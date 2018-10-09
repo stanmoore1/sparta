@@ -37,12 +37,18 @@ class WriteRestart : protected Pointers {
   int me,nprocs;
   FILE *fp;
 
+  // moving definitions of the output file name pointers to here
+  char *hfile;
+
   int multiproc;             // 0 = proc 0 writes for all
                              // else # of procs writing files
   int nclusterprocs;         // # of procs in my cluster that write to one file
   int filewriter;            // 1 if this proc writes a file, else 0
   int fileproc;              // ID of proc in my cluster who writes to file
   int icluster;              // which cluster I am in
+  int no_dw_flag;
+  int use_lustre_flag;
+  int staging_pending;
 
   void header();
   void box_params();

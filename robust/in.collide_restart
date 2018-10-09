@@ -1,0 +1,54 @@
+# advect particles via VSS collisional flow on a uniform grid
+# particles reflect off global box boundaries
+
+variable            x index 10
+variable            y index 10
+variable            z index 10
+
+variable            lx equal $x*1.0e-5
+variable            ly equal $y*1.0e-5
+variable            lz equal $z*1.0e-5
+
+variable            n equal 10*$x*$y*$z
+
+seed	    	    12345
+dimension   	    3
+global              gridcut 1.0e-5
+
+boundary	    rr rr rr
+
+shell               touch ${DIR_READ}/SPARTA_RESTART_FAIL_${RESTART_NUMBER}
+
+read_restart        ${DIR_READ}/restart.%.${RESTART_NUMBER} balance rcb cell
+
+shell               rm ${DIR_READ}/SPARTA_RESTART_FAIL_1
+shell               rm ${DIR_READ}/SPARTA_RESTART_FAIL_2
+shell               rm ${DIR_WRITE}/SPARTA_RESTART_FAIL_1
+shell               rm ${DIR_WRITE}/SPARTA_RESTART_FAIL_2
+
+balance_grid        rcb part
+
+mixture		    air Ar vstream 0.0 0.0 0.0 temp 273.15
+
+global              nrho 7.07043E22
+global              fnum 7.07043E6
+
+collide		    vss air ar.vss
+
+create_particles    air n $n
+
+stats		    10
+compute             temp temp
+stats_style	    step cpu np nattempt ncoll c_temp
+
+# first equilibrate with large timestep to unsort particles
+# then benchmark with normal timestep
+
+timestep 	    7.00E-8
+
+fix bal balance 100 1.00 rcb time
+
+restart 100 ${DIR_WRITE}/restart.%.1 ${DIR_WRITE}/restart.%.2 nfile ${NFILES}
+
+run 		    200
+

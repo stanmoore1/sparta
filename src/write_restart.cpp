@@ -24,6 +24,17 @@
 #include "surf.h"
 #include "memory.h"
 #include "error.h"
+#include <unistd.h>
+#ifdef SPARTA_DATAWARP_GV
+extern "C" {
+#include "datawarp.h"
+}
+#endif
+#include <iostream>
+#include <fstream>
+#include <chrono>
+#include <ctime>
+//#include "dw_info.h"
 
 using namespace SPARTA_NS;
 
@@ -50,6 +61,8 @@ WriteRestart::WriteRestart(SPARTA *sparta) : Pointers(sparta)
   MPI_Comm_rank(world,&me);
   MPI_Comm_size(world,&nprocs);
   multiproc = 0;
+  no_dw_flag = 0;
+  use_lustre_flag = 0;
 }
 
 /* ----------------------------------------------------------------------
@@ -173,10 +186,47 @@ void WriteRestart::multiproc_options(int multiproc_caller,
 
 void WriteRestart::write(char *file)
 {
+start:
+
+   fp = fopen("./NO_DW","r");
+   if (fp != NULL) {
+     use_lustre_flag = 1;
+     if (comm->me == 0 && use_lustre_flag) printf("Using Lustre\n");
+     fclose(fp);
+   }
+
+
+  if (use_lustre_flag) {
+    // for now have the Parallel File System target directory specified by the PFS_STAGEOUT_DIR
+    // environment variable.
+    char* pfs_dpath = getenv("PFS_STAGEOUT_DIR");
+    //printf("file %s\n",file);
+
+    if (NULL != pfs_dpath) {
+      char* file_short = strrchr(file,'/');
+      char* file_new = new char[strlen(pfs_dpath) + 1 + strlen(file_short)];
+      sprintf(file_new, "%s/%s", pfs_dpath, file_short);
+      //delete [] file;
+      file = file_new;
+      //printf("file new %s\n",file);
+    } else {
+      error->all(FLERR, "Need to set PFS_STAGEOUT_DIR environment variable to the full PFS target path.");
+    }
+  }
+
+
   // open single restart file or base file for multiproc case
 
+  MPI_Barrier(world);
+  if (comm->me == 0) {
+    auto now = std::chrono::system_clock::now();
+    std::time_t now_time = std::chrono::system_clock::to_time_t(now);
+    std::cout << "Starting writing checkpoint files at " << std::ctime(&now_time);
+  }
+
   if (me == 0) {
-    char *hfile;
+    // moved following to write_restart.h
+    //    char *hfile;
     if (multiproc) {
       hfile = new char[strlen(file) + 16];
       char *ptr = strchr(file,'%');
@@ -190,7 +240,10 @@ void WriteRestart::write(char *file)
       sprintf(str,"Cannot open restart file %s",hfile);
       error->one(FLERR,str);
     }
-    if (multiproc) delete [] hfile;
+    /* I need to hang on the the 'hfile' char string for the DataWarp
+       calls to be done later on. Will execute the following deletion
+       near the end of this funciton. */
+    //  if (multiproc) delete [] hfile;
   }
 
   // proc 0 writes magic string, endian flag, numeric version
@@ -237,10 +290,10 @@ void WriteRestart::write(char *file)
   //   close header file, open multiname file on each writing proc,
   //   write PROCSPERFILE into new file
 
+  char *multiname = new char[strlen(file) + 16];
   if (multiproc) {
     if (me == 0) fclose(fp);
 
-    char *multiname = new char[strlen(file) + 16];
     char *ptr = strchr(file,'%');
     *ptr = '\0';
     sprintf(multiname,"%s%d%s",file,icluster,ptr+1);
@@ -255,8 +308,9 @@ void WriteRestart::write(char *file)
       }
       write_int(PROCSPERFILE,nclusterprocs);
     }
-
-    delete [] multiname;
+    /* Also want to wait to delete this dynamic string array until
+       the DataWarp calls using it have are done. */
+    //delete [] multiname;
   }
 
   // pack my child grid and particle data into buf
@@ -272,8 +326,13 @@ void WriteRestart::write(char *file)
   int tmp,recv_size;
   MPI_Status status;
   MPI_Request request;
+  long mysize = 0;
+
+  //if (me == 0) printf("PERPROC = %i !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n",PERPROC);
+  //dw_info(fp,world,filewriter);
 
   if (filewriter) {
+    mysize = sizeof(int);
     for (int iproc = 0; iproc < nclusterprocs; iproc++) {
       if (iproc) {
         MPI_Irecv(buf,max_size,MPI_CHAR,me+iproc,0,world,&request);
@@ -282,18 +341,148 @@ void WriteRestart::write(char *file)
         MPI_Get_count(&status,MPI_CHAR,&recv_size);
       } else recv_size = send_size;
       
+      mysize += 2*sizeof(int);
+      mysize += recv_size*sizeof(char);
       write_char_vec(PERPROC,recv_size,buf);
     }
+    mysize += sizeof(int); // EOF?
     fclose(fp);
+  }
+
+  //CONEGA-20180720: introducing DataWarp API calls
+#ifdef SPARTA_DATAWARP_GV
+  if (!use_lustre_flag) {
+    staging_pending = 0;
+
+    if (filewriter) {
+      int dwret1,dwret2;
+      dwret1 = dwret2 = 0;
+      int tmp;
+      if (comm->me == 0)
+        dwret1 = dw_query_file_stage(hfile, &tmp, &staging_pending, &tmp, &tmp);
+      dwret2 = dw_query_file_stage(multiname, &tmp, &staging_pending, &tmp, &tmp);
+      //if (0 != dwret1 + dwret2) {
+      //  printf("%i %i\n",dwret1,dwret2);
+      //  error->warning(FLERR, "Trouble with dw_query.");
+      //}
+    }
+    int staging_pending_global;
+    MPI_Allreduce(&staging_pending,&staging_pending_global,1,MPI_INT,MPI_SUM,world);
+    staging_pending = staging_pending_global;
+    //printf("SP %i\n",staging_pending);
+  }
+
+  if (filewriter) {
+    if (!use_lustre_flag && !staging_pending) {
+    // for now have the Parallel File System target directory specified by the PFS_STAGEOUT_DIR
+    // environment variable.
+    char* pfs_dpath = getenv("PFS_STAGEOUT_DIR");
+
+    if (NULL != pfs_dpath) {
+      //printf("file %s\n",file);
+      int dwret1,dwret2;
+      dwret1 = dwret2 = 0;
+      if (comm->me == 0) {
+        char* hfile_short = strrchr(hfile,'/');
+        char *pfs_fpath_hfile = new char[strlen(pfs_dpath) + 1 + strlen(hfile)];
+        sprintf(pfs_fpath_hfile, "%s/%s", pfs_dpath, hfile_short);
+        //printf("hfile, %s , %s\n",hfile,pfs_fpath_hfile);
+        dwret1 = dw_stage_file_out(hfile, pfs_fpath_hfile, DW_STAGE_IMMEDIATE);
+        delete [] pfs_fpath_hfile;
+      }
+      char* multiname_short = strrchr(multiname,'/');
+      char *pfs_fpath_multiname = new char[strlen(pfs_dpath) + 1 + strlen(multiname)];
+      sprintf(pfs_fpath_multiname, "%s/%s", pfs_dpath, multiname_short);
+      //printf("multiname, %s , %s\n",multiname,pfs_fpath_multiname);
+      dwret2 = dw_stage_file_out(multiname, pfs_fpath_multiname, DW_STAGE_IMMEDIATE);
+      delete [] pfs_fpath_multiname;
+      if (0 != dwret1 + dwret2) {
+        printf("%i %i\n",dwret1,dwret2);
+        error->all(FLERR, "Trouble with dw_stage_file_out.");
+      }
+    } else {
+      error->all(FLERR, "Need to set PFS_STAGEOUT_DIR environment variable to the full PFS target path.");
+    }
+    }
+  }
+#endif
+
+  if (filewriter) {
+    //sleep(30);
+    std::ifstream myfile( multiname, std::ios::binary | std::ios::ate);
+    long disk_size = myfile.tellg();
+    //printf("Bytes in %s, wrote %ld, disk size %ld\n",multiname,mysize,disk_size);
+    if (mysize != disk_size) {
+      no_dw_flag = 1;
+      char str[128];
+      sprintf(str,"Wrong bytes in %s, wrote %ld, disk size %ld, last errno %i, Switching to Lustre",multiname,mysize,disk_size,errno);
+      perror("Last error");
+      error->warning(FLERR,str);
+    }
 
   } else {
     MPI_Recv(&tmp,0,MPI_INT,fileproc,0,world,&status);
     MPI_Rsend(buf,send_size,MPI_CHAR,fileproc,0,world);
   }
 
+  MPI_Barrier(world);
+  if (comm->me == 0) {
+    auto now = std::chrono::system_clock::now();
+    std::time_t now_time = std::chrono::system_clock::to_time_t(now);
+    std::cout << "Finished writing checkpoint files at " << std::ctime(&now_time);
+  }
+
+  if (filewriter) {
+    std::ifstream myfile( multiname, std::ios::binary | std::ios::ate);
+    long disk_size = myfile.tellg();
+    //printf("After barrier: Bytes in %s, wrote %ld, disk size %ld\n",multiname,mysize,disk_size);
+    if (mysize != disk_size) {
+      no_dw_flag = 1;
+      char str[128];
+      sprintf(str,"After barrier: Wrong bytes in %s, wrote %ld, disk size %ld, last errno %i, Switching to Lustre",multiname,mysize,disk_size,errno);
+      perror("Last error");
+      error->warning(FLERR,str);
+    }
+  }
+
   // clean up
 
+  delete [] multiname;
+  if (me == 0) delete [] hfile;
   memory->destroy(buf);
+
+
+#ifdef SPARTA_DATAWARP_GV
+  // DW is down, write out checkpoint file to Lustre
+ 
+  int no_dw_flag_global = 0;
+  MPI_Allreduce(&no_dw_flag,&no_dw_flag_global,1,MPI_INT,MPI_SUM,world);
+  no_dw_flag = no_dw_flag_global;
+  if (!use_lustre_flag && no_dw_flag) {
+    use_lustre_flag = 1;
+    // cancel pending DW operations
+    // write out file NO_DW that can be used in the batch script
+    if (me == 0) {
+      fp = fopen("./NO_DW","w");
+      fclose(fp);
+    }
+
+    if (filewriter) {
+      int dwret1,dwret2;
+      dwret1 = dwret2 = 0;
+      if (comm->me == 0)
+        dwret1 = dw_terminate_file_stage(hfile);
+      dwret2 = dw_terminate_file_stage(multiname);
+      //if (0 != dwret1 + dwret2) {
+      //  printf("%i %i\n",dwret1,dwret2);
+      //  error->warning(FLERR, "Trouble with dw_terminate.");
+      //}
+    }
+
+    // try writing files again using Lustre
+    goto start;
+  }
+#endif
 }
 
 /* ----------------------------------------------------------------------
@@ -448,8 +637,19 @@ void WriteRestart::version_numeric()
 
 void WriteRestart::write_int(int flag, int value)
 {
-  fwrite(&flag,sizeof(int),1,fp);
-  fwrite(&value,sizeof(int),1,fp);
+  size_t wrote = 0;
+  wrote = fwrite(&flag,sizeof(int),1,fp);
+  if (wrote != 1) {
+    long lost = (1-wrote)*sizeof(int);
+    printf("Lost %ld bytes, errno = %i\n",lost,errno);
+    perror("Invalid write in write_int_1");
+  }
+  wrote = fwrite(&value,sizeof(int),1,fp);
+  if (wrote != 1) {
+    long lost = (1-wrote)*sizeof(int);
+    printf("Lost %ld bytes, errno = %i\n",lost,errno);
+    perror("Invalid write in write_int_2");
+  }
 }
 
 /* ----------------------------------------------------------------------
@@ -512,7 +712,23 @@ void WriteRestart::write_double_vec(int flag, int n, double *vec)
 
 void WriteRestart::write_char_vec(int flag, int n, char *vec)
 {
-  fwrite(&flag,sizeof(int),1,fp);
-  fwrite(&n,sizeof(int),1,fp);
-  fwrite(vec,sizeof(char),n,fp);
+  size_t wrote = 0;
+  wrote = fwrite(&flag,sizeof(int),1,fp);
+  if (wrote != 1) {
+    long lost = (1-wrote)*sizeof(int);
+    printf("Lost %ld bytes, errno = %i\n",lost,errno);
+    perror("Invalid write in write_char_vec_1");
+  }
+  wrote = fwrite(&n,sizeof(int),1,fp);
+  if (wrote != 1) {
+    long lost = (1-wrote)*sizeof(int);
+    printf("Lost %ld bytes, errno = %i\n",lost,errno);
+    perror("Invalid write in write_char_vec_2");
+  }
+  wrote = fwrite(vec,sizeof(char),n,fp);
+  if (wrote != n) {
+    long lost = (n-wrote)*sizeof(char);
+    printf("Lost %ld bytes, errno = %i\n",lost,errno);
+    perror("Invalid write in write_char_vec_3");
+  }
 }
