@@ -37,6 +37,7 @@ using namespace SPARTA_NS;
 enum{PKEEP,PINSERT,PDONE,PDISCARD,PENTRY,PEXIT,PSURF};  // several files
 enum{NONE,DISCRETE,SMOOTH};            // several files
 enum{INT,DOUBLE};                      // several files
+enum{COPYPARTICLELIST,FIXEDMEMORY};
 
 #define DELTA 16384
 #define DELTASPECIES 16
@@ -48,8 +49,6 @@ enum{INT,DOUBLE};                      // several files
 // also add a check for the keyword in 2 places in add_species()
 
 #define AIR "N O NO"
-
-
 
 /* ---------------------------------------------------------------------- */
 
@@ -180,6 +179,8 @@ void ParticleKokkos::sort_kokkos()
 {
   sorted_kk = 1;
   int reorder_scheme = COPYPARTICLELIST;
+  if (update->mem_limit_grid_flag)
+    update->global_mem_limit = grid->nlocal*sizeof(Grid::ChildCell);
   if (update->global_mem_limit > 0)
     reorder_scheme = FIXEDMEMORY;
 
@@ -247,8 +248,8 @@ void ParticleKokkos::sort_kokkos()
     }
     else if (reorder_scheme == FIXEDMEMORY && d_pswap1.size() == 0){
       nParticlesWksp = (double)update->global_mem_limit/sizeof(Particle::OnePart);
-      d_pswap1 = t_particle_1d("particle:swap1",nParticlesWksp);
-      d_pswap2 = t_particle_1d("particle:swap2",nParticlesWksp);
+      d_pswap1 = t_particle_1d(Kokkos::view_alloc("particle:swap1",Kokkos::WithoutInitializing),nParticlesWksp);
+      d_pswap2 = t_particle_1d(Kokkos::view_alloc("particle:swap2",Kokkos::WithoutInitializing),nParticlesWksp);
     }
 
     nbytes = sizeof(OnePart);
@@ -261,8 +262,6 @@ void ParticleKokkos::sort_kokkos()
       this->modify(Device,PARTICLE_MASK);
     }
     else if (reorder_scheme == FIXEDMEMORY) {
-      //    double timeA = MPI_Wtime();
-      // fixed memory reordering---------------------------------------------------------
       // Copy particle destinations into the particle list cell locations
       //  (to avoid adding a "destination" integer in OnePart for the fixed memory reorder)
       // After the particle list has been reordered, reset the icell values to correctly reflect
@@ -272,7 +271,6 @@ void ParticleKokkos::sort_kokkos()
       DeviceType::fence();
       copymode = 0;
 
-      d_cascadeSize = DAT::t_int_1d("particle:cascadeSize",nParticlesWksp);
       int npasses = (nlocal-1)/nParticlesWksp + 1;
       for (int ipass=0; ipass < npasses; ++ipass) {
 
@@ -291,20 +289,6 @@ void ParticleKokkos::sort_kokkos()
         Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagFixedMemoryReorder>(0,nParticlesWksp),*this);
         DeviceType::fence();
         copymode = 0;
-#if 0
-        int sum = 0;
-        copymode = 1;
-        Kokkos::parallel_reduce(Kokkos::RangePolicy<DeviceType, TagSetAverageCascadeSize>(0,nParticlesWksp),*this,sum);
-        DeviceType::fence();
-        copymode = 0;
-
-        int max;
-        copymode = 1;
-        Kokkos::parallel_reduce(Kokkos::RangePolicy<DeviceType, TagSetMaxCascadeSize>(0,nParticlesWksp),*this,Kokkos::Max<int>(max));
-        DeviceType::fence();
-        copymode = 0;
-        std::cout << "pass = " << ipass << " AVERAGE CASCADE SIZE = " << static_cast<double>(sum)/nParticlesWksp << " MAX CASCADE SIZE = " << max << std::endl;
-#endif
       }
 
       // reset the icell values in the particle list
@@ -314,9 +298,9 @@ void ParticleKokkos::sort_kokkos()
       copymode = 0;
       this->modify(Device,PARTICLE_MASK);
 
-      //      std::cout << "WORKSPACE MEMORY USED (MB) = " << 2*nParticlesWksp*nbytes/1.0e+6 << std::endl;
-      //    double timeB = MPI_Wtime();
-      //    std::cout << "time for fixed memory reordering (sec) = " << timeB - timeA << std::endl;
+      // destroy references to reduce memory use
+      d_pswap1 = t_particle_1d();
+      d_pswap2 = t_particle_1d();
     }
   }
 
@@ -324,19 +308,6 @@ void ParticleKokkos::sort_kokkos()
   grid_kk->d_plist = d_plist;
 
   d_particles = t_particle_1d(); // destroy reference to reduce memory use
-}
-
-KOKKOS_INLINE_FUNCTION
-void ParticleKokkos::operator()(TagSetAverageCascadeSize, const int &i, int &sum) const
-{
-  sum += d_cascadeSize[i];
-}
-
-KOKKOS_INLINE_FUNCTION
-void ParticleKokkos::operator()(TagSetMaxCascadeSize, const int &i, int &max) const
-{
-  if (d_cascadeSize[i] > max)
-    max = d_cascadeSize[i];
 }
 
 KOKKOS_INLINE_FUNCTION
@@ -400,7 +371,6 @@ void ParticleKokkos::operator()(TagFixedMemoryReorder, const int &i) const
     d_particles[newParticleLoc] = *movePtr;
     count++;
   }
-  d_cascadeSize[i] = count;
 }
 
 KOKKOS_INLINE_FUNCTION
