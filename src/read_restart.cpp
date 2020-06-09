@@ -362,6 +362,7 @@ void ReadRestart::command(int narg, char **arg)
 
         fread(&n,sizeof(bigint),1,fp);
 
+        long filepos = ftell(fp);
         int grid_nlocal;
         fread(&grid_nlocal,sizeof(int),1,fp);
         fseek(fp,-sizeof(int),SEEK_CUR);
@@ -371,17 +372,12 @@ void ReadRestart::command(int narg, char **arg)
         fseek(fp,grid_read_size,SEEK_CUR);
         debug_flag = 0;
         if (particle_read_size == 8) {
+          debug_flag = 1;
+          particle_nlocal = 0;
+          particle_read_size = 0;
+        } else
           fread(&particle_nlocal,sizeof(int),1,fp);
-          if (particle_nlocal != 0) {
-            debug_flag = 1;
-            particle_nlocal = 0;
-            particle_read_size = 0;
-            fseek(fp,4,SEEK_CUR);
-          }
-        } else {
-          fread(&particle_nlocal,sizeof(int),1,fp);
-        }
-        fseek(fp,-(sizeof(int)+grid_read_size),SEEK_CUR);
+        fseek(fp,filepos,SEEK_SET);
 
         if (update->mem_limit_grid_flag)
           update->set_mem_limit_grid(grid_nlocal);
@@ -515,6 +511,7 @@ void ReadRestart::command(int narg, char **arg)
 
         fread(&n,sizeof(bigint),1,fp);
 
+        long filepos = ftell(fp);
         int grid_nlocal;
         fread(&grid_nlocal,sizeof(int),1,fp);
         fseek(fp,-sizeof(int),SEEK_CUR);
@@ -524,17 +521,12 @@ void ReadRestart::command(int narg, char **arg)
         fseek(fp,grid_read_size,SEEK_CUR);
         debug_flag = 0;
         if (particle_read_size == 8) {
+          debug_flag = 1;
+          particle_nlocal = 0;
+          particle_read_size = 0;
+        } else
           fread(&particle_nlocal,sizeof(int),1,fp);
-          if (particle_nlocal != 0) {
-            debug_flag = 1;
-            particle_nlocal = 0;
-            particle_read_size = 0;
-            fseek(fp,4,SEEK_CUR);
-          }
-        } else {
-          fread(&particle_nlocal,sizeof(int),1,fp);
-        }
-        fseek(fp,-(sizeof(int)+grid_read_size),SEEK_CUR);
+        fseek(fp,filepos,SEEK_SET);
 
         if (update->mem_limit_grid_flag)
           update->set_mem_limit_grid(grid_nlocal);
