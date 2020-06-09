@@ -353,6 +353,7 @@ void ReadRestart::command(int narg, char **arg)
       fread(&procsperfile,sizeof(int),1,fp);
 
       int step_size,npasses;
+      int debug_flag;
 
       for (int i = 0; i < procsperfile; i++) {
         fread(&flag,sizeof(int),1,fp);
@@ -368,7 +369,18 @@ void ReadRestart::command(int narg, char **arg)
         bigint particle_read_size = n - grid_read_size;
         int particle_nlocal;
         fseek(fp,grid_read_size,SEEK_CUR);
-        fread(&particle_nlocal,sizeof(int),1,fp);
+        debug_flag = 0;
+        if (particle_read_size == 8) {
+          fread(&particle_nlocal,sizeof(int),1,fp);
+          if (particle_nlocal != 0) {
+            debug_flag = 1;
+            particle_nlocal = 0;
+            particle_read_size = 0;
+            fseek(fp,4,SEEK_CUR);
+          }
+        } else {
+          fread(&particle_nlocal,sizeof(int),1,fp);
+        }
         fseek(fp,-(sizeof(int)+grid_read_size),SEEK_CUR);
 
         if (update->mem_limit_grid_flag)
@@ -394,7 +406,7 @@ void ReadRestart::command(int narg, char **arg)
         // extra pass for grid
 
         npasses = ceil((double)particle_nlocal/step_size)+1;
-        if (particle_nlocal == 0) npasses++;
+        if (particle_nlocal == 0 && !debug_flag) npasses++;
 
         int nlocal_restart = 0;
         bigint total_read_part = 0;
@@ -493,6 +505,7 @@ void ReadRestart::command(int narg, char **arg)
     MPI_Request request;
 
     int step_size,npasses;
+    int debug_flag;
 
     for (int i = 0; i < procsperfile; i++) {
       if (filereader) {
@@ -509,7 +522,18 @@ void ReadRestart::command(int narg, char **arg)
         bigint particle_read_size = n - grid_read_size;
         int particle_nlocal;
         fseek(fp,grid_read_size,SEEK_CUR);
-        fread(&particle_nlocal,sizeof(int),1,fp);
+        debug_flag = 0;
+        if (particle_read_size == 8) {
+          fread(&particle_nlocal,sizeof(int),1,fp);
+          if (particle_nlocal != 0) {
+            debug_flag = 1;
+            particle_nlocal = 0;
+            particle_read_size = 0;
+            fseek(fp,4,SEEK_CUR);
+          }
+        } else {
+          fread(&particle_nlocal,sizeof(int),1,fp);
+        }
         fseek(fp,-(sizeof(int)+grid_read_size),SEEK_CUR);
 
         if (update->mem_limit_grid_flag)
@@ -535,7 +559,7 @@ void ReadRestart::command(int narg, char **arg)
         // extra pass for grid
 
         npasses = ceil((double)particle_nlocal/step_size)+1;
-        if (particle_nlocal == 0) npasses++;
+        if (particle_nlocal == 0 && !debug_flag) npasses++;
 
         if (i % nclusterprocs) {
           iproc = me + (i % nclusterprocs);
