@@ -1,14 +1,15 @@
 /* ----------------------------------------------------------------------
-   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
-   http://lammps.sandia.gov, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
+   http://sparta.sandia.gov
+   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   Sandia National Laboratories
 
-   Copyright (2003) Sandia Corporation.  Under the terms of Contract
+   Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under
+   certain rights in this software.  This software is distributed under 
    the GNU General Public License.
 
-   See the README file in the top-level LAMMPS directory.
+   See the README file in the top-level SPARTA directory.
 ------------------------------------------------------------------------- */
 
 /* ----------------------------------------------------------------------
@@ -25,7 +26,7 @@
 #include "kokkos.h"
 
 
-using namespace LAMMPS_NS;
+using namespace SPARTA_NS;
 
 #define MIN(A,B) ((A) < (B) ? (A) : (B))
 #define MAX(A,B) ((A) > (B) ? (A) : (B))
@@ -33,7 +34,7 @@ using namespace LAMMPS_NS;
 /* ---------------------------------------------------------------------- */
 
 template<class DeviceType>
-FFT3dKokkos<DeviceType>::FFT3dKokkos(LAMMPS *lmp, MPI_Comm comm, int nfast, int nmid, int nslow,
+FFT3dKokkos<DeviceType>::FFT3dKokkos(SPARTA *lmp, MPI_Comm comm, int nfast, int nmid, int nslow,
              int in_ilo, int in_ihi, int in_jlo, int in_jhi,
              int in_klo, int in_khi,
              int out_ilo, int out_ihi, int out_jlo, int out_jhi,
@@ -903,9 +904,9 @@ void FFT3dKokkos<DeviceType>::fft_3d_1d_only_kokkos(typename FFT_AT::t_FFT_DATA_
   }
 }
 
-namespace LAMMPS_NS {
-template class FFT3dKokkos<LMPDeviceType>;
+namespace SPARTA_NS {
+template class FFT3dKokkos<SPADeviceType>;
 #ifdef KOKKOS_ENABLE_CUDA
-template class FFT3dKokkos<LMPHostType>;
+template class FFT3dKokkos<SPAHostType>;
 #endif
 }

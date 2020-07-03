@@ -1,18 +1,20 @@
 /* ----------------------------------------------------------------------
-   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
-   http://lammps.sandia.gov, Sandia National Laboratories
+   SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
+   http://sparta.sandia.gov
    Steve Plimpton, sjplimp@sandia.gov
+   Michael Gallis, magalli@sandia.gov
+   Sandia National Laboratories
 
-   Copyright (2003) Sandia Corporation.  Under the terms of Contract
+   Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under
+   certain rights in this software.  This software is distributed under 
    the GNU General Public License.
 
-   See the README file in the top-level LAMMPS directory.
+   See the README file in the top-level SPARTA directory.
 ------------------------------------------------------------------------- */
 
 /*
-   we use a stripped down KISS FFT as default FFT for LAMMPS
+   we use a stripped down KISS FFT as default FFT for SPARTA
    this code is adapted from kiss_fft_v1_2_9
    homepage: http://kissfft.sf.net/
 
@@ -56,8 +58,8 @@
 */
 
 
-#ifndef LMP_KISSFFT_KOKKOS_H
-#define LMP_KISSFFT_KOKKOS_H
+#ifndef SPARTA_KISSFFT_KOKKOS_H
+#define SPARTA_KISSFFT_KOKKOS_H
 
 #include <stdlib.h>
 #include <string.h>
@@ -129,7 +131,7 @@
         }while(0)
 
 
-namespace LAMMPS_NS {
+namespace SPARTA_NS {
 
 #define MAXFACTORS 32
 /* e.g. an fft of length 128 has 4 factors
@@ -511,12 +513,12 @@ class KissFFTKokkos {
           st.d_scratch = typename FFT_AT::t_FFT_DATA_1d("kissfft:scratch",p_max);
       }
 
-      k_factors.template modify<LMPHostType>();
-      k_factors.template sync<LMPDeviceType>();
+      k_factors.template modify<SPAHostType>();
+      k_factors.template sync<SPADeviceType>();
       st.d_factors = k_factors.template view<DeviceType>();
 
-      k_twiddles.template modify<LMPHostType>();
-      k_twiddles.template sync<LMPDeviceType>();
+      k_twiddles.template modify<SPAHostType>();
+      k_twiddles.template sync<SPADeviceType>();
       st.d_twiddles = k_twiddles.template view<DeviceType>();
 
       return st;

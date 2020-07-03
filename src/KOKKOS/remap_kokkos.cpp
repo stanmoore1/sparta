@@ -1,14 +1,15 @@
 /* ----------------------------------------------------------------------
-   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
-   http://lammps.sandia.gov, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
+   http://sparta.sandia.gov
+   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   Sandia National Laboratories
 
-   Copyright (2003) Sandia Corporation.  Under the terms of Contract
+   Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under
+   certain rights in this software.  This software is distributed under 
    the GNU General Public License.
 
-   See the README file in the top-level LAMMPS directory.
+   See the README file in the top-level SPARTA directory.
 ------------------------------------------------------------------------- */
 
 #include <mpi.h>
@@ -18,7 +19,7 @@
 #include "pack_kokkos.h"
 #include "error.h"
 
-using namespace LAMMPS_NS;
+using namespace SPARTA_NS;
 
 #define MIN(A,B) ((A) < (B) ? (A) : (B))
 #define MAX(A,B) ((A) > (B) ? (A) : (B))
@@ -26,13 +27,13 @@ using namespace LAMMPS_NS;
 /* ---------------------------------------------------------------------- */
 
 template<class DeviceType>
-RemapKokkos<DeviceType>::RemapKokkos(LAMMPS *lmp) : Pointers(lmp)
+RemapKokkos<DeviceType>::RemapKokkos(SPARTA *lmp) : Pointers(lmp)
 {
   plan = NULL;
 }
 
 template<class DeviceType>
-RemapKokkos<DeviceType>::RemapKokkos(LAMMPS *lmp, MPI_Comm comm,
+RemapKokkos<DeviceType>::RemapKokkos(SPARTA *lmp, MPI_Comm comm,
              int in_ilo, int in_ihi, int in_jlo, int in_jhi,
              int in_klo, int in_khi,
              int out_ilo, int out_ihi, int out_jlo, int out_jhi,
@@ -527,9 +528,9 @@ void RemapKokkos<DeviceType>::remap_3d_destroy_plan_kokkos(struct remap_plan_3d_
   delete plan;
 }
 
-namespace LAMMPS_NS {
-template class RemapKokkos<LMPDeviceType>;
+namespace SPARTA_NS {
+template class RemapKokkos<SPADeviceType>;
 #ifdef KOKKOS_ENABLE_CUDA
-template class RemapKokkos<LMPHostType>;
+template class RemapKokkos<SPAHostType>;
 #endif
 }

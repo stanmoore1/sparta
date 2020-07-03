@@ -1,14 +1,16 @@
 /* ----------------------------------------------------------------------
-   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
-   http://lammps.sandia.gov, Sandia National Laboratories
+   SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
+   http://sparta.sandia.gov
    Steve Plimpton, sjplimp@sandia.gov
+   Michael Gallis, magalli@sandia.gov
+   Sandia National Laboratories
 
-   Copyright (2003) Sandia Corporation.  Under the terms of Contract
+   Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under
+   certain rights in this software.  This software is distributed under 
    the GNU General Public License.
 
-   See the README file in the top-level LAMMPS directory.
+   See the README file in the top-level SPARTA directory.
 ------------------------------------------------------------------------- */
 
 #include "kokkos_type.h"
@@ -19,8 +21,8 @@
 
 // data types for 2d/3d FFTs
 
-#ifndef LMP_FFT_DATA_KOKKOS_H
-#define LMP_FFT_DATA_KOKKOS_H
+#ifndef SPARTA_FFT_DATA_KOKKOS_H
+#define SPARTA_FFT_DATA_KOKKOS_H
 
 // User-settable FFT precision
 
@@ -136,29 +138,29 @@ template <class DeviceType>
 struct FFTArrayTypes;
 
 template <>
-struct FFTArrayTypes<LMPDeviceType> {
+struct FFTArrayTypes<SPADeviceType> {
 
 typedef Kokkos::
-  DualView<FFT_SCALAR*, Kokkos::LayoutRight, LMPDeviceType> tdual_FFT_SCALAR_1d;
+  DualView<FFT_SCALAR*, Kokkos::LayoutRight, SPADeviceType> tdual_FFT_SCALAR_1d;
 typedef tdual_FFT_SCALAR_1d::t_dev t_FFT_SCALAR_1d;
 typedef tdual_FFT_SCALAR_1d::t_dev_um t_FFT_SCALAR_1d_um;
 
-typedef Kokkos::DualView<FFT_SCALAR**,Kokkos::LayoutRight,LMPDeviceType> tdual_FFT_SCALAR_2d;
+typedef Kokkos::DualView<FFT_SCALAR**,Kokkos::LayoutRight,SPADeviceType> tdual_FFT_SCALAR_2d;
 typedef tdual_FFT_SCALAR_2d::t_dev t_FFT_SCALAR_2d;
 
-typedef Kokkos::DualView<FFT_SCALAR**[3],Kokkos::LayoutRight,LMPDeviceType> tdual_FFT_SCALAR_2d_3;
+typedef Kokkos::DualView<FFT_SCALAR**[3],Kokkos::LayoutRight,SPADeviceType> tdual_FFT_SCALAR_2d_3;
 typedef tdual_FFT_SCALAR_2d_3::t_dev t_FFT_SCALAR_2d_3;
 
-typedef Kokkos::DualView<FFT_SCALAR***,Kokkos::LayoutRight,LMPDeviceType> tdual_FFT_SCALAR_3d;
+typedef Kokkos::DualView<FFT_SCALAR***,Kokkos::LayoutRight,SPADeviceType> tdual_FFT_SCALAR_3d;
 typedef tdual_FFT_SCALAR_3d::t_dev t_FFT_SCALAR_3d;
 
 typedef Kokkos::
-  DualView<FFT_DATA*, Kokkos::LayoutRight, LMPDeviceType> tdual_FFT_DATA_1d;
+  DualView<FFT_DATA*, Kokkos::LayoutRight, SPADeviceType> tdual_FFT_DATA_1d;
 typedef tdual_FFT_DATA_1d::t_dev t_FFT_DATA_1d;
 typedef tdual_FFT_DATA_1d::t_dev_um t_FFT_DATA_1d_um;
 
 typedef Kokkos::
-  DualView<int*, LMPDeviceType::array_layout, LMPDeviceType> tdual_int_64;
+  DualView<int*, SPADeviceType::array_layout, SPADeviceType> tdual_int_64;
 typedef tdual_int_64::t_dev t_int_64;
 typedef tdual_int_64::t_dev_um t_int_64_um;
 
@@ -166,39 +168,39 @@ typedef tdual_int_64::t_dev_um t_int_64_um;
 
 #ifdef KOKKOS_ENABLE_CUDA
 template <>
-struct FFTArrayTypes<LMPHostType> {
+struct FFTArrayTypes<SPAHostType> {
 
 //Kspace
 
 typedef Kokkos::
-  DualView<FFT_SCALAR*, Kokkos::LayoutRight, LMPDeviceType> tdual_FFT_SCALAR_1d;
+  DualView<FFT_SCALAR*, Kokkos::LayoutRight, SPADeviceType> tdual_FFT_SCALAR_1d;
 typedef tdual_FFT_SCALAR_1d::t_host t_FFT_SCALAR_1d;
 typedef tdual_FFT_SCALAR_1d::t_host_um t_FFT_SCALAR_1d_um;
 
-typedef Kokkos::DualView<FFT_SCALAR**,Kokkos::LayoutRight,LMPDeviceType> tdual_FFT_SCALAR_2d;
+typedef Kokkos::DualView<FFT_SCALAR**,Kokkos::LayoutRight,SPADeviceType> tdual_FFT_SCALAR_2d;
 typedef tdual_FFT_SCALAR_2d::t_host t_FFT_SCALAR_2d;
 
-typedef Kokkos::DualView<FFT_SCALAR**[3],Kokkos::LayoutRight,LMPDeviceType> tdual_FFT_SCALAR_2d_3;
+typedef Kokkos::DualView<FFT_SCALAR**[3],Kokkos::LayoutRight,SPADeviceType> tdual_FFT_SCALAR_2d_3;
 typedef tdual_FFT_SCALAR_2d_3::t_host t_FFT_SCALAR_2d_3;
 
-typedef Kokkos::DualView<FFT_SCALAR***,Kokkos::LayoutRight,LMPDeviceType> tdual_FFT_SCALAR_3d;
+typedef Kokkos::DualView<FFT_SCALAR***,Kokkos::LayoutRight,SPADeviceType> tdual_FFT_SCALAR_3d;
 typedef tdual_FFT_SCALAR_3d::t_host t_FFT_SCALAR_3d;
 
 typedef Kokkos::
-  DualView<FFT_DATA*, Kokkos::LayoutRight, LMPDeviceType> tdual_FFT_DATA_1d;
+  DualView<FFT_DATA*, Kokkos::LayoutRight, SPADeviceType> tdual_FFT_DATA_1d;
 typedef tdual_FFT_DATA_1d::t_host t_FFT_DATA_1d;
 typedef tdual_FFT_DATA_1d::t_host_um t_FFT_DATA_1d_um;
 
 typedef Kokkos::
-  DualView<int*, LMPDeviceType::array_layout, LMPDeviceType> tdual_int_64;
+  DualView<int*, SPADeviceType::array_layout, SPADeviceType> tdual_int_64;
 typedef tdual_int_64::t_host t_int_64;
 typedef tdual_int_64::t_host_um t_int_64_um;
 
 };
 #endif
 
-typedef struct FFTArrayTypes<LMPDeviceType> FFT_DAT;
-typedef struct FFTArrayTypes<LMPHostType> FFT_HAT;
+typedef struct FFTArrayTypes<SPADeviceType> FFT_DAT;
+typedef struct FFTArrayTypes<SPAHostType> FFT_HAT;
 
 
 #if defined(FFT_KISSFFT)

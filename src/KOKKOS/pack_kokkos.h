@@ -31,7 +31,7 @@
 
 #include "fftdata_kokkos.h"
 
-namespace LAMMPS_NS {
+namespace SPARTA_NS {
 
 template<class DeviceType>
 class PackKokkos {
