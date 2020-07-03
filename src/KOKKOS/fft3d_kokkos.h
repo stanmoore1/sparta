@@ -17,7 +17,7 @@
 #define SPARTA_FFT3D_KOKKOS_H
 
 #include "pointers.h"
-#include "remap_kokkos.h"
+#include "remap3d_kokkos.h"
 #include "fftdata_kokkos.h"
 
 namespace SPARTA_NS {

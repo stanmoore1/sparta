@@ -19,7 +19,7 @@
 #include "pointers.h"
 #include <mpi.h>
 #include "fftdata_kokkos.h"
-#include "remap.h"
+#include "remap3d.h"
 
 namespace SPARTA_NS {
 

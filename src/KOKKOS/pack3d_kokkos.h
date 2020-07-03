@@ -14,7 +14,7 @@
 
 // loop counters for doing a pack/unpack
 
-#include "pack.h"
+#include "pack3d.h"
 
 /* ----------------------------------------------------------------------
    Pack and unpack functions:

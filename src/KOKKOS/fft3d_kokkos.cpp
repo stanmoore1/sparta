@@ -21,7 +21,6 @@
 #include <stdlib.h>
 #include <math.h>
 #include "fft3d_kokkos.h"
-#include "remap_kokkos.h"
 #include "error.h"
 #include "kokkos.h"
 
@@ -34,28 +33,28 @@ using namespace SPARTA_NS;
 /* ---------------------------------------------------------------------- */
 
 template<class DeviceType>
-FFT3dKokkos<DeviceType>::FFT3dKokkos(SPARTA *lmp, MPI_Comm comm, int nfast, int nmid, int nslow,
+FFT3dKokkos<DeviceType>::FFT3dKokkos(SPARTA *sparta, MPI_Comm comm, int nfast, int nmid, int nslow,
              int in_ilo, int in_ihi, int in_jlo, int in_jhi,
              int in_klo, int in_khi,
              int out_ilo, int out_ihi, int out_jlo, int out_jhi,
              int out_klo, int out_khi,
              int scaled, int permute, int *nbuf, int usecollective,
              int usecuda_aware) :
-  Pointers(lmp)
+  Pointers(sparta)
 {
-  int nthreads = lmp->kokkos->nthreads;
-  int ngpus = lmp->kokkos->ngpus;
+  int nthreads = sparta->kokkos->nthreads;
+  int ngpus = sparta->kokkos->ngpus;
   ExecutionSpace execution_space = ExecutionSpaceFromDevice<DeviceType>::space;
 
 #if defined(FFT_MKL)
   if (ngpus > 0 && execution_space == Device)
-    lmp->error->all(FLERR,"Cannot use the MKL library with Kokkos CUDA on GPUs");
+    sparta->error->all(FLERR,"Cannot use the MKL library with Kokkos CUDA on GPUs");
 #elif defined(FFT_FFTW3)
   if (ngpus > 0 && execution_space == Device)
-    lmp->error->all(FLERR,"Cannot use the FFTW library with Kokkos CUDA on GPUs");
+    sparta->error->all(FLERR,"Cannot use the FFTW library with Kokkos CUDA on GPUs");
 #elif defined(FFT_CUFFT)
   if (ngpus > 0 && execution_space == Host)
-    lmp->error->all(FLERR,"Cannot use the cuFFT library with Kokkos CUDA on the host CPUs");
+    sparta->error->all(FLERR,"Cannot use the cuFFT library with Kokkos CUDA on the host CPUs");
 #elif defined(FFT_KISSFFT)
   // The compiler can't statically determine the stack size needed for
   //  recursive function calls in KISS FFT and the default per-thread
@@ -406,7 +405,7 @@ struct fft_plan_3d_kokkos<DeviceType>* FFT3dKokkos<DeviceType>::fft_3d_create_pl
   // allocate memory for plan data struct
 
   plan = new struct fft_plan_3d_kokkos<DeviceType>;
-  remapKK = new RemapKokkos<DeviceType>(lmp);
+  remapKK = new RemapKokkos<DeviceType>(sparta);
   if (plan == NULL) return NULL;
 
   // remap from initial distribution to layout needed for 1st set of 1d FFTs

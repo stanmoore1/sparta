@@ -77,6 +77,9 @@ action comm_kokkos.cpp
 action comm_kokkos.h
 action domain_kokkos.cpp
 action domain_kokkos.h
+action fftdata_kokkos.h fft3d.h
+action fft3d_kokkos.cpp fft3d.cpp
+action fft3d_kokkos.h fft3d.h
 action fix_adapt_kokkos.cpp
 action fix_adapt_kokkos.h
 action fix_ave_grid_kokkos.cpp
@@ -95,15 +98,18 @@ action grid_kokkos.cpp
 action grid_kokkos.h
 action irregular_kokkos.cpp
 action irregular_kokkos.h
+action kissfft_kokkos.h kissfft.h
 action kokkos.cpp
 action kokkos.h
 action kokkos_base.h
+action kokkos_base_fft.h fft3d.h
 action kokkos_copy.h
 action kokkos_type.h
 action math_extra_kokkos.h
 action memory_kokkos.h
 action modify_kokkos.cpp
 action modify_kokkos.h
+action pack3d_kokkos.h pack3d.h
 action particle_kokkos.cpp
 action particle_kokkos.h
 action rand_pool_wrap.cpp
@@ -112,6 +118,8 @@ action react_bird_kokkos.cpp
 action react_bird_kokkos.h
 action react_tce_kokkos.cpp
 action react_tce_kokkos.h
+action remap3d_kokkos.cpp remap3d.cpp
+action remap3d_kokkos.h remap3d.h
 action surf_collide_diffuse_kokkos.cpp
 action surf_collide_diffuse_kokkos.h
 action surf_collide_piston_kokkos.cpp

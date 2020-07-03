@@ -15,8 +15,8 @@
 #include <mpi.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "remap_kokkos.h"
-#include "pack_kokkos.h"
+#include "remap3d_kokkos.h"
+#include "pack3d_kokkos.h"
 #include "error.h"
 
 using namespace SPARTA_NS;
@@ -27,20 +27,20 @@ using namespace SPARTA_NS;
 /* ---------------------------------------------------------------------- */
 
 template<class DeviceType>
-RemapKokkos<DeviceType>::RemapKokkos(SPARTA *lmp) : Pointers(lmp)
+RemapKokkos<DeviceType>::RemapKokkos(SPARTA *sparta) : Pointers(sparta)
 {
   plan = NULL;
 }
 
 template<class DeviceType>
-RemapKokkos<DeviceType>::RemapKokkos(SPARTA *lmp, MPI_Comm comm,
+RemapKokkos<DeviceType>::RemapKokkos(SPARTA *sparta, MPI_Comm comm,
              int in_ilo, int in_ihi, int in_jlo, int in_jhi,
              int in_klo, int in_khi,
              int out_ilo, int out_ihi, int out_jlo, int out_jhi,
              int out_klo, int out_khi,
              int nqty, int permute, int memory,
              int precision, int usecollective,
-             int usecuda_aware) : Pointers(lmp)
+             int usecuda_aware) : Pointers(sparta)
 {
   plan = remap_3d_create_plan_kokkos(comm,
                               in_ilo,in_ihi,in_jlo,in_jhi,in_klo,in_khi,
