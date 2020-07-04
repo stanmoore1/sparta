@@ -23,9 +23,9 @@
 #include "input.h"
 #include "variable.h"
 #include "irregular.h"
-#include "fft3d_wrap.h"
+#include "fft3d_kokkos.h"
 #include "fft2d_wrap.h"
-#include "memory.h"
+#include "memory_kokkos.h"
 #include "error.h"
 
 #include <string>
@@ -65,8 +65,8 @@ ComputeFFTGridKokkos::ComputeFFTGridKokkos(SPARTA *sparta, int narg, char **arg)
   memory->destroy(fft);
   memory->destroy(fftwork);
 
-  memory->create_kokkos(k_fft, fft, 2*nfft, "fft/grid:fft");
-  memory->create_kokkos(k_fftwork, fftwork, nfft, "fft/grid:fftwork");
+  memoryKK->create_kokkos(k_fft, fft, 2*nfft, "fft/grid:fft");
+  memoryKK->create_kokkos(k_fftwork, fftwork, nfft, "fft/grid:fftwork");
 
   nglocal = 0;
   reallocate();
@@ -80,25 +80,25 @@ ComputeFFTGridKokkos::~ComputeFFTGridKokkos()
 
   if (copymode) return;
 
-  memory->destroy_kokkos(k_vector_grid, vector_grid);
-  memory->destroy_kokkos(k_array_grid, array_grid);
+  memoryKK->destroy_kokkos(k_vector_grid, vector_grid);
+  memoryKK->destroy_kokkos(k_array_grid, array_grid);
   vector_grid = NULL;
   array_grid = NULL;
 
-  memory->destroy_kokkos(k_fft, fft);
-  memory->destroy_kokkos(k_fftwork, fftwork);
+  memoryKK->destroy_kokkos(k_fft, fft);
+  memoryKK->destroy_kokkos(k_fftwork, fftwork);
   fft = NULL;
   fftwork = NULL;
 
-  memory->destroy_kokkos(k_ingrid, ingrid);
-  memory->destroy_kokkos(k_gridwork, gridwork);
-  memory->destroy_kokkos(k_gridworkcomplex, gridworkcomplex);
+  memoryKK->destroy_kokkos(k_ingrid, ingrid);
+  memoryKK->destroy_kokkos(k_gridwork, gridwork);
+  memoryKK->destroy_kokkos(k_gridworkcomplex, gridworkcomplex);
   ingrid = NULL;
   gridwork = NULL;
   gridworkcomplex = NULL;
 
-  memory->destroy_kokkos(k_map1, map1);
-  memory->destroy_kokkos(k_map2, map2);
+  memoryKK->destroy_kokkos(k_map1, map1);
+  memoryKK->destroy_kokkos(k_map2, map2);
   map1 = NULL;
   map2 = NULL;
 
@@ -161,7 +161,7 @@ void ComputeFFTGridKokkos::compute_per_grid()
 
         copymode = 1;
         Kokkos::parallel_for(copy_from_tmp(0, grid->nlocal), *this);
-        SPADeviceType::fence();
+        SPADeviceType().fence();
         copymode = 0;
 
         k_ingrid.modify< SPADeviceType >();
@@ -187,7 +187,7 @@ void ComputeFFTGridKokkos::compute_per_grid()
 
         copymode = 1;
         Kokkos::parallel_for(copy_from_tmp(0, grid->nlocal), *this);
-        SPADeviceType::fence();
+        SPADeviceType().fence();
         copymode = 0;
 
         k_ingrid.modify< SPADeviceType >();
@@ -220,7 +220,7 @@ void ComputeFFTGridKokkos::compute_per_grid()
     // use them to fill the fft buffer on the device
     copymode = 1;
     Kokkos::parallel_for(fill_fft(0, nfft), *this);
-    SPADeviceType::fence();
+    SPADeviceType().fence();
     copymode = 0;
 
     // then copy the buffer contents back to the host
@@ -246,7 +246,7 @@ void ComputeFFTGridKokkos::compute_per_grid()
 
       copymode = 1;
       Kokkos::parallel_for(compute_norm_sq(0, nfft), *this);
-      SPADeviceType::fence();
+      SPADeviceType().fence();
       copymode = 0;
 
       // update device values
@@ -263,7 +263,7 @@ void ComputeFFTGridKokkos::compute_per_grid()
       copymode = 1;
       offset = m;
       Kokkos::parallel_for(update_conjugate(0, grid->nlocal), *this);
-      SPADeviceType::fence();
+      SPADeviceType().fence();
       copymode = 0;
 
       if (ncol == 1) {
@@ -286,7 +286,7 @@ void ComputeFFTGridKokkos::compute_per_grid()
       copymode = 1;
       offset = m;
       Kokkos::parallel_for(update_complex(0, grid->nlocal), *this);
-      SPADeviceType::fence();
+      SPADeviceType().fence();
       copymode = 0;
 
       // copy back to host
@@ -302,7 +302,7 @@ void ComputeFFTGridKokkos::compute_per_grid()
 
     copymode = 1;
     Kokkos::parallel_for(scale_grid(0, nglocal), *this);
-    SPADeviceType::fence();
+    SPADeviceType().fence();
     copymode = 0;
 
     if (ncol == 1) {
@@ -329,8 +329,8 @@ void ComputeFFTGridKokkos::reallocate()
   delete irregular1;
   delete irregular2;
 
-  memory->destroy_kokkos(k_map1, map1);
-  memory->destroy_kokkos(k_map2, map2);
+  memoryKK->destroy_kokkos(k_map1, map1);
+  memoryKK->destroy_kokkos(k_map2, map2);
  
   irregular_create();
 
@@ -339,28 +339,28 @@ void ComputeFFTGridKokkos::reallocate()
 
   if (grid->nlocal == nglocal) return;
 
-  memory->destroy_kokkos(k_vector_grid, vector_grid);
-  memory->destroy_kokkos(k_array_grid, array_grid);
-  memory->destroy_kokkos(k_ingrid, ingrid);
-  memory->destroy_kokkos(k_gridwork, gridwork);
-  memory->destroy_kokkos(k_gridworkcomplex, gridworkcomplex);
+  memoryKK->destroy_kokkos(k_vector_grid, vector_grid);
+  memoryKK->destroy_kokkos(k_array_grid, array_grid);
+  memoryKK->destroy_kokkos(k_ingrid, ingrid);
+  memoryKK->destroy_kokkos(k_gridwork, gridwork);
+  memoryKK->destroy_kokkos(k_gridworkcomplex, gridworkcomplex);
   
   nglocal = grid->nlocal;
 
-  memory->create_kokkos(k_ingrid,ingrid,nglocal,"fft/grid:ingrid");
+  memoryKK->create_kokkos(k_ingrid,ingrid,nglocal,"fft/grid:ingrid");
 
   gridwork = NULL;
   gridworkcomplex = NULL;
 
   if (startcol || conjugate) {
-    memory->create_kokkos(
+    memoryKK->create_kokkos(
         k_gridwork, 
         gridwork,
         nglocal,
         "fft/grid:gridwork");
   }
   if (!conjugate) {
-    memory->create_kokkos(
+    memoryKK->create_kokkos(
         k_gridworkcomplex, 
         gridworkcomplex,
         2*nglocal, 
@@ -368,13 +368,13 @@ void ComputeFFTGridKokkos::reallocate()
   }
 
   if (ncol == 1) {
-    memory->create_kokkos(
+    memoryKK->create_kokkos(
       k_vector_grid, 
       vector_grid, 
       nglocal,
       "fft/grid:vector_grid");
   } else {
-    memory->create_kokkos(
+    memoryKK->create_kokkos(
       k_array_grid,
       array_grid,
       nglocal, ncol,
@@ -496,7 +496,7 @@ void ComputeFFTGridKokkos::irregular_create()
 
   irregular1->exchange_uniform(sbuf1,sizeof(cellint),rbuf1);
 
-  memory->create_kokkos(k_map1,map1,nfft,"fft/grid:map1");
+  memoryKK->create_kokkos(k_map1,map1,nfft,"fft/grid:map1");
 
   cellint *idrecv = (cellint *) rbuf1;
 
@@ -553,7 +553,7 @@ void ComputeFFTGridKokkos::irregular_create()
 
   idrecv = (cellint *) rbuf2;
 
-  memory->create_kokkos(k_map2,map2,nfft,"fft/grid:map2");
+  memoryKK->create_kokkos(k_map2,map2,nfft,"fft/grid:map2");
   for (i = 0; i < nglocal; i++) {
     gid = idrecv[i];
     map2[i] = (*hash)[gid] - 1;

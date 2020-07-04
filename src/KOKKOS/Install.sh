@@ -55,6 +55,8 @@ action compute_distsurf_grid_kokkos.cpp
 action compute_distsurf_grid_kokkos.h
 action compute_eflux_grid_kokkos.cpp
 action compute_eflux_grid_kokkos.h
+action compute_fft_grid_kokkos.cpp compute_fft_grid.cpp
+action compute_fft_grid_kokkos.h compute_fft_grid.h
 action compute_grid_kokkos.cpp
 action compute_grid_kokkos.h
 action compute_ke_particle_kokkos.cpp

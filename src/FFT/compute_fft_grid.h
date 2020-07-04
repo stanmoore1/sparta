@@ -42,7 +42,7 @@ class ComputeFFTGrid : public Compute {
   void reallocate();
   bigint memory_usage();
 
- private:
+ protected:
   int me,nprocs;
   int nvalues;
   int *which,*argindex,*value2index;

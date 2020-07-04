@@ -22,8 +22,7 @@ ComputeStyle(fft/grid/kk,ComputeFFTGridKokkos)
 #define SPARTA_COMPUTE_FFT_GRID_KOKKOS_H
 
 #include "compute_fft_grid.h"
-#include <Kokkos_Core.hpp>
-#include <Kokkos_DualView.hpp>
+#include "fftdata_kokkos.h"
 
 namespace SPARTA_NS {
 
@@ -37,19 +36,6 @@ struct TagComputeFFTGrid_update_complex{};
 struct TagComputeFFTGrid_scale_grid{};
 
 class ComputeFFTGridKokkos : public ComputeFFTGrid {
-
-  typedef Kokkos::LayoutRight layout_type;
-  typedef Kokkos::DefaultExecutionSpace SPADeviceType;
-  typedef Kokkos::HostSpace::execution_space SPAHostType;
-
-  typedef Kokkos::DualView< int*, layout_type, SPADeviceType > int_1D_dualview;
-  typedef Kokkos::DualView< double*, layout_type, SPADeviceType > double_1D_dualview;
-  typedef Kokkos::DualView< double**, layout_type, SPADeviceType > double_2D_dualview;
-
-  typedef double_2D_dualview::t_dev double_2D_device_view;
-
-  typedef Kokkos::DualView< cellint*, layout_type, SPADeviceType > cellint_1D_dualview;
-  typedef Kokkos::DualView< FFT_SCALAR*, layout_type, SPADeviceType > fftscalar_1D_dualview;
 
   typedef Kokkos::RangePolicy< SPADeviceType, TagComputeFFTGrid_copy_from_tmp > copy_from_tmp;
 
@@ -100,44 +86,44 @@ class ComputeFFTGridKokkos : public ComputeFFTGrid {
     int offset;
 
     // complex buf for performing FFT, length = nfft
-    fftscalar_1D_dualview k_fft;
+    FFT_DAT::tdual_FFT_SCALAR_1d k_fft;
 
 
     // work buf in grid decomp, length = nglocal
-    fftscalar_1D_dualview k_gridworkcomplex;
+    FFT_DAT::tdual_FFT_SCALAR_1d k_gridworkcomplex;
 
 
     // mapping of received SPARTA grid values to FFT grid
     // map1[i] = index into ordered FFT grid of 
     //           Ith value in buffer received
     //           from SPARTA decomp via irregular comm
-    int_1D_dualview k_map1;
+    DAT::tdual_int_1d k_map1;
 
 
     // mapping of received FFT grid values to SPARTA grid
     // map2[i] = index into SPARTA grid of Ith value
     //           in buffer received from FFT decomp via
     //           irregular comm
-    int_1D_dualview k_map2;
+    DAT::tdual_int_1d k_map2;
 
 
     // input grid values from compute,fix,variable
     // may be NULL if ingridptr just points to c/f/v
-    double_1D_dualview k_ingrid;
+    DAT::tdual_float_1d k_ingrid;
 
 
     // work buf in FFT decomp, length = nfft
-    double_1D_dualview k_fftwork;
+    DAT::tdual_float_1d k_fftwork;
 
 
     // work buf in grid decomp, length = nglocal
-    double_1D_dualview k_gridwork;
+    DAT::tdual_float_1d k_gridwork;
 
 
-    double_2D_dualview k_array_grid;
-    double_1D_dualview k_vector_grid;
+    DAT::tdual_float_2d k_array_grid;
+    DAT::tdual_float_1d k_vector_grid;
 
-    double_2D_device_view k_tmp;
+    DAT::t_float_2d k_tmp;
 
     void irregular_create();
 
