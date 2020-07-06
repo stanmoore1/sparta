@@ -63,6 +63,11 @@ ParticleKokkos::ParticleKokkos(SPARTA *sparta) : Particle(sparta)
 
   sorted_kk = 0;
   maxcellcount = 10;
+
+  k_eivec = tdual_struct_tdual_int_1d_1d("particle:eivec",0);
+  k_eiarray = tdual_struct_tdual_int_2d_1d("particle:eiarray",0);
+  k_edvec = tdual_struct_tdual_float_1d_1d("particle:edvec",0);
+  k_edarray = tdual_struct_tdual_float_2d_1d("particle:edarray",0);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -73,6 +78,21 @@ ParticleKokkos::~ParticleKokkos()
 
   particles = NULL;
   species = NULL;
+
+
+  // deallocate views of views in serial to prevent race condition in profiling tools
+
+  for (int i = 0; i < k_eivec.extent(0); i++)
+    k_eivec.h_view(i).k_view = decltype(k_eivec.h_view(i).k_view)();
+
+  for (int i = 0; i < k_eiarray.extent(0); i++)
+    k_eiarray.h_view(i).k_view = decltype(k_eiarray.h_view(i).k_view)();
+
+  for (int i = 0; i < k_edvec.extent(0); i++)
+    k_edvec.h_view(i).k_view = decltype(k_edvec.h_view(i).k_view)();
+
+  for (int i = 0; i < k_edarray.extent(0); i++)
+    k_edarray.h_view(i).k_view = decltype(k_edarray.h_view(i).k_view)();
 }
 
 #ifndef SPARTA_KOKKOS_EXACT
@@ -629,6 +649,10 @@ void ParticleKokkos::wrap_kokkos()
 
 int ParticleKokkos::add_custom(char *name, int type, int size)
 {
+  ///modifies eivec,eiarray,edvec,edarray on either host or device, probably device since host isn't modified. May just want to use host
+  ///modifies ewhich on host, sync to device here since it is never modified on the device
+  //
+ 
   int index;
 
   // if name already exists
@@ -654,7 +678,7 @@ int ParticleKokkos::add_custom(char *name, int type, int size)
                                        "particle:ename");
     memory->grow(etype,ncustom,"particle:etype");
     memory->grow(esize,ncustom,"particle:etype");
-    memory->grow(ewhich,ncustom,"particle:etype");
+    memoryKK->grow_kokkos(k_ewhich,ewhich,ncustom,"particle:etype");
   }
 
   int n = strlen(name) + 1;
@@ -666,18 +690,19 @@ int ParticleKokkos::add_custom(char *name, int type, int size)
   if (type == INT) {
     if (size == 0) {
       ewhich[index] = ncustom_ivec++;
-      this->sync(Device,EIVEC_MASK);
-      memoryKK->grow_kokkos(k_eivec,eivec,ncustom_ivec,
-                          "particle:eivec");
-      this->modified(Device,EIVEC_MASK);
+      eivec = (int **)
+        memory->srealloc(eivec,ncustom_ivec*sizeof(int *),"particle:eivec");
+      eivec[ncustom_ivec-1] = NULL;
+      k_eivec.resize(ncustom_ivec);
       memory->grow(icustom_ivec,ncustom_ivec,"particle:icustom_ivec");
       icustom_ivec[ncustom_ivec-1] = index;
     } else {
       ewhich[index] = ncustom_iarray++;
-      this->sync(Device,EIARRAY_MASK);
-      memoryKK->grow_kokkos(k_eiarray,eiarray,ncustom_iarray,
-                          "particle:eivec");
-      this->modified(Device,EIARRAY_MASK);
+      eiarray = (int ***)
+        memory->srealloc(eiarray,ncustom_iarray*sizeof(int **),
+                         "particle:eivec");
+      eiarray[ncustom_iarray-1] = NULL;
+      k_eiarray.resize(ncustom_iarray);
       memory->grow(icustom_iarray,ncustom_iarray,"particle:icustom_iarray");
       icustom_iarray[ncustom_iarray-1] = index;
       memory->grow(eicol,ncustom_iarray,"particle:eicol");
@@ -686,23 +711,38 @@ int ParticleKokkos::add_custom(char *name, int type, int size)
   } else if (type == DOUBLE) {
     if (size == 0) {
       ewhich[index] = ncustom_dvec++;
-      edvec = (double **) 
+      edvec = (double **)
         memory->srealloc(edvec,ncustom_dvec*sizeof(double *),"particle:edvec");
       edvec[ncustom_dvec-1] = NULL;
+      k_edvec.resize(ncustom_dvec);
       memory->grow(icustom_dvec,ncustom_dvec,"particle:icustom_dvec");
       icustom_dvec[ncustom_dvec-1] = index;
     } else {
       ewhich[index] = ncustom_darray++;
-      edarray = (double ***) 
+      edarray = (double ***)
         memory->srealloc(edarray,ncustom_darray*sizeof(double **),
                          "particle:edvec");
       edarray[ncustom_darray-1] = NULL;
+      k_edarray.resize(ncustom_darray);
       memory->grow(icustom_darray,ncustom_darray,"particle:icustom_darray");
       icustom_darray[ncustom_darray-1] = index;
       memory->grow(edcol,ncustom_darray,"particle:edcol");
       edcol[ncustom_darray-1] = size;
     }
   }
+
+  // ewhich is never modified on the device, so sync here
+
+  k_ewhich.modify_host();
+  k_ewhich.sync_device();
+
+  // eivec,eiarray,edvec,edarray outer views are never modified on the device
+
+  k_eivec.sync_device();
+  k_eiarray.sync_device();
+  k_edvec.sync_device();
+  k_edarray.sync_device();
+
 
   grow_custom(index,0,maxlocal);
 
@@ -717,31 +757,31 @@ int ParticleKokkos::add_custom(char *name, int type, int size)
 
 void ParticleKokkos::grow_custom(int index, int nold, int nnew)
 {
+  // modifies the inner part of eivec,eiarray,edvec,edarray on whatever, and the outer view on the host 
+  //
   if (etype[index] == INT) {
     if (esize[index] == 0) {
       int *ivector = eivec[ewhich[index]];
-      memory->grow(ivector,nnew,"particle:eivec");
-      if (ivector) memset(&ivector[nold],0,(nnew-nold)*sizeof(int));
+      auto k_ivector = k_eivec.h_view[ewhich[index]].k_view;
+      memoryKK->grow_kokkos(k_ivector,ivector,nnew,"particle:eivec");
       eivec[ewhich[index]] = ivector;
     } else {
       int **iarray = eiarray[ewhich[index]];
-      memory->grow(iarray,nnew,esize[index],"particle:eiarray");
-      if (iarray) 
-        memset(&iarray[nold][0],0,(nnew-nold)*esize[index]*sizeof(int));
+      auto k_iarray = k_eiarray.h_view[ewhich[index]].k_view;
+      memoryKK->grow_kokkos(k_iarray,iarray,nnew,esize[index],"particle:eiarray");
       eiarray[ewhich[index]] = iarray;
     }
 
   } else {
     if (esize[index] == 0) {
       double *dvector = edvec[ewhich[index]];
-      memory->grow(dvector,nnew,"particle:edvec");
-      if (dvector) memset(&dvector[nold],0,(nnew-nold)*sizeof(double));
+      auto k_dvector = k_edvec.h_view[ewhich[index]].k_view;
+      memoryKK->grow_kokkos(k_dvector,dvector,nnew,"particle:edvec");
       edvec[ewhich[index]] = dvector;
     } else {
       double **darray = edarray[ewhich[index]];
-      memory->grow(darray,nnew,esize[index],"particle:edarray");
-      if (darray)
-        memset(&darray[nold][0],0,(nnew-nold)*esize[index]*sizeof(double));
+      auto k_darray = k_edarray.h_view[ewhich[index]].k_view;
+      memoryKK->grow_kokkos(k_darray,darray,nnew,esize[index],"particle:edarray");
       edarray[ewhich[index]] = darray;
     }
   }
@@ -756,46 +796,54 @@ void ParticleKokkos::grow_custom(int index, int nold, int nnew)
 
 void ParticleKokkos::remove_custom(int index)
 {
+  // modifies the outer host view, deletes the inner dual view
+  //
   delete [] ename[index];
   ename[index] = NULL;
 
   if (etype[index] == INT) {
     if (esize[index] == 0) {
-      memory->destroy(eivec[ewhich[index]]);
+      memoryKK->destroy_kokkos(k_eivec.h_view[ewhich[index]].k_view,eivec[ewhich[index]]);
       ncustom_ivec--;
       for (int i = ewhich[index]; i < ncustom_ivec; i++) {
         icustom_ivec[i] = icustom_ivec[i+1];
         ewhich[icustom_ivec[i]] = i;
         eivec[i] = eivec[i+1];
+        k_eivec.h_view[i] = k_eivec.h_view[i+1];
       }
     } else{
-      memory->destroy(eiarray[ewhich[index]]);
+      memoryKK->destroy_kokkos(eiarray[ewhich[index]]);
       ncustom_iarray--;
       for (int i = ewhich[index]; i < ncustom_iarray; i++) {
         icustom_iarray[i] = icustom_iarray[i+1];
         ewhich[icustom_iarray[i]] = i;
         eiarray[i] = eiarray[i+1];
         eicol[i] = eicol[i+1];
+        k_eiarray.h_view[i] = k_eiarray.h_view[i+1];
       }
     }
   } else if (etype[index] == DOUBLE) {
     if (esize[index] == 0) {
-      memory->destroy(edvec[ewhich[index]]);
+      memoryKK->destroy(edvec[ewhich[index]]);
       ncustom_dvec--;
       for (int i = ewhich[index]; i < ncustom_dvec; i++) {
         icustom_dvec[i] = icustom_dvec[i+1];
         ewhich[icustom_dvec[i]] = i;
         edvec[i] = edvec[i+1];
+        k_edvec.h_view[i] = k_edvec.h_view[i+1];
       }
-    } else{
-      memory->destroy(edarray[ewhich[index]]);
+      k_edvec.modify_host();
+    } else {
+      memoryKK->destroy(edarray[ewhich[index]]);
       ncustom_darray--;
       for (int i = ewhich[index]; i < ncustom_darray; i++) {
         icustom_darray[i] = icustom_darray[i+1];
         ewhich[icustom_darray[i]] = i;
         edarray[i] = edarray[i+1];
         edcol[i] = edcol[i+1];
+        k_edarray.h_view[i] = k_edarray.h_view[i+1];
       }
+      k_edarray.modify_host();
     }
   }
 
@@ -805,6 +853,11 @@ void ParticleKokkos::remove_custom(int index)
   for (int i = 0; i < ncustom; i++) 
     if (ename[i]) empty = 0;
   if (empty) ncustom = 0;
+
+  k_eivec.sync_device();
+  k_eiarray.sync_device();
+  k_edvec.sync_device();
+  k_edarray.sync_device();
 }
 
 /* ----------------------------------------------------------------------
@@ -814,6 +867,7 @@ void ParticleKokkos::remove_custom(int index)
 
 void ParticleKokkos::copy_custom(int i, int j)
 {
+  // need sync/modify host of inner view
   int m;
 
   // caller does not always check this
@@ -841,167 +895,13 @@ void ParticleKokkos::copy_custom(int i, int j)
 }
 
 /* ----------------------------------------------------------------------
-   return size of all custom attributes in bytes for one particle
-   used by callers to allocate buffer memory for particles
-   assume integer attributes can be put at start of buffer
-   only alignment needed is between integers and doubles
-------------------------------------------------------------------------- */
-
-int ParticleKokkos::sizeof_custom()
-{
-  int n = 0;
-
-  n += ncustom_ivec*sizeof(int);
-  if (ncustom_iarray)
-    for (int i = 0; i < ncustom_iarray; i++)
-      n += eicol[i]*sizeof(int);
-
-  n = IROUNDUP(n);
-
-  n += ncustom_dvec*sizeof(double);
-  if (ncustom_darray)
-    for (int i = 0; i < ncustom_darray; i++)
-      n += edcol[i]*sizeof(double);
-
-  return n;
-}
-
-/* ----------------------------------------------------------------------
-   proc 0 writes custom attribute definition info to restart file
-------------------------------------------------------------------------- */
-
-void ParticleKokkos::write_restart_custom(FILE *fp)
-{
-  int m,index;
-
-  // nactive = # of ncustom that have active vectors/arrays
-
-  int nactive = 0;
-  for (int i = 0; i < ncustom; i++)
-    if (ename[i]) nactive++;
-
-  fwrite(&nactive,sizeof(int),1,fp);
-
-  // must write custom info in same order 
-  //   the per-particle custom values will be written into file
-  // not necessarily the same as ncustom list, due to deletions & additions
-
-  for (m = 0; m < ncustom_ivec; m++) {
-    index = icustom_ivec[m];
-    int n = strlen(ename[index]) + 1;
-    fwrite(&n,sizeof(int),1,fp);
-    fwrite(ename[index],sizeof(char),n,fp);
-    fwrite(&etype[index],sizeof(int),1,fp);
-    fwrite(&esize[index],sizeof(int),1,fp);
-  }
-  for (m = 0; m < ncustom_iarray; m++) {
-    index = icustom_iarray[m];
-    int n = strlen(ename[index]) + 1;
-    fwrite(&n,sizeof(int),1,fp);
-    fwrite(ename[index],sizeof(char),n,fp);
-    fwrite(&etype[index],sizeof(int),1,fp);
-    fwrite(&esize[index],sizeof(int),1,fp);
-  }
-  for (m = 0; m < ncustom_dvec; m++) {
-    index = icustom_dvec[m];
-    int n = strlen(ename[index]) + 1;
-    fwrite(&n,sizeof(int),1,fp);
-    fwrite(ename[index],sizeof(char),n,fp);
-    fwrite(&etype[index],sizeof(int),1,fp);
-    fwrite(&esize[index],sizeof(int),1,fp);
-  }
-  for (m = 0; m < ncustom_darray; m++) {
-    index = icustom_darray[m];
-    int n = strlen(ename[index]) + 1;
-    fwrite(&n,sizeof(int),1,fp);
-    fwrite(ename[index],sizeof(char),n,fp);
-    fwrite(&etype[index],sizeof(int),1,fp);
-    fwrite(&esize[index],sizeof(int),1,fp);
-  }
-}
-
-/* ----------------------------------------------------------------------
-   proc 0 reads custom attribute definition info from restart file
-   bcast to other procs and all procs instantiate series of Mixtures
-------------------------------------------------------------------------- */
-
-void ParticleKokkos::read_restart_custom(FILE *fp)
-{
-  // ncustom is 0 at time restart file is read
-  // will be incremented as add_custom() for each nactive
-
-  int nactive;
-  if (me == 0) fread(&nactive,sizeof(int),1,fp);
-  MPI_Bcast(&nactive,1,MPI_INT,0,world);
-  if (nactive == 0) return;
-
-  // order that custom vectors/arrays are in restart file
-  //   matches order the per-particle custom values will be read from file
-
-  int n,type,size;
-  char *name;
-
-  for (int i = 0; i < nactive; i++) {
-    if (me == 0) fread(&n,sizeof(int),1,fp);
-    MPI_Bcast(&n,1,MPI_INT,0,world);
-    name = new char[n];
-    if (me == 0) fread(name,sizeof(char),n,fp);
-    MPI_Bcast(name,n,MPI_CHAR,0,world);
-    if (me == 0) fread(&type,sizeof(int),1,fp);
-    MPI_Bcast(&type,n,MPI_CHAR,0,world);
-    if (me == 0) fread(&size,sizeof(int),1,fp);
-    MPI_Bcast(&size,n,MPI_CHAR,0,world);
-
-    // create the custom attribute
-
-    add_custom(name,type,size);
-    delete [] name;
-  }
-
-  // set flag for each newly created custom attribute to 0
-  // will be reset to 1 if restart script redefines attribute with same name
-
-  custom_restart_flag = new int[ncustom];
-  for (int i = 0; i < ncustom; i++) custom_restart_flag[i] = 0;
-}
-
-/* ----------------------------------------------------------------------
    pack a custom attributes for a single particle N into buf
    this is done in order of 4 styles of vectors/arrays, not in ncustom order
 ------------------------------------------------------------------------- */
 
 void ParticleKokkos::pack_custom(int n, char *buf)
 {
-  int i;
-  char *ptr = buf;
-
-  if (ncustom_ivec) {
-    for (i = 0; i < ncustom_ivec; i++) {
-      memcpy(ptr,&eivec[i][n],sizeof(int));
-      ptr += sizeof(int);
-    }
-  }
-  if (ncustom_iarray) {
-    for (i = 0; i < ncustom_iarray; i++) {
-      memcpy(ptr,eiarray[i][n],eicol[i]*sizeof(int));
-      ptr += eicol[i]*sizeof(int);
-    }
-  }
-
-  ptr = ROUNDUP(ptr);
-
-  if (ncustom_dvec) {
-    for (i = 0; i < ncustom_dvec; i++) {
-      memcpy(ptr,&edvec[i][n],sizeof(double));
-      ptr += sizeof(double);
-    }
-  }
-  if (ncustom_darray) {
-    for (i = 0; i < ncustom_darray; i++) {
-      memcpy(ptr,edarray[i][n],edcol[i]*sizeof(double));
-      ptr += edcol[i]*sizeof(double);
-    }
-  }
+  // need sync to host of inner views
 }
 
 /* ----------------------------------------------------------------------
@@ -1011,36 +911,7 @@ void ParticleKokkos::pack_custom(int n, char *buf)
 
 void ParticleKokkos::unpack_custom(char *buf, int n)
 {
-  int i;
-  char *ptr = buf;
-
-  if (ncustom_ivec) {
-    for (i = 0; i < ncustom_ivec; i++) {
-      memcpy(&eivec[i][n],ptr,sizeof(int));
-      ptr += sizeof(int);
-    }
-  }
-  if (ncustom_iarray) {
-    for (i = 0; i < ncustom_iarray; i++) {
-      memcpy(eiarray[i][n],ptr,eicol[i]*sizeof(int));
-      ptr += eicol[i]*sizeof(int);
-    }
-  }
-
-  ptr = ROUNDUP(ptr);
-
-  if (ncustom_dvec) {
-    for (i = 0; i < ncustom_dvec; i++) {
-      memcpy(&edvec[i][n],ptr,sizeof(double));
-      ptr += sizeof(double);
-    }
-  }
-  if (ncustom_darray) {
-    for (i = 0; i < ncustom_darray; i++) {
-      memcpy(edarray[i][n],ptr,edcol[i]*sizeof(double));
-      ptr += edcol[i]*sizeof(double);
-    }
-  }
+  // modifies host of inner views
 }
 
 /* ---------------------------------------------------------------------- */
@@ -1050,11 +921,47 @@ void ParticleKokkos::sync(ExecutionSpace space, unsigned int mask)
   if (space == Device) {
     if (sparta->kokkos->auto_sync)
       modify(Host,mask);
-    if (mask & PARTICLE_MASK) k_particles.sync<SPADeviceType>();
-    if (mask & SPECIES_MASK) k_species.sync<SPADeviceType>();
+    if (mask & PARTICLE_MASK) k_particles.sync_device();
+    if (mask & SPECIES_MASK) k_species.sync_device();
+    if (mask & CUSTOM_MASK) {
+      if (ncustom) {
+        if (ncustom_ivec)
+          for (int i = 0; i < ncustom_ivec; i++)
+            k_eivec.h_view[i].k_view.sync_device();
+        
+        if (ncustom_iarray)
+          for (int i = 0; i < ncustom_iarray; i++)
+            k_eiarray.h_view[i].k_view.sync_device();
+
+        if (ncustom_dvec)
+          for (int i = 0; i < ncustom_dvec; i++)
+            k_edvec.h_view[i].k_view.sync_device();
+
+        if (ncustom_darray)
+          for (int i = 0; i < ncustom_darray; i++)
+            k_edarray.h_view[i].k_view.sync_device();
+      }
+    }
   } else {
-    if (mask & PARTICLE_MASK) k_particles.sync<SPAHostType>();
-    if (mask & SPECIES_MASK) k_species.sync<SPAHostType>();
+    if (mask & PARTICLE_MASK) k_particles.sync_host();
+    if (mask & SPECIES_MASK) k_species.sync_host();
+    if (mask & CUSTOM_MASK) {
+      if (ncustom_ivec)
+        for (int i = 0; i < ncustom_ivec; i++)
+          k_eivec.h_view[i].k_view.sync_host();
+        
+      if (ncustom_iarray)
+        for (int i = 0; i < ncustom_iarray; i++)
+          k_eiarray.h_view[i].k_view.sync_host();
+  
+      if (ncustom_dvec)
+        for (int i = 0; i < ncustom_dvec; i++)
+          k_edvec.h_view[i].k_view.sync_host();
+  
+      if (ncustom_darray)
+        for (int i = 0; i < ncustom_darray; i++)
+          k_edarray.h_view[i].k_view.sync_host();
+    }
   }
 }
 

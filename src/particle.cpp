@@ -1634,8 +1634,8 @@ int Particle::add_custom(char *name, int type, int size)
     ename = (char **) memory->srealloc(ename,ncustom*sizeof(char *),
                                        "particle:ename");
     memory->grow(etype,ncustom,"particle:etype");
-    memory->grow(esize,ncustom,"particle:etype");
-    memory->grow(ewhich,ncustom,"particle:etype");
+    memory->grow(esize,ncustom,"particle:esize");
+    memory->grow(ewhich,ncustom,"particle:ewhich");
   }
 
   int n = strlen(name) + 1;
