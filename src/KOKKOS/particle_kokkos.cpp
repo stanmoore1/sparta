@@ -705,7 +705,7 @@ int ParticleKokkos::add_custom(char *name, int type, int size)
       k_eiarray.resize(ncustom_iarray);
       memory->grow(icustom_iarray,ncustom_iarray,"particle:icustom_iarray");
       icustom_iarray[ncustom_iarray-1] = index;
-      memory->grow(eicol,ncustom_iarray,"particle:eicol");
+      memoryKK->grow_kokkos(k_eicol,eicol,ncustom_iarray,"particle:eicol");
       eicol[ncustom_iarray-1] = size;
     }
   } else if (type == DOUBLE) {
@@ -726,15 +726,21 @@ int ParticleKokkos::add_custom(char *name, int type, int size)
       k_edarray.resize(ncustom_darray);
       memory->grow(icustom_darray,ncustom_darray,"particle:icustom_darray");
       icustom_darray[ncustom_darray-1] = index;
-      memory->grow(edcol,ncustom_darray,"particle:edcol");
+      memoryKK->grow_kokkos(k_edcol,edcol,ncustom_darray,"particle:edcol");
       edcol[ncustom_darray-1] = size;
     }
   }
 
-  // ewhich is never modified on the device, so sync here
+  // ewhich,eicol,edcol never modified on the device, so sync here
 
   k_ewhich.modify_host();
   k_ewhich.sync_device();
+
+  k_eicol.modify_host();
+  k_eicol.sync_device();
+
+  k_edcol.modify_host();
+  k_edcol.sync_device();
 
   // eivec,eiarray,edvec,edarray outer views are never modified on the device
 
@@ -742,7 +748,6 @@ int ParticleKokkos::add_custom(char *name, int type, int size)
   k_eiarray.sync_device();
   k_edvec.sync_device();
   k_edarray.sync_device();
-
 
   grow_custom(index,0,maxlocal);
 
@@ -757,8 +762,8 @@ int ParticleKokkos::add_custom(char *name, int type, int size)
 
 void ParticleKokkos::grow_custom(int index, int nold, int nnew)
 {
-  // modifies the inner part of eivec,eiarray,edvec,edarray on whatever, and the outer view on the host 
-  //
+  // modifies the inner part of eivec,eiarray,edvec,edarray on whatever, and the outer view on the host
+
   if (etype[index] == INT) {
     if (esize[index] == 0) {
       int *ivector = eivec[ewhich[index]];
@@ -811,7 +816,7 @@ void ParticleKokkos::remove_custom(int index)
         eivec[i] = eivec[i+1];
         k_eivec.h_view[i] = k_eivec.h_view[i+1];
       }
-    } else{
+    } else {
       memoryKK->destroy_kokkos(eiarray[ewhich[index]]);
       ncustom_iarray--;
       for (int i = ewhich[index]; i < ncustom_iarray; i++) {
@@ -901,7 +906,8 @@ void ParticleKokkos::copy_custom(int i, int j)
 
 void ParticleKokkos::pack_custom(int n, char *buf)
 {
-  // need sync to host of inner views
+  this->sync(Host,CUSTOM_MASK);
+  Particle::pack_custom(n,buf);
 }
 
 /* ----------------------------------------------------------------------
@@ -911,7 +917,8 @@ void ParticleKokkos::pack_custom(int n, char *buf)
 
 void ParticleKokkos::unpack_custom(char *buf, int n)
 {
-  // modifies host of inner views
+  Particle::unpack_custom(buf,n);
+  this->modify(Host,CUSTOM_MASK);
 }
 
 /* ---------------------------------------------------------------------- */
