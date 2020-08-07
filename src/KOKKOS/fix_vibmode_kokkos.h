@@ -58,7 +58,6 @@ class FixVibmodeKokkos : public FixVibmode {
   t_species_1d d_species;
 
   DAT::t_int_1d d_ewhich;
-
   ParticleKokkos::tdual_struct_tdual_int_2d_1d k_eiarray;
 };
 
