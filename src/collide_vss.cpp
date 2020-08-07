@@ -494,7 +494,7 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
             E_Dispose += p->erot;
             p->erot = E_Dispose * 
               sample_bl(random,0.5*species[sp].rotdof-1.0,
-                        1.5-params[sp].omega);
+                        1.5-aveomega);
             E_Dispose -= p->erot;
           }
         }
@@ -527,7 +527,7 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
                   (random->uniform()*(max_level+AdjustFactor));
                 p->evib = ivib * update->boltz * species[sp].vibtemp[0];
                 State_prob = pow((1.0 - p->evib / E_Dispose),
-                                 (1.5 - params[sp].omega));
+                                 (1.5 - aveomega));
               } while (State_prob < random->uniform());
               E_Dispose -= p->evib;
             }
@@ -741,33 +741,33 @@ void CollideVSS::EEXCHANGE_ReactingEDisposal(Particle::OnePart *ip,
                    1.5-aveomega);
           E_Dispose -= p->evib;
       } else if (vibdof > 2 && vibstyle == DISCRETE) {
-          p->evib = 0.0;
+        p->evib = 0.0;
 
-          int nmode = particle->species[sp].nvibmode;
-          int **vibmode = particle->eiarray[particle->ewhich[index_vibmode]];
-          int pindex = p - particle->particles;
+        int nmode = particle->species[sp].nvibmode;
+        int **vibmode = particle->eiarray[particle->ewhich[index_vibmode]];
+        int pindex = p - particle->particles;
 
-          for (int imode = 0; imode < nmode; imode++) {
-            ivib = vibmode[pindex][imode];
-            E_Dispose += ivib * update->boltz * 
-            particle->species[sp].vibtemp[imode];
-            max_level = static_cast<int>
-            (E_Dispose / (update->boltz * species[sp].vibtemp[imode]));
-            do {
-              ivib = static_cast<int> 
-              (random->uniform()*(max_level+AdjustFactor));
-              pevib = ivib * update->boltz * species[sp].vibtemp[imode];
-              State_prob = pow((1.0 - pevib / E_Dispose),
-                               (1.5 - aveomega));
-            } while (State_prob < random->uniform());
+        for (int imode = 0; imode < nmode; imode++) {
+          ivib = vibmode[pindex][imode];
+          E_Dispose += ivib * update->boltz * 
+          particle->species[sp].vibtemp[imode];
+          max_level = static_cast<int>
+          (E_Dispose / (update->boltz * species[sp].vibtemp[imode]));
+          do {
+            ivib = static_cast<int> 
+            (random->uniform()*(max_level+AdjustFactor));
+            pevib = ivib * update->boltz * species[sp].vibtemp[imode];
+            State_prob = pow((1.0 - pevib / E_Dispose),
+                             (1.5 - aveomega));
+          } while (State_prob < random->uniform());
 
-            vibmode[pindex][imode] = ivib;
-            p->evib += pevib;
-            E_Dispose -= pevib;
-          }
+          vibmode[pindex][imode] = ivib;
+          p->evib += pevib;
+          E_Dispose -= pevib;
         }
       }
     }
+  }
   
   // compute post-collision internal energies
   
