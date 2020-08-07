@@ -58,7 +58,6 @@ struct TagParticleSort{};
 
 class ParticleKokkos : public Particle {
  public:
-  typedef ArrayTypes<DeviceType> AT;
   typedef int value_type;
 
   // methods
@@ -169,7 +168,7 @@ class ParticleKokkos : public Particle {
   t_species_1d d_species;
   int nParticlesWksp;
   DAT::tdual_int_scalar k_reorder_pass;
-  typename AT::t_int_scalar d_reorder_pass;
+  DAT::t_int_scalar d_reorder_pass;
   HAT::t_int_scalar h_reorder_pass;
 
   int nbytes;
@@ -177,8 +176,8 @@ class ParticleKokkos : public Particle {
   int collide_rot,vibstyle;
   double boltz;
 
-  typename AT::t_int_2d d_plist;
-  typename AT::t_int_1d d_cellcount;
+  DAT::t_int_2d d_plist;
+  DAT::t_int_1d d_cellcount;
 
   DAT::t_int_2d d_lists;
   DAT::t_int_1d d_mlist;
@@ -188,7 +187,7 @@ class ParticleKokkos : public Particle {
   HAT::t_int_1d h_mlist;
   HAT::t_int_1d h_slist;
 
-  typename AT::t_int_scalar d_fail_flag;
+  DAT::t_int_scalar d_fail_flag;
   HAT::t_int_scalar h_fail_flag;
 
   // work memory for reduced memory reordering
