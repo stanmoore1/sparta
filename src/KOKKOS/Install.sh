@@ -73,6 +73,8 @@ action compute_temp_kokkos.cpp
 action compute_temp_kokkos.h
 action compute_thermal_grid_kokkos.cpp
 action compute_thermal_grid_kokkos.h
+action compute_tvib_grid_kokkos.cpp
+action compute_tvib_grid_kokkos.h
 action comm_kokkos.cpp
 action comm_kokkos.h
 action domain_kokkos.cpp
