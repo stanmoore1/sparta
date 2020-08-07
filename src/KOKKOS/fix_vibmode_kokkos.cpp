@@ -32,70 +32,64 @@ enum{NONE,DISCRETE,SMOOTH};            // several files
 /* ---------------------------------------------------------------------- */
 
 FixVibmodeKokkos::FixVibmodeKokkos(SPARTA *sparta, int narg, char **arg) :
-  Fix(sparta, narg, arg),
+  FixVibmode(sparta, narg, arg),
   rand_pool(12345 + comm->me
 #ifdef SPARTA_KOKKOS_EXACT
             , sparta
 #endif
-            ),
+            )
 {
+  if (narg != 2) error->all(FLERR,"Illegal fix vibmode command");
 
+  flag_add_particle = 1;
+
+  // random = RNG for vibrational mode initialization
+
+  random = new RanPark(update->ranmaster->uniform());
+  double seed = update->ranmaster->uniform();
+  random->reset(seed,comm->me,100);
+
+  // create per-particle array
+
+  if (collide->vibstyle != DISCRETE)
+    error->all(FLERR,"Cannot use fix vibmode without "
+               "collide_modify vibrate discrete");
+
+  maxmode = particle->maxvibmode;
+  if (maxmode <= 1) 
+    error->all(FLERR,"No multiple vibrational modes in fix vibmode "
+               "for any species");
+
+  vibmodeindex = particle->add_custom((char *) "vibmode",INT,maxmode);
 }
 
 /* ---------------------------------------------------------------------- */
 
 FixVibmodeKokkos::~FixVibmodeKokkos()
 {
+  delete random;
+  particle->remove_custom(vibmodeindex);
+
 #ifdef SPARTA_KOKKOS_EXACT
   rand_pool.destroy();
-  if (random_backup)
-    delete random_backup;
-  if (react_random_backup)
-    delete react_random_backup;
 #endif
 }
+
+/* ---------------------------------------------------------------------- */
+
+//void FixVibmodeKokkos::init()
+//{
+//}
 
 /* ----------------------------------------------------------------------
    called when a particle with index is created
    populate all vibrational modes and set evib = sum of mode energies
 ------------------------------------------------------------------------- */
 
-KOKKOS_INLINE_FUNCTION
-void FixVibmodeKokkos::add_particle_kokkos(int index, double temp_thermal, 
-                              double temp_rot, double temp_vib, 
-                              double *vstream)
+void FixVibmodeKokkos::add_particle(int index, double temp_thermal,
+                                    double temp_rot, double temp_vib,
+                                    double *vstream)
 {
-  DAT::t_int_1d_um& d_vibmode = d_eiarray[d_ewhich[vibmodeindex]].k_view.d_view;
 
-  int isp = d_particles[index].ispecies;
-  int nmode = d_species[isp].nvibmode;
-
-  // no modes, just return
-
-  if (nmode == 0) return;
-
-  // single mode, evib already set by Particle::evib()
-  // just convert evib back to mode level
-
-  if (nmode == 1) {
-    d_vibmode(index,0) = static_cast<int> 
-      (d_particles[index].evib / boltz / 
-       d_species[isp].vibtemp[0]);
-    return;
-  }
-
-  // loop over modes and populate each
-  // accumlate new total evib
-
-  int ivib;
-  double evib = 0.0;
-
-  for (int imode = 0; imode < nmode; imode++) {
-    ivib = static_cast<int> (-log(random->uniform()) * temp_vib /
-                             d_species[isp].vibtemp[imode]);
-    d_vibmode(index,imode) = ivib;
-    evib += ivib * boltz * d_species[isp].vibtemp[imode];
-  }
-
-  d_particles[index].evib = evib;
 }
+

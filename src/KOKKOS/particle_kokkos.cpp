@@ -742,13 +742,6 @@ int ParticleKokkos::add_custom(char *name, int type, int size)
   k_edcol.modify_host();
   k_edcol.sync_device();
 
-  // eivec,eiarray,edvec,edarray outer views are never modified on the device
-
-  k_eivec.sync_device();
-  k_eiarray.sync_device();
-  k_edvec.sync_device();
-  k_edarray.sync_device();
-
   grow_custom(index,0,maxlocal);
 
   return index;
@@ -763,6 +756,11 @@ int ParticleKokkos::add_custom(char *name, int type, int size)
 void ParticleKokkos::grow_custom(int index, int nold, int nnew)
 {
   // modifies the inner part of eivec,eiarray,edvec,edarray on whatever, and the outer view on the host
+
+  k_eivec.sync_host();
+  k_eiarray.sync_host();
+  k_edvec.sync_host();
+  k_edarray.sync_host();
 
   if (etype[index] == INT) {
     if (esize[index] == 0) {
@@ -790,6 +788,11 @@ void ParticleKokkos::grow_custom(int index, int nold, int nnew)
       edarray[ewhich[index]] = darray;
     }
   }
+
+  k_eivec.sync_device();
+  k_eiarray.sync_device();
+  k_edvec.sync_device();
+  k_edarray.sync_device();
 }
 
 /* ----------------------------------------------------------------------

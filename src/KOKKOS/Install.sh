@@ -89,6 +89,8 @@ action fix_ave_histo_weight_kokkos.cpp
 action fix_ave_histo_weight_kokkos.h
 action fix_move_surf_kokkos.cpp
 action fix_move_surf_kokkos.h
+action fix_vibmode_kokkos.cpp
+action fix_vibmode_kokkos.h
 action geometry_kokkos.h
 action grid_id_kokkos.cpp
 action grid_kokkos.cpp
