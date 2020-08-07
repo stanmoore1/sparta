@@ -24,6 +24,7 @@ ComputeStyle(tvib/grid/kk,ComputeTvibGridKokkos)
 #include "compute_tvib_grid.h"
 #include "kokkos_base.h"
 #include "kokkos_type.h"
+#include "particle_kokkos.h"
 
 namespace SPARTA_NS {
 
@@ -55,8 +56,12 @@ class ComputeTvibGridKokkos : public ComputeTvibGrid, public KokkosBase {
   DAT::tdual_float_1d k_vector_grid;
 
  private:
+  int nstride,count,evib,nsp;
+  double boltz;
+
   DAT::tdual_float_2d_lr k_tally;
   DAT::t_float_2d_lr d_tally;
+
   int need_dup;
   Kokkos::Experimental::ScatterView<F_FLOAT**, typename DAT::t_float_2d_lr::array_layout,DeviceType,Kokkos::Experimental::ScatterSum,Kokkos::Experimental::ScatterDuplicated> dup_tally;
   Kokkos::Experimental::ScatterView<F_FLOAT**, typename DAT::t_float_2d_lr::array_layout,DeviceType,Kokkos::Experimental::ScatterSum,Kokkos::Experimental::ScatterNonDuplicated> ndup_tally;
@@ -85,8 +90,8 @@ class ComputeTvibGridKokkos : public ComputeTvibGrid, public KokkosBase {
   DAT::t_int_1d d_t2s_mode;
   DAT::t_int_2d d_s2t_mode;
 
-  int nstride,count,evib,nsp;
-  double boltz;
+  DAT::t_int_1d d_ewhich;
+  ParticleKokkos::tdual_struct_tdual_int_2d_1d k_eiarray;
 };
 
 }

@@ -137,10 +137,10 @@ class ParticleKokkos : public Particle {
   tdual_species_1d k_species;
   DAT::tdual_int_2d k_species2group;
 
-  typedef Kokkos::DualView<struct_tdual_int_1d*, SPADeviceType::array_layout, DeviceType> tdual_struct_tdual_int_1d_1d;
-  typedef Kokkos::DualView<struct_tdual_float_1d*, SPADeviceType::array_layout, DeviceType> tdual_struct_tdual_float_1d_1d;
-  typedef Kokkos::DualView<struct_tdual_int_2d*, SPADeviceType::array_layout, DeviceType> tdual_struct_tdual_int_2d_1d;
-  typedef Kokkos::DualView<struct_tdual_float_2d*, SPADeviceType::array_layout, DeviceType> tdual_struct_tdual_float_2d_1d;
+  typedef Kokkos::DualView<struct_tdual_int_1d*, DeviceType::array_layout, DeviceType> tdual_struct_tdual_int_1d_1d;
+  typedef Kokkos::DualView<struct_tdual_float_1d*, DeviceType::array_layout, DeviceType> tdual_struct_tdual_float_1d_1d;
+  typedef Kokkos::DualView<struct_tdual_int_2d*, DeviceType::array_layout, DeviceType> tdual_struct_tdual_int_2d_1d;
+  typedef Kokkos::DualView<struct_tdual_float_2d*, DeviceType::array_layout, DeviceType> tdual_struct_tdual_float_2d_1d;
 
   DAT::tdual_int_1d k_ewhich,k_eicol,k_edcol;
 
