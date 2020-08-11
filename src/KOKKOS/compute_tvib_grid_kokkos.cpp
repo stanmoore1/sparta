@@ -187,11 +187,11 @@ void ComputeTvibGridKokkos::operator()(TagComputeTvibGrid_compute_per_grid_atomi
 
     // tally only the modes this species has
 
-    nmode = d_species[ispecies].nvibmode;
+    const int nmode = d_species[ispecies].nvibmode;
     for (int imode = 0; imode < nmode; imode++) {
       const int j = d_s2t_mode(ispecies,imode);
       if (nmode > 1) a_tally(icell,j) += d_vibmode(i,imode);
-      else a_tally[icell][j] +=
+      else a_tally(icell,j) +=
              d_particles[i].evib / (boltz*d_species[ispecies].vibtemp[0]);
       a_tally(icell,j+1) += 1.0;
     }
@@ -204,41 +204,23 @@ void ComputeTvibGridKokkos::operator()(TagComputeTvibGrid_compute_per_grid, cons
 
   const int np = d_cellcount[icell];
 
-      const int i = d_plist(icell,n);
-
   for (int n = 0; n < np; n++) {
-    ispecies = particles[i].ispecies;
-    if (!species[ispecies].vibdof) continue;
-    igroup = s2g[ispecies];
+    const int i = d_plist(icell,n);
+    const int ispecies = d_particles[i].ispecies;
+    if (!d_species[ispecies].vibdof) continue;
+    const int igroup = d_s2g(imix,ispecies);
     if (igroup < 0) continue;
-    icell = particles[i].icell;
-    if (!(cinfo[icell].mask & groupbit)) continue;
 
     if (modeflag == 0) {
-
-      const int i = d_plist(icell,n);
-      if (!d_species[ispecies].vibdof) return;
-
-      const int ispecies = d_particles[i].ispecies;
-      const int igroup = d_s2g(imix,ispecies);
-      if (igroup < 0) return;
-
-      const int icell = d_particles[i].icell;
-      if (!(d_cinfo[icell].mask & groupbit)) return;
-
       const int j = d_s2t[ispecies];
       d_tally(icell,j) += d_particles[i].evib;
       d_tally(icell,j+1) += 1.0;
     } else if (modeflag >= 1) {
       auto &d_vibmode = k_eiarray.d_view[d_ewhich[index_vibmode]].k_view.d_view;
 
-      if (!d_species[ispecies].vibdof) return;
-      if (igroup < 0) return;
-      if (!(d_cinfo[icell].mask & groupbit)) return;
-
       // tally only the modes this species has
 
-      nmode = d_species[ispecies].nvibmode;
+      const int nmode = d_species[ispecies].nvibmode;
       for (int imode = 0; imode < nmode; imode++) {
         const int j = d_s2t_mode(ispecies,imode);
         if (nmode > 1) d_tally(icell,j) += d_vibmode(i,imode);
@@ -296,11 +278,6 @@ post_process_grid_kokkos(int index, int onecell, int nsample,
     emap = map[index];
     d_vec = d_vector;
     nstride = 1;
-    if (onecell >= 0) {
-      lo = onecell;
-      hi = lo + 1;
-      //k = lo;
-    }
   }
 
   this->d_etally = d_etally;
@@ -316,10 +293,17 @@ post_process_grid_kokkos(int index, int onecell, int nsample,
   grid_kk->sync(Device,CINFO_MASK);
   d_cinfo = grid_kk->k_cinfo.d_view;
 
-  if (modeflag == 0){
-    nsp = nmap[index]/2;
+  if (modeflag == 0) {
+    nsp = nmap[index] / 2;
     evib = emap[0];
-    count = emap[1];
+  } else if (modeflag == 1) {
+    nsp = nmap[index] / maxmode / 2;
+    evib = emap[0];
+  } else if (modeflag == 2) {
+    nsp = nmap[index] / maxmode / 2;
+    imode = index % maxmode;
+    evib = emap[2*imode];
+    count = emap[2*imode+1];
   }
 
   copymode = 1;
@@ -334,8 +318,8 @@ post_process_grid_kokkos(int index, int onecell, int nsample,
 
 KOKKOS_INLINE_FUNCTION
 void ComputeTvibGridKokkos::operator()(TagComputeTvibGrid_post_process_grid, const int &icell) const {
-  int cnt = evib+1;
   int evb = evib;
+  int cnt = evib+1;
   int ispecies,imode;
   double theta, ibar;
 
@@ -346,21 +330,21 @@ void ComputeTvibGridKokkos::operator()(TagComputeTvibGrid_post_process_grid, con
 
   if (modeflag == 0) {
 
-    for (int isp=0; isp<nsp; ++isp) {
-      ispecies = d_t2s[evb];
-      theta = d_species[ispecies].vibtemp[0];
+    for (int isp = 0; isp < nsp; ++isp) {
+      const int ispecies = d_t2s[evb];
+      const F_FLOAT theta = d_species[ispecies].vibtemp[0];
       if (theta == 0.0 || d_etally(icell,cnt) == 0.0) {
         d_tspecies[isp] = 0.0;
         evb += 2;
         cnt = evb+1;
-        return;
+        continue;
       }
       ibar = d_etally(icell,evb) / (d_etally(icell,cnt) * boltz * theta);
       if (ibar == 0.0) {
         d_tspecies[isp] = 0.0;
         evb += 2;
         cnt = evb+1;
-        return;
+        continue;
       }
       d_tspecies[isp] = theta / (log(1.0 + 1.0/ibar));
       //denom = boltz * etally[icell][count] * ibar * log(1.0 + 1.0/ibar);
@@ -372,13 +356,14 @@ void ComputeTvibGridKokkos::operator()(TagComputeTvibGrid_post_process_grid, con
     double numer = 0.0;
     double denom = 0.0;
     cnt = count;
-    for (int isp=0; isp<nsp; ++isp) {
+    for (int isp = 0; isp < nsp; isp++) {
       numer += d_tspecies[isp]*d_etally(icell,cnt);
       denom += d_etally(icell,cnt);
       cnt += 2;
     }
-    if (denom == 0.0) d_vec[icell] = 0.0;
-    else d_vec[icell] = numer/denom;
+
+    if (denom == 0.0) d_vec[nstride*icell] = 0.0;
+    else d_vec[nstride*icell] = numer/denom;
 
   // modeflag = 1, vib modes exist
   // Tgroup = weighted sum over all Tsp and modes for species in group
@@ -387,51 +372,48 @@ void ComputeTvibGridKokkos::operator()(TagComputeTvibGrid_post_process_grid, con
   // inputs: 2*nsp*maxmode tallies
 
   } else if (modeflag == 1) {
-    int nsp = nmap[index] / maxmode / 2;
     auto &d_vibmode = k_eiarray.d_view[d_ewhich[index_vibmode]].k_view.d_view;
 
-    evib = emap[0];
-    count = evib+1;
-    for (isp = 0; isp < nsp; isp++) {
-      ispecies = d_t2s_mode[evib-emap[0]];
+    for (int isp = 0; isp < nsp; isp++) {
+      const int ispecies = d_t2s_mode[evb-evib];
       for (imode = 0; imode < maxmode; imode++) {
         theta = d_species[ispecies].vibtemp[imode];
-        if (theta == 0.0 || d_etally(icell,count) == 0.0) {
+        if (theta == 0.0 || d_etally(icell,cnt) == 0.0) {
           d_tspecies_mode(isp,imode) = 0.0;
-          evib += 2;
-          count = evib+1;
-          return;
+          evb += 2;
+          cnt = evb+1;
+          continue;
         }
-        ibar = d_etally(icell,evib) / d_etally(icell,count);
+        ibar = d_etally(icell,evb) / d_etally(icell,cnt);
         if (ibar == 0.0) {
           d_tspecies_mode(isp,imode) = 0.0;
-          evib += 2;
-          count = evib+1;
-          return;
+          evb += 2;
+          cnt = evb+1;
+          continue;
         }
         d_tspecies_mode(isp,imode) = theta / (log(1.0 + 1.0/ibar));
         //denom = boltz * etally[icell][count] * ibar * log(1.0 + 1.0/ibar);
         //tspecies_mode[isp][imode] = etally[icell][evib] / denom;
-        evib += 2;
-        count = evib+1;
+        evb += 2;
+        cnt = evb+1;
       }
     }
 
     // loop over species in group and all their modes
     // to accumulate numerator & denominator
 
-    numer = denom = 0.0;
-    count = emap[1];
-    for (isp = 0; isp < nsp; isp++) {
-      for (imode = 0; imode < maxmode; imode++) {
-        numer += d_tspecies_mode(isp,imode)*d_etally(icell,count);
-        denom += d_etally(icell,count);
-      count += 2;
+    double numer = 0.0;
+    double denom = 0.0;
+    cnt = count;
+    for (int isp = 0; isp < nsp; isp++) {
+      for (int imode = 0; imode < maxmode; imode++) {
+        numer += d_tspecies_mode(isp,imode)*d_etally(icell,cnt);
+        denom += d_etally(icell,cnt);
+        cnt += 2;
       }
     }
-     if (denom == 0.0) vec[k] = 0.0;
-    else vec[k] = numer/denom;
-    k += nstride;
+    if (denom == 0.0) d_vec[nstride*icell] = 0.0;
+    else d_vec[nstride*icell] = numer/denom;
 
   // modeflag = 2, vib modes exist
   // Tgroup = weighted sum over all Tsp and single mode for species in group
@@ -440,50 +422,46 @@ void ComputeTvibGridKokkos::operator()(TagComputeTvibGrid_post_process_grid, con
   // inputs: 2*nsp tallies strided by maxmode
 
   } else if (modeflag == 2) {
-    int nsp = nmap[index] / maxmode / 2;
-    imode = index % maxmode;
     auto &d_vibmode = k_eiarray.d_view[d_ewhich[index_vibmode]].k_view.d_view;
 
-    evib = emap[2*imode];
-    count = evib+1;
-    for (isp = 0; isp < nsp; isp++) {
-      ispecies = t2s_mode[evib-emap[0]];
-      theta = species[ispecies].vibtemp[imode];
-      if (theta == 0.0 || etally[icell][count] == 0.0) {
-        tspecies_mode[isp][imode] = 0.0;
-        evib += 2*maxmode;
-        count = evib+1;
-        return;
+    for (int isp = 0; isp < nsp; isp++) {
+      const int ispecies = d_t2s_mode[evb-evib];
+      const double theta = d_species[ispecies].vibtemp[imode];
+      if (theta == 0.0 || d_etally(icell,cnt) == 0.0) {
+        d_tspecies_mode(isp,imode) = 0.0;
+        evb += 2*maxmode;
+        cnt = evb+1;
+        continue;
       }
-      ibar = etally[icell][evib] / etally[icell][count];
+      ibar = d_etally(icell,evb) / d_etally(icell,cnt);
       if (ibar == 0.0) {
-        tspecies_mode[isp][imode] = 0.0;
-        evib += 2*maxmode;
-        count = evib+1;
-        return;
+        d_tspecies_mode(isp,imode) = 0.0;
+        evb += 2*maxmode;
+        cnt = evb+1;
+        continue;
       }
       tspecies_mode[isp][imode] = theta / (log(1.0 + 1.0/ibar));
       //denom = boltz * etally[icell][count] * ibar * log(1.0 + 1.0/ibar);
       //tspecies_mode[isp][imode] = etally[icell][evib] / denom;
-      evib += 2*maxmode;
-      count = evib+1;
+      evb += 2*maxmode;
+      cnt = evb+1;
     }
 
     // loop over species in group and single mode for each species
     // to accumulate numerator & denominator
 
-    numer = denom = 0.0;
-    count = emap[2*imode+1];
-    for (isp = 0; isp < nsp; isp++) {
-      ispecies = t2s[evib-emap[0]];
-      numer += tspecies_mode[isp][imode]*etally[icell][count];
-      denom += etally[icell][count];
-      count += 2*maxmode;
+    double numer = 0.0;
+    double denom = 0.0;
+    cnt = count;
+    for (int isp = 0; isp < nsp; isp++) {
+      ispecies = d_t2s[evb-evib];
+      numer += d_tspecies_mode(isp,imode)*d_etally(icell,cnt);
+      denom += d_etally(icell,cnt);
+      cnt += 2*maxmode;
     }
 
-    if (denom == 0.0) vec[k] = 0.0;
-    else vec[k] = numer/denom;
-    k += nstride;
+    if (denom == 0.0) d_vec[nstride*icell] = 0.0;
+    else d_vec[nstride*icell] = numer/denom;
   }
 
 }
