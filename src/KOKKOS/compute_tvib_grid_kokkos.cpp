@@ -39,35 +39,45 @@ ComputeTvibGridKokkos::ComputeTvibGridKokkos(SPARTA *sparta, int narg, char **ar
   ComputeTvibGrid(sparta, narg, arg)
 {
   kokkos_flag = 1;
-  k_s2t = DAT::tdual_int_1d("compute/tvib/grid:s2t",nspecies);
-  k_t2s = DAT::tdual_int_1d("compute/tvib/grid:t2s",ntally);
-  k_t2s_mode = DAT::tdual_int_1d("compute/tvib/grid:t2s_mode",ntally);
-  k_s2t_mode = DAT::tdual_int_2d("compute/tvib/grids2t_mode",nspecies,maxmode);
 
-  for (int n = 0; n < nspecies; n++) {
-    k_s2t.h_view(n) = s2t[n];
-    for (int m = 0; m < maxmode; m++)
-      k_s2t_mode.h_view(n,m) = s2t_mode[n][m];
+  if (modeflag == 0) {
+    k_s2t = DAT::tdual_int_1d("compute/tvib/grid:s2t",nspecies);
+    k_t2s = DAT::tdual_int_1d("compute/tvib/grid:t2s",ntally);
+
+    for (int n = 0; n < nspecies; n++)
+      k_s2t.h_view(n) = s2t[n];
+
+    for (int n = 0; n < ntally; n++)
+      k_t2s.h_view(n) = t2s[n];
+
+    k_s2t.modify_host();
+    k_t2s.modify_host();
+
+    k_s2t.sync_device();
+    k_t2s.sync_device();
+
+    d_s2t = k_s2t.d_view;
+    d_t2s = k_t2s.d_view;
+  } else {
+    k_t2s_mode = DAT::tdual_int_1d("compute/tvib/grid:t2s_mode",ntally);
+    k_s2t_mode = DAT::tdual_int_2d("compute/tvib/grids2t_mode",nspecies,maxmode);
+
+    for (int n = 0; n < nspecies; n++)
+      for (int m = 0; m < maxmode; m++)
+        k_s2t_mode.h_view(n,m) = s2t_mode[n][m];
+
+    for (int n = 0; n < ntally; n++)
+      k_t2s_mode.h_view(n) = t2s_mode[n];
+
+    k_s2t_mode.modify_host();
+    k_t2s_mode.modify_host();
+
+    k_s2t_mode.sync_device();
+    k_t2s_mode.sync_device();
+
+    d_s2t_mode = k_s2t_mode.d_view;
+    d_t2s_mode = k_t2s_mode.d_view;
   }
-  for (int n = 0; n < ntally; n++) {
-    k_t2s.h_view(n) = t2s[n];
-    k_t2s_mode.h_view(n) = t2s_mode[n];
-  }
-
-  k_s2t.modify_host();
-  k_t2s.modify_host();
-  k_t2s_mode.modify_host();
-  k_s2t_mode.modify_host();
-
-  k_s2t.sync_device();
-  k_t2s.sync_device();
-  k_t2s_mode.sync_device();
-  k_s2t_mode.sync_device();
-
-  d_s2t = k_s2t.d_view;
-  d_t2s = k_t2s.d_view;
-  d_t2s_mode = k_t2s_mode.d_view;
-  d_s2t_mode = k_s2t_mode.d_view;
 
   d_tspecies = DAT::t_float_1d("d_tspecies",nspecies);
   d_tspecies_mode = DAT::t_float_2d_lr("d_tspecies_mode",nspecies,maxmode);
@@ -448,12 +458,14 @@ void ComputeTvibGridKokkos::operator()(TagComputeTvibGrid_post_process_grid, con
 
     double numer = 0.0;
     double denom = 0.0;
+    evb = evib;
     cnt = count;
     for (int isp = 0; isp < nsp; isp++) {
-      const int ispecies = d_t2s[evb-evib];
+      const int ispecies = d_t2s_mode[evb-evib];
       numer += d_tspecies_mode(isp,imode)*d_etally(icell,cnt);
       denom += d_etally(icell,cnt);
-      cnt += 2*maxmode;
+      evb += 2*maxmode;
+      cnt = evb+1;
     }
 
     if (denom == 0.0) d_vec[icell] = 0.0;

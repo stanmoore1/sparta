@@ -557,9 +557,6 @@ void ParticleKokkos::update_class_variables() {
 
 void ParticleKokkos::grow(int nextra)
 {
-  if (ncustom)
-    error->all(FLERR,"Custom per-particles attributes not yet supported with Kokkos");
-
   bigint target = (bigint) nlocal + nextra;
   if (target <= maxlocal) return;
 

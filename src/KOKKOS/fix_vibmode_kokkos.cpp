@@ -39,28 +39,7 @@ FixVibmodeKokkos::FixVibmodeKokkos(SPARTA *sparta, int narg, char **arg) :
 #endif
             )
 {
-  if (narg != 2) error->all(FLERR,"Illegal fix vibmode command");
 
-  flag_add_particle = 1;
-
-  // random = RNG for vibrational mode initialization
-
-  random = new RanPark(update->ranmaster->uniform());
-  double seed = update->ranmaster->uniform();
-  random->reset(seed,comm->me,100);
-
-  // create per-particle array
-
-  if (collide->vibstyle != DISCRETE)
-    error->all(FLERR,"Cannot use fix vibmode without "
-               "collide_modify vibrate discrete");
-
-  maxmode = particle->maxvibmode;
-  if (maxmode <= 1) 
-    error->all(FLERR,"No multiple vibrational modes in fix vibmode "
-               "for any species");
-
-  vibmodeindex = particle->add_custom((char *) "vibmode",INT,maxmode);
 }
 
 /* ---------------------------------------------------------------------- */
