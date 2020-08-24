@@ -25,14 +25,13 @@ message(STATUS "")
 
 message(STATUS "Enabled extra options")
 foreach(opt IN LISTS SPARTA_EXTRA_OPTIONS_LIST)
-  if(${${opt}})
-    message(STATUS "  ${opt}")
+  if(${opt})
+    message(STATUS "  ${opt}: ${${opt}}")
   endif()
 endforeach()
 
 message(STATUS "")
 
-message(STATUS "SPARTA_MACHINE: ${SPARTA_MACHINE}")
 message(
   STATUS "SPARTA_DEFAULT_CXX_COMPILE_FLAGS: ${SPARTA_DEFAULT_CXX_COMPILE_FLAGS}"
 )
