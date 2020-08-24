@@ -40,7 +40,8 @@ class ComputeTvibGridKokkos : public ComputeTvibGrid, public KokkosBase {
   void compute_per_grid();
   void compute_per_grid_kokkos();
   int query_tally_grid_kokkos(DAT::t_float_2d_lr &);
-  void post_process_grid_kokkos(int, int, DAT::t_float_2d_lr, int *, DAT::t_float_1d_strided);
+  void post_process_grid_kokkos(int, int, DAT::t_float_2d_lr, int *,
+                                DAT::t_float_1d_strided);
   void reallocate();
 
   template<int NEED_ATOMICS>
