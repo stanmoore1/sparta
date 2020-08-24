@@ -262,15 +262,15 @@ int ComputeTvibGridKokkos::query_tally_grid_kokkos(DAT::t_float_2d_lr &d_array)
    if norm = 0.0, set result to 0.0 directly so do not divide by 0.0
 ------------------------------------------------------------------------- */
 
-double ComputeTvibGridKokkos::
-post_process_grid_kokkos(int index, int onecell, int nsample,
-                  DAT::t_float_2d_lr d_etally, int *emap, DAT::t_float_1d_strided d_vec)
+void ComputeTvibGridKokkos::
+post_process_grid_kokkos(int index, int nsample,
+                         DAT::t_float_2d_lr d_etally, int *emap,
+                         DAT::t_float_1d_strided d_vec)
 {
   index--;
 
   int lo = 0;
   int hi = nglocal;
-  //k = 0;
 
   if (!d_etally.data()) {
     nsample = 1;
@@ -309,9 +309,6 @@ post_process_grid_kokkos(int index, int onecell, int nsample,
   copymode = 1;
   Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagComputeTvibGrid_post_process_grid>(lo,hi),*this);
   copymode = 0;
-
-  if (onecell < 0) return 0.0;
-  return d_vec[onecell];
 }
 
 /* ---------------------------------------------------------------------- */
@@ -362,8 +359,9 @@ void ComputeTvibGridKokkos::operator()(TagComputeTvibGrid_post_process_grid, con
       cnt += 2;
     }
 
-    if (denom == 0.0) d_vec[nstride*icell] = 0.0;
-    else d_vec[nstride*icell] = numer/denom;
+    if (denom == 0.0) d_vec[icell] = 0.0;
+    else d_vec[icell] = numer/denom;
+
 
   // modeflag = 1, vib modes exist
   // Tgroup = weighted sum over all Tsp and modes for species in group
@@ -412,8 +410,8 @@ void ComputeTvibGridKokkos::operator()(TagComputeTvibGrid_post_process_grid, con
         cnt += 2;
       }
     }
-    if (denom == 0.0) d_vec[nstride*icell] = 0.0;
-    else d_vec[nstride*icell] = numer/denom;
+    if (denom == 0.0) d_vec[icell] = 0.0;
+    else d_vec[icell] = numer/denom;
 
   // modeflag = 2, vib modes exist
   // Tgroup = weighted sum over all Tsp and single mode for species in group
@@ -460,8 +458,8 @@ void ComputeTvibGridKokkos::operator()(TagComputeTvibGrid_post_process_grid, con
       cnt += 2*maxmode;
     }
 
-    if (denom == 0.0) d_vec[nstride*icell] = 0.0;
-    else d_vec[nstride*icell] = numer/denom;
+    if (denom == 0.0) d_vec[icell] = 0.0;
+    else d_vec[icell] = numer/denom;
   }
 
 }
