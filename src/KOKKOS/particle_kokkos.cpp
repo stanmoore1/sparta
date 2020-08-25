@@ -93,6 +93,10 @@ ParticleKokkos::~ParticleKokkos()
 
   for (int i = 0; i < k_edarray.extent(0); i++)
     k_edarray.h_view(i).k_view = decltype(k_edarray.h_view(i).k_view)();
+
+  ewhich = NULL;
+  eicol = NULL;
+  edcol = NULL;
 }
 
 #ifndef SPARTA_KOKKOS_EXACT
@@ -562,6 +566,7 @@ void ParticleKokkos::grow(int nextra)
 
   bigint newmax = maxlocal;
   while (newmax < target) newmax += MAX(DELTA, newmax*1.1);
+  int oldmax = maxlocal;
 
   if (newmax > MAXSMALLINT)
     error->one(FLERR,"Per-processor particle count is too big");
@@ -579,10 +584,10 @@ void ParticleKokkos::grow(int nextra)
 
   if (ncustom == 0) return;
 
-  //for (int i = 0; i < ncustom; i++) {
-  //  if (ename[i] == NULL) continue;
-  //  grow_custom(i,oldmax,maxlocal);
-  //}
+  for (int i = 0; i < ncustom; i++) {
+    if (ename[i] == NULL) continue;
+    grow_custom(i,oldmax,maxlocal);
+  }
 }
 
 /* ----------------------------------------------------------------------
@@ -674,8 +679,8 @@ int ParticleKokkos::add_custom(char *name, int type, int size)
     ename = (char **) memory->srealloc(ename,ncustom*sizeof(char *),
                                        "particle:ename");
     memory->grow(etype,ncustom,"particle:etype");
-    memory->grow(esize,ncustom,"particle:etype");
-    memoryKK->grow_kokkos(k_ewhich,ewhich,ncustom,"particle:etype");
+    memory->grow(esize,ncustom,"particle:esize");
+    memoryKK->grow_kokkos(k_ewhich,ewhich,ncustom,"particle:ewhich");
   }
 
   int n = strlen(name) + 1;
@@ -763,12 +768,12 @@ void ParticleKokkos::grow_custom(int index, int nold, int nnew)
     if (esize[index] == 0) {
       int *ivector = eivec[ewhich[index]];
       auto k_ivector = k_eivec.h_view[ewhich[index]].k_view;
-      memoryKK->grow_kokkos(k_ivector,ivector,nnew,"particle:eivec");
+      memoryKK->grow_kokkos(k_ivector,ivector,nold+nnew,"particle:eivec");
       eivec[ewhich[index]] = ivector;
     } else {
       int **iarray = eiarray[ewhich[index]];
-      auto k_iarray = k_eiarray.h_view[ewhich[index]].k_view;
-      memoryKK->grow_kokkos(k_iarray,iarray,nnew,esize[index],"particle:eiarray");
+      auto &k_iarray = k_eiarray.h_view[ewhich[index]].k_view;
+      memoryKK->grow_kokkos(k_iarray,iarray,nold+nnew,esize[index],"particle:eiarray");
       eiarray[ewhich[index]] = iarray;
     }
 
@@ -776,12 +781,12 @@ void ParticleKokkos::grow_custom(int index, int nold, int nnew)
     if (esize[index] == 0) {
       double *dvector = edvec[ewhich[index]];
       auto k_dvector = k_edvec.h_view[ewhich[index]].k_view;
-      memoryKK->grow_kokkos(k_dvector,dvector,nnew,"particle:edvec");
+      memoryKK->grow_kokkos(k_dvector,dvector,nold+nnew,"particle:edvec");
       edvec[ewhich[index]] = dvector;
     } else {
       double **darray = edarray[ewhich[index]];
       auto k_darray = k_edarray.h_view[ewhich[index]].k_view;
-      memoryKK->grow_kokkos(k_darray,darray,nnew,esize[index],"particle:edarray");
+      memoryKK->grow_kokkos(k_darray,darray,nold+nnew,esize[index],"particle:edarray");
       edarray[ewhich[index]] = darray;
     }
   }

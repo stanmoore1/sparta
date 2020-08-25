@@ -134,6 +134,32 @@ void CollideVSSKokkos::init()
   if (mixture->nspecies != particle->nspecies)
     error->all(FLERR,"Collision mixture does not contain all species");
 
+  // if rotstyle or vibstyle = DISCRETE,
+  // check that extra rotation/vibration info is defined
+  // for species that require it
+
+  if (vibstyle == DISCRETE) {
+    index_vibmode = particle->find_custom((char *) "vibmode");
+
+    Particle::Species *species = particle->species;
+    int nspecies = particle->nspecies;
+
+    int flag = 0;
+    for (int isp = 0; isp < nspecies; isp++) {
+      if (species[isp].vibdof <= 2) continue;
+      if (index_vibmode < 0)
+        error->all(FLERR,
+                   "Fix vibmode must be used with discrete vibrational modes");
+      if (species[isp].nvibmode != species[isp].vibdof / 2) flag++;
+    }
+    if (flag) {
+      char str[128];
+      sprintf(str,"%d species do not define correct vibrational "
+              "modes for discrete model",flag);
+      error->all(FLERR,str);
+    }
+  }
+
   // reallocate one-cell data structs for one or many groups
 
   oldgroups = ngroups;
@@ -409,6 +435,8 @@ template < int NEARCP > void CollideVSSKokkos::collisions_one(COLLIDE_REDUCE &re
   particle_kk->sync(Device,PARTICLE_MASK|SPECIES_MASK);
   d_particles = particle_kk->k_particles.d_view;
   d_species = particle_kk->k_species.d_view;
+  d_ewhich = particle_kk->k_ewhich.d_view;
+  k_eiarray = particle_kk->k_eiarray;
 
   GridKokkos* grid_kk = (GridKokkos*) grid;
   grid_kk->sync(Device,CINFO_MASK);

@@ -120,6 +120,8 @@ void ComputeTvibGridKokkos::compute_per_grid_kokkos()
   particle_kk->sync(Device,PARTICLE_MASK|SPECIES_MASK);
   d_particles = particle_kk->k_particles.d_view;
   d_species = particle_kk->k_species.d_view;
+  d_ewhich = particle_kk->k_ewhich.d_view;
+  k_eiarray = particle_kk->k_eiarray;
 
   GridKokkos* grid_kk = (GridKokkos*) grid;
   d_cellcount = grid_kk->d_cellcount;
@@ -188,11 +190,10 @@ void ComputeTvibGridKokkos::operator()(TagComputeTvibGrid_compute_per_grid_atomi
     const int j = d_s2t[ispecies];
     a_tally(icell,j) += d_particles[i].evib;
     a_tally(icell,j+1) += 1.0;
-  } else if (modeflag >=1) {
-    auto &d_vibmode = k_eiarray.d_view[d_ewhich[index_vibmode]].k_view.d_view;
+  } else if (modeflag >= 1) {
+    auto &d_vibmode = k_eiarray.h_view[d_ewhich[index_vibmode]].k_view.d_view;
 
     if (!d_species[ispecies].vibdof) return;
-    if (igroup < 0) return;
     if (!(d_cinfo[icell].mask & groupbit)) return;
 
     // tally only the modes this species has
@@ -306,9 +307,11 @@ post_process_grid_kokkos(int index, int nsample,
   if (modeflag == 0) {
     nsp = nmap[index] / 2;
     evib = emap[0];
+    count = emap[1];
   } else if (modeflag == 1) {
     nsp = nmap[index] / maxmode / 2;
     evib = emap[0];
+    count = emap[1];
   } else if (modeflag == 2) {
     nsp = nmap[index] / maxmode / 2;
     imode = index % maxmode;
@@ -458,14 +461,11 @@ void ComputeTvibGridKokkos::operator()(TagComputeTvibGrid_post_process_grid, con
 
     double numer = 0.0;
     double denom = 0.0;
-    evb = evib;
     cnt = count;
     for (int isp = 0; isp < nsp; isp++) {
-      const int ispecies = d_t2s_mode[evb-evib];
       numer += d_tspecies_mode(isp,imode)*d_etally(icell,cnt);
       denom += d_etally(icell,cnt);
-      evb += 2*maxmode;
-      cnt = evb+1;
+      cnt += 2*maxmode;
     }
 
     if (denom == 0.0) d_vec[icell] = 0.0;

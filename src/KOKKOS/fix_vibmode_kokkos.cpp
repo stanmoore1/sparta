@@ -46,9 +46,6 @@ FixVibmodeKokkos::FixVibmodeKokkos(SPARTA *sparta, int narg, char **arg) :
 
 FixVibmodeKokkos::~FixVibmodeKokkos()
 {
-  delete random;
-  particle->remove_custom(vibmodeindex);
-
 #ifdef SPARTA_KOKKOS_EXACT
   rand_pool.destroy();
 #endif
@@ -69,6 +66,8 @@ void FixVibmodeKokkos::add_particle(int index, double temp_thermal,
                                     double temp_rot, double temp_vib,
                                     double *vstream)
 {
-
+  //sync //////////////////////////
+  FixVibmode::add_particle(index, temp_thermal, temp_rot, temp_vib, vstream);
+  //modify /////////////////////////
 }
 
