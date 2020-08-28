@@ -984,10 +984,48 @@ void ParticleKokkos::modify(ExecutionSpace space, unsigned int mask)
   if (space == Device) {
     if (mask & PARTICLE_MASK) k_particles.modify_device();
     if (mask & SPECIES_MASK) k_species.modify_device();
+    if (mask & CUSTOM_MASK) {
+      if (ncustom) {
+        if (ncustom_ivec)
+          for (int i = 0; i < ncustom_ivec; i++)
+            k_eivec.h_view[i].k_view.modify_device();
+
+        if (ncustom_iarray)
+          for (int i = 0; i < ncustom_iarray; i++)
+            k_eiarray.h_view[i].k_view.modify_device();
+
+        if (ncustom_dvec)
+          for (int i = 0; i < ncustom_dvec; i++)
+            k_edvec.h_view[i].k_view.modify_device();
+
+        if (ncustom_darray)
+          for (int i = 0; i < ncustom_darray; i++)
+            k_edarray.h_view[i].k_view.modify_device();
+      }
+    }
     if (sparta->kokkos->auto_sync)
       sync(Host,mask);
   } else {
     if (mask & PARTICLE_MASK) k_particles.modify_host();
     if (mask & SPECIES_MASK) k_species.modify_host();
+    if (mask & CUSTOM_MASK) {
+      if (ncustom) {
+        if (ncustom_ivec)
+          for (int i = 0; i < ncustom_ivec; i++)
+            k_eivec.h_view[i].k_view.modify_host();
+    
+        if (ncustom_iarray)
+          for (int i = 0; i < ncustom_iarray; i++)
+            k_eiarray.h_view[i].k_view.modify_host();
+
+        if (ncustom_dvec)
+          for (int i = 0; i < ncustom_dvec; i++)
+            k_edvec.h_view[i].k_view.modify_host();
+
+        if (ncustom_darray)
+          for (int i = 0; i < ncustom_darray; i++)
+            k_edarray.h_view[i].k_view.modify_host();
+      }
+    }
   }
 }

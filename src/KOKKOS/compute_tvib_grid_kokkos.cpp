@@ -191,7 +191,7 @@ void ComputeTvibGridKokkos::operator()(TagComputeTvibGrid_compute_per_grid_atomi
     a_tally(icell,j) += d_particles[i].evib;
     a_tally(icell,j+1) += 1.0;
   } else if (modeflag >= 1) {
-    auto &d_vibmode = k_eiarray.h_view[d_ewhich[index_vibmode]].k_view.d_view;
+    auto &d_vibmode = k_eiarray.d_view[d_ewhich[index_vibmode]].k_view.d_view;
 
     if (!d_species[ispecies].vibdof) return;
     if (!(d_cinfo[icell].mask & groupbit)) return;
