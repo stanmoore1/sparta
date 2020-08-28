@@ -1132,7 +1132,7 @@ void CollideVSSKokkos::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
 
               int nmode = d_species[sp].nvibmode;
               auto &d_vibmode = k_eiarray.d_view[d_ewhich[index_vibmode]].k_view.d_view;
-              int pindex = p - particle->particles; //////
+              int pindex = p - d_particles.data();
 
               for (int imode = 0; imode < nmode; imode++) {
                 ivib = d_vibmode(pindex,imode);
@@ -1335,7 +1335,7 @@ void CollideVSSKokkos::EEXCHANGE_ReactingEDisposal(Particle::OnePart *ip,
 
         int nmode = d_species[sp].nvibmode;
         auto &d_vibmode = k_eiarray.d_view[d_ewhich[index_vibmode]].k_view.d_view;
-        int pindex = p - particle->particles; //////
+        int pindex = p - d_particles.data();
 
         for (int imode = 0; imode < nmode; imode++) {
           ivib = d_vibmode(pindex,imode);
