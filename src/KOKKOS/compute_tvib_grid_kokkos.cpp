@@ -117,7 +117,7 @@ void ComputeTvibGridKokkos::compute_per_grid_kokkos()
   invoked_per_grid = update->ntimestep;
 
   ParticleKokkos* particle_kk = (ParticleKokkos*) particle;
-  particle_kk->sync(Device,PARTICLE_MASK|SPECIES_MASK);
+  particle_kk->sync(Device,PARTICLE_MASK|SPECIES_MASK); /////////////////////
   d_particles = particle_kk->k_particles.d_view;
   d_species = particle_kk->k_species.d_view;
   d_ewhich = particle_kk->k_ewhich.d_view;

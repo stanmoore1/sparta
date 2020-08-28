@@ -22,6 +22,7 @@
 #include "random_park.h"
 #include "math_const.h"
 #include "error.h"
+#include "sparta_masks.h"
 
 using namespace SPARTA_NS;
 using namespace MathConst;
@@ -39,7 +40,9 @@ FixVibmodeKokkos::FixVibmodeKokkos(SPARTA *sparta, int narg, char **arg) :
 #endif
             )
 {
-
+#ifdef SPARTA_KOKKOS_EXACT
+  rand_pool.init(random);
+#endif
 }
 
 /* ---------------------------------------------------------------------- */
@@ -51,12 +54,6 @@ FixVibmodeKokkos::~FixVibmodeKokkos()
 #endif
 }
 
-/* ---------------------------------------------------------------------- */
-
-//void FixVibmodeKokkos::init()
-//{
-//}
-
 /* ----------------------------------------------------------------------
    called when a particle with index is created
    populate all vibrational modes and set evib = sum of mode energies
@@ -66,8 +63,15 @@ void FixVibmodeKokkos::add_particle(int index, double temp_thermal,
                                     double temp_rot, double temp_vib,
                                     double *vstream)
 {
-  //sync //////////////////////////
+  ParticleKokkos* particle_kk = (ParticleKokkos*) particle;
+  particle_kk->sync(Host,PARTICLE_MASK|SPECIES_MASK|CUSTOM_MASK);
   FixVibmode::add_particle(index, temp_thermal, temp_rot, temp_vib, vstream);
-  //modify /////////////////////////
+  particle_kk->modify(Host,PARTICLE_MASK|CUSTOM_MASK);
 }
+
+/* ---------------------------------------------------------------------- */
+
+//void FixVibmodeKokkos::()
+//{
+//}
 
