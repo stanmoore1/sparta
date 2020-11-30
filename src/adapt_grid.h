@@ -54,6 +54,7 @@ class AdaptGrid : protected Pointers {
   bigint coarsen();
   void cleanup();
   void write_file();
+  void unpack_adapt();
 
  private:
   int me,nprocs;

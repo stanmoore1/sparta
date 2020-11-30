@@ -1388,7 +1388,16 @@ void AdaptGrid::particle_surf_comm()
 
   memory->destroy(proclist);
   memory->sfree(sadapt);
+}
 
+
+/* ----------------------------------------------------------------------
+   unpack adapt comm buffer
+   called from Comm::send_cells_adapt
+------------------------------------------------------------------------- */
+
+void AdaptGrid::unpack_adapt(int nrecv,char **spbuf)
+{
   // create alist = list of parent cells I will coarsen in perform_coarsen()
 
   MyHash *alhash = new MyHash();

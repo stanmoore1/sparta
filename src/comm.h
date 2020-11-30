@@ -62,6 +62,7 @@ class Comm : protected Pointers {
                                 // base class when child copy is destroyed)
 
   void migrate_cells_less_memory(int);  // small memory version of migrate_cells
+  int send_cells_adapt_less_memory(int, int *, char *, char **);  // small memory version of send_cells_adapt
   int rendezvous_irregular(int, char *, int, int, int *,
                            int (*)(int, char *, int &, int *&, char *&, void *),
                            int, char *&, int, void *, int);

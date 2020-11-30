@@ -430,6 +430,7 @@ void Comm::migrate_cells_less_memory(int nmigrate)
       memset(rbuf,0,maxrecvbuf);
     }
 
+
     // perform irregular communication
 
     igrid->exchange_variable(sbuf,gsize,rbuf);
@@ -476,7 +477,7 @@ void Comm::migrate_cells_less_memory(int nmigrate)
    called from AdaptGrid
 ------------------------------------------------------------------------- */
 
-int Comm::send_cells_adapt(int nsend, int *procsend, char *inbuf, char **outbuf)
+void Comm::send_cells_adapt(int nsend, int *procsend, char *inbuf, AdaptGrid *adapt)
 {
   if (update->mem_limit_grid_flag)
     update->set_mem_limit_grid();
@@ -553,10 +554,10 @@ int Comm::send_cells_adapt(int nsend, int *procsend, char *inbuf, char **outbuf)
 
   igrid->exchange_variable(sbuf,gsize,rbuf);
 
-  // return rbuf and grid cell count
+  // unpack rbuf
 
   *outbuf = rbuf;
-  return nrecv;
+  adapt->unpack_adapt(nrecv,outbuf);
 }
 
 /* ----------------------------------------------------------------------
@@ -566,7 +567,7 @@ int Comm::send_cells_adapt(int nsend, int *procsend, char *inbuf, char **outbuf)
    uses multiple comm passes to reduce buffer size
 ------------------------------------------------------------------------- */
 
-int Comm::send_cells_adapt_less_memory(int nsend, int *procsend, char *inbuf, char **outbuf)
+void Comm::send_cells_adapt_less_memory(int nsend_total, int *procsend, char *inbuf, AdaptGrid *adapt)
 {
   int i,n;
   
@@ -575,33 +576,42 @@ int Comm::send_cells_adapt_less_memory(int nsend, int *procsend, char *inbuf, ch
   // grow size list if needed
   // don't use gproc, but needs to stay same size as gsize
   
-  if (nsend > maxgproc) {
-    maxgproc = nsend;
+  if (nsend_total > maxgproc) {
+    maxgproc = nsend_total;
     memory->destroy(gproc);
     memory->destroy(gsize);
     memory->create(gproc,maxgproc,"comm:gproc");
     memory->create(gsize,maxgproc,"comm:gsize");
   }
+
+  if (sbuf) memory->destroy(sbuf);
+  sbuf = NULL;
+  maxsendbuf = 0;
+
+  if (rbuf) memory->destroy(rbuf);
+  rbuf = NULL;
+  maxrecvbuf = 0;
   
   // compute byte count needed to pack cells
 
-  int nrecv_total = 0;
   int i_start = 0;
-  int i_end = nsend;
+  int i_end = nsend_total;
   int not_done = 1;
 
   while (not_done) {
     bigint boffset = 0;
-    for (int i = i_start; i < nsend; i++) {
+    int nsend = 0;
+    for (int i = i_start; i < nsend_total; i++) {
       i_end = i+1;
       n = grid->pack_one_adapt((char *) &sadapt[i],NULL,0);
       if (n > 0 && boffset > 0 && boffset+n > update->global_mem_limit) {
         i_end -= 1;
         break;
       }
-      gsize[i] = n;
+      gsize[nsend++] = n;
       boffset += n;
     }
+    printf("me %i, %i %i %ld %i\n",comm->me,i_end,nsend,boffset,update->global_mem_limit);
 
     if (boffset > MAXSMALLINT) 
       error->one(FLERR,"Adapt grid send buffer exceeds 2 GB");
@@ -634,7 +644,7 @@ int Comm::send_cells_adapt_less_memory(int nsend, int *procsend, char *inbuf, ch
     int nrecv = 
       igrid->create_data_variable(nsend,procsend,gsize,
                                   recvsize,commsortflag);
-    nrecv_total += nrecv;
+    printf("nrecv %i %i\n",comm->me,nrecv);
   
     // reallocate rbuf as needed
   
@@ -644,21 +654,38 @@ int Comm::send_cells_adapt_less_memory(int nsend, int *procsend, char *inbuf, ch
       memory->create(rbuf,maxrecvbuf,"comm:rbuf");
       memset(rbuf,0,maxrecvbuf);
     }
+    printf("buf %i %i %i\n",comm->me, maxrecvbuf, maxsendbuf);
   
     // perform irregular communication
   
     igrid->exchange_variable(sbuf,gsize,rbuf);
 
+    // deallocate large buffers to reduce memory footprint
+    // also deallocate igrid for same reason
+
+    if (sbuf) memory->destroy(sbuf);
+    sbuf = NULL;
+    maxsendbuf = 0;
+
+    if (rbuf) memory->destroy(rbuf);
+    rbuf = NULL;
+    maxrecvbuf = 0;
+
+    if (igrid) {
+      delete igrid;
+      igrid = NULL;
+    }
+
     i_start = i_end;
-    int not_done_local = i_start < nsend;
+    int not_done_local = i_start < nsend_total;
     MPI_Allreduce(&not_done_local,&not_done,1,MPI_INT,MPI_SUM,world);
 
-  } // end while loop
-
-  // return rbuf and grid cell count
+    // unpack rbuf
 
     *outbuf = rbuf;
-    return nrecv_total;
+    adapt->unpack_adapt(nrecv,outbuf);
+
+  } // end while loop
 }
 
 /* ----------------------------------------------------------------------
