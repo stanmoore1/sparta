@@ -483,8 +483,10 @@ void Comm::send_cells_adapt(int nsend, int *procsend, char *inbuf, AdaptGrid *ad
     update->set_mem_limit_grid();
 
   if (update->global_mem_limit > 0 ||
-      (update->mem_limit_grid_flag && !grid->nlocal))
-    return send_cells_adapt_less_memory(nsend,procsend,inbuf,outbuf);
+      (update->mem_limit_grid_flag && !grid->nlocal)) {
+    send_cells_adapt_less_memory(nsend,procsend,inbuf,adapt);
+    return;
+  }
 
   int i,n;
 
@@ -556,8 +558,7 @@ void Comm::send_cells_adapt(int nsend, int *procsend, char *inbuf, AdaptGrid *ad
 
   // unpack rbuf
 
-  *outbuf = rbuf;
-  adapt->unpack_adapt(nrecv,outbuf);
+  adapt->unpack_adapt(nrecv,rbuf);
 }
 
 /* ----------------------------------------------------------------------
@@ -611,7 +612,6 @@ void Comm::send_cells_adapt_less_memory(int nsend_total, int *procsend, char *in
       gsize[nsend++] = n;
       boffset += n;
     }
-    printf("me %i, %i %i %ld %i\n",comm->me,i_end,nsend,boffset,update->global_mem_limit);
 
     if (boffset > MAXSMALLINT) 
       error->one(FLERR,"Adapt grid send buffer exceeds 2 GB");
@@ -644,7 +644,6 @@ void Comm::send_cells_adapt_less_memory(int nsend_total, int *procsend, char *in
     int nrecv = 
       igrid->create_data_variable(nsend,procsend,gsize,
                                   recvsize,commsortflag);
-    printf("nrecv %i %i\n",comm->me,nrecv);
   
     // reallocate rbuf as needed
   
@@ -654,11 +653,14 @@ void Comm::send_cells_adapt_less_memory(int nsend_total, int *procsend, char *in
       memory->create(rbuf,maxrecvbuf,"comm:rbuf");
       memset(rbuf,0,maxrecvbuf);
     }
-    printf("buf %i %i %i\n",comm->me, maxrecvbuf, maxsendbuf);
   
     // perform irregular communication
   
     igrid->exchange_variable(sbuf,gsize,rbuf);
+
+    // unpack rbuf
+
+    adapt->unpack_adapt(nrecv,rbuf); 
 
     // deallocate large buffers to reduce memory footprint
     // also deallocate igrid for same reason
@@ -679,11 +681,6 @@ void Comm::send_cells_adapt_less_memory(int nsend_total, int *procsend, char *in
     i_start = i_end;
     int not_done_local = i_start < nsend_total;
     MPI_Allreduce(&not_done_local,&not_done,1,MPI_INT,MPI_SUM,world);
-
-    // unpack rbuf
-
-    *outbuf = rbuf;
-    adapt->unpack_adapt(nrecv,outbuf);
 
   } // end while loop
 }
