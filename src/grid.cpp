@@ -442,7 +442,7 @@ void Grid::acquire_ghosts_all(int surfflag)
 
   // create buf for holding all of my cells, not including sub cells
 
-  bigint sendsize = 0;
+  bigint bsendsize = 0;
   for (int icell = 0; icell < nlocal; icell++) {
     if (cells[icell].nsplit <= 0) continue;
     bsendsize += pack_one(icell,NULL,0,0,surfflag,0);
@@ -2434,16 +2434,16 @@ int Grid::size_restart()
    using nlocal_restart count of all owned cells
 ------------------------------------------------------------------------- */
 
-int Grid::size_restart(int nlocal_restart)
+bigint Grid::size_restart_big(int nlocal_restart)
 {
   int n = 2*sizeof(int);
-  n = IROUNDUP(n);
+  n = BIROUNDUP(n);
   n += nlocal_restart * sizeof(cellint);
-  n = IROUNDUP(n);
+  n = BIROUNDUP(n);
   n += nlocal_restart * sizeof(int);
-  n = IROUNDUP(n);
+  n = BIROUNDUP(n);
   n += nlocal_restart * sizeof(int);
-  n = IROUNDUP(n);
+  n = BIROUNDUP(n);
   return n;
 }
 
@@ -2464,25 +2464,49 @@ int Grid::pack_restart(char *buf)
   n = 2*sizeof(int);
   n = IROUNDUP(n);
 
-  cellint *cbuf = (cellint *) &buf[n];
-  for (int i = 0; i < nlocal; i++)
-    cbuf[i] = cells[i].id;
-  n += nlocal * sizeof(cellint);
-  n = IROUNDUP(n);
+  GridRestart *gbuf = (GridRestart *) &buf[n];
+  for (int i = 0; i < nlocal; i++) {
+    gbuf[i].id = cells[i].id;
+    gbuf[i].level = cells[i].level;
+    gbuf[i].nsplit = cells[i].nsplit;
+  }
 
-  ibuf = (int *) &buf[n];
-  for (int i = 0; i < nlocal; i++)
-    ibuf[i] = cells[i].level;
-  n += nlocal * sizeof(int);
-  n = IROUNDUP(n);
-
-  ibuf = (int *) &buf[n];
-  for (int i = 0; i < nlocal; i++)
-    ibuf[i] = cells[i].nsplit;
-  n += nlocal * sizeof(int);
+  n += nlocal * sizeof(GridRestart);
   n = IROUNDUP(n);
 
   return n;
+}
+
+/* ----------------------------------------------------------------------
+   pack my child grid info into buf
+   use multiple passes to reduce memory use
+   nlocal, clumped as scalars
+   ID, level, nsplit as vectors for all owned cells
+   NOTE: does not ROUNDUP(ptr) at the end, this is done by caller
+------------------------------------------------------------------------- */
+
+void Grid::pack_restart(char *buf, int step, int pass)
+{
+  int n = 0;
+
+  if (pass == 0) {
+    int *ibuf = (int *) buf;
+    ibuf[0] = nlocal;
+    ibuf[1] = clumped;
+    n = 2*sizeof(int);
+    n = IROUNDUP(n);
+  }
+
+  GridRestart *gbuf = (GridRestart *) &buf[n];
+  int start = step*pass;
+  int end = start+step;
+  end = MIN(nlocal,end);
+  for (int i = start; i < end; i++) {
+    gbuf[i].id = cells[i].id;
+    gbuf[i].level = cells[i].level;
+    gbuf[i].nsplit = cells[i].nsplit;
+  }
+
 }
 
 /* ----------------------------------------------------------------------
@@ -2502,29 +2526,49 @@ int Grid::unpack_restart(char *buf)
   n = 2*sizeof(int);
   n = IROUNDUP(n);
 
-  memory->create(id_restart,nlocal_restart,"grid:id_restart");
-  memory->create(level_restart,nlocal_restart,"grid:nlevel_restart");
-  memory->create(nsplit_restart,nlocal_restart,"grid:nsplit_restart");
+  grid_restart = (char *)
+    memory->smalloc(nlocal_restart*sizeof(GridRestart),"grid:grid_restart");
 
-  cellint *cbuf = (cellint *) &buf[n];
-  for (int i = 0; i < nlocal_restart; i++)
-    id_restart[i] = cbuf[i];
-  n += nlocal_restart * sizeof(cellint);
-  n = IROUNDUP(n);
+  memcpy(grid_restart,&buf[n],nlocal_restart*sizeof(GridRestart));
 
-  ibuf = (int *) &buf[n];
-  for (int i = 0; i < nlocal_restart; i++)
-    level_restart[i] = ibuf[i];
-  n += nlocal_restart * sizeof(int);
-  n = IROUNDUP(n);
-
-  ibuf = (int *) &buf[n];
-  for (int i = 0; i < nlocal_restart; i++)
-    nsplit_restart[i] = ibuf[i];
   n += nlocal_restart * sizeof(int);
   n = IROUNDUP(n);
 
   return n;
+}
+
+/* ----------------------------------------------------------------------
+   unpack child grid info into restart storage
+   use multiple passes to reduce memory use
+   nlocal_restart, clumped as scalars
+   id_restart, nsplit_restart as vectors
+   allocate vectors here, will be deallocated by ReadRestart
+   NOTE: does not ROUNDUP(ptr) at the end, this is done by caller
+------------------------------------------------------------------------- */
+
+void Grid::unpack_restart(char *buf, int &nlocal_restart, int step, int pass)
+{
+  int n = 0;
+
+  if (pass == 0) {
+    int *ibuf = (int *) buf;
+    nlocal_restart = ibuf[0];
+    clumped = ibuf[1];
+    n = 2*sizeof(int);
+    n = IROUNDUP(n);
+
+    grid_restart = (char *)
+      memory->smalloc(step*sizeof(GridRestart),"grid:grid_restart");
+  }
+
+  int start = step*pass;
+  int end = start+step;
+  end = MIN(nlocal_restart,end);
+  step = end - start;
+
+  memcpy(grid_restart,&buf[n],step*sizeof(GridRestart));
+
+  this->nlocal_restart = step;
 }
 
 /* ---------------------------------------------------------------------- */
