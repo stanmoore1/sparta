@@ -603,6 +603,7 @@ void ReadRestart::command(int narg, char **arg)
         MPI_Recv(&npasses_particle,1,MPI_INT,fileproc,0,world,&status);
         MPI_Recv(&step_size_grid,1,MPI_INT,fileproc,0,world,&status);
         MPI_Recv(&step_size_particle,1,MPI_INT,fileproc,0,world,&status);
+        npasses = npasses_grid + npasses_particle;
         int nlocal_restart_grid = 0;
         int nlocal_restart_particle = 0;
         for (int ii = 0; ii < npasses; ii++) {
