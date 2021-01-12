@@ -810,6 +810,7 @@ void Grid::acquire_ghosts_near_less_memory(int surfflag)
 
   while (not_done) {
     for (int icell = icell_start; icell < nlocal; icell++) {
+      icell_end = icell+1;
       if (cells[icell].nsplit <= 0) continue;
       lo = cells[icell].lo;
       hi = cells[icell].hi;
@@ -881,11 +882,6 @@ void Grid::acquire_ghosts_near_less_memory(int surfflag)
       }
     }
 
-    // clean up
-
-    memory->destroy(list);
-    delete [] boxall;
-
     // perform irregular communication of list of ghost cells
 
     Irregular *irregular = new Irregular(sparta);
@@ -899,6 +895,7 @@ void Grid::acquire_ghosts_near_less_memory(int surfflag)
 
     irregular->exchange_variable(sbuf,sizelist,rbuf);
     delete irregular;
+    irregular = NULL;
 
     // unpack received grid cells as ghost cells
 
@@ -918,6 +915,11 @@ void Grid::acquire_ghosts_near_less_memory(int surfflag)
     MPI_Allreduce(&not_done_local,&not_done,1,MPI_INT,MPI_SUM,world);
 
   } // end while loop
+
+  // clean up
+
+  memory->destroy(list);
+  delete [] boxall;
 
   // set nempty = # of EMPTY ghost cells I store
 
@@ -2420,11 +2422,7 @@ int Grid::size_restart()
 {
   int n = 2*sizeof(int);
   n = IROUNDUP(n);
-  n += nlocal * sizeof(cellint);
-  n = IROUNDUP(n);
-  n += nlocal * sizeof(int);
-  n = IROUNDUP(n);
-  n += nlocal * sizeof(int);
+  n += nlocal * sizeof(GridRestart);
   n = IROUNDUP(n);
   return n;
 }
@@ -2438,11 +2436,7 @@ bigint Grid::size_restart_big(int nlocal_restart)
 {
   int n = 2*sizeof(int);
   n = BIROUNDUP(n);
-  n += nlocal_restart * sizeof(cellint);
-  n = BIROUNDUP(n);
-  n += nlocal_restart * sizeof(int);
-  n = BIROUNDUP(n);
-  n += nlocal_restart * sizeof(int);
+  n += nlocal_restart * sizeof(GridRestart);
   n = BIROUNDUP(n);
   return n;
 }
@@ -2531,7 +2525,7 @@ int Grid::unpack_restart(char *buf)
 
   memcpy(grid_restart,&buf[n],nlocal_restart*sizeof(GridRestart));
 
-  n += nlocal_restart * sizeof(int);
+  n += nlocal_restart * sizeof(GridRestart);
   n = IROUNDUP(n);
 
   return n;

@@ -466,13 +466,13 @@ void WriteRestart::write_less_memory(char *file)
             if (i == 1) n += IROUNDUP(sizeof(int)); // ROUNDUP(ptr)
             if (i == npasses_grid-1) n = grid_send_size - total_write_grid;
             total_write_grid += n;
-            grid->pack_restart(buf,step_size_grid,i-1);
+            grid->pack_restart(buf,step_size_grid,i);
           } else {
             n = step_size_particle*nbytes_particle;
             if (i == npasses_grid) n += IROUNDUP(sizeof(int)); // ROUNDUP(ptr)
             if (i == npasses-1) n = particle_send_size - total_write_part;
             total_write_part += n;
-            particle->pack_restart(buf,step_size_particle,i-1);
+            particle->pack_restart(buf,step_size_particle,i-npasses_grid);
           }
           recv_size = n;
         }

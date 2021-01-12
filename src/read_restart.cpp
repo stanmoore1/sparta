@@ -424,10 +424,10 @@ void ReadRestart::command(int narg, char **arg)
           fread(buf,sizeof(char),n,fp);
 
           if (ii < npasses_grid) {
-            grid->unpack_restart(buf,nlocal_restart_grid,step_size_grid,ii-1);
+            grid->unpack_restart(buf,nlocal_restart_grid,step_size_grid,ii);
             create_child_cells(0);
           } else {
-            particle->unpack_restart(buf,nlocal_restart_particle,step_size_particle,ii-1);
+            particle->unpack_restart(buf,nlocal_restart_particle,step_size_particle,ii-npasses_grid);
             assign_particles(0);
           }
         }
@@ -589,10 +589,10 @@ void ReadRestart::command(int narg, char **arg)
             MPI_Rsend(buf,n,MPI_CHAR,iproc,0,world);
           } else if (i % nclusterprocs == me - fileproc) {
             if (ii < npasses_grid) {
-              grid->unpack_restart(buf,nlocal_restart_particle,step_size_grid,ii-1);
+              grid->unpack_restart(buf,nlocal_restart_particle,step_size_grid,ii);
               create_child_cells(0);
             } else {
-              particle->unpack_restart(buf,nlocal_restart_grid,step_size_particle,ii-1);
+              particle->unpack_restart(buf,nlocal_restart_grid,step_size_particle,ii-npasses_grid);
               assign_particles(0);
             }
           }
@@ -617,10 +617,10 @@ void ReadRestart::command(int narg, char **arg)
           MPI_Wait(&request,&status);
 
           if (ii < npasses_grid) {
-            grid->unpack_restart(buf,nlocal_restart_grid,step_size_grid,ii-1);
+            grid->unpack_restart(buf,nlocal_restart_grid,step_size_grid,ii);
             create_child_cells(0);
           } else {
-            particle->unpack_restart(buf,nlocal_restart_particle,step_size_particle,ii-1);
+            particle->unpack_restart(buf,nlocal_restart_particle,step_size_particle,ii-npasses_grid);
             assign_particles(0);
           }
         }
