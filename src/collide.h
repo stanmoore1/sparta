@@ -65,6 +65,17 @@ class Collide : protected Pointers {
   int npmax;          // max # of particles in plist
   int *plist;         // list of particle indices for the entire cell
 
+  // ADDED BY JIMMY //  
+  int ****neighbor_list;
+  int ***neighbor_count;
+  int **subcell_list;
+  int *subcell_IDlist;
+  int *subcell_next;
+  int *subcell_first;
+  int *subcell_count;
+  int *subcell_mostrecent; // could reuse for below
+  int *neighbor_cells;
+
   int nglocal;        // current size of per-cell arrays
   int nglocalmax;     // max allocated size of per-cell arrays (vremax, remain)
 
@@ -157,6 +168,7 @@ class Collide : protected Pointers {
   }
 
   template < int > void collisions_one();
+  template < int > void collisions_one_subcell();
   template < int > void collisions_group();
   void collisions_one_ambipolar();
   void collisions_group_ambipolar();
@@ -165,6 +177,8 @@ class Collide : protected Pointers {
   void ambi_check();
   void grow_percell(int);
 
+  void define_subcell_neighbors(int ****neighbor_list, int ***neighbor_count);
+  int subcell_ID(Particle::OnePart *, double, double, double, double, double, double, int, int);
   int find_nn(int, int);
   int find_nn_group(int, int *, int, int *, int *, int *, int *);
   void realloc_nn(int, int *&);
