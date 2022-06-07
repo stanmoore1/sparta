@@ -69,12 +69,15 @@ class Collide : protected Pointers {
   int ****neighbor_list;
   int ***neighbor_count;
   int **subcell_list;
+  int ***subcell_list_group;
   int *subcell_IDlist;
-  int *subcell_next;
-  int *subcell_first;
+  //int *subcell_next;
+  //int *subcell_first;
   int *subcell_count;
-  int *subcell_mostrecent; // could reuse for below
+  int **subcell_count_group;
+  //int *subcell_mostrecent; // could reuse for below
   int *neighbor_cells;
+  int subcellflag;       // 1 if subcell option is enabled
 
   int nglocal;        // current size of per-cell arrays
   int nglocalmax;     // max allocated size of per-cell arrays (vremax, remain)
@@ -169,9 +172,16 @@ class Collide : protected Pointers {
 
   template < int > void collisions_one();
   template < int > void collisions_one_subcell();
+
   template < int > void collisions_group();
+  template < int > void collisions_group_subcell();
+ 
   void collisions_one_ambipolar();
+  void collisions_one_ambipolar_subcell();
+ 
   void collisions_group_ambipolar();
+  void collisions_group_ambipolar_subcell();
+
   void ambi_reset(int, int, int, Particle::OnePart *, Particle::OnePart *,
                   Particle::OnePart *, int *);
   void ambi_check();
@@ -179,6 +189,7 @@ class Collide : protected Pointers {
 
   void define_subcell_neighbors(int ****neighbor_list, int ***neighbor_count);
   int subcell_ID(Particle::OnePart *, double, double, double, double, double, double, int, int);
+
   int find_nn(int, int);
   int find_nn_group(int, int *, int, int *, int *, int *, int *);
   void realloc_nn(int, int *&);
