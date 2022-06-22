@@ -26,7 +26,7 @@ global             nrho 7.07043E22
 global             fnum 7.07043E6
 
 collide		         vss air ar.vss
-collide_modify     nearcp yes 30
+collide_modify     subcell yes
 
 create_particles   air n 80000 twopass
 

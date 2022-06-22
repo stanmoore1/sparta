@@ -27,9 +27,8 @@ global             nrho 7.07043E22
 global             fnum 7.07043E6
 
 collide		         vss air ar.vss 
-collide_modify     nearcp yes 30
 
-create_particles   air n 100000 twopass
+create_particles   air n 10000 twopass
 
 stats		           100
 compute            temp temp

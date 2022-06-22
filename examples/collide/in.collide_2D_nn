@@ -8,27 +8,28 @@
 # The "comm/sort" and "twopass" options should not be used for production runs.
 ################################################################################
 
-seed	    	       123456
-dimension   	     3
+seed	    	       12345
+dimension   	     2
 global             gridcut 1.0e-5 comm/sort yes
 
-boundary	         rr rr rr
+boundary	         rr rr p
 
-create_box  	     0 0.0001 0 0.0001 0 0.0001
-create_grid 	     10 10 10
+#create_box  	     0 0.0001 0 0.0001 -0.0001 0.0001
+create_box  	     0 0.00001 0 0.00001 -0.00001 0.00001
+create_grid 	     10 10 1
 
 balance_grid       rcb part
 
 species		         ar.species Ar
-mixture		         air Ar vstream 0.0 0.0 0.0 temp 1000
+mixture		         air Ar vstream 0.0 0.0 0.0 temp 273.15
 
 global             nrho 7.07043E22
 global             fnum 7.07043E6
 
-collide		         vss air ar.vss
+collide		         vss air ar.vss 
 collide_modify     nearcp yes 30
 
-create_particles   air n 80000 twopass
+create_particles   air n 10000 twopass
 
 stats		           100
 compute            temp temp
