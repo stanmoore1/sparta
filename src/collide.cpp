@@ -68,12 +68,24 @@ Collide::Collide(SPARTA *sparta, int, char **arg) : Pointers(sparta)
   // JIMMY
   subcell_list = NULL;
   subcell_IDlist = NULL;
+  subcell_ID_ilist = NULL;
+  subcell_ID_jlist = NULL;
+  subcell_ID_klist = NULL;
   subcell_count = NULL;
+
+  subcell_mostrecent = NULL;
+  subcell_next = NULL;
+  subcell_first = NULL;
+
   subcell_list_group = NULL;
+  subcell_IDlist_group = NULL;
   subcell_count_group = NULL;
+
   neighbor_cells = NULL;
-  neighbor_list = NULL;
-  neighbor_count = NULL;
+  nsc_dim_group = NULL;
+
+  electron_coords = NULL;
+
   subcellflag = 0;
 
   nglocal = nglocalmax = 0;
@@ -123,6 +135,7 @@ Collide::Collide(SPARTA *sparta, int, char **arg) : Pointers(sparta)
 
 Collide::~Collide()
 {
+  printf("DESTROYING\n");
   if (copymode) return;
 
   delete [] style;
@@ -148,6 +161,25 @@ Collide::~Collide()
   memory->destroy(nn_last_partner);
   memory->destroy(nn_last_partner_igroup);
   memory->destroy(nn_last_partner_jgroup);
+
+  if (ngroups == 1) {
+    memory->destroy(subcell_IDlist);
+    memory->destroy(subcell_ID_ilist);
+    memory->destroy(subcell_ID_jlist);
+    memory->destroy(subcell_ID_klist);
+    memory->destroy(subcell_list);
+    memory->destroy(subcell_count);
+    memory->destroy(subcell_first);
+    memory->destroy(subcell_next);
+    memory->destroy(subcell_mostrecent);
+  }
+  else {
+    memory->destroy(subcell_IDlist_group);
+    memory->destroy(subcell_list_group);
+    memory->destroy(subcell_count_group);
+  }
+  memory->destroy(neighbor_cells);
+  memory->destroy(nsc_dim_group);
 
   memory->destroy(recomb_ijflag);
 }
@@ -245,6 +277,18 @@ void Collide::init()
     if (ngroups == 1) {
       npmax = DELTAPART;
       memory->create(plist,npmax,"collide:plist");
+      if (subcellflag) {
+        memory->create(subcell_list,npmax,npmax,"collide:subcell_list");
+        memory->create(subcell_IDlist,npmax,"collide:subcell_IDlist");
+        memory->create(subcell_ID_ilist,npmax,"collide:subcell_ID_ilist");
+        memory->create(subcell_ID_jlist,npmax,"collide:subcell_ID_jlist");
+        memory->create(subcell_ID_klist,npmax,"collide:subcell_ID_klist");
+        memory->create(subcell_count,npmax,"collide:subcell_count");
+        memory->create(neighbor_cells,npmax,"collide:neighbor_cells");
+        memory->create(subcell_mostrecent, npmax,"collide:subcell_mostrecent");
+        memory->create(subcell_next, npmax,"collide:subcell_next");
+        memory->create(subcell_first, npmax,"collide:subcell_first");
+      }
     }
     if (ngroups > 1) {
       ngroup = new int[ngroups];
@@ -255,24 +299,18 @@ void Collide::init()
         memory->create(glist[i],DELTAPART,"collide:glist");
       }
       memory->create(gpair,ngroups*ngroups,3,"collide:gpair");
+      if (subcellflag) {
+      //  //npmax += DELTAPART;
+      //  memory->create(subcell_list_group,ngroups,npmax,npmax,"collide:subcell_list_group");
+      //  memory->create(subcell_IDlist_group,ngroups,npmax,"collide:subcell_IDlist_group");
+      //  memory->create(subcell_count_group,ngroups,npmax,"collide:subcell_count_group");
+      //  memory->create(neighbor_cells,npmax,"collide:neighbor_cells");
+        if (ambiflag) memory->create(electron_coords,npmax,3,"collide:electron_coords\n");
+        memory->create(nsc_dim_group,ngroups,"collide:nsc_dim_group");
+      //  printf("initial create group success\n");
+      }
     }
   }
-
-  int subcell_flag = 1;
-  if (subcell_flag == 1) {
-    //npmax = DELTAPART;
-    printf("npmax setup = %d\n", npmax);
-    memory->create(subcell_list,npmax,npmax,"collide:subcell_list");
-    memory->create(subcell_IDlist,npmax,"collide:subcell_IDlist");
-    memory->create(subcell_count,npmax,"collide:subcell_count");
-    memory->create(subcell_list_group,npmax,npmax,npmax,"collide:subcell_list_group");
-    memory->create(subcell_count_group,npmax,npmax,"collide:subcell_count_group");
-    memory->create(neighbor_cells,npmax,"collide:neighbor_cells");
-    memory->create(neighbor_list,npmax,npmax,npmax,npmax,"collide:neighbor_list");
-    memory->create(neighbor_count,npmax,npmax,npmax,"collide:neighbor_count");
-  }
-
-  //define_subcell_neighbors(neighbor_list, neighbor_count);
 
   // allocate vremax,remain if group count changed
   // will always be allocated on first run since oldgroups = 0
@@ -461,25 +499,40 @@ void Collide::collisions()
   int mydim = domain->dimension;
 
   if (!ambiflag) {
-    if (subcellflag == 1) {
-      collisions_one_subcell<3>();
-    }
-    else { 
-      if (nearcp == 0) {
-        if (ngroups == 1) collisions_one<0>();
-        else collisions_group<0>();
-      } else {
-        if (ngroups == 1) collisions_one<1>();
-        else collisions_group<1>();
+    if (ngroups == 1) {
+      if (subcellflag == 1) {
+        if (mydim == 2) collisions_one_subcell<2>();
+        else if (mydim == 3) collisions_one_subcell<3>();
+      }
+      else {
+        if (nearcp == 0) collisions_one<0>();
+        else collisions_one<1>();
       }
     }
-  } else {
+    else {
+      if (subcellflag == 1) {
+        if (mydim == 2) collisions_group_subcell<2>();
+        else if (mydim == 3) collisions_group_subcell<3>();
+      }
+      else {
+        if (nearcp == 0) collisions_group<0>();
+        else collisions_group<1>();
+      } 
+    }
+  }
+  else { 
     if (ngroups == 1) {
-      if (subcellflag == 1) collisions_one_ambipolar_subcell();
+      if (subcellflag == 1) {
+        if (mydim == 2) collisions_one_ambipolar_subcell<2>();
+        else if (mydim == 3) collisions_one_ambipolar_subcell<3>();
+      }
       else collisions_one_ambipolar();
     }
     else {
-      if (subcellflag == 1) collisions_group_ambipolar_subcell();
+      if (subcellflag == 1) { 
+        if (mydim == 2) collisions_group_ambipolar_subcell<2>();
+        if (mydim == 3) collisions_group_ambipolar_subcell<3>();
+      }
       else collisions_group_ambipolar();
     }
   }
@@ -919,7 +972,7 @@ template < int NEARCP > void Collide::collisions_group()
 template < int DIM > void Collide::collisions_one_subcell()
 {
   double t1, tt;
-  double t_clear = 0;
+  double t_clear = 0; double t_setup = 0;
   double t_createsubcells = 0; double t_partners = 0;
   double ta = 0; double tb = 0;
 
@@ -927,26 +980,26 @@ template < int DIM > void Collide::collisions_one_subcell()
   int nattempt,reactflag;
   double attempt,volume;
   Particle::OnePart *ipart,*jpart,*kpart;
-  
+ 
   // loop over cells I own  
 
-  if (DIM == 2) {}
-  if (DIM == 3) {}
-
-
   Grid::ChildInfo *cinfo = grid->cinfo;
-  
+ 
   Particle::OnePart *particles = particle->particles;
   int *next = particle->next;
-  
+ 
   // additions
   int curr_subcell, isubcell, final_subcell;
   int partner_count, temp_ctr;
   int nsubcell_bydim, nscbd_sq;
   int ibox, jbox, kbox, adj_ibox, adj_jbox, adj_kbox, radius;
   int jj, jj_new;
-  double c_lo_x, c_lo_y, c_lo_z, dx, dy, dz;
-  double dim_inv = 1./3.;
+  double c_lo_x, c_lo_y, c_lo_z, oodx, oody, oodz;
+  double dim_inv;
+  int x_id, y_id, z_id;
+  if (DIM == 2) dim_inv = 1./2.;
+  else dim_inv = 1./3.;
+
   Grid::ChildCell *cells = grid->cells;
 
   for (int icell = 0; icell < nglocal; icell++) {
@@ -964,22 +1017,33 @@ template < int DIM > void Collide::collisions_one_subcell()
     c_lo_x = cells[icell].lo[0];
     c_lo_y = cells[icell].lo[1];
     c_lo_z = cells[icell].lo[2];
-    dx = (cells[icell].hi[0] - c_lo_x) / nsubcell_bydim;
-    dy = (cells[icell].hi[1] - c_lo_y) / nsubcell_bydim;
-    dz = (cells[icell].hi[2] - c_lo_z) / nsubcell_bydim;
+    oodx = ((double)nsubcell_bydim) / (cells[icell].hi[0] - c_lo_x);
+    oody = ((double)nsubcell_bydim) / (cells[icell].hi[1] - c_lo_y);
+    oodz = ((double)nsubcell_bydim) / (cells[icell].hi[2] - c_lo_z);
  
     if (np > npmax) { 
-      printf("ADJUSTING MEMORY\n"); 
       while (np > npmax) npmax += DELTAPART;
  
       memory->destroy(plist);
       memory->create(plist,npmax,"collide:plist");
  
-      memory->destroy(subcell_list);
-      memory->create(subcell_list,npmax,npmax,"collide:subcell_list");
- 
+      memory->destroy(subcell_mostrecent);
+      memory->create(subcell_mostrecent,npmax,"collide:subcell_mostrecent");
+
+      memory->destroy(subcell_next);
+      memory->create(subcell_next,npmax,"collide:subcell_mostrecent");
+
+      memory->destroy(subcell_first);
+      memory->create(subcell_first,npmax,"collide:subell_first");
+
       memory->destroy(subcell_IDlist);
+      memory->destroy(subcell_ID_ilist);
+      memory->destroy(subcell_ID_jlist);
+      memory->destroy(subcell_ID_klist);
       memory->create(subcell_IDlist,npmax,"collide:subcell_IDlist");
+      memory->create(subcell_ID_ilist,npmax,"collide:subcell_ID_ilist");
+      memory->create(subcell_ID_jlist,npmax,"collide:subcell_ID_jlist");
+      memory->create(subcell_ID_klist,npmax,"collide:subcell_ID_klist");
  
       memory->destroy(subcell_count);
       memory->create(subcell_count,npmax,"collide:subcell_count");
@@ -988,32 +1052,45 @@ template < int DIM > void Collide::collisions_one_subcell()
       memory->create(neighbor_cells,npmax,"collide:neighbor_cells");
     }
 
+    // attempt = exact collision attempt count for all particles in cell
+    // nattempt = rounded attempt with RN
+    // if no attempts, continue to next grid cell
+    attempt = attempt_collision(icell,np,volume);
+    nattempt = static_cast<int> (attempt);
+    if (!nattempt) continue;
+    nattempt_one += nattempt;
+
     // clear counts for reuse in next cell
-    memset(subcell_count, 0, npmax*sizeof(*subcell_count));
+    memset(subcell_count, 0, npmax*sizeof(int));
+    memset(subcell_first, -1, npmax*sizeof(int));
+    memset(subcell_next, -1, npmax*sizeof(int));
 
     n = 0;
     while (ip >= 0) {
       plist[n] = ip;
- 
-      // setting up the necessary structure for subcells
-      curr_subcell = subcell_ID(&particles[plist[n]], c_lo_x, c_lo_y, c_lo_z, dx, dy, dz, nsubcell_bydim, nscbd_sq);
+
+      // subcell structure
+      x_id = (int)(((&particles[plist[n]])->x[0]-c_lo_x)*oodx); subcell_ID_ilist[n] = x_id;
+      y_id = (int)(((&particles[plist[n]])->x[1]-c_lo_y)*oody); subcell_ID_jlist[n] = y_id;
+      z_id = 0;
+      if (DIM == 3) {
+        z_id = (int)(((&particles[plist[n]])->x[2]-c_lo_z)*oodz); subcell_ID_klist[n] = z_id;
+        subcell_ID_klist[n] = z_id;
+      }
+      curr_subcell = nscbd_sq*z_id + nsubcell_bydim*y_id + x_id;
       subcell_IDlist[n] = curr_subcell;
-      subcell_list[curr_subcell][subcell_count[curr_subcell]] = n;  
+      if (subcell_first[curr_subcell] < 0) {
+        subcell_first[curr_subcell] = n;
+      } else {
+        subcell_next[subcell_mostrecent[curr_subcell]] = n;
+      }
+      subcell_mostrecent[curr_subcell] = n;
+ 
       subcell_count[curr_subcell]++;      
 
       ip = next[ip];
       n++;
     }
-
-    // attempt = exact collision attempt count for all particles in cell
-    // nattempt = rounded attempt with RN
-    // if no attempts, continue to next grid cell
-
-    attempt = attempt_collision(icell,np,volume);
-    nattempt = static_cast<int> (attempt);
- 
-    if (!nattempt) continue;
-    nattempt_one += nattempt;
 
     // perform collisions
     // select pair of particles according to subcell structure, cannot be the same
@@ -1029,118 +1106,146 @@ template < int DIM > void Collide::collisions_one_subcell()
       final_subcell = isubcell;
       partner_count = subcell_count[final_subcell];
       if (partner_count >= 2) {
-        j = subcell_list[final_subcell][int(partner_count*random->uniform())];
+        j = i;
         while (j == i) {
-          j = subcell_list[final_subcell][int(partner_count*random->uniform())];
+          j = subcell_first[isubcell];
+          jj = int(partner_count*random->uniform());
+          while (jj > 0) {
+            j = subcell_next[j];
+            jj--;
+          } 
         }
       }
       // radius >= 1 case
       else {
-        ibox = (int)((isubcell%nscbd_sq)%nsubcell_bydim);
-        jbox = (int)((isubcell%nscbd_sq)/nsubcell_bydim);
-        kbox = (int)(isubcell/nscbd_sq);
-        radius=1;
-        while (radius < nsubcell_bydim) {
-          partner_count = 0;
-          temp_ctr = 0;
+        if (DIM == 2) {
+          ibox = subcell_ID_ilist[i];
+          jbox = subcell_ID_jlist[i];
+          radius=1;
+          while (radius < nsubcell_bydim) {
+            partner_count = 0;
+            temp_ctr = 0;
 
-          // 3-D looping over neighbors
-          for (int adj_i = -radius; adj_i <= radius; adj_i++) {
-            adj_ibox = ibox + adj_i;
-            for (int adj_j = -radius; adj_j <= radius; adj_j++) {
-              adj_jbox = jbox + adj_j;
-              
+            // 2-D looping over neighbors
+            for (int adj_i = -radius; adj_i <= radius; adj_i++) {
+              adj_ibox = ibox + adj_i;
               // Bottom
-              adj_kbox = kbox - radius;
-              if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
-                neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
-              }
-
-              // Top
-              adj_kbox = kbox + radius;
-              if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
-                neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
-              }
-            }
-            for (int adj_k = -radius+1; adj_k <= radius-1; adj_k++) {
-              adj_kbox = kbox + adj_k;
-              
-              // Front
               adj_jbox = jbox - radius;
               if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
                 neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
               }
-  
-              // Back
+              // Top
               adj_jbox = jbox + radius;
               if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
                 neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
               }
             }
-          }
-          for (int adj_j = -radius+1; adj_j <= radius-1; adj_j++) {
-            adj_jbox = jbox + adj_j;
-            for (int adj_k = -radius+1; adj_k <= radius-1; adj_k++) {
-              adj_kbox = kbox + adj_k;
-              
+            for (int adj_j = -radius+1; adj_j <= radius-1; adj_j++) {
+              adj_jbox = jbox + adj_j;
               // Left
-              adj_ibox = ibox - radius;              
+              adj_ibox = ibox - radius;
               if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
                 neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
               }
-
               // Right
-              adj_ibox = ibox + radius;              
+              adj_ibox = ibox + radius;
               if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
                 neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
               }
             }
-          }
-          for (int tc = 0; tc < temp_ctr; tc++) {
-            partner_count += subcell_count[tc];
-          }
 
-/*
-          // precompute version
-          temp_ctr = neighbor_count[np][isubcell][radius-1];
-          for (int tc = 0; tc < temp_ctr; tc++) {
-            partner_count += subcell_count[neighbor_list[np][isubcell][radius-1][tc]];
+            // looking for partner at this radius
+            // if good, leave. if not, radius++ 
+            for (int tc = 0; tc < temp_ctr; tc++) {
+              partner_count += subcell_count[neighbor_cells[tc]];
+            }
+            if (partner_count == 0) radius++;
+            else break;
           }
-*/
-
-          // no partner found - increase radius and try again
-          if (partner_count == 0) radius++;
-          else break;
         }
- 
-        // can maybe move this out to match and work with the k particle step 
-        // select random particle at this radius
+        else if (DIM == 3) {
+          ibox = subcell_ID_ilist[i];
+          jbox = subcell_ID_jlist[i];
+          kbox = subcell_ID_klist[i];
+          radius=1;
+          while (radius < nsubcell_bydim) {
+            partner_count = 0;
+            temp_ctr = 0;
 
+            // 3-D looping over neighbors
+            for (int adj_i = -radius; adj_i <= radius; adj_i++) {
+              adj_ibox = ibox + adj_i;
+              for (int adj_j = -radius; adj_j <= radius; adj_j++) {
+                adj_jbox = jbox + adj_j;
+                // Bottom
+                adj_kbox = kbox - radius;
+                if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
+                  neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
+                }
+                // Top
+                adj_kbox = kbox + radius;
+                if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
+                  neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
+                }
+              }
+              for (int adj_k = -radius+1; adj_k <= radius-1; adj_k++) {
+                adj_kbox = kbox + adj_k;
+                // Front
+                adj_jbox = jbox - radius;
+                if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
+                  neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
+                }
+                // Back
+                adj_jbox = jbox + radius;
+                if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
+                  neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
+                }
+              }
+            }
+            for (int adj_j = -radius+1; adj_j <= radius-1; adj_j++) {
+              adj_jbox = jbox + adj_j;
+              for (int adj_k = -radius+1; adj_k <= radius-1; adj_k++) {
+                adj_kbox = kbox + adj_k;
+                // Left
+                adj_ibox = ibox - radius;              
+                if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
+                  neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
+                }
+                // Right
+                adj_ibox = ibox + radius;              
+                if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
+                  neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
+                }
+              }
+            }
+
+            // looking for partner at this radius
+            // if good, leave. if not, radius++ 
+            for (int tc = 0; tc < temp_ctr; tc++) {
+              partner_count += subcell_count[neighbor_cells[tc]];
+            }
+            if (partner_count == 0) radius++;
+            else break;
+          }
+        }
+        
+        // We have a valid list of partners - select one randomly 
         jj = partner_count * random->uniform();
         for (int tc = 0; tc < temp_ctr; tc++) {
-          jj_new = jj - subcell_count[tc]; 
+          jj_new = jj - subcell_count[neighbor_cells[tc]];
           if (jj_new < 0) {
-            final_subcell = tc;
+            final_subcell = neighbor_cells[tc];
             break;
           }
           else jj = jj_new;
         }
-        j = subcell_list[final_subcell][jj];
-
-/*
-        // precompute version
-        jj = partner_count * random->uniform();
-        for (int tc = 0; tc < temp_ctr; tc++) {
-          jj_new = jj - subcell_count[neighbor_list[np][isubcell][radius-1][tc]]; 
-          if (jj_new < 0) {
-            final_subcell = neighbor_list[np][isubcell][radius-1][tc];
-            break;
-          }
-          else jj = jj_new;
+        j = subcell_first[final_subcell];
+        while (jj > 0) {
+          j = subcell_next[j];
+          jj--;
         }
-        j = subcell_list[final_subcell][jj];
-*/
       }
+
       ipart = &particles[plist[i]];
       jpart = &particles[plist[j]];
 
@@ -1168,13 +1273,12 @@ template < int DIM > void Collide::collisions_one_subcell()
       }
 
       // perform collision and possible reaction
-
       setup_collision(ipart,jpart);
       reactflag = perform_collision(ipart,jpart,kpart);
       ncollide_one++;
       if (reactflag) nreact_one++;
       else continue;
-
+      
       // if jpart destroyed: delete from plist, add particle to deleteion list
       // exit attempt loop if only single particle left
 
@@ -1197,6 +1301,12 @@ template < int DIM > void Collide::collisions_one_subcell()
         if (np == npmax) {
           npmax += DELTAPART;
           memory->grow(plist,npmax,"collide:plist");
+          memory->grow(subcell_next,npmax,"collide:subcell_list");
+          memory->grow(subcell_first,npmax,"collide:subcell_first");
+          memory->grow(subcell_mostrecent,npmax,"collide:subcell_mostrecent");
+          memory->grow(subcell_IDlist,npmax,"collide:subcell_IDlist");
+          memory->grow(subcell_count,npmax,"collide:subcell_count");
+          memory->grow(neighbor_cells,npmax,"collide:neighbor_cells");  
         }
         plist[np++] = particle->nlocal-1;
         particles = particle->particles;
@@ -1206,13 +1316,14 @@ template < int DIM > void Collide::collisions_one_subcell()
   }
   //printf("Time create = %f\n", 10000*t_createsubcells);
   //printf("Time partners= %f\n", 10000*t_partners);
+  //printf("finished coll step\n");
 }
 
 /* ----------------------------------------------------------------------
    NTC algorithm for multiple groups, loop over pairs of groups
    pre-compute # of attempts per group pair, using subcell method
 ------------------------------------------------------------------------- */
-template < int NEARCP > void Collide::collisions_group_subcell()
+template < int DIM > void Collide::collisions_group_subcell()
 {
   int i,j,k,m,n,ii,jj,kk,ip,np,isp,ng;
   int pindex,ipair,igroup,jgroup,newgroup,ngmax;
@@ -1233,19 +1344,18 @@ template < int NEARCP > void Collide::collisions_group_subcell()
   // additions
   int curr_subcell, isubcell, final_subcell;
   int partner_count, temp_ctr;
-  int nsubcell_bydim, nscbd_sq;
+  int nsubcell_bydim, nscbd_sq, temp_ng;
   int ibox,jbox,kbox,adj_ibox,adj_jbox,adj_kbox,radius;
   int jj_new;
-  double dim_inv = 1./3.;
-  double c_lo_x, c_lo_y, c_lo_z, dx, dy, dz;
+  double dim_inv;
+  if (DIM == 2) dim_inv = 1./2.;
+  else dim_inv = 1./3.;
+  double c_lo_x, c_lo_y, c_lo_z, c_hi_x, c_hi_y, c_hi_z, dxx, dyy, dzz, oodx, oody, oodz;
   Grid::ChildCell *cells = grid->cells;
 
   for (int icell = 0; icell < nglocal; icell++) {
     np = cinfo[icell].count;
     if (np <= 1) continue;
-
-    nsubcell_bydim = (int)(pow((double)np, dim_inv));
-    nscbd_sq = nsubcell_bydim * nsubcell_bydim;
 
     ip = cinfo[icell].first;
     volume = cinfo[icell].volume / cinfo[icell].weight;
@@ -1255,9 +1365,9 @@ template < int NEARCP > void Collide::collisions_group_subcell()
     c_lo_x = cells[icell].lo[0];
     c_lo_y = cells[icell].lo[1];
     c_lo_z = cells[icell].lo[2];
-    dx = (cells[icell].hi[0] - c_lo_x) / nsubcell_bydim;
-    dy = (cells[icell].hi[1] - c_lo_y) / nsubcell_bydim;
-    dz = (cells[icell].hi[2] - c_lo_z) / nsubcell_bydim;
+    dxx = (cells[icell].hi[0] - c_lo_x);
+    dyy = (cells[icell].hi[1] - c_lo_y);
+    dzz = (cells[icell].hi[2] - c_lo_z);
 
     if (np > npmax) {
       while (np > npmax) npmax += DELTAPART;
@@ -1268,20 +1378,24 @@ template < int NEARCP > void Collide::collisions_group_subcell()
         memory->create(p2g,npmax,2,"collide:p2g");
 
         memory->destroy(subcell_list_group);
-        memory->create(subcell_list_group,npmax,npmax,npmax,"collide:subcell_list_group");
+        memory->create(subcell_list_group,ngroups,npmax,npmax,"collide:subcell_list_group");
 
-        memory->destroy(subcell_IDlist);
-        memory->create(subcell_IDlist,npmax,"collide:subcell_IDlist");
+        memory->destroy(subcell_IDlist_group);
+        memory->create(subcell_IDlist_group,ngroups,npmax,"collide:subcell_IDlist_group");
 
         memory->destroy(subcell_count_group);
-        memory->create(subcell_count_group,npmax,npmax,"collide:subcell_count_group");
+        memory->create(subcell_count_group,ngroups,npmax,"collide:subcell_count_group");
 
         memory->destroy(neighbor_cells);
         memory->create(neighbor_cells,npmax,"collide:neighbor_cells");
     }
 
     // clear counts for reuse in next cell
-    memset(subcell_count_group, 0, npmax*npmax*sizeof(**subcell_count_group));
+    for (int ti = 0; ti < ngroups; ti++) {
+      for (int tj = 0; tj < npmax; tj++) {
+        subcell_count_group[ti][tj] = 0;
+      }
+    }
 
     // plist = particle list for entire cell
     // glist[igroup][i] = index in plist of Ith particle in Igroup
@@ -1307,15 +1421,28 @@ template < int NEARCP > void Collide::collisions_group_subcell()
       p2g[n][1] = ng;
       plist[n] = ip;
 
-      // subcell structure
-      curr_subcell = subcell_ID(&particles[plist[n]],c_lo_x,c_lo_y,c_lo_z,dx,dy,dz,nsubcell_bydim,nscbd_sq);
-      subcell_IDlist[n] = curr_subcell;
-      subcell_list_group[curr_subcell][igroup][subcell_count_group[curr_subcell][igroup]] = n;
-      subcell_count_group[curr_subcell][igroup]++;
-
       ngroup[igroup]++;
       n++;
       ip = next[i];
+    }
+
+    // setup subcell structure for each group separately
+    for (igroup = 0; igroup < ngroups; igroup++) {
+      temp_ng = ngroup[igroup];
+      nsubcell_bydim = (int)(pow((double)temp_ng, dim_inv));
+      nscbd_sq = nsubcell_bydim*nsubcell_bydim;
+      nsc_dim_group[igroup] = nsubcell_bydim;
+
+      oodx = ((double)nsubcell_bydim) / dxx;
+      oody = ((double)nsubcell_bydim) / dyy;
+      oodz = ((double)nsubcell_bydim) / dzz;
+
+      for (int temp_part = 0; temp_part < temp_ng; temp_part++) {
+        curr_subcell = subcell_ID<DIM>((&particles[plist[glist[igroup][temp_part]]])->x[0], (&particles[plist[glist[igroup][temp_part]]])->x[1], (&particles[plist[glist[igroup][temp_part]]])->x[2], c_lo_x, c_lo_y, c_lo_z, oodx, oody, oodz, nsubcell_bydim, nscbd_sq);
+        subcell_IDlist_group[igroup][temp_part] = curr_subcell;
+        subcell_list_group[igroup][curr_subcell][subcell_count_group[igroup][curr_subcell]] = temp_part;
+        subcell_count_group[igroup][curr_subcell]++;
+      }
     }
 
     // attempt = exact collision attempt count for a pair of groups
@@ -1369,117 +1496,167 @@ template < int NEARCP > void Collide::collisions_group_subcell()
       for (int iattempt = 0; iattempt < nattempt; iattempt++) {
         i = *ni * random->uniform();
 
-        // grab the subcell info for particle i
-        isubcell = subcell_IDlist[i];
+        // grab subcell according to applicable subcell setup
+        if (igroup == jgroup) {
+          isubcell = subcell_IDlist_group[igroup][i];
+        } 
+        else {
+          nsubcell_bydim = nsc_dim_group[jgroup];
+          nscbd_sq = nsubcell_bydim*nsubcell_bydim;
+          oodx = ((double)nsubcell_bydim) / dxx;
+          oody = ((double)nsubcell_bydim) / dyy;
+          oodz = ((double)nsubcell_bydim) / dzz;
+          isubcell = subcell_ID<DIM>((&particles[plist[glist[igroup][i]]])->x[0], (&particles[plist[glist[igroup][i]]])->x[1], (&particles[plist[glist[igroup][i]]])->x[2], c_lo_x, c_lo_y, c_lo_z, oodx, oody, oodz, nsubcell_bydim, nscbd_sq);
+        }
+        partner_count = subcell_count_group[jgroup][isubcell]; // initially r=0 count
 
         // radius == 0 case
-        final_subcell = isubcell;
-        partner_count = subcell_count_group[final_subcell][jgroup]; // partner must be jgroup
-        if ((igroup == jgroup && partner_count >= 2) || (igroup != jgroup && partner_count >= 1)) {
-          j = subcell_list_group[final_subcell][jgroup][int(partner_count*random->uniform())];
-          while (igroup == jgroup && j == i) {
-            j = subcell_list_group[final_subcell][jgroup][int(partner_count*random->uniform())];
+        if (igroup == jgroup && partner_count >= 2) {
+          j = subcell_list_group[jgroup][isubcell][int(partner_count*random->uniform())];
+          while (j == i) {
+            j = subcell_list_group[jgroup][isubcell][int(partner_count*random->uniform())];
           }
+        }
+        // other group, so anything ok
+        else if (igroup != jgroup && partner_count >= 1) {
+          j = subcell_list_group[jgroup][isubcell][int(partner_count*random->uniform())];
         }
         // radius >= 1 case
         else {
-          ibox = (int)((isubcell%nscbd_sq)%nsubcell_bydim);
-          jbox = (int)((isubcell%nscbd_sq)/nsubcell_bydim);
-          kbox = (int)(isubcell/nscbd_sq);
-          radius = 1;
-          while (radius < nsubcell_bydim) {
-            partner_count = 0;
-            temp_ctr = 0;
+          if (DIM == 3) {
+            ibox = (int)((isubcell%nscbd_sq)%nsubcell_bydim);
+            jbox = (int)((isubcell%nscbd_sq)/nsubcell_bydim);
+            kbox = (int)(isubcell/nscbd_sq);
+            radius = 1;
+            while (radius < nsubcell_bydim) {
+              partner_count = 0;
+              temp_ctr = 0;
 
-            // 3-D looping over neighbors
-            for (int adj_i = -radius; adj_i <= radius; adj_i++) {
-              adj_ibox = ibox + adj_i;
-              for (int adj_j = -radius; adj_j <= radius; adj_j++) {
-                adj_jbox = jbox + adj_j;
-
-                // Bottom
-                adj_kbox = kbox - radius;
-                if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
-                  neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
+              // 3-D looping over neighbors
+              for (int adj_i = -radius; adj_i <= radius; adj_i++) {
+                adj_ibox = ibox + adj_i;
+                for (int adj_j = -radius; adj_j <= radius; adj_j++) {
+                  adj_jbox = jbox + adj_j;
+                  // Bottom
+                  adj_kbox = kbox - radius;
+                  if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
+                    neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
+                  }
+                  // Top
+                  adj_kbox = kbox + radius;
+                  if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
+                    neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
+                  }
                 }
-
-                // Top
-                adj_kbox = kbox + radius;
-                if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
-                  neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
+                for (int adj_k = -radius+1; adj_k <= radius-1; adj_k++) {
+                  adj_kbox = kbox + adj_k;
+                  // Front
+                  adj_jbox = jbox - radius;
+                  if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
+                    neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
+                  }
+                  // Back
+                  adj_jbox = jbox + radius;
+                  if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
+                    neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
+                  }
                 }
               }
-              for (int adj_k = -radius+1; adj_k <= radius-1; adj_k++) {
-                adj_kbox = kbox + adj_k;
+              for (int adj_j = -radius+1; adj_j <= radius-1; adj_j++) {
+                adj_jbox = jbox + adj_j;
+                for (int adj_k = -radius+1; adj_k <= radius-1; adj_k++) {
+                  adj_kbox = kbox + adj_k;
+                  // Left
+                  adj_ibox = ibox - radius;
+                  if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
+                    neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
+                  }
+                  // Right
+                  adj_ibox = ibox + radius;
+                  if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
+                    neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
+                  }
+                }
+              }
 
-                // Front
+              // looking for partner at this radius
+              // if good, leave. if not, radius++ 
+              for (int tc = 0; tc < temp_ctr; tc++) {
+                partner_count += subcell_count_group[jgroup][neighbor_cells[tc]];
+              }
+              if (partner_count == 0) radius++;
+              else break;
+            }
+          }
+          else if (DIM == 2) {
+            ibox = (int)(isubcell%nsubcell_bydim);
+            jbox = (int)(isubcell/nsubcell_bydim);
+            radius = 1;
+            while (radius < nsubcell_bydim) {
+              partner_count = 0;
+              temp_ctr = 0;
+
+              // 2-D looping over neighbors
+              for (int adj_i = -radius; adj_i <= radius; adj_i++) {
+                adj_ibox = ibox + adj_i;
+                // Bottom
                 adj_jbox = jbox - radius;
                 if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
                   neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
                 }
-
-                // Back
+                // Top
                 adj_jbox = jbox + radius;
                 if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
                   neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
                 }
               }
-            }
-            for (int adj_j = -radius+1; adj_j <= radius-1; adj_j++) {
-              adj_jbox = jbox + adj_j;
-              for (int adj_k = -radius+1; adj_k <= radius-1; adj_k++) {
-                adj_kbox = kbox + adj_k;
-
+              for (int adj_j = -radius+1; adj_j <= radius-1; adj_j++) {
+                adj_jbox = jbox + adj_j;
                 // Left
                 adj_ibox = ibox - radius;
                 if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
                   neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
                 }
-
                 // Right
                 adj_ibox = ibox + radius;
                 if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
                   neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
                 }
               }
-            }
 
-            for (int tc = 0; tc < temp_ctr; tc++) {
-              partner_count += subcell_count_group[tc][jgroup];
+              // looking for partner at this radius
+              // if good, leave. if not, radius++ 
+              for (int tc = 0; tc < temp_ctr; tc++) {
+                partner_count += subcell_count_group[jgroup][neighbor_cells[tc]];
+              }
+              if (partner_count == 0) radius++;
+              else break;
             }
-
-            // no partner found - increase radius and try again;
-            if (partner_count == 0) radius++;
-            else break;
           }
-
-          // can maybe move this out to match and work with the k particle step
-          // select random particle at this radius
 
           jj = partner_count * random->uniform();
           for (int tc = 0; tc < temp_ctr; tc++) {
-            jj_new = jj - subcell_count_group[tc][jgroup];
+            jj_new = jj - subcell_count_group[jgroup][neighbor_cells[tc]];
             if (jj_new < 0) {
-              final_subcell = tc;
+              final_subcell = neighbor_cells[tc];
               break;
             }
             else jj = jj_new;
           }
-          j = subcell_list_group[final_subcell][jgroup][jj];
+          j = subcell_list_group[jgroup][final_subcell][jj];
 
         }
+
         ipart = &particles[plist[ilist[i]]];
         jpart = &particles[plist[jlist[j]]];
 
         // test if collision actually occurs
         // continue to next collision if no reaction
-
         if (!test_collision(icell,igroup,jgroup,ipart,jpart)) continue;
 
         // if recombination reaction is possible for this IJ pair
         // pick a 3rd particle to participate and set cell number density
         // unless boost factor turns it off, or there is no 3rd particle
-
         if (recombflag && recomb_ijflag[ipart->ispecies][jpart->ispecies]) {
           if (random->uniform() > react->recomb_boost_inverse)
             react->recomb_species = -1;
@@ -1490,7 +1667,7 @@ template < int NEARCP > void Collide::collisions_group_subcell()
             jj = jlist[j];
             k = np * random->uniform();
             while (k == ii || k == jj) k = np * random->uniform();
-            react->recomb_part3 = &particle[plist[k]];
+            react->recomb_part3 = &particles[plist[k]];
             react->recomb_species = react->recomb_part3->ispecies;
             react->recomb_density = np * update->fnum / volume;
           }
@@ -1559,9 +1736,9 @@ template < int NEARCP > void Collide::collisions_group_subcell()
             npmax += DELTAPART;
             memory->grow(plist,npmax,"collide:plist");
             memory->grow(p2g,npmax,2,"collide:p2g");
-            memory->grow(subcell_list_group,npmax,npmax,npmax,"collide:subcell_list_group");
-            memory->grow(subcell_IDlist,npmax,"collide:subcell_IDlist");
-            memory->grow(subcell_count_group,npmax,npmax,"collide:subcell_count_group");
+            memory->grow(subcell_list_group,ngroups,npmax,npmax,"collide:subcell_list_group");
+            memory->grow(subcell_IDlist_group,ngroups,npmax,"collide:subcell_IDlist");
+            memory->grow(subcell_count_group,ngroups,npmax,"collide:subcell_count_group");
             memory->grow(neighbor_cells,npmax,"collide:neighbor_cells");
           }
           plist[np++] = particle->nlocal-1;
@@ -1678,15 +1855,26 @@ void Collide::define_subcell_neighbors(int ****neighbor_list, int ***neighbor_co
 /* ----------------------------------------------------------------------
    Determining ID of subcell for subcell method
 ------------------------------------------------------------------------- */
-int Collide::subcell_ID(Particle::OnePart *ipart, double lo_x, double lo_y, double lo_z, double dx, double dy, double dz, int n, int nsq) 
+template < int DIM > int Collide::subcell_ID(double xc, double yc, double zc, double lo_x, double lo_y, double lo_z, double oodx, double oody, double oodz, int n, int nsq) 
 {
   int x_id, y_id, z_id;
   int my_id;
 
-  x_id = (int)((ipart->x[0]-lo_x)/dx);
-  y_id = (int)((ipart->x[1]-lo_y)/dy);
-  z_id = (int)((ipart->x[2]-lo_z)/dz);
-
+  x_id = (int)((xc-lo_x)*oodx);
+  y_id = (int)((yc-lo_y)*oody);
+  if (DIM == 2) {
+    z_id = 0;
+  }
+  else if (DIM == 3) {
+    z_id = (int)((zc-lo_z)*oodz);
+  }
+  if (x_id < 0 || x_id > n || y_id < 0 || y_id > n || z_id < 0 || z_id > n) {
+    //printf("coords = %f %f %f\n", coords[0], coords[1], coords[2]);
+    //printf("lows = %f %f %f\n", lo_x, lo_y, lo_z);
+    //printf("oodx, oody, oodz = %f %f %f\n", oodx, oody, oodz);
+    //printf("IDs = %d %d %d \n", x_id, y_id, z_id);
+    error->one(FLERR,"INVALID SUBCELL ID");
+  }
   my_id = nsq*z_id + n*y_id + x_id;  
 
   return my_id;
@@ -1697,7 +1885,6 @@ int Collide::subcell_ID(Particle::OnePart *ipart, double lo_x, double lo_y, doub
 ------------------------------------------------------------------------- */
 void Collide::collisions_one_ambipolar()
 {
-  printf("COLL ONE AMBI\n");
   int i,j,k,n,ip,np,nelectron,nptotal,ispecies,jspecies,tmp;
   int nattempt,reactflag;
   double attempt,volume;
@@ -1988,9 +2175,8 @@ void Collide::collisions_one_ambipolar()
    NTC algorithm for a single group with ambipolar approximation
    using subcell method
 ------------------------------------------------------------------------- */
-void Collide::collisions_one_ambipolar_subcell()
+template < int DIM > void Collide::collisions_one_ambipolar_subcell()
 {
-  printf("starting ambipolar subcell\n");
   int i,j,k,n,ip,np,nelectron,nptotal,ispecies,jspecies,tmp;
   int nattempt,reactflag;
   double attempt,volume;
@@ -2015,16 +2201,15 @@ void Collide::collisions_one_ambipolar_subcell()
   int nsubcell_bydim, nscbd_sq;
   int ibox, jbox, kbox, adj_ibox, adj_jbox, adj_kbox, radius;
   int jj, jj_new;
-  double c_lo_x, c_lo_y, c_lo_z, dx, dy, dz;
-  double dim_inv = 1./3.;
+  double c_lo_x, c_lo_y, c_lo_z, oodx, oody, oodz;
+  double dim_inv;
+  if (DIM == 2) dim_inv = 1./2.;
+  else dim_inv = 1./3.;
   Grid::ChildCell *cells = grid->cells;
 
   for (int icell = 0; icell < nglocal; icell++) {
     np = cinfo[icell].count;
     if (np <= 1) continue;
-
-    nsubcell_bydim = (int)(pow((double)np, dim_inv));
-    nscbd_sq = nsubcell_bydim * nsubcell_bydim;
 
     ip = cinfo[icell].first;
     volume = cinfo[icell].volume / cinfo[icell].weight;
@@ -2034,12 +2219,11 @@ void Collide::collisions_one_ambipolar_subcell()
     c_lo_x = cells[icell].lo[0];
     c_lo_y = cells[icell].lo[1];
     c_lo_z = cells[icell].lo[2];
-    dx = (cells[icell].hi[0] - c_lo_x) / nsubcell_bydim;
-    dy = (cells[icell].hi[0] - c_lo_x) / nsubcell_bydim;
-    dz = (cells[icell].hi[2] - c_lo_z) / nsubcell_bydim;
+    oodx = ((double)nsubcell_bydim) / (cells[icell].hi[0] - c_lo_x);
+    oody = ((double)nsubcell_bydim) / (cells[icell].hi[1] - c_lo_y);
+    oodz = ((double)nsubcell_bydim) / (cells[icell].hi[2] - c_lo_z);
 
     // setup particle list for this cell
-    printf("E\n");
 
     if (np > npmax) {
       while (np > npmax) npmax += DELTAPART;
@@ -2062,13 +2246,12 @@ void Collide::collisions_one_ambipolar_subcell()
 
     // clear counts for reuse in next cell
     memset(subcell_count, 0, npmax*sizeof(*subcell_count));
-    printf("D\n");
     n = 0;
     while (ip >= 0) {
       plist[n] = ip;
 
       // setting up the necessary structure for subcells
-      curr_subcell = subcell_ID(&particles[plist[n]], c_lo_x, c_lo_y, c_lo_z, dx, dy, dz, nsubcell_bydim, nscbd_sq);
+      curr_subcell = subcell_ID<DIM>((&particles[plist[n]])->x[0], (&particles[plist[n]])->x[1], (&particles[plist[n]])->x[2], c_lo_x, c_lo_y, c_lo_z, oodx, oody, oodz, nsubcell_bydim, nscbd_sq);
       subcell_IDlist[n] = curr_subcell;
       subcell_list[curr_subcell][subcell_count[curr_subcell]] = n;
       subcell_count[curr_subcell]++;
@@ -2079,7 +2262,6 @@ void Collide::collisions_one_ambipolar_subcell()
 
     // setup elist of ionized electrons for this cell
     // create them in separate array since will never become real particles
-    printf("A\n");
     if (np >= maxelectron) {
       while (maxelectron < np) maxelectron += DELTAELECTRON;
       memory->sfree(elist);
@@ -2088,8 +2270,7 @@ void Collide::collisions_one_ambipolar_subcell()
     }
 
     // create electrons for ambipolar ions
-
-    printf("B\n");
+    // FIXME
     nelectron = 0;
     for (i = 0; i < np; i++) { // loop over known particles
       if (ionambi[plist[i]]) { // if this particle is among the ambipolar
@@ -2099,7 +2280,7 @@ void Collide::collisions_one_ambipolar_subcell()
         memcpy(ep->v,velambi[plist[i]],3*sizeof(double)); // put in the velocity of the electron
         ep->ispecies = ambispecies; // put in the species
 
-        curr_subcell = subcell_ID(&particles[plist[i]], c_lo_x, c_lo_y, c_lo_z, dx, dy, dz, nsubcell_bydim, nscbd_sq);
+        curr_subcell = subcell_ID<DIM>((&particles[plist[i]])->x[0], (&particles[plist[i]])->x[1], (&particles[plist[i]])->x[2], c_lo_x, c_lo_y, c_lo_z, oodx, oody, oodz, nsubcell_bydim, nscbd_sq);
         subcell_IDlist[np+nelectron] = curr_subcell;
         subcell_list[curr_subcell][subcell_count[curr_subcell]] = np+nelectron;
         subcell_count[curr_subcell]++;
@@ -2107,7 +2288,6 @@ void Collide::collisions_one_ambipolar_subcell()
         nelectron++;
       }
     }
-    printf("C\n");
 
     // attempt = exact collision attempt count for all particles in cell
     // nptotal = includes neutrals, ions, electrons
@@ -2130,6 +2310,7 @@ void Collide::collisions_one_ambipolar_subcell()
 
       // grab the subcell info for particle i
       isubcell = subcell_IDlist[i];
+      final_subcell = isubcell;
 
       // radius == 0 case
       final_subcell = isubcell;
@@ -2142,86 +2323,127 @@ void Collide::collisions_one_ambipolar_subcell()
       }
       // radius >= 1 case
       else {
-        ibox = (int)((isubcell%nscbd_sq)%nsubcell_bydim);
-        jbox = (int)((isubcell%nscbd_sq)/nsubcell_bydim);
-        kbox = (int)(isubcell/nscbd_sq);
-        radius=1;
-        while (radius < nsubcell_bydim) {
-          partner_count = 0;
-          temp_ctr = 0;
+        if (DIM == 3) {
+          ibox = (int)((isubcell%nscbd_sq)%nsubcell_bydim);
+          jbox = (int)((isubcell%nscbd_sq)/nsubcell_bydim);
+          kbox = (int)(isubcell/nscbd_sq);
+          radius=1;
+          while (radius < nsubcell_bydim) {
+            partner_count = 0;
+            temp_ctr = 0;
 
-          // 3-D looping over neighbors
-          for (int adj_i = -radius; adj_i <= radius; adj_i++) {
-            adj_ibox = ibox + adj_i;
-            for (int adj_j = -radius; adj_j <= radius; adj_j++) {
-              adj_jbox = jbox + adj_j;
-
-              // Bottom
-              adj_kbox = kbox - radius;
-              if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
-                neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
+            // 3-D looping over neighbors
+            for (int adj_i = -radius; adj_i <= radius; adj_i++) {
+              adj_ibox = ibox + adj_i;
+              for (int adj_j = -radius; adj_j <= radius; adj_j++) {
+                adj_jbox = jbox + adj_j;
+                // Bottom
+                adj_kbox = kbox - radius;
+                if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
+                  neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
+                }
+                // Top
+                adj_kbox = kbox + radius;
+                if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
+                  neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
+                }
               }
-
-              // Top
-              adj_kbox = kbox + radius;
-              if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
-                neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
+              for (int adj_k = -radius+1; adj_k <= radius-1; adj_k++) {
+                adj_kbox = kbox + adj_k;
+                // Front
+                adj_jbox = jbox - radius;
+                if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
+                  neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
+                }
+                // Back
+                adj_jbox = jbox + radius;
+                if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
+                  neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
+                }
               }
             }
-            for (int adj_k = -radius+1; adj_k <= radius-1; adj_k++) {
-              adj_kbox = kbox + adj_k;
+            for (int adj_j = -radius+1; adj_j <= radius-1; adj_j++) {
+              adj_jbox = jbox + adj_j;
+              for (int adj_k = -radius+1; adj_k <= radius-1; adj_k++) {
+                adj_kbox = kbox + adj_k;
+                // Left
+                adj_ibox = ibox - radius;
+                if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
+                  neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
+                }
+                // Right
+                adj_ibox = ibox + radius;
+                if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
+                  neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
+                }
+              }
+            }
 
-              // Front
+            for (int tc = 0; tc < temp_ctr; tc++) {
+              partner_count += subcell_count[neighbor_cells[tc]];
+            }
+            if (partner_count == 0) radius++;
+            else break;
+          }
+        }
+        else if (DIM == 2) {
+          ibox = (int)(isubcell%nsubcell_bydim);
+          jbox = (int)(isubcell/nsubcell_bydim);
+          radius = 1;
+          while (radius < nsubcell_bydim) {
+            partner_count = 0;
+            temp_ctr = 0;
+
+            // 2-D looping over neighbors
+            for (int adj_i = -radius; adj_i <= radius; adj_i++) {
+              adj_ibox = ibox + adj_i;
+              // Bottom
               adj_jbox = jbox - radius;
               if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
                 neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
               }
-
-              // Back
+              // Top
               adj_jbox = jbox + radius;
               if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
                 neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
               }
             }
-          }
-          for (int adj_j = -radius+1; adj_j <= radius-1; adj_j++) {
-            adj_jbox = jbox + adj_j;
-            for (int adj_k = -radius+1; adj_k <= radius-1; adj_k++) {
-              adj_kbox = kbox + adj_k;
-
+            for (int adj_j = -radius+1; adj_j <= radius-1; adj_j++) {
+              adj_jbox = jbox + adj_j;
               // Left
               adj_ibox = ibox - radius;
               if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
                 neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
               }
-
               // Right
               adj_ibox = ibox + radius;
               if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
                 neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
               }
             }
-          }
-          for (int tc = 0; tc < temp_ctr; tc++) {
-            partner_count += subcell_count[tc];
-          }
 
-          // no partner found - increase radius and try again
-          if (partner_count == 0) radius++;
-          else break;
+            // looking for partner at this radius
+            // if good, leave. if not, radius++ 
+            for (int tc = 0; tc < temp_ctr; tc++) {
+              partner_count += subcell_count[neighbor_cells[tc]];
+            }
+            if (partner_count == 0) radius++;
+            else break;
+          }
         }
 
         // select random particle at this radius
         jj = partner_count * random->uniform();
         for (int tc = 0; tc < temp_ctr; tc++) {
-          jj_new = jj - subcell_count[tc];
+          jj_new = jj - subcell_count[neighbor_cells[tc]];
           if (jj_new < 0) {
-            final_subcell = tc;
+            final_subcell = neighbor_cells[tc];
             break;
           }
           else jj = jj_new;
         }
         j = subcell_list[final_subcell][jj];
+
       }
 
       // ipart,jpart = heavy particles or electrons
@@ -2433,7 +2655,7 @@ void Collide::collisions_one_ambipolar_subcell()
 
 void Collide::collisions_group_ambipolar()
 {
-  printf("COLL GROUP AMBIPOLAR\n");
+  double tt; double t_setup = 0;
   int i,j,k,n,ii,jj,ip,np,isp,ng;
   int pindex,ipair,igroup,jgroup,newgroup,ispecies,jspecies,tmp;
   int nattempt,reactflag,nelectron;
@@ -2447,7 +2669,6 @@ void Collide::collisions_group_ambipolar()
   double **velambi = particle->edarray[particle->ewhich[index_velambi]];
 
   // loop over cells I own
-  //printf("1\n");
   Grid::ChildInfo *cinfo = grid->cinfo;
 
   Particle::OnePart *particles = particle->particles;
@@ -2457,7 +2678,6 @@ void Collide::collisions_group_ambipolar()
   int egroup = species2group[ambispecies];
 
   for (int icell = 0; icell < nglocal; icell++) {
-    //printf("2\n");
     np = cinfo[icell].count;
     if (np <= 1) continue;
     ip = cinfo[icell].first;
@@ -2467,20 +2687,17 @@ void Collide::collisions_group_ambipolar()
     // reallocate plist and p2g if necessary
 
     if (np > npmax) {
-      //printf("reallocing 1\n");
       while (np > npmax) npmax += DELTAPART;
       memory->destroy(plist);
       memory->create(plist,npmax,"collide:plist");
       memory->destroy(p2g);
       memory->create(p2g,npmax,2,"collide:p2g");
     }
-    //printf("3\n");
 
     // setup elist of ionized electrons for this cell
     // create them in separate array since will never become real particles
 
     if (np >= maxelectron) {
-      //printf("reallocing 2\n");
       while (maxelectron < np) maxelectron += DELTAELECTRON;
       memory->sfree(elist);
       elist = (Particle::OnePart *)
@@ -2495,62 +2712,50 @@ void Collide::collisions_group_ambipolar()
     // also populate elist with ionized electrons, now separated from ions
     // ngroup[egroup] = nelectron
 
-    //printf("4\n");
     for (i = 0; i < ngroups; i++) ngroup[i] = 0;
     n = 0;
     nelectron = 0;
-    //printf("5\n");
 
+    tt = MPI_Wtime();
     while (ip >= 0) {
-      //printf("5a\n");
       isp = particles[ip].ispecies;
       igroup = species2group[isp];
       if (ngroup[igroup] == maxgroup[igroup]) {
 	      maxgroup[igroup] += DELTAPART;
 	      memory->grow(glist[igroup],maxgroup[igroup],"collide:glist");
       }
-      //printf("5b\n");
       ng = ngroup[igroup];
-      //printf("5c1\n");
       glist[igroup][ng] = n;
-      //printf("5c2\n");
-      //printf("n = %d\n", n);
-      //printf("igroup = %d\n", igroup);
       p2g[n][0] = igroup;
-      //printf("5c3\n");
       p2g[n][1] = ng;
-      //printf("5c4\n");
       plist[n] = ip;
-      //printf("5c5\n");
       ngroup[igroup]++;
-      //printf("5c6\n");
-
+      //double xc0,xc1,xc2;
       if (ionambi[ip]) {
-        //printf("5d\n");
         p = &particles[ip];
         ep = &elist[nelectron];
         memcpy(ep,p,nbytes);
         memcpy(ep->v,velambi[ip],3*sizeof(double));
+        //xc0 = ep->x[0];
+        //xc1 = ep->x[1];
+        //xc2 = ep->x[2];
+        //printf("electron coords = %f %f %f\n", xc0, xc1, xc2);
         ep->ispecies = ambispecies;
 	    nelectron++;
-      //printf("5e\n");
 
 	    if (ngroup[egroup] == maxgroup[egroup]) {
-        //printf("5f\n");
 	      maxgroup[egroup] += DELTAPART;
 	      memory->grow(glist[egroup],maxgroup[egroup],"collide:grouplist");
 	    }
-      //printf("5g\n");
 	    ng = ngroup[egroup];
 	    glist[egroup][ng] = nelectron-1;
 	    ngroup[egroup]++;
-      //printf("5h\n");
       }
 
       n++;
       ip = next[ip];
     }
-    //printf("6\n");
+    t_setup += MPI_Wtime() - tt;
     // attempt = exact collision attempt count for a pair of groups
     // double loop over N^2 / 2 pairs of groups
     // temporarily include nelectrons in count for egroup
@@ -2566,7 +2771,6 @@ void Collide::collisions_group_ambipolar()
 	if (igroup == egroup && jgroup == egroup) continue;
 	attempt = attempt_collision(icell,igroup,jgroup,volume);
 	nattempt = static_cast<int> (attempt);
-  //printf("7\n");
 	if (nattempt) {
 	  if (igroup == egroup) {
 	      gpair[npair][0] = jgroup;
@@ -2580,7 +2784,6 @@ void Collide::collisions_group_ambipolar()
 	  npair++;
 	}
       }
-    //printf("8\n");
     // perform collisions for each pair of groups in gpair list
     // select random particle in each group
     // if igroup = jgroup, cannot be same particle
@@ -2870,6 +3073,7 @@ void Collide::collisions_group_ambipolar()
     if (melectron != nelectron)
       error->one(FLERR,"Collisions in cell did not conserve electron count");
   }
+  //printf("t_setup = %f\n", 1000*t_setup);
 }
 
 /* ----------------------------------------------------------------------
@@ -2878,9 +3082,10 @@ void Collide::collisions_group_ambipolar()
    uses subcell method
 ------------------------------------------------------------------------- */
 
-void Collide::collisions_group_ambipolar_subcell()
+template <int DIM > void Collide::collisions_group_ambipolar_subcell()
 {
-  //printf("starting group ambipolar subcell\n");
+  double tt; double t_setup = 0; double t_partner = 0;
+
   int i,j,k,n,ii,jj,ip,np,isp,ng;
   int pindex,ipair,igroup,jgroup,newgroup,ispecies,jspecies,tmp;
   int nattempt,reactflag,nelectron;
@@ -2906,21 +3111,20 @@ void Collide::collisions_group_ambipolar_subcell()
   // additions
   int curr_subcell, isubcell, final_subcell;
   int partner_count, temp_ctr;
-  int nsubcell_bydim, nscbd_sq;
+  int nsubcell_bydim, nscbd_sq, temp_ng, nel_sq;
   int ibox,jbox,kbox,adj_ibox,adj_jbox,adj_kbox,radius;
   int jj_new;
-  double dim_inv = 1./3.;
-  double c_lo_x, c_lo_y, c_lo_z, dx, dy, dz;
+  double dim_inv;
+  if (DIM == 2) dim_inv = 1./2.;
+  else dim_inv = 1./3.;
+  double c_lo_x, c_lo_y, c_lo_z, dxx, dyy, dzz, oodx, oody, oodz;
+  double ec_x, ec_y, ec_z;
   Grid::ChildCell *cells = grid->cells;
-
+  
   for (int icell = 0; icell < nglocal; icell++) {
+    //printf("icell = %d out of %d\n", icell, nglocal);
     np = cinfo[icell].count;
-    //printf("Cell %d. Np = %d\n", icell, np);
     if (np <= 1) continue;
-
-    nsubcell_bydim = (int)(pow((double)np, dim_inv));
-    nscbd_sq = nsubcell_bydim * nsubcell_bydim;
-
     ip = cinfo[icell].first;
     volume = cinfo[icell].volume / cinfo[icell].weight;
     if (volume == 0.0) error->one(FLERR,"Collision cell volume is zero");
@@ -2929,15 +3133,13 @@ void Collide::collisions_group_ambipolar_subcell()
     c_lo_x = cells[icell].lo[0];
     c_lo_y = cells[icell].lo[1];
     c_lo_z = cells[icell].lo[2];
-    dx = (cells[icell].hi[0] - c_lo_x) / nsubcell_bydim;
-    dy = (cells[icell].hi[1] - c_lo_y) / nsubcell_bydim;
-    dz = (cells[icell].hi[2] - c_lo_z) / nsubcell_bydim;
+    dxx = (cells[icell].hi[0] - c_lo_x);
+    dyy = (cells[icell].hi[1] - c_lo_y);
+    dzz = (cells[icell].hi[2] - c_lo_z);
 
     // reallocate plist and p2g if necessary
-    //printf("B\n");
     if (np > npmax) {
-      while (np > npmax) { printf("growing from %d to %d\n", npmax, npmax+DELTAPART); npmax += DELTAPART; }
-      printf("adjusted npmax to %d\n", npmax);
+      while (np > npmax) npmax += DELTAPART;
 
       memory->destroy(plist);
       memory->create(plist,npmax,"collide:plist");
@@ -2945,37 +3147,38 @@ void Collide::collisions_group_ambipolar_subcell()
       memory->destroy(p2g);
       memory->create(p2g,npmax,2,"collide:p2g");
 
-      memory->destroy(subcell_IDlist);
-      memory->create(subcell_IDlist,npmax,"collide:subcell_IDlist");
+      memory->destroy(subcell_IDlist_group);
+      memory->create(subcell_IDlist_group,ngroups,npmax,"collide:subcell_IDlist");
 
       memory->destroy(subcell_count_group);
-      memory->create(subcell_count_group,npmax,ngroups,"collide:subcell_count_group");
+      memory->create(subcell_count_group,ngroups,npmax,"collide:subcell_count_group");
 
       memory->destroy(neighbor_cells);
       memory->create(neighbor_cells,npmax,"collide:neighbor_cells");
- 
+
       memory->destroy(subcell_list_group);
-      memory->create(subcell_list_group,npmax,npmax,npmax,"collide:subcell_list_group");
+      memory->create(subcell_list_group,ngroups,npmax,npmax,"collide:subcell_list_group");
+
+      memory->destroy(electron_coords);
+      memory->create(electron_coords,npmax,3,"collide:electron_coords");
     }
+
     // setup elist of ionized electrons for this cell
     // create them in separate array since will never become real particles
-
     if (np >= maxelectron) {
       while (maxelectron < np) maxelectron += DELTAELECTRON;
       memory->sfree(elist);
       elist = (Particle::OnePart *)
         memory->smalloc(maxelectron*nbytes,"collide:elist");
     }
-    //printf("zeroing\n");
+
     // clear counts for reuse in next cell
-    //memset(subcell_count_group, 0, npmax*npmax*sizeof(**subcell_count_group));
-    //printf("npmax = %d. ngroups = %d\n", npmax, ngroups);
-    for (int ti = 0; ti < npmax; ti++) {
-      for (int tj = 0; tj < ngroups; tj++) {
+    for (int ti = 0; ti < ngroups; ti++) {
+      for (int tj = 0; tj < npmax; tj++) {
         subcell_count_group[ti][tj] = 0;
       }
     }
-    //printf("zeroing groups\n");
+
     // plist = particle list for entire cell
     // glist[igroup][i] = index in plist of Ith particle in Igroup
     // ngroup[igroup] = particle count in Igroup
@@ -2983,12 +3186,11 @@ void Collide::collisions_group_ambipolar_subcell()
     // p2g[i][1] = index within glist[igroup] of Ith particle in plist
 
     for (i = 0; i < ngroups; i++) ngroup[i] = 0; // could be done with memset?
+
     n = 0;
     nelectron = 0;
-
-    //printf("list assembly\n");
+    double xc0, xc1, xc2;
     while (ip >= 0) {
-      // map particle to species
       isp = particles[i].ispecies;
       igroup = species2group[isp];
       if (ngroup[igroup] == maxgroup[igroup]) {
@@ -2997,29 +3199,20 @@ void Collide::collisions_group_ambipolar_subcell()
       }
       ng = ngroup[igroup];
       glist[igroup][ng] = n;
-      //printf("n = %d. npmax = %d\n", n, npmax);
       p2g[n][0] = igroup;
       p2g[n][1] = ng;
       plist[n] = ip;
-
-      // subcell structure
-      curr_subcell = subcell_ID(&particles[plist[n]], c_lo_x, c_lo_y, c_lo_z, dx, dy, dz, nsubcell_bydim, nscbd_sq);
-      subcell_IDlist[n] = curr_subcell;
-      subcell_list_group[curr_subcell][igroup][subcell_count_group[curr_subcell][igroup]] = n;
-      subcell_count_group[curr_subcell][igroup]++;
       ngroup[igroup]++;
+
       if (ionambi[ip]) {
-        printf("%d is ionambi\n", ip);
         p = &particles[ip];
         ep = &elist[nelectron];
         memcpy(ep,p,nbytes);
         memcpy(ep->v,velambi[ip],3*sizeof(double));
+        electron_coords[nelectron][0] = ep->x[0];
+        electron_coords[nelectron][1] = ep->x[1];
+        electron_coords[nelectron][2] = ep->x[2];
         ep->ispecies = ambispecies;
-        
-        subcell_IDlist[np+nelectron] = curr_subcell;
-        subcell_list_group[curr_subcell][egroup][subcell_count_group[curr_subcell][egroup]] = np+nelectron; 
-        subcell_count_group[curr_subcell][egroup]++;
-
         nelectron++;
 
         if (ngroup[egroup] == maxgroup[egroup]) {
@@ -3030,12 +3223,55 @@ void Collide::collisions_group_ambipolar_subcell()
         glist[egroup][ng] = nelectron-1;
         ngroup[egroup]++;
       }
+
       n++;
       ip = next[ip];
     }
-    printf("AA\n");
-    //printf("nelectron is now %d\n", nelectron);
-    //printf("nelectron = %d\n", nelectron);
+
+
+    // setup subcell structure for each group
+    for (igroup = 0; igroup < ngroups; igroup++) {
+      if (igroup == egroup) continue;
+      temp_ng = ngroup[igroup];
+      nsubcell_bydim = (int)(pow((double)temp_ng, dim_inv));
+      nscbd_sq = nsubcell_bydim*nsubcell_bydim;
+      nsc_dim_group[igroup] = nsubcell_bydim;
+
+      oodx = ((double)nsubcell_bydim) / dxx;
+      oody = ((double)nsubcell_bydim) / dyy;
+      oodz = ((double)nsubcell_bydim) / dzz;
+      //if (ngroup[igroup] != 0) printf("ngroup = %d. nscbd = %d. OOs = %f %f %f\n", ngroup[igroup], nsubcell_bydim, oodx, oody, oodz);
+
+      for (int temp_part = 0; temp_part < temp_ng; temp_part++) {
+        curr_subcell = subcell_ID<DIM>((&particles[plist[glist[igroup][temp_part]]])->x[0], (&particles[plist[glist[igroup][temp_part]]])->x[1], (&particles[plist[glist[igroup][temp_part]]])->x[2], c_lo_x, c_lo_y, c_lo_z, oodx, oody, oodz, nsubcell_bydim, nscbd_sq);
+        subcell_IDlist_group[igroup][temp_part] = curr_subcell;
+        subcell_list_group[igroup][curr_subcell][subcell_count_group[igroup][curr_subcell]] = temp_part;
+        subcell_count_group[igroup][curr_subcell]++;
+      }
+    }
+
+    // setup subcell structure for electrons separately
+    nsubcell_bydim = (int)(pow((double)nelectron, dim_inv));
+    nscbd_sq = nsubcell_bydim*nsubcell_bydim;
+    oodx = ((double)nsubcell_bydim) / dxx;
+    oody = ((double)nsubcell_bydim) / dyy;
+    oodz = ((double)nsubcell_bydim) / dzz;
+    nsc_dim_group[egroup] = nsubcell_bydim;
+    //if (nelectron > 0) { printf("NELECTRONS = %d\n", nelectron); }
+    for (int ielectron = 0; ielectron < nelectron; ielectron++) {
+      curr_subcell = subcell_ID<DIM>(electron_coords[ielectron][0], electron_coords[ielectron][1], electron_coords[ielectron][2],
+                                     c_lo_x, c_lo_y, c_lo_z, oodx, oody, oodz, nsubcell_bydim, nscbd_sq);
+      subcell_IDlist_group[egroup][ielectron] = curr_subcell;
+      subcell_list_group[egroup][curr_subcell][subcell_count_group[egroup][curr_subcell]] = ielectron;
+      subcell_count_group[egroup][curr_subcell]++;
+    }
+    //if (icell == 963) {
+    //  printf("icell 963 nelectrons = %d\n", nelectron);
+    //  for (int ax = 0; ax < nsc_dim_group[egroup]*nsc_dim_group[egroup]; ax++) {
+    //    printf("icell 963 electron count subcell %d out of %d is %d\n", ax, nsc_dim_group[egroup]*nsc_dim_group[egroup], subcell_count_group[egroup][ax]);
+    //  }
+    //}
+
     // attempt = exact collision attempt count for a pair of groups
     // double loop over N^2 / 2 pairs of groups
     // temporarily inlude nelectrons in count for egroup
@@ -3066,7 +3302,13 @@ void Collide::collisions_group_ambipolar_subcell()
         }
       }
     }
-    printf("BB\n");
+
+    //if (icell == 963) {
+    //  printf("PT2 icell 963 nelectrons = %d\n", nelectron);
+    //  for (int ax = 0; ax < nsc_dim_group[egroup]*nsc_dim_group[egroup]; ax++) {
+    //    printf("PT2 icell 963 electron count subcell %d out of %d is %d\n", ax, nsc_dim_group[egroup]*nsc_dim_group[egroup], subcell_count_group[egroup][ax]);
+    //  }
+    //}
     // perform collisions for each pair of groups in gpair list
     // select random particle in each group
     // if igroup = jgroup, cannot be same particle
@@ -3076,143 +3318,221 @@ void Collide::collisions_group_ambipolar_subcell()
     // Ni and Nj are pointers to value in ngroup vector
     //   b/c need to stay current as chemistry occurs
     // NOTE: OK to use pre-computed nattempt when Ngroup may have changed via react?
-    //printf("num coll pairs = %d\n", npair);
     for (ipair = 0; ipair < npair; ipair++) {
+      //if (icell == 963) {
+      //  printf("PT3ITER %d out of %d icell 963 nelectrons = %d\n", ipair, npair, nelectron);
+      //  for (int ax = 0; ax < nsc_dim_group[egroup]*nsc_dim_group[egroup]; ax++) {
+      //    printf("PT3ITER %d out of %d icell 963 electron count subcell %d out of %d is %d\n", ipair, npair, ax, nsc_dim_group[egroup]*nsc_dim_group[egroup], subcell_count_group[egroup][ax]);
+      //  }
+      //}
       igroup = gpair[ipair][0];
       jgroup = gpair[ipair][1];
       nattempt = gpair[ipair][2];
-
       ni = &ngroup[igroup];
       nj = &ngroup[jgroup];
+      //if (icell == 963) { printf("Icell 963 iter %d out of %d is groups %d and %d\n", ipair, npair, igroup, jgroup); }
+      //if (igroup == egroup || jgroup == egroup) { printf("Num igroup = %d. Num jgroup = %d\n", *ni, *nj); }
+
       ilist = glist[igroup];
       jlist = glist[jgroup];
-
-      //printf("Num in j group = %d\n", *nj);
+      
+      //if (igroup == egroup || jgroup == egroup) { 
+      //  //printf("nelectron = %d\n", nelectron);
+      //  for (int ax = 0; ax < nsc_dim_group[egroup]*nsc_dim_group[egroup]; ax++) {
+      //    printf("Before continues cell %d: ig, jg = %d, %d: electron count subcell %d out of %d is %d\n", icell, igroup, jgroup, ax, nsc_dim_group[egroup]*nsc_dim_group[egroup], subcell_count_group[egroup][ax]);
+      //  }
+      //}
 
       // re-test for no possible attempts
       // could have changed due to reactions in previous group pairs
-      if (*ni == 0 || *nj == 0) continue;
-      if (igroup == jgroup && *ni == 1) continue;
+      if (*ni == 0 || *nj == 0) { continue; }
+      if (igroup == jgroup && *ni == 1) { continue; }
 
-      printf("num attempts = %d\n", nattempt);
-      //nattempt = 0;
+      //if (igroup == egroup || jgroup == egroup) { printf("Num colls between igroup = %d, pop %d, and jgroup = %d, pop %d is %d COLLS \n", igroup, *ni, jgroup, *nj, nattempt); }
       for (int iattempt = 0; iattempt < nattempt; iattempt++) {
         i = *ni * random->uniform();
-        
-        // grab the subcell info for particle i
-        isubcell = subcell_IDlist[i];
+
+        // grab subcell info for jgroup grid
+        if (igroup == jgroup) {
+          isubcell = subcell_IDlist_group[igroup][i];
+          nsubcell_bydim = nsc_dim_group[jgroup];
+        }
+        else {
+          nsubcell_bydim = nsc_dim_group[jgroup]; 
+          nscbd_sq = nsubcell_bydim*nsubcell_bydim;
+          oodx = ((double)nsubcell_bydim) / dxx;
+          oody = ((double)nsubcell_bydim) / dyy;
+          oodz = ((double)nsubcell_bydim) / dzz;
+          isubcell = subcell_ID<DIM>((&particles[plist[glist[igroup][i]]])->x[0], (&particles[plist[glist[igroup][i]]])->x[1], (&particles[plist[glist[igroup][i]]])->x[2],
+                                      c_lo_x, c_lo_y, c_lo_z, oodx, oody, oodz, nsubcell_bydim, nscbd_sq);
+        }
 
         // radius == 0 case
-        final_subcell = isubcell;
-        partner_count = subcell_count_group[final_subcell][jgroup]; // partner must be jgroup
-        if ((igroup == jgroup && partner_count >= 2) || (igroup != jgroup && partner_count >= 1)) {
-          j = subcell_list_group[final_subcell][jgroup][int(partner_count*random->uniform())];
+        partner_count = subcell_count_group[jgroup][isubcell]; // partner must be jgroup
+        //if (igroup == egroup || jgroup == egroup) { printf("jgroup = %d. isubcell = %d. partner_ct = %d\n", jgroup, isubcell, partner_count); }
+
+        // radius == 0 case
+        if (igroup != jgroup && partner_count >= 1) {
+          //if (igroup == egroup || jgroup == egroup) { printf("r = 0a. partner count = %d\n", partner_count); }
+          j = subcell_list_group[jgroup][isubcell][int(partner_count*random->uniform())];
+          //printf("r = 0a partner found. j = %d\n", j);
+        }
+        else if (igroup == jgroup && partner_count >= 2) {
+          //if (igroup == egroup || jgroup == egroup) { printf("r = 0b\n"); }
+          j = subcell_list_group[jgroup][isubcell][int(partner_count*random->uniform())];
           while (j == i) {
-            j = subcell_list_group[final_subcell][jgroup][int(partner_count*random->uniform())];
+            j = subcell_list_group[jgroup][isubcell][int(partner_count*random->uniform())];
           }
         }
         // radius >= 1 case
         else {
-          ibox = (int)((isubcell%nscbd_sq)%nsubcell_bydim);
-          jbox = (int)((isubcell%nscbd_sq)/nsubcell_bydim);
-          kbox = (int)(isubcell/nscbd_sq);
-          radius = 1;
-          while (radius < nsubcell_bydim) {
-            partner_count = 0;
-            temp_ctr = 0;
+          if (DIM == 3) {
+            ibox = (int)((isubcell%nscbd_sq)%nsubcell_bydim);
+            jbox = (int)((isubcell%nscbd_sq)/nsubcell_bydim);
+            kbox = (int)(isubcell/nscbd_sq);
+            radius = 1;
+            //if (igroup == egroup || jgroup == egroup) { printf("going into while\n"); }
+            while (radius < nsubcell_bydim) {
+              //if (igroup == egroup || jgroup == egroup) { printf("r = %d\n", radius); }
+              partner_count = 0;
+              temp_ctr = 0;
 
-            // 3-D looping over neighbors
-            for (int adj_i = -radius; adj_i <= radius; adj_i++) {
-              adj_ibox = ibox + adj_i;
-              for (int adj_j = -radius; adj_j <= radius; adj_j++) {
+              // 3-D looping over neighbors
+              for (int adj_i = -radius; adj_i <= radius; adj_i++) {
+                adj_ibox = ibox + adj_i;
+                for (int adj_j = -radius; adj_j <= radius; adj_j++) {
+                  adj_jbox = jbox + adj_j;
+                  // Bottom
+                  adj_kbox = kbox - radius;
+                  if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
+                    neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
+                  }
+                  // Top
+                  adj_kbox = kbox + radius;
+                  if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
+                    neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
+                  }
+                  // Front
+                  adj_jbox = jbox - radius;
+                  if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
+                    neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
+                  }
+                  // Back
+                  adj_jbox = jbox + radius;
+                  if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
+                    neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
+                  }
+                }
+              }
+              for (int adj_j = -radius+1; adj_j <= radius-1; adj_j++) {
                 adj_jbox = jbox + adj_j;
-
+                for (int adj_k = -radius+1; adj_k <= radius-1; adj_k++) {
+                  adj_kbox = kbox + adj_k;
+                  // Left
+                  adj_ibox = ibox - radius;
+                  if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
+                    neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
+                  }
+                  // Right
+                  adj_ibox = ibox + radius;
+                  if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
+                    neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
+                  }
+                }
+              }
+            
+              if (partner_count == 0) radius++;
+              else break;
+            }
+          }
+          else if (DIM == 2) {
+            //if (igroup == egroup || jgroup == egroup) {
+            //  printf("dim = 2\n");
+            //  printf("isubcell = %d\n", isubcell);
+            //  printf("nsubcellbydim = %d\n", nsubcell_bydim);
+            //}
+            ibox = (int)(isubcell%nsubcell_bydim);
+            jbox = (int)(isubcell/nsubcell_bydim);
+            //printf("ibox = %d, jbox = %d\n", ibox, jbox);
+            radius = 1;
+            while (radius < nsubcell_bydim) {
+              //if (igroup == egroup || jgroup == egroup) printf("r = %d\n", radius);
+              //printf("radius = %d\n", radius);
+              partner_count = 0;
+              temp_ctr = 0;
+              // 2-D looping over neighbors
+              for (int adj_i = -radius; adj_i <= radius; adj_i++) {
+                adj_ibox = ibox + adj_i;
                 // Bottom
-                adj_kbox = kbox - radius;
-                if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && kbox < nsubcell_bydim) {
-                  neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
-                }
-
-                // Top
-                adj_kbox = kbox + radius;
-                if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && kbox < nsubcell_bydim) {
-                  neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
-                }
-
-                // Front
                 adj_jbox = jbox - radius;
-                if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && kbox < nsubcell_bydim) {
+                if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
                   neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
                 }
-
-                // Back
+                // Top
                 adj_jbox = jbox + radius;
-                if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && kbox < nsubcell_bydim) {
+                if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
                   neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
                 }
               }
-            }
-            for (int adj_j = -radius+1; adj_j <= radius-1; adj_j++) {
-              adj_jbox = jbox + adj_j;
-              for (int adj_k = -radius+1; adj_k <= radius-1; adj_k++) {
-                adj_kbox = kbox + adj_k;
-
+              for (int adj_j = -radius+1; adj_j <= radius-1; adj_j++) {
+                adj_jbox = jbox + adj_j;
                 // Left
                 adj_ibox = ibox - radius;
-                if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && kbox < nsubcell_bydim) {
+                if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
                   neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
                 }
-
                 // Right
                 adj_ibox = ibox + radius;
-                if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && kbox < nsubcell_bydim) {
+                if (0 <= adj_ibox && adj_ibox < nsubcell_bydim && 0 <= adj_jbox && adj_jbox < nsubcell_bydim && 0 <= adj_kbox && adj_kbox < nsubcell_bydim) {
                   neighbor_cells[temp_ctr++] = nsubcell_bydim*(nsubcell_bydim*adj_kbox + adj_jbox) + adj_ibox;
                 }
               }
-            }
 
-            for (int tc = 0; tc < temp_ctr; tc++) {
-              partner_count += subcell_count_group[tc][jgroup];
+              // looking for partner at this radius
+              // if good, leave. if not, radius++ 
+              for (int tc = 0; tc < temp_ctr; tc++) {
+                //if (igroup == egroup || jgroup == egroup) printf("nbr subcell %d has count %d\n", neighbor_cells[tc], subcell_count_group[jgroup][neighbor_cells[tc]]);
+                partner_count += subcell_count_group[jgroup][neighbor_cells[tc]];
+              }
+              if (partner_count == 0) radius++;
+              else break;
             }
-
-            // no partner found - increase radius and try again
-            if (partner_count == 0) radius++;
-            else break;
           }
 
-          // can maybe move this out to match and work with the k particle step
           // select random particle at this radius
-
           jj = partner_count * random->uniform();
+          //if (igroup == egroup || jgroup == egroup) printf("jj init = %d; partner count = %d\n", jj, partner_count);
+          
           for (int tc = 0; tc < temp_ctr; tc++) {
-            jj_new = jj - subcell_count_group[tc][jgroup];
+            jj_new = jj - subcell_count_group[jgroup][neighbor_cells[tc]];
+            //if (igroup == egroup || jgroup == egroup) printf("jj new = %d\n", jj_new);
             if (jj_new < 0) {
-              final_subcell = tc;
+              //if (igroup == egroup || jgroup == egroup) { printf("jj new again = %d\n", jj_new); }
+              final_subcell = neighbor_cells[tc];
               break;
             }
             else jj = jj_new;
           }
-          j = subcell_list_group[final_subcell][jgroup][jj];
-
+          //if (igroup == egroup || jgroup == egroup) { printf("finally picking partner pt2\n"); 
+          //  printf("final subcell = %d\n", final_subcell);
+          //  printf("jj = %d\n\n\n", jj);
+          //}
+          j = subcell_list_group[jgroup][final_subcell][jj];
         }
-        printf("partner picked\n");
-        //j = *nj * random->uniform();
+        //if (igroup == egroup || jgroup == egroup) { printf("doing colls with e's 3\n"); }
 
-        printf("i = %d. j = %d\n", i, j);
-        printf("ilist[i] = %d\n", ilist[i]);
-        printf("jlist[j] = %d\n", jlist[j]);
-        
-        ipart = &particles[plist[ilist[i]]];
-        jpart = &particles[plist[jlist[j]]];
-        printf("coll partners of ilist/jlist %d / %d and plist %d %d\n", ilist[i], jlist[j], plist[ilist[i]], plist[jlist[j]]);
+        //j = *nj * random->uniform();
+        //if (igroup == jgroup)
+        //  while (i == j) j = *nj * random->uniform();
+        //printf("partner j chosen to be = %d\n", j);
 
         // ipart/jpart can be from particles or elist
-
         if (igroup == egroup) ipart = &elist[i];
         else ipart = &particles[plist[ilist[i]]];
         if (jgroup == egroup) jpart = &elist[j];
         else jpart = &particles[plist[jlist[j]]];
 
+        //if (igroup == egroup || jgroup == egroup) { printf("doing colls with e's 4\n"); }
         // NOTE: unlike single group, no possibility of e/e collision
         //       means collision stats may be different
 
@@ -3220,16 +3540,16 @@ void Collide::collisions_group_ambipolar_subcell()
         //  ncollide_one++;
         //  continue;
         //}
-        printf("testing\n");
-        // test if collision actually occurs
-        if (!test_collision(icell,igroup,jgroup,ipart,jpart)) continue;
 
+        // test if collision actually occurs
+        if (!test_collision(icell,igroup,jgroup,ipart,jpart)) {
+          continue; }
+ 
         // if recombination reaction is possible for this IJ pair
         // pick a 3rd particle to participate and set cell number density
         // unless boost factor turns it off, or there is no 3rd particle
         // 3rd particle will never be an electron since plist has no electrons
         // if jgroup == egroup, no need to check k for match to jj
-        printf("Actually doing the coll now\n"); 
         if (recombflag && recomb_ijflag[ipart->ispecies][jpart->ispecies]) {
           if (random->uniform() > react->recomb_boost_inverse)
             react->recomb_species = -1;
@@ -3278,7 +3598,7 @@ void Collide::collisions_group_ambipolar_subcell()
           delgroup(igroup,i);
           ilist = glist[igroup];
           jlist = glist[jgroup];
-          // this line needed if jgroup=igruop and delgroup() moved J particle
+          // this line needed if jgroup=igroup and delgroup() moved J particle
           if (jlist == ilist && j == *ni) j = i;
         }
 
@@ -3297,14 +3617,20 @@ void Collide::collisions_group_ambipolar_subcell()
 
           if (newgroup != egroup) {
             if (np == npmax) {
-              printf("INSIDE ADJUSTMENT OF NPMAX 1\n");
               npmax += DELTAPART;
               memory->grow(plist,npmax,"collide:plist");
               memory->grow(p2g,npmax,2,"collide:p2g");
-              memory->grow(subcell_IDlist,npmax,"collide:subcell_IDlist");
-              memory->grow(subcell_count_group,npmax,ngroups,"collide:subcell_count_group");
+              memory->grow(subcell_IDlist_group,ngroups,npmax,"collide:subcell_IDlist_group");
+              //printf("subcell count group growing\n\n");
+              memory->grow(subcell_count_group,ngroups,npmax,"collide:subcell_count_group");
+              // clear counts for reuse in next cell
+              for (int ti = 0; ti < ngroups; ti++) {
+                for (int tj = 0; tj < npmax; tj++) {
+                  subcell_count_group[ti][tj] = 0;
+                }
+              }
               memory->grow(neighbor_cells,npmax,"collide:neighbor_cells");
-              memory->grow(subcell_list_group,npmax,npmax,npmax,"collide:subcell_list_group");
+              memory->grow(subcell_list_group,ngroups,npmax,npmax,"collide:subcell_list_group");
             }
             plist[np++] = particle->nlocal-1;
             addgroup(newgroup,np-1);
@@ -3399,14 +3725,20 @@ void Collide::collisions_group_ambipolar_subcell()
             ngroup[egroup]--;
 
             if (np == npmax) {
-              printf("INSIDE ADJUSTMENT OF npmax\n");
               npmax += DELTAPART;
               memory->grow(plist,npmax,"collide:plist");
               memory->grow(p2g,npmax,2,"collide:p2g");
-              memory->grow(subcell_IDlist,npmax,"collide:subcell_IDlist");
-              memory->grow(subcell_count_group,npmax,ngroups,"collide:subcell_count_group");
+              memory->grow(subcell_IDlist_group,ngroups,npmax,"collide:subcell_IDlist_group");
+              //printf("subcell count group growing part 2\n\n");
+              memory->grow(subcell_count_group,ngroups,npmax,"collide:subcell_count_group");
+              // clear counts for reuse in next cell
+              for (int ti = 0; ti < ngroups; ti++) {
+                for (int tj = 0; tj < npmax; tj++) {
+                  subcell_count_group[ti][tj] = 0;
+                }
+              }
               memory->grow(neighbor_cells,npmax,"collide:neighbor_cells");
-              memory->grow(subcell_list_group,npmax,npmax,npmax,"collide:subcell_list_group");
+              memory->grow(subcell_list_group,ngroups,npmax,npmax,"collide:subcell_list_group");
             }
             plist[np++] = index;
             addgroup(newgroup,np-1);
@@ -3448,7 +3780,7 @@ void Collide::collisions_group_ambipolar_subcell()
         }
       }
     }
-    printf("CC\n");    
+
     // done with collisions/chemistry for one grid cell
     // recombine ambipolar ions with their matching electrons
     //   by copying electron velocity into velambi
@@ -3466,13 +3798,12 @@ void Collide::collisions_group_ambipolar_subcell()
         melectron++;
       }
     }
-    //printf("melectron = %d. nelectron = %d\n", melectron, nelectron);
     if (melectron != nelectron)
       error->one(FLERR,"Collisions in cell did not conserve electron count");
-    //printf("going next #checked\n");
   }
-  printf("final npmax = %d\n", npmax);
-  //printf("going to next timestep\n");
+
+  //printf("t_setup = %f\n", 1000*t_setup);
+  //printf("t partner = %f\n", 1000*t_partner);
 }
 
 

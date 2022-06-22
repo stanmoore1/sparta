@@ -66,17 +66,26 @@ class Collide : protected Pointers {
   int *plist;         // list of particle indices for the entire cell
 
   // ADDED BY JIMMY //  
-  int ****neighbor_list;
-  int ***neighbor_count;
   int **subcell_list;
-  int ***subcell_list_group;
   int *subcell_IDlist;
-  //int *subcell_next;
-  //int *subcell_first;
+  int *subcell_ID_ilist;
+  int *subcell_ID_jlist;
+  int *subcell_ID_klist;
   int *subcell_count;
+  
+  int *subcell_mostrecent;
+  int *subcell_first;
+  int *subcell_next;
+
+  int ***subcell_list_group;
+  int **subcell_IDlist_group;
   int **subcell_count_group;
-  //int *subcell_mostrecent; // could reuse for below
+  
   int *neighbor_cells;
+  int *nsc_dim_group;
+
+  double **electron_coords;
+
   int subcellflag;       // 1 if subcell option is enabled
 
   int nglocal;        // current size of per-cell arrays
@@ -177,10 +186,10 @@ class Collide : protected Pointers {
   template < int > void collisions_group_subcell();
  
   void collisions_one_ambipolar();
-  void collisions_one_ambipolar_subcell();
+  template < int > void collisions_one_ambipolar_subcell();
  
   void collisions_group_ambipolar();
-  void collisions_group_ambipolar_subcell();
+  template < int > void collisions_group_ambipolar_subcell();
 
   void ambi_reset(int, int, int, Particle::OnePart *, Particle::OnePart *,
                   Particle::OnePart *, int *);
@@ -188,7 +197,7 @@ class Collide : protected Pointers {
   void grow_percell(int);
 
   void define_subcell_neighbors(int ****neighbor_list, int ***neighbor_count);
-  int subcell_ID(Particle::OnePart *, double, double, double, double, double, double, int, int);
+  template < int> int subcell_ID(double, double, double, double, double, double, double, double, double, int, int);
 
   int find_nn(int, int);
   int find_nn_group(int, int *, int, int *, int *, int *, int *);
