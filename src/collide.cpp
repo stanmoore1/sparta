@@ -74,7 +74,6 @@ Collide::Collide(SPARTA *sparta, int, char **arg) : Pointers(sparta)
   subcell_next = NULL;
   subcell_first = NULL;
   neighbor_cells = NULL;
-  nsc_dim_group = NULL;
 
   subcellflag = 0;
 
@@ -165,8 +164,7 @@ Collide::~Collide()
     memory->destroy(neighbor_cells);
     memory->destroy(nsc_dim_group);
   }
-	  
-  memory->destroy(recomb_ijflag);
+	https://github.com/jfabell/sparta.git
 }
 
 /* ---------------------------------------------------------------------- */
