@@ -178,6 +178,9 @@ void Collide::init()
   if (ambiflag && nearcp)
     error->all(FLERR,"Ambipolar collision model does not yet support "
                "near-neighbor collisions");
+  if (ambiflag && subcellflag)
+    error->all(FLERR,"Ambipolar collision model does not yet support "
+	       "subcell collisions");
 
   // require mixture to contain all species
 
@@ -240,6 +243,10 @@ void Collide::init()
 
   oldgroups = ngroups;
   ngroups = mixture->ngroup;
+	
+  if (ngroups > 1 && subcellflag)
+    error->all(FLERR,"Multipe-groups collision model does not yet support "
+	       "subcell collisions");
 
   if (ngroups != oldgroups) {
     if (oldgroups == 1) {
@@ -472,18 +479,13 @@ void Collide::collisions()
   // variant for nearcp flag or not
   // variant for ambipolar approximation or not
 
-  int mydim = domain->dimension;
+  int grid_dim = domain->dimension;
 
-  if (mcfflag) {
-    if (nearcp == 0) collisions_one_mcf<0>();
-    else collisions_one_mcf<1>();
-  }
-  else {
   if (!ambiflag) {
     if (ngroups == 1) {
       if (subcellflag == 1) {
-        if (mydim == 2) collisions_one_subcell<2>();
-        else if (mydim == 3) collisions_one_subcell<3>();
+        if (grid_dim == 2) collisions_one_subcell<2>();
+        else if (grid_dim == 3) collisions_one_subcell<3>();
       }
       else {
         if (nearcp == 0) collisions_one<0>();
@@ -491,32 +493,17 @@ void Collide::collisions()
       }
     }
     else {
-      if (subcellflag == 1) {
-        if (mydim == 2) collisions_group_subcell<2>();
-        else if (mydim == 3) collisions_group_subcell<3>();
-      }
-      else {
-        if (nearcp == 0) collisions_group<0>();
-        else collisions_group<1>();
-      } 
+      if (nearcp == 0) collisions_group<0>();
+      else collisions_group<1>(); 
     }
   }
   else { 
     if (ngroups == 1) {
-      if (subcellflag == 1) {
-        if (mydim == 2) collisions_one_ambipolar_subcell<2>();
-        else if (mydim == 3) collisions_one_ambipolar_subcell<3>();
-      }
-      else collisions_one_ambipolar();
+      collisions_one_ambipolar();
     }
     else {
-      if (subcellflag == 1) { 
-        if (mydim == 2) collisions_group_ambipolar_subcell<2>();
-        if (mydim == 3) collisions_group_ambipolar_subcell<3>();
-      }
-      else collisions_group_ambipolar();
+      collisions_group_ambipolar();
     }
-  }
   }
 
   // remove any particles deleted in chemistry reactions
