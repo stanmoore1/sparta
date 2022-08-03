@@ -66,8 +66,8 @@ class Collide : protected Pointers {
  protected:
   int npmax;          // max # of particles in plist
   int *plist;         // list of particle indices for the entire cell
-
-  // ADDED BY JIMMY //  
+	
+  // for subcell methods
   int **subcell_list;
   int *subcell_IDlist;
   int *subcell_ID_ilist;
@@ -78,22 +78,11 @@ class Collide : protected Pointers {
   int *subcell_mostrecent;
   int *subcell_first;
   int *subcell_next;
-
-  int **subcell_ID_group_ilist;
-  int **subcell_ID_group_jlist;
-  int **subcell_ID_group_klist;
-
-  int ***subcell_list_group;
-  int **subcell_IDlist_group;
-  int **subcell_count_group;
   
   int *neighbor_cells;
   int *nsc_dim_group;
 
-  double **electron_coords;
-
   int subcellflag;       // 1 if subcell option is enabled
-  int mcfflag;           // 1 if MCF option is enabled
 
   int nglocal;        // current size of per-cell arrays
   int nglocalmax;     // max allocated size of per-cell arrays (vremax, remain)
@@ -189,25 +178,19 @@ class Collide : protected Pointers {
   }
 
   template < int > void collisions_one();
-  template < int > void collisions_one_mcf();
+	
   template < int > void collisions_one_subcell();
 
   template < int > void collisions_group();
-  template < int > void collisions_group_subcell();
  
   void collisions_one_ambipolar();
-  template < int > void collisions_one_ambipolar_subcell();
  
   void collisions_group_ambipolar();
-  template < int > void collisions_group_ambipolar_subcell();
 
   void ambi_reset(int, int, int, Particle::OnePart *, Particle::OnePart *,
                   Particle::OnePart *, int *);
   void ambi_check();
   void grow_percell(int);
-
-  void define_subcell_neighbors(int ****neighbor_list, int ***neighbor_count);
-  template < int> int subcell_ID(double, double, double, double, double, double, double, double, double, int, int);
 
   int find_nn(int, int);
   int find_nn_group(int, int *, int, int *, int *, int *, int *);
