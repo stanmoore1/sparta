@@ -78,9 +78,7 @@ class Collide : protected Pointers {
   int *subcell_mostrecent;
   int *subcell_first;
   int *subcell_next;
-  
   int *neighbor_cells;
-  int *nsc_dim_group;
 
   int subcellflag;       // 1 if subcell option is enabled
 
