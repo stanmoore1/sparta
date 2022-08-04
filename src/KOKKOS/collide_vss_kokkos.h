@@ -60,9 +60,13 @@ typedef struct s_COLLIDE_REDUCE COLLIDE_REDUCE;
 
 struct TagCollideResetVremax{};
 struct TagCollideZeroNN{};
+struct TagCollideZeroSubcell{};
 
 template < int NEARCP, int ATOMIC_REDUCTION >
 struct TagCollideCollisionsOne{};
+
+template < int DIM, int ATOMIC_REDUCTION >
+struct TagCollideCollisionsOneSubcell{};
 
 template < int ATOMIC_REDUCTION >
 struct TagCollideCollisionsOneAmbipolar{};
@@ -108,6 +112,9 @@ class CollideVSSKokkos : public CollideVSS {
   KOKKOS_INLINE_FUNCTION
   void operator()(TagCollideZeroNN, const int&) const;
 
+  KOKKOS_INLINE_FUNCTION
+  void operator()(TagCollideZeroSubcell, const int&) const;
+
   template < int NEARCP, int ATOMIC_REDUCTION >
   KOKKOS_INLINE_FUNCTION
   void operator()(TagCollideCollisionsOne< NEARCP, ATOMIC_REDUCTION >, const int&) const;
@@ -115,6 +122,14 @@ class CollideVSSKokkos : public CollideVSS {
   template < int NEARCP, int ATOMIC_REDUCTION >
   KOKKOS_INLINE_FUNCTION
   void operator()(TagCollideCollisionsOne< NEARCP, ATOMIC_REDUCTION >, const int&, COLLIDE_REDUCE&) const;
+
+  template < int DIM, int ATOMIC_REDUCTION >
+  KOKKOS_INLINE_FUNCTION
+  void operator()(TagCollideCollisionsOneSubcell< DIM, ATOMIC_REDUCTION >, const int&) const;
+
+  template < int DIM, int ATOMIC_REDUCTION >
+  KOKKOS_INLINE_FUNCTION
+  void operator()(TagCollideCollisionsOneSubcell< DIM, ATOMIC_REDUCTION >, const int&, COLLIDE_REDUCE&) const;
 
   template < int ATOMIC_REDUCTION >
   KOKKOS_INLINE_FUNCTION
@@ -206,6 +221,7 @@ class CollideVSSKokkos : public CollideVSS {
   DAT::t_int_2d d_nn_last_partner;
 
   template < int NEARCP > void collisions_one(COLLIDE_REDUCE&);
+  template < int DIM > void collisions_one_subcell(COLLIDE_REDUCE&);
   void collisions_one_ambipolar(COLLIDE_REDUCE&);
 
   // VSS specific
@@ -265,6 +281,14 @@ class CollideVSSKokkos : public CollideVSS {
   DAT::t_int_1d d_ionambi_backup;
   DAT::t_float_2d d_velambi_backup;
   RanKnuth* random_backup;
+
+  DAT::t_int_3d d_subcell_list;
+  DAT::t_int_2d d_subcell_IDlist;
+  DAT::t_int_2d d_subcell_ID_ilist;
+  DAT::t_int_2d d_subcell_ID_jlist;
+  DAT::t_int_2d d_subcell_ID_klist;
+  DAT::t_int_2d d_subcell_count;
+  DAT::t_int_2d d_neighbor_cells;
 };
 
 }
