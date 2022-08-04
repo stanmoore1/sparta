@@ -10,7 +10,7 @@
 
    See the README file in the top-level SPARTA directory.
 ------------------------------------------------------------------------- */
-
+// AAAAAAA
 #ifndef SPARTA_STYPE_KOKKOS_H
 #define SPARTA_STYPE_KOKKOS_H
 
@@ -519,6 +519,14 @@ typedef tdual_int_2d::t_dev_const_um t_int_2d_const_um;
 typedef tdual_int_2d::t_dev_const_randomread t_int_2d_randomread;
 
 typedef Kokkos::
+  DualView<int***, Kokkos::LayoutRight, DeviceType> tdual_int_3d;
+typedef tdual_int_3d::t_dev t_int_3d;
+typedef tdual_int_3d::t_dev_const t_int_3d_const;
+typedef tdual_int_3d::t_dev_um t_int_3d_um;
+typedef tdual_int_3d::t_dev_const_um t_int_3d_const_um;
+typedef tdual_int_3d::t_dev_const_randomread t_int_3d_randomread;
+
+typedef Kokkos::
   DualView<SPARTA_NS::cellint*, DeviceType::array_layout, DeviceType>
   tdual_cellint_1d;
 typedef tdual_cellint_1d::t_dev t_cellint_1d;
@@ -793,6 +801,13 @@ typedef tdual_int_2d::t_host_const t_int_2d_const;
 typedef tdual_int_2d::t_host_um t_int_2d_um;
 typedef tdual_int_2d::t_host_const_um t_int_2d_const_um;
 typedef tdual_int_2d::t_host_const_randomread t_int_2d_randomread;
+
+typedef Kokkos::DualView<int***, Kokkos::LayoutRight, DeviceType> tdual_int_3d;
+typedef tdual_int_3d::t_host t_int_3d;
+typedef tdual_int_3d::t_host_const t_int_3d_const;
+typedef tdual_int_3d::t_host_um t_int_3d_um;
+typedef tdual_int_3d::t_host_const_um t_int_3d_const_um;
+typedef tdual_int_3d::t_host_const_randomread t_int_3d_randomread;
 
 typedef Kokkos::DualView<SPARTA_NS::cellint*, DeviceType::array_layout, DeviceType> tdual_cellint_1d;
 typedef tdual_cellint_1d::t_host t_cellint_1d;
