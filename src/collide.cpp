@@ -957,8 +957,6 @@ template < int DIM > void Collide::collisions_one_subcell()
   Particle::OnePart *particles = particle->particles;
   int *next = particle->next; 
 
-  Grid::ChildCell *cells = grid->cells;
-
   for (int icell = 0; icell < nglocal; icell++) {
     np = cinfo[icell].count;
     if (np <= 1) continue;
@@ -966,14 +964,6 @@ template < int DIM > void Collide::collisions_one_subcell()
     ip = cinfo[icell].first;
     volume = cinfo[icell].volume / cinfo[icell].weight;
     if (volume == 0.0) error->one(FLERR, "Collision cell volume is zero");
- 
-    // grab cell boundaries for defining subgrid
-    c_lo_x = cells[icell].lo[0];
-    c_lo_y = cells[icell].lo[1];
-    c_lo_z = cells[icell].lo[2];
-    oodx = ((double)nsubcell_bydim) / (cells[icell].hi[0] - c_lo_x);
-    oody = ((double)nsubcell_bydim) / (cells[icell].hi[1] - c_lo_y);
-    oodz = ((double)nsubcell_bydim) / (cells[icell].hi[2] - c_lo_z);
  
     if (np > npmax) { 
       while (np > npmax) npmax += DELTAPART;
@@ -1017,10 +1007,20 @@ template < int DIM > void Collide::collisions_one_subcell()
     if (!nattempt) continue;
     nattempt_one += nattempt;
 	
+    Grid::ChildCell *cells = grid->cells;
+	  
     // subcell grid size
     nsubcell_bydim = (int)(pow((double)np, dim_inv));
     nscbd_sq = nsubcell_bydim * nsubcell_bydim;
-
+  
+    // grab cell boundaries for defining subgrid
+    c_lo_x = cells[icell].lo[0];
+    c_lo_y = cells[icell].lo[1];
+    c_lo_z = cells[icell].lo[2];
+    oodx = ((double)nsubcell_bydim) / (cells[icell].hi[0] - c_lo_x);
+    oody = ((double)nsubcell_bydim) / (cells[icell].hi[1] - c_lo_y);
+    oodz = ((double)nsubcell_bydim) / (cells[icell].hi[2] - c_lo_z);
+	  
     // clear arrays for use
     if (DIM == 2) {
       memset(subcell_count, 0, nscbd_sq*sizeof(int));
