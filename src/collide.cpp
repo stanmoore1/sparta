@@ -164,7 +164,7 @@ Collide::~Collide()
     memory->destroy(neighbor_cells);
     memory->destroy(nsc_dim_group);
   }
-	https://github.com/jfabell/sparta.git
+
 }
 
 /* ---------------------------------------------------------------------- */
