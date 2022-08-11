@@ -18,3 +18,7 @@ For Stan:
 4) Test problem (using subcells)
 -adapted from provided collide/ test problem, also added a 2d version of it
 -stored in src/jab_testproblem/ as in.collide*
+
+5) Bird's version of partner selection (random subcell instead of random particle)
+-code snippet is stored in src/jab_bird_partnerselection.txt
+-this should replace what (as of writing this note) is lines 1200-1214 in collide.cpp
