@@ -72,8 +72,6 @@ enum{NOFIELD,CFIELD,PFIELD,GFIELD};             // several files
 /* ---------------------------------------------------------------------- */
 
 UpdateKokkos::UpdateKokkos(SPARTA *sparta) : Update(sparta),
-  grid_kk_copy(sparta),
-  domain_kk_copy(sparta),
   // Virtual functions are not yet supported on the GPU, which leads to pain:
   sc_kk_specular_copy{VAL_2(KKCopy<SurfCollideSpecularKokkos>(sparta))},
   sc_kk_diffuse_copy{VAL_2(KKCopy<SurfCollideDiffuseKokkos>(sparta))},
@@ -126,9 +124,6 @@ UpdateKokkos::~UpdateKokkos()
 
   memoryKK->destroy_kokkos(k_mlist,mlist);
   mlist = NULL;
-
-  grid_kk_copy.uncopy();
-  domain_kk_copy.uncopy();
 
   for (int i=0; i<KOKKOS_MAX_SURF_COLL_PER_TYPE; i++) {
     sc_kk_specular_copy[i].uncopy();
@@ -467,8 +462,19 @@ template < int DIM, int SURF > void UpdateKokkos::move()
     grid_kk->sync(Device,CELL_MASK|PCELL_MASK|SINFO_MASK|PLEVEL_MASK);
 
     // may be able to move this outside of the while loop
-    grid_kk_copy.copy(grid_kk);
-    domain_kk_copy.copy((DomainKokkos*)domain);
+
+    d_grid_kk = static_cast<GridKokkos*>(Kokkos::kokkos_malloc<DeviceType>(
+      "create_object_on_device_impl", sizeof(GridKokkos)));
+    Kokkos::parallel_for("create_object_on_device",
+      Kokkos::RangePolicy<DeviceType>(0,1),
+      KOKKOS_LAMBDA(const int i) {new (d_grid_kk) GridKokkos(*grid_kk);});
+
+    DomainKokkos* domain_kk = (DomainKokkos*)domain;
+    d_domain_kk = static_cast<DomainKokkos*>(Kokkos::kokkos_malloc<DeviceType>(
+      "create_object_on_device_impl", sizeof(DomainKokkos)));
+    Kokkos::parallel_for("create_object_on_device",
+      Kokkos::RangePolicy<DeviceType>(0,1),
+      KOKKOS_LAMBDA(const int i) {new (d_domain_kk) DomainKokkos(*domain_kk);});
 
     if (surf->nsc > KOKKOS_TOT_SURF_COLL)
       error->all(FLERR,"Kokkos currently supports two instances of each surface collide method");
@@ -924,7 +930,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,ATOMIC_REDUCTION>, const in
 	 (me == MOVE_DEBUG_PROC && i == MOVE_DEBUG_INDEX))) {
       if (outface != INTERIOR)
 	printf("  OUTFACE %d out: %d %d, frac %g\n",
-	       outface,grid_kk_copy.obj.neigh_decode(nmask,outface),
+	       outface,d_grid_kk->neigh_decode(nmask,outface),
 	       neigh[outface],frac);
       else
 	printf("  INTERIOR %d %d\n",outface,INTERIOR);
@@ -1361,7 +1367,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,ATOMIC_REDUCTION>, const in
     //   (d) its child, which the particle is in, is entirely beyond my halo
     // if new cell is child and surfs exist, check if a split cell
 
-    nflag = grid_kk_copy.obj.neigh_decode(nmask,outface);
+    nflag = d_grid_kk->neigh_decode(nmask,outface);
     icell_original = icell;
 
     if (nflag == NCHILD) {
@@ -1376,7 +1382,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,ATOMIC_REDUCTION>, const in
       }
     } else if (nflag == NPARENT) {
       auto pcell = &d_pcells[neigh[outface]];
-      icell = grid_kk_copy.obj.id_find_child(pcell->id,d_cells[icell].level,
+      icell = d_grid_kk->id_find_child(pcell->id,d_cells[icell].level,
                                              pcell->lo,pcell->hi,x);
       if (icell >= 0) {
         if (DIM == 3 && SURF) {
@@ -1413,43 +1419,43 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,ATOMIC_REDUCTION>, const in
       Particle::OnePart* ipart = &particle_i;
       lo = d_cells[icell].lo;
       hi = d_cells[icell].hi;
-      if (domain_kk_copy.obj.bflag[outface] == SURFACE) {
+      if (d_domain_kk->bflag[outface] == SURFACE) {
         // treat global boundary as a surface
         // particle velocity is changed by surface collision model
         // dtremain may be changed by collision model
         // reset all components of xnew, in case dtremain changed
         // if axisymmetric, caller will reset again, including xnew[2]
 
-        int n = domain_kk_copy.obj.surf_collide[outface];
+        int n = d_domain_kk->surf_collide[outface];
         int sc_type = sc_type_list[n];
         int m = sc_map[n];
 
         if (sc_type == 0)
           jpart = sc_kk_specular_copy[m].obj.
-            collide_kokkos(ipart,dtremain,-(outface+1),domain_kk_copy.obj.norm[outface],domain_kk_copy.obj.surf_react[outface],reaction);
+            collide_kokkos(ipart,dtremain,-(outface+1),d_domain_kk->norm[outface],d_domain_kk->surf_react[outface],reaction);
         else if (sc_type == 1)
           jpart = sc_kk_diffuse_copy[m].obj.
-            collide_kokkos(ipart,dtremain,-(outface+1),domain_kk_copy.obj.norm[outface],domain_kk_copy.obj.surf_react[outface],reaction);
+            collide_kokkos(ipart,dtremain,-(outface+1),d_domain_kk->norm[outface],d_domain_kk->surf_react[outface],reaction);
         else if (sc_type == 2)
           jpart = sc_kk_vanish_copy[m].obj.
-            collide_kokkos(ipart,dtremain,-(outface+1),domain_kk_copy.obj.norm[outface],domain_kk_copy.obj.surf_react[outface],reaction);
+            collide_kokkos(ipart,dtremain,-(outface+1),d_domain_kk->norm[outface],d_domain_kk->surf_react[outface],reaction);
         else if (sc_type == 3)
           jpart = sc_kk_piston_copy[m].obj.
-            collide_kokkos(ipart,dtremain,-(outface+1),domain_kk_copy.obj.norm[outface],domain_kk_copy.obj.surf_react[outface],reaction);
+            collide_kokkos(ipart,dtremain,-(outface+1),d_domain_kk->norm[outface],d_domain_kk->surf_react[outface],reaction);
         else if (sc_type == 4)
           jpart = sc_kk_transparent_copy[m].obj.
-            collide_kokkos(ipart,dtremain,-(outface+1),domain_kk_copy.obj.norm[outface],domain_kk_copy.obj.surf_react[outface],reaction);
+            collide_kokkos(ipart,dtremain,-(outface+1),d_domain_kk->norm[outface],d_domain_kk->surf_react[outface],reaction);
 
         if (ipart) {
           double *x = ipart->x;
           double *v = ipart->v;
           xnew[0] = x[0] + dtremain*v[0];
           xnew[1] = x[1] + dtremain*v[1];
-          if (domain_kk_copy.obj.dimension == 3) xnew[2] = x[2] + dtremain*v[2];
+          if (d_domain_kk->dimension == 3) xnew[2] = x[2] + dtremain*v[2];
         }
         bflag = SURFACE;
       } else {
-        bflag = domain_kk_copy.obj.collide_kokkos(ipart,outface,lo,hi,xnew/*,dtremain*/,reaction);
+        bflag = d_domain_kk->collide_kokkos(ipart,outface,lo,hi,xnew/*,dtremain*/,reaction);
       }
 
       //if (jpart) {
@@ -1461,7 +1467,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,ATOMIC_REDUCTION>, const in
       if (nboundary_tally)
         for (int m = 0; m < nboundary_tally; m++)
           blist_active_copy[m].obj.
-            boundary_tally_kk<ATOMIC_REDUCTION>(outface,bflag,reaction,&iorig,ipart,jpart,domain_kk_copy.obj.norm[outface]);
+            boundary_tally_kk<ATOMIC_REDUCTION>(outface,bflag,reaction,&iorig,ipart,jpart,d_domain_kk->norm[outface]);
 
       if (DIM == 1) {
         xnew[0] = x[0] + dtremain*v[0];
@@ -1491,7 +1497,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,ATOMIC_REDUCTION>, const in
           }
         } else if (nflag == NPBPARENT) {
           auto pcell = &d_pcells[neigh[outface]];
-          icell = grid_kk_copy.obj.id_find_child(pcell->id,d_cells[icell].level,
+          icell = d_grid_kk->id_find_child(pcell->id,d_cells[icell].level,
                                                  pcell->lo,pcell->hi,x);
           if (icell >= 0) {
             if (DIM == 3 && SURF) {
@@ -1502,10 +1508,10 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,ATOMIC_REDUCTION>, const in
               if (d_cells[icell].nsplit > 1 && d_cells[icell].nsurf >= 0)
                 icell = split2d(icell,x);
             }
-          } else domain_kk_copy.obj.uncollide_kokkos(outface,x);
+          } else d_domain_kk->uncollide_kokkos(outface,x);
         } else if (nflag == NPBUNKNOWN) {
           icell = -1;
-          domain_kk_copy.obj.uncollide_kokkos(outface,x);
+          d_domain_kk->uncollide_kokkos(outface,x);
         }
 
       } else if (bflag == SURFACE) {

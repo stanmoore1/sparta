@@ -133,8 +133,8 @@ class UpdateKokkos : public Update {
 
   class KokkosBase* KKBaseFieldFix;
 
-  KKCopy<GridKokkos> grid_kk_copy;
-  KKCopy<DomainKokkos> domain_kk_copy;
+  GridKokkos* d_grid_kk;
+  DomainKokkos* d_domain_kk;
 
   int sc_type_list[KOKKOS_TOT_SURF_COLL];
   int sc_map[KOKKOS_TOT_SURF_COLL];
