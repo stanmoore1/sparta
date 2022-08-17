@@ -109,6 +109,7 @@ action kokkos.cpp
 action kokkos.h
 action kokkos_base.h
 action kokkos_copy.h
+action kokkos_device_copy.h
 action kokkos_type.h
 action math_extra_kokkos.h
 action memory_kokkos.h

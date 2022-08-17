@@ -43,6 +43,7 @@
 #include "sparta_masks.h"
 #include "surf_collide_specular_kokkos.h"
 #include "kokkos_base.h"
+#include "kokkos_device_copy.h"
 
 using namespace SPARTA_NS;
 
@@ -463,18 +464,11 @@ template < int DIM, int SURF > void UpdateKokkos::move()
 
     // may be able to move this outside of the while loop
 
-    d_grid_kk = static_cast<GridKokkos*>(Kokkos::kokkos_malloc<DeviceType>(
-      "create_object_on_device_impl", sizeof(GridKokkos)));
-    Kokkos::parallel_for("create_object_on_device",
-      Kokkos::RangePolicy<DeviceType>(0,1),
-      KOKKOS_LAMBDA(const int i) {new (d_grid_kk) GridKokkos(*grid_kk);});
+    auto copy_grid = KKDeviceCopy<GridKokkos>(grid_kk);
+    d_grid_kk = copy_grid.d_ptr;
 
-    DomainKokkos* domain_kk = (DomainKokkos*)domain;
-    d_domain_kk = static_cast<DomainKokkos*>(Kokkos::kokkos_malloc<DeviceType>(
-      "create_object_on_device_impl", sizeof(DomainKokkos)));
-    Kokkos::parallel_for("create_object_on_device",
-      Kokkos::RangePolicy<DeviceType>(0,1),
-      KOKKOS_LAMBDA(const int i) {new (d_domain_kk) DomainKokkos(*domain_kk);});
+    auto copy_domain = KKDeviceCopy<DomainKokkos>((DomainKokkos*)domain);
+    d_domain_kk = copy_domain.d_ptr;
 
     if (surf->nsc > KOKKOS_TOT_SURF_COLL)
       error->all(FLERR,"Kokkos currently supports two instances of each surface collide method");
