@@ -284,7 +284,7 @@ void CreateParticlesKokkos::create_local(bigint np)
   int nnew;
   auto d_cands2new = offset_scan(d_keep, nnew);
 
-  auto particleKK = dynamic_cast<ParticleKokkos*>(particle);
+  auto particleKK = (ParticleKokkos*)particle;
   particleKK->grow(nnew);
   particleKK->sync(Device, PARTICLE_MASK | SPECIES_MASK);
   auto d_particles = particleKK->k_particles.d_view;

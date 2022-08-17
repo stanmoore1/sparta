@@ -45,10 +45,10 @@ void FixGridCheckKokkos::end_of_step()
 {
   if (update->ntimestep % nevery) return;
 
-  auto particleKK = dynamic_cast<ParticleKokkos*>(particle);
+  auto particleKK = (ParticleKokkos*)particle;
   particleKK->k_particles.sync_device();
   auto d_particles = particleKK->k_particles.d_view;
-  auto gridKK = dynamic_cast<GridKokkos*>(grid);
+  auto gridKK = (GridKokkos*)grid;
   gridKK->k_cells.sync_device();
   auto d_cells = gridKK->k_cells.d_view;
   gridKK->k_cinfo.sync_device();

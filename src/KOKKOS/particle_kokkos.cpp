@@ -443,7 +443,7 @@ void ParticleKokkos::operator()(TagParticleZero_cellcount, const int &i) const {
 
 void ParticleKokkos::pre_weight()
 {
-  auto grid_kk = dynamic_cast<GridKokkos*>(grid);
+  auto grid_kk = (GridKokkos*)grid;
   auto& k_cinfo = grid_kk->k_cinfo;
   grid_kk->sync(Device,CINFO_MASK);
   this->sync(Device,PARTICLE_MASK);
@@ -482,7 +482,7 @@ void ParticleKokkos::post_weight()
   } else if (METHOD == 2) { // Kokkos-parallel, gives same (correct) answer
     Kokkos::View<double*> d_ratios("post_weight:ratios", nlocal);
     auto h_ratios = Kokkos::create_mirror_view(d_ratios);
-    auto grid_kk = dynamic_cast<GridKokkos*>(grid);
+    auto grid_kk = (GridKokkos*)grid;
     auto& k_cinfo = grid_kk->k_cinfo;
     grid_kk->sync(Device,CINFO_MASK);
     this->sync(Device,PARTICLE_MASK);

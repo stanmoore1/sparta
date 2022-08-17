@@ -253,7 +253,7 @@ void FixEmitFaceKokkos::perform_task()
   int nnew;
   auto ld_cands2new = offset_scan(d_keep, nnew);
 
-  auto particleKK = dynamic_cast<ParticleKokkos*>(particle);
+  auto particleKK = (ParticleKokkos*)particle;
   auto nlocal_before = particleKK->nlocal;
   particleKK->grow(nnew);
   particleKK->sync(SPARTA_NS::Device, PARTICLE_MASK);
