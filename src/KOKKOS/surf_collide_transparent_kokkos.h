@@ -22,11 +22,12 @@ SurfCollideStyle(transparent/kk,SurfCollideTransparentKokkos)
 #define SPARTA_SURF_COLLIDE_TRANSPARENT_KOKKOS_H
 
 #include "surf_collide_transparent.h"
+#include "kokkos_base.h"
 #include "kokkos_type.h"
 
 namespace SPARTA_NS {
 
-class SurfCollideTransparentKokkos : public SurfCollideTransparent {
+class SurfCollideTransparentKokkos : public SurfCollideTransparent, public KokkosBase {
  public:
 
   SurfCollideTransparentKokkos(class SPARTA *, int, char **);

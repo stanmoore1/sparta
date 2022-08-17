@@ -22,12 +22,13 @@ SurfCollideStyle(piston/kk,SurfCollidePistonKokkos)
 #define SPARTA_SURF_COLLIDE_PISTON_KOKKOS_H
 
 #include "surf_collide_piston.h"
+#include "kokkos_base.h"
 #include "kokkos_type.h"
 #include "error.h"
 
 namespace SPARTA_NS {
 
-class SurfCollidePistonKokkos : public SurfCollidePiston {
+class SurfCollidePistonKokkos : public SurfCollidePiston, public KokkosBase {
  public:
 
   SurfCollidePistonKokkos(class SPARTA *, int, char **);

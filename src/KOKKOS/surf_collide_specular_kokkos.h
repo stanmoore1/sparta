@@ -22,12 +22,13 @@ SurfCollideStyle(specular/kk,SurfCollideSpecularKokkos)
 #define SPARTA_SURF_COLLIDE_SPECULAR_KOKKOS_H
 
 #include "surf_collide_specular.h"
+#include "kokkos_base.h"
 #include "kokkos_type.h"
 #include "math_extra_kokkos.h"
 
 namespace SPARTA_NS {
 
-class SurfCollideSpecularKokkos : public SurfCollideSpecular {
+class SurfCollideSpecularKokkos : public SurfCollideSpecular, public KokkosBase {
  public:
 
   SurfCollideSpecularKokkos(class SPARTA *, int, char **);

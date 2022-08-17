@@ -131,21 +131,14 @@ class UpdateKokkos : public Update {
   DAT::t_float_2d_lr d_fieldfix_array_particle;
   DAT::t_float_2d_lr d_fieldfix_array_grid;
 
+  class KokkosBase** sc_kk_base_copy;
   class KokkosBase* KKBaseFieldFix;
 
   GridKokkos* d_grid_kk;
   DomainKokkos* d_domain_kk;
 
-  int sc_type_list[KOKKOS_TOT_SURF_COLL];
-  int sc_map[KOKKOS_TOT_SURF_COLL];
-  KKCopy<SurfCollideSpecularKokkos> sc_kk_specular_copy[KOKKOS_MAX_SURF_COLL_PER_TYPE];
-  KKCopy<SurfCollideDiffuseKokkos> sc_kk_diffuse_copy[KOKKOS_MAX_SURF_COLL_PER_TYPE];
-  KKCopy<SurfCollideVanishKokkos> sc_kk_vanish_copy[KOKKOS_MAX_SURF_COLL_PER_TYPE];
-  KKCopy<SurfCollidePistonKokkos> sc_kk_piston_copy[KOKKOS_MAX_SURF_COLL_PER_TYPE];
-  KKCopy<SurfCollideTransparentKokkos> sc_kk_transparent_copy[KOKKOS_MAX_SURF_COLL_PER_TYPE];
   KKCopy<ComputeBoundaryKokkos> blist_active_copy[KOKKOS_MAX_BLIST];
   KKCopy<ComputeSurfKokkos> slist_active_copy[KOKKOS_MAX_SLIST];
-
 
   typedef Kokkos::DualView<int[12], DeviceType::array_layout, DeviceType> tdual_int_12;
   typedef tdual_int_12::t_dev t_int_12;

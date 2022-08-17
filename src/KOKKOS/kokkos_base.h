@@ -35,6 +35,14 @@ class KokkosBase {
 
   DAT::tdual_float_2d_lr k_array;    // Kokkos version of computed array
   DAT::t_float_2d_lr d_array;        // Kokkos version of computed array
+
+  // SurfCollide
+  KOKKOS_INLINE_FUNCTION
+  virtual Particle::OnePart* collide_kokkos(Particle::OnePart *&ip, double &,
+             int isurf, const double *norm, int, int &) const {return NULL;}
+
+  virtual void pre_collide() {}
+  virtual void post_collide() {}
 };
 
 }

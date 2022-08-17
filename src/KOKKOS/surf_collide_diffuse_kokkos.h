@@ -22,7 +22,7 @@ SurfCollideStyle(diffuse/kk,SurfCollideDiffuseKokkos)
 #define SPARTA_SURF_COLLIDE_DIFFUSE_KOKKOS_H
 
 #include "surf_collide_diffuse.h"
-#include "kokkos_type.h"
+#include "kokkos_base.h"
 #include "kokkos_type.h"
 #include "math.h"
 #include "stdlib.h"
@@ -53,7 +53,7 @@ namespace SPARTA_NS {
 enum{NONE,DISCRETE,SMOOTH};            // several files
 enum{NUMERIC,VARIABLE,CUSTOM};
 
-class SurfCollideDiffuseKokkos : public SurfCollideDiffuse {
+class SurfCollideDiffuseKokkos : public SurfCollideDiffuse, public KokkosBase {
  public:
 
   SurfCollideDiffuseKokkos(class SPARTA *, int, char **);

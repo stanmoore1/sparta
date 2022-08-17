@@ -22,11 +22,12 @@ SurfCollideStyle(vanish/kk,SurfCollideVanishKokkos)
 #define SPARTA_SURF_COLLIDE_VANISH_KOKKOS_H
 
 #include "surf_collide_vanish.h"
+#include "kokkos_base.h"
 #include "kokkos_type.h"
 
 namespace SPARTA_NS {
 
-class SurfCollideVanishKokkos : public SurfCollideVanish {
+class SurfCollideVanishKokkos : public SurfCollideVanish, public KokkosBase {
  public:
 
   SurfCollideVanishKokkos(class SPARTA *, int, char **);
