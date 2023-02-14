@@ -1134,13 +1134,13 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,ATOMIC_REDUCTION>, const in
             iorig = particle_i;
           int n = DIM == 3 ? tri->isc : line->isc;
 
-          if (DIM == 3)
+          if (DIM == 3) {
               jpart = sc_kk_base_copy[n]->
                 collide_kokkos(ipart,dtremain,minsurf,tri->norm,tri->isr,reaction);
-          if (DIM != 3)
+          }
+          if (DIM != 3) {
               jpart = sc_kk_base_copy[n]->
                 collide_kokkos(ipart,dtremain,minsurf,line->norm,line->isr,reaction);
-            }
           }
 
           //Need to error out for now if surface reactions create (or destroy?) particles
