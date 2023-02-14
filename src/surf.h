@@ -1,7 +1,7 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
    http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov
+   Steve Plimpton, sjplimp@gmail.com
    Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
@@ -244,6 +244,9 @@ class Surf : protected Pointers {
 
   void write_restart(FILE *);
   void read_restart(FILE *);
+  void write_restart_custom(FILE *);
+  void read_restart_custom(FILE *);
+
   virtual void grow(int);
   virtual void grow_own(int);
   virtual void grow_temporary(int);

@@ -1,5 +1,5 @@
 # Pizza.py toolkit, www.cs.sandia.gov/~sjplimp/pizza.html
-# Steve Plimpton, sjplimp@sandia.gov, Sandia National Laboratories
+# Steve Plimpton, sjplimp@gmail.com, Sandia National Laboratories
 #
 # Copyright (2005) Sandia Corporation.  Under the terms of Contract
 # DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -113,9 +113,9 @@ class xyz:
     which = self.data.findtime(time)
     time,box,atoms,bonds,tris,lines = self.data.viz(which)
     f = open(file,"w")
-    print >>f,len(atoms)
-    print >>f,"Atoms"
+    print(len(atoms), file=f)
+    print("Atoms", file=f)
     for atom in atoms:
       itype = int(atom[1])
-      print >>f,itype,atom[2],atom[3],atom[4]
+      print(itype,atom[2],atom[3],atom[4], file=f)
     f.close()
