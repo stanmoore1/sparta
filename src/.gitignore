@@ -11,6 +11,7 @@
 /kokkos.h
 /kokkos_base.h
 /kokkos_copy.h
+/kokkos_device_copy.h
 /kokkos_scan.cpp
 /kokkos_scan.h
 /kokkos_type.h
