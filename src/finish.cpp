@@ -528,6 +528,22 @@ void mpi_timings(const char *label, Timer *t, int tt,
   double tmp, time_max, time_min, time_sq;
   double time = t->array[tt];
 
+  struct {
+    double val;
+    int rank;
+  } in, out;
+
+  in.val = time;
+  in.rank = me;
+
+  MPI_Allreduce(&in,&out,1,MPI_DOUBLE_INT,MPI_MAXLOC,world);
+  if (me == 0) {
+    if (scr)
+      fprintf(scr,"Max time for %s is on MPI Rank: %i, value is %g\n",label,out.rank,out.val);
+    if (log)
+      fprintf(log,"Max time for %s is on MPI Rank: %i, value is %g\n",label,out.rank,out.val);
+  }
+
   MPI_Allreduce(&time,&time_min,1,MPI_DOUBLE,MPI_MIN,world);
   MPI_Allreduce(&time,&time_max,1,MPI_DOUBLE,MPI_MAX,world);
   time_sq = time*time;
@@ -541,7 +557,6 @@ void mpi_timings(const char *label, Timer *t, int tt,
     time_sq = sqrt(time_sq/time - time)*100.0;
   else
     time_sq = 0.0;
-
 
   if (me == 0) {
     tmp = time/time_loop*100.0;
