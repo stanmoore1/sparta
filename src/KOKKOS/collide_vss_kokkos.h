@@ -64,6 +64,11 @@ class CollideVSSKokkos : public CollideVSS {
  public:
   typedef COLLIDE_REDUCE value_type;
 
+  typedef Kokkos::DualView<double[8],DeviceType> tdual_float_8;
+  typedef typename tdual_float_8::t_dev t_float_8;
+  typedef typename tdual_float_8::t_host t_host_float_8;
+  t_float_8 d_times;
+
   CollideVSSKokkos(class SPARTA *, int, char **);
   ~CollideVSSKokkos();
   void init();

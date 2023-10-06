@@ -95,6 +95,9 @@ CollideVSSKokkos::CollideVSSKokkos(SPARTA *sparta, int narg, char **arg) :
   react_defined = 0;
 
   maxdelete = DELTADELETE;
+
+  d_times = t_float_8("d_times");
+  Kokkos::deep_copy(d_times,0.0);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -431,6 +434,34 @@ void CollideVSSKokkos::collisions()
   nattempt_running += nattempt_one;
   ncollide_running += ncollide_one;
   nreact_running += nreact_one;
+
+  if (update->ntimestep == update->nsteps) {
+    double tmp[8];
+    MPI_Allreduce(d_times.data(),&tmp[0],8,MPI_DOUBLE,MPI_SUM,world);
+
+    if (comm->me == 0) {
+      char** labels = new char*[8];
+      for (int i = 0; i < 8; i++)
+        labels[i] = new char[128];
+
+      strcpy(labels[0],"Timer All");
+      strcpy(labels[1],"Timer Outer: init ");
+      strcpy(labels[2],"Timer Outer: attempt");
+      strcpy(labels[3],"Timer Outer: collide loop");
+      strcpy(labels[4],"Timer Inner: find_nn");
+      strcpy(labels[5],"Timer Inner: test");
+      strcpy(labels[6],"Timer Inner: setup");
+      strcpy(labels[7],"Timer Inner: perform");
+
+      for (int i = 0; i < 8; i++) {
+        if (screen) fprintf(screen,"%s: %g\n",labels[i],tmp[i]);
+        if (logfile) fprintf(logfile,"%s: %g\n",labels[i],tmp[i]);
+      }
+
+      for (int i = 0; i < 8; i++)
+        delete [] labels[i];
+    }
+  }
 }
 
 /* ----------------------------------------------------------------------
@@ -604,10 +635,23 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOne< NEARCP, ATOMIC_REDUCT
 template < int NEARCP, int ATOMIC_REDUCTION >
 KOKKOS_INLINE_FUNCTION
 void CollideVSSKokkos::operator()(TagCollideCollisionsOne< NEARCP, ATOMIC_REDUCTION >, const int &icell, COLLIDE_REDUCE &reduce) const {
-  if (d_retry()) return;
+  Kokkos::Timer timer_all, timer_outer, timer_inner;
+  timer_all.reset();
+  timer_outer.reset();
+  timer_inner.reset();
+
+  if (d_retry()) {
+    d_times[0] += timer_all.seconds(); // full loop
+    d_times[1] += timer_outer.seconds(); // init
+    return;
+  }
 
   int np = grid_kk_copy.obj.d_cellcount[icell];
-  if (np <= 1) return;
+  if (np <= 1) {
+    d_times[0] += timer_all.seconds(); // full loop
+    d_times[1] += timer_outer.seconds(); // init
+    return;
+  }
 
   if (NEARCP) {
     for (int i = 0; i < np; i++)
@@ -622,6 +666,9 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOne< NEARCP, ATOMIC_REDUCT
 
   rand_type rand_gen = rand_pool.get_state();
 
+  d_times[1] += timer_outer.seconds(); // init
+  timer_outer.reset();
+
   // attempt = exact collision attempt count for a pair of groups
   // nattempt = rounded attempt with RN
 
@@ -629,6 +676,8 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOne< NEARCP, ATOMIC_REDUCT
   const int nattempt = static_cast<int> (attempt);
   if (!nattempt){
     rand_pool.free_state(rand_gen);
+    d_times[0] += timer_all.seconds(); // full loop
+    d_times[2] += timer_outer.seconds(); // attempt
     return;
   }
   if (ATOMIC_REDUCTION == 1)
@@ -638,18 +687,26 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOne< NEARCP, ATOMIC_REDUCT
   else
     reduce.nattempt_one += nattempt;
 
+  d_times[2] += timer_outer.seconds(); // attempt
+  timer_outer.reset();
+
   // perform collisions
   // select random pair of particles, cannot be same
   // test if collision actually occurs
 
   for (int m = 0; m < nattempt; m++) {
+    timer_inner.reset();
     const int i = np * rand_gen.drand();
     int j;
-    if (NEARCP) j = find_nn(rand_gen,i,np,icell);
-    else {
+    if (NEARCP) {
+      j = find_nn(rand_gen,i,np,icell);
+    } else {
       j = np * rand_gen.drand();
       while (i == j) j = np * rand_gen.drand();
     }
+
+    d_times[4] += timer_inner.seconds(); // find_nn
+    timer_inner.reset();
 
     Particle::OnePart* ipart = &d_particles[d_plist(icell,i)];
     Particle::OnePart* jpart = &d_particles[d_plist(icell,j)];
@@ -659,7 +716,13 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOne< NEARCP, ATOMIC_REDUCT
     // ijspecies = species before collision chemistry
     // continue to next collision if no reaction
 
-    if (!test_collision_kokkos(icell,0,0,ipart,jpart,precoln,rand_gen)) continue;
+    if (!test_collision_kokkos(icell,0,0,ipart,jpart,precoln,rand_gen)) {
+      d_times[5] += timer_inner.seconds(); // test collision
+      continue;
+    }
+
+    d_times[5] += timer_inner.seconds(); // test collision
+    timer_inner.reset();
 
     if (NEARCP) {
       d_nn_last_partner(icell,i) = j+1;
@@ -698,6 +761,10 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOne< NEARCP, ATOMIC_REDUCT
     int index_kpart;
 
     setup_collision_kokkos(ipart,jpart,precoln,postcoln);
+
+    d_times[6] += timer_inner.seconds(); // setup collision
+    timer_inner.reset();
+
     const int reactflag = perform_collision_kokkos(ipart,jpart,kpart,precoln,postcoln,rand_gen,
                                                    recomb_part3,recomb_species,recomb_density,index_kpart);
 
@@ -708,56 +775,12 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOne< NEARCP, ATOMIC_REDUCT
     else
       reduce.ncollide_one++;
 
-    if (reactflag) {
-      if (ATOMIC_REDUCTION == 1)
-        Kokkos::atomic_increment(&d_nreact_one());
-      else if (ATOMIC_REDUCTION == 0)
-        d_nreact_one()++;
-      else
-        reduce.nreact_one++;
-    } else {
-      rand_pool.free_state(rand_gen);
-      continue;
-    }
-
-    // if jpart destroyed, delete from plist
-    // also add particle to deletion list
-    // exit attempt loop if only single particle left
-
-    if (!jpart) {
-      int ndelete = Kokkos::atomic_fetch_add(&d_ndelete(),1);
-      if (ndelete < d_dellist.extent(0)) {
-        d_dellist(ndelete) = d_plist(icell,j);
-      } else {
-        d_retry() = 1;
-        d_maxdelete() += DELTADELETE;
-        rand_pool.free_state(rand_gen);
-        return;
-      }
-      np--;
-      d_plist(icell,j) = d_plist(icell,np);
-      if (NEARCP) d_nn_last_partner(icell,j) = d_nn_last_partner(icell,np);
-      if (np < 2) break;
-    }
-
-    // if kpart created, add to plist
-    // kpart was just added to particle list, so index = nlocal-1
-    // particle data structs may have been realloced by kpart
-
-    if (kpart) {
-      if (np < d_plist.extent(1)) {
-        if (NEARCP) d_nn_last_partner(icell,np) = 0;
-        d_plist(icell,np++) = index_kpart;
-      } else {
-        d_retry() = 1;
-        d_maxcellcount() += DELTACELLCOUNT;
-        rand_pool.free_state(rand_gen);
-        return;
-      }
-
-    }
+    d_times[7] += timer_inner.seconds(); // perform collision
   }
   rand_pool.free_state(rand_gen);
+
+  d_times[0] += timer_all.seconds(); // full loop
+  d_times[3] += timer_outer.seconds(); // collision loop
 }
 
 /* ----------------------------------------------------------------------

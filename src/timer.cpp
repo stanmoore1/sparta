@@ -44,7 +44,7 @@ void Timer::init()
 void Timer::stamp()
 {
   // uncomment if want synchronized timing
-  MPI_Barrier(world);
+  //MPI_Barrier(world);
   previous_time = MPI_Wtime();
 }
 
@@ -53,7 +53,7 @@ void Timer::stamp()
 void Timer::stamp(int which)
 {
   // uncomment if want synchronized timing
-  MPI_Barrier(world);
+  //MPI_Barrier(world);
   double current_time = MPI_Wtime();
   array[which] += current_time - previous_time;
   previous_time = current_time;
