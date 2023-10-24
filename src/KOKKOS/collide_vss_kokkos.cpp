@@ -389,10 +389,13 @@ void CollideVSSKokkos::collisions()
   COLLIDE_REDUCE reduce;
 
   if (!ambiflag) {
-    if (nearcp == 0)
-      collisions_one<0>(reduce);
-    else
-      collisions_one<1>(reduce);
+    if (nearcp == 0) {
+      if (react) collisions_one<0,1>(reduce);
+      else collisions_one<0,0>(reduce);
+    } else {
+      if (react) collisions_one<1,1>(reduce);
+      else collisions_one<1,0>(reduce);
+    }
   } else {
     collisions_one_ambipolar(reduce);
   }
@@ -437,7 +440,8 @@ void CollideVSSKokkos::collisions()
    NTC algorithm for a single group
 ------------------------------------------------------------------------- */
 
-template < int NEARCP > void CollideVSSKokkos::collisions_one(COLLIDE_REDUCE &reduce)
+template <int NEARCP, int REACT>
+void CollideVSSKokkos::collisions_one(COLLIDE_REDUCE &reduce)
 {
   // loop over cells I own
 
@@ -455,7 +459,7 @@ template < int NEARCP > void CollideVSSKokkos::collisions_one(COLLIDE_REDUCE &re
 
   grid_kk_copy.copy(grid_kk);
 
-  if (react) {
+  if (REACT) {
     ReactTCEKokkos* react_kk = (ReactTCEKokkos*) react;
     if (!react_kk)
       error->all(FLERR,"Must use TCE reactions with Kokkos");
@@ -483,7 +487,7 @@ template < int NEARCP > void CollideVSSKokkos::collisions_one(COLLIDE_REDUCE &re
 
   h_retry() = 1;
 
-  if (react) {
+  if (REACT) {
     double extra_factor = 1.0;
     if (sparta->kokkos->react_retry_flag)
       extra_factor = sparta->kokkos->react_extra;
@@ -515,7 +519,7 @@ template < int NEARCP > void CollideVSSKokkos::collisions_one(COLLIDE_REDUCE &re
 
   while (h_retry()) {
 
-    if (react && sparta->kokkos->react_retry_flag)
+    if (REACT && sparta->kokkos->react_retry_flag)
       backup();
 
     h_retry() = 0;
@@ -529,16 +533,16 @@ template < int NEARCP > void CollideVSSKokkos::collisions_one(COLLIDE_REDUCE &re
 
     if (sparta->kokkos->atomic_reduction) {
       if (sparta->kokkos->need_atomics)
-        Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagCollideCollisionsOne<NEARCP,1> >(0,nglocal),*this);
+        Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagCollideCollisionsOne<NEARCP,REACT,1>>(0,nglocal),*this);
       else
-        Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagCollideCollisionsOne<NEARCP,0> >(0,nglocal),*this);
+        Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagCollideCollisionsOne<NEARCP,REACT,0>>(0,nglocal),*this);
     } else
-      Kokkos::parallel_reduce(Kokkos::RangePolicy<DeviceType, TagCollideCollisionsOne<NEARCP,-1> >(0,nglocal),*this,reduce);
+      Kokkos::parallel_reduce(Kokkos::RangePolicy<DeviceType, TagCollideCollisionsOne<NEARCP,REACT,-1>>(0,nglocal),*this,reduce);
 
     Kokkos::deep_copy(h_scalars,d_scalars);
 
     if (h_retry()) {
-      //printf("Retrying, reason %i %i %i !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n",h_maxdelete() > d_dellist.extent(0),h_maxcellcount() > d_plist.extent(1),h_part_grow());
+      //printf("Retrying, reason %i %i %i !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n",h_maxdelete()> d_dellist.extent(0),h_maxcellcount()> d_plist.extent(1),h_part_grow());
       if (!sparta->kokkos->react_retry_flag) {
         error->one(FLERR,"Ran out of space in Kokkos collisions, increase collide/extra"
                          " or use collide/retry");
@@ -594,16 +598,16 @@ void CollideVSSKokkos::operator()(TagCollideZeroNN, const int &icell) const {
     d_nn_last_partner(icell,i) = 0;
 }
 
-template < int NEARCP, int ATOMIC_REDUCTION >
+template <int NEARCP, int REACT, int ATOMIC_REDUCTION>
 KOKKOS_INLINE_FUNCTION
-void CollideVSSKokkos::operator()(TagCollideCollisionsOne< NEARCP, ATOMIC_REDUCTION >, const int &icell) const {
+void CollideVSSKokkos::operator()(TagCollideCollisionsOne<NEARCP, REACT, ATOMIC_REDUCTION>, const int &icell) const {
   COLLIDE_REDUCE reduce;
-  this->template operator()< NEARCP, ATOMIC_REDUCTION >(TagCollideCollisionsOne< NEARCP, ATOMIC_REDUCTION >(), icell, reduce);
+  this->template operator()<NEARCP, REACT, ATOMIC_REDUCTION>(TagCollideCollisionsOne<NEARCP, REACT, ATOMIC_REDUCTION>(), icell, reduce);
 }
 
-template < int NEARCP, int ATOMIC_REDUCTION >
+template <int NEARCP, int REACT, int ATOMIC_REDUCTION>
 KOKKOS_INLINE_FUNCTION
-void CollideVSSKokkos::operator()(TagCollideCollisionsOne< NEARCP, ATOMIC_REDUCTION >, const int &icell, COLLIDE_REDUCE &reduce) const {
+void CollideVSSKokkos::operator()(TagCollideCollisionsOne<NEARCP, REACT, ATOMIC_REDUCTION>, const int &icell, COLLIDE_REDUCE &reduce) const {
   if (d_retry()) return;
 
   int np = grid_kk_copy.obj.d_cellcount[icell];
@@ -673,23 +677,26 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOne< NEARCP, ATOMIC_REDUCT
     Particle::OnePart* recomb_part3 = NULL;
     int recomb_species = -1;
     double recomb_density = 0.0;
-    if (recombflag && d_recomb_ijflag(ipart->ispecies,jpart->ispecies)) {
-      if (rand_gen.drand() > recomb_boost_inverse)
-        //react->recomb_species = -1;
-        recomb_species = -1;
-      else if (np <= 2)
-        //react->recomb_species = -1;
-        recomb_species = -1;
-      else {
-        int k = np * rand_gen.drand();
-        while (k == i || k == j) k = np * rand_gen.drand();
-        // NOT thread safe
-        //react->recomb_part3 = &particles[plist[k]];
-        //react->recomb_species = react->recomb_part3->ispecies;
-        //react->recomb_density = np * update->fnum / volume;
-        recomb_part3 = &d_particles[d_plist(icell,k)];
-        recomb_species = recomb_part3->ispecies;
-        recomb_density = np * fnum / volume;
+
+    if (REACT) {
+      if (recombflag && d_recomb_ijflag(ipart->ispecies,jpart->ispecies)) {
+        if (rand_gen.drand() > recomb_boost_inverse)
+          //react->recomb_species = -1;
+          recomb_species = -1;
+        else if (np <= 2)
+          //react->recomb_species = -1;
+          recomb_species = -1;
+        else {
+          int k = np * rand_gen.drand();
+          while (k == i || k == j) k = np * rand_gen.drand();
+          // NOT thread safe
+          //react->recomb_part3 = &particles[plist[k]];
+          //react->recomb_species = react->recomb_part3->ispecies;
+          //react->recomb_density = np * update->fnum / volume;
+          recomb_part3 = &d_particles[d_plist(icell,k)];
+          recomb_species = recomb_part3->ispecies;
+          recomb_density = np * fnum / volume;
+        }
       }
     }
 
@@ -708,7 +715,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOne< NEARCP, ATOMIC_REDUCT
     else
       reduce.ncollide_one++;
 
-    if (reactflag) {
+    if (REACT && reactflag) {
       if (ATOMIC_REDUCTION == 1)
         Kokkos::atomic_increment(&d_nreact_one());
       else if (ATOMIC_REDUCTION == 0)
@@ -865,11 +872,11 @@ void CollideVSSKokkos::collisions_one_ambipolar(COLLIDE_REDUCE &reduce)
 
     if (sparta->kokkos->atomic_reduction) {
       if (sparta->kokkos->need_atomics)
-        Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagCollideCollisionsOneAmbipolar<1> >(0,nglocal),*this);
+        Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagCollideCollisionsOneAmbipolar<1>>(0,nglocal),*this);
       else
-        Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagCollideCollisionsOneAmbipolar<0> >(0,nglocal),*this);
+        Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagCollideCollisionsOneAmbipolar<0>>(0,nglocal),*this);
     } else
-      Kokkos::parallel_reduce(Kokkos::RangePolicy<DeviceType, TagCollideCollisionsOneAmbipolar<-1> >(0,nglocal),*this,reduce);
+      Kokkos::parallel_reduce(Kokkos::RangePolicy<DeviceType, TagCollideCollisionsOneAmbipolar<-1>>(0,nglocal),*this,reduce);
 
     Kokkos::deep_copy(h_scalars,d_scalars);
 
@@ -937,16 +944,16 @@ void CollideVSSKokkos::collisions_one_ambipolar(COLLIDE_REDUCE &reduce)
   d_plist = decltype(d_nn_last_partner)();
 }
 
-template < int ATOMIC_REDUCTION >
+template <int ATOMIC_REDUCTION>
 KOKKOS_INLINE_FUNCTION
-void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar< ATOMIC_REDUCTION >, const int &icell) const {
+void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar<ATOMIC_REDUCTION>, const int &icell) const {
   COLLIDE_REDUCE reduce;
-  this->template operator()< ATOMIC_REDUCTION >(TagCollideCollisionsOneAmbipolar< ATOMIC_REDUCTION >(), icell, reduce);
+  this->template operator()<ATOMIC_REDUCTION>(TagCollideCollisionsOneAmbipolar<ATOMIC_REDUCTION>(), icell, reduce);
 }
 
-template < int ATOMIC_REDUCTION >
+template <int ATOMIC_REDUCTION>
 KOKKOS_INLINE_FUNCTION
-void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar< ATOMIC_REDUCTION >, const int &icell, COLLIDE_REDUCE &reduce) const {
+void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar<ATOMIC_REDUCTION>, const int &icell, COLLIDE_REDUCE &reduce) const {
   if (d_retry()) return;
 
   int np = grid_kk_copy.obj.d_cellcount[icell];

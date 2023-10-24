@@ -54,10 +54,10 @@ typedef struct s_COLLIDE_REDUCE COLLIDE_REDUCE;
 struct TagCollideResetVremax{};
 struct TagCollideZeroNN{};
 
-template < int NEARCP, int ATOMIC_REDUCTION >
+template < int NEARCP, int REACT, int ATOMIC_REDUCTION>
 struct TagCollideCollisionsOne{};
 
-template < int ATOMIC_REDUCTION >
+template < int ATOMIC_REDUCTION>
 struct TagCollideCollisionsOneAmbipolar{};
 
 class CollideVSSKokkos : public CollideVSS {
@@ -101,21 +101,21 @@ class CollideVSSKokkos : public CollideVSS {
   KOKKOS_INLINE_FUNCTION
   void operator()(TagCollideZeroNN, const int&) const;
 
-  template < int NEARCP, int ATOMIC_REDUCTION >
+  template < int NEARCP, int REACT, int ATOMIC_REDUCTION>
   KOKKOS_INLINE_FUNCTION
-  void operator()(TagCollideCollisionsOne< NEARCP, ATOMIC_REDUCTION >, const int&) const;
+  void operator()(TagCollideCollisionsOne<NEARCP, REACT, ATOMIC_REDUCTION>, const int&) const;
 
-  template < int NEARCP, int ATOMIC_REDUCTION >
+  template < int NEARCP, int REACT, int ATOMIC_REDUCTION>
   KOKKOS_INLINE_FUNCTION
-  void operator()(TagCollideCollisionsOne< NEARCP, ATOMIC_REDUCTION >, const int&, COLLIDE_REDUCE&) const;
+  void operator()(TagCollideCollisionsOne<NEARCP, REACT, ATOMIC_REDUCTION>, const int&, COLLIDE_REDUCE&) const;
 
-  template < int ATOMIC_REDUCTION >
+  template < int ATOMIC_REDUCTION>
   KOKKOS_INLINE_FUNCTION
-  void operator()(TagCollideCollisionsOneAmbipolar< ATOMIC_REDUCTION >, const int&) const;
+  void operator()(TagCollideCollisionsOneAmbipolar<ATOMIC_REDUCTION>, const int&) const;
 
-  template < int ATOMIC_REDUCTION >
+  template < int ATOMIC_REDUCTION>
   KOKKOS_INLINE_FUNCTION
-  void operator()(TagCollideCollisionsOneAmbipolar< ATOMIC_REDUCTION >, const int&, COLLIDE_REDUCE&) const;
+  void operator()(TagCollideCollisionsOneAmbipolar<ATOMIC_REDUCTION>, const int&, COLLIDE_REDUCE&) const;
 
  private:
   KOKKOS_INLINE_FUNCTION
@@ -198,7 +198,8 @@ class CollideVSSKokkos : public CollideVSS {
 
   DAT::t_int_2d d_nn_last_partner;
 
-  template < int NEARCP > void collisions_one(COLLIDE_REDUCE&);
+  template <int NEARCP, int REACT>
+  void collisions_one(COLLIDE_REDUCE&);
   void collisions_one_ambipolar(COLLIDE_REDUCE&);
 
   // VSS specific
