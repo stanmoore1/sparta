@@ -117,7 +117,7 @@ class SurfCollideDiffuseKokkos : public SurfCollideDiffuse {
                                     int isurf, const double *norm, int isr, int &reaction,
                                     const DAT::t_int_scalar &d_retry, const DAT::t_int_scalar &d_nlocal) const
   {
-    if (ATOMIC_REDUCTION == 0)
+    if constexpr (ATOMIC_REDUCTION == 0)
       d_nsingle()++;
     else
       Kokkos::atomic_increment(&d_nsingle());
@@ -131,7 +131,7 @@ class SurfCollideDiffuseKokkos : public SurfCollideDiffuse {
     reaction = 0;
     int velreset = 0;
 
-    if (REACT) {
+    if constexpr (REACT) {
       if (ambi_flag || vibmode_flag) memcpy(&iorig,ip,sizeof(Particle::OnePart));
 
       int sr_type = sr_type_list[isr];
@@ -170,29 +170,32 @@ class SurfCollideDiffuseKokkos : public SurfCollideDiffuse {
       if (vibmode_flag)
         fix_vibmode_kk_copy.obj.update_custom_kokkos(i,twall_local,twall_local,twall_local,vstream);
     }
-    if (REACT && jp) {
-      if (!velreset) diffuse(jp,norm,twall_local);
-      int j = jp - d_particles.data();
-      if (ambi_flag)
-        fix_ambi_kk_copy.obj.update_custom_kokkos(j,twall_local,twall_local,twall_local,vstream);
-      if (vibmode_flag)
-        fix_vibmode_kk_copy.obj.update_custom_kokkos(j,twall_local,twall_local,twall_local,vstream);
-    }
 
-    // call any fixes with a surf_react() method
-    // they may reset j to -1, e.g. fix ambipolar
-    //   in which case newly created j is deleted
+    if constexpr (REACT) {
+      if (jp) {
+        if (!velreset) diffuse(jp,norm,twall_local);
+        int j = jp - d_particles.data();
+        if (ambi_flag)
+          fix_ambi_kk_copy.obj.update_custom_kokkos(j,twall_local,twall_local,twall_local,vstream);
+        if (vibmode_flag)
+          fix_vibmode_kk_copy.obj.update_custom_kokkos(j,twall_local,twall_local,twall_local,vstream);
+      }
 
-    if (REACT && reaction && ambi_flag) {
-      int i = -1;
-      if (ip) i = ip - d_particles.data();
-      int j = -1;
-      if (jp) j = jp - d_particles.data();
-      int j_orig = j;
-      fix_ambi_kk_copy.obj.surf_react_kokkos(&iorig,i,j);
-      if (jp && j < 0) {
-        d_particles[j_orig].flag = PDISCARD;
-        jp = NULL;
+      // call any fixes with a surf_react() method
+      // they may reset j to -1, e.g. fix ambipolar
+      //   in which case newly created j is deleted
+
+      if (reaction && ambi_flag) {
+        int i = -1;
+        if (ip) i = ip - d_particles.data();
+        int j = -1;
+        if (jp) j = jp - d_particles.data();
+        int j_orig = j;
+        fix_ambi_kk_copy.obj.surf_react_kokkos(&iorig,i,j);
+        if (jp && j < 0) {
+          d_particles[j_orig].flag = PDISCARD;
+          jp = NULL;
+        }
       }
     }
 

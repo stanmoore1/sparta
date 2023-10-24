@@ -98,7 +98,7 @@ class SurfCollidePistonKokkos : public SurfCollidePiston {
                                     int isurf, const double *norm, int isr, int &reaction,
                                     const DAT::t_int_scalar &d_retry, const DAT::t_int_scalar &d_nlocal) const
   {
-    if (ATOMIC_REDUCTION == 0)
+    if constexpr (ATOMIC_REDUCTION == 0)
       d_nsingle()++;
     else
       Kokkos::atomic_increment(&d_nsingle());
@@ -112,7 +112,7 @@ class SurfCollidePistonKokkos : public SurfCollidePiston {
     reaction = 0;
     int velreset = 0;
 
-    if (REACT) {
+    if constexpr (REACT) {
       if (ambi_flag || vibmode_flag) memcpy(&iorig,ip,sizeof(Particle::OnePart));
 
       int sr_type = sr_type_list[isr];
@@ -198,16 +198,18 @@ class SurfCollidePistonKokkos : public SurfCollidePiston {
     // they may reset j to -1, e.g. fix ambipolar
     //   in which case newly created j is deleted
 
-    if (REACT && reaction && ambi_flag) {
-      int i = -1;
-      if (ip) i = ip - d_particles.data();
-      int j = -1;
-      if (jp) j = jp - d_particles.data();
-      int j_orig = j;
-      fix_ambi_kk_copy.obj.surf_react_kokkos(&iorig,i,j);
-      if (jp && j < 0) {
-        d_particles[j_orig].flag = PDISCARD;
-        jp = NULL;
+    if constexpr (REACT) {
+      if (reaction && ambi_flag) {
+        int i = -1;
+        if (ip) i = ip - d_particles.data();
+        int j = -1;
+        if (jp) j = jp - d_particles.data();
+        int j_orig = j;
+        fix_ambi_kk_copy.obj.surf_react_kokkos(&iorig,i,j);
+        if (jp && j < 0) {
+          d_particles[j_orig].flag = PDISCARD;
+          jp = NULL;
+        }
       }
     }
 

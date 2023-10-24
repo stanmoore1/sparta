@@ -850,61 +850,61 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
   // for 2d and axisymmetry only
   // xnew,xc passed to geometry routines which use or set z component
 
-  if (DIM < 3) xnew[2] = xc[2] = 0.0;
+  if constexpr (DIM < 3) xnew[2] = xc[2] = 0.0;
 
   // apply moveperturb() to PKEEP and PINSERT since are computing xnew
   // not to PENTRY,PEXIT since are just re-computing xnew of sender
   // set xnew[2] to linear move for axisymmetry, will be remapped later
   // let pflag = PEXIT persist to check during axisymmetric cell crossing
 
-  if (DIM < 3) xnew[2] = 0.0;
+  if constexpr (DIM < 3) xnew[2] = 0.0;
   if (pflag == PKEEP) {
     dtremain = dt;
     xnew[0] = x[0] + dtremain*v[0];
     xnew[1] = x[1] + dtremain*v[1];
-    if (DIM != 2) xnew[2] = x[2] + dtremain*v[2];
+    if constexpr (DIM != 2) xnew[2] = x[2] + dtremain*v[2];
     if (fstyle == CFIELD) {
-      if (DIM == 3) field3d(dtremain,xnew,v);
-      else if (DIM == 2) field2d(dtremain,xnew,v);
+      if constexpr (DIM == 3) field3d(dtremain,xnew,v);
+      else if constexpr (DIM == 2) field2d(dtremain,xnew,v);
     } else if (fstyle == PFIELD) field_per_particle(i,particle_i.icell,dtremain,xnew,v);
     else if (fstyle == GFIELD) field_per_grid(i,particle_i.icell,dtremain,xnew,v);
   } else if (pflag == PINSERT) {
     dtremain = particle_i.dtremain;
     xnew[0] = x[0] + dtremain*v[0];
     xnew[1] = x[1] + dtremain*v[1];
-    if (DIM != 2) xnew[2] = x[2] + dtremain*v[2];
+    if constexpr (DIM != 2) xnew[2] = x[2] + dtremain*v[2];
     if (fstyle == CFIELD) {
-      if (DIM == 3) field3d(dtremain,xnew,v);
-      else if (DIM == 2) field2d(dtremain,xnew,v);
+      if constexpr (DIM == 3) field3d(dtremain,xnew,v);
+      else if constexpr (DIM == 2) field2d(dtremain,xnew,v);
     } else if (fstyle == PFIELD) field_per_particle(i,particle_i.icell,dtremain,xnew,v);
     else if (fstyle == GFIELD) field_per_grid(i,particle_i.icell,dtremain,xnew,v);
   } else if (pflag == PENTRY) {
     icell = particle_i.icell;
     if (d_cells[icell].nsplit > 1) {
-      if (DIM == 3 && SURF) icell = split3d(icell,x);
-      if (DIM < 3 && SURF) icell = split2d(icell,x);
+      if constexpr (DIM == 3 && SURF) icell = split3d(icell,x);
+      if constexpr (DIM < 3 && SURF) icell = split2d(icell,x);
       particle_i.icell = icell;
     }
     dtremain = particle_i.dtremain;
     xnew[0] = x[0] + dtremain*v[0];
     xnew[1] = x[1] + dtremain*v[1];
-    if (DIM != 2) xnew[2] = x[2] + dtremain*v[2];
+    if constexpr (DIM != 2) xnew[2] = x[2] + dtremain*v[2];
   } else if (pflag == PEXIT) {
     dtremain = particle_i.dtremain;
     xnew[0] = x[0] + dtremain*v[0];
     xnew[1] = x[1] + dtremain*v[1];
-    if (DIM != 2) xnew[2] = x[2] + dtremain*v[2];
+    if constexpr (DIM != 2) xnew[2] = x[2] + dtremain*v[2];
   } else if (pflag >= PSURF) {
     dtremain = particle_i.dtremain;
     xnew[0] = x[0] + dtremain*v[0];
     xnew[1] = x[1] + dtremain*v[1];
-    if (DIM != 2) xnew[2] = x[2] + dtremain*v[2];
+    if constexpr (DIM != 2) xnew[2] = x[2] + dtremain*v[2];
     if (pflag > PSURF) exclude = pflag - PSURF - 1;
   }
 
   // optimized move
 
-  if (OPT) {
+  if constexpr (OPT) {
     int optmove = 1;
 
     if (xnew[0] < xlo || xnew[0] > xhi)
@@ -913,7 +913,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
     if (xnew[1] < ylo || xnew[1] > yhi)
       optmove = 0;
 
-    if (DIM == 3) {
+    if constexpr (DIM == 3) {
       if (xnew[2] < zlo || xnew[2] > zhi)
         optmove = 0;
     }
@@ -923,7 +923,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
       const int ip = static_cast<int>((xnew[0] - xlo)/dx);
       const int jp = static_cast<int>((xnew[1] - ylo)/dy);
       int kp = 0;
-      if (DIM == 3) kp = static_cast<int>((xnew[2] - zlo)/dz);
+      if constexpr (DIM == 3) kp = static_cast<int>((xnew[2] - zlo)/dz);
 
       int cellIdx = (kp*ncy + jp)*ncx + ip + 1;
       auto index = hash_kk.find(static_cast<GridKokkos::key_type>(cellIdx));
@@ -944,7 +944,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
 
         if (d_cells[icell].proc != me) {
           int indx;
-          if (ATOMIC_REDUCTION == 0) {
+          if constexpr (ATOMIC_REDUCTION == 0) {
             indx = d_nmigrate();
             d_nmigrate()++;
           } else {
@@ -954,9 +954,9 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
 
           particle_i.flag = PDONE;
 
-	  if (ATOMIC_REDUCTION == 1)
+	  if constexpr (ATOMIC_REDUCTION == 1)
 	    Kokkos::atomic_increment(&d_ncomm_one());
-	  else if (ATOMIC_REDUCTION == 0)
+	  else if constexpr (ATOMIC_REDUCTION == 0)
 	    d_ncomm_one()++;
 	  else
 	    reduce.ncomm_one++;
@@ -974,9 +974,9 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
   cellint* neigh = d_cells[icell].neigh;
   int nmask = d_cells[icell].nmask;
   stuck_iterate = 0;
-  if (ATOMIC_REDUCTION == 1)
+  if constexpr (ATOMIC_REDUCTION == 1)
     Kokkos::atomic_increment(&d_ntouch_one());
-  else if (ATOMIC_REDUCTION == 0)
+  else if constexpr (ATOMIC_REDUCTION == 0)
     d_ntouch_one()++;
   else
     reduce.ntouch_one++;
@@ -986,7 +986,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
   while (1) {
 
 #ifdef MOVE_DEBUG
-    if (DIM == 3) {
+    if constexpr (DIM == 3) {
       if (ntimestep == MOVE_DEBUG_STEP &&
           (MOVE_DEBUG_ID == d_particles[i].id ||
            (me == MOVE_DEBUG_PROC && i == MOVE_DEBUG_INDEX)))
@@ -998,7 +998,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
                icell,d_cells[icell].id,
                lo[0],lo[1],lo[2],hi[0],hi[1],hi[2],dtremain);
     }
-    if (DIM == 2) {
+    if constexpr (DIM == 2) {
       if (ntimestep == MOVE_DEBUG_STEP &&
           (MOVE_DEBUG_ID == d_particles[i].id ||
            (me == MOVE_DEBUG_PROC && i == MOVE_DEBUG_INDEX)))
@@ -1010,7 +1010,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
                icell,d_cells[icell].id,
                lo[0],lo[1],hi[0],hi[1],dtremain);
     }
-    if (DIM == 1) {
+    if constexpr (DIM == 1) {
       if (ntimestep == MOVE_DEBUG_STEP &&
           (MOVE_DEBUG_ID == d_particles[i].id ||
            (me == MOVE_DEBUG_PROC && i == MOVE_DEBUG_INDEX)))
@@ -1049,7 +1049,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
       outface = XHI;
     }
 
-    if (DIM != 1) {
+    if constexpr (DIM != 1) {
       if (xnew[1] < lo[1]) {
         newfrac = (lo[1]-x[1]) / (xnew[1]-x[1]);
         if (newfrac < frac) {
@@ -1065,7 +1065,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
       }
     }
 
-    if (DIM == 1) {
+    if constexpr (DIM == 1) {
       if (x[1] == lo[1] && (pflag == PEXIT || v[1] < 0.0)) {
         frac = 0.0;
         outface = YLO;
@@ -1098,7 +1098,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
       pflag = 0;
     }
 
-    if (DIM == 3) {
+    if constexpr (DIM == 3) {
       if (xnew[2] < lo[2]) {
         newfrac = (lo[2]-x[2]) / (xnew[2]-x[2]);
         if (newfrac < frac) {
@@ -1129,7 +1129,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
 
     // START of code specific to surfaces
 
-    if (SURF) {
+    if constexpr (SURF) {
 
       // skip surf checks if particle flagged as EXITing this cell
       // then unset pflag so not checked again for this particle
@@ -1140,9 +1140,9 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
         pflag = 0;
       }
 
-      if (ATOMIC_REDUCTION == 1)
+      if constexpr (ATOMIC_REDUCTION == 1)
         Kokkos::atomic_add(&d_nscheck_one(),nsurf);
-      else if (ATOMIC_REDUCTION == 0)
+      else if constexpr (ATOMIC_REDUCTION == 0)
         d_nscheck_one() += nsurf;
       else
         reduce.nscheck_one += nsurf;
@@ -1156,11 +1156,11 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
         if (outface != INTERIOR) {
           xhold[0] = xnew[0];
           xhold[1] = xnew[1];
-          if (DIM != 2) xhold[2] = xnew[2];
+          if constexpr (DIM != 2) xhold[2] = xnew[2];
 
           xnew[0] = x[0] + frac*(xnew[0]-x[0]);
           xnew[1] = x[1] + frac*(xnew[1]-x[1]);
-          if (DIM != 2) xnew[2] = x[2] + frac*(xnew[2]-x[2]);
+          if constexpr (DIM != 2) xnew[2] = x[2] + frac*(xnew[2]-x[2]);
 
           if (outface == XLO) xnew[0] = lo[0];
           else if (outface == XHI) xnew[0] = hi[0];
@@ -1173,7 +1173,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
         // for axisymmetric, dtsurf = time that particle stays in cell
         // used as arg to axi_line_intersect()
 
-        if (DIM == 1) {
+        if constexpr (DIM == 1) {
           if (outface == INTERIOR) dtsurf = dtremain;
           else dtsurf = dtremain * frac;
         }
@@ -1192,24 +1192,24 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
         for (int m = 0; m < nsurf; m++) {
           isurf = d_csurfs.entries(csurfs_begin + m);
 
-          if (DIM > 1) {
+          if constexpr (DIM > 1) {
             if (isurf == exclude) continue;
           }
-          if (DIM == 3) {
+          if constexpr (DIM == 3) {
             tri = &d_tris[isurf];
             hitflag = GeometryKokkos::
               line_tri_intersect(x,xnew,
                                  tri->p1,tri->p2,
                                  tri->p3,tri->norm,xc,param,side);
           }
-          if (DIM == 2) {
+          if constexpr (DIM == 2) {
             line = &d_lines[isurf];
             hitflag = GeometryKokkos::
               line_line_intersect(x,xnew,
                                   line->p1,line->p2,
                                   line->norm,xc,param,side);
           }
-          if (DIM == 1) {
+          if constexpr (DIM == 1) {
             line = &d_lines[isurf];
             hitflag = GeometryKokkos::
               axi_line_intersect(dtsurf,x,v,outface,lo,hi,
@@ -1219,7 +1219,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
           }
 
 #ifdef MOVE_DEBUG
-          if (DIM == 3) {
+          if constexpr (DIM == 3) {
             if (hitflag && ntimestep == MOVE_DEBUG_STEP &&
                 (MOVE_DEBUG_ID == d_particles[i].id ||
                  (me == MOVE_DEBUG_PROC && i == MOVE_DEBUG_INDEX)))
@@ -1236,7 +1236,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
                      tri->norm[0],tri->norm[1],tri->norm[2],
                      xc[0],xc[1],xc[2],param,side);
           }
-          if (DIM == 2) {
+          if constexpr (DIM == 2) {
             if (hitflag && ntimestep == MOVE_DEBUG_STEP &&
                 (MOVE_DEBUG_ID == d_particles[i].id ||
                  (me == MOVE_DEBUG_PROC && i == MOVE_DEBUG_INDEX)))
@@ -1249,7 +1249,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
                      line->norm[0],line->norm[1],
                      xc[0],xc[1],param,side);
           }
-          if (DIM == 1) {
+          if constexpr (DIM == 1) {
             if (hitflag && ntimestep == MOVE_DEBUG_STEP &&
                 (MOVE_DEBUG_ID == d_particles[i].id ||
                  (me == MOVE_DEBUG_PROC && i == MOVE_DEBUG_INDEX)))
@@ -1312,8 +1312,8 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
             minsurf = isurf;
             minxc[0] = xc[0];
             minxc[1] = xc[1];
-            if (DIM == 3) minxc[2] = xc[2];
-            if (DIM == 1) {
+            if constexpr (DIM == 3) minxc[2] = xc[2];
+            if constexpr (DIM == 1) {
               minvc[1] = vc[1];
               minvc[2] = vc[2];
             }
@@ -1324,16 +1324,16 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
         // tri/line = surf that particle hit first
 
         if (cflag) {
-          if (DIM == 3) tri = &d_tris[minsurf];
-          if (DIM != 3) line = &d_lines[minsurf];
+          if constexpr (DIM == 3) tri = &d_tris[minsurf];
+          if constexpr (DIM != 3) line = &d_lines[minsurf];
 
           // set x to collision point
           // if axisymmetric, set v to remapped velocity at collision pt
 
           x[0] = minxc[0];
           x[1] = minxc[1];
-          if (DIM == 3) x[2] = minxc[2];
-          if (DIM == 1) {
+          if constexpr (DIM == 3) x[2] = minxc[2];
+          if constexpr (DIM == 1) {
             v[1] = minvc[1];
             v[2] = minvc[2];
           }
@@ -1355,7 +1355,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
           int sc_type = sc_type_list[n];
           int m = sc_map[n];
 
-          if (DIM == 3) {
+          if constexpr (DIM == 3) {
             if (sc_type == 0) {
               jpart = sc_kk_specular_copy[m].obj.
                 collide_kokkos<REACT,ATOMIC_REDUCTION>(ipart,dtremain,minsurf,tri->norm,tri->isr,reaction,d_retry,d_nlocal);
@@ -1374,7 +1374,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
             }
           }
 
-          if (DIM != 3) {
+          if constexpr (DIM != 3) {
             if (sc_type == 0) {
               jpart = sc_kk_specular_copy[m].obj.
                 collide_kokkos<REACT,ATOMIC_REDUCTION>(ipart,dtremain,minsurf,line->norm,line->isr,reaction,d_retry,d_nlocal);
@@ -1415,18 +1415,18 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
 
           xnew[0] = x[0] + dtremain*v[0];
           xnew[1] = x[1] + dtremain*v[1];
-          if (DIM != 2) xnew[2] = x[2] + dtremain*v[2];
+          if constexpr (DIM != 2) xnew[2] = x[2] + dtremain*v[2];
 
           exclude = minsurf;
-          if (ATOMIC_REDUCTION == 1)
+          if constexpr (ATOMIC_REDUCTION == 1)
             Kokkos::atomic_increment(&d_nscollide_one());
-          else if (ATOMIC_REDUCTION == 0)
+          else if constexpr (ATOMIC_REDUCTION == 0)
             d_nscollide_one()++;
           else
             reduce.nscollide_one++;
 
 #ifdef MOVE_DEBUG
-          if (DIM == 3) {
+          if constexpr (DIM == 3) {
             if (ntimestep == MOVE_DEBUG_STEP &&
                 (MOVE_DEBUG_ID == d_particles[i].id ||
                  (me == MOVE_DEBUG_PROC && i == MOVE_DEBUG_INDEX)))
@@ -1435,7 +1435,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
                      x[0],x[1],x[2],xnew[0],xnew[1],xnew[2],
                      minparam,frac,dtremain);
           }
-          if (DIM == 2) {
+          if constexpr (DIM == 2) {
             if (ntimestep == MOVE_DEBUG_STEP &&
                 (MOVE_DEBUG_ID == d_particles[i].id ||
                  (me == MOVE_DEBUG_PROC && i == MOVE_DEBUG_INDEX)))
@@ -1444,7 +1444,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
                      x[0],x[1],xnew[0],xnew[1],
                      minparam,frac,dtremain);
           }
-          if (DIM == 1) {
+          if constexpr (DIM == 1) {
             if (ntimestep == MOVE_DEBUG_STEP &&
                 (MOVE_DEBUG_ID == d_particles[i].id ||
                  (me == MOVE_DEBUG_PROC && i == MOVE_DEBUG_INDEX)))
@@ -1465,9 +1465,9 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
           else if (stuck_iterate < MAXSTUCK) continue;
           else {
             particle_i.flag = PDISCARD;
-            if (ATOMIC_REDUCTION == 1)
+            if constexpr (ATOMIC_REDUCTION == 1)
               Kokkos::atomic_increment(&d_nstuck());
-            else if (ATOMIC_REDUCTION == 0)
+            else if constexpr (ATOMIC_REDUCTION == 0)
               d_nstuck()++;
             else
               reduce.nstuck++;
@@ -1480,7 +1480,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
         if (outface != INTERIOR) {
           xnew[0] = xhold[0];
           xnew[1] = xhold[1];
-          if (DIM != 2) xnew[2] = xhold[2];
+          if constexpr (DIM != 2) xnew[2] = xhold[2];
         }
 
       } // END of if test for any surfs in this cell
@@ -1503,16 +1503,16 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
     //   flag as PDONE so new proc won't move it more on this step
 
     if (outface == INTERIOR) {
-      if (DIM == 1) axi_remap(xnew,v);
+      if constexpr (DIM == 1) axi_remap(xnew,v);
       x[0] = xnew[0];
       x[1] = xnew[1];
-      if (DIM == 3) x[2] = xnew[2];
-      if (DIM == 1) {
+      if constexpr (DIM == 3) x[2] = xnew[2];
+      if constexpr (DIM == 1) {
         if (x[1] < lo[1] || x[1] > hi[1]) {
           particle_i.flag = PDISCARD;
-          if (ATOMIC_REDUCTION == 1)
+          if constexpr (ATOMIC_REDUCTION == 1)
             Kokkos::atomic_increment(&d_naxibad());
-          else if (ATOMIC_REDUCTION == 0)
+          else if constexpr (ATOMIC_REDUCTION == 0)
             d_naxibad()++;
           else
             reduce.naxibad++;
@@ -1534,8 +1534,8 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
 
     x[0] += frac * (xnew[0]-x[0]);
     x[1] += frac * (xnew[1]-x[1]);
-    if (DIM != 2) x[2] += frac * (xnew[2]-x[2]);
-    if (DIM == 1) axi_remap(x,v);
+    if constexpr (DIM != 2) x[2] += frac * (xnew[2]-x[2]);
+    if constexpr (DIM == 1) axi_remap(x,v);
 
     if (outface == XLO) x[0] = lo[0];
     else if (outface == XHI) x[0] = hi[0];
@@ -1544,7 +1544,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
     else if (outface == ZLO) x[2] = lo[2];
     else if (outface == ZHI) x[2] = hi[2];
 
-    if (DIM == 1) {
+    if constexpr (DIM == 1) {
       xnew[0] = x[0] + dtremain*v[0];
       xnew[1] = x[1] + dtremain*v[1];
       xnew[2] = x[2] + dtremain*v[2];
@@ -1564,11 +1564,11 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
 
     if (nflag == NCHILD) {
       icell = neigh[outface];
-      if (DIM == 3 && SURF) {
+      if constexpr (DIM == 3 && SURF) {
         if (d_cells[icell].nsplit > 1 && d_cells[icell].nsurf >= 0)
           icell = split3d(icell,x);
       }
-      if (DIM < 3 && SURF) {
+      if constexpr (DIM < 3 && SURF) {
         if (d_cells[icell].nsplit > 1 && d_cells[icell].nsurf >= 0)
           icell = split2d(icell,x);
       }
@@ -1577,11 +1577,11 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
       icell = grid_kk_copy.obj.id_find_child(pcell->id,d_cells[icell].level,
                                              pcell->lo,pcell->hi,x);
       if (icell >= 0) {
-        if (DIM == 3 && SURF) {
+        if constexpr (DIM == 3 && SURF) {
           if (d_cells[icell].nsplit > 1 && d_cells[icell].nsurf >= 0)
             icell = split3d(icell,x);
         }
-        if (DIM < 3 && SURF) {
+        if constexpr (DIM < 3 && SURF) {
           if (d_cells[icell].nsplit > 1 && d_cells[icell].nsurf >= 0)
             icell = split2d(icell,x);
         }
@@ -1660,7 +1660,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
           blist_active_copy[m].obj.
             boundary_tally_kk<ATOMIC_REDUCTION>(outface,bflag,reaction,&iorig,ipart,jpart,domain_kk_copy.obj.norm[outface]);
 
-      if (DIM == 1) {
+      if constexpr (DIM == 1) {
         xnew[0] = x[0] + dtremain*v[0];
         xnew[1] = x[1] + dtremain*v[1];
         xnew[2] = x[2] + dtremain*v[2];
@@ -1668,9 +1668,9 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
 
       if (bflag == OUTFLOW) {
         particle_i.flag = PDISCARD;
-        if (ATOMIC_REDUCTION == 1)
+        if constexpr (ATOMIC_REDUCTION == 1)
           Kokkos::atomic_increment(&d_nexit_one());
-        else if (ATOMIC_REDUCTION == 0)
+        else if constexpr (ATOMIC_REDUCTION == 0)
           d_nexit_one()++;
         else
           reduce.nexit_one++;
@@ -1678,11 +1678,11 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
       } else if (bflag == PERIODIC) {
         if (nflag == NPBCHILD) {
           icell = neigh[outface];
-          if (DIM == 3 && SURF) {
+          if constexpr (DIM == 3 && SURF) {
             if (d_cells[icell].nsplit > 1 && d_cells[icell].nsurf >= 0)
               icell = split3d(icell,x);
           }
-          if (DIM < 3 && SURF) {
+          if constexpr (DIM < 3 && SURF) {
             if (d_cells[icell].nsplit > 1 && d_cells[icell].nsurf >= 0)
               icell = split2d(icell,x);
           }
@@ -1691,11 +1691,11 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
           icell = grid_kk_copy.obj.id_find_child(pcell->id,d_cells[icell].level,
                                                  pcell->lo,pcell->hi,x);
           if (icell >= 0) {
-            if (DIM == 3 && SURF) {
+            if constexpr (DIM == 3 && SURF) {
               if (d_cells[icell].nsplit > 1 && d_cells[icell].nsurf >= 0)
                 icell = split3d(icell,x);
             }
-            if (DIM < 3 && SURF) {
+            if constexpr (DIM < 3 && SURF) {
               if (d_cells[icell].nsplit > 1 && d_cells[icell].nsurf >= 0)
                 icell = split2d(icell,x);
             }
@@ -1718,10 +1718,10 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
         Kokkos::atomic_increment(&d_nboundary_one());
         Kokkos::atomic_decrement(&d_ntouch_one());    // decrement here since will increment below
       } else {
-        if (ATOMIC_REDUCTION == 1) {
+        if constexpr (ATOMIC_REDUCTION == 1) {
           Kokkos::atomic_increment(&d_nboundary_one());
           Kokkos::atomic_decrement(&d_ntouch_one());    // decrement here since will increment below
-        } else if (ATOMIC_REDUCTION == 0) {
+        } else if constexpr (ATOMIC_REDUCTION == 0) {
           d_nboundary_one()++;
           d_ntouch_one()--;    // decrement here since will increment below
         } else {
@@ -1759,9 +1759,9 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
     hi = d_cells[icell].hi;
     neigh = d_cells[icell].neigh;
     nmask = d_cells[icell].nmask;
-    if (ATOMIC_REDUCTION == 1)
+    if constexpr (ATOMIC_REDUCTION == 1)
       Kokkos::atomic_increment(&d_ntouch_one());
-    else if (ATOMIC_REDUCTION == 0)
+    else if constexpr (ATOMIC_REDUCTION == 0)
       d_ntouch_one()++;
     else
       reduce.ntouch_one++;
@@ -1787,7 +1787,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
 
   if (particle_i.flag != PKEEP) {
     int index;
-    if (ATOMIC_REDUCTION == 0) {
+    if constexpr (ATOMIC_REDUCTION == 0) {
       index = d_nmigrate();
       d_nmigrate()++;
     } else {
@@ -1799,9 +1799,9 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
         d_error_flag() = 1;
         return;
       }
-      if (ATOMIC_REDUCTION == 1)
+      if constexpr (ATOMIC_REDUCTION == 1)
         Kokkos::atomic_increment(&d_ncomm_one());
-      else if (ATOMIC_REDUCTION == 0)
+      else if constexpr (ATOMIC_REDUCTION == 0)
         d_ncomm_one()++;
       else
         reduce.ncomm_one++;

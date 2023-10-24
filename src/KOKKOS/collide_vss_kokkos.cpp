@@ -459,7 +459,7 @@ void CollideVSSKokkos::collisions_one(COLLIDE_REDUCE &reduce)
 
   grid_kk_copy.copy(grid_kk);
 
-  if (REACT) {
+  if constexpr (REACT) {
     ReactTCEKokkos* react_kk = (ReactTCEKokkos*) react;
     if (!react_kk)
       error->all(FLERR,"Must use TCE reactions with Kokkos");
@@ -468,7 +468,7 @@ void CollideVSSKokkos::collisions_one(COLLIDE_REDUCE &reduce)
 
   copymode = 1;
 
-  if (NEARCP) {
+  if constexpr (NEARCP) {
     if (int(d_nn_last_partner.extent(0)) < nglocal || int(d_nn_last_partner.extent(1)) < d_plist.extent(1))
       MemKK::realloc_kokkos(d_nn_last_partner,"collide:nn_last_partner",nglocal,d_plist.extent(1));
     //Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagCollideZeroNN>(0,nglocal),*this);
@@ -487,7 +487,7 @@ void CollideVSSKokkos::collisions_one(COLLIDE_REDUCE &reduce)
 
   h_retry() = 1;
 
-  if (REACT) {
+  if constexpr (REACT) {
     double extra_factor = 1.0;
     if (sparta->kokkos->react_retry_flag)
       extra_factor = sparta->kokkos->react_extra;
@@ -505,7 +505,7 @@ void CollideVSSKokkos::collisions_one(COLLIDE_REDUCE &reduce)
       d_plist = decltype(d_plist)();
       Kokkos::resize(grid_kk->d_plist,nglocal,maxcellcount_extra);
       d_plist = grid_kk->d_plist;
-      if (NEARCP)
+      if constexpr (NEARCP)
         MemKK::realloc_kokkos(d_nn_last_partner,"collide:nn_last_partner",nglocal,maxcellcount_extra);
     }
 
@@ -519,8 +519,9 @@ void CollideVSSKokkos::collisions_one(COLLIDE_REDUCE &reduce)
 
   while (h_retry()) {
 
-    if (REACT && sparta->kokkos->react_retry_flag)
-      backup();
+    if constexpr (REACT)
+      if (sparta->kokkos->react_retry_flag)
+        backup();
 
     h_retry() = 0;
     h_maxdelete() = maxdelete;
@@ -613,7 +614,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOne<NEARCP, REACT, ATOMIC_
   int np = grid_kk_copy.obj.d_cellcount[icell];
   if (np <= 1) return;
 
-  if (NEARCP) {
+  if constexpr (NEARCP) {
     for (int i = 0; i < np; i++)
       d_nn_last_partner(icell,i) = 0;
   }
@@ -635,9 +636,9 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOne<NEARCP, REACT, ATOMIC_
     rand_pool.free_state(rand_gen);
     return;
   }
-  if (ATOMIC_REDUCTION == 1)
+  if constexpr (ATOMIC_REDUCTION == 1)
     Kokkos::atomic_add(&d_nattempt_one(),nattempt);
-  else if (ATOMIC_REDUCTION == 0)
+  else if constexpr (ATOMIC_REDUCTION == 0)
     d_nattempt_one() += nattempt;
   else
     reduce.nattempt_one += nattempt;
@@ -649,7 +650,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOne<NEARCP, REACT, ATOMIC_
   for (int m = 0; m < nattempt; m++) {
     const int i = np * rand_gen.drand();
     int j;
-    if (NEARCP) j = find_nn(rand_gen,i,np,icell);
+    if constexpr (NEARCP) j = find_nn(rand_gen,i,np,icell);
     else {
       j = np * rand_gen.drand();
       while (i == j) j = np * rand_gen.drand();
@@ -665,7 +666,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOne<NEARCP, REACT, ATOMIC_
 
     if (!test_collision_kokkos(icell,0,0,ipart,jpart,precoln,rand_gen)) continue;
 
-    if (NEARCP) {
+    if constexpr (NEARCP) {
       d_nn_last_partner(icell,i) = j+1;
       d_nn_last_partner(icell,j) = i+1;
     }
@@ -678,7 +679,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOne<NEARCP, REACT, ATOMIC_
     int recomb_species = -1;
     double recomb_density = 0.0;
 
-    if (REACT) {
+    if constexpr (REACT) {
       if (recombflag && d_recomb_ijflag(ipart->ispecies,jpart->ispecies)) {
         if (rand_gen.drand() > recomb_boost_inverse)
           //react->recomb_species = -1;
@@ -708,20 +709,22 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOne<NEARCP, REACT, ATOMIC_
     const int reactflag = perform_collision_kokkos(ipart,jpart,kpart,precoln,postcoln,rand_gen,
                                                    recomb_part3,recomb_species,recomb_density,index_kpart);
 
-    if (ATOMIC_REDUCTION == 1)
+    if constexpr (ATOMIC_REDUCTION == 1)
       Kokkos::atomic_increment(&d_ncollide_one());
-    else if (ATOMIC_REDUCTION == 0)
+    else if constexpr (ATOMIC_REDUCTION == 0)
       d_ncollide_one()++;
     else
       reduce.ncollide_one++;
 
-    if (REACT && reactflag) {
-      if (ATOMIC_REDUCTION == 1)
-        Kokkos::atomic_increment(&d_nreact_one());
-      else if (ATOMIC_REDUCTION == 0)
-        d_nreact_one()++;
-      else
-        reduce.nreact_one++;
+    if constexpr (REACT) {
+      if (reactflag) {
+        if constexpr (ATOMIC_REDUCTION == 1)
+          Kokkos::atomic_increment(&d_nreact_one());
+        else if constexpr (ATOMIC_REDUCTION == 0)
+          d_nreact_one()++;
+        else
+          reduce.nreact_one++;
+      }
     } else {
       rand_pool.free_state(rand_gen);
       continue;
@@ -743,7 +746,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOne<NEARCP, REACT, ATOMIC_
       }
       np--;
       d_plist(icell,j) = d_plist(icell,np);
-      if (NEARCP) d_nn_last_partner(icell,j) = d_nn_last_partner(icell,np);
+      if constexpr (NEARCP) d_nn_last_partner(icell,j) = d_nn_last_partner(icell,np);
       if (np < 2) break;
     }
 
@@ -753,7 +756,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOne<NEARCP, REACT, ATOMIC_
 
     if (kpart) {
       if (np < d_plist.extent(1)) {
-        if (NEARCP) d_nn_last_partner(icell,np) = 0;
+        if constexpr (NEARCP) d_nn_last_partner(icell,np) = 0;
         d_plist(icell,np++) = index_kpart;
       } else {
         d_retry() = 1;
@@ -1001,9 +1004,9 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar<ATOMIC_REDUCT
     rand_pool.free_state(rand_gen);
     return;
   }
-  if (ATOMIC_REDUCTION == 1)
+  if constexpr (ATOMIC_REDUCTION == 1)
     Kokkos::atomic_fetch_add(&d_nattempt_one(),nattempt);
-  else if (ATOMIC_REDUCTION == 0)
+  else if constexpr (ATOMIC_REDUCTION == 0)
     d_nattempt_one() += nattempt;
   else
     reduce.nattempt_one += nattempt;
@@ -1029,9 +1032,9 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar<ATOMIC_REDUCT
     // count as collision, but do not perform it
 
     if (ipart->ispecies == ambispecies && jpart->ispecies == ambispecies) {
-      if (ATOMIC_REDUCTION == 1)
+      if constexpr (ATOMIC_REDUCTION == 1)
         Kokkos::atomic_fetch_add(&d_ncollide_one(),1);
-      else if (ATOMIC_REDUCTION == 0)
+      else if constexpr (ATOMIC_REDUCTION == 0)
         d_ncollide_one()++;
       else
         reduce.ncollide_one++;
@@ -1096,17 +1099,17 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar<ATOMIC_REDUCT
     const int reactflag = perform_collision_kokkos(ipart,jpart,kpart,precoln,postcoln,rand_gen,
                                                    recomb_part3,recomb_species,recomb_density,index_kpart);
 
-    if (ATOMIC_REDUCTION == 1)
+    if constexpr (ATOMIC_REDUCTION == 1)
       Kokkos::atomic_fetch_add(&d_ncollide_one(),1);
-    else if (ATOMIC_REDUCTION == 0)
+    else if constexpr (ATOMIC_REDUCTION == 0)
       d_ncollide_one()++;
     else
       reduce.ncollide_one++;
 
     if (reactflag) {
-      if (ATOMIC_REDUCTION == 1)
+      if constexpr (ATOMIC_REDUCTION == 1)
         Kokkos::atomic_fetch_add(&d_nreact_one(),1);
-      else if (ATOMIC_REDUCTION == 0)
+      else if constexpr (ATOMIC_REDUCTION == 0)
         d_nreact_one()++;
       else
         reduce.nreact_one++;
