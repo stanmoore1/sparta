@@ -113,7 +113,7 @@ class SurfReactProbKokkos : public SurfReactProb {
       react_prob += d_coeffs(j,0);
 
       if (react_prob > random_prob) {
-        if (ATOMIC_REDUCTION == 0) {
+        if constexpr (ATOMIC_REDUCTION == 0) {
           d_nsingle()++;
           d_tally_single(j)++;
         } else {
@@ -130,7 +130,7 @@ class SurfReactProbKokkos : public SurfReactProb {
             memcpy(v,ip->v,3*sizeof(double));
 
             int index;
-            if (ATOMIC_REDUCTION == 0) {
+            if constexpr (ATOMIC_REDUCTION == 0) {
               index = d_nlocal();
               d_nlocal()++;
             } else

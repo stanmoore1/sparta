@@ -441,7 +441,7 @@ template<int NEED_ATOMICS>
 KOKKOS_INLINE_FUNCTION
 void IrregularKokkos::operator()(TagIrregularPackBuffer<NEED_ATOMICS>, const int &i) const {
   int n;
-  if (NEED_ATOMICS)
+  if constexpr (NEED_ATOMICS)
     n = Kokkos::atomic_fetch_add(&d_n(),1);
   else {
     n = d_n();

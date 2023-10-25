@@ -246,7 +246,7 @@ void CommKokkos::operator()(TagCommMigrateParticles<NEED_ATOMICS, HAVE_CUSTOM>, 
   const int j = d_plist[i];
   if (d_particles[j].flag == PDISCARD) return;
   int nsend;
-  if (NEED_ATOMICS)
+  if constexpr (NEED_ATOMICS)
     nsend = Kokkos::atomic_fetch_add(&d_nsend(),1);
   else {
     nsend = d_nsend();
@@ -256,7 +256,7 @@ void CommKokkos::operator()(TagCommMigrateParticles<NEED_ATOMICS, HAVE_CUSTOM>, 
   d_particles[j].icell = d_cells[d_particles[j].icell].ilocal;
   const int offset = nsend*nbytes_total;
   memcpy(&d_sbuf[offset],&d_particles[j],nbytes_particle);
-  if (HAVE_CUSTOM)
+  if constexpr (HAVE_CUSTOM)
     particle_kk_copy.obj.pack_custom_kokkos(j,(char*)(d_sbuf.data()+offset+nbytes_particle));
 }
 
@@ -264,7 +264,7 @@ template<int NEED_ATOMICS, int HAVE_CUSTOM>
 KOKKOS_INLINE_FUNCTION
 void CommKokkos::operator()(TagCommMigrateUnpackParticles<NEED_ATOMICS,HAVE_CUSTOM>, const int &irecv) const {
   int i;
-  if (NEED_ATOMICS)
+  if constexpr (NEED_ATOMICS)
     i = Kokkos::atomic_fetch_add(&d_nlocal(),1);
   else {
     i = d_nlocal();
@@ -272,7 +272,7 @@ void CommKokkos::operator()(TagCommMigrateUnpackParticles<NEED_ATOMICS,HAVE_CUST
   }
   const int offset = irecv*nbytes_total;
   memcpy(&d_particles[i],&d_rbuf[offset],nbytes_particle);
-  if (HAVE_CUSTOM)
+  if constexpr (HAVE_CUSTOM)
     particle_kk_copy.obj.unpack_custom_kokkos((char*)(d_rbuf.data()+offset+nbytes_particle),i);
 }
 

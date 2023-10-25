@@ -54,10 +54,10 @@ typedef struct s_COLLIDE_REDUCE COLLIDE_REDUCE;
 struct TagCollideResetVremax{};
 struct TagCollideZeroNN{};
 
-template < int NEARCP, int REACT, int ATOMIC_REDUCTION>
+template <int NEARCP, int REACT, int ATOMIC_REDUCTION>
 struct TagCollideCollisionsOne{};
 
-template < int ATOMIC_REDUCTION>
+template <int REACT, int ATOMIC_REDUCTION>
 struct TagCollideCollisionsOneAmbipolar{};
 
 class CollideVSSKokkos : public CollideVSS {
@@ -84,15 +84,20 @@ class CollideVSSKokkos : public CollideVSS {
 #endif
 
   KOKKOS_INLINE_FUNCTION
-  double attempt_collision_kokkos(int, int, double, rand_type &) const;
+  double attempt_collision_kokkos(const int &, const int &, const double &, rand_type &) const;
   KOKKOS_INLINE_FUNCTION
-  int test_collision_kokkos(int, int, int, Particle::OnePart *, Particle::OnePart *, struct State &, rand_type &) const;
+  int test_collision_kokkos(const int &, const int &, const int &, Particle::OnePart*, Particle::OnePart*, struct State &, rand_type &) const;
   KOKKOS_INLINE_FUNCTION
-  void setup_collision_kokkos(Particle::OnePart *, Particle::OnePart *, struct State &, struct State &) const;
+  void setup_collision_kokkos(Particle::OnePart*, Particle::OnePart*, struct State &, struct State &) const;
+
   KOKKOS_INLINE_FUNCTION
-  int perform_collision_kokkos(Particle::OnePart *&, Particle::OnePart *&,
-                        Particle::OnePart *&, struct State &, struct State &, rand_type &,
-                        Particle::OnePart *&, int &, double &,
+  void perform_collision_kokkos(Particle::OnePart*, Particle::OnePart*,
+                         struct State &, struct State &, rand_type &) const;
+
+  KOKKOS_INLINE_FUNCTION
+  int perform_collision_kokkos(Particle::OnePart*, Particle::OnePart*,
+                        Particle::OnePart*, struct State &, struct State &, rand_type &,
+                        Particle::OnePart*, int &, double &,
                         int &) const;
 
   KOKKOS_INLINE_FUNCTION
@@ -101,27 +106,27 @@ class CollideVSSKokkos : public CollideVSS {
   KOKKOS_INLINE_FUNCTION
   void operator()(TagCollideZeroNN, const int&) const;
 
-  template < int NEARCP, int REACT, int ATOMIC_REDUCTION>
+  template <int NEARCP, int REACT, int ATOMIC_REDUCTION>
   KOKKOS_INLINE_FUNCTION
   void operator()(TagCollideCollisionsOne<NEARCP, REACT, ATOMIC_REDUCTION>, const int&) const;
 
-  template < int NEARCP, int REACT, int ATOMIC_REDUCTION>
+  template <int NEARCP, int REACT, int ATOMIC_REDUCTION>
   KOKKOS_INLINE_FUNCTION
   void operator()(TagCollideCollisionsOne<NEARCP, REACT, ATOMIC_REDUCTION>, const int&, COLLIDE_REDUCE&) const;
 
-  template < int ATOMIC_REDUCTION>
+  template <int REACT, int ATOMIC_REDUCTION>
   KOKKOS_INLINE_FUNCTION
-  void operator()(TagCollideCollisionsOneAmbipolar<ATOMIC_REDUCTION>, const int&) const;
+  void operator()(TagCollideCollisionsOneAmbipolar<REACT, ATOMIC_REDUCTION>, const int&) const;
 
-  template < int ATOMIC_REDUCTION>
+  template <int REACT, int ATOMIC_REDUCTION>
   KOKKOS_INLINE_FUNCTION
-  void operator()(TagCollideCollisionsOneAmbipolar<ATOMIC_REDUCTION>, const int&, COLLIDE_REDUCE&) const;
+  void operator()(TagCollideCollisionsOneAmbipolar<REACT, ATOMIC_REDUCTION>, const int&, COLLIDE_REDUCE&) const;
 
  private:
   KOKKOS_INLINE_FUNCTION
   void ambi_reset_kokkos(int, int, int, int,
-                         Particle::OnePart *, Particle::OnePart *,
-                         Particle::OnePart *, const DAT::t_int_1d &) const;
+                         Particle::OnePart*, Particle::OnePart*,
+                         Particle::OnePart*, const DAT::t_int_1d &) const;
   int pack_grid_one(int, char *, int);
   int unpack_grid_one(int, char *);
   void copy_grid_one(int, int);
@@ -200,6 +205,8 @@ class CollideVSSKokkos : public CollideVSS {
 
   template <int NEARCP, int REACT>
   void collisions_one(COLLIDE_REDUCE&);
+
+  template <int REACT>
   void collisions_one_ambipolar(COLLIDE_REDUCE&);
 
   // VSS specific
@@ -217,36 +224,34 @@ class CollideVSSKokkos : public CollideVSS {
   int maxcellcount,react_defined;
 
   KOKKOS_INLINE_FUNCTION
-  void SCATTER_TwoBodyScattering(Particle::OnePart *,
-                                 Particle::OnePart *,
-                                 struct State &, struct State &, rand_type &) const;
+  void SCATTER_TwoBodyScattering(Particle::OnePart*,
+                                 Particle::OnePart*,
+                                 const struct State &, struct State &, rand_type &) const;
   KOKKOS_INLINE_FUNCTION
-  void EEXCHANGE_NonReactingEDisposal(Particle::OnePart *,
-                                      Particle::OnePart *,
-                                      struct State &, struct State &, rand_type &) const;
+  void EEXCHANGE_NonReactingEDisposal(Particle::OnePart*,
+                                      Particle::OnePart*,
+                                      const struct State &, struct State &, rand_type &) const;
 
   KOKKOS_INLINE_FUNCTION
-  void SCATTER_ThreeBodyScattering(Particle::OnePart *,
-                                   Particle::OnePart *,
-                                   Particle::OnePart *,
-                                   struct State &, struct State &, rand_type &) const;
+  void SCATTER_ThreeBodyScattering(Particle::OnePart*,
+                                   Particle::OnePart*,
+                                   Particle::OnePart*,
+                                   const struct State &, struct State &, rand_type &) const;
   KOKKOS_INLINE_FUNCTION
-  void EEXCHANGE_ReactingEDisposal(Particle::OnePart *,
-                                   Particle::OnePart *,
-                                   Particle::OnePart *,
-                                   struct State &, struct State &, rand_type &) const;
+  void EEXCHANGE_ReactingEDisposal(Particle::OnePart*,
+                                   Particle::OnePart*,
+                                   Particle::OnePart*,
+                                   const struct State &, struct State &, rand_type &) const;
 
   KOKKOS_INLINE_FUNCTION
-  double sample_bl(rand_type &, double, double) const;
+  double sample_bl(rand_type &, const double &, const double &) const;
   KOKKOS_INLINE_FUNCTION
-  double rotrel (int, double) const;
+  double rotrel (const int &, const double &) const;
   KOKKOS_INLINE_FUNCTION
-  double vibrel (int, double) const;
+  double vibrel (const int &, const double &) const;
 
   KOKKOS_INLINE_FUNCTION
-  int set_nn(int, int) const;
-  KOKKOS_INLINE_FUNCTION
-  int find_nn(rand_type &, int, int, int) const;
+  int find_nn(rand_type &, const int &, const int &, const int &) const;
 
   void backup();
   void restore();

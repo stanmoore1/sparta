@@ -57,7 +57,7 @@ class SurfCollideVanishKokkos : public SurfCollideVanish {
                                     int, const double *, int, int &,
                                     const DAT::t_int_scalar &, const DAT::t_int_scalar &) const
   {
-    if (ATOMIC_REDUCTION == 0)
+    if constexpr (ATOMIC_REDUCTION == 0)
       d_nsingle()++;
     else
       Kokkos::atomic_increment(&d_nsingle());

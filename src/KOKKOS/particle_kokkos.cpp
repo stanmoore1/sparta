@@ -414,7 +414,7 @@ void ParticleKokkos::operator()(TagParticleSort<NEED_ATOMICS,REORDER_FLAG>, cons
 {
   const int icell = d_particles[i].icell;
   int j;
-  if (NEED_ATOMICS)
+  if constexpr (NEED_ATOMICS)
     j = Kokkos::atomic_fetch_add(&d_cellcount[icell],1);
   else {
     j = d_cellcount[icell];
@@ -426,7 +426,7 @@ void ParticleKokkos::operator()(TagParticleSort<NEED_ATOMICS,REORDER_FLAG>, cons
   else {
     d_plist(icell,j) = i;
 
-    if (REORDER_FLAG)
+    if constexpr (REORDER_FLAG)
       d_offsets_part[i] = j;
   }
 }

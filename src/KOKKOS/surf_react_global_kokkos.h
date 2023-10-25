@@ -89,7 +89,7 @@ class SurfReactGlobalKokkos : public SurfReactGlobal {
     // perform destroy reaction
 
     if (r < prob_destroy) {
-      if (ATOMIC_REDUCTION == 0) {
+      if constexpr (ATOMIC_REDUCTION == 0) {
         d_nsingle()++;
         d_tally_single(0)++;
       } else {
@@ -106,7 +106,7 @@ class SurfReactGlobalKokkos : public SurfReactGlobal {
     // if add_particle performs a realloc must retry
 
     if (r < prob_destroy+prob_create) {
-      if (ATOMIC_REDUCTION == 0) {
+      if constexpr (ATOMIC_REDUCTION == 0) {
         d_nsingle()++;
         d_tally_single(1)++;
       } else {
@@ -119,7 +119,7 @@ class SurfReactGlobalKokkos : public SurfReactGlobal {
       memcpy(v,ip->v,3*sizeof(double));
 
       int index;
-      if (ATOMIC_REDUCTION == 0) {
+      if constexpr (ATOMIC_REDUCTION == 0) {
         index = d_nlocal();
         d_nlocal()++;
       } else
