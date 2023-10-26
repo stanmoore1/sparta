@@ -610,7 +610,6 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOne<NEARCP, REACT, ATOMIC_
 template <int NEARCP, int REACT, int ATOMIC_REDUCTION>
 KOKKOS_INLINE_FUNCTION
 void CollideVSSKokkos::operator()(TagCollideCollisionsOne<NEARCP, REACT, ATOMIC_REDUCTION>, const int &icell, COLLIDE_REDUCE &reduce) const {
-
   if constexpr (REACT)
     if (d_retry()) return;
 

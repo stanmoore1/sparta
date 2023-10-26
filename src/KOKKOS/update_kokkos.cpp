@@ -815,19 +815,8 @@ KOKKOS_INLINE_FUNCTION
 void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>, const int &i, UPDATE_REDUCE &reduce) const {
   if (d_error_flag() || d_retry()) return;
 
-  // int m;
-  bool hitflag;
-  int icell,icell_original,outface,bflag,nflag,pflag,itmp;
-  int side,minsurf,nsurf,cflag,isurf,exclude,stuck_iterate;
-  double dtremain,frac,newfrac,param,minparam,rnew,dtsurf,tc,tmp;
-  double xnew[3],xhold[3],xc[3],vc[3],minxc[3],minvc[3];
-  double *x,*v;
-  Surf::Tri *tri;
-  Surf::Line *line;
-  int reaction;
-
   Particle::OnePart &particle_i = d_particles[i];
-  pflag = particle_i.flag;
+  int pflag = particle_i.flag;
 
   Particle::OnePart iorig;
   Particle::OnePart *ipart,*jpart;
@@ -843,12 +832,14 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
     if (niterate > 1) return;
   }
 
-  x = particle_i.x;
-  v = particle_i.v;
-  exclude = -1;
+  double* x = particle_i.x;
+  double* v = particle_i.v;
+  int exclude = -1;
 
   // for 2d and axisymmetry only
   // xnew,xc passed to geometry routines which use or set z component
+
+  double xnew[3],xc[3];
 
   if constexpr (DIM < 3) xnew[2] = xc[2] = 0.0;
 
@@ -856,6 +847,8 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
   // not to PENTRY,PEXIT since are just re-computing xnew of sender
   // set xnew[2] to linear move for axisymmetry, will be remapped later
   // let pflag = PEXIT persist to check during axisymmetric cell crossing
+
+  double dtremain;
 
   if constexpr (DIM < 3) xnew[2] = 0.0;
   if (pflag == PKEEP) {
@@ -879,7 +872,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
     } else if (fstyle == PFIELD) field_per_particle(i,particle_i.icell,dtremain,xnew,v);
     else if (fstyle == GFIELD) field_per_grid(i,particle_i.icell,dtremain,xnew,v);
   } else if (pflag == PENTRY) {
-    icell = particle_i.icell;
+    int icell = particle_i.icell;
     if (d_cells[icell].nsplit > 1) {
       if constexpr (DIM == 3 && SURF) icell = split3d(icell,x);
       if constexpr (DIM < 3 && SURF) icell = split2d(icell,x);
@@ -968,12 +961,12 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
   }
 
   particle_i.flag = PKEEP;
-  icell = particle_i.icell;
+  int icell = particle_i.icell;
   double* lo = d_cells[icell].lo;
   double* hi = d_cells[icell].hi;
   cellint* neigh = d_cells[icell].neigh;
   int nmask = d_cells[icell].nmask;
-  stuck_iterate = 0;
+  int stuck_iterate = 0;
   if constexpr (ATOMIC_REDUCTION == 1)
     Kokkos::atomic_increment(&d_ntouch_one());
   else if constexpr (ATOMIC_REDUCTION == 0)
@@ -1038,8 +1031,10 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
     //       so set frac and outface directly to move into adjacent cell,
     //       then unset pflag so not checked again for this particle
 
-    outface = INTERIOR;
-    frac = 1.0;
+    int outface = INTERIOR;
+    double frac = 1.0;
+    double newfrac;
+    int reaction;
 
     if (xnew[0] < lo[0]) {
       frac = (lo[0]-x[0]) / (xnew[0]-x[0]);
@@ -1064,7 +1059,9 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
         }
       }
     }
-
+    
+    int itmp;
+    double tc,tmp;
     if constexpr (DIM == 1) {
       if (x[1] == lo[1] && (pflag == PEXIT || v[1] < 0.0)) {
         frac = 0.0;
@@ -1082,7 +1079,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
         frac = 0.0;
         outface = YHI;
       } else {
-        rnew = sqrt(xnew[1]*xnew[1] + xnew[2]*xnew[2]);
+        const double rnew = sqrt(xnew[1]*xnew[1] + xnew[2]*xnew[2]);
         if (rnew >= hi[1]) {
           if (GeometryKokkos::
               axi_horizontal_line(dtremain,x,v,hi[1],itmp,tc,tmp)) {
@@ -1127,6 +1124,11 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
     }
 #endif
 
+    double minxc[3],minvc[3];
+    int minsurf;
+    Surf::Tri *tri;
+    Surf::Line *line;
+
     // START of code specific to surfaces
 
     if constexpr (SURF) {
@@ -1134,7 +1136,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
       // skip surf checks if particle flagged as EXITing this cell
       // then unset pflag so not checked again for this particle
 
-      nsurf = d_cells[icell].nsurf;
+      int nsurf = d_cells[icell].nsurf;
       if (pflag == PEXIT) {
         nsurf = 0;
         pflag = 0;
@@ -1148,6 +1150,8 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
         reduce.nscheck_one += nsurf;
 
       if (nsurf) {
+
+        double xhold[3],vc[3];
 
         // particle crosses cell face, reset xnew exactly on face of cell
         // so surface check occurs only for particle path within grid cell
@@ -1173,6 +1177,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
         // for axisymmetric, dtsurf = time that particle stays in cell
         // used as arg to axi_line_intersect()
 
+        double dtsurf;
         if constexpr (DIM == 1) {
           if (outface == INTERIOR) dtsurf = dtremain;
           else dtsurf = dtremain * frac;
@@ -1185,12 +1190,15 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
         // if collision occurs, perform collision with surface model
         // reset x,v,xnew,dtremain and continue single particle trajectory
 
-        cflag = 0;
-        minparam = 2.0;
+        int cflag = 0;
+        double minparam = 2.0;
+        double param;
         auto csurfs_begin = d_csurfs.row_map(icell);
 
         for (int m = 0; m < nsurf; m++) {
-          isurf = d_csurfs.entries(csurfs_begin + m);
+          int hitflag,side;
+
+          const int isurf = d_csurfs.entries(csurfs_begin + m);
 
           if constexpr (DIM > 1) {
             if (isurf == exclude) continue;
@@ -1559,8 +1567,8 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
     //   (d) its child, which the particle is in, is entirely beyond my halo
     // if new cell is child and surfs exist, check if a split cell
 
-    nflag = grid_kk_copy.obj.neigh_decode(nmask,outface);
-    icell_original = icell;
+    const int nflag = grid_kk_copy.obj.neigh_decode(nmask,outface);
+    const int icell_original = icell;
 
     if (nflag == NCHILD) {
       icell = neigh[outface];
@@ -1611,6 +1619,8 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
       Particle::OnePart* ipart = &particle_i;
       lo = d_cells[icell].lo;
       hi = d_cells[icell].hi;
+      int bflag;
+
       if (domain_kk_copy.obj.bflag[outface] == SURFACE) {
         // treat global boundary as a surface
         // particle velocity is changed by surface collision model
