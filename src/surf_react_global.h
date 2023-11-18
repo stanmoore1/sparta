@@ -1,12 +1,12 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
    http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -28,16 +28,17 @@ namespace SPARTA_NS {
 class SurfReactGlobal : public SurfReact {
  public:
   SurfReactGlobal(class SPARTA *, int, char **);
-  ~SurfReactGlobal();
-  int react(Particle::OnePart *&, double *, Particle::OnePart *&);
-
+  SurfReactGlobal(class SPARTA *sparta) : SurfReact(sparta) {}
+  virtual ~SurfReactGlobal();
+  int react(Particle::OnePart *&, int, double *, Particle::OnePart *&, int &);
   char *reactionID(int);
+  double reaction_coeff(int) {return 0.0;};
   int match_reactant(char *, int) {return 1;}
   int match_product(char *, int) {return 1;}
 
- private:
+ protected:
   double prob_create,prob_destroy;
-  class RanPark *random;     // RNG for reaction probabilities
+  class RanKnuth *random;     // RNG for reaction probabilities
 };
 
 }

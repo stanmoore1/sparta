@@ -1,12 +1,12 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
    http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -84,7 +84,7 @@ void MoveSurf::command(int narg, char **arg)
   process_args(narg-1,&arg[1]);
   mode = 0;
 
-  if (action == READFILE) 
+  if (action == READFILE)
     error->all(FLERR,"Move_surf file option is not yet implemented");
 
   // perform surface move
@@ -123,7 +123,7 @@ void MoveSurf::command(int narg, char **arg)
     int nglocal = grid->nlocal;
     for (int icell = 0; icell < nglocal; icell++)
       if (cells[icell].nsplit > 1)
-	grid->combine_split_cell_particles(icell,1);
+        grid->combine_split_cell_particles(icell,1);
   }
 
   grid->clear_surf();
@@ -174,23 +174,23 @@ void MoveSurf::command(int narg, char **arg)
   if (comm->me == 0) {
     if (screen) {
       if (particle->exist)
-	fprintf(screen,"  " BIGINT_FORMAT " deleted particles\n",ndeleted);
+        fprintf(screen,"  " BIGINT_FORMAT " deleted particles\n",ndeleted);
       fprintf(screen,"  CPU time = %g secs\n",time_total);
       fprintf(screen,"  sort/surf2grid/ghost/inout/particle percent = "
-	      "%g %g %g %g %g\n",
+              "%g %g %g %g %g\n",
               100.0*(time2-time1)/time_total,100.0*(time3-time2)/time_total,
               100.0*(time4-time3)/time_total,100.0*(time5-time4)/time_total,
-	      100.0*(time6-time5)/time_total);
+              100.0*(time6-time5)/time_total);
     }
     if (logfile) {
       if (particle->exist)
-	fprintf(logfile,"  " BIGINT_FORMAT " deleted particles\n",ndeleted);
+        fprintf(logfile,"  " BIGINT_FORMAT " deleted particles\n",ndeleted);
       fprintf(logfile,"  CPU time = %g secs\n",time_total);
       fprintf(logfile,"  sort/surf2grid/ghost/inout/particle percent = "
-	      "%g %g %g %g %g\n",
+              "%g %g %g %g %g\n",
               100.0*(time2-time1)/time_total,100.0*(time3-time2)/time_total,
               100.0*(time4-time3)/time_total,100.0*(time5-time4)/time_total,
-	      100.0*(time6-time5)/time_total);
+              100.0*(time6-time5)/time_total);
     }
   }
 }
@@ -220,7 +220,7 @@ void MoveSurf::process_args(int narg, char **arg)
     delta[0] = input->numeric(FLERR,arg[1]);
     delta[1] = input->numeric(FLERR,arg[2]);
     delta[2] = input->numeric(FLERR,arg[3]);
-    if (domain->dimension == 2 && delta[2] != 0.0) 
+    if (domain->dimension == 2 && delta[2] != 0.0)
       error->all(FLERR,"Invalid move surf translation for 2d simulation");
     iarg = 4;
   } else if (strcmp(arg[0],"rotate") == 0) {
@@ -233,7 +233,7 @@ void MoveSurf::process_args(int narg, char **arg)
     origin[0] = input->numeric(FLERR,arg[5]);
     origin[1] = input->numeric(FLERR,arg[6]);
     origin[2] = input->numeric(FLERR,arg[7]);
-    if (domain->dimension == 2 && (rvec[0] != 0.0 || rvec[1] != 0.0)) 
+    if (domain->dimension == 2 && (rvec[0] != 0.0 || rvec[1] != 0.0))
       error->all(FLERR,"Invalid move surf rotation for 2d simulation");
     if (rvec[0] == 0.0 && rvec[1] == 0.0 && rvec[2] == 0.0)
       error->all(FLERR,"Invalid move surf rotation");
@@ -269,10 +269,10 @@ void MoveSurf::move_lines(double fraction, Surf::Line *origlines)
   if (action == READFILE) {
     readfile();
     update_points(fraction);
-  } 
+  }
   else if (action == TRANSLATE) translate_2d(fraction,origlines);
   else if (action == ROTATE) rotate_2d(fraction,origlines);
-  
+
   if (connectflag && groupbit != 1) connect_2d_post();
 
   surf->compute_line_normal(0);
@@ -295,7 +295,7 @@ void MoveSurf::move_tris(double fraction, Surf::Tri *origtris)
   if (action == READFILE) {
     readfile();
     update_points(fraction);
-  } 
+  }
   else if (action == TRANSLATE) translate_3d(fraction,origtris);
   else if (action == ROTATE) rotate_3d(fraction,origtris);
 
@@ -337,13 +337,13 @@ void MoveSurf::readfile()
   if (me == 0) {
     while (1) {
       if (fgets(line,MAXLINE,fp) == NULL)
-	error->one(FLERR,"Did not find entry in move surf file");
+        error->one(FLERR,"Did not find entry in move surf file");
       if (strspn(line," \t\n\r") == strlen(line)) continue;  // blank line
       if (line[0] == '#') continue;                          // comment
       word = strtok(line," \t\n\r");
       if (strcmp(word,entry) != 0) continue;          // non-matching entry
       if (fgets(line,MAXLINE,fp) == NULL)
-	error->one(FLERR,"Incompete entry in move surf file");
+        error->one(FLERR,"Incompete entry in move surf file");
       word = strtok(line," \t\n\r");        // npoints value after entry
       nread = input->inumeric(FLERR,word);
     }
@@ -382,8 +382,8 @@ void MoveSurf::readfile()
       y = input->numeric(FLERR,strtok(NULL," \t\n\r"));
       if (dim == 3) z = input->numeric(FLERR,strtok(NULL," \t\n\r"));
       else z = 0.0;
-      if (id < 1 || id > npoint) 
-	error->one(FLERR,"Invalid point index in move surf file");
+      if (id < 1 || id > npoint)
+        error->one(FLERR,"Invalid point index in move surf file");
       id--;
       readindex[i] = id;
       oldcoord[i][0] = pts[id].x[0];
@@ -583,7 +583,7 @@ void MoveSurf::rotate_2d(double fraction, Surf::Line *origlines)
     p1[0] = dnew[0] + origin[0];
     p1[1] = dnew[1] + origin[1];
     pselect[2*i] = 1;
-    
+
     d[0] = op2[0] - origin[0];
     d[1] = op2[1] - origin[1];
     d[2] = op2[2] - origin[2];
@@ -630,7 +630,7 @@ void MoveSurf::rotate_3d(double fraction, Surf::Tri *origtris)
     p1[1] = dnew[1] + origin[1];
     p1[2] = dnew[2] + origin[2];
     pselect[3*i] = 1;
-    
+
     d[0] = op2[0] - origin[0];
     d[1] = op2[1] - origin[1];
     d[2] = op2[2] - origin[2];
@@ -801,7 +801,7 @@ void MoveSurf::connect_3d_post()
         else pselect[3*i+2] = 1;
       }
     }
-  }  
+  }
 
   // free the hash
 
@@ -850,25 +850,25 @@ bigint MoveSurf::remove_particles()
 
       int m;
       if (dim == 2) {
-	for (m = 0; m < nsurf; m++) {
+        for (m = 0; m < nsurf; m++) {
           isurf = csurfs[m];
-	  if (pselect[2*isurf]) break;
-	  if (pselect[2*isurf+1]) break;
-	}
+          if (pselect[2*isurf]) break;
+          if (pselect[2*isurf+1]) break;
+        }
       } else {
-	for (m = 0; m < nsurf; m++) {
+        for (m = 0; m < nsurf; m++) {
           isurf = csurfs[m];
-	  if (pselect[3*isurf]) break;
-	  if (pselect[3*isurf+1]) break;
-	  if (pselect[3*isurf+2]) break;
-	}
+          if (pselect[3*isurf]) break;
+          if (pselect[3*isurf+1]) break;
+          if (pselect[3*isurf+2]) break;
+        }
       }
 
       if (m < nsurf) {
-	if (cinfo[icell].count) delflag = 1;
-	particle->remove_all_from_cell(cinfo[icell].first);
-	cinfo[icell].count = 0;
-	cinfo[icell].first = -1;
+        if (cinfo[icell].count) delflag = 1;
+        particle->remove_all_from_cell(cinfo[icell].first);
+        cinfo[icell].count = 0;
+        cinfo[icell].first = -1;
       }
     }
 

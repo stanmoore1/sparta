@@ -1,12 +1,12 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
    http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -24,6 +24,9 @@ ComputeStyle(surf/kk,ComputeSurfKokkos)
 #include "compute_surf.h"
 #include "kokkos_type.h"
 #include "math_extra_kokkos.h"
+#include "kokkos_copy.h"
+#include "surf_react_global_kokkos.h"
+#include "surf_react_prob_kokkos.h"
 
 namespace SPARTA_NS {
 
@@ -42,8 +45,8 @@ class ComputeSurfKokkos : public ComputeSurf {
   void pre_surf_tally();
   void post_surf_tally();
 
-enum{NUM,NUMWT,MFLUX,FX,FY,FZ,PRESS,XPRESS,YPRESS,ZPRESS,
-     XSHEAR,YSHEAR,ZSHEAR,KE,EROT,EVIB,ETOT};
+enum{NUM,NUMWT,NFLUX,NFLUXIN,MFLUX,MFLUXIN,FX,FY,FZ,PRESS,XPRESS,YPRESS,ZPRESS,
+     XSHEAR,YSHEAR,ZSHEAR,KE,EROT,EVIB,ECHEM,ETOT};
 
 /* ----------------------------------------------------------------------
    tally values for a single particle in icell
@@ -58,7 +61,7 @@ enum{NUM,NUMWT,MFLUX,FX,FY,FZ,PRESS,XPRESS,YPRESS,ZPRESS,
 template <int ATOMIC_REDUCTION>
 KOKKOS_INLINE_FUNCTION
 void surf_tally_kk(int isurf, int icell, int reaction,
-                   Particle::OnePart *iorig, 
+                   Particle::OnePart *iorig,
                    Particle::OnePart *ip, Particle::OnePart *jp) const
 {
   // skip if isurf not in surface group
@@ -78,31 +81,24 @@ void surf_tally_kk(int isurf, int icell, int reaction,
   // itally = tally index of isurf
   // grow tally list if needed
 
-  int itally,transparent;
+  int itally,transparent,isr;
 
   surfint surfID;
   if (dim == 2) {
     surfID = d_lines[isurf].id;
     transparent = d_lines[isurf].transparent;
+    isr = d_lines[isurf].isr;
   } else {
     surfID = d_tris[isurf].id;
     transparent = d_tris[isurf].transparent;
+    isr = d_tris[isurf].isr;
   }
 
-  int index = d_surf2tally(isurf);
-  if (index != -1)
-    itally = index;
-  else { // OK if two threads hit this at the same time
-    if (ATOMIC_REDUCTION != 0)
-      itally = Kokkos::atomic_fetch_add(&d_ntally(),1);
-    else {
-      itally = d_ntally();
-      d_ntally()++;
-    }
+  // thread-safe, tally array will be compressed later
 
-    d_tally2surf(itally) = surfID;
-    d_surf2tally(isurf) = itally;
-  }
+  itally = isurf;
+  d_tally2surf(itally) = surfID;
+  d_surf2tally(isurf) = isurf;
 
   double fluxscale = d_normflux(isurf);
 
@@ -136,8 +132,8 @@ void surf_tally_kk(int isurf, int icell, int reaction,
   int nflag = 0;
   int tflag = 0;
 
-  auto v_array_surf_tally = ScatterViewHelper<NeedDup<ATOMIC_REDUCTION,DeviceType>::value,decltype(dup_array_surf_tally),decltype(ndup_array_surf_tally)>::get(dup_array_surf_tally,ndup_array_surf_tally);
-  auto a_array_surf_tally = v_array_surf_tally.template access<AtomicDup<ATOMIC_REDUCTION,DeviceType>::value>();
+  auto v_array_surf_tally = ScatterViewHelper<typename NeedDup<ATOMIC_REDUCTION,DeviceType>::value,decltype(dup_array_surf_tally),decltype(ndup_array_surf_tally)>::get(dup_array_surf_tally,ndup_array_surf_tally);
+  auto a_array_surf_tally = v_array_surf_tally.template access<typename AtomicDup<ATOMIC_REDUCTION,DeviceType>::value>();
 
   for (int m = 0; m < nvalue; m++) {
     switch (d_which(m)) {
@@ -147,12 +143,29 @@ void surf_tally_kk(int isurf, int icell, int reaction,
     case NUMWT:
       a_array_surf_tally(itally,k++) += weight;
       break;
-    case MFLUX:
-      a_array_surf_tally(itally,k++) += origmass;
+    case NFLUX:
+      a_array_surf_tally(itally,k) += weight * fluxscale;
       if (!transparent) {
-        if (ip) a_array_surf_tally(itally,k++) -= imass;
-        if (jp) a_array_surf_tally(itally,k++) -= jmass;
+        if (ip) a_array_surf_tally(itally,k) -= weight * fluxscale;
+        if (jp) a_array_surf_tally(itally,k) -= weight * fluxscale;
       }
+      k++;
+      break;
+    case NFLUXIN:
+      a_array_surf_tally(itally,k) += weight * fluxscale;
+      k++;
+      break;
+    case MFLUX:
+      a_array_surf_tally(itally,k) += origmass * fluxscale;
+      if (!transparent) {
+        if (ip) a_array_surf_tally(itally,k) -= imass * fluxscale;
+        if (jp) a_array_surf_tally(itally,k) -= jmass * fluxscale;
+      }
+      k++;
+      break;
+    case MFLUXIN:
+      a_array_surf_tally(itally,k) += origmass * fluxscale;
+      k++;
       break;
     case FX:
       if (!fflag) {
@@ -281,6 +294,16 @@ void surf_tally_kk(int isurf, int icell, int reaction,
       else
         a_array_surf_tally(itally,k++) -= weight * (ievib + jevib - iorig->evib) * fluxscale;
       break;
+    case ECHEM:
+      if (reaction && !transparent) {
+        int sr_type = sr_type_list[isr];
+        int m = sr_map[isr];
+        double r_coeff = 0.0;
+        if (sr_type == 1)
+          r_coeff = sr_kk_prob_copy[m].obj.d_coeffs(reaction-1,1);
+        a_array_surf_tally(itally,k++) += weight * r_coeff * fluxscale;
+      }
+      break;
     case ETOT:
       vsqpre = origmass * MathExtraKokkos::lensq3(vorig);
       otherpre = iorig->erot + iorig->evib;
@@ -294,9 +317,18 @@ void surf_tally_kk(int isurf, int icell, int reaction,
       } else jvsqpost = jother = 0.0;
       if (transparent)
         etot = -0.5*mvv2e*vsqpre - weight*otherpre;
-      else
-        etot = 0.5*mvv2e*(ivsqpost + jvsqpost - vsqpre) + 
+      else {
+        etot = 0.5*mvv2e*(ivsqpost + jvsqpost - vsqpre) +
           weight * (iother + jother - otherpre);
+        if (reaction) {
+          int sr_type = sr_type_list[isr];
+          int m = sr_map[isr];
+          double r_coeff = 0.0;
+          if (sr_type == 1)
+            r_coeff = sr_kk_prob_copy[m].obj.d_coeffs(reaction-1,1);
+          etot -= weight * r_coeff;
+        }
+      }
       a_array_surf_tally(itally,k++) -= etot * fluxscale;
       break;
     }
@@ -306,16 +338,15 @@ void surf_tally_kk(int isurf, int icell, int reaction,
  private:
   int mvv2e;
 
-  DAT::t_int_scalar d_ntally;
   DAT::t_int_1d d_which;
 
   DAT::tdual_float_2d_lr k_array_surf_tally;
   DAT::t_float_2d_lr d_array_surf_tally;  // tally values for local surfs
 
   int need_dup;
-  Kokkos::Experimental::ScatterView<F_FLOAT**, typename DAT::t_float_2d_lr::array_layout,DeviceType,Kokkos::Experimental::ScatterSum,Kokkos::Experimental::ScatterDuplicated> dup_array_surf_tally;
-  Kokkos::Experimental::ScatterView<F_FLOAT**, typename DAT::t_float_2d_lr::array_layout,DeviceType,Kokkos::Experimental::ScatterSum,Kokkos::Experimental::ScatterNonDuplicated> ndup_array_surf_tally;
- 
+  Kokkos::Experimental::ScatterView<F_FLOAT**, typename DAT::t_float_2d_lr::array_layout,DeviceType,typename Kokkos::Experimental::ScatterSum,typename Kokkos::Experimental::ScatterDuplicated> dup_array_surf_tally;
+  Kokkos::Experimental::ScatterView<F_FLOAT**, typename DAT::t_float_2d_lr::array_layout,DeviceType,typename Kokkos::Experimental::ScatterSum,typename Kokkos::Experimental::ScatterNonDuplicated> ndup_array_surf_tally;
+
   DAT::t_surfint_1d d_tally2surf;           // tally2surf[I] = surf ID of Ith tally
   DAT::tdual_surfint_1d k_tally2surf;
   DAT::t_int_1d d_surf2tally;         // using Kokkos::UnorderedMap::insert uses too many registers on GPUs
@@ -327,6 +358,11 @@ void surf_tally_kk(int isurf, int icell, int reaction,
 
   t_line_1d d_lines;
   t_tri_1d d_tris;
+
+  int sr_type_list[KOKKOS_MAX_TOT_SURF_REACT];
+  int sr_map[KOKKOS_MAX_TOT_SURF_REACT];
+  KKCopy<SurfReactGlobalKokkos> sr_kk_global_copy[KOKKOS_MAX_SURF_REACT_PER_TYPE];
+  KKCopy<SurfReactProbKokkos> sr_kk_prob_copy[KOKKOS_MAX_SURF_REACT_PER_TYPE];
 
   void grow_tally();
 };

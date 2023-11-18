@@ -1,12 +1,12 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
    http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -49,7 +49,7 @@ ComputePropertyGrid::ComputePropertyGrid(SPARTA *sparta, int narg, char **arg) :
       pack_choice[i] = &ComputePropertyGrid::pack_id;
       index[i] = 0;
     } else if (strcmp(arg[iarg],"proc") == 0) {
-      pack_choice[i] = &ComputePropertyGrid::pack_proc;      
+      pack_choice[i] = &ComputePropertyGrid::pack_proc;
       index[i] = 1;
     } else if (strcmp(arg[iarg],"xlo") == 0) {
       pack_choice[i] = &ComputePropertyGrid::pack_xlo;
@@ -58,8 +58,8 @@ ComputePropertyGrid::ComputePropertyGrid(SPARTA *sparta, int narg, char **arg) :
       pack_choice[i] = &ComputePropertyGrid::pack_ylo;
       index[i] = 3;
     } else if (strcmp(arg[iarg],"zlo") == 0) {
-      if (domain->dimension == 2) 
-	error->all(FLERR,
+      if (domain->dimension == 2)
+        error->all(FLERR,
                    "Invalid compute property/grid field for 2d simulation");
       pack_choice[i] = &ComputePropertyGrid::pack_zlo;
       index[i] = 4;
@@ -70,8 +70,8 @@ ComputePropertyGrid::ComputePropertyGrid(SPARTA *sparta, int narg, char **arg) :
       pack_choice[i] = &ComputePropertyGrid::pack_yhi;
       index[i] = 6;
     } else if (strcmp(arg[iarg],"zhi") == 0) {
-      if (domain->dimension == 2) 
-	error->all(FLERR,
+      if (domain->dimension == 2)
+        error->all(FLERR,
                    "Invalid compute property/grid field for 2d simulation");
       pack_choice[i] = &ComputePropertyGrid::pack_zhi;
       index[i] = 7;
@@ -82,8 +82,8 @@ ComputePropertyGrid::ComputePropertyGrid(SPARTA *sparta, int narg, char **arg) :
       pack_choice[i] = &ComputePropertyGrid::pack_yc;
       index[i] = 9;
     } else if (strcmp(arg[iarg],"zc") == 0) {
-      if (domain->dimension == 2) 
-	error->all(FLERR,
+      if (domain->dimension == 2)
+        error->all(FLERR,
                    "Invalid compute property/grid field for 2d simulation");
       pack_choice[i] = &ComputePropertyGrid::pack_zc;
       index[i] = 10;
@@ -297,7 +297,7 @@ void ComputePropertyGrid::pack_xc(int n)
   Grid::ChildInfo *cinfo = grid->cinfo;
 
   for (int i = 0; i < nglocal; i++) {
-    if (cinfo[i].mask & groupbit) 
+    if (cinfo[i].mask & groupbit)
       buf[n] = 0.5 * (cells[i].lo[0] + cells[i].hi[0]);
     else buf[n] = 0.0;
     n += nvalues;
@@ -312,7 +312,7 @@ void ComputePropertyGrid::pack_yc(int n)
   Grid::ChildInfo *cinfo = grid->cinfo;
 
   for (int i = 0; i < nglocal; i++) {
-    if (cinfo[i].mask & groupbit) 
+    if (cinfo[i].mask & groupbit)
       buf[n] = 0.5 * (cells[i].lo[1] + cells[i].hi[1]);
     else buf[n] = 0.0;
     n += nvalues;
@@ -327,7 +327,7 @@ void ComputePropertyGrid::pack_zc(int n)
   Grid::ChildInfo *cinfo = grid->cinfo;
 
   for (int i = 0; i < nglocal; i++) {
-    if (cinfo[i].mask & groupbit) 
+    if (cinfo[i].mask & groupbit)
       buf[n] = 0.5 * (cells[i].lo[2] + cells[i].hi[2]);
     else buf[n] = 0.0;
     n += nvalues;

@@ -1,12 +1,12 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
    http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -14,6 +14,8 @@
 
 #include "string.h"
 #include "compute_surf.h"
+#include "surf_react.h"
+#include "style_surf_react.h"
 #include "particle.h"
 #include "mixture.h"
 #include "surf.h"
@@ -27,8 +29,8 @@
 
 using namespace SPARTA_NS;
 
-enum{NUM,NUMWT,MFLUX,FX,FY,FZ,PRESS,XPRESS,YPRESS,ZPRESS,
-     XSHEAR,YSHEAR,ZSHEAR,KE,EROT,EVIB,ETOT};
+enum{NUM,NUMWT,NFLUX,NFLUXIN,MFLUX,MFLUXIN,FX,FY,FZ,PRESS,XPRESS,YPRESS,ZPRESS,
+     XSHEAR,YSHEAR,ZSHEAR,KE,EROT,EVIB,ECHEM,ETOT};
 
 #define DELTA 4096
 
@@ -50,12 +52,17 @@ ComputeSurf::ComputeSurf(SPARTA *sparta, int narg, char **arg) :
   nvalue = narg - 4;
   which = new int[nvalue];
 
+  // process input values
+
   nvalue = 0;
   int iarg = 4;
   while (iarg < narg) {
     if (strcmp(arg[iarg],"n") == 0) which[nvalue++] = NUM;
     else if (strcmp(arg[iarg],"nwt") == 0) which[nvalue++] = NUMWT;
+    else if (strcmp(arg[iarg],"nflux") == 0) which[nvalue++] = NFLUX;
+    else if (strcmp(arg[iarg],"nflux_incident") == 0) which[nvalue++] = NFLUXIN;
     else if (strcmp(arg[iarg],"mflux") == 0) which[nvalue++] = MFLUX;
+    else if (strcmp(arg[iarg],"mflux_incident") == 0) which[nvalue++] = MFLUXIN;
     else if (strcmp(arg[iarg],"fx") == 0) which[nvalue++] = FX;
     else if (strcmp(arg[iarg],"fy") == 0) which[nvalue++] = FY;
     else if (strcmp(arg[iarg],"fz") == 0) which[nvalue++] = FZ;
@@ -69,10 +76,28 @@ ComputeSurf::ComputeSurf(SPARTA *sparta, int narg, char **arg) :
     else if (strcmp(arg[iarg],"ke") == 0) which[nvalue++] = KE;
     else if (strcmp(arg[iarg],"erot") == 0) which[nvalue++] = EROT;
     else if (strcmp(arg[iarg],"evib") == 0) which[nvalue++] = EVIB;
+    else if (strcmp(arg[iarg],"echem") == 0) which[nvalue++] = ECHEM;
     else if (strcmp(arg[iarg],"etot") == 0) which[nvalue++] = ETOT;
-    else error->all(FLERR,"Illegal compute surf command");
+    else break;
     iarg++;
   }
+
+  // process optional keywords
+
+  normarea = 1;
+
+  while (iarg < narg) {
+    if (strcmp(arg[iarg],"norm") == 0) {
+      if (iarg+2 > narg)
+        error->all(FLERR,"Invalid compute surf optional keyword");
+      if (strcmp(arg[iarg+1],"flow") == 0) normarea = 0;
+      else if (strcmp(arg[iarg+1],"flux") == 0) normarea = 1;
+      else error->all(FLERR,"Invalid compute surf optional keyword");
+      iarg += 2;
+    } else error->all(FLERR,"Invalid compute surf value or optional keyword");
+  }
+
+  // setup
 
   ntotal = ngroup*nvalue;
 
@@ -116,7 +141,7 @@ void ComputeSurf::init()
 {
   if (!surf->exist)
     error->all(FLERR,"Cannot use compute surf when surfs do not exist");
-  if (surf->implicit) 
+  if (surf->implicit)
     error->all(FLERR,"Cannot use compute surf with implicit surfs");
 
   if (ngroup != particle->mixture[imix]->ngroup)
@@ -156,6 +181,8 @@ void ComputeSurf::init_normflux()
   nfactor_inverse = 1.0/nfactor;
 
   // normflux for all surface elements, based on area and timestep size
+  // if normarea = 0, area is not included in flux
+  //   mass/eng fluxes (mass/area/time) becomes mass/eng flows (mass/time)
   // nsurf = all explicit surfs in this procs grid cells
   // store inverse, so can multipy by scale factor when tally
   // store for all surf elements, b/c don't know which ones I need to normalize
@@ -168,7 +195,8 @@ void ComputeSurf::init_normflux()
   double tmp;
 
   for (int i = 0; i < nsurf; i++) {
-    if (dim == 3) normflux[i] = surf->tri_size(i,tmp);
+    if (!normarea) normflux[i] = 1.0;
+    else if (dim == 3) normflux[i] = surf->tri_size(i,tmp);
     else if (axisymmetric) normflux[i] = surf->axi_line_size(i);
     else normflux[i] = surf->line_size(i);
     normflux[i] *= nfactor;
@@ -213,7 +241,7 @@ void ComputeSurf::clear()
 ------------------------------------------------------------------------- */
 
 void ComputeSurf::surf_tally(int isurf, int icell, int reaction,
-                             Particle::OnePart *iorig, 
+                             Particle::OnePart *iorig,
                              Particle::OnePart *ip, Particle::OnePart *jp)
 {
   // skip if isurf not in surface group
@@ -234,17 +262,22 @@ void ComputeSurf::surf_tally(int isurf, int icell, int reaction,
   // if 1st particle hitting isurf, add surf ID to hash
   // grow tally list if needed
 
-  int itally,transparent;
+  int itally,transparent,isr;
   double *vec;
 
   surfint surfID;
   if (dim == 2) {
     surfID = lines[isurf].id;
     transparent = lines[isurf].transparent;
+    isr = lines[isurf].isr;
   } else {
     surfID = tris[isurf].id;
     transparent = tris[isurf].transparent;
+    isr = tris[isurf].isr;
   }
+
+  double r_coeff;
+  SurfReact *sr;
 
   if (hash->find(surfID) != hash->end()) itally = (*hash)[surfID];
   else {
@@ -297,12 +330,29 @@ void ComputeSurf::surf_tally(int isurf, int icell, int reaction,
     case NUMWT:
       vec[k++] += weight;
       break;
-    case MFLUX:
-      vec[k++] += origmass;
+    case NFLUX:
+      vec[k] += weight * fluxscale;
       if (!transparent) {
-        if (ip) vec[k++] -= imass;
-        if (jp) vec[k++] -= jmass;
+        if (ip) vec[k] -= weight * fluxscale;
+        if (jp) vec[k] -= weight * fluxscale;
       }
+      k++;
+      break;
+    case NFLUXIN:
+      vec[k] += weight * fluxscale;
+      k++;
+      break;
+    case MFLUX:
+      vec[k] += origmass * fluxscale;
+      if (!transparent) {
+        if (ip) vec[k] -= imass * fluxscale;
+        if (jp) vec[k] -= jmass * fluxscale;
+      }
+      k++;
+      break;
+    case MFLUXIN:
+      vec[k] += origmass * fluxscale;
+      k++;
       break;
     case FX:
       if (!fflag) {
@@ -431,22 +481,35 @@ void ComputeSurf::surf_tally(int isurf, int icell, int reaction,
       else
         vec[k++] -= weight * (ievib + jevib - iorig->evib) * fluxscale;
       break;
+    case ECHEM:
+      if (reaction && !transparent) {
+        sr = surf->sr[isr];
+        r_coeff = sr->reaction_coeff(reaction-1);
+        vec[k++] += weight * r_coeff * fluxscale;
+      }
+      break;
     case ETOT:
       vsqpre = origmass * MathExtra::lensq3(vorig);
       otherpre = iorig->erot + iorig->evib;
       if (ip) {
-	ivsqpost = imass * MathExtra::lensq3(ip->v);
-	iother = ip->erot + ip->evib;
+        ivsqpost = imass * MathExtra::lensq3(ip->v);
+        iother = ip->erot + ip->evib;
       } else ivsqpost = iother = 0.0;
       if (jp) {
-	jvsqpost = jmass * MathExtra::lensq3(jp->v);
-	jother = jp->erot + jp->evib;
+        jvsqpost = jmass * MathExtra::lensq3(jp->v);
+        jother = jp->erot + jp->evib;
       } else jvsqpost = jother = 0.0;
       if (transparent)
         etot = -0.5*mvv2e*vsqpre - weight*otherpre;
-      else
-        etot = 0.5*mvv2e*(ivsqpost + jvsqpost - vsqpre) + 
+      else {
+        etot = 0.5*mvv2e*(ivsqpost + jvsqpost - vsqpre) +
           weight * (iother + jother - otherpre);
+        if (reaction) {
+          sr = surf->sr[isr];
+          r_coeff = sr->reaction_coeff(reaction-1);
+          etot -= weight * r_coeff;
+        }
+      }
       vec[k++] -= etot * fluxscale;
       break;
     }
@@ -483,6 +546,7 @@ void ComputeSurf::post_process_surf()
   }
 
   // zero array_surf
+  // NOTE: is this needed if collate zeroes ?
 
   int i,j;
   for (i = 0; i < nown; i++)
@@ -497,7 +561,7 @@ void ComputeSurf::post_process_surf()
   if (array_surf_tally)
     surf->collate_vector(ntally,tally2surf,
                          &array_surf_tally[0][index-1],ntotal,vector_surf);
-  else 
+  else
     surf->collate_vector(ntally,tally2surf,NULL,ntotal,vector_surf);
   */
 }

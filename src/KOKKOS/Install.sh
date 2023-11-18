@@ -53,6 +53,8 @@ action compute_count_kokkos.cpp
 action compute_count_kokkos.h
 action compute_distsurf_grid_kokkos.cpp
 action compute_distsurf_grid_kokkos.h
+action compute_dt_grid_kokkos.cpp
+action compute_dt_grid_kokkos.h
 action compute_eflux_grid_kokkos.cpp
 action compute_eflux_grid_kokkos.h
 action compute_fft_grid_kokkos.cpp compute_fft_grid.cpp
@@ -75,6 +77,8 @@ action compute_temp_kokkos.cpp
 action compute_temp_kokkos.h
 action compute_thermal_grid_kokkos.cpp
 action compute_thermal_grid_kokkos.h
+action compute_tvib_grid_kokkos.cpp
+action compute_tvib_grid_kokkos.h
 action comm_kokkos.cpp
 action comm_kokkos.h
 action domain_kokkos.cpp
@@ -84,6 +88,8 @@ action fft3d_kokkos.cpp fft3d.cpp
 action fft3d_kokkos.h fft3d.h
 action fix_adapt_kokkos.cpp
 action fix_adapt_kokkos.h
+action fix_ambipolar_kokkos.cpp
+action fix_ambipolar_kokkos.h
 action fix_ave_grid_kokkos.cpp
 action fix_ave_grid_kokkos.h
 action fix_balance_kokkos.cpp
@@ -92,8 +98,16 @@ action fix_ave_histo_kokkos.cpp
 action fix_ave_histo_kokkos.h
 action fix_ave_histo_weight_kokkos.cpp
 action fix_ave_histo_weight_kokkos.h
+action fix_dt_reset_kokkos.cpp
+action fix_dt_reset_kokkos.h
+action fix_surf_temp_kokkos.cpp
+action fix_surf_temp_kokkos.h
 action fix_move_surf_kokkos.cpp
 action fix_move_surf_kokkos.h
+action fix_temp_rescale_kokkos.cpp
+action fix_temp_rescale_kokkos.h
+action fix_vibmode_kokkos.cpp
+action fix_vibmode_kokkos.h
 action geometry_kokkos.h
 action grid_id_kokkos.cpp
 action grid_kokkos.cpp
@@ -134,6 +148,10 @@ action surf_collide_vanish_kokkos.cpp
 action surf_collide_vanish_kokkos.h
 action surf_kokkos.cpp
 action surf_kokkos.h
+action surf_react_global_kokkos.cpp
+action surf_react_global_kokkos.h
+action surf_react_prob_kokkos.cpp
+action surf_react_prob_kokkos.h
 action update_kokkos.cpp
 action update_kokkos.h
 action kokkos_scan.cpp

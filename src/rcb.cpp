@@ -1,12 +1,12 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
    http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -172,9 +172,9 @@ void RCB::compute(int n, double **x, double *wt, char *eligible, int flip)
   for (i = 0; i < ndot; i++) {
     for (j = 0; j < 3; j++) {
       if (dots[i].x[j] < boxtmp.lo[j])
-	boxtmp.lo[j] = dots[i].x[j];
+        boxtmp.lo[j] = dots[i].x[j];
       if (dots[i].x[j] > boxtmp.hi[j])
-	boxtmp.hi[j] = dots[i].x[j];
+        boxtmp.hi[j] = dots[i].x[j];
     }
   }
 
@@ -217,7 +217,7 @@ void RCB::compute(int n, double **x, double *wt, char *eligible, int flip)
       procpartner = me + (procmid - proclower);
     else
       procpartner = me - (procmid - proclower);
-    
+
     int readnumber = 1;
     if (procpartner > procupper) {
       readnumber = 0;
@@ -227,7 +227,7 @@ void RCB::compute(int n, double **x, double *wt, char *eligible, int flip)
       readnumber = 2;
       procpartner2 = procpartner + 1;
     }
-    
+
     // wttot = summed weight of entire partition
     // search tolerance = largest single weight (plus epsilon
     // targetlo = desired weight in lower half of partition
@@ -252,13 +252,13 @@ void RCB::compute(int n, double **x, double *wt, char *eligible, int flip)
     if (xeligible) dim = 0;
     else if (yeligible) dim = 1;
     else if (zeligible) dim = 2;
-    if (yeligible && dim == 0 && 
+    if (yeligible && dim == 0 &&
         rcbbox.hi[1] - rcbbox.lo[1] > rcbbox.hi[0] - rcbbox.lo[0]) dim = 1;
-    if (zeligible && dim == 0 && 
+    if (zeligible && dim == 0 &&
         rcbbox.hi[2] - rcbbox.lo[2] > rcbbox.hi[0] - rcbbox.lo[0]) dim = 2;
-    if (zeligible && dim == 1 && 
+    if (zeligible && dim == 1 &&
         rcbbox.hi[2] - rcbbox.lo[2] > rcbbox.hi[1] - rcbbox.lo[1]) dim = 2;
-    
+
     // create active list and mark array for dots
     // initialize active list to all dots
 
@@ -295,22 +295,22 @@ void RCB::compute(int n, double **x, double *wt, char *eligible, int flip)
 
       // choose bisector value
       // use old value on 1st iteration if old cut dimension is the same
-      // on 2nd option: could push valuehalf towards geometric center 
+      // on 2nd option: could push valuehalf towards geometric center
       //   with "1.0-factor" to force overshoot
 
       if (first_iteration && reuse && dim == tree[procmid].dim) {
-	counters[5]++;
-	valuehalf = tree[procmid].cut;
-	if (valuehalf < valuemin || valuehalf > valuemax)
-	  valuehalf = 0.5 * (valuemin + valuemax);	  
+        counters[5]++;
+        valuehalf = tree[procmid].cut;
+        if (valuehalf < valuemin || valuehalf > valuemax)
+          valuehalf = 0.5 * (valuemin + valuemax);
       } else if (wt)
-	valuehalf = valuemin + (targetlo - wtlo) /
-	  (wttot - wtlo - wthi) * (valuemax - valuemin);
+        valuehalf = valuemin + (targetlo - wtlo) /
+          (wttot - wtlo - wthi) * (valuemax - valuemin);
       else
-	valuehalf = 0.5 * (valuemin + valuemax);
+        valuehalf = 0.5 * (valuemin + valuemax);
 
       first_iteration = 0;
-      
+
       // initialize local median data structure
 
       medme.totallo = medme.totalhi = 0.0;
@@ -325,33 +325,33 @@ void RCB::compute(int n, double **x, double *wt, char *eligible, int flip)
       // save indices of closest dots on either side
 
       for (j = 0; j < nlist; j++) {
-	i = dotlist[j];
-	if (dots[i].x[dim] <= valuehalf) {            // in lower part
-	  medme.totallo += dots[i].wt;
-	  dotmark[i] = 0;
-	  if (dots[i].x[dim] > medme.valuelo) {       // my closest dot
-	    medme.valuelo = dots[i].x[dim];
-	    medme.wtlo = dots[i].wt;
-	    medme.countlo = 1;
-	    indexlo = i;
-	  } else if (dots[i].x[dim] == medme.valuelo) {   // tied for closest
-	    medme.wtlo += dots[i].wt;
-	    medme.countlo++;
-	  }
-	}
-	else {                                        // in upper part
-	  medme.totalhi += dots[i].wt;
-	  dotmark[i] = 1;
-	  if (dots[i].x[dim] < medme.valuehi) {       // my closest dot
-	    medme.valuehi = dots[i].x[dim];
-	    medme.wthi = dots[i].wt;
-	    medme.counthi = 1;
-	    indexhi = i;
-	  } else if (dots[i].x[dim] == medme.valuehi) {   // tied for closest
-	    medme.wthi += dots[i].wt;
-	    medme.counthi++;
-	  }
-	}
+        i = dotlist[j];
+        if (dots[i].x[dim] <= valuehalf) {            // in lower part
+          medme.totallo += dots[i].wt;
+          dotmark[i] = 0;
+          if (dots[i].x[dim] > medme.valuelo) {       // my closest dot
+            medme.valuelo = dots[i].x[dim];
+            medme.wtlo = dots[i].wt;
+            medme.countlo = 1;
+            indexlo = i;
+          } else if (dots[i].x[dim] == medme.valuelo) {   // tied for closest
+            medme.wtlo += dots[i].wt;
+            medme.countlo++;
+          }
+        }
+        else {                                        // in upper part
+          medme.totalhi += dots[i].wt;
+          dotmark[i] = 1;
+          if (dots[i].x[dim] < medme.valuehi) {       // my closest dot
+            medme.valuehi = dots[i].x[dim];
+            medme.wthi = dots[i].wt;
+            medme.counthi = 1;
+            indexhi = i;
+          } else if (dots[i].x[dim] == medme.valuehi) {   // tied for closest
+            medme.wthi += dots[i].wt;
+            medme.counthi++;
+          }
+        }
       }
 
       // combine median data struct across current subset of procs
@@ -364,99 +364,99 @@ void RCB::compute(int n, double **x, double *wt, char *eligible, int flip)
 
       if (wtlo + med.totallo < targetlo) {    // lower half TOO SMALL
 
-	wtlo += med.totallo;
-	valuehalf = med.valuehi;
+        wtlo += med.totallo;
+        valuehalf = med.valuehi;
 
-	if (med.counthi == 1) {                  // only one dot to move
-	  if (wtlo + med.wthi < targetlo) {  // move it, keep iterating
-	    if (me == med.prochi) dotmark[indexhi] = 0;
-	  }
-	  else {                                 // only move if beneficial
-	    if (wtlo + med.wthi - targetlo < targetlo - wtlo)
-	      if (me == med.prochi) dotmark[indexhi] = 0;
-	    break;                               // all done
-	  }
-	}
-	else {                                   // multiple dots to move
-	  breakflag = 0;
-	  wtok = 0.0;
-	  if (medme.valuehi == med.valuehi) wtok = medme.wthi;   
-	  if (wtlo + med.wthi >= targetlo) {                // all done
-	    MPI_Scan(&wtok,&wtupto,1,MPI_DOUBLE,MPI_SUM,comm);
-	    wtmax = targetlo - wtlo;
-	    if (wtupto > wtmax) wtok = wtok - (wtupto - wtmax);
-	    breakflag = 1;
-	  }                                      // wtok = most I can move
-	  for (j = 0, wtsum = 0.0; j < nlist && wtsum < wtok; j++) {
-	    i = dotlist[j];
-	    if (dots[i].x[dim] == med.valuehi) { // only move if better
-	      if (wtsum + dots[i].wt - wtok < wtok - wtsum)
-		dotmark[i] = 0;
-	      wtsum += dots[i].wt;
-	    }
-	  }
-	  if (breakflag) break;                   // done if moved enough
-	}
+        if (med.counthi == 1) {                  // only one dot to move
+          if (wtlo + med.wthi < targetlo) {  // move it, keep iterating
+            if (me == med.prochi) dotmark[indexhi] = 0;
+          }
+          else {                                 // only move if beneficial
+            if (wtlo + med.wthi - targetlo < targetlo - wtlo)
+              if (me == med.prochi) dotmark[indexhi] = 0;
+            break;                               // all done
+          }
+        }
+        else {                                   // multiple dots to move
+          breakflag = 0;
+          wtok = 0.0;
+          if (medme.valuehi == med.valuehi) wtok = medme.wthi;
+          if (wtlo + med.wthi >= targetlo) {                // all done
+            MPI_Scan(&wtok,&wtupto,1,MPI_DOUBLE,MPI_SUM,comm);
+            wtmax = targetlo - wtlo;
+            if (wtupto > wtmax) wtok = wtok - (wtupto - wtmax);
+            breakflag = 1;
+          }                                      // wtok = most I can move
+          for (j = 0, wtsum = 0.0; j < nlist && wtsum < wtok; j++) {
+            i = dotlist[j];
+            if (dots[i].x[dim] == med.valuehi) { // only move if better
+              if (wtsum + dots[i].wt - wtok < wtok - wtsum)
+                dotmark[i] = 0;
+              wtsum += dots[i].wt;
+            }
+          }
+          if (breakflag) break;                   // done if moved enough
+        }
 
-	wtlo += med.wthi;
-	if (targetlo-wtlo <= tolerance) break;  // close enough
+        wtlo += med.wthi;
+        if (targetlo-wtlo <= tolerance) break;  // close enough
 
-	valuemin = med.valuehi;                   // iterate again
-	markactive = 1;
+        valuemin = med.valuehi;                   // iterate again
+        markactive = 1;
       }
 
       else if (wthi + med.totalhi < targethi) {  // upper half TOO SMALL
 
-	wthi += med.totalhi;
-	valuehalf = med.valuelo;
+        wthi += med.totalhi;
+        valuehalf = med.valuelo;
 
-	if (med.countlo == 1) {                  // only one dot to move
-	  if (wthi + med.wtlo < targethi) {  // move it, keep iterating
-	    if (me == med.proclo) dotmark[indexlo] = 1;
-	  }
-	  else {                                 // only move if beneficial
-	    if (wthi + med.wtlo - targethi < targethi - wthi)
-	      if (me == med.proclo) dotmark[indexlo] = 1;
-	    break;                               // all done
-	  }
-	}
-	else {                                   // multiple dots to move
-	  breakflag = 0;
-	  wtok = 0.0;
-	  if (medme.valuelo == med.valuelo) wtok = medme.wtlo;   
-	  if (wthi + med.wtlo >= targethi) {                // all done
-	    MPI_Scan(&wtok,&wtupto,1,MPI_DOUBLE,MPI_SUM,comm);
-	    wtmax = targethi - wthi;
-	    if (wtupto > wtmax) wtok = wtok - (wtupto - wtmax);
-	    breakflag = 1;
-	  }                                      // wtok = most I can move
-	  for (j = 0, wtsum = 0.0; j < nlist && wtsum < wtok; j++) {
-	    i = dotlist[j];
-	    if (dots[i].x[dim] == med.valuelo) { // only move if better
-	      if (wtsum + dots[i].wt - wtok < wtok - wtsum) 
-		dotmark[i] = 1;
-	      wtsum += dots[i].wt;
-	    }
-	  }
-	  if (breakflag) break;                   // done if moved enough
-	}
+        if (med.countlo == 1) {                  // only one dot to move
+          if (wthi + med.wtlo < targethi) {  // move it, keep iterating
+            if (me == med.proclo) dotmark[indexlo] = 1;
+          }
+          else {                                 // only move if beneficial
+            if (wthi + med.wtlo - targethi < targethi - wthi)
+              if (me == med.proclo) dotmark[indexlo] = 1;
+            break;                               // all done
+          }
+        }
+        else {                                   // multiple dots to move
+          breakflag = 0;
+          wtok = 0.0;
+          if (medme.valuelo == med.valuelo) wtok = medme.wtlo;
+          if (wthi + med.wtlo >= targethi) {                // all done
+            MPI_Scan(&wtok,&wtupto,1,MPI_DOUBLE,MPI_SUM,comm);
+            wtmax = targethi - wthi;
+            if (wtupto > wtmax) wtok = wtok - (wtupto - wtmax);
+            breakflag = 1;
+          }                                      // wtok = most I can move
+          for (j = 0, wtsum = 0.0; j < nlist && wtsum < wtok; j++) {
+            i = dotlist[j];
+            if (dots[i].x[dim] == med.valuelo) { // only move if better
+              if (wtsum + dots[i].wt - wtok < wtok - wtsum)
+                dotmark[i] = 1;
+              wtsum += dots[i].wt;
+            }
+          }
+          if (breakflag) break;                   // done if moved enough
+        }
 
-	wthi += med.wtlo;
-	if (targethi-wthi <= tolerance) break;  // close enough
+        wthi += med.wtlo;
+        if (targethi-wthi <= tolerance) break;  // close enough
 
-	valuemax = med.valuelo;                   // iterate again
-	markactive = 0;
+        valuemax = med.valuelo;                   // iterate again
+        markactive = 0;
       }
 
       else                  // Goldilocks result: both partitions just right
-	break;
+        break;
 
       // shrink the active list
-      
+
       k = 0;
       for (j = 0; j < nlist; j++) {
-	i = dotlist[j];
-	if (dotmark[i] == markactive) dotlist[k++] = i;
+        i = dotlist[j];
+        if (dotmark[i] == markactive) dotlist[k++] = i;
       }
       nlist = k;
     }
@@ -482,7 +482,7 @@ void RCB::compute(int n, double **x, double *wt, char *eligible, int flip)
       if (dotmark[i] == markactive) outgoing++;
       else if (i < nkeep) keep++;
     nkeep = keep;
-    
+
     // alert partner how many dots I'll send, read how many I'll recv
 
     MPI_Send(&outgoing,1,MPI_INT,procpartner,0,world);
@@ -490,8 +490,8 @@ void RCB::compute(int n, double **x, double *wt, char *eligible, int flip)
     if (readnumber) {
       MPI_Recv(&incoming,1,MPI_INT,procpartner,0,world,&status);
       if (readnumber == 2) {
-	MPI_Recv(&incoming2,1,MPI_INT,procpartner2,0,world,&status);
-	incoming += incoming2;
+        MPI_Recv(&incoming2,1,MPI_INT,procpartner2,0,world,&status);
+        incoming += incoming2;
       }
     }
 
@@ -508,7 +508,7 @@ void RCB::compute(int n, double **x, double *wt, char *eligible, int flip)
     counters[2] += incoming;
     if (ndotnew > counters[3]) counters[3] = ndotnew;
     if (maxdot > counters[4]) counters[4] = maxdot;
-    
+
     // malloc comm send buffer
 
     if (outgoing > maxbuf) {
@@ -519,7 +519,7 @@ void RCB::compute(int n, double **x, double *wt, char *eligible, int flip)
 
     // fill buffer with dots that are marked for sending
     // pack down the unmarked ones
-    
+
     keep = outgoing = 0;
     for (i = 0; i < ndot; i++) {
       if (dotmark[i] == markactive)
@@ -534,14 +534,14 @@ void RCB::compute(int n, double **x, double *wt, char *eligible, int flip)
       MPI_Irecv(&dots[keep],incoming*sizeof(Dot),MPI_CHAR,
                 procpartner,1,world,&request);
       if (readnumber == 2) {
-	keep += incoming - incoming2;
-	MPI_Irecv(&dots[keep],incoming2*sizeof(Dot),MPI_CHAR,
+        keep += incoming - incoming2;
+        MPI_Irecv(&dots[keep],incoming2*sizeof(Dot),MPI_CHAR,
                   procpartner2,1,world,&request2);
       }
     }
-    
+
     // handshake before sending dots to insure recvs have been posted
-    
+
     if (readnumber > 0) {
       MPI_Send(NULL,0,MPI_INT,procpartner,0,world);
       if (readnumber == 2) MPI_Send(NULL,0,MPI_INT,procpartner2,0,world);
@@ -551,7 +551,7 @@ void RCB::compute(int n, double **x, double *wt, char *eligible, int flip)
     // send dots to partner
 
     MPI_Rsend(buf,outgoing*sizeof(Dot),MPI_CHAR,procpartner,1,world);
-    
+
     // wait until all dots are received
 
     if (readnumber > 0) {
@@ -636,7 +636,7 @@ void box_merge(void *in, void *inout, int *, MPI_Datatype *)
                wtlo, wthi       = total wt of dot(s) at that position
                countlo, counthi = total # of dot(s) nearest to cut
                proclo, prochi   = one unique proc who owns a nearest dot
-	                          all procs must get same proclo,prochi
+                                  all procs must get same proclo,prochi
 ------------------------------------------------------------------------- */
 
 void median_merge(void *in, void *inout, int *, MPI_Datatype *)
@@ -644,7 +644,7 @@ void median_merge(void *in, void *inout, int *, MPI_Datatype *)
 {
   RCB::Median *med1 = (RCB::Median *) in;
   RCB::Median *med2 = (RCB::Median *) inout;
-  
+
   med2->totallo += med1->totallo;
   if (med1->valuelo > med2->valuelo) {
     med2->valuelo = med1->valuelo;
@@ -687,7 +687,7 @@ void RCB::invert()
   int *proclist;
   memory->create(proclist,nsend,"RCB:proclist");
 
-  Invert *sinvert = 
+  Invert *sinvert =
     (Invert *) memory->smalloc(nsend*sizeof(Invert),"RCB:sinvert");
 
   int m = 0;
@@ -698,12 +698,12 @@ void RCB::invert()
     sinvert[m].sindex = i;
     m++;
   }
-  
+
   // perform inversion via irregular comm
   // nrecv = # of my dots to send to other procs
 
   int nrecv = irregular->create_data_uniform(nsend,proclist,comm->commsortflag);
-  Invert *rinvert = 
+  Invert *rinvert =
     (Invert *) memory->smalloc(nrecv*sizeof(Invert),"RCB:rinvert");
   irregular->exchange_uniform((char *) sinvert,sizeof(Invert),
                               (char *) rinvert);
@@ -750,11 +750,11 @@ void RCB::check()
   MPI_Allreduce(&ndotorig,&total1,1,MPI_INT,MPI_SUM,world);
   MPI_Allreduce(&ndot,&total2,1,MPI_INT,MPI_SUM,world);
   if (total1 != total2) {
-    if (me == 0) 
+    if (me == 0)
       printf("ERROR: Points before RCB = %d, Points after RCB = %d\n",
-	     total1,total2);
+             total1,total2);
   }
-  
+
   // check that result is load-balanced within log2(P)*max-wt
 
   weight = wtone = 0.0;
@@ -774,25 +774,25 @@ void RCB::check()
   tolerance = tolerance * i * (1.0 + TINY);
 
   if (wtmax - wtmin > tolerance) {
-    if (me == 0) 
+    if (me == 0)
       printf("ERROR: Load-imbalance > tolerance of %g\n",tolerance);
     MPI_Barrier(world);
     if (weight == wtmin) printf("  Proc %d has weight = %g\n",me,weight);
     if (weight == wtmax) printf("  Proc %d has weight = %g\n",me,weight);
   }
-  
+
   MPI_Barrier(world);
-  
+
   // check that final set of points is inside RCB box of each proc
-  
+
   iflag = 0;
   for (i = 0; i < ndot; i++) {
     if (dots[i].x[0] < rcbbox.lo[0] || dots[i].x[0] > rcbbox.hi[0] ||
-	dots[i].x[1] < rcbbox.lo[1] || dots[i].x[1] > rcbbox.hi[1] ||
-	dots[i].x[2] < rcbbox.lo[2] || dots[i].x[2] > rcbbox.hi[2])
+        dots[i].x[1] < rcbbox.lo[1] || dots[i].x[1] > rcbbox.hi[1] ||
+        dots[i].x[2] < rcbbox.lo[2] || dots[i].x[2] > rcbbox.hi[2])
       iflag++;
   }
-  if (iflag > 0) 
+  if (iflag > 0)
     printf("ERROR: %d points are out-of-box on proc %d\n",iflag,me);
 }
 
@@ -808,7 +808,7 @@ void RCB::stats(int flag)
   if (me == 0) printf("RCB Statistics:\n");
 
   // distribution info
-  
+
   for (i = 0, weight = 0.0; i < ndot; i++) weight += dots[i].wt;
   MPI_Allreduce(&weight,&wttot,1,MPI_DOUBLE,MPI_SUM,world);
   MPI_Allreduce(&weight,&wtmin,1,MPI_DOUBLE,MPI_MIN,world);
@@ -817,17 +817,17 @@ void RCB::stats(int flag)
   if (me == 0) {
     printf(" Total weight of dots = %g\n",wttot);
     printf(" Weight on each proc: ave = %g, max = %g, min = %g\n",
-	   wttot/nprocs,wtmax,wtmin);
+           wttot/nprocs,wtmax,wtmin);
   }
   if (flag) {
     MPI_Barrier(world);
     printf("    Proc %d has weight = %g\n",me,weight);
   }
 
-  for (i = 0, weight = 0.0; i < ndot; i++) 
+  for (i = 0, weight = 0.0; i < ndot; i++)
     if (dots[i].wt > weight) weight = dots[i].wt;
   MPI_Allreduce(&weight,&wtmax,1,MPI_DOUBLE,MPI_MAX,world);
-  
+
   if (me == 0) printf(" Maximum weight of single dot = %g\n",wtmax);
   if (flag) {
     MPI_Barrier(world);
@@ -840,7 +840,7 @@ void RCB::stats(int flag)
   MPI_Allreduce(&counters[0],&min,1,MPI_INT,MPI_MIN,world);
   MPI_Allreduce(&counters[0],&max,1,MPI_INT,MPI_MAX,world);
   ave = ((double) sum)/nprocs;
-  if (me == 0) 
+  if (me == 0)
     printf(" Median iter: ave = %g, min = %d, max = %d\n",ave,min,max);
   if (flag) {
     MPI_Barrier(world);
@@ -851,7 +851,7 @@ void RCB::stats(int flag)
   MPI_Allreduce(&counters[1],&min,1,MPI_INT,MPI_MIN,world);
   MPI_Allreduce(&counters[1],&max,1,MPI_INT,MPI_MAX,world);
   ave = ((double) sum)/nprocs;
-  if (me == 0) 
+  if (me == 0)
     printf(" Send count: ave = %g, min = %d, max = %d\n",ave,min,max);
   if (flag) {
     MPI_Barrier(world);
@@ -862,7 +862,7 @@ void RCB::stats(int flag)
   MPI_Allreduce(&counters[2],&min,1,MPI_INT,MPI_MIN,world);
   MPI_Allreduce(&counters[2],&max,1,MPI_INT,MPI_MAX,world);
   ave = ((double) sum)/nprocs;
-  if (me == 0) 
+  if (me == 0)
     printf(" Recv count: ave = %g, min = %d, max = %d\n",ave,min,max);
   if (flag) {
     MPI_Barrier(world);
@@ -873,7 +873,7 @@ void RCB::stats(int flag)
   MPI_Allreduce(&counters[3],&min,1,MPI_INT,MPI_MIN,world);
   MPI_Allreduce(&counters[3],&max,1,MPI_INT,MPI_MAX,world);
   ave = ((double) sum)/nprocs;
-  if (me == 0) 
+  if (me == 0)
     printf(" Max dots: ave = %g, min = %d, max = %d\n",ave,min,max);
   if (flag) {
     MPI_Barrier(world);
@@ -884,7 +884,7 @@ void RCB::stats(int flag)
   MPI_Allreduce(&counters[4],&min,1,MPI_INT,MPI_MIN,world);
   MPI_Allreduce(&counters[4],&max,1,MPI_INT,MPI_MAX,world);
   ave = ((double) sum)/nprocs;
-  if (me == 0) 
+  if (me == 0)
     printf(" Max memory: ave = %g, min = %d, max = %d\n",ave,min,max);
   if (flag) {
     MPI_Barrier(world);
@@ -896,19 +896,19 @@ void RCB::stats(int flag)
     MPI_Allreduce(&counters[5],&min,1,MPI_INT,MPI_MIN,world);
     MPI_Allreduce(&counters[5],&max,1,MPI_INT,MPI_MAX,world);
     ave = ((double) sum)/nprocs;
-    if (me == 0) 
+    if (me == 0)
       printf(" # of Reuse: ave = %g, min = %d, max = %d\n",ave,min,max);
     if (flag) {
       MPI_Barrier(world);
       printf("    Proc %d # of Reuse = %d\n",me,counters[5]);
     }
   }
-  
+
   MPI_Allreduce(&counters[6],&sum,1,MPI_INT,MPI_SUM,world);
   MPI_Allreduce(&counters[6],&min,1,MPI_INT,MPI_MIN,world);
   MPI_Allreduce(&counters[6],&max,1,MPI_INT,MPI_MAX,world);
   ave = ((double) sum)/nprocs;
-  if (me == 0) 
+  if (me == 0)
     printf(" # of OverAlloc: ave = %g, min = %d, max = %d\n",ave,min,max);
   if (flag) {
     MPI_Barrier(world);
@@ -916,7 +916,7 @@ void RCB::stats(int flag)
   }
 
   // RCB boxes for each proc
-  
+
   if (flag) {
     if (me == 0) printf(" RCB sub-domain boxes:\n");
     for (i = 0; i < 3; i++) {

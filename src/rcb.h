@@ -1,12 +1,12 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
    http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -46,15 +46,15 @@ class RCB : protected Pointers {
   void stats(int);
 
   // RCB cut info
-  
+
   struct Median {
     double totallo,totalhi;   // weight in each half of active partition
     double valuelo,valuehi;   // position of dot(s) nearest to cut
     double wtlo,wthi;         // total weight of dot(s) at that position
     int countlo,counthi;      // # of dots at that position
-    int proclo,prochi;	      // unique proc who owns a nearest dot
+    int proclo,prochi;              // unique proc who owns a nearest dot
   };
-  
+
   // bounding box
 
   struct BBox {
@@ -77,10 +77,10 @@ class RCB : protected Pointers {
   // tree of RCB cuts
 
   struct Tree {
-    double cut;        	// position of cut
-    int dim;	        // dimension = 0/1/2 of cut
+    double cut;                // position of cut
+    int dim;                // dimension = 0/1/2 of cut
   };
-  
+
   // inversion message
 
   struct Invert {
@@ -114,13 +114,13 @@ class RCB : protected Pointers {
   BBox rcbbox;      // bounding box of final RCB sub-domain
   Tree *tree;       // tree of RCB cuts, used by reuse()
   int counters[7];  // diagnostic counts
-		    // 0 = # of median iterations
-		    // 1 = # of points sent
-		    // 2 = # of points received
-		    // 3 = most points this proc ever owns
-		    // 4 = most point memory this proc ever allocs
-		    // 5 = # of times a previous cut is re-used
-		    // 6 = # of reallocs of point vector
+                    // 0 = # of median iterations
+                    // 1 = # of points sent
+                    // 2 = # of points received
+                    // 3 = most points this proc ever owns
+                    // 4 = most point memory this proc ever allocs
+                    // 5 = # of times a previous cut is re-used
+                    // 6 = # of reallocs of point vector
 };
 
 }

@@ -1,12 +1,12 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
    http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -23,6 +23,7 @@ ComputeStyle(surf,ComputeSurf)
 
 #include "compute.h"
 #include "surf.h"
+#include "surf_react.h"
 #include "hash3.h"
 
 namespace SPARTA_NS {
@@ -35,7 +36,7 @@ class ComputeSurf : public Compute {
   virtual void init();
   void compute_per_surf();
   virtual void clear();
-  virtual void surf_tally(int, int, int, Particle::OnePart *, 
+  virtual void surf_tally(int, int, int, Particle::OnePart *,
                           Particle::OnePart *, Particle::OnePart *);
   virtual int tallyinfo(surfint *&);
   virtual void post_process_surf();
@@ -45,6 +46,7 @@ class ComputeSurf : public Compute {
  protected:
   int groupbit,imix,nvalue,ngroup,ntotal;
   int maxsurf,combined;
+  int normarea;            // 1 for value/area/time, 0 for value/time
   double nfactor_inverse;
   int *which;
 

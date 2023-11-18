@@ -1,12 +1,12 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
    http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -58,9 +58,9 @@ FixAveTime::FixAveTime(SPARTA *sparta, int narg, char **arg) :
 
   int iarg = 5;
   while (iarg < narg) {
-    if ((strncmp(arg[iarg],"c_",2) == 0) || 
-	(strncmp(arg[iarg],"f_",2) == 0) || 
-	(strncmp(arg[iarg],"v_",2) == 0)) {
+    if ((strncmp(arg[iarg],"c_",2) == 0) ||
+        (strncmp(arg[iarg],"f_",2) == 0) ||
+        (strncmp(arg[iarg],"v_",2) == 0)) {
       nvalues++;
       iarg++;
     } else break;
@@ -132,63 +132,63 @@ FixAveTime::FixAveTime(SPARTA *sparta, int narg, char **arg) :
     if (which[i] == COMPUTE && mode == SCALAR) {
       int icompute = modify->find_compute(ids[i]);
       if (icompute < 0)
-	error->all(FLERR,"Compute ID for fix ave/time does not exist");
+        error->all(FLERR,"Compute ID for fix ave/time does not exist");
       if (argindex[i] == 0 && modify->compute[icompute]->scalar_flag == 0)
-	error->all(FLERR,"Fix ave/time compute does not calculate a scalar");
+        error->all(FLERR,"Fix ave/time compute does not calculate a scalar");
       if (argindex[i] && modify->compute[icompute]->vector_flag == 0)
-	error->all(FLERR,"Fix ave/time compute does not calculate a vector");
+        error->all(FLERR,"Fix ave/time compute does not calculate a vector");
       if (argindex[i] && argindex[i] > modify->compute[icompute]->size_vector)
-	error->all(FLERR,
-		   "Fix ave/time compute vector is accessed out-of-range");
+        error->all(FLERR,
+                   "Fix ave/time compute vector is accessed out-of-range");
 
     } else if (which[i] == COMPUTE && mode == VECTOR) {
       int icompute = modify->find_compute(ids[i]);
       if (icompute < 0)
-	error->all(FLERR,"Compute ID for fix ave/time does not exist");
+        error->all(FLERR,"Compute ID for fix ave/time does not exist");
       if (argindex[i] == 0 && modify->compute[icompute]->vector_flag == 0)
-	error->all(FLERR,"Fix ave/time compute does not calculate a vector");
+        error->all(FLERR,"Fix ave/time compute does not calculate a vector");
       if (argindex[i] && modify->compute[icompute]->array_flag == 0)
-	error->all(FLERR,"Fix ave/time compute does not calculate an array");
-      if (argindex[i] && 
-	  argindex[i] > modify->compute[icompute]->size_array_cols)
-	error->all(FLERR,"Fix ave/time compute array is accessed out-of-range");
+        error->all(FLERR,"Fix ave/time compute does not calculate an array");
+      if (argindex[i] &&
+          argindex[i] > modify->compute[icompute]->size_array_cols)
+        error->all(FLERR,"Fix ave/time compute array is accessed out-of-range");
 
     } else if (which[i] == FIX && mode == SCALAR) {
       int ifix = modify->find_fix(ids[i]);
       if (ifix < 0)
-	error->all(FLERR,"Fix ID for fix ave/time does not exist");
+        error->all(FLERR,"Fix ID for fix ave/time does not exist");
       if (argindex[i] == 0 && modify->fix[ifix]->scalar_flag == 0)
-	error->all(FLERR,"Fix ave/time fix does not calculate a scalar");
+        error->all(FLERR,"Fix ave/time fix does not calculate a scalar");
       if (argindex[i] && modify->fix[ifix]->vector_flag == 0)
-	error->all(FLERR,"Fix ave/time fix does not calculate a vector");
+        error->all(FLERR,"Fix ave/time fix does not calculate a vector");
       if (argindex[i] && argindex[i] > modify->fix[ifix]->size_vector)
-	error->all(FLERR,"Fix ave/time fix vector is accessed out-of-range");
+        error->all(FLERR,"Fix ave/time fix vector is accessed out-of-range");
       if (nevery % modify->fix[ifix]->global_freq)
-	error->all(FLERR,
-		   "Fix for fix ave/time not computed at compatible time");
+        error->all(FLERR,
+                   "Fix for fix ave/time not computed at compatible time");
 
     } else if (which[i] == FIX && mode == VECTOR) {
       int ifix = modify->find_fix(ids[i]);
       if (ifix < 0)
-	error->all(FLERR,"Fix ID for fix ave/time does not exist");
+        error->all(FLERR,"Fix ID for fix ave/time does not exist");
       if (argindex[i] == 0 && modify->fix[ifix]->vector_flag == 0)
-	error->all(FLERR,"Fix ave/time fix does not calculate a vector");
+        error->all(FLERR,"Fix ave/time fix does not calculate a vector");
       if (argindex[i] && modify->fix[ifix]->array_flag == 0)
-	error->all(FLERR,"Fix ave/time fix does not calculate an array");
+        error->all(FLERR,"Fix ave/time fix does not calculate an array");
       if (argindex[i] && argindex[i] > modify->fix[ifix]->size_array_cols)
-	error->all(FLERR,"Fix ave/time fix array is accessed out-of-range");
+        error->all(FLERR,"Fix ave/time fix array is accessed out-of-range");
       if (nevery % modify->fix[ifix]->global_freq)
-	error->all(FLERR,
-		   "Fix for fix ave/time not computed at compatible time");
+        error->all(FLERR,
+                   "Fix for fix ave/time not computed at compatible time");
 
     } else if (which[i] == VARIABLE) {
       int ivariable = input->variable->find(ids[i]);
       if (ivariable < 0)
-	error->all(FLERR,"Variable name for fix ave/time does not exist");
+        error->all(FLERR,"Variable name for fix ave/time does not exist");
       if (input->variable->equal_style(ivariable) == 0)
-	error->all(FLERR,"Fix ave/time variable is not equal-style variable");
+        error->all(FLERR,"Fix ave/time variable is not equal-style variable");
       if (mode == VECTOR)
-	error->all(FLERR,"Fix ave/time cannot use variable with vector mode");
+        error->all(FLERR,"Fix ave/time cannot use variable with vector mode");
     }
   }
 
@@ -200,17 +200,17 @@ FixAveTime::FixAveTime(SPARTA *sparta, int narg, char **arg) :
 
     for (int i = 0; i < nvalues; i++) {
       if (which[i] == COMPUTE) {
-	int icompute = modify->find_compute(ids[i]);
-	if (argindex[i] == 0) length = modify->compute[icompute]->size_vector;
-	else length = modify->compute[icompute]->size_array_rows;
+        int icompute = modify->find_compute(ids[i]);
+        if (argindex[i] == 0) length = modify->compute[icompute]->size_vector;
+        else length = modify->compute[icompute]->size_array_rows;
       } else if (which[i] == FIX) {
-	int ifix = modify->find_fix(ids[i]);
-	if (argindex[i] == 0) length = modify->fix[ifix]->size_vector;
-	else length = modify->fix[ifix]->size_array_rows;
+        int ifix = modify->find_fix(ids[i]);
+        if (argindex[i] == 0) length = modify->fix[ifix]->size_vector;
+        else length = modify->fix[ifix]->size_array_rows;
       }
       if (i == 0) nrows = length;
       else if (length != nrows)
-	error->all(FLERR,"Fix ave/time columns are inconsistent lengths");
+        error->all(FLERR,"Fix ave/time columns are inconsistent lengths");
     }
 
     column = new double[nrows];
@@ -271,7 +271,7 @@ FixAveTime::FixAveTime(SPARTA *sparta, int narg, char **arg) :
   // this fix produces either a global scalar or vector or array
   // SCALAR mode produces either a scalar or vector
   // VECTOR mode produces either a vector or array
-  
+
   if (mode == SCALAR) {
     if (nvalues == 1) scalar_flag = 1;
     else {
@@ -316,12 +316,12 @@ FixAveTime::FixAveTime(SPARTA *sparta, int narg, char **arg) :
 
 FixAveTime::~FixAveTime()
 {
-  memory->destroy(which);
-  memory->destroy(argindex);
-  memory->destroy(value2index);
-  memory->destroy(offcol);
+  delete [] which;
+  delete [] argindex;
+  delete [] value2index;
+  delete [] offcol;
   for (int i = 0; i < nvalues; i++) delete [] ids[i];
-  memory->sfree(ids);
+  delete [] ids;
 
   if (fp && me == 0) fclose(fp);
 
@@ -352,19 +352,19 @@ void FixAveTime::init()
     if (which[i] == COMPUTE) {
       int icompute = modify->find_compute(ids[i]);
       if (icompute < 0)
-	error->all(FLERR,"Compute ID for fix ave/time does not exist");
+        error->all(FLERR,"Compute ID for fix ave/time does not exist");
       value2index[i] = icompute;
 
     } else if (which[i] == FIX) {
       int ifix = modify->find_fix(ids[i]);
-      if (ifix < 0) 
-	error->all(FLERR,"Fix ID for fix ave/time does not exist");
+      if (ifix < 0)
+        error->all(FLERR,"Fix ID for fix ave/time does not exist");
       value2index[i] = ifix;
 
     } else if (which[i] == VARIABLE) {
       int ivariable = input->variable->find(ids[i]);
-      if (ivariable < 0) 
-	error->all(FLERR,"Variable name for fix ave/time does not exist");
+      if (ivariable < 0)
+        error->all(FLERR,"Variable name for fix ave/time does not exist");
       value2index[i] = ivariable;
     }
   }
@@ -411,41 +411,41 @@ void FixAveTime::invoke_scalar(bigint ntimestep)
 
   for (i = 0; i < nvalues; i++) {
     m = value2index[i];
-    
+
     // invoke compute if not previously invoked
-    
+
     if (which[i] == COMPUTE) {
       Compute *compute = modify->compute[m];
 
       if (argindex[i] == 0) {
-	if (!(compute->invoked_flag & INVOKED_SCALAR)) {
-	  compute->compute_scalar();
-	  compute->invoked_flag |= INVOKED_SCALAR;
-	}
-	scalar = compute->scalar;
+        if (!(compute->invoked_flag & INVOKED_SCALAR)) {
+          compute->compute_scalar();
+          compute->invoked_flag |= INVOKED_SCALAR;
+        }
+        scalar = compute->scalar;
       } else {
-	if (!(compute->invoked_flag & INVOKED_VECTOR)) {
-	  compute->compute_vector();
-	  compute->invoked_flag |= INVOKED_VECTOR;
-	}
-	scalar = compute->vector[argindex[i]-1];
+        if (!(compute->invoked_flag & INVOKED_VECTOR)) {
+          compute->compute_vector();
+          compute->invoked_flag |= INVOKED_VECTOR;
+        }
+        scalar = compute->vector[argindex[i]-1];
       }
-      
+
     // access fix fields, guaranteed to be ready
-      
+
     } else if (which[i] == FIX) {
-      if (argindex[i] == 0) 
-	scalar = modify->fix[m]->compute_scalar();
+      if (argindex[i] == 0)
+        scalar = modify->fix[m]->compute_scalar();
       else
-	scalar = modify->fix[m]->compute_vector(argindex[i]-1);
-      
+        scalar = modify->fix[m]->compute_vector(argindex[i]-1);
+
     // evaluate equal-style variable
-      
+
     } else if (which[i] == VARIABLE)
       scalar = input->variable->compute_equal(m);
-    
+
     // add value to vector or just set directly if offcol is set
-    
+
     if (offcol[i]) vector[i] = scalar;
     else vector[i] += scalar;
   }
@@ -478,18 +478,18 @@ void FixAveTime::invoke_scalar(bigint ntimestep)
   if (ave == ONE) {
     for (i = 0; i < nvalues; i++) vector_total[i] = vector[i];
     norm = 1;
-    
+
   } else if (ave == RUNNING) {
     for (i = 0; i < nvalues; i++) vector_total[i] += vector[i];
     norm++;
-    
+
   } else if (ave == WINDOW) {
     for (i = 0; i < nvalues; i++) {
       vector_total[i] += vector[i];
       if (window_limit) vector_total[i] -= vector_list[iwindow][i];
       vector_list[iwindow][i] = vector[i];
     }
-    
+
     iwindow++;
     if (iwindow == nwindow) {
       iwindow = 0;
@@ -498,7 +498,7 @@ void FixAveTime::invoke_scalar(bigint ntimestep)
     if (window_limit) norm = nwindow;
     else norm = iwindow;
   }
-  
+
   // insure any columns with offcol set are effectively set to last value
 
   for (i = 0; i < nvalues; i++)
@@ -525,64 +525,64 @@ void FixAveTime::invoke_vector(bigint ntimestep)
   if (irepeat == 0)
     for (i = 0; i < nrows; i++)
       for (j = 0; j < nvalues; j++) array[i][j] = 0.0;
-  
+
   // accumulate results of computes,fixes,variables to local copy
   // compute/fix/variable may invoke computes so wrap with clear/add
-  
+
   modify->clearstep_compute();
-  
+
   for (j = 0; j < nvalues; j++) {
     m = value2index[j];
-    
+
     // invoke compute if not previously invoked
-    
+
     if (which[j] == COMPUTE) {
       Compute *compute = modify->compute[m];
-      
+
       if (argindex[j] == 0) {
-	if (!(compute->invoked_flag & INVOKED_VECTOR)) {
-	  compute->compute_vector();
-	  compute->invoked_flag |= INVOKED_VECTOR;
-	}
-	double *cvector = compute->vector;
-	for (i = 0; i < nrows; i++)
-	  column[i] = cvector[i];
-	
+        if (!(compute->invoked_flag & INVOKED_VECTOR)) {
+          compute->compute_vector();
+          compute->invoked_flag |= INVOKED_VECTOR;
+        }
+        double *cvector = compute->vector;
+        for (i = 0; i < nrows; i++)
+          column[i] = cvector[i];
+
       } else {
-	if (!(compute->invoked_flag & INVOKED_ARRAY)) {
-	  compute->compute_array();
-	  compute->invoked_flag |= INVOKED_ARRAY;
-	}
-	double **carray = compute->array;
-	int icol = argindex[j]-1;
-	for (i = 0; i < nrows; i++)
-	  column[i] = carray[i][icol];
+        if (!(compute->invoked_flag & INVOKED_ARRAY)) {
+          compute->compute_array();
+          compute->invoked_flag |= INVOKED_ARRAY;
+        }
+        double **carray = compute->array;
+        int icol = argindex[j]-1;
+        for (i = 0; i < nrows; i++)
+          column[i] = carray[i][icol];
       }
-      
+
     // access fix fields, guaranteed to be ready
-      
+
     } else if (which[j] == FIX) {
       Fix *fix = modify->fix[m];
       if (argindex[j] == 0)
-	for (i = 0; i < nrows; i++)
-	  column[i] = fix->compute_vector(i);
+        for (i = 0; i < nrows; i++)
+          column[i] = fix->compute_vector(i);
       else {
-	int icol = argindex[j]-1;
-	for (i = 0; i < nrows; i++)
-	  column[i] = fix->compute_array(i,icol);
+        int icol = argindex[j]-1;
+        for (i = 0; i < nrows; i++)
+          column[i] = fix->compute_array(i,icol);
       }
     }
-    
+
     // add columns of values to array or just set directly if offcol is set
-    
+
     if (offcol[j])
       for (i = 0; i < nrows; i++)
-	array[i][j] = column[i];
+        array[i][j] = column[i];
     else
       for (i = 0; i < nrows; i++)
-	array[i][j] += column[i];
+        array[i][j] += column[i];
   }
-  
+
   // done if irepeat < nrepeat
   // else reset irepeat and nvalid
 
@@ -598,35 +598,35 @@ void FixAveTime::invoke_vector(bigint ntimestep)
   modify->addstep_compute(nvalid);
 
   // average the final result for the Nfreq timestep
-  
+
   double repeat = nrepeat;
 
-  for (m = 0; m < nvalues; m++) 
+  for (m = 0; m < nvalues; m++)
     if (offcol[m] == 0)
       for (i = 0; i < nrows; i++) array[i][m] /= repeat;
-  
+
   // if ave = ONE, only single Nfreq timestep value is needed
   // if ave = RUNNING, combine with all previous Nfreq timestep values
   // if ave = WINDOW, combine with nwindow most recent Nfreq timestep values
-  
+
   if (ave == ONE) {
     for (i = 0; i < nrows; i++)
       for (j = 0; j < nvalues; j++) array_total[i][j] = array[i][j];
     norm = 1;
-    
+
   } else if (ave == RUNNING) {
     for (i = 0; i < nrows; i++)
       for (j = 0; j < nvalues; j++) array_total[i][j] += array[i][j];
     norm++;
-    
+
   } else if (ave == WINDOW) {
     for (i = 0; i < nrows; i++)
       for (j = 0; j < nvalues; j++) {
-	array_total[i][j] += array[i][j];
-	if (window_limit) array_total[i][j] -= array_list[iwindow][i][j];
-	array_list[iwindow][i][j] = array[i][j];
+        array_total[i][j] += array[i][j];
+        if (window_limit) array_total[i][j] -= array_list[iwindow][i][j];
+        array_list[iwindow][i][j] = array[i][j];
       }
-    
+
     iwindow++;
     if (iwindow == nwindow) {
       iwindow = 0;
@@ -635,13 +635,13 @@ void FixAveTime::invoke_vector(bigint ntimestep)
     if (window_limit) norm = nwindow;
     else norm = iwindow;
   }
-  
+
   // insure any columns with offcol set are effectively set to last value
 
   for (i = 0; i < nrows; i++)
     for (j = 0; j < nvalues; j++)
       if (offcol[j]) array_total[i][j] = norm*array[i][j];
-  
+
   // output result to file
 
   if (fp && me == 0) {
@@ -712,12 +712,12 @@ void FixAveTime::options(int iarg, int narg, char **arg)
     if (strcmp(arg[iarg],"file") == 0) {
       if (iarg+2 > narg) error->all(FLERR,"Illegal fix ave/time command");
       if (me == 0) {
-	fp = fopen(arg[iarg+1],"w");
-	if (fp == NULL) {
-	  char str[128];
-	  sprintf(str,"Cannot open fix ave/time file %s",arg[iarg+1]);
-	  error->one(FLERR,str);
-	}
+        fp = fopen(arg[iarg+1],"w");
+        if (fp == NULL) {
+          char str[128];
+          sprintf(str,"Cannot open fix ave/time file %s",arg[iarg+1]);
+          error->one(FLERR,str);
+        }
       }
       iarg += 2;
     } else if (strcmp(arg[iarg],"ave") == 0) {
@@ -727,9 +727,9 @@ void FixAveTime::options(int iarg, int narg, char **arg)
       else if (strcmp(arg[iarg+1],"window") == 0) ave = WINDOW;
       else error->all(FLERR,"Illegal fix ave/time command");
       if (ave == WINDOW) {
-	if (iarg+3 > narg) error->all(FLERR,"Illegal fix ave/time command");
-	nwindow = atoi(arg[iarg+2]);
-	if (nwindow <= 0) error->all(FLERR,"Illegal fix ave/time command");
+        if (iarg+3 > narg) error->all(FLERR,"Illegal fix ave/time command");
+        nwindow = atoi(arg[iarg+2]);
+        if (nwindow <= 0) error->all(FLERR,"Illegal fix ave/time command");
       }
       iarg += 2;
       if (ave == WINDOW) iarg++;

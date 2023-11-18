@@ -1,12 +1,12 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
    http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -37,7 +37,7 @@ class ComputeGrid : public Compute {
   bigint memory_usage();
 
  protected:
-  int groupbit,imix,nvalue,ngroup;
+  int groupbit,imix,nvalue,ngroup,tvib_flag;
 
   int *value;                // keyword for each user requested value
   int *unique;               // unique keywords for tally, len = npergroup
@@ -72,6 +72,11 @@ documentation for the command.  You can use -echo screen as a
 command-line option when running SPARTA to see the offending line.
 
 E: Compute grid mixture ID does not exist
+
+Self-explanatory.
+
+W: Using compute grid tvib with fix vibmode may give incorrect temperature,
+use compute tvib/grid instead
 
 Self-explanatory.
 

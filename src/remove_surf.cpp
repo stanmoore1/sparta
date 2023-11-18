@@ -1,12 +1,12 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
    http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -35,7 +35,7 @@ RemoveSurf::~RemoveSurf() {}
 
 void RemoveSurf::command(int narg, char **arg)
 {
-  if (!surf->exist) 
+  if (!surf->exist)
     error->all(FLERR,"Cannot remove_surf before surf elements are defined");
 
   if (surf->distributed)
@@ -86,7 +86,7 @@ void RemoveSurf::command(int narg, char **arg)
     int nglocal = grid->nlocal;
     for (int icell = 0; icell < nglocal; icell++)
       if (cells[icell].nsplit > 1)
-	grid->combine_split_cell_particles(icell,1);
+        grid->combine_split_cell_particles(icell,1);
   }
 
   grid->clear_surf();
@@ -102,7 +102,7 @@ void RemoveSurf::command(int narg, char **arg)
     int nglocal = grid->nlocal;
     for (int icell = 0; icell < nglocal; icell++)
       if (cells[icell].nsplit > 1)
-	grid->assign_split_cell_particles(icell);
+        grid->assign_split_cell_particles(icell);
   }
 
   MPI_Barrier(world);
@@ -159,12 +159,12 @@ void RemoveSurf::remove_2d(int groupbit)
 
   int n = 0;
   for (i = 0; i < nline; i++) {
-    if (!(lines[i].mask & groupbit)) continue;
+    if (lines[i].mask & groupbit) continue;
     if (i != n) memcpy(&lines[n],&lines[i],nbytes);
     n++;
   }
 
-  surf->nsurf = surf->nlocal = nline - n;
+  surf->nsurf = surf->nlocal = n;
 
   // print stats after removal
 
@@ -199,12 +199,12 @@ void RemoveSurf::remove_3d(int groupbit)
 
   int n = 0;
   for (i = 0; i < ntri; i++) {
-    if (!(tris[i].mask & groupbit)) continue;
+    if (tris[i].mask & groupbit) continue;
     if (i != n) memcpy(&tris[n],&tris[i],nbytes);
     n++;
   }
 
-  surf->nsurf = surf->nlocal = ntri - n;
+  surf->nsurf = surf->nlocal = n;
 
   // print stats after removal
 

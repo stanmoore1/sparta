@@ -1,12 +1,12 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
    http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -51,7 +51,7 @@ ComputeLambdaGrid::ComputeLambdaGrid(SPARTA *sparta, int narg, char **arg) :
     int n = strlen(arg[2]);
     id_nrho = new char[n];
     strcpy(id_nrho,&arg[2][2]);
-    
+
     char *ptr = strchr(id_nrho,'[');
     if (ptr) {
       if (id_nrho[strlen(id_nrho)-1] != ']')
@@ -65,36 +65,36 @@ ComputeLambdaGrid::ComputeLambdaGrid(SPARTA *sparta, int narg, char **arg) :
 
     if (nrhowhich == COMPUTE) {
       int n = modify->find_compute(id_nrho);
-      if (n < 0) 
+      if (n < 0)
         error->all(FLERR,"Could not find compute lambda/grid compute ID");
       if (modify->compute[n]->per_grid_flag == 0)
-	error->all(FLERR,"Compute lambda/grid compute does not "
+        error->all(FLERR,"Compute lambda/grid compute does not "
                    "compute per-grid info");
       if (nrhoindex == 0 && modify->compute[n]->size_per_grid_cols > 0)
-	error->all(FLERR,
-		   "Compute lambda/grid compute does not "
+        error->all(FLERR,
+                   "Compute lambda/grid compute does not "
                    "compute per-grid vector");
       if (nrhoindex > 0 && modify->compute[n]->size_per_grid_cols == 0)
-	error->all(FLERR,
-		   "Compute lambda/grid compute does not "
+        error->all(FLERR,
+                   "Compute lambda/grid compute does not "
                    "compute per-grid array");
       if (nrhoindex > 0 && nrhoindex > modify->compute[n]->size_per_grid_cols)
-	error->all(FLERR,"Compute lambda compute vector is "
+        error->all(FLERR,"Compute lambda compute vector is "
                    "accessed out-of-range");
     } else {
       int n = modify->find_fix(id_nrho);
       if (n < 0) error->all(FLERR,"Could not find compute lambda/grid fix ID");
       if (modify->fix[n]->per_grid_flag == 0)
-	error->all(FLERR,"Compute lambda/grid fix does not "
+        error->all(FLERR,"Compute lambda/grid fix does not "
                    "compute per-grid info");
       if (nrhoindex == 0 && modify->fix[n]->size_per_grid_cols > 0)
-	error->all(FLERR,"Compute lambda/grid fix does not "
+        error->all(FLERR,"Compute lambda/grid fix does not "
                    "compute per-grid vector");
       if (nrhoindex > 0 && modify->fix[n]->size_per_grid_cols == 0)
-	error->all(FLERR,"Compute lambda/grid fix does not "
+        error->all(FLERR,"Compute lambda/grid fix does not "
                    "compute per-grid array");
       if (nrhoindex > 0 && nrhoindex > modify->fix[n]->size_per_grid_cols)
-	error->all(FLERR,"Compute lambda/grid fix array is "
+        error->all(FLERR,"Compute lambda/grid fix array is "
                    "accessed out-of-range");
     }
   } else error->all(FLERR,"Illegal compute lambda/grid command");
@@ -103,7 +103,7 @@ ComputeLambdaGrid::ComputeLambdaGrid(SPARTA *sparta, int narg, char **arg) :
     int n = strlen(arg[3]);
     id_temp = new char[n];
     strcpy(id_temp,&arg[3][2]);
-    
+
     char *ptr = strchr(id_temp,'[');
     if (ptr) {
       if (id_temp[strlen(id_temp)-1] != ']')
@@ -117,36 +117,36 @@ ComputeLambdaGrid::ComputeLambdaGrid(SPARTA *sparta, int narg, char **arg) :
 
     if (tempwhich == COMPUTE) {
       int n = modify->find_compute(id_temp);
-      if (n < 0) 
+      if (n < 0)
         error->all(FLERR,"Could not find compute lambda/grid compute ID");
       if (modify->compute[n]->per_grid_flag == 0)
-	error->all(FLERR,"Compute lambda/grid compute does not "
+        error->all(FLERR,"Compute lambda/grid compute does not "
                    "compute per-grid info");
       if (tempindex == 0 && modify->compute[n]->size_per_grid_cols > 0)
-	error->all(FLERR,
-		   "Compute lambda/grid compute does not "
+        error->all(FLERR,
+                   "Compute lambda/grid compute does not "
                    "compute per-grid vector");
       if (tempindex > 0 && modify->compute[n]->size_per_grid_cols == 0)
-	error->all(FLERR,
-		   "Compute lambda/grid compute does not "
+        error->all(FLERR,
+                   "Compute lambda/grid compute does not "
                    "compute per-grid array");
       if (tempindex > 0 && tempindex > modify->compute[n]->size_per_grid_cols)
-	error->all(FLERR,"Compute lambda compute vector is "
+        error->all(FLERR,"Compute lambda compute vector is "
                    "accessed out-of-range");
     } else {
       int n = modify->find_fix(id_temp);
       if (n < 0) error->all(FLERR,"Could not find compute lambda/grid fix ID");
       if (modify->fix[n]->per_grid_flag == 0)
-	error->all(FLERR,"Compute lambda/grid fix does not "
+        error->all(FLERR,"Compute lambda/grid fix does not "
                    "compute per-grid info");
       if (tempindex == 0 && modify->fix[n]->size_per_grid_cols > 0)
-	error->all(FLERR,"Compute lambda/grid fix does not "
+        error->all(FLERR,"Compute lambda/grid fix does not "
                    "compute per-grid vector");
       if (tempindex > 0 && modify->fix[n]->size_per_grid_cols == 0)
-	error->all(FLERR,"Compute lambda/grid fix does not "
+        error->all(FLERR,"Compute lambda/grid fix does not "
                    "compute per-grid array");
       if (tempindex > 0 && tempindex > modify->fix[n]->size_per_grid_cols)
-	error->all(FLERR,"Compute lambda/grid fix array is "
+        error->all(FLERR,"Compute lambda/grid fix array is "
                    "accessed out-of-range");
     }
   } else if (strcmp(arg[3],"NULL") == 0) tempwhich = NONE;
@@ -207,24 +207,24 @@ void ComputeLambdaGrid::init()
 
   if (nrhowhich == COMPUTE) {
     int icompute = modify->find_compute(id_nrho);
-    if (icompute < 0) 
+    if (icompute < 0)
       error->all(FLERR,"Could not find compute lambda/grid compute ID");
     cnrho = modify->compute[icompute];
   } else if (nrhowhich == FIX) {
     int ifix = modify->find_fix(id_nrho);
-    if (ifix < 0) 
+    if (ifix < 0)
       error->all(FLERR,"Could not find compute lambda/grid fix ID");
     fnrho = modify->fix[ifix];
   }
 
   if (tempwhich == COMPUTE) {
     int icompute = modify->find_compute(id_temp);
-    if (icompute < 0) 
+    if (icompute < 0)
       error->all(FLERR,"Could not find compute lambda/grid compute ID");
     ctemp = modify->compute[icompute];
   } else if (tempwhich == FIX) {
     int ifix = modify->find_fix(id_temp);
-    if (ifix < 0) 
+    if (ifix < 0)
       error->all(FLERR,"Could not find compute lambda/grid fix ID");
     ftemp = modify->fix[ifix];
   }
@@ -236,12 +236,12 @@ void ComputeLambdaGrid::init()
                "collision style be defined");
 
   int ispecies = particle->find_species(species);
-  if (ispecies < 0) 
+  if (ispecies < 0)
     error->all(FLERR,"Compute lambda/grid species is not defined");
 
-  dref = collide->extract(ispecies,"diam");
-  tref = collide->extract(ispecies,"tref");
-  omega = collide->extract(ispecies,"omega");
+  dref = collide->extract(ispecies,ispecies,"diam");
+  tref = collide->extract(ispecies,ispecies,"tref");
+  omega = collide->extract(ispecies,ispecies,"omega");
   prefactor = sqrt(2.0) * MY_PI * dref*dref;
 }
 
@@ -326,7 +326,7 @@ void ComputeLambdaGrid::compute_per_grid()
     if (nrho[i] == 0.0) lambda = BIG;
     else if (tempwhich == NONE || temp[i] == 0.0)
       lambda = 1.0 / (prefactor * nrho[i]);
-    else 
+    else
       lambda = 1.0 / (prefactor * nrho[i] * pow(tref/temp[i],omega-0.5));
 
     if (kflag == KNONE) vector_grid[i] = lambda;
