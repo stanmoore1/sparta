@@ -1,7 +1,7 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
    http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
@@ -78,7 +78,7 @@ collide(Particle::OnePart *&ip, double &,
 
   // specular or noslip reflection for each particle
   // only if SurfReact did not already reset velocities
-  // also both partiticles need to trigger any fixes
+  // also both particles need to trigger any fixes
   //   to update per-particle properties which depend on
   //   temperature of the particle, e.g. fix vibmode and fix ambipolar
   // NOTE: not doing this for this specular model,

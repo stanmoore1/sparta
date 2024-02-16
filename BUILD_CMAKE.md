@@ -59,7 +59,7 @@ cmake -C /path/to/<NAME>.cmake /path/to/sparta/cmake
 * BUILD_MPI
   * Whether to enable the SPARTA MPI TPL.
 * FFT
-  * Which SPARTA FFT TPL to enable: FFTW2, FFTW3, or MKL.
+  * Which SPARTA FFT TPL to enable: FFTW3, or MKL.
 
 Note: To point to a TPL installation, export <TPL>_ROOT=/path/to/tpl/install
 before running cmake.
@@ -77,6 +77,13 @@ before running cmake.
   * Print the SPARTA TPLs and exit.
 * SPARTA_ENABLE_TESTING
   * Add tests in examples to be run via ctest.
+* SPARTA_ENABLE_PARAVIEW_TESTING
+  * Enable ParaView tests. Default if OFF.
+  * When ON, must specify SPARTA_PARAVIEW_BIN_DIR and SPARTA_PARAVIEW_MPIEXEC.
+* SPARTA_PARAVIEW_BIN_DIR
+  * Path to ParaView bin directory containing pvbatch and pvpython.
+* SPARTA_PARAVIEW_MPIEXEC
+  * Path to program used to start ParaView mpi jobs, typically mpiexec in SPARTA_PARAVIEW_BIN_DIR.
 * SPARTA_DSMC_TESTING_PATH
   * Add tests in SPARTA_DSMC_TESTING_PATH/examples to be run via ctest.
   * Run all tests via SPARTA_DSMC_TESTING_PATH/regression.py.

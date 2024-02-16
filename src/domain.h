@@ -1,7 +1,7 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
    http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
@@ -37,8 +37,8 @@ class Domain : protected Pointers {
 
   int surfreactany;                 // 1 if any boundary has surf reactions
 
-  int copy,copymode;            // 1 if copy of class (prevents deallocation of
-                                //  base class when child copy is destroyed)
+  int copy,uncopy,copymode;         // used by Kokkos, prevent deallocation of
+                                    //  base class when child copy is destroyed
 
   int nregion;                      // # of defined Regions
   int maxregion;                    // max # regions can hold

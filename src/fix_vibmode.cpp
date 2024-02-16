@@ -1,7 +1,7 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
    http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
@@ -59,7 +59,12 @@ FixVibmode::FixVibmode(SPARTA *sparta, int narg, char **arg) :
     error->all(FLERR,"No multiple vibrational modes in fix vibmode "
                "for any species");
 
-  vibmodeindex = particle->add_custom((char *) "vibmode",INT,maxmode);
+  // check if custom attribute already exists, due to restart file
+  // else create per-particle attribute
+
+  vibmodeindex = particle->find_custom((char *) "vibmode");
+  if (vibmodeindex < 0)
+    vibmodeindex = particle->add_custom((char *) "vibmode",INT,maxmode);
 }
 
 /* ---------------------------------------------------------------------- */

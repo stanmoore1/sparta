@@ -1,7 +1,7 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
    http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
@@ -42,7 +42,6 @@ CommKokkos::CommKokkos(SPARTA *sparta) : Comm(sparta),
   k_nsend = DAT::tdual_int_scalar("comm:nsend");
   d_nsend = k_nsend.d_view;
   h_nsend = k_nsend.h_view;
-  d_nlocal = DAT::t_int_scalar("comm:nlocal");
 }
 
 /* ---------------------------------------------------------------------- */
@@ -51,7 +50,7 @@ CommKokkos::~CommKokkos()
 {
   if (copymode) return;
 
-  if (!sparta->kokkos->comm_classic) {
+  if (!sparta->kokkos->comm_serial) {
     pproc = NULL;
   }
 
@@ -64,14 +63,17 @@ CommKokkos::~CommKokkos()
      so Update can iterate on particle move
 ------------------------------------------------------------------------- */
 
-int CommKokkos::migrate_particles(int nmigrate, int *plist, DAT::t_int_1d d_plist_in)
+int CommKokkos::migrate_particles(int nmigrate, int *plist, DAT::t_int_1d &d_plist_in)
 {
   GridKokkos* grid_kk = (GridKokkos*) grid;
   ParticleKokkos* particle_kk = ((ParticleKokkos*)particle);
   particle_kk->update_class_variables();
   particle_kk_copy.copy(particle_kk);
 
-  if (sparta->kokkos->comm_classic) {
+  const int gpu_aware_flag = sparta->kokkos->gpu_aware_flag;
+  const int need_atomics = sparta->kokkos->need_atomics;
+
+  if (sparta->kokkos->comm_serial) {
     particle_kk->sync(Host,ALL_MASK);
     //grid_kk->sync(Host,ALL_MASK);
     int prev_auto_sync = sparta->kokkos->auto_sync;
@@ -115,7 +117,7 @@ int CommKokkos::migrate_particles(int nmigrate, int *plist, DAT::t_int_1d d_plis
   }
   //if (maxsendbuf == 0 || nmigrate*nbytes_total > maxsendbuf) { // this doesn't work, not sure why
     int maxsendbuf = nmigrate*nbytes_total;
-    if (maxsendbuf > int(d_sbuf.extent(0)))
+    if (maxsendbuf > int(d_sbuf.extent(0)) || !gpu_aware_flag)
       d_sbuf = DAT::t_char_1d(Kokkos::view_alloc("comm:sbuf",Kokkos::WithoutInitializing),maxsendbuf);
   //}
 
@@ -143,14 +145,14 @@ int CommKokkos::migrate_particles(int nmigrate, int *plist, DAT::t_int_1d d_plis
   copymode = 1;
   if (!ncustom) {
 
-    if (sparta->kokkos->need_atomics)
+    if (need_atomics)
       Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagCommMigrateParticles<1,0> >(0,nmigrate),*this);
     else
       Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagCommMigrateParticles<0,0> >(0,nmigrate),*this);
 
   } else {
 
-    if (sparta->kokkos->need_atomics)
+    if (need_atomics)
       Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagCommMigrateParticles<1,1> >(0,nmigrate),*this);
     else
       Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagCommMigrateParticles<0,1> >(0,nmigrate),*this);
@@ -195,7 +197,7 @@ int CommKokkos::migrate_particles(int nmigrate, int *plist, DAT::t_int_1d d_plis
   particle_kk->sync(Device,PARTICLE_MASK);
   d_particles = particle_kk->k_particles.d_view;
 
-  if (sparta->kokkos->gpu_aware_flag && !ncustom) {
+  if (gpu_aware_flag && !ncustom) {
     iparticle_kk->
       exchange_uniform(d_sbuf,nbytes_total,
                        (char *) (d_particles.data()+particle->nlocal),d_rbuf);
@@ -206,25 +208,19 @@ int CommKokkos::migrate_particles(int nmigrate, int *plist, DAT::t_int_1d d_plis
     int maxrecvbuf = nrecv*nbytes_total;
     d_rbuf = DAT::t_char_1d(Kokkos::view_alloc("comm:rbuf",Kokkos::WithoutInitializing),maxrecvbuf);
 
-    Kokkos::deep_copy(d_nlocal,particle->nlocal);
+    nlocal = particle->nlocal;
     iparticle_kk->exchange_uniform(d_sbuf,nbytes_total,(char *)d_rbuf.data(),d_rbuf);
 
     copymode = 1;
     if (!ncustom) {
 
-      if (sparta->kokkos->need_atomics)
-        Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagCommMigrateUnpackParticles<1,0> >(0,nrecv),*this);
-      else
-        Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagCommMigrateUnpackParticles<0,0> >(0,nrecv),*this);
+      Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagCommMigrateUnpackParticles<0> >(0,nrecv),*this);
       DeviceType().fence();
       copymode = 0;
 
     } else {
 
-      if (sparta->kokkos->need_atomics)
-        Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagCommMigrateUnpackParticles<1,1> >(0,nrecv),*this);
-      else
-        Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagCommMigrateUnpackParticles<0,1> >(0,nrecv),*this);
+      Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagCommMigrateUnpackParticles<1> >(0,nrecv),*this);
       DeviceType().fence();
       copymode = 0;
     }
@@ -233,6 +229,7 @@ int CommKokkos::migrate_particles(int nmigrate, int *plist, DAT::t_int_1d d_plis
 
   particle_kk->modify(Device,PARTICLE_MASK);
   d_particles = t_particle_1d(); // destroy reference to reduce memory use
+  d_plist = decltype(d_plist)();
 
   particle->nlocal += nrecv;
   ncomm += nsend;
@@ -259,16 +256,10 @@ void CommKokkos::operator()(TagCommMigrateParticles<NEED_ATOMICS, HAVE_CUSTOM>, 
     particle_kk_copy.obj.pack_custom_kokkos(j,(char*)(d_sbuf.data()+offset+nbytes_particle));
 }
 
-template<int NEED_ATOMICS, int HAVE_CUSTOM>
+template<int HAVE_CUSTOM>
 KOKKOS_INLINE_FUNCTION
-void CommKokkos::operator()(TagCommMigrateUnpackParticles<NEED_ATOMICS,HAVE_CUSTOM>, const int &irecv) const {
-  int i;
-  if (NEED_ATOMICS)
-    i = Kokkos::atomic_fetch_add(&d_nlocal(),1);
-  else {
-    i = d_nlocal();
-    d_nlocal()++;
-  }
+void CommKokkos::operator()(TagCommMigrateUnpackParticles<HAVE_CUSTOM>, const int &irecv) const {
+  const int i = nlocal + irecv;
   const int offset = irecv*nbytes_total;
   memcpy(&d_particles[i],&d_rbuf[offset],nbytes_particle);
   if (HAVE_CUSTOM)

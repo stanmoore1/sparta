@@ -1,7 +1,7 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
    http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
@@ -35,10 +35,7 @@ class SurfCollideImpulsive : public SurfCollide {
   void wrapper(Particle::OnePart *, double *, int *, double*);
   void flags_and_coeffs(int *, double *);
 
-  void dynamic();
-
  private:
-  double twall;                   // surface temperature
   double eng_ratio,eff_mass;      // energy ratio and effective mass
                                   // of the surface for soft-sphere model
   double u0_a, u0_b;              // u0 values for the direct case
@@ -58,9 +55,6 @@ class SurfCollideImpulsive : public SurfCollide {
   int softsphere_flag;             // flag for direct or soft sphere model
   int step_flag,double_flag;       // optional model flags
   int intenergy_flag;
-
-  char *tstr;                // temperature variable name (NULL if constant)
-  int tvar;                  // index of equal-style variable
 
   double vstream[3];
   class RanKnuth *random;     // RNG for particle reflection

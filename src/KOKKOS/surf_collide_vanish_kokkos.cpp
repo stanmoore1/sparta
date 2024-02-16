@@ -1,7 +1,7 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
    http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
@@ -23,6 +23,8 @@ using namespace SPARTA_NS;
 SurfCollideVanishKokkos::SurfCollideVanishKokkos(SPARTA *sparta, int narg, char **arg) :
   SurfCollideVanish(sparta, narg, arg)
 {
+  kokkosable = 1;
+
   k_nsingle = DAT::tdual_int_scalar("SurfCollide:nsingle");
   d_nsingle = k_nsingle.d_view;
   h_nsingle = k_nsingle.h_view;
@@ -35,4 +37,27 @@ SurfCollideVanishKokkos::SurfCollideVanishKokkos(SPARTA *sparta) :
 {
   id = NULL;
   style = NULL;
+
+  t_owned = NULL;
+  t_localghost = NULL;
+}
+
+/* ---------------------------------------------------------------------- */
+
+void SurfCollideVanishKokkos::pre_collide()
+{
+  Kokkos::deep_copy(d_nsingle,0);
+}
+
+/* ---------------------------------------------------------------------- */
+
+void SurfCollideVanishKokkos::post_collide()
+{
+  Kokkos::deep_copy(h_nsingle,d_nsingle);
+
+  // can't modify the copy directly, use the original
+
+  int m = surf->find_collide(id);
+  auto sc = surf->sc[m];
+  sc->nsingle += h_nsingle();
 }

@@ -1,52 +1,23 @@
-/*
 //@HEADER
 // ************************************************************************
 //
-//                        Kokkos v. 3.0
-//       Copyright (2020) National Technology & Engineering
+//                        Kokkos v. 4.0
+//       Copyright (2022) National Technology & Engineering
 //               Solutions of Sandia, LLC (NTESS).
 //
 // Under the terms of Contract DE-NA0003525 with NTESS,
 // the U.S. Government retains certain rights in this software.
 //
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are
-// met:
+// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
+// See https://kokkos.org/LICENSE for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
-// 1. Redistributions of source code must retain the above copyright
-// notice, this list of conditions and the following disclaimer.
-//
-// 2. Redistributions in binary form must reproduce the above copyright
-// notice, this list of conditions and the following disclaimer in the
-// documentation and/or other materials provided with the distribution.
-//
-// 3. Neither the name of the Corporation nor the names of the
-// contributors may be used to endorse or promote products derived from
-// this software without specific prior written permission.
-//
-// THIS SOFTWARE IS PROVIDED BY NTESS "AS IS" AND ANY
-// EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
-// PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL NTESS OR THE
-// CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
-// EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
-// PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
-// PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
-// LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
-// NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-// SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//
-// Questions? Contact Christian R. Trott (crtrott@sandia.gov)
-//
-// ************************************************************************
 //@HEADER
-*/
 #ifndef TESTVIEWSUBVIEW_HPP_
 #define TESTVIEWSUBVIEW_HPP_
 #include <gtest/gtest.h>
 
 #include <Kokkos_Core.hpp>
-#include <stdexcept>
 #include <sstream>
 #include <iostream>
 #include <type_traits>
@@ -68,14 +39,14 @@ struct static_assert_predicate_true_impl;
 
 template <template <class...> class predicate, class... message, class... args>
 struct static_assert_predicate_true_impl<
-    typename std::enable_if<predicate<args...>::type::value>::type, predicate,
+    std::enable_if_t<predicate<args...>::type::value>, predicate,
     static_predicate_message<message...>, args...> {
   using type = int;
 };
 
 template <template <class...> class predicate, class... message, class... args>
 struct static_assert_predicate_true_impl<
-    typename std::enable_if<!predicate<args...>::type::value>::type, predicate,
+    std::enable_if_t<!predicate<args...>::type::value>, predicate,
     static_predicate_message<message...>, args...> {
   using type = typename _kokkos____________________static_test_failure_____<
       message...>::type;
@@ -165,8 +136,9 @@ struct fill_2D {
 
 template <class Layout, class Space>
 void test_auto_1d() {
-  using mv_type   = Kokkos::View<double**, Layout, Space>;
-  using size_type = typename mv_type::size_type;
+  using mv_type         = Kokkos::View<double**, Layout, Space>;
+  using execution_space = typename Space::execution_space;
+  using size_type       = typename mv_type::size_type;
 
   const double ZERO = 0.0;
   const double ONE  = 1.0;
@@ -179,7 +151,14 @@ void test_auto_1d() {
   typename mv_type::HostMirror X_h = Kokkos::create_mirror_view(X);
 
   fill_2D<mv_type, Space> f1(X, ONE);
-  Kokkos::parallel_for(X.extent(0), f1);
+#if (HIP_VERSION_MAJOR == 5) && (HIP_VERSION_MINOR == 3)
+  using Property =
+      Kokkos::Experimental::WorkItemProperty::ImplForceGlobalLaunch_t;
+#else
+  using Property = Kokkos::Experimental::WorkItemProperty::None_t;
+#endif
+  Kokkos::parallel_for(
+      Kokkos::RangePolicy<execution_space, Property>(0, X.extent(0)), f1);
   Kokkos::fence();
   Kokkos::deep_copy(X_h, X);
   for (size_type j = 0; j < numCols; ++j) {
@@ -189,7 +168,8 @@ void test_auto_1d() {
   }
 
   fill_2D<mv_type, Space> f2(X, 0.0);
-  Kokkos::parallel_for(X.extent(0), f2);
+  Kokkos::parallel_for(
+      Kokkos::RangePolicy<execution_space, Property>(0, X.extent(0)), f2);
   Kokkos::fence();
   Kokkos::deep_copy(X_h, X);
   for (size_type j = 0; j < numCols; ++j) {
@@ -199,7 +179,8 @@ void test_auto_1d() {
   }
 
   fill_2D<mv_type, Space> f3(X, TWO);
-  Kokkos::parallel_for(X.extent(0), f3);
+  Kokkos::parallel_for(
+      Kokkos::RangePolicy<execution_space, Property>(0, X.extent(0)), f3);
   Kokkos::fence();
   Kokkos::deep_copy(X_h, X);
   for (size_type j = 0; j < numCols; ++j) {
@@ -212,7 +193,8 @@ void test_auto_1d() {
     auto X_j = Kokkos::subview(X, Kokkos::ALL, j);
 
     fill_1D<decltype(X_j), Space> f4(X_j, ZERO);
-    Kokkos::parallel_for(X_j.extent(0), f4);
+    Kokkos::parallel_for(
+        Kokkos::RangePolicy<execution_space, Property>(0, X_j.extent(0)), f4);
     Kokkos::fence();
     Kokkos::deep_copy(X_h, X);
     for (size_type i = 0; i < numRows; ++i) {
@@ -222,7 +204,9 @@ void test_auto_1d() {
     for (size_type jj = 0; jj < numCols; ++jj) {
       auto X_jj = Kokkos::subview(X, Kokkos::ALL, jj);
       fill_1D<decltype(X_jj), Space> f5(X_jj, ONE);
-      Kokkos::parallel_for(X_jj.extent(0), f5);
+      Kokkos::parallel_for(
+          Kokkos::RangePolicy<execution_space, Property>(0, X_jj.extent(0)),
+          f5);
       Kokkos::fence();
       Kokkos::deep_copy(X_h, X);
       for (size_type i = 0; i < numRows; ++i) {
