@@ -46,8 +46,8 @@ class Collide : protected Pointers {
   virtual double attempt_collision(int, int, int, double) = 0;
   virtual int test_collision(int, int, int,
                              Particle::OnePart *, Particle::OnePart *) = 0;
-  virtual int test_collision_mcf(int, int, double, int, int,
-                             Particle::OnePart *, Particle::OnePart *) = 0;
+  //virtual int test_collision_mcf(int, int, double, int, int,
+  //                           Particle::OnePart *, Particle::OnePart *) = 0;
   virtual void setup_collision(Particle::OnePart *, Particle::OnePart *) = 0;
   virtual int perform_collision(Particle::OnePart *&, Particle::OnePart *&,
                                 Particle::OnePart *&) = 0;

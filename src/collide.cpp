@@ -91,6 +91,7 @@ Collide::Collide(SPARTA *sparta, int, char **arg) : Pointers(sparta)
   vre_start = 1;
   vre_every = 0;
   remainflag = 1;
+  vmax = NULL;
   vremax = NULL;
   vremax_initial = NULL;
   remain = NULL;
@@ -162,7 +163,6 @@ Collide::~Collide()
     memory->destroy(subcell_next);
     memory->destroy(subcell_mostrecent);
     memory->destroy(neighbor_cells);
-    memory->destroy(nsc_dim_group);
   }
 
 }
@@ -1096,6 +1096,7 @@ template < int DIM > void Collide::collisions_one_subcell()
 
             // 2-D looping over neighbors
             for (int adj_i = -radius; adj_i <= radius; adj_i++) {
+              adj_kbox = 0;
               adj_ibox = ibox + adj_i;
               // Bottom
               adj_jbox = jbox - radius;
@@ -1109,6 +1110,7 @@ template < int DIM > void Collide::collisions_one_subcell()
               }
             }
             for (int adj_j = -radius+1; adj_j <= radius-1; adj_j++) {
+              adj_kbox = 0;
               adj_jbox = jbox + adj_j;
               // Left
               adj_ibox = ibox - radius;
