@@ -412,9 +412,9 @@ void ComputeLambdaGrid::compute_per_grid()
 
   for (i = 0; i < nglocal; i++) {
     for (j = 0; j < ntotal; j++) {
-        nrho[i][j] = 0.0;
-        lambdainv[i][j] = 0.0;
-        tauinv[i][j] = 0.0;
+      nrho[i][j] = 0.0;
+      lambdainv[i][j] = 0.0;
+      tauinv[i][j] = 0.0;
     }
   }
 
@@ -458,11 +458,11 @@ void ComputeLambdaGrid::compute_per_grid()
         k = umap[m][0];
         int jm1 = j - 1;
         if (nvalues == 1) {
-            compute->post_process_grid(j,1,nrho,map[0],vector_grid,1);
-            for (i = 0; i < nglocal; i++) nrho[i][k] = vector_grid[i];
+          compute->post_process_grid(j,1,nrho,map[0],vector_grid,1);
+          for (i = 0; i < nglocal; i++) nrho[i][k] = vector_grid[i];
         } else {
-            compute->post_process_grid(j,1,nrho,map[m],&array_grid1[0][m],nvalues);
-            for (i = 0; i < nglocal; i++) nrho[i][k] = array_grid1[i][jm1];
+          compute->post_process_grid(j,1,nrho,map[m],&array_grid1[0][m],nvalues);
+          for (i = 0; i < nglocal; i++) nrho[i][k] = array_grid1[i][jm1];
         }
       } else {
         k = umap[m][0];
@@ -489,9 +489,8 @@ void ComputeLambdaGrid::compute_per_grid()
       } else {
         int jm1 = j - 1;
         double **fix_array = modify->fix[n]->array_grid;
-        for (i = 0; i < nglocal; i++) {
+        for (i = 0; i < nglocal; i++)
           nrho[i][k] = fix_array[i][jm1];
-        }
       }
     }
   }
@@ -531,34 +530,33 @@ void ComputeLambdaGrid::compute_per_grid()
   double nrhosum,lambda,tau;
 
   for (int i = 0; i < nglocal; i++) {
-      nrhosum = lambda = tau = 0.0;
-      for (int j = 0; j < ntotal; j++) {
-        nrhosum += nrho[i][j];
-        for (int k = 0; k < ntotal; k++) {
-            dref = collide->extract(j,k,"diam");
-            tref = collide->extract(j,k,"tref");
-            omega = collide->extract(j,k,"omega");
-            mj = particle->species[j].mass;
-            mk = particle->species[k].mass;
-            mr = mj * mk / (mj + mk);
-            if (tempwhich == NONE || temp[i] == 0.0) {
-              lambdainv[i][j] += (MY_PI * sqrt (1+mj/mk) * pow(dref,2.0) * nrho[i][k]);
-              tauinv[i][j] += (2.0 * pow(dref,2.0) * nrho[i][k] * sqrt (2.0 * MY_PI * update->boltz * tref / mr));
-            }
-            else {
-              lambdainv[i][j] += (MY_PI * sqrt (1+mj/mk) * pow(dref,2.0) * nrho[i][k] * pow(tref/temp[i],omega-0.5));
-              tauinv[i][j] += (2.0 * pow(dref,2.0) * nrho[i][k] * sqrt (2.0 * MY_PI * update->boltz * tref / mr) * pow(temp[i]/tref,1.0-omega));
-            }
+    nrhosum = lambda = tau = 0.0;
+    for (int j = 0; j < ntotal; j++) {
+      nrhosum += nrho[i][j];
+      for (int k = 0; k < ntotal; k++) {
+        dref = collide->extract(j,k,"diam");
+        tref = collide->extract(j,k,"tref");
+        omega = collide->extract(j,k,"omega");
+        mj = particle->species[j].mass;
+        mk = particle->species[k].mass;
+        mr = mj * mk / (mj + mk);
+        if (tempwhich == NONE || temp[i] == 0.0) {
+          lambdainv[i][j] += (MY_PI * sqrt (1+mj/mk) * pow(dref,2.0) * nrho[i][k]);
+          tauinv[i][j] += (2.0 * pow(dref,2.0) * nrho[i][k] * sqrt (2.0 * MY_PI * update->boltz * tref / mr));
+        } else {
+          lambdainv[i][j] += (MY_PI * sqrt (1+mj/mk) * pow(dref,2.0) * nrho[i][k] * pow(tref/temp[i],omega-0.5));
+          tauinv[i][j] += (2.0 * pow(dref,2.0) * nrho[i][k] * sqrt (2.0 * MY_PI * update->boltz * tref / mr) * pow(temp[i]/tref,1.0-omega));
         }
       }
-      for (int j = 0; j<ntotal; j++) {
-        if (lambdainv[i][j] > 1e-30) lambda += nrho[i][j] / (nrhosum * lambdainv[i][j]);
-        if (tauinv[i][j] > 1e-30) tau += nrho[i][j] / (nrhosum * tauinv[i][j]);
-      }
-      if (lambda == 0.0) array_grid[i][0] = BIG;
-      else array_grid[i][0] = lambda;
-      if (tau == 0.0) array_grid[i][1] = BIG;
-      else array_grid[i][1] = tau;
+    }
+    for (int j = 0; j<ntotal; j++) {
+      if (lambdainv[i][j] > 1e-30) lambda += nrho[i][j] / (nrhosum * lambdainv[i][j]);
+      if (tauinv[i][j] > 1e-30) tau += nrho[i][j] / (nrhosum * tauinv[i][j]);
+    }
+    if (lambda == 0.0) array_grid[i][0] = BIG;
+    else array_grid[i][0] = lambda;
+    if (tau == 0.0) array_grid[i][1] = BIG;
+    else array_grid[i][1] = tau;
   }
 
   // calculate per-cell Knudsen number
@@ -590,7 +588,6 @@ void ComputeLambdaGrid::compute_per_grid()
     for (int i = 0; i < nglocal; i++)
       array_grid[i][2] = array_grid[i][0] / (cells[i].hi[2] - cells[i].lo[2]);
   }
-
 }
 
 /* ----------------------------------------------------------------------

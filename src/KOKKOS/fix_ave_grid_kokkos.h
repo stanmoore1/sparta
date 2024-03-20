@@ -94,11 +94,11 @@ class FixAveGridKokkos : public FixAveGrid, public KokkosBase {
 
   t_cinfo_1d d_cinfo;
 
-  DAT::tdual_float_1d k_numap;
-  DAT::t_float_1d d_numap;
+  DAT::tdual_int_1d k_numap;
+  DAT::t_int_1d d_numap;
 
-  DAT::tdual_float_2d k_umap,k_uomap;
-  DAT::t_float_2d d_umap,d_uomap;
+  DAT::tdual_int_2d k_umap,k_uomap;
+  DAT::t_int_2d d_umap,d_uomap;
 
   int j,k,kk,jm1,m,ntally;
 

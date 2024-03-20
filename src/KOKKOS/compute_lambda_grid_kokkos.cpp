@@ -47,6 +47,23 @@ ComputeLambdaGridKokkos::ComputeLambdaGridKokkos(SPARTA *sparta, int narg, char 
   ComputeLambdaGrid(sparta, narg, arg)
 {
   kokkos_flag = 1;
+
+  k_umap = DAT::tdual_int_2d("compute lambda/grid:umap",nvalues,tmax);
+  k_uomap = DAT::tdual_int_2d("compute lambda/grid:uomap",nvalues,tmax);
+
+  for (int i = 0; i < nvalues; i++) {
+    k_numap.h_view(i) = numap[i];
+    for (int j = 0; j < tmax; j++) {
+      k_umap.h_view(i,j) = umap[i][j];
+      k_uomap.h_view(i,j) = uomap[i][j];
+    }
+  }
+
+  k_umap.modify_host();
+  k_umap.sync_device();
+
+  k_uomap.modify_host();
+  k_uomap.sync_device();
 }
 
 /* ---------------------------------------------------------------------- */
@@ -87,73 +104,128 @@ void ComputeLambdaGridKokkos::compute_per_grid_kokkos()
   // grab nrho and temp values from compute or fix
   // invoke nrho and temp computes as needed
 
-  if (nrhowhich == COMPUTE) {
-    if (!cnrho->kokkos_flag)
-      error->all(FLERR,"Cannot (yet) use non-Kokkos computes with compute lambda/grid/kk");
-    KokkosBase* computeKKBase = dynamic_cast<KokkosBase*>(cnrho);
-    if (!(cnrho->invoked_flag & INVOKED_PER_GRID)) {
-      computeKKBase->compute_per_grid_kokkos();
-      cnrho->invoked_flag |= INVOKED_PER_GRID;
+  for (int m = 0; m < nvalues; m++) {
+    n = value2index[m];
+    j = nrhoindex[m];
+
+    if (nrhowhich == COMPUTE) {
+
+      if (!cnrho->kokkos_flag)
+        error->all(FLERR,"Cannot (yet) use non-Kokkos computes with compute lambda/grid/kk");
+
+      KokkosBase* KKBase = dynamic_cast<KokkosBase*>(cnrho);
+      if (!(cnrho->invoked_flag & INVOKED_PER_GRID)) {
+        KKBase->compute_per_grid_kokkos();
+        cnrho->invoked_flag |= INVOKED_PER_GRID;
+      }
+
+      // accumulate one or more compute values to umap columns of tally array
+      // if compute does not post-process, access its vec/array grid directly
+      // else access uomap columns in its ctally array
+
+      if (post_process[m]) {
+        ntally_col = numap[m];
+        KKBase->query_tally_grid_kokkos(d_ctally);
+
+        auto d_umap = k_umap.d_view;
+        auto d_uomap = k_uomap.d_view;
+        Kokkos::parallel_for(nglocal, SPARTA_LAMBDA(int i) {
+          for (int itally = 0; itally < ntally_col; itally++) {
+            k = d_umap(m,itally);
+            kk = d_uomap(m,itally);
+            d_nrho(i,k) = d_ctally(i,kk);
+          }
+        });
+
+        k = umap[m][0];
+        int jm1 = j - 1;
+        if (nvalues == 1) {
+          KKBase->post_process_grid_kokkos(j,1,d_nrho,map[0],d_vector_grid);
+          Kokkos::parallel_for(nglocal, SPARTA_LAMBDA(int i) {
+            d_nrho(i,k) = d_vector_grid[i];
+          });
+        } else {
+          KKBase->post_process_grid_kokkos(j,1,d_nrho,map[m],
+                    Kokkos::subview(d_array_grid,Kokkos::ALL(),m)); // need to use subview
+          Kokkos::parallel_for(nglocal, SPARTA_LAMBDA(int i) {
+            d_nrho(i,k) = d_array_grid1(i,jm1);
+          });
+        }
+      } else {
+        k = umap[m][0];
+        if (j == 0) {
+          auto d_compute_vector = KKBase->d_vector_grid;
+          Kokkos::parallel_for(nglocal, SPARTA_LAMBDA(int i) {
+            d_nrho(i,k) = d_compute_vector[i];
+          });
+        } else {
+          int jm1 = j - 1;
+          auto d_compute_array = compute->d_array_grid;
+          Kokkos::parallel_for(nglocal, SPARTA_LAMBDA(int i) {
+            d_nrho(i,k) = d_compute_array(i,jm1);
+          });
+        }
+      }
+
+    // access fix fields
+
+    } else if (nrhowhich[m] == FIX) {
+      auto fnrho = modify->fix[n];
+
+      if (update->ntimestep % fnrho->per_grid_freq)
+      error->all(FLERR,"Compute lambda/grid fix not computed at compatible time");
+
+      if (!fnrho->kokkos_flag)
+        error->all(FLERR,"Cannot (yet) use non-Kokkos fixes with compute lambda/grid/kk");
+
+      KokkosBase* KKBase = dynamic_cast<KokkosBase*>(fnrho);
+      k = umap[m][0];
+      if (j == 0) {
+        auto d_fix_vector = KKBase->d_vector_grid;
+        for (i = 0; i < nglocal; i++)
+          d_nrho(i,k) = d_fix_vector[i];
+      } else {
+        int jm1 = j - 1;
+        auto d_fix_array = KKBase->d_array_grid;
+        for (i = 0; i < nglocal; i++)
+          d_nrho(i,k) = d_fix_array(i,jm1);
+      }
     }
 
-    if (cnrho->post_process_grid_flag)
-      computeKKBase->post_process_grid_kokkos(nrhoindex,1,DAT::t_float_2d_lr(),NULL,DAT::t_float_1d_strided());
+    if (tempwhich == COMPUTE) {
+      if (!ctemp->kokkos_flag)
+        error->all(FLERR,"Cannot (yet) use non-Kokkos computes with compute lambda/grid/kk");
 
-    if (nrhoindex == 0 || cnrho->post_process_grid_flag)
-      Kokkos::deep_copy(d_nrho_vector, computeKKBase->d_vector_grid);
-    else {
-      d_array = computeKKBase->d_array_grid;
-      copymode = 1;
-      Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagComputeLambdaGrid_LoadNrhoVecFromArray>(0,nglocal),*this);
-      copymode = 0;
-    }
-  } else if (nrhowhich == FIX) {
-    if (!fnrho->kokkos_flag)
-      error->all(FLERR,"Cannot (yet) use non-Kokkos fixes with compute lambda/grid/kk");
-    KokkosBase* computeKKBase = dynamic_cast<KokkosBase*>(fnrho);
-    if (nrhoindex == 0)
-      d_nrho_vector = computeKKBase->d_vector_grid;
-    else {
-      d_array = computeKKBase->d_array_grid;
-      copymode = 1;
-      Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagComputeLambdaGrid_LoadNrhoVecFromArray>(0,nglocal),*this);
-      copymode = 0;
-    }
-  }
+      KokkosBase* KKBase = dynamic_cast<KokkosBase*>(ctemp);
+      if (!(ctemp->invoked_flag & INVOKED_PER_GRID)) {
+        KKBase->compute_per_grid_kokkos();
+        ctemp->invoked_flag |= INVOKED_PER_GRID;
+      }
 
-  if (tempwhich == COMPUTE) {
-    if (!ctemp->kokkos_flag)
-      error->all(FLERR,"Cannot (yet) use non-Kokkos computes with compute lambda/grid/kk");
-    KokkosBase* computeKKBase = dynamic_cast<KokkosBase*>(ctemp);
-    if (!(ctemp->invoked_flag & INVOKED_PER_GRID)) {
-      computeKKBase->compute_per_grid_kokkos();
-      ctemp->invoked_flag |= INVOKED_PER_GRID;
-    }
+      if (ctemp->post_process_grid_flag)
+        KKBase->post_process_grid_kokkos(tempindex,1,DAT::t_float_2d_lr(),NULL,DAT::t_float_1d_strided());
 
-    if (ctemp->post_process_grid_flag)
-      computeKKBase->post_process_grid_kokkos(tempindex,1,DAT::t_float_2d_lr(),NULL,DAT::t_float_1d_strided());
-
-    if (tempindex == 0 || ctemp->post_process_grid_flag)
-      Kokkos::deep_copy(d_temp_vector, computeKKBase->d_vector_grid);
-    else{
-      d_array = computeKKBase->d_array_grid;
-      copymode = 1;
-      Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagComputeLambdaGrid_LoadTempVecFromArray>(0,nglocal),*this);
-      copymode = 0;
+      if (tempindex == 0 || ctemp->post_process_grid_flag)
+        Kokkos::deep_copy(d_temp_vector, KKBase->d_vector_grid);
+      else{
+        d_array = KKBase->d_array_grid;
+        copymode = 1;
+        Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagComputeLambdaGrid_LoadTempVecFromArray>(0,nglocal),*this);
+        copymode = 0;
+      }
+    } else if (tempwhich == FIX) {
+      if (!ftemp->kokkos_flag)
+        error->all(FLERR,"Cannot (yet) use non-Kokkos fixes with compute lambda/grid/kk");
+      KokkosBase* KKBase = dynamic_cast<KokkosBase*>(ftemp);
+      if (tempindex == 0)
+        d_temp_vector = KKBase->d_vector_grid;
+      else {
+        d_array = KKBase->d_array_grid;
+        copymode = 1;
+        Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagComputeLambdaGrid_LoadTempVecFromArray>(0,nglocal),*this);
+        copymode = 0;
+      }
     }
-  } else if (tempwhich == FIX) {
-    if (!ftemp->kokkos_flag)
-      error->all(FLERR,"Cannot (yet) use non-Kokkos fixes with compute lambda/grid/kk");
-    KokkosBase* computeKKBase = dynamic_cast<KokkosBase*>(ftemp);
-    if (tempindex == 0)
-      d_temp_vector = computeKKBase->d_vector_grid;
-    else {
-      d_array = computeKKBase->d_array_grid;
-      copymode = 1;
-      Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagComputeLambdaGrid_LoadTempVecFromArray>(0,nglocal),*this);
-      copymode = 0;
-    }
-  }
 
   GridKokkos* grid_kk = ((GridKokkos*)grid);
   grid_kk->sync(Device,CELL_MASK);

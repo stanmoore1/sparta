@@ -56,9 +56,10 @@ namespace SPARTA_NS {
     DAT::t_float_1d d_nrho_vector;
     DAT::t_float_1d d_temp_vector;
 
+    DAT::tdual_int_2d k_umap,k_uomap;
+
     int dimension;
     t_cell_1d d_cells;
-
 };
 
 }
