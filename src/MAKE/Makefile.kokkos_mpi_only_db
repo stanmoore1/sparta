@@ -1,4 +1,4 @@
-# hip_kokkos = KOKKOS/HIP, AMD MI250X GPU and AMD EPYC 7A53 "Optimized 3rd Gen EPYC" CPU, Cray MPICH, hipcc compiler, hipFFT
+# kokkos_mpi_only = KOKKOS package with Serial backend (no OpenMP support), MPI compiler, default MPI
 
 SHELL = /bin/sh
 
@@ -6,21 +6,21 @@ SHELL = /bin/sh
 # compiler/linker settings
 # specify flags and libraries needed for your compiler
 
-CC =		hipcc
-CCFLAGS =	-g -O3 -munsafe-fp-atomics -DNDEBUG -DKOKKOS_ENABLE_HIP_MULTIPLE_KERNEL_INSTANTIATIONS
+CC =		mpicxx
+CCFLAGS =	-g -O0 -DSPARTA_KOKKOS_EXACT
 SHFLAGS =	-fPIC
 DEPFLAGS =	-M
 
-LINK =		hipcc
-LINKFLAGS =	-g -O3
+LINK =		mpicxx
+LINKFLAGS =	-g -O0
 LIB = 
 SIZE =		size
 
 ARCHIVE =	ar
 ARFLAGS =	-rc
 SHLIBFLAGS =	-shared
-KOKKOS_DEVICES = HIP
-KOKKOS_ARCH = ZEN3,AMD_GFX90A
+KOKKOS_DEVICES = Serial
+KOKKOS_DEBUG = yes
 
 # ---------------------------------------------------------------------
 # SPARTA-specific settings
@@ -39,9 +39,9 @@ SPARTA_INC =	-DSPARTA_GZIP
 # PATH = path for MPI library
 # LIB = name of MPI library
 
-MPI_INC =       -DMPICH_SKIP_MPICXX -DOMPI_SKIP_MPICXX=1 -I${MPICH_DIR}/include
-MPI_PATH = 
-MPI_LIB = -L${MPICH_DIR}/lib -lmpi -L${CRAY_MPICH_ROOTDIR}/gtl/lib -lmpi_gtl_hsa
+MPI_INC =       -DMPICH_SKIP_MPICXX -DOMPI_SKIP_MPICXX=1
+MPI_PATH =      
+MPI_LIB =	
 
 # FFT library, OPTIONAL
 # see discussion in doc/Section_start.html#2_2 (step 6)
@@ -50,12 +50,9 @@ MPI_LIB = -L${MPICH_DIR}/lib -lmpi -L${CRAY_MPICH_ROOTDIR}/gtl/lib -lmpi_gtl_hsa
 # PATH = path for FFT library
 # LIB = name of FFT library
 
-MY_HIP_EXE = $(shell which hipcc)
-MY_HIP_PATH = $(dir ${MY_HIP_EXE})
-
-FFT_INC = -DFFT_KOKKOS_HIPFFT
+FFT_INC = 
 FFT_PATH =
-FFT_LIB = -L${MY_HIP_PATH}../lib -lhipfft
+FFT_LIB = 
 
 # JPEG library, OPTIONAL
 # see discussion in doc/Section_start.html#2_2 (step 7)
