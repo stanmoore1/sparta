@@ -1,12 +1,12 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   http://sparta.github.io
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -32,7 +32,8 @@ class FixEmitFace : public FixEmit {
   FixEmitFace(class SPARTA *, int, char **);
   virtual ~FixEmitFace();
   virtual void init();
-  virtual void post_compress_grid();
+
+  void grid_changed();
 
   // one insertion task for a cell and a face
 
@@ -73,9 +74,6 @@ class FixEmitFace : public FixEmit {
   double fnum,dt;
   double *fraction,*cummulative;
 
-  Surf::Line *lines;
-  Surf::Tri *tris;
-
                          // ntask = # of tasks is stored by parent class
   Task *tasks;           // list of particle insertion tasks
   int ntaskmax;          // max # of tasks allocated
@@ -87,10 +85,11 @@ class FixEmitFace : public FixEmit {
 
   // protected methods
 
-  int create_task(int);
+  virtual void create_task(int);
   virtual void perform_task();
   void perform_task_onepass();
   virtual void perform_task_twopass();
+  virtual void grow_task();
 
   int split(int, int);
 
@@ -98,12 +97,7 @@ class FixEmitFace : public FixEmit {
   void subsonic_sort();
   void subsonic_grid();
 
-  virtual int pack_task(int, char *, int);
-  virtual int unpack_task(char *, int);
-  virtual void copy_task(int, int, int, int);
-  virtual void grow_task();
   virtual void realloc_nspecies();
-
   int option(int, char **);
 };
 

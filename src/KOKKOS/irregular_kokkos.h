@@ -1,12 +1,12 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   http://sparta.github.io
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -20,14 +20,12 @@
 
 namespace SPARTA_NS {
 
-template<int NEED_ATOMICS>
 struct TagIrregularPackBuffer{};
 
-struct TagIrregularUnpackBuffer{};
+struct TagIrregularUnpackBufferSelf{};
 
 class IrregularKokkos : public Irregular {
  public:
-  typedef ArrayTypes<DeviceType> AT;
 
   IrregularKokkos(class SPARTA *);
   ~IrregularKokkos();
@@ -35,28 +33,24 @@ class IrregularKokkos : public Irregular {
   int augment_data_uniform(int, int *);
   void exchange_uniform(DAT::t_char_1d, int, char *, DAT::t_char_1d);
 
-  template<int NEED_ATOMICS>
   KOKKOS_INLINE_FUNCTION
-  void operator()(TagIrregularPackBuffer<NEED_ATOMICS>, const int&) const;
+  void operator()(TagIrregularPackBuffer, const int&) const;
 
   KOKKOS_INLINE_FUNCTION
-  void operator()(TagIrregularUnpackBuffer, const int&) const;
+  void operator()(TagIrregularUnpackBufferSelf, const int&) const;
 
   inline
   void pack_buffer_serial(const int, const int) const;
 
  private:
+  int offset_send;
+
   DAT::tdual_int_1d k_index_send;
   DAT::t_int_1d d_index_send;
   DAT::tdual_int_1d k_index_self;
   DAT::t_int_1d d_index_self;
 
-  DAT::tdual_int_scalar k_n;
-  typename AT::t_int_scalar d_n;
-  HAT::t_int_scalar h_n;
-
   DAT::t_char_1d d_sendbuf;
-  char* d_recvbuf_ptr;
   DAT::t_char_1d d_recvbuf;
   DAT::t_char_1d d_buf;
   HAT::t_char_1d h_recvbuf;

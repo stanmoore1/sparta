@@ -1,12 +1,12 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   http://sparta.github.io
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -29,34 +29,45 @@ using namespace SPARTA_NS;
    pack single icell into buf
    only called for owned unsplit and split cells, not for sub cells
    include its cinfo, surfs, split info, sub cells if necessary
-   ownflag = 1/0 = owned or ghost cell
+   ownflag = 1/0 = receiver stores cell as owned or ghost
      for owned cell, also pack cinfo and auxiliary collision/fix info
-     if nsurf < 0, is an empty ghost cell, pack only cells
-   molflag = 0/1 = no/yes to also pack particles
+     if nsurf < 0, is an empty ghost cell, pack only the cell
+   partflag = 0/1 = no/yes to also pack particles
+   surfflag = 0/1 = no/yes to also pack surface info
+     surfflag = no always called with and ownflag = 0 and partflag = 0
    memflag = 0/1 = no/yes to actually pack into buf, 0 = just length
    return length of packing in bytes
    called from Grid::acquire_ghosts(), Comm::migrate_cells()
 ------------------------------------------------------------------------- */
 
-int Grid::pack_one(int icell, char *buf, 
-                   int ownflag, int molflag, int memflag)
+int Grid::pack_one(int icell, char *buf,
+                   int ownflag, int partflag, int surfflag, int memflag)
 {
   char *ptr = buf;
 
-  // pack child cell and its csurfs and cinfo
-  // just pack child cell if nsurf < 0 which is EMPTY ghost
-  //   unpack_one() will reset other fields (csurfs, nsplit, isplit)
+  // pack child cell data struct, csurf ptr will be reset when unpacked
 
   if (memflag) memcpy(ptr,&cells[icell],sizeof(ChildCell));
   ptr += sizeof(ChildCell);
   ptr = ROUNDUP(ptr);
 
+  // pack custom grid data
+
+  if (ncustom) {
+    ptr += pack_custom(icell,ptr,memflag);
+    ptr = ROUNDUP(ptr);
+  }
+
+  // no surfs or any other info
+  // ditto for sending empty ghost
+
+  if (!surfflag) return ptr - buf;
   if (cells[icell].nsurf < 0) return ptr - buf;
 
   // if nsurfs, pack different info for explicit vs implicit surfs
   // explicit all: just list of csurf indices
   // explicit distributed and implicit: list of lines or triangles
-  
+
   int nsurf = cells[icell].nsurf;
   if (nsurf) {
     if (!surf->implicit && !surf->distributed) {
@@ -68,20 +79,20 @@ int Grid::pack_one(int icell, char *buf,
       int sizesurf = sizeof(Surf::Line);
       surfint *csurfs = cells[icell].csurfs;
       for (int m = 0; m < nsurf; m++) {
-	int isurf = csurfs[m];
-	if (memflag) memcpy(ptr,&lines[isurf],sizesurf);
-	ptr += sizesurf;
-	ptr = ROUNDUP(ptr);
+        int isurf = csurfs[m];
+        if (memflag) memcpy(ptr,&lines[isurf],sizesurf);
+        ptr += sizesurf;
+        ptr = ROUNDUP(ptr);
       }
     } else {
       Surf::Tri *tris = surf->tris;
       int sizesurf = sizeof(Surf::Tri);
       surfint *csurfs = cells[icell].csurfs;
       for (int m = 0; m < nsurf; m++) {
-	int isurf = csurfs[m];
-	if (memflag) memcpy(ptr,&tris[isurf],sizesurf);
-	ptr += sizesurf;
-	ptr = ROUNDUP(ptr);
+        int isurf = csurfs[m];
+        if (memflag) memcpy(ptr,&tris[isurf],sizesurf);
+        ptr += sizesurf;
+        ptr = ROUNDUP(ptr);
       }
     }
   }
@@ -135,7 +146,7 @@ int Grid::pack_one(int icell, char *buf,
 
   // pack particles for unsplit cell or split cell
 
-  if (!molflag) return ptr - buf;
+  if (!partflag) return ptr - buf;
 
   ptr += pack_particles(icell,ptr,memflag);
 
@@ -158,27 +169,33 @@ int Grid::pack_one(int icell, char *buf,
    unpack received ghost cells into cell lists
 ------------------------------------------------------------------------- */
 
-void Grid::unpack_ghosts(int nsize, char *buf)
+void Grid::unpack_ghosts(int nsize, char *buf, void *ptr)
 {
+  Grid *gptr = (Grid *) ptr;
+  int surfflag = gptr->unpack_ghosts_surfflag;
+
   int n = 0;
   while (n < nsize)
-    n += gptr->unpack_one(&buf[n],0,0);
+    n += gptr->unpack_one(&buf[n],0,0,surfflag);
 }
 
 /* ----------------------------------------------------------------------
    unpack single icell from buf
    include its cinfo, surfs, split info, sub cells if necessary
-   ownflag = 1/0 = owned or ghost cell
+   ownflag = 1/0 = receiver stores cell as owned or ghost
      for owned cell, also unpack cinfo and auxiliary collision/fix info
-   molflag = 0/1 = no/yes to also unpack particles
+   partflag = 0/1 = no/yes to also unpack particles
+   surfflag = 0/1 = no/yes to also unpack surface info
+     surfflag = 0 always called with ownflag = 0 and partflag = 0
    return length of unpacking in bytes
 ------------------------------------------------------------------------- */
 
-int Grid::unpack_one(char *buf, int ownflag, int molflag, int sortflag)
+int Grid::unpack_one(char *buf,
+                     int ownflag, int partflag, int surfflag, int sortflag)
 {
   char *ptr = buf;
 
-  // unpack child cell and its csurfs and cinfo, add to ghost cells
+  // unpack child cell as owned or ghost
 
   int icell;
   if (ownflag) icell = nlocal;
@@ -191,19 +208,27 @@ int Grid::unpack_one(char *buf, int ownflag, int molflag, int sortflag)
   ptr += sizeof(ChildCell);
   ptr = ROUNDUP(ptr);
 
-  // nsurf < 0 means EMPTY ghost
+  if (ownflag) {
+    cells[icell].proc = me;
+    cells[icell].ilocal = icell;
+  }
+
+  // unpack custom grid data
+
+  if (ncustom) {
+    ptr += unpack_custom(ptr,icell);
+    ptr = ROUNDUP(ptr);
+  }
+
+  // no surfs or any other info
+  // ditto for EMPTY ghost with nsurf < 0
   // reset other fields for ghost cell (csurfs, nsplit, isplit)
 
-  if (cells[icell].nsurf < 0) {
+  if (!surfflag || cells[icell].nsurf < 0) {
     cells[icell].csurfs = NULL;
     cells[icell].nsplit = 1;
     cells[icell].isplit = -1;
     return ptr - buf;
-  }
-
-  if (ownflag) {
-    cells[icell].proc = me;
-    cells[icell].ilocal = icell;
   }
 
   // if nsurfs, unpack different info for explicit vs implicit
@@ -254,7 +279,7 @@ int Grid::unpack_one(char *buf, int ownflag, int molflag, int sortflag)
 
     // explicit distributed surfs
 
-    } else {    
+    } else {
       Surf::MySurfHash *shash = surf->hash;
 
       if (domain->dimension == 2) {
@@ -290,7 +315,7 @@ int Grid::unpack_one(char *buf, int ownflag, int molflag, int sortflag)
 
     csurfs->vgot(nsurf);
   }
-  
+
   if (ownflag) {
     memcpy(&cinfo[icell],ptr,sizeof(ChildInfo));
     ptr += sizeof(ChildInfo);
@@ -362,10 +387,10 @@ int Grid::unpack_one(char *buf, int ownflag, int molflag, int sortflag)
       ptr = ROUNDUP(ptr);
     }
   }
-  
+
   // unpack particles, for unsplit cell or split cell
 
-  if (!molflag) return ptr - buf;
+  if (!partflag) return ptr - buf;
 
   ptr += unpack_particles(ptr,icell,sortflag);
 
@@ -386,6 +411,7 @@ int Grid::unpack_one(char *buf, int ownflag, int molflag, int sortflag)
 /* ----------------------------------------------------------------------
    pack single icell into buf with grid adaptation info
    memflag = 0/1 = no/yes to actually pack into buf, 0 = just length
+   flag all packed particles for deletion
    return length of packing in bytes
 ------------------------------------------------------------------------- */
 
@@ -396,28 +422,63 @@ int Grid::pack_one_adapt(char *inbuf, char *buf, int memflag)
   AdaptGrid::SendAdapt *s = (AdaptGrid::SendAdapt *) inbuf;
   char *ptr = buf;
 
+  int owner = s->owner;
+  int icell = s->icell;
+  int nsurf = s->nsurf;
+  int np = s->np;
+
   // pack SendAdapt data struct
 
   if (memflag) memcpy(ptr,s,sizeof(AdaptGrid::SendAdapt));
   ptr += sizeof(AdaptGrid::SendAdapt);
   ptr = ROUNDUP(ptr);
 
-  int icell = s->icell;
+  // if parent cell owner also owns the child cell being packed, then done
+  // otherwise pack surfs and particles for comm to another proc
 
-  // pack list of surf indices
+  if (owner == me) return ptr-buf;
 
-  if (s->nsurf) {
-    int nsurf = s->nsurf;
-    if (memflag) memcpy(ptr,cells[icell].csurfs,nsurf*sizeof(surfint));
-    ptr += nsurf*sizeof(surfint);
+  // pack explicit surf info
+  // for non-distributed, just pack indices, since every proc stores all surfs
+  // for distributed, pack the surfs themselves
+
+  if (nsurf) {
+    int isurf;
+    if (!surf->distributed) {
+      if (memflag) memcpy(ptr,cells[icell].csurfs,nsurf*sizeof(surfint));
+      ptr += nsurf*sizeof(surfint);
+    } else if (domain->dimension == 2) {
+      Surf::Line *lines = surf->lines;
+      int sizesurf = sizeof(Surf::Line);
+      surfint *csurfs = cells[icell].csurfs;
+      for (int m = 0; m < nsurf; m++) {
+        isurf = csurfs[m];
+        if (memflag) memcpy(ptr,&lines[isurf],sizesurf);
+        ptr += sizesurf;
+      }
+    } else {
+      Surf::Tri *tris = surf->tris;
+      int sizesurf = sizeof(Surf::Tri);
+      surfint *csurfs = cells[icell].csurfs;
+      for (int m = 0; m < nsurf; m++) {
+        isurf = csurfs[m];
+        if (memflag) memcpy(ptr,&tris[isurf],sizesurf);
+        ptr += sizesurf;
+      }
+    }
     ptr = ROUNDUP(ptr);
   }
 
-  if (s->np == 0) return ptr-buf;
+  // done if no particles
+
+  if (np == 0) return ptr-buf;
+
+  // pack particles
 
   if (memflag) {
 
     // pack particles for unsplit cell
+    // flag each particle for deletion
 
     Particle::OnePart *particles = particle->particles;
     int *next = particle->next;
@@ -427,14 +488,16 @@ int Grid::pack_one_adapt(char *inbuf, char *buf, int memflag)
       while (ip >= 0) {
         memcpy(ptr,&particles[ip],nbytes_particle);
         ptr += nbytes_particle;
-        if (ncustom) {
+        if (ncustom_particle) {
           particle->pack_custom(ip,ptr);
-          ptr += nbytes_custom;
+          ptr += nbytes_particle_custom;
         }
+        particles[ip].icell = -1;
         ip = next[ip];
       }
 
     // pack particles for all sub cells
+    // flag each particle for deletion
 
     } else {
       int isplit = cells[icell].isplit;
@@ -446,16 +509,17 @@ int Grid::pack_one_adapt(char *inbuf, char *buf, int memflag)
         while (ip >= 0) {
           memcpy(ptr,&particles[ip],nbytes_particle);
           ptr += nbytes_particle;
-          if (ncustom) {
+          if (ncustom_particle) {
             particle->pack_custom(ip,ptr);
-            ptr += nbytes_custom;
+            ptr += nbytes_particle_custom;
           }
+          particles[ip].icell = -1;
           ip = next[ip];
         }
       }
-    } 
+    }
 
-  } else ptr += s->np * nbytes_total;
+  } else ptr += np * nbytes_particle_total;
 
   ptr = ROUNDUP(ptr);
   return ptr-buf;
@@ -486,14 +550,14 @@ int Grid::pack_particles(int icell, char *buf, int memflag)
     while (ip >= 0) {
       memcpy(ptr,&particles[ip],nbytes_particle);
       ptr += nbytes_particle;
-      if (ncustom) {
+      if (ncustom_particle) {
         particle->pack_custom(ip,ptr);
-        ptr += nbytes_custom;
+        ptr += nbytes_particle_custom;
       }
       particles[ip].icell = -1;
       ip = next[ip];
     }
-  } else ptr += np * nbytes_total;
+  } else ptr += np * nbytes_particle_total;
 
   ptr = ROUNDUP(ptr);
   return ptr-buf;
@@ -521,18 +585,18 @@ int Grid::unpack_particles(char *buf, int icell, int sortflag)
   Particle::OnePart *particles = particle->particles;
   int nplocal = particle->nlocal;
 
-  if (ncustom) {
+  if (ncustom_particle) {
     int n = nplocal;
     for (int i = 0; i < np; i++) {
       memcpy(&particles[n],ptr,nbytes_particle);
       ptr += nbytes_particle;
       particle->unpack_custom(ptr,n);
-      ptr += nbytes_custom;
+      ptr += nbytes_particle_custom;
       n++;
     }
   } else {
     memcpy(&particles[nplocal],ptr,np*nbytes_particle);
-    ptr += np*nbytes_particle;
+    ptr += np * nbytes_particle_total;
   }
 
   ptr = ROUNDUP(ptr);
@@ -543,10 +607,10 @@ int Grid::unpack_particles(char *buf, int icell, int sortflag)
 
   if (sortflag) {
     particle->grow_next();
-    
+
     cinfo[icell].first = nplocal;
     cinfo[icell].count = np;
-    
+
     for (int i = nplocal; i < npnew-1; i++)
       particle->next[i] = i+1;
     particle->next[npnew-1] = -1;
@@ -554,7 +618,6 @@ int Grid::unpack_particles(char *buf, int icell, int sortflag)
 
   return ptr-buf;
 }
-
 
 /* ----------------------------------------------------------------------
    unpack Np particles from buf
@@ -564,17 +627,17 @@ int Grid::unpack_particles(char *buf, int icell, int sortflag)
 void Grid::unpack_particles_adapt(int np, char *buf)
 {
   particle->grow(np);
-  
+
   Particle::OnePart *particles = particle->particles;
   int nplocal = particle->nlocal;
 
-  if (ncustom) {
+  if (ncustom_particle) {
     char *ptr = buf;
     for (int i = 0; i < np; i++) {
       memcpy(&particles[nplocal],ptr,nbytes_particle);
       ptr += nbytes_particle;
       particle->unpack_custom(ptr,nplocal);
-      ptr += nbytes_custom;
+      ptr += nbytes_particle_custom;
       nplocal++;
     }
   } else {
@@ -597,16 +660,13 @@ void Grid::unpack_particles_adapt(int np, char *buf)
    operates on cells, cinfo, sinfo
    integer lists (csurfs,csplits,csubs) are re-created from scratch
      copy old info from kept cells into new data structs
+   also resets particle cells
+     particles MUST be sorted and uncompressed
+     when done, particles are still sorted in new compressed grid cells
 ------------------------------------------------------------------------- */
 
 void Grid::compress()
 {
-  // must compress per-cell arrays in collide and fixes before
-  // cells data structure changes
-
-  if (collide) collide->compress_grid();
-  if (modify->n_pergrid) modify->compress_grid(0);
-
   // copy of integer lists
   // create new lists
 
@@ -620,13 +680,15 @@ void Grid::compress()
   // compress cells and cinfo and sinfo arrays
   // 4 cases:
   // discard unsplit or sub cell:
+  //   b/c assigned to another procs
   //   continue
   // keep unsplit or sub cell:
   //   memcpy of cells and cinfo, setup csurfs
   //   reset cells.ilocal and sinfo.csubs
   //   increment nlocal, nunsplitlocal, nsublocal
   // discard split cell:
-  //   flag all sub cells with other proc
+  //   b/c assigned to another proc
+  //   flag all its sub cells with other proc (come later in list)
   //   continue
   // keep split cell:
   //   memcpy of cells and cinfo and sinfo, setup csurfs/csplits/csubs
@@ -646,9 +708,15 @@ void Grid::compress()
     if (cells[icell].nsplit <= 1) {
       if (cells[icell].proc != me) continue;
 
+      // copy cell from nlocal to icell
+      // collide and fixes also need to do the same
+
       if (icell != nlocal) {
         memcpy(&cells[nlocal],&cells[icell],sizeof(ChildCell));
         memcpy(&cinfo[nlocal],&cinfo[icell],sizeof(ChildInfo));
+        if (ncustom) copy_custom(icell,nlocal);
+        if (collide) collide->copy_grid_one(icell,nlocal);
+        if (modify->n_pergrid) modify->copy_grid_one(icell,nlocal);
       }
 
       cells[nlocal].ilocal = nlocal;
@@ -664,7 +732,7 @@ void Grid::compress()
                  cells[nlocal].nsurf*sizeof(surfint));
           csurfs->vgot(cells[nlocal].nsurf);
         } else
-          cells[nlocal].csurfs = 
+          cells[nlocal].csurfs =
             cells[sinfo[cells[nlocal].isplit].icell].csurfs;
       }
 
@@ -678,6 +746,9 @@ void Grid::compress()
     // split cells
 
     } else {
+
+      // discard and mark sub cells (appear later in list) with other proc
+
       if (cells[icell].proc != me) {
         int isplit = cells[icell].isplit;
         int nsplit = cells[icell].nsplit;
@@ -688,13 +759,19 @@ void Grid::compress()
         continue;
       }
 
+      // copy cell from nlocal to icell
+      // collide and fixes also need to do the same
+
       if (icell != nlocal) {
         memcpy(&cells[nlocal],&cells[icell],sizeof(ChildCell));
         memcpy(&cinfo[nlocal],&cinfo[icell],sizeof(ChildInfo));
+        if (ncustom) copy_custom(icell,nlocal);
+        if (collide) collide->copy_grid_one(icell,nlocal);
+        if (modify->n_pergrid) modify->copy_grid_one(icell,nlocal);
       }
 
       cells[nlocal].ilocal = nlocal;
-      
+
       // new copy of all csurfs indices
 
       surfint *oldcsurfs = cells[icell].csurfs;
@@ -737,7 +814,10 @@ void Grid::compress()
     }
   }
 
-  hashfilled = 0;
+  // reset final grid cell count in collide and fixes
+
+  if (collide) collide->reset_grid_count(nlocal);
+  if (modify->n_pergrid) modify->reset_grid_count(nlocal);
 
   // delete old integer lists
 
@@ -761,8 +841,4 @@ void Grid::compress()
       ip = next[ip];
     }
   }
-
-  // some fixes have post-compress operations to perform
-
-  if (modify->n_pergrid) modify->compress_grid(1);
 }

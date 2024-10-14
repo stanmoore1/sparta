@@ -1,49 +1,21 @@
-/*
 //@HEADER
 // ************************************************************************
 //
-//                        Kokkos v. 2.0
-//              Copyright (2014) Sandia Corporation
+//                        Kokkos v. 4.0
+//       Copyright (2022) National Technology & Engineering
+//               Solutions of Sandia, LLC (NTESS).
 //
-// Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
+// Under the terms of Contract DE-NA0003525 with NTESS,
 // the U.S. Government retains certain rights in this software.
 //
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are
-// met:
+// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
+// See https://kokkos.org/LICENSE for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
-// 1. Redistributions of source code must retain the above copyright
-// notice, this list of conditions and the following disclaimer.
-//
-// 2. Redistributions in binary form must reproduce the above copyright
-// notice, this list of conditions and the following disclaimer in the
-// documentation and/or other materials provided with the distribution.
-//
-// 3. Neither the name of the Corporation nor the names of the
-// contributors may be used to endorse or promote products derived from
-// this software without specific prior written permission.
-//
-// THIS SOFTWARE IS PROVIDED BY SANDIA CORPORATION "AS IS" AND ANY
-// EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
-// PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL SANDIA CORPORATION OR THE
-// CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
-// EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
-// PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
-// PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
-// LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
-// NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-// SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//
-// Questions? Contact Christian R. Trott (crtrott@sandia.gov)
-//
-// ************************************************************************
 //@HEADER
-*/
 
 #include <gtest/gtest.h>
 
-#include <stdexcept>
 #include <sstream>
 #include <iostream>
 
@@ -51,251 +23,110 @@
 
 namespace Test {
 
-inline
-void test_utilities()
-{
-  using namespace Kokkos::Impl;
-
-  {
-    using i = integer_sequence< int >;
-    using j = make_integer_sequence< int, 0 >;
-
-    static_assert( std::is_same< i, j >::value, "Error: make_integer_sequence" );
-    static_assert( i::size() == 0u, "Error: integer_sequence.size()" );
-  }
-
-  {
-    using i = integer_sequence< int, 0 >;
-    using j = make_integer_sequence< int, 1 >;
-
-    static_assert( std::is_same< i, j >::value, "Error: make_integer_sequence" );
-    static_assert( i::size() == 1u, "Error: integer_sequence.size()" );
-
-    static_assert( integer_sequence_at< 0, i >::value == 0, "Error: integer_sequence_at" );
-
-    static_assert( at( 0, i{} ) == 0, "Error: at(unsigned, integer_sequence)" );
-  }
-
-  {
-    using i = integer_sequence< int, 0, 1 >;
-    using j = make_integer_sequence< int, 2 >;
-
-    static_assert( std::is_same< i, j >::value, "Error: make_integer_sequence" );
-    static_assert( i::size() == 2u, "Error: integer_sequence.size()" );
-
-    static_assert( integer_sequence_at< 0, i >::value == 0, "Error: integer_sequence_at" );
-    static_assert( integer_sequence_at< 1, i >::value == 1, "Error: integer_sequence_at" );
-
-    static_assert( at( 0, i{} ) == 0, "Error: at(unsigned, integer_sequence)" );
-    static_assert( at( 1, i{} ) == 1, "Error: at(unsigned, integer_sequence)" );
-  }
-
-  {
-    using i = integer_sequence< int, 0, 1, 2 >;
-    using j = make_integer_sequence< int, 3 >;
-
-    static_assert( std::is_same< i, j >::value, "Error: make_integer_sequence" );
-    static_assert( i::size() == 3u, "Error: integer_sequence.size()" );
-
-    static_assert( integer_sequence_at< 0, i >::value == 0, "Error: integer_sequence_at" );
-    static_assert( integer_sequence_at< 1, i >::value == 1, "Error: integer_sequence_at" );
-    static_assert( integer_sequence_at< 2, i >::value == 2, "Error: integer_sequence_at" );
-
-    static_assert( at( 0, i{} ) == 0, "Error: at(unsigned, integer_sequence)" );
-    static_assert( at( 1, i{} ) == 1, "Error: at(unsigned, integer_sequence)" );
-    static_assert( at( 2, i{} ) == 2, "Error: at(unsigned, integer_sequence)" );
-  }
-
-  {
-    using i = integer_sequence< int, 0, 1, 2, 3 >;
-    using j = make_integer_sequence< int, 4 >;
-
-    static_assert( std::is_same< i, j >::value, "Error: make_integer_sequence" );
-    static_assert( i::size() == 4u, "Error: integer_sequence.size()" );
-
-    static_assert( integer_sequence_at< 0, i >::value == 0, "Error: integer_sequence_at" );
-    static_assert( integer_sequence_at< 1, i >::value == 1, "Error: integer_sequence_at" );
-    static_assert( integer_sequence_at< 2, i >::value == 2, "Error: integer_sequence_at" );
-    static_assert( integer_sequence_at< 3, i >::value == 3, "Error: integer_sequence_at" );
-
-    static_assert( at( 0, i{} ) == 0, "Error: at(unsigned, integer_sequence)" );
-    static_assert( at( 1, i{} ) == 1, "Error: at(unsigned, integer_sequence)" );
-    static_assert( at( 2, i{} ) == 2, "Error: at(unsigned, integer_sequence)" );
-    static_assert( at( 3, i{} ) == 3, "Error: at(unsigned, integer_sequence)" );
-  }
-
-  {
-    using i = integer_sequence< int, 0, 1, 2, 3, 4 >;
-    using j = make_integer_sequence< int, 5 >;
-
-    static_assert( std::is_same< i, j >::value, "Error: make_integer_sequence" );
-    static_assert( i::size() == 5u, "Error: integer_sequence.size()" );
-
-    static_assert( integer_sequence_at< 0, i >::value == 0, "Error: integer_sequence_at" );
-    static_assert( integer_sequence_at< 1, i >::value == 1, "Error: integer_sequence_at" );
-    static_assert( integer_sequence_at< 2, i >::value == 2, "Error: integer_sequence_at" );
-    static_assert( integer_sequence_at< 3, i >::value == 3, "Error: integer_sequence_at" );
-    static_assert( integer_sequence_at< 4, i >::value == 4, "Error: integer_sequence_at" );
-
-    static_assert( at( 0, i{} ) == 0, "Error: at(unsigned, integer_sequence)" );
-    static_assert( at( 1, i{} ) == 1, "Error: at(unsigned, integer_sequence)" );
-    static_assert( at( 2, i{} ) == 2, "Error: at(unsigned, integer_sequence)" );
-    static_assert( at( 3, i{} ) == 3, "Error: at(unsigned, integer_sequence)" );
-    static_assert( at( 4, i{} ) == 4, "Error: at(unsigned, integer_sequence)" );
-  }
-
-  {
-    using i = integer_sequence< int, 0, 1, 2, 3, 4, 5 >;
-    using j = make_integer_sequence< int, 6 >;
-
-    static_assert( std::is_same< i, j >::value, "Error: make_integer_sequence" );
-    static_assert( i::size() == 6u, "Error: integer_sequence.size()" );
-
-    static_assert( integer_sequence_at< 0, i >::value == 0, "Error: integer_sequence_at" );
-    static_assert( integer_sequence_at< 1, i >::value == 1, "Error: integer_sequence_at" );
-    static_assert( integer_sequence_at< 2, i >::value == 2, "Error: integer_sequence_at" );
-    static_assert( integer_sequence_at< 3, i >::value == 3, "Error: integer_sequence_at" );
-    static_assert( integer_sequence_at< 4, i >::value == 4, "Error: integer_sequence_at" );
-    static_assert( integer_sequence_at< 5, i >::value == 5, "Error: integer_sequence_at" );
-
-    static_assert( at( 0, i{} ) == 0, "Error: at(unsigned, integer_sequence)" );
-    static_assert( at( 1, i{} ) == 1, "Error: at(unsigned, integer_sequence)" );
-    static_assert( at( 2, i{} ) == 2, "Error: at(unsigned, integer_sequence)" );
-    static_assert( at( 3, i{} ) == 3, "Error: at(unsigned, integer_sequence)" );
-    static_assert( at( 4, i{} ) == 4, "Error: at(unsigned, integer_sequence)" );
-    static_assert( at( 5, i{} ) == 5, "Error: at(unsigned, integer_sequence)" );
-  }
-
-  {
-    using i = integer_sequence< int, 0, 1, 2, 3, 4, 5, 6 >;
-    using j = make_integer_sequence< int, 7 >;
-
-    static_assert( std::is_same< i, j >::value, "Error: make_integer_sequence" );
-    static_assert( i::size() == 7u, "Error: integer_sequence.size()" );
-
-    static_assert( integer_sequence_at< 0, i >::value == 0, "Error: integer_sequence_at" );
-    static_assert( integer_sequence_at< 1, i >::value == 1, "Error: integer_sequence_at" );
-    static_assert( integer_sequence_at< 2, i >::value == 2, "Error: integer_sequence_at" );
-    static_assert( integer_sequence_at< 3, i >::value == 3, "Error: integer_sequence_at" );
-    static_assert( integer_sequence_at< 4, i >::value == 4, "Error: integer_sequence_at" );
-    static_assert( integer_sequence_at< 5, i >::value == 5, "Error: integer_sequence_at" );
-    static_assert( integer_sequence_at< 6, i >::value == 6, "Error: integer_sequence_at" );
-
-    static_assert( at( 0, i{} ) == 0, "Error: at(unsigned, integer_sequence)" );
-    static_assert( at( 1, i{} ) == 1, "Error: at(unsigned, integer_sequence)" );
-    static_assert( at( 2, i{} ) == 2, "Error: at(unsigned, integer_sequence)" );
-    static_assert( at( 3, i{} ) == 3, "Error: at(unsigned, integer_sequence)" );
-    static_assert( at( 4, i{} ) == 4, "Error: at(unsigned, integer_sequence)" );
-    static_assert( at( 5, i{} ) == 5, "Error: at(unsigned, integer_sequence)" );
-    static_assert( at( 6, i{} ) == 6, "Error: at(unsigned, integer_sequence)" );
-  }
-
-  {
-    using i = integer_sequence< int, 0, 1, 2, 3, 4, 5, 6, 7 >;
-    using j = make_integer_sequence< int, 8 >;
-
-    static_assert( std::is_same< i, j >::value, "Error: make_integer_sequence" );
-    static_assert( i::size() == 8u, "Error: integer_sequence.size()" );
-
-    static_assert( integer_sequence_at< 0, i >::value == 0, "Error: integer_sequence_at" );
-    static_assert( integer_sequence_at< 1, i >::value == 1, "Error: integer_sequence_at" );
-    static_assert( integer_sequence_at< 2, i >::value == 2, "Error: integer_sequence_at" );
-    static_assert( integer_sequence_at< 3, i >::value == 3, "Error: integer_sequence_at" );
-    static_assert( integer_sequence_at< 4, i >::value == 4, "Error: integer_sequence_at" );
-    static_assert( integer_sequence_at< 5, i >::value == 5, "Error: integer_sequence_at" );
-    static_assert( integer_sequence_at< 6, i >::value == 6, "Error: integer_sequence_at" );
-    static_assert( integer_sequence_at< 7, i >::value == 7, "Error: integer_sequence_at" );
-
-    static_assert( at( 0, i{} ) == 0, "Error: at(unsigned, integer_sequence)" );
-    static_assert( at( 1, i{} ) == 1, "Error: at(unsigned, integer_sequence)" );
-    static_assert( at( 2, i{} ) == 2, "Error: at(unsigned, integer_sequence)" );
-    static_assert( at( 3, i{} ) == 3, "Error: at(unsigned, integer_sequence)" );
-    static_assert( at( 4, i{} ) == 4, "Error: at(unsigned, integer_sequence)" );
-    static_assert( at( 5, i{} ) == 5, "Error: at(unsigned, integer_sequence)" );
-    static_assert( at( 6, i{} ) == 6, "Error: at(unsigned, integer_sequence)" );
-    static_assert( at( 7, i{} ) == 7, "Error: at(unsigned, integer_sequence)" );
-  }
-
-  {
-    using i = integer_sequence< int, 0, 1, 2, 3, 4, 5, 6, 7, 8 >;
-    using j = make_integer_sequence< int, 9 >;
-
-    static_assert( std::is_same< i, j >::value, "Error: make_integer_sequence" );
-    static_assert( i::size() == 9u, "Error: integer_sequence.size()" );
-
-    static_assert( integer_sequence_at< 0, i >::value == 0, "Error: integer_sequence_at" );
-    static_assert( integer_sequence_at< 1, i >::value == 1, "Error: integer_sequence_at" );
-    static_assert( integer_sequence_at< 2, i >::value == 2, "Error: integer_sequence_at" );
-    static_assert( integer_sequence_at< 3, i >::value == 3, "Error: integer_sequence_at" );
-    static_assert( integer_sequence_at< 4, i >::value == 4, "Error: integer_sequence_at" );
-    static_assert( integer_sequence_at< 5, i >::value == 5, "Error: integer_sequence_at" );
-    static_assert( integer_sequence_at< 6, i >::value == 6, "Error: integer_sequence_at" );
-    static_assert( integer_sequence_at< 7, i >::value == 7, "Error: integer_sequence_at" );
-    static_assert( integer_sequence_at< 8, i >::value == 8, "Error: integer_sequence_at" );
-
-    static_assert( at( 0, i{} ) == 0, "Error: at(unsigned, integer_sequence)" );
-    static_assert( at( 1, i{} ) == 1, "Error: at(unsigned, integer_sequence)" );
-    static_assert( at( 2, i{} ) == 2, "Error: at(unsigned, integer_sequence)" );
-    static_assert( at( 3, i{} ) == 3, "Error: at(unsigned, integer_sequence)" );
-    static_assert( at( 4, i{} ) == 4, "Error: at(unsigned, integer_sequence)" );
-    static_assert( at( 5, i{} ) == 5, "Error: at(unsigned, integer_sequence)" );
-    static_assert( at( 6, i{} ) == 6, "Error: at(unsigned, integer_sequence)" );
-    static_assert( at( 7, i{} ) == 7, "Error: at(unsigned, integer_sequence)" );
-    static_assert( at( 8, i{} ) == 8, "Error: at(unsigned, integer_sequence)" );
-  }
-
-  {
-    using i = integer_sequence< int, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 >;
-    using j = make_integer_sequence< int, 10 >;
-
-    static_assert( std::is_same< i, j >::value, "Error: make_integer_sequence" );
-    static_assert( i::size() == 10u, "Error: integer_sequence.size()" );
-
-    static_assert( integer_sequence_at< 0, i >::value == 0, "Error: integer_sequence_at" );
-    static_assert( integer_sequence_at< 1, i >::value == 1, "Error: integer_sequence_at" );
-    static_assert( integer_sequence_at< 2, i >::value == 2, "Error: integer_sequence_at" );
-    static_assert( integer_sequence_at< 3, i >::value == 3, "Error: integer_sequence_at" );
-    static_assert( integer_sequence_at< 4, i >::value == 4, "Error: integer_sequence_at" );
-    static_assert( integer_sequence_at< 5, i >::value == 5, "Error: integer_sequence_at" );
-    static_assert( integer_sequence_at< 6, i >::value == 6, "Error: integer_sequence_at" );
-    static_assert( integer_sequence_at< 7, i >::value == 7, "Error: integer_sequence_at" );
-    static_assert( integer_sequence_at< 8, i >::value == 8, "Error: integer_sequence_at" );
-    static_assert( integer_sequence_at< 9, i >::value == 9, "Error: integer_sequence_at" );
-
-    static_assert( at( 0, i{} ) == 0, "Error: at(unsigned, integer_sequence)" );
-    static_assert( at( 1, i{} ) == 1, "Error: at(unsigned, integer_sequence)" );
-    static_assert( at( 2, i{} ) == 2, "Error: at(unsigned, integer_sequence)" );
-    static_assert( at( 3, i{} ) == 3, "Error: at(unsigned, integer_sequence)" );
-    static_assert( at( 4, i{} ) == 4, "Error: at(unsigned, integer_sequence)" );
-    static_assert( at( 5, i{} ) == 5, "Error: at(unsigned, integer_sequence)" );
-    static_assert( at( 6, i{} ) == 6, "Error: at(unsigned, integer_sequence)" );
-    static_assert( at( 7, i{} ) == 7, "Error: at(unsigned, integer_sequence)" );
-    static_assert( at( 8, i{} ) == 8, "Error: at(unsigned, integer_sequence)" );
-    static_assert( at( 9, i{} ) == 9, "Error: at(unsigned, integer_sequence)" );
-  }
-
-  {
-    using i = make_integer_sequence< int, 5 >;
-    using r = reverse_integer_sequence< i >;
-    using gr = integer_sequence< int, 4, 3, 2, 1, 0 >;
-
-    static_assert( std::is_same< r, gr >::value, "Error: reverse_integer_sequence" );
-  }
-
-  {
-    using s = make_integer_sequence< int, 10 >;
-    using e = exclusive_scan_integer_sequence< s >;
-    using i = inclusive_scan_integer_sequence< s >;
-
-    using ge = integer_sequence< int, 0, 0, 1, 3, 6, 10, 15, 21, 28, 36 >;
-    using gi = integer_sequence< int, 0, 1, 3, 6, 10, 15, 21, 28, 36, 45 >;
-
-    static_assert( e::value == 45, "Error: scan value" );
-    static_assert( i::value == 45, "Error: scan value" );
-
-    static_assert( std::is_same< e::type, ge >::value, "Error: exclusive_scan" );
-    static_assert( std::is_same< i::type, gi >::value, "Error: inclusive_scan" );
-  }
+void test_is_specialization_of() {
+  using Kokkos::Impl::is_specialization_of;
+  static_assert(is_specialization_of<Kokkos::pair<float, int>, Kokkos::pair>{});
+  static_assert(!is_specialization_of<Kokkos::View<int*>, Kokkos::pair>{});
+  static_assert(is_specialization_of<Kokkos::View<int*>, Kokkos::View>{});
+  // NOTE Not removing cv-qualifiers
+  static_assert(
+      !is_specialization_of<Kokkos::View<int*> const, Kokkos::View>{});
+  // NOTE Would not compile because Kokkos::Array takes a non-type template
+  // parameter
+  // static_assert(is_specialization_of<Kokkos::Array<int, 4>,
+  //               Kokkos::Array>{});
+  // But this is fine of course
+  static_assert(!is_specialization_of<Kokkos::Array<float, 2>, Kokkos::pair>{});
 }
 
-} // namespace Test
+namespace {
+enum Enum { EZero, EOne };
+enum EnumBool : bool { EBFalse, EBTrue };
+enum class ScopedEnum { SEZero, SEOne };
+enum class ScopedEnumShort : short { SESZero, SESOne };
+class Class {};
+
+template <typename Base, typename Derived>
+inline constexpr bool is_public_unambiguous_base_of_v =
+    std::is_convertible_v<Derived*, Base*> && !std::is_same_v<Derived, Base>;
+}  // namespace
+
+void test_to_underlying() {
+  using Kokkos::Impl::to_underlying;
+
+  constexpr auto e0 = to_underlying(EZero);
+  static_assert(e0 == 0);
+
+  constexpr auto e1 = to_underlying(EOne);
+  static_assert(e1 == 1);
+
+  constexpr auto eb0 = to_underlying(EBFalse);
+  constexpr bool b0  = false;
+  static_assert(std::is_same_v<decltype(eb0), decltype(b0)>);
+  static_assert(eb0 == b0);
+
+  constexpr auto eb1 = to_underlying(EBTrue);
+  constexpr bool b1  = true;
+  static_assert(std::is_same_v<decltype(eb1), decltype(b1)>);
+  static_assert(eb1 == b1);
+
+  constexpr auto se0 = to_underlying(ScopedEnum::SEZero);
+  static_assert(se0 == 0);
+
+  constexpr auto se1 = to_underlying(ScopedEnum::SEOne);
+  static_assert(se1 == 1);
+
+  constexpr auto ses0 = to_underlying(ScopedEnumShort::SESZero);
+  constexpr short s0  = 0;
+  static_assert(std::is_same_v<decltype(ses0), decltype(s0)>);
+  static_assert(ses0 == s0);
+
+  constexpr auto ses1 = to_underlying(ScopedEnumShort::SESOne);
+  constexpr short s1  = 1;
+  static_assert(std::is_same_v<decltype(ses1), decltype(s1)>);
+  static_assert(ses1 == s1);
+}
+
+void test_is_scoped_enum() {
+  using Kokkos::Impl::is_scoped_enum;
+  using Kokkos::Impl::is_scoped_enum_v;
+
+  static_assert(!is_scoped_enum<int>{});
+  static_assert(!is_scoped_enum<int>::value);
+  static_assert(!is_scoped_enum_v<int>);
+  static_assert(
+      is_public_unambiguous_base_of_v<std::false_type, is_scoped_enum<int>>);
+
+  static_assert(!is_scoped_enum<Class>{});
+  static_assert(!is_scoped_enum<Class>::value);
+  static_assert(!is_scoped_enum_v<Class>);
+  static_assert(
+      is_public_unambiguous_base_of_v<std::false_type, is_scoped_enum<Class>>);
+
+  static_assert(!is_scoped_enum<Enum>{});
+  static_assert(!is_scoped_enum<Enum>::value);
+  static_assert(!is_scoped_enum_v<Enum>);
+  static_assert(
+      is_public_unambiguous_base_of_v<std::false_type, is_scoped_enum<Enum>>);
+
+  static_assert(!is_scoped_enum<EnumBool>{});
+  static_assert(!is_scoped_enum<EnumBool>::value);
+  static_assert(!is_scoped_enum_v<EnumBool>);
+  static_assert(is_public_unambiguous_base_of_v<std::false_type,
+                                                is_scoped_enum<EnumBool>>);
+
+  static_assert(is_scoped_enum<ScopedEnum>{});
+  static_assert(is_scoped_enum<ScopedEnum>::value);
+  static_assert(is_scoped_enum_v<ScopedEnum>);
+  static_assert(is_public_unambiguous_base_of_v<std::true_type,
+                                                is_scoped_enum<ScopedEnum>>);
+
+  static_assert(is_scoped_enum<ScopedEnumShort>{});
+  static_assert(is_scoped_enum<ScopedEnumShort>::value);
+  static_assert(is_scoped_enum_v<ScopedEnumShort>);
+  static_assert(
+      is_public_unambiguous_base_of_v<std::true_type,
+                                      is_scoped_enum<ScopedEnumShort>>);
+}
+
+}  // namespace Test

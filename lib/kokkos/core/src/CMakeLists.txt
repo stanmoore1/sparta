@@ -1,114 +1,215 @@
-
-
-INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR})
-INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR})
-
-#-----------------------------------------------------------------------------
-
-SET(TRILINOS_INCDIR ${CMAKE_INSTALL_PREFIX}/${${PROJECT_NAME}_INSTALL_INCLUDE_DIR})
-
-#-----------------------------------------------------------------------------
-
-IF(KOKKOS_LEGACY_TRIBITS)
-
-  MESSAGE("LEGACY STUFF GETTING CALLED")
-
-  IF(KOKKOS_ENABLE_EXPLICIT_INSTANTIATION)
-    MESSAGE("GOING INTO ETI DIR")
-    ADD_SUBDIRECTORY(eti)
-    INCLUDE_DIRECTORIES("${CMAKE_CURRENT_SOURCE_DIR}/eti")
+KOKKOS_INCLUDE_DIRECTORIES(
+  ${CMAKE_CURRENT_BINARY_DIR}
+  ${CMAKE_CURRENT_SOURCE_DIR}
+  ${KOKKOS_TOP_BUILD_DIR}
+)
+IF (NOT desul_FOUND)
+  IF(KOKKOS_ENABLE_CUDA)
+    SET(DESUL_ATOMICS_ENABLE_CUDA ON)
   ENDIF()
-
-  ASSERT_DEFINED(${PROJECT_NAME}_ENABLE_CXX11)
-  ASSERT_DEFINED(${PACKAGE_NAME}_ENABLE_CUDA)
-
-  SET(HEADERS_PUBLIC "")
-  SET(HEADERS_PRIVATE "")
-  SET(SOURCES "")
-
-  FILE(GLOB HEADERS_PUBLIC Kokkos*.hpp)
-  LIST( APPEND HEADERS_PUBLIC ${CMAKE_BINARY_DIR}/${PACKAGE_NAME}_config.h )
-
-  #-----------------------------------------------------------------------------
-
-  FILE(GLOB HEADERS_IMPL impl/*.hpp)
-  FILE(GLOB SOURCES_IMPL impl/*.cpp)
-
-  LIST(APPEND HEADERS_PRIVATE ${HEADERS_IMPL} )
-  LIST(APPEND SOURCES         ${SOURCES_IMPL} )
-
-  INSTALL(FILES ${HEADERS_IMPL} DESTINATION ${TRILINOS_INCDIR}/impl/)
-
-  #-----------------------------------------------------------------------------
-
-  FILE(GLOB HEADERS_THREADS Threads/*.hpp)
-  FILE(GLOB SOURCES_THREADS Threads/*.cpp)
-
-  LIST(APPEND HEADERS_PRIVATE ${HEADERS_THREADS} )
-  LIST(APPEND SOURCES         ${SOURCES_THREADS} )
-
-  INSTALL(FILES ${HEADERS_THREADS} DESTINATION ${TRILINOS_INCDIR}/Threads/)
-
-  #-----------------------------------------------------------------------------
-
-  FILE(GLOB HEADERS_OPENMP OpenMP/*.hpp)
-  FILE(GLOB SOURCES_OPENMP OpenMP/*.cpp)
-
-  LIST(APPEND HEADERS_PRIVATE ${HEADERS_OPENMP} )
-  LIST(APPEND SOURCES         ${SOURCES_OPENMP} )
-
-  INSTALL(FILES ${HEADERS_OPENMP} DESTINATION ${TRILINOS_INCDIR}/OpenMP/)
-
-  #-----------------------------------------------------------------------------
-
-  FILE(GLOB HEADERS_CUDA Cuda/*.hpp)
-  FILE(GLOB SOURCES_CUDA Cuda/*.cpp)
-
-  LIST(APPEND HEADERS_PRIVATE ${HEADERS_CUDA} )
-  LIST(APPEND SOURCES         ${SOURCES_CUDA} )
-
-  INSTALL(FILES ${HEADERS_CUDA} DESTINATION ${TRILINOS_INCDIR}/Cuda/)
-
-  #-----------------------------------------------------------------------------
-  FILE(GLOB HEADERS_QTHREADS Qthreads/*.hpp)
-  FILE(GLOB SOURCES_QTHREADS Qthreads/*.cpp)
-
-  LIST(APPEND HEADERS_PRIVATE ${HEADERS_QTHREADS} )
-  LIST(APPEND SOURCES         ${SOURCES_QTHREADS} )
-
-  IF(KOKKOS_ENABLE_EXPLICIT_INSTANTIATION)
-    LIST(APPEND SOURCES       ${ETI_SOURCES} )
+  IF(KOKKOS_ENABLE_CUDA_RELOCATABLE_DEVICE_CODE)
+    SET(DESUL_ATOMICS_ENABLE_CUDA_SEPARABLE_COMPILATION ON)
   ENDIF()
+  IF(KOKKOS_ENABLE_HIP)
+    SET(DESUL_ATOMICS_ENABLE_HIP ON)
+  ENDIF()
+  IF(KOKKOS_ENABLE_HIP_RELOCATABLE_DEVICE_CODE)
+    SET(DESUL_ATOMICS_ENABLE_HIP_SEPARABLE_COMPILATION ON)
+  ENDIF()
+  IF(KOKKOS_ENABLE_SYCL)
+    SET(DESUL_ATOMICS_ENABLE_SYCL ON)
+    IF(KOKKOS_IMPL_SYCL_DEVICE_GLOBAL_SUPPORTED AND NOT KOKKOS_IMPL_HAVE_SYCL_EXT_ONEAPI_DEVICE_GLOBAL)
+      SET(DESUL_ATOMICS_ENABLE_SYCL_SEPARABLE_COMPILATION ON)
+    ENDIF()
+  ENDIF()
+  IF(KOKKOS_ENABLE_OPENMPTARGET)
+    SET(DESUL_ATOMICS_ENABLE_OPENMP ON) # not a typo Kokkos OpenMPTarget -> Desul OpenMP
+  ENDIF()
+  IF(KOKKOS_ENABLE_OPENACC)
+    SET(DESUL_ATOMICS_ENABLE_OPENACC ON)
+  ENDIF()
+  CONFIGURE_FILE(
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../tpls/desul/Config.hpp.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/desul/atomics/Config.hpp
+  )
+  KOKKOS_INCLUDE_DIRECTORIES(
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../tpls/desul/include
+  )
+ENDIF()
 
-  INSTALL(FILES ${HEADERS_QTHREADS} DESTINATION ${TRILINOS_INCDIR}/Qthreads/)
+INSTALL (DIRECTORY
+  "${CMAKE_CURRENT_SOURCE_DIR}/"
+  DESTINATION ${KOKKOS_HEADER_DIR}
+  FILES_MATCHING
+  PATTERN "*.hpp"
+  PATTERN "*.h"
+)
 
-  TRIBITS_ADD_LIBRARY(
-      kokkoscore
-      HEADERS ${HEADERS_PUBLIC}
-      NOINSTALLHEADERS ${HEADERS_PRIVATE}
-      SOURCES ${SOURCES}
-      DEPLIBS
-      )
+SET(KOKKOS_CORE_SRCS)
+APPEND_GLOB(KOKKOS_CORE_SRCS ${CMAKE_CURRENT_SOURCE_DIR}/impl/*.cpp)
+SET(KOKKOS_CORE_HEADERS)
+APPEND_GLOB(KOKKOS_CORE_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/*.hpp)
+APPEND_GLOB(KOKKOS_CORE_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/impl/*.hpp)
 
-#-----------------------------------------------------------------------------
-#  In the new build system, sources are calculated by Makefile.kokkos
-else()
+IF (KOKKOS_ENABLE_CUDA)
+  APPEND_GLOB(KOKKOS_CORE_SRCS ${CMAKE_CURRENT_SOURCE_DIR}/Cuda/*.cpp)
+  APPEND_GLOB(KOKKOS_CORE_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/Cuda/*.hpp)
+ENDIF()
+
+IF (KOKKOS_ENABLE_OPENMP)
+  APPEND_GLOB(KOKKOS_CORE_SRCS ${CMAKE_CURRENT_SOURCE_DIR}/OpenMP/*.cpp)
+  APPEND_GLOB(KOKKOS_CORE_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/OpenMP/*.hpp)
+ENDIF()
+
+IF (KOKKOS_ENABLE_OPENMPTARGET)
+  APPEND_GLOB(KOKKOS_CORE_SRCS ${CMAKE_CURRENT_SOURCE_DIR}/OpenMPTarget/*.cpp)
+  APPEND_GLOB(KOKKOS_CORE_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/OpenMPTarget/*.hpp)
+ENDIF()
+
+IF (KOKKOS_ENABLE_OPENACC)
+  APPEND_GLOB(KOKKOS_CORE_SRCS ${CMAKE_CURRENT_SOURCE_DIR}/OpenACC/*.cpp)
+  APPEND_GLOB(KOKKOS_CORE_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/OpenACC/*.hpp)
+ENDIF()
+
+IF (KOKKOS_ENABLE_THREADS)
+  APPEND_GLOB(KOKKOS_CORE_SRCS ${CMAKE_CURRENT_SOURCE_DIR}/Threads/*.cpp)
+  APPEND_GLOB(KOKKOS_CORE_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/Threads/*.hpp)
+ENDIF()
+
+IF (KOKKOS_ENABLE_HIP)
+  APPEND_GLOB(KOKKOS_CORE_SRCS ${CMAKE_CURRENT_SOURCE_DIR}/HIP/*.cpp)
+  APPEND_GLOB(KOKKOS_CORE_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/HIP/*.hpp)
+ENDIF()
+
+IF (KOKKOS_ENABLE_HPX)
+  APPEND_GLOB(KOKKOS_CORE_SRCS ${CMAKE_CURRENT_SOURCE_DIR}/HPX/*.cpp)
+  APPEND_GLOB(KOKKOS_CORE_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/HPX/*.hpp)
+ENDIF()
+
+IF (KOKKOS_ENABLE_SERIAL)
+  APPEND_GLOB(KOKKOS_CORE_SRCS ${CMAKE_CURRENT_SOURCE_DIR}/Serial/*.cpp)
+  APPEND_GLOB(KOKKOS_CORE_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/Serial/*.hpp)
+ENDIF()
+
+IF (KOKKOS_ENABLE_SYCL)
+  APPEND_GLOB(KOKKOS_CORE_SRCS ${CMAKE_CURRENT_SOURCE_DIR}/SYCL/*.cpp)
+  APPEND_GLOB(KOKKOS_CORE_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/SYCL/*.hpp)
+ENDIF()
+
+IF (NOT desul_FOUND)
+  IF (KOKKOS_ENABLE_CUDA)
+    APPEND_GLOB(KOKKOS_CORE_SRCS ${CMAKE_CURRENT_SOURCE_DIR}/../../tpls/desul/src/Lock_Array_CUDA.cpp)
+  ELSEIF (KOKKOS_ENABLE_HIP)
+    APPEND_GLOB(KOKKOS_CORE_SRCS ${CMAKE_CURRENT_SOURCE_DIR}/../../tpls/desul/src/Lock_Array_HIP.cpp)
+  ELSEIF (KOKKOS_ENABLE_SYCL)
+    APPEND_GLOB(KOKKOS_CORE_SRCS ${CMAKE_CURRENT_SOURCE_DIR}/../../tpls/desul/src/Lock_Array_SYCL.cpp)
+  ENDIF()
+  APPEND_GLOB(KOKKOS_CORE_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/../../tpls/desul/include/desul/*.hpp)
+  APPEND_GLOB(KOKKOS_CORE_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/../../tpls/desul/include/desul/*/*.hpp)
+  APPEND_GLOB(KOKKOS_CORE_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/../../tpls/desul/include/desul/*/*/*.hpp)
+  APPEND_GLOB(KOKKOS_CORE_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/../../tpls/desul/include/*/*/*.inc*)
+  APPEND_GLOB(KOKKOS_CORE_HEADERS ${CMAKE_CURRENT_BINARY_DIR}/desul/*.hpp)
 
   INSTALL (DIRECTORY
-           "${CMAKE_CURRENT_SOURCE_DIR}/"
-           DESTINATION ${TRILINOS_INCDIR}
-           FILES_MATCHING PATTERN "*.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../tpls/desul/include/desul"
+    "${CMAKE_CURRENT_BINARY_DIR}/desul"
+    DESTINATION ${KOKKOS_HEADER_DIR}
+    FILES_MATCHING
+    PATTERN "*.inc"
+    PATTERN "*.inc_*"
+    PATTERN "*.hpp"
   )
 
-  TRIBITS_ADD_LIBRARY(
+  MESSAGE(STATUS "Using internal desul_atomics copy")
+ELSE()
+  MESSAGE(STATUS "Using external desul_atomics install found at:")
+  MESSAGE(STATUS "  " ${desul_DIR})
+ENDIF()
+
+
+KOKKOS_ADD_LIBRARY(
+  kokkoscore
+  SOURCES ${KOKKOS_CORE_SRCS}
+  HEADERS ${KOKKOS_CORE_HEADERS}
+  ADD_BUILD_OPTIONS # core should be given all the necessary compiler/linker flags
+)
+
+KOKKOS_LIB_INCLUDE_DIRECTORIES(kokkoscore
+  ${KOKKOS_TOP_BUILD_DIR}
+  ${CMAKE_CURRENT_BINARY_DIR}
+  ${CMAKE_CURRENT_SOURCE_DIR}
+)
+IF (NOT desul_FOUND)
+  KOKKOS_LIB_INCLUDE_DIRECTORIES(kokkoscore
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../tpls/desul/include
+  )
+ENDIF()
+
+IF (Kokkos_ENABLE_IMPL_MDSPAN)
+  MESSAGE(STATUS "Experimental mdspan support is enabled")
+
+  # Some compilers now include mdspan... we just flag on their version
+  # for now until we can get some compiler detection support
+  include(CheckIncludeFileCXX)
+  check_include_file_cxx(experimental/mdspan KOKKOS_COMPILER_SUPPORTS_EXPERIMENTAL_MDSPAN)
+  check_include_file_cxx(mdspan KOKKOS_COMPILER_SUPPORTS_MDSPAN)
+
+  if (Kokkos_ENABLE_MDSPAN_EXTERNAL)
+    MESSAGE(STATUS "Using external mdspan")
+    target_link_libraries(kokkoscore PUBLIC std::mdspan)
+  elseif(KOKKOS_COMPILER_SUPPORTS_MDSPAN AND NOT Kokkos_ENABLE_IMPL_SKIP_COMPILER_MDSPAN)
+    message(STATUS "Using compiler-supplied mdspan")
+  elseif(KOKKOS_COMPILER_SUPPORTS_EXPERIMENTAL_MDSPAN AND NOT Kokkos_ENABLE_IMPL_SKIP_COMPILER_MDSPAN)
+    message(STATUS "Using compiler-supplied experimental/mdspan")
+  else()
+    KOKKOS_LIB_INCLUDE_DIRECTORIES(
       kokkoscore
-      SOURCES ${KOKKOS_CORE_SRCS}
-      DEPLIBS
-      )
+      ${CMAKE_CURRENT_SOURCE_DIR}/../../tpls/mdspan/include
+    )
 
-endif()
-#-----------------------------------------------------------------------------
+    APPEND_GLOB(KOKKOS_CORE_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/../../tpls/mdspan/include/experimental/__p0009_bits/*.hpp)
+    APPEND_GLOB(KOKKOS_CORE_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/../../tpls/mdspan/include/experimental/mdspan)
 
-# build and install pkgconfig file
-CONFIGURE_FILE(kokkos.pc.in kokkos.pc @ONLY)
-INSTALL(FILES ${CMAKE_CURRENT_BINARY_DIR}/kokkos.pc DESTINATION lib/pkgconfig)
+    INSTALL (DIRECTORY
+      "${CMAKE_CURRENT_SOURCE_DIR}/../../tpls/mdspan/include/"
+      DESTINATION ${KOKKOS_HEADER_DIR}
+      FILES_MATCHING
+      PATTERN "mdspan"
+      PATTERN "*.hpp"
+    )
+    MESSAGE(STATUS "Using internal mdspan directory ${CMAKE_CURRENT_SOURCE_DIR}/../../tpls/mdspan/include")
+  endif()
+ENDIF()
+
+KOKKOS_LINK_TPL(kokkoscore PUBLIC HWLOC)
+KOKKOS_LINK_TPL(kokkoscore PUBLIC CUDA)
+KOKKOS_LINK_TPL(kokkoscore PUBLIC HPX)
+KOKKOS_LINK_TPL(kokkoscore PUBLIC LIBDL)
+# On *nix-like systems (Linux, macOS) we need pthread for C++ std::thread
+IF (NOT WIN32)
+  KOKKOS_LINK_TPL(kokkoscore PUBLIC THREADS)
+ENDIF()
+IF (NOT KOKKOS_ENABLE_COMPILE_AS_CMAKE_LANGUAGE)
+  KOKKOS_LINK_TPL(kokkoscore PUBLIC ROCM)
+ENDIF()
+
+# FIXME: We need a proper solution to figure out whether to enable
+#        libatomic
+# Most compilers only require libatomic for 128-bit CAS
+# I (CT) had removed 128bit CAS from desul to not need libatomic.
+IF (KOKKOS_ENABLE_OPENMPTARGET)
+  target_link_libraries(kokkoscore PUBLIC atomic)
+ENDIF()
+
+IF (desul_FOUND)
+  target_link_libraries(kokkoscore PUBLIC desul_atomics)
+ENDIF()
+
+# FIXME_TRILINOS Trilinos doesn't allow for Kokkos to use find_dependency so we
+# just append the flags in cmake/kokkos_tpls.cmake instead of linking with the
+# OpenMP target.
+IF(Kokkos_ENABLE_OPENMP AND NOT KOKKOS_HAS_TRILINOS)
+  target_link_libraries(kokkoscore PUBLIC OpenMP::OpenMP_CXX)
+ENDIF()
+
+KOKKOS_LINK_TPL(kokkoscore PUBLIC LIBQUADMATH)

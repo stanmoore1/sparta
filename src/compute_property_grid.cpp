@@ -1,12 +1,12 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   http://sparta.github.io
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -38,12 +38,20 @@ ComputePropertyGrid::ComputePropertyGrid(SPARTA *sparta, int narg, char **arg) :
   // parse input values
   // customize a new keyword by adding to if statement
 
+  dimension = domain->dimension;
+
   pack_choice = new FnPtrPack[nvalues];
-  index = new int[nvalues];
 
   int i;
   for (int iarg = 3; iarg < narg; iarg++) {
     i = iarg-3;
+
+    // check for invalid fields in 2d
+
+    if (dimension == 2)
+      if ((strcmp(arg[iarg],"zlo") == 0) || (strcmp(arg[iarg],"zhi") == 0) ||
+	  (strcmp(arg[iarg],"zc") == 0))
+        error->all(FLERR,"Invalid compute property/grid field for 2d simulation");
 
     if (strcmp(arg[iarg],"id") == 0) {
       pack_choice[i] = &ComputePropertyGrid::pack_id;
@@ -55,19 +63,12 @@ ComputePropertyGrid::ComputePropertyGrid(SPARTA *sparta, int narg, char **arg) :
     } else if (strcmp(arg[iarg],"ylo") == 0) {
       pack_choice[i] = &ComputePropertyGrid::pack_ylo;
     } else if (strcmp(arg[iarg],"zlo") == 0) {
-      if (domain->dimension == 2) 
-	error->all(FLERR,
-                   "Invalid compute property/grid field for 2d simulation");
       pack_choice[i] = &ComputePropertyGrid::pack_zlo;
-
     } else if (strcmp(arg[iarg],"xhi") == 0) {
       pack_choice[i] = &ComputePropertyGrid::pack_xhi;
     } else if (strcmp(arg[iarg],"yhi") == 0) {
       pack_choice[i] = &ComputePropertyGrid::pack_yhi;
     } else if (strcmp(arg[iarg],"zhi") == 0) {
-      if (domain->dimension == 2) 
-	error->all(FLERR,
-                   "Invalid compute property/grid field for 2d simulation");
       pack_choice[i] = &ComputePropertyGrid::pack_zhi;
 
     } else if (strcmp(arg[iarg],"xc") == 0) {
@@ -75,9 +76,6 @@ ComputePropertyGrid::ComputePropertyGrid(SPARTA *sparta, int narg, char **arg) :
     } else if (strcmp(arg[iarg],"yc") == 0) {
       pack_choice[i] = &ComputePropertyGrid::pack_yc;
     } else if (strcmp(arg[iarg],"zc") == 0) {
-      if (domain->dimension == 2) 
-	error->all(FLERR,
-                   "Invalid compute property/grid field for 2d simulation");
       pack_choice[i] = &ComputePropertyGrid::pack_zc;
 
     } else if (strcmp(arg[iarg],"vol") == 0) {
@@ -99,8 +97,8 @@ ComputePropertyGrid::ComputePropertyGrid(SPARTA *sparta, int narg, char **arg) :
 
 ComputePropertyGrid::~ComputePropertyGrid()
 {
+  if (copymode) return;
   delete [] pack_choice;
-  delete [] index;
   memory->destroy(vector_grid);
   memory->destroy(array_grid);
 }
@@ -289,7 +287,7 @@ void ComputePropertyGrid::pack_xc(int n)
   Grid::ChildInfo *cinfo = grid->cinfo;
 
   for (int i = 0; i < nglocal; i++) {
-    if (cinfo[i].mask & groupbit) 
+    if (cinfo[i].mask & groupbit)
       buf[n] = 0.5 * (cells[i].lo[0] + cells[i].hi[0]);
     else buf[n] = 0.0;
     n += nvalues;
@@ -304,7 +302,7 @@ void ComputePropertyGrid::pack_yc(int n)
   Grid::ChildInfo *cinfo = grid->cinfo;
 
   for (int i = 0; i < nglocal; i++) {
-    if (cinfo[i].mask & groupbit) 
+    if (cinfo[i].mask & groupbit)
       buf[n] = 0.5 * (cells[i].lo[1] + cells[i].hi[1]);
     else buf[n] = 0.0;
     n += nvalues;
@@ -319,7 +317,7 @@ void ComputePropertyGrid::pack_zc(int n)
   Grid::ChildInfo *cinfo = grid->cinfo;
 
   for (int i = 0; i < nglocal; i++) {
-    if (cinfo[i].mask & groupbit) 
+    if (cinfo[i].mask & groupbit)
       buf[n] = 0.5 * (cells[i].lo[2] + cells[i].hi[2]);
     else buf[n] = 0.0;
     n += nvalues;

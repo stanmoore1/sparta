@@ -1,7 +1,7 @@
 <HEAD>
 <TITLE>SPARTA Users Manual</TITLE>
-<META NAME="docnumber" CONTENT="16 Apr 2019 version">
-<META NAME="author" CONTENT="http://sparta.sandia.gov - Sandia National Laboratories">
+<META NAME="docnumber" CONTENT="4 Sep 2024 version">
+<META NAME="author" CONTENT="https://sparta.github.io - Sandia National Laboratories">
 <META NAME="copyright" CONTENT="Copyright (2014) Sandia Corporation.  This software and manual is distributed under the GNU General Public License.">
 </HEAD>
 
@@ -9,7 +9,7 @@
 
 "SPARTA WWW Site"_sws - "SPARTA Documentation"_sd - "SPARTA Commands"_sc :c
 
-:link(sws,http://sparta.sandia.gov)
+:link(sws,https://sparta.github.io)
 :link(sd,Manual.html)
 :link(sc,Section_commands.html#comm)
 
@@ -18,7 +18,7 @@
 <H1></H1>
 
 SPARTA Documentation :c,h3
-16 Apr 2019 version :c,h4
+4 Sep 2024 version :c,h4
 
 Version info: :h4
 
@@ -44,8 +44,7 @@ it to be part of very patch. :l
 
 At some point, there also will be a "Developer.pdf"_Developer.pdf file
 in the doc directory, which describes the internal structure and
-algorithms of SPARTA.  NOTE: as of 21 Apr 2015, this file is not yet
-available. :ule,l
+algorithms of SPARTA. :ule,l
 
 SPARTA stands for Stochastic PArallel Rarefied-gas Time-accurate
 Analyzer.
@@ -59,12 +58,12 @@ request under the terms of the GNU Lesser General Public License
 (LGPL).
 
 The primary developers of SPARTA are "Steve Plimpton"_sjp, and Michael
-Gallis who can be contacted at sjplimp,magalli at sandia.gov.  The
-"SPARTA WWW Site"_sws at http://sparta.sandia.gov has more information
-about the code and its uses.
+Gallis who can be contacted at sjplimp at gmail.com and magalli at
+sandia.gov.  The "SPARTA WWW Site"_sws at https://sparta.github.io has
+more information about the code and its uses.
 
-:link(bug,http://sparta.sandia.gov/bug.html)
-:link(sjp,http://www.sandia.gov/~sjplimp)
+:link(bug,https://sparta.github.io/bug.html)
+:link(sjp,https://sjplimp.github.io)
 
 :line
 
@@ -103,7 +102,8 @@ it gives quick access to documentation for all SPARTA commands.
 "Packages"_Section_packages.html :l
 "Accelerating SPARTA performance"_Section_accelerate.html :l
   5.1 "Measuring performance"_acc_1 :ulb,b
-  5.2 "Packages with optimized styles"_acc_2 :ule,b
+  5.2 "Packages with optimized styles"_acc_2 :b
+  5.3 "KOKKOS package"_acc_3 :ule,b
 "How-to discussions"_Section_howto.html :l
   6.1 "2d simulations"_howto_1 :ulb,b
   6.2 "Axisymmetric simulations"_howto_2 :b
@@ -116,7 +116,13 @@ it gives quick access to documentation for all SPARTA commands.
   6.9 "Details of surfaces in SPARTA"_howto_9 :b
   6.10 "Restarting a simulation"_howto_10 :b
   6.11 "Using the ambipolar approximation"_howto_11 :b
-  6.12 "Using multiple vibrational energy levels"_howto_12 :ule,b
+  6.12 "Using multiple vibrational energy levels"_howto_12 :b
+  6.13 "Surface elements: explicit, implicit, distributed"_howto_13 :b
+  6.14 "Implicit surface ablation"_howto_14 :b
+  6.15 "Transparent surface elements"_howto_15 :b
+  6.16 "Visualizing SPARTA output with ParaView"_howto_16 :b
+  6.17 "Custom per-particle, per-grid, per-surf attributes"_howto_17 :b
+  6.18 "Variable timestep simulations"_howto_18 :ule,b
 "Example problems"_Section_example.html :l
 "Performance & scalability"_Section_perf.html :l
 "Additional tools"_Section_tools.html :l
@@ -130,13 +136,12 @@ it gives quick access to documentation for all SPARTA commands.
   10.7 "Dump styles"_mod_7 :b
   10.8 "Input script commands"_mod_8 :ule,b
 "Python interface"_Section_python.html :l
-  11.1 "Extending Python with a serial version of SPARTA"_py_1 :ulb,b
-  11.2 "Creating a shared MPI library"_py_2 :b
-  11.3 "Extending Python with a parallel version of SPARTA"_py_3 :b
-  11.4 "Extending Python with MPI"_py_4 :b
-  11.5 "Testing the Python-SPARTA interface"_py_5 :b
-  11.6 "Using SPARTA from Python"_py_6 :b
-  11.7 "Example Python scripts that use SPARTA"_py_7 :ule,b
+  11.1 "Creating a shared MPI library"_py_1 :ulb,b
+  11.2 "Extending Python with a parallel version of SPARTA"_py_2 :b
+  11.3 "Extending Python with MPI"_py_3 :b
+  11.4 "Testing the Python-SPARTA interface"_py_4 :b
+  11.5 "Using SPARTA from Python"_py_5 :b
+  11.6 "Example Python scripts that use SPARTA"_py_6 :ule,b
 "Errors"_Section_errors.html :l
   12.1 "Common problems"_err_1 :ulb,b
   12.2 "Reporting bugs"_err_2 :b
@@ -168,6 +173,7 @@ it gives quick access to documentation for all SPARTA commands.
 
 :link(acc_1,Section_accelerate.html#acc_1)
 :link(acc_2,Section_accelerate.html#acc_2)
+:link(acc_3,Section_accelerate.html#acc_3)
 
 :link(howto_1,Section_howto.html#howto_1)
 :link(howto_2,Section_howto.html#howto_2)
@@ -181,15 +187,21 @@ it gives quick access to documentation for all SPARTA commands.
 :link(howto_10,Section_howto.html#howto_10)
 :link(howto_11,Section_howto.html#howto_11)
 :link(howto_12,Section_howto.html#howto_12)
+:link(howto_13,Section_howto.html#howto_13)
+:link(howto_14,Section_howto.html#howto_14)
+:link(howto_15,Section_howto.html#howto_15)
+:link(howto_16,Section_howto.html#howto_16)
+:link(howto_17,Section_howto.html#howto_17)
+:link(howto_18,Section_howto.html#howto_18)
 
-:link(mod_1,Section_python.html#mod_1)
-:link(mod_2,Section_python.html#mod_2)
-:link(mod_3,Section_python.html#mod_3)
-:link(mod_4,Section_python.html#mod_4)
-:link(mod_5,Section_python.html#mod_5)
-:link(mod_6,Section_python.html#mod_6)
-:link(mod_7,Section_python.html#mod_7)
-:link(mod_8,Section_python.html#mod_8)
+:link(mod_1,Section_modify.html#mod_1)
+:link(mod_2,Section_modify.html#mod_2)
+:link(mod_3,Section_modify.html#mod_3)
+:link(mod_4,Section_modify.html#mod_4)
+:link(mod_5,Section_modify.html#mod_5)
+:link(mod_6,Section_modify.html#mod_6)
+:link(mod_7,Section_modify.html#mod_7)
+:link(mod_8,Section_modify.html#mod_8)
 
 :link(py_1,Section_python.html#py_1)
 :link(py_2,Section_python.html#py_2)
@@ -197,7 +209,6 @@ it gives quick access to documentation for all SPARTA commands.
 :link(py_4,Section_python.html#py_4)
 :link(py_5,Section_python.html#py_5)
 :link(py_6,Section_python.html#py_6)
-:link(py_7,Section_python.html#py_7)
 
 :link(err_1,Section_errors.html#err_1)
 :link(err_2,Section_errors.html#err_2)

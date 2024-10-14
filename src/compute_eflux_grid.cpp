@@ -1,12 +1,12 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   http://sparta.github.io
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -46,7 +46,7 @@ ComputeEFluxGrid::ComputeEFluxGrid(SPARTA *sparta, int narg, char **arg) :
   if (narg < 5) error->all(FLERR,"Illegal compute eflux/grid command");
 
   int igroup = grid->find_group(arg[2]);
-  if (igroup < 0) 
+  if (igroup < 0)
     error->all(FLERR,"Compute eflux/grid group ID does not exist");
   groupbit = grid->bitmask[igroup];
 
@@ -57,7 +57,7 @@ ComputeEFluxGrid::ComputeEFluxGrid(SPARTA *sparta, int narg, char **arg) :
 
   nvalue = narg - 4;
   value = new int[nvalue];
-  
+
   npergroup = 0;
   unique = new int[LASTSIZE];
   nmap = new int[nvalue];
@@ -248,19 +248,19 @@ void ComputeEFluxGrid::compute_per_grid()
         break;
       case mVxVzVz:
         vec[k++] += mass*v[0]*v[2]*v[2];
-	break;
+        break;
       case mVyVxVx:
         vec[k++] += mass*v[1]*v[0]*v[0];
-	break;
+        break;
       case mVyVzVz:
         vec[k++] += mass*v[1]*v[2]*v[2];
-	break;
+        break;
       case mVzVxVx:
         vec[k++] += mass*v[2]*v[0]*v[0];
-	break;
+        break;
       case mVzVyVy:
         vec[k++] += mass*v[2]*v[1]*v[1];
-	break;
+        break;
       }
     }
   }
@@ -288,10 +288,9 @@ int ComputeEFluxGrid::query_tally_grid(int index, double **&array, int *&cols)
    index = which column of output (0 for vec, 1 to N for array)
    for etally = NULL:
      use internal tallied info for single timestep, set nsample = 1
-     if onecell = -1, compute values for all grid cells
+     compute values for all grid cells
        store results in vector_grid with nstride = 1 (single col of array_grid)
-     if onecell >= 0, compute single value for onecell and return it
-   for etaylly = ptr to caller array:
+   for etally = ptr to caller array:
      use external tallied info for many timesteps
      nsample = additional normalization factor used by some values
      emap = list of etally columns to use, # of columns determined by index
@@ -299,13 +298,12 @@ int ComputeEFluxGrid::query_tally_grid(int index, double **&array, int *&cols)
    if norm = 0.0, set result to 0.0 directly so do not divide by 0.0
 ------------------------------------------------------------------------- */
 
-double ComputeEFluxGrid::post_process_grid(int index, int onecell, int nsample,
-                                      double **etally, int *emap,
-                                      double *vec, int nstride)
+void ComputeEFluxGrid::post_process_grid(int index, int nsample,
+                                         double **etally, int *emap,
+                                         double *vec, int nstride)
 {
   index--;
-  int ivalue = index % nvalue;
-  
+
   int lo = 0;
   int hi = nglocal;
   int k = 0;
@@ -316,30 +314,25 @@ double ComputeEFluxGrid::post_process_grid(int index, int onecell, int nsample,
     emap = map[index];
     vec = vector_grid;
     nstride = 1;
-    if (onecell >= 0) {
-      lo = onecell;
-      hi = lo + 1;
-      k = lo;
-    }
   }
 
   // compute normalized final value for each grid cell
   // Vcm = Sum mv / Sum m = (Wx,Wy,Wz)
   // Wi = Sum mVi / M
   // heati = 0.5 * F/V Sum m (Vi - Wi) (V - W)^2
-  // (Vi - Wi) (V - W)^2 = (Vi - Wi) 
+  // (Vi - Wi) (V - W)^2 = (Vi - Wi)
   //                       [ (Vi - Wi)^2 + (V1 - W1)^2 + (V2 - W2)^2 ]
   // i = xyz and 1,2 = xyx indices different than i
   // heati = 3 terms = h+h1+h2 where h2 is same as h1 with V1 replaced by V2
   // h = F/V Sum m (Vi-Wi)^3
   //   (Vi-Wi)^3 = Vi^3 - 3WiVi^2 + 3Wi^2Vi - Wi^3
-  //   Sum m (Vi-Wi)^3 = Sum(mVi^3) - 3 Sum(mVi^2) Sum(mVi) / M + 
+  //   Sum m (Vi-Wi)^3 = Sum(mVi^3) - 3 Sum(mVi^2) Sum(mVi) / M +
   //                     2 Sum(mVi)^3 / M^2
   // h1 = F/V Sum m (Vi-Wi) (V1-W1)^2
   //   (Vi-Wi) (V1-W1)^2 = ViV1^2 - 2ViV1W1 + ViW1^2 - WiV1^2 + 2V1WiW1 - WiW1^2
   //   3 terms in previous equation combine to 1 term in next equation
   //   Sum m (Vi-Wi) (V1-W1)^2 = Sum(mViV1^2) - 2 Sum(mViV1) Sum(mV1) / M -
-  //                             Sum(mVi) Sum(mV1^2) / M + 
+  //                             Sum(mVi) Sum(mV1^2) / M +
   //                             2 Sum(mVi) Sum(mV1)^2 / M^2
 
   double summass,h,h1,h2,wt;
@@ -366,20 +359,17 @@ double ComputeEFluxGrid::post_process_grid(int index, int onecell, int nsample,
     summass = t[mass];
     if (summass == 0.0) vec[k] = 0.0;
     else {
-      h = t[mvvv] - 3.0*t[mv]*t[mvv]/summass + 
+      h = t[mvvv] - 3.0*t[mv]*t[mvv]/summass +
         2.0*t[mv]*t[mv]*t[mv]/summass/summass;
-      h1 = t[mvv1v1] - 2.0*t[mvv1]*t[mv1]/summass - t[mv]*t[mv1v1]/summass + 
-	2.0*t[mv]*t[mv1]*t[mv1]/summass/summass;
-      h2 = t[mvv2v2] - 2.0*t[mvv2]*t[mv2]/summass - t[mv]*t[mv2v2]/summass + 
-	2.0*t[mv]*t[mv2]*t[mv2]/summass/summass;
+      h1 = t[mvv1v1] - 2.0*t[mvv1]*t[mv1]/summass - t[mv]*t[mv1v1]/summass +
+        2.0*t[mv]*t[mv1]*t[mv1]/summass/summass;
+      h2 = t[mvv2v2] - 2.0*t[mvv2]*t[mv2]/summass - t[mv]*t[mv2v2]/summass +
+        2.0*t[mv]*t[mv2]*t[mv2]/summass/summass;
       wt = 0.5 * fnum * cinfo[icell].weight / cinfo[icell].volume;
-      vec[k] = wt * (h + h1 + h2);
+      vec[k] = wt/nsample * (h + h1 + h2);
     }
     k += nstride;
   }
-
-  if (onecell < 0) return 0.0;
-  return vec[onecell];
 }
 
 /* ----------------------------------------------------------------------

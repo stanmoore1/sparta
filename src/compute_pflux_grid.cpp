@@ -1,12 +1,12 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   http://sparta.github.io
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -44,7 +44,7 @@ ComputePFluxGrid::ComputePFluxGrid(SPARTA *sparta, int narg, char **arg) :
   if (narg < 5) error->all(FLERR,"Illegal compute pflux/grid command");
 
   int igroup = grid->find_group(arg[2]);
-  if (igroup < 0) 
+  if (igroup < 0)
     error->all(FLERR,"Compute pflux/grid group ID does not exist");
   groupbit = grid->bitmask[igroup];
 
@@ -55,7 +55,7 @@ ComputePFluxGrid::ComputePFluxGrid(SPARTA *sparta, int narg, char **arg) :
 
   nvalue = narg - 4;
   value = new int[nvalue];
-  
+
   npergroup = 0;
   unique = new int[LASTSIZE];
   nmap = new int[nvalue];
@@ -250,9 +250,8 @@ int ComputePFluxGrid::query_tally_grid(int index, double **&array, int *&cols)
    index = which column of output (0 for vec, 1 to N for array)
    for etally = NULL:
      use internal tallied info for single timestep
-     if onecell = -1, compute values for all grid cells
+     compute values for all grid cells
        store results in vector_grid with nstride = 1 (single col of array_grid)
-     if onecell >= 0, compute single value for onecell and return it
    for etaylly = ptr to caller array:
      use external tallied info for many timesteps
      emap = list of etally columns to use, # of columns determined by index
@@ -260,27 +259,23 @@ int ComputePFluxGrid::query_tally_grid(int index, double **&array, int *&cols)
    if norm = 0.0, set result to 0.0 directly so do not divide by 0.0
 ------------------------------------------------------------------------- */
 
-double ComputePFluxGrid::post_process_grid(int index, int onecell, int,
-                                      double **etally, int *emap,
-                                      double *vec, int nstride)
+void ComputePFluxGrid::post_process_grid(int index, int nsample,
+                                         double **etally, int *emap,
+                                         double *vec, int nstride)
 {
   index--;
   int ivalue = index % nvalue;
-  
+
   int lo = 0;
   int hi = nglocal;
   int k = 0;
 
   if (!etally) {
+    nsample = 1;
     etally = tally;
     emap = map[index];
     vec = vector_grid;
     nstride = 1;
-    if (onecell >= 0) {
-      lo = onecell;
-      hi = lo + 1;
-      k = lo;
-    }
   }
 
   // compute normalized final value for each grid cell
@@ -311,9 +306,9 @@ double ComputePFluxGrid::post_process_grid(int index, int onecell, int,
         if (summass == 0.0) vec[k] = 0.0;
         else {
           wt = fnum * cinfo[icell].weight / cinfo[icell].volume;
-	  summv = etally[icell][mv];
-	  vec[k] = wt * (etally[icell][mvv] - summv*summv/summass);
-	}
+          summv = etally[icell][mv];
+          vec[k] = wt/nsample * (etally[icell][mvv] - summv*summv/summass);
+        }
         k += nstride;
       }
       break;
@@ -336,17 +331,14 @@ double ComputePFluxGrid::post_process_grid(int index, int onecell, int,
         if (summass == 0.0) vec[k] = 0.0;
         else {
           wt = fnum * cinfo[icell].weight / cinfo[icell].volume;
-	  vec[k] = wt * (etally[icell][mvv] - 
-			 etally[icell][mv1]*etally[icell][mv2]/summass);
-	}
+          vec[k] = wt/nsample * (etally[icell][mvv] -
+                                 etally[icell][mv1]*etally[icell][mv2]/summass);
+        }
         k += nstride;
       }
       break;
     }
   }
-
-  if (onecell < 0) return 0.0;
-  return vec[onecell];
 }
 
 /* ----------------------------------------------------------------------

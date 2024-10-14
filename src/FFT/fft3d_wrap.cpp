@@ -1,19 +1,19 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   http://sparta.github.io
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
 ------------------------------------------------------------------------- */
 
-#include <mpi.h>
 #include "fft3d_wrap.h"
+
 #include "error.h"
 
 using namespace SPARTA_NS;
@@ -25,8 +25,7 @@ FFT3D::FFT3D(SPARTA *spa, MPI_Comm comm, int nfast, int nmid, int nslow,
              int in_klo, int in_khi,
              int out_ilo, int out_ihi, int out_jlo, int out_jhi,
              int out_klo, int out_khi,
-             int scaled, int permute, int *nbuf, int usecollective) : 
-  Pointers(spa)
+             int scaled, int permute, int *nbuf, int usecollective) : Pointers(spa)
 {
   plan = fft_3d_create_plan(comm,nfast,nmid,nslow,
                             in_ilo,in_ihi,in_jlo,in_jhi,in_klo,in_khi,

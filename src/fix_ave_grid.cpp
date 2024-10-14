@@ -1,12 +1,12 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   http://sparta.github.io
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -29,11 +29,14 @@
 
 using namespace SPARTA_NS;
 
-enum{COMPUTE,FIX,VARIABLE};
-enum{ONE,RUNNING};                // multiple files
+enum{PERGRID,PERGRIDSURF};
+enum{COMPUTE,FIX,VARIABLE,CUSTOM};
+enum{ONE,RUNNING};                      // multiple files
+enum{INT,DOUBLE};                       // several files
 
 #define INVOKED_PER_GRID 16
 #define DELTAGRID 1024            // must be bigger than split cells per cell
+#define DELTASURF 1024;
 
 /* ---------------------------------------------------------------------- */
 
@@ -59,9 +62,9 @@ FixAveGrid::FixAveGrid(SPARTA *sparta, int narg, char **arg) :
 
   int iarg = 6;
   while (iarg < narg) {
-    if ((strncmp(arg[iarg],"c_",2) == 0) || 
-	(strncmp(arg[iarg],"f_",2) == 0) || 
-	(strncmp(arg[iarg],"v_",2) == 0)) {
+    if ((strncmp(arg[iarg],"c_",2) == 0) ||
+        (strncmp(arg[iarg],"f_",2) == 0) ||
+        (strncmp(arg[iarg],"v_",2) == 0)) {
       nvalues++;
       iarg++;
     } else break;
@@ -93,7 +96,7 @@ FixAveGrid::FixAveGrid(SPARTA *sparta, int narg, char **arg) :
     if (arg[i][0] == 'c') which[i] = COMPUTE;
     else if (arg[i][0] == 'f') which[i] = FIX;
     else if (arg[i][0] == 'v') which[i] = VARIABLE;
-    
+
     int n = strlen(arg[i]);
     char *suffix = new char[n];
     strcpy(suffix,&arg[i][2]);
@@ -110,13 +113,13 @@ FixAveGrid::FixAveGrid(SPARTA *sparta, int narg, char **arg) :
     ids[i] = new char[n];
     strcpy(ids[i],suffix);
     delete [] suffix;
-      
+
     post_process[i] = 0;
     if (which[i] == COMPUTE) {
       int icompute = modify->find_compute(ids[i]);
       if (icompute < 0)
         error->all(FLERR,"Compute ID for fix ave/grid does not exist");
-      post_process[i] = 
+      post_process[i] =
         modify->compute[icompute]->post_process_grid_flag;
     }
   }
@@ -132,6 +135,9 @@ FixAveGrid::FixAveGrid(SPARTA *sparta, int narg, char **arg) :
   // setup and error check
   // for fix inputs, check that fix frequency is acceptable
 
+  int flavor_pergrid = 0;
+  int flavor_pergridsurf = 0;
+
   if (nevery <= 0 || nrepeat <= 0 || per_grid_freq <= 0)
     error->all(FLERR,"Illegal fix ave/grid command");
   if (per_grid_freq % nevery || (nrepeat-1)*nevery >= per_grid_freq)
@@ -141,47 +147,78 @@ FixAveGrid::FixAveGrid(SPARTA *sparta, int narg, char **arg) :
     if (which[i] == COMPUTE) {
       int icompute = modify->find_compute(ids[i]);
       if (icompute < 0)
-	error->all(FLERR,"Compute ID for fix ave/grid does not exist");
+        error->all(FLERR,"Compute ID for fix ave/grid does not exist");
       if (modify->compute[icompute]->per_grid_flag == 0)
-	error->all(FLERR,
-		   "Fix ave/grid compute does not calculate per-grid values");
-      if (argindex[i] == 0 && 
-	  modify->compute[icompute]->size_per_grid_cols != 0)
-	error->all(FLERR,"Fix ave/grid compute does not "
-		   "calculate per-grid vector");
+        error->all(FLERR,
+                   "Fix ave/grid compute does not calculate per-grid values");
+      if (argindex[i] == 0 &&
+          modify->compute[icompute]->size_per_grid_cols != 0)
+        error->all(FLERR,"Fix ave/grid compute does not "
+                   "calculate per-grid vector");
       if (argindex[i] && modify->compute[icompute]->size_per_grid_cols == 0)
-	error->all(FLERR,"Fix ave/grid compute does not "
-		   "calculate per-grid array");
-      if (argindex[i] && 
-	  argindex[i] > modify->compute[icompute]->size_per_grid_cols)
-	error->all(FLERR,"Fix ave/grid compute array is accessed out-of-range");
+        error->all(FLERR,"Fix ave/grid compute does not "
+                   "calculate per-grid array");
+      if (argindex[i] &&
+          argindex[i] > modify->compute[icompute]->size_per_grid_cols)
+        error->all(FLERR,"Fix ave/grid compute array is accessed out-of-range");
+      if (modify->compute[icompute]->post_process_isurf_grid_flag)
+        flavor_pergridsurf = 1;
+      else flavor_pergrid = 1;
 
     } else if (which[i] == FIX) {
       int ifix = modify->find_fix(ids[i]);
       if (ifix < 0)
-	error->all(FLERR,"Fix ID for fix ave/grid does not exist");
+        error->all(FLERR,"Fix ID for fix ave/grid does not exist");
       if (modify->fix[ifix]->per_grid_flag == 0)
-	error->all(FLERR,"Fix ave/grid fix does not calculate per-grid values");
+        error->all(FLERR,"Fix ave/grid fix does not calculate per-grid values");
       if (argindex[i] == 0 && modify->fix[ifix]->size_per_grid_cols != 0)
-	error->all(FLERR,
-		   "Fix ave/grid fix does not calculate per-grid vector");
+        error->all(FLERR,
+                   "Fix ave/grid fix does not calculate per-grid vector");
       if (argindex[i] && modify->fix[ifix]->size_per_grid_cols == 0)
-	error->all(FLERR,
-		   "Fix ave/grid fix does not calculate per-grid array");
+        error->all(FLERR,
+                   "Fix ave/grid fix does not calculate per-grid array");
       if (argindex[i] && argindex[i] > modify->fix[ifix]->size_per_grid_cols)
-	error->all(FLERR,"Fix ave/grid fix array is accessed out-of-range");
+        error->all(FLERR,"Fix ave/grid fix array is accessed out-of-range");
       if (nevery % modify->fix[ifix]->per_grid_freq)
-	error->all(FLERR,
-		   "Fix for fix ave/grid not computed at compatible time");
+        error->all(FLERR,
+                   "Fix for fix ave/grid not computed at compatible time");
+      flavor_pergrid = 1;
 
     } else if (which[i] == VARIABLE) {
       int ivariable = input->variable->find(ids[i]);
       if (ivariable < 0)
-	error->all(FLERR,"Variable name for fix ave/grid does not exist");
+        error->all(FLERR,"Variable name for fix ave/grid does not exist");
       if (input->variable->grid_style(ivariable) == 0)
-	error->all(FLERR,"Fix ave/grid variable is not grid-style variable");
+        error->all(FLERR,"Fix ave/grid variable is not grid-style variable");
+      flavor_pergrid = 1;
+
+    } else if (which[i] == CUSTOM) {
+      int icustom = grid->find_custom(ids[i]);
+      if (icustom < 0)
+        error->all(FLERR,"Custom attribute for fix ave/grid does not exist");
+      if (argindex[i] == 0 && grid->esize[icustom] != 0)
+        error->all(FLERR,"Fix ave/grid custom attribute is not a vector");
+      if (argindex[i] && grid->esize[icustom] == 0)
+        error->all(FLERR,"Fix ave/grid custom attribute is not an array");
+      if (argindex[i] && argindex[i] > grid->esize[icustom])
+        error->all(FLERR,"Fix ave/grid custom attribute array is "
+		   "accessed out-of-range");
     }
   }
+
+  // require all inputs be flavor PERGRID or PERGRIDSURF
+
+  if (flavor_pergrid && flavor_pergridsurf)
+    error->all(FLERR,"Fix ave/grid cannot mix grid and grid/surf inputs");
+
+  if (flavor_pergrid) flavor = PERGRID;
+  if (flavor_pergridsurf) flavor = PERGRIDSURF;
+
+  // this could be allowed but is dangerous if load-balancing
+  // per-cellID tallies stored by this proc might grow enormous
+
+  if (flavor == PERGRIDSURF && ave == RUNNING)
+    error->all(FLERR,"Fix ave/grid for grid/surf inputs cannot use ave running");
 
   // this fix produces either a per-grid vector or array
 
@@ -189,7 +226,7 @@ FixAveGrid::FixAveGrid(SPARTA *sparta, int narg, char **arg) :
   if (nvalues == 1) size_per_grid_cols = 0;
   else size_per_grid_cols = nvalues;
 
-  nglocal = nglocalmax = grid->nlocal;
+  nglocal = maxgrid = grid->nlocal;
 
   // allocate per-grid cell data storage
   // zero vector/array grid in case used by dump or load balancer
@@ -198,10 +235,10 @@ FixAveGrid::FixAveGrid(SPARTA *sparta, int narg, char **arg) :
   array_grid = NULL;
 
   if (nvalues == 1) {
-    memory->grow(vector_grid,nglocal,"ave/grid:vector_grid");
+    memory->create(vector_grid,nglocal,"ave/grid:vector_grid");
     for (int i = 0; i < nglocal; i++) vector_grid[i] = 0.0;
   } else {
-    memory->grow(array_grid,nglocal,nvalues,"ave/grid:array_grid");
+    memory->create(array_grid,nglocal,nvalues,"ave/grid:array_grid");
     for (int i = 0; i < nglocal; i++)
       for (int m = 0; m < nvalues; m++) array_grid[i][m] = 0.0;
   }
@@ -303,13 +340,26 @@ FixAveGrid::FixAveGrid(SPARTA *sparta, int narg, char **arg) :
     }
   }
 
-  // allocate tally array
+  // allocate tally array for flavor = PERGRID
   // zero in case used by ave = RUNNING or accessed for immediate output
 
-  memory->create(tally,nglocal,ntotal,"ave/grid:tally");
-  for (int i = 0; i < nglocal; i++)
-    for (int j = 0; j < ntotal; j++)
-      tally[i][j] = 0.0;
+  if (flavor == PERGRID) {
+    memory->create(tally,nglocal,ntotal,"ave/grid:tally");
+    for (int i = 0; i < nglocal; i++)
+      for (int j = 0; j < ntotal; j++)
+        tally[i][j] = 0.0;
+  } else tally = NULL;
+
+  // tally accumulators for flavor = PERGRIDSURF
+
+  ntallyID = maxtallyID = 0;
+  tally2surf = NULL;
+  vec_tally = NULL;
+  array_tally = NULL;
+
+  // hash for mapping cellIDs to tally indices
+
+  hash = new MyHash;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -333,7 +383,14 @@ FixAveGrid::~FixAveGrid()
 
   if (nvalues == 1) memory->destroy(vector_grid);
   else memory->destroy(array_grid);
+
   memory->destroy(tally);
+
+  memory->destroy(tally2surf);
+  memory->destroy(vec_tally);
+  memory->destroy(array_tally);
+
+  delete hash;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -349,29 +406,41 @@ int FixAveGrid::setmask()
 
 void FixAveGrid::init()
 {
-  // set indices and check validity of all computes,fixes,variables
+  // set indices and check validity of all computes,fixes,variables,
+  //  custom attributes
 
   for (int m = 0; m < nvalues; m++) {
     if (which[m] == COMPUTE) {
       int icompute = modify->find_compute(ids[m]);
       if (icompute < 0)
-	error->all(FLERR,"Compute ID for fix ave/grid does not exist");
+        error->all(FLERR,"Compute ID for fix ave/grid does not exist");
       value2index[m] = icompute;
-      
+
     } else if (which[m] == FIX) {
       int ifix = modify->find_fix(ids[m]);
-      if (ifix < 0) 
-	error->all(FLERR,"Fix ID for fix ave/grid does not exist");
+      if (ifix < 0)
+        error->all(FLERR,"Fix ID for fix ave/grid does not exist");
       value2index[m] = ifix;
 
     } else if (which[m] == VARIABLE) {
       int ivariable = input->variable->find(ids[m]);
-      if (ivariable < 0) 
-	error->all(FLERR,"Variable name for fix ave/grid does not exist");
+      if (ivariable < 0)
+        error->all(FLERR,"Variable name for fix ave/grid does not exist");
       value2index[m] = ivariable;
+
+    } else if (which[m] == CUSTOM) {
+      int icustom = grid->find_custom(ids[m]);
+      if (icustom < 0)
+        error->all(FLERR,"Custom attribute for fix ave/grid does not exist");
+      value2index[m] = icustom;
 
     } else value2index[m] = -1;
   }
+
+  // reallocate per-grid data if necessary
+
+  nglocal = grid->nlocal;
+  grow_percell(0);
 }
 
 /* ----------------------------------------------------------------------
@@ -388,8 +457,10 @@ void FixAveGrid::setup()
 void FixAveGrid::end_of_step()
 {
   int i,j,k,m,n,itally;
-  int ntally,kk;
+  int ntally_col,kk;
+  surfint surfID;
   int *itmp;
+  double *vec;
   double **ctally;
 
   // skip if not step which requires doing something
@@ -397,80 +468,207 @@ void FixAveGrid::end_of_step()
   bigint ntimestep = update->ntimestep;
   if (ntimestep != nvalid) return;
 
-  // zero tally if ave = ONE and first sample
+  // zero grid tallies if ave = ONE and first sample
   // could do this with memset()
 
-  if (ave == ONE && irepeat == 0) {
+  if (flavor == PERGRID && ave == ONE && irepeat == 0) {
     for (i = 0; i < nglocal; i++)
       for (j = 0; j < ntotal; j++)
         tally[i][j] = 0.0;
   }
 
-  // accumulate results of computes,fixes,variables
+  // clear hash of surfID tallies if ave = ONE and first sample
+
+  if (flavor == PERGRIDSURF && ave == ONE && irepeat == 0) {
+    hash->clear();
+    ntallyID = 0;
+  }
+
+  // accumulate results of computes,fixes,variables,custom attributes
   // compute/fix/variable may invoke computes so wrap with clear/add
 
   modify->clearstep_compute();
 
-  for (m = 0; m < nvalues; m++) {
-    n = value2index[m];
-    j = argindex[m];
+  // PERGRID = all values are computes,fixes,variable,custom attributes
+  //           which calculate per-grid values in standard manner
 
-    // invoke compute if not previously invoked
-  
-    if (which[m] == COMPUTE) {
+  if (flavor == PERGRID) {
+
+    for (m = 0; m < nvalues; m++) {
+      n = value2index[m];
+      j = argindex[m];
+
+      // invoke compute if not previously invoked
+
+      if (which[m] == COMPUTE) {
+        Compute *compute = modify->compute[n];
+        if (!(compute->invoked_flag & INVOKED_PER_GRID)) {
+          compute->compute_per_grid();
+          compute->invoked_flag |= INVOKED_PER_GRID;
+        }
+
+        // accumulate one or more compute values to umap columns of tally array
+        // if compute does not post-process, access its vec/array grid directly
+        // else access uomap columns in its ctally array
+
+        if (post_process[m]) {
+          ntally_col = numap[m];
+          compute->query_tally_grid(j,ctally,itmp);
+          for (i = 0; i < nglocal; i++)
+            for (itally = 0; itally < ntally_col; itally++) {
+              k = umap[m][itally];
+              kk = uomap[m][itally];
+              tally[i][k] += ctally[i][kk];
+            }
+        } else {
+          k = umap[m][0];
+          if (j == 0) {
+            double *compute_vector = compute->vector_grid;
+            for (i = 0; i < nglocal; i++)
+              tally[i][k] += compute_vector[i];
+          } else {
+            int jm1 = j - 1;
+            double **compute_array = compute->array_grid;
+            for (i = 0; i < nglocal; i++)
+              tally[i][k] += compute_array[i][jm1];
+          }
+        }
+
+      // access fix fields, guaranteed to be ready
+
+      } else if (which[m] == FIX) {
+        k = umap[m][0];
+        if (j == 0) {
+          double *fix_vector = modify->fix[n]->vector_grid;
+          for (i = 0; i < nglocal; i++)
+            tally[i][k] += fix_vector[i];
+        } else {
+          int jm1 = j - 1;
+          double **fix_array = modify->fix[n]->array_grid;
+          for (i = 0; i < nglocal; i++)
+            tally[i][k] += fix_array[i][jm1];
+        }
+
+      // evaluate grid-style variable, sum values to Kth column of tally array
+
+      } else if (which[m] == VARIABLE) {
+        k = umap[m][0];
+        input->variable->compute_grid(n,&tally[0][k],ntotal,1);
+
+      // access custom attribute
+
+      } else if (which[m] == CUSTOM) {
+        k = umap[m][0];
+	if (j == 0) {
+          if (grid->etype[n] == INT) {
+            int *custom_vector = grid->eivec[grid->ewhich[n]];
+            for (i = 0; i < nglocal; i++) tally[i][k] += custom_vector[i];
+          } else if (grid->etype[n] == DOUBLE) {
+            double *custom_vector = grid->edvec[grid->ewhich[n]];
+            for (i = 0; i < nglocal; i++) tally[i][k] += custom_vector[i];
+          }
+	} else {
+	  int jm1 = j - 1;
+          if (grid->etype[n] == INT) {
+            int **custom_array = grid->eiarray[grid->ewhich[n]];
+            for (i = 0; i < nglocal; i++) tally[i][k] += custom_array[i][jm1];
+          } else if (grid->etype[n] == DOUBLE) {
+            double **custom_array = grid->edarray[grid->ewhich[n]];
+            for (i = 0; i < nglocal; i++) tally[i][k] += custom_array[i][jm1];
+          }
+	}
+      }
+    }
+
+  // PERGRIDSURF = all values are computes which tally info on collisions
+  //               with implicit surfs and store them as per-grid-cell tallies
+  //               for implicit surfs, surfIDs are also cellIDs
+
+  } else if (flavor == PERGRIDSURF) {
+
+    for (m = 0; m < nvalues; m++) {
+      n = value2index[m];
+      j = argindex[m];
+
+      // invoke compute if not previously invoked
+
       Compute *compute = modify->compute[n];
       if (!(compute->invoked_flag & INVOKED_PER_GRID)) {
         compute->compute_per_grid();
         compute->invoked_flag |= INVOKED_PER_GRID;
       }
 
-      // accumulate one or more compute values to umap columns of tally array
-      // if compute does not post-process, access its vec/array grid directly
-      // else access uomap columns in its ctally array
+      // similar logic to fix ave/surf and its per-surf tally accumulation
 
-      if (post_process[m]) {
-	ntally = numap[m];
-        compute->query_tally_grid(j,ctally,itmp);
-        for (i = 0; i < nglocal; i++)
-          for (itally = 0; itally < ntally; itally++) {
-            k = umap[m][itally];
-            kk = uomap[m][itally];
-	    tally[i][k] += ctally[i][kk];
-	}
-      } else {
-        k = umap[m][0];
-        if (j == 0) {
-          double *compute_vector = compute->vector_grid;
-	  for (i = 0; i < nglocal; i++)
-	    tally[i][k] += compute_vector[i];
-        } else {
-          int jm1 = j - 1;
-          double **compute_array = compute->array_grid;
-	  for (i = 0; i < nglocal; i++)
-	    tally[i][k] += compute_array[i][jm1];
-        }
-      }
-  
-    // access fix fields, guaranteed to be ready
-      
-    } else if (which[m] == FIX) {
-      k = umap[m][0];
+      surfint *tally2surf_compute;
+      int ntallyID_compute = compute->tallyinfo(tally2surf_compute);
+
       if (j == 0) {
-        double *fix_vector = modify->fix[n]->vector_grid;
-	for (i = 0; i < nglocal; i++)
-	  tally[i][k] += fix_vector[i];
+        double *vector = compute->vector_surf_tally;
+        if (nvalues == 1) {
+          for (i = 0; i < ntallyID_compute; i++) {
+            surfID = tally2surf_compute[i];
+            if (hash->find(surfID) != hash->end()) itally = (*hash)[surfID];
+            else {
+              if (ntallyID == maxtallyID) grow_tally();
+              itally = ntallyID;
+              (*hash)[surfID] = itally;
+              tally2surf[itally] = surfID;
+              vec_tally[itally] = 0.0;
+              ntallyID++;
+            }
+            vec_tally[itally] += vector[i];
+          }
+        } else {
+          for (i = 0; i < ntallyID_compute; i++) {
+            surfID = tally2surf_compute[i];
+            if (hash->find(surfID) != hash->end()) itally = (*hash)[surfID];
+            else {
+              if (ntallyID == maxtallyID) grow_tally();
+              itally = ntallyID;
+              (*hash)[surfID] = itally;
+              tally2surf[itally] = surfID;
+              vec = array_tally[itally];
+              for (k = 0; k < nvalues; k++) vec[k] = 0.0;
+              ntallyID++;
+            }
+            array_tally[itally][m] += vector[i];
+          }
+        }
       } else {
         int jm1 = j - 1;
-        double **fix_array = modify->fix[n]->array_grid;
-	for (i = 0; i < nglocal; i++)
-	  tally[i][k] += fix_array[i][jm1];
+        double **array = compute->array_surf_tally;
+        if (nvalues == 1) {
+          for (i = 0; i < ntallyID_compute; i++) {
+            surfID = tally2surf_compute[i];
+            if (hash->find(surfID) != hash->end()) itally = (*hash)[surfID];
+            else {
+              if (ntallyID == maxtallyID) grow_tally();
+              itally = ntallyID;
+              (*hash)[surfID] = itally;
+              tally2surf[itally] = surfID;
+              vec_tally[itally] = 0.0;
+              ntallyID++;
+            }
+            vec_tally[itally] += array[i][jm1];
+          }
+        } else {
+          for (i = 0; i < ntallyID_compute; i++) {
+            surfID = tally2surf_compute[i];
+            if (hash->find(surfID) != hash->end()) itally = (*hash)[surfID];
+            else {
+              if (ntallyID == maxtallyID) grow_tally();
+              itally = ntallyID;
+              (*hash)[surfID] = itally;
+              tally2surf[itally] = surfID;
+              vec = array_tally[itally];
+              for (k = 0; k < nvalues; k++) vec[k] = 0.0;
+              ntallyID++;
+            }
+            array_tally[itally][m] += array[i][jm1];
+          }
+        }
       }
-      
-    // evaluate grid-style variable, sum values to Kth column of tally array
-      
-    } else if (which[m] == VARIABLE) {
-      k = umap[m][0];
-      input->variable->compute_grid(n,&tally[0][k],ntotal,1);
     }
   }
 
@@ -489,36 +687,90 @@ void FixAveGrid::end_of_step()
   nvalid = ntimestep+per_grid_freq - (nrepeat-1)*nevery;
   modify->addstep_compute(nvalid);
 
+  // final PERGRID values for output
   // normalize the accumulators for output on Nfreq timestep
+  // works for ave = ONE or RUNNING
   // if post_process flag set, compute performs normalization via pp_grid()
   // else just divide by nsample
 
-  if (nvalues == 1) {
-    if (post_process[0]) {
-      n = value2index[0];
-      j = argindex[0];
-      Compute *c = modify->compute[n];
-      c->post_process_grid(j,-1,nsample,tally,map[0],vector_grid,1);
+  if (flavor == PERGRID) {
+    if (nvalues == 1) {
+      if (post_process[0]) {
+        n = value2index[0];
+        j = argindex[0];
+        Compute *c = modify->compute[n];
+        c->post_process_grid(j,nsample,tally,map[0],vector_grid,1);
+      } else {
+        k = map[0][0];
+        for (i = 0; i < nglocal; i++) vector_grid[i] = tally[i][k] / nsample;
+      }
     } else {
-      k = map[0][0];
-      for (i = 0; i < nglocal; i++) vector_grid[i] = tally[i][k] / nsample;
+      for (m = 0; m < nvalues; m++) {
+        if (post_process[m]) {
+          n = value2index[m];
+          j = argindex[m];
+          Compute *c = modify->compute[n];
+          if (array_grid) c->post_process_grid(j,nsample,tally,map[m],
+                                               &array_grid[0][m],nvalues);
+        } else {
+          k = map[m][0];
+          for (i = 0; i < nglocal; i++) array_grid[i][m] = tally[i][k] / nsample;
+        }
+      }
     }
 
-  } else {
-    for (m = 0; m < nvalues; m++) {
-      if (post_process[m]) {
-	n = value2index[m];
-	j = argindex[m];
-	Compute *c = modify->compute[n];
-        if (array_grid) c->post_process_grid(j,-1,nsample,tally,map[m],
-                                             &array_grid[0][m],nvalues);
+  // final PERGRIDSURF values for output
+  // perform rendezvous comm on tallies this fix stores for multiple steps
+  //   to sum ghost tallies to my owned grid cells
+  // for implicit surfs, surfIDs are also cellIDs
+
+  } else if (flavor == PERGRIDSURF) {
+    if (nvalues == 1) {
+      grid->collate_vector_implicit(ntallyID,(cellint *) tally2surf,
+                                    vec_tally,vector_grid);
+    } else {
+      grid->collate_array_implicit(ntallyID,nvalues,(cellint *) tally2surf,
+                                   array_tally,array_grid);
+    }
+
+    // divide results by nsample
+
+    Grid::ChildCell *cells = grid->cells;
+
+    if (nvalues == 1) {
+      for (int icell = 0; icell < nglocal; icell++)
+        vector_grid[icell] /= nsample;
+    } else {
+      for (int icell = 0; icell < nglocal; icell++)
+        for (m = 0; m < nvalues; m++)
+          array_grid[icell][m] /= nsample;
+    }
+
+    // copy split cell values to their sub cells, used by dump grid
+
+    Grid::SplitInfo *sinfo = grid->sinfo;
+
+    int jcell,nsplit;
+    int *csubs;
+
+    for (int icell = 0; icell < nglocal; icell++) {
+      if (cells[icell].nsplit <= 1) continue;
+      nsplit = cells[icell].nsplit;
+      csubs = sinfo[cells[icell].isplit].csubs;
+      if (nvalues == 1) {
+        for (int j = 0; j < nsplit; j++) {
+          jcell = csubs[j];
+          vector_grid[jcell] = vector_grid[icell];
+        }
       } else {
-        k = map[m][0];
-	for (i = 0; i < nglocal; i++) array_grid[i][m] = tally[i][k] / nsample;
+        for (int j = 0; j < nsplit; j++) {
+          jcell = csubs[j];
+          memcpy(array_grid[jcell],array_grid[icell],nvalues*sizeof(double));
+        }
       }
     }
   }
-  
+
   // set values for grid cells not in group to zero
 
   if (groupbit != 1) {
@@ -540,7 +792,7 @@ void FixAveGrid::end_of_step()
 
 /* ----------------------------------------------------------------------
    pack icell values for per-cell arrays into buf
-   if icell is a split cell, also pack all sub cell values 
+   if icell is a split cell, also pack all sub cell values
    return byte count of amount packed
    if memflag, only return count, do not fill buf
 ------------------------------------------------------------------------- */
@@ -563,7 +815,7 @@ int FixAveGrid::pack_grid_one(int icell, char *buf, int memflag)
 
   return ptr-buf;
 }
- 
+
 /* ----------------------------------------------------------------------
    pack one set of values into buf from icell
 ------------------------------------------------------------------------- */
@@ -578,37 +830,17 @@ int FixAveGrid::pack_one(int icell, char *buf, int memflag)
   }
   ptr += nvalues*sizeof(double);
 
-  if (memflag) memcpy(ptr,tally[icell],ntotal*sizeof(double));
-  ptr += ntotal*sizeof(double);
+  if (flavor == PERGRID) {
+    if (memflag) memcpy(ptr,tally[icell],ntotal*sizeof(double));
+    ptr += ntotal*sizeof(double);
+  }
 
   return ptr-buf;
 }
 
 /* ----------------------------------------------------------------------
-   realloc and initialize arrays with 0.0
-     for a new child cell added by adapt_grid or fix adapt
-   NOTE: do nothing for now if flag = 1
-         could add logic to interpolate new values for created cell
-------------------------------------------------------------------------- */
-
-void FixAveGrid::add_grid_one(int, int flag)
-{
-  if (flag) return;
-
-  grow_percell(1);
-
-  if (nvalues == 1) vector_grid[nglocal] = 0.0;
-  else 
-    for (int i = 0; i < nvalues; i++) array_grid[nglocal][i] = 0.0;
-
-  for (int i = 0; i < ntotal; i++) tally[nglocal][i] = 0.0;
-
-  nglocal++;
-}
-
-/* ----------------------------------------------------------------------
    unpack icell values for per-cell arrays from buf
-   if icell is a split cell, also unpack all sub cell values 
+   if icell is a split cell, also unpack all sub cell values
    return byte count of amount unpacked
    NOTE: why packing/unpacking parent cell if a split cell?
 ------------------------------------------------------------------------- */
@@ -648,56 +880,55 @@ int FixAveGrid::unpack_one(char *buf, int icell)
   else memcpy(array_grid[icell],ptr,nvalues*sizeof(double));
   ptr += nvalues*sizeof(double);
 
-  memcpy(tally[icell],ptr,ntotal*sizeof(double));
-  ptr += ntotal*sizeof(double);
+  if (flavor == PERGRID) {
+    memcpy(tally[icell],ptr,ntotal*sizeof(double));
+    ptr += ntotal*sizeof(double);
+  }
 
   return ptr-buf;
 }
 
 /* ----------------------------------------------------------------------
-   compress per-cell arrays due to cells migrating to new procs
-   criteria for keeping/discarding a cell is same as in Grid::compress()
-   this keeps final ordering of per-cell arrays consistent with Grid class
+   copy per-cell info from Icell to Jcell
+   called when a grid cell is removed from this processor's list
+   caller checks that Icell != Jcell
 ------------------------------------------------------------------------- */
 
-void FixAveGrid::compress_grid()
+void FixAveGrid::copy_grid_one(int icell, int jcell)
 {
-  int me = comm->me;
-  Grid::ChildCell *cells = grid->cells;
-
-  // keep an unsplit or split cell if staying on this proc
-  // keep a sub cell if its split cell is staying on this proc
-
-  int ncurrent = nglocal;
-  nglocal = 0;
-  for (int icell = 0; icell < ncurrent; icell++) {
-    if (cells[icell].nsplit >= 1) {
-      if (cells[icell].proc != me) continue;
-    } else {
-      int isplit = cells[icell].isplit;
-      if (cells[grid->sinfo[isplit].icell].proc != me) continue;
-    }
-
-    if (nglocal != icell)  {
-      if (nvalues == 1) vector_grid[nglocal] = vector_grid[icell];
-      else memcpy(array_grid[nglocal],array_grid[icell],nvalues*sizeof(double));
-      memcpy(tally[nglocal],tally[icell],ntotal*sizeof(double));
-    }
-
-    nglocal++;
-  }
+  if (nvalues == 1) vector_grid[jcell] = vector_grid[icell];
+  else memcpy(array_grid[jcell],array_grid[icell],nvalues*sizeof(double));
+  if (flavor == PERGRID)
+    memcpy(tally[jcell],tally[icell],ntotal*sizeof(double));
 }
 
 /* ----------------------------------------------------------------------
-   memory usage of accumulators
+   add a grid cell
+   called when a grid cell is added to this processor's list
+   initialize values to 0.0
 ------------------------------------------------------------------------- */
 
-double FixAveGrid::memory_usage()
+void FixAveGrid::add_grid_one()
 {
-  double bytes = 0.0;
-  bytes += nglocalmax*nvalues * sizeof(double);
-  if (ave == RUNNING) bytes += nglocalmax*nvalues * sizeof(double);
-  return bytes;
+  grow_percell(1);
+
+  if (nvalues == 1) vector_grid[nglocal] = 0.0;
+  else
+    for (int i = 0; i < nvalues; i++) array_grid[nglocal][i] = 0.0;
+
+  if (flavor == PERGRID)
+    for (int i = 0; i < ntotal; i++) tally[nglocal][i] = 0.0;
+
+  nglocal++;
+}
+
+/* ----------------------------------------------------------------------
+   reset final grid cell count after grid cell removals
+------------------------------------------------------------------------- */
+
+void FixAveGrid::reset_grid_count(int nlocal)
+{
+  nglocal = nlocal;
 }
 
 /* ----------------------------------------------------------------------
@@ -731,7 +962,7 @@ void FixAveGrid::options(int iarg, int narg, char **arg)
 
 bigint FixAveGrid::nextvalid()
 {
-  bigint nvalid = (update->ntimestep/per_grid_freq)*per_grid_freq + 
+  bigint nvalid = (update->ntimestep/per_grid_freq)*per_grid_freq +
     per_grid_freq;
   if (nvalid-per_grid_freq == update->ntimestep && nrepeat == 1)
     nvalid = update->ntimestep;
@@ -747,11 +978,48 @@ bigint FixAveGrid::nextvalid()
 
 void FixAveGrid::grow_percell(int nnew)
 {
-  if (nglocal+nnew < nglocalmax) return;
-  nglocalmax += DELTAGRID;
-  int n = nglocalmax;
+  if (nglocal+nnew < maxgrid) return;
 
-  if (nvalues == 1) memory->grow(vector_grid,n,"ave/grid:vector_grid");
-  else memory->grow(array_grid,n,nvalues,"ave/grid:array_grid");
-  memory->grow(tally,n,ntotal,"ave/grid:tally");
+  int maxgridold = maxgrid;
+  while (maxgrid < nglocal+nnew) maxgrid += DELTAGRID;
+
+  if (nvalues == 1) memory->grow(vector_grid,maxgrid,"ave/grid:vector_grid");
+  else memory->grow(array_grid,maxgrid,nvalues,"ave/grid:array_grid");
+  if (flavor == PERGRID) memory->grow(tally,maxgrid,ntotal,"ave/grid:tally");
+
+  if (nvalues == 1)
+    for (int i = maxgridold; i < maxgrid; i++)
+      vector_grid[i] = 0.0;
+  else
+    for (int i = maxgridold; i < maxgrid; i++)
+      for (int j = 0; j < nvalues; j++)
+        array_grid[i][j] = 0.0;
+}
+
+/* ---------------------------------------------------------------------- */
+
+void FixAveGrid::grow_tally()
+{
+  maxtallyID += DELTASURF;
+  memory->grow(tally2surf,maxtallyID,"ave/grid:tally2cell");
+  if (nvalues == 1)
+    memory->grow(vec_tally,maxtallyID,"ave/grid:vec_tally");
+  else
+    memory->grow(array_tally,maxtallyID,nvalues,"ave/grid:array_tally");
+}
+
+/* ----------------------------------------------------------------------
+   memory usage of accumulators
+------------------------------------------------------------------------- */
+
+double FixAveGrid::memory_usage()
+{
+  double bytes = 0.0;
+  bytes += maxgrid*nvalues * sizeof(double);    // vector or array grid
+  if (flavor == PERGRID) bytes += ntotal*maxgrid * sizeof(double);
+  if (flavor == PERGRIDSURF) {
+    bytes += maxtallyID * sizeof(surfint);
+    bytes += nvalues*maxtallyID * sizeof(double);
+  }
+  return bytes;
 }

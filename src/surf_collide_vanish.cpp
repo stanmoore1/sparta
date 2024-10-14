@@ -1,12 +1,12 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   http://sparta.github.io
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -24,6 +24,8 @@ SurfCollideVanish::SurfCollideVanish(SPARTA *sparta, int narg, char **arg) :
   SurfCollide(sparta, narg, arg)
 {
   if (narg != 2) error->all(FLERR,"Illegal surf_collide vanish command");
+
+  allowreact = 0;
 }
 
 /* ----------------------------------------------------------------------
@@ -32,10 +34,11 @@ SurfCollideVanish::SurfCollideVanish(SPARTA *sparta, int narg, char **arg) :
    norm = surface normal unit vector
    isr = index of reaction model if >= 0, -1 for no chemistry
    simply return ip = NULL to delete particle
+   return reaction = 0 = no reaction took place
 ------------------------------------------------------------------------- */
 
 Particle::OnePart *SurfCollideVanish::
-collide(Particle::OnePart *&ip, double *, double &, int)
+collide(Particle::OnePart *&ip, double &, int, double *, int, int &)
 {
   nsingle++;
 

@@ -1,12 +1,12 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   http://sparta.github.io
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -36,10 +36,14 @@ class WriteGrid : protected Pointers {
  private:
   FILE *fp;
 
-  void header_parents();
-  void write_parents();
-  void header_geometry();
-  void write_geometry();
+  int ncustom;               // number of custom per-grid attributes to output
+  int *index_custom,*type_custom,*size_custom;  // flags for custom attributes
+  int nvalues_custom;        // # of custom values per grid cell
+
+  void header();
+  void write();
+  void pack_custom(int, double *);
+  void write_custom(double *);
 };
 
 }

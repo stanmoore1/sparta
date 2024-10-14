@@ -58,6 +58,7 @@ help:
 	@echo 'make mpi-stubs           build dummy MPI library in STUBS'
 	@echo 'make install-python      install SPARTA wrapper in Python'
 	@echo 'make tar                 create spa_src.tar.gz of src dir and packages'
+	@echo 'make purge               purge obsolete copies of source files'
 	@echo ''
 	@echo 'make package             list available packages'
 	@echo 'make yes-package         install a single pgk in src dir'
@@ -66,6 +67,7 @@ help:
 	@echo 'make no-all              remove all pkgs from src dir'
 	@echo ''
 	@echo 'make package-status (ps)  status of all packages'
+	@echo 'make package-installed (pi)  list of installed packages'
 	@echo 'make package-update (pu)  replace src files with package files'
 	@echo 'make package-overwrite    replace package files with src files'
 	@echo 'make package-diff (pd)    diff src files against package file'
@@ -160,7 +162,7 @@ install-python:
 tar:
 	@cd STUBS; $(MAKE) clean
 	@cd ..; tar cvzf src/$(ROOT)_src.tar.gz \
-	  src/Make* src/Package.sh src/Install.sh \
+	  src/Make* src/Package.sh src/Depend.sh src/Install.sh \
 	  src/MAKE src/*.cpp src/*.h src/STUBS \
 	  $(patsubst %,src/%,$(PACKAGEUC)) \
 	  $(patsubst %,src/%,$(PACKAGEUC)) $(patsubst %,src/%,$(PACKUSERUC)) \
@@ -180,6 +182,7 @@ package:
 	@echo 'make no-all                  remove all pkgs from src dir'
 	@echo ''
 	@echo 'make package-status (ps)  status of all packages'
+	@echo 'make package-installed (pi)  list of installed packages'
 	@echo 'make package-update (pu)  replace src files with package files'
 	@echo 'make package-overwrite    replace package files with src files'
 	@echo 'make package-diff (pd)    diff src files against package file'
@@ -200,9 +203,11 @@ yes-%:
 	elif [ -e $(YESDIR)/Install.sh ]; then \
 	  echo "Installing package $(@:yes-%=%)"; \
 	  cd $(YESDIR); $(SHELL) Install.sh 1; cd ..; \
+		$(SHELL) Depend.sh $(YESDIR) 1; \
 	else \
 	  echo "Installing package $(@:yes-%=%)"; \
 	  cd $(YESDIR); $(SHELL) ../Install.sh 1; cd ..; \
+		$(SHELL) Depend.sh $(YESDIR) 1; \
 	fi;
 
 no-%:
@@ -211,9 +216,11 @@ no-%:
 	elif [ -e $(NODIR)/Install.sh ]; then \
 	  echo "Uninstalling package $(@:no-%=%)"; \
 	  cd $(NODIR); $(SHELL) Install.sh 0; cd ..; \
+		$(SHELL) Depend.sh $(NODIR) 0; \
 	else \
 	  echo "Uninstalling package $(@:no-%=%)"; \
 	  cd $(NODIR); $(SHELL) ../Install.sh 0; cd ..; \
+		$(SHELL) Depend.sh $(NODIR) 0; \
         fi;
 
 # status = list src files that differ from package files
@@ -226,6 +233,10 @@ package-status ps:
 	@for p in $(PACKAGEUC); do $(SHELL) Package.sh $$p status; done
 #	@echo ''
 #	@for p in $(PACKUSERUC); do $(SHELL) Package.sh $$p status; done
+
+package-installed pi:
+	@for p in $(PACKAGEUC); do $(SHELL) Package.sh $$p installed; done
+#        @for p in $(PACKUSERUC); do $(SHELL) Package.sh $$p installed; done
 
 package-update pu:
 	@for p in $(PACKAGEUC); do $(SHELL) Package.sh $$p update; done
@@ -242,8 +253,8 @@ package-diff pd:
 #	@echo ''
 #	@for p in $(PACKUSERUC); do $(SHELL) Package.sh $$p diff; done
 
-package-purge: Purge.list
-	@echo 'Purging obsolete and auto-generated source files'
+purge: Purge.list
+	@echo 'Purging auto-generated source files'
 	@for f in `grep -v '#' Purge.list` ;		\
 	    do test -f $$f && rm $$f && echo $$f || : ;		\
 	done

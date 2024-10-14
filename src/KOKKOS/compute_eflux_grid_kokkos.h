@@ -1,7 +1,7 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   http://sparta.github.io
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
@@ -40,7 +40,7 @@ class ComputeEFluxGridKokkos : public ComputeEFluxGrid, public KokkosBase {
   void compute_per_grid();
   void compute_per_grid_kokkos();
   int query_tally_grid_kokkos(DAT::t_float_2d_lr &);
-  double post_process_grid_kokkos(int, int, int, DAT::t_float_2d_lr, int *,
+  void post_process_grid_kokkos(int, int, DAT::t_float_2d_lr, int *,
                                   DAT::t_float_1d_strided);
   void reallocate();
 
@@ -61,8 +61,8 @@ class ComputeEFluxGridKokkos : public ComputeEFluxGrid, public KokkosBase {
   DAT::tdual_float_2d_lr k_tally;
   DAT::t_float_2d_lr d_tally;
   int need_dup;
-  Kokkos::Experimental::ScatterView<F_FLOAT**, typename DAT::t_float_2d_lr::array_layout,DeviceType,Kokkos::Experimental::ScatterSum,Kokkos::Experimental::ScatterDuplicated> dup_tally;
-  Kokkos::Experimental::ScatterView<F_FLOAT**, typename DAT::t_float_2d_lr::array_layout,DeviceType,Kokkos::Experimental::ScatterSum,Kokkos::Experimental::ScatterNonDuplicated> ndup_tally;
+  Kokkos::Experimental::ScatterView<F_FLOAT**, typename DAT::t_float_2d_lr::array_layout,DeviceType,typename Kokkos::Experimental::ScatterSum,typename Kokkos::Experimental::ScatterDuplicated> dup_tally;
+  Kokkos::Experimental::ScatterView<F_FLOAT**, typename DAT::t_float_2d_lr::array_layout,DeviceType,typename Kokkos::Experimental::ScatterSum,typename Kokkos::Experimental::ScatterNonDuplicated> ndup_tally;
 
   DAT::t_float_2d_lr d_etally;
   DAT::t_float_1d_strided d_vec;

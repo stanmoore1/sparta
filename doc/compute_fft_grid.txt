@@ -1,12 +1,13 @@
 "SPARTA WWW Site"_sws - "SPARTA Documentation"_sd - "SPARTA Commands"_sc :c
 
-:link(sws,http://sparta.sandia.gov)
+:link(sws,https://sparta.github.io)
 :link(sd,Manual.html)
 :link(sc,Section_commands.html#comm)
 
 :line
 
 compute fft/grid command :h3
+compute fft/grid/kk command :h3
 
 [Syntax:]
 
@@ -41,12 +42,12 @@ velocity components in each grid cell to a dump file every 1000 steps:
 
 compute 1 grid all u v w
 fix 1 ave/grid 10 100 1000 c_1
-compute 2 fft/grid f_1[1] f_1[2] f_1[3]
+compute 2 fft/grid f_1\[1\] f_1\[2\] f_1\[3\]
 dump 1 grid all 1000 tmp.grid id c_2 f_1 :pre
 
 [Description:]
 
-Define a computation that performs FFTs on per-grid values.  
+Define a computation that performs forward FFTs on per-grid values.  
 This can be useful, for example, in calculating the energy spectrum
 of a turbulent flow.
 
@@ -64,7 +65,7 @@ different ways.  The values for a single timestep can be output by the
 timesteps can be averaged by the "fix ave/grid"_fix_ave_grid.html
 command.
 
-An FFT is perfomed on each input value independently.
+A forward FFT is perfomed on each input value independently.
 
 Each listed input can be the result of a "compute"_compute.html or
 "fix"_fix.html or the evaluation of a "variable"_variable.html, all of
@@ -104,7 +105,9 @@ will be summed together, grid value by grid value, to create
 a single output.
 
 The result of each FFT is scaled by the {sfactor} value of
-the {scale} keyword, whose default is 1.0.
+the {scale} keyword, whose default is 1.0.  Note that forward FFTs do
+not perform any scaling of their own; backward FFTs scale each output
+value by N = # of points in the FFT grid.
 
 If the {conjugate} keyword is set to {no}, the result of each FFT is 2
 values for each grid point, the real and imaginary parts of a complex
@@ -115,7 +118,7 @@ is effectively the squared length of the complex 2-vector with real
 and imaginary components.
 
 If one or more of the {kx}, {ky}, {kz}, or {kmag} keywords are set to
-{yes}, then one or moer extra columns of per-grid output is generated.
+{yes}, then one or more extra columns of per-grid output is generated.
 For {kx} the x-component of the K-space wavevector is generated.
 Similarly for {ky} and {kz}.  For {kmag} the length of each K-space
 wavevector is generated.  These values can be useful, for example, for
@@ -179,6 +182,31 @@ wavevector magnitudes are effectively unitless, e.g. sqrt(Kx^2 + Ky^2
 + Kz^2) where Kx,Ky,Kz are integers.  The FFT values can be real or
 imaginary or squared values in K-space resulting from FFTs of per-grid
 quantities in whatever units the specified input values represent.
+
+:line
+
+Styles with a {kk} suffix are functionally the same as the
+corresponding style without the suffix.  They have been optimized to
+run faster, depending on your available hardware, as discussed in the
+"Accelerating SPARTA"_Section_accelerate.html section of the manual.
+The accelerated styles take the same arguments and should produce the
+same results, except for different random number, round-off and
+precision issues.
+
+These accelerated styles are part of the KOKKOS package. They are only
+enabled if SPARTA was built with that package.  See the "Making
+SPARTA"_Section_start.html#start_3 section for more info.
+
+You can specify the accelerated styles explicitly in your input script
+by including their suffix, or you can use the "-suffix command-line
+switch"_Section_start.html#start_6 when you invoke SPARTA, or you can
+use the "suffix"_suffix.html command in your input script.
+
+See the "Accelerating SPARTA"_Section_accelerate.html section of the
+manual for more instructions on how to use the accelerated styles
+effectively.
+
+:line
 
 [Restrictions:]
 

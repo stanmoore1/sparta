@@ -1,12 +1,12 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   http://sparta.github.io
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -48,6 +48,7 @@ enum{PKEEP,PINSERT,PDONE,PDISCARD,PENTRY,PEXIT,PSURF};   // several files
 enum{NCHILD,NPARENT,NUNKNOWN,NPBCHILD,NPBPARENT,NPBUNKNOWN,NBOUND};  // Grid
 enum{TALLYAUTO,TALLYREDUCE,TALLYRVOUS};         // same as Surf
 enum{PERAUTO,PERCELL,PERSURF};                  // several files
+enum{NOFIELD,CFIELD,PFIELD,GFIELD};             // several files
 
 #define MAXSTUCK 20
 #define EPSPARAM 1.0e-7
@@ -55,10 +56,10 @@ enum{PERAUTO,PERCELL,PERSURF};                  // several files
 // either set ID or PROC/INDEX, set other to -1
 
 //#define MOVE_DEBUG 1              // un-comment to debug one particle
-#define MOVE_DEBUG_ID 537898343   // particle ID
-#define MOVE_DEBUG_PROC 0        // owning proc
-#define MOVE_DEBUG_INDEX 16617       // particle index on owning proc
-#define MOVE_DEBUG_STEP 16    // timestep
+#define MOVE_DEBUG_ID 308143534  // particle ID
+#define MOVE_DEBUG_PROC -1        // owning proc
+#define MOVE_DEBUG_INDEX -1   // particle index on owning proc
+#define MOVE_DEBUG_STEP 4107    // timestep
 
 /* ---------------------------------------------------------------------- */
 
@@ -68,9 +69,13 @@ Update::Update(SPARTA *sparta) : Pointers(sparta)
   MPI_Comm_size(world,&nprocs);
 
   ntimestep = 0;
+  runflag = 0;
   firststep = laststep = 0;
   beginstep = endstep = 0;
-  runflag = 0;
+  first_update = 0;
+
+  time = 0.0;
+  time_last_update = 0;
 
   unit_style = NULL;
   set_units("si");
@@ -79,7 +84,9 @@ Update::Update(SPARTA *sparta) : Pointers(sparta)
   nrho = 1.0;
   vstream[0] = vstream[1] = vstream[2] = 0.0;
   temp_thermal = 273.15;
-  gravity[0] = gravity[1] = gravity[2] = 0.0;
+  optmove_flag = 0;
+  fstyle = NOFIELD;
+  fieldID = NULL;
 
   maxmigrate = 0;
   mlist = NULL;
@@ -87,6 +94,9 @@ Update::Update(SPARTA *sparta) : Pointers(sparta)
   nslist_compute = nblist_compute = 0;
   slist_compute = blist_compute = NULL;
   slist_active = blist_active = NULL;
+
+  nulist_surfcollide  = 0;
+  ulist_surfcollide = NULL;
 
   ranmaster = new RanMars(sparta);
 
@@ -104,11 +114,13 @@ Update::~Update()
   if (copymode) return;
 
   delete [] unit_style;
+  delete [] fieldID;
   memory->destroy(mlist);
   delete [] slist_compute;
   delete [] blist_compute;
   delete [] slist_active;
   delete [] blist_active;
+  delete [] ulist_surfcollide;
   delete ranmaster;
 }
 
@@ -118,17 +130,17 @@ void Update::set_units(const char *style)
 {
   // physical constants from:
   // http://physics.nist.gov/cuu/Constants/Table/allascii.txt
-  
+
   if (strcmp(style,"cgs") == 0) {
-    boltz = 1.3806488e-16;
+    boltz = 1.380649e-16;
     mvv2e = 1.0;
     dt = 1.0;
 
   } else if (strcmp(style,"si") == 0) {
-    boltz = 1.3806488e-23;
+    boltz = 1.380649e-23;
     mvv2e = 1.0;
     dt = 1.0;
-    
+
   } else error->all(FLERR,"Illegal units command");
 
   delete [] unit_style;
@@ -147,32 +159,77 @@ void Update::init()
   if (runflag == 0) return;
   first_update = 1;
 
+  if (optmove_flag) {
+    if (!grid->uniform)
+      error->all(FLERR,"Cannot use optimized move with non-uniform grid");
+    else if (surf->exist)
+      error->all(FLERR,"Cannot use optimized move when surfaces are defined");
+    else {
+      for (int ifix = 0; ifix < modify->nfix; ifix++) {
+        if (strstr(modify->fix[ifix]->style,"adapt") != NULL)
+          error->all(FLERR,"Cannot use optimized move with fix adapt");
+      }
+    }
+  }
+
   // choose the appropriate move method
 
   if (domain->dimension == 3) {
-    if (surf->exist) moveptr = &Update::move<3,1>;
-    else moveptr = &Update::move<3,0>;
+    if (surf->exist)
+      moveptr = &Update::move<3,1,0>;
+    else {
+      if (optmove_flag) moveptr = &Update::move<3,0,1>;
+      else moveptr = &Update::move<3,0,0>;
+    }
   } else if (domain->axisymmetric) {
-    if (surf->exist) moveptr = &Update::move<1,1>;
-    else moveptr = &Update::move<1,0>;
+    if (surf->exist)
+      moveptr = &Update::move<1,1,0>;
+    else {
+      if (optmove_flag) moveptr = &Update::move<1,0,1>;
+      else moveptr = &Update::move<1,0,0>;
+    }
   } else if (domain->dimension == 2) {
-    if (surf->exist) moveptr = &Update::move<2,1>;
-    else moveptr = &Update::move<2,0>;
+    if (surf->exist)
+      moveptr = &Update::move<2,1,0>;
+    else {
+      if (optmove_flag) moveptr = &Update::move<2,0,1>;
+      else moveptr = &Update::move<2,0,0>;
+    }
   }
 
-  // check gravity vector
+  // checks on external field options
 
-  if (domain->dimension == 2 && gravity[2] != 0.0)
-    error->all(FLERR,"Gravity in z not allowed for 2d");
-  if (domain->axisymmetric && gravity[1] != 0.0) 
-    error->all(FLERR,"Gravity in y not allowed for axi-symmetric model");
+  if (fstyle == CFIELD) {
+    if (domain->dimension == 2 && field[2] != 0.0)
+      error->all(FLERR,"External field in z not allowed for 2d");
+    if (domain->axisymmetric && field[1] != 0.0)
+      error->all(FLERR,
+                 "External field in y not allowed for axisymmetric model");
+  } else if (fstyle == PFIELD) {
+    ifieldfix = modify->find_fix(fieldID);
+    if (ifieldfix < 0) error->all(FLERR,"External field fix ID not found");
+    if (!modify->fix[ifieldfix]->per_particle_field)
+      error->all(FLERR,"External field fix does not compute necessary field");
+  } else if (fstyle == GFIELD) {
+    ifieldfix = modify->find_fix(fieldID);
+    if (ifieldfix < 0) error->all(FLERR,"External field fix ID not found");
+    if (!modify->fix[ifieldfix]->per_grid_field)
+      error->all(FLERR,"External field fix does not compute necessary field");
+  }
 
-  // moveperturb method is set if particle motion is perturbed
+  // moveperturb method is set if external field perturbs particle motion
 
   moveperturb = NULL;
-  if (gravity[0] != 0.0 || gravity[1] != 0.0 || gravity[2] != 0.0) {
-    if (domain->dimension == 3) moveperturb = &Update::gravity3d;
-    if (domain->dimension == 2) moveperturb = &Update::gravity2d;
+
+  if (fstyle == CFIELD) {
+    if (domain->dimension == 2) moveperturb = &Update::field2d;
+    if (domain->dimension == 3) moveperturb = &Update::field3d;
+  } else if (fstyle == PFIELD) {
+    moveperturb = &Update::field_per_particle;
+    field_active = modify->fix[ifieldfix]->field_active;
+  } else if (fstyle == GFIELD) {
+    moveperturb = &Update::field_per_grid;
+    field_active = modify->fix[ifieldfix]->field_active;
   }
 
   if (moveperturb) perturbflag = 1;
@@ -197,12 +254,16 @@ void Update::setup()
   nboundary_running = nexit_running = 0;
   nscheck_running = nscollide_running = 0;
   surf->nreact_running = 0;
-  nstuck = 0;
+  nstuck = naxibad = 0;
 
   collide_react = collide_react_setup();
   bounce_tally = bounce_setup();
 
+  dynamic = 0;
+  dynamic_setup();
+
   modify->setup();
+  if (dynamic) dynamic_update();
   output->setup(1);
 }
 
@@ -212,7 +273,13 @@ void Update::run(int nsteps)
 {
   int n_start_of_step = modify->n_start_of_step;
   int n_end_of_step = modify->n_end_of_step;
-  //int dynamic = 0;
+
+  // external per grid cell field
+  // only evaluate once at beginning of run b/c time-independent
+  // fix calculates field acting at center point of all grid cells
+
+  if (fstyle == GFIELD && fieldfreq == 0)
+    modify->fix[ifieldfix]->compute_field();
 
   // cellweightflag = 1 if grid-based particle weighting is ON
 
@@ -225,10 +292,14 @@ void Update::run(int nsteps)
 
     ntimestep++;
 
-    if (collide_react) collide_react_update();
+    if (collide_react) collide_react_reset();
     if (bounce_tally) bounce_set(ntimestep);
 
     timer->stamp();
+
+    // dynamic parameter updates
+
+    if (dynamic) dynamic_update();
 
     // start of step fixes
 
@@ -236,8 +307,6 @@ void Update::run(int nsteps)
       modify->start_of_step();
       timer->stamp(TIME_MODIFY);
     }
-
-    //if (dynamic) domain->dynamic();
 
     // move particles
 
@@ -258,6 +327,8 @@ void Update::run(int nsteps)
       collide->collisions();
       timer->stamp(TIME_COLLIDE);
     }
+
+    if (collide_react) collide_react_update();
 
     // diagnostic fixes
 
@@ -282,22 +353,36 @@ void Update::run(int nsteps)
    use multiple iterations of move/comm if necessary
 ------------------------------------------------------------------------- */
 
-template < int DIM, int SURF > void Update::move()
+template < int DIM, int SURF, int OPT > void Update::move()
 {
   bool hitflag;
   int m,icell,icell_original,nmask,outface,bflag,nflag,pflag,itmp;
   int side,minside,minsurf,nsurf,cflag,isurf,exclude,stuck_iterate;
-  int pstart,pstop,entryexit,any_entryexit;
+  int pstart,pstop,entryexit,any_entryexit,reaction;
   surfint *csurfs;
   cellint *neigh;
   double dtremain,frac,newfrac,param,minparam,rnew,dtsurf,tc,tmp;
   double xnew[3],xhold[3],xc[3],vc[3],minxc[3],minvc[3];
   double *x,*v,*lo,*hi;
+  double Lx,Ly,Lz,dx,dy,dz;
+  double *boxlo, *boxhi;
+  Grid::ParentCell *pcell;
   Surf::Tri *tri;
   Surf::Line *line;
   Particle::OnePart iorig;
   Particle::OnePart *particles;
   Particle::OnePart *ipart,*jpart;
+
+  if (OPT) {
+    boxlo = domain->boxlo;
+    boxhi = domain->boxhi;
+    Lx = boxhi[0] - boxlo[0];
+    Ly = boxhi[1] - boxlo[1];
+    Lz = boxhi[2] - boxlo[2];
+    dx = Lx/grid->unx;
+    dy = Ly/grid->uny;
+    dz = Lz/grid->unz;
+  }
 
   // for 2d and axisymmetry only
   // xnew,xc passed to geometry routines which use or set z component
@@ -326,24 +411,35 @@ template < int DIM, int SURF > void Update::move()
   // move/migrate iterations
 
   Grid::ChildCell *cells = grid->cells;
+  Grid::ParentCell *pcells = grid->pcells;
   Surf::Tri *tris = surf->tris;
   Surf::Line *lines = surf->lines;
   double dt = update->dt;
-  int notfirst = 0;
+
+  // external per particle field
+  // fix calculates field acting on all owned particles
+
+  if (fstyle == PFIELD) modify->fix[ifieldfix]->compute_field();
+
+  // external per grid cell field
+  // evaluate once every fieldfreq steps b/c time-dependent
+  // fix calculates field acting at center point of all grid cells
+
+  if (fstyle == GFIELD && fieldfreq && ((ntimestep-1) % fieldfreq == 0))
+    modify->fix[ifieldfix]->compute_field();
+
+  // one or more loops over particles
+  // first iteration = all my particles
+  // subsequent iterations = received particles
 
   while (1) {
-
-    // loop over particles
-    // first iteration = all my particles
-    // subsequent iterations = received particles
 
     niterate++;
     particles = particle->particles;
     nmigrate = 0;
     entryexit = 0;
 
-    if (notfirst == 0) {
-      notfirst = 1;
+    if (niterate == 1) {
       pstart = 0;
       pstop = nlocal;
     }
@@ -375,13 +471,15 @@ template < int DIM, int SURF > void Update::move()
         xnew[0] = x[0] + dtremain*v[0];
         xnew[1] = x[1] + dtremain*v[1];
         if (DIM != 2) xnew[2] = x[2] + dtremain*v[2];
-        if (perturbflag) (this->*moveperturb)(dtremain,xnew,v);
+        if (perturbflag)
+          (this->*moveperturb)(i,particles[i].icell,dtremain,xnew,v);
       } else if (pflag == PINSERT) {
         dtremain = particles[i].dtremain;
         xnew[0] = x[0] + dtremain*v[0];
         xnew[1] = x[1] + dtremain*v[1];
         if (DIM != 2) xnew[2] = x[2] + dtremain*v[2];
-        if (perturbflag) (this->*moveperturb)(dtremain,xnew,v);
+        if (perturbflag)
+          (this->*moveperturb)(i,particles[i].icell,dtremain,xnew,v);
       } else if (pflag == PENTRY) {
         icell = particles[i].icell;
         if (cells[icell].nsplit > 1) {
@@ -406,6 +504,55 @@ template < int DIM, int SURF > void Update::move()
         if (pflag > PSURF) exclude = pflag - PSURF - 1;
       }
 
+      // optimized move
+
+      if (OPT) {
+        int optmove = 1;
+
+        if (xnew[0] < boxlo[0] || xnew[0] > boxhi[0])
+          optmove = 0;
+
+        if (xnew[1] < boxlo[1] || xnew[1] > boxhi[1])
+          optmove = 0;
+
+        if (DIM == 3) {
+          if (xnew[2] < boxlo[2] || xnew[2] > boxhi[2])
+            optmove = 0;
+        }
+
+        if (optmove) {
+          const int ip = static_cast<int>((xnew[0] - boxlo[0])/dx);
+          const int jp = static_cast<int>((xnew[1] - boxlo[1])/dy);
+          int kp = 0;
+          if (DIM == 3) kp = static_cast<int>((xnew[2] - boxlo[2])/dz);
+
+          int cellIdx = (kp*grid->uny + jp)*grid->unx + ip + 1;
+
+          // particle outside ghost grid halo must use standard move
+
+          if (grid->hash->find(cellIdx) != grid->hash->end()) {
+
+            int icell = (*(grid->hash))[cellIdx];
+
+            // reset particle cell and coordinates
+
+            particles[i].icell = icell;
+            particles[i].flag = PKEEP;
+            x[0] = xnew[0];
+            x[1] = xnew[1];
+            x[2] = xnew[2];
+
+            if (cells[icell].proc != me) {
+              mlist[nmigrate++] = i;
+              particles[i].flag = PDONE;
+              ncomm_one++;
+            }
+
+            continue;
+          }
+        }
+      }
+
       particles[i].flag = PKEEP;
       icell = particles[i].icell;
       lo = cells[icell].lo;
@@ -423,10 +570,10 @@ template < int DIM, int SURF > void Update::move()
 
 #ifdef MOVE_DEBUG
         if (DIM == 3) {
-          if (ntimestep == MOVE_DEBUG_STEP && 
+          if (ntimestep == MOVE_DEBUG_STEP &&
               (MOVE_DEBUG_ID == particles[i].id ||
-               (me == MOVE_DEBUG_PROC && i == MOVE_DEBUG_INDEX))) 
-            printf("PARTICLE %d %ld: %d %d: %d: x %g %g %g: xnew %g %g %g: %d " 
+               (me == MOVE_DEBUG_PROC && i == MOVE_DEBUG_INDEX)))
+            printf("PARTICLE %d %ld: %d %d: %d: x %g %g %g: xnew %g %g %g: %d "
                    CELLINT_FORMAT ": lo %g %g %g: hi %g %g %g: DTR %g\n",
                    me,update->ntimestep,i,particles[i].id,
                    cells[icell].nsurf,
@@ -435,9 +582,9 @@ template < int DIM, int SURF > void Update::move()
                    lo[0],lo[1],lo[2],hi[0],hi[1],hi[2],dtremain);
         }
         if (DIM == 2) {
-          if (ntimestep == MOVE_DEBUG_STEP && 
+          if (ntimestep == MOVE_DEBUG_STEP &&
               (MOVE_DEBUG_ID == particles[i].id ||
-               (me == MOVE_DEBUG_PROC && i == MOVE_DEBUG_INDEX))) 
+               (me == MOVE_DEBUG_PROC && i == MOVE_DEBUG_INDEX)))
             printf("PARTICLE %d %ld: %d %d: %d: x %g %g: xnew %g %g: %d "
                    CELLINT_FORMAT ": lo %g %g: hi %g %g: DTR: %g\n",
                    me,update->ntimestep,i,particles[i].id,
@@ -447,9 +594,9 @@ template < int DIM, int SURF > void Update::move()
                    lo[0],lo[1],hi[0],hi[1],dtremain);
         }
         if (DIM == 1) {
-          if (ntimestep == MOVE_DEBUG_STEP && 
+          if (ntimestep == MOVE_DEBUG_STEP &&
               (MOVE_DEBUG_ID == particles[i].id ||
-               (me == MOVE_DEBUG_PROC && i == MOVE_DEBUG_INDEX))) 
+               (me == MOVE_DEBUG_PROC && i == MOVE_DEBUG_INDEX)))
             printf("PARTICLE %d %ld: %d %d: %d: x %g %g: xnew %g %g: %d "
                    CELLINT_FORMAT ": lo %g %g: hi %g %g: DTR: %g\n",
                    me,update->ntimestep,i,particles[i].id,
@@ -464,15 +611,18 @@ template < int DIM, int SURF > void Update::move()
         // frac = fraction of move completed before hitting cell face
         // this section should be as efficient as possible,
         //   since most particles won't do anything else
-        // axisymmetric cell face crossings:
-        //   use linear xnew to check vertical faces
-        //   must always check move against curved lower y face of cell
-        //   use remapped rnew to check horizontal lines
-        //   for y faces, if pflag = PEXIT, particle was just received
-        //     from another proc and is exiting this cell from face:
-        //       axi_horizontal_line() will not detect correct crossing,
-        //       so set frac and outface directly to move into adjacent cell,
-        //       then unset pflag so not checked again for this particle
+        // axisymmetric y cell face crossings:
+        //   these faces are curved cylindrical shells
+        //   axi_horizontal_line() checks for intersection of
+        //     straight-line y,z move with circle in y,z
+        //   always check move against lower y face
+        //     except when particle starts on face and
+        //     PEXIT is set (just received) or particle is moving downward in y
+        //   only check move against upper y face
+        //     if remapped final y position (rnew) is within cell,
+        //     or except when particle starts on face and
+        //     PEXIT is set (just received) or particle is moving upward in y
+        //   unset pflag so not checked again for this particle
 
         outface = INTERIOR;
         frac = 1.0;
@@ -484,7 +634,7 @@ template < int DIM, int SURF > void Update::move()
           frac = (hi[0]-x[0]) / (xnew[0]-x[0]);
           outface = XHI;
         }
-        
+
         if (DIM != 1) {
           if (xnew[1] < lo[1]) {
             newfrac = (lo[1]-x[1]) / (xnew[1]-x[1]);
@@ -502,7 +652,7 @@ template < int DIM, int SURF > void Update::move()
         }
 
         if (DIM == 1) {
-          if (pflag == PEXIT && x[1] == lo[1]) {
+          if (x[1] == lo[1] && (pflag == PEXIT || v[1] < 0.0)) {
             frac = 0.0;
             outface = YLO;
           } else if (Geometry::
@@ -514,7 +664,7 @@ template < int DIM, int SURF > void Update::move()
             }
           }
 
-          if (pflag == PEXIT && x[1] == hi[1]) {
+          if (x[1] == hi[1] && (pflag == PEXIT || v[1] > 0.0)) {
             frac = 0.0;
             outface = YHI;
           } else {
@@ -533,7 +683,7 @@ template < int DIM, int SURF > void Update::move()
 
           pflag = 0;
         }
-          
+
         if (DIM == 3) {
           if (xnew[2] < lo[2]) {
             newfrac = (lo[2]-x[2]) / (xnew[2]-x[2]);
@@ -554,7 +704,7 @@ template < int DIM, int SURF > void Update::move()
         //iterate++;
 
 #ifdef MOVE_DEBUG
-        if (ntimestep == MOVE_DEBUG_STEP && 
+        if (ntimestep == MOVE_DEBUG_STEP &&
             (MOVE_DEBUG_ID == particles[i].id ||
              (me == MOVE_DEBUG_PROC && i == MOVE_DEBUG_INDEX))) {
           if (outface != INTERIOR)
@@ -570,7 +720,16 @@ template < int DIM, int SURF > void Update::move()
 
         if (SURF) {
 
+          // skip surf checks if particle flagged as EXITing this cell
+          // then unset pflag so not checked again for this particle
+
           nsurf = cells[icell].nsurf;
+          if (pflag == PEXIT) {
+            nsurf = 0;
+            pflag = 0;
+          }
+          nscheck_one += nsurf;
+
           if (nsurf) {
 
             // particle crosses cell face, reset xnew exactly on face of cell
@@ -581,13 +740,13 @@ template < int DIM, int SURF > void Update::move()
               xhold[0] = xnew[0];
               xhold[1] = xnew[1];
               if (DIM != 2) xhold[2] = xnew[2];
-              
+
               xnew[0] = x[0] + frac*(xnew[0]-x[0]);
               xnew[1] = x[1] + frac*(xnew[1]-x[1]);
               if (DIM != 2) xnew[2] = x[2] + frac*(xnew[2]-x[2]);
 
               if (outface == XLO) xnew[0] = lo[0];
-              else if (outface == XHI) xnew[0] = hi[0]; 
+              else if (outface == XHI) xnew[0] = hi[0];
               else if (outface == YLO) xnew[1] = lo[1];
               else if (outface == YHI) xnew[1] = hi[1];
               else if (outface == ZLO) xnew[2] = lo[2];
@@ -612,8 +771,10 @@ template < int DIM, int SURF > void Update::move()
             cflag = 0;
             minparam = 2.0;
             csurfs = cells[icell].csurfs;
+
             for (m = 0; m < nsurf; m++) {
               isurf = csurfs[m];
+
               if (DIM > 1) {
                 if (isurf == exclude) continue;
               }
@@ -636,10 +797,10 @@ template < int DIM, int SURF > void Update::move()
                                      line->norm,exclude == isurf,
                                      xc,vc,param,side);
               }
-              
+
 #ifdef MOVE_DEBUG
               if (DIM == 3) {
-                if (hitflag && ntimestep == MOVE_DEBUG_STEP && 
+                if (hitflag && ntimestep == MOVE_DEBUG_STEP &&
                     (MOVE_DEBUG_ID == particles[i].id ||
                      (me == MOVE_DEBUG_PROC && i == MOVE_DEBUG_INDEX)))
                   printf("SURF COLLIDE: %d %d %d %d: "
@@ -656,7 +817,7 @@ template < int DIM, int SURF > void Update::move()
                          xc[0],xc[1],xc[2],param,side);
               }
               if (DIM == 2) {
-                if (hitflag && ntimestep == MOVE_DEBUG_STEP && 
+                if (hitflag && ntimestep == MOVE_DEBUG_STEP &&
                     (MOVE_DEBUG_ID == particles[i].id ||
                      (me == MOVE_DEBUG_PROC && i == MOVE_DEBUG_INDEX)))
                   printf("SURF COLLIDE: %d %d %d %d: P1 %g %g: P2 %g %g: "
@@ -669,7 +830,7 @@ template < int DIM, int SURF > void Update::move()
                          xc[0],xc[1],param,side);
               }
               if (DIM == 1) {
-                if (hitflag && ntimestep == MOVE_DEBUG_STEP && 
+                if (hitflag && ntimestep == MOVE_DEBUG_STEP &&
                     (MOVE_DEBUG_ID == particles[i].id ||
                      (me == MOVE_DEBUG_PROC && i == MOVE_DEBUG_INDEX)))
                   printf("SURF COLLIDE %d %ld: %d %d %d %d: P1 %g %g: P2 %g %g: "
@@ -685,7 +846,7 @@ template < int DIM, int SURF > void Update::move()
                 MathExtra::sub3(line->p2,line->p1,edge1);
                 MathExtra::sub3(x,line->p1,edge2);
                 MathExtra::cross3(edge2,edge1,cross);
-                if (hitflag && ntimestep == MOVE_DEBUG_STEP && 
+                if (hitflag && ntimestep == MOVE_DEBUG_STEP &&
                     MOVE_DEBUG_ID == particles[i].id)
                   printf("CROSSSTART %g %g %g\n",cross[0],cross[1],cross[2]);
                 xfinal[0] = xnew[0];
@@ -693,38 +854,13 @@ template < int DIM, int SURF > void Update::move()
                 xfinal[2] = 0.0;
                 MathExtra::sub3(xfinal,line->p1,edge2);
                 MathExtra::cross3(edge2,edge1,cross);
-                if (hitflag && ntimestep == MOVE_DEBUG_STEP && 
+                if (hitflag && ntimestep == MOVE_DEBUG_STEP &&
                     MOVE_DEBUG_ID == particles[i].id)
                   printf("CROSSFINAL %g %g %g\n",cross[0],cross[1],cross[2]);
               }
 #endif
-              
+
               if (hitflag && param < minparam && side == OUTSIDE) {
-
-                // NOTE: these were the old checks
-                //       think it is now sufficient to test for particle
-                //       in an INSIDE cell in fix grid/check
-
-              //if (hitflag && side != ONSURF2OUT && param <= minparam) {
-
-                // this if test is to avoid case where particle
-                // previously hit 1 of 2 (or more) touching angled surfs at
-                // common edge/corner, on this iteration first surf
-                // is excluded, but others may be hit on inside:
-                // param will be epsilon and exclude must be set
-                // skip the hits of other touching surfs
-
-                //if (side == INSIDE && param < EPSPARAM && exclude >= 0) 
-                // continue;
-
-                // this if test is to avoid case where particle
-                // hits 2 touching angled surfs at common edge/corner
-                // from far away:
-                // param is same, but hits one on outside, one on inside
-                // only keep surf hit on outside
-
-                //if (param == minparam && side == INSIDE) continue;
-
                 cflag = 1;
                 minparam = param;
                 minside = side;
@@ -740,19 +876,9 @@ template < int DIM, int SURF > void Update::move()
 
             } // END of for loop over surfs
 
-            nscheck_one += nsurf;
-            
-            if (cflag) {
-              // NOTE: this check is no longer needed?
-              if (minside == INSIDE) {
-                char str[128];
-                sprintf(str,
-                        "Particle %d on proc %d hit inside of "
-                        "surf %d on step " BIGINT_FORMAT,
-                        i,me,minsurf,update->ntimestep);
-                error->one(FLERR,str);
-              }
+            // tri/line = surf that particle hit first
 
+            if (cflag) {
               if (DIM == 3) tri = &tris[minsurf];
               if (DIM != 3) line = &lines[minsurf];
 
@@ -778,15 +904,15 @@ template < int DIM, int SURF > void Update::move()
               ipart->icell = icell;
               dtremain *= 1.0 - minparam*frac;
 
-              if (nsurf_tally) 
+              if (nsurf_tally)
                 memcpy(&iorig,&particles[i],sizeof(Particle::OnePart));
 
               if (DIM == 3)
                 jpart = surf->sc[tri->isc]->
-                  collide(ipart,tri->norm,dtremain,tri->isr);
+                  collide(ipart,dtremain,minsurf,tri->norm,tri->isr,reaction);
               if (DIM != 3)
                 jpart = surf->sc[line->isc]->
-                  collide(ipart,line->norm,dtremain,line->isr);
+                  collide(ipart,dtremain,minsurf,line->norm,line->isr,reaction);
 
               if (jpart) {
                 particles = particle->particles;
@@ -800,9 +926,10 @@ template < int DIM, int SURF > void Update::move()
 
               if (nsurf_tally)
                 for (m = 0; m < nsurf_tally; m++)
-                  slist_active[m]->surf_tally(minsurf,&iorig,ipart,jpart);
-              
-              // nstuck = consective iterations particle is immobile
+                  slist_active[m]->surf_tally(minsurf,icell,reaction,
+                                              &iorig,ipart,jpart);
+
+              // stuck_iterate = consecutive iterations particle is immobile
 
               if (minparam == 0.0) stuck_iterate++;
               else stuck_iterate = 0;
@@ -815,10 +942,10 @@ template < int DIM, int SURF > void Update::move()
 
               exclude = minsurf;
               nscollide_one++;
-              
+
 #ifdef MOVE_DEBUG
               if (DIM == 3) {
-                if (ntimestep == MOVE_DEBUG_STEP && 
+                if (ntimestep == MOVE_DEBUG_STEP &&
                     (MOVE_DEBUG_ID == particles[i].id ||
                      (me == MOVE_DEBUG_PROC && i == MOVE_DEBUG_INDEX)))
                   printf("POST COLLISION %d: %g %g %g: %g %g %g: %g %g %g\n",
@@ -827,7 +954,7 @@ template < int DIM, int SURF > void Update::move()
                          minparam,frac,dtremain);
               }
               if (DIM == 2) {
-                if (ntimestep == MOVE_DEBUG_STEP && 
+                if (ntimestep == MOVE_DEBUG_STEP &&
                     (MOVE_DEBUG_ID == particles[i].id ||
                      (me == MOVE_DEBUG_PROC && i == MOVE_DEBUG_INDEX)))
                   printf("POST COLLISION %d: %g %g: %g %g: %g %g %g\n",
@@ -836,7 +963,7 @@ template < int DIM, int SURF > void Update::move()
                          minparam,frac,dtremain);
               }
               if (DIM == 1) {
-                if (ntimestep == MOVE_DEBUG_STEP && 
+                if (ntimestep == MOVE_DEBUG_STEP &&
                     (MOVE_DEBUG_ID == particles[i].id ||
                      (me == MOVE_DEBUG_PROC && i == MOVE_DEBUG_INDEX)))
                   printf("POST COLLISION %d: %g %g: %g %g: vel %g %g %g: %g %g %g\n",
@@ -862,7 +989,7 @@ template < int DIM, int SURF > void Update::move()
             } // END of cflag if section that performed collision
 
             // no collision, so restore saved xnew if changed it above
-            
+
             if (outface != INTERIOR) {
               xnew[0] = xhold[0];
               xnew[1] = xhold[1];
@@ -879,18 +1006,31 @@ template < int DIM, int SURF > void Update::move()
         // no cell crossing and no surface collision
         // set final particle position to xnew, then break from advection loop
         // for axisymmetry, must first remap linear xnew and v
+        // for axisymmetry, check if final particle position is within cell
+        //   can be rare epsilon round-off cases where particle ends up outside
+        //     of final cell curved surf when move logic thinks it is inside
+        //   example is when Geom::axi_horizontal_line() says no crossing of cell edge
+        //     but axi_remap() puts particle outside the cell
+        //   in this case, just DISCARD particle and tally it to naxibad
         // if migrating to another proc,
         //   flag as PDONE so new proc won't move it more on this step
-        
+
         if (outface == INTERIOR) {
           if (DIM == 1) axi_remap(xnew,v);
           x[0] = xnew[0];
           x[1] = xnew[1];
           if (DIM == 3) x[2] = xnew[2];
+          if (DIM == 1) {
+            if (x[1] < lo[1] || x[1] > hi[1]) {
+              particles[i].flag = PDISCARD;
+              naxibad++;
+              break;
+            }
+          }
           if (cells[icell].proc != me) particles[i].flag = PDONE;
           break;
         }
-          
+
         // particle crosses cell face
         // decrement dtremain in case particle is passed to another proc
         // for axisymmetry, must then remap linear x and v
@@ -906,11 +1046,11 @@ template < int DIM, int SURF > void Update::move()
         if (DIM == 1) axi_remap(x,v);
 
         if (outface == XLO) x[0] = lo[0];
-        else if (outface == XHI) x[0] = hi[0]; 
+        else if (outface == XHI) x[0] = hi[0];
         else if (outface == YLO) x[1] = lo[1];
         else if (outface == YHI) x[1] = hi[1];
         else if (outface == ZLO) x[2] = lo[2];
-        else if (outface == ZHI) x[2] = hi[2]; 
+        else if (outface == ZHI) x[2] = hi[2];
 
         if (DIM == 1) {
           xnew[0] = x[0] + dtremain*v[0];
@@ -920,10 +1060,11 @@ template < int DIM, int SURF > void Update::move()
 
         // nflag = type of neighbor cell: child, parent, unknown, boundary
         // if parent, use id_find_child to identify child cell
-        //   result of id_find_child could be unknown:
-        //     particle is hitting face of a ghost child cell which extends
-        //     beyond my ghost halo, cell on other side of face is a parent,
-        //     it's child which the particle is in is entirely beyond my halo
+        //   result can be -1 for unknown cell, occurs when:
+        //   (a) particle hits face of ghost child cell
+        //   (b) the ghost cell extends beyond ghost halo
+        //   (c) cell on other side of face is a parent
+        //   (d) its child, which the particle is in, is entirely beyond my halo
         // if new cell is child and surfs exist, check if a split cell
 
         nflag = grid->neigh_decode(nmask,outface);
@@ -940,7 +1081,9 @@ template < int DIM, int SURF > void Update::move()
               icell = split2d(icell,x);
           }
         } else if (nflag == NPARENT) {
-          icell = grid->id_find_child(neigh[outface],x);
+          pcell = &pcells[neigh[outface]];
+          icell = grid->id_find_child(pcell->id,cells[icell].level,
+                                      pcell->lo,pcell->hi,x);
           if (icell >= 0) {
             if (DIM == 3 && SURF) {
               if (cells[icell].nsplit > 1 && cells[icell].nsurf >= 0)
@@ -952,7 +1095,7 @@ template < int DIM, int SURF > void Update::move()
             }
           }
         } else if (nflag == NUNKNOWN) icell = -1;
-        
+
         // neighbor cell is global boundary
         // tally boundary stats if requested using iorig
         // collide() updates x,v,xnew as needed due to boundary interaction
@@ -962,15 +1105,16 @@ template < int DIM, int SURF > void Update::move()
         // if jpart, add new particle to this iteration via pstop++
         // OUTFLOW: exit with particle flag = PDISCARD
         // PERIODIC: new cell via same logic as above for child/parent/unknown
-        // other = reflected particle stays in same grid cell
+        // OTHER: reflected particle stays in same grid cell
 
         else {
           ipart = &particles[i];
 
-          if (nboundary_tally) 
+          if (nboundary_tally)
             memcpy(&iorig,&particles[i],sizeof(Particle::OnePart));
 
-          bflag = domain->collide(ipart,outface,icell,xnew,dtremain,jpart);
+          bflag = domain->collide(ipart,outface,icell,xnew,dtremain,
+                                  jpart,reaction);
 
           if (jpart) {
             particles = particle->particles;
@@ -981,7 +1125,7 @@ template < int DIM, int SURF > void Update::move()
           if (nboundary_tally)
             for (m = 0; m < nboundary_tally; m++)
               blist_active[m]->
-                boundary_tally(outface,bflag,&iorig,ipart,jpart);
+                boundary_tally(outface,bflag,reaction,&iorig,ipart,jpart);
 
           if (DIM == 1) {
             xnew[0] = x[0] + dtremain*v[0];
@@ -1006,7 +1150,9 @@ template < int DIM, int SURF > void Update::move()
                   icell = split2d(icell,x);
               }
             } else if (nflag == NPBPARENT) {
-              icell = grid->id_find_child(neigh[outface],x);
+              pcell = &pcells[neigh[outface]];
+              icell = grid->id_find_child(pcell->id,cells[icell].level,
+                                          pcell->lo,pcell->hi,x);
               if (icell >= 0) {
                 if (DIM == 3 && SURF) {
                   if (cells[icell].nsplit > 1 && cells[icell].nsurf >= 0)
@@ -1055,7 +1201,7 @@ template < int DIM, int SURF > void Update::move()
 
         // if nsurf < 0, new cell is EMPTY ghost
         // exit with particle flag = PENTRY, so receiver can continue move
-        
+
         if (cells[icell].nsurf < 0) {
           particles[i].flag = PENTRY;
           particles[i].dtremain = dtremain;
@@ -1075,7 +1221,7 @@ template < int DIM, int SURF > void Update::move()
       // END of while loop over advection of single particle
 
 #ifdef MOVE_DEBUG
-      if (ntimestep == MOVE_DEBUG_STEP && 
+      if (ntimestep == MOVE_DEBUG_STEP &&
           (MOVE_DEBUG_ID == particles[i].id ||
            (me == MOVE_DEBUG_PROC && i == MOVE_DEBUG_INDEX)))
         printf("MOVE DONE %d %d %d: %g %g %g: DTR %g\n",
@@ -1087,9 +1233,9 @@ template < int DIM, int SURF > void Update::move()
       // update particle's grid cell
       // if particle flag set, add particle to migrate list
       // if discarding, migration will delete particle
-    
+
       particles[i].icell = icell;
-      
+
       if (particles[i].flag != PKEEP) {
         mlist[nmigrate++] = i;
         if (particles[i].flag != PDISCARD) {
@@ -1107,7 +1253,7 @@ template < int DIM, int SURF > void Update::move()
     }
 
     // END of pstart/pstop loop advecting all particles
-    
+
     // if gridcut >= 0.0, check if another iteration of move is required
     // only the case if some particle flag = PENTRY/PEXIT
     //   in which case perform particle migration
@@ -1143,7 +1289,7 @@ template < int DIM, int SURF > void Update::move()
   // accumulate running totals
 
   niterate_running += niterate;
-  nmove_running += nlocal;
+  nmove_running += particle->nlocal;
   ntouch_running += ntouch_one;
   ncomm_running += ncomm_one;
   nboundary_running += nboundary_one;
@@ -1152,6 +1298,64 @@ template < int DIM, int SURF > void Update::move()
   nscollide_running += nscollide_one;
   surf->nreact_running += surf->nreact_one;
 }
+
+/* ----------------------------------------------------------------------
+   calculate motion perturbation for a single particle I
+     due to external per particle field
+   array in fix[ifieldfix] stores per particle perturbations for x and v
+------------------------------------------------------------------------- */
+
+void Update::field_per_particle(int i, int icell, double dt, double *x, double *v)
+{
+  double dtsq = 0.5*dt*dt;
+  double **array = modify->fix[ifieldfix]->array_particle;
+
+  int icol = 0;
+  if (field_active[0]) {
+    x[0] += dtsq*array[i][icol];
+    v[0] += dt*array[i][icol];
+    icol++;
+  }
+  if (field_active[1]) {
+    x[1] += dtsq*array[i][icol];
+    v[1] += dt*array[i][icol];
+    icol++;
+  }
+  if (field_active[2]) {
+    x[2] += dtsq*array[i][icol];
+    v[2] += dt*array[i][icol];
+    icol++;
+  }
+};
+
+/* ----------------------------------------------------------------------
+   calculate motion perturbation for a single particle I in grid cell Icell
+     due to external per grid cell field
+   array in fix[ifieldfix] stores per grid cell perturbations for x and v
+------------------------------------------------------------------------- */
+
+void Update::field_per_grid(int i, int icell, double dt, double *x, double *v)
+{
+  double dtsq = 0.5*dt*dt;
+  double **array = modify->fix[ifieldfix]->array_grid;
+
+  int icol = 0;
+  if (field_active[0]) {
+    x[0] += dtsq*array[icell][icol];
+    v[0] += dt*array[icell][icol];
+    icol++;
+  }
+  if (field_active[1]) {
+    x[1] += dtsq*array[icell][icol];
+    v[1] += dt*array[icell][icol];
+    icol++;
+  }
+  if (field_active[2]) {
+    x[2] += dtsq*array[icell][icol];
+    v[2] += dt*array[icell][icol];
+    icol++;
+  }
+};
 
 /* ----------------------------------------------------------------------
    particle is entering split parent icell at x
@@ -1175,6 +1379,7 @@ int Update::split3d(int icell, double *x)
   // only consider tris that are mapped via csplits to a split cell
   //   unmapped tris only touch cell surf at xnew
   //   another mapped tri should include same xnew
+  // NOTE: these next 2 lines do not seem correct compared to code
   // not considered a collision if particles starts on surf, moving out
   // not considered a collision if 2 params are tied and one is INSIDE surf
 
@@ -1186,6 +1391,7 @@ int Update::split3d(int icell, double *x)
 
   cflag = 0;
   minparam = 2.0;
+
   for (m = 0; m < nsurf; m++) {
     if (csplits[m] < 0) continue;
     isurf = csurfs[m];
@@ -1193,7 +1399,7 @@ int Update::split3d(int icell, double *x)
     hitflag = Geometry::
       line_tri_intersect(x,xnew,tri->p1,tri->p2,tri->p3,
                          tri->norm,xc,param,side);
-    
+
     if (hitflag && side != INSIDE && param < minparam) {
       cflag = 1;
       minparam = param;
@@ -1228,6 +1434,7 @@ int Update::split2d(int icell, double *x)
   // only consider lines that are mapped via csplits to a split cell
   //   unmapped lines only touch cell surf at xnew
   //   another mapped line should include same xnew
+  // NOTE: these next 2 lines do not seem correct compared to code
   // not considered a collision if particle starts on surf, moving out
   // not considered a collision if 2 params are tied and one is INSIDE surf
 
@@ -1245,7 +1452,7 @@ int Update::split2d(int icell, double *x)
     line = &lines[isurf];
     hitflag = Geometry::
       line_line_intersect(x,xnew,line->p1,line->p2,line->norm,xc,param,side);
-    
+
     if (hitflag && side != INSIDE && param < minparam) {
       cflag = 1;
       minparam = param;
@@ -1259,7 +1466,7 @@ int Update::split2d(int icell, double *x)
 }
 
 /* ----------------------------------------------------------------------
-   setup lists of all computes that tally surface and boundary bounce info
+   check if any surface collision or reaction models are defined
    return 1 if there are any, 0 if not
 ------------------------------------------------------------------------- */
 
@@ -1270,13 +1477,26 @@ int Update::collide_react_setup()
   nsr = surf->nsr;
   sr = surf->sr;
 
-  if (sc || sr) return 1;
+  if (nsc || nsr) return 1;
   return 0;
 }
 
 /* ----------------------------------------------------------------------
-   setup lists of all computes that tally surface and boundary bounce info
-   return 1 if there are any, 0 if not
+   zero counters for tallying surface collisions/reactions
+   done at start of each timestep
+   done within individual SurfCollide and SurfReact instances
+------------------------------------------------------------------------- */
+
+void Update::collide_react_reset()
+{
+  for (int i = 0; i < nsc; i++) sc[i]->tally_reset();
+  for (int i = 0; i < nsr; i++) sr[i]->tally_reset();
+}
+
+/* ----------------------------------------------------------------------
+   update cummulative counters for tallying surface collisions/reactions
+   done at end of each timestep
+   this is done within individual SurfCollide and SurfReact instances
 ------------------------------------------------------------------------- */
 
 void Update::collide_react_update()
@@ -1296,8 +1516,8 @@ int Update::bounce_setup()
   delete [] blist_compute;
   delete [] slist_active;
   delete [] blist_active;
-
   slist_compute = blist_compute = NULL;
+
   nslist_compute = nblist_compute = 0;
   for (int i = 0; i < modify->ncompute; i++) {
     if (modify->compute[i]->surf_tally_flag) nslist_compute++;
@@ -1324,7 +1544,8 @@ int Update::bounce_setup()
 
 /* ----------------------------------------------------------------------
    set bounce tally flags for current timestep
-   nsurf_tally = # of computes needing bounce info on this step
+   nsurf_tally = # of surface computes needing bounce info on this step
+   nboundary_tally = # of boundary computes needing bounce info on this step
    clear accumulators in computes that will be invoked this step
 ------------------------------------------------------------------------- */
 
@@ -1352,6 +1573,43 @@ void Update::bounce_set(bigint ntimestep)
 }
 
 /* ----------------------------------------------------------------------
+   make list of classes that reset dynamic parameters
+   currently only surf collision models
+------------------------------------------------------------------------- */
+
+void Update::dynamic_setup()
+{
+  delete [] ulist_surfcollide;
+  ulist_surfcollide = NULL;
+
+  nulist_surfcollide = 0;
+  for (int i = 0; i < surf->nsc; i++)
+    if (surf->sc[i]->dynamicflag) nulist_surfcollide++;
+
+  if (nulist_surfcollide)
+    ulist_surfcollide = new SurfCollide*[nulist_surfcollide];
+
+  nulist_surfcollide = 0;
+  for (int i = 0; i < surf->nsc; i++)
+    if (surf->sc[i]->dynamicflag)
+      ulist_surfcollide[nulist_surfcollide++] = surf->sc[i];
+
+  if (nulist_surfcollide) dynamic = 1;
+}
+
+/* ----------------------------------------------------------------------
+   invoke class methods that reset dynamic parameters
+------------------------------------------------------------------------- */
+
+void Update::dynamic_update()
+{
+  if (nulist_surfcollide) {
+    for (int i = 0; i < nulist_surfcollide; i++)
+      ulist_surfcollide[i]->dynamic();
+  }
+}
+
+/* ----------------------------------------------------------------------
    set global properites via global command in input script
 ------------------------------------------------------------------------- */
 
@@ -1365,6 +1623,12 @@ void Update::global(int narg, char **arg)
       if (iarg+2 > narg) error->all(FLERR,"Illegal global command");
       fnum = input->numeric(FLERR,arg[iarg+1]);
       if (fnum <= 0.0) error->all(FLERR,"Illegal global command");
+      iarg += 2;
+    } else if (strcmp(arg[iarg],"optmove") == 0) {
+      if (iarg+2 > narg) error->all(FLERR,"Illegal global command");
+      if (strcmp(arg[iarg+1],"yes") == 0) optmove_flag = 1;
+      else if (strcmp(arg[iarg+1],"no") == 0) optmove_flag = 0;
+      else error->all(FLERR,"Illegal global command");
       iarg += 2;
     } else if (strcmp(arg[iarg],"nrho") == 0) {
       if (iarg+2 > narg) error->all(FLERR,"Illegal global command");
@@ -1382,19 +1646,43 @@ void Update::global(int narg, char **arg)
       temp_thermal = input->numeric(FLERR,arg[iarg+1]);
       if (temp_thermal <= 0.0) error->all(FLERR,"Illegal global command");
       iarg += 2;
-    } else if (strcmp(arg[iarg],"gravity") == 0) {
-      if (iarg+5 > narg) error->all(FLERR,"Illegal global command");
-      double gmag = input->numeric(FLERR,arg[iarg+1]);
-      gravity[0] = input->numeric(FLERR,arg[iarg+2]);
-      gravity[1] = input->numeric(FLERR,arg[iarg+3]);
-      gravity[2] = input->numeric(FLERR,arg[iarg+4]);
-      if (gmag < 0.0) error->all(FLERR,"Illegal global command");
-      if (gmag > 0.0 && 
-          gravity[0] == 0.0 && gravity[1] == 0.0 && gravity[2] == 0.0)
-        error->all(FLERR,"Illegal global command");
-      if (gmag > 0.0) MathExtra::snorm3(gmag,gravity);
-      else gravity[0] = gravity[1] = gravity[2] = 0.0;
-      iarg += 5;
+
+    } else if (strcmp(arg[iarg],"field") == 0) {
+      if (iarg+1 > narg) error->all(FLERR,"Illegal global command");
+      if (strcmp(arg[iarg+1],"none") == 0) {
+        fstyle = NOFIELD;
+        iarg += 2;
+      } else if (strcmp(arg[iarg+1],"constant") == 0) {
+        if (iarg+6 > narg) error->all(FLERR,"Illegal global field command");
+        fstyle = CFIELD;
+        double fmag = input->numeric(FLERR,arg[iarg+2]);
+        field[0] = input->numeric(FLERR,arg[iarg+3]);
+        field[1] = input->numeric(FLERR,arg[iarg+4]);
+        field[2] = input->numeric(FLERR,arg[iarg+5]);
+        if (fmag <= 0.0) error->all(FLERR,"Illegal global field command");
+        if (field[0] == 0.0 && field[1] == 0.0 && field[2] == 0.0)
+          error->all(FLERR,"Illegal global field command");
+        MathExtra::snorm3(fmag,field);
+        iarg += 6;
+      } else if (strcmp(arg[iarg+1],"particle") == 0) {
+        if (iarg+3 > narg) error->all(FLERR,"Illegal global field command");
+        delete [] fieldID;
+        fstyle = PFIELD;
+        int n = strlen(arg[iarg+2]) + 1;
+        fieldID = new char[n];
+        strcpy(fieldID,arg[iarg+2]);
+        iarg += 3;
+      } else if (strcmp(arg[iarg+1],"grid") == 0) {
+        if (iarg+4 > narg) error->all(FLERR,"Illegal global field command");
+        delete [] fieldID;
+        fstyle = GFIELD;
+        int n = strlen(arg[iarg+2]) + 1;
+        fieldID = new char[n];
+        strcpy(fieldID,arg[iarg+2]);
+        fieldfreq = input->inumeric(FLERR,arg[iarg+3]);
+        if (fieldfreq < 0) error->all(FLERR,"Illegal global field command");
+        iarg += 4;
+      } else error->all(FLERR,"Illegal global field command");
 
     } else if (strcmp(arg[iarg],"surfs") == 0) {
       if (iarg+2 > narg) error->all(FLERR,"Illegal global command");
@@ -1402,19 +1690,19 @@ void Update::global(int narg, char **arg)
       iarg += 2;
     } else if (strcmp(arg[iarg],"surfgrid") == 0) {
       if (iarg+2 > narg) error->all(FLERR,"Illegal global command");
-      if (surf->exist) 
+      if (surf->exist)
         error->all(FLERR,
                    "Cannot set global surfgrid when surfaces already exist");
       if (strcmp(arg[iarg+1],"auto") == 0) grid->surfgrid_algorithm = PERAUTO;
-      else if (strcmp(arg[iarg+1],"percell") == 0) 
+      else if (strcmp(arg[iarg+1],"percell") == 0)
         grid->surfgrid_algorithm = PERCELL;
-      else if (strcmp(arg[iarg+1],"persurf") == 0) 
+      else if (strcmp(arg[iarg+1],"persurf") == 0)
         grid->surfgrid_algorithm = PERSURF;
       else error->all(FLERR,"Illegal global command");
       iarg += 2;
     } else if (strcmp(arg[iarg],"surfmax") == 0) {
       if (iarg+2 > narg) error->all(FLERR,"Illegal global command");
-      if (surf->exist) 
+      if (surf->exist)
         error->all(FLERR,
                    "Cannot set global surfmax when surfaces already exist");
       grid->maxsurfpercell = atoi(arg[iarg+1]);
@@ -1422,19 +1710,9 @@ void Update::global(int narg, char **arg)
       // reallocate paged data structs for variable-length surf info
       grid->allocate_surf_arrays();
       iarg += 2;
-    } else if (strcmp(arg[iarg],"cellmax") == 0) {
-      if (iarg+2 > narg) error->all(FLERR,"Illegal global command");
-      if (surf->exist) 
-        error->all(FLERR,
-                   "Cannot set global cellmax when surfaces already exist");
-      grid->maxcellpersurf = atoi(arg[iarg+1]);
-      if (grid->maxcellpersurf <= 0) error->all(FLERR,"Illegal global command");
-      // reallocate paged data structs for variable-length cell info
-      grid->allocate_cell_arrays();
-      iarg += 2;
     } else if (strcmp(arg[iarg],"splitmax") == 0) {
       if (iarg+2 > narg) error->all(FLERR,"Illegal global command");
-      if (surf->exist) 
+      if (surf->exist)
         error->all(FLERR,
                    "Cannot set global splitmax when surfaces already exist");
       grid->maxsplitpercell = atoi(arg[iarg+1]);
@@ -1442,25 +1720,6 @@ void Update::global(int narg, char **arg)
       // reallocate paged data structs for variable-length cell info
       grid->allocate_surf_arrays();
       iarg += 2;
-    } else if (strcmp(arg[iarg],"surfpush") == 0) {
-      if (iarg+2 > narg) error->all(FLERR,"Illegal global command");
-      if (strcmp(arg[iarg+1],"no") == 0) {
-        surf->pushflag = 0;
-        iarg += 2;
-      } else if (strcmp(arg[iarg+1],"yes") == 0) {
-        surf->pushflag = 1;
-        iarg += 2;
-      } else {
-        if (iarg+4 > narg) error->all(FLERR,"Illegal global command");
-        surf->pushflag = 2;
-        surf->pushlo = input->numeric(FLERR,arg[iarg+1]);
-        surf->pushhi = input->numeric(FLERR,arg[iarg+2]);
-        surf->pushvalue = input->numeric(FLERR,arg[iarg+3]);
-        if (surf->pushlo > surf->pushhi) 
-          error->all(FLERR,"Illegal global command");
-        iarg += 4;
-      }
-
     } else if (strcmp(arg[iarg],"gridcut") == 0) {
       if (iarg+2 > narg) error->all(FLERR,"Illegal global command");
       grid->cutoff = input->numeric(FLERR,arg[iarg+1]);
@@ -1469,7 +1728,13 @@ void Update::global(int narg, char **arg)
       // force ghost info to be regenerated with new cutoff
       grid->remove_ghosts();
       iarg += 2;
-
+    } else if (strcmp(arg[iarg],"weight") == 0) {
+      // for now assume just one arg after "cell"
+      // may need to generalize later
+      if (iarg+3 > narg) error->all(FLERR,"Illegal global command");
+      if (strcmp(arg[iarg+1],"cell") == 0) grid->weight(1,&arg[iarg+2]);
+      else error->all(FLERR,"Illegal weight command");
+      iarg += 3;
     } else if (strcmp(arg[iarg],"comm/sort") == 0) {
       if (iarg+2 > narg) error->all(FLERR,"Illegal global command");
       if (strcmp(arg[iarg+1],"yes") == 0) comm->commsortflag = 1;
@@ -1489,14 +1754,6 @@ void Update::global(int narg, char **arg)
       else if (strcmp(arg[iarg+1],"rvous") == 0) surf->tally_comm = TALLYRVOUS;
       else error->all(FLERR,"Illegal global command");
       iarg += 2;
-
-    } else if (strcmp(arg[iarg],"weight") == 0) {
-      // for now assume just one arg after "cell"
-      // may need to generalize later
-      if (iarg+3 > narg) error->all(FLERR,"Illegal global command");
-      if (strcmp(arg[iarg+1],"cell") == 0) grid->weight(1,&arg[iarg+2]);
-      else error->all(FLERR,"Illegal weight command");
-      iarg += 3;
     } else if (strcmp(arg[iarg],"particle/reorder") == 0) {
       reorder_period = input->inumeric(FLERR,arg[iarg+1]);
       if (reorder_period < 0) error->all(FLERR,"Illegal global command");
@@ -1506,8 +1763,11 @@ void Update::global(int narg, char **arg)
       if (strcmp(arg[iarg+1],"grid") == 0) mem_limit_grid_flag = 1;
       else {
         double factor = input->numeric(FLERR,arg[iarg+1]);
-        global_mem_limit = static_cast<int> (factor * 1024*1024);
-        if (global_mem_limit < 0) error->all(FLERR,"Illegal global command");
+        bigint global_mem_limit_big = static_cast<bigint> (factor * 1024*1024);
+        if (global_mem_limit_big < 0) error->all(FLERR,"Illegal global command");
+        if (global_mem_limit_big > MAXSMALLINT)
+          error->all(FLERR,"Global mem/limit setting cannot exceed 2GB");
+        global_mem_limit = global_mem_limit_big;
       }
       iarg += 2;
     } else error->all(FLERR,"Illegal global command");
@@ -1563,4 +1823,37 @@ void Update::reset_timestep(bigint newstep)
 
   for (int i = 0; i < modify->ncompute; i++)
     if (modify->compute[i]->timeflag) modify->compute[i]->clearstep();
+}
+
+/* ----------------------------------------------------------------------
+   get mem/limit based on grid memory
+------------------------------------------------------------------------- */
+
+void Update::set_mem_limit_grid(int gnlocal)
+{
+  if (gnlocal == 0) gnlocal = grid->nlocal;
+
+  bigint global_mem_limit_big = static_cast<bigint> (gnlocal*sizeof(Grid::ChildCell));
+
+  if (global_mem_limit_big > MAXSMALLINT)
+    error->one(FLERR,"Global mem/limit setting cannot exceed 2GB");
+
+  global_mem_limit = global_mem_limit_big;
+}
+
+/* ----------------------------------------------------------------------
+   get mem/limit based on grid memory
+------------------------------------------------------------------------- */
+
+int Update::have_mem_limit()
+{
+  if (mem_limit_grid_flag)
+    set_mem_limit_grid();
+
+  int mem_limit_flag = 0;
+
+  if (global_mem_limit > 0 || (mem_limit_grid_flag && !grid->nlocal))
+    mem_limit_flag = 1;
+
+  return mem_limit_flag;
 }

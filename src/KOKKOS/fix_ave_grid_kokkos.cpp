@@ -1,12 +1,12 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   http://sparta.github.io
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -32,11 +32,14 @@
 
 using namespace SPARTA_NS;
 
-enum{COMPUTE,FIX,VARIABLE};
-enum{ONE,RUNNING};                // multiple files
+enum{PERGRID,PERGRIDSURF};
+enum{COMPUTE,FIX,VARIABLE,CUSTOM};
+enum{ONE,RUNNING};                      // multiple files
+enum{INT,DOUBLE};                       // several files
 
 #define INVOKED_PER_GRID 16
 #define DELTAGRID 1024            // must be bigger than split cells per cell
+#define DELTASURF 1024;
 
 /* ---------------------------------------------------------------------- */
 
@@ -48,7 +51,10 @@ FixAveGridKokkos::FixAveGridKokkos(SPARTA *sparta, int narg, char **arg) :
   datamask_read = EMPTY_MASK;
   datamask_modify = EMPTY_MASK;
 
-  nglocal = nglocalmax = grid->nlocal;
+  if (flavor == PERGRIDSURF)
+    error->all(FLERR,"Cannot yet use Kokkos with fix ave/grid for grid/surf inputs");
+
+  nglocal = maxgrid = grid->nlocal;
 
   // allocate per-grid cell data storage
   // zero vector/array grid in case used by dump or load balancer
@@ -57,7 +63,7 @@ FixAveGridKokkos::FixAveGridKokkos(SPARTA *sparta, int narg, char **arg) :
     memory->destroy(vector_grid);
     vector_grid = NULL;
     memoryKK->grow_kokkos(k_vector_grid,vector_grid,nglocal,"ave/grid:vector_grid");
-    d_vector = k_vector_grid.d_view;
+    d_vector_grid = k_vector_grid.d_view;
   } else {
     memory->destroy(array_grid);
     array_grid = NULL;
@@ -84,16 +90,16 @@ FixAveGridKokkos::FixAveGridKokkos(SPARTA *sparta, int narg, char **arg) :
       k_uomap.h_view(i,j) = uomap[i][j];
     }
   }
-  k_numap.modify<SPAHostType>();
-  k_numap.sync<DeviceType>();
+  k_numap.modify_host();
+  k_numap.sync_device();
   d_numap = k_numap.d_view;
 
-  k_umap.modify<SPAHostType>();
-  k_umap.sync<DeviceType>();
+  k_umap.modify_host();
+  k_umap.sync_device();
   d_umap = k_umap.d_view;
 
-  k_uomap.modify<SPAHostType>();
-  k_uomap.sync<DeviceType>();
+  k_uomap.modify_host();
+  k_uomap.sync_device();
   d_uomap = k_uomap.d_view;
 }
 
@@ -114,7 +120,7 @@ FixAveGridKokkos::~FixAveGridKokkos()
 
 void FixAveGridKokkos::init()
 {
-  // set indices and check validity of all computes,fixes,variables
+  // set indices and check validity of all computes,fixes,variables,custom attributes
 
   for (int m = 0; m < nvalues; m++) {
     if (which[m] == COMPUTE) {
@@ -122,16 +128,16 @@ void FixAveGridKokkos::init()
       if (icompute < 0)
     error->all(FLERR,"Compute ID for fix ave/grid does not exist");
       value2index[m] = icompute;
-      
+
     } else if (which[m] == FIX) {
       int ifix = modify->find_fix(ids[m]);
-      if (ifix < 0) 
+      if (ifix < 0)
     error->all(FLERR,"Fix ID for fix ave/grid does not exist");
       value2index[m] = ifix;
 
     } else if (which[m] == VARIABLE) {
       int ivariable = input->variable->find(ids[m]);
-      if (ivariable < 0) 
+      if (ivariable < 0)
     error->all(FLERR,"Variable name for fix ave/grid does not exist");
       value2index[m] = ivariable;
 
@@ -164,12 +170,10 @@ void FixAveGridKokkos::end_of_step()
   // could do this with memset()
 
   copymode = 1;
-  if (ave == ONE && irepeat == 0) {
+  if (ave == ONE && irepeat == 0)
     Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagFixAveGrid_Zero_tally>(0,nglocal),*this);
-    DeviceType::fence();
-  }
 
-  // accumulate results of computes,fixes,variables
+  // accumulate results of computes,fixes,variables,custom attributes
   // compute/fix/variable may invoke computes so wrap with clear/add
   // NOTE: add more logic for fixes and variables if enable them
 
@@ -203,18 +207,15 @@ void FixAveGridKokkos::end_of_step()
         ntally = numap[m];
         computeKKBase->query_tally_grid_kokkos(d_ctally);
         Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagFixAveGrid_Add_ctally>(0,nglocal),*this);
-        DeviceType::fence();
       } else {
         k = umap[m][0];
         if (j == 0) {
-          d_compute_vector = computeKKBase->d_vector;
+          d_compute_vector = computeKKBase->d_vector_grid;
           Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagFixAveGrid_Add_compute_vector>(0,nglocal),*this);
-          DeviceType::fence();
         } else {
           jm1 = j - 1;
           d_compute_array = computeKKBase->d_array_grid;
           Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagFixAveGrid_Add_compute_array>(0,nglocal),*this);
-          DeviceType::fence();
         }
       }
 
@@ -226,12 +227,10 @@ void FixAveGridKokkos::end_of_step()
       //if (j == 0) {
       //  double *d_fix_vector = modify->fix[n]->vector_grid; // need Kokkos version
       //  Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagFixAveGrid_Add_fix_vector>(0,nglocal),*this);
-      //  DeviceType::fence();
       //} else {
       //  int jm1 = j - 1;
       //  double **fix_array = modify->fix[n]->array_grid; // need Kokkos version
       //  Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagFixAveGrid_Add_fix_array>(0,nglocal),*this);
-      //  DeviceType::fence();
       //}
 
     // evaluate grid-style variable, sum values to Kth column of tally array
@@ -240,8 +239,102 @@ void FixAveGridKokkos::end_of_step()
       error->all(FLERR,"Cannot (yet) use variables with fix ave/grid/kk");
       //k = umap[m][0];
       //input->variable->compute_grid(n,&tally[0][k],ntotal,1); // need Kokkos version
+
+    // access custom attribute
+
+    } else if (which[m] == CUSTOM) {
+
+      auto gridKK = (GridKokkos*) grid;
+      gridKK->sync(Device,CUSTOM_MASK);
+
+      k = umap[m][0];
+      if (j == 0) {
+        if (nvalues == 1) {
+          if (grid->etype[n] == INT) {
+            auto h_ewhich = gridKK->k_ewhich.h_view;
+            auto h_eivec = gridKK->k_eivec.h_view;
+            auto d_custom_vector = h_eivec[h_ewhich[n]].k_view.d_view;
+
+            Kokkos::parallel_for(nglocal, SPARTA_CLASS_LAMBDA(int i) {
+              d_tally(i,k) += d_custom_vector[i];
+            });
+
+          } else if (grid->etype[n] == DOUBLE) {
+            auto h_ewhich = gridKK->k_ewhich.h_view;
+            auto h_edvec = gridKK->k_edvec.h_view;
+            auto d_custom_vector = h_edvec[h_ewhich[n]].k_view.d_view;
+
+            Kokkos::parallel_for(nglocal, SPARTA_CLASS_LAMBDA(int i) {
+              d_tally(i,k) += d_custom_vector[i];
+            });
+
+          }
+        } else {
+          if (grid->etype[n] == INT) {
+            auto h_ewhich = gridKK->k_ewhich.h_view;
+            auto h_eivec = gridKK->k_eivec.h_view;
+            auto d_custom_vector = h_eivec[h_ewhich[n]].k_view.d_view;
+
+            Kokkos::parallel_for(nglocal, SPARTA_CLASS_LAMBDA(int i) {
+              d_tally(i,k) += d_custom_vector[i];
+            });
+
+          } else if (grid->etype[n] == DOUBLE) {
+            auto h_ewhich = gridKK->k_ewhich.h_view;
+            auto h_edvec = gridKK->k_edvec.h_view;
+            auto d_custom_vector = h_edvec[h_ewhich[n]].k_view.d_view;
+
+            Kokkos::parallel_for(nglocal, SPARTA_CLASS_LAMBDA(int i) {
+              d_tally(i,k) += d_custom_vector[i];
+            });
+
+          }
+        }
+      } else {
+        int jm1 = j - 1;
+        if (nvalues == 1) {
+          if (grid->etype[n] == INT) {
+            auto h_ewhich = gridKK->k_ewhich.h_view;
+            auto h_eiarray = gridKK->k_eiarray.h_view;
+            auto d_custom_array = h_eiarray[h_ewhich[n]].k_view.d_view;
+
+            Kokkos::parallel_for(nglocal, SPARTA_CLASS_LAMBDA(int i) {
+              d_tally(i,k) += d_custom_array(i,jm1);
+            });
+
+          } else if (grid->etype[n] == DOUBLE) {
+            auto h_ewhich = gridKK->k_ewhich.h_view;
+            auto h_edarray = gridKK->k_edarray.h_view;
+            auto d_custom_array = h_edarray[h_ewhich[n]].k_view.d_view;
+
+            Kokkos::parallel_for(nglocal, SPARTA_CLASS_LAMBDA(int i) {
+              d_tally(i,k) += d_custom_array(i,jm1);
+            });
+
+          }
+        } else {
+          if (grid->etype[n] == INT) {
+            auto h_ewhich = gridKK->k_ewhich.h_view;
+            auto h_edarray = gridKK->k_edarray.h_view;
+            auto d_custom_array = h_edarray[h_ewhich[n]].k_view.d_view;
+
+            Kokkos::parallel_for(nglocal, SPARTA_CLASS_LAMBDA(int i) {
+              d_tally(i,k) += d_custom_array(i,jm1);
+            });
+
+          } else if (grid->etype[n] == DOUBLE) {
+            auto h_ewhich = gridKK->k_ewhich.h_view;
+            auto h_edarray = gridKK->k_edarray.h_view;
+            auto d_custom_array = h_edarray[h_ewhich[n]].k_view.d_view;
+
+            Kokkos::parallel_for(nglocal, SPARTA_CLASS_LAMBDA(int i) {
+              d_tally(i,k) += d_custom_array(i,jm1);
+            });
+
+          }
+        }
+      }
     }
-   
   }
 
   // done if irepeat < nrepeat
@@ -270,11 +363,10 @@ void FixAveGridKokkos::end_of_step()
       j = argindex[0];
       Compute *c = modify->compute[n];
       KokkosBase* cKKBase = dynamic_cast<KokkosBase*>(c);
-      cKKBase->post_process_grid_kokkos(j,-1,nsample,d_tally,map[0],d_vector);
+      cKKBase->post_process_grid_kokkos(j,nsample,d_tally,map[0],d_vector_grid);
     } else {
       k = map[0][0];
       Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagFixAveGrid_Norm_vector_grid>(0,nglocal),*this);
-      DeviceType::fence();
     }
 
   } else {
@@ -284,22 +376,21 @@ void FixAveGridKokkos::end_of_step()
         j = argindex[m];
         Compute *c = modify->compute[n];
         KokkosBase* cKKBase = dynamic_cast<KokkosBase*>(c);
-        if (d_array_grid.data()) cKKBase->post_process_grid_kokkos(j,-1,nsample,d_tally,map[m],
+        if (d_array_grid.data()) cKKBase->post_process_grid_kokkos(j,nsample,d_tally,map[m],
                              Kokkos::subview(d_array_grid,Kokkos::ALL(),m)); // need to use subview
       } else {
         k = map[m][0];
         Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagFixAveGrid_Norm_array_grid>(0,nglocal),*this);
-        DeviceType::fence();
       }
     }
   }
 
   if (nvalues == 1) {
-    k_vector_grid.modify<DeviceType>();
-    k_vector_grid.sync<SPAHostType>();
+    k_vector_grid.modify_device();
+    k_vector_grid.sync_host();
   } else {
-    k_array_grid.modify<DeviceType>();
-    k_array_grid.sync<SPAHostType>();
+    k_array_grid.modify_device();
+    k_array_grid.sync_host();
   }
 
   // set values for grid cells not in group to zero
@@ -312,7 +403,6 @@ void FixAveGridKokkos::end_of_step()
       Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagFixAveGrid_Zero_group_vector>(0,nglocal),*this);
     else
       Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagFixAveGrid_Zero_group_array>(0,nglocal),*this);
-    DeviceType::fence();
   }
 
   // reset nsample if ave = ONE
@@ -325,7 +415,7 @@ void FixAveGridKokkos::end_of_step()
 
 KOKKOS_INLINE_FUNCTION
 void FixAveGridKokkos::operator()(TagFixAveGrid_Zero_group_vector, const int &i) const {
-  if (!(d_cinfo[i].mask & groupbit)) d_vector(i) = 0.0;
+  if (!(d_cinfo[i].mask & groupbit)) d_vector_grid(i) = 0.0;
 }
 
 KOKKOS_INLINE_FUNCTION
@@ -385,7 +475,7 @@ void FixAveGridKokkos::operator()(TagFixAveGrid_Add_fix_array, const int &i) con
 
 KOKKOS_INLINE_FUNCTION
 void FixAveGridKokkos::operator()(TagFixAveGrid_Norm_vector_grid, const int &i) const {
-  d_vector[i] = d_tally(i,k) / nsample;
+  d_vector_grid[i] = d_tally(i,k) / nsample;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -401,18 +491,18 @@ void FixAveGridKokkos::operator()(TagFixAveGrid_Norm_array_grid, const int &i) c
 
 void FixAveGridKokkos::grow_percell(int nnew)
 {
-  if (nglocal+nnew < nglocalmax) return;
-  nglocalmax += DELTAGRID;
-  int n = nglocalmax;
+  if (nglocal+nnew < maxgrid) return;
+  maxgrid += DELTAGRID;
+  int n = maxgrid;
 
   if (nvalues == 1) {
     memoryKK->grow_kokkos(k_vector_grid,vector_grid,n,"ave/grid:vector_grid");
-    d_vector = k_vector_grid.d_view;
-    k_vector_grid.sync<SPAHostType>();
+    d_vector_grid = k_vector_grid.d_view;
+    k_vector_grid.sync_host();
   } else {
     memoryKK->grow_kokkos(k_array_grid,array_grid,n,nvalues,"ave/grid:array_grid");
     d_array_grid = k_array_grid.d_view;
-    k_array_grid.sync<SPAHostType>();
+    k_array_grid.sync_host();
   }
 
   memoryKK->grow_kokkos(k_tally,tally,n,ntotal,"ave/grid:tally");

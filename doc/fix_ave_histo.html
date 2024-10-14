@@ -1,5 +1,5 @@
 <HTML>
-<CENTER><A HREF = "http://sparta.sandia.gov">SPARTA WWW Site</A> - <A HREF = "Manual.html">SPARTA Documentation</A> - <A HREF = "Section_commands.html#comm">SPARTA Commands</A> 
+<CENTER><A HREF = "https://sparta.github.io">SPARTA WWW Site</A> - <A HREF = "Manual.html">SPARTA Documentation</A> - <A HREF = "Section_commands.html#comm">SPARTA Commands</A> 
 </CENTER>
 
 
@@ -80,7 +80,7 @@
 </UL>
 <P><B>Examples:</B>
 </P>
-<PRE>fix 1 ave/histo 100 5 1000 0.5 1.5 50 c_myGrid<B>*</B> file temp.histo ave running
+<PRE>fix 1 ave/histo 100 5 1000 0.5 1.5 50 c_myGrid[*] file temp.histo ave running
 fix 1 ave/histo 100 5 1000 0 5 100 c_kePart "My output values"
 fix 1 ave/histo/weight 1 100 1000 -2.0 2.0 18 vx vy ave running beyond extra 
 </PRE>
@@ -388,7 +388,7 @@ effectively.
 <P><A HREF = "compute.html">compute</A>, <A HREF = "fix_ave_time.html">fix ave/time</A>,
 <A HREF = "variable.html">variable</A>
 </P>
-<P><B>Default:</B> none
+<P><B>Default:</B>
 </P>
 <P>The option defaults are mode = scalar, ave = one, start = 0, no file
 output, no region/mixture/group restriction on inclusion of particles

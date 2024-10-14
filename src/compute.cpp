@@ -1,12 +1,12 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   http://sparta.github.io
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -39,7 +39,7 @@ Compute::Compute(SPARTA *sparta, int narg, char **arg) : Pointers(sparta)
   for (int i = 0; i < n-1; i++)
     if (!isalnum(id[i]) && id[i] != '_')
       error->all(FLERR,
-		 "Compute ID must be alphanumeric or underscore characters");
+                 "Compute ID must be alphanumeric or underscore characters");
 
   n = strlen(arg[1]) + 1;
   style = new char[n];
@@ -49,19 +49,20 @@ Compute::Compute(SPARTA *sparta, int narg, char **arg) : Pointers(sparta)
 
   scalar_flag = vector_flag = array_flag = 0;
   per_particle_flag = per_grid_flag = per_surf_flag = 0;
-  post_process_grid_flag = 0;
+  post_process_grid_flag = post_process_isurf_grid_flag = 0;
   surf_tally_flag = boundary_tally_flag = 0;
 
   timeflag = 0;
   ntime = maxtime = 0;
   tlist = NULL;
 
+  first_init = 0;
   invoked_scalar = invoked_vector = invoked_array = -1;
   invoked_per_particle = invoked_per_grid = invoked_per_surf = -1;
+  invoked_flag = 0;
 
   kokkos_flag = 0;
-  copymode = 0;
-  copy = 0;
+  copy = uncopy = copymode = 0;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -73,6 +74,17 @@ Compute::~Compute()
   delete [] id;
   delete [] style;
   memory->destroy(tlist);
+}
+
+/* ----------------------------------------------------------------------
+   set first_init = 1
+   called by Modify::init()
+   used by Variable to check if computes can be invoked
+------------------------------------------------------------------------- */
+
+void Compute::set_init()
+{
+  first_init = 1;
 }
 
 /* ----------------------------------------------------------------------

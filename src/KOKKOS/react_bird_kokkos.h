@@ -1,7 +1,7 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   http://sparta.github.io
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
@@ -34,11 +34,21 @@ class ReactBirdKokkos : public ReactBird {
 #ifdef SPARTA_KOKKOS_EXACT
                                           , sparta
 #endif
-                                          ) {};
+                                          ) {random_backup = NULL;};
   virtual ~ReactBirdKokkos();
   virtual void init();
-  virtual int attempt(Particle::OnePart *, Particle::OnePart *, 
+  virtual int attempt(Particle::OnePart *, Particle::OnePart *,
                       double, double, double, double &, int &) = 0;
+  double extract_tally(int);
+  void backup();
+  void restore();
+
+  // tallies for reactions
+
+  DAT::tdual_bigint_1d k_tally_reactions;
+  DAT::t_bigint_1d d_tally_reactions;
+  DAT::tdual_bigint_1d k_tally_reactions_all;
+  DAT::t_bigint_1d d_tally_reactions_backup;
 
   struct OneReactionKokkos {
     int active;                    // 1 if reaction is active
@@ -54,7 +64,7 @@ class ReactBirdKokkos : public ReactBird {
   // all reactions a pair of reactant species is part of
 
   struct ReactionIJKokkos {
-    DAT::t_int_1d d_list;       // N-length list of rlist indices 
+    DAT::t_int_1d d_list;       // N-length list of rlist indices
                      //   for reactions defined for this IJ pair,
                      //   just a ptr into sub-section of long list_ij vector
                      //   for all pairs
@@ -69,19 +79,24 @@ class ReactBirdKokkos : public ReactBird {
  protected:
 
   typedef Kokkos::
-    DualView<OneReactionKokkos*, SPADeviceType::array_layout, DeviceType> tdual_reaction_1d;
+    DualView<OneReactionKokkos*, DeviceType::array_layout, DeviceType> tdual_reaction_1d;
   typedef tdual_reaction_1d::t_dev t_reaction_1d;
   typedef tdual_reaction_1d::t_host t_host_reaction_1d;
 
-  t_reaction_1d d_rlist;              // list of all reactions read from file
+  tdual_reaction_1d k_rlist; // list of all reactions read from file
+  t_reaction_1d d_rlist;
 
   typedef Kokkos::
-    DualView<ReactionIJKokkos**, SPADeviceType::array_layout, DeviceType> tdual_reactionIJ_2d;
+    DualView<ReactionIJKokkos**, DeviceType::array_layout, DeviceType> tdual_reactionIJ_2d;
   typedef tdual_reactionIJ_2d::t_dev t_reactionIJ_2d;
   typedef tdual_reactionIJ_2d::t_host t_host_reactionIJ_2d;
 
   tdual_reactionIJ_2d k_reactions;     // reaction info for all IJ pairs of species
   t_reactionIJ_2d d_reactions;     // reaction info for all IJ pairs of species
+
+  void deallocate_views_of_views();
+
+  RanKnuth* random_backup;
 
  public:
 #ifndef SPARTA_KOKKOS_EXACT

@@ -1,12 +1,13 @@
 "SPARTA WWW Site"_sws - "SPARTA Documentation"_sd - "SPARTA Commands"_sc :c
 
-:link(sws,http://sparta.sandia.gov)
+:link(sws,https://sparta.github.io)
 :link(sd,Manual.html)
 :link(sc,Section_commands.html#comm)
 
 :line
 
 compute property/grid command :h3
+compute property/grid/kk command :h3
 
 [Syntax:]
 
@@ -28,35 +29,34 @@ input = one or more grid attributes :l
 
 [Examples:]
 
-compute 1 all property/grid id xc yc zc :pre
+compute 1 property/grid all id xc yc zc :pre
 
 [Description:]
 
 Define a computation that simply stores grid attributes for each grid
-cell in a grid cell group.  This is useful so that the values can be
+cell in a grid cell group.  This is useful for values which can be
 used by other "output commands"_Section_howto.html#howto_4 that take
 computes as inputs.  See for example, the "compute
-reduce"_compute_reduce.html, "fix ave/grid"_fix_ave_atom.html, and
-"dump grid"_dump.html commands.
+reduce"_compute_reduce.html, "fix ave/grid"_fix_ave_grid.html, "dump
+grid"_dump.html, and "grid-style variable"_variable.html commands.
 
 Only grid cells in the grid group specified by {group-ID} are included
 in the calculation.  See the "group grid"_group.html command for info
 on how grid cells can be assigned to grid groups.
 
-The values are stored in a per-grid vector or array as discussed
-below. 
+:line
 
 {Id} is the grid cell ID.  In SPARTA each grid cell is assigned a
-unique ID which represents its location, in a topological sense,
-within the hierarchical grid.  This ID is stored as an integer such as
-5774983, but can also be decoded into a string such as 33-4-6, which
-makes it easier to understand the grid hierarchy.  In this case it
-means the grid cell is at the 3rd level of the hierarchy.  Its
-grandparent cell was 33 at the 1st level, its parent was cell 4 (at
-level 2) within cell 33, and the cell itself is cell 6 (at level 3)
-within cell 4 within cell 33.  If you specify {id}, the ID is printed
-directly as an integer.  The ID in string format can be accessed by
-the "dump grid"_dump.html command and its {idstr} argument.
+unique ID which represents its logical location within the
+hierarchical grid.  This ID is stored as an integer such as 5774983,
+but can also be decoded into a string such as 33-4-6, which makes it
+easier to understand the grid hierarchy.  In this case it means the
+grid cell is at the 3rd level of the hierarchy.  Its grandparent cell
+was 33 at the 1st level, its parent was cell 4 (at level 2) within
+cell 33, and the cell itself is cell 6 (at level 3) within cell 4
+within cell 33.  If you specify {id}, the ID is printed directly as an
+integer.  The ID in string format can be accessed by the "dump
+grid"_dump.html command and its {idstr} argument.
 
 {Proc} is the ID of the processor which currently owns the grid cell.
 
@@ -103,7 +103,35 @@ options.
 The vector or array values will be in whatever "units"_units.html the
 corresponding attribute is in, e.g. distance units for xlo or xc.
 
-[Restrictions:] none
+:line
+
+Styles with a {kk} suffix are functionally the same as the
+corresponding style without the suffix.  They have been optimized to
+run faster, depending on your available hardware, as discussed in the
+"Accelerating SPARTA"_Section_accelerate.html section of the manual.
+The accelerated styles take the same arguments and should produce the
+same results, except for different random number, round-off and
+precision issues.
+
+These accelerated styles are part of the KOKKOS package. They are only
+enabled if SPARTA was built with that package.  See the "Making
+SPARTA"_Section_start.html#start_3 section for more info.
+
+You can specify the accelerated styles explicitly in your input script
+by including their suffix, or you can use the "-suffix command-line
+switch"_Section_start.html#start_6 when you invoke SPARTA, or you can
+use the "suffix"_suffix.html command in your input script.
+
+See the "Accelerating SPARTA"_Section_accelerate.html section of the
+manual for more instructions on how to use the accelerated styles
+effectively.
+
+:line
+
+[Restrictions:}
+
+For 2d simulations, none of the attributes which refer to the 3rd
+dimension may be used.
 
 [Related commands:]
 

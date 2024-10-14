@@ -1,6 +1,6 @@
 "SPARTA WWW Site"_sws - "SPARTA Documentation"_sd - "SPARTA Commands"_sc :c
 
-:link(sws,http://sparta.sandia.gov)
+:link(sws,https://sparta.github.io)
 :link(sd,Manual.html)
 :link(sc,Section_commands.html#comm)
 
@@ -50,11 +50,11 @@ keyword = {mode} or {file} or {ave} or {start} or {off} or {title1} or {title2} 
 
 [Examples:]
 
-fix 1 all ave/time 100 5 1000 c_myTemp c_thermo_temp file temp.profile
-fix 1 all ave/time 100 5 1000 c_myCount\[2\] c_myCount\[3\] ave window 20 &
+fix 1 ave/time 100 5 1000 c_myTemp c_thermo_temp file temp.profile
+fix 1 ave/time 100 5 1000 c_myCount\[2\] c_myCount\[3\] ave window 20 &
                               title1 "My output values"
-fix 1 all ave/time 100 5 1000 c_myCount\[*\] ave window 20
-fix 1 all ave/time 1 100 1000 f_indent f_indent\[1\] file temp.indent off 1 :pre
+fix 1 ave/time 100 5 1000 c_myCount\[*\] ave window 20
+fix 1 ave/time 1 100 1000 f_indent f_indent\[1\] file temp.indent off 1 :pre
 
 [Description:]
 
@@ -295,7 +295,7 @@ inputs.
 "compute"_compute.html, fix ave/grid"_fix_ave_grid.html, "fix
 ave/surf"_fix_ave_surf.html, "variable"_variable.html
 
-[Default:] none
+[Default:]
 
 The option defaults are mode = scalar, ave = one, start = 0, no file
 output, title 1,2,3 = strings as described above, and no off settings

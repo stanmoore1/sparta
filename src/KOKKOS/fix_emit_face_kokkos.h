@@ -1,12 +1,12 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   http://sparta.github.io
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -36,11 +36,10 @@ class FixEmitFaceKokkos : public FixEmitFace {
   typedef int value_type;
 
   FixEmitFaceKokkos(class SPARTA *, int, char **);
-  ~FixEmitFaceKokkos();
-  void init();
+  ~FixEmitFaceKokkos() override;
+  void init() override;
   void perform_task() override;
   void perform_task_twopass() override { perform_task(); }
-  void post_compress_grid();
 
   KOKKOS_INLINE_FUNCTION
   void operator()(TagFixEmitFace_ninsert, const int&) const;
@@ -62,7 +61,7 @@ class FixEmitFaceKokkos : public FixEmitFace {
  private:
   KKCopy<ParticleKokkos> particle_kk_copy;
 
-  typedef Kokkos::DualView<Task*, SPADeviceType::array_layout, DeviceType> tdual_task_1d;
+  typedef Kokkos::DualView<Task*, DeviceType::array_layout, DeviceType> tdual_task_1d;
   typedef tdual_task_1d::t_dev t_task_1d;
   tdual_task_1d k_tasks;
   t_task_1d d_tasks;
@@ -73,7 +72,7 @@ class FixEmitFaceKokkos : public FixEmitFace {
   DAT::t_float_2d_lr d_vscale;
 
   DAT::tdual_int_1d k_ninsert;
-  Kokkos::View<int*, SPADeviceType> d_ninsert;
+  Kokkos::View<int*, DeviceType> d_ninsert;
   DAT::t_int_1d d_task2cand;
 
   DAT::t_float_2d d_x;
@@ -86,7 +85,7 @@ class FixEmitFaceKokkos : public FixEmitFace {
   DAT::t_int_1d   d_id;
   DAT::t_int_1d   d_isp;
   DAT::t_int_1d   d_task;
-  Kokkos::View<int*, SPADeviceType> d_keep; // won't compile with DAT::t_int_1d type
+  Kokkos::View<int*, DeviceType> d_keep; // won't compile with DAT::t_int_1d type
 
   DAT::tdual_float_1d k_mix_vscale;
   DAT::tdual_float_1d k_cummulative;
@@ -96,11 +95,9 @@ class FixEmitFaceKokkos : public FixEmitFace {
   DAT::t_float_1d d_cummulative;
   DAT::t_int_1d d_species;
 
-  int pack_task(int, char *, int);
-  int unpack_task(char *, int);
-  void copy_task(int, int, int, int);
-  void grow_task();
-  void realloc_nspecies();
+  void create_task(int) override;
+  void grow_task() override;
+  void realloc_nspecies() override;
 };
 
 }

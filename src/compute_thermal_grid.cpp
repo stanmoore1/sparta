@@ -1,12 +1,12 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   http://sparta.github.io
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -43,7 +43,7 @@ ComputeThermalGrid::ComputeThermalGrid(SPARTA *sparta, int narg, char **arg) :
   groupbit = grid->bitmask[igroup];
 
   imix = particle->find_mixture(arg[3]);
-  if (imix < 0) 
+  if (imix < 0)
     error->all(FLERR,"Compute thermal/grid mixture ID does not exist");
   ngroup = particle->mixture[imix]->ngroup;
 
@@ -151,7 +151,7 @@ void ComputeThermalGrid::compute_per_grid()
 
     vec = tally[icell];
     k = igroup*npergroup;
-    
+
     vec[k++] += 1.0;
     vec[k++] += mass;
     vec[k++] += mass*v[0];
@@ -183,9 +183,8 @@ int ComputeThermalGrid::query_tally_grid(int index, double **&array, int *&cols)
    index = which column of output (0 for vec, 1 to N for array)
    for etally = NULL:
      use internal tallied info for single timestep, set nsample = 1
-     if onecell = -1, compute values for all grid cells
+     compute values for all grid cells
        store results in vector_grid with nstride = 1 (single col of array_grid)
-     if onecell >= 0, compute single value for onecell and return it
    for etally = ptr to caller array:
      use external tallied info for many timesteps
      nsample = additional normalization factor used by some values
@@ -194,8 +193,8 @@ int ComputeThermalGrid::query_tally_grid(int index, double **&array, int *&cols)
    if norm = 0.0, set result to 0.0 directly so do not divide by 0.0
 ------------------------------------------------------------------------- */
 
-double ComputeThermalGrid::
-post_process_grid(int index, int onecell, int nsample,
+void ComputeThermalGrid::
+post_process_grid(int index, int nsample,
                   double **etally, int *emap, double *vec, int nstride)
 {
   index--;
@@ -211,11 +210,6 @@ post_process_grid(int index, int onecell, int nsample,
     emap = map[index];
     vec = vector_grid;
     nstride = 1;
-    if (onecell >= 0) {
-      lo = onecell;
-      hi = lo + 1;
-      k = lo;
-    }
   }
 
   // compute normalized final value for each grid cell
@@ -243,7 +237,7 @@ post_process_grid(int index, int onecell, int nsample,
   for (int icell = lo; icell < hi; icell++) {
     values = etally[icell];
     ncount = values[n];
-    if (ncount == 0.0) vec[k] = 0.0;
+    if (ncount <= 1.0) vec[k] = 0.0;
     else {
       mass = values[n+1];
       mvx = values[n+2];
@@ -257,9 +251,6 @@ post_process_grid(int index, int onecell, int nsample,
     }
     k += nstride;
   }
-
-  if (onecell < 0) return 0.0;
-  return vec[onecell];
 }
 
 /* ----------------------------------------------------------------------

@@ -1,12 +1,12 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   http://sparta.github.io
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -46,13 +46,18 @@ Modify::Modify(SPARTA *sparta) : Pointers(sparta)
 
   end_of_step_every = NULL;
   list_pergrid = NULL;
-  list_add_particle = NULL;
+  list_update_custom = NULL;
   list_gas_react = NULL;
   list_surf_react = NULL;
   list_timeflag = NULL;
 
   ncompute = maxcompute = 0;
   compute = NULL;
+
+  // n_pergrid needs to be initialized here because ReadSurf calls
+  //  Modify::reset_grid_count without calling Modify::init
+
+  n_pergrid = 0;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -76,7 +81,7 @@ Modify::~Modify()
 
   delete [] end_of_step_every;
   delete [] list_pergrid;
-  delete [] list_add_particle;
+  delete [] list_update_custom;
   delete [] list_gas_react;
   delete [] list_surf_react;
   delete [] list_timeflag;
@@ -113,6 +118,7 @@ void Modify::init()
 
   for (i = 0; i < ncompute; i++) {
     compute[i]->init();
+    compute[i]->set_init();
     compute[i]->invoked_scalar = -1;
     compute[i]->invoked_vector = -1;
     compute[i]->invoked_array = -1;
@@ -155,17 +161,6 @@ void Modify::end_of_step()
 }
 
 /* ----------------------------------------------------------------------
-   add_grid_one call, only for relevant fixes
-   invoked by adapt_grid and fix adapt when new child cells are created
-------------------------------------------------------------------------- */
-
-void Modify::add_grid_one(int icell, int flag)
-{
-  for (int i = 0; i < n_pergrid; i++)
-    fix[list_pergrid[i]]->add_grid_one(icell,flag);
-}
-
-/* ----------------------------------------------------------------------
    pack_grid_one call, only for relevant fixes
    invoked by load balancer when grid cells migrate
 ------------------------------------------------------------------------- */
@@ -192,30 +187,59 @@ int Modify::unpack_grid_one(int icell, char *buf)
 }
 
 /* ----------------------------------------------------------------------
-   compress_grid call, only for relevant fixes
-   invoked by load balancer when grid cells migrate
+   copy_grid call, only for relevant fixes
+   invoked when a grod cell is removed
 ------------------------------------------------------------------------- */
 
-void Modify::compress_grid(int flag)
+void Modify::copy_grid_one(int icell, int jcell)
 {
-  if (flag == 0)
-    for (int i = 0; i < n_pergrid; i++)
-      fix[list_pergrid[i]]->compress_grid();
-  else
-    for (int i = 0; i < n_pergrid; i++)
-      fix[list_pergrid[i]]->post_compress_grid();
+  for (int i = 0; i < n_pergrid; i++)
+    fix[list_pergrid[i]]->copy_grid_one(icell,jcell);
 }
 
 /* ----------------------------------------------------------------------
-   invoke add_particle() method, only for relevant fixes
+   add_grid_one call, only for relevant fixes
+   invoked by adapt_grid and fix adapt when new child cells are created
 ------------------------------------------------------------------------- */
 
-void Modify::add_particle(int index, double temp_thermal, 
-                          double temp_rot, double temp_vib, double *vstream)
+void Modify::add_grid_one()
 {
-  for (int i = 0; i < n_add_particle; i++)
-    fix[list_add_particle[i]]->add_particle(index,temp_thermal,temp_rot,
-                                            temp_vib,vstream);
+  for (int i = 0; i < n_pergrid; i++)
+    fix[list_pergrid[i]]->add_grid_one();
+}
+
+/* ----------------------------------------------------------------------
+   reset_grid call, only for relevant fixes
+   invoked after all grid cell removals
+------------------------------------------------------------------------- */
+
+void Modify::reset_grid_count(int nlocal)
+{
+  for (int i = 0; i < n_pergrid; i++)
+    fix[list_pergrid[i]]->reset_grid_count(nlocal);
+}
+
+/* ----------------------------------------------------------------------
+   grid_changed call, only for relevant fixes
+   invoked after per-processor list of grid cells has changed
+------------------------------------------------------------------------- */
+
+void Modify::grid_changed()
+{
+  for (int i = 0; i < n_pergrid; i++)
+    fix[list_pergrid[i]]->grid_changed();
+}
+
+/* ----------------------------------------------------------------------
+   invoke update_custom() method, only for relevant fixes
+------------------------------------------------------------------------- */
+
+void Modify::update_custom(int index, double temp_thermal,
+			   double temp_rot, double temp_vib, double *vstream)
+{
+  for (int i = 0; i < n_update_custom; i++)
+    fix[list_update_custom[i]]->update_custom(index,temp_thermal,temp_rot,
+                                              temp_vib,vstream);
 }
 
 /* ----------------------------------------------------------------------
@@ -245,7 +269,7 @@ void Modify::surf_react(Particle::OnePart *iorig, int &i, int &j)
 
 void Modify::add_fix(int narg, char **arg)
 {
-  if (domain->box_exist == 0) 
+  if (domain->box_exist == 0)
     error->all(FLERR,"Fix command before simulation box is defined");
   if (narg < 2) error->all(FLERR,"Illegal fix command");
 
@@ -414,6 +438,11 @@ void Modify::add_compute(int narg, char **arg)
   }
 
   ncompute++;
+
+  // post_constructor() can call virtual methods in parent or child
+  //   which would otherwise not yet be visible in child class
+
+  compute[ncompute-1]->post_constructor();
 }
 
 /* ----------------------------------------------------------------------
@@ -531,27 +560,27 @@ void Modify::list_init_end_of_step(int mask, int &n, int *&list)
 void Modify::list_init_fixes()
 {
   delete [] list_pergrid;
-  delete [] list_add_particle;
+  delete [] list_update_custom;
   delete [] list_gas_react;
   delete [] list_surf_react;
 
-  n_pergrid = n_add_particle = n_gas_react = n_surf_react = 0;
+  n_pergrid = n_update_custom = n_gas_react = n_surf_react = 0;
   for (int i = 0; i < nfix; i++) {
     if (fix[i]->gridmigrate) n_pergrid++;
-    if (fix[i]->flag_add_particle) n_add_particle++;
+    if (fix[i]->flag_update_custom) n_update_custom++;
     if (fix[i]->flag_gas_react) n_gas_react++;
     if (fix[i]->flag_surf_react) n_surf_react++;
   }
 
   list_pergrid = new int[n_pergrid];
-  list_add_particle = new int[n_add_particle];
+  list_update_custom = new int[n_update_custom];
   list_gas_react = new int[n_gas_react];
   list_surf_react = new int[n_surf_react];
 
-  n_pergrid = n_add_particle = n_gas_react = n_surf_react = 0;
+  n_pergrid = n_update_custom = n_gas_react = n_surf_react = 0;
   for (int i = 0; i < nfix; i++) {
     if (fix[i]->gridmigrate) list_pergrid[n_pergrid++] = i;
-    if (fix[i]->flag_add_particle) list_add_particle[n_add_particle++] = i;
+    if (fix[i]->flag_update_custom) list_update_custom[n_update_custom++] = i;
     if (fix[i]->flag_gas_react) list_gas_react[n_gas_react++] = i;
     if (fix[i]->flag_surf_react) list_surf_react[n_surf_react++] = i;
   }

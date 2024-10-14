@@ -1,12 +1,12 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   http://sparta.github.io
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -58,14 +58,14 @@ Domain::Domain(SPARTA *sparta) : Pointers(sparta)
 
   nregion = maxregion = 0;
   regions = NULL;
-  copy = copymode = 0;
+  copy = uncopy = copymode = 0;
 }
 
 /* ---------------------------------------------------------------------- */
 
 Domain::~Domain()
 {
-  if (copy || copymode) return;
+  if (!uncopy && (copy || copymode)) return;
 
   for (int i = 0; i < nregion; i++) delete regions[i];
   memory->sfree(regions);
@@ -80,6 +80,16 @@ void Domain::init()
   if (dimension == 2 && (bflag[ZLO] != PERIODIC || bflag[ZHI] != PERIODIC))
     error->all(FLERR,"Z dimension must be periodic for 2d simulation");
 
+  // check grid cutoff versus box size
+
+  int cutflag = 0;
+  if (bflag[0] == PERIODIC && grid->cutoff > xprd) cutflag = 1;
+  if (bflag[2] == PERIODIC && grid->cutoff > yprd) cutflag = 1;
+  if (dimension == 3 && bflag[4] == PERIODIC && grid->cutoff > zprd)
+    cutflag = 1;
+  if (cutflag) error->all(FLERR,"Grid cutoff is longer than "
+                          "box length in a periodic dimension");
+
   // check that every SURFACE boundary is assigned to a surf collision model
   // skip if caller turned off the check, e.g. BalanceGrid
 
@@ -89,13 +99,13 @@ void Domain::init()
         error->all(FLERR,"Box boundary not assigned a surf_collide ID");
   }
 
-  int cutflag = 0;
-  if (bflag[0] == PERIODIC && grid->cutoff > xprd) cutflag = 1;
-  if (bflag[2] == PERIODIC && grid->cutoff > yprd) cutflag = 1;
-  if (dimension == 3 && bflag[4] == PERIODIC && grid->cutoff > zprd) 
-    cutflag = 1;
-  if (cutflag) error->all(FLERR,"Grid cutoff is longer than "
-                          "box length in a periodic dimension");
+  // if a SURFACE boundary is assigned a reaction model
+  // then its collision model must allow reactions
+
+  for (int i = 0; i < 2*dimension; i++)
+    if (surf_react[i] >= 0 && surf->sc[surf_collide[i]]->allowreact == 0)
+      error->all(FLERR,"Box face with reaction model, "
+                 "but collision model does not allow reactions");
 
   // surfreactany = 1 if any face has surface reactions assigned to it
 
@@ -128,12 +138,12 @@ void Domain::set_global_box()
 }
 
 /* ----------------------------------------------------------------------
-   boundary settings from input script 
+   boundary settings from input script
 ------------------------------------------------------------------------- */
 
 void Domain::set_boundary(int narg, char **arg)
 {
-  if (domain->box_exist) 
+  if (domain->box_exist)
     error->all(FLERR,"Boundary command after simulation box is defined");
 
   if (narg != 3) error->all(FLERR,"Illegal boundary command");
@@ -159,21 +169,21 @@ void Domain::set_boundary(int narg, char **arg)
 
   if (dimension == 2 && (bflag[ZLO] != PERIODIC || bflag[ZHI] != PERIODIC))
     error->all(FLERR,"Z dimension must be periodic for 2d simulation");
-  
-  if (bflag[XLO] == AXISYM || bflag[XHI] == AXISYM || 
+
+  if (bflag[XLO] == AXISYM || bflag[XHI] == AXISYM ||
       bflag[YHI] == AXISYM || bflag[ZLO] == AXISYM || bflag[ZHI] == AXISYM)
     error->all(FLERR,"Only ylo boundary can be axi-symmetric");
 
   if (bflag[YLO] == AXISYM) {
     axisymmetric = 1;
-    if (bflag[YHI] == PERIODIC) 
+    if (bflag[YHI] == PERIODIC)
       error->all(FLERR,"Y cannot be periodic for axi-symmetric");
   }
 
   for (m = 0; m < 6; m += 2)
     if (bflag[m] == PERIODIC || bflag[m+1] == PERIODIC) {
       if (bflag[m] != PERIODIC || bflag[m+1] != PERIODIC)
-	error->all(FLERR,"Both sides of boundary must be periodic");
+        error->all(FLERR,"Both sides of boundary must be periodic");
     }
 }
 
@@ -235,7 +245,7 @@ void Domain::boundary_modify(int narg, char **arg)
     if (strcmp(arg[iarg],"collide") == 0) {
       if (iarg + 2 > narg) error->all(FLERR,"Illegal bound_modify command");
       int index = surf->find_collide(arg[iarg+1]);
-      if (index < 0) 
+      if (index < 0)
         error->all(FLERR,"Bound_modify surf_collide ID is unknown");
       for (int i = 0; i < nface; i++) {
         if (bflag[faces[i]] != SURFACE)
@@ -249,7 +259,7 @@ void Domain::boundary_modify(int narg, char **arg)
       if (strcmp(arg[iarg+1],"none") == 0) index = -1;
       else {
         index = surf->find_react(arg[iarg+1]);
-        if (index < 0) 
+        if (index < 0)
           error->all(FLERR,"Bound_modify surf_react ID is unknown");
       }
       for (int i = 0; i < nface; i++) {
@@ -267,13 +277,15 @@ void Domain::boundary_modify(int narg, char **arg)
    called by Update::move()
    xnew = final position of particle at end of move
    return boundary type of global boundary
+   return reaction = index of reaction (1 to N) that took place, 0 = no reaction
    if needed, update particle x,v,xnew due to collision
 ------------------------------------------------------------------------- */
 
-int Domain::collide(Particle::OnePart *&ip, int face, int icell, double *xnew, 
-                    double &dtremain, Particle::OnePart *&jp)
+int Domain::collide(Particle::OnePart *&ip, int face, int icell, double *xnew,
+                    double &dtremain, Particle::OnePart *&jp, int &reaction)
 {
   jp = NULL;
+  reaction = 0;
 
   switch (bflag[face]) {
 
@@ -292,29 +304,29 @@ int Domain::collide(Particle::OnePart *&ip, int face, int icell, double *xnew,
 
       switch (face) {
       case XLO:
-	x[0] = boxhi[0];
-	xnew[0] += xprd;
-	break;
+        x[0] = boxhi[0];
+        xnew[0] += xprd;
+        break;
       case XHI:
-	x[0] = boxlo[0];
-	xnew[0] -= xprd;
-	break;
+        x[0] = boxlo[0];
+        xnew[0] -= xprd;
+        break;
       case YLO:
-	x[1] = boxhi[1];
-	xnew[1] += yprd;
-	break;
+        x[1] = boxhi[1];
+        xnew[1] += yprd;
+        break;
       case YHI:
-	x[1] = boxlo[1];
-	xnew[1] -= yprd;
-	break;
+        x[1] = boxlo[1];
+        xnew[1] -= yprd;
+        break;
       case ZLO:
-	x[2] = boxhi[2];
-	xnew[2] += zprd;
-	break;
+        x[2] = boxhi[2];
+        xnew[2] += zprd;
+        break;
       case ZHI:
-	x[2] = boxlo[2];
-	xnew[2] -= zprd;
-	break;
+        x[2] = boxlo[2];
+        xnew[2] -= zprd;
+        break;
       }
 
       return PERIODIC;
@@ -329,29 +341,30 @@ int Domain::collide(Particle::OnePart *&ip, int face, int icell, double *xnew,
       double *lo = grid->cells[icell].lo;
       double *hi = grid->cells[icell].hi;
       int dim = face / 2;
-      
+
       if (face % 2 == 0) {
-	xnew[dim] = lo[dim] + (lo[dim]-xnew[dim]);
-	v[dim] = -v[dim];
+        xnew[dim] = lo[dim] + (lo[dim]-xnew[dim]);
+        v[dim] = -v[dim];
       } else {
-	xnew[dim] = hi[dim] - (xnew[dim]-hi[dim]);
-	v[dim] = -v[dim];
+        xnew[dim] = hi[dim] - (xnew[dim]-hi[dim]);
+        v[dim] = -v[dim];
       }
 
       return REFLECT;
     }
-    
+
   // treat global boundary as a surface
   // particle velocity is changed by surface collision model
   // dtremain may be changed by collision model
   // reset all components of xnew, in case dtremain changed
   // if axisymmetric, caller will reset again, including xnew[2]
+  // pass -face to collide() to distinguish from surf element collision
 
-  case SURFACE: 
+  case SURFACE:
     {
       jp = surf->sc[surf_collide[face]]->
-        collide(ip,norm[face],dtremain,surf_react[face]);
-      
+        collide(ip,dtremain,-(face+1),norm[face],surf_react[face],reaction);
+
       if (ip) {
         double *x = ip->x;
         double *v = ip->v;
@@ -475,9 +488,9 @@ void Domain::print_box(const char *str)
   if (comm->me == 0) {
     if (screen)
       fprintf(screen,"%sorthogonal box = (%g %g %g) to (%g %g %g)\n",
-	      str,boxlo[0],boxlo[1],boxlo[2],boxhi[0],boxhi[1],boxhi[2]);
+              str,boxlo[0],boxlo[1],boxlo[2],boxhi[0],boxhi[1],boxhi[2]);
     if (logfile)
       fprintf(logfile,"%sorthogonal box = (%g %g %g) to (%g %g %g)\n",
-	      str,boxlo[0],boxlo[1],boxlo[2],boxhi[0],boxhi[1],boxhi[2]);
+              str,boxlo[0],boxlo[1],boxlo[2],boxhi[0],boxhi[1],boxhi[2]);
   }
 }

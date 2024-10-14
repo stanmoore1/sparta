@@ -1,6 +1,6 @@
 "SPARTA WWW Site"_sws - "SPARTA Documentation"_sd - "SPARTA Commands"_sc :c
 
-:link(sws,http://sparta.sandia.gov)
+:link(sws,https://sparta.github.io)
 :link(sd,Manual.html)
 :link(sc,Section_commands.html#comm)
 
@@ -28,7 +28,7 @@ value = {temp} or {press} :l
 compute 1 thermal/grid all species temp
 compute 1 thermal/grid subset air temp press :pre
 
-These commands will dump 10 time averaged thermal temperatures for
+These commands will dump time averaged thermal temperatures for
 each species and each grid cell to a dump file every 1000 steps:
 
 compute 1 thermal/grid species temp

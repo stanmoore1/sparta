@@ -1,12 +1,12 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   http://sparta.github.io
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -38,25 +38,18 @@ class WriteRestart : protected Pointers {
   int me,nprocs;
   FILE *fp;
 
-  // moving definitions of the output file name pointers to here
-  char *hfile;
-
   int multiproc;             // 0 = proc 0 writes for all
                              // else # of procs writing files
   int nclusterprocs;         // # of procs in my cluster that write to one file
   int filewriter;            // 1 if this proc writes a file, else 0
   int fileproc;              // ID of proc in my cluster who writes to file
   int icluster;              // which cluster I am in
-  int no_dw_flag;
-  int use_lustre_flag;
-  int staging_pending;
 
   void header();
   void box_params();
   void particle_params();
   void grid_params();
   void surf_params();
-  void file_layout(int);
 
   void magic_string();
   void endian();
@@ -69,7 +62,7 @@ class WriteRestart : protected Pointers {
   void write_int_vec(int, int, int *);
   void write_double_vec(int, int, double *);
   void write_char_vec(int, int, char *);
-  void write_char_vec(int, int, int, char *);
+  void write_char_vec(int, bigint, int, char *);
   void write_char_vec(int, char *);
 };
 
@@ -89,6 +82,10 @@ E: Illegal ... command
 Self-explanatory.  Check the input script syntax and compare to the
 documentation for the command.  You can use -echo screen as a
 command-line option when running SPARTA to see the offending line.
+
+E: Cannot (yet) use global mem/limit without % in restart file name
+
+This feature is not yet implemented.
 
 E: Cannot use write_restart fileper without % in restart file name
 

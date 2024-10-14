@@ -1,12 +1,12 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   http://sparta.github.io
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -21,6 +21,7 @@
 #include "modify.h"
 #include "memory.h"
 #include "error.h"
+#include "comm.h"
 
 using namespace SPARTA_NS;
 
@@ -56,7 +57,9 @@ ComputeGrid::ComputeGrid(SPARTA *sparta, int narg, char **arg) :
 
   nvalue = narg - 4;
   value = new int[nvalue];
-  
+
+  tvib_flag = 0;
+
   npergroup = cellmass = cellcount = 0;
   unique = new int[LASTSIZE];
   nmap = new int[nvalue];
@@ -137,6 +140,7 @@ ComputeGrid::ComputeGrid(SPARTA *sparta, int narg, char **arg) :
       value[ivalue] = TVIB;
       set_map(ivalue,ENGVIB);
       set_map(ivalue,DOFVIB);
+      tvib_flag = 1;
     } else if (strcmp(arg[iarg],"pxrho") == 0) {
       value[ivalue] = PXRHO;
       set_map(ivalue,MVX);
@@ -193,6 +197,11 @@ void ComputeGrid::init()
 {
   if (ngroup != particle->mixture[imix]->ngroup)
     error->all(FLERR,"Number of groups in compute grid mixture has changed");
+
+  if (tvib_flag && particle->find_custom((char *) "vibmode") >= 0)
+    if (comm->me == 0)
+      error->warning(FLERR,"Using compute grid tvib with fix vibmode may give "
+                     "incorrect temperature, use compute tvib/grid instead");
 
   eprefactor = 0.5*update->mvv2e;
   tprefactor = update->mvv2e / (3.0*update->boltz);
@@ -315,9 +324,8 @@ int ComputeGrid::query_tally_grid(int index, double **&array, int *&cols)
    index = which column of output (0 for vec, 1 to N for array)
    for etally = NULL:
      use internal tallied info for single timestep, set nsample = 1
-     if onecell = -1, compute values for all grid cells
+     compute values for all grid cells
        store results in vector_grid with nstride = 1 (single col of array_grid)
-     if onecell >= 0, compute single value for onecell and return it
    for etally = ptr to caller array:
      use external tallied info for many timesteps
      nsample = additional normalization factor used by some values
@@ -326,13 +334,13 @@ int ComputeGrid::query_tally_grid(int index, double **&array, int *&cols)
    if norm = 0.0, set result to 0.0 directly so do not divide by 0.0
 ------------------------------------------------------------------------- */
 
-double ComputeGrid::post_process_grid(int index, int onecell, int nsample,
-                                      double **etally, int *emap,
-                                      double *vec, int nstride)
+void ComputeGrid::post_process_grid(int index, int nsample,
+                                    double **etally, int *emap,
+                                    double *vec, int nstride)
 {
   index--;
   int ivalue = index % nvalue;
-  
+
   int lo = 0;
   int hi = nglocal;
   int k = 0;
@@ -343,11 +351,6 @@ double ComputeGrid::post_process_grid(int index, int onecell, int nsample,
     emap = map[index];
     vec = vector_grid;
     nstride = 1;
-    if (onecell >= 0) {
-      lo = onecell;
-      hi = lo + 1;
-      k = lo;
-    }
   }
 
   // compute normalized final value for each grid cell
@@ -552,9 +555,6 @@ double ComputeGrid::post_process_grid(int index, int onecell, int nsample,
       break;
     }
   }
-
-  if (onecell < 0) return 0.0;
-  return vec[onecell];
 }
 
 /* ----------------------------------------------------------------------

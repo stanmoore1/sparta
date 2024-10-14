@@ -1,12 +1,12 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   http://sparta.github.io
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -25,7 +25,7 @@
 #include "output.h"
 #include "dump.h"
 #include "random_mars.h"
-#include "random_park.h"
+#include "random_knuth.h"
 #include "memory.h"
 #include "error.h"
 #include "timer.h"
@@ -63,6 +63,7 @@ void BalanceGrid::command(int narg, char **arg, int outflag)
   if (strcmp(arg[0],"none") == 0) {
     if (narg < 1) error->all(FLERR,"Illegal balance_grid command");
     bstyle = NONE;
+    iarg = 1;
 
   } else if (strcmp(arg[0],"stride") == 0) {
     if (narg < 2) error->all(FLERR,"Illegal balance_grid command");
@@ -74,7 +75,7 @@ void BalanceGrid::command(int narg, char **arg, int outflag)
     else if (strcmp(arg[1],"zxy") == 0) order = ZXY;
     else if (strcmp(arg[1],"zyx") == 0) order = ZYX;
     else error->all(FLERR,"Illegal balance_grid command");
-    iarg = 1;
+    iarg = 2;
 
   } else if (strcmp(arg[0],"clump") == 0) {
     if (narg < 2) error->all(FLERR,"Illegal balance_grid command");
@@ -98,16 +99,16 @@ void BalanceGrid::command(int narg, char **arg, int outflag)
     if (strcmp(arg[3],"*") == 0) pz = 0;
     else pz = atoi(arg[3]);
     iarg = 4;
-    
+
   } else if (strcmp(arg[0],"random") == 0) {
     if (narg < 1) error->all(FLERR,"Illegal balance_grid command");
     bstyle = RANDOM;
-    iarg = 0;
+    iarg = 1;
 
   } else if (strcmp(arg[0],"proc") == 0) {
     if (narg < 1) error->all(FLERR,"Illegal balance_grid command");
     bstyle = PROC;
-    iarg = 0;
+    iarg = 1;
 
   } else if (strcmp(arg[0],"rcb") == 0) {
     if (narg < 2) error->all(FLERR,"Illegal balance_grid command");
@@ -139,7 +140,7 @@ void BalanceGrid::command(int narg, char **arg, int outflag)
       if (strchr(eligible,'z')) zdim = 1;
       if (zdim && domain->dimension == 2)
         error->all(FLERR,"Illegal balance_grid command");
-      if (xdim+ydim+zdim != strlen(eligible)) 
+      if (xdim+ydim+zdim != strlen(eligible))
         error->all(FLERR,"Illegal balance_grid command");
       iarg += 2;
     } else if (strcmp(arg[iarg],"flip") == 0) {
@@ -154,12 +155,12 @@ void BalanceGrid::command(int narg, char **arg, int outflag)
   // error check on methods only allowed for a uniform grid
 
   if (bstyle == STRIDE || bstyle == CLUMP || bstyle == BLOCK)
-    if (!grid->uniform) 
+    if (!grid->uniform)
       error->all(FLERR,"Invalid balance_grid style for non-uniform grid");
 
   // re-assign each of my local child cells to a proc
   // only assign unsplit and split cells
-  // do not assign sub-cells since they migrate with their split cell
+  // do not assign sub cells since they migrate with their split cell
   // set nmigrate = # of cells that will migrate to a new proc
   // reset proc field in cells for migrating cells
   // style NONE performs no re-assignment
@@ -188,7 +189,7 @@ void BalanceGrid::command(int narg, char **arg, int outflag)
       ix = idm1 % nx;
       iy = (idm1 / nx) % ny;
       iz = idm1 / (nx*ny);
-    
+
       if (order == XYZ) nth = iz*nx*ny + iy*nx + ix;
       else if (order == XZY) nth = iy*nx*nz + iz*nx + ix;
       else if (order == YXZ) nth = iz*ny*nx + ix*ny + iy;
@@ -216,7 +217,7 @@ void BalanceGrid::command(int narg, char **arg, int outflag)
       ix = idm1 % nx;
       iy = (idm1 / nx) % ny;
       iz = idm1 / (nx*ny);
-    
+
       if (order == XYZ) nth = iz*nx*ny + iy*nx + ix;
       else if (order == XZY) nth = iy*nx*nz + iz*nx + ix;
       else if (order == YXZ) nth = iz*ny*nx + ix*ny + iy;
@@ -260,7 +261,7 @@ void BalanceGrid::command(int narg, char **arg, int outflag)
 
   } else if (bstyle == RANDOM) {
     int newproc;
-    RanPark *random = new RanPark(update->ranmaster->uniform());
+    RanKnuth *random = new RanKnuth(update->ranmaster->uniform());
     double seed = update->ranmaster->uniform();
     random->reset(seed,comm->me,100);
 
@@ -275,7 +276,7 @@ void BalanceGrid::command(int narg, char **arg, int outflag)
 
   } else if (bstyle == PROC) {
     int newproc;
-    RanPark *random = new RanPark(update->ranmaster->uniform());
+    RanKnuth *random = new RanKnuth(update->ranmaster->uniform());
     newproc = nprocs * random->uniform();
 
     for (int icell = 0; icell < nglocal; icell++) {
@@ -341,7 +342,7 @@ void BalanceGrid::command(int narg, char **arg, int outflag)
     update->rcbhi[1] = rcb->hi[1];
     update->rcbhi[2] = rcb->hi[2];
 
-#endif 
+#endif
 
     rcb->invert();
 
@@ -358,10 +359,10 @@ void BalanceGrid::command(int narg, char **arg, int outflag)
     memory->destroy(wt);
   }
 
-  // set clumped of not, depending on style
+  // set clumped or not, depending on style
   // NONE style does not change clumping
 
-  if (nprocs == 1 || bstyle == CLUMP || bstyle == BLOCK || bstyle == BISECTION) 
+  if (nprocs == 1 || bstyle == CLUMP || bstyle == BLOCK || bstyle == BISECTION)
     grid->clumped = 1;
   else if (bstyle != NONE) grid->clumped = 0;
 
@@ -372,28 +373,6 @@ void BalanceGrid::command(int narg, char **arg, int outflag)
   // NOTE: not needed again if rcbwt = PARTICLE for bstyle = BISECTION ??
 
   particle->sort();
-
-  // DEBUG
-
-  /*
-  char file[32];
-  sprintf(file,"tmp.bef.%d",comm->me);
-  FILE *fp = fopen(file,"w");
-
-  fprintf(fp,"Cells %d %d\n",grid->nlocal,grid->nghost);
-  for (int i = 0; i < grid->nlocal+grid->nghost; i++) {
-    fprintf(fp,"cell %d " CELLINT_FORMAT ": %d : %d %d %d %d %d %d\n",
-           i,grid->cells[i].id,
-           grid->cells[i].nmask,
-           grid->cells[i].neigh[0],
-           grid->cells[i].neigh[1],
-           grid->cells[i].neigh[2],
-           grid->cells[i].neigh[3],
-           grid->cells[i].neigh[4],
-           grid->cells[i].neigh[5]);
-  }
-  fclose(fp);
-  */
 
   MPI_Barrier(world);
   double time3 = MPI_Wtime();
@@ -415,7 +394,9 @@ void BalanceGrid::command(int narg, char **arg, int outflag)
 
   grid->unset_neighbors();
   grid->remove_ghosts();
+
   comm->migrate_cells(nmigrate);
+  grid->hashfilled = 0;
 
   MPI_Barrier(world);
   double time4 = MPI_Wtime();
@@ -426,10 +407,20 @@ void BalanceGrid::command(int narg, char **arg, int outflag)
   else grid->find_neighbors();
   comm->reset_neighbors();
 
-  // reallocate per grid arrays in per grid dumps
+  // if explicit distributed surfs
+  // set redistribute timestep and clear custom status flags
 
-  for (int i = 0; i < output->ndump; i++)
-    output->dump[i]->reset_grid();
+  if (surf->distributed && !surf->implicit) {
+    surf->localghost_changed_step = update->ntimestep;
+    for (int i = 0; i < surf->ncustom; i++)
+      surf->estatus[i] = 0;
+  }
+
+  // if not before first run:
+  // notify all classes that store per-grid data that grid may have changed
+  // do this after clearing custom status flags in case classes use that info
+
+  if (update->first_update) grid->notify_changed();
 
   MPI_Barrier(world);
   double time5 = MPI_Wtime();
@@ -485,11 +476,11 @@ void BalanceGrid::command(int narg, char **arg, int outflag)
 }
 
 /* ----------------------------------------------------------------------
-   assign nprocs to 3d grid so as to minimize surface area 
+   assign nprocs to 3d grid so as to minimize surface area
    area = surface area of each of 3 faces of simulation box
 ------------------------------------------------------------------------- */
 
-void BalanceGrid::procs2grid(int nx, int ny, int nz, 
+void BalanceGrid::procs2grid(int nx, int ny, int nz,
                              int &px, int &py, int &pz)
 {
   int upx = px;
@@ -548,25 +539,25 @@ void BalanceGrid::procs2grid(int nx, int ny, int nz,
       if (upy && ipy != upy) valid = 0;
       if ((nprocs/ipx) % ipy) valid = 0;
       if (!valid) {
-	ipy++;
-	continue;
+        ipy++;
+        continue;
       }
-      
+
       ipz = nprocs/ipx/ipy;
       valid = 1;
       if (upz && ipz != upz) valid = 0;
       if (domain->dimension == 2 && ipz != 1) valid = 0;
       if (!valid) {
-	ipy++;
-	continue;
+        ipy++;
+        continue;
       }
-      
+
       surf = area[0]/ipx/ipy + area[1]/ipx/ipz + area[2]/ipy/ipz;
       if (surf < bestsurf) {
-	bestsurf = surf;
-	px = ipx;
-	py = ipy;
-	pz = ipz;
+        bestsurf = surf;
+        px = ipx;
+        py = ipy;
+        pz = ipz;
       }
       ipy++;
     }
@@ -577,7 +568,7 @@ void BalanceGrid::procs2grid(int nx, int ny, int nz,
 
 /* -------------------------------------------------------------------- */
 
-void BalanceGrid::timer_cell_weights(double *weight)
+void BalanceGrid::timer_cell_weights(double* &weight)
 {
   // cost = CPU time for relevant timers since last invocation
 
@@ -595,6 +586,8 @@ void BalanceGrid::timer_cell_weights(double *weight)
   if (maxcost <= 0.0) {
     memory->destroy(weight);
     weight = NULL;
+      error->warning(FLERR,"No time history accumulated for balance_grid "
+        "rcb time, using rcb cell option instead");
     return;
   }
 
@@ -622,7 +615,7 @@ void BalanceGrid::timer_cell_weights(double *weight)
     wttotal += localwt[nbalance-1];
   }
 
-  for (int icell = 0; icell < nglocal; icell++) 
+  for (int icell = 0; icell < nglocal; icell++)
     weight[icell] = cost*localwt[icell]/wttotal;
 
   memory->destroy(localwt);

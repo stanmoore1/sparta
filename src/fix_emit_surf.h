@@ -1,12 +1,12 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   http://sparta.github.io
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -32,14 +32,18 @@ class FixEmitSurf : public FixEmit {
   FixEmitSurf(class SPARTA *, int, char **);
   ~FixEmitSurf();
   void init();
-  void setup();
-  void post_compress_grid();
+
+  void grid_changed();
 
  private:
-  int imix,groupbit,np,normalflag,subsonic,subsonic_style,subsonic_warning;
+  int imix,groupbit,normalflag,subsonic,subsonic_style,subsonic_warning;
   int npertask,nthresh;
   double psubsonic,tsubsonic,nsubsonic;
   double tprefactor,soundspeed_mixture;
+
+  int npmode,np;    // npmode = FLOW,CONSTANT,VARIABLE
+  int npvar;
+  char *npstr;
 
   // copies of data from other classes
 
@@ -47,9 +51,6 @@ class FixEmitSurf : public FixEmit {
   double fnum,dt;
   double nrho,temp_thermal,temp_rot,temp_vib;
   double *fraction,*cummulative;
-
-  Surf::Line *lines;
-  Surf::Tri *tris;
 
   class Cut2d *cut2d;
   class Cut3d *cut3d;
@@ -64,6 +65,7 @@ class FixEmitSurf : public FixEmit {
     double temp_thermal;        // from mixture or adjacent subsonic cell
     double temp_rot;            // from mixture or subsonic temp_thermal
     double temp_vib;            // from mixture or subsonic temp_thermal
+    double magvstream;          // from mixture
     double vstream[3];          // from mixture or adjacent subsonic cell
     double *ntargetsp;          // # of mols to insert for each species,
                                 //   only defined for PERSPECIES
@@ -74,7 +76,7 @@ class FixEmitSurf : public FixEmit {
     double *fracarea;           // fractional area for each sub tri in path
 
     int icell;                  // associated cell index, unsplit or split cell
-    int isurf;                  // surf index
+    surfint isurf;              // surf index, sometimes a surf ID
     int pcell;                  // associated cell index for particles
                                 // unsplit or sub cell (not split cell)
     int npoint;                 // # of points in path
@@ -87,6 +89,17 @@ class FixEmitSurf : public FixEmit {
   double magvstream;       // magnitude of mixture vstream
   double norm_vstream[3];  // direction of mixture vstream
 
+  // custom options for per-surf emission properties
+
+  int nrho_custom_flag,vstream_custom_flag,speed_custom_flag,temp_custom_flag,fractions_custom_flag;
+  char *nrho_custom_id,*vstream_custom_id,*speed_custom_id,*temp_custom_id,*fractions_custom_id;
+  int nrho_custom_index,vstream_custom_index,speed_custom_index,temp_custom_index,fractions_custom_index;
+  double *nrho_custom,*speed_custom,*temp_custom;
+  double **vstream_custom,**fractions_custom;
+
+  int max_cummulative;
+  double **cummulative_custom;     // local to this fix, not actually custom data
+
   // active grid cells assigned to tasks, used by subsonic sorting
 
   int maxactive;
@@ -94,17 +107,13 @@ class FixEmitSurf : public FixEmit {
 
   // private methods
 
-  int create_task(int);
+  void create_task(int);
   void perform_task();
+  void grow_task();
 
   void subsonic_inflow();
   void subsonic_sort();
   void subsonic_grid();
-
-  int pack_task(int, char *, int);
-  int unpack_task(char *, int);
-  void copy_task(int, int, int, int);
-  void grow_task();
 
   int option(int, char **);
 };

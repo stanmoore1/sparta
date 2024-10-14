@@ -1,12 +1,12 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   http://sparta.github.io
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -32,7 +32,6 @@ class FixEmitFaceFile : public FixEmit {
   FixEmitFaceFile(class SPARTA *, int, char **);
   ~FixEmitFaceFile();
   void init();
-  void post_compress_grid();
 
  private:
   int imix,iface,subsonic,subsonic_style,subsonic_warning;
@@ -126,11 +125,8 @@ class FixEmitFaceFile : public FixEmit {
   void subsonic_sort();
   void subsonic_grid();
 
-  int create_task(int);
+  void create_task(int);
   void perform_task();
-  int pack_task(int, char *, int);
-  int unpack_task(char *, int);
-  void copy_task(int, int, int, int);
   void grow_task();
 
   int option(int, char **);

@@ -1,12 +1,12 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   http://sparta.github.io
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -21,6 +21,7 @@ CommandStyle(read_surf,ReadSurf)
 #ifndef SPARTA_READ_SURF_H
 #define SPARTA_READ_SURF_H
 
+#include "mpi.h"
 #include "stdio.h"
 #include "pointers.h"
 #include "hash3.h"
@@ -35,61 +36,67 @@ class ReadSurf : protected Pointers {
   virtual void command(int, char **);
 
  protected:
-  int me;
+  int me,nprocs;
+  int dim;
+  int distributed;
+
   char *line,*keyword,*buffer;
   FILE *fp;
   int compressed;
-  int distributed;
+
+  int typeflag,typeadd;
+  int grouparg,transparent_flag;
   int partflag,filearg;
 
-  int dim;
+  char **name_custom;
+  int *type_custom,*size_custom,*index_custom;
+
+  int ncustom;              // # of custom per-surf vecs/arrays
+  int nvalues_custom;       // # of custom values per surf
+  double **cvalues;         // surfID + read-in per-surf custom values
+
+  int multiproc;            // 1 if multiple files to read from
+  int nfiles;               // # of proc files in addition to base file
+  int me_file,nprocs_file;  // info for cluster of procs that read a file
+
   double origin[3];
 
+  Surf::Line *lines;        // lines read from all files, distributed over procs
+  Surf::Tri *tris;          // tris read from all files, distributed over procs
+
+  int nsurf;                // # of read-in surfs on this proc
+  int maxsurf;              // max allocation of lines or tris
+  bigint nsurf_all;         // # of read-in surfs across all procs
+  int nsurf_file;           // # of surfs read-in from one file
+
   struct Point {
-    double x[3];
+    double x[3];            // point coords
   };
 
-  struct Line {
-    int type,mask;          // type and mask of the line
-    int p1,p2;              // indices of points in line segment
-  };
+  int npoint_file;          // # of points in one file
+  Point *pts;               // storage for points read from one file
 
-  struct Tri {
-    int type,mask;          // type and mask of the triangle
-    int p1,p2,p3;           // indices of points in triangle
-  };
+  int filereader;
+  MPI_Comm filecomm;
 
-  Point *pts;
-  Line *lines;
-  Tri *tris;
-  int npoint,nline,ntri;
-  int maxpoint,maxline,maxtri;
-  bigint nsurf_old;
-  int nline_old,nline_new;
-  int ntri_old,ntri_new;
+  // methods
 
-  int **edge;
-  int nedge,maxedge;
+  void read_single(char *);
+  void read_multiple(char *);
+  void read_file(char *);
 
-#ifdef SPARTA_MAP
-  typedef std::map<bigint,int> MyHash;
-  typedef std::map<bigint,int>::iterator MyIterator;
-#elif defined SPARTA_UNORDERED_MAP
-  typedef std::unordered_map<bigint,int> MyHash;
-  typedef std::unordered_map<bigint,int>::iterator MyIterator;
-#else
-  typedef std::tr1::unordered_map<bigint,int> MyHash;
-  typedef std::tr1::unordered_map<bigint,int>::iterator MyIterator;
-#endif
-
+  void base(char *);
   void header();
+
   void read_points();
   void read_lines();
-  void read_lines_distributed();
   void read_tris();
-  void read_tris_distributed();
 
-  void process_args(int, char **);
+  void add_line(surfint, int, double *, double *);
+  void add_tri(surfint, int, double *, double *, double *);
+  void add_custom(surfint, double *);
+
+  void process_args(int, int, char **);
 
   void translate(double, double, double);
   void scale(double, double, double);
@@ -98,17 +105,34 @@ class ReadSurf : protected Pointers {
   void clip2d();
   void clip3d();
 
-  void add_surfs();
+  void check_bounds();
   void push_points_to_boundary(double);
   void check_neighbor_norm_2d();
   void check_neighbor_norm_3d();
 
-  int find_edge(int, int);
-  void add_edge(int, int, int);
-
   void open(char *);
+  void file_search(char *, char *);
   void parse_keyword(int);
   int count_words(char *);
+
+  // union data struct for packing 32-bit and 64-bit ints into double bufs
+  // this avoids aliasing issues by having 2 pointers (double,int)
+  //   to same buf memory
+  // constructor for 32-bit int prevents compiler
+  //   from possibly calling the double constructor when passed an int
+  // copy to a double *buf:
+  //   buf[m++] = ubuf(foo).d, where foo is a 32-bit or 64-bit int
+  // copy from a double *buf:
+  //   foo = (int) ubuf(buf[m++]).i;, where (int) or (tagint) match foo
+  //   the cast prevents compiler warnings about possible truncation
+
+  union ubuf {
+    double d;
+    int64_t i;
+    ubuf(double arg) : d(arg) {}
+    ubuf(int64_t arg) : i(arg) {}
+    ubuf(int arg) : i(arg) {}
+  };
 };
 
 }

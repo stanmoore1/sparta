@@ -1,6 +1,6 @@
 "SPARTA WWW Site"_sws - "SPARTA Documentation"_sd - "SPARTA Commands"_sc :c
 
-:link(sws,http://sparta.sandia.gov)
+:link(sws,https://sparta.github.io)
 :link(sd,Manual.html)
 :link(sc,Section_commands.html#comm)
 
@@ -27,13 +27,13 @@ keyword = {particle} or {pdiam} or {grid} or {gridx} or {gridy} or {gridz} or {s
   {grid} values = color
     color = {proc} or per-grid compute or fix
   {gridx} values = xcoord color
-    xcoord = x value to dray yz plane of grid cells at
+    xcoord = x value to draw yz plane of grid cells at
     color = {proc} or per-grid compute or fix
   {gridy} values = ycoord color
-    ycoord = y value to dray xz plane of grid cells at
+    ycoord = y value to draw xz plane of grid cells at
     color = {proc} or per-grid compute or fix
   {gridz} values = zcoord color
-    zcoord = z value to dray xy plane of grid cells at
+    zcoord = z value to draw xy plane of grid cells at
     color = {proc} or per-grid compute or fix
   {surf} values = color diam
     color = {one} or {proc} or per-surf compute or fix
@@ -89,7 +89,7 @@ species are in the {mix-ID} to a file every 100 steps.  The last two
 shell command will make a movie from the JPG files (once the run has
 finished) and play it in the Firefox browser:
 
-dump                4 image 100 tmp.*.jpg type type pdiam 0.2 view 90 -90 
+dump                4 image all 100 tmp.*.jpg type type pdiam 0.2 view 90 -90 
 dump_modify	    4 pad 4
 % convert tmp*jpg tmp.gif
 % firefox tmp.gif :pre
@@ -587,8 +587,8 @@ variety of file formats and decoders. :l
 % mplayer foo.mpg 
 % ffplay bar.avi :pre
 
-c) Use the "Pizza.py"_http://www.sandia.gov/~sjplimp/pizza.html
-"animate tool"_http://www.sandia.gov/~sjplimp/pizza/doc/animate.html,
+c) Use the "Pizza.py"_https://lammps.github.io/pizza
+"animate tool"_https://lammps.gitbug.io/pizza/doc/animate.html,
 which works directly on a series of image files. :l
 
 a = animate("foo*.jpg") :pre

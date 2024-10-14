@@ -1,12 +1,12 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   http://sparta.github.io
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -27,7 +27,7 @@
 #include "input.h"
 #include "variable.h"
 #include "random_mars.h"
-#include "random_park.h"
+#include "random_knuth.h"
 #include "math_const.h"
 #include "memory_kokkos.h"
 #include "error.h"
@@ -52,7 +52,7 @@ void CreateParticlesKokkos::create_local(bigint np)
   int dimension = domain->dimension;
 
   int me = comm->me;
-  RanPark *random = new RanPark(update->ranmaster->uniform());
+  RanKnuth *random = new RanKnuth(update->ranmaster->uniform());
   double seed = update->ranmaster->uniform();
   random->reset(seed,me,100);
   Grid::ChildCell *cells = grid->cells;
@@ -78,12 +78,12 @@ void CreateParticlesKokkos::create_local(bigint np)
       continue;
 
     if (dimension == 3) volone = (hi[0]-lo[0]) * (hi[1]-lo[1]) * (hi[2]-lo[2]);
-    else if (domain->axisymmetric) 
+    else if (domain->axisymmetric)
       volone = (hi[0]-lo[0]) * (hi[1]*hi[1]-lo[1]*lo[1])*MY_PI;
     else volone = (hi[0]-lo[0]) * (hi[1]-lo[1]);
     volme += volone / cinfo[i].weight;
   }
-  
+
   double volupto;
   MPI_Scan(&volme,&volupto,1,MPI_DOUBLE,MPI_SUM,world);
 
@@ -98,7 +98,7 @@ void CreateParticlesKokkos::create_local(bigint np)
   // enforce that by brute force
 
   for (int i = 1; i < nprocs; i++)
-    if (vols[i] != vols[i-1] && 
+    if (vols[i] != vols[i-1] &&
         fabs(vols[i]-vols[i-1])/vols[nprocs-1] < EPSZERO)
       vols[i] = vols[i-1];
 
@@ -110,10 +110,10 @@ void CreateParticlesKokkos::create_local(bigint np)
 
   memory->destroy(vols);
 
-  // nfix_add_particle = # of fixes with add_particle() method
+  // nfix_update_custom = # of fixes with update_custom() method
 
   modify->list_init_fixes();
-  int nfix_add_particle = modify->n_add_particle;
+  int nfix_update_custom = modify->n_update_custom;
 
   // loop over cells I own
   // only add particles to OUTSIDE cells
@@ -141,7 +141,7 @@ void CreateParticlesKokkos::create_local(bigint np)
 
   double vstream_variable[3];
 
-  Kokkos::View<int*, SPADeviceType> d_npercell("npercell", nglocal);
+  Kokkos::View<int*, DeviceType> d_npercell("npercell", nglocal);
   auto h_npercell = Kokkos::create_mirror_view(d_npercell);
 
   for (int i = 0; i < nglocal; i++) {
@@ -171,7 +171,7 @@ void CreateParticlesKokkos::create_local(bigint np)
 
     if (ncreate < 0) ncreate = 0;
     h_npercell(i) = ncreate;
-  
+
     // increment count without effect of density variation
     // so that target insertion count is undisturbed
 
@@ -184,22 +184,16 @@ void CreateParticlesKokkos::create_local(bigint np)
   auto h_cells2cands = Kokkos::create_mirror_view(d_cells2cands);
   Kokkos::deep_copy(h_cells2cands, d_cells2cands);
 
-  Kokkos::View<int*, SPADeviceType> d_keep("cand_keep", ncands);
-  Kokkos::View<int*, SPADeviceType> d_isp("cand_x", ncands);
-  Kokkos::View<double*[3], SPADeviceType> d_x("cand_x", ncands);
-  Kokkos::View<double*, SPADeviceType> d_vn("cand_vn", ncands);
-  Kokkos::View<double*, SPADeviceType> d_vr("cand_vr", ncands);
-  Kokkos::View<double*[2], SPADeviceType> d_theta("cand_theta", ncands);
-  Kokkos::View<double*, SPADeviceType> d_erot("cand_erot", ncands);
-  Kokkos::View<double*, SPADeviceType> d_evib("cand_evib", ncands);
-  Kokkos::View<int*, SPADeviceType> d_id("cand_id", ncands);
-  Kokkos::View<double*[3], SPADeviceType> d_v("cand_v", ncands);
+  Kokkos::View<int*, DeviceType> d_keep("cand_keep", ncands);
+  Kokkos::View<int*, DeviceType> d_isp("cand_isp", ncands);
+  Kokkos::View<double*[3], DeviceType> d_x("cand_x", ncands);
+  Kokkos::View<double*, DeviceType> d_erot("cand_erot", ncands);
+  Kokkos::View<double*, DeviceType> d_evib("cand_evib", ncands);
+  Kokkos::View<int*, DeviceType> d_id("cand_id", ncands);
+  Kokkos::View<double*[3], DeviceType> d_v("cand_v", ncands);
   auto h_keep = Kokkos::create_mirror_view(d_keep);
   auto h_isp = Kokkos::create_mirror_view(d_isp);
   auto h_x = Kokkos::create_mirror_view(d_x);
-  auto h_vn = Kokkos::create_mirror_view(d_vn);
-  auto h_vr = Kokkos::create_mirror_view(d_vr);
-  auto h_theta = Kokkos::create_mirror_view(d_theta);
   auto h_erot = Kokkos::create_mirror_view(d_erot);
   auto h_evib = Kokkos::create_mirror_view(d_evib);
   auto h_id = Kokkos::create_mirror_view(d_id);
@@ -244,10 +238,6 @@ void CreateParticlesKokkos::create_local(bigint np)
 
       auto theta1 = MY_2PI * random->uniform();
       auto theta2 = MY_2PI * random->uniform();
-      h_vn(cand) = vn;
-      h_vr(cand) = vr;
-      h_theta(cand,0) = theta1;
-      h_theta(cand,1) = theta2;
 
       //these two functions also use random variables...
       h_erot(cand) = particle->erot(ispecies,temp_rot*tempscale,random);
@@ -273,9 +263,6 @@ void CreateParticlesKokkos::create_local(bigint np)
   Kokkos::deep_copy(d_keep, h_keep);
   Kokkos::deep_copy(d_isp, h_isp);
   Kokkos::deep_copy(d_x, h_x);
-  Kokkos::deep_copy(d_vn, h_vn);
-  Kokkos::deep_copy(d_vr, h_vr);
-  Kokkos::deep_copy(d_theta, h_theta);
   Kokkos::deep_copy(d_erot, h_erot);
   Kokkos::deep_copy(d_evib, h_evib);
   Kokkos::deep_copy(d_id, h_id);
@@ -287,8 +274,8 @@ void CreateParticlesKokkos::create_local(bigint np)
   auto particleKK = dynamic_cast<ParticleKokkos*>(particle);
   particleKK->grow(nnew);
   particleKK->sync(Device, PARTICLE_MASK | SPECIES_MASK);
-  auto d_particles = particleKK->k_particles.view<SPADeviceType>();
-  Kokkos::View<int*, SPADeviceType> d_species("species", nspecies);
+  auto d_particles = particleKK->k_particles.d_view;
+  Kokkos::View<int*, DeviceType> d_species("species", nspecies);
   auto h_species = Kokkos::create_mirror_view(d_species);
   for (int i = 0; i < nspecies; ++i) h_species(i) = species[i];
   Kokkos::deep_copy(d_species, h_species);
@@ -323,8 +310,8 @@ void CreateParticlesKokkos::create_local(bigint np)
       auto cand = h_cells2cands(i) + m;
       if (!h_keep(cand)) continue;
       auto inew = h_cands2new(cand) + nlocal_before;
-      if (nfix_add_particle)
-        modify->add_particle(inew,temp_thermal,temp_rot,temp_vib,vstream);
+      if (nfix_update_custom)
+        modify->update_custom(inew,temp_thermal,temp_rot,temp_vib,vstream);
     }
   }
 

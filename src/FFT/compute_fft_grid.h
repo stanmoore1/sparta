@@ -1,12 +1,12 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   http://sparta.github.io
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -36,13 +36,14 @@ namespace SPARTA_NS {
 class ComputeFFTGrid : public Compute {
  public:
   ComputeFFTGrid(class SPARTA *, int, char **);
-  ~ComputeFFTGrid();
+  virtual ~ComputeFFTGrid();
   void init();
-  void compute_per_grid();
-  void reallocate();
+  virtual void post_constructor();
+  virtual void compute_per_grid();
+  virtual void reallocate();
   bigint memory_usage();
 
- private:
+ protected:
   int me,nprocs;
   int nvalues;
   int *which,*argindex,*value2index;
@@ -69,7 +70,7 @@ class ComputeFFTGrid : public Compute {
   FFT_SCALAR *gridworkcomplex;  // work buf in grid decomp, length = nglocal
 
   int *map1;            // mapping of received SPARTA grid values to FFT grid
-                        // map1[i] = index into ordered FFT grid of 
+                        // map1[i] = index into ordered FFT grid of
                         //           Ith value in buffer received
                         //           from SPARTA decomp via irregular comm
   int *map2;            // mapping of received FFT grid values to SPARTA grid
@@ -81,10 +82,11 @@ class ComputeFFTGrid : public Compute {
   class FFT2D *fft2d;
   class Irregular *irregular1,*irregular2;
 
-  void fft_create();
-  void irregular_create();
+  virtual void fft_create();
+  virtual void irregular_create();
   void procs2grid2d(int, int, int, int &, int &);
   int factorable(int);
+  virtual void print_FFT_info();
   void debug(const char *, int, double *, int *, cellint *, int stride=1);
 };
 

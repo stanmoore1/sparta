@@ -1,12 +1,12 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   http://sparta.github.io
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -26,12 +26,14 @@ class ModifyKokkos : public Modify {
   void start_of_step();
   void end_of_step();
 
-  void add_grid_one(int, int);
   int pack_grid_one(int, char *, int);
   int unpack_grid_one(int, char *);
-  void compress_grid(int);
+  void copy_grid_one(int, int);
+  void add_grid_one();
+  void reset_grid_count(int);
+  void grid_changed();
 
-  void add_particle(int, double, double, double, double *);
+  void update_custom(int, double, double, double, double *);
   void gas_react(int);
   void surf_react(Particle::OnePart *, int &, int &);
 

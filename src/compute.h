@@ -1,12 +1,12 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   http://sparta.github.io
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -50,10 +50,10 @@ class Compute : protected Pointers {
   int per_particle_flag;      // 0/1 if compute_per_particle() function exists
   int size_per_particle_cols; // 0 = vector, N = columns in per-particle array
 
-  int per_grid_flag;          // 0/1 if compute_per_grid() function exists
-  int size_per_grid_cols;     // 0 = vector, N = columns in per-grid array
-
-  int post_process_grid_flag;   // 1 if requires post_processing for output
+  int per_grid_flag;            // 0/1 if compute_per_grid() function exists
+  int size_per_grid_cols;       // 0 = vector, N = columns in per-grid array
+  int post_process_grid_flag;   // 1 if requires post_process_grid() for output
+  int post_process_isurf_grid_flag; // 1 if requires post_process_tally() for out
 
   int per_surf_flag;          // 0/1 if compute_per_surf() function exists
   int size_per_surf_cols;     // 0 = vector, N = columns in per-surf array
@@ -66,6 +66,7 @@ class Compute : protected Pointers {
   int maxtime;        // max # of entries time list can hold
   bigint *tlist;      // list of timesteps the Compute is called on
 
+  int first_init;         // 0 if init() not yet called, otherwise 1
   int invoked_flag;       // non-zero if invoked or accessed this step, 0 if not
   bigint invoked_scalar;  // last timestep on which compute_scalar() was invoked
   bigint invoked_vector;       // ditto for compute_vector()
@@ -75,9 +76,11 @@ class Compute : protected Pointers {
   bigint invoked_per_surf;     // ditto for compute_per_surf()
 
   Compute(class SPARTA *, int, char **);
-  Compute(class SPARTA* sparta) : Pointers(sparta) {} 
+  Compute(class SPARTA* sparta) : Pointers(sparta) {} // needed for Kokkos
   virtual ~Compute();
   virtual void init() {}
+  void set_init();
+  virtual void post_constructor() {}
 
   virtual double compute_scalar() {return 0.0;}
   virtual void compute_vector() {}
@@ -86,20 +89,19 @@ class Compute : protected Pointers {
   virtual void compute_per_grid() {}
   virtual void compute_per_surf() {}
   virtual void clear() {}
-  virtual void surf_tally(int, Particle::OnePart *,  
+  virtual void surf_tally(int, int, int, Particle::OnePart *,
                           Particle::OnePart *, Particle::OnePart *) {}
-  virtual void boundary_tally(int, int, Particle::OnePart *,
+  virtual void boundary_tally(int, int, int, Particle::OnePart *,
                               Particle::OnePart *, Particle::OnePart *) {}
 
-  virtual int query_tally_grid(int, double **&, int *&) {return 0;}
-  virtual double post_process_grid(int, int, int, double **, int *, 
-                                   double *, int) {return 0.0;}
-
+  virtual void post_process_grid(int, int, double **, int *, double *, int) {}
   // NOTE: get rid of this method at some point
   virtual void post_process_grid_old(void *, void *, int, int, double *, int) {}
+  virtual void post_process_isurf_grid() {}
 
-  virtual int tallyinfo(int *&) {return 0;}
-  virtual void tallysum(int) {}
+  virtual int query_tally_grid(int, double **&, int *&) {return 0;}
+  virtual int tallyinfo(surfint *&) {return 0;}
+  virtual void post_process_surf() {}
 
   virtual void reallocate() {}
   virtual bigint memory_usage();
@@ -113,8 +115,8 @@ class Compute : protected Pointers {
   // Kokkos methods
 
   int kokkos_flag;          // 1 if Kokkos-enabled
-  int copy,copymode;        // 1 if copy of class (prevents deallocation of
-                            //  base class when child copy is destroyed)
+  int copy,uncopy,copymode; // prevent deallocation of
+                            //  base class when child copy is destroyed
 };
 
 }

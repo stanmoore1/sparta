@@ -1,12 +1,12 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   http://sparta.github.io
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -34,9 +34,9 @@ class ComputePropertyGrid : public Compute {
   void reallocate();
   bigint memory_usage();
 
- private:
-  int groupbit,nvalues,nglocal;
-  int *index;
+ protected:
+  int groupbit,nvalues;
+  int dimension,nglocal;
   double *buf;
 
   typedef void (ComputePropertyGrid::*FnPtrPack)(int);
@@ -44,6 +44,7 @@ class ComputePropertyGrid : public Compute {
 
   void pack_id(int);
   void pack_proc(int);
+
   void pack_xlo(int);
   void pack_ylo(int);
   void pack_zlo(int);
@@ -53,6 +54,7 @@ class ComputePropertyGrid : public Compute {
   void pack_xc(int);
   void pack_yc(int);
   void pack_zc(int);
+
   void pack_vol(int);
 };
 

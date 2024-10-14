@@ -1,12 +1,12 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   http://sparta.github.io
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -26,13 +26,15 @@
 #include "modify.h"
 #include "comm.h"
 #include "random_mars.h"
-#include "random_park.h"
+#include "random_knuth.h"
 #include "math_const.h"
 #include "math_extra.h"
 #include "error.h"
 
 using namespace SPARTA_NS;
 using namespace MathConst;
+
+enum{NUMERIC,CUSTOM,VARIABLE,VAREQUAL,VARSURF};   // surf_collide classes
 
 /* ---------------------------------------------------------------------- */
 
@@ -41,21 +43,10 @@ SurfCollideDiffuse::SurfCollideDiffuse(SPARTA *sparta, int narg, char **arg) :
 {
   if (narg < 4) error->all(FLERR,"Illegal surf_collide diffuse command");
 
-  allowreact = 1;
+  parse_tsurf(arg[2]);
 
-  tstr = NULL;
-
-  if (strstr(arg[2],"v_") == arg[2]) {
-    int n = strlen(&arg[2][2]) + 1;
-    tstr = new char[n];
-    strcpy(tstr,&arg[2][2]);
-  } else {
-    twall = input->numeric(FLERR,arg[2]); 
-    if (twall <= 0.0) error->all(FLERR,"Surf_collide diffuse temp <= 0.0");
-  }
-
-  acc = input->numeric(FLERR,arg[3]); 
-  if (acc < 0.0 || acc > 1.0) 
+  acc = input->numeric(FLERR,arg[3]);
+  if (acc < 0.0 || acc > 1.0)
     error->all(FLERR,"Illegal surf_collide diffuse command");
 
   // optional args
@@ -64,8 +55,14 @@ SurfCollideDiffuse::SurfCollideDiffuse(SPARTA *sparta, int narg, char **arg) :
 
   int iarg = 4;
   while (iarg < narg) {
-    if (strcmp(arg[iarg],"translate") == 0) {
-      if (iarg+4 > narg) 
+    if (strcmp(arg[iarg],"temp/freq") == 0) {
+      if (iarg+2 > narg)
+        error->all(FLERR,"Illegal surf_collide diffuse command");
+      tfreq = atoi(arg[iarg+1]);
+      if (tfreq <= 0) error->all(FLERR,"Illegal surf_collide diffuse command");
+      iarg += 2;
+    } else if (strcmp(arg[iarg],"translate") == 0) {
+      if (iarg+4 > narg)
         error->all(FLERR,"Illegal surf_collide diffuse command");
       tflag = 1;
       vx = atof(arg[iarg+1]);
@@ -73,7 +70,7 @@ SurfCollideDiffuse::SurfCollideDiffuse(SPARTA *sparta, int narg, char **arg) :
       vz = atof(arg[iarg+3]);
       iarg += 4;
     } else if (strcmp(arg[iarg],"rotate") == 0) {
-      if (iarg+7 > narg) 
+      if (iarg+7 > narg)
         error->all(FLERR,"Illegal surf_collide diffuse command");
       rflag = 1;
       px = atof(arg[iarg+1]);
@@ -82,11 +79,19 @@ SurfCollideDiffuse::SurfCollideDiffuse(SPARTA *sparta, int narg, char **arg) :
       wx = atof(arg[iarg+4]);
       wy = atof(arg[iarg+5]);
       wz = atof(arg[iarg+6]);
-      if (domain->dimension == 2 && pz != 0.0) 
-        error->all(FLERR,"Surf_collide diffuse rotation invalid for 2d");
-      if (domain->dimension == 2 && (wx != 0.0 || wy != 0.0))
-        error->all(FLERR,"Surf_collide diffuse rotation invalid for 2d");
+
+      if (domain->dimension == 2) {
+        if (pz != 0.0)
+          error->all(FLERR,"Surf_collide diffuse rotation invalid for 2d");
+        if (!domain->axisymmetric && (wx != 0.0 || wy != 0.0))
+          error->all(FLERR,"Surf_collide diffuse rotation invalid for 2d");
+        if (domain->axisymmetric && (wy != 0.0 || wz != 0.0))
+          error->all(FLERR,
+                     "Surf_collide diffuse rotation invalid for 2d axisymmetric");
+      }
+
       iarg += 7;
+
     } else error->all(FLERR,"Illegal surf_collide diffuse command");
   }
 
@@ -98,7 +103,7 @@ SurfCollideDiffuse::SurfCollideDiffuse(SPARTA *sparta, int narg, char **arg) :
 
   // initialize RNG
 
-  random = new RanPark(update->ranmaster->uniform());
+  random = new RanKnuth(update->ranmaster->uniform());
   double seed = update->ranmaster->uniform();
   random->reset(seed,comm->me,100);
 }
@@ -109,7 +114,6 @@ SurfCollideDiffuse::~SurfCollideDiffuse()
 {
   if (copy) return;
 
-  delete [] tstr;
   delete random;
 }
 
@@ -118,56 +122,67 @@ SurfCollideDiffuse::~SurfCollideDiffuse()
 void SurfCollideDiffuse::init()
 {
   SurfCollide::init();
-
-  // check variable
-
-  if (tstr) {
-    tvar = input->variable->find(tstr);
-    if (tvar < 0) 
-      error->all(FLERR,"Surf_collide diffuse variable name does not exist");
-    if (!input->variable->equal_style(tvar))
-      error->all(FLERR,"Surf_collide diffuse variable is invalid style");
-  }
+  check_tsurf();
 }
 
 /* ----------------------------------------------------------------------
    particle collision with surface with optional chemistry
    ip = particle with current x = collision pt, current v = incident v
+   isurf = index of surface element
    norm = surface normal unit vector
    isr = index of reaction model if >= 0, -1 for no chemistry
-   ip = set to NULL if destroyed by chemsitry
+   ip = reset to NULL if destroyed by chemistry
    return jp = new particle if created by chemistry
+   return reaction = index of reaction (1 to N) that took place, 0 = no reaction
    resets particle(s) to post-collision outward velocity
 ------------------------------------------------------------------------- */
 
 Particle::OnePart *SurfCollideDiffuse::
-collide(Particle::OnePart *&ip, double *norm, double &, int isr)
+collide(Particle::OnePart *&ip, double &,
+        int isurf, double *norm, int isr, int &reaction)
 {
   nsingle++;
 
   // if surface chemistry defined, attempt reaction
-  // reaction = 1 if reaction took place
+  // reaction = 1 to N for which reaction took place, 0 for none
+  // velreset = 1 if reaction reset post-collision velocity, else 0
 
   Particle::OnePart iorig;
   Particle::OnePart *jp = NULL;
-  int reaction = 0;
+  reaction = 0;
+  int velreset = 0;
 
   if (isr >= 0) {
     if (modify->n_surf_react) memcpy(&iorig,ip,sizeof(Particle::OnePart));
-    reaction = surf->sr[isr]->react(ip,norm,jp);
+    reaction = surf->sr[isr]->react(ip,isurf,norm,jp,velreset);
     if (reaction) surf->nreact_one++;
   }
 
-  // diffuse reflection for each particle
-  // resets v, roteng, vibeng
-  // if new particle J created, also need to trigger any fixes
+  // set temperature of isurf if VARSURF or CUSTOM
 
-  if (ip) diffuse(ip,norm);
+  if (persurf_temperature) {
+    tsurf = t_persurf[isurf];
+    if (tsurf <= 0.0) error->one(FLERR,"Surf_collide tsurf <= 0.0");
+  }
+
+  // diffuse reflection for each particle
+  // only if SurfReact did not already reset velocities
+  // also both particles need to trigger any fixes
+  //   to update per-particle properties which depend on
+  //   temperature of the particle, e.g. fix vibmode and fix ambipolar
+
+  if (ip) {
+    if (!velreset) diffuse(ip,norm);
+    if (modify->n_update_custom) {
+      int i = ip - particle->particles;
+      modify->update_custom(i,tsurf,tsurf,tsurf,vstream);
+    }
+  }
   if (jp) {
-    diffuse(jp,norm);
-    if (modify->n_add_particle) {
+    if (!velreset) diffuse(jp,norm);
+    if (modify->n_update_custom) {
       int j = jp - particle->particles;
-      modify->add_particle(j,twall,twall,twall,vstream);
+      modify->update_custom(j,tsurf,tsurf,tsurf,vstream);
     }
   }
 
@@ -204,8 +219,6 @@ void SurfCollideDiffuse::diffuse(Particle::OnePart *p, double *norm)
 
   if (random->uniform() > acc) {
     MathExtra::reflect3(p->v,norm);
-    p->erot = particle->erot(p->ispecies,twall,random);
-    p->evib = particle->evib(p->ispecies,twall,random);
 
   // diffuse reflection
   // vrm = most probable speed of species, eqns (4.1) and (4.7)
@@ -221,7 +234,7 @@ void SurfCollideDiffuse::diffuse(Particle::OnePart *p, double *norm)
     Particle::Species *species = particle->species;
     int ispecies = p->ispecies;
 
-    double vrm = sqrt(2.0*update->boltz * twall / species[ispecies].mass);
+    double vrm = sqrt(2.0*update->boltz * tsurf / species[ispecies].mass);
     double vperp = vrm * sqrt(-log(random->uniform()));
 
     double theta = MY_2PI * random->uniform();
@@ -256,7 +269,7 @@ void SurfCollideDiffuse::diffuse(Particle::OnePart *p, double *norm)
       if (tflag) {
         vxdelta = vx; vydelta = vy; vzdelta = vz;
         double dot = vxdelta*norm[0] + vydelta*norm[1] + vzdelta*norm[2];
-     
+
         if (fabs(dot) > 0.001) {
           dot /= vrm;
           do {
@@ -281,7 +294,7 @@ void SurfCollideDiffuse::diffuse(Particle::OnePart *p, double *norm)
         vydelta -= dot*norm[1];
         vzdelta -= dot*norm[2];
       }
-      
+
       v[0] = vperp*norm[0] + vtan1*tangent1[0] + vtan2*tangent2[0] + vxdelta;
       v[1] = vperp*norm[1] + vtan1*tangent1[1] + vtan2*tangent2[1] + vydelta;
       v[2] = vperp*norm[2] + vtan1*tangent1[2] + vtan2*tangent2[2] + vzdelta;
@@ -296,17 +309,39 @@ void SurfCollideDiffuse::diffuse(Particle::OnePart *p, double *norm)
 
     // initialize rot/vib energy
 
-    p->erot = particle->erot(ispecies,twall,random);
-    p->evib = particle->evib(ispecies,twall,random);
+    p->erot = particle->erot(ispecies,tsurf,random);
+    p->evib = particle->evib(ispecies,tsurf,random);
   }
 }
 
 /* ----------------------------------------------------------------------
-   set current surface temperature
+   wrapper on diffuse() method to perform collision for a single particle
+   pass in 2 coefficients to match command-line args for style diffuse
+   flags, coeffs can be NULL
+   called by SurfReactAdsorb
 ------------------------------------------------------------------------- */
 
-void SurfCollideDiffuse::dynamic()
+void SurfCollideDiffuse::wrapper(Particle::OnePart *p, double *norm,
+                                 int *flags, double *coeffs)
 {
-  twall = input->variable->compute_equal(tvar);
-  if (twall <= 0.0) error->all(FLERR,"Surf_collide diffuse temp <= 0.0");
+  if (coeffs) {
+    tsurf = coeffs[0];
+    acc = coeffs[1];
+  }
+
+  diffuse(p,norm);
+}
+
+/* ----------------------------------------------------------------------
+   return flags and coeffs for this SurfCollide instance to caller
+------------------------------------------------------------------------- */
+
+void SurfCollideDiffuse::flags_and_coeffs(int *flags, double *coeffs)
+{
+  if (tmode != NUMERIC)
+    error->all(FLERR,"Surf_collide diffuse with non-numeric Tsurf "
+               "does not support external caller");
+
+  coeffs[0] = tsurf;
+  coeffs[1] = acc;
 }

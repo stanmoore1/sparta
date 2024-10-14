@@ -1,4 +1,11 @@
+################################################################################
 # 3d flow around porous media
+#
+# Note:
+#  - The "comm/sort” option to the “global” command is used to match MPI runs.
+#  - The “twopass” option is used to match Kokkos runs.
+# The "comm/sort" and "twopass" options should not be used for production runs.
+################################################################################
 
 seed	    	    12345
 dimension   	    3
@@ -18,15 +25,16 @@ mixture		    air N O vstream 100.0 0 0
 
 global              surfs implicit
 
-read_isurf          all 100 100 100 binary.101x101x101 99.5
+fix                 ablate ablate all 0 0.2 random 10
+read_isurf          all 100 100 100 binary.101x101x101 99.5 ablate
 
 surf_collide	    1 diffuse 300.0 0.0
 surf_modify         all collide 1
 
 collide             vss air air.vss
 
-create_particles    air n 0
-fix		    in emit/face air xlo
+create_particles    air n 0 twopass
+fix		    in emit/face air xlo twopass
 
 fix                 check grid/check 1 warn
 
@@ -41,4 +49,4 @@ timestep 	    1e-3
 
 stats		    100
 stats_style	    step cpu np nattempt ncoll nscoll nscheck f_check
-run 		    1000
+run 		    400

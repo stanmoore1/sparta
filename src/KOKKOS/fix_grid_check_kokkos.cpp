@@ -1,12 +1,12 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   http://sparta.github.io
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -30,7 +30,7 @@ using namespace SPARTA_NS;
 enum{ERROR,WARNING,SILENT};
 enum{UNKNOWN,OUTSIDE,INSIDE,OVERLAP};   // same as Grid
 
-FixGridCheckKokkos::FixGridCheckKokkos(SPARTA *sparta, int narg, char **arg) : 
+FixGridCheckKokkos::FixGridCheckKokkos(SPARTA *sparta, int narg, char **arg) :
   FixGridCheck(sparta, narg, arg)
 {
   kokkos_flag = 1;
@@ -46,13 +46,15 @@ void FixGridCheckKokkos::end_of_step()
   if (update->ntimestep % nevery) return;
 
   auto particleKK = dynamic_cast<ParticleKokkos*>(particle);
-  particleKK->k_particles.sync<SPADeviceType>();
+  particleKK->k_particles.sync_device();
   auto d_particles = particleKK->k_particles.d_view;
   auto gridKK = dynamic_cast<GridKokkos*>(grid);
-  gridKK->k_cells.sync<SPADeviceType>();
+  gridKK->k_cells.sync_device();
   auto d_cells = gridKK->k_cells.d_view;
-  gridKK->k_cinfo.sync<SPADeviceType>();
+  gridKK->k_cinfo.sync_device();
   auto d_cinfo = gridKK->k_cinfo.d_view;
+  gridKK->k_sinfo.sync_device();
+  auto d_sinfo = gridKK->k_sinfo.d_view;
   int nglocal = grid->nlocal;
   int nlocal = particle->nlocal;
 
@@ -79,7 +81,7 @@ void FixGridCheckKokkos::end_of_step()
       local_nflag++;
     }
 
-    // does particle coord matches icell bounds
+    // does particle coord match icell bounds
     double* lo = d_cells[icell].lo;
     double* hi = d_cells[icell].hi;
     double* x = d_particles[i].x;
@@ -90,25 +92,76 @@ void FixGridCheckKokkos::end_of_step()
       local_nflag++;
     }
 
-    // is icell a split cell, since should be a sub cell
+    // error if icell is a split cell, since should be a sub cell
     if (d_cells[icell].nsplit > 1) {
       d_particle_problems(i) |= IS_IN_SPLIT_CELL;
       local_nflag++;
     }
 
-    // is icell an interior cell, then particle is inside surfs
+    // error if icell is an interior cell, since particle is inside surfs
     if (d_cinfo[icell].type == INSIDE) {
       d_particle_problems(i) |= IS_IN_INTERIOR_CELL;
       local_nflag++;
     }
 
-    // does icell have zero volume, then collision attempt freq will blow up
+    // error if icell has zero volume, since collision attempt freq will blow up
     if (d_cinfo[icell].volume == 0.0) {
       d_particle_problems(i) |= IS_IN_ZERO_VOLUME_CELL;
       local_nflag++;
     }
+
+    // This check not yet supported
+
+    //// check if particle in a cell with surfs is outside the surfs
+    //// for split cell, also verify particle is in correct sub cell
+    //// expensive, so only do this check if requested
+    //
+    //if (!outside_check) continue;
+    //if (cells[icell].nsurf == 0) continue;
+    //
+    //int splitcell,subcell,flag;
+    //
+    //if (cells[icell].nsplit <= 0) {
+    //  splitcell = sinfo[cells[icell].isplit].icell;
+    //  flag = grid->outside_surfs(splitcell,x,cut3d,cut2d);
+    //} else flag = grid->outside_surfs(icell,x,cut3d,cut2d);
+    //
+    //if (!flag) {
+    //  if (outflag == ERROR) {
+    //    char str[128];
+    //    sprintf(str,
+    //            "Particle %d,%d on proc %d is inside surfs in cell "
+    //            CELLINT_FORMAT " on timestep " BIGINT_FORMAT,
+    //            i,particles[i].id,comm->me,cells[icell].id,
+    //            update->ntimestep);
+    //    error->one(FLERR,str);
+    //  }
+    //  nflag++;
+    //}
+    //
+    //if (cells[icell].nsplit <= 0) {
+    //  int subcell;
+    //  if (dim == 2) subcell = update->split2d(splitcell,x);
+    //  else subcell = update->split3d(splitcell,x,particles[i].id);
+    //
+    //  if (subcell != icell) {
+    //    if (outflag == ERROR) {
+    //      char str[128];
+    //      sprintf(str,
+    //              "Particle %d,%d on proc %d is in wrong sub cell %d not %d"
+    //              " on timestep " BIGINT_FORMAT,
+    //              i,particles[i].id,comm->me,icell,subcell,
+    //              update->ntimestep);
+    //      error->one(FLERR,str);
+    //    }
+    //    nflag++;
+    //  }
+    //}
+
   }, nflag);
 
+  // -------------------------------------
+  // done with all tests
   // warning message instead of error
 
   if (outflag == WARNING) {
@@ -116,7 +169,7 @@ void FixGridCheckKokkos::end_of_step()
     MPI_Allreduce(&nflag,&all,1,MPI_INT,MPI_SUM,world);
     if (all && comm->me == 0) {
       char str[128];
-      sprintf(str,"%d particles were in wrong cells on timestep " 
+      sprintf(str,"%d particles were in wrong cells on timestep "
               BIGINT_FORMAT,all,update->ntimestep);
       error->warning(FLERR,str);
     }
@@ -138,7 +191,7 @@ void FixGridCheckKokkos::end_of_step()
       }
       if (h_particle_problems(i) & IS_OUTSIDE_CELL) {
         sprintf(str,
-                "Particle %d,%d on proc %d is outside cell " CELLINT_FORMAT 
+                "Particle %d,%d on proc %d is outside cell " CELLINT_FORMAT
                 " on timestep " BIGINT_FORMAT,
                 i,particles[i].id,comm->me,cells[icell].id,
                 update->ntimestep);
@@ -146,7 +199,7 @@ void FixGridCheckKokkos::end_of_step()
       }
       if (h_particle_problems(i) & IS_IN_SPLIT_CELL) {
         sprintf(str,
-                "Particle %d,%d on proc %d is in split cell " CELLINT_FORMAT 
+                "Particle %d,%d on proc %d is in split cell " CELLINT_FORMAT
                 " on timestep " BIGINT_FORMAT,
                 i,particles[i].id,comm->me,cells[icell].id,
                 update->ntimestep);
