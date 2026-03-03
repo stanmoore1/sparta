@@ -42,7 +42,7 @@ class KokkosBase {
   virtual void match_all_kokkos(DAT::tdual_int_1d) {}
 
   KOKKOS_INLINE_FUNCTION
-  int match_kokkos(double x, double y, double z) const {}
+  int match_kokkos(double x, double y, double z) const {return 0;}
 };
 
 }
