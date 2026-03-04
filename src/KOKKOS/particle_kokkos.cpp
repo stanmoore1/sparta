@@ -667,9 +667,12 @@ void ParticleKokkos::grow_species()
   } else {
     if (species == NULL)
       MemKK::realloc_kokkos(k_species,"particle:species",maxspecies);
-    else
+    else {
+      this->sync(Device,SPECIES_MASK); // force resize on device
       Kokkos::resize(Kokkos::view_alloc(Kokkos::WithoutInitializing),
                      k_species,maxspecies);
+      this->modify(Device,SPECIES_MASK); // needed for auto sync
+    }
     species = k_species.view_host().data();
   }
 }

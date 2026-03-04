@@ -65,12 +65,18 @@ FixEmitSurfKokkos::FixEmitSurfKokkos(SPARTA *sparta, int narg, char **arg) :
             ),
   particle_kk_copy(sparta),
   slist_active_copy{VAL_2(KKCopy<ComputeSurfKokkos>(sparta))},
-  tmp_compute_surf_kk(sparta)
+  tmp_compute_surf_kk(sparta),
+  regblock_kk_copy(sparta),
+  regcylinder_kk_copy(sparta),
+  regplane_kk_copy(sparta),
+  regsphere_kk_copy(sparta)
 {
   kokkos_flag = 1;
   execution_space = Device;
   datamask_read = EMPTY_MASK;
   datamask_modify = EMPTY_MASK;
+
+  region_flag = 0;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -80,6 +86,10 @@ FixEmitSurfKokkos::~FixEmitSurfKokkos()
   if (copymode) return;
 
   particle_kk_copy.uncopy();
+  regblock_kk_copy.uncopy();
+  regcylinder_kk_copy.uncopy();
+  regplane_kk_copy.uncopy();
+  regsphere_kk_copy.uncopy();
 
   for (int i=0; i<KOKKOS_MAX_SLIST; i++) {
     slist_active_copy[i].uncopy();
@@ -361,8 +371,31 @@ void FixEmitSurfKokkos::perform_task()
   particle_kk->update_class_variables();
   particle_kk_copy.copy(particle_kk);
 
-  if (region)
-    error->one(FLERR,"Cannot yet use fix emit/surf/kk with regions");
+  if (region && !region->kokkos_flag)
+    error->all(FLERR,"KOKKOS package does not (yet) support chosen region style");
+
+  region_flag = 0;
+  if (region) {
+    if (strstr(region->style,"block") != NULL) {
+      RegBlockKokkos* region_kk = ((RegBlockKokkos*)region);
+      regblock_kk_copy.copy(region_kk);
+      region_flag = 1;
+    } else if (strstr(region->style,"cylinder") != NULL) {
+      RegCylinderKokkos* region_kk = ((RegCylinderKokkos*)region);
+      regcylinder_kk_copy.copy(region_kk);
+      region_flag = 2;
+    } else if (strstr(region->style,"plane") != NULL) {
+      RegPlaneKokkos* region_kk = ((RegPlaneKokkos*)region);
+      regplane_kk_copy.copy(region_kk);
+      region_flag = 3;
+    } else if (strstr(region->style,"sphere") != NULL) {
+      RegSphereKokkos* region_kk = ((RegSphereKokkos*)region);
+      regsphere_kk_copy.copy(region_kk);
+      region_flag = 4;
+    } else {
+      error->all(FLERR,"KOKKOS package does not (yet) support chosen region style");
+    }
+  }
 
   int nsingle_reduce = 0;
   copymode = 1;
@@ -544,7 +577,16 @@ void FixEmitSurfKokkos::operator()(TagFixEmitSurf_perform_task, const int &i, in
           x[2] = p1[2] + alpha*e1[2] + beta*e2[2];
         }
 
-        //if (region && !region->match(x)) continue; ////////////////////////
+        if (region_flag == 1) {
+          if (!regblock_kk_copy.obj.match_kokkos(x[0], x[1], x[2])) continue;
+        } else if (region_flag == 2) {
+          if (!regcylinder_kk_copy.obj.match_kokkos(x[0], x[1], x[2])) continue;
+        } else if (region_flag == 3) {
+          if (!regplane_kk_copy.obj.match_kokkos(x[0], x[1], x[2])) continue;
+        } else if (region_flag == 4) {
+          if (!regsphere_kk_copy.obj.match_kokkos(x[0], x[1], x[2])) continue;
+        }
+
         nactual++;
         d_keep(cand) = 1;
         d_task(cand) = i;
@@ -646,7 +688,16 @@ void FixEmitSurfKokkos::operator()(TagFixEmitSurf_perform_task, const int &i, in
         x[2] = p1[2] + alpha*e1[2] + beta*e2[2];
       }
 
-      //if (region && !region->match(x)) continue; ////////////////////////
+      if (region_flag == 1) {
+        if (!regblock_kk_copy.obj.match_kokkos(x[0], x[1], x[2])) continue;
+      } else if (region_flag == 2) {
+        if (!regcylinder_kk_copy.obj.match_kokkos(x[0], x[1], x[2])) continue;
+      } else if (region_flag == 3) {
+        if (!regplane_kk_copy.obj.match_kokkos(x[0], x[1], x[2])) continue;
+      } else if (region_flag == 4) {
+        if (!regsphere_kk_copy.obj.match_kokkos(x[0], x[1], x[2])) continue;
+      }
+
       nactual++;
       d_keep(cand) = 1;
       d_task(cand) = i;
