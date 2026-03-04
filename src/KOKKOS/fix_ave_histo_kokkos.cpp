@@ -59,6 +59,8 @@ FixAveHistoKokkos::FixAveHistoKokkos(SPARTA *spa, int narg, char **arg) :
 {
   kokkos_flag = 1;
   execution_space = Device;
+  datamask_read = EMPTY_MASK;
+  datamask_modify = EMPTY_MASK;
 
   k_stats.resize(4);
   d_stats = k_stats.view_device();
