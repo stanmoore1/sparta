@@ -215,9 +215,9 @@ void CollideVSSKokkos::init()
     memory->create(vremax_initial,ngroups,ngroups,"collide:vremax_initial");
 
     k_vremax_initial = DAT::tdual_float_2d("collide:vremax_initial",ngroups,ngroups);
-    k_vremax = DAT::tdual_float_3d("collide:vremax",nglocalmax,ngroups,ngroups);
+    MemKK::realloc_kokkos(k_vremax,"collide:vremax",nglocalmax,ngroups,ngroups);
     d_vremax = k_vremax.view_device();
-    k_remain = DAT::tdual_float_3d("collide:remain",nglocalmax,ngroups,ngroups);
+    MemKK::realloc_kokkos(k_remain,"collide:remain",nglocalmax,ngroups,ngroups);
     d_remain = k_remain.view_device();
 
     for (int igroup = 0; igroup < ngroups; igroup++) {
@@ -333,7 +333,8 @@ void CollideVSSKokkos::reset_vremax()
 {
   grid_kk_copy.copy((GridKokkos*)grid);
 
-  this->sync(Device,ALL_MASK);
+  k_vremax.clear_sync_state();
+  if (remainflag) k_remain.clear_sync_state();
 
   copymode = 1;
   Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagCollideResetVremax>(0,nglocal),*this);
@@ -462,6 +463,8 @@ void CollideVSSKokkos::collisions()
 template < int NEARCP, int GASTALLY > void CollideVSSKokkos::collisions_one(COLLIDE_REDUCE &reduce)
 {
   // loop over cells I own
+
+  this->sync(Device,ALL_MASK);
 
   ParticleKokkos* particle_kk = (ParticleKokkos*) particle;
   particle_kk->sync(Device,PARTICLE_MASK|SPECIES_MASK);
@@ -605,7 +608,9 @@ template < int NEARCP, int GASTALLY > void CollideVSSKokkos::collisions_one(COLL
   if (h_error_flag())
     error->one(FLERR,"Collision cell volume is zero");
 
+  this->modified(Device,ALL_MASK);
   particle_kk->modify(Device,PARTICLE_MASK);
+  if (vibstyle == DISCRETE) particle_kk->modify(Device,CUSTOM_MASK);
 
   d_particles = t_particle_1d(); // destroy reference to reduce memory use
   d_nn_last_partner = {};
@@ -795,6 +800,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOne< NEARCP, GASTALLY, ATO
 
     }
   }
+
   rand_pool.free_state(rand_gen);
 }
 
@@ -806,6 +812,8 @@ template < int GASTALLY >
 void CollideVSSKokkos::collisions_one_ambipolar(COLLIDE_REDUCE &reduce)
 {
   // ambipolar vectors
+
+  this->sync(Device,ALL_MASK);
 
   ParticleKokkos* particle_kk = (ParticleKokkos*) particle;
   particle_kk->sync(Device,PARTICLE_MASK|SPECIES_MASK|CUSTOM_MASK);
@@ -874,6 +882,7 @@ void CollideVSSKokkos::collisions_one_ambipolar(COLLIDE_REDUCE &reduce)
     auto nlocal_extra = particle->nlocal*extra_factor;
     if (d_particles.extent(0) < nlocal_extra) {
       particle->grow(nlocal_extra - particle->nlocal);
+      particle_kk->sync(Device,PARTICLE_MASK|SPECIES_MASK|CUSTOM_MASK);
       d_particles = particle_kk->k_particles.view_device();
       auto h_ewhich = particle_kk->k_ewhich.view_host();
       k_eivec = particle_kk->k_eivec;
@@ -951,6 +960,7 @@ void CollideVSSKokkos::collisions_one_ambipolar(COLLIDE_REDUCE &reduce)
       auto nlocal_new = h_nlocal();
       if (d_particles.extent(0) < nlocal_new) {
         particle->grow(nlocal_new - particle->nlocal);
+        particle_kk->sync(Device,PARTICLE_MASK|SPECIES_MASK|CUSTOM_MASK);
         d_particles = particle_kk->k_particles.view_device();
         auto h_ewhich = particle_kk->k_ewhich.view_host();
         k_eivec = particle_kk->k_eivec;
@@ -973,6 +983,7 @@ void CollideVSSKokkos::collisions_one_ambipolar(COLLIDE_REDUCE &reduce)
   else if (h_error_flag() == 2)
     error->one(FLERR,"Collisions in cell did not conserve electron count");
 
+  this->modified(Device,ALL_MASK);
   particle_kk->modify(Device,PARTICLE_MASK|CUSTOM_MASK);
 
   d_particles = t_particle_1d(); // destroy reference to reduce memory use
@@ -2183,6 +2194,8 @@ int CollideVSSKokkos::pack_grid_one(int icell, char *buf_char, int memflag)
 
   Grid::ChildCell *cells = grid->cells;
 
+  this->sync(Host,ALL_MASK);
+
   int n = 0;
   if (memflag) {
     for (int igroup = 0; igroup < ngroups; igroup++) {
@@ -2236,6 +2249,9 @@ int CollideVSSKokkos::unpack_grid_one(int icell, char *buf_char)
   Grid::SplitInfo *sinfo = grid->sinfo;
 
   grow_percell(1);
+
+  this->sync(Host,ALL_MASK);
+
   int n = 0;
   for (int igroup = 0; igroup < ngroups; igroup++) {
     for (int jgroup = 0; jgroup < ngroups; jgroup++) {
@@ -2246,10 +2262,15 @@ int CollideVSSKokkos::unpack_grid_one(int icell, char *buf_char)
   }
   nglocal++;
 
+  this->modified(Host,ALL_MASK);
+
   if (cells[icell].nsplit > 1) {
     int isplit = cells[icell].isplit;
     int nsplit = cells[icell].nsplit;
     grow_percell(nsplit);
+
+    this->sync(Host,ALL_MASK);
+
     for (int i = 0; i < nsplit; i++) {
       int m = sinfo[isplit].csubs[i];
       for (int igroup = 0; igroup < ngroups; igroup++) {
@@ -2261,6 +2282,8 @@ int CollideVSSKokkos::unpack_grid_one(int icell, char *buf_char)
       }
     }
     nglocal += nsplit;
+
+    this->modified(Host,ALL_MASK);
   }
 
   return n*sizeof(double);
@@ -2334,10 +2357,12 @@ void CollideVSSKokkos::adapt_grid()
   this->modified(Host,ALL_MASK); // force resize on host
 
   nglocalmax = nglocal;
-  k_vremax.resize(nglocalmax,ngroups,ngroups);
+  k_vremax.resize(Kokkos::view_alloc(Kokkos::WithoutInitializing),
+                  nglocalmax,ngroups,ngroups);
   d_vremax = k_vremax.view_device();
   if (remainflag) {
-    k_remain.resize(nglocalmax,ngroups,ngroups);
+    k_remain.resize(Kokkos::view_alloc(Kokkos::WithoutInitializing),
+                    nglocalmax,ngroups,ngroups);
     d_remain = k_remain.view_device();
   }
   this->sync(Host,ALL_MASK);
@@ -2362,10 +2387,12 @@ void CollideVSSKokkos::grow_percell(int n)
 
   this->sync(Device,ALL_MASK); // force resize on device
 
-  k_vremax.resize(nglocalmax,ngroups,ngroups);
+  k_vremax.resize(Kokkos::view_alloc(Kokkos::WithoutInitializing),
+                  nglocalmax,ngroups,ngroups);
   d_vremax = k_vremax.view_device();
   if (remainflag) {
-    k_remain.resize(nglocalmax,ngroups,ngroups);
+    k_remain.resize(Kokkos::view_alloc(Kokkos::WithoutInitializing),
+                    nglocalmax,ngroups,ngroups);
     d_remain = k_remain.view_device();
   }
 

@@ -152,10 +152,22 @@ action create_particles_kokkos.cpp
 action create_particles_kokkos.h
 action fix_emit_face_kokkos.cpp
 action fix_emit_face_kokkos.h
+action fix_emit_surf_kokkos.cpp
+action fix_emit_surf_kokkos.h
 action fix_grid_check_kokkos.cpp
 action fix_grid_check_kokkos.h
 action read_surf_kokkos.cpp
 action read_surf_kokkos.h
+action region_block_kokkos.cpp
+action region_block_kokkos.h
+action region_cylinder_kokkos.cpp
+action region_cylinder_kokkos.h
+action region_plane_kokkos.cpp
+action region_plane_kokkos.h
+action region_sphere_kokkos.cpp
+action region_sphere_kokkos.h
+action remove_surf_kokkos.cpp
+action remove_surf_kokkos.h
 action variable_kokkos.cpp
 action variable_kokkos.h
 
