@@ -25,6 +25,7 @@
 #include "input.h"
 #include "modify.h"
 #include "update.h"
+#include "utils.h"
 #include "variable.h"
 
 using namespace SPARTA_NS;
