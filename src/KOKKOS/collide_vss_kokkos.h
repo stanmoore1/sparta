@@ -78,6 +78,9 @@ struct TagCollideCollisionsGroup{};
 template < int GASTALLY, int ATOMIC_REDUCTION >
 struct TagCollideCollisionsGroupAmbipolar{};
 
+template<int NEARCP>
+struct TagCountAttempts{};
+
 class CollideVSSKokkos : public CollideVSS {
  public:
   typedef COLLIDE_REDUCE value_type;
@@ -162,6 +165,10 @@ class CollideVSSKokkos : public CollideVSS {
   KOKKOS_INLINE_FUNCTION
   void operator()(TagCollideCollisionsGroupAmbipolar< GASTALLY, ATOMIC_REDUCTION >, const int&, COLLIDE_REDUCE&) const;
 
+  template<int NEARCP>
+  KOKKOS_INLINE_FUNCTION
+  void operator()(TagCountAttempts<NEARCP>, const int) const;
+
   typedef Kokkos::
     DualView<Params**, Kokkos::LayoutRight, DeviceType> tdual_params_2d;
   typedef tdual_params_2d::t_dev t_params_2d;
@@ -229,6 +236,9 @@ class CollideVSSKokkos : public CollideVSS {
   void finish_gas_tally();
   void clear_gas_tally();
 
+  DAT::t_int_1d d_nattempt;
+  DAT::t_int_1d d_active_cells;
+  DAT::t_int_1d num_active_cells;
   t_particle_1d d_particles;
   t_species_1d_const d_species;
   DAT::t_int_2d d_plist;
