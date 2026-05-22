@@ -122,11 +122,12 @@ int ReactQK::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
           maxlev = static_cast<int> (ecc * inverse_kT);
           if (ecc > r->coeff[1]) {
 
-            prob = 0.0;
+            react_prob = 0.0;
             do {
               iv =  static_cast<int> (random->uniform()*(maxlev+0.99999999));
               evib = static_cast<double> (iv / inverse_kT);
-              if (evib < ecc) react_prob = pow(1.0-evib/ecc,1.5-omega);
+              if (evib < ecc && ecc > 0.0) react_prob = pow(1.0-evib/ecc,1.5-omega);
+              else react_prob = 0.0;
             } while (random->uniform() < react_prob);
 
             ilevel = static_cast<int> (fabs(r->coeff[4]) * inverse_kT);
@@ -152,6 +153,7 @@ int ReactQK::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
 
           ecc += r->coeff[4];
           maxlev = static_cast<int> (ecc * inverse_kT);
+          prob = 0.0;
           do {
             iv = random->uniform()*(maxlev+0.99999999);
             evib = static_cast<double>

@@ -1443,7 +1443,7 @@ void Surf::check_watertight_3d_distributed()
   // allocate memory for rvous input
 
   int *proclist;
-  memory->create(proclist,n*6,"surf:proclist");
+  memory->create(proclist,(bigint)n*6,"surf:proclist");
   InRvousEdge *inedge =
     (InRvousEdge *) memory->smalloc((bigint) n*6*sizeof(InRvousEdge),
                                      "surf:inedge");
@@ -2030,7 +2030,7 @@ void Surf::add_collide(int narg, char **arg)
   if (sparta->suffix_enable) {
     if (sparta->suffix) {
       char estyle[256];
-      sprintf(estyle,"%s/%s",arg[1],sparta->suffix);
+      snprintf(estyle,256,"%s/%s",arg[1],sparta->suffix);
 
       if (0) return;
 
@@ -2103,7 +2103,7 @@ void Surf::add_react(int narg, char **arg)
   if (sparta->suffix_enable) {
     if (sparta->suffix) {
       char estyle[256];
-      sprintf(estyle,"%s/%s",arg[1],sparta->suffix);
+      snprintf(estyle,256,"%s/%s",arg[1],sparta->suffix);
 
       if (0) return;
 
@@ -3082,7 +3082,7 @@ void Surf::grow(int old)
   } else {
     tris = (Surf::Tri *)
       memory->srealloc(tris,nmax*sizeof(Tri),"surf:tris");
-    memset(&tris[old],0,(nmax-old)*sizeof(Tri));
+    memset(&tris[old],0,(size_t)(nmax-old)*sizeof(Tri));
   }
 }
 

@@ -119,12 +119,13 @@ void FixGridCheck::end_of_step()
       if (outflag == ERROR) {
         char str[128];
         sprintf(str,
-                "Particle %d,%d on proc %d is in invalid cell " CELLINT_FORMAT
+                "Particle %d,%d on proc %d is in invalid cell index %d"
                 " on timestep " BIGINT_FORMAT,
-                i,particles[i].id,comm->me,cells[icell].id,update->ntimestep);
+                i,particles[i].id,comm->me,icell,update->ntimestep);
         error->one(FLERR,str);
       }
       nflag++;
+      continue;
     }
 
     // does particle coord match icell bounds
@@ -218,9 +219,9 @@ void FixGridCheck::end_of_step()
       if (outflag == ERROR) {
         char str[128];
         sprintf(str,
-                "Particle %d,%d on proc %d at %g %g %d is inside surfs in cell "
+                "Particle %d,%d on proc %d at %g %g %g is inside surfs in cell "
                 CELLINT_FORMAT " on timestep " BIGINT_FORMAT,
-                i,particles[i].id,comm->me,x[0],x[1],icell,cells[icell].id,
+                i,particles[i].id,comm->me,x[0],x[1],x[2],cells[icell].id,
                 update->ntimestep);
         error->one(FLERR,str);
       }

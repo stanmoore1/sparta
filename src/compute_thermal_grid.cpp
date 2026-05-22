@@ -276,7 +276,7 @@ void ComputeThermalGrid::reallocate()
 bigint ComputeThermalGrid::memory_usage()
 {
   bigint bytes = 0;
-  bytes = nglocal * sizeof(double);
-  bytes = ntotal*nglocal * sizeof(double);
+  bytes += nglocal * sizeof(double);
+  bytes += ntotal*nglocal * sizeof(double);
   return bytes;
 }

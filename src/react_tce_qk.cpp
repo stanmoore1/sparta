@@ -229,8 +229,9 @@ int ReactTCEQK::attempt_qk(Particle::OnePart *ip, Particle::OnePart *jp,
           do {
             iv =  static_cast<int> (random->uniform()*(maxlev+0.99999999));
             evib = static_cast<double> (iv / inverse_kT);
-            if (evib < ecc) react_prob = pow(1.0-evib/ecc,1.5-omega);
-          } while (random->uniform() < react_prob);
+            if (evib < ecc && ecc > 0.0) prob = pow(1.0-evib/ecc,1.5-omega);
+            else prob = 0.0;
+          } while (random->uniform() < prob);
 
           ilevel = static_cast<int> (fabs(r->coeff[4]) * inverse_kT);
           if (iv >= ilevel) react_prob = 1.0;

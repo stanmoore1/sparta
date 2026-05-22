@@ -171,8 +171,9 @@ void FixTempRescale::end_of_step_no_average(double t_target)
     t_current *= tprefactor/count;
 
     // vscale = scale factor for thermal velocity components
-
-    vscale = sqrt(t_target/t_current);
+ 
+    if (t_current <= 0.0) vscale = 1.0;
+    else vscale = sqrt(t_target/t_current);
 
     // 2nd pass: loop over particles in cell
     // rescale thermal velocity components
@@ -294,7 +295,9 @@ void FixTempRescale::end_of_step_average(double t_target)
   // scale all particles in all cells by vscale
 
   t_current /= n_current;
-  double vscale = sqrt(t_target/t_current);
+  double vscale;
+  if (t_current <= 0.0) vscale = 1.0;
+  else vscale = sqrt(t_target/t_current);
 
   // loop over grid cells to rescale velocity of particles in each
   // single-particle cells are also rescaled, their vcom = 0.0

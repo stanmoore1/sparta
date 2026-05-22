@@ -1532,6 +1532,7 @@ int Update::tally_setup()
   delete [] blist_active;
 
   glist_compute = slist_compute = blist_compute = NULL;
+  glist_active = slist_active = blist_active = NULL;
 
   nglist_compute = nslist_compute = nblist_compute = 0;
   for (int i = 0; i < modify->ncompute; i++) {

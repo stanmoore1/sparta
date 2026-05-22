@@ -324,10 +324,10 @@ struct remap_plan_3d_kokkos<DeviceType>* RemapKokkos3d<DeviceType>::remap_3d_cre
   out.ksize = out.khi - out.klo + 1;
 
   inarray = (struct extent_3d *) malloc(nprocs*sizeof(struct extent_3d));
-  if (inarray == nullptr) return nullptr;
+  if (inarray == nullptr) { delete plan; return nullptr; }
 
   outarray = (struct extent_3d *) malloc(nprocs*sizeof(struct extent_3d));
-  if (outarray == nullptr) return nullptr;
+  if (outarray == nullptr) { free(inarray); delete plan; return nullptr; }
 
   // combine input & output extents across all procs
 

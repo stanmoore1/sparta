@@ -166,7 +166,7 @@ void Grid::reallocate_custom(int nold, int nnew)
                                     nnew,eicol[ewhich[ic]],"grid:eiarray");
         if (nnew > nold)
           memset(&iarray[nold][0],0,
-                 (nnew-nold)*eicol[ewhich[ic]]*sizeof(int));
+                 (size_t)(nnew-nold)*eicol[ewhich[ic]]*sizeof(int));
       }
 
     } else {
@@ -176,7 +176,7 @@ void Grid::reallocate_custom(int nold, int nnew)
       } else {
         double **darray = memory->grow(edarray[ewhich[ic]],
                                        nnew,edcol[ewhich[ic]],"grid:edarray");
-        if (nnew - nold)
+        if (nnew > nold)
           memset(&darray[nold][0],0,
                  (nnew-nold)*edcol[ewhich[ic]]*sizeof(double));
       }

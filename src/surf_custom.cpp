@@ -198,7 +198,7 @@ void Surf::reallocate_custom()
         int **iarray = memory->grow(eiarray[ewhich[index]],
                                     nnew,eicol[ewhich[index]],"surf:eiarray");
         if (nnew > nold)
-        memset(iarray[nold],0,(nnew-nold)*eicol[ewhich[index]]*sizeof(int));
+        memset(iarray[nold],0,(size_t)(nnew-nold)*eicol[ewhich[index]]*sizeof(int));
       }
 
     } else {

@@ -1907,6 +1907,6 @@ int compare_indices(const void *iptr, const void *jptr)
 
 void MarchingCubes::print_cube()
 {
-  fprintf(screen,"\t %d %d %d %d %d %d %d %d\n",
+  fprintf(screen,"\t %g %g %g %g %g %g %g %g\n",
          v000,v001,v011,v010,v100,v101,v111,v110);
 }

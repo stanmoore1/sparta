@@ -1473,7 +1473,7 @@ void Grid::set_inout()
   // create set1 and set2 lists so can swap between them
 
   int *set1,*set2;
-  memory->create(set1,nlocal*nface,"grid:set1");
+  memory->create(set1,(bigint)nlocal*nface,"grid:set1");
   memory->create(set2,nlocal*nface,"grid:set2");
 
   // initial set list = overlapped cells with corner values which are set
@@ -2237,7 +2237,10 @@ void Grid::group(int narg, char **arg)
     int jgroup;
     for (int iarg = 3; iarg < narg; iarg++) {
       jgroup = find_group(arg[iarg]);
-      if (jgroup == -1) error->all(FLERR,"Group ID does not exist");
+      if (jgroup == -1) {
+        delete [] list;
+        error->all(FLERR,"Group ID does not exist");
+      }
       list[iarg-3] = jgroup;
     }
 
@@ -2272,7 +2275,10 @@ void Grid::group(int narg, char **arg)
     int jgroup;
     for (int iarg = 3; iarg < narg; iarg++) {
       jgroup = find_group(arg[iarg]);
-      if (jgroup == -1) error->all(FLERR,"Group ID does not exist");
+      if (jgroup == -1) {
+        delete [] list;
+        error->all(FLERR,"Group ID does not exist");
+      }
       list[iarg-3] = jgroup;
     }
 
@@ -2299,7 +2305,10 @@ void Grid::group(int narg, char **arg)
     int jgroup;
     for (int iarg = 3; iarg < narg; iarg++) {
       jgroup = find_group(arg[iarg]);
-      if (jgroup == -1) error->all(FLERR,"Group ID does not exist");
+      if (jgroup == -1) {
+        delete [] list;
+        error->all(FLERR,"Group ID does not exist");
+      }
       list[iarg-3] = jgroup;
     }
 

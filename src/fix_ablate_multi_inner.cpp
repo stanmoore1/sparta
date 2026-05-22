@@ -89,7 +89,8 @@ void FixAblate::decrement_multid_outside()
 
     Ninterface = find_ninter();
     total = celldelta[icell];
-    perout = total/Ninterface;
+    if (Ninterface > 0) perout = total / Ninterface;
+    else perout = 0.0;
 
     // iterate to find the number of vertices around each corner
     // also assign perout to the interface points
@@ -677,7 +678,8 @@ void FixAblate::decrement_multiv_multid_outside()
 
     Ninterface = find_ninter();
     total = celldelta[icell];
-    perout = total/Ninterface;
+    if (Ninterface > 0) perout = total / Ninterface;
+    else perout = 0.0;
 
     for (i = 0; i < ncorner; i++) {
 

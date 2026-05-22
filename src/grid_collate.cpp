@@ -71,7 +71,7 @@ void Grid::collate_vector_implicit(int n, cellint *ids,
   int *proclist;
   memory->create(proclist,nsend,"grid:proclist");
   double *in_rvous;
-  memory->create(in_rvous,2*nsend,"grid:in_rvous");
+  memory->create(in_rvous,(bigint)2*nsend,"grid:in_rvous");
 
   int m = 0;
   nsend = 0;
@@ -146,7 +146,7 @@ void Grid::collate_array_implicit(int nrow, int ncol, cellint *ids,
 
   // zero output values for owned cells
 
-  if (nlocal) memset(&out[0][0],0,nlocal*ncol*sizeof(double));
+  if (nlocal)   memset(&out[0][0],0,(size_t)nlocal*ncol*sizeof(double));
 
   // if I own grid cell, sum in values to out values directly
   // else nsend = # of tallies to contribute to rendezvous
