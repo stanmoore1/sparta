@@ -33,8 +33,34 @@ class FixEmitSurf : public FixEmit {
   ~FixEmitSurf();
   void init();
 
+<<<<<<< HEAD
   void grid_changed() override;
   void custom_surf_changed();
+=======
+  void grid_changed();
+
+ private:
+  int imix,groupbit,normalflag,subsonic,subsonic_style,subsonic_warning;
+  int npertask,nthresh;
+  double psubsonic,tsubsonic,nsubsonic;
+  double tprefactor,soundspeed_mixture;
+
+  int npmode,np;    // npmode = FLOW,CONSTANT,VARIABLE
+  int npvar;
+  char *npstr;
+
+  // copies of data from other classes
+
+  int dimension,nspecies;
+  double fnum,dt;
+  double nrho,temp_thermal,temp_rot,temp_vib,temp_elec;
+  double *fraction,*cummulative;
+
+  class Cut2d *cut2d;
+  class Cut3d *cut3d;
+
+  // one insertion task for a cell and a surf
+>>>>>>> zseckert/electronic_excitation
 
   struct Task {
     double area;                // area of overlap of surf with cell
@@ -44,6 +70,7 @@ class FixEmitSurf : public FixEmit {
     double temp_thermal;        // from mixture or adjacent subsonic cell
     double temp_rot;            // from mixture or subsonic temp_thermal
     double temp_vib;            // from mixture or subsonic temp_thermal
+    double temp_elec;           // from mixture or subsonic temp_thermal
     double magvstream;          // from mixture
     double vstream[3];          // from mixture or adjacent subsonic cell
     double *ntargetsp;          // # of mols to insert for each species,

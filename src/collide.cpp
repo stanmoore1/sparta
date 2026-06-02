@@ -82,6 +82,7 @@ Collide::Collide(SPARTA *sparta, int, char **arg) : Pointers(sparta)
   remain = NULL;
   rotstyle = SMOOTH;
   vibstyle = NONE;
+  elecstyle = NONE;
   nearcp = 0;
   nearlimit = 10;
 
@@ -102,6 +103,8 @@ Collide::Collide(SPARTA *sparta, int, char **arg) : Pointers(sparta)
 
   ncollide_one = nattempt_one = nreact_one = 0;
   ncollide_running = nattempt_running = nreact_running = 0;
+
+  index_elecstate = index_eelec = -1;
 
   copymode = kokkos_flag = 0;
 }
@@ -203,6 +206,16 @@ void Collide::init()
       sprintf(str,"%d species do not define correct vibrational "
               "modes for discrete model",flag);
       error->all(FLERR,str);
+    }
+  }
+
+  if (elecstyle == DISCRETE) {
+    index_elecstate = particle->find_custom((char *) "elecstate");
+    index_eelec = particle->find_custom((char *) "eelec");
+
+    if (index_elecstate < 0) {
+        error->all(FLERR,
+                   "Fix elecmode must be used with discrete electronic modes");
     }
   }
 
@@ -335,7 +348,65 @@ void Collide::setup()
   // copy Update list of gas/gas collision computes
   // done once after Update->setup()
 
+<<<<<<< HEAD
   glist_active = update->glist_active;
+=======
+  int iarg = 0;
+  while (iarg < narg) {
+    if (strcmp(arg[iarg],"vremax") == 0) {
+      if (iarg+3 > narg) error->all(FLERR,"Illegal collide_modify command");
+      vre_every = atoi(arg[iarg+1]);
+      if (vre_every < 0) error->all(FLERR,"Illegal collide_modify command");
+      if (strcmp(arg[iarg+2],"yes") == 0) vre_start = 1;
+      else if (strcmp(arg[iarg+2],"no") == 0) vre_start = 0;
+      else error->all(FLERR,"Illegal collide_modify command");
+      iarg += 3;
+    } else if (strcmp(arg[iarg],"remain") == 0) {
+      if (iarg+2 > narg) error->all(FLERR,"Illegal collide_modify command");
+      if (strcmp(arg[iarg+1],"yes") == 0) remainflag = 1;
+      else if (strcmp(arg[iarg+1],"no") == 0) remainflag = 0;
+      else error->all(FLERR,"Illegal collide_modify command");
+      iarg += 2;
+    } else if (strcmp(arg[iarg],"rotate") == 0) {
+      if (iarg+2 > narg) error->all(FLERR,"Illegal collide_modify command");
+      if (strcmp(arg[iarg+1],"no") == 0) rotstyle = NONE;
+      // not yet supported
+      //else if (strcmp(arg[iarg+1],"discrete") == 0) rotstyle = DISCRETE;
+      else if (strcmp(arg[iarg+1],"smooth") == 0) rotstyle = SMOOTH;
+      else error->all(FLERR,"Illegal collide_modify command");
+      iarg += 2;
+    } else if (strcmp(arg[iarg],"vibrate") == 0) {
+      if (iarg+2 > narg) error->all(FLERR,"Illegal collide_modify command");
+      if (strcmp(arg[iarg+1],"no") == 0) vibstyle = NONE;
+      else if (strcmp(arg[iarg+1],"discrete") == 0) vibstyle = DISCRETE;
+      else if (strcmp(arg[iarg+1],"smooth") == 0) vibstyle = SMOOTH;
+      else error->all(FLERR,"Illegal collide_modify command");
+      iarg += 2;
+    } else if (strcmp(arg[iarg],"electronic") == 0) {
+      if (iarg+2 > narg) error->all(FLERR,"Illegal collide_modify command");
+      if (strcmp(arg[iarg+1],"no") == 0) elecstyle = NONE;
+      else if (strcmp(arg[iarg+1],"discrete") == 0) elecstyle = DISCRETE;
+      else error->all(FLERR,"Illegal collide_modify command");
+      iarg += 2;
+    } else if (strcmp(arg[iarg],"ambipolar") == 0) {
+      if (iarg+2 > narg) error->all(FLERR,"Illegal collide_modify command");
+      if (strcmp(arg[iarg+1],"no") == 0) ambiflag = 0;
+      else if (strcmp(arg[iarg+1],"yes") == 0) ambiflag = 1;
+      else error->all(FLERR,"Illegal collide_modify command");
+      iarg += 2;
+    } else if (strcmp(arg[iarg],"nearcp") == 0) {
+      if (iarg+3 > narg) error->all(FLERR,"Illegal collide_modify command");
+      if (strcmp(arg[iarg+1],"yes") == 0) nearcp = 1;
+      else if (strcmp(arg[iarg+1],"no") == 0) nearcp = 0;
+      else error->all(FLERR,"Illegal collide_modify command");
+      nearlimit = atoi(arg[iarg+2]);
+      if (nearcp && nearlimit <= 0)
+        error->all(FLERR,"Illegal collide_modify command");
+      iarg += 3;
+
+    } else error->all(FLERR,"Illegal collide_modify command");
+  }
+>>>>>>> zseckert/electronic_excitation
 }
 
 /* ----------------------------------------------------------------------
