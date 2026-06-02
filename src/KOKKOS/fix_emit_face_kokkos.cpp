@@ -170,10 +170,17 @@ void FixEmitFaceKokkos::perform_task()
 
   // if subsonic, re-compute particle inflow counts for each task
   // also computes current per-task temp_thermal and vstream
+  // subsonic_inflow() operates on host-side particle and task data,
+  // so sync particles to host first, then mark task data as modified
 
-  if (subsonic)
-    error->one(FLERR,"Cannot yet use fix emit/face/kk with subsonic emission");
-  //if (subsonic) subsonic_inflow(); ////////////////////////
+  if (subsonic) {
+    ParticleKokkos* particle_kk = (ParticleKokkos*) particle;
+    particle_kk->sync(Host, PARTICLE_MASK);
+    subsonic_inflow();
+    k_tasks.modify_host();
+    if (perspecies) k_ntargetsp.modify_host();
+    if (subsonic_style == PONLY) k_vscale.modify_host();
+  }
 
   // if modulate variable set, evaluate it as prefactor for this timestep
 
