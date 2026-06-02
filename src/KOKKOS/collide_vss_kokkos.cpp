@@ -376,14 +376,12 @@ void CollideVSSKokkos::collisions()
     vre_next += vre_every;
   }
 
-<<<<<<< HEAD
   // copy Update count of gas/gas collision computes active on this timestep
 
   ngas_tally = update->ngas_tally;
-=======
+
   if (elecstyle == DISCRETE && grid->maxlocal > (int)d_cumulative_probabilities.extent(0))
     MemKK::realloc_kokkos(d_cumulative_probabilities,"collide:cumulative_probabilities",grid->maxlocal,particle->maxelecstate);
->>>>>>> zseckert/electronic_excitation
 
   // counters
 
@@ -484,12 +482,6 @@ template < int NEARCP, int GASTALLY > void CollideVSSKokkos::collisions_one(COLL
 
   ParticleKokkos* particle_kk = (ParticleKokkos*) particle;
   particle_kk->sync(Device,PARTICLE_MASK|SPECIES_MASK);
-<<<<<<< HEAD
-  if (vibstyle == DISCRETE) particle_kk->sync(Device,CUSTOM_MASK);
-  d_particles = particle_kk->k_particles.view_device();
-  d_species = particle_kk->k_species.view_device();
-  d_ewhich = particle_kk->k_ewhich.view_device();
-=======
   if (vibstyle == DISCRETE || elecstyle == DISCRETE)
     particle_kk->sync(Device,CUSTOM_MASK);
   d_particles = particle_kk->k_particles.d_view;
@@ -501,7 +493,6 @@ template < int NEARCP, int GASTALLY > void CollideVSSKokkos::collisions_one(COLL
   d_enforce_spin_conservation = particle_kk->d_enforce_spin_conservation;
   d_ewhich = particle_kk->k_ewhich.d_view;
   k_eivec = particle_kk->k_eivec;
->>>>>>> zseckert/electronic_excitation
   k_eiarray = particle_kk->k_eiarray;
   k_edvec = particle_kk->k_edvec;
 
@@ -848,12 +839,6 @@ void CollideVSSKokkos::collisions_one_ambipolar(COLLIDE_REDUCE &reduce)
 
   ParticleKokkos* particle_kk = (ParticleKokkos*) particle;
   particle_kk->sync(Device,PARTICLE_MASK|SPECIES_MASK|CUSTOM_MASK);
-<<<<<<< HEAD
-  d_particles = particle_kk->k_particles.view_device();
-  d_species = particle_kk->k_species.view_device();
-  d_ewhich = particle_kk->k_ewhich.view_device();
-  auto h_ewhich = particle_kk->k_ewhich.view_host();
-=======
   d_particles = particle_kk->k_particles.d_view;
   d_species = particle_kk->k_species.d_view;
   d_nelecstates = particle_kk->d_nelecstates;
@@ -863,7 +848,6 @@ void CollideVSSKokkos::collisions_one_ambipolar(COLLIDE_REDUCE &reduce)
   d_enforce_spin_conservation = particle_kk->d_enforce_spin_conservation;
   d_ewhich = particle_kk->k_ewhich.d_view;
   auto h_ewhich = particle_kk->k_ewhich.h_view;
->>>>>>> zseckert/electronic_excitation
   k_eivec = particle_kk->k_eivec;
   k_eiarray = particle_kk->k_eiarray;
   k_edvec = particle_kk->k_edvec;
@@ -1506,12 +1490,12 @@ void CollideVSSKokkos::setup_collision_kokkos(Particle::OnePart *ip, Particle::O
 
 KOKKOS_INLINE_FUNCTION
 int CollideVSSKokkos::perform_collision_kokkos(int icell,
-                                  Particle::OnePart *&ip,
-                                  Particle::OnePart *&jp,
-                                  Particle::OnePart *&kp,
-                                  struct State &precoln, struct State &postcoln, rand_type &rand_gen,
-                                  Particle::OnePart *&p3, int &recomb_species, double &recomb_density,
-                                  int &index_kpart) const
+                                   Particle::OnePart *&ip,
+                                   Particle::OnePart *&jp,
+                                   Particle::OnePart *&kp,
+                                   struct State &precoln, struct State &postcoln, rand_type &rand_gen,
+                                   Particle::OnePart *&p3, int &recomb_species, double &recomb_density,
+                                   int &index_kpart) const
 {
   int reaction,kspecies;
   double x[3],v[3];
@@ -1533,7 +1517,8 @@ int CollideVSSKokkos::perform_collision_kokkos(int icell,
   // just collision, no reaction
 
   if (!reaction) {
-    if (precoln.ave_dof > 0.0) EEXCHANGE_NonReactingEDisposal(ip,jp,precoln,postcoln,rand_gen);
+    if (precoln.ave_dof > 0.0)
+      EEXCHANGE_NonReactingEDisposal(icell,ip,jp,precoln,postcoln,rand_gen);
     SCATTER_TwoBodyScattering(ip,jp,precoln,postcoln,rand_gen);
     return reaction;
   }
@@ -1553,7 +1538,6 @@ int CollideVSSKokkos::perform_collision_kokkos(int icell,
   if (kspecies >= 0) {
     int id = MAXSMALLINT*rand_gen.drand();
 
-<<<<<<< HEAD
     memcpy(x,ip->x,3*sizeof(double));
     memcpy(v,ip->v,3*sizeof(double));
     index_kpart = Kokkos::atomic_fetch_add(&d_nlocal(),1);
@@ -1563,86 +1547,10 @@ int CollideVSSKokkos::perform_collision_kokkos(int icell,
       d_retry() = 1;
       d_part_grow() = 1;
       return 0;
-=======
-    if (kspecies >= 0) {
-      int id = MAXSMALLINT*rand_gen.drand();
-
-      memcpy(x,ip->x,3*sizeof(double));
-      memcpy(v,ip->v,3*sizeof(double));
-      index_kpart = Kokkos::atomic_fetch_add(&d_nlocal(),1);
-      int reallocflag =
-        ParticleKokkos::add_particle_kokkos(d_particles,index_kpart,id,kspecies,ip->icell,x,v,0.0,0.0);
-      if (reallocflag) {
-        d_retry() = 1;
-        d_part_grow() = 1;
-        return 0;
-      }
-
-      kp = &d_particles[index_kpart];
-      EEXCHANGE_ReactingEDisposal(icell,ip,jp,kp,precoln,postcoln,rand_gen);
-      SCATTER_ThreeBodyScattering(ip,jp,kp,precoln,postcoln,rand_gen);
-
-    // remove 2nd J particle if recombination reaction removed it
-    // p3 is 3rd particle participating in energy exchange
-
-    } else if (jp->ispecies < 0) {
-      double *vi = ip->v;
-      double *vj = jp->v;
-
-      const double divisor = 1.0 / (precoln.imass + precoln.jmass);
-      const double ucmf = ((precoln.imass*vi[0]) + (precoln.jmass*vj[0])) * divisor;
-      const double vcmf = ((precoln.imass*vi[1]) + (precoln.jmass*vj[1])) * divisor;
-      const double wcmf = ((precoln.imass*vi[2]) + (precoln.jmass*vj[2])) * divisor;
-
-      vi[0] = ucmf;
-      vi[1] = vcmf;
-      vi[2] = wcmf;
-
-      jp = NULL;
-
-      // account for 3rd body energy via another call to setup_collision()
-      // set precoln.vr2 = relative velocity between ip and 3rd body p3
-
-      const double *vp3 = p3->v;
-      const double du  = vi[0] - vp3[0];
-      const double dv  = vi[1] - vp3[1];
-      const double dw  = vi[2] - vp3[2];
-      const double vr2 = du*du + dv*dv + dw*dw;
-      precoln.vr2 = vr2;
-
-      // save postcoln.etotal from previous setup_collision()
-      // add 3rd body internal energy to it
-      // ip internal energy is already included in postcoln.etotal
-
-      double partial_energy =  postcoln.etotal + p3->erot + p3->evib;
-      if (elecstyle == DISCRETE) {
-        auto &d_eelecs = k_edvec.d_view[d_ewhich[index_eelec]].k_view.d_view;
-        if (d_nelecstates[p3->ispecies] > 0)
-          partial_energy += d_eelecs[p3 - d_particles.data()];
-      }
-
-      ip->erot = 0.0;
-      ip->evib = 0.0;
-      p3->erot = 0.0;
-      p3->evib = 0.0;
-
-      // 2nd call to setup_collision() sets new postcoln.etotal
-      // then add saved partial_energy to it
-
-      setup_collision_kokkos(ip,p3,precoln,postcoln);
-      postcoln.etotal += partial_energy;
-
-      if (precoln.ave_dof > 0.0) EEXCHANGE_ReactingEDisposal(icell,ip,p3,jp,precoln,postcoln,rand_gen);
-      SCATTER_TwoBodyScattering(ip,p3,precoln,postcoln,rand_gen);
-
-    } else {
-      EEXCHANGE_ReactingEDisposal(icell,ip,jp,kp,precoln,postcoln,rand_gen);
-      SCATTER_TwoBodyScattering(ip,jp,precoln,postcoln,rand_gen);
->>>>>>> zseckert/electronic_excitation
     }
 
     kp = &d_particles[index_kpart];
-    EEXCHANGE_ReactingEDisposal(ip,jp,kp,precoln,postcoln,rand_gen);
+    EEXCHANGE_ReactingEDisposal(icell,ip,jp,kp,precoln,postcoln,rand_gen);
     SCATTER_ThreeBodyScattering(ip,jp,kp,precoln,postcoln,rand_gen);
 
   // remove 2nd J particle if recombination reaction removed it
@@ -1678,6 +1586,12 @@ int CollideVSSKokkos::perform_collision_kokkos(int icell,
     // ip internal energy is already included in postcoln.etotal
 
     double partial_energy =  postcoln.etotal + p3->erot + p3->evib;
+    if (elecstyle == DISCRETE) {
+      auto &d_eelecs = k_edvec.d_view[d_ewhich[index_eelec]].k_view.d_view;
+      if (d_nelecstates[p3->ispecies] > 0)
+        partial_energy += d_eelecs[p3 - d_particles.data()];
+    }
+
     ip->erot = 0.0;
     ip->evib = 0.0;
     p3->erot = 0.0;
@@ -1689,16 +1603,12 @@ int CollideVSSKokkos::perform_collision_kokkos(int icell,
     setup_collision_kokkos(ip,p3,precoln,postcoln);
     postcoln.etotal += partial_energy;
 
-    if (precoln.ave_dof > 0.0) EEXCHANGE_ReactingEDisposal(ip,p3,jp,precoln,postcoln,rand_gen);
+    if (precoln.ave_dof > 0.0)
+      EEXCHANGE_ReactingEDisposal(icell,ip,p3,jp,precoln,postcoln,rand_gen);
     SCATTER_TwoBodyScattering(ip,p3,precoln,postcoln,rand_gen);
 
   } else {
-<<<<<<< HEAD
-    EEXCHANGE_ReactingEDisposal(ip,jp,kp,precoln,postcoln,rand_gen);
-=======
-    kp = NULL;
-    if (precoln.ave_dof > 0.0) EEXCHANGE_NonReactingEDisposal(icell,ip,jp,precoln,postcoln,rand_gen);
->>>>>>> zseckert/electronic_excitation
+    EEXCHANGE_ReactingEDisposal(icell,ip,jp,kp,precoln,postcoln,rand_gen);
     SCATTER_TwoBodyScattering(ip,jp,precoln,postcoln,rand_gen);
   }
 

@@ -804,11 +804,7 @@ void FixEmitSurf::perform_task_onepass()
 
           if (nfix_update_custom)
             modify->update_custom(particle->nlocal-1,temp_thermal,
-<<<<<<< HEAD
-                                  temp_rot,temp_vib,vstream);
-=======
-                                 temp_rot,temp_vib,temp_elec,vstream);
->>>>>>> zseckert/electronic_excitation
+                                  temp_rot,temp_vib,temp_elec,vstream);
         }
 
         nsingle += nactual;
@@ -1118,7 +1114,7 @@ void FixEmitSurf::perform_task_twopass()
 
           if (nfix_update_custom)
             modify->update_custom(particle->nlocal-1,temp_thermal,
-                                  temp_rot,temp_vib,vstream);
+                                  temp_rot,temp_vib,temp_elec,vstream);
         }
 
         nsingle += nactual;
@@ -1220,7 +1216,7 @@ void FixEmitSurf::perform_task_twopass()
 
         if (nfix_update_custom)
           modify->update_custom(particle->nlocal-1,temp_thermal,
-                               temp_rot,temp_vib,vstream);
+                               temp_rot,temp_vib,temp_elec,vstream);
       }
 
       nsingle += nactual;

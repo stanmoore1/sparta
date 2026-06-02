@@ -34,11 +34,7 @@ class ReactTCEKokkos : public ReactBirdKokkos {
   ReactTCEKokkos(class SPARTA* sparta) : ReactBirdKokkos(sparta) {copy = 1;}
   void init();
   int attempt(Particle::OnePart *, Particle::OnePart *,
-<<<<<<< HEAD
-              double, double, double, double &, int &) {return 0;}
-=======
               double, double, double, double, double &, int &) { return 0; }
->>>>>>> zseckert/electronic_excitation
 
 /* ---------------------------------------------------------------------- */
 

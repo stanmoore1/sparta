@@ -86,11 +86,7 @@ void FixVibmodeKokkos::pre_update_custom_kokkos()
   d_species = particle_kk->k_species.view_device();
   auto h_ewhich = particle_kk->k_ewhich.view_host();
   auto k_eiarray = particle_kk->k_eiarray;
-<<<<<<< HEAD
-  d_vibmode = k_eiarray.view_host()[h_ewhich[vibmodeindex]].k_view.view_device();
-=======
   d_vibmode = k_eiarray.h_view[h_ewhich[index_vibmode]].k_view.d_view;
->>>>>>> zseckert/electronic_excitation
 }
 
 /* ----------------------------------------------------------------------

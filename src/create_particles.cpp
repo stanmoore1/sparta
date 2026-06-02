@@ -803,14 +803,8 @@ void CreateParticles::create_local()
       // if using per-grid variables or per-grid custom attributes
 
       if (nfix_update_custom)
-<<<<<<< HEAD
-        modify->update_custom(particle->nlocal-1,tempscale*temp_thermal,
-                              tempscale*temp_rot,tempscale*temp_vib,
-                              vstream_update_custom);
-=======
         modify->update_custom(particle->nlocal-1,temp_thermal,
-                             temp_rot,temp_vib,temp_elec,vstream);
->>>>>>> zseckert/electronic_excitation
+                              temp_rot,temp_vib,temp_elec,vstream);
     }
 
     // increment count without effect of density variation
@@ -1123,20 +1117,13 @@ void CreateParticles::create_local_twopass()
       id = MAXSMALLINT*random->uniform();
 
       particle->add_particle(id,ispecies,icell,x,v,erot,evib);
-<<<<<<< HEAD
 
       // tempscale and vstream_update_custom are set appropriately
       // if using per-grid variables or per-grid custom attributes
 
       if (nfix_update_custom)
-        modify->update_custom(particle->nlocal-1,tempscale*temp_thermal,
-                              tempscale*temp_rot,tempscale*temp_vib,
-                              vstream_update_custom);
-=======
-      if (nfix_update_custom)
         modify->update_custom(particle->nlocal-1,temp_thermal,
-                             temp_rot,temp_vib,temp_elec,vstream);
->>>>>>> zseckert/electronic_excitation
+                              temp_rot,temp_vib,temp_elec,vstream);
     }
   }
 
