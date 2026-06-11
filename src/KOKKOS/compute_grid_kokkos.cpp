@@ -1,6 +1,6 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.github.io
+   http://sparta.sandia.gov
    Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
@@ -30,13 +30,13 @@ using namespace SPARTA_NS;
 // user keywords
 
 enum{NUM,NRHO,NFRAC,MASS,MASSRHO,MASSFRAC,
-     U,V,W,USQ,VSQ,WSQ,KE,TEMPERATURE,EROT,TROT,EVIB,TVIB,
+     U,V,W,USQ,VSQ,WSQ,KE,TEMPERATURE,EROT,TROT,EVIB,TVIB,EELEC,
      PXRHO,PYRHO,PZRHO,KERHO};
 
 // internal accumulators
 
 enum{COUNT,MASSSUM,MVX,MVY,MVZ,MVXSQ,MVYSQ,MVZSQ,MVSQ,
-     ENGROT,ENGVIB,DOFROT,DOFVIB,CELLCOUNT,CELLMASS,LASTSIZE};
+     ENGROT,ENGVIB,ENGELEC,DOFROT,DOFVIB,CELLCOUNT,CELLMASS,LASTSIZE};
 
 // max # of quantities to accumulate for any user value
 
@@ -51,10 +51,12 @@ ComputeGridKokkos::ComputeGridKokkos(SPARTA *sparta, int narg, char **arg) :
 
   k_unique = DAT::tdual_int_1d("compute/grid:unique",npergroup);
   for (int m = 0; m < npergroup; m++)
-    k_unique.view_host()(m) = unique[m];
+    k_unique.h_view(m) = unique[m];
   k_unique.modify_host();
   k_unique.sync_device();
-  d_unique = k_unique.view_device();
+  d_unique = k_unique.d_view;
+
+  index_eelec = -1;
 
 #if defined (SPARTA_KOKKOS_GPU)
   #if defined(FFT_KOKKOS_KISS)
@@ -97,17 +99,25 @@ void ComputeGridKokkos::compute_per_grid_kokkos()
 
   ParticleKokkos* particle_kk = (ParticleKokkos*) particle;
   particle_kk->sync(Device,PARTICLE_MASK|SPECIES_MASK);
-  d_particles = particle_kk->k_particles.view_device();
-  d_species = particle_kk->k_species.view_device();
+  d_particles = particle_kk->k_particles.d_view;
+  d_species = particle_kk->k_species.d_view;
 
   GridKokkos* grid_kk = (GridKokkos*) grid;
   d_cellcount = grid_kk->d_cellcount;
   d_plist = grid_kk->d_plist;
   grid_kk->sync(Device,CINFO_MASK);
-  d_cinfo = grid_kk->k_cinfo.view_device();
+  d_cinfo = grid_kk->k_cinfo.d_view;
 
-  d_s2g = particle_kk->k_species2group.view_device();
+  d_s2g = particle_kk->k_species2group.d_view;
   int nlocal = particle->nlocal;
+
+  index_eelec = particle->find_custom((char *) "eelec");
+  if (index_eelec >= 0) {
+    d_ewhich = particle_kk->k_ewhich.d_view;
+    k_edvec = particle_kk->k_edvec;
+
+    particle_kk->sync(Device,CUSTOM_MASK);
+  }
 
   // zero all accumulators
 
@@ -140,7 +150,7 @@ void ComputeGridKokkos::compute_per_grid_kokkos()
 
   if (need_dup) {
     Kokkos::Experimental::contribute(d_tally, dup_tally);
-    dup_tally = {}; // free duplicated memory
+    dup_tally = decltype(dup_tally)(); // free duplicated memory
   }
 
   d_particles = t_particle_1d(); // destroy reference to reduce memory use
@@ -210,6 +220,12 @@ void ComputeGridKokkos::operator()(TagComputeGrid_compute_per_grid_atomic<NEED_A
       break;
     case ENGVIB:
       a_tally(icell,k++) += d_particles[i].evib;
+      break;
+    case ENGELEC:
+      if (index_eelec >= 0) {
+        auto &d_eelecs = k_edvec.d_view[d_ewhich[index_eelec]].k_view.d_view;
+        a_tally(icell,k++) += d_eelecs[i];
+      }
       break;
     case DOFROT:
       a_tally(icell,k++) += d_species[ispecies].rotdof;
@@ -281,6 +297,12 @@ void ComputeGridKokkos::operator()(TagComputeGrid_compute_per_grid, const int &i
       case ENGVIB:
         d_tally(icell,k++) += d_particles[i].evib;
         break;
+      case ENGELEC:
+        if (index_eelec >= 0) {
+          auto &d_eelecs = k_edvec.d_view[d_ewhich[index_eelec]].k_view.d_view;
+          d_tally(icell,k++) += d_eelecs[i];
+        }
+        break;
       case DOFROT:
         d_tally(icell,k++) += d_species[ispecies].rotdof;
         break;
@@ -346,7 +368,7 @@ void ComputeGridKokkos::post_process_grid_kokkos(int index, int nsample,
 
   GridKokkos* grid_kk = (GridKokkos*) grid;
   grid_kk->sync(Device,CINFO_MASK);
-  d_cinfo = grid_kk->k_cinfo.view_device();
+  d_cinfo = grid_kk->k_cinfo.d_view;
 
   fnum = update->fnum;
 
@@ -425,6 +447,7 @@ void ComputeGridKokkos::post_process_grid_kokkos(int index, int nsample,
 
   case EROT:
   case EVIB:
+  case EELEC:
     {
       eng = emap[0];
       count = emap[1];
@@ -591,7 +614,7 @@ void ComputeGridKokkos::reallocate()
   memoryKK->destroy_kokkos(k_tally,tally);
   nglocal = grid->nlocal;
   memoryKK->create_kokkos(k_vector_grid,vector_grid,nglocal,"compute_grid:vector_grid");
-  d_vector_grid = k_vector_grid.view_device();
+  d_vector_grid = k_vector_grid.d_view;
   memoryKK->create_kokkos(k_tally,tally,nglocal,ntotal,"compute_grid:tally");
-  d_tally = k_tally.view_device();
+  d_tally = k_tally.d_view;
 }

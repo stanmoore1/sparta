@@ -1,6 +1,6 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.github.io
+   http://sparta.sandia.gov
    Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
@@ -346,7 +346,7 @@ void FixEmitFaceFile::create_task(int icell)
 void FixEmitFaceFile::perform_task()
 {
   int pcell,ninsert,nactual,isp,ispecies,id;
-  double temp_thermal,temp_rot,temp_vib;
+  double temp_thermal,temp_rot,temp_vib,temp_elec;
   double indot,scosine,rn,ntarget,vr;
   double beta_un,normalized_distbn_fn,theta,erot,evib;
   double x[3],v[3];
@@ -436,7 +436,7 @@ void FixEmitFaceFile::perform_task()
 
           if (nfix_update_custom)
             modify->update_custom(particle->nlocal-1,temp_thermal,
-                                 temp_rot,temp_vib,vstream);
+                                 temp_rot,temp_vib,temp_elec,vstream);
         }
 
         nsingle += nactual;
@@ -490,7 +490,7 @@ void FixEmitFaceFile::perform_task()
 
         if (nfix_update_custom)
           modify->update_custom(particle->nlocal-1,temp_thermal,
-                               temp_rot,temp_vib,vstream);
+                               temp_rot,temp_vib,temp_elec,vstream);
       }
 
       nsingle += nactual;

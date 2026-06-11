@@ -14,34 +14,30 @@
 
 #ifdef FIX_CLASS
 
-FixStyle(ambipolar,FixAmbipolar)
+FixStyle(elecmode,FixElecmode)
 
 #else
 
-#ifndef SPARTA_FIX_AMBIPOLAR_H
-#define SPARTA_FIX_AMBIPOLAR_H
+#ifndef SPARTA_FIX_ELECMODE_H
+#define SPARTA_FIX_ELECMODE_H
 
+#include "stdio.h"
 #include "fix.h"
-#include "particle.h"
 
 namespace SPARTA_NS {
 
-class FixAmbipolar : public Fix {
+class FixElecmode : public Fix {
  public:
-  int especies;               // index of electron species
-  int *ions;                  // 1 if a particle species is an ionx
-
-  FixAmbipolar(class SPARTA *, int, char **);
-  FixAmbipolar(class SPARTA *sparta) : Fix(sparta) {} // needed for Kokkos
-  virtual ~FixAmbipolar();
+  FixElecmode(class SPARTA *, int, char **);
+  FixElecmode(class SPARTA *sparta) : Fix(sparta) {} // needed for Kokkos
+  virtual ~FixElecmode();
   int setmask();
   void init();
   virtual void update_custom(int, double, double, double, double, double *);
-  void surf_react(Particle::OnePart *, int &, int &);
 
  protected:
-  int maxion;                 // length of ions vector
-  int ionindex,velindex;      // indices into particle custom data structs
+  int index_elecstate;      // index into particle custom data structs
+  int index_eelec;
   class RanKnuth *random;
 };
 

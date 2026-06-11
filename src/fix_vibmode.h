@@ -1,6 +1,6 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.github.io
+   http://sparta.sandia.gov
    Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
@@ -33,11 +33,11 @@ class FixVibmode : public Fix {
   virtual ~FixVibmode();
   int setmask();
   void init();
-  virtual void update_custom(int, double, double, double, double *);
+  virtual void update_custom(int, double, double, double, double, double *);
 
  protected:
   int maxmode;           // max # of vibrational modes for any species
-  int vibmodeindex;      // index into particle custom data structs
+  int index_vibmode;      // index into particle custom data structs
   class RanKnuth *random;
 };
 

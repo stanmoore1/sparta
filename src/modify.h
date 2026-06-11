@@ -1,6 +1,6 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.github.io
+   http://sparta.sandia.gov
    Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
@@ -38,7 +38,6 @@ class Modify : protected Pointers {
   void setup();
   virtual void start_of_step();
   virtual void end_of_step();
-  virtual void post_run();
 
   virtual int pack_grid_one(int, char *, int);
   virtual int unpack_grid_one(int, char *);
@@ -46,7 +45,6 @@ class Modify : protected Pointers {
   virtual void add_grid_one();
   virtual void reset_grid_count(int);
   virtual void grid_changed();
-  virtual void custom_surf_changed();
 
   void add_fix(int, char **);
   void delete_fix(const char *);
@@ -63,7 +61,7 @@ class Modify : protected Pointers {
   void list_init_fixes();
   void list_init_computes();
 
-  virtual void update_custom(int, double, double, double, double *);
+  virtual void update_custom(int, double, double, double, double, double *);
   virtual void gas_react(int);
   virtual void surf_react(Particle::OnePart *, int &, int &);
 
@@ -74,15 +72,13 @@ class Modify : protected Pointers {
   // lists of fixes to apply at different stages of timestep
 
   int *list_start_of_step,*list_end_of_step;
+
   int *end_of_step_every;
 
   int *list_pergrid;         // list of fixes that store per grid cell info
-  int *list_update_custom;   // list of fixes with update_custom() method
+  int *list_update_custom;    // list of fixes with update_custom() method
   int *list_gas_react;       // list of fixes with gas_react() method
   int *list_surf_react;      // list of fixes with surf_react() method
-
-  int n_custom_surf_changed; // list of fixes with custom_surf_changed() method
-  int *list_custom_surf_changed;
 
   int n_timeflag;            // list of computes that store time invocation
   int *list_timeflag;

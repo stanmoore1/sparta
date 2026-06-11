@@ -1,6 +1,6 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.github.io
+   http://sparta.sandia.gov
    Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
@@ -121,7 +121,7 @@ void FixAmbipolar::init()
 ------------------------------------------------------------------------- */
 
 void FixAmbipolar::update_custom(int index, double temp_thermal,
-                                double, double,
+                                double, double, double,
                                 double *vstream)
 {
   int *ionambi = particle->eivec[particle->ewhich[ionindex]];
@@ -191,7 +191,8 @@ void FixAmbipolar::surf_react(Particle::OnePart *iorig, int &i, int &j)
     if (ions[particles[i].ispecies] == 0) return;
     if (particles[j].ispecies != especies) return;
     update_custom(i,update->temp_thermal,update->temp_thermal,
-                 update->temp_thermal,update->vstream);
+                  update->temp_thermal,update->temp_thermal,
+                  update->vstream);
     j = -1;
   }
 }

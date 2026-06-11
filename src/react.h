@@ -1,6 +1,6 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.github.io
+   http://sparta.sandia.gov
    Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
@@ -48,7 +48,7 @@ class React : protected Pointers {
   virtual int recomb_exist(int, int) = 0;
   virtual void ambi_check() = 0;
   virtual int attempt(Particle::OnePart *, Particle::OnePart *,
-                      double, double, double, double &, int &) = 0;
+                      double, double, double, double, double &, int &) = 0;
   virtual char *reactionID(int) = 0;
   virtual double extract_tally(int) = 0;
 

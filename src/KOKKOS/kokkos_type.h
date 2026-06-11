@@ -1,6 +1,6 @@
 /* -*- c++ -*- ----------------------------------------------------------
    SPARTA - Large-scale Atomic/Molecular Massively Parallel Simulator
-   http://sparta.github.io, Sandia National Laboratories
+   http://sparta.sandia.gov, Sandia National Laboratories
    Steve Plimpton, sjplimp@gmail.com
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
@@ -39,7 +39,7 @@ namespace Kokkos {
   struct sparta_float3 {
     float x,y,z;
     KOKKOS_INLINE_FUNCTION
-    sparta_float3():x(0.0f),y(0.0f),z(0.0f) {}
+    sparta_float3():x(0.0f),z(0.0f),y(0.0f) {}
 
     KOKKOS_INLINE_FUNCTION
     void operator += (const sparta_float3& tmp) {
@@ -58,7 +58,7 @@ namespace Kokkos {
   struct sparta_double3 {
     double x,y,z;
     KOKKOS_INLINE_FUNCTION
-    sparta_double3():x(0.0),y(0.0),z(0.0) {}
+    sparta_double3():x(0.0),z(0.0),y(0.0) {}
 
     KOKKOS_INLINE_FUNCTION
     void operator += (const sparta_double3& tmp) {
@@ -276,17 +276,17 @@ public:
 
 // define precision
 
-#ifndef SPA_PRECISION
-#define SPA_PRECISION 2
+#ifndef PRECISION
+#define PRECISION 2
 #endif
-#if SPA_PRECISION==1
+#if PRECISION==1
 typedef float SPARTA_FLOAT;
 #else
 typedef double SPARTA_FLOAT;
 #endif
 
 #ifndef PREC_FORCE
-#define PREC_FORCE SPA_PRECISION
+#define PREC_FORCE PRECISION
 #endif
 
 #if PREC_FORCE==1
@@ -296,7 +296,7 @@ typedef double F_FLOAT;
 #endif
 
 #ifndef PREC_ENERGY
-#define PREC_ENERGY SPA_PRECISION
+#define PREC_ENERGY PRECISION
 #endif
 
 #if PREC_ENERGY==1
@@ -332,7 +332,7 @@ struct s_EV_FLOAT {
 typedef struct s_EV_FLOAT EV_FLOAT;
 
 #ifndef PREC_POS
-#define PREC_POS SPA_PRECISION
+#define PREC_POS PRECISION
 #endif
 
 #if PREC_POS==1
@@ -342,7 +342,7 @@ typedef double X_FLOAT;
 #endif
 
 #ifndef PREC_VELOCITIES
-#define PREC_VELOCITIES SPA_PRECISION
+#define PREC_VELOCITIES PRECISION
 #endif
 
 #if PREC_VELOCITIES==1
@@ -378,6 +378,11 @@ namespace SPARTA_NS {
   typedef tdual_species_1d::t_dev t_species_1d;
   typedef tdual_species_1d::t_dev_const t_species_1d_const;
   typedef tdual_species_1d::t_host t_host_species_1d;
+
+  typedef Kokkos::
+    DualView<Particle::ElecState**, DeviceType::array_layout, DeviceType> tdual_elecstate_2d;
+  typedef tdual_elecstate_2d::t_dev t_elecstate_2d;
+  typedef tdual_elecstate_2d::t_host t_host_elecstate_2d;
 
   typedef Kokkos::
     DualView<Grid::ChildCell*, DeviceType::array_layout, DeviceType> tdual_cell_1d;
@@ -732,7 +737,7 @@ void buffer_view(BufferView &buf, DualView &view,
                  const size_t n7 = 0) {
 
   buf = BufferView(
-          view.d_view.data(),
+          view.template d_view.data(),
           n0,n1,n2,n3,n4,n5,n6,n7);
 
 }

@@ -1,6 +1,6 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.github.io
+   http://sparta.sandia.gov
    Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
@@ -47,6 +47,7 @@ class FixEmitFace : public FixEmit {
     double temp_thermal;        // from mixture or adjacent subsonic cell
     double temp_rot;            // from mixture or subsonic temp_thermal
     double temp_vib;            // from mixture or subsonic temp_thermal
+    double temp_elec;           // from mixture or subsonic temp_thermal
     double vstream[3];          // from mixture or adjacent subsonic cell
     double *ntargetsp;          // # of mols to insert for each species,
                                 //   only defined for PERSPECIES
@@ -68,9 +69,6 @@ class FixEmitFace : public FixEmit {
   double psubsonic,tsubsonic,nsubsonic;
   double tprefactor,soundspeed_mixture;
 
-  int imodvar;
-  char *modvar;
-
   // copies of data from other classes
 
   int dimension,nspecies;
@@ -88,7 +86,7 @@ class FixEmitFace : public FixEmit {
 
   // protected methods
 
-  void create_task(int);
+  virtual void create_task(int);
   virtual void perform_task();
   void perform_task_onepass();
   virtual void perform_task_twopass();

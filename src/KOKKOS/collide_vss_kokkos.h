@@ -1,6 +1,6 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.github.io
+   http://sparta.sandia.gov
    Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
@@ -54,10 +54,10 @@ typedef struct s_COLLIDE_REDUCE COLLIDE_REDUCE;
 struct TagCollideResetVremax{};
 struct TagCollideZeroNN{};
 
-template < int NEARCP, int GASTALLY, int ATOMIC_REDUCTION >
+template < int NEARCP, int ATOMIC_REDUCTION >
 struct TagCollideCollisionsOne{};
 
-template < int GASTALLY, int ATOMIC_REDUCTION >
+template < int ATOMIC_REDUCTION >
 struct TagCollideCollisionsOneAmbipolar{};
 
 class CollideVSSKokkos : public CollideVSS {
@@ -67,6 +67,7 @@ class CollideVSSKokkos : public CollideVSS {
   CollideVSSKokkos(class SPARTA *, int, char **);
   ~CollideVSSKokkos();
   void init();
+  void reset_vremax();
   void collisions();
   void sync(ExecutionSpace, unsigned int);
   void modified(ExecutionSpace, unsigned int);
@@ -89,7 +90,7 @@ class CollideVSSKokkos : public CollideVSS {
   KOKKOS_INLINE_FUNCTION
   void setup_collision_kokkos(Particle::OnePart *, Particle::OnePart *, struct State &, struct State &) const;
   KOKKOS_INLINE_FUNCTION
-  int perform_collision_kokkos(Particle::OnePart *&, Particle::OnePart *&,
+  int perform_collision_kokkos(int, Particle::OnePart *&, Particle::OnePart *&,
                         Particle::OnePart *&, struct State &, struct State &, rand_type &,
                         Particle::OnePart *&, int &, double &,
                         int &) const;
@@ -100,34 +101,27 @@ class CollideVSSKokkos : public CollideVSS {
   KOKKOS_INLINE_FUNCTION
   void operator()(TagCollideZeroNN, const int&) const;
 
-  template < int NEARCP, int GASTALLY, int ATOMIC_REDUCTION >
+  template < int NEARCP, int ATOMIC_REDUCTION >
   KOKKOS_INLINE_FUNCTION
-  void operator()(TagCollideCollisionsOne< NEARCP, GASTALLY, ATOMIC_REDUCTION >, const int&) const;
+  void operator()(TagCollideCollisionsOne< NEARCP, ATOMIC_REDUCTION >, const int&) const;
 
-  template < int NEARCP, int GASTALLY, int ATOMIC_REDUCTION >
+  template < int NEARCP, int ATOMIC_REDUCTION >
   KOKKOS_INLINE_FUNCTION
-  void operator()(TagCollideCollisionsOne< NEARCP, GASTALLY, ATOMIC_REDUCTION >, const int&, COLLIDE_REDUCE&) const;
+  void operator()(TagCollideCollisionsOne< NEARCP, ATOMIC_REDUCTION >, const int&, COLLIDE_REDUCE&) const;
 
-  template < int GASTALLY, int ATOMIC_REDUCTION >
+  template < int ATOMIC_REDUCTION >
   KOKKOS_INLINE_FUNCTION
-  void operator()(TagCollideCollisionsOneAmbipolar< GASTALLY, ATOMIC_REDUCTION >, const int&) const;
+  void operator()(TagCollideCollisionsOneAmbipolar< ATOMIC_REDUCTION >, const int&) const;
 
-  template < int GASTALLY, int ATOMIC_REDUCTION >
+  template < int ATOMIC_REDUCTION >
   KOKKOS_INLINE_FUNCTION
-  void operator()(TagCollideCollisionsOneAmbipolar< GASTALLY, ATOMIC_REDUCTION >, const int&, COLLIDE_REDUCE&) const;
-
-  typedef Kokkos::
-    DualView<Params**, Kokkos::LayoutRight, DeviceType> tdual_params_2d;
-  typedef tdual_params_2d::t_dev t_params_2d;
-  typedef tdual_params_2d::t_dev_const t_params_2d_const;
-  t_params_2d_const d_params_const;
+  void operator()(TagCollideCollisionsOneAmbipolar< ATOMIC_REDUCTION >, const int&, COLLIDE_REDUCE&) const;
 
  private:
   KOKKOS_INLINE_FUNCTION
   void ambi_reset_kokkos(int, int, int, int,
                          Particle::OnePart *, Particle::OnePart *,
                          Particle::OnePart *, const DAT::t_int_1d &) const;
-  void reset_vremax();
   int pack_grid_one(int, char *, int);
   int unpack_grid_one(int, char *);
   void copy_grid_one(int, int);
@@ -143,9 +137,17 @@ class CollideVSSKokkos : public CollideVSS {
   t_species_1d_const d_species;
   DAT::t_int_2d d_plist;
 
+  DAT::t_int_1d d_nelecstates;
+  t_elecstate_2d d_elecstates;
+  DAT::t_float_2d d_elec_default_rels;
+  DAT::t_float_3d d_elec_species_rels;
+  DAT::t_int_2d d_enforce_spin_conservation;
+  DAT::t_float_2d d_cumulative_probabilities;
+
   DAT::t_int_1d d_ewhich;
   tdual_struct_tdual_int_1d_1d k_eivec;
   tdual_struct_tdual_int_2d_1d k_eiarray;
+  tdual_struct_tdual_float_1d_1d k_edvec;
   tdual_struct_tdual_float_2d_1d k_edarray;
   DAT::t_int_1d d_ionambi;
   DAT::t_float_2d_lr d_velambi;
@@ -204,14 +206,17 @@ class CollideVSSKokkos : public CollideVSS {
 
   DAT::t_int_2d d_nn_last_partner;
 
-  template < int NEARCP, int GASTALLY > void collisions_one(COLLIDE_REDUCE&);
-  template < int GASTALLY > void collisions_one_ambipolar(COLLIDE_REDUCE&);
+  template < int NEARCP > void collisions_one(COLLIDE_REDUCE&);
+  void collisions_one_ambipolar(COLLIDE_REDUCE&);
 
   // VSS specific
 
   DAT::tdual_float_2d k_prefactor;
   DAT::t_float_2d d_prefactor;
 
+  typedef Kokkos::
+    DualView<Params**, Kokkos::LayoutRight, DeviceType> tdual_params_2d;
+  typedef tdual_params_2d::t_dev t_params_2d;
   tdual_params_2d k_params;
   t_params_2d d_params;
 
@@ -223,7 +228,7 @@ class CollideVSSKokkos : public CollideVSS {
                                  Particle::OnePart *,
                                  struct State &, struct State &, rand_type &) const;
   KOKKOS_INLINE_FUNCTION
-  void EEXCHANGE_NonReactingEDisposal(Particle::OnePart *,
+  void EEXCHANGE_NonReactingEDisposal(int icell, Particle::OnePart *,
                                       Particle::OnePart *,
                                       struct State &, struct State &, rand_type &) const;
 
@@ -233,10 +238,19 @@ class CollideVSSKokkos : public CollideVSS {
                                    Particle::OnePart *,
                                    struct State &, struct State &, rand_type &) const;
   KOKKOS_INLINE_FUNCTION
-  void EEXCHANGE_ReactingEDisposal(Particle::OnePart *,
+  void EEXCHANGE_ReactingEDisposal(int, Particle::OnePart *,
                                    Particle::OnePart *,
                                    Particle::OnePart *,
                                    struct State &, struct State &, rand_type &) const;
+
+  KOKKOS_INLINE_FUNCTION
+  void relax_electronic_mode(int, Particle::OnePart *, Particle::OnePart *,
+                             double&, rand_type &rand_gen, bool) const;
+  KOKKOS_INLINE_FUNCTION
+  double get_elec_phi(int, int, int, double) const;
+  KOKKOS_INLINE_FUNCTION
+  int select_elec_state(int, Particle::OnePart *, Particle::OnePart *,
+                        double, double, bool, rand_type &rand_gen, bool) const;
 
   KOKKOS_INLINE_FUNCTION
   double sample_bl(rand_type &, double, double) const;

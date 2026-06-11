@@ -1,6 +1,6 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.github.io
+   http://sparta.sandia.gov
    Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
@@ -31,13 +31,13 @@ class ReactTCEQK : public ReactBird {
   ReactTCEQK(class SPARTA *, int, char **);
   void init();
   int attempt(Particle::OnePart *, Particle::OnePart *,
-              double, double, double, double &, int &);
+              double, double, double, double, double &, int &);
 
  private:
   int attempt_tce(Particle::OnePart *, Particle::OnePart *, OneReaction *,
-                  double, double, double, double &, int &);
+                  double, double, double, double, double &, int &);
   int attempt_qk(Particle::OnePart *, Particle::OnePart *, OneReaction *,
-                 double, double, double, double &, int &);
+                 double, double, double, double, double &, int &);
 };
 
 }

@@ -1,6 +1,6 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.github.io
+   http://sparta.sandia.gov
    Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
@@ -28,8 +28,14 @@ class Collide : protected Pointers {
   char *style;
   int rotstyle;       // none/smooth rotational modes
   int vibstyle;       // none/discrete/smooth vibrational modes
+  int elecstyle;      // none/discrete electronic modes
   int nearcp;         // 1 for near neighbor collisions
   int nearlimit;      // limit on neighbor serach for near neigh collisions
+
+  // electronic excitation data structs
+
+  int index_elecstate; // index to custom elecstate vector
+  int index_eelec;     // index to custom eelec vector
 
   int ncollide_one,nattempt_one,nreact_one;
   bigint ncollide_running,nattempt_running,nreact_running;
@@ -40,6 +46,9 @@ class Collide : protected Pointers {
   virtual void setup();
   virtual void collisions();
 
+  void modify_params(int, char **);
+  void reset_vremax();
+
   virtual double vremax_init(int, int) = 0;
   virtual double attempt_collision(int, int, double) = 0;
   virtual double attempt_collision(int, int, int, double) = 0;
@@ -48,10 +57,8 @@ class Collide : protected Pointers {
   virtual void setup_collision(Particle::OnePart *, Particle::OnePart *) = 0;
   virtual int perform_collision(Particle::OnePart *&, Particle::OnePart *&,
                                 Particle::OnePart *&) = 0;
-  virtual double extract(int, int, const char *) {return 0.0;}
 
-  void modify_params(int, char **);
-  void reset_vremax();
+  virtual double extract(int, int, const char *) {return 0.0;}
 
   virtual int pack_grid_one(int, char *, int);
   virtual int unpack_grid_one(int, char *);
@@ -114,6 +121,7 @@ class Collide : protected Pointers {
 
   int index_vibmode;   // index to custom vibmode vector
 
+
   // ambipolar approximation data structs
 
   int ambiflag;       // 1 if ambipolar option is enabled
@@ -123,8 +131,7 @@ class Collide : protected Pointers {
 
   int maxelectron;              // max # elist can hold
   Particle::OnePart *elist;     // list of ambipolar electrons
-
-  // for one grid cell or pair of groups in cell
+                                // for one grid cell or pair of groups in cell
   // Kokkos data
 
   int oldgroups;         // pass from parent to child class
@@ -165,11 +172,9 @@ class Collide : protected Pointers {
   template < int,int > void collisions_group();
   template < int > void collisions_one_ambipolar();
   template < int > void collisions_group_ambipolar();
-
   void ambi_reset(int, int, int, Particle::OnePart *, Particle::OnePart *,
                   Particle::OnePart *, int *);
   void ambi_check();
-
   void grow_percell(int);
 
   int find_nn(int, int);

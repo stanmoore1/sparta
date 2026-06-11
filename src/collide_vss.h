@@ -1,6 +1,6 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.github.io
+   http://sparta.sandia.gov
    Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
@@ -35,11 +35,10 @@ class CollideVSS : public Collide {
   double vremax_init(int, int);
   virtual double attempt_collision(int, int, double);
   double attempt_collision(int, int, int, double);
-  virtual int test_collision(int, int, int, Particle::OnePart *,
-                             Particle::OnePart *);
+  virtual int test_collision(int, int, int, Particle::OnePart *, Particle::OnePart *);
   virtual void setup_collision(Particle::OnePart *, Particle::OnePart *);
   virtual int perform_collision(Particle::OnePart *&, Particle::OnePart *&,
-                                Particle::OnePart *&);
+                        Particle::OnePart *&);
   double extract(int, int, const char *);
 
   struct State {      // two-particle state
@@ -52,6 +51,7 @@ class CollideVSS : public Collide {
     double etrans;
     double erot;
     double evib;
+    double eelec;
     double eexchange;
     double eint;
     double etotal;
@@ -98,6 +98,11 @@ class CollideVSS : public Collide {
   double sample_bl(RanKnuth *, double, double);
   double rotrel (int, double);
   double vibrel (int, double);
+
+  void relax_electronic_mode(Particle::OnePart *, Particle::OnePart *, double&, bool);
+  double get_elec_phi(int, int, int, double);
+  int select_elec_state(Particle::OnePart *, Particle::OnePart *,
+                        double, double, bool, bool);
 
   void read_param_file(char *);
   int wordparse(int, char *, char **);

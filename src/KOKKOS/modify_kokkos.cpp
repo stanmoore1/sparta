@@ -1,6 +1,6 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.github.io
+   http://sparta.sandia.gov
    Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
@@ -216,31 +216,12 @@ void ModifyKokkos::grid_changed()
 }
 
 /* ----------------------------------------------------------------------
-   custom_surf_changed call, only for relevant fixes
-   invoked after per-surf custom values have changed
-------------------------------------------------------------------------- */
-
-void ModifyKokkos::custom_surf_changed()
-{
-  for (int i = 0; i < n_custom_surf_changed; i++) {
-    int j = list_custom_surf_changed[i];
-    particle_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
-    int prev_auto_sync = sparta->kokkos->auto_sync;
-    if (!fix[j]->kokkos_flag) sparta->kokkos->auto_sync = 1;
-
-    fix[j]->custom_surf_changed();
-
-    sparta->kokkos->auto_sync = prev_auto_sync;
-    particle_kk->modify(fix[j]->execution_space,fix[j]->datamask_modify);
-  }
-}
-
-/* ----------------------------------------------------------------------
    invoke update_custom() method, only for relevant fixes
 ------------------------------------------------------------------------- */
 
 void ModifyKokkos::update_custom(int index, double temp_thermal,
-                                 double temp_rot, double temp_vib, double *vstream)
+                                 double temp_rot, double temp_vib,
+                                 double temp_elec, double *vstream)
 {
   for (int i = 0; i < n_update_custom; i++) {
     int j = list_update_custom[i];
@@ -249,7 +230,7 @@ void ModifyKokkos::update_custom(int index, double temp_thermal,
     if (!fix[j]->kokkos_flag) sparta->kokkos->auto_sync = 1;
 
     fix[list_update_custom[i]]->update_custom(index,temp_thermal,temp_rot,
-                                            temp_vib,vstream);
+                                            temp_vib,temp_elec,vstream);
 
     sparta->kokkos->auto_sync = prev_auto_sync;
     particle_kk->modify(fix[j]->execution_space,fix[j]->datamask_modify);

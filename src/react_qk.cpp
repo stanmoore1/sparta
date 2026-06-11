@@ -1,6 +1,6 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.github.io
+   http://sparta.sandia.gov
    Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
@@ -57,7 +57,7 @@ void ReactQK::init()
 /* ---------------------------------------------------------------------- */
 
 int ReactQK::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
-                     double pre_etrans, double pre_erot, double pre_evib,
+                     double pre_etrans, double pre_erot, double pre_evib, double pre_eelec,
                      double &post_etotal, int &kspecies)
 {
   double pre_etotal,ecc,e_excess;
@@ -75,6 +75,7 @@ int ReactQK::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
   double omega = collide->extract(isp,jsp,"omega");
 
   int n = reactions[isp][jsp].n;
+
   if (n == 0) return 0;
   int *list = reactions[isp][jsp].list;
 
@@ -90,7 +91,7 @@ int ReactQK::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
 
     // ignore energetically impossible reactions
 
-    pre_etotal = pre_etrans + pre_erot + pre_evib;
+    pre_etotal = pre_etrans + pre_erot + pre_evib + pre_eelec;
 
     ecc = pre_etrans;
     if (pre_ave_rotdof > 0.1) ecc += pre_erot*r->coeff[0]/pre_ave_rotdof;
@@ -114,6 +115,7 @@ int ReactQK::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
       }
     case EXCHANGE:
       {
+
         if (r->coeff[4] < 0.0 && species[isp].rotdof > 0) {
 
           // endothermic reaction
@@ -195,13 +197,9 @@ int ReactQK::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
       if (r->nproduct > 2) kspecies = r->products[2];
       else kspecies = -1;
 
-      // return reaction from 1 to N
-
-      return list[i] + 1;
+      return 1;
     }
   }
-
-  // no reaction performed
 
   return 0;
 }

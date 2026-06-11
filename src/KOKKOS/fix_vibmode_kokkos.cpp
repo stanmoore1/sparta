@@ -1,6 +1,6 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.github.io
+   http://sparta.sandia.gov
    Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
@@ -60,7 +60,9 @@ FixVibmodeKokkos::FixVibmodeKokkos(SPARTA *sparta) :
 #endif
             )
 {
-  copy = 1;
+  random = NULL;
+  id = NULL;
+  style = NULL;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -82,11 +84,11 @@ void FixVibmodeKokkos::pre_update_custom_kokkos()
 
   ParticleKokkos* particle_kk = (ParticleKokkos*) particle;
   particle_kk->sync(Device,PARTICLE_MASK|SPECIES_MASK|CUSTOM_MASK);
-  d_particles = particle_kk->k_particles.view_device();
-  d_species = particle_kk->k_species.view_device();
-  auto h_ewhich = particle_kk->k_ewhich.view_host();
+  d_particles = particle_kk->k_particles.d_view;
+  d_species = particle_kk->k_species.d_view;
+  auto h_ewhich = particle_kk->k_ewhich.h_view;
   auto k_eiarray = particle_kk->k_eiarray;
-  d_vibmode = k_eiarray.view_host()[h_ewhich[vibmodeindex]].k_view.view_device();
+  d_vibmode = k_eiarray.h_view[h_ewhich[index_vibmode]].k_view.d_view;
 }
 
 /* ----------------------------------------------------------------------
@@ -97,11 +99,10 @@ void FixVibmodeKokkos::pre_update_custom_kokkos()
 
 void FixVibmodeKokkos::update_custom(int index, double temp_thermal,
                                      double temp_rot, double temp_vib,
-                                     double *vstream)
+                                     double temp_elec, double *vstream)
 {
   ParticleKokkos* particle_kk = (ParticleKokkos*) particle;
   particle_kk->sync(Host,PARTICLE_MASK|SPECIES_MASK|CUSTOM_MASK);
-  FixVibmode::update_custom(index, temp_thermal, temp_rot, temp_vib, vstream);
+  FixVibmode::update_custom(index, temp_thermal, temp_rot, temp_vib, temp_elec, vstream);
   particle_kk->modify(Host,PARTICLE_MASK|CUSTOM_MASK);
 }
-

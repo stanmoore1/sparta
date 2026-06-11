@@ -1,6 +1,6 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.github.io
+   http://sparta.sandia.gov
    Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
@@ -34,11 +34,11 @@ class ReactBirdKokkos : public ReactBird {
 #ifdef SPARTA_KOKKOS_EXACT
                                           , sparta
 #endif
-                                          ) {random_backup = NULL; copy = 1;}
+                                          ) {random_backup = NULL;};
   virtual ~ReactBirdKokkos();
   virtual void init();
   virtual int attempt(Particle::OnePart *, Particle::OnePart *,
-                      double, double, double, double &, int &) = 0;
+                      double, double, double, double, double &, int &) = 0;
   double extract_tally(int);
   void backup();
   void restore();
@@ -83,8 +83,7 @@ class ReactBirdKokkos : public ReactBird {
   typedef tdual_reaction_1d::t_dev t_reaction_1d;
   typedef tdual_reaction_1d::t_host t_host_reaction_1d;
 
-  tdual_reaction_1d k_rlist; // list of all reactions read from file
-  t_reaction_1d d_rlist;
+  t_reaction_1d d_rlist;              // list of all reactions read from file
 
   typedef Kokkos::
     DualView<ReactionIJKokkos**, DeviceType::array_layout, DeviceType> tdual_reactionIJ_2d;
@@ -93,8 +92,6 @@ class ReactBirdKokkos : public ReactBird {
 
   tdual_reactionIJ_2d k_reactions;     // reaction info for all IJ pairs of species
   t_reactionIJ_2d d_reactions;     // reaction info for all IJ pairs of species
-
-  void deallocate_views_of_views();
 
   RanKnuth* random_backup;
 

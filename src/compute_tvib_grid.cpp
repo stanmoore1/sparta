@@ -1,6 +1,6 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.github.io
+   http://sparta.sandia.gov
    Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
@@ -23,8 +23,6 @@
 #include "error.h"
 
 using namespace SPARTA_NS;
-
-enum{NONE,COUNT,MASSWT,DOF};
 
 /* ---------------------------------------------------------------------- */
 

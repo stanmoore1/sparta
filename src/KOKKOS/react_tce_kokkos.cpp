@@ -1,6 +1,6 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.github.io
+   http://sparta.sandia.gov
    Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
@@ -17,6 +17,7 @@
 #include "stdlib.h"
 #include "react_tce_kokkos.h"
 #include "particle.h"
+#include "particle_kokkos.h"
 #include "collide.h"
 #include "random_knuth.h"
 #include "error.h"
@@ -42,6 +43,15 @@ void ReactTCEKokkos::init()
 
   ReactBirdKokkos::init();
 
+  ParticleKokkos *particle_kk = (ParticleKokkos *) particle;
+  d_particles = particle_kk->k_particles.d_view;
+  d_nelecstates = particle_kk->d_nelecstates;
+  d_elecstates = particle_kk->d_elecstates;
+  d_ewhich = particle_kk->k_ewhich.d_view;
+  k_eivec = particle_kk->k_eivec;
+
   vibstyle = collide->vibstyle;
+  elecstyle = collide->elecstyle;
+  index_elecstate = collide->index_elecstate;
   boltz = update->boltz;
 }

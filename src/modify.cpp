@@ -1,6 +1,6 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.github.io
+   http://sparta.sandia.gov
    Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
@@ -32,7 +32,6 @@ using namespace SPARTA_NS;
 
 #define START_OF_STEP  1
 #define END_OF_STEP    2
-#define POST_RUN       3
 
 /* ---------------------------------------------------------------------- */
 
@@ -50,7 +49,6 @@ Modify::Modify(SPARTA *sparta) : Pointers(sparta)
   list_update_custom = NULL;
   list_gas_react = NULL;
   list_surf_react = NULL;
-  list_custom_surf_changed = NULL;
   list_timeflag = NULL;
 
   ncompute = maxcompute = 0;
@@ -86,7 +84,6 @@ Modify::~Modify()
   delete [] list_update_custom;
   delete [] list_gas_react;
   delete [] list_surf_react;
-  delete [] list_custom_surf_changed;
   delete [] list_timeflag;
 }
 
@@ -128,7 +125,6 @@ void Modify::init()
     compute[i]->invoked_per_particle = -1;
     compute[i]->invoked_per_grid = -1;
     compute[i]->invoked_per_surf = -1;
-    compute[i]->invoked_per_tally = -1;
   }
   addstep_compute_all(update->ntimestep);
 }
@@ -162,21 +158,6 @@ void Modify::end_of_step()
   for (int i = 0; i < n_end_of_step; i++)
     if (update->ntimestep % end_of_step_every[i] == 0)
       fix[list_end_of_step[i]]->end_of_step();
-}
-
-/* ----------------------------------------------------------------------
-   post_run call
-------------------------------------------------------------------------- */
-
-void Modify::post_run()
-{
-  for (int i = 0; i < nfix; i++) fix[i]->post_run();
-
-  // must reset this to its default value, since computes may be added
-  // or removed between runs and with this change we will redirect any
-  // calls to addstep_compute() to addstep_compute_all() instead.
-
-  n_timeflag = -1;
 }
 
 /* ----------------------------------------------------------------------
@@ -250,26 +231,16 @@ void Modify::grid_changed()
 }
 
 /* ----------------------------------------------------------------------
-   custom_surf_changed call, only for relevant fixes
-   invoked after per-surf custom values have changed
-------------------------------------------------------------------------- */
-
-void Modify::custom_surf_changed()
-{
-  for (int i = 0; i < n_custom_surf_changed; i++)
-    fix[list_custom_surf_changed[i]]->custom_surf_changed();
-}
-
-/* ----------------------------------------------------------------------
    invoke update_custom() method, only for relevant fixes
 ------------------------------------------------------------------------- */
 
 void Modify::update_custom(int index, double temp_thermal,
-			   double temp_rot, double temp_vib, double *vstream)
+                           double temp_rot, double temp_vib,
+                           double temp_elec, double *vstream)
 {
   for (int i = 0; i < n_update_custom; i++)
     fix[list_update_custom[i]]->update_custom(index,temp_thermal,temp_rot,
-                                              temp_vib,vstream);
+                                              temp_vib,temp_elec,vstream);
 }
 
 /* ----------------------------------------------------------------------
@@ -593,35 +564,26 @@ void Modify::list_init_fixes()
   delete [] list_update_custom;
   delete [] list_gas_react;
   delete [] list_surf_react;
-  delete [] list_custom_surf_changed;
 
   n_pergrid = n_update_custom = n_gas_react = n_surf_react = 0;
-  n_custom_surf_changed = 0;
-
   for (int i = 0; i < nfix; i++) {
     if (fix[i]->gridmigrate) n_pergrid++;
     if (fix[i]->flag_update_custom) n_update_custom++;
     if (fix[i]->flag_gas_react) n_gas_react++;
     if (fix[i]->flag_surf_react) n_surf_react++;
-    if (fix[i]->flag_custom_surf_changed) n_custom_surf_changed++;
   }
 
   list_pergrid = new int[n_pergrid];
   list_update_custom = new int[n_update_custom];
   list_gas_react = new int[n_gas_react];
   list_surf_react = new int[n_surf_react];
-  list_custom_surf_changed = new int[n_custom_surf_changed];
 
   n_pergrid = n_update_custom = n_gas_react = n_surf_react = 0;
-  n_custom_surf_changed = 0;
-
   for (int i = 0; i < nfix; i++) {
     if (fix[i]->gridmigrate) list_pergrid[n_pergrid++] = i;
     if (fix[i]->flag_update_custom) list_update_custom[n_update_custom++] = i;
     if (fix[i]->flag_gas_react) list_gas_react[n_gas_react++] = i;
     if (fix[i]->flag_surf_react) list_surf_react[n_surf_react++] = i;
-    if (fix[i]->flag_custom_surf_changed)
-      list_custom_surf_changed[n_custom_surf_changed++] = i;
   }
 }
 

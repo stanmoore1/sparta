@@ -1,6 +1,6 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-   http://sparta.github.io
+   http://sparta.sandia.gov
    Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
@@ -31,10 +31,10 @@ namespace SPARTA_NS {
 class ReactTCEKokkos : public ReactBirdKokkos {
  public:
   ReactTCEKokkos(class SPARTA *, int, char **);
-  ReactTCEKokkos(class SPARTA* sparta) : ReactBirdKokkos(sparta) {copy = 1;}
+  ReactTCEKokkos(class SPARTA* sparta) : ReactBirdKokkos(sparta) {};
   void init();
   int attempt(Particle::OnePart *, Particle::OnePart *,
-              double, double, double, double &, int &) {return 0;}
+              double, double, double, double, double &, int &) { return 0; }
 
 /* ---------------------------------------------------------------------- */
 
@@ -130,7 +130,7 @@ enum{DISSOCIATION,EXCHANGE,IONIZATION,RECOMBINATION};   // other files
 
 KOKKOS_INLINE_FUNCTION
 int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
-         double pre_etrans, double pre_erot, double pre_evib,
+         double pre_etrans, double pre_erot, double pre_evib, double pre_eelec,
          double &post_etotal, int &kspecies,
          int &recomb_species, double &recomb_density, const t_species_1d_const &d_species) const
 {
@@ -167,7 +167,7 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
 
     // ignore energetically impossible reactions
 
-    const double pre_etotal = pre_etrans + pre_erot + pre_evib;
+    const double pre_etotal = pre_etrans + pre_erot + pre_evib + pre_eelec;
 
     // two options for total energy in TCE model
     // 0: partialEnergy = true: rDOF model
@@ -189,7 +189,6 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
     }
 
     // Cover cases where coeff[1].neq.coeff[4]
-
     if (r->d_coeff[1]>((-1)*r->d_coeff[4])) e_excess = ecc - r->d_coeff[1];
     else e_excess = ecc + r->d_coeff[4];
     if (e_excess <= 0.0) continue;
@@ -228,6 +227,21 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
 
             if (isnan(zi) || isnan(zj) || zi < 0 || zj < 0) Kokkos::abort("Root-Finding Error\n");
             z += 0.5 * (zi+zj);
+       }
+
+       if (elecstyle == DISCRETE) {
+         const auto &d_estates = k_eivec.d_view[d_ewhich[index_elecstate]].k_view.d_view;
+         zi = 0.0;
+         if (d_nelecstates[isp] > 0) {
+           const int ielec = d_estates[ip - d_particles.data()];
+           zi = d_elecstates(isp,ielec).dof;
+         }
+         zj = 0.0;
+         if (d_nelecstates[jsp] > 0) {
+           const int ielec = d_estates[jp - d_particles.data()];
+           zj = d_elecstates(jsp,ielec).dof;
+         }
+         z += 0.5 * (zi+zj);
        }
     }
 
@@ -293,7 +307,7 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
     //      nothing that is I-specific or J-specific
 
     if (react_prob > random_prob) {
-      Kokkos::atomic_inc(&d_tally_reactions[d_list[i]]);
+      Kokkos::atomic_increment(&d_tally_reactions[d_list[i]]);
       if (!computeChemRates) {
         ip->ispecies = r->d_products[0];
 
@@ -319,14 +333,12 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
 
         post_etotal = pre_etotal + r->d_coeff[4];
 
-        // return reaction from 1 to N
-
-        return d_list[i] + 1;
+        return 1;
+      } else {
+        return 0;
       }
     }
   }
-
-  // no reaction performed
 
   return 0;
 }
@@ -335,7 +347,15 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
 
  protected:
   int vibstyle;
+  int elecstyle;
+  int index_elecstate;
   double boltz;
+
+  t_particle_1d d_particles;
+  DAT::t_int_1d d_nelecstates;
+  t_elecstate_2d d_elecstates;
+  DAT::t_int_1d d_ewhich;
+  tdual_struct_tdual_int_1d_1d k_eivec;
 
   DAT::tdual_int_scalar k_error_flag;
   DAT::t_int_scalar d_error_flag;
