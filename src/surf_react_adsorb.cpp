@@ -2945,9 +2945,11 @@ void SurfReactAdsorb::PS_react(int isurf, int isc, double *norm)
         nsingle++;
         ireaction = nlist_gs + reactions_ps_list[i];
         tally_single[ireaction]++;
+        // surf_tally() expects a 1-indexed reaction (it decrements internally),
+        // matching the GS path which returns list[i]+1; pass ireaction+1 here
         if (ncompute_tally)
           for (m = 0; m < ncompute_tally; m++)
-            clist_active[m]->surf_tally(0.0,isurf,-1,ireaction,NULL,NULL,NULL);
+            clist_active[m]->surf_tally(0.0,isurf,-1,ireaction+1,NULL,NULL,NULL);
 
         // update tau
 
