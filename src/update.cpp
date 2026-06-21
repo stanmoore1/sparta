@@ -538,9 +538,10 @@ template < int DIM, int SURF, int OPT > void Update::move()
 
           // particle outside ghost grid halo must use standard move
 
-          if (grid->hash->find(cellIdx) != grid->hash->end()) {
+          Grid::MyHash::iterator hashloc = grid->hash->find(cellIdx);
+          if (hashloc != grid->hash->end()) {
 
-            int icell = (*(grid->hash))[cellIdx];
+            int icell = hashloc->second;
 
             // reset particle cell and coordinates
 
