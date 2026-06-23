@@ -67,7 +67,11 @@ keyword = {fnum} or {nrho} or {vstream} or {temp} or {field} or {surfs} or {surf
     grid = limit extra memory for load-balancing, particle reordering, and restart file read/write to grid cell memory
     bytes = limit extra particle memory to this amount (in MBytes)
   {optmove} value = yes or no
-    yes/no = use optimized particle move if yes, else use regular move :pre
+    yes/no = use optimized particle move if yes, else use regular move
+  {twopass} value = no or yes or auto
+    no = always use the single-pass KOKKOS GPU particle move
+    yes = always use the two-pass KOKKOS GPU particle move
+    auto = automatically select single- vs two-pass each step (default) :pre
 :ule
 
 [Examples:]
@@ -418,6 +422,22 @@ will be used for that specific particle on that timestep. The {optmove
 yes} option cannot be used when surfaces are defined, the grid is not
 uniform, or when fix adapt is enabled, otherwise an error will result.
 
+The {twopass} keyword only affects KOKKOS GPU runs and controls how the
+particle move is dispatched on the device. The two-pass move first runs
+a cheap kernel that advances the "trivial" particles (those that remain
+inside their current surface-free cell after the timestep) and gathers
+the remaining "complex" particles into a compact list; a second kernel
+then runs the full move on just that list. This improves GPU occupancy
+and reduces warp divergence when most particles stay within their cell
+each step (small displacement per timestep), but it adds overhead when
+most particles cross a cell boundary (large displacement per timestep).
+With {auto} (the default) SPARTA measures the fraction of complex
+particles and automatically switches between the single-pass and
+two-pass move, re-sampling periodically so the choice tracks changing
+conditions; {yes} and {no} force one path. The keyword is ignored on CPU
+backends and for axisymmetric, external-field, or surface-reaction runs,
+which always use the single-pass move.
+
 [Restrictions:]
 
 The global surfmax command must be used before surface elements are
@@ -433,4 +453,4 @@ The keyword defaults are fnum = 1.0, nrho = 1.0, vstream = 0.0 0.0
 0.0, temp = 273.15, field = none, surfs = explicit, surfgrid = auto,
 surfmax = 100, splitmax = 10, surftally = auto,
 gridcut = -1.0, comm/sort = no, comm/style = neigh, weight = cell
-none, particle/reorder = 0, mem/limit = 0, optmove = no.
+none, particle/reorder = 0, mem/limit = 0, optmove = no, twopass = auto.

@@ -85,6 +85,7 @@ Update::Update(SPARTA *sparta) : Pointers(sparta)
   vstream[0] = vstream[1] = vstream[2] = 0.0;
   temp_thermal = 273.15;
   optmove_flag = 0;
+  twopass_flag = 2;       // default: auto-select the KOKKOS two-pass GPU move
   fstyle = NOFIELD;
   fieldID = NULL;
 
@@ -1660,6 +1661,18 @@ void Update::global(int narg, char **arg)
       if (iarg+2 > narg) error->all(FLERR,"Illegal global command");
       if (strcmp(arg[iarg+1],"yes") == 0) optmove_flag = 1;
       else if (strcmp(arg[iarg+1],"no") == 0) optmove_flag = 0;
+      else error->all(FLERR,"Illegal global command");
+      iarg += 2;
+    } else if (strcmp(arg[iarg],"twopass") == 0) {
+      // KOKKOS two-pass GPU particle move (ignored by the non-Kokkos code path)
+      //   no   = always use the single-pass move
+      //   yes  = always use the two-pass move
+      //   auto = measure the fraction of "complex" particles and switch
+      //          automatically (the default)
+      if (iarg+2 > narg) error->all(FLERR,"Illegal global command");
+      if (strcmp(arg[iarg+1],"no") == 0) twopass_flag = 0;
+      else if (strcmp(arg[iarg+1],"yes") == 0) twopass_flag = 1;
+      else if (strcmp(arg[iarg+1],"auto") == 0) twopass_flag = 2;
       else error->all(FLERR,"Illegal global command");
       iarg += 2;
     } else if (strcmp(arg[iarg],"nrho") == 0) {

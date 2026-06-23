@@ -88,8 +88,8 @@ UpdateKokkos::UpdateKokkos(SPARTA *sparta) : Update(sparta),
 
   // use 1D view for scalars to reduce GPU memory operations
 
-  d_scalars = t_int_14("collide:scalars");
-  h_scalars = t_host_int_14("collide:scalars_mirror");
+  d_scalars = t_int_15("collide:scalars");
+  h_scalars = t_host_int_15("collide:scalars_mirror");
 
   d_ncomm_one     = Kokkos::subview(d_scalars,0);
   d_nexit_one     = Kokkos::subview(d_scalars,1);
@@ -105,6 +105,7 @@ UpdateKokkos::UpdateKokkos(SPARTA *sparta) : Update(sparta),
   d_error_flag    = Kokkos::subview(d_scalars,11);
   d_retry         = Kokkos::subview(d_scalars,12);
   d_nlocal        = Kokkos::subview(d_scalars,13);
+  d_ncomplex      = Kokkos::subview(d_scalars,14);
 
   h_ncomm_one     = Kokkos::subview(h_scalars,0);
   h_nexit_one     = Kokkos::subview(h_scalars,1);
@@ -120,8 +121,20 @@ UpdateKokkos::UpdateKokkos(SPARTA *sparta) : Update(sparta),
   h_error_flag    = Kokkos::subview(h_scalars,11);
   h_retry         = Kokkos::subview(h_scalars,12);
   h_nlocal        = Kokkos::subview(h_scalars,13);
+  h_ncomplex      = Kokkos::subview(h_scalars,14);
 
   nboundary_tally = 0;
+
+  // adaptive two-pass move selector defaults
+  // start optimistic (two-pass on) and let the first sampled step decide;
+  // hysteresis (hi > lo) avoids flapping, resample picks up flow changes
+
+  twopass_active     = 1;
+  twopass_last_sample = -1;
+  twopass_frac       = 0.0;
+  twopass_thresh_hi  = 0.55;
+  twopass_thresh_lo  = 0.40;
+  twopass_resample   = 100;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -417,6 +430,44 @@ void UpdateKokkos::run(int nsteps)
 }
 
 /* ----------------------------------------------------------------------
+   decide whether this move() step should use the two-pass GPU kernel
+   eligible = caller has already checked the regime is one the two-pass
+              kernels handle (first iteration, all owned particles, no field)
+   returns 1 to use the two-pass move, 0 to use the single-pass move
+
+   global twopass no   -> never (single pass)
+   global twopass yes  -> always (when eligible)
+   global twopass auto -> two-pass while the measured fraction of "complex"
+                          particles stays low; fall back to single-pass when it
+                          is high. The fraction is re-measured every
+                          twopass_resample steps by running one two-pass step,
+                          so a long run tracks changing flow conditions. The
+                          measurement itself is cheap (it is just a normal
+                          two-pass step) and amortizes to nothing.
+------------------------------------------------------------------------- */
+
+int UpdateKokkos::use_twopass_move(int eligible)
+{
+#ifndef SPARTA_KOKKOS_GPU
+  // the two-pass move targets GPU occupancy/divergence; on CPU backends the
+  // single-pass move is already the right choice
+  return 0;
+#else
+  if (!eligible) return 0;
+  if (twopass_flag == 0) return 0;   // forced off
+  if (twopass_flag == 1) return 1;   // forced on
+
+  // auto: run two-pass if it is currently the chosen path, or if it is time to
+  // re-measure the complex fraction (which requires running a two-pass step)
+
+  const bigint nt = update->ntimestep;
+  const int sample_now = (twopass_last_sample < 0) ||
+                         (nt - twopass_last_sample >= twopass_resample);
+  return (twopass_active || sample_now) ? 1 : 0;
+#endif
+}
+
+/* ----------------------------------------------------------------------
    advect particles thru grid
    DIM = 2/3 for 2d/3d, 1 for 2d axisymmetric
    SURF = 0/1 for no surfs or surfs
@@ -590,6 +641,21 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
 
     UPDATE_REDUCE reduce;
 
+    // adaptive two-pass GPU move decision (see use_twopass_move()).
+    // only the common regime is eligible: first move iteration over all owned
+    // particles, no external field. The DIM!=1 (non-axisymmetric) and REACT==0
+    // restrictions are compile-time so the two-pass kernels are not even
+    // instantiated for the cases they do not handle.
+
+    [[maybe_unused]] int use_twopass = 0;
+    if constexpr (DIM != 1 && REACT == 0 && OPT == 0) {
+      const int eligible = (niterate == 1 && !continue_loop_flag &&
+                            fstyle == NOFIELD);
+      use_twopass = use_twopass_move(eligible);
+      if (use_twopass && (int)d_complex_list.extent(0) < pstop)
+        Kokkos::realloc(d_complex_list,maxlocal);
+    }
+
     // Reactions may create or delete more particles than existing views can hold.
     //  Cannot grow a Kokkos view in a parallel loop, so
     //  if the capacity of the view is exceeded, break out of parallel loop,
@@ -620,7 +686,43 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
   #if defined(KOKKOS_ARCH_AMD_GFX940) || defined(KOKKOS_ARCH_AMD_GFX942) || defined(KOKKOS_ARCH_AMD_GFX942_APU)
       Kokkos::parallel_reduce(Kokkos::RangePolicy<DeviceType, TagUpdateMove<DIM,SURF,REACT,OPT,-1> >(pstart,pstop),*this,reduce);
   #else
-      Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagUpdateMove<DIM,SURF,REACT,OPT,1> >(pstart,pstop),*this);
+      if constexpr (DIM != 1 && REACT == 0 && OPT == 0) {
+        if (use_twopass) {
+
+          // pass 1: advance trivial particles in place, compact the rest.
+          // d_ncomplex lives in d_scalars and was zeroed by the deep_copy above.
+
+          Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagUpdateMoveFirstPass<DIM> >(pstart,pstop),*this);
+
+          // read back how many particles need the full (complex) move.
+          // NOTE: this host sync between the two kernels is the simplest
+          // correct approach; it can be removed by launching pass 2 over a
+          // fixed grid and reading the count on device (a follow-up optimization).
+
+          Kokkos::deep_copy(h_ncomplex,d_ncomplex);
+          const int ncomplex = h_ncomplex();
+
+          // pass 2: full per-particle move over just the compact complex list
+
+          Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagUpdateMoveComplex<DIM,SURF,REACT,OPT,1> >(0,ncomplex),*this);
+
+          // record the sample and update the adaptive decision for later steps
+
+          if (twopass_flag == 2) {
+            twopass_frac = (pstop > pstart) ?
+              double(ncomplex)/double(pstop-pstart) : 0.0;
+            twopass_last_sample = update->ntimestep;
+            if (twopass_active && twopass_frac > twopass_thresh_hi)
+              twopass_active = 0;
+            else if (!twopass_active && twopass_frac < twopass_thresh_lo)
+              twopass_active = 1;
+          }
+        } else {
+          Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagUpdateMove<DIM,SURF,REACT,OPT,1> >(pstart,pstop),*this);
+        }
+      } else {
+        Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagUpdateMove<DIM,SURF,REACT,OPT,1> >(pstart,pstop),*this);
+      }
   #endif
 #elif defined KOKKOS_ENABLE_SERIAL
       if constexpr(std::is_same<DeviceType,Kokkos::Serial>::value)
@@ -817,6 +919,71 @@ KOKKOS_INLINE_FUNCTION
 void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>, const int &i) const {
   UPDATE_REDUCE reduce;
   this->template operator()<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>(), i, reduce);
+}
+
+/*-----------------------------------------------------------------------------*/
+
+// two-pass GPU move, first pass.
+// Fast-path the dominant case: a PKEEP particle sitting in a surface-free cell
+// whose linear dt advance keeps it strictly inside that same cell. Such a
+// particle just has its position updated (it neither crosses a face, hits a
+// surface, nor migrates), so it never needs the heavy per-particle move.
+// Every other particle is appended to a compact list (d_complex_list) that the
+// second pass processes with the full move kernel. The trivial test is
+// deliberately conservative: deferring a particle to the second pass is always
+// correct, so the result is identical to the single-pass move.
+
+template<int DIM>
+KOKKOS_INLINE_FUNCTION
+void UpdateKokkos::operator()(TagUpdateMoveFirstPass<DIM>, const int &i) const {
+  Particle::OnePart &particle_i = d_particles[i];
+  const int pflag = particle_i.flag;
+
+  if (pflag == PKEEP) {
+    const int icell = particle_i.icell;
+    if (d_cells[icell].nsurf == 0) {
+      double *x = particle_i.x;
+      double *v = particle_i.v;
+      const double xnew0 = x[0] + dt*v[0];
+      const double xnew1 = x[1] + dt*v[1];
+      const double xnew2 = (DIM != 2) ? x[2] + dt*v[2] : 0.0;
+      const double *lo = d_cells[icell].lo;
+      const double *hi = d_cells[icell].hi;
+
+      // strict interior test: a particle landing exactly on a face is treated
+      // as a crossing and handled by the (heavy) second pass
+
+      bool inside = (xnew0 > lo[0] && xnew0 < hi[0] &&
+                     xnew1 > lo[1] && xnew1 < hi[1]);
+      if (DIM == 3)
+        inside = inside && (xnew2 > lo[2] && xnew2 < hi[2]);
+
+      if (inside) {
+        x[0] = xnew0;
+        x[1] = xnew1;
+        if (DIM != 2) x[2] = xnew2;
+        // flag already PKEEP; this particle "touched" exactly one cell
+        Kokkos::atomic_inc(&d_ntouch_one());
+        return;
+      }
+    }
+  }
+
+  // complex particle: append its index to the compact list
+
+  const int k = Kokkos::atomic_fetch_add(&d_ncomplex(),1);
+  d_complex_list(k) = i;
+}
+
+/*-----------------------------------------------------------------------------*/
+
+// two-pass GPU move, second pass: run the full move on the compact list only
+
+template<int DIM, int SURF, int REACT, int OPT, int ATOMIC_REDUCTION>
+KOKKOS_INLINE_FUNCTION
+void UpdateKokkos::operator()(TagUpdateMoveComplex<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>, const int &k) const {
+  const int i = d_complex_list(k);
+  this->template operator()<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>(), i);
 }
 
 /*-----------------------------------------------------------------------------*/

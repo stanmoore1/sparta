@@ -72,6 +72,16 @@ typedef struct s_UPDATE_REDUCE UPDATE_REDUCE;
 template<int DIM, int SURF, int REACT, int OPT, int ATOMIC_REDUCTION>
 struct TagUpdateMove{};
 
+// two-pass GPU move (see PR #623 / ATS-5 work):
+//   first pass advances "trivial" particles in place and compacts the
+//   remaining "complex" particles into a list; the second pass runs the full
+//   per-particle move only on that compact list.
+template<int DIM>
+struct TagUpdateMoveFirstPass{};
+
+template<int DIM, int SURF, int REACT, int OPT, int ATOMIC_REDUCTION>
+struct TagUpdateMoveComplex{};
+
 class UpdateKokkos : public Update {
  public:
   typedef UPDATE_REDUCE value_type;
@@ -95,6 +105,14 @@ class UpdateKokkos : public Update {
   template<int DIM, int SURF, int REACT, int OPT, int ATOMIC_REDUCTION>
   KOKKOS_INLINE_FUNCTION
   void operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>, const int&, UPDATE_REDUCE&) const;
+
+  template<int DIM>
+  KOKKOS_INLINE_FUNCTION
+  void operator()(TagUpdateMoveFirstPass<DIM>, const int&) const;
+
+  template<int DIM, int SURF, int REACT, int OPT, int ATOMIC_REDUCTION>
+  KOKKOS_INLINE_FUNCTION
+  void operator()(TagUpdateMoveComplex<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>, const int&) const;
 
  private:
 
@@ -144,11 +162,11 @@ class UpdateKokkos : public Update {
   ComputeBoundaryKokkos tmp_compute_boundary_kk;
   ComputeSurfKokkos tmp_compute_surf_kk;
 
-  typedef Kokkos::DualView<int[14], DeviceType::array_layout, DeviceType> tdual_int_14;
-  typedef tdual_int_14::t_dev t_int_14;
-  typedef tdual_int_14::t_host t_host_int_14;
-  t_int_14 d_scalars;
-  t_host_int_14 h_scalars;
+  typedef Kokkos::DualView<int[15], DeviceType::array_layout, DeviceType> tdual_int_15;
+  typedef tdual_int_15::t_dev t_int_15;
+  typedef tdual_int_15::t_host t_host_int_15;
+  t_int_15 d_scalars;
+  t_host_int_15 h_scalars;
 
   DAT::t_int_scalar d_ntouch_one;
   HAT::t_int_scalar h_ntouch_one;
@@ -191,6 +209,24 @@ class UpdateKokkos : public Update {
 
   DAT::t_int_scalar d_nlocal;
   HAT::t_int_scalar h_nlocal;
+
+  // two-pass GPU move: compact list of "complex" particle indices and its count
+
+  DAT::t_int_scalar d_ncomplex;
+  HAT::t_int_scalar h_ncomplex;
+  DAT::t_int_1d d_complex_list;
+
+  // adaptive two-pass selector state (host side, evolves over a run)
+
+  int twopass_active;          // 1 = currently using two-pass, 0 = single-pass
+  bigint twopass_last_sample;  // last timestep the complex fraction was measured
+  double twopass_frac;         // last measured complex-particle fraction
+  double twopass_thresh_hi;    // disable two-pass above this fraction
+  double twopass_thresh_lo;    // (re-)enable two-pass below this fraction
+  int twopass_resample;        // re-measure the fraction every this many steps
+
+  // decide whether the current move() step should use the two-pass kernel
+  int use_twopass_move(int eligible);
 
   void backup();
   void restore();
