@@ -57,6 +57,30 @@ struct TagCollideZeroNN{};
 template < int NEARCP, int GASTALLY, int ATOMIC_REDUCTION >
 struct TagCollideCollisionsOne{};
 
+// active-cell collision pre-pass: the collision kernel loops over a compact
+// list of the cells that can actually collide (cellcount > 1) instead of over
+// all grid cells, improving GPU occupancy when many cells are empty.
+template < int NEARCP, int GASTALLY, int ATOMIC_REDUCTION >
+struct TagCollideCollisionsOneActive{};
+
+// standalone prefix-scan functor that compacts the collision-active cells into
+// d_active_cells (its own int value_type avoids the class-level COLLIDE_REDUCE
+// value_type used by the collision reduce kernels)
+struct CollideBuildActiveFunctor {
+  typedef int value_type;
+  DAT::t_int_1d d_cellcount;
+  DAT::t_int_1d d_active_cells;
+  CollideBuildActiveFunctor(DAT::t_int_1d cellcount_, DAT::t_int_1d active_)
+    : d_cellcount(cellcount_), d_active_cells(active_) {}
+  KOKKOS_INLINE_FUNCTION
+  void operator()(const int icell, int &offset, const bool final) const {
+    if (d_cellcount(icell) > 1) {
+      if (final) d_active_cells(offset) = icell;
+      offset++;
+    }
+  }
+};
+
 template < int GASTALLY, int ATOMIC_REDUCTION >
 struct TagCollideCollisionsOneAmbipolar{};
 
@@ -99,6 +123,10 @@ class CollideVSSKokkos : public CollideVSS {
 
   KOKKOS_INLINE_FUNCTION
   void operator()(TagCollideZeroNN, const int&) const;
+
+  template < int NEARCP, int GASTALLY, int ATOMIC_REDUCTION >
+  KOKKOS_INLINE_FUNCTION
+  void operator()(TagCollideCollisionsOneActive< NEARCP, GASTALLY, ATOMIC_REDUCTION >, const int&) const;
 
   template < int NEARCP, int GASTALLY, int ATOMIC_REDUCTION >
   KOKKOS_INLINE_FUNCTION
@@ -203,6 +231,22 @@ class CollideVSSKokkos : public CollideVSS {
   DAT::t_float_2d d_recomb_ijflag;
 
   DAT::t_int_2d d_nn_last_partner;
+
+  // active-cell collision pre-pass: compact list of collision-active cells
+
+  DAT::t_int_1d d_active_cells;
+
+  // adaptive pre-pass selector state (host side, evolves over a run)
+
+  int collide_compact_on;        // 1 = currently using the active-cell list
+  bigint collide_last_sample;    // last timestep the active fraction was measured
+  double collide_active_frac;    // last measured fraction of collision-active cells
+  double collide_thresh_hi;      // disable the pre-pass above this fraction
+  double collide_thresh_lo;      // (re-)enable the pre-pass below this fraction
+  int collide_resample;          // re-measure the active fraction every N steps
+
+  // decide whether this collisions() step should use the active-cell pre-pass
+  int use_collide_compaction();
 
   template < int NEARCP, int GASTALLY > void collisions_one(COLLIDE_REDUCE&);
   template < int GASTALLY > void collisions_one_ambipolar(COLLIDE_REDUCE&);

@@ -84,6 +84,7 @@ Collide::Collide(SPARTA *sparta, int, char **arg) : Pointers(sparta)
   vibstyle = NONE;
   nearcp = 0;
   nearlimit = 10;
+  twopass_flag = 0;   // default off; opt in via the KOKKOS collision pre-pass
 
   recomb_ijflag = NULL;
 
@@ -1723,6 +1724,18 @@ void Collide::modify_params(int narg, char **arg)
       if (nearcp && nearlimit <= 0)
         error->all(FLERR,"Illegal collide_modify command");
       iarg += 3;
+
+    } else if (strcmp(arg[iarg],"twopass") == 0) {
+      // KOKKOS active-cell collision pre-pass (ignored by the non-Kokkos path)
+      //   no   = loop over all grid cells
+      //   yes  = loop only over a compacted list of collision-active cells
+      //   auto = measure the active-cell fraction and switch automatically
+      if (iarg+2 > narg) error->all(FLERR,"Illegal collide_modify command");
+      if (strcmp(arg[iarg+1],"no") == 0) twopass_flag = 0;
+      else if (strcmp(arg[iarg+1],"yes") == 0) twopass_flag = 1;
+      else if (strcmp(arg[iarg+1],"auto") == 0) twopass_flag = 2;
+      else error->all(FLERR,"Illegal collide_modify command");
+      iarg += 2;
 
     } else error->all(FLERR,"Illegal collide_modify command");
   }

@@ -13,7 +13,7 @@ collide_modify command :h3
 collide_modify keyword values ...  :pre
 
 one or more keyword/value pairs may be listed :ulb,l
-keywords = {vremax} or {remain} or {ambipolar} or {nearcp} or {rotate} or {vibrate} :l
+keywords = {vremax} or {remain} or {ambipolar} or {nearcp} or {rotate} or {vibrate} or {twopass} :l
   {vremax} values = Nevery startflag
     Nevery = zero vremax every this many timesteps
     startflag = {yes} or {no} = zero vremax at start of every run
@@ -23,7 +23,8 @@ keywords = {vremax} or {remain} or {ambipolar} or {nearcp} or {rotate} or {vibra
     Nlimit = max # of attempts made to find a collision partner
   {ambipolar} value = {no} or {yes}
   {rotate} value = {no} or {smooth}
-  {vibrate} value = {no} or {smooth} or {discrete} :pre
+  {vibrate} value = {no} or {smooth} or {discrete}
+  {twopass} value = {no} or {yes} or {auto} :pre
 :ule
 
 [Examples:]
@@ -137,6 +138,24 @@ the per-particle mode values.
 
 :line
 
+The {twopass} keyword only affects KOKKOS GPU runs and controls how the
+collision step is dispatched on the device. The collision kernel normally
+launches one thread per grid cell, but cells with one or zero particles
+cannot collide and do no work. When {twopass} is {yes}, SPARTA first
+compacts the collision-active cells (those with more than one particle)
+into a list and then loops only over that list, which improves GPU
+occupancy when many cells are empty (for example a strongly
+non-uniform flow, or low particles-per-cell). When most cells are active
+(dense, uniform flow with many particles per cell), the extra compaction
+pass is overhead. With {auto} SPARTA measures the active-cell fraction
+and switches between the two automatically, re-sampling periodically so
+the choice tracks changing conditions; {yes} and {no} force one path. The
+default is {no}. The keyword is ignored on CPU backends and on the
+non-atomic parallel_reduce collision path, which always loop over all
+cells.
+
+:line
+
 [Restrictions:] none
 
 [Related commands:]
@@ -146,7 +165,7 @@ the per-particle mode values.
 [Default:]
 
 The option defaults are vremax = (0,yes), remain = yes, ambipolar no,
-nearcp no, rotate smooth, and vibrate = no.
+nearcp no, rotate smooth, vibrate = no, and twopass = no.
 
 :line
 

@@ -96,6 +96,18 @@ CollideVSSKokkos::CollideVSSKokkos(SPARTA *sparta, int narg, char **arg) :
   react_defined = 0;
 
   maxdelete = DELTADELETE;
+
+  // adaptive active-cell collision pre-pass selector defaults.
+  // The pre-pass pays off when only a small fraction of cells can collide
+  // (few cells with > 1 particle); start optimistic and let the first sampled
+  // step decide. Hysteresis (hi > lo) avoids flapping.
+
+  collide_compact_on  = 1;
+  collide_last_sample = -1;
+  collide_active_frac = 0.0;
+  collide_thresh_hi   = 0.80;
+  collide_thresh_lo   = 0.65;
+  collide_resample    = 100;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -458,6 +470,39 @@ void CollideVSSKokkos::collisions()
 }
 
 /* ----------------------------------------------------------------------
+   decide whether this collisions() step should use the active-cell pre-pass
+   returns 1 to compact and loop over collision-active cells, 0 to loop over
+   all grid cells
+
+   collide_modify twopass no   -> never (all cells)
+   collide_modify twopass yes  -> always (when on the parallel_for path)
+   collide_modify twopass auto -> compact while the active-cell fraction stays
+                                  low; loop over all cells when most cells can
+                                  collide. The fraction is re-measured every
+                                  collide_resample steps.
+------------------------------------------------------------------------- */
+
+int CollideVSSKokkos::use_collide_compaction()
+{
+#ifndef SPARTA_KOKKOS_GPU
+  // the pre-pass targets GPU occupancy when many cells are empty; on CPU
+  // backends looping over all cells is already the right choice
+  return 0;
+#else
+  if (twopass_flag == 0) return 0;   // forced off
+  if (twopass_flag == 1) return 1;   // forced on
+
+  // auto: compact if it is currently the chosen path, or if it is time to
+  // re-measure the active-cell fraction (which requires running the pre-pass)
+
+  const bigint nt = update->ntimestep;
+  const int sample_now = (collide_last_sample < 0) ||
+                         (nt - collide_last_sample >= collide_resample);
+  return (collide_compact_on || sample_now) ? 1 : 0;
+#endif
+}
+
+/* ----------------------------------------------------------------------
    NTC algorithm for a single group
 ------------------------------------------------------------------------- */
 
@@ -556,13 +601,52 @@ template < int NEARCP, int GASTALLY > void CollideVSSKokkos::collisions_one(COLL
       react_kk_copy.copy(react_kk);
     }
 
-    if (sparta->kokkos->atomic_reduction) {
+    // adaptive active-cell pre-pass decision (see use_collide_compaction()).
+    // The compacted active kernel uses the parallel_for (atomic/no-atomic)
+    // collision path; the parallel_reduce path always loops over all cells.
+
+    int use_active = use_collide_compaction();
+    if (!sparta->kokkos->atomic_reduction) use_active = 0;
+    if (use_active && int(d_active_cells.extent(0)) < nglocal)
+      MemKK::realloc_kokkos(d_active_cells,"collide:active_cells",nglocal);
+
+    if (use_active) {
+
+      // pass 1: compact the collision-active cells (cellcount > 1) into
+      // d_active_cells via a prefix scan; nactive is returned to the host
+
+      int nactive = 0;
+      CollideBuildActiveFunctor build_active(grid_kk->d_cellcount,d_active_cells);
+      Kokkos::parallel_scan(Kokkos::RangePolicy<DeviceType>(0,nglocal),build_active,nactive);
+
+      // pass 2: run the collision kernel over just the active cells
+
       if (sparta->kokkos->need_atomics)
-        Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagCollideCollisionsOne<NEARCP,GASTALLY,1> >(0,nglocal),*this);
+        Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagCollideCollisionsOneActive<NEARCP,GASTALLY,1> >(0,nactive),*this);
       else
-        Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagCollideCollisionsOne<NEARCP,GASTALLY,0> >(0,nglocal),*this);
-    } else
-      Kokkos::parallel_reduce(Kokkos::RangePolicy<DeviceType, TagCollideCollisionsOne<NEARCP,GASTALLY,-1> >(0,nglocal),*this,reduce);
+        Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagCollideCollisionsOneActive<NEARCP,GASTALLY,0> >(0,nactive),*this);
+
+      // record the sample and update the adaptive decision for later steps
+
+      if (twopass_flag == 2 && nglocal > 0) {
+        collide_active_frac = double(nactive)/double(nglocal);
+        collide_last_sample = update->ntimestep;
+        if (collide_compact_on && collide_active_frac > collide_thresh_hi)
+          collide_compact_on = 0;
+        else if (!collide_compact_on && collide_active_frac < collide_thresh_lo)
+          collide_compact_on = 1;
+      }
+
+    } else {
+
+      if (sparta->kokkos->atomic_reduction) {
+        if (sparta->kokkos->need_atomics)
+          Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagCollideCollisionsOne<NEARCP,GASTALLY,1> >(0,nglocal),*this);
+        else
+          Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagCollideCollisionsOne<NEARCP,GASTALLY,0> >(0,nglocal),*this);
+      } else
+        Kokkos::parallel_reduce(Kokkos::RangePolicy<DeviceType, TagCollideCollisionsOne<NEARCP,GASTALLY,-1> >(0,nglocal),*this,reduce);
+    }
 
     Kokkos::deep_copy(h_scalars,d_scalars);
 
@@ -623,6 +707,17 @@ void CollideVSSKokkos::operator()(TagCollideZeroNN, const int &icell) const {
   const int np = grid_kk_copy.obj.d_cellcount[icell];
   for (int i = 0; i < np; i++)
     d_nn_last_partner(icell,i) = 0;
+}
+
+// active-cell collision kernel: map the compact index to a cell, then run the
+// exact same per-cell collision work as the all-cells kernel
+
+template < int NEARCP, int GASTALLY, int ATOMIC_REDUCTION >
+KOKKOS_INLINE_FUNCTION
+void CollideVSSKokkos::operator()(TagCollideCollisionsOneActive< NEARCP, GASTALLY, ATOMIC_REDUCTION >, const int &k) const {
+  const int icell = d_active_cells(k);
+  COLLIDE_REDUCE reduce;
+  this->template operator()< NEARCP, GASTALLY, ATOMIC_REDUCTION >(TagCollideCollisionsOne< NEARCP, GASTALLY, ATOMIC_REDUCTION >(), icell, reduce);
 }
 
 template < int NEARCP, int GASTALLY, int ATOMIC_REDUCTION >
