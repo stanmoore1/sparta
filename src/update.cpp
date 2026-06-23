@@ -85,7 +85,7 @@ Update::Update(SPARTA *sparta) : Pointers(sparta)
   vstream[0] = vstream[1] = vstream[2] = 0.0;
   temp_thermal = 273.15;
   optmove_flag = 0;
-  twopass_flag = 2;       // default: auto-select the KOKKOS two-pass GPU move
+  twopass_flag = 0;       // default off; opt in via the KOKKOS two-pass GPU move
   fstyle = NOFIELD;
   fieldID = NULL;
 

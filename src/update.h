@@ -43,7 +43,7 @@ class Update : protected Pointers {
   double vstream[3];     // streaming velocity of background gas
   double temp_thermal;   // thermal temperature of background gas
   int optmove_flag;      // global optmove option set
-  int twopass_flag;      // KOKKOS two-pass GPU move: 0 = off, 1 = on, 2 = auto
+  int twopass_flag;      // KOKKOS two-pass GPU move: 0 = off (default), 1 = on, 2 = auto
 
   int fstyle;            // external field: NOFIELD, CFIELD, PFIELD, GFIELD
   double field[3];       // constant external field

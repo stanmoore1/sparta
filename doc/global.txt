@@ -69,9 +69,9 @@ keyword = {fnum} or {nrho} or {vstream} or {temp} or {field} or {surfs} or {surf
   {optmove} value = yes or no
     yes/no = use optimized particle move if yes, else use regular move
   {twopass} value = no or yes or auto
-    no = always use the single-pass KOKKOS GPU particle move
+    no = always use the single-pass KOKKOS GPU particle move (default)
     yes = always use the two-pass KOKKOS GPU particle move
-    auto = automatically select single- vs two-pass each step (default) :pre
+    auto = automatically select single- vs two-pass each step :pre
 :ule
 
 [Examples:]
@@ -431,10 +431,11 @@ then runs the full move on just that list. This improves GPU occupancy
 and reduces warp divergence when most particles stay within their cell
 each step (small displacement per timestep), but it adds overhead when
 most particles cross a cell boundary (large displacement per timestep).
-With {auto} (the default) SPARTA measures the fraction of complex
-particles and automatically switches between the single-pass and
-two-pass move, re-sampling periodically so the choice tracks changing
-conditions; {yes} and {no} force one path. The keyword is ignored on CPU
+With {auto} SPARTA measures the fraction of complex particles and
+automatically switches between the single-pass and two-pass move,
+re-sampling periodically so the choice tracks changing conditions; {yes}
+and {no} force one path. The default is {no} (single-pass move). The
+keyword is ignored on CPU
 backends and for axisymmetric, external-field, or surface-reaction runs,
 which always use the single-pass move.
 
@@ -453,4 +454,4 @@ The keyword defaults are fnum = 1.0, nrho = 1.0, vstream = 0.0 0.0
 0.0, temp = 273.15, field = none, surfs = explicit, surfgrid = auto,
 surfmax = 100, splitmax = 10, surftally = auto,
 gridcut = -1.0, comm/sort = no, comm/style = neigh, weight = cell
-none, particle/reorder = 0, mem/limit = 0, optmove = no, twopass = auto.
+none, particle/reorder = 0, mem/limit = 0, optmove = no, twopass = no.
