@@ -596,13 +596,15 @@ void Input::substitute(char *&str, char *&str2, int &max, int &max2, int flag)
      p_ID[*], g_ID[*], or s_ID[*]
    fields to consider in input arg range from iarg to narg
    return new expanded # of values, and copy them w/out "*" into earg
+   f_ID[*] for a fix which produces a per-grid or per-surf vector
+     (single column) becomes the vector reference f_ID
    if any expansion occurs, earg is new allocation, must be freed by caller
    if no expansion occurs, earg just points to arg, caller need not free
 ------------------------------------------------------------------------- */
 
 int Input::expand_args(int narg, char **arg, int mode, char **&earg)
 {
-  int n,iarg,index,nlo,nhi,nmax,expandflag,icompute,ifix,icustom;
+  int n,iarg,index,nlo,nhi,nmax,expandflag,vecflag,icompute,ifix,icustom;
   char *ptr1,*ptr2,*str;
 
   ptr1 = NULL;
@@ -624,6 +626,7 @@ int Input::expand_args(int narg, char **arg, int mode, char **&earg)
   int newarg = 0;
   for (iarg = 0; iarg < narg; iarg++) {
     expandflag = 0;
+    vecflag = 0;
 
     if (strncmp(arg[iarg],"c_",2) == 0 ||
         strncmp(arg[iarg],"f_",2) == 0 ||
@@ -695,14 +698,16 @@ int Input::expand_args(int narg, char **arg, int mode, char **&earg)
                            modify->fix[ifix]->size_per_particle_cols) {
                   nmax = modify->fix[ifix]->size_per_particle_cols;
                   expandflag = 1;
-                } else if (modify->fix[ifix]->per_grid_flag &&
-                           modify->fix[ifix]->size_per_grid_cols) {
-                  nmax = modify->fix[ifix]->size_per_grid_cols;
-                  expandflag = 1;
-                } else if (modify->fix[ifix]->per_surf_flag &&
-                           modify->fix[ifix]->size_per_surf_cols) {
-                  nmax = modify->fix[ifix]->size_per_surf_cols;
-                  expandflag = 1;
+                } else if (modify->fix[ifix]->per_grid_flag) {
+                  if (modify->fix[ifix]->size_per_grid_cols) {
+                    nmax = modify->fix[ifix]->size_per_grid_cols;
+                    expandflag = 1;
+                  } else if (strcmp(ptr1+1,"*") == 0) vecflag = 1;
+                } else if (modify->fix[ifix]->per_surf_flag) {
+                  if (modify->fix[ifix]->size_per_surf_cols) {
+                    nmax = modify->fix[ifix]->size_per_surf_cols;
+                    expandflag = 1;
+                  } else if (strcmp(ptr1+1,"*") == 0) vecflag = 1;
                 }
               }
 
@@ -771,6 +776,21 @@ int Input::expand_args(int narg, char **arg, int mode, char **&earg)
         strcat(str,ptr2);
         newarg++;
       }
+
+    // strip "[*]" from a fix which produces a per-grid or per-surf vector,
+    //   e.g. f_ID[*] becomes f_ID
+
+    } else if (vecflag) {
+      if (newarg == maxarg) {
+        maxarg++;
+        earg = (char **)
+          memory->srealloc(earg,maxarg*sizeof(char *),"input:earg");
+      }
+      n = ptr1 - arg[iarg] + 1;
+      str = earg[newarg] = new char[n];
+      strncpy(str,arg[iarg],n-1);
+      str[n-1] = '\0';
+      newarg++;
 
     } else {
       if (newarg == maxarg) {
