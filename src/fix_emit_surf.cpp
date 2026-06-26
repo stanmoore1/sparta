@@ -1330,7 +1330,7 @@ void FixEmitSurf::subsonic_sort()
       maxactive = grid->nlocal;
       memory->create(activecell,maxactive,"emit/face:active");
     }
-    memset(activecell,0,maxactive*sizeof(int));
+    memset(activecell,0,((size_t)maxactive)*sizeof(int));
     for (i = 0; i < ntask; i++) activecell[tasks[i].pcell] = 1;
     active_current = 1;
   }
@@ -1455,7 +1455,7 @@ void FixEmitSurf::subsonic_grid()
         else normal = norm_vstream;
       }
 
-      if (np) {
+      if (np && massrho_cell * soundspeed_cell > 0.0) {
         vsmag = (psubsonic - press_cell) / (massrho_cell*soundspeed_cell);
         vstream[0] += vsmag*normal[0];
         vstream[1] += vsmag*normal[1];
@@ -1494,7 +1494,7 @@ void FixEmitSurf::grow_task()
   // set all new task bytes to 0 so valgrind won't complain
   // if bytes between fields are uninitialized
 
-  memset(&tasks[oldmax],0,(ntaskmax-oldmax)*sizeof(Task));
+  memset(&tasks[oldmax],0,((size_t)ntaskmax-oldmax)*sizeof(Task));
 
   // allocate vectors in each new task or set to NULL
   // path and fracarea are allocated later to specific sizes

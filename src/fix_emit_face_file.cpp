@@ -239,6 +239,8 @@ void FixEmitFaceFile::init()
   // per-species vectors for mesh setting of species fractions
   // initialize to mixture settings
 
+  delete [] fflag;
+  delete [] fuser;
   fflag = new int[nspecies];
   fuser = new double[nspecies];
   for (isp = 0; isp < nspecies; isp++) {
@@ -473,7 +475,7 @@ void FixEmitFaceFile::perform_task()
 
         v[ndim] = beta_un*vscale[isp]*normal[ndim] + vstream[ndim];
 
-        theta = MY_PI * random->uniform();
+        theta = MY_2PI * random->uniform();
         vr = vscale[isp] * sqrt(-log(random->uniform()));
         v[pdim] = vr * sin(theta) + vstream[pdim];
         v[qdim] = vr * cos(theta) + vstream[qdim];
@@ -1116,7 +1118,7 @@ void FixEmitFaceFile::subsonic_sort()
       maxactive = grid->nlocal;
       memory->create(activecell,maxactive,"emit/face:active");
     }
-    memset(activecell,0,maxactive*sizeof(int));
+    memset(activecell,0,((size_t)maxactive)*sizeof(int));
     for (i = 0; i < ntask; i++) activecell[tasks[i].pcell] = 1;
     active_current = 1;
   }
@@ -1225,14 +1227,14 @@ void FixEmitFaceFile::subsonic_grid()
         tempmax = MAX(tempmax,temp_thermal_cell);
       }
 
-      if (np) {
+      if (np && massrho_cell * soundspeed_cell > 0.0) {
         sign = normal[ndim];
         vstream[ndim] += sign *
           (tasks[i].press - press_cell) / (massrho_cell*soundspeed_cell);
       }
 
       vscale = tasks[i].vscale;
-      for (m = 0; m < nspecies; i++) {
+      for (m = 0; m < nspecies; m++) {
         ispecies = particle->mixture[imix]->species[m];
         vscale[m] = sqrt(2.0 * update->boltz * temp_thermal_cell /
                          species[ispecies].mass);
@@ -1262,7 +1264,7 @@ void FixEmitFaceFile::grow_task()
   // set all new task bytes to 0 so valgrind won't complain
   // if bytes between fields are uninitialized
 
-  memset(&tasks[oldmax],0,(ntaskmax-oldmax)*sizeof(Task));
+  memset(&tasks[oldmax],0,((size_t)ntaskmax-oldmax)*sizeof(Task));
 
   // allocate vectors in each new task or set to NULL
 

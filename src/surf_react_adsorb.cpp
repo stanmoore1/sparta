@@ -824,9 +824,13 @@ int SurfReactAdsorb::react(Particle::OnePart *&ip, int isurf, double *norm,
           double dot = MathExtra::dot3(v,norm);
           double vmag_sq = MathExtra::lensq3(v);
           double E_i = 0.5 * species[ip->ispecies].mass * vmag_sq;
-          double cos_theta = abs(dot) / sqrt(vmag_sq);
-          prob_value[i] *= pow(E_i,r->energy_coeff[0]) *
-          pow(cos_theta,r->energy_coeff[1]);
+          if (vmag_sq > 0.0) {
+            double cos_theta = abs(dot) / sqrt(vmag_sq);
+            prob_value[i] *= pow(E_i,r->energy_coeff[0]) *
+            pow(cos_theta,r->energy_coeff[1]);
+          } else {
+            prob_value[i] = 0.0;
+          }
         }
         break;
       }

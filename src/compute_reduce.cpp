@@ -133,8 +133,10 @@ ComputeReduce::ComputeReduce(SPARTA *spa, int narg, char **arg) :
 
       char *ptr = strchr(suffix,'[');
       if (ptr) {
-        if (suffix[strlen(suffix)-1] != ']')
+        if (suffix[strlen(suffix)-1] != ']') {
+          delete [] suffix;
           error->all(FLERR,"Illegal compute reduce command");
+        }
         argindex[nvalues] = atoi(ptr+1);
         *ptr = '\0';
       } else argindex[nvalues] = 0;
@@ -158,7 +160,7 @@ ComputeReduce::ComputeReduce(SPARTA *spa, int narg, char **arg) :
 
   while (iarg < nargnew) {
     if (strcmp(arg[iarg],"replace") == 0) {
-      if (iarg+3 > narg) error->all(FLERR,"Illegal compute reduce command");
+      if (iarg+3 > nargnew) error->all(FLERR,"Illegal compute reduce command");
       if (mode != MINN && mode != MAXX)
         error->all(FLERR,"Compute reduce replace requires min or max mode");
       int col1 = atoi(arg[iarg+1]) - 1;
@@ -171,7 +173,7 @@ ComputeReduce::ComputeReduce(SPARTA *spa, int narg, char **arg) :
       replace[col1] = col2;
       iarg += 3;
     } else if (strcmp(arg[iarg],"subset") == 0) {
-      if (iarg+2 > narg) error->all(FLERR,"Illegal compute reduce command");
+      if (iarg+2 > nargnew) error->all(FLERR,"Illegal compute reduce command");
       int n = strlen(arg[iarg+1]) + 1;
       subsetID = new char[n];
       strcpy(subsetID,arg[iarg+1]);

@@ -239,8 +239,8 @@ void Input::file()
     // execute the command
 
     if (execute_command()) {
-      char *str = new char[maxline+32];
-      sprintf(str,"Unknown command: %s",line);
+      char str[128];
+      snprintf(str,128,"Unknown command: %.90s",line);
       error->all(FLERR,str);
     }
   }
@@ -265,7 +265,7 @@ void Input::file(const char *filename)
     infile = fopen(filename,"r");
     if (infile == NULL) {
       char str[128];
-      sprintf(str,"Cannot open input script %s",filename);
+      snprintf(str,128,"Cannot open input script %s",filename);
       error->one(FLERR,str);
     }
     infiles[0] = infile;
@@ -306,8 +306,8 @@ char *Input::one(const char *single)
   // execute the command and return its name
 
   if (execute_command()) {
-    char *str = new char[maxline+32];
-    sprintf(str,"Unknown command: %s",line);
+    char str[128];
+    snprintf(str,128,"Unknown command: %.90s",line);
     error->all(FLERR,str);
   }
 
@@ -1000,7 +1000,7 @@ void Input::ifthenelse()
     ncommands = 0;
     for (int i = first; i <= last; i++) {
       int n = strlen(arg[i]) + 1;
-      if (n == 1) error->all(FLERR,"Illegal if command");
+      if (n == 1) { for (int j = 0; j < ncommands; j++) delete [] commands[j]; delete [] commands; error->all(FLERR,"Illegal if command"); }
       commands[ncommands] = new char[n];
       strcpy(commands[ncommands],arg[i]);
       ncommands++;
@@ -1054,7 +1054,7 @@ void Input::ifthenelse()
     ncommands = 0;
     for (int i = first; i <= last; i++) {
       int n = strlen(arg[i]) + 1;
-      if (n == 1) error->all(FLERR,"Illegal if command");
+      if (n == 1) { for (int j = 0; j < ncommands; j++) delete [] commands[j]; delete [] commands; error->all(FLERR,"Illegal if command"); }
       commands[ncommands] = new char[n];
       strcpy(commands[ncommands],arg[i]);
       ncommands++;
@@ -1097,7 +1097,7 @@ void Input::include()
     infile = fopen(arg[0],"r");
     if (infile == NULL) {
       char str[128];
-      sprintf(str,"Cannot open input script %s",arg[0]);
+      snprintf(str,128,"Cannot open input script %s",arg[0]);
       error->one(FLERR,str);
     }
     infiles[nfile++] = infile;
@@ -1122,7 +1122,7 @@ void Input::jump()
       infile = fopen(arg[0],"r");
       if (infile == NULL) {
         char str[128];
-        sprintf(str,"Cannot open input script %s",arg[0]);
+        snprintf(str,128,"Cannot open input script %s",arg[0]);
         error->one(FLERR,str);
       }
       infiles[nfile-1] = infile;
@@ -1167,7 +1167,7 @@ void Input::log()
 
       if (logfile == NULL) {
         char str[128];
-        sprintf(str,"Cannot open logfile %s",arg[0]);
+        snprintf(str,128,"Cannot open logfile %s",arg[0]);
         error->one(FLERR,str);
       }
     }
@@ -1245,7 +1245,7 @@ void Input::print()
         else fp = fopen(arg[iarg+1],"a");
         if (fp == NULL) {
           char str[128];
-          sprintf(str,"Cannot open print file %s",arg[iarg+1]);
+          snprintf(str,128,"Cannot open print file %s",arg[iarg+1]);
           error->one(FLERR,str);
         }
       }

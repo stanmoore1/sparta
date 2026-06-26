@@ -56,7 +56,7 @@ Custom::~Custom()
 
   for (int i = 0; i < naction; i++) {
     int action = actions[i].action;
-    if (action == FILESTYLE) {
+    if (action == FILESTYLE || action == FILECOARSE) {
       delete [] actions[i].fname;
       delete [] actions[i].cindex_file;
       delete [] actions[i].ctype_file;

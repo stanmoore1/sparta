@@ -435,7 +435,7 @@ void Dump::openfile()
 int Dump::convert_string(int n, double *mybuf)
 {
   int i,j;
-  char str[32];
+  char str[128];
 
   int offset = 0;
   int m = 0;

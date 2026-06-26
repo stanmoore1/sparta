@@ -608,7 +608,7 @@ void FixEmitSurfKokkos::operator()(TagFixEmitSurf_perform_task, const int &i, in
         else vnmag = beta_un*vscale + indot;
 
         const double theta = MY_2PI * rand_gen.drand();
-        const double vr = vscale * sqrt(-log(rand_gen.drand()));
+        const double vr = vscale * sqrt(-log(1.0 - rand_gen.drand()));
 
         double vamag,vbmag;
         if (normalflag) {
@@ -720,7 +720,7 @@ void FixEmitSurfKokkos::operator()(TagFixEmitSurf_perform_task, const int &i, in
       else vnmag = beta_un*vscale + indot;
 
       const double theta = MY_2PI * rand_gen.drand();
-      const double vr = vscale * sqrt(-log(rand_gen.drand()));
+      const double vr = vscale * sqrt(-log(1.0 - rand_gen.drand()));
 
       double vamag,vbmag;
       if (normalflag) {
