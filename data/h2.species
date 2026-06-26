@@ -1,0 +1,32 @@
+# Hydrogen species data
+#
+# Molecular hydrogen (H2) and atomic hydrogen (H).
+# H2 thermophysical and collision parameters from:
+#   G. A. Bird, "Molecular Gas Dynamics and the Direct Simulation of
+#   Gas Flows", Oxford University Press, 1994, Appendix A.
+# Added in response to SPARTA issue #403 (helium/hydrogen species request).
+#
+# NOTE: RotRel for H2 is set to the SPARTA template default (0.2) for
+# consistency with the other diatomic .species files in this directory.
+# H2 actually has a large rotational collision number (Zrot ~ 200-350 near
+# room temperature, i.e. slow relaxation); for quantitative work consider a
+# smaller constant or the variable (Parker) rotational-relaxation model.
+# NOTE: the H2 vibrational temperature (6159 K) follows Bird (1994); some
+# references quote ~6332 K depending on anharmonic correction.
+# NOTE: atomic-H collision parameters below are a hard-sphere-type ESTIMATE
+# (Bird's Appendix A does not tabulate atomic H); replace with a primary
+# source before using H for quantitative chemistry.
+
+# ID
+# Molwt (amu)
+# Molmass (kg)
+# Rotational dof
+# RotRel
+# Vibrational dof
+# VibRel
+# VibTemp (K)
+# species wt
+# charge
+
+H2  2.016    3.35E-27  2    0.2   2    1.9E-5   6159.0   1.0      0.0
+H   1.008    1.67E-27  0    0.0   0    0.0      0.0      1.0      0.0

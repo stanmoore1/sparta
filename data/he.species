@@ -1,0 +1,20 @@
+# Helium species data
+#
+# Helium atom (He), monatomic neutral.
+# Thermophysical and collision parameters from:
+#   G. A. Bird, "Molecular Gas Dynamics and the Direct Simulation of
+#   Gas Flows", Oxford University Press, 1994, Appendix A.
+# Added in response to SPARTA issue #403 (helium/hydrogen species request).
+
+# ID
+# Molwt (amu)
+# Molmass (kg)
+# Rotational dof
+# RotRel
+# Vibrational dof
+# VibRel
+# VibTemp (K)
+# species wt
+# charge
+
+He  4.0026   6.65E-27  0    0.0   0    0.0    0.0    1.0      0.0

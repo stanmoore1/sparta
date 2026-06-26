@@ -1,0 +1,13 @@
+# VSS collision model parameters for helium
+#
+# Variable Soft Sphere (VSS) parameters from:
+#   G. A. Bird, "Molecular Gas Dynamics and the Direct Simulation of
+#   Gas Flows", Oxford University Press, 1994, Appendix A (Tref = 273.15 K).
+# For a VHS run, use diameter 2.33e-10 with alpha = 1.0 instead.
+
+# diameter (m)
+# omega
+# tref
+# alpha
+
+He   2.30e-10  0.66  273.15  1.26

@@ -1,0 +1,17 @@
+# VSS collision model parameters for hydrogen
+#
+# Variable Soft Sphere (VSS) parameters for molecular hydrogen (H2) from:
+#   G. A. Bird, "Molecular Gas Dynamics and the Direct Simulation of
+#   Gas Flows", Oxford University Press, 1994, Appendix A (Tref = 273.15 K).
+# For a VHS run, use diameter 2.92e-10 with alpha = 1.0 instead.
+#
+# NOTE: the atomic-H (H) row is a hard-sphere-type ESTIMATE, not a Bird
+# Appendix A value; replace with a primary source before quantitative use.
+
+# diameter (m)
+# omega
+# tref
+# alpha
+
+H2   2.88e-10  0.67  273.15  1.35
+H    2.50e-10  0.80  273.15  1.0
