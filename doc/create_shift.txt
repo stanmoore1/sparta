@@ -1,0 +1,70 @@
+"SPARTA WWW Site"_sws - "SPARTA Documentation"_sd - "SPARTA Commands"_sc :c
+
+:link(sws,https://sparta.github.io)
+:link(sd,Manual.html)
+:link(sc,Section_commands.html#comm)
+
+:line
+
+create_shift command :h3
+
+[Syntax:]
+
+create_shift xfrac yfrac zfrac :pre
+
+xfrac,yfrac,zfrac = shift fractions in the x,y,z dimensions (-1.0 to 1.0) :ul
+
+[Examples:]
+
+create_shift 0.0 0.5 0.0
+create_shift 0.25 0.0 0.0 :pre
+
+[Description:]
+
+Define a shifted-periodic boundary condition for the global simulation
+box.  This generalizes a standard periodic boundary: when a particle
+exits a "periodic"_boundary.html face, it re-enters through the opposite
+face as usual, but its position in the directions {transverse} to the
+crossing is also offset by the requested shift.  The particle velocity is
+unchanged.
+
+Each argument is a fraction of the corresponding box length, so the
+absolute offset applied is {frac} * (boxhi - boxlo) for that dimension.
+A fraction of 0.0 (the default for every dimension) reproduces a standard
+periodic boundary.  The box must already exist (via
+"create_box"_create_box.html, "read_data"_read_data.html, or
+"read_restart"_read_restart.html) before this command is used.
+
+This boundary condition is useful for simulating a single repeating unit
+of a geometry whose periodic images are offset from one another, such as
+flow through one of several identical helical channels: particles leaving
+the end of a channel re-enter shifted to line up with the adjacent
+channel.
+
+The shift is applied when a particle crosses a periodic face:
+
+on a {lo} face the transverse coordinates are shifted by +offset
+on a {hi} face the transverse coordinates are shifted by -offset :ul
+
+If the shift would move a particle outside the box bounds in a transverse
+direction, that particle leaves the domain (it is treated as outflow).
+This models the open transverse edges of a shifted channel.
+
+The offset is stored with the simulation box and is written to and read
+from "restart"_write_restart.html files.
+
+[Restrictions:]
+
+For 2d simulations the z fraction must be 0.0.
+
+The shift in a given transverse dimension only takes effect for particles
+crossing a "periodic"_boundary.html face in another dimension.  Setting a
+shift fraction has no effect on a dimension whose faces are not periodic.
+
+[Related commands:]
+
+"boundary"_boundary.html, "create_box"_create_box.html
+
+[Default:]
+
+All shift fractions are 0.0 (standard periodic boundaries).

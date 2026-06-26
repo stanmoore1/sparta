@@ -60,32 +60,31 @@ class DomainKokkos : public Domain {
       case PERIODIC:
       {
         double *x = ip->x;
+        int dim = face / 2;            // 0,1,2 = crossing x,y,z dimension
+        int side = face % 2;           // 0 = lo face, 1 = hi face
 
-        switch (face) {
-        case XLO:
-          x[0] = boxhi[0];
-          xnew[0] += xprd;
-          break;
-        case XHI:
-          x[0] = boxlo[0];
-          xnew[0] -= xprd;
-          break;
-        case YLO:
-          x[1] = boxhi[1];
-          xnew[1] += yprd;
-          break;
-        case YHI:
-          x[1] = boxlo[1];
-          xnew[1] -= yprd;
-          break;
-        case ZLO:
-          x[2] = boxhi[2];
-          xnew[2] += zprd;
-          break;
-        case ZHI:
-          x[2] = boxlo[2];
-          xnew[2] -= zprd;
-          break;
+        if (side == 0) {
+          x[dim] = boxhi[dim];
+          xnew[dim] += prd[dim];
+        } else {
+          x[dim] = boxlo[dim];
+          xnew[dim] -= prd[dim];
+        }
+
+        // shifted-periodic offset, see create_shift / Domain::collide()
+
+        double sgn = (side == 0) ? 1.0 : -1.0;
+        for (int t = 0; t < 3; t++) {
+          if (t == dim) continue;
+          double delta = sgn*shift[t];
+          if (delta == 0.0) continue;
+          if (delta > 0.0) {
+            if (x[t] > boxhi[t] - delta) return OUTFLOW;
+          } else {
+            if (x[t] < boxlo[t] - delta) return OUTFLOW;
+          }
+          x[t] += delta;
+          xnew[t] += delta;
         }
 
         return PERIODIC;
@@ -126,25 +125,18 @@ class DomainKokkos : public Domain {
   KOKKOS_INLINE_FUNCTION
   void uncollide_kokkos(int face, double *x) const
   {
-    switch (face) {
-    case XLO:
-      x[0] = boxlo[0];
-      break;
-    case XHI:
-      x[0] = boxhi[0];
-      break;
-    case YLO:
-      x[1] = boxlo[1];
-      break;
-    case YHI:
-      x[1] = boxhi[1];
-      break;
-    case ZLO:
-      x[2] = boxlo[2];
-      break;
-    case ZHI:
-      x[2] = boxhi[2];
-      break;
+    int dim = face / 2;
+    int side = face % 2;
+
+    if (side == 0) x[dim] = boxlo[dim];
+    else x[dim] = boxhi[dim];
+
+    // undo any transverse shifted-periodic offset, see Domain::uncollide()
+
+    double sgn = (side == 0) ? 1.0 : -1.0;
+    for (int t = 0; t < 3; t++) {
+      if (t == dim) continue;
+      x[t] -= sgn*shift[t];
     }
   };
 

@@ -1,0 +1,33 @@
+################################################################################
+# shifted-periodic boundary condition (create_shift) demo
+#
+# A directed thermal stream flows in +x through a fully periodic 3d box.
+# create_shift offsets the y coordinate by half a box length whenever a
+# particle wraps across an x face.  Particles whose shifted y would fall
+# outside the box leave the domain, so the population decays over time.
+# Set the create_shift line to "0.0 0.0 0.0" (or comment it out) to recover
+# a standard periodic box in which the population is conserved.
+################################################################################
+
+seed            12345
+dimension       3
+global          gridcut 1.0e-5 comm/sort yes
+
+boundary        pp pp pp
+create_box      0 0.0001 0 0.0001 0 0.0001
+create_grid     10 10 10
+
+species         ar.species Ar
+mixture         air Ar vstream 1000.0 0.0 0.0 temp 273.15
+
+global          nrho 7.07043E22
+global          fnum 7.07043E6
+
+create_particles air n 10000 twopass
+
+create_shift    0.0 0.5 0.0
+
+stats           200
+stats_style     step np
+timestep        7.00E-9
+run             2000

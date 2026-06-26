@@ -31,6 +31,8 @@ class Domain : protected Pointers {
   double boxlo[3],boxhi[3];         // box global bounds
   double xprd,yprd,zprd;            // global box dimensions
   double prd[3];                    // array form of dimensions
+  double shift[3];                  // shifted-periodic BC offsets, see create_shift
+                                    // 0.0 = standard periodic in that dimension
 
   int bflag[6];                     // boundary flags
   double norm[6][3];                // boundary normals
@@ -63,6 +65,7 @@ class Domain : protected Pointers {
   void delete_region(int, char **);
   int find_region(char *);
   void print_box(const char *);
+  void print_shift(const char *);
 };
 
 }

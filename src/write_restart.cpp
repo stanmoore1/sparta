@@ -46,7 +46,7 @@ enum{VERSION,SMALLINT,CELLINT,BIGINT,
      SPECIES,MIXTURE,GRID,SURF,
      PARTICLE_CUSTOM,GRID_CUSTOM,SURF_CUSTOM,
      MULTIPROC,PROCSPERFILE,PERPROC_GRID,PERPROC_SURF,
-     DT,TIME};    // new fields added after TIME
+     DT,TIME,SHIFT};    // new fields added after TIME
 
 enum{NOFIELD,CFIELD,PFIELD,GFIELD};             // update.cpp
 
@@ -674,6 +674,7 @@ void WriteRestart::box_params()
   write_double_vec(BOXLO,3,domain->boxlo);
   write_double_vec(BOXHI,3,domain->boxhi);
   write_int_vec(BFLAG,6,domain->bflag);
+  write_double_vec(SHIFT,3,domain->shift);
 
   // -1 flag signals end of box info
 

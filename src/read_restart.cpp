@@ -50,7 +50,7 @@ enum{VERSION,SMALLINT,CELLINT,BIGINT,
      SPECIES,MIXTURE,GRID,SURF,
      PARTICLE_CUSTOM,GRID_CUSTOM,SURF_CUSTOM,
      MULTIPROC,PROCSPERFILE,PERPROC_GRID,PERPROC_SURF,
-     DT,TIME};    // new fields added after TIME
+     DT,TIME,SHIFT};    // new fields added after TIME
 
 enum{KEEPID,KEEPALL};
 
@@ -632,6 +632,9 @@ void ReadRestart::box_params()
     } else if (flag == BFLAG) {
       read_int();
       read_int_vec(6,domain->bflag);
+    } else if (flag == SHIFT) {
+      read_int();
+      read_double_vec(3,domain->shift);
 
     } else error->all(FLERR,"Invalid flag in header section of restart file");
 
@@ -639,6 +642,9 @@ void ReadRestart::box_params()
   }
 
   domain->print_box("  ");
+  if (domain->shift[0] != 0.0 || domain->shift[1] != 0.0 ||
+      domain->shift[2] != 0.0)
+    domain->print_shift("  ");
   domain->set_global_box();
 }
 

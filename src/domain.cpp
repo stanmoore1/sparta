@@ -47,6 +47,8 @@ Domain::Domain(SPARTA *sparta) : Pointers(sparta)
   for (int i = 0; i < 6; i++) bflag[i] = PERIODIC;
   for (int i = 0; i < 6; i++) surf_collide[i] = surf_react[i] = -1;
 
+  shift[0] = shift[1] = shift[2] = 0.0;
+
   // surface normals of 6 box faces pointed inward towards particles
 
   norm[XLO][0] =  1.0; norm[XLO][1] =  0.0; norm[XLO][2] =  0.0;
@@ -298,36 +300,37 @@ int Domain::collide(Particle::OnePart *&ip, int face, int icell, double *xnew,
   // periodic boundary
   // set x to be on periodic box face
   // adjust xnew by periodic box length
+  // if a shifted-periodic offset is set (see create_shift), also shift the
+  //   transverse coords of x and xnew by +shift on a lo face, -shift on a hi
+  //   face; if the shift moves the particle outside the transverse box bounds
+  //   the particle leaves the domain and OUTFLOW is returned
 
   case PERIODIC:
     {
       double *x = ip->x;
+      int dim = face / 2;            // 0,1,2 = crossing x,y,z dimension
+      int side = face % 2;           // 0 = lo face, 1 = hi face
 
-      switch (face) {
-      case XLO:
-        x[0] = boxhi[0];
-        xnew[0] += xprd;
-        break;
-      case XHI:
-        x[0] = boxlo[0];
-        xnew[0] -= xprd;
-        break;
-      case YLO:
-        x[1] = boxhi[1];
-        xnew[1] += yprd;
-        break;
-      case YHI:
-        x[1] = boxlo[1];
-        xnew[1] -= yprd;
-        break;
-      case ZLO:
-        x[2] = boxhi[2];
-        xnew[2] += zprd;
-        break;
-      case ZHI:
-        x[2] = boxlo[2];
-        xnew[2] -= zprd;
-        break;
+      if (side == 0) {
+        x[dim] = boxhi[dim];
+        xnew[dim] += prd[dim];
+      } else {
+        x[dim] = boxlo[dim];
+        xnew[dim] -= prd[dim];
+      }
+
+      double sgn = (side == 0) ? 1.0 : -1.0;
+      for (int t = 0; t < 3; t++) {
+        if (t == dim) continue;
+        double delta = sgn*shift[t];
+        if (delta == 0.0) continue;
+        if (delta > 0.0) {
+          if (x[t] > boxhi[t] - delta) return OUTFLOW;
+        } else {
+          if (x[t] < boxlo[t] - delta) return OUTFLOW;
+        }
+        x[t] += delta;
+        xnew[t] += delta;
       }
 
       return PERIODIC;
@@ -391,25 +394,22 @@ int Domain::collide(Particle::OnePart *&ip, int face, int icell, double *xnew,
 
 void Domain::uncollide(int face, double *x)
 {
-  switch (face) {
-  case XLO:
-    x[0] = boxlo[0];
-    break;
-  case XHI:
-    x[0] = boxhi[0];
-    break;
-  case YLO:
-    x[1] = boxlo[1];
-    break;
-  case YHI:
-    x[1] = boxhi[1];
-    break;
-  case ZLO:
-    x[2] = boxlo[2];
-    break;
-  case ZHI:
-    x[2] = boxhi[2];
-    break;
+  int dim = face / 2;
+  int side = face % 2;
+
+  // undo remap of the crossing coordinate
+
+  if (side == 0) x[dim] = boxlo[dim];
+  else x[dim] = boxhi[dim];
+
+  // undo any transverse shifted-periodic offset applied by collide()
+  // a PERIODIC return from collide() guarantees the shift was applied,
+  //   so it can be reversed unconditionally here
+
+  double sgn = (side == 0) ? 1.0 : -1.0;
+  for (int t = 0; t < 3; t++) {
+    if (t == dim) continue;
+    x[t] -= sgn*shift[t];
   }
 }
 
@@ -514,5 +514,21 @@ void Domain::print_box(const char *str)
     if (logfile)
       fprintf(logfile,"%sorthogonal box = (%g %g %g) to (%g %g %g)\n",
               str,boxlo[0],boxlo[1],boxlo[2],boxhi[0],boxhi[1],boxhi[2]);
+  }
+}
+
+/* ----------------------------------------------------------------------
+   print shifted-periodic offset info
+------------------------------------------------------------------------- */
+
+void Domain::print_shift(const char *str)
+{
+  if (comm->me == 0) {
+    if (screen)
+      fprintf(screen,"%speriodic shift = (%g %g %g)\n",
+              str,shift[0],shift[1],shift[2]);
+    if (logfile)
+      fprintf(logfile,"%speriodic shift = (%g %g %g)\n",
+              str,shift[0],shift[1],shift[2]);
   }
 }
