@@ -940,7 +940,7 @@ void WriteSurf::write_base(char *file)
   fp = fopen(hfile,"w");
   if (fp == NULL) {
     char str[128];
-    sprintf(str,"Cannot open surface base file %s",hfile);
+    snprintf(str,128,"Cannot open surface base file %s",hfile);
     error->one(FLERR,str);
   }
 
@@ -976,7 +976,7 @@ void WriteSurf::open(char *file)
   fp = fopen(onefile,"w");
   if (fp == NULL) {
     char str[128];
-    sprintf(str,"Cannot open surface file %s",onefile);
+    snprintf(str,128,"Cannot open surface file %s",onefile);
     error->one(FLERR,str);
   }
 

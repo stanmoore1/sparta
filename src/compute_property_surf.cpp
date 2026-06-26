@@ -247,7 +247,7 @@ void ComputePropertySurf::pack_id(int n)
     Surf::Tri *tris;
     if (distributed) tris = surf->mytris;
     else tris = surf->tris;
-    for (int i = 0; i < nsown; i++) {
+    for (int i = 0; i < nchoose; i++) {
       m = cglobal[i];
       if (tris[m].mask & groupbit) buf[n] = tris[m].id;
       else buf[n] = 0.0;

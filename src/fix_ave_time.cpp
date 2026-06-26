@@ -99,8 +99,10 @@ FixAveTime::FixAveTime(SPARTA *sparta, int narg, char **arg) :
 
     char *ptr = strchr(suffix,'[');
     if (ptr) {
-      if (suffix[strlen(suffix)-1] != ']')
+      if (suffix[strlen(suffix)-1] != ']') {
+        delete [] suffix;
         error->all(FLERR,"Illegal fix ave/time command");
+      }
       argindex[i] = atoi(ptr+1);
       *ptr = '\0';
     } else argindex[i] = 0;
