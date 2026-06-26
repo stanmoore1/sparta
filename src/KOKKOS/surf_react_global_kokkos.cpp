@@ -74,7 +74,7 @@ SurfReactGlobalKokkos::~SurfReactGlobalKokkos()
 
 void SurfReactGlobalKokkos::init()
 {
-  SurfReact::init();
+  SurfReactGlobal::init();
 
   Kokkos::deep_copy(d_scalars,0);
 

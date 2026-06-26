@@ -97,6 +97,8 @@ Update::Update(SPARTA *sparta) : Pointers(sparta)
 
   ndlist_surfcollide  = 0;
   dlist_surfcollide = NULL;
+  ndlist_surfreact = 0;
+  dlist_surfreact = NULL;
 
   ranmaster = new RanMars(sparta);
 
@@ -126,6 +128,7 @@ Update::~Update()
   delete [] blist_active;
 
   delete [] dlist_surfcollide;
+  delete [] dlist_surfreact;
 
   delete ranmaster;
 }
@@ -1605,7 +1608,7 @@ void Update::tally_set(bigint ntimestep)
 
 /* ----------------------------------------------------------------------
    make list of classes that reset dynamic parameters
-   currently only surf collision models
+   currently surf collision and surf reaction models
 ------------------------------------------------------------------------- */
 
 int Update::dynamic_setup()
@@ -1625,7 +1628,22 @@ int Update::dynamic_setup()
     if (surf->sc[i]->dynamicflag)
       dlist_surfcollide[ndlist_surfcollide++] = surf->sc[i];
 
-  if (ndlist_surfcollide) return 1;
+  delete [] dlist_surfreact;
+  dlist_surfreact = NULL;
+
+  ndlist_surfreact = 0;
+  for (int i = 0; i < surf->nsr; i++)
+    if (surf->sr[i]->dynamicflag) ndlist_surfreact++;
+
+  if (ndlist_surfreact)
+    dlist_surfreact = new SurfReact*[ndlist_surfreact];
+
+  ndlist_surfreact = 0;
+  for (int i = 0; i < surf->nsr; i++)
+    if (surf->sr[i]->dynamicflag)
+      dlist_surfreact[ndlist_surfreact++] = surf->sr[i];
+
+  if (ndlist_surfcollide || ndlist_surfreact) return 1;
   return 0;
 }
 
@@ -1638,6 +1656,11 @@ void Update::dynamic_update()
   if (ndlist_surfcollide) {
     for (int i = 0; i < ndlist_surfcollide; i++)
       dlist_surfcollide[i]->dynamic();
+  }
+
+  if (ndlist_surfreact) {
+    for (int i = 0; i < ndlist_surfreact; i++)
+      dlist_surfreact[i]->dynamic();
   }
 }
 

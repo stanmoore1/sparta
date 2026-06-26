@@ -13,8 +13,10 @@
 ------------------------------------------------------------------------- */
 
 #include "math.h"
+#include "string.h"
 #include "surf_react_global.h"
 #include "input.h"
+#include "variable.h"
 #include "update.h"
 #include "comm.h"
 #include "random_mars.h"
@@ -24,6 +26,8 @@
 
 using namespace SPARTA_NS;
 
+enum{NUMERIC,VAREQUAL};
+
 /* ---------------------------------------------------------------------- */
 
 SurfReactGlobal::SurfReactGlobal(SPARTA *sparta, int narg, char **arg) :
@@ -31,10 +35,23 @@ SurfReactGlobal::SurfReactGlobal(SPARTA *sparta, int narg, char **arg) :
 {
   if (narg != 4) error->all(FLERR,"Illegal surf_react global command");
 
-  prob_destroy = input->numeric(FLERR,arg[2]);
-  prob_create = input->numeric(FLERR,arg[3]);
+  // each probability is either a numeric value or an equal-style variable
+  // a variable is flagged with a leading "v_" prefix on the argument
 
-  if (prob_destroy + prob_create > 1.0)
+  prob_destroy = prob_create = 0.0;
+  pdelete_name = pcreate_name = NULL;
+  pdelete_var = pcreate_var = -1;
+
+  parse_prob(arg[2],pdelete_mode,pdelete_name,prob_destroy);
+  parse_prob(arg[3],pcreate_mode,pcreate_name,prob_create);
+
+  // dynamic if either probability is set by a variable
+  // sum of probabilities can only be statically checked when both are numeric
+
+  if (pdelete_mode == VAREQUAL || pcreate_mode == VAREQUAL) dynamicflag = 1;
+
+  if (pdelete_mode == NUMERIC && pcreate_mode == NUMERIC &&
+      prob_destroy + prob_create > 1.0)
     error->all(FLERR,"Illegal surf_react global command");
 
   // setup the reaction tallies
@@ -62,7 +79,79 @@ SurfReactGlobal::~SurfReactGlobal()
 {
   if (copy) return;
 
+  delete [] pdelete_name;
+  delete [] pcreate_name;
   delete random;
+}
+
+/* ----------------------------------------------------------------------
+   parse a probability argument as a numeric value or equal-style variable
+   sets mode, and either name (for a variable) or value (for a number)
+------------------------------------------------------------------------- */
+
+void SurfReactGlobal::parse_prob(char *str, int &mode, char *&name,
+                                 double &value)
+{
+  if (strstr(str,"v_") == str) {
+    mode = VAREQUAL;
+    int n = strlen(&str[2]) + 1;
+    name = new char[n];
+    strcpy(name,&str[2]);
+  } else {
+    mode = NUMERIC;
+    value = input->numeric(FLERR,str);
+    if (value < 0.0 || value > 1.0)
+      error->all(FLERR,"Surf_react global probability must be from 0.0 to 1.0");
+  }
+}
+
+/* ----------------------------------------------------------------------
+   re-find variables and validate they are equal-style
+   variable indices can change between runs, so look them up at init
+------------------------------------------------------------------------- */
+
+void SurfReactGlobal::init()
+{
+  SurfReact::init();
+
+  if (pdelete_mode == VAREQUAL) {
+    pdelete_var = input->variable->find(pdelete_name);
+    if (pdelete_var < 0)
+      error->all(FLERR,"Surf_react global pdelete variable name does not exist");
+    if (!input->variable->equal_style(pdelete_var))
+      error->all(FLERR,"Surf_react global pdelete variable is not equal-style");
+  }
+
+  if (pcreate_mode == VAREQUAL) {
+    pcreate_var = input->variable->find(pcreate_name);
+    if (pcreate_var < 0)
+      error->all(FLERR,"Surf_react global pcreate variable name does not exist");
+    if (!input->variable->equal_style(pcreate_var))
+      error->all(FLERR,"Surf_react global pcreate variable is not equal-style");
+  }
+}
+
+/* ----------------------------------------------------------------------
+   recompute variable-driven probabilities
+   called once per timestep by Update before surface collisions
+------------------------------------------------------------------------- */
+
+void SurfReactGlobal::dynamic()
+{
+  if (pdelete_mode == VAREQUAL) {
+    prob_destroy = input->variable->compute_equal(pdelete_var);
+    if (prob_destroy < 0.0 || prob_destroy > 1.0)
+      error->all(FLERR,"Surf_react global pdelete must be from 0.0 to 1.0");
+  }
+
+  if (pcreate_mode == VAREQUAL) {
+    prob_create = input->variable->compute_equal(pcreate_var);
+    if (prob_create < 0.0 || prob_create > 1.0)
+      error->all(FLERR,"Surf_react global pcreate must be from 0.0 to 1.0");
+  }
+
+  if (prob_destroy + prob_create > 1.0)
+    error->all(FLERR,"Surf_react global pdelete + pcreate > 1.0");
 }
 
 /* ----------------------------------------------------------------------

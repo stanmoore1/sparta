@@ -19,6 +19,8 @@ args = arguments for that style :l
   {global} or {global/kk} args = pdelete pcreate
     pdelete = probability that surface collision removes the incident particle
     pcreate = probability that surface collision clones the incident particle
+      pdelete and pcreate can each be specified as a numeric value or
+      as an equal-style variable, e.g. v_name
   {prob} or {prob/kk} args = infile
     infile = file with list of surface chemistry reactions 
   {adsorb} args = model infile(s) n=Nsync type temp n_sites adsp1 adsp2 ...
@@ -97,6 +99,20 @@ that surface/boundary by the "surf_modify collide"_surf_modify.html
 command.
 
 The sum of {pdelete} and {pcreate} must be <= 1.0.
+
+Either {pdelete} or {pcreate} (or both) can be specified as an
+equal-style "variable"_variable.html instead of a numeric value.  If
+the value is a variable, it should be specified as v_name, where name
+is the variable name.  In this case, the variable is evaluated at the
+beginning of each timestep, and its value is used as the probability
+for that timestep.  This allows the deletion or creation probability to
+vary in time, e.g. as a function of elapsed time or of a global
+quantity computed by another "compute"_compute.html or
+"fix"_fix.html command.  Note that an equal-style variable computes a
+single global value, so the same probability is applied to all
+surface collisions on a given timestep.  The sum of the two
+probabilities must still be <= 1.0 each timestep, else an error is
+generated.
 
 Note that if you simply wish to delete all particles which hit the
 surface, you can use the "surf_collide vanish"_surf_collide.html

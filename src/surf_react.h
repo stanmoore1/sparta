@@ -26,6 +26,7 @@ class SurfReact : protected Pointers {
   char *style;
 
   int nlist;                // # of reactions defined or read from file
+  int dynamicflag;          // 1 if any param is dynamically updated
   int vector_flag;          // 0/1 if compute_vector() function exists
   int size_vector;          // length of global vector
   int kokkosable;           // 1 if Kokkos version
@@ -46,6 +47,7 @@ class SurfReact : protected Pointers {
   virtual void tally_reset();
   virtual void tally_update();
   virtual void grid_changed() {}
+  virtual void dynamic() {}
   double compute_vector(int i);
 
  protected:

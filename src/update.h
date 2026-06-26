@@ -140,11 +140,13 @@ class Update : protected Pointers {
 
   int dynamic;               // 1 if any classes do dynamic updates of params
   int ndlist_surfcollide;    // # of SurfCollide classes with dynamic updates
+  int ndlist_surfreact;      // # of SurfReact classes with dynamic updates
 
   class Compute **glist_compute;  // list of all gas/gas Computes
   class Compute **slist_compute;  // list of all gas/surf Computes
   class Compute **blist_compute;  // list of all gas/boundary Computes
   class SurfCollide **dlist_surfcollide;  // list of all dynamic SurfCollides
+  class SurfReact **dlist_surfreact;      // list of all dynamic SurfReacts
 
   // methods
 

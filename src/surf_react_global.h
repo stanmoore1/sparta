@@ -30,15 +30,27 @@ class SurfReactGlobal : public SurfReact {
   SurfReactGlobal(class SPARTA *, int, char **);
   SurfReactGlobal(class SPARTA *sparta) : SurfReact(sparta) {} // needed for Kokkos
   virtual ~SurfReactGlobal();
+  virtual void init();
   int react(Particle::OnePart *&, int, double *, Particle::OnePart *&, int &);
   char *reactionID(int);
   double reaction_coeff(int) {return 0.0;};
   int match_reactant(char *, int) {return 1;}
   int match_product(char *, int) {return 1;}
+  virtual void dynamic();
 
  protected:
   double prob_create,prob_destroy;
+
+  // a probability can be a fixed value (NUMERIC) or
+  //   an equal-style variable (VAREQUAL) evaluated each timestep
+
+  int pdelete_mode,pcreate_mode;       // NUMERIC or VAREQUAL
+  char *pdelete_name,*pcreate_name;    // variable names (no v_ prefix)
+  int pdelete_var,pcreate_var;         // variable indices, -1 if unused
+
   class RanKnuth *random;     // RNG for reaction probabilities
+
+  void parse_prob(char *, int &, char *&, double &);
 };
 
 }
