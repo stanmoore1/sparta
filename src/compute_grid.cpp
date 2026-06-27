@@ -27,7 +27,7 @@ using namespace SPARTA_NS;
 
 // user keywords
 
-enum{NUM,NRHO,NFRAC,MASS,MASSRHO,MASSFRAC,
+enum{NUM,NUMWI,NRHO,NFRAC,MASS,MASSRHO,MASSFRAC,
      U,V,W,USQ,VSQ,WSQ,KE,TEMPERATURE,EROT,TROT,EVIB,TVIB,
      PXRHO,PYRHO,PZRHO,KERHO};
 
@@ -72,6 +72,9 @@ ComputeGrid::ComputeGrid(SPARTA *sparta, int narg, char **arg) :
     if (strcmp(arg[iarg],"n") == 0) {
       value[ivalue] = NUM;
       set_map(ivalue,SIMCOUNT);
+    } else if (strcmp(arg[iarg],"sumwi") == 0) {   // SWS: sum of particle weights
+      value[ivalue] = NUMWI;
+      set_map(ivalue,COUNT);
     } else if (strcmp(arg[iarg],"nrho") == 0) {
       value[ivalue] = NRHO;
       set_map(ivalue,COUNT);
@@ -366,6 +369,7 @@ void ComputeGrid::post_process_grid(int index, int nsample,
   switch (value[ivalue]) {
 
   case NUM:
+  case NUMWI:
     {
       int count = emap[0];
       for (int icell = lo; icell < hi; icell++) {

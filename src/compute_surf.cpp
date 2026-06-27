@@ -335,16 +335,16 @@ void ComputeSurf::surf_tally(double /*dtremain*/, int isurf, int icell, int reac
   // for SWPM there is no splitting at the boundary (single species), so the
   // outgoing particle(s) carry the incident particle's stochastic weight.
 
-  if (sweights || particle->weightflag) {
+  if (sweights || particle->sws || particle->weightflag) {
     int nout = 0;
     oswfrac = 0.0;
     if (ip) {
-      iswfrac = sweights ? sweights[ip - particle->particles] : ip->weight;
+      iswfrac = particle->pweight(ip - particle->particles,sweights);
       oswfrac += iswfrac;
       nout++;
     }
     if (jp) {
-      jswfrac = sweights ? sweights[jp - particle->particles] : jp->weight;
+      jswfrac = particle->pweight(jp - particle->particles,sweights);
       oswfrac += jswfrac;
       nout++;
     }

@@ -183,8 +183,7 @@ void ComputePFluxGrid::compute_per_grid()
     if (!(cinfo[icell].mask & groupbit)) continue;
 
     mass = species[ispecies].mass;
-    if (sweights) mass *= sweights[i];
-    else if (particle->weightflag) mass *= particles[i].weight;
+    mass *= particle->pweight(i,sweights);
     v = particles[i].v;
     specwt = species[ispecies].specwt; // SWS
 

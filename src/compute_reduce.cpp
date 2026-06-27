@@ -616,8 +616,7 @@ double ComputeReduce::compute_one(int m, int flag)
       double swfrac = 1.0;
       for (i = 0; i < n; i++) {
         if (subsetID && s2g[particles[i].ispecies] < 0) continue;
-        if (sweights && aveflag) swfrac = sweights[i];
-        else if (particle->weightflag && aveflag) swfrac = particles[i].weight;
+        if (aveflag) swfrac = particle->pweight(i,sweights);
         combine(one,particles[i].x[aidx] * swfrac,i);
       }
     } else one = particles[flag].x[aidx];
@@ -629,8 +628,7 @@ double ComputeReduce::compute_one(int m, int flag)
       double swfrac = 1.0;
       for (i = 0; i < n; i++) {
         if (subsetID && s2g[particles[i].ispecies] < 0) continue;
-        if (sweights && aveflag) swfrac = sweights[i];
-        else if (particle->weightflag && aveflag) swfrac = particles[i].weight;
+        if (aveflag) swfrac = particle->pweight(i,sweights);
         combine(one,particles[i].v[aidx] * swfrac,i);
       }
     } else one = particles[flag].v[aidx];
@@ -650,8 +648,7 @@ double ComputeReduce::compute_one(int m, int flag)
         if (subsetID && s2g[particles[i].ispecies] < 0) continue;
         p = &particles[i];
         v = p->v;
-        if (sweights && aveflag) swfrac = sweights[i];
-        else if (particle->weightflag && aveflag) swfrac = particles[i].weight;
+        if (aveflag) swfrac = particle->pweight(i,sweights);
         ke = mvv2e * 0.5 * species[p->ispecies].mass * swfrac *
           (v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
         combine(one,ke,i);
@@ -670,8 +667,7 @@ double ComputeReduce::compute_one(int m, int flag)
       double swfrac = 1.0;
       for (i = 0; i < n; i++) {
         if (subsetID && s2g[particles[i].ispecies] < 0) continue;
-        if (sweights && aveflag) swfrac = sweights[i];
-        else if (particle->weightflag && aveflag) swfrac = particles[i].weight;
+        if (aveflag) swfrac = particle->pweight(i,sweights);
         combine(one,particles[i].erot * swfrac,i);
       }
     } else one = particles[flag].erot;
@@ -683,8 +679,7 @@ double ComputeReduce::compute_one(int m, int flag)
       double swfrac = 1.0;
       for (i = 0; i < n; i++) {
         if (subsetID && s2g[particles[i].ispecies] < 0) continue;
-        if (sweights && aveflag) swfrac = sweights[i];
-        else if (particle->weightflag && aveflag) swfrac = particles[i].weight;
+        if (aveflag) swfrac = particle->pweight(i,sweights);
         combine(one,particles[i].evib * swfrac,i);
       }
     } else one = particles[flag].evib;
@@ -941,16 +936,14 @@ double ComputeReduce::compute_one(int m, int flag)
 	        int *cvec = particle->eivec[particle->ewhich[vidx]];
 	        for (i = 0; i < n; i++) {
             if (subsetID && s2g[particles[i].ispecies] < 0) continue;
-            if (sweights && aveflag) swfrac = sweights[i];
-        else if (particle->weightflag && aveflag) swfrac = particles[i].weight;
+            if (aveflag) swfrac = particle->pweight(i,sweights);
       	    combine(one,cvec[i] * swfrac,i);
 	        }
         } else if (particle->etype[vidx] == DOUBLE) {
           double *cvec = particle->edvec[particle->ewhich[vidx]];
           for (i = 0; i < n; i++) {
             if (subsetID && s2g[particles[i].ispecies] < 0) continue;
-            if (sweights && aveflag) swfrac = sweights[i];
-        else if (particle->weightflag && aveflag) swfrac = particles[i].weight;
+            if (aveflag) swfrac = particle->pweight(i,sweights);
             combine(one,cvec[i] * swfrac,i);
           }
         }
@@ -970,16 +963,14 @@ double ComputeReduce::compute_one(int m, int flag)
           int **carray = particle->eiarray[particle->ewhich[vidx]];
           for (i = 0; i < n; i++) {
             if (subsetID && s2g[particles[i].ispecies] < 0) continue;
-            if (sweights && aveflag) swfrac = sweights[i];
-        else if (particle->weightflag && aveflag) swfrac = particles[i].weight;
+            if (aveflag) swfrac = particle->pweight(i,sweights);
             combine(one,carray[i][aidxm1] * swfrac,i);
           }
         } else if (particle->etype[vidx] == DOUBLE) {
           double **carray = particle->edarray[particle->ewhich[vidx]];
           for (i = 0; i < n; i++) {
             if (subsetID && s2g[particles[i].ispecies] < 0) continue;
-            if (sweights && aveflag) swfrac = sweights[i];
-        else if (particle->weightflag && aveflag) swfrac = particles[i].weight;
+            if (aveflag) swfrac = particle->pweight(i,sweights);
             combine(one,carray[i][aidxm1] * swfrac,i);
           }
         }
