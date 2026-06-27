@@ -215,6 +215,9 @@ void DumpTally::header_item(bigint ndump)
 {
   fprintf(fp,"ITEM: TIMESTEP\n");
   fprintf(fp,BIGINT_FORMAT "\n",update->ntimestep);
+  fprintf(fp,"ITEM: TIME\n");
+  fprintf(fp,"%.16g\n",update->time +
+          (update->ntimestep - update->time_last_update) * update->dt);
   fprintf(fp,"ITEM: NUMBER OF TALLIES\n");
   fprintf(fp,BIGINT_FORMAT "\n",ndump);
   fprintf(fp,"ITEM: BOX BOUNDS %s\n",boundstr);

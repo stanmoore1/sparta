@@ -166,6 +166,12 @@ simulation box boundaries (xlo,xhi and ylo,yhi and zlo,zhi).  Each of
 the 6 characters is either o = outflow, p = periodic, or s = specular.
 See the "boundary"_doc/boundary.html command for details.
 
+The "ITEM: TIME" entry in each snapshot, which immediately follows the
+"ITEM: TIMESTEP" entry, gives the elapsed simulation time (in seconds)
+corresponding to that timestep.  This is useful when a variable
+timestep size is used, since the timestep number alone does not
+indicate the simulation time.
+
 The "ITEM: NUMBER OF ATOMS" or "ITEM: NUMBER OF CELLS" or "ITEM:
 NUMBER OF SURFS" or "ITEM: NUMBER OF TALLIES" entry in each snapshot
 gives the number of particles, grid cells, surfaces to follow.
