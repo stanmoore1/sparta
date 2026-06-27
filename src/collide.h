@@ -31,7 +31,7 @@ class Collide : protected Pointers {
   int nearcp;         // 1 for near neighbor collisions
   int nearlimit;      // limit on neighbor serach for near neigh collisions
 
-  int ncollide_one,nattempt_one,nreact_one;
+  bigint ncollide_one,nattempt_one,nreact_one;
   bigint ncollide_running,nattempt_running,nreact_running;
 
   Collide(class SPARTA *, int, char **);
