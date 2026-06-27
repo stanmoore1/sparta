@@ -628,30 +628,19 @@ int CollideVSS::perform_collision_SWS(Particle::OnePart *&ip,
   double phi_j;
   double phi_k;
 
-  // if gas-phase chemistry defined, attempt and perform reactflag
+  // if gas-phase chemistry defined, attempt and perform reaction
   // if a 3rd particle is created, its kspecies >= 0 is returned
   // if 2nd particle is removed, its jspecies is set to -1
-  // reactflag = 0 if no reactflag occurs
-  // reactflag = 1 to N for which reactflag occurs
-  // reactflag is returned to caller
 
   if (react)
-    reactflag = react->attempt(ip,jp,precoln.etrans,precoln.erot,
-                              precoln.evib,postcoln.etotal,kspecies);
+    reactflag = react->attempt(ip,jp,
+                               precoln.etrans,precoln.erot,
+                               precoln.evib,postcoln.etotal,kspecies);
   else reactflag = 0;
 
-  // just collision, no reactflag
-
-  if (!reactflag) {
-    if (precoln.ave_dof > 0.0) EEXCHANGE_NonReactingEDisposal(ip,jp);
-    SCATTER_TwoBodyScattering(ip,jp);
-    return reactflag;
-  }
-
-  // reactflag took place
   // repartition energy and perform velocity scattering for I,J,K particles
-  // reactflag may have changed species of I,J particles
-  // J,K particles may have been removed or created by reactflag
+  // reaction may have changed species of I,J particles
+  // J,K particles may have been removed or created by reaction
 
   kp = NULL;
 
@@ -683,7 +672,7 @@ int CollideVSS::perform_collision_SWS(Particle::OnePart *&ip,
     phi_i = w_min/w_i;  // SWS
     phi_j = w_min/w_j;  // SWS
     
-    // add 3rd K particle if reactflag created it
+    // add 3rd K particle if reaction created it
     // index of new K particle = nlocal-1
     // if add_particle() performs a realloc:
     //   make copy of x,v, then repoint ip,jp to new particles data struct
@@ -712,7 +701,7 @@ int CollideVSS::perform_collision_SWS(Particle::OnePart *&ip,
       w_k = species[ksp].specwt;  // SWS
       phi_k = w_min/w_k;  // SWS
       
-      // !! if the reactflag is impact ionization, 
+      // !! if the reaction is impact ionization, 
       // If the ramdom number [0:1] is lower than the creteria made by two weight,
       // integer will be 1 , else 0
       // we can have number of additional product here
@@ -726,7 +715,7 @@ int CollideVSS::perform_collision_SWS(Particle::OnePart *&ip,
       EEXCHANGE_ReactingEDisposal(ip,jp,kp);
       SCATTER_ThreeBodyScattering(ip,jp,kp);
 
-    // remove 2nd J particle if recombination reactflag removed it
+    // remove 2nd J particle if recombination reaction removed it
     // p3 is 3rd particle participating in energy exchange
 
     } else if (jp->ispecies < 0) {
@@ -775,91 +764,37 @@ int CollideVSS::perform_collision_SWS(Particle::OnePart *&ip,
       
       if (phi_i < 1.0) n_i = (((phi_i)/random->uniform()>1)?1:0);  // SWS
       else if (phi_i >= 1.0) n_i = int(phi_i)+(((phi_i-int(phi_i))/random->uniform()>1)?1:0);   // SWS
-      // because this reactflag produce 1 particles, number of j,k particle is 0
+      // because this reaction produce 1 particles, number of j,k particle is 0
       n_j = n_k = 0;    // SWS
 
       if (precoln.ave_dof > 0.0) EEXCHANGE_ReactingEDisposal(ip,p3,jp);
 
       // Add reactflag to scattering routine as 
-      // splitting-merging should not be used when reactflag
+      // splitting-merging should not be used when reaction
       // with differently weighted reactant and/or product occur.
       // Instead, the mass, momentum and energy are conserved
       // through the probability of creation/production of the
       // involved species.
       SCATTER_TwoBodyScattering_SWS(ip,p3,reactflag);  // SWS
     } else {
-      // exchange reactflag or associative ionization
-      // compute number of particle after the reactflag
-      // !! if the reactflag is charge exchange or associative ionization
+      // exchange reaction or associative ionization
+      // compute number of particle after the reaction
+      // !! if the reaction is charge exchange or associative ionization
       // !! reactant and product charge should be same.
       if (phi_i < 1.0) n_i = (((phi_i)/random->uniform()>1)?1:0);  // SWS
       else n_i = int(phi_i)+(((phi_i-int(phi_i))/random->uniform()>1)?1:0);  // SWS
       if (phi_j < 1.0) n_j = (((phi_j)/random->uniform()>1)?1:0);  // SWS
       else n_j = int(phi_j)+(((phi_j-int(phi_j))/random->uniform()>1)?1:0);  // SWS
 
-      // because this reactflag produce 2 particles, number of k particle is 0
+      // because this reaction produce 2 particles, number of k particle is 0
       n_k = 0;  // SWS
       EEXCHANGE_ReactingEDisposal(ip,jp,kp);
       SCATTER_TwoBodyScattering_SWS(ip,jp,reactflag);  // SWS
     }
 
-    kp = &particle->particles[particle->nlocal-1];
-    EEXCHANGE_ReactingEDisposal(ip,jp,kp);
-    SCATTER_ThreeBodyScattering(ip,jp,kp);
-
-  // remove 2nd J particle if recombination reactflag removed it
-  // p3 is 3rd particle participating in energy exchange
-
-  } else if (jp->ispecies < 0) {
-    double *vi = ip->v;
-    double *vj = jp->v;
-
-    double divisor = 1.0 / (precoln.imass + precoln.jmass);
-    double ucmf = ((precoln.imass*vi[0]) + (precoln.jmass*vj[0])) * divisor;
-    double vcmf = ((precoln.imass*vi[1]) + (precoln.jmass*vj[1])) * divisor;
-    double wcmf = ((precoln.imass*vi[2]) + (precoln.jmass*vj[2])) * divisor;
-
-    vi[0] = ucmf;
-    vi[1] = vcmf;
-    vi[2] = wcmf;
-
-    jp = NULL;
-    p3 = react->recomb_part3;
-
-    // properly account for 3rd body energy with another call to setup_collision()
-    // it needs relative velocity of recombined species and 3rd body
-
-    double *vp3 = p3->v;
-    double du  = vi[0] - vp3[0];
-    double dv  = vi[1] - vp3[1];
-    double dw  = vi[2] - vp3[2];
-    double vr2 = du*du + dv*dv + dw*dw;
-    precoln.vr2 = vr2;
-
-    // internal energy of ip particle is already included
-    //   in postcoln.etotal returned from react->attempt()
-    // but still need to add 3rd body internal energy
-
-    double partial_energy =  postcoln.etotal + p3->erot + p3->evib;
-
-    ip->erot = 0;
-    ip->evib = 0;
-    p3->erot = 0;
-    p3->evib = 0;
-
-    // returned postcoln.etotal will increment only the
-    //   relative translational energy between recombined species and 3rd body
-    // add back partial_energy to get full total energy
-
-    setup_collision(ip,p3);
-    postcoln.etotal += partial_energy;
-
-    if (precoln.ave_dof > 0.0) EEXCHANGE_ReactingEDisposal(ip,p3,jp);
-    SCATTER_TwoBodyScattering(ip,p3);
-
   } else {
-    // no reactflag
-    // if reactflag is not triggered, particle creation part is skipped
+    // no reaction
+    // if reaction is not triggered, particle creation part is skipped
     if (precoln.ave_dof > 0.0) EEXCHANGE_NonReactingEDisposal_SWS(ip,jp);  // SWS
     SCATTER_TwoBodyScattering_SWS(ip,jp,reactflag); // SWS
   }
