@@ -43,6 +43,7 @@ enum{NCHILD,NPARENT,NUNKNOWN,NPBCHILD,NPBPARENT,NPBUNKNOWN,NBOUND};  // Grid
 enum{NOSUBSONIC,PTBOTH,PONLY};
 
 #define DELTATASK 256
+#define EPSZERO 1.0e-14
 #define TEMPLIMIT 1.0e5
 
 /* ---------------------------------------------------------------------- */
@@ -229,25 +230,127 @@ void FixEmitFace::grid_changed()
 {
   create_tasks();
 
-  // if Np > 0, nper = # of insertions per task
-  // set nthresh so as to achieve exactly Np insertions
-  // tasks > tasks_with_no_extra need to insert 1 extra particle
-  // NOTE: currently setting same # of insertions per task
-  //       could instead weight by cell face area
+  // if Np > 0, distribute exactly Np insertions across all tasks (cell faces)
+  //   on all procs, weighted by per-face inflow area (tasks[i].ntarget)
+  // only faces that overlap the optional emission region contribute weight,
+  //   so Np is not wasted on faces whose particles would all be rejected
+  // np_me = # of insertions this proc owns; sum of np_me over procs = Np
+  // method mirrors CreateParticles::create_local() volume-weighted scheme
+  // the per-step, per-face counts are drawn stochastically in distribute_np(),
+  //   so over many timesteps emission is spread across all eligible faces
+  //   in proportion to their area (fixes Np-dependent single-cell emission)
 
   if (np > 0) {
-    int all,nupto,tasks_with_no_extra;
-    MPI_Allreduce(&ntask,&all,1,MPI_INT,MPI_SUM,world);
-    if (all) {
-      npertask = np / all;
-      tasks_with_no_extra = all - (np % all);
-    } else npertask = tasks_with_no_extra = 0;
+    double wsum_me = 0.0;
+    for (int i = 0; i < ntask; i++)
+      if (task_in_region(i)) wsum_me += tasks[i].ntarget;
+    insertweight_me = wsum_me;
 
-    MPI_Scan(&ntask,&nupto,1,MPI_INT,MPI_SUM,world);
-    if (tasks_with_no_extra < nupto-ntask) nthresh = 0;
-    else if (tasks_with_no_extra >= nupto) nthresh = ntask;
-    else nthresh = tasks_with_no_extra - (nupto-ntask);
+    double wupto;
+    MPI_Scan(&wsum_me,&wupto,1,MPI_DOUBLE,MPI_SUM,world);
+
+    int nprocs = comm->nprocs;
+    int me = comm->me;
+    double *wvols;
+    memory->create(wvols,nprocs,"emit/face:wvols");
+    MPI_Allgather(&wupto,1,MPI_DOUBLE,wvols,1,MPI_DOUBLE,world);
+
+    // gathered Scan results not guaranteed to be monotonically increasing,
+    //   so enforce monotonic increase by brute force (as in create_particles)
+
+    for (int i = 1; i < nprocs; i++)
+      if (wvols[i] != wvols[i-1] &&
+          fabs(wvols[i]-wvols[i-1])/wvols[nprocs-1] < EPSZERO)
+        wvols[i] = wvols[i-1];
+
+    double wtotal = wvols[nprocs-1];
+    if (wtotal == 0.0) np_me = 0;
+    else {
+      bigint nstart,nstop;
+      if (me > 0) nstart = static_cast<bigint> (np * (wvols[me-1]/wtotal));
+      else nstart = 0;
+      nstop = static_cast<bigint> (np * (wvols[me]/wtotal));
+      np_me = nstop - nstart;
+    }
+
+    memory->destroy(wvols);
   }
+}
+
+/* ----------------------------------------------------------------------
+   compute per-task insertion counts for the np > 0 (exact Np) case
+   distributes this proc's np_me insertions across its tasks (cell faces)
+   each insertion independently selects a face with probability proportional
+     to its inflow area (tasks[i].ntarget), among region-eligible faces only
+   this multinomial draw is unbiased: E[ninsert[i]] = np_me * area_i/sum,
+     so over many timesteps emission is spread across all eligible faces in
+     proportion to their area (a cumulative/sequential remainder scheme is
+     NOT used here, as it biases small Np toward low-indexed faces)
+   sum of ninsert[i] over local tasks = np_me exactly, so global sum = Np
+------------------------------------------------------------------------- */
+
+void FixEmitFace::distribute_np(int *ninsert)
+{
+  for (int i = 0; i < ntask; i++) ninsert[i] = 0;
+  if (np_me == 0 || insertweight_me == 0.0) return;
+
+  // compact list of region-eligible faces and their cumulative area weights
+
+  int *elig;
+  double *cum;
+  memory->create(elig,ntask,"emit/face:elig");
+  memory->create(cum,ntask,"emit/face:cum");
+
+  int nelig = 0;
+  double sum = 0.0;
+  for (int i = 0; i < ntask; i++)
+    if (task_in_region(i)) {
+      sum += tasks[i].ntarget;
+      elig[nelig] = i;
+      cum[nelig] = sum;
+      nelig++;
+    }
+
+  if (nelig && sum > 0.0) {
+    for (int m = 0; m < np_me; m++) {
+      double target = random->uniform() * sum;
+      int lo = 0, hi = nelig-1;
+      while (lo < hi) {
+        int mid = (lo+hi) / 2;
+        if (cum[mid] < target) lo = mid+1;
+        else hi = mid;
+      }
+      ninsert[elig[lo]]++;
+    }
+  }
+
+  memory->destroy(elig);
+  memory->destroy(cum);
+}
+
+/* ----------------------------------------------------------------------
+   return 1 if task I's cell face can emit into the optional region
+   conservative bounding-box test: a face whose extent cannot overlap the
+     region bbox is excluded, so np insertions are not assigned to it
+   if no region, or the region bbox is unusable (no computable bbox, or an
+     exterior "side out" region), all faces are eligible and the per-particle
+     region->match() test still filters individual insertions precisely
+------------------------------------------------------------------------- */
+
+int FixEmitFace::task_in_region(int i)
+{
+  if (!region) return 1;
+  if (!region->bboxflag || !region->interior) return 1;
+
+  double *lo = tasks[i].lo;
+  double *hi = tasks[i].hi;
+
+  if (hi[0] <= region->extent_xlo || lo[0] >= region->extent_xhi) return 0;
+  if (hi[1] <= region->extent_ylo || lo[1] >= region->extent_yhi) return 0;
+  if (dimension == 3)
+    if (hi[2] <= region->extent_zlo || lo[2] >= region->extent_zhi) return 0;
+
+  return 1;
 }
 
 /* ----------------------------------------------------------------------
@@ -516,6 +619,15 @@ void FixEmitFace::perform_task_onepass()
 
   int nfix_update_custom = modify->n_update_custom;
 
+  // for exact-Np mode, precompute per-task insertion counts (area-weighted,
+  //   region-aware, stochastic) so they sum to np_me across this proc's tasks
+
+  int *npcount = NULL;
+  if (np > 0 && ntask) {
+    memory->create(npcount,ntask,"emit/face:npcount");
+    distribute_np(npcount);
+  }
+
   for (int i = 0; i < ntask; i++) {
     pcell = tasks[i].pcell;
     ndim = tasks[i].ndim;
@@ -590,8 +702,7 @@ void FixEmitFace::perform_task_onepass()
         ntarget = prefactor*tasks[i].ntarget + random->uniform();
         ninsert = static_cast<int> (ntarget);
       } else {
-        ninsert = npertask;
-        if (i >= nthresh) ninsert++;
+        ninsert = npcount[i];
       }
 
       nactual = 0;
@@ -644,6 +755,8 @@ void FixEmitFace::perform_task_onepass()
       nsingle += nactual;
     }
   }
+
+  if (np > 0 && ntask) memory->destroy(npcount);
 }
 
 /* ----------------------------------------------------------------------
@@ -699,6 +812,15 @@ void FixEmitFace::perform_task_twopass()
   int** ninsert_values;
   memory->create(ninsert_values, ntask, ninsert_dim1, "fix_emit_face:ninsert");
 
+  // for exact-Np mode, precompute per-task insertion counts (area-weighted,
+  //   region-aware, stochastic) so they sum to np_me across this proc's tasks
+
+  int *npcount = NULL;
+  if (np > 0 && ntask) {
+    memory->create(npcount,ntask,"emit/face:npcount");
+    distribute_np(npcount);
+  }
+
   for (int i = 0; i < ntask; i++) {
     if (perspecies) {
       for (isp = 0; isp < nspecies; isp++) {
@@ -711,8 +833,7 @@ void FixEmitFace::perform_task_twopass()
         ntarget = prefactor*tasks[i].ntarget + random->uniform();
         ninsert = static_cast<int> (ntarget);
       } else {
-        ninsert = npertask;
-        if (i >= nthresh) ninsert++;
+        ninsert = npcount[i];
       }
       ninsert_values[i][0] = ninsert;
     }
@@ -841,6 +962,7 @@ void FixEmitFace::perform_task_twopass()
   }
 
   memory->destroy(ninsert_values);
+  if (np > 0 && ntask) memory->destroy(npcount);
 }
 
 /* ----------------------------------------------------------------------

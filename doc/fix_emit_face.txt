@@ -110,9 +110,15 @@ useful for debugging purposes.  If {Np} is set to 0, then the number
 of added particles is a function of {fnum}, {nrho}, and other mixture
 settings, as described above.  If {Np} is set to a value > 0, then the
 {fnum} and {nrho} settings are ignored, and exactly {Np} particles are
-added on each insertion timestep.  This is done by dividing {Np} by
-the total number of grid cells that are adjacent to the specified box
-faces and adding an equal number of particles per grid cell.
+added on each insertion timestep.  Each of the {Np} particles is
+assigned to a grid cell face chosen randomly with probability
+proportional to the face area, so that on average the insertions are
+spread uniformly (per unit area) over all the candidate faces.  If a
+{region} is also specified, only faces that overlap the region are
+candidates.  Because the assignment is random per timestep, even when
+{Np} is smaller than the number of candidate faces the insertions are
+spread across all of them over many timesteps, rather than always from
+the same faces.
 
 The {nevery} keyword determines how often particles are added.  If
 {Nstep} > 1, this may give a non-continuous, clumpy distribution in
@@ -156,12 +162,16 @@ used to define whether the inside or outside of the geometric region
 is considered to be "in" the region.
 
 IMPORTANT NOTE: If the {region} and {n} keywords are used together,
-less than N particles may be added on an insertion timestep.  This is
-because grid cells will be candidates for particle insertion, unless
-they are entirely outside the bounding box that encloses the region.
-Particles those grid cells attempt to add are included in the count
-for N, even if some or all of the particle insertions are rejected due
-to not being inside the region.
+slightly less than N particles may be added on an insertion timestep.
+Faces that are entirely outside the bounding box that encloses the
+region are excluded as insertion candidates, so N is distributed only
+over faces that overlap the region.  However, a face that only
+partially overlaps the region is still a candidate, and the particles
+it attempts to add are included in the count for N even if some are
+rejected because their random position falls outside the region.  This
+only causes an undercount at faces straddling the region boundary; for
+regions whose boundary is aligned with grid cell faces, exactly N
+particles are added.
 
 The {modulate} keyword can be used to multiple the count of particles
 inserted at each timestep by a prefactor.  The prefactor is calcalated

@@ -64,7 +64,10 @@ class FixEmitFace : public FixEmit {
  protected:
   int imix,np,subsonic,subsonic_style,subsonic_warning;
   int faces[6];
-  int npertask,nthresh,twopass;
+  int twopass;
+  int np_me;                  // # of particles this proc inserts when np > 0
+  double insertweight_me;     // this proc's total area weight (sum of ntarget)
+                              //   over its region-eligible faces, for np > 0
   double psubsonic,tsubsonic,nsubsonic;
   double tprefactor,soundspeed_mixture;
 
@@ -89,6 +92,8 @@ class FixEmitFace : public FixEmit {
   // protected methods
 
   void create_task(int);
+  void distribute_np(int *);
+  int task_in_region(int);
   virtual void perform_task();
   void perform_task_onepass();
   virtual void perform_task_twopass();

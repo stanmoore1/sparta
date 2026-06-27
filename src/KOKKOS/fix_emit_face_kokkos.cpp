@@ -195,9 +195,23 @@ void FixEmitFaceKokkos::perform_task()
   if (d_ninsert.extent(0) < ntask * ninsert_dim1)
     d_ninsert = DAT::t_int_1d("ninsert", ntask * ninsert_dim1);
 
-  copymode = 1;
-  Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagFixEmitFace_ninsert>(0,ntask),*this);
-  copymode = 0;
+  if (np == 0) {
+    copymode = 1;
+    Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagFixEmitFace_ninsert>(0,ntask),*this);
+    copymode = 0;
+  } else {
+
+    // exact-Np mode: per-task counts require a global weighted draw of np_me
+    //   insertions, so compute them on the host with the shared distribute_np()
+    //   routine and copy the result to the device (np > 0 implies perspecies=no)
+    // zero the full mirror first: d_ninsert may be allocated larger than ntask,
+    //   and offset_scan() below scans its entire extent
+
+    auto h_ninsert = Kokkos::create_mirror_view(d_ninsert);
+    for (int i = 0; i < (int) h_ninsert.extent(0); i++) h_ninsert(i) = 0;
+    if (ntask) distribute_np(h_ninsert.data());
+    Kokkos::deep_copy(d_ninsert, h_ninsert);
+  }
 
   int ncands;
   d_task2cand = offset_scan(d_ninsert, ncands);
@@ -395,6 +409,10 @@ void FixEmitFaceKokkos::perform_task()
 KOKKOS_INLINE_FUNCTION
 void FixEmitFaceKokkos::operator()(TagFixEmitFace_ninsert, const int &i) const
 {
+  // only invoked for the np == 0 case; the exact-Np (np > 0) per-task counts
+  //   require a global weighted random draw and are computed on the host in
+  //   distribute_np()
+
   int ninsert;
 
   rand_type rand_gen = rand_pool.get_state();
@@ -406,13 +424,8 @@ void FixEmitFaceKokkos::operator()(TagFixEmitFace_ninsert, const int &i) const
       d_ninsert(i * nspecies + isp) = ninsert;
     }
   } else {
-    if (np == 0) {
-      auto ntarget = prefactor*d_tasks(i).ntarget + rand_gen.drand();
-      ninsert = static_cast<int> (ntarget);
-    } else {
-      ninsert = npertask;
-      if (i >= nthresh) ninsert++;
-    }
+    auto ntarget = prefactor*d_tasks(i).ntarget + rand_gen.drand();
+    ninsert = static_cast<int> (ntarget);
     d_ninsert(i) = ninsert;
   }
 
