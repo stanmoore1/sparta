@@ -1,0 +1,4 @@
+# SWS demo species: Ar (weight 1) and He (weight 2)
+# columns: id molwt mass rotdof rotrel vibdof vibrel vibtemp specwt charge
+Ar  40.00  6.63E-26  0  0.0  0  0.0  0.0  1.0  0.0
+He   4.00  6.65E-27  0  0.0  0  0.0  0.0  2.0  0.0

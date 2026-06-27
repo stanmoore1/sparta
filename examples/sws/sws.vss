@@ -1,0 +1,4 @@
+# VSS collision parameters: id diam omega tref alpha
+Ar   4.110E-10   0.810   273.15   1.400
+He   2.300E-10   0.660   273.15   1.260
+Ar He 3.193E-10  0.835   273.15   1.475

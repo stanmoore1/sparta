@@ -1862,20 +1862,20 @@ template < int NEARCP > void Collide::collisions_one_SWS()
         if (np < 2) break;
       }       
 
-      // If k particles are created, but become unnecessary with some probability and are deleted
-      // In reaction not envolving third species, kpart = NULL
+      // If a 3rd (k) particle was created by the reaction but is not kept by
+      // the weighting probability (n_k == 0), delete it.  kpart was created in
+      // perform_collision_SWS and was NOT added to plist (the plist add at the
+      // top of this block is guarded by "if (n_k)"), so delete it by its actual
+      // particle index and do not touch plist here.  (The previous code indexed
+      // plist[k], but k is only set for recombination pairs and is otherwise
+      // stale, which corrupted dellist and crashed compress_reactions.)
       if (!n_k && kpart) {
-        //printf("!!check del k \n");
         if (ndelete == maxdelete) {
           maxdelete += DELTADELETE;
           memory->grow(dellist,maxdelete,"collide:dellist");
         }
-        dellist[ndelete++] = plist[k];
-        np--;
-        plist[k] = plist[np];
-        if (NEARCP) nn_last_partner[k] = nn_last_partner[np];
-        if (np < 2) break;
-      }             
+        dellist[ndelete++] = kpart - particle->particles;
+      }
 
       // copy paste ipart particle 
       if (ipart) {

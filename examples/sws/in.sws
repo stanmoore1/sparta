@@ -1,0 +1,46 @@
+################################################################################
+# Nagoya Species Weighting Scheme (SWS) — homogeneous relaxation demo
+#
+# Two monatomic species with different species weights (Ar wi=1, He wi=2) in a
+# single well-mixed cell.  Enabled with the "SWS" keyword on the species
+# command.  In thermal equilibrium the translational temperature must stay
+# constant (the SWS collision update conserves weighted energy in expectation).
+#
+#   n     -> raw simulation-particle count
+#   sumwi -> sum of species weights (effective physical-particle count)
+#   temp  -> translational temperature, should be flat
+################################################################################
+
+seed               12137
+dimension          3
+
+variable T         equal 273.15
+variable N         equal 8000
+variable L         equal 1.0e-6
+variable nrho      equal 1.0e23
+variable Fnum      equal ${nrho}*(${L}*${L}*${L})/${N}
+
+species            sws.species Ar He SWS
+mixture            air Ar He vstream 0.0 0.0 0.0 temp ${T}
+mixture            air Ar He frac 0.5
+
+boundary           p p p
+create_box         0.0 ${L} 0.0 ${L} 0.0 ${L}
+create_grid        1 1 1 block * * *
+global             nrho ${nrho} fnum ${Fnum}
+
+create_particles   air n 0
+
+collide            vss air sws.vss
+collide_modify     remain no
+
+compute            g grid all all n sumwi nrho
+compute            t thermal/grid all all temp
+compute            gr reduce ave c_g[1] c_g[2] c_g[3]
+compute            tr reduce ave c_t[*]
+
+stats              100
+stats_style        step np c_gr[1] c_gr[2] c_gr[3] c_tr
+
+timestep           1.0e-9
+run                1000
