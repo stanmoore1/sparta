@@ -2381,6 +2381,14 @@ void Collide::collisions_group_ambipolar_SWS()
       ip = next[ip];
     }
 
+    // SWS: max species weight across all groups in cell, constant over the
+    // cell's collisions.  Computed once here (with its own loop variable) to
+    // avoid clobbering the per-pair particle index i inside the attempt loop,
+    // which is used by the recombination / ambi_reset / group-move logic below.
+
+    double maxwi = 0.0;
+    for (int g = 0; g < ngroups; g++) maxwi = std::max(maxwigr[g],maxwi);
+
     // attempt = exact collision attempt count for a pair of groups
     // double loop over N^2 / 2 pairs of groups
     // temporarily include nelectrons in count for egroup
@@ -2460,10 +2468,6 @@ void Collide::collisions_group_ambipolar_SWS()
 
         // test if collision actually occurs
 
-  double maxwi=0.0;    // SWS
-  for (i = 0; i < ngroups; i++) {    // SWS
-    maxwi = std::max(maxwigr[i],maxwi);
-  }
 	if (!test_collision_SWS(icell,igroup,jgroup,ipart,jpart,maxwi)) continue;    // SWS
 
         // if recombination reaction is possible for this IJ pair
