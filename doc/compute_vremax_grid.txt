@@ -1,0 +1,67 @@
+"SPARTA WWW Site"_sws - "SPARTA Documentation"_sd - "SPARTA Commands"_sc :c
+
+:link(sws,http://sparta.sandia.gov)
+:link(sd,Manual.html)
+:link(sc,Section_commands.html#comm)
+
+:line
+
+compute vremax/grid command :h3
+
+[Syntax:]
+
+compute ID vremax/grid :pre
+
+ID is documented in "compute"_compute.html command
+vremax/grid = style name of this compute command :ul
+
+[Examples:]
+
+compute 1 vremax/grid :pre
+
+[Description:]
+
+Output the {vremax} parameter for each grid cell.  {Vremax} is the
+maximum relative velocity between pairs of particles that the collision
+model maintains for each grid cell, used to set the number of collision
+attempts in the cell each timestep.  See the "collide"_collide.html and
+"collide_modify"_collide_modify.html commands for how {vremax} is
+initialized and periodically reset.
+
+If the collision model uses multiple groups (see the
+"collide_modify"_collide_modify.html command), a separate {vremax} is
+stored for each pair of groups in each cell.  In that case this compute
+reports the maximum {vremax} over all group pairs for the cell.  For the
+common single-group case this is simply the cell's {vremax}.
+
+The results of this compute can be used by different commands in
+different ways.  The values for a single timestep can be output by the
+"dump grid"_dump.html command or used as inputs to the "compute
+reduce"_compute_reduce.html command.  The values can also be time
+averaged by the "fix ave/grid"_fix_ave_grid.html command.
+
+:line
+
+[Output info:]
+
+This compute calculates a per-grid vector with the {vremax} value for
+each grid cell, in units of velocity (distance/time).
+
+The vector can be accessed by any command that uses per-grid values
+from a compute as input.  See "Section 6.4"_Section_howto.html#howto_4
+for an overview of SPARTA output options.
+
+:line
+
+[Restrictions:]
+
+This compute can only be used if a "collide"_collide.html style is
+defined.
+
+[Related commands:]
+
+"compute gas/collision/grid"_compute_gas_collision_grid.html,
+"collide"_collide.html, "collide_modify"_collide_modify.html, "dump
+grid"_dump.html
+
+[Default:] none

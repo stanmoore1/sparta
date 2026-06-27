@@ -62,6 +62,11 @@ class Collide : protected Pointers {
 
   int ngroups;        // # of groups
 
+  // read-only accessor for per-cell, per-group-pair max relative velocity
+  // returns NULL if vremax has not yet been allocated (e.g. before first run)
+
+  double ***get_vremax() { return vremax; }
+
  protected:
   int npmax;          // max # of particles in plist
   int *plist;         // list of particle indices for the entire cell
