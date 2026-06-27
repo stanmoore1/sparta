@@ -630,16 +630,23 @@ template < int NEARCP, int WEIGHT > void Collide::collisions_one()
         // add particles generated in perform_collision to plist first,
         // before nlocal changes are propagated
 
+        // kpart (reaction 3rd product) occupies the particle->nlocal-1 slot
+        // whenever it was created (kspecies >= 0).  Reserve its slot in i_add
+        // regardless of n_k so a following n_pre particle is indexed correctly;
+        // only add kpart to plist if it survives the weighting (n_k >= 1).
+
         int i_add = 0;
-        if (n_k) {
+        if (kpart) {
           i_add++;
-          if (np == npmax) {
-            npmax += DELTAPART;
-            memory->grow(plist,npmax,"collide:plist");
+          if (n_k) {
+            if (np == npmax) {
+              npmax += DELTAPART;
+              memory->grow(plist,npmax,"collide:plist");
+            }
+            if (NEARCP) set_nn(np);
+            plist[np++] = particle->nlocal-i_add;
+            particles = particle->particles;
           }
-          if (NEARCP) set_nn(np);
-          plist[np++] = particle->nlocal-i_add;
-          particles = particle->particles;
         }
         if (n_pre) {
           i_add++;
@@ -680,7 +687,11 @@ template < int NEARCP, int WEIGHT > void Collide::collisions_one()
           if (np < 2) break;
         }
 
-        // k created by reaction but unnecessary by probability: delete
+        // k created by reaction but discarded by SWS weighting (n_k == 0):
+        // kpart sits at particle->nlocal-1 and was never added to plist, so
+        // delete it directly via the deletion list (no plist/np change).
+        // The previous code dereferenced plist[k] with a stale k (k is only set
+        // during recombination), which could read/write out of bounds.
         // kpart = NULL for reactions not involving a third species
 
         if (!n_k && kpart) {
@@ -688,11 +699,7 @@ template < int NEARCP, int WEIGHT > void Collide::collisions_one()
             maxdelete += DELTADELETE;
             memory->grow(dellist,maxdelete,"collide:dellist");
           }
-          dellist[ndelete++] = plist[k];
-          np--;
-          plist[k] = plist[np];
-          if (NEARCP) nn_last_partner[k] = nn_last_partner[np];
-          if (np < 2) break;
+          dellist[ndelete++] = kpart - particle->particles;
         }
 
         // clone ipart particle n_i-1 times
