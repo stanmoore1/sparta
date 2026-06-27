@@ -25,6 +25,12 @@ namespace SPARTA_NS {
 
 class Collide : protected Pointers {
  public:
+  // particle-weighting policy, used as a compile-time template axis on the
+  // collision drivers (alongside NEARCP).  WNONE reproduces unweighted DSMC at
+  // zero cost; WSPECIES = Species Weighting Scheme (per-species specwt);
+  // WPARTICLE = Stochastic Weighted Particle Method (per-particle weight).
+  enum WeightStyle { WNONE = 0, WSPECIES = 1, WPARTICLE = 2 };
+
   char *style;
   int rotstyle;       // none/smooth rotational modes
   int vibstyle;       // none/discrete/smooth vibrational modes
@@ -174,11 +180,10 @@ class Collide : protected Pointers {
     ngroup[igroup]--;
   }
 
-  template < int > void collisions_one();
+  template < int, int > void collisions_one();       // <NEARCP,WEIGHT>
   template < int > void collisions_group();
   void collisions_one_ambipolar();
   void collisions_group_ambipolar();
-  template < int > void collisions_one_SWS();        // SWS
   template < int > void collisions_group_SWS();      // SWS
   void collisions_one_ambipolar_SWS();               // SWS
   void collisions_group_ambipolar_SWS();             // SWS

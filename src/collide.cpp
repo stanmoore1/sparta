@@ -434,8 +434,8 @@ void Collide::collisions()
   if (!ambiflag) {
     if (nearcp == 0) {
       if (ngroups == 1) {
-        if (sws == 0) collisions_one<0>();
-        else collisions_one_SWS<0>();        // SWS
+        if (sws == 0) collisions_one<0,WNONE>();
+        else collisions_one<0,WSPECIES>();   // SWS
         }
       else {
         if (sws == 0) collisions_group<0>();
@@ -443,8 +443,8 @@ void Collide::collisions()
         }
     } else {
       if (ngroups == 1) {
-        if (sws == 0) collisions_one<1>();
-        else collisions_one_SWS<1>();        // SWS
+        if (sws == 0) collisions_one<1,WNONE>();
+        else collisions_one<1,WSPECIES>();   // SWS
         }
       else {
         if (sws == 0) collisions_group<1>();
@@ -480,12 +480,20 @@ void Collide::collisions()
    NTC algorithm for a single group
 ------------------------------------------------------------------------- */
 
-template < int NEARCP > void Collide::collisions_one()
+template < int NEARCP, int WEIGHT > void Collide::collisions_one()
 {
   int i,j,k,n,ip,np;
   int nattempt,reactflag;
   double attempt,volume;
   Particle::OnePart *ipart,*jpart,*kpart;
+
+  // WSPECIES (Species Weighting Scheme) per-collision state
+  // unused / dead-code-eliminated for WEIGHT == WNONE
+
+  double count_wi = 0.0,maxwi = 0.0;                 // SWS
+  int n_i,n_j,n_k,n_pre,i_loop;                       // SWS
+  double x[3],v[3];                                   // SWS
+  Particle::Species *species = particle->species;     // SWS
 
   // loop over cells I own
 
@@ -515,8 +523,19 @@ template < int NEARCP > void Collide::collisions_one()
       memory->create(plist,npmax,"collide:plist");
     }
 
+    // WEIGHT policy: per-cell weight pre-pass
+    // count_wi = sum of species weights in cell; maxwi = max species weight
+
+    if (WEIGHT == WSPECIES) {
+      count_wi = cinfo[icell].count_wi;
+      Ewilost = 0.0;
+      maxwi = 0.0;
+    }
+
     n = 0;
     while (ip >= 0) {
+      if (WEIGHT == WSPECIES)
+        maxwi = std::max(species[particles[ip].ispecies].specwt,maxwi);
       plist[n++] = ip;
       ip = next[ip];
     }
@@ -524,8 +543,12 @@ template < int NEARCP > void Collide::collisions_one()
     // attempt = exact collision attempt count for all particles in cell
     // nattempt = rounded attempt with RN
     // if no attempts, continue to next grid cell
+    // WEIGHT policy: attempt-count scaling
 
-    attempt = attempt_collision(icell,np,volume);
+    if (WEIGHT == WSPECIES)
+      attempt = attempt_collision_SWS(icell,np,volume,count_wi,maxwi);
+    else
+      attempt = attempt_collision(icell,np,volume);
     nattempt = static_cast<int> (attempt);
 
     if (!nattempt) continue;
@@ -548,8 +571,13 @@ template < int NEARCP > void Collide::collisions_one()
 
       // test if collision actually occurs
       // continue to next collision if no reaction
+      // WEIGHT policy: acceptance-test scaling
 
-      if (!test_collision(icell,0,0,ipart,jpart)) continue;
+      if (WEIGHT == WSPECIES) {
+        if (!test_collision_SWS(icell,0,0,ipart,jpart,maxwi)) continue;
+      } else {
+        if (!test_collision(icell,0,0,ipart,jpart)) continue;
+      }
 
       if (NEARCP) {
         nn_last_partner[i] = j+1;
@@ -570,45 +598,205 @@ template < int NEARCP > void Collide::collisions_one()
           while (k == i || k == j) k = np * random->uniform();
           react->recomb_part3 = &particles[plist[k]];
           react->recomb_species = react->recomb_part3->ispecies;
-          react->recomb_density = np * update->fnum / volume;
+          if (WEIGHT == WSPECIES)
+            react->recomb_density = count_wi * update->fnum / volume;
+          else
+            react->recomb_density = np * update->fnum / volume;
         }
       }
 
       // perform collision and possible reaction
+      // WEIGHT policy: SWS returns split/clone counts n_i/n_j/n_k/n_pre
 
-      setup_collision(ipart,jpart);
-      reactflag = perform_collision(ipart,jpart,kpart);
+      if (WEIGHT == WSPECIES) {
+        setup_collision_SWS(ipart,jpart);
+        n_i = 1;
+        n_j = n_k = n_pre = 0;
+        reactflag = perform_collision_SWS(ipart,jpart,kpart,n_i,n_j,n_k,n_pre);
+      } else {
+        setup_collision(ipart,jpart);
+        reactflag = perform_collision(ipart,jpart,kpart);
+      }
       ncollide_one++;
       if (reactflag) nreact_one++;
       else continue;
 
-      // if jpart destroyed: delete from plist, add particle to deletion list
-      // exit attempt loop if only single particle left
+      // post-collision particle bookkeeping
+      // WEIGHT policy: WNONE = simple jpart-delete / kpart-add;
+      //               WSPECIES = clone/delete per n_i/n_j/n_k/n_pre
 
-      if (!jpart) {
-        if (ndelete == maxdelete) {
-          maxdelete += DELTADELETE;
-          memory->grow(dellist,maxdelete,"collide:dellist");
+      if (WEIGHT == WSPECIES) {
+
+        // add particles generated in perform_collision to plist first,
+        // before nlocal changes are propagated
+
+        int i_add = 0;
+        if (n_k) {
+          i_add++;
+          if (np == npmax) {
+            npmax += DELTAPART;
+            memory->grow(plist,npmax,"collide:plist");
+          }
+          if (NEARCP) set_nn(np);
+          plist[np++] = particle->nlocal-i_add;
+          particles = particle->particles;
         }
-        dellist[ndelete++] = plist[j];
-        np--;
-        plist[j] = plist[np];
-        if (NEARCP) nn_last_partner[j] = nn_last_partner[np];
-        if (np < 2) break;
-      }
-
-      // if kpart created, add to plist
-      // kpart was just added to particle list, so index = nlocal-1
-      // particle data structs may have been realloced by kpart
-
-      if (kpart) {
-        if (np == npmax) {
-          npmax += DELTAPART;
-          memory->grow(plist,npmax,"collide:plist");
+        if (n_pre) {
+          i_add++;
+          if (np == npmax) {
+            npmax += DELTAPART;
+            memory->grow(plist,npmax,"collide:plist");
+          }
+          if (NEARCP) set_nn(np);
+          plist[np++] = particle->nlocal-i_add;
+          particles = particle->particles;
         }
-        if (NEARCP) set_nn(np);
-        plist[np++] = particle->nlocal-1;
-        particles = particle->particles;
+
+        // delete i from plist if destroyed by probability
+
+        if (!n_i) {
+          if (ndelete == maxdelete) {
+            maxdelete += DELTADELETE;
+            memory->grow(dellist,maxdelete,"collide:dellist");
+          }
+          dellist[ndelete++] = plist[i];
+          np--;
+          plist[i] = plist[np];
+          if (NEARCP) nn_last_partner[i] = nn_last_partner[np];
+          if (np < 2) break;
+        }
+
+        // delete j from plist if destroyed by probability or recombination
+
+        if (!n_j) {
+          if (ndelete == maxdelete) {
+            maxdelete += DELTADELETE;
+            memory->grow(dellist,maxdelete,"collide:dellist");
+          }
+          dellist[ndelete++] = plist[j];
+          np--;
+          plist[j] = plist[np];
+          if (NEARCP) nn_last_partner[j] = nn_last_partner[np];
+          if (np < 2) break;
+        }
+
+        // k created by reaction but unnecessary by probability: delete
+        // kpart = NULL for reactions not involving a third species
+
+        if (!n_k && kpart) {
+          if (ndelete == maxdelete) {
+            maxdelete += DELTADELETE;
+            memory->grow(dellist,maxdelete,"collide:dellist");
+          }
+          dellist[ndelete++] = plist[k];
+          np--;
+          plist[k] = plist[np];
+          if (NEARCP) nn_last_partner[k] = nn_last_partner[np];
+          if (np < 2) break;
+        }
+
+        // clone ipart particle n_i-1 times
+
+        if (ipart) {
+          for (i_loop = 0; i_loop < n_i-1 ; i_loop++) {
+            int id = MAXSMALLINT*random->uniform();
+            memcpy(x,ipart->x,3*sizeof(double));
+            memcpy(v,ipart->v,3*sizeof(double));
+            int reallocflag =
+            particle->add_particle(id,ipart->ispecies,ipart->icell,x,v,ipart->erot,ipart->evib);
+            if (reallocflag) {
+              if(ipart) ipart = particle->particles + (ipart - particles);
+              if(jpart) jpart = particle->particles + (jpart - particles);
+              if(kpart) kpart = particle->particles + (kpart - particles);
+            }
+            if (np == npmax) {
+              npmax += DELTAPART;
+              memory->grow(plist,npmax,"collide:plist");
+            }
+            if (NEARCP) set_nn(np);
+            plist[np++] = particle->nlocal-1;
+            particles = particle->particles;
+          }
+        }
+
+        // clone jpart particle n_j-1 times
+
+        if (jpart) {
+          for (i_loop = 0; i_loop < n_j-1 ; i_loop++)  {
+            int id = MAXSMALLINT*random->uniform();
+            memcpy(x,jpart->x,3*sizeof(double));
+            memcpy(v,jpart->v,3*sizeof(double));
+            int reallocflag =
+            particle->add_particle(id,jpart->ispecies,jpart->icell,x,v,jpart->erot,jpart->evib);
+            if (reallocflag) {
+              if(ipart) ipart = particle->particles + (ipart - particles);
+              if(jpart) jpart = particle->particles + (jpart - particles);
+              if(kpart) kpart = particle->particles + (kpart - particles);
+            }
+            if (np == npmax) {
+              npmax += DELTAPART;
+              memory->grow(plist,npmax,"collide:plist");
+            }
+            if (NEARCP) set_nn(np);
+            plist[np++] = particle->nlocal-1;
+            particles = particle->particles;
+          }
+        }
+
+        // clone kpart particle n_k-1 times
+
+        if (kpart) {
+          for (i_loop = 0; i_loop < n_k-1 ; i_loop++) {
+            int id = MAXSMALLINT*random->uniform();
+            memcpy(x,kpart->x,3*sizeof(double));
+            memcpy(v,kpart->v,3*sizeof(double));
+            int reallocflag =
+            particle->add_particle(id,kpart->ispecies,kpart->icell,x,v,kpart->erot,kpart->evib);
+            if (reallocflag) {
+              if(ipart) ipart = particle->particles + (ipart - particles);
+              if(jpart) jpart = particle->particles + (jpart - particles);
+              if(kpart) kpart = particle->particles + (kpart - particles);
+            }
+            if (np == npmax) {
+              npmax += DELTAPART;
+              memory->grow(plist,npmax,"collide:plist");
+            }
+            if (NEARCP) set_nn(np);
+            plist[np++] = particle->nlocal-1;
+            particles = particle->particles;
+          }
+        }
+
+      } else {
+
+        // if jpart destroyed: delete from plist, add particle to deletion list
+        // exit attempt loop if only single particle left
+
+        if (!jpart) {
+          if (ndelete == maxdelete) {
+            maxdelete += DELTADELETE;
+            memory->grow(dellist,maxdelete,"collide:dellist");
+          }
+          dellist[ndelete++] = plist[j];
+          np--;
+          plist[j] = plist[np];
+          if (NEARCP) nn_last_partner[j] = nn_last_partner[np];
+          if (np < 2) break;
+        }
+
+        // if kpart created, add to plist
+        // kpart was just added to particle list, so index = nlocal-1
+        // particle data structs may have been realloced by kpart
+
+        if (kpart) {
+          if (np == npmax) {
+            npmax += DELTAPART;
+            memory->grow(plist,npmax,"collide:plist");
+          }
+          if (NEARCP) set_nn(np);
+          plist[np++] = particle->nlocal-1;
+          particles = particle->particles;
+        }
       }
     }
   }
@@ -1601,283 +1789,12 @@ void Collide::collisions_group_ambipolar()
 }
 
 // ========================================================================
-// Add the new functions for SWS collisions: 
-// collisions_one_SWS()
+// SWS collisions for paths not yet folded into the WEIGHT policy template
+// (collisions_one is now collisions_one<NEARCP,WSPECIES>):
 // collisions_group_SWS()
 // collisions_one_ambipolar_SWS()
 // collisions_group_ambipolar_SWS()
 // ========================================================================
-/* ----------------------------------------------------------------------
-   NTC algorithm for a single group using Species Weighting Scheme
-------------------------------------------------------------------------- */
-
-template < int NEARCP > void Collide::collisions_one_SWS()
-{
-  int i,j,k,n,ip,np;
-  int nattempt,reactflag;
-  double attempt,volume;
-  Particle::OnePart *ipart,*jpart,*kpart;
-  double count_wi;   // SWS
-  Particle::Species *species = particle->species;   // SWS
-  int n_i,n_j,n_k,n_pre,i_loop;   // SWS
-  double x[3],v[3];               // SWS
-
-  // loop over cells I own
-
-  Grid::ChildInfo *cinfo = grid->cinfo;
-
-  Particle::OnePart *particles = particle->particles;
-  int *next = particle->next;
-
-  for (int icell = 0; icell < nglocal; icell++) {
-    np = cinfo[icell].count;
-
-    count_wi = cinfo[icell].count_wi;     // SWS
-    Ewilost = 0.0;                        // SWS
-    double maxwi = 0.0;                   // SWS
-
-    if (np <= 1) continue;
-
-    if (NEARCP) {
-      if (np > max_nn) realloc_nn(np,nn_last_partner);
-      memset(nn_last_partner,0,np*sizeof(int));
-    }
-
-    ip = cinfo[icell].first;
-    volume = cinfo[icell].volume / cinfo[icell].weight;
-    if (volume == 0.0) error->one(FLERR,"Collision cell volume is zero");
-
-    // setup particle list for this cell
-
-    if (np > npmax) {
-      while (np > npmax) npmax += DELTAPART;
-      memory->destroy(plist);
-      memory->create(plist,npmax,"collide:plist");
-    }
-
-    n = 0;
-    while (ip >= 0) {
-      maxwi = std::max(species[particles[ip].ispecies].specwt,maxwi);  // SWS
-      plist[n++] = ip;
-      ip = next[ip];
-    }
-
-    // attempt = exact collision attempt count for all particles in cell
-    // nattempt = rounded attempt with RN
-    // if no attempts, continue to next grid cell
-
-    attempt = attempt_collision_SWS(icell,np,volume,count_wi,maxwi);   // SWS
-
-    nattempt = static_cast<int> (attempt);
-
-    if (!nattempt) continue;
-    nattempt_one += nattempt;
-
-    // perform collisions
-    // select random pair of particles, cannot be same
-    // test if collision actually occurs
-
-    for (int iattempt = 0; iattempt < nattempt; iattempt++) {
-      i = np * random->uniform();
-      if (NEARCP) j = find_nn(i,np);
-      else {
-        j = np * random->uniform();
-        while (i == j) j = np * random->uniform();
-      }
-
-      ipart = &particles[plist[i]];
-      jpart = &particles[plist[j]];
-
-      // test if collision actually occurs
-      // continue to next collision if no reaction
-
-      if (!test_collision_SWS(icell,0,0,ipart,jpart,maxwi)) continue;   // SWS
-
-      if (NEARCP) {
-        nn_last_partner[i] = j+1;
-        nn_last_partner[j] = i+1;
-      }
-
-      // if recombination reaction is possible for this IJ pair
-      // pick a 3rd particle to participate and set cell number density
-      // unless boost factor turns it off, or there is no 3rd particle
-
-      if (recombflag && recomb_ijflag[ipart->ispecies][jpart->ispecies]) {
-        if (random->uniform() > react->recomb_boost_inverse)
-          react->recomb_species = -1;
-        else if (np <= 2)
-          react->recomb_species = -1;
-        else {
-          k = np * random->uniform();
-          while (k == i || k == j) k = np * random->uniform();
-          react->recomb_part3 = &particles[plist[k]];
-          react->recomb_species = react->recomb_part3->ispecies;
-          react->recomb_density = count_wi * update->fnum / volume;    // SWS
-        }
-      }
-
-      // perform collision and possible reaction
-
-      setup_collision_SWS(ipart,jpart);   // SWS
-
-      n_i = 1;                   // SWS
-      n_j = n_k = n_pre = 0;     // SWS
-      reactflag = perform_collision_SWS(ipart,jpart,kpart,n_i,n_j,n_k,n_pre);   // SWS
-      
-      ncollide_one++;
-      if (reactflag) nreact_one++;
-      else continue;
-
-      // if jpart destroyed: delete from plist, add particle to deletion list
-      // exit attempt loop if only single particle left
-      
-      ///////////==============================================
-      // Here, we add the particles generated in perform_collide to plist.
-      // To avoid updating nlocal changes, add them to the plist first.
-      ///////////==============================================
-
-      int i_add = 0; // to count 
-      if (n_k) {
-        i_add++;
-        if (np == npmax) {
-          npmax += DELTAPART;
-          memory->grow(plist,npmax,"collide:plist");
-        }
-        if (NEARCP) set_nn(np);
-        plist[np++] = particle->nlocal-i_add;
-        particles = particle->particles;
-      }      
-      if (n_pre) {
-        i_add++;
-        if (np == npmax) {
-          npmax += DELTAPART;
-          memory->grow(plist,npmax,"collide:plist");
-        }
-        if (NEARCP) set_nn(np);
-        plist[np++] = particle->nlocal-i_add;
-        particles = particle->particles;
-      }           
-      ///////////==============================================
-
-      // delete from plist if i is destroyed by probability
-      //if (!ipart) {
-      if (!n_i) {
-        //printf("!!check del i \n");
-        if (ndelete == maxdelete) {
-          maxdelete += DELTADELETE;
-          memory->grow(dellist,maxdelete,"collide:dellist");
-        }
-        dellist[ndelete++] = plist[i];
-        np--;
-        plist[i] = plist[np];
-        if (NEARCP) nn_last_partner[i] = nn_last_partner[np];
-        if (np < 2) break;
-      }
-
-      // delete from plist if j is destroyed by probability or recombination
-      //if (!jpart) {
-      if (!n_j) {
-        //printf("!!check del j \n");       
-        if (ndelete == maxdelete) {
-          maxdelete += DELTADELETE;
-          memory->grow(dellist,maxdelete,"collide:dellist");
-        }
-        dellist[ndelete++] = plist[j];
-        np--;
-        plist[j] = plist[np];
-        if (NEARCP) nn_last_partner[j] = nn_last_partner[np];
-        if (np < 2) break;
-      }       
-
-      // If k particles are created, but become unnecessary with some probability and are deleted
-      // In reaction not envolving third species, kpart = NULL
-      if (!n_k && kpart) {
-        //printf("!!check del k \n");
-        if (ndelete == maxdelete) {
-          maxdelete += DELTADELETE;
-          memory->grow(dellist,maxdelete,"collide:dellist");
-        }
-        dellist[ndelete++] = plist[k];
-        np--;
-        plist[k] = plist[np];
-        if (NEARCP) nn_last_partner[k] = nn_last_partner[np];
-        if (np < 2) break;
-      }             
-
-      // copy paste ipart particle 
-      if (ipart) {
-        for (i_loop = 0; i_loop < n_i-1 ; i_loop++) {  
-          //printf("!!check cp i \n");       
-          int id = MAXSMALLINT*random->uniform();
-          memcpy(x,ipart->x,3*sizeof(double));
-          memcpy(v,ipart->v,3*sizeof(double));
-          int reallocflag = 
-          particle->add_particle(id,ipart->ispecies,ipart->icell,x,v,ipart->erot,ipart->evib); 
-          if (reallocflag) {
-            if(ipart) ipart = particle->particles + (ipart - particles);
-            if(jpart) jpart = particle->particles + (jpart - particles);
-            if(kpart) kpart = particle->particles + (kpart - particles);
-          }                    
-          if (np == npmax) {
-            npmax += DELTAPART;
-            memory->grow(plist,npmax,"collide:plist");
-          }
-          if (NEARCP) set_nn(np);
-          plist[np++] = particle->nlocal-1;
-          particles = particle->particles;
-        }
-      }
-
-      // copy paste jpart particle 
-      if (jpart) {
-        for (i_loop = 0; i_loop < n_j-1 ; i_loop++)  {
-          //printf("!!check cp j \n");         
-          int id = MAXSMALLINT*random->uniform();
-          memcpy(x,jpart->x,3*sizeof(double));
-          memcpy(v,jpart->v,3*sizeof(double));
-          int reallocflag = 
-          particle->add_particle(id,jpart->ispecies,jpart->icell,x,v,jpart->erot,jpart->evib); 
-          if (reallocflag) {
-            if(ipart) ipart = particle->particles + (ipart - particles);
-            if(jpart) jpart = particle->particles + (jpart - particles);
-            if(kpart) kpart = particle->particles + (kpart - particles);
-          }     
-          if (np == npmax) {
-            npmax += DELTAPART;
-            memory->grow(plist,npmax,"collide:plist");
-          }
-          if (NEARCP) set_nn(np);
-          plist[np++] = particle->nlocal-1;
-          particles = particle->particles;
-        }
-      }
-
-      // copy paste kpart particle 
-      if (kpart) {
-        for (i_loop = 0; i_loop < n_k-1 ; i_loop++) {  
-          //printf("!!check cp k \n");       
-          int id = MAXSMALLINT*random->uniform();
-          memcpy(x,kpart->x,3*sizeof(double));
-          memcpy(v,kpart->v,3*sizeof(double));
-          int reallocflag = 
-          particle->add_particle(id,kpart->ispecies,kpart->icell,x,v,kpart->erot,kpart->evib); 
-          if (reallocflag) {
-            if(ipart) ipart = particle->particles + (ipart - particles);
-            if(jpart) jpart = particle->particles + (jpart - particles);
-            if(kpart) kpart = particle->particles + (kpart - particles);
-          }     
-          if (np == npmax) {
-            npmax += DELTAPART;
-            memory->grow(plist,npmax,"collide:plist");
-          }
-          if (NEARCP) set_nn(np);
-          plist[np++] = particle->nlocal-1;
-          particles = particle->particles;
-        }
-      }
-    }
-  }
-}
 
 /* ----------------------------------------------------------------------
    NTC algorithm for multiple groups using Species Weighting Scheme, 
