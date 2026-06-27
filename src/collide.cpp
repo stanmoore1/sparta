@@ -1858,7 +1858,12 @@ template < int WEIGHT > void Collide::collisions_one_ambipolar()
           particle->nlocal--;
           i_add_ele++;
         }
-      }  
+      } else if (kpart) {
+        // n_k == 0 but a kpart was created (and is deleted below): it still
+        // occupies the particle->nlocal-1 slot, so reserve it in i_add to keep
+        // a following n_pre particle correctly indexed.
+        i_add++;
+      }
 
       // major particle which created through major-minor is added
       if (n_pre) {
@@ -1928,21 +1933,20 @@ template < int WEIGHT > void Collide::collisions_one_ambipolar()
         ionambi[plist[i]]=ionambi[plist[np]];
       }      
 
-      // delete needless k particle 
-      // If k particles are created, but become unnecessary with some probability and are deleted
-      // In reaction not envolving third speices, kpart = NULL
-      // therefore, n_k = 0 and kpart is not NULL is the condition
+      // delete needless k particle
+      // k created by reaction but discarded by SWS weighting (n_k == 0):
+      // kpart sits at particle->nlocal-1 and was never added to plist, so delete
+      // it directly via the deletion list (no plist/np change).  The previous
+      // code dereferenced plist[k] with a stale k -- k is only set during
+      // recombination -- which could read/write out of bounds.
+      // kpart = NULL for reactions not involving a third species
       if (!n_k && kpart) {
-        //printf("!!check del k \n");
         if (ndelete == maxdelete) {
           maxdelete += DELTADELETE;
           memory->grow(dellist,maxdelete,"collide:dellist");
         }
-        dellist[ndelete++] = plist[k];
-        np--;
-        plist[k] = plist[np];
-        ionambi[plist[k]]=ionambi[plist[np]];
-      }       
+        dellist[ndelete++] = kpart - particle->particles;
+      }
 
       // copy paste i particle 
       // i is always non ambipolar particle because of reactoin style limitation
