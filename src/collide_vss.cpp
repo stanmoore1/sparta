@@ -441,12 +441,10 @@ void CollideVSS::setup_collision_SWS(Particle::OnePart *ip, Particle::OnePart *j
   double imass = precoln.imass = species[isp].mass;
   double jmass = precoln.jmass = species[jsp].mass;
 
-   if ((w_i==w_max) && (w_j==w_max)){  // SWS
-    precoln.etrans = 0.5 * params[isp][jsp].mr * precoln.vr2 + Ewilost;
-    Ewilost = 0.0;
-  } else {
-    precoln.etrans = 0.5 * params[isp][jsp].mr * precoln.vr2;
-  }
+  // SWS: the probabilistic species-weighting update in
+  // SCATTER_TwoBodyScattering_SWS conserves weighted energy in expectation, so
+  // no Ewilost energy-recovery term is added here
+  precoln.etrans = 0.5 * params[isp][jsp].mr * precoln.vr2;
   
   precoln.erot = ip->erot + jp->erot;
   precoln.evib = ip->evib + jp->evib;
@@ -890,10 +888,8 @@ void CollideVSS::SCATTER_TwoBodyScattering_SWS(Particle::OnePart *ip,
   double w_j = species[jsp].specwt; 
   double phi = 1.0; 
 
-  double vi_pre[3];  
-  double vi_post[3]; 
+  double vi_pre[3];
   double vj_pre[3];
-  double vj_post[3];
 
   vi_pre[0]=vi[0];
   vi_pre[1]=vi[1];
@@ -952,44 +948,32 @@ void CollideVSS::SCATTER_TwoBodyScattering_SWS(Particle::OnePart *ip,
   vj[1] = precoln.vcmf - (mass_i*divisor)*vb;
   vj[2] = precoln.wcmf - (mass_i*divisor)*wc;
 
-  if (!(reactflag)){     // SWS
-    if (w_i>w_j){
-      vj_post[0] = vj[0];
-      vj_post[1] = vj[1];
-      vj_post[2] = vj[2];
-      
-      vi_post[0] = (1-phi)*vi_pre[0]+phi*vi[0];
-      vi_post[1] = (1-phi)*vi_pre[1]+phi*vi[1];
-      vi_post[2] = (1-phi)*vi_pre[2]+phi*vi[2];
-  
-      Ewilost += w_i*0.5*mass_i*phi*(1-phi)*(
-      pow((vi_pre[0]-vi[0]),2.0)+
-      pow((vi_pre[1]-vi[1]),2.0)+
-      pow((vi_pre[2]-vi[2]),2.0)
-      );
-  
-      vi[0]=vi_post[0];
-      vi[1]=vi_post[1];
-      vi[2]=vi_post[2];
-  
+  // SWS species-weighting update.  The velocities vi,vj computed above are the
+  // full post-collision velocities that conserve momentum/energy for a single
+  // (unweighted) pair.  In the weighted ensemble, a collision between a weight
+  // w_i and a weight w_j particle represents min(w_i,w_j) real collisions, so
+  // the larger-weight particle is only affected for the fraction
+  // phi = w_min/w_max of its representation.  Realize this unbiasedly: the
+  // smaller-weight particle always keeps the full update; the larger-weight
+  // particle keeps it with probability phi, otherwise it reverts to its
+  // pre-collision velocity.  This conserves weighted momentum and weighted
+  // energy in expectation (the cross terms sum to w_min times the full-pair
+  // conservation = 0).  A deterministic (1-phi)*v_pre + phi*v_full interpolation
+  // would instead bias the energy, because kinetic energy is quadratic in v.
+
+  if (!reactflag && phi < 1.0) {
+    if (w_i > w_j) {
+      if (random->uniform() >= phi) {
+        vi[0] = vi_pre[0];
+        vi[1] = vi_pre[1];
+        vi[2] = vi_pre[2];
+      }
     } else {
-      vi_post[0] = vi[0];
-      vi_post[1] = vi[1];
-      vi_post[2] = vi[2];
-      
-      vj_post[0] = (1-phi)*vj_pre[0]+phi*vj[0];
-      vj_post[1] = (1-phi)*vj_pre[1]+phi*vj[1];
-      vj_post[2] = (1-phi)*vj_pre[2]+phi*vj[2];
-  
-      Ewilost += w_j*0.5*mass_j*phi*(1-phi)*(
-      pow((vj_pre[0]-vj[0]),2.0)+
-      pow((vj_pre[1]-vj[1]),2.0)+
-      pow((vj_pre[2]-vj[2]),2.0)
-      );
-  
-      vj[0]=vj_post[0];
-      vj[1]=vj_post[1];
-      vj[2]=vj_post[2];
+      if (random->uniform() >= phi) {
+        vj[0] = vj_pre[0];
+        vj[1] = vj_pre[1];
+        vj[2] = vj_pre[2];
+      }
     }
   }
 }
