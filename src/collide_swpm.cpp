@@ -329,9 +329,9 @@ void Collide::group()
   double *stochastic_weights = particle->edvec[particle->ewhich[index_stochastic_weight]];
 
   double swmean, swvar, swstd;
-  double d1, d2;
+  double d1;
   double lLim, uLim;
-  int np_med,np_small;
+  int np_med;
 
   for (int icell = 0; icell < nglocal; icell++) {
     np = cinfo[icell].count;
@@ -363,52 +363,50 @@ void Collide::group()
         group_octree(0,n,group_size_buffer);
       } else if (group_type == WEIGHT) {
 
-        // find mean / standard deviation of weight
+        // plist[0..n-1] are this cell's positive-weight particle indices
+        // (built above).  classify them by weight and reduce the small and
+        // medium buckets separately with the binary-tree strategy, ignoring
+        // the largest-weight particles.
 
-        n = 0.0;
+        int ngroup = n;
+
+        // find mean / standard deviation of weight (Welford incremental)
+
+        int ncount = 0;
         swmean = swvar = 0.0;
-        for (int i = 0; i < np; i++) {
-          ipart = &particles[plist[i]];
+        for (int i = 0; i < ngroup; i++) {
           isw = stochastic_weights[plist[i]];
-
-          // Incremental variance
-
-          if(isw > 0) {
-            n++;
+          if (isw > 0) {
+            ncount++;
             d1 = isw - swmean;
-            swmean += (d1/n);
-            swvar += (n-1.0)/n*d1*d1;
+            swmean += d1/ncount;
+            swvar += (ncount-1.0)/ncount*d1*d1;
           }
-          ip = next[ip];
         }
-        swstd = sqrt(swvar/n);
+        if (ncount == 0) break;
+        swstd = sqrt(swvar/ncount);
 
         // weight limits to separate particles
 
         lLim = MAX(swmean-1.25*swstd,0);
         uLim = swmean+2.0*swstd;
 
-        // recreate particle list and omit large weighted particles
+        // partition plist in place (index by position i, not particle id):
+        // first move all small-weight particles to the front
 
-        // first place all small weighted particles to front
-        int np_small = 0; // index of center particle
-        ip = cinfo[icell].first;
-        for (int i = 0; i < np; i++) {
-          ipart = &particles[plist[i]];
+        int np_small = 0;
+        for (int i = 0; i < ngroup; i++) {
           isw = stochastic_weights[plist[i]];
-          if(isw > 0 && isw < lLim) {
-            std::swap(plist[ip],plist[np_small]);
+          if (isw > 0 && isw < lLim) {
+            std::swap(plist[i],plist[np_small]);
             np_small++;
           }
-          ip = next[ip];
         }
 
-        // then place all medium weighted particles starting from
-        // .., last index (np_small)
+        // then move all medium-weight particles directly after the small ones
 
         np_med = np_small;
-        for (int i = np_small; i < np; i++) {
-          ipart = &particles[plist[i]];
+        for (int i = np_small; i < ngroup; i++) {
           isw = stochastic_weights[plist[i]];
           if (isw >= lLim && isw < uLim) {
             std::swap(plist[np_med],plist[i]);
@@ -545,11 +543,18 @@ void Collide::group_bt(int istart, int iend, int group_size_buffer)
 
     // scale values to be consistent with definitions in
     // .. stochastic numerics book
+    // use the mass-weighted mean mass of the group (mbar = msum/gsum) as the
+    // representative mass.  for a single-species group this is exactly the
+    // species mass (so energy is conserved); using a single particle's mass
+    // here instead would make the result depend on particle ordering.
+    // NOTE: the two-survivor reduction is only exact for single-species
+    // groups; multi-species groups are reduced approximately about mbar.
 
-    T *= update->boltz/mass;
+    double mbar = msum/gsum;
+    T *= update->boltz/mbar;
     for (int i = 0; i < 3; i++) {
-      q[i] /= mass;
-      for(int j = 0; j < 3; j++) pij[i][j] /= mass;
+      q[i] /= mbar;
+      for(int j = 0; j < 3; j++) pij[i][j] /= mbar;
     }
 
     // reduce based on type
