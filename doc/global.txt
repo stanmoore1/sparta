@@ -109,7 +109,9 @@ The {field} keyword adds an additional external field term which can
 included in the motion of particles.  The {fstyle} argument can be
 {none} or {constant}, {particle}, or {grid}.  Note that only one of
 these can be set by the global command.  If the {field} keyword is
-specified multiple times, only the last one has an effect.
+specified multiple times, only the last one has an effect; a warning is
+printed when a {field} setting overrides a previously defined external
+field.
 
 The {none} setting turns off any external field setting previously
 specified.  It is the default.

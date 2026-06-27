@@ -1681,6 +1681,9 @@ void Update::global(int narg, char **arg)
 
     } else if (strcmp(arg[iarg],"field") == 0) {
       if (iarg+1 > narg) error->all(FLERR,"Illegal global command");
+      if (fstyle != NOFIELD && strcmp(arg[iarg+1],"none") != 0)
+        error->warning(FLERR,"Global field command overrides a previously "
+                       "defined external field; only the last field is used");
       if (strcmp(arg[iarg+1],"none") == 0) {
         fstyle = NOFIELD;
         iarg += 2;
