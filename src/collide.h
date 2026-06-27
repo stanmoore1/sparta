@@ -182,9 +182,8 @@ class Collide : protected Pointers {
 
   template < int, int > void collisions_one();       // <NEARCP,WEIGHT>
   template < int, int > void collisions_group();     // <NEARCP,WEIGHT>
-  template < int > void collisions_one_ambipolar();  // <WEIGHT>
-  void collisions_group_ambipolar();
-  void collisions_group_ambipolar_SWS();             // SWS
+  template < int > void collisions_one_ambipolar();    // <WEIGHT>
+  template < int > void collisions_group_ambipolar();  // <WEIGHT>
   void ambi_reset(int, int, int, Particle::OnePart *, Particle::OnePart *,
                   Particle::OnePart *, int *);
   void ambi_check();
