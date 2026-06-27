@@ -80,6 +80,7 @@ FixEmitFace::FixEmitFace(SPARTA *sparta, int narg, char **arg) :
   // optional args
 
   np = 0;
+  ndot = 0.0;
   modvar = NULL;
   subsonic = 0;
   subsonic_style = NOSUBSONIC;
@@ -102,9 +103,18 @@ FixEmitFace::FixEmitFace(SPARTA *sparta, int narg, char **arg) :
     error->all(FLERR,"Cannot use fix emit/face n > 0 with subsonic");
   if (np > 0 && modvar)
     error->all(FLERR,"Cannot use fix emit/face n > 0 with modulate option");
+  if (ndot > 0.0 && np > 0)
+    error->all(FLERR,"Cannot use fix emit/face ndot > 0 with n > 0");
+  if (ndot > 0.0 && perspecies)
+    error->all(FLERR,"Cannot use fix emit/face ndot > 0 with perspecies yes");
+  if (ndot > 0.0 && subsonic)
+    error->all(FLERR,"Cannot use fix emit/face ndot > 0 with subsonic");
+  if (ndot > 0.0 && modvar)
+    error->all(FLERR,"Cannot use fix emit/face ndot > 0 with modulate option");
 
   // task list and subsonic data structs
 
+  alltask = 0;
   tasks = NULL;
   ntask = ntaskmax = 0;
 
@@ -235,12 +245,18 @@ void FixEmitFace::grid_changed()
   // NOTE: currently setting same # of insertions per task
   //       could instead weight by cell face area
 
+  // ndot = real particles/sec: store global # of tasks to spread flux over
+  // the per-timestep insertion count is computed in perform_task(),
+  //   since it depends on the current timestep and global fnum
+
+  if (np > 0 || ndot > 0.0)
+    MPI_Allreduce(&ntask,&alltask,1,MPI_INT,MPI_SUM,world);
+
   if (np > 0) {
-    int all,nupto,tasks_with_no_extra;
-    MPI_Allreduce(&ntask,&all,1,MPI_INT,MPI_SUM,world);
-    if (all) {
-      npertask = np / all;
-      tasks_with_no_extra = all - (np % all);
+    int nupto,tasks_with_no_extra;
+    if (alltask) {
+      npertask = np / alltask;
+      tasks_with_no_extra = alltask - (np % alltask);
     } else npertask = tasks_with_no_extra = 0;
 
     MPI_Scan(&ntask,&nupto,1,MPI_INT,MPI_SUM,world);
@@ -498,6 +514,15 @@ void FixEmitFace::perform_task_onepass()
     if (prefactor < 0.0) error->all(FLERR,"Fix emit/face modulation < 0.0");
   }
 
+  // if ndot set, compute per-task fractional insertion count for this timestep
+  // ndot = real particles/sec, so ndot*dt/fnum = MC particles/timestep
+  //   summed over all tasks; spread equally over the global # of tasks
+  // recomputed each step so it tracks changes in dt and fnum
+
+  double nperdot = 0.0;
+  if (ndot > 0.0 && alltask)
+    nperdot = ndot * dt / update->fnum / alltask;
+
   // insert particles for each task = cell/face pair
   // ntarget/ninsert is either perspecies or for all species
   // for one particle:
@@ -586,12 +611,15 @@ void FixEmitFace::perform_task_onepass()
       }
 
     } else {
-      if (np == 0) {
-        ntarget = prefactor*tasks[i].ntarget + random->uniform();
-        ninsert = static_cast<int> (ntarget);
-      } else {
+      if (np > 0) {
         ninsert = npertask;
         if (i >= nthresh) ninsert++;
+      } else if (ndot > 0.0) {
+        ntarget = nperdot + random->uniform();
+        ninsert = static_cast<int> (ntarget);
+      } else {
+        ntarget = prefactor*tasks[i].ntarget + random->uniform();
+        ninsert = static_cast<int> (ntarget);
       }
 
       nactual = 0;
@@ -677,6 +705,15 @@ void FixEmitFace::perform_task_twopass()
     if (prefactor < 0.0) error->all(FLERR,"Fix emit/face modulation < 0.0");
   }
 
+  // if ndot set, compute per-task fractional insertion count for this timestep
+  // ndot = real particles/sec, so ndot*dt/fnum = MC particles/timestep
+  //   summed over all tasks; spread equally over the global # of tasks
+  // recomputed each step so it tracks changes in dt and fnum
+
+  double nperdot = 0.0;
+  if (ndot > 0.0 && alltask)
+    nperdot = ndot * dt / update->fnum / alltask;
+
   // insert particles for each task = cell/face pair
   // ntarget/ninsert is either perspecies or for all species
   // for one particle:
@@ -707,12 +744,15 @@ void FixEmitFace::perform_task_twopass()
         ninsert_values[i][isp] = ninsert;
       }
     } else {
-      if (np == 0) {
-        ntarget = prefactor*tasks[i].ntarget + random->uniform();
-        ninsert = static_cast<int> (ntarget);
-      } else {
+      if (np > 0) {
         ninsert = npertask;
         if (i >= nthresh) ninsert++;
+      } else if (ndot > 0.0) {
+        ntarget = nperdot + random->uniform();
+        ninsert = static_cast<int> (ntarget);
+      } else {
+        ntarget = prefactor*tasks[i].ntarget + random->uniform();
+        ninsert = static_cast<int> (ntarget);
       }
       ninsert_values[i][0] = ninsert;
     }
@@ -1162,6 +1202,13 @@ int FixEmitFace::option(int narg, char **arg)
     if (2 > narg) error->all(FLERR,"Illegal fix emit/face command");
     np = atoi(arg[1]);
     if (np <= 0) error->all(FLERR,"Illegal fix emit/face command");
+    return 2;
+  }
+
+  if (strcmp(arg[0],"ndot") == 0) {
+    if (2 > narg) error->all(FLERR,"Illegal fix emit/face command");
+    ndot = input->numeric(FLERR,arg[1]);
+    if (ndot <= 0.0) error->all(FLERR,"Illegal fix emit/face command");
     return 2;
   }
 

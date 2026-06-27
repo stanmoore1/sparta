@@ -18,8 +18,9 @@ emit/face = style name of this fix command :l
 mix-ID = ID of mixture to use when creating particles :l
 face1,face2,... = one or more of {all} or {xlo} or {xhi} or {ylo} or {yhi} or {zlo} or {zhi} :l
 zero or more keyword/value(s) pairs may be appended :l
-keyword = {n} or {nevery} or {perspecies} or {region} or {modulate} or {subsonic} or {twopass} :l
+keyword = {n} or {ndot} or {nevery} or {perspecies} or {region} or {modulate} or {subsonic} or {twopass} :l
   {n} value = Np = number of particles to create
+  {ndot} value = Ndot = number of real particles/second to create
   {nevery} value = Nstep = add particles every this many timesteps
   {perspecies} value = {yes} or {no}
   {region} value = region-ID
@@ -35,6 +36,7 @@ keyword = {n} or {nevery} or {perspecies} or {region} or {modulate} or {subsonic
 
 fix in emit/face air all
 fix in emit/face mymix xlo yhi n 1000 nevery 10 region circle
+fix in emit/face mymix xlo ndot 1.0e18 perspecies no region circle
 fix in emit/face air xlo subsonic 0.1 300
 fix in emit/face air xhi subsonic 0.05 NULL twopass :pre
 
@@ -113,6 +115,28 @@ settings, as described above.  If {Np} is set to a value > 0, then the
 added on each insertion timestep.  This is done by dividing {Np} by
 the total number of grid cells that are adjacent to the specified box
 faces and adding an equal number of particles per grid cell.
+
+The {ndot} keyword specifies the influx directly as a number of real
+particles per second, {Ndot}, rather than requiring it to be derived
+from the mixture number density and streaming velocity.  On each
+insertion timestep the number of simulation particles to add, summed
+over all emitting grid cell faces, is computed as {Ndot} * {dt} /
+{fnum}, where {dt} is the current timestep size as set by the
+"timestep"_timestep.html command and {fnum} is the ratio of real to
+simulation particles as set by the "global"_global.html command.
+Because this conversion is performed every insertion timestep, the
+target real particle flux {Ndot} is held fixed even if {dt} or {fnum}
+change during a simulation.  As with the unmodulated insertion count,
+if the resulting per-face count has a fractional value, the extra
+particle is added depending on the value of a random number.  Unlike
+the {n} keyword, the {fnum} and {nrho} settings are still used (via the
+conversion above), but the streaming velocity and thermal temperature
+no longer determine the total number of inserted particles, only their
+velocities.
+
+The {n} and {ndot} keywords cannot be used together.  Like the {n}
+keyword, {ndot} can only be used with a {perspecies} setting of {no},
+and cannot be used with the {modulate} or {subsonic} keywords.
 
 The {nevery} keyword determines how often particles are added.  If
 {Nstep} > 1, this may give a non-continuous, clumpy distribution in
@@ -264,8 +288,9 @@ Particles cannot be emitted from {z} faces of the simluation box for a
 2d simulation.
 
 A {perspecies} setting of {yes} can only be used with an {n} setting
-of {Np} = 0.  Likewise, the {modulate} keyword can only be used with
-an {n} setting of {Np} = 0.
+of {Np} = 0 and without the {ndot} keyword.  Likewise, the {modulate}
+keyword can only be used with an {n} setting of {Np} = 0 and without
+the {ndot} keyword.
 
 A warning will be issued if a specified face has an inward normal in a
 direction opposing the streaming velocity.  Particles will still be
@@ -283,8 +308,9 @@ emit/face/file"_fix_emit_face_file.html
 
 [Default:]
 
-The keyword defaults are n = 0, nevery = 1, perspecies = yes, region =
-none, no modulate setting, no subsonic settings, no twopass setting.
+The keyword defaults are n = 0, ndot = 0, nevery = 1, perspecies = yes,
+region = none, no modulate setting, no subsonic settings, no twopass
+setting.
 
 :line
 

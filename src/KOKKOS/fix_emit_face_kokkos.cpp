@@ -183,6 +183,14 @@ void FixEmitFaceKokkos::perform_task()
     if (prefactor < 0.0) error->all(FLERR,"Fix emit/face modulation < 0.0");
   }
 
+  // if ndot set, compute per-task fractional insertion count for this timestep
+  // ndot = real particles/sec, so ndot*dt/fnum = MC particles/timestep
+  //   summed over all tasks; spread equally over the global # of tasks
+
+  nperdot = 0.0;
+  if (ndot > 0.0 && alltask)
+    nperdot = ndot * dt / update->fnum / alltask;
+
   // insert particles for each task = cell/face pair
   // ntarget/ninsert is either perspecies or for all species
 
@@ -406,12 +414,15 @@ void FixEmitFaceKokkos::operator()(TagFixEmitFace_ninsert, const int &i) const
       d_ninsert(i * nspecies + isp) = ninsert;
     }
   } else {
-    if (np == 0) {
-      auto ntarget = prefactor*d_tasks(i).ntarget + rand_gen.drand();
-      ninsert = static_cast<int> (ntarget);
-    } else {
+    if (np > 0) {
       ninsert = npertask;
       if (i >= nthresh) ninsert++;
+    } else if (ndot > 0.0) {
+      auto ntarget = nperdot + rand_gen.drand();
+      ninsert = static_cast<int> (ntarget);
+    } else {
+      auto ntarget = prefactor*d_tasks(i).ntarget + rand_gen.drand();
+      ninsert = static_cast<int> (ntarget);
     }
     d_ninsert(i) = ninsert;
   }

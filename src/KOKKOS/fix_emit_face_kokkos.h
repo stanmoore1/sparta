@@ -68,6 +68,7 @@ class FixEmitFaceKokkos : public FixEmitFace {
 
  private:
   int prefactor, region_flag;
+  double nperdot;
 
   KKCopy<ParticleKokkos> particle_kk_copy;
   KKCopy<RegBlockKokkos> regblock_kk_copy;

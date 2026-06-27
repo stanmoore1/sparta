@@ -65,6 +65,8 @@ class FixEmitFace : public FixEmit {
   int imix,np,subsonic,subsonic_style,subsonic_warning;
   int faces[6];
   int npertask,nthresh,twopass;
+  int alltask;                  // global # of tasks, used by np and ndot
+  double ndot;                  // real particles/sec to insert, 0 if unused
   double psubsonic,tsubsonic,nsubsonic;
   double tprefactor,soundspeed_mixture;
 
