@@ -387,6 +387,9 @@ void CollideVSSKokkos::collisions()
   if (ngroups != 1)
     error->all(FLERR,"Group collisions not yet supported with Kokkos");
 
+  if (particle->sws)
+    error->all(FLERR,"Species weighting scheme (SWS) not yet supported with Kokkos");
+
   COLLIDE_REDUCE reduce;
 
   if (!ambiflag) {

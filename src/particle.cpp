@@ -874,8 +874,12 @@ void Particle::add_species(int narg, char **arg)
     else error->all(FLERR,"Illegal species command");
   }
 
-  if (sws==0) {  
-    for (i = 0; i < newspecies; i++) species[i].specwt=1.0;  // SWS
+  if (sws==0) {
+    for (i = nspecies-newspecies; i < nspecies; i++) species[i].specwt=1.0;  // SWS
+  } else {
+    for (i = nspecies-newspecies; i < nspecies; i++)  // SWS
+      if (species[i].specwt <= 0.0)
+        error->all(FLERR,"Species weight (specwt) must be positive with SWS");
   }
 
   // read rotational species file and setup per-species params

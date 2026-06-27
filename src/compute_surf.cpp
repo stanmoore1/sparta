@@ -355,7 +355,7 @@ void ComputeSurf::surf_tally(int isurf, int icell, int reaction,
   double worig = 1.0;   
   double wi = 1.0;      
   double wj = 1.0;     
-  worig = particle->species[origspecies].specwt;   
+  if (origspecies >= 0) worig = particle->species[origspecies].specwt;
   if (ip) wi = particle->species[ip->ispecies].specwt;
   if (jp) wj = particle->species[jp->ispecies].specwt;
 

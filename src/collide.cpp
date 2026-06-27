@@ -2071,6 +2071,9 @@ template < int NEARCP > void Collide::collisions_group_SWS()
         // perform collision and possible reaction
 
         setup_collision_SWS(ipart,jpart);  // SWS
+
+        n_i = 1;                   // SWS
+        n_j = n_k = n_pre = 0;     // SWS
         reactflag = perform_collision_SWS(ipart,jpart,kpart,n_i,n_j,n_k,n_pre);  // SWS
         ncollide_one++;
         if (reactflag) nreact_one++;
@@ -2557,8 +2560,7 @@ void Collide::collisions_one_ambipolar_SWS()
               if(ipart) ipart = particle->particles + (ipart - particles);
               if(jpart) jpart = particle->particles + (jpart - particles);
               if(kpart) kpart = particle->particles + (kpart - particles);
-              kpart = particle->particles + (kpart - particles);
-          }                      
+          }
             if (np == npmax) {
               npmax += DELTAPART;
               memory->grow(plist,npmax,"collide:plist");
@@ -3011,6 +3013,9 @@ void Collide::collisions_group_ambipolar_SWS()
 
         jspecies = jpart->ispecies;
         setup_collision_SWS(ipart,jpart);  // SWS
+
+        n_i = 1;                   // SWS
+        n_j = n_k = n_pre = 0;     // SWS
         reactflag = perform_collision_SWS(ipart,jpart,kpart,n_i,n_j,n_k,n_pre);  // SWS
         ncollide_one++;
         if (reactflag) nreact_one++;
