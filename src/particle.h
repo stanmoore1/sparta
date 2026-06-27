@@ -24,7 +24,8 @@ class Particle : protected Pointers {
  public:
   int exist;                // 1 if particles exist
   int sorted;               // 1 if particles are sorted by grid cell
-  int weightflag;           // 1 if stochastic weights used
+  int weightflag;           // 1 if grid-based cell weighting used
+  int sws;                  // SWS - 0:none, 1:SWS, 2:SWSmax ; read from input file species command keyword
 
   enum{MAXVIBMODE=4};       // increase value if species need more vib modes
 
@@ -179,14 +180,16 @@ class Particle : protected Pointers {
 
   // canonical per-particle weight resolver.  pw is the array returned by
   // stochastic_weights() (fetched once by the caller and passed in):
-  //   - if pw != NULL (per-particle weighting active) -> pw[i]
-  //   - else if grid-based cell weighting active      -> particles[i].weight
-  //   - else                                          -> 1.0
+  //   - if pw != NULL (per-particle SWPM weighting active) -> pw[i]
+  //   - else if SWS species weighting active               -> species[isp].specwt
+  //   - else if grid-based cell weighting active           -> particles[i].weight
+  //   - else                                               -> 1.0
   // all weighted diagnostics go through this one accessor so that additional
-  // weighting schemes only need to populate the per-particle weight array.
+  // weighting schemes only need to plug in here (or populate the array pw).
 
   inline double pweight(int i, double *pw) {
     if (pw) return pw[i];
+    if (sws) return species[particles[i].ispecies].specwt;
     if (weightflag) return particles[i].weight;
     return 1.0;
   }

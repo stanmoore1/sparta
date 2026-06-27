@@ -187,8 +187,7 @@ void ComputeSonineGrid::compute_per_grid()
     if (!(cinfo[icell].mask & groupbit)) continue;
 
     mass = species[ispecies].mass;
-    if (sweights) mass *= sweights[i];
-    else if (particle->weightflag) mass *= particles[i].weight;
+    mass *= particle->pweight(i,sweights);
     v = particles[i].v;
 
     vcom[icell][igroup][0] += mass * v[0];
@@ -228,8 +227,7 @@ void ComputeSonineGrid::compute_per_grid()
     k = igroup*npergroup;
 
     mass = species[ispecies].mass;
-    if (sweights) mass *= sweights[i];
-    else if (particle->weightflag) mass *= particles[i].weight;
+    mass *= particle->pweight(i,sweights);
     vec[k++] += mass;
 
     v = particles[i].v;
