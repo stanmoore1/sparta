@@ -115,6 +115,18 @@ class ComputeGridKokkos : public ComputeGrid, public KokkosBase {
   t_species_1d d_species;
   DAT::t_int_2d d_s2g;
 
+  // canonical per-particle weight on device (SWPM / SWS / grid weighting)
+  DAT::t_float_1d d_sweights;
+  int swpm_flag,sws_flag,weight_flag;
+
+  KOKKOS_INLINE_FUNCTION
+  double pweight_kk(const int i, const int ispecies) const {
+    if (swpm_flag) return d_sweights[i];
+    if (sws_flag) return d_species[ispecies].specwt;
+    if (weight_flag) return d_particles[i].weight;
+    return 1.0;
+  }
+
   DAT::t_int_1d d_cellcount;
   DAT::t_int_2d d_plist;
 
