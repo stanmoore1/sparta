@@ -176,6 +176,21 @@ class Particle : protected Pointers {
 
   int find_custom(char *);
   double *stochastic_weights();
+
+  // canonical per-particle weight resolver.  pw is the array returned by
+  // stochastic_weights() (fetched once by the caller and passed in):
+  //   - if pw != NULL (per-particle weighting active) -> pw[i]
+  //   - else if grid-based cell weighting active      -> particles[i].weight
+  //   - else                                          -> 1.0
+  // all weighted diagnostics go through this one accessor so that additional
+  // weighting schemes only need to populate the per-particle weight array.
+
+  inline double pweight(int i, double *pw) {
+    if (pw) return pw[i];
+    if (weightflag) return particles[i].weight;
+    return 1.0;
+  }
+
   void error_custom();
   virtual int add_custom(char *, int, int);
   virtual void grow_custom(int, int, int);

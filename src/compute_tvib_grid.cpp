@@ -293,8 +293,7 @@ void ComputeTvibGrid::compute_per_grid()
       icell = particles[i].icell;
       if (!(cinfo[icell].mask & groupbit)) continue;
 
-      if (sweights) swfrac = sweights[i];
-      else if (particle->weightflag) swfrac = particles[i].weight;
+      swfrac = particle->pweight(i,sweights);
 
       j = s2t[ispecies];
       tally[icell][j] += particles[i].evib * swfrac;
@@ -313,8 +312,7 @@ void ComputeTvibGrid::compute_per_grid()
       icell = particles[i].icell;
       if (!(cinfo[icell].mask & groupbit)) continue;
 
-      if (sweights) swfrac = sweights[i];
-      else if (particle->weightflag) swfrac = particles[i].weight;
+      swfrac = particle->pweight(i,sweights);
 
       // tally only the modes this species has
 

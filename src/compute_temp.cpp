@@ -55,8 +55,7 @@ double ComputeTemp::compute_scalar()
   double swfrac = 1.0;
   for (int i = 0; i < nlocal; i++) {
     v = particles[i].v;
-    if (sweights) swfrac = sweights[i];
-    else if (particle->weightflag) swfrac = particles[i].weight;
+    swfrac = particle->pweight(i,sweights);
     t += (v[0]*v[0] + v[1]*v[1] + v[2]*v[2]) *
       species[particles[i].ispecies].mass * swfrac;
     wsum += swfrac;

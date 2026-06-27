@@ -147,8 +147,7 @@ void ComputeThermalGrid::compute_per_grid()
     if (!(cinfo[icell].mask & groupbit)) continue;
 
     mass = species[ispecies].mass;
-    if (sweights) swfrac = sweights[i];
-    else if (particle->weightflag) swfrac = particles[i].weight;
+    swfrac = particle->pweight(i,sweights);
     mass *= swfrac;
     v = particles[i].v;
 

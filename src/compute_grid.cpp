@@ -248,8 +248,7 @@ void ComputeGrid::compute_per_grid()
 
     mass = species[ispecies].mass;
     v = particles[i].v;
-    if (sweights) swfrac = sweights[i];
-    else if (particle->weightflag) swfrac = particles[i].weight;
+    swfrac = particle->pweight(i,sweights);
 
     mass *= swfrac;
 
