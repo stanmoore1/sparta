@@ -30,6 +30,41 @@ false positives and incorrect/regressive fixes were rejected.
   **rejects** the 4 non-bugs, and **avoids AB's EPSZERO regression** in `collide_vss*`.
 - **Build:** `make serial` links cleanly (`spa_serial`) with all non-KOKKOS fixes applied.
 
+## Follow-up review (second pass): inert / non-defect changes reverted
+
+An independent re-verification of every applied change against `origin/master` found that a
+subset of the originally-applied edits do **not** fix a reachable defect and were reverted to
+keep the diff scoped to genuine bugs. These reverts do **not** touch any confirmed fix:
+
+- **82, 83** (`adapt_grid.cpp`): the `(bigint)` casts on `int * sizeof(...)` are **inert** —
+  `sizeof` is `size_t`, so the multiply is already 64-bit. Same pattern this audit rejected as
+  Bug 93. Reverted. (The genuine Bug 81 `nglocalprev` fix in the same file is kept.)
+- **61** (`surf.cpp`): `(size_t)(nmax-old)*sizeof(Line/Tri)` memset casts are inert (already
+  64-bit). Reverted. (The genuine Bug 33 `snprintf(estyle,...)` fixes are kept.)
+- **60** (`surf_comm.cpp`): the two `spread_own2local_reduce` `(bigint)nlocal*n` create-casts are
+  inert — the function already errors out via `bcount > MAXSMALLINT` before the create, and
+  `Memory::create` truncates back to `int`. Reverted. (The two un-guarded `spread_local2own`
+  `(bigint)(n+1)*nunique` casts, which remove genuine signed-overflow UB, are kept.)
+- **59** (`surf_custom.cpp`): the four 1-D *vector* memset casts (`(size_t)n*sizeof(T)`) are
+  inert (`int * size_t` already promotes). Reverted. The four 2-D *array* casts
+  (`(size_t)n*eicol*...`, where `n*eicol` is `int*int` and can overflow before promotion) are
+  genuine and **kept**.
+- **100** (`compute_dt_grid.cpp` + KOKKOS): the `vrm_max > 0.0` guard is **unreachable** — the
+  loop already does `if (!(temp[i] > 0.)) continue;` upstream, so `vrm_max > 0` always holds.
+  Reverted.
+- **105** (`collide_vss.cpp`): the `volume > 0.0` guards in both `attempt_collision` overloads
+  are **unreachable** — all callers in `collide.cpp` hard-error on `volume == 0.0` before the
+  call. Reverted. (The genuine Bug 46 `vremax==0` guard and Bug 47 symmetric `rotc2` assignment
+  in the same file are kept, and the EPSZERO guard remains intact.)
+- **75** (`react_bird_kokkos.cpp`): the pool-seed change `12345`→`54321` is speculative, not a
+  correctness fix, and changes RNG reproducibility of existing KOKKOS runs while ~8 sibling
+  classes keep the old seed. Reverted to `12345`.
+
+Note: the structural `Memory::create(TYPE*&, int n, ...)` int-parameter limitation means
+`(bigint)` casts on a *count* argument cannot enable a >INT_MAX allocation regardless; the
+companion `memset` casts (which take `size_t`) are the ones that genuinely matter, and those
+are retained for the array cases (56, 59-array).
+
 ## Legend
 
 - **Real?**: REAL · PARTIAL (genuine but narrow/defensive) · **NO** (not a bug)

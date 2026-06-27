@@ -3078,11 +3078,11 @@ void Surf::grow(int old)
   if (domain->dimension == 2) {
     lines = (Surf::Line *)
       memory->srealloc(lines,nmax*sizeof(Line),"surf:lines");
-    memset(&lines[old],0,(size_t)(nmax-old)*sizeof(Line));
+    memset(&lines[old],0,(nmax-old)*sizeof(Line));
   } else {
     tris = (Surf::Tri *)
       memory->srealloc(tris,nmax*sizeof(Tri),"surf:tris");
-    memset(&tris[old],0,(size_t)(nmax-old)*sizeof(Tri));
+    memset(&tris[old],0,(nmax-old)*sizeof(Tri));
   }
 }
 

@@ -984,7 +984,7 @@ void AdaptGrid::candidates_coarsen()
       if (clhash->find(parentID) == clhash->end()) {
         if (cnum == cnummax) {
           cnummax += DELTA_LIST;
-          clist = (CList *) memory->srealloc(clist,(bigint)cnummax*sizeof(CList),
+          clist = (CList *) memory->srealloc(clist,cnummax*sizeof(CList),
                                              "adapt_grid:clist");
         }
         (*clhash)[parentID] = cnum;
@@ -1050,7 +1050,7 @@ void AdaptGrid::candidates_coarsen()
       (*clhash)[parentID] = cnum;
       if (cnum == cnummax) {
         cnummax += DELTA_LIST;
-        clist = (CList *) memory->srealloc(clist,(bigint)cnummax*sizeof(CList),
+        clist = (CList *) memory->srealloc(clist,cnummax*sizeof(CList),
                                            "adapt_grid:clist");
       }
       clist[cnum].parentID = parentID;
@@ -1376,7 +1376,7 @@ void AdaptGrid::particle_surf_comm()
 
   nsend = nreturn;
   memory->create(proclist,nsend,"adapt_grid:proclist");
-  SendAdapt *sadapt = (SendAdapt *) memory->smalloc((bigint)nsend*sizeof(SendAdapt),
+  SendAdapt *sadapt = (SendAdapt *) memory->smalloc(nsend*sizeof(SendAdapt),
                                                     "adapt_grid:sadapt");
   for (int i = 0; i < nreturn; i++) {
     icell = outbuf[i].icell;
@@ -1439,7 +1439,7 @@ void AdaptGrid::particle_surf_comm()
     if (alhash->find(parentID) == alhash->end()) {
       if (anum == anummax) {
         anummax += DELTA_LIST;
-        alist = (ActionList *) memory->srealloc(alist,(bigint)anummax*sizeof(ActionList),
+        alist = (ActionList *) memory->srealloc(alist,anummax*sizeof(ActionList),
                                                 "adapt_grid:alist");
       }
       (*alhash)[parentID] = anum;

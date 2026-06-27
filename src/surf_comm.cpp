@@ -571,7 +571,7 @@ void Surf::spread_own2local_reduce(int n, int type, void *in, void *out)
       error->all(FLERR,"Overflow in spread_own2local_reduce");
     bigint bbytes = (bigint) nlocal * n * sizeof(int);
 
-    memory->create(myvec,(bigint)nlocal*n,"surf/spread:myvec");
+    memory->create(myvec,nlocal*n,"surf/spread:myvec");
     memset(myvec,0,bbytes);
 
     if (n == 1) {
@@ -602,7 +602,7 @@ void Surf::spread_own2local_reduce(int n, int type, void *in, void *out)
       error->all(FLERR,"Overflow in spread_own2local_reduce");
     bigint bbytes = (bigint) nlocal * n * sizeof(double);
 
-    memory->create(myvec,(bigint)nlocal*n,"surf/spread:myvec");
+    memory->create(myvec,nlocal*n,"surf/spread:myvec");
     memset(myvec,0,bbytes);
 
     if (n == 1) {

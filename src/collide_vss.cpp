@@ -139,17 +139,15 @@ double CollideVSS::attempt_collision(int icell, int np, double volume)
   double fnum = update->fnum;
   double dt = update->dt;
 
-  double nattempt = 0.0;
+  double nattempt;
 
-  if (volume > 0.0) {
-    if (remainflag) {
-      nattempt = 0.5 * np * (np-1) *
-        vremax[icell][0][0] * dt * fnum / volume + remain[icell][0][0];
-      remain[icell][0][0] = nattempt - static_cast<int> (nattempt);
-    } else {
-      nattempt = 0.5 * np * (np-1) *
-        vremax[icell][0][0] * dt * fnum / volume + random->uniform();
-    }
+  if (remainflag) {
+    nattempt = 0.5 * np * (np-1) *
+      vremax[icell][0][0] * dt * fnum / volume + remain[icell][0][0];
+    remain[icell][0][0] = nattempt - static_cast<int> (nattempt);
+  } else {
+    nattempt = 0.5 * np * (np-1) *
+      vremax[icell][0][0] * dt * fnum / volume + random->uniform();
   }
 
   return nattempt;
@@ -163,23 +161,21 @@ double CollideVSS::attempt_collision(int icell, int igroup, int jgroup,
  double fnum = update->fnum;
  double dt = update->dt;
 
- double nattempt = 0.0;
+ double nattempt;
 
- if (volume > 0.0) {
-   // return 2x the value for igroup != jgroup, since no J,I pairing
+ // return 2x the value for igroup != jgroup, since no J,I pairing
 
-   double npairs;
-   if (igroup == jgroup) npairs = 0.5 * ngroup[igroup] * (ngroup[igroup]-1);
-   else npairs = ngroup[igroup] * (ngroup[jgroup]);
-   //else npairs = 0.5 * ngroup[igroup] * (ngroup[jgroup]);
+ double npairs;
+ if (igroup == jgroup) npairs = 0.5 * ngroup[igroup] * (ngroup[igroup]-1);
+ else npairs = ngroup[igroup] * (ngroup[jgroup]);
+ //else npairs = 0.5 * ngroup[igroup] * (ngroup[jgroup]);
 
-   nattempt = npairs * vremax[icell][igroup][jgroup] * dt * fnum / volume;
+ nattempt = npairs * vremax[icell][igroup][jgroup] * dt * fnum / volume;
 
-   if (remainflag) {
-     nattempt += remain[icell][igroup][jgroup];
-     remain[icell][igroup][jgroup] = nattempt - static_cast<int> (nattempt);
-   } else nattempt += random->uniform();
- }
+ if (remainflag) {
+   nattempt += remain[icell][igroup][jgroup];
+   remain[icell][igroup][jgroup] = nattempt - static_cast<int> (nattempt);
+ } else nattempt += random->uniform();
 
  return nattempt;
 }
