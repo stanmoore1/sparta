@@ -117,6 +117,9 @@ class Collide : protected Pointers {
 
   double ***vremax;   // max relative velocity, per cell, per group pair
   double ***remain;   // collision number remainder, per cell, per group pair
+  double *ewilost_cell;  // SWS - per-cell energy lost by split-merge
+                         //       collisions, pending re-injection into a
+                         //       future max-weight pair collision
   double **vremax_initial;   // initial vremax value, per group pair
 
   int ngas_tally;            // copy of gas/gas Compute info setup by Update
