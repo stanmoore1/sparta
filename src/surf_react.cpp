@@ -18,6 +18,7 @@
 #include "string.h"
 #include "surf_react.h"
 #include "input.h"
+#include "particle.h"
 #include "update.h"
 #include "comm.h"
 #include "math_const.h"
@@ -78,6 +79,13 @@ SurfReact::~SurfReact()
 
 void SurfReact::init()
 {
+  // SWS - surface reactions do not yet perform the probabilistic
+  // creation/deletion of products required by the species weighting scheme
+
+  if (particle->sws)
+    error->all(FLERR,"Surface reactions are not yet supported with "
+               "the species weighting scheme (SWS)");
+
   nsingle = ntotal = 0;
   for (int i = 0; i < nlist; i++)
     tally_single[i] = tally_total[i] = 0;

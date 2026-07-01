@@ -352,10 +352,12 @@ void ComputeSurf::surf_tally(double /*dtremain*/, int isurf, int icell, int reac
   if (jp) jmass = particle->species[jp->ispecies].mass * weight;
   
   // SWS - variables
-  double worig = 1.0;   
-  double wi = 1.0;      
-  double wj = 1.0;     
-  worig = particle->species[origspecies].specwt;   
+  // if no original particle (emission), use emitted species weight for worig
+  double worig = 1.0;
+  double wi = 1.0;
+  double wj = 1.0;
+  if (origspecies >= 0) worig = particle->species[origspecies].specwt;
+  else if (ip) worig = particle->species[ip->ispecies].specwt;
   if (ip) wi = particle->species[ip->ispecies].specwt;
   if (jp) wj = particle->species[jp->ispecies].specwt;
 
@@ -393,7 +395,7 @@ void ComputeSurf::surf_tally(double /*dtremain*/, int isurf, int icell, int reac
       vec[k++] += weight;
       break;
     case NFLUX:
-      vec[k] += weight * fluxscale * worig;  // SWS
+      if (iorig) vec[k] += weight * fluxscale * worig;  // SWS
       if (!transparent) {
         if (ip) vec[k] -= weight * fluxscale * wi;   // SWS
         if (jp) vec[k] -= weight * fluxscale * wj;   // SWS
@@ -405,7 +407,7 @@ void ComputeSurf::surf_tally(double /*dtremain*/, int isurf, int icell, int reac
       k++;
       break;
     case MFLUX:
-      vec[k] += origmass * fluxscale * worig;  // SWS
+      if (iorig) vec[k] += origmass * fluxscale * worig;  // SWS
       if (!transparent) {
         if (ip) vec[k] -= imass * fluxscale * wi;  // SWS
         if (jp) vec[k] -= jmass * fluxscale * wj;  // SWS
@@ -622,7 +624,7 @@ void ComputeSurf::surf_tally(double /*dtremain*/, int isurf, int icell, int reac
       if (reaction && !transparent) {
         sr = surf->sr[isr];
         r_coeff = sr->reaction_coeff(reaction-1);
-        vec[k++] += weight * r_coeff * fluxscale;
+        vec[k++] += weight * r_coeff * fluxscale * worig;  // SWS
       }
       break;
     case ETOT:
@@ -645,7 +647,7 @@ void ComputeSurf::surf_tally(double /*dtremain*/, int isurf, int icell, int reac
         if (reaction) {
           sr = surf->sr[isr];
           r_coeff = sr->reaction_coeff(reaction-1);
-          etot -= weight * r_coeff;
+          etot -= weight * r_coeff * worig;  // SWS
         }
       }
       vec[k++] -= etot * fluxscale;

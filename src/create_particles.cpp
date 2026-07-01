@@ -223,6 +223,9 @@ void CreateParticles::command(int narg, char **arg)
     error->all(FLERR,"Create_particles cannot use vstream and custom vstream together");
   if (species_var_flag && fractions_custom_flag)
     error->all(FLERR,"Create_particles cannot use species and custom fractions together");
+  if (particle->sws && (species_var_flag || fractions_custom_flag))
+    error->all(FLERR,"Create_particles cannot use the species or fractions "
+               "keywords with the species weighting scheme (SWS)");
 
   nrho_flag = nrho_var_flag + nrho_custom_flag;
   temp_flag = temp_var_flag + temp_custom_flag;
@@ -599,10 +602,13 @@ void CreateParticles::create_local()
     Particle::Species *species_weight = particle->species;
     int nspecies = particle->mixture[imix]->nspecies;
     double *fraction = particle->mixture[imix]->fraction;
-    
+
+    double npsum = 0.0;
     for (int isp = 0; isp < nspecies; isp++) {
-      np += particle->mixture[imix]->nrho * flowvol * fraction[isp] / (update->fnum * species_weight[species[isp]].specwt);
+      npsum += particle->mixture[imix]->nrho * flowvol * fraction[isp] /
+        (update->fnum * species_weight[species[isp]].specwt);
     }
+    np = static_cast<bigint> (npsum);
   }
 
   // gather cummulative insertion volumes across all procs
@@ -899,10 +905,13 @@ void CreateParticles::create_local_twopass()
     Particle::Species *species_weight = particle->species;
     int nspecies = particle->mixture[imix]->nspecies;
     double *fraction = particle->mixture[imix]->fraction;
-    
+
+    double npsum = 0.0;
     for (int isp = 0; isp < nspecies; isp++) {
-      np += particle->mixture[imix]->nrho * flowvol * fraction[isp] / (update->fnum * species_weight[species[isp]].specwt);
+      npsum += particle->mixture[imix]->nrho * flowvol * fraction[isp] /
+        (update->fnum * species_weight[species[isp]].specwt);
     }
+    np = static_cast<bigint> (npsum);
   }
 
   // gather cummulative insertion volumes across all procs

@@ -161,6 +161,13 @@ void FixEmitSurf::init()
 
   FixEmit::init();
 
+  // SWS - custom per-surf fractions build an unweighted cummulative,
+  // inconsistent with the weighted per-species emission targets
+
+  if (particle->sws && fractions_custom_flag)
+    error->all(FLERR,"Fix emit/surf custom fractions are not yet supported "
+               "with the species weighting scheme (SWS)");
+
   // copies of class data before invoking parent init() and count_task()
 
   fnum = update->fnum;
@@ -590,7 +597,8 @@ void FixEmitSurf::create_task(int icell)
     tasks[ntask].ntarget = 0.0;
     for (isp = 0; isp < nspecies; isp++) {
       ntargetsp = mol_inflow(indot,vscale[isp],fraction[isp]);
-      ntargetsp *= nrho*area*dt / (fnum*particle->species[isp].specwt);  // SWS
+      ntargetsp *= nrho*area*dt /
+        (fnum*particle->species[particle->mixture[imix]->species[isp]].specwt);  // SWS
       ntargetsp /= cinfo[icell].weight;
       tasks[ntask].ntarget += ntargetsp;
       if (perspecies) tasks[ntask].ntargetsp[isp] = ntargetsp;
@@ -1285,7 +1293,7 @@ void FixEmitSurf::subsonic_inflow()
       mass = species[mspecies[isp]].mass;
       vscale = sqrt(2.0 * boltz * temp_thermal / mass);
       ntargetsp = mol_inflow(indot,vscale,fraction[isp]);
-      ntargetsp *= nrho*area*dt / (fnum*particle->species[isp].specwt);  // SWS
+      ntargetsp *= nrho*area*dt / (fnum*species[mspecies[isp]].specwt);  // SWS
       ntargetsp /= cinfo[icell].weight;
       tasks[i].ntarget += ntargetsp;
       if (perspecies) tasks[i].ntargetsp[isp] = ntargetsp;
@@ -1314,6 +1322,7 @@ void FixEmitSurf::subsonic_sort()
     icell = tasks[i].pcell;
     cinfo[icell].first = -1;
     cinfo[icell].count = 0;
+    cinfo[icell].count_wi = 0.0;  // SWS
   }
 
   // reallocate particle next list if necessary
@@ -1343,12 +1352,15 @@ void FixEmitSurf::subsonic_sort()
   int *next = particle->next;
   int nlocal = particle->nlocal;
 
+  Particle::Species *species = particle->species;  // SWS
+
   for (i = 0; i < nlocal; i++) {
     icell = particles[i].icell;
     if (!activecell[icell]) continue;
     next[i] = cinfo[icell].first;
     cinfo[icell].first = i;
     cinfo[icell].count++;
+    cinfo[icell].count_wi += species[particles[i].ispecies].specwt;  // SWS
   }
 }
 

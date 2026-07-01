@@ -150,6 +150,13 @@ Particle::~Particle()
 
 void Particle::init()
 {
+  // SWS - the KOKKOS package does not implement the species weighting
+  // scheme (per-cell count_wi, weighted collisions/emission)
+
+  if (sws && sparta->kokkos)
+    error->all(FLERR,"Cannot yet use the species weighting scheme (SWS) "
+               "with the KOKKOS package");
+
   // check for errors in custom particle vectors/arrays
 
   error_custom();
@@ -875,8 +882,19 @@ void Particle::add_species(int narg, char **arg)
     else error->all(FLERR,"Illegal species command");
   }
 
-  if (sws==0) {  
-    for (i = 0; i < newspecies; i++) species[i].specwt=1.0;  // SWS
+  // SWS - if no SWS/SWSmax keyword: reset weights of the species added by
+  // THIS command to 1.0 (they live at the end of the global species array).
+  // If SWS is enabled: species weights must be positive to be usable as
+  // divisors in emission/creation rates and mixture fractions.
+
+  if (sws == 0) {
+    for (i = 0; i < newspecies; i++)
+      species[nspecies_original + i].specwt = 1.0;  // SWS
+  } else {
+    for (i = 0; i < nspecies; i++)
+      if (species[i].specwt <= 0.0)
+        error->all(FLERR,"Species weight (prop8 in species file) must be "
+                   "> 0 when the SWS or SWSmax keyword is used");
   }
 
   // read rotational species file and setup per-species params
@@ -1368,6 +1386,7 @@ void Particle::write_restart_species(FILE *fp)
 {
   fwrite(&nspecies,sizeof(int),1,fp);
   fwrite(species,sizeof(Species),nspecies,fp);
+  fwrite(&sws,sizeof(int),1,fp);  // SWS
 }
 
 /* ----------------------------------------------------------------------
@@ -1389,6 +1408,9 @@ void Particle::read_restart_species(FILE *fp)
 
   if (me == 0) tmp = fread(species,sizeof(Species),nspecies,fp);
   MPI_Bcast(species,nspecies*sizeof(Species),MPI_CHAR,0,world);
+
+  if (me == 0) tmp = fread(&sws,sizeof(int),1,fp);  // SWS
+  MPI_Bcast(&sws,1,MPI_INT,0,world);                // SWS
 
   maxvibmode = 0;
   for (int isp = 0; isp < nspecies; isp++)

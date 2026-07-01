@@ -600,16 +600,18 @@ int CollideVSS::perform_collision_SWS(Particle::OnePart *&ip,
 
   //Additional parameters for Species weighting scheme
   //All of particles are pre-collision parameters
+  // NOTE: kp is an output arg with no meaningful value on entry,
+  //       so ksp/w_k are only set once a K particle is created below
   int isp = ip->ispecies;
   int jsp = jp->ispecies;
-  int ksp = kp->ispecies;
+  int ksp;
   Particle::OnePart ip_pre = *ip;
   Particle::OnePart jp_pre = *jp;
   Particle::OnePart maxp_pre = *jp;
   // SWS - variables for weighting scheme
   double w_i = species[isp].specwt;
   double w_j = species[jsp].specwt;
-  double w_k = species[ksp].specwt;
+  double w_k;
   double w_min = std::min(w_i, w_j);
   double w_max = std::max(w_i, w_j);
   double phi_i;

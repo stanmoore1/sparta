@@ -944,7 +944,8 @@ int FixEmitFaceFile::interpolate(int icell)
   for (isp = 0; isp < nspecies; isp++) {
     ntargetsp = frac_user *
       mol_inflow(indot,tasks[ntask].vscale[isp],tasks[ntask].fraction[isp]);
-      ntargetsp *= tasks[ntask].nrho*area*dt / (fnum*particle->species[isp].specwt); // SWS
+      ntargetsp *= tasks[ntask].nrho*area*dt /
+        (fnum*particle->species[particle->mixture[imix]->species[isp]].specwt); // SWS
     ntargetsp /= cinfo[icell].weight;
     tasks[ntask].ntarget += ntargetsp;
     if (perspecies) tasks[ntask].ntargetsp[isp] = ntargetsp;
@@ -1070,7 +1071,7 @@ void FixEmitFaceFile::subsonic_inflow()
       mass = species[mspecies[isp]].mass;
       vscale = sqrt(2.0 * boltz * temp_thermal / mass);
       ntargetsp = mol_inflow(indot,vscale,tasks[i].fraction[isp]);
-      ntargetsp *= nrho*area*dt / (fnum*particle->species[isp].specwt);  // SWS
+      ntargetsp *= nrho*area*dt / (fnum*species[mspecies[isp]].specwt);  // SWS
       ntargetsp /= cinfo[icell].weight;
       tasks[i].ntarget += ntargetsp;
       if (perspecies) tasks[i].ntargetsp[isp] = ntargetsp;
@@ -1100,6 +1101,7 @@ void FixEmitFaceFile::subsonic_sort()
     icell = tasks[i].pcell;
     cinfo[icell].first = -1;
     cinfo[icell].count = 0;
+    cinfo[icell].count_wi = 0.0;  // SWS
   }
 
   // reallocate particle next list if necessary
@@ -1129,12 +1131,15 @@ void FixEmitFaceFile::subsonic_sort()
   int *next = particle->next;
   int nlocal = particle->nlocal;
 
+  Particle::Species *species = particle->species;  // SWS
+
   for (i = 0; i < nlocal; i++) {
     icell = particles[i].icell;
     if (!activecell[icell]) continue;
     next[i] = cinfo[icell].first;
     cinfo[icell].first = i;
     cinfo[icell].count++;
+    cinfo[icell].count_wi += species[particles[i].ispecies].specwt;  // SWS
   }
 }
 
