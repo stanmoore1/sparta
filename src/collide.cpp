@@ -80,6 +80,7 @@ Collide::Collide(SPARTA *sparta, int, char **arg) : Pointers(sparta)
 
   count_wi_group = NULL;  // SWS
   maxwigr = NULL;         // SWS
+  ewilost_cell = NULL;    // SWS
 
   vremax = NULL;
   vremax_initial = NULL;
@@ -138,6 +139,7 @@ Collide::~Collide()
   memory->destroy(remain);
   memory->destroy(count_wi_group);  // SWS
   memory->destroy(maxwigr);         // SWS
+  memory->destroy(ewilost_cell);    // SWS
   memory->destroy(nn_last_partner);
   memory->destroy(nn_last_partner_igroup);
   memory->destroy(nn_last_partner_jgroup);
@@ -270,6 +272,7 @@ void Collide::init()
     memory->destroy(maxwigr);         // SWS
     memory->destroy(vremax_initial);
     memory->destroy(remain);
+    memory->destroy(ewilost_cell);    // SWS
     nglocal = grid->nlocal;
     nglocalmax = nglocal;
     memory->create(count_wi_group, ngroups,"collide:count_wi_group");   // SWS
@@ -278,6 +281,9 @@ void Collide::init()
     memory->create(vremax_initial,ngroups,ngroups,"collide:vremax_initial");
     if (remainflag)
       memory->create(remain,nglocalmax,ngroups,ngroups,"collide:remain");
+    memory->create(ewilost_cell,nglocalmax,"collide:ewilost_cell");     // SWS
+    for (int icell = 0; icell < nglocalmax; icell++)                    // SWS
+      ewilost_cell[icell] = 0.0;
 
     for (int igroup = 0; igroup < ngroups; igroup++)
       for (int jgroup = 0; jgroup < ngroups; jgroup++)
@@ -1669,7 +1675,7 @@ template < int NEARCP > void Collide::collisions_one_SWS()
     np = cinfo[icell].count;
 
     count_wi = cinfo[icell].count_wi;     // SWS
-    Ewilost = 0.0;                        // SWS
+    Ewilost = ewilost_cell[icell];                        // SWS
     double maxwi = 0.0;                   // SWS
 
     if (np <= 1) continue;
@@ -1920,6 +1926,10 @@ template < int NEARCP > void Collide::collisions_one_SWS()
 
       if (np < 2) break;
     }
+
+    // SWS - store residual split-merge energy for this cell
+
+    ewilost_cell[icell] = Ewilost;
   }
 }
 
@@ -1952,7 +1962,7 @@ template < int NEARCP > void Collide::collisions_group_SWS()
 
   for (int icell = 0; icell < nglocal; icell++) {
     count_wi = cinfo[icell].count_wi;   // SWS
-    Ewilost = 0.0;                      // SWS
+    Ewilost = ewilost_cell[icell];                      // SWS
     np = cinfo[icell].count;
     if (np <= 1) continue;
     ip = cinfo[icell].first;
@@ -2214,6 +2224,10 @@ template < int NEARCP > void Collide::collisions_group_SWS()
         }
       }
     }
+
+    // SWS - store residual split-merge energy for this cell
+
+    ewilost_cell[icell] = Ewilost;
   }
 }
 
@@ -2253,7 +2267,7 @@ void Collide::collisions_one_ambipolar_SWS()
 
   for (int icell = 0; icell < nglocal; icell++) {
     count_wi = cinfo[icell].count_wi;   // SWS
-    Ewilost = 0.0;                      // SWS
+    Ewilost = ewilost_cell[icell];                      // SWS
     double maxwi = 0.0;                 // SWS
     np = cinfo[icell].count;
     if (np <= 1) continue;
@@ -2776,6 +2790,10 @@ void Collide::collisions_one_ambipolar_SWS()
     if (melectron != nelectron) {  // SWS
       error->one(FLERR,"Collisions in cell did not conserve electron count now **Currently only equal weight electrons and ions are supported.");
     }    
+
+    // SWS - store residual split-merge energy for this cell
+
+    ewilost_cell[icell] = Ewilost;
   }
 }
 
@@ -2815,7 +2833,7 @@ void Collide::collisions_group_ambipolar_SWS()
 
   for (int icell = 0; icell < nglocal; icell++) {
     count_wi = cinfo[icell].count_wi;   // SWS
-    Ewilost = 0.0;   // SWS
+    Ewilost = ewilost_cell[icell];   // SWS
     np = cinfo[icell].count;
     if (np <= 1) continue;
     ip = cinfo[icell].first;
@@ -3221,6 +3239,10 @@ void Collide::collisions_group_ambipolar_SWS()
     }
     if (melectron != nelectron)
       error->one(FLERR,"Collisions in cell did not conserve electron count");
+
+    // SWS - store residual split-merge energy for this cell
+
+    ewilost_cell[icell] = Ewilost;
   }
 }
 
@@ -3406,6 +3428,8 @@ int Collide::pack_grid_one(int icell, char *buf, int memflag)
     if (memflag) memcpy(buf,&vremax[icell][0][0],nbytes);
     n = nbytes;
   }
+  if (memflag) memcpy(&buf[n],&ewilost_cell[icell],sizeof(double));  // SWS
+  n += sizeof(double);
 
   if (cells[icell].nsplit > 1) {
     int isplit = cells[icell].isplit;
@@ -3423,6 +3447,8 @@ int Collide::pack_grid_one(int icell, char *buf, int memflag)
         if (memflag) memcpy(&buf[n],&vremax[m][0][0],nbytes);
         n += nbytes;
       }
+      if (memflag) memcpy(&buf[n],&ewilost_cell[m],sizeof(double));  // SWS
+      n += sizeof(double);
     }
   }
 
@@ -3449,6 +3475,8 @@ int Collide::unpack_grid_one(int icell, char *buf)
     memcpy(&remain[icell][0][0],&buf[n],nbytes);
     n += nbytes;
   }
+  memcpy(&ewilost_cell[icell],&buf[n],sizeof(double));  // SWS
+  n += sizeof(double);
   nglocal++;
 
   if (cells[icell].nsplit > 1) {
@@ -3463,6 +3491,8 @@ int Collide::unpack_grid_one(int icell, char *buf)
         memcpy(&remain[m][0][0],&buf[n],nbytes);
         n += nbytes;
       }
+      memcpy(&ewilost_cell[m],&buf[n],sizeof(double));  // SWS
+      n += sizeof(double);
     }
     nglocal += nsplit;
   }
@@ -3483,6 +3513,7 @@ void Collide::copy_grid_one(int icell, int jcell)
   memcpy(&vremax[jcell][0][0],&vremax[icell][0][0],nbytes);
   if (remainflag)
     memcpy(&remain[jcell][0][0],&remain[icell][0][0],nbytes);
+  ewilost_cell[jcell] = ewilost_cell[icell];  // SWS
 }
 
 /* ----------------------------------------------------------------------
@@ -3509,6 +3540,7 @@ void Collide::add_grid_one()
       vremax[nglocal][igroup][jgroup] = vremax_initial[igroup][jgroup];
       if (remainflag) remain[nglocal][igroup][jgroup] = 0.0;
     }
+  ewilost_cell[nglocal] = 0.0;  // SWS
 
   nglocal++;
 }
@@ -3532,13 +3564,16 @@ void Collide::adapt_grid()
   memory->grow(vremax,nglocalmax,ngroups,ngroups,"collide:vremax");
   if (remainflag)
     memory->grow(remain,nglocalmax,ngroups,ngroups,"collide:remain");
+  memory->grow(ewilost_cell,nglocalmax,"collide:ewilost_cell");  // SWS
 
-  for (int icell = nglocal_old; icell < nglocal; icell++)
+  for (int icell = nglocal_old; icell < nglocal; icell++) {
     for (int igroup = 0; igroup < ngroups; igroup++)
       for (int jgroup = 0; jgroup < ngroups; jgroup++) {
         vremax[icell][igroup][jgroup] = vremax_initial[igroup][jgroup];
         if (remainflag) remain[icell][igroup][jgroup] = 0.0;
       }
+    ewilost_cell[icell] = 0.0;  // SWS
+  }
 }
 
 /* ----------------------------------------------------------------------
@@ -3552,6 +3587,7 @@ void Collide::grow_percell(int n)
   memory->grow(vremax,nglocalmax,ngroups,ngroups,"collide:vremax");
   if (remainflag)
     memory->grow(remain,nglocalmax,ngroups,ngroups,"collide:remain");
+  memory->grow(ewilost_cell,nglocalmax,"collide:ewilost_cell");  // SWS
 }
 
 /* ----------------------------------------------------------------------
