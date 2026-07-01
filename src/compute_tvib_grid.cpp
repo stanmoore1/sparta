@@ -316,7 +316,7 @@ void ComputeTvibGrid::compute_per_grid()
       nmode = particle->species[ispecies].nvibmode;
       for (imode = 0; imode < nmode; imode++) {
         j = s2t_mode[ispecies][imode];
-        if (nmode > 1) tally[icell][j] += vibmode[i][imode];
+        if (nmode > 1) tally[icell][j] += vibmode[i][imode] * specwt;  // SWS
         else tally[icell][j] +=
                particles[i].evib / (boltz*species[ispecies].vibtemp[0]) * specwt;  // SWS
         tally[icell][j+1] += 1.0 * specwt;  // SWS

@@ -319,8 +319,8 @@ int Mixture::init_fraction(int *fflag, double *fuser, double *f, double *c)
     } else {
       c[i]=f[i]/(particle->species[species[i]].specwt*sum_norm);
     }
-    if (nspecies) c[nspecies-1] = 1.0;
   }
+  if (nspecies) c[nspecies-1] = 1.0;
 
   return 0;
 }
