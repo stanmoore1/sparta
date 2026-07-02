@@ -239,7 +239,7 @@ void ComputeGrid::compute_per_grid()
   int i,j,k,m,ispecies,igroup,icell;
   double mass;
   double *v,*vec;
-  double specwt;  // SWS
+  double w;      // effective particle weight (1.0 unless SWS/SWPM active)
 
   // zero all accumulators - could do this with memset()
 
@@ -252,8 +252,6 @@ void ComputeGrid::compute_per_grid()
   // perform all tallies needed for each particle
   // depends on its species group and the user-requested values
 
-  double *sweights = particle->stochastic_weights();
-  double swfrac = 1.0;
   for (i = 0; i < nlocal; i++) {
     ispecies = particles[i].ispecies;
     igroup = s2g[ispecies];
@@ -263,18 +261,11 @@ void ComputeGrid::compute_per_grid()
 
     mass = species[ispecies].mass;
     v = particles[i].v;
-    if (sweights) swfrac = sweights[i];
-    else if (particle->weightflag) swfrac = particles[i].weight;
-
-    mass *= swfrac;
+    w = particle->pweight(i);
 
     vec = tally[icell];
-    // weighted cell totals: specwt (SWS) and swfrac (SWPM) are mutually
-    // exclusive, so at most one factor differs from 1.0; mass already
-    // carries swfrac from above
-    specwt = species[ispecies].specwt;
-    if (cellcountwi) vec[cellcountwi] += specwt*swfrac;
-    if (cellmass) vec[cellmass] += mass*specwt;
+    if (cellcountwi) vec[cellcountwi] += w;
+    if (cellmass) vec[cellmass] += mass*w;
     if (cellcount) vec[cellcount] += 1.0;
 
     // loop has all possible values particle needs to accumulate
@@ -288,43 +279,43 @@ void ComputeGrid::compute_per_grid()
         vec[k++] += 1.0;
         break;
       case COUNT_WI:
-        vec[k++] += specwt*swfrac;
+        vec[k++] += w;
         break;
       case MASSSUM:
-        vec[k++] += mass*specwt;  // SWS
+        vec[k++] += mass*w;
         break;
       case MVX:
-        vec[k++] += mass*specwt*v[0];  // SWS
+        vec[k++] += mass*w*v[0];
         break;
       case MVY:
-        vec[k++] += mass*specwt*v[1];  // SWS
+        vec[k++] += mass*w*v[1];
         break;
       case MVZ:
-        vec[k++] += mass*specwt*v[2];  // SWS
+        vec[k++] += mass*w*v[2];
         break;
       case MVXSQ:
-        vec[k++] += mass*specwt*v[0]*v[0];  // SWS
+        vec[k++] += mass*w*v[0]*v[0];
         break;
       case MVYSQ:
-        vec[k++] += mass*specwt*v[1]*v[1];  // SWS
+        vec[k++] += mass*w*v[1]*v[1];
         break;
       case MVZSQ:
-        vec[k++] += mass*specwt*v[2]*v[2];  // SWS
+        vec[k++] += mass*w*v[2]*v[2];
         break;
       case MVSQ:
-        vec[k++] += mass*specwt * (v[0]*v[0]+v[1]*v[1]+v[2]*v[2]);
+        vec[k++] += mass*w * (v[0]*v[0]+v[1]*v[1]+v[2]*v[2]);
         break;
       case ENGROT:
-        vec[k++] += specwt*swfrac * particles[i].erot;
+        vec[k++] += w * particles[i].erot;
         break;
       case ENGVIB:
-        vec[k++] += specwt*swfrac * particles[i].evib;
+        vec[k++] += w * particles[i].evib;
         break;
       case DOFROT:
-        vec[k++] += specwt*swfrac * species[ispecies].rotdof;
+        vec[k++] += w * species[ispecies].rotdof;
         break;
       case DOFVIB:
-        vec[k++] += specwt*swfrac * species[ispecies].vibdof;
+        vec[k++] += w * species[ispecies].vibdof;
         break;
       }
     }
