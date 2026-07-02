@@ -1,0 +1,49 @@
+################################################################################
+# SWS (species weighting scheme) regression test: thermal box, no reactions
+#
+# 90% N2 (weight 1.0) with 10% N trace (weight 0.1): the trace species is
+# resolved with 10x more numerical particles per physical particle.
+# Momentum/energy conservation across weighted collisions uses Boyd's
+# splitting-merging method (species SWS keyword).
+#
+# Pinned behavior:
+# - weighted cummulative species selection in create_particles
+#   (np per species scales with fraction_i / weight_i)
+# - weighted NTC attempt counts (attempt_collision_SWS)
+# - split-merge scattering (SCATTER_TwoBodyScattering_SWS)
+# - sumwi grid tally and weighted temperature (compute grid / compute temp)
+################################################################################
+
+seed	    	    12345
+dimension   	    3
+global              gridcut 1.0e-5 comm/sort yes
+
+boundary	    rr rr rr
+
+create_box  	    0 0.0001 0 0.0001 0 0.0001
+create_grid 	    10 10 10
+
+balance_grid        rcb part
+
+species		    sws.species N2 N SWS
+mixture		    air N2 N vstream 0.0 0.0 0.0 temp 273.15
+mixture             air N2 frac 0.9
+mixture             air N frac 0.1
+
+global              nrho 7.07043E22
+global              fnum 7.07043E6
+
+collide		    vss air sws.vss
+
+create_particles    air n 10000 twopass
+
+stats		    100
+compute             temp temp
+compute             nsp count N2 N
+compute             gsum grid all all n sumwi
+compute             redsum reduce sum c_gsum[1] c_gsum[2]
+stats_style	    step cpu np nattempt ncoll c_temp c_nsp[1] c_nsp[2] &
+                    c_redsum[1] c_redsum[2]
+
+timestep 	    7.00E-9
+run 		    500

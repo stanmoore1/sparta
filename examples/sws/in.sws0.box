@@ -1,0 +1,47 @@
+################################################################################
+# SWS-off equivalence regression test: thermal box, no reactions
+#
+# Uses the SWS species file (which carries non-unit weights in the
+# species-weight column) but does NOT use the SWS/SWSmax keyword:
+# all species weights must be reset to 1.0 and the run must be
+# identical to a conventional unweighted simulation.
+#
+# Pinned behavior:
+# - specwt reset to 1.0 when no SWS keyword is given
+# - unweighted collision path taken when particle->sws == 0
+# - sumwi == n for every cell when all weights are 1
+################################################################################
+
+seed	    	    12345
+dimension   	    3
+global              gridcut 1.0e-5 comm/sort yes
+
+boundary	    rr rr rr
+
+create_box  	    0 0.0001 0 0.0001 0 0.0001
+create_grid 	    10 10 10
+
+balance_grid        rcb part
+
+species		    sws.species N2 N
+mixture		    air N2 N vstream 0.0 0.0 0.0 temp 273.15
+mixture             air N2 frac 0.9
+mixture             air N frac 0.1
+
+global              nrho 7.07043E22
+global              fnum 7.07043E6
+
+collide		    vss air sws.vss
+
+create_particles    air n 10000 twopass
+
+stats		    100
+compute             temp temp
+compute             nsp count N2 N
+compute             gsum grid all all n sumwi
+compute             redsum reduce sum c_gsum[1] c_gsum[2]
+stats_style	    step cpu np nattempt ncoll c_temp c_nsp[1] c_nsp[2] &
+                    c_redsum[1] c_redsum[2]
+
+timestep 	    7.00E-9
+run 		    500

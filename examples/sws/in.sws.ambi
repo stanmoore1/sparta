@@ -1,0 +1,52 @@
+################################################################################
+# SWS regression test: ambipolar approximation with a weighted trace neutral
+#
+# Thermal box of N2 (weight 1.0), a weighted trace neutral N (weight 0.1),
+# plus ambipolar ions N2+ and electrons e (both weight 1.0). No gas-phase
+# chemistry: exercises the ambipolar SWS collision loop (electron list
+# handling, weighted attempt counts, split-merge scattering between the
+# weighted neutral and the other species).
+#
+# NOTE: SWS reactions with the ambipolar model require equal weights for
+# ions and electrons; this test uses no reactions.
+#
+# Pinned behavior:
+# - collisions_one_ambipolar_SWS non-reactive path
+# - count_wi including recreated ambipolar electrons
+################################################################################
+
+seed	    	    12345
+dimension   	    3
+global              gridcut 1.0e-5 comm/sort yes
+
+boundary	    rr rr rr
+
+create_box  	    0 0.0001 0 0.0001 0 0.0001
+create_grid 	    10 10 10
+
+balance_grid        rcb part
+
+species		    sws.species N2 N N2+ e SWS
+mixture		    air N2 N N2+ vstream 0.0 0.0 0.0 temp 2000.0
+mixture             air N2 frac 0.85
+mixture             air N frac 0.1
+mixture             air N2+ frac 0.05
+mixture             air e
+
+fix                 ambi ambipolar e N2+
+
+global              nrho 7.07043E22
+global              fnum 7.07043E6
+
+collide		    vss air sws.vss
+collide_modify      ambipolar yes
+
+create_particles    air n 10000 twopass
+
+stats		    100
+compute             temp temp
+compute             nsp count N2 N N2+
+stats_style	    step cpu np nattempt ncoll c_temp c_nsp[1] c_nsp[2] c_nsp[3]
+
+timestep 	    7.00E-9
+run 		    500

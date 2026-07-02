@@ -1,0 +1,119 @@
+SPARTA (24 Sep 2025)
+Running on 1 MPI task(s)
+################################################################################
+# SWS-off equivalence regression test: thermal box, no reactions
+#
+# Uses the SWS species file (which carries non-unit weights in the
+# species-weight column) but does NOT use the SWS/SWSmax keyword:
+# all species weights must be reset to 1.0 and the run must be
+# identical to a conventional unweighted simulation.
+#
+# Pinned behavior:
+# - specwt reset to 1.0 when no SWS keyword is given
+# - unweighted collision path taken when particle->sws == 0
+# - sumwi == n for every cell when all weights are 1
+################################################################################
+
+seed	    	    12345
+dimension   	    3
+global              gridcut 1.0e-5 comm/sort yes
+
+boundary	    rr rr rr
+
+create_box  	    0 0.0001 0 0.0001 0 0.0001
+Created orthogonal box = (0 0 0) to (0.0001 0.0001 0.0001)
+create_grid 	    10 10 10
+Created 1000 child grid cells
+  CPU time = 0.00104189 secs
+  create/ghost percent = 83.2037 16.7963
+
+balance_grid        rcb part
+Balance grid migrated 0 cells
+  CPU time = 0.000134945 secs
+  reassign/sort/migrate/ghost percent = 50.3534 0.883392 12.5442 36.2191
+
+species		    sws.species N2 N
+mixture		    air N2 N vstream 0.0 0.0 0.0 temp 273.15
+mixture             air N2 frac 0.9
+mixture             air N frac 0.1
+
+global              nrho 7.07043E22
+global              fnum 7.07043E6
+
+collide		    vss air sws.vss
+
+create_particles    air n 10000 twopass
+Created 10000 particles
+  CPU time = 0.00220895 secs
+
+stats		    100
+compute             temp temp
+compute             nsp count N2 N
+compute             gsum grid all all n sumwi
+compute             redsum reduce sum c_gsum[1] c_gsum[2]
+stats_style	    step cpu np nattempt ncoll c_temp c_nsp[1] c_nsp[2]                     c_redsum[1] c_redsum[2]
+
+timestep 	    7.00E-9
+run 		    500
+Memory usage per proc in Mbytes:
+  particles (ave,min,max) = 1.5625 1.5625 1.5625
+  grid      (ave,min,max) = 1.63879 1.63879 1.63879
+  surf      (ave,min,max) = 0 0 0
+  total     (ave,min,max) = 3.21655 3.21655 3.21655
+Step CPU Np Natt Ncoll c_temp c_nsp[1] c_nsp[2] c_redsum[1] c_redsum[2] 
+       0            0    10000        0        0    271.07806         8993         1007        10000        10000 
+     100  0.052397966    10000     1271      802    272.18697         8993         1007        10000        10000 
+     200   0.10941386    10000     1331      828    274.10403         8993         1007        10000        10000 
+     300   0.16350198    10000     1336      814    272.58796         8993         1007        10000        10000 
+     400     0.219419    10000     1350      817    274.69642         8993         1007        10000        10000 
+     500   0.27469993    10000     1354      824    275.26947         8993         1007        10000        10000 
+Loop time of 0.274712 on 1 procs for 500 steps with 10000 particles
+Performance: 1820.089 timesteps/s, 18.201 Mparticle-step/s
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Move    | 0.11576    | 0.11576    | 0.11576    |   0.0 | 42.14
+Coll    | 0.14119    | 0.14119    | 0.14119    |   0.0 | 51.39
+Sort    | 0.01652    | 0.01652    | 0.01652    |   0.0 |  6.01
+Comm    | 0.00032258 | 0.00032258 | 0.00032258 |   0.0 |  0.12
+Modify  | 0          | 0          | 0          |   0.0 |  0.00
+Output  | 0.00075507 | 0.00075507 | 0.00075507 |   0.0 |  0.27
+Other   |            | 0.0001709  |            |       |  0.06
+
+Particle moves    = 5000000 (5M)
+Cells touched     = 7241918 (7.24M)
+Particle comms    = 0 (0K)
+Boundary collides = 249102 (0.249M)
+Boundary exits    = 0 (0K)
+SurfColl checks   = 0 (0K)
+SurfColl occurs   = 0 (0K)
+Surf reactions    = 0 (0K)
+Collide attempts  = 654734 (0.655M)
+Collide occurs    = 407036 (0.407M)
+Reactions         = 0 (0K)
+Particles stuck   = 0
+Axisymm bad moves = 0
+
+Particle-moves/CPUsec/proc: 1.82009e+07
+Particle-moves/step: 10000
+Cell-touches/particle/step: 1.44838
+Particle comm iterations/step: 1
+Particle fraction communicated: 0
+Particle fraction colliding with boundary: 0.0498204
+Particle fraction exiting boundary: 0
+Surface-checks/particle/step: 0
+Surface-collisions/particle/step: 0
+Surf-reactions/particle/step: 0
+Collision-attempts/particle/step: 0.130947
+Collisions/particle/step: 0.0814072
+Reactions/particle/step: 0
+
+Particles: 10000 ave 10000 max 10000 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Cells:      1000 ave 1000 max 1000 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+GhostCell: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+EmptyCell: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
