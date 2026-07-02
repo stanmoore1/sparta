@@ -128,7 +128,7 @@ void ComputeThermalGrid::compute_per_grid()
   int i,j,k,ispecies,igroup,icell;
   double mass;
   double *v,*vec;
-  double specwt;  // SWS
+  double w;      // effective particle weight (1.0 unless SWS/SWPM active)
 
   // zero all accumulators - could do this with memset()
 
@@ -138,8 +138,6 @@ void ComputeThermalGrid::compute_per_grid()
 
   // loop over all particles, skip species not in mixture group
 
-  double *sweights = particle->stochastic_weights();
-  double swfrac = 1.0;
   for (i = 0; i < nlocal; i++) {
     ispecies = particles[i].ispecies;
     igroup = s2g[ispecies];
@@ -148,27 +146,22 @@ void ComputeThermalGrid::compute_per_grid()
     if (!(cinfo[icell].mask & groupbit)) continue;
 
     mass = species[ispecies].mass;
-    if (sweights) swfrac = sweights[i];
-    else if (particle->weightflag) swfrac = particles[i].weight;
-    mass *= swfrac;
     v = particles[i].v;
-    specwt = species[ispecies].specwt;  // SWS
+    w = particle->pweight(i);
 
     // 6 tallies per particle: N, Mass, mVx, mVy, mVz, mV^2
 
     vec = tally[icell];
     k = igroup*npergroup;
 
-    // weighted tallies: sum of effective weights, then mass moments.
-    // specwt (SWS) and swfrac (SWPM) are mutually exclusive, so at most
-    // one factor differs from 1.0; mass already carries swfrac from above
+    // weighted tallies: sum of effective weights, then mass moments
 
-    vec[k++] += specwt*swfrac;
-    vec[k++] += mass*specwt;
-    vec[k++] += mass*specwt*v[0];
-    vec[k++] += mass*specwt*v[1];
-    vec[k++] += mass*specwt*v[2];
-    vec[k++] += mass*specwt * (v[0]*v[0]+v[1]*v[1]+v[2]*v[2]);
+    vec[k++] += w;
+    vec[k++] += mass*w;
+    vec[k++] += mass*w*v[0];
+    vec[k++] += mass*w*v[1];
+    vec[k++] += mass*w*v[2];
+    vec[k++] += mass*w * (v[0]*v[0]+v[1]*v[1]+v[2]*v[2]);
   }
 }
 

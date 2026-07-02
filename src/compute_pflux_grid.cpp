@@ -158,12 +158,10 @@ void ComputePFluxGrid::compute_per_grid()
   Particle::OnePart *particles = particle->particles;
   int *s2g = particle->mixture[imix]->species2group;
   int nlocal = particle->nlocal;
-  double *sweights = particle->stochastic_weights();
 
   int i,j,k,m,ispecies,igroup,icell;
   double mass;
   double *v,*vec;
-  double specwt;  // SWS
 
   // zero all accumulators - could do this with memset()
 
@@ -183,10 +181,8 @@ void ComputePFluxGrid::compute_per_grid()
     if (!(cinfo[icell].mask & groupbit)) continue;
 
     mass = species[ispecies].mass;
-    if (sweights) mass *= sweights[i];
-    else if (particle->weightflag) mass *= particles[i].weight;
+    mass *= particle->pweight(i);
     v = particles[i].v;
-    specwt = species[ispecies].specwt; // SWS
 
     vec = tally[icell];
 
@@ -199,34 +195,34 @@ void ComputePFluxGrid::compute_per_grid()
     for (m = 0; m < npergroup; m++) {
       switch (unique[m]) {
       case MASSSUM:
-        vec[k++] += mass*specwt;
+        vec[k++] += mass;
         break;
       case MVX:
-        vec[k++] += mass*v[0]*specwt;
+        vec[k++] += mass*v[0];
         break;
       case MVY:
-        vec[k++] += mass*v[1]*specwt;
+        vec[k++] += mass*v[1];
         break;
       case MVZ:
-        vec[k++] += mass*v[2]*specwt;
+        vec[k++] += mass*v[2];
         break;
       case MVXSQ:
-        vec[k++] += mass*v[0]*v[0]*specwt;
+        vec[k++] += mass*v[0]*v[0];
         break;
       case MVYSQ:
-        vec[k++] += mass*v[1]*v[1]*specwt;
+        vec[k++] += mass*v[1]*v[1];
         break;
       case MVZSQ:
-        vec[k++] += mass*v[2]*v[2]*specwt;
+        vec[k++] += mass*v[2]*v[2];
         break;
       case MVXVY:
-        vec[k++] += mass*v[0]*v[1]*specwt;
+        vec[k++] += mass*v[0]*v[1];
         break;
       case MVYVZ:
-        vec[k++] += mass*v[1]*v[2]*specwt;
+        vec[k++] += mass*v[1]*v[2];
         break;
       case MVXVZ:
-        vec[k++] += mass*v[0]*v[2]*specwt;
+        vec[k++] += mass*v[0]*v[2];
         break;
       }
     }
