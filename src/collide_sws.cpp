@@ -67,298 +67,6 @@ enum{CONSTANT,VARIABLE};
    loop over pairs of groups pre-compute # of attempts per group pair
 ------------------------------------------------------------------------- */
 
-template < int NEARCP > void Collide::collisions_group_SWS()
-{
-  double wi;        // SWS
-  double count_wi;  // SWS
-  double maxwi;     // SWS
-  int i,j,k,n,ii,jj,ip,np,isp,ng;
-  int pindex,ipair,igroup,jgroup,newgroup,ngmax;
-  int nattempt,reactflag;
-  int *ni,*nj,*ilist,*jlist;
-  int *nn_igroup,*nn_jgroup;
-  double attempt,volume;
-  Particle::OnePart *ipart,*jpart,*kpart;
-  int n_i,n_j,n_k,n_pre,i_loop;  // SWS
-
-  // loop over cells I own
-
-  Grid::ChildInfo *cinfo = grid->cinfo;
-
-  Particle::OnePart *particles = particle->particles;
-  int *next = particle->next;
-  int *species2group = mixture->species2group;
-
-  for (int icell = 0; icell < nglocal; icell++) {
-    count_wi = cinfo[icell].count_wi;   // SWS
-    Ewilost = ewilost_cell[icell];                      // SWS
-    np = cinfo[icell].count;
-    if (np <= 1) continue;
-    ip = cinfo[icell].first;
-    volume = cinfo[icell].volume / cinfo[icell].weight;
-    if (volume == 0.0) error->one(FLERR,"Collision cell volume is zero");
-
-    // reallocate plist and p2g if necessary
-
-    if (np > npmax) {
-      while (np > npmax) npmax += DELTAPART;
-      memory->destroy(plist);
-      memory->create(plist,npmax,"collide:plist");
-      memory->destroy(p2g);
-      memory->create(p2g,npmax,2,"collide:p2g");
-    }
-
-    // plist = particle list for entire cell
-    // glist[igroup][i] = index in plist of Ith particle in Igroup
-    // ngroup[igroup] = particle count in Igroup
-    // p2g[i][0] = Igroup for Ith particle in plist
-    // p2g[i][1] = index within glist[igroup] of Ith particle in plist
-
-    for (i = 0; i < ngroups; i++) {    // SWS
-      ngroup[i] = 0;
-      count_wi_group[i] = 0;
-      maxwigr[i] = 0.0;
-    }
-
-    n = 0;
-
-    while (ip >= 0) {
-      isp = particles[ip].ispecies;
-      igroup = species2group[isp];
-      wi = particle->species[isp].specwt;    // SWS
-      if (ngroup[igroup] == maxgroup[igroup]) {
-        maxgroup[igroup] += DELTAPART;
-        memory->grow(glist[igroup],maxgroup[igroup],"collide:glist");
-      }
-      ng = ngroup[igroup];
-      glist[igroup][ng] = n;
-      p2g[n][0] = igroup;
-      p2g[n][1] = ng;
-      plist[n] = ip;
-      ngroup[igroup]++;
-      n++;
-      ip = next[ip];
-      count_wi_group[igroup]+=wi;                    // SWS
-      maxwigr[igroup]=std::max(wi,maxwigr[igroup]);  // SWS
-    }
-
-    if (NEARCP) {
-      ngmax = 0;
-      for (i = 0; i < ngroups; i++) ngmax = MAX(ngmax,ngroup[i]);
-      if (ngmax > max_nn) {
-        realloc_nn(ngmax,nn_last_partner_igroup);
-        realloc_nn(ngmax,nn_last_partner_jgroup);
-      }
-    }
-
-    // SWS - maxwi = max species weight over all particles in this cell
-    // must NOT reuse the particle-pair loop index below
-
-    maxwi = 0.0;
-    for (int igr = 0; igr < ngroups; igr++)
-      maxwi = std::max(maxwigr[igr],maxwi);
-
-    // attempt = exact collision attempt count for a pair of groups
-    // double loop over N^2 / 2 pairs of groups
-    // nattempt = rounded attempt with RN
-    // NOTE: not using RN for rounding of nattempt
-    // gpair = list of group pairs when nattempt > 0
-
-    npair = 0;
-    for (igroup = 0; igroup < ngroups; igroup++)
-      for (jgroup = igroup; jgroup < ngroups; jgroup++) {
-        attempt = attempt_collision_SWS(icell,igroup,jgroup,volume);
-        nattempt = static_cast<int> (attempt);
-
-        if (nattempt) {
-          gpair[npair][0] = igroup;
-          gpair[npair][1] = jgroup;
-          gpair[npair][2] = nattempt;
-          nattempt_one += nattempt;
-          npair++;
-        }
-      }
-
-    // perform collisions for each pair of groups in gpair list
-    // select random particle in each group
-    // if igroup = jgroup, cannot be same particle
-    // test if collision actually occurs
-    // if chemistry occurs, move output I,J,K particles to new group lists
-    // if chemistry occurs, exit attempt loop if group counts become too small
-    // Ni and Nj are pointers to value in ngroup vector
-    //   b/c need to stay current as chemistry occurs
-    // NOTE: OK to use pre-computed nattempt when Ngroup may have changed via react?
-
-    for (ipair = 0; ipair < npair; ipair++) {
-      igroup = gpair[ipair][0];
-      jgroup = gpair[ipair][1];
-      nattempt = gpair[ipair][2];
-
-      ni = &ngroup[igroup];
-      nj = &ngroup[jgroup];
-      ilist = glist[igroup];
-      jlist = glist[jgroup];
-
-      // re-test for no possible attempts
-      // could have changed due to reactions in previous group pairs
-
-      if (*ni == 0 || *nj == 0) continue;
-      if (igroup == jgroup && *ni == 1) continue;
-
-      if (NEARCP) {
-        nn_igroup = nn_last_partner_igroup;
-        if (igroup == jgroup) nn_jgroup = nn_last_partner_igroup;
-        else nn_jgroup = nn_last_partner_jgroup;
-        memset(nn_igroup,0,(*ni)*sizeof(int));
-        if (igroup != jgroup) memset(nn_jgroup,0,(*nj)*sizeof(int));
-      }
-
-      for (int iattempt = 0; iattempt < nattempt; iattempt++) {
-	    i = *ni * random->uniform();
-            if (NEARCP) j = find_nn_group(i,ilist,*nj,jlist,plist,nn_igroup,nn_jgroup);
-            else {
-              j = *nj * random->uniform();
-              if (igroup == jgroup)
-                while (i == j) j = *nj * random->uniform();
-            }
-      
-	    ipart = &particles[plist[ilist[i]]];
-	    jpart = &particles[plist[jlist[j]]];
-
-        // test if collision actually occurs
-        // continue to next collision if no reaction
-
-        if (!test_collision_SWS(icell,igroup,jgroup,ipart,jpart,maxwi)) continue;  // SWS
-
-        if (NEARCP) {
-          nn_igroup[i] = j+1;
-          nn_jgroup[j] = i+1;
-        }
-
-        // if recombination reaction is possible for this IJ pair
-        // pick a 3rd particle to participate and set cell number density
-        // unless boost factor turns it off, or there is no 3rd particle
-
-        if (recombflag && recomb_ijflag[ipart->ispecies][jpart->ispecies]) {
-          if (random->uniform() > react->recomb_boost_inverse)
-            react->recomb_species = -1;
-          else if (np <= 2)
-            react->recomb_species = -1;
-          else {
-            ii = ilist[i];
-            jj = jlist[j];
-            k = np * random->uniform();
-            while (k == ii || k == jj) k = np * random->uniform();
-            react->recomb_part3 = &particles[plist[k]];
-            react->recomb_species = react->recomb_part3->ispecies;
-            react->recomb_density = count_wi * update->fnum / volume;  // SWS
-          }
-        }
-
-        // perform collision and possible reaction
-
-        setup_collision_SWS(ipart,jpart);  // SWS
-        reactflag = perform_collision_SWS(ipart,jpart,kpart,n_i,n_j,n_k,n_pre);  // SWS
-        ncollide_one++;
-        if (reactflag) nreact_one++;
-        else continue;
-
-        // ipart may now be in different group
-        // reset ilist,jlist after addgroup() in case it realloced glist
-
-        newgroup = species2group[ipart->ispecies];
-        if (newgroup != igroup) {
-          addgroup(newgroup,ilist[i]);
-          delgroup(igroup,i);
-          ilist = glist[igroup];
-          jlist = glist[jgroup];
-          // this line needed if jgroup=igroup and delgroup() moved J particle
-          if (jgroup == igroup && j == *ni) j = i;
-        }
-
-        // jpart may now be in different group or destroyed
-        // if new group: reset ilist,jlist after addgroup() in case it realloced glist
-        // if destroyed: delete from plist and group, add particle to deletion list
-
-        if (jpart) {
-          newgroup = species2group[jpart->ispecies];
-          if (newgroup != jgroup) {
-            addgroup(newgroup,jlist[j]);
-            delgroup(jgroup,j);
-            ilist = glist[igroup];
-            jlist = glist[jgroup];
-          }
-
-        } else {
-          if (ndelete == maxdelete) {
-            maxdelete += DELTADELETE;
-            memory->grow(dellist,maxdelete,"collide:dellist");
-          }
-          pindex = jlist[j];
-          dellist[ndelete++] = plist[pindex];
-
-          delgroup(jgroup,j);
-
-          plist[pindex] = plist[np-1];
-          p2g[pindex][0] = p2g[np-1][0];
-          p2g[pindex][1] = p2g[np-1][1];
-          if (pindex < np-1) glist[p2g[pindex][0]][p2g[pindex][1]] = pindex;
-          np--;
-
-          if (NEARCP) nn_jgroup[j] = nn_jgroup[*nj];
-        }
-
-        // if kpart created, add to plist and group list
-        // kpart was just added to particle list, so index = nlocal-1
-        // reset ilist,jlist after addgroup() in case it realloced
-        // particles data struct may also have been realloced
-
-        if (kpart) {
-          newgroup = species2group[kpart->ispecies];
-
-          if (NEARCP) {
-            if (newgroup == igroup || newgroup == jgroup) {
-              n = ngroup[newgroup];
-              set_nn_group(n);
-              nn_igroup = nn_last_partner_igroup;
-              if (igroup == jgroup) nn_jgroup = nn_last_partner_igroup;
-              else nn_jgroup = nn_last_partner_jgroup;
-              nn_igroup[n] = 0;
-              nn_jgroup[n] = 0;
-            }
-          }
-
-          if (np == npmax) {
-            npmax += DELTAPART;
-            memory->grow(plist,npmax,"collide:plist");
-            memory->grow(p2g,npmax,2,"collide:p2g");
-          }
-          plist[np++] = particle->nlocal-1;
-
-          addgroup(newgroup,np-1);
-          ilist = glist[igroup];
-          jlist = glist[jgroup];
-          particles = particle->particles;
-        }
-
-        // test to exit attempt loop due to groups becoming too small
-
-        if (*ni <= 1) {
-          if (*ni == 0) break;
-          if (igroup == jgroup) break;
-        }
-        if (*nj <= 1) {
-          if (*nj == 0) break;
-          if (igroup == jgroup) break;
-        }
-      }
-    }
-
-    // SWS - store residual split-merge energy for this cell
-
-    ewilost_cell[icell] = Ewilost;
-  }
-}
 
 /* ----------------------------------------------------------------------
    NTC algorithm for a single group with ambipolar approximation
@@ -2165,6 +1873,38 @@ double Collide::sws_cell_maxwi(int np)
   return maxwi;
 }
 
+
+/* ----------------------------------------------------------------------
+   SWS - per-group weight sums and maxima for the N particles in plist
+   fills count_wi_group[] and maxwigr[] (sized ngroups)
+   return the max species weight over all particles in the cell
+------------------------------------------------------------------------- */
+
+double Collide::sws_group_weights(int n)
+{
+  Particle::Species *species = particle->species;
+  Particle::OnePart *particles = particle->particles;
+  int *species2group = mixture->species2group;
+
+  for (int igr = 0; igr < ngroups; igr++) {
+    count_wi_group[igr] = 0.0;
+    maxwigr[igr] = 0.0;
+  }
+
+  for (int m = 0; m < n; m++) {
+    int isp = particles[plist[m]].ispecies;
+    int igroup = species2group[isp];
+    double wi = species[isp].specwt;
+    count_wi_group[igroup] += wi;
+    maxwigr[igroup] = std::max(wi,maxwigr[igroup]);
+  }
+
+  double maxwi = 0.0;
+  for (int igr = 0; igr < ngroups; igr++)
+    maxwi = std::max(maxwigr[igr],maxwi);
+  return maxwi;
+}
+
 /* ----------------------------------------------------------------------
    SWS - bookkeeping for particles created/destroyed by a reaction in the
    single-group and near-neighbor collision loops
@@ -2339,6 +2079,4 @@ int Collide::sws_products_one(int &np, int i, int j,
 ------------------------------------------------------------------------- */
 
 namespace SPARTA_NS {
-template void Collide::collisions_group_SWS<0>();
-template void Collide::collisions_group_SWS<1>();
 }
