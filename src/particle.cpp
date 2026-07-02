@@ -618,12 +618,13 @@ void Particle::grow_species()
   for (int isp = 0; isp < nspecies; ++isp) {
     if (species[isp].elecdat != NULL) {
       species[isp].elecdat->species_rel = (double **)
-        memory->srealloc(species[isp].elecdat->species_rel,
-                         maxspecies*sizeof(double*),"elecdat:species_rel");
+        memory->srealloc(species[isp].elecdat->species_rel, maxspecies*sizeof(double*),"elecdat:species_rel");
       memory->grow(species[isp].elecdat->enforce_spin_conservation, maxspecies, "elecdat:enforce_spin_conservation");
-      for (int jsp = nspecies; jsp < maxspecies; ++jsp) {
-        species[isp].elecdat->species_rel[jsp] = NULL;
-        species[isp].elecdat->enforce_spin_conservation[jsp] = true;
+      // newly added partner-species slots have no relationship data yet:
+      // no species-specific relaxation numbers, spin conservation enforced
+      for (int j = nspecies; j < maxspecies; ++j) {
+        species[isp].elecdat->species_rel[j] = NULL;
+        species[isp].elecdat->enforce_spin_conservation[j] = true;
       }
     }
   }
@@ -1050,6 +1051,9 @@ void Particle::add_species(int narg, char **arg)
       memory->create(species[ii].elecdat->default_rel, nmode, "elecdat:default_rel");
       species[ii].elecdat->species_rel = (double**) memory->smalloc(maxspecies*sizeof(double*),"elecdat:species_rel");
       memory->create(species[ii].elecdat->enforce_spin_conservation, maxspecies, "elecdat:enforce_spin_conservation");
+      // initialize the full allocated capacity, not just nspecies entries:
+      // slots past nspecies are read/freed once later species commands
+      // raise nspecies without necessarily growing maxspecies
       for (int isp = 0; isp < maxspecies; ++isp) {
         species[ii].elecdat->species_rel[isp] = NULL;
         species[ii].elecdat->enforce_spin_conservation[isp] = true;
@@ -1259,7 +1263,7 @@ int Particle::ielec(int isp, double temp_elec, RanKnuth *erandom)
   if (collide) elecstyle = collide->elecstyle;
   if (elecstyle == DISCRETE) {
     Species species = particle->species[isp];
-    if (species.elecdat == NULL) return 0.0;
+    if (species.elecdat == NULL) return 0;
 
     electronic_distribution_func(isp, temp_elec);
 
@@ -1268,7 +1272,10 @@ int Particle::ielec(int isp, double temp_elec, RanKnuth *erandom)
 
     double ran = erandom->uniform();
     ielec = 0;
-    while (ran > cumulative_probabilities[ielec])
+    // bound the search: floating-point roundoff can leave ran above the
+    // final cumulative entry, which would index past the last state
+    while (ielec < species.elecdat->nelecstate-1 &&
+           ran > cumulative_probabilities[ielec])
       ++ielec;
   }
   return ielec;
@@ -1517,7 +1524,6 @@ void Particle::read_electronic_file()
   // read file line by line
   // skip blank lines or comment lines starting with '#'
 
-  char **words = new char*[128];
   char line[MAXLINE],copy[MAXLINE];
 
   while (fgets(line,MAXLINE,fp)) {
@@ -1537,15 +1543,24 @@ void Particle::read_electronic_file()
       memset(&fileelec[nfile],0,(maxfile-nfile)*sizeof(ElecFile));
     }
 
+    // size words to this line's count: a species with N electronic states
+    // has 2 + 5N words, which can exceed any fixed-size buffer
+
+    char **words = new char*[nwords];
     nwords = wordcount(line,words);
     ElecFile *vsp = &fileelec[nfile];
 
-    if (strlen(words[0]) + 1 > 16)
+    if (strlen(words[0]) + 1 > 16) {
+      delete [] words;
       error->one(FLERR,"Invalid species ID in electronic file");
+    }
     strcpy(vsp->id,words[0]);
 
     int isp = particle->find_species(words[0]);
-    if (isp < 0) continue;
+    if (isp < 0) {
+      delete [] words;
+      continue;
+    }
 
     int test_nmode = atoi(words[1]);
     if (test_nmode > 0) {
@@ -1583,20 +1598,40 @@ void Particle::read_electronic_file()
         vsp->elecspin[i] = atoi(words[j++]);
         vsp->elecdof[i] = atof(words[j++]);
       }
+
+      // state selection and temperature bisection assume the ground state
+      // comes first with zero energy and states are in ascending order
+
+      if (vsp->electemp[0] != 0.0)
+        error->one(FLERR,"First electronic state in electronic file "
+                   "must have zero energy");
+      for (int i = 1; i < vsp->nmode; ++i)
+        if (vsp->electemp[i] <= vsp->electemp[i-1])
+          error->one(FLERR,"Electronic states in electronic file "
+                     "must be in ascending energy order");
+
       nfile++;
     } else {
       // Cross-species line defining species-specific relaxation collision numbers
+      ElecFile *xsp = NULL;
       for (int i = 0; i < nfile; ++i) {
         if (strcmp(words[0],fileelec[i].id) == 0) {
-          vsp = &fileelec[i];
+          xsp = &fileelec[i];
           break;
         }
       }
+      if (!xsp)
+        error->one(FLERR,"Cross-species line in electronic file must "
+                   "follow the line defining that species' states");
+      vsp = xsp;
       if (nwords != 3 + vsp->nmode)
         error->one(FLERR,"Incorrect line format in electronic file");
 
       int jsp = particle->find_species(words[1]);
-      if (jsp < 0) continue;
+      if (jsp < 0) {
+        delete [] words;
+        continue;
+      }
 
       if (strcmp(words[2],"T") == 0) {
         vsp->enforce_spin_conservation[jsp] = true;
@@ -1610,9 +1645,9 @@ void Particle::read_electronic_file()
         vsp->elecrel[jsp][i] = atof(words[j++]);
       }
     }
-  }
 
-  delete [] words;
+    delete [] words;
+  }
 
   fclose(fp);
 }
@@ -1660,11 +1695,21 @@ void Particle::read_restart_species(FILE *fp)
 
   if (nspecies > maxspecies) {
     while (nspecies > maxspecies) maxspecies += DELTASPECIES;
-    grow_species();
+    // grow the raw species list only; do NOT call grow_species() here, which
+    // would dereference elecdat of species not yet read from the file
+    species = (Species *)
+      memory->srealloc(species,maxspecies*sizeof(Species),"particle:species");
   }
 
   if (me == 0) tmp = fread(species,sizeof(Species),nspecies,fp);
   MPI_Bcast(species,nspecies*sizeof(Species),MPI_CHAR,0,world);
+
+  // the elecdat pointer is byte-dumped into the restart and is invalid on read;
+  // per-species electronic data is not serialized, so clear it to avoid a
+  // dangling-pointer dereference/free (electronic states must be redefined
+  // via the species command after a restart)
+  for (int isp = 0; isp < nspecies; isp++)
+    species[isp].elecdat = NULL;
 
   maxvibmode = 0;
   for (int isp = 0; isp < nspecies; isp++)
@@ -1993,7 +2038,7 @@ double Particle::bisectTelec(int isp, double eelec, int count)
   // Bisect
 
   if (isinf(T_high)) {
-    throw 0;
+    error->one(FLERR,"bisectTelec: electronic temperature did not converge");
   }
 
   double T_mid = t_elec;

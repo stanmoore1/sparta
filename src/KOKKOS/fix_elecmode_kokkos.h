@@ -41,7 +41,8 @@ class FixElecmodeKokkos : public FixElecmode {
   void update_custom_kokkos(int, double, double, double, double, const double *) const;
 
  private:
-  int boltz,elecstyle;
+  double boltz;
+  int elecstyle;
 
 #ifndef SPARTA_KOKKOS_EXACT
   Kokkos::Random_XorShift64_Pool<DeviceType> rand_pool;
@@ -67,7 +68,7 @@ class FixElecmodeKokkos : public FixElecmode {
   void electronic_distribution_func(int, int, double) const;
 
   KOKKOS_INLINE_FUNCTION
-  double ielec(int, int, double, rand_type &) const;
+  int ielec(int, int, double, rand_type &) const;
 };
 
 /* ---------------------------------------------------------------------- */
@@ -93,7 +94,7 @@ void FixElecmodeKokkos::electronic_distribution_func(int index, int isp, double 
 /* ---------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-double FixElecmodeKokkos::ielec(int index, int isp, double temp_elec, rand_type &erandom) const
+int FixElecmodeKokkos::ielec(int index, int isp, double temp_elec, rand_type &erandom) const
 {
   enum{NONE,DISCRETE,SMOOTH};            // several files
 
@@ -101,7 +102,7 @@ double FixElecmodeKokkos::ielec(int index, int isp, double temp_elec, rand_type 
 
   if (elecstyle == DISCRETE) {
     int nelecstate = d_nelecstates[isp];
-    if (!nelecstate) return 0.0;
+    if (!nelecstate) return 0;
 
     electronic_distribution_func(index, isp, temp_elec);
 
@@ -110,7 +111,10 @@ double FixElecmodeKokkos::ielec(int index, int isp, double temp_elec, rand_type 
 
     double ran = erandom.drand();
     ielec = 0;
-    while (ran > d_cumulative_probabilities(index,ielec))
+    // bound the search: floating-point roundoff can leave ran above the
+    // final cumulative entry, which would index past the last state
+    while (ielec < nelecstate-1 &&
+           ran > d_cumulative_probabilities(index,ielec))
       ++ielec;
   }
   return ielec;

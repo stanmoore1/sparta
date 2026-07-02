@@ -142,7 +142,7 @@ ComputeGrid::ComputeGrid(SPARTA *sparta, int narg, char **arg) :
       set_map(ivalue,DOFVIB);
       tvib_flag = 1;
     } else if (strcmp(arg[iarg],"eelec") == 0) {
-      value[ivalue] = ENGELEC;
+      value[ivalue] = EELEC;
       set_map(ivalue,ENGELEC);
       set_map(ivalue,COUNT);
     } else if (strcmp(arg[iarg],"pxrho") == 0) {
@@ -302,8 +302,10 @@ void ComputeGrid::compute_per_grid()
         vec[k++] += particles[i].evib;
         break;
       case ENGELEC:
-        if (index_eelec >= 0)
-          vec[k++] += eelecs[i];
+        // always advance k to keep the per-value tally layout in sync;
+        // only accumulate when the eelec custom attribute exists
+        if (index_eelec >= 0) vec[k] += eelecs[i];
+        k++;
         break;
       case DOFROT:
         vec[k++] += species[ispecies].rotdof;

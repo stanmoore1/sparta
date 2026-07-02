@@ -272,7 +272,7 @@ int CollideVSS::perform_collision(Particle::OnePart *&ip,
                                   Particle::OnePart *&kp)
 {
   Particle::Species *species = particle->species;
-  int m,reaction,kspecies;
+  int reaction,kspecies;
   double x[3],v[3];
   Particle::OnePart *p3;
 
@@ -292,7 +292,11 @@ int CollideVSS::perform_collision(Particle::OnePart *&ip,
   // just collision, no reaction
 
   if (!reaction) {
-    if (precoln.ave_dof > 0.0) EEXCHANGE_NonReactingEDisposal(ip,jp);
+    // ave_dof counts only rot/vib DOF, so also call the energy disposal
+    // when either species has electronic states (e.g. two atoms),
+    // else their electronic modes would never relax
+    if (precoln.ave_dof > 0.0 || elec_exchange(ip,jp))
+      EEXCHANGE_NonReactingEDisposal(ip,jp);
     SCATTER_TwoBodyScattering(ip,jp);
     return reaction;
   }
@@ -376,6 +380,14 @@ int CollideVSS::perform_collision(Particle::OnePart *&ip,
     p3->erot = 0;
     p3->evib = 0;
 
+    // zero electronic energy like erot/evib above: it is already part of
+    // partial_energy, so setup_collision() must not count it a second time
+
+    if (elecstyle == DISCRETE) {
+      zero_elec(ip);
+      zero_elec(p3);
+    }
+
     // returned postcoln.etotal will increment only the
     //   relative translational energy between recombined species and 3rd body
     // add back partial_energy to get full total energy
@@ -383,7 +395,8 @@ int CollideVSS::perform_collision(Particle::OnePart *&ip,
     setup_collision(ip,p3);
     postcoln.etotal += partial_energy;
 
-    if (precoln.ave_dof > 0.0) EEXCHANGE_ReactingEDisposal(ip,p3,jp);
+    if (precoln.ave_dof > 0.0 || elec_exchange(ip,p3))
+      EEXCHANGE_ReactingEDisposal(ip,p3,jp);
     SCATTER_TwoBodyScattering(ip,p3);
 
   } else {
@@ -470,8 +483,11 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
   double pevib = 0.0;
 
   // handle each kind of energy disposal for non-reacting reactants
+  // enter the disposal loop even if ave_dof (rot/vib) is zero when either
+  // species has electronic states, so those can still relax;
+  // the rot/vib blocks below are skipped naturally via rotdof/vibdof = 0
 
-  if (precoln.ave_dof == 0) {
+  if (precoln.ave_dof == 0 && !elec_exchange(ip,jp)) {
     ip->erot = 0.0;
     jp->erot = 0.0;
     ip->evib = 0.0;
@@ -637,6 +653,36 @@ void CollideVSS::relax_electronic_mode(Particle::OnePart *p, Particle::OnePart *
   E_Dispose -= eelecs[p - particle->particles];
 }
 
+/* ----------------------------------------------------------------------
+   reset the electronic state/energy of particle p to the ground state
+   skip ambipolar electrons: they live in a separate scratch array (elist),
+   not in particle->particles, so they have no custom storage to reset
+------------------------------------------------------------------------- */
+
+void CollideVSS::zero_elec(Particle::OnePart *p)
+{
+  if (ambiflag && p->ispecies == ambispecies) return;
+  int *estates = particle->eivec[particle->ewhich[index_elecstate]];
+  double *eelecs = particle->edvec[particle->ewhich[index_eelec]];
+  eelecs[p - particle->particles] = 0.0;
+  estates[p - particle->particles] = 0;
+}
+
+/* ----------------------------------------------------------------------
+   return 1 if electronic energy exchange is possible between two particles,
+   i.e. discrete electronic modes are enabled and either species has
+   electronic states defined
+------------------------------------------------------------------------- */
+
+int CollideVSS::elec_exchange(Particle::OnePart *ip, Particle::OnePart *jp)
+{
+  if (elecstyle != DISCRETE) return 0;
+  Particle::Species *species = particle->species;
+  if (species[ip->ispecies].elecdat != NULL ||
+      species[jp->ispecies].elecdat != NULL) return 1;
+  return 0;
+}
+
 /* ---------------------------------------------------------------------- */
 
 double CollideVSS::get_elec_phi(int ispec1, int ispec2, int ielec, double)
@@ -662,6 +708,10 @@ int CollideVSS::select_elec_state(Particle::OnePart *p, Particle::OnePart *jp, d
     ++max_level;
   }
   --max_level;
+
+  // not enough energy to reach even the ground state: stay in ground state
+  // (guards against max_level == -1 indexing state_probability[-1])
+  if (max_level < 0) return 0;
 
   double* state_probability = particle->cumulative_probabilities;
 
@@ -699,6 +749,8 @@ int CollideVSS::select_elec_state(Particle::OnePart *p, Particle::OnePart *jp, d
     double rand_state = random->uniform()*state_probability[max_level];
     ielec = 0;
     ilast = -1;
+    // bound by max_level: roundoff can leave rand_state >= 0 after the last
+    // included state, which would index states[] past max_level/nelecstate
     while (rand_state >= 0 && ielec <= max_level) {
       if (!enforce_spin_conservation ||
              species[p->ispecies].elecdat->states[ielec].spin == species[p->ispecies].elecdat->states[estates[p - particle->particles]].spin) {
@@ -812,20 +864,19 @@ void CollideVSS::EEXCHANGE_ReactingEDisposal(Particle::OnePart *ip,
   Particle::Species *species = particle->species;
   double AdjustFactor = 0.99999999;
 
-  double *eelecs = NULL;
-  if (elecstyle == DISCRETE) {
-    eelecs = particle->edvec[particle->ewhich[index_eelec]];
-  }
+  // zero electronic state/energy of all products, not just those whose
+  // species has electronic data: the reactant electronic energy is already
+  // part of postcoln.etotal, so leaving a stale eelec on a product whose
+  // (new) species has no electronic data would duplicate that energy
+
   if (!kp) {
     ip->erot = 0.0;
     jp->erot = 0.0;
     ip->evib = 0.0;
     jp->evib = 0.0;
     if (elecstyle == DISCRETE) {
-      if (species[ip->ispecies].elecdat != NULL)
-        eelecs[ip - particle->particles] = 0.0;
-      if (species[jp->ispecies].elecdat != NULL)
-        eelecs[jp - particle->particles] = 0.0;
+      zero_elec(ip);
+      zero_elec(jp);
     }
     numspecies = 2;
     aveomega = params[ip->ispecies][jp->ispecies].omega;
@@ -837,12 +888,9 @@ void CollideVSS::EEXCHANGE_ReactingEDisposal(Particle::OnePart *ip,
     jp->evib = 0.0;
     kp->evib = 0.0;
     if (elecstyle == DISCRETE) {
-      if (species[ip->ispecies].elecdat != NULL)
-        eelecs[ip - particle->particles] = 0.0;
-      if (species[jp->ispecies].elecdat != NULL)
-        eelecs[jp - particle->particles] = 0.0;
-      if (species[kp->ispecies].elecdat != NULL)
-        eelecs[kp - particle->particles] = 0.0;
+      zero_elec(ip);
+      zero_elec(jp);
+      zero_elec(kp);
     }
     numspecies = 3;
     aveomega = (params[ip->ispecies][ip->ispecies].omega + params[jp->ispecies][jp->ispecies].omega +
