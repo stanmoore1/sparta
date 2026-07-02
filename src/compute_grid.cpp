@@ -33,7 +33,8 @@ enum{NUM,NUMWI,NRHO,NFRAC,MASS,MASSRHO,MASSFRAC,
      PXRHO,PYRHO,PZRHO,KERHO};
 
 // internal accumulators
-// SWS - add the keyword for the new accumulators: COUNT_WI and CELLCOUNTWI.
+// COUNT = raw simulator-particle count under all weighting schemes
+// COUNT_WI = weighted count (sum of effective particle weights)
 enum{COUNT,COUNT_WI,MASSSUM,MVX,MVY,MVZ,MVXSQ,MVYSQ,MVZSQ,MVSQ,
      ENGROT,ENGVIB,DOFROT,DOFVIB,CELLCOUNT,CELLMASS,CELLCOUNTWI,LASTSIZE};
 
@@ -73,7 +74,9 @@ ComputeGrid::ComputeGrid(SPARTA *sparta, int narg, char **arg) :
     if (strcmp(arg[iarg],"n") == 0) {
       value[ivalue] = NUM;
       set_map(ivalue,COUNT);
-    } else if (strcmp(arg[iarg],"sumwi") == 0) {  // SWS - wi summation output
+    } else if (strcmp(arg[iarg],"sumwi") == 0) {
+      // weighted count output: sum of effective particle weights
+      // (per-species SWS weights or per-particle SWPM weights)
       value[ivalue] = NUMWI;
       set_map(ivalue,COUNT_WI);
     } else if (strcmp(arg[iarg],"nrho") == 0) {
@@ -249,6 +252,8 @@ void ComputeGrid::compute_per_grid()
   // perform all tallies needed for each particle
   // depends on its species group and the user-requested values
 
+  double *sweights = particle->stochastic_weights();
+  double swfrac = 1.0;
   for (i = 0; i < nlocal; i++) {
     ispecies = particles[i].ispecies;
     igroup = s2g[ispecies];
@@ -258,18 +263,17 @@ void ComputeGrid::compute_per_grid()
 
     mass = species[ispecies].mass;
     v = particles[i].v;
+    if (sweights) swfrac = sweights[i];
+    else if (particle->weightflag) swfrac = particles[i].weight;
+
+    mass *= swfrac;
 
     vec = tally[icell];
-    // ========================================================================
-    // SWS - Accumulate the number of physical particles: sum of the weight, and 
-    // the corresponding mass: sum of the product mass * weight.
-    // ========================================================================
-    // Baseline code:
-    //~ if (cellmass) vec[cellmass] += mass;
-    //~ if (cellcount) vec[cellcount] += 1.0;
-    // Modified code:
+    // weighted cell totals: specwt (SWS) and swfrac (SWPM) are mutually
+    // exclusive, so at most one factor differs from 1.0; mass already
+    // carries swfrac from above
     specwt = species[ispecies].specwt;
-    if (cellcountwi) vec[cellcountwi] += specwt;
+    if (cellcountwi) vec[cellcountwi] += specwt*swfrac;
     if (cellmass) vec[cellmass] += mass*specwt;
     if (cellcount) vec[cellcount] += 1.0;
 
@@ -283,9 +287,9 @@ void ComputeGrid::compute_per_grid()
       case COUNT:
         vec[k++] += 1.0;
         break;
-      case COUNT_WI:         // SWS
-        vec[k++] += specwt;  // SWS
-        break;               // SWS
+      case COUNT_WI:
+        vec[k++] += specwt*swfrac;
+        break;
       case MASSSUM:
         vec[k++] += mass*specwt;  // SWS
         break;
@@ -308,19 +312,19 @@ void ComputeGrid::compute_per_grid()
         vec[k++] += mass*specwt*v[2]*v[2];  // SWS
         break;
       case MVSQ:
-        vec[k++] += mass*specwt * (v[0]*v[0]+v[1]*v[1]+v[2]*v[2]);  // SWS
+        vec[k++] += mass*specwt * (v[0]*v[0]+v[1]*v[1]+v[2]*v[2]);
         break;
       case ENGROT:
-        vec[k++] += specwt * particles[i].erot;  // SWS
+        vec[k++] += specwt*swfrac * particles[i].erot;
         break;
       case ENGVIB:
-        vec[k++] += specwt * particles[i].evib;  // SWS
+        vec[k++] += specwt*swfrac * particles[i].evib;
         break;
       case DOFROT:
-        vec[k++] += specwt * species[ispecies].rotdof;  // SWS
+        vec[k++] += specwt*swfrac * species[ispecies].rotdof;
         break;
       case DOFVIB:
-        vec[k++] += specwt * species[ispecies].vibdof;  // SWS
+        vec[k++] += specwt*swfrac * species[ispecies].vibdof;
         break;
       }
     }

@@ -25,6 +25,7 @@ class Particle : protected Pointers {
   int exist;                // 1 if particles exist
   int sorted;               // 1 if particles are sorted by grid cell
   int sws;                  // SWS - 0:none, 1:SWS, 2:SWSmax ; read from input file species command keyword
+  int weightflag;           // 1 if stochastic weights used
 
   enum{MAXVIBMODE=4};       // increase value if species need more vib modes
 
@@ -174,6 +175,7 @@ class Particle : protected Pointers {
   void unpack_restart(char *, int &, int, int);
 
   int find_custom(char *);
+  double *stochastic_weights();
   void error_custom();
   virtual int add_custom(char *, int, int);
   virtual void grow_custom(int, int, int);

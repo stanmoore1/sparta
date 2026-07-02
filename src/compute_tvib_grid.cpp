@@ -283,6 +283,9 @@ void ComputeTvibGrid::compute_per_grid()
   // mode = 0: tally vib eng and count for each species
   // mode >= 1: tally vib level and count for each species and each vib mode
 
+  double *sweights = particle->stochastic_weights();
+  double swfrac = 1.0;
+
   if (modeflag == 0) {
     for (i = 0; i < nlocal; i++) {
       ispecies = particles[i].ispecies;
@@ -293,9 +296,14 @@ void ComputeTvibGrid::compute_per_grid()
       icell = particles[i].icell;
       if (!(cinfo[icell].mask & groupbit)) continue;
 
+      if (sweights) swfrac = sweights[i];
+      else if (particle->weightflag) swfrac = particles[i].weight;
+
       j = s2t[ispecies];
-      tally[icell][j] += particles[i].evib * specwt;  // SWS
-      tally[icell][j+1] += 1.0 * specwt;  // SWS
+      // specwt (SWS) and swfrac (SWPM) are mutually exclusive: at most one
+      // factor differs from 1.0
+      tally[icell][j] += particles[i].evib * specwt * swfrac;
+      tally[icell][j+1] += specwt * swfrac;
     }
 
   } else if (modeflag >= 1) {
@@ -311,15 +319,21 @@ void ComputeTvibGrid::compute_per_grid()
       icell = particles[i].icell;
       if (!(cinfo[icell].mask & groupbit)) continue;
 
+      if (sweights) swfrac = sweights[i];
+      else if (particle->weightflag) swfrac = particles[i].weight;
+
       // tally only the modes this species has
 
       nmode = particle->species[ispecies].nvibmode;
       for (imode = 0; imode < nmode; imode++) {
         j = s2t_mode[ispecies][imode];
-        if (nmode > 1) tally[icell][j] += vibmode[i][imode] * specwt;  // SWS
+        // factor order preserves bit-exactness for each scheme:
+        // swfrac multiplies before the division (SWPM order), specwt after
+        // (SWS order); the inactive factor is exactly 1.0
+        if (nmode > 1) tally[icell][j] += vibmode[i][imode] * specwt * swfrac;
         else tally[icell][j] +=
-               particles[i].evib / (boltz*species[ispecies].vibtemp[0]) * specwt;  // SWS
-        tally[icell][j+1] += 1.0 * specwt;  // SWS
+               particles[i].evib * swfrac / (boltz*species[ispecies].vibtemp[0]) * specwt;
+        tally[icell][j+1] += specwt * swfrac;
       }
     }
   }

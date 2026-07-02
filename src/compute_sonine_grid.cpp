@@ -161,6 +161,7 @@ void ComputeSonineGrid::compute_per_grid()
   Particle::OnePart *particles = particle->particles;
   int *s2g = particle->mixture[imix]->species2group;
   int nlocal = particle->nlocal;
+  double *sweights = particle->stochastic_weights();
 
   int i,j,k,m,n,ispecies,igroup,icell;
   double mass,norm,csq,value;
@@ -188,6 +189,8 @@ void ComputeSonineGrid::compute_per_grid()
     if (!(cinfo[icell].mask & groupbit)) continue;
 
     mass = species[ispecies].mass;
+    if (sweights) mass *= sweights[i];
+    else if (particle->weightflag) mass *= particles[i].weight;
     v = particles[i].v;
     specwt = species[ispecies].specwt;  // SWS
 
@@ -228,6 +231,8 @@ void ComputeSonineGrid::compute_per_grid()
     k = igroup*npergroup;
 
     mass = species[ispecies].mass;
+    if (sweights) mass *= sweights[i];
+    else if (particle->weightflag) mass *= particles[i].weight;
     specwt = species[ispecies].specwt;  // SWS
     vec[k++] += mass*specwt;  // SWS
 

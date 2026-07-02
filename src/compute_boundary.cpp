@@ -184,6 +184,34 @@ void ComputeBoundary::boundary_tally(double dtremain,
   int igroup = particle->mixture[imix]->species2group[origspecies];
   if (igroup < 0) return;
 
+  // assume non-reacting and no splitting at boundary
+
+  double *sweights = particle->stochastic_weights();
+  double oswfrac, iswfrac, jswfrac;
+  iswfrac = jswfrac = oswfrac = 1.0;
+
+  // particle weighting: stochastic (SWPM) or grid-based cell weighting.
+  // the two are mutually exclusive (enforced in Particle::stochastic_weights),
+  // so the ternary below selects whichever scheme is active.
+  // for SWPM there is no splitting at the boundary (single species), so the
+  // outgoing particle(s) carry the incident particle's stochastic weight.
+
+  if (sweights || particle->weightflag) {
+    int nout = 0;
+    oswfrac = 0.0;
+    if (ip) {
+      iswfrac = sweights ? sweights[ip - particle->particles] : ip->weight;
+      oswfrac += iswfrac;
+      nout++;
+    }
+    if (jp) {
+      jswfrac = sweights ? sweights[jp - particle->particles] : jp->weight;
+      oswfrac += jswfrac;
+      nout++;
+    }
+    if (nout > 0) oswfrac /= nout;
+  }
+
   // tally all values associated with group into array
   // set nflag and tflag if normal and tangent computation already done once
   // particle weight used for all keywords except NUM
@@ -197,9 +225,9 @@ void ComputeBoundary::boundary_tally(double dtremain,
 
   double origmass,imass,jmass,pre;
   if (weightflag) weight = iorig->weight;
-  origmass = particle->species[origspecies].mass * weight;
-  if (ip) imass = particle->species[ip->ispecies].mass * weight;
-  if (jp) jmass = particle->species[jp->ispecies].mass * weight;
+  origmass = particle->species[origspecies].mass * weight * oswfrac;
+  if (ip) imass = particle->species[ip->ispecies].mass * weight * iswfrac;
+  if (jp) jmass = particle->species[jp->ispecies].mass * weight * jswfrac;
 
   // SWS - variables
   double worig = 1.0;   
@@ -234,7 +262,9 @@ void ComputeBoundary::boundary_tally(double dtremain,
         vec[k++] += weight;
         break;
       case NFLUX:
-        vec[k++] += weight * worig;   // SWS
+        // worig (SWS, per-species) and oswfrac (SWPM, per-particle) are
+        // mutually exclusive: at most one factor differs from 1.0
+        vec[k++] += weight * worig * oswfrac;
         break;
       case MFLUX:
         vec[k++] += origmass * worig;   // SWS
@@ -275,15 +305,16 @@ void ComputeBoundary::boundary_tally(double dtremain,
         vec[k++] += 0.5 * mvv2e * origmass * vsqpre * worig;   // SWS
         break;
       case EROT:
-        vec[k++] += weight * iorig->erot  * worig;   // SWS
+        vec[k++] += weight * iorig->erot * worig * oswfrac;
         break;
       case EVIB:
-        vec[k++] += weight * iorig->evib * worig;   // SWS
+        vec[k++] += weight * iorig->evib * worig * oswfrac;
         break;
       case ETOT:
+        // origmass already carries oswfrac from its definition above
         vsqpre = MathExtra::lensq3(vorig);
-        vec[k++] += 0.5*mvv2e*origmass*vsqpre  * worig +
-          weight*(iorig->erot+iorig->evib) * worig;   // SWS
+        vec[k++] += 0.5*mvv2e*origmass*vsqpre * worig +
+          weight * (iorig->erot+iorig->evib) * worig * oswfrac;
         break;
       }
     }
@@ -298,9 +329,9 @@ void ComputeBoundary::boundary_tally(double dtremain,
         vec[k++] += weight;
         break;
       case NFLUX:
-        vec[k] += weight * worig;        // SWS
-        if (ip) vec[k] -= weight * wi;   // SWS
-        if (jp) vec[k] -= weight * wj;   // SWS
+        vec[k] += weight * worig * oswfrac;
+        if (ip) vec[k] -= weight * wi * iswfrac;
+        if (jp) vec[k] -= weight * wj * jswfrac;
         k++;
         break;
       case MFLUX:
@@ -357,29 +388,32 @@ void ComputeBoundary::boundary_tally(double dtremain,
         vec[k++] -= 0.5*mvv2e * (ivsqpost * wi + jvsqpost * wj - vsqpre * worig);   // SWS
         break;
       case EROT:
-        if (ip) ierot = ip->erot;
+        if (ip) ierot = ip->erot * iswfrac;
         else ierot = 0.0;
-        if (jp) jerot = jp->erot;
+        if (jp) jerot = jp->erot * jswfrac;
         else jerot = 0.0;
-        vec[k++] -= weight * (ierot * wi + jerot * wj - iorig->erot * worig);   // SWS
+        // ierot/jerot carry iswfrac/jswfrac from their definitions above
+        vec[k++] -= weight * (ierot * wi + jerot * wj -
+                              iorig->erot * worig * oswfrac);
         break;
       case EVIB:
-        if (ip) ievib = ip->evib;
+        if (ip) ievib = ip->evib * iswfrac;
         else ievib = 0.0;
-        if (jp) jevib = jp->evib;
+        if (jp) jevib = jp->evib * jswfrac;
         else jevib = 0.0;
-        vec[k++] -= weight * (ievib * wi + jevib * wj - iorig->evib * worig);   // SWS
+        vec[k++] -= weight * (ievib * wi + jevib * wj -
+                              iorig->evib * worig * oswfrac);
         break;
       case ETOT:
         vsqpre = origmass * MathExtra::lensq3(vorig);
-        otherpre = iorig->erot + iorig->evib;
+        otherpre = (iorig->erot + iorig->evib) * oswfrac;
         if (ip) {
           ivsqpost = imass * MathExtra::lensq3(ip->v);
-          iother = ip->erot + ip->evib;
+          iother = (ip->erot + ip->evib) * iswfrac;
         } else ivsqpost = iother = 0.0;
         if (jp) {
           jvsqpost = jmass * MathExtra::lensq3(jp->v);
-          jother = jp->erot + jp->evib;
+          jother = (jp->erot + jp->evib) * jswfrac;
         } else jvsqpost = jother = 0.0;
         vec[k++] -= 0.5*mvv2e*(ivsqpost * wi + jvsqpost * wj - vsqpre * worig) +
           weight * (iother * wi + jother * wj - otherpre * worig);    // SWS

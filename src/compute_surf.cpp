@@ -325,6 +325,32 @@ void ComputeSurf::surf_tally(double /*dtremain*/, int isurf, int icell, int reac
 
   double fluxscale = normflux[isurf];
 
+  // assume non-reacting and no splitting at boundary
+
+  double *sweights = particle->stochastic_weights();
+  double oswfrac, iswfrac, jswfrac;
+  iswfrac = jswfrac = oswfrac = 1.0;
+
+  // particle weighting: stochastic (SWPM) or grid-based cell weighting.
+  // for SWPM there is no splitting at the boundary (single species), so the
+  // outgoing particle(s) carry the incident particle's stochastic weight.
+
+  if (sweights || particle->weightflag) {
+    int nout = 0;
+    oswfrac = 0.0;
+    if (ip) {
+      iswfrac = sweights ? sweights[ip - particle->particles] : ip->weight;
+      oswfrac += iswfrac;
+      nout++;
+    }
+    if (jp) {
+      jswfrac = sweights ? sweights[jp - particle->particles] : jp->weight;
+      oswfrac += jswfrac;
+      nout++;
+    }
+    if (nout > 0) oswfrac /= nout;
+  }
+
   // tally all values associated with group into array
   // set fflag after force computation is done once
   // set tqflag after torque computation is done once
@@ -347,11 +373,12 @@ void ComputeSurf::surf_tally(double /*dtremain*/, int isurf, int icell, int reac
   double imass,jmass;
   if (weightflag && iorig) weight = iorig->weight;
   else if (weightflag) weight = ip->weight;
-  if (origspecies >= 0) origmass = particle->species[origspecies].mass * weight;
-  if (ip) imass = particle->species[ip->ispecies].mass * weight;
-  if (jp) jmass = particle->species[jp->ispecies].mass * weight;
-  
-  // SWS - variables
+  if (origspecies >= 0) origmass = particle->species[origspecies].mass * weight * oswfrac;
+  if (ip) imass = particle->species[ip->ispecies].mass * weight * iswfrac;
+  if (jp) jmass = particle->species[jp->ispecies].mass * weight * jswfrac;
+
+  // SWS - per-species weight triple; mutually exclusive with the SWPM
+  // per-particle o/i/jswfrac above, so at most one set differs from 1.0.
   // if no original particle (emission), use emitted species weight for worig
   double worig = 1.0;
   double wi = 1.0;
@@ -395,15 +422,15 @@ void ComputeSurf::surf_tally(double /*dtremain*/, int isurf, int icell, int reac
       vec[k++] += weight;
       break;
     case NFLUX:
-      if (iorig) vec[k] += weight * fluxscale * worig;  // SWS
+      if (iorig) vec[k] += weight * fluxscale * worig * oswfrac;
       if (!transparent) {
-        if (ip) vec[k] -= weight * fluxscale * wi;   // SWS
-        if (jp) vec[k] -= weight * fluxscale * wj;   // SWS
+        if (ip) vec[k] -= weight * fluxscale * wi * iswfrac;
+        if (jp) vec[k] -= weight * fluxscale * wj * jswfrac;
       }
       k++;
       break;
     case NFLUXIN:
-      vec[k] += weight * fluxscale * worig;  // SWS
+      vec[k] += weight * fluxscale * worig * oswfrac;
       k++;
       break;
     case MFLUX:
@@ -601,24 +628,26 @@ void ComputeSurf::surf_tally(double /*dtremain*/, int isurf, int icell, int reac
         vec[k++] -= 0.5*mvv2e * (ivsqpost * wi + jvsqpost * wj - vsqpre * worig) * fluxscale;  // SWS
       break;
     case EROT:
-      if (ip) ierot = ip->erot;
+      if (ip) ierot = ip->erot * iswfrac;
       else ierot = 0.0;
-      if (jp) jerot = jp->erot;
+      if (jp) jerot = jp->erot * jswfrac;
       else jerot = 0.0;
       if (transparent)
-        vec[k++] += weight * oerot * fluxscale * worig;  // SWS
+        vec[k++] += weight * oerot * fluxscale * worig * oswfrac;
       else
-        vec[k++] -= weight * (ierot * wi + jerot * wj - oerot * worig) * fluxscale;  // SWS
+        vec[k++] -= weight * (ierot * wi + jerot * wj -
+                              oerot * worig * oswfrac) * fluxscale;
       break;
     case EVIB:
-      if (ip) ievib = ip->evib;
+      if (ip) ievib = ip->evib * iswfrac;
       else ievib = 0.0;
-      if (jp) jevib = jp->evib;
+      if (jp) jevib = jp->evib * jswfrac;
       else jevib = 0.0;
       if (transparent)
-        vec[k++] += weight * oevib * fluxscale * worig;  // SWS
+        vec[k++] += weight * oevib * fluxscale * worig * oswfrac;
       else
-        vec[k++] -= weight * (ievib * wi + jevib * wj - oevib * worig) * fluxscale;  // SWS
+        vec[k++] -= weight * (ievib * wi + jevib * wj -
+                              oevib * worig * oswfrac) * fluxscale;
       break;
     case ECHEM:
       if (reaction && !transparent) {
@@ -628,16 +657,18 @@ void ComputeSurf::surf_tally(double /*dtremain*/, int isurf, int icell, int reac
       }
       break;
     case ETOT:
+
       if (iorig) vsqpre = origmass * MathExtra::lensq3(vorig);
       else vsqpre = 0.0;
-      otherpre = oerot + oevib;
+      otherpre = (oerot + oevib) * oswfrac;
+
       if (ip) {
         ivsqpost = imass * MathExtra::lensq3(ip->v);
-        iother = ip->erot + ip->evib;
+        iother = (ip->erot + ip->evib) * iswfrac;
       } else ivsqpost = iother = 0.0;
       if (jp) {
         jvsqpost = jmass * MathExtra::lensq3(jp->v);
-        jother = jp->erot + jp->evib;
+        jother = (jp->erot + jp->evib) * jswfrac;
       } else jvsqpost = jother = 0.0;
       if (transparent)
         etot = -0.5*mvv2e*vsqpre*worig - weight*otherpre*worig;  // SWS

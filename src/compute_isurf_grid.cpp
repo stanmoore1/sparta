@@ -250,6 +250,34 @@ void ComputeISurfGrid::surf_tally(double dtremain,
 
   double fluxscale = normflux[isurf];
 
+  // assume non-reacting and no splitting at boundary
+
+  double *sweights = particle->stochastic_weights();
+  double oswfrac, iswfrac, jswfrac;
+  iswfrac = jswfrac = oswfrac = 1.0;
+
+  // particle weighting: stochastic (SWPM) or grid-based cell weighting.
+  // the two are mutually exclusive (enforced in Particle::stochastic_weights),
+  // so the ternary below selects whichever scheme is active.
+  // for SWPM there is no splitting at the boundary (single species), so the
+  // outgoing particle(s) carry the incident particle's stochastic weight.
+
+  if (sweights || particle->weightflag) {
+    int nout = 0;
+    oswfrac = 0.0;
+    if (ip) {
+      iswfrac = sweights ? sweights[ip - particle->particles] : ip->weight;
+      oswfrac += iswfrac;
+      nout++;
+    }
+    if (jp) {
+      jswfrac = sweights ? sweights[jp - particle->particles] : jp->weight;
+      oswfrac += jswfrac;
+      nout++;
+    }
+    if (nout > 0) oswfrac /= nout;
+  }
+
   // tally all values associated with group into array
   // set nflag and tflag after normal and tangent computation is done once
   // particle weight used for all keywords except NUM
@@ -266,9 +294,9 @@ void ComputeISurfGrid::surf_tally(double dtremain,
 
   double origmass,imass,jmass;
   if (weightflag) weight = iorig->weight;
-  origmass = particle->species[origspecies].mass * weight;
-  if (ip) imass = particle->species[ip->ispecies].mass * weight;
-  if (jp) jmass = particle->species[jp->ispecies].mass * weight;
+  origmass = particle->species[origspecies].mass * weight * oswfrac;
+  if (ip) imass = particle->species[ip->ispecies].mass * weight * iswfrac;
+  if (jp) jmass = particle->species[jp->ispecies].mass * weight * jswfrac;
 
   // SWS - variables
   double worig = 1.0;   
@@ -296,9 +324,11 @@ void ComputeISurfGrid::surf_tally(double dtremain,
       vec[k++] += weight;
       break;
     case MFLUX:
-      vec[k] += origmass * fluxscale * worig;  // SWS
-      if (ip) vec[k] -= imass * fluxscale * wi;  // SWS
-      if (jp) vec[k] -= jmass * fluxscale * wj;  // SWS
+      // origmass/imass/jmass carry the SWPM weight fractions; the SWS
+      // per-species triple is applied explicitly (mutually exclusive)
+      vec[k] += origmass * fluxscale * worig;
+      if (ip) vec[k] -= imass * fluxscale * wi;
+      if (jp) vec[k] -= jmass * fluxscale * wj;
       k++;
       break;
     case FX:
@@ -406,29 +436,31 @@ void ComputeISurfGrid::surf_tally(double dtremain,
       vec[k++] -= 0.5*mvv2e * (ivsqpost * wi + jvsqpost * wj - vsqpre * worig) * fluxscale;  // SWS
       break;
     case EROT:
-      if (ip) ierot = ip->erot;
+      if (ip) ierot = ip->erot * iswfrac;
       else ierot = 0.0;
-      if (jp) jerot = jp->erot;
+      if (jp) jerot = jp->erot * jswfrac;
       else jerot = 0.0;
-      vec[k++] -= weight * (ierot * wi + jerot *wj - iorig->erot * worig) * fluxscale;  // SWS
+      vec[k++] -= weight * (ierot * wi + jerot * wj -
+                            iorig->erot * worig * oswfrac) * fluxscale;
       break;
     case EVIB:
-      if (ip) ievib = ip->evib;
+      if (ip) ievib = ip->evib * iswfrac;
       else ievib = 0.0;
-      if (jp) jevib = jp->evib;
+      if (jp) jevib = jp->evib * jswfrac;
       else jevib = 0.0;
-      vec[k++] -= weight * (ievib * wi + jevib * wj - iorig->evib * worig) * fluxscale;  // SWS
+      vec[k++] -= weight * (ievib * wi + jevib * wj -
+                            iorig->evib * worig * oswfrac) * fluxscale;
       break;
     case ETOT:
       vsqpre = origmass * MathExtra::lensq3(vorig);
-      otherpre = iorig->erot + iorig->evib;
+      otherpre = (iorig->erot + iorig->evib) * oswfrac;
       if (ip) {
         ivsqpost = imass * MathExtra::lensq3(ip->v);
-        iother = ip->erot + ip->evib;
+        iother = (ip->erot + ip->evib) * iswfrac;
       } else ivsqpost = iother = 0.0;
       if (jp) {
         jvsqpost = jmass * MathExtra::lensq3(jp->v);
-        jother = jp->erot + jp->evib;
+        jother = (jp->erot + jp->evib) * jswfrac;
       } else jvsqpost = jother = 0.0;
       etot = 0.5*mvv2e*(ivsqpost * wi + jvsqpost * wj - vsqpre * worig) +
         weight * (iother * wi + jother * wj - otherpre * worig);  // SWS
