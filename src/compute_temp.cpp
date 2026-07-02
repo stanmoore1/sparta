@@ -51,12 +51,11 @@ double ComputeTemp::compute_scalar()
   // swfrac == 1 and wsum reduces to the particle count.
 
   double wsum = 0.0;
-  double *sweights = particle->stochastic_weights();
+  double *sweights = particle->pweight_vector();
   double swfrac = 1.0;
   for (int i = 0; i < nlocal; i++) {
     v = particles[i].v;
     if (sweights) swfrac = sweights[i];
-    else if (particle->weightflag) swfrac = particles[i].weight;
     t += (v[0]*v[0] + v[1]*v[1] + v[2]*v[2]) *
       species[particles[i].ispecies].mass * swfrac;
     wsum += swfrac;
