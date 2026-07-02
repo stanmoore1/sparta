@@ -1,0 +1,11 @@
+# Dummy inert species used only to grow the global species list past the
+# initial allocation (DELTASPECIES=16) after an elecfile species is defined,
+# regression-testing reallocation/initialization of per-species elec data.
+X1  28.016 4.65E-26 2 0.2 0 0.0 0.0 1.0 0.0
+X2  28.016 4.65E-26 2 0.2 0 0.0 0.0 1.0 0.0
+X3  28.016 4.65E-26 2 0.2 0 0.0 0.0 1.0 0.0
+X4  28.016 4.65E-26 2 0.2 0 0.0 0.0 1.0 0.0
+X5  28.016 4.65E-26 2 0.2 0 0.0 0.0 1.0 0.0
+X6  28.016 4.65E-26 2 0.2 0 0.0 0.0 1.0 0.0
+X7  28.016 4.65E-26 2 0.2 0 0.0 0.0 1.0 0.0
+X8  28.016 4.65E-26 2 0.2 0 0.0 0.0 1.0 0.0

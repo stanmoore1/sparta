@@ -1,0 +1,6 @@
+# Single dissociation reaction for equilibrium TCE rate verification.
+# Arrhenius: k(T) = 3.321e-9 * T^-1.5 * exp(-8.197e-19/kT)  [m^3/s]
+# (O2 + N2 dissociation, same coefficients as examples/relax_electronic_reacting/air.tce)
+
+O2 + N2 --> O + O + N2
+D A 1.0 8.197e-19 3.321e-9 -1.5 -8.197e-19

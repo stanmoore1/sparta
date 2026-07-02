@@ -1,0 +1,5 @@
+# N2 electronic states for verification: real level energies/degeneracies,
+# uniform relaxation probability 0.5 for fast equilibration, and all states
+# assigned the SAME spin so every transition is allowed and the full
+# Boltzmann distribution across all four states is the expected equilibrium.
+N2 4   0.0 0.5 9 1 0   72231.4 0.5 27 1 0   85782.7 0.5 54 1 0   98057.1133 0.5 18 1 0

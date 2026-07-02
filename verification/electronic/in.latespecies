@@ -1,0 +1,50 @@
+################################################################################
+# TEST: species added after an elecfile species (memory regression)
+# Defines N2 with electronic data first, then adds enough further species
+# to force reallocation of the global species list (past DELTASPECIES=16),
+# then collides N2 with a late-added species (O2). Exercises
+# Particle::grow_species() handling of elecdat->species_rel /
+# enforce_spin_conservation and get_elec_phi() lookups for late species.
+# Pass criterion: runs to completion with sane statistics.
+################################################################################
+seed                12345
+dimension           3
+global              gridcut 1.0e-5 comm/sort yes
+boundary            rr rr rr
+create_box          0 0.0001 0 0.0001 0 0.0001
+create_grid         2 2 2
+balance_grid        rcb part
+
+species             air.species N2 elecfile n2boltz.elec
+species             air.species O2
+species             air.species O
+species             air.species N
+species             air.species NO
+species             air.species N2+
+species             air.species O2+
+species             air.species NO+
+species             air.species N+
+species             air.species O+
+species             air.species e
+species             extra.species X1 X2 X3 X4 X5 X6 X7 X8
+
+mixture             gas N2 O2 vstream 0.0 0.0 0.0 temp 20000.0 trot 20000.0 tvib 20000.0 telec 20000.0
+mixture             gas N2 frac 0.5
+mixture             gas O2 frac 0.5
+
+global              nrho 1.4141E24
+global              fnum 3.5352E7
+
+collide             vss all airx.vss relax constant
+collide_modify      rotate no vibrate no electronic discrete
+fix                 electronic elecmode
+collide_modify      remain no
+
+create_particles    gas n 20000 twopass
+
+compute             temp temp
+stats               100
+stats_style         step cpu np nattempt ncoll c_temp
+
+timestep            1.00E-9
+run                 300

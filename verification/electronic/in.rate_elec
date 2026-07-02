@@ -1,0 +1,41 @@
+################################################################################
+# TEST: equilibrium TCE rate vs Arrhenius WITH the electronic mode included
+# Same reservoir as in.rate_noelec but N2/O2 carry discrete electronic
+# states initialized to the Boltzmann distribution at T. With
+# partial_energy no, the electronic energy enters the TCE collision energy;
+# the measured rate quantifies the deviation from the input Arrhenius rate.
+# Variables (set via -var): T = temperature, EFILE = electronic data file
+#   (o2n2.elec has per-state TCE dof 0; o2n2_dof09.elec has dof 0.9)
+################################################################################
+seed                12345
+dimension           3
+global              gridcut 1.0e-5 comm/sort yes
+boundary            rr rr rr
+create_box          0 0.0001 0 0.0001 0 0.0001
+create_grid         2 2 2
+balance_grid        rcb part
+
+species             air.species N2 O2 O N elecfile ${EFILE}
+mixture             gas N2 O2 vstream 0.0 0.0 0.0 temp ${T} trot ${T} tvib ${T} telec ${T}
+mixture             gas N2 frac 0.5
+mixture             gas O2 frac 0.5
+
+global              nrho 7.07043E22
+global              fnum 1.767E6
+
+collide             vss all air.vss relax constant
+collide_modify      rotate smooth vibrate discrete electronic discrete
+fix                 electronic elecmode
+collide_modify      remain no
+
+react               tce o2n2.tce
+react_modify        partial_energy no compute_chem_rates yes
+
+create_particles    gas n 40000 twopass
+
+compute             temp temp
+stats               1000
+stats_style         step cpu np nattempt ncoll c_temp
+
+timestep            1.00E-9
+run                 2000

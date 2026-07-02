@@ -1259,18 +1259,21 @@ void DumpParticle::pack_custom(int n)
 {
   int index = custom[field2index[n]];
 
+  // store integer values via ubuf so that write_text/write_binary
+  // can decode them with ubuf as for all other integer fields
+
   if (particle->etype[index] == INT) {
     if (particle->esize[index] == 0) {
       int *vector = particle->eivec[particle->ewhich[index]];
       for (int i = 0; i < nchoose; i++) {
-        buf[n] = vector[clist[i]];
+        buf[n] = ubuf(vector[clist[i]]).d;
         n += size_one;
       }
     } else {
       int icol = argindex[n]-1;
       int **array = particle->eiarray[particle->ewhich[index]];
       for (int i = 0; i < nchoose; i++) {
-        buf[n] = array[clist[i]][icol];
+        buf[n] = ubuf(array[clist[i]][icol]).d;
         n += size_one;
       }
     }
