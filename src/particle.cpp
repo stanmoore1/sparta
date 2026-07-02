@@ -152,25 +152,6 @@ Particle::~Particle()
 
 void Particle::init()
 {
-  // SWS - the KOKKOS package does not implement the species weighting
-  // scheme (per-cell count_wi, weighted collisions/emission)
-
-  if (sws && sparta->kokkos)
-    error->all(FLERR,"Cannot yet use the species weighting scheme (SWS) "
-               "with the KOKKOS package");
-
-  // resolve the unified particle weighting mode for this run
-  // per-particle (SWPM) weighting is active whenever the custom attribute
-  // exists (registered by fix stochastic_weight); the schemes are
-  // mutually exclusive
-  // NOTE: full resolution + exclusivity guard moves to setup_weighting()
-
-  index_sweight = find_custom((char *) "stochastic_wt");
-  if (index_sweight >= 0) weight_mode = WEIGHT_PARTICLE;
-  else if (sws) weight_mode = WEIGHT_SPECIES;
-  else if (grid->cellweightflag) weight_mode = WEIGHT_CELL;
-  else weight_mode = WEIGHT_NONE;
-
   // check for errors in custom particle vectors/arrays
 
   error_custom();
@@ -212,6 +193,41 @@ void Particle::init()
     //memory->create(first,maxgrid,"particle:first");
     //memory->create(cellcount,maxgrid,"particle:cellcount");
   // }
+}
+
+/* ----------------------------------------------------------------------
+   resolve the unified particle weighting mode for this run
+   called from Update::setup() after all commands have been parsed and
+   before any compute can be invoked
+   the three weighting schemes are mutually exclusive:
+     global weight (cell)      -> WEIGHT_CELL
+     species ... SWS|SWSmax    -> WEIGHT_SPECIES (per-species specwt)
+     fix stochastic_weight     -> WEIGHT_PARTICLE (SWPM custom attribute)
+------------------------------------------------------------------------- */
+
+void Particle::setup_weighting()
+{
+  int cellwt = grid->cellweightflag ? 1 : 0;
+  int specieswt = sws ? 1 : 0;
+  index_sweight = find_custom((char *) "stochastic_wt");
+  int particlewt = index_sweight >= 0 ? 1 : 0;
+
+  if (cellwt + specieswt + particlewt > 1)
+    error->all(FLERR,"Particle weighting schemes are mutually exclusive: "
+               "global weight (cell weighting), species SWS/SWSmax, "
+               "and fix stochastic_weight (SWPM)");
+
+  if (particlewt) weight_mode = WEIGHT_PARTICLE;
+  else if (specieswt) weight_mode = WEIGHT_SPECIES;
+  else if (cellwt) weight_mode = WEIGHT_CELL;
+  else weight_mode = WEIGHT_NONE;
+
+  // the KOKKOS package implements neither SWS nor SWPM
+
+  if ((weight_mode == WEIGHT_SPECIES || weight_mode == WEIGHT_PARTICLE) &&
+      sparta->kokkos)
+    error->all(FLERR,"Cannot yet use SWS or SWPM particle weighting "
+               "with the KOKKOS package");
 }
 
 /* ----------------------------------------------------------------------

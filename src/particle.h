@@ -185,6 +185,7 @@ class Particle : protected Pointers {
   void unpack_restart(char *, int &, int, int);
 
   int find_custom(char *);
+  void setup_weighting();
 
   // effective in-loop weight of particle I, relative to fnum
   // exactly 1.0 unless SWS or SWPM weighting is active

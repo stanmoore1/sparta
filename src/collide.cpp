@@ -187,14 +187,6 @@ void Collide::init()
     error->all(FLERR,"Stochastic weighting collision model does not yet support "
                "near-neighbor collisions");
 
-  // SWS and SWPM are mutually exclusive particle weighting schemes
-  // (as is grid-based cell weighting, checked in
-  // Particle::stochastic_weights)
-
-  if (stochastic_weight_flag && particle->sws)
-    error->all(FLERR,"Cannot use the species weighting scheme (SWS) and "
-               "stochastic weighting (SWPM) together");
-
   // require mixture to contain all species
 
   int imix = particle->find_mixture(mixID);
@@ -215,11 +207,7 @@ void Collide::init()
                       "fix stochastic_weight to be declared first");
     }
 
-    // the Kokkos collision styles do not implement the SWPM collision loop;
-    // without this check the setting would be silently ignored
-
-    if (sparta->kokkos)
-      error->all(FLERR,"Stochastic weighting is not yet supported with Kokkos");
+    // KOKKOS exclusion is enforced in Particle::setup_weighting()
 
     // particle reduction merges particles assuming they all have the same
     // mass: group moments and the merged survivors are single-species

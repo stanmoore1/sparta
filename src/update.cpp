@@ -246,6 +246,11 @@ void Update::init()
 
 void Update::setup()
 {
+  // resolve the particle weighting mode (cell/SWS/SWPM, mutually
+  // exclusive) before any compute or collide setup can consume it
+
+  particle->setup_weighting();
+
   // initialize counters in case stats outputs them
   // initialize running stats before each run
 
