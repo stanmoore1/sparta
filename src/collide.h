@@ -207,10 +207,15 @@ class Collide : protected Pointers {
   template < int,int > void collisions_group();
   template < int > void collisions_one_ambipolar();
   template < int > void collisions_group_ambipolar();
-  template < int > void collisions_one_SWS();        // SWS
   template < int > void collisions_group_SWS();      // SWS
   void collisions_one_ambipolar_SWS();               // SWS
   void collisions_group_ambipolar_SWS();             // SWS
+
+  // SWS helpers, defined in collide_sws.cpp
+  double sws_cell_maxwi(int);
+  int sws_products_one(int &, int, int, Particle::OnePart *,
+                       Particle::OnePart *, Particle::OnePart *,
+                       int, int, int, int, int);
   template < int, int > void collisions_one_stochastic_weighting();  // SWPM
 
   void ambi_reset(int, int, int, Particle::OnePart *, Particle::OnePart *,

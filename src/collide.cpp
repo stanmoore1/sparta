@@ -464,10 +464,8 @@ void Collide::collisions()
   if (!ambiflag && !stochastic_weight_flag) {
     if (!nearcp) {
       if (!ngas_tally) {
-        if (ngroups == 1) {
-          if (sws == 0) collisions_one<0,0>();
-          else collisions_one_SWS<0>();        // SWS
-        } else {
+        if (ngroups == 1) collisions_one<0,0>();          // handles SWS
+        else {
           if (sws == 0) collisions_group<0,0>();
           else collisions_group_SWS<0>();      // SWS
         }
@@ -477,10 +475,8 @@ void Collide::collisions()
       }
     } else if (nearcp) {
       if (!ngas_tally) {
-        if (ngroups == 1) {
-          if (sws == 0) collisions_one<1,0>();
-          else collisions_one_SWS<1>();        // SWS
-        } else {
+        if (ngroups == 1) collisions_one<1,0>();          // handles SWS
+        else {
           if (sws == 0) collisions_group<1,0>();
           else collisions_group_SWS<1>();      // SWS
         }
@@ -554,6 +550,15 @@ template < int NEARCP, int GASTALLY > void Collide::collisions_one()
   Particle::OnePart iorig,jorig;
   Particle::OnePart *ipart,*jpart,*kpart;
 
+  // SWS (species weighting scheme) state; run-constant flag, and the
+  // guarded seams below are no-ops when the scheme is off
+  // (house pattern: recombflag/remainflag are likewise runtime flags)
+
+  const int sws = particle->sws;
+  double count_wi = 0.0;
+  double maxwi = 0.0;
+  int n_i,n_j,n_k,n_pre;
+
   // loop over cells I own
 
   Grid::ChildInfo *cinfo = grid->cinfo;
@@ -564,6 +569,11 @@ template < int NEARCP, int GASTALLY > void Collide::collisions_one()
   for (int icell = 0; icell < nglocal; icell++) {
     np = cinfo[icell].count;
     if (np <= 1) continue;
+
+    if (sws) {
+      count_wi = cinfo[icell].count_wi;
+      Ewilost = ewilost_cell[icell];
+    }
 
     if (NEARCP) {
       if (np > max_nn) realloc_nn(np,nn_last_partner);
@@ -588,11 +598,14 @@ template < int NEARCP, int GASTALLY > void Collide::collisions_one()
       ip = next[ip];
     }
 
+    if (sws) maxwi = sws_cell_maxwi(np);
+
     // attempt = exact collision attempt count for all particles in cell
     // nattempt = rounded attempt with RN
     // if no attempts, continue to next grid cell
 
-    attempt = attempt_collision(icell,np,volume);
+    if (!sws) attempt = attempt_collision(icell,np,volume);
+    else attempt = attempt_collision_SWS(icell,np,volume,count_wi,maxwi);
     nattempt = static_cast<int> (attempt);
 
     if (!nattempt) continue;
@@ -616,7 +629,11 @@ template < int NEARCP, int GASTALLY > void Collide::collisions_one()
       // test if collision actually occurs
       // continue to next collision if no reaction
 
-      if (!test_collision(icell,0,0,ipart,jpart)) continue;
+      if (!sws) {
+        if (!test_collision(icell,0,0,ipart,jpart)) continue;
+      } else {
+        if (!test_collision_SWS(icell,0,0,ipart,jpart,maxwi)) continue;
+      }
 
       if (NEARCP) {
         nn_last_partner[i] = j+1;
@@ -637,20 +654,29 @@ template < int NEARCP, int GASTALLY > void Collide::collisions_one()
           while (k == i || k == j) k = np * random->uniform();
           react->recomb_part3 = &particles[plist[k]];
           react->recomb_species = react->recomb_part3->ispecies;
-          react->recomb_density = np * update->fnum / volume;
+          if (!sws) react->recomb_density = np * update->fnum / volume;
+          else react->recomb_density = count_wi * update->fnum / volume;
         }
       }
 
       // perform collision and possible reaction
       // if GASTALLY: tally prep with iorig/jorig, then trigger tally
+      // (gas tallies are rejected with SWS, so the two never combine)
 
       if (GASTALLY) {
         memcpy(&iorig,ipart,sizeof(Particle::OnePart));
         memcpy(&jorig,jpart,sizeof(Particle::OnePart));
       }
 
-      setup_collision(ipart,jpart);
-      reactflag = perform_collision(ipart,jpart,kpart);
+      if (!sws) {
+        setup_collision(ipart,jpart);
+        reactflag = perform_collision(ipart,jpart,kpart);
+      } else {
+        setup_collision_SWS(ipart,jpart);
+        n_i = 1;
+        n_j = n_k = n_pre = 0;
+        reactflag = perform_collision_SWS(ipart,jpart,kpart,n_i,n_j,n_k,n_pre);
+      }
       ncollide_one++;
 
       if (GASTALLY)
@@ -660,6 +686,16 @@ template < int NEARCP, int GASTALLY > void Collide::collisions_one()
 
       if (reactflag) nreact_one++;
       else continue;
+
+      // SWS: probabilistic product bookkeeping (collide_sws.cpp)
+
+      if (sws) {
+        int done = sws_products_one(np,i,j,ipart,jpart,kpart,
+                                    n_i,n_j,n_k,n_pre,NEARCP);
+        particles = particle->particles;
+        if (done) break;
+        continue;
+      }
 
       // if jpart destroyed: delete from plist, add particle to deletion list
       // exit attempt loop if only single particle left
@@ -690,6 +726,10 @@ template < int NEARCP, int GASTALLY > void Collide::collisions_one()
         particles = particle->particles;
       }
     }
+
+    // SWS: store residual split-merge energy for this cell
+
+    if (sws) ewilost_cell[icell] = Ewilost;
   }
 }
 
