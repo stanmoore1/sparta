@@ -161,14 +161,13 @@ void ComputeSonineGrid::compute_per_grid()
   Particle::OnePart *particles = particle->particles;
   int *s2g = particle->mixture[imix]->species2group;
   int nlocal = particle->nlocal;
-  double *sweights = particle->stochastic_weights();
 
   int i,j,k,m,n,ispecies,igroup,icell;
   double mass,norm,csq,value;
   double *v,*vec;
   double vthermal[3];
 
-  double specwt; // SWS
+  double w;      // effective particle weight
 
   // compute COM velocity on this timestep for each cell and group
 
@@ -189,15 +188,13 @@ void ComputeSonineGrid::compute_per_grid()
     if (!(cinfo[icell].mask & groupbit)) continue;
 
     mass = species[ispecies].mass;
-    if (sweights) mass *= sweights[i];
-    else if (particle->weightflag) mass *= particles[i].weight;
+    mass *= particle->pweight(i);
     v = particles[i].v;
-    specwt = species[ispecies].specwt;  // SWS
 
-    vcom[icell][igroup][0] += mass * v[0] * specwt;  // SWS
-    vcom[icell][igroup][1] += mass * v[1] * specwt;  // SWS
-    vcom[icell][igroup][2] += mass * v[2] * specwt;  // SWS
-    vcom[icell][igroup][3] += mass * specwt;         // SWS
+    vcom[icell][igroup][0] += mass * v[0];
+    vcom[icell][igroup][1] += mass * v[1];
+    vcom[icell][igroup][2] += mass * v[2];
+    vcom[icell][igroup][3] += mass;
   }
 
   for (i = 0; i < nglocal; i++)
@@ -231,10 +228,8 @@ void ComputeSonineGrid::compute_per_grid()
     k = igroup*npergroup;
 
     mass = species[ispecies].mass;
-    if (sweights) mass *= sweights[i];
-    else if (particle->weightflag) mass *= particles[i].weight;
-    specwt = species[ispecies].specwt;  // SWS
-    vec[k++] += mass*specwt;  // SWS
+    mass *= particle->pweight(i);
+    vec[k++] += mass;
 
     v = particles[i].v;
     vthermal[0] = v[0] - vcom[icell][igroup][0];
@@ -245,14 +240,14 @@ void ComputeSonineGrid::compute_per_grid()
 
     for (m = 0; m < nvalue; m++) {
       if (which[m] == AMOM) {
-        value = mass*vthermal[moment[m]] * csq * specwt;
+        value = mass*vthermal[moment[m]] * csq;
         vec[k++] += value;
         for (n = 1; n < order[m]; n++) {
           value *= csq;
           vec[k++] += value;
         }
       } else {
-        value = mass * vthermal[moment[m]/3] * vthermal[moment[m]%3] * csq * specwt;
+        value = mass * vthermal[moment[m]/3] * vthermal[moment[m]%3] * csq;
         vec[k++] += value;
         for (n = 1; n < order[m]; n++) {
           value *= csq;

@@ -271,7 +271,7 @@ void ComputeTvibGrid::compute_per_grid()
 
   int i,j,ispecies,igroup,icell,imode,nmode;
 
-  double specwt;  // SWS
+  double w;      // effective particle weight
 
   // zero all accumulators - could do this with memset()
 
@@ -283,27 +283,21 @@ void ComputeTvibGrid::compute_per_grid()
   // mode = 0: tally vib eng and count for each species
   // mode >= 1: tally vib level and count for each species and each vib mode
 
-  double *sweights = particle->stochastic_weights();
-  double swfrac = 1.0;
 
   if (modeflag == 0) {
     for (i = 0; i < nlocal; i++) {
       ispecies = particles[i].ispecies;
-      specwt = species[ispecies].specwt;  // SWS
       if (!species[ispecies].vibdof) continue;
       igroup = s2g[ispecies];
       if (igroup < 0) continue;
       icell = particles[i].icell;
       if (!(cinfo[icell].mask & groupbit)) continue;
 
-      if (sweights) swfrac = sweights[i];
-      else if (particle->weightflag) swfrac = particles[i].weight;
+      w = particle->pweight(i);
 
       j = s2t[ispecies];
-      // specwt (SWS) and swfrac (SWPM) are mutually exclusive: at most one
-      // factor differs from 1.0
-      tally[icell][j] += particles[i].evib * specwt * swfrac;
-      tally[icell][j+1] += specwt * swfrac;
+      tally[icell][j] += particles[i].evib * w;
+      tally[icell][j+1] += w;
     }
 
   } else if (modeflag >= 1) {
@@ -312,28 +306,23 @@ void ComputeTvibGrid::compute_per_grid()
 
     for (i = 0; i < nlocal; i++) {
       ispecies = particles[i].ispecies;
-      specwt = species[ispecies].specwt;  // SWS
       if (!species[ispecies].vibdof) continue;
       igroup = s2g[ispecies];
       if (igroup < 0) continue;
       icell = particles[i].icell;
       if (!(cinfo[icell].mask & groupbit)) continue;
 
-      if (sweights) swfrac = sweights[i];
-      else if (particle->weightflag) swfrac = particles[i].weight;
+      w = particle->pweight(i);
 
       // tally only the modes this species has
 
       nmode = particle->species[ispecies].nvibmode;
       for (imode = 0; imode < nmode; imode++) {
         j = s2t_mode[ispecies][imode];
-        // factor order preserves bit-exactness for each scheme:
-        // swfrac multiplies before the division (SWPM order), specwt after
-        // (SWS order); the inactive factor is exactly 1.0
-        if (nmode > 1) tally[icell][j] += vibmode[i][imode] * specwt * swfrac;
+        if (nmode > 1) tally[icell][j] += vibmode[i][imode] * w;
         else tally[icell][j] +=
-               particles[i].evib * swfrac / (boltz*species[ispecies].vibtemp[0]) * specwt;
-        tally[icell][j+1] += specwt * swfrac;
+               particles[i].evib * w / (boltz*species[ispecies].vibtemp[0]);
+        tally[icell][j+1] += w;
       }
     }
   }
