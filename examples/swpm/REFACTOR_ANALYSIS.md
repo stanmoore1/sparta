@@ -2,10 +2,14 @@
 
 This note analyzes how the stochastic weighted particle method (SWPM) can be
 re-implemented with a smaller, better-isolated footprint, without changing its
-behavior.  It is written to guide the planned refactor; the accompanying
-example/regression suite (`examples/swpm/`, `verify_swpm.py`) exists so the
-refactor can be done under correctness protection — the invariants in
-`verify_swpm.py` and the gold logs must keep passing.
+behavior.  The accompanying suite (`examples/swpm/` gold-log ctests,
+`verify_swpm.py`) exists so the refactor can be done under correctness
+protection.  The concrete step-by-step plan derived from this analysis is in
+`REFACTOR_PLAN.md`.
+
+Revision note: an earlier version of this analysis recommended moving the SWPM
+algorithm off the base `Collide` class into `CollideVSS`.  That recommendation
+was withdrawn after checking the codebase precedents; see section 3.4.
 
 ## 1. Current footprint (what a refactor is starting from)
 
@@ -16,30 +20,16 @@ falls into four groups, very different in how intrinsic they are to the feature:
 |-------|-------|-----------|
 | Per-particle weight storage (`fix_stochastic_weight`, custom attribute) | 2 new + `particle_custom.cpp` | Yes — idiomatic, keep |
 | SWPM collision loop + split + grouping + reduction | `collide_swpm.cpp`, `collide_reduce.cpp` (new) | Yes — the algorithm |
-| Hooks in the base `Collide` class + `CollideVSS` | `collide.h` (+14 members), `collide.cpp` (+126), `collide_vss.cpp` (2 hot-path branches) | Partly — misplaced |
+| Hooks in the base `Collide` class + `CollideVSS` | `collide.h` (+14 members), `collide.cpp` (+126), `collide_vss.cpp` (2 hot-path branches) | Yes — matches the ambipolar precedent (see 3.4) |
 | Weighting every diagnostic | 12 `compute_*.cpp` + `compute_vmom_grid.*` (new) | Partly — reducible |
 
-The last two groups are where the invasiveness lives and where a refactor has
-leverage.  The first two are essentially irreducible and are already close to
-idiomatic SPARTA.
+The new files and the weight-storage design are essentially irreducible and
+already idiomatic.  The reducible invasiveness is concentrated in the
+diagnostics and in incidental churn.
 
 ## 2. Problems worth fixing in a refactor
 
-1. **SWPM logic lives on the base `Collide` class but is VSS-only.**
-   `collisions_one_stochastic_weighting()`, `split()`, `group()`, `group_bt()`,
-   `group_octree()`, `reduce_energy/heat/stress()`, and 14 data members were
-   added to the base class.  Yet the SWPM loop calls `attempt_collision()`,
-   `test_collision()`, `setup_collision()`, `perform_collision()` — all of
-   which are **VSS** concepts (the base class declares them but only VSS
-   implements the physics).  Any future non-VSS collision style inherits a
-   large block of dead interface.
-
-2. **Two `if (stochastic_weight_flag)` branches in VSS hot paths**
-   (`attempt_collision`, `test_collision`).  Correct but they sit in the
-   inner collision loop and re-fetch the custom array / recompute
-   `MAX(isw,jsw)/max_stochastic_weight` per candidate pair.
-
-3. **The diagnostic weighting is copy-pasted across 12 computes.**  Each one
+1. **The diagnostic weighting is copy-pasted across 12 computes.**  Each one
    repeats the same shape:
    ```cpp
    double *sweights = particle->stochastic_weights();   // string lookup
@@ -49,104 +39,151 @@ idiomatic SPARTA.
    else if (particle->weightflag) swfrac = particles[i].weight;
    mass *= swfrac;                    // or: tally += value*swfrac
    ```
-   `stochastic_weights()` does a `find_custom("stochastic_wt")` (an
-   O(ncustom) `strcmp` scan) on every compute invocation.
+   `Particle::stochastic_weights()` does a `find_custom("stochastic_wt")`
+   string scan on every compute invocation, and the
+   `else if (particle->weightflag)` fallback is dead code:
+   `Particle::weightflag` is initialized to 0 and never set anywhere.
 
-4. **Dead / half-implemented code.**  `group_octree()` is a stub that calls
-   `error->all`; `OCTREE` is parseable-ish but unreachable.  Duplicate
-   `enum{ENERGY,HEAT,STRESS}` / `enum{BINARY,WEIGHT,OCTREE}` / `enum{INT,DOUBLE}`
-   are redefined in several translation units.
+2. **`compute_reduce.cpp` is ~242 changed lines of which only ~37 are real.**
+   The rest is tab/space indentation churn that bloats the diff against
+   upstream and will cause merge pain forever.  Separately, the weighting
+   semantics added there are questionable: SUM multiplies every per-particle
+   value (including positions `x`!) by the weight, while AVE divides the
+   weighted sum by the **raw particle count** (`count_included()`), which is
+   neither an unweighted average nor a weighted average.  This needs a
+   deliberate semantics decision, not just a cleanup.
 
-## 3. Proposed re-implementation, by leverage
+3. **Dead / half-implemented code.**
+   - `group_octree()` is a stub whose body is `error->all(...)`, and the
+     `OCTREE` enum value is unreachable (`collide_modify reduce` only parses
+     `binary`/`weight`).
+   - The `NEARCP` and `GASTALLY` template parameters of
+     `collisions_one_stochastic_weighting<>` are never used in its body:
+     nearcp+SWPM is rejected at init, and gas-collision tallies are silently
+     skipped under SWPM (a documented limitation at best, a surprise at worst).
+   - `enum{ENERGY,HEAT,STRESS}`, `enum{BINARY,WEIGHT,OCTREE}`,
+     `enum{INT,DOUBLE}` are re-declared in several translation units.
+   - `Particle::weightflag` (see item 1).
 
-### 3.1 Move SWPM off the base class into the VSS layer (highest leverage, lowest risk)
+4. **Small hot-path inefficiencies.**  `CollideVSS::test_collision` re-fetches
+   the custom weight array via `particle->edvec[particle->ewhich[...]]` and
+   recomputes `MAX(isw,jsw)/max_stochastic_weight` per candidate pair.  Minor,
+   but easy to cache per cell.
 
-SWPM is a VSS variant.  Relocate everything SWPM-specific from `Collide` into
-`CollideVSS` (the code **moves**, it does not change):
+## 3. Design decisions
 
-- the 14 data members and the method declarations in `collide.h`;
-- `collisions_one_stochastic_weighting`, `split`, `group`, `group_bt`,
-  `reduce_*` (i.e. `collide_swpm.cpp` + `collide_reduce.cpp` compile into the
-  VSS layer);
-- the `collide_modify stochastic_weight|split|reduce` parsing (override
-  `CollideVSS::modify_params`, falling back to `Collide::modify_params`).
+### 3.1 Weight storage: keep the custom attribute (do not change)
 
-The base `Collide::collisions()` dispatch block (the `else if
-(stochastic_weight_flag)` ladder) collapses back to its original form.  This
-keeps the **user interface unchanged** (`collide vss` + `collide_modify
-stochastic_weight yes`) while removing SWPM from the base class entirely.
+`fix stochastic_weight` + the `stochastic_wt` custom per-particle attribute is
+the idiomatic SPARTA mechanism: it already handles particle-array growth,
+migration, restart and `compress_reactions` correctly, and it keeps
+`Particle::OnePart` (and the restart file format) identical to upstream.
+Storing weights relative to `fnum`, and the mutual exclusion with grid-based
+cell weighting, are also right.  Keep all of it.
 
-Two viable structures:
-- **(a) Keep it inside `CollideVSS`.**  Smallest diff, no new style.  The SWPM
-  members are unused when the option is off (a few ints/doubles).
-- **(b) A `CollideVSSSW : public CollideVSS` subclass** registered as a distinct
-  style.  Cleaner separation and zero overhead for plain VSS, but changes the
-  user interface to `collide vss/sw` and duplicates some plumbing.  Only worth
-  it if SWPM grows further (e.g. multi-species, Kokkos).
+### 3.2 Diagnostics: one cached accessor instead of 12 copies
 
-Recommendation: **(a)** now (minimal, preserves inputs and the gold logs);
-revisit (b) only if SWPM is extended.
-
-### 3.2 Collapse the diagnostic weighting behind one accessor (widest reduction)
-
-Replace the repeated block in the 12 computes with a single effective-weight
-accessor on `Particle`, resolved once and read per particle:
+Give `Particle` a cached effective-weight accessor:
 
 ```cpp
-// particle.h  (inline, no per-call string lookup)
-inline double Particle::weight_one(int i) const {
-  if (sweight)          return sweight[i];      // cached SWPM array ptr, or NULL
-  if (weightflag)       return particles[i].weight;
-  return 1.0;
+// particle.h
+int index_sweight;                  // custom index of "stochastic_wt", -1 if absent
+                                    // set/cleared by fix stochastic_weight
+inline double *sweight_vector() {   // NULL when SWPM inactive
+  if (index_sweight < 0) return NULL;
+  return edvec[ewhich[index_sweight]];
 }
 ```
 
-`sweight` is refreshed (once) wherever the particle array can move — the same
-places `particles`/`nlocal` are already refreshed — so the string
-`find_custom` lookup disappears from the compute hot loops.  Each compute then
-reads `double w = particle->weight_one(i);` and multiplies, turning the
-repeated 4-line branch into one line and unifying SWPM with the pre-existing
-grid weighting (`weightflag`) that several computes already handled.
+Each compute then does, once per invocation:
 
-This does not reduce the *number* of computes touched (each genuinely needs to
-weight its tally), but it minimizes the change in each and removes the
-per-invocation lookup.  A follow-up could push the multiply into shared tally
-helpers, but that is a larger change than the feature itself warrants.
+```cpp
+double *swgt = particle->sweight_vector();
+...
+if (swgt) mass *= swgt[i];          // expression shape kept identical
+```
 
-### 3.3 Cache the custom-attribute index
+This removes the per-invocation string lookup, deletes the dead
+`weightflag` fallback (and the `weightflag` member itself, restoring
+`particle.h` to upstream plus one index + one inline function), and shrinks
+each compute's diff to the minimum it can be — the tally multiplication
+itself, which is irreducible because each compute genuinely must weight its
+tally.  Kept bit-exact by preserving the multiplication order in each tally
+expression.
 
-`Particle::stochastic_weights()` (or the `sweight` pointer above) should be
-resolved from a cached index set when `fix stochastic_weight` registers the
-attribute, not by `find_custom("stochastic_wt")` on every call.  `Collide`
-already caches `index_stochastic_weight` in `init()`; the computes should use
-the same cached index rather than re-scanning by name.
+### 3.3 `compute_reduce`: revert churn, then decide semantics
 
-### 3.4 Remove dead code and de-duplicate enums
+Two independent actions:
+- Revert the pure-whitespace churn (mechanical, zero risk, shrinks the
+  upstream diff by ~200 lines).
+- Decide the weighting semantics.  Recommendation: weight only quantities that
+  are physically extensive (KE, EROT, EVIB, custom vectors), do not weight
+  coordinates/velocities under SUM, and normalize AVE by the weight sum rather
+  than the particle count — or, more conservatively, drop weighting from
+  `compute reduce` entirely and document that per-grid computes are the
+  weighted path.  Either way the chosen semantics must be documented in
+  `compute_reduce.txt`.  (No regression deck currently pins this behavior, so
+  the decision is still cheap to make.)
 
-- Delete `group_octree()` and the `OCTREE` enum until octree grouping is
-  actually implemented (a stub that only `error->all`s is a maintenance trap).
-- Put the shared `enum{ENERGY,HEAT,STRESS}`, `enum{BINARY,WEIGHT,OCTREE}`,
-  `enum{INT,DOUBLE}` in one header instead of redefining them per file.
+### 3.4 Class placement: keep SWPM on the base `Collide` class
 
-## 4. What NOT to change
+The earlier recommendation to move the SWPM methods/members into `CollideVSS`
+is withdrawn, for three reasons checked against the codebase:
 
-- **`fix stochastic_weight` + custom per-particle attribute.**  This is the
-  idiomatic SPARTA way to attach per-particle data and it already handles
-  restart and particle growth correctly.  Keep it.
-- **Storing weights relative to `fnum`.**  Mutually exclusive with grid-based
-  `particle->weight`; the exclusivity is already enforced.
-- **The split/reduce math.**  The moment-preserving reductions are the feature;
-  the refactor is about *placement*, not *algorithm*.  The invariants in
-  `verify_swpm.py` pin this behavior.
+1. **The interface the SWPM loop uses is the base-class interface.**
+   `attempt_collision`, `test_collision`, `setup_collision`,
+   `perform_collision` are pure virtuals on `Collide`; the SWPM loop is
+   style-agnostic in exactly the way `collisions_one` and
+   `collisions_one_ambipolar` are.
+2. **Ambipolar is the precedent, and it lives on the base class.**  An
+   optional collision-time algorithm, enabled by `collide_modify`, backed by a
+   companion fix and custom particle data — that is ambipolar's exact shape,
+   and its loop, flag and helpers are all on `Collide`.  SWPM's current
+   placement follows the house convention; relocating it would make the two
+   features inconsistent with each other.
+3. **A future Kokkos port wants the members on the base class.**
+   `CollideVSSKokkos : public CollideVSS`; flags and thresholds on `Collide`
+   are inherited by the whole hierarchy, which is how `ambiflag` reaches the
+   Kokkos style today.
 
-## 5. Suggested order (each step keeps the suite green)
+What remains VSS-specific — the ~20 lines in `CollideVSS::attempt_collision`
+and `test_collision` that scale the attempt count and acceptance probability
+by the weights — is already in `collide_vss.cpp`, i.e. in the right place.
+A `collide vss/sw` subclass (registered as its own style) is only worth
+revisiting if SWPM grows large enough to strain the base class (Kokkos
+port, multi-species reduction); it changes the user-facing input syntax and
+is strictly optional.
 
-1. De-dup enums + delete the octree stub (mechanical, isolated).
-2. Add `Particle::weight_one()` (or a cached `sweight` ptr) and convert the 12
-   computes one at a time, re-running the gold logs after each.
-3. Move SWPM from `Collide` into `CollideVSS` (structure 3.1a); rebuild and run
-   the `swpm` ctest suite + `verify_swpm.py` at mpi_1 and mpi_4.
+### 3.5 Behavior-preservation classes for refactor steps
 
-Steps 1–2 are independent of step 3 and can land separately.  After each step,
-`ctest -R swpm` and `python3 verify_swpm.py <binary>` must still pass — that is
-the correctness protection this suite was built to provide.
+Refactor steps must be classified before starting, because the gold logs pin
+bit-exact trajectories:
+
+- **Bit-exact** steps (no RNG-call-order change, no FP reassociation): file
+  moves, enum consolidation, dead-code deletion, the accessor conversion of
+  section 3.2 (expression shape preserved), index caching.  The gold logs must
+  keep passing unchanged — any diff is a bug in the refactor.
+- **Statistically-equivalent** steps (RNG order or FP order changes, e.g.
+  restructuring the acceptance test into separate thinning draws): the gold
+  logs will legitimately change and must be re-blessed, and `verify_swpm.py`
+  plus the BKW benchmark become the correctness evidence.  Avoid mixing these
+  with bit-exact steps in one commit.
+
+The plan in `REFACTOR_PLAN.md` keeps every step bit-exact except where
+explicitly marked.
+
+## 4. Known limitations to track (not part of this refactor)
+
+Documented here so they are not silently lost; each is guarded by an init
+error or is invisible today:
+
+- SWPM is not Kokkos-enabled (init error added).
+- Particle reduction requires a single species (init error added); the
+  reduction schemes use a single mass for the group.
+- Gas-collision tallies (`compute .../gas/tally`) are not tallied by the SWPM
+  collision loop (unused `GASTALLY` template parameter).
+- `react` chemistry alongside SWPM is untested; reduction and chemistry share
+  the deletion list.
+- Octree grouping is unimplemented (stub slated for deletion).
+- Particles created by splitting within a timestep join grouping/reduction on
+  the next timestep (the cell linked lists are from the pre-collision sort).
