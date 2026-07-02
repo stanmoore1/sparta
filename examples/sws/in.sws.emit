@@ -1,0 +1,48 @@
+################################################################################
+# SWS regression test: weighted inflow emission (fix emit/face)
+#
+# 2d channel flow: 90% N2 (weight 1.0) / 10% N (weight 0.1) inflow at xlo,
+# outflow at xhi. The per-species emission target is flux/(fnum*w_i), so
+# the trace species is emitted with 10x more numerical particles per
+# physical particle; species selection uses the weighted cummulative
+# fractions of the mixture.
+#
+# Pinned behavior:
+# - weighted per-species emission targets in FixEmitFace::create_task
+#   (global species indexing of specwt)
+# - weighted cummulative species selection (Mixture::init_fraction)
+# - weighted surface/boundary fluxes (compute boundary)
+################################################################################
+
+seed	    	    12345
+dimension   	    2
+global              gridcut 1.0e-5 comm/sort yes
+
+boundary	    o r p
+
+create_box  	    0 0.001 0 0.001 -0.5 0.5
+create_grid 	    10 10 1
+
+balance_grid        rcb part
+
+species		    sws.species N2 N SWS
+mixture		    air N2 N vstream 500.0 0.0 0.0 temp 273.15 nrho 7.07043E18
+mixture             air N2 frac 0.9
+mixture             air N frac 0.1
+
+global              fnum 7.07043E10
+
+collide		    vss air sws.vss
+
+fix		    in emit/face air xlo twopass
+
+compute             nsp count N2 N
+compute             gsum grid all all n sumwi
+compute             redsum reduce sum c_gsum[1] c_gsum[2]
+compute             bnd boundary air nflux mflux
+stats		    100
+stats_style	    step cpu np c_nsp[1] c_nsp[2] c_redsum[1] c_redsum[2] &
+                    c_bnd[1][1] c_bnd[1][2]
+
+timestep 	    7.00E-7
+run 		    500

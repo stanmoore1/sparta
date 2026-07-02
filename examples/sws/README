@@ -1,0 +1,62 @@
+SPARTA examples and regression tests for the species weighting scheme (SWS)
+============================================================================
+
+The SWS assigns each species a weight w_i (column 9 of the species file,
+enabled via the SWS or SWSmax keyword of the species command).  The
+physical-to-numerical particle ratio for species i is w_i * fnum, so a
+trace species with w_i = 0.1 is resolved with 10x more numerical
+particles per physical particle.  See doc/species.html.
+
+Inputs
+------
+in.sws.box      thermal box, N2 (w=1.0) + 10% N (w=0.1), SWS keyword:
+                weighted particle creation, weighted NTC collisions,
+                split-merge scattering, sumwi grid tally
+in.swsmax.box   same box with the SWSmax pair-selection variant
+in.sws0.box     same species file with NO keyword: weights must be inert
+                and the run identical to a conventional simulation
+in.sws.emit     2d channel, weighted inflow via fix emit/face:
+                per-species emission targets scaled by 1/w_i
+in.sws.chem     hot box with TCE N2 dissociation, single-group mixture:
+                probabilistic reactant/product creation/deletion
+in.sws.ambi     ambipolar approximation with a weighted trace neutral
+                (no reactions; SWS reactions with ambipolar require
+                equal ion/electron weights)
+in.sws.restart  restart round-trip: the SWS mode flag and weights are
+                persisted through write_restart/read_restart
+
+Regression testing
+------------------
+These inputs are registered as the "sws" ctest suite (see
+cmake/common/set/sparta_cmake_defaults.cmake) and are compared
+column-by-column against the gold log files log.<date>.mpi_1.<test> by
+tools/testing/regression.py, exactly like the other example suites.
+The gold logs were generated with a serial build; MPI gold logs are
+auto-generated on first run.  To run by hand:
+
+    cd examples/sws
+    python3 ../../tools/testing/regression.py mpi_1 \
+        /path/to/spa_serial . -logread ../../tools/testing olog
+
+Because all runs use a fixed seed and the comparison tolerance is tight,
+any refactor of the SWS code paths that changes trajectories will fail
+these tests.  If a change is *intended* to alter results, regenerate the
+gold logs and document why.
+
+Physics checks
+--------------
+verify_sws.py runs seed-independent physical-invariant checks (species
+split ~ f_i/w_i, sum(w_i) tallies, steady temperature / no energy leak,
+weighted emission ratios, physical mass conservation through reactions):
+
+    cd examples/sws
+    python3 verify_sws.py /path/to/spa_serial
+
+Known limitations of the current SWS implementation (enforced by errors)
+------------------------------------------------------------------------
+- gas-phase chemistry requires a single-group mixture
+- surface reactions are not supported
+- gas-collision tally computes are not supported
+- create_particles species/fractions custom options are not supported
+- fix emit/surf custom fractions are not supported
+- the KOKKOS package does not implement SWS

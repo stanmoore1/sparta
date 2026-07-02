@@ -51,7 +51,8 @@ if(SPARTA_ENABLE_TESTING)
       "custom"
       "explicit2implicit"
       "mfp_mct"
-      "torque")
+      "torque"
+      "sws")
 
   set(SPARTA_DISABLED_TESTS
       "in.ablation.3d.reactions" # Failing
@@ -98,6 +99,15 @@ if(SPARTA_ENABLE_TESTING)
         # external field fix not KOKKOS-enabled
         "in.bfield"
         "in.bfield.grid"
+        # species weighting scheme (SWS) not KOKKOS-enabled
+        # (in.sws0.box uses the sumwi grid tally, also not KOKKOS-enabled)
+        "in.sws0.box"
+        "in.sws.box"
+        "in.swsmax.box"
+        "in.sws.emit"
+        "in.sws.chem"
+        "in.sws.ambi"
+        "in.sws.restart"
     )
   endif()
 

@@ -1,0 +1,126 @@
+SPARTA (24 Sep 2025)
+Running on 1 MPI task(s)
+################################################################################
+# SWS regression test: ambipolar approximation with a weighted trace neutral
+#
+# Thermal box of N2 (weight 1.0), a weighted trace neutral N (weight 0.1),
+# plus ambipolar ions N2+ and electrons e (both weight 1.0). No gas-phase
+# chemistry: exercises the ambipolar SWS collision loop (electron list
+# handling, weighted attempt counts, split-merge scattering between the
+# weighted neutral and the other species).
+#
+# NOTE: SWS reactions with the ambipolar model require equal weights for
+# ions and electrons; this test uses no reactions.
+#
+# Pinned behavior:
+# - collisions_one_ambipolar_SWS non-reactive path
+# - count_wi including recreated ambipolar electrons
+################################################################################
+
+seed	    	    12345
+dimension   	    3
+global              gridcut 1.0e-5 comm/sort yes
+
+boundary	    rr rr rr
+
+create_box  	    0 0.0001 0 0.0001 0 0.0001
+Created orthogonal box = (0 0 0) to (0.0001 0.0001 0.0001)
+create_grid 	    10 10 10
+Created 1000 child grid cells
+  CPU time = 0.000972033 secs
+  create/ghost percent = 86.1172 13.8828
+
+balance_grid        rcb part
+Balance grid migrated 0 cells
+  CPU time = 0.0001719 secs
+  reassign/sort/migrate/ghost percent = 48.2663 0.554785 11.0957 40.0832
+
+species		    sws.species N2 N N2+ e SWS
+mixture		    air N2 N N2+ vstream 0.0 0.0 0.0 temp 2000.0
+mixture             air N2 frac 0.85
+mixture             air N frac 0.1
+mixture             air N2+ frac 0.05
+mixture             air e
+
+fix                 ambi ambipolar e N2+
+
+global              nrho 7.07043E22
+global              fnum 7.07043E6
+
+collide		    vss air sws.vss
+collide_modify      ambipolar yes
+
+create_particles    air n 10000 twopass
+Created 10000 particles
+  CPU time = 0.00275087 secs
+
+stats		    100
+compute             temp temp
+compute             nsp count N2 N N2+
+stats_style	    step cpu np nattempt ncoll c_temp c_nsp[1] c_nsp[2] c_nsp[3]
+
+timestep 	    7.00E-9
+run 		    500
+WARNING: Single-group ambipolar collisions are inefficient; grouping electrons separately (e.g. collide ... species) is recommended (../collide.cpp:344)
+Memory usage per proc in Mbytes:
+  particles (ave,min,max) = 2 2 2
+  grid      (ave,min,max) = 1.63879 1.63879 1.63879
+  surf      (ave,min,max) = 0 0 0
+  total     (ave,min,max) = 3.63879 3.63879 3.63879
+Step CPU Np Natt Ncoll c_temp c_nsp[1] c_nsp[2] c_nsp[3] 
+       0            0    10000        0        0    1993.8218         4453         5292          255 
+     100   0.56925702    10000    90788     2755    1929.2796         4453         5292          255 
+     200     1.159266    10000    89730     2417    1887.0219         4453         5292          255 
+     300    1.7176268    10000    89706     2592     1899.387         4453         5292          255 
+     400     2.295378    10000    91168     2596    1864.0008         4453         5292          255 
+     500     2.858639    10000    90371     2592    1891.5327         4453         5292          255 
+Loop time of 2.85865 on 1 procs for 500 steps with 10000 particles
+Performance: 174.908 timesteps/s, 1.749 Mparticle-step/s
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Move    | 0.24987    | 0.24987    | 0.24987    |   0.0 |  8.74
+Coll    | 2.5924     | 2.5924     | 2.5924     |   0.0 | 90.69
+Sort    | 0.015248   | 0.015248   | 0.015248   |   0.0 |  0.53
+Comm    | 0.00049043 | 0.00049043 | 0.00049043 |   0.0 |  0.02
+Modify  | 0          | 0          | 0          |   0.0 |  0.00
+Output  | 0.00031304 | 0.00031304 | 0.00031304 |   0.0 |  0.01
+Other   |            | 0.0002987  |            |       |  0.01
+
+Particle moves    = 5000000 (5M)
+Cells touched     = 11905981 (11.9M)
+Particle comms    = 0 (0K)
+Boundary collides = 767300 (0.767M)
+Boundary exits    = 0 (0K)
+SurfColl checks   = 0 (0K)
+SurfColl occurs   = 0 (0K)
+Surf reactions    = 0 (0K)
+Collide attempts  = 45241051 (45.2M)
+Collide occurs    = 1283092 (1.28M)
+Reactions         = 0 (0K)
+Particles stuck   = 0
+Axisymm bad moves = 0
+
+Particle-moves/CPUsec/proc: 1.74908e+06
+Particle-moves/step: 10000
+Cell-touches/particle/step: 2.3812
+Particle comm iterations/step: 1
+Particle fraction communicated: 0
+Particle fraction colliding with boundary: 0.15346
+Particle fraction exiting boundary: 0
+Surface-checks/particle/step: 0
+Surface-collisions/particle/step: 0
+Surf-reactions/particle/step: 0
+Collision-attempts/particle/step: 9.04821
+Collisions/particle/step: 0.256618
+Reactions/particle/step: 0
+
+Particles: 10000 ave 10000 max 10000 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Cells:      1000 ave 1000 max 1000 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+GhostCell: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+EmptyCell: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0

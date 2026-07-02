@@ -1,0 +1,50 @@
+################################################################################
+# SWS regression test: thermal box with TCE chemistry (single-group mixture)
+#
+# Hot N2/N mixture with N2 dissociation (N2 + M -> N + N + M) using the
+# TCE reaction model. N2 has weight 1.0, N has weight 0.1: reaction
+# products/reactants are kept or deleted probabilistically according to
+# their weight ratios (perform_collision_SWS), since splitting-merging
+# cannot be used when reactions destroy the reactants.
+#
+# Pinned behavior:
+# - reactive SWS path: perform_collision_SWS n_i/n_j/n_k/n_pre bookkeeping
+# - product particle creation/deletion probabilities (phi = w_min/w)
+# - un-reacted portion of the max-weight reactant (p_pre)
+# - weighted recombination density (count_wi * fnum / volume)
+################################################################################
+
+seed	    	    12345
+dimension   	    3
+global              gridcut 1.0e-5 comm/sort yes
+
+boundary	    rr rr rr
+
+create_box  	    0 0.0001 0 0.0001 0 0.0001
+create_grid 	    10 10 10
+
+balance_grid        rcb part
+
+species		    sws.species N2 N SWS
+mixture		    air N2 N vstream 0.0 0.0 0.0 temp 20000.0
+mixture             air N2 frac 0.9
+mixture             air N frac 0.1
+
+global              nrho 7.07043E22
+global              fnum 7.07043E5
+
+collide		    vss air sws.vss
+react               tce air.tce
+
+create_particles    air n 10000 twopass
+
+stats		    100
+compute             temp temp
+compute             nsp count N2 N
+compute             gsum grid all all n sumwi
+compute             redsum reduce sum c_gsum[1] c_gsum[2]
+stats_style	    step cpu np nattempt ncoll nreact c_temp &
+                    c_nsp[1] c_nsp[2] c_redsum[1] c_redsum[2]
+
+timestep 	    7.00E-9
+run 		    500
