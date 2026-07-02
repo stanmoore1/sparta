@@ -481,10 +481,8 @@ void Collide::collisions()
     }
   } else if (ambiflag) {
     if (!ngas_tally) {
-      if (ngroups == 1) {
-        if (sws == 0) collisions_one_ambipolar<0>();
-        else collisions_one_ambipolar_SWS();   // SWS
-      } else {
+      if (ngroups == 1) collisions_one_ambipolar<0>();   // handles SWS
+      else {
         if (sws == 0) collisions_group_ambipolar<0>();
         else collisions_group_ambipolar_SWS(); // SWS
       }
@@ -1062,6 +1060,16 @@ template < int GASTALLY > void Collide::collisions_one_ambipolar()
   Particle::OnePart iorig,jorig;
   Particle::OnePart *ipart,*jpart,*kpart,*p,*ep;
 
+  // SWS (species weighting scheme) state; run-constant flag
+
+  const int sws = particle->sws;
+  Particle::Species *species = particle->species;
+  double count_wi = 0.0;
+  double count_wi_electron = 0.0;
+  double count_wi_total = 0.0;
+  double maxwi = 0.0;
+  int n_i,n_j,n_k,n_pre,npstart;
+
   // ambipolar vectors
 
   int *ionambi = particle->eivec[particle->ewhich[index_ionambi]];
@@ -1078,6 +1086,11 @@ template < int GASTALLY > void Collide::collisions_one_ambipolar()
   for (int icell = 0; icell < nglocal; icell++) {
     np = cinfo[icell].count;
     if (np <= 1) continue;
+
+    if (sws) {
+      count_wi = cinfo[icell].count_wi;
+      Ewilost = ewilost_cell[icell];
+    }
 
     ip = cinfo[icell].first;
     volume = cinfo[icell].volume / cinfo[icell].weight;
@@ -1097,6 +1110,8 @@ template < int GASTALLY > void Collide::collisions_one_ambipolar()
       ip = next[ip];
     }
 
+    if (sws) maxwi = sws_cell_maxwi(np);
+
     // setup elist of ionized electrons for this cell
     // create them in separate array since will never become real particles
 
@@ -1110,6 +1125,7 @@ template < int GASTALLY > void Collide::collisions_one_ambipolar()
     // create electrons for ambipolar ions
 
     nelectron = 0;
+    if (sws) count_wi_electron = 0.0;
     for (i = 0; i < np; i++) {
       if (ionambi[plist[i]]) {
         p = &particles[plist[i]];
@@ -1117,6 +1133,7 @@ template < int GASTALLY > void Collide::collisions_one_ambipolar()
         memcpy(ep,p,nbytes);
         memcpy(ep->v,velambi[plist[i]],3*sizeof(double));
         ep->ispecies = ambispecies;
+        if (sws) count_wi_electron += species[ambispecies].specwt;
         nelectron++;
       }
     }
@@ -1126,7 +1143,11 @@ template < int GASTALLY > void Collide::collisions_one_ambipolar()
     // nattempt = rounded attempt with RN
 
     nptotal = np + nelectron;
-    attempt = attempt_collision(icell,nptotal,volume);
+    if (!sws) attempt = attempt_collision(icell,nptotal,volume);
+    else {
+      count_wi_total = count_wi + count_wi_electron;
+      attempt = attempt_collision_SWS(icell,nptotal,volume,count_wi_total,maxwi);
+    }
     nattempt = static_cast<int> (attempt);
 
     if (!nattempt) continue;
@@ -1173,7 +1194,11 @@ template < int GASTALLY > void Collide::collisions_one_ambipolar()
 
       // test if collision actually occurs
 
-      if (!test_collision(icell,0,0,ipart,jpart)) continue;
+      if (!sws) {
+        if (!test_collision(icell,0,0,ipart,jpart)) continue;
+      } else {
+        if (!test_collision_SWS(icell,0,0,ipart,jpart,maxwi)) continue;
+      }
 
       // if recombination reaction is possible for this IJ pair
       // pick a 3rd particle to participate and set cell number density
@@ -1192,13 +1217,15 @@ template < int GASTALLY > void Collide::collisions_one_ambipolar()
           while (k == i || k == j) k = np * random->uniform();
           react->recomb_part3 = &particles[plist[k]];
           react->recomb_species = react->recomb_part3->ispecies;
-          react->recomb_density = np * update->fnum / volume;
+          if (!sws) react->recomb_density = np * update->fnum / volume;
+          else react->recomb_density = count_wi * update->fnum / volume;
         }
       }
 
       // perform collision
       // ijspecies = species before collision chemistry
       // if GASTALLY: tally prep with iorig/jorig, then trigger tally
+      // (gas tallies are rejected with SWS, so the two never combine)
 
       if (GASTALLY) {
         memcpy(&iorig,ipart,sizeof(Particle::OnePart));
@@ -1206,8 +1233,16 @@ template < int GASTALLY > void Collide::collisions_one_ambipolar()
       }
 
       jspecies = jpart->ispecies;
-      setup_collision(ipart,jpart);
-      reactflag = perform_collision(ipart,jpart,kpart);
+      if (!sws) {
+        setup_collision(ipart,jpart);
+        reactflag = perform_collision(ipart,jpart,kpart);
+      } else {
+        setup_collision_SWS(ipart,jpart);
+        n_i = 1;
+        n_j = n_k = n_pre = 0;
+        npstart = np;
+        reactflag = perform_collision_SWS(ipart,jpart,kpart,n_i,n_j,n_k,n_pre);
+      }
       ncollide_one++;
 
       if (GASTALLY)
@@ -1227,6 +1262,20 @@ template < int GASTALLY > void Collide::collisions_one_ambipolar()
         ambi_reset(plist[i],-1,jspecies,ipart,jpart,kpart,ionambi);
       else
         ambi_reset(plist[i],plist[j],jspecies,ipart,jpart,kpart,ionambi);
+
+      // SWS: probabilistic product bookkeeping (collide_sws.cpp)
+
+      if (sws) {
+        sws_products_one_ambipolar(np,nelectron,i,j,npstart,jspecies,
+                                   ipart,jpart,kpart,n_i,n_j,n_k,n_pre);
+        particles = particle->particles;
+        ionambi = particle->eivec[particle->ewhich[index_ionambi]];
+        velambi = particle->edarray[particle->ewhich[index_velambi]];
+
+        nptotal = np + nelectron;
+        if (nptotal < 2) break;
+        continue;
+      }
 
       // if kpart created:
       // particles and custom data structs may have been realloced by kpart
@@ -1348,8 +1397,18 @@ template < int GASTALLY > void Collide::collisions_one_ambipolar()
         melectron++;
       }
     }
-    if (melectron != nelectron)
-      error->one(FLERR,"Collisions in cell did not conserve electron count");
+    if (melectron != nelectron) {
+      if (!sws)
+        error->one(FLERR,"Collisions in cell did not conserve electron count");
+      else
+        error->one(FLERR,"Collisions in cell did not conserve electron "
+                   "count (SWS currently supports only equal-weight "
+                   "electrons and ions)");
+    }
+
+    // SWS: store residual split-merge energy for this cell
+
+    if (sws) ewilost_cell[icell] = Ewilost;
   }
 }
 

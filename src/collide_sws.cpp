@@ -73,566 +73,6 @@ enum{CONSTANT,VARIABLE};
    using Species Weighting Scheme
 ------------------------------------------------------------------------- */
 
-void Collide::collisions_one_ambipolar_SWS()
-{
-  int i,j,k,n,ip,np,nelectron,nptotal,jspecies,tmp;
-  int nattempt,reactflag;
-  double attempt,volume;
-
-  int n_i,n_j,n_k,n_pre,i_loop;  // SWS
-  double x[3],v[3];              // SWS
-  int np_pre;                    // SWS
-
-  double count_wi;           // SWS
-  double count_wi_electron;  // SWS
-
-  Particle::Species *species = particle->species;
-  Particle::OnePart *ipart,*jpart,*kpart,*p,*ep;
-
-  // ambipolar vectors
-
-  int *ionambi = particle->eivec[particle->ewhich[index_ionambi]];
-  double **velambi = particle->edarray[particle->ewhich[index_velambi]];
-
-  // loop over cells I own
-
-  Grid::ChildInfo *cinfo = grid->cinfo;
-
-  Particle::OnePart *particles = particle->particles;
-  int *next = particle->next;
-  int nbytes = sizeof(Particle::OnePart);
-
-  for (int icell = 0; icell < nglocal; icell++) {
-    count_wi = cinfo[icell].count_wi;   // SWS
-    Ewilost = ewilost_cell[icell];                      // SWS
-    double maxwi = 0.0;                 // SWS
-    np = cinfo[icell].count;
-    if (np <= 1) continue;
-    ip = cinfo[icell].first;
-    volume = cinfo[icell].volume / cinfo[icell].weight;
-    if (volume == 0.0) error->one(FLERR,"Collision cell volume is zero");
-
-    // setup particle list for this cell
-
-    if (np > npmax) {
-      while (np > npmax) npmax += DELTAPART;
-      memory->destroy(plist);
-      memory->create(plist,npmax,"collide:plist");
-    }
-
-    n = 0;
-    while (ip >= 0) {
-      maxwi = std::max(species[particles[ip].ispecies].specwt,maxwi);  // SWS
-      plist[n++] = ip;
-      ip = next[ip];
-    }
-
-    // setup elist of ionized electrons for this cell
-    // create them in separate array since will never become real particles
-
-    if (np >= maxelectron) {
-      while (maxelectron < np) maxelectron += DELTAELECTRON;
-      memory->sfree(elist);
-      elist = (Particle::OnePart *)
-        memory->smalloc(maxelectron*nbytes,"collide:elist");
-    }
-
-    // create electrons for ambipolar ions
-
-    nelectron = 0;
-
-    count_wi_electron = 0.0;    // SWS
-    Particle::Species *species = particle->species;    // SWS
-
-    for (i = 0; i < np; i++) {
-      if (ionambi[plist[i]]) {
-        p = &particles[plist[i]];
-        ep = &elist[nelectron];
-        memcpy(ep,p,nbytes);
-        memcpy(ep->v,velambi[plist[i]],3*sizeof(double));
-        ep->ispecies = ambispecies;
-        count_wi_electron += species[ep->ispecies].specwt;  // SWS
-        nelectron++;
-      }
-    }
-
-    // attempt = exact collision attempt count for all particles in cell
-    // nptotal = includes neutrals, ions, electrons
-    // nattempt = rounded attempt with RN
-
-    nptotal = np + nelectron;
-    double count_wi_total;     // SWS
-    count_wi_total = count_wi + count_wi_electron;    // SWS
-    attempt = attempt_collision_SWS(icell,nptotal,volume,count_wi_total,maxwi);    // SWS
-    nattempt = static_cast<int> (attempt);
-
-    if (!nattempt) continue;
-    nattempt_one += nattempt;
-
-    // perform collisions
-    // select random pair of particles, cannot be same
-    // test if collision actually occurs
-    // if chemistry occurs, exit attempt loop if group count goes to 0
-
-    for (int iattempt = 0; iattempt < nattempt; iattempt++) {
-      i = nptotal * random->uniform();
-      j = nptotal * random->uniform();
-      while (i == j) j = nptotal * random->uniform();
-
-      // ipart,jpart = heavy particles or electrons
-
-      if (i < np) ipart = &particles[plist[i]];
-      else ipart = &elist[i-np];
-      if (j < np) jpart = &particles[plist[j]];
-      else jpart = &elist[j-np];
-
-      // check for e/e pair
-      // count as collision, but do not perform it
-
-      if (ipart->ispecies == ambispecies && jpart->ispecies == ambispecies) {
-        ncollide_one++;
-        continue;
-      }
-
-      // if particle I is electron
-      // swap with J, since electron must be 2nd in any ambipolar reaction
-      // just need to swap i/j, ipart/jpart
-      // don't have to worry if an ambipolar ion is I or J
-
-      if (ipart->ispecies == ambispecies) {
-        tmp = i;
-        i = j;
-        j = tmp;
-        p = ipart;
-        ipart = jpart;
-        jpart = p;
-      }
-
-      // test if collision actually occurs
-      if (!test_collision_SWS(icell,0,0,ipart,jpart,maxwi)) continue;   // SWS
-
-      // if recombination reaction is possible for this IJ pair
-      // pick a 3rd particle to participate and set cell number density
-      // unless boost factor turns it off, or there is no 3rd particle
-      // 3rd particle cannot be an electron, so select from Np
-
-      if (recombflag && recomb_ijflag[ipart->ispecies][jpart->ispecies]) {
-        if (random->uniform() > react->recomb_boost_inverse)
-          react->recomb_species = -1;
-        else if (np == 1)
-          react->recomb_species = -1;
-        else if (np == 2 && jpart->ispecies != ambispecies)
-          react->recomb_species = -1;
-        else {
-          k = np * random->uniform();
-          while (k == i || k == j) k = np * random->uniform();
-          react->recomb_part3 = &particles[plist[k]];
-          react->recomb_species = react->recomb_part3->ispecies;
-          react->recomb_density = count_wi * update->fnum / volume;  // SWS
-        }
-      }
-
-      // perform collision
-      // ijspecies = species before collision chemistry
-      // continue to next collision if no reaction
-
-      jspecies = jpart->ispecies;
-      setup_collision_SWS(ipart,jpart);  // SWS
-      // ========================================================================
-      // SWS - from here to the end of the loop, changes are made to take into 
-      // account reactions in the event of a collision.
-      // n_i variable is the number of particles after the reaction.
-      // ipart is the particle pointer before and after the reaction, like the baseline.
-      // define the number of particles generated with perform collison, and 
-      // then, add particle to list in this function.
-      // However, note that the main particles and k particles when there is a reaction 
-      // are added within perform_collide.
-      // ========================================================================
-      // parameters to count particle after the reaction      
-      n_i = 1; 
-      n_j = n_k = n_pre = 0;      
-      // save number of particle before collision
-      // to point electron in elist   
-      np_pre = np;    
-      reactflag = perform_collision_SWS(ipart,jpart,kpart,n_i,n_j,n_k,n_pre);
-
-      ncollide_one++;
-      if (reactflag) nreact_one++;
-      else continue;
-
-      // reset ambipolar ion flags due to collision
-      // must do now before particle count reset below can break out of loop
-      // first reset ionambi if kpart was added since ambi_reset() uses it
-
-      if (kpart) ionambi = particle->eivec[particle->ewhich[index_ionambi]];
-      if (jspecies == ambispecies)
-        ambi_reset(plist[i],-1,jspecies,ipart,jpart,kpart,ionambi);
-      else
-        ambi_reset(plist[i],plist[j],jspecies,ipart,jpart,kpart,ionambi);
-      
-      //==================================================================
-      // add particles witch added in perform_collide
-      // if kpart created:
-      // particles and custom data structs may have been realloced by kpart
-      // add kpart to plist or elist
-      // kpart was just added to particle list, so index = nlocal-1
-      // must come before jpart code below since it modifies nlocal
-      //==================================================================
-
-      // SWS - indices in the master particle list of particles appended by
-      // perform_collision_SWS(): p_pre first (if n_pre), then kp (if kpart)
-
-      int kp_index = -1;
-      int pre_index = -1;
-      if (kpart) {
-        kp_index = particle->nlocal-1;
-        if (n_pre) pre_index = particle->nlocal-2;
-      } else if (n_pre) pre_index = particle->nlocal-1;
-
-      if (kpart || n_pre) {
-        particles = particle->particles;
-        ionambi = particle->eivec[particle->ewhich[index_ionambi]];
-        velambi = particle->edarray[particle->ewhich[index_velambi]];
-      }
-
-      // kp handling:
-      // heavy kp kept (n_k): add to plist, remember its particle index in k
-      // heavy kp discarded (!n_k): flag for deletion, never entered plist
-      // electron kp: create n_k copies in elist, then remove kp from the
-      //   master particle list (it is the last entry, so nlocal-- is safe;
-      //   pre_index = nlocal-2 remains valid)
-
-      if (kpart) {
-        if (kpart->ispecies != ambispecies) {
-          if (n_k) {
-            if (np == npmax) {
-              npmax += DELTAPART;
-              memory->grow(plist,npmax,"collide:plist");
-            }
-            plist[np++] = kp_index;
-            // save particle index of kp for the copy loop below
-            k = kp_index;
-          } else {
-            if (ndelete == maxdelete) {
-              maxdelete += DELTADELETE;
-              memory->grow(dellist,maxdelete,"collide:dellist");
-            }
-            dellist[ndelete++] = kp_index;
-            kpart = NULL;
-          }
-        } else {
-          for (i_loop = 0; i_loop < n_k; i_loop++) {
-            if (nelectron == maxelectron) {
-              maxelectron += DELTAELECTRON;
-              elist = (Particle::OnePart *)
-                memory->srealloc(elist,maxelectron*nbytes,"collide:elist");
-            }
-            ep = &elist[nelectron];
-            memcpy(ep,kpart,nbytes);
-            ep->ispecies = ambispecies;
-            nelectron++;
-          }
-          particle->nlocal--;
-          kpart = NULL;
-        }
-      }
-
-      // p_pre = un-reacted portion of the max-weight reactant, always kept
-      // heavy: add to plist as a neutral
-      // electron: copy to elist, flag master-list entry for deletion
-
-      if (n_pre) {
-        Particle::OnePart *p_pre = &particle->particles[pre_index];
-        if (p_pre->ispecies != ambispecies) {
-          if (np == npmax) {
-            npmax += DELTAPART;
-            memory->grow(plist,npmax,"collide:plist");
-          }
-          plist[np++] = pre_index;
-          ionambi[pre_index] = 0;
-        } else {
-          if (nelectron == maxelectron) {
-            maxelectron += DELTAELECTRON;
-            elist = (Particle::OnePart *)
-              memory->srealloc(elist,maxelectron*nbytes,"collide:elist");
-          }
-          ep = &elist[nelectron];
-          memcpy(ep,p_pre,nbytes);
-          ep->ispecies = ambispecies;
-          nelectron++;
-          if (ndelete == maxdelete) {
-            maxdelete += DELTADELETE;
-            memory->grow(dellist,maxdelete,"collide:dellist");
-          }
-          dellist[ndelete++] = pre_index;
-        }
-      }
-
-      // if jpart exists, was originally not an electron, now is an electron:
-      //   ionization reaction converted 2 neutrals to one ion
-      //   add to elist, remove from plist, flag J for deletion
-      // if jpart exists, was originally an electron, now is not an electron:
-      //   exchange reaction converted ion + electron to two neutrals
-      //   add neutral J to master particle list, remove from elist, add to plist
-      // if jpart destroyed, was an electron:
-      //   recombination reaction converted ion + electron to one neutral
-      //   remove electron from elist
-      // else if jpart destroyed:
-      //   non-ambipolar recombination reaction
-      //   remove from plist, flag J for deletion
-
-      //==================================================================
-      // first delete i and k particle if number of them will be zero.
-      // secondary, i, j, k particle is added by copy paste 
-      // here, in ambipolar, treatment of j is a bit complicated,
-      // therefore, j particle delete and add part is same.
-      // 
-      // Be careful when respecifying a pointer when reallocflag is 1.
-      //================================================================== 
-      
-      // delete reactant I from plist if destroyed by probability (n_i = 0)
-      // if the last plist entry swapped into slot i is reactant J,
-      // update j to follow it
-
-      if (!n_i && ipart ) {
-        if (ndelete == maxdelete) {
-          maxdelete += DELTADELETE;
-          memory->grow(dellist,maxdelete,"collide:dellist");
-        }
-        dellist[ndelete++] = plist[i];
-        np--;
-        plist[i] = plist[np];
-        // j indexes plist only when j < np_pre (else it indexes elist)
-        if (j < np_pre && j == np) j = i;
-      }
-
-      // copy paste i particle 
-      // i is always non ambipolar particle because of reactoin style limitation
-      if (ipart) {
-        // printf("!!check cp i \n");
-        for (i_loop = 0; i_loop < n_i-1 ; i_loop++) {   
-          particles = particle->particles;    
-          int id = MAXSMALLINT*random->uniform();
-          memcpy(x,ipart->x,3*sizeof(double));
-          memcpy(v,ipart->v,3*sizeof(double));
-          int reallocflag = 
-          particle->add_particle(id,ipart->ispecies,ipart->icell,x,v,ipart->erot,ipart->evib); 
-          if (np == npmax) {
-            npmax += DELTAPART;
-            memory->grow(plist,npmax,"collide:plist");
-          }
-          if (reallocflag) {
-            ionambi = particle->eivec[particle->ewhich[index_ionambi]];
-            velambi = particle->edarray[particle->ewhich[index_velambi]];
-            if(ipart) ipart = particle->particles + (ipart - particles);
-            if(jpart) jpart = particle->particles + (jpart - particles);
-            if(kpart) kpart = particle->particles + (kpart - particles);
-          }          
-          plist[np++] = particle->nlocal-1;
-          particles = particle->particles;
-          // ionambi is set when paticle copy pasted
-          ionambi[particle->nlocal-1] = ionambi[plist[i]];
-        }
-      }
-
-      // Particle j is not treated the same as i and k
-      // j Particle plist elist move, delete, and copy-paste of 
-      // particle of ambipolar-involved reaction is done here.
-
-      // if jpart exists, was originally not an electron, now is an electron:
-      //   ionization reaction converted 2 neutrals to one ion
-      //   add to elist, remove from plist, flag J for deletion
-      // if jpart exists, was originally an electron, now is not an electron:
-      //   exchange reaction converted ion + electron to two neutrals
-      //   add neutral J to master particle list, remove from elist, add to plist
-      // if jpart destroyed, was an electron:
-      //   recombination reaction converted ion + electron to one neutral
-      //   remove electron from elist
-      // else if jpart destroyed:
-      //   non-ambipolar recombination reaction
-      //   remove from plist, flag J for deletion
-
-      // need to save the information of  jpart ,ambipolar electron
-      // because it will be deleted. to reproduce correctly, use jp.
-      // jpart is NULL if the reaction destroyed it (e.g. recombination)
-
-      Particle::OnePart jp;
-      if (jpart) jp = *jpart;
-
-      if (jpart) {
-          // printf("!!check process j \n");
-          if (jspecies != ambispecies && jpart->ispecies == ambispecies) { 
-            for (i_loop = 0; i_loop < n_j; i_loop++) { 
-              // loop is added to create additional electron because jpart will be NULL 
-	            if (nelectron == maxelectron) {
-	              maxelectron += DELTAELECTRON;
-	              elist = (Particle::OnePart *)
-	                memory->srealloc(elist,maxelectron*nbytes,"collide:elist");
-	            }
-	            ep = &elist[nelectron];
-	            memcpy(ep,jpart,nbytes);
-	            ep->ispecies = ambispecies;
-	            nelectron++;
-            }
-	          jpart = NULL;
-	        } else if (jspecies == ambispecies && jpart->ispecies != ambispecies) {
-            // even particle is not created, delete ambi particle here
-            //if (nelectron-1 != j-np) memcpy(&elist[j-np],&elist[nelectron-1],nbytes);
-            
-            // np can be changed by other reactions, np_pre is used
-            if (nelectron-1 != j-np_pre) memcpy(&elist[j-np_pre],&elist[nelectron-1],nbytes);
-            nelectron--;
-            for (i_loop = 0; i_loop < n_j; i_loop++) {
-              // loop is added to create additional j particle
-              int id = MAXSMALLINT*random->uniform();
-              memcpy(x,jp.x,3*sizeof(double));
-              memcpy(v,jp.v,3*sizeof(double));
-              int reallocflag = particle->add_particle(id,jp.ispecies,jp.icell,x,v,jp.erot,jp.evib);
-	            //int reallocflag = particle->add_particle();
-	            if (reallocflag) {
-	              particles = particle->particles;
-	              ionambi = particle->eivec[particle->ewhich[index_ionambi]];
-	              velambi = particle->edarray[particle->ewhich[index_velambi]];
-                if(ipart) ipart = particle->particles + (ipart - particles);
-                if(jpart) jpart = particle->particles + (jpart - particles);
-                if(kpart) kpart = particle->particles + (kpart - particles);
-	            }
-	            int index = particle->nlocal-1;
-	            // memcpy(&particles[index],jpart,nbytes);
-	            // particles[index].id = MAXSMALLINT*random->uniform();
-	            ionambi[index] = 0;
-              //if (i_loop == 0) {
-	            //  if (nelectron-1 != j-np) memcpy(&elist[j-np],&elist[nelectron-1],nbytes);
-	            //  nelectron--;
-              //}
-	            if (np == npmax) {
-	              npmax += DELTAPART;
-	              memory->grow(plist,npmax,"collide:plist");
-	            }
-	            plist[np++] = index;
-	        }
-        }
-      }
-
-      // remove product major particle with the probability
-      // with current assumption, electron cannot be a major
-      // thus only neutral is considered
-      if ((jpart && !n_j) && (jpart->ispecies != ambispecies && jspecies != ambispecies)) {
-        if (ndelete == maxdelete) {
-          maxdelete += DELTADELETE;
-          memory->grow(dellist,maxdelete,"collide:dellist");
-        }
-        dellist[ndelete++] = plist[j];
-        np--;
-        plist[j] = plist[np];        
-      }   
-
-      if (!jpart && jspecies == ambispecies) {
-        //if (nelectron-1 != j-np) memcpy(&elist[j-np],&elist[nelectron-1],nbytes);
-        if (nelectron-1 != j-np_pre) memcpy(&elist[j-np_pre],&elist[nelectron-1],nbytes);
-        nelectron--;
-      } else if (!jpart) {
-        if (ndelete == maxdelete) {
-          maxdelete += DELTADELETE;
-          memory->grow(dellist,maxdelete,"collide:dellist");
-        }
-        dellist[ndelete++] = plist[j];
-        plist[j] = plist[np-1];
-        np--;
-      }
-      
-      // copy and paste of j particles after reactions not involving j ambispecies 
-      // now j is not ambipolar electron 
-      // particle j is already exist 
-      if (jpart) {
-        // printf("!!check cp j \n");
-        if (jpart->ispecies != ambispecies && jspecies != ambispecies) { 
-          for ( i_loop = 0; i_loop < n_j-1 ; i_loop++)  {
-              int id = MAXSMALLINT*random->uniform();
-              memcpy(x,jpart->x,3*sizeof(double));
-              memcpy(v,jpart->v,3*sizeof(double));
-              int reallocflag = 
-              particle->add_particle(id,jpart->ispecies,jpart->icell,x,v,jpart->erot,jpart->evib); 
-              if (np == npmax) {
-                npmax += DELTAPART;
-                memory->grow(plist,npmax,"collide:plist");
-              }
-              if (reallocflag) {
-                ionambi = particle->eivec[particle->ewhich[index_ionambi]];
-                velambi = particle->edarray[particle->ewhich[index_velambi]];
-                if(ipart) ipart = particle->particles + (ipart - particles);
-                if(jpart) jpart = particle->particles + (jpart - particles);
-                if(kpart) kpart = particle->particles + (kpart - particles);                
-              }                        
-              plist[np++] = particle->nlocal-1;
-              particles = particle->particles;
-              ionambi[particle->nlocal-1] = ionambi[plist[j]];
-            }
-          }
-        }      
-
-
-      
-      // copy paste kpart particle
-      // electron kp copies were all created in elist above (kpart = NULL),
-      // so only heavy kp copies are created here
-      if (kpart) {
-        for (i_loop = 0; i_loop < n_k-1 ; i_loop++) {
-          particles = particle->particles;
-          int id = MAXSMALLINT*random->uniform();
-          memcpy(x,kpart->x,3*sizeof(double));
-          memcpy(v,kpart->v,3*sizeof(double));
-          int reallocflag =
-          particle->add_particle(id,kpart->ispecies,kpart->icell,x,v,kpart->erot,kpart->evib);
-          if (reallocflag) {
-            ionambi = particle->eivec[particle->ewhich[index_ionambi]];
-            velambi = particle->edarray[particle->ewhich[index_velambi]];
-            kpart = particle->particles + (kpart - particles);
-          }
-          if (np == npmax) {
-            npmax += DELTAPART;
-            memory->grow(plist,npmax,"collide:plist");
-          }
-          plist[np++] = particle->nlocal-1;
-          particles = particle->particles;
-          // k = particle index of the original kp
-          ionambi[particle->nlocal-1] = ionambi[k];
-        }
-      }
-
-      // update particle counts
-      // quit if no longer enough particles for another collision
-
-      nptotal = np + nelectron;
-      if (nptotal < 2) break;
-    }
-
-    // done with collisions/chemistry for one grid cell
-    // recombine ambipolar ions with their matching electrons
-    //   by copying electron velocity into velambi
-    // which ion is combined with which electron does not matter
-    // error if ion count does not match electron count
-
-    int melectron = 0;
-    for (n = 0; n < np; n++) {
-      i = plist[n];
-      if (ionambi[i]) {
-        if (melectron < nelectron) {
-          ep = &elist[melectron];
-          memcpy(velambi[i],ep->v,3*sizeof(double));
-        }
-        melectron++;
-      }
-    }
-    if (melectron != nelectron) {  // SWS
-      error->one(FLERR,"Collisions in cell did not conserve electron count now **Currently only equal weight electrons and ions are supported.");
-    }    
-
-    // SWS - store residual split-merge energy for this cell
-
-    ewilost_cell[icell] = Ewilost;
-  }
-}
 
 /* ----------------------------------------------------------------------
    NTC algorithm for multiple groups with ambipolar approximation
@@ -2072,6 +1512,358 @@ int Collide::sws_products_one(int &np, int i, int j,
 
   if (np < 2) return 1;
   return 0;
+}
+
+
+/* ----------------------------------------------------------------------
+   SWS - bookkeeping for particles created/destroyed by a reaction in the
+   single-group ambipolar collision loop
+   np/nelectron are the caller's live counts (updated here)
+   i,j = indices of the two reactants in the combined plist+elist space
+   npstart = np at pair-selection time (elist offset for j)
+   jspecies = J species before collision chemistry
+   caller must refresh its particles/ionambi/velambi pointers on return
+------------------------------------------------------------------------- */
+
+void Collide::sws_products_one_ambipolar(int &np, int &nelectron,
+                                         int i, int j, int npstart,
+                                         int jspecies,
+                                         Particle::OnePart *ipart,
+                                         Particle::OnePart *jpart,
+                                         Particle::OnePart *kpart,
+                                         int n_i, int n_j, int n_k, int n_pre)
+{
+  int i_loop;
+  int kpindex = -1;
+  double x[3],v[3];
+  int nbytes = sizeof(Particle::OnePart);
+  Particle::OnePart *ep;
+
+  Particle::OnePart *particles = particle->particles;
+  int *ionambi = particle->eivec[particle->ewhich[index_ionambi]];
+  double **velambi = particle->edarray[particle->ewhich[index_velambi]];
+
+  // SWS - indices in the master particle list of particles appended by
+  // perform_collision_SWS(): p_pre first (if n_pre), then kp (if kpart)
+
+  int kp_index = -1;
+  int pre_index = -1;
+  if (kpart) {
+    kp_index = particle->nlocal-1;
+    if (n_pre) pre_index = particle->nlocal-2;
+  } else if (n_pre) pre_index = particle->nlocal-1;
+
+  if (kpart || n_pre) {
+    particles = particle->particles;
+    ionambi = particle->eivec[particle->ewhich[index_ionambi]];
+    velambi = particle->edarray[particle->ewhich[index_velambi]];
+  }
+
+  // kp handling:
+  // heavy kp kept (n_k): add to plist, remember its particle index in k
+  // heavy kp discarded (!n_k): flag for deletion, never entered plist
+  // electron kp: create n_k copies in elist, then remove kp from the
+  //   master particle list (it is the last entry, so nlocal-- is safe;
+  //   pre_index = nlocal-2 remains valid)
+
+  if (kpart) {
+    if (kpart->ispecies != ambispecies) {
+      if (n_k) {
+        if (np == npmax) {
+          npmax += DELTAPART;
+          memory->grow(plist,npmax,"collide:plist");
+        }
+        plist[np++] = kp_index;
+        // save particle index of kp for the copy loop below
+        kpindex = kp_index;
+      } else {
+        if (ndelete == maxdelete) {
+          maxdelete += DELTADELETE;
+          memory->grow(dellist,maxdelete,"collide:dellist");
+        }
+        dellist[ndelete++] = kp_index;
+        kpart = NULL;
+      }
+    } else {
+      for (i_loop = 0; i_loop < n_k; i_loop++) {
+        if (nelectron == maxelectron) {
+          maxelectron += DELTAELECTRON;
+          elist = (Particle::OnePart *)
+            memory->srealloc(elist,maxelectron*nbytes,"collide:elist");
+        }
+        ep = &elist[nelectron];
+        memcpy(ep,kpart,nbytes);
+        ep->ispecies = ambispecies;
+        nelectron++;
+      }
+      particle->nlocal--;
+      kpart = NULL;
+    }
+  }
+
+  // p_pre = un-reacted portion of the max-weight reactant, always kept
+  // heavy: add to plist as a neutral
+  // electron: copy to elist, flag master-list entry for deletion
+
+  if (n_pre) {
+    Particle::OnePart *p_pre = &particle->particles[pre_index];
+    if (p_pre->ispecies != ambispecies) {
+      if (np == npmax) {
+        npmax += DELTAPART;
+        memory->grow(plist,npmax,"collide:plist");
+      }
+      plist[np++] = pre_index;
+      ionambi[pre_index] = 0;
+    } else {
+      if (nelectron == maxelectron) {
+        maxelectron += DELTAELECTRON;
+        elist = (Particle::OnePart *)
+          memory->srealloc(elist,maxelectron*nbytes,"collide:elist");
+      }
+      ep = &elist[nelectron];
+      memcpy(ep,p_pre,nbytes);
+      ep->ispecies = ambispecies;
+      nelectron++;
+      if (ndelete == maxdelete) {
+        maxdelete += DELTADELETE;
+        memory->grow(dellist,maxdelete,"collide:dellist");
+      }
+      dellist[ndelete++] = pre_index;
+    }
+  }
+
+  // if jpart exists, was originally not an electron, now is an electron:
+  //   ionization reaction converted 2 neutrals to one ion
+  //   add to elist, remove from plist, flag J for deletion
+  // if jpart exists, was originally an electron, now is not an electron:
+  //   exchange reaction converted ion + electron to two neutrals
+  //   add neutral J to master particle list, remove from elist, add to plist
+  // if jpart destroyed, was an electron:
+  //   recombination reaction converted ion + electron to one neutral
+  //   remove electron from elist
+  // else if jpart destroyed:
+  //   non-ambipolar recombination reaction
+  //   remove from plist, flag J for deletion
+
+  //==================================================================
+  // first delete i and k particle if number of them will be zero.
+  // secondary, i, j, k particle is added by copy paste 
+  // here, in ambipolar, treatment of j is a bit complicated,
+  // therefore, j particle delete and add part is same.
+  // 
+  // Be careful when respecifying a pointer when reallocflag is 1.
+  //================================================================== 
+  
+  // delete reactant I from plist if destroyed by probability (n_i = 0)
+  // if the last plist entry swapped into slot i is reactant J,
+  // update j to follow it
+
+  if (!n_i && ipart ) {
+    if (ndelete == maxdelete) {
+      maxdelete += DELTADELETE;
+      memory->grow(dellist,maxdelete,"collide:dellist");
+    }
+    dellist[ndelete++] = plist[i];
+    np--;
+    plist[i] = plist[np];
+    // j indexes plist only when j < npstart (else it indexes elist)
+    if (j < npstart && j == np) j = i;
+  }
+
+  // copy paste i particle 
+  // i is always non ambipolar particle because of reactoin style limitation
+  if (ipart) {
+    // printf("!!check cp i \n");
+    for (i_loop = 0; i_loop < n_i-1 ; i_loop++) {   
+      particles = particle->particles;    
+      int id = MAXSMALLINT*random->uniform();
+      memcpy(x,ipart->x,3*sizeof(double));
+      memcpy(v,ipart->v,3*sizeof(double));
+      int reallocflag = 
+      particle->add_particle(id,ipart->ispecies,ipart->icell,x,v,ipart->erot,ipart->evib); 
+      if (np == npmax) {
+        npmax += DELTAPART;
+        memory->grow(plist,npmax,"collide:plist");
+      }
+      if (reallocflag) {
+        ionambi = particle->eivec[particle->ewhich[index_ionambi]];
+        velambi = particle->edarray[particle->ewhich[index_velambi]];
+        if(ipart) ipart = particle->particles + (ipart - particles);
+        if(jpart) jpart = particle->particles + (jpart - particles);
+        if(kpart) kpart = particle->particles + (kpart - particles);
+      }          
+      plist[np++] = particle->nlocal-1;
+      particles = particle->particles;
+      // ionambi is set when paticle copy pasted
+      ionambi[particle->nlocal-1] = ionambi[plist[i]];
+    }
+  }
+
+  // Particle j is not treated the same as i and k
+  // j Particle plist elist move, delete, and copy-paste of 
+  // particle of ambipolar-involved reaction is done here.
+
+  // if jpart exists, was originally not an electron, now is an electron:
+  //   ionization reaction converted 2 neutrals to one ion
+  //   add to elist, remove from plist, flag J for deletion
+  // if jpart exists, was originally an electron, now is not an electron:
+  //   exchange reaction converted ion + electron to two neutrals
+  //   add neutral J to master particle list, remove from elist, add to plist
+  // if jpart destroyed, was an electron:
+  //   recombination reaction converted ion + electron to one neutral
+  //   remove electron from elist
+  // else if jpart destroyed:
+  //   non-ambipolar recombination reaction
+  //   remove from plist, flag J for deletion
+
+  // need to save the information of  jpart ,ambipolar electron
+  // because it will be deleted. to reproduce correctly, use jp.
+  // jpart is NULL if the reaction destroyed it (e.g. recombination)
+
+  Particle::OnePart jp;
+  if (jpart) jp = *jpart;
+
+  if (jpart) {
+      // printf("!!check process j \n");
+      if (jspecies != ambispecies && jpart->ispecies == ambispecies) { 
+        for (i_loop = 0; i_loop < n_j; i_loop++) { 
+          // loop is added to create additional electron because jpart will be NULL 
+	            if (nelectron == maxelectron) {
+	              maxelectron += DELTAELECTRON;
+	              elist = (Particle::OnePart *)
+	                memory->srealloc(elist,maxelectron*nbytes,"collide:elist");
+	            }
+	            ep = &elist[nelectron];
+	            memcpy(ep,jpart,nbytes);
+	            ep->ispecies = ambispecies;
+	            nelectron++;
+        }
+	          jpart = NULL;
+	        } else if (jspecies == ambispecies && jpart->ispecies != ambispecies) {
+        // even particle is not created, delete ambi particle here
+        //if (nelectron-1 != j-np) memcpy(&elist[j-np],&elist[nelectron-1],nbytes);
+        
+        // np can be changed by other reactions, npstart is used
+        if (nelectron-1 != j-npstart) memcpy(&elist[j-npstart],&elist[nelectron-1],nbytes);
+        nelectron--;
+        for (i_loop = 0; i_loop < n_j; i_loop++) {
+          // loop is added to create additional j particle
+          int id = MAXSMALLINT*random->uniform();
+          memcpy(x,jp.x,3*sizeof(double));
+          memcpy(v,jp.v,3*sizeof(double));
+          int reallocflag = particle->add_particle(id,jp.ispecies,jp.icell,x,v,jp.erot,jp.evib);
+	            //int reallocflag = particle->add_particle();
+	            if (reallocflag) {
+	              particles = particle->particles;
+	              ionambi = particle->eivec[particle->ewhich[index_ionambi]];
+	              velambi = particle->edarray[particle->ewhich[index_velambi]];
+            if(ipart) ipart = particle->particles + (ipart - particles);
+            if(jpart) jpart = particle->particles + (jpart - particles);
+            if(kpart) kpart = particle->particles + (kpart - particles);
+	            }
+	            int index = particle->nlocal-1;
+	            // memcpy(&particles[index],jpart,nbytes);
+	            // particles[index].id = MAXSMALLINT*random->uniform();
+	            ionambi[index] = 0;
+          //if (i_loop == 0) {
+	            //  if (nelectron-1 != j-np) memcpy(&elist[j-np],&elist[nelectron-1],nbytes);
+	            //  nelectron--;
+          //}
+	            if (np == npmax) {
+	              npmax += DELTAPART;
+	              memory->grow(plist,npmax,"collide:plist");
+	            }
+	            plist[np++] = index;
+	        }
+    }
+  }
+
+  // remove product major particle with the probability
+  // with current assumption, electron cannot be a major
+  // thus only neutral is considered
+  if ((jpart && !n_j) && (jpart->ispecies != ambispecies && jspecies != ambispecies)) {
+    if (ndelete == maxdelete) {
+      maxdelete += DELTADELETE;
+      memory->grow(dellist,maxdelete,"collide:dellist");
+    }
+    dellist[ndelete++] = plist[j];
+    np--;
+    plist[j] = plist[np];        
+  }   
+
+  if (!jpart && jspecies == ambispecies) {
+    //if (nelectron-1 != j-np) memcpy(&elist[j-np],&elist[nelectron-1],nbytes);
+    if (nelectron-1 != j-npstart) memcpy(&elist[j-npstart],&elist[nelectron-1],nbytes);
+    nelectron--;
+  } else if (!jpart) {
+    if (ndelete == maxdelete) {
+      maxdelete += DELTADELETE;
+      memory->grow(dellist,maxdelete,"collide:dellist");
+    }
+    dellist[ndelete++] = plist[j];
+    plist[j] = plist[np-1];
+    np--;
+  }
+  
+  // copy and paste of j particles after reactions not involving j ambispecies 
+  // now j is not ambipolar electron 
+  // particle j is already exist 
+  if (jpart) {
+    // printf("!!check cp j \n");
+    if (jpart->ispecies != ambispecies && jspecies != ambispecies) { 
+      for ( i_loop = 0; i_loop < n_j-1 ; i_loop++)  {
+          int id = MAXSMALLINT*random->uniform();
+          memcpy(x,jpart->x,3*sizeof(double));
+          memcpy(v,jpart->v,3*sizeof(double));
+          int reallocflag = 
+          particle->add_particle(id,jpart->ispecies,jpart->icell,x,v,jpart->erot,jpart->evib); 
+          if (np == npmax) {
+            npmax += DELTAPART;
+            memory->grow(plist,npmax,"collide:plist");
+          }
+          if (reallocflag) {
+            ionambi = particle->eivec[particle->ewhich[index_ionambi]];
+            velambi = particle->edarray[particle->ewhich[index_velambi]];
+            if(ipart) ipart = particle->particles + (ipart - particles);
+            if(jpart) jpart = particle->particles + (jpart - particles);
+            if(kpart) kpart = particle->particles + (kpart - particles);                
+          }                        
+          plist[np++] = particle->nlocal-1;
+          particles = particle->particles;
+          ionambi[particle->nlocal-1] = ionambi[plist[j]];
+        }
+      }
+    }      
+
+
+  
+  // copy paste kpart particle
+  // electron kp copies were all created in elist above (kpart = NULL),
+  // so only heavy kp copies are created here
+  if (kpart) {
+    for (i_loop = 0; i_loop < n_k-1 ; i_loop++) {
+      particles = particle->particles;
+      int id = MAXSMALLINT*random->uniform();
+      memcpy(x,kpart->x,3*sizeof(double));
+      memcpy(v,kpart->v,3*sizeof(double));
+      int reallocflag =
+      particle->add_particle(id,kpart->ispecies,kpart->icell,x,v,kpart->erot,kpart->evib);
+      if (reallocflag) {
+        ionambi = particle->eivec[particle->ewhich[index_ionambi]];
+        velambi = particle->edarray[particle->ewhich[index_velambi]];
+        kpart = particle->particles + (kpart - particles);
+      }
+      if (np == npmax) {
+        npmax += DELTAPART;
+        memory->grow(plist,npmax,"collide:plist");
+      }
+      plist[np++] = particle->nlocal-1;
+      particles = particle->particles;
+      // k = particle index of the original kp
+      ionambi[particle->nlocal-1] = ionambi[kpindex];
+    }
+  }
+
 }
 
 /* ----------------------------------------------------------------------
