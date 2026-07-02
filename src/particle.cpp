@@ -58,6 +58,8 @@ Particle::Particle(SPARTA *sparta) : Pointers(sparta)
   particles = NULL;
   
   sws = 0;  // SWS
+  weight_mode = WEIGHT_NONE;
+  index_sweight = -1;
 
   nspecies = maxspecies = 0;
   species = NULL;
@@ -157,6 +159,18 @@ void Particle::init()
   if (sws && sparta->kokkos)
     error->all(FLERR,"Cannot yet use the species weighting scheme (SWS) "
                "with the KOKKOS package");
+
+  // resolve the unified particle weighting mode for this run
+  // per-particle (SWPM) weighting is active whenever the custom attribute
+  // exists (registered by fix stochastic_weight), matching the semantics
+  // of stochastic_weights(); the schemes are mutually exclusive
+  // NOTE: full resolution + exclusivity guard moves to setup_weighting()
+
+  index_sweight = find_custom((char *) "stochastic_wt");
+  if (index_sweight >= 0) weight_mode = WEIGHT_PARTICLE;
+  else if (sws) weight_mode = WEIGHT_SPECIES;
+  else if (grid->cellweightflag) weight_mode = WEIGHT_CELL;
+  else weight_mode = WEIGHT_NONE;
 
   // check for errors in custom particle vectors/arrays
 

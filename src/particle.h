@@ -27,6 +27,17 @@ class Particle : protected Pointers {
   int sws;                  // SWS - 0:none, 1:SWS, 2:SWSmax ; read from input file species command keyword
   int weightflag;           // 1 if stochastic weights used
 
+  // unified particle weighting mode, resolved once per run
+  // WEIGHT_SPECIES = SWS (static per-species specwt)
+  // WEIGHT_PARTICLE = SWPM (dynamic per-particle custom attribute)
+  // WEIGHT_CELL = grid-based cell weighting (applied at the per-cell
+  //   normalization stage of computes, NOT via pweight())
+  // the schemes are mutually exclusive
+
+  enum WeightMode {WEIGHT_NONE,WEIGHT_CELL,WEIGHT_SPECIES,WEIGHT_PARTICLE};
+  int weight_mode;
+  int index_sweight;        // custom index of "stochastic_wt", -1 if absent
+
   enum{MAXVIBMODE=4};       // increase value if species need more vib modes
 
   struct Species {          // info on each particle species, read from file
@@ -176,6 +187,62 @@ class Particle : protected Pointers {
 
   int find_custom(char *);
   double *stochastic_weights();
+
+  // effective in-loop weight of particle I, relative to fnum
+  // exactly 1.0 unless SWS or SWPM weighting is active
+
+  inline double pweight(int i) {
+    if (weight_mode == WEIGHT_SPECIES)
+      return species[particles[i].ispecies].specwt;
+    if (weight_mode == WEIGHT_PARTICLE)
+      return edvec[ewhich[index_sweight]][i];
+    return 1.0;
+  }
+
+  // per-particle weight vector for hot-path hoisting
+  // non-NULL only for per-particle (SWPM) weighting
+
+  inline double *pweight_vector() {
+    if (weight_mode == WEIGHT_PARTICLE) return edvec[ewhich[index_sweight]];
+    return NULL;
+  }
+
+  // weight triple for surface/boundary tally callbacks
+  // iorig may be a stack copy of the pre-interaction particle, so it is
+  // never indexed; ip/jp point into the particles array
+  // WEIGHT_SPECIES: specwt by each particle's species (exact even when a
+  //   surface reaction changed the species)
+  // WEIGHT_PARTICLE: index-based weights for ip/jp; worig = average of
+  //   the outgoing particles' weights (no splitting at boundaries), or
+  //   0.0 if no particle survived
+
+  inline void tally_weights(const OnePart *iorig, const OnePart *ip,
+                            const OnePart *jp,
+                            double &worig, double &wi, double &wj) {
+    worig = wi = wj = 1.0;
+    if (weight_mode == WEIGHT_SPECIES) {
+      if (iorig) worig = species[iorig->ispecies].specwt;
+      else if (ip) worig = species[ip->ispecies].specwt;
+      if (ip) wi = species[ip->ispecies].specwt;
+      if (jp) wj = species[jp->ispecies].specwt;
+    } else if (weight_mode == WEIGHT_PARTICLE) {
+      double *wvec = edvec[ewhich[index_sweight]];
+      int nout = 0;
+      double osum = 0.0;
+      if (ip) {
+        wi = wvec[ip - particles];
+        osum += wi;
+        nout++;
+      }
+      if (jp) {
+        wj = wvec[jp - particles];
+        osum += wj;
+        nout++;
+      }
+      if (nout > 0) worig = osum/nout;
+      else worig = 0.0;
+    }
+  }
   void error_custom();
   virtual int add_custom(char *, int, int);
   virtual void grow_custom(int, int, int);
