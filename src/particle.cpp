@@ -52,7 +52,6 @@ Particle::Particle(SPARTA *sparta) : Pointers(sparta)
   MPI_Comm_rank(world,&me);
 
   exist = sorted = 0;
-  weightflag = 0;
   nglobal = 0;
   nlocal = maxlocal = 0;
   particles = NULL;
@@ -162,8 +161,8 @@ void Particle::init()
 
   // resolve the unified particle weighting mode for this run
   // per-particle (SWPM) weighting is active whenever the custom attribute
-  // exists (registered by fix stochastic_weight), matching the semantics
-  // of stochastic_weights(); the schemes are mutually exclusive
+  // exists (registered by fix stochastic_weight); the schemes are
+  // mutually exclusive
   // NOTE: full resolution + exclusivity guard moves to setup_weighting()
 
   index_sweight = find_custom((char *) "stochastic_wt");

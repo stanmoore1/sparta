@@ -25,7 +25,6 @@ class Particle : protected Pointers {
   int exist;                // 1 if particles exist
   int sorted;               // 1 if particles are sorted by grid cell
   int sws;                  // SWS - 0:none, 1:SWS, 2:SWSmax ; read from input file species command keyword
-  int weightflag;           // 1 if stochastic weights used
 
   // unified particle weighting mode, resolved once per run
   // WEIGHT_SPECIES = SWS (static per-species specwt)
@@ -186,7 +185,6 @@ class Particle : protected Pointers {
   void unpack_restart(char *, int &, int, int);
 
   int find_custom(char *);
-  double *stochastic_weights();
 
   // effective in-loop weight of particle I, relative to fnum
   // exactly 1.0 unless SWS or SWPM weighting is active
