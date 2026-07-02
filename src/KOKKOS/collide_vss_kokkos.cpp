@@ -1935,13 +1935,20 @@ int CollideVSSKokkos::select_elec_state(int icell,Particle::OnePart *p,
       }
     }
   }
+  // if no selectable state has any weight (e.g. every allowed state has a
+  // zero relaxation probability), leave the particle in its current state
+
+  if (d_state_probability(icell,max_level) <= 0.0)
+    return d_estates[p - d_particles.data()];
+
   // Select a state from the distribution
-  int ielec;
+  int ielec,ilast;
   double eelec = 0.0;
   do {
     double rand_state = rand_gen.drand()*d_state_probability(icell,max_level);
     ielec = 0;
-    while (rand_state >= 0) {
+    ilast = -1;
+    while (rand_state >= 0 && ielec <= max_level) {
       if (!enforce_spin_conservation ||
              d_elecstates(p->ispecies,ielec).spin == d_elecstates(p->ispecies,d_estates[p - d_particles.data()]).spin) {
         if (reacting) {
@@ -1950,10 +1957,13 @@ int CollideVSSKokkos::select_elec_state(int icell,Particle::OnePart *p,
         } else {
           rand_state -= d_elecstates(p->ispecies,ielec).degen*get_elec_phi(p->ispecies, jp->ispecies, ielec, E_Dispose);
         }
+        ilast = ielec;
       }
       ++ielec;
     }
-    --ielec;
+    // floating-point round-off can leave rand_state non-negative after all
+    // weights are subtracted, so clamp to the last spin-allowed state
+    ielec = ilast;
     eelec = d_elecstates(p->ispecies,ielec).temp*boltz;
     State_prob = pow((1.0 - eelec / E_Dispose),
                      (1.5 - omega));

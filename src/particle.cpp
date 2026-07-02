@@ -617,8 +617,14 @@ void Particle::grow_species()
 
   for (int isp = 0; isp < nspecies; ++isp) {
     if (species[isp].elecdat != NULL) {
-      memory->srealloc(species[isp].elecdat->species_rel, maxspecies*sizeof(double*),"elecdat:species_rel");
+      species[isp].elecdat->species_rel = (double **)
+        memory->srealloc(species[isp].elecdat->species_rel,
+                         maxspecies*sizeof(double*),"elecdat:species_rel");
       memory->grow(species[isp].elecdat->enforce_spin_conservation, maxspecies, "elecdat:enforce_spin_conservation");
+      for (int jsp = nspecies; jsp < maxspecies; ++jsp) {
+        species[isp].elecdat->species_rel[jsp] = NULL;
+        species[isp].elecdat->enforce_spin_conservation[jsp] = true;
+      }
     }
   }
 }
@@ -1044,8 +1050,9 @@ void Particle::add_species(int narg, char **arg)
       memory->create(species[ii].elecdat->default_rel, nmode, "elecdat:default_rel");
       species[ii].elecdat->species_rel = (double**) memory->smalloc(maxspecies*sizeof(double*),"elecdat:species_rel");
       memory->create(species[ii].elecdat->enforce_spin_conservation, maxspecies, "elecdat:enforce_spin_conservation");
-      for (int isp = 0; isp < particle->nspecies; ++isp) {
+      for (int isp = 0; isp < maxspecies; ++isp) {
         species[ii].elecdat->species_rel[isp] = NULL;
+        species[ii].elecdat->enforce_spin_conservation[isp] = true;
       }
       for (int isp = 0; isp < particle->nspecies; ++isp) {
         species[ii].elecdat->enforce_spin_conservation[isp] = fileelec[j].enforce_spin_conservation[isp];
@@ -1574,7 +1581,7 @@ void Particle::read_electronic_file()
         vsp->default_rel[i] = atof(words[j++]);
         vsp->elecdegen[i] = atoi(words[j++]);
         vsp->elecspin[i] = atoi(words[j++]);
-        vsp->elecdof[i] = atoi(words[j++]);
+        vsp->elecdof[i] = atof(words[j++]);
       }
       nfile++;
     } else {
