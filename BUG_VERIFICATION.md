@@ -30,6 +30,29 @@ false positives and incorrect/regressive fixes were rejected.
   **rejects** the 4 non-bugs, and **avoids AB's EPSZERO regression** in `collide_vss*`.
 - **Build:** `make serial` links cleanly (`spa_serial`) with all non-KOKKOS fixes applied.
 
+## Follow-up review (third pass): completed the incomplete fixes
+
+Two fixes that the first pass applied only partially were completed:
+
+- **108** (`variable.cpp`): the first pass fixed only the `compute`-ID leak site. The identical
+  `char *id = new char[n]` / `error->all` / `delete [] id` leak-on-error pattern was completed at
+  all remaining sites — `fix`, `surf collide`, `surf react`, and the multi-exit `custom` and
+  `v_` blocks (each leaking `id` at several `error->all` exits). Every leaking `error->all`
+  between an `id` allocation and its `delete [] id` is now preceded by `delete [] id`. These are
+  low-severity (pre-`MPI_Abort`) leaks, fixed for consistency.
+- **85/86/87 CPU twins** (`fix_ambipolar.cpp`, `fix_emit_face.cpp`, `fix_emit_surf.cpp`,
+  `fix_vibmode.cpp`, `particle.cpp`, `surf_collide_diffuse.cpp`): the first pass hardened
+  `-log(drand())` → `-log(1.0 - drand())` only in the KOKKOS kernels. The **CPU twins** of those
+  exact six kernels were hardened identically (`-log(1.0 - random->uniform())` /
+  `-log(1.0 - erandom->uniform())`), since `RanMars::uniform()` can return `0.0` →
+  `-log(0) = +Inf`. Scope was matched to the six KOKKOS kernels that were hardened, to restore
+  CPU/GPU parity without introducing a new asymmetry. `create_particles`, `fix_emit_face_file`,
+  `surf_collide_cll`, `surf_collide_td`, and `surf_react_adsorb` have the same idiom but their
+  KOKKOS side was **not** hardened, so they were left unchanged (both sides stay consistent).
+  **Note:** this shifts the exact CPU velocity draw for a given seed (same distribution,
+  different value), so CPU regression baselines that assume bit-identical output change — as the
+  KOKKOS baselines already did.
+
 ## Follow-up review (second pass): inert / non-defect changes reverted
 
 An independent re-verification of every applied change against `origin/master` found that a
