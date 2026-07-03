@@ -1,0 +1,33 @@
+################################################################################
+# TEST: compute telec/grid recovers the initialization temperature
+# N2 gas initialized with electronic states Boltzmann-distributed at
+# telec = ${TELEC}. compute telec/grid (per-species) should read back a
+# temperature close to ${TELEC} at step 0, before collisions change it.
+# Exercises bisectTelec / elec_energy / electronic_distribution_func.
+################################################################################
+seed                12345
+dimension           3
+global              gridcut 1.0e-5 comm/sort yes
+boundary            rr rr rr
+create_box          0 0.0001 0 0.0001 0 0.0001
+create_grid         2 2 2
+balance_grid        rcb part
+
+species             air.species N2 elecfile n2boltz.elec
+mixture             gas N2 vstream 0.0 0.0 0.0 temp 20000.0 trot 100.0 tvib 100.0 telec ${TELEC}
+
+global              nrho 1.4141E24
+global              fnum 3.5352E7
+
+collide             vss gas air.vss relax constant
+collide_modify      rotate no vibrate no electronic discrete
+fix                 electronic elecmode
+collide_modify      remain no
+
+create_particles    gas n 40000 twopass
+compute             telec telec/grid all species
+compute             Telec reduce ave c_telec[*]
+stats               100
+stats_style         step cpu np nattempt ncoll c_Telec
+timestep            1.00E-9
+run                 100

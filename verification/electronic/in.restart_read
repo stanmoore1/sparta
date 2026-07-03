@@ -1,0 +1,12 @@
+################################################################################
+# TEST part B: read the restart and immediately snapshot. Must match part A's
+# step-100 snapshot exactly (electronic custom data survived the round-trip).
+# dump particle reads the restored custom attributes directly; no collide/fix
+# is required just to write them back out.
+################################################################################
+seed                12345
+read_restart        elec.restart
+dump                1 particle all 1000 dump.post.* id type vx vy vz p_eelec p_elecstate
+dump_modify         1 format float %.17e
+dump_modify         1 first yes
+run                 0

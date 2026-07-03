@@ -1,0 +1,34 @@
+################################################################################
+# TEST: electronic-only relaxation for an atomic species (elec_exchange path)
+# Pure atomic O with electronic states but zero rot/vib dof. Translation hot,
+# electronic cold. Because ave_dof (rot+vib) == 0, relaxation only happens if
+# the elec_exchange() path is taken. Expect: electronic states reach the
+# Boltzmann distribution at the equilibrated temperature, energy conserved.
+################################################################################
+seed                12345
+dimension           3
+global              gridcut 1.0e-5 comm/sort yes
+boundary            rr rr rr
+create_box          0 0.0001 0 0.0001 0 0.0001
+create_grid         2 2 2
+balance_grid        rcb part
+
+species             air.species O elecfile o_atom.elec
+mixture             gas O vstream 0.0 0.0 0.0 temp 30000.0 telec 100.0
+
+global              nrho 1.4141E24
+global              fnum 3.5352E7
+
+collide             vss gas o_atom.vss relax constant
+collide_modify      rotate no vibrate no electronic discrete
+fix                 electronic elecmode
+collide_modify      remain no
+
+create_particles    gas n 40000 twopass
+compute             temp temp
+stats               2000
+stats_style         step cpu np nattempt ncoll c_temp
+dump                1 particle all 4000 dump.atom.* id type vx vy vz p_eelec p_elecstate
+dump_modify         1 format float %.17e
+timestep            1.00E-9
+run                 4000

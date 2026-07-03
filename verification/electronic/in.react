@@ -1,0 +1,39 @@
+################################################################################
+# TEST: energy conservation across REAL reactions with electronic energy
+# Hot O2/N2 reservoir that actually dissociates (O2 + N2 -> O + O + N2),
+# composition changes, electronic mode active on all species. The driver
+# checks the exact conservation law: the drop in (kinetic + rot + vib + elec)
+# energy equals the number of reactions times the dissociation energy
+# (coeff[4] = 8.197e-19 J). Exercises EEXCHANGE_ReactingEDisposal,
+# relax_electronic_mode(reacting=true), and zero_elec on all products.
+################################################################################
+seed                12345
+dimension           3
+global              gridcut 1.0e-5 comm/sort yes
+boundary            rr rr rr
+create_box          0 0.0001 0 0.0001 0 0.0001
+create_grid         2 2 2
+balance_grid        rcb part
+
+species             air.species N2 O2 O N elecfile o2n2.elec
+mixture             gas N2 O2 vstream 0.0 0.0 0.0 temp 40000.0 trot 40000.0 tvib 40000.0 telec 40000.0
+mixture             gas N2 frac 0.5
+mixture             gas O2 frac 0.5
+
+global              nrho 7.07043E22
+global              fnum 1.767E6
+
+collide             vss all air.vss relax constant
+collide_modify      rotate smooth vibrate discrete electronic discrete
+fix                 electronic elecmode
+collide_modify      remain no
+react               tce o2n2.tce
+
+create_particles    gas n 40000 twopass
+compute             temp temp
+stats               200
+stats_style         step cpu np nattempt ncoll nreact c_temp
+dump                1 particle all 1000 dump.react.* id type vx vy vz erot evib p_eelec p_elecstate
+dump_modify         1 format float %.17e
+timestep            1.00E-9
+run                 1000

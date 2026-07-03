@@ -1,0 +1,37 @@
+################################################################################
+# TEST: species-specific relaxation numbers (get_elec_phi species_rel branch)
+# N2 (trace) immersed in a bath of inert partner ${PARTNER}. N2 relaxes its
+# electronic mode against the bath; the per-partner relaxation probability is
+# set by cross-species lines in n2_specrel.elec (F1 fast, F2 slow). Driver runs
+# this with PARTNER=F1 and PARTNER=F2 and checks N2 relaxes faster vs F1.
+################################################################################
+seed                12345
+dimension           3
+global              gridcut 1.0e-5 comm/sort yes
+boundary            rr rr rr
+create_box          0 0.0001 0 0.0001 0 0.0001
+create_grid         2 2 2
+balance_grid        rcb part
+
+species             partners.species ${PARTNER}
+species             air.species N2 elecfile n2_specrel.elec
+mixture             gas N2 ${PARTNER} vstream 0.0 0.0 0.0 temp 40000.0 trot 100.0 tvib 100.0 telec 100.0
+mixture             gas N2 frac 0.05
+mixture             gas ${PARTNER} frac 0.95
+
+global              nrho 1.4141E24
+global              fnum 3.5352E7
+
+collide             vss gas specrel.vss relax constant
+collide_modify      rotate no vibrate no electronic discrete
+fix                 electronic elecmode
+collide_modify      remain no
+
+create_particles    gas n 40000 twopass
+compute             eelec grid all species eelec
+compute             Eelec reduce ave c_eelec[2]
+compute             temp temp
+stats               10
+stats_style         step cpu np nattempt ncoll c_temp c_Eelec
+timestep            1.00E-9
+run                 100

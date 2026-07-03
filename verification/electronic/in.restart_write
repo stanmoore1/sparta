@@ -1,0 +1,29 @@
+################################################################################
+# TEST part A: run, snapshot the electronic custom data, then write a restart.
+# The dump at run 0 and the restart both capture the identical step-100 state,
+# so comparing the post-read snapshot to this one is a pure round-trip check of
+# the elecstate/eelec custom data (no RNG-continuity assumption).
+################################################################################
+seed                12345
+dimension           3
+global              gridcut 1.0e-5 comm/sort yes
+boundary            rr rr rr
+create_box          0 0.0001 0 0.0001 0 0.0001
+create_grid         2 2 2
+balance_grid        rcb part
+species             air.species N2 elecfile n2boltz.elec
+mixture             gas N2 vstream 0.0 0.0 0.0 temp 25000.0 trot 25000.0 tvib 25000.0 telec 100.0
+global              nrho 1.4141E24
+global              fnum 3.5352E7
+collide             vss gas air.vss relax constant
+collide_modify      rotate no vibrate no electronic discrete
+fix                 electronic elecmode
+collide_modify      remain no
+create_particles    gas n 40000 twopass
+timestep            1.00E-9
+run                 100
+write_restart       elec.restart
+dump                1 particle all 1000 dump.pre.* id type vx vy vz p_eelec p_elecstate
+dump_modify         1 format float %.17e
+dump_modify         1 first yes
+run                 0

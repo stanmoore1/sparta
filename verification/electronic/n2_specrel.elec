@@ -1,0 +1,7 @@
+# N2 electronic states, single spin class. Default relaxation prob 0.1.
+# Cross-species lines set a FAST partner (F1, prob 0.5) and a SLOW partner
+# (F2, prob 0.01), exercising the species-specific relaxation branch of
+# get_elec_phi (species_rel != NULL) vs the default_rel fallback.
+N2 3   0.0 0.1 9 1 0   72231.4 0.1 27 1 0   85782.7 0.1 54 1 0
+N2 F1 F   0.5 0.5 0.5
+N2 F2 F   0.01 0.01 0.01

@@ -1,0 +1,5 @@
+# Atomic oxygen electronic states (ground 3P, 1D, 1S) with fast uniform
+# relaxation and a single spin class so every transition is allowed.
+# O has zero rot/vib dof, so this exercises the electronic-only relaxation
+# path (elec_exchange with ave_dof == 0).
+O 3   0.0 0.5 5 1 0   22830.0 0.5 1 1 0   48621.0 0.5 5 1 0
