@@ -23,14 +23,21 @@ All steps 1–5 are implemented, verified, and committed. Final state:
   (commit `3e46645c`).
 - **Negative test** — SWS+SWPM / SWPM+cell exclusion asserted in both
   verify scripts (commit `c51f9ada`).
+- **SWPM re-sync** — the `claude/swpm-review-tests-b8jf0s` branch was
+  force-updated after Step 1 with two further review commits, both folded
+  in here: vibrational-energy conservation in SWPM split/reduce (with the
+  polyatomic `in.swpm.n2` regression deck) and a compute-independent
+  conservation audit plus a react+SWPM init guard
+  (commits `36d6ad06`, `c3a08aee`).
 
-Verification at completion: SWS gold suite 7/7, SWPM suite 8/8,
-`verify_sws.py` and `verify_swpm.py` all pass; three A/B decks (reactive
-ambipolar+TCE, two-group, multigroup ambipolar) byte-identical to a
-reference binary still carrying the `_SWS` kernels; five untouched example
-families (collide, chem, free, circle, axi — the last using cell
-weighting) byte-identical to the upstream-master baseline in every
-non-CPU column. Step 6 items remain recorded follow-ups, not done here.
+Verification at completion: SWS gold suite 7/7, SWPM suite 9/9 (adds the
+polyatomic `n2` deck), `verify_sws.py` / `verify_swpm.py` /
+`audit_conservation.py` all pass; three A/B decks (reactive ambipolar+TCE,
+two-group, multigroup ambipolar) byte-identical to a reference binary
+still carrying the `_SWS` kernels; five untouched example families
+(collide, chem, free, circle, axi — the last using cell weighting)
+byte-identical to the upstream-master baseline in every non-CPU column.
+Step 6 items remain recorded follow-ups, not done here.
 
 ## Context
 
