@@ -49,435 +49,212 @@ enum{CONSTANT,VARIABLE};
 #define DELTAELECTRON 128
 #define EPSZERO 1.0e-14
 
-/* ---------------------------------------------------------------------- */
-// ========================================================================
-// Modify the number of attempted collision to account for the species
-// weight, leading to an artificial increase of the number of 
-// trace species numerical particles. Thus, in below equations,
-// N from the conventional DSMC is lower than N from SWS methods. 
-// Conventional DSMC (sws=0): Ncoll = 1/2 N fnum (N-1)
-// SWS (sws=1): Ncoll = 1/2 count_wi fnum (N-1)
-// SWSmax (sws=2): Ncoll = 1/2 N fnum wi_max (N-1)
-// ========================================================================
-double CollideVSS::attempt_collision_SWS(int icell, int np, double volume, double count_wi, double maxwi)
+/* ----------------------------------------------------------------------
+   SWS - weighted collision attempt count for a single group
+   called by attempt_collision(icell,np,volume) when SWS is active
+   sws_attempt_wi and sws_maxwi are set per cell by the collision loops
+   conventional DSMC (sws=0): Ncoll = 1/2 N fnum (N-1)
+   SWS (sws=1): Ncoll = 1/2 count_wi fnum (N-1)
+   SWSmax (sws=2): Ncoll = 1/2 N wi_max fnum (N-1)
+   the weighting artificially increases the number of trace-species
+   numerical particles, so N under SWS is higher than conventional DSMC
+------------------------------------------------------------------------- */
+
+double CollideVSS::sws_attempt_one(int icell, int np, double volume)
 {
   double fnum = update->fnum;
   double dt = update->dt;
 
   double nattempt;
 
-  int sws = particle->sws;  // SWS
-  if (sws==1) {             // SWS
+  int sws = particle->sws;
+  if (sws==1) {
     if (remainflag) {
-      nattempt = 0.5 * count_wi * (np-1) *
+      nattempt = 0.5 * sws_attempt_wi * (np-1) *
         vremax[icell][0][0] * dt * fnum / volume + remain[icell][0][0];
       remain[icell][0][0] = nattempt - static_cast<int> (nattempt);
     } else {
-      nattempt = 0.5 * count_wi * (np-1) *
-        vremax[icell][0][0] * dt * fnum / volume + random->uniform();
-    }
-  } else if (sws==2) {      // SWS
-    if (remainflag) {
-      nattempt = 0.5 * np * maxwi * (np-1) *
-        vremax[icell][0][0] * dt * fnum / volume + remain[icell][0][0];
-      remain[icell][0][0] = nattempt - static_cast<int> (nattempt);
-    } else {
-      nattempt = 0.5 * np * maxwi * (np-1) *
+      nattempt = 0.5 * sws_attempt_wi * (np-1) *
         vremax[icell][0][0] * dt * fnum / volume + random->uniform();
     }
   } else {
     if (remainflag) {
-      nattempt = 0.5 * np * (np-1) *
+      nattempt = 0.5 * np * sws_maxwi * (np-1) *
         vremax[icell][0][0] * dt * fnum / volume + remain[icell][0][0];
       remain[icell][0][0] = nattempt - static_cast<int> (nattempt);
     } else {
-      nattempt = 0.5 * np * (np-1) *
+      nattempt = 0.5 * np * sws_maxwi * (np-1) *
         vremax[icell][0][0] * dt * fnum / volume + random->uniform();
     }
   }
   return nattempt;
 }
 
-/* ---------------------------------------------------------------------- */
-// ========================================================================
-// SWS keyword: use n = count_wi * fnum instead of n = np * fnum 
-// to obtain the correct number of attempted collisions when using 
-// different species weight.
-// SWSmax keyword: use n = np * fnum * max(wi)
-// ========================================================================
-double CollideVSS::attempt_collision_SWS(int icell, int igroup, int jgroup,
-                                     double volume)
+/* ----------------------------------------------------------------------
+   SWS - weighted pair count for a group pair
+   called by attempt_collision(icell,igroup,jgroup,volume) under SWS
+   count_wi_group[] and maxwigr[] are filled per cell by
+   sws_group_weights()
+------------------------------------------------------------------------- */
+
+double CollideVSS::sws_group_npairs(int igroup, int jgroup)
 {
- double fnum = update->fnum;
- double dt = update->dt;
+  int sws = particle->sws;
 
- double nattempt;
-
- // return 2x the value for igroup != jgroup, since no J,I pairing
-
- double npairs;
-
- int sws = particle->sws;  // SWS
- if (igroup == jgroup) {   
-  if (sws==1) npairs = 0.5 * count_wi_group[igroup] * (ngroup[igroup]-1);  // SWS
-  else if (sws==2) npairs = 0.5 * ngroup[igroup] * maxwigr[igroup] * (ngroup[igroup]-1);  // SWS
-  else npairs = 0.5 * ngroup[igroup] * (ngroup[igroup]-1);
- }
- else {
-  if (sws==1) npairs = count_wi_group[igroup] * (ngroup[jgroup]);  // SWS
-  else if (sws==2) npairs = ngroup[igroup] * maxwigr[igroup] * (ngroup[jgroup]);  // SWS
-  else npairs = ngroup[igroup] * (ngroup[jgroup]);
- }
-
- nattempt = npairs * vremax[icell][igroup][jgroup] * dt * fnum / volume;
-
- if (remainflag) {
-   nattempt += remain[icell][igroup][jgroup];
-   remain[icell][igroup][jgroup] = nattempt - static_cast<int> (nattempt);
- } else nattempt += random->uniform();
-
- return nattempt;
+  double npairs;
+  if (igroup == jgroup) {
+    if (sws==1) npairs = 0.5 * count_wi_group[igroup] * (ngroup[igroup]-1);
+    else npairs = 0.5 * ngroup[igroup] * maxwigr[igroup] * (ngroup[igroup]-1);
+  } else {
+    if (sws==1) npairs = count_wi_group[igroup] * (ngroup[jgroup]);
+    else npairs = ngroup[igroup] * maxwigr[igroup] * (ngroup[jgroup]);
+  }
+  return npairs;
 }
 
-/* ---------------------------------------------------------------------- */
-// ========================================================================
-// Modify the acceptance-rejection method so that particle pair
-// candidates are less likely to be selected if both particles
-// have low weights. 
-// This modification goes along with: Ncoll = 1/2 N fnum w_imax (N-1),
-// N being increased by SWS.
-// This method provides the best accuracy for physical particles species 
-// collision rates with the cost of a slight increase in the total number of 
-// attempted collision.
-// Keyword to use this method: SWSmax
-// ========================================================================
-int CollideVSS::test_collision_SWS(int icell, int igroup, int jgroup,
-  Particle::OnePart *ip, Particle::OnePart *jp, double maxwi)
+/* ----------------------------------------------------------------------
+   SWS - acceptance-rejection scale for the SWSmax variant (sws=2)
+   pair candidates are less likely to be selected if both particles
+   have low weights; goes along with Ncoll = 1/2 N wi_max fnum (N-1)
+------------------------------------------------------------------------- */
+
+double CollideVSS::sws_test_scale(int ispecies, int jspecies)
 {
-double *vi = ip->v;
-double *vj = jp->v;
-int ispecies = ip->ispecies;
-int jspecies = jp->ispecies;
-double du  = vi[0] - vj[0];
-double dv  = vi[1] - vj[1];
-double dw  = vi[2] - vj[2];
-double vr2 = du*du + dv*dv + dw*dw;
-
-// prevent division by zero
-
-if (vr2 < EPSZERO && params[ispecies][jspecies].omega >= 1.0)
-  return 0;
-
-double vro  = pow(vr2,1.0-params[ispecies][jspecies].omega);
-
-// although the vremax is calculated for the group,
-// the individual collisions calculated species dependent vre
-
-double vre = vro*prefactor[ispecies][jspecies];
-vremax[icell][igroup][jgroup] = MAX(vre,vremax[icell][igroup][jgroup]);
-
-int sws = particle->sws;  // SWS
-if (sws==2) {             // SWS
-  Particle::Species *species = particle->species;   // SWS
-  double w_ipart = species[ispecies].specwt;   // SWS
-  double w_jpart = species[jspecies].specwt;   // SWS
-  if ((vre/vremax[icell][igroup][jgroup])*(MAX(w_ipart,w_jpart)/maxwi) < random->uniform()) return 0;  // SWS
-} else {
-  if (vre/vremax[icell][igroup][jgroup] < random->uniform()) return 0;
-}
-precoln.vr2 = vr2;
-return 1;
+  Particle::Species *species = particle->species;
+  double w_ipart = species[ispecies].specwt;
+  double w_jpart = species[jspecies].specwt;
+  return MAX(w_ipart,w_jpart)/sws_maxwi;
 }
 
-/* ---------------------------------------------------------------------- */
-// ========================================================================
-// Set the weights according to the colliding particle species and 
-// determine the maximum weight over all the simulated particles.
-// Add the stored energy lost due to differently weighted
-// collision to the translation energy of the current collision if
-// the colliding particles are major species.
-// ========================================================================
-void CollideVSS::setup_collision_SWS(Particle::OnePart *ip, Particle::OnePart *jp)
+/* ----------------------------------------------------------------------
+   SWS - Ewilost re-injection for setup_collision()
+   returns the pooled split-merge energy (draining the pool) when both
+   collision partners carry the max species weight, else 0.0
+------------------------------------------------------------------------- */
+
+double CollideVSS::sws_ewilost_take(int isp, int jsp)
 {
   Particle::Species *species = particle->species;
 
-  int isp = ip->ispecies;
-  int jsp = jp->ispecies;
-
-  double w_i = species[isp].specwt;  // SWS
-  double w_j = species[jsp].specwt;  // SWS
-  int nspecies = particle->nspecies; // SWS
-  double w_max = 0.0;                // SWS
-
-  for (int i = 0; i < nspecies; i++){  // SWS
-    w_max = std::max(species[i].specwt,w_max);
-  }
-
-  precoln.vr = sqrt(precoln.vr2);
-
-  precoln.ave_rotdof = 0.5 * (species[isp].rotdof + species[jsp].rotdof);
-  precoln.ave_vibdof = 0.5 * (species[isp].vibdof + species[jsp].vibdof);
-  precoln.ave_dof = (precoln.ave_rotdof  + precoln.ave_vibdof)/2.;
-
-  double imass = precoln.imass = species[isp].mass;
-  double jmass = precoln.jmass = species[jsp].mass;
-
-   if ((w_i==w_max) && (w_j==w_max)){  // SWS
-    precoln.etrans = 0.5 * params[isp][jsp].mr * precoln.vr2 + Ewilost;
-    Ewilost = 0.0;
-  } else {
-    precoln.etrans = 0.5 * params[isp][jsp].mr * precoln.vr2;
-  }
-  
-  precoln.erot = ip->erot + jp->erot;
-  precoln.evib = ip->evib + jp->evib;
-
-  precoln.eint   = precoln.erot + precoln.evib;
-  precoln.etotal = precoln.etrans + precoln.eint;
-
-  // COM velocity calculated using reactant masses
-
-  double divisor = 1.0 / (imass+jmass);
-  double *vi = ip->v;
-  double *vj = jp->v;
-  precoln.ucmf = ((imass*vi[0])+(jmass*vj[0])) * divisor;
-  precoln.vcmf = ((imass*vi[1])+(jmass*vj[1])) * divisor;
-  precoln.wcmf = ((imass*vi[2])+(jmass*vj[2])) * divisor;
-
-  postcoln.etrans = precoln.etrans;
-  postcoln.erot = 0.0;
-  postcoln.evib = 0.0;
-  postcoln.eint = 0.0;
-  postcoln.etotal = precoln.etotal;
-}
-
-int CollideVSS::perform_collision_SWS(Particle::OnePart *&ip,
-                                  Particle::OnePart *&jp,
-                                  Particle::OnePart *&kp,
-                                  int &n_i,
-                                  int &n_j,
-                                  int &n_k,
-                                  int &n_pre)
-{
-  int reactflag,kspecies;
-  double x[3],v[3];
-  Particle::OnePart *p3;
-  Particle::OnePart *p_pre;   // SWS
-  
-  int i;   // SWS
-  Particle::Species *species = particle->species;   // SWS
-
-  //Additional parameters for Species weighting scheme
-  //All of particles are pre-collision parameters
-  // NOTE: kp is an output arg with no meaningful value on entry,
-  //       so ksp/w_k are only set once a K particle is created below
-  int isp = ip->ispecies;
-  int jsp = jp->ispecies;
-  int ksp;
-  Particle::OnePart ip_pre = *ip;
-  Particle::OnePart jp_pre = *jp;
-  Particle::OnePart maxp_pre = *jp;
-  // SWS - variables for weighting scheme
   double w_i = species[isp].specwt;
   double w_j = species[jsp].specwt;
-  double w_k;
-  double w_min = std::min(w_i, w_j);
-  double w_max = std::max(w_i, w_j);
-  double phi_i;
-  double phi_j;
-  double phi_k;
+  int nspecies = particle->nspecies;
+  double w_max = 0.0;
 
-  // if gas-phase chemistry defined, attempt and perform reaction
-  // if a 3rd particle is created, its kspecies >= 0 is returned
-  // if 2nd particle is removed, its jspecies is set to -1
+  for (int i = 0; i < nspecies; i++)
+    w_max = std::max(species[i].specwt,w_max);
 
-  if (react)
-    reactflag = react->attempt(ip,jp,
-                               precoln.etrans,precoln.erot,
-                               precoln.evib,postcoln.etotal,kspecies);
-  else reactflag = 0;
-
-  // repartition energy and perform velocity scattering for I,J,K particles
-  // reaction may have changed species of I,J particles
-  // J,K particles may have been removed or created by reaction
-
-  kp = NULL;
-
-  if (reactflag) {
-    // compute the number of split particle（0 or 1）
-    if (w_i == w_j) n_pre = 0;         // SWS
-    else n_pre = ((((w_max-w_min)/w_max)/random->uniform()>1)?1:0);   // SWS
-    maxp_pre = ((w_i > w_j) ? ip_pre : jp_pre);      // SWS
-
-    // particle creation of major reactant. This should also be taken account.
-    // p_pre is the pointer for a reactant particle that continue to exist
-    if ( n_pre == 1) {   // SWS
-       int id = MAXSMALLINT*random->uniform();
-       Particle::OnePart *particles = particle->particles;
-       memcpy(x,maxp_pre.x,3*sizeof(double));
-       memcpy(v,maxp_pre.v,3*sizeof(double));
-       int reallocflag = 
-       particle->add_particle(id,maxp_pre.ispecies,maxp_pre.icell,x,v,maxp_pre.erot,maxp_pre.evib);
-       if (reallocflag) {
-        ip = particle->particles + (ip - particles);
-        jp = particle->particles + (jp - particles);
-      }
-       p_pre = &particle->particles[particle->nlocal-1];
-     }          
-    isp = ip->ispecies;  // SWS
-    jsp = jp->ispecies;  // SWS
-    w_i = species[isp].specwt;  // SWS
-    w_j = species[jsp].specwt;  // SWS
-    phi_i = w_min/w_i;  // SWS
-    phi_j = w_min/w_j;  // SWS
-    
-    // add 3rd K particle if reaction created it
-    // index of new K particle = nlocal-1
-    // if add_particle() performs a realloc:
-    //   make copy of x,v, then repoint ip,jp to new particles data struct
-    //   unless electron
-
-    if (kspecies >= 0) {
-      int id = MAXSMALLINT*random->uniform();
-
-      Particle::OnePart *particles = particle->particles;
-      memcpy(x,ip->x,3*sizeof(double));
-      memcpy(v,ip->v,3*sizeof(double));
-      int ielectron_flag = (ambiflag && ip->ispecies == ambispecies);
-      int jelectron_flag = (ambiflag && jp->ispecies == ambispecies);
-      int reallocflag =
-        particle->add_particle(id,kspecies,ip->icell,x,v,0.0,0.0);
-      if (reallocflag) {
-        if (!ielectron_flag)
-          ip = particle->particles + (ip - particles);
-        if (!jelectron_flag)
-          jp = particle->particles + (jp - particles);
-      }
-
-      kp = &particle->particles[particle->nlocal-1];
-      
-      ksp = kp->ispecies;  // SWS
-      w_k = species[ksp].specwt;  // SWS
-      phi_k = w_min/w_k;  // SWS
-      
-      // !! if the reaction is impact ionization, 
-      // If the ramdom number [0:1] is lower than the creteria made by two weight,
-      // integer will be 1 , else 0
-      // we can have number of additional product here
-      if (phi_i < 1.0) n_i = (((phi_i)/random->uniform()>1)?1:0);  // SWS
-      else if (phi_i >= 1.0) n_i = int(phi_i)+(((phi_i-int(phi_i))/random->uniform()>1)?1:0);  // SWS  
-      if (phi_j < 1.0) n_j = (((phi_j)/random->uniform()>1)?1:0);  // SWS
-      else if (phi_j >= 1.0) n_j = int(phi_j)+(((phi_j-int(phi_j))/random->uniform()>1)?1:0);  // SWS
-      if (phi_k < 1.0) n_k = (((phi_k)/random->uniform()>1)?1:0);  // SWS
-      else if (phi_k >= 1.0) n_k = int(phi_k)+(((phi_k-int(phi_k))/random->uniform()>1)?1:0);  // SWS
-        
-      EEXCHANGE_ReactingEDisposal(ip,jp,kp);
-      SCATTER_ThreeBodyScattering(ip,jp,kp);
-
-    // remove 2nd J particle if recombination reaction removed it
-    // p3 is 3rd particle participating in energy exchange
-
-    } else if (jp->ispecies < 0) {
-      double *vi = ip->v;
-      double *vj = jp->v;
-
-      double divisor = 1.0 / (precoln.imass + precoln.jmass);
-      double ucmf = ((precoln.imass*vi[0]) + (precoln.jmass*vj[0])) * divisor;
-      double vcmf = ((precoln.imass*vi[1]) + (precoln.jmass*vj[1])) * divisor;
-      double wcmf = ((precoln.imass*vi[2]) + (precoln.jmass*vj[2])) * divisor;
-
-      vi[0] = ucmf;
-      vi[1] = vcmf;
-      vi[2] = wcmf;
-
-      jp = NULL;
-      p3 = react->recomb_part3;
-
-      // properly account for 3rd body energy with another call to setup_collision()
-      // it needs relative velocity of recombined species and 3rd body
-
-      double *vp3 = p3->v;
-      double du  = vi[0] - vp3[0];
-      double dv  = vi[1] - vp3[1];
-      double dw  = vi[2] - vp3[2];
-      double vr2 = du*du + dv*dv + dw*dw;
-      precoln.vr2 = vr2;
-
-      // internal energy of ip particle is already included
-      //   in postcoln.etotal returned from react->attempt()
-      // but still need to add 3rd body internal energy
-
-      double partial_energy =  postcoln.etotal + p3->erot + p3->evib;
-
-      ip->erot = 0;
-      ip->evib = 0;
-      p3->erot = 0;
-      p3->evib = 0;
-
-      // returned postcoln.etotal will increment only the
-      //   relative translational energy between recombined species and 3rd body
-      // add back partial_energy to get full total energy
-
-      setup_collision_SWS(ip,p3);  // SWS
-      postcoln.etotal += partial_energy;
-      
-      if (phi_i < 1.0) n_i = (((phi_i)/random->uniform()>1)?1:0);  // SWS
-      else if (phi_i >= 1.0) n_i = int(phi_i)+(((phi_i-int(phi_i))/random->uniform()>1)?1:0);   // SWS
-      // because this reaction produce 1 particles, number of j,k particle is 0
-      n_j = n_k = 0;    // SWS
-
-      if (precoln.ave_dof > 0.0) EEXCHANGE_ReactingEDisposal(ip,p3,jp);
-
-      // Add reactflag to scattering routine as 
-      // splitting-merging should not be used when reaction
-      // with differently weighted reactant and/or product occur.
-      // Instead, the mass, momentum and energy are conserved
-      // through the probability of creation/production of the
-      // involved species.
-      SCATTER_TwoBodyScattering_SWS(ip,p3,reactflag);  // SWS
-    } else {
-      // exchange reaction or associative ionization
-      // compute number of particle after the reaction
-      // !! if the reaction is charge exchange or associative ionization
-      // !! reactant and product charge should be same.
-      if (phi_i < 1.0) n_i = (((phi_i)/random->uniform()>1)?1:0);  // SWS
-      else n_i = int(phi_i)+(((phi_i-int(phi_i))/random->uniform()>1)?1:0);  // SWS
-      if (phi_j < 1.0) n_j = (((phi_j)/random->uniform()>1)?1:0);  // SWS
-      else n_j = int(phi_j)+(((phi_j-int(phi_j))/random->uniform()>1)?1:0);  // SWS
-
-      // because this reaction produce 2 particles, number of k particle is 0
-      n_k = 0;  // SWS
-      EEXCHANGE_ReactingEDisposal(ip,jp,kp);
-      SCATTER_TwoBodyScattering_SWS(ip,jp,reactflag);  // SWS
-    }
-
-  } else {
-    // no reaction
-    // if reaction is not triggered, particle creation part is skipped
-    if (precoln.ave_dof > 0.0) EEXCHANGE_NonReactingEDisposal_SWS(ip,jp);  // SWS
-    SCATTER_TwoBodyScattering_SWS(ip,jp,reactflag); // SWS
+  if ((w_i==w_max) && (w_j==w_max)) {
+    double etake = Ewilost;
+    Ewilost = 0.0;
+    return etake;
   }
-
-  return reactflag;
+  return 0.0;
 }
 
-/* ---------------------------------------------------------------------- */
-// ========================================================================
-// Compute the post-collision velocity according using the 
-// splitting-merging method.
-// Compute and store the energy lost due to non conservation of the energy
-// during differently weighted particles collision.
-// If reaction occurs, the conservation is ensured by the 
-// probobility of creation/deletion of the particles. Thus,
-// the splitting-merging method is not used.
-// Remark : if equally weighted particles collide phi=1.
-// ========================================================================
-void CollideVSS::SCATTER_TwoBodyScattering_SWS(Particle::OnePart *ip,
-					   Particle::OnePart *jp, int reactflag)
-{
-  double ua,vb,wc;
-  double vrc[3];
+/* ----------------------------------------------------------------------
+   SWS - pre-collision capture for perform_collision()
+   copies the reactants (react->attempt() may change their species) and
+   resets the sws_n_* product multiplicities to the no-reaction values
+------------------------------------------------------------------------- */
 
+void CollideVSS::sws_perform_prep(Particle::OnePart *ip, Particle::OnePart *jp)
+{
+  sws_ip_pre = *ip;
+  sws_jp_pre = *jp;
+  sws_n_i = 1;
+  sws_n_j = sws_n_k = sws_n_pre = 0;
+}
+
+/* ----------------------------------------------------------------------
+   SWS - probabilistic split of the max-weight reactant after a reaction
+   draws n_pre; if 1, appends a copy of the pre-reaction max-weight
+   reactant (its un-reacted portion) to the master particle list
+   also computes the product survival ratios phi_i/phi_j from the min
+   PRE-reaction weight and the POST-reaction species weights
+------------------------------------------------------------------------- */
+
+void CollideVSS::sws_pre_split(Particle::OnePart *&ip, Particle::OnePart *&jp)
+{
+  double x[3],v[3];
+  Particle::Species *species = particle->species;
+
+  double w_i = species[sws_ip_pre.ispecies].specwt;
+  double w_j = species[sws_jp_pre.ispecies].specwt;
+  double w_min = std::min(w_i, w_j);
+  double w_max = std::max(w_i, w_j);
+
+  // number of split particles (0 or 1)
+
+  if (w_i == w_j) sws_n_pre = 0;
+  else sws_n_pre = ((((w_max-w_min)/w_max)/random->uniform()>1)?1:0);
+
+  // particle creation of the un-reacted portion of the major reactant
+
+  if (sws_n_pre == 1) {
+    Particle::OnePart *maxp_pre = ((w_i > w_j) ? &sws_ip_pre : &sws_jp_pre);
+    int id = MAXSMALLINT*random->uniform();
+    Particle::OnePart *particles = particle->particles;
+    memcpy(x,maxp_pre->x,3*sizeof(double));
+    memcpy(v,maxp_pre->v,3*sizeof(double));
+    int reallocflag =
+      particle->add_particle(id,maxp_pre->ispecies,maxp_pre->icell,x,v,
+                             maxp_pre->erot,maxp_pre->evib);
+    if (reallocflag) {
+      ip = particle->particles + (ip - particles);
+      jp = particle->particles + (jp - particles);
+    }
+  }
+
+  sws_w_min = w_min;
+  sws_phi_i = w_min/species[ip->ispecies].specwt;
+  sws_phi_j = w_min/species[jp->ispecies].specwt;
+}
+
+/* ----------------------------------------------------------------------
+   SWS - single product-multiplicity draw from survival ratio phi
+------------------------------------------------------------------------- */
+
+int CollideVSS::sws_draw_count(double phi)
+{
+  if (phi < 1.0) return (((phi)/random->uniform()>1)?1:0);
+  return int(phi)+(((phi-int(phi))/random->uniform()>1)?1:0);
+}
+
+/* ----------------------------------------------------------------------
+   SWS - draw the product multiplicities for a reaction
+   nprod = 1: recombination (single product I)
+   nprod = 2: exchange or associative ionization (products I,J)
+   nprod = 3: dissociation or impact ionization (products I,J,K)
+   the i,j,k draw order is pinned by the original implementation
+------------------------------------------------------------------------- */
+
+void CollideVSS::sws_draw_products(int nprod, Particle::OnePart *kp)
+{
+  Particle::Species *species = particle->species;
+
+  sws_n_i = sws_draw_count(sws_phi_i);
+  if (nprod >= 2) sws_n_j = sws_draw_count(sws_phi_j);
+  else sws_n_j = 0;
+  if (nprod == 3)
+    sws_n_k = sws_draw_count(sws_w_min/species[kp->ispecies].specwt);
+  else sws_n_k = 0;
+}
+
+/* ----------------------------------------------------------------------
+   SWS - splitting-merging velocity blend after two-body scattering
+   the higher-weight particle keeps only a phi fraction of its
+   post-collision velocity change (only that fraction of the molecules
+   it represents took part); the unconserved kinetic energy is pooled
+   in Ewilost for later re-injection by sws_ewilost_take()
+   with equally weighted partners phi = 1 and the blend is a no-op
+------------------------------------------------------------------------- */
+
+void CollideVSS::sws_scatter_merge(Particle::OnePart *ip,
+                                   Particle::OnePart *jp,
+                                   const double *vi_pre,
+                                   const double *vj_pre)
+{
   Particle::Species *species = particle->species;
   double *vi = ip->v;
   double *vj = jp->v;
@@ -485,75 +262,22 @@ void CollideVSS::SCATTER_TwoBodyScattering_SWS(Particle::OnePart *ip,
   int jsp = jp->ispecies;
   double mass_i = species[isp].mass;
   double mass_j = species[jsp].mass;
-  
-  // SWS - variables
-  double w_i = species[isp].specwt;  
-  double w_j = species[jsp].specwt; 
-  double phi = 1.0; 
 
-  double vi_pre[3];  
-  double vi_post[3]; 
-  double vj_pre[3];
+  double w_i = species[isp].specwt;
+  double w_j = species[jsp].specwt;
+  double phi = 1.0;
+
+  double vi_post[3];
   double vj_post[3];
-
-  vi_pre[0]=vi[0];
-  vi_pre[1]=vi[1];
-  vi_pre[2]=vi[2];
-
-  vj_pre[0]=vj[0];
-  vj_pre[1]=vj[1];
-  vj_pre[2]=vj[2];
 
   if ((w_i>0) && (w_j>0)){
     if (w_i>w_j){
       phi = w_j/w_i;
     } else {
       phi = w_i/w_j;
-    } 
-  }
-
-  double alpha_r = 1.0 / params[isp][jsp].alpha;
-
-  double eps = random->uniform() * 2*MY_PI;
-  if (fabs(alpha_r - 1.0) < 0.001) {
-    double vr = sqrt(2.0 * postcoln.etrans / params[isp][jsp].mr);
-    double cosX = 2.0*random->uniform() - 1.0;
-    double sinX = sqrt(1.0 - cosX*cosX);
-    ua = vr*cosX;
-    vb = vr*sinX*cos(eps);
-    wc = vr*sinX*sin(eps);
-  } else {
-    double scale = sqrt((2.0 * postcoln.etrans) / (params[isp][jsp].mr * precoln.vr2));
-    double cosX = 2.0*pow(random->uniform(),alpha_r) - 1.0;
-    double sinX = sqrt(1.0 - cosX*cosX);
-    vrc[0] = vi[0]-vj[0];
-    vrc[1] = vi[1]-vj[1];
-    vrc[2] = vi[2]-vj[2];
-    double d = sqrt(vrc[1]*vrc[1]+vrc[2]*vrc[2]);
-    if (d > 1.0e-6) {
-      ua = scale * ( cosX*vrc[0] + sinX*d*sin(eps) );
-      vb = scale * ( cosX*vrc[1] + sinX*(precoln.vr*vrc[2]*cos(eps) -
-                                         vrc[0]*vrc[1]*sin(eps))/d );
-      wc = scale * ( cosX*vrc[2] - sinX*(precoln.vr*vrc[1]*cos(eps) +
-                                         vrc[0]*vrc[2]*sin(eps))/d );
-    } else {
-      ua = scale * ( cosX*vrc[0] );
-      vb = scale * ( sinX*vrc[0]*cos(eps) );
-      wc = scale * ( sinX*vrc[0]*sin(eps) );
     }
   }
 
-  // new velocities for the products
-
-  double divisor = 1.0 / (mass_i + mass_j);
-  vi[0] = precoln.ucmf + (mass_j*divisor)*ua;
-  vi[1] = precoln.vcmf + (mass_j*divisor)*vb;
-  vi[2] = precoln.wcmf + (mass_j*divisor)*wc;
-  vj[0] = precoln.ucmf - (mass_i*divisor)*ua;
-  vj[1] = precoln.vcmf - (mass_i*divisor)*vb;
-  vj[2] = precoln.wcmf - (mass_i*divisor)*wc;
-
-  if (!(reactflag)){     // SWS
     if (w_i>w_j){
       vj_post[0] = vj[0];
       vj_post[1] = vj[1];
@@ -592,243 +316,40 @@ void CollideVSS::SCATTER_TwoBodyScattering_SWS(Particle::OnePart *ip,
       vj[1]=vj_post[1];
       vj[2]=vj_post[2];
     }
-  }
 }
 
-/* ---------------------------------------------------------------------- */
-// ========================================================================
-// Compute the post-collision rotational and vibrational energy
-// using the splitting-merging method.
-// ========================================================================
-void CollideVSS::EEXCHANGE_NonReactingEDisposal_SWS(Particle::OnePart *ip,
-                                                Particle::OnePart *jp)
+/* ----------------------------------------------------------------------
+   SWS - per-particle blend factor for the energy-exchange kernel
+   phi = weight ratio of the pair (1.0 if either weight is <= 0)
+   return 1 if P is the higher-weight (major) particle of the pair
+------------------------------------------------------------------------- */
+
+int CollideVSS::sws_eexchange_phi(Particle::OnePart *p, Particle::OnePart *p2,
+                                  double &phi)
 {
-
-  double State_prob,Fraction_Rot,Fraction_Vib,E_Dispose;
-  int i,rotdof,vibdof,max_level,ivib;
-
-  Particle::OnePart *p, *p2;
   Particle::Species *species = particle->species;
 
-  double AdjustFactor = 0.99999999;
-  postcoln.erot = 0.0;
-  postcoln.evib = 0.0;
-  double pevib = 0.0;
+  double w_p = species[p->ispecies].specwt;
+  double w_p2 = species[p2->ispecies].specwt;
 
-  // handle each kind of energy disposal for non-reacting reactants
-
-  if (precoln.ave_dof == 0) {
-    ip->erot = 0.0;
-    jp->erot = 0.0;
-    ip->evib = 0.0;
-    jp->evib = 0.0;
-
-  } else {
-    E_Dispose = precoln.etrans;
-
-    for (i = 0; i < 2; i++) {
-      if (i == 0) {
-        p = ip;
-        p2 = jp;
-      }
-      else {
-        p = jp;
-        p2 = ip;
-      }  
-
-      // Two different methods are used:
-      // 1) Exclusive method:
-      // Allow all exchange scenario but the one that imply internal
-      // energy exchange of a major particle when colliding with a 
-      // minor particle. In this case the energy exchanged is negligible 
-      // (proportional to phi). Particles still exchange internal energy 
-      // when colliding with identically weighted particles or 
-      // more highly weighted particles.
-      // 2) Explicit method:
-      // Use the splitting merging principle: E''_i=phi*E'_i+(1-phi)*E_i
-      // Explicit conservation of the internal energy when a major
-      // particle trigger internal energy exchange.
-      // NOTE: 
-      // The exclusive method is only used for discrete
-      // vibrational energy exchange of major particles, as the discrete  
-      // energy mode are proportional to integers (ivib) that 
-      // are not mergeable without loosing this integer
-      // property. All the other exchanges are handled via spitting
-      // merging method.
-
-      // SWS - variables
-      int psp = p->ispecies;
-      int p2sp = p2->ispecies;
-      double w_p = species[psp].specwt;
-      double w_p2 = species[p2sp].specwt;
-      double phi=1.0;
-      if ((w_p>0) && (w_p2>0)){ 
-        if (w_p>w_p2){
-          phi = w_p2/w_p;
-        } else {
-          phi = w_p/w_p2;
-        } 
-      }
-
-      int sp = p->ispecies;
-      rotdof = species[sp].rotdof;
-      double rotn_phi = species[sp].rotrel;
-
-      if (rotdof) {
-        if (relaxflag == VARIABLE) rotn_phi = rotrel(sp,E_Dispose+p->erot);
-        if (rotn_phi >= random->uniform()) {
-          if (w_p>w_p2) {  // SWS
-            if (rotstyle == NONE) {
-              p->erot = 0.0;
-            } else if (rotstyle != NONE && rotdof == 2) {
-              double erot_pre = p->erot;
-              E_Dispose += p->erot;
-              Fraction_Rot =
-               1- pow(random->uniform(),
-		        (1/(2.5-params[ip->ispecies][jp->ispecies].omega)));
-              double erot_post = Fraction_Rot * E_Dispose;
-              E_Dispose -= erot_post;
-              p->erot = phi * erot_post + (1-phi) * erot_pre;
-            } else {
-              double erot_pre = p->erot;
-              E_Dispose += p->erot;
-              double erot_post = E_Dispose *
-                sample_bl(random,0.5*species[sp].rotdof-1.0,
-                           1.5-params[ip->ispecies][jp->ispecies].omega);
-              E_Dispose -= erot_post;
-              p->erot = phi * erot_post + (1-phi) * erot_pre; // SWS
-            } 
-          } else {
-            if (rotstyle == NONE) {
-              p->erot = 0.0;
-            } else if (rotstyle != NONE && rotdof == 2) {
-              E_Dispose += p->erot;
-              Fraction_Rot =
-               1- pow(random->uniform(),
-		        (1/(2.5-params[ip->ispecies][jp->ispecies].omega)));
-              p->erot = Fraction_Rot * E_Dispose;
-              E_Dispose -= p->erot;
-            } else {
-              E_Dispose += p->erot;
-              p->erot = E_Dispose *
-                sample_bl(random,0.5*species[sp].rotdof-1.0,
-                           1.5-params[ip->ispecies][jp->ispecies].omega);
-              E_Dispose -= p->erot;
-            }
-          }
-        }
-      }
-      postcoln.erot += p->erot;
-
-      vibdof = species[sp].vibdof;
-      double vibn_phi = species[sp].vibrel[0];
-
-      if (vibdof) {
-        if (relaxflag == VARIABLE) vibn_phi = vibrel(sp,E_Dispose+p->evib);
-        if (vibn_phi >= random->uniform()) {
-          if (vibstyle == NONE) {
-            p->evib = 0.0;
-
-          } else if (vibdof == 2) {
-            if (vibstyle == SMOOTH) {
-              double e_vib_pre =  p->evib; // SWS
-              E_Dispose += p->evib;
-              Fraction_Vib =
-                1.0 - pow(random->uniform(),
-			            (1.0/(2.5-params[ip->ispecies][jp->ispecies].omega)));
-              if (w_p>w_p2) {  // SWS
-                double e_vib_post = Fraction_Vib * E_Dispose;
-                E_Dispose -= e_vib_post;
-                p->evib = phi * e_vib_post + (1-phi) * e_vib_pre;  // SWS
-              } else {
-                p->evib= Fraction_Vib * E_Dispose;
-                E_Dispose -= p->evib;
-              }
-
-            } else if (vibstyle == DISCRETE) {
-              // Added condition (Exclusive mode):
-              if (!(w_p>w_p2)) {  // SWS
-              E_Dispose += p->evib;
-              max_level = static_cast<int>
-                (E_Dispose / (update->boltz * species[sp].vibtemp[0]));
-              do {
-                ivib = static_cast<int>
-                  (random->uniform()*(max_level+AdjustFactor));
-                p->evib = ivib * update->boltz * species[sp].vibtemp[0];
-                State_prob = pow((1.0 - p->evib / E_Dispose),
-                                 (1.5 - params[ip->ispecies][jp->ispecies].omega));
-              } while (State_prob < random->uniform());
-              E_Dispose -= p->evib;
-            }
-            }
-
-          } else if (vibdof > 2) {
-            if (vibstyle == SMOOTH) {
-              double e_vib_pre =  p->evib;  // SWS
-              E_Dispose += p->evib;
-              if (w_p>w_p2) {  // SWS
-                double e_vib_post = E_Dispose *
-                  sample_bl(random,0.5*species[sp].vibdof-1.0,
-                            1.5-params[ip->ispecies][jp->ispecies].omega);
-                E_Dispose -= e_vib_post;
-                p->evib = phi * e_vib_post + (1-phi) * e_vib_pre;  // SWS
-              } else {
-                p->evib = E_Dispose *
-                  sample_bl(random,0.5*species[sp].vibdof-1.0,
-                            1.5-params[ip->ispecies][jp->ispecies].omega);
-                E_Dispose -= p->evib;
-              }
-
-            } else if (vibstyle == DISCRETE) {
-              // Added condition (Exclusive mode):
-              if (!(w_p>w_p2)) {  // SWS
-              p->evib = 0.0;
-              
-              int nmode = particle->species[sp].nvibmode;
-              int **vibmode =
-                particle->eiarray[particle->ewhich[index_vibmode]];
-              int pindex = p - particle->particles;
-              
-              for (int imode = 0; imode < nmode; imode++) {
-                ivib = vibmode[pindex][imode];
-                E_Dispose += ivib * update->boltz *
-                  particle->species[sp].vibtemp[imode];
-                max_level = static_cast<int>
-                  (E_Dispose / (update->boltz * species[sp].vibtemp[imode]));
-              
-                do {
-                  ivib = static_cast<int>
-                    (random->uniform()*(max_level+AdjustFactor));
-                  pevib = ivib * update->boltz * species[sp].vibtemp[imode];
-                  State_prob = pow((1.0 - pevib / E_Dispose),
-                                   (1.5 - params[ip->ispecies][jp->ispecies].omega));
-                } while (State_prob < random->uniform());
-              
-                vibmode[pindex][imode] = ivib;
-                p->evib += pevib;
-                E_Dispose -= pevib;
-              }
-              }
-            }
-          } // end of vibstyle/vibdof if
-        }
-        postcoln.evib += p->evib;
-      } // end of vibdof if
-    }
+  phi = 1.0;
+  if ((w_p>0) && (w_p2>0)) {
+    if (w_p>w_p2) phi = w_p2/w_p;
+    else phi = w_p/w_p2;
   }
-
-  // compute portion of energy left over for scattering
-
-  postcoln.eint = postcoln.erot + postcoln.evib;
-  postcoln.etrans = E_Dispose;
+  return (w_p > w_p2);
 }
+
 
 
 /* ----------------------------------------------------------------------
-   SWS - max species weight over the NP particles in plist
+   SWS - per-cell setup for the single-group and ambipolar-one loops
+   sws_attempt_wi = weighted count used by the attempt formula
+   sws_maxwi = max species weight over the NP heavy particles in plist
+   (both read by attempt_collision()/test_collision() under SWS)
 ------------------------------------------------------------------------- */
 
-double Collide::sws_cell_maxwi(int np)
+void Collide::sws_cell_prep(int np, double count_wi)
 {
   Particle::Species *species = particle->species;
   Particle::OnePart *particles = particle->particles;
@@ -836,17 +357,19 @@ double Collide::sws_cell_maxwi(int np)
   double maxwi = 0.0;
   for (int m = 0; m < np; m++)
     maxwi = std::max(species[particles[plist[m]].ispecies].specwt,maxwi);
-  return maxwi;
+
+  sws_maxwi = maxwi;
+  sws_attempt_wi = count_wi;
 }
 
 
 /* ----------------------------------------------------------------------
    SWS - per-group weight sums and maxima for the N particles in plist
-   fills count_wi_group[] and maxwigr[] (sized ngroups)
-   return the max species weight over all particles in the cell
+   fills count_wi_group[] and maxwigr[] (sized ngroups), read by the
+   group attempt formula; sets sws_maxwi = cell max species weight
 ------------------------------------------------------------------------- */
 
-double Collide::sws_group_weights(int n)
+void Collide::sws_group_weights(int n)
 {
   Particle::Species *species = particle->species;
   Particle::OnePart *particles = particle->particles;
@@ -868,14 +391,14 @@ double Collide::sws_group_weights(int n)
   double maxwi = 0.0;
   for (int igr = 0; igr < ngroups; igr++)
     maxwi = std::max(maxwigr[igr],maxwi);
-  return maxwi;
+  sws_maxwi = maxwi;
 }
 
 /* ----------------------------------------------------------------------
    SWS - bookkeeping for particles created/destroyed by a reaction in the
    single-group and near-neighbor collision loops
-   perform_collision_SWS() appended new particles to the master particle
-   list in this order:
+   perform_collision() under SWS appended new particles to the master
+   particle list in this order:
      p_pre (if n_pre) = un-reacted portion of the max-weight reactant
      kp    (if kpart) = 3rd product particle (dissociation/ionization)
    n_i/n_j/n_k = # of copies of the I/J/K products to keep (0 = delete)
@@ -1070,7 +593,7 @@ void Collide::sws_products_one_ambipolar(int &np, int &nelectron,
   double **velambi = particle->edarray[particle->ewhich[index_velambi]];
 
   // SWS - indices in the master particle list of particles appended by
-  // perform_collision_SWS(): p_pre first (if n_pre), then kp (if kpart)
+  // perform_collision() under SWS: p_pre first (if n_pre), then kp (if kpart)
 
   int kp_index = -1;
   int pre_index = -1;

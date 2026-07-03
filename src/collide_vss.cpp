@@ -137,6 +137,10 @@ double CollideVSS::vremax_init(int igroup, int jgroup)
 
 double CollideVSS::attempt_collision(int icell, int np, double volume)
 {
+  // SWS: weighted attempt-count formulas (collide_sws.cpp)
+
+  if (particle->sws) return sws_attempt_one(icell,np,volume);
+
   double fnum;
   // stochastic weights are stored relative to update->fnum, so the absolute
   // molecule count of the heaviest particle is max_stochastic_weight*fnum.
@@ -173,8 +177,11 @@ double nattempt;
 
 // return 2x the value for igroup != jgroup, since no J,I pairing
 
+// SWS: weighted group pair count (collide_sws.cpp)
+
 double npairs;
-if (igroup == jgroup) npairs = 0.5 * ngroup[igroup] * (ngroup[igroup]-1);
+if (particle->sws) npairs = sws_group_npairs(igroup,jgroup);
+else if (igroup == jgroup) npairs = 0.5 * ngroup[igroup] * (ngroup[igroup]-1);
 else npairs = ngroup[igroup] * (ngroup[jgroup]);
 
 //else npairs = 0.5 * ngroup[igroup] * (ngroup[jgroup]);
@@ -224,6 +231,11 @@ int CollideVSS::test_collision(int icell, int igroup, int jgroup,
     ijsw = MAX(isw,jsw)/max_stochastic_weight;
   }
 
+  // SWS (SWSmax variant): scale acceptance by the pair's max species
+  // weight relative to the cell max; mutually exclusive with SWPM above
+
+  if (particle->sws == 2) ijsw = sws_test_scale(ispecies,jspecies);
+
   // although the vremax is calculated for the group,
   // the individual collisions calculated species dependent vre
 
@@ -254,6 +266,11 @@ void CollideVSS::setup_collision(Particle::OnePart *ip, Particle::OnePart *jp)
   double jmass = precoln.jmass = species[jsp].mass;
 
   precoln.etrans = 0.5 * params[isp][jsp].mr * precoln.vr2;
+
+  // SWS: re-inject pooled split-merge energy into a max-weight pair
+
+  if (particle->sws) precoln.etrans += sws_ewilost_take(isp,jsp);
+
   precoln.erot = ip->erot + jp->erot;
   precoln.evib = ip->evib + jp->evib;
 
@@ -287,6 +304,12 @@ int CollideVSS::perform_collision(Particle::OnePart *&ip,
   double x[3],v[3];
   Particle::OnePart *p3;
 
+  // SWS: capture pre-collision reactants and init the sws_n_* product
+  // multiplicities read by the collision loops (collide_sws.cpp)
+
+  const int sws = particle->sws;
+  if (sws) sws_perform_prep(ip,jp);
+
   // if gas-phase chemistry defined, attempt and perform reaction
   // if a 3rd particle is created, its kspecies >= 0 is returned
   // if 2nd particle is removed, its jspecies is set to -1
@@ -314,6 +337,11 @@ int CollideVSS::perform_collision(Particle::OnePart *&ip,
 
   kp = NULL;
 
+  // SWS: probabilistic split of the max-weight reactant before the
+  // reaction products are handled (draws n_pre, may create p_pre)
+
+  if (sws) sws_pre_split(ip,jp);
+
   // add 3rd K particle if reaction created it
   // index of new K particle = nlocal-1
   // if add_particle() performs a realloc:
@@ -338,6 +366,11 @@ int CollideVSS::perform_collision(Particle::OnePart *&ip,
     }
 
     kp = &particle->particles[particle->nlocal-1];
+
+    // SWS: draw the I,J,K product multiplicities
+
+    if (sws) sws_draw_products(3,kp);
+
     EEXCHANGE_ReactingEDisposal(ip,jp,kp);
     SCATTER_ThreeBodyScattering(ip,jp,kp);
 
@@ -388,12 +421,21 @@ int CollideVSS::perform_collision(Particle::OnePart *&ip,
     setup_collision(ip,p3);
     postcoln.etotal += partial_energy;
 
+    // SWS: recombination leaves a single product, draw its multiplicity
+
+    if (sws) sws_draw_products(1,NULL);
+
     if (precoln.ave_dof > 0.0) EEXCHANGE_ReactingEDisposal(ip,p3,jp);
-    SCATTER_TwoBodyScattering(ip,p3);
+    SCATTER_TwoBodyScattering(ip,p3,reaction);
 
   } else {
+
+    // SWS: exchange reaction leaves two products, draw multiplicities
+
+    if (sws) sws_draw_products(2,NULL);
+
     EEXCHANGE_ReactingEDisposal(ip,jp,kp);
-    SCATTER_TwoBodyScattering(ip,jp);
+    SCATTER_TwoBodyScattering(ip,jp,reaction);
   }
 
   return reaction;
@@ -405,11 +447,11 @@ int CollideVSS::perform_collision(Particle::OnePart *&ip,
 /* ---------------------------------------------------------------------- */
 
 void CollideVSS::SCATTER_TwoBodyScattering(Particle::OnePart *ip,
-  Particle::OnePart *jp)
+  Particle::OnePart *jp, int reactflag)
 {
   double ua,vb,wc;
   double vrc[3];
-  
+
   Particle::Species *species = particle->species;
   double *vi = ip->v;
   double *vj = jp->v;
@@ -417,7 +459,16 @@ void CollideVSS::SCATTER_TwoBodyScattering(Particle::OnePart *ip,
   int jsp = jp->ispecies;
   double mass_i = species[isp].mass;
   double mass_j = species[jsp].mass;
-  
+
+  // SWS: capture pre-collision velocities for the split-merge blend
+
+  const int sws = particle->sws;
+  double vi_pre[3],vj_pre[3];
+  if (sws) {
+    vi_pre[0] = vi[0]; vi_pre[1] = vi[1]; vi_pre[2] = vi[2];
+    vj_pre[0] = vj[0]; vj_pre[1] = vj[1]; vj_pre[2] = vj[2];
+  }
+
   double alpha_r = 1.0 / params[isp][jsp].alpha;
   
   double eps = random->uniform() * 2*MY_PI;
@@ -458,8 +509,16 @@ void CollideVSS::SCATTER_TwoBodyScattering(Particle::OnePart *ip,
   vj[0] = precoln.ucmf - (mass_i*divisor)*ua;
   vj[1] = precoln.vcmf - (mass_i*divisor)*vb;
   vj[2] = precoln.wcmf - (mass_i*divisor)*wc;
+
+  // SWS: blend the higher-weight particle back toward its pre-collision
+  // velocity (only a phi fraction of its molecules took part) and pool
+  // the unconserved energy (splitting-merging, collide_sws.cpp);
+  // skipped when a reaction occurred - conservation is then handled by
+  // the probabilistic creation/deletion of products
+
+  if (sws && !reactflag) sws_scatter_merge(ip,jp,vi_pre,vj_pre);
 }
-  
+
 
 /* ---------------------------------------------------------------------- */
 
@@ -469,30 +528,41 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
 
   double State_prob,Fraction_Rot,Fraction_Vib,E_Dispose;
   int i,rotdof,vibdof,max_level,ivib;
-  
-  Particle::OnePart *p;
+
+  Particle::OnePart *p,*p2;
   Particle::Species *species = particle->species;
-  
+
   double AdjustFactor = 0.99999999;
   postcoln.erot = 0.0;
   postcoln.evib = 0.0;
   double pevib = 0.0;
-  
+
+  const int sws = particle->sws;
+
   // handle each kind of energy disposal for non-reacting reactants
-  
+
   if (precoln.ave_dof == 0) {
     ip->erot = 0.0;
     jp->erot = 0.0;
     ip->evib = 0.0;
     jp->evib = 0.0;
-  
+
   } else {
     E_Dispose = precoln.etrans;
-    
+
     for (i = 0; i < 2; i++) {
-      if (i == 0) p = ip;
-      else p = jp;
-      
+      if (i == 0) { p = ip; p2 = jp; }
+      else { p = jp; p2 = ip; }
+
+      // SWS: splitting-merging blend factor for this particle of the pair
+      // wmajor = 1 if P is the higher-weight particle; its smooth energy
+      // disposals below are blended (E'' = phi E' + (1-phi) E) and its
+      // discrete disposals are skipped entirely (exclusive method)
+
+      double wphi = 1.0;
+      int wmajor = 0;
+      if (sws) wmajor = sws_eexchange_phi(p,p2,wphi);
+
       int sp = p->ispecies;
       rotdof = species[sp].rotdof;
       double rotn_phi = species[sp].rotrel;
@@ -503,18 +573,22 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
           if (rotstyle == NONE) {
             p->erot = 0.0;
           } else if (rotstyle != NONE && rotdof == 2) {
+            double erot_pre = p->erot;
             E_Dispose += p->erot;
             Fraction_Rot =
               1- pow(random->uniform(),
                     (1/(2.5-params[ip->ispecies][jp->ispecies].omega)));
             p->erot = Fraction_Rot * E_Dispose;
             E_Dispose -= p->erot;
+            if (wmajor) p->erot = wphi * p->erot + (1-wphi) * erot_pre; // SWS
           } else {
+            double erot_pre = p->erot;
             E_Dispose += p->erot;
             p->erot = E_Dispose *
               sample_bl(random,0.5*species[sp].rotdof-1.0,
                         1.5-params[ip->ispecies][jp->ispecies].omega);
             E_Dispose -= p->erot;
+            if (wmajor) p->erot = wphi * p->erot + (1-wphi) * erot_pre; // SWS
           }
         }
       }
@@ -531,14 +605,19 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
       
           } else if (vibdof == 2) {
             if (vibstyle == SMOOTH) {
+              double evib_pre = p->evib;
               E_Dispose += p->evib;
               Fraction_Vib =
               1.0 - pow(random->uniform(),
                        (1.0/(2.5-params[ip->ispecies][jp->ispecies].omega)));
               p->evib= Fraction_Vib * E_Dispose;
               E_Dispose -= p->evib;
-      
+              if (wmajor) p->evib = wphi * p->evib + (1-wphi) * evib_pre; // SWS
+
             } else if (vibstyle == DISCRETE) {
+              // SWS: discrete levels cannot be blended; the exclusive
+              // method skips disposal for the higher-weight particle
+              if (!wmajor) {
               E_Dispose += p->evib;
               max_level = static_cast<int>
                 (E_Dispose / (update->boltz * species[sp].vibtemp[0]));
@@ -550,31 +629,36 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
                                  (1.5 - params[ip->ispecies][jp->ispecies].omega));
               } while (State_prob < random->uniform());
               E_Dispose -= p->evib;
+              }
             }
-      
+
           } else if (vibdof > 2) {
             if (vibstyle == SMOOTH) {
+              double evib_pre = p->evib;
               E_Dispose += p->evib;
               p->evib = E_Dispose *
                 sample_bl(random,0.5*species[sp].vibdof-1.0,
                           1.5-params[ip->ispecies][jp->ispecies].omega);
               E_Dispose -= p->evib;
-      
+              if (wmajor) p->evib = wphi * p->evib + (1-wphi) * evib_pre; // SWS
+
             } else if (vibstyle == DISCRETE) {
+              // SWS: exclusive method, as above
+              if (!wmajor) {
               p->evib = 0.0;
-      
+
               int nmode = particle->species[sp].nvibmode;
               int **vibmode =
                 particle->eiarray[particle->ewhich[index_vibmode]];
               int pindex = p - particle->particles;
-      
+
               for (int imode = 0; imode < nmode; imode++) {
                 ivib = vibmode[pindex][imode];
                 E_Dispose += ivib * update->boltz *
                   particle->species[sp].vibtemp[imode];
                 max_level = static_cast<int>
                   (E_Dispose / (update->boltz * species[sp].vibtemp[imode]));
-      
+
                 do {
                   ivib = static_cast<int>
                     (random->uniform()*(max_level+AdjustFactor));
@@ -582,10 +666,11 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
                   State_prob = pow((1.0 - pevib / E_Dispose),
                                    (1.5 - params[ip->ispecies][jp->ispecies].omega));
                 } while (State_prob < random->uniform());
-                
+
                 vibmode[pindex][imode] = ivib;
                 p->evib += pevib;
                 E_Dispose -= pevib;
+              }
               }
             }
           } // end of vibstyle/vibdof if

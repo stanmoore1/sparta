@@ -54,19 +54,10 @@ class Collide : protected Pointers {
   virtual int test_collision(int, int, int,
 	 		     Particle::OnePart *, Particle::OnePart *) = 0;
 
-  virtual double attempt_collision_SWS(int, int, double, double, double) = 0;  // SWS
-  virtual double attempt_collision_SWS(int, int, int, double) = 0;             // SWS
-
-  virtual int test_collision_SWS(int, int, int,                                // SWS
-			     Particle::OnePart *, Particle::OnePart *, double) = 0;
-
   virtual void setup_collision(Particle::OnePart *, Particle::OnePart *) = 0;
-  virtual void setup_collision_SWS(Particle::OnePart *, Particle::OnePart *) = 0;   // SWS
 
   virtual int perform_collision(Particle::OnePart *&, Particle::OnePart *&,
                                 Particle::OnePart *&) = 0;
-  virtual int perform_collision_SWS(Particle::OnePart *&, Particle::OnePart *&,     // SWS
-                                Particle::OnePart *&,int &,int &,int &,int &) = 0;
 
   virtual double extract(int, int, const char *) {return 0.0;}
 
@@ -117,8 +108,12 @@ class Collide : protected Pointers {
   bigint vre_next;    // next timestep to reset vre params on
   int remainflag;     // 1 if remain defined, else use random fraction
   
-  double *count_wi_group;            // SWS
-  double *maxwigr;                   // SWS
+  double *count_wi_group;            // SWS - per-group weight sums (current cell)
+  double *maxwigr;                   // SWS - per-group weight maxima (current cell)
+  double sws_attempt_wi;             // SWS - weighted count for attempt formulas
+  double sws_maxwi;                  // SWS - max species weight in current cell
+  int sws_n_i,sws_n_j,sws_n_k;       // SWS - product multiplicities set by
+  int sws_n_pre;                     //       perform_collision() under SWS
 
   double ***vremax;   // max relative velocity, per cell, per group pair
   double ***remain;   // collision number remainder, per cell, per group pair
@@ -209,15 +204,15 @@ class Collide : protected Pointers {
   template < int > void collisions_group_ambipolar();
 
   // SWS helpers, defined in collide_sws.cpp
-  double sws_cell_maxwi(int);
-  double sws_group_weights(int);
+  void sws_cell_prep(int, double);
+  void sws_group_weights(int);
   void sws_products_one_ambipolar(int &, int &, int, int, int, int,
                                   Particle::OnePart *, Particle::OnePart *,
                                   Particle::OnePart *, int, int, int, int);
   int sws_products_one(int &, int, int, Particle::OnePart *,
                        Particle::OnePart *, Particle::OnePart *,
                        int, int, int, int, int);
-  template < int, int > void collisions_one_stochastic_weighting();  // SWPM
+  void collisions_one_stochastic_weighting();  // SWPM
 
   void ambi_reset(int, int, int, Particle::OnePart *, Particle::OnePart *,
                   Particle::OnePart *, int *);

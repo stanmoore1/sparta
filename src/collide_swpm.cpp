@@ -44,7 +44,6 @@ using namespace SPARTA_NS;
    Stochastic weighted particle method algorithm
 ------------------------------------------------------------------------- */
 
-template < int NEARCP, int GASTALLY >
 void Collide::collisions_one_stochastic_weighting()
 {
   int i,j,n,ip,np;
@@ -622,17 +621,4 @@ void Collide::group_bt(int istart, int iend, int group_size_buffer)
   }
 
   return;
-}
-
-/* ----------------------------------------------------------------------
-   explicit instantiations of the SWPM collision template for the
-   NEARCP/GASTALLY combinations dispatched from collide.cpp
-   (the template is defined here, in a separate translation unit)
-------------------------------------------------------------------------- */
-
-namespace SPARTA_NS {
-template void Collide::collisions_one_stochastic_weighting<0,0>();
-template void Collide::collisions_one_stochastic_weighting<0,1>();
-template void Collide::collisions_one_stochastic_weighting<1,0>();
-template void Collide::collisions_one_stochastic_weighting<1,1>();
 }

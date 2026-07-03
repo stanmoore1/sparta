@@ -36,21 +36,14 @@ class CollideVSS : public Collide {
 
   virtual double attempt_collision(int, int, double);
   double attempt_collision(int, int, int, double);
-  virtual double attempt_collision_SWS(int, int, double, double, double);   // SWS
-  double attempt_collision_SWS(int, int, int, double);   // SWS
 
   virtual int test_collision(int, int, int, Particle::OnePart *,
                              Particle::OnePart *);
-  virtual int test_collision_SWS(int, int, int, Particle::OnePart *,
-                                 Particle::OnePart *, double);   // SWS
 
   virtual void setup_collision(Particle::OnePart *, Particle::OnePart *);
-  virtual void setup_collision_SWS(Particle::OnePart *, Particle::OnePart *);   // SWS
 
   virtual int perform_collision(Particle::OnePart *&, Particle::OnePart *&,
                                 Particle::OnePart *&);
-  virtual int perform_collision_SWS(Particle::OnePart *&, Particle::OnePart *&,   // SWS
-                                    Particle::OnePart *&, int &,int &,int &,int &);
 
   double extract(int, int, const char *);
 
@@ -97,14 +90,30 @@ class CollideVSS : public Collide {
   int nparams;                // # of per-species params read in
 
 
-  void SCATTER_TwoBodyScattering(Particle::OnePart *,
-	 			 Particle::OnePart *);
-  void EEXCHANGE_NonReactingEDisposal(Particle::OnePart *,
-         Particle::OnePart *);
+  // SWS (species weighting scheme) per-collision state, set by the
+  // guarded seams in the collision kernels; bodies live in collide_sws.cpp
 
-  void SCATTER_TwoBodyScattering_SWS(Particle::OnePart *,   // SWS
-				 Particle::OnePart *, int);
-  void EEXCHANGE_NonReactingEDisposal_SWS(Particle::OnePart *,   // SWS
+  Particle::OnePart sws_ip_pre,sws_jp_pre;  // pre-collision reactant copies
+  double sws_w_min;                         // min pre-collision species weight
+  double sws_phi_i,sws_phi_j;               // post-reaction survival ratios
+
+  // SWS kernel seams, defined in collide_sws.cpp
+
+  double sws_attempt_one(int, int, double);
+  double sws_group_npairs(int, int);
+  double sws_test_scale(int, int);
+  double sws_ewilost_take(int, int);
+  void sws_perform_prep(Particle::OnePart *, Particle::OnePart *);
+  void sws_pre_split(Particle::OnePart *&, Particle::OnePart *&);
+  int sws_draw_count(double);
+  void sws_draw_products(int, Particle::OnePart *);
+  int sws_eexchange_phi(Particle::OnePart *, Particle::OnePart *, double &);
+  void sws_scatter_merge(Particle::OnePart *, Particle::OnePart *,
+                         const double *, const double *);
+
+  void SCATTER_TwoBodyScattering(Particle::OnePart *,
+	 			 Particle::OnePart *, int reactflag = 0);
+  void EEXCHANGE_NonReactingEDisposal(Particle::OnePart *,
          Particle::OnePart *);
 
   void SCATTER_ThreeBodyScattering(Particle::OnePart *,

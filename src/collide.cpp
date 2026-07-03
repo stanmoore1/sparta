@@ -489,27 +489,14 @@ void Collide::collisions()
     }
   } else if (stochastic_weight_flag) {
     // verify custom attribute exists before using stochastic weighting
+    // near-neighbor is rejected at init; the loop does not tally gas
+    // collision computes, so nearcp/ngas_tally do not vary the dispatch
     if (index_stochastic_weight < 0) {
       error->all(FLERR,"collide_modify stochastic_weight yes requires "
                       "fix stochastic_weight to be declared first");
     }
-    if (!nearcp) {
-      if (!ngas_tally) {
-        if (ngroups == 1) collisions_one_stochastic_weighting<0,0>();
-        else error->all(FLERR,"Stochastic weighting not yet implemented for multiple groups");
-      } else if (ngas_tally) {
-        if (ngroups == 1) collisions_one_stochastic_weighting<0,1>();
-        else error->all(FLERR,"Stochastic weighting not yet implemented for multiple groups");
-      }
-    } else if (nearcp) {
-      if (!ngas_tally) {
-        if (ngroups == 1) collisions_one_stochastic_weighting<1,0>();
-        else error->all(FLERR,"Stochastic weighting not yet implemented for multiple groups");
-      } else if (ngas_tally) {
-        if (ngroups == 1) collisions_one_stochastic_weighting<1,1>();
-        else error->all(FLERR,"Stochastic weighting not yet implemented for multiple groups");
-      }
-    }
+    if (ngroups == 1) collisions_one_stochastic_weighting();
+    else error->all(FLERR,"Stochastic weighting not yet implemented for multiple groups");
   }
 
   // remove any particles deleted in chemistry reactions
@@ -545,8 +532,6 @@ template < int NEARCP, int GASTALLY > void Collide::collisions_one()
 
   const int sws = particle->sws;
   double count_wi = 0.0;
-  double maxwi = 0.0;
-  int n_i,n_j,n_k,n_pre;
 
   // loop over cells I own
 
@@ -587,14 +572,15 @@ template < int NEARCP, int GASTALLY > void Collide::collisions_one()
       ip = next[ip];
     }
 
-    if (sws) maxwi = sws_cell_maxwi(np);
+    // SWS: per-cell weighted count / max weight (collide_sws.cpp)
+
+    if (sws) sws_cell_prep(np,count_wi);
 
     // attempt = exact collision attempt count for all particles in cell
     // nattempt = rounded attempt with RN
     // if no attempts, continue to next grid cell
 
-    if (!sws) attempt = attempt_collision(icell,np,volume);
-    else attempt = attempt_collision_SWS(icell,np,volume,count_wi,maxwi);
+    attempt = attempt_collision(icell,np,volume);
     nattempt = static_cast<int> (attempt);
 
     if (!nattempt) continue;
@@ -618,11 +604,7 @@ template < int NEARCP, int GASTALLY > void Collide::collisions_one()
       // test if collision actually occurs
       // continue to next collision if no reaction
 
-      if (!sws) {
-        if (!test_collision(icell,0,0,ipart,jpart)) continue;
-      } else {
-        if (!test_collision_SWS(icell,0,0,ipart,jpart,maxwi)) continue;
-      }
+      if (!test_collision(icell,0,0,ipart,jpart)) continue;
 
       if (NEARCP) {
         nn_last_partner[i] = j+1;
@@ -657,15 +639,8 @@ template < int NEARCP, int GASTALLY > void Collide::collisions_one()
         memcpy(&jorig,jpart,sizeof(Particle::OnePart));
       }
 
-      if (!sws) {
-        setup_collision(ipart,jpart);
-        reactflag = perform_collision(ipart,jpart,kpart);
-      } else {
-        setup_collision_SWS(ipart,jpart);
-        n_i = 1;
-        n_j = n_k = n_pre = 0;
-        reactflag = perform_collision_SWS(ipart,jpart,kpart,n_i,n_j,n_k,n_pre);
-      }
+      setup_collision(ipart,jpart);
+      reactflag = perform_collision(ipart,jpart,kpart);
       ncollide_one++;
 
       if (GASTALLY)
@@ -677,10 +652,11 @@ template < int NEARCP, int GASTALLY > void Collide::collisions_one()
       else continue;
 
       // SWS: probabilistic product bookkeeping (collide_sws.cpp)
+      // perform_collision() set the sws_n_* product multiplicities
 
       if (sws) {
         int done = sws_products_one(np,i,j,ipart,jpart,kpart,
-                                    n_i,n_j,n_k,n_pre,NEARCP);
+                                    sws_n_i,sws_n_j,sws_n_k,sws_n_pre,NEARCP);
         particles = particle->particles;
         if (done) break;
         continue;
@@ -744,8 +720,6 @@ template < int NEARCP, int GASTALLY > void Collide::collisions_group()
 
   const int sws = particle->sws;
   double count_wi = 0.0;
-  double maxwi = 0.0;
-  int n_i,n_j,n_k,n_pre;
 
   // loop over cells I own
 
@@ -815,7 +789,7 @@ template < int NEARCP, int GASTALLY > void Collide::collisions_group()
 
     // SWS: per-group weight sums / maxima + cell max (collide_sws.cpp)
 
-    if (sws) maxwi = sws_group_weights(n);
+    if (sws) sws_group_weights(n);
 
     // attempt = exact collision attempt count for a pair of groups
     // double loop over N^2 / 2 pairs of groups
@@ -826,8 +800,7 @@ template < int NEARCP, int GASTALLY > void Collide::collisions_group()
     npair = 0;
     for (igroup = 0; igroup < ngroups; igroup++)
       for (jgroup = igroup; jgroup < ngroups; jgroup++) {
-        if (!sws) attempt = attempt_collision(icell,igroup,jgroup,volume);
-        else attempt = attempt_collision_SWS(icell,igroup,jgroup,volume);
+        attempt = attempt_collision(icell,igroup,jgroup,volume);
         nattempt = static_cast<int> (attempt);
 
         if (nattempt) {
@@ -888,11 +861,7 @@ template < int NEARCP, int GASTALLY > void Collide::collisions_group()
         // test if collision actually occurs
         // continue to next collision if no reaction
 
-        if (!sws) {
-          if (!test_collision(icell,igroup,jgroup,ipart,jpart)) continue;
-        } else {
-          if (!test_collision_SWS(icell,igroup,jgroup,ipart,jpart,maxwi)) continue;
-        }
+        if (!test_collision(icell,igroup,jgroup,ipart,jpart)) continue;
 
         if (NEARCP) {
           nn_igroup[i] = j+1;
@@ -929,15 +898,8 @@ template < int NEARCP, int GASTALLY > void Collide::collisions_group()
           memcpy(&jorig,jpart,sizeof(Particle::OnePart));
         }
 
-        if (!sws) {
-          setup_collision(ipart,jpart);
-          reactflag = perform_collision(ipart,jpart,kpart);
-        } else {
-          setup_collision_SWS(ipart,jpart);
-          n_i = 1;
-          n_j = n_k = n_pre = 0;
-          reactflag = perform_collision_SWS(ipart,jpart,kpart,n_i,n_j,n_k,n_pre);
-        }
+        setup_collision(ipart,jpart);
+        reactflag = perform_collision(ipart,jpart,kpart);
         ncollide_one++;
 
         if (GASTALLY)
@@ -1064,8 +1026,7 @@ template < int GASTALLY > void Collide::collisions_one_ambipolar()
   double count_wi = 0.0;
   double count_wi_electron = 0.0;
   double count_wi_total = 0.0;
-  double maxwi = 0.0;
-  int n_i,n_j,n_k,n_pre,npstart;
+  int npstart = 0;
 
   // ambipolar vectors
 
@@ -1107,7 +1068,10 @@ template < int GASTALLY > void Collide::collisions_one_ambipolar()
       ip = next[ip];
     }
 
-    if (sws) maxwi = sws_cell_maxwi(np);
+    // SWS: per-cell max weight over heavy particles; the weighted count
+    // is set below once the electrons are added (collide_sws.cpp)
+
+    if (sws) sws_cell_prep(np,count_wi);
 
     // setup elist of ionized electrons for this cell
     // create them in separate array since will never become real particles
@@ -1140,11 +1104,11 @@ template < int GASTALLY > void Collide::collisions_one_ambipolar()
     // nattempt = rounded attempt with RN
 
     nptotal = np + nelectron;
-    if (!sws) attempt = attempt_collision(icell,nptotal,volume);
-    else {
+    if (sws) {
       count_wi_total = count_wi + count_wi_electron;
-      attempt = attempt_collision_SWS(icell,nptotal,volume,count_wi_total,maxwi);
+      sws_attempt_wi = count_wi_total;
     }
+    attempt = attempt_collision(icell,nptotal,volume);
     nattempt = static_cast<int> (attempt);
 
     if (!nattempt) continue;
@@ -1191,11 +1155,7 @@ template < int GASTALLY > void Collide::collisions_one_ambipolar()
 
       // test if collision actually occurs
 
-      if (!sws) {
-        if (!test_collision(icell,0,0,ipart,jpart)) continue;
-      } else {
-        if (!test_collision_SWS(icell,0,0,ipart,jpart,maxwi)) continue;
-      }
+      if (!test_collision(icell,0,0,ipart,jpart)) continue;
 
       // if recombination reaction is possible for this IJ pair
       // pick a 3rd particle to participate and set cell number density
@@ -1230,16 +1190,9 @@ template < int GASTALLY > void Collide::collisions_one_ambipolar()
       }
 
       jspecies = jpart->ispecies;
-      if (!sws) {
-        setup_collision(ipart,jpart);
-        reactflag = perform_collision(ipart,jpart,kpart);
-      } else {
-        setup_collision_SWS(ipart,jpart);
-        n_i = 1;
-        n_j = n_k = n_pre = 0;
-        npstart = np;
-        reactflag = perform_collision_SWS(ipart,jpart,kpart,n_i,n_j,n_k,n_pre);
-      }
+      if (sws) npstart = np;
+      setup_collision(ipart,jpart);
+      reactflag = perform_collision(ipart,jpart,kpart);
       ncollide_one++;
 
       if (GASTALLY)
@@ -1264,7 +1217,8 @@ template < int GASTALLY > void Collide::collisions_one_ambipolar()
 
       if (sws) {
         sws_products_one_ambipolar(np,nelectron,i,j,npstart,jspecies,
-                                   ipart,jpart,kpart,n_i,n_j,n_k,n_pre);
+                                   ipart,jpart,kpart,
+                                   sws_n_i,sws_n_j,sws_n_k,sws_n_pre);
         particles = particle->particles;
         ionambi = particle->eivec[particle->ewhich[index_ionambi]];
         velambi = particle->edarray[particle->ewhich[index_velambi]];
@@ -1430,8 +1384,6 @@ template < int GASTALLY > void Collide::collisions_group_ambipolar()
 
   const int sws = particle->sws;
   double count_wi = 0.0;
-  double maxwi = 0.0;
-  int n_i,n_j,n_k,n_pre;
 
   // ambipolar vectors
 
@@ -1532,7 +1484,7 @@ template < int GASTALLY > void Collide::collisions_group_ambipolar()
     // plist holds only heavy particles, so electrons (elist) accumulate
     // no group weight, matching the original SWS clone
 
-    if (sws) maxwi = sws_group_weights(n);
+    if (sws) sws_group_weights(n);
 
     // attempt = exact collision attempt count for a pair of groups
     // double loop over N^2 / 2 pairs of groups
@@ -1547,8 +1499,7 @@ template < int GASTALLY > void Collide::collisions_group_ambipolar()
     for (igroup = 0; igroup < ngroups; igroup++)
       for (jgroup = igroup; jgroup < ngroups; jgroup++) {
         if (igroup == egroup && jgroup == egroup) continue;
-        if (!sws) attempt = attempt_collision(icell,igroup,jgroup,volume);
-        else attempt = attempt_collision_SWS(icell,igroup,jgroup,volume);
+        attempt = attempt_collision(icell,igroup,jgroup,volume);
         nattempt = static_cast<int> (attempt);
 
         if (nattempt) {
@@ -1614,11 +1565,7 @@ template < int GASTALLY > void Collide::collisions_group_ambipolar()
 
         // test if collision actually occurs
 
-        if (!sws) {
-          if (!test_collision(icell,igroup,jgroup,ipart,jpart)) continue;
-        } else {
-          if (!test_collision_SWS(icell,igroup,jgroup,ipart,jpart,maxwi)) continue;
-        }
+        if (!test_collision(icell,igroup,jgroup,ipart,jpart)) continue;
 
         // if recombination reaction is possible for this IJ pair
         // pick a 3rd particle to participate and set cell number density
@@ -1656,15 +1603,8 @@ template < int GASTALLY > void Collide::collisions_group_ambipolar()
 
         ispecies = ipart->ispecies;
         jspecies = jpart->ispecies;
-        if (!sws) {
-          setup_collision(ipart,jpart);
-          reactflag = perform_collision(ipart,jpart,kpart);
-        } else {
-          setup_collision_SWS(ipart,jpart);
-          n_i = 1;
-          n_j = n_k = n_pre = 0;
-          reactflag = perform_collision_SWS(ipart,jpart,kpart,n_i,n_j,n_k,n_pre);
-        }
+        setup_collision(ipart,jpart);
+        reactflag = perform_collision(ipart,jpart,kpart);
         ncollide_one++;
 
         if (GASTALLY)
