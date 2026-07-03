@@ -115,6 +115,7 @@ class Compute : protected Pointers {
                          Particle::OnePart *, Particle::OnePart *,
                          Particle::OnePart *, Particle::OnePart *,
                          Particle::OnePart *) {}
+  virtual void attempt_tally(int, int) {}
 
   virtual void post_process_grid(int, int, double **, int *, double *, int) {}
   // NOTE: get rid of this method at some point

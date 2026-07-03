@@ -388,7 +388,7 @@ void Collide::collisions()
     if (!ngas_tally) {
       if (ngroups == 1) collisions_one_ambipolar<0>();
       else collisions_group_ambipolar<0>();
-    } else if (!ngas_tally) {
+    } else if (ngas_tally) {
       if (ngroups == 1) collisions_one_ambipolar<1>();
       else collisions_group_ambipolar<1>();
     }
@@ -463,6 +463,10 @@ template < int NEARCP, int GASTALLY > void Collide::collisions_one()
 
     if (!nattempt) continue;
     nattempt_one += nattempt;
+
+    if (GASTALLY)
+      for (m = 0; m < ngas_tally; m++)
+        glist_active[m]->attempt_tally(icell,nattempt);
 
     // perform collisions
     // select random pair of particles, cannot be same
@@ -654,6 +658,10 @@ template < int NEARCP, int GASTALLY > void Collide::collisions_group()
           gpair[npair][2] = nattempt;
           nattempt_one += nattempt;
           npair++;
+
+          if (GASTALLY)
+            for (m = 0; m < ngas_tally; m++)
+              glist_active[m]->attempt_tally(icell,nattempt);
         }
       }
 
@@ -927,6 +935,10 @@ template < int GASTALLY > void Collide::collisions_one_ambipolar()
 
     if (!nattempt) continue;
     nattempt_one += nattempt;
+
+    if (GASTALLY)
+      for (m = 0; m < ngas_tally; m++)
+        glist_active[m]->attempt_tally(icell,nattempt);
 
     // perform collisions
     // select random pair of particles, cannot be same
@@ -1281,6 +1293,10 @@ template < int GASTALLY > void Collide::collisions_group_ambipolar()
           gpair[npair][2] = nattempt;
           nattempt_one += nattempt;
           npair++;
+
+          if (GASTALLY)
+            for (m = 0; m < ngas_tally; m++)
+              glist_active[m]->attempt_tally(icell,nattempt);
         }
       }
 
