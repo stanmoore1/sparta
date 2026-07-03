@@ -21,7 +21,7 @@ file = name of file to write image to :l
 color = particle attribute that determines color of each particle :l
 diameter = particle attribute that determines size of each particle :l
 zero or more keyword/value pairs may be appended :l
-keyword = {particle} or {pdiam} or {grid} or {gridx} or {gridy} or {gridz} or {surf} or {size} or {view} or {center} or {up} or {zoom} or {persp} or {box} or {gline} or {sline} or {axes} or {shiny} or {ssao} :l
+keyword = {particle} or {pdiam} or {grid} or {gridx} or {gridy} or {gridz} or {surf} or {size} or {view} or {center} or {up} or {zoom} or {persp} or {box} or {gline} or {sline} or {axes} or {shiny} or {ssao} or {label} :l
   {particle} = yes/no = do or do not draw particles
   {pdiam} value = number = numeric value for particle diameter (distance units)
   {grid} values = color
@@ -76,7 +76,13 @@ keyword = {particle} or {pdiam} or {grid} or {gridx} or {gridy} or {gridz} or {s
   {ssao} value = yes/no seed dfactor = SSAO depth shading
     yes/no = turn depth shading on/off
     seed = random # seed (positive integer)
-    dfactor = strength of shading from 0.0 to 1.0 :pre
+    dfactor = strength of shading from 0.0 to 1.0
+  {label} values = corner color scale text = overlay a text annotation
+    corner = {tl} or {tr} or {bl} or {br} = image corner to anchor text at
+    color = name of text color (see below)
+    scale = integer font magnification (1 = 5x7 pixel font)
+    text = text string, may contain %step, %time, %% tokens
+           (enclose in quotes if it contains whitespace) :pre
 :ule
 
 [Examples:]
@@ -533,6 +539,26 @@ which is perceived as depth.  The calculation of this effect can
 increase the cost of computing the image by roughly 2x.  The strength
 of the effect can be scaled by the {dfactor} parameter.  If {no} is
 set, no depth shading is performed.
+
+The {label} keyword overlays a line of text onto the rendered image.
+It may be specified multiple times to place several annotations.  The
+{corner} value ({tl}, {tr}, {bl}, {br}) anchors the text to the top or
+bottom, left or right corner of the image.  The {color} value is the
+name of a color (see the list of recognized colors below), and {scale}
+is an integer that magnifies the built-in 5x7 pixel font (e.g. {scale}
+= 2 draws each font pixel as a 2x2 block).
+
+The {text} string is drawn as-is, except that the following tokens are
+replaced when each image is written: {%step} with the current
+timestep, {%time} with the current simulation time, and {%%} with a
+literal percent sign.  If the text contains whitespace, enclose it in
+quotes so the input parser treats it as a single argument, e.g.
+
+dump 2 image all 100 image.*.ppm type type label tl white 2 "step %step, t = %time" :pre
+
+The annotation is drawn as a flat 2d overlay after the 3d scene has
+been rendered, so it always appears on top of the image and is not
+affected by the view, zoom, or lighting settings.
 
 :line
 

@@ -56,6 +56,11 @@ class Image : protected Pointers {
   void draw_cylinder(double *, double *, double *, double, int);
   void draw_triangle(double *, double *, double *, double *);
 
+  // 2d text overlay for image annotations (issue #523)
+  void draw_text(int, int, const char *, double *, int);
+  static int text_width(const char *, int);
+  static int text_height(int);
+
   int map_dynamic(int);
   int map_reset(int, int, char **);
   int map_minmax(int, double, double);

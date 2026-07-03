@@ -54,6 +54,161 @@ enum{CONTINUOUS,DISCRETE,SEQUENTIAL};
 enum{ABSOLUTE,FRACTIONAL};
 enum{NO,YES};
 
+/* ----------------------------------------------------------------------
+   minimal 5x7 bitmap font used to render text annotations on images
+   (see GitHub issue #523)
+   each glyph is defined as 7 rows of 5 chars, '#' = pixel on, ' ' = off
+   the ASCII-art table is packed once into font_bits[] on first use
+   undefined printable chars render as a hollow box; unknown/control
+   chars render as blank
+------------------------------------------------------------------------- */
+
+#define FONT_W 5
+#define FONT_H 7
+
+namespace {
+
+struct FontGlyph {
+  char c;
+  const char *rows[FONT_H];
+};
+
+static const FontGlyph font_defs[] = {
+  {' ', {"     ","     ","     ","     ","     ","     ","     "}},
+  {'0', {" ### ","#   #","#  ##","# # #","##  #","#   #"," ### "}},
+  {'1', {"  #  "," ##  ","  #  ","  #  ","  #  ","  #  "," ### "}},
+  {'2', {" ### ","#   #","    #","   # ","  #  "," #   ","#####"}},
+  {'3', {"#####","   # ","  #  ","   # ","    #","#   #"," ### "}},
+  {'4', {"   # ","  ## "," # # ","#  # ","#####","   # ","   # "}},
+  {'5', {"#####","#    ","#### ","    #","    #","#   #"," ### "}},
+  {'6', {"  ## "," #   ","#    ","#### ","#   #","#   #"," ### "}},
+  {'7', {"#####","    #","   # ","  #  "," #   "," #   "," #   "}},
+  {'8', {" ### ","#   #","#   #"," ### ","#   #","#   #"," ### "}},
+  {'9', {" ### ","#   #","#   #"," ####","    #","   # "," ##  "}},
+  {'A', {" ### ","#   #","#   #","#####","#   #","#   #","#   #"}},
+  {'B', {"#### ","#   #","#   #","#### ","#   #","#   #","#### "}},
+  {'C', {" ### ","#   #","#    ","#    ","#    ","#   #"," ### "}},
+  {'D', {"#### ","#   #","#   #","#   #","#   #","#   #","#### "}},
+  {'E', {"#####","#    ","#    ","#### ","#    ","#    ","#####"}},
+  {'F', {"#####","#    ","#    ","#### ","#    ","#    ","#    "}},
+  {'G', {" ### ","#   #","#    ","# ###","#   #","#   #"," ### "}},
+  {'H', {"#   #","#   #","#   #","#####","#   #","#   #","#   #"}},
+  {'I', {" ### ","  #  ","  #  ","  #  ","  #  ","  #  "," ### "}},
+  {'J', {"  ###","   # ","   # ","   # ","#  # ","#  # "," ##  "}},
+  {'K', {"#   #","#  # ","# #  ","##   ","# #  ","#  # ","#   #"}},
+  {'L', {"#    ","#    ","#    ","#    ","#    ","#    ","#####"}},
+  {'M', {"#   #","## ##","# # #","#   #","#   #","#   #","#   #"}},
+  {'N', {"#   #","##  #","# # #","#  ##","#   #","#   #","#   #"}},
+  {'O', {" ### ","#   #","#   #","#   #","#   #","#   #"," ### "}},
+  {'P', {"#### ","#   #","#   #","#### ","#    ","#    ","#    "}},
+  {'Q', {" ### ","#   #","#   #","#   #","# # #","#  # "," ## #"}},
+  {'R', {"#### ","#   #","#   #","#### ","# #  ","#  # ","#   #"}},
+  {'S', {" ####","#    ","#    "," ### ","    #","    #","#### "}},
+  {'T', {"#####","  #  ","  #  ","  #  ","  #  ","  #  ","  #  "}},
+  {'U', {"#   #","#   #","#   #","#   #","#   #","#   #"," ### "}},
+  {'V', {"#   #","#   #","#   #","#   #","#   #"," # # ","  #  "}},
+  {'W', {"#   #","#   #","#   #","#   #","# # #","## ##","#   #"}},
+  {'X', {"#   #","#   #"," # # ","  #  "," # # ","#   #","#   #"}},
+  {'Y', {"#   #","#   #"," # # ","  #  ","  #  ","  #  ","  #  "}},
+  {'Z', {"#####","    #","   # ","  #  "," #   ","#    ","#####"}},
+  {'a', {"     ","     "," ### ","    #"," ####","#   #"," ####"}},
+  {'b', {"#    ","#    ","#### ","#   #","#   #","#   #","#### "}},
+  {'c', {"     ","     "," ### ","#    ","#    ","#   #"," ### "}},
+  {'d', {"    #","    #"," ####","#   #","#   #","#   #"," ####"}},
+  {'e', {"     ","     "," ### ","#   #","#####","#    "," ### "}},
+  {'f', {"  ## "," #   ","#### "," #   "," #   "," #   "," #   "}},
+  {'g', {"     "," ####","#   #","#   #"," ####","    #"," ### "}},
+  {'h', {"#    ","#    ","#### ","#   #","#   #","#   #","#   #"}},
+  {'i', {"  #  ","     "," ##  ","  #  ","  #  ","  #  "," ### "}},
+  {'j', {"   # ","     ","  ## ","   # ","   # ","#  # "," ##  "}},
+  {'k', {"#    ","#    ","#  # ","# #  ","##   ","# #  ","#  # "}},
+  {'l', {" ##  ","  #  ","  #  ","  #  ","  #  ","  #  "," ### "}},
+  {'m', {"     ","     ","## # ","# # #","# # #","#   #","#   #"}},
+  {'n', {"     ","     ","#### ","#   #","#   #","#   #","#   #"}},
+  {'o', {"     ","     "," ### ","#   #","#   #","#   #"," ### "}},
+  {'p', {"     ","#### ","#   #","#   #","#### ","#    ","#    "}},
+  {'q', {"     "," ####","#   #","#   #"," ####","    #","    #"}},
+  {'r', {"     ","     ","# ## ","##   ","#    ","#    ","#    "}},
+  {'s', {"     ","     "," ####","#    "," ### ","    #","#### "}},
+  {'t', {" #   "," #   ","#### "," #   "," #   "," #  #","  ## "}},
+  {'u', {"     ","     ","#   #","#   #","#   #","#   #"," ####"}},
+  {'v', {"     ","     ","#   #","#   #","#   #"," # # ","  #  "}},
+  {'w', {"     ","     ","#   #","#   #","# # #","# # #"," # # "}},
+  {'x', {"     ","     ","#   #"," # # ","  #  "," # # ","#   #"}},
+  {'y', {"     ","#   #","#   #","#   #"," ####","    #"," ### "}},
+  {'z', {"     ","     ","#####","   # ","  #  "," #   ","#####"}},
+  {'.', {"     ","     ","     ","     ","     "," ##  "," ##  "}},
+  {',', {"     ","     ","     ","     ","  ## ","  #  "," #   "}},
+  {':', {"     "," ##  "," ##  ","     "," ##  "," ##  ","     "}},
+  {';', {"     "," ##  "," ##  ","     "," ##  ","  #  "," #   "}},
+  {'-', {"     ","     ","     ","#####","     ","     ","     "}},
+  {'+', {"     ","  #  ","  #  ","#####","  #  ","  #  ","     "}},
+  {'=', {"     ","     ","#####","     ","#####","     ","     "}},
+  {'*', {"     ","#   #"," # # ","#####"," # # ","#   #","     "}},
+  {'/', {"    #","    #","   # ","  #  "," #   ","#    ","#    "}},
+  {'(', {"  ## "," #   ","#    ","#    ","#    "," #   ","  ## "}},
+  {')', {" ##  ","   # ","    #","    #","    #","   # "," ##  "}},
+  {'[', {" ### "," #   "," #   "," #   "," #   "," #   "," ### "}},
+  {']', {" ### ","   # ","   # ","   # ","   # ","   # "," ### "}},
+  {'!', {"  #  ","  #  ","  #  ","  #  ","  #  ","     ","  #  "}},
+  {'?', {" ### ","#   #","    #","   # ","  #  ","     ","  #  "}},
+  {'#', {" # # "," # # ","#####"," # # ","#####"," # # "," # # "}},
+  {'%', {"##   ","##  #","   # ","  #  "," #   ","#  ##","   ##"}},
+  {'_', {"     ","     ","     ","     ","     ","     ","#####"}},
+  {'<', {"   # ","  #  "," #   ","#    "," #   ","  #  ","   # "}},
+  {'>', {"#    "," #   ","  #  ","   # ","  #  "," #   ","#    "}},
+  {'^', {"  #  "," # # ","#   #","     ","     ","     ","     "}}
+};
+
+static const int nfont_defs = sizeof(font_defs) / sizeof(FontGlyph);
+
+static unsigned char font_bits[128][FONT_H];
+static int font_built = 0;
+
+static void build_font()
+{
+  // default: control chars and space blank, other printable chars a box
+
+  static const char *box[FONT_H] =
+    {"#####","#   #","#   #","#   #","#   #","#   #","#####"};
+
+  for (int c = 0; c < 128; c++)
+    for (int r = 0; r < FONT_H; r++) {
+      unsigned char b = 0;
+      if (c > 32 && c < 127) {
+        const char *row = box[r];
+        for (int col = 0; col < FONT_W; col++)
+          if (row[col] != ' ') b |= (1 << (FONT_W-1-col));
+      }
+      font_bits[c][r] = b;
+    }
+
+  // overwrite with defined glyphs
+
+  for (int i = 0; i < nfont_defs; i++) {
+    int c = (unsigned char) font_defs[i].c;
+    for (int r = 0; r < FONT_H; r++) {
+      const char *row = font_defs[i].rows[r];
+      unsigned char b = 0;
+      for (int col = 0; col < FONT_W && row[col]; col++)
+        if (row[col] != ' ') b |= (1 << (FONT_W-1-col));
+      font_bits[c][r] = b;
+    }
+  }
+
+  font_built = 1;
+}
+
+static const unsigned char *font_glyph(char ch)
+{
+  if (!font_built) build_font();
+  unsigned char uc = (unsigned char) ch;
+  if (uc >= 128) uc = (unsigned char) '?';
+  return font_bits[uc];
+}
+
+}
+
 /* ---------------------------------------------------------------------- */
 
 Image::Image(SPARTA *sparta, int nmap_caller) : Pointers(sparta)
@@ -949,6 +1104,76 @@ void Image::draw_pixel(int ix, int iy, double depth,
   imageBuffer[0 + ix*3 + iy*width*3] = static_cast<int>(c[0] * 255.0);
   imageBuffer[1 + ix*3 + iy*width*3] = static_cast<int>(c[1] * 255.0);
   imageBuffer[2 + ix*3 + iy*width*3] = static_cast<int>(c[2] * 255.0);
+}
+
+/* ----------------------------------------------------------------------
+   draw a text string as a flat 2d overlay directly into imageBuffer
+   (x,y) is the top-left pixel of the string in screen coords, where
+   x grows rightward and y grows downward from the top of the image
+   color is RGB in [0,1], scale is an integer pixel magnification (>=1)
+   intended to be called on proc 0 after Image::merge(), so no depth or
+   lighting is applied and the MPI compositing is untouched
+------------------------------------------------------------------------- */
+
+void Image::draw_text(int x, int y, const char *str, double *color, int scale)
+{
+  if (scale < 1) scale = 1;
+
+  char red = static_cast<int>(color[0] * 255.0);
+  char green = static_cast<int>(color[1] * 255.0);
+  char blue = static_cast<int>(color[2] * 255.0);
+
+  int penx = x;
+
+  for (const char *p = str; *p; p++) {
+    const unsigned char *glyph = font_glyph(*p);
+
+    for (int row = 0; row < FONT_H; row++) {
+      unsigned char bits = glyph[row];
+      if (!bits) continue;
+      for (int col = 0; col < FONT_W; col++) {
+        if (!(bits & (1 << (FONT_W-1-col)))) continue;
+
+        // fill a scale x scale block of pixels for this glyph pixel
+
+        for (int dy = 0; dy < scale; dy++)
+          for (int dx = 0; dx < scale; dx++) {
+            int sx = penx + col*scale + dx;
+            int sy = y + row*scale + dy;
+
+            // convert screen y (from top) to buffer row (from bottom)
+
+            int iy = height - 1 - sy;
+            if (sx < 0 || sx >= width || iy < 0 || iy >= height) continue;
+
+            int offset = 3*sx + iy*width*3;
+            imageBuffer[offset + 0] = red;
+            imageBuffer[offset + 1] = green;
+            imageBuffer[offset + 2] = blue;
+          }
+      }
+    }
+
+    penx += (FONT_W + 1) * scale;    // 1 blank column between glyphs
+  }
+}
+
+/* ----------------------------------------------------------------------
+   pixel width/height of a rendered string, used to place text at corners
+------------------------------------------------------------------------- */
+
+int Image::text_width(const char *str, int scale)
+{
+  if (scale < 1) scale = 1;
+  int n = strlen(str);
+  if (n == 0) return 0;
+  return (n * (FONT_W + 1) - 1) * scale;    // no trailing inter-glyph gap
+}
+
+int Image::text_height(int scale)
+{
+  if (scale < 1) scale = 1;
+  return FONT_H * scale;
 }
 
 /* ---------------------------------------------------------------------- */

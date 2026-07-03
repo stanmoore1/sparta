@@ -24,6 +24,7 @@
 #include "particle.h"
 #include "grid.h"
 #include "surf.h"
+#include "update.h"
 #include "input.h"
 #include "variable.h"
 #include "modify.h"
@@ -52,6 +53,7 @@ enum{NUMERIC,TYPE,PROC,ATTRIBUTE,ONE};
 enum{STATIC,DYNAMIC};
 enum{COMPUTE,FIX,VARIABLE};
 enum{PARTICLE,GRID,SURF,XPLANE,YPLANE,ZPLANE};
+enum{TOPLEFT,TOPRIGHT,BOTLEFT,BOTRIGHT};   // annotation corners
 
 /* ---------------------------------------------------------------------- */
 
@@ -134,6 +136,9 @@ DumpImage::DumpImage(SPARTA *sparta, int narg, char **arg) :
   glineflag = 0;
   slineflag = 0;
   axesflag = 0;
+
+  nannotate = 0;
+  annotations = NULL;
 
   idgrid = idgridx = idgridy = idgridz = idsurf = NULL;
 
@@ -483,6 +488,42 @@ DumpImage::DumpImage(SPARTA *sparta, int narg, char **arg) :
       image->ssaoint = ssaoint;
       iarg += 4;
 
+    } else if (strcmp(arg[iarg],"label") == 0) {
+
+      // label <corner> <color> <scale> <text>
+      // corner = tl/tr/bl/br, text may contain %step and %time tokens
+      // quote multi-word text in the input script so it is one arg
+
+      if (iarg+5 > narg) error->all(FLERR,"Illegal dump image command");
+
+      int corner;
+      if (strcmp(arg[iarg+1],"tl") == 0) corner = TOPLEFT;
+      else if (strcmp(arg[iarg+1],"tr") == 0) corner = TOPRIGHT;
+      else if (strcmp(arg[iarg+1],"bl") == 0) corner = BOTLEFT;
+      else if (strcmp(arg[iarg+1],"br") == 0) corner = BOTRIGHT;
+      else error->all(FLERR,"Illegal dump image command");
+
+      double *color = image->color2rgb(arg[iarg+2]);
+      if (color == NULL)
+        error->all(FLERR,"Invalid color in dump image command");
+
+      int scale = atoi(arg[iarg+3]);
+      if (scale < 1) error->all(FLERR,"Illegal dump image command");
+
+      annotations = (Annotation *)
+        memory->srealloc(annotations,(nannotate+1)*sizeof(Annotation),
+                         "dump:annotations");
+      Annotation &a = annotations[nannotate];
+      int n = strlen(arg[iarg+4]) + 1;
+      a.text = new char[n];
+      strcpy(a.text,arg[iarg+4]);
+      a.corner = corner;
+      a.color = color;
+      a.scale = scale;
+      nannotate++;
+
+      iarg += 5;
+
     } else error->all(FLERR,"Illegal dump image command");
   }
 
@@ -556,6 +597,9 @@ DumpImage::~DumpImage()
 
   delete [] pcolortype;
   delete [] pdiamtype;
+
+  for (int i = 0; i < nannotate; i++) delete [] annotations[i].text;
+  memory->sfree(annotations);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -1047,6 +1091,10 @@ void DumpImage::write()
   create_image();
   image->merge();
 
+  // draw 2d text annotations as an overlay on the merged image (proc 0)
+
+  if (me == 0 && nannotate) draw_annotations();
+
   // write image file
 
   if (me == 0) {
@@ -1058,6 +1106,74 @@ void DumpImage::write()
       fp = NULL;
     }
   }
+}
+
+/* ----------------------------------------------------------------------
+   draw all text annotations onto the merged image (proc 0 only)
+   each annotation is placed relative to one of the 4 image corners
+------------------------------------------------------------------------- */
+
+void DumpImage::draw_annotations()
+{
+  const int margin = 5;
+  char buf[1024];
+
+  for (int i = 0; i < nannotate; i++) {
+    Annotation &a = annotations[i];
+    expand_annotation(a.text,buf,1024);
+
+    int tw = Image::text_width(buf,a.scale);
+    int th = Image::text_height(a.scale);
+
+    int x,y;
+    if (a.corner == TOPLEFT) {
+      x = margin;
+      y = margin;
+    } else if (a.corner == TOPRIGHT) {
+      x = image->width - tw - margin;
+      y = margin;
+    } else if (a.corner == BOTLEFT) {
+      x = margin;
+      y = image->height - th - margin;
+    } else {
+      x = image->width - tw - margin;
+      y = image->height - th - margin;
+    }
+
+    image->draw_text(x,y,buf,a.color,a.scale);
+  }
+}
+
+/* ----------------------------------------------------------------------
+   expand annotation template tokens into out (size n, NULL-terminated)
+   supported tokens: %step -> current timestep, %time -> simulation time
+   %% -> literal %
+   returns length of expanded string
+------------------------------------------------------------------------- */
+
+int DumpImage::expand_annotation(const char *tmpl, char *out, int n)
+{
+  int pos = 0;
+  const char *p = tmpl;
+
+  while (*p && pos < n-1) {
+    if (p[0] == '%' && strncmp(p+1,"step",4) == 0) {
+      pos += snprintf(&out[pos],n-pos,BIGINT_FORMAT,update->ntimestep);
+      p += 5;
+    } else if (p[0] == '%' && strncmp(p+1,"time",4) == 0) {
+      pos += snprintf(&out[pos],n-pos,"%g",update->time);
+      p += 5;
+    } else if (p[0] == '%' && p[1] == '%') {
+      out[pos++] = '%';
+      p += 2;
+    } else {
+      out[pos++] = *p++;
+    }
+  }
+
+  if (pos > n-1) pos = n-1;
+  out[pos] = '\0';
+  return pos;
 }
 
 /* ----------------------------------------------------------------------

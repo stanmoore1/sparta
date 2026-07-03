@@ -113,6 +113,17 @@ class DumpImage : public DumpParticle {
   double slinediam;                // diameter of lines
   double *slinecolor;              // color of lines
 
+  // text annotations (issue #523)
+
+  struct Annotation {
+    char *text;                    // template string, may contain %step,%time
+    int corner;                    // TOPLEFT,TOPRIGHT,BOTLEFT,BOTRIGHT
+    int scale;                     // integer font magnification
+    double *color;                 // text color, RGB in [0,1]
+  };
+  int nannotate;                   // number of text annotations
+  Annotation *annotations;         // list of text annotations
+
   // methods
 
   void init_style();
@@ -124,6 +135,8 @@ class DumpImage : public DumpParticle {
   void box_bounds();
 
   void create_image();
+  void draw_annotations();
+  int expand_annotation(const char *, char *, int);
 };
 
 }
