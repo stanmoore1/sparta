@@ -54,6 +54,7 @@ class FixAblate : public Fix {
                               //   and a generated tri vertex or line segment endpt
  protected:
   int me;
+  int mode;               // ABLATE (recede) or DEPOSIT (grow) the surface
   int groupbit,which,argindex,icompute,ifix,ivariable,maxrandom;
   double scale;
   char *idsource;
@@ -124,6 +125,7 @@ class FixAblate : public Fix {
   void set_delta_uniform();
 
   void decrement();
+  void increment();
   void decrement_multiv();
   void decrement_multid_inside();
   void decrement_multid_outside();

@@ -26,7 +26,10 @@ source = computeID or fixID or uniform or random :l
 
 maxrandom = maximum per grid cell decrement as an integer (only specified if source = random or uniform) :l
 zero or more keyword/value pairs may be appended :l
-keyword = {mindist} or {multiple} :l
+keyword = {mode} or {mindist} or {multiple} :l
+  {mode} value = ablate or deposit
+    ablate = source decrements corner point values so the surface recedes
+    deposit = source increments corner point values so the surface grows
   {mindist} value = fraction
     fraction = minimum fractional distance along cell edge for triangle/line vertices (value > 0 and < 0.5)
   {multiple} value = yes or no :pre
@@ -36,7 +39,8 @@ keyword = {mindist} or {multiple} :l
 
 fix 1 ablate surfcells 1000 10.0 c_tally
 fix 1 ablate surfcells 0 0.0 random 10
-fix fablate ablate inner 0 0.2 random 0 mindist 0.02 :pre
+fix fablate ablate inner 0 0.2 random 0 mindist 0.02
+fix depo ablate inner 100 0.2 f_FIX mode deposit :pre
 
 [Description:]
 
@@ -120,6 +124,24 @@ of the gas and the surface is decremented by {maxrandom}.
 
 See the explanation for the optional {mindist} and {multiple} keywords
 below.
+
+:line
+
+By default ({mode} = ablate) the {source} decrements the grid corner
+point values so that the implicit surface recedes, modeling removal of
+surface material.  If {mode} = deposit is specified, the same {source}
+instead increments the corner point values (clamped at the maximum of
+255) so that the implicit surface grows into the gas phase, modeling
+deposition of material onto the surface.  This is the inverse operation
+of ablation and can be used for growth problems such as thin-film
+deposition or condensation.  When the growing surface engulfs gas
+particles, those particles are deleted, in the same way that a receding
+surface deletes particles left behind on the material side.
+
+The {mode} = deposit option currently supports only the default
+single-value, single-decrement corner point representation; it cannot
+be combined with the {multiple} keyword or with multivalue corner
+points.
 
 :line
 
@@ -323,8 +345,9 @@ that is the case.
 
 [Default:]
 
-The default for the {mindist} keyword = 0.0, i.e. the epsilon method
-is used.  The default for the {multiple} keyword = no.
+The default for the {mode} keyword = ablate.  The default for the
+{mindist} keyword = 0.0, i.e. the epsilon method is used.  The default
+for the {multiple} keyword = no.
 
 :line
 

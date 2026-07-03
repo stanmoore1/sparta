@@ -40,6 +40,8 @@ using namespace SPARTA_NS;
 
 enum{COMPUTE,FIX,VARIABLE,RANDOM,UNIFORM};
 enum{CVALUE,CDELTA,NVERT};
+enum{ABLATE,DEPOSIT};     // surface recedes (ablate) or grows (deposit)
+enum{UNKNOWN,OUTSIDE,INSIDE,OVERLAP};   // cell types, same as Grid
 
 #define INVOKED_PER_GRID 16
 #define DELTAGRID 1024            // must be bigger than split cells per cell
@@ -434,6 +436,13 @@ void FixAblate::init()
   if (!storeflag)
     error->all(FLERR,"Fix ablate corner point values not stored");
 
+  // deposition prototype currently supports only the base single-value,
+  //   single-decrement path (not the multivalue / multiple-decrement modes)
+
+  if (mode == DEPOSIT && (multi_val_flag || multi_dec_flag))
+    error->all(FLERR,"Fix ablate mode deposit does not yet support "
+               "multivalue or multiple corner-point decrement modes");
+
   if (which == COMPUTE) {
     icompute = modify->find_compute(idsource);
     if (icompute < 0)
@@ -533,6 +542,9 @@ void FixAblate::end_of_step()
     if (multi_val_flag) {
       decrement_multiv();
       sync_multiv();
+    } else if (mode == DEPOSIT) {
+      increment();
+      sync();
     } else {
       decrement();
       sync();
@@ -714,7 +726,12 @@ void FixAblate::create_surfs(int outflag)
   // DEBUG - should not have to do any of this once marching cubes is perfect
   // only necessary for 3d
 
-  if (dim == 2) {
+  // for ablation the surface recedes, so no particle can be engulfed and
+  //   the 2d path skips the inside-surf particle deletion below
+  // for deposition the surface grows into the gas, so particles can be
+  //   engulfed in 2d as well as 3d and must be removed
+
+  if (dim == 2 && mode != DEPOSIT) {
     memory->destroy(mcflags_old);
     return;
   }
@@ -739,6 +756,7 @@ void FixAblate::create_surfs(int outflag)
   // similar code as in fix grid/check
 
   Grid::ChildCell *cells = grid->cells;
+  Grid::ChildInfo *cinfo = grid->cinfo;
   Grid::SplitInfo *sinfo = grid->sinfo;
   Particle::OnePart *particles = particle->particles;
   int pnlocal = particle->nlocal;
@@ -752,7 +770,17 @@ void FixAblate::create_surfs(int outflag)
   for (int i = 0; i < pnlocal; i++) {
     particles[i].flag = PKEEP;
     icell = particles[i].icell;
-    if (cells[icell].nsurf == 0) continue;
+    if (cells[icell].nsurf == 0) {
+      // a cell with no surfs is entirely OUTSIDE or entirely INSIDE
+      // for deposition a formerly-open cell can become fully INSIDE (engulfed)
+      //   in a single step, so its particles must be discarded here since the
+      //   surf-straddle test below is skipped for no-surf cells
+      if (mode == DEPOSIT && cinfo[icell].type == INSIDE) {
+        particles[i].flag = PDISCARD;
+        ncount++;
+      }
+      continue;
+    }
 
     x = particles[i].x;
 
@@ -1052,6 +1080,61 @@ void FixAblate::decrement()
 }
 
 /* ----------------------------------------------------------------------
+   increment corner points of each owned grid cell (deposition)
+   inverse of decrement(): corner point values grow toward 255.0
+   skip cells not in group, with no surfs, and sub-cells
+   algorithm:
+     no corner pt value can be > 255.0
+     increment largest sub-255 corner pt by full delta
+       (mirror of decrement, which shrinks the smallest positive corner pt)
+     if cannot, fill it to 255.0, increment next largest by remainder, etc
+------------------------------------------------------------------------- */
+
+void FixAblate::increment()
+{
+  Grid::ChildCell *cells = grid->cells;
+  Grid::ChildInfo *cinfo = grid->cinfo;
+
+  int i,imax;
+  double maxvalue,total,room;
+  double *corners;
+
+  // total = full amount to deposit onto cell
+  // cdelta[icell] = amount to add to each corner point of icell
+
+  for (int icell = 0; icell < nglocal; icell++) {
+    if (!(cinfo[icell].mask & groupbit)) continue;
+    if (cells[icell].nsplit <= 0) continue;
+
+    for (i = 0; i < ncorner; i++) cdelta[icell][i] = 0.0;
+
+    total = celldelta[icell];
+    corners = cvalues[icell];
+    while (total > 0.0) {
+      imax = -1;
+      maxvalue = -1.0;
+      for (i = 0; i < ncorner; i++) {
+        if (corners[i] < 255.0 && corners[i] > maxvalue &&
+            cdelta[icell][i] == 0.0) {
+          imax = i;
+          maxvalue = corners[i];
+        }
+      }
+      if (imax == -1) break;
+
+      room = 255.0 - corners[imax];
+      if (total < room) {
+        cdelta[icell][imax] += total;
+        total = 0.0;
+      } else {
+        cdelta[icell][imax] = room;
+        total -= room;
+      }
+    }
+  }
+}
+
+/* ----------------------------------------------------------------------
    sync all copies of corner points values for all owned grid cells
    algorithm:
      comm my cdelta values that are shared by neighbor
@@ -1128,8 +1211,16 @@ void FixAblate::sync()
         }
       }
 
-      if (total > cvalues[icell][i]) cvalues[icell][i] = 0.0;
-      else cvalues[icell][i] -= total;
+      // ABLATE: newvalue = MAX(oldvalue-dsum,0)
+      // DEPOSIT: newvalue = MIN(oldvalue+dsum,255)
+
+      if (mode == DEPOSIT) {
+        if (total > 255.0 - cvalues[icell][i]) cvalues[icell][i] = 255.0;
+        else cvalues[icell][i] += total;
+      } else {
+        if (total > cvalues[icell][i]) cvalues[icell][i] = 0.0;
+        else cvalues[icell][i] -= total;
+      }
 
     }
   }
@@ -1826,10 +1917,17 @@ void FixAblate::process_args(int narg, char **arg)
   mindist = 0.0;
   multi_dec_flag = 0;
   minmaxflag = 0;
+  mode = ABLATE;
 
   int iarg = 0;
   while (iarg < narg) {
-    if (strcmp(arg[iarg],"mindist") == 0)  {
+    if (strcmp(arg[iarg],"mode") == 0)  {
+      if (iarg+2 > narg) error->all(FLERR,"Invalid fix ablate command");
+      if (strcmp(arg[iarg+1],"ablate") == 0) mode = ABLATE;
+      else if (strcmp(arg[iarg+1],"deposit") == 0) mode = DEPOSIT;
+      else error->all(FLERR,"Illegal fix_ablate command");
+      iarg += 2;
+    } else if (strcmp(arg[iarg],"mindist") == 0)  {
       if (iarg+2 > narg) error->all(FLERR,"Invalid read_isurf command");
       mindist = atof(arg[iarg+1]);
       if (mindist < 0.0 || mindist >= 0.5)
