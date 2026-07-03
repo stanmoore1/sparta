@@ -130,6 +130,8 @@ double CollideVSS::sws_test_scale(int ispecies, int jspecies)
    SWS - Ewilost re-injection for setup_collision()
    returns the pooled split-merge energy (draining the pool) when both
    collision partners carry the max species weight, else 0.0
+   sws_species_maxwt (the run-constant max over all species) is resolved
+   once in Collide::setup()
 ------------------------------------------------------------------------- */
 
 double CollideVSS::sws_ewilost_take(int isp, int jsp)
@@ -138,13 +140,8 @@ double CollideVSS::sws_ewilost_take(int isp, int jsp)
 
   double w_i = species[isp].specwt;
   double w_j = species[jsp].specwt;
-  int nspecies = particle->nspecies;
-  double w_max = 0.0;
 
-  for (int i = 0; i < nspecies; i++)
-    w_max = std::max(species[i].specwt,w_max);
-
-  if ((w_i==w_max) && (w_j==w_max)) {
+  if ((w_i==sws_species_maxwt) && (w_j==sws_species_maxwt)) {
     double etake = Ewilost;
     Ewilost = 0.0;
     return etake;

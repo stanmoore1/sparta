@@ -87,6 +87,7 @@ Collide::Collide(SPARTA *sparta, int, char **arg) : Pointers(sparta)
   count_wi_group = NULL;  // SWS
   maxwigr = NULL;         // SWS
   ewilost_cell = NULL;    // SWS
+  sws_species_maxwt = 0.0; // SWS
 
   vremax = NULL;
   vremax_initial = NULL;
@@ -438,6 +439,18 @@ void Collide::setup()
   // done once after Update->setup()
 
   glist_active = update->glist_active;
+
+  // SWS: max species weight over all species is run-constant (species
+  // weights are static), so resolve it once here rather than rescanning
+  // every collision in setup_collision()'s Ewilost re-injection
+
+  if (particle->sws) {
+    Particle::Species *species = particle->species;
+    int nspecies = particle->nspecies;
+    sws_species_maxwt = 0.0;
+    for (int i = 0; i < nspecies; i++)
+      sws_species_maxwt = MAX(species[i].specwt,sws_species_maxwt);
+  }
 }
 
 /* ----------------------------------------------------------------------

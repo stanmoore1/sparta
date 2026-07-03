@@ -112,6 +112,8 @@ class Collide : protected Pointers {
   double *maxwigr;                   // SWS - per-group weight maxima (current cell)
   double sws_attempt_wi;             // SWS - weighted count for attempt formulas
   double sws_maxwi;                  // SWS - max species weight in current cell
+  double sws_species_maxwt;          // SWS - max weight over all species
+                                     //       (run-constant, set in setup())
   int sws_n_i,sws_n_j,sws_n_k;       // SWS - product multiplicities set by
   int sws_n_pre;                     //       perform_collision() under SWS
 
