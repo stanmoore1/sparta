@@ -20,13 +20,48 @@ Checks:
    sum(w_i * m_i) is conserved to within the reaction stoichiometry.
 """
 
-import subprocess, sys, os, re
+import subprocess, sys, os, re, tempfile
 
 def run(exe, infile):
     log = "log.verify." + infile[3:]
     subprocess.run([exe, "-in", infile, "-log", log],
                    check=True, stdout=subprocess.DEVNULL)
     return parse(log)
+
+# SWS and stochastic weighting (SWPM) are mutually exclusive; enabling both
+# must be rejected by Particle::setup_weighting() with a single message.
+# Run inline (not an in.* deck) so the gold-log regression never sees it.
+EXCLUSION_DECK = """seed 12345
+dimension 3
+global gridcut 1.0e-5
+boundary rr rr rr
+create_box 0 1e-4 0 1e-4 0 1e-4
+create_grid 5 5 5
+species {species} N2 N SWS
+mixture air N2 N vstream 0 0 0 temp 273
+mixture air N2 frac 0.9
+mixture air N frac 0.1
+global nrho 7e22
+global fnum 7e6
+fix sw stochastic_weight
+collide vss air {vss}
+collide_modify stochastic_weight yes
+create_particles air n 2000
+run 1
+"""
+
+def run_expect_error(exe, deck_text, expect):
+    with tempfile.NamedTemporaryFile("w", suffix=".sparta_excl",
+                                     delete=False, dir=".") as f:
+        f.write(deck_text)
+        path = f.name
+    try:
+        p = subprocess.run([exe, "-in", path],
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                           universal_newlines=True)
+    finally:
+        os.remove(path)
+    return p.returncode != 0 and "ERROR" in p.stdout and expect in p.stdout
 
 def parse(log):
     rows, header = [], None
@@ -120,6 +155,11 @@ def main():
     allok &= check("sws.chem reactions occurred",
                    col(h, rows, "Np")[-1] > col(h, rows, "Np")[0],
                    f"np {col(h,rows,'Np')[0]:.0f} -> {col(h,rows,'Np')[-1]:.0f}")
+
+    # 5. mutual exclusion: SWS + SWPM together must be rejected
+    deck = EXCLUSION_DECK.format(species="sws.species", vss="sws.vss")
+    allok &= check("SWS + SWPM rejected as mutually exclusive",
+                   run_expect_error(exe, deck, "mutually exclusive"))
 
     print("=" * 40)
     print("ALL CHECKS PASSED" if allok else "SOME CHECKS FAILED")

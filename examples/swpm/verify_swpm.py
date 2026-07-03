@@ -141,6 +141,13 @@ ERROR_CASES = [
      "collide_modify     stochastic_weight yes\n"
      "collide_modify     nearcp yes 10",
      "near-neighbor"),
+    # SWPM (particle weighting) and cell weighting are mutually exclusive;
+    # setup_weighting() rejects any two active schemes with one message
+    ("swpm-plus-cell-weighting",
+     "global             weight cell volume\n"
+     "fix                fweight stochastic_weight\n"
+     "collide_modify     stochastic_weight yes",
+     "mutually exclusive"),
 ]
 
 ERROR_DECK_TEMPLATE = """
