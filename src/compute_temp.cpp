@@ -46,19 +46,18 @@ double ComputeTemp::compute_scalar()
   double t = 0.0;
 
   // accumulate the summed particle weight as well, so the temperature is
-  // normalized by the effective particle count.  with stochastic (SWPM) or
-  // grid-based weighting the weights vary per particle; with no weighting
-  // swfrac == 1 and wsum reduces to the particle count.
+  // normalized by the effective particle count.  pweight(i) is the
+  // per-particle weight relative to fnum: the per-species weight under
+  // SWS, the per-particle weight under stochastic (SWPM) weighting, and
+  // 1.0 with no weighting (where wsum reduces to the particle count).
 
   double wsum = 0.0;
-  double *sweights = particle->pweight_vector();
-  double swfrac = 1.0;
   for (int i = 0; i < nlocal; i++) {
     v = particles[i].v;
-    if (sweights) swfrac = sweights[i];
+    double w = particle->pweight(i);
     t += (v[0]*v[0] + v[1]*v[1] + v[2]*v[2]) *
-      species[particles[i].ispecies].mass * swfrac;
-    wsum += swfrac;
+      species[particles[i].ispecies].mass * w;
+    wsum += w;
   }
 
   double local[2] = {t,wsum}, all[2];

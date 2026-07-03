@@ -73,6 +73,15 @@ def main():
     allok &= check("sws.box temperature steady (no energy leak)",
                    abs(t_last - t_first) / t_first < 0.10,
                    f"t(100)={t_first:.1f} t(end)={t_last:.1f}")
+    # weighted temperature (compute temp): normalized by the summed
+    # species weight, not the raw particle count.  at step 0 the particles
+    # are a fresh Maxwellian draw at the mixture temperature (273.15 K, no
+    # collisions yet, no energy leak), so the weighted normalization must
+    # recover it.  a broken pweight (raw-count divisor, wrong scale, NaN)
+    # shows up here; the exact per-step weighted temperature is pinned by
+    # the gold-log regression.
+    allok &= check("sws.box weighted temperature recovers draw temp (step 0)",
+                   abs(temp[0] - 273.15) < 8.0, f"got {temp[0]:.2f}")
 
     # 2. SWS off: weights inert
     h, rows = run(exe, "in.sws0.box")

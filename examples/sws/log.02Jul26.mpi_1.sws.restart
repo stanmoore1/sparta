@@ -22,13 +22,13 @@ create_box  	    0 0.0001 0 0.0001 0 0.0001
 Created orthogonal box = (0 0 0) to (0.0001 0.0001 0.0001)
 create_grid 	    10 10 10
 Created 1000 child grid cells
-  CPU time = 0.00099206 secs
-  create/ghost percent = 77.3131 22.6869
+  CPU time = 0.000936985 secs
+  create/ghost percent = 81.9847 18.0153
 
 balance_grid        rcb part
 Balance grid migrated 0 cells
-  CPU time = 0.00014019 secs
-  reassign/sort/migrate/ghost percent = 52.8912 0.680272 11.3946 35.034
+  CPU time = 0.000138044 secs
+  reassign/sort/migrate/ghost percent = 52.1589 0.863558 12.2625 34.715
 
 species		    sws.species N2 N SWS
 mixture		    air N2 N vstream 0.0 0.0 0.0 temp 273.15
@@ -42,7 +42,7 @@ collide		    vss air sws.vss
 
 create_particles    air n 10000 twopass
 Created 10000 particles
-  CPU time = 0.002244 secs
+  CPU time = 0.00201893 secs
 
 stats		    50
 compute             temp temp
@@ -57,25 +57,25 @@ Memory usage per proc in Mbytes:
   surf      (ave,min,max) = 0 0 0
   total     (ave,min,max) = 3.20129 3.20129 3.20129
 Step CPU Np Natt Ncoll c_temp c_nsp[1] c_nsp[2] 
-       0            0    10000        0        0    272.79463         4878         5122 
-      50  0.020948887    10000      622      415    266.17053         4878         5122 
-     100   0.04456687    10000      626      385    261.13674         4878         5122 
-     150  0.066679001    10000      624      384    263.16377         4878         5122 
-     200   0.09073782    10000      675      412    259.78443         4878         5122 
-     250   0.11249804    10000      655      402    261.05667         4878         5122 
-Loop time of 0.112506 on 1 procs for 250 steps with 10000 particles
-Performance: 2222.105 timesteps/s, 22.221 Mparticle-step/s
+       0            0    10000        0        0    272.70517         4878         5122 
+      50  0.021060944    10000      622      415    264.59988         4878         5122 
+     100  0.042376041    10000      626      385    260.54488         4878         5122 
+     150  0.063698053    10000      624      384    261.20432         4878         5122 
+     200  0.084948063    10000      675      412    258.14949         4878         5122 
+     250   0.10613894    10000      655      402    260.35176         4878         5122 
+Loop time of 0.106149 on 1 procs for 250 steps with 10000 particles
+Performance: 2355.181 timesteps/s, 23.552 Mparticle-step/s
 
 MPI task timing breakdown:
 Section |  min time  |  avg time  |  max time  |%varavg| %total
 ---------------------------------------------------------------
-Move    | 0.058511   | 0.058511   | 0.058511   |   0.0 | 52.01
-Coll    | 0.045394   | 0.045394   | 0.045394   |   0.0 | 40.35
-Sort    | 0.0081241  | 0.0081241  | 0.0081241  |   0.0 |  7.22
-Comm    | 0.00016999 | 0.00016999 | 0.00016999 |   0.0 |  0.15
+Move    | 0.05476    | 0.05476    | 0.05476    |   0.0 | 51.59
+Coll    | 0.044434   | 0.044434   | 0.044434   |   0.0 | 41.86
+Sort    | 0.0066061  | 0.0066061  | 0.0066061  |   0.0 |  6.22
+Comm    | 7.3671e-05 | 7.3671e-05 | 7.3671e-05 |   0.0 |  0.07
 Modify  | 0          | 0          | 0          |   0.0 |  0.00
-Output  | 0.00022602 | 0.00022602 | 0.00022602 |   0.0 |  0.20
-Other   |            | 8.011e-05  |            |       |  0.07
+Output  | 0.00022244 | 0.00022244 | 0.00022244 |   0.0 |  0.21
+Other   |            | 5.245e-05  |            |       |  0.05
 
 Particle moves    = 2500000 (2.5M)
 Cells touched     = 3778474 (3.78M)
@@ -91,7 +91,7 @@ Reactions         = 0 (0K)
 Particles stuck   = 0
 Axisymm bad moves = 0
 
-Particle-moves/CPUsec/proc: 2.22211e+07
+Particle-moves/CPUsec/proc: 2.35518e+07
 Particle-moves/step: 10000
 Cell-touches/particle/step: 1.51139
 Particle comm iterations/step: 1
@@ -124,14 +124,14 @@ read_restart        tmp.sws.restart
   orthogonal box = (0 0 0) to (0.0001 0.0001 0.0001)
   1000 grid cells
   10000 particles
-  CPU time = 0.00210714 secs
-  read/surf2grid/rebalance/ghost/inout percent = 95.0102 0 0 4.98982 0
+  CPU time = 0.00224495 secs
+  read/surf2grid/rebalance/ghost/inout percent = 94.9235 0 0 5.07647 0
 
 global              gridcut 1.0e-5 comm/sort yes
 balance_grid        rcb part
 Balance grid migrated 0 cells
-  CPU time = 0.00020504 secs
-  reassign/sort/migrate/ghost percent = 29.7674 14.186 4.30233 51.7442
+  CPU time = 0.000204086 secs
+  reassign/sort/migrate/ghost percent = 30.3738 13.785 4.90654 50.9346
 
 collide		    vss air sws.vss
 
@@ -148,25 +148,25 @@ Memory usage per proc in Mbytes:
   surf      (ave,min,max) = 0 0 0
   total     (ave,min,max) = 3.20129 3.20129 3.20129
 Step CPU Np Natt Ncoll c_temp c_nsp[1] c_nsp[2] 
-     250            0    10000        0        0    261.05667         4878         5122 
-     300  0.021383047    10000      599      385    256.55924         4878         5122 
-     350  0.042639017    10000      593      381    254.99527         4878         5122 
-     400  0.063503027    10000      627      388    257.22313         4878         5122 
-     450  0.084867001    10000      641      400    257.85414         4878         5122 
-     500   0.10590386    10000      651      389     258.2705         4878         5122 
-Loop time of 0.105911 on 1 procs for 250 steps with 10000 particles
-Performance: 2360.472 timesteps/s, 23.605 Mparticle-step/s
+     250            0    10000        0        0    260.35176         4878         5122 
+     300  0.021384001    10000      599      385    257.28359         4878         5122 
+     350   0.04248786    10000      593      381     254.1478         4878         5122 
+     400  0.063706875    10000      627      388    257.83264         4878         5122 
+     450  0.084951878    10000      641      400    258.23893         4878         5122 
+     500   0.10686898    10000      651      389    255.79308         4878         5122 
+Loop time of 0.106878 on 1 procs for 250 steps with 10000 particles
+Performance: 2339.115 timesteps/s, 23.391 Mparticle-step/s
 
 MPI task timing breakdown:
 Section |  min time  |  avg time  |  max time  |%varavg| %total
 ---------------------------------------------------------------
-Move    | 0.05637    | 0.05637    | 0.05637    |   0.0 | 53.22
-Coll    | 0.042112   | 0.042112   | 0.042112   |   0.0 | 39.76
-Sort    | 0.0070529  | 0.0070529  | 0.0070529  |   0.0 |  6.66
-Comm    | 0.00010276 | 0.00010276 | 0.00010276 |   0.0 |  0.10
+Move    | 0.055017   | 0.055017   | 0.055017   |   0.0 | 51.48
+Coll    | 0.044811   | 0.044811   | 0.044811   |   0.0 | 41.93
+Sort    | 0.0066481  | 0.0066481  | 0.0066481  |   0.0 |  6.22
+Comm    | 7.3671e-05 | 7.3671e-05 | 7.3671e-05 |   0.0 |  0.07
 Modify  | 0          | 0          | 0          |   0.0 |  0.00
-Output  | 0.00021696 | 0.00021696 | 0.00021696 |   0.0 |  0.20
-Other   |            | 5.627e-05  |            |       |  0.05
+Output  | 0.00026703 | 0.00026703 | 0.00026703 |   0.0 |  0.25
+Other   |            | 6.056e-05  |            |       |  0.06
 
 Particle moves    = 2500000 (2.5M)
 Cells touched     = 3765022 (3.77M)
@@ -182,7 +182,7 @@ Reactions         = 0 (0K)
 Particles stuck   = 0
 Axisymm bad moves = 0
 
-Particle-moves/CPUsec/proc: 2.36047e+07
+Particle-moves/CPUsec/proc: 2.33911e+07
 Particle-moves/step: 10000
 Cell-touches/particle/step: 1.50601
 Particle comm iterations/step: 1

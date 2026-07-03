@@ -24,13 +24,13 @@ create_box  	    0 0.0001 0 0.0001 0 0.0001
 Created orthogonal box = (0 0 0) to (0.0001 0.0001 0.0001)
 create_grid 	    10 10 10
 Created 1000 child grid cells
-  CPU time = 0.00121689 secs
-  create/ghost percent = 78.8793 21.1207
+  CPU time = 0.000944138 secs
+  create/ghost percent = 84.2172 15.7828
 
 balance_grid        rcb part
 Balance grid migrated 0 cells
-  CPU time = 0.000161886 secs
-  reassign/sort/migrate/ghost percent = 52.43 0.589102 12.9602 34.0206
+  CPU time = 0.000203133 secs
+  reassign/sort/migrate/ghost percent = 65.9624 1.05634 8.33333 24.6479
 
 species		    sws.species N2 N SWSmax
 mixture		    air N2 N vstream 0.0 0.0 0.0 temp 273.15
@@ -44,7 +44,7 @@ collide		    vss air sws.vss
 
 create_particles    air n 10000 twopass
 Created 10000 particles
-  CPU time = 0.00215602 secs
+  CPU time = 0.00199294 secs
 
 stats		    100
 compute             temp temp
@@ -61,25 +61,25 @@ Memory usage per proc in Mbytes:
   surf      (ave,min,max) = 0 0 0
   total     (ave,min,max) = 3.21655 3.21655 3.21655
 Step CPU Np Natt Ncoll c_temp c_nsp[1] c_nsp[2] c_redsum[1] c_redsum[2] 
-       0            0    10000        0        0    272.79463         4878         5122        10000       5390.2 
-     100  0.052323103    10000     1174      595     258.2663         4878         5122        10000       5390.2 
-     200   0.10297203    10000     1210      574       261.15         4878         5122        10000       5390.2 
-     300   0.15532112    10000     1259      578    260.34811         4878         5122        10000       5390.2 
-     400   0.20662403    10000     1257      574    261.26073         4878         5122        10000       5390.2 
-     500       0.2572    10000     1278      623    259.07291         4878         5122        10000       5390.2 
-Loop time of 0.25721 on 1 procs for 500 steps with 10000 particles
-Performance: 1943.937 timesteps/s, 19.439 Mparticle-step/s
+       0            0    10000        0        0    272.70517         4878         5122        10000       5390.2 
+     100  0.050955057    10000     1174      595    257.99053         4878         5122        10000       5390.2 
+     200   0.10162306    10000     1210      574    259.12026         4878         5122        10000       5390.2 
+     300     0.152596    10000     1259      578    258.91414         4878         5122        10000       5390.2 
+     400   0.20317411    10000     1257      574    261.49631         4878         5122        10000       5390.2 
+     500   0.25377512    10000     1278      623    259.77403         4878         5122        10000       5390.2 
+Loop time of 0.253785 on 1 procs for 500 steps with 10000 particles
+Performance: 1970.171 timesteps/s, 19.702 Mparticle-step/s
 
 MPI task timing breakdown:
 Section |  min time  |  avg time  |  max time  |%varavg| %total
 ---------------------------------------------------------------
-Move    | 0.1157     | 0.1157     | 0.1157     |   0.0 | 44.98
-Coll    | 0.12519    | 0.12519    | 0.12519    |   0.0 | 48.67
-Sort    | 0.015054   | 0.015054   | 0.015054   |   0.0 |  5.85
-Comm    | 0.00025868 | 0.00025868 | 0.00025868 |   0.0 |  0.10
+Move    | 0.10948    | 0.10948    | 0.10948    |   0.0 | 43.14
+Coll    | 0.1294     | 0.1294     | 0.1294     |   0.0 | 50.99
+Sort    | 0.013858   | 0.013858   | 0.013858   |   0.0 |  5.46
+Comm    | 0.00020051 | 0.00020051 | 0.00020051 |   0.0 |  0.08
 Modify  | 0          | 0          | 0          |   0.0 |  0.00
-Output  | 0.00083685 | 0.00083685 | 0.00083685 |   0.0 |  0.33
-Other   |            | 0.0001614  |            |       |  0.06
+Output  | 0.00072789 | 0.00072789 | 0.00072789 |   0.0 |  0.29
+Other   |            | 0.0001161  |            |       |  0.05
 
 Particle moves    = 5000000 (5M)
 Cells touched     = 7548749 (7.55M)
@@ -95,7 +95,7 @@ Reactions         = 0 (0K)
 Particles stuck   = 0
 Axisymm bad moves = 0
 
-Particle-moves/CPUsec/proc: 1.94394e+07
+Particle-moves/CPUsec/proc: 1.97017e+07
 Particle-moves/step: 10000
 Cell-touches/particle/step: 1.50975
 Particle comm iterations/step: 1
