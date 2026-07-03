@@ -202,9 +202,12 @@ void FixSurfTemp::end_of_step()
 
   // access source compute or fix which is only surfs I own
   // set new temperature via Stefan-Boltzmann eq for nown surfs I own
-  // NOTE: which of these 2 options (set doc page accordingly):
-  //   set to Twall if eng flux to surf is too small
-  //   no reset if eng flux < threshold
+  // the Stefan-Boltzmann inversion has no real solution for a
+  //   non-positive energy flux, so for qw <= threshold the previous
+  //   surface temperature is retained rather than reset to Twall
+  //   this avoids an unphysical discontinuity for cooling surfaces
+  //   (e.g. net-negative energy flux) and lets the temperature of an
+  //   element persist across invocations of this fix
 
   Surf::Line *lines;
   Surf::Tri *tris;
@@ -235,7 +238,7 @@ void FixSurfTemp::end_of_step()
       if (mask & groupbit) {
         qw = qwvector[i];
 	if (qw > threshold) tcustom[i] = pow(prefactor*qw,0.25);
-        else tcustom[i] = twall;
+        // else retain previous tcustom[i]
       }
     }
 
@@ -256,7 +259,7 @@ void FixSurfTemp::end_of_step()
       if (mask & groupbit) {
         qw = qwarray[i][icol];
         if (qw > threshold) tcustom[i] = pow(prefactor*qw,0.25);
-        else tcustom[i] = twall;
+        // else retain previous tcustom[i]
       }
     }
   }

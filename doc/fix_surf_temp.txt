@@ -88,6 +88,15 @@ the surface elements in the {surf-ID} group will be reset every
 {Nevery} timesteps by the formula above.  Thus temperature values for
 surfaces not in the {surf-ID} group will always be {Tinit}.
 
+The Stefan-Boltzmann inversion above has no real solution when the
+energy flux {q_wall} to a surface element is not positive.  This can
+occur for a cooling surface, e.g. when the net energy flux is negative
+because the gas incident on an already-warm surface is colder than the
+surface.  In this case, as well as when the flux is smaller than a
+small positive threshold, the surface element retains its previous
+temperature rather than being reset to {Tinit}.  The temperature of a
+surface element therefore persists across invocations of this fix.
+
 Note that commands which use these temperature values can determine
 which surface element values they access by their own {surf-ID} group.
 E.g. the "surf_collide diffuse"_surf_collide.html command is assigned
