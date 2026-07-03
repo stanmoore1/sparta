@@ -34,6 +34,8 @@
 using namespace SPARTA_NS;
 using namespace MathConst;
 
+#define MAXBADPRINT 100      // max # of bad surf IDs to print per proc in init()
+
 enum{TALLYAUTO,TALLYREDUCE,TALLYRVOUS};         // same as Update
 enum{REGION_ALL,REGION_ONE,REGION_CENTER};      // same as Grid
 enum{TYPE,MOLECULE,ID};
@@ -313,6 +315,19 @@ void Surf::init()
   else allflag = flag;
 
   if (allflag) {
+    surfint *badids;
+    memory->create(badids,flag ? flag : 1,"surf:badids");
+    int nbad = 0;
+    if (domain->dimension == 2) {
+      for (int i = 0; i < nlocal; i++)
+        if (lines[i].type <= 0) badids[nbad++] = lines[i].id;
+    } else {
+      for (int i = 0; i < nlocal; i++)
+        if (tris[i].type <= 0) badids[nbad++] = tris[i].id;
+    }
+    print_bad_surfs("with invalid type <= 0",badids,nbad);
+    memory->destroy(badids);
+
     char str[64];
     sprintf(str,BIGINT_FORMAT
             " surface elements with invalid type <= 0",allflag);
@@ -337,6 +352,19 @@ void Surf::init()
     else allflag = flag;
 
     if (allflag) {
+      surfint *badids;
+      memory->create(badids,flag ? flag : 1,"surf:badids");
+      int nbad = 0;
+      if (domain->dimension == 2) {
+        for (int i = 0; i < nlocal+nghost; i++)
+          if (lines[i].isc < 0) badids[nbad++] = lines[i].id;
+      } else {
+        for (int i = 0; i < nlocal+nghost; i++)
+          if (tris[i].isc < 0) badids[nbad++] = tris[i].id;
+      }
+      print_bad_surfs("not assigned to a collision model",badids,nbad);
+      memory->destroy(badids);
+
       char str[64];
       sprintf(str,BIGINT_FORMAT
               " surface elements not assigned to a collision model",allflag);
@@ -362,6 +390,22 @@ void Surf::init()
     else allflag = flag;
 
     if (allflag) {
+      surfint *badids;
+      memory->create(badids,flag ? flag : 1,"surf:badids");
+      int nbad = 0;
+      if (domain->dimension == 2) {
+        for (int i = 0; i < nlocal+nghost; i++)
+          if (lines[i].isr >= 0 && sc[lines[i].isc]->allowreact == 0)
+            badids[nbad++] = lines[i].id;
+      } else {
+        for (int i = 0; i < nlocal+nghost; i++)
+          if (tris[i].isr >= 0 && sc[tris[i].isc]->allowreact == 0)
+            badids[nbad++] = tris[i].id;
+      }
+      print_bad_surfs("with reaction model but invalid collision model",
+                      badids,nbad);
+      memory->destroy(badids);
+
       char str[128];
       sprintf(str,BIGINT_FORMAT " surface elements with reaction model, "
               "but invalid collision model",allflag);
@@ -391,6 +435,24 @@ void Surf::init()
     else allflag = flag;
 
     if (allflag) {
+      surfint *badids;
+      memory->create(badids,flag ? flag : 1,"surf:badids");
+      int nbad = 0;
+      if (domain->dimension == 2) {
+        for (int i = 0; i < nlocal+nghost; i++) {
+          if (!lines[i].transparent) continue;
+          if (!sc[lines[i].isc]->transparent) badids[nbad++] = lines[i].id;
+        }
+      } else {
+        for (int i = 0; i < nlocal+nghost; i++) {
+          if (!tris[i].transparent) continue;
+          if (!sc[tris[i].isc]->transparent) badids[nbad++] = tris[i].id;
+        }
+      }
+      print_bad_surfs("transparent with invalid collision or reaction model",
+                      badids,nbad);
+      memory->destroy(badids);
+
       char str[128];
       sprintf(str,BIGINT_FORMAT " transparent surface elements "
               "with invalid collision model or reaction model",allflag);
@@ -402,6 +464,48 @@ void Surf::init()
 
   for (int i = 0; i < nsc; i++) sc[i]->init();
   for (int i = 0; i < nsr; i++) sr[i]->init();
+}
+
+/* ----------------------------------------------------------------------
+   print the IDs of surf elements that failed a validation check in init()
+   what = phrase describing why the elements are bad
+   badids = list of nbad surf IDs owned by this proc, already collected
+   helps users locate offending elements in large surf files
+   replicated surfs: only proc 0 prints, since all procs hold identical copies
+   distributed surfs: each proc prints the offenders it owns, tagged by proc
+   output is capped at MAXBADPRINT IDs per proc
+------------------------------------------------------------------------- */
+
+void Surf::print_bad_surfs(const char *what, surfint *badids, int nbad)
+{
+  if (nbad == 0) return;
+  if (!distributed && comm->me != 0) return;
+
+  int nprint = nbad;
+  if (nprint > MAXBADPRINT) nprint = MAXBADPRINT;
+
+  // proc 0 writes to screen and logfile (only proc 0 has them open)
+  // other procs (reached only when distributed) write to stdout
+
+  FILE *fplist[2];
+  if (comm->me == 0) {
+    fplist[0] = screen;
+    fplist[1] = logfile;
+  } else {
+    fplist[0] = stdout;
+    fplist[1] = NULL;
+  }
+
+  for (int f = 0; f < 2; f++) {
+    FILE *fp = fplist[f];
+    if (!fp) continue;
+    if (distributed) fprintf(fp,"Proc %d: surf element IDs %s:",comm->me,what);
+    else fprintf(fp,"Surf element IDs %s:",what);
+    for (int i = 0; i < nprint; i++)
+      fprintf(fp," " SURFINT_FORMAT,badids[i]);
+    if (nprint < nbad) fprintf(fp," ... (%d total on this proc)",nbad);
+    fprintf(fp,"\n");
+  }
 }
 
 /* ----------------------------------------------------------------------
