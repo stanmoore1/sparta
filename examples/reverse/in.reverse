@@ -1,0 +1,37 @@
+# PROTOTYPE (issue #472): thermal gas box exercising a forward exchange
+# reaction together with its detailed-balance reverse reaction (style B).
+#
+# The reverse rate is not supplied as an independent Arrhenius fit; it is
+# derived from the forward rate and the species partition functions at the
+# local cell temperature.  Both reactions should fire in the tallies below.
+
+seed            12345
+dimension       3
+global          gridcut 1.0e-5 comm/sort yes
+boundary        rr rr rr
+
+create_box      0 0.0001 0 0.0001 0 0.0001
+create_grid     10 10 10
+balance_grid    rcb part
+
+species         air.species N2 O NO N
+mixture         air N2 O NO N vstream 0.0 0.0 0.0 temp 20000.0
+mixture         air N2 frac 0.25
+mixture         air O  frac 0.25
+mixture         air NO frac 0.25
+mixture         air N  frac 0.25
+
+global          nrho 7.07043E22
+global          fnum 7.07043E5
+
+collide         vss air air.vss
+react           tce rev.tce
+
+create_particles air n 10000 twopass
+
+stats           100
+compute         temp temp
+stats_style     step np nattempt ncoll nreact c_temp
+
+timestep        7.00E-9
+run             1000

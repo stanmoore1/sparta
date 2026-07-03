@@ -38,6 +38,9 @@ React::React(SPARTA *sparta, int, char **arg) : Pointers(sparta)
   computeChemRates = 0;
   partialEnergy = 1;
 
+  reverse_active = 0;
+  tgas = 0.0;
+
   random = new RanKnuth(update->ranmaster->uniform());
   double seed = update->ranmaster->uniform();
   random->reset(seed,comm->me,100);

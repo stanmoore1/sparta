@@ -45,6 +45,11 @@ class ReactTCE : public ReactBird {
   double bird_Evib(int nmode, double Tvib,
                  double VibTemp[],
                  double Evib);
+
+  // PROTOTYPE (issue #472): detailed-balance backward reaction rates
+
+  double partition_function(int isp, double T);
+  double reverse_scale(OneReaction *r);
 };
 
 }

@@ -166,6 +166,8 @@ class Collide : protected Pointers {
   template < int > void collisions_one_ambipolar();
   template < int > void collisions_group_ambipolar();
 
+  double cell_temperature(int);   // PROTOTYPE (issue #472)
+
   void ambi_reset(int, int, int, Particle::OnePart *, Particle::OnePart *,
                   Particle::OnePart *, int *);
   void ambi_check();

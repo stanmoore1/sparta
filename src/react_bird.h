@@ -53,6 +53,12 @@ class ReactBird : public React {
     int *reactants,*products;      // species indices of reactants/products
     double *coeff;                 // numerical coeffs for reaction
     char *id;                      // reaction ID (formula)
+    int reverse;                   // 1 if backward rate is derived from a
+                                   //   forward reaction by detailed balance
+                                   //   (reaction style 'B'), else 0 (PROTOTYPE)
+    int reverse_partner;           // rlist index of the forward reaction whose
+                                   //   Arrhenius rate this reverse rate derives
+                                   //   from, or -1 if none found
   };
 
   OneReaction *rlist;              // list of all reactions read from file

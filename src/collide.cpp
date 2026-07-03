@@ -409,6 +409,44 @@ void Collide::collisions()
 }
 
 /* ----------------------------------------------------------------------
+   PROTOTYPE (issue #472): representative translational temperature (K) of a
+   grid cell, computed from the peculiar kinetic energy of all its particles
+     T = sum_p m_p (v_p - u)^2 / (3 N kB),  u = mass-weighted mean velocity
+   used to evaluate detailed-balance backward reaction rates in ReactTCE
+   returns 0.0 if the cell has fewer than 2 particles
+------------------------------------------------------------------------- */
+
+double Collide::cell_temperature(int icell)
+{
+  Particle::OnePart *particles = particle->particles;
+  Particle::Species *species = particle->species;
+  int *next = particle->next;
+  Grid::ChildInfo *cinfo = grid->cinfo;
+
+  double msum = 0.0, mvx = 0.0, mvy = 0.0, mvz = 0.0, mv2 = 0.0;
+  int n = 0;
+
+  int ip = cinfo[icell].first;
+  while (ip >= 0) {
+    Particle::OnePart *p = &particles[ip];
+    double m = species[p->ispecies].mass;
+    double *v = p->v;
+    msum += m;
+    mvx += m*v[0];  mvy += m*v[1];  mvz += m*v[2];
+    mv2 += m*(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+    n++;
+    ip = next[ip];
+  }
+
+  if (n < 2 || msum <= 0.0) return 0.0;
+
+  double kesum = mv2 - (mvx*mvx + mvy*mvy + mvz*mvz)/msum;  // sum m (v-u)^2
+  double temp = kesum / (3.0*n*update->boltz);
+  if (temp < 0.0) temp = 0.0;
+  return temp;
+}
+
+/* ----------------------------------------------------------------------
    NTC algorithm for a single group
 ------------------------------------------------------------------------- */
 
@@ -439,6 +477,11 @@ template < int NEARCP, int GASTALLY > void Collide::collisions_one()
     ip = cinfo[icell].first;
     volume = cinfo[icell].volume / cinfo[icell].weight;
     if (volume == 0.0) error->one(FLERR,"Collision cell volume is zero");
+
+    // PROTOTYPE (issue #472): representative cell temperature for reverse
+    //   (detailed-balance) reaction rates, evaluated once per cell
+
+    if (react && react->reverse_active) react->tgas = cell_temperature(icell);
 
     // setup particle list for this cell
 
@@ -590,6 +633,11 @@ template < int NEARCP, int GASTALLY > void Collide::collisions_group()
     ip = cinfo[icell].first;
     volume = cinfo[icell].volume / cinfo[icell].weight;
     if (volume == 0.0) error->one(FLERR,"Collision cell volume is zero");
+
+    // PROTOTYPE (issue #472): representative cell temperature for reverse
+    //   (detailed-balance) reaction rates, evaluated once per cell
+
+    if (react && react->reverse_active) react->tgas = cell_temperature(icell);
 
     // reallocate plist and p2g if necessary
 
@@ -878,6 +926,11 @@ template < int GASTALLY > void Collide::collisions_one_ambipolar()
     ip = cinfo[icell].first;
     volume = cinfo[icell].volume / cinfo[icell].weight;
     if (volume == 0.0) error->one(FLERR,"Collision cell volume is zero");
+
+    // PROTOTYPE (issue #472): representative cell temperature for reverse
+    //   (detailed-balance) reaction rates, evaluated once per cell
+
+    if (react && react->reverse_active) react->tgas = cell_temperature(icell);
 
     // setup particle list for this cell
 
@@ -1186,6 +1239,11 @@ template < int GASTALLY > void Collide::collisions_group_ambipolar()
     ip = cinfo[icell].first;
     volume = cinfo[icell].volume / cinfo[icell].weight;
     if (volume == 0.0) error->one(FLERR,"Collision cell volume is zero");
+
+    // PROTOTYPE (issue #472): representative cell temperature for reverse
+    //   (detailed-balance) reaction rates, evaluated once per cell
+
+    if (react && react->reverse_active) react->tgas = cell_temperature(icell);
 
     // reallocate plist and p2g if necessary
 

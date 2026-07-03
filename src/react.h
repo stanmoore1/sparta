@@ -37,12 +37,19 @@ class React : protected Pointers {
   double recomb_boost_inverse;   // inverse of boost parameter
   Particle::OnePart *recomb_part3;  // ptr to 3rd particle in recomb reaction
 
+  // support for detailed-balance (reverse) reactions, see ReactTCE (PROTOTYPE)
+
+  int reverse_active;        // 1 if any reverse (detailed-balance) reactions
+  double tgas;               // representative cell temperature (K) used to
+                             //   evaluate reverse-reaction rates; set per grid
+                             //   cell by Collide before the collision loop
+
   int copy,uncopy,copymode;  // prevent deallocation of
                              //  base class when child copy is destroyed
 
   React(class SPARTA *, int, char **);
   React(class SPARTA *sparta) : Pointers(sparta) // needed for Kokkos
-    { style = NULL; random = NULL; }
+    { style = NULL; random = NULL; reverse_active = 0; tgas = 0.0; }
   virtual ~React();
   virtual void init() {}
   virtual int recomb_exist(int, int) = 0;
