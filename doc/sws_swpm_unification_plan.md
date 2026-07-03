@@ -1,5 +1,37 @@
 # Unify SWS and SWPM particle weighting in SPARTA
 
+## Execution status — COMPLETE (branch `claude/sws-swpm-unification`)
+
+All steps 1–5 are implemented, verified, and committed. Final state:
+
+- **Step 1** — SWPM merged alongside SWS, side-by-side, both features'
+  members present, dispatch guarded (commit `977a96c7`).
+- **Step 2** — unified `pweight()` / `pweight_vector()` / `tally_weights()`
+  accessors; every grid/global/surf compute converted; dead `weightflag`
+  and `stochastic_weights()` deleted (commits `038d1cae`…`e480290b`).
+- **Step 3** — `Particle::setup_weighting()` resolves one `weight_mode`
+  and enforces mutual exclusion + the KOKKOS guard in one place
+  (commit `22487b7b`).
+- **Step 4** — all SWS collision code relocated to `src/collide_sws.cpp`;
+  the four `_SWS` loop clones and six `_SWS` VSS kernels are deleted and
+  folded into the base kernels behind runtime-flag seams
+  (commits `9039696d`…`011f1839`). `git grep _SWS` over
+  `collide.cpp`/`collide_vss.cpp`/`collide.h`/`collide_vss.h` is empty.
+- **Step 5** — `compute_temp` uses the uniform `pweight` path (weighted
+  effective-count normalization under SWS); five SWS gold logs re-blessed
+  (temperature column only); `verify_sws.py` pins the weighted temperature
+  (commit `3e46645c`).
+- **Negative test** — SWS+SWPM / SWPM+cell exclusion asserted in both
+  verify scripts (commit `c51f9ada`).
+
+Verification at completion: SWS gold suite 7/7, SWPM suite 8/8,
+`verify_sws.py` and `verify_swpm.py` all pass; three A/B decks (reactive
+ambipolar+TCE, two-group, multigroup ambipolar) byte-identical to a
+reference binary still carrying the `_SWS` kernels; five untouched example
+families (collide, chem, free, circle, axi — the last using cell
+weighting) byte-identical to the upstream-master baseline in every
+non-CPU column. Step 6 items remain recorded follow-ups, not done here.
+
 ## Context
 
 SPARTA now has three particle-weighting schemes answering the same question —
