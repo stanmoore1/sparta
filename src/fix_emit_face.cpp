@@ -115,6 +115,7 @@ FixEmitFace::FixEmitFace(SPARTA *sparta, int narg, char **arg) :
   // task list and subsonic data structs
 
   alltask = 0;
+  sumfrac = 0.0;
   tasks = NULL;
   ntask = ntaskmax = 0;
 
@@ -245,18 +246,38 @@ void FixEmitFace::grid_changed()
   // NOTE: currently setting same # of insertions per task
   //       could instead weight by cell face area
 
-  // ndot = real particles/sec: store global # of tasks to spread flux over
-  // the per-timestep insertion count is computed in perform_task(),
+  // for np or ndot insertion, gather two global quantities:
+  //   alltask = total # of tasks (cell/face pairs) across all procs
+  //   sumfrac = sum of each task's region_frac (= alltask if no region)
+  // sumfrac spreads the requested count/rate over only the in-region
+  //   portion of the emitting faces, so that after per-particle rejection
+  //   the expected number of kept particles matches the request
+  // the per-timestep ndot count is finished in perform_task(),
   //   since it depends on the current timestep and global fnum
 
-  if (np > 0 || ndot > 0.0)
+  if (np > 0 || ndot > 0.0) {
     MPI_Allreduce(&ntask,&alltask,1,MPI_INT,MPI_SUM,world);
+
+    double sumfrac_me = 0.0;
+    for (int i = 0; i < ntask; i++) sumfrac_me += tasks[i].region_frac;
+    MPI_Allreduce(&sumfrac_me,&sumfrac,1,MPI_DOUBLE,MPI_SUM,world);
+  }
 
   if (np > 0) {
     int nupto,tasks_with_no_extra;
+
+    // ntot = total insertion attempts to distribute over all tasks
+    // scaled up by alltask/sumfrac (>= 1) to offset region rejection,
+    //   so the expected # of kept particles is np
+    // reduces to ntot = np when no region is used (sumfrac == alltask)
+
+    int ntot = np;
+    if (sumfrac > 0.0)
+      ntot = static_cast<int> (((double) np)*alltask/sumfrac + 0.5);
+
     if (alltask) {
-      npertask = np / alltask;
-      tasks_with_no_extra = alltask - (np % alltask);
+      npertask = ntot / alltask;
+      tasks_with_no_extra = alltask - (ntot % alltask);
     } else npertask = tasks_with_no_extra = 0;
 
     MPI_Scan(&ntask,&nupto,1,MPI_INT,MPI_SUM,world);
@@ -466,10 +487,63 @@ void FixEmitFace::create_task(int icell)
     tasks[ntask].vstream[1] = particle->mixture[imix]->vstream[1];
     tasks[ntask].vstream[2] = particle->mixture[imix]->vstream[2];
 
+    // region_frac = fraction of this face that lies inside the region
+    // only needed for n or ndot insertion, to spread the requested count/rate
+    //   over the region and compensate for per-particle rejection below
+    // estimated by a deterministic lattice of sample points on the face,
+    //   so it does not perturb the insertion RNG stream (Kokkos/MPI match)
+    // for flux insertion, rejection already yields the area-scaled flux,
+    //   so region_frac is left at 1.0 and unused
+
+    tasks[ntask].region_frac = 1.0;
+    if (region && (np > 0 || ndot > 0.0))
+      tasks[ntask].region_frac = region_face_fraction(&tasks[ntask]);
+
     // increment task counter
 
     ntask++;
   }
+}
+
+/* ----------------------------------------------------------------------
+   estimate the fraction of a task's face that lies inside the region
+   sample a deterministic lattice of points on the face and test each
+     with region->match(), which honors the region's side setting
+   deterministic (no RNG) so insertion random #s are unchanged,
+     keeping MPI and Kokkos runs reproducible
+   returns a value in [0,1]; caller guarantees region is defined
+------------------------------------------------------------------------- */
+
+double FixEmitFace::region_face_fraction(Task *task)
+{
+  double x[3];
+
+  int pdim = task->pdim;
+  int qdim = task->qdim;
+  double *lo = task->lo;
+  double *hi = task->hi;
+
+  // lattice resolution per parallel dimension of the face
+  // face is a segment in 2d (vary pdim) and a rectangle in 3d (vary pdim,qdim)
+
+  int np_samp = (dimension == 3) ? 32 : 1000;
+  int nq_samp = (dimension == 3) ? 32 : 1;
+
+  int ninside = 0;
+
+  for (int a = 0; a < np_samp; a++) {
+    for (int b = 0; b < nq_samp; b++) {
+      x[0] = lo[0];
+      x[1] = lo[1];
+      x[2] = lo[2];
+      x[pdim] = lo[pdim] + (a+0.5)/np_samp * (hi[pdim]-lo[pdim]);
+      if (dimension == 3) x[qdim] = lo[qdim] + (b+0.5)/nq_samp * (hi[qdim]-lo[qdim]);
+      else x[2] = 0.0;
+      if (region->match(x)) ninside++;
+    }
+  }
+
+  return ((double) ninside) / (np_samp*nq_samp);
 }
 
 /* ----------------------------------------------------------------------
@@ -516,12 +590,13 @@ void FixEmitFace::perform_task_onepass()
 
   // if ndot set, compute per-task fractional insertion count for this timestep
   // ndot = real particles/sec, so ndot*dt/fnum = MC particles/timestep
-  //   summed over all tasks; spread equally over the global # of tasks
+  //   summed over all tasks, spread over sumfrac (in-region face count)
+  //   so region rejection still yields ndot*dt/fnum kept particles
   // recomputed each step so it tracks changes in dt and fnum
 
   double nperdot = 0.0;
-  if (ndot > 0.0 && alltask)
-    nperdot = ndot * dt / update->fnum / alltask;
+  if (ndot > 0.0 && sumfrac > 0.0)
+    nperdot = ndot * dt / update->fnum / sumfrac;
 
   // insert particles for each task = cell/face pair
   // ntarget/ninsert is either perspecies or for all species
@@ -707,12 +782,13 @@ void FixEmitFace::perform_task_twopass()
 
   // if ndot set, compute per-task fractional insertion count for this timestep
   // ndot = real particles/sec, so ndot*dt/fnum = MC particles/timestep
-  //   summed over all tasks; spread equally over the global # of tasks
+  //   summed over all tasks, spread over sumfrac (in-region face count)
+  //   so region rejection still yields ndot*dt/fnum kept particles
   // recomputed each step so it tracks changes in dt and fnum
 
   double nperdot = 0.0;
-  if (ndot > 0.0 && alltask)
-    nperdot = ndot * dt / update->fnum / alltask;
+  if (ndot > 0.0 && sumfrac > 0.0)
+    nperdot = ndot * dt / update->fnum / sumfrac;
 
   // insert particles for each task = cell/face pair
   // ntarget/ninsert is either perspecies or for all species

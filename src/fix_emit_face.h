@@ -52,6 +52,8 @@ class FixEmitFace : public FixEmit {
                                 //   only defined for PERSPECIES
     double *vscale;             // vscale for each species,
                                 //   only defined for subsonic_style PONLY
+    double region_frac;         // fraction of face inside region, 1.0 if none
+                                //   only computed for n or ndot insertion
 
     int icell;                  // associated cell index, unsplit or split cell
     int iface;                  // which face of unsplit or split cell
@@ -67,6 +69,8 @@ class FixEmitFace : public FixEmit {
   int npertask,nthresh,twopass;
   int alltask;                  // global # of tasks, used by np and ndot
   double ndot;                  // real particles/sec to insert, 0 if unused
+  double sumfrac;               // global sum of per-task region_frac,
+                                //   used to spread np/ndot over a region
   double psubsonic,tsubsonic,nsubsonic;
   double tprefactor,soundspeed_mixture;
 
@@ -91,6 +95,7 @@ class FixEmitFace : public FixEmit {
   // protected methods
 
   void create_task(int);
+  double region_face_fraction(Task *);
   virtual void perform_task();
   void perform_task_onepass();
   virtual void perform_task_twopass();

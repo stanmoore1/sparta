@@ -179,13 +179,25 @@ that the {side} option for the "region"_region.html command can be
 used to define whether the inside or outside of the geometric region
 is considered to be "in" the region.
 
-IMPORTANT NOTE: If the {region} and {n} keywords are used together,
-less than N particles may be added on an insertion timestep.  This is
-because grid cells will be candidates for particle insertion, unless
-they are entirely outside the bounding box that encloses the region.
-Particles those grid cells attempt to add are included in the count
-for N, even if some or all of the particle insertions are rejected due
-to not being inside the region.
+When a {region} restricts insertion, the grid cell faces touching an
+emitting boundary may lie only partially inside the region.  For the
+default flux-based insertion (i.e. when neither {n} nor {ndot} is
+used), this is handled correctly with no adjustment: the number of
+particles inserted on a face is proportional to its area, and rejecting
+per-particle positions that fall outside the region leaves a count
+proportional to the in-region area, which is the physically correct
+flux through that portion of the boundary.
+
+For the {n} and {ndot} keywords, which instead request a fixed total
+count or rate, the fraction of each candidate face that lies inside the
+region is estimated (by sampling a fixed lattice of points on the face)
+and the requested count/rate is spread over the summed in-region
+fraction of all candidate faces rather than over the raw number of
+faces.  This compensates for the per-particle rejection so that, on
+average, the full requested {Np} count (or {Ndot} rate) of particles is
+inserted through the region opening, rather than a smaller number.  The
+count on any single timestep will fluctuate about this target because
+the region test is applied per particle.
 
 The {modulate} keyword can be used to multiple the count of particles
 inserted at each timestep by a prefactor.  The prefactor is calcalated

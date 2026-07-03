@@ -185,11 +185,12 @@ void FixEmitFaceKokkos::perform_task()
 
   // if ndot set, compute per-task fractional insertion count for this timestep
   // ndot = real particles/sec, so ndot*dt/fnum = MC particles/timestep
-  //   summed over all tasks; spread equally over the global # of tasks
+  //   summed over all tasks, spread over sumfrac (in-region face count)
+  //   so region rejection still yields ndot*dt/fnum kept particles
 
   nperdot = 0.0;
-  if (ndot > 0.0 && alltask)
-    nperdot = ndot * dt / update->fnum / alltask;
+  if (ndot > 0.0 && sumfrac > 0.0)
+    nperdot = ndot * dt / update->fnum / sumfrac;
 
   // insert particles for each task = cell/face pair
   // ntarget/ninsert is either perspecies or for all species
