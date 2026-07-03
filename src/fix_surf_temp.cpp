@@ -40,13 +40,17 @@ using namespace SPARTA_NS;
 
 enum{INT,DOUBLE};                      // several files
 enum{COMPUTE,FIX};
+enum{EQUILIBRIUM,TRANSIENT};           // temperature update model
+
+#define NEWTON_MAXITER 50
+#define NEWTON_TOL 1.0e-8
 
 /* ---------------------------------------------------------------------- */
 
 FixSurfTemp::FixSurfTemp(SPARTA *sparta, int narg, char **arg) :
   Fix(sparta, narg, arg)
 {
-  if (narg != 8) error->all(FLERR,"Illegal fix surf/temp command");
+  if (narg < 8) error->all(FLERR,"Illegal fix surf/temp command");
 
   if (surf->implicit)
     error->all(FLERR,"Cannot use fix surf/temp with implicit surfs");
@@ -135,17 +139,49 @@ FixSurfTemp::FixSurfTemp(SPARTA *sparta, int narg, char **arg) :
   if (tindex < 0) tindex = surf->add_custom(id_custom,DOUBLE,0);
   delete [] id_custom;
 
-  // prefactor and threshold in Stefan/Boltzmann equation
+  // optional keyword args
+  // heat_capacity switches to the transient energy-balance model
+  // Tsink sets the radiative sink temperature (transient model only)
+
+  tmode = EQUILIBRIUM;
+  heatcap = 0.0;
+  tsink = 0.0;
+
+  int iarg = 8;
+  while (iarg < narg) {
+    if (strcmp(arg[iarg],"heat_capacity") == 0) {
+      if (iarg+2 > narg) error->all(FLERR,"Illegal fix surf/temp command");
+      tmode = TRANSIENT;
+      heatcap = input->numeric(FLERR,arg[iarg+1]);
+      if (heatcap <= 0.0)
+        error->all(FLERR,"Fix surf/temp heat_capacity must be > 0.0");
+      iarg += 2;
+    } else if (strcmp(arg[iarg],"Tsink") == 0) {
+      if (iarg+2 > narg) error->all(FLERR,"Illegal fix surf/temp command");
+      tsink = input->numeric(FLERR,arg[iarg+1]);
+      if (tsink < 0.0) error->all(FLERR,"Fix surf/temp Tsink must be >= 0.0");
+      iarg += 2;
+    } else error->all(FLERR,"Illegal fix surf/temp command");
+  }
+
+  if (tmode == EQUILIBRIUM && tsink != 0.0)
+    error->all(FLERR,"Fix surf/temp Tsink requires the heat_capacity keyword");
+
+  // Stefan-Boltzmann constant, prefactor, and threshold
+  // prefactor = 1/(emisurf*sigma), emisb = emisurf*sigma
   // units of prefactor (SI) is K^4 / (watt - m^2)
   // same in 3d vs 2d, since SPARTA treats 2d cell volume as 1 m in z
 
   if (strcmp(update->unit_style,"si") == 0) {
-    prefactor = 1.0 / (emi * SB_SI);
+    sbconst = SB_SI;
     threshold = 1.0e-6;
   } else if (strcmp(update->unit_style,"cgs") == 0) {
-    prefactor = 1.0 / (emi * SB_CGS);
+    sbconst = SB_CGS;
     threshold = 1.0e-3;
-  }
+  } else error->all(FLERR,"Fix surf/temp requires si or cgs units");
+
+  prefactor = 1.0 / (emi * sbconst);
+  emisb = emi * sbconst;
 
   // trigger one-time initialization of custom per-surf temperatures
 
@@ -193,7 +229,6 @@ void FixSurfTemp::init()
 void FixSurfTemp::end_of_step()
 {
   int m,mask;
-  double qw;
 
   int me = comm->me;
   int nprocs = comm->nprocs;
@@ -201,13 +236,15 @@ void FixSurfTemp::end_of_step()
   int distributed = surf->distributed;
 
   // access source compute or fix which is only surfs I own
-  // set new temperature via Stefan-Boltzmann eq for nown surfs I own
-  // the Stefan-Boltzmann inversion has no real solution for a
-  //   non-positive energy flux, so for qw <= threshold the previous
-  //   surface temperature is retained rather than reset to Twall
-  //   this avoids an unphysical discontinuity for cooling surfaces
-  //   (e.g. net-negative energy flux) and lets the temperature of an
-  //   element persist across invocations of this fix
+  // set new temperature for nown surfs I own via new_temperature()
+  //   EQUILIBRIUM model: invert the Stefan-Boltzmann law; this has no
+  //     real solution for a non-positive energy flux, so for
+  //     qw <= threshold the previous surface temperature is retained
+  //     rather than reset to Twall.  This avoids an unphysical
+  //     discontinuity for cooling surfaces and lets the temperature of
+  //     an element persist across invocations of this fix
+  //   TRANSIENT model: integrate a surface energy balance with finite
+  //     heat capacity, which handles negative (cooling) fluxes directly
 
   Surf::Line *lines;
   Surf::Tri *tris;
@@ -223,6 +260,12 @@ void FixSurfTemp::end_of_step()
   double *tcustom = surf->edvec[surf->ewhich[tindex]];
   int nsown = surf->nown;
 
+  // cache the physical time interval since the last update and the
+  // radiative sink term, used by the transient energy-balance model
+
+  dtfix = nevery * update->dt;
+  tsink4 = tsink*tsink*tsink*tsink;
+
   if (qwindex == 0) {
     double *qwvector;
     if (source == COMPUTE) {
@@ -235,11 +278,8 @@ void FixSurfTemp::end_of_step()
       else m = i;
       if (dimension == 2) mask = lines[m].mask;
       else mask = tris[m].mask;
-      if (mask & groupbit) {
-        qw = qwvector[i];
-	if (qw > threshold) tcustom[i] = pow(prefactor*qw,0.25);
-        // else retain previous tcustom[i]
-      }
+      if (mask & groupbit)
+        tcustom[i] = new_temperature(qwvector[i],tcustom[i]);
     }
 
   } else {
@@ -256,11 +296,8 @@ void FixSurfTemp::end_of_step()
       else m = i;
       if (dimension == 2) mask = lines[m].mask;
       else mask = tris[m].mask;
-      if (mask & groupbit) {
-        qw = qwarray[i][icol];
-        if (qw > threshold) tcustom[i] = pow(prefactor*qw,0.25);
-        // else retain previous tcustom[i]
-      }
+      if (mask & groupbit)
+        tcustom[i] = new_temperature(qwarray[i][icol],tcustom[i]);
     }
   }
 
@@ -272,4 +309,48 @@ void FixSurfTemp::end_of_step()
   // example: fix emit/surf
 
   modify->custom_surf_changed();
+}
+
+/* ----------------------------------------------------------------------
+   return the updated temperature of one surface element
+   qw = energy flux to the element (from source compute/fix)
+   told = element's previous temperature
+------------------------------------------------------------------------- */
+
+double FixSurfTemp::new_temperature(double qw, double told)
+{
+  // EQUILIBRIUM: instantaneous radiative equilibrium, qw = sigma*emi*T^4
+  // no real root for qw <= threshold, so retain the previous temperature
+
+  if (tmode == EQUILIBRIUM) {
+    if (qw > threshold) return pow(prefactor*qw,0.25);
+    return told;
+  }
+
+  // TRANSIENT: implicit (backward-Euler) integration of the energy balance
+  //   C*(T - told)/dtfix = qw - sigma*emi*(T^4 - Tsink^4)
+  // rearranged to f(T) = coef*T + emisb*T^4 - rhs = 0, with coef = C/dtfix.
+  // f is monotonic and convex for T > 0, so Newton's method converges to
+  // the unique positive root.  Negative qw (cooling) is handled naturally.
+  // If the sink and flux cannot sustain a positive root over this interval
+  // (rhs <= 0, an extreme/under-resolved case), floor the temperature.
+
+  double coef = heatcap / dtfix;
+  double rhs = coef*told + qw + emisb*tsink4;
+  if (rhs <= 0.0) return (tsink > 0.0) ? tsink : threshold;
+
+  double t = told;
+  if (t <= 0.0) t = twall;
+
+  for (int iter = 0; iter < NEWTON_MAXITER; iter++) {
+    double t2 = t*t;
+    double f = coef*t + emisb*t2*t2 - rhs;
+    double fp = coef + 4.0*emisb*t2*t;
+    double dt = f/fp;
+    t -= dt;
+    if (t <= 0.0) t = 0.5*(t+dt);   // damp back toward positive if overshoot
+    if (fabs(dt) <= NEWTON_TOL*t) break;
+  }
+
+  return t;
 }

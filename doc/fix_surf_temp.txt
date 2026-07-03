@@ -10,7 +10,7 @@ fix surf/temp command :h3
 
 [Syntax:]
 
-fix ID surf/temp surf-ID Nevery source Tinit emisurf custom-name :pre
+fix ID surf/temp surf-ID Nevery source Tinit emisurf custom-name keyword value ... :pre
 
 ID is documented in "fix"_fix.html command :ulb,l
 surf/temp = style name of this fix command :l
@@ -21,13 +21,25 @@ source = computeID or fixID :l
   fixID = f_ID or f_ID\[N\] for a fix that calculates per surf values :pre
 Tinit = initial temperature of surface (temperature units) :l
 emisurf = emissivity of the surface (unitless, 0 < emisurf <= 1)  :l
-custom-name = name of a custom per-surf variable to create :l,ule
+custom-name = name of a custom per-surf variable to create :l
+zero or more keyword/value pairs may be appended :l
+keyword = {heat_capacity} or {Tsink} :l
+  {heat_capacity} value = C
+    C = areal heat capacity rho*cp*thickness of the surface material,
+        in units of energy / (area * temperature); enables the
+        transient surface temperature model (C > 0)
+  {Tsink} value = Tenv
+    Tenv = temperature of the radiative environment/sink (temperature
+           units, default 0.0); only valid with {heat_capacity} :pre
+:ule
 
 [Examples:]
 
 compute 1 surf all all etot
 fix 1 surf/temp all 1000 c_1 250 0.9 temperature
 surf_collide 1 diffuse s_temperature 0.5 :pre
+
+fix 2 surf/temp all 100 c_1 250 0.9 temperature heat_capacity 2.0e4 Tsink 200 :pre
 
 [Description:]
 
@@ -88,7 +100,10 @@ the surface elements in the {surf-ID} group will be reset every
 {Nevery} timesteps by the formula above.  Thus temperature values for
 surfaces not in the {surf-ID} group will always be {Tinit}.
 
-The Stefan-Boltzmann inversion above has no real solution when the
+This is the default {equilibrium} temperature model, which assumes the
+surface has no thermal inertia and instantaneously reaches the
+temperature at which it re-radiates all the energy the gas deposits on
+it.  The Stefan-Boltzmann inversion above has no real solution when the
 energy flux {q_wall} to a surface element is not positive.  This can
 occur for a cooling surface, e.g. when the net energy flux is negative
 because the gas incident on an already-warm surface is colder than the
@@ -96,6 +111,38 @@ surface.  In this case, as well as when the flux is smaller than a
 small positive threshold, the surface element retains its previous
 temperature rather than being reset to {Tinit}.  The temperature of a
 surface element therefore persists across invocations of this fix.
+
+:line
+
+If the {heat_capacity} keyword is specified, a {transient} surface
+temperature model is used instead.  In this model each surface element
+has a finite areal heat capacity {C} = rho*cp*thickness (the product of
+the material density, specific heat, and an effective wall thickness),
+and its temperature evolves in time according to the energy balance
+
+C d(Tsurf)/dt = q_wall - sigma * emisurf * (Tsurf^4 - Tsink^4) :pre
+
+where {q_wall} is the energy flux to the surface from the gas (provided
+by the compute or fix), the second term is the net radiative loss to an
+environment at temperature {Tsink} (set by the {Tsink} keyword, default
+0.0), and {C} has units of energy / (area * temperature) in the current
+"units"_units.html system.  Because {q_wall} may be negative, this
+model handles cooling surfaces directly; the surface temperature
+smoothly heats or cools toward the local steady state rather than being
+reset to {Tinit}.
+
+The equation is integrated once every {Nevery} steps over the elapsed
+physical time interval {Nevery}*dt, holding {q_wall} constant over the
+interval.  A stable implicit (backward-Euler) update is used, so the
+scheme does not become unstable for stiff (large radiative) cases;
+however {Nevery} should still be chosen small enough that {q_wall} does
+not change appreciably over the interval, since it is treated as
+constant there.  The per-surf temperature persists across invocations
+(and across restarts, via the custom vector), so it forms a continuous
+time history.
+
+The {equilibrium} model is recovered as C -> 0, i.e. in the limit of
+negligible thermal inertia.
 
 Note that commands which use these temperature values can determine
 which surface element values they access by their own {surf-ID} group.

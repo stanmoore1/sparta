@@ -37,6 +37,7 @@ class FixSurfTemp : public Fix {
  private:
   int source,icompute,ifix,firstflag;
   int groupbit;
+  int tmode;                   // EQUILIBRIUM or TRANSIENT temperature model
   double twall,emi;
   int tindex,qwindex;
 
@@ -44,8 +45,15 @@ class FixSurfTemp : public Fix {
   class Compute *cqw;
   class Fix *fqw;
 
-  double prefactor,threshold;
+  double prefactor,threshold;  // for equilibrium Stefan-Boltzmann inversion
+  double sbconst;              // Stefan-Boltzmann constant for the unit style
+  double emisb;                // sigma * emisurf (radiative prefactor)
+  double heatcap;              // areal heat capacity rho*cp*thickness (transient)
+  double tsink;                // radiative sink/environment temperature (transient)
+  double dtfix,tsink4;         // cached each end_of_step for transient update
   double *tvector_me;
+
+  double new_temperature(double qw, double told);
 };
 
 }
