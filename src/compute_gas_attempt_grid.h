@@ -34,6 +34,7 @@ class ComputeGasAttemptGrid : public Compute {
   void compute_per_grid();
   void clear();
   void attempt_tally(int, int);
+  int attempt_tally_only() {return 1;}
   bigint memory_usage();
 
  protected:

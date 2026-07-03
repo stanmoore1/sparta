@@ -1990,7 +1990,15 @@ void UpdateKokkos::tally_set(bigint ntimestep)
     }
   }
 
-  if (ngas_tally)
+  // per-cell collision-attempt tallying (compute gas/attempt/grid) is
+  //   supported by Kokkos; per-collision gas tallies (which need particle
+  //   info inside the collision kernel) are not yet supported
+
+  int nper_collision = 0;
+  for (i = 0; i < ngas_tally; i++)
+    if (!glist_active[i]->attempt_tally_only()) nper_collision++;
+
+  if (nper_collision)
     error->all(FLERR,"Kokkos does not (yet) support tallying gas/gas collisions or reactions");
 }
 

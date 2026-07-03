@@ -21,6 +21,7 @@
 #include "particle_kokkos.h"
 #include "mixture.h"
 #include "collide.h"
+#include "compute.h"
 #include "react.h"
 #include "comm.h"
 #include "random_knuth.h"
@@ -391,8 +392,22 @@ void CollideVSSKokkos::collisions()
   // variant for ngas_tally active or not
   // variant for single group or multiple groups
 
-  if (ngas_tally)
-    error->all(FLERR,"Kokkos does not (yet) support tallying gas/gas collisions or reactions");
+  // per-cell collision-attempt tallying (compute gas/attempt/grid) is
+  //   supported below; per-collision gas tallies are not yet supported
+
+  need_attempt_percell = 0;
+  for (int m = 0; m < ngas_tally; m++) {
+    if (glist_active[m]->attempt_tally_only()) need_attempt_percell = 1;
+    else error->all(FLERR,"Kokkos does not (yet) support tallying gas/gas collisions or reactions");
+  }
+
+  // (re)allocate and zero the per-cell attempt counts for this step
+
+  if (need_attempt_percell) {
+    if (int(d_nattempt_percell.extent(0)) < nglocal)
+      MemKK::realloc_kokkos(d_nattempt_percell,"collide:nattempt_percell",nglocal);
+    Kokkos::deep_copy(d_nattempt_percell,0.0);
+  }
 
   if (ngroups != 1)
     error->all(FLERR,"Group collisions not yet supported with Kokkos");
@@ -455,6 +470,22 @@ void CollideVSSKokkos::collisions()
   nattempt_running += nattempt_one;
   ncollide_running += ncollide_one;
   nreact_running += nreact_one;
+
+  // push per-cell attempt counts to any active gas/attempt/grid computes
+  // copy device counts to host, then replay through the compute's
+  //   attempt_tally() so grid-group masking is handled the same as on the CPU
+
+  if (need_attempt_percell) {
+    auto h_nattempt_percell = Kokkos::create_mirror_view(d_nattempt_percell);
+    Kokkos::deep_copy(h_nattempt_percell,d_nattempt_percell);
+    for (int m = 0; m < ngas_tally; m++) {
+      if (!glist_active[m]->attempt_tally_only()) continue;
+      for (int icell = 0; icell < nglocal; icell++) {
+        int nattempt = static_cast<int> (h_nattempt_percell(icell));
+        if (nattempt) glist_active[m]->attempt_tally(icell,nattempt);
+      }
+    }
+  }
 }
 
 /* ----------------------------------------------------------------------
@@ -668,6 +699,11 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOne< NEARCP, GASTALLY, ATO
     d_nattempt_one() += nattempt;
   else
     reduce.nattempt_one += nattempt;
+
+  // tally per-cell collision attempts (compute gas/attempt/grid)
+  // one work item per cell, so no atomics needed
+
+  if (need_attempt_percell) d_nattempt_percell(icell) = nattempt;
 
   // perform collisions
   // select random pair of particles, cannot be same
@@ -1054,6 +1090,11 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar< GASTALLY, AT
     d_nattempt_one() += nattempt;
   else
     reduce.nattempt_one += nattempt;
+
+  // tally per-cell collision attempts (compute gas/attempt/grid)
+  // one work item per cell, so no atomics needed
+
+  if (need_attempt_percell) d_nattempt_percell(icell) = nattempt;
 
   // perform collisions
   // select random pair of particles, cannot be same

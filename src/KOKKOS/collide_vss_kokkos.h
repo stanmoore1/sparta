@@ -158,6 +158,9 @@ class CollideVSSKokkos : public CollideVSS {
   DAT::tdual_float_3d k_remain;
   DAT::t_float_3d d_remain;
 
+  int need_attempt_percell;      // 1 if a gas/attempt/grid compute is active
+  DAT::t_float_1d d_nattempt_percell;   // per-cell collision attempts
+
   typedef Kokkos::DualView<int[11], DeviceType::array_layout, DeviceType> tdual_int_11;
   typedef tdual_int_11::t_dev t_int_11;
   typedef tdual_int_11::t_host t_host_int_11;
