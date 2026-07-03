@@ -246,8 +246,9 @@ for a discussion of these requirements.
 The {style} of each reaction is a single character (upper or lower
 case) with the following meaning:
 
-A = Arrhenius 
-Q = Quantum :ul
+A = Arrhenius
+Q = Quantum
+B = Arrhenius Backward (PROTOTYPE, see below) :ul
 
 The style determines how many reaction coefficients are listed as C1,
 C2, etc, and how they are interpreted by SPARTA.
@@ -263,6 +264,49 @@ C5 = overall reaction energy (positive for exothermic) :ul
 
 The different reaction styles use these values in different ways, as
 explained above.
+
+:line
+
+[Backward (detailed-balance) reactions - PROTOTYPE]
+
+The B = Arrhenius Backward style is a prototype capability (issue #472)
+for deriving a reverse reaction rate from its forward reaction using
+the principle of detailed balance, rather than supplying an independent
+Arrhenius fit for the reverse rate.  See "(Bird94)"_#Bird94 section 6.6
+and Boyd & Schwartzentruber sections 7.5.2-7.5.3 for background.
+
+A reaction flagged with the B style must be an exchange reaction (in
+this prototype) and its reactants/products must be the products/reactants
+of a forward reaction with the A style that is also present in the file.
+For example:
+
+N2 + O --> NO + N
+E A 0.0 5.175e-19 1.069e-12 -1.0 -5.175e-19 :pre
+
+NO + N --> N2 + O
+E B 0.0 0.0 0.0 0.0 0.0 :pre
+
+The 5 coefficients for a B reaction are placeholders; they are ignored
+and overwritten internally.  The backward rate is constructed as
+
+k_b(T) = k_f(T) / K_eq(T) :pre
+
+where K_eq(T) is the equilibrium constant computed from the species
+translational, rotational (rigid-rotor), and vibrational (harmonic-
+oscillator) partition functions.  Equivalently, the backward activation
+energy is set to Ea_f + dHrxn, the backward reaction energy to -dHrxn,
+and the forward Arrhenius prefactor is scaled by the partition-function
+ratio q_reactants/q_products.  This ratio is evaluated each timestep at a
+representative translational temperature of the grid cell, so the reverse
+rate adapts to the local nonequilibrium state.
+
+Prototype limitations: only exchange reactions are supported; the
+electronic partition function uses a ground-state degeneracy of 1 (no
+electronic-level data in the "species"_species.html file); rotational
+partition functions require a rotational temperature (via a rotational
+data file) and default to 1 otherwise; the backward temperature exponent
+is inherited from the forward reaction; and the KOKKOS accelerated styles
+do not yet implement this path.
 
 :line
 

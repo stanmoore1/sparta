@@ -43,6 +43,25 @@ enum{NONE,DISCRETE,SMOOTH};                            // several files
 #define MAXLINE 1024
 #define DELTALIST 16
 
+/* ----------------------------------------------------------------------
+   return 1 if the two small unordered species-index sets are identical
+   used to match a reverse reaction with its forward partner
+------------------------------------------------------------------------- */
+
+static int set_match(int *a, int na, int *b, int nb)
+{
+  if (na != nb) return 0;
+  int used[MAXPRODUCT] = {0};
+  for (int i = 0; i < na; i++) {
+    int found = 0;
+    for (int j = 0; j < nb; j++) {
+      if (!used[j] && a[i] == b[j]) { used[j] = 1; found = 1; break; }
+    }
+    if (!found) return 0;
+  }
+  return 1;
+}
+
 /* ---------------------------------------------------------------------- */
 
 ReactBird::ReactBird(SPARTA *sparta, int narg, char **arg) :
@@ -222,6 +241,64 @@ void ReactBird::init()
     if (i == j) continue;
     reactions[j][i].list[reactions[j][i].n++] = m;
   }
+
+  // PROTOTYPE (issue #472): pair each reverse (detailed-balance) reaction with
+  //   its forward partner and seed the backward Arrhenius coefficients.
+  // forward partner F of reverse reaction B has reactants/products swapped:
+  //   F.reactants == B.products and F.products == B.reactants
+  // following Bird94 sec 6.6 and Boyd & Schwartzentruber sec 7.5.2-7.5.3, with
+  //   dHf = F.coeff[4] (signed reaction energy, negative for endothermic F):
+  //   Ea_B  = Ea_F + dHf        (barrier seen from the product side)
+  //   dHr_B = -dHf              (reverse reaction energy)
+  //   b_B, z_B inherit from F   (temperature exponent, effective DOF)
+  //   A_B(T) = A_F * q_react,F(T)/q_prod,F(T)
+  // the equilibrium-constant exponential cancels against the shifted barrier,
+  //   leaving only the partition-function ratio, which ReactTCE::attempt()
+  //   applies at run time using the cell temperature React::tgas.
+  // here we store the RAW forward A into B.coeff[2] so the standard TCE
+  //   transform below yields B's geometric prefactor G_B * A_F.
+  // guarded by initflag so the seeding happens exactly once (like the transform)
+
+  for (int m = 0; m < nlist; m++) {
+    OneReaction *b = &rlist[m];
+    if (!b->active || !b->reverse || b->initflag) continue;
+    if (b->type != EXCHANGE)
+      error->all(FLERR,"Reverse (B-style) reaction prototype currently "
+                 "supports only exchange reactions");
+
+    int found = -1;
+    for (int f = 0; f < nlist; f++) {
+      OneReaction *r = &rlist[f];
+      if (f == m || !r->active || r->reverse) continue;
+      if (r->type != EXCHANGE) continue;
+      if (set_match(r->reactants,r->nreactant,b->products,b->nproduct) &&
+          set_match(r->products,r->nproduct,b->reactants,b->nreactant)) {
+        found = f;
+        break;
+      }
+    }
+    if (found < 0) {
+      print_reaction(b);
+      error->all(FLERR,
+                 "No forward partner found for reverse (B-style) reaction");
+    }
+
+    OneReaction *f = &rlist[found];
+    b->reverse_partner = found;
+
+    b->coeff[0] = f->coeff[0];                // effective internal DOF
+    b->coeff[1] = f->coeff[1] + f->coeff[4];  // Ea_B = Ea_F + dHf
+    b->coeff[2] = f->coeff[2];                // raw A_F (scaled at run time)
+    b->coeff[3] = f->coeff[3];                // inherit temperature exponent
+    b->coeff[4] = -f->coeff[4];               // reverse reaction energy
+    if (b->coeff[1] < 0.0) b->coeff[1] = 0.0; // clamp small negative barrier
+  }
+
+  // set reverse_active if any active reverse reaction is defined
+
+  reverse_active = 0;
+  for (int m = 0; m < nlist; m++)
+    if (rlist[m].active && rlist[m].reverse) reverse_active = 1;
 
   // modify Arrhenius coefficients for TCE model
   // C1,C2 Bird 94, p 127
@@ -591,6 +668,8 @@ void ReactBird::readfile(char *fname)
         r->products = new int[MAXPRODUCT];
         r->coeff = new double[MAXCOEFF];
         r->id = NULL;
+        r->reverse = 0;
+        r->reverse_partner = -1;
       }
     }
 
@@ -703,7 +782,15 @@ void ReactBird::readfile(char *fname)
     }
     if (word[0] == 'A' || word[0] == 'a') r->style = ARRHENIUS;
     else if (word[0] == 'Q' || word[0] == 'q') r->style = QUANTUM;
-    else {
+    else if (word[0] == 'B' || word[0] == 'b') {
+      // 'B' = Arrhenius Backward: TCE reaction whose rate is derived from a
+      //   forward reaction via detailed balance (PROTOTYPE, see ReactTCE).
+      //   Treated as an Arrhenius reaction; its Arrhenius prefactor (C3) is
+      //   overwritten in init() by the paired forward rate and the
+      //   temperature-dependent partition-function ratio.
+      r->style = ARRHENIUS;
+      r->reverse = 1;
+    } else {
       print_reaction(copy1,copy2);
       error->all(FLERR,"Invalid reaction style in file");
     }
