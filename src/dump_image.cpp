@@ -140,6 +140,8 @@ DumpImage::DumpImage(SPARTA *sparta, int narg, char **arg) :
   nannotate = 0;
   annotations = NULL;
 
+  colorbarflag = 0;
+
   idgrid = idgridx = idgridy = idgridz = idsurf = NULL;
 
   // parse optional args
@@ -523,6 +525,32 @@ DumpImage::DumpImage(SPARTA *sparta, int narg, char **arg) :
       nannotate++;
 
       iarg += 5;
+
+    } else if (strcmp(arg[iarg],"colorbar") == 0) {
+
+      // colorbar <corner> <color> <scale>
+      // draws a gradient bar + min/mid/max labels for particle colormap
+      // only meaningful when particles are colored by a per-particle attribute
+
+      if (iarg+4 > narg) error->all(FLERR,"Illegal dump image command");
+      if (pcolor != ATTRIBUTE)
+        error->all(FLERR,"Dump image colorbar requires particle attribute color");
+
+      if (strcmp(arg[iarg+1],"tl") == 0) colorbar_corner = TOPLEFT;
+      else if (strcmp(arg[iarg+1],"tr") == 0) colorbar_corner = TOPRIGHT;
+      else if (strcmp(arg[iarg+1],"bl") == 0) colorbar_corner = BOTLEFT;
+      else if (strcmp(arg[iarg+1],"br") == 0) colorbar_corner = BOTRIGHT;
+      else error->all(FLERR,"Illegal dump image command");
+
+      colorbar_color = image->color2rgb(arg[iarg+2]);
+      if (colorbar_color == NULL)
+        error->all(FLERR,"Invalid color in dump image command");
+
+      colorbar_scale = atoi(arg[iarg+3]);
+      if (colorbar_scale < 1) error->all(FLERR,"Illegal dump image command");
+
+      colorbarflag = 1;
+      iarg += 4;
 
     } else error->all(FLERR,"Illegal dump image command");
   }
@@ -1091,8 +1119,9 @@ void DumpImage::write()
   create_image();
   image->merge();
 
-  // draw 2d text annotations as an overlay on the merged image (proc 0)
+  // draw 2d overlays (colorbar, text annotations) on merged image (proc 0)
 
+  if (me == 0 && colorbarflag) draw_colorbar();
   if (me == 0 && nannotate) draw_annotations();
 
   // write image file
@@ -1174,6 +1203,81 @@ int DumpImage::expand_annotation(const char *tmpl, char *out, int n)
   if (pos > n-1) pos = n-1;
   out[pos] = '\0';
   return pos;
+}
+
+/* ----------------------------------------------------------------------
+   draw a vertical colorbar for the particle attribute colormap (proc 0)
+   samples the colormap across its current [lo,hi] range and labels the
+   min, mid, and max values; anchored to one of the 4 image corners
+------------------------------------------------------------------------- */
+
+void DumpImage::draw_colorbar()
+{
+  double lo,hi;
+  image->map_range(PARTICLE,&lo,&hi);
+
+  int iw = image->width;
+  int ih = image->height;
+
+  const int margin = 8;
+  const int gap = 4;                        // pixels between bar and labels
+  int barw = 12 * colorbar_scale;
+  int barh = (2*ih) / 5;                     // bar spans ~40% of image height
+  if (barh < 2) barh = 2;
+
+  int th = Image::text_height(colorbar_scale);
+
+  // format the three tick labels and find the widest for layout
+
+  char lostr[64],midstr[64],histr[64];
+  snprintf(histr,64,"%.3g",hi);
+  snprintf(midstr,64,"%.3g",0.5*(lo+hi));
+  snprintf(lostr,64,"%.3g",lo);
+
+  int lw = Image::text_width(histr,colorbar_scale);
+  int w2 = Image::text_width(midstr,colorbar_scale);
+  int w3 = Image::text_width(lostr,colorbar_scale);
+  if (w2 > lw) lw = w2;
+  if (w3 > lw) lw = w3;
+
+  int assemblyw = barw + gap + lw;
+
+  // corner placement; leave room above/below the bar for centered labels
+
+  int barx,bartop;
+  if (colorbar_corner == TOPLEFT || colorbar_corner == BOTLEFT)
+    barx = margin;
+  else
+    barx = iw - margin - assemblyw;
+
+  if (colorbar_corner == TOPLEFT || colorbar_corner == TOPRIGHT)
+    bartop = margin + th/2;
+  else
+    bartop = ih - margin - barh - th/2;
+
+  // gradient: top row = hi value, bottom row = lo value
+
+  for (int i = 0; i < barh; i++) {
+    double frac = (barh > 1) ? (double) i / (barh-1) : 0.0;
+    double value = hi - frac*(hi-lo);
+    double *color = image->map_value2color(PARTICLE,value);
+    image->draw_rectangle(barx,bartop+i,barw,1,color);
+  }
+
+  // 1-pixel border around the bar
+
+  image->draw_rectangle(barx-1,bartop-1,barw+2,1,colorbar_color);
+  image->draw_rectangle(barx-1,bartop+barh,barw+2,1,colorbar_color);
+  image->draw_rectangle(barx-1,bartop-1,1,barh+2,colorbar_color);
+  image->draw_rectangle(barx+barw,bartop-1,1,barh+2,colorbar_color);
+
+  // tick labels, vertically centered at top / middle / bottom of the bar
+
+  int labelx = barx + barw + gap;
+  image->draw_text(labelx,bartop-th/2,histr,colorbar_color,colorbar_scale);
+  image->draw_text(labelx,bartop+barh/2-th/2,midstr,colorbar_color,
+                   colorbar_scale);
+  image->draw_text(labelx,bartop+barh-th/2,lostr,colorbar_color,colorbar_scale);
 }
 
 /* ----------------------------------------------------------------------

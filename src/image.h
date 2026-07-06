@@ -56,8 +56,9 @@ class Image : protected Pointers {
   void draw_cylinder(double *, double *, double *, double, int);
   void draw_triangle(double *, double *, double *, double *);
 
-  // 2d text overlay for image annotations (issue #523)
+  // 2d overlays for image annotations (issue #523)
   void draw_text(int, int, const char *, double *, int);
+  void draw_rectangle(int, int, int, int, double *);
   static int text_width(const char *, int);
   static int text_height(int);
 
@@ -65,6 +66,7 @@ class Image : protected Pointers {
   int map_reset(int, int, char **);
   int map_minmax(int, double, double);
   double *map_value2color(int, double);
+  void map_range(int, double *, double *);
 
   int addcolor(char *, double, double, double);
   double *element2color(char *);
@@ -172,6 +174,7 @@ class ColorMap : protected Pointers {
   int reset(int, char **);
   int minmax(double, double);
   double *value2color(double);
+  void range(double *lo, double *hi) { *lo = locurrent; *hi = hicurrent; }
 
  private:
   class Image *image;              // caller with color2rgb() method

@@ -21,7 +21,7 @@ file = name of file to write image to :l
 color = particle attribute that determines color of each particle :l
 diameter = particle attribute that determines size of each particle :l
 zero or more keyword/value pairs may be appended :l
-keyword = {particle} or {pdiam} or {grid} or {gridx} or {gridy} or {gridz} or {surf} or {size} or {view} or {center} or {up} or {zoom} or {persp} or {box} or {gline} or {sline} or {axes} or {shiny} or {ssao} or {label} :l
+keyword = {particle} or {pdiam} or {grid} or {gridx} or {gridy} or {gridz} or {surf} or {size} or {view} or {center} or {up} or {zoom} or {persp} or {box} or {gline} or {sline} or {axes} or {shiny} or {ssao} or {label} or {colorbar} :l
   {particle} = yes/no = do or do not draw particles
   {pdiam} value = number = numeric value for particle diameter (distance units)
   {grid} values = color
@@ -82,7 +82,11 @@ keyword = {particle} or {pdiam} or {grid} or {gridx} or {gridy} or {gridz} or {s
     color = name of text color (see below)
     scale = integer font magnification (1 = 5x7 pixel font)
     text = text string, may contain %step, %time, %% tokens
-           (enclose in quotes if it contains whitespace) :pre
+           (enclose in quotes if it contains whitespace)
+  {colorbar} values = corner color scale = draw a particle colormap key
+    corner = {tl} or {tr} or {bl} or {br} = image corner to anchor colorbar at
+    color = name of color for the border and tick labels
+    scale = integer font magnification for the tick labels :pre
 :ule
 
 [Examples:]
@@ -559,6 +563,18 @@ dump 2 image all 100 image.*.ppm type type label tl white 2 "step %step, t = %ti
 The annotation is drawn as a flat 2d overlay after the 3d scene has
 been rendered, so it always appears on top of the image and is not
 affected by the view, zoom, or lighting settings.
+
+The {colorbar} keyword draws a vertical gradient bar that serves as a
+key for particles colored by a per-particle attribute (i.e. when the
+{color} argument of the dump image command is an attribute rather than
+{type} or {proc}).  The bar is sampled from the particle colormap and
+is labeled with the minimum, midpoint, and maximum values of the
+colormap's current range.  When the colormap bounds are set to {min}
+and/or {max} (the default), the labeled range tracks the actual spread
+of the attribute in each snapshot.  As with {label}, the {corner}
+value anchors the colorbar to a corner of the image, {color} sets the
+color of the border and tick labels, and {scale} magnifies the label
+font.
 
 :line
 

@@ -1176,6 +1176,31 @@ int Image::text_height(int scale)
   return FONT_H * scale;
 }
 
+/* ----------------------------------------------------------------------
+   fill a w x h pixel rectangle as a flat 2d overlay into imageBuffer
+   (x,y) is the top-left corner in screen coords (y grows down from top)
+   color is RGB in [0,1]; intended for use on proc 0 after Image::merge()
+------------------------------------------------------------------------- */
+
+void Image::draw_rectangle(int x, int y, int w, int h, double *color)
+{
+  char red = static_cast<int>(color[0] * 255.0);
+  char green = static_cast<int>(color[1] * 255.0);
+  char blue = static_cast<int>(color[2] * 255.0);
+
+  for (int sy = y; sy < y+h; sy++) {
+    int iy = height - 1 - sy;
+    if (iy < 0 || iy >= height) continue;
+    for (int sx = x; sx < x+w; sx++) {
+      if (sx < 0 || sx >= width) continue;
+      int offset = 3*sx + iy*width*3;
+      imageBuffer[offset + 0] = red;
+      imageBuffer[offset + 1] = green;
+      imageBuffer[offset + 2] = blue;
+    }
+  }
+}
+
 /* ---------------------------------------------------------------------- */
 
 void Image::compute_SSAO()
@@ -1448,6 +1473,15 @@ int Image::map_minmax(int index, double mindynamic, double maxdynamic)
 double *Image::map_value2color(int index, double value)
 {
   return maps[index]->value2color(value);
+}
+
+/* ----------------------------------------------------------------------
+   return current lo/hi value bounds of color map index
+------------------------------------------------------------------------- */
+
+void Image::map_range(int index, double *lo, double *hi)
+{
+  maps[index]->range(lo,hi);
 }
 
 /* ----------------------------------------------------------------------

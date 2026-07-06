@@ -124,6 +124,13 @@ class DumpImage : public DumpParticle {
   int nannotate;                   // number of text annotations
   Annotation *annotations;         // list of text annotations
 
+  // colorbar for particle attribute colormap (issue #523)
+
+  int colorbarflag;                // 0/1 draw a colorbar for particle colors
+  int colorbar_corner;             // TOPLEFT,TOPRIGHT,BOTLEFT,BOTRIGHT
+  int colorbar_scale;              // font magnification for tick labels
+  double *colorbar_color;          // color for border and tick labels
+
   // methods
 
   void init_style();
@@ -136,6 +143,7 @@ class DumpImage : public DumpParticle {
 
   void create_image();
   void draw_annotations();
+  void draw_colorbar();
   int expand_annotation(const char *, char *, int);
 };
 
