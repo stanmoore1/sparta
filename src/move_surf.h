@@ -47,6 +47,11 @@ class MoveSurf : protected Pointers {
 
   MyHash *hash;
 
+  // hash for matching moved points to file entries by coordinate
+  // key = original point coord, value = index into oldcoord/newcoord
+
+  MyHash *fhash;
+
   MoveSurf(class SPARTA *);
   ~MoveSurf();
   void command(int, char **);
@@ -65,12 +70,13 @@ class MoveSurf : protected Pointers {
 
   int *pselect;                    // 1 if point is moved, else 0
 
-  int nread;
-  int *readindex;
-  double **oldcoord,**newcoord;
+  int readflag;                    // 1 if file entry has been read & cached
+  int nread;                       // # of points listed in file entry
+  double **oldcoord,**newcoord;    // original & target coords of read points
 
   void readfile();
-  void update_points(double);
+  void move_file_2d(double, Surf::Line *);
+  void move_file_3d(double, Surf::Tri *);
   void translate_2d(double, Surf::Line *);
   void translate_3d(double, Surf::Tri *);
   void rotate_2d(double, Surf::Line *);
@@ -93,5 +99,18 @@ E: Illegal ... command
 Self-explanatory.  Check the input script syntax and compare to the
 documentation for the command.  You can use -echo screen as a
 command-line option when running SPARTA to see the offending line.
+
+E: Cannot open move surf file %s
+
+The specified file for the move_surf file style could not be opened.
+
+E: Did not find entry in move surf file
+
+The requested entry name was not present in the move surf file.
+
+E: Incomplete entry in move surf file
+
+The named entry in the move surf file ended before the expected number
+of point lines were read.
 
 */

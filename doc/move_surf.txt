@@ -15,6 +15,8 @@ move_surf groupID style args ... keyword value ... :pre
 group-ID = group ID for which surface elements to move :ulb,l
 style = {file} or {trans} or {rotate} :l
   {file} args = filename entry
+    filename = file with one or more entries of new point coordinates
+    entry = ID of entry in file to use
   {trans} args = Dx Dy Dz
     Dx,Dy,Dz = displacement applied to all surface points (distance units)
   {rotate} args = theta Rx Ry Rz Ox Oy Oz 
@@ -49,8 +51,33 @@ perform a series of runs from one input script, where some attribute
 of the surface elements change, e.g. the separation between two
 spheres.
 
-IMPORTANT NOTE: The {file} style is not yet implemented.  It will
-allow new positions of points to be listed in a file.
+The {file} style reads new vertex positions from a file, which allows
+an arbitrary displacement of individual surface points, e.g. to deform
+or morph the shape of a surface object rather than move it rigidly.
+This is useful when the moved geometry is computed externally, e.g. by
+a separate structural or fluid solver, and written to a file.
+
+The {filename} is the file to read.  It may contain one or more
+entries; the {entry} argument selects which one to use.  Blank lines
+and lines beginning with a "#" character are ignored.  The format of
+an entry is its ID on a line by itself, then a line with the number of
+points N in the entry, then N lines of point coordinates:
+
+entryID
+N
+xold yold xnew ynew
+xold yold xnew ynew
+... :pre
+
+In 3d each point line instead lists {xold yold zold xnew ynew znew}.
+The {xold,yold,zold} coordinates are the current (pre-move) position
+of a surface vertex; they are used to identify which vertex to move by
+matching them against the coordinates of the surface points in the
+specified group.  The match is by exact coordinate value, so the old
+coordinates in the file should be written to full precision.  A vertex
+whose coordinates match is moved to the {xnew,ynew,znew} position; the
+{connect} keyword can be used as with the other styles to keep shared
+vertices of adjacent elements welded together.
 
 In 2d, surface elements are line segments with 2 vertices each.  In
 3d, surface elements are triangles with 3 vertices each.  If a line
