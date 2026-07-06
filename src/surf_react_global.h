@@ -39,18 +39,26 @@ class SurfReactGlobal : public SurfReact {
   virtual void dynamic();
 
  protected:
-  double prob_create,prob_destroy;
 
-  // a probability can be a fixed value (NUMERIC) or
-  //   an equal-style variable (VAREQUAL) evaluated each timestep
+  // a probability can be a fixed value (NUMERIC),
+  //   an equal-style variable (VAREQUAL) giving one value per timestep, or
+  //   a grid-style variable (VARGRID) giving a per-grid-cell value each step
 
-  int pdelete_mode,pcreate_mode;       // NUMERIC or VAREQUAL
+  enum{NUMERIC,VARIABLE,VAREQUAL,VARGRID};
+
+  double prob_create,prob_destroy;     // scalar probabilities (NUMERIC/VAREQUAL)
+
+  int pdelete_mode,pcreate_mode;       // NUMERIC, VAREQUAL, or VARGRID
   char *pdelete_name,*pcreate_name;    // variable names (no v_ prefix)
   int pdelete_var,pcreate_var;         // variable indices, -1 if unused
+
+  double *pdelete_grid,*pcreate_grid;  // per-cell probabilities for VARGRID
+  int ngrid;                           // allocated length of grid arrays
 
   class RanKnuth *random;     // RNG for reaction probabilities
 
   void parse_prob(char *, int &, char *&, double &);
+  void grow_grid();
 };
 
 }

@@ -35,12 +35,17 @@ class SurfReactGlobalKokkos : public SurfReactGlobal {
   SurfReactGlobalKokkos(class SPARTA *);
   ~SurfReactGlobalKokkos();
   void init();
+  void dynamic();
   void tally_reset();
   void tally_update();
 
   void pre_react();
   void backup();
   void restore();
+
+  // per-cell probabilities on device for grid-style (VARGRID) variables
+
+  DAT::t_float_1d d_pdelete_grid,d_pcreate_grid;
 
 #ifndef SPARTA_KOKKOS_EXACT
   Kokkos::Random_XorShift64_Pool<DeviceType> rand_pool;
@@ -83,12 +88,20 @@ class SurfReactGlobalKokkos : public SurfReactGlobal {
                    Particle::OnePart *&jp, int &,
                    const DAT::t_int_scalar &d_retry, const DAT::t_int_scalar &d_nlocal) const
   {
+    // grid-style variables set a per-cell probability
+    // ip->icell is the local owned cell the collision occurs in
+
+    double pdestroy = prob_destroy;
+    double pcreate = prob_create;
+    if (pdelete_mode == VARGRID) pdestroy = d_pdelete_grid[ip->icell];
+    if (pcreate_mode == VARGRID) pcreate = d_pcreate_grid[ip->icell];
+
     rand_type rand_gen = rand_pool.get_state();
     double r = rand_gen.drand();
 
     // perform destroy reaction
 
-    if (r < prob_destroy) {
+    if (r < pdestroy) {
       if (ATOMIC_REDUCTION == 0) {
         d_nsingle()++;
         d_tally_single(0)++;
@@ -105,7 +118,7 @@ class SurfReactGlobalKokkos : public SurfReactGlobal {
     // clone 1st particle to create 2nd particle
     // if add_particle performs a realloc must retry
 
-    if (r < prob_destroy+prob_create) {
+    if (r < pdestroy+pcreate) {
       if (ATOMIC_REDUCTION == 0) {
         d_nsingle()++;
         d_tally_single(1)++;

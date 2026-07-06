@@ -20,7 +20,7 @@ args = arguments for that style :l
     pdelete = probability that surface collision removes the incident particle
     pcreate = probability that surface collision clones the incident particle
       pdelete and pcreate can each be specified as a numeric value or
-      as an equal-style variable, e.g. v_name
+      as an equal-style or grid-style variable, e.g. v_name
   {prob} or {prob/kk} args = infile
     infile = file with list of surface chemistry reactions 
   {adsorb} args = model infile(s) n=Nsync type temp n_sites adsp1 adsp2 ...
@@ -101,17 +101,31 @@ command.
 The sum of {pdelete} and {pcreate} must be <= 1.0.
 
 Either {pdelete} or {pcreate} (or both) can be specified as an
-equal-style "variable"_variable.html instead of a numeric value.  If
-the value is a variable, it should be specified as v_name, where name
-is the variable name.  In this case, the variable is evaluated at the
-beginning of each timestep, and its value is used as the probability
-for that timestep.  This allows the deletion or creation probability to
-vary in time, e.g. as a function of elapsed time or of a global
-quantity computed by another "compute"_compute.html or
-"fix"_fix.html command.  Note that an equal-style variable computes a
-single global value, so the same probability is applied to all
-surface collisions on a given timestep.  The sum of the two
-probabilities must still be <= 1.0 each timestep, else an error is
+equal-style or grid-style "variable"_variable.html instead of a numeric
+value.  If the value is a variable, it should be specified as v_name,
+where name is the variable name.  The variable is evaluated at the
+beginning of each timestep and its value(s) used as the probability for
+that timestep.
+
+If the variable is equal-style, it computes a single global value, so
+the same probability is applied to all surface collisions on a given
+timestep.  This allows the deletion or creation probability to vary in
+time, e.g. as a function of elapsed time or of a global quantity
+computed by another "compute"_compute.html or "fix"_fix.html command.
+
+If the variable is grid-style, it computes a value for each grid cell,
+and the probability used for a surface collision is the value in the
+grid cell where the collision occurs.  This allows the probability to
+vary in space as well as time, e.g. as a function of the local number
+density computed by a per-grid-cell "compute"_compute.html.  A common
+use is to increase the deletion probability where the local number
+density is higher, in order to control the number density near a
+boundary.
+
+The referenced variable(s) are re-evaluated every timestep, so any
+per-grid computes they reference are recomputed using the current
+particle state.  The sum of the two probabilities must be <= 1.0 each
+timestep (per grid cell for grid-style variables), else an error is
 generated.
 
 Note that if you simply wish to delete all particles which hit the

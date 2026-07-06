@@ -83,6 +83,29 @@ void SurfReactGlobalKokkos::init()
 #endif
 }
 
+/* ----------------------------------------------------------------------
+   recompute variable-driven probabilities
+   base class fills/validates the host arrays for grid-style variables,
+   then copy the per-cell values to device for use in react_kokkos()
+------------------------------------------------------------------------- */
+
+void SurfReactGlobalKokkos::dynamic()
+{
+  SurfReactGlobal::dynamic();
+
+  if (pdelete_mode == VARGRID) {
+    auto h_pdelete_grid = HAT::t_float_1d(pdelete_grid,ngrid);
+    d_pdelete_grid =
+      Kokkos::create_mirror_view_and_copy(SPADeviceType(),h_pdelete_grid);
+  }
+
+  if (pcreate_mode == VARGRID) {
+    auto h_pcreate_grid = HAT::t_float_1d(pcreate_grid,ngrid);
+    d_pcreate_grid =
+      Kokkos::create_mirror_view_and_copy(SPADeviceType(),h_pcreate_grid);
+  }
+}
+
 /* ---------------------------------------------------------------------- */
 
 void SurfReactGlobalKokkos::tally_reset()

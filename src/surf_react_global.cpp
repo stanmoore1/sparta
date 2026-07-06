@@ -17,16 +17,17 @@
 #include "surf_react_global.h"
 #include "input.h"
 #include "variable.h"
+#include "grid.h"
+#include "modify.h"
 #include "update.h"
 #include "comm.h"
+#include "memory.h"
 #include "random_mars.h"
 #include "random_knuth.h"
 #include "math_extra.h"
 #include "error.h"
 
 using namespace SPARTA_NS;
-
-enum{NUMERIC,VAREQUAL};
 
 /* ---------------------------------------------------------------------- */
 
@@ -35,12 +36,15 @@ SurfReactGlobal::SurfReactGlobal(SPARTA *sparta, int narg, char **arg) :
 {
   if (narg != 4) error->all(FLERR,"Illegal surf_react global command");
 
-  // each probability is either a numeric value or an equal-style variable
+  // each probability is either a numeric value or a variable
   // a variable is flagged with a leading "v_" prefix on the argument
+  // equal-style vs grid-style is resolved later in init()
 
   prob_destroy = prob_create = 0.0;
   pdelete_name = pcreate_name = NULL;
   pdelete_var = pcreate_var = -1;
+  pdelete_grid = pcreate_grid = NULL;
+  ngrid = 0;
 
   parse_prob(arg[2],pdelete_mode,pdelete_name,prob_destroy);
   parse_prob(arg[3],pcreate_mode,pcreate_name,prob_create);
@@ -48,7 +52,7 @@ SurfReactGlobal::SurfReactGlobal(SPARTA *sparta, int narg, char **arg) :
   // dynamic if either probability is set by a variable
   // sum of probabilities can only be statically checked when both are numeric
 
-  if (pdelete_mode == VAREQUAL || pcreate_mode == VAREQUAL) dynamicflag = 1;
+  if (pdelete_mode == VARIABLE || pcreate_mode == VARIABLE) dynamicflag = 1;
 
   if (pdelete_mode == NUMERIC && pcreate_mode == NUMERIC &&
       prob_destroy + prob_create > 1.0)
@@ -81,11 +85,14 @@ SurfReactGlobal::~SurfReactGlobal()
 
   delete [] pdelete_name;
   delete [] pcreate_name;
+  memory->destroy(pdelete_grid);
+  memory->destroy(pcreate_grid);
   delete random;
 }
 
 /* ----------------------------------------------------------------------
-   parse a probability argument as a numeric value or equal-style variable
+   parse a probability argument as a numeric value or a variable
+   a leading "v_" prefix flags a variable (equal- or grid-style)
    sets mode, and either name (for a variable) or value (for a number)
 ------------------------------------------------------------------------- */
 
@@ -93,7 +100,7 @@ void SurfReactGlobal::parse_prob(char *str, int &mode, char *&name,
                                  double &value)
 {
   if (strstr(str,"v_") == str) {
-    mode = VAREQUAL;
+    mode = VARIABLE;
     int n = strlen(&str[2]) + 1;
     name = new char[n];
     strcpy(name,&str[2]);
@@ -106,7 +113,7 @@ void SurfReactGlobal::parse_prob(char *str, int &mode, char *&name,
 }
 
 /* ----------------------------------------------------------------------
-   re-find variables and validate they are equal-style
+   re-find variables and resolve their style (equal vs grid)
    variable indices can change between runs, so look them up at init
 ------------------------------------------------------------------------- */
 
@@ -114,43 +121,92 @@ void SurfReactGlobal::init()
 {
   SurfReact::init();
 
-  if (pdelete_mode == VAREQUAL) {
+  if (pdelete_mode != NUMERIC) {
     pdelete_var = input->variable->find(pdelete_name);
     if (pdelete_var < 0)
       error->all(FLERR,"Surf_react global pdelete variable name does not exist");
-    if (!input->variable->equal_style(pdelete_var))
-      error->all(FLERR,"Surf_react global pdelete variable is not equal-style");
+    if (input->variable->equal_style(pdelete_var)) pdelete_mode = VAREQUAL;
+    else if (input->variable->grid_style(pdelete_var)) pdelete_mode = VARGRID;
+    else error->all(FLERR,"Surf_react global pdelete variable is invalid style");
   }
 
-  if (pcreate_mode == VAREQUAL) {
+  if (pcreate_mode != NUMERIC) {
     pcreate_var = input->variable->find(pcreate_name);
     if (pcreate_var < 0)
       error->all(FLERR,"Surf_react global pcreate variable name does not exist");
-    if (!input->variable->equal_style(pcreate_var))
-      error->all(FLERR,"Surf_react global pcreate variable is not equal-style");
+    if (input->variable->equal_style(pcreate_var)) pcreate_mode = VAREQUAL;
+    else if (input->variable->grid_style(pcreate_var)) pcreate_mode = VARGRID;
+    else error->all(FLERR,"Surf_react global pcreate variable is invalid style");
   }
+}
+
+/* ----------------------------------------------------------------------
+   (re)allocate per-cell probability arrays to match current grid
+------------------------------------------------------------------------- */
+
+void SurfReactGlobal::grow_grid()
+{
+  if (ngrid == grid->nlocal) return;
+  ngrid = grid->nlocal;
+  if (pdelete_mode == VARGRID)
+    memory->grow(pdelete_grid,ngrid,"surf_react/global:pdelete_grid");
+  if (pcreate_mode == VARGRID)
+    memory->grow(pcreate_grid,ngrid,"surf_react/global:pcreate_grid");
 }
 
 /* ----------------------------------------------------------------------
    recompute variable-driven probabilities
    called once per timestep by Update before surface collisions
+   equal-style vars set a single scalar; grid-style vars set per-cell values
 ------------------------------------------------------------------------- */
 
 void SurfReactGlobal::dynamic()
 {
+  // reallocate per-cell arrays if grid changed (adapt/balance)
+
+  if (pdelete_mode == VARGRID || pcreate_mode == VARGRID) grow_grid();
+
+  // clear/restore compute invocation flags around variable evaluation
+  // so any computes the variables reference are recomputed with current
+  //   state on every timestep, not left stale between output steps
+
+  modify->clearstep_compute();
+
   if (pdelete_mode == VAREQUAL) {
     prob_destroy = input->variable->compute_equal(pdelete_var);
     if (prob_destroy < 0.0 || prob_destroy > 1.0)
       error->all(FLERR,"Surf_react global pdelete must be from 0.0 to 1.0");
+  } else if (pdelete_mode == VARGRID) {
+    input->variable->compute_grid(pdelete_var,pdelete_grid,1,0);
   }
 
   if (pcreate_mode == VAREQUAL) {
     prob_create = input->variable->compute_equal(pcreate_var);
     if (prob_create < 0.0 || prob_create > 1.0)
       error->all(FLERR,"Surf_react global pcreate must be from 0.0 to 1.0");
+  } else if (pcreate_mode == VARGRID) {
+    input->variable->compute_grid(pcreate_var,pcreate_grid,1,0);
   }
 
-  if (prob_destroy + prob_create > 1.0)
+  modify->addstep_compute(update->ntimestep + 1);
+
+  // validate ranges and the pdelete+pcreate <= 1 constraint
+  // for grid-style values this is a per-cell check
+
+  if (pdelete_mode == VARGRID || pcreate_mode == VARGRID) {
+    int flag = 0;
+    for (int i = 0; i < ngrid; i++) {
+      double pd = (pdelete_mode == VARGRID) ? pdelete_grid[i] : prob_destroy;
+      double pc = (pcreate_mode == VARGRID) ? pcreate_grid[i] : prob_create;
+      if (pd < 0.0 || pd > 1.0 || pc < 0.0 || pc > 1.0 || pd + pc > 1.0)
+        flag = 1;
+    }
+    int flagall;
+    MPI_Allreduce(&flag,&flagall,1,MPI_INT,MPI_MAX,world);
+    if (flagall)
+      error->all(FLERR,"Surf_react global probabilities out of range: "
+                 "each must be from 0.0 to 1.0 and pdelete + pcreate <= 1.0");
+  } else if (prob_destroy + prob_create > 1.0)
     error->all(FLERR,"Surf_react global pdelete + pcreate > 1.0");
 }
 
@@ -163,11 +219,19 @@ void SurfReactGlobal::dynamic()
 int SurfReactGlobal::react(Particle::OnePart *&ip, int, double *,
                            Particle::OnePart *&jp, int &)
 {
+  // grid-style variables set a per-cell probability
+  // ip->icell is the local owned cell the collision occurs in
+
+  double pdestroy = prob_destroy;
+  double pcreate = prob_create;
+  if (pdelete_mode == VARGRID) pdestroy = pdelete_grid[ip->icell];
+  if (pcreate_mode == VARGRID) pcreate = pcreate_grid[ip->icell];
+
   double r = random->uniform();
 
   // perform destroy reaction
 
-  if (r < prob_destroy) {
+  if (r < pdestroy) {
     nsingle++;
     tally_single[0]++;
     ip = NULL;
@@ -181,7 +245,7 @@ int SurfReactGlobal::react(Particle::OnePart *&ip, int, double *,
   //   rot/vib energies will be reset by SurfCollide
   //   repoint ip to new particles data struct if reallocated
 
-  if (r < prob_destroy+prob_create) {
+  if (r < pdestroy+pcreate) {
     nsingle++;
     tally_single[1]++;
     double x[3],v[3];
