@@ -133,7 +133,7 @@ void FixVibmode::update_custom(int index, double temp_thermal,
   double evib = 0.0;
 
   for (int imode = 0; imode < nmode; imode++) {
-    ivib = static_cast<int> (-log(1.0 - random->uniform()) * temp_vib /
+    ivib = static_cast<int> (-log(random->uniform()) * temp_vib /
                              particle->species[isp].vibtemp[imode]);
     vibmode[index][imode] = ivib;
     evib += ivib * update->boltz * particle->species[isp].vibtemp[imode];

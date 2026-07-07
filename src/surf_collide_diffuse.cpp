@@ -235,10 +235,10 @@ void SurfCollideDiffuse::diffuse(Particle::OnePart *p, double *norm)
     int ispecies = p->ispecies;
 
     double vrm = sqrt(2.0*update->boltz * tsurf / species[ispecies].mass);
-    double vperp = vrm * sqrt(-log(1.0 - random->uniform()));
+    double vperp = vrm * sqrt(-log(random->uniform()));
 
     double theta = MY_2PI * random->uniform();
-    double vtangent = vrm * sqrt(-log(1.0 - random->uniform()));
+    double vtangent = vrm * sqrt(-log(random->uniform()));
     double vtan1 = vtangent * sin(theta);
     double vtan2 = vtangent * cos(theta);
 

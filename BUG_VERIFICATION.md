@@ -40,18 +40,17 @@ Two fixes that the first pass applied only partially were completed:
   `v_` blocks (each leaking `id` at several `error->all` exits). Every leaking `error->all`
   between an `id` allocation and its `delete [] id` is now preceded by `delete [] id`. These are
   low-severity (pre-`MPI_Abort`) leaks, fixed for consistency.
-- **85/86/87 CPU twins** (`fix_ambipolar.cpp`, `fix_emit_face.cpp`, `fix_emit_surf.cpp`,
-  `fix_vibmode.cpp`, `particle.cpp`, `surf_collide_diffuse.cpp`): the first pass hardened
-  `-log(drand())` → `-log(1.0 - drand())` only in the KOKKOS kernels. The **CPU twins** of those
-  exact six kernels were hardened identically (`-log(1.0 - random->uniform())` /
-  `-log(1.0 - erandom->uniform())`), since `RanMars::uniform()` can return `0.0` →
-  `-log(0) = +Inf`. Scope was matched to the six KOKKOS kernels that were hardened, to restore
-  CPU/GPU parity without introducing a new asymmetry. `create_particles`, `fix_emit_face_file`,
-  `surf_collide_cll`, `surf_collide_td`, and `surf_react_adsorb` have the same idiom but their
-  KOKKOS side was **not** hardened, so they were left unchanged (both sides stay consistent).
-  **Note:** this shifts the exact CPU velocity draw for a given seed (same distribution,
-  different value), so CPU regression baselines that assume bit-identical output change — as the
-  KOKKOS baselines already did.
+- **85/86/87 (`-log(1.0 - x())` hardening) — REVERTED entirely.** The first pass hardened
+  `-log(drand())` → `-log(1.0 - drand())` in the KOKKOS kernels, and a follow-up briefly extended
+  the same idiom to the CPU twins. **All of these were subsequently reverted** (both the KOKKOS
+  originals in `fix_ambipolar_kokkos.h`, `fix_vibmode_kokkos.h`, `fix_emit_face_kokkos.cpp`,
+  `fix_emit_surf_kokkos.cpp`, `particle_kokkos.h`, `surf_collide_diffuse_kokkos.h`, and the CPU
+  twins in `fix_ambipolar.cpp`, `fix_emit_face.cpp`, `fix_emit_surf.cpp`, `fix_vibmode.cpp`,
+  `particle.cpp`, `surf_collide_diffuse.cpp`). The `-log(1.0 - x())` rewrite changes the exact
+  RNG-derived velocity draw for a given seed (shifting bit-identical regression baselines) while
+  only guarding a `~2⁻²⁴`-rare `-log(0) = +Inf`; that tradeoff was judged not worthwhile, so the
+  `-log(x())` form was restored everywhere to match `origin/master`. The six KOKKOS files are now
+  byte-identical to `origin/master` again.
 
 ## Follow-up review (second pass): inert / non-defect changes reverted
 
@@ -180,9 +179,9 @@ are retained for the array cases (56, 59-array).
 | 82 | adapt_grid.cpp | PARTIAL | NO | NO | ✔* | (bigint) smalloc — neither fixed |
 | 83 | adapt_grid.cpp | PARTIAL | NO | NO | ✔* | (bigint) clist/alist srealloc — neither fixed |
 | **84** | adapt_grid.cpp/.h, grid_adapt.cpp | **NO** | NO | NO | **✖** | speculative int-widening; total size already bigint |
-| 85 | KOKKOS/fix_ambipolar_kokkos.h | REAL | OK | OK | ✔ | -log(0)=+Inf → 1.0-drand() |
-| 86 | KOKKOS/fix_vibmode_kokkos.h | REAL | OK | OK | ✔ | -log(0)→Inf cast to int (UB) |
-| 87 | KOKKOS/fix_emit_*/diffuse/particle_kokkos | REAL | OK | NO | ✔ | 13 -log(drand) sites; CP missed all |
+| 85 | KOKKOS/fix_ambipolar_kokkos.h | REAL | OK | OK | ✖ | -log(0)=+Inf; `1.0-drand()` fix **reverted** (shifts RNG baselines) |
+| 86 | KOKKOS/fix_vibmode_kokkos.h | REAL | OK | OK | ✖ | -log(0)→Inf cast to int (UB); fix **reverted** |
+| 87 | KOKKOS/fix_emit_*/diffuse/particle_kokkos | REAL | OK | NO | ✖ | 13 -log(drand) sites; fix **reverted** (+ CPU twins) |
 | 88 | create_isurf.cpp | REAL | OK | NO | ✔ | (bigint)/(size_t) nsurf*nbytes |
 | 89 | create_*/dump_movie.cpp | PARTIAL | OK | NO | ✔ partial | dump_movie filename applied; create_* pure-%d rejected |
 | 90 | create_isurf.cpp/.h | REAL | OK | NO | ✔ | maxsbuf int→bigint |

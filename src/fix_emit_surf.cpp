@@ -770,7 +770,7 @@ void FixEmitSurf::perform_task_onepass()
           else vnmag = beta_un*vscale[isp] + indot;
 
           theta = MY_2PI * random->uniform();
-          vr = vscale[isp] * sqrt(-log(1.0 - random->uniform()));
+          vr = vscale[isp] * sqrt(-log(random->uniform()));
           if (normalflag) {
             vamag = vr * sin(theta);
             vbmag = vr * cos(theta);
@@ -882,7 +882,7 @@ void FixEmitSurf::perform_task_onepass()
         else vnmag = beta_un*vscale[isp] + indot;
 
         theta = MY_2PI * random->uniform();
-        vr = vscale[isp] * sqrt(-log(1.0 - random->uniform()));
+        vr = vscale[isp] * sqrt(-log(random->uniform()));
         if (normalflag) {
           vamag = vr * sin(theta);
           vbmag = vr * cos(theta);
@@ -1080,7 +1080,7 @@ void FixEmitSurf::perform_task_twopass()
           else vnmag = beta_un*vscale[isp] + indot;
 
           theta = MY_2PI * random->uniform();
-          vr = vscale[isp] * sqrt(-log(1.0 - random->uniform()));
+          vr = vscale[isp] * sqrt(-log(random->uniform()));
           if (normalflag) {
             vamag = vr * sin(theta);
             vbmag = vr * cos(theta);
@@ -1182,7 +1182,7 @@ void FixEmitSurf::perform_task_twopass()
         else vnmag = beta_un*vscale[isp] + indot;
 
         theta = MY_2PI * random->uniform();
-        vr = vscale[isp] * sqrt(-log(1.0 - random->uniform()));
+        vr = vscale[isp] * sqrt(-log(random->uniform()));
         if (normalflag) {
           vamag = vr * sin(theta);
           vbmag = vr * cos(theta);

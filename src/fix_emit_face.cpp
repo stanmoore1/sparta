@@ -563,7 +563,7 @@ void FixEmitFace::perform_task_onepass()
           v[ndim] = beta_un*vscale[isp]*normal[ndim] + vstream[ndim];
 
           theta = MY_2PI * random->uniform();
-          vr = vscale[isp] * sqrt(-log(1.0 - random->uniform()));
+          vr = vscale[isp] * sqrt(-log(random->uniform()));
           v[pdim] = vr * sin(theta) + vstream[pdim];
           v[qdim] = vr * cos(theta) + vstream[qdim];
           erot = particle->erot(ispecies,temp_rot,random);
@@ -622,7 +622,7 @@ void FixEmitFace::perform_task_onepass()
         v[ndim] = beta_un*vscale[isp]*normal[ndim] + vstream[ndim];
 
         theta = MY_2PI * random->uniform();
-        vr = vscale[isp] * sqrt(-log(1.0 - random->uniform()));
+        vr = vscale[isp] * sqrt(-log(random->uniform()));
         v[pdim] = vr * sin(theta) + vstream[pdim];
         v[qdim] = vr * cos(theta) + vstream[qdim];
         erot = particle->erot(ispecies,temp_rot,random);
@@ -764,7 +764,7 @@ void FixEmitFace::perform_task_twopass()
           v[ndim] = beta_un*vscale[isp]*normal[ndim] + vstream[ndim];
 
           theta = MY_2PI * random->uniform();
-          vr = vscale[isp] * sqrt(-log(1.0 - random->uniform()));
+          vr = vscale[isp] * sqrt(-log(random->uniform()));
           v[pdim] = vr * sin(theta) + vstream[pdim];
           v[qdim] = vr * cos(theta) + vstream[qdim];
           erot = particle->erot(ispecies,temp_rot,random);
@@ -817,7 +817,7 @@ void FixEmitFace::perform_task_twopass()
         v[ndim] = beta_un*vscale[isp]*normal[ndim] + vstream[ndim];
 
         theta = MY_2PI * random->uniform();
-        vr = vscale[isp] * sqrt(-log(1.0 - random->uniform()));
+        vr = vscale[isp] * sqrt(-log(random->uniform()));
         v[pdim] = vr * sin(theta) + vstream[pdim];
         v[qdim] = vr * cos(theta) + vstream[qdim];
         erot = particle->erot(ispecies,temp_rot,random);

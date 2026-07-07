@@ -144,8 +144,8 @@ void FixAmbipolar::update_custom(int index, double temp_thermal,
   double vscale = sqrt(2.0 * update->boltz * temp_thermal /
                        particle->species[especies].mass);
 
-  double vn = vscale * sqrt(-log(1.0 - random->uniform()));
-  double vr = vscale * sqrt(-log(1.0 - random->uniform()));
+  double vn = vscale * sqrt(-log(random->uniform()));
+  double vr = vscale * sqrt(-log(random->uniform()));
   double theta1 = MY_2PI * random->uniform();
   double theta2 = MY_2PI * random->uniform();
 
