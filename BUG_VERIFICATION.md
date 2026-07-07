@@ -201,3 +201,43 @@ treated as cosmetic non-bugs and not applied, to keep the deliverable scoped to 
 - `make serial` builds and links `spa_serial` with all non-KOKKOS fixes applied.
 - KOKKOS files are not part of a serial build (Kokkos not installed in `src/`); those edits are
   either byte-identical to AB's (which compiles) or trivial targeted edits, and were diff-checked.
+
+## Appendix: `ai_bugfixes`-specific audit
+
+This appendix isolates what the **`ai_bugfixes` (AB)** branch got wrong or bundled, and where the
+deliverable therefore departed from AB.
+
+### A. False positives in `ai_bugfixes` (AB changes that are not real bugs)
+
+| # | File | AB change | Why it is not a bug |
+|--|--|--|--|
+| **40** | `KOKKOS/fft2d_kokkos.cpp` | `if (flag == 1 …)` → `if (flag == -1 …)` | This function's flag convention is inverted (`-1` is the forward transform here), so the original `flag==1` scaling already targets the inverse. AB's change moves scaling onto the forward transform — a **regression**. |
+| **93** | `fix_move_surf.cpp`, `fix_emit_face.cpp`, `fix_emit_face_file.cpp`, `fix_emit_surf.cpp` | added `(bigint)`/`(size_t)` casts to `nsurf*sizeof(...)`, `ntaskmax*sizeof(...)` | `sizeof` is `size_t`, so the products are already 64-bit. Casts are inert. |
+| **102** | `KOKKOS/compute_fft_grid_kokkos.cpp` | `sprintf`→`snprintf` into `char str[64]` | Bounded macro text; cannot overflow. Cosmetic. |
+| — | e.g. `collide_vss.cpp` "%d species…discrete model", `update_kokkos.cpp` BIGINT self-proc message, and similar | `sprintf`→`snprintf` on **bounded numeric** buffers | Defensive-only; no `%s`/unbounded input. Cosmetic non-bugs, not applied. |
+
+(AB correctly left **Bug 84** unchanged, so #84 is a report-level false positive, not an AB one.)
+
+### B. Bugs where the deliverable was *modified* from AB's version
+
+AB changed this code, but its version was wrong / regressive / carried unlisted extras, so AB was
+**not** taken as-is:
+
+| # | File | AB's version | Deliverable |
+|--|--|--|--|
+| **46** | `collide_vss.cpp` | Did not add the `vremax==0` guard, and **deleted the pre-existing `EPSZERO` divide-by-zero guard** (+ its `#define`); also added `remain` outside the `volume>0` guard in the 2nd overload. | Took **copilot** (adds `vremax==0` guard, keeps `EPSZERO`). |
+| **73 + 76** | `KOKKOS/collide_vss_kokkos.cpp` | Correct 73/76 edits **bundled with** the same `EPSZERO`-guard deletion (regression) + RNG-seed rewrites (unlisted). | Applied **only** the 73 (`free_state` before `continue`) and 76 (`vr2>0`) edits via targeted patches; **kept `EPSZERO`**; dropped the seed changes. |
+| **75** | `KOKKOS/react_bird_kokkos.cpp` | Changed the `rand_pool` seed (listed) **and** rewrote the `random_backup` seed (unlisted). | Applied **only** the listed `rand_pool` seed change (`12345`→`54321`). |
+| **54** | `react_bird.cpp` | `tally_reactions*` NULL init (listed) **plus** an `ncount>0` divide guard and a `sprintf`→`snprintf` (both unlisted). | Applied **only** Bug 54 (the two NULL inits). |
+| **40 / 93 / 102** | see Part A | Wrong / inert changes. | **Rejected entirely.** |
+
+### C. Related context (AB fell short, but not an AB modification per se)
+
+- **AB fixed only the KOKKOS copies** of Bugs **62, 77, 78, 79, 80**; the identical CPU defects in
+  `update.cpp` / `geometry.cpp` were left unfixed by AB (and by copilot). The deliverable ports the
+  verified fixes to the CPU files.
+- **AB never fixed** (deliverable took copilot or an original fix): Bugs **3, 5, 9, 30, 47, 53, 55,
+  56, 81** (pure-logic bugs), and **82, 83** (fixed by neither branch).
+- AB's unrelated `adapt_grid.cpp` warning rewrite dropped the message's `printf` arguments (a minor
+  regression). Avoided — the deliverable takes copilot's Bug 81 fix and does not import AB's
+  `adapt_grid.cpp` changes.
