@@ -15,7 +15,11 @@ false positives and incorrect/regressive fixes were rejected.
 ## Headline results
 
 - **111** numbered entries audited. Of these, **3 are duplicates** of another entry
-  (23 = 67 = 98, same `fix_ablate` line) and **4 are NOT bugs** (40, 84, 93, 102).
+  (23 = 67 = 98, same `fix_ablate` line) and, after reconciliation, **11 are NOT genuine defects**:
+  the 4 originally rejected (40, 84, 93, 102) plus **7 found inert/unreachable on second-pass
+  review and reverted** (59-vector, 60-`own2local`, 61, 82, 83, 100, 105 — see the reconciliation
+  section). Additionally **75** (speculative RNG-seed change) and **85/86/87** (`-log(0)` guard;
+  genuine but shifts RNG baselines) were reverted as unwanted, not because they were non-bugs.
 - **~104 genuine defects** confirmed (REAL or PARTIAL-but-genuine).
 - **Neither branch is complete or correct on its own:**
   - **AB** has **2 incorrect fixes** (Bug 46 and Bug 40) and misses several pure-logic bugs
@@ -29,6 +33,35 @@ false positives and incorrect/regressive fixes were rejected.
   whichever is right, or a corrected/extended fix where both were wrong or incomplete),
   **rejects** the 4 non-bugs, and **avoids AB's EPSZERO regression** in `collide_vss*`.
 - **Build:** `make serial` links cleanly (`spa_serial`) with all non-KOKKOS fixes applied.
+
+## Reconciliation with independent re-audit
+
+Every applied change was independently re-verified against `origin/master` (six parallel
+auditors reading the actual source, not the commit messages). The re-audit **agreed with the
+document on ~90 genuine fixes** and on the 4 original rejections (40, 84, 93, 102). It diverged on
+the entries below; the code on this branch reflects the **Final** column, and the per-bug table
+above has been updated to match.
+
+| # | Document claimed | Independent finding | Final state |
+|--|--|--|--|
+| 40 | rejected; rationale "`flag==-1` is forward" | rejection correct, but rationale **backwards** — `flag==-1` is the *inverse*; scaling-on-inverse is standard | unchanged; rationale corrected |
+| 49 | REAL, applied | real, but `break` **changes chem-rate output** | kept; domain sign-off advised |
+| 59 | REAL, `(size_t)` memset ✔ | 2-D array casts genuine; **1-D vector casts inert** | array kept, **vector reverted** |
+| 60 | REAL, "bigint ×4 sites" ✔ | 2 `own2local` casts **inert (already guarded)**; 2 `local2own` genuine | `local2own` kept, **`own2local` reverted** |
+| 61 | PARTIAL, `(size_t)` memset ✔ | `(nmax-old)*sizeof` **already 64-bit → inert** | **reverted** |
+| 75 | PARTIAL, seed decorrelation ✔ | speculative; changes RNG reproducibility | **reverted** |
+| 80 | REAL, Vieta rewrite ✔* | math verified equivalent, but new `a==0` branch changes a rare degenerate case | kept; domain sign-off advised |
+| 82 | PARTIAL, `(bigint)` smalloc ✔* | `int*sizeof` **already 64-bit → inert** (same as rejected 93) | **reverted** |
+| 83 | PARTIAL, `(bigint)` srealloc ✔* | `int*sizeof` **already 64-bit → inert** (same as 93) | **reverted** |
+| 85/86/87 | REAL, `-log(1.0-x)` ✔ | genuine `-log(0)=+Inf`, but rewrite shifts RNG baselines | **reverted** (per maintainer preference) |
+| 100 | REAL, `vrm_max>0` guard ✔ | guard **unreachable** (upstream `temp>0` check) | **reverted** |
+| 105 | REAL, `volume>0` guard ✔ | guard **unreachable** (callers hard-error on `volume==0`) | **reverted** |
+| 108 | REAL, id leak ✔ | fix applied to **only 1 of 6** leak sites | **completed** (all sites) |
+
+Net effect on the deliverable: **7 inert/unreachable edits reverted** (59-vector, 60-`own2local`,
+61, 82, 83, 100, 105), **1 speculative edit reverted** (75), **the `-log` idiom reverted** on both
+CPU and KOKKOS (85/86/87 + CPU twins), **1 fix completed** (108), and **2 genuine fixes flagged
+for domain sign-off** (49, 80). Details of each pass follow.
 
 ## Follow-up review (third pass): completed the incomplete fixes
 
@@ -91,7 +124,9 @@ are retained for the array cases (56, 59-array).
 
 - **Real?**: REAL · PARTIAL (genuine but narrow/defensive) · **NO** (not a bug)
 - **AB / CP**: OK (correct) · DIFF (correct, alternative) · NO (not fixed) · **WRONG** · PARTIAL
-- **Applied**: ✔ applied · ✔* applied (corrected/extended beyond both branches) · ✖ rejected
+- **Applied**: ✔ applied · ✔* applied (corrected/extended beyond both branches) · ✖ rejected ·
+  **⟲ reverted on reconciliation** (inert/unreachable — see below) · **✔† completed** (first pass
+  applied only partially) · **‡ genuine but changes scientific output — domain sign-off advised**
 
 | # | File(s) | Real? | AB | CP | Applied | Note |
 |--|--|--|--|--|--|--|
@@ -143,7 +178,7 @@ are retained for the array cases (56, 59-array).
 | 46 | collide_vss.cpp | REAL | **WRONG** | OK | ✔ | vremax==0 NaN; **AB deleted the EPSZERO guard (regression)** → took CP |
 | 47 | collide_vss.cpp | REAL | NO | OK | ✔ | rotc2 symmetric assignment — AB missed |
 | 48 | react_tce.cpp | REAL | OK | OK | ✔ | hardcoded SI kb → update->boltz |
-| 49 | react_tce.cpp | REAL | OK | OK | ✔ | missing `break` inflates chem-rate tallies |
+| 49 | react_tce.cpp | REAL | OK | OK | ✔‡ | missing `break` inflates chem-rate tallies — **changes chem-rate output; domain sign-off advised** |
 | 50 | fix_surf_temp.cpp | REAL | OK | OK | ✔ | uninit prefactor/threshold (no else) |
 | 51 | fix_surf_temp.cpp | REAL | OK | OK | ✔ | stale cqw/fqw; re-resolve in init() |
 | 52 | compute_lambda_grid.cpp | REAL | OK | OK | ✔ | CPU twin of 19/38 |
@@ -153,9 +188,9 @@ are retained for the array cases (56, 59-array).
 | 56 | grid_collate.cpp | REAL | NO | OK | ✔ | 32-bit memset/create — AB missed |
 | 57 | grid_custom.cpp | REAL | NO | PARTIAL | ✔* | (size_t) on int **and** double memset (both missed double) |
 | 58 | grid.cpp | REAL | NO | PARTIAL | ✔* | bigint on set1 **and** set2 (CP did set1 only) |
-| 59 | surf_custom.cpp | REAL | OK | OK | ✔ | (size_t) memset |
-| 60 | surf_comm.cpp | REAL | OK | PARTIAL | ✔ | bigint ×4 sites; CP missed dbuf → took AB |
-| 61 | surf.cpp | PARTIAL | OK | PARTIAL | ✔ | effective fix = (size_t) on Tri/Line memset |
+| 59 | surf_custom.cpp | PARTIAL | OK | OK | ✔/⟲ | 2-D array `(size_t)` casts genuine (kept); 1-D **vector casts inert → reverted** |
+| 60 | surf_comm.cpp | PARTIAL | PARTIAL | PARTIAL | ✔/⟲ | 2 `own2local` casts **inert (already guarded) → reverted**; 2 `local2own` casts kept |
+| 61 | surf.cpp | **NO** | — | — | **⟲** | `(size_t)(nmax-old)*sizeof` already 64-bit → **inert; reverted** |
 | 62 | update.h, geometry.cpp, KOKKOS update/geometry | REAL | PARTIAL | NO | ✔* | axi div-by-zero; **both left CPU geometry.cpp — fixed here** |
 | 63 | fix_*/compute_* (sweep) | PARTIAL | OK | PARTIAL | ✔ partial | genuine %s sites applied via 28/32/94; pure-%d rejected |
 | 64 | compute_gas_reaction_/collision_grid.cpp | PARTIAL | OK | NO | ✔ | (size_t) memset |
@@ -169,15 +204,15 @@ are retained for the array cases (56, 59-array).
 | 72 | react_qk.cpp, react_tce_qk.cpp | REAL | OK | PARTIAL | ✔ | scratch `prob` vs `react_prob`; **CP wrong on react_qk** |
 | 73 | KOKKOS/collide_vss_kokkos.cpp | REAL | OK | PARTIAL | ✔ | free_state before continue (PRNG race); CP missed ambipolar loop |
 | 74 | KOKKOS/react_tce_kokkos.h | PARTIAL | OK | OK | ✔ | kb→boltz (premise "base uses boltz" was false; paired with 48) |
-| 75 | KOKKOS/react_bird_kokkos.cpp | PARTIAL | OK | NO | ✔ | pool seed decorrelation (speculative; pool-seed only applied) |
+| 75 | KOKKOS/react_bird_kokkos.cpp | **NO** | OK | NO | **⟲** | pool seed 12345→54321 speculative, changes RNG reproducibility → **reverted** |
 | 76 | KOKKOS/collide_vss_kokkos.cpp, react_tce*.h | PARTIAL | OK | NO | ✔ | vr2>0 guard (the reachable one); ecc guard via 106 |
 | 77 | update.cpp, KOKKOS/update_kokkos.cpp | REAL | PARTIAL | NO | ✔* | frac 0/0; **AB KOKKOS only — CPU fixed here** |
 | 78 | update.cpp, KOKKOS/update_kokkos.cpp | PARTIAL | PARTIAL | NO | ✔* | clamp frac∈[0,1]; **CPU fixed here** |
 | 79 | update.cpp, KOKKOS/update_kokkos.cpp | REAL | PARTIAL | NO | ✔* | stuck_iterate `==0`→`<=1e-14`; **CPU fixed here** |
-| 80 | geometry.cpp, KOKKOS/geometry_kokkos.h | REAL | PARTIAL | NO | ✔* | catastrophic cancellation (Vieta); **CPU fixed here** |
+| 80 | geometry.cpp, KOKKOS/geometry_kokkos.h | REAL | PARTIAL | NO | ✔*‡ | catastrophic cancellation (Vieta); **CPU fixed here**. Math verified equivalent, but new `a==0` linear branch changes a rare degenerate axis case — **domain sign-off advised** |
 | 81 | adapt_grid.cpp | REAL | NO | OK | ✔ | newcell→nglocalprev — AB missed |
-| 82 | adapt_grid.cpp | PARTIAL | NO | NO | ✔* | (bigint) smalloc — neither fixed |
-| 83 | adapt_grid.cpp | PARTIAL | NO | NO | ✔* | (bigint) clist/alist srealloc — neither fixed |
+| 82 | adapt_grid.cpp | **NO** | NO | NO | **⟲** | `(bigint)` on `int*sizeof` already 64-bit → inert (same as 93) → **reverted** |
+| 83 | adapt_grid.cpp | **NO** | NO | NO | **⟲** | `(bigint)` on `int*sizeof` already 64-bit → inert (same as 93) → **reverted** |
 | **84** | adapt_grid.cpp/.h, grid_adapt.cpp | **NO** | NO | NO | **✖** | speculative int-widening; total size already bigint |
 | 85 | KOKKOS/fix_ambipolar_kokkos.h | REAL | OK | OK | ✖ | -log(0)=+Inf; `1.0-drand()` fix **reverted** (shifts RNG baselines) |
 | 86 | KOKKOS/fix_vibmode_kokkos.h | REAL | OK | OK | ✖ | -log(0)→Inf cast to int (UB); fix **reverted** |
@@ -194,14 +229,14 @@ are retained for the array cases (56, 59-array).
 | 97 | fix_temp_rescale.cpp | REAL | OK | OK | ✔ | global avg /0 (paired with 70) |
 | 98 | fix_ablate.cpp | REAL | OK | OK | ✔ | duplicate of 23 |
 | 99 | fix_ablate/ave_grid/histo/surf/time.cpp | REAL | OK | NO | ✔ | suffix leak on error path |
-| 100 | compute_dt_grid.cpp + KOKKOS | REAL | OK | PARTIAL | ✔ | vrm_max==0 div; CP missed KOKKOS |
+| 100 | compute_dt_grid.cpp + KOKKOS | **NO** | OK | PARTIAL | **⟲** | `vrm_max>0` guard **unreachable** (upstream `if(!(temp[i]>0.))continue`) → **reverted** |
 | 101 | compute_{thermal,eflux,pflux}_grid.cpp + KOKKOS | REAL | OK | NO | ✔ | volume==0 div in flux tallies |
 | **102** | KOKKOS/compute_fft_grid_kokkos.cpp | **NO** | OK | NO | **✖** | sprintf into str[64] cannot overflow (cosmetic) |
 | 103 | compute_lambda_grid.cpp, compute_reduce.cpp | REAL | OK | NO | ✔ | suffix leak on error |
-| 105 | collide_vss.cpp | REAL | OK | OK | ✔ | volume==0 div in nattempt |
+| 105 | collide_vss.cpp | **NO** | OK | OK | **⟲** | `volume>0` guard **unreachable** (callers hard-error on `volume==0`) → **reverted** |
 | 106 | react_qk/tce/tce_qk.cpp | PARTIAL | OK | OK | ✔ | ecc>0 guards (mostly already guarded; via 2/48/72) |
 | 107 | surf_react_adsorb.cpp | PARTIAL | OK | OK | ✔ | CI vmag_sq>0 (ER dot==0 moot: dot hardcoded 2.0) |
-| 108 | variable.cpp | REAL | OK | OK | ✔ | id leak on error |
+| 108 | variable.cpp | REAL | OK | OK | ✔† | id leak on error — first pass fixed 1/6 sites; **completed all sites here** |
 | 109 | grid.cpp, input.cpp (sweep) | PARTIAL | DIFF | PARTIAL | ✔ partial | %s/filename sites applied (28/32); pure-%d rejected |
 | 110 | dump.cpp, dump_grid.cpp, grid_id.cpp | REAL | OK | NO | ✔ | str[32] too small for deep cell ids |
 | 111 | input.cpp | REAL | OK | OK | ✔ | commands[] leak on illegal `if` |
@@ -210,10 +245,13 @@ are retained for the array cases (56, 59-array).
 ## Notable findings
 
 **False positives (rejected — applying them would be wrong or pointless):**
-- **Bug 40** (`fft2d_kokkos.cpp`): the report misread this function's *inverted* flag
-  convention — here `flag==-1` is the forward transform, so the existing `flag==1` scaling
-  already targets the inverse. **Both branches changed it and thereby moved scaling onto the
-  forward transform — an actual regression.** Rejected.
+- **Bug 40** (`fft2d_kokkos.cpp`): rejection is correct, but the rationale below was corrected on
+  reconciliation. Per the file's own comment (`flag 1 = forward, -1 = inverse`) and the canonical
+  CPU twin `src/FFT/fft2d.cpp`, `flag == -1` is the **inverse** transform, and normalization on
+  the inverse (`if (flag == -1 && plan->scaled)`) is the standard FFT convention. **Both branches
+  flipped this and thereby moved scaling onto the forward transform — an actual regression.**
+  Rejected. (The earlier draft's claim that "`flag==-1` is the forward transform" was backwards;
+  the verdict was right for the wrong reason.)
 - **Bug 84** (`adapt_grid` int widening): the only genuinely size-scaling quantity
   (`plevels[].nxyz` / total children) is already `bigint`; the `int` locals hold per-parent
   subdivision factors that cannot overflow. Both branches correctly left it alone.
