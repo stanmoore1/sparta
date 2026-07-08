@@ -163,7 +163,7 @@ The format of a species electronic file is as follows. Comments or
 blank lines are allowed in the file. Comment lines start with a "#"
 character. All other lines must have one of the following formats:
 
-species-ID N temp1 relax1 degen1 spin1 temp2 relax2 degen2 spin2 ... tempN relaxN degenN spinN:pre
+species-ID N temp1 relax1 degen1 spin1 dof1 temp2 relax2 degen2 spin2 dof2 ... tempN relaxN degenN spinN dofN :pre
 
 The species-ID is a string that will be matched against the requested species-ID.
 N is the number of electronic states. For each of the N states, 5 values are
@@ -171,13 +171,27 @@ listed:
 
 tempI = electronic temperature of state I (temperature units)
 relaxI = inverse electronic relaxation number of state I (unitless)
-degenI = degenercy of state I (integer, unitless) :ul
-spinI = spin degeneracy of the state (e.g. singlet = 1, triplet = 3, etc.)
-eff. dof = Effective dof for use in the TCE chemistry model
+degenI = total degeneracy of state I (integer, unitless)
+spinI = spin degeneracy of state I (e.g. singlet = 1, triplet = 3, etc.)
+dofI = effective DOF of state I for the TCE chemistry model (unitless) :ul
+
+The {dofI} value is only used by the TCE reaction model when the
+"react_modify"_react_modify.html {elec_energy} option is set to {yes};
+with the default {elec_energy micro} setting (and with {elec_energy no})
+it is read but ignored.
+
+Note that the {relaxI} values enter a state-to-state transition twice:
+a relaxation event is attempted with probability relax(current state),
+and the destination state is then selected with a weight proportional
+to degen * relax(destination) times an available-energy factor.  The
+effective i->f transition rate therefore scales as relaxI*relaxF; this
+product form is what preserves detailed balance for state-dependent
+relaxation numbers, and should be accounted for when calibrating the
+inputs against measured relaxation times or state-to-state rates.
 
 The other accepted format is:
 
-species-ID1 species-ID2 conserve_spin relax1 ... relaxN
+species-ID1 species-ID2 conserve_spin relax1 ... relaxN :pre
 
 species-ID1 is a string of a species ID with electronic modes defined.
 species-ID2 is another species ID with which species-ID1 will collide.

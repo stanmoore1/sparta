@@ -34,6 +34,7 @@ class FixElecmode : public Fix {
   int setmask();
   void init();
   virtual void update_custom(int, double, double, double, double, double *);
+  virtual void surf_react(Particle::OnePart *, int &, int &);
 
  protected:
   int index_elecstate;      // index into particle custom data structs

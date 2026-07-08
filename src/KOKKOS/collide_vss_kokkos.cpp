@@ -1868,7 +1868,9 @@ void CollideVSSKokkos::EEXCHANGE_NonReactingEDisposal(int icell,
         auto &d_estates = k_eivec.view_device()[d_ewhich[index_elecstate]].k_view.view_device();
         double elec_phi = get_elec_phi(p->ispecies, p2->ispecies, d_estates[p - d_particles.data()], E_Dispose);
         if (elec_phi >= rand_gen.drand()) {
-          relax_electronic_mode(icell, p, p2, E_Dispose, rand_gen, false);
+          relax_electronic_mode(icell, p, p2, E_Dispose,
+                                d_params(p->ispecies,p2->ispecies).omega,
+                                rand_gen, false);
         }
       }
     }
@@ -1900,6 +1902,7 @@ void CollideVSSKokkos::relax_electronic_mode(int icell,
                                              Particle::OnePart *p,
                                              Particle::OnePart *jp,
                                              double& E_Dispose,
+                                             double omega,
                                              rand_type &rand_gen,
                                              bool reacting) const
 {
@@ -1907,8 +1910,7 @@ void CollideVSSKokkos::relax_electronic_mode(int icell,
   E_Dispose += d_eelecs[p - d_particles.data()];
 
   int ielec = select_elec_state(
-    icell, p, jp, E_Dispose,
-    d_params(p->ispecies,jp->ispecies).omega,
+    icell, p, jp, E_Dispose, omega,
     d_enforce_spin_conservation(p->ispecies,jp->ispecies) && !reacting,
     rand_gen, reacting);
   double eelec = d_elecstates(p->ispecies,ielec).temp*boltz;
@@ -1991,6 +1993,11 @@ int CollideVSSKokkos::select_elec_state(int icell,Particle::OnePart *p,
   auto &d_state_probability = d_cumulative_probabilities;
 
   // Calculate number of total states, including degeneracies
+  //
+  // IMPORTANT: phi appears TWICE in a transition (gate on phi(current) in
+  // the caller, weight by phi(candidate) below); both factors are required
+  // for detailed balance with state-dependent relaxation numbers -- see the
+  // matching comment in CollideVSS::select_elec_state
   for (int state = 0; state <= max_level; ++state) {
     if (state != 0) {
       d_state_probability(icell,state) = d_state_probability(icell,state-1);
@@ -2263,8 +2270,12 @@ void CollideVSSKokkos::EEXCHANGE_ReactingEDisposal(int icell,
         }
       }
     }
+    // use aveomega for the LB exponent, consistent with the rot/vib
+    // redistribution above (the partner argument is only meaningful for
+    // the relaxation-number lookup, which the reacting path skips)
+
     if (elecstyle == DISCRETE && d_nelecstates[sp] > 0)
-      relax_electronic_mode(icell, p, p, E_Dispose, rand_gen, true);
+      relax_electronic_mode(icell, p, p, E_Dispose, aveomega, rand_gen, true);
   }
 
   // compute post-collision internal energies

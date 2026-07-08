@@ -608,7 +608,9 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
         int *estates = particle->eivec[particle->ewhich[index_elecstate]];
         double elec_phi = get_elec_phi(p->ispecies, p2->ispecies, estates[p - particle->particles], E_Dispose);
         if (elec_phi >= random->uniform()) {
-          relax_electronic_mode(p, p2, E_Dispose, false);
+          relax_electronic_mode(p, p2, E_Dispose,
+                                params[p->ispecies][p2->ispecies].omega,
+                                false);
         }
       }
     }
@@ -635,7 +637,7 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
 
 /* ---------------------------------------------------------------------- */
 
-void CollideVSS::relax_electronic_mode(Particle::OnePart *p, Particle::OnePart *jp, double& E_Dispose, bool reacting)
+void CollideVSS::relax_electronic_mode(Particle::OnePart *p, Particle::OnePart *jp, double& E_Dispose, double omega, bool reacting)
 {
   Particle::Species *species = particle->species;
   int *estates = particle->eivec[particle->ewhich[index_elecstate]];
@@ -644,8 +646,7 @@ void CollideVSS::relax_electronic_mode(Particle::OnePart *p, Particle::OnePart *
   E_Dispose += eelecs[p - particle->particles];
 
   estates[p - particle->particles] = select_elec_state(
-    p, jp, E_Dispose,
-    params[p->ispecies][jp->ispecies].omega,
+    p, jp, E_Dispose, omega,
     species[p->ispecies].elecdat->enforce_spin_conservation[jp->ispecies] && !reacting,
     reacting);
   eelecs[p - particle->particles] = species[p->ispecies].elecdat->states[estates[p - particle->particles]].temp*update->boltz;
@@ -716,6 +717,19 @@ int CollideVSS::select_elec_state(Particle::OnePart *p, Particle::OnePart *jp, d
   double* state_probability = particle->cumulative_probabilities;
 
   // Calculate number of total states, including degeneracies
+  //
+  // IMPORTANT: phi (the per-state relaxation probability from get_elec_phi)
+  // appears TWICE in a transition: the caller gates the relaxation event on
+  // phi(current state), and the candidate weights below carry
+  // phi(candidate state). Both factors are required for detailed balance:
+  // the transition kernel is T(i->f) = phi_i * g_f phi_f X_f / Z with
+  // X_f = (1-eps_f/E)^(3/2-omega) applied by the rejection loop below, so
+  // the flux ratio T(i->f)/T(f->i) = (g_f X_f)/(g_i X_i) -- the phi's and Z
+  // cancel within a spin class and the stationary distribution is the
+  // microcanonical g*X, which Boltzmann-averages correctly. Dropping the
+  // phi(candidate) factor ("gate on phi then sample g*X") looks equivalent
+  // but equilibrates to g*X/phi instead of Boltzmann whenever the
+  // relaxation numbers are state-dependent.
   for (int state = 0; state <= max_level; ++state) {
     if (state != 0) {
       state_probability[state] = state_probability[state-1];
@@ -983,8 +997,12 @@ void CollideVSS::EEXCHANGE_ReactingEDisposal(Particle::OnePart *ip,
         }
       }
     }
+    // use aveomega for the LB exponent, consistent with the rot/vib
+    // redistribution above (the partner argument is only meaningful for
+    // the relaxation-number lookup, which the reacting path skips)
+
     if (elecstyle == DISCRETE && species[sp].elecdat != NULL)
-      relax_electronic_mode(p, p, E_Dispose, true);
+      relax_electronic_mode(p, p, E_Dispose, aveomega, true);
   }
 
   // compute post-collision internal energies

@@ -37,6 +37,7 @@ FixElecmode::FixElecmode(SPARTA *sparta, int narg, char **arg) :
   if (narg != 2) error->all(FLERR,"Illegal fix elecmode command");
 
   flag_update_custom = 1;
+  flag_surf_react = 1;
 
   random = new RanKnuth(update->ranmaster->uniform());
   double seed = update->ranmaster->uniform();
@@ -113,4 +114,41 @@ void FixElecmode::update_custom(int index, double temp_thermal,
 
   elecstate[index] = particle->ielec(isp,temp_elec,random);
   eelec[index] = update->boltz*particle->species[isp].elecdat->states[elecstate[index]].temp;
+}
+
+/* ----------------------------------------------------------------------
+   called when a surface reaction occurred for particle I
+   iorig = original particle before reaction, I,J = particles after reaction
+   if the reaction changed the species of particle I, make its
+   elecstate/eelec consistent with the NEW species' state table:
+   surf_collide styles with a surface temperature (diffuse, cll, td,
+   impulsive, specular) resample both via update_custom() before this hook
+   runs, making this a no-op for them; styles without one (adiabatic,
+   piston) would otherwise carry a stale state index that can read past
+   the end of the new species' table in the next collision
+   a J particle newly created by the reaction starts with zeroed custom
+   data (ground state), which is already consistent
+------------------------------------------------------------------------- */
+
+void FixElecmode::surf_react(Particle::OnePart *iorig, int &i, int &j)
+{
+  if (i < 0) return;
+
+  Particle::OnePart *particles = particle->particles;
+  int isp = particles[i].ispecies;
+  if (iorig->ispecies == isp) return;
+
+  int *elecstate = particle->eivec[particle->ewhich[index_elecstate]];
+  double *eelec = particle->edvec[particle->ewhich[index_eelec]];
+
+  Particle::ElectronicData *edat = particle->species[isp].elecdat;
+
+  if (edat == NULL) {
+    elecstate[i] = 0;
+    eelec[i] = 0.0;
+    return;
+  }
+
+  if (elecstate[i] >= edat->nelecstate) elecstate[i] = 0;
+  eelec[i] = update->boltz*edat->states[elecstate[i]].temp;
 }

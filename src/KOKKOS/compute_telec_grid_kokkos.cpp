@@ -274,9 +274,15 @@ double ComputeTelecGridKokkos::bisectTelec(int icell, int isp, double e_total, d
 
   if (isinf(T_high)) Kokkos::abort("bisectTelec: electronic temperature did not converge\n");
 
+  // relative tolerance with a small absolute floor, matching
+  // Particle::bisectTelec exactly (required for KOKKOS_EXACT parity)
+
+  const double TELEC_RELTOL = 1.0e-6;
+  const double TELEC_ABSTOL = 1.0e-3;
+
   double T_mid = t_elec;
   double e_mid = elec_energy(icell, isp, T_mid);
-  while ((T_high - T_low) > 0.01) {
+  while (fabs(T_high - T_low) > TELEC_RELTOL*fabs(T_mid) + TELEC_ABSTOL) {
     if (e_mid > target_energy_per_part) {
       T_high = T_mid;
     } else {

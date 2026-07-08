@@ -49,6 +49,13 @@ re-assigned to particles when a restart file is read, if a new fix
 elecmode command is specified in the restart script before the first
 "run"_run.html command is used.
 
+The per-species electronic state tables read via the {elecfile} option
+of the "species"_species.html command are also stored in the restart
+file, so a restarted run can continue performing electronic relaxation
+(and reactions) without re-issuing the species command; only the
+"collide"_collide.html, "collide_modify"_collide_modify.html and fix
+elecmode commands need to be repeated in the restart script.
+
 No global or per-particle or per-grid quantities are stored by this
 fix for access by various output commands.
 
@@ -98,6 +105,7 @@ mode values.
 
 [Related commands:]
 
-"collide_modify electronic discrete"_collide_modify.html
+"collide_modify electronic discrete"_collide_modify.html,
+"react_modify elec_energy"_react_modify.html
 
 [Default:] none

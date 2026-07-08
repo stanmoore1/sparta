@@ -1679,6 +1679,31 @@ void Particle::write_restart_species(FILE *fp)
 {
   fwrite(&nspecies,sizeof(int),1,fp);
   fwrite(species,sizeof(Species),nspecies,fp);
+
+  // per-species electronic state tables
+  // the elecdat pointer inside the byte-dumped Species struct is
+  // meaningless in the file, so the tables are serialized explicitly:
+  // per species, a state count (0 = no electronic data), then the state
+  // array, default relaxation numbers, per-partner relaxation overrides,
+  // and per-partner spin-conservation flags
+
+  for (int isp = 0; isp < nspecies; isp++) {
+    ElectronicData *edat = species[isp].elecdat;
+    int nstate = edat ? edat->nelecstate : 0;
+    fwrite(&nstate,sizeof(int),1,fp);
+    if (!nstate) continue;
+    fwrite(edat->states,sizeof(ElecState),nstate,fp);
+    fwrite(edat->default_rel,sizeof(double),nstate,fp);
+    for (int jsp = 0; jsp < nspecies; jsp++) {
+      int flag = edat->species_rel[jsp] ? 1 : 0;
+      fwrite(&flag,sizeof(int),1,fp);
+      if (flag) fwrite(edat->species_rel[jsp],sizeof(double),nstate,fp);
+    }
+    for (int jsp = 0; jsp < nspecies; jsp++) {
+      int flag = edat->enforce_spin_conservation[jsp] ? 1 : 0;
+      fwrite(&flag,sizeof(int),1,fp);
+    }
+  }
 }
 
 /* ----------------------------------------------------------------------
@@ -1704,12 +1729,68 @@ void Particle::read_restart_species(FILE *fp)
   if (me == 0) tmp = fread(species,sizeof(Species),nspecies,fp);
   MPI_Bcast(species,nspecies*sizeof(Species),MPI_CHAR,0,world);
 
-  // the elecdat pointer is byte-dumped into the restart and is invalid on read;
-  // per-species electronic data is not serialized, so clear it to avoid a
-  // dangling-pointer dereference/free (electronic states must be redefined
-  // via the species command after a restart)
+  // the elecdat pointer byte-dumped inside the Species struct is invalid on
+  // read; clear it, then rebuild the per-species electronic state tables
+  // from their explicit records so an electronic-excitation run can
+  // continue colliding/reacting after the restart
+
   for (int isp = 0; isp < nspecies; isp++)
     species[isp].elecdat = NULL;
+
+  maxelecstate = 0;
+
+  for (int isp = 0; isp < nspecies; isp++) {
+    int nstate = 0;
+    if (me == 0) tmp = fread(&nstate,sizeof(int),1,fp);
+    MPI_Bcast(&nstate,1,MPI_INT,0,world);
+    if (!nstate) continue;
+
+    maxelecstate = MAX(maxelecstate,nstate);
+
+    ElectronicData *edat = new ElectronicData();
+    species[isp].elecdat = edat;
+    edat->nelecstate = nstate;
+    edat->states = (ElecState *)
+      memory->smalloc(nstate*sizeof(ElecState),"elecdat:elecstate");
+    memory->create(edat->default_rel,nstate,"elecdat:default_rel");
+    edat->species_rel = (double **)
+      memory->smalloc(maxspecies*sizeof(double*),"elecdat:species_rel");
+    memory->create(edat->enforce_spin_conservation,maxspecies,
+                   "elecdat:enforce_spin_conservation");
+    for (int jsp = 0; jsp < maxspecies; jsp++) {
+      edat->species_rel[jsp] = NULL;
+      edat->enforce_spin_conservation[jsp] = true;
+    }
+
+    if (me == 0) tmp = fread(edat->states,sizeof(ElecState),nstate,fp);
+    MPI_Bcast(edat->states,nstate*sizeof(ElecState),MPI_CHAR,0,world);
+    if (me == 0) tmp = fread(edat->default_rel,sizeof(double),nstate,fp);
+    MPI_Bcast(edat->default_rel,nstate,MPI_DOUBLE,0,world);
+
+    for (int jsp = 0; jsp < nspecies; jsp++) {
+      int flag = 0;
+      if (me == 0) tmp = fread(&flag,sizeof(int),1,fp);
+      MPI_Bcast(&flag,1,MPI_INT,0,world);
+      if (!flag) continue;
+      memory->create(edat->species_rel[jsp],nstate,"elecdat:species_rel[]");
+      if (me == 0) tmp = fread(edat->species_rel[jsp],sizeof(double),nstate,fp);
+      MPI_Bcast(edat->species_rel[jsp],nstate,MPI_DOUBLE,0,world);
+    }
+    for (int jsp = 0; jsp < nspecies; jsp++) {
+      int flag = 0;
+      if (me == 0) tmp = fread(&flag,sizeof(int),1,fp);
+      MPI_Bcast(&flag,1,MPI_INT,0,world);
+      edat->enforce_spin_conservation[jsp] = flag ? true : false;
+    }
+  }
+
+  // working array for electronic state selection, sized to the new tables
+
+  if (cumulative_probabilities) memory->destroy(cumulative_probabilities);
+  cumulative_probabilities = NULL;
+  if (maxelecstate)
+    memory->create(cumulative_probabilities,maxelecstate+1,
+                   "particle:cumulative_probabilities");
 
   maxvibmode = 0;
   for (int isp = 0; isp < nspecies; isp++)
@@ -2003,7 +2084,8 @@ double Particle::bisectTelec(int isp, double eelec, int count)
 
   t_elec = species[isp].elecdat->states[1].temp;
 
-  // Bisection method to find T accurate to 1%
+  // Bisection method to find T to a relative accuracy of TELEC_RELTOL
+  // (with a small absolute floor so the loop terminates as T -> 0)
 
   // Find initial bounds based on our first guess
 
@@ -2041,9 +2123,12 @@ double Particle::bisectTelec(int isp, double eelec, int count)
     error->one(FLERR,"bisectTelec: electronic temperature did not converge");
   }
 
+  const double TELEC_RELTOL = 1.0e-6;
+  const double TELEC_ABSTOL = 1.0e-3;
+
   double T_mid = t_elec;
   double e_mid = elec_energy(isp, T_mid);
-  while ((T_high - T_low) > 0.01) {
+  while (fabs(T_high - T_low) > TELEC_RELTOL*fabs(T_mid) + TELEC_ABSTOL) {
     if (e_mid > target_energy_per_part) {
       T_high = T_mid;
     } else {
