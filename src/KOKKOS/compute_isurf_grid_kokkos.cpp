@@ -33,6 +33,8 @@ ComputeISurfGridKokkos::ComputeISurfGridKokkos(SPARTA *sparta, int narg, char **
 {
   kokkos_flag = 1;
 
+  nsurf_tally_alloc = -1;
+
   // hash is allocated/used only on the host; not needed for device tally
 
   d_which = DAT::t_int_1d("isurf/grid:which",nvalue);
@@ -92,6 +94,23 @@ void ComputeISurfGridKokkos::init_normflux()
 
   memoryKK->grow_kokkos(k_array_surf_tally,array_surf_tally,nsurf,ntotal,"isurf/grid:array_surf_tally");
   d_array_surf_tally = k_array_surf_tally.view_device();
+
+  nsurf_tally_alloc = nsurf;
+}
+
+/* ----------------------------------------------------------------------
+   reallocate per-cell and per-surf arrays after the grid/surfs change
+   the per-surf tally arrays are indexed by isurf, so they must track the
+   surf count; ablation regenerates surfs without changing grid->nlocal, so
+   the base reallocate() (keyed on grid->nlocal) can leave them stale
+------------------------------------------------------------------------- */
+
+void ComputeISurfGridKokkos::reallocate()
+{
+  ComputeISurfGrid::reallocate();
+
+  int nsurf = surf->nlocal + surf->nghost;
+  if (nsurf != nsurf_tally_alloc) init_normflux();
 }
 
 /* ---------------------------------------------------------------------- */
