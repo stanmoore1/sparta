@@ -39,6 +39,9 @@ void ReactTCEQK::init()
   if (!collide || strcmp(collide->style,"vss") != 0)
     error->all(FLERR,"React tce/qk can only be used with collide vss");
 
+  if (vibEnergyMode == VIB_MICRO)
+    error->all(FLERR,"react_modify vib_energy micro requires react tce");
+
   ReactBird::init();
 
   // do not allow recombination reactions for now
@@ -80,7 +83,12 @@ int ReactTCEQK::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
 
     pre_etotal = pre_etrans + pre_erot + pre_evib + pre_eelec;
 
+    // energetic-impossibility screen: consistent with attempt_tce/attempt_qk
+    // below, electronic energy does not count toward crossing the barrier
+    // unless react_modify elec_energy yes or micro
+
     ecc = pre_etotal;
+    if (elecEnergyMode == ELEC_EXCLUDE) ecc -= pre_eelec;
 
     e_excess = ecc - r->coeff[1];
     if (e_excess <= 0.0) continue;

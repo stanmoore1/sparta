@@ -248,7 +248,7 @@ class CollideVSSKokkos : public CollideVSS {
 
   KOKKOS_INLINE_FUNCTION
   void relax_electronic_mode(int, Particle::OnePart *, Particle::OnePart *,
-                             double&, rand_type &rand_gen, bool) const;
+                             double&, double, rand_type &rand_gen, bool) const;
   KOKKOS_INLINE_FUNCTION
   void zero_elec(Particle::OnePart *) const;
   KOKKOS_INLINE_FUNCTION
