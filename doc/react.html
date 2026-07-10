@@ -342,9 +342,18 @@ against independently computed equilibrium constants.
 </P>
 <P>The B style requires the <A HREF = "react.html">react tce</A> style (with or without
 <A HREF = "react_modify.html">react_modify</A> <I>compute_chem_rates</I>); it is an error
-with the qk and tce/qk styles.  B-style ionization reactions are not
-supported: the reverse of an ionization involves the free-electron
-temperature and must be supplied explicitly.  The KOKKOS-accelerated
+with the qk and tce/qk styles.  Reactions between charged and neutral
+heavy species are fully supported: a charge-exchange reaction such as
+A+ + B --> A + B+ is an exchange (E) reaction and pairs with a B-style
+reverse like any other exchange, since no free electron participates
+and all partition functions are those of heavy particles.  What is not
+supported is a B-style reverse of an ionization (I) reaction that
+creates or consumes a free electron: its equilibrium constant contains
+the electron partition function and Boltzmann factor evaluated at the
+free-electron temperature (the Saha equation), which can differ
+greatly from the heavy-particle cell temperature and is not available
+from the ambipolar electron model; such reverse rates must be supplied
+explicitly.  The KOKKOS-accelerated
 tce/kk style implements the identical path and reproduces the CPU code
 bit-for-bit when built with -DSPARTA_KOKKOS_EXACT.
 </P>
