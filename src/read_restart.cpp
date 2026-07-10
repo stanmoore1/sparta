@@ -36,7 +36,7 @@ using namespace SPARTA_NS;
 #define MAGIC_STRING "SpartA RestartT"
 #define ENDIAN 0x0001
 #define ENDIANSWAP 0x1000
-#define VERSION_NUMERIC 0
+#define VERSION_NUMERIC 1
 #define DELTA 1024
 
 enum{VERSION,SMALLINT,CELLINT,BIGINT,

@@ -169,6 +169,7 @@ void Mixture::command(int narg, char **arg)
     if (strcmp(arg[iarg],"temp") == 0) break;
     if (strcmp(arg[iarg],"trot") == 0) break;
     if (strcmp(arg[iarg],"tvib") == 0) break;
+    if (strcmp(arg[iarg],"telec") == 0) break;
     if (strcmp(arg[iarg],"frac") == 0) break;
     if (strcmp(arg[iarg],"group") == 0) break;
     if (strcmp(arg[iarg],"copy") == 0) break;

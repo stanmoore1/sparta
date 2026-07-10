@@ -239,14 +239,21 @@ double ComputeTelecGridKokkos::bisectTelec(int icell, int isp, double e_total, d
 
   double t_elec = d_elecstates(isp,1).temp;
 
-  // find initial bounds based on our first guess
+  // supremum of the mean electronic energy for T -> +/- infinity,
+  // where every state is populated proportional to its degeneracy;
+  // energies above it are only reachable with a negative temperature
+  // (population inversion), which the mean energy approaches from above
+  // as T -> -infinity, and e_inf itself is not reachable at any finite T
+
+  double sum_g = 0.0, sum_ge = 0.0;
+  for (int i = 0; i < d_nelecstates[isp]; ++i) {
+    sum_g += d_elecstates(isp,i).degen;
+    sum_ge += d_elecstates(isp,i).degen*d_elecstates(isp,i).temp*boltz;
+  }
+  double e_inf = sum_ge/sum_g;
 
   bool positive_t = true;
-
-  // corner case where the energy is so high that even an infinite positive
-  // temp doesn't provide enough energy per particle
-
-  if (target_energy_per_part > elec_energy(icell, isp, 100*t_elec)) {
+  if (target_energy_per_part >= e_inf) {
     positive_t = false;
     t_elec *= -1;
   }
@@ -260,19 +267,26 @@ double ComputeTelecGridKokkos::bisectTelec(int icell, int isp, double e_total, d
     high_mult = 0.9;
   }
 
+  // bracket the target: both loops are bounded, since the mean energy
+  // only asymptotes to its limits (e_inf for |T| -> infinity, the top
+  // state energy for T -> -0), so roundoff could otherwise spin them
+  // forever; the bisection below then converges on the near-limit answer
+
   double T_low = low_mult*t_elec;
-  while (elec_energy(icell, isp, T_low) > target_energy_per_part) {
+  while (elec_energy(icell, isp, T_low) > target_energy_per_part && !isinf(T_low)) {
     T_low *= low_mult;
   }
 
   double T_high = high_mult*t_elec;
-  while (elec_energy(icell, isp, T_high) < target_energy_per_part && !isinf(T_high)) {
+  while (elec_energy(icell, isp, T_high) < target_energy_per_part &&
+         !isinf(T_high) && fabs(T_high) > 1.0e-200) {
     T_high *= high_mult;
   }
 
   // bisect
 
   if (isinf(T_high)) Kokkos::abort("bisectTelec: electronic temperature did not converge\n");
+  if (isinf(T_low)) T_low = -1.0e300;
 
   // relative tolerance with a small absolute floor, matching
   // Particle::bisectTelec exactly (required for KOKKOS_EXACT parity)
