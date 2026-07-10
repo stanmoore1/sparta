@@ -465,6 +465,9 @@ void ReactBird::check_tce_bounds()
         zmin += 0.5 * (species[isp].vibdof + species[jsp].vibdof);
     }
 
+    // each test below fires on the violation of its bound:
+    // (1) and (2) are lower bounds on eta, (3) is an upper bound
+
     if (eta <= -(zmin+1.5)) {
       if (zconstant) {
         sprintf(str,"Reaction %s: temperature exponent %g must be > %g, "
