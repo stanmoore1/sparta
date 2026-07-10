@@ -254,6 +254,7 @@ case) with the following meaning:
 </P>
 <UL><LI>A = Arrhenius 
 <LI>Q = Quantum 
+<LI>B = Arrhenius Backward (see below)
 </UL>
 <P>The style determines how many reaction coefficients are listed as C1,
 C2, etc, and how they are interpreted by SPARTA.
@@ -269,6 +270,83 @@ coefficients:
 </UL>
 <P>The different reaction styles use these values in different ways, as
 explained above.
+</P>
+<HR>
+
+<H4>Backward (detailed-balance) reactions
+</H4>
+<P>The B = Arrhenius Backward style derives a reverse reaction rate from
+its forward reaction using the principle of detailed balance, rather
+than supplying an independent Arrhenius fit for the reverse rate.  See
+<A HREF = "#Bird94">(Bird94)</A> section 6.6 and Boyd & Schwartzentruber sections
+7.5.2-7.5.3 for background.  A single Arrhenius form cannot exactly
+reproduce k_b(T) = k_f(T)/K_eq(T), because the equilibrium constant
+K_eq carries the non-Arrhenius temperature dependence of the
+partition-function ratios, so independently-fitted forward and
+backward rates do not satisfy detailed balance and the gas does not
+relax to the correct chemical-equilibrium composition at elevated
+temperatures.
+</P>
+<P>Two kinds of pairs are supported.  A B-style exchange reaction pairs
+with the forward A-style exchange reaction whose reactants/products
+are its products/reactants:
+</P>
+<PRE>N2 + O --> NO + N
+E A 0.0 5.175e-19 1.069e-12 -1.0 -5.175e-19 
+</PRE>
+<PRE>NO + N --> N2 + O
+E B 0.0 0.0 0.0 0.0 0.0 
+</PRE>
+<P>A B-style recombination reaction pairs with the forward dissociation
+reaction with the same explicit third-body species (the atom/mol
+wildcards cannot be used on a B recombination, since per-partner
+forward dissociation rates differ):
+</P>
+<PRE>N2 + N --> N + N + N
+D A 1.0 1.561e-18 4.980e-8 -1.5 -1.561e-18 
+</PRE>
+<PRE>N + N --> N2 + N
+R B 0.0 0.0 0.0 0.0 0.0 
+</PRE>
+<P>The 5 coefficients for a B reaction are placeholders; they are ignored
+and overwritten internally.  The backward rate is constructed as
+</P>
+<PRE>k_b(T) = k_f(T) / K_eq(T) 
+</PRE>
+<P>where K_eq(T) is the equilibrium constant computed from the species
+partition functions: translational, rotational (rigid rotor, with the
+symmetry number from the <A HREF = "species.html">species</A> <I>rotfile</I>), vibrational
+(harmonic oscillator, including degenerate modes), and electronic
+(summed over the ladder from the <I>elecfile</I>, when defined).
+Equivalently, the backward activation energy is set to Ea_f + dHrxn,
+the backward reaction energy to -dHrxn, and the forward Arrhenius
+prefactor is scaled by the partition-function ratio
+q_reactants/q_products.  This ratio, together with the forward
+temperature exponent, is evaluated at a representative translational
+temperature of the grid cell, computed once per cell per timestep, so
+the reverse rate adapts to the local nonequilibrium state.  For a
+recombination pair the ratio has units of volume, converting the
+m^3/s dissociation prefactor into the m^6/s recombination prefactor.
+Reverse reactions whose cell has fewer than 2 particles (no defined
+temperature) are skipped for that collision.
+</P>
+<P>For quantitatively correct equilibrium constants, define a <I>rotfile</I>
+with the rotational symmetry numbers of homonuclear molecules and an
+<I>elecfile</I> with at least the ground-state degeneracies of each species
+(see the <A HREF = "species.html">species</A> command): for N2 + O <-> NO + N the
+ground-state electronic degeneracies alone change K_eq by a factor of
+~1.8 and the N2 symmetry number by a further factor of 2.  See
+examples/reverse for a complete worked example and
+examples/reverse/validate_reverse.py for a quantitative validation
+against independently computed equilibrium constants.
+</P>
+<P>The B style requires the <A HREF = "react.html">react tce</A> style (with or without
+<A HREF = "react_modify.html">react_modify</A> <I>compute_chem_rates</I>); it is an error
+with the qk and tce/qk styles.  B-style ionization reactions are not
+supported: the reverse of an ionization involves the free-electron
+temperature and must be supplied explicitly.  The KOKKOS-accelerated
+tce/kk style implements the identical path and reproduces the CPU code
+bit-for-bit when built with -DSPARTA_KOKKOS_EXACT.
 </P>
 <HR>
 

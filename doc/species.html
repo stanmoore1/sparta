@@ -144,15 +144,18 @@ blank lines are allowed in the file.  Comment lines start with a "#"
 character.  All other lines must have the following format with values
 separated by whitespace:
 </P>
-<PRE>species-ID N temp1 ... tempN
+<PRE>species-ID N temp1 ... tempN sigma
 </PRE>
 <P>The species-ID is a string that will be matched against the requested
 species-ID, as described above.  N is the number of rotational
 temperatures that follow: 1 for a linear molecule (rotdof = 2), or 3
-for a nonlinear molecule (rotdof = 3).  Note that only the single
-temperature of linear molecules is currently used (by the discrete
-rotational model); nonlinear molecules keep the continuous rotational
-model.
+for a nonlinear molecule (rotdof = 3).  The optional trailing value
+<I>sigma</I> is the rotational symmetry number (e.g. 2 for homonuclear
+diatomics, default 1), used in the rotational partition functions of
+detailed-balance reverse reactions (see the <A HREF = "react.html">react</A>
+command).  Note that only the single temperature of linear molecules
+is used by the discrete rotational model; nonlinear molecules keep the
+continuous rotational model.
 </P>
 <HR>
 
