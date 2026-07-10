@@ -81,10 +81,9 @@ W: Reaction ...: temperature exponent ... must be ...
 The temperature exponent of the reaction is outside the exact bounds
 of the TCE model for the energy and vibrational models in use, so the
 reaction probability will be erroneous.  See the warning message for
-the offending bound: the gamma function must be positive and finite,
-the probability must vanish as the collision energy approaches the
-activation energy, and the probability must not diverge as the
-collision energy approaches zero or infinity.
+the offending bound: the probability must vanish as the collision
+energy approaches the activation energy, and must not diverge as the
+collision energy approaches infinity.
 
 E: Cannot open reaction file %s
 
