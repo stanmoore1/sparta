@@ -58,7 +58,7 @@ ComputeGrid::ComputeGrid(SPARTA *sparta, int narg, char **arg) :
   nvalue = narg - 4;
   value = new int[nvalue];
 
-  tvib_flag = 0;
+  tvib_flag = eelec_flag = 0;
 
   npergroup = cellmass = cellcount = 0;
   unique = new int[LASTSIZE];
@@ -145,6 +145,7 @@ ComputeGrid::ComputeGrid(SPARTA *sparta, int narg, char **arg) :
       value[ivalue] = EELEC;
       set_map(ivalue,ENGELEC);
       set_map(ivalue,COUNT);
+      eelec_flag = 1;
     } else if (strcmp(arg[iarg],"pxrho") == 0) {
       value[ivalue] = PXRHO;
       set_map(ivalue,MVX);
@@ -206,6 +207,9 @@ void ComputeGrid::init()
     if (comm->me == 0)
       error->warning(FLERR,"Using compute grid tvib with fix vibmode may give "
                      "incorrect temperature, use compute tvib/grid instead");
+
+  if (eelec_flag && particle->find_custom((char *) "eelec") < 0)
+    error->all(FLERR,"Compute grid eelec requires fix elecmode");
 
   eprefactor = 0.5*update->mvv2e;
   tprefactor = update->mvv2e / (3.0*update->boltz);
