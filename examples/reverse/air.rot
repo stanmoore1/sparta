@@ -1,0 +1,10 @@
+# rotational data for linear air molecules
+# format: species-ID N theta_rot(s) [sigma]
+#   N = number of rotational temperatures (1 for linear molecules)
+#   theta_rot = characteristic rotational temperature (K)
+#   sigma = rotational symmetry number (2 for homonuclear diatomics),
+#           used in the partition functions of detailed-balance reverse
+#           reactions; optional, default 1
+N2 1 2.88 2
+O2 1 2.07 2
+NO 1 2.44 1

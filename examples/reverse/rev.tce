@@ -1,14 +1,23 @@
-# PROTOTYPE (issue #472): detailed-balance reverse reaction
+# detailed-balance reverse reactions (issue #472)
 #
-# Forward exchange reaction (parameters from data/air.tce):
-#   N2 + O --> NO + N
-# Reverse reaction with style B derives its backward rate internally from
-# the forward Arrhenius rate and the species partition functions, evaluated
-# at the local grid-cell temperature.  The 5 coefficients on a B line are
+# Forward reactions (parameters from data/air.tce) paired with B-style
+# reverse reactions whose rates are derived internally from the forward
+# Arrhenius rate and the species partition functions, evaluated at the
+# local grid-cell temperature.  The 5 coefficients on a B line are
 # placeholders and are overwritten during initialization.
+#
+# exchange pair: N2 + O <-> NO + N
 
 N2 + O --> NO + N
 E A 0.0 5.175e-19 1.069e-12 -1.0 -5.175e-19
 
 NO + N --> N2 + O
 E B 0.0 0.0 0.0 0.0 0.0
+
+# dissociation/recombination pair: N2 + N <-> N + N + N
+
+N2 + N --> N + N + N
+D A 1.0 1.561e-18 4.980e-8 -1.5 -1.561e-18
+
+N + N --> N2 + N
+R B 0.0 0.0 0.0 0.0 0.0

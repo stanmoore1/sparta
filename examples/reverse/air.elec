@@ -1,0 +1,13 @@
+# low-lying electronic states of air species
+# format: species-ID N  temp1 relax1 degen1 spin1 dof1  ... tempN relaxN degenN spinN dofN
+#   temp = state energy / kB (K), relax = inverse relaxation collision number,
+#   degen = total state degeneracy, spin = spin degeneracy class, dof = unused
+# level data: NIST atomic/molecular spectra (fine-structure levels grouped)
+#
+# these ladders set the electronic partition functions used to derive
+# detailed-balance reverse reaction rates; the ground-state degeneracies
+# alone change the equilibrium constant of N2 + O <-> NO + N by ~1.8x
+N2 3   0.0 0.01 1 1 0   72231.4 0.01 3 3 0   85778.0 0.01 6 3 0
+O  3   0.0 0.01 9 3 0   22830.0 0.01 5 1 0   48620.0 0.01 1 1 0
+N  3   0.0 0.01 4 4 0   27660.0 0.01 10 2 0  41490.0 0.01 6 2 0
+NO 2   0.0 0.01 4 2 0   63200.0 0.01 2 2 0

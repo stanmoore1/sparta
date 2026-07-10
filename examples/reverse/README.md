@@ -1,43 +1,79 @@
-# Detailed-balance reverse reactions — PROTOTYPE (issue #472)
+# Detailed-balance reverse reactions (issue #472)
 
-This example demonstrates a prototype for deriving **backward reaction rates**
-from forward rates using the principle of detailed balance, instead of
-requiring an independently-fitted Arrhenius expression for each reverse
-reaction. It addresses the enhancement requested in issue #472, following
-Bird (1994) §6.6 and Boyd & Schwartzentruber (2017) §7.5.2–7.5.3.
+This example demonstrates **backward reaction rates derived from forward
+rates by detailed balance**, instead of requiring an independently-fitted
+Arrhenius expression for each reverse reaction.  It implements the
+enhancement requested in issue #472, following Bird (1994) Sec. 6.6 and
+Boyd & Schwartzentruber (2017) Secs. 7.5.2-7.5.3.
 
-## What SPARTA does today
+## Why
 
-In the TCE model every reaction — forward or reverse — is an independent
-entry in the reaction file with its own Arrhenius triple `(A, b, Ea)`. A
-reverse reaction is obtained only by supplying a separate fit for it (see the
-forward/reverse pairs in `data/air.tce`). A single Arrhenius form cannot
-exactly reproduce `k_b(T) = k_f(T) / K_eq(T)`, because `K_eq` carries the
-non-Arrhenius temperature dependence of the partition-function ratios, so
-independently-fit forward/backward rates do not satisfy detailed balance and
-the gas does not relax to the correct chemical equilibrium at high `T`.
+In the TCE model every reaction - forward or reverse - is normally an
+independent entry in the reaction file with its own Arrhenius triple
+`(A, b, Ea)`.  A single Arrhenius form cannot exactly reproduce
+`k_b(T) = k_f(T) / K_eq(T)`, because `K_eq` carries the non-Arrhenius
+temperature dependence of the partition-function ratios; independently
+fitted forward/backward rates therefore do not satisfy detailed balance,
+and a reacting gas does not relax to the correct chemical equilibrium
+composition.
 
-## What this prototype adds
+## The B reaction style
 
-A new reaction **style `B`** (Arrhenius Backward). A `B` reaction is paired at
-initialization with the forward `A` reaction whose reactants/products are its
-products/reactants. With `dHf` = the forward reaction energy (coeff C5):
+A reaction with style **`B`** in the reaction file gets its rate derived
+at run time from its forward partner (see `doc/react.txt` for the full
+description).  Two kinds of pairs are supported:
 
-- backward activation energy: `Ea_b = Ea_f + dHf`
-- backward reaction energy:   `dHr_b = -dHf`
-- backward temperature exponent and effective DOF inherited from the forward
-- backward prefactor:         `A_b(T) = A_f · q_reactants,f(T) / q_products,f(T)`
+- **exchange <-> exchange**: the forward partner is the exchange reaction
+  with reactants and products swapped
+- **recombination <-> dissociation**: `A + B -> AB + M` pairs with the
+  per-partner dissociation `AB + M -> A + B + M` with the same explicit
+  third body `M`
 
-The equilibrium-constant exponential cancels against the shifted activation
-energy, leaving only the **partition-function ratio**, which is evaluated each
-timestep at a representative **grid-cell translational temperature**. So the
-reverse rate adapts to the local nonequilibrium state, exactly as the issue
-requested ("Arrhenius parameters derived from forward reactions + cell-averaged
-temperature + partition functions").
+At initialization the backward activation energy (`Ea_B = Ea_F + dHf`),
+reaction energy (`-dHf`), and effective DOF are seeded from the forward
+line; the five numeric coefficients on a `B` line are placeholders.  At
+run time the backward prefactor is the forward prefactor scaled by the
+partition-function ratio and the forward temperature exponent, both
+evaluated at the **local grid-cell translational temperature**, so the
+backward rate adapts to the local nonequilibrium state:
 
-Partition functions used: translational `(2πmkT/h²)^{3/2}`, rotational
-(rigid rotor, linear), vibrational (harmonic oscillator), electronic (ground
-state, g=1).
+```
+k_b(T_cell) = A_F * T_cell^b_F
+              * q_reactants,F(T_cell) / q_products,F(T_cell)
+              * exp(-(Ea_F + dHf)/kT_cell)
+```
+
+Partition functions include translational, rigid-rotor rotational (with
+the symmetry number sigma from the species `rotfile`), harmonic-oscillator
+vibrational, and electronic (from the species `elecfile` ladder) factors.
+For a recombination the ratio carries one net translational factor (units
+of volume), converting the m^3/s dissociation prefactor into the m^6/s
+recombination prefactor; the third body is a spectator and cancels.
+
+Reverse reactions require `react tce` (with the microcanonical
+`partial_energy no` coupling recommended) and are not available for
+ionization, whose reverse rate depends on the electron temperature and
+must be supplied explicitly.  The KOKKOS `tce/kk` style produces
+bit-for-bit identical results (SPARTA_KOKKOS_EXACT).
+
+## Files
+
+- `in.reverse` - demonstration deck: thermal air box (N2/O/NO/N) at
+  20000 K with all internal modes discrete, running the two pairs in
+  `rev.tce`
+- `rev.tce` - exchange pair `N2 + O <-> NO + N` and
+  dissociation/recombination pair `N2 + N <-> N + N + N`; forward
+  parameters from `data/air.tce`
+- `rev_exch.tce` - exchange pair only (used by the relaxation check)
+- `in.reverse_rate` - frozen-composition reservoir
+  (`compute_chem_rates yes`) for measuring rates; variables `T`, `RB`,
+  `NRHO`, `FNUM`
+- `in.reverse_eq` - closed reacting box for the equilibrium-relaxation
+  check; variables `T`, `FN2`, `FO`, `FNO`, `FN`
+- `air.rot` - rotational temperatures + symmetry numbers (N2: 2.88 K,
+  sigma 2; O2: 2.07 K, sigma 2; NO: 2.44 K, sigma 1)
+- `air.elec` - NIST-based low-lying electronic levels for N2, O, N, NO
+- `validate_reverse.py` - quantitative validation battery (below)
 
 ## Running
 
@@ -45,46 +81,53 @@ state, g=1).
 ../../src/spa_serial -in in.reverse
 ```
 
-Both reactions fire in the tallies; the exothermic reverse reaction is more
-frequent than the endothermic forward, as expected:
+Both exchange directions fire in the tallies; the exothermic reverse is
+more frequent than the endothermic forward, as expected:
 
 ```
-reaction N2 + O --> NO + N: 347
-reaction NO + N --> N2 + O: 876
+reaction N2 + O --> NO + N: 197
+reaction NO + N --> N2 + O: 506
+reaction N2 + N --> N + N + N: 1004
 ```
+
+Three-body recombination events are too rare to appear at this density
+in a 1000-step demonstration (the rate scales as density cubed); the
+validation battery measures them in a 200x denser reservoir.
 
 ## Validation
 
-The derived backward rate lands within a factor of ~5–10 of the independent
-literature fit for the same reverse reaction in `data/air.tce`
-(`NO + N --> N2 + O`, `A 0.0 0.0 4.059e-12 -1.359 5.175e-19`) over
-5000–30000 K. The derived reverse activation energy (0) and reaction energy
-(+5.175e-19) match the `air.tce` fit exactly; the remaining prefactor gap is
-attributable to the prototype limitations below.
+`validate_reverse.py` recomputes the partition functions and equilibrium
+constants independently of the SPARTA implementation (from the same data
+files) and checks the measured rates against them:
 
-## Prototype limitations (future work for a production version)
+```
+python3 validate_reverse.py --exe ../../src/spa_serial
+```
 
-- Only **exchange** reactions are supported. Dissociation↔recombination
-  additionally requires the third-body number density that SPARTA already
-  handles specially for recombination.
-- **Rotational** partition functions need a rotational temperature (rotational
-  data file) and a symmetry number; they default to 1 (σ=1) otherwise. This is
-  the largest source of the prefactor discrepancy above.
-- **Electronic** partition functions use a ground-state degeneracy of 1; the
-  `species` file stores no electronic-level data.
-- The backward **temperature exponent** is inherited from the forward reaction
-  rather than refit to `k_f/K_eq`.
-- The **cell temperature** is a translational temperature; a chemistry-relevant
-  effective temperature could include internal modes.
-- The **KOKKOS** accelerated styles do not yet implement this path.
+1. **Exchange detailed balance**: the forward/backward tally ratio from
+   frozen reservoirs matches the analytic `K_eq(T)` to 0.2% at 15000 K,
+   1.3% at 10000 K, and 9.4% at 8000 K (within the tally statistics).
+2. **Literature comparison**: the derived backward rate for
+   `NO + N -> N2 + O` lies within a factor of 1.36-1.42 of the
+   independently fitted literature rate for the same reaction in
+   `data/air.tce` over 8000-15000 K - i.e. the derived rate agrees with
+   the fitted one to well within the scatter of published rate models.
+3. **Recombination detailed balance**: in a dense reservoir the
+   dissociation/recombination tally ratio times the atom number density
+   matches the analytic volumetric `K_eq` to 3.8% (5.0% statistics).
+4. **Equilibrium relaxation**: a closed reacting box initialized on the
+   pure-reactant side and on the pure-product side relaxes toward the
+   same analytic equilibrium composition (NO fraction 0.411) from both
+   directions.
+5. **Input sanity**: the electronic ground-state degeneracies and
+   symmetry numbers that dominate the `K_eq` prefactor are present in the
+   data files (for this reaction they contribute factors of ~1.8 and 2).
+6. **Error paths**: a `B` reaction without a forward partner, a `B`
+   recombination with a wildcard third body, and a `B` reaction under a
+   QK style all abort with the intended error messages.
 
-## Files changed for the prototype
-
-- `src/react.h`, `src/react.cpp` — `React::tgas`, `React::reverse_active`
-- `src/react_bird.h`, `src/react_bird.cpp` — `B` style parsing; forward/reverse
-  pairing and backward-coefficient seeding in `init()`
-- `src/react_tce.h`, `src/react_tce.cpp` — partition functions, runtime
-  partition-ratio scaling of the reverse prefactor in `attempt()`
-- `src/collide.h`, `src/collide.cpp` — per-cell `cell_temperature()` feeding
-  `React::tgas`
-- `doc/react.txt` — documentation of the `B` style
+Accurate reverse rates need accurate partition functions: supply a
+`rotfile` with symmetry numbers and an `elecfile` with the low-lying
+electronic levels for every species that participates in a reverse
+reaction.  Omitting them silently biases `K_eq` (here by the factors
+noted in check 5).

@@ -1,9 +1,10 @@
-# PROTOTYPE (issue #472): thermal gas box exercising a forward exchange
-# reaction together with its detailed-balance reverse reaction (style B).
-#
-# The reverse rate is not supplied as an independent Arrhenius fit; it is
-# derived from the forward rate and the species partition functions at the
-# local cell temperature.  Both reactions should fire in the tallies below.
+# Detailed-balance reverse reactions (issue #472): thermal gas box with a
+# forward exchange reaction and a forward dissociation, each paired with a
+# B-style reverse reaction whose rate is derived internally from the
+# forward Arrhenius rate and the species partition functions at the local
+# cell temperature.  Discrete rotation, vibration, and electronic modes
+# are all active, so the reverse rates include the full rotational
+# (with symmetry numbers), vibrational, and electronic partition functions.
 
 seed            12345
 dimension       3
@@ -14,7 +15,7 @@ create_box      0 0.0001 0 0.0001 0 0.0001
 create_grid     10 10 10
 balance_grid    rcb part
 
-species         air.species N2 O NO N
+species         air.species N2 O NO N rotfile air.rot elecfile air.elec
 mixture         air N2 O NO N vstream 0.0 0.0 0.0 temp 20000.0
 mixture         air N2 frac 0.25
 mixture         air O  frac 0.25
@@ -25,7 +26,11 @@ global          nrho 7.07043E22
 global          fnum 7.07043E5
 
 collide         vss air air.vss
+collide_modify  rotate discrete vibrate discrete electronic discrete
+fix             electronic elecmode
+
 react           tce rev.tce
+react_modify    partial_energy no
 
 create_particles air n 10000 twopass
 

@@ -1,0 +1,41 @@
+# reacting box relaxing toward chemical equilibrium through a forward
+# exchange reaction and its detailed-balance (B-style) reverse.
+# Initialized off-equilibrium via per-species fractions FN2/FO/FNO/FN;
+# species counts are tracked in the stats output.
+# Only the exchange pair is defined so the element totals close.
+
+seed            12345
+dimension       3
+global          gridcut 1.0e-5 comm/sort yes
+boundary        rr rr rr
+
+create_box      0 0.0001 0 0.0001 0 0.0001
+create_grid     2 2 2
+balance_grid    rcb part
+
+species         air.species N2 O NO N rotfile air.rot elecfile air.elec
+mixture         air N2 O NO N vstream 0.0 0.0 0.0 temp ${T}
+mixture         air N2 frac ${FN2}
+mixture         air O  frac ${FO}
+mixture         air NO frac ${FNO}
+mixture         air N  frac ${FN}
+
+global          nrho 7.07043E22
+global          fnum 1.767E6
+
+collide         vss air air.vss relax constant
+collide_modify  rotate discrete vibrate discrete electronic discrete
+fix             electronic elecmode
+collide_modify  remain no
+
+react           tce rev_exch.tce
+react_modify    partial_energy no
+
+create_particles air n 40000 twopass
+
+compute         spcount count N2 O NO N
+stats           2000
+stats_style     step np c_spcount[1] c_spcount[2] c_spcount[3] c_spcount[4]
+
+timestep        1.00E-9
+run             30000

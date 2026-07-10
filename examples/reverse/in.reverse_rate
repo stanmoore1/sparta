@@ -1,0 +1,43 @@
+# frozen-composition reservoir for measuring forward and reverse reaction
+# rates (react_modify compute_chem_rates yes tallies reactions without
+# performing them, so the composition and temperature stay fixed).
+# Variables: T = temperature, RB = recombination boost factor,
+#   NRHO/FNUM = number density and ratio (raise both together to measure
+#   slow 3-body recombination rates: the rate scales as density cubed)
+# All four species at equal number fractions, all internal modes discrete.
+
+seed            12345
+dimension       3
+global          gridcut 1.0e-5 comm/sort yes
+boundary        rr rr rr
+
+create_box      0 0.0001 0 0.0001 0 0.0001
+create_grid     2 2 2
+balance_grid    rcb part
+
+species         air.species N2 O NO N rotfile air.rot elecfile air.elec
+mixture         air N2 O NO N vstream 0.0 0.0 0.0 temp ${T}
+mixture         air N2 frac 0.25
+mixture         air O  frac 0.25
+mixture         air NO frac 0.25
+mixture         air N  frac 0.25
+
+global          nrho ${NRHO}
+global          fnum ${FNUM}
+
+collide         vss air air.vss relax constant
+collide_modify  rotate discrete vibrate discrete electronic discrete
+fix             electronic elecmode
+collide_modify  remain no
+
+react           tce rev.tce
+react_modify    partial_energy no compute_chem_rates yes rboost ${RB}
+
+create_particles air n 40000 twopass
+
+compute         temp temp
+stats           1000
+stats_style     step cpu np nattempt ncoll c_temp
+
+timestep        1.00E-9
+run             2000
