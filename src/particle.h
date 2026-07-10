@@ -55,6 +55,8 @@ class Particle : protected Pointers {
     double charge;          // multiple of electron charge
     double rotrel;          // inverse rotational relaxation number
     double rottemp[3];      // rotational temperature(s)
+    double rotsymm;         // rotational symmetry number sigma (rotfile,
+                            //   default 1); used in partition functions
     double vibtemp[MAXVIBMODE];   // vibrational temperature(s)
     double vibrel[MAXVIBMODE];    // inverse vibrational relaxation number(s)
     ElectronicData* elecdat;      // NULL if no states defined for this species
@@ -70,6 +72,7 @@ class Particle : protected Pointers {
   struct RotFile {          // extra rotation info read from rotfile
     char id[16];
     double rottemp[4];
+    double rotsymm;         // optional symmetry number, default 1
     int ntemp;
   };
 

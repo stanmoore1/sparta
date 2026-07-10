@@ -926,6 +926,7 @@ void Particle::add_species(int narg, char **arg)
       for (k = 0; k < ntemp; k++) {
         species[ii].rottemp[k] = filerot[j].rottemp[k];
       }
+      species[ii].rotsymm = filerot[j].rotsymm;
     }
 
     memory->sfree(filerot);
@@ -1400,6 +1401,7 @@ void Particle::read_species_file()
     // may be overwritten by rotfile or vibfile
 
     fsp->nrottemp = 0;
+    fsp->rotsymm = 1.0;
     fsp->nvibmode = fsp->vibdof / 2;
 
     fsp->rottemp[0] = fsp->rottemp[1] = fsp->rottemp[2] = 0.0;
@@ -1433,7 +1435,7 @@ void Particle::read_rotation_file()
   // skip blank lines or comment lines starting with '#'
   // all other lines can have up to NWORDS
 
-  int NWORDS = 5;
+  int NWORDS = 6;
   char **words = new char*[NWORDS];
   char line[MAXLINE],copy[MAXLINE];
 
@@ -1464,12 +1466,22 @@ void Particle::read_rotation_file()
     rsp->ntemp = atoi(words[1]);
     if (rsp->ntemp != 1 && rsp->ntemp != 3)
       error->one(FLERR,"Invalid N count in rotation file");
-    if (nwords != 2 + rsp->ntemp)
+    if (nwords != 2 + rsp->ntemp && nwords != 3 + rsp->ntemp)
       error->one(FLERR,"Incorrect line format in rotation file");
 
     int j = 2;
     for (int i = 0; i < rsp->ntemp; i++)
       rsp->rottemp[i] = atof(words[j++]);
+
+    // optional trailing value = rotational symmetry number sigma
+    // (e.g. 2 for homonuclear diatomics), default 1
+
+    rsp->rotsymm = 1.0;
+    if (nwords == 3 + rsp->ntemp) {
+      rsp->rotsymm = atof(words[j++]);
+      if (rsp->rotsymm <= 0.0)
+        error->one(FLERR,"Invalid symmetry number in rotation file");
+    }
 
     nfile++;
   }
