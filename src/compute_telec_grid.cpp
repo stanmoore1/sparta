@@ -150,6 +150,8 @@ void ComputeTelecGrid::compute_per_grid()
   // loop over all particles, skip species not in mixture group
   // tally electronic eng and count for species
 
+  double* eelecs = particle->edvec[particle->ewhich[index_eelec]];
+
   for (i = 0; i < nlocal; i++) {
     ispecies = particles[i].ispecies;
     igroup = s2g[ispecies];
@@ -158,7 +160,6 @@ void ComputeTelecGrid::compute_per_grid()
     if (!(cinfo[icell].mask & groupbit)) continue;
 
     j = s2t[ispecies];
-    double* eelecs = particle->edvec[particle->ewhich[index_eelec]];
     tally[icell][j] += eelecs[i];
     tally[icell][j+1] += 1.0;
   }

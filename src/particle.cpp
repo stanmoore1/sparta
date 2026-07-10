@@ -1289,7 +1289,7 @@ int Particle::ielec(int isp, double temp_elec, RanKnuth *erandom)
   int elecstyle = NONE;
   if (collide) elecstyle = collide->elecstyle;
   if (elecstyle == DISCRETE) {
-    Species species = particle->species[isp];
+    const Species &species = particle->species[isp];
     if (species.elecdat == NULL) return 0;
 
     electronic_distribution_func(isp, temp_elec);
@@ -1315,7 +1315,7 @@ double* Particle::electronic_distribution_func(int isp, double temp_elec) {
   int elecstyle = NONE;
   if (collide) elecstyle = collide->elecstyle;
   if (elecstyle == DISCRETE) {
-    Particle::Species species = particle->species[isp];
+    const Species &species = particle->species[isp];
     double partition_function = 0.0;
 
     for (int i = 0; i < species.elecdat->nelecstate; ++i) {
@@ -2097,7 +2097,7 @@ bigint Particle::memory_usage()
 /* ---------------------------------------------------------------------- */
 
 double Particle::elec_energy(int isp, double temp_elec) {
-  Particle::Species species = particle->species[isp];
+  const Species &species = particle->species[isp];
 
   double* state_probabilities = particle->electronic_distribution_func(isp, temp_elec);
 
