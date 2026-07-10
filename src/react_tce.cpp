@@ -151,24 +151,16 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
     }
 
     // compute probability of reaction
-    // gamma function denominator hits a pole (NaN) or is non-positive
-    //   (erroneous probability) if temperature exponent is out of bounds,
-    //   see ReactBird::check_tce_bounds()
+    // gamma function denominator is negative or infinite (erroneous
+    //   probability) if temperature exponent is out of bounds,
+    //   checked at init by ReactBird::check_tce_bounds()
 
     switch (r->type) {
     case DISSOCIATION:
     case IONIZATION:
     case EXCHANGE:
       {
-        double gamma_denom = tgamma(z+r->coeff[3]+1.5);
-        if (isnan(gamma_denom))
-          error->one(FLERR,"Reaction probability is NaN: gamma function pole, "
-                     "temperature exponent is out of bounds");
-        if (z+r->coeff[3]+1.5 <= 0.0)
-          error->warning(FLERR,"Reaction probability will be erroneous: "
-                         "non-positive gamma function argument, "
-                         "temperature exponent is out of bounds");
-        react_prob += r->coeff[2] * tgamma(z+2.5-r->coeff[5]) / gamma_denom *
+        react_prob += r->coeff[2] * tgamma(z+2.5-r->coeff[5]) / tgamma(z+r->coeff[3]+1.5) *
           pow(ecc-r->coeff[1],r->coeff[3]-1+r->coeff[5]) *
           pow(1.0-r->coeff[1]/ecc,z+1.5-r->coeff[5]);
         break;
@@ -188,16 +180,8 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
         int *sp2recomb = reactions[isp][jsp].sp2recomb;
         if (sp2recomb[recomb_species] != list[i]) continue;
 
-        double gamma_denom = tgamma(z+r->coeff[3]+1.5);
-        if (isnan(gamma_denom))
-          error->one(FLERR,"Reaction probability is NaN: gamma function pole, "
-                     "temperature exponent is out of bounds");
-        if (z+r->coeff[3]+1.5 <= 0.0)
-          error->warning(FLERR,"Reaction probability will be erroneous: "
-                         "non-positive gamma function argument, "
-                         "temperature exponent is out of bounds");
         react_prob += recomb_boost * recomb_density * r->coeff[2] *
-          tgamma(z+2.5-r->coeff[5]) / gamma_denom *
+          tgamma(z+2.5-r->coeff[5]) / tgamma(z+r->coeff[3]+1.5) *
           pow(ecc-r->coeff[1],r->coeff[3]-1+r->coeff[5]) *  // extended to general recombination case with non-zero activation energy
           pow(1.0-r->coeff[1]/ecc,z+1.5-r->coeff[5]);
         break;

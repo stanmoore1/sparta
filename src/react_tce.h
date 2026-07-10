@@ -74,22 +74,15 @@ E: Unknown outcome in reaction
 The specified type of the reaction is not encoded in the reaction
 style.
 
-E: Reaction probability is NaN: gamma function pole, temperature
-exponent is out of bounds
+E: Reaction ...: temperature exponent ... must be > ..., else the
+gamma function is negative or infinite and the reaction probability
+is erroneous or NaN
 
 The argument of the gamma function in the TCE reaction probability is
-a non-positive integer, so the reaction probability is not a number.
-The temperature exponent in the reaction file must be within the
-bounds printed as warnings when the reactions are initialized.
-
-W: Reaction probability will be erroneous: non-positive gamma function
-argument, temperature exponent is out of bounds
-
-The argument of the gamma function in the TCE reaction probability is
-non-positive, so the gamma function is negative or infinite and the
-reaction probability is erroneous.  The temperature exponent in the
-reaction file must be within the bounds printed as warnings when the
-reactions are initialized.
+non-positive for this reaction, so the probability is certain to be
+erroneous (negative, infinite, or NaN).  The temperature exponent in
+the reaction file must be within the printed bound for the energy and
+vibrational models in use.
 
 W: Reaction ...: temperature exponent ... must be ...
 

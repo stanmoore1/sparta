@@ -422,6 +422,10 @@ void ReactBird::init()
    (1) eta > -(zmin + 3/2), else the argument of Gamma(z+eta+3/2) is
        non-positive: Gamma is negative (negative probability) or hits
        a pole at a non-positive integer (infinite or NaN probability)
+       for models where z is constant this is certain, so it is an error
+       for the discrete vibrational model z varies with the instantaneous
+       vibrational energy and only reaches zmin when it is small,
+       so it is a warning
    (2) trend as Ec -> Ea: for Ea > 0 the probability varies as
        (Ec-Ea)^(eta+z+1/2) near threshold and must vanish there,
        requiring eta > -(zmin + 1/2)
@@ -435,10 +439,12 @@ void ReactBird::init()
 
 void ReactBird::check_tce_bounds()
 {
-  if (comm->me) return;
-
   Particle::Species *species = particle->species;
   char str[MAXLINE+256];
+
+  // z is constant unless using total energy with discrete vibration
+
+  int zconstant = partialEnergy || collide->vibstyle != DISCRETE;
 
   for (int m = 0; m < nlist; m++) {
     OneReaction *r = &rlist[m];
@@ -460,31 +466,47 @@ void ReactBird::check_tce_bounds()
     }
 
     if (eta <= -(zmin+1.5)) {
-      sprintf(str,"Reaction %s: temperature exponent %g must be > %g, "
-              "else the gamma function is negative or infinite and "
-              "the reaction probability will be erroneous",
-              r->id,eta,-(zmin+1.5));
-      error->warning(FLERR,str);
+      if (zconstant) {
+        sprintf(str,"Reaction %s: temperature exponent %g must be > %g, "
+                "else the gamma function is negative or infinite and "
+                "the reaction probability is erroneous or NaN",
+                r->id,eta,-(zmin+1.5));
+        error->all(FLERR,str);
+      }
+      if (comm->me == 0) {
+        sprintf(str,"Reaction %s: temperature exponent %g must be > %g, "
+                "else the gamma function is negative or infinite and "
+                "the reaction probability is erroneous when the "
+                "vibrational energy is small",
+                r->id,eta,-(zmin+1.5));
+        error->warning(FLERR,str);
+      }
     } else if (ea > 0.0 && eta <= -(zmin+0.5)) {
-      sprintf(str,"Reaction %s: temperature exponent %g must be > %g, "
-              "else the reaction probability does not vanish as the "
-              "collision energy approaches the activation energy",
-              r->id,eta,-(zmin+0.5));
-      error->warning(FLERR,str);
+      if (comm->me == 0) {
+        sprintf(str,"Reaction %s: temperature exponent %g must be > %g, "
+                "else the reaction probability does not vanish as the "
+                "collision energy approaches the activation energy",
+                r->id,eta,-(zmin+0.5));
+        error->warning(FLERR,str);
+      }
     } else if (ea <= 0.0 && eta < 1.0-omega) {
-      sprintf(str,"Reaction %s: temperature exponent %g must be >= %g, "
-              "else the reaction probability diverges as the "
-              "collision energy approaches zero",
-              r->id,eta,1.0-omega);
-      error->warning(FLERR,str);
+      if (comm->me == 0) {
+        sprintf(str,"Reaction %s: temperature exponent %g must be >= %g, "
+                "else the reaction probability diverges as the "
+                "collision energy approaches zero",
+                r->id,eta,1.0-omega);
+        error->warning(FLERR,str);
+      }
     }
 
     if (eta > 1.0-omega) {
-      sprintf(str,"Reaction %s: temperature exponent %g must be <= %g, "
-              "else the reaction probability diverges as the "
-              "collision energy approaches infinity",
-              r->id,eta,1.0-omega);
-      error->warning(FLERR,str);
+      if (comm->me == 0) {
+        sprintf(str,"Reaction %s: temperature exponent %g must be <= %g, "
+                "else the reaction probability diverges as the "
+                "collision energy approaches infinity",
+                r->id,eta,1.0-omega);
+        error->warning(FLERR,str);
+      }
     }
   }
 }
