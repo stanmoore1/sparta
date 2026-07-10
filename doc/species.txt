@@ -163,7 +163,7 @@ The format of a species electronic file is as follows. Comments or
 blank lines are allowed in the file. Comment lines start with a "#"
 character. All other lines must have one of the following formats:
 
-species-ID N temp1 relax1 degen1 spin1 temp2 relax2 degen2 spin2 ... tempN relaxN degenN spinN:pre
+species-ID N temp1 relax1 degen1 spin1 dof1 temp2 relax2 degen2 spin2 dof2 ... tempN relaxN degenN spinN dofN :pre
 
 The species-ID is a string that will be matched against the requested species-ID.
 N is the number of electronic states. For each of the N states, 5 values are
@@ -171,9 +171,19 @@ listed:
 
 tempI = electronic temperature of state I (temperature units)
 relaxI = inverse electronic relaxation number of state I (unitless)
-degenI = degenercy of state I (integer, unitless) :ul
+degenI = degenercy of state I (integer, unitless)
 spinI = spin degeneracy of the state (e.g. singlet = 1, triplet = 3, etc.)
-eff. dof = Effective dof for use in the TCE chemistry model
+dofI = effective dof of state I for use in the TCE chemistry model :ul
+
+The effective dof only affects "react tce"_react.html simulations run with
+"react_modify partial_energy no"_react_modify.html.  A particle whose
+current electronic state has a non-zero effective dof contributes its
+electronic energy to the TCE collision energy, and the dof value is added
+to the average DOF count of the TCE probability.  A state with dof = 0.0
+(the recommended default) contributes neither, so the equilibrium reaction
+rates reproduce the Arrhenius rates specified in the reaction file.
+Non-zero values enhance the reactivity of specific excited states, which
+biases the equilibrium rates above the nominal Arrhenius rates.
 
 The other accepted format is:
 

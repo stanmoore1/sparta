@@ -75,6 +75,38 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
   double iTvib = 0.0;
   double jTvib = 0.0;
 
+  // electronic contribution to the TCE collision energy (partial_energy no)
+  // a particle's electronic energy enters ecc only when its current state
+  //   has a non-zero effective DOF (read from the elec file), which is then
+  //   added to z; a state with dof = 0 contributes neither, else adding its
+  //   energy to ecc with no compensating DOF inflates the equilibrium TCE
+  //   rate above the Arrhenius rate the coefficients were fit to
+  // loop-invariant, so computed once before the loop over reactions
+
+  double eelec_ecc = 0.0;
+  double zelec = 0.0;
+
+  if (collide->elecstyle == DISCRETE && !partialEnergy) {
+    int *estates = particle->eivec[particle->ewhich[collide->index_elecstate]];
+    double *eelecs = particle->edvec[particle->ewhich[collide->index_eelec]];
+    if (species[isp].elecdat != NULL) {
+      double idof = species[isp].elecdat->
+        states[estates[ip - particle->particles]].dof;
+      if (idof > 0.0) {
+        zelec += 0.5*idof;
+        eelec_ecc += eelecs[ip - particle->particles];
+      }
+    }
+    if (species[jsp].elecdat != NULL) {
+      double jdof = species[jsp].elecdat->
+        states[estates[jp - particle->particles]].dof;
+      if (jdof > 0.0) {
+        zelec += 0.5*jdof;
+        eelec_ecc += eelecs[jp - particle->particles];
+      }
+    }
+  }
+
   // loop over possible reactions for these 2 species
 
   for (int i = 0; i < n; i++) {
@@ -95,7 +127,7 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
        z = r->coeff[0];
        if (pre_ave_rotdof > 0.1) ecc += pre_erot*z/pre_ave_rotdof;
     } else {
-       ecc = pre_etotal;
+       ecc = pre_etotal - pre_eelec + eelec_ecc;
        z = pre_ave_rotdof;
     }
 
@@ -144,19 +176,7 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
             z += 0.5 * (zi+zj);
        }
 
-      if (collide->elecstyle == DISCRETE) {
-        zi = 0.0;
-        if (species[isp].elecdat != NULL) {
-          int ielec = particle->eivec[particle->ewhich[collide->index_elecstate]][ip - particle->particles];
-          zi = species[isp].elecdat->states[ielec].dof;
-        }
-        zj = 0.0;
-        if (species[jsp].elecdat != NULL) {
-          int ielec = particle->eivec[particle->ewhich[collide->index_elecstate]][jp - particle->particles];
-          zj = species[jsp].elecdat->states[ielec].dof;
-        }
-        z += 0.5*(zi + zj);
-      }
+      if (collide->elecstyle == DISCRETE) z += zelec;
     }
 
     // compute probability of reaction

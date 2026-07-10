@@ -252,6 +252,8 @@ class CollideVSSKokkos : public CollideVSS {
   KOKKOS_INLINE_FUNCTION
   void zero_elec(Particle::OnePart *) const;
   KOKKOS_INLINE_FUNCTION
+  int has_elec_storage(Particle::OnePart *) const;
+  KOKKOS_INLINE_FUNCTION
   int elec_exchange(Particle::OnePart *, Particle::OnePart *) const;
   KOKKOS_INLINE_FUNCTION
   double get_elec_phi(int, int, int, double) const;

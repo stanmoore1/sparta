@@ -174,7 +174,7 @@ appear in <I>elecfile</I> for every species in this command.
 blank lines are allowed in the file. Comment lines start with a "#"
 character. All other lines must have one of the following formats:
 </P>
-<P>species-ID N temp1 relax1 degen1 spin1 temp2 relax2 degen2 spin2 ... tempN relaxN degenN spinN:pre
+<P>species-ID N temp1 relax1 degen1 spin1 dof1 temp2 relax2 degen2 spin2 dof2 ... tempN relaxN degenN spinN dofN
 </P>
 <P>The species-ID is a string that will be matched against the requested species-ID.
 N is the number of electronic states. For each of the N states, 5 values are
@@ -182,10 +182,19 @@ listed:
 </P>
 <UL><LI>tempI = electronic temperature of state I (temperature units)
 <LI>relaxI = inverse electronic relaxation number of state I (unitless)
-<LI>degenI = degenercy of state I (integer, unitless) 
+<LI>degenI = degenercy of state I (integer, unitless)
+<LI>spinI = spin degeneracy of the state (e.g. singlet = 1, triplet = 3, etc.)
+<LI>dofI = effective dof of state I for use in the TCE chemistry model
 </UL>
-<P>spinI = spin degeneracy of the state (e.g. singlet = 1, triplet = 3, etc.)
-eff. dof = Effective dof for use in the TCE chemistry model
+<P>The effective dof only affects <A HREF = "react.html">react tce</A> simulations run with
+<A HREF = "react_modify.html">react_modify partial_energy no</A>.  A particle whose
+current electronic state has a non-zero effective dof contributes its
+electronic energy to the TCE collision energy, and the dof value is added
+to the average DOF count of the TCE probability.  A state with dof = 0.0
+(the recommended default) contributes neither, so the equilibrium reaction
+rates reproduce the Arrhenius rates specified in the reaction file.
+Non-zero values enhance the reactivity of specific excited states, which
+biases the equilibrium rates above the nominal Arrhenius rates.
 </P>
 <P>The other accepted format is:
 </P>

@@ -637,6 +637,13 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
 
 void CollideVSS::relax_electronic_mode(Particle::OnePart *p, Particle::OnePart *jp, double& E_Dispose, bool reacting)
 {
+  // skip particles without custom electronic storage (ambipolar electrons
+  // in elist, possibly already carrying a product species after a reaction):
+  // the energy pool is untouched and the product particle is set to the
+  // ground state when it is copied into particle->particles
+
+  if (!has_elec_storage(p)) return;
+
   Particle::Species *species = particle->species;
   int *estates = particle->eivec[particle->ewhich[index_elecstate]];
   double *eelecs = particle->edvec[particle->ewhich[index_eelec]];
@@ -655,17 +662,30 @@ void CollideVSS::relax_electronic_mode(Particle::OnePart *p, Particle::OnePart *
 
 /* ----------------------------------------------------------------------
    reset the electronic state/energy of particle p to the ground state
-   skip ambipolar electrons: they live in a separate scratch array (elist),
-   not in particle->particles, so they have no custom storage to reset
+   skip particles without custom electronic storage
 ------------------------------------------------------------------------- */
 
 void CollideVSS::zero_elec(Particle::OnePart *p)
 {
-  if (ambiflag && p->ispecies == ambispecies) return;
+  if (!has_elec_storage(p)) return;
   int *estates = particle->eivec[particle->ewhich[index_elecstate]];
   double *eelecs = particle->edvec[particle->ewhich[index_eelec]];
   eelecs[p - particle->particles] = 0.0;
   estates[p - particle->particles] = 0;
+}
+
+/* ----------------------------------------------------------------------
+   return 1 if particle p has per-particle custom electronic storage,
+   i.e. it lives in the particle->particles array
+   ambipolar electrons live in a separate scratch array (elist) and after
+   an ambipolar reaction may already carry a product species, so they are
+   detected by address, not by species
+------------------------------------------------------------------------- */
+
+int CollideVSS::has_elec_storage(Particle::OnePart *p)
+{
+  return (p >= particle->particles &&
+          p < particle->particles + particle->nlocal);
 }
 
 /* ----------------------------------------------------------------------
@@ -800,11 +820,11 @@ void CollideVSS::SCATTER_ThreeBodyScattering(Particle::OnePart *ip,
                 + ip->evib + jp->evib + kp->evib;
   if (elecstyle == DISCRETE) {
     double *eelecs = particle->edvec[particle->ewhich[index_eelec]];
-    if (species[ip->ispecies].elecdat != NULL)
+    if (species[ip->ispecies].elecdat != NULL && has_elec_storage(ip))
       postcoln.eint += eelecs[ip - particle->particles];
-    if (species[jp->ispecies].elecdat != NULL)
+    if (species[jp->ispecies].elecdat != NULL && has_elec_storage(jp))
       postcoln.eint += eelecs[jp - particle->particles];
-    if (species[kp->ispecies].elecdat != NULL)
+    if (species[kp->ispecies].elecdat != NULL && has_elec_storage(kp))
       postcoln.eint += eelecs[kp - particle->particles];
   }
 
@@ -994,9 +1014,9 @@ void CollideVSS::EEXCHANGE_ReactingEDisposal(Particle::OnePart *ip,
   postcoln.eelec = 0.0;
   if (elecstyle == DISCRETE) {
     double *eelecs = particle->edvec[particle->ewhich[index_eelec]];
-    if (species[ip->ispecies].elecdat != NULL)
+    if (species[ip->ispecies].elecdat != NULL && has_elec_storage(ip))
       postcoln.eelec += eelecs[ip - particle->particles];
-    if (species[jp->ispecies].elecdat != NULL)
+    if (species[jp->ispecies].elecdat != NULL && has_elec_storage(jp))
       postcoln.eelec += eelecs[jp - particle->particles];
   }
 
@@ -1005,7 +1025,7 @@ void CollideVSS::EEXCHANGE_ReactingEDisposal(Particle::OnePart *ip,
     postcoln.evib += kp->evib;
     if (elecstyle == DISCRETE) {
       double *eelecs = particle->edvec[particle->ewhich[index_eelec]];
-      if (species[kp->ispecies].elecdat != NULL)
+      if (species[kp->ispecies].elecdat != NULL && has_elec_storage(kp))
         postcoln.eelec += eelecs[kp - particle->particles];
     }
   }

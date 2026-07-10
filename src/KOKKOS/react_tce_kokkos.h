@@ -128,16 +128,18 @@ double newtonTvib(const int &nmode, const double& Evib, const double vibTemp[],
 enum{NONE,DISCRETE,SMOOTH};
 enum{DISSOCIATION,EXCHANGE,IONIZATION,RECOMBINATION};   // other files
 
-// idof/jdof: per-particle effective electronic DoF of ip/jp (used only when
-//   elecstyle == DISCRETE). The caller must precompute these from the
-//   particle's electronic state, passing 0.0 for species with no electronic
-//   states (d_nelecstates == 0); see CollideVSSKokkos::perform_collision_kokkos.
+// eelec_ecc/zelec: electronic contribution to the TCE collision energy,
+//   used only when elecstyle == DISCRETE. The caller precomputes them from
+//   each particle's electronic state: a particle whose current state has a
+//   non-zero effective DoF (read from the elec file) contributes its eelec
+//   to eelec_ecc and 0.5*dof to zelec, else it contributes neither; see
+//   CollideVSSKokkos::perform_collision_kokkos and ReactTCE::attempt
 KOKKOS_INLINE_FUNCTION
 int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
          double pre_etrans, double pre_erot, double pre_evib, double pre_eelec,
          double &post_etotal, int &kspecies,
          int &recomb_species, double &recomb_density, const t_species_1d_const &d_species,
-         const double idof, const double jdof) const
+         const double eelec_ecc, const double zelec) const
 {
   OneReactionKokkos *r;
 
@@ -189,7 +191,7 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
       if (pre_ave_rotdof > 0.1)
         ecc += pre_erot*z/pre_ave_rotdof;
     } else {
-      ecc = pre_etotal;
+      ecc = pre_etotal - pre_eelec + eelec_ecc;
       z = pre_ave_rotdof;
     }
 
@@ -235,9 +237,9 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
             z += 0.5 * (zi+zj);
        }
 
-       // electronic DoF read from per-state input (idof/jdof precomputed by caller)
+       // electronic DoF read from per-state input (zelec precomputed by caller)
 
-       if (elecstyle == DISCRETE) z += 0.5*(idof + jdof);
+       if (elecstyle == DISCRETE) z += zelec;
     }
 
     // compute probability of reaction
