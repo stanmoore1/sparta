@@ -33,6 +33,9 @@ class ReactTCE : public ReactBird {
   int attempt(Particle::OnePart *, Particle::OnePart *,
               double, double, double, double, double &, int &);
 
+  double elec_ladder_pterm(int, int, double, double,
+                           double, double, double);
+
   double newtonTvib(int nmode, double Evib,
                       double VibTemp[],
                       double Tvib0,

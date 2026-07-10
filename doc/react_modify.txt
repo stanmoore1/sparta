@@ -13,13 +13,14 @@ react_modify command :h3
 react_modify keyword values ...  :pre
 
 one or more keyword/value pairs may be listed :ulb,l
-keywords = {recomb} or {rboost} or {compute_chem_rates} or {partial_energy} :l
+keywords = {recomb} or {rboost} or {compute_chem_rates} or {partial_energy} or {elec_exact} :l
   {recomb} value = yes or no = enable or disable defined recombination reactions
   {rboost} value = rfactor
     rfactor = boost probability of recombination reactions by this factor
   {compute_chem_rates} value = yes or no = enable or disable computation of Arrhenius rate for chemical
   reaction without performing the reaction
-  {partial_energy} = yes or no = use partial energy or total energy for TCE chemistry :pre
+  {partial_energy} = yes or no = use partial energy or total energy for TCE chemistry
+  {elec_exact} = yes or no = use the exact electronic-ladder TCE probability :pre
 :ule
 
 [Examples:]
@@ -85,6 +86,28 @@ vibrational energy model used has an impact on the internal degrees of
 freedom used in the TCE model in that case. This option is ignored for
 the QK reaction model.
 
+The {elec_exact} keyword selects an exact treatment of discrete
+electronic energy in the TCE model, and requires {partial_energy} =
+{no}, "collide_modify electronic discrete"_collide_modify.html, and
+"fix elecmode"_fix_elecmode.html.  The reaction probability is a
+function of the total collision energy including the electronic energy
+of both reactants,
+
+P ~ sum_ab g_ab (E - Ea - e_ab)^(z+eta+1/2) / sum_ab g_ab (E - e_ab)^(z+3/2-omega) :pre
+
+where the sums run over all electronic state pairs (a,b) of the two
+reactant species with non-negative arguments, g_ab and e_ab are the
+combined degeneracies and energies of the state pair, and z is the
+average number of participating internal degrees of freedom of the
+other modes.  This is the unique probability depending only on the
+total collision energy whose equilibrium average reproduces the
+Arrhenius rate at every temperature: electronically excited reactants
+(e.g. metastables) can drive reactions even when the gas is
+translationally cold, while thermal-equilibrium rates still match the
+reaction file coefficients exactly.  The effective DOF column of the
+"species elecfile"_species.html is ignored when this option is
+enabled.  This option is currently not supported by the KOKKOS package.
+
 :line
 
 [Restrictions:] none
@@ -96,4 +119,4 @@ the QK reaction model.
 [Default:]
 
 The option defaults are recomb = yes, rboost = 1000.0,
-compute_chem_rates = no, partial_energy = yes.
+compute_chem_rates = no, partial_energy = yes, elec_exact = no.

@@ -32,6 +32,8 @@ class React : protected Pointers {
                              // actually doing reaction
 
   int partialEnergy;         // 1 if using rDOF model, 0 if using all energy
+  int elecExact;             // 1 to use the exact electronic-ladder TCE
+                             //   probability (partial_energy no only)
   double recomb_density;     // num density of particles in collision grid cell
   double recomb_boost;       // rate boost param for recombination reactions
   double recomb_boost_inverse;   // inverse of boost parameter

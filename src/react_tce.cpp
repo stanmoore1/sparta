@@ -39,6 +39,14 @@ void ReactTCE::init()
   if (!collide || strcmp(collide->style,"vss") != 0)
     error->all(FLERR,"React tce can only be used with collide vss");
 
+  if (elecExact) {
+    if (partialEnergy)
+      error->all(FLERR,"React_modify elec_exact requires partial_energy no");
+    if (collide->elecstyle != DISCRETE)
+      error->all(FLERR,"React_modify elec_exact requires "
+                 "collide_modify electronic discrete");
+  }
+
   ReactBird::init();
 }
 
@@ -81,12 +89,15 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
   //   added to z; a state with dof = 0 contributes neither, else adding its
   //   energy to ecc with no compensating DOF inflates the equilibrium TCE
   //   rate above the Arrhenius rate the coefficients were fit to
+  // with elec_exact the ladder probability below replaces this mechanism:
+  //   all electronic energy enters ecc and the per-state dof is ignored
   // loop-invariant, so computed once before the loop over reactions
 
   double eelec_ecc = 0.0;
   double zelec = 0.0;
 
-  if (collide->elecstyle == DISCRETE && !partialEnergy) {
+  if (elecExact) eelec_ecc = pre_eelec;
+  else if (collide->elecstyle == DISCRETE && !partialEnergy) {
     int *estates = particle->eivec[particle->ewhich[collide->index_elecstate]];
     double *eelecs = particle->edvec[particle->ewhich[collide->index_eelec]];
     if (species[isp].elecdat != NULL) {
@@ -186,9 +197,15 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
     case IONIZATION:
     case EXCHANGE:
       {
-        react_prob += r->coeff[2] * tgamma(z+2.5-r->coeff[5]) / MAX(1.0e-6,tgamma(z+r->coeff[3]+1.5)) *
-          pow(ecc-r->coeff[1],r->coeff[3]-1+r->coeff[5]) *
-          pow(1.0-r->coeff[1]/ecc,z+1.5-r->coeff[5]);
+        double pterm;
+        if (elecExact)
+          pterm = elec_ladder_pterm(isp,jsp,ecc,z,
+                                    r->coeff[1],r->coeff[3],r->coeff[5]);
+        else
+          pterm = pow(ecc-r->coeff[1],r->coeff[3]-1+r->coeff[5]) *
+            pow(1.0-r->coeff[1]/ecc,z+1.5-r->coeff[5]);
+        react_prob += r->coeff[2] * tgamma(z+2.5-r->coeff[5]) /
+          MAX(1.0e-6,tgamma(z+r->coeff[3]+1.5)) * pterm;
         break;
       }
 
@@ -206,10 +223,16 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
         int *sp2recomb = reactions[isp][jsp].sp2recomb;
         if (sp2recomb[recomb_species] != list[i]) continue;
 
+        double pterm;
+        if (elecExact)
+          pterm = elec_ladder_pterm(isp,jsp,ecc,z,
+                                    r->coeff[1],r->coeff[3],r->coeff[5]);
+        else   // extended to general recombination case with non-zero activation energy
+          pterm = pow(ecc-r->coeff[1],r->coeff[3]-1+r->coeff[5]) *
+            pow(1.0-r->coeff[1]/ecc,z+1.5-r->coeff[5]);
         react_prob += recomb_boost * recomb_density * r->coeff[2] *
-          tgamma(z+2.5-r->coeff[5]) / MAX(1.0e-6,tgamma(z+r->coeff[3]+1.5)) *
-          pow(ecc-r->coeff[1],r->coeff[3]-1+r->coeff[5]) *  // extended to general recombination case with non-zero activation energy
-          pow(1.0-r->coeff[1]/ecc,z+1.5-r->coeff[5]);
+          tgamma(z+2.5-r->coeff[5]) /
+          MAX(1.0e-6,tgamma(z+r->coeff[3]+1.5)) * pterm;
         break;
       }
 
@@ -276,6 +299,51 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
   // no reaction performed
 
   return 0;
+}
+
+/* ----------------------------------------------------------------------
+   exact electronic-ladder TCE probability term (react_modify elec_exact)
+   replaces (ecc-Ea)^(eta-1+omega) * (1-Ea/ecc)^(z+1.5-omega), which it
+     reduces to when neither species has electronic states
+   etot = full pair collision energy including electronic energy
+   derivation: require a probability that is a function of the total
+     collision energy only, whose Boltzmann-weighted equilibrium average
+     is the Arrhenius rate at every temperature; writing both sides as
+     Laplace transforms in 1/kT absorbs the electronic Boltzmann factors
+     into the transform variable, and uniqueness of the Laplace transform
+     gives the unique solution
+       pterm = sum_ab g_ab*(etot-Ea-e_ab)^(z+eta+0.5)
+             / sum_ab g_ab*(etot-e_ab)^(z+1.5-omega)
+     over all electronic state pairs (a,b) of the two reactant species,
+     each sum restricted to non-negative arguments
+------------------------------------------------------------------------- */
+
+double ReactTCE::elec_ladder_pterm(int isp, int jsp, double etot, double z,
+                                   double ea, double eta, double omega)
+{
+  Particle::Species *species = particle->species;
+  Particle::ElectronicData *idat = species[isp].elecdat;
+  Particle::ElectronicData *jdat = species[jsp].elecdat;
+
+  int ni = idat ? idat->nelecstate : 1;
+  int nj = jdat ? jdat->nelecstate : 1;
+
+  double num = 0.0;
+  double den = 0.0;
+
+  for (int a = 0; a < ni; a++) {
+    double ei = idat ? idat->states[a].temp*update->boltz : 0.0;
+    double gi = idat ? idat->states[a].degen : 1.0;
+    for (int b = 0; b < nj; b++) {
+      double e = ei + (jdat ? jdat->states[b].temp*update->boltz : 0.0);
+      double g = gi * (jdat ? jdat->states[b].degen : 1.0);
+      if (etot > e) den += g * pow(etot-e,z+1.5-omega);
+      if (etot > ea+e) num += g * pow(etot-ea-e,z+eta+0.5);
+    }
+  }
+
+  if (den <= 0.0) return 0.0;
+  return num/den;
 }
 
 /* ---------------------------------------------------------------------- */

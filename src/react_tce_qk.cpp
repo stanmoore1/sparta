@@ -36,6 +36,9 @@ ReactTCEQK::ReactTCEQK(SPARTA *sparta, int narg, char **arg) :
 
 void ReactTCEQK::init()
 {
+  if (elecExact)
+    error->all(FLERR,"React_modify elec_exact requires react style tce");
+
   if (!collide || strcmp(collide->style,"vss") != 0)
     error->all(FLERR,"React tce/qk can only be used with collide vss");
 

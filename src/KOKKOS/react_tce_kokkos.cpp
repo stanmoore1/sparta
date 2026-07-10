@@ -37,6 +37,9 @@ ReactTCEKokkos::ReactTCEKokkos(SPARTA *sparta, int narg, char **arg) :
 
 void ReactTCEKokkos::init()
 {
+  if (elecExact)
+    error->all(FLERR,"React_modify elec_exact is not yet supported with KOKKOS");
+
   if (!collide || (strcmp(collide->style,"vss") != 0 && strcmp(collide->style,"vss/kk") != 0))
     error->all(FLERR,"React tce can only be used with collide vss");
 
