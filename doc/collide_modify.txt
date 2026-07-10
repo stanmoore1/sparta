@@ -22,7 +22,7 @@ keywords = {vremax} or {remain} or {ambipolar} or {nearcp} or {rotate} or {vibra
     choice = {yes} or {no} to turn on/off near collision partners
     Nlimit = max # of attempts made to find a collision partner
   {ambipolar} value = {no} or {yes}
-  {rotate} value = {no} or {smooth}
+  {rotate} value = {no} or {smooth} or {discrete}
   {vibrate} value = {no} or {smooth} or {discrete} :pre
   {electronic} value = {no} or {discrete} :pre
 :ule
@@ -113,7 +113,19 @@ The {rotate} keyword determines how rotational energy is treated in
 particle collisions and stored by particles.  If the value is set to
 {no}, then rotational energy is not tracked; every particle's
 rotational energy is 0.0.  If the value is set to {smooth}, a
-particle's rotational energy is a single continuous value.
+particle's rotational energy is a single continuous value.  If the
+value is set to {discrete}, the rotational energy of a linear molecule
+(2 rotational degrees of freedom) is set to the discrete rigid-rotor
+level energies E_J = J(J+1) k Theta_r, where Theta_r is the species'
+characteristic rotational temperature and each level J carries
+degeneracy 2J+1.  Thermal initialization samples the
+degeneracy-weighted Boltzmann distribution over levels and collisional
+relaxation selects levels with the corresponding degeneracy-weighted
+Borgnakke-Larsen kernel.  Each linear species with rotational degrees
+of freedom must then define its rotational temperature via the
+{rotfile} keyword of the "species"_species.html command.  Species with
+3 rotational degrees of freedom (nonlinear molecules) have no
+closed-form level structure and keep the continuous rotational model.
 
 The {vibrate} keyword determines how vibrational energy is treated in
 particle collisions and stored by particles.  If the value is set to

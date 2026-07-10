@@ -16,6 +16,8 @@ file = filename with species info :ulb,l
 ID1, ID2, ... = one or more species names listed in file :l
 multi-species abbreviations can also be used (see below) :l
 zero or more keyword/value pairs may be appended :l
+keyword = {rotfile} :l
+  {rotfile} value = rfile = filename for extra rotational info :pre
 keyword = {vibfile} :l
   {vibfile} value = vfile = filename for extra vibrational info :pre
 keyword = {elecfile} :l
@@ -114,6 +116,30 @@ change the settings at the top of src/particle.h in the enum command
 for MAXVIBMODE=4 to a larger value and re-compile the code.  The
 format of the {vibfile}, as described next, is then enhanced
 accordingly.
+
+:line
+
+The optional {rotfile} keyword can be used to specify the
+characteristic rotational temperature(s) of species in the specified
+{rfile}.  It is required for each linear (rotdof = 2) species when the
+"collide_modify rotate"_collide_modify.html setting is {discrete}: the
+rotational temperature Theta_r defines the rigid-rotor level energies
+E_J = J(J+1) k Theta_r used by the discrete rotational model.
+
+The format of a species rotational file is as follows.  Comments or
+blank lines are allowed in the file.  Comment lines start with a "#"
+character.  All other lines must have the following format with values
+separated by whitespace:
+
+species-ID N temp1 ... tempN :pre
+
+The species-ID is a string that will be matched against the requested
+species-ID, as described above.  N is the number of rotational
+temperatures that follow: 1 for a linear molecule (rotdof = 2), or 3
+for a nonlinear molecule (rotdof = 3).  Note that only the single
+temperature of linear molecules is currently used (by the discrete
+rotational model); nonlinear molecules keep the continuous rotational
+model.
 
 :line
 
