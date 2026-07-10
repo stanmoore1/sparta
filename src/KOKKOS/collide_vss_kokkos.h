@@ -147,8 +147,8 @@ class CollideVSSKokkos : public CollideVSS {
   t_elecstate_2d d_elecstates;
   DAT::t_float_2d d_elec_default_rels;
   DAT::t_float_3d d_elec_species_rels;
+  DAT::t_float_3d d_elec_wt;      // precomputed degen*phi selection weights
   DAT::t_int_2d d_enforce_spin_conservation;
-  DAT::t_float_2d d_cumulative_probabilities;
 
   DAT::t_int_1d d_ewhich;
   tdual_struct_tdual_int_1d_1d k_eivec;
@@ -248,7 +248,7 @@ class CollideVSSKokkos : public CollideVSS {
                                    struct State &, struct State &, rand_type &) const;
 
   KOKKOS_INLINE_FUNCTION
-  void relax_electronic_mode(int, Particle::OnePart *, Particle::OnePart *,
+  void relax_electronic_mode(Particle::OnePart *, Particle::OnePart *,
                              double&, double, rand_type &rand_gen, bool) const;
   KOKKOS_INLINE_FUNCTION
   void zero_elec(Particle::OnePart *) const;
@@ -257,7 +257,7 @@ class CollideVSSKokkos : public CollideVSS {
   KOKKOS_INLINE_FUNCTION
   double get_elec_phi(int, int, int, double) const;
   KOKKOS_INLINE_FUNCTION
-  int select_elec_state(int, Particle::OnePart *, Particle::OnePart *,
+  int select_elec_state(Particle::OnePart *, Particle::OnePart *,
                         double, double, bool, rand_type &rand_gen, bool) const;
 
   KOKKOS_INLINE_FUNCTION

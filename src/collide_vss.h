@@ -85,6 +85,11 @@ class CollideVSS : public Collide {
   Params **params;             // VSS params for each species
   int nparams;                // # of per-species params read in
 
+  double ***elec_wt;          // precomputed electronic selection weights
+                              //   elec_wt[isp][jsp][state] = degen * phi,
+                              //   NULL row for species w/o electronic data
+  int elec_wt_nsp;            // nspecies the tables were built for
+
   void SCATTER_TwoBodyScattering(Particle::OnePart *,
                                  Particle::OnePart *);
   void EEXCHANGE_NonReactingEDisposal(Particle::OnePart *,
@@ -106,6 +111,8 @@ class CollideVSS : public Collide {
   void zero_elec(Particle::OnePart *);
   int elec_exchange(Particle::OnePart *, Particle::OnePart *);
   double get_elec_phi(int, int, int, double);
+  void build_elec_wt();
+  void free_elec_wt();
   int select_elec_state(Particle::OnePart *, Particle::OnePart *,
                         double, double, bool, bool);
 

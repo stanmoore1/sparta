@@ -709,16 +709,19 @@ void ParticleKokkos::update_elec_views()
 maxelecstate);
   MemKK::realloc_kokkos(d_elec_default_rels,"particle:elec_default_rels",nspecies,maxelecstate);
   MemKK::realloc_kokkos(d_elec_species_rels,"particle:elec_species_rels",nspecies,nspecies,maxelecstate);
+  MemKK::realloc_kokkos(d_elec_wt,"particle:elec_wt",nspecies,nspecies,maxelecstate);
   MemKK::realloc_kokkos(d_enforce_spin_conservation,"particle:enforce_spin_conservation",nspecies,nspecies);
 
   auto h_nelecstates = Kokkos::create_mirror_view(d_nelecstates);
   auto h_elecstates = Kokkos::create_mirror_view(d_elecstates);
   auto h_elec_default_rels = Kokkos::create_mirror_view(d_elec_default_rels);
   auto h_elec_species_rels = Kokkos::create_mirror_view(d_elec_species_rels);
+  auto h_elec_wt = Kokkos::create_mirror_view(d_elec_wt);
   auto h_enforce_spin_conservation = Kokkos::create_mirror_view(d_enforce_spin_conservation);
 
   Kokkos::deep_copy(h_nelecstates,0);
   Kokkos::deep_copy(h_elec_species_rels,-1.0);
+  Kokkos::deep_copy(h_elec_wt,0.0);
 
   for (int isp = 0; isp < nspecies; ++isp) {
     if (!species[isp].elecdat) continue;
@@ -736,6 +739,15 @@ maxelecstate);
       if (species[isp].elecdat->species_rel[jsp])
         for (int k = 0; k < nelecstate; k++)
           h_elec_species_rels(isp,jsp,k) = species[isp].elecdat->species_rel[jsp][k];
+
+      // precomputed selection weights degen*phi, matching
+      // CollideVSS::build_elec_wt exactly
+
+      const double *phi = species[isp].elecdat->species_rel[jsp] ?
+        species[isp].elecdat->species_rel[jsp] :
+        species[isp].elecdat->default_rel;
+      for (int k = 0; k < nelecstate; k++)
+        h_elec_wt(isp,jsp,k) = species[isp].elecdat->states[k].degen*phi[k];
     }
   }
 
@@ -743,6 +755,7 @@ maxelecstate);
   Kokkos::deep_copy(d_elecstates,h_elecstates);
   Kokkos::deep_copy(d_elec_default_rels,h_elec_default_rels);
   Kokkos::deep_copy(d_elec_species_rels,h_elec_species_rels);
+  Kokkos::deep_copy(d_elec_wt,h_elec_wt);
   Kokkos::deep_copy(d_enforce_spin_conservation,h_enforce_spin_conservation);
 }
 

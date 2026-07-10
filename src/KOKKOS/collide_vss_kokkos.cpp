@@ -396,11 +396,6 @@ void CollideVSSKokkos::collisions()
     vre_next += vre_every;
   }
 
-  if (elecstyle == DISCRETE &&
-      (grid->maxlocal > (int)d_cumulative_probabilities.extent(0) ||
-       particle->maxelecstate > (int)d_cumulative_probabilities.extent(1)))
-    MemKK::realloc_kokkos(d_cumulative_probabilities,"collide:cumulative_probabilities",grid->maxlocal,particle->maxelecstate);
-
   // copy Update count of gas/gas collision computes active on this timestep
 
   ngas_tally = update->ngas_tally;
@@ -512,6 +507,7 @@ template < int NEARCP, int GASTALLY > void CollideVSSKokkos::collisions_one(COLL
   d_elecstates = particle_kk->d_elecstates;
   d_elec_default_rels = particle_kk->d_elec_default_rels;
   d_elec_species_rels = particle_kk->d_elec_species_rels;
+  d_elec_wt = particle_kk->d_elec_wt;
   d_enforce_spin_conservation = particle_kk->d_enforce_spin_conservation;
   d_ewhich = particle_kk->k_ewhich.view_device();
   k_eivec = particle_kk->k_eivec;
@@ -894,6 +890,7 @@ void CollideVSSKokkos::collisions_one_ambipolar(COLLIDE_REDUCE &reduce)
   d_elecstates = particle_kk->d_elecstates;
   d_elec_default_rels = particle_kk->d_elec_default_rels;
   d_elec_species_rels = particle_kk->d_elec_species_rels;
+  d_elec_wt = particle_kk->d_elec_wt;
   d_enforce_spin_conservation = particle_kk->d_enforce_spin_conservation;
   d_ewhich = particle_kk->k_ewhich.view_device();
   auto h_ewhich = particle_kk->k_ewhich.view_host();
@@ -1907,7 +1904,7 @@ void CollideVSSKokkos::EEXCHANGE_NonReactingEDisposal(int icell,
         auto &d_estates = k_eivec.view_device()[d_ewhich[index_elecstate]].k_view.view_device();
         double elec_phi = get_elec_phi(p->ispecies, p2->ispecies, d_estates[p - d_particles.data()], E_Dispose);
         if (elec_phi >= rand_gen.drand()) {
-          relax_electronic_mode(icell, p, p2, E_Dispose,
+          relax_electronic_mode(p, p2, E_Dispose,
                                 d_params(p->ispecies,p2->ispecies).omega,
                                 rand_gen, false);
         }
@@ -1937,8 +1934,7 @@ void CollideVSSKokkos::EEXCHANGE_NonReactingEDisposal(int icell,
 /* ---------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-void CollideVSSKokkos::relax_electronic_mode(int icell,
-                                             Particle::OnePart *p,
+void CollideVSSKokkos::relax_electronic_mode(Particle::OnePart *p,
                                              Particle::OnePart *jp,
                                              double& E_Dispose,
                                              double omega,
@@ -1949,7 +1945,7 @@ void CollideVSSKokkos::relax_electronic_mode(int icell,
   E_Dispose += d_eelecs[p - d_particles.data()];
 
   int ielec = select_elec_state(
-    icell, p, jp, E_Dispose, omega,
+    p, jp, E_Dispose, omega,
     d_enforce_spin_conservation(p->ispecies,jp->ispecies) && !reacting,
     rand_gen, reacting);
   double eelec = d_elecstates(p->ispecies,ielec).temp*boltz;
@@ -2008,7 +2004,7 @@ double CollideVSSKokkos::get_elec_phi(int ispec1, int ispec2, int ielec, double)
 /* ---------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-int CollideVSSKokkos::select_elec_state(int icell,Particle::OnePart *p,
+int CollideVSSKokkos::select_elec_state(Particle::OnePart *p,
                                         Particle::OnePart *jp,
                                         double E_Dispose, double omega,
                                         bool enforce_spin_conservation,
@@ -2026,61 +2022,50 @@ int CollideVSSKokkos::select_elec_state(int icell,Particle::OnePart *p,
   --max_level;
 
   // not enough energy to reach even the ground state: stay in ground state
-  // (guards against max_level == -1 indexing d_state_probability[-1])
   if (max_level < 0) return 0;
 
-  auto &d_state_probability = d_cumulative_probabilities;
-
-  // Calculate number of total states, including degeneracies
+  // candidate weights: the precomputed per-pair degen*phi table (see
+  // ParticleKokkos::update_elec_views); a reacting disposal distributes
+  // with the bare degeneracies (relaxation probability is 100%)
   //
   // IMPORTANT: phi appears TWICE in a transition (gate on phi(current) in
   // the caller, weight by phi(candidate) below); both factors are required
   // for detailed balance with state-dependent relaxation numbers -- see the
   // matching comment in CollideVSS::select_elec_state
+
+  const int curstate = d_estates[p - d_particles.data()];
+  const int curspin = d_elecstates(p->ispecies,curstate).spin;
+
+  // total weight of all selectable states, including degeneracies
+
+  double total_weight = 0.0;
   for (int state = 0; state <= max_level; ++state) {
-    if (state != 0) {
-      d_state_probability(icell,state) = d_state_probability(icell,state-1);
-    } else {
-      d_state_probability(icell,state) = 0.0;
-    }
     if (!enforce_spin_conservation ||
-           d_elecstates(p->ispecies,state).spin == d_elecstates(p->ispecies,d_estates[p - d_particles.data()]).spin) {
-      // Note we can use E_Dispose here since the current implementation requires the collision numbers
-      // to be collision invariant (and therefore depend on E_Dispose, the trans + elec energy) but this
-      // algorithm allows that to be relaxed. If other models are needed, the correct data would need passed
-      // in here.
-      if (reacting) {
-        // We are distributing energy after a reaction, so relaxation probability is 100%
-        d_state_probability(icell,state) += d_elecstates(p->ispecies,state).degen;
-      } else {
-        d_state_probability(icell,state) += d_elecstates(p->ispecies,state).degen*get_elec_phi(p->ispecies, jp->ispecies, state, E_Dispose);
-      }
+           d_elecstates(p->ispecies,state).spin == curspin) {
+      if (reacting) total_weight += d_elecstates(p->ispecies,state).degen;
+      else total_weight += d_elec_wt(p->ispecies,jp->ispecies,state);
     }
   }
   // if no selectable state has any weight (e.g. every allowed state has a
   // zero relaxation probability), leave the particle in its current state
 
-  if (d_state_probability(icell,max_level) <= 0.0)
-    return d_estates[p - d_particles.data()];
+  if (total_weight <= 0.0)
+    return curstate;
 
   // Select a state from the distribution
   int ielec,ilast;
   double eelec = 0.0;
   do {
-    double rand_state = rand_gen.drand()*d_state_probability(icell,max_level);
+    double rand_state = rand_gen.drand()*total_weight;
     ielec = 0;
     ilast = -1;
     // bound by max_level: roundoff can leave rand_state >= 0 after the last
     // included state, which would index d_elecstates past max_level/nelecstate
     while (rand_state >= 0 && ielec <= max_level) {
       if (!enforce_spin_conservation ||
-             d_elecstates(p->ispecies,ielec).spin == d_elecstates(p->ispecies,d_estates[p - d_particles.data()]).spin) {
-        if (reacting) {
-          // We are distributing energy after a reaction, so relaxation probability is 100%
-          rand_state -= d_elecstates(p->ispecies,ielec).degen;
-        } else {
-          rand_state -= d_elecstates(p->ispecies,ielec).degen*get_elec_phi(p->ispecies, jp->ispecies, ielec, E_Dispose);
-        }
+             d_elecstates(p->ispecies,ielec).spin == curspin) {
+        if (reacting) rand_state -= d_elecstates(p->ispecies,ielec).degen;
+        else rand_state -= d_elec_wt(p->ispecies,jp->ispecies,ielec);
         ilast = ielec;
       }
       ++ielec;
@@ -2318,7 +2303,7 @@ void CollideVSSKokkos::EEXCHANGE_ReactingEDisposal(int icell,
     // the relaxation-number lookup, which the reacting path skips)
 
     if (elecstyle == DISCRETE && d_nelecstates[sp] > 0)
-      relax_electronic_mode(icell, p, p, E_Dispose, aveomega, rand_gen, true);
+      relax_electronic_mode(p, p, E_Dispose, aveomega, rand_gen, true);
   }
 
   // compute post-collision internal energies

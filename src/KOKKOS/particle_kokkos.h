@@ -126,6 +126,8 @@ class ParticleKokkos : public Particle {
   t_elecstate_2d d_elecstates;
   DAT::t_float_2d d_elec_default_rels;
   DAT::t_float_3d d_elec_species_rels;
+  DAT::t_float_3d d_elec_wt;      // precomputed selection weights
+                                  //   (isp,jsp,state) = degen * phi
   DAT::t_int_2d d_enforce_spin_conservation;
 
   DAT::tdual_int_1d k_ewhich,k_eicol,k_edcol;

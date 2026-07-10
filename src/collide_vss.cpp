@@ -75,6 +75,9 @@ CollideVSS::CollideVSS(SPARTA *sparta, int narg, char **arg) :
   // allocate per-species prefactor array
 
   memory->create(prefactor,nparams,nparams,"collide:prefactor");
+
+  elec_wt = NULL;
+  elec_wt_nsp = 0;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -85,6 +88,7 @@ CollideVSS::~CollideVSS()
 
   memory->destroy(params);
   memory->destroy(prefactor);
+  free_elec_wt();
 }
 
 /* ---------------------------------------------------------------------- */
@@ -97,6 +101,61 @@ void CollideVSS::init()
     error->all(FLERR,"VSS parameters do not match current species");
 
   Collide::init();
+
+  // (re)build the precomputed electronic selection weights
+
+  build_elec_wt();
+}
+
+/* ----------------------------------------------------------------------
+   precompute the per-pair electronic selection weights used by
+   select_elec_state: elec_wt[isp][jsp][state] = degen(state) * phi,
+   where phi is the per-state relaxation probability of species isp
+   colliding with species jsp (species_rel override or default_rel);
+   avoids re-resolving the phi indirection per state per collision
+------------------------------------------------------------------------- */
+
+void CollideVSS::build_elec_wt()
+{
+  free_elec_wt();
+  if (elecstyle != DISCRETE) return;
+
+  Particle::Species *species = particle->species;
+  int nsp = particle->nspecies;
+
+  elec_wt = new double**[nsp];
+  for (int isp = 0; isp < nsp; isp++) {
+    const Particle::ElectronicData *ed = species[isp].elecdat;
+    if (!ed) {
+      elec_wt[isp] = NULL;
+      continue;
+    }
+    elec_wt[isp] = new double*[nsp];
+    for (int jsp = 0; jsp < nsp; jsp++) {
+      elec_wt[isp][jsp] = new double[ed->nelecstate];
+      const double *phi = ed->species_rel[jsp] ?
+        ed->species_rel[jsp] : ed->default_rel;
+      for (int k = 0; k < ed->nelecstate; k++)
+        elec_wt[isp][jsp][k] = ed->states[k].degen*phi[k];
+    }
+  }
+  elec_wt_nsp = nsp;
+}
+
+/* ---------------------------------------------------------------------- */
+
+void CollideVSS::free_elec_wt()
+{
+  if (!elec_wt) return;
+  for (int isp = 0; isp < elec_wt_nsp; isp++) {
+    if (!elec_wt[isp]) continue;
+    for (int jsp = 0; jsp < elec_wt_nsp; jsp++)
+      delete [] elec_wt[isp][jsp];
+    delete [] elec_wt[isp];
+  }
+  delete [] elec_wt;
+  elec_wt = NULL;
+  elec_wt_nsp = 0;
 }
 
 /* ----------------------------------------------------------------------
@@ -708,20 +767,25 @@ int CollideVSS::select_elec_state(Particle::OnePart *p, Particle::OnePart *jp, d
   int max_level;
   Particle::Species *species = particle->species;
   int *estates = particle->eivec[particle->ewhich[index_elecstate]];
+  const Particle::ElecState *states = species[p->ispecies].elecdat->states;
+  const int nelecstate = species[p->ispecies].elecdat->nelecstate;
   // Find the maximum electronic level it can be in, given the current E_dispose
   max_level = 0;
-  while (max_level < species[p->ispecies].elecdat->nelecstate && E_Dispose > species[p->ispecies].elecdat->states[max_level].temp*update->boltz) {
+  while (max_level < nelecstate && E_Dispose > states[max_level].temp*update->boltz) {
     ++max_level;
   }
   --max_level;
 
   // not enough energy to reach even the ground state: stay in ground state
-  // (guards against max_level == -1 indexing state_probability[-1])
   if (max_level < 0) return 0;
 
-  double* state_probability = particle->cumulative_probabilities;
-
-  // Calculate number of total states, including degeneracies
+  // candidate weights: the precomputed per-pair degen*phi tables (see
+  // build_elec_wt); a reacting disposal distributes with the bare
+  // degeneracies (relaxation probability is 100% after a reaction).
+  // Note the weights can use E_Dispose-invariant phi's only because the
+  // current implementation requires the collision numbers to be collision
+  // invariant; if energy-dependent models are needed, the correct data
+  // would need passed in here.
   //
   // IMPORTANT: phi (the per-state relaxation probability from get_elec_phi)
   // appears TWICE in a transition: the caller gates the relaxation event on
@@ -735,50 +799,39 @@ int CollideVSS::select_elec_state(Particle::OnePart *p, Particle::OnePart *jp, d
   // phi(candidate) factor ("gate on phi then sample g*X") looks equivalent
   // but equilibrates to g*X/phi instead of Boltzmann whenever the
   // relaxation numbers are state-dependent.
+
+  const double *wt = reacting ? NULL : elec_wt[p->ispecies][jp->ispecies];
+  const int curstate = estates[p - particle->particles];
+  const int curspin = states[curstate].spin;
+
+  // total weight of all selectable states, including degeneracies
+
+  double total_weight = 0.0;
   for (int state = 0; state <= max_level; ++state) {
-    if (state != 0) {
-      state_probability[state] = state_probability[state-1];
-    } else {
-      state_probability[state] = 0.0;
-    }
-    if (!enforce_spin_conservation ||
-           species[p->ispecies].elecdat->states[state].spin == species[p->ispecies].elecdat->states[estates[p - particle->particles]].spin) {
-      // Note we can use E_Dispose here since the current implementation requires the collision numbers
-      // to be collision invariant (and therefore depend on E_Dispose, the trans + elec energy) but this
-      // algorithm allows that to be relaxed. If other models are needed, the correct data would need passed
-      // in here.
-      if (reacting) {
-        // We are distributing energy after a reaction, so relaxation probability is 100%
-        state_probability[state] += species[p->ispecies].elecdat->states[state].degen;
-      } else {
-        state_probability[state] += species[p->ispecies].elecdat->states[state].degen*get_elec_phi(p->ispecies, jp->ispecies, state, E_Dispose);
-      }
+    if (!enforce_spin_conservation || states[state].spin == curspin) {
+      if (reacting) total_weight += states[state].degen;
+      else total_weight += wt[state];
     }
   }
   // if no selectable state has any weight (e.g. every allowed state has a
   // zero relaxation probability), leave the particle in its current state
 
-  if (state_probability[max_level] <= 0.0)
-    return estates[p - particle->particles];
+  if (total_weight <= 0.0)
+    return curstate;
 
   // Select a state from the distribution
   int ielec,ilast;
   double eelec = 0.0;
   do {
-    double rand_state = random->uniform()*state_probability[max_level];
+    double rand_state = random->uniform()*total_weight;
     ielec = 0;
     ilast = -1;
     // bound by max_level: roundoff can leave rand_state >= 0 after the last
     // included state, which would index states[] past max_level/nelecstate
     while (rand_state >= 0 && ielec <= max_level) {
-      if (!enforce_spin_conservation ||
-             species[p->ispecies].elecdat->states[ielec].spin == species[p->ispecies].elecdat->states[estates[p - particle->particles]].spin) {
-        if (reacting) {
-          // We are distributing energy after a reaction, so relaxation probability is 100%
-          rand_state -= species[p->ispecies].elecdat->states[ielec].degen;
-        } else {
-          rand_state -= species[p->ispecies].elecdat->states[ielec].degen*get_elec_phi(p->ispecies, jp->ispecies, ielec, E_Dispose);
-        }
+      if (!enforce_spin_conservation || states[ielec].spin == curspin) {
+        if (reacting) rand_state -= states[ielec].degen;
+        else rand_state -= wt[ielec];
         ilast = ielec;
       }
       ++ielec;
@@ -786,7 +839,7 @@ int CollideVSS::select_elec_state(Particle::OnePart *p, Particle::OnePart *jp, d
     // floating-point round-off can leave rand_state non-negative after all
     // weights are subtracted, so clamp to the last spin-allowed state
     ielec = ilast;
-    eelec = species[p->ispecies].elecdat->states[ielec].temp*update->boltz;
+    eelec = states[ielec].temp*update->boltz;
     State_prob = pow((1.0 - eelec / E_Dispose),
                      (1.5 - omega));
   } while (State_prob < random->uniform());
