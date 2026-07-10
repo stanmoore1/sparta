@@ -35,7 +35,7 @@ class FixElecmodeKokkos : public FixElecmode {
   FixElecmodeKokkos(class SPARTA *sparta);
   ~FixElecmodeKokkos();
   void pre_update_custom_kokkos();
-  void update_custom(int, double, double, double, double, double *);
+  void update_custom(int, const TempsInfo &, double *);
 
   KOKKOS_INLINE_FUNCTION
   void update_custom_kokkos(int, double, double, double, double, const double *) const;

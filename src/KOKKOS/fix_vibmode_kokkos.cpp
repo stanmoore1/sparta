@@ -95,12 +95,11 @@ void FixVibmodeKokkos::pre_update_custom_kokkos()
    populate all vibrational modes and set evib = sum of mode energies
 ------------------------------------------------------------------------- */
 
-void FixVibmodeKokkos::update_custom(int index, double temp_thermal,
-                                     double temp_rot, double temp_vib,
-                                     double temp_elec, double *vstream)
+void FixVibmodeKokkos::update_custom(int index, const TempsInfo &temps,
+                                     double *vstream)
 {
   ParticleKokkos* particle_kk = (ParticleKokkos*) particle;
   particle_kk->sync(Host,PARTICLE_MASK|SPECIES_MASK|CUSTOM_MASK);
-  FixVibmode::update_custom(index, temp_thermal, temp_rot, temp_vib, temp_elec, vstream);
+  FixVibmode::update_custom(index, temps, vstream);
   particle_kk->modify(Host,PARTICLE_MASK|CUSTOM_MASK);
 }

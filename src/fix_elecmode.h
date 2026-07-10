@@ -33,7 +33,7 @@ class FixElecmode : public Fix {
   virtual ~FixElecmode();
   int setmask();
   void init();
-  virtual void update_custom(int, double, double, double, double, double *);
+  virtual void update_custom(int, const TempsInfo &, double *);
   virtual void surf_react(Particle::OnePart *, int &, int &);
 
  protected:

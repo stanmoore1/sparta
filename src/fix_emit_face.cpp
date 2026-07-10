@@ -532,6 +532,8 @@ void FixEmitFace::perform_task_onepass()
     temp_elec = tasks[i].temp_elec;
     vstream = tasks[i].vstream;
 
+    const TempsInfo temps = {temp_thermal,temp_rot,temp_vib,temp_elec};
+
     if (subsonic_style == PONLY) vscale = tasks[i].vscale;
     else vscale = particle->mixture[imix]->vscale;
 
@@ -580,8 +582,7 @@ void FixEmitFace::perform_task_onepass()
           p->dtremain = dt * random->uniform();
 
           if (nfix_update_custom)
-            modify->update_custom(particle->nlocal-1,temp_thermal,
-                                 temp_rot,temp_vib,temp_elec,vstream);
+            modify->update_custom(particle->nlocal-1,temps,vstream);
         }
 
         nsingle += nactual;
@@ -639,8 +640,7 @@ void FixEmitFace::perform_task_onepass()
         p->dtremain = dt * random->uniform();
 
         if (nfix_update_custom)
-          modify->update_custom(particle->nlocal-1,temp_thermal,
-                                temp_rot,temp_vib,temp_elec,vstream);
+          modify->update_custom(particle->nlocal-1,temps,vstream);
       }
 
       nsingle += nactual;
@@ -735,6 +735,8 @@ void FixEmitFace::perform_task_twopass()
     temp_elec = tasks[i].temp_elec;
     vstream = tasks[i].vstream;
 
+    const TempsInfo temps = {temp_thermal,temp_rot,temp_vib,temp_elec};
+
     if (subsonic_style == PONLY) vscale = tasks[i].vscale;
     else vscale = particle->mixture[imix]->vscale;
 
@@ -782,8 +784,7 @@ void FixEmitFace::perform_task_twopass()
           p->dtremain = dt * random->uniform();
 
           if (nfix_update_custom)
-            modify->update_custom(particle->nlocal-1,temp_thermal,
-                temp_rot,temp_vib,temp_elec,vstream);
+            modify->update_custom(particle->nlocal-1,temps,vstream);
         }
 
         nsingle += nactual;
@@ -835,8 +836,7 @@ void FixEmitFace::perform_task_twopass()
         p->dtremain = dt * random->uniform();
 
         if (nfix_update_custom)
-          modify->update_custom(particle->nlocal-1,temp_thermal,
-              temp_rot,temp_vib,temp_elec,vstream);
+          modify->update_custom(particle->nlocal-1,temps,vstream);
       }
 
       nsingle += nactual;

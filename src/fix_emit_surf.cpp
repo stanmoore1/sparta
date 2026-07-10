@@ -712,6 +712,8 @@ void FixEmitSurf::perform_task_onepass()
     magvstream = tasks[i].magvstream;
     vstream = tasks[i].vstream;
 
+    const TempsInfo temps = {temp_thermal,temp_rot,temp_vib,temp_elec};
+
     if (subsonic_style == PONLY || temp_custom_flag) vscale = tasks[i].vscale;
     else vscale = particle->mixture[imix]->vscale;
     if (normalflag) indot = magvstream;
@@ -805,8 +807,7 @@ void FixEmitSurf::perform_task_onepass()
           // temps/vstream already set to custom attributes in create_task
 
           if (nfix_update_custom)
-            modify->update_custom(particle->nlocal-1,temp_thermal,
-                                  temp_rot,temp_vib,temp_elec,vstream);
+            modify->update_custom(particle->nlocal-1,temps,vstream);
         }
 
         nsingle += nactual;
@@ -917,8 +918,7 @@ void FixEmitSurf::perform_task_onepass()
         // if per-surf custom attributes are being used
 
         if (nfix_update_custom)
-          modify->update_custom(particle->nlocal-1,temp_thermal,
-                               temp_rot,temp_vib,temp_elec,vstream);
+          modify->update_custom(particle->nlocal-1,temps,vstream);
       }
 
       nsingle += nactual;
@@ -1024,6 +1024,8 @@ void FixEmitSurf::perform_task_twopass()
     magvstream = tasks[i].magvstream;
     vstream = tasks[i].vstream;
 
+    const TempsInfo temps = {temp_thermal,temp_rot,temp_vib,temp_elec};
+
     if (subsonic_style == PONLY || temp_custom_flag) vscale = tasks[i].vscale;
     else vscale = particle->mixture[imix]->vscale;
     if (normalflag) indot = magvstream;
@@ -1116,8 +1118,7 @@ void FixEmitSurf::perform_task_twopass()
           // temps/vstream already set to custom attributes in create_task
 
           if (nfix_update_custom)
-            modify->update_custom(particle->nlocal-1,temp_thermal,
-                                  temp_rot,temp_vib,temp_elec,vstream);
+            modify->update_custom(particle->nlocal-1,temps,vstream);
         }
 
         nsingle += nactual;
@@ -1218,8 +1219,7 @@ void FixEmitSurf::perform_task_twopass()
         // if per-surf custom attributes are being used
 
         if (nfix_update_custom)
-          modify->update_custom(particle->nlocal-1,temp_thermal,
-                               temp_rot,temp_vib,temp_elec,vstream);
+          modify->update_custom(particle->nlocal-1,temps,vstream);
       }
 
       nsingle += nactual;

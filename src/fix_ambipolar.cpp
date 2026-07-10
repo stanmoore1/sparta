@@ -120,8 +120,7 @@ void FixAmbipolar::init()
    if an ion, set ionambi and velambi for particle
 ------------------------------------------------------------------------- */
 
-void FixAmbipolar::update_custom(int index, double temp_thermal,
-                                double, double, double,
+void FixAmbipolar::update_custom(int index, const TempsInfo &temps,
                                 double *vstream)
 {
   int *ionambi = particle->eivec[particle->ewhich[ionindex]];
@@ -141,7 +140,7 @@ void FixAmbipolar::update_custom(int index, double temp_thermal,
 
   ionambi[index] = 1;
 
-  double vscale = sqrt(2.0 * update->boltz * temp_thermal /
+  double vscale = sqrt(2.0 * update->boltz * temps.thermal /
                        particle->species[especies].mass);
 
   double vn = vscale * sqrt(-log(random->uniform()));
@@ -190,9 +189,9 @@ void FixAmbipolar::surf_react(Particle::OnePart *iorig, int &i, int &j)
     Particle::OnePart *particles = particle->particles;
     if (ions[particles[i].ispecies] == 0) return;
     if (particles[j].ispecies != especies) return;
-    update_custom(i,update->temp_thermal,update->temp_thermal,
-                  update->temp_thermal,update->temp_thermal,
-                  update->vstream);
+    const TempsInfo temps = {update->temp_thermal,update->temp_thermal,
+                             update->temp_thermal,update->temp_thermal};
+    update_custom(i,temps,update->vstream);
     j = -1;
   }
 }

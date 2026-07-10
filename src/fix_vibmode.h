@@ -33,7 +33,7 @@ class FixVibmode : public Fix {
   virtual ~FixVibmode();
   int setmask();
   void init();
-  virtual void update_custom(int, double, double, double, double, double *);
+  virtual void update_custom(int, const TempsInfo &, double *);
 
  protected:
   int maxmode;           // max # of vibrational modes for any species

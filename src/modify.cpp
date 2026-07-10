@@ -264,13 +264,10 @@ void Modify::custom_surf_changed()
    invoke update_custom() method, only for relevant fixes
 ------------------------------------------------------------------------- */
 
-void Modify::update_custom(int index, double temp_thermal,
-                           double temp_rot, double temp_vib,
-                           double temp_elec, double *vstream)
+void Modify::update_custom(int index, const TempsInfo &temps, double *vstream)
 {
   for (int i = 0; i < n_update_custom; i++)
-    fix[list_update_custom[i]]->update_custom(index,temp_thermal,temp_rot,
-                                              temp_vib,temp_elec,vstream);
+    fix[list_update_custom[i]]->update_custom(index,temps,vstream);
 }
 
 /* ----------------------------------------------------------------------

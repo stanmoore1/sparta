@@ -462,8 +462,8 @@ void FixEmitSurfKokkos::perform_task()
       auto inew = h_cands2new(cand);
       auto ilocal = nlocal_before + inew;
 
-      modify->update_custom(ilocal,temp_thermal,
-          temp_rot,temp_vib,temp_elec,vstream);
+      const TempsInfo temps = {temp_thermal,temp_rot,temp_vib,temp_elec};
+      modify->update_custom(ilocal,temps,vstream);
     }
   }
 }

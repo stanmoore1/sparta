@@ -98,9 +98,7 @@ void FixElecmode::init()
    populate an electronic state and set eelec
 ------------------------------------------------------------------------- */
 
-void FixElecmode::update_custom(int index, double temp_thermal,
-                               double temp_rot, double temp_vib,
-                               double temp_elec,
+void FixElecmode::update_custom(int index, const TempsInfo &temps,
                                double *vstream)
 {
   int *elecstate = particle->eivec[particle->ewhich[index_elecstate]];
@@ -112,7 +110,7 @@ void FixElecmode::update_custom(int index, double temp_thermal,
 
   if (particle->species[isp].elecdat == NULL) return;
 
-  elecstate[index] = particle->ielec(isp,temp_elec,random);
+  elecstate[index] = particle->ielec(isp,temps.elec,random);
   eelec[index] = update->boltz*particle->species[isp].elecdat->states[elecstate[index]].temp;
 }
 

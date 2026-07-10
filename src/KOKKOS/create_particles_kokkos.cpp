@@ -21,6 +21,7 @@
 #include "mixture.h"
 #include "grid_kokkos.h"
 #include "modify.h"
+#include "fix.h"
 #include "comm.h"
 #include "domain.h"
 #include "region.h"
@@ -423,10 +424,11 @@ void CreateParticlesKokkos::create_local(bigint np)
       // tempscale and vstream_update_custom are set appropriately
       // if using per-grid variables or per-grid custom attributes
 
-      if (nfix_update_custom)
-        modify->update_custom(inew,tempscale*temp_thermal,
-                              tempscale*temp_rot,tempscale*temp_vib,
-                              tempscale*temp_elec,vstream_update_custom);
+      if (nfix_update_custom) {
+        const TempsInfo temps = {tempscale*temp_thermal,tempscale*temp_rot,
+                                 tempscale*temp_vib,tempscale*temp_elec};
+        modify->update_custom(inew,temps,vstream_update_custom);
+      }
     }
   }
 

@@ -33,6 +33,7 @@
 #include "domain.h"
 #include "update.h"
 #include "modify.h"
+#include "fix.h"
 #include "comm.h"
 #include "random_mars.h"
 #include "random_knuth.h"
@@ -197,14 +198,16 @@ collide(Particle::OnePart *&ip, double &,
     if (!velreset) cll(ip,norm);
     if (modify->n_update_custom) {
       int i = ip - particle->particles;
-      modify->update_custom(i,tsurf,tsurf,tsurf,tsurf,vstream);
+      const TempsInfo temps = {tsurf,tsurf,tsurf,tsurf};
+      modify->update_custom(i,temps,vstream);
     }
   }
   if (jp) {
     if (!velreset) cll(jp,norm);
     if (modify->n_update_custom) {
       int j = jp - particle->particles;
-      modify->update_custom(j,tsurf,tsurf,tsurf,tsurf,vstream);
+      const TempsInfo temps = {tsurf,tsurf,tsurf,tsurf};
+      modify->update_custom(j,temps,vstream);
     }
   }
 

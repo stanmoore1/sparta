@@ -103,9 +103,8 @@ void FixVibmode::init()
    populate all vibrational modes and set evib = sum of mode energies
 ------------------------------------------------------------------------- */
 
-void FixVibmode::update_custom(int index, double temp_thermal,
-                               double temp_rot, double temp_vib,
-                               double, double *vstream)
+void FixVibmode::update_custom(int index, const TempsInfo &temps,
+                               double *vstream)
 {
   int **vibmode = particle->eiarray[particle->ewhich[index_vibmode]];
 
@@ -133,7 +132,7 @@ void FixVibmode::update_custom(int index, double temp_thermal,
   double evib = 0.0;
 
   for (int imode = 0; imode < nmode; imode++) {
-    ivib = static_cast<int> (-log(random->uniform()) * temp_vib /
+    ivib = static_cast<int> (-log(random->uniform()) * temps.vib /
                              particle->species[isp].vibtemp[imode]);
     vibmode[index][imode] = ivib;
     evib += ivib * update->boltz * particle->species[isp].vibtemp[imode];

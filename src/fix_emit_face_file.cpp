@@ -392,6 +392,8 @@ void FixEmitFaceFile::perform_task()
     vscale = tasks[i].vscale;
     vstream = tasks[i].vstream;
 
+    const TempsInfo temps = {temp_thermal,temp_rot,temp_vib,temp_elec};
+
     indot = vstream[0]*normal[0] + vstream[1]*normal[1] + vstream[2]*normal[2];
 
     if (perspecies) {
@@ -437,8 +439,7 @@ void FixEmitFaceFile::perform_task()
           p->dtremain = dt * random->uniform();
 
           if (nfix_update_custom)
-            modify->update_custom(particle->nlocal-1,temp_thermal,
-                                 temp_rot,temp_vib,temp_elec,vstream);
+            modify->update_custom(particle->nlocal-1,temps,vstream);
         }
 
         nsingle += nactual;
@@ -491,8 +492,7 @@ void FixEmitFaceFile::perform_task()
         p->dtremain = dt * random->uniform();
 
         if (nfix_update_custom)
-          modify->update_custom(particle->nlocal-1,temp_thermal,
-                               temp_rot,temp_vib,temp_elec,vstream);
+          modify->update_custom(particle->nlocal-1,temps,vstream);
       }
 
       nsingle += nactual;

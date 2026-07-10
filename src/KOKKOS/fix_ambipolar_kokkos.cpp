@@ -109,12 +109,11 @@ void FixAmbipolarKokkos::pre_update_custom_kokkos()
    if an ion, set ionambi and velambi for particle
 ------------------------------------------------------------------------- */
 
-void FixAmbipolarKokkos::update_custom(int index, double temp_thermal,
-                                       double temp_rot, double temp_vib,
-                                       double temp_elec, double *vstream)
+void FixAmbipolarKokkos::update_custom(int index, const TempsInfo &temps,
+                                       double *vstream)
 {
   ParticleKokkos* particle_kk = (ParticleKokkos*) particle;
   particle_kk->sync(Host,PARTICLE_MASK|SPECIES_MASK|CUSTOM_MASK);
-  FixAmbipolar::update_custom(index, temp_thermal, temp_rot, temp_vib, temp_elec, vstream);
+  FixAmbipolar::update_custom(index, temps, vstream);
   particle_kk->modify(Host,CUSTOM_MASK);
 }

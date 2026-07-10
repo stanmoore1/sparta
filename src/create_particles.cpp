@@ -21,6 +21,7 @@
 #include "mixture.h"
 #include "grid.h"
 #include "modify.h"
+#include "fix.h"
 #include "comm.h"
 #include "domain.h"
 #include "region.h"
@@ -523,9 +524,10 @@ void CreateParticles::create_single()
     double erot = particle->erot(mspecies,temp_rot,random);
     double evib = particle->evib(mspecies,temp_vib,random);
     particle->add_particle(id,mspecies,iwhich,x,v,erot,evib);
-    if (nfix_update_custom)
-      modify->update_custom(particle->nlocal-1,temp_thermal,
-                           temp_rot,temp_vib,temp_elec,vstream);
+    if (nfix_update_custom) {
+      const TempsInfo temps = {temp_thermal,temp_rot,temp_vib,temp_elec};
+      modify->update_custom(particle->nlocal-1,temps,vstream);
+    }
   }
 
   delete random;
@@ -802,10 +804,12 @@ void CreateParticles::create_local()
       // tempscale and vstream_update_custom are set appropriately
       // if using per-grid variables or per-grid custom attributes
 
-      if (nfix_update_custom)
-        modify->update_custom(particle->nlocal-1,tempscale*temp_thermal,
-                              tempscale*temp_rot,tempscale*temp_vib,
-                              tempscale*temp_elec,vstream_update_custom);
+      if (nfix_update_custom) {
+        const TempsInfo temps = {tempscale*temp_thermal,tempscale*temp_rot,
+                                 tempscale*temp_vib,tempscale*temp_elec};
+        modify->update_custom(particle->nlocal-1,temps,
+                              vstream_update_custom);
+      }
     }
 
     // increment count without effect of density variation
@@ -1122,10 +1126,12 @@ void CreateParticles::create_local_twopass()
       // tempscale and vstream_update_custom are set appropriately
       // if using per-grid variables or per-grid custom attributes
 
-      if (nfix_update_custom)
-        modify->update_custom(particle->nlocal-1,tempscale*temp_thermal,
-                              tempscale*temp_rot,tempscale*temp_vib,
-                              tempscale*temp_elec,vstream_update_custom);
+      if (nfix_update_custom) {
+        const TempsInfo temps = {tempscale*temp_thermal,tempscale*temp_rot,
+                                 tempscale*temp_vib,tempscale*temp_elec};
+        modify->update_custom(particle->nlocal-1,temps,
+                              vstream_update_custom);
+      }
     }
   }
 

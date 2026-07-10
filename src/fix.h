@@ -20,6 +20,13 @@
 
 namespace SPARTA_NS {
 
+struct TempsInfo {        // temperatures for initializing per-particle
+  double thermal;         //   custom attributes of a created particle
+  double rot;
+  double vib;
+  double elec;
+};
+
 class Fix : protected Pointers {
  public:
   char *id,*style;
@@ -83,7 +90,7 @@ class Fix : protected Pointers {
   virtual void start_of_step() {}
   virtual void end_of_step() {}
   virtual void post_run() {}
-  virtual void update_custom(int, double, double, double, double, double *) {}
+  virtual void update_custom(int, const TempsInfo &, double *) {}
   virtual void gas_react(int) {}
   virtual void surf_react(Particle::OnePart *, int &, int &) {}
   virtual void compute_field() {}

@@ -36,7 +36,7 @@ class FixAmbipolarKokkos : public FixAmbipolar {
   FixAmbipolarKokkos(class SPARTA *);
   ~FixAmbipolarKokkos();
   void pre_update_custom_kokkos();
-  void update_custom(int, double, double, double, double, double *);
+  void update_custom(int, const TempsInfo &, double *);
 
  private:
 
