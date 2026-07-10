@@ -34,6 +34,7 @@ using namespace MathConst;
 
 enum{DISSOCIATION,EXCHANGE,IONIZATION,RECOMBINATION};  // other react files
 enum{ARRHENIUS,QUANTUM};                               // other react files
+enum{NONE,DISCRETE,SMOOTH};                            // several files
 
 #define MAXREACTANT 2
 #define MAXPRODUCT 3
@@ -976,6 +977,17 @@ void ReactBird::build_micro_tables()
     // grid resolution from the smallest vibrational quantum;
     // skip the table entirely if the reactants carry no discrete ladders
     // (runtime then falls back to the standard / elec-micro factor)
+    //
+    // rotation stays in the continuum even with collide_modify rotate
+    // discrete, for two reasons: (a) the rigid-rotor ladder is so dense
+    // (theta_rot of order 1 K) that its density of states differs from
+    // the continuum limit only to O(theta_rot/T); and (b) removing
+    // rotation from the continuum makes the TCE calibration singular for
+    // temperature exponents eta <= zrot - 3/2 (the numerator seed
+    // exponent zcont+eta+1/2 reaches -1 and the required energy factor
+    // degenerates to a delta comb), which excludes common rate sets
+    // (e.g. eta = -1.5 dissociation): Bird's TCE validity constraint
+    // zbar + eta + 3/2 > 0 is satisfied by keeping rotation continuous
 
     double theta_min = 0.0;
     int nladder = 0;

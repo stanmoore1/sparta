@@ -169,20 +169,23 @@ void Collide::init()
   // check that extra rotation/vibration info is defined
   // for species that require it
 
+  // discrete rotation = rigid-rotor levels, defined only for linear
+  // (rotdof 2) species, which need a single rotational temperature from
+  // a species rotfile; nonlinear (rotdof 3) species have no closed-form
+  // level structure and keep the continuous rotational model
+
   if (rotstyle == DISCRETE) {
     Particle::Species *species = particle->species;
     int nspecies = particle->nspecies;
 
     int flag = 0;
     for (int isp = 0; isp < nspecies; isp++) {
-      if (species[isp].rotdof == 0) continue;
       if (species[isp].rotdof == 2 && species[isp].nrottemp != 1) flag++;
-      if (species[isp].rotdof == 3 && species[isp].nrottemp != 3) flag++;
     }
     if (flag) {
       char str[128];
-      sprintf(str,"%d species do not define correct rotational "
-              "temps for discrete model",flag);
+      sprintf(str,"%d species do not define a rotational "
+              "temperature for the discrete rotation model",flag);
       error->all(FLERR,str);
     }
   }
@@ -1719,8 +1722,7 @@ void Collide::modify_params(int narg, char **arg)
     } else if (strcmp(arg[iarg],"rotate") == 0) {
       if (iarg+2 > narg) error->all(FLERR,"Illegal collide_modify command");
       if (strcmp(arg[iarg+1],"no") == 0) rotstyle = NONE;
-      // not yet supported
-      //else if (strcmp(arg[iarg+1],"discrete") == 0) rotstyle = DISCRETE;
+      else if (strcmp(arg[iarg+1],"discrete") == 0) rotstyle = DISCRETE;
       else if (strcmp(arg[iarg+1],"smooth") == 0) rotstyle = SMOOTH;
       else error->all(FLERR,"Illegal collide_modify command");
       iarg += 2;

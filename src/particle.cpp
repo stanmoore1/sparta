@@ -843,7 +843,6 @@ void Particle::add_species(int narg, char **arg)
   memory->sfree(filespecies);
 
   // process any optional keywords
-  // NOTE: rotfile is not yet supported
 
   int rotindex = 0;
   int vibindex = 0;
@@ -851,8 +850,6 @@ void Particle::add_species(int narg, char **arg)
 
   while (iarg < narg) {
     if (strcmp(arg[iarg],"rotfile") == 0) {
-      // not yet supported
-      error->all(FLERR,"Illegal species command");
       if (iarg+2 > narg) error->all(FLERR,"Illegal species command");
       if (rotindex)
         error->all(FLERR,"Species command can only use a single rotfile");
@@ -1192,9 +1189,27 @@ double Particle::erot(int isp, double temp_thermal, RanKnuth *erandom)
   if (species[isp].rotdof < 2) return 0.0;
 
   if (rotstyle == DISCRETE && species[isp].rotdof == 2) {
-    int irot = -log(erandom->uniform()) * temp_thermal /
+    // rigid-rotor levels E_J = J(J+1) k theta_r with degeneracy 2J+1:
+    // sample J from p(J) ~ (2J+1) exp(-J(J+1) theta_r/T) by rejection
+    // against a uniform-J proposal normalized at the distribution peak
+    double tratio = temp_thermal / particle->species[isp].rottemp[0];
+    if (tratio <= 0.0) return 0.0;
+    int jmax = static_cast<int> (0.5*(sqrt(1.0+60.0*tratio)-1.0)) + 1;
+    int jpeak = static_cast<int> (0.5*(sqrt(2.0*tratio)-1.0));
+    if (jpeak < 0) jpeak = 0;
+    double wmax = 0.0;
+    for (int j = jpeak; j <= jpeak+1; j++) {
+      double w = (2.0*j+1.0) * exp(-j*(j+1.0)/tratio);
+      if (w > wmax) wmax = w;
+    }
+    int irot;
+    double state_prob;
+    do {
+      irot = static_cast<int> (erandom->uniform()*(jmax+0.99999999));
+      state_prob = (2.0*irot+1.0) * exp(-irot*(irot+1.0)/tratio) / wmax;
+    } while (state_prob < erandom->uniform());
+    eng = irot*(irot+1.0) * update->boltz *
       particle->species[isp].rottemp[0];
-    eng = irot * update->boltz * particle->species[isp].rottemp[0];
   } else if (rotstyle == SMOOTH && species[isp].rotdof == 2) {
     eng = -log(erandom->uniform()) * update->boltz * temp_thermal;
   } else {

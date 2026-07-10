@@ -514,6 +514,11 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
         if (rotn_phi >= random->uniform()) {
           if (rotstyle == NONE) {
             p->erot = 0.0;
+          } else if (rotstyle == DISCRETE && rotdof == 2) {
+            E_Dispose += p->erot;
+            p->erot = sample_rot_discrete(random,sp,E_Dispose,
+                        params[ip->ispecies][jp->ispecies].omega);
+            E_Dispose -= p->erot;
           } else if (rotstyle != NONE && rotdof == 2) {
             E_Dispose += p->erot;
             Fraction_Rot =
@@ -927,6 +932,10 @@ void CollideVSS::EEXCHANGE_ReactingEDisposal(Particle::OnePart *ip,
     if (rotdof) {
       if (rotstyle == NONE) {
         p->erot = 0.0;
+      } else if (rotstyle == DISCRETE && rotdof == 2) {
+        p->erot = sample_rot_discrete(random,sp,E_Dispose,aveomega);
+        E_Dispose -= p->erot;
+
       } else if (rotdof == 2) {
         Fraction_Rot =
           1- pow(random->uniform(),(1/(2.5-aveomega)));
@@ -1045,6 +1054,50 @@ double CollideVSS::sample_bl(RanKnuth *random, double Exp_1, double Exp_2)
     y = pow(x*Exp_s/Exp_1, Exp_1)*pow((1.0-x)*Exp_s/Exp_2, Exp_2);
   } while (y < random->uniform());
   return x;
+}
+
+/* ----------------------------------------------------------------------
+   Borgnakke-Larsen selection of a discrete rigid-rotor level:
+   levels E_J = J(J+1) k theta_r with degeneracy 2J+1 for a linear
+   (rotdof 2) molecule of species sp, disposing energy E_Dispose against
+   the remaining continuous modes,
+     p(J) ~ (2J+1) (1 - E_J/E_Dispose)^(1.5-omega)
+   sampled by rejection against a uniform-J proposal normalized at the
+   analytic peak of the weight; returns the level energy E_J
+------------------------------------------------------------------------- */
+
+double CollideVSS::sample_rot_discrete(RanKnuth *random, int sp,
+                                       double E_Dispose, double omega)
+{
+  const double AdjustFactor = 0.99999999;
+  double rotquantum = update->boltz * particle->species[sp].rottemp[0];
+  double xrot = E_Dispose / rotquantum;
+  if (xrot <= 0.0) return 0.0;
+
+  int max_level = static_cast<int> (0.5*(sqrt(1.0+4.0*xrot)-1.0));
+  if (max_level == 0) return 0.0;
+  double arot = 1.5 - omega;
+
+  // peak of w(J) = (2J+1)(1 - J(J+1)/xrot)^arot at
+  // (2J+1)^2 = (2*xrot+0.5)/(arot+0.5); bracket with the neighbors
+
+  int jpeak = static_cast<int> (0.5*(sqrt((2.0*xrot+0.5)/(arot+0.5))-1.0));
+  double wmax = 0.0;
+  for (int j = MAX(jpeak-1,0); j <= MIN(jpeak+1,max_level); j++) {
+    double ej = j*(j+1.0)*rotquantum;
+    double w = (2.0*j+1.0) * pow(1.0-ej/E_Dispose,arot);
+    if (w > wmax) wmax = w;
+  }
+
+  int irot;
+  double perot,state_prob;
+  do {
+    irot = static_cast<int> (random->uniform()*(max_level+AdjustFactor));
+    perot = irot*(irot+1.0)*rotquantum;
+    state_prob = (2.0*irot+1.0) * pow(1.0-perot/E_Dispose,arot) / wmax;
+  } while (state_prob < random->uniform());
+
+  return perot;
 }
 
 /* ----------------------------------------------------------------------
