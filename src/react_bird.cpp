@@ -535,6 +535,100 @@ void ReactBird::init()
 }
 
 /* ----------------------------------------------------------------------
+   check that the temperature exponent eta = coeff[3] of each active
+     reaction is within the exact bounds of the TCE reaction probability
+       P = C1 * Gamma(z+5/2-omega) / Gamma(z+eta+3/2) *
+           (Ec-Ea)^(eta-1+omega) * (1-Ea/Ec)^(z+3/2-omega)
+     else warn that the probability will be erroneous
+   z = continuum internal DOF contributing to the collision energy Ec,
+     constant for a given reaction:
+     partial energy (rDOF): z = coeff[0]
+     total energy: z = average rotational DOF of the reactants, plus the
+       average vibrational DOF when vibstyle = smooth; the discrete
+       vibrational and electronic ladders enter through the microcanonical
+       energy-factor tables, not through z, so z stays constant
+   3 bounds on eta:
+   (1) eta > -(z + 3/2), else the argument of Gamma(z+eta+3/2) is
+       non-positive: Gamma is negative (negative probability) or hits
+       a pole at a non-positive integer (infinite or NaN probability),
+       and the microcanonical table seeds are non-integrable;
+       z is constant so this is certain: it is an error
+   (2) trend as Ec -> Ea: for Ea > 0 the probability varies as
+       (Ec-Ea)^(eta+z+1/2) near threshold and must vanish there,
+       requiring eta > -(z + 1/2)
+       for Ea <= 0 the probability varies as Ec^(eta-1+omega) as
+       Ec -> 0 and must not diverge, requiring eta >= 1 - omega
+   (3) trend as Ec -> infinity: the probability varies as
+       Ec^(eta-1+omega) and must not diverge, requiring eta <= 1 - omega
+   B-style reverse reactions are seeded with eta = 0 and the forward
+     temperature exponent applied at the cell temperature, so they are
+     checked in the form that actually runs
+   called from ReactTCE::init() and ReactTCEKokkos::init(),
+     after ReactBird::init() has set coeff[5] = omega and seeded any
+     B-style reverse coefficients
+------------------------------------------------------------------------- */
+
+void ReactBird::check_tce_bounds()
+{
+  Particle::Species *species = particle->species;
+  char str[MAXLINE+256];
+
+  for (int m = 0; m < nlist; m++) {
+    OneReaction *r = &rlist[m];
+    if (!r->active) continue;
+
+    int isp = r->reactants[0];
+    int jsp = r->reactants[1];
+
+    double ea = r->coeff[1];
+    double eta = r->coeff[3];
+    double omega = r->coeff[5];
+
+    double z;
+    if (partialEnergy) z = r->coeff[0];
+    else {
+      z = 0.5 * (species[isp].rotdof + species[jsp].rotdof);
+      if (collide->vibstyle == SMOOTH)
+        z += 0.5 * (species[isp].vibdof + species[jsp].vibdof);
+    }
+
+    if (eta <= -(z+1.5)) {
+      sprintf(str,"Reaction %s: temperature exponent %g must be > %g, "
+              "else the gamma function is negative or infinite and "
+              "the reaction probability is erroneous or NaN",
+              r->id,eta,-(z+1.5));
+      error->all(FLERR,str);
+    } else if (ea > 0.0 && eta <= -(z+0.5)) {
+      if (comm->me == 0) {
+        sprintf(str,"Reaction %s: temperature exponent %g must be > %g, "
+                "else the reaction probability does not vanish as the "
+                "collision energy approaches the activation energy",
+                r->id,eta,-(z+0.5));
+        error->warning(FLERR,str);
+      }
+    } else if (ea <= 0.0 && eta < 1.0-omega) {
+      if (comm->me == 0) {
+        sprintf(str,"Reaction %s: temperature exponent %g must be >= %g, "
+                "else the reaction probability diverges as the "
+                "collision energy approaches zero",
+                r->id,eta,1.0-omega);
+        error->warning(FLERR,str);
+      }
+    }
+
+    if (eta > 1.0-omega) {
+      if (comm->me == 0) {
+        sprintf(str,"Reaction %s: temperature exponent %g must be <= %g, "
+                "else the reaction probability diverges as the "
+                "collision energy approaches infinity",
+                r->id,eta,1.0-omega);
+        error->warning(FLERR,str);
+      }
+    }
+  }
+}
+
+/* ----------------------------------------------------------------------
    return 1 if any recombination reactions are defined for species pair ISP,JSP
    else return 0
    called from Collide::init(), after React::init() has been performed

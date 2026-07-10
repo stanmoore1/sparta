@@ -43,6 +43,11 @@ void ReactTCE::init()
 
   ReactBird::init();
 
+  // error/warn if the temperature exponent of any reaction is out of
+  //   bounds for the TCE reaction probability
+
+  check_tce_bounds();
+
   // with partial_energy no, the TCE energy factor is the microcanonical
   // average over the reactants' discrete ladders (SHO vibrational levels
   // when vibrate discrete, electronic states when electronic discrete):
@@ -147,13 +152,16 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
     }
 
     // compute probability of reaction
+    // gamma function denominator is negative or infinite (erroneous
+    //   probability) if the temperature exponent is out of bounds,
+    //   checked at init by ReactBird::check_tce_bounds()
 
     switch (r->type) {
     case DISSOCIATION:
     case IONIZATION:
     case EXCHANGE:
       {
-        react_prob += prefactor * tgamma(z+2.5-r->coeff[5]) / MAX(1.0e-6,tgamma(z+r->coeff[3]+1.5)) *
+        react_prob += prefactor * tgamma(z+2.5-r->coeff[5]) / tgamma(z+r->coeff[3]+1.5) *
           efactor;
         break;
       }
@@ -173,7 +181,7 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
         if (sp2recomb[recomb_species] != list[i]) continue;
 
         react_prob += recomb_boost * recomb_density * prefactor *
-          tgamma(z+2.5-r->coeff[5]) / MAX(1.0e-6,tgamma(z+r->coeff[3]+1.5)) *
+          tgamma(z+2.5-r->coeff[5]) / tgamma(z+r->coeff[3]+1.5) *
           efactor;   // extended to general recombination case with non-zero activation energy
         break;
       }
