@@ -79,10 +79,13 @@ class ReactBird : public React {
     char *id;                      // reaction ID (formula)
     int reverse;                   // 1 if backward rate is derived from a
                                    //   forward reaction by detailed balance
-                                   //   (reaction style 'B'), else 0 (PROTOTYPE)
+                                   //   (reaction style 'B'), else 0
     int reverse_partner;           // rlist index of the forward reaction whose
                                    //   Arrhenius rate this reverse rate derives
                                    //   from, or -1 if none found
+    double reverse_bf;             // temperature exponent of the forward
+                                   //   reaction, applied at the cell
+                                   //   temperature in the backward prefactor
   };
 
   OneReaction *rlist;              // list of all reactions read from file

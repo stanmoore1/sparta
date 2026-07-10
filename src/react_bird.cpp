@@ -242,10 +242,12 @@ void ReactBird::init()
     reactions[j][i].list[reactions[j][i].n++] = m;
   }
 
-  // PROTOTYPE (issue #472): pair each reverse (detailed-balance) reaction with
+  // issue #472: pair each reverse (detailed-balance, B-style) reaction with
   //   its forward partner and seed the backward Arrhenius coefficients.
-  // forward partner F of reverse reaction B has reactants/products swapped:
-  //   F.reactants == B.products and F.products == B.reactants
+  // supported pairs:
+  //   EXCHANGE B      <-> EXCHANGE forward with reactants/products swapped
+  //   RECOMBINATION B <-> DISSOCIATION forward with the same third body:
+  //                       B: A + B -> AB + M  pairs with  F: AB + M -> A + B + M
   // following Bird94 sec 6.6 and Boyd & Schwartzentruber sec 7.5.2-7.5.3, with
   //   dHf = F.coeff[4] (signed reaction energy, negative for endothermic F):
   //   Ea_B  = Ea_F + dHf        (barrier seen from the product side)
@@ -254,25 +256,55 @@ void ReactBird::init()
   //   A_B(T) = A_F * q_react,F(T)/q_prod,F(T)
   // the equilibrium-constant exponential cancels against the shifted barrier,
   //   leaving only the partition-function ratio, which ReactTCE::attempt()
-  //   applies at run time using the cell temperature React::tgas.
+  //   applies at run time using the cell temperature React::tgas; for a
+  //   recombination pair the ratio has one net translational factor (units of
+  //   volume), converting the m^3/s dissociation prefactor into the m^6/s
+  //   recombination prefactor.
   // here we store the RAW forward A into B.coeff[2] so the standard TCE
   //   transform below yields B's geometric prefactor G_B * A_F.
   // guarded by initflag so the seeding happens exactly once (like the transform)
 
   for (int m = 0; m < nlist; m++) {
     OneReaction *b = &rlist[m];
-    if (!b->active || !b->reverse || b->initflag) continue;
-    if (b->type != EXCHANGE)
-      error->all(FLERR,"Reverse (B-style) reaction prototype currently "
-                 "supports only exchange reactions");
+    if (!b->reverse) continue;
+    if (b->type != EXCHANGE && b->type != RECOMBINATION) {
+      print_reaction(b);
+      error->all(FLERR,"Reverse (B-style) reactions support exchange "
+                 "reactions and recombination reactions paired with "
+                 "dissociation; for ionization the reverse rate depends on "
+                 "the electron temperature and must be supplied explicitly");
+    }
+    if (!b->active || b->initflag) continue;
+    if (b->type == RECOMBINATION && b->products[1] < 0) {
+      print_reaction(b);
+      error->all(FLERR,"Reverse (B-style) recombination requires an "
+                 "explicit third-body species (not atom/mol), so it can "
+                 "pair with the per-partner forward dissociation reaction");
+    }
 
     int found = -1;
-    for (int f = 0; f < nlist; f++) {
-      OneReaction *r = &rlist[f];
-      if (f == m || !r->active || r->reverse) continue;
-      if (r->type != EXCHANGE) continue;
-      if (set_match(r->reactants,r->nreactant,b->products,b->nproduct) &&
-          set_match(r->products,r->nproduct,b->reactants,b->nreactant)) {
+    if (b->type == EXCHANGE) {
+      for (int f = 0; f < nlist; f++) {
+        OneReaction *r = &rlist[f];
+        if (f == m || !r->active || r->reverse) continue;
+        if (r->type != EXCHANGE) continue;
+        if (set_match(r->reactants,r->nreactant,b->products,b->nproduct) &&
+            set_match(r->products,r->nproduct,b->reactants,b->nreactant)) {
+          found = f;
+          break;
+        }
+      }
+    } else {                    // RECOMBINATION paired with DISSOCIATION
+      for (int f = 0; f < nlist; f++) {
+        OneReaction *r = &rlist[f];
+        if (f == m || !r->active || r->reverse) continue;
+        if (r->type != DISSOCIATION) continue;
+        // F: AB + M -> A + B + M   vs   B: A + B -> AB + M
+        if (r->reactants[0] != b->products[0]) continue;   // AB
+        if (r->reactants[1] != b->products[1]) continue;   // same third body
+        if (r->products[2] != r->reactants[1]) continue;   // F third body sane
+        int ab_pair[2] = {r->products[0],r->products[1]};
+        if (!set_match(ab_pair,2,b->reactants,b->nreactant)) continue;
         found = f;
         break;
       }
@@ -289,7 +321,16 @@ void ReactBird::init()
     b->coeff[0] = f->coeff[0];                // effective internal DOF
     b->coeff[1] = f->coeff[1] + f->coeff[4];  // Ea_B = Ea_F + dHf
     b->coeff[2] = f->coeff[2];                // raw A_F (scaled at run time)
-    b->coeff[3] = f->coeff[3];                // inherit temperature exponent
+    b->coeff[3] = 0.0;                        // T dependence handled by the
+    b->reverse_bf = f->coeff[3];              //   cell-T prefactor: T^b_F and
+                                              //   the q ratio are evaluated
+                                              //   together at run time, which
+                                              //   keeps the TCE form valid
+                                              //   for any b_F (a b_B <=
+                                              //   -(z+3/2) would make the
+                                              //   backward energy factor
+                                              //   non-integrable, e.g. for
+                                              //   atom + atom recombination)
     b->coeff[4] = -f->coeff[4];               // reverse reaction energy
     if (b->coeff[1] < 0.0) b->coeff[1] = 0.0; // clamp small negative barrier
   }
@@ -670,6 +711,7 @@ void ReactBird::readfile(char *fname)
         r->id = NULL;
         r->reverse = 0;
         r->reverse_partner = -1;
+        r->reverse_bf = 0.0;
       }
     }
 

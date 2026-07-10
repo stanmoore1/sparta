@@ -133,11 +133,12 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
       efactor = pow(ecc-r->coeff[1],r->coeff[3]-1+r->coeff[5]) *
                 pow(1.0-r->coeff[1]/ecc,z+1.5-r->coeff[5]);
 
-    // effective Arrhenius prefactor
-    // PROTOTYPE (issue #472): for a reverse (detailed-balance) reaction, scale
-    //   the seeded forward prefactor by the partition-function ratio evaluated
-    //   at the local cell temperature React::tgas.  If no valid cell
-    //   temperature is available (e.g. tgas not set), skip the reverse reaction.
+    // effective Arrhenius prefactor (issue #472): for a reverse
+    // (detailed-balance) reaction, scale the seeded forward prefactor by
+    // the partition-function ratio and forward temperature exponent
+    // evaluated at the local cell temperature React::tgas.  If no valid
+    // cell temperature is available (fewer than 2 particles in the cell),
+    // skip the reverse reaction for this collision.
 
     double prefactor = r->coeff[2];
     if (r->reverse) {
@@ -243,15 +244,19 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
 }
 
 /* ----------------------------------------------------------------------
-   PROTOTYPE (issue #472): total partition function per unit volume for a
-   species at temperature T, q = q_trans * q_rot * q_vib * q_elec
-   - translational: (2 pi m kB T / h^2)^{3/2}
-   - rotational:    rigid rotor, linear molecule, symmetry number sigma = 1
-   - vibrational:   harmonic oscillator, ground-state referenced
-   - electronic:    ground-state degeneracy assumed = 1 (not in species file)
-   the constant translational prefactor cancels in the reactant/product ratio
-   for the exchange reactions supported by this prototype, but is retained here
-   so the routine returns a physically meaningful partition function
+   total partition function per unit volume for a species at temperature T,
+     q = q_trans * q_rot * q_vib * q_elec   (issue #472 reverse reactions)
+   - translational: (2 pi m kB T / h^2)^{3/2}  (per unit volume)
+   - rotational:    rigid rotor, linear molecule, T/(sigma theta_r), with
+                    the symmetry number sigma from the species rotfile
+                    (nonlinear molecules use the classical
+                    sqrt(pi/(sigma^2) * T^3/(tA tB tC)) form)
+   - vibrational:   harmonic oscillator, ground-state referenced, with
+                    d-fold degenerate modes contributing (1-x)^-d
+   - electronic:    sum over the species elecfile ladder, g_i e^(-theta_i/T);
+                    1 if the species defines no electronic data
+   energies are referenced to each species' own ground state, consistent
+   with the reaction energy (C5) used to seed the backward coefficients
 ------------------------------------------------------------------------- */
 
 double ReactTCE::partition_function(int isp, double T)
@@ -264,11 +269,19 @@ double ReactTCE::partition_function(int isp, double T)
 
   double qtrans = pow(2.0*MY_PI*sp->mass*kb*T/(h*h), 1.5);
 
-  // rotational partition function (rigid rotor, linear molecule)
+  // rotational partition function (rigid rotor), high-temperature form:
+  // exact to O(theta_r/T), i.e. to ~1e-4 at any temperature where the
+  // reaction rates themselves are non-negligible
 
   double qrot = 1.0;
-  if (sp->rotdof >= 2 && sp->nrottemp >= 1 && sp->rottemp[0] > 0.0)
-    qrot = T / sp->rottemp[0];
+  if (sp->rotdof == 2 && sp->nrottemp >= 1 && sp->rottemp[0] > 0.0)
+    qrot = T / (sp->rotsymm * sp->rottemp[0]);
+  else if (sp->rotdof == 3 && sp->nrottemp == 3 &&
+           sp->rottemp[0] > 0.0 && sp->rottemp[1] > 0.0 &&
+           sp->rottemp[2] > 0.0)
+    qrot = sqrt(MY_PI*T*T*T /
+                (sp->rotsymm*sp->rotsymm *
+                 sp->rottemp[0]*sp->rottemp[1]*sp->rottemp[2]));
 
   // vibrational partition function (harmonic oscillator, ground-state ref)
 
@@ -280,27 +293,49 @@ double ReactTCE::partition_function(int isp, double T)
     qvib *= pow(1.0/(1.0-x), g);
   }
 
-  // electronic partition function (ground state only)
+  // electronic partition function from the species elecfile ladder
 
   double qelec = 1.0;
+  if (sp->elecdat) {
+    qelec = 0.0;
+    for (int i = 0; i < sp->elecdat->nelecstate; i++)
+      qelec += sp->elecdat->states[i].degen *
+        exp(-sp->elecdat->states[i].temp/T);
+  }
 
   return qtrans*qrot*qvib*qelec;
 }
 
 /* ----------------------------------------------------------------------
-   PROTOTYPE (issue #472): partition-function ratio that converts the seeded
-   forward Arrhenius prefactor into the backward prefactor by detailed balance,
+   partition-function ratio that converts the seeded forward Arrhenius
+   prefactor into the backward prefactor by detailed balance,
      A_B / A_F = q_reactants,forward / q_products,forward
                = q(reverse products) / q(reverse reactants)
-   evaluated at the local cell temperature React::tgas
+   evaluated at the local cell temperature React::tgas.
+   for a dissociation/recombination pair the product and reactant counts
+   differ by one, so the ratio carries one net translational factor and
+   has units of volume, converting the forward m^3/s prefactor into the
+   backward m^6/s recombination prefactor (issue #472)
 ------------------------------------------------------------------------- */
 
 double ReactTCE::reverse_scale(OneReaction *r)
 {
+  // for a B-style recombination A + B -> AB + M, the third body M
+  // (products[1]) is a spectator whose partition function appears on both
+  // sides of the paired dissociation and cancels: skip it
+
+  int nprod = r->nproduct;
+  if (r->type == RECOMBINATION) nprod = 1;
+
   double num = 1.0, den = 1.0;
-  for (int i = 0; i < r->nproduct; i++)
+  for (int i = 0; i < nprod; i++)
     num *= partition_function(r->products[i],tgas);
   for (int i = 0; i < r->nreactant; i++)
     den *= partition_function(r->reactants[i],tgas);
-  return num/den;
+
+  // the forward temperature exponent is applied here at the cell
+  // temperature (the seeded backward exponent is 0), so the backward TCE
+  // form stays integrable for any forward b (see ReactBird::init)
+
+  return num/den * pow(tgas,r->reverse_bf);
 }

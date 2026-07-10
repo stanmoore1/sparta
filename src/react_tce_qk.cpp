@@ -41,6 +41,12 @@ void ReactTCEQK::init()
 
   ReactBird::init();
 
+  // reverse (B-style) reactions are implemented only by the tce style
+
+  for (int i = 0; i < nlist; i++)
+    if (rlist[i].reverse)
+      error->all(FLERR,"Reverse (B-style) reactions require react tce");
+
   // do not allow recombination reactions for now
 
   for (int i = 0; i < nlist; i++)
