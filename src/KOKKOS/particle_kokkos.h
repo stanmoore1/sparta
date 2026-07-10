@@ -161,7 +161,7 @@ class ParticleKokkos : public Particle {
 
   int nbytes;
   int maxcellcount,ngrid;
-  int collide_rot,vibstyle;
+  int collide_rot,rotstyle,vibstyle;
   double boltz;
 
   DAT::t_int_2d d_plist;
@@ -263,10 +263,31 @@ double ParticleKokkos::erot(int isp, double temp_thermal, rand_type &erandom) co
 {
  double eng,a,erm,b;
 
+ enum{NONE,DISCRETE,SMOOTH};            // several files
  if (!collide_rot) return 0.0;
  if (d_species[isp].rotdof < 2) return 0.0;
 
- if (d_species[isp].rotdof == 2)
+ if (rotstyle == DISCRETE && d_species[isp].rotdof == 2) {
+   // rigid-rotor levels E_J = J(J+1) k theta_r with degeneracy 2J+1:
+   // must match Particle::erot draw-for-draw for SPARTA_KOKKOS_EXACT
+   double tratio = temp_thermal / d_species[isp].rottemp[0];
+   if (tratio <= 0.0) return 0.0;
+   int jmax = static_cast<int> (0.5*(sqrt(1.0+60.0*tratio)-1.0)) + 1;
+   int jpeak = static_cast<int> (0.5*(sqrt(2.0*tratio)-1.0));
+   if (jpeak < 0) jpeak = 0;
+   double wmax = 0.0;
+   for (int j = jpeak; j <= jpeak+1; j++) {
+     double w = (2.0*j+1.0) * exp(-j*(j+1.0)/tratio);
+     if (w > wmax) wmax = w;
+   }
+   int irot;
+   double state_prob;
+   do {
+     irot = static_cast<int> (erandom.drand()*(jmax+0.99999999));
+     state_prob = (2.0*irot+1.0) * exp(-irot*(irot+1.0)/tratio) / wmax;
+   } while (state_prob < erandom.drand());
+   eng = irot*(irot+1.0) * boltz * d_species[isp].rottemp[0];
+ } else if (d_species[isp].rotdof == 2)
    eng = -log(erandom.drand()) * boltz * temp_thermal;
  else {
    a = 0.5*d_species[isp].rotdof-1.0;

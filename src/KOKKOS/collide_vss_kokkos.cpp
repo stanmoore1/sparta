@@ -1775,6 +1775,11 @@ void CollideVSSKokkos::EEXCHANGE_NonReactingEDisposal(int icell,
         if (rotn_phi >= rand_gen.drand()) {
           if (rotstyle == NONE) {
             p->erot = 0.0;
+          } else if (rotstyle == DISCRETE && rotdof == 2) {
+            E_Dispose += p->erot;
+            p->erot = sample_rot_discrete(rand_gen,sp,E_Dispose,
+                        d_params(ip->ispecies,jp->ispecies).omega);
+            E_Dispose -= p->erot;
           } else if (rotstyle != NONE && rotdof == 2) {
             E_Dispose += p->erot;
             Fraction_Rot =
@@ -2200,6 +2205,10 @@ void CollideVSSKokkos::EEXCHANGE_ReactingEDisposal(int icell,
     if (rotdof) {
       if (rotstyle == NONE) {
         p->erot = 0.0 ;
+      } else if (rotstyle == DISCRETE && rotdof == 2) {
+        p->erot = sample_rot_discrete(rand_gen,sp,E_Dispose,aveomega);
+        E_Dispose -= p->erot;
+
       } else if (rotdof == 2) {
         Fraction_Rot =
           1- pow(rand_gen.drand(),(1/(2.5-aveomega)));
@@ -2319,6 +2328,45 @@ double CollideVSSKokkos::sample_bl(rand_type &rand_gen, double Exp_1, double Exp
     y = pow(x*Exp_s/Exp_1, Exp_1)*pow((1.0-x)*Exp_s/Exp_2, Exp_2);
   } while (y < rand_gen.drand());
   return x;
+}
+
+/* ----------------------------------------------------------------------
+   Borgnakke-Larsen selection of a discrete rigid-rotor level,
+   matching CollideVSS::sample_rot_discrete draw-for-draw
+   (see that method for the derivation)
+------------------------------------------------------------------------- */
+
+KOKKOS_INLINE_FUNCTION
+double CollideVSSKokkos::sample_rot_discrete(rand_type &rand_gen, int sp,
+                                             double E_Dispose,
+                                             double omega) const
+{
+  const double AdjustFactor = 0.99999999;
+  double rotquantum = boltz * d_species[sp].rottemp[0];
+  double xrot = E_Dispose / rotquantum;
+  if (xrot <= 0.0) return 0.0;
+
+  int max_level = static_cast<int> (0.5*(sqrt(1.0+4.0*xrot)-1.0));
+  if (max_level == 0) return 0.0;
+  double arot = 1.5 - omega;
+
+  int jpeak = static_cast<int> (0.5*(sqrt((2.0*xrot+0.5)/(arot+0.5))-1.0));
+  double wmax = 0.0;
+  for (int j = MAX(jpeak-1,0); j <= MIN(jpeak+1,max_level); j++) {
+    double ej = j*(j+1.0)*rotquantum;
+    double w = (2.0*j+1.0) * pow(1.0-ej/E_Dispose,arot);
+    if (w > wmax) wmax = w;
+  }
+
+  int irot;
+  double perot,state_prob;
+  do {
+    irot = static_cast<int> (rand_gen.drand()*(max_level+AdjustFactor));
+    perot = irot*(irot+1.0)*rotquantum;
+    state_prob = (2.0*irot+1.0) * pow(1.0-perot/E_Dispose,arot) / wmax;
+  } while (state_prob < rand_gen.drand());
+
+  return perot;
 }
 
 /* ----------------------------------------------------------------------
