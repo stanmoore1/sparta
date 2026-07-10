@@ -92,7 +92,7 @@ reaction probability will be erroneous.  See the warning message for
 the offending bound: the gamma function must be positive and finite,
 the probability must vanish as the collision energy approaches the
 activation energy, and the probability must not diverge as the
-collision energy approaches zero or infinity.
+collision energy approaches infinity.
 
 E: Cannot open reaction file %s
 

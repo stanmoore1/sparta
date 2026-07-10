@@ -429,8 +429,8 @@ void ReactBird::init()
    (2) trend as Ec -> Ea: for Ea > 0 the probability varies as
        (Ec-Ea)^(eta+z+1/2) near threshold and must vanish there,
        requiring eta > -(zmin + 1/2)
-       for Ea <= 0 the probability varies as Ec^(eta-1+omega) as
-       Ec -> 0 and must not diverge, requiring eta >= 1 - omega
+       not checked for barrierless reactions (Ea = 0, e.g. recombination),
+       whose integrable low-energy behavior is set by eta-1+omega
    (3) trend as Ec -> infinity: the probability varies as
        Ec^(eta-1+omega) and must not diverge, requiring eta <= 1 - omega
    called from ReactTCE::init() and ReactTCEKokkos::init(),
@@ -487,14 +487,6 @@ void ReactBird::check_tce_bounds()
                 "else the reaction probability does not vanish as the "
                 "collision energy approaches the activation energy",
                 r->id,eta,-(zmin+0.5));
-        error->warning(FLERR,str);
-      }
-    } else if (ea <= 0.0 && eta < 1.0-omega) {
-      if (comm->me == 0) {
-        sprintf(str,"Reaction %s: temperature exponent %g must be >= %g, "
-                "else the reaction probability diverges as the "
-                "collision energy approaches zero",
-                r->id,eta,1.0-omega);
         error->warning(FLERR,str);
       }
     }
