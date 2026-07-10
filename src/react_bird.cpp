@@ -989,16 +989,20 @@ void ReactBird::build_micro_tables()
     // (e.g. eta = -1.5 dissociation): Bird's TCE validity constraint
     // zbar + eta + 3/2 > 0 is satisfied by keeping rotation continuous
 
+    int vibdiscrete = (collide->vibstyle == DISCRETE);
+    int elecdiscrete = (collide->elecstyle == DISCRETE);
+
     double theta_min = 0.0;
     int nladder = 0;
     for (int s = 0; s < 2; s++) {
       int sp = sps[s];
-      for (int m = 0; m < species[sp].nvibmode; m++) {
-        nladder++;
-        double th = species[sp].vibtemp[m];
-        if (theta_min == 0.0 || th < theta_min) theta_min = th;
-      }
-      if (elecEnergyMode == ELEC_MICRO && species[sp].elecdat) nladder++;
+      if (vibdiscrete)
+        for (int m = 0; m < species[sp].nvibmode; m++) {
+          nladder++;
+          double th = species[sp].vibtemp[m];
+          if (theta_min == 0.0 || th < theta_min) theta_min = th;
+        }
+      if (elecdiscrete && species[sp].elecdat) nladder++;
     }
     if (nladder == 0) continue;
 
@@ -1017,10 +1021,17 @@ void ReactBird::build_micro_tables()
     memory->create(den,n,"react:mtab_den");
     memory->create(work,n,"react:mtab_work");
 
-    double zrot = 0.5*(species[sps[0]].rotdof + species[sps[1]].rotdof);
+    // continuum internal DOF: rotation, plus vibration when it is a
+    // continuous (smooth) mode; must match the z used at runtime in
+    // ReactTCE::attempt so the Gamma prefactor stays consistent with
+    // the table seeds
+
+    double zcont = 0.5*(species[sps[0]].rotdof + species[sps[1]].rotdof);
+    if (collide->vibstyle == SMOOTH)
+      zcont += 0.5*(species[sps[0]].vibdof + species[sps[1]].vibdof);
     double omega = collide->extract(sps[0],sps[1],"omega");
-    double exp_num = zrot + r->coeff[3] + 0.5;
-    double exp_den = zrot + 1.5 - omega;
+    double exp_num = zcont + r->coeff[3] + 0.5;
+    double exp_den = zcont + 1.5 - omega;
 
     for (int k = 0; k < n; k++) {
       double u = k*du;
@@ -1037,24 +1048,25 @@ void ReactBird::build_micro_tables()
     for (int s = 0; s < 2; s++) {
       int sp = sps[s];
 
-      for (int m = 0; m < species[sp].nvibmode; m++) {
-        double th = species[sp].vibtemp[m];
-        int d = species[sp].vibdegen[m] > 1 ? species[sp].vibdegen[m] : 1;
-        int nlev = 0;
-        double g = 1.0;
-        for (int l = 0; l*th*boltz < umax && nlev < maxlev; l++) {
-          leps[nlev] = l*th*boltz;
-          // level degeneracy of a d-fold degenerate SHO mode:
-          // C(l+d-1,d-1), built iteratively
-          if (l > 0) g = g*(l+d-1)/l;
-          lg[nlev] = g;
-          nlev++;
+      if (vibdiscrete)
+        for (int m = 0; m < species[sp].nvibmode; m++) {
+          double th = species[sp].vibtemp[m];
+          int d = species[sp].vibdegen[m] > 1 ? species[sp].vibdegen[m] : 1;
+          int nlev = 0;
+          double g = 1.0;
+          for (int l = 0; l*th*boltz < umax && nlev < maxlev; l++) {
+            leps[nlev] = l*th*boltz;
+            // level degeneracy of a d-fold degenerate SHO mode:
+            // C(l+d-1,d-1), built iteratively
+            if (l > 0) g = g*(l+d-1)/l;
+            lg[nlev] = g;
+            nlev++;
+          }
+          ladder_convolve(num,work,n,du,nlev,leps,lg);
+          ladder_convolve(den,work,n,du,nlev,leps,lg);
         }
-        ladder_convolve(num,work,n,du,nlev,leps,lg);
-        ladder_convolve(den,work,n,du,nlev,leps,lg);
-      }
 
-      if (elecEnergyMode == ELEC_MICRO && species[sp].elecdat) {
+      if (elecdiscrete && species[sp].elecdat) {
         int nlev = species[sp].elecdat->nelecstate;
         for (int l = 0; l < nlev; l++) {
           leps[l] = boltz*species[sp].elecdat->states[l].temp;

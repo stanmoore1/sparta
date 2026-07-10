@@ -214,10 +214,10 @@ listed:
 <LI>spinI = spin degeneracy of state I (e.g. singlet = 1, triplet = 3, etc.)
 <LI>dofI = effective DOF of state I for the TCE chemistry model (unitless)
 </UL>
-<P>The <I>dofI</I> value is only used by the TCE reaction model when the
-<A HREF = "react_modify.html">react_modify</A> <I>elec_energy</I> option is set to <I>yes</I>;
-with the default <I>elec_energy micro</I> setting (and with <I>elec_energy no</I>)
-it is read but ignored.
+<P>The <I>dofI</I> value is read for file compatibility but not used: the TCE
+reaction model couples electronic energy to the reaction probability
+through the microcanonical ladder average (see
+<A HREF = "react_modify.html">react_modify</A>), which requires no per-state DOF.
 </P>
 <P>Note that the <I>relaxI</I> values enter a state-to-state transition twice:
 a relaxation event is attempted with probability relax(current state),

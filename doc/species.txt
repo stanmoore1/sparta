@@ -201,10 +201,10 @@ degenI = total degeneracy of state I (integer, unitless)
 spinI = spin degeneracy of state I (e.g. singlet = 1, triplet = 3, etc.)
 dofI = effective DOF of state I for the TCE chemistry model (unitless) :ul
 
-The {dofI} value is only used by the TCE reaction model when the
-"react_modify"_react_modify.html {elec_energy} option is set to {yes};
-with the default {elec_energy micro} setting (and with {elec_energy no})
-it is read but ignored.
+The {dofI} value is read for file compatibility but not used: the TCE
+reaction model couples electronic energy to the reaction probability
+through the microcanonical ladder average (see
+"react_modify"_react_modify.html), which requires no per-state DOF.
 
 Note that the {relaxI} values enter a state-to-state transition twice:
 a relaxation event is attempted with probability relax(current state),

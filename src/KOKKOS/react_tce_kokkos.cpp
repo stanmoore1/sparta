@@ -48,31 +48,13 @@ void ReactTCEKokkos::init()
   elecstyle = collide->elecstyle;
   boltz = update->boltz;
 
-  // per-species electronic ladders for elec_energy micro
-  // rebuild the flattened views if stale (e.g. after a restart)
+  // with partial_energy no, build the host microcanonical energy-factor
+  // tables (shared ReactBird machinery) and mirror them into flat device
+  // views (zero-padded to the widest table); reactions whose reactants
+  // carry no discrete ladders keep n = 0 and use the standard analytic
+  // factor at runtime
 
-  if (elecstyle == DISCRETE && elecEnergyMode == ELEC_MICRO) {
-    ParticleKokkos *particle_kk = (ParticleKokkos *) particle;
-    if ((int)particle_kk->d_nelecstates.extent(0) != particle->nspecies)
-      particle_kk->update_elec_views();
-    d_nelecstates = particle_kk->d_nelecstates;
-    d_elecstates = particle_kk->d_elecstates;
-  }
-
-  // vib_energy micro: validate, build the host microcanonical energy-
-  // factor tables (shared ReactBird machinery), and mirror them into
-  // flat device views (zero-padded to the widest table)
-
-  if (vibEnergyMode == VIB_MICRO) {
-    if (partialEnergy)
-      error->all(FLERR,"react_modify vib_energy micro requires "
-                 "partial_energy no");
-    if (collide->vibstyle != DISCRETE)
-      error->all(FLERR,"react_modify vib_energy micro requires "
-                 "collide_modify vibrate discrete");
-    if (elecEnergyMode == ELEC_INCLUDE)
-      error->all(FLERR,"react_modify vib_energy micro cannot be combined "
-                 "with elec_energy yes");
+  if (!partialEnergy) {
     build_micro_tables();
 
     int maxn = 0;

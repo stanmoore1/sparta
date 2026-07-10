@@ -32,21 +32,6 @@ class ReactTCE : public ReactBird {
   void init();
   int attempt(Particle::OnePart *, Particle::OnePart *,
               double, double, double, double, double &, int &);
-
-  double elec_micro_factor(int, int, double, double, OneReaction *);
-
-  double newtonTvib(int nmode, double Evib,
-                      double VibTemp[],
-                      double Tvib0,
-                      double tol,
-                      int nmax);
-
-  double bird_dEvib(int nmode, double Tvib,
-                  double VibTemp[]);
-
-  double bird_Evib(int nmode, double Tvib,
-                 double VibTemp[],
-                 double Evib);
 };
 
 }

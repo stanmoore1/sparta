@@ -40,9 +40,6 @@ void ReactQK::init()
   if (!collide || strcmp(collide->style,"vss") != 0)
     error->all(FLERR,"React qk can only be used with collide vss");
 
-  if (vibEnergyMode == VIB_MICRO)
-    error->all(FLERR,"react_modify vib_energy micro requires react tce");
-
   ReactBird::init();
 
   // do not allow recombination reactions for now

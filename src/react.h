@@ -32,39 +32,20 @@ class React : protected Pointers {
                              // actually doing reaction
 
   int partialEnergy;         // 1 if using rDOF model, 0 if using all energy
+                             // with partial_energy no, the TCE reaction
+                             // energy is the TOTAL collision energy
+                             // (trans+rot+vib+elec) and the energy factor
+                             // of the probability is the microcanonical
+                             // average over the reactants' discrete
+                             // (vibrational x electronic) ladders at fixed
+                             // total energy, with translation, rotation,
+                             // and smooth vibration as the continuum:
+                             // the equilibrium rate stays on the input
+                             // Arrhenius rate for any mix of continuous
+                             // and discrete internal modes, and out of
+                             // equilibrium the rate responds to the actual
+                             // internal-state populations
 
-  enum{VIB_DOF,VIB_MICRO};
-  int vibEnergyMode;         // how discrete vibrational energy couples to
-                             // the TCE reaction probability:
-                             // VIB_DOF (default) = instantaneous
-                             //   vibrational DOF heuristic
-                             //   (2*i*ln(1+1/i), newtonTvib); deviates
-                             //   from the input Arrhenius rate by ~10-30%
-                             //   at 10-20 kK
-                             // VIB_MICRO = SHO ladder folded into the
-                             //   microcanonical TCE energy factor
-                             //   (jointly with the electronic ladder when
-                             //   elec_energy micro); keeps the equilibrium
-                             //   rate on the input Arrhenius rate
-
-  enum{ELEC_EXCLUDE,ELEC_INCLUDE,ELEC_MICRO};
-  int elecEnergyMode;        // how electronic energy couples to the TCE
-                             // reaction probability (energy conservation via
-                             // pre/post etotal is unaffected by the mode):
-                             // ELEC_EXCLUDE = excluded from the
-                             //   reaction energy; equilibrium
-                             //   consistency with the input Arrhenius rates
-                             // ELEC_INCLUDE = added to the reaction energy
-                             //   with per-state DOF from the elecfile
-                             //   (historical behavior; overpredicts
-                             //   equilibrium rates)
-                             // ELEC_MICRO (default) = added to the reaction
-                             //   energy with the TCE energy factor replaced by
-                             //   its microcanonical average over the pair's
-                             //   electronic ladder: state-sensitive while
-                             //   keeping the equilibrium rate on the input
-                             //   Arrhenius rate; reduces to the standard
-                             //   factor when no electronic states are present
   double recomb_density;     // num density of particles in collision grid cell
   double recomb_boost;       // rate boost param for recombination reactions
   double recomb_boost_inverse;   // inverse of boost parameter
