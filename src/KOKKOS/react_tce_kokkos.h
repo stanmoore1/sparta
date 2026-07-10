@@ -25,8 +25,11 @@ ReactStyle(tce/kk,ReactTCEKokkos)
 #include "react_bird_kokkos.h"
 #include "kokkos_type.h"
 #include "update.h"
+#include "math_const.h"
 
 namespace SPARTA_NS {
+
+using MathConst::MY_PI;
 
 class ReactTCEKokkos : public ReactBirdKokkos {
  public:
@@ -45,7 +48,8 @@ KOKKOS_INLINE_FUNCTION
 int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
          double pre_etrans, double pre_erot, double pre_evib, double pre_eelec,
          double &post_etotal, int &kspecies,
-         int &recomb_species, double &recomb_density, const t_species_1d_const &d_species) const
+         int &recomb_species, double &recomb_density, const t_species_1d_const &d_species,
+         const double tgas_cell) const
 {
   OneReactionKokkos *r;
 
@@ -126,6 +130,16 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
       efactor = pow(ecc-r->d_coeff[1],r->d_coeff[3]-1+r->d_coeff[5]) *
                 pow(1.0-r->d_coeff[1]/ecc,z+1.5-r->d_coeff[5]);
 
+    // effective Arrhenius prefactor: for a reverse (detailed-balance)
+    // reaction, scale the seeded forward prefactor by the partition-function
+    // ratio at the cell temperature, matching ReactTCE::attempt
+
+    double prefactor = r->d_coeff[2];
+    if (r->reverse) {
+      if (tgas_cell > 0.0) prefactor *= reverse_scale_kk(r,d_species,tgas_cell);
+      else continue;
+    }
+
     // compute probability of reaction
 
     switch (r->type) {
@@ -133,7 +147,7 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
     case IONIZATION:
     case EXCHANGE:
       {
-        react_prob += r->d_coeff[2] * tgamma(z+2.5-r->d_coeff[5]) / MAX(1.0e-6,tgamma(z+r->d_coeff[3]+1.5)) *
+        react_prob += prefactor * tgamma(z+2.5-r->d_coeff[5]) / MAX(1.0e-6,tgamma(z+r->d_coeff[3]+1.5)) *
           efactor;
         break;
       }
@@ -152,7 +166,7 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
         auto& d_sp2recomb = d_reactions(isp,jsp).d_sp2recomb;
         if (d_sp2recomb[recomb_species] != d_list[i]) continue;
 
-        react_prob += recomb_boost * recomb_density * r->d_coeff[2] *
+        react_prob += recomb_boost * recomb_density * prefactor *
           tgamma(z+2.5-r->d_coeff[5]) / MAX(1.0e-6,tgamma(z+r->d_coeff[3]+1.5)) *
           efactor;   // extended to general recombination case with non-zero activation energy
         break;
@@ -226,10 +240,83 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
 
 /* ---------------------------------------------------------------------- */
 
+/* ----------------------------------------------------------------------
+   device twins of ReactTCE::partition_function / reverse_scale
+   (issue #472 detailed-balance reverse reactions); must match the host
+   implementations exactly for SPARTA_KOKKOS_EXACT
+------------------------------------------------------------------------- */
+
+KOKKOS_INLINE_FUNCTION
+double partition_function_kk(int isp, double T,
+                             const t_species_1d_const &d_species) const
+{
+  const double kb = boltz;
+  const double h = 6.62607015e-34;   // Planck constant (J s)
+
+  double qtrans = pow(2.0*MY_PI*d_species[isp].mass*kb*T/(h*h), 1.5);
+
+  double qrot = 1.0;
+  if (d_species[isp].rotdof == 2 && d_species[isp].nrottemp >= 1 &&
+      d_species[isp].rottemp[0] > 0.0)
+    qrot = T / (d_species[isp].rotsymm * d_species[isp].rottemp[0]);
+  else if (d_species[isp].rotdof == 3 && d_species[isp].nrottemp == 3 &&
+           d_species[isp].rottemp[0] > 0.0 && d_species[isp].rottemp[1] > 0.0 &&
+           d_species[isp].rottemp[2] > 0.0)
+    qrot = sqrt(MY_PI*T*T*T /
+                (d_species[isp].rotsymm*d_species[isp].rotsymm *
+                 d_species[isp].rottemp[0]*d_species[isp].rottemp[1]*
+                 d_species[isp].rottemp[2]));
+
+  double qvib = 1.0;
+  for (int m = 0; m < d_species[isp].nvibmode; m++) {
+    if (d_species[isp].vibtemp[m] <= 0.0) continue;
+    double x = exp(-d_species[isp].vibtemp[m]/T);
+    int g = d_species[isp].vibdegen[m] > 0 ? d_species[isp].vibdegen[m] : 1;
+    qvib *= pow(1.0/(1.0-x), g);
+  }
+
+  double qelec = 1.0;
+  if (d_nelecstates.extent(0) > 0 && d_nelecstates[isp] > 0) {
+    qelec = 0.0;
+    for (int i = 0; i < d_nelecstates[isp]; i++)
+      qelec += d_elecstates(isp,i).degen *
+        exp(-d_elecstates(isp,i).temp/T);
+  }
+
+  return qtrans*qrot*qvib*qelec;
+}
+
+KOKKOS_INLINE_FUNCTION
+double reverse_scale_kk(OneReactionKokkos *r,
+                        const t_species_1d_const &d_species,
+                        double T) const
+{
+  int nprod = r->nproduct;
+  if (r->type == RECOMBINATION) nprod = 1;
+
+  double num = 1.0, den = 1.0;
+  for (int i = 0; i < nprod; i++)
+    num *= partition_function_kk(r->d_products[i],T,d_species);
+  for (int i = 0; i < r->nreactant; i++)
+    den *= partition_function_kk(r->d_reactants[i],T,d_species);
+
+  // forward temperature exponent applied at the cell temperature,
+  // matching ReactTCE::reverse_scale
+
+  return num/den * pow(T,r->reverse_bf);
+}
+
  protected:
   int vibstyle;
   int elecstyle;
   double boltz;
+
+  // per-species electronic ladders (partition functions of reverse
+  // reactions), shared views owned by ParticleKokkos; zero-length views
+  // when no electronic data is defined
+
+  DAT::t_int_1d d_nelecstates;
+  t_elecstate_2d d_elecstates;
 
   // per-reaction microcanonical energy-factor tables, device mirror of
   // the ReactBird host tables; n = 0 marks "no table"

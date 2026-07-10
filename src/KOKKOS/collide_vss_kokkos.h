@@ -92,7 +92,7 @@ class CollideVSSKokkos : public CollideVSS {
   int perform_collision_kokkos(int, Particle::OnePart *&, Particle::OnePart *&,
                         Particle::OnePart *&, struct State &, struct State &, rand_type &,
                         Particle::OnePart *&, int &, double &,
-                        int &) const;
+                        int &, double) const;
 
   KOKKOS_INLINE_FUNCTION
   void operator()(TagCollideResetVremax, const int&) const;
@@ -225,6 +225,7 @@ class CollideVSSKokkos : public CollideVSS {
 
   double dt,fnum,boltz;
   int maxcellcount,react_defined;
+  int react_reverse_active;   // 1 if detailed-balance reverse reactions
 
   KOKKOS_INLINE_FUNCTION
   void SCATTER_TwoBodyScattering(Particle::OnePart *,

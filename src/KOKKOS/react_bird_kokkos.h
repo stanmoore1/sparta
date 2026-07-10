@@ -57,6 +57,8 @@ class ReactBirdKokkos : public ReactBird {
     int style;                     // reaction style = ARRHENIUS, etc
     int ncoeff;                    // # of numerical coeffs
     int nreactant,nproduct;        // # of reactants and products
+    int reverse;                   // 1 if detailed-balance (B-style) reverse
+    double reverse_bf;             // forward temperature exponent (B-style)
     int d_reactants[MAXREACTANT],d_products[MAXPRODUCT];      // species indices of reactants/products
     double d_coeff[MAXCOEFF];                 // numerical coeffs for reaction
   };

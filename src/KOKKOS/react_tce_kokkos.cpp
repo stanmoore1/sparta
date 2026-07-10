@@ -48,6 +48,18 @@ void ReactTCEKokkos::init()
   elecstyle = collide->elecstyle;
   boltz = update->boltz;
 
+  // per-species electronic ladders, used by the reverse-reaction
+  // partition functions (and shared with the collide relaxation views);
+  // rebuild the flattened views if stale (e.g. after a restart)
+
+  if (elecstyle == DISCRETE) {
+    ParticleKokkos *particle_kk = (ParticleKokkos *) particle;
+    if ((int)particle_kk->d_nelecstates.extent(0) != particle->nspecies)
+      particle_kk->update_elec_views();
+    d_nelecstates = particle_kk->d_nelecstates;
+    d_elecstates = particle_kk->d_elecstates;
+  }
+
   // with partial_energy no, build the host microcanonical energy-factor
   // tables (shared ReactBird machinery) and mirror them into flat device
   // views (zero-padded to the widest table); reactions whose reactants

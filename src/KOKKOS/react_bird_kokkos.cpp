@@ -114,6 +114,8 @@ void ReactBirdKokkos::init()
     h_rlist[i].ncoeff = rlist[i].ncoeff;
     h_rlist[i].nreactant = rlist[i].nreactant;
     h_rlist[i].nproduct = rlist[i].nproduct;
+    h_rlist[i].reverse = rlist[i].reverse;
+    h_rlist[i].reverse_bf = rlist[i].reverse_bf;
     for (int j = 0; j < MAXREACTANT; j++)
       h_rlist[i].d_reactants[j] = rlist[i].reactants[j];
     for (int j = 0; j < MAXPRODUCT; j++)

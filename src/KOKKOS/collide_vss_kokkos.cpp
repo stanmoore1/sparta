@@ -254,10 +254,12 @@ void CollideVSSKokkos::init()
   // if recombination reactions exist, set flags per species pair
 
   recombflag = 0;
+  react_reverse_active = 0;
   if (react) {
     react_defined = 1;
     recombflag = react->recombflag;
     recomb_boost_inverse = react->recomb_boost_inverse;
+    react_reverse_active = react->reverse_active;
   }
 
   if (recombflag) {
@@ -715,6 +717,27 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOne< NEARCP, GASTALLY, ATO
   else
     reduce.nattempt_one += nattempt;
 
+  // representative cell translational temperature for detailed-balance
+  // reverse reaction rates (issue #472); matches Collide::cell_temperature
+
+  double tgas_cell = 0.0;
+  if (react_reverse_active) {
+    double msum = 0.0, mvx = 0.0, mvy = 0.0, mvz = 0.0, mv2 = 0.0;
+    for (int p = 0; p < np; p++) {
+      Particle::OnePart *pp = &d_particles[d_plist(icell,p)];
+      const double m = d_species[pp->ispecies].mass;
+      const double *v = pp->v;
+      msum += m;
+      mvx += m*v[0];  mvy += m*v[1];  mvz += m*v[2];
+      mv2 += m*(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+    }
+    if (np >= 2 && msum > 0.0) {
+      const double kesum = mv2 - (mvx*mvx + mvy*mvy + mvz*mvz)/msum;
+      tgas_cell = kesum / (3.0*np*boltz);
+      if (tgas_cell < 0.0) tgas_cell = 0.0;
+    }
+  }
+
   // perform collisions
   // select random pair of particles, cannot be same
   // test if collision actually occurs
@@ -784,7 +807,8 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOne< NEARCP, GASTALLY, ATO
 
     setup_collision_kokkos(ipart,jpart,precoln,postcoln);
     const int reactflag = perform_collision_kokkos(icell,ipart,jpart,kpart,precoln,postcoln,rand_gen,
-                                                   recomb_part3,recomb_species,recomb_density,index_kpart);
+                                                   recomb_part3,recomb_species,recomb_density,index_kpart,
+                                                   tgas_cell);
 
     if (ATOMIC_REDUCTION == 1)
       Kokkos::atomic_inc(&d_ncollide_one());
@@ -1114,6 +1138,27 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar< GASTALLY, AT
   else
     reduce.nattempt_one += nattempt;
 
+  // representative cell translational temperature for detailed-balance
+  // reverse reaction rates (issue #472); matches Collide::cell_temperature
+
+  double tgas_cell = 0.0;
+  if (react_reverse_active) {
+    double msum = 0.0, mvx = 0.0, mvy = 0.0, mvz = 0.0, mv2 = 0.0;
+    for (int p = 0; p < np; p++) {
+      Particle::OnePart *pp = &d_particles[d_plist(icell,p)];
+      const double m = d_species[pp->ispecies].mass;
+      const double *v = pp->v;
+      msum += m;
+      mvx += m*v[0];  mvy += m*v[1];  mvz += m*v[2];
+      mv2 += m*(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+    }
+    if (np >= 2 && msum > 0.0) {
+      const double kesum = mv2 - (mvx*mvx + mvy*mvy + mvz*mvz)/msum;
+      tgas_cell = kesum / (3.0*np*boltz);
+      if (tgas_cell < 0.0) tgas_cell = 0.0;
+    }
+  }
+
   // perform collisions
   // select random pair of particles, cannot be same
   // test if collision actually occurs
@@ -1207,7 +1252,8 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar< GASTALLY, AT
     const int jspecies = jpart->ispecies;
     setup_collision_kokkos(ipart,jpart,precoln,postcoln);
     const int reactflag = perform_collision_kokkos(icell,ipart,jpart,kpart,precoln,postcoln,rand_gen,
-                                                   recomb_part3,recomb_species,recomb_density,index_kpart);
+                                                   recomb_part3,recomb_species,recomb_density,index_kpart,
+                                                   tgas_cell);
 
     if (ATOMIC_REDUCTION == 1)
       Kokkos::atomic_fetch_add(&d_ncollide_one(),1);
@@ -1520,7 +1566,7 @@ int CollideVSSKokkos::perform_collision_kokkos(int icell,
                                   Particle::OnePart *&kp,
                                   struct State &precoln, struct State &postcoln, rand_type &rand_gen,
                                   Particle::OnePart *&p3, int &recomb_species, double &recomb_density,
-                                  int &index_kpart) const
+                                  int &index_kpart, double tgas_cell) const
 {
   int reaction,kspecies;
   double x[3],v[3];
@@ -1536,7 +1582,7 @@ int CollideVSSKokkos::perform_collision_kokkos(int icell,
     reaction = react_kk_copy.obj.attempt_kk(ip,jp,
                                              precoln.etrans,precoln.erot,
                                              precoln.evib,precoln.eelec,postcoln.etotal,kspecies,
-                                             recomb_species,recomb_density,d_species);
+                                             recomb_species,recomb_density,d_species,tgas_cell);
   else reaction = 0;
 
   // just collision, no reaction
