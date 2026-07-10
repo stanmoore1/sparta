@@ -232,13 +232,24 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
     }
 
     // compute probability of reaction
+    // gamma function denominator hits a pole (NaN) or is non-positive
+    //   (erroneous probability) if temperature exponent is out of bounds,
+    //   see ReactBird::check_tce_bounds()
 
     switch (r->type) {
     case DISSOCIATION:
     case IONIZATION:
     case EXCHANGE:
       {
-        react_prob += r->d_coeff[2] * tgamma(z+2.5-r->d_coeff[5]) / MAX(1.0e-6,tgamma(z+r->d_coeff[3]+1.5)) *
+        const double gamma_denom = tgamma(z+r->d_coeff[3]+1.5);
+        if (isnan(gamma_denom))
+          Kokkos::abort("Reaction probability is NaN: gamma function pole, "
+                        "temperature exponent is out of bounds\n");
+        if (z+r->d_coeff[3]+1.5 <= 0.0)
+          printf("WARNING: Reaction probability will be erroneous: "
+                 "non-positive gamma function argument, "
+                 "temperature exponent is out of bounds\n");
+        react_prob += r->d_coeff[2] * tgamma(z+2.5-r->d_coeff[5]) / gamma_denom *
           pow(ecc-r->d_coeff[1],r->d_coeff[3]-1+r->d_coeff[5]) *
           pow(1.0-r->d_coeff[1]/ecc,z+1.5-r->d_coeff[5]);
         break;
@@ -258,8 +269,16 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
         auto& d_sp2recomb = d_reactions(isp,jsp).d_sp2recomb;
         if (d_sp2recomb[recomb_species] != d_list[i]) continue;
 
+        const double gamma_denom = tgamma(z+r->d_coeff[3]+1.5);
+        if (isnan(gamma_denom))
+          Kokkos::abort("Reaction probability is NaN: gamma function pole, "
+                        "temperature exponent is out of bounds\n");
+        if (z+r->d_coeff[3]+1.5 <= 0.0)
+          printf("WARNING: Reaction probability will be erroneous: "
+                 "non-positive gamma function argument, "
+                 "temperature exponent is out of bounds\n");
         react_prob += recomb_boost * recomb_density * r->d_coeff[2] *
-          tgamma(z+2.5-r->d_coeff[5]) / MAX(1.0e-6,tgamma(z+r->d_coeff[3]+1.5)) *
+          tgamma(z+2.5-r->d_coeff[5]) / gamma_denom *
           pow(ecc-r->d_coeff[1],r->d_coeff[3]-1+r->d_coeff[5]) *  // extended to general recombination case with non-zero activation energy
           pow(1.0-r->d_coeff[1]/ecc,z+1.5-r->d_coeff[5]);
         break;

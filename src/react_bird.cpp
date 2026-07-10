@@ -34,6 +34,7 @@ using namespace MathConst;
 
 enum{DISSOCIATION,EXCHANGE,IONIZATION,RECOMBINATION};  // other react files
 enum{ARRHENIUS,QUANTUM};                               // other react files
+enum{NONE,DISCRETE,SMOOTH};                            // several files
 
 #define MAXREACTANT 2
 #define MAXPRODUCT 3
@@ -401,6 +402,91 @@ void ReactBird::init()
         }
       }
     }
+}
+
+/* ----------------------------------------------------------------------
+   check that the temperature exponent eta = coeff[3] of each active
+     reaction is within the exact bounds of the TCE reaction probability
+       P = C1 * Gamma(z+5/2-omega) / Gamma(z+eta+3/2) *
+           (Ec-Ea)^(eta-1+omega) * (1-Ea/Ec)^(z+3/2-omega)
+     else warn that the probability will be erroneous
+   z = effective internal DOF contributing to the collision energy Ec,
+     its minimum value zmin depends on the energy and vibrational models:
+     partial energy (rDOF): z = coeff[0], constant
+     total energy, vibstyle = none: z = average rotational DOF, constant
+     total energy, vibstyle = smooth: z = average rotational DOF +
+       average vibrational DOF, constant
+     total energy, vibstyle = discrete: z >= average rotational DOF,
+       since the instantaneous vibrational contribution can be zero
+   3 bounds on eta, each is most restrictive at z = zmin:
+   (1) eta > -(zmin + 3/2), else the argument of Gamma(z+eta+3/2) is
+       non-positive: Gamma is negative (negative probability) or hits
+       a pole at a non-positive integer (infinite or NaN probability)
+   (2) trend as Ec -> Ea: for Ea > 0 the probability varies as
+       (Ec-Ea)^(eta+z+1/2) near threshold and must vanish there,
+       requiring eta > -(zmin + 1/2)
+       for Ea <= 0 the probability varies as Ec^(eta-1+omega) as
+       Ec -> 0 and must not diverge, requiring eta >= 1 - omega
+   (3) trend as Ec -> infinity: the probability varies as
+       Ec^(eta-1+omega) and must not diverge, requiring eta <= 1 - omega
+   called from ReactTCE::init() and ReactTCEKokkos::init(),
+     after ReactBird::init() has set coeff[5] = omega
+------------------------------------------------------------------------- */
+
+void ReactBird::check_tce_bounds()
+{
+  if (comm->me) return;
+
+  Particle::Species *species = particle->species;
+  char str[MAXLINE+256];
+
+  for (int m = 0; m < nlist; m++) {
+    OneReaction *r = &rlist[m];
+    if (!r->active) continue;
+
+    int isp = r->reactants[0];
+    int jsp = r->reactants[1];
+
+    double ea = r->coeff[1];
+    double eta = r->coeff[3];
+    double omega = r->coeff[5];
+
+    double zmin;
+    if (partialEnergy) zmin = r->coeff[0];
+    else {
+      zmin = 0.5 * (species[isp].rotdof + species[jsp].rotdof);
+      if (collide->vibstyle == SMOOTH)
+        zmin += 0.5 * (species[isp].vibdof + species[jsp].vibdof);
+    }
+
+    if (eta <= -(zmin+1.5)) {
+      sprintf(str,"Reaction %s: temperature exponent %g must be > %g, "
+              "else the gamma function is negative or infinite and "
+              "the reaction probability will be erroneous",
+              r->id,eta,-(zmin+1.5));
+      error->warning(FLERR,str);
+    } else if (ea > 0.0 && eta <= -(zmin+0.5)) {
+      sprintf(str,"Reaction %s: temperature exponent %g must be > %g, "
+              "else the reaction probability does not vanish as the "
+              "collision energy approaches the activation energy",
+              r->id,eta,-(zmin+0.5));
+      error->warning(FLERR,str);
+    } else if (ea <= 0.0 && eta < 1.0-omega) {
+      sprintf(str,"Reaction %s: temperature exponent %g must be >= %g, "
+              "else the reaction probability diverges as the "
+              "collision energy approaches zero",
+              r->id,eta,1.0-omega);
+      error->warning(FLERR,str);
+    }
+
+    if (eta > 1.0-omega) {
+      sprintf(str,"Reaction %s: temperature exponent %g must be <= %g, "
+              "else the reaction probability diverges as the "
+              "collision energy approaches infinity",
+              r->id,eta,1.0-omega);
+      error->warning(FLERR,str);
+    }
+  }
 }
 
 /* ----------------------------------------------------------------------
