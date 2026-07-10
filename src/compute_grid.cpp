@@ -210,7 +210,6 @@ void ComputeGrid::init()
   eprefactor = 0.5*update->mvv2e;
   tprefactor = update->mvv2e / (3.0*update->boltz);
   rvprefactor = 2.0*update->mvv2e / update->boltz;
-  elecprefactor = update->mvv2e / update->boltz;
 
   reallocate();
 }

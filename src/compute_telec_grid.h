@@ -36,11 +36,8 @@ class ComputeTelecGrid : public Compute {
   virtual void reallocate();
   bigint memory_usage();
 
-  double elec_energy(int, double);
-
  protected:
   int groupbit,imix,ngroup,mixspecies,nspecies;
-  int maxstate;               // max elec state for any species
 
   int ntally;                // total # of columns in tally array
   int nglocal;               // # of owned grid cells
