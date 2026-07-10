@@ -615,6 +615,18 @@ void Particle::grow_species()
   species = (Species *)
     memory->srealloc(species,maxspecies*sizeof(Species),"particle:species");
 
+  grow_elecdat();
+}
+
+/* ----------------------------------------------------------------------
+   insure per-species electronic data can hold maxspecies partner species
+   split out from grow_species() so ParticleKokkos::grow_species(),
+     which resizes the species list itself as a Kokkos view,
+     can also grow the host-side electronic data
+------------------------------------------------------------------------- */
+
+void Particle::grow_elecdat()
+{
   for (int isp = 0; isp < nspecies; ++isp) {
     if (species[isp].elecdat != NULL) {
       species[isp].elecdat->species_rel = (double **)
@@ -1070,7 +1082,6 @@ void Particle::add_species(int narg, char **arg)
 
       }
       for (int isp = 0; isp < particle->nspecies; ++isp) {
-        if (isp == ii) continue;
         if (fileelec[j].elecrel[isp][0] >= 0) {
           memory->create(species[ii].elecdat->species_rel[isp], nmode, "elecdat:species_rel[]");
           for (k = 0; k < nmode; k++) {
@@ -2005,13 +2016,22 @@ double Particle::bisectTelec(int isp, double eelec, int count)
 
   // Bisection method to find T accurate to 1%
 
-  // Find initial bounds based on our first guess
+  // supremum of the mean electronic energy for T -> +/- infinity,
+  // where every state is populated proportional to its degeneracy;
+  // energies above it are only reachable with a negative temperature
+  // (population inversion), which the mean energy approaches from above
+  // as T -> -infinity, and e_inf itself is not reachable at any finite T
+
+  double sum_g = 0.0, sum_ge = 0.0;
+  for (int i = 0; i < species[isp].elecdat->nelecstate; ++i) {
+    sum_g += species[isp].elecdat->states[i].degen;
+    sum_ge += species[isp].elecdat->states[i].degen *
+      species[isp].elecdat->states[i].temp*boltz;
+  }
+  double e_inf = sum_ge/sum_g;
 
   bool positive_t = true;
-  // This is a corner case where the energy is so high that
-  // even an infinite positive temp doesn't
-  // provide enough energy per particle.
-  if (target_energy_per_part > elec_energy(isp, 100*t_elec)) {
+  if (target_energy_per_part >= e_inf) {
     positive_t = false;
     t_elec *= -1;
   }
@@ -2025,13 +2045,19 @@ double Particle::bisectTelec(int isp, double eelec, int count)
     high_mult = 0.9;
   }
 
+  // bracket the target: both loops are bounded, since the mean energy
+  // only asymptotes to its limits (e_inf for |T| -> infinity, the top
+  // state energy for T -> -0), so roundoff could otherwise spin them
+  // forever; the bisection below then converges on the near-limit answer
+
   double T_low = low_mult*t_elec;
-  while (elec_energy(isp, T_low) > target_energy_per_part) {
+  while (elec_energy(isp, T_low) > target_energy_per_part && ! isinf(T_low)) {
     T_low *= low_mult;
   }
 
   double T_high = high_mult*t_elec;
-  while (elec_energy(isp, T_high) < target_energy_per_part && ! isinf(T_high)) {
+  while (elec_energy(isp, T_high) < target_energy_per_part &&
+         ! isinf(T_high) && fabs(T_high) > 1.0e-200) {
     T_high *= high_mult;
   }
 
@@ -2040,6 +2066,7 @@ double Particle::bisectTelec(int isp, double eelec, int count)
   if (isinf(T_high)) {
     error->one(FLERR,"bisectTelec: electronic temperature did not converge");
   }
+  if (isinf(T_low)) T_low = -1.0e300;
 
   double T_mid = t_elec;
   double e_mid = elec_energy(isp, T_mid);

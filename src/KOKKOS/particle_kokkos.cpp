@@ -674,6 +674,11 @@ void ParticleKokkos::grow_species()
       this->modify(Device,SPECIES_MASK); // needed for auto sync
     }
     species = k_species.view_host().data();
+
+    // grow the host-side per-species electronic data as well,
+    // same as Particle::grow_species() does in the prewrap branch
+
+    grow_elecdat();
   }
 }
 

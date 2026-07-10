@@ -181,6 +181,7 @@ class Particle : protected Pointers {
   void remove_all_from_cell(int);
   virtual void grow(int);
   virtual void grow_species();
+  void grow_elecdat();
   void grow_next();
   virtual void pre_weight();
   virtual void post_weight();
