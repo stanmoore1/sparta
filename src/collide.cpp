@@ -220,6 +220,16 @@ void Collide::init()
         error->all(FLERR,
                    "Fix elecmode must be used with discrete electronic modes");
     }
+
+    // catch a misconfigured run whose species all lack electronic data,
+    // else electronic relaxation would be silently skipped
+
+    int anyelec = 0;
+    for (int isp = 0; isp < particle->nspecies; isp++)
+      if (particle->species[isp].elecdat != NULL) anyelec = 1;
+    if (!anyelec)
+      error->all(FLERR,"Discrete electronic modes require species "
+                 "electronic data defined via the species elecfile keyword");
   }
 
   // reallocate one-cell data structs for one or many groups
@@ -314,6 +324,15 @@ void Collide::init()
       if (strcmp(modify->fix[ifix]->style,"ambipolar") == 0) break;
     FixAmbipolar *afix = (FixAmbipolar *) modify->fix[ifix];
     ambispecies = afix->especies;
+
+    // ambipolar electrons live in a scratch array (elist), not in
+    // particle->particles, so they have no per-particle electronic
+    // storage: the electron species must not define electronic states
+
+    if (elecstyle == DISCRETE &&
+        particle->species[ambispecies].elecdat != NULL)
+      error->all(FLERR,"Ambipolar electron species cannot have "
+                 "electronic states defined in the species elecfile");
   }
 
   // if ambipolar and multiple groups in mixture, ambispecies must be its own group
