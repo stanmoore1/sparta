@@ -314,31 +314,36 @@ symmetry number from the "species"_species.html {rotfile}), vibrational
 (harmonic oscillator, including degenerate modes), and electronic
 (summed over the ladder from the {elecfile}, when defined).
 
-For an exchange pair this is enforced without evaluating any
-temperature: at initialization the reaction is given a
-detailed-balance table relating the microcanonical densities of
-states of the two channels at matched total collision energy (the
-same density-of-states machinery that builds the microcanonical TCE
-energy factors), so each collision's backward probability follows
-from the forward reaction by energy-resolved microscopic
-reversibility.  The thermal average of this probability reproduces
-k_f(T)/K_eq(T) at every temperature simultaneously, and the
-per-collision probability remains meaningful arbitrarily far from
-equilibrium, where no temperature is defined.
+This is enforced without evaluating any temperature.  At
+initialization an exchange pair is given a detailed-balance table
+relating the microcanonical densities of states of the two channels
+at matched total collision energy (the same density-of-states
+machinery that builds the microcanonical TCE energy factors), so each
+collision's backward probability follows from the forward reaction by
+energy-resolved microscopic reversibility.  The thermal average of
+this probability reproduces k_f(T)/K_eq(T) at every temperature
+simultaneously, and the per-collision probability remains meaningful
+arbitrarily far from equilibrium, where no temperature is defined.
 
-For a dissociation/recombination pair the backward activation energy
-is set to Ea_f + dHrxn, the backward reaction energy to -dHrxn, and
-the forward Arrhenius prefactor is scaled by the partition-function
-ratio q_reactants/q_products together with the forward temperature
-exponent, evaluated at a representative translational temperature of
-the grid cell, computed once per cell per timestep (exact energy-level
-reversibility of a three-body process is not representable by a
-two-body collision probability).  The ratio has units of volume,
-converting the m^3/s dissociation prefactor into the m^6/s
-recombination prefactor.  Reverse recombination reactions whose cell
-has fewer than 2 particles (no defined temperature) are skipped for
-that collision.  Reverse reactions require "react_modify"_react_modify.html
-{partial_energy} {no} (the default).
+A dissociation/recombination pair is handled the same way, extended
+to three bodies: the backward activation energy is seeded as Ea_f +
+dHrxn and the backward reaction energy as -dHrxn, and the
+recombination probability is resolved in the total available energy
+of all three particles - the collision energy of the recombining
+pair, plus the third particle's internal energies, plus its
+translational energy relative to the pair's center of mass (which is
+exactly the relative translational energy of the forward
+dissociation collision).  The probability is the ratio of the
+forward channel's microcanonical reaction numerator at that total
+energy to the density of states of the (pair energy, third-body
+energy) decomposition, so the third particle's energy genuinely
+counts toward the energy balance: an energetic third body enhances
+recombination exactly as microscopic reversibility of the forward
+dissociation demands, and the thermal average again reproduces
+k_f(T)/K_eq(T) at every temperature with no cell temperature
+evaluated.  Reverse reactions require
+"react_modify"_react_modify.html {partial_energy} {no} (the
+default).
 
 For quantitatively correct equilibrium constants, define a {rotfile}
 with the rotational symmetry numbers of homonuclear molecules and an
