@@ -46,6 +46,15 @@ class ReactBird : public React {
   int *mtab_n;              // # of grid points per table
   int mtab_nlist;           // # of rlist entries tables were built for
 
+  // 3-body detailed-balance table of a reverse recombination: the
+  // calibrated forward numerator divided by the flat measure of the
+  // (pair energy, third-body energy) decomposition, as a function of
+  // the total available energy w = u + e3; the pair density of states
+  // x_AB(u) is stored in the reaction's mtab slot; both share the mtab
+  // grid; NULL for all other reactions (see build_db3_table)
+
+  double **mtab_num;
+
   void build_micro_tables();
   void free_micro_tables();
 
@@ -53,6 +62,16 @@ class ReactBird : public React {
     const double *tab = mtab[ireact];
     const int n = mtab_n[ireact];
     const double x = ecc / mtab_du[ireact];
+    const int k = (int) x;
+    if (k >= n-1) return tab[n-1];
+    const double f = x - k;
+    return (1.0-f)*tab[k] + f*tab[k+1];
+  }
+
+  inline double db3_num_factor(int ireact, double ew) const {
+    const double *tab = mtab_num[ireact];
+    const int n = mtab_n[ireact];
+    const double x = ew / mtab_du[ireact];
     const int k = (int) x;
     if (k >= n-1) return tab[n-1];
     const double f = x - k;
@@ -161,6 +180,7 @@ class ReactBird : public React {
   virtual void grow_tallies();
   double partition_function(int, double);
   void build_db_table(int);
+  void build_db3_table(int);
   void generate_reverses();
   void read_keq_file();
   void assign_keq_fits();

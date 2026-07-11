@@ -1575,12 +1575,24 @@ int CollideVSSKokkos::perform_collision_kokkos(int icell,
   // reaction = 1 to N for which reaction occurs
   // reaction is returned to caller
 
-  if (react_defined)
+  if (react_defined) {
+
+    // electronic energy of the recombination 3rd particle, needed by
+    // the fully microcanonical reverse-recombination probability
+
+    double p3_eelec = 0.0;
+    if (elecstyle == DISCRETE && recomb_species >= 0 && p3) {
+      auto &d_eelecs = k_edvec.view_device()[d_ewhich[index_eelec]].k_view.view_device();
+      if (d_nelecstates[p3->ispecies] > 0)
+        p3_eelec = d_eelecs[p3 - d_particles.data()];
+    }
+
     reaction = react_kk_copy.obj.attempt_kk(ip,jp,
                                              precoln.etrans,precoln.erot,
                                              precoln.evib,precoln.eelec,postcoln.etotal,kspecies,
-                                             recomb_species,recomb_density,d_species,tgas_cell);
-  else reaction = 0;
+                                             recomb_species,recomb_density,
+                                             p3,p3_eelec,d_species,tgas_cell);
+  } else reaction = 0;
 
   // just collision, no reaction
 

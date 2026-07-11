@@ -33,9 +33,13 @@ class ReactTCE : public ReactBird {
   int attempt(Particle::OnePart *, Particle::OnePart *,
               double, double, double, double, double &, int &);
 
-  // detailed-balance backward recombination rates (issue #472)
+  // detailed-balance backward reaction rates (issue #472)
 
   double reverse_scale(OneReaction *r);
+
+ protected:
+  int index_eelec;      // custom eelec index for the 3rd-body energy of
+                        // a reverse recombination; -1 if not defined
 };
 
 }
