@@ -59,6 +59,20 @@ ReactBirdKokkos::ReactBirdKokkos(SPARTA *sparta, int narg, char **arg) :
   random_backup = NULL;
 }
 
+/* ----------------------------------------------------------------------
+   resize the reaction tally arrays after auto-generation appended
+   reactions; the host pointers are owned by the dual views
+------------------------------------------------------------------------- */
+
+void ReactBirdKokkos::grow_tallies()
+{
+  memoryKK->destroy_kokkos(k_tally_reactions,tally_reactions);
+  memoryKK->destroy_kokkos(k_tally_reactions_all,tally_reactions_all);
+  memoryKK->create_kokkos(k_tally_reactions,tally_reactions,nlist,"react_bird:tally_reactions");
+  memoryKK->create_kokkos(k_tally_reactions_all,tally_reactions_all,nlist,"react_bird:tally_reactions_all");
+  d_tally_reactions = k_tally_reactions.view_device();
+}
+
 /* ---------------------------------------------------------------------- */
 
 ReactBirdKokkos::~ReactBirdKokkos()
@@ -116,6 +130,10 @@ void ReactBirdKokkos::init()
     h_rlist[i].nproduct = rlist[i].nproduct;
     h_rlist[i].reverse = rlist[i].reverse;
     h_rlist[i].reverse_bf = rlist[i].reverse_bf;
+    h_rlist[i].keq_flag = rlist[i].keq_flag;
+    for (int j = 0; j < 5; j++)
+      h_rlist[i].keq_coeff[j] = rlist[i].keq_coeff[j];
+    h_rlist[i].reverse_dEa = rlist[i].reverse_dEa;
     for (int j = 0; j < MAXREACTANT; j++)
       h_rlist[i].d_reactants[j] = rlist[i].reactants[j];
     for (int j = 0; j < MAXPRODUCT; j++)

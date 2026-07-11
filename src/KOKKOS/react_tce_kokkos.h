@@ -137,7 +137,7 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
     // energy factor is the microcanonical detailed-balance table)
 
     double prefactor = r->d_coeff[2];
-    if (r->reverse && r->type == RECOMBINATION) {
+    if (r->reverse && (r->type == RECOMBINATION || r->keq_flag)) {
       if (tgas_cell > 0.0) prefactor *= reverse_scale_kk(r,d_species,tgas_cell);
       else continue;
     }
@@ -296,6 +296,16 @@ double reverse_scale_kk(OneReactionKokkos *r,
                         const t_species_1d_const &d_species,
                         double T) const
 {
+  // external Keq curve fit, matching ReactTCE::reverse_scale
+
+  if (r->keq_flag) {
+    const double z = 10000.0/T;
+    const double keq = exp(r->keq_coeff[0]/z + r->keq_coeff[1] +
+                           r->keq_coeff[2]*log(z) + r->keq_coeff[3]*z +
+                           r->keq_coeff[4]*z*z);
+    return pow(T,r->reverse_bf) * exp(-r->reverse_dEa/(boltz*T)) / keq;
+  }
+
   int nprod = r->nproduct;
   if (r->type == RECOMBINATION) nprod = 1;
 

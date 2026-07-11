@@ -39,6 +39,8 @@ React::React(SPARTA *sparta, int, char **arg) : Pointers(sparta)
   partialEnergy = 1;
 
   reverse_active = 0;
+  reverse_auto = 0;
+  keq_file = NULL;
   tgas = 0.0;
 
   random = new RanKnuth(update->ranmaster->uniform());
@@ -56,6 +58,7 @@ React::~React()
   if (copy) return;
 
   delete [] style;
+  delete [] keq_file;
   delete random;
 }
 
@@ -90,6 +93,22 @@ void React::modify_params(int narg, char **arg)
         if (strcmp(arg[iarg+1],"yes") == 0) partialEnergy = 1;
         else if (strcmp(arg[iarg+1],"no") == 0) partialEnergy = 0;
         else error->all(FLERR,"Illegal react_modify command");
+        iarg += 2;
+    } else if (strcmp(arg[iarg],"reverse") == 0) {
+        if (iarg+2 > narg) error->all(FLERR,"Illegal react_modify command");
+        if (strcmp(arg[iarg+1],"auto") == 0) reverse_auto = 1;
+        else if (strcmp(arg[iarg+1],"no") == 0) reverse_auto = 0;
+        else error->all(FLERR,"Illegal react_modify command");
+        iarg += 2;
+    } else if (strcmp(arg[iarg],"keq_file") == 0) {
+        if (iarg+2 > narg) error->all(FLERR,"Illegal react_modify command");
+        delete [] keq_file;
+        if (strcmp(arg[iarg+1],"none") == 0) keq_file = NULL;
+        else {
+          int n = strlen(arg[iarg+1]) + 1;
+          keq_file = new char[n];
+          strcpy(keq_file,arg[iarg+1]);
+        }
         iarg += 2;
     } else error->all(FLERR,"Illegal react_modify command");
   }

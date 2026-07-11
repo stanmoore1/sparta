@@ -157,7 +157,7 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
     // microcanonical detailed-balance table built at init.
 
     double prefactor = r->coeff[2];
-    if (r->reverse && r->type == RECOMBINATION) {
+    if (r->reverse && (r->type == RECOMBINATION || r->keq_flag)) {
       if (tgas > 0.0) prefactor *= reverse_scale(r);
       else continue;
     }
@@ -276,6 +276,16 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
 
 double ReactTCE::reverse_scale(OneReaction *r)
 {
+  // external equilibrium-constant curve fit (react_modify keq_file):
+  // k_b = k_f/Keq_fit at the cell temperature; the exponential shift
+  // reverse_dEa restates the forward barrier relative to the seeded
+  // backward barrier so the standard TCE energy factor stays in place
+
+  if (r->keq_flag)
+    return pow(tgas,r->reverse_bf) *
+      exp(-r->reverse_dEa/(update->boltz*tgas)) /
+      keq_eval(r->keq_coeff,tgas);
+
   // for a B-style recombination A + B -> AB + M, the third body M
   // (products[1]) is a spectator whose partition function appears on both
   // sides of the paired dissociation and cancels: skip it

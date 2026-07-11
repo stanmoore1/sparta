@@ -16,6 +16,7 @@
 #define SPARTA_REACT_BIRD_H
 
 #include "stdio.h"
+#include "math.h"
 #include "react.h"
 #include "particle.h"
 
@@ -92,6 +93,19 @@ class ReactBird : public React {
                                    //   transform), used to calibrate the
                                    //   detailed-balance table of a B-style
                                    //   exchange reaction
+    int generated;                 // 1 if this reverse reaction was
+                                   //   auto-generated (react_modify
+                                   //   reverse auto), else 0
+    int keq_flag;                  // 1 if this reverse reaction uses an
+                                   //   external equilibrium-constant curve
+                                   //   fit (react_modify keq_file), else 0
+    double keq_coeff[5];           // Park-form fit coefficients:
+                                   //   ln Keq = c0/Z + c1 + c2 ln(Z) +
+                                   //   c3 Z + c4 Z^2 with Z = 10000 K / T
+    double reverse_dEa;            // Ea_F - seeded Ea_B: exponential shift
+                                   //   between the forward barrier and the
+                                   //   (clamped) backward barrier, used by
+                                   //   the external-Keq prefactor
   };
 
   OneReaction *rlist;              // list of all reactions read from file
@@ -125,12 +139,36 @@ class ReactBird : public React {
                               //   length of each chunk is # of species
                               // pointed into by reactions[i][k].sp2recomb
 
+  // equilibrium-constant curve fits read from react_modify keq_file
+
+  struct KeqFit {
+    int reactants[2];                // species indices of the FORWARD
+    int products[3];                 //   reaction the fit belongs to
+    int nreactant,nproduct;
+    double coeff[5];                 // Park-form coefficients
+    int used;                        // 1 once matched to a reaction
+  };
+
+  KeqFit *keqfits;
+  int nkeqfits;
+
+  int generated_flag;              // 1 once auto-reverses were generated
+
   void readfile(char *);
   int readone(char *, char *, int &, int &);
   void check_duplicate();
   void check_tce_bounds();
+  virtual void grow_tallies();
   double partition_function(int, double);
   void build_db_table(int);
+  void generate_reverses();
+  void read_keq_file();
+  void assign_keq_fits();
+
+  inline double keq_eval(const double *c, double T) const {
+    double z = 10000.0/T;
+    return exp(c[0]/z + c[1] + c[2]*log(z) + c[3]*z + c[4]*z*z);
+  }
   void print_reaction(char *, char *);
   void print_reaction(OneReaction *);
   void print_reaction_ambipolar(OneReaction *);

@@ -45,6 +45,8 @@ class ReactBirdKokkos : public ReactBird {
 
   // tallies for reactions
 
+  void grow_tallies() override;
+
   DAT::tdual_bigint_1d k_tally_reactions;
   DAT::t_bigint_1d d_tally_reactions;
   DAT::tdual_bigint_1d k_tally_reactions_all;
@@ -59,6 +61,9 @@ class ReactBirdKokkos : public ReactBird {
     int nreactant,nproduct;        // # of reactants and products
     int reverse;                   // 1 if detailed-balance (B-style) reverse
     double reverse_bf;             // forward temperature exponent (B-style)
+    int keq_flag;                  // 1 if using an external Keq curve fit
+    double keq_coeff[5];           // Park-form fit coefficients
+    double reverse_dEa;            // Ea_F - seeded Ea_B (external-Keq path)
     int d_reactants[MAXREACTANT],d_products[MAXPRODUCT];      // species indices of reactants/products
     double d_coeff[MAXCOEFF];                 // numerical coeffs for reaction
   };

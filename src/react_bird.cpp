@@ -86,6 +86,10 @@ ReactBird::ReactBird(SPARTA *sparta, int narg, char **arg) :
   mtab_du = NULL;
   mtab_n = NULL;
   mtab_nlist = 0;
+
+  keqfits = NULL;
+  nkeqfits = 0;
+  generated_flag = 0;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -101,6 +105,10 @@ ReactBird::ReactBird(SPARTA *sparta) : React(sparta)
   mtab_du = NULL;
   mtab_n = NULL;
   mtab_nlist = 0;
+
+  keqfits = NULL;
+  nkeqfits = 0;
+  generated_flag = 0;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -133,6 +141,7 @@ ReactBird::~ReactBird()
   memory->destroy(reactions);
   memory->destroy(list_ij);
   memory->destroy(sp2recomb_ij);
+  memory->sfree(keqfits);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -149,6 +158,14 @@ void ReactBird::init()
   for (int m = 0; m < nlist; m++) {
     OneReaction *r = &rlist[m];
     r->active = 1;
+    r->keq_flag = 0;
+
+    // auto-generated reverse reactions are inert when reverse_auto is off
+
+    if (r->generated && !reverse_auto) {
+      r->active = 0;
+      continue;
+    }
 
     if (r->type == RECOMBINATION && recombflag_user == 0) {
       r->active = 0;
@@ -184,6 +201,11 @@ void ReactBird::init()
       }
     }
   }
+
+  // auto-generate reverse (B-style) reactions for eligible forward
+  // reactions (react_modify reverse auto), before the per-pair lists
+
+  if (reverse_auto) generate_reverses();
 
   // count possible active reactions for each species pair
   // include J,I reactions in I,J list and vice versa
@@ -336,7 +358,16 @@ void ReactBird::init()
                                               //   atom + atom recombination)
     b->coeff[4] = -f->coeff[4];               // reverse reaction energy
     if (b->coeff[1] < 0.0) b->coeff[1] = 0.0; // clamp small negative barrier
+    b->reverse_dEa = f->coeff[1] - b->coeff[1];
   }
+
+  // read equilibrium-constant curve fits (react_modify keq_file) and
+  // assign them to the reverse reactions whose forward partner they
+  // describe; a matched reaction evaluates k_b = k_f/Keq_fit at the cell
+  // temperature instead of using the internal partition functions
+
+  read_keq_file();
+  assign_keq_fits();
 
   // set reverse_active if any active reverse RECOMBINATION is defined:
   // only the recombination prefactor needs the per-cell temperature at
@@ -346,7 +377,8 @@ void ReactBird::init()
   reverse_active = 0;
   for (int m = 0; m < nlist; m++)
     if (rlist[m].active && rlist[m].reverse &&
-        rlist[m].type == RECOMBINATION) reverse_active = 1;
+        (rlist[m].type == RECOMBINATION || rlist[m].keq_flag))
+      reverse_active = 1;
 
   // modify Arrhenius coefficients for TCE model
   // C1,C2 Bird 94, p 127
@@ -539,6 +571,310 @@ void ReactBird::init()
         }
       }
     }
+}
+
+/* ----------------------------------------------------------------------
+   auto-generate a reverse (B-style) reaction for every eligible active
+     forward reaction (react_modify reverse auto):
+     EXCHANGE A + B -> C + D        gains  C + D -> A + B (exchange B)
+     DISSOCIATION AB + M -> A+B+M   gains  A + B -> AB + M (recomb B)
+       (explicit third body only; wildcard recombination cannot pair
+       with a per-partner dissociation rate)
+   a forward reaction is skipped if any active reaction already provides
+     its reverse: an explicit B line, an independently fitted reverse, or
+     a wildcard recombination covering the same product
+   generated entries are marked and become inert if reverse_auto is
+     turned off before a later run
+------------------------------------------------------------------------- */
+
+void ReactBird::generate_reverses()
+{
+  if (generated_flag) return;
+  generated_flag = 1;
+
+  Particle::Species *species = particle->species;
+
+  int nforward = nlist;
+  int ngen = 0;
+
+  for (int m = 0; m < nforward; m++) {
+    OneReaction *f = &rlist[m];
+    if (!f->active || f->reverse) continue;
+    if (f->style != ARRHENIUS) continue;      // QK reactions are not eligible
+
+    int rtype;
+    int reactants[2],products[2];
+    if (f->type == EXCHANGE) {
+      rtype = EXCHANGE;
+      reactants[0] = f->products[0]; reactants[1] = f->products[1];
+      products[0] = f->reactants[0]; products[1] = f->reactants[1];
+    } else if (f->type == DISSOCIATION) {
+      if (f->nproduct != 3) continue;
+      if (f->reactants[1] < 0 || f->products[2] != f->reactants[1]) continue;
+      rtype = RECOMBINATION;
+      reactants[0] = f->products[0]; reactants[1] = f->products[1];
+      products[0] = f->reactants[0]; products[1] = f->reactants[1];
+    } else continue;
+
+    // skip if any active reaction already provides this reverse
+
+    int exists = 0;
+    for (int k = 0; k < nlist; k++) {
+      OneReaction *r2 = &rlist[k];
+      if (!r2->active || r2->type != rtype) continue;
+      if (rtype == EXCHANGE) {
+        if (set_match(r2->reactants,2,reactants,2) &&
+            set_match(r2->products,2,products,2)) { exists = 1; break; }
+      } else {
+        if (!set_match(r2->reactants,2,reactants,2)) continue;
+        if (r2->products[0] != products[0]) continue;
+        if (r2->nproduct < 2 || r2->products[1] == products[1] ||
+            r2->products[1] < 0) { exists = 1; break; }
+      }
+    }
+    if (exists) continue;
+
+    // append the generated reverse to rlist
+
+    if (nlist == maxlist) {
+      maxlist += DELTALIST;
+      rlist = (OneReaction *)
+        memory->srealloc(rlist,maxlist*sizeof(OneReaction),"react/bird:rlist");
+      for (int i = nlist; i < maxlist; i++) {
+        OneReaction *r = &rlist[i];
+        r->nreactant = r->nproduct = 0;
+        r->id_reactants = new char*[MAXREACTANT];
+        r->id_products = new char*[MAXPRODUCT];
+        r->reactants = new int[MAXREACTANT];
+        r->products = new int[MAXPRODUCT];
+        r->coeff = new double[MAXCOEFF];
+        r->id = NULL;
+        r->reverse = 0;
+        r->reverse_partner = -1;
+        r->reverse_bf = 0.0;
+        r->reverse_A = 0.0;
+        r->reverse_dEa = 0.0;
+        r->generated = 0;
+        r->keq_flag = 0;
+      }
+      f = &rlist[m];   // rlist may have moved
+    }
+
+    OneReaction *b = &rlist[nlist];
+    b->active = 1;
+    b->initflag = 0;
+    b->type = rtype;
+    b->style = ARRHENIUS;
+    b->ncoeff = 5;
+    b->nreactant = 2;
+    b->nproduct = 2;
+    b->reverse = 1;
+    b->reverse_partner = -1;
+    b->reverse_bf = 0.0;
+    b->reverse_A = 0.0;
+    b->reverse_dEa = 0.0;
+    b->generated = 1;
+    b->keq_flag = 0;
+    for (int i = 0; i < 5; i++) b->coeff[i] = 0.0;
+
+    char idbuf[MAXLINE];
+    for (int i = 0; i < 2; i++) {
+      char *name = species[reactants[i]].id;
+      b->reactants[i] = reactants[i];
+      b->id_reactants[i] = new char[strlen(name)+1];
+      strcpy(b->id_reactants[i],name);
+      name = species[products[i]].id;
+      b->products[i] = products[i];
+      b->id_products[i] = new char[strlen(name)+1];
+      strcpy(b->id_products[i],name);
+    }
+    sprintf(idbuf,"%s + %s --> %s + %s",
+            species[reactants[0]].id,species[reactants[1]].id,
+            species[products[0]].id,species[products[1]].id);
+    b->id = new char[strlen(idbuf)+1];
+    strcpy(b->id,idbuf);
+
+    nlist++;
+    ngen++;
+  }
+
+  // tally arrays were sized for the file reactions: regrow
+  // (virtual: the KOKKOS variant owns them through dual views)
+
+  if (ngen) {
+    grow_tallies();
+    for (int i = 0; i < nlist; i++) tally_reactions[i] = 0;
+  }
+
+  if (comm->me == 0) {
+    if (screen)
+      fprintf(screen,"Generated %d reverse reaction(s)\n",ngen);
+    if (logfile)
+      fprintf(logfile,"Generated %d reverse reaction(s)\n",ngen);
+  }
+}
+
+/* ----------------------------------------------------------------------
+   resize the reaction tally arrays to the current nlist, after
+   auto-generation appended reactions; the KOKKOS variant overrides this
+   because its arrays are owned by dual views
+------------------------------------------------------------------------- */
+
+void ReactBird::grow_tallies()
+{
+  delete [] tally_reactions;
+  delete [] tally_reactions_all;
+  tally_reactions = new bigint[nlist];
+  tally_reactions_all = new bigint[nlist];
+}
+
+/* ----------------------------------------------------------------------
+   read equilibrium-constant curve fits from react_modify keq_file:
+     2-line entries, comments and blank lines allowed:
+       A + B --> C + D          (the FORWARD reaction the fit describes)
+       park c0 c1 c2 c3 c4
+     ln Keq = c0/Z + c1 + c2 ln(Z) + c3 Z + c4 Z^2,  Z = 10000 K / T,
+     with Keq = k_f/k_b in SI units (dimensionless for an exchange pair,
+     1/m^3 for a dissociation/recombination pair)
+   entries whose species are not all defined are skipped, like reaction
+     files; called every init so react_modify changes take effect
+------------------------------------------------------------------------- */
+
+void ReactBird::read_keq_file()
+{
+  memory->sfree(keqfits);
+  keqfits = NULL;
+  nkeqfits = 0;
+  if (!keq_file) return;
+
+  int maxfits = 0;
+  char line1[MAXLINE],line2[MAXLINE];
+
+  FILE *fp = NULL;
+  if (comm->me == 0) {
+    fp = fopen(keq_file,"r");
+    if (!fp) {
+      char str[MAXLINE+64];
+      sprintf(str,"Cannot open Keq file %s",keq_file);
+      error->one(FLERR,str);
+    }
+  }
+
+  while (1) {
+    int eof = 0;
+    if (comm->me == 0) {
+
+      // read a 2-line entry, skipping blank and comment lines
+
+      char *ptr;
+      do {
+        ptr = fgets(line1,MAXLINE,fp);
+      } while (ptr && (strspn(line1," \t\n\r") == strlen(line1) ||
+                       line1[strspn(line1," \t")] == '#'));
+      if (!ptr) eof = 1;
+      else if (!fgets(line2,MAXLINE,fp)) eof = 1;
+    }
+    MPI_Bcast(&eof,1,MPI_INT,0,world);
+    if (eof) break;
+    MPI_Bcast(line1,MAXLINE,MPI_CHAR,0,world);
+    MPI_Bcast(line2,MAXLINE,MPI_CHAR,0,world);
+
+    // parse the formula: species names split by "+" and "-->"
+
+    if (nkeqfits == maxfits) {
+      maxfits += DELTALIST;
+      keqfits = (KeqFit *)
+        memory->srealloc(keqfits,maxfits*sizeof(KeqFit),"react/bird:keqfits");
+    }
+    KeqFit *fit = &keqfits[nkeqfits];
+    fit->nreactant = fit->nproduct = 0;
+    fit->used = 0;
+
+    int side = 0;
+    int skip = 0;
+    char *word = strtok(line1," \t\n\r");
+    while (word) {
+      if (strcmp(word,"+") == 0) {
+        word = strtok(NULL," \t\n\r");
+        continue;
+      }
+      if (strcmp(word,"-->") == 0) {
+        side = 1;
+        word = strtok(NULL," \t\n\r");
+        continue;
+      }
+      int isp = particle->find_species(word);
+      if (isp < 0) skip = 1;
+      if (side == 0) {
+        if (fit->nreactant == 2)
+          error->all(FLERR,"Too many reactants in Keq file entry");
+        fit->reactants[fit->nreactant++] = isp;
+      } else {
+        if (fit->nproduct == 3)
+          error->all(FLERR,"Too many products in Keq file entry");
+        fit->products[fit->nproduct++] = isp;
+      }
+      word = strtok(NULL," \t\n\r");
+    }
+    if (fit->nreactant != 2 || fit->nproduct < 2)
+      error->all(FLERR,"Invalid reaction formula in Keq file");
+
+    word = strtok(line2," \t\n\r");
+    if (!word || (strcmp(word,"park") != 0 && strcmp(word,"PARK") != 0))
+      error->all(FLERR,"Invalid fit style in Keq file (expected park)");
+    for (int i = 0; i < 5; i++) {
+      word = strtok(NULL," \t\n\r");
+      if (!word) error->all(FLERR,"Keq file park fit requires 5 coefficients");
+      fit->coeff[i] = input->numeric(FLERR,word);
+    }
+
+    // entries naming absent species are skipped like reaction-file lines
+
+    if (!skip) nkeqfits++;
+  }
+
+  if (comm->me == 0) fclose(fp);
+}
+
+/* ----------------------------------------------------------------------
+   assign each Keq fit to the reverse reaction whose FORWARD partner it
+   describes; a matched reverse evaluates k_b = k_f/Keq_fit at the cell
+   temperature in place of the internal partition functions
+------------------------------------------------------------------------- */
+
+void ReactBird::assign_keq_fits()
+{
+  if (!nkeqfits) return;
+
+  for (int m = 0; m < nlist; m++) {
+    OneReaction *b = &rlist[m];
+    if (!b->active || !b->reverse || b->reverse_partner < 0) continue;
+    OneReaction *f = &rlist[b->reverse_partner];
+
+    for (int k = 0; k < nkeqfits; k++) {
+      KeqFit *fit = &keqfits[k];
+      if (fit->nreactant != f->nreactant) continue;
+      if (fit->nproduct != f->nproduct) continue;
+      if (!set_match(fit->reactants,fit->nreactant,
+                     f->reactants,f->nreactant)) continue;
+      if (!set_match(fit->products,fit->nproduct,
+                     f->products,f->nproduct)) continue;
+      b->keq_flag = 1;
+      for (int i = 0; i < 5; i++) b->keq_coeff[i] = fit->coeff[i];
+      fit->used = 1;
+      break;
+    }
+  }
+
+  int nunused = 0;
+  for (int k = 0; k < nkeqfits; k++)
+    if (!keqfits[k].used) nunused++;
+  if (nunused && comm->me == 0) {
+    char str[160];
+    sprintf(str,"%d of %d Keq fit(s) matched no active reverse reaction",
+            nunused,nkeqfits);
+    error->warning(FLERR,str);
+  }
 }
 
 /* ----------------------------------------------------------------------
@@ -809,6 +1145,9 @@ void ReactBird::readfile(char *fname)
         r->reverse_partner = -1;
         r->reverse_bf = 0.0;
         r->reverse_A = 0.0;
+        r->reverse_dEa = 0.0;
+        r->generated = 0;
+        r->keq_flag = 0;
       }
     }
 
@@ -1199,9 +1538,13 @@ void ReactBird::build_micro_tables()
     if (!r->active || r->nreactant != 2) continue;
 
     // a reverse (B-style) exchange reaction gets a temperature-free
-    // detailed-balance table instead of the standard energy factor
+    // detailed-balance table instead of the standard energy factor;
+    // with an external Keq fit (a thermal quantity with no microcanonical
+    // content) it keeps the standard factor and scales its prefactor by
+    // k_f/Keq at the cell temperature instead, like a recombination
 
-    if (r->reverse && r->type == EXCHANGE && r->reverse_partner >= 0) {
+    if (r->reverse && r->type == EXCHANGE && !r->keq_flag &&
+        r->reverse_partner >= 0) {
       build_db_table(i);
       continue;
     }
