@@ -108,12 +108,18 @@ def kb_derived(T):
 
 # ---------------------------------------------------------------- running
 
-def run(exe, deck, varz, tag, extra_args=None):
+def run(exe, deck, varz, tag, extra_args=None, subs=None, extra_files=None):
     wd = os.path.join(HERE, "work_validate", tag)
     os.makedirs(wd, exist_ok=True)
     for f in ("air.species","air.vss","air.rot","air.elec","rev.tce",
               "rev_exch.tce",deck):
         shutil.copy(os.path.join(HERE,f), wd)
+    for name, text in (extra_files or {}).items():
+        open(os.path.join(wd,name),"w").write(text)
+    if subs:
+        dk = open(os.path.join(wd,deck)).read()
+        for old,new in subs.items(): dk = dk.replace(old,new)
+        open(os.path.join(wd,deck),"w").write(dk)
     cmd = [exe] + (extra_args or []) + ["-in", deck, "-log", "log.sparta"]
     for k,v in varz.items(): cmd += ["-var", k, str(v)]
     r = subprocess.run(cmd, cwd=wd, capture_output=True, text=True,
@@ -279,6 +285,58 @@ def main():
         "\nNO + N --> N2 + O\nE B 0.0 0.0 0.0 0.0 0.0\n",
         "require react tce",
         react_style_line="react           tce/qk rev.tce")
+
+    # forward-only reaction file for the auto-reverse checks
+
+    FWD_TCE = (
+        "N2 + O --> NO + N\n"
+        "E A 0.0 5.175e-19 1.069e-12 -1.0 -5.175e-19\n\n"
+        "N2 + N --> N + N + N\n"
+        "D A 1.0 1.561e-18 4.980e-8 -1.5 -1.561e-18\n")
+
+    print("check 7: reverse auto generates B partners from a forward-only file")
+    T = 15000.0
+    log = run(exe,"in.reverse_rate",
+              {"T":T,"RB":1000.0,"NRHO":NRHO,"FNUM":FNUM},
+              "auto%d"%T,extra,
+              subs={"react           tce rev.tce":
+                    "react           tce fwd.tce",
+                    "rboost ${RB}":"rboost ${RB} reverse auto"},
+              extra_files={"fwd.tce":FWD_TCE})
+    gen = any("Generated 2 reverse reaction" in l for l in open(log))
+    check("init reports 2 generated reverse reactions", gen)
+    t = tallies(log)
+    f = t.get("N2 + O --> NO + N",0.0)
+    b = t.get("NO + N --> N2 + O",0.0)
+    keq = keq_exchange(T)
+    ratio = f/b if b else float("inf")
+    sig = math.sqrt(1.0/max(f,1)+1.0/max(b,1))
+    dev = abs(ratio/keq - 1.0)
+    check("generated exchange reverse holds detailed balance "
+          "(f/b=%.4f Keq=%.4f dev %.1f%%)" % (ratio,keq,100*dev),
+          dev < max(4*sig, 0.06) and f > 200 and b > 200)
+
+    print("check 8: external Keq fit reproduces the fitted reverse rate")
+    # Park-form fit of the Keq implied by the air.tce forward/reverse pair:
+    # matching it must reproduce the literature backward rate exactly
+    c1 = math.log(A_F/A_L) + (B_F-B_L)*math.log(10000.0)
+    c3 = -EA_F/KB/10000.0
+    PARK = ("N2 + O --> NO + N\n"
+            "park 0.0 %.6f %.6f %.6f 0.0\n" % (c1, -(B_F-B_L), c3))
+    log = run(exe,"in.reverse_rate",
+              {"T":T,"RB":1000.0,"NRHO":NRHO,"FNUM":FNUM},
+              "keqfit%d"%T,extra,
+              subs={"react           tce rev.tce":
+                    "react           tce fwd.tce",
+                    "rboost ${RB}":
+                    "rboost ${RB} reverse auto keq_file park.keq"},
+              extra_files={"fwd.tce":FWD_TCE,"park.keq":PARK})
+    t = tallies(log)
+    b = t.get("NO + N --> N2 + O",0.0)
+    kb_meas = b*FNUM/((NRHO*nfrac)**2*V*NSTEP*DT)
+    check("derived kb matches the literature fit via the Keq file "
+          "(kb=%.3e lit=%.3e x%.2f)" % (kb_meas,kb_lit(T),kb_meas/kb_lit(T)),
+          0.9 < kb_meas/kb_lit(T) < 1.1 and b > 200)
 
     print("%d failures" % FAIL)
     sys.exit(FAIL)

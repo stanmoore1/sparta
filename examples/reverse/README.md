@@ -138,6 +138,14 @@ python3 validate_reverse.py --exe ../../src/spa_serial
 6. **Error paths**: a `B` reaction without a forward partner, a `B`
    recombination with a wildcard third body, and a `B` reaction under a
    QK style all abort with the intended error messages.
+7. **Auto-generation**: `react_modify reverse auto` on a forward-only
+   reaction file generates the same two reverse reactions as the
+   hand-written `B` lines and holds the same detailed balance.
+8. **External K_eq**: `react_modify keq_file` with a Park-form fit of
+   the equilibrium constant implied by the published forward/reverse
+   pair reproduces the published reverse rate to x1.02 - the option to
+   use when a chemistry set's backward rates must be matched exactly
+   rather than derived from statistical mechanics.
 
 Accurate reverse rates need accurate partition functions: supply a
 `rotfile` with symmetry numbers and an `elecfile` with the low-lying
