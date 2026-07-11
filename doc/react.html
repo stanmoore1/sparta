@@ -354,7 +354,13 @@ ground-state electronic degeneracies alone change K_eq by a factor of
 ~1.8 and the N2 symmetry number by a further factor of 2.  See
 examples/reverse for a complete worked example and
 examples/reverse/validate_reverse.py for a quantitative validation
-against independently computed equilibrium constants.
+against independently computed equilibrium constants.  Instead of
+writing B lines by hand, <A HREF = "react_modify.html">react_modify</A> <I>reverse</I>
+<I>auto</I> generates the reverse of every eligible forward reaction
+automatically, and <A HREF = "react_modify.html">react_modify</A> <I>keq_file</I> can
+supply equilibrium-constant curve fits that override the internal
+partition functions when a published chemistry set's backward rates
+must be reproduced exactly.
 </P>
 <P>The B style requires the <A HREF = "react.html">react tce</A> style (with or without
 <A HREF = "react_modify.html">react_modify</A> <I>compute_chem_rates</I>); it is an error
