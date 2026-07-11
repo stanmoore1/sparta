@@ -123,7 +123,7 @@ void utils::missing_cmd_args(const std::string &file, int line, const std::strin
                              Error *error)
 {
   char msg[128];
-  sprintf(msg,"Illegal %s command: missing argument(s)",cmd.c_str());
+  snprintf(msg,sizeof(msg),"Illegal %s command: missing argument(s)",cmd.c_str());
   if (error) error->all(file.c_str(), line, msg);
 }
 

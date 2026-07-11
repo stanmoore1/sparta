@@ -984,7 +984,7 @@ void AdaptGrid::candidates_coarsen()
       if (clhash->find(parentID) == clhash->end()) {
         if (cnum == cnummax) {
           cnummax += DELTA_LIST;
-          clist = (CList *) memory->srealloc(clist,cnummax*sizeof(CList),
+          clist = (CList *) memory->srealloc(clist,(bigint)cnummax*sizeof(CList),
                                              "adapt_grid:clist");
         }
         (*clhash)[parentID] = cnum;
@@ -1050,7 +1050,7 @@ void AdaptGrid::candidates_coarsen()
       (*clhash)[parentID] = cnum;
       if (cnum == cnummax) {
         cnummax += DELTA_LIST;
-        clist = (CList *) memory->srealloc(clist,cnummax*sizeof(CList),
+        clist = (CList *) memory->srealloc(clist,(bigint)cnummax*sizeof(CList),
                                            "adapt_grid:clist");
       }
       clist[cnum].parentID = parentID;
@@ -1376,7 +1376,7 @@ void AdaptGrid::particle_surf_comm()
 
   nsend = nreturn;
   memory->create(proclist,nsend,"adapt_grid:proclist");
-  SendAdapt *sadapt = (SendAdapt *) memory->smalloc(nsend*sizeof(SendAdapt),
+  SendAdapt *sadapt = (SendAdapt *) memory->smalloc((bigint)nsend*sizeof(SendAdapt),
                                                     "adapt_grid:sadapt");
   for (int i = 0; i < nreturn; i++) {
     icell = outbuf[i].icell;
@@ -1439,7 +1439,7 @@ void AdaptGrid::particle_surf_comm()
     if (alhash->find(parentID) == alhash->end()) {
       if (anum == anummax) {
         anummax += DELTA_LIST;
-        alist = (ActionList *) memory->srealloc(alist,anummax*sizeof(ActionList),
+        alist = (ActionList *) memory->srealloc(alist,(bigint)anummax*sizeof(ActionList),
                                                 "adapt_grid:alist");
       }
       (*alhash)[parentID] = anum;
@@ -1526,6 +1526,7 @@ int AdaptGrid::perform_coarsen()
 
     // coarsen parentID to become a new child cell
 
+    int nglocalprev = grid->nlocal;
     grid->coarsen_cell(parentID,plevel,plo,phi,nchild,
                        alist[i].index,alist[i].nsurf,alist[i].np,
                        alist[i].surfs,alist[i].particles,cut2d,cut3d);
@@ -1533,7 +1534,7 @@ int AdaptGrid::perform_coarsen()
     cells = grid->cells;
     cinfo = grid->cinfo;
     sinfo = grid->sinfo;
-    newcell = grid->nlocal - 1;
+    newcell = nglocalprev;
 
     // if new child has no surfs and any of its children was INSIDE
     // then type of new child cell = INSIDE

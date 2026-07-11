@@ -653,10 +653,13 @@ int Variable::next(int narg, char **arg)
       delete random;
 
       FILE *fp = fopen("tmp.sparta.variable.lock","r");
+      if (fp == NULL) error->one(FLERR,"Could not open variable lock file for reading");
       int tmp = fscanf(fp,"%d",&nextindex);
+      if (tmp != 1) error->one(FLERR,"Failed to read index from variable lock file");
       //printf("READ %d %d\n",universe->me,nextindex);
       fclose(fp);
       fp = fopen("tmp.sparta.variable.lock","w");
+      if (fp == NULL) error->one(FLERR,"Could not open variable lock file for writing");
       fprintf(fp,"%d\n",nextindex+1);
       //printf("WRITE %d %d\n",universe->me,nextindex+1);
       fclose(fp);
@@ -1283,8 +1286,10 @@ double Variable::evaluate(char *str, Tree **tree)
         strcpy(id,&word[2]);
 
         int icompute = modify->find_compute(id);
-        if (icompute < 0)
+        if (icompute < 0) {
+          delete [] id;
           error->all(FLERR,"Invalid compute ID in variable formula");
+        }
         Compute *compute = modify->compute[icompute];
         delete [] id;
 

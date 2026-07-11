@@ -989,9 +989,9 @@ void CreateISurf::comm_neigh_corners(int which)
   else if (which == CVAL) ncomm = 1 + ncorner;
   else if (which == INVAL) ncomm = 1 + ncorner*nmulti;
 
-  if (nsend*ncomm > maxsbuf) {
+  if ((bigint)nsend*ncomm > maxsbuf) {
     memory->destroy(sbuf);
-    maxsbuf = nsend*ncomm;
+    maxsbuf = (bigint)nsend*ncomm;
     memory->create(sbuf,maxsbuf,"createisurf:sbuf");
   }
 
@@ -1552,7 +1552,10 @@ void CreateISurf::set_cvalues_voxel()
     dx = cells[icell].hi[0] - cells[icell].lo[0];
     dy = cells[icell].hi[1] - cells[icell].lo[1];
     dz = cells[icell].hi[2] - cells[icell].lo[2];
-    sfrac = (dx*dy*dz - cvol) / (dx*dy*dz);
+
+    double boxvol = dx*dy*dz;
+    if (boxvol > 0.0) sfrac = (boxvol - cvol) / boxvol;
+    else sfrac = 0.0;
 
     // use a small tolerance so that a cell which is essentially fully solid
     // or fully open is not rejected due to floating-point roundoff in the
@@ -1859,6 +1862,7 @@ double CreateISurf::param2cval(double param, double v1)
   // param = (thresh  - v0) / (v1 - v0)
 
   double v0;
+  if (param >= 1.0) param = 0.999999;
   v0 = (thresh - v1*param) / (1.0 - param);
 
   // bound by limits
@@ -1898,11 +1902,11 @@ void CreateISurf::remove_old()
   else nbytes = sizeof(Surf::Tri);
 
   if (dim == 2) {
-    llines = (Surf::Line *) memory->smalloc(nsurf*nbytes,"createisurf:lines");
-    memcpy(llines,surf->mylines,nsurf*nbytes);
+    llines = (Surf::Line *) memory->smalloc((bigint)nsurf*nbytes,"createisurf:lines");
+    memcpy(llines,surf->mylines,(size_t)nsurf*nbytes);
   } else {
-    ltris = (Surf::Tri *) memory->smalloc(nsurf*nbytes,"createisurf:ltris");
-    memcpy(ltris,surf->mytris,nsurf*nbytes);
+    ltris = (Surf::Tri *) memory->smalloc((bigint)nsurf*nbytes,"createisurf:ltris");
+    memcpy(ltris,surf->mytris,(size_t)nsurf*nbytes);
   }
 
   surf->add_surfs(1,0,llines,ltris,ncustom,index_custom,cuvalues);
