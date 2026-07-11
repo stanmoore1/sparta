@@ -48,6 +48,15 @@ void ReactTCE::init()
 
   check_tce_bounds();
 
+  // reverse exchange reactions are implemented by microcanonical
+  // detailed-balance tables, which are built on the total-energy model
+
+  if (partialEnergy)
+    for (int i = 0; i < nlist; i++)
+      if (rlist[i].active && rlist[i].reverse)
+        error->all(FLERR,"Reverse (B-style) reactions require "
+                   "react_modify partial_energy no");
+
   // with partial_energy no, the TCE energy factor is the microcanonical
   // average over the reactants' discrete ladders (SHO vibrational levels
   // when vibrate discrete, electronic states when electronic discrete):
@@ -139,14 +148,16 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
                 pow(1.0-r->coeff[1]/ecc,z+1.5-r->coeff[5]);
 
     // effective Arrhenius prefactor (issue #472): for a reverse
-    // (detailed-balance) reaction, scale the seeded forward prefactor by
-    // the partition-function ratio and forward temperature exponent
-    // evaluated at the local cell temperature React::tgas.  If no valid
-    // cell temperature is available (fewer than 2 particles in the cell),
-    // skip the reverse reaction for this collision.
+    // (detailed-balance) RECOMBINATION, scale the seeded forward
+    // prefactor by the partition-function ratio and forward temperature
+    // exponent evaluated at the local cell temperature React::tgas; if
+    // no valid cell temperature is available (fewer than 2 particles in
+    // the cell), skip the reaction for this collision.  A reverse
+    // EXCHANGE needs no temperature: its energy factor is the
+    // microcanonical detailed-balance table built at init.
 
     double prefactor = r->coeff[2];
-    if (r->reverse) {
+    if (r->reverse && r->type == RECOMBINATION) {
       if (tgas > 0.0) prefactor *= reverse_scale(r);
       else continue;
     }
@@ -249,69 +260,6 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
   // no reaction performed
 
   return 0;
-}
-
-/* ----------------------------------------------------------------------
-   total partition function per unit volume for a species at temperature T,
-     q = q_trans * q_rot * q_vib * q_elec   (issue #472 reverse reactions)
-   - translational: (2 pi m kB T / h^2)^{3/2}  (per unit volume)
-   - rotational:    rigid rotor, linear molecule, T/(sigma theta_r), with
-                    the symmetry number sigma from the species rotfile
-                    (nonlinear molecules use the classical
-                    sqrt(pi/(sigma^2) * T^3/(tA tB tC)) form)
-   - vibrational:   harmonic oscillator, ground-state referenced, with
-                    d-fold degenerate modes contributing (1-x)^-d
-   - electronic:    sum over the species elecfile ladder, g_i e^(-theta_i/T);
-                    1 if the species defines no electronic data
-   energies are referenced to each species' own ground state, consistent
-   with the reaction energy (C5) used to seed the backward coefficients
-------------------------------------------------------------------------- */
-
-double ReactTCE::partition_function(int isp, double T)
-{
-  Particle::Species *sp = &particle->species[isp];
-  const double kb = update->boltz;
-  const double h = 6.62607015e-34;   // Planck constant (J s)
-
-  // translational partition function per unit volume
-
-  double qtrans = pow(2.0*MY_PI*sp->mass*kb*T/(h*h), 1.5);
-
-  // rotational partition function (rigid rotor), high-temperature form:
-  // exact to O(theta_r/T), i.e. to ~1e-4 at any temperature where the
-  // reaction rates themselves are non-negligible
-
-  double qrot = 1.0;
-  if (sp->rotdof == 2 && sp->nrottemp >= 1 && sp->rottemp[0] > 0.0)
-    qrot = T / (sp->rotsymm * sp->rottemp[0]);
-  else if (sp->rotdof == 3 && sp->nrottemp == 3 &&
-           sp->rottemp[0] > 0.0 && sp->rottemp[1] > 0.0 &&
-           sp->rottemp[2] > 0.0)
-    qrot = sqrt(MY_PI*T*T*T /
-                (sp->rotsymm*sp->rotsymm *
-                 sp->rottemp[0]*sp->rottemp[1]*sp->rottemp[2]));
-
-  // vibrational partition function (harmonic oscillator, ground-state ref)
-
-  double qvib = 1.0;
-  for (int m = 0; m < sp->nvibmode; m++) {
-    if (sp->vibtemp[m] <= 0.0) continue;
-    double x = exp(-sp->vibtemp[m]/T);
-    int g = sp->vibdegen[m] > 0 ? sp->vibdegen[m] : 1;
-    qvib *= pow(1.0/(1.0-x), g);
-  }
-
-  // electronic partition function from the species elecfile ladder
-
-  double qelec = 1.0;
-  if (sp->elecdat) {
-    qelec = 0.0;
-    for (int i = 0; i < sp->elecdat->nelecstate; i++)
-      qelec += sp->elecdat->states[i].degen *
-        exp(-sp->elecdat->states[i].temp/T);
-  }
-
-  return qtrans*qrot*qvib*qelec;
 }
 
 /* ----------------------------------------------------------------------

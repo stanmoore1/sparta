@@ -49,6 +49,15 @@ void ReactTCEKokkos::init()
 
   check_tce_bounds();
 
+  // reverse exchange reactions are implemented by microcanonical
+  // detailed-balance tables, which are built on the total-energy model
+
+  if (partialEnergy)
+    for (int i = 0; i < nlist; i++)
+      if (rlist[i].active && rlist[i].reverse)
+        error->all(FLERR,"Reverse (B-style) reactions require "
+                   "react_modify partial_energy no");
+
   vibstyle = collide->vibstyle;
   elecstyle = collide->elecstyle;
   boltz = update->boltz;

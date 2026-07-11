@@ -31,11 +31,20 @@ description).  Two kinds of pairs are supported:
 
 At initialization the backward activation energy (`Ea_B = Ea_F + dHf`),
 reaction energy (`-dHf`), and effective DOF are seeded from the forward
-line; the five numeric coefficients on a `B` line are placeholders.  At
-run time the backward prefactor is the forward prefactor scaled by the
-partition-function ratio and the forward temperature exponent, both
-evaluated at the **local grid-cell translational temperature**, so the
-backward rate adapts to the local nonequilibrium state:
+line; the five numeric coefficients on a `B` line are placeholders.
+
+An **exchange** pair is then given a temperature-free detailed-balance
+table: the ratio of the two channels' microcanonical densities of
+states at matched total collision energy (built with the same
+machinery as the microcanonical TCE energy factors), so each
+collision's backward probability follows from the forward reaction by
+energy-resolved microscopic reversibility.  Its thermal average
+reproduces `k_b(T) = k_f(T)/K_eq(T)` at every temperature
+simultaneously, and no temperature is evaluated at run time.
+
+A **recombination** pair scales the forward prefactor by the
+partition-function ratio and the forward temperature exponent at the
+local grid-cell translational temperature:
 
 ```
 k_b(T_cell) = A_F * T_cell^b_F

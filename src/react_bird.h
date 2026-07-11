@@ -85,7 +85,13 @@ class ReactBird : public React {
                                    //   from, or -1 if none found
     double reverse_bf;             // temperature exponent of the forward
                                    //   reaction, applied at the cell
-                                   //   temperature in the backward prefactor
+                                   //   temperature in the backward
+                                   //   recombination prefactor
+    double reverse_A;              // raw Arrhenius prefactor of the forward
+                                   //   reaction (stashed before the TCE
+                                   //   transform), used to calibrate the
+                                   //   detailed-balance table of a B-style
+                                   //   exchange reaction
   };
 
   OneReaction *rlist;              // list of all reactions read from file
@@ -123,6 +129,8 @@ class ReactBird : public React {
   int readone(char *, char *, int &, int &);
   void check_duplicate();
   void check_tce_bounds();
+  double partition_function(int, double);
+  void build_db_table(int);
   void print_reaction(char *, char *);
   void print_reaction(OneReaction *);
   void print_reaction_ambipolar(OneReaction *);

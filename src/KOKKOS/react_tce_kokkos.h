@@ -131,11 +131,13 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
                 pow(1.0-r->d_coeff[1]/ecc,z+1.5-r->d_coeff[5]);
 
     // effective Arrhenius prefactor: for a reverse (detailed-balance)
-    // reaction, scale the seeded forward prefactor by the partition-function
-    // ratio at the cell temperature, matching ReactTCE::attempt
+    // RECOMBINATION, scale the seeded forward prefactor by the
+    // partition-function ratio at the cell temperature, matching
+    // ReactTCE::attempt; a reverse EXCHANGE needs no temperature (its
+    // energy factor is the microcanonical detailed-balance table)
 
     double prefactor = r->d_coeff[2];
-    if (r->reverse) {
+    if (r->reverse && r->type == RECOMBINATION) {
       if (tgas_cell > 0.0) prefactor *= reverse_scale_kk(r,d_species,tgas_cell);
       else continue;
     }

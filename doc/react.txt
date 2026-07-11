@@ -303,7 +303,8 @@ N + N --> N2 + N
 R B 0.0 0.0 0.0 0.0 0.0 :pre
 
 The 5 coefficients for a B reaction are placeholders; they are ignored
-and overwritten internally.  The backward rate is constructed as
+and overwritten internally.  The backward rate is constructed to
+satisfy
 
 k_b(T) = k_f(T) / K_eq(T) :pre
 
@@ -312,16 +313,32 @@ partition functions: translational, rotational (rigid rotor, with the
 symmetry number from the "species"_species.html {rotfile}), vibrational
 (harmonic oscillator, including degenerate modes), and electronic
 (summed over the ladder from the {elecfile}, when defined).
-Equivalently, the backward activation energy is set to Ea_f + dHrxn,
-the backward reaction energy to -dHrxn, and the forward Arrhenius
-prefactor is scaled by the partition-function ratio
-q_reactants/q_products.  This ratio, together with the forward
-temperature exponent, is evaluated at a representative translational
-temperature of the grid cell, computed once per cell per timestep, so
-the reverse rate adapts to the local nonequilibrium state.  For a recombination pair the ratio has units of volume,
+
+For an exchange pair this is enforced without evaluating any
+temperature: at initialization the reaction is given a
+detailed-balance table relating the microcanonical densities of
+states of the two channels at matched total collision energy (the
+same density-of-states machinery that builds the microcanonical TCE
+energy factors), so each collision's backward probability follows
+from the forward reaction by energy-resolved microscopic
+reversibility.  The thermal average of this probability reproduces
+k_f(T)/K_eq(T) at every temperature simultaneously, and the
+per-collision probability remains meaningful arbitrarily far from
+equilibrium, where no temperature is defined.
+
+For a dissociation/recombination pair the backward activation energy
+is set to Ea_f + dHrxn, the backward reaction energy to -dHrxn, and
+the forward Arrhenius prefactor is scaled by the partition-function
+ratio q_reactants/q_products together with the forward temperature
+exponent, evaluated at a representative translational temperature of
+the grid cell, computed once per cell per timestep (exact energy-level
+reversibility of a three-body process is not representable by a
+two-body collision probability).  The ratio has units of volume,
 converting the m^3/s dissociation prefactor into the m^6/s
-recombination prefactor.  Reverse reactions whose cell has fewer than
-2 particles (no defined temperature) are skipped for that collision.
+recombination prefactor.  Reverse recombination reactions whose cell
+has fewer than 2 particles (no defined temperature) are skipped for
+that collision.  Reverse reactions require "react_modify"_react_modify.html
+{partial_energy} {no} (the default).
 
 For quantitatively correct equilibrium constants, define a {rotfile}
 with the rotational symmetry numbers of homonuclear molecules and an

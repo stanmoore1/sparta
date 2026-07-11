@@ -33,9 +33,8 @@ class ReactTCE : public ReactBird {
   int attempt(Particle::OnePart *, Particle::OnePart *,
               double, double, double, double, double &, int &);
 
-  // detailed-balance backward reaction rates (issue #472)
+  // detailed-balance backward recombination rates (issue #472)
 
-  double partition_function(int isp, double T);
   double reverse_scale(OneReaction *r);
 };
 

@@ -321,25 +321,32 @@ void ReactBird::init()
     b->coeff[0] = f->coeff[0];                // effective internal DOF
     b->coeff[1] = f->coeff[1] + f->coeff[4];  // Ea_B = Ea_F + dHf
     b->coeff[2] = f->coeff[2];                // raw A_F (scaled at run time)
-    b->coeff[3] = 0.0;                        // T dependence handled by the
-    b->reverse_bf = f->coeff[3];              //   cell-T prefactor: T^b_F and
-                                              //   the q ratio are evaluated
-                                              //   together at run time, which
-                                              //   keeps the TCE form valid
-                                              //   for any b_F (a b_B <=
-                                              //   -(z+3/2) would make the
-                                              //   backward energy factor
+    b->coeff[3] = 0.0;                        // exchange: T dependence handled
+    b->reverse_bf = f->coeff[3];              //   by the microcanonical
+    b->reverse_A = f->coeff[2];               //   detailed-balance table (see
+                                              //   build_db_table); recomb: by
+                                              //   the cell-T prefactor, where
+                                              //   T^b_F and the q ratio are
+                                              //   evaluated together at run
+                                              //   time, which keeps the TCE
+                                              //   form valid for any b_F (a
+                                              //   b_B <= -(z+3/2) would make
+                                              //   the backward energy factor
                                               //   non-integrable, e.g. for
                                               //   atom + atom recombination)
     b->coeff[4] = -f->coeff[4];               // reverse reaction energy
     if (b->coeff[1] < 0.0) b->coeff[1] = 0.0; // clamp small negative barrier
   }
 
-  // set reverse_active if any active reverse reaction is defined
+  // set reverse_active if any active reverse RECOMBINATION is defined:
+  // only the recombination prefactor needs the per-cell temperature at
+  // run time; reverse exchange reactions are handled by their
+  // temperature-free detailed-balance tables
 
   reverse_active = 0;
   for (int m = 0; m < nlist; m++)
-    if (rlist[m].active && rlist[m].reverse) reverse_active = 1;
+    if (rlist[m].active && rlist[m].reverse &&
+        rlist[m].type == RECOMBINATION) reverse_active = 1;
 
   // modify Arrhenius coefficients for TCE model
   // C1,C2 Bird 94, p 127
@@ -801,6 +808,7 @@ void ReactBird::readfile(char *fname)
         r->reverse = 0;
         r->reverse_partner = -1;
         r->reverse_bf = 0.0;
+        r->reverse_A = 0.0;
       }
     }
 
@@ -1189,6 +1197,15 @@ void ReactBird::build_micro_tables()
 
     OneReaction *r = &rlist[i];
     if (!r->active || r->nreactant != 2) continue;
+
+    // a reverse (B-style) exchange reaction gets a temperature-free
+    // detailed-balance table instead of the standard energy factor
+
+    if (r->reverse && r->type == EXCHANGE && r->reverse_partner >= 0) {
+      build_db_table(i);
+      continue;
+    }
+
     sps[0] = r->reactants[0];
     sps[1] = r->reactants[1];
 
@@ -1305,6 +1322,271 @@ void ReactBird::build_micro_tables()
     memory->destroy(den);
     memory->destroy(work);
   }
+}
+
+/* ----------------------------------------------------------------------
+   total partition function per unit volume for a species at temperature T,
+     q = q_trans * q_rot * q_vib * q_elec   (issue #472 reverse reactions)
+   - translational: (2 pi m kB T / h^2)^{3/2}  (per unit volume)
+   - rotational:    rigid rotor, linear molecule, T/(sigma theta_r), with
+                    the symmetry number sigma from the species rotfile
+                    (nonlinear molecules use the classical
+                    sqrt(pi/(sigma^2) * T^3/(tA tB tC)) form)
+   - vibrational:   harmonic oscillator, ground-state referenced, with
+                    d-fold degenerate modes contributing (1-x)^-d
+   - electronic:    sum over the species elecfile ladder, g_i e^(-theta_i/T);
+                    1 if the species defines no electronic data
+   energies are referenced to each species' own ground state, consistent
+   with the reaction energy (C5) used to seed the backward coefficients
+------------------------------------------------------------------------- */
+
+double ReactBird::partition_function(int isp, double T)
+{
+  Particle::Species *sp = &particle->species[isp];
+  const double kb = update->boltz;
+  const double h = 6.62607015e-34;   // Planck constant (J s)
+
+  // translational partition function per unit volume
+
+  double qtrans = pow(2.0*MY_PI*sp->mass*kb*T/(h*h), 1.5);
+
+  // rotational partition function (rigid rotor), high-temperature form:
+  // exact to O(theta_r/T), i.e. to ~1e-4 at any temperature where the
+  // reaction rates themselves are non-negligible
+
+  double qrot = 1.0;
+  if (sp->rotdof == 2 && sp->nrottemp >= 1 && sp->rottemp[0] > 0.0)
+    qrot = T / (sp->rotsymm * sp->rottemp[0]);
+  else if (sp->rotdof == 3 && sp->nrottemp == 3 &&
+           sp->rottemp[0] > 0.0 && sp->rottemp[1] > 0.0 &&
+           sp->rottemp[2] > 0.0)
+    qrot = sqrt(MY_PI*T*T*T /
+                (sp->rotsymm*sp->rotsymm *
+                 sp->rottemp[0]*sp->rottemp[1]*sp->rottemp[2]));
+
+  // vibrational partition function (harmonic oscillator, ground-state ref)
+
+  double qvib = 1.0;
+  for (int m = 0; m < sp->nvibmode; m++) {
+    if (sp->vibtemp[m] <= 0.0) continue;
+    double x = exp(-sp->vibtemp[m]/T);
+    int g = sp->vibdegen[m] > 0 ? sp->vibdegen[m] : 1;
+    qvib *= pow(1.0/(1.0-x), g);
+  }
+
+  // electronic partition function from the species elecfile ladder
+
+  double qelec = 1.0;
+  if (sp->elecdat) {
+    qelec = 0.0;
+    for (int i = 0; i < sp->elecdat->nelecstate; i++)
+      qelec += sp->elecdat->states[i].degen *
+        exp(-sp->elecdat->states[i].temp/T);
+  }
+
+  return qtrans*qrot*qvib*qelec;
+}
+
+/* ----------------------------------------------------------------------
+   build the temperature-free detailed-balance table of a reverse
+   (B-style) EXCHANGE reaction, stored in its mtab slot:
+     P_b(u) = prefactor * Gamma-ratio * table(u)
+     table(u) = scale * num_F(u) / den_B(u)
+   where u is the total collision energy of the backward reactant pair,
+     den_B(u) = u^(zcontB+3/2-omegaB) (x) discrete ladders of the pair
+       = collision-weighted density of states of the colliding pair
+       (identical to the standard table denominator), and
+     num_F(u) = (u - ea_eff)_+^(zcontF+etaF+1/2) (x) discrete ladders of
+       the FORWARD reactant pair, with ea_eff = Ea_F + dHf the backward
+       threshold: num_F is the forward reaction's microcanonical
+       numerator expressed in the backward channel's energy variable
+       (energy conservation shifts the argument, which folds into the
+       threshold), so the ratio enforces energy-resolved microscopic
+       reversibility between the two channels.
+   the constant `scale` collects all channel constants (VSS collision
+   rates, reduced masses, rotational 1/(sigma k theta) factors, Gamma
+   normalizations): it is fixed by calibrating the thermal average of
+   P_b against the exact detailed-balance target
+     k_b(T) = A_F T^bF e^(-ea_eff/kT) q_prod(T)/q_react(T)
+   at one temperature; the ratio of the two sides is temperature
+   independent by construction (both are Laplace transforms of the same
+   energy profile), so one calibration temperature suffices, and doing
+   it on the discrete grid absorbs quadrature bias as well.
+   the backward rate then satisfies k_b(T) = k_f(T)/K_eq(T) at every
+   temperature with no temperature evaluated at run time.
+------------------------------------------------------------------------- */
+
+void ReactBird::build_db_table(int i)
+{
+  Particle::Species *species = particle->species;
+  double boltz = update->boltz;
+
+  OneReaction *r = &rlist[i];
+  OneReaction *f = &rlist[r->reverse_partner];
+
+  int spsB[2],spsF[2];
+  spsB[0] = r->reactants[0]; spsB[1] = r->reactants[1];
+  spsF[0] = f->reactants[0]; spsF[1] = f->reactants[1];
+
+  int vibdiscrete = (collide->vibstyle == DISCRETE);
+  int elecdiscrete = (collide->elecstyle == DISCRETE);
+
+  // backward threshold: forward barrier shifted into the backward
+  // channel by the reaction energy (unclamped: a negative value means
+  // the backward reaction is barrierless with excess energy)
+
+  double ea_eff = f->coeff[1] + f->coeff[4];
+  double eaP = ea_eff > 0.0 ? ea_eff : 0.0;
+
+  // energy grid: resolve the smallest vibrational quantum of EITHER
+  // pair; always build (a ladder-free pair still needs the continuum
+  // density-of-states ratio)
+
+  double theta_min = 0.0;
+  for (int s = 0; s < 4; s++) {
+    int sp = s < 2 ? spsB[s] : spsF[s-2];
+    if (vibdiscrete)
+      for (int m = 0; m < species[sp].nvibmode; m++) {
+        double th = species[sp].vibtemp[m];
+        if (theta_min == 0.0 || th < theta_min) theta_min = th;
+      }
+  }
+
+  double umax = eaP + 40.0*1.602176634e-19;
+  double du;
+  if (theta_min > 0.0) du = boltz*theta_min/16.0;
+  else du = umax/20000.0;
+  if (umax/du > 200000.0) du = umax/200000.0;
+  int n = (int) (umax/du) + 2;
+
+  mtab_du[i] = du;
+  mtab_n[i] = n;
+
+  double *num,*den,*work,*leps,*lg;
+  memory->create(num,n,"react:mtab_num");
+  memory->create(den,n,"react:mtab_den");
+  memory->create(work,n,"react:mtab_work");
+
+  // continuum internal DOF and omega of each channel, matching the
+  // runtime z of the colliding (backward) pair and the forward table
+  // construction respectively
+
+  double zcontB = 0.5*(species[spsB[0]].rotdof + species[spsB[1]].rotdof);
+  double zcontF = 0.5*(species[spsF[0]].rotdof + species[spsF[1]].rotdof);
+  if (collide->vibstyle == SMOOTH) {
+    zcontB += 0.5*(species[spsB[0]].vibdof + species[spsB[1]].vibdof);
+    zcontF += 0.5*(species[spsF[0]].vibdof + species[spsF[1]].vibdof);
+  }
+  double omegaB = collide->extract(spsB[0],spsB[1],"omega");
+
+  double exp_num = zcontF + f->coeff[3] + 0.5;
+  double exp_den = zcontB + 1.5 - omegaB;
+
+  for (int k = 0; k < n; k++) {
+    double u = k*du;
+    den[k] = (u > 0.0) ? pow(u,exp_den) : 0.0;
+    num[k] = (u > ea_eff) ? pow(u-ea_eff,exp_num) : 0.0;
+  }
+
+  // convolve den with the backward pair's ladders and num with the
+  // forward pair's ladders
+
+  int maxlev = (int) (umax/(boltz*(theta_min > 0.0 ? theta_min : 1.0))) + 2;
+  memory->create(leps,maxlev,"react:mtab_leps");
+  memory->create(lg,maxlev,"react:mtab_lg");
+
+  for (int which = 0; which < 2; which++) {
+    double *arr = which ? num : den;
+    int *sps = which ? spsF : spsB;
+
+    for (int s = 0; s < 2; s++) {
+      int sp = sps[s];
+
+      if (vibdiscrete)
+        for (int m = 0; m < species[sp].nvibmode; m++) {
+          double th = species[sp].vibtemp[m];
+          int d = species[sp].vibdegen[m] > 1 ? species[sp].vibdegen[m] : 1;
+          int nlev = 0;
+          double g = 1.0;
+          for (int l = 0; l*th*boltz < umax && nlev < maxlev; l++) {
+            leps[nlev] = l*th*boltz;
+            if (l > 0) g = g*(l+d-1)/l;
+            lg[nlev] = g;
+            nlev++;
+          }
+          ladder_convolve(arr,work,n,du,nlev,leps,lg);
+        }
+
+      if (elecdiscrete && species[sp].elecdat) {
+        int nlev = species[sp].elecdat->nelecstate;
+        for (int l = 0; l < nlev; l++) {
+          leps[l] = boltz*species[sp].elecdat->states[l].temp;
+          lg[l] = species[sp].elecdat->states[l].degen;
+        }
+        ladder_convolve(arr,work,n,du,nlev,leps,lg);
+      }
+    }
+  }
+
+  mtab[i] = new double[n];
+  for (int k = 0; k < n; k++)
+    mtab[i][k] = (den[k] > 0.0) ? num[k]/den[k] : 0.0;
+
+  // calibrate the channel constant: match the thermal average of the
+  // runtime probability, times the VSS collision rate of the backward
+  // pair (in SPARTA's own convention, inverted from the C1 transform:
+  // kcoll = 2 sqrt(pi) d^2 sqrt(2 k Tref/mr) (T/Tref)^(1-omega) / eps),
+  // to the exact detailed-balance rate at one temperature; the common
+  // factor e^(-eaP/kT) is removed from both sides so large thresholds
+  // cannot underflow
+
+  double tcal = 5000.0;
+  if (ea_eff > 0.0 && ea_eff/(5.0*boltz) > tcal) tcal = ea_eff/(5.0*boltz);
+  if (tcal > umax/(20.0*boltz)) tcal = umax/(20.0*boltz);
+
+  double diam = collide->extract(spsB[0],spsB[1],"diam");
+  double tref = collide->extract(spsB[0],spsB[1],"tref");
+  double mr = species[spsB[0]].mass*species[spsB[1]].mass /
+    (species[spsB[0]].mass + species[spsB[1]].mass);
+  double epsB = (spsB[0] == spsB[1]) ? 2.0 : 1.0;
+  double kcoll = 2.0*MY_PIS*diam*diam*sqrt(2.0*boltz*tref/mr) *
+    pow(tcal/tref,1.0-omegaB) / epsB;
+
+  double cpre = r->coeff[2] *
+    tgamma(zcontB+2.5-omegaB)/tgamma(zcontB+r->coeff[3]+1.5);
+
+  double s1 = 0.0, s0 = 0.0;
+  for (int k = 0; k < n; k++) {
+    double u = k*du;
+    s0 += den[k]*exp(-u/(boltz*tcal));
+    if (mtab[i][k] > 0.0)
+      s1 += den[k]*mtab[i][k]*exp(-(u-eaP)/(boltz*tcal));
+  }
+  double kb_model = kcoll*cpre*s1/s0;   // = model k_b * e^(+eaP/kTcal)
+
+  double qratio =
+    partition_function(r->products[0],tcal) *
+    partition_function(r->products[1],tcal) /
+    (partition_function(r->reactants[0],tcal) *
+     partition_function(r->reactants[1],tcal));
+  double target = r->reverse_A * pow(tcal,r->reverse_bf) * qratio *
+    exp(-(ea_eff-eaP)/(boltz*tcal));   // = exact k_b * e^(+eaP/kTcal)
+
+  char str[MAXLINE+128];
+  if (!(kb_model > 0.0) || !(target > 0.0)) {
+    sprintf(str,"Reverse reaction %s: detailed-balance table "
+            "calibration failed",r->id);
+    error->all(FLERR,str);
+  }
+
+  double scale = target/kb_model;
+  for (int k = 0; k < n; k++) mtab[i][k] *= scale;
+
+  memory->destroy(leps);
+  memory->destroy(lg);
+  memory->destroy(num);
+  memory->destroy(den);
+  memory->destroy(work);
 }
 
 /* ---------------------------------------------------------------------- */
