@@ -42,22 +42,30 @@ energy-resolved microscopic reversibility.  Its thermal average
 reproduces `k_b(T) = k_f(T)/K_eq(T)` at every temperature
 simultaneously, and no temperature is evaluated at run time.
 
-A **recombination** pair scales the forward prefactor by the
-partition-function ratio and the forward temperature exponent at the
-local grid-cell translational temperature:
+A **recombination** pair gets the same treatment extended to three
+bodies: its probability is resolved in the total available energy
 
 ```
-k_b(T_cell) = A_F * T_cell^b_F
-              * q_reactants,F(T_cell) / q_products,F(T_cell)
-              * exp(-(Ea_F + dHf)/kT_cell)
+w = u_pair + eps_3 + e_int,3
 ```
 
-Partition functions include translational, rigid-rotor rotational (with
-the symmetry number sigma from the species `rotfile`), harmonic-oscillator
-vibrational, and electronic (from the species `elecfile` ladder) factors.
-For a recombination the ratio carries one net translational factor (units
-of volume), converting the m^3/s dissociation prefactor into the m^6/s
-recombination prefactor; the third body is a spectator and cancels.
+(the collision energy of the recombining pair, plus the third
+particle's translational energy relative to the pair's center of mass
+- which is exactly the relative translational energy of the forward
+dissociation collision - plus the third particle's internal energies).
+The probability is the calibrated ratio of the forward channel's
+microcanonical reaction numerator at w to the density of states of
+the (pair, third-body) energy decomposition, so an energetic third
+body enhances recombination exactly as microscopic reversibility of
+the forward dissociation demands.  As for exchange, the thermal
+average reproduces `k_b(T) = k_f(T)/K_eq(T)` at every temperature and
+no cell temperature is used anywhere.
+
+Partition functions (used to calibrate the tables at initialization)
+include translational, rigid-rotor rotational (with the symmetry
+number sigma from the species `rotfile`), harmonic-oscillator
+vibrational, and electronic (from the species `elecfile` ladder)
+factors.
 
 Reverse reactions require `react tce` (with the microcanonical
 `partial_energy no` coupling recommended) and are not available for
@@ -114,8 +122,8 @@ python3 validate_reverse.py --exe ../../src/spa_serial
 ```
 
 1. **Exchange detailed balance**: the forward/backward tally ratio from
-   frozen reservoirs matches the analytic `K_eq(T)` to 0.2% at 15000 K,
-   1.3% at 10000 K, and 9.4% at 8000 K (within the tally statistics).
+   frozen reservoirs matches the analytic `K_eq(T)` to 3.5% at 15000 K,
+   3.6% at 10000 K, and 9.5% at 8000 K (within the tally statistics).
 2. **Literature comparison**: the derived backward rate for
    `NO + N -> N2 + O` lies within a factor of 1.33-1.39 of the
    independently fitted literature rate for the same reaction in
@@ -127,7 +135,9 @@ python3 validate_reverse.py --exe ../../src/spa_serial
    backward rate cannot (and should not) match the fitted one exactly.
 3. **Recombination detailed balance**: in a dense reservoir the
    dissociation/recombination tally ratio times the atom number density
-   matches the analytic volumetric `K_eq` to 3.8% (5.0% statistics).
+   matches the analytic volumetric `K_eq` to 1.4% (2.9% statistics) -
+   with the fully microcanonical 3-body probability, no cell
+   temperature involved.
 4. **Equilibrium relaxation**: a closed reacting box initialized on the
    pure-reactant side and on the pure-product side relaxes toward the
    same analytic equilibrium composition (NO fraction 0.411) from both

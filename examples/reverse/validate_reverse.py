@@ -187,10 +187,14 @@ def main():
               0.5 < kb_meas/kb_lit(T) < 2.0)
 
     print("check 3: dissociation/recombination pair vs volumetric Keq")
+    # longer run + tight bound: a missing constant in the 3-body table
+    # calibration (e.g. the Gamma(3/2) norm of the third body's
+    # translational energy, ~13%) must fail this check
     T = 15000.0
     log = run(exe,"in.reverse_rate",
               {"T":T,"RB":1.0,"NRHO":NRHO_HI,"FNUM":FNUM_HI},
-              "recomb%d"%T,extra)
+              "recomb%d"%T,extra,
+              subs={"run             2000":"run             6000"})
     t = tallies(log)
     d = t.get("N2 + N --> N + N + N",0.0)
     r = t.get("N + N --> N2 + N",0.0)
@@ -203,7 +207,7 @@ def main():
     dev = abs(ratio/keqd - 1.0)
     check("T=%6.0fK  (d/r)*n_N=%.3e  Keq=%.3e (dev %.1f%%, stat %.1f%%)"
           % (T, ratio, keqd, 100*dev, 100*sig),
-          dev < max(4*sig, 0.08) and d > 200 and r > 200)
+          dev < max(3*sig, 0.05) and d > 500 and r > 500)
 
     print("check 4: reacting box relaxes toward analytic equilibrium")
     # closed system N2/O/NO/N with only the exchange reaction active:
