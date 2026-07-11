@@ -72,18 +72,44 @@ SPECIES = parse_species(os.path.join(HERE,"air.species"))
 ROT = parse_rot(os.path.join(HERE,"air.rot"))
 ELEC = parse_elec(os.path.join(HERE,"air.elec"))
 
-def q_total(name, T):
-    """partition function per unit volume, matching ReactTCE exactly"""
+def q_total(name, T, vibsmooth=False):
+    """partition function per unit volume, matching ReactBird exactly;
+    with vibsmooth the classical harmonic vib form (q = T/theta per mode),
+    matching partition_function under collide_modify vibrate smooth"""
     s = SPECIES[name]
     q = (2.0*math.pi*s["mass"]*KB*T/(H*H))**1.5
     if s["rotdof"] == 2 and name in ROT:
         temps, sigma = ROT[name]
         q *= T/(sigma*temps[0])
     if s["vibdof"] >= 2 and s["vibtemp"] > 0.0:
-        q *= 1.0/(1.0 - math.exp(-s["vibtemp"]/T))
+        if vibsmooth: q *= T/s["vibtemp"]
+        else:         q *= 1.0/(1.0 - math.exp(-s["vibtemp"]/T))
     if name in ELEC:
         q *= sum(g*math.exp(-t/T) for t,g in ELEC[name])
     return q
+
+def park_fit(func, Ts):
+    """solve for Park coefficients c0..c4 with
+    ln f(T) = c0/Z + c1 + c2 ln Z + c3 Z + c4 Z^2,  Z = 1e4/T,
+    exactly through the 5 given temperatures (pure-python 5x5 solve)"""
+    A, y = [], []
+    for T in Ts:
+        Z = 1e4/T
+        A.append([1.0/Z, 1.0, math.log(Z), Z, Z*Z])
+        y.append(math.log(func(T)))
+    # Gaussian elimination with partial pivoting
+    n = 5
+    M = [A[i][:] + [y[i]] for i in range(n)]
+    for col in range(n):
+        piv = max(range(col, n), key=lambda r: abs(M[r][col]))
+        M[col], M[piv] = M[piv], M[col]
+        d = M[col][col]
+        for j in range(col, n+1): M[col][j] /= d
+        for r in range(n):
+            if r == col: continue
+            f = M[r][col]
+            for j in range(col, n+1): M[r][j] -= f*M[col][j]
+    return [M[i][n] for i in range(n)]
 
 # reaction data (must match rev.tce)
 A_F, B_F, EA_F, DH_F = 1.069e-12, -1.0, 5.175e-19, -5.175e-19   # N2+O -> NO+N
@@ -155,9 +181,14 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--exe", required=True)
     p.add_argument("--exe-args", default="")
+    p.add_argument("--exe2", default=None,
+                   help="second binary (e.g. KOKKOS) for the keq parity check")
+    p.add_argument("--exe2-args", default="")
     args = p.parse_args()
     exe = os.path.abspath(args.exe)
     extra = args.exe_args.split() if args.exe_args else []
+    exe2 = os.path.abspath(args.exe2) if args.exe2 else None
+    extra2 = args.exe2_args.split() if args.exe2_args else []
 
     FNUM, NRHO, V = 1.767e6, 7.07043e22, 1.0e-12
     NRHO_HI, FNUM_HI = 1.414086e25, 3.534e8  # dense reservoir for 3-body rates
@@ -341,6 +372,87 @@ def main():
     check("derived kb matches the literature fit via the Keq file "
           "(kb=%.3e lit=%.3e x%.2f)" % (kb_meas,kb_lit(T),kb_meas/kb_lit(T)),
           0.9 < kb_meas/kb_lit(T) < 1.1 and b > 200)
+
+    print("check 9: external Keq fit on a dissociation/recombination pair")
+    # a Park fit of the analytic volumetric dissociation Keq (1/m^3), fed
+    # via keq_file, must reproduce that Keq as the recombination backward
+    # rate -- the recombination (m^6/s) analogue of check 8, exercising the
+    # m^3->m^6 unit path that the exchange check cannot
+    T = 15000.0
+    cd = park_fit(keq_dissoc, (8000.,11000.,14000.,17000.,20000.))
+    PARKD = ("N2 + N --> N + N + N\n"
+             "park %.8g %.8g %.8g %.8g %.8g\n" % tuple(cd))
+    log = run(exe,"in.reverse_rate",
+              {"T":T,"RB":1.0,"NRHO":NRHO_HI,"FNUM":FNUM_HI},
+              "keqrecomb%d"%T,extra,
+              subs={"react           tce rev.tce":
+                    "react           tce fwd.tce",
+                    "rboost ${RB}":
+                    "rboost ${RB} reverse auto keq_file park.keq",
+                    "run             2000":"run             6000"},
+              extra_files={"fwd.tce":FWD_TCE,"park.keq":PARKD})
+    t = tallies(log)
+    d = t.get("N2 + N --> N + N + N",0.0)
+    r = t.get("N + N --> N2 + N",0.0)
+    nN = NRHO_HI*nfrac
+    keqd = keq_dissoc(T)
+    ratio = (d/r)*nN if r else float("inf")
+    sig = math.sqrt(1.0/max(d,1)+1.0/max(r,1))
+    dev = abs(ratio/keqd - 1.0)
+    check("T=%6.0fK  (d/r)*n_N=%.3e  Keq=%.3e (dev %.1f%%, stat %.1f%%)"
+          % (T, ratio, keqd, 100*dev, 100*sig),
+          dev < max(3*sig, 0.05) and d > 500 and r > 500)
+
+    print("check 10: standard eta=-1.5 dissociation raises no bounds warning")
+    # the ubiquitous eta = -3/2 dissociation with one rotor sits exactly on
+    # the low-energy trend bound; check_tce_bounds must not warn about it
+    log = run(exe,"in.reverse_rate",{"T":15000.,"RB":1000.,
+              "NRHO":NRHO,"FNUM":FNUM},"bounds",extra)
+    warned = any("does not vanish" in l for l in open(log))
+    check("no spurious 'does not vanish' warning on eta=-1.5", not warned)
+
+    print("check 11: reverse detailed balance under vibrate smooth")
+    # with classical (smooth) vibration the calibration target and the
+    # detailed-balance table must share the same vib temperature
+    # dependence: the table must not warn that it drifts, and the exchange
+    # reverse must reproduce the classical-vib Keq
+    T = 15000.0
+    log = run(exe,"in.reverse_rate",
+              {"T":T,"RB":1000.,"NRHO":NRHO,"FNUM":FNUM},
+              "smooth%d"%T,extra,
+              subs={"vibrate discrete":"vibrate smooth"})
+    drift = any("detailed-balance table drifts" in l for l in open(log))
+    t = tallies(log)
+    f = t.get("N2 + O --> NO + N",0.0)
+    b = t.get("NO + N --> N2 + O",0.0)
+    keqs = (q_total("NO",T,True)*q_total("N",T,True)) / \
+           (q_total("N2",T,True)*q_total("O",T,True))*math.exp(DH_F/(KB*T))
+    ratio = f/b if b else float("inf")
+    sig = math.sqrt(1.0/max(f,1)+1.0/max(b,1))
+    dev = abs(ratio/keqs - 1.0)
+    check("smooth-vib exchange reverse: no drift warning and f/b matches "
+          "classical Keq (f/b=%.4f Keq=%.4f dev %.1f%%)" % (ratio,keqs,100*dev),
+          (not drift) and dev < max(4*sig, 0.06) and f > 200 and b > 200)
+
+    if exe2:
+        print("check 12: external-Keq path is bit-for-bit across binaries")
+        # tgas feeds the keq prefactor; verify the two binaries (e.g. CPU
+        # and KOKKOS) produce identical reaction tallies on the keq path
+        c1 = math.log(A_F/A_L) + (B_F-B_L)*math.log(10000.0)
+        c3 = -EA_F/KB/10000.0
+        PARK = ("N2 + O --> NO + N\n"
+                "park 0.0 %.6f %.6f %.6f 0.0\n" % (c1, -(B_F-B_L), c3))
+        sub = {"react           tce rev.tce":"react           tce fwd.tce",
+               "rboost ${RB}":"rboost ${RB} reverse auto keq_file park.keq"}
+        xf = {"fwd.tce":FWD_TCE,"park.keq":PARK}
+        vz = {"T":15000.,"RB":1000.,"NRHO":NRHO,"FNUM":FNUM}
+        t1 = tallies(run(exe ,"in.reverse_rate",vz,"keqpar1",extra ,sub,xf))
+        t2 = tallies(run(exe2,"in.reverse_rate",vz,"keqpar2",extra2,sub,xf))
+        same = t1 == t2 and t1
+        check("CPU and second-binary keq tallies identical (%s)" %
+              (",".join("%s=%g"%(k.split("-->")[0].strip(),v)
+                        for k,v in sorted(t1.items())) if t1 else "no tallies"),
+              same)
 
     print("%d failures" % FAIL)
     sys.exit(FAIL)

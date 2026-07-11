@@ -121,6 +121,9 @@ files) and checks the measured rates against them:
 python3 validate_reverse.py --exe ../../src/spa_serial
 ```
 
+Add `--exe2 <kokkos-binary> --exe2-args "-k on -sf kk -pk kokkos react/retry
+yes"` to also run the CPU/KOKKOS parity check (check 12).
+
 1. **Exchange detailed balance**: the forward/backward tally ratio from
    frozen reservoirs matches the analytic `K_eq(T)` to 3.5% at 15000 K,
    3.6% at 10000 K, and 9.5% at 8000 K (within the tally statistics).
@@ -156,6 +159,23 @@ python3 validate_reverse.py --exe ../../src/spa_serial
    pair reproduces the published reverse rate to x1.02 - the option to
    use when a chemistry set's backward rates must be matched exactly
    rather than derived from statistical mechanics.
+9. **External K_eq for recombination**: a Park fit of the analytic
+   volumetric dissociation `K_eq` (1/m^3), fed via `keq_file`, reproduces
+   that `K_eq` as the three-body recombination backward rate to within
+   statistics - the m^6/s recombination analogue of check 8, exercising
+   the volumetric-unit path the dimensionless exchange check cannot.
+10. **No spurious bounds warning**: the ubiquitous `eta = -3/2`
+    dissociation with one rotor sits exactly on the low-energy trend
+    bound of the TCE probability, where the threshold factor is finite;
+    `check_tce_bounds` must not warn that its rate is erroneous.
+11. **Detailed balance under `vibrate smooth`**: with classical
+    (continuum) vibration the detailed-balance table and its calibration
+    target share the same vibrational temperature dependence, so the
+    table does not report drift and the exchange reverse reproduces the
+    classical-vibration `K_eq`.
+12. **KOKKOS parity of the external-K_eq path** (only with `--exe2`):
+    the cell-temperature-dependent `keq_file` prefactor produces reaction
+    tallies bit-for-bit identical between the CPU and KOKKOS styles.
 
 Accurate reverse rates need accurate partition functions: supply a
 `rotfile` with symmetry numbers and an `elecfile` with the low-lying
