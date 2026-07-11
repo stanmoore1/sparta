@@ -55,6 +55,10 @@ class React : protected Pointers {
 
   int reverse_active;        // 1 if any reverse reactions need the cell
                              //   temperature at run time
+  int reverse_recomb_active; // 1 if any active reverse (B-style)
+                             //   recombination uses a 3-body detailed-
+                             //   balance table (needs the 3rd particle's
+                             //   electronic energy at run time)
   int reverse_auto;          // 1 to auto-generate a B-style reverse for
                              //   every eligible forward reaction
   char *keq_file;            // file of equilibrium-constant curve fits
@@ -69,7 +73,8 @@ class React : protected Pointers {
 
   React(class SPARTA *, int, char **);
   React(class SPARTA *sparta) : Pointers(sparta) // needed for Kokkos
-    { style = NULL; random = NULL; reverse_active = 0; reverse_auto = 0;
+    { style = NULL; random = NULL; reverse_active = 0;
+      reverse_recomb_active = 0; reverse_auto = 0;
       keq_file = NULL; tgas = 0.0; }
   virtual ~React();
   virtual void init() {}

@@ -255,11 +255,13 @@ void CollideVSSKokkos::init()
 
   recombflag = 0;
   react_reverse_active = 0;
+  react_reverse_recomb_active = 0;
   if (react) {
     react_defined = 1;
     recombflag = react->recombflag;
     recomb_boost_inverse = react->recomb_boost_inverse;
     react_reverse_active = react->reverse_active;
+    react_reverse_recomb_active = react->reverse_recomb_active;
   }
 
   if (recombflag) {
@@ -1577,11 +1579,15 @@ int CollideVSSKokkos::perform_collision_kokkos(int icell,
 
   if (react_defined) {
 
-    // electronic energy of the recombination 3rd particle, needed by
-    // the fully microcanonical reverse-recombination probability
+    // electronic energy of the recombination 3rd particle, needed only
+    // by the fully microcanonical reverse-recombination probability;
+    // gated on react_reverse_recomb_active so an ordinary forward-
+    // recombination run never pays the per-collision view unwrap + gather
+    // (the CPU path computes this lazily inside the micro3 branch)
 
     double p3_eelec = 0.0;
-    if (elecstyle == DISCRETE && recomb_species >= 0 && p3) {
+    if (react_reverse_recomb_active &&
+        elecstyle == DISCRETE && recomb_species >= 0 && p3) {
       auto &d_eelecs = k_edvec.view_device()[d_ewhich[index_eelec]].k_view.view_device();
       if (d_nelecstates[p3->ispecies] > 0)
         p3_eelec = d_eelecs[p3 - d_particles.data()];

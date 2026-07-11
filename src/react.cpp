@@ -39,6 +39,7 @@ React::React(SPARTA *sparta, int, char **arg) : Pointers(sparta)
   partialEnergy = 1;
 
   reverse_active = 0;
+  reverse_recomb_active = 0;
   reverse_auto = 0;
   keq_file = NULL;
   tgas = 0.0;

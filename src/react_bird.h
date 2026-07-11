@@ -179,6 +179,7 @@ class ReactBird : public React {
   void check_tce_bounds();
   virtual void grow_tallies();
   double partition_function(int, double);
+  int max_nelecstate();
   void build_db_table(int);
   void build_db3_table(int);
   void generate_reverses();

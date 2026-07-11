@@ -226,6 +226,7 @@ class CollideVSSKokkos : public CollideVSS {
   double dt,fnum,boltz;
   int maxcellcount,react_defined;
   int react_reverse_active;   // 1 if detailed-balance reverse reactions
+  int react_reverse_recomb_active;   // 1 if reverse recombination tables
 
   KOKKOS_INLINE_FUNCTION
   void SCATTER_TwoBodyScattering(Particle::OnePart *,

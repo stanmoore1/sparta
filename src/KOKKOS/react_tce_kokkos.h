@@ -109,7 +109,7 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
 
     int micro3 = 0;
     if (r->reverse && r->type == RECOMBINATION && !r->keq_flag &&
-        d_mtab_n[d_list[i]] > 0) micro3 = 1;
+        d_mtab_n[d_list[i]] > 0 && d_mtab_num_flag[d_list[i]]) micro3 = 1;
 
     // Cover cases where coeff[1].neq.coeff[4]
 
@@ -355,6 +355,9 @@ double reverse_scale_kk(OneReactionKokkos *r, double T) const
   DAT::t_float_2d d_mtab_num;
   DAT::t_float_1d d_mtab_du;
   DAT::t_int_1d d_mtab_n;
+  DAT::t_int_1d d_mtab_num_flag;   // 1 if mtab_num row is a real 3-body
+                                   //   detailed-balance table (mirrors the
+                                   //   host mtab_num[i] != NULL test)
 
   DAT::tdual_int_scalar k_error_flag;
   DAT::t_int_scalar d_error_flag;

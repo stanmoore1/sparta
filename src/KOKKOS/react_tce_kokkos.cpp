@@ -77,13 +77,24 @@ void ReactTCEKokkos::init()
     d_mtab_num = DAT::t_float_2d("react:d_mtab_num",mtab_nlist,MAX(maxn,1));
     d_mtab_du = DAT::t_float_1d("react:d_mtab_du",mtab_nlist);
     d_mtab_n = DAT::t_int_1d("react:d_mtab_n",mtab_nlist);
+    d_mtab_num_flag = DAT::t_int_1d("react:d_mtab_num_flag",mtab_nlist);
     auto h_mtab = Kokkos::create_mirror_view(d_mtab);
     auto h_mtab_num = Kokkos::create_mirror_view(d_mtab_num);
     auto h_du = Kokkos::create_mirror_view(d_mtab_du);
     auto h_n = Kokkos::create_mirror_view(d_mtab_n);
+    auto h_num_flag = Kokkos::create_mirror_view(d_mtab_num_flag);
+
+    // create_mirror_view leaves the buffers uninitialized; zero-fill so
+    // absent rows and the zero-padded columns beyond each table's length
+    // are deterministic on the device (they are gated out of reads by
+    // d_mtab_n / d_mtab_num_flag, but must not carry host garbage)
+
+    Kokkos::deep_copy(h_mtab,0.0);
+    Kokkos::deep_copy(h_mtab_num,0.0);
     for (int i = 0; i < mtab_nlist; i++) {
       h_du(i) = mtab_du[i];
       h_n(i) = mtab[i] ? mtab_n[i] : 0;
+      h_num_flag(i) = mtab_num[i] ? 1 : 0;
       if (mtab[i])
         for (int k = 0; k < mtab_n[i]; k++) h_mtab(i,k) = mtab[i][k];
       if (mtab_num[i])
@@ -93,5 +104,6 @@ void ReactTCEKokkos::init()
     Kokkos::deep_copy(d_mtab_num,h_mtab_num);
     Kokkos::deep_copy(d_mtab_du,h_du);
     Kokkos::deep_copy(d_mtab_n,h_n);
+    Kokkos::deep_copy(d_mtab_num_flag,h_num_flag);
   } else free_micro_tables();
 }

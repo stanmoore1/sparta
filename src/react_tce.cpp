@@ -270,9 +270,6 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
         break;
       }
 
-    if (react_prob < 0) error->warning(FLERR,"Negative reaction probability");
-    else if (react_prob > 1) error->warning(FLERR,"Reaction probability greater than 1");
-
     default:
       error->one(FLERR,"Unknown outcome in reaction");
       break;

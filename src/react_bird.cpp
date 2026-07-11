@@ -384,6 +384,18 @@ void ReactBird::init()
     if (rlist[m].active && rlist[m].reverse && rlist[m].keq_flag)
       reverse_active = 1;
 
+  // set reverse_recomb_active if any active reverse recombination uses a
+  // 3-body detailed-balance table (not an external Keq fit): the KOKKOS
+  // collision loop only fetches the 3rd particle's electronic energy for
+  // the reaction probability when this is set
+
+  reverse_recomb_active = 0;
+  for (int m = 0; m < nlist; m++)
+    if (rlist[m].active && rlist[m].reverse &&
+        rlist[m].type == RECOMBINATION && !rlist[m].keq_flag &&
+        rlist[m].reverse_partner >= 0)
+      reverse_recomb_active = 1;
+
   // modify Arrhenius coefficients for TCE model
   // C1,C2 Bird 94, p 127
   // initflag logic insures only done once per reaction
@@ -754,12 +766,12 @@ void ReactBird::read_keq_file()
   int maxfits = 0;
   char line1[MAXLINE],line2[MAXLINE];
 
-  FILE *fp = NULL;
+  FILE *keqfp = NULL;
   if (comm->me == 0) {
-    fp = fopen(keq_file,"r");
-    if (!fp) {
+    keqfp = fopen(keq_file,"r");
+    if (!keqfp) {
       char str[MAXLINE+64];
-      sprintf(str,"Cannot open Keq file %s",keq_file);
+      snprintf(str,sizeof(str),"Cannot open Keq file %s",keq_file);
       error->one(FLERR,str);
     }
   }
@@ -772,11 +784,11 @@ void ReactBird::read_keq_file()
 
       char *ptr;
       do {
-        ptr = fgets(line1,MAXLINE,fp);
+        ptr = fgets(line1,MAXLINE,keqfp);
       } while (ptr && (strspn(line1," \t\n\r") == strlen(line1) ||
                        line1[strspn(line1," \t")] == '#'));
       if (!ptr) eof = 1;
-      else if (!fgets(line2,MAXLINE,fp)) eof = 1;
+      else if (!fgets(line2,MAXLINE,keqfp)) eof = 1;
     }
     MPI_Bcast(&eof,1,MPI_INT,0,world);
     if (eof) break;
@@ -837,7 +849,7 @@ void ReactBird::read_keq_file()
     if (!skip) nkeqfits++;
   }
 
-  if (comm->me == 0) fclose(fp);
+  if (comm->me == 0) fclose(keqfp);
 }
 
 /* ----------------------------------------------------------------------
@@ -948,9 +960,14 @@ void ReactBird::check_tce_bounds()
               "the reaction probability is erroneous or NaN",
               r->id,eta,-(z+1.5));
       error->all(FLERR,str);
-    } else if (ea > 0.0 && eta <= -(z+0.5)) {
+    } else if (ea > 0.0 && eta < -(z+0.5)) {
+      // strict inequality: at eta = -(z+1/2) the near-threshold factor is
+      // (Ec-Ea)^0 = 1 (finite, integrable), which is the exponent of the
+      // ubiquitous eta = -3/2 dissociation with one rotor (z = 1) and is
+      // physically benign; only eta strictly below the bound leaves the
+      // probability nonzero-and-growing at threshold
       if (comm->me == 0) {
-        sprintf(str,"Reaction %s: temperature exponent %g must be > %g, "
+        sprintf(str,"Reaction %s: temperature exponent %g must be >= %g, "
                 "else the reaction probability does not vanish as the "
                 "collision energy approaches the activation energy",
                 r->id,eta,-(z+0.5));
@@ -1518,6 +1535,26 @@ static void ladder_convolve(double *arr, double *work, int n, double du,
    ~100000 K, and clamping keeps CPU/Kokkos evaluation identical).
 ------------------------------------------------------------------------- */
 
+/* ----------------------------------------------------------------------
+   largest electronic-state count over all species, used to size the
+   per-ladder scratch buffers: the electronic ladder of any one species
+   can be longer than the vibrational-grid depth that otherwise bounds
+   the scratch arrays, so the buffers must cover it to avoid a heap
+   overflow when a species carries a densely resolved elecfile
+------------------------------------------------------------------------- */
+
+int ReactBird::max_nelecstate()
+{
+  Particle::Species *species = particle->species;
+  int maxn = 0;
+  for (int sp = 0; sp < particle->nspecies; sp++)
+    if (species[sp].elecdat && species[sp].elecdat->nelecstate > maxn)
+      maxn = species[sp].elecdat->nelecstate;
+  return maxn;
+}
+
+/* ---------------------------------------------------------------------- */
+
 void ReactBird::build_micro_tables()
 {
   free_micro_tables();
@@ -1636,6 +1673,7 @@ void ReactBird::build_micro_tables()
     // convolve numerator and denominator with each ladder
 
     int maxlev = (int) (umax/(boltz*(theta_min > 0.0 ? theta_min : 1.0))) + 2;
+    if (max_nelecstate() + 2 > maxlev) maxlev = max_nelecstate() + 2;
     memory->create(leps,maxlev,"react:mtab_leps");
     memory->create(lg,maxlev,"react:mtab_lg");
 
@@ -1723,14 +1761,25 @@ double ReactBird::partition_function(int isp, double T)
                 (sp->rotsymm*sp->rotsymm *
                  sp->rottemp[0]*sp->rottemp[1]*sp->rottemp[2]));
 
-  // vibrational partition function (harmonic oscillator, ground-state ref)
+  // vibrational partition function: quantum harmonic oscillator
+  // (ground-state referenced) with DISCRETE vibration, matching the
+  // energy-resolved SHO ladders convolved into the detailed-balance
+  // tables; classical harmonic (q = T/theta per mode) with SMOOTH
+  // vibration, matching the continuum vibrational DOF the tables and the
+  // forward TCE rate use in that mode -- so the calibration target and
+  // the table DOS carry the same vibrational temperature dependence
 
   double qvib = 1.0;
+  int vibsmooth = (collide && collide->vibstyle == SMOOTH);
   for (int m = 0; m < sp->nvibmode; m++) {
     if (sp->vibtemp[m] <= 0.0) continue;
-    double x = exp(-sp->vibtemp[m]/T);
     int g = sp->vibdegen[m] > 0 ? sp->vibdegen[m] : 1;
-    qvib *= pow(1.0/(1.0-x), g);
+    if (vibsmooth)
+      qvib *= pow(T/sp->vibtemp[m], g);
+    else {
+      double x = exp(-sp->vibtemp[m]/T);
+      qvib *= pow(1.0/(1.0-x), g);
+    }
   }
 
   // electronic partition function from the species elecfile ladder
@@ -1851,6 +1900,7 @@ void ReactBird::build_db_table(int i)
   // forward pair's ladders
 
   int maxlev = (int) (umax/(boltz*(theta_min > 0.0 ? theta_min : 1.0))) + 2;
+  if (max_nelecstate() + 2 > maxlev) maxlev = max_nelecstate() + 2;
   memory->create(leps,maxlev,"react:mtab_leps");
   memory->create(lg,maxlev,"react:mtab_lg");
 
@@ -2116,6 +2166,7 @@ void ReactBird::build_db3_table(int i)
   // forward pair's ladders, and v3 with the third body's ladders
 
   int maxlev = (int) (umax/(boltz*(theta_min > 0.0 ? theta_min : 1.0))) + 2;
+  if (max_nelecstate() + 2 > maxlev) maxlev = max_nelecstate() + 2;
   memory->create(leps,maxlev,"react:mtab_leps");
   memory->create(lg,maxlev,"react:mtab_lg");
 
