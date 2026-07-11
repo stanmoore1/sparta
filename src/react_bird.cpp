@@ -1582,6 +1582,42 @@ void ReactBird::build_db_table(int i)
   double scale = target/kb_model;
   for (int k = 0; k < n; k++) mtab[i][k] *= scale;
 
+  // self-check: the calibrated table must reproduce the detailed-balance
+  // target at EVERY temperature (the ratio of the two sides is
+  // temperature independent in the continuum limit); verify at a second
+  // temperature and warn if the drift exceeds 2%, which indicates
+  // inconsistent level data or an under-resolved energy grid
+
+  double tcal2 = 2.0*tcal;
+  if (tcal2 > umax/(10.0*boltz)) tcal2 = umax/(10.0*boltz);
+  if (tcal2 != tcal) {
+    double s1b = 0.0, s0b = 0.0;
+    for (int k = 0; k < n; k++) {
+      double u = k*du;
+      s0b += den[k]*exp(-u/(boltz*tcal2));
+      if (mtab[i][k] > 0.0)
+        s1b += den[k]*mtab[i][k]*exp(-(u-eaP)/(boltz*tcal2));
+    }
+    double kcoll2 = 2.0*MY_PIS*diam*diam*sqrt(2.0*boltz*tref/mr) *
+      pow(tcal2/tref,1.0-omegaB) / epsB;
+    double kb2 = kcoll2*cpre*s1b/s0b;
+    double qratio2 =
+      partition_function(r->products[0],tcal2) *
+      partition_function(r->products[1],tcal2) /
+      (partition_function(r->reactants[0],tcal2) *
+       partition_function(r->reactants[1],tcal2));
+    double target2 = r->reverse_A * pow(tcal2,r->reverse_bf) * qratio2 *
+      exp(-(ea_eff-eaP)/(boltz*tcal2));
+    double drift = kb2/target2 - 1.0;
+    if (fabs(drift) > 0.02 && comm->me == 0) {
+      sprintf(str,"Reverse reaction %s: detailed-balance table drifts "
+              "%g%% between %g and %g K; check the species level data "
+              "(elecfile/rotfile/vibfile) for consistency",
+              r->id,100.0*drift,tcal,tcal2);
+      error->warning(FLERR,str);
+    }
+  }
+
   memory->destroy(leps);
   memory->destroy(lg);
   memory->destroy(num);

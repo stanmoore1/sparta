@@ -117,10 +117,14 @@ python3 validate_reverse.py --exe ../../src/spa_serial
    frozen reservoirs matches the analytic `K_eq(T)` to 0.2% at 15000 K,
    1.3% at 10000 K, and 9.4% at 8000 K (within the tally statistics).
 2. **Literature comparison**: the derived backward rate for
-   `NO + N -> N2 + O` lies within a factor of 1.36-1.42 of the
+   `NO + N -> N2 + O` lies within a factor of 1.33-1.39 of the
    independently fitted literature rate for the same reaction in
    `data/air.tce` over 8000-15000 K - i.e. the derived rate agrees with
    the fitted one to well within the scatter of published rate models.
+   The residual is the fit pair's own inconsistency: the equilibrium
+   constant implied by the two published fits is x1.38-1.40 larger than
+   the statistical-mechanics K_eq, so a thermodynamically consistent
+   backward rate cannot (and should not) match the fitted one exactly.
 3. **Recombination detailed balance**: in a dense reservoir the
    dissociation/recombination tally ratio times the atom number density
    matches the analytic volumetric `K_eq` to 3.8% (5.0% statistics).
