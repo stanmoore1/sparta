@@ -32,7 +32,7 @@ enum{DISSOCIATION,EXCHANGE,IONIZATION,RECOMBINATION};   // other files
 /* ---------------------------------------------------------------------- */
 
 ReactTCE::ReactTCE(SPARTA *sparta, int narg, char **arg) :
-  ReactBird(sparta, narg, arg) {}
+  ReactBird(sparta, narg, arg) { probwarnflag = 0; }
 
 /* ---------------------------------------------------------------------- */
 
@@ -301,6 +301,19 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
     //      used by perform_collision() after reaction has taken place
     //      precoln only stores combined properties of I,J
     //      nothing that is I-specific or J-specific
+
+    // diagnostic: a cumulative probability above 1 means this collision has
+    //   saturated - any reaction later in the list cannot fire and, if a
+    //   single reaction's probability exceeds 1, its rate is silently
+    //   under-counted (a dense-cell / large-timestep recombination regime).
+    //   Warn once so the condition is not silent.
+
+    if (react_prob > 1.0 && !probwarnflag) {
+      probwarnflag = 1;
+      error->warning(FLERR,"TCE reaction probability exceeded 1; reaction "
+                     "rate may be under-counted - reduce the timestep or fnum, "
+                     "or refine the grid");
+    }
 
     if (react_prob > random_prob) {
       tally_reactions[list[i]]++;

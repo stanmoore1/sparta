@@ -38,6 +38,7 @@ class ReactTCE : public ReactBird {
  protected:
   int index_eelec;      // custom eelec index for the 3rd-body energy of
                         // a reverse recombination; -1 if not defined
+  int probwarnflag;     // 1 once the P>1 under-count warning has been issued
 };
 
 }

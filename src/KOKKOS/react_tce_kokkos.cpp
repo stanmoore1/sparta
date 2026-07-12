@@ -61,6 +61,11 @@ void ReactTCEKokkos::init()
   elecstyle = collide->elecstyle;
   boltz = update->boltz;
 
+  // one-time "probability exceeded 1" device warning flag (zero-initialized)
+
+  d_probwarn = DAT::t_int_scalar("react:probwarn");
+  Kokkos::deep_copy(d_probwarn,0);
+
   // with partial_energy no, build the host microcanonical energy-factor
   // tables (shared ReactBird machinery) and mirror them into flat device
   // views (zero-padded to the widest table); reactions whose reactants

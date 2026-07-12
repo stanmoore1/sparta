@@ -293,6 +293,16 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
     //      only store combined properties of I,J,
     //      nothing that is I-specific or J-specific
 
+    // diagnostic (matches ReactTCE::attempt): warn once if the cumulative
+    //   probability saturates above 1, where the rate can be under-counted
+
+    if (react_prob > 1.0) {
+      if (Kokkos::atomic_compare_exchange(&d_probwarn(),0,1) == 0)
+        Kokkos::printf("WARNING: TCE reaction probability exceeded 1; "
+          "reaction rate may be under-counted - reduce the timestep or fnum, "
+          "or refine the grid\n");
+    }
+
     if (react_prob > random_prob) {
       Kokkos::atomic_inc(&d_tally_reactions[d_list[i]]);
       if (!computeChemRates) {
@@ -355,6 +365,11 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
   DAT::tdual_int_scalar k_error_flag;
   DAT::t_int_scalar d_error_flag;
   HAT::t_int_scalar h_error_flag;
+
+  // one-time device flag: set the first time a collision's cumulative
+  //   reaction probability exceeds 1 (rate may be under-counted); mirrors
+  //   the CPU ReactTCE::probwarnflag warning
+  DAT::t_int_scalar d_probwarn;
 };
 
 }
