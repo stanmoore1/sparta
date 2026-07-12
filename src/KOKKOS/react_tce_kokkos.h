@@ -150,7 +150,11 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
     double keq_resid = 1.0;
     if (r->reverse && r->keq_flag) {
       if (tgas_cell > 0.0) {
-        const double z10 = 10000.0/tgas_cell;
+        // clamp to the residual fit window (1000-60000 K), matching
+        // ReactTCE::attempt, to avoid an uncontrolled Park extrapolation
+        const double tr = tgas_cell < 1000.0 ? 1000.0 :
+          (tgas_cell > 60000.0 ? 60000.0 : tgas_cell);
+        const double z10 = 10000.0/tr;
         keq_resid = exp(r->keq_resid_coeff[0]/z10 + r->keq_resid_coeff[1] +
                         r->keq_resid_coeff[2]*log(z10) +
                         r->keq_resid_coeff[3]*z10 +

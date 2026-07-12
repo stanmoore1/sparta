@@ -179,8 +179,14 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
 
     double keq_resid = 1.0;
     if (r->reverse && r->keq_flag) {
-      if (tgas > 0.0) keq_resid = keq_eval(r->keq_resid_coeff,tgas);
-      else continue;
+      if (tgas > 0.0) {
+        // clamp to the residual fit window (1000-60000 K, see
+        // ReactBird::fit_keq_residual) so a very cold or very hot cell
+        // gets the edge correction rather than an uncontrolled Park
+        // extrapolation
+        double tr = tgas < 1000.0 ? 1000.0 : (tgas > 60000.0 ? 60000.0 : tgas);
+        keq_resid = keq_eval(r->keq_resid_coeff,tr);
+      } else continue;
     }
     double prefactor = r->coeff[2] * keq_resid;
 

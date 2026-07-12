@@ -972,6 +972,34 @@ void ReactBird::fit_keq_residual(int i)
     }
   }
   for (int a = 0; a < 5; a++) b->keq_resid_coeff[a] = m[a][5];
+
+  // goodness-of-fit self-check: the Park basis reproduces a statistical-
+  // mechanics / Park-fit Keq ratio to well under 1% in practice, but a
+  // pathological external fit (different functional shape, or wildly
+  // inconsistent partition functions) could defeat the 5-term fit; warn if
+  // the residual R(T) is off by more than 2% anywhere in the fit window so
+  // the reproduced Keq is not silently wrong
+
+  double maxerr = 0.0;
+  for (int p = 0; p < NP; p++) {
+    double T = Tlo * pow(Thi/Tlo, p/(double)(NP-1));
+    double keq_sm = exp(f->coeff[4]/(boltz*T));
+    for (int j = 0; j < f->nproduct; j++)
+      keq_sm *= partition_function(f->products[j],T);
+    for (int j = 0; j < f->nreactant; j++)
+      keq_sm /= partition_function(f->reactants[j],T);
+    double lnR = log(keq_sm) - log(keq_eval(b->keq_coeff,T));
+    double err = fabs(keq_eval(b->keq_resid_coeff,T)/exp(lnR) - 1.0);
+    if (err > maxerr) maxerr = err;
+  }
+  if (maxerr > 0.02 && comm->me == 0) {
+    char str[MAXLINE+128];
+    sprintf(str,"Reverse reaction %s: external-Keq residual fit is off by "
+            "%g%% within %g-%g K; the reproduced Keq will be biased by that "
+            "much (check the Keq file fit and species partition-function data)",
+            b->id,100.0*maxerr,Tlo,Thi);
+    error->warning(FLERR,str);
+  }
 }
 
 /* ----------------------------------------------------------------------
