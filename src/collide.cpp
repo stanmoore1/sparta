@@ -474,6 +474,10 @@ double Collide::cell_temperature(int icell)
   int ip = cinfo[icell].first;
   while (ip >= 0) {
     Particle::OnePart *p = &particles[ip];
+    // exclude ambipolar electrons: they are typically at a different
+    //   temperature than the heavy particles and their reverse rates
+    //   depend on the electron temperature, which is handled separately
+    if (ambiflag && p->ispecies == ambispecies) { ip = next[ip]; continue; }
     double m = species[p->ispecies].mass;
     double *v = p->v;
     msum += m;
@@ -485,8 +489,11 @@ double Collide::cell_temperature(int icell)
 
   if (n < 2 || msum <= 0.0) return 0.0;
 
+  // subtract the cell mean velocity (3 constrained DOF), so the unbiased
+  //   translational temperature uses 3(n-1) degrees of freedom, not 3n
+
   double kesum = mv2 - (mvx*mvx + mvy*mvy + mvz*mvz)/msum;  // sum m (v-u)^2
-  double temp = kesum / (3.0*n*update->boltz);
+  double temp = kesum / (3.0*(n-1)*update->boltz);
   if (temp < 0.0) temp = 0.0;
   return temp;
 }

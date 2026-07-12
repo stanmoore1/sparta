@@ -721,17 +721,21 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOne< NEARCP, GASTALLY, ATO
   double tgas_cell = 0.0;
   if (react_reverse_active) {
     double msum = 0.0, mvx = 0.0, mvy = 0.0, mvz = 0.0, mv2 = 0.0;
+    int nt = 0;
     for (int p = 0; p < np; p++) {
       Particle::OnePart *pp = &d_particles[d_plist(icell,p)];
+      // exclude ambipolar electrons (see Collide::cell_temperature)
+      if (ambiflag && pp->ispecies == ambispecies) continue;
       const double m = d_species[pp->ispecies].mass;
       const double *v = pp->v;
       msum += m;
       mvx += m*v[0];  mvy += m*v[1];  mvz += m*v[2];
       mv2 += m*(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+      nt++;
     }
-    if (np >= 2 && msum > 0.0) {
+    if (nt >= 2 && msum > 0.0) {
       const double kesum = mv2 - (mvx*mvx + mvy*mvy + mvz*mvz)/msum;
-      tgas_cell = kesum / (3.0*np*boltz);
+      tgas_cell = kesum / (3.0*(nt-1)*boltz);
       if (tgas_cell < 0.0) tgas_cell = 0.0;
     }
   }
@@ -1143,17 +1147,21 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar< GASTALLY, AT
   double tgas_cell = 0.0;
   if (react_reverse_active) {
     double msum = 0.0, mvx = 0.0, mvy = 0.0, mvz = 0.0, mv2 = 0.0;
+    int nt = 0;
     for (int p = 0; p < np; p++) {
       Particle::OnePart *pp = &d_particles[d_plist(icell,p)];
+      // exclude ambipolar electrons (see Collide::cell_temperature)
+      if (ambiflag && pp->ispecies == ambispecies) continue;
       const double m = d_species[pp->ispecies].mass;
       const double *v = pp->v;
       msum += m;
       mvx += m*v[0];  mvy += m*v[1];  mvz += m*v[2];
       mv2 += m*(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+      nt++;
     }
-    if (np >= 2 && msum > 0.0) {
+    if (nt >= 2 && msum > 0.0) {
       const double kesum = mv2 - (mvx*mvx + mvy*mvy + mvz*mvz)/msum;
-      tgas_cell = kesum / (3.0*np*boltz);
+      tgas_cell = kesum / (3.0*(nt-1)*boltz);
       if (tgas_cell < 0.0) tgas_cell = 0.0;
     }
   }
