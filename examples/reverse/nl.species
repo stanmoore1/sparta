@@ -1,0 +1,9 @@
+# Synthetic species for the nonlinear-rotor (rotdof=3) reverse-reaction test
+# (validate_reverse.py).  Round-number data isolate the nonlinear rotational
+# code path (partition_function qrot ~ T^1.5, build_db_table zcont=1.5); the
+# detailed-balance test only requires internal self-consistency.
+# id  molwt  molmass(kg)  rotdof rotrel vibdof vibrel   vibtemp specwt charge
+TRIA  50.0   8.303e-26    3      0.2    2      1.0e-4   2000.0  1.0    0.0
+DIA   48.0   7.971e-26    2      0.2    2      1.0e-4   2500.0  1.0    0.0
+ATO   32.0   5.314e-26    0      0.0    0      0.0      0.0     1.0    0.0
+ATB   30.0   4.982e-26    0      0.0    0      0.0      0.0     1.0    0.0

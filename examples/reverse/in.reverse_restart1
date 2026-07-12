@@ -1,0 +1,38 @@
+# Restart test, phase 1: run a frozen reservoir with detailed-balance reverse
+# reactions for part of the run, then write a restart file.  Phase 2
+# (in.reverse_restart2) reads it and continues; the reverse tables and Keq
+# fits are rebuilt deterministically at init, so the continued run must hold
+# the same detailed balance.  Variables: T, NRHO, FNUM.
+
+seed            12345
+dimension       3
+global          gridcut 1.0e-5 comm/sort yes
+boundary        rr rr rr
+
+create_box      0 0.0001 0 0.0001 0 0.0001
+create_grid     2 2 2
+balance_grid    rcb part
+
+species         air.species N2 O NO N rotfile air.rot elecfile air.elec
+mixture         air N2 O NO N vstream 0.0 0.0 0.0 temp ${T}
+mixture         air N2 frac 0.25
+mixture         air O  frac 0.25
+mixture         air NO frac 0.25
+mixture         air N  frac 0.25
+
+global          nrho ${NRHO}
+global          fnum ${FNUM}
+
+collide         vss air air.vss relax constant
+collide_modify  rotate discrete vibrate discrete electronic discrete
+fix             electronic elecmode
+collide_modify  remain no
+
+react           tce rev.tce
+react_modify    partial_energy no compute_chem_rates yes rboost 1000.0
+
+create_particles air n 40000 twopass
+
+timestep        1.00E-9
+run             1000
+write_restart   reverse.restart

@@ -1,0 +1,5 @@
+# VSS parameters for the nonlinear-rotor test
+TRIA 4.5E-10 0.80 273.15 1.0
+DIA  4.0E-10 0.80 273.15 1.0
+ATO  3.0E-10 0.80 273.15 1.0
+ATB  3.0E-10 0.80 273.15 1.0

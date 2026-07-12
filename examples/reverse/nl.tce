@@ -1,0 +1,7 @@
+# nonlinear-molecule exchange pair TRIA + ATB <-> DIA + ATO
+# (TRIA is nonlinear, rotdof=3); reverse rate derived by detailed balance.
+TRIA + ATB --> DIA + ATO
+E A 0.0 1.0e-19 2.0e-18 0.0 -0.5e-19
+
+DIA + ATO --> TRIA + ATB
+E B 0.0 0.0 0.0 0.0 0.0

@@ -68,9 +68,18 @@ def parse_elec(path):
         elec[w[0]] = states
     return elec
 
+def parse_vss(path):
+    vss = {}
+    for line in open(path):
+        w = line.split()
+        if not w or w[0].startswith("#"): continue
+        vss[w[0]] = float(w[2])       # omega
+    return vss
+
 SPECIES = parse_species(os.path.join(HERE,"air.species"))
 ROT = parse_rot(os.path.join(HERE,"air.rot"))
 ELEC = parse_elec(os.path.join(HERE,"air.elec"))
+VSS = parse_vss(os.path.join(HERE,"air.vss"))
 
 def q_total(name, T, vibsmooth=False):
     """partition function per unit volume, matching ReactBird exactly;
@@ -111,6 +120,78 @@ def park_fit(func, Ts):
             for j in range(col, n+1): M[r][j] -= f*M[col][j]
     return [M[i][n] for i in range(n)]
 
+# ------------- independent reconstruction of the exchange DB table ----------
+# Reproduces ReactBird::build_db_table (grid, exponents, ladder convolution)
+# WITHOUT the calibration scale (which cancels in the rate ratio used by the
+# non-equilibrium check), so the reverse per-collision probability shape
+# mtab(ecc) can be integrated over an arbitrary collision-energy distribution.
+
+EV = 1.602176634e-19
+
+def _ladder(np, arr, du, n, eps, g):
+    work = arr.copy(); out = np.zeros(n)
+    for m in range(len(eps)):
+        if g[m] == 0.0: continue
+        sh = eps[m]/du; i0 = int(sh); frac = sh - i0
+        if i0 < n:     out[i0:]   += g[m]*(1.0-frac)*work[:n-i0]
+        if i0+1 < n:   out[i0+1:] += g[m]*frac*work[:n-i0-1]
+    return out
+
+def db_table_shape(np, spB, spF, Fcoeff):
+    """(du, n, mtab) for reverse pair spB with forward pair spF and forward
+    coefficients Fcoeff = (Ea_F, eta_F, dHreac_F); unscaled."""
+    Ea_F, eta_F, dH_F = Fcoeff
+    ea_eff = Ea_F + dH_F; eaP = max(ea_eff, 0.0)
+    thetas = [SPECIES[s]["vibtemp"] for s in spB+spF if SPECIES[s]["vibtemp"] > 0]
+    theta_min = min(thetas) if thetas else 0.0
+    umax = eaP + 40.0*EV
+    du = KB*theta_min/16.0 if theta_min > 0 else umax/20000.0
+    if umax/du > 200000.0: du = umax/200000.0
+    n = int(umax/du) + 2
+    u = np.arange(n)*du
+    zB = 0.5*(SPECIES[spB[0]]["rotdof"] + SPECIES[spB[1]]["rotdof"])
+    zF = 0.5*(SPECIES[spF[0]]["rotdof"] + SPECIES[spF[1]]["rotdof"])
+    omB = 0.5*(VSS[spB[0]] + VSS[spB[1]])
+    exp_num = zF + eta_F + 0.5
+    exp_den = zB + 1.5 - omB
+    den = np.where(u > 0.0,    np.power(np.maximum(u, 0.0),      exp_den), 0.0)
+    num = np.where(u > ea_eff, np.power(np.maximum(u-ea_eff,0.), exp_num), 0.0)
+    def conv(arr, sp):
+        out = arr; th = SPECIES[sp]["vibtemp"]
+        if th > 0.0:
+            eps = []; g = []; l = 0
+            while l*th*KB < umax: eps.append(l*th*KB); g.append(1.0); l += 1
+            out = _ladder(np, out, du, n, eps, g)
+        if sp in ELEC:
+            out = _ladder(np, out, du, n, [KB*t for t,_ in ELEC[sp]],
+                          [float(gg) for _,gg in ELEC[sp]])
+        return out
+    for sp in spF: num = conv(num, sp)
+    for sp in spB: den = conv(den, sp)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        mtab = np.where(den > 0.0, num/den, 0.0)
+    return du, n, mtab
+
+def sample_ecc(np, rng, spB, Ttr, Tint, ns):
+    """collision-energy distribution of the reverse pair spB: VSS translation
+    (Gamma 5/2-omega, at Ttr), continuum rotors (at Tint), discrete vib and
+    electronic ladders (Boltzmann at Tint); matches the runtime pre_etotal."""
+    omB = 0.5*(VSS[spB[0]] + VSS[spB[1]])
+    ecc = rng.gamma(2.5-omB, KB*Ttr, ns)
+    for sp in spB:
+        rd = SPECIES[sp]["rotdof"]
+        if rd > 0: ecc = ecc + rng.gamma(0.5*rd, KB*Tint, ns)
+        th = SPECIES[sp]["vibtemp"]
+        if th > 0.0:
+            x = math.exp(-th/Tint)
+            ecc = ecc + (rng.geometric(1.0-x, ns)-1)*th*KB
+        if sp in ELEC:
+            temps = np.array([t for t,_ in ELEC[sp]])
+            degs  = np.array([g for _,g in ELEC[sp]], float)
+            w = degs*np.exp(-temps/Tint); w /= w.sum()
+            ecc = ecc + KB*temps[rng.choice(len(temps), ns, p=w)]
+    return ecc
+
 # reaction data (must match rev.tce)
 A_F, B_F, EA_F, DH_F = 1.069e-12, -1.0, 5.175e-19, -5.175e-19   # N2+O -> NO+N
 A_D, B_D, EA_D, DH_D = 4.980e-8, -1.5, 1.561e-18, -1.561e-18    # N2+N -> N+N+N
@@ -138,7 +219,8 @@ def run(exe, deck, varz, tag, extra_args=None, subs=None, extra_files=None):
     wd = os.path.join(HERE, "work_validate", tag)
     os.makedirs(wd, exist_ok=True)
     for f in ("air.species","air.vss","air.rot","air.elec","rev.tce",
-              "rev_exch.tce","rev_mol.tce",deck):
+              "rev_exch.tce","rev_mol.tce","nl.species","nl.vss","nl.rot",
+              "nl.elec","nl.tce","ce.species","ce.vss","ce.elec","ce.tce",deck):
         shutil.copy(os.path.join(HERE,f), wd)
     for name, text in (extra_files or {}).items():
         open(os.path.join(wd,name),"w").write(text)
@@ -170,8 +252,13 @@ def stats_rows(log):
             header = l.split(); rows = []
             for l2 in lines[i+1:]:
                 w = l2.split()
+                # end of the stats block
+                if not w or l2.startswith("Loop time") or l2.startswith("Step "):
+                    break
+                # skip warnings/other messages interleaved in the run output
+                # (e.g. a one-time "reaction probability exceeded 1" warning)
                 try: float(w[0])
-                except (ValueError,IndexError): break
+                except (ValueError,IndexError): continue
                 rows.append(w)
     return header, rows
 
@@ -462,6 +549,241 @@ def main():
                      "molrecomb_kk",extra2,subs=molsub))
         check("molecular third body: CPU/second-binary tallies identical",
               t == tk and bool(t))
+
+    print("check 14: non-equilibrium reverse rate (two-temperature reservoir)")
+    # The per-collision reverse probability is a temperature-free function of
+    # the total collision energy (microscopic reversibility), so out of
+    # equilibrium the reverse RATE must follow the collision-energy
+    # distribution, not any single temperature.  Measure the barriered reverse
+    # N2 + O -> NO + N (bounded probability, unlike the barrierless direction
+    # which saturates above 1) in a frozen reservoir whose translational
+    # temperature is fixed while the rotational/vibrational/electronic modes
+    # are held at a different temperature, and compare the ratio of the 2T
+    # reverse rate to the equilibrium reverse rate (same Ttr, so the collision
+    # rate and densities cancel) against an INDEPENDENT microcanonical integral
+    # of the reconstructed detailed-balance table over the two collision-energy
+    # distributions.
+    try:
+        import numpy as _np
+    except ImportError:
+        check("non-equilibrium reverse rate (needs numpy)", True,
+              "SKIPPED: numpy not available")
+        _np = None
+    if _np is not None:
+        # barriered reverse: forward NO+N->N2+O (barrierless literature fit),
+        # reverse N2+O->NO+N (endothermic).  spB/spF and Fcoeff below.
+        spB, spF = ("N2","O"), ("NO","N")
+        Fcoeff = (0.0, -1.359, 5.175e-19)     # Ea_F, eta_F, reaction energy
+        NONEQ_TCE = ("NO + N --> N2 + O\nE A 0.0 0.0 4.059e-12 -1.359 5.175e-19\n\n"
+                     "N2 + O --> NO + N\nE B 0.0 0.0 0.0 0.0 0.0\n")
+        # frozen data files: zero every relaxation number so the two-temperature
+        # state stays stationary under relax constant
+        def _frozen_species():
+            out = []
+            for line in open(os.path.join(HERE,"air.species")):
+                w = line.split()
+                if len(w) >= 10 and not line.strip().startswith("#"):
+                    w[4] = "0.0"; w[6] = "0.0"; out.append("  ".join(w))
+                else: out.append(line.rstrip("\n"))
+            return "\n".join(out) + "\n"
+        def _frozen_elec():
+            out = []
+            for line in open(os.path.join(HERE,"air.elec")):
+                w = line.split()
+                if len(w) > 2 and not line.strip().startswith("#"):
+                    nl = int(w[1])
+                    for k in range(nl): w[2+5*k+1] = "0.0"
+                    out.append(" ".join(w))
+                else: out.append(line.rstrip("\n"))
+            return "\n".join(out) + "\n"
+        xf = {"air_frozen.species": _frozen_species(),
+              "air_frozen.elec":   _frozen_elec(),
+              "rev_noneq.tce":     NONEQ_TCE}
+        du, ntab, mtab = db_table_shape(_np, spB, spF, Fcoeff)
+        def _interp(ecc):
+            x = ecc/du; k = _np.clip(x.astype(int), 0, ntab-2); f = x - k
+            return (1.0-f)*mtab[k] + f*mtab[k+1]
+        rng = _np.random.default_rng(2024); NS = 4_000_000
+        def _avg(Ttr, Tint):
+            return _interp(sample_ecc(_np, rng, spB, Ttr, Tint, NS)).mean()
+
+        # self-check: the reconstructed table must reproduce the equilibrium
+        # detailed-balance temperature dependence (else the 2T prediction is
+        # untrustworthy).  k_rev(T) = k(NO+N->N2+O) * Keq(N2+O<->NO+N).
+        omB = 0.5*(VSS[spB[0]] + VSS[spB[1]])
+        def _krev_an(T): return kb_lit(T)*keq_exchange(T)
+        ratios = []
+        for T in (8000., 12000., 16000., 20000.):
+            ratios.append(_avg(T,T)*T**(1-omB) / _krev_an(T))
+        drift = max(ratios)/min(ratios) - 1.0
+        check("reconstructed table reproduces equilibrium detailed balance "
+              "across 8-20 kK (drift %.1f%%)" % (100*drift), drift < 0.03)
+
+        Ttr = 8000.0
+        beq = None
+        for Tint in (Ttr, 20000.0, 4000.0):
+            log = run(exe, "in.reverse_noneq",
+                      {"T":Ttr, "TINT":Tint, "NRHO":NRHO, "FNUM":FNUM},
+                      "noneq%d"%Tint, extra,
+                      subs={"run             8000":"run             30000"},
+                      extra_files=xf)
+            b = tallies(log).get("N2 + O --> NO + N", 0.0)
+            if Tint == Ttr:
+                beq = b
+                check("equilibrium control run has adequate statistics",
+                      beq > 400, "reverse counts=%.0f" % beq)
+                continue
+            rm = b/beq if beq else float("inf")
+            rp = _avg(Ttr, Tint)/_avg(Ttr, Ttr)
+            sig = math.sqrt(1.0/max(b,1) + 1.0/max(beq,1))
+            dev = abs(rm/rp - 1.0)
+            check("Tint=%5.0fK  R_rev/R_eq meas=%.3f pred=%.3f (dev %.1f%%, "
+                  "stat %.1f%%)" % (Tint, rm, rp, 100*dev, 100*sig),
+                  dev < max(3*sig, 0.05) and b > 200)
+
+    print("check 15: nonlinear (rotdof=3) molecule reverse reaction")
+    # exchange pair TRIA + ATB <-> DIA + ATO with TRIA a nonlinear triatomic
+    # (rotdof=3): exercises the nonlinear rotational partition function
+    # (qrot ~ T^1.5, partition_function) and the zcont=3/2 continuum in
+    # build_db_table.  Detailed balance is validated to ~12 kK here; a small
+    # (~4% at 20 kK) drift appears at very high T, beyond the table's built-in
+    # calibration self-check range (see the memo).
+    nlsp = parse_species(os.path.join(HERE,"nl.species"))
+    nlrot = parse_rot(os.path.join(HERE,"nl.rot"))
+    nlel = parse_elec(os.path.join(HERE,"nl.elec"))
+    def qnl(name, T):
+        s = nlsp[name]
+        q = (2.0*math.pi*s["mass"]*KB*T/(H*H))**1.5
+        if s["rotdof"] == 2 and name in nlrot:
+            temps,sg = nlrot[name]; q *= T/(sg*temps[0])
+        elif s["rotdof"] == 3 and name in nlrot:
+            temps,sg = nlrot[name]
+            q *= math.sqrt(math.pi*T**3/(sg*sg*temps[0]*temps[1]*temps[2]))
+        if s["vibdof"] >= 2 and s["vibtemp"] > 0.0:
+            q *= 1.0/(1.0 - math.exp(-s["vibtemp"]/T))
+        if name in nlel:
+            q *= sum(g*math.exp(-t/T) for t,g in nlel[name])
+        return q
+    dHnl = -0.5e-19    # forward reaction energy (nl.tce coeff[4])
+    for T in (10000.0, 12000.0):
+        keqnl = qnl("DIA",T)*qnl("ATO",T)/(qnl("TRIA",T)*qnl("ATB",T)) \
+                * math.exp(dHnl/(KB*T))
+        log = run(exe,"in.reverse_nl",{"T":T,"NRHO":NRHO,"FNUM":FNUM},
+                  "nl%d"%T,extra)
+        t = tallies(log)
+        f = t.get("TRIA + ATB --> DIA + ATO",0.0)
+        b = t.get("DIA + ATO --> TRIA + ATB",0.0)
+        ratio = f/b if b else float("inf")
+        sig = math.sqrt(1.0/max(f,1)+1.0/max(b,1))
+        dev = abs(ratio/keqnl - 1.0)
+        check("T=%6.0fK nonlinear rotor: f/b=%.4f Keq=%.4f (dev %.1f%%, "
+              "stat %.1f%%)" % (T,ratio,keqnl,100*dev,100*sig),
+              dev < max(4*sig, 0.06) and f > 200 and b > 200)
+
+    print("check 16: molecular third-body recombination under vibrate smooth")
+    # check 13 (N+N->N2+N2) with continuum (classical) vibration: the third
+    # body N2's vibration is a flat measure variable folded into the 3-body
+    # density of states exactly as its rotation is, so detailed balance must
+    # hold with vibrate smooth as it does with vibrate discrete
+    T = 15000.0
+    smolsub = {"react           tce rev.tce":"react           tce rev_mol.tce",
+               "run             2000":"run             8000",
+               "vibrate discrete":"vibrate smooth"}
+    log = run(exe,"in.reverse_rate",
+              {"T":T,"RB":1.0,"NRHO":NRHO_HI,"FNUM":FNUM_HI},
+              "molsmooth",extra,subs=smolsub)
+    drift = any("detailed-balance table drifts" in l for l in open(log))
+    t = tallies(log)
+    d = t.get("N2 + N2 --> N + N + N2",0.0)
+    r = t.get("N + N --> N2 + N2",0.0)
+    nN = NRHO_HI*nfrac
+    # classical-vibration volumetric Keq (q_vib = T/theta per mode)
+    keqd = (q_total("N",T)**2/q_total("N2",T,True))*math.exp(DH_D/(KB*T))
+    ratio = (d/r)*nN if r else float("inf")
+    sig = math.sqrt(1.0/max(d,1)+1.0/max(r,1))
+    dev = abs(ratio/keqd - 1.0)
+    check("smooth-vib molecular third body: (d/r)*n_N=%.3e Keq=%.3e (dev %.1f%%, "
+          "stat %.1f%%)" % (ratio, keqd, 100*dev, 100*sig),
+          (not drift) and dev < max(3*sig, 0.05) and d > 500 and r > 500)
+
+    print("check 17: external-Keq residual goodness-of-fit guard")
+    # feed an external Keq (the statmech exchange Keq times a strongly T-varying
+    # factor) that the 5-coefficient Park form cannot represent to 2% over the
+    # full 1000-60000 K residual-sampling range.  Two things must hold: the
+    # goodness-of-fit guard added to fit_keq_residual must WARN (so a user is not
+    # silently handed a biased Keq), and the reverse rate at the operating
+    # temperature - where the fit is anchored and good - must still reproduce the
+    # target, confirming the residual correction stays locally accurate.
+    def keq_ext(T):    # statmech Keq times a strong Arrhenius-like distortion
+        return keq_exchange(T)*math.exp(-8000.0/T)*(T/10000.0)**2
+    cext = park_fit(keq_ext,(8000.,11000.,14000.,17000.,20000.))
+    PARKX = ("N2 + O --> NO + N\npark %.8g %.8g %.8g %.8g %.8g\n" % tuple(cext))
+    T = 15000.0
+    log = run(exe,"in.reverse_rate",
+              {"T":T,"RB":1000.0,"NRHO":NRHO,"FNUM":FNUM},
+              "keqvary%d"%T,extra,
+              subs={"react           tce rev.tce":"react           tce fwd.tce",
+                    "rboost ${RB}":
+                    "rboost ${RB} reverse auto keq_file park.keq"},
+              extra_files={"fwd.tce":FWD_TCE,"park.keq":PARKX})
+    fitwarn = any("residual fit is off" in l for l in open(log))
+    t = tallies(log)
+    b = t.get("NO + N --> N2 + O",0.0)
+    kb_meas = b*FNUM/((NRHO*nfrac)**2*V*NSTEP*DT)
+    kb_target = kf(T)/keq_ext(T)
+    dev = abs(kb_meas/kb_target - 1.0)
+    sig = math.sqrt(1.0/max(b,1))
+    check("poorly-fittable external Keq warns and still reproduces at %.0f K: "
+          "kb=%.3e target=%.3e (dev %.1f%%, stat %.1f%%, guard warned=%s)"
+          % (T, kb_meas, kb_target, 100*dev, 100*sig, fitwarn),
+          fitwarn and dev < max(3*sig, 0.06) and b > 200)
+
+    print("check 18: restart then continue with reverse reactions")
+    # write a restart mid-run, read it back, re-issue collide/react/fix, and
+    # continue: the detailed-balance tables and Keq fits rebuild
+    # deterministically at init and the per-particle electronic state is
+    # restored by fix elecmode, so detailed balance must hold after the restart
+    T = 15000.0
+    run(exe,"in.reverse_restart1",{"T":T,"NRHO":NRHO,"FNUM":FNUM},
+        "restart",extra)
+    log = run(exe,"in.reverse_restart2",{"T":T,"NRHO":NRHO,"FNUM":FNUM},
+              "restart",extra)
+    t = tallies(log)
+    f = t.get("N2 + O --> NO + N",0.0)
+    b = t.get("NO + N --> N2 + O",0.0)
+    keq = keq_exchange(T)
+    ratio = f/b if b else float("inf")
+    sig = math.sqrt(1.0/max(f,1)+1.0/max(b,1))
+    dev = abs(ratio/keq - 1.0)
+    check("post-restart exchange detailed balance: f/b=%.4f Keq=%.4f "
+          "(dev %.1f%%, stat %.1f%%)" % (ratio,keq,100*dev,100*sig),
+          dev < max(4*sig, 0.06) and f > 200 and b > 200)
+
+    print("check 19: charge-exchange reverse reaction")
+    # charge-exchange MAp + MB <-> MA + MBp (data in ce.*) moves charge between
+    # two atoms with no free electron, so it is an EXCHANGE reaction whose
+    # reverse is derived by detailed balance (unlike ionization, whose reverse
+    # depends on the electron temperature and is rejected at init).  The
+    # electronic ground-state degeneracies drive the Keq prefactor.
+    cesp = parse_species(os.path.join(HERE,"ce.species"))
+    ceel = parse_elec(os.path.join(HERE,"ce.elec"))
+    def qce(name, T):
+        return (2.0*math.pi*cesp[name]["mass"]*KB*T/(H*H))**1.5 * ceel[name][0][1]
+    dHce = -0.5e-19    # forward reaction energy (ce.tce coeff[4])
+    for T in (10000.0, 15000.0):
+        keqce = qce("MA",T)*qce("MBp",T)/(qce("MAp",T)*qce("MB",T)) \
+                * math.exp(dHce/(KB*T))
+        log = run(exe,"in.reverse_ce",{"T":T,"NRHO":NRHO,"FNUM":FNUM},
+                  "ce%d"%T,extra)
+        t = tallies(log)
+        f = t.get("MAp + MB --> MA + MBp",0.0)
+        b = t.get("MA + MBp --> MAp + MB",0.0)
+        ratio = f/b if b else float("inf")
+        sig = math.sqrt(1.0/max(f,1)+1.0/max(b,1))
+        dev = abs(ratio/keqce - 1.0)
+        check("T=%6.0fK charge exchange: f/b=%.4f Keq=%.4f (dev %.1f%%, "
+              "stat %.1f%%)" % (T,ratio,keqce,100*dev,100*sig),
+              dev < max(4*sig, 0.06) and f > 200 and b > 200)
 
     if exe2:
         print("check 12: external-Keq path is bit-for-bit across binaries")

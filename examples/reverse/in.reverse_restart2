@@ -1,0 +1,21 @@
+# Restart test, phase 2: read the restart written by in.reverse_restart1 and
+# continue the frozen reservoir.  The collide/react/fix commands are not saved
+# in a restart and are re-issued here; the detailed-balance reverse tables and
+# any Keq fits are rebuilt deterministically at react init, and the per-particle
+# electronic state (elecstate/eelec) is restored by fix elecmode.  The continued
+# run must hold the same detailed balance as an uninterrupted run.
+# Variables: T, NRHO, FNUM.
+
+read_restart    reverse.restart
+seed            54321
+
+collide         vss air air.vss relax constant
+collide_modify  rotate discrete vibrate discrete electronic discrete
+fix             electronic elecmode
+collide_modify  remain no
+
+react           tce rev.tce
+react_modify    partial_energy no compute_chem_rates yes rboost 1000.0
+
+timestep        1.00E-9
+run             6000

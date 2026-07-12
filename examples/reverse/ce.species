@@ -1,0 +1,7 @@
+# Synthetic species for the charge-exchange reverse test.  Atomic ions/neutrals
+# (rotdof=0) isolate the charge-exchange path; charge in the last column.
+# id  molwt molmass(kg)  rotdof rotrel vibdof vibrel vibtemp specwt charge
+MA   20.0  3.321e-26    0      0.0    0      0.0    0.0     1.0    0.0
+MAp  20.0  3.321e-26    0      0.0    0      0.0    0.0     1.0    1.0
+MB   30.0  4.982e-26    0      0.0    0      0.0    0.0     1.0    0.0
+MBp  30.0  4.982e-26    0      0.0    0      0.0    0.0     1.0    1.0

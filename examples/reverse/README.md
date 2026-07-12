@@ -188,6 +188,40 @@ yes"` to also run the CPU/KOKKOS parity check (check 12).
     general case of the microcanonical recombination that check 3, with an
     atomic third body N, does not exercise.  The dissociation/recombination
     tally ratio matches the volumetric `K_eq` to within statistics.
+14. **Non-equilibrium reverse rate**: the whole point of the temperature-free
+    per-collision construction is far-from-equilibrium behaviour.  The
+    barriered reverse `N2 + O -> NO + N` is measured in a frozen reservoir
+    whose translational temperature is fixed while the internal
+    (rotational/vibrational/electronic) modes are held at a different
+    temperature (`in.reverse_noneq`, relaxation zeroed).  The ratio of the
+    two-temperature reverse rate to the equilibrium rate at the same
+    translational temperature is compared against an INDEPENDENT
+    microcanonical integral of the reconstructed detailed-balance table over
+    the two collision-energy distributions.  The rate swings ~14x with the
+    internal temperature and matches the prediction to within statistics,
+    directly verifying microscopic reversibility out of equilibrium.
+15. **Nonlinear rotor**: an exchange pair `TRIA + ATB <-> DIA + ATO` (data in
+    `nl.*`) whose reactant `TRIA` is a nonlinear triatomic (rotdof 3)
+    exercises the nonlinear rotational partition function (`qrot ~ T^1.5`)
+    and the `zcont = 3/2` continuum in the detailed-balance table.  Detailed
+    balance holds to ~1% up to ~12 kK; a small (~4% at 20 kK) drift appears
+    at very high temperature, beyond the table's built-in calibration
+    self-check range - a documented limitation of the nonlinear-rotor path.
+16. **Molecular third body under `vibrate smooth`**: check 13 with classical
+    (continuum) vibration, so the third body's vibration is a flat measure
+    variable folded into the 3-body density of states exactly as its rotation
+    is; the recombination reproduces the classical-vibration volumetric
+    `K_eq`.
+17. **Sharply temperature-varying external `K_eq`**: a `keq_file` whose target
+    differs from the statistical-mechanics `K_eq` by a factor that swings ~5x
+    across the fit window stresses the Park fit of the residual
+    `R(T)=K_eq_statmech/K_eq_ext`; the fit self-check must not warn and the
+    measured reverse rate must reproduce the sharply varying target.
+18. **Restart then continue**: a restart is written mid-run and read back, the
+    `collide`/`react`/`fix` commands are re-issued (`in.reverse_restart1/2`),
+    and the run continues.  The detailed-balance tables and `K_eq` fits are
+    rebuilt deterministically at init and the per-particle electronic state is
+    restored by `fix elecmode`, so the continued run holds detailed balance.
 
 Accurate reverse rates need accurate partition functions: supply a
 `rotfile` with symmetry numbers and an `elecfile` with the low-lying

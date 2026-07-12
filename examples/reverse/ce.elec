@@ -1,0 +1,6 @@
+# ground state degeneracies drive the charge-exchange K_eq prefactor
+# (MA g=2, MA+ g=1, MB g=4, MB+ g=5), plus a high unpopulated state
+MA  2 0.0 0.01 2 2 0   500000.0 0.01 2 2 0
+MAp 2 0.0 0.01 1 1 0   500000.0 0.01 1 1 0
+MB  2 0.0 0.01 4 4 0   500000.0 0.01 4 4 0
+MBp 2 0.0 0.01 5 5 0   500000.0 0.01 5 5 0

@@ -1,0 +1,7 @@
+# charge-exchange pair MAp + MB <-> MA + MBp (endothermic forward, Ea=1e-19)
+# reverse rate derived by detailed balance from the forward Arrhenius rate
+MAp + MB --> MA + MBp
+E A 0.0 1.0e-19 2.0e-18 0.0 -0.5e-19
+
+MA + MBp --> MAp + MB
+E B 0.0 0.0 0.0 0.0 0.0

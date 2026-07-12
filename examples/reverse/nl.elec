@@ -1,0 +1,9 @@
+# electronic states for the nonlinear-rotor test.  A ground state (degen 1)
+# plus one excited state placed so high it is unpopulated at the test
+# temperature, so the electronic partition function is ~1 and the rotor path
+# is isolated (SPARTA requires at least two electronic states per species).
+# id  nstate  (temp relax degen spin dof) x nstate
+TRIA 2 0.0 0.01 1 1 0   500000.0 0.01 1 1 0
+DIA  2 0.0 0.01 1 1 0   500000.0 0.01 1 1 0
+ATO  2 0.0 0.01 1 1 0   500000.0 0.01 1 1 0
+ATB  2 0.0 0.01 1 1 0   500000.0 0.01 1 1 0
