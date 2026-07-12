@@ -158,7 +158,11 @@ yes"` to also run the CPU/KOKKOS parity check (check 12).
    the equilibrium constant implied by the published forward/reverse
    pair reproduces the published reverse rate to x1.02 - the option to
    use when a chemistry set's backward rates must be matched exactly
-   rather than derived from statistical mechanics.
+   rather than derived from statistical mechanics.  The matched reverse
+   keeps its energy-resolved detailed-balance table and applies only the
+   residual thermal factor `R(T) = K_eq_statmech/K_eq_fit`, so the
+   collision-energy selectivity stays microscopically reversible and only
+   the (small) K_eq discrepancy is thermal.
 9. **External K_eq for recombination**: a Park fit of the analytic
    volumetric dissociation `K_eq` (1/m^3), fed via `keq_file`, reproduces
    that `K_eq` as the three-body recombination backward rate to within
@@ -174,8 +178,16 @@ yes"` to also run the CPU/KOKKOS parity check (check 12).
     table does not report drift and the exchange reverse reproduces the
     classical-vibration `K_eq`.
 12. **KOKKOS parity of the external-K_eq path** (only with `--exe2`):
-    the cell-temperature-dependent `keq_file` prefactor produces reaction
-    tallies bit-for-bit identical between the CPU and KOKKOS styles.
+    the cell-temperature-dependent `keq_file` residual factor produces
+    reaction tallies bit-for-bit identical between the CPU and KOKKOS
+    styles.
+13. **Molecular third body**: the recombination `N + N -> N2 + N2` (data
+    in `rev_mol.tce`) has a molecular third body N2, whose discrete
+    vibrational and electronic ladders fold into the 3-body density of
+    states and whose continuum rotation is a flat measure variable - the
+    general case of the microcanonical recombination that check 3, with an
+    atomic third body N, does not exercise.  The dissociation/recombination
+    tally ratio matches the volumetric `K_eq` to within statistics.
 
 Accurate reverse rates need accurate partition functions: supply a
 `rotfile` with symmetry numbers and an `elecfile` with the low-lying

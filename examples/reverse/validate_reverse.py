@@ -138,7 +138,7 @@ def run(exe, deck, varz, tag, extra_args=None, subs=None, extra_files=None):
     wd = os.path.join(HERE, "work_validate", tag)
     os.makedirs(wd, exist_ok=True)
     for f in ("air.species","air.vss","air.rot","air.elec","rev.tce",
-              "rev_exch.tce",deck):
+              "rev_exch.tce","rev_mol.tce",deck):
         shutil.copy(os.path.join(HERE,f), wd)
     for name, text in (extra_files or {}).items():
         open(os.path.join(wd,name),"w").write(text)
@@ -433,6 +433,35 @@ def main():
     check("smooth-vib exchange reverse: no drift warning and f/b matches "
           "classical Keq (f/b=%.4f Keq=%.4f dev %.1f%%)" % (ratio,keqs,100*dev),
           (not drift) and dev < max(4*sig, 0.06) and f > 200 and b > 200)
+
+    print("check 13: 3-body recombination with a molecular third body")
+    # N + N -> N2 + N2: the third body N2 carries discrete vibrational and
+    # electronic ladders (folded into the density of states) and continuum
+    # rotation (a flat measure variable) -- the general molecular-M case of
+    # build_db3_table, where check 3 uses an atomic third body N
+    T = 15000.0
+    molsub = {"react           tce rev.tce":"react           tce rev_mol.tce",
+              "run             2000":"run             8000"}
+    log = run(exe,"in.reverse_rate",
+              {"T":T,"RB":1.0,"NRHO":NRHO_HI,"FNUM":FNUM_HI},
+              "molrecomb",extra,subs=molsub)
+    t = tallies(log)
+    d = t.get("N2 + N2 --> N + N + N2",0.0)
+    r = t.get("N + N --> N2 + N2",0.0)
+    nN = NRHO_HI*nfrac
+    keqd = keq_dissoc(T)
+    ratio = (d/r)*nN if r else float("inf")
+    sig = math.sqrt(1.0/max(d,1)+1.0/max(r,1))
+    dev = abs(ratio/keqd - 1.0)
+    check("molecular third body N2: (d/r)*n_N=%.3e Keq=%.3e (dev %.1f%%, stat %.1f%%)"
+          % (ratio, keqd, 100*dev, 100*sig),
+          dev < max(3*sig, 0.05) and d > 500 and r > 500)
+    if exe2:
+        tk = tallies(run(exe2,"in.reverse_rate",
+                     {"T":T,"RB":1.0,"NRHO":NRHO_HI,"FNUM":FNUM_HI},
+                     "molrecomb_kk",extra2,subs=molsub))
+        check("molecular third body: CPU/second-binary tallies identical",
+              t == tk and bool(t))
 
     if exe2:
         print("check 12: external-Keq path is bit-for-bit across binaries")

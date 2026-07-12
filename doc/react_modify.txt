@@ -147,11 +147,16 @@ defining ln Keq = c0/Z + c1 + c2 ln(Z) + c3 Z + c4 Z^2 with Z = 10000
 K / T (the form used by Park's chemistry reviews).  Keq = k_f/k_b must
 be in SI units: dimensionless for an exchange pair, 1/m^3 for a
 dissociation/recombination pair; published fits in molar or cgs units
-must be converted.  A reverse reaction matched by an entry evaluates
-k_b = k_f/Keq(T) at the representative cell translational temperature
-(instead of its temperature-free detailed-balance table, since a
-thermal curve fit carries no energy-resolved information), so its
-equilibrium composition follows the supplied fit exactly.  Entries
+must be converted.  A reverse reaction matched by an entry keeps its
+energy-resolved detailed-balance table (which by itself reproduces the
+statistical-mechanics equilibrium constant Keq_sm) and multiplies the
+per-collision probability by the residual factor R(T) =
+Keq_sm(T)/Keq_fit(T), evaluated at the representative cell
+translational temperature.  Its thermal average therefore reproduces
+the supplied Keq exactly, while the collision-energy selectivity stays
+microscopically reversible and only the (usually small and smooth) Keq
+discrepancy is applied thermally; ln R is fit once to the same Park
+form so the tce and tce/kk styles evaluate it identically.  Entries
 naming species that are not defined are skipped; entries matching no
 reverse reaction produce a warning.  Setting {keq_file} to {none}
 restores the internal partition functions.

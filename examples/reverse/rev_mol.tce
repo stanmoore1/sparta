@@ -1,0 +1,20 @@
+# detailed-balance reverse recombination with a MOLECULAR third body
+# (issue #472)
+#
+# The recombination N + N -> N2 + N2 has a molecular third body (N2), so
+# its fully-microcanonical backward probability must fold the third
+# body's discrete vibrational and electronic ladders into the density of
+# states and treat its (continuum) rotation as a flat measure variable -
+# the general case of ReactBird::build_db3_table, exercised here where the
+# other example (rev.tce) uses an atomic third body N.
+#
+# The recombination pairs with the forward dissociation that has the same
+# explicit third body N2.  Forward parameters are illustrative (the
+# reverse rate is derived from them by detailed balance regardless of the
+# specific Arrhenius triple).
+
+N2 + N2 --> N + N + N2
+D A 1.0 1.561e-18 4.980e-8 -1.5 -1.561e-18
+
+N + N --> N2 + N2
+R B 0.0 0.0 0.0 0.0 0.0

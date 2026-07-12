@@ -102,13 +102,14 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
         z += (d_species[isp].vibdof + d_species[jsp].vibdof)/2.0;
     }
 
-    // a reverse (B-style) recombination without an external Keq fit is
-    // fully microcanonical, matching ReactTCE::attempt: the 3rd
-    // particle's energy counts toward the barrier, so the pair-energy
-    // threshold below does not apply to it
+    // a reverse (B-style) recombination is fully microcanonical, matching
+    // ReactTCE::attempt: the 3rd particle's energy counts toward the
+    // barrier, so the pair-energy threshold below does not apply to it; an
+    // external-Keq recombination uses the same 3-body table times the
+    // residual thermal factor applied below
 
     int micro3 = 0;
-    if (r->reverse && r->type == RECOMBINATION && !r->keq_flag &&
+    if (r->reverse && r->type == RECOMBINATION &&
         d_mtab_n[d_list[i]] > 0 && d_mtab_num_flag[d_list[i]]) micro3 = 1;
 
     // Cover cases where coeff[1].neq.coeff[4]
@@ -140,17 +141,23 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
                   pow(1.0-r->d_coeff[1]/ecc,z+1.5-r->d_coeff[5]);
     }
 
-    // effective Arrhenius prefactor: a reverse reaction matched to an
-    // external Keq curve fit scales the seeded forward prefactor by
-    // k_f/Keq_fit at the cell temperature, matching ReactTCE::attempt;
-    // all other reverse reactions need no temperature (they are handled
-    // by the microcanonical detailed-balance tables)
+    // residual thermal correction for an external-Keq reverse reaction,
+    // matching ReactTCE::attempt: multiply the detailed-balance table by
+    // R(T) = Keq_statmech/Keq_ext at the cell temperature so the thermal
+    // average matches the external Keq while the shape stays energy-
+    // resolved; other reverse reactions need no temperature (keq_resid = 1)
 
-    double prefactor = r->d_coeff[2];
+    double keq_resid = 1.0;
     if (r->reverse && r->keq_flag) {
-      if (tgas_cell > 0.0) prefactor *= reverse_scale_kk(r,tgas_cell);
-      else continue;
+      if (tgas_cell > 0.0) {
+        const double z10 = 10000.0/tgas_cell;
+        keq_resid = exp(r->keq_resid_coeff[0]/z10 + r->keq_resid_coeff[1] +
+                        r->keq_resid_coeff[2]*log(z10) +
+                        r->keq_resid_coeff[3]*z10 +
+                        r->keq_resid_coeff[4]*z10*z10);
+      } else continue;
     }
+    double prefactor = r->d_coeff[2] * keq_resid;
 
     // compute probability of reaction
     // gamma function denominator is negative or infinite (erroneous
@@ -245,7 +252,7 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
             }
           }
 
-          react_prob += recomb_boost * recomb_density * numw / (xpair*c3);
+          react_prob += keq_resid * recomb_boost * recomb_density * numw / (xpair*c3);
           break;
         }
 
@@ -322,24 +329,6 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
 }
 
 /* ---------------------------------------------------------------------- */
-
-/* ----------------------------------------------------------------------
-   device twin of ReactTCE::reverse_scale (issue #472 external-Keq
-   reverse reactions); must match the host implementation exactly for
-   SPARTA_KOKKOS_EXACT.  only called for reactions with keq_flag set;
-   all other reverse reactions use the temperature-free microcanonical
-   detailed-balance tables
-------------------------------------------------------------------------- */
-
-KOKKOS_INLINE_FUNCTION
-double reverse_scale_kk(OneReactionKokkos *r, double T) const
-{
-  const double z = 10000.0/T;
-  const double keq = exp(r->keq_coeff[0]/z + r->keq_coeff[1] +
-                         r->keq_coeff[2]*log(z) + r->keq_coeff[3]*z +
-                         r->keq_coeff[4]*z*z);
-  return pow(T,r->reverse_bf) * exp(-r->reverse_dEa/(boltz*T)) / keq;
-}
 
  protected:
   int vibstyle;

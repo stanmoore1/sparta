@@ -161,6 +161,7 @@ void ReactBird::init()
     OneReaction *r = &rlist[m];
     r->active = 1;
     r->keq_flag = 0;
+    for (int j = 0; j < 5; j++) r->keq_resid_coeff[j] = 0.0;
 
     // auto-generated reverse reactions are inert when reverse_auto is off
 
@@ -375,9 +376,9 @@ void ReactBird::init()
   assign_keq_fits();
 
   // set reverse_active if any active reverse reaction uses an external
-  // Keq curve fit: only k_f/Keq_fit needs the per-cell temperature at
-  // run time; reverse exchange and recombination reactions are handled
-  // by their temperature-free microcanonical detailed-balance tables
+  // Keq curve fit: only the residual thermal correction R(T) needs the
+  // per-cell temperature at run time; the energy-resolved shape of every
+  // reverse reaction comes from its temperature-free detailed-balance table
 
   reverse_active = 0;
   for (int m = 0; m < nlist; m++)
@@ -385,14 +386,14 @@ void ReactBird::init()
       reverse_active = 1;
 
   // set reverse_recomb_active if any active reverse recombination uses a
-  // 3-body detailed-balance table (not an external Keq fit): the KOKKOS
-  // collision loop only fetches the 3rd particle's electronic energy for
-  // the reaction probability when this is set
+  // 3-body detailed-balance table (with or without an external Keq fit):
+  // the KOKKOS collision loop fetches the 3rd particle's electronic energy
+  // for the reaction probability only when this is set
 
   reverse_recomb_active = 0;
   for (int m = 0; m < nlist; m++)
     if (rlist[m].active && rlist[m].reverse &&
-        rlist[m].type == RECOMBINATION && !rlist[m].keq_flag &&
+        rlist[m].type == RECOMBINATION &&
         rlist[m].reverse_partner >= 0)
       reverse_recomb_active = 1;
 
@@ -878,6 +879,7 @@ void ReactBird::assign_keq_fits()
       b->keq_flag = 1;
       for (int i = 0; i < 5; i++) b->keq_coeff[i] = fit->coeff[i];
       fit->used = 1;
+      fit_keq_residual(m);
       break;
     }
   }
@@ -891,6 +893,85 @@ void ReactBird::assign_keq_fits()
             nunused,nkeqfits);
     error->warning(FLERR,str);
   }
+}
+
+/* ----------------------------------------------------------------------
+   fit the residual thermal correction of a reverse reaction matched to an
+   external Keq curve fit:
+     R(T) = Keq_statmech(T) / Keq_ext(T)
+   The detailed-balance table (build_db_table / build_db3_table) already
+   reproduces the reverse rate for the statistical-mechanics equilibrium
+   constant Keq_statmech, so multiplying its per-collision probability by
+   R(T) at run time makes the thermal average reproduce the EXTERNAL Keq
+   while keeping the energy-resolved, microscopically-reversible collision-
+   energy shape (only the -- usually small and smooth -- Keq discrepancy is
+   thermal).  ln R is fit to the same Park form as Keq so both the CPU and
+   KOKKOS runtimes evaluate it identically from stored coefficients, with no
+   partition functions on the device.  Keq_statmech of the FORWARD reaction
+   is q_products/q_reactants times exp(dHrxn/kT); a spectator third body
+   cancels between the two products/reactants sets.
+------------------------------------------------------------------------- */
+
+void ReactBird::fit_keq_residual(int i)
+{
+  OneReaction *b = &rlist[i];
+  OneReaction *f = &rlist[b->reverse_partner];
+  const double boltz = update->boltz;
+
+  // least-squares fit of ln R(T) over a log-spaced temperature range wide
+  // enough to cover any cell temperature the reaction will see
+
+  const int NP = 16;
+  const double Tlo = 1000.0, Thi = 60000.0;
+  double ata[5][5], atb[5];
+  for (int a = 0; a < 5; a++) {
+    atb[a] = 0.0;
+    for (int c = 0; c < 5; c++) ata[a][c] = 0.0;
+  }
+
+  for (int p = 0; p < NP; p++) {
+    double T = Tlo * pow(Thi/Tlo, p/(double)(NP-1));
+
+    double keq_sm = exp(f->coeff[4]/(boltz*T));
+    for (int j = 0; j < f->nproduct; j++)
+      keq_sm *= partition_function(f->products[j],T);
+    for (int j = 0; j < f->nreactant; j++)
+      keq_sm /= partition_function(f->reactants[j],T);
+
+    double lnR = log(keq_sm) - log(keq_eval(b->keq_coeff,T));
+
+    double Z = 10000.0/T;
+    double basis[5] = {1.0/Z, 1.0, log(Z), Z, Z*Z};
+    for (int a = 0; a < 5; a++) {
+      atb[a] += basis[a]*lnR;
+      for (int c = 0; c < 5; c++) ata[a][c] += basis[a]*basis[c];
+    }
+  }
+
+  // solve the 5x5 normal equations by Gaussian elimination with partial
+  // pivoting; store the coefficients so R(T) = keq_eval(keq_resid_coeff,T)
+
+  double m[5][6];
+  for (int a = 0; a < 5; a++) {
+    for (int c = 0; c < 5; c++) m[a][c] = ata[a][c];
+    m[a][5] = atb[a];
+  }
+  for (int col = 0; col < 5; col++) {
+    int piv = col;
+    for (int r = col+1; r < 5; r++)
+      if (fabs(m[r][col]) > fabs(m[piv][col])) piv = r;
+    for (int c = 0; c < 6; c++) {
+      double t = m[col][c]; m[col][c] = m[piv][c]; m[piv][c] = t;
+    }
+    double d = m[col][col];
+    for (int c = col; c < 6; c++) m[col][c] /= d;
+    for (int r = 0; r < 5; r++) {
+      if (r == col) continue;
+      double fac = m[r][col];
+      for (int c = col; c < 6; c++) m[r][c] -= fac*m[col][c];
+    }
+  }
+  for (int a = 0; a < 5; a++) b->keq_resid_coeff[a] = m[a][5];
 }
 
 /* ----------------------------------------------------------------------
@@ -1581,23 +1662,26 @@ void ReactBird::build_micro_tables()
     if (!r->active || r->nreactant != 2) continue;
 
     // a reverse (B-style) exchange reaction gets a temperature-free
-    // detailed-balance table instead of the standard energy factor;
-    // with an external Keq fit (a thermal quantity with no microcanonical
-    // content) it keeps the standard factor and scales its prefactor by
-    // k_f/Keq at the cell temperature instead, like a recombination
+    // detailed-balance table (the energy-resolved microscopic-reversibility
+    // shape) instead of the standard energy factor.  With an external Keq
+    // fit it keeps the same table -- calibrated to the statistical-mechanics
+    // Keq -- and applies only the residual thermal correction
+    // R(T) = Keq_statmech(T)/Keq_ext(T) at the cell temperature (see
+    // assign_keq_fits / ReactTCE::attempt), so the collision-energy
+    // selectivity stays microscopically reversible and only the (usually
+    // small) Keq discrepancy is thermal
 
-    if (r->reverse && r->type == EXCHANGE && !r->keq_flag &&
-        r->reverse_partner >= 0) {
+    if (r->reverse && r->type == EXCHANGE && r->reverse_partner >= 0) {
       build_db_table(i);
       continue;
     }
 
     // a reverse (B-style) recombination gets 3-body detailed-balance
     // tables: the pair density of states in its mtab slot plus the
-    // calibrated forward-numerator/flat-measure ratio in mtab_num
+    // calibrated forward-numerator/flat-measure ratio in mtab_num; an
+    // external Keq fit uses the same tables times the residual R(T)
 
-    if (r->reverse && r->type == RECOMBINATION && !r->keq_flag &&
-        r->reverse_partner >= 0) {
+    if (r->reverse && r->type == RECOMBINATION && r->reverse_partner >= 0) {
       build_db3_table(i);
       continue;
     }

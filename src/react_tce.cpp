@@ -130,13 +130,15 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
          z += (species[isp].vibdof + species[jsp].vibdof)/2.0;
     }
 
-    // a reverse (B-style) recombination without an external Keq fit is
-    // fully microcanonical: the 3rd particle's energy counts toward the
-    // barrier (its probability is resolved in the total available
-    // energy), so the pair-energy threshold below does not apply to it
+    // a reverse (B-style) recombination is fully microcanonical: the 3rd
+    // particle's energy counts toward the barrier (its probability is
+    // resolved in the total available energy), so the pair-energy threshold
+    // below does not apply to it.  This holds for an external-Keq
+    // recombination too: it uses the same 3-body table times the residual
+    // thermal factor R(T) applied below.
 
     int micro3 = 0;
-    if (r->reverse && r->type == RECOMBINATION && !r->keq_flag &&
+    if (r->reverse && r->type == RECOMBINATION &&
         mtab && mtab[list[i]] && mtab_num[list[i]]) micro3 = 1;
 
     // Cover cases where coeff[1].neq.coeff[4]
@@ -165,20 +167,22 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
                   pow(1.0-r->coeff[1]/ecc,z+1.5-r->coeff[5]);
     }
 
-    // effective Arrhenius prefactor (issue #472): a reverse reaction
-    // matched to an external Keq curve fit (react_modify keq_file)
-    // scales the seeded forward prefactor by k_f/Keq_fit evaluated at
-    // the local cell temperature React::tgas; if no valid cell
-    // temperature is available (fewer than 2 particles in the cell),
-    // skip the reaction for this collision.  All other reverse
-    // reactions need no temperature: they are handled by the
-    // microcanonical detailed-balance tables built at init.
+    // residual thermal correction for a reverse reaction matched to an
+    // external Keq curve fit (react_modify keq_file): its detailed-balance
+    // table already reproduces the reverse rate for the statistical-
+    // mechanics Keq, so multiplying by R(T) = Keq_statmech/Keq_ext at the
+    // local cell temperature React::tgas makes the thermal average match
+    // the EXTERNAL Keq while the energy-resolved shape stays microscopically
+    // reversible.  If no cell temperature is available (fewer than 2
+    // particles in the cell), skip the reaction for this collision.  Other
+    // reverse reactions need no temperature (keq_resid = 1).
 
-    double prefactor = r->coeff[2];
+    double keq_resid = 1.0;
     if (r->reverse && r->keq_flag) {
-      if (tgas > 0.0) prefactor *= reverse_scale(r);
+      if (tgas > 0.0) keq_resid = keq_eval(r->keq_resid_coeff,tgas);
       else continue;
     }
+    double prefactor = r->coeff[2] * keq_resid;
 
     // compute probability of reaction
     // gamma function denominator is negative or infinite (erroneous
@@ -259,7 +263,7 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
           if (!(xpair > 0.0)) continue;
 
           double w = ecc + eps_t + p3->erot + p3->evib + eelec3;
-          react_prob += recomb_boost * recomb_density *
+          react_prob += keq_resid * recomb_boost * recomb_density *
             db3_num_factor(list[i],w) / (xpair*c3);
           break;
         }
@@ -330,23 +334,4 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
   // no reaction performed
 
   return 0;
-}
-
-/* ----------------------------------------------------------------------
-   prefactor scale of a reverse reaction matched to an external
-   equilibrium-constant curve fit (react_modify keq_file):
-   k_b = k_f/Keq_fit at the local cell temperature React::tgas; the
-   exponential shift reverse_dEa restates the forward barrier relative
-   to the seeded backward barrier so the standard TCE energy factor
-   stays in place.  reverse reactions without a Keq fit never call
-   this: they are handled by the temperature-free microcanonical
-   detailed-balance tables (ReactBird::build_db_table and
-   build_db3_table)  (issue #472)
-------------------------------------------------------------------------- */
-
-double ReactTCE::reverse_scale(OneReaction *r)
-{
-  return pow(tgas,r->reverse_bf) *
-    exp(-r->reverse_dEa/(update->boltz*tgas)) /
-    keq_eval(r->keq_coeff,tgas);
 }

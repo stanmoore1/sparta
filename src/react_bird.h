@@ -118,13 +118,20 @@ class ReactBird : public React {
     int keq_flag;                  // 1 if this reverse reaction uses an
                                    //   external equilibrium-constant curve
                                    //   fit (react_modify keq_file), else 0
-    double keq_coeff[5];           // Park-form fit coefficients:
+    double keq_coeff[5];           // Park-form fit coefficients of the
+                                   //   external equilibrium constant:
                                    //   ln Keq = c0/Z + c1 + c2 ln(Z) +
                                    //   c3 Z + c4 Z^2 with Z = 10000 K / T
+    double keq_resid_coeff[5];     // Park-form fit of the residual thermal
+                                   //   correction ln R(T) = ln Keq_statmech
+                                   //   - ln Keq_ext, applied on top of the
+                                   //   detailed-balance table at run time so
+                                   //   the external Keq keeps the energy-
+                                   //   resolved shape (only R is thermal)
     double reverse_dEa;            // Ea_F - seeded Ea_B: exponential shift
                                    //   between the forward barrier and the
-                                   //   (clamped) backward barrier, used by
-                                   //   the external-Keq prefactor
+                                   //   (clamped) backward barrier (unused by
+                                   //   the residual-correction Keq path)
   };
 
   OneReaction *rlist;              // list of all reactions read from file
@@ -185,6 +192,7 @@ class ReactBird : public React {
   void generate_reverses();
   void read_keq_file();
   void assign_keq_fits();
+  void fit_keq_residual(int);
 
   inline double keq_eval(const double *c, double T) const {
     double z = 10000.0/T;
