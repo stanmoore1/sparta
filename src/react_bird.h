@@ -128,10 +128,6 @@ class ReactBird : public React {
                                    //   detailed-balance table at run time so
                                    //   the external Keq keeps the energy-
                                    //   resolved shape (only R is thermal)
-    double reverse_dEa;            // Ea_F - seeded Ea_B: exponential shift
-                                   //   between the forward barrier and the
-                                   //   (clamped) backward barrier (unused by
-                                   //   the residual-correction Keq path)
   };
 
   OneReaction *rlist;              // list of all reactions read from file

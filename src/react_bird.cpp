@@ -364,7 +364,6 @@ void ReactBird::init()
                                               //   cell temperature instead
     b->coeff[4] = -f->coeff[4];               // reverse reaction energy
     if (b->coeff[1] < 0.0) b->coeff[1] = 0.0; // clamp small negative barrier
-    b->reverse_dEa = f->coeff[1] - b->coeff[1];
   }
 
   // read equilibrium-constant curve fits (react_modify keq_file) and
@@ -670,7 +669,6 @@ void ReactBird::generate_reverses()
         r->reverse_partner = -1;
         r->reverse_bf = 0.0;
         r->reverse_A = 0.0;
-        r->reverse_dEa = 0.0;
         r->generated = 0;
         r->keq_flag = 0;
       }
@@ -689,7 +687,6 @@ void ReactBird::generate_reverses()
     b->reverse_partner = -1;
     b->reverse_bf = 0.0;
     b->reverse_A = 0.0;
-    b->reverse_dEa = 0.0;
     b->generated = 1;
     b->keq_flag = 0;
     for (int i = 0; i < 5; i++) b->coeff[i] = 0.0;
@@ -1275,7 +1272,6 @@ void ReactBird::readfile(char *fname)
         r->reverse_partner = -1;
         r->reverse_bf = 0.0;
         r->reverse_A = 0.0;
-        r->reverse_dEa = 0.0;
         r->generated = 0;
         r->keq_flag = 0;
       }
