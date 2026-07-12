@@ -1746,7 +1746,7 @@ void ReactBird::build_micro_tables()
     if (nladder == 0) continue;
 
     double ea = r->coeff[1] > 0.0 ? r->coeff[1] : 0.0;
-    double umax = ea + 40.0*1.602176634e-19;
+    double umax = ea + 60.0*1.602176634e-19;   // Boltzmann tail to ~1e5 K
     double du;
     if (theta_min > 0.0) du = boltz*theta_min/16.0;
     else du = umax/20000.0;
@@ -1968,7 +1968,7 @@ void ReactBird::build_db_table(int i)
       }
   }
 
-  double umax = eaP + 40.0*1.602176634e-19;
+  double umax = eaP + 60.0*1.602176634e-19;   // Boltzmann tail to ~1e5 K
   double du;
   if (theta_min > 0.0) du = boltz*theta_min/16.0;
   else du = umax/20000.0;
@@ -2220,7 +2220,7 @@ void ReactBird::build_db3_table(int i)
       }
   }
 
-  double umax = eaP + 40.0*1.602176634e-19;
+  double umax = eaP + 60.0*1.602176634e-19;   // Boltzmann tail to ~1e5 K
   double du;
   if (theta_min > 0.0) du = boltz*theta_min/16.0;
   else du = umax/20000.0;
