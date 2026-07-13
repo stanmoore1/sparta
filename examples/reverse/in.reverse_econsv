@@ -1,0 +1,45 @@
+# Closed reacting box for the ENERGY-CONSERVATION check (validate_reverse.py).
+# A single exchange pair N2+O<->NO+N (its reverse derived by detailed balance)
+# runs in a closed reflective box seeded off-equilibrium.  The electronic mode
+# is left off so the entire thermal energy is translational+rotational+
+# vibrational; the validator dumps per-particle ke/erot/evib at the first and
+# last step and checks that the thermal energy plus the reaction-enthalpy
+# bookkeeping (net forward events x reaction energy) is conserved across the
+# reverse-reaction energy-disposal path.  Variables: T, FN2, FO, FNO, FN.
+
+seed            12345
+dimension       3
+global          gridcut 1.0e-5 comm/sort yes
+boundary        rr rr rr
+
+create_box      0 0.0001 0 0.0001 0 0.0001
+create_grid     2 2 2
+balance_grid    rcb part
+
+species         econsv.species N2 O NO N rotfile air.rot
+mixture         air N2 O NO N vstream 0.0 0.0 0.0 temp ${T}
+mixture         air N2 frac ${FN2}
+mixture         air O  frac ${FO}
+mixture         air NO frac ${FNO}
+mixture         air N  frac ${FN}
+
+global          nrho 7.07043E22
+global          fnum 1.767E6
+
+collide         vss air air.vss relax constant
+collide_modify  rotate discrete vibrate discrete
+collide_modify  remain no
+
+react           tce rev_exch.tce
+react_modify    partial_energy no
+
+create_particles air n 40000 twopass
+
+compute         spcount count N2 O NO N
+stats           5000
+stats_style     step np c_spcount[1] c_spcount[2] c_spcount[3] c_spcount[4]
+
+dump            d1 particle all 30000 dump.econsv id ke erot evib
+
+timestep        1.00E-9
+run             30000

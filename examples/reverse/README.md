@@ -238,6 +238,13 @@ yes"` to also run the CPU/KOKKOS parity check (check 12).
     the five-species composition must relax to the joint chemical equilibrium,
     compared against an independent two-reaction-extent equilibrium solve (N and
     O nuclei conserved) rather than only internal self-consistency.
+22. **Energy conservation across the reverse-disposal path**
+    (`in.reverse_econsv`, `econsv.species`): a closed reacting box with the
+    mass-consistent exchange `N2+O<->NO+N` (electronic off) dumps per-particle
+    `ke+erot+evib` at the first and last step; the thermal-energy change must
+    equal the net reaction extent times the reaction energy `coeff[4]` to
+    machine precision (measured residual ~1e-8 of the thermal energy).  A
+    disposal that leaked energy would fail by `O(reaction energy)` per event.
 
 Accurate reverse rates need accurate partition functions: supply a
 `rotfile` with symmetry numbers and an `elecfile` with the low-lying

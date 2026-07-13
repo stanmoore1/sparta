@@ -219,9 +219,9 @@ def run(exe, deck, varz, tag, extra_args=None, subs=None, extra_files=None):
     wd = os.path.join(HERE, "work_validate", tag)
     os.makedirs(wd, exist_ok=True)
     for f in ("air.species","air.vss","air.rot","air.elec","rev.tce",
-              "rev_exch.tce","rev_mol.tce","multi_fwd.tce","nl.species",
-              "nl.vss","nl.rot","nl.elec","nl.tce","ce.species","ce.vss",
-              "ce.elec","ce.tce",deck):
+              "rev_exch.tce","rev_mol.tce","multi_fwd.tce","econsv.species",
+              "nl.species","nl.vss","nl.rot","nl.elec","nl.tce","ce.species",
+              "ce.vss","ce.elec","ce.tce",deck):
         shutil.copy(os.path.join(HERE,f), wd)
     for name, text in (extra_files or {}).items():
         open(os.path.join(wd,name),"w").write(text)
@@ -860,6 +860,40 @@ def main():
           "5 species; NO %.3f->%.3f eq %.3f)"
           % (worst, f0["NO"], fT["NO"], feq["NO"]),
           worst < 0.03 and moved > 0.1)
+
+    print("check 22: energy conservation across the reverse-disposal path")
+    # closed reacting box (mass-consistent econsv.species so the exchange
+    # conserves mass exactly); the per-particle thermal energy (ke+erot+evib,
+    # electronic off) dumped at the first and last step must change by exactly
+    # the net reaction extent times the reaction energy coeff[4].  A disposal
+    # that leaked energy would fail by O(reaction energy) per event.
+    DH_EX = 5.175e-19    # |coeff[4]| of the N2+O<->NO+N exchange (rev_exch.tce)
+    wd = run(exe,"in.reverse_econsv",
+             {"T":12000.,"FN2":0.45,"FO":0.45,"FNO":0.05,"FN":0.05},
+             "econsv",extra)
+    wdir = os.path.dirname(wd)
+    def _thermal(frame_lines):
+        return sum(float(w[1])+float(w[2])+float(w[3])
+                   for w in (l.split() for l in frame_lines) if len(w) == 4)
+    dumpf = os.path.join(wdir,"dump.econsv")
+    frames = []
+    cur = None
+    for line in open(dumpf):
+        if line.startswith("ITEM: TIMESTEP"):
+            if cur is not None: frames.append(cur)
+            cur = []; reading = False
+        elif line.startswith("ITEM: ATOMS"): reading = True
+        elif cur is not None and reading: cur.append(line)
+    if cur is not None: frames.append(cur)
+    E0 = _thermal(frames[0]); E1 = _thermal(frames[-1])
+    t = tallies(wd)
+    nnet = t.get("N2 + O --> NO + N",0.0) - t.get("NO + N --> N2 + O",0.0)
+    resid = (E1 - E0) + nnet*DH_EX
+    dHeff = -(E1 - E0)/nnet if nnet else 0.0
+    check("thermal energy change matches net extent x reaction energy "
+          "(dH_eff=%.5e vs %.5e; residual %.1e = %.1e of E_therm)"
+          % (dHeff, DH_EX, resid, abs(resid/E0)),
+          abs(resid/E0) < 1e-6 and abs(nnet) > 500)
 
     if exe2:
         print("check 12: external-Keq path is bit-for-bit across binaries")
