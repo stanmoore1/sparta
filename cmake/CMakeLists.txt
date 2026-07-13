@@ -43,6 +43,7 @@ endif()
 set(SPARTA_TPL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../lib)
 set(SPARTA_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../src)
 set(SPARTA_EXAMPLES_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../examples)
+set(SPARTA_UNITTEST_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../unittest)
 set(SPARTA_TOOLS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../tools)
 set(PARAVIEW_TOOLS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../tools/paraview)
 set(SPARTA_DSMC_TESTING_EXAMPLES_DIR ${SPARTA_DSMC_TESTING_PATH}/examples)
@@ -61,7 +62,7 @@ include(${SPARTA_CMAKE_COMMON_DIR}/set/sparta_options.cmake)
 
 # Include CTest in top-level CMakeLists. Tests are configured and added in
 # examples/CMakeLists.txt
-if(SPARTA_ENABLE_TESTING OR SPARTA_DSMC_TESTING_PATH)
+if(SPARTA_ENABLE_TESTING OR SPARTA_DSMC_TESTING_PATH OR SPARTA_ENABLE_UNIT_TESTING)
   if(SPARTA_DSMC_TESTING_PATH)
     file(COPY ${SPARTA_DSMC_TESTING_PATH}/cmake/CTestConfig.cmake
          DESTINATION ${CMAKE_CURRENT_SOURCE_DIR})
@@ -160,6 +161,9 @@ include(${SPARTA_CMAKE_COMMON_DIR}/test/sparta_test_paraview.cmake)
 add_subdirectory(${SPARTA_SRC_DIR} ${CMAKE_CURRENT_BINARY_DIR}/src)
 add_subdirectory(${PARAVIEW_TOOLS_DIR} ${CMAKE_CURRENT_BINARY_DIR}/paraview)
 add_subdirectory(${SPARTA_EXAMPLES_DIR} ${CMAKE_CURRENT_BINARY_DIR}/examples)
+if(SPARTA_ENABLE_UNIT_TESTING)
+  add_subdirectory(${SPARTA_UNITTEST_DIR} ${CMAKE_CURRENT_BINARY_DIR}/unittest)
+endif()
 if(SPARTA_DSMC_TESTING_PATH)
   add_subdirectory(${SPARTA_DSMC_TESTING_EXAMPLES_DIR}
                    ${CMAKE_CURRENT_BINARY_DIR}/dsmc_testing/examples)
