@@ -1,0 +1,70 @@
+################################################################################
+# thermal gas in a 3d box, free molecular flow (no collisions)
+#
+# Regression coverage for per-grid / per-particle computes, the compute reduce
+# aggregator, time/histogram averaging fixes, and region styles that are not
+# exercised by any other example.  All reduced/averaged values are printed in
+# the stats output so the regression harness compares them numerically.
+#
+# Note:
+#  - The "comm/sort" option to the "global" command is used to match MPI runs.
+#  - The "twopass" option is used to match Kokkos runs.
+# The "comm/sort" and "twopass" options should not be used for production runs.
+################################################################################
+
+seed	    	    12345
+dimension   	    3
+global              gridcut 1.0e-5 comm/sort yes
+
+boundary	    rr rr rr
+
+create_box  	    0 0.0001 0 0.0001 0 0.0001
+create_grid 	    10 10 10
+
+balance_grid        rcb part
+
+species		    ar.species Ar
+mixture		    air Ar vstream 0.0 0.0 0.0 temp 273.15
+
+global              nrho 7.07043E22
+global              fnum 7.07043E6
+
+# region styles: sphere / plane / union / intersect (none used elsewhere)
+
+region              rsphere sphere 0.00005 0.00005 0.00005 0.00004
+region              rplane  plane  0.00005 0.00005 0.00005 1 0 0 side in
+region              rball   union     2 rsphere rplane
+region              rcore   intersect 2 rsphere rplane
+
+create_particles    air n 10000 twopass
+
+# per-particle and per-grid computes, aggregated to global scalars via reduce
+
+compute             kep   ke/particle
+compute             eflux eflux/grid all air heatx heaty heatz
+compute             pflux pflux/grid all air momxx momyy momzz
+compute             son   sonine/grid all air a x 1 b xy 1
+
+compute             rke  reduce ave c_kep
+compute             ref  reduce sum c_eflux[*]
+compute             rpf  reduce sum c_pflux[*]
+compute             rson reduce sum c_son[*]
+
+# averaging fixes over the run
+
+compute             temp temp
+fix                 avt ave/time 10 5 100 c_temp
+fix                 avh ave/histo 10 5 100 0 1.0e-18 20 c_kep mode vector
+
+# text output fix (exercises fix print code path)
+variable            npart equal np
+fix                 pr print 200 "step $(step) has ${npart} particles" screen no
+
+# global thermostat rescale (exercises fix temp/global/rescale)
+fix                 resc temp/global/rescale 100 273.15 273.15 0.2
+
+stats		    100
+stats_style	    step cpu np c_temp c_rke c_ref[1] c_rpf[1] c_rson[1] f_avt f_avh[1]
+
+timestep 	    7.00E-9
+run 		    1000

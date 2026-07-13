@@ -1,0 +1,45 @@
+################################################################################
+# thermal gas in a closed 3d box
+#
+# Regression coverage for two commands/fixes not used by any other example:
+#   scale_particles - clone the particle population by a fixed factor
+#   fix halt        - monitor an equal-style variable each N steps
+# The box is closed (reflecting walls) so the particle count stays constant and
+# the halt condition (np < 8000) is evaluated every 100 steps but never trips,
+# exercising the fix halt setup and periodic check for the full run.
+#
+# Note:
+#  - The "comm/sort" option to the "global" command is used to match MPI runs.
+#  - The "twopass" option is used to match Kokkos runs.
+# The "comm/sort" and "twopass" options should not be used for production runs.
+################################################################################
+
+seed	    	    12345
+dimension   	    3
+global              gridcut 1.0e-5 comm/sort yes
+
+boundary	    r r r
+
+create_box  	    0 0.0001 0 0.0001 0 0.0001
+create_grid 	    10 10 10
+balance_grid        rcb part
+
+species		    ar.species Ar
+mixture		    air Ar vstream 0.0 0.0 0.0 temp 273.15
+
+global              nrho 7.07043E22
+global              fnum 7.07043E6
+
+create_particles    air n 10000 twopass
+
+# clone the particle population by 1.5x
+scale_particles     air 1.5
+
+# monitor particle count; "error continue" keeps the run going after triggering
+variable            pcount equal np
+fix                 h halt 100 v_pcount < 8000 error continue
+
+stats		    100
+stats_style	    step cpu np
+timestep 	    7.00E-9
+run 		    1000

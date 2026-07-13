@@ -1,0 +1,135 @@
+SPARTA (24 Sep 2025)
+Running on 4 MPI task(s)
+################################################################################
+# thermal nitrogen gas in a 3d box, Quantum-Kinetic (QK) dissociation chemistry
+#
+# Regression coverage for the QK gas-phase reaction model (react qk) and the
+# per-grid gas collision / reaction counting computes, none of which are
+# exercised by any other example.  The per-grid counts are aggregated to global
+# scalars with compute reduce so the regression harness compares them.
+#
+# Note:
+#  - The "comm/sort" option to the "global" command is used to match MPI runs.
+#  - The "twopass" option is used to match Kokkos runs.
+# The "comm/sort" and "twopass" options should not be used for production runs.
+################################################################################
+
+seed	    	    12345
+dimension   	    3
+global              gridcut 1.0e-5 comm/sort yes
+
+boundary	    rr rr rr
+
+create_box  	    0 0.0001 0 0.0001 0 0.0001
+Created orthogonal box = (0 0 0) to (0.0001 0.0001 0.0001)
+create_grid 	    10 10 10
+WARNING: Could not acquire nearby ghost cells b/c grid partition is not clumped (/home/user/sparta/src/grid.cpp:473)
+Created 1000 child grid cells
+  CPU time = 0.000935509 secs
+  create/ghost percent = 94.1577 5.84227
+balance_grid        rcb part
+Balance grid migrated 740 cells
+  CPU time = 0.0006606 secs
+  reassign/sort/migrate/ghost percent = 49.4935 0.43188 20.0598 30.0148
+
+species		    air.species N2 N
+mixture		    air N2 N vstream 0.0 0.0 0.0 temp 20000.0
+mixture             air N2 frac 1.0
+mixture             air N frac 0.0
+
+global              nrho 7.07043E22
+global              fnum 7.07043E5
+
+collide		    vss air air.vss
+react               qk air.qk
+
+create_particles    air n 10000 twopass
+Created 10000 particles
+  CPU time = 0.00218998 secs
+
+# per-grid gas collision and reaction counts, reduced to global scalars
+
+compute             gcol gas/collision/grid all air
+compute             grea gas/reaction/grid all air all
+
+compute             rcol reduce sum c_gcol
+compute             rrea reduce sum c_grea
+
+stats		    100
+compute             temp temp
+stats_style	    step cpu np nattempt ncoll nreact c_temp c_rcol c_rrea
+
+timestep 	    7.00E-9
+run 		    1000
+Memory usage per proc in Mbytes:
+  particles (ave,min,max) = 1.5625 1.5625 1.5625
+  grid      (ave,min,max) = 1.51379 1.51379 1.51379
+  surf      (ave,min,max) = 0 0 0
+  total     (ave,min,max) = 3.08011 3.08011 3.08011
+Step CPU Np Natt Ncoll Nreact c_temp c_rcol c_rrea 
+       0            0    10000        0        0        0    19847.392            0            0 
+     100  0.045232489    10280      997      249        2     18282.13          247            2 
+     200  0.097135176    10450     1027      253        1    17342.412          252            1 
+     300     0.143664    10592     1046      259        1    16858.714          258            1 
+     400   0.18848357    10700     1068      288        1    16200.268          287            1 
+     500   0.23540874    10801     1098      238        1    15855.107          237            1 
+     600   0.28161732    10889     1126      276        1    15486.368          275            1 
+     700   0.32563075    10948     1144      250        0    15206.709          250            0 
+     800   0.37763534    10986     1137      269        0     15023.66          269            0 
+     900   0.42530184    11034     1141      269        0    14820.021          269            0 
+    1000   0.47054226    11087     1175      272        1    14615.867          271            1 
+Loop time of 0.470669 on 4 procs for 1000 steps with 11087 particles
+Performance: 2124.635 timesteps/s, 23.556 Mparticle-step/s
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Move    | 0.30054    | 0.30886    | 0.32072    |   1.3 | 65.62
+Coll    | 0.036693   | 0.037935   | 0.039332   |   0.5 |  8.06
+Sort    | 0.0037942  | 0.0040001  | 0.004283   |   0.3 |  0.85
+Comm    | 0.068876   | 0.073806   | 0.077699   |   1.2 | 15.68
+Modify  | 0          | 0          | 0          |   0.0 |  0.00
+Output  | 0.0003631  | 0.00065871 | 0.0015075  |   0.0 |  0.14
+Other   |            | 0.04541    |            |       |  9.65
+
+Particle moves    = 10723601 (10.7M)
+Cells touched     = 48644537 (48.6M)
+Particle comms    = 2629800 (2.63M)
+Boundary collides = 4151414 (4.15M)
+Boundary exits    = 0 (0K)
+SurfColl checks   = 0 (0K)
+SurfColl occurs   = 0 (0K)
+Surf reactions    = 0 (0K)
+Collide attempts  = 1089141 (1.09M)
+Collide occurs    = 261600 (0.262M)
+Reactions         = 1087 (1.09K)
+Particles stuck   = 0
+Axisymm bad moves = 0
+
+Particle-moves/CPUsec/proc: 5.69594e+06
+Particle-moves/step: 10723.6
+Cell-touches/particle/step: 4.53621
+Particle comm iterations/step: 2.992
+Particle fraction communicated: 0.245235
+Particle fraction colliding with boundary: 0.387129
+Particle fraction exiting boundary: 0
+Surface-checks/particle/step: 0
+Surface-collisions/particle/step: 0
+Surf-reactions/particle/step: 0
+Collision-attempts/particle/step: 0.101565
+Collisions/particle/step: 0.0243948
+Reactions/particle/step: 0.000101365
+
+Gas reaction tallies:
+  style qk #-of-reactions 2
+  reaction N2 + N2 --> N + N + N2: 1026
+  reaction N2 + N --> N + N + N: 61
+
+Particles: 2771.75 ave 2806 max 2732 min
+Histogram: 1 0 0 0 1 0 1 0 0 1
+Cells:      250 ave 250 max 250 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+GhostCell: 172.5 ave 240 max 110 min
+Histogram: 1 0 0 0 2 0 0 0 0 1
+EmptyCell: 62.5 ave 130 max 0 min
+Histogram: 1 0 0 0 2 0 0 0 0 1

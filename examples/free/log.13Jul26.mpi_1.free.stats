@@ -1,0 +1,148 @@
+SPARTA (24 Sep 2025)
+Running on 1 MPI task(s)
+################################################################################
+# thermal gas in a 3d box, free molecular flow (no collisions)
+#
+# Regression coverage for per-grid / per-particle computes, the compute reduce
+# aggregator, time/histogram averaging fixes, and region styles that are not
+# exercised by any other example.  All reduced/averaged values are printed in
+# the stats output so the regression harness compares them numerically.
+#
+# Note:
+#  - The "comm/sort" option to the "global" command is used to match MPI runs.
+#  - The "twopass" option is used to match Kokkos runs.
+# The "comm/sort" and "twopass" options should not be used for production runs.
+################################################################################
+
+seed	    	    12345
+dimension   	    3
+global              gridcut 1.0e-5 comm/sort yes
+
+boundary	    rr rr rr
+
+create_box  	    0 0.0001 0 0.0001 0 0.0001
+Created orthogonal box = (0 0 0) to (0.0001 0.0001 0.0001)
+create_grid 	    10 10 10
+Created 1000 child grid cells
+  CPU time = 0.001002 secs
+  create/ghost percent = 80.0793 19.9207
+
+balance_grid        rcb part
+Balance grid migrated 0 cells
+  CPU time = 0.000229078 secs
+  reassign/sort/migrate/ghost percent = 56.9518 0.372362 9.06067 33.6152
+
+species		    ar.species Ar
+mixture		    air Ar vstream 0.0 0.0 0.0 temp 273.15
+
+global              nrho 7.07043E22
+global              fnum 7.07043E6
+
+# region styles: sphere / plane / union / intersect (none used elsewhere)
+
+region              rsphere sphere 0.00005 0.00005 0.00005 0.00004
+region              rplane  plane  0.00005 0.00005 0.00005 1 0 0 side in
+region              rball   union     2 rsphere rplane
+region              rcore   intersect 2 rsphere rplane
+
+create_particles    air n 10000 twopass
+Created 10000 particles
+  CPU time = 0.00198372 secs
+
+# per-particle and per-grid computes, aggregated to global scalars via reduce
+
+compute             kep   ke/particle
+compute             eflux eflux/grid all air heatx heaty heatz
+compute             pflux pflux/grid all air momxx momyy momzz
+compute             son   sonine/grid all air a x 1 b xy 1
+
+compute             rke  reduce ave c_kep
+compute             ref  reduce sum c_eflux[*]
+compute             rpf  reduce sum c_pflux[*]
+compute             rson reduce sum c_son[*]
+
+# averaging fixes over the run
+
+compute             temp temp
+fix                 avt ave/time 10 5 100 c_temp
+fix                 avh ave/histo 10 5 100 0 1.0e-18 20 c_kep mode vector
+
+# text output fix (exercises fix print code path)
+variable            npart equal np
+fix                 pr print 200 "step $(step) has ${npart} particles" screen no
+
+# global thermostat rescale (exercises fix temp/global/rescale)
+fix                 resc temp/global/rescale 100 273.15 273.15 0.2
+
+stats		    100
+stats_style	    step cpu np c_temp c_rke c_ref[1] c_rpf[1] c_rson[1] f_avt f_avh[1]
+
+timestep 	    7.00E-9
+run 		    1000
+Memory usage per proc in Mbytes:
+  particles (ave,min,max) = 1.5625 1.5625 1.5625
+  grid      (ave,min,max) = 1.51379 1.51379 1.51379
+  surf      (ave,min,max) = 0 0 0
+  total     (ave,min,max) = 3.32806 3.32806 3.32806
+Step CPU Np c_temp c_rke c_ref[1] c_rpf[1] c_rson[1] f_avt f_avh[1] 
+       0            0    10000    273.86304 5.6716311e-21    812581.32    242438.99 3.4668694e+08            0            0 
+     100   0.01929753    10000    273.72043 5.6686777e-21   -109458.49    242622.69     78957514    273.86304        50000 
+     200  0.038457729    10000    273.60635 5.666315e-21   -42085.339    239764.43    -58182364    273.72043        50000 
+     300  0.058853938    10000    273.51508 5.6644248e-21   -161902.88     241151.7    -87499145    273.60635        50000 
+     400  0.078499878    10000    273.44206 5.6629127e-21   -4821.3475    242012.19 -1.6668717e+08    273.51508        50000 
+     500  0.097390013    10000    273.38365 5.6617029e-21   -1071798.7    240569.82 -4.0700365e+08    273.44206        50000 
+     600   0.11632484    10000    273.33692 5.6607352e-21   -634637.42    242401.24 -3.4139317e+08    273.38365        50000 
+     700    0.1357509    10000    273.29954 5.659961e-21    653680.38    240475.08 3.3307738e+08    273.33692        50000 
+     800   0.15561569    10000    273.26963 5.6593416e-21   -1903290.1    241593.15 -6.5345668e+08    273.29954        50000 
+     900   0.17522769    10000     273.2457 5.6588461e-21   -1683709.6    240747.16 -5.0481128e+08    273.26963        50000 
+    1000   0.19536572    10000    273.22656 5.6584497e-21   -704701.59     237888.7 -2.6574626e+08     273.2457        50000 
+Loop time of 0.195376 on 1 procs for 1000 steps with 10000 particles
+Performance: 5118.332 timesteps/s, 51.183 Mparticle-step/s
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Move    | 0.18119    | 0.18119    | 0.18119    |   0.0 | 92.74
+Coll    | 0          | 0          | 0          |   0.0 |  0.00
+Sort    | 0          | 0          | 0          |   0.0 |  0.00
+Comm    | 0.00024076 | 0.00024076 | 0.00024076 |   0.0 |  0.12
+Modify  | 0.0043908  | 0.0043908  | 0.0043908  |   0.0 |  2.25
+Output  | 0.0092263  | 0.0092263  | 0.0092263  |   0.0 |  4.72
+Other   |            | 0.0003325  |            |       |  0.17
+
+Particle moves    = 10000000 (10M)
+Cells touched     = 13597089 (13.6M)
+Particle comms    = 0 (0K)
+Boundary collides = 399681 (0.4M)
+Boundary exits    = 0 (0K)
+SurfColl checks   = 0 (0K)
+SurfColl occurs   = 0 (0K)
+Surf reactions    = 0 (0K)
+Collide attempts  = 0 (0K)
+Collide occurs    = 0 (0K)
+Reactions         = 0 (0K)
+Particles stuck   = 0
+Axisymm bad moves = 0
+
+Particle-moves/CPUsec/proc: 5.11833e+07
+Particle-moves/step: 10000
+Cell-touches/particle/step: 1.35971
+Particle comm iterations/step: 1
+Particle fraction communicated: 0
+Particle fraction colliding with boundary: 0.0399681
+Particle fraction exiting boundary: 0
+Surface-checks/particle/step: 0
+Surface-collisions/particle/step: 0
+Surf-reactions/particle/step: 0
+Collision-attempts/particle/step: 0
+Collisions/particle/step: 0
+Reactions/particle/step: 0
+
+Particles: 10000 ave 10000 max 10000 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Cells:      1000 ave 1000 max 1000 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+GhostCell: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+EmptyCell: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0

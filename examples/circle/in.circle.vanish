@@ -1,0 +1,42 @@
+################################################################################
+# 2d flow around a circle whose surface deletes (vanishes) incident particles
+#
+# Regression coverage for the surf_collide vanish model, which is not used by
+# any other example.  Particles that strike the circle are removed from the
+# simulation, so the surface acts as a perfect sink.
+#
+# Note:
+#  - The "comm/sort" option to the "global" command is used to match MPI runs.
+#  - The "twopass" option is used to match Kokkos runs.
+# The "comm/sort" and "twopass" options should not be used for production runs.
+################################################################################
+
+seed	    	    12345
+dimension   	    2
+global              gridcut 0.0 comm/sort yes
+
+boundary	    o r p
+
+create_box  	    0 10 0 10 -0.5 0.5
+create_grid 	    20 20 1
+balance_grid        rcb cell
+
+global		    nrho 1.0 fnum 0.001
+
+species		    air.species N O
+mixture		    air N O vstream 100.0 0 0
+
+read_surf           data.circle
+surf_collide	    1 vanish
+surf_modify         all collide 1
+
+collide             vss air air.vss
+
+fix		    in emit/face air xlo twopass
+
+timestep 	    0.0001
+
+compute             bnd boundary air n
+stats		    100
+stats_style	    step cpu np nscoll c_bnd[2][1]
+run 		    1000

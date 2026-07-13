@@ -1,0 +1,127 @@
+SPARTA (24 Sep 2025)
+Running on 4 MPI task(s)
+################################################################################
+# thermal gas in a closed 3d box
+#
+# Regression coverage for two commands/fixes not used by any other example:
+#   scale_particles - clone the particle population by a fixed factor
+#   fix halt        - monitor an equal-style variable each N steps
+# The box is closed (reflecting walls) so the particle count stays constant and
+# the halt condition (np < 8000) is evaluated every 100 steps but never trips,
+# exercising the fix halt setup and periodic check for the full run.
+#
+# Note:
+#  - The "comm/sort" option to the "global" command is used to match MPI runs.
+#  - The "twopass" option is used to match Kokkos runs.
+# The "comm/sort" and "twopass" options should not be used for production runs.
+################################################################################
+
+seed	    	    12345
+dimension   	    3
+global              gridcut 1.0e-5 comm/sort yes
+
+boundary	    r r r
+
+create_box  	    0 0.0001 0 0.0001 0 0.0001
+Created orthogonal box = (0 0 0) to (0.0001 0.0001 0.0001)
+create_grid 	    10 10 10
+WARNING: Could not acquire nearby ghost cells b/c grid partition is not clumped (/home/user/sparta/src/grid.cpp:473)
+Created 1000 child grid cells
+  CPU time = 0.000815515 secs
+  create/ghost percent = 94.3562 5.6438
+balance_grid        rcb part
+Balance grid migrated 740 cells
+  CPU time = 0.00057322 secs
+  reassign/sort/migrate/ghost percent = 41.4928 0.235686 28.599 29.6726
+
+species		    ar.species Ar
+mixture		    air Ar vstream 0.0 0.0 0.0 temp 273.15
+
+global              nrho 7.07043E22
+global              fnum 7.07043E6
+
+create_particles    air n 10000 twopass
+Created 10000 particles
+  CPU time = 0.00116042 secs
+
+# clone the particle population by 1.5x
+scale_particles     air 1.5
+Scaled particles
+  before = 10000, after = 15013
+  CPU time = 5.439e-05 secs
+
+# monitor particle count; "error continue" keeps the run going after triggering
+variable            pcount equal np
+fix                 h halt 100 v_pcount < 8000 error continue
+
+stats		    100
+stats_style	    step cpu np
+timestep 	    7.00E-9
+run 		    1000
+Memory usage per proc in Mbytes:
+  particles (ave,min,max) = 1.5625 1.5625 1.5625
+  grid      (ave,min,max) = 1.51379 1.51379 1.51379
+  surf      (ave,min,max) = 0 0 0
+  total     (ave,min,max) = 3.07629 3.07629 3.07629
+Step CPU Np 
+       0            0    15013 
+     100  0.009270483    15013 
+     200  0.019260423    15013 
+     300    0.0283455    15013 
+     400  0.036599907    15013 
+     500   0.04608663    15013 
+     600  0.054461184    15013 
+     700  0.063531174    15013 
+     800  0.077771488    15013 
+     900  0.086336913    15013 
+    1000  0.094564564    15013 
+Loop time of 0.0946301 on 4 procs for 1000 steps with 15013 particles
+Performance: 10567.468 timesteps/s, 158.649 Mparticle-step/s
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Move    | 0.063498   | 0.066115   | 0.067197   |   0.6 | 69.87
+Coll    | 0          | 0          | 0          |   0.0 |  0.00
+Sort    | 0          | 0          | 0          |   0.0 |  0.00
+Comm    | 0.015302   | 0.016171   | 0.016808   |   0.5 | 17.09
+Modify  | 0.00031002 | 0.00034645 | 0.00037839 |   0.0 |  0.37
+Output  | 7.2248e-05 | 0.00033327 | 0.0010194  |   0.0 |  0.35
+Other   |            | 0.01166    |            |       | 12.33
+
+Particle moves    = 15013000 (15M)
+Cells touched     = 20427153 (20.4M)
+Particle comms    = 396838 (0.397M)
+Boundary collides = 601677 (0.602M)
+Boundary exits    = 0 (0K)
+SurfColl checks   = 0 (0K)
+SurfColl occurs   = 0 (0K)
+Surf reactions    = 0 (0K)
+Collide attempts  = 0 (0K)
+Collide occurs    = 0 (0K)
+Reactions         = 0 (0K)
+Particles stuck   = 0
+Axisymm bad moves = 0
+
+Particle-moves/CPUsec/proc: 3.96623e+07
+Particle-moves/step: 15013
+Cell-touches/particle/step: 1.36063
+Particle comm iterations/step: 1
+Particle fraction communicated: 0.026433
+Particle fraction colliding with boundary: 0.0400771
+Particle fraction exiting boundary: 0
+Surface-checks/particle/step: 0
+Surface-collisions/particle/step: 0
+Surf-reactions/particle/step: 0
+Collision-attempts/particle/step: 0
+Collisions/particle/step: 0
+Reactions/particle/step: 0
+
+Particles: 3753.25 ave 3844 max 3628 min
+Histogram: 1 0 0 0 0 1 0 1 0 1
+Cells:      250 ave 250 max 250 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+GhostCell: 172.5 ave 240 max 110 min
+Histogram: 1 0 0 0 2 0 0 0 0 1
+EmptyCell: 62.5 ave 130 max 0 min
+Histogram: 1 0 0 0 2 0 0 0 0 1

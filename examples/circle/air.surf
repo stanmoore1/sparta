@@ -1,0 +1,14 @@
+# surface reactions for the N/O circle flow (surf_react prob model)
+#
+# R = recombination (reactant absorbed by surface, product NULL)
+# E = exchange     (reactant converted to a new product species)
+# S = Surface style
+
+O --> NULL
+R S 0.4 0.0
+
+N --> NULL
+R S 0.4 0.0
+
+O --> N
+E S 0.3 0.0

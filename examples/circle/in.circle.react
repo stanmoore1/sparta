@@ -1,0 +1,63 @@
+################################################################################
+# 2d flow around a circle with surface chemistry
+#
+# Regression coverage for surface/boundary reaction and geometry computes that
+# are not exercised by any other example:
+#   compute react/surf      - per-surface-element reaction tallies
+#   compute react/boundary  - per-boundary-face reaction tallies
+#   compute boundary        - per-boundary-face flux tallies
+#   compute distsurf/grid   - distance from each grid cell to the surface
+# Surface reactions use the surf_react prob model; the yhi wall carries a
+# boundary reaction so react/boundary has something to tally.
+#
+# Note:
+#  - The "comm/sort" option to the "global" command is used to match MPI runs.
+#  - The "twopass" option is used to match Kokkos runs.
+# The "comm/sort" and "twopass" options should not be used for production runs.
+################################################################################
+
+seed	    	    12345
+dimension   	    2
+global              gridcut 0.0 comm/sort yes
+
+boundary	    o rs p
+
+create_box  	    0 10 0 10 -0.5 0.5
+create_grid 	    20 20 1
+balance_grid        rcb cell
+
+global		    nrho 1.0 fnum 0.001
+
+species		    air.species N O
+mixture		    air N O vstream 100.0 0 0
+
+read_surf           data.circle
+
+# surface collision + reaction model on the circle
+surf_collide	    1 diffuse 300.0 0.0
+surf_react          1 prob air.surf
+surf_modify         all collide 1 react 1
+
+# reacting reflective boundary on the yhi wall
+surf_collide        2 diffuse 300.0 0.0
+surf_react          2 prob air.surf
+bound_modify        yhi collide 2 react 2
+
+collide             vss air air.vss
+
+fix		    in emit/face air xlo twopass
+
+timestep 	    0.0001
+
+# surface / boundary / geometry computes
+compute             rsurf react/surf all 1
+compute             rbnd  react/boundary 2
+compute             bnd   boundary air n press
+compute             dist  distsurf/grid all all
+
+compute             rrs   reduce sum c_rsurf[*]
+compute             rdist reduce ave c_dist
+
+stats		    100
+stats_style	    step cpu np nscoll nsreact c_rrs[1] c_rrs[3] c_rdist c_bnd[3][1] c_rbnd[4][1]
+run 		    1000

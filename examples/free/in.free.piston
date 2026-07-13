@@ -1,0 +1,42 @@
+################################################################################
+# thermal gas in a 3d box with a moving piston wall
+#
+# Regression coverage for the surf_collide piston model, which is not used by
+# any other example.  The xlo box boundary is treated as a surface and assigned
+# a piston collision model (a subsonic pressure boundary condition); incident
+# particles collide as if the wall moves with velocity Vwall, so the gas
+# expands through the xlo boundary and cools.
+#
+# Note:
+#  - The "comm/sort" option to the "global" command is used to match MPI runs.
+#  - The "twopass" option is used to match Kokkos runs.
+# The "comm/sort" and "twopass" options should not be used for production runs.
+################################################################################
+
+seed	    	    12345
+dimension   	    3
+global              gridcut 1.0e-5 comm/sort yes
+
+boundary	    sr r r
+
+create_box  	    0 0.0001 0 0.0001 0 0.0001
+create_grid 	    10 10 10
+balance_grid        rcb part
+
+species		    ar.species Ar
+mixture		    air Ar vstream 0.0 0.0 0.0 temp 273.15
+
+global              nrho 7.07043E22
+global              fnum 7.07043E6
+
+create_particles    air n 10000 twopass
+
+# xlo boundary acts as a piston moving inward at 100 m/s
+surf_collide        pist piston 100.0
+bound_modify        xlo collide pist
+
+compute             temp temp
+stats		    100
+stats_style	    step cpu np c_temp
+timestep 	    7.00E-9
+run 		    1000

@@ -1,0 +1,51 @@
+################################################################################
+# thermal nitrogen gas in a 3d box, Quantum-Kinetic (QK) dissociation chemistry
+#
+# Regression coverage for the QK gas-phase reaction model (react qk) and the
+# per-grid gas collision / reaction counting computes, none of which are
+# exercised by any other example.  The per-grid counts are aggregated to global
+# scalars with compute reduce so the regression harness compares them.
+#
+# Note:
+#  - The "comm/sort" option to the "global" command is used to match MPI runs.
+#  - The "twopass" option is used to match Kokkos runs.
+# The "comm/sort" and "twopass" options should not be used for production runs.
+################################################################################
+
+seed	    	    12345
+dimension   	    3
+global              gridcut 1.0e-5 comm/sort yes
+
+boundary	    rr rr rr
+
+create_box  	    0 0.0001 0 0.0001 0 0.0001
+create_grid 	    10 10 10
+balance_grid        rcb part
+
+species		    air.species N2 N
+mixture		    air N2 N vstream 0.0 0.0 0.0 temp 20000.0
+mixture             air N2 frac 1.0
+mixture             air N frac 0.0
+
+global              nrho 7.07043E22
+global              fnum 7.07043E5
+
+collide		    vss air air.vss
+react               qk air.qk
+
+create_particles    air n 10000 twopass
+
+# per-grid gas collision and reaction counts, reduced to global scalars
+
+compute             gcol gas/collision/grid all air
+compute             grea gas/reaction/grid all air all
+
+compute             rcol reduce sum c_gcol
+compute             rrea reduce sum c_grea
+
+stats		    100
+compute             temp temp
+stats_style	    step cpu np nattempt ncoll nreact c_temp c_rcol c_rrea
+
+timestep 	    7.00E-9
+run 		    1000

@@ -1,0 +1,11 @@
+# Air nitrogen dissociation reactions for the hybrid TCE/QK model (react tce/qk)
+#
+# Reactions flagged with the "A" (Arrhenius) style are evaluated with the TCE
+# model; reactions flagged with the "Q" (Quantum) style are evaluated with the
+# QK model.  This exercises both code paths from a single reaction file.
+
+N2 + N2 --> N + N + N2
+D Q 1.0 1.561e-18 3.321e-9 -1.6 -1.561e-18
+
+N2 + N --> N + N + N
+D A 1.0 1.561e-18 4.980e-8 -1.6 -1.561e-18

@@ -1,0 +1,12 @@
+# Air nitrogen dissociation reactions for the Quantum-Kinetic (QK) model
+#
+# Same file format as the TCE (.tce) reaction files, but every reaction is
+# flagged with the "Q" (Quantum) style so it is evaluated with the QK model
+# (react qk).  The QK model uses the C1 (internal DOF), C2 (activation energy)
+# and C5 (reaction energy) coefficients; the Arrhenius C3/C4 values are ignored.
+
+N2 + N2 --> N + N + N2
+D Q 1.0 1.561e-18 3.321e-9 -1.6 -1.561e-18
+
+N2 + N --> N + N + N
+D Q 1.0 1.561e-18 4.980e-8 -1.6 -1.561e-18
