@@ -1,0 +1,45 @@
+# Closed reacting five-species box for the MULTI-CHANNEL EQUILIBRIUM
+# benchmark (validate_reverse.py).  Two coupled Zeldovich exchange
+# reactions and their auto-generated reverses (N2+O<->NO+N, NO+O<->O2+N)
+# run in a closed reflective box seeded off-equilibrium; the element
+# totals (N and O nuclei) are conserved and the composition must relax to
+# the joint chemical equilibrium of the two coupled reactions -- compared
+# in the validator against an INDEPENDENT two-extent equilibrium solve.
+# Variables: T, NRHO, FNUM.
+
+seed            12345
+dimension       3
+global          gridcut 1.0e-5 comm/sort yes
+boundary        rr rr rr
+
+create_box      0 0.0001 0 0.0001 0 0.0001
+create_grid     2 2 2
+balance_grid    rcb part
+
+species         air.species O2 N2 O N NO rotfile air.rot elecfile air.elec
+mixture         air O2 N2 O N NO vstream 0.0 0.0 0.0 temp ${T}
+mixture         air N2 frac 0.30
+mixture         air O2 frac 0.20
+mixture         air O  frac 0.30
+mixture         air N  frac 0.10
+mixture         air NO frac 0.10
+
+global          nrho ${NRHO}
+global          fnum ${FNUM}
+
+collide         vss air air.vss relax constant
+collide_modify  rotate discrete vibrate discrete electronic discrete
+fix             electronic elecmode
+collide_modify  remain no
+
+react           tce multi_fwd.tce
+react_modify    partial_energy no reverse auto
+
+create_particles air n 60000 twopass
+
+compute         spcount count O2 N2 O N NO
+stats           4000
+stats_style     step np c_spcount[1] c_spcount[2] c_spcount[3] c_spcount[4] c_spcount[5]
+
+timestep        1.00E-9
+run             30000

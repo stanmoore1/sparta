@@ -1,0 +1,14 @@
+# Two coupled Zeldovich exchange reactions (forward only); the B-style
+# reverses are generated at run time by "react_modify reverse auto".
+# They share species NO, O, N, so the two reverse reactions compete for
+# the same reactants -- a multi-channel detailed-balance test.  Forward
+# parameters are from data/air.tce.
+#
+#   R1:  N2 + O <-> NO + N
+#   R2:  NO + O <-> O2 + N
+
+N2 + O --> NO + N
+E A 0.0 5.175e-19 1.069e-12 -1.0 -5.175e-19
+
+NO + O --> O2 + N
+E A 0.0 2.684e-19 1.389e-17 0.0 -2.684e-19

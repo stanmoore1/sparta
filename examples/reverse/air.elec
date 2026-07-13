@@ -7,6 +7,7 @@
 # these ladders set the electronic partition functions used to derive
 # detailed-balance reverse reaction rates; the ground-state degeneracies
 # alone change the equilibrium constant of N2 + O <-> NO + N by ~1.8x
+O2 3   0.0 0.01 3 3 0   11393.0 0.01 2 1 0   18985.0 0.01 1 1 0
 N2 3   0.0 0.01 1 1 0   72231.4 0.01 3 3 0   85778.0 0.01 6 3 0
 O  3   0.0 0.01 9 3 0   22830.0 0.01 5 1 0   48620.0 0.01 1 1 0
 N  3   0.0 0.01 4 4 0   27660.0 0.01 10 2 0  41490.0 0.01 6 2 0
