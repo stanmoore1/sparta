@@ -51,7 +51,9 @@ if(SPARTA_ENABLE_TESTING)
       "custom"
       "explicit2implicit"
       "mfp_mct"
-      "torque")
+      "torque"
+      "tally_computes"
+      "ambi_3body")
 
   set(SPARTA_DISABLED_TESTS
       "in.ablation.3d.reactions" # Failing
@@ -98,6 +100,21 @@ if(SPARTA_ENABLE_TESTING)
         # external field fix not KOKKOS-enabled
         "in.bfield"
         "in.bfield.grid"
+        # per-grid/per-particle moment computes (eflux/pflux/sonine/grid,
+        # ke/particle) and compute reduce not KOKKOS-enabled
+        "in.free.stats"
+        # per-surf/per-boundary reaction and distsurf/grid computes not
+        # KOKKOS-enabled
+        "in.circle.react"
+        # compute gas/collision/grid and gas/reaction/grid not KOKKOS-enabled
+        "in.chem.qk"
+        "in.chem.tceqk"
+        # gas collision/reaction tally not KOKKOS-enabled
+        "in.gas.collision.tally"
+        "in.gas.reaction.tally"
+        # surf collision/reaction tally not KOKKOS-enabled
+        "in.surf.collision.tally"
+        "in.surf.reaction.tally"
     )
   endif()
 
