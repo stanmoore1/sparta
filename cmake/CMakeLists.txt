@@ -158,6 +158,10 @@ include(${SPARTA_CMAKE_COMMON_DIR}/print/sparta_options.cmake)
 include(${SPARTA_CMAKE_COMMON_DIR}/test/sparta_test_paraview.cmake)
 # ######### END   TEST PARAVIEW SPARTA OPTIONS ##########
 
+# ######### BEGIN TEST PYTHON LIBRARY API ##########
+include(${SPARTA_CMAKE_COMMON_DIR}/test/sparta_test_python.cmake)
+# ######### END   TEST PYTHON LIBRARY API ##########
+
 add_subdirectory(${SPARTA_SRC_DIR} ${CMAKE_CURRENT_BINARY_DIR}/src)
 add_subdirectory(${PARAVIEW_TOOLS_DIR} ${CMAKE_CURRENT_BINARY_DIR}/paraview)
 add_subdirectory(${SPARTA_EXAMPLES_DIR} ${CMAKE_CURRENT_BINARY_DIR}/examples)
