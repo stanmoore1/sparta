@@ -105,6 +105,15 @@ function(sparta_add_test sparta_in_file mpi_ranks config_name)
     ${__test_name} PROPERTIES PASS_REGULAR_EXPRESSION "passed;no failures"
                               FAIL_REGULAR_EXPRESSION "FAILED")
 
+  # Tests whose input deck reads/writes a restart (or other named scratch) file
+  # share that file across rank counts in a common working directory. Serialize
+  # them with a per-input RESOURCE_LOCK so concurrent ctest jobs (e.g. mpi_1 and
+  # mpi_4 of the same test) cannot clobber each other's scratch file.
+  if(sparta_in_file MATCHES "restart")
+    set_property(TEST ${__test_name} PROPERTY RESOURCE_LOCK
+                 "${sparta_in_file}")
+  endif()
+
   if(NOT SPARTA_DSMC_TESTING_THREADS_PER_RANK)
     # message(WARNING "SPARTA_DSMC_TESTING_THREADS_PER_RANK is uset! Defaulting
     # to 1.")

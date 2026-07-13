@@ -1,0 +1,63 @@
+################################################################################
+# thermal nitrogen gas in a 3d box with dissociation chemistry, exercised
+# through a write_restart / read_restart round trip
+#
+# Regression coverage for restart serialization, which no other enabled test
+# exercises in a self-contained deck.  The run is stopped halfway, written to a
+# restart file, the entire state is cleared, the restart file is read back, and
+# the run is continued.  Because the gas is colliding and reacting (the particle
+# count and species mix evolve), any corruption of the serialized particle,
+# grid, or species state would change the post-restart thermo output and fail
+# the comparison to the gold-standard log.
+#
+# Note:
+#  - The "comm/sort" option to the "global" command is used to match MPI runs.
+#  - The "twopass" option is used to match Kokkos runs.
+# The "comm/sort" and "twopass" options should not be used for production runs.
+################################################################################
+
+seed	    	    12345
+dimension   	    3
+global              gridcut 1.0e-5 comm/sort yes
+
+boundary	    rr rr rr
+
+create_box  	    0 0.0001 0 0.0001 0 0.0001
+create_grid 	    10 10 10
+balance_grid        rcb part
+
+species		    air.species N2 N
+mixture		    air N2 N vstream 0.0 0.0 0.0 temp 20000.0
+mixture             air N2 frac 1.0
+mixture             air N frac 0.0
+
+global              nrho 7.07043E22
+global              fnum 7.07043E5
+
+collide		    vss air air.vss
+react               tce air.tce
+
+create_particles    air n 10000 twopass
+
+stats		    100
+compute             temp temp
+stats_style	    step cpu np nattempt ncoll nreact c_temp
+
+timestep 	    7.00E-9
+run 		    500
+
+# round-trip the full simulation state through a restart file
+write_restart       tmp.chem.restart
+clear
+read_restart        tmp.chem.restart
+seed		    12345
+
+# the collision and reaction models are not stored in the restart file and
+# must be re-issued after read_restart so the continued run keeps colliding
+collide		    vss air air.vss
+react               tce air.tce
+
+# continue the run; particle count and reactions must pick up seamlessly
+compute             temp2 temp
+stats_style	    step cpu np nattempt ncoll nreact c_temp2
+run 		    500

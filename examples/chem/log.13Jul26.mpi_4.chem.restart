@@ -1,0 +1,211 @@
+SPARTA (24 Sep 2025)
+Running on 4 MPI task(s)
+################################################################################
+# thermal nitrogen gas in a 3d box with dissociation chemistry, exercised
+# through a write_restart / read_restart round trip
+#
+# Regression coverage for restart serialization, which no other enabled test
+# exercises in a self-contained deck.  The run is stopped halfway, written to a
+# restart file, the entire state is cleared, the restart file is read back, and
+# the run is continued.  Because the gas is colliding and reacting (the particle
+# count and species mix evolve), any corruption of the serialized particle,
+# grid, or species state would change the post-restart thermo output and fail
+# the comparison to the gold-standard log.
+#
+# Note:
+#  - The "comm/sort" option to the "global" command is used to match MPI runs.
+#  - The "twopass" option is used to match Kokkos runs.
+# The "comm/sort" and "twopass" options should not be used for production runs.
+################################################################################
+
+seed	    	    12345
+dimension   	    3
+global              gridcut 1.0e-5 comm/sort yes
+
+boundary	    rr rr rr
+
+create_box  	    0 0.0001 0 0.0001 0 0.0001
+Created orthogonal box = (0 0 0) to (0.0001 0.0001 0.0001)
+create_grid 	    10 10 10
+WARNING: Could not acquire nearby ghost cells b/c grid partition is not clumped (/home/user/sparta/src/grid.cpp:473)
+Created 1000 child grid cells
+  CPU time = 0.000936785 secs
+  create/ghost percent = 94.6806 5.31936
+balance_grid        rcb part
+Balance grid migrated 740 cells
+  CPU time = 0.000739242 secs
+  reassign/sort/migrate/ghost percent = 41.655 0.302066 15.4519 42.5911
+
+species		    air.species N2 N
+mixture		    air N2 N vstream 0.0 0.0 0.0 temp 20000.0
+mixture             air N2 frac 1.0
+mixture             air N frac 0.0
+
+global              nrho 7.07043E22
+global              fnum 7.07043E5
+
+collide		    vss air air.vss
+react               tce air.tce
+
+create_particles    air n 10000 twopass
+Created 10000 particles
+  CPU time = 0.00144718 secs
+
+stats		    100
+compute             temp temp
+stats_style	    step cpu np nattempt ncoll nreact c_temp
+
+timestep 	    7.00E-9
+run 		    500
+Memory usage per proc in Mbytes:
+  particles (ave,min,max) = 1.5625 1.5625 1.5625
+  grid      (ave,min,max) = 1.51379 1.51379 1.51379
+  surf      (ave,min,max) = 0 0 0
+  total     (ave,min,max) = 3.07629 3.07629 3.07629
+Step CPU Np Natt Ncoll Nreact c_temp 
+       0            0    10000        0        0        0    19847.392 
+     100  0.045641794    10187      998      269        0    18979.069 
+     200   0.10645017    10362     1020      239        2     18220.89 
+     300   0.15848782    10529     1067      259        2    17415.447 
+     400   0.20521596    10658     1079      260        0    16700.368 
+     500   0.24994615    10778     1097      246        1    15978.454 
+Loop time of 0.250024 on 4 procs for 500 steps with 10778 particles
+Performance: 1999.811 timesteps/s, 21.554 Mparticle-step/s
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Move    | 0.15469    | 0.16124    | 0.16844    |   1.5 | 64.49
+Coll    | 0.01775    | 0.01839    | 0.019337   |   0.4 |  7.36
+Sort    | 0.0020321  | 0.0021452  | 0.0022974  |   0.2 |  0.86
+Comm    | 0.033972   | 0.03473    | 0.035419   |   0.3 | 13.89
+Modify  | 0          | 0          | 0          |   0.0 |  0.00
+Output  | 0.00025817 | 0.0003841  | 0.0006614  |   0.0 |  0.15
+Other   |            | 0.03313    |            |       | 13.25
+
+Particle moves    = 5212700 (5.21M)
+Cells touched     = 24150571 (24.2M)
+Particle comms    = 1312904 (1.31M)
+Boundary collides = 2072594 (2.07M)
+Boundary exits    = 0 (0K)
+SurfColl checks   = 0 (0K)
+SurfColl occurs   = 0 (0K)
+Surf reactions    = 0 (0K)
+Collide attempts  = 514360 (0.514M)
+Collide occurs    = 129535 (0.13M)
+Reactions         = 778 (0.778K)
+Particles stuck   = 0
+Axisymm bad moves = 0
+
+Particle-moves/CPUsec/proc: 5.21221e+06
+Particle-moves/step: 10425.4
+Cell-touches/particle/step: 4.63303
+Particle comm iterations/step: 2.994
+Particle fraction communicated: 0.251866
+Particle fraction colliding with boundary: 0.397605
+Particle fraction exiting boundary: 0
+Surface-checks/particle/step: 0
+Surface-collisions/particle/step: 0
+Surf-reactions/particle/step: 0
+Collision-attempts/particle/step: 0.0986744
+Collisions/particle/step: 0.0248499
+Reactions/particle/step: 0.000149251
+
+Gas reaction tallies:
+  style tce #-of-reactions 45
+  reaction N2 + N2 --> N + N + N2: 577
+  reaction N2 + N --> N + N + N: 201
+
+Particles: 2694.5 ave 2767 max 2647 min
+Histogram: 1 1 0 0 1 0 0 0 0 1
+Cells:      250 ave 250 max 250 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+GhostCell: 172.5 ave 240 max 110 min
+Histogram: 1 0 0 0 2 0 0 0 0 1
+EmptyCell: 62.5 ave 130 max 0 min
+Histogram: 1 0 0 0 2 0 0 0 0 1
+
+# round-trip the full simulation state through a restart file
+write_restart       tmp.chem.restart
+clear
+Running on 4 MPI task(s)
+read_restart        tmp.chem.restart
+  orthogonal box = (0 0 0) to (0.0001 0.0001 0.0001)
+  1000 grid cells
+  10778 particles
+  CPU time = 0.00241328 secs
+  read/surf2grid/rebalance/ghost/inout percent = 91.7958 0.0389097 0.0310366 8.09289 0.0413545
+seed		    12345
+
+# the collision and reaction models are not stored in the restart file and
+# must be re-issued after read_restart so the continued run keeps colliding
+collide		    vss air air.vss
+react               tce air.tce
+
+# continue the run; particle count and reactions must pick up seamlessly
+compute             temp2 temp
+stats_style	    step cpu np nattempt ncoll nreact c_temp2
+run 		    500
+Memory usage per proc in Mbytes:
+  particles (ave,min,max) = 1.5625 1.5625 1.5625
+  grid      (ave,min,max) = 1.51379 1.51379 1.51379
+  surf      (ave,min,max) = 0 0 0
+  total     (ave,min,max) = 3.07629 3.07629 3.07629
+Step CPU Np Natt Ncoll Nreact c_temp2 
+     500            0    10778        0        0        0    15978.454 
+    1000   0.23245121    11173     1167      236        0     14156.38 
+Loop time of 0.23259 on 4 procs for 500 steps with 11173 particles
+Performance: 2149.701 timesteps/s, 24.019 Mparticle-step/s
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Move    | 0.15488    | 0.15842    | 0.16423    |   0.9 | 68.11
+Coll    | 0.018499   | 0.01899    | 0.019965   |   0.4 |  8.16
+Sort    | 0.0020232  | 0.0021434  | 0.0024146  |   0.3 |  0.92
+Comm    | 0.02864    | 0.028942   | 0.029115   |   0.1 | 12.44
+Modify  | 0          | 0          | 0          |   0.0 |  0.00
+Output  | 2.3652e-05 | 5.6477e-05 | 0.00015196 |   0.0 |  0.02
+Other   |            | 0.02404    |            |       | 10.33
+
+Particle moves    = 5497844 (5.5M)
+Cells touched     = 24536765 (24.5M)
+Particle comms    = 1321144 (1.32M)
+Boundary collides = 2084767 (2.08M)
+Boundary exits    = 0 (0K)
+SurfColl checks   = 0 (0K)
+SurfColl occurs   = 0 (0K)
+Surf reactions    = 0 (0K)
+Collide attempts  = 572014 (0.572M)
+Collide occurs    = 132189 (0.132M)
+Reactions         = 395 (0.395K)
+Particles stuck   = 0
+Axisymm bad moves = 0
+
+Particle-moves/CPUsec/proc: 5.90936e+06
+Particle-moves/step: 10995.7
+Cell-touches/particle/step: 4.46298
+Particle comm iterations/step: 2.994
+Particle fraction communicated: 0.240302
+Particle fraction colliding with boundary: 0.379197
+Particle fraction exiting boundary: 0
+Surface-checks/particle/step: 0
+Surface-collisions/particle/step: 0
+Surf-reactions/particle/step: 0
+Collision-attempts/particle/step: 0.104043
+Collisions/particle/step: 0.0240438
+Reactions/particle/step: 7.18463e-05
+
+Gas reaction tallies:
+  style tce #-of-reactions 45
+  reaction N2 + N2 --> N + N + N2: 186
+  reaction N2 + N --> N + N + N: 209
+
+Particles: 2793.25 ave 2839 max 2695 min
+Histogram: 1 0 0 0 0 0 0 1 0 2
+Cells:      250 ave 250 max 250 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+GhostCell: 172.5 ave 240 max 110 min
+Histogram: 1 0 0 0 2 0 0 0 0 1
+EmptyCell: 62.5 ave 130 max 0 min
+Histogram: 1 0 0 0 2 0 0 0 0 1
