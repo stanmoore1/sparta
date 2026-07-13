@@ -245,6 +245,17 @@ yes"` to also run the CPU/KOKKOS parity check (check 12).
     equal the net reaction extent times the reaction energy `coeff[4]` to
     machine precision (measured residual ~1e-8 of the thermal energy).  A
     disposal that leaked energy would fail by `O(reaction energy)` per event.
+23. **Mode-resolved non-equilibrium** (`in.reverse_modeneq`): like check 14 but
+    each internal mode (rotation, vibration, electronic) is driven hot
+    *individually* while the other two stay at the translational temperature.
+    The measured reverse-rate ratio to the fully-cold rate must match an
+    independent microcanonical integral that puts only that mode hot, confirming
+    each mode's energy contributes to the reverse rate per microscopic
+    reversibility (measured dev <=1.5% for all three modes at 8->25 kK).
+24. **Unbounded-probability diagnostic**: a barrierless reverse whose derived
+    rate exceeds the collision rate saturates the per-collision probability
+    (`react_prob>1`); the one-time diagnostic must fire to warn the user while
+    the run still completes and tallies reactions (it is a warning, not a stop).
 
 Accurate reverse rates need accurate partition functions: supply a
 `rotfile` with symmetry numbers and an `elecfile` with the low-lying

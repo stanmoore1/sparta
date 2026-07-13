@@ -172,23 +172,28 @@ def db_table_shape(np, spB, spF, Fcoeff):
         mtab = np.where(den > 0.0, num/den, 0.0)
     return du, n, mtab
 
-def sample_ecc(np, rng, spB, Ttr, Tint, ns):
+def sample_ecc(np, rng, spB, Ttr, Tint, ns, Trot=None, Tvib=None, Telec=None):
     """collision-energy distribution of the reverse pair spB: VSS translation
-    (Gamma 5/2-omega, at Ttr), continuum rotors (at Tint), discrete vib and
-    electronic ladders (Boltzmann at Tint); matches the runtime pre_etotal."""
+    (Gamma 5/2-omega, at Ttr), continuum rotors (at Trot), discrete vib
+    (at Tvib) and electronic (at Telec) ladders; matches the runtime
+    pre_etotal.  Trot/Tvib/Telec default to Tint (fully-coupled internal
+    temperature); pass them separately for mode-specific non-equilibrium."""
+    if Trot is None: Trot = Tint
+    if Tvib is None: Tvib = Tint
+    if Telec is None: Telec = Tint
     omB = 0.5*(VSS[spB[0]] + VSS[spB[1]])
     ecc = rng.gamma(2.5-omB, KB*Ttr, ns)
     for sp in spB:
         rd = SPECIES[sp]["rotdof"]
-        if rd > 0: ecc = ecc + rng.gamma(0.5*rd, KB*Tint, ns)
+        if rd > 0: ecc = ecc + rng.gamma(0.5*rd, KB*Trot, ns)
         th = SPECIES[sp]["vibtemp"]
         if th > 0.0:
-            x = math.exp(-th/Tint)
+            x = math.exp(-th/Tvib)
             ecc = ecc + (rng.geometric(1.0-x, ns)-1)*th*KB
         if sp in ELEC:
             temps = np.array([t for t,_ in ELEC[sp]])
             degs  = np.array([g for _,g in ELEC[sp]], float)
-            w = degs*np.exp(-temps/Tint); w /= w.sum()
+            w = degs*np.exp(-temps/Telec); w /= w.sum()
             ecc = ecc + KB*temps[rng.choice(len(temps), ns, p=w)]
     return ecc
 
@@ -894,6 +899,87 @@ def main():
           "(dH_eff=%.5e vs %.5e; residual %.1e = %.1e of E_therm)"
           % (dHeff, DH_EX, resid, abs(resid/E0)),
           abs(resid/E0) < 1e-6 and abs(nnet) > 500)
+
+    print("check 23: mode-resolved non-equilibrium reverse rate")
+    # check 14 drives all internal modes to one temperature together; here each
+    # mode (rotation, vibration, electronic) is driven hot INDIVIDUALLY while
+    # the other two stay at the translational temperature.  Microscopic
+    # reversibility requires the reverse rate to respond to each mode's own
+    # energy content; the measured ratio to the fully-cold rate must match an
+    # independent microcanonical integral that puts only that mode hot.
+    try:
+        import numpy as _np
+    except ImportError:
+        check("mode-resolved non-equilibrium (needs numpy)", True,
+              "SKIPPED: numpy not available"); _np = None
+    if _np is not None:
+        spB, spF = ("N2","O"), ("NO","N")
+        Fcoeff = (0.0, -1.359, 5.175e-19)
+        NONEQ_TCE = ("NO + N --> N2 + O\nE A 0.0 0.0 4.059e-12 -1.359 5.175e-19\n\n"
+                     "N2 + O --> NO + N\nE B 0.0 0.0 0.0 0.0 0.0\n")
+        def _frozen_species():
+            out = []
+            for line in open(os.path.join(HERE,"air.species")):
+                w = line.split()
+                if len(w) >= 10 and not line.strip().startswith("#"):
+                    w[4] = "0.0"; w[6] = "0.0"; out.append("  ".join(w))
+                else: out.append(line.rstrip("\n"))
+            return "\n".join(out) + "\n"
+        def _frozen_elec():
+            out = []
+            for line in open(os.path.join(HERE,"air.elec")):
+                w = line.split()
+                if len(w) > 2 and not line.strip().startswith("#"):
+                    nl = int(w[1])
+                    for k in range(nl): w[2+5*k+1] = "0.0"
+                    out.append(" ".join(w))
+                else: out.append(line.rstrip("\n"))
+            return "\n".join(out) + "\n"
+        xf = {"air_frozen.species": _frozen_species(),
+              "air_frozen.elec":   _frozen_elec(),
+              "rev_noneq.tce":     NONEQ_TCE}
+        du, ntab, mtab = db_table_shape(_np, spB, spF, Fcoeff)
+        def _ip(ecc):
+            x = ecc/du; k = _np.clip(x.astype(int), 0, ntab-2); f = x - k
+            return (1.0-f)*mtab[k] + f*mtab[k+1]
+        rng = _np.random.default_rng(77); NS = 4_000_000
+        def _avgm(Ttr, Tr, Tv, Te):
+            return _ip(sample_ecc(_np, rng, spB, Ttr, Ttr, NS,
+                                  Trot=Tr, Tvib=Tv, Telec=Te)).mean()
+        Ttr, Thot = 8000.0, 25000.0
+        logb = run(exe, "in.reverse_modeneq",
+                   {"T":Ttr,"TROT":Ttr,"TVIB":Ttr,"TELEC":Ttr,
+                    "NRHO":NRHO,"FNUM":FNUM}, "modeeq", extra, extra_files=xf)
+        beq = tallies(logb).get("N2 + O --> NO + N", 0.0)
+        base = _avgm(Ttr,Ttr,Ttr,Ttr)
+        for mode,(tr,tv,te) in (("rotation",   (Thot,Ttr,Ttr)),
+                                ("vibration",  (Ttr,Thot,Ttr)),
+                                ("electronic", (Ttr,Ttr,Thot))):
+            log = run(exe, "in.reverse_modeneq",
+                      {"T":Ttr,"TROT":tr,"TVIB":tv,"TELEC":te,
+                       "NRHO":NRHO,"FNUM":FNUM}, "mode_"+mode, extra,
+                      extra_files=xf)
+            b = tallies(log).get("N2 + O --> NO + N", 0.0)
+            rm = b/beq if beq else float("inf")
+            rp = _avgm(Ttr,tr,tv,te)/base
+            sig = math.sqrt(1.0/max(b,1) + 1.0/max(beq,1))
+            dev = abs(rm/rp - 1.0)
+            check("%-10s hot: R_rev/R_eq meas=%.3f pred=%.3f (dev %.1f%%, "
+                  "stat %.1f%%)" % (mode, rm, rp, 100*dev, 100*sig),
+                  dev < max(3*sig, 0.05) and b > 200)
+
+    print("check 24: unbounded-probability diagnostic fires and does not crash")
+    # a barrierless reverse whose derived rate exceeds the collision rate makes
+    # the cumulative react_prob exceed 1 (the TCE model saturating); the added
+    # one-time diagnostic must fire to warn the user, and the run must still
+    # complete and tally reactions - it is a warning, not a hard stop.
+    logsat = run(exe,"in.reverse_rate",
+                 {"T":5000.,"RB":1000.,"NRHO":NRHO,"FNUM":FNUM},"psat",extra)
+    warned = any("reaction probability exceeded 1" in l for l in open(logsat))
+    bsat = tallies(logsat).get("NO + N --> N2 + O",0.0)
+    check("P>1 saturation diagnostic fires and the run still tallies "
+          "(warned=%s, reverse tally=%.0f)" % (warned, bsat),
+          warned and bsat > 200)
 
     if exe2:
         print("check 12: external-Keq path is bit-for-bit across binaries")
