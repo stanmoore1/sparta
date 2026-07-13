@@ -88,6 +88,12 @@ sparta_option(
   SPARTA_EXTRA_OPTIONS_LIST)
 
 sparta_option(
+  SPARTA_ENABLE_COVERAGE
+  "Instrument the build with gcov/gcc coverage flags (--coverage) for measuring test coverage. Default: OFF"
+  OFF
+  SPARTA_EXTRA_OPTIONS_LIST)
+
+sparta_option(
   SPARTA_KOKKOS_EXACT
   "Make the KOKKOS package reproduce non-KOKKOS results exactly (for regression testing). Requires PKG_KOKKOS. Default: OFF"
   OFF

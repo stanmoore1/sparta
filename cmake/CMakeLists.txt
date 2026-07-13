@@ -60,6 +60,16 @@ include(${SPARTA_CMAKE_COMMON_DIR}/set/sparta_cmake_defaults.cmake)
 include(${SPARTA_CMAKE_COMMON_DIR}/set/sparta_options.cmake)
 # ######### END   SET SPARTA OPTIONS ##########
 
+# ######### BEGIN COVERAGE INSTRUMENTATION ##########
+# Apply gcov coverage flags to all SPARTA targets defined below (src, examples,
+# unittest). Must precede the add_subdirectory() calls so the flags propagate.
+if(SPARTA_ENABLE_COVERAGE)
+  message(STATUS "SPARTA coverage instrumentation enabled (--coverage)")
+  add_compile_options(--coverage -O0 -g)
+  add_link_options(--coverage)
+endif()
+# ######### END   COVERAGE INSTRUMENTATION ##########
+
 # Include CTest in top-level CMakeLists. Tests are configured and added in
 # examples/CMakeLists.txt
 if(SPARTA_ENABLE_TESTING OR SPARTA_DSMC_TESTING_PATH OR SPARTA_ENABLE_UNIT_TESTING)
