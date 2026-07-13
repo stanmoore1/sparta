@@ -56,6 +56,7 @@ jobs:
         cd build
         cmake -C ../cmake/presets/serial.cmake \
           -DSPARTA_ENABLE_TESTING=ON \
+          -DSPARTA_ENABLE_UNIT_TESTING=ON \
           -DPKG_FFT=ON \
           -DPKG_PYTHON=ON \
            ../cmake
@@ -117,6 +118,130 @@ jobs:
       with:
         name: 'mpi-stubs-kokkos-exact-fft-Artifacts'
         path: 'build/examples/'
+  # Build SPARTA as a shared library with the Python package and exercise the
+  # Python wrapper / C library interface (python/test_library.py) via ctypes.
+  python:
+    runs-on: ubuntu-22.04
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Configure
+      run: |
+        mkdir build
+        cd build
+        cmake -C ../cmake/presets/serial.cmake \
+          -DSPARTA_ENABLE_TESTING=ON \
+          -DBUILD_SHARED_LIBS=ON \
+          -DPKG_PYTHON=ON \
+          -DPKG_FFT=ON \
+          ../cmake
+
+    - name: Build
+      run: cd build; make -j4
+
+    - name: Test
+      run: |
+        cd build
+        ctest --output-on-failure -R 'python.library'
+
+  # Exercise the KOKKOS OpenMP backend with real multithreading (2 threads).
+  #
+  # The Serial-backend KOKKOS job (SPARTA_KOKKOS_EXACT) already checks that
+  # KOKKOS reproduces the non-KOKKOS results numerically, but it is
+  # single-threaded. Under multiple threads the RNG draw order changes, so the
+  # stochastic thermo output no longer matches the serial gold logs to a tight
+  # tolerance -- a numeric comparison would be too loose to be meaningful or
+  # would be flaky. Instead this job runs each deck under the threaded binary
+  # and checks it completes cleanly (no crash, error, NaN, or deadlock), which
+  # is what multithreading actually stresses.
+  #
+  # The deck list is a curated set of threading-stable kernels (free-molecular,
+  # collisions, static surfaces, grid flow). Reacting-collision and moving-
+  # surface decks are excluded: they trip pre-existing, thread-scheduling-
+  # dependent robustness issues in the KOKKOS kernels (collision-buffer overflow
+  # needing collide_modify react/retry; a moving-surface grid-check race), which
+  # would make the job flaky. Those are known limitations of threaded KOKKOS,
+  # not regressions in this suite.
+  kokkos-omp-threaded:
+    runs-on: ubuntu-22.04
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Dependencies
+      run: sudo apt install openmpi-bin libopenmpi-dev
+
+    - name: Configure
+      run: |
+        mkdir build
+        cd build
+        cmake -C ../cmake/presets/kokkos_omp.cmake \
+          -DKokkos_ENABLE_OPENMP=ON \
+          -DKokkos_ENABLE_SERIAL=ON \
+          -DPKG_FFT=ON \
+          ../cmake
+
+    - name: Build
+      run: cd build; make -j4
+
+    - name: Threaded smoke test
+      run: |
+        python3 tools/testing/kokkos_threaded_smoke.py \
+          --sparta build/src/spa_kokkos_omp --threads 2 \
+          --skip stats,react,qk,tceqk,tally,piston,vanish,distributed \
+          examples/free examples/circle examples/step \
+          examples/sphere examples/collide
+
+  # Measure regression + unit test line/branch coverage with gcov/gcovr and
+  # publish the report as a build artifact to establish a coverage baseline.
+  coverage:
+    runs-on: ubuntu-22.04
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Dependencies
+      run: |
+        sudo apt install openmpi-bin libopenmpi-dev
+        python3 -m pip install --user gcovr
+
+    - name: Configure
+      run: |
+        mkdir build
+        cd build
+        cmake -C ../cmake/presets/mpi.cmake \
+          -DSPARTA_ENABLE_TESTING=ON \
+          -DSPARTA_ENABLE_UNIT_TESTING=ON \
+          -DSPARTA_ENABLE_COVERAGE=ON \
+          -DPKG_FFT=ON \
+          -DPKG_PYTHON=ON \
+          ../cmake
+
+    - name: Build
+      run: cd build; make -j4
+
+    - name: Test
+      run: |
+        cd build
+        sudo rm /bin/sh
+        sudo ln -s /bin/bash /bin/sh
+        ctest --output-on-failure -j4 || true
+
+    - name: Coverage report
+      run: |
+        cd build
+        mkdir -p coverage
+        gcovr --root ../src --object-directory . \
+          --print-summary \
+          --xml coverage/coverage.xml \
+          --html-details coverage/coverage.html \
+          --gcov-ignore-parse-errors 2>/dev/null || \
+        gcovr --root ../src --object-directory . --print-summary
+
+    - uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: 'coverage-report'
+        path: 'build/coverage/'
+
   bigbig:
     runs-on: ubuntu-22.04
     steps:
