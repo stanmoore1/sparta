@@ -22,8 +22,8 @@ at a window size around 800x600, in the light theme unless noted.
 
 | File | Page | Content |
 | ---- | ---- | ------- |
-| `sparta-gui-screen.png` | overview.rst | Full workspace: Editor plus Output, Charts, and Slide Show windows during a run |
-| `sparta-gui-main.png` | basic_usage.rst | Main editor window with an input script loaded (light theme) |
+| `sparta-gui-screen.png` (captured) | overview.rst | Full workspace: Editor plus Output, Charts, and Slide Show windows during a run |
+| `sparta-gui-main.png` (captured) | basic_usage.rst | Main editor window with an input script loaded (light theme) |
 | `sparta-gui-dark.png` | basic_usage.rst | Same as above in the dark theme |
 | `sparta-gui-running.png` | basic_usage.rst | Editor during an active run: green current-line highlight, progress bar, %CPU display |
 | `sparta-gui-run-error.png` | basic_usage.rst | Error dialog with the offending input line highlighted in red |
@@ -45,7 +45,7 @@ at a window size around 800x600, in the light theme unless noted.
 | `sparta-gui-prefs-image.png` | dialogs.rst | Preferences: Snapshot Image tab |
 | `sparta-gui-prefs-editor.png` | dialogs.rst | Preferences: Editor Settings tab |
 | `sparta-gui-prefs-charts.png` | dialogs.rst | Preferences: Charts Settings tab |
-| `sparta-gui-image.png` | visualization.rst | Image Viewer with particles, grid, and surfaces of a SPARTA example |
+| `sparta-gui-image.png` (captured) | visualization.rst | Image Viewer with particles, grid, and surfaces of a SPARTA example |
 | `sparta-gui-image-settings.png` | visualization.rst | Dump Image Settings dialog (e.g. Particles or Grid tab) |
 | `sparta-gui-slideshow.png` | visualization.rst | Slide Show window with images of a run |
 

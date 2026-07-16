@@ -50,13 +50,9 @@ workflow when running SPARTA simulations on high-performance computing
 facilities, since SPARTA-GUI intentionally runs SPARTA without MPI
 parallelization.
 
-.. TODO screenshot: capture SPARTA-GUI showing editor, output, chart,
-   and slide show windows of a SPARTA example run and save it as
-   JPG/sparta-gui-screen.png, then re-enable this figure.
-..
-.. .. image:: JPG/sparta-gui-screen.png
-..    :align: center
-..    :scale: 50%
+.. image:: JPG/sparta-gui-screen.png
+   :align: center
+   :scale: 50%
 
 Most features in SPARTA-GUI have been exposed to keyboard shortcuts,
 making it also appealing for experienced SPARTA users for prototyping

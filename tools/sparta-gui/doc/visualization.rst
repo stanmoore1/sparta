@@ -101,14 +101,9 @@ viewer <slideshow>` when running the simulation with the thus modified
 input from SPARTA-GUI.  This is an effective strategy for interactively
 composing publication quality visualizations of a DSMC simulation.
 
-.. TODO screenshot: capture the Image Viewer window showing particles,
-   grid cells, and surface elements of a SPARTA example (e.g.
-   examples/circle) as JPG/sparta-gui-image.png, then re-enable this
-   figure.
-..
-.. .. image:: JPG/sparta-gui-image.png
-..    :align: center
-..    :width: 70%
+.. image:: JPG/sparta-gui-image.png
+   :align: center
+   :width: 70%
 
 -----------
 

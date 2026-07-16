@@ -468,7 +468,7 @@ ImageViewer::ImageViewer(const QString &fileName, SpartaWrapper *_sparta, Sparta
     buttonLayout->setContentsMargins(0, 0, 0, 0);
     buttonLayout->setSpacing(LAYOUT_SPACING);
     settingsLayout->addWidget(new QHline);
-    settingsLayout->addWidget(new QLabel("Mi&xture:"));
+    settingsLayout->addWidget(new QLabel("Mixture:"));
     settingsLayout->addWidget(combo);
     settingsLayout->addWidget(new QHline);
     settingsLayout->addWidget(new QLabel("Settings:"));
@@ -587,6 +587,23 @@ void ImageViewer::readImageSettings()
     params.ssaoseed  = Cfg::SSAO_SEED;
     params.mixture   = "all";
     params.dimension = sparta ? sparta->extractSetting("dimension") : 3;
+
+    // default particle diameter: SPARTA's per-type default of 1.0 length
+    // units is usually far too large, so scale it to the simulation box
+    // unless the user chose an explicit diameter
+    if ((params.diameter == "type") && sparta) {
+        auto *boxlo = static_cast<double *>(sparta->extractGlobal("boxlo"));
+        auto *boxhi = static_cast<double *>(sparta->extractGlobal("boxhi"));
+        if (boxlo && boxhi) {
+            double minext = boxhi[0] - boxlo[0];
+            minext        = qMin(minext, boxhi[1] - boxlo[1]);
+            if (params.dimension == 3) minext = qMin(minext, boxhi[2] - boxlo[2]);
+            if (minext > 0.0) {
+                params.numericdiam = true;
+                params.pdiamvalue  = 0.01 * minext;
+            }
+        }
+    }
     // start with the grid volume rendering enabled when there are no
     // particles yet, so the first rendering is not just an empty box
     if (sparta && (sparta->extractSetting("nplocal") < 1)) {

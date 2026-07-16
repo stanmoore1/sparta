@@ -66,17 +66,12 @@ Launching SPARTA-GUI
 When SPARTA-GUI starts, it shows the main window, labeled *Editor*, with
 either an empty buffer or the contents of the file used as argument.
 
-.. TODO screenshot: capture the main editor window with a SPARTA input
-   script loaded, in the light theme (JPG/sparta-gui-main.png) and in
-   the dark theme (JPG/sparta-gui-dark.png), then re-enable the figures.
-..
-.. .. |gui-main1| image:: JPG/sparta-gui-main.png
-..    :width: 48%
-..
-.. .. |gui-main2| image:: JPG/sparta-gui-dark.png
-..    :width: 48%
-..
-..    usage: put "|gui-main1|  |gui-main2|" on its own line here
+.. image:: JPG/sparta-gui-main.png
+   :align: center
+   :width: 80%
+
+.. TODO screenshot: also capture the main editor window in the dark
+   theme as JPG/sparta-gui-dark.png and show both side by side.
 
 There is the typical menu bar at the top, then the main editor buffer,
 and a status bar at the bottom.  The input script contents are shown
