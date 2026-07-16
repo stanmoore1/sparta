@@ -1,5 +1,5 @@
 // -*- c++ -*- /////////////////////////////////////////////////////////////////////////
-// SPARTA-GUI - A Graphical Tool to Learn and Explore the SPARTA MD Simulation Software
+// SPARTA-GUI - A Graphical Tool to Learn and Explore the SPARTA DSMC Simulation Software
 //
 // Copyright (c) 2023, 2024, 2025, 2026  Axel Kohlmeyer
 //
@@ -15,36 +15,30 @@
 
 Highlighter::Highlighter(QTextDocument *parent) :
     QSyntaxHighlighter(parent),
-    isLattice1(QStringLiteral("^\\s*(units|atom_style|change_box|dielectric|dimension)\\s+(\\S+)")),
-    isLattice2(QStringLiteral("^\\s*(lattice|region|create_box|create_atoms|delete_atoms|displace_"
-                              "atoms)\\s+(\\S+)\\s+(\\S+)")),
-    isLattice3(QStringLiteral("^\\s*(boundary|replicate)\\s+(\\S+)\\s+(\\S+)\\s+(\\S+)")),
-    isOutput1(QStringLiteral("^\\s*(echo|log|write_data|write_coeff|write_restart|restart|info|"
-                             "thermo|print|thermo_style|"
-                             "timer|pair_write|bond_write|angle_write|dihedral_write)\\s+(\\S+)")),
-    isOutput2(QStringLiteral("^\\s*(write_dump|shell|thermo_modify)\\s+(\\S+)\\s+(\\S+)")),
+    isLattice1(QStringLiteral("^\\s*(units|dimension|seed|timestep|global|package)\\s+(\\S+)")),
+    isLattice2(QStringLiteral("^\\s*(create_box|create_grid|create_particles|create_"
+                              "isurf)\\s+(\\S+)\\s+(\\S+)")),
+    isLattice3(QStringLiteral("^\\s*(boundary)\\s+(\\S+)\\s+(\\S+)\\s+(\\S+)")),
+    isOutput1(QStringLiteral("^\\s*(echo|log|print|restart|"
+                             "stats_style|stats_modify|stats|"
+                             "write_grid|write_isurf|write_restart|write_surf)\\s+(\\S+)")),
+    isOutput2(QStringLiteral("^\\s*(shell|dump_modify)\\s+(\\S+)\\s+(\\S+)")),
     isRead(QStringLiteral(
-        "^\\s*(include|read_restart|read_data|read_dump|molecule|geturl)\\s+(\\S+)")),
-    isStyle(QStringLiteral("^\\s*(fix|compute|dump)\\s+(\\S+)\\s+(\\S+)\\s+(\\S+)")),
+        "^\\s*(include|read_restart|read_grid|read_isurf|read_particles|read_surf)\\s+(\\S+)")),
+    isStyle(QStringLiteral("^\\s*(fix|compute|dump)\\s+(\\S+)\\s+(\\S+)")),
     isForce(QStringLiteral(
-        "^\\s*(pair_style|bond_style|angle_style|dihedral_style|improper_style|kspace_style|pair_"
-        "coeff|angle_coeff|bond_coeff|dihedral_coeff|improper_coeff)\\s+(\\S+)")),
-    isDefine(QStringLiteral("^\\s*(group|variable|python|set|group2ndx|ndx2group|kim|kim_query|mdi)"
+        "^\\s*(collide_modify|collide|react_modify|react)\\s+(\\S+)")),
+    isDefine(QStringLiteral("^\\s*(group|variable|python|region|mixture|surf_collide|surf_react)"
                             "\\s+(\\S+)\\s+(\\S+)")),
     isUndo(QStringLiteral("^\\s*(unfix|uncompute|undump|label|jump|next)\\s+(\\S+)")),
-    isParticle(QStringLiteral("^\\s*(pair_modify|mass|velocity|create_bonds|delete_"
-                              "bonds|kspace_modify|labelmap|atom_modify)\\s+(\\S+)")),
-    isRun(QStringLiteral("^\\s*(minimize|minimize/kk|run|rerun|tad|neb|neb/spin|prd|server|temper/"
-                         "npt|temper/grem|temper|message|hyper|dynamical_matrix|dynamical_matrix/"
-                         "kk|third_order|third_order/kk|fitpod)")),
-    isSetup(QStringLiteral("^\\s*(min_modify|neighbor|neigh_modify|special_bonds|balance|box|clear|"
-                           "quit|newton|partition|processors|reset_atoms|reset_ids)")),
-    isSetup1(
-        QStringLiteral("^\\s*(min_style|run_style|timestep|suffix|plugin|comm_modify|comm_style|"
-                       "package|reset_timestep|dump_modify|fix_modify|compute_modify)\\s+(\\S+)")),
+    isParticle(QStringLiteral("^\\s*(species_modify|species|bound_modify|surf_modify|"
+                              "move_surf|remove_surf)\\s+(\\S+)")),
+    isRun(QStringLiteral("^\\s*(run|balance_grid|adapt_grid|custom|scale_particles|partition)")),
+    isSetup(QStringLiteral("^\\s*(clear|quit)")),
+    isSetup1(QStringLiteral("^\\s*(reset_timestep)\\s+(\\S+)")),
     isVariable(QStringLiteral("(\\$[a-z]|\\${[^} ]+}|\\$\\(\\S+\\))")),
     isReference(
-        QStringLiteral("\\s+(c_\\S+|C_\\S+|f_\\S+|F_\\S+|i_\\S+|i2_\\S+|d_\\S+|d2_\\S+|v_\\S+)")),
+        QStringLiteral("\\s+(c_\\S+|f_\\S+|v_\\S+|p_\\S+|g_\\S+|s_\\S+)")),
     isNumber1(QStringLiteral("(^|\\s+)[-+]?[0-9:*]+")), // integer and integer ranges
     isNumber2(QStringLiteral("(^|\\s+)[-+]?[0-9]+\\.[0-9]*[edED]?[-+]?[0-9]*")), // floating point 1
     isNumber3(QStringLiteral("(^|\\s+)[-+]?[0-9]*\\.[0-9]+[edED]?[-+]?[0-9]*")), // floating point 2
@@ -155,8 +149,7 @@ void Highlighter::highlightBlock(const QString &text)
     if (match.hasMatch()) {
         setFormat(match.capturedStart(1), match.capturedLength(1), formatParticle);
         setFormat(match.capturedStart(2), match.capturedLength(2), formatNumber);
-        setFormat(match.capturedStart(3), match.capturedLength(3), formatString);
-        setFormat(match.capturedStart(4), match.capturedLength(4), formatRun);
+        setFormat(match.capturedStart(3), match.capturedLength(3), formatRun);
     }
 
     match = isForce.match(text);

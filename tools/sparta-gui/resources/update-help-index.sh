@@ -9,8 +9,12 @@ fi
 
 cd "$(dirname $0)" || exit 1
 
+# SPARTA doc pages are .txt sources with one or more "<command> command :h3"
+# or "<command> <style> command :h3" headings per file. Each <name>.txt file
+# is translated to a <name>.html page. Lines with quotes are doc links, not
+# command headings, and must be skipped.
 mv help_index.table help_index.oldtable
-grep '\.\. index::' "$1"/src/*.rst | sort \
-    | sed -e 's/^.*src\/\([^/]\+\)\.rst:/\1.html /' \
-          -e 's/\.\. \+index:: \+//' > help_index.table
+grep ' command :h3' "$1"/*.txt | grep -v '"' | sort \
+    | sed -e 's/^.*\/\([^/:]\+\)\.txt:/\1.html /' \
+          -e 's/ \+command :h3.*$//' > help_index.table
 cmp help_index.table help_index.oldtable > /dev/null || touch spartagui.qrc

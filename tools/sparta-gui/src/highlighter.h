@@ -1,5 +1,5 @@
 // -*- c++ -*- /////////////////////////////////////////////////////////////////////////
-// SPARTA-GUI - A Graphical Tool to Learn and Explore the SPARTA MD Simulation Software
+// SPARTA-GUI - A Graphical Tool to Learn and Explore the SPARTA DSMC Simulation Software
 //
 // Copyright (c) 2023, 2024, 2025, 2026  Axel Kohlmeyer
 //
@@ -53,12 +53,12 @@ protected:
 
 private:
     // Regular expressions for different SPARTA command categories
-    QRegularExpression isLattice1, isLattice2, isLattice3; ///< Lattice setup commands
+    QRegularExpression isLattice1, isLattice2, isLattice3; ///< Box, grid, and setup commands
     QRegularExpression isOutput1, isOutput2, isRead;       ///< Output and input commands
     QTextCharFormat formatOutput, formatRead, formatLattice,
         formatSetup;                                         ///< Formats for setup commands
-    QRegularExpression isStyle, isForce, isDefine, isUndo;   ///< Style and force commands
-    QRegularExpression isParticle, isRun, isSetup, isSetup1; ///< Particle and run commands
+    QRegularExpression isStyle, isForce, isDefine, isUndo;   ///< Styled and define/undefine commands
+    QRegularExpression isParticle, isRun, isSetup, isSetup1; ///< Particle, surface, and run commands
     QTextCharFormat formatParticle, formatRun;               ///< Formats for various command types
     QRegularExpression isVariable, isReference; ///< Variable definitions and references
     QTextCharFormat formatVariable;             ///< Format for variables
