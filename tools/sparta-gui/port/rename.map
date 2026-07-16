@@ -48,6 +48,11 @@ s	lmplogo	spalogo
 s	thermo_every	stats_every
 
 # ----------------------------------------------------------------------
+# descriptive text
+# ----------------------------------------------------------------------
+s	LAMMPS MD Simulation Software	SPARTA DSMC Simulation Software
+
+# ----------------------------------------------------------------------
 # generic catch-all rules, applied last
 # these cover class names (LammpsGui -> SpartaGui, LammpsWrapper ->
 # SpartaWrapper, ...), macros (LAMMPS_GUI_USE_PLUGIN, MIN_LAMMPS_VERSION,

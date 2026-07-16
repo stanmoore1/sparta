@@ -1,5 +1,5 @@
 // -*- c++ -*- /////////////////////////////////////////////////////////////////////////
-// SPARTA-GUI - A Graphical Tool to Learn and Explore the SPARTA MD Simulation Software
+// SPARTA-GUI - A Graphical Tool to Learn and Explore the SPARTA DSMC Simulation Software
 //
 // Copyright (c) 2023, 2024, 2025, 2026  Axel Kohlmeyer
 //
@@ -87,22 +87,18 @@ void *SpartaWrapper::extractGlobal(const char *keyword)
     return val;
 }
 
-void *SpartaWrapper::extractPair(const char *keyword)
+// SPARTA has no pair styles, so there is no extract_pair library function.
+// Kept as a stub so upstream call sites can be adapted with minimal changes.
+void *SpartaWrapper::extractPair(const char *)
 {
-    void *val = nullptr;
-    if (sparta_handle) {
-        val = SPAFN(extract_pair)(sparta_handle, keyword);
-    }
-    return val;
+    return nullptr;
 }
 
-void *SpartaWrapper::extractAtom(const char *keyword)
+// SPARTA has no extract_atom library function (per-particle data is
+// accessed via computes and fixes). Kept as a stub, see extractPair().
+void *SpartaWrapper::extractAtom(const char *)
 {
-    void *val = nullptr;
-    if (sparta_handle) {
-        val = SPAFN(extract_atom)(sparta_handle, keyword);
-    }
-    return val;
+    return nullptr;
 }
 
 void *SpartaWrapper::extractCompute(const QString &id, int style, int type)
@@ -114,11 +110,17 @@ void *SpartaWrapper::extractCompute(const QString &id, int style, int type)
         case GLOBAL_STYLE:
             mystyle = SPA_STYLE_GLOBAL;
             break;
-        case ATOM_STYLE:
-            mystyle = SPA_STYLE_ATOM;
+        case PARTICLE_STYLE:
+            mystyle = SPA_STYLE_PARTICLE;
             break;
-        case LOCAL_STYLE:
-            mystyle = SPA_STYLE_LOCAL;
+        case GRID_STYLE:
+            mystyle = SPA_STYLE_GRID;
+            break;
+        case SURF_STYLE:
+            mystyle = SPA_STYLE_SURF;
+            break;
+        case TALLY_STYLE:
+            mystyle = SPA_STYLE_TALLY;
             break;
         default:
             mystyle = -1;
@@ -134,25 +136,23 @@ void *SpartaWrapper::extractCompute(const QString &id, int style, int type)
         case ARRAY_TYPE:
             mytype = SPA_TYPE_ARRAY;
             break;
-        case NUM_ROWS:
-            mytype = SPA_SIZE_ROWS;
-            break;
-        case NUM_COLS:
-            mytype = SPA_SIZE_COLS;
-            break;
         default:
+            // NUM_ROWS/NUM_COLS introspection is not available in SPARTA
             mytype = -1;
             break;
     }
 
-    if (sparta_handle) {
+    if (sparta_handle && (mystyle >= 0) && (mytype >= 0)) {
         return SPAFN(extract_compute)(sparta_handle, id.toLocal8Bit(), mystyle, mytype);
     }
     return nullptr;
 }
 
-void *SpartaWrapper::extractFix(const QString &id, int style, int type, int nrow, int ncol)
+void *SpartaWrapper::extractFix(const QString &id, int style, int type, int, int)
 {
+    // SPARTA's sparta_extract_fix() has no row/column arguments;
+    // global data is returned as allocated memory the caller must free
+
     int mystyle = -1;
     int mytype  = -1;
 
@@ -160,11 +160,14 @@ void *SpartaWrapper::extractFix(const QString &id, int style, int type, int nrow
         case GLOBAL_STYLE:
             mystyle = SPA_STYLE_GLOBAL;
             break;
-        case ATOM_STYLE:
-            mystyle = SPA_STYLE_ATOM;
+        case PARTICLE_STYLE:
+            mystyle = SPA_STYLE_PARTICLE;
             break;
-        case LOCAL_STYLE:
-            mystyle = SPA_STYLE_LOCAL;
+        case GRID_STYLE:
+            mystyle = SPA_STYLE_GRID;
+            break;
+        case SURF_STYLE:
+            mystyle = SPA_STYLE_SURF;
             break;
         default:
             mystyle = -1;
@@ -180,19 +183,14 @@ void *SpartaWrapper::extractFix(const QString &id, int style, int type, int nrow
         case ARRAY_TYPE:
             mytype = SPA_TYPE_ARRAY;
             break;
-        case NUM_ROWS:
-            mytype = SPA_SIZE_ROWS;
-            break;
-        case NUM_COLS:
-            mytype = SPA_SIZE_COLS;
-            break;
         default:
+            // NUM_ROWS/NUM_COLS introspection is not available in SPARTA
             mytype = -1;
             break;
     }
 
-    if (sparta_handle) {
-        return SPAFN(extract_fix)(sparta_handle, id.toLocal8Bit(), mystyle, mytype, nrow, ncol);
+    if (sparta_handle && (mystyle >= 0) && (mytype >= 0)) {
+        return SPAFN(extract_fix)(sparta_handle, id.toLocal8Bit(), mystyle, mytype);
     }
     return nullptr;
 }
@@ -205,11 +203,13 @@ int SpartaWrapper::extractVariableDatatype(const QString &keyword)
     }
     switch (type) {
         case SPA_VAR_EQUAL:
+        case SPA_VAR_INTERNAL:
             return EQUAL_STYLE;
-        case SPA_VAR_ATOM:
+        case SPA_VAR_PARTICLE:
+        case SPA_VAR_GRID:
+        case SPA_VAR_SURF:
+            // per-particle/grid/surf data, not representable as a scalar
             return ATOM_STYLE;
-        case SPA_VAR_VECTOR:
-            return VECTOR_STYLE;
         case SPA_VAR_STRING:
             return STRING_STYLE;
         default:
@@ -224,7 +224,7 @@ double SpartaWrapper::extractVariable(const char *keyword)
 {
     void *ptr = nullptr;
     if (sparta_handle) {
-        ptr = SPAFN(extract_variable)(sparta_handle, keyword, nullptr);
+        ptr = SPAFN(extract_variable)(sparta_handle, keyword);
     }
     double val = (ptr) ? *(static_cast<double *>(ptr)) : 0.0;
     SPAFN(free)(ptr);
@@ -354,15 +354,18 @@ void SpartaWrapper::commandsString(const QString &input)
     }
 }
 
-// may be called with null handle. returns global error then.
 bool SpartaWrapper::hasError() const
 {
+    if (!sparta_handle) return false;
     return SPAFN(has_error)(sparta_handle) != 0;
 }
 
-// may be called with null handle. returns global error then.
 int SpartaWrapper::getLastErrorMessage(char *buf, int buflen)
 {
+    if (!sparta_handle) {
+        if (buf && (buflen > 0)) buf[0] = '\0';
+        return 0;
+    }
     return SPAFN(get_last_error_message)(sparta_handle, buf, buflen);
 }
 
@@ -391,11 +394,10 @@ void SpartaWrapper::close()
 
 void SpartaWrapper::finalize()
 {
+    // SPARTA has no separate mpi/kokkos finalization in its library
+    // interface; closing the instance is all that is needed
     if (sparta_handle) {
         SPAFN(close)(sparta_handle);
-        SPAFN(mpi_finalize)();
-        SPAFN(kokkos_finalize)();
-        SPAFN(python_finalize)();
         // otherwise isOpen() reports an instance that no longer exists and a
         // later close() would close the stale handle a second time
         sparta_handle = nullptr;
@@ -413,14 +415,17 @@ bool SpartaWrapper::configAccelerator(const char *package, const char *category,
     return SPAFN(config_accelerator)(package, category, setting) != 0;
 }
 
+// SPARTA is not built with libcurl support
 bool SpartaWrapper::configHasCurlSupport() const
 {
-    return SPAFN(config_has_curl_support)() != 0;
+    return false;
 }
 
+// SPARTA uses Kokkos rather than a separate OpenMP package,
+// see configAccelerator()
 bool SpartaWrapper::configHasOmpSupport() const
 {
-    return SPAFN(config_has_omp_support)() != 0;
+    return false;
 }
 
 bool SpartaWrapper::configHasPngSupport() const
@@ -433,9 +438,11 @@ bool SpartaWrapper::configHasJpegSupport() const
     return SPAFN(config_has_jpeg_support)() != 0;
 }
 
+// GPU support in SPARTA comes via Kokkos; there is no separate
+// GPU-device detection in the library interface
 bool SpartaWrapper::hasGpuDevice() const
 {
-    return SPAFN(has_gpu_device)() != 0;
+    return false;
 }
 
 #undef SPAFN
@@ -543,9 +550,9 @@ bool SpartaWrapper::loadLib(const QString &libfile)
 
     CHECKSYM(get_thermo);
     CHECKSYM(last_thermo);
-    CHECKSYM(config_has_curl_support);
-    CHECKSYM(config_has_omp_support);
-    CHECKSYM(extract_pair);
+    CHECKSYM(commands_string);
+    CHECKSYM(style_count);
+    CHECKSYM(is_running);
 
     // check minimum required version
     QString lmpversion;

@@ -1,5 +1,5 @@
 // -*- c++ -*- /////////////////////////////////////////////////////////////////////////
-// SPARTA-GUI - A Graphical Tool to Learn and Explore the SPARTA MD Simulation Software
+// SPARTA-GUI - A Graphical Tool to Learn and Explore the SPARTA DSMC Simulation Software
 //
 // Copyright (c) 2023, 2024, 2025, 2026  Axel Kohlmeyer
 //
@@ -43,9 +43,9 @@ constexpr int NUM_RECENT_FILES = 5; ///< Number of entries in the recent files l
 
 // ---- SPARTA version requirement ------------------------------------------
 constexpr int MIN_SPARTA_VERSION =
-    20260704; ///< Minimum SPARTA version (4 July 2026) as YYYYMMDD format number
+    20250924; ///< Minimum SPARTA version (24 Sep 2025) as YYYYMMDD format number
 inline const QString MIN_SPARTA_VERSION_STR =
-    QStringLiteral("4 Jul 2026"); ///< Minimum SPARTA version (4 July 2026) as string
+    QStringLiteral("24 Sep 2025"); ///< Minimum SPARTA version (24 Sep 2025) as string
 
 // ---- Buffer thresholds ---------------------------------------------------
 constexpr double BUFFER_WARNING_THRESHOLD = 0.333; ///< Warn when capture buffer exceeds this

@@ -1,15 +1,21 @@
 /* -*- c++ -*- ----------------------------------------------------------
-   SPARTA - Large-scale Atomic/Molecular Massively Parallel Simulator
-   https://sparta.github.io/, Sandia National Laboratories
-   SPARTA development team: developers@sparta.github.io
+   SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
+   http://sparta.github.io
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
+   Sandia National Laboratories
 
-   Copyright (2003) Sandia Corporation.  Under the terms of Contract
+   Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
    certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
 ------------------------------------------------------------------------- */
+
+/* Adapted for SPARTA-GUI from the LAMMPS-GUI plugin loader
+   (https://github.com/akohlmey/lammps-gui, liblammpsplugin.c,
+   Copyright (c) 2023 - 2026  Axel Kohlmeyer), reduced to the
+   functions actually exported by the SPARTA C library interface. */
 
 /*
    Variant of the C style library interface to SPARTA
@@ -72,105 +78,36 @@ libspartaplugin_t *libspartaplugin_load(const char *lib)
 #endif
 
   ADDSYM(open_no_mpi);
-  ADDSYM(open_fortran);
   ADDSYM(close);
-
-  ADDSYM(mpi_init);
-  ADDSYM(mpi_finalize);
-  ADDSYM(kokkos_finalize);
-  ADDSYM(python_finalize);
-  ADDSYM(plugin_finalize);
-
-  ADDSYM(error);
-  ADDSYM(expand);
 
   ADDSYM(file);
   ADDSYM(command);
-  ADDSYM(commands_list);
   ADDSYM(commands_string);
 
-  ADDSYM(get_natoms);
   ADDSYM(get_thermo);
   ADDSYM(last_thermo);
 
-  ADDSYM(extract_box);
-  ADDSYM(reset_box);
-
-  ADDSYM(memory_usage);
-  ADDSYM(get_mpi_comm);
-
   ADDSYM(extract_setting);
-  ADDSYM(extract_global_datatype);
   ADDSYM(extract_global);
-  ADDSYM(extract_pair_dimension);
-  ADDSYM(extract_pair);
-  ADDSYM(map_atom);
-
-  ADDSYM(extract_atom_datatype);
-  ADDSYM(extract_atom_size);
-  ADDSYM(extract_atom);
 
   ADDSYM(extract_compute);
   ADDSYM(extract_fix);
   ADDSYM(extract_variable);
   ADDSYM(extract_variable_datatype);
-  ADDSYM(set_variable);
-  ADDSYM(set_string_variable);
-  ADDSYM(set_internal_variable);
   ADDSYM(variable_info);
-  ADDSYM(eval);
-  ADDSYM(clearstep_compute);
-  ADDSYM(addstep_compute);
-  ADDSYM(addstep_compute_all);
-
-  ADDSYM(gather_atoms);
-  ADDSYM(gather_atoms_concat);
-  ADDSYM(gather_atoms_subset);
-  ADDSYM(scatter_atoms);
-  ADDSYM(scatter_atoms_subset);
-
-  ADDSYM(gather_bonds);
-  ADDSYM(gather_angles);
-  ADDSYM(gather_dihedrals);
-  ADDSYM(gather_impropers);
-
-  ADDSYM(gather);
-  ADDSYM(gather_concat);
-  ADDSYM(gather_subset);
-  ADDSYM(scatter);
-  ADDSYM(scatter_subset);
-
-  ADDSYM(create_atoms);
-  ADDSYM(create_molecule);
-
-  ADDSYM(find_pair_neighlist);
-  ADDSYM(find_fix_neighlist);
-  ADDSYM(find_compute_neighlist);
-  ADDSYM(request_single_neighlist);
-  ADDSYM(neighlist_num_elements);
-  ADDSYM(neighlist_element_neighbors);
 
   ADDSYM(version);
-  ADDSYM(get_os_info);
 
   ADDSYM(config_has_mpi_support);
-  ADDSYM(config_has_omp_support);
   ADDSYM(config_has_gzip_support);
   ADDSYM(config_has_png_support);
   ADDSYM(config_has_jpeg_support);
   ADDSYM(config_has_ffmpeg_support);
-  ADDSYM(config_has_curl_support);
   ADDSYM(config_has_exceptions);
 
   ADDSYM(config_has_package);
-  ADDSYM(config_package_count);
-  ADDSYM(config_package_name);
-
   ADDSYM(config_accelerator);
-  ADDSYM(has_gpu_device);
-  ADDSYM(get_gpu_device_info);
 
-  ADDSYM(has_style);
   ADDSYM(style_count);
   ADDSYM(style_name);
 
@@ -178,29 +115,12 @@ libspartaplugin_t *libspartaplugin_load(const char *lib)
   ADDSYM(id_count);
   ADDSYM(id_name);
 
-  ADDSYM(plugin_count);
-  ADDSYM(plugin_name);
-
-  ADDSYM(encode_image_flags);
-  ADDSYM(decode_image_flags);
-
-  ADDSYM(set_fix_external_callback);
-  ADDSYM(fix_external_get_force);
-  ADDSYM(fix_external_set_energy_global);
-  ADDSYM(fix_external_set_energy_peratom);
-  ADDSYM(fix_external_set_virial_global);
-  ADDSYM(fix_external_set_virial_peratom);
-  ADDSYM(fix_external_set_vector_length);
-  ADDSYM(fix_external_set_vector);
-
-  ADDSYM(flush_buffers);
-
   ADDSYM(free);
 
   ADDSYM(is_running);
   ADDSYM(force_timeout);
 
-  // symbol not present: release the handle and storage before bailing out
+  /* symbol not present: release the handle and storage before bailing out */
   if (!lmp->config_has_exceptions) {
     libspartaplugin_release(lmp);
     return NULL;
@@ -211,9 +131,7 @@ libspartaplugin_t *libspartaplugin_load(const char *lib)
     ADDSYM(has_error);
     ADDSYM(get_last_error_message);
   }
-  ADDSYM(set_show_error);
 
-  ADDSYM(python_api_version);
   return lmp;
 }
 

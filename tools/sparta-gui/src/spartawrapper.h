@@ -1,5 +1,5 @@
 // -*- c++ -*- /////////////////////////////////////////////////////////////////////////
-// SPARTA-GUI - A Graphical Tool to Learn and Explore the SPARTA MD Simulation Software
+// SPARTA-GUI - A Graphical Tool to Learn and Explore the SPARTA DSMC Simulation Software
 //
 // Copyright (c) 2023, 2024, 2025, 2026  Axel Kohlmeyer
 //
@@ -26,8 +26,17 @@ class SpartaWrapper {
 public:
     /// Constants for variable styles
     enum StyleConst { EQUAL_STYLE = 0, ATOM_STYLE, VECTOR_STYLE, STRING_STYLE };
-    /// Constants for data scopes
-    enum ScopeConst { GLOBAL_STYLE = 0, DUMMY /* = ATOM_STYLE */, LOCAL_STYLE };
+    /// Constants for data scopes (SPARTA: global, per-particle, per-grid,
+    /// per-surf, or per-tally data; ATOM_STYLE is an alias for per-particle
+    /// to keep upstream call sites unchanged)
+    enum ScopeConst {
+        GLOBAL_STYLE = 0,
+        PARTICLE_STYLE,
+        GRID_STYLE,
+        SURF_STYLE,
+        TALLY_STYLE,
+        LOCAL_STYLE /* unsupported in SPARTA, maps to no data */
+    };
     /// Constants for data types
     enum TypeConst { SCALAR_TYPE = 0, VECTOR_TYPE, ARRAY_TYPE, NUM_ROWS, NUM_COLS };
 
