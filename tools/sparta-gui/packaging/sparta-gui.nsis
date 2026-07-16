@@ -1,0 +1,214 @@
+#!Nsis Installer Command Script
+#
+# The following external defines are recognized:
+# ${VERSION} = YYYYMMDD
+# ${BIT}     = 32 or 64
+# ${LIBGCC}  = name of libgcc dll file to use
+# ${MINGW}   = <path to mingw windows dlls>
+
+!include "MUI2.nsh"
+!include "FileAssociation.nsh"
+!include "FileFunc.nsh"
+
+!define MUI_ICON "sparta-gui.ico"
+!define MUI_UNICON "sparta-gui.ico"
+!define MUI_HEADERIMAGE
+!define MUI_HEADERIMAGE_BITMAP "sparta-gui-banner.bmp"
+!define MUI_HEADERIMAGE_RIGHT
+
+Unicode true
+XPStyle on
+
+!include "LogicLib.nsh"
+!addplugindir "envvar/Plugins/x86-unicode"
+!include "x64.nsh"
+
+RequestExecutionLevel user
+
+!macro CreateInternetShortcut FILENAME URL ICONFILE ICONINDEX
+WriteINIStr "${FILENAME}.url" "InternetShortcut" "URL" "${URL}"
+WriteINIStr "${FILENAME}.url" "InternetShortcut" "IconFile" "${ICONFILE}"
+WriteINIStr "${FILENAME}.url" "InternetShortcut" "IconIndex" "${ICONINDEX}"
+!macroend
+
+!macro _StrContainsConstructor OUT NEEDLE HAYSTACK
+  Push `${HAYSTACK}`
+  Push `${NEEDLE}`
+  Call StrContains
+  Pop `${OUT}`
+!macroend
+
+!define StrContains '!insertmacro "_StrContainsConstructor"'
+
+!define SPARTAGUI "SPARTA-GUI ${VERSION}"
+OutFile "../SPARTA-GUI-Win10-x86_64-${VERSION}.exe"
+
+Name "${SPARTAGUI}"
+InstallDir "$LOCALAPPDATA\${SPARTAGUI}"
+
+ShowInstDetails show
+ShowUninstDetails show
+SetCompressor zlib
+
+!define MUI_ABORTWARNING
+
+!insertmacro MUI_PAGE_LICENSE "./LICENSE.txt"
+!insertmacro MUI_PAGE_DIRECTORY
+!insertmacro MUI_PAGE_INSTFILES
+
+!insertmacro MUI_UNPAGE_CONFIRM
+!insertmacro MUI_UNPAGE_INSTFILES
+
+!insertmacro MUI_LANGUAGE "English"
+
+function .onInit
+  # Determine if SPARTA-GUI was already installed.
+  # Then look up path to uninstaller and offer to uninstall or quit
+  SetRegView 32
+  ReadRegDWORD $0 HKCU "Software\SPARTA-GUI" "Bits"
+  SetRegView LastUsed
+  ${If} $0 == "32"
+    SetRegView 32
+  ${ElseIf} $0 == "64"
+    SetRegView 64
+  ${Else}
+    SetRegView ${BIT}
+  ${EndIf}
+  ClearErrors
+  ReadRegStr $R0 HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SPARTA-GUI" "UninstallString"
+  SetRegView LastUsed
+  ${If} ${Errors}
+    DetailPrint "SPARTA-GUI not (yet) installed"
+  ${Else}
+    MessageBox MB_YESNO "SPARTA ($0 bit) is already installed. Uninstall existing version?" /SD IDYES IDNO Quit
+      Pop $R1
+      StrCmp $R1 2 Quit +1
+      Exec $R0
+    Quit:
+      Quit
+  ${EndIf}
+  setShellVarContext all
+functionEnd
+
+Section "${SPARTAGUI}" SecSparta
+  SectionIn RO
+  # Write SPARTA-GUI installation bitness marker. Always use 32-bit registry view
+  SetRegView 32
+  IntFmt $0 "0x%08X" ${BIT}
+  WriteRegDWORD HKCU "Software\SPARTA-GUI" "Bits" $0
+
+  # Switch to "native" registry view
+  SetRegView ${BIT}
+  SetShellVarContext current
+
+  CreateDirectory "$SMPROGRAMS\${SPARTAGUI}"
+  CreateShortCut  "$SMPROGRAMS\${SPARTAGUI}\SPARTA-GUI.lnk"      "$INSTDIR\Bin\sparta-gui.exe"  \
+                  '' "$INSTDIR\sparta-gui.ico" "" SW_SHOWNORMAL "" "The SPARTA GUI"
+  CreateShortCut  "$SMPROGRAMS\${SPARTAGUI}\Uninstall.lnk"      "$INSTDIR\Uninstall.exe"          "" ""
+  CreateShortCut  "$SMPROGRAMS\${SPARTAGUI}\SPARTA-GUI-Manual.lnk"  "$INSTDIR\Doc\SPARTA-GUI-Manual.pdf"  "" ""
+  CreateShortCut  "$SMPROGRAMS\${SPARTAGUI}\LICENSE.lnk"        "$INSTDIR\LICENSE.txt"            "" ""
+
+!insertmacro CreateInternetShortcut "$SMPROGRAMS\${SPARTAGUI}\SPARTA-GUI Homepage" \
+                  "https://sparta.github.io/sparta-gui" "" "0"
+
+  SetOutPath "$INSTDIR"
+  CreateDirectory "$INSTDIR\bin"
+  CreateDirectory "$INSTDIR\Doc"
+  CreateDirectory "$INSTDIR\qt6plugins"
+  CreateDirectory "$INSTDIR\qt6plugins\imageformats"
+  CreateDirectory "$INSTDIR\qt6plugins\platforms"
+  CreateDirectory "$INSTDIR\qt6plugins\styles"
+  CreateDirectory "$INSTDIR\qt6plugins\tls"
+  CreateDirectory "$INSTDIR\qt6plugins"
+
+  File License.txt
+  File sparta-gui.ico
+
+  SetOutPath "$INSTDIR\bin"
+
+  File bin/*.exe
+  File bin/*.dll
+  File bin/qt.conf
+
+  # install Qt6 plugins
+  SetOutPath "$INSTDIR\qt6plugins\platforms"
+  File ${MINGW}/../lib/qt6/plugins/platforms/qwindows.dll
+  File ${MINGW}/../lib/qt6/plugins/platforms/qdirect2d.dll
+  SetOutPath "$INSTDIR\qt6plugins\imageformats"
+  File ${MINGW}/../lib/qt6/plugins/imageformats/q*.dll
+  SetOutPath "$INSTDIR\qt6plugins\styles"
+  File ${MINGW}/../lib/qt6/plugins/styles/q*.dll
+  SetOutPath "$INSTDIR\qt6plugins\tls"
+  File ${MINGW}/../lib/qt6/plugins/tls/q*.dll
+
+  SetOutPath "$INSTDIR\Doc"
+  File *.pdf
+
+  SetOutPath "$INSTDIR"
+  ${registerExtension} "$INSTDIR\bin\sparta-gui.exe" ".lmp" "SPARTA Input File"
+
+  # Register Application and its uninstaller
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SPARTA-GUI" \
+                 "DisplayName" "${SPARTAGUI} -- SPARTA Graphical User Interface"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SPARTA-GUI" \
+                 "Publisher" "Axel Kohlmeyer"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SPARTA-GUI" \
+                 "URLInfoAbout" "sparta.github.io/sparta-gui"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SPARTA-GUI" \
+                 "DisplayIcon" "$INSTDIR\sparta-gui.ico"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SPARTA-GUI" \
+                 "DisplayVersion" "${VERSION}"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SPARTA-GUI" \
+                 "InstallLocation" "$INSTDIR"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SPARTA-GUI" \
+                 "UninstallString" "$\"$INSTDIR\uninstall.exe$\""
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SPARTA-GUI" \
+                 "QuietUninstallString" "$\"$INSTDIR\uninstall.exe$\" /S"
+
+  ${GetSize} "$INSTDIR" "/S=0K" $0 $1 $2
+  IntFmt $0 "0x%08X" $0
+  WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SPARTA-GUI" \
+                 "EstimatedSize" "$0"
+
+  # update path variables
+  EnVar::SetHKCU
+  # add SPARTA executable path
+  EnVar::AddValue "PATH" "$INSTDIR\bin"
+  WriteUninstaller "$INSTDIR\Uninstall.exe"
+SectionEnd
+
+function un.onInit
+  SetShellVarContext current
+functionEnd
+
+Section "Uninstall"
+  # remove SPARTA bitness/installation indicator always in 32-bit registry view
+  SetRegView 32
+  DeleteRegKey HKCU "Software\SPARTA"
+
+  # unregister extension, and uninstall info
+  SetRegView ${BIT}
+  SetShellVarContext current
+  ${unregisterExtension} ".lmp" "SPARTA Input File"
+  # unregister installation
+  DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SPARTA-GUI"
+
+  # update path variables
+  EnVar::SetHKCU
+  # remove SPARTA executable and dll path
+  EnVar::DeleteValue "PATH" "$INSTDIR\bin"
+
+  RMDir /r "$SMPROGRAMS\${SPARTAGUI}"
+
+  Delete /REBOOTOK   "$INSTDIR\*.txt"
+  Delete /REBOOTOK   "$INSTDIR\*.ico"
+  Delete /REBOOTOK   "$INSTDIR\Uninstall.exe"
+  RMDir /r /REBOOTOK "$INSTDIR\bin"
+  RMDir /r /REBOOTOK "$INSTDIR\Doc"
+  RMDir /r /REBOOTOK "$INSTDIR\qt6plugins"
+  RMDir /REBOOTOK "$INSTDIR"
+SectionEnd
+
+# Local Variables:
+# mode: sh
+# End:

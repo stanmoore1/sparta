@@ -1,0 +1,144 @@
+#!/bin/bash
+
+APP_NAME=sparta-gui
+VERSION="$1"
+
+echo "Delete old files, if they exist"
+rm -f ${APP_NAME}.dmg ${APP_NAME}-rw.dmg SPARTA-GUI-macOS-multiarch*.dmg \
+   ${APP_NAME}.app/Contents/Frameworks/libsparta.0.dylib
+
+# download pre-compiled SPARTA shared library if plugin-mode SPARTA-GUI binary
+if $(./${APP_NAME}.app/Contents/MacOS/sparta-gui -h | grep -q pluginpath); then
+    mkdir -p ${APP_NAME}.app/Contents/Frameworks
+    curl -L -o ${APP_NAME}.app/Contents/Frameworks/libsparta.0.dylib https://sparta.github.io/sparta-gui/libsparta.0.dylib
+    chmod 0755 ${APP_NAME}.app/Contents/Frameworks/libsparta.0.dylib
+fi
+
+# The pre-compiled SPARTA library is built with OpenMP and records a dependency
+# on /usr/local/lib/libomp.dylib.  Apple ships no libomp, so on hosts that were
+# set up without an OpenMP runtime (e.g. CI runners) macdeployqt cannot resolve
+# or bundle it and prints a cryptic otool "can't open file" error.  Detect that
+# case so the bundle is built cleanly without OpenMP support instead.
+SKIP_LIBOMP=no
+SPARTA_LIB=${APP_NAME}.app/Contents/Frameworks/libsparta.0.dylib
+if [ -f "${SPARTA_LIB}" ] \
+   && otool -L "${SPARTA_LIB}" 2>/dev/null | grep -q '/usr/local/lib/libomp.dylib' \
+   && [ ! -e /usr/local/lib/libomp.dylib ]; then
+    echo "NOTE: libsparta references libomp.dylib but no OpenMP runtime is installed;"
+    echo "      building the bundle without OpenMP support and skipping libomp deployment."
+    SKIP_LIBOMP=yes
+fi
+
+echo "Create initial dmg file with macdeployqt"
+if [ "${SKIP_LIBOMP}" = "yes" ]; then
+    # drop the expected, harmless errors about the unresolved libomp dependency
+    macdeployqt ${APP_NAME}.app -dmg 2>&1 | grep -v 'libomp\.dylib'
+else
+    macdeployqt ${APP_NAME}.app -dmg
+fi
+echo "Create writable dmg file"
+hdiutil convert ${APP_NAME}.dmg -format UDRW -o ${APP_NAME}-rw.dmg
+
+echo "Mount writeable DMG file in read-write mode. Keep track of device and volume names"
+DEVICE=$(hdiutil attach -readwrite -noverify ${APP_NAME}-rw.dmg | grep '^/dev/' | sed 1q | awk '{print $1}')
+VOLUME=$(df | grep ${DEVICE} | sed -e 's/^.*\(\/Volumes\/\)/\1/')
+sleep 2
+
+echo "Create link to Application folder and move README and background image files"
+
+pushd "${VOLUME}"
+ln -s /Applications .
+mv ${APP_NAME}.app/Contents/Resources/README.txt .
+mkdir  .background
+mv ${APP_NAME}.app/Contents/Resources/SPARTA_DMG_Background.png .background/background.png
+mv ${APP_NAME}.app SPARTA-GUI.app
+cd SPARTA-GUI.app/Contents
+
+echo "Attach icons to SPARTA console and GUI executables and lib"
+echo "read 'icns' (-16455) \"Resources/sparta-gui.icns\";" > icon.rsrc
+Rez -a icon.rsrc -o bin/lmp
+SetFile -a C bin/lmp
+Rez -a icon.rsrc -o MacOS/sparta-gui
+SetFile -a C MacOS/sparta-gui
+if [ -f Frameworks/libsparta.0.dylib ]; then
+    Rez -a icon.rsrc -o Frameworks/libsparta.0.dylib
+    SetFile -a C Frameworks/libsparta.0.dylib
+fi
+rm icon.rsrc
+popd
+
+echo 'Tell the Finder to resize the window, set the background,'
+echo 'change the icon size, place the icons in the right position, etc.'
+echo '
+    tell application "Finder"
+    tell disk "'${APP_NAME}'"
+
+      -- wait for the image to finish mounting
+      set open_attempts to 0
+      repeat while open_attempts < 4
+        try
+          open
+            delay 1
+            set open_attempts to 5
+          close
+        on error errStr number errorNumber
+          set open_attempts to open_attempts + 1
+          delay 10
+        end try
+      end repeat
+      delay 5
+
+      -- open the image the first time and save a .DS_Store
+      -- just the background and icon setup
+      open
+        set current view of container window to icon view
+        set theViewOptions to the icon view options of container window
+        set background picture of theViewOptions to file ".background:background.png"
+        set arrangement of theViewOptions to not arranged
+        set icon size of theViewOptions to 64
+        delay 5
+      close
+
+      -- next set up the position of the app and Applications symlink
+      -- plus hide all window decorations
+      open
+        update without registering applications
+        tell container window
+          set sidebar width to 0
+          set statusbar visible to false
+          set toolbar visible to false
+          set the bounds to { 100, 40, 868, 640 }
+          set position of item "'SPARTA-GUI'.app" to { 190, 216 }
+          set position of item "Applications" to { 576, 216 }
+          set position of item "README.txt" to { 190, 400 }
+        end tell
+        update without registering applications
+        delay 5
+      close
+
+      -- one last open and close to check the results
+      open
+        delay 5
+      close
+    end tell
+    delay 1
+  end tell
+' | osascript
+
+sync
+
+echo "Unmount modified disk image and convert to compressed read-only image"
+hdiutil detach "${DEVICE}"
+hdiutil convert "${APP_NAME}-rw.dmg" -format UDZO -o "SPARTA-GUI-macOS-multiarch-v${VERSION}.dmg"
+
+echo "Attach icon to .dmg file"
+echo "read 'icns' (-16455) \"sparta-gui.app/Contents/Resources/sparta-gui.icns\";" > icon.rsrc
+Rez -a icon.rsrc -o SPARTA-GUI-macOS-multiarch-v${VERSION}.dmg
+SetFile -a C SPARTA-GUI-macOS-multiarch-v${VERSION}.dmg
+rm icon.rsrc
+
+echo "Delete temporary disk images"
+rm -f "${APP_NAME}-rw.dmg"
+rm -f "${APP_NAME}.dmg"
+
+exit 0

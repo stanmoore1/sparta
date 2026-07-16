@@ -1,0 +1,143 @@
+// -*- c++ -*- /////////////////////////////////////////////////////////////////////////
+// SPARTA-GUI - A Graphical Tool to Learn and Explore the SPARTA MD Simulation Software
+//
+// Copyright (c) 2023, 2024, 2025, 2026  Axel Kohlmeyer
+//
+// Documentation: https://sparta.github.io/sparta-gui/
+// Contact: akohlmey@gmail.com
+//
+// This software is distributed under the GNU General Public License version 2 or later.
+////////////////////////////////////////////////////////////////////////////////////////
+
+#include "fileviewer.h"
+
+#include "constants.h"
+#include "helpers.h"
+#include "spartagui.h"
+
+#include <QEvent>
+#include <QFile>
+#include <QFileInfo>
+#include <QFont>
+#include <QFontInfo>
+#include <QIcon>
+#include <QKeySequence>
+#include <QProcess>
+#include <QSettings>
+#include <QShortcut>
+#include <QString>
+#include <QStringList>
+#include <QTextCursor>
+#include <QTextStream>
+
+FileViewer::FileViewer(const QString &_filename, SpartaGui *_spartagui, const QString &title,
+                       QWidget *parent) :
+    QPlainTextEdit(parent), fileName(_filename), spartagui(_spartagui)
+{
+    auto *action = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Q), this);
+    connect(action, &QShortcut::activated, this, &FileViewer::quit);
+    action = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Slash), this);
+    connect(action, &QShortcut::activated, this, &FileViewer::stopRun);
+
+    installEventFilter(this);
+
+    // open and read file. Set editor to read-only.
+    QFile file(fileName);
+    QFileInfo finfo(file);
+    QString content;
+    QProcess decomp;
+    QStringList args = {"-cdf", fileName};
+
+    // lookup table mapping file extensions to decompression programs and extra args
+    struct CompressionFormat {
+        const char *extension;
+        const char *program;
+        const char *extraArg; // nullptr if none
+    };
+    static constexpr CompressionFormat compressionFormats[] = {
+        {"gz", "gzip", nullptr}, {"bz2", "bzip2", nullptr},       {"zst", "zstd", nullptr},
+        {"xz", "xz", nullptr},   {"lzma", "xz", "--format=lzma"}, {"lz4", "lz4", nullptr},
+    };
+
+    // match suffix with decompression program
+    QString command;
+    bool compressed = false;
+    for (const auto &fmt : compressionFormats) {
+        if (finfo.suffix() == fmt.extension) {
+            command    = fmt.program;
+            compressed = true;
+            if (fmt.extraArg) args.insert(1, fmt.extraArg);
+            break;
+        }
+    }
+
+    // read compressed file from pipe
+    if (compressed) {
+        decomp.start(command, args, QIODevice::ReadOnly);
+        if (decomp.waitForStarted()) {
+            while (decomp.waitForReadyRead())
+                content += decomp.readAll();
+        } else {
+            content = "\nCould not open compressed file %1 with decompression program %2\n";
+            content = content.arg(fileName).arg(command);
+        }
+        decomp.close();
+    } else if (file.open(QIODevice::Text | QIODevice::ReadOnly)) {
+        // read plain text
+        QTextStream in(&file);
+        content = in.readAll();
+        file.close();
+    } else {
+        // report the failure in the viewer instead of showing an empty window
+        content = QString("\nCould not open file %1: %2\n").arg(fileName, file.errorString());
+    }
+
+    document()->setDefaultFont(monoFontFromSettings());
+
+    document()->setPlainText(content);
+    moveCursor(QTextCursor::Start, QTextCursor::MoveAnchor);
+    setReadOnly(true);
+    setLineWrapMode(NoWrap);
+    setMinimumSize(800, 500);
+    setWindowIcon(QIcon(Cfg::MAIN_ICON));
+    if (title.isEmpty())
+        setWindowTitle("SPARTA-GUI - Viewer - " + fileName);
+    else
+        setWindowTitle(title);
+
+    applyWindowFlags(this);
+}
+
+void FileViewer::quit()
+{
+    if (spartagui) spartagui->quit();
+}
+
+void FileViewer::stopRun()
+{
+    if (spartagui) spartagui->stopRun();
+}
+
+// event filter to handle "Ambiguous shortcut override" issues
+bool FileViewer::eventFilter(QObject *watched, QEvent *event)
+{
+    if (event->type() == QEvent::ShortcutOverride) {
+        auto *keyEvent = dynamic_cast<QKeyEvent *>(event);
+        if (!keyEvent) return QAbstractScrollArea::eventFilter(watched, event);
+        if (keyEvent->modifiers().testFlag(Qt::ControlModifier) && keyEvent->key() == '/') {
+            stopRun();
+            event->accept();
+            return true;
+        }
+        if (keyEvent->modifiers().testFlag(Qt::ControlModifier) && keyEvent->key() == 'W') {
+            close();
+            event->accept();
+            return true;
+        }
+    }
+    return QWidget::eventFilter(watched, event);
+}
+
+// Local Variables:
+// c-basic-offset: 4
+// End:

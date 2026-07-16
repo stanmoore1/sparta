@@ -1,0 +1,7 @@
+Sphinx >= 6, < 9.2.0
+breathe
+sphinxcontrib-spelling
+sphinxcontrib-jquery
+sphinx-sitemap
+linkchecker
+docutils > 0.18, < 0.23

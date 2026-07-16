@@ -1,0 +1,60 @@
+# SPARTA-GUI rename map: mechanical LAMMPS -> SPARTA translation rules
+#
+# This file is the single source of truth for how the upstream
+# LAMMPS-GUI sources (https://github.com/akohlmey/lammps-gui) are
+# translated into SPARTA-GUI sources.  It is applied by rename.sh to
+# whole source trees and to patches, so that future upstream changes
+# can be ported by running the upstream diff through the same rules.
+#
+# Format: one rule per line, three TAB-separated fields:
+#   MODE <TAB> OLD <TAB> NEW
+# MODE = w : identifier replacement with word boundaries (\bOLD\b)
+# MODE = s : literal substring replacement
+# Rules are applied IN ORDER, so more specific rules must come first.
+# The same rules are applied to file and directory names.
+# Lines starting with # and blank lines are ignored.
+
+# ----------------------------------------------------------------------
+# URLs (must precede the generic lammps -> sparta rules,
+# which would otherwise produce broken host names)
+# ----------------------------------------------------------------------
+s	https://docs.lammps.org	https://sparta.github.io
+s	lammps-gui.lammps.org	sparta.github.io/sparta-gui
+s	download.lammps.org	sparta.github.io
+s	www.lammps.org	sparta.github.io
+s	https://lammps.org	https://sparta.github.io
+s	lammps.org	sparta.github.io
+
+# ----------------------------------------------------------------------
+# library interface constants and macros
+# ----------------------------------------------------------------------
+s	LMP_STYLE_	SPA_STYLE_
+s	LMP_TYPE_	SPA_TYPE_
+s	LMP_SIZE_	SPA_SIZE_
+s	LMP_VAR_	SPA_VAR_
+s	LMP_ERROR_	SPA_ERROR_
+w	LMPFN	SPAFN
+
+# ----------------------------------------------------------------------
+# file name fragments with no lammps/LAMMPS substring
+# ----------------------------------------------------------------------
+s	lmpfile	spafile
+s	lmpicons	spaicons
+s	lmplogo	spalogo
+
+# ----------------------------------------------------------------------
+# library interface key strings that differ between the codes
+# ----------------------------------------------------------------------
+s	thermo_every	stats_every
+
+# ----------------------------------------------------------------------
+# generic catch-all rules, applied last
+# these cover class names (LammpsGui -> SpartaGui, LammpsWrapper ->
+# SpartaWrapper, ...), macros (LAMMPS_GUI_USE_PLUGIN, MIN_LAMMPS_VERSION,
+# LAMMPSPLUGIN_ABI_VERSION, lammps_##fn, ...), file names
+# (lammpsgui.cpp, liblammpsplugin.c, lammps-gui.icns, ...),
+# library names (liblammps.so -> libsparta.so), and UI strings
+# ----------------------------------------------------------------------
+s	LAMMPS	SPARTA
+s	Lammps	Sparta
+s	lammps	sparta

@@ -1,0 +1,244 @@
+// -*- c++ -*- /////////////////////////////////////////////////////////////////////////
+// SPARTA-GUI - A Graphical Tool to Learn and Explore the SPARTA MD Simulation Software
+//
+// Copyright (c) 2023, 2024, 2025, 2026  Axel Kohlmeyer
+//
+// Documentation: https://sparta.github.io/sparta-gui/
+// Contact: akohlmey@gmail.com
+//
+// This software is distributed under the GNU General Public License version 2 or later.
+////////////////////////////////////////////////////////////////////////////////////////
+
+#ifndef CONSTANTS_H
+#define CONSTANTS_H
+
+#include <QString>
+
+/**
+ * @brief Application-wide constants for SPARTA-GUI
+ *
+ * Centralizes magic numbers and repeated string literals that were previously
+ * scattered across the codebase.  Grouping by category makes maintenance easier
+ * and reduces the risk of typos from duplicated literals.
+ *
+ * The namespace name is deliberately short: these constants are internal, not
+ * an exported interface, so call sites read @c Cfg::NAME directly without a
+ * @c using directive or alias.
+ */
+namespace Cfg {
+
+// ---- UI dimensions -------------------------------------------------------
+constexpr int DEFAULT_BUFLEN =
+    1024; ///< Default length for C-string buffers (error messages, names)
+constexpr int MAX_DEFAULT_THREADS   = 16;  ///< Maximum default thread count
+constexpr int MINIMUM_WIDTH         = 400; ///< Minimum window width in pixels
+constexpr int MINIMUM_HEIGHT        = 300; ///< Minimum window height in pixels
+constexpr int ICON_SCALE            = 22;  ///< Status bar icon dimension in pixels
+constexpr int TOOLBAR_ICON_SIZE     = 24;  ///< Icon size in pixels for tool/status-bar buttons
+constexpr int TOOLBAR_BUTTON_MARGIN = 6; ///< Pixels added to the size hint for square tool buttons
+constexpr int PROGRESS_MAXIMUM      = 1000; ///< Maximum value for QProgressBar
+
+// ---- File limits ---------------------------------------------------------
+constexpr int NUM_RECENT_FILES = 5; ///< Number of entries in the recent files list
+
+// ---- SPARTA version requirement ------------------------------------------
+constexpr int MIN_SPARTA_VERSION =
+    20260704; ///< Minimum SPARTA version (4 July 2026) as YYYYMMDD format number
+inline const QString MIN_SPARTA_VERSION_STR =
+    QStringLiteral("4 Jul 2026"); ///< Minimum SPARTA version (4 July 2026) as string
+
+// ---- Buffer thresholds ---------------------------------------------------
+constexpr double BUFFER_WARNING_THRESHOLD = 0.333; ///< Warn when capture buffer exceeds this
+constexpr int THERMO_SUGGEST_MULTIPLIER   = 5;     ///< Multiplier for thermo interval suggestion
+
+// ---- Preferences dialog --------------------------------------------------
+constexpr int PREFERENCES_WIDTH  = 700; ///< Preferences dialog default width in pixels
+constexpr int PREFERENCES_HEIGHT = 500; ///< Preferences dialog default height in pixels
+
+// ---- Update intervals (milliseconds) -------------------------------------
+constexpr int DATA_UPDATE_INTERVAL_MIN      = 1;    ///< Min log/data update interval
+constexpr int DATA_UPDATE_INTERVAL_MAX      = 1000; ///< Max log/data update interval
+constexpr int DATA_UPDATE_INTERVAL_DEFAULT  = 10;   ///< Default log/data update interval
+constexpr int CHART_UPDATE_INTERVAL_MIN     = 1;    ///< Min chart update interval
+constexpr int CHART_UPDATE_INTERVAL_MAX     = 5000; ///< Max chart update interval
+constexpr int CHART_UPDATE_INTERVAL_DEFAULT = 500;  ///< Default chart update interval
+
+// ---- Chart dimension ranges and defaults (pixels) ------------------------
+constexpr int CHART_WIDTH_MIN        = 400;   ///< Min configurable chart width
+constexpr int CHART_WIDTH_MAX        = 40000; ///< Max configurable chart width
+constexpr int CHART_HEIGHT_MIN       = 300;   ///< Min configurable chart height
+constexpr int CHART_HEIGHT_MAX       = 30000; ///< Max configurable chart height
+constexpr int CHART_DEFAULT_WIDTH    = 640;   ///< Default chart width
+constexpr int CHART_DEFAULT_HEIGHT   = 480;   ///< Default chart height
+constexpr double CHART_YPAD_FRACTION = 0.05;  ///< Relative y-axis margin around the data range
+
+// ---- Chart post-processing dialog ----------------------------------------
+constexpr int POSTPROCESS_EXPR_WIDTH = 260; ///< Min width of the custom-function expression field
+
+// ---- Chart smoothing (Savitzky-Golay) ------------------------------------
+constexpr int SMOOTH_WINDOW_MIN     = 5;   ///< Min smoothing window size
+constexpr int SMOOTH_WINDOW_MAX     = 999; ///< Max smoothing window size
+constexpr int SMOOTH_WINDOW_DEFAULT = 10;  ///< Default smoothing window size
+constexpr int SMOOTH_ORDER_MIN      = 1;   ///< Min smoothing polynomial order
+constexpr int SMOOTH_ORDER_MAX      = 20;  ///< Max smoothing polynomial order
+constexpr int SMOOTH_ORDER_DEFAULT  = 4;   ///< Default smoothing polynomial order
+
+// ---- Auto-completion -----------------------------------------------------
+constexpr int COMPLETION_CHARS_MIN = 1;  ///< Min characters before auto-completion triggers
+constexpr int COMPLETION_CHARS_MAX = 32; ///< Max characters before auto-completion triggers
+
+// ---- Inactive (grayed out) icons -----------------------------------------
+/** Gray level that the pixels of an inactive icon are faded towards */
+constexpr int GRAYSCALE_MIDPOINT = 145;
+/** Fraction of its contrast that an inactive icon keeps; 1.0 desaturates only */
+constexpr double GRAYSCALE_CONTRAST = 0.4;
+
+// ---- Movie frame import --------------------------------------------------
+constexpr int MOVIE_PROBE_TIMEOUT = 15000; ///< Timeout in milliseconds for an ffprobe run
+constexpr int MOVIE_WARN_FRAMES   = 1000;  ///< Warn when extracting more frames than this
+/** Warn when the extracted frames are estimated to need more than this many bytes */
+constexpr qint64 MOVIE_WARN_BYTES = 1024LL * 1024LL * 1024LL;
+/** Warn when the estimated size exceeds this fraction of the free space on the temporary volume */
+constexpr double MOVIE_WARN_DISKFRAC = 0.9;
+
+// ---- Resource paths ------------------------------------------------------
+/** path to SPARTA-GUI Window Icon resource */
+inline const QString MAIN_ICON = QStringLiteral(":/icons/sparta-gui-icon-128x128.png");
+/** path to SPARTA Icon resource */
+inline const QString SPARTA_ICON = QStringLiteral(":/icons/sparta-icon-128x128.png");
+
+// ---- Restart file inspection ----------------------------------------------
+/** restart files larger than this (bytes) prompt a memory-use warning */
+constexpr qint64 INSPECT_WARN_SIZE = 262144000LL;
+/** divisor turning a restart file size into an estimated RAM demand in GB */
+constexpr double INSPECT_GB_PER_BYTE = 134217728.0;
+
+// ---- Fixed RNG seeds for SPARTA commands ----------------------------------
+/** seed for the create_atoms command placing the temporary molecule */
+constexpr int CREATE_ATOMS_SEED = 312944;
+/** seed for the dump image ssao keyword */
+constexpr int SSAO_SEED = 453983;
+
+// ---- Documentation ---------------------------------------------------------
+/** base URL of the SPARTA online documentation */
+inline const QString DOCS_URL = QStringLiteral("https://sparta.github.io");
+
+// ---- Charts ----------------------------------------------------------------
+/** default chart title template; %f is replaced with the input file name */
+inline const QString CHART_TITLE_DEFAULT = QStringLiteral("Thermo: %f");
+
+// ---- Status messages -----------------------------------------------------
+/** status string when SPARTA-GUI is ready */
+inline const QString STATUS_READY = QStringLiteral("Ready.");
+/** CPU utilization status label text when no simulation is running */
+inline const QString STATUS_ZERO_CPU = QStringLiteral("   0%CPU");
+
+} // namespace Cfg
+
+/**
+ * @brief Centralized QSettings key and group names
+ *
+ * One named constant per persisted QSettings key so a typo becomes a compile
+ * error instead of a silently mismatched (and therefore lost) setting.  The
+ * string value of each constant must match the original literal exactly.
+ * Like @ref Cfg, the namespace name is kept short for direct @c Keys::NAME use.
+ */
+namespace Keys {
+
+// The settings-key constants below are intentionally self-describing -- each
+// constant name mirrors its string value -- so they are excluded from the
+// generated API docs by the conditional section below instead of carrying
+// redundant per-member documentation comments. See the namespace brief above.
+/// @cond
+
+// ---- groups (QSettings::beginGroup) --------------------------------------
+inline const QString GROUP_CHARTS   = QStringLiteral("charts");
+inline const QString GROUP_REFORMAT = QStringLiteral("reformat");
+inline const QString GROUP_SNAPSHOT = QStringLiteral("snapshot");
+inline const QString GROUP_TUTORIAL = QStringLiteral("tutorial");
+
+// ---- keys ----------------------------------------------------------------
+inline const QString ACCELERATOR  = QStringLiteral("accelerator");
+inline const QString ALLFAMILY    = QStringLiteral("allfamily");
+inline const QString ALLSIZE      = QStringLiteral("allsize");
+inline const QString ANTIALIAS    = QStringLiteral("antialias");
+inline const QString AUTOBOND     = QStringLiteral("autobond");
+inline const QString AUTOMATIC    = QStringLiteral("automatic");
+inline const QString AUTOSAVE     = QStringLiteral("autosave");
+inline const QString AXES         = QStringLiteral("axes");
+inline const QString AXESDIAM     = QStringLiteral("axesdiam");
+inline const QString AXESLEN      = QStringLiteral("axeslen");
+inline const QString BACKCOLOR    = QStringLiteral("backcolor");
+inline const QString BACKCOLOR2   = QStringLiteral("backcolor2");
+inline const QString USEGRADIENT  = QStringLiteral("usegradient");
+inline const QString BONDCOLOR    = QStringLiteral("bondcolor");
+inline const QString BONDCUT      = QStringLiteral("bondcut");
+inline const QString BONDDIAM     = QStringLiteral("bonddiam");
+inline const QString BOX          = QStringLiteral("box");
+inline const QString BOXCOLOR     = QStringLiteral("boxcolor");
+inline const QString BOXDIAM      = QStringLiteral("boxdiam");
+inline const QString CHARTREPLACE = QStringLiteral("chartreplace");
+inline const QString CHARTX       = QStringLiteral("chartx");
+inline const QString CHARTY       = QStringLiteral("charty");
+inline const QString CITE         = QStringLiteral("cite");
+inline const QString COLOR        = QStringLiteral("color");
+inline const QString COLORMAP     = QStringLiteral("colormap");
+inline const QString BONDCOLORMAP = QStringLiteral("bondcolormap");
+inline const QString COMMAND      = QStringLiteral("command");
+inline const QString DIAMETER     = QStringLiteral("diameter");
+inline const QString ECHO         = QStringLiteral("echo");
+inline const QString GPUNEIGH     = QStringLiteral("gpuneigh");
+inline const QString GPUPAIRONLY  = QStringLiteral("gpupaironly");
+inline const QString GRID         = QStringLiteral("grid");
+inline const QString HROT         = QStringLiteral("hrot");
+inline const QString HTTPS_PROXY  = QStringLiteral("https_proxy");
+inline const QString ID           = QStringLiteral("id");
+inline const QString IMAGEREPLACE = QStringLiteral("imagereplace");
+inline const QString INTELPREC    = QStringLiteral("intelprec");
+inline const QString LOGREPLACE   = QStringLiteral("logreplace");
+inline const QString LOGX         = QStringLiteral("logx");
+inline const QString LOGY         = QStringLiteral("logy");
+inline const QString MAINX        = QStringLiteral("mainx");
+inline const QString MAINY        = QStringLiteral("mainy");
+inline const QString LEGEND       = QStringLiteral("legend");
+inline const QString MINORGRID    = QStringLiteral("minorgrid");
+inline const QString REFLABELBOX  = QStringLiteral("reflabelbox");
+inline const QString REFLABELDIST = QStringLiteral("reflabeldist");
+inline const QString REFLABELSIZE = QStringLiteral("reflabelsize");
+inline const QString MONOFAMILY   = QStringLiteral("monofamily");
+inline const QString MONOSIZE     = QStringLiteral("monosize");
+inline const QString NAME         = QStringLiteral("name");
+inline const QString NTHREADS     = QStringLiteral("nthreads");
+inline const QString PLUGIN_PATH  = QStringLiteral("plugin_path");
+inline const QString RAWBRUSH     = QStringLiteral("rawbrush");
+inline const QString RECENT       = QStringLiteral("recent");
+inline const QString RETURN       = QStringLiteral("return");
+inline const QString SHINYSTYLE   = QStringLiteral("shinystyle");
+inline const QString SMOOTHBRUSH  = QStringLiteral("smoothbrush");
+inline const QString SMOOTHCHOICE = QStringLiteral("smoothchoice");
+inline const QString SMOOTHORDER  = QStringLiteral("smoothorder");
+inline const QString SMOOTHWINDOW = QStringLiteral("smoothwindow");
+inline const QString SOLUTION     = QStringLiteral("solution");
+inline const QString SSAO         = QStringLiteral("ssao");
+inline const QString TITLE        = QStringLiteral("title");
+inline const QString TYPE         = QStringLiteral("type");
+inline const QString UPDCHART     = QStringLiteral("updchart");
+inline const QString UPDFREQ      = QStringLiteral("updfreq");
+inline const QString VDWSTYLE     = QStringLiteral("vdwstyle");
+inline const QString VIEWCHART    = QStringLiteral("viewchart");
+inline const QString VIEWLOG      = QStringLiteral("viewlog");
+inline const QString VIEWSLIDE    = QStringLiteral("viewslide");
+inline const QString VROT         = QStringLiteral("vrot");
+inline const QString WEBPAGE      = QStringLiteral("webpage");
+inline const QString XSIZE        = QStringLiteral("xsize");
+inline const QString YSIZE        = QStringLiteral("ysize");
+inline const QString ZOOM         = QStringLiteral("zoom");
+/// @endcond
+
+} // namespace Keys
+
+#endif // CONSTANTS_H
+
+// Local Variables:
+// c-basic-offset: 4
+// End:

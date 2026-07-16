@@ -1,0 +1,45 @@
+SPARTA-GUI universal binaries for macOS (arm64/x86_64)
+======================================================
+
+This package provides a universal binary of SPARTA-GUI that should run on
+macOS systems running running macOS version 11 (Big Sur) or newer.  Note
+that this version of the SPARTA-GUI package does not contain SPARTA itself.
+It is meant to be used by people that compile their own version of SPARTA
+and then tell SPARTA-GUI to load the shared library of that version.  This
+is useful, in case this self-compiled SPARTA version contains packages not
+available in the standard SPARTA package.  For most people, however, the
+binary package available from the SPARTA release pages should be used.
+
+After copying the SPARTA-GUI folder into your Applications folder, please
+follow these steps:
+
+1. Open the Terminal app
+
+2. Identify the location of the libsparta.0.dylib file that you want to use
+   with SPARTA-GUI and yype the following command and press ENTER:
+
+   /Applications/SPARTA-GUI.app/Contents/MacOS/sparta-gui -p </path/to/>libsparta.0.dylib
+
+   This will open SPARTA-GUI for the first time and have it load the provided
+   SPARTA shared library. If the loading fails, and error dialog will be presented
+   and SPARTA-GUI will exit.  After loading the SPARTA shared library successfully
+   for the first time, SPARTA-GUI will store its location in the preferences
+   and use the same location automatically the next time it is launched.
+   The path can be changed at runtime in the preferences dialog. SPARTA-GUI
+   cannot launch without having immediate access to the SPARTA library.
+
+3. Depending on the size and resolution of your screen, the fonts may be too
+   small to read. This can be adjusted by setting the environment variable
+   QT_FONT_DPI. The default value would be 72, so to increase the fonts by a
+   third, one can add to the .zprofile file the line
+
+   export QT_FONT_DPI=96
+
+4. Give permission to execute SPARTA-GUI
+
+   MacOS will possibly block the initial run of SPARTA-GUI, since it was
+   downloaded from the internet and is missing a known signature from an
+   identified developer. Go to "Settings" and search for "Security settings".
+   It should display a message that an executable "sparta-gui" was blocked.
+   Press "Open anyway", which might prompt you for your admin credentials.
+   Afterwards "sparta-gui" should work as expected.

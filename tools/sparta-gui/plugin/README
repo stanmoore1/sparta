@@ -1,0 +1,5 @@
+This folder contains a copy of the dynamic SPARTA library loader plugin
+from the "examples/COUPLE/plugin" folder of the SPARTA distribution.
+
+This allows to call the SPARTA C-language library interface after
+loading it as a shared library at runtime.

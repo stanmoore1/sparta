@@ -1,0 +1,33 @@
+id: org.sparta.sparta-gui
+runtime: org.kde.Platform
+runtime-version: "6.10"
+sdk: org.kde.Sdk
+command: sparta-gui
+finish-args:
+  - --share=ipc
+  - --device=dri
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --filesystem=host
+  - --share=network
+build-options:
+  build-args:
+    - --share=network
+rename-icon: sparta-gui
+rename-desktop-file: sparta-gui.desktop
+rename-appdata-file: sparta-gui.appdata.xml
+rename-mime-file: sparta-input.xml
+modules:
+  - name: sparta-gui
+    buildsystem: cmake-ninja
+    builddir: true
+    config-opts:
+      - -D SPARTA_GUI_USE_PLUGIN=yes
+      - -D BUILD_DOC=no
+      - -D CMAKE_CXX_COMPILER=g++
+      - -D CMAKE_C_COMPILER=gcc
+      - -D CMAKE_BUILD_TYPE=Release
+    sources:
+      - type: git
+        url: https://github.com/akohlmey/sparta-gui.git
+        branch: main

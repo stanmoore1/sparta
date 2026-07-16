@@ -1,0 +1,336 @@
+********
+Overview
+********
+
+SPARTA-GUI is built using C++17 and the Qt Framework (Qt 6.2+).  The
+application follows object-oriented design principles with separation of
+concerns between different components:
+
+- **Editor Components**: Handle text editing, syntax highlighting, and auto-completion
+- **SPARTA Interface**: Wraps the SPARTA C library API
+- **Visualization**: Displays images, charts, and simulation output
+- **GUI Framework**: Main window, dialogs, and preferences
+
+==================
+ SPARTA Interface
+==================
+
+SPARTA-GUI can operate in two modes: **Plugin Mode** and **Linked
+Mode**.  The mode is controlled by the
+``-D SPARTA_GUI_USE_PLUGIN=(ON|OFF)`` CMake configuration option.
+
+**Plugin Mode** (default)
+  SPARTA is loaded dynamically at runtime from a shared library file
+  (.so, .dll, .dylib).  This allows using different SPARTA builds with
+  different compilation settings and different SPARTA versions without
+  recompiling the GUI. The library loading is handled in
+  :cpp:class:`SpartaWrapper` using platform-specific dynamic loading
+  functions (``dlopen()`` on Unix/Linux/macOS, ``LoadLibrary()`` on
+  Windows).  The path to the shared library file is auto-detected or
+  configured via command line or preferences.
+
+**Linked Mode**
+  The SPARTA library is linked at compile time.  Used by default when
+  building SPARTA-GUI as part of a SPARTA CMake build with
+  ``-D BUILD_SPARTA_GUI=on``.  For standalone builds, the
+  ``-D SPARTA_SOURCE_DIR=<path to SPARTA' src folder>`` and
+  ``-D SPARTA_LIBRARY=<path to SPARTA shared or static library file>``
+  settings are also required when configuring with CMake.  It may be
+  necessary to adjust environment variables to find shared libraries
+  (``LD_LIBRARY_PATH`` on Linux, ``DYLD_LIBRARY_PATH`` on macOS, or
+  ``PATH`` on Windows) when linked to a shared library.
+
+================
+ Qt Integration
+================
+
+SPARTA-GUI makes extensive use of Qt features:
+
+**Signals and Slots**
+  Used for inter-component communication, especially between GUI
+  components and background threads.
+
+**Qt Resource System**
+  Icons and resources embedded via ``resources/spartagui.qrc``.  The icons
+  are SVG and are rendered through the Qt6 Svg module (``Qt6::Svg``).
+
+**Qt Models**
+  Used for data display in various viewers and inspectors.
+
+SPARTA-GUI requires the Qt application development and GUI framework
+version 6.2 or later, including the Widgets, Network, and Svg modules.
+See the `Qt Documentation <https://doc.qt.io/>`_ for more details.
+
+------------------
+
+************
+Architecture
+************
+
+=================
+ Main Components
+=================
+
+The application architecture consists of several key components organized into
+functional groups:
+
+Main Window
+-----------
+
+**SpartaGui (spartagui.h/.cpp)**
+  The main window class that coordinates all other components. It
+  manages the editor, handles file operations, controls SPARTA
+  execution, and manages the overall application state. This is the
+  central hub of the application that integrates all other components.
+  The UI is built programmatically in ``setupUi()``, which delegates
+  menu construction to ``createFileMenu()``, ``createEditMenu()``,
+  ``createRunMenu()``, ``createViewMenu()``, ``createTutorialMenu()``,
+  ``createAboutMenu()``, and the status bar to ``createStatusBar()``.
+  Plugin discovery and accelerator setup are handled by
+  ``setupPlugin()`` and ``setupAccelerators()``.
+  See :cpp:class:`SpartaGui`
+
+Editor Components
+-----------------
+
+**CodeEditor (codeeditor.h/.cpp)**
+  Custom text editor widget based on `QPlainTextEdit
+  <https://doc.qt.io/qt-6/qplaintextedit.html>`_, providing
+  SPARTA-specific features including syntax highlighting,
+  auto-completion, line numbers, and context-sensitive help. The main
+  editing surface for SPARTA input scripts.  See :cpp:class:`CodeEditor`
+
+**LineNumberArea (linenumberarea.h)**
+  Widget that displays line numbers in the left margin of the
+  CodeEditor.  Updates dynamically as text is added or removed.  See
+  :cpp:class:`LineNumberArea`
+
+**Highlighter (highlighter.h/.cpp)**
+  Syntax highlighter for SPARTA input scripts. Categorizes and colors
+  different types of commands, keywords, variables, and comments using
+  Qt's QSyntaxHighlighter framework.  See :cpp:class:`Highlighter`
+
+**FindAndReplace (findandreplace.h/.cpp)**
+  Dialog for searching and replacing text in the editor. Supports
+  case-sensitive search, wrap-around search, and whole-word matching
+  options.  See :cpp:class:`FindAndReplace`
+
+SPARTA Interface
+----------------
+
+**SpartaWrapper (spartawrapper.h/.cpp)**
+  C++ wrapper around the SPARTA C library interface. Provides a clean
+  C++ API and handles dynamic library loading in plugin mode. Manages
+  SPARTA initialization, command execution, and error handling.  See
+  :cpp:class:`SpartaWrapper`
+
+**SpartaRunner (spartarunner.h)**
+  Worker thread for executing SPARTA simulations without blocking the
+  GUI.  Uses Qt's threading facilities to run simulations in the
+  background, allowing the UI to remain responsive during long
+  calculations.  See :cpp:class:`SpartaRunner`
+
+Visualization Components
+------------------------
+
+**ImageViewer (imageviewer.h/.cpp)**
+  Dialog for viewing and manipulating SPARTA snapshot images created by
+  the ``dump image`` command.  Supports interactive control of
+  visualization parameters such as zoom, rotation, atom size, coloring,
+  and rendering options.  Changes can be applied to regenerate the image
+  using the SPARTA library interface.  See :cpp:class:`ImageViewer`.
+  This uses two internal helper classes:
+
+  - **ImageInfo** - Stores settings for displaying graphics from a SPARTA
+    compute or fix in snapshot images.
+  - **RegionInfo** - Stores settings for displaying a region in snapshot images.
+
+**ChartWindow (chartviewer.h/.cpp)**
+  Window for displaying thermodynamic data as charts.  Supports line plots
+  and multiple data series.  See :cpp:class:`ChartWindow`
+
+**ChartViewer (chartviewer.h/.cpp)**
+  Custom chart view widget that provides interactive features like zooming,
+  smoothing, and panning for data visualization.  ChartViewer owns neutral
+  ``PlotSeries`` data objects and renders them with :cpp:class:`PlotWidget`.
+  See :cpp:class:`ChartViewer`.
+
+**PlotWidget (plotwidget.h/.cpp)**
+  Native ``QWidget`` + ``QPainter`` 2D line/scatter chart renderer.  It is
+  the only chart backend and depends only on Qt Widgets -- no Qt Charts, Qt
+  Graphs, or QML.  Axis-layout math (nice ticks, label formatting) lives in
+  the Qt-free ``plotaxismath`` helpers.  See :cpp:class:`PlotWidget`.
+
+**SlideShow (slideshow.h/.cpp)**
+  Dialog for viewing multiple images as a slideshow or animation with
+  navigation controls.  Supports converting an animation to a movie file
+  when `FFmpeg <https://ffmpeg.org/>`_ or `ImageMagick
+  <https://imagemagick.org/>`_ is available.  See :cpp:class:`SlideShow`
+
+**RangeSlider (thirdparty/rangeslider/rangeslider.h/.cpp)**
+  Custom slider widget with two handles for selecting a range of
+  values. This is code written by Hoyoung Lee and distributed under the
+  CeCILL-A license as circulated by CEA, CNRS and INRIA at the following
+  URL: "http://www.cecill.info".  Used in :cpp:class:`ChartWindow` for
+  selecting x- and y-direction plot ranges.  See :cpp:class:`RangeSlider`
+
+**RangeBandSlider (rangebandslider.h/.cpp)**
+  Horizontal ``QSlider`` that paints an active sub-range on its track,
+  distinct from the third-party :cpp:class:`RangeSlider`.  See
+  :cpp:class:`RangeBandSlider`
+
+Dialog and Utility Components
+-----------------------------
+
+**LogWindow (logwindow.h/.cpp)**
+  Window displaying captured output from SPARTA simulations.  Updates in
+  real-time as the simulation progresses and highlights warning and
+  error messages.  Provides navigation to jump between warnings.  See
+  :cpp:class:`LogWindow`
+
+**Preferences (preferences.h/.cpp)**
+  Dialog for configuring application settings including accelerator
+  packages, editor appearance, snapshot settings, and chart
+  preferences. Settings are made persistent across SPARTA-GUI sessions
+  using the `QSettings class <https://doc.qt.io/qt-6/qsettings.html>`_.
+  See :cpp:class:`Preferences`.  The dialog is organized into five tabs,
+  each implemented as a separate widget class:
+
+  - :cpp:class:`GeneralTab` - General settings (SPARTA library path, fonts, etc.)
+  - :cpp:class:`AcceleratorTab` - SPARTA accelerator package configuration
+  - :cpp:class:`SnapshotTab` - Snapshot image viewer defaults
+  - :cpp:class:`EditorTab` - Editor appearance and behavior settings
+  - :cpp:class:`ChartsTab` - Chart viewer display settings
+
+**SetVariables (setvariables.h/.cpp)**
+  Dialog for editing SPARTA index-style variable definitions. Allows
+  users to define name-value pairs that are substituted in input scripts
+  using ``${varname}`` syntax.  See :cpp:class:`SetVariables`
+
+**FileViewer (fileviewer.h/.cpp)**
+  Read-only text viewer dialog for displaying file contents. Used for
+  viewing auxiliary files without allowing modifications.  See
+  :cpp:class:`FileViewer`
+
+**TutorialWizard (tutorialwizard.h/.cpp)**
+  Wizard dialog for interactive SPARTA tutorials. Guides users through
+  setting up tutorial directories and files, providing a structured
+  learning experience.  See :cpp:class:`TutorialWizard`
+
+**AboutDialog (aboutdialog.h/.cpp)**
+  Custom About dialog that displays version information, SPARTA
+  configuration details, and available styles in two scrollable text
+  areas.  The dialog automatically scrolls down when the content exceeds
+  the visible area, pauses at the bottom, and then returns back to the
+  top.  See :cpp:class:`AboutDialog`
+
+Support Components
+------------------
+
+**URLDownloader (urldownloader.h/.cpp)**
+  Utility class for downloading files over HTTPS.  Provides a
+  synchronous download interface using ``QNetworkAccessManager`` with
+  ``QEventLoop``.  Respects the ``https_proxy`` preference setting and
+  the ``https_proxy`` environment variable.  After downloading a file,
+  it checks for a ``SHA256SUMS`` file in the same remote directory and
+  verifies the SHA-256 checksum if available.
+  See :cpp:class:`URLDownloader`
+
+**StdCapture (stdcapture.h/.cpp)**
+  Utility class that captures stdout output from SPARTA.  Redirects
+  the C-level stdout file descriptor through a pipe to allow capturing
+  output from the SPARTA library without blocking the GUI thread.
+  See :cpp:class:`StdCapture`
+
+**FlagWarnings (flagwarnings.h/.cpp)**
+  Syntax highlighter for SPARTA warning and error messages in log
+  output.  Detects and highlights WARNING/ERROR lines and URLs for
+  documentation links.  Maintains a count of warnings and updates a
+  summary label.  See :cpp:class:`FlagWarnings`
+
+**QHline (qaddon.h/.cpp)**
+  Simple horizontal line widget for visual separation in dialogs and
+  forms.  See :cpp:class:`QHline`
+
+**QColorCompleter (qaddon.h/.cpp)**
+  Auto-completer for color name inputs, suggesting valid Qt color names
+  as the user types.  See :cpp:class:`QColorCompleter`
+
+**QColorValidator (qaddon.h/.cpp)**
+  Validator for color input fields, ensuring they contain valid color
+  names or hex color codes.  See :cpp:class:`QColorValidator`
+
+**VerticalLabel (qaddon.h/.cpp)**
+  Label widget that renders text rotated 90 degrees for vertical
+  display.  See :cpp:class:`VerticalLabel`
+
+Helper Functions
+----------------
+
+The :ref:`helpers module <helper_functions>` provides utility functions
+used throughout the application:
+
+- Date comparison (``dateCompare`` for version comparisons)
+- Command-line parsing (``splitLine`` with quote handling)
+- System utilities (``hasExe`` for executable detection)
+- UI utilities (``isLightTheme`` for theme detection,
+  ``showUnsavedChangesDialog`` for standardized unsaved-changes prompts)
+- Menu construction (``addMenuAction`` builds a menu action with an
+  optional icon and a ``triggered()`` handler in one call; used to build
+  the context and tool menus across the widget classes)
+- Stdout management (``silenceStdout``/``restoreStdout`` for suppressing
+  SPARTA library output, with the :cpp:class:`StdoutSilencer` RAII guard
+  for scope-based silencing, coordinated with :cpp:class:`StdCapture` via
+  ``isStdoutSilenced`` and ``notifyCaptureState``)
+
+**Constants (constants.h)**
+  The ``Cfg`` namespace centralizes application-wide magic numbers and
+  repeated string literals, such as default buffer sizes, minimum window
+  dimensions, file limits, resource paths, and version constants, while
+  the ``Keys`` namespace holds every persisted ``QSettings`` key and group
+  name.  Using named constants avoids typos and makes maintenance easier.
+
+===========
+ Data Flow
+===========
+
+1. **User Input**: User edits SPARTA input in CodeEditor with syntax highlighting
+2. **Execution Request**: User triggers execution via menu or button
+3. **Preparation**: SpartaGui creates/configures SpartaWrapper and prepares variables
+4. **Threading**: Commands sent to SpartaRunner thread to avoid UI blocking
+5. **Execution**: SpartaRunner executes commands via SpartaWrapper
+6. **Output Capture**: Output captured via StdCapture for display
+7. **Visualization**: Results displayed in LogWindow, ImageViewer, or ChartWindow
+8. **Completion**: UI updated when execution completes, progress indicators cleared
+
+===============================
+ Settings and State Management
+===============================
+
+The application uses Qt's QSettings mechanism to persist:
+
+- Recent files list
+- Window geometry and state
+- Editor preferences (font, colors)
+- Accelerator settings
+- SPARTA plugin path
+- Tutorial preferences
+
+Settings are stored in platform-specific locations (the application name
+includes the Qt major version, e.g. ``SPARTA-GUI (QT6)``):
+
+- Linux: ``~/.config/The SPARTA Developers/SPARTA-GUI (QT6).conf``
+- macOS: ``~/Library/Preferences/org.sparta.SPARTA-GUI (QT6).plist``
+- Windows: Registry under ``HKEY_CURRENT_USER\Software\The SPARTA Developers\SPARTA-GUI (QT6)``
+
+=================
+ Threading Model
+=================
+
+The application uses Qt's event-driven architecture with threading:
+
+- **Main Thread**: Handles all UI operations and user interactions
+- **SPARTA Thread**: SpartaRunner executes SPARTA in a separate QThread
+- **Communication**: Signals/slots for thread-safe communication between threads
+
+This design keeps the UI responsive even during long-running simulations.

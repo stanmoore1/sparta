@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Categories=Education;Science
+MimeType=text/x-application-sparta
+Exec=sparta-gui %f
+Name=SPARTA-GUI
+Terminal=false
+GenericName=SPARTA MD Simulator GUI
+Keywords=MD Simulation;SPARTA;Molecular Dynamics;N-Body
+Icon=sparta-gui
