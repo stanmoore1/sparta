@@ -71,6 +71,16 @@
 #      -tolerance <float>
 #        column difference > tolerance = fail, else success
 #        default = 1.0e-7
+#      -column_tolerance <"Name1:tol1,Name2:tol2,...">
+#        per-column tolerance overrides applied by column name; a column not
+#        listed uses the default -tolerance value
+#        this is for comparing runs that are not bit-for-bit reproducible, e.g.
+#        a threaded (KOKKOS OpenMP) or GPU (KOKKOS CUDA) backend where the RNG
+#        draw order changes: keep the default tolerance tight and loosen only
+#        the few columns whose statistical spread is large (surface/reaction
+#        counts, per-cell reductions). A -custom options file may extend the
+#        dict per test, e.g. column_tolerance["Ncoll"] = 2.0
+#        default = none (every column uses -tolerance)
 #      -logread <dir module>
 #        path for where to find the log-file reading Python module
 #        default = . log (log.py in this dir or somewhere Python can find it)
@@ -116,6 +126,13 @@ usage = """
       -tolerance <float>
         column difference > tolerance = fail, else success
         default = 1.0e-7
+      -column_tolerance <"Name1:tol1,Name2:tol2,...">
+        per-column tolerance overrides applied by column name; columns not
+        listed use the default -tolerance. Intended for non-bit-for-bit
+        backends (KOKKOS OpenMP threads or CUDA GPU) where a few high-variance
+        columns need loosening while the rest stay tight. A -custom options
+        file may extend it per test via column_tolerance["Name"] = tol
+        default = none
       -logread <dir module>
         path for where to find the log-file reading Python module
         default = . log (log.py in this dir or somewhere Python can find it)
@@ -144,6 +161,12 @@ custom_file = "options"
 default_error_norm = "max"
 default_relative_error = False
 default_tolerance = 1.e-7
+# per-column tolerance overrides: {column_name: tolerance}. default_column_tolerance
+# is set from the -column_tolerance command-line option and applies to every test;
+# column_tolerance is the effective dict for the current test (a copy of the
+# default that a -custom options file may extend with test-specific columns).
+default_column_tolerance = {}
+column_tolerance = {}
 logread = [".","log"]
 
 #====================================================
@@ -354,6 +377,10 @@ def compare(name,colA,colB):
   nsame_rows = 0
   global nrows
   global not_same_rows
+  # per-column tolerance overrides the default tolerance for this named column
+  # (e.g. loosen a high-variance column that cannot be reproduced under
+  # multithreading while keeping the default tolerance tight for all others)
+  col_tol = column_tolerance.get(name,tolerance)
   n = len(colB)
   nrows = n
   if (len(colA) != len(colB)):
@@ -366,7 +393,7 @@ def compare(name,colA,colB):
     norm2 += vB*vB
     normmax = max(normmax,abs(vB))
     dv = vA-vB
-    if (abs(dv) > tolerance):
+    if (abs(dv) > col_tol):
       not_same_rows.add(i)
     else:
       nsame_rows += 1
@@ -390,32 +417,33 @@ def compare(name,colA,colB):
   else:
     raise Exception("Invalid error norm")
 
-  if (relative_error and norm > tolerance):
+  if (relative_error and norm > col_tol):
     err /= norm
     norm = 1.0
 
-  if (norm > tolerance) :
+  if (norm > col_tol) :
     msg = "{0:7s}  error {1:4} wrt norm {2:7}\n".format(name,err,norm)
   else :
     msg = "{0:7s}           error {1:4}\n"               .format(name,err)
   pass_flag = False
   if min_same_rows >= 0:
-    pass_flag = err < tolerance or nsame_rows >= min_same_rows or nsame_rows == nrows;
+    pass_flag = err < col_tol or nsame_rows >= min_same_rows or nsame_rows == nrows;
   else:
-    pass_flag = err < tolerance
+    pass_flag = err < col_tol
   return [pass_flag,msg];
 
 #====================================================
 ### run and time tests
 #====================================================
 def execute(test):
-  global tolerance,error_norm,relative_error,custom_flag
+  global tolerance,error_norm,relative_error,custom_flag,column_tolerance
   global launch,descriptors
   msg = ""
   os.chdir(test[0])
   tolerance = default_tolerance
   error_norm = default_error_norm
   relative_error = default_relative_error
+  column_tolerance = dict(default_column_tolerance)
   launch = [default_lmps]
   descriptors = [default_descriptor]
   options = custom_file+"."+test[1]
@@ -459,7 +487,7 @@ def init() :
   cnt = 4
   keywords = ["-auto-rebless","-min-same-rows","-exclude","-only",
               "-customonly","-customtest","-custom","-error_norm",
-              "-relative_error","-tolerance","-logread"]
+              "-relative_error","-tolerance","-column_tolerance","-logread"]
   while (cnt < len(sys.argv)):
     option = sys.argv[cnt]
     if ("-auto-rebless" == option):
@@ -522,6 +550,13 @@ def init() :
       cnt += 2
     elif ("-tolerance" == option):
       default_tolerance = float(sys.argv[cnt+1])
+      cnt += 2
+    elif ("-column_tolerance" == option):
+      # format: "Name1:tol1,Name2:tol2,..." e.g. "Nscoll:0.9,Nreact:0.9"
+      for pair in sys.argv[cnt+1].split(","):
+        if not pair: continue
+        cname,ctol = pair.rsplit(":",1)
+        default_column_tolerance[cname] = float(ctol)
       cnt += 2
     elif ("-logread" == option):
       logread = [os.path.abspath(sys.argv[cnt+1]),sys.argv[cnt+2]]

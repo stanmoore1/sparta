@@ -1,0 +1,8 @@
+# Per-column override for the threaded/GPU KOKKOS regression job (read only with
+# -custom omp_options). c_3c_reduced[*] are per-cell mean collision-count
+# reductions that are uncorrelated between thread/GPU schedulings; guard them
+# loosely. np, ncoll, temperature and the c_3f_reduced[*] columns stay at the
+# sane global defaults.
+column_tolerance["c_3c_reduced[1]"] = 3.0
+column_tolerance["c_3c_reduced[2]"] = 3.0
+column_tolerance["c_3c_reduced[3]"] = 3.0

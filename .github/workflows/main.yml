@@ -144,24 +144,46 @@ jobs:
         cd build
         ctest --output-on-failure -R 'python.library'
 
-  # Exercise the KOKKOS OpenMP backend with real multithreading (2 threads).
+  # Run the regression tests under the KOKKOS OpenMP backend with 2 threads.
   #
-  # The Serial-backend KOKKOS job (SPARTA_KOKKOS_EXACT) already checks that
-  # KOKKOS reproduces the non-KOKKOS results numerically, but it is
-  # single-threaded. Under multiple threads the RNG draw order changes, so the
-  # stochastic thermo output no longer matches the serial gold logs to a tight
-  # tolerance -- a numeric comparison would be too loose to be meaningful or
-  # would be flaky. Instead this job runs each deck under the threaded binary
-  # and checks it completes cleanly (no crash, error, NaN, or deadlock), which
-  # is what multithreading actually stresses.
+  # The Serial-backend KOKKOS job (SPARTA_KOKKOS_EXACT) reproduces the non-KOKKOS
+  # results bit-for-bit, but it is single-threaded. This job exercises real
+  # multithreading, which the serial job cannot -- catching data races and
+  # non-deterministic reductions in the KOKKOS kernels. Under multiple threads
+  # the RNG draw order changes, so the stochastic thermo columns no longer match
+  # the serial gold logs bit-for-bit.
   #
-  # The deck list is a curated set of threading-stable kernels (free-molecular,
-  # collisions, static surfaces, grid flow). Reacting-collision and moving-
-  # surface decks are excluded: they trip pre-existing, thread-scheduling-
-  # dependent robustness issues in the KOKKOS kernels (collision-buffer overflow
-  # needing collide_modify react/retry; a moving-surface grid-check race), which
-  # would make the job flaky. Those are known limitations of threaded KOKKOS,
-  # not regressions in this suite.
+  # Rather than loosen the tolerance for whole tests, comparison uses a sane
+  # default relative tolerance (L1 norm, 25%) that covers most columns, plus a
+  # small set of per-column overrides (regression.py -column_tolerance) applied
+  # by column name across all tests. Each value has buffer above the observed
+  # spread so runs do not intermittently fail:
+  #   - 25% default: conserved/averaged columns (np, temperature, grid counts)
+  #     and the various per-collision computes, which stay well within it
+  #   - 50%: the semi-stochastic bulk collision counts (Nattempt, Ncoll)
+  #   - 2.0 (guard only): the low-count integer surface/reaction columns and
+  #     the surface-energy reduce (Nscoll, Nsreact, Nreact, Nscheck, c_echem)
+  #     whose relative spread reaches ~100%
+  # Only two decks are genuine outliers and carry an omp_options.<test> file:
+  # a nearly collisionless surface deck whose Ncoll is uncorrelated
+  # (surf_react_heatflux) and a per-cell collision-count reduce (mfp_mct).
+  #
+  # The same column tolerances also fit a KOKKOS GPU (CUDA) regression job,
+  # which has a similar (slightly larger) statistical spread; a GPU job would
+  # reuse these driver args with GPU KOKKOS flags (e.g. -k on g 1). The
+  # '-custom omp_options' prefix is unique to the parallel-backend jobs, so the
+  # bit-for-bit CPU and Serial-KOKKOS jobs (which pass neither -custom nor
+  # -column_tolerance) are unaffected and keep their 1e-7 tolerance.
+  #
+  # 'package kokkos react/retry yes' (via -pk) makes reacting-flow collisions
+  # retry allocation instead of aborting when the per-cell collision buffer
+  # overflows, which otherwise fails intermittently under threading.
+  #
+  # surf.slide, adapt.slide, adapt.rotate and adapt.static are excluded outright
+  # (ctest -E): fix move/surf and fix adapt + grid check have a thread-
+  # scheduling-dependent "particle in interior cell" race that aborts the run,
+  # which no tolerance can address. These are known limitations of threaded
+  # KOKKOS, not regressions here.
   kokkos-omp-threaded:
     runs-on: ubuntu-22.04
     steps:
@@ -175,21 +197,34 @@ jobs:
         mkdir build
         cd build
         cmake -C ../cmake/presets/kokkos_omp.cmake \
+          -DSPARTA_ENABLE_TESTING=ON \
+          -DSPARTA_KOKKOS_EXACT=ON \
           -DKokkos_ENABLE_OPENMP=ON \
           -DKokkos_ENABLE_SERIAL=ON \
           -DPKG_FFT=ON \
+          -DSPARTA_SPA_ARGS='-k on t 2 -sf kk -pk kokkos react/retry yes' \
+          -DSPARTA_DSMC_TESTING_DRIVER_ARGS='-error_norm L1 -relative_error True -tolerance 0.25 -column_tolerance Natt:0.5,Ncoll:0.5,Nscoll:2.0,Nsreact:2.0,Nreact:2.0,Nscheck:2.0,c_echem:2.0 -custom omp_options' \
           ../cmake
 
     - name: Build
       run: cd build; make -j4
 
-    - name: Threaded smoke test
+    - name: Test
+      env:
+        OMP_NUM_THREADS: 2
+        OMP_PROC_BIND: false
       run: |
-        python3 tools/testing/kokkos_threaded_smoke.py \
-          --sparta build/src/spa_kokkos_omp --threads 2 \
-          --skip stats,react,qk,tceqk,tally,piston,vanish,distributed \
-          examples/free examples/circle examples/step \
-          examples/sphere examples/collide
+        cd build
+        sudo rm /bin/sh
+        sudo ln -s /bin/bash /bin/sh
+        ctest --output-on-failure -j4 \
+          -E 'surf.slide|adapt.slide|adapt.rotate|adapt.static'
+
+    - uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: 'kokkos-omp-threaded-Artifacts'
+        path: 'build/examples/'
 
   # Measure regression + unit test line/branch coverage with gcov/gcovr and
   # publish the report as a build artifact to establish a coverage baseline.

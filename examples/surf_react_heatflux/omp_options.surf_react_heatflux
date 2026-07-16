@@ -1,0 +1,6 @@
+# Per-column override for the threaded/GPU KOKKOS regression job (read only with
+# -custom omp_options). This deck is nearly collisionless (surface-reaction
+# dominated), so its gas collision count Ncoll is essentially uncorrelated
+# between thread/GPU schedulings (spread ~150%); guard it loosely for this deck.
+# All other columns use the sane global defaults.
+column_tolerance["Ncoll"] = 3.0
