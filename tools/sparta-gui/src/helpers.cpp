@@ -412,7 +412,8 @@ bool isMovieFile(const QString &filename)
 bool isRestartFile(const QString &filename)
 {
     // SPARTA binary restart files start with this magic string
-    static const char magic[] = "LammpS RestartT";
+    // must match MAGIC_STRING in SPARTA's write_restart.cpp
+    static const char magic[] = "SpartA RestartT";
     char buffer[16]           = "               ";
     QFile file(filename);
     if (file.open(QIODevice::ReadOnly)) {

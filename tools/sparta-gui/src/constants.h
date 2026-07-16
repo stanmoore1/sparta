@@ -125,7 +125,7 @@ inline const QString DOCS_URL = QStringLiteral("https://sparta.github.io");
 
 // ---- Charts ----------------------------------------------------------------
 /** default chart title template; %f is replaced with the input file name */
-inline const QString CHART_TITLE_DEFAULT = QStringLiteral("Thermo: %f");
+inline const QString CHART_TITLE_DEFAULT = QStringLiteral("Stats: %f");
 
 // ---- Status messages -----------------------------------------------------
 /** status string when SPARTA-GUI is ready */

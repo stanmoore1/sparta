@@ -438,6 +438,11 @@ bool SpartaWrapper::configHasJpegSupport() const
     return SPAFN(config_has_jpeg_support)() != 0;
 }
 
+bool SpartaWrapper::configHasFfmpegSupport() const
+{
+    return SPAFN(config_has_ffmpeg_support)() != 0;
+}
+
 // GPU support in SPARTA comes via Kokkos; there is no separate
 // GPU-device detection in the library interface
 bool SpartaWrapper::hasGpuDevice() const

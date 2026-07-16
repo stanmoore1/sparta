@@ -330,6 +330,12 @@ public:
     [[nodiscard]] bool configHasJpegSupport() const;
 
     /**
+     * @brief Check if SPARTA was compiled with FFmpeg support (dump movie)
+     * @return true if FFmpeg support is available, false if not
+     */
+    [[nodiscard]] bool configHasFfmpegSupport() const;
+
+    /**
      * @brief Check if GPU device is available for GPU package
      * @return true if GPU device found, false otherwise
      */
