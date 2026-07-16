@@ -30,10 +30,9 @@ File
    - *Open Example* offers a submenu with the input scripts from the
      ``examples`` tree of the SPARTA distribution, organized by example
      folder.  Selecting an entry loads that input script and switches
-     the working directory to its folder.  The menu is built by scanning
-     the ``examples`` folder, which is located automatically relative to
-     the SPARTA shared library in use; the location can also be adjusted
-     in the *Preferences* dialog.
+     the working directory to its folder.  The menu is built by
+     scanning the ``examples`` folder of the SPARTA distribution the
+     loaded SPARTA library was built from.
    - *Save Input File* saves the current file; if the file name is ``*unknown*``
      a dialog will open to select a new file name
    - *Save Input File As* opens a dialog to select a new file name (and folder, if

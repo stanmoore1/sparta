@@ -81,7 +81,7 @@ displayed within a tab.
 .. .. |guiprefs5| image:: JPG/sparta-gui-prefs-charts.png
 ..    :width: 19%
 ..
-.. |guiprefs1|  |guiprefs2|  |guiprefs3|  |guiprefs4|  |guiprefs5|
+..    usage: put "|guiprefs1| ... |guiprefs5|" on its own line here
 
 General Settings
 ^^^^^^^^^^^^^^^^

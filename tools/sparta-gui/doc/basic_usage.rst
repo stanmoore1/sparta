@@ -76,7 +76,7 @@ either an empty buffer or the contents of the file used as argument.
 .. .. |gui-main2| image:: JPG/sparta-gui-dark.png
 ..    :width: 48%
 ..
-.. |gui-main1|  |gui-main2|
+..    usage: put "|gui-main1|  |gui-main2|" on its own line here
 
 There is the typical menu bar at the top, then the main editor buffer,
 and a status bar at the bottom.  The input script contents are shown

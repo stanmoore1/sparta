@@ -136,7 +136,7 @@ Visualization Components
 **ImageViewer (imageviewer.h/.cpp)**
   Dialog for viewing and manipulating SPARTA snapshot images created by
   the ``dump image`` command.  Supports interactive control of
-  visualization parameters such as zoom, rotation, atom size, coloring,
+  visualization parameters such as zoom, rotation, particle size, coloring,
   and rendering options.  Changes can be applied to regenerate the image
   using the SPARTA library interface.  The dialog state is collected in
   a ``DumpImageSettings`` struct (``src/dumpimage.h``) from which the

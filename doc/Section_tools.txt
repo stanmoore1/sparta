@@ -37,9 +37,16 @@ The dump, sdata, and olog tools are included in the SPARTA
 distribution in the tools/pizza directory, and are used by some of the
 scripts discussed below.
 
+The tools directory also contains SPARTA-GUI, a graphical desktop
+application for editing SPARTA input scripts and running, monitoring,
+and visualizing SPARTA simulations from within a single program.
+Since it is a larger package with its own build system and manual, it
+is described on the separate "SPARTA-GUI"_sparta_gui.html doc page.
+
 This is the list of tools included in the tools directory of the
 SPARTA distribution.  Each is described in more detail below.
 
+"sparta-gui"_sparta_gui.html - GUI to edit inputs and run, monitor, and visualize simulations
 "dump2cfg"_#dump2cfg - convert a particle dump file to CFG format
 "dump2xyz"_#dump2xyz - convert a particle dump file to XYZ format
 "grid_refine"_#gridrefine - refine a grid around a surface

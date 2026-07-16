@@ -117,7 +117,7 @@ those entries is chosen.
 .. .. |gui-popup2| image:: JPG/sparta-gui-popup-view.png
 ..    :width: 55%
 ..
-.. |gui-popup1|  |gui-popup2|
+..    usage: put "|gui-popup1|  |gui-popup2|" on its own line here
 
 If the word under the cursor is a file, then additionally the context
 menu has an entry to open the file in a read-only text viewer window.
@@ -160,7 +160,7 @@ visualization of the system in the restart.
 .. .. |inspect2| image:: JPG/sparta-gui-inspect-image.png
 ..    :width: 45%
 ..
-.. |inspect1|  |inspect2|
+..    usage: put "|inspect1|  |inspect2|" on its own line here
 
 .. admonition:: Large Restart Files
    :class: warning
