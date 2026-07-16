@@ -87,7 +87,8 @@ the snapshot images and the `dump image
 SPARTA itself.  To also enable the `dump movie
 <https://sparta.github.io/doc/dump_image.html>`_ command (SPARTA piping
 images directly into `FFmpeg <https://ffmpeg.org/>`_), additionally
-configure SPARTA with ``-D SPARTA_FFMPEG=yes``.  To enable the KOKKOS
+compile SPARTA with the ``SPARTA_FFMPEG`` define (e.g. by adding
+``-DSPARTA_FFMPEG`` to the compiler flags).  To enable the KOKKOS
 accelerator package (OpenMP threading, selectable in the SPARTA-GUI
 *Preferences*), add ``-D PKG_KOKKOS=ON`` and the appropriate Kokkos
 settings as described in the SPARTA manual.

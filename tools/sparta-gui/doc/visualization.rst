@@ -150,8 +150,8 @@ The **menu bar row** has:
      <https://sparta.github.io/doc/dump_image.html>`_ command instead,
      including *framerate* and *bitrate* `dump_modify
      <https://sparta.github.io/doc/dump_modify.html>`_ settings.  The
-     dump movie command requires a SPARTA library compiled with
-     ``-D SPARTA_FFMPEG=yes``.
+     dump movie command requires a SPARTA library compiled with the
+     ``SPARTA_FFMPEG`` define.
    - **Load Colors from JSON...** / **Save Colors to JSON...**: Load or
      save the current per-species color assignments from/to a JSON
      format file, so that a customized color assignment can be restored
@@ -618,8 +618,8 @@ used as an effective way to refine visualizations created with the
    As an alternative to exporting the slide show images to a movie
    (described below), SPARTA itself supports writing a movie directly
    with the `dump movie <https://sparta.github.io/doc/dump_image.html>`_
-   command when the SPARTA library was compiled with ``-D
-   SPARTA_FFMPEG=yes``.  In that case the images are piped directly
+   command when the SPARTA library was compiled with the
+   ``SPARTA_FFMPEG`` define.  In that case the images are piped directly
    into FFmpeg, and the frame rate and bit rate can be set with the
    *framerate* and *bitrate* keywords of the `dump_modify
    <https://sparta.github.io/doc/dump_modify.html>`_ command.
