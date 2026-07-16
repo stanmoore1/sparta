@@ -1,5 +1,5 @@
 // -*- c++ -*- /////////////////////////////////////////////////////////////////////////
-// SPARTA-GUI - A Graphical Tool to Learn and Explore the SPARTA MD Simulation Software
+// SPARTA-GUI - A Graphical Tool to Learn and Explore the SPARTA DSMC Simulation Software
 //
 // Copyright (c) 2023, 2024, 2025, 2026  Axel Kohlmeyer
 //
@@ -27,7 +27,6 @@
 #include "setvariables.h"
 #include "slideshow.h"
 #include "stdcapture.h"
-#include "tutorialwizard.h"
 #include "urldownloader.h"
 
 #include <QAction>
@@ -59,8 +58,6 @@
 #include <QTextStream>
 #include <QTimer>
 #include <QUrl>
-#include <QWizard>
-#include <QWizardPage>
 
 #include <algorithm>
 #include <cmath>
@@ -70,7 +67,6 @@
 #include <utility>
 
 #include "constants.h"
-#include "tutorials.h"
 
 namespace {
 
@@ -122,7 +118,6 @@ void SpartaGui::setupUi(QSettings &settings, QFont &allFont, QFont &monoFont)
     createEditMenu();
     createRunMenu();
     createViewMenu();
-    createTutorialMenu();
     createAboutMenu();
     setMenuBar(menubar);
 
@@ -270,49 +265,6 @@ void SpartaGui::createViewMenu()
                   &SpartaGui::viewVariables);
 }
 
-void SpartaGui::createTutorialMenu()
-{
-    auto *menu              = menubar->addMenu("&Tutorials");
-    const auto &collections = tutorialCollections();
-    for (int c = 0; c < collections.size(); ++c) {
-        const auto &coll = collections[c];
-        QString title    = QString("&%1: %2").arg(c + 1).arg(coll.name);
-        if (!coll.published) title += " (" + coll.status + ")";
-        auto *sub = menu->addMenu(QIcon(":/icons/tutorial-logo.png"), title);
-        // a planned collection has no tutorials yet: show it as a disabled entry
-        if (coll.count() == 0) {
-            sub->menuAction()->setEnabled(false);
-            continue;
-        }
-        for (int i = 0; i < coll.count(); ++i) {
-            QAction *action;
-            int ip1 = i + 1;
-            int dec = ip1 / 10;
-            if (i < 9) {
-                action =
-                    addMenuAction(sub, coll.logoFor(ip1),
-                                  QString("Tutorial  &%1: %2").arg(ip1).arg(coll.titles.value(i)),
-                                  "", [this, c, ip1]() {
-                                      startTutorial(c, ip1);
-                                  });
-            } else {
-                action = addMenuAction(sub, coll.logoFor(ip1),
-                                       QString("Tutorial %1&%2: %3")
-                                           .arg(dec)
-                                           .arg(ip1 - dec * 10)
-                                           .arg(coll.titles.value(i)),
-                                       "", [this, c, ip1]() {
-                                           startTutorial(c, ip1);
-                                       });
-            }
-
-            // Tutorials beyond the available count appear as a "coming attractions"
-            // teaser: their titles are visible but the entries cannot be launched yet.
-            if (i >= coll.available) action->setEnabled(false);
-        }
-    }
-}
-
 void SpartaGui::createAboutMenu()
 {
     auto *menu = menubar->addMenu("&About");
@@ -323,8 +275,6 @@ void SpartaGui::createAboutMenu()
                   &SpartaGui::howto);
     addMenuAction(menu, ":/icons/help-browser.svg", "SPARTA Online &Manual", "Ctrl+Shift+M",
                   &SpartaGui::manual);
-    addMenuAction(menu, ":/icons/tutorial-logo.png", "SPARTA &Tutorial Website", "Ctrl+Shift+T",
-                  &SpartaGui::tutorialWeb);
 
 #if defined(SPARTA_GUI_USE_PLUGIN)
     menu->addSeparator();
@@ -631,7 +581,7 @@ SpartaGui::SpartaGui(QWidget *parent, const QString &filename, int width, int he
     capturer(new StdCapture), status(nullptr), cpuuse(nullptr), lastCpuBucket(-1),
     logwindow(nullptr), imagewindow(nullptr), chartwindow(nullptr), slideshow(nullptr),
     logupdater(nullptr), dirstatus(nullptr), progress(nullptr), prefdialog(nullptr),
-    spartastatus(nullptr), varwindow(nullptr), wizard(nullptr), runner(nullptr), runCounter(0),
+    spartastatus(nullptr), varwindow(nullptr), runner(nullptr), runCounter(0),
     nthreads(1), mainx(width), mainy(height)
 {
 #if QT_CONFIG(clipboard)
@@ -867,21 +817,6 @@ void SpartaGui::openRecent()
 {
     auto *act = qobject_cast<QAction *>(sender());
     if (act) openFile(act->data().toString());
-}
-
-void SpartaGui::getDirectory()
-{
-    if (wizard) {
-        auto *line = wizard->findChild<QLineEdit *>("t_directory");
-        if (line) {
-            auto curdir = line->text();
-            QFileDialog dialog(this, "Choose Directory for Tutorial Files", curdir);
-            dialog.setFileMode(QFileDialog::Directory);
-            dialog.setOption(QFileDialog::ShowDirsOnly, false);
-            dialog.exec();
-            line->setText(dialog.directory().path());
-        }
-    }
 }
 
 void SpartaGui::startExe()
@@ -2373,141 +2308,6 @@ void SpartaGui::manual()
     QDesktopServices::openUrl(QUrl(Cfg::DOCS_URL + docver));
 }
 
-void SpartaGui::tutorialWeb()
-{
-    QDesktopServices::openUrl(QUrl("https://spartatutorials.github.io/"));
-}
-
-QWizardPage *SpartaGui::tutorialIntro(int collection, int ntutorial, const QString &infotext)
-{
-    const auto &coll = tutorialCollection(collection);
-    auto *page       = new QWizardPage;
-    page->setTitle(QString("Getting Started With %1 Tutorial %2").arg(coll.name).arg(ntutorial));
-    page->setPixmap(QWizard::WatermarkPixmap, QPixmap(coll.logoFor(ntutorial)));
-
-    QString text = QString("<p>This dialog will help you to select and populate a folder with "
-                           "materials required to work through tutorial %1 from the SPARTA %2 "
-                           "tutorials by %3.</p>")
-                       .arg(ntutorial)
-                       .arg(coll.name, coll.author);
-    if (!coll.filesRepoUrl.isEmpty())
-        text += QString("<p>The materials for this tutorial are downloaded from:<br>"
-                        "<b><a href=\"%1\">%1</a></b></p>")
-                    .arg(coll.filesRepoUrl);
-    auto *label = new QLabel(text + infotext);
-    label->setWordWrap(true);
-
-    auto *layout = new QVBoxLayout;
-    layout->addWidget(label);
-    page->setLayout(layout);
-    return page;
-}
-
-QWizardPage *SpartaGui::tutorialDirectory(int collection, int ntutorial)
-{
-    const auto &coll = tutorialCollection(collection);
-    QSettings settings;
-    settings.beginGroup(Keys::GROUP_TUTORIAL);
-    auto *page = new QWizardPage;
-    page->setTitle(QString("Select Directory for %1 Tutorial %2").arg(coll.name).arg(ntutorial));
-    page->setPixmap(QWizard::WatermarkPixmap, QPixmap(coll.logoFor(ntutorial)));
-
-    auto *label = new QLabel(
-        QString("<p>Select a directory to store the files for tutorial %1.  The directory will be "
-                "created if necessary and SPARTA-GUI will download the files required for the "
-                "tutorial.  If selected, an existing directory may be cleared from old "
-                "files.</p>\n<p>Available files of the tutorial solution may be downloaded to a "
-                "sub-folder called \"solution\", if requested.</p>\n")
-            .arg(ntutorial));
-    label->setWordWrap(true);
-
-    auto *layout = new QVBoxLayout;
-    layout->addWidget(label);
-
-    auto *dirlayout = new QHBoxLayout;
-    auto *directory = new QLineEdit;
-
-    // if we are already inside this collection's "<prefix><N>" folder, switch the
-    // tutorial number in place; otherwise append a fresh folder (after redirecting
-    // away from home/system locations that should not be written to directly)
-    const QString folder = coll.dirPrefix + QString::number(ntutorial);
-    const int idx        = currentDir.lastIndexOf("/" + coll.dirPrefix);
-    bool inCollFolder    = false;
-    if (idx >= 0) {
-        bool ok        = false;
-        QString digits = currentDir.mid(idx + 1 + coll.dirPrefix.size());
-        digits.toInt(&ok);
-        inCollFolder = ok && !digits.isEmpty();
-    }
-    if (inCollFolder) {
-        currentDir.truncate(idx);
-    } else if ((currentDir == QDir::homePath()) || currentDir.contains("AppData") ||
-               currentDir.contains("system32") || currentDir.contains("Program Files")) {
-        currentDir = QStandardPaths::writableLocation(QStandardPaths::DesktopLocation);
-    }
-    currentDir.append("/" + folder);
-    directory->setText(currentDir);
-
-    auto *dirbutton = new QPushButton("&Choose");
-    dirlayout->addWidget(directory);
-    dirlayout->addWidget(dirbutton);
-    directory->setObjectName("t_directory");
-    connect(dirbutton, &QPushButton::released, this, &SpartaGui::getDirectory);
-    layout->addLayout(dirlayout);
-
-    auto *purgeval = new QCheckBox("&Remove existing files from directory");
-    auto *solval   = new QCheckBox("&Download solutions");
-
-    purgeval->setChecked(false);
-    purgeval->setObjectName("t_dirpurge");
-    layout->addWidget(purgeval, 0, Qt::AlignVCenter | Qt::AlignLeft);
-
-    solval->setChecked(settings.value(Keys::SOLUTION, false).toBool());
-    solval->setObjectName("t_getsolution");
-    layout->addWidget(solval, 0, Qt::AlignVCenter | Qt::AlignLeft);
-
-    // only offer the webpage checkbox for collections that have online pages
-    QCheckBox *webval = nullptr;
-    if (!coll.webUrl.isEmpty()) {
-        webval = new QCheckBox("&Open tutorial webpage in web browser");
-        webval->setChecked(settings.value(Keys::WEBPAGE, true).toBool());
-        webval->setObjectName("t_webopen");
-        layout->addWidget(webval, 0, Qt::AlignVCenter | Qt::AlignLeft);
-    }
-
-    auto *label2 = new QLabel(
-        QString("<hr width=\"33%\">\n<p align=\"center\">Click on "
-                "the \"Finish\" button to complete the setup and start the download.</p>"));
-    label2->setWordWrap(false);
-
-    layout->addWidget(label2);
-    settings.endGroup();
-
-    page->setLayout(layout);
-    return page;
-}
-
-void SpartaGui::startTutorial(int collection, int tutno)
-{
-    const auto &coll = tutorialCollection(collection);
-    if (tutno < 1 || tutno > coll.count()) return;
-    // tutorials beyond the available count are shown in the menu but not launchable yet
-    if (tutno > coll.available) return;
-
-    delete wizard;
-    wizard = new TutorialWizard(collection, tutno, this);
-    const auto infotext =
-        coll.blurbs.value(tutno - 1) +
-        QString("<hr width=\"33%\">\n<p align=\"center\">Click on the \"Next\" button "
-                "to select a folder.</p>");
-    wizard->setFont(font());
-    wizard->addPage(tutorialIntro(collection, tutno, infotext));
-    wizard->addPage(tutorialDirectory(collection, tutno));
-    wizard->setWindowTitle(QString("%1 Tutorial %2 Setup Wizard").arg(coll.name).arg(tutno));
-    wizard->setWizardStyle(QWizard::ModernStyle);
-    wizard->show();
-}
-
 void SpartaGui::howto()
 {
     QDesktopServices::openUrl(QUrl("https://sparta.github.io/sparta-gui/"));
@@ -2734,135 +2534,6 @@ bool SpartaGui::eventFilter(QObject *watched, QEvent *event)
         return true;
     }
     return QWidget::eventFilter(watched, event);
-}
-
-void SpartaGui::openTutorialWebpage(int collection, int tutno)
-{
-    const auto &coll = tutorialCollection(collection);
-    QString weburl   = coll.siteUrl;
-    if (!coll.webUrl.isEmpty() && (tutno >= 1) && (tutno <= coll.slugs.size()))
-        weburl = coll.webUrl.arg(tutno).arg(coll.slugs.value(tutno - 1));
-    if (!weburl.isEmpty()) QDesktopServices::openUrl(QUrl(weburl));
-}
-
-bool SpartaGui::downloadTutorialFiles(const QString &dir, const QList<DownloadItem> &downloads,
-                                      URLDownloader &downloader, const QString &baseUrl)
-{
-    int i   = 0;
-    int num = downloads.size();
-    if (!num) num = 1;
-
-    progress->setValue(0);
-    progress->show();
-    dirstatus->hide();
-
-    for (const auto &item : downloads) {
-        ++i;
-        status->setText(QString("Downloading file %1 of %2").arg(i).arg(num));
-        progress->setValue(
-            static_cast<int>(static_cast<double>(i) / static_cast<double>(num) * 1000.0));
-        status->repaint();
-
-        QString localPath = dir + QDir::separator() + item.fname;
-        if (!downloader.download(baseUrl.arg(item.ntutorial).arg(item.fname), localPath)) {
-            // download failed. abort, restore status line, and launch error dialog
-            status->setText("Error.");
-            progress->hide();
-            dirstatus->show();
-            status->repaint();
-            critical(this, "SPARTA-GUI Error",
-                     "Tutorial files download error:", downloader.errorString());
-            return false;
-        }
-
-        // check if download is a placeholder for a symbolic link and make a copy instead.
-        QFile dlfile(localPath);
-        QFileInfo dlpath(localPath);
-        if (dlfile.open(QIODevice::ReadOnly)) {
-            QString line = QString::fromLocal8Bit(dlfile.readLine());
-            line         = line.trimmed();
-            dlfile.close();
-
-            if (line == QString("../") + dlpath.fileName()) {
-                // the file is a symbolic link placeholder: copy the referenced file instead
-                QString srcFile = dir + QDir::separator() + dlpath.fileName();
-                QFile::remove(localPath);
-                QFile::copy(srcFile, localPath);
-            }
-        }
-    }
-    progress->setValue(Cfg::PROGRESS_MAXIMUM);
-    status->setText(Cfg::STATUS_READY);
-    progress->hide();
-    dirstatus->show();
-    status->repaint();
-    return true;
-}
-
-void SpartaGui::setupTutorial(int collection, int tutno, const QString &dir, bool purgedir,
-                              bool getsolution, bool openwebpage)
-{
-    const auto &coll = tutorialCollection(collection);
-    if (coll.filesUrl.isEmpty()) {
-        critical(this, "SPARTA-GUI Error", "Tutorial files are not available:",
-                 QString("The \"%1\" tutorial collection is not yet published for download.")
-                     .arg(coll.name));
-        return;
-    }
-    const QString baseUrl = coll.filesUrl;
-
-    QDir directory(dir);
-    directory.cd(dir);
-
-    // open web page of the corresponding online tutorial
-    if (openwebpage) openTutorialWebpage(collection, tutno);
-
-    if (purgedir) purgeDirectory(dir);
-    if (getsolution && !directory.mkpath("solution"))
-        warning(this, "SPARTA-GUI Warning",
-                "Could not create the \"solution\" subdirectory for the tutorial files.");
-
-    URLDownloader downloader(this);
-
-    // download and process manifest for selected tutorial
-    // must check for error after download, e.g. when there is no network.
-    QString manifestPath = dir + QDir::separator() + ".manifest";
-    if (!downloader.download(baseUrl.arg(tutno).arg(".manifest"), manifestPath)) {
-        critical(this, "SPARTA-GUI Error",
-                 "Tutorial files download error:", downloader.errorString());
-        return;
-    }
-
-    QFile manifest(manifestPath);
-    QString line, first;
-
-    QList<DownloadItem> downloads;
-    if (manifest.open(QIODevice::ReadOnly)) {
-        while (!manifest.atEnd()) {
-            line = QString::fromLocal8Bit(manifest.readLine());
-            line = line.trimmed();
-
-            // skip empty and comment lines
-            if (line.isEmpty() || line.startsWith('#')) continue;
-
-            // file in subfolder
-            if (line.contains('/')) {
-                if (getsolution && line.startsWith("solution")) {
-                    downloads.append(DownloadItem(tutno, line));
-                }
-            } else {
-                // first file is the initial template
-                if (first.isEmpty()) first = line;
-                downloads.append(DownloadItem(tutno, line));
-            }
-        }
-        manifest.close();
-        manifest.remove();
-    }
-
-    if (!downloadTutorialFiles(dir, downloads, downloader, baseUrl)) return;
-
-    if (!first.isEmpty()) openFile(dir + QDir::separator() + first);
 }
 
 // Local Variables:

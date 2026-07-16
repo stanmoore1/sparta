@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(sparta-gui
-  VERSION 3.0.3
+  VERSION 1.0.0
   LANGUAGES CXX
   DESCRIPTION "The SPARTA GUI"
   HOMEPAGE_URL "https://sparta.github.io/sparta-gui/")
@@ -12,8 +12,8 @@ include(GNUInstallDirs)
 # configuration settings:
 # prefer compiling plugin version only if standalone compile
 option(SPARTA_GUI_USE_PLUGIN "Load SPARTA library dynamically at runtime" ON)
-# build html documentation by default
-option(BUILD_DOC "Build SPARTA-GUI HTML documentation" ON)
+# html documentation build is off by default
+option(BUILD_DOC "Build SPARTA-GUI HTML documentation" OFF)
 option(BUILD_DOC_ONLY "Build only the documentation, skip the application" OFF)
 # testing support is off by default
 option(ENABLE_TESTING "Build unit tests" OFF)

@@ -1,5 +1,5 @@
 // -*- c++ -*- /////////////////////////////////////////////////////////////////////////
-// SPARTA-GUI - A Graphical Tool to Learn and Explore the SPARTA MD Simulation Software
+// SPARTA-GUI - A Graphical Tool to Learn and Explore the SPARTA DSMC Simulation Software
 //
 // Copyright (c) 2023, 2024, 2025, 2026  Axel Kohlmeyer
 //
@@ -36,7 +36,6 @@ class QSettings;
 class QStatusBar;
 class QTimer;
 class QWidget;
-class QWizardPage;
 
 class ChartWindow;
 class CodeEditor;
@@ -48,7 +47,6 @@ class LogWindow;
 class Preferences;
 class SlideShow;
 class StdCapture;
-class TutorialWizard;
 class URLDownloader;
 
 /**
@@ -61,7 +59,6 @@ class URLDownloader;
  * - SPARTA simulation execution and control
  * - Visualization windows (images, charts, log output)
  * - Application preferences and settings
- * - Tutorial wizard for interactive SPARTA learning
  *
  * The class integrates with Qt's main window framework and provides menu actions,
  * toolbars, and status bar components. It uses a SpartaWrapper to interface with
@@ -83,7 +80,6 @@ class SpartaGui : public QMainWindow {
     friend class Preferences;
     friend class AcceleratorTab;
     friend class GeneralTab;
-    friend class TutorialWizard;
 
 public:
     /**
@@ -158,35 +154,6 @@ protected:
      */
     void setFont(const QFont &newfont);
 
-    /**
-     * @brief Create an introduction page for a tutorial
-     * @param collection Tutorial collection index
-     * @param ntutorial Tutorial number within the collection
-     * @param infotext Information text to display
-     * @return Wizard page with tutorial introduction
-     */
-    QWizardPage *tutorialIntro(int collection, int ntutorial, const QString &infotext);
-
-    /**
-     * @brief Create a directory selection page for a tutorial
-     * @param collection Tutorial collection index
-     * @param ntutorial Tutorial number within the collection
-     * @return Wizard page for tutorial directory selection
-     */
-    QWizardPage *tutorialDirectory(int collection, int ntutorial);
-
-    /**
-     * @brief Set up files and resources for a tutorial
-     * @param collection Tutorial collection index
-     * @param tutno Tutorial number within the collection
-     * @param dir Directory to create files in
-     * @param purgedir Whether to clean the directory first
-     * @param getsolution Whether to include solution files
-     * @param openwebpage Whether to open the tutorial web page
-     */
-    void setupTutorial(int collection, int tutno, const QString &dir, bool purgedir,
-                       bool getsolution, bool openwebpage);
-
     /** @brief Clean up the inspect file dialog list */
     void purgeInspectList();
 
@@ -226,9 +193,6 @@ private slots:
 
     /** @brief Open a file from the recent files list */
     void openRecent();
-
-    /** @brief Change the working directory */
-    void getDirectory();
 
     /** @brief Start external executable */
     void startExe();
@@ -301,16 +265,6 @@ private slots:
     /** @brief Open SPARTA manual */
     void manual();
 
-    /** @brief Open tutorial web page */
-    void tutorialWeb();
-
-    /**
-     * @brief Start a tutorial wizard
-     * @param collection Tutorial collection index
-     * @param tutno Tutorial number within the collection
-     */
-    void startTutorial(int collection, int tutno);
-
     /** @brief Open HOWTO documentation */
     void howto();
 
@@ -339,20 +293,6 @@ private:
 
     /** @brief Append accelerator-package command-line arguments to spartaArgs */
     void appendAcceleratorArgs(int accel, QSettings &settings);
-
-    /** @brief Open the online web page for the given collection and tutorial number */
-    void openTutorialWebpage(int collection, int tutno);
-
-    /** @brief One file to fetch for a tutorial: tutorial number and relative filename */
-    struct DownloadItem {
-        DownloadItem(int _n, const QString &_f) : ntutorial(_n), fname(_f) {}
-        int ntutorial;
-        QString fname;
-    };
-
-    /** @brief Download the listed tutorial files from @p baseUrl with progress; false on error */
-    bool downloadTutorialFiles(const QString &dir, const QList<DownloadItem> &downloads,
-                               URLDownloader &downloader, const QString &baseUrl);
 
     /** @brief Create and show/hide the output log window for a run */
     void createLogWindow(QSettings &settings);
@@ -411,9 +351,6 @@ private:
     /** @brief Create View menu actions and add them to the menu bar */
     void createViewMenu();
 
-    /** @brief Create Tutorials menu with tutorial actions */
-    void createTutorialMenu();
-
     /** @brief Create About/Help menu actions and add them to the menu bar */
     void createAboutMenu();
 
@@ -453,7 +390,6 @@ private:
     Preferences *prefdialog; ///< Preferences dialog
     QLabel *spartastatus;    ///< Status bar label for SPARTA state
     QLabel *varwindow;       ///< Window showing variable definitions
-    TutorialWizard *wizard;  ///< Tutorial wizard dialog
 
     /**
      * @brief Container for inspect dialog widgets

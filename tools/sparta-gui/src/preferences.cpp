@@ -1,5 +1,5 @@
 // -*- c++ -*- /////////////////////////////////////////////////////////////////////////
-// SPARTA-GUI - A Graphical Tool to Learn and Explore the SPARTA MD Simulation Software
+// SPARTA-GUI - A Graphical Tool to Learn and Explore the SPARTA DSMC Simulation Software
 //
 // Copyright (c) 2023, 2024, 2025, 2026  Axel Kohlmeyer
 //
@@ -18,7 +18,6 @@
 #include "spartawrapper.h"
 #include "logwindow.h"
 #include "qaddon.h"
-#include "tutorialwizard.h"
 #include "urldownloader.h"
 
 #include <QApplication>
@@ -201,13 +200,6 @@ void Preferences::accept()
     box = tabWidget->findChild<QCheckBox *>("viewslide");
     if (box) settings->setValue(Keys::VIEWSLIDE, box->isChecked());
 
-    settings->beginGroup(Keys::GROUP_TUTORIAL);
-    box = tabWidget->findChild<QCheckBox *>("solution");
-    if (box) settings->setValue(Keys::SOLUTION, box->isChecked());
-    box = tabWidget->findChild<QCheckBox *>("webpage");
-    if (box) settings->setValue(Keys::WEBPAGE, box->isChecked());
-    settings->endGroup();
-
     auto *spin = tabWidget->findChild<QSpinBox *>("updfreq");
     if (spin) settings->setValue(Keys::UPDFREQ, spin->value());
     spin = tabWidget->findChild<QSpinBox *>("updchart");
@@ -304,15 +296,6 @@ GeneralTab::GeneralTab(QSettings *_settings, SpartaWrapper *_sparta, SpartaGui *
     pltr->setObjectName("chartreplace");
     pltr->setChecked(settings->value(Keys::CHARTREPLACE, true).toBool());
 
-    settings->beginGroup(Keys::GROUP_TUTORIAL);
-    auto *solution = new QCheckBox("Download tutorial solutions enabled");
-    solution->setObjectName("solution");
-    solution->setChecked(settings->value(Keys::SOLUTION, false).toBool());
-    auto *webpage = new QCheckBox("Open tutorial webpage enabled");
-    webpage->setObjectName("webpage");
-    webpage->setChecked(settings->value(Keys::WEBPAGE, true).toBool());
-    settings->endGroup();
-
     auto *getallfont =
         new QPushButton(QIcon(":/icons/preferences-desktop-font.svg"), "Select &Default Font...");
     auto *gettextfont =
@@ -345,9 +328,6 @@ GeneralTab::GeneralTab(QSettings *_settings, SpartaWrapper *_sparta, SpartaGui *
     layout->addWidget(pltr, nrow++, 1);
     layout->addWidget(sldv, nrow, 0);
     layout->addWidget(imgr, nrow++, 1);
-    layout->addWidget(new QHline, nrow++, 0, 1, 2);
-    layout->addWidget(solution, nrow, 0);
-    layout->addWidget(webpage, nrow++, 1);
     layout->addWidget(new QHline, nrow++, 0, 1, 2);
     layout->addWidget(getallfont, nrow, 0);
     layout->addWidget(gettextfont, nrow++, 1);
@@ -413,7 +393,6 @@ void GeneralTab::updateFonts(const QFont &all, const QFont &text)
     if (spartagui) {
         spartagui->setFont(all);
         spartagui->textEdit->document()->setDefaultFont(text);
-        if (spartagui->wizard) spartagui->wizard->setFont(all);
         if (spartagui->logwindow) spartagui->logwindow->document()->setDefaultFont(text);
         if (spartagui->varwindow) spartagui->varwindow->setFont(text);
     }

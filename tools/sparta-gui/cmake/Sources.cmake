@@ -26,8 +26,6 @@ set(PROJECT_SOURCES
   ${CMAKE_SOURCE_DIR}/src/colormaps.cpp
   ${CMAKE_SOURCE_DIR}/src/colormaps.h
   ${CMAKE_SOURCE_DIR}/src/constants.h
-  ${CMAKE_SOURCE_DIR}/src/tutorials.cpp
-  ${CMAKE_SOURCE_DIR}/src/tutorials.h
   ${CMAKE_SOURCE_DIR}/src/customfunc.cpp
   ${CMAKE_SOURCE_DIR}/src/customfunc.h
   ${CMAKE_SOURCE_DIR}/src/dumpimage.cpp
@@ -81,8 +79,6 @@ set(PROJECT_SOURCES
   ${CMAKE_SOURCE_DIR}/src/slideshow.h
   ${CMAKE_SOURCE_DIR}/src/stdcapture.cpp
   ${CMAKE_SOURCE_DIR}/src/stdcapture.h
-  ${CMAKE_SOURCE_DIR}/src/tutorialwizard.cpp
-  ${CMAKE_SOURCE_DIR}/src/tutorialwizard.h
   ${CMAKE_SOURCE_DIR}/src/urldownloader.cpp
   ${CMAKE_SOURCE_DIR}/src/urldownloader.h
   ${PLUGIN_LOADER_SRC}
