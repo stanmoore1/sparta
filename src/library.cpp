@@ -366,6 +366,14 @@ void *sparta_extract_global(void *ptr, const char *name)
 {
   SPARTA *sparta = (SPARTA *) ptr;
 
+  // these entries do not require an instance,
+  // e.g. so a version check can be done before calling sparta_open()
+
+  if (strcmp(name,"sparta_version") == 0) return (void *) SPARTA_VERSION;
+  if (strcmp(name,"git_branch") == 0) return (void *) "";
+
+  if (!sparta) return NULL;
+
   if (strcmp(name,"dt") == 0) return (void *) &sparta->update->dt;
   if (strcmp(name,"fnum") == 0) return (void *) &sparta->update->fnum;
   if (strcmp(name,"nrho") == 0) return (void *) &sparta->update->nrho;
@@ -375,8 +383,6 @@ void *sparta_extract_global(void *ptr, const char *name)
   if (strcmp(name,"boxlo") == 0) return (void *) sparta->domain->boxlo;
   if (strcmp(name,"boxhi") == 0) return (void *) sparta->domain->boxhi;
   if (strcmp(name,"units") == 0) return (void *) sparta->update->unit_style;
-  if (strcmp(name,"sparta_version") == 0) return (void *) SPARTA_VERSION;
-  if (strcmp(name,"git_branch") == 0) return (void *) "";
   return NULL;
 }
 
