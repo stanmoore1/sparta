@@ -333,42 +333,57 @@ def main():
           % (T, ratio, keqd, 100*dev, 100*sig),
           dev < max(3*sig, 0.05) and d > 500 and r > 500)
 
-    print("check 4: reacting box relaxes toward analytic equilibrium")
-    # closed system N2/O/NO/N with only the exchange reaction active:
-    # element totals conserved; equilibrium satisfies
-    #   (nNO nN)/(nN2 nO) = Keq(T);  start from pure reactant side and
-    # pure product side and require the compositions to converge toward
-    # the analytic root and toward each other
-    T = 15000.0
-    keq = keq_exchange(T)
-    logs = {}
-    for tag, fr in (("fwd",(0.45,0.45,0.05,0.05)),
-                    ("bwd",(0.05,0.05,0.45,0.45))):
-        logs[tag] = run(exe,"in.reverse_eq",
-                        {"T":T,"FN2":fr[0],"FO":fr[1],"FNO":fr[2],"FN":fr[3]},
-                        "eq_"+tag,extra)
-    # analytic equilibrium for x: N2,O start a; NO,N start b; extent x
-    def resid(x,a,b):
-        return (b+x)*(b+x) - keq*(a-x)*(a-x)
-    for tag,(a,b) in (("fwd",(0.45,0.05)),("bwd",(0.05,0.45))):
-        lo,hi = -b+1e-9, a-1e-9
-        for _ in range(200):
-            mid = 0.5*(lo+hi)
-            if resid(mid,a,b) > 0: hi = mid
-            else: lo = mid
-        xeq = 0.5*(lo+hi)
-        frac_eq = (b+xeq)/((a-xeq)+(b+xeq))   # NO fraction of the NO+N2 pool
-        header, rows = stats_rows(logs[tag])
+    print("check 4: reacting box relaxes to the ADIABATIC equilibrium")
+    # closed reflective (adiabatic) box, only the exchange N2+O<->NO+N active.
+    # The exchange has a large reaction energy (coeff[4]=5.175e-19 ~ 2.5 kT at
+    # 15 kK), so as it proceeds it shifts the gas temperature: the endothermic
+    # forward direction (reactant side) COOLS the gas, the exothermic reverse
+    # (product side) HEATS it.  The box therefore relaxes NOT to the isothermal
+    # 15 kK equilibrium (NO frac 0.417) but to the energy-CONSERVING adiabatic
+    # equilibrium at the shifted temperature -- a lower NO fraction from the
+    # reactant side, a higher one from the product side.  Both are computed
+    # here by solving Keq(T_eq) jointly with total-energy conservation, and the
+    # measured compositions must match (the integral signature of a detailed-
+    # balance pair that also conserves energy).
+    T0 = 15000.0
+    def _eint(sp, Temp):   # translational + internal energy per particle
+        e = 1.5*KB*Temp
+        if SPECIES[sp]["rotdof"] >= 2: e += KB*Temp
+        th = SPECIES[sp]["vibtemp"]
+        if th > 0.0: e += KB*th/(math.exp(th/Temp)-1.0)
+        if sp in ELEC:
+            num = den = 0.0
+            for t,g in ELEC[sp]:
+                w = g*math.exp(-t/Temp); den += w; num += w*KB*t
+            e += num/den
+        return e
+    EFORM = {"N2":0.0,"O":0.0,"NO":0.0,"N":5.175e-19}   # products carry +dH
+    def _adiabatic_eq(a, b, lo, hi):
+        # N2=O=a-x, NO=N=b+x; conserve total (thermal+chemical) energy from x=0
+        def etot(x,Temp):
+            c = {"N2":a-x,"O":a-x,"NO":b+x,"N":b+x}
+            return sum(c[s]*(_eint(s,Temp)+EFORM[s]) for s in c)
+        E0 = etot(0.0, T0)
+        def xof(Temp):
+            s = math.sqrt(keq_exchange(Temp)); return (s*a-b)/(1.0+s)
+        for _ in range(100):
+            Tm = 0.5*(lo+hi)
+            if etot(xof(Tm), Tm) > E0: hi = Tm
+            else: lo = Tm
+        Tm = 0.5*(lo+hi); x = xof(Tm)
+        return Tm, (b+x)/((a-x)+(b+x))
+    for tag,(a,b,lo,hi) in (("fwd",(0.45,0.05,8000.,15000.)),
+                            ("bwd",(0.05,0.45,15000.,25000.))):
+        Teq, frac_eq = _adiabatic_eq(a,b,lo,hi)
+        log = run(exe,"in.reverse_eq",
+                  {"T":T0,"FN2":a,"FO":a,"FNO":b,"FN":b},"eq_"+tag,extra)
+        header, rows = stats_rows(log)
         iNO = header.index("c_spcount[3]"); iN2 = header.index("c_spcount[1]")
-        n0 = (float(rows[0][iNO]), float(rows[0][iN2]))
-        nT = (float(rows[-1][iNO]), float(rows[-1][iN2]))
-        frac0 = n0[0]/(n0[0]+n0[1])
-        fracT = nT[0]/(nT[0]+nT[1])
-        # moved at least 60% of the way from the start to the analytic value
-        prog = (fracT-frac0)/(frac_eq-frac0) if frac_eq != frac0 else 1.0
-        check("%s: NO/(NO+N2) %.3f -> %.3f (analytic eq %.3f, progress %.0f%%)"
-              % (tag, frac0, fracT, frac_eq, 100*prog),
-              prog > 0.6 and abs(fracT-frac_eq) < abs(frac0-frac_eq)*0.5)
+        frac0 = float(rows[0][iNO])/(float(rows[0][iNO])+float(rows[0][iN2]))
+        fracT = float(rows[-1][iNO])/(float(rows[-1][iNO])+float(rows[-1][iN2]))
+        check("%s: NO/(NO+N2) %.3f -> %.3f  adiabatic eq %.3f (T_eq=%.0f K; "
+              "isothermal 15 kK would be 0.417)" % (tag,frac0,fracT,frac_eq,Teq),
+              abs(fracT-frac_eq) < 0.02 and abs(fracT-frac0) > 0.1)
 
     print("check 5: analytic sanity of the implementation inputs")
     # ground-state electronic degeneracy ratio for this reaction is
