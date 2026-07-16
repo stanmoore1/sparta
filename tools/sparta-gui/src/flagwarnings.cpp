@@ -18,8 +18,7 @@
 
 FlagWarnings::FlagWarnings(QLabel *label, QTextDocument *parent) :
     QSyntaxHighlighter(parent), isWarning(QStringLiteral("^(ERROR|WARNING).*$")),
-    isURL(QStringLiteral("^.*(https://sparta.github.io/err[0-9]+).*$")), summary(label),
-    document(parent)
+    isURL(QStringLiteral("(https?://\\S+)")), summary(label), document(parent)
 {
     nwarnings = nlines = 0;
     oldwarnings = oldlines = -1;
@@ -42,7 +41,7 @@ void FlagWarnings::highlightBlock(const QString &text)
         setFormat(match.capturedStart(0), match.capturedLength(0), formatWarning);
     }
 
-    // highlight ErrorURL links
+    // highlight URLs, e.g. links to the online documentation
     match = isURL.match(text);
     if (match.hasMatch()) {
         setFormat(match.capturedStart(1), match.capturedLength(1), formatURL);

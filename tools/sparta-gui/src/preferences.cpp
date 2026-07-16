@@ -81,14 +81,8 @@ Preferences::~Preferences()
 }
 
 namespace {
-const QHash<QString, int> buttonToChoice = {
-    {"none", AcceleratorTab::None},     {"opt", AcceleratorTab::Opt},
-    {"openmp", AcceleratorTab::OpenMP}, {"intel", AcceleratorTab::Intel},
-    {"kokkos", AcceleratorTab::Kokkos}, {"gpu", AcceleratorTab::Gpu}};
-
-const QHash<QString, int> buttonToPrecision = {{"inteldouble", AcceleratorTab::Double},
-                                               {"intelmixed", AcceleratorTab::Mixed},
-                                               {"intelsingle", AcceleratorTab::Single}};
+const QHash<QString, int> buttonToChoice = {{"none", AcceleratorTab::None},
+                                            {"kokkos", AcceleratorTab::Kokkos}};
 } // namespace
 
 void Preferences::accept()
@@ -96,26 +90,24 @@ void Preferences::accept()
     // store all data in settings class
     // and then confirm accepting
 
-    // store selected accelerator and precision settings from radiobuttons
+    // store selected accelerator settings from radiobuttons
     QList<QRadioButton *> allButtons = tabWidget->findChildren<QRadioButton *>();
     for (const auto &anyButton : allButtons) {
         if (anyButton->isChecked()) {
             const auto &button = anyButton->objectName();
             if (buttonToChoice.contains(button)) {
                 settings->setValue(Keys::ACCELERATOR, buttonToChoice.value(button));
-            } else if (buttonToPrecision.contains(button)) {
-                settings->setValue(Keys::INTELPREC, buttonToPrecision.value(button));
             }
         }
     }
 
     QLineEdit *field;
 
-    // store number of threads, reset to 1 for "None" and "Opt" settings
+    // store number of threads, reset to 1 for the "None" setting
     field = tabWidget->findChild<QLineEdit *>("nthreads");
     if (field && spartagui) {
         int accel = settings->value(Keys::ACCELERATOR, AcceleratorTab::None).toInt();
-        if ((accel == AcceleratorTab::None) || (accel == AcceleratorTab::Opt)) {
+        if (accel == AcceleratorTab::None) {
             spartagui->nthreads = 1;
         } else if (field->hasAcceptableInput()) {
             settings->setValue(Keys::NTHREADS, field->text());
@@ -123,13 +115,8 @@ void Preferences::accept()
         }
     }
 
-    // store setting for GPU package
-    auto *box = tabWidget->findChild<QCheckBox *>("gpuneigh");
-    if (box) settings->setValue(Keys::GPUNEIGH, box->isChecked());
-    box = tabWidget->findChild<QCheckBox *>("gpupaironly");
-    if (box) settings->setValue(Keys::GPUPAIRONLY, box->isChecked());
-
     // store image width, height, zoom, and rendering settings
+    QCheckBox *box;
 
     settings->beginGroup(Keys::GROUP_SNAPSHOT);
     field = tabWidget->findChild<QLineEdit *>("xsize");
@@ -185,8 +172,6 @@ void Preferences::accept()
     // general settings
     box = tabWidget->findChild<QCheckBox *>("echo");
     if (box) settings->setValue(Keys::ECHO, box->isChecked());
-    box = tabWidget->findChild<QCheckBox *>("cite");
-    if (box) settings->setValue(Keys::CITE, box->isChecked());
     box = tabWidget->findChild<QCheckBox *>("logreplace");
     if (box) settings->setValue(Keys::LOGREPLACE, box->isChecked());
     box = tabWidget->findChild<QCheckBox *>("chartreplace");
@@ -207,6 +192,9 @@ void Preferences::accept()
 
     field = tabWidget->findChild<QLineEdit *>("proxyval");
     if (field) settings->setValue(Keys::HTTPS_PROXY, field->text());
+
+    field = tabWidget->findChild<QLineEdit *>("examplesedit");
+    if (field) settings->setValue(Keys::EXAMPLES_PATH, field->text());
 
     // reformatting settings
 
@@ -274,9 +262,6 @@ GeneralTab::GeneralTab(QSettings *_settings, SpartaWrapper *_sparta, SpartaGui *
     auto *echo = new QCheckBox("Echo input to output buffer");
     echo->setObjectName("echo");
     echo->setChecked(settings->value(Keys::ECHO, false).toBool());
-    auto *cite = new QCheckBox("Include citation details");
-    cite->setObjectName("cite");
-    cite->setChecked(settings->value(Keys::CITE, false).toBool());
     auto *logv = new QCheckBox("Show Output window by default");
     logv->setObjectName("viewlog");
     logv->setChecked(settings->value(Keys::VIEWLOG, true).toBool());
@@ -319,8 +304,7 @@ GeneralTab::GeneralTab(QSettings *_settings, SpartaWrapper *_sparta, SpartaGui *
 
     int nrow = 0;
     layout->addWidget(new QHline, nrow++, 0, 1, 2);
-    layout->addWidget(echo, nrow, 0);
-    layout->addWidget(cite, nrow++, 1);
+    layout->addWidget(echo, nrow++, 0);
     layout->addWidget(new QHline, nrow++, 0, 1, 2);
     layout->addWidget(logv, nrow, 0);
     layout->addWidget(logr, nrow++, 1);
@@ -380,6 +364,21 @@ GeneralTab::GeneralTab(QSettings *_settings, SpartaWrapper *_sparta, SpartaGui *
     layout->addWidget(plugindownload, nrow++, 1);
     layout->addLayout(pluginlayout, nrow++, 0, 1, 2);
 #endif
+    layout->addWidget(new QHline, nrow++, 0, 1, 2);
+
+    auto *exampleslabel = new QLabel("SPARTA examples path:");
+    auto *examplesedit  = new QLineEdit(settings->value(Keys::EXAMPLES_PATH, "").toString());
+    auto *examplesbrowse = new QPushButton("B&rowse...");
+    examplesbrowse->setIcon(QIcon(":/icons/document-open.svg"));
+    examplesedit->setObjectName("examplesedit");
+
+    auto *exampleslayout = new QHBoxLayout;
+    exampleslayout->addWidget(examplesedit);
+    exampleslayout->addWidget(examplesbrowse);
+    connect(examplesbrowse, &QPushButton::released, this, &GeneralTab::examplesPath);
+
+    layout->addWidget(exampleslabel, nrow++, 0);
+    layout->addLayout(exampleslayout, nrow++, 0, 1, 2);
     layout->addWidget(new QHline, nrow++, 0, 1, 2);
 
     layout->addItem(new QSpacerItem(10, 10, QSizePolicy::Minimum, QSizePolicy::Expanding), nrow, 0);
@@ -503,28 +502,37 @@ void GeneralTab::pluginPath()
     }
 }
 
+void GeneralTab::examplesPath()
+{
+    auto *field = findChild<QLineEdit *>("examplesedit");
+    if (field) {
+        QString startdir = field->text();
+        if (startdir.isEmpty()) startdir = QDir::currentPath();
+        QString exdir = QFileDialog::getExistingDirectory(this, "Select SPARTA examples folder",
+                                                          startdir);
+        if (!exdir.isEmpty()) {
+            auto canonical = QFileInfo(exdir).canonicalFilePath();
+            settings->setValue(Keys::EXAMPLES_PATH, canonical);
+            field->setText(canonical);
+            settings->sync();
+        }
+    }
+}
+
 AcceleratorTab::AcceleratorTab(QSettings *_settings, SpartaWrapper *_sparta, QWidget *parent) :
     QWidget(parent), settings(_settings), sparta(_sparta)
 {
     auto *mainLayout  = new QHBoxLayout;
     auto *accelerator = new QGroupBox("Choose Accelerator:");
     auto *none        = new QRadioButton("&None");
-    auto *opt         = new QRadioButton("O&pt");
-    auto *openmp      = new QRadioButton("&OpenMP");
-    auto *intel       = new QRadioButton("&Intel");
     auto *kokkos      = new QRadioButton("&Kokkos");
-    auto *gpu         = new QRadioButton("GP&U");
 
     auto *accelframe   = new QFrame;
     auto *accelLayout  = new QVBoxLayout;
     auto *buttonLayout = new QVBoxLayout;
     accelLayout->addWidget(accelerator);
     buttonLayout->addWidget(none);
-    buttonLayout->addWidget(opt);
-    buttonLayout->addWidget(openmp);
-    buttonLayout->addWidget(intel);
     buttonLayout->addWidget(kokkos);
-    buttonLayout->addWidget(gpu);
     buttonLayout->addStretch(1);
     accelerator->setLayout(buttonLayout);
     accelframe->setLayout(accelLayout);
@@ -532,12 +540,6 @@ AcceleratorTab::AcceleratorTab(QSettings *_settings, SpartaWrapper *_sparta, QWi
 
     none->setEnabled(true);
     none->setObjectName("none");
-    opt->setEnabled(sparta->configHasPackage("OPT"));
-    opt->setObjectName("opt");
-    openmp->setEnabled(sparta->configHasPackage("OPENMP"));
-    openmp->setObjectName("openmp");
-    intel->setEnabled(sparta->configHasPackage("INTEL"));
-    intel->setObjectName("intel");
     // Kokkos support only works with Serial and OpenMP for now.
     kokkos->setEnabled(false);
     if (sparta->configHasPackage("KOKKOS")) {
@@ -549,8 +551,6 @@ AcceleratorTab::AcceleratorTab(QSettings *_settings, SpartaWrapper *_sparta, QWi
             kokkos->setEnabled(true);
     }
     kokkos->setObjectName("kokkos");
-    gpu->setEnabled(sparta->configHasPackage("GPU") && sparta->hasGpuDevice());
-    gpu->setObjectName("gpu");
 
     auto *choices       = new QFrame;
     auto *choiceLayout  = new QVBoxLayout;
@@ -575,50 +575,11 @@ AcceleratorTab::AcceleratorTab(QSettings *_settings, SpartaWrapper *_sparta, QWi
     ntchoice->setObjectName("nthreads");
 
     connect(none, &QRadioButton::released, this, &AcceleratorTab::updateAccel);
-    connect(opt, &QRadioButton::released, this, &AcceleratorTab::updateAccel);
-    connect(openmp, &QRadioButton::released, this, &AcceleratorTab::updateAccel);
-    connect(intel, &QRadioButton::released, this, &AcceleratorTab::updateAccel);
     connect(kokkos, &QRadioButton::released, this, &AcceleratorTab::updateAccel);
-    connect(gpu, &QRadioButton::released, this, &AcceleratorTab::updateAccel);
-
-    auto *intelLayout = new QHBoxLayout;
-    auto *intelprec   = new QGroupBox("Intel Precision:");
-    auto *inteldouble = new QRadioButton("&Double");
-    auto *intelmixed  = new QRadioButton("&Mixed");
-    auto *intelsingle = new QRadioButton("&Single");
-    intelLayout->addWidget(inteldouble);
-    inteldouble->setObjectName("inteldouble");
-    intelLayout->addWidget(intelmixed);
-    intelmixed->setObjectName("intelmixed");
-    intelLayout->addWidget(intelsingle);
-    intelsingle->setObjectName("intelsingle");
-    intelprec->setLayout(intelLayout);
-    intelprec->setObjectName("intelprec");
-    intelprec->setEnabled(false);
-
-    connect(inteldouble, &QRadioButton::released, this, &AcceleratorTab::updateAccel);
-    connect(intelmixed, &QRadioButton::released, this, &AcceleratorTab::updateAccel);
-    connect(intelsingle, &QRadioButton::released, this, &AcceleratorTab::updateAccel);
-
-    auto *gpuLayout   = new QHBoxLayout;
-    auto *gpuchoice   = new QGroupBox("GPU Settings:");
-    auto *gpuneigh    = new QCheckBox("Neighbor&list on GPU");
-    auto *gpupaironly = new QCheckBox("Pair st&yles only");
-    gpuLayout->addWidget(gpuneigh);
-    gpuneigh->setObjectName("gpuneigh");
-    gpuneigh->setChecked(settings->value(Keys::GPUNEIGH, true).toBool());
-    gpuLayout->addWidget(gpupaironly);
-    gpupaironly->setObjectName("gpupaironly");
-    gpupaironly->setChecked(settings->value(Keys::GPUPAIRONLY, false).toBool());
-    gpuchoice->setLayout(gpuLayout);
-    gpuchoice->setObjectName("gpuchoice");
-    gpuchoice->setEnabled(false);
 
     choiceLayout->addWidget(new QLabel("Settings for accelerator packages:\n"));
     choiceLayout->addWidget(ntlabel);
     choiceLayout->addWidget(ntchoice);
-    choiceLayout->addWidget(intelprec);
-    choiceLayout->addWidget(gpuchoice);
     choiceLayout->addStretch(1);
     choices->setLayout(choiceLayout);
     mainLayout->addWidget(choices);
@@ -627,46 +588,11 @@ AcceleratorTab::AcceleratorTab(QSettings *_settings, SpartaWrapper *_sparta, QWi
     // trigger update of nthreads line editor field depending on accelerator choice
     // fall back on None, if configured accelerator package is no longer available
     int choice = settings->value(Keys::ACCELERATOR, AcceleratorTab::None).toInt();
-    int iprec  = settings->value(Keys::INTELPREC, AcceleratorTab::Mixed).toInt();
-    if (iprec == AcceleratorTab::Double)
-        inteldouble->setChecked(true);
-    else if (iprec == AcceleratorTab::Mixed)
-        intelmixed->setChecked(true);
-    else if (iprec == AcceleratorTab::Single)
-        intelsingle->setChecked(true);
-
     switch (choice) {
-        case AcceleratorTab::Opt:
-            if (opt->isEnabled())
-                opt->click();
-            else
-                none->click();
-            break;
-        case AcceleratorTab::OpenMP:
-            if (openmp->isEnabled())
-                openmp->click();
-            else
-                none->click();
-            break;
-        case AcceleratorTab::Intel:
-            if (intel->isEnabled()) {
-                intel->click();
-                intelprec->setEnabled(true);
-            } else {
-                none->click();
-            }
-            break;
         case AcceleratorTab::Kokkos:
             if (kokkos->isEnabled())
                 kokkos->click();
             else
-                none->click();
-            break;
-        case AcceleratorTab::Gpu:
-            if (gpu->isEnabled()) {
-                gpu->click();
-                gpuchoice->setEnabled(true);
-            } else
                 none->click();
             break;
         case AcceleratorTab::None: // fallthrough
@@ -691,17 +617,10 @@ void AcceleratorTab::updateAccel()
         }
     }
 
-    auto *group = findChild<QGroupBox *>("intelprec");
-    group->setEnabled(choice == AcceleratorTab::Intel);
-
-    group = findChild<QGroupBox *>("gpuchoice");
-    group->setEnabled(choice == AcceleratorTab::Gpu);
-
-    // The number of threads field is disabled and the value set to 1 for "None" and "Opt" choice
+    // The number of threads field is disabled and the value set to 1 for the "None" choice
     auto *field = findChild<QLineEdit *>("nthreads");
     if (field) {
-        if ((choice == AcceleratorTab::None) || (choice == AcceleratorTab::Opt) ||
-            !sparta->configHasOmpSupport()) {
+        if ((choice == AcceleratorTab::None) || !sparta->configHasOmpSupport()) {
             field->setText("1");
             field->setEnabled(false);
         } else {

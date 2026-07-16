@@ -7,6 +7,7 @@
 
 import sys
 import os
+import importlib.util
 from datetime import date
 
 has_enchant = False
@@ -32,7 +33,7 @@ def get_git_info():
     return git_n_date.strip()
 
 project = 'SPARTA-GUI'
-author = 'Axel Kohlmeyer'
+author = 'The SPARTA and LAMMPS-GUI developers'
 copyright = '2023 - {}, {}'.format(date.today().year, author)
 version = '@PROJECT_VERSION@'
 release = get_git_info()
@@ -45,25 +46,37 @@ rst_prolog = ".. |copyright| replace:: {0}".format(copyright)
 
 needs_sphinx = '6.0.0'
 
-extensions = [
-        'breathe',
-        'sphinxcontrib.jquery',
-        'sphinx_sitemap',
-        ]
+extensions = []
 
-# Breathe configuration
-breathe_projects = {
-    "SPARTA-GUI": "@CMAKE_CURRENT_BINARY_DIR@/doxygen/xml"
-}
-breathe_default_project = "SPARTA-GUI"
-breathe_default_members = ('members', 'undoc-members')
+exclude_patterns = ['_build']
+
+# The API reference is extracted from the C++ sources with Doxygen and
+# imported through the "breathe" extension.  Both are optional: when the
+# breathe module or the Doxygen XML output is not available (e.g. for a
+# plain "sphinx-build" run outside of the CMake "html" target), the API
+# reference page is skipped instead of failing the build.
+breathe_xml_dir = '@CMAKE_CURRENT_BINARY_DIR@/doxygen/xml'
+if importlib.util.find_spec("breathe") and os.path.isdir(breathe_xml_dir):
+    extensions.append('breathe')
+    breathe_projects = {
+        "SPARTA-GUI": breathe_xml_dir
+    }
+    breathe_default_project = "SPARTA-GUI"
+    breathe_default_members = ('members', 'undoc-members')
+else:
+    exclude_patterns.append('api_reference.rst')
+
+# optional extensions used for the full documentation build; a plain
+# sphinx-build still works when they are not installed
+if importlib.util.find_spec("sphinxcontrib.jquery"):
+    extensions.append('sphinxcontrib.jquery')
+if importlib.util.find_spec("sphinx_sitemap"):
+    extensions.append('sphinx_sitemap')
 
 images_config = {
         'default_image_width' : '25%',
         'default_group' : 'default',
         }
-
-exclude_patterns = ['_build']
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -119,7 +132,6 @@ sitemap_url_scheme = "{link}"
 sitemap_filename = "sitemap.xml"
 
 # configure spelling extensions, if present
-import importlib.util
 spelling_spec = importlib.util.find_spec("sphinxcontrib.spelling")
 if spelling_spec and has_enchant:
     extensions.append('sphinxcontrib.spelling')
@@ -144,7 +156,7 @@ latex_elements = {
     \begingroup % for PDF information dictionary
       \def\endgraf{ }\def\and{\& }%
       \pdfstringdefDisableCommands{\def\\{, }}% overwrite hyperref setup
-      \hypersetup{pdfauthor={Axel Kohlmeyer}, pdftitle={SPARTA-GUI Documentation}}%
+      \hypersetup{pdfauthor={The SPARTA and LAMMPS-GUI developers}, pdftitle={SPARTA-GUI Documentation}}%
     \endgroup
     \noindent\rule{\textwidth}{4pt}\par
     \begin{center}%
@@ -154,8 +166,7 @@ latex_elements = {
       \vfill
       {\LARGE \spartaversion \par}
       \vfill
-      {\LARGE Axel Kohlmeyer \par}
-      {\large akohlmey@gmail.com \par}
+      {\LARGE The SPARTA and LAMMPS-GUI developers \par}
       \vfill\vfill\vfill
     \end{center}
     \noindent\rule{\textwidth}{4pt}\par
@@ -165,4 +176,3 @@ latex_elements = {
 }
 ''',
 }
-

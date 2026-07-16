@@ -54,6 +54,18 @@ AboutDialog::AboutDialog(const QString &version, const QString &info, const QStr
     topLayout->addWidget(versionLabel, 1);
     mainLayout->addLayout(topLayout);
 
+    // attribution of the software SPARTA-GUI is derived from
+    auto *creditsLabel = new QLabel(
+        "<p align=\"justify\">SPARTA-GUI is based on "
+        "<a href=\"https://github.com/akohlmey/lammps-gui\">LAMMPS-GUI</a> by "
+        "Axel Kohlmeyer, adapted for the SPARTA DSMC simulation software.</p>",
+        this);
+    creditsLabel->setMargin(LABEL_MARGIN);
+    creditsLabel->setWordWrap(true);
+    creditsLabel->setOpenExternalLinks(true);
+    creditsLabel->setTextInteractionFlags(Qt::TextBrowserInteraction);
+    mainLayout->addWidget(creditsLabel);
+
     // Info scroll area
     infoScrollArea = new QScrollArea(this);
     infoScrollArea->setWidgetResizable(true);
@@ -103,8 +115,9 @@ AboutDialog::AboutDialog(const QString &version, const QString &info, const QStr
     desiredWidth += 4 * LABEL_MARGIN;
     desiredWidth += infoScrollArea->verticalScrollBar()->sizeHint().width();
 
-    // add spacer icon and close button
-    desiredHeight += iconLabel->height() + closeButton->height();
+    // add spacer icon, credits, and close button
+    desiredHeight += iconLabel->height() + creditsLabel->sizeHint().height() +
+                     closeButton->height();
 
     // Apply size constraints based on screen dimensions
     auto *screen = QGuiApplication::primaryScreen();

@@ -140,64 +140,34 @@ public:
     void setDumpList(const QStringList &words);
 
     /**
-     * @brief Set word list for atom style completion
-     * @param words List of atom style names
-     */
-    void setAtomList(const QStringList &words);
-
-    /**
-     * @brief Set word list for pair style completion
-     * @param words List of pair style names
-     */
-    void setPairList(const QStringList &words);
-
-    /**
-     * @brief Set word list for bond style completion
-     * @param words List of bond style names
-     */
-    void setBondList(const QStringList &words);
-
-    /**
-     * @brief Set word list for angle style completion
-     * @param words List of angle style names
-     */
-    void setAngleList(const QStringList &words);
-
-    /**
-     * @brief Set word list for dihedral style completion
-     * @param words List of dihedral style names
-     */
-    void setDihedralList(const QStringList &words);
-
-    /**
-     * @brief Set word list for improper style completion
-     * @param words List of improper style names
-     */
-    void setImproperList(const QStringList &words);
-
-    /**
-     * @brief Set word list for kspace style completion
-     * @param words List of kspace style names
-     */
-    void setKspaceList(const QStringList &words);
-
-    /**
      * @brief Set word list for region style completion
      * @param words List of region style names
      */
     void setRegionList(const QStringList &words);
 
     /**
-     * @brief Set word list for integration style completion
-     * @param words List of integration style names
+     * @brief Set word list for collide style completion
+     * @param words List of collide style names
      */
-    void setIntegrateList(const QStringList &words);
+    void setCollideList(const QStringList &words);
 
     /**
-     * @brief Set word list for minimization style completion
-     * @param words List of minimization style names
+     * @brief Set word list for react style completion
+     * @param words List of react style names
      */
-    void setMinimizeList(const QStringList &words);
+    void setReactList(const QStringList &words);
+
+    /**
+     * @brief Set word list for surface collision style completion
+     * @param words List of surf_collide style names
+     */
+    void setSurfCollideList(const QStringList &words);
+
+    /**
+     * @brief Set word list for surface reaction style completion
+     * @param words List of surf_react style names
+     */
+    void setSurfReactList(const QStringList &words);
 
     /**
      * @brief Set word list for variable style completion
@@ -212,13 +182,7 @@ public:
     void setUnitsList(const QStringList &words);
 
     /**
-     * @brief Set extra word list for completion
-     * @param words List of extra words
-     */
-    void setExtraList(const QStringList &words);
-
-    /**
-     * @brief Update group ID list from the editor buffer
+     * @brief Update grid/surf group ID list from the editor buffer
      */
     void setGroupList();
 
@@ -236,6 +200,11 @@ public:
      * @brief Update fix ID list from the editor buffer
      */
     void setFixIDList();
+
+    /**
+     * @brief Update mixture ID list from the editor buffer and SPARTA instance
+     */
+    void setMixtureIDList();
 
     /**
      * @brief Update file list from current directory
@@ -291,11 +260,6 @@ protected:
      */
     void keyPressEvent(QKeyEvent *event) override;
 
-    /**
-     * @brief Set SPARTA documentation version for help links
-     */
-    void setDocver();
-
 private slots:
     /**
      * @brief Update line number area width when block count changes
@@ -319,11 +283,6 @@ private slots:
      * @brief Open help URL in browser
      */
     void openHelp();
-
-    /**
-     * @brief Open URL at cursor in browser
-     */
-    void openUrl();
 
     /**
      * @brief View file at cursor
@@ -390,26 +349,21 @@ private:
     QShortcut *helpAction;   ///< Keyboard shortcut for help
 
     /// @brief Auto-completion objects for different SPARTA command contexts
-    QCompleter *currentComp, *commandComp, *fixComp, *computeComp, *dumpComp, *atomComp, *pairComp,
-        *bondComp, *angleComp, *dihedralComp, *improperComp, *kspaceComp, *regionComp,
-        *integrateComp, *minimizeComp, *variableComp, *unitsComp, *groupComp, *varnameComp,
-        *fixidComp, *compidComp, *fileComp, *extraComp;
+    QCompleter *currentComp, *commandComp, *fixComp, *computeComp, *dumpComp, *regionComp,
+        *collideComp, *reactComp, *surfCollideComp, *surfReactComp, *variableComp, *unitsComp,
+        *groupComp, *varnameComp, *fixidComp, *compidComp, *mixtureComp, *fileComp;
 
     int highlight;            ///< Current highlighted line number, NO_HIGHLIGHT if none
     bool highlighterror;      ///< Highlighted line marks an error (red) instead of progress
     bool reformatOnReturn;    ///< Enable auto-reformatting on Enter
     bool automaticCompletion; ///< Enable auto-completion popup
-    QString docver;           ///< SPARTA documentation version string
 
     /// @brief Maps for SPARTA command help pages
-    QMap<QString, QString> cmdMap;      ///< Command to help page mapping
-    QMap<QString, QString> fixMap;      ///< Fix style to help page mapping
-    QMap<QString, QString> computeMap;  ///< Compute style to help page mapping
-    QMap<QString, QString> pairMap;     ///< Pair style to help page mapping
-    QMap<QString, QString> bondMap;     ///< Bond style to help page mapping
-    QMap<QString, QString> angleMap;    ///< Angle style to help page mapping
-    QMap<QString, QString> dihedralMap; ///< Dihedral style to help page mapping
-    QMap<QString, QString> improperMap; ///< Improper style to help page mapping
+    QMap<QString, QString> cmdMap;       ///< Command to help page mapping
+    QMap<QString, QString> fixMap;       ///< Fix style to help page mapping
+    QMap<QString, QString> computeMap;   ///< Compute style to help page mapping
+    QMap<QString, QString> dumpMap;      ///< Dump style to help page mapping
+    QMap<QString, QString> surfReactMap; ///< Surface reaction style to help page mapping
 };
 
 #endif

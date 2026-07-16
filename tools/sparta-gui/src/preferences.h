@@ -103,6 +103,7 @@ public:
 private slots:
     void downloadPlugin();
     void pluginPath();
+    void examplesPath();
     void newAllFont();
     void newTextFont();
 
@@ -129,18 +130,8 @@ public:
     explicit AcceleratorTab(QSettings *settings, SpartaWrapper *sparta, QWidget *parent = nullptr);
     /** Constants for selecting SPARTA accelerator package */
     enum AccelType {
-        None,   ///< no accelerator
-        Opt,    ///< OPT package
-        OpenMP, ///< OPENMP package
-        Intel,  ///< INTEL package
-        Kokkos, ///< KOKKOS package
-        Gpu     ///< GPU package
-    };
-    /** Constants for selecting SPARTA accelerator precision */
-    enum AccelPrec {
-        Double, ///< full double precision
-        Mixed,  ///< only accumulators in double precision, rest in single precision
-        Single  ///< full single precision
+        None,  ///< no accelerator
+        Kokkos ///< KOKKOS package
     };
 
 private slots:

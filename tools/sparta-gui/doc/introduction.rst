@@ -84,7 +84,7 @@ Main Window
   central hub of the application that integrates all other components.
   The UI is built programmatically in ``setupUi()``, which delegates
   menu construction to ``createFileMenu()``, ``createEditMenu()``,
-  ``createRunMenu()``, ``createViewMenu()``, ``createTutorialMenu()``,
+  ``createRunMenu()``, ``createViewMenu()``,
   ``createAboutMenu()``, and the status bar to ``createStatusBar()``.
   Plugin discovery and accelerator setup are handled by
   ``setupPlugin()`` and ``setupAccelerators()``.
@@ -146,7 +146,7 @@ Visualization Components
   - **RegionInfo** - Stores settings for displaying a region in snapshot images.
 
 **ChartWindow (chartviewer.h/.cpp)**
-  Window for displaying thermodynamic data as charts.  Supports line plots
+  Window for displaying stats output data as charts.  Supports line plots
   and multiple data series.  See :cpp:class:`ChartWindow`
 
 **ChartViewer (chartviewer.h/.cpp)**
@@ -212,11 +212,6 @@ Dialog and Utility Components
   viewing auxiliary files without allowing modifications.  See
   :cpp:class:`FileViewer`
 
-**TutorialWizard (tutorialwizard.h/.cpp)**
-  Wizard dialog for interactive SPARTA tutorials. Guides users through
-  setting up tutorial directories and files, providing a structured
-  learning experience.  See :cpp:class:`TutorialWizard`
-
 **AboutDialog (aboutdialog.h/.cpp)**
   Custom About dialog that displays version information, SPARTA
   configuration details, and available styles in two scrollable text
@@ -230,10 +225,9 @@ Support Components
 **URLDownloader (urldownloader.h/.cpp)**
   Utility class for downloading files over HTTPS.  Provides a
   synchronous download interface using ``QNetworkAccessManager`` with
-  ``QEventLoop``.  Respects the ``https_proxy`` preference setting and
-  the ``https_proxy`` environment variable.  After downloading a file,
-  it checks for a ``SHA256SUMS`` file in the same remote directory and
-  verifies the SHA-256 checksum if available.
+  ``QEventLoop``.  Respects the ``https_proxy`` environment variable.
+  After downloading a file, it checks for a ``SHA256SUMS`` file in the
+  same remote directory and verifies the SHA-256 checksum if available.
   See :cpp:class:`URLDownloader`
 
 **StdCapture (stdcapture.h/.cpp)**
@@ -314,7 +308,6 @@ The application uses Qt's QSettings mechanism to persist:
 - Editor preferences (font, colors)
 - Accelerator settings
 - SPARTA plugin path
-- Tutorial preferences
 
 Settings are stored in platform-specific locations (the application name
 includes the Qt major version, e.g. ``SPARTA-GUI (QT6)``):

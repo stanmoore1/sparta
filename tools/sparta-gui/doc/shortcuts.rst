@@ -76,34 +76,22 @@ available (On macOS use the Command key instead of Ctrl/Control).
      - SPARTA-GUI Docs
    * - Ctrl+Shift+R
      - Inspect Restart File
-     - Ctrl+Shift+O
-     - View in OVITO
-     - Ctrl+Shift+D
-     - View in VMD
-   * - Ctrl+Shift+L
+     - Ctrl+Shift+L
      - Output Window
      - Ctrl+Shift+C
      - Charts Window
-     - Ctrl+Shift+I
+   * - Ctrl+Shift+I
      - Image Window
-   * - Ctrl+Shift+M
+     - Ctrl+Shift+M
      - SPARTA Manual
      - Ctrl+?
      - Context Help
-     - Ctrl+Shift+T
-     - SPARTA Tutorial
-   * - Ctrl+Shift+U
-     - Update SPARTA
-     - Ctrl+Home
-     - Go to Home
-     - Ctrl+End
-     - Go to End
    * - Ctrl+Shift+J
      - View Image or Movie File(s)
      - Ctrl+Shift+P
      - Plot Data File
-     -
-     -
+     - Ctrl+Home / Ctrl+End
+     - Go to Start / End
 
 Further keybindings of the editor window `are documented with the Qt
 documentation

@@ -17,36 +17,51 @@ About SPARTA-GUI
 ****************
 
 SPARTA-GUI is a graphical text editor with syntax highlighting,
-auto-completion, inline help, and indentation support for `SPARTA
-<https://sparta.github.io/>`_ input files.  It is programmed using the `Qt
-Framework <https://www.qt.io/>`_ and customized for running, monitoring,
-and visualizing SPARTA simulations.  It calls SPARTA directly using the
+auto-completion, inline help, and indentation support for input scripts
+of the `SPARTA Direct Simulation Monte Carlo (DSMC) code
+<https://sparta.github.io/>`_.  It is programmed using the `Qt Framework
+<https://www.qt.io/>`_ and customized for running, monitoring, and
+visualizing SPARTA simulations.  It calls SPARTA directly using the
 `SPARTA library interface
-<https://sparta.github.io/Library.html#sparta-c-library-api>`_ instead of
+<https://sparta.github.io/doc/Section_howto.html#howto_6>`_ instead of
 launching an external SPARTA executable.  Therefore it can retrieve and
 display information from SPARTA *while it is running* and *immediately*
-display visualizations created by a dump image command in the input.
+display visualizations created by a `dump image command
+<https://sparta.github.io/doc/dump_image.html>`_ in the input.
 
-The primary motivation for implementing SPARTA-GUI is to facilitate
-teaching SPARTA to beginners using only SPARTA-GUI and to have a
-consistent behavior across major platforms like Linux, macOS, and
-Windows.  This way one can focus on teaching SPARTA and avoid having to
-spend time explaining different tools (for editing inputs, plotting
-graphs, visualizing systems) on the different platforms.  Also,
-SPARTA-GUI is fully integrated with a `collection of SPARTA tutorials
-<https://spartatutorials.github.io>`_.
+The primary motivation for SPARTA-GUI is to make it easy to get started
+with SPARTA and to have a consistent behavior across major platforms
+like Linux and macOS.  This way one can focus on learning SPARTA itself
+and avoid having to spend time learning different tools (for editing
+inputs, plotting graphs, visualizing systems) on the different
+platforms.
 
-Many of the features in SPARTA-GUI are useful beyond working on
-tutorials.  For instance, it can streamline the process of prototyping
-new simulation projects or debugging misbehaving simulations.  It also
-has been found extremely useful in creating, debugging, and tweaking
-`advanced visualizations with SPARTA
-<https://sparta.github.io/Howto_viz.html>`_ using the built-in
-visualization facility of the `dump image command
-<https://sparta.github.io/dump_image.html>`_.
+Many of the features in SPARTA-GUI are useful beyond learning SPARTA.
+For instance, it can streamline the process of prototyping new
+simulation projects or debugging misbehaving simulations.  It also is
+extremely useful for creating, debugging, and tweaking visualizations
+with the built-in rendering facility of the `dump image command
+<https://sparta.github.io/doc/dump_image.html>`_, covering particles,
+grid cells, grid cut planes, and surface elements.
 
-SPARTA-GUI is Copyright (c) |copyright|, and distributed under the
-terms of the GNU General Public License version 2.0 or later (GPL-2.0-or-later).
+***********
+Attribution
+***********
+
+SPARTA-GUI is a derived work of `LAMMPS-GUI
+<https://github.com/akohlmey/lammps-gui>`_ version 3.0.3 by Axel
+Kohlmeyer, adapted for the SPARTA DSMC code.  The look and feel of the
+application, most of its infrastructure, and large parts of this manual
+originate from LAMMPS-GUI; the SPARTA adaptation replaces the
+LAMMPS-specific functionality (running molecular dynamics inputs,
+atom/bond visualization, thermodynamic output capture) with their SPARTA
+equivalents (DSMC input scripts, particle/grid/surface visualization,
+stats output capture).
+
+LAMMPS-GUI is Copyright (c) 2023 - 2026 Axel Kohlmeyer.  SPARTA-GUI, as
+a whole and like SPARTA itself, is distributed under the terms of the
+GNU General Public License version 2.0 (GPL-2.0-or-later for the files
+retained from LAMMPS-GUI).
 
 --------
 
@@ -57,10 +72,9 @@ About this document
 This document contains the documentation of SPARTA-GUI and how to
 compile, install, use, configure, and modify it.  Suggestions for new
 features and reports of bugs are always welcome.  You can use the `same
-channels as for SPARTA itself
-<https://sparta.github.io/Errors_bugs.html>`_ for that purpose or submit
-bug reports or pull requests in the `SPARTA-GUI GitHub repository
-<https://github.com/akohlmey/sparta-gui>`_.
+channels as for SPARTA itself <https://sparta.github.io/>`_ for that
+purpose or submit bug reports or pull requests in the `SPARTA GitHub
+repository <https://github.com/sparta/sparta>`_.
 
 ------------------
 
@@ -73,71 +87,6 @@ This document describes SPARTA-GUI version |version|.
 .. raw:: html
 
    </h2>
-   <hr>
-   <h3>Test Status of the development branch:</h3>
-   <p align="left">
-   <a href="https://github.com/akohlmey/sparta-gui/actions/workflows/compile-linux-qt6.yml"><img src="https://github.com/akohlmey/sparta-gui/actions/workflows/compile-linux-qt6.yml/badge.svg" alt="Compile with Qt 6.x" style="max-width: 100%;"></a>
-   <a href="https://github.com/akohlmey/sparta-gui/actions/workflows/compile-macos-dmg.yml"><img src="https://github.com/akohlmey/sparta-gui/actions/workflows/compile-macos-dmg.yml/badge.svg" alt="Compile on macOS and build DMG" style="max-width: 100%;"></a>
-   <a href="https://github.com/akohlmey/sparta-gui/actions/workflows/build-html-docs.yml"><img src="https://github.com/akohlmey/sparta-gui/actions/workflows/build-html-docs.yml/badge.svg" alt="Build Documentation in HTML" style="max-width: 100%;"></a>
-   <a href="https://github.com/akohlmey/sparta-gui/actions/workflows/compile-windows-msvc.yml"><img src="https://github.com/akohlmey/sparta-gui/actions/workflows/compile-windows-msvc.yml/badge.svg" alt="Compile on Windows with MSVC" style="max-width: 100%;"></a>
-   <a href="https://github.com/akohlmey/sparta-gui/actions/workflows/compile-mingw64-cross.yml"><img src="https://github.com/akohlmey/sparta-gui/actions/workflows/compile-mingw64-cross.yml/badge.svg" alt="Cross-compile for Windows with MinGW64" style="max-width: 100%;"></a>
-   <a href="https://github.com/akohlmey/sparta-gui/actions/workflows/build-linux-flatpak.yml"><img src="https://github.com/akohlmey/sparta-gui/actions/workflows/build-linux-flatpak.yml/badge.svg" alt="Build SPARTA-GUI as flatpak bundle" style="max-width: 100%;"></a>
-   <a href="https://github.com/akohlmey/sparta-gui/actions/workflows/codeql-analysis.yml"><img src="https://github.com/akohlmey/sparta-gui/actions/workflows/codeql-analysis.yml/badge.svg" alt="CodeQL Code Analysis" style="max-width: 100%;"></a>
-   <a href="https://scan.coverity.com/projects/akohlmey-sparta-gui"><img alt="Coverity Scan Build Status" src="https://scan.coverity.com/projects/33110/badge.svg"/></a>
-   </p>
-
-------------------
-
-*****************
-Citing SPARTA-GUI
-*****************
-
-There is currently no citation specifically describing SPARTA-GUI but a
-manuscript has been submitted to `JOSS <https://joss.theoj.org/>`_.
-Also, starting with version 3.0.0 SPARTA-GUI releases are automatically
-archived on `Zenodo <https://zenodo.org>`_:
-
-.. code-block:: bibtex
-
-   @software{sparta_gui_zenodo,
-     author       = {Kohlmeyer, Axel},
-     title        = {{SPARTA-GUI}: A Cross-Platform Graphical Tool to
-                      Learn and Explore Molecular Dynamics with SPARTA},
-     publisher    = {Zenodo},
-     doi          = {10.5281/zenodo.21035505},
-     url          = {https://doi.org/10.5281/zenodo.21035505},
-   }
-
-.. raw:: html
-
-   <a href="https://joss.theoj.org/papers/59eed23e3cdee45c6585356fb7c23ca8"><img src="https://joss.theoj.org/papers/59eed23e3cdee45c6585356fb7c23ca8/status.svg"></a>
-   <a href="https://doi.org/10.5281/zenodo.21035505"><img src="https://zenodo.org/badge/DOI/10.5281/zenodo.21035505.svg" alt="DOI"></a>
-
-An introduction to SPARTA-GUI is included in the following publication
-in LiveCoMS for the SPARTA tutorials that are linked from SPARTA-GUI, so
-the suggestion is to cite that publication for now:
-
-   Gravelle, S., Alvares, C. M. S., Gissinger, J. R., &
-   Kohlmeyer, A. (2025). A Set of Tutorials for the SPARTA Simulation
-   Package [Article v1.0]. Living Journal of Computational Molecular
-   Science, 6(1), 3037. https://doi.org/10.33011/livecoms.6.1.3037
-
-or in BibTeX format:
-
-.. code-block:: bibtex
-
-   @article{sparta_tutorials_2025,
-     author={Gravelle, Simon and Alvares, Cecilia M. S. and Gissinger, Jacob R. and Kohlmeyer, Axel},
-     title={A Set of Tutorials for the {SPARTA} Simulation Package [Article v1.0]},
-     journal={Living Journal of Computational Molecular Science},
-     pages={3037},
-     volume={6},
-     number={1},
-     year={2025},
-     month={Sep.},
-     url={https://livecomsjournal.org/index.php/livecoms/article/view/v6i1e3037},
-     DOI={10.33011/livecoms.6.1.3037}
-   }
 
 ------------------
 
@@ -182,13 +131,15 @@ the internals of SPARTA-GUI or contribute to its development.
 .. admonition:: AI Generated Content
    :class: note
 
-   The initial version of the Programmer's Guide section was created by
-   the `GitHub Copilot Coding Agent <https://docs.github.com/en/copilot>`_
-   and not everything has been carefully checked.  It is therefore
-   possible that it contains errors where the LLM has misinterpreted the
-   SPARTA-GUI source code.  If you spot any such errors or inconsistencies,
-   please submit a bug report issue to point them out or -- even better --
-   submit a pull request with the necessary corrections.
+   The initial version of the Programmer's Guide section (for the
+   LAMMPS-GUI project, from which these pages are derived) was created
+   by the `GitHub Copilot Coding Agent
+   <https://docs.github.com/en/copilot>`_ and not everything has been
+   carefully checked.  It is therefore possible that it contains errors
+   where the LLM has misinterpreted the source code.  If you spot any
+   such errors or inconsistencies, please submit a bug report issue to
+   point them out or -- even better -- submit a pull request with the
+   necessary corrections.
 
 .. toctree::
    :caption: Table of Contents

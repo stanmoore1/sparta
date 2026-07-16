@@ -17,6 +17,11 @@ Paste (`Ctrl-V`), Undo (`Ctrl-Z`), Redo (`Ctrl-Shift-Z`), Select All
 dialog will pop up asking whether to cancel the exit operation, or to
 save or not save the buffer contents to a file.
 
+The syntax highlighting is customized for SPARTA input scripts: SPARTA
+commands, styles, numbers, strings, variable references, and comments
+are colored differently, and lines that are recognized as invalid are
+flagged with an inline warning.
+
 .. index:: auto-save
 
 The editor has an auto-save mode that can be enabled or disabled in the
@@ -34,9 +39,13 @@ By default, SPARTA-GUI displays a small pop-up frame with possible
 choices for SPARTA input script commands or styles after 2 characters of
 a word have been typed.
 
-.. image:: JPG/sparta-gui-complete.png
-   :align: center
-   :scale: 75%
+.. TODO screenshot: capture the completion pop-up offering SPARTA
+   styles (e.g. after typing "compute 1 grid ...") as
+   JPG/sparta-gui-complete.png, then re-enable this figure.
+..
+.. .. image:: JPG/sparta-gui-complete.png
+..    :align: center
+..    :scale: 75%
 
 The word can then be completed through selecting an entry by scrolling
 up and down with the cursor keys and selecting with the 'Enter' key or
@@ -45,10 +54,19 @@ pop-up can be disabled in the *Preferences* dialog, but the completion
 can still be requested manually by either hitting the `Shift+TAB` key or
 by right-clicking with the mouse and selecting the option from the
 context menu.  Most of the completion information is retrieved from the
-active SPARTA instance and thus it shows only available options that
-have been enabled when compiling SPARTA. That list, however, excludes
-accelerated styles and commands; for improved clarity, only the
-non-suffix versions of styles are shown.
+active SPARTA instance: the lists of available `compute
+<https://sparta.github.io/doc/compute.html>`_, `fix
+<https://sparta.github.io/doc/fix.html>`_, `dump
+<https://sparta.github.io/doc/dump.html>`_, `region
+<https://sparta.github.io/doc/region.html>`_, `collide
+<https://sparta.github.io/doc/collide.html>`_, `react
+<https://sparta.github.io/doc/react.html>`_, `surf_collide
+<https://sparta.github.io/doc/surf_collide.html>`_, and `surf_react
+<https://sparta.github.io/doc/surf_react.html>`_ styles as well as the
+command names are queried from the loaded SPARTA library, and thus the
+completion shows only options that are actually available in the SPARTA
+version and configuration in use.  For improved clarity, only the
+non-suffix (non-accelerated) versions of styles are shown.
 
 Line Reformatting
 ^^^^^^^^^^^^^^^^^
@@ -59,7 +77,7 @@ Line Reformatting
 
 The editor supports reformatting lines according to the syntax in order
 to have consistently aligned lines.  This primarily means adding
-whitespace padding to commands, type specifiers, IDs and names.  This
+whitespace padding to commands, IDs, and names.  This
 reformatting is performed manually by hitting the 'Tab' key.  It is
 also possible to have this done automatically when hitting the 'Enter'
 key to start a new line.  This feature can be turned on or off in the
@@ -79,21 +97,27 @@ Context Specific Help
 .. index:: documentation; online
 .. index:: SPARTA documentation
 
-.. |gui-popup1| image:: JPG/sparta-gui-popup-help.png
-   :width: 44%
-
-.. |gui-popup2| image:: JPG/sparta-gui-popup-view.png
-   :width: 55%
-
-|gui-popup1|  |gui-popup2|
-
 A unique feature of SPARTA-GUI is the option to look up the SPARTA
 documentation for the command in the current line.  This can be done by
 either clicking the right mouse button or by using the `Ctrl-?` keyboard
 shortcut.  When using the mouse, there are additional entries in the
-context menu that open the corresponding documentation page in the
-online SPARTA documentation in a web browser window.  When using the
-keyboard, the first of those entries is chosen.
+context menu that open the corresponding documentation page
+(``https://sparta.github.io/doc/<command>.html``) in the online SPARTA
+manual in a web browser window.  When using the keyboard, the first of
+those entries is chosen.
+
+.. TODO screenshot: capture the context menu with the documentation
+   lookup entries as JPG/sparta-gui-popup-help.png and the read-only
+   file viewer opened from it as JPG/sparta-gui-popup-view.png, then
+   re-enable these figures.
+..
+.. .. |gui-popup1| image:: JPG/sparta-gui-popup-help.png
+..    :width: 44%
+..
+.. .. |gui-popup2| image:: JPG/sparta-gui-popup-view.png
+..    :width: 55%
+..
+.. |gui-popup1|  |gui-popup2|
 
 If the word under the cursor is a file, then additionally the context
 menu has an entry to open the file in a read-only text viewer window.
@@ -101,12 +125,12 @@ If the file is a SPARTA restart file, instead the menu entry offers to
 :ref:`inspect the restart <inspect_restart>`.
 
 The text viewer is a convenient way to view the contents of files that
-are referenced in the input.  The file viewer also supports on-the-fly
-decompression based on the file name suffix in a `similar fashion as
-available with SPARTA
-<https://sparta.github.io/Build_settings.html#read-or-write-compressed-files>`_.
-If the necessary decompression program is missing or the file cannot be
-decompressed, the viewer window will contain a corresponding message.
+are referenced in the input, for example `surface files
+<https://sparta.github.io/doc/read_surf.html>`_ or species files.  The
+file viewer also supports on-the-fly decompression of gzipped files
+based on the file name suffix.  If the necessary decompression program
+is missing or the file cannot be decompressed, the viewer window will
+contain a corresponding message.
 
 .. _inspect_restart:
 
@@ -118,25 +142,25 @@ Inspecting a Restart file
 .. index:: file inspection
 
 When SPARTA-GUI is asked to "Inspect a Restart", it will read the
-restart file into a SPARTA instance and then open three different
-windows.  The first window is a text viewer with the output of an `info
-command <https://sparta.github.io/info.html>`_ with system information
-stored in the restart.  The second window is a text viewer containing a
-data file generated with a `write_data command
-<https://sparta.github.io/write_data.html>`_.  The third window is a
-:ref:`Snapshot Image Viewer <snapshot_viewer>` containing a
+restart file into a SPARTA instance using the `read_restart command
+<https://sparta.github.io/doc/read_restart.html>`_ and then open two
+windows.  The first window is a text viewer with a summary of the
+system stored in the restart (box dimensions, grid, particle and
+surface counts, defined species and mixtures, and so on).  The second
+window is a :ref:`Snapshot Image Viewer <snapshot_viewer>` containing a
 visualization of the system in the restart.
 
-.. |inspect1| image:: JPG/sparta-gui-inspect-data.png
-   :width: 30%
-
-.. |inspect2| image:: JPG/sparta-gui-inspect-info.png
-   :width: 30%
-
-.. |inspect3| image:: JPG/sparta-gui-inspect-image.png
-   :width: 35%
-
-|inspect1|  |inspect2|  |inspect3|
+.. TODO screenshot: capture the two restart inspection windows (info
+   text viewer and snapshot image) as JPG/sparta-gui-inspect-info.png
+   and JPG/sparta-gui-inspect-image.png, then re-enable these figures.
+..
+.. .. |inspect1| image:: JPG/sparta-gui-inspect-info.png
+..    :width: 40%
+..
+.. .. |inspect2| image:: JPG/sparta-gui-inspect-image.png
+..    :width: 45%
+..
+.. |inspect1|  |inspect2|
 
 .. admonition:: Large Restart Files
    :class: warning
@@ -148,4 +172,3 @@ visualization of the system in the restart.
    cluster may overload a laptop or local workstation. The *Show
    Details...* button will display a rough estimate of the additional
    memory required.
-

@@ -142,9 +142,6 @@ protected:
     /** @brief Handle completion of a SPARTA run */
     void runDone();
 
-    /** @brief Set the documentation version string for help links */
-    void setDocver();
-
     /** @brief Perform an auto-save of the current file */
     void autoSave();
 
@@ -194,8 +191,8 @@ private slots:
     /** @brief Open a file from the recent files list */
     void openRecent();
 
-    /** @brief Start external executable */
-    void startExe();
+    /** @brief Open an example input file from the File menu */
+    void openExample();
 
     /** @brief Save the current file */
     void save();
@@ -292,7 +289,14 @@ private:
     void updateSlideShow();
 
     /** @brief Append accelerator-package command-line arguments to spartaArgs */
-    void appendAcceleratorArgs(int accel, QSettings &settings);
+    void appendAcceleratorArgs(int accel);
+
+    /** @brief Locate the SPARTA examples folder from preferences or common locations
+     *  @return canonical path of the examples folder or empty string if not found */
+    QString findExamplesDir() const;
+
+    /** @brief (Re-)populate the File->Open Example submenu from the examples folder */
+    void buildExampleMenu();
 
     /** @brief Create and show/hide the output log window for a run */
     void createLogWindow(QSettings &settings);
@@ -369,6 +373,7 @@ private:
     QMenuBar *menubar;              ///< Menu bar with menus and actions
     QStatusBar *statusbar;          ///< status bar
     QList<QAction *> recentActions; ///< list of actions for recent files
+    QMenu *exampleMenu;             ///< File menu entry with SPARTA example inputs
 
     Highlighter *highlighter; ///< Syntax highlighter for SPARTA input
     StdCapture *capturer;     ///< Captures stdout/stderr from SPARTA
@@ -394,12 +399,11 @@ private:
     /**
      * @brief Container for inspect dialog widgets
      *
-     * Holds references to the three tabs (info, data, image) in an inspect dialog
+     * Holds references to the two windows (info, image) of an inspect dialog
      */
     struct InspectData {
-        QWidget *info;  ///< Information tab widget
-        QWidget *data;  ///< Data viewing tab widget
-        QWidget *image; ///< Image rendering tab widget
+        QWidget *info;  ///< Information window widget
+        QWidget *image; ///< Image rendering window widget
     };
     QList<InspectData *> inspectList; ///< List of open inspect dialogs
 
@@ -410,7 +414,6 @@ private:
 
     SpartaWrapper sparta;                ///< Interface to SPARTA library
     SpartaRunner *runner;                ///< Thread for running SPARTA simulations
-    QString docver;                      ///< SPARTA documentation version string
     QString pluginPath;                  ///< Path to SPARTA shared library (plugin mode)
     int runCounter;                      ///< Counter for simulation runs
     std::vector<std::string> spartaArgs; ///< Command-line arguments for SPARTA

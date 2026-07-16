@@ -19,37 +19,6 @@ SpartaGui Class
 
 -----
 
-TutorialWizard Class
---------------------
-
-.. doxygenclass:: TutorialWizard
-   :members:
-   :protected-members:
-
------
-
-Tutorial Collections
---------------------
-
-The ``TutorialCollection`` struct (``src/tutorials.h``) is the single source of
-truth for the tutorial collections offered in the *Tutorials* menu.  Each entry
-describes one independently hosted collection (its files repository, web pages,
-per-tutorial titles and blurbs, and how much of it is released).  The menu and
-the ``TutorialWizard`` consume the table through the
-``tutorialCollections()`` and ``tutorialCollection()`` accessors.  See
-:ref:`add_tutorial` for how to add or update a tutorial or a whole collection.
-
-.. doxygenstruct:: TutorialCollection
-   :members:
-
------
-
-.. doxygenfunction:: tutorialCollections
-
-.. doxygenfunction:: tutorialCollection
-
------
-
 Editor Components
 =================
 
@@ -116,7 +85,7 @@ ChartWindow Class
 ChartColumn Struct
 ------------------
 
-``ChartWindow`` owns one ``ChartColumn`` per thermo column: a plain,
+``ChartWindow`` owns one ``ChartColumn`` per stats column: a plain,
 move-only data holder (``src/chartviewer.h``) that bundles the column's
 ``PlotSeries`` objects, cached data bounds, smoothing parameters, display
 style, and overlay/reference-line state.  The single ``ChartViewer`` is
@@ -175,16 +144,24 @@ ImageViewer Class
 Dump Image Command Builder
 --------------------------
 
-The ``DumpImageParams`` struct and the ``buildDumpImageCommand()`` free
-function (``src/dumpimage.h``) form a GUI-free, unit-testable core that
-assembles the SPARTA ``write_dump ... image ...`` command from a snapshot of
-the viewer state.  ``ImageViewer`` populates the struct (resolving all SPARTA
-queries up front) and then calls the pure builder, which returns a
-``DumpImageCommand`` holding the render and ``dump_modify`` argument strings;
-``toWriteDumpCommand()`` composes the final one-shot ``write_dump`` command
-from those pieces.
+The ``DumpImageSettings`` struct and the builder free functions
+(``src/dumpimage.h``) form a GUI-free, unit-testable core that assembles
+the SPARTA ``dump ... image ...`` and ``dump_modify`` commands from a
+snapshot of the viewer state.  ``ImageViewer`` populates the struct
+(resolving all SPARTA queries up front) and then calls the pure
+builders: ``buildDumpImageCommand()`` returns the dump image argument
+string, ``buildDumpModifyCommands()`` returns the ordered list of
+``dump_modify`` commands (including the six per-mode ``cmap`` color-map
+commands described by ``ColorMapSpec``), and ``buildDumpSnippet()``
+composes the complete reusable input-script snippet used by the "Copy
+dump image command" action.
 
-.. doxygenstruct:: DumpImageParams
+.. doxygenstruct:: DumpImageSettings
+   :members:
+
+-----
+
+.. doxygenstruct:: ColorMapSpec
    :members:
 
 -----
@@ -193,12 +170,11 @@ from those pieces.
 
 -----
 
-.. doxygenstruct:: DumpImageCommand
-   :members:
+.. doxygenfunction:: buildDumpModifyCommands
 
 -----
 
-.. doxygenfunction:: toWriteDumpCommand
+.. doxygenfunction:: buildDumpSnippet
 
 -----
 

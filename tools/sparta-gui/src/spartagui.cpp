@@ -48,7 +48,6 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
-#include <QProcess>
 #include <QProgressBar>
 #include <QPushButton>
 #include <QSettings>
@@ -166,6 +165,8 @@ void SpartaGui::createFileMenu()
                   &SpartaGui::newDocument);
     addMenuAction(menu, ":/icons/document-open.svg", "&Open Input File", "Ctrl+O",
                   &SpartaGui::open);
+    exampleMenu = menu->addMenu(QIcon(":/icons/document-open.svg"), "Open &Example");
+    exampleMenu->setEnabled(false);
     addMenuAction(menu, ":/icons/document-save.svg", "&Save Input File", "Ctrl+S",
                   &SpartaGui::save);
     addMenuAction(menu, ":/icons/document-save-as.svg", "Save Input File &As", "Ctrl+Shift+S",
@@ -237,17 +238,6 @@ void SpartaGui::createRunMenu()
 
     addMenuAction(menu, ":/icons/image-viewer.svg", "Create &Image", "Ctrl+I",
                   &SpartaGui::renderImage);
-    menu->addSeparator();
-
-    auto *ovito = addMenuAction(menu, ":/icons/ovito.png", "View in &OVITO", "Ctrl+Shift+O",
-                                &SpartaGui::startExe);
-    ovito->setEnabled(hasExe("ovito"));
-    ovito->setData("ovito");
-
-    auto *vmd = addMenuAction(menu, ":/icons/vmd.svg", "View in VM&D", "Ctrl+Shift+D",
-                              &SpartaGui::startExe);
-    vmd->setEnabled(hasExe("vmd"));
-    vmd->setData("vmd");
 }
 
 void SpartaGui::createViewMenu()
@@ -520,41 +510,13 @@ void SpartaGui::setupPlugin(QSettings &) {}
 
 void SpartaGui::setupAccelerators(QSettings &settings)
 {
-    // default accelerator package is OPENMP, but we switch the configured accelerator to
-    // "none" if the selected package is not available to have an option that always works
-    int accel = settings.value(Keys::ACCELERATOR, AcceleratorTab::OpenMP).toInt();
-    switch (accel) {
-        case AcceleratorTab::Opt:
-            if (!sparta.configHasPackage("OPT")) accel = AcceleratorTab::None;
-            break;
-        case AcceleratorTab::OpenMP:
-            if (!sparta.configHasPackage("OPENMP")) accel = AcceleratorTab::None;
-            break;
-        case AcceleratorTab::Intel:
-            if (!sparta.configHasPackage("INTEL")) accel = AcceleratorTab::None;
-            break;
-        case AcceleratorTab::Gpu:
-            if (!sparta.configHasPackage("GPU")) accel = AcceleratorTab::None;
-            break;
-        case AcceleratorTab::Kokkos:
-            if (!sparta.configHasPackage("KOKKOS")) accel = AcceleratorTab::None;
-            break;
-        case AcceleratorTab::None: // fallthrough
-        default:                   // do nothing
-            break;
-    }
+    // SPARTA only supports the KOKKOS accelerator package. Switch the configured
+    // accelerator to "none" if KOKKOS is not available so there is always a
+    // working option.
+    int accel = settings.value(Keys::ACCELERATOR, AcceleratorTab::None).toInt();
+    if ((accel != AcceleratorTab::Kokkos) || !sparta.configHasPackage("KOKKOS"))
+        accel = AcceleratorTab::None;
     settings.setValue(Keys::ACCELERATOR, accel);
-
-    // Check and initialize some settings for individual accelerator packages and commit
-    // GPU neighbor list on GPU versus host
-    bool gpuneigh = settings.value(Keys::GPUNEIGH, true).toBool();
-    settings.setValue(Keys::GPUNEIGH, gpuneigh);
-    // accelerate only pair style (i.e. run PPPM completely on host)
-    bool gpupaironly = settings.value(Keys::GPUPAIRONLY, false).toBool();
-    settings.setValue(Keys::GPUPAIRONLY, gpupaironly);
-    // INTEL package precision
-    int intelprec = settings.value(Keys::INTELPREC, AcceleratorTab::Mixed).toInt();
-    settings.setValue(Keys::INTELPREC, intelprec);
 
     // Check and initialize nthreads setting for when OpenMP support is compiled in.
     // Default is to use OMP_NUM_THREADS setting, if that is not available, then half of max
@@ -567,7 +529,7 @@ void SpartaGui::setupAccelerators(QSettings &settings)
     nthreads = settings.value(Keys::NTHREADS, default_threads).toInt();
 
     // reset nthreads if accelerator does not support threads
-    if ((accel == AcceleratorTab::Opt) || (accel == AcceleratorTab::None)) nthreads = 1;
+    if (accel == AcceleratorTab::None) nthreads = 1;
 
     // set OMP_NUM_THREADS environment variable, if not set
     if (!qEnvironmentVariableIsSet("OMP_NUM_THREADS"))
@@ -577,19 +539,18 @@ void SpartaGui::setupAccelerators(QSettings &settings)
 /* -------------------------------------------------------------------- */
 
 SpartaGui::SpartaGui(QWidget *parent, const QString &filename, int width, int height) :
-    QMainWindow(parent), textEdit(nullptr), menubar(nullptr), highlighter(nullptr),
-    capturer(new StdCapture), status(nullptr), cpuuse(nullptr), lastCpuBucket(-1),
-    logwindow(nullptr), imagewindow(nullptr), chartwindow(nullptr), slideshow(nullptr),
-    logupdater(nullptr), dirstatus(nullptr), progress(nullptr), prefdialog(nullptr),
-    spartastatus(nullptr), varwindow(nullptr), runner(nullptr), runCounter(0),
-    nthreads(1), mainx(width), mainy(height)
+    QMainWindow(parent), textEdit(nullptr), menubar(nullptr), exampleMenu(nullptr),
+    highlighter(nullptr), capturer(new StdCapture), status(nullptr), cpuuse(nullptr),
+    lastCpuBucket(-1), logwindow(nullptr), imagewindow(nullptr), chartwindow(nullptr),
+    slideshow(nullptr), logupdater(nullptr), dirstatus(nullptr), progress(nullptr),
+    prefdialog(nullptr), spartastatus(nullptr), varwindow(nullptr), runner(nullptr),
+    runCounter(0), nthreads(1), mainx(width), mainy(height)
 {
 #if QT_CONFIG(clipboard)
     hasClipboard = true;
 #else
     hasClipboard = false;
 #endif
-    docver = "";
 
 #if !defined(Q_OS_MACOS)
     // minimize window so we don't see it while it is being constructed and configured.
@@ -630,6 +591,9 @@ SpartaGui::SpartaGui(QWidget *parent, const QString &filename, int width, int he
 
     setupPlugin(settings);
     setupAccelerators(settings);
+
+    // populate the File->Open Example submenu (needs the plugin path for probing)
+    buildExampleMenu();
 
     // set up default SPARTA thread arguments
     spartaArgs.clear();
@@ -672,44 +636,32 @@ SpartaGui::SpartaGui(QWidget *parent, const QString &filename, int width, int he
     textEdit->setCommandList(style_list);
 
     style_list.clear();
-    const char *varstyles[] = {"delete",   "atomfile", "file",   "format", "getenv", "index",
-                               "internal", "loop",     "python", "string", "timer",  "uloop",
-                               "universe", "world",    "equal",  "vector", "atom"};
+    const char *varstyles[] = {"delete", "equal",  "file",     "format", "getenv", "grid",
+                               "index",  "internal", "loop",   "particle", "python", "string",
+                               "surf",   "uloop",  "universe", "world"};
     for (const auto *const var : varstyles)
         style_list << var;
     style_list.sort();
     textEdit->setVariableList(style_list);
 
     style_list.clear();
-    const char *unitstyles[] = {"lj", "real", "metal", "si", "cgs", "electron", "micro", "nano"};
+    const char *unitstyles[] = {"si", "cgs"};
     for (const auto *const unit : unitstyles)
         style_list << unit;
     style_list.sort();
     textEdit->setUnitsList(style_list);
 
-    style_list.clear();
-    const char *extraargs[] = {"extra/atom/types",        "extra/bond/types",
-                               "extra/angle/types",       "extra/dihedral/types",
-                               "extra/improper/types",    "extra/bond/per/atom",
-                               "extra/angle/per/atom",    "extra/dihedral/per/atom",
-                               "extra/improper/per/atom", "extra/special/per/atom"};
-    for (const auto *const extra : extraargs)
-        style_list << extra;
-    textEdit->setExtraList(style_list);
-
     textEdit->setFileList();
 
     // build a sorted, accelerator-suffix-filtered style list for one category
-    auto styleList = [&](const char *keyword, bool withNone) {
+    auto styleList = [&](const char *keyword) {
         QStringList list;
-        if (withNone) list << QStringLiteral("none");
         const int nstyles = sparta.styleCount(keyword);
         for (int i = 0; i < nstyles; ++i) {
             const QString style = sparta.styleName(keyword, i);
             if (style.isEmpty()) continue;
-            if (style.endsWith("/gpu") || style.endsWith("/intel") || style.endsWith("/kk") ||
-                style.endsWith("/kk/device") || style.endsWith("/kk/host") ||
-                style.endsWith("/omp") || style.endsWith("/opt"))
+            if (style.endsWith("/kk") || style.endsWith("/kk/device") ||
+                style.endsWith("/kk/host"))
                 continue;
             list << style;
         }
@@ -717,19 +669,14 @@ SpartaGui::SpartaGui(QWidget *parent, const QString &filename, int width, int he
         return list;
     };
 
-    textEdit->setFixList(styleList("fix", false));
-    textEdit->setComputeList(styleList("compute", false));
-    textEdit->setDumpList(styleList("dump", false));
-    textEdit->setAtomList(styleList("atom", false));
-    textEdit->setPairList(styleList("pair", true));
-    textEdit->setBondList(styleList("bond", true));
-    textEdit->setAngleList(styleList("angle", true));
-    textEdit->setDihedralList(styleList("dihedral", true));
-    textEdit->setImproperList(styleList("improper", true));
-    textEdit->setKspaceList(styleList("kspace", true));
-    textEdit->setRegionList(styleList("region", false));
-    textEdit->setIntegrateList(styleList("integrate", false));
-    textEdit->setMinimizeList(styleList("minimize", false));
+    textEdit->setFixList(styleList("fix"));
+    textEdit->setComputeList(styleList("compute"));
+    textEdit->setDumpList(styleList("dump"));
+    textEdit->setRegionList(styleList("region"));
+    textEdit->setCollideList(styleList("collide"));
+    textEdit->setReactList(styleList("react"));
+    textEdit->setSurfCollideList(styleList("surf_collide"));
+    textEdit->setSurfReactList(styleList("surf_react"));
 
     settings.beginGroup(Keys::GROUP_REFORMAT);
     textEdit->setReformatOnReturn(settings.value(Keys::RETURN, false).toBool());
@@ -797,7 +744,8 @@ void SpartaGui::newDocument()
 
 void SpartaGui::open()
 {
-    QString fileName = QFileDialog::getOpenFileName(this, "Open the file");
+    QString fileName = QFileDialog::getOpenFileName(
+        this, "Open the file", QString(), "SPARTA input files (in.*);;All files (*)");
     openFile(fileName);
 }
 
@@ -819,70 +767,76 @@ void SpartaGui::openRecent()
     if (act) openFile(act->data().toString());
 }
 
-void SpartaGui::startExe()
+// locate the folder with the SPARTA example inputs. The preferences setting has
+// priority; otherwise probe folders relative to the plugin library and upward
+// from the current working directory for an "examples" folder that contains
+// subfolders with in.* input files.
+QString SpartaGui::findExamplesDir() const
 {
-    auto *act = qobject_cast<QAction *>(sender());
-    if (act) {
-        auto exe = act->data().toString();
-        QStringList args;
-        if (sparta.extractSetting("box_exist")) {
-            QString datacmd = "write_data '";
-            QDir datadir(QDir::tempPath());
-            QFile datafile(datadir.absoluteFilePath(currentFile + ".data"));
-            datacmd += datafile.fileName() + "'";
-            if (exe == "vmd") {
-                QFile vmdfile(datadir.absoluteFilePath("tmp-loader.vmd"));
-                if (vmdfile.open(QIODevice::WriteOnly)) {
-                    vmdfile.write("package require topotools\n");
-                    vmdfile.write("topo readspartadata {");
-                    vmdfile.write(datafile.fileName().toLocal8Bit());
-                    vmdfile.write("}\ntopo guessatom sparta data\n");
-                    vmdfile.write("animate write psf {");
-                    vmdfile.write(datafile.fileName().toLocal8Bit());
-                    vmdfile.write(".psf}\nanimate write dcd {");
-                    vmdfile.write(datafile.fileName().toLocal8Bit());
-                    vmdfile.write(".dcd}\nmol delete top\nmol new {");
-                    vmdfile.write(datafile.fileName().toLocal8Bit());
-                    vmdfile.write(".psf} type psf waitfor all\nmol addfile {");
-                    vmdfile.write(datafile.fileName().toLocal8Bit());
-                    vmdfile.write(".dcd} type dcd waitfor all\nfile delete {");
-                    vmdfile.write(datafile.fileName().toLocal8Bit());
-                    vmdfile.write("} {");
-                    vmdfile.write(vmdfile.fileName().toLocal8Bit());
-                    vmdfile.write("} {");
-                    vmdfile.write(datafile.fileName().toLocal8Bit());
-                    vmdfile.write(".dcd} {");
-                    vmdfile.write(datafile.fileName().toLocal8Bit());
-                    vmdfile.write(".psf}\n");
-                    vmdfile.close();
-                    args << "-e" << vmdfile.fileName();
-                    {
-                        StdoutSilencer guard;
-                        sparta.command(datacmd);
-                    }
-                    auto *vmd = new QProcess(this);
-                    vmd->start(exe, args);
-                } else {
-                    warning(this, "SPARTA-GUI Error",
-                            "Cannot create temporary file for loading system in VMD",
-                            vmdfile.errorString());
-                }
+    auto isExamplesDir = [](const QString &path) {
+        if (path.isEmpty()) return false;
+        QDir dir(path);
+        if (!dir.exists()) return false;
+        const auto subdirs = dir.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot);
+        for (const auto &sub : subdirs) {
+            if (!QDir(sub.absoluteFilePath())
+                     .entryList({QStringLiteral("in.*")}, QDir::Files)
+                     .isEmpty())
+                return true;
+        }
+        return false;
+    };
+
+    QSettings settings;
+    const QString configured = settings.value(Keys::EXAMPLES_PATH, "").toString();
+    if (isExamplesDir(configured)) return QFileInfo(configured).canonicalFilePath();
+
+    QStringList candidates;
+    if (!pluginPath.isEmpty()) {
+        QDir libdir = QFileInfo(pluginPath).absoluteDir();
+        candidates << libdir.absoluteFilePath("../../examples")
+                    << libdir.absoluteFilePath("../../../examples");
+    }
+    QDir dir(QDir::currentPath());
+    do {
+        candidates << dir.absoluteFilePath("examples");
+    } while (dir.cdUp());
+
+    for (const auto &candidate : std::as_const(candidates))
+        if (isExamplesDir(candidate)) return QFileInfo(candidate).canonicalFilePath();
+    return {};
+}
+
+void SpartaGui::buildExampleMenu()
+{
+    if (!exampleMenu) return;
+    exampleMenu->clear();
+
+    const QString dirname = findExamplesDir();
+    if (!dirname.isEmpty()) {
+        QDir exdir(dirname);
+        const auto subdirs = exdir.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
+        for (const auto &sub : subdirs) {
+            // the benchmark inputs are not instructive examples
+            if (sub.fileName() == "bench") continue;
+            const auto inputs = QDir(sub.absoluteFilePath())
+                                    .entryInfoList({QStringLiteral("in.*")}, QDir::Files, QDir::Name);
+            if (inputs.isEmpty()) continue;
+            auto *submenu = exampleMenu->addMenu(sub.fileName());
+            for (const auto &input : inputs) {
+                auto *action = submenu->addAction(input.fileName());
+                action->setData(input.absoluteFilePath());
+                connect(action, &QAction::triggered, this, &SpartaGui::openExample);
             }
-            if (exe == "ovito") {
-                args << datafile.fileName();
-                {
-                    StdoutSilencer guard;
-                    sparta.command(datacmd);
-                }
-                auto *ovito = new QProcess(this);
-                ovito->start(exe, args);
-            }
-        } else {
-            // launch program without arguments when no system exists (yet)
-            auto *proc = new QProcess(this);
-            proc->start(exe, args);
         }
     }
+    exampleMenu->setEnabled(!exampleMenu->isEmpty());
+}
+
+void SpartaGui::openExample()
+{
+    auto *act = qobject_cast<QAction *>(sender());
+    if (act) openFile(act->data().toString());
 }
 
 void SpartaGui::updateRecents(const QString &filename)
@@ -1058,6 +1012,7 @@ void SpartaGui::openFile(const QString &fileName)
     textEdit->setVarNameList();
     textEdit->setComputeIDList();
     textEdit->setFixIDList();
+    textEdit->setMixtureIDList();
     textEdit->setFileList();
     dirstatus->setText(QString(" Directory: ") + currentDir);
     status->setText(Cfg::STATUS_READY);
@@ -1144,15 +1099,11 @@ void SpartaGui::purgeInspectList()
             delete item->info;
             item->info = nullptr;
         }
-        if (item->data && !item->data->isVisible()) {
-            delete item->data;
-            item->data = nullptr;
-        }
         if (item->image && !item->image->isVisible()) {
             delete item->image;
             item->image = nullptr;
         }
-        if (!item->image && !item->data && !item->info) {
+        if (!item->image && !item->info) {
             delete item;
             it = inspectList.erase(it);
         } else {
@@ -1170,7 +1121,6 @@ void SpartaGui::inspectFile(const QString &fileName)
     purgeInspectList();
     auto *ilist  = new InspectData;
     ilist->info  = nullptr;
-    ilist->data  = nullptr;
     ilist->image = nullptr;
     inspectList.append(ilist);
 
@@ -1221,20 +1171,26 @@ void SpartaGui::inspectFile(const QString &fileName)
     // SPARTA is not re-entrant, so we can only query SPARTA when it is not running a simulation
     if (!sparta.isRunning()) {
         startSparta();
-        {
-            StdoutSilencer guard;
-            sparta.command("clear");
-            clearVariables();
-            sparta.command(QString("read_restart %1").arg(fileName));
-        }
+        // SPARTA has no "info" command, so we capture the screen output of the
+        // read_restart command itself. It summarizes the restored simulation:
+        // grid cells, surface elements, particles, and species/mixture counts.
         capturer->beginCapture();
-        sparta.command("info system group compute fix");
+        sparta.command("clear");
+        clearVariables();
+        sparta.command(QString("read_restart %1").arg(fileName));
         capturer->endCapture();
-        auto info    = capturer->getCapture();
+        auto info = capturer->getCapture();
+
+        const QString errmsg = sparta.lastErrorMessage();
+        if (!errmsg.isEmpty() && !errmsg.contains("Invalid SPARTA handle")) {
+            warning(this, "SPARTA-GUI Warning",
+                    "Error reading restart file " + fileName + ":", errmsg);
+            return;
+        }
+
         auto infolog = QString("%1.info.log").arg(fileName);
         QFile dumpinfo(infolog);
         if (dumpinfo.open(QIODevice::WriteOnly)) {
-            auto infodata = QString("%1.tmp.data").arg(fileName);
             dumpinfo.write(info.c_str(), info.size());
             dumpinfo.close();
             auto *infoviewer = new FileViewer(
@@ -1242,35 +1198,6 @@ void SpartaGui::inspectFile(const QString &fileName)
             infoviewer->show();
             ilist->info = infoviewer;
             dumpinfo.remove();
-            // read_restart restores the pair style but not the kspace style, so a
-            // pair style that uses long-range Coulomb/dispersion would make the
-            // render "run 0" in the image viewer abort with "...requires a KSpace
-            // style". Probe with a silenced no-op run and let SPARTA be the oracle:
-            // only when it reports that a KSpace style is required do we add the
-            // harmless "kspace_style zero" (which computes nothing but satisfies the
-            // requirement). Pair styles that do not use kspace are left as "none"
-            // (the read_restart default) -- adding a kspace style would itself error
-            // there (no per-atom charge / incompatible pair style). lastErrorMessage()
-            // both reads and clears the error, so the probe leaves SPARTA clean.
-            QString kspaceerr;
-            {
-                StdoutSilencer guard;
-                sparta.command("run 0 post no");
-                kspaceerr = sparta.lastErrorMessage();
-            }
-            if (kspaceerr.contains("requires a KSpace style")) {
-                StdoutSilencer guard;
-                sparta.command("kspace_style zero 1.0e-6");
-            }
-            {
-                StdoutSilencer guard;
-                sparta.command(QString("write_data %1 pair ij noinit").arg(infodata));
-            }
-            auto *dataviewer = new FileViewer(
-                infodata, this, QString("SPARTA-GUI: data file for %1").arg(shortName));
-            dataviewer->show();
-            ilist->data = dataviewer;
-            QFile(infodata).remove();
             auto *inspect_image = new ImageViewer(fileName, &sparta, this);
             inspect_image->setFont(font());
             inspect_image->setMinimumSize(Cfg::MINIMUM_WIDTH, Cfg::MINIMUM_HEIGHT);
@@ -1437,7 +1364,7 @@ void SpartaGui::logUpdate()
     else
         step = static_cast<int>(sparta.lastThermoAs<int64_t>("step", 0));
 
-    // extract cached thermo data when SPARTA is executing a minimize or run command
+    // extract cached stats data while SPARTA is executing a run command
     if (chartwindow && sparta.isRunning()) {
         // thermo data is not yet valid during setup
         if (sparta.lastThermoAs<int>("setup", 0)) return;
@@ -1608,7 +1535,7 @@ void SpartaGui::warnHighBufferUsage()
                       "output was used by up to %1%.</p>"
                       "<p align=\"justify\"><b>This can slow down the simulation.</b></p>");
         QString mesg2("<p align=\"justify\">Please consider reducing the amount of output "
-                      "to the screen, for example by increasing the thermo interval in the "
+                      "to the screen, for example by increasing the stats interval in the "
                       "input from %1 to %2, or reducing the data update interval in the "
                       "preferences from %3 to %4, or something similar.</p>");
 
@@ -1754,8 +1681,8 @@ void SpartaGui::createChartWindow(QSettings &settings)
 
     const auto *unitptr = static_cast<const char *>(sparta.extractGlobal("units"));
     if (unitptr) chartwindow->setUnits(QString::fromUtf8(unitptr));
-    auto normflag = sparta.extractSetting("thermo_norm");
-    chartwindow->setNorm(normflag != 0);
+    // SPARTA stats output has no equivalent of LAMMPS' per-atom normalization
+    chartwindow->setNorm(false);
     chartwindow->setRangeEnabled(false);
 
     if (settings.value(Keys::VIEWCHART, true).toBool())
@@ -1773,6 +1700,22 @@ void SpartaGui::doRun(bool use_buffer)
 
     purgeInspectList();
     autoSave();
+
+    // the SPARTA "quit" command calls exit() and thus would terminate not just
+    // the run but the entire SPARTA-GUI process. Warn before running such input.
+    if (textEdit->toPlainText().contains(
+            QRegularExpression(QStringLiteral(R"(^\s*quit\b)"), // clazy:exclude=use-static-qregularexpression
+                               QRegularExpression::MultilineOption))) {
+        QMessageBox msg(QMessageBox::Warning, "SPARTA-GUI Warning",
+                        "The input contains a 'quit' command.\n\n"
+                        "Executing 'quit' will terminate not only the SPARTA run "
+                        "but the entire SPARTA-GUI application.\n\n"
+                        "Do you want to run the input anyway?",
+                        QMessageBox::Yes | QMessageBox::No, this);
+        msg.setDefaultButton(QMessageBox::No);
+        if (msg.exec() != QMessageBox::Yes) return;
+    }
+
     if (!use_buffer && textEdit->document()->isModified()) {
         int rv = showUnsavedChangesDialog(this, currentFile,
                                           "Do you want to save the buffer before running SPARTA?");
@@ -1796,10 +1739,8 @@ void SpartaGui::doRun(bool use_buffer)
     lastCpuBucket = -1; // force the cpuuse stylesheet to be applied on the first poll
 
     int numthreads = nthreads;
-    int accel      = settings.value(Keys::ACCELERATOR, AcceleratorTab::OpenMP).toInt();
-    if ((accel != AcceleratorTab::OpenMP) && (accel != AcceleratorTab::Intel) &&
-        (accel != AcceleratorTab::Kokkos) && (accel != AcceleratorTab::Gpu))
-        numthreads = 1;
+    int accel      = settings.value(Keys::ACCELERATOR, AcceleratorTab::None).toInt();
+    if (accel != AcceleratorTab::Kokkos) numthreads = 1;
     if (numthreads > 1)
         status->setText(QString("Running SPARTA with %1 thread(s)...").arg(numthreads));
     else
@@ -1895,12 +1836,12 @@ void SpartaGui::renderImage()
         startSparta();
         if (!sparta.extractSetting("box_exist")) {
             // there is no current system defined yet.
-            // so we select the input from the start to the first run or minimize command
+            // so we select the input from the start to the first run command
             // add a run 0 and thus create the state of the initial system without running.
             // this will allow us to create a snapshot image.
             auto saved = textEdit->textCursor();
             textEdit->moveCursor(QTextCursor::Start);
-            if (textEdit->find(QRegularExpression(QStringLiteral(R"(^\s*(run|minimize)\s+)")))) {
+            if (textEdit->find(QRegularExpression(QStringLiteral(R"(^\s*run\s+)")))) {
                 auto cursor = textEdit->textCursor();
                 cursor.movePosition(QTextCursor::PreviousBlock);
                 cursor.movePosition(QTextCursor::EndOfLine);
@@ -2044,18 +1985,6 @@ void SpartaGui::viewVariables()
     }
 }
 
-void SpartaGui::setDocver()
-{
-    QString git_branch = static_cast<const char *>(sparta.extractGlobal("git_branch"));
-    if ((git_branch == "stable") || (git_branch == "maintenance")) {
-        docver = "/stable/";
-    } else if (git_branch == "release") {
-        docver = "/";
-    } else {
-        docver = "/latest/";
-    }
-}
-
 void SpartaGui::autoSave()
 {
     // no need to auto-save, if the document has no name or is not modified.
@@ -2104,72 +2033,57 @@ void SpartaGui::about()
     QString to_clipboard(version.c_str());
     to_clipboard += "\n\n";
 
-    std::string info    = "SPARTA is currently running. SPARTA config info not available.\n";
-    std::string details = "";
+    QString info = "SPARTA is currently running. SPARTA config info not available.\n";
+    QString details;
 
-    // SPARTA is not re-entrant, so we can only query SPARTA when it is not running
+    // SPARTA is not re-entrant, so we can only query SPARTA when it is not running.
+    // SPARTA has no "info" command, so the version and the available styles are
+    // queried through the SPARTA library interface instead.
     if (!sparta.isRunning()) {
         startSparta();
-        capturer->beginCapture();
-        sparta.command("info config styles");
-        capturer->endCapture();
-        info       = capturer->getCapture();
-        auto start = info.find("SPARTA version");
-        auto mid   = info.find("Styles information", start);
-        auto end   = info.find("Info-Info-Info", start);
+        info.clear();
+        const auto *verstr = static_cast<const char *>(sparta.extractGlobal("sparta_version"));
+        if (verstr) info += QString("SPARTA version: %1\n").arg(verstr);
+        info += QString("KOKKOS package: %1\n")
+                    .arg(sparta.configHasPackage("KOKKOS") ? "included" : "not included");
+        info += QString("PNG image support: %1\n")
+                    .arg(sparta.configHasPngSupport() ? "yes" : "no");
+        info += QString("JPEG image support: %1\n")
+                    .arg(sparta.configHasJpegSupport() ? "yes" : "no");
 
-        // protect from a failed or incomplete capture
-        if ((start != std::string::npos) && (mid != std::string::npos) &&
-            (end != std::string::npos)) {
-            details = std::string(info, mid, end - mid);
-            info    = std::string(info, start, mid - start);
-
-            // condense newlines and trailing whitespace in detailed styles info string
-            auto loc = details.find("\n\n\n\n");
-            while (loc != std::string::npos) {
-                details.replace(loc, 4, "\n\n");
-                loc = details.find("\n\n\n\n");
+        // build a listing of the available styles for each category
+        auto styleInfo = [&](const char *category, const char *label) {
+            QStringList styles;
+            const int nstyles = sparta.styleCount(category);
+            for (int i = 0; i < nstyles; ++i) {
+                const QString style = sparta.styleName(category, i);
+                if (!style.isEmpty()) styles << style;
             }
-            loc = details.find("\r\n\r\n\r\n\r\n");
-            while (loc != std::string::npos) {
-                details.replace(loc, 8, "\r\n\r\n");
-                loc = details.find("\r\n\r\n\r\n\r\n");
-            }
-            loc = details.find("les:\n\n");
-            while (loc != std::string::npos) {
-                details.replace(loc, 6, "les:\n");
-                loc = details.find("les:\n\n");
-            }
-            loc = details.find("les:\r\n\r\n");
-            while (loc != std::string::npos) {
-                details.replace(loc, 8, "les:\r\n");
-                loc = details.find("les:\r\n\r\n");
-            }
-            loc = details.find(" \n");
-            while (loc != std::string::npos) {
-                details.replace(loc, 2, "\n");
-                loc = details.find(" \n");
-            }
-            loc = details.find(" \r\n");
-            while (loc != std::string::npos) {
-                details.replace(loc, 3, "\r\n");
-                loc = details.find(" \r\n");
-            }
-        }
+            styles.sort();
+            return QString("%1 styles:\n%2\n\n").arg(label, styles.join(' '));
+        };
+        details += styleInfo("collide", "Collide");
+        details += styleInfo("react", "React");
+        details += styleInfo("surf_collide", "Surface collide");
+        details += styleInfo("surf_react", "Surface react");
+        details += styleInfo("compute", "Compute");
+        details += styleInfo("fix", "Fix");
+        details += styleInfo("dump", "Dump");
+        details += styleInfo("region", "Region");
+        details += styleInfo("command", "Command");
     }
 
-    info += citeme.toStdString();
-    to_clipboard += info.c_str();
-    to_clipboard += details.c_str();
+    info += citeme;
+    to_clipboard += info;
+    to_clipboard += details;
 
 #if QT_CONFIG(clipboard)
     if (auto *clip = QGuiApplication::clipboard()) clip->setText(to_clipboard);
 #endif
 
     auto fsize = QFontMetrics(QApplication::font()).size(Qt::TextSingleLine, citeme);
-    AboutDialog dialog(QString::fromStdString(version).trimmed(),
-                       QString::fromStdString(info).trimmed(),
-                       QString::fromStdString(details).trimmed(), fsize.width(), this);
+    AboutDialog dialog(QString::fromStdString(version).trimmed(), info.trimmed(),
+                       details.trimmed(), fsize.width(), this);
     dialog.exec();
 }
 
@@ -2260,7 +2174,7 @@ void SpartaGui::help()
         "or clicking on 'Run SPARTA from Editor Buffer' in the 'Run' menu, "
         "SPARTA will be run "
         "with the contents of editor buffer as input. The output of the SPARTA "
-        "run is captured and displayed in an Output window. The thermodynamic data "
+        "run is captured and displayed in an Output window. The stats output data "
         "is displayed in a chart window. Both are updated regularly during the "
         "run, as is a progress bar in the main window. The running simulation "
         "can be stopped cleanly by typing <b>Ctrl-/</b> or by clicking on "
@@ -2274,7 +2188,7 @@ void SpartaGui::help()
         "<p>When opening a file, the editor will determine the directory "
         "where the input file resides and switch its current working directory "
         "to that same folder and thus enabling the run to read other files in "
-        "that folder, e.g. a data file. The GUI will show its current working "
+        "that folder, e.g. a surface or grid file. The GUI will show its current working "
         "directory in the status bar. In addition to using the menu, the "
         "editor window can also receive files as the first command line "
         "argument or via drag-n-drop from a graphical file manager or a "
@@ -2291,7 +2205,7 @@ void SpartaGui::help()
         "features included into the SPARTA library linked to the SPARTA-GUI. "
         "A number of settings can be adjusted in the 'Preferences' dialog (in "
         "the 'Edit' menu or from <b>Ctrl-P</b>) which includes selecting "
-        "accelerator packages and number of OpenMP threads. Due to its nature "
+        "the KOKKOS accelerator package and number of OpenMP threads. Due to its nature "
         "as a graphical application, it is <b>not</b> possible to use the "
         "SPARTA-GUI in parallel with MPI.</p>");
     mb.setIconPixmap(QPixmap(Cfg::MAIN_ICON).scaled(64, 64));
@@ -2304,8 +2218,8 @@ void SpartaGui::help()
 
 void SpartaGui::manual()
 {
-    if (docver.isEmpty()) setDocver();
-    QDesktopServices::openUrl(QUrl(Cfg::DOCS_URL + docver));
+    // the SPARTA online manual is not versioned
+    QDesktopServices::openUrl(QUrl(Cfg::DOCS_URL + "/doc/Manual.html"));
 }
 
 void SpartaGui::howto()
@@ -2353,13 +2267,9 @@ void SpartaGui::preferences()
 {
     // default settings are committed to QSettings during initialization of SPARTA-GUI
     QSettings settings;
-    int oldthreads   = settings.value(Keys::NTHREADS, 1).toInt();
-    int oldaccel     = settings.value(Keys::ACCELERATOR, AcceleratorTab::None).toInt();
-    bool oldecho     = settings.value(Keys::ECHO, false).toBool();
-    bool oldcite     = settings.value(Keys::CITE, false).toBool();
-    int oldiprec     = settings.value(Keys::INTELPREC, AcceleratorTab::Mixed).toInt();
-    bool oldgpuneigh = settings.value(Keys::GPUNEIGH, true).toBool();
-    bool oldgpupair  = settings.value(Keys::GPUPAIRONLY, false).toBool();
+    int oldthreads = settings.value(Keys::NTHREADS, 1).toInt();
+    int oldaccel   = settings.value(Keys::ACCELERATOR, AcceleratorTab::None).toInt();
+    bool oldecho   = settings.value(Keys::ECHO, false).toBool();
 
     Preferences prefs(&sparta, this);
     prefs.setFont(font());
@@ -2370,12 +2280,8 @@ void SpartaGui::preferences()
         // suffixes or package commands
         int newthreads = settings.value(Keys::NTHREADS, nthreads).toInt();
         int newaccel   = settings.value(Keys::ACCELERATOR, AcceleratorTab::None).toInt();
-        int newiprec   = settings.value(Keys::INTELPREC, AcceleratorTab::Mixed).toInt();
-        if ((oldaccel != newaccel) || (oldthreads != newthreads) || (oldiprec != newiprec) ||
-            (oldecho != settings.value(Keys::ECHO, false).toBool()) ||
-            (oldcite != settings.value(Keys::CITE, false).toBool()) ||
-            (oldgpuneigh != settings.value(Keys::GPUNEIGH, true).toBool()) ||
-            (oldgpupair != settings.value(Keys::GPUPAIRONLY, false).toBool())) {
+        if ((oldaccel != newaccel) || (oldthreads != newthreads) ||
+            (oldecho != settings.value(Keys::ECHO, false).toBool())) {
             if (sparta.isRunning()) {
                 stopRun();
                 runner->wait();
@@ -2388,7 +2294,7 @@ void SpartaGui::preferences()
             }
             spartastatus->hide();
             // reset nthreads if accelerator does not support threads
-            if ((newaccel == AcceleratorTab::Opt) || (newaccel == AcceleratorTab::None))
+            if (newaccel == AcceleratorTab::None)
                 nthreads = 1;
             else
                 nthreads = newthreads;
@@ -2400,80 +2306,22 @@ void SpartaGui::preferences()
         textEdit->setReformatOnReturn(settings.value(Keys::RETURN, false).toBool());
         textEdit->setAutoComplete(settings.value(Keys::AUTOMATIC, true).toBool());
         settings.endGroup();
+        // the examples folder setting may have changed
+        buildExampleMenu();
     }
 }
 
-void SpartaGui::appendAcceleratorArgs(int accel, QSettings &settings)
+void SpartaGui::appendAcceleratorArgs(int accel)
 {
-    if (accel == AcceleratorTab::Opt) {
-        spartaArgs.push_back("-suffix");
-        spartaArgs.push_back("opt");
-    } else if (accel == AcceleratorTab::OpenMP) {
-        spartaArgs.push_back("-suffix");
-        spartaArgs.push_back("omp");
-        spartaArgs.push_back("-pk");
-        spartaArgs.push_back("omp");
-        spartaArgs.push_back(std::to_string(nthreads));
-    } else if (accel == AcceleratorTab::Intel) {
-        spartaArgs.push_back("-suffix");
-        if (sparta.configHasPackage("OPENMP")) {
-            spartaArgs.push_back("hybrid");
-            spartaArgs.push_back("intel");
-            spartaArgs.push_back("omp");
-            spartaArgs.push_back("-pk");
-            spartaArgs.push_back("omp");
-            spartaArgs.push_back(std::to_string(nthreads));
-        } else {
-            spartaArgs.push_back("intel");
-        }
-        spartaArgs.push_back("-pk");
-        spartaArgs.push_back("intel");
-        spartaArgs.push_back("0");
-        spartaArgs.push_back("omp");
-        spartaArgs.push_back(std::to_string(nthreads));
-        spartaArgs.push_back("mode");
-        int iprec = settings.value(Keys::INTELPREC, AcceleratorTab::Mixed).toInt();
-        if (iprec == AcceleratorTab::Double)
-            spartaArgs.push_back("double");
-        else if (iprec == AcceleratorTab::Mixed)
-            spartaArgs.push_back("mixed");
-        else if (iprec == AcceleratorTab::Single)
-            spartaArgs.push_back("single");
-        else // use mixed precision for invalid value so there is no syntax error crash
-            spartaArgs.push_back("mixed");
-    } else if (accel == AcceleratorTab::Gpu) {
-        spartaArgs.push_back("-suffix");
-        if ((nthreads > 1) && sparta.configHasPackage("OPENMP")) {
-            spartaArgs.push_back("hybrid");
-            spartaArgs.push_back("gpu");
-            spartaArgs.push_back("omp");
-            spartaArgs.push_back("-pk");
-            spartaArgs.push_back("omp");
-            spartaArgs.push_back(std::to_string(nthreads));
-        } else {
-            spartaArgs.push_back("gpu");
-        }
-        spartaArgs.push_back("-pk");
-        spartaArgs.push_back("gpu");
-        spartaArgs.push_back("1"); // can use only one GPU without MPI
-        spartaArgs.push_back("omp");
-        spartaArgs.push_back(std::to_string(nthreads));
-        spartaArgs.push_back("neigh");
-        if (settings.value(Keys::GPUNEIGH, true).toBool())
-            spartaArgs.push_back("yes");
-        else
-            spartaArgs.push_back("no");
-        spartaArgs.push_back("pair/only");
-        if (settings.value(Keys::GPUPAIRONLY, false).toBool())
-            spartaArgs.push_back("on");
-        else
-            spartaArgs.push_back("off");
-    } else if (accel == AcceleratorTab::Kokkos) {
-        spartaArgs.push_back("-kokkos");
+    // SPARTA only supports the KOKKOS accelerator package: -k on [t <N>] -sf kk
+    if ((accel == AcceleratorTab::Kokkos) && sparta.configHasPackage("KOKKOS")) {
+        spartaArgs.push_back("-k");
         spartaArgs.push_back("on");
-        spartaArgs.push_back("t");
-        spartaArgs.push_back(std::to_string(nthreads));
-        spartaArgs.push_back("-suffix");
+        if (nthreads > 1) {
+            spartaArgs.push_back("t");
+            spartaArgs.push_back(std::to_string(nthreads));
+        }
+        spartaArgs.push_back("-sf");
         spartaArgs.push_back("kk");
     }
 }
@@ -2485,19 +2333,15 @@ void SpartaGui::startSparta()
     QSettings settings;
     int accel = settings.value(Keys::ACCELERATOR, AcceleratorTab::None).toInt();
     // if non-threaded accelerator selected reset threads
-    if ((accel == AcceleratorTab::None) || (accel == AcceleratorTab::Opt)) {
+    if (accel == AcceleratorTab::None) {
         nthreads = 1;
     }
     qputenv("OMP_NUM_THREADS", QByteArray::number(nthreads));
 
-    appendAcceleratorArgs(accel, settings);
+    appendAcceleratorArgs(accel);
 
     if (settings.value(Keys::ECHO, false).toBool()) {
         spartaArgs.push_back("-echo");
-        spartaArgs.push_back("screen");
-    }
-    if (settings.value(Keys::CITE, false).toBool()) {
-        spartaArgs.push_back("-cite");
         spartaArgs.push_back("screen");
     }
 

@@ -13,7 +13,8 @@
 #define IMAGEVIEWER_INTERNAL_H
 
 // Implementation-detail symbols shared between imageviewer.cpp and
-// imageviewersettings.cpp (the dialog builders). Not part of any public API.
+// imageviewersettings.cpp (the settings dialog builders). Not part of any
+// public API.
 
 #include <QColor>
 #include <QIcon>
@@ -30,98 +31,32 @@ class QWidget;
 
 // ---- shared UI constants -------------------------------------------------
 inline const QString blank(" ");
-inline constexpr double VDW_ON           = 1.6;
-inline constexpr double VDW_OFF          = 0.5;
-inline constexpr double VDW_CUT          = 1.0;
-inline constexpr double SHINY_ON         = 0.6;
-inline constexpr double SHINY_OFF        = 0.2;
-inline constexpr double SHINY_CUT        = 0.4;
-inline constexpr double ZOOM_MIN         = 0.1;
-inline constexpr double ZOOM_MAX         = 10.0;
-inline constexpr int DEFAULT_NPOINTS     = 100000;
-inline constexpr double DEFAULT_DIAMETER = 0.2;
-inline constexpr double DEFAULT_OPACITY  = 0.5;
-inline constexpr int TITLE_MARGIN        = 10;
-inline constexpr int CONTENT_MARGIN      = 5;
-inline constexpr int LAYOUT_SPACING      = 6;
-inline constexpr int MINIMUM_WIDTH       = 400;
-inline constexpr int MINIMUM_HEIGHT      = 300;
-inline constexpr int EXTRA_WIDTH         = 150;
-inline constexpr int EXTRA_HEIGHT        = 100;
-inline constexpr int RESET_ALL_COLORS    = 10;
-inline constexpr int ICON_SIZE           = 48;
+inline constexpr double SHINY_ON      = 1.0; // the SPARTA default
+inline constexpr double SHINY_OFF     = 0.3;
+inline constexpr double SHINY_CUT     = 0.65;
+inline constexpr double ZOOM_MIN      = 0.1;
+inline constexpr double ZOOM_MAX      = 10.0;
+inline constexpr int TITLE_MARGIN     = 10;
+inline constexpr int CONTENT_MARGIN   = 5;
+inline constexpr int LAYOUT_SPACING   = 6;
+inline constexpr int MINIMUM_WIDTH    = 400;
+inline constexpr int MINIMUM_HEIGHT   = 300;
+inline constexpr int ICON_SIZE        = 48;
+inline constexpr int MAX_VALUE_COLS   = 99; // upper bound of the c_ID[N] column spinbox
 
-// ---- shared enumerations -------------------------------------------------
-enum { FRAME, FILLED, TRANSPARENT, POINTS };
-enum { TYPE, ELEMENT, CONSTANT };
+// The default per-species color assignment of SPARTA's dump image: species i
+// gets deftypecolors[(i - 1) % 6] (see sparta/src/dump_image.cpp). RGB values
+// match SPARTA's image.cpp color database so the GUI preview is faithful and
+// unchanged assignments can be omitted from the generated command.
+inline const QList<QPair<QString, QColor>> defspeciescolors = {
+    {{"red"}, {255, 0, 0}},    {{"green"}, {0, 255, 0}}, {{"blue"}, {0, 0, 255}},
+    {{"yellow"}, {255, 255, 0}}, {{"aqua"}, {0, 255, 255}}, {{"purple"}, {128, 0, 128}}};
 
-// needs to be kept in sync with the dump image tri flag values
-enum { NONE, TRIANGLES, CYLINDERS, BOTH };
-
-// same list as in dump image
-inline const QList<QPair<QString, QColor>> deftypecolors = {
-    {{"red"}, {255, 0, 0}},           {{"forestgreen"}, {34, 139, 34}},
-    {{"blue"}, {0, 0, 255}},          {{"gold"}, {255, 215, 0}},
-    {{"cyan"}, {0, 255, 255}},        {{"magenta"}, {255, 0, 255}},
-    {{"silver"}, {192, 192, 192}},    {{"orange"}, {255, 128, 0}},
-    {{"lime"}, {0, 255, 0}},          {{"gray"}, {128, 128, 128}},
-    {{"darkred"}, {139, 0, 0}},       {{"darkgreen"}, {0, 100, 0}},
-    {{"darkblue"}, {0, 0, 139}},      {{"darkcyan"}, {0, 139, 139}},
-    {{"darkmagenta"}, {139, 0, 139}}, {{"darkgray"}, {69, 69, 69}}};
-
-// per-bond "compute bond/local" attributes offered for the bond color-by-value
-// feature; a single attribute yields a per-bond vector referenced as c_<id>
-inline const QStringList bondLocalAttrs = {"dist",   "dx",       "dy",    "dz",    "engpot",
-                                           "force",  "fx",       "fy",    "fz",    "engvib",
-                                           "engrot", "engtrans", "omega", "velvib"};
-
-// reserved compute ID the GUI creates/destroys to color bonds by a per-bond value
-inline const QString bondComputeId = QStringLiteral("imgviewer_bondcolor");
-
-/**
- * @brief Store settings for displaying graphics from a fix or compute in a SPARTA snapshot image
- */
-class ImageInfo {
-public:
-    ImageInfo() = delete;
-    /** Custom constructor */
-    ImageInfo(bool _enabled, const QString &_style, int _colorstyle, const QString &_color,
-              double _opacity, double _flag1, double _flag2) :
-        enabled(_enabled), style(_style), colorstyle(_colorstyle), color(_color), opacity(_opacity),
-        flag1(_flag1), flag2(_flag2)
-    {
-    }
-
-    bool enabled;   ///< display graphics if true
-    QString style;  ///< name of style
-    int colorstyle; ///< color style for graphics: TYPE, ELEMENT, CONSTANT
-    QString color;  ///< custom color of graphics objects for style == CONSTANT
-    double opacity; ///< opacity of graphics objects for style == CONSTANT
-    double flag1;   ///< Flag #1 for graphics
-    double flag2;   ///< Flag #2 for graphics
-};
-
-/**
- * @brief Store settings for displaying a region in a SPARTA snapshot image
- */
-class RegionInfo {
-public:
-    RegionInfo() = delete;
-    /** Custom constructor */
-    RegionInfo(bool _enabled, int _style, const QString &_color, double _diameter, double _opacity,
-               int _npoints) :
-        enabled(_enabled), style(_style), color(_color), diameter(_diameter), opacity(_opacity),
-        npoints(_npoints)
-    {
-    }
-
-    bool enabled;    ///< display region if true
-    int style;       ///< style of region object: FRAME, FILLED, TRANSPARENT, or POINTS
-    QString color;   ///< color of region display
-    double diameter; ///< diameter value for POINTS and FRAME
-    double opacity;  ///< opacity for TRANSPARENT
-    int npoints;     ///< number of points to be used for POINTS style region display
-};
+// particle attributes of SPARTA's dump particle usable for coloring or sizing
+// particles in dump image (c_/f_/v_/p_/i_/d_ references may be typed in freely)
+inline const QStringList particleAttributes = {"id", "type", "proc", "x",  "y",  "z",
+                                               "xs", "ys",   "zs",   "vx", "vy", "vz",
+                                               "ke", "erot", "evib"};
 
 // ---- shared free helpers (defined in imageviewer.cpp) --------------------
 QPixmap color_icon(const QColor &color);
@@ -132,3 +67,7 @@ void saveJsonColors(QWidget *parent, const QJsonArray &colors, const QJsonObject
 void selectComboItem(QComboBox *box, const QString &text);
 
 #endif
+
+// Local Variables:
+// c-basic-offset: 4
+// End:

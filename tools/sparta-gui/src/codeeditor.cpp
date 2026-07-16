@@ -48,16 +48,14 @@
 CodeEditor::CodeEditor(QWidget *parent) :
     QPlainTextEdit(parent), currentComp(nullptr), commandComp(new QCompleter(this)),
     fixComp(new QCompleter(this)), computeComp(new QCompleter(this)),
-    dumpComp(new QCompleter(this)), atomComp(new QCompleter(this)), pairComp(new QCompleter(this)),
-    bondComp(new QCompleter(this)), angleComp(new QCompleter(this)),
-    dihedralComp(new QCompleter(this)), improperComp(new QCompleter(this)),
-    kspaceComp(new QCompleter(this)), regionComp(new QCompleter(this)),
-    integrateComp(new QCompleter(this)), minimizeComp(new QCompleter(this)),
+    dumpComp(new QCompleter(this)), regionComp(new QCompleter(this)),
+    collideComp(new QCompleter(this)), reactComp(new QCompleter(this)),
+    surfCollideComp(new QCompleter(this)), surfReactComp(new QCompleter(this)),
     variableComp(new QCompleter(this)), unitsComp(new QCompleter(this)),
     groupComp(new QCompleter(this)), varnameComp(new QCompleter(this)),
     fixidComp(new QCompleter(this)), compidComp(new QCompleter(this)),
-    fileComp(new QCompleter(this)), extraComp(new QCompleter(this)), highlight(NO_HIGHLIGHT),
-    highlighterror(false), reformatOnReturn(false), automaticCompletion(true), docver("")
+    mixtureComp(new QCompleter(this)), fileComp(new QCompleter(this)), highlight(NO_HIGHLIGHT),
+    highlighterror(false), reformatOnReturn(false), automaticCompletion(true)
 {
     helpAction = new QShortcut(QKeySequence::fromString("Ctrl+?"), parent);
     connect(helpAction, &QShortcut::activated, this, &CodeEditor::getHelp);
@@ -73,11 +71,9 @@ CodeEditor::CodeEditor(QWidget *parent) :
                 &CodeEditor::insertCompletedCommand);
     };
 
-    for (auto *c :
-         {commandComp,   fixComp,      computeComp,  dumpComp,     atomComp,   pairComp,
-          bondComp,      angleComp,    dihedralComp, improperComp, kspaceComp, regionComp,
-          integrateComp, minimizeComp, variableComp, unitsComp,    groupComp,  varnameComp,
-          fixidComp,     compidComp,   fileComp,     extraComp})
+    for (auto *c : {commandComp, fixComp, computeComp, dumpComp, regionComp, collideComp,
+                    reactComp, surfCollideComp, surfReactComp, variableComp, unitsComp,
+                    groupComp, varnameComp, fixidComp, compidComp, mixtureComp, fileComp})
         setupCompleter(c);
 
     // initialize help system
@@ -88,24 +84,15 @@ CodeEditor::CodeEditor(QWidget *parent) :
             auto words = line.trimmed().split(QRegularExpression("\\s+"), Qt::SkipEmptyParts);
             if (words.size() > 2) {
 
-                if (words.at(1) == "pair_style") {
-                    pairMap[words.at(2)] = words.at(0);
-                } else if (words.at(1) == "bond_style") {
-                    bondMap[words.at(2)] = words.at(0);
-                } else if (words.at(1) == "angle_style") {
-                    angleMap[words.at(2)] = words.at(0);
-                } else if (words.at(1) == "dihedral_style") {
-                    dihedralMap[words.at(2)] = words.at(0);
-                } else if (words.at(1) == "improper_style") {
-                    improperMap[words.at(2)] = words.at(0);
-                } else if (words.at(1) == "fix") {
+                if (words.at(1) == "fix") {
                     fixMap[words.at(2)] = words.at(0);
                 } else if (words.at(1) == "compute") {
                     computeMap[words.at(2)] = words.at(0);
-                } else if (words.at(1) == "kspace_style") {
-                    cmdMap["kspace_style"] = "kspace_style.html";
+                } else if (words.at(1) == "dump") {
+                    dumpMap[words.at(2)] = words.at(0);
+                } else if (words.at(1) == "surf_react") {
+                    surfReactMap[words.at(2)] = words.at(0);
                 }
-                // ignoring: dump, fix_modify ATC
             } else if (words.size() == 2) {
                 cmdMap[words.at(1)] = words.at(0);
             } else {
@@ -196,6 +183,7 @@ QString CodeEditor::reformatLine(const QString &line)
     bool rebuildVarNameComp   = false;
     bool rebuildComputeIDComp = false;
     bool rebuildFixIDComp     = false;
+    bool rebuildMixtureIDComp = false;
 
     if (!words.isEmpty()) {
         // commented line. do nothing
@@ -214,6 +202,8 @@ QString CodeEditor::reformatLine(const QString &line)
             if (words[0] == "compute") rebuildComputeIDComp = true;
             // new/updated fix command -> update completer
             if (words[0] == "fix") rebuildFixIDComp = true;
+            // new/updated mixture command -> update completer
+            if (words[0] == "mixture") rebuildMixtureIDComp = true;
         }
 
         // append remaining words with just a single blank added.
@@ -224,12 +214,7 @@ QString CodeEditor::reformatLine(const QString &line)
             // special cases
 
             if (i < 3) {
-                // additional space for types or type ranges
-                if (words[0] == "pair_coeff")
-                    for (int j = words[i].size(); j < typesize; ++j)
-                        newtext += ' ';
-
-                // pad 4 for IDs and 8 for groups
+                // pad IDs and styles of fix/compute/dump commands
                 if ((words[0] == "fix") || (words[0] == "compute") || (words[0] == "dump")) {
                     if (i == 1) {
                         for (int j = words[i].size(); j < idsize; ++j)
@@ -242,9 +227,8 @@ QString CodeEditor::reformatLine(const QString &line)
             }
 
             if (i < 2) {
-                if ((words[0] == "bond_coeff") || (words[0] == "angle_coeff") ||
-                    (words[0] == "dihedral_coeff") || (words[0] == "improper_coeff") ||
-                    (words[0] == "mass"))
+                // additional space for species in mixture assignments
+                if (words[0] == "mixture")
                     for (int j = words[i].size(); j < typesize; ++j)
                         newtext += ' ';
             }
@@ -254,6 +238,7 @@ QString CodeEditor::reformatLine(const QString &line)
     if (rebuildVarNameComp) setVarNameList();
     if (rebuildComputeIDComp) setComputeIDList();
     if (rebuildFixIDComp) setFixIDList();
+    if (rebuildMixtureIDComp) setMixtureIDList();
     return newtext;
 }
 
@@ -267,19 +252,13 @@ COMPLETER_INIT_FUNC(command, Command)
 COMPLETER_INIT_FUNC(fix, Fix)
 COMPLETER_INIT_FUNC(compute, Compute)
 COMPLETER_INIT_FUNC(dump, Dump)
-COMPLETER_INIT_FUNC(atom, Atom)
-COMPLETER_INIT_FUNC(pair, Pair)
-COMPLETER_INIT_FUNC(bond, Bond)
-COMPLETER_INIT_FUNC(angle, Angle)
-COMPLETER_INIT_FUNC(dihedral, Dihedral)
-COMPLETER_INIT_FUNC(improper, Improper)
-COMPLETER_INIT_FUNC(kspace, Kspace)
 COMPLETER_INIT_FUNC(region, Region)
-COMPLETER_INIT_FUNC(integrate, Integrate)
-COMPLETER_INIT_FUNC(minimize, Minimize)
+COMPLETER_INIT_FUNC(collide, Collide)
+COMPLETER_INIT_FUNC(react, React)
+COMPLETER_INIT_FUNC(surfCollide, SurfCollide)
+COMPLETER_INIT_FUNC(surfReact, SurfReact)
 COMPLETER_INIT_FUNC(variable, Variable)
 COMPLETER_INIT_FUNC(units, Units)
-COMPLETER_INIT_FUNC(extra, Extra)
 
 #undef COMPLETER_INIT_FUNC
 
@@ -396,6 +375,39 @@ void CodeEditor::setFixIDList()
 
     setTextCursor(saved);
     fixidComp->setModel(new QStringListModel(fixid, fixidComp));
+}
+
+// build completer for mixture IDs from the SPARTA instance and the edit buffer
+
+void CodeEditor::setMixtureIDList()
+{
+    QStringList mixid;
+
+    // query mixtures known to the SPARTA instance (includes the
+    // predefined mixtures "all" and "species")
+    SpartaWrapper *sparta = &qobject_cast<SpartaGui *>(parent())->sparta;
+    int nmix              = sparta->idCount("mixture");
+    for (int i = 0; i < nmix; ++i) {
+        const QString name = sparta->idName("mixture", i);
+        if (!name.isEmpty() && !mixid.contains(name)) mixid << name;
+    }
+    if (!mixid.contains("all")) mixid << QStringLiteral("all");
+    if (!mixid.contains("species")) mixid << QStringLiteral("species");
+
+    QRegularExpression mixcmd(QStringLiteral(R"(^\s*mixture\s+(\S+)(\s+|$))"));
+    auto saved = textCursor();
+    // reposition cursor to beginning of text and search for mixture commands
+    auto cursor = textCursor();
+    cursor.movePosition(QTextCursor::Start);
+    setTextCursor(cursor);
+    while (find(mixcmd)) {
+        auto words = splitLine(textCursor().block().text().replace('\t', ' '));
+        if ((words.size() > 1) && !mixid.contains(words[1])) mixid << words[1];
+    }
+    mixid.sort();
+
+    setTextCursor(saved);
+    mixtureComp->setModel(new QStringListModel(mixid, mixtureComp));
 }
 
 void CodeEditor::setFileList()
@@ -680,15 +692,11 @@ void CodeEditor::contextMenuEvent(QContextMenuEvent *event)
 
     addMenuAction(menu, QString("SPARTA Commands Overview"), ":/icons/help-browser.svg", this,
                   &CodeEditor::openHelp)
-        ->setData(QString("/Commands_all.html"));
+        ->setData(QString("Section_commands.html"));
 
     addMenuAction(menu, QString("SPARTA Manual"), ":/icons/help-browser.svg", this,
                   &CodeEditor::openHelp)
-        ->setData(QString());
-
-    addMenuAction(menu, QString("SPARTA Tutorial"), ":/icons/tutorial-logo.png", this,
-                  &CodeEditor::openUrl)
-        ->setData(QString("https://spartatutorials.github.io/"));
+        ->setData(QString("Manual.html"));
 
     menu->exec(event->globalPos());
     delete menu;
@@ -856,32 +864,18 @@ void CodeEditor::runCompletion()
         if (words[0][0] == '#') return;
 
         currentComp = nullptr;
-        if (words[0] == "pair_style")
-            currentComp = pairComp;
-        else if (words[0] == "bond_style")
-            currentComp = bondComp;
-        else if (words[0] == "angle_style")
-            currentComp = angleComp;
-        else if (words[0] == "dihedral_style")
-            currentComp = dihedralComp;
-        else if (words[0] == "improper_style")
-            currentComp = improperComp;
-        else if (words[0] == "kspace_style")
-            currentComp = kspaceComp;
-        else if (words[0] == "atom_style")
-            currentComp = atomComp;
-        else if (words[0] == "run_style")
-            currentComp = integrateComp;
-        else if (words[0] == "minimize_style")
-            currentComp = minimizeComp;
+        if (words[0] == "collide")
+            currentComp = collideComp;
+        else if (words[0] == "react")
+            currentComp = reactComp;
         else if (words[0] == "units")
             currentComp = unitsComp;
-        else if ((words[0] == "change_box") || (words[0] == "displace_atoms") ||
-                 (words[0] == "velocity") || (words[0] == "write_dump"))
+        else if (words[0] == "create_particles")
+            currentComp = mixtureComp;
+        else if ((words[0] == "adapt_grid") || (words[0] == "read_isurf"))
             currentComp = groupComp;
-        else if ((words[0] == "fitpod") || (words[0] == "include") || (words[0] == "ndx2group") ||
-                 (words[0] == "read_data") || (words[0] == "read_dump") ||
-                 (words[0] == "read_restart") || (words[0] == "rerun")) {
+        else if ((words[0] == "include") || (words[0] == "jump") || (words[0] == "read_grid") ||
+                 (words[0] == "read_restart") || (words[0] == "read_surf")) {
             if (selected.contains('/')) {
                 if (popup && popup->isVisible()) popup->hide();
             } else
@@ -904,22 +898,23 @@ void CodeEditor::runCompletion()
             currentComp = regionComp;
         else if (words[0] == "variable")
             currentComp = variableComp;
-        else if ((words[0] == "fix") || (words[0] == "compute") || (words[0] == "dump"))
-            currentComp = groupComp;
+        else if (words[0] == "fix")
+            currentComp = fixComp;
+        else if (words[0] == "compute")
+            currentComp = computeComp;
+        else if (words[0] == "dump")
+            currentComp = dumpComp;
+        else if (words[0] == "surf_collide")
+            currentComp = surfCollideComp;
+        else if (words[0] == "surf_react")
+            currentComp = surfReactComp;
         else if (selected.startsWith("v_"))
             currentComp = varnameComp;
         else if (selected.startsWith("c_") || selected.startsWith("C_"))
             currentComp = compidComp;
         else if (selected.startsWith("f_") || selected.startsWith("F_"))
             currentComp = fixidComp;
-        else if ((words[0] == "read_data") && selected.startsWith("ex"))
-            currentComp = extraComp;
-        else if ((words[0] == "fitpod") || (words[0] == "molecule")) {
-            if (selected.contains('/')) {
-                if (popup && popup->isVisible()) popup->hide();
-            } else
-                currentComp = fileComp;
-        }
+
         if (currentComp) popupCompletion(words[2], popup);
         // completions for fourth word
     } else if ((words.size() > 3) && (words[3] == selected)) {
@@ -927,25 +922,15 @@ void CodeEditor::runCompletion()
         if (words[0][0] == '#') return;
 
         currentComp = nullptr;
-        if (words[0] == "fix")
-            currentComp = fixComp;
-        else if (words[0] == "compute")
-            currentComp = computeComp;
-        else if (words[0] == "dump")
-            currentComp = dumpComp;
-        else if ((words[0] == "pair_coeff") && (words[1] == "*") && (words[2] == "*")) {
-            if (selected.contains('/')) {
-                if (popup && popup->isVisible()) popup->hide();
-            } else
-                currentComp = fileComp;
-        } else if (selected.startsWith("v_"))
+        // "dump ID style mix-ID ..." and "fix ID emit/... mix-ID ..." take a mixture ID
+        if ((words[0] == "dump") || ((words[0] == "fix") && words[2].startsWith("emit/")))
+            currentComp = mixtureComp;
+        else if (selected.startsWith("v_"))
             currentComp = varnameComp;
         else if (selected.startsWith("c_") || selected.startsWith("C_"))
             currentComp = compidComp;
         else if (selected.startsWith("f_") || selected.startsWith("F_"))
             currentComp = fixidComp;
-        else if ((words[0] == "read_data") && selected.startsWith("ex"))
-            currentComp = extraComp;
 
         if (currentComp) popupCompletion(words[3], popup);
         // reference located anywhere further right in the line
@@ -957,8 +942,6 @@ void CodeEditor::runCompletion()
             currentComp = compidComp;
         else if (selected.startsWith("f_") || selected.startsWith("F_"))
             currentComp = fixidComp;
-        else if ((words[0] == "read_data") && selected.startsWith("ex"))
-            currentComp = extraComp;
 
         if (currentComp) popupCompletion(selected, popup);
     }
@@ -993,65 +976,35 @@ void CodeEditor::insertCompletedCommand(const QString &completion)
     setTextCursor(cursor);
 }
 
-void CodeEditor::setDocver()
-{
-    SpartaWrapper *sparta = &qobject_cast<SpartaGui *>(parent())->sparta;
-    docver                = "/";
-    {
-        QString git_branch = static_cast<const char *>(sparta->extractGlobal("git_branch"));
-        if ((git_branch == "stable") || (git_branch == "maintenance")) {
-            docver = "/stable/";
-        } else if (git_branch == "release") {
-            docver = "/";
-        } else {
-            docver = "/latest/";
-        }
-    }
-}
-
 void CodeEditor::getHelp()
 {
     QString page, help;
     findHelp(page, help);
-    if (docver.isEmpty()) setDocver();
+    // the SPARTA online documentation is not versioned
     if (!page.isEmpty())
-        QDesktopServices::openUrl(QUrl(QString("%1%2%3").arg(Cfg::DOCS_URL, docver, page)));
+        QDesktopServices::openUrl(QUrl(QString("%1/doc/%2").arg(Cfg::DOCS_URL, page)));
 }
 
 void CodeEditor::findHelp(QString &page, QString &help)
 {
     // process line of text where the cursor is
     auto text = textCursor().block().text().replace('\t', ' ').trimmed();
-    auto style =
-        QRegularExpression(R"(^(pair|bond|angle|dihedral|improper)_style\s+(\S+))").match(text);
     help.clear();
     page.clear();
-    if (style.hasMatch()) {
-        if (style.captured(1) == "pair") {
-            page = pairMap.value(style.captured(2), QString());
-            help = QString("pair_style %1").arg(style.captured(2));
-        } else if (style.captured(1) == "bond") {
-            page = bondMap.value(style.captured(2), QString());
-            help = QString("bond_style %1").arg(style.captured(2));
-        } else if (style.captured(1) == "angle") {
-            page = angleMap.value(style.captured(2), QString());
-            help = QString("angle_style %1").arg(style.captured(2));
-        } else if (style.captured(1) == "dihedral") {
-            page = dihedralMap.value(style.captured(2), QString());
-            help = QString("dihedral_style %1").arg(style.captured(2));
-        } else if (style.captured(1) == "improper") {
-            page = improperMap.value(style.captured(2), QString());
-            help = QString("improper_style %1").arg(style.captured(2));
-        }
-    }
 
-    style = QRegularExpression(R"(^(fix|compute)\s+\w+\s+\w+\s+(\S+))").match(text);
+    // fix/compute/dump/surf_collide/surf_react have their style as the third word
+    auto style = QRegularExpression(R"(^(fix|compute|dump|surf_collide|surf_react)\s+\w+\s+(\S+))")
+                     .match(text);
     if (style.hasMatch()) {
         help = QString("%1 %2").arg(style.captured(1), style.captured(2));
         if (style.captured(1) == "fix") {
             page = fixMap.value(style.captured(2), QString());
         } else if (style.captured(1) == "compute") {
             page = computeMap.value(style.captured(2), QString());
+        } else if (style.captured(1) == "dump") {
+            page = dumpMap.value(style.captured(2), QString());
+        } else if (style.captured(1) == "surf_react") {
+            page = surfReactMap.value(style.captured(2), QString());
         }
     }
 
@@ -1066,15 +1019,9 @@ void CodeEditor::findHelp(QString &page, QString &help)
 void CodeEditor::openHelp()
 {
     auto *act = qobject_cast<QAction *>(sender());
-    if (docver.isEmpty()) setDocver();
+    // the SPARTA online documentation is not versioned
     QDesktopServices::openUrl(
-        QUrl(QString("%1%2%3").arg(Cfg::DOCS_URL, docver, act->data().toString())));
-}
-
-void CodeEditor::openUrl()
-{
-    auto *act = qobject_cast<QAction *>(sender());
-    QDesktopServices::openUrl(QUrl(act->data().toString()));
+        QUrl(QString("%1/doc/%2").arg(Cfg::DOCS_URL, act->data().toString())));
 }
 
 // forward requests to view or inspect files to the corresponding SpartaGui methods

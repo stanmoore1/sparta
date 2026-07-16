@@ -9,365 +9,311 @@
 // This software is distributed under the GNU General Public License version 2 or later.
 ////////////////////////////////////////////////////////////////////////////////////////
 
-#include "dumpimage.h"
+// Pure command builders for SPARTA's `dump ID image mix-ID N file color diameter
+// [keywords...]` command and its dump_modify options.  All knowledge about the
+// SPARTA option syntax, defaults, and keyword order lives here (verified against
+// sparta/src/dump_image.cpp); the GUI only fills a DumpImageSettings struct.
 
-#include "constants.h"
+#include "dumpimage.h"
 
 #include "colormaps.h"
 
-#include <QRegularExpression>
+#include <QStringList>
 #include <algorithm>
 
-// SPARTA dump_image built-in defaults. The builder emits a color, color map,
-// light, or transparency setting only when it differs from these, so the
-// generated command stays compact without changing the rendered image: the
-// GUI's own defaults were reconciled to match SPARTA (the per-type color table
-// in deftypecolors mirrors the SPARTA color database). Deliberate GUI
-// divergences (the backcolor2 gradient and shiny) are emitted unconditionally.
-constexpr double DEF_TRANS     = 1.0; // fully opaque
+namespace {
+
+// SPARTA dump image built-in defaults (see src/dump_image.cpp and image.cpp).
+// The builders emit an option only when it differs from these.
+constexpr double DEF_BOXDIAM   = 0.02;
+constexpr double DEF_THETA     = 60.0;
+constexpr double DEF_PHI       = 30.0;
+constexpr double DEF_SHINY     = 1.0;
 constexpr double DEF_AMBIENT   = 0.0;
 constexpr double DEF_KEYLIGHT  = 0.9;
 constexpr double DEF_FILLLIGHT = 0.45;
 constexpr double DEF_BACKLIGHT = 0.9;
-const QString DEF_BOXCOLOR     = QStringLiteral("gold");
-const QString DEF_BACKCOLOR    = QStringLiteral("black");
 
-// Append region visualization arguments to the dump-image command.
-static void appendRegionArgs(QString &cmd, const DumpImageParams &p)
+// format a floating point number the way SPARTA reads it back (shortest form)
+QString num(double v)
 {
-    for (const auto &reg : p.regions) {
-        if (reg.second->enabled) {
-            QString id(reg.first.c_str());
-            const QString &color = reg.second->color;
-            switch (reg.second->style) {
-                case FRAME:
-                    cmd += " region " + id + blank + color;
-                    cmd += " frame " + QString::number(reg.second->diameter);
-                    cmd += " hull_points " + QString::number(reg.second->npoints);
-                    break;
-                case FILLED:
-                    cmd += " region " + id + blank + color + " filled";
-                    cmd += " hull_points " + QString::number(reg.second->npoints);
-                    break;
-                case TRANSPARENT:
-                    cmd += " region " + id + blank + color;
-                    cmd += " transparent " + QString::number(reg.second->opacity);
-                    cmd += " hull_points " + QString::number(reg.second->npoints);
-                    break;
-                case POINTS:
-                default:
-                    cmd += " region " + id + blank + color;
-                    cmd += " points " + QString::number(reg.second->npoints);
-                    cmd += blank + QString::number(reg.second->diameter);
-                    break;
-            }
-            cmd += blank;
-        }
-    }
+    return QString::number(v);
 }
 
-// Append the per-fix/compute draw styles. Returns true if any fix or compute is
-// active (the caller suppresses "noinit" in that case).
-static bool appendFixComputeStyles(QString &cmd, const DumpImageParams &p)
+// emit "v_<name>" when a variable override is set, the number otherwise
+QString numOrVar(double v, const QString &var)
 {
-    bool dofixes = false;
-    for (const auto &comp : p.computes) {
-        if (comp.second->enabled) {
-            dofixes = true;
-            QString id(comp.first.c_str());
-            switch (comp.second->colorstyle) {
-                case TYPE:
-                    cmd += " compute " + id + blank + "type ";
-                    break;
-                case ELEMENT:
-                    cmd += " compute " + id + blank + "element ";
-                    break;
-                case CONSTANT: // FALLTHROUGH
-                default:
-                    cmd += " compute " + id + blank + "const ";
-                    break;
-            }
-            cmd += QString::number(comp.second->flag1) + blank +
-                   QString::number(comp.second->flag2) + blank;
-        }
-    }
-    for (const auto &fix : p.fixes) {
-        if (fix.second->enabled) {
-            dofixes = true;
-            QString id(fix.first.c_str());
-            switch (fix.second->colorstyle) {
-                case TYPE:
-                    cmd += " fix " + id + blank + "type ";
-                    break;
-                case ELEMENT:
-                    cmd += " fix " + id + blank + "element ";
-                    break;
-                case CONSTANT: // FALLTHROUGH
-                default:
-                    cmd += " fix " + id + blank + "const ";
-                    break;
-            }
-            cmd += QString::number(fix.second->flag1) + blank + QString::number(fix.second->flag2) +
-                   blank;
-        }
-    }
-    return dofixes;
+    if (!var.isEmpty()) return "v_" + var;
+    return num(v);
 }
 
-// Append the definition of a color map. @p kw is the dump_modify keyword
-// ("amap" for atoms, "bmap" for bonds); @p pfx prefixes the custom color-stop
-// names so an atom map and a bond map with different gradients do not collide in
-// the global color namespace (atoms use "map", bonds use "bm").  When @p reverse
-// is set the map is mirrored: the stop order is flipped, and for continuous maps
-// the positions are remapped (pos -> 1 - pos) so they stay ascending and the
-// gradient is inverted (e.g. "RWB" reversed renders identically to "BWR").
-static void appendColorMapArgs(QString &cmd, const QString &kw, const QString &colormap,
-                               const QString &mapmin, const QString &mapmax, const QString &pfx,
-                               bool reverse)
-{
-    const ColorMapDef &def = colorMapDef(colormap);
-    const QString mmin     = (mapmin == "auto") ? QStringLiteral("min") : mapmin;
-    const QString mmax     = (mapmax == "auto") ? QStringLiteral("max") : mapmax;
+// prefix for the custom color names of the per-mode color-map stops, so maps
+// of different modes never collide in the dump's global color namespace
+const char *const cmapColorPrefix[DumpImageSettings::NUM_CMAP_MODES] = {
+    "guimapp", "guimapg", "guimaps", "guimapx", "guimapy", "guimapz"};
 
-    // work on a local copy of the stops so the optional reversal never mutates
-    // the shared definition returned by colorMapDef()
+// Build the argument text of one `cmap` dump_modify keyword for mode `mode`
+// (including any needed leading `color <name> <R> <G> <B>` definitions) from
+// the shared color-map table.  Returns an empty string when the map is not
+// active. See ColorMapSpec for the meaning of style/range.
+QString buildCmapArgs(const DumpImageSettings &s, int mode)
+{
+    const ColorMapSpec &m = s.cmap[mode];
+    if (!m.active) return {};
+
+    const ColorMapDef &def = colorMapDef(m.mapname);
+
+    // work on a copy of the stops; reversal must not mutate the shared table
     QList<ColorMapStop> stops = def.stops;
-    if (reverse) {
+    if (m.reverse) {
         std::reverse(stops.begin(), stops.end());
         if (def.continuous)
-            for (auto &s : stops)
-                s.pos = 1.0 - s.pos;
+            for (auto &stop : stops)
+                stop.pos = 1.0 - stop.pos;
     }
+    const int n = stops.size();
+    if (n < 1) return {};
 
-    // Resolve each stop to a color token: a SPARTA named color used verbatim, or
-    // a custom color "<pfx><n>" defined once via "color <pfx><n> R G B".  Distinct
-    // RGB values share a single custom color, numbered in order of first use.
-    QStringList colorref; // per-stop color token, parallel to stops
-    QStringList rgbseen;  // distinct "R G B" strings; index + 1 -> custom number
-    for (const auto &s : stops) {
-        if (!s.name.isEmpty()) {
-            colorref.append(s.name);
+    // 'a' (absolute) positions require numeric lo/hi bounds; fall back to 'f'
+    bool lonum = false, hinum = false;
+    const double loval = m.lo.toDouble(&lonum);
+    const double hival = m.hi.toDouble(&hinum);
+    const bool absolute = (m.range == 'a') && lonum && hinum && (hival > loval);
+    const QChar range   = absolute ? QChar('a') : QChar('f');
+
+    // map a 0..1 fraction to the emitted entry value
+    auto mapval = [&](double frac) {
+        return absolute ? (loval + frac * (hival - loval)) : frac;
+    };
+
+    // Resolve each stop to a color token: a SPARTA named color used verbatim,
+    // or a custom color defined once via "color <prefix><k> R G B".  Distinct
+    // RGB values share one custom color, numbered in order of first use.
+    QString colordefs;
+    QStringList colorref;
+    QStringList rgbseen;
+    const QString prefix = QString::fromLatin1(cmapColorPrefix[mode]);
+    for (const auto &stop : stops) {
+        if (!stop.name.isEmpty()) {
+            colorref.append(stop.name);
             continue;
         }
-        const QString rgb =
-            QStringLiteral("%1 %2 %3").arg(s.r, 0, 'f', 3).arg(s.g, 0, 'f', 3).arg(s.b, 0, 'f', 3);
-        int idx = rgbseen.indexOf(rgb);
+        const QString rgb = QStringLiteral("%1 %2 %3")
+                                .arg(stop.r, 0, 'f', 3)
+                                .arg(stop.g, 0, 'f', 3)
+                                .arg(stop.b, 0, 'f', 3);
+        int idx = static_cast<int>(rgbseen.indexOf(rgb));
         if (idx < 0) {
             rgbseen.append(rgb);
             idx = rgbseen.size() - 1;
-            cmd += " color " + pfx + QString::number(idx + 1) + " " + rgb;
+            colordefs += QString("color %1%2 %3 ").arg(prefix).arg(idx + 1).arg(rgb);
         }
-        colorref.append(pfx + QString::number(idx + 1));
+        colorref.append(prefix + QString::number(idx + 1));
     }
 
-    const int n = stops.size();
-    if (def.continuous) {
-        cmd += QString(" %1 %2 %3 cf 0.0 %4").arg(kw, mmin, mmax).arg(n);
-        for (int i = 0; i < n; ++i) {
-            const QString pos = (i == 0)       ? QStringLiteral("min")
-                                : (i == n - 1) ? QStringLiteral("max")
-                                               : QString::number(stops[i].pos);
-            cmd += " " + pos + " " + colorref[i];
-        }
-    } else {
-        cmd += QString(" %1 %2 %3 sa 1.0 %4").arg(kw, mmin, mmax).arg(n);
+    // fraction of stop i for maps whose table has no positions (sequences)
+    auto stopfrac = [&](int i) {
+        if (def.continuous) return stops[i].pos;
+        return (n > 1) ? static_cast<double>(i) / (n - 1) : 0.0;
+    };
+
+    QString args = QString("cmap %1 %2 %3 ").arg(cmapModeName[mode], m.lo, m.hi);
+
+    if (m.style == 's') {
+        // sequential: colors repeat in bins of width delta
+        args += QString("s%1 %2 %3").arg(range).arg(num(m.delta)).arg(n);
         for (const auto &c : colorref)
-            cmd += " " + c;
-    }
-}
-
-// Append the per-fix/compute color and transparency overrides.
-static void appendFixComputeColors(QString &cmd, const DumpImageParams &p)
-{
-    for (const auto &comp : p.computes) {
-        if (comp.second->enabled) {
-            QString id(comp.first.c_str());
-            const QString &color = comp.second->color;
-            cmd += " ccolor " + id + blank + color;
-            cmd += " ctrans " + id + blank + QString::number(comp.second->opacity);
-            cmd += blank;
+            args += " " + c;
+    } else if (m.style == 'd') {
+        // discrete: one equally wide value bin per stop; numeric bounds only
+        // (SPARTA's discrete-entry parser mishandles "min"/"max" entries)
+        args += QString("d%1 0.0 %2").arg(range).arg(n);
+        for (int i = 0; i < n; ++i) {
+            args += QString(" %1 %2 %3")
+                        .arg(num(mapval(static_cast<double>(i) / n)),
+                             num(mapval(static_cast<double>(i + 1) / n)), colorref[i]);
         }
-    }
-    for (const auto &fix : p.fixes) {
-        if (fix.second->enabled) {
-            QString id(fix.first.c_str());
-            const QString &color = fix.second->color;
-            cmd += " fcolor " + id + blank + color;
-            cmd += " ftrans " + id + blank + QString::number(fix.second->opacity);
-            cmd += blank;
-        }
-    }
-}
-
-DumpImageCommand buildDumpImageCommand(const DumpImageParams &p)
-{
-    QString d; // render options (after "image <N> <file>")
-    QString m; // dump_modify options
-
-    const int hhrot   = (p.hrot > 180) ? 360 - p.hrot : p.hrot;
-    const bool do_vdw = p.vdwfactor > VDW_CUT;
-
-    // atom color
-    const QString atomColorTok = (!p.atomcustom && p.useelements) ? QStringLiteral("element")
-                                                                  : p.atomcolor;
-    d += blank + atomColorTok;
-
-    // atom diameter
-    if (!p.atomcustom) {
-        if (p.usediameter && do_vdw)
-            d += blank + "diameter";
-        else
-            d += " type";
     } else {
-        if ((p.atomdiam == "diameter") && p.usediameter && do_vdw)
-            d += blank + "diameter";
-        else
-            d += " type";
-    }
-
-    if (!p.showatoms) d += " atom no";
-    if (p.showbodies && (p.body_flag == 1)) {
-        d += QString(" body %1 %2 %3").arg(p.bodycolor).arg(p.bodydiam).arg(p.bodyflag);
-    } else if (p.showlines && (p.line_flag == 1))
-        d += QString(" line %1 %2").arg(p.linecolor).arg(p.linediam);
-    else if (p.showtris && (p.tri_flag == 1))
-        d += QString(" tri %1 %2 %3").arg(p.tricolor).arg(p.triflag).arg(p.tridiam);
-    else if (p.showellipsoids && (p.ellipsoid_flag == 1)) {
-        d += QString(" ellipsoid %1 %2 %3 %4")
-                 .arg(p.ellipsoidcolor)
-                 .arg(p.ellipsoidflag)
-                 .arg(p.ellipsoidlevel)
-                 .arg(p.ellipsoiddiam);
-    }
-    d += QString(" size %1 %2").arg(p.xsize).arg(p.ysize);
-    d += QString(" zoom %1").arg(p.zoom);
-    d += QString(" shiny %1 ").arg(p.shinyfactor);
-    d += QString(" fsaa %1").arg(p.antialias ? "yes" : "no");
-    if (p.nbondtypes > 0) {
-        if (do_vdw || !p.showbonds)
-            d += " bond none none ";
-        else
-            d += QString(" bond %1 %2 ").arg(p.bondcolor).arg(p.bonddiam);
-    }
-    if (p.dimension == 3) {
-        d += QString(" view %1 %2").arg(hhrot).arg(p.vrot);
-    }
-    if (p.usessao) d += QString(" ssao yes %1 %2").arg(Cfg::SSAO_SEED).arg(p.ssaoval);
-    if (p.showbox)
-        d += QString(" box yes %1").arg(p.boxdiam);
-    else
-        d += " box no 0.0";
-    // subbox and axes default to "no" in SPARTA, so emit them only when shown
-    if (p.showsubbox) d += QString(" subbox yes %1").arg(p.subboxdiam);
-
-    if (p.showaxes) d += QString(" axes %1 %2 %3").arg(p.axesloc).arg(p.axeslen).arg(p.axesdiam);
-
-    if (p.autobond && p.haspairstyle) {
-        // use custom bond diameter value, if present
-        QRegularExpression validnum(R"((^\d+\.?\d*|^\d*\.?\d+))");
-        auto match = validnum.match(p.bonddiam);
-        if (match.hasMatch()) {
-            d += blank + "autobond" + blank + QString::number(p.bondcutoff) + blank + p.bonddiam;
-        } else {
-            d += blank + "autobond" + blank + QString::number(p.bondcutoff) + " 0.5";
+        // continuous: first entry at "min", last at "max", interior stops at
+        // their (strictly ascending) table positions
+        args += QString("c%1 0.0 %2").arg(range).arg(n);
+        for (int i = 0; i < n; ++i) {
+            QString pos;
+            if (i == 0)
+                pos = QStringLiteral("min");
+            else if (i == n - 1)
+                pos = QStringLiteral("max");
+            else
+                pos = num(mapval(stopfrac(i)));
+            args += " " + pos + " " + colorref[i];
         }
     }
-
-    appendRegionArgs(d, p);
-
-    const bool dofixes = appendFixComputeStyles(d, p);
-
-    // center defaults to the box center "s 0.5 0.5 0.5"; emit only when moved
-    if ((p.xcenter != 0.5) || (p.ycenter != 0.5) || (p.zcenter != 0.5))
-        d += QString(" center s %1 %2 %3").arg(p.xcenter).arg(p.ycenter).arg(p.zcenter);
-
-    // the camera up direction defaults to "0 0 1" in 3d and "0 1 0" in 2d
-    const double defyup = (p.dimension == 2) ? 1.0 : 0.0;
-    const double defzup = (p.dimension == 2) ? 0.0 : 1.0;
-    if ((p.xup != 0.0) || (p.yup != defyup) || (p.zup != defzup))
-        d += QString(" up %1 %2 %3").arg(p.xup).arg(p.yup).arg(p.zup);
-
-    // ---- dump_modify options ----
-
-    // change global color definitions first so they apply everywhere, but emit
-    // only those that differ from the SPARTA built-in defaults: deftypecolors
-    // mirrors the SPARTA color database, so an unmodified table emits nothing
-    const int numcolors    = p.color_list.size();
-    const int ndefcolors   = deftypecolors.size();
-    const bool prunecolors = (numcolors == ndefcolors);
-
-    for (int i = 0; i < numcolors; ++i) {
-        if (prunecolors && (p.color_list[i].first == deftypecolors[i].first) &&
-            (p.color_list[i].second == deftypecolors[i].second))
-            continue;
-        m += QString(" color %1 %2 %3 %4")
-                 .arg(p.color_list[i].first)
-                 .arg(p.color_list[i].second.redF())
-                 .arg(p.color_list[i].second.greenF())
-                 .arg(p.color_list[i].second.blueF());
-    }
-    // assign type colors only where the name differs from the default SPARTA
-    // assignment for that type (type i -> deftypecolors[(i - 1) % ndefcolors])
-    for (int i = 1; i <= p.ntypes; ++i) {
-        const QString curname = p.color_list[(i - 1) % numcolors].first;
-        const QString defname = deftypecolors[(i - 1) % ndefcolors].first;
-        if (curname == defname) continue;
-        m += QString(" acolor %1 %2").arg(i).arg(curname);
-    }
-
-    if (p.boxcolor != DEF_BOXCOLOR) m += " boxcolor " + p.boxcolor;
-
-    // background: with the gradient enabled (the GUI default, a deliberate
-    // divergence from the solid SPARTA default) the backcolor/backcolor2 pair is
-    // emitted together. With the gradient off the background is solid and only
-    // backcolor is emitted, and only when it differs from the SPARTA default, so
-    // backcolor2 is never emitted without backcolor.
-    if (p.usegradient) {
-        m += " backcolor " + p.backcolor;
-        m += " backcolor2 " + p.backcolor2;
-    } else if (p.backcolor != DEF_BACKCOLOR) {
-        m += " backcolor " + p.backcolor;
-    }
-
-    if (p.axestrans != DEF_TRANS) m += QString(" axestrans %1").arg(p.axestrans);
-    if (p.boxtrans != DEF_TRANS) m += QString(" boxtrans %1").arg(p.boxtrans);
-    if (p.atomtrans != DEF_TRANS) m += QString(" atrans * %1").arg(p.atomtrans);
-    if ((p.bond_flag == 1) && (p.bondtrans != DEF_TRANS))
-        m += QString(" btrans * %1").arg(p.bondtrans);
-
-    const bool lightsdefault = (p.ambientlight == DEF_AMBIENT) && (p.keylight == DEF_KEYLIGHT) &&
-                               (p.filllight == DEF_FILLLIGHT) && (p.backlight == DEF_BACKLIGHT);
-    if (!lightsdefault)
-        m += QString(" lights %1 %2 %3 %4")
-                 .arg(p.ambientlight)
-                 .arg(p.keylight)
-                 .arg(p.filllight)
-                 .arg(p.backlight);
-
-    if (p.useelements) m += blank + p.elements + blank + p.adiams + blank;
-    if (p.usesigma) m += blank + p.adiams + blank;
-    if (!p.useelements && !p.usesigma && (p.atomSize != 1.0)) m += blank + p.adiams + blank;
-
-    // apply the selected color map only when atoms are colored by a per-atom
-    // value; for type/element coloring the map is unused, so omit it
-    const bool atomByValue = (atomColorTok != "type") && (atomColorTok != "element");
-    if (atomByValue)
-        appendColorMapArgs(m, "amap", p.colormap, p.mapmin, p.mapmax, "map", p.revcolormap);
-    if (p.bondbyvalue)
-        appendColorMapArgs(m, "bmap", p.bondcolormap, p.bondmapmin, p.bondmapmax, "bm",
-                           p.revbondcolormap);
-
-    appendFixComputeColors(m, p);
-
-    return {d, m, dofixes};
+    return colordefs + args;
 }
 
-QString toWriteDumpCommand(const DumpImageCommand &c, const QString &group, const QString &file)
+} // namespace
+
+QString buildDumpImageCommand(const DumpImageSettings &s)
 {
-    QString cmd = "write_dump " + group + " image '" + file + "'" + c.dumpargs;
-    if (!c.dofixes) cmd += " noinit";
-    cmd += " modify" + c.modifyargs;
+    QString cmd;
+
+    // positional arguments: color and diameter source
+    cmd += s.color + " " + s.diameter;
+
+    // keyword order follows the SPARTA documentation / parse loop
+
+    if (!s.particle) cmd += " particle no";
+    if (s.numericdiam) cmd += " pdiam " + num(s.pdiamvalue);
+
+    // grid volume rendering and grid cut planes are mutually exclusive in
+    // SPARTA; the planes win when both are (erroneously) enabled
+    const bool anyplane = s.gridx || s.gridy || s.gridz;
+    if (s.grid && !anyplane && !s.gridcolor.isEmpty()) cmd += " grid " + s.gridcolor;
+    if (s.gridx && !s.gridxcolor.isEmpty())
+        cmd += " gridx " + num(s.gridxcoord) + " " + s.gridxcolor;
+    if (s.gridy && !s.gridycolor.isEmpty())
+        cmd += " gridy " + num(s.gridycoord) + " " + s.gridycolor;
+    if (s.gridz && !s.gridzcolor.isEmpty())
+        cmd += " gridz " + num(s.gridzcoord) + " " + s.gridzcolor;
+
+    if (s.surf) cmd += " surf " + s.surfcolor + " " + num(s.surfdiam);
+
+    cmd += QString(" size %1 %2").arg(s.xsize).arg(s.ysize);
+
+    // camera settings; SPARTA forces view 0 0 and up 0 1 0 for 2d systems
+    if (s.dimension == 3) {
+        if ((s.theta != DEF_THETA) || (s.phi != DEF_PHI) || !s.thetavar.isEmpty() ||
+            !s.phivar.isEmpty())
+            cmd += " view " + numOrVar(s.theta, s.thetavar) + " " + numOrVar(s.phi, s.phivar);
+    }
+    if ((s.cx != 0.5) || (s.cy != 0.5) || (s.cz != 0.5) || s.centerdynamic ||
+        !s.cxvar.isEmpty() || !s.cyvar.isEmpty() || !s.czvar.isEmpty()) {
+        cmd += QString(" center %1 %2 %3 %4")
+                   .arg(s.centerdynamic ? "d" : "s", numOrVar(s.cx, s.cxvar),
+                        numOrVar(s.cy, s.cyvar), numOrVar(s.cz, s.czvar));
+    }
+    if (s.dimension == 3) {
+        if ((s.upx != 0.0) || (s.upy != 0.0) || (s.upz != 1.0))
+            cmd += QString(" up %1 %2 %3").arg(num(s.upx), num(s.upy), num(s.upz));
+    }
+    if ((s.zoom != 1.0) || !s.zoomvar.isEmpty()) cmd += " zoom " + numOrVar(s.zoom, s.zoomvar);
+
+    // NOTE: no `persp` keyword: SPARTA errors out with "not yet supported"
+
+    if (!s.box)
+        cmd += " box no " + num(s.boxdiam);
+    else if (s.boxdiam != DEF_BOXDIAM)
+        cmd += " box yes " + num(s.boxdiam);
+    if (s.subbox) cmd += " subbox yes " + num(s.subboxdiam);
+    if (s.gline) cmd += " gline yes " + num(s.glinediam);
+    if (s.sline) cmd += " sline yes " + num(s.slinediam);
+    if (s.axes) cmd += QString(" axes yes %1 %2").arg(num(s.axeslen), num(s.axesdiam));
+    if (s.shiny != DEF_SHINY) cmd += " shiny " + num(s.shiny);
+    if (s.ssao) cmd += QString(" ssao yes %1 %2").arg(s.ssaoseed).arg(num(s.ssaoint));
+    if (s.fsaa) cmd += " fsaa yes";
+
     return cmd;
+}
+
+QStringList buildDumpModifyCommands(const DumpImageSettings &s, const QString &id, bool movie)
+{
+    QStringList cmds;
+    const QString head = "dump_modify " + id + " ";
+
+    // background: a solid non-default color, or the bottom/top pair of the
+    // vertical gradient (backcolor2 is only meaningful together with backcolor)
+    if (s.gradient) {
+        cmds << head + "backcolor " + s.backcolor;
+        cmds << head + "backcolor2 " + s.backcolor2;
+    } else if (s.backcolor != QLatin1String("black")) {
+        cmds << head + "backcolor " + s.backcolor;
+    }
+
+    if (s.box && (s.boxcolor != QLatin1String("yellow"))) cmds << head + "boxcolor " + s.boxcolor;
+    if (s.subbox && (s.subboxcolor != QLatin1String("yellow")))
+        cmds << head + "subboxcolor " + s.subboxcolor;
+
+    // user-defined custom colors (0..1 float RGB triples)
+    for (const auto &cc : s.customcolors)
+        cmds << head + "color " + cc.first + " " + cc.second;
+
+    // grid: per-proc colors, outline color, grid group
+    const bool anyplane = s.gridx || s.gridy || s.gridz;
+    const bool anygrid  = (s.grid && !anyplane) || anyplane;
+    if (s.grid && !anyplane && (s.gridcolor == QLatin1String("proc"))) {
+        for (const auto &gc : s.gcolors)
+            cmds << head + "gcolor " + gc.first + " " + gc.second;
+    }
+    if (s.gline && (s.glinecolor != QLatin1String("white")))
+        cmds << head + "glinecolor " + s.glinecolor;
+    if (anygrid && !s.gridgroup.isEmpty() && (s.gridgroup != QLatin1String("all")))
+        cmds << head + "gridgroup " + s.gridgroup;
+
+    // particles: per-type/per-proc colors and per-type diameters
+    if (s.particle &&
+        ((s.color == QLatin1String("type")) || (s.color == QLatin1String("proc")))) {
+        for (const auto &pc : s.pcolors)
+            cmds << head + "pcolor " + pc.first + " " + pc.second;
+    }
+    if (s.particle && !s.numericdiam && (s.diameter == QLatin1String("type"))) {
+        for (const auto &pd : s.pdiams)
+            cmds << head + "pdiam " + pd.first + " " + num(pd.second);
+    }
+
+    // region clip for particles (from dump particle)
+    if (!s.region.isEmpty() && (s.region != QLatin1String("none")))
+        cmds << head + "region " + s.region;
+
+    // surfs: single color, per-proc colors, outline color, surf group
+    if (s.surf) {
+        if ((s.surfcolor == QLatin1String("one")) && (s.surfcolorone != QLatin1String("gray")))
+            cmds << head + "scolor * " + s.surfcolorone;
+        if (s.surfcolor == QLatin1String("proc")) {
+            for (const auto &sc : s.scolors)
+                cmds << head + "scolor " + sc.first + " " + sc.second;
+        }
+    }
+    if (s.sline && (s.slinecolor != QLatin1String("white")))
+        cmds << head + "slinecolor " + s.slinecolor;
+    if (s.surf && !s.surfgroup.isEmpty() && (s.surfgroup != QLatin1String("all")))
+        cmds << head + "surfgroup " + s.surfgroup;
+
+    // light intensities (only when changed from the SPARTA defaults)
+    if ((s.amblight != DEF_AMBIENT) || (s.keylight != DEF_KEYLIGHT) ||
+        (s.filllight != DEF_FILLLIGHT) || (s.backlight != DEF_BACKLIGHT)) {
+        cmds << head +
+                QString("lights %1 %2 %3 %4")
+                    .arg(num(s.amblight), num(s.keylight), num(s.filllight), num(s.backlight));
+    }
+
+    // the six independent color maps, in fixed mode order
+    for (int mode = 0; mode < DumpImageSettings::NUM_CMAP_MODES; ++mode) {
+        const QString args = buildCmapArgs(s, mode);
+        if (!args.isEmpty()) cmds << head + args;
+    }
+
+    // movie-only settings
+    if (movie) {
+        if (s.framerate > 0.0) cmds << head + "framerate " + num(s.framerate);
+        if (s.bitrate > 0) cmds << head + "bitrate " + QString::number(s.bitrate);
+    }
+
+    return cmds;
+}
+
+QString buildDumpSnippet(const DumpImageSettings &s, bool movie, const QString &file, int every)
+{
+    const QString id    = movie ? QStringLiteral("movie") : QStringLiteral("viz");
+    const QString style = movie ? QStringLiteral("movie") : QStringLiteral("image");
+
+    QString out = QString("dump %1 %2 %3 %4 %5 ").arg(id, style, s.mixture).arg(every).arg(file);
+    out += buildDumpImageCommand(s);
+    out += '\n';
+    if (!movie) out += "dump_modify " + id + " pad 9\n";
+    const QStringList modify = buildDumpModifyCommands(s, id, movie);
+    for (const auto &cmd : modify)
+        out += cmd + '\n';
+    return out;
 }
 
 // Local Variables:
