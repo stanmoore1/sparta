@@ -383,24 +383,6 @@ FlagWarnings Class
 
 -----
 
-ImageInfo Class
----------------
-
-.. doxygenclass:: ImageInfo
-   :members:
-   :protected-members:
-
------
-
-RegionInfo Class
-----------------
-
-.. doxygenclass:: RegionInfo
-   :members:
-   :protected-members:
-
------
-
 StdCapture Class
 ----------------
 

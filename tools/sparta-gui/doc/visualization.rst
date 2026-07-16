@@ -46,13 +46,13 @@ Automatic settings
 ------------------
 
 By default, SPARTA-GUI renders the particles of the mixture "all",
-colored by their species type using the default color sequence of the
-`dump image <https://sparta.github.io/doc/dump_image.html>`_ command,
-with a particle diameter inferred from the cell size of the simulation
-grid so that particles are visible but do not dominate the image.  When
-the simulation defines surface elements, they are shown as well.  All
-of these choices can be changed in the settings dialogs described
-below.
+colored and sized by their species type using the default assignments
+of the `dump image <https://sparta.github.io/doc/dump_image.html>`_
+command.  When the simulation defines surface elements, they are shown
+as well.  When the system does not contain any particles yet, the grid
+cells are rendered instead, so the first image is not just an empty
+box.  All of these choices can be changed in the settings dialog
+described below.
 
 -----------
 
@@ -120,7 +120,7 @@ Available controls
 The Image Viewer window consists of three main areas: a menu/toolbar
 strip at the top, the rendered image in the center, and a settings panel
 on the right side.  Following the general theme of SPARTA-GUI of
-extensive keyboard shortcut support, you can select most text fields by
+extensive keyboard shortcut support, you can select most controls by
 using the `Alt` key and the underlined letter.  For example the *File*
 menu is opened with `Alt-F` and its entries can be also selected the
 same way or using the cursor keys and `Enter`.  Keyboard shortcuts
@@ -145,17 +145,28 @@ The **menu bar row** has:
      clipboard so they can be pasted into a SPARTA input script.  This
      allows the current visualization settings to be reproduced during a
      simulation run, including in the :ref:`slide show viewer <slideshow>`.
+   - **Copy dump movie command**: Same as the previous entry, but
+     composes a `dump movie
+     <https://sparta.github.io/doc/dump_image.html>`_ command instead,
+     including *framerate* and *bitrate* `dump_modify
+     <https://sparta.github.io/doc/dump_modify.html>`_ settings.  The
+     dump movie command requires a SPARTA library compiled with
+     ``-D SPARTA_FFMPEG=yes``.
+   - **Load Colors from JSON...** / **Save Colors to JSON...**: Load or
+     save the current per-species color assignments from/to a JSON
+     format file, so that a customized color assignment can be restored
+     later (these settings are otherwise reset when the Image Viewer is
+     closed).
+   - **Reset Colors**: Reset the per-species colors to the default
+     color sequence of the dump image command.
    - **Close** (`Ctrl-W`): Close the Image Viewer window.
    - **Quit** (`Ctrl-Q`): Quit the entire application.
 - The **busy indicator**, a small palette icon that is colored |palette|
   while SPARTA is rendering a new image and grayed out |inactive| when
   rendering is complete.
-- The **Particle size** text field, where the particle diameter (in
-  distance units, corresponding to the *pdiam* keyword) can be adjusted.
-- The **Width** spin box where the image width can be set.  It can be
-  accessed using the `Alt-W` keyboard shortcut.
-- The **Height** spin box, where the image height can be set.  It can
-  be accessed using the `Alt-H` keyboard shortcut.
+- The **Width** (`Alt-W`) and **Height** (`Alt-H`) spin boxes, where
+  the size of the rendered image in pixels can be set (the *size*
+  keyword).
 
 The **toolbar buttons** row below the menu bar provides quick access to
 several rendering options and view manipulations.  From left to right
@@ -164,24 +175,24 @@ there are:
 - **SSAO** (toggle): Enable or disable `Screen Space Ambient Occlusion
   <https://en.wikipedia.org/wiki/Screen_space_ambient_occlusion>`_
   rendering for a more spatial, depth-shaded appearance, at the
-  expense of more CPU time.  This corresponds to the *ssao* keyword.
+  expense of more CPU time (the *ssao* keyword).
 - **Anti-aliasing** (toggle): Render the image at double resolution and
   scale down for smoother edges.  `Full Scene Anti-Aliasing (FSAA)
   <https://en.wikipedia.org/wiki/Spatial_anti-aliasing#Super_sampling_/_full-scene_anti-aliasing>`_
-  produces higher quality images at the expense of more CPU time.  This
-  corresponds to the *fsaa* keyword.
-- **Shininess** (toggle): Switch between shiny and matte surface
-  rendering (the *shiny* keyword).
+  produces higher quality images at the expense of more CPU time (the
+  *fsaa* keyword).
+- **Shininess** (toggle): Switch between shiny and matte rendering of
+  spheres and cylinders (the *shiny* keyword).
 - **Particles** (toggle): Show or hide the particles (the *particle*
   keyword).
 - **Grid** (toggle): Show or hide the grid cell volume rendering (the
   *grid* keyword).
 - **Surfaces** (toggle): Show or hide the surface elements (the *surf*
-  keyword).
+  keyword).  Only enabled when the simulation defines surfaces.
 - **Box** (toggle): Show or hide the simulation box drawn as colored
   cylinders (the *box* keyword).
-- **Axes** (toggle): Show or hide the coordinate axes arrows (the
-  *axes* keyword).
+- **Axes** (toggle): Show or hide the coordinate axes (the *axes*
+  keyword).
 - **Zoom in** / **Zoom out**: Adjust the zoom level in 10
   percent increments between 0.1x and 10.0x (the *zoom* keyword).
 - **Rotate left** / **Rotate right**: Rotate the view horizontally by
@@ -190,6 +201,8 @@ there are:
   10 degrees per click (the *theta* angle of the *view* keyword).
   For 2d simulations the view is fixed to look down the z axis and the
   rotation buttons are disabled.
+- **Recenter**: Reset the view center (the *center* keyword) to the
+  middle of the simulation box.
 - **Reset**: Reset the view to the default orientation and zoom level.
 - **Fit window**: Resize the window so the image is shown at its full
   size, without scroll bars or unused space.  This undoes a manual
@@ -201,293 +214,146 @@ colors can be changed in the :doc:`Preferences <dialogs>` dialog
 window.
 
 The **settings panel** on the right side of the window provides
-additional controls (most are explained in detail below):
+additional controls:
 
-- **Mixture**: A drop-down list to select which `mixture
+- **Mixture** (`Alt-X`): A drop-down list to select which `mixture
   <https://sparta.github.io/doc/mixture.html>`_ of particles to display
   (default is "all").  Only particles whose species belong to the
   selected mixture are rendered.  The list is retrieved from the
   current SPARTA instance.
-- **Global**: Opens the :ref:`Global image settings <global_settings>`
-  dialog for fine-grained control of axes, box, sub-box, background,
-  quality, view, center, camera, and lighting settings.
-- **Particles**: Opens the :ref:`Particle settings <particle_settings>`
-  dialog for detailed particle coloring and sizing options.
-- **Grid**: Opens the :ref:`Grid settings <grid_settings>` dialog to
-  configure the volume rendering of the grid cells and the grid cell
-  outlines.
-- **Grid planes**: Opens the :ref:`Grid plane settings <plane_settings>`
-  dialog to configure cut planes through the grid perpendicular to the
-  x, y, and z axes.
-- **Surfaces**: Opens the :ref:`Surface settings <surf_settings>` dialog
-  to configure the display of the surface elements.
+- One button for each tab of the :ref:`Dump Image Settings dialog
+  <image_settings_dialog>` described below: **Particles...**,
+  **Grid...**, **Grid Planes...**, **Surfaces...**, **Box & Axes...**,
+  **Camera...**, **Quality...**, and **Color Maps...**.  Each button
+  opens the same dialog with the corresponding tab selected.
 - **Help**: Opens this documentation page for the visualization
   features in SPARTA-GUI in a web browser.
 
 The image is re-rendered after each change to the buttons, text fields
-or settings dialogs, and when there are many particles or grid cells to
-render and high quality images with anti-aliasing are requested,
-re-rendering may take several seconds.  There is no GPU acceleration.
+or settings dialog, and when there are many particles, grid cells, or
+surface elements to render and high quality images with anti-aliasing
+are requested, re-rendering may take several seconds.  There is no GPU
+acceleration.
 
 ---------------
 
-.. _global_settings:
+.. _image_settings_dialog:
 
-Global image settings
----------------------
+Dump Image Settings dialog
+--------------------------
 
 .. index:: image settings
-.. index:: global image settings
+.. index:: dump image settings
 .. index:: dump_modify
 
 While some persistent default settings for the image output can be
 configured in the "Snapshot Image" tab of the :ref:`Preferences dialog
-<image_preferences>`, more fine-grained configuration is possible by
-opening the "Global image settings" dialog.  However, settings not
-stored by the preferences are reset when the image viewer window is
-closed.  This dialog is opened by pressing the "Global" button in the
-settings panel or by using the `Alt-L` keyboard shortcut.  The settings
-in this dialog correspond to options of the SPARTA `dump image
+<image_preferences>`, the full set of options of the `dump image
 <https://sparta.github.io/doc/dump_image.html>`_ and `dump_modify
-<https://sparta.github.io/doc/dump_modify.html>`_ commands.
+<https://sparta.github.io/doc/dump_modify.html>`_ commands is
+configured in the "Dump Image Settings" dialog.  Settings not stored by
+the preferences are reset when the image viewer window is closed (the
+per-species colors can be saved to a JSON file, see above).  The dialog
+is organized into eight tabs, and the buttons in the settings panel
+open it directly at the respective tab.  Press **Apply** to apply the
+current settings and re-render the image, or **Cancel** to discard
+changes.  The **Help** button opens the SPARTA `dump image
+<https://sparta.github.io/doc/dump_image.html>`_ documentation.
 
-.. TODO screenshot: capture the Global image settings dialog as
-   JPG/sparta-gui-image-global.png, then re-enable this figure.
+.. TODO screenshot: capture the Dump Image Settings dialog (e.g. the
+   Particles and the Grid tabs) as JPG/sparta-gui-image-settings.png
+   together with a rendered image of a SPARTA example as
+   JPG/sparta-gui-image.png, then re-enable this figure.
 ..
-.. .. image:: JPG/sparta-gui-image-global.png
+.. .. image:: JPG/sparta-gui-image-settings.png
 ..    :align: center
 ..    :width: 62%
 
-The dialog is organized into the following sections:
-
-**Axes**
-   Controls the display of coordinate axes arrows in the image
-   (the *axes* keyword).
-
-   - **Axes** (checkbox): Enable or disable rendering of coordinate axes.
-   - **Length**: The length of the axes lines as a fraction of the box
-     size.
-   - **Diameter**: The diameter of the axes lines as a fraction of the
-     box size.
-
-**Box**
-   Controls the display of the simulation box (the *box* keyword and
-   the *boxcolor* dump_modify keyword).
-
-   - **Box** (checkbox): Enable or disable rendering of the simulation
-     box.
-   - **Color**: The color used to draw the box edges.  Accepts the
-     `named colors <https://sparta.github.io/doc/dump_modify.html>`_
-     known to the dump image command.
-   - **Diameter**: The diameter of the box edge sticks as fraction
-     of the box size.
-
-**Sub-box**
-   Controls the display of the per-processor sub-domain boxes (the
-   *subbox* keyword and the *subboxcolor* dump_modify keyword).  Since
-   SPARTA-GUI runs SPARTA on a single processor, the sub-box coincides
-   with the simulation box; the setting is mainly useful when composing
-   a dump image command for a parallel run with the **Copy dump image
-   command** action.
-
-   - **Subbox** (checkbox): Enable or disable rendering of the sub-domain
-     boxes.
-   - **Color**: The color used to draw the sub-box edges.
-   - **Diameter**: The diameter of the sub-box edge sticks as
-     fraction of the box size.
-
-**Background**
-   Sets the background color(s) of the rendered image (the *backcolor*
-   and *backcolor2* dump_modify keywords).
-
-   - **Bottom color**: The background color at the bottom of the image.
-   - **Top color**: The background color at the top of the image.  If
-     the two colors differ, a vertical gradient is applied from bottom
-     to top.
-
-**Quality**
-   Controls rendering quality options.
-
-   - **FSAA** (checkbox): Enable or disable full-scene anti-aliasing
-     (the *fsaa* keyword).
-   - **SSAO** (checkbox): Enable or disable Screen Space Ambient
-     Occlusion for depth-shaded rendering (the *ssao* keyword).
-   - **SSAO strength**: The strength of the SSAO effect (range: 0.0 --
-     1.0).
-   - **Shiny**: The shininess factor for surface rendering (range: 0.0
-     -- 1.0, where 0.0 is matte and 1.0 is fully shiny; the *shiny*
-     keyword).
-
-**View**
-   Adjusts the camera position (the *view*, *center*, *up*, and *zoom*
-   keywords).
-
-   - **Theta**: The viewing angle in degrees away from the positive
-     z-axis.  Disabled for 2d systems, where SPARTA always looks down
-     the z-axis.
-   - **Phi**: The azimuthal viewing angle in degrees around the
-     z-axis.  Disabled for 2d systems.
-   - **Center X / Y / Z**: Fractional coordinates (0.5 = center of the
-     box) specifying the center of the view relative to the simulation
-     box.
-   - **Up X / Y / Z**: The components of the camera's up vector.  The
-     vector does not need to be normalized, but it must not be all
-     zeros, or the values are ignored.
-   - **Zoom**: The zoom factor of the view (range: 0.1 -- 10.0, where
-     values larger than 1.0 zoom in).  This is the same setting that
-     the zoom in/out buttons of the toolbar change in steps of
-     10 percent.
-
-   .. note::
-
-      The *persp* keyword of the dump image command (depth perspective)
-      is documented but not yet supported by SPARTA, therefore there is
-      no perspective setting in SPARTA-GUI; all images are rendered
-      with orthographic projection.
-
-**Lighting**
-   Adjusts the intensities of the four light sources used in the
-   rendering (the *lights* dump_modify keyword).  Each value is a
-   floating point number (range: 0.0 -- 1.0) representing the intensity
-   of the respective light source.
-
-   - **Ambient**: The intensity of the uniform, non-directional base
-     lighting that illuminates all parts of the scene equally.
-   - **Key**: The intensity of the primary, directional light source
-     that provides the main illumination and highlights.
-   - **Fill**: The intensity of the secondary directional light source
-     that fills in the shadows created by the key light.
-   - **Back**: The intensity of the tertiary directional light source
-     that illuminates the back of the objects, helping to separate
-     them from the background.
-
-Press **Apply** to apply the current settings and re-render the image,
-or **Cancel** to discard changes.  The **Help** button opens the SPARTA
-`dump image <https://sparta.github.io/doc/dump_image.html>`_
-documentation.
-
----------------
-
 .. _particle_settings:
 
-Particle settings
------------------
+Particles tab
+"""""""""""""
 
 .. index:: particle settings
 .. index:: particle coloring
 .. index:: mixture
 
-This dialog offers detailed customizations for the particle
-visualization that are not directly accessible from the main Image
-Viewer toolbar.  It is opened by pressing the "Particles" button in the
-settings panel or by using the `Alt-P` keyboard shortcut.
+Controls how particles are rendered:
 
-.. TODO screenshot: capture the Particle settings dialog as
-   JPG/sparta-gui-image-particles.png, then re-enable this figure.
-..
-.. .. image:: JPG/sparta-gui-image-particles.png
-..    :align: center
-..    :width: 62%
-
-The dialog contains the following controls:
-
-- **Particles** (checkbox): Enable or disable rendering of particles
-  (the *particle* keyword of the dump image command).
-- **Color by**: Select the per-particle attribute used for coloring.
-  The basic choices are *type* (the species type, with one fixed color
-  per type) and *proc* (the owning processor, always a single color in
-  SPARTA-GUI runs).  In addition, all per-particle attributes known to
-  the `dump particle <https://sparta.github.io/doc/dump.html>`_ command
-  can be selected, such as coordinates and velocity components, as well
-  as particle-style `variables <https://sparta.github.io/doc/variable.html>`_
+- **Show particles** (checkbox): Enable or disable rendering of
+  particles (the *particle* keyword).
+- **Mixture**: Select the `mixture
+  <https://sparta.github.io/doc/mixture.html>`_ of particles to render;
+  the same setting as the drop-down list in the settings panel.
+- **Color by**: Select what determines the color of each particle.
+  The basic choices are *type* (the species type, with one color per
+  type) and *proc* (the owning processor).  In addition, any
+  per-particle attribute known to the `dump particle
+  <https://sparta.github.io/doc/dump.html>`_ command can be selected
+  (``id``, ``x``, ``y``, ``z``, ``vx``, ``vy``, ``vz``, ``ke``,
+  ``erot``, ``evib``, and so on), as well as references to
+  particle-style `variables <https://sparta.github.io/doc/variable.html>`_
   (``v_name``), per-particle `compute
-  <https://sparta.github.io/doc/compute.html>`_ results (``c_ID`` or
-  ``c_ID[col]``), and per-particle `fix
-  <https://sparta.github.io/doc/fix.html>`_ results (``f_ID`` or
-  ``f_ID[col]``).  The contents of the list depend on what is available
-  in the current simulation.  When a numeric attribute is selected, the
-  colors are determined by the particle :ref:`color map <colormaps>`.
-- **Per-type colors**: When coloring by *type*, the color assigned to
-  each particle type can be customized (the *pcolor* dump_modify
-  keyword).  The per-type color rows can be scrolled when the current
-  system has many species.  A **Reset** button restores the compiled-in
-  default color sequence.
-- **Size by**: Select how the particle diameter is determined: a
-  constant diameter entered in the text field (the *pdiam* keyword of
-  the dump image command, in distance units), the particle *type* with
-  an editable per-type diameter table (the *pdiam* dump_modify
-  keyword), or a numeric per-particle attribute (the *diameter* choice
-  of the dump image command).
-- **Map** / **Reverse** / **Min** / **Max**: Configure the particle
-  :ref:`color map <colormaps>` used when coloring by a numeric
-  attribute.  Use *auto* for **Min** / **Max** to have SPARTA determine
-  the range automatically from the visible particles for every image.
-
-Press **Apply** to apply the settings and re-render the image, or
-**Cancel** to discard changes.  The **Help** button opens the SPARTA
-`dump image <https://sparta.github.io/doc/dump_image.html>`_
-documentation.
-
---------------
+  <https://sparta.github.io/doc/compute.html>`_ or `fix
+  <https://sparta.github.io/doc/fix.html>`_ output (``c_ID``,
+  ``c_ID[col]``, ``f_ID``, ``f_ID[col]``), and `custom per-particle
+  attributes <https://sparta.github.io/doc/Section_howto.html#howto_17>`_
+  (``p_name``, ``i_name``, ``d_name``).  The available compute, fix,
+  and variable references are queried from the current SPARTA instance.
+  When a numeric attribute is selected, the colors are determined by
+  the *particle* :ref:`color map <colormaps>`.
+- **Region clip**: Only render particles inside the selected `region
+  <https://sparta.github.io/doc/region.html>`_ (the *region* dump_modify
+  keyword; default "none").
+- **Diameter**: Select how the particle diameter is determined: *By
+  type* (using the per-species diameter table below), by a numeric
+  per-particle *Attribute* (like the color attributes above), or a
+  constant *Value* in simulation length units (the *pdiam* keyword).
+- **Per-species colors and diameters**: A table with one row per
+  species of the current simulation, showing the species name and
+  allowing to customize the color (the *pcolor* dump_modify keyword)
+  and per-type diameter (the *pdiam* dump_modify keyword) for each.
+  The table scrolls when the simulation has many species.
 
 .. _grid_settings:
 
-Grid settings
--------------
+Grid tab
+""""""""
 
 .. index:: grid visualization
 .. index:: grid settings
 .. index:: grid groups
 
-This dialog allows enabling and configuring the volume rendering of the
-`simulation grid <https://sparta.github.io/doc/create_grid.html>`_.  It
-is opened by pressing the "Grid" button in the settings panel or by
-using the `Alt-G` keyboard shortcut.
+Controls the volume rendering of the cells of the `simulation grid
+<https://sparta.github.io/doc/create_grid.html>`_:
 
-.. TODO screenshot: capture the Grid settings dialog together with an
-   image showing grid cells colored by a per-grid compute as
-   JPG/sparta-gui-image-grid.png, then re-enable this figure.
-..
-.. .. image:: JPG/sparta-gui-image-grid.png
-..    :align: center
-..    :width: 62%
-
-The following settings are available:
-
-- **Grid** (checkbox): Enable or disable rendering of the grid cells as
-  semi-transparent volumes (the *grid* keyword of the dump image
-  command).
+- **Render grid cells (volume)** (checkbox): Enable or disable
+  rendering of the grid cells as semi-transparent volumes (the *grid*
+  keyword).  Grid volume rendering and grid cut planes (next tab) are
+  mutually exclusive; enabling one disables the other.
 - **Color by**: Select what determines the color of each grid cell:
   *proc* (the owning processor) or any per-grid value produced by a
   `compute <https://sparta.github.io/doc/compute.html>`_ or `fix
   <https://sparta.github.io/doc/fix.html>`_ (``c_ID``, ``c_ID[col]``,
   ``f_ID``, or ``f_ID[col]``), for example a `compute grid
   <https://sparta.github.io/doc/compute_grid.html>`_ that tallies
-  density or temperature per cell.  The contents of the list depend on
-  what is defined in the current simulation.
+  density or temperature per cell.  Coloring by a computed value uses
+  the *grid* :ref:`color map <colormaps>`.
+- **Proc colors**: The color (or a list of colors like
+  ``red/green/blue``) used when coloring by *proc* (the *gcolor*
+  dump_modify keyword).
 - **Grid group**: Restrict the rendering to a `grid group
   <https://sparta.github.io/doc/group.html>`_ (the *gridgroup*
   dump_modify keyword; default is "all").
-- **Cell outlines** (checkbox): Draw the outline of each grid cell (the
-  *gline* keyword).  The outline diameter as a fraction of the box size
-  and the outline color (the *glinecolor* dump_modify keyword) can be
-  set in the adjacent fields.
-- **Map** / **Reverse** / **Min** / **Max**: Configure the grid
-  :ref:`color map <colormaps>` used to translate the selected per-grid
-  values into colors.  Use *auto* for **Min** / **Max** to have SPARTA
-  determine the range automatically for every image.
-
-Press **Apply** to apply the settings and re-render the image, or
-**Cancel** to discard changes.  The **Help** button opens the SPARTA
-`dump image <https://sparta.github.io/doc/dump_image.html>`_
-documentation.
-
---------------
+- **Grid cell outlines (gline)** (checkbox): Draw the outline of each
+  grid cell (the *gline* keyword), with fields for the outline
+  diameter as a fraction of the box size and the outline color (the
+  *glinecolor* dump_modify keyword).
 
 .. _plane_settings:
 
-Grid plane settings
--------------------
+Grid Planes tab
+"""""""""""""""
 
 .. index:: grid cut planes
 .. index:: gridx
@@ -495,104 +361,166 @@ Grid plane settings
 .. index:: gridz
 
 Rather than rendering the entire grid as volumes, it is often clearer
-to show one or more *cut planes* through the grid.  This dialog
-configures the *gridx*, *gridy*, and *gridz* keywords of the `dump
-image <https://sparta.github.io/doc/dump_image.html>`_ command.  It is
-opened by pressing the "Grid planes" button in the settings panel.
-
-.. TODO screenshot: capture the Grid plane settings dialog together
-   with an image showing gridx/gridy cut planes as
-   JPG/sparta-gui-image-planes.png, then re-enable this figure.
-..
-.. .. image:: JPG/sparta-gui-image-planes.png
-..    :align: center
-..    :width: 62%
-
-For each of the three axis directions there is one row of controls:
+to show one or more *cut planes* through the grid.  This tab configures
+the *gridx*, *gridy*, and *gridz* keywords of the `dump image
+<https://sparta.github.io/doc/dump_image.html>`_ command; it is
+mutually exclusive with the grid volume rendering of the previous tab.
+For each of the three axis directions there is one group of controls:
 
 - **Show** (checkbox): Enable or disable the cut plane perpendicular to
   this axis.
 - **Position**: The coordinate along the axis at which the plane cuts
-  through the grid (in simulation units, within the box bounds).
+  through the grid (within the simulation box bounds).
 - **Color by**: Select what determines the color of the grid cells in
   the plane: *proc* or a per-grid `compute
   <https://sparta.github.io/doc/compute.html>`_ or `fix
   <https://sparta.github.io/doc/fix.html>`_ value, exactly like for the
-  :ref:`grid volume rendering <grid_settings>`.
-- **Map** / **Reverse** / **Min** / **Max**: Each of the three planes
-  has its *own* :ref:`color map <colormaps>` (the *gridx*, *gridy*, and
-  *gridz* modes of the *cmap* dump_modify keyword), so, for example, a
-  density plane and a temperature plane can use different maps and
-  ranges in the same image.
+  grid volume rendering.
 
-Cut planes are only available for 3d simulations; for 2d simulations
-the grid itself is a plane and can be shown with the :ref:`grid volume
-rendering <grid_settings>`.
-
-Press **Apply** to apply the settings and re-render the image, or
-**Cancel** to discard changes.
-
---------------
+Each of the three planes has its *own* :ref:`color map <colormaps>`
+(the *gridx*, *gridy*, and *gridz* modes of the *cmap* dump_modify
+keyword), so, for example, a density plane and a temperature plane can
+use different maps and ranges in the same image.
 
 .. _surf_settings:
 
-Surface settings
-----------------
+Surfaces tab
+""""""""""""
 
 .. index:: surface visualization
 .. index:: surface settings
 .. index:: surf groups
 
-This dialog allows enabling and configuring the visualization of the
-`surface elements <https://sparta.github.io/doc/read_surf.html>`_
-defined in the simulation.  It is opened by pressing the "Surfaces"
-button in the settings panel or by using the `Alt-S` keyboard shortcut.
-The controls are disabled when the current simulation defines no
-surfaces.
+Controls the display of the `surface elements
+<https://sparta.github.io/doc/read_surf.html>`_ defined in the
+simulation.  The controls are disabled when the current simulation
+defines no surfaces.
 
-.. TODO screenshot: capture the Surface settings dialog together with
-   an image showing surface elements colored by a per-surf compute as
-   JPG/sparta-gui-image-surf.png, then re-enable this figure.
-..
-.. .. image:: JPG/sparta-gui-image-surf.png
-..    :align: center
-..    :width: 62%
-
-The following settings are available:
-
-- **Surfaces** (checkbox): Enable or disable rendering of the surface
-  elements (the *surf* keyword of the dump image command).
+- **Show surface elements** (checkbox): Enable or disable rendering of
+  the surface elements (the *surf* keyword).
 - **Color by**: Select what determines the color of each surface
-  element: *one* (a single constant color, set with the *scolor*
-  dump_modify keyword), *proc* (the owning processor), or any per-surf
-  value produced by a `compute
+  element: *one* (a single constant color), *proc* (the owning
+  processor), or any per-surf value produced by a `compute
   <https://sparta.github.io/doc/compute.html>`_ or `fix
   <https://sparta.github.io/doc/fix.html>`_ (``c_ID``, ``c_ID[col]``,
   ``f_ID``, or ``f_ID[col]``), for example a `compute surf
   <https://sparta.github.io/doc/compute_surf.html>`_ that tallies
-  fluxes on the surface elements.
-- **Diameter**: The diameter used to render the line segments of 2d
-  surfaces, as a fraction of the shortest box length.
-- **Surf group**: Restrict the rendering to a `surf group
+  fluxes on the surface elements.  Coloring by a computed value uses
+  the *surf* :ref:`color map <colormaps>`.
+- **Color for "one"**: The constant color used with the *one* color
+  mode (the *scolor* dump_modify keyword).
+- **Element diameter**: The diameter used to render the line segments
+  of 2d surfaces, as a fraction of the shortest box length.
+- **Proc colors**: The color (or a list of colors) used when coloring
+  by *proc*.
+- **Surface group**: Restrict the rendering to a `surf group
   <https://sparta.github.io/doc/group.html>`_ (the *surfgroup*
   dump_modify keyword; default is "all").
-- **Element outlines** (checkbox): Draw the outline of each surface
-  element (the *sline* keyword).  The outline diameter and the outline
-  color (the *slinecolor* dump_modify keyword) can be set in the
-  adjacent fields.
-- **Map** / **Reverse** / **Min** / **Max**: Configure the surf
-  :ref:`color map <colormaps>` used to translate the selected per-surf
-  values into colors.
+- **Surface element outlines (sline)** (checkbox): Draw the outline of
+  each surface element (the *sline* keyword), with fields for the
+  outline diameter and the outline color (the *slinecolor* dump_modify
+  keyword).
 
-Press **Apply** to apply the settings and re-render the image, or
-**Cancel** to discard changes.
+.. _box_settings:
 
-------------
+Box & Axes tab
+""""""""""""""
+
+.. index:: simulation box
+.. index:: sub-box
+.. index:: axes
+
+Controls the display of the simulation box, the processor sub-boxes,
+and the coordinate axes:
+
+- **Simulation box** (checkbox): Draw the outline of the simulation box
+  (the *box* keyword), with fields for the edge diameter as a fraction
+  of the box size and the color (the *boxcolor* dump_modify keyword).
+- **Processor sub-boxes** (checkbox): Draw the outlines of the
+  per-processor sub-domains (the *subbox* keyword), with fields for
+  the edge diameter and the color (the *subboxcolor* dump_modify
+  keyword).  Since SPARTA-GUI runs SPARTA on a single processor, the
+  sub-box coincides with the simulation box; the setting is mainly
+  useful when composing a dump image command for a parallel run with
+  the **Copy dump image command** action.
+- **Coordinate axes** (checkbox): Draw the coordinate axes next to the
+  simulation box (the *axes* keyword), with fields for the axes length
+  and diameter as fractions of the box size.
+
+.. _camera_settings:
+
+Camera tab
+""""""""""
+
+.. index:: camera settings
+.. index:: view angles
+
+Adjusts how the simulation box is projected into the image (the *view*,
+*center*, *up*, and *zoom* keywords):
+
+- **View theta**: The viewing angle in degrees away from the positive
+  z-axis.  Disabled for 2d systems, where SPARTA always looks down the
+  z-axis.
+- **View phi**: The azimuthal viewing angle in degrees around the
+  z-axis.  Disabled for 2d systems.
+- **Center**: Whether the view center is *static* or *dynamic* (the
+  "s"/"d" flag of the *center* keyword) and its x, y, and z positions
+  as fractions of the box dimensions (0.5 = center of the box).
+- **Camera up**: The components of the vector that points up in the
+  image.  The vector does not need to be normalized, but it must not
+  be all zeros.
+- **Zoom**: The zoom factor of the view (range: 0.1 -- 10.0, where
+  values larger than 1.0 zoom in).  This is the same setting that the
+  zoom in/out buttons of the toolbar change in steps of 10 percent.
+- **Variable** fields: The theta, phi, center, and zoom settings can
+  alternatively be driven by equal-style `variables
+  <https://sparta.github.io/doc/variable.html>`_ so that the camera
+  moves during a run.  This has no effect on the static snapshot in
+  the Image Viewer, but is included when copying the dump image
+  command for use in an input script (e.g. for animations).
+
+.. note::
+
+   The *persp* keyword of the dump image command (depth perspective)
+   is documented but not supported by SPARTA (it stops with an error
+   when used), therefore the perspective setting is shown grayed out in
+   SPARTA-GUI and all images are rendered without perspective.
+
+.. _quality_settings:
+
+Quality tab
+"""""""""""
+
+.. index:: rendering quality
+.. index:: background color
+.. index:: lighting
+
+Controls rendering quality, the background, and the lighting:
+
+- **SSAO** (checkbox): Enable or disable Screen Space Ambient
+  Occlusion for depth-shaded rendering (the *ssao* keyword), with a
+  field for the shading **Strength** (range: 0.0 -- 1.0).
+- **FSAA** (checkbox): Enable or disable full-scene anti-aliasing (the
+  *fsaa* keyword).
+- **Shininess**: The shininess factor for rendering spheres and
+  cylinders (range: 0.0 -- 1.0, where 0.0 is matte and 1.0 is fully
+  shiny; the *shiny* keyword).
+- **Background**: The background color of the image (the *backcolor*
+  dump_modify keyword).
+- **Gradient to** (checkbox): When enabled, a vertical background
+  gradient is drawn from the background color at the bottom to the
+  second color at the top (the *backcolor2* dump_modify keyword).
+- **Lights**: The intensities (range: 0.0 -- 1.0) of the four light
+  sources used in the rendering (the *lights* dump_modify keyword):
+  *ambient* (uniform, non-directional base lighting), *key* (the
+  primary directional light), *fill* (the secondary light softening
+  the shadows of the key light), and *back* (the light separating
+  objects from the background).
 
 .. _colormaps:
 
-Color maps
-----------
+Color Maps tab
+""""""""""""""
 
 .. index:: color map
 .. index:: reversible color map
@@ -603,21 +531,34 @@ through a color map (the *cmap* keyword of the `dump_modify
 <https://sparta.github.io/doc/dump_modify.html>`_ command).  SPARTA-GUI
 maintains **six independent color maps**, one for each of the *cmap*
 modes of SPARTA: *particle*, *grid*, *surf*, *gridx*, *gridy*, and
-*gridz*.  Each map is configured in the corresponding settings dialog
-described above through four controls:
+*gridz*.  The **Color map for:** selector at the top of the tab picks
+which of the six maps the remaining controls edit:
 
+- **Customize this color map** (checkbox): When unchecked, no *cmap*
+  command is emitted for this mode and SPARTA's built-in default map
+  (blue-to-red, continuous, over the automatically determined value
+  range) is used.
 - **Map**: Select the color map.  Currently available continuous color
-  maps are: *RWB* (red-white-blue), *PWT* (purple-white-teal), *BWG*
-  (blue-white-green), *BGR* (blue-green-red), *Grayscale*
-  (black-white), *Viridis*, *Plasma*, *Inferno*, *Magma*, *Cividis*,
-  and *Turbo* (from matplotlib), *Teal*, and *Rainbow*.  *Sequential*,
-  *Landscape*, and *Basic* are maps with discrete colors.
+  maps are: *BWR* (blue-white-red, a smoothed version of SPARTA's
+  default map), *PWT* (purple-white-teal), *BWG* (blue-white-green),
+  *BGR* (blue-green-red), *Grayscale*, *Viridis*, *Plasma*, *Inferno*,
+  *Magma*, *Cividis*, and *Turbo* (from matplotlib), *Teal*, and
+  *Rainbow*.  *Sequential*, *Landscape*, and *Basic* are maps with
+  discrete colors.
 - **Reverse** (checkbox): Mirror the selected color map so its low and
-  high ends are swapped (for example, *RWB* becomes blue-white-red).
-- **Min** / **Max**: Set the range of the color map.  Use *auto* to
-  have SPARTA determine the range automatically from the data of each
-  rendered image or specify an explicit numeric value to pin the range
-  (recommended when comparing images, e.g. in the slide show).
+  high ends are swapped.
+- **Minimum** / **Maximum**: Set the range of the color map.  Use *min*
+  and *max* to have SPARTA determine the bound automatically from the
+  data of each rendered image, or specify an explicit numeric value to
+  pin the range (recommended when comparing images, e.g. in the slide
+  show).
+- **Style**: How the color stops of the map are laid out: *continuous*
+  (interpolated), *discrete* (equally wide value bins), or *sequential*
+  (colors repeat in bins of a fixed width).
+- **Range**: Whether the color stops are interpreted as *fractional*
+  positions within the min/max range or as *absolute* values (the
+  latter requires numeric minimum and maximum).
+- **Bin size**: The value bin width for the *sequential* style.
 
 The color maps offered by SPARTA-GUI are shown below; the continuous
 maps are interpolated between color stops, while *Sequential*,
@@ -629,8 +570,8 @@ maps are interpolated between color stops, while *Sequential*,
    :align: center
    :width: 60%
 
-   The dump-image color maps offered for coloring particles, grid
-   cells, grid cut planes, and surface elements by value.
+   The color maps offered for coloring particles, grid cells, grid cut
+   planes, and surface elements by value.
 
 These color maps are defined in a single table in the C++ source, which
 makes them simple to add or modify; see :ref:`add_colormap` in the

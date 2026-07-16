@@ -138,12 +138,11 @@ Visualization Components
   the ``dump image`` command.  Supports interactive control of
   visualization parameters such as zoom, rotation, atom size, coloring,
   and rendering options.  Changes can be applied to regenerate the image
-  using the SPARTA library interface.  See :cpp:class:`ImageViewer`.
-  This uses two internal helper classes:
-
-  - **ImageInfo** - Stores settings for displaying graphics from a SPARTA
-    compute or fix in snapshot images.
-  - **RegionInfo** - Stores settings for displaying a region in snapshot images.
+  using the SPARTA library interface.  The dialog state is collected in
+  a ``DumpImageSettings`` struct (``src/dumpimage.h``) from which the
+  GUI-free builder functions assemble the ``dump image`` and
+  ``dump_modify`` commands.  The settings-dialog builders live in
+  ``imageviewersettings.cpp``.  See :cpp:class:`ImageViewer`.
 
 **ChartWindow (chartviewer.h/.cpp)**
   Window for displaying stats output data as charts.  Supports line plots

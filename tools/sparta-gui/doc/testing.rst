@@ -268,19 +268,20 @@ test_dumpimage.cpp
 ------------------
 
 Tests for the GUI-free dump-image command builder (``src/dumpimage.{h,cpp}``)
-that assembles the SPARTA ``write_dump ... image`` command from a
-``DumpImageParams`` snapshot of the Image Viewer state.  Test cases cover:
+that assembles the SPARTA ``dump ... image`` and ``dump_modify`` commands
+from a ``DumpImageSettings`` snapshot of the Image Viewer state.  Test
+cases cover:
 
-- Basic structure of the generated render and ``dump_modify`` arguments
-- Pruning of all settings that match the SPARTA defaults (color tables,
-  transparency, background, up direction, sub-box style, axes center)
-- The default BWR color map, named and reversed continuous maps, discrete
-  bond color maps, and the canonical stops of the perceptual maps
-- Element-based vs. type-based coloring (no color map for type coloring)
-- Bond rendering: suppressed while VDW spheres are active, drawn when
-  requested, auto-bond generation only when a pair style is defined
-- ``noinit`` suppressed while a fix is active; disabled fixes are ignored
-- Region outline points and bond coloring by computed values
+- Basic structure of the generated dump image and ``dump_modify``
+  arguments and their deterministic keyword order
+- Pruning of all settings that match the SPARTA built-in defaults
+- The color-map (``cmap``) emission for the six modes (particle, grid,
+  surf, gridx, gridy, gridz), including named, reversed, discrete, and
+  sequential maps and the canonical stops of the perceptual maps
+- Per-species color and diameter tables (``pcolor``/``pdiam``) reduced
+  to the entries that differ from the defaults
+- Grid volume rendering vs. grid cut planes, surface element options,
+  box/sub-box/outline/axes keywords, background gradient, and lights
 
 test_movieimport.cpp
 --------------------
@@ -324,7 +325,7 @@ cover:
 - Appending rows and columns to the model
 - CSV import with and without a header line
 - Whitespace-separated (``.dat``) import with a SPARTA-style header
-- SPARTA YAML thermo output, including trailing commas, interleaved log
+- YAML data files, including trailing commas, interleaved log
   lines, and a sequence of maps
 - JSON import as array-of-rows and object-of-arrays, with error handling
   for unequal columns and malformed input
@@ -628,17 +629,12 @@ Planned additions to the test suite include:
   - File opening/saving
   - Recent files management
   - Auto-save functionality
-  - Data file inspection
+  - Restart file inspection
 
 **Preferences Tests**
   - Settings persistence
   - Default value initialization
   - Migration between versions
-
-**Tutorial Tests**
-  - Tutorial file generation
-  - Directory setup
-  - Resource extraction
 
 Adding Tests
 ^^^^^^^^^^^^
