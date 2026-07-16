@@ -114,7 +114,6 @@ class Input : protected Pointers {
   void undump();
   void unfix();
   void units();
-  void weight();
 };
 
 }
