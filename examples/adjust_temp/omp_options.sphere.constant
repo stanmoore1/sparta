@@ -1,0 +1,6 @@
+# Per-column override for the threaded/GPU KOKKOS regression job. This
+# thermostat deck has few gas collisions (~27/step), so Ncoll/Nattempt follow
+# counting statistics with ~15-20% spread; loosen them for this deck. The high-
+# collision decks keep the tight global Natt/Ncoll tolerance.
+column_tolerance["Ncoll"] = 0.5
+column_tolerance["Natt"]  = 0.4

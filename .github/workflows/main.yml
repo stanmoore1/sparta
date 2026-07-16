@@ -160,13 +160,17 @@ jobs:
   # spread so runs do not intermittently fail:
   #   - 25% default: conserved/averaged columns (np, temperature, grid counts)
   #     and the various per-collision computes, which stay well within it
-  #   - 50%: the semi-stochastic bulk collision counts (Nattempt, Ncoll)
+  #   - 15%: the bulk collision counts (Nattempt, Ncoll). Their spread follows
+  #     counting statistics (~1/sqrt(Ncoll)): it is only 2-5% for the many decks
+  #     with hundreds+ collisions per step, so 15% keeps those tightly checked
   #   - 2.0 (guard only): the low-count integer surface/reaction columns and
   #     the surface-energy reduce (Nscoll, Nsreact, Nreact, Nscheck, c_echem)
   #     whose relative spread reaches ~100%
-  # Only two decks are genuine outliers and carry an omp_options.<test> file:
-  # a nearly collisionless surface deck whose Ncoll is uncorrelated
-  # (surf_react_heatflux) and a per-cell collision-count reduce (mfp_mct).
+  # Ncoll/Nattempt spread is larger only in decks with few collisions, so those
+  # decks carry an omp_options.<test> file that loosens just those columns:
+  # the low-collision thermostat/relaxation decks (sphere.adjust, sphere.constant,
+  # vibrate), a nearly collisionless surface deck (surf_react_heatflux), and a
+  # per-cell collision-count reduce (mfp_mct).
   #
   # The same column tolerances also fit a KOKKOS GPU (CUDA) regression job,
   # which has a similar (slightly larger) statistical spread; a GPU job would
@@ -203,7 +207,7 @@ jobs:
           -DKokkos_ENABLE_SERIAL=ON \
           -DPKG_FFT=ON \
           -DSPARTA_SPA_ARGS='-k on t 2 -sf kk -pk kokkos react/retry yes' \
-          -DSPARTA_DSMC_TESTING_DRIVER_ARGS='-error_norm L1 -relative_error True -tolerance 0.25 -column_tolerance Natt:0.5,Ncoll:0.5,Nscoll:2.0,Nsreact:2.0,Nreact:2.0,Nscheck:2.0,c_echem:2.0 -custom omp_options' \
+          -DSPARTA_DSMC_TESTING_DRIVER_ARGS='-error_norm L1 -relative_error True -tolerance 0.25 -column_tolerance Natt:0.15,Ncoll:0.15,Nscoll:2.0,Nsreact:2.0,Nreact:2.0,Nscheck:2.0,c_echem:2.0 -custom omp_options' \
           ../cmake
 
     - name: Build

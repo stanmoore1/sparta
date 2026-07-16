@@ -1,0 +1,10 @@
+# Per-column override for the threaded/GPU KOKKOS regression job. This deck has
+# few gas collisions (~25/step), so Ncoll/Nattempt spread ~15-20% and the
+# relaxation-rate computes c_St/c_Sr/c_Srv/c_Sv spread similarly; loosen them
+# for this deck. The high-collision decks keep the tight global tolerance.
+column_tolerance["Ncoll"] = 0.5
+column_tolerance["Natt"]  = 0.4
+column_tolerance["c_St"]  = 0.5
+column_tolerance["c_Sr"]  = 0.5
+column_tolerance["c_Srv"] = 0.5
+column_tolerance["c_Sv"]  = 0.5
