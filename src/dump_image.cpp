@@ -31,6 +31,8 @@
 #include "compute.h"
 #include "math_extra.h"
 #include "math_const.h"
+#include "output.h"
+#include "stats.h"
 #include "error.h"
 #include "memory.h"
 
@@ -1058,6 +1060,10 @@ void DumpImage::write()
       fp = NULL;
     }
   }
+
+  // record completed image filename, e.g. for a GUI to display
+
+  output->stats->set_last_image(filelast);
 }
 
 /* ----------------------------------------------------------------------
