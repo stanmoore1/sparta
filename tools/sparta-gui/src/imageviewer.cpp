@@ -604,7 +604,6 @@ void ImageViewer::readImageSettings()
 
 void ImageViewer::resetView()
 {
-    const QString oldmix = params.mixture;
     readImageSettings();
 
     auto *field = findChild<QSpinBox *>("xsize");
@@ -620,7 +619,6 @@ void ImageViewer::resetView()
         syncButtons();
         createImage();
     }
-    Q_UNUSED(oldmix);
 }
 
 void ImageViewer::syncButtons()

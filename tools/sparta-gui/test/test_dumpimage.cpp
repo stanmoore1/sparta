@@ -68,7 +68,7 @@ TEST(DumpImage, GridVolume)
     DumpImageSettings s;
     s.grid      = true;
     s.gridcolor = "c_temp[2]";
-    s.gcolors.append({"*", "red/green/blue"});
+    s.gcolors.emplaceBack("*", "red/green/blue");
     EXPECT_EQ(args(s), "type type grid c_temp[2] size 600 600");
     EXPECT_EQ(modify(s), ""); // no gcolor: not colored by proc
 
@@ -136,7 +136,7 @@ TEST(DumpImage, Surfaces)
 
     // per-proc coloring with explicit proc color rows and a surf group
     s.surfcolor = "proc";
-    s.scolors.append({"1*4", "red/blue"});
+    s.scolors.emplaceBack("1*4", "red/blue");
     s.surfgroup = "walls";
     EXPECT_EQ(args(s), "type type surf proc 0.5 size 600 600");
     EXPECT_EQ(modify(s), "dump_modify viz scolor 1*4 red/blue\n"
@@ -266,10 +266,10 @@ TEST(DumpImage, Lights)
 TEST(DumpImage, PerTypeRowsAndRegion)
 {
     DumpImageSettings s;
-    s.customcolors.append({"mycolor", "0.100 0.200 0.300"});
-    s.pcolors.append({"1", "mycolor"});
-    s.pcolors.append({"2*3", "blue/red"});
-    s.pdiams.append({"2", 0.5});
+    s.customcolors.emplaceBack("mycolor", "0.100 0.200 0.300");
+    s.pcolors.emplaceBack("1", "mycolor");
+    s.pcolors.emplaceBack("2*3", "blue/red");
+    s.pdiams.emplaceBack("2", 0.5);
     s.region = "clip1";
     EXPECT_EQ(modify(s), "dump_modify viz color mycolor 0.100 0.200 0.300\n"
                          "dump_modify viz pcolor 1 mycolor\n"
@@ -437,8 +437,8 @@ TEST(DumpImage, FullFeaturedRender)
     s.gridgroup     = "inner";
     s.surfgroup     = "walls";
     s.region        = "clip1";
-    s.pcolors.append({"*", "blue/red"});
-    s.pdiams.append({"2", 0.5});
+    s.pcolors.emplaceBack("*", "blue/red");
+    s.pdiams.emplaceBack("2", 0.5);
     s.amblight = 0.1;
     s.cmap[DumpImageSettings::GRIDX].active = true;
 
