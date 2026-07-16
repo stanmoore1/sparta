@@ -92,7 +92,7 @@ struct DumpImageSettings {
     // ---- surface elements --------------------------------------------------
     bool surf         = false; ///< `surf <color> <diam>` keyword present
     QString surfcolor = "one"; ///< "one", "proc", or a c_/f_/v_ reference
-    double surfdiam   = 1.0;   ///< surf element diameter (2d line width fraction)
+    double surfdiam   = 0.01;  ///< surf element diameter (2d line width fraction)
 
     // ---- image size ---------------------------------------------------------
     int xsize = 600; ///< rendered image width in pixels

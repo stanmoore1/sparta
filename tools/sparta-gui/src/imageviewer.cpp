@@ -580,7 +580,8 @@ void ImageViewer::readImageSettings()
     params.subboxdiam = settings.value("subboxdiam", 0.02).toDouble();
     params.glinediam  = settings.value("glinediam", 0.005).toDouble();
     params.slinediam  = settings.value("slinediam", 0.005).toDouble();
-    params.surfdiam   = settings.value("surfdiam", 1.0).toDouble();
+    // fraction of the shortest box length, like the box/gline diameters
+    params.surfdiam   = settings.value("surfdiam", 0.01).toDouble();
     params.ssaoint    = settings.value("ssaoint", 0.6).toDouble();
     settings.endGroup();
 
