@@ -1,0 +1,48 @@
+################################################################################
+# thermal gas in a closed 3d box created with create_particles options
+#
+# Regression coverage for create_particles and global keyword paths not used by
+# any other example:
+#   create_particles single           - create one particle at a given state
+#   create_particles ... temperature  - per-position temperature scale factor
+#   global mem/limit                  - grid communication memory limit
+#   global particle/reorder           - periodic particle reordering
+#
+# Note:
+#  - The "comm/sort" option to the "global" command is used to match MPI runs.
+#  - The "twopass" option is used to match Kokkos runs.
+# The "comm/sort" and "twopass" options should not be used for production runs.
+################################################################################
+
+seed	    	    12345
+dimension   	    3
+global              gridcut 1.0e-5 comm/sort yes
+global              mem/limit 100
+global              particle/reorder 100
+
+boundary	    rr rr rr
+
+create_box  	    0 0.0001 0 0.0001 0 0.0001
+create_grid 	    10 10 10
+balance_grid        rcb part
+
+species		    ar.species Ar
+mixture		    air Ar vstream 0.0 0.0 0.0 temp 273.15
+
+global              nrho 7.07043E22
+global              fnum 7.07043E6
+
+# temperature scale factor varies from 0.5 to 1.5 along x (a thermal gradient)
+variable            px internal 0.0
+variable            tvar equal "0.5 + 1.0e4*v_px"
+
+create_particles    air n 10000 temperature tvar px NULL NULL twopass
+
+# a single tracer particle at the box center
+create_particles    air single Ar 0.00005 0.00005 0.00005 100.0 0.0 0.0
+
+compute             temp temp
+stats		    100
+stats_style	    step cpu np c_temp
+timestep 	    7.00E-9
+run 		    500

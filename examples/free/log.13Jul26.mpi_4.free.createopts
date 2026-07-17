@@ -1,0 +1,124 @@
+SPARTA (24 Sep 2025)
+Running on 4 MPI task(s)
+################################################################################
+# thermal gas in a closed 3d box created with create_particles options
+#
+# Regression coverage for create_particles and global keyword paths not used by
+# any other example:
+#   create_particles single           - create one particle at a given state
+#   create_particles ... temperature  - per-position temperature scale factor
+#   global mem/limit                  - grid communication memory limit
+#   global particle/reorder           - periodic particle reordering
+#
+# Note:
+#  - The "comm/sort" option to the "global" command is used to match MPI runs.
+#  - The "twopass" option is used to match Kokkos runs.
+# The "comm/sort" and "twopass" options should not be used for production runs.
+################################################################################
+
+seed	    	    12345
+dimension   	    3
+global              gridcut 1.0e-5 comm/sort yes
+global              mem/limit 100
+global              particle/reorder 100
+
+boundary	    rr rr rr
+
+create_box  	    0 0.0001 0 0.0001 0 0.0001
+Created orthogonal box = (0 0 0) to (0.0001 0.0001 0.0001)
+create_grid 	    10 10 10
+WARNING: Could not acquire nearby ghost cells b/c grid partition is not clumped (/home/user/sparta/src/grid.cpp:473)
+Created 1000 child grid cells
+  CPU time = 0.00331736 secs
+  create/ghost percent = 90.9883 9.01171
+balance_grid        rcb part
+Balance grid migrated 740 cells
+  CPU time = 0.00214374 secs
+  reassign/sort/migrate/ghost percent = 52.6946 0.103651 26.7134 20.4884
+
+species		    ar.species Ar
+mixture		    air Ar vstream 0.0 0.0 0.0 temp 273.15
+
+global              nrho 7.07043E22
+global              fnum 7.07043E6
+
+# temperature scale factor varies from 0.5 to 1.5 along x (a thermal gradient)
+variable            px internal 0.0
+variable            tvar equal "0.5 + 1.0e4*v_px"
+
+create_particles    air n 10000 temperature tvar px NULL NULL twopass
+Created 10000 particles
+  CPU time = 0.00635073 secs
+
+# a single tracer particle at the box center
+create_particles    air single Ar 0.00005 0.00005 0.00005 100.0 0.0 0.0
+Created 1 particles
+  CPU time = 6.389e-06 secs
+
+compute             temp temp
+stats		    100
+stats_style	    step cpu np c_temp
+timestep 	    7.00E-9
+run 		    500
+Memory usage per proc in Mbytes:
+  particles (ave,min,max) = 1.5625 1.5625 1.5625
+  grid      (ave,min,max) = 1.51379 1.51379 1.51379
+  surf      (ave,min,max) = 0 0 0
+  total     (ave,min,max) = 3.07629 3.07629 3.07629
+Step CPU Np c_temp 
+       0            0    10001    271.97477 
+     100  0.006178059    10001    271.97477 
+     200  0.014136263    10001    271.97477 
+     300   0.02184959    10001    271.97477 
+     400  0.027993054    10001    271.97477 
+     500  0.035006997    10001    271.97477 
+Loop time of 0.0350832 on 4 procs for 500 steps with 10001 particles
+Performance: 14251.855 timesteps/s, 142.533 Mparticle-step/s
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Move    | 0.023037   | 0.024155   | 0.027221   |   1.1 | 68.85
+Coll    | 0          | 0          | 0          |   0.0 |  0.00
+Sort    | 0          | 0          | 0          |   0.0 |  0.00
+Comm    | 0.0053578  | 0.005506   | 0.005741   |   0.2 | 15.69
+Modify  | 0          | 0          | 0          |   0.0 |  0.00
+Output  | 6.9561e-05 | 0.00013934 | 0.00033894 |   0.0 |  0.40
+Other   |            | 0.005283   |            |       | 15.06
+
+Particle moves    = 5000500 (5M)
+Cells touched     = 6777398 (6.78M)
+Particle comms    = 130232 (0.13M)
+Boundary collides = 197458 (0.197M)
+Boundary exits    = 0 (0K)
+SurfColl checks   = 0 (0K)
+SurfColl occurs   = 0 (0K)
+Surf reactions    = 0 (0K)
+Collide attempts  = 0 (0K)
+Collide occurs    = 0 (0K)
+Reactions         = 0 (0K)
+Particles stuck   = 0
+Axisymm bad moves = 0
+
+Particle-moves/CPUsec/proc: 3.56332e+07
+Particle-moves/step: 10001
+Cell-touches/particle/step: 1.35534
+Particle comm iterations/step: 1
+Particle fraction communicated: 0.0260438
+Particle fraction colliding with boundary: 0.0394877
+Particle fraction exiting boundary: 0
+Surface-checks/particle/step: 0
+Surface-collisions/particle/step: 0
+Surf-reactions/particle/step: 0
+Collision-attempts/particle/step: 0
+Collisions/particle/step: 0
+Reactions/particle/step: 0
+
+Particles: 2500.25 ave 2539 max 2449 min
+Histogram: 1 0 0 1 0 0 0 0 0 2
+Cells:      250 ave 250 max 250 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+GhostCell: 172.5 ave 240 max 110 min
+Histogram: 1 0 0 0 2 0 0 0 0 1
+EmptyCell: 62.5 ave 130 max 0 min
+Histogram: 1 0 0 0 2 0 0 0 0 1
