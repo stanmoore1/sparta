@@ -1,0 +1,49 @@
+################################################################################
+# thermal N2 gas in a closed 3d box exercising collision and run options
+#
+# Regression coverage for collide_modify and run keyword paths not used by any
+# other example:
+#   collide_modify remain yes   - carry the remaining collision fraction over
+#   collide_modify vibrate smooth / rotate no
+#   run ... upto / every / pre no / post no
+#
+# Note:
+#  - The "comm/sort" option to the "global" command is used to match MPI runs.
+#  - The "twopass" option is used to match Kokkos runs.
+# The "comm/sort" and "twopass" options should not be used for production runs.
+################################################################################
+
+seed	    	    12345
+dimension   	    3
+global              gridcut 1.0e-5 comm/sort yes
+
+boundary	    rr rr rr
+
+create_box  	    0 0.0001 0 0.0001 0 0.0001
+create_grid 	    10 10 10
+balance_grid        rcb part
+
+species		    air.species N2
+mixture		    air N2 vstream 0.0 0.0 0.0 temp 20000.0 trot 20000.0 tvib 1000.0
+
+global              nrho 7.07043E22
+global              fnum 7.07043E6
+
+collide		    vss air air.vss
+# collision options not covered elsewhere: hold remaining collisions over,
+# smooth vibrational relaxation, no rotational relaxation
+collide_modify      remain yes vibrate smooth rotate no
+
+create_particles    air n 10000 twopass
+
+compute             temp temp
+stats		    50
+stats_style	    step cpu np nattempt ncoll c_temp
+
+timestep 	    7.00E-9
+
+# run keyword paths: upto, segmented (every), and skipping pre/post setup
+run 		    100
+run 		    200 upto
+run 		    100 every 50 NULL
+run 		    500 upto pre no post no
