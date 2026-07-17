@@ -1882,8 +1882,11 @@ int DumpImage::modify_param(int narg, char **arg)
     else if (strcmp(arg[1],"gridz") == 0) which = ZPLANE;
     else error->all(FLERR,"Illegal dump_modify command");
     if (strlen(arg[4]) != 2) error->all(FLERR,"Illegal dump_modify command");
-    int factor = 2;
+    int factor;
     if (arg[4][0] == 's') factor = 1;
+    else if (arg[4][0] == 'c') factor = 2;
+    else if (arg[4][0] == 'd') factor = 3;
+    else error->all(FLERR,"Illegal dump_modify command");
     int nentry = atoi(arg[6]);
     if (nentry < 1) error->all(FLERR,"Illegal dump_modify command");
     int n = 7 + factor*nentry;
