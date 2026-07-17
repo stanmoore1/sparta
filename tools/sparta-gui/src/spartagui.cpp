@@ -90,8 +90,9 @@ void applyProxySetting(SpartaWrapper &sparta, QSettings &settings)
     if (!proxy.isEmpty()) sparta.command(QString("shell putenv https_proxy=") + proxy);
 }
 
-const QString citeme("# When using SPARTA-GUI in your project, please cite: "
-                     "https://doi.org/10.33011/livecoms.6.1.3037\n");
+// shown as the initial editor content and appended to the About info;
+// intentionally empty for SPARTA-GUI (no citation banner)
+const QString citeme;
 const QString bannerstyle("CodeEditor {background-position: center center; "
                           "padding: 0px; "
                           "background-repeat: no-repeat; "
@@ -793,6 +794,12 @@ QString SpartaGui::findExamplesDir() const
     if (isExamplesDir(configured)) return QFileInfo(configured).canonicalFilePath();
 
     QStringList candidates;
+    // examples bundled inside the application (macOS .app/Contents/Resources,
+    // or a Linux/Windows install tree) are the primary location
+    const QString appdir = QCoreApplication::applicationDirPath();
+    candidates << appdir + "/../Resources/examples"     // macOS app bundle
+               << appdir + "/../share/sparta/examples"  // Linux/Windows install
+               << appdir + "/examples";
     if (!pluginPath.isEmpty()) {
         QDir libdir = QFileInfo(pluginPath).absoluteDir();
         candidates << libdir.absoluteFilePath("../../examples")
@@ -837,7 +844,39 @@ void SpartaGui::buildExampleMenu()
 void SpartaGui::openExample()
 {
     auto *act = qobject_cast<QAction *>(sender());
-    if (act) openFile(act->data().toString());
+    if (!act) return;
+
+    const QString srcfile = act->data().toString();
+    QFileInfo srcinfo(srcfile);
+    const QString srcdir = srcinfo.absolutePath();
+
+    // examples are usually bundled read-only (e.g. inside the macOS .app), so
+    // copy the whole example directory (input script plus its data files) into
+    // a writable location the first time and open the copy from there, so the
+    // simulation can actually be run and write its log and image output
+    if (QFileInfo(srcdir).isWritable()) {
+        openFile(srcfile);
+        return;
+    }
+
+    const QString subname  = QFileInfo(srcdir).fileName();
+    QDir destroot(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) +
+                  "/SPARTA-GUI Examples");
+    const QString destdir  = destroot.absoluteFilePath(subname);
+    const QString destfile = destdir + "/" + srcinfo.fileName();
+
+    if (!QFileInfo::exists(destfile)) {
+        if (!destroot.mkpath(subname)) {
+            warning(this, "Open Example", "Could not create a writable copy of the example in:",
+                    destdir);
+            return;
+        }
+        // copy the input scripts and data files, but not any subdirectories
+        const auto entries = QDir(srcdir).entryInfoList(QDir::Files);
+        for (const auto &entry : entries)
+            QFile::copy(entry.absoluteFilePath(), destdir + "/" + entry.fileName());
+    }
+    openFile(destfile);
 }
 
 void SpartaGui::updateRecents(const QString &filename)
@@ -1908,10 +1947,15 @@ void SpartaGui::viewSlides()
         slideshow = new SlideShow(currentFile, this);
         slideshow->setMinimumSize(Cfg::MINIMUM_WIDTH, Cfg::MINIMUM_HEIGHT);
     }
-    if (slideshow->isVisible())
+    if (slideshow->isVisible()) {
         slideshow->hide();
-    else
+    } else {
         slideshow->show();
+        // make sure the window comes to the front and does not open behind
+        // the editor window (observed on macOS)
+        slideshow->raise();
+        slideshow->activateWindow();
+    }
 }
 
 void SpartaGui::viewChart()
@@ -2082,7 +2126,8 @@ void SpartaGui::about()
     if (auto *clip = QGuiApplication::clipboard()) clip->setText(to_clipboard);
 #endif
 
-    auto fsize = QFontMetrics(QApplication::font()).size(Qt::TextSingleLine, citeme);
+    auto fsize = QFontMetrics(QApplication::font())
+                     .size(Qt::TextSingleLine, "SPARTA-GUI configuration information line width");
     AboutDialog dialog(QString::fromStdString(version).trimmed(), info.trimmed(),
                        details.trimmed(), fsize.width(), this);
     dialog.exec();

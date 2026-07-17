@@ -37,6 +37,20 @@ if (SPARTA_GUI_USE_PLUGIN AND NOT BUILD_DOC_ONLY)
   if(APPLE)
     # additional targets to populate the bundle tree and create the .dmg image file
     set(APP_CONTENTS ${CMAKE_BINARY_DIR}/sparta-gui.app/Contents)
+
+    # the SPARTA example inputs are bundled into the app so the
+    # File -> Open Example menu works from an installed .app; the location
+    # can be overridden with -D SPARTA_EXAMPLES_DIR=...
+    if(NOT SPARTA_EXAMPLES_DIR)
+      set(SPARTA_EXAMPLES_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../examples)
+    endif()
+    set(BUNDLE_EXAMPLES_CMD "")
+    if(EXISTS ${SPARTA_EXAMPLES_DIR})
+      set(BUNDLE_EXAMPLES_CMD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+                ${SPARTA_EXAMPLES_DIR} ${APP_CONTENTS}/Resources/examples)
+    endif()
+
     add_custom_target(complete-bundle
       ${CMAKE_COMMAND} -E make_directory ${APP_CONTENTS}/bin
       COMMAND ${CMAKE_COMMAND} -E create_symlink ../MacOS/sparta-gui ${APP_CONTENTS}/bin/sparta-gui
@@ -44,6 +58,7 @@ if (SPARTA_GUI_USE_PLUGIN AND NOT BUILD_DOC_ONLY)
       COMMAND ${CMAKE_COMMAND} -E copy_if_different ${MACOSX_README_FILE} ${APP_CONTENTS}/Resources/README.txt
       COMMAND ${CMAKE_COMMAND} -E copy_if_different ${MACOSX_ICON_FILE} ${APP_CONTENTS}/Resources
       COMMAND ${CMAKE_COMMAND} -E copy_if_different ${MACOSX_BACKGROUND_FILE} ${APP_CONTENTS}/Resources
+      ${BUNDLE_EXAMPLES_CMD}
       DEPENDS sparta-gui
       COMMENT "Copying additional files into macOS app bundle tree"
       WORKING_DIRECTORY ${CMAKE_BINARY_DIR}

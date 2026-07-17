@@ -45,6 +45,6 @@
 </g>
 <circle cx="256" cy="256" r="168" fill="#e0aa2e"/>
 <circle cx="256" cy="256" r="158" fill="#c23b2e"/>
-<text x="256" y="300" font-family="DejaVu Serif" font-size="230" font-weight="bold" fill="#e0aa2e" text-anchor="middle">&#955;</text>
-<text x="256" y="372" font-family="DejaVu Serif" font-size="56" fill="#e0aa2e" text-anchor="middle" letter-spacing="6">SPARTA</text>
+<text x="256" y="292" font-family="DejaVu Serif" font-size="240" font-weight="bold" fill="#e0aa2e" text-anchor="middle">&#955;</text>
+<text x="256" y="360" font-family="DejaVu Serif" font-size="44" fill="#e0aa2e" text-anchor="middle" letter-spacing="2">SPARTA</text>
 </svg>
