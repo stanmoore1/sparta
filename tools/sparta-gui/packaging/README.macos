@@ -1,45 +1,54 @@
 SPARTA-GUI universal binaries for macOS (arm64/x86_64)
 ======================================================
 
-This package provides a universal binary of SPARTA-GUI that should run on
-macOS systems running running macOS version 11 (Big Sur) or newer.  Note
-that this version of the SPARTA-GUI package does not contain SPARTA itself.
-It is meant to be used by people that compile their own version of SPARTA
-and then tell SPARTA-GUI to load the shared library of that version.  This
-is useful, in case this self-compiled SPARTA version contains packages not
-available in the standard SPARTA package.  For most people, however, the
-binary package available from the SPARTA release pages should be used.
+This package provides a universal binary of SPARTA-GUI that runs natively
+on both Apple Silicon (arm64) and Intel (x86_64) Macs running macOS version
+12 (Monterey) or newer.
 
-After copying the SPARTA-GUI folder into your Applications folder, please
-follow these steps:
+A universal build of the SPARTA shared library (libsparta) is bundled inside
+the application, so SPARTA-GUI works out of the box: you do not need to
+compile or install anything else.  A set of SPARTA example input decks is
+also bundled and can be opened from the "File > Open Example" menu.
 
-1. Open the Terminal app
+Installation
+------------
 
-2. Identify the location of the libsparta.0.dylib file that you want to use
-   with SPARTA-GUI and yype the following command and press ENTER:
+Drag the SPARTA-GUI application onto the Applications folder icon in this
+disk image window.
 
-   /Applications/SPARTA-GUI.app/Contents/MacOS/sparta-gui -p </path/to/>libsparta.0.dylib
+The first time you launch SPARTA-GUI, macOS may block it because it was
+downloaded from the internet and is not signed by an identified developer.
+To allow it to run, either:
 
-   This will open SPARTA-GUI for the first time and have it load the provided
-   SPARTA shared library. If the loading fails, and error dialog will be presented
-   and SPARTA-GUI will exit.  After loading the SPARTA shared library successfully
-   for the first time, SPARTA-GUI will store its location in the preferences
-   and use the same location automatically the next time it is launched.
-   The path can be changed at runtime in the preferences dialog. SPARTA-GUI
-   cannot launch without having immediate access to the SPARTA library.
+  - right-click (or control-click) the SPARTA-GUI app and choose "Open",
+    then confirm "Open" in the dialog, or
 
-3. Depending on the size and resolution of your screen, the fonts may be too
-   small to read. This can be adjusted by setting the environment variable
-   QT_FONT_DPI. The default value would be 72, so to increase the fonts by a
-   third, one can add to the .zprofile file the line
+  - open "System Settings", go to "Privacy & Security", and click
+    "Open Anyway" next to the message about "sparta-gui", or
 
-   export QT_FONT_DPI=96
+  - run this once in the Terminal app:
 
-4. Give permission to execute SPARTA-GUI
+        xattr -cr /Applications/SPARTA-GUI.app
 
-   MacOS will possibly block the initial run of SPARTA-GUI, since it was
-   downloaded from the internet and is missing a known signature from an
-   identified developer. Go to "Settings" and search for "Security settings".
-   It should display a message that an executable "sparta-gui" was blocked.
-   Press "Open anyway", which might prompt you for your admin credentials.
-   Afterwards "sparta-gui" should work as expected.
+Using your own SPARTA build (advanced)
+--------------------------------------
+
+If you have compiled your own version of SPARTA as a shared library (for
+example to enable additional packages), you can tell SPARTA-GUI to load it
+instead of the bundled one: open the Preferences dialog and set the path to
+your libsparta shared library, or launch once from the Terminal with
+
+    /Applications/SPARTA-GUI.app/Contents/MacOS/sparta-gui -p /path/to/libsparta.dylib
+
+SPARTA-GUI stores the chosen library location in its preferences and reuses
+it on the next launch.
+
+Font size
+---------
+
+Depending on the size and resolution of your screen, the fonts may be too
+small to read comfortably.  This can be adjusted by setting the environment
+variable QT_FONT_DPI.  The default value is 72, so to increase the fonts by
+a third, add the following line to your ~/.zprofile file:
+
+    export QT_FONT_DPI=96
