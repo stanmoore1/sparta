@@ -138,14 +138,20 @@ R B 0.0 0.0 0.0 0.0 0.0
 # The barriered (endothermic) directions keep their published fits; the
 # barrierless reverses are derived by detailed balance.
 
+# reaction energy C5 set to the JANAF 0-K endothermicity (5.228e-19 J);
+# the activation energy stays the published 5.175e-19 J
 N2 + O --> NO + N
-E A 0.0 5.175e-19 1.069e-12 -1.0 -5.175e-19
+E A 0.0 5.175e-19 1.069e-12 -1.0 -5.228e-19
 
 NO + N --> N2 + O
 E B 0.0 0.0 0.0 0.0 0.0
 
+# reaction energy C5 set to the JANAF 0-K endothermicity (2.200e-19 J =
+# D0(NO)-D0(O2)); the published barrier 2.684e-19 J sits ABOVE the
+# endothermicity (the legacy file equated C5 with -Ea, overstating the
+# reaction energy by 22% and biasing Keq by up to 5.8x at 2000 K)
 NO + O --> O2 + N
-E A 0.0 2.684e-19 1.389e-17 0.0 -2.684e-19
+E A 0.0 2.684e-19 1.389e-17 0.0 -2.200e-19
 
 O2 + N --> NO + O
 E B 0.0 0.0 0.0 0.0 0.0
