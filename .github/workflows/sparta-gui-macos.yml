@@ -18,6 +18,7 @@ on:
     paths:
       - 'tools/sparta-gui/**'
       - 'src/**'
+      - 'cmake/**'
       - '.github/workflows/sparta-gui-macos.yml'
 
 concurrency:
@@ -53,46 +54,34 @@ jobs:
           echo "SPARTA_LIB=$SPARTA_LIB" >> "$GITHUB_ENV"
           lipo -info "$SPARTA_LIB"
 
-      - name: Build SPARTA-GUI (linked mode, universal)
+      - name: Build SPARTA-GUI (plugin mode, universal)
         run: |
           cmake -S tools/sparta-gui -B build-gui \
             -D CMAKE_BUILD_TYPE=Release \
-            -D SPARTA_GUI_USE_PLUGIN=OFF \
-            -D SPARTA_SOURCE_DIR=$PWD/src \
-            -D SPARTA_LIBRARY="$SPARTA_LIB" \
+            -D SPARTA_GUI_USE_PLUGIN=ON \
             -D CMAKE_OSX_ARCHITECTURES="arm64;x86_64" \
             -D CMAKE_OSX_DEPLOYMENT_TARGET=12.0
           cmake --build build-gui -j3
+          lipo -info build-gui/sparta-gui.app/Contents/MacOS/sparta-gui
 
-      - name: Create disk image
+      - name: Create drag-n-drop installer disk image (dmg target)
         run: |
-          APP=$(find "$PWD/build-gui" -maxdepth 2 -name '*.app' -type d | head -1)
-          echo "app bundle: $APP"
-          lipo -info "$APP/Contents/MacOS/"*
-          # deploy Qt frameworks and the SPARTA library into the bundle
-          macdeployqt "$APP"
-          # bundle README and example inputs alongside the app
-          STAGE=$PWD/dmg-stage
-          mkdir -p "$STAGE"
-          cp -a "$APP" "$STAGE/"
-          cp tools/sparta-gui/packaging/README.macos "$STAGE/README.txt"
-          cp -a examples "$STAGE/SPARTA-examples"
-          ln -s /Applications "$STAGE/Applications"
-          VERSION=$(date +%Y%m%d)
-          hdiutil create -volname "SPARTA-GUI" -srcfolder "$STAGE" \
-            -ov -format UDZO "SPARTA-GUI-macOS-multiarch-${VERSION}.dmg"
-          shasum -a 256 SPARTA-GUI-macOS-multiarch-*.dmg | tee checksum.txt
+          export SPARTA_PLUGIN_LIB="$SPARTA_LIB"
+          cmake --build build-gui --target dmg
+          shasum -a 256 build-gui/SPARTA-GUI-macOS-multiarch-*.dmg | tee checksum.txt
 
       - name: Verify the bundled app launches
         run: |
-          APP=$(find "$PWD/build-gui" -maxdepth 2 -name '*.app' -type d | head -1)
-          "$APP/Contents/MacOS/sparta-gui" -v
+          hdiutil attach build-gui/SPARTA-GUI-macOS-multiarch-*.dmg -mountpoint /Volumes/sgui-check
+          /Volumes/sgui-check/SPARTA-GUI.app/Contents/MacOS/sparta-gui -v
+          lipo -info /Volumes/sgui-check/SPARTA-GUI.app/Contents/Frameworks/libsparta.0.dylib
+          hdiutil detach /Volumes/sgui-check
 
       - name: Upload disk image
         uses: actions/upload-artifact@v4
         with:
           name: SPARTA-GUI-macOS-multiarch
           path: |
-            SPARTA-GUI-macOS-multiarch-*.dmg
+            build-gui/SPARTA-GUI-macOS-multiarch-*.dmg
             checksum.txt
           if-no-files-found: error

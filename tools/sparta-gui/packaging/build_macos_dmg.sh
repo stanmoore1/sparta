@@ -7,10 +7,16 @@ echo "Delete old files, if they exist"
 rm -f ${APP_NAME}.dmg ${APP_NAME}-rw.dmg SPARTA-GUI-macOS-multiarch*.dmg \
    ${APP_NAME}.app/Contents/Frameworks/libsparta.0.dylib
 
-# download pre-compiled SPARTA shared library if plugin-mode SPARTA-GUI binary
+# bundle the SPARTA shared library if this is a plugin-mode SPARTA-GUI binary.
+# the library to bundle must be passed in the SPARTA_PLUGIN_LIB environment
+# variable (e.g. a universal libsparta dylib built alongside the GUI)
 if $(./${APP_NAME}.app/Contents/MacOS/sparta-gui -h | grep -q pluginpath); then
+    if [ -z "${SPARTA_PLUGIN_LIB}" ] || [ ! -f "${SPARTA_PLUGIN_LIB}" ]; then
+        echo "ERROR: set SPARTA_PLUGIN_LIB to the path of the SPARTA shared library to bundle"
+        exit 1
+    fi
     mkdir -p ${APP_NAME}.app/Contents/Frameworks
-    curl -L -o ${APP_NAME}.app/Contents/Frameworks/libsparta.0.dylib https://sparta.github.io/sparta-gui/libsparta.0.dylib
+    cp "${SPARTA_PLUGIN_LIB}" ${APP_NAME}.app/Contents/Frameworks/libsparta.0.dylib
     chmod 0755 ${APP_NAME}.app/Contents/Frameworks/libsparta.0.dylib
 fi
 
@@ -54,10 +60,8 @@ mv ${APP_NAME}.app/Contents/Resources/SPARTA_DMG_Background.png .background/back
 mv ${APP_NAME}.app SPARTA-GUI.app
 cd SPARTA-GUI.app/Contents
 
-echo "Attach icons to SPARTA console and GUI executables and lib"
+echo "Attach icons to SPARTA-GUI executable and lib"
 echo "read 'icns' (-16455) \"Resources/sparta-gui.icns\";" > icon.rsrc
-Rez -a icon.rsrc -o bin/lmp
-SetFile -a C bin/lmp
 Rez -a icon.rsrc -o MacOS/sparta-gui
 SetFile -a C MacOS/sparta-gui
 if [ -f Frameworks/libsparta.0.dylib ]; then

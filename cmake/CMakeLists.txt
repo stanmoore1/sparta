@@ -26,6 +26,11 @@ if(PKG_KOKKOS AND (CMAKE_CXX_STANDARD LESS 20))
 endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF CACHE BOOL "Use compiler extensions")
+
+# C++11 is guaranteed above, so use std::unordered_map for the grid/surf
+# hashes instead of the pre-C++11 TR1 fallback, which no longer exists in
+# some standard libraries (e.g. libc++ on macOS)
+add_compile_definitions(SPARTA_UNORDERED_MAP)
 # ugly hacks for MSVC which by default always reports an old C++ standard in the __cplusplus macro
 # and prints lots of pointless warnings about "unsafe" functions
 if(MSVC)

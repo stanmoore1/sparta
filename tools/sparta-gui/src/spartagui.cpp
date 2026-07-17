@@ -353,6 +353,7 @@ void SpartaGui::setupPlugin(QSettings &settings)
     dirlist.append(
         QString::fromLocal8Bit(qgetenv("DYLD_LIBRARY_PATH")).split(":", Qt::SkipEmptyParts));
     // library may be included in an application bundle:
+    dirlist.append(QCoreApplication::applicationDirPath() + "/../Frameworks");
     dirlist.append({"/Applications/SPARTA-GUI.app/Contents/Frameworks",
                     "/Applications/SPARTA.app/Contents/Frameworks"});
 #elif defined(Q_OS_WIN32)
