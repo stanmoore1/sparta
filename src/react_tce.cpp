@@ -81,7 +81,6 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
                       double pre_etrans, double pre_erot, double pre_evib, double pre_eelec,
                       double &post_etotal, int &kspecies)
 {
-  double pre_etotal,ecc,e_excess,z;
   OneReaction *r;
 
   Particle::Species *species = particle->species;
@@ -94,19 +93,139 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
   if (n == 0) return 0;
   int *list = reactions[isp][jsp].list;
 
-  // probablity to compare to reaction probability
-
-  double react_prob = 0.0;
   double random_prob = random->uniform();
 
-  // loop over possible reactions for these 2 species
+  // pass 1: cumulative channel selection, each channel's probability
+  // individually capped at 1 (sigma_R <= sigma_VHS: the TCE derivation
+  // assumes the reaction cross-section is a fraction of the VHS
+  // cross-section, so a computed probability above 1 is outside the model
+  // and is limited to the collision rate; Higdon 2018, following Strand &
+  // Goldstein).  No early exit on selection: the full channel sum is
+  // needed to detect saturation of the PAIR, so that the channel split is
+  // not biased by the ordering of reactions in the input file.  The extra
+  // cost is only the remainder of this pair's (short) reaction list on
+  // the rare collisions that select a reaction; nothing is computed for
+  // collisions of pairs with no reactions, and the collision-acceptance
+  // machinery ((sigma_T c_r)_max) is untouched.
+
+  double total_prob = 0.0;
+  int capped = 0;
+  int isel = -1;
 
   for (int i = 0; i < n; i++) {
-    r = &rlist[list[i]];
+    double p = channel_prob(list[i],ip,jp,pre_etrans,pre_erot,
+                            pre_evib,pre_eelec,pre_ave_rotdof);
+    if (p > 1.0) { p = 1.0; capped = 1; }
+    total_prob += p;
+    if (isel < 0 && total_prob > random_prob) isel = i;
+  }
+
+  // saturation: the pair's total reaction probability exceeds 1, so the
+  // collision reacts with probability 1 and the channel must be selected
+  // proportionally (P_i/total) to remove the ordering bias of the
+  // sequential test above.  Re-walk the (deterministic) cumulative sum
+  // against u*total; this slow second pass runs only for saturated pairs.
+
+  if (total_prob > 1.0) {
+    double target = random_prob*total_prob;
+    double cum = 0.0;
+    isel = -1;
+    for (int i = 0; i < n; i++) {
+      double p = channel_prob(list[i],ip,jp,pre_etrans,pre_erot,
+                              pre_evib,pre_eelec,pre_ave_rotdof);
+      if (p > 1.0) p = 1.0;
+      cum += p;
+      if (p > 0.0) isel = i;               // round-off fallback: last live channel
+      if (cum > target) break;
+    }
+  }
+
+  if ((total_prob > 1.0 || capped) && !probwarnflag) {
+    probwarnflag = 1;
+    error->warning(FLERR,"TCE reaction probability exceeded 1 and was "
+                   "capped (reaction cross-section limited to the VHS "
+                   "cross-section); the simulated rate saturates at the "
+                   "collision rate - reduce the timestep or fnum, or "
+                   "refine the grid");
+  }
+
+  if (isel < 0) return 0;
+
+  // selected channel: tally it; in compute_chem_rates mode the reaction is
+  // tallied but not performed.  Exactly one channel is tallied per reacting
+  // collision, so each channel's tally rate is P_i (or P_i/total when the
+  // pair is saturated), independent of its position in the reaction file.
+
+  r = &rlist[list[isel]];
+  tally_reactions[list[isel]]++;
+
+  if (computeChemRates) return 0;
+
+  // perform the reaction: reset species of I,J and optional K to products.
+  // J particle is destroyed in a recombination reaction (species = -1); a
+  // K particle can be created in a dissociation or ionization reaction
+  // (parent creates it from kspecies).
+  // important NOTE:
+  //   it does not matter what order the I,J reactants are in compared to
+  //   the order listed in the reaction file: the list of possible
+  //   reactions includes all reactions the I,J species are in, and the
+  //   pre-reaction state (precoln) stores only combined I,J properties
+
+  ip->ispecies = r->products[0];
+
+  switch (r->type) {
+  case DISSOCIATION:
+  case IONIZATION:
+  case EXCHANGE:
+    {
+      jp->ispecies = r->products[1];
+      break;
+    }
+  case RECOMBINATION:
+    {
+      // always destroy 2nd reactant species
+
+      jp->ispecies = -1;
+      break;
+    }
+  }
+
+  if (r->nproduct > 2) kspecies = r->products[2];
+  else kspecies = -1;
+
+  post_etotal = pre_etrans + pre_erot + pre_evib + pre_eelec + r->coeff[4];
+
+  // return reaction from 1 to N
+
+  return list[isel] + 1;
+}
+
+/* ----------------------------------------------------------------------
+   TCE probability of reaction rindex (index into rlist) for the collision
+   of ip,jp with the given pre-collision energies; returns 0 for channels
+   that are skipped (energetically impossible, no matching 3rd body, no
+   cell temperature for an external-Keq reverse).  Deterministic: no
+   random numbers are drawn, so the saturation path of attempt() can
+   re-walk the cumulative sum exactly.
+------------------------------------------------------------------------- */
+
+double ReactTCE::channel_prob(int rindex, Particle::OnePart *ip,
+                              Particle::OnePart *jp,
+                              double pre_etrans, double pre_erot,
+                              double pre_evib, double pre_eelec,
+                              double pre_ave_rotdof)
+{
+  double ecc,e_excess,z;
+
+  Particle::Species *species = particle->species;
+  int isp = ip->ispecies;
+  int jsp = jp->ispecies;
+
+  OneReaction *r = &rlist[rindex];
 
     // ignore energetically impossible reactions
 
-    pre_etotal = pre_etrans + pre_erot + pre_evib + pre_eelec;
+    double pre_etotal = pre_etrans + pre_erot + pre_evib + pre_eelec;
 
     // two options for total energy in TCE model
     // 0: partialEnergy = true: rDOF model
@@ -139,13 +258,13 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
 
     int micro3 = 0;
     if (r->reverse && r->type == RECOMBINATION &&
-        mtab && mtab[list[i]] && mtab_num[list[i]]) micro3 = 1;
+        mtab && mtab[rindex] && mtab_num[rindex]) micro3 = 1;
 
     // Cover cases where coeff[1].neq.coeff[4]
 
     if (r->coeff[1]>((-1)*r->coeff[4])) e_excess = ecc - r->coeff[1];
     else e_excess = ecc + r->coeff[4];
-    if (e_excess <= 0.0 && !micro3) continue;
+    if (e_excess <= 0.0 && !micro3) return 0.0;
 
     // energy-dependent factor of the TCE probability:
     // the microcanonical (density-of-states weighted) average of the
@@ -160,8 +279,8 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
 
     double efactor = 0.0;
     if (!micro3) {   // a micro3 reaction uses its own 3-body factor below
-      if (!partialEnergy && mtab && mtab[list[i]])
-        efactor = vib_micro_factor(list[i],ecc);
+      if (!partialEnergy && mtab && mtab[rindex])
+        efactor = vib_micro_factor(rindex,ecc);
       else
         efactor = pow(ecc-r->coeff[1],r->coeff[3]-1+r->coeff[5]) *
                   pow(1.0-r->coeff[1]/ecc,z+1.5-r->coeff[5]);
@@ -186,7 +305,7 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
         // extrapolation
         double tr = tgas < 1000.0 ? 1000.0 : (tgas > 60000.0 ? 60000.0 : tgas);
         keq_resid = keq_eval(r->keq_resid_coeff,tr);
-      } else continue;
+      } else return 0.0;
     }
     double prefactor = r->coeff[2] * keq_resid;
 
@@ -200,9 +319,8 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
     case IONIZATION:
     case EXCHANGE:
       {
-        react_prob += prefactor * tgamma(z+2.5-r->coeff[5]) / tgamma(z+r->coeff[3]+1.5) *
+        return prefactor * tgamma(z+2.5-r->coeff[5]) / tgamma(z+r->coeff[3]+1.5) *
           efactor;
-        break;
       }
 
     case RECOMBINATION:
@@ -215,9 +333,9 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
         //   if selected a 3rd particle species that matches none of them
         // scale probability by boost factor to restore correct stats
 
-        if (recomb_species < 0) continue;
+        if (recomb_species < 0) return 0.0;
         int *sp2recomb = reactions[isp][jsp].sp2recomb;
-        if (sp2recomb[recomb_species] != list[i]) continue;
+        if (sp2recomb[recomb_species] != rindex) return 0.0;
 
         // fully microcanonical reverse recombination (issue #472): the
         // probability is resolved in the total available energy
@@ -263,21 +381,19 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
           int vibdof3 = species[sp3].vibdof;
           if (collide->vibstyle == SMOOTH && vibdof3 > 0 && vibdof3 != 2)
             c3 *= pow(p3->evib,0.5*vibdof3-1.0);
-          if (!(c3 > 0.0)) continue;
+          if (!(c3 > 0.0)) return 0.0;
 
-          double xpair = vib_micro_factor(list[i],ecc);
-          if (!(xpair > 0.0)) continue;
+          double xpair = vib_micro_factor(rindex,ecc);
+          if (!(xpair > 0.0)) return 0.0;
 
           double w = ecc + eps_t + p3->erot + p3->evib + eelec3;
-          react_prob += keq_resid * recomb_boost * recomb_density *
-            db3_num_factor(list[i],w) / (xpair*c3);
-          break;
+          return keq_resid * recomb_boost * recomb_density *
+            db3_num_factor(rindex,w) / (xpair*c3);
         }
 
-        react_prob += recomb_boost * recomb_density * prefactor *
+        return recomb_boost * recomb_density * prefactor *
           tgamma(z+2.5-r->coeff[5]) / tgamma(z+r->coeff[3]+1.5) *
           efactor;   // extended to general recombination case with non-zero activation energy
-        break;
       }
 
     default:
@@ -285,72 +401,5 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
       break;
     }
 
-    // test against random number to see if this reaction occurs
-    // if it does, reset species of I,J and optional K to product species
-    // J particle is destroyed in recombination reaction, set species = -1
-    // K particle can be created in a dissociation or ionization reaction,
-    //   set its kspecies, parent will create it
-    // important NOTE:
-    //   does not matter what order I,J reactants are in compared
-    //     to order the reactants are listed in the reaction file
-    //   for two reasons:
-    //   a) list of N possible reactions above includes all reactions
-    //      that I,J species are in, regardless of order
-    //   b) properties of pre-reaction state are stored in precoln:
-    //      computed by setup_collision()
-    //      used by perform_collision() after reaction has taken place
-    //      precoln only stores combined properties of I,J
-    //      nothing that is I-specific or J-specific
-
-    // diagnostic: a cumulative probability above 1 means this collision has
-    //   saturated - any reaction later in the list cannot fire and, if a
-    //   single reaction's probability exceeds 1, its rate is silently
-    //   under-counted (a dense-cell / large-timestep recombination regime).
-    //   Warn once so the condition is not silent.
-
-    if (react_prob > 1.0 && !probwarnflag) {
-      probwarnflag = 1;
-      error->warning(FLERR,"TCE reaction probability exceeded 1; reaction "
-                     "rate may be under-counted - reduce the timestep or fnum, "
-                     "or refine the grid");
-    }
-
-    if (react_prob > random_prob) {
-      tally_reactions[list[i]]++;
-
-      if (!computeChemRates) {
-        ip->ispecies = r->products[0];
-
-        switch (r->type) {
-        case DISSOCIATION:
-        case IONIZATION:
-        case EXCHANGE:
-          {
-            jp->ispecies = r->products[1];
-            break;
-          }
-        case RECOMBINATION:
-          {
-            // always destroy 2nd reactant species
-
-            jp->ispecies = -1;
-            break;
-          }
-        }
-
-        if (r->nproduct > 2) kspecies = r->products[2];
-        else kspecies = -1;
-
-        post_etotal = pre_etotal + r->coeff[4];
-
-        // return reaction from 1 to N
-
-        return list[i] + 1;
-      }
-    }
-  }
-
-  // no reaction performed
-
-  return 0;
+  return 0.0;
 }

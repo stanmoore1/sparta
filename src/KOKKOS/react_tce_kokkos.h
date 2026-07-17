@@ -61,17 +61,123 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
   if (n == 0) return 0;
   auto& d_list = d_reactions(isp,jsp).d_list;
 
-  // probablity to compare to reaction probability
-
-  double react_prob = 0.0;
   rand_type rand_gen = rand_pool.get_state();
   const double random_prob = rand_gen.drand();
   rand_pool.free_state(rand_gen);
 
-  // loop over possible reactions for these 2 species
+  // pass 1: cumulative channel selection, each channel's probability
+  // individually capped at 1 (sigma_R <= sigma_VHS), matching
+  // ReactTCE::attempt exactly; no early exit so the channel split is not
+  // biased by the ordering of reactions in the input file
+
+  double total_prob = 0.0;
+  int capped = 0;
+  int isel = -1;
 
   for (int i = 0; i < n; i++) {
-    r = &d_rlist[d_list[i]];
+    double p = channel_prob_kk(d_list[i],ip,jp,pre_etrans,pre_erot,
+                               pre_evib,pre_eelec,pre_ave_rotdof,
+                               recomb_species,recomb_density,recomb_part3,
+                               recomb_p3_eelec,d_species,tgas_cell);
+    if (p > 1.0) { p = 1.0; capped = 1; }
+    total_prob += p;
+    if (isel < 0 && total_prob > random_prob) isel = i;
+  }
+
+  // saturation: the pair reacts with probability 1 and the channel is
+  // selected proportionally (P_i/total) by re-walking the deterministic
+  // cumulative sum against u*total; this slow second pass runs only for
+  // saturated pairs (matches ReactTCE::attempt)
+
+  if (total_prob > 1.0) {
+    const double target = random_prob*total_prob;
+    double cum = 0.0;
+    isel = -1;
+    for (int i = 0; i < n; i++) {
+      double p = channel_prob_kk(d_list[i],ip,jp,pre_etrans,pre_erot,
+                                 pre_evib,pre_eelec,pre_ave_rotdof,
+                                 recomb_species,recomb_density,recomb_part3,
+                                 recomb_p3_eelec,d_species,tgas_cell);
+      if (p > 1.0) p = 1.0;
+      cum += p;
+      if (p > 0.0) isel = i;               // round-off fallback: last live channel
+      if (cum > target) break;
+    }
+  }
+
+  if (total_prob > 1.0 || capped) {
+    if (Kokkos::atomic_compare_exchange(&d_probwarn(),0,1) == 0)
+      Kokkos::printf("WARNING: TCE reaction probability exceeded 1 and was "
+        "capped (reaction cross-section limited to the VHS cross-section); "
+        "the simulated rate saturates at the collision rate - reduce the "
+        "timestep or fnum, or refine the grid\n");
+  }
+
+  if (isel < 0) return 0;
+
+  // selected channel: tally it; in compute_chem_rates mode the reaction is
+  // tallied but not performed.  Exactly one channel is tallied per
+  // reacting collision (matches ReactTCE::attempt)
+
+  r = &d_rlist[d_list[isel]];
+  Kokkos::atomic_inc(&d_tally_reactions[d_list[isel]]);
+
+  if (computeChemRates) return 0;
+
+  // perform the reaction: reset species of I,J and optional K to products.
+  // J particle is destroyed in a recombination reaction (species = -1); a
+  // K particle can be created in a dissociation or ionization reaction
+  // (parent creates it from kspecies)
+
+  ip->ispecies = r->d_products[0];
+
+  switch (r->type) {
+  case DISSOCIATION:
+  case IONIZATION:
+  case EXCHANGE:
+    {
+      jp->ispecies = r->d_products[1];
+      break;
+    }
+  case RECOMBINATION:
+    {
+      // always destroy 2nd reactant species
+
+      jp->ispecies = -1;
+      break;
+    }
+  }
+
+  if (r->nproduct > 2) kspecies = r->d_products[2];
+  else kspecies = -1;
+
+  post_etotal = pre_etrans + pre_erot + pre_evib + pre_eelec + r->d_coeff[4];
+
+  // return reaction from 1 to N
+
+  return d_list[isel] + 1;
+}
+
+/* ----------------------------------------------------------------------
+   TCE probability of reaction rindex for the collision of ip,jp; device
+   twin of ReactTCE::channel_prob, kept line-for-line consistent for
+   SPARTA_KOKKOS_EXACT parity.  Deterministic: no random numbers drawn.
+------------------------------------------------------------------------- */
+
+KOKKOS_INLINE_FUNCTION
+double channel_prob_kk(int rindex, Particle::OnePart *ip,
+         Particle::OnePart *jp,
+         double pre_etrans, double pre_erot, double pre_evib,
+         double pre_eelec, double pre_ave_rotdof,
+         int &recomb_species, double &recomb_density,
+         Particle::OnePart *recomb_part3, const double recomb_p3_eelec,
+         const t_species_1d_const &d_species,
+         const double tgas_cell) const
+{
+  const int isp = ip->ispecies;
+  const int jsp = jp->ispecies;
+
+  OneReactionKokkos *r = &d_rlist[rindex];
 
     // ignore energetically impossible reactions
 
@@ -110,13 +216,13 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
 
     int micro3 = 0;
     if (r->reverse && r->type == RECOMBINATION &&
-        d_mtab_n[d_list[i]] > 0 && d_mtab_num_flag[d_list[i]]) micro3 = 1;
+        d_mtab_n[rindex] > 0 && d_mtab_num_flag[rindex]) micro3 = 1;
 
     // Cover cases where coeff[1].neq.coeff[4]
 
     if (r->d_coeff[1]>((-1)*r->d_coeff[4])) e_excess = ecc - r->d_coeff[1];
     else e_excess = ecc + r->d_coeff[4];
-    if (e_excess <= 0.0 && !micro3) continue;
+    if (e_excess <= 0.0 && !micro3) return 0.0;
 
     // energy-dependent factor of the TCE probability: the tabulated
     // microcanonical average over the reactants' discrete vibrational
@@ -126,8 +232,8 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
 
     double efactor = 0.0;
     if (!micro3) {   // a micro3 reaction uses its own 3-body factor below
-      if (!partialEnergy && d_mtab_n[d_list[i]] > 0) {
-        const int ir = d_list[i];
+      if (!partialEnergy && d_mtab_n[rindex] > 0) {
+        const int ir = rindex;
         const int n = d_mtab_n[ir];
         const double x = ecc/d_mtab_du[ir];
         const int k = (int) x;
@@ -159,7 +265,7 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
                         r->keq_resid_coeff[2]*log(z10) +
                         r->keq_resid_coeff[3]*z10 +
                         r->keq_resid_coeff[4]*z10*z10);
-      } else continue;
+      } else return 0.0;
     }
     double prefactor = r->d_coeff[2] * keq_resid;
 
@@ -173,9 +279,8 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
     case IONIZATION:
     case EXCHANGE:
       {
-        react_prob += prefactor * tgamma(z+2.5-r->d_coeff[5]) / tgamma(z+r->d_coeff[3]+1.5) *
+        return prefactor * tgamma(z+2.5-r->d_coeff[5]) / tgamma(z+r->d_coeff[3]+1.5) *
           efactor;
-        break;
       }
 
     case RECOMBINATION:
@@ -188,9 +293,9 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
         //   if selected a 3rd particle species that matches none of them
         // scale probability by boost factor to restore correct stats
 
-        if (recomb_species < 0) continue;
+        if (recomb_species < 0) return 0.0;
         auto& d_sp2recomb = d_reactions(isp,jsp).d_sp2recomb;
-        if (d_sp2recomb[recomb_species] != d_list[i]) continue;
+        if (d_sp2recomb[recomb_species] != rindex) return 0.0;
 
         // fully microcanonical reverse recombination, matching
         // ReactTCE::attempt exactly (see ReactBird::build_db3_table);
@@ -226,9 +331,9 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
           const int vibdof3 = d_species[sp3].vibdof;
           if (vibstyle == SMOOTH && vibdof3 > 0 && vibdof3 != 2)
             c3 *= pow(p3->evib,0.5*vibdof3-1.0);
-          if (!(c3 > 0.0)) continue;
+          if (!(c3 > 0.0)) return 0.0;
 
-          const int ir = d_list[i];
+          const int ir = rindex;
           const int ntab = d_mtab_n[ir];
           const double dutab = d_mtab_du[ir];
 
@@ -242,7 +347,7 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
               xpair = (1.0-f)*d_mtab(ir,k) + f*d_mtab(ir,k+1);
             }
           }
-          if (!(xpair > 0.0)) continue;
+          if (!(xpair > 0.0)) return 0.0;
 
           const double w = ecc + eps_t + p3->erot + p3->evib + eelec3;
           double numw;
@@ -256,14 +361,12 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
             }
           }
 
-          react_prob += keq_resid * recomb_boost * recomb_density * numw / (xpair*c3);
-          break;
+          return keq_resid * recomb_boost * recomb_density * numw / (xpair*c3);
         }
 
-        react_prob += recomb_boost * recomb_density * prefactor *
+        return recomb_boost * recomb_density * prefactor *
           tgamma(z+2.5-r->d_coeff[5]) / tgamma(z+r->d_coeff[3]+1.5) *
           efactor;   // extended to general recombination case with non-zero activation energy
-        break;
       }
 
       //if (react_prob < 0) error->warning(FLERR,"Negative reaction probability");
@@ -276,70 +379,7 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
       break;
     }
 
-    // test against random number to see if this reaction occurs
-    // if it does, reset species of I,J and optional K to product species
-    // J particle can be destroyed in recombination reaction, set species = -1
-    // K particle can be created in a dissociation or ionization reaction,
-    //   set its kspecies, parent will create it
-    // important NOTE:
-    //   does not matter what order I,J reactants are in compared
-    //     to order the reactants are listed in the reaction file
-    //   for two reasons:
-    //   a) list of N possible reactions above includes all reactions
-    //      that I,J species are in, regardless of order
-    //   b) properties of pre-reaction state, stored in precoln,
-    //      as computed by setup_collision(),
-    //      and used by perform_collision() after reaction has taken place,
-    //      only store combined properties of I,J,
-    //      nothing that is I-specific or J-specific
-
-    // diagnostic (matches ReactTCE::attempt): warn once if the cumulative
-    //   probability saturates above 1, where the rate can be under-counted
-
-    if (react_prob > 1.0) {
-      if (Kokkos::atomic_compare_exchange(&d_probwarn(),0,1) == 0)
-        Kokkos::printf("WARNING: TCE reaction probability exceeded 1; "
-          "reaction rate may be under-counted - reduce the timestep or fnum, "
-          "or refine the grid\n");
-    }
-
-    if (react_prob > random_prob) {
-      Kokkos::atomic_inc(&d_tally_reactions[d_list[i]]);
-      if (!computeChemRates) {
-        ip->ispecies = r->d_products[0];
-
-        switch (r->type) {
-        case DISSOCIATION:
-        case IONIZATION:
-        case EXCHANGE:
-          {
-            jp->ispecies = r->d_products[1];
-            break;
-          }
-        case RECOMBINATION:
-          {
-            // always destroy 2nd reactant species
-
-            jp->ispecies = -1;
-            break;
-          }
-        }
-
-        if (r->nproduct > 2) kspecies = r->d_products[2];
-        else kspecies = -1;
-
-        post_etotal = pre_etotal + r->d_coeff[4];
-
-        // return reaction from 1 to N
-
-        return d_list[i] + 1;
-      }
-    }
-  }
-
-  // no reaction performed
-
-  return 0;
+  return 0.0;
 }
 
 /* ---------------------------------------------------------------------- */
