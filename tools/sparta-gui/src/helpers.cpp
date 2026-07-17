@@ -333,9 +333,9 @@ void exportImage(QWidget *parent, QImage *image, const QString &title)
                 return;
             }
 
-            QString cmd = "magick";
+            QString cmd = findExe("magick");
+            if (cmd.isEmpty()) cmd = findExe("convert");
             QStringList args{tmpfile.fileName(), fileName};
-            if (!hasExe("magick")) cmd = "convert";
             QProcess convert;
             convert.start(cmd, args);
             if (!convert.waitForFinished(-1)) {
@@ -367,9 +367,24 @@ void exportImage(QWidget *parent, QImage *image, const QString &title)
 
 // find if executable is in path
 
+QString findExe(const QString &exe)
+{
+    // first look on the regular PATH
+    QString path = QStandardPaths::findExecutable(exe);
+    if (!path.isEmpty()) return path;
+
+    // GUI applications launched from a desktop environment (in particular a
+    // macOS .app started from Finder) often run with a minimal PATH that does
+    // not include Homebrew, MacPorts, or /usr/local, where tools such as
+    // ffmpeg are typically installed, so search those locations as well
+    static const QStringList extra = {"/opt/homebrew/bin", "/usr/local/bin", "/opt/local/bin",
+                                      "/usr/bin", "/bin"};
+    return QStandardPaths::findExecutable(exe, extra);
+}
+
 bool hasExe(const QString &exe)
 {
-    return !QStandardPaths::findExecutable(exe).isEmpty();
+    return !findExe(exe).isEmpty();
 }
 
 bool looksLikeBinaryFile(const QString &filename)

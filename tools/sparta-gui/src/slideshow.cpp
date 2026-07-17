@@ -126,7 +126,8 @@ SlideShow::SlideShow(const QString &fileName, SpartaGui *_spartagui, QWidget *pa
 
     auto *tomovie = new QPushButton(QIcon(":/icons/export-movie.svg"), "");
     tomovie->setToolTip("Export to movie file");
-    tomovie->setEnabled(hasExe("ffmpeg") || hasExe("magick") || hasExe("convert"));
+    // always enabled: movie() explains what to install if no encoder is found,
+    // rather than leaving a dead, disabled button
 
     auto *toimage = new QPushButton(QIcon(":/icons/document-save-as.svg"), "");
     toimage->setToolTip("Export to image file");
@@ -645,6 +646,29 @@ void SlideShow::saveCurrentImage()
 
 void SlideShow::movie()
 {
+    // exporting a movie needs an external encoder; on macOS in particular this
+    // is usually not installed by default, so give a clear explanation rather
+    // than silently doing nothing
+    const QString ffmpeg = findExe("ffmpeg");
+    QString imconvert    = findExe("magick");
+    if (imconvert.isEmpty()) imconvert = findExe("convert");
+    if (ffmpeg.isEmpty() && imconvert.isEmpty()) {
+        warning(this, "Export Movie",
+                "Exporting a movie requires the <b>ffmpeg</b> command-line tool "
+                "(or ImageMagick), which was not found on this system.",
+                "Please install ffmpeg and try again. On macOS you can install it "
+                "with Homebrew:\n\n    brew install ffmpeg\n\n"
+                "then restart SPARTA-GUI.");
+        return;
+    }
+
+    if (imagefiles.isEmpty()) {
+        warning(this, "Export Movie", "There are no images to export.",
+                "Run a simulation that produces a 'dump image' first, or load "
+                "image files into the slide show.");
+        return;
+    }
+
     QString fileName =
         QFileDialog::getSaveFileName(this, "Export to Movie File", ".",
                                      "Movie Files (*.mp4 *.mkv *.avi *.mpg *.mpeg *.gif *.webm)");
@@ -656,7 +680,7 @@ void SlideShow::movie()
     if ((lo < 0) || (hi < lo) || (hi >= imagefiles.size())) return;
     const QStringList frames = imagefiles.mid(lo, hi - lo + 1);
 
-    if (hasExe("ffmpeg")) {
+    if (!ffmpeg.isEmpty()) {
         QDir curdir(".");
         QTemporaryFile concatfile;
         if (concatfile.open()) {
@@ -697,16 +721,17 @@ void SlideShow::movie()
             args << "-r" << fps;
             args << fileName;
 
-            QProcess ffmpeg;
-            ffmpeg.start("ffmpeg", args);
-            ffmpeg.waitForFinished(-1);
+            QProcess proc;
+            proc.start(ffmpeg, args);
+            proc.waitForFinished(-1);
+            if ((proc.exitStatus() != QProcess::NormalExit) || (proc.exitCode() != 0))
+                warning(this, "Export Movie", "ffmpeg failed to create the movie file:",
+                        QString::fromLocal8Bit(proc.readAllStandardError()));
         } else {
-            warning(this, "SlideShow Error",
+            warning(this, "Export Movie",
                     "Cannot create temporary file for generating movie:", concatfile.errorString());
         }
     } else {
-        QString cmd = "magick";
-        if (!hasExe("magick")) cmd = "convert";
         QStringList args;
         args << "-delay" << QString::number(timerDelay / 10);
         QDir curdir(".");
@@ -719,9 +744,12 @@ void SlideShow::movie()
         args << fileName;
 
         // run the conversion command
-        QProcess convert;
-        convert.start(cmd, args);
-        convert.waitForFinished(-1);
+        QProcess proc;
+        proc.start(imconvert, args);
+        proc.waitForFinished(-1);
+        if ((proc.exitStatus() != QProcess::NormalExit) || (proc.exitCode() != 0))
+            warning(this, "Export Movie", "ImageMagick failed to create the movie file:",
+                    QString::fromLocal8Bit(proc.readAllStandardError()));
     }
 }
 
