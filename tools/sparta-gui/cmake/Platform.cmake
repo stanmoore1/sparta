@@ -43,15 +43,10 @@ endif()
 # icon, readme, and installer resources for the macOS app bundle; prefer
 # the files from the SPARTA source tree when compiling with it
 if(APPLE)
-  if(SPARTA_SOURCE_DIR)
-    set(MACOSX_ICON_FILE ${SPARTA_SOURCE_DIR}/../cmake/packaging/sparta-gui.icns)
-    set(MACOSX_README_FILE ${SPARTA_SOURCE_DIR}/../cmake/packaging/README.macos)
-    set(MACOSX_BACKGROUND_FILE ${SPARTA_SOURCE_DIR}/../cmake/packaging/SPARTA_DMG_Background.png)
-    set(MACOSX_PLIST_FILE ${SPARTA_SOURCE_DIR}/../cmake/packaging/MacOSXBundleInfo.plist.in)
-  else()
-    set(MACOSX_ICON_FILE ${CMAKE_SOURCE_DIR}/packaging/sparta-gui.icns)
-    set(MACOSX_README_FILE ${CMAKE_SOURCE_DIR}/packaging/README.macos)
-    set(MACOSX_BACKGROUND_FILE ${CMAKE_SOURCE_DIR}/packaging/SPARTA_DMG_Background.png)
-    set(MACOSX_PLIST_FILE ${CMAKE_SOURCE_DIR}/packaging/MacOSXBundleInfo.plist.in)
-  endif()
+  # the packaging files always come from the SPARTA-GUI tree itself,
+  # in both plugin and linked (SPARTA_SOURCE_DIR) mode
+  set(MACOSX_ICON_FILE ${CMAKE_SOURCE_DIR}/packaging/sparta-gui.icns)
+  set(MACOSX_README_FILE ${CMAKE_SOURCE_DIR}/packaging/README.macos)
+  set(MACOSX_BACKGROUND_FILE ${CMAKE_SOURCE_DIR}/packaging/SPARTA_DMG_Background.png)
+  set(MACOSX_PLIST_FILE ${CMAKE_SOURCE_DIR}/packaging/MacOSXBundleInfo.plist.in)
 endif()

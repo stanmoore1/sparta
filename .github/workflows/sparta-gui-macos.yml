@@ -1,0 +1,98 @@
+# Build a universal (arm64 + x86_64) macOS disk image of SPARTA-GUI,
+# equivalent to the LAMMPS-macOS-multiarch-GUI dmg files that the
+# LAMMPS project publishes with its releases.
+#
+# The official Qt binaries for macOS are universal, and both SPARTA and
+# SPARTA-GUI are built with CMAKE_OSX_ARCHITECTURES="arm64;x86_64", so a
+# single .app bundle runs natively on Apple Silicon and Intel Macs.
+# The SPARTA shared library is linked into the bundle and deployed by
+# macdeployqt together with the Qt frameworks.
+
+name: build-sparta-gui-macos
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - claude/sparta-gui-lammps-adaptation-jbih8k
+    paths:
+      - 'tools/sparta-gui/**'
+      - 'src/**'
+      - '.github/workflows/sparta-gui-macos.yml'
+
+concurrency:
+  group: sparta-gui-macos-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-dmg:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Qt (official universal macOS binaries)
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.7.3'
+          host: 'mac'
+          target: 'desktop'
+          arch: 'clang_64'
+          cache: true
+
+      - name: Build SPARTA shared library (serial, universal)
+        run: |
+          cmake -S cmake -B build-lib \
+            -D BUILD_SHARED_LIBS=ON \
+            -D BUILD_MPI=OFF \
+            -D CMAKE_BUILD_TYPE=Release \
+            -D CMAKE_OSX_ARCHITECTURES="arm64;x86_64" \
+            -D CMAKE_OSX_DEPLOYMENT_TARGET=12.0
+          cmake --build build-lib -j3
+          SPARTA_LIB=$(find "$PWD/build-lib" -name 'libsparta*.dylib' -type f | head -1)
+          echo "SPARTA_LIB=$SPARTA_LIB" >> "$GITHUB_ENV"
+          lipo -info "$SPARTA_LIB"
+
+      - name: Build SPARTA-GUI (linked mode, universal)
+        run: |
+          cmake -S tools/sparta-gui -B build-gui \
+            -D CMAKE_BUILD_TYPE=Release \
+            -D SPARTA_GUI_USE_PLUGIN=OFF \
+            -D SPARTA_SOURCE_DIR=$PWD/src \
+            -D SPARTA_LIBRARY="$SPARTA_LIB" \
+            -D CMAKE_OSX_ARCHITECTURES="arm64;x86_64" \
+            -D CMAKE_OSX_DEPLOYMENT_TARGET=12.0
+          cmake --build build-gui -j3
+
+      - name: Create disk image
+        run: |
+          APP=$(find "$PWD/build-gui" -maxdepth 2 -name '*.app' -type d | head -1)
+          echo "app bundle: $APP"
+          lipo -info "$APP/Contents/MacOS/"*
+          # deploy Qt frameworks and the SPARTA library into the bundle
+          macdeployqt "$APP"
+          # bundle README and example inputs alongside the app
+          STAGE=$PWD/dmg-stage
+          mkdir -p "$STAGE"
+          cp -a "$APP" "$STAGE/"
+          cp tools/sparta-gui/packaging/README.macos "$STAGE/README.txt"
+          cp -a examples "$STAGE/SPARTA-examples"
+          ln -s /Applications "$STAGE/Applications"
+          VERSION=$(date +%Y%m%d)
+          hdiutil create -volname "SPARTA-GUI" -srcfolder "$STAGE" \
+            -ov -format UDZO "SPARTA-GUI-macOS-multiarch-${VERSION}.dmg"
+          shasum -a 256 SPARTA-GUI-macOS-multiarch-*.dmg | tee checksum.txt
+
+      - name: Verify the bundled app launches
+        run: |
+          APP=$(find "$PWD/build-gui" -maxdepth 2 -name '*.app' -type d | head -1)
+          "$APP/Contents/MacOS/sparta-gui" -v
+
+      - name: Upload disk image
+        uses: actions/upload-artifact@v4
+        with:
+          name: SPARTA-GUI-macOS-multiarch
+          path: |
+            SPARTA-GUI-macOS-multiarch-*.dmg
+            checksum.txt
+          if-no-files-found: error
