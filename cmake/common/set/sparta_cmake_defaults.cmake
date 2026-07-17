@@ -115,6 +115,9 @@ if(SPARTA_ENABLE_TESTING)
         # surf collision/reaction tally not KOKKOS-enabled
         "in.surf.collision.tally"
         "in.surf.reaction.tally"
+        # compute react/surf and react/isurf/grid tallies not KOKKOS-enabled
+        "in.circle.global"
+        "in.exp2imp.circle.react"
     )
   endif()
 

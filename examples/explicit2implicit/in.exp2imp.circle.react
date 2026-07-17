@@ -1,0 +1,51 @@
+################################################################################
+# 2d flow past an implicit circle with surface chemistry; exercises
+# compute react/isurf/grid
+#
+# Regression coverage for compute react/isurf/grid (compute_react_isurf_grid.cpp)
+# which tallies surface reactions on implicit surface elements per grid cell.
+# No other example uses it.  The explicit circle is converted to an implicit
+# surface with create_isurf, given a surf_react prob model, and the per-grid
+# reaction tallies are reduced to a scalar for the regression comparison.
+#
+# Note:
+#  - The "comm/sort" option to the "global" command is used to match MPI runs.
+#  - The "twopass" option is used to match Kokkos runs.
+# The "comm/sort" and "twopass" options should not be used for production runs.
+################################################################################
+
+seed			12345
+dimension		2
+boundary		p p p
+global                  gridcut 1.E-1 comm/sort yes
+
+create_box		-1.0 1.0 -1.0 1.0 -0.5 0.5
+create_grid		80 80 1
+balance_grid		rcb cell
+
+global			nrho 1.0 fnum 0.001
+global                  surfs explicit/distributed
+
+species			air.species N2
+mixture			air N2 vstream 100.0 0 0 temp 300.0
+
+read_surf               data.circle2d invert
+surf_collide		1 diffuse 300.0 0.0
+fix		        fablate ablate all 0 0.2 random 0
+create_isurf            all fablate 39.5 ave
+
+# surface reaction model on the implicit surface
+surf_react              1 prob isurf.react
+surf_modify		all collide 1 react 1
+
+create_particles        air n 10000 twopass
+collide			vss air air.vss
+
+# per-grid tally of implicit-surface reactions, reduced to a scalar
+compute                 ris react/isurf/grid all 1
+compute                 rr reduce sum c_ris[*]
+
+timestep		0.0001
+stats			50
+stats_style		step cpu np nscoll nsreact c_rr
+run			500

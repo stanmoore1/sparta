@@ -1,0 +1,48 @@
+################################################################################
+# 2d flow around a circle whose surface uses the global surf_react model
+#
+# Regression coverage for the surf_react global style (surf_react_global.cpp),
+# which is not used by any other example.  The global model deletes an incident
+# particle with probability pdelete and clones it with probability pcreate,
+# independent of species.  compute react/surf tallies the reactions.
+#
+# Note:
+#  - The "comm/sort" option to the "global" command is used to match MPI runs.
+#  - The "twopass" option is used to match Kokkos runs.
+# The "comm/sort" and "twopass" options should not be used for production runs.
+################################################################################
+
+seed	    	    12345
+dimension   	    2
+global              gridcut 0.0 comm/sort yes
+
+boundary	    o r p
+
+create_box  	    0 10 0 10 -0.5 0.5
+create_grid 	    20 20 1
+balance_grid        rcb cell
+
+global		    nrho 1.0 fnum 0.001
+
+species		    air.species N O
+mixture		    air N O vstream 100.0 0 0
+
+read_surf           data.circle
+
+surf_collide	    1 diffuse 300.0 0.0
+# global surf reaction: 30% of collisions delete the particle, 10% clone it
+surf_react          1 global 0.3 0.1
+surf_modify         all collide 1 react 1
+
+collide             vss air air.vss
+
+fix		    in emit/face air xlo twopass
+
+timestep 	    0.0001
+
+compute             rs react/surf all 1
+compute             rrs reduce sum c_rs[*]
+
+stats		    100
+stats_style	    step cpu np nscoll nsreact c_rrs[1] c_rrs[2]
+run 		    1000

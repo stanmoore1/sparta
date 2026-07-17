@@ -1,0 +1,166 @@
+SPARTA (24 Sep 2025)
+Running on 1 MPI task(s)
+################################################################################
+# 2d flow past an implicit circle with surface chemistry; exercises
+# compute react/isurf/grid
+#
+# Regression coverage for compute react/isurf/grid (compute_react_isurf_grid.cpp)
+# which tallies surface reactions on implicit surface elements per grid cell.
+# No other example uses it.  The explicit circle is converted to an implicit
+# surface with create_isurf, given a surf_react prob model, and the per-grid
+# reaction tallies are reduced to a scalar for the regression comparison.
+#
+# Note:
+#  - The "comm/sort" option to the "global" command is used to match MPI runs.
+#  - The "twopass" option is used to match Kokkos runs.
+# The "comm/sort" and "twopass" options should not be used for production runs.
+################################################################################
+
+seed			12345
+dimension		2
+boundary		p p p
+global                  gridcut 1.E-1 comm/sort yes
+
+create_box		-1.0 1.0 -1.0 1.0 -0.5 0.5
+Created orthogonal box = (-1 -1 -0.5) to (1 1 0.5)
+create_grid		80 80 1
+Created 6400 child grid cells
+  CPU time = 0.00195981 secs
+  create/ghost percent = 51.3624 48.6376
+balance_grid		rcb cell
+Balance grid migrated 0 cells
+  CPU time = 0.00102005 secs
+  reassign/sort/migrate/ghost percent = 43.4052 3.55148 7.48451 45.5588
+
+global			nrho 1.0 fnum 0.001
+global                  surfs explicit/distributed
+
+species			air.species N2
+mixture			air N2 vstream 100.0 0 0 temp 300.0
+
+read_surf               data.circle2d invert
+  100 lines
+  -0.75 0.75 xlo xhi
+  -0.75 0.75 ylo yhi
+  0 0 zlo zhi
+  0.0471161 min line length
+  243 0 = cells overlapping surfs, overlap cells with unmarked corner pts
+  3465 2692 243 = cells outside/inside/overlapping surfs
+  243 = surf cells with 1,2,etc splits
+  2.23402 2.23402 = cell-wise and global flow volume
+  CPU time = 0.00233323 secs
+  read/check/sort/surf2grid/ghost/inout/particle percent = 4.56813 2.4371 4.9663 68.8398 19.1887 13.1956 0.0101576
+  surf2grid time = 0.00160619 secs
+  map/comm1/comm2/comm3/comm4/split percent = 40.8108 1.69968 27.1151 3.02604 7.80587 7.65377
+surf_collide		1 diffuse 300.0 0.0
+fix		        fablate ablate all 0 0.2 random 0
+create_isurf            all fablate 39.5 ave
+  6400 0 0 = cells outside/inside/overlapping surfs
+  0 = surf cells with 1,2,etc splits
+  4 4 = cell-wise and global flow volume
+  -0.75 0.75 xlo xhi
+  -0.75 0.75 ylo yhi
+  0 0 zlo zhi
+  0.00153672 min line length
+  236 = cells with surfs
+  236 = total surfs in all grid cells
+  1 = max surfs in one grid cell
+  0.0614686 = min surf-size/cell-size ratio
+  236 0 = cells overlapping surfs, overlap cells with unmarked corner pts
+  3472 2692 236 = cells outside/inside/overlapping surfs
+  236 = surf cells with 1,2,etc splits
+  2.23415 2.23415 = cell-wise and global flow volume
+
+# surface reaction model on the implicit surface
+surf_react              1 prob isurf.react
+surf_modify		all collide 1 react 1
+
+create_particles        air n 10000 twopass
+Created 10000 particles
+  CPU time = 0.00140551 secs
+collide			vss air air.vss
+
+# per-grid tally of implicit-surface reactions, reduced to a scalar
+compute                 ris react/isurf/grid all 1
+compute                 rr reduce sum c_ris[*]
+
+timestep		0.0001
+stats			50
+stats_style		step cpu np nscoll nsreact c_rr
+run			500
+Memory usage per proc in Mbytes:
+  particles (ave,min,max) = 1.5625 1.5625 1.5625
+  grid      (ave,min,max) = 1.51379 1.51379 1.51379
+  surf      (ave,min,max) = 0.023407 0.023407 0.023407
+  total     (ave,min,max) = 3.0997 3.0997 3.0997
+Step CPU Np Nscoll Nsreact c_rr 
+       0            0    10000        0        0            0 
+      50  0.032393616     5918      129       54           54 
+     100  0.050684777     3822       84       32           32 
+     150  0.061529745     2674       38       15           15 
+     200  0.068747063     1925       35       15           15 
+     250  0.074349498     1451       16        9            9 
+     300   0.07865391     1147       16        4            4 
+     350  0.082146053      935       11        5            5 
+     400   0.08536376      765        5        5            5 
+     450   0.08807854      652        2        1            1 
+     500  0.090492049      558        1        1            1 
+Loop time of 0.090498 on 1 procs for 500 steps with 558 particles
+Performance: 5524.984 timesteps/s, 3.083 Mparticle-step/s
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Move    | 0.068594   | 0.068594   | 0.068594   |   0.0 | 75.80
+Coll    | 0.013066   | 0.013066   | 0.013066   |   0.0 | 14.44
+Sort    | 0.0076113  | 0.0076113  | 0.0076113  |   0.0 |  8.41
+Comm    | 0.00028223 | 0.00028223 | 0.00028223 |   0.0 |  0.31
+Modify  | 0          | 0          | 0          |   0.0 |  0.00
+Output  | 0.00053005 | 0.00053005 | 0.00053005 |   0.0 |  0.59
+Other   |            | 0.0004146  |            |       |  0.46
+
+Particle moves    = 1209661 (1.21M)
+Cells touched     = 2934277 (2.93M)
+Particle comms    = 0 (0K)
+Boundary collides = 0 (0K)
+Boundary exits    = 0 (0K)
+SurfColl checks   = 93445 (93.4K)
+SurfColl occurs   = 23419 (23.4K)
+Surf reactions    = 9442 (9.44K)
+Collide attempts  = 0 (0K)
+Collide occurs    = 0 (0K)
+Reactions         = 0 (0K)
+Particles stuck   = 0
+Axisymm bad moves = 0
+
+Particle-moves/CPUsec/proc: 1.33667e+07
+Particle-moves/step: 2419.32
+Cell-touches/particle/step: 2.4257
+Particle comm iterations/step: 1
+Particle fraction communicated: 0
+Particle fraction colliding with boundary: 0
+Particle fraction exiting boundary: 0
+Surface-checks/particle/step: 0.0772489
+Surface-collisions/particle/step: 0.01936
+Surf-reactions/particle/step: 0.00780549
+Collision-attempts/particle/step: 0
+Collisions/particle/step: 0
+Reactions/particle/step: 0
+
+Surface reaction tallies:
+  id 1 style prob #-of-reactions 1
+    reaction all: 9442
+    reaction N2 --> NULL: 9442
+
+Particles: 558 ave 558 max 558 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Cells:      6400 ave 6400 max 6400 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+GhostCell: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+EmptyCell: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Surfs:    236 ave 236 max 236 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+GhostSurf: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0

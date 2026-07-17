@@ -1,0 +1,50 @@
+################################################################################
+# 2d flow around a circle whose wall temperature is driven by a PID controller
+#
+# Regression coverage for the fix controller command (fix_controller.cpp),
+# which is not used by any other example.  A PID feedback loop samples the gas
+# temperature (process variable) every N steps and adjusts an internal-style
+# variable (control variable) that sets the diffuse surface wall temperature,
+# driving the gas temperature toward a setpoint.
+#
+# Note:
+#  - The "comm/sort" option to the "global" command is used to match MPI runs.
+#  - The "twopass" option is used to match Kokkos runs.
+# The "comm/sort" and "twopass" options should not be used for production runs.
+################################################################################
+
+seed	    	    12345
+dimension   	    2
+global              gridcut 0.0 comm/sort yes
+
+boundary	    o r p
+
+create_box  	    0 10 0 10 -0.5 0.5
+create_grid 	    20 20 1
+balance_grid        rcb cell
+
+global		    nrho 1.0 fnum 0.001
+
+species		    air.species N O
+mixture		    air N O vstream 100.0 0 0 temp 300.0
+
+read_surf           data.circle
+
+# control variable = wall temperature, adjusted by the controller
+variable            wtemp internal 300.0
+surf_collide	    1 diffuse v_wtemp 1.0
+surf_modify         all collide 1
+
+collide             vss air air.vss
+
+fix		    in emit/face air xlo twopass
+
+# PID controller: drive the gas temperature to 500 K by adjusting the wall temp
+compute             gtemp temp
+fix                 pid controller 100 5.0 1.0 0.1 0.0 c_gtemp 500.0 wtemp
+
+timestep 	    0.0001
+
+stats		    100
+stats_style	    step cpu np c_gtemp v_wtemp
+run 		    2000
