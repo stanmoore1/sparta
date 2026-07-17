@@ -10,6 +10,8 @@
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
+
+   Adapted from the LAMMPS math_eigen files (https://www.lammps.org/)
 ------------------------------------------------------------------------- */
 
 /* ----------------------------------------------------------------------
@@ -19,20 +21,16 @@
 #include "math_eigen.h"
 #include "math_eigen_impl.h"
 
-#include <array>
 #include <utility>
-#include <vector>
 
-using std::array;
-using std::vector;
 using namespace MathEigen;
 
 // Special case: 3x3 matrices
 
-typedef Jacobi<double, double *, double (*)[3], double const (*)[3]> Jacobi_v1;
-typedef Jacobi<double, double *, double **, double const *const *> Jacobi_v2;
+using Jacobi_v1 = Jacobi<double, double *, double (*)[3], double const (*)[3]>;
+using Jacobi_v2 = Jacobi<double, double *, double **, double const *const *>;
 
-int MathEigen::jacobi3(double const mat[3][3], double *eval, double evec[3][3])
+int MathEigen::jacobi3(double const mat[3][3], double *eval, double evec[3][3], int sort)
 {
   // make copy of const matrix
 
@@ -45,7 +43,15 @@ int MathEigen::jacobi3(double const mat[3][3], double *eval, double evec[3][3])
   // create instance of generic Jacobi class and get eigenvalues and -vectors
 
   Jacobi_v1 ecalc3(3, M, midx);
-  int ierror = ecalc3.Diagonalize(mat, eval, evec, Jacobi_v1::SORT_DECREASING_EVALS);
+  int ierror = 1;
+  if (sort == -1)
+    ierror = ecalc3.Diagonalize(mat, eval, evec, Jacobi_v1::SORT_DECREASING_EVALS);
+  else if (sort == 0)
+    ierror = ecalc3.Diagonalize(mat, eval, evec, Jacobi_v1::DO_NOT_SORT);
+  else if (sort == 1)
+    ierror = ecalc3.Diagonalize(mat, eval, evec, Jacobi_v1::SORT_INCREASING_EVALS);
+
+  if (ierror) return ierror;
 
   // transpose the evec matrix
 
@@ -55,7 +61,7 @@ int MathEigen::jacobi3(double const mat[3][3], double *eval, double evec[3][3])
   return ierror;
 }
 
-int MathEigen::jacobi3(double const *const *mat, double *eval, double **evec)
+int MathEigen::jacobi3(double const *const *mat, double *eval, double **evec, int sort)
 {
   // make copy of const matrix
 
@@ -68,7 +74,15 @@ int MathEigen::jacobi3(double const *const *mat, double *eval, double **evec)
   // create instance of generic Jacobi class and get eigenvalues and -vectors
 
   Jacobi_v2 ecalc3(3, M, midx);
-  int ierror = ecalc3.Diagonalize(mat, eval, evec, Jacobi_v2::SORT_DECREASING_EVALS);
+  int ierror = 1;
+  if (sort == -1)
+    ierror = ecalc3.Diagonalize(mat, eval, evec, Jacobi_v2::SORT_DECREASING_EVALS);
+  else if (sort == 0)
+    ierror = ecalc3.Diagonalize(mat, eval, evec, Jacobi_v2::DO_NOT_SORT);
+  else if (sort == 1)
+    ierror = ecalc3.Diagonalize(mat, eval, evec, Jacobi_v2::SORT_INCREASING_EVALS);
+
+  if (ierror) return ierror;
 
   // transpose the evec matrix
 
