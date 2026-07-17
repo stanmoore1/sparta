@@ -1,0 +1,20 @@
+# rotational data for linear air molecules
+#
+# For use with:  species air.species <sp1 sp2 ...> rotfile air.rot
+#
+# format: species-ID N theta_rot(s) [sigma]
+#   N         = number of rotational temperatures (1 for linear molecules)
+#   theta_rot = characteristic rotational temperature (K), from the
+#               equilibrium rotational constant B_e (Huber & Herzberg 1979):
+#               theta_rot = B_e * hc/kB = B_e[cm^-1] * 1.4387769
+#   sigma     = rotational symmetry number (2 for homonuclear diatomics,
+#               1 otherwise); used in the partition functions that derive
+#               detailed-balance reverse reaction rates.  Optional,
+#               default 1.
+
+N2  1 2.88 2
+O2  1 2.07 2
+NO  1 2.44 1
+N2+ 1 2.78 2
+O2+ 1 2.43 2
+NO+ 1 2.87 1
