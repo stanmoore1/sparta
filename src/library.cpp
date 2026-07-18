@@ -924,7 +924,9 @@ int sparta_has_id(void *ptr, const char *category, const char *name)
 }
 
 /* ----------------------------------------------------------------------
-   copy the name of variable number idx into buffer
+   copy a human-readable description of variable number idx into buffer
+   (name, style, and definition), matching the LAMMPS lammps_variable_info
+   contract so the GUI can display one variable per line
    returns 1 if successful, 0 if not
 ------------------------------------------------------------------------- */
 
@@ -933,7 +935,8 @@ int sparta_variable_info(void *ptr, int idx, char *buffer, int buf_size)
   SPARTA *sparta = (SPARTA *) ptr;
 
   if (idx < 0 || idx >= sparta->input->variable->nvar_active()) return 0;
-  return copy_string(sparta->input->variable->name(idx),buffer,buf_size);
+  std::string info = sparta->input->variable->get_info(idx);
+  return copy_string(info.c_str(),buffer,buf_size);
 }
 
 // ----------------------------------------------------------------------

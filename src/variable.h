@@ -17,6 +17,7 @@
 
 #include "stdio.h"
 #include "pointers.h"
+#include <string>
 
 namespace SPARTA_NS {
 
@@ -56,6 +57,7 @@ class Variable : protected Pointers {
 
   int nvar_active() const { return nvar; }
   const char *name(int i) const { return names[i]; }
+  std::string get_info(int);
 
  protected:
   int me;
