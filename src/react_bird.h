@@ -196,6 +196,8 @@ class ReactBird : public React {
   double partition_function(int, double);
   double morse_qvib(double, double, double, double);
   double anharm_vibelec_q(int, double);
+  double sho_vibelec_q(int, double);
+  void apply_anharm_residual();
   int max_nelecstate();
   void build_db_table(int);
   void build_db3_table(int);

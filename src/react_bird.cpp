@@ -386,6 +386,15 @@ void ReactBird::init()
   read_nasa9_file();
   apply_keq_thermo();
 
+  // Morse thermodynamics (species anharmfile): any remaining derived
+  // reverse whose species carry anharmonicity data gets a fitted thermal
+  // residual R(T) = Keq_SHO/Keq_Morse through the same mechanism, so its
+  // thermal average reproduces the Morse equilibrium constant at every
+  // temperature while the SHO detailed-balance table stays exact on the
+  // ladder the particles occupy
+
+  apply_anharm_residual();
+
   // set reverse_active if any active reverse reaction uses an external
   // Keq curve fit: only the residual thermal correction R(T) needs the
   // per-cell temperature at run time; the energy-resolved shape of every
@@ -1257,6 +1266,105 @@ void ReactBird::apply_keq_thermo()
             nskipped);
     error->warning(FLERR,str);
   }
+}
+
+/* ----------------------------------------------------------------------
+   apply the Morse (anharmfile) thermodynamics to every derived reverse
+   not already pinned by keq_file or keq_thermo: fit the thermal residual
+     R(T) = Keq_SHO(T)/Keq_Morse(T)
+   to the Park basis and store it in the standard residual slot, so the
+   thermal average reproduces the Morse equilibrium constant at every
+   temperature.  The residual is the ratio of the harmonic to the
+   anharmonic vibrational-electronic factors of the species that carry
+   anharmonicity data (translation and rotation cancel).  Precedence:
+   keq_file > keq_thermo > anharmfile.
+------------------------------------------------------------------------- */
+
+void ReactBird::apply_anharm_residual()
+{
+  Particle::Species *species = particle->species;
+
+  int any = 0;
+  for (int isp = 0; isp < particle->nspecies; isp++)
+    if (species[isp].anharm_read) any = 1;
+  if (!any) return;
+
+  int vibsmooth = (collide && collide->vibstyle == SMOOTH);
+  if (vibsmooth) return;   // Morse manifolds are a discrete-vib upgrade
+
+  for (int m = 0; m < nlist; m++) {
+    OneReaction *b = &rlist[m];
+    if (!b->active || !b->reverse || b->reverse_partner < 0) continue;
+    if (b->keq_flag) continue;
+    OneReaction *f = &rlist[b->reverse_partner];
+
+    int has = 0;
+    for (int j = 0; j < f->nreactant; j++)
+      if (species[f->reactants[j]].anharm_read) has = 1;
+    for (int j = 0; j < f->nproduct; j++)
+      if (species[f->products[j]].anharm_read) has = 1;
+    if (!has) continue;
+
+    const int NP = 16;
+    const double Tlo = 1000.0, Thi = 60000.0;
+    double Ts[NP], lnR[NP];
+    for (int p = 0; p < NP; p++) {
+      double T = Tlo * pow(Thi/Tlo, p/(double)(NP-1));
+      double lr = 0.0;
+      for (int j = 0; j < f->nproduct; j++) {
+        int isp = f->products[j];
+        if (species[isp].anharm_read)
+          lr += log(sho_vibelec_q(isp,T)) - log(anharm_vibelec_q(isp,T));
+      }
+      for (int j = 0; j < f->nreactant; j++) {
+        int isp = f->reactants[j];
+        if (species[isp].anharm_read)
+          lr -= log(sho_vibelec_q(isp,T)) - log(anharm_vibelec_q(isp,T));
+      }
+      Ts[p] = T;
+      lnR[p] = lr;
+    }
+    fit_park_form(Ts,lnR,NP,b->keq_resid_coeff);
+
+    double maxerr = 0.0;
+    for (int p = 0; p < NP; p++) {
+      double err = fabs(keq_eval(b->keq_resid_coeff,Ts[p])/exp(lnR[p]) - 1.0);
+      maxerr = MAX(maxerr,err);
+    }
+    if (maxerr > 0.02 && comm->me == 0) {
+      char str[MAXLINE+128];
+      sprintf(str,"Reverse reaction %s: Morse residual fit is off by "
+              "%g%% within %g-%g K",b->id,100.0*maxerr,Tlo,Thi);
+      error->warning(FLERR,str);
+    }
+    b->keq_flag = 1;
+  }
+}
+
+/* ----------------------------------------------------------------------
+   harmonic (SHO) vibrational-electronic internal partition factor of one
+   species, matching the factors partition_function() uses; the ratio to
+   anharm_vibelec_q() is the Morse thermal residual
+------------------------------------------------------------------------- */
+
+double ReactBird::sho_vibelec_q(int isp, double T)
+{
+  Particle::Species *sp = &particle->species[isp];
+  double qvib = 1.0;
+  for (int m = 0; m < sp->nvibmode; m++) {
+    if (sp->vibtemp[m] <= 0.0) continue;
+    int g = sp->vibdegen[m] > 0 ? sp->vibdegen[m] : 1;
+    double x = exp(-sp->vibtemp[m]/T);
+    qvib *= pow(1.0/(1.0-x), g);
+  }
+  double qelec = 1.0;
+  if (sp->elecdat) {
+    qelec = 0.0;
+    for (int i = 0; i < sp->elecdat->nelecstate; i++)
+      qelec += sp->elecdat->states[i].degen *
+        exp(-sp->elecdat->states[i].temp/T);
+  }
+  return qvib*qelec;
 }
 
 /* ----------------------------------------------------------------------
@@ -2159,20 +2267,6 @@ double ReactBird::partition_function(int isp, double T)
       qelec += sp->elecdat->states[i].degen *
         exp(-sp->elecdat->states[i].temp/T);
   }
-
-  // anharmonic (Morse) upgrade of the internal factor (species anharmfile):
-  // replace qvib*qelec by the joint sum over electronic states of
-  // dissociation-truncated Morse vibrational manifolds, per-state
-  // constants where supplied (elecfile state K), ground-manifold
-  // constants with the depth measured from the state origin otherwise.
-  // This upgrades only the THERMODYNAMIC layer (reverse-rate calibration
-  // constants, equilibrium constants); the collisional ladder and the
-  // microcanonical reaction tables stay on the SHO ladder the particles
-  // actually occupy, exactly as the external-Keq option confines its
-  // thermal correction to a residual factor.
-
-  if (sp->anharm_read && !vibsmooth && sp->nvibmode >= 1)
-    return qtrans*qrot*anharm_vibelec_q(isp,T);
 
   return qtrans*qrot*qvib*qelec;
 }
