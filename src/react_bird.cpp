@@ -1635,7 +1635,7 @@ static void ladder_convolve(double *arr, double *work, int n, double du,
    The numerator/denominator sums are accumulated on an energy grid by
    convolution (shift-and-add per ladder level); runtime evaluation is a
    single linear interpolation (vib_micro_factor() in react_bird.h).
-   Tables are clamped at umax = Ea + 40 eV; collisions beyond use the
+   Tables are clamped at umax = Ea + 60 eV; collisions beyond use the
    last table value (their probability weight is negligible below
    ~100000 K, and clamping keeps CPU/Kokkos evaluation identical).
 ------------------------------------------------------------------------- */
