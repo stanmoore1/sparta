@@ -31,6 +31,12 @@ using namespace SPARTA_NS;
 Timer::Timer(SPARTA *sparta) : Pointers(sparta)
 {
   memory->create(array,TIME_N,"array");
+  // zero the timers at construction: init() only runs at the start of a run,
+  // but commands such as "balance_grid rcb time" read the array before any run
+  // and would otherwise use uninitialized values (garbage cell weights, and a
+  // missed "no time history" warning) -- benign in a fresh process where the
+  // heap is zeroed, but not when SPARTA is embedded in a long-lived process.
+  for (int i = 0; i < TIME_N; i++) array[i] = 0.0;
   _timeout = -1.0;
   _s_timeout = -1.0;
   _checkfreq = 10;
