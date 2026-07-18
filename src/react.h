@@ -62,6 +62,8 @@ class React : protected Pointers {
   int reverse_auto;          // 1 to auto-generate a B-style reverse for
                              //   every eligible forward reaction
   char *keq_file;            // file of equilibrium-constant curve fits
+  char *keq_thermo_file;     // NASA-9 species thermo file: pins every
+                             //   derived reverse to the CEA Keq
                              //   used in place of the internal partition
                              //   functions, or NULL
   double tgas;               // representative cell temperature (K) used to

@@ -22,6 +22,8 @@ keyword = {vibfile} :l
   {vibfile} value = vfile = filename for extra vibrational info :pre
 keyword = {elecfile} :l
   {elecfile} value = efile = filename for extra electronic info :pre
+keyword = {anharmfile} :l
+  {anharmfile} value = afile = filename for Morse anharmonicity info :pre
 :ule
 
 [Examples:]
@@ -235,6 +237,43 @@ The states of a species must be listed in ascending energy order, and the
 first (ground) state must have a temperature of zero. A line in the second
 format must come after the line in the first format that defines the states
 of species-ID1.
+
+:line
+
+The optional {anharmfile} keyword supplies Morse (first-order
+anharmonic) vibrational constants that upgrade the thermodynamic
+partition functions used by the detailed-balance reverse-reaction
+machinery of the "react_modify"_react_modify.html command: the
+calibration constants of derived reverse reactions and the equilibrium
+constants they reproduce.  The collisional vibrational ladder and the
+microcanonical reaction tables are unaffected; they stay on the simple
+harmonic ladder that particles occupy.
+
+The file contains lines of two formats.  The ground-manifold format is
+
+species-ID N thetax1 ... thetaxN D0 :pre
+
+where N is the number of vibrational modes, thetaxI is the
+anharmonicity constant omega_e x_e of mode I in temperature units, and
+D0 is the 0-K dissociation energy in temperature units, which
+truncates the vibrational ladder.  The optional per-electronic-state
+format is
+
+species-ID state K thetae thetax D0K :pre
+
+where "state" is a literal keyword, K is the 0-based index of a state
+in the species {elecfile} ladder, and thetae/thetax/D0K are that
+state's harmonic spacing, anharmonicity, and dissociation energy
+(measured from the state's own minimum), all in temperature units.
+Electronic states without such a line use the ground-manifold
+constants with the dissociation depth measured from the state origin.
+Species without an entry in the file remain harmonic.  A
+per-electronic-state line must come after its species' ground-manifold
+line.  For polyatomic species only the first mode carries the
+anharmonicity; additional modes remain harmonic.
+
+The file data/air.anharm provides Huber-Herzberg ground-manifold
+constants for the six molecular species of 11-species air.
 
 [Restrictions:] none
 

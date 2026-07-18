@@ -786,6 +786,10 @@ void Particle::add_species(int narg, char **arg)
       break;
     } else if (strcmp(arg[iarg],"vibfile") == 0) {
       break;
+    } else if (strcmp(arg[iarg],"elecfile") == 0) {
+      break;
+    } else if (strcmp(arg[iarg],"anharmfile") == 0) {
+      break;
     } else {
       newspecies++;
     }
@@ -805,6 +809,8 @@ void Particle::add_species(int narg, char **arg)
     } else if (strcmp(arg[iarg],"vibfile") == 0) {
       break;
     } else if (strcmp(arg[iarg],"elecfile") == 0) {
+      break;
+    } else if (strcmp(arg[iarg],"anharmfile") == 0) {
       break;
     } else {
       names[newspecies++] = arg[iarg];
@@ -859,6 +865,7 @@ void Particle::add_species(int narg, char **arg)
   int rotindex = 0;
   int vibindex = 0;
   int elecindex = 0;
+  int anharmindex = 0;
 
   while (iarg < narg) {
     if (strcmp(arg[iarg],"rotfile") == 0) {
@@ -878,6 +885,12 @@ void Particle::add_species(int narg, char **arg)
       if (elecindex)
         error->all(FLERR,"Species command can only use a single elecfile");
       elecindex = iarg+1;
+      iarg += 2;
+    } else if (strcmp(arg[iarg],"anharmfile") == 0) {
+      if (iarg+2 > narg) error->all(FLERR,"Illegal species command");
+      if (anharmindex)
+        error->all(FLERR,"Species command can only use a single anharmfile");
+      anharmindex = iarg+1;
       iarg += 2;
     } else error->all(FLERR,"Illegal species command");
   }
@@ -1076,6 +1089,9 @@ void Particle::add_species(int narg, char **arg)
         species[ii].elecdat->states[k].degen = fileelec[j].elecdegen[k];
         species[ii].elecdat->states[k].spin = fileelec[j].elecspin[k];
         species[ii].elecdat->states[k].dof = fileelec[j].elecdof[k];
+        species[ii].elecdat->states[k].vibtheta = 0.0;
+        species[ii].elecdat->states[k].vibthetax = 0.0;
+        species[ii].elecdat->states[k].vibd0 = 0.0;
         species[ii].elecdat->default_rel[k] = fileelec[j].default_rel[k];
 
       }
@@ -1103,12 +1119,180 @@ void Particle::add_species(int narg, char **arg)
     }
     memory->sfree(fileelec);
   }
+
+  // read anharmonicity file (Morse constants for the thermodynamic
+  // partition functions used by the detailed-balance reverse machinery);
+  // processed after the elecfile so per-electronic-state manifolds can be
+  // bounds-checked against the ladder
+
+  if (anharmindex) {
+    if (me == 0) {
+      fp = fopen(arg[anharmindex],"r");
+      if (fp == NULL) {
+        char str[128];
+        sprintf(str,"Cannot open anharmonicity file %s",arg[anharmindex]);
+        error->one(FLERR,str);
+      }
+    }
+
+    nfile = maxfile = 0;
+    fileanharm = NULL;
+
+    if (me == 0) read_anharmonic_file();
+    MPI_Bcast(&nfile,1,MPI_INT,0,world);
+    if (comm->me) {
+      fileanharm = (AnharmFile *)
+        memory->smalloc(nfile*sizeof(AnharmFile),"particle:fileanharm");
+    }
+    MPI_Bcast(fileanharm,nfile*sizeof(AnharmFile),MPI_BYTE,0,world);
+
+    for (i = 0; i < newspecies; i++) {
+      int ii = nspecies_original + i;
+
+      for (j = 0; j < nfile; j++)
+        if (strcmp(names[i],fileanharm[j].id) == 0) break;
+      if (j == nfile) continue;   // species without an entry stay harmonic
+
+      if (species[ii].nvibmode == 0)
+        error->all(FLERR,"Anharmonicity file entry for species "
+                   "without vibrational modes");
+      if (fileanharm[j].nmode != species[ii].nvibmode)
+        error->all(FLERR,"Mismatch between species vib modes "
+                   "and anharmonicity file entry");
+
+      for (k = 0; k < fileanharm[j].nmode; k++)
+        species[ii].anharm_thetax[k] = fileanharm[j].thetax[k];
+      species[ii].anharm_d0 = fileanharm[j].d0;
+      species[ii].anharm_read = 1;
+
+      // optional per-electronic-state Morse manifolds
+
+      for (k = 0; k < fileanharm[j].nest; k++) {
+        int st = fileanharm[j].est_state[k];
+        if (!species[ii].elecdat || st < 0 ||
+            st >= species[ii].elecdat->nelecstate)
+          error->all(FLERR,"Anharmonicity file electronic-state index "
+                     "out of range");
+        species[ii].elecdat->states[st].vibtheta = fileanharm[j].est_thetae[k];
+        species[ii].elecdat->states[st].vibthetax = fileanharm[j].est_thetax[k];
+        species[ii].elecdat->states[st].vibd0 = fileanharm[j].est_d0[k];
+      }
+    }
+
+    memory->sfree(fileanharm);
+  }
+
   // clean up
   if (cumulative_probabilities) memory->destroy(cumulative_probabilities);
   if (maxelecstate)
     memory->create(cumulative_probabilities, maxelecstate+1, "particle:cumulative_probabilities");
 
   delete [] names;
+}
+
+/* ----------------------------------------------------------------------
+   read anharmonicity (Morse) file, invoked by proc 0 only
+   two line formats:
+     ID N thetax_1 ... thetax_N D0
+       ground-manifold constants: N = # vib modes, thetax = omega_e x_e
+       (K) per mode, D0 = 0-K dissociation energy (K) truncating the
+       ladder
+     ID state K thetae thetax D0K
+       optional per-electronic-state Morse manifold for elecfile state
+       index K (0-based): thetae = state omega_e (K), thetax = state
+       omega_e x_e (K), D0K = dissociation energy from that state's
+       minimum (K)
+   these constants feed only the thermodynamic partition functions of the
+   detailed-balance reverse machinery (ReactBird::partition_function);
+   the collisional vibrational ladder and the microcanonical reaction
+   tables stay on the SHO ladder the particles actually occupy
+------------------------------------------------------------------------- */
+
+void Particle::read_anharmonic_file()
+{
+  int NWORDS = 3 + MAXVIBMODE;
+  char **words = new char*[NWORDS];
+  char line[MAXLINE],copy[MAXLINE];
+
+  while (fgets(line,MAXLINE,fp)) {
+    int pre = strspn(line," \t\n\r");
+    if (pre == strlen(line) || line[pre] == '#') continue;
+
+    strcpy(copy,line);
+    int nwords = wordcount(copy,NULL);
+    if (nwords > NWORDS)
+      error->one(FLERR,"Incorrect line format in anharmonicity file");
+
+    nwords = wordcount(line,words);
+    if (nwords < 3)
+      error->one(FLERR,"Incorrect line format in anharmonicity file");
+
+    // per-electronic-state line: ID state K thetae thetax D0K
+
+    if (strcmp(words[1],"state") == 0) {
+      if (nwords != 6)
+        error->one(FLERR,"Incorrect state-line format in anharmonicity file");
+      int j;
+      for (j = 0; j < nfile; j++)
+        if (strcmp(words[0],fileanharm[j].id) == 0) break;
+      if (j == nfile)
+        error->one(FLERR,"Anharmonicity state line precedes its "
+                   "species line");
+      AnharmFile *asp = &fileanharm[j];
+      if (asp->nest == MAXELECSTATE_ANHARM)
+        error->one(FLERR,"Too many state lines in anharmonicity file");
+      asp->est_state[asp->nest] = atoi(words[2]);
+      asp->est_thetae[asp->nest] = atof(words[3]);
+      asp->est_thetax[asp->nest] = atof(words[4]);
+      asp->est_d0[asp->nest] = atof(words[5]);
+      if (asp->est_thetae[asp->nest] <= 0.0 ||
+          asp->est_thetax[asp->nest] < 0.0 ||
+          asp->est_d0[asp->nest] <= 0.0)
+        error->one(FLERR,"Invalid state constants in anharmonicity file");
+      asp->nest++;
+      continue;
+    }
+
+    // ground-manifold line: ID N thetax_1..N D0
+
+    if (nfile == maxfile) {
+      maxfile += DELTASPECIES;
+      fileanharm = (AnharmFile *)
+        memory->srealloc(fileanharm,maxfile*sizeof(AnharmFile),
+                         "particle:fileanharm");
+      memset(&fileanharm[nfile],0,(maxfile-nfile)*sizeof(AnharmFile));
+    }
+
+    AnharmFile *asp = &fileanharm[nfile];
+
+    if (strlen(words[0]) + 1 > 16)
+      error->one(FLERR,"Invalid species ID in anharmonicity file");
+    strcpy(asp->id,words[0]);
+
+    asp->nmode = atoi(words[1]);
+    if (asp->nmode < 1 || asp->nmode > MAXVIBMODE)
+      error->one(FLERR,"Invalid mode count in anharmonicity file");
+    if (nwords != 3 + asp->nmode)
+      error->one(FLERR,"Incorrect line format in anharmonicity file");
+
+    int j = 2;
+    for (int i = 0; i < asp->nmode; i++) {
+      asp->thetax[i] = atof(words[j++]);
+      if (asp->thetax[i] < 0.0)
+        error->one(FLERR,"Invalid anharmonicity constant in "
+                   "anharmonicity file");
+    }
+    asp->d0 = atof(words[j++]);
+    if (asp->d0 <= 0.0)
+      error->one(FLERR,"Invalid dissociation energy in anharmonicity file");
+    asp->nest = 0;
+
+    nfile++;
+  }
+
+  delete [] words;
+
+  fclose(fp);
 }
 
 /* ----------------------------------------------------------------------
@@ -1414,6 +1598,10 @@ void Particle::read_species_file()
     }
 
     fsp->vibdiscrete_read = 0;
+
+    for (int m = 0; m < MAXVIBMODE; m++) fsp->anharm_thetax[m] = 0.0;
+    fsp->anharm_d0 = 0.0;
+    fsp->anharm_read = 0;
 
     nfile++;
   }

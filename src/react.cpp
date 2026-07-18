@@ -42,6 +42,7 @@ React::React(SPARTA *sparta, int, char **arg) : Pointers(sparta)
   reverse_recomb_active = 0;
   reverse_auto = 0;
   keq_file = NULL;
+  keq_thermo_file = NULL;
   tgas = 0.0;
 
   random = new RanKnuth(update->ranmaster->uniform());
@@ -60,6 +61,7 @@ React::~React()
 
   delete [] style;
   delete [] keq_file;
+  delete [] keq_thermo_file;
   delete random;
 }
 
@@ -109,6 +111,16 @@ void React::modify_params(int narg, char **arg)
           int n = strlen(arg[iarg+1]) + 1;
           keq_file = new char[n];
           strcpy(keq_file,arg[iarg+1]);
+        }
+        iarg += 2;
+    } else if (strcmp(arg[iarg],"keq_thermo") == 0) {
+        if (iarg+2 > narg) error->all(FLERR,"Illegal react_modify command");
+        delete [] keq_thermo_file;
+        if (strcmp(arg[iarg+1],"none") == 0) keq_thermo_file = NULL;
+        else {
+          int n = strlen(arg[iarg+1]) + 1;
+          keq_thermo_file = new char[n];
+          strcpy(keq_thermo_file,arg[iarg+1]);
         }
         iarg += 2;
     } else error->all(FLERR,"Illegal react_modify command");

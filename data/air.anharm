@@ -1,0 +1,37 @@
+# Morse anharmonicity data for air molecules
+#
+# For use with:  species air.species <sp1 sp2 ...> anharmfile air.anharm
+#
+# These constants upgrade the THERMODYNAMIC partition functions used by
+# the detailed-balance reverse-reaction machinery (calibration constants
+# and equilibrium constants) from harmonic-oscillator to first-order
+# anharmonic (Morse) vibrational manifolds truncated at the dissociation
+# energy.  The collisional vibrational ladder and the microcanonical
+# reaction tables remain on the SHO ladder that particles occupy.
+#
+# format (ground manifold):  ID  N  thetax_1 ... thetax_N  D0
+#   N      = number of vibrational modes
+#   thetax = omega_e x_e in K (Huber & Herzberg 1979 omega_e x_e [cm^-1]
+#            * 1.4387769)
+#   D0     = 0-K dissociation energy in K, truncating the ladder; for the
+#            neutral molecules these equal the air.tce reaction energies
+#
+# optional per-electronic-state manifolds:
+#   ID  state  K  thetae  thetax  D0K
+#   K = 0-based index into the species elecfile ladder; thetae/thetax =
+#   state-specific omega_e / omega_e x_e (K); D0K = dissociation energy
+#   from that state's minimum (K).  States without such a line use the
+#   ground constants with the depth measured from the state origin.
+#   (Grouped high-lying manifolds in air.elec do not map to single
+#   spectroscopic constants; per-state entries are therefore left to be
+#   supplied when a resolved ladder is used.)
+#
+# ion D0 values are standard-table dissociation energies (N2+ 8.713 eV,
+# O2+ 6.663 eV, NO+ 10.85 eV); verify before production ion chemistry.
+
+N2   1  20.61  113062.0
+O2   1  17.24   59371.0
+NO   1  20.25   75544.0
+N2+  1  23.16  101110.0
+O2+  1  23.79   77321.0
+NO+  1  23.40  125909.0

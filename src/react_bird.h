@@ -174,6 +174,18 @@ class ReactBird : public React {
   KeqFit *keqfits;
   int nkeqfits;
 
+  // NASA-9 species thermodynamic records (react_modify keq_thermo)
+
+  struct Nasa9 {
+    char id[16];
+    int nranges;                     // up to 4 temperature ranges
+    double tlo[4],thi[4];
+    double c[4][9];                  // a1..a7, b1, b2 per range
+  };
+
+  Nasa9 *nasa9recs;
+  int nnasa9;
+
   int generated_flag;              // 1 once auto-reverses were generated
 
   void readfile(char *);
@@ -182,6 +194,8 @@ class ReactBird : public React {
   void check_tce_bounds();
   virtual void grow_tallies();
   double partition_function(int, double);
+  double morse_qvib(double, double, double, double);
+  double anharm_vibelec_q(int, double);
   int max_nelecstate();
   void build_db_table(int);
   void build_db3_table(int);
@@ -189,6 +203,10 @@ class ReactBird : public React {
   void read_keq_file();
   void assign_keq_fits();
   void fit_keq_residual(int);
+  void read_nasa9_file();
+  void apply_keq_thermo();
+  double nasa9_g_rt(int, double);
+  void fit_park_form(const double *, const double *, int, double *);
 
   inline double keq_eval(const double *c, double T) const {
     double z = 10000.0/T;

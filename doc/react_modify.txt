@@ -13,7 +13,7 @@ react_modify command :h3
 react_modify keyword values ...  :pre
 
 one or more keyword/value pairs may be listed :ulb,l
-keywords = {recomb} or {rboost} or {compute_chem_rates} or {partial_energy} or {reverse} or {keq_file} :l
+keywords = {recomb} or {rboost} or {compute_chem_rates} or {partial_energy} or {reverse} or {keq_file} or {keq_thermo} :l
   {recomb} value = yes or no = enable or disable defined recombination reactions
   {rboost} value = rfactor
     rfactor = boost probability of recombination reactions by this factor
@@ -22,6 +22,7 @@ keywords = {recomb} or {rboost} or {compute_chem_rates} or {partial_energy} or {
   {partial_energy} = yes or no = use partial energy or total energy for TCE chemistry
   {reverse} value = auto or no = auto-generate a detailed-balance reverse for every eligible forward reaction
   {keq_file} value = kfile or none
+  {keq_thermo} value = tfile or none
     kfile = file of equilibrium-constant curve fits for reverse reactions :pre
 :ule
 
@@ -160,6 +161,24 @@ form so the tce and tce/kk styles evaluate it identically.  Entries
 naming species that are not defined are skipped; entries matching no
 reverse reaction produce a warning.  Setting {keq_file} to {none}
 restores the internal partition functions.
+
+The {keq_thermo} keyword goes one step further: it supplies a file of
+NASA-9 polynomial thermodynamic records (the functional form of the
+NASA Glenn CEA database), and every derived reverse reaction whose
+species all have records - and which is not already matched by an
+explicit {keq_file} entry, which takes precedence - has its thermal
+average pinned to the CEA equilibrium constant through the same
+residual mechanism.  The Gibbs-function Keq is represented in Park
+form over 1000-20000 K (a warning is issued if that representation is
+off by more than 2%), and the edge polynomials are extrapolated beyond
+the tabulated range.  The file format is: a species header line
+"ID nranges", then per range a "Tlo Thi" line, a line with
+coefficients a1-a5, and a line with a6, a7, b1, b2 (see
+data/air.nasa9, generated from the CEA database for 11-species air).
+Reverse reactions matched this way evaluate the residual factor at the
+translational cell temperature, exactly as {keq_file} reactions do.
+Setting {keq_thermo} to {none} restores the internal partition
+functions.
 
 :line
 

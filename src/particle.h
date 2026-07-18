@@ -26,12 +26,19 @@ class Particle : protected Pointers {
   int sorted;               // 1 if particles are sorted by grid cell
 
   enum{MAXVIBMODE=4};       // increase value if species need more vib modes
+  enum{MAXELECSTATE_ANHARM=16}; // max per-electronic-state Morse manifolds
+                                //   listed per species in an anharmfile
 
   struct ElecState {
     double temp;    // Energy (K)
     int degen;      // Total degeneracy
     int spin;       // Spin degeneracy (e.g. singlet, triplet, etc)
     double dof;     // Effective DoF for use in chemistry models
+    double vibtheta;   // state-specific harmonic spacing omega_e (K);
+                       //   0 = use the species vibtemp (anharmfile)
+    double vibthetax;  // state-specific anharmonicity omega_e x_e (K)
+    double vibd0;      // dissociation energy from this state's minimum (K);
+                       //   truncates the state's vibrational manifold
   };
 
   struct ElectronicData {
@@ -67,6 +74,11 @@ class Particle : protected Pointers {
     int vibdiscrete_read;   // 1 if species.vib file read for this species
     int elecdiscrete_read;   // 1 if species.elec file read for this species
     double magmoment;       // magnetic moment, set by species_modify command
+    double anharm_thetax[MAXVIBMODE]; // Morse anharmonicity omega_e x_e (K)
+                                      //   per vib mode (anharmfile); 0 = SHO
+    double anharm_d0;       // 0-K dissociation energy (K) truncating the
+                            //   ground-manifold vibrational ladder; 0 = none
+    int anharm_read;        // 1 if anharmfile entry present for this species
   };
 
   struct RotFile {          // extra rotation info read from rotfile
@@ -94,6 +106,20 @@ class Particle : protected Pointers {
     int* elecspin;
     double* elecdof;
     int nmode;
+  };
+
+  struct AnharmFile {       // Morse anharmonicity info read from anharmfile
+    char id[16];
+    double thetax[MAXVIBMODE];  // omega_e x_e (K) per vib mode
+    double d0;                  // 0-K dissociation energy (K)
+    int nmode;
+    // optional per-electronic-state manifolds (index into the elecfile
+    // ladder); state < 0 terminates the list
+    int    est_state[MAXELECSTATE_ANHARM];
+    double est_thetae[MAXELECSTATE_ANHARM];
+    double est_thetax[MAXELECSTATE_ANHARM];
+    double est_d0[MAXELECSTATE_ANHARM];
+    int nest;
   };
 
   Species *species;         // list of particle species info
@@ -245,6 +271,7 @@ class Particle : protected Pointers {
   RotFile *filerot;         // list of species rotation info read from file
   VibFile *filevib;         // list of species vibration info read from file
   ElecFile *fileelec;         // list of species electronic info read from file
+  AnharmFile *fileanharm;   // list of species anharmonicity info from file
 
   class RanKnuth *wrandom;   // RNG for particle weighting
 
@@ -270,6 +297,7 @@ class Particle : protected Pointers {
   void read_rotation_file();
   void read_vibration_file();
   void read_electronic_file();
+  void read_anharmonic_file();
   int wordcount(char *, char **);
 };
 

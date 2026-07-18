@@ -89,6 +89,8 @@ ReactBird::ReactBird(SPARTA *sparta, int narg, char **arg) :
   mtab_nlist = 0;
 
   keqfits = NULL;
+  nasa9recs = NULL;
+  nnasa9 = 0;
   nkeqfits = 0;
   generated_flag = 0;
 }
@@ -109,6 +111,8 @@ ReactBird::ReactBird(SPARTA *sparta) : React(sparta)
   mtab_nlist = 0;
 
   keqfits = NULL;
+  nasa9recs = NULL;
+  nnasa9 = 0;
   nkeqfits = 0;
   generated_flag = 0;
 }
@@ -144,6 +148,7 @@ ReactBird::~ReactBird()
   memory->destroy(list_ij);
   memory->destroy(sp2recomb_ij);
   memory->sfree(keqfits);
+  memory->sfree(nasa9recs);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -373,6 +378,13 @@ void ReactBird::init()
 
   read_keq_file();
   assign_keq_fits();
+
+  // NASA-9 species thermodynamics (react_modify keq_thermo): pin every
+  // remaining derived reverse (explicit keq_file fits take precedence) to
+  // the CEA equilibrium constant through the same residual mechanism
+
+  read_nasa9_file();
+  apply_keq_thermo();
 
   // set reverse_active if any active reverse reaction uses an external
   // Keq curve fit: only the residual thermal correction R(T) needs the
@@ -995,6 +1007,254 @@ void ReactBird::fit_keq_residual(int i)
             "%g%% within %g-%g K; the reproduced Keq will be biased by that "
             "much (check the Keq file fit and species partition-function data)",
             b->id,100.0*maxerr,Tlo,Thi);
+    error->warning(FLERR,str);
+  }
+}
+
+/* ----------------------------------------------------------------------
+   read NASA-9 species thermodynamic records (react_modify keq_thermo):
+     ID nranges
+       then per range:  Tlo Thi
+                        a1 a2 a3 a4 a5
+                        a6 a7 b1 b2
+   records naming species not defined in the run are skipped
+------------------------------------------------------------------------- */
+
+void ReactBird::read_nasa9_file()
+{
+  memory->sfree(nasa9recs);
+  nasa9recs = NULL;
+  nnasa9 = 0;
+  if (!keq_thermo_file) return;
+
+  int maxrecs = 0;
+  char line[MAXLINE];
+
+  FILE *tfp = NULL;
+  if (comm->me == 0) {
+    tfp = fopen(keq_thermo_file,"r");
+    if (!tfp) {
+      char str[MAXLINE+64];
+      snprintf(str,sizeof(str),"Cannot open keq_thermo file %s",
+               keq_thermo_file);
+      error->one(FLERR,str);
+    }
+
+    // helper lambda-style macro: next non-blank, non-comment line
+
+    while (1) {
+      char *ptr;
+      do {
+        ptr = fgets(line,MAXLINE,tfp);
+      } while (ptr && (strspn(line," \t\n\r") == strlen(line) ||
+                       line[strspn(line," \t")] == '#'));
+      if (!ptr) break;
+
+      char id[64];
+      int nranges;
+      if (sscanf(line,"%63s %d",id,&nranges) != 2 ||
+          nranges < 1 || nranges > 4)
+        error->one(FLERR,"Invalid species header in keq_thermo file");
+
+      if (nnasa9 == maxrecs) {
+        maxrecs += DELTALIST;
+        nasa9recs = (Nasa9 *)
+          memory->srealloc(nasa9recs,maxrecs*sizeof(Nasa9),
+                           "react/bird:nasa9recs");
+      }
+      Nasa9 *rec = &nasa9recs[nnasa9];
+      if (strlen(id) + 1 > 16)
+        error->one(FLERR,"Species ID too long in keq_thermo file");
+      strcpy(rec->id,id);
+      rec->nranges = nranges;
+
+      for (int r = 0; r < nranges; r++) {
+        if (!fgets(line,MAXLINE,tfp) ||
+            sscanf(line,"%lg %lg",&rec->tlo[r],&rec->thi[r]) != 2)
+          error->one(FLERR,"Invalid range line in keq_thermo file");
+        if (!fgets(line,MAXLINE,tfp) ||
+            sscanf(line,"%lg %lg %lg %lg %lg",&rec->c[r][0],&rec->c[r][1],
+                   &rec->c[r][2],&rec->c[r][3],&rec->c[r][4]) != 5)
+          error->one(FLERR,"Invalid coefficient line in keq_thermo file");
+        if (!fgets(line,MAXLINE,tfp) ||
+            sscanf(line,"%lg %lg %lg %lg",&rec->c[r][5],&rec->c[r][6],
+                   &rec->c[r][7],&rec->c[r][8]) != 4)
+          error->one(FLERR,"Invalid coefficient line in keq_thermo file");
+      }
+      nnasa9++;
+    }
+    fclose(tfp);
+  }
+
+  MPI_Bcast(&nnasa9,1,MPI_INT,0,world);
+  if (comm->me && nnasa9) {
+    nasa9recs = (Nasa9 *)
+      memory->smalloc(nnasa9*sizeof(Nasa9),"react/bird:nasa9recs");
+  }
+  if (nnasa9)
+    MPI_Bcast(nasa9recs,nnasa9*sizeof(Nasa9),MPI_BYTE,0,world);
+}
+
+/* ----------------------------------------------------------------------
+   G/RT = H/RT - S/R of NASA-9 record irec at temperature T; the edge
+   polynomial is extrapolated beyond the record's tabulated range (the
+   Park-form representation is fitted only within it)
+------------------------------------------------------------------------- */
+
+double ReactBird::nasa9_g_rt(int irec, double T)
+{
+  Nasa9 *rec = &nasa9recs[irec];
+  int r = 0;
+  while (r < rec->nranges-1 && T > rec->thi[r]) r++;
+  const double *a = rec->c[r];
+  double lnT = log(T);
+  double hrt = -a[0]/(T*T) + a[1]*lnT/T + a[2] + a[3]*T/2.0 +
+    a[4]*T*T/3.0 + a[5]*T*T*T/4.0 + a[6]*T*T*T*T/5.0 + a[7]/T;
+  double sr = -a[0]/(2.0*T*T) - a[1]/T + a[2]*lnT + a[3]*T +
+    a[4]*T*T/2.0 + a[5]*T*T*T/3.0 + a[6]*T*T*T*T/4.0 + a[8];
+  return hrt - sr;
+}
+
+/* ----------------------------------------------------------------------
+   least-squares Park-form representation of lnv(T) samples:
+     ln v = c0/Z + c1 + c2 ln Z + c3 Z + c4 Z^2,  Z = 10^4/T
+------------------------------------------------------------------------- */
+
+void ReactBird::fit_park_form(const double *Ts, const double *lnv, int n,
+                              double *coeff)
+{
+  double ata[5][5], atb[5];
+  for (int a = 0; a < 5; a++) {
+    atb[a] = 0.0;
+    for (int c = 0; c < 5; c++) ata[a][c] = 0.0;
+  }
+  for (int p = 0; p < n; p++) {
+    double Z = 10000.0/Ts[p];
+    double basis[5] = {1.0/Z, 1.0, log(Z), Z, Z*Z};
+    for (int a = 0; a < 5; a++) {
+      atb[a] += basis[a]*lnv[p];
+      for (int c = 0; c < 5; c++) ata[a][c] += basis[a]*basis[c];
+    }
+  }
+  double m[5][6];
+  for (int a = 0; a < 5; a++) {
+    for (int c = 0; c < 5; c++) m[a][c] = ata[a][c];
+    m[a][5] = atb[a];
+  }
+  for (int col = 0; col < 5; col++) {
+    int piv = col;
+    for (int r = col+1; r < 5; r++)
+      if (fabs(m[r][col]) > fabs(m[piv][col])) piv = r;
+    for (int c = 0; c < 6; c++) {
+      double t = m[col][c]; m[col][c] = m[piv][c]; m[piv][c] = t;
+    }
+    double d = m[col][col];
+    for (int c = col; c < 6; c++) m[col][c] /= d;
+    for (int r = 0; r < 5; r++) {
+      if (r == col) continue;
+      double fac = m[r][col];
+      for (int c = col; c < 6; c++) m[r][c] -= fac*m[col][c];
+    }
+  }
+  for (int a = 0; a < 5; a++) coeff[a] = m[a][5];
+}
+
+/* ----------------------------------------------------------------------
+   pin every derived reverse reaction not already matched by an explicit
+   keq_file fit to the NASA-9 (CEA) equilibrium constant: represent the
+   forward reaction's concentration Keq from the Gibbs functions in
+   Park form over 1000-20000 K (the data's validity range; fit residual
+   checked), then reuse the standard residual mechanism so the thermal
+   average reproduces the CEA Keq while the energy-resolved shape stays
+   microscopically reversible
+------------------------------------------------------------------------- */
+
+void ReactBird::apply_keq_thermo()
+{
+  if (!keq_thermo_file) return;
+  if (!nnasa9) return;
+
+  const double boltz = update->boltz;
+  const double P0 = 100000.0;   // NASA-9 standard-state pressure (Pa)
+
+  int nspecies = particle->nspecies;
+  int *recmap = new int[nspecies];
+  for (int isp = 0; isp < nspecies; isp++) {
+    recmap[isp] = -1;
+    for (int k = 0; k < nnasa9; k++)
+      if (strcmp(particle->species[isp].id,nasa9recs[k].id) == 0) {
+        recmap[isp] = k;
+        break;
+      }
+  }
+
+  int napplied = 0, nskipped = 0;
+  for (int m = 0; m < nlist; m++) {
+    OneReaction *b = &rlist[m];
+    if (!b->active || !b->reverse || b->reverse_partner < 0) continue;
+    if (b->keq_flag) continue;             // explicit keq_file fit wins
+    OneReaction *f = &rlist[b->reverse_partner];
+
+    int ok = 1;
+    for (int j = 0; j < f->nreactant; j++)
+      if (recmap[f->reactants[j]] < 0) ok = 0;
+    for (int j = 0; j < f->nproduct; j++)
+      if (recmap[f->products[j]] < 0) ok = 0;
+    if (!ok) { nskipped++; continue; }
+
+    // fit the Park basis to the RESIDUAL ln R = ln Keq_sm - ln Kc_NASA9
+    // directly: the residual is small and smooth (it IS the data-file
+    // thermochemistry discrepancy), so the 5-term basis represents it to
+    // well below the warning threshold, unlike the full Kc whose ~40
+    // decades of range the basis can only track to a few percent
+
+    const int NP = 16;
+    const double Tlo = 1000.0, Thi = 20000.0;
+    double Ts[NP], lnkc[NP], lnR[NP];
+    int dn = f->nproduct - f->nreactant;
+    for (int p = 0; p < NP; p++) {
+      double T = Tlo * pow(Thi/Tlo, p/(double)(NP-1));
+      double dgrt = 0.0;
+      for (int j = 0; j < f->nproduct; j++)
+        dgrt += nasa9_g_rt(recmap[f->products[j]],T);
+      for (int j = 0; j < f->nreactant; j++)
+        dgrt -= nasa9_g_rt(recmap[f->reactants[j]],T);
+      Ts[p] = T;
+      lnkc[p] = -dgrt + dn*log(P0/(boltz*T));
+
+      double keq_sm = exp(f->coeff[4]/(boltz*T));
+      for (int j = 0; j < f->nproduct; j++)
+        keq_sm *= partition_function(f->products[j],T);
+      for (int j = 0; j < f->nreactant; j++)
+        keq_sm /= partition_function(f->reactants[j],T);
+      lnR[p] = log(keq_sm) - lnkc[p];
+    }
+    fit_park_form(Ts,lnkc,NP,b->keq_coeff);      // bookkeeping/restart only
+    fit_park_form(Ts,lnR,NP,b->keq_resid_coeff);
+
+    double maxerr = 0.0;
+    for (int p = 0; p < NP; p++) {
+      double err = fabs(keq_eval(b->keq_resid_coeff,Ts[p])/exp(lnR[p]) - 1.0);
+      maxerr = MAX(maxerr,err);
+    }
+    if (maxerr > 0.02 && comm->me == 0) {
+      char str[MAXLINE+128];
+      sprintf(str,"Reverse reaction %s: NASA-9 residual fit is off by "
+              "%g%% within %g-%g K; the reproduced Keq will be biased by "
+              "that much",b->id,100.0*maxerr,Tlo,Thi);
+      error->warning(FLERR,str);
+    }
+
+    b->keq_flag = 1;
+    napplied++;
+  }
+  delete [] recmap;
+
+  if (comm->me == 0 && nskipped) {
+    char str[160];
+    sprintf(str,"keq_thermo: %d reverse reaction(s) lack NASA-9 records "
+            "for all species and keep internal partition functions",
+            nskipped);
     error->warning(FLERR,str);
   }
 }
@@ -1900,7 +2160,86 @@ double ReactBird::partition_function(int isp, double T)
         exp(-sp->elecdat->states[i].temp/T);
   }
 
+  // anharmonic (Morse) upgrade of the internal factor (species anharmfile):
+  // replace qvib*qelec by the joint sum over electronic states of
+  // dissociation-truncated Morse vibrational manifolds, per-state
+  // constants where supplied (elecfile state K), ground-manifold
+  // constants with the depth measured from the state origin otherwise.
+  // This upgrades only the THERMODYNAMIC layer (reverse-rate calibration
+  // constants, equilibrium constants); the collisional ladder and the
+  // microcanonical reaction tables stay on the SHO ladder the particles
+  // actually occupy, exactly as the external-Keq option confines its
+  // thermal correction to a residual factor.
+
+  if (sp->anharm_read && !vibsmooth && sp->nvibmode >= 1)
+    return qtrans*qrot*anharm_vibelec_q(isp,T);
+
   return qtrans*qrot*qvib*qelec;
+}
+
+/* ----------------------------------------------------------------------
+   ground-referenced Morse vibrational partition sum for one manifold:
+   levels e_v = thetae*v - thetax*v*(v+1) (K), truncated at the
+   dissociation depth (K) and at the Morse turnover
+------------------------------------------------------------------------- */
+
+double ReactBird::morse_qvib(double thetae, double thetax, double depth,
+                             double T)
+{
+  double q = 0.0;
+  double eprev = -1.0;
+  for (int v = 0; v < 100000; v++) {
+    double e = thetae*v - thetax*v*(v+1.0);
+    if (e <= eprev) break;                 // Morse turnover
+    if (depth > 0.0 && e > depth) break;   // dissociation truncation
+    q += exp(-e/T);
+    eprev = e;
+  }
+  return q;
+}
+
+/* ----------------------------------------------------------------------
+   joint vibrational-electronic internal partition function with Morse
+   manifolds (species anharmfile):
+     q_ve(T) = sum_k g_k e^(-eps_k/T) * q_vib^(k)(T) * q_othermodes(T)
+   mode 0 carries the anharmonicity; per-state (thetae,thetax,D0K) from
+   the anharmfile state lines when present, else the ground-manifold
+   constants with depth D0 - eps_k (threshold-conservative: all states
+   share the reaction file's single dissociation limit); additional
+   modes (polyatomics) remain harmonic
+------------------------------------------------------------------------- */
+
+double ReactBird::anharm_vibelec_q(int isp, double T)
+{
+  Particle::Species *sp = &particle->species[isp];
+
+  // harmonic factor of any modes beyond mode 0
+
+  double qother = 1.0;
+  for (int m = 1; m < sp->nvibmode; m++) {
+    if (sp->vibtemp[m] <= 0.0) continue;
+    int g = sp->vibdegen[m] > 0 ? sp->vibdegen[m] : 1;
+    double x = exp(-sp->vibtemp[m]/T);
+    qother *= pow(1.0/(1.0-x), g);
+  }
+
+  double the0 = sp->vibtemp[0];
+  double thx0 = sp->anharm_thetax[0];
+  double d0 = sp->anharm_d0;
+
+  if (!sp->elecdat)
+    return morse_qvib(the0,thx0,d0,T) * qother;
+
+  double qve = 0.0;
+  for (int k = 0; k < sp->elecdat->nelecstate; k++) {
+    Particle::ElecState *st = &sp->elecdat->states[k];
+    double the = st->vibtheta  > 0.0 ? st->vibtheta  : the0;
+    double thx = st->vibtheta  > 0.0 ? st->vibthetax : thx0;
+    double dep = st->vibd0     > 0.0 ? st->vibd0
+                                     : MAX(d0 - st->temp, the);
+    qve += st->degen * exp(-st->temp/T) * morse_qvib(the,thx,dep,T);
+  }
+  return qve * qother;
 }
 
 /* ----------------------------------------------------------------------
