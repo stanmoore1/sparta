@@ -378,7 +378,8 @@ void ImageViewer::settingsDialog(int tab)
             const QColor selected =
                 QColorDialog::getColor(initial, &dialog, "Select Species Color");
             if (selected.isValid()) {
-                // adopt the SVG color name when Qt knows one for this RGB
+                // store the "#rrggbb" value; gatherSettings() defines it as a
+                // custom SPARTA color, since SPARTA cannot parse a hex literal
                 name->setText(selected.name());
                 icon->setIcon(color_icon(selected));
             }

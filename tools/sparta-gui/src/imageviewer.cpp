@@ -990,15 +990,22 @@ void ImageViewer::gatherSettings()
             const auto &def = defspeciescolors[(i - 1) % ndef];
             const auto &cur = color_list[i - 1];
             if ((cur.first == def.first) && (cur.second == def.second)) continue;
-            // define/redefine the color when the RGB differs from the stock name
-            if (cur.second.isValid() && (cur.second != QColor(cur.first))) {
+            // SPARTA's color parser only understands its built-in SVG color
+            // names and user-defined names, never a "#rrggbb" literal (as the
+            // color picker produces). Reference such colors through a
+            // SPARTA-safe synthetic name defined via "color <name> R G B".
+            QString token = cur.first;
+            if (cur.second.isValid() && token.startsWith('#'))
+                token = QStringLiteral("guisp%1").arg(i);
+            // define/redefine the color when the token is not a stock SPARTA name
+            if (cur.second.isValid() && (token != cur.first || cur.second != QColor(cur.first))) {
                 params.customcolors.append(
-                    {cur.first, QStringLiteral("%1 %2 %3")
-                                    .arg(cur.second.redF(), 0, 'f', 3)
-                                    .arg(cur.second.greenF(), 0, 'f', 3)
-                                    .arg(cur.second.blueF(), 0, 'f', 3)});
+                    {token, QStringLiteral("%1 %2 %3")
+                                .arg(cur.second.redF(), 0, 'f', 3)
+                                .arg(cur.second.greenF(), 0, 'f', 3)
+                                .arg(cur.second.blueF(), 0, 'f', 3)});
             }
-            params.pcolors.append({QString::number(i), cur.first});
+            params.pcolors.append({QString::number(i), token});
         }
     }
 }
@@ -1011,6 +1018,13 @@ void ImageViewer::createImage()
 {
     // no point in trying to update the image when triggered after the destructor started
     if (shutdown) return;
+
+    // SPARTA is not re-entrant. The viewer is a separate, non-modal window, so
+    // the user can change a setting here while a run started from the main
+    // window is still in progress on the runner thread. Issuing dump/run/undump
+    // commands on the same instance from this (GUI) thread would race with the
+    // runner. Skip the re-render until the run has finished.
+    if (sparta->isRunning()) return;
 
     // rendering requires a defined simulation box and grid
     if (!sparta->extractSetting("box_exist") || !sparta->extractSetting("grid_exist")) {
@@ -1074,9 +1088,18 @@ void ImageViewer::createImage()
             renderstatus->setPixmap(renderstatus->property("idlePix").value<QPixmap>());
     };
 
+    // remove the per-step frame file(s) this render produced. dump image may
+    // have flushed a frame even when the run reported an error, so this must run
+    // on every exit path below, not only the success path.
+    auto cleanupFrames = [&]() {
+        for (const auto &f : dumpdir.entryList({filename + ".*.ppm"}, QDir::Files))
+            QFile::remove(dumpdir.absoluteFilePath(f));
+    };
+
     // display error message
     if (!errmsg.isEmpty()) {
         restoreRenderState();
+        cleanupFrames();
         // ignore "Invalid SPARTA handle", but report other errors
         if (!errmsg.contains("Invalid SPARTA handle"))
             warning(this, "Image Viewer File Creation Error",
@@ -1087,9 +1110,7 @@ void ImageViewer::createImage()
     QImageReader reader(imagepath);
     reader.setAutoTransform(true);
     const QImage newImage = reader.read();
-    // remove the per-step frame file(s) this render produced
-    for (const auto &f : dumpdir.entryList({filename + ".*.ppm"}, QDir::Files))
-        QFile::remove(dumpdir.absoluteFilePath(f));
+    cleanupFrames();
 
     // read of new image failed. nothing left to do.
     if (newImage.isNull()) {

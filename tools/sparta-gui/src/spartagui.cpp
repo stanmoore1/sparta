@@ -2326,6 +2326,7 @@ void SpartaGui::preferences()
         // suffixes or package commands
         int newthreads = settings.value(Keys::NTHREADS, nthreads).toInt();
         int newaccel   = settings.value(Keys::ACCELERATOR, AcceleratorTab::None).toInt();
+        bool instanceClosed = false;
         if ((oldaccel != newaccel) || (oldthreads != newthreads) ||
             (oldecho != settings.value(Keys::ECHO, false).toBool())) {
             if (sparta.isRunning()) {
@@ -2338,6 +2339,7 @@ void SpartaGui::preferences()
                 StdoutSilencer guard;
                 sparta.close();
             }
+            instanceClosed = true;
             spartastatus->hide();
             // reset nthreads if accelerator does not support threads
             if (newaccel == AcceleratorTab::None)
@@ -2347,7 +2349,10 @@ void SpartaGui::preferences()
 
             qputenv("OMP_NUM_THREADS", QByteArray::number(nthreads));
         }
-        if (imagewindow) imagewindow->createImage();
+        // only refresh the snapshot if the instance is still alive: closing it
+        // above tears down the box/grid, so a re-render would just pop a
+        // "no simulation box" warning right after changing a preference.
+        if (imagewindow && !instanceClosed) imagewindow->createImage();
         settings.beginGroup(Keys::GROUP_REFORMAT);
         textEdit->setReformatOnReturn(settings.value(Keys::RETURN, false).toBool());
         textEdit->setAutoComplete(settings.value(Keys::AUTOMATIC, true).toBool());
