@@ -312,12 +312,6 @@ public:
     [[nodiscard]] bool configHasCurlSupport() const;
 
     /**
-     * @brief Check if SPARTA was built with OpenMP support
-     * @return true if OpenMP is available, false otherwise
-     */
-    [[nodiscard]] bool configHasOmpSupport() const;
-
-    /**
      * @brief Check if SPARTA was compiled with PNG format image support
      * @return true if PNG image format support is available, false if not
      */

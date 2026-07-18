@@ -2348,6 +2348,17 @@ void SpartaGui::preferences()
                 nthreads = newthreads;
 
             qputenv("OMP_NUM_THREADS", QByteArray::number(nthreads));
+
+            // Kokkos can be initialized only once per process, so once a run has
+            // used it the thread count is fixed until SPARTA-GUI is restarted.
+            // Tell the user rather than let a thread-count change silently do
+            // nothing.
+            if (kokkosStarted && (oldthreads != newthreads))
+                warning(this, "Accelerator Settings",
+                        "The number of threads cannot be changed after SPARTA has "
+                        "run with the Kokkos accelerator, because Kokkos can be "
+                        "initialized only once per process.",
+                        "Restart SPARTA-GUI for the new thread count to take effect.");
         }
         // only refresh the snapshot if the instance is still alive: closing it
         // above tears down the box/grid, so a re-render would just pop a
@@ -2406,6 +2417,9 @@ void SpartaGui::startSparta()
     int narg = static_cast<int>(cargs.size());
     sparta.open(narg, cargs.data());
     spartastatus->show();
+    // Kokkos can be initialized at most once per process: record that it is now
+    // live so a later thread-count change can tell the user a restart is needed.
+    if (accel == AcceleratorTab::Kokkos) kokkosStarted = true;
 
     if (sparta.version() < Cfg::MIN_SPARTA_VERSION) {
         critical(this, "SPARTA-GUI Error", "Incompatible SPARTA Version:",
