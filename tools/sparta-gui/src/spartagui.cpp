@@ -1064,6 +1064,9 @@ void SpartaGui::openFile(const QString &fileName)
 // open file in read-only mode for viewing in separate window
 void SpartaGui::viewFile(const QString &fileName)
 {
+    // empty name means the file dialog was cancelled: nothing to view
+    if (fileName.isEmpty()) return;
+
     // a movie file is also an image file when it is an animated GIF
     if (isMovieFile(fileName)) {
         warning(this, "Cannot View Movie as Text",
@@ -1155,6 +1158,9 @@ void SpartaGui::purgeInspectList()
 // read restart file into SPARTA instance and launch image viewer
 void SpartaGui::inspectFile(const QString &fileName)
 {
+    // empty name means the file dialog was cancelled: nothing to inspect
+    if (fileName.isEmpty()) return;
+
     QFile file(fileName);
     auto shortName = QFileInfo(fileName).fileName();
 
