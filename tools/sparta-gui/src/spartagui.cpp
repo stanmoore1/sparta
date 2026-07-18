@@ -1251,6 +1251,13 @@ void SpartaGui::inspectFile(const QString &fileName)
             return;
         }
 
+        // read_restart does not restore the RNG seed (it is a runtime command, not
+        // stored in the restart file). Rendering the restored state runs "run 0",
+        // which requires a seeded RNG whenever the restart defines a collide or
+        // react style. Provide a fixed seed here so restart inspection can always
+        // create an image; the value is irrelevant for a static visualization.
+        sparta.command("seed 12345");
+
         auto infolog = QString("%1.info.log").arg(fileName);
         QFile dumpinfo(infolog);
         if (dumpinfo.open(QIODevice::WriteOnly)) {
