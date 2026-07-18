@@ -712,6 +712,23 @@ SpartaGui::~SpartaGui()
 
 void SpartaGui::newDocument()
 {
+    // prompt to save unsaved changes before discarding the buffer, matching
+    // the behavior of Open and Run (which already guard this)
+    if (textEdit->document()->isModified()) {
+        int rv = showUnsavedChangesDialog(
+            this, currentFile, "Do you want to save the file before starting a new one?");
+        switch (rv) {
+            case QMessageBox::Yes:
+                save();
+                break;
+            case QMessageBox::Cancel:
+                return;
+            case QMessageBox::No: // fallthrough
+            default:
+                break;
+        }
+    }
+
     currentFile.clear();
     textEdit->document()->setPlainText(citeme);
     textEdit->document()->setModified(false);
