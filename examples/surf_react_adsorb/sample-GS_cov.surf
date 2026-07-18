@@ -1,0 +1,53 @@
+
+################## GS method - coverage variant ##########################
+# Exercises the optional per-reaction modeling paths that the plain
+# sample-GS_2.surf file leaves untested:
+#   - the "kisliuk" sticking-coefficient option (AA/DA/LH1/LH3/CD)
+#   - the "energy" rate option, only valid for a CI reaction
+#   - the "specular", "adiabatic" and "none" per-reaction surf collide
+#     models for emitted gas products (in addition to cll/td)
+##########################################################################
+
+# Adsorption with Kisliuk precursor sticking model
+O(g) --> O(s)
+AA  A  1.0 0 0 1 kisliuk 0.5 1.0 100.0
+
+# DA reaction with Kisliuk sticking model
+O2(g) --> 2O(s)
+DA  A  1.0 0 0 2 kisliuk 0.5 1.0 100.0
+
+# DA reaction, emitted gas product scattered with a specular model
+O2(g) --> O(s) + O(g)
+DA  A  0.5 0 0 1
+specular noslip
+
+# DA reaction, emitted gas product scattered with an adiabatic model
+CO2(g) --> C(b) + 2O(g)
+DA  A  0.5 0 0 1
+adiabatic
+
+#LH1 reaction with Kisliuk sticking model
+O(g) + O(s) --> CO2(g)
+LH1  A  536.3e5   0 6.5565e2 1 kisliuk 0.5 1.0 100.0
+td 300.0
+
+#LH3 reaction with Kisliuk sticking model
+O(g) --> CO(s)
+LH3  A  157.49   0 6.24e3 1 kisliuk 0.5 1.0 100.0
+
+#ER reaction, emitted gas product with no scatter model
+O(g) --> CO(g)
+ER  A  15.749   0 6.24e3
+none
+
+#CI reaction with impact-energy rate dependence
+O(g) + O(s) --> O(g) + O(g)
+CI  A  1e8  0 0 energy 1.0 0.5
+cll 300 1 1 1 1
+td  300.0
+
+#################################
+
+#CD reaction with Kisliuk sticking model
+C(g) --> C(b)
+CD  A  0.75 0 0 1 kisliuk 0.5 1.0 100.0

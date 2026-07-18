@@ -95,6 +95,7 @@ if(SPARTA_ENABLE_TESTING)
         "in.beam.surf.gs_ps"
         "in.beam.surf.ps"
         "in.circle.gs"
+        "in.circle.gs.cov"
         "in.circle.gs_ps"
         "in.circle.ps"
         # external field fix not KOKKOS-enabled
