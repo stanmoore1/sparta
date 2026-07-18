@@ -1,0 +1,45 @@
+################################################################################
+# thermal argon gas in a closed 3d box with fix ave/histo/weight
+#
+# Regression coverage for fix ave/histo/weight (fix_ave_histo_weight.cpp), which
+# had no working configuration before: histogramming a per-grid compute weighted
+# by another per-grid compute segfaulted because post-process grid computes
+# (e.g. compute grid) never allocate array_grid.  Here the per-cell temperature
+# is histogrammed, weighted by the per-cell particle count.
+#
+# Note:
+#  - The "comm/sort" option to the "global" command is used to match MPI runs.
+#  - The "twopass" option is used to match Kokkos runs.
+# The "comm/sort" and "twopass" options should not be used for production runs.
+################################################################################
+
+seed	    	    12345
+dimension   	    3
+global              gridcut 1.0e-5 comm/sort yes
+
+boundary	    rr rr rr
+
+create_box  	    0 0.0001 0 0.0001 0 0.0001
+create_grid 	    10 10 10
+balance_grid        rcb part
+
+species		    ar.species Ar
+mixture		    air Ar vstream 0.0 0.0 0.0 temp 273.15
+
+global              nrho 7.07043E22
+global              fnum 7.07043E6
+
+collide		    vss air ar.vss
+create_particles    air n 10000 twopass
+
+# histogram per-cell temperature, weighted by per-cell particle count
+compute             gt grid all air temp
+compute             gn grid all air n
+fix                 hw ave/histo/weight 10 5 100 0 600 20 c_gt[1] c_gn[1] mode vector
+
+compute             temp temp
+stats		    100
+stats_style	    step cpu np ncoll c_temp f_hw[1] f_hw[2]
+
+timestep 	    7.00E-9
+run 		    500

@@ -118,6 +118,8 @@ if(SPARTA_ENABLE_TESTING)
         # compute react/surf and react/isurf/grid tallies not KOKKOS-enabled
         "in.circle.global"
         "in.exp2imp.circle.react"
+        # fix ave/histo/weight is not KOKKOS-enabled
+        "in.collide.histoweight"
     )
   endif()
 
