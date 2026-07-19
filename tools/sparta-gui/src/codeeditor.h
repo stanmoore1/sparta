@@ -32,6 +32,8 @@ class QResizeEvent;
 class QShortcut;
 class QWidget;
 
+class SpartaGui;
+
 /**
  * @brief Custom text editor with SPARTA syntax support and auto-completion
  *
@@ -347,6 +349,11 @@ private:
 
     QWidget *lineNumberArea; ///< Widget for displaying line numbers
     QShortcut *helpAction;   ///< Keyboard shortcut for help
+
+    /// @brief The main window, captured at construction time (not derived from parent()):
+    /// the docked panel layout reparents this editor into the Qt-ADS dock hierarchy, so
+    /// parent() no longer points at SpartaGui once that happens.
+    SpartaGui *mainWindow;
 
     /// @brief Auto-completion objects for different SPARTA command contexts
     QCompleter *currentComp, *commandComp, *fixComp, *computeComp, *dumpComp, *regionComp,

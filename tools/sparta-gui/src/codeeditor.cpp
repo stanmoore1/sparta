@@ -46,16 +46,17 @@
 #include <QWidget>
 
 CodeEditor::CodeEditor(QWidget *parent) :
-    QPlainTextEdit(parent), currentComp(nullptr), commandComp(new QCompleter(this)),
-    fixComp(new QCompleter(this)), computeComp(new QCompleter(this)),
-    dumpComp(new QCompleter(this)), regionComp(new QCompleter(this)),
-    collideComp(new QCompleter(this)), reactComp(new QCompleter(this)),
-    surfCollideComp(new QCompleter(this)), surfReactComp(new QCompleter(this)),
-    variableComp(new QCompleter(this)), unitsComp(new QCompleter(this)),
-    groupComp(new QCompleter(this)), varnameComp(new QCompleter(this)),
-    fixidComp(new QCompleter(this)), compidComp(new QCompleter(this)),
-    mixtureComp(new QCompleter(this)), fileComp(new QCompleter(this)), highlight(NO_HIGHLIGHT),
-    highlighterror(false), reformatOnReturn(false), automaticCompletion(true)
+    QPlainTextEdit(parent), mainWindow(qobject_cast<SpartaGui *>(parent)), currentComp(nullptr),
+    commandComp(new QCompleter(this)), fixComp(new QCompleter(this)),
+    computeComp(new QCompleter(this)), dumpComp(new QCompleter(this)),
+    regionComp(new QCompleter(this)), collideComp(new QCompleter(this)),
+    reactComp(new QCompleter(this)), surfCollideComp(new QCompleter(this)),
+    surfReactComp(new QCompleter(this)), variableComp(new QCompleter(this)),
+    unitsComp(new QCompleter(this)), groupComp(new QCompleter(this)),
+    varnameComp(new QCompleter(this)), fixidComp(new QCompleter(this)),
+    compidComp(new QCompleter(this)), mixtureComp(new QCompleter(this)),
+    fileComp(new QCompleter(this)), highlight(NO_HIGHLIGHT), highlighterror(false),
+    reformatOnReturn(false), automaticCompletion(true)
 {
     helpAction = new QShortcut(QKeySequence::fromString("Ctrl+?"), parent);
     connect(helpAction, &QShortcut::activated, this, &CodeEditor::getHelp);
@@ -293,7 +294,7 @@ void CodeEditor::setVarNameList()
     vars << QString("${gui_run}");
     vars << QString("v_gui_run");
 
-    SpartaWrapper *sparta = &qobject_cast<SpartaGui *>(parent())->sparta;
+    SpartaWrapper *sparta = &mainWindow->sparta;
     int nvar              = sparta->idCount("variable");
     for (int i = 0; i < nvar; ++i) {
         const QString name = sparta->variableInfo(i);
@@ -385,7 +386,7 @@ void CodeEditor::setMixtureIDList()
 
     // query mixtures known to the SPARTA instance (includes the
     // predefined mixtures "all" and "species")
-    SpartaWrapper *sparta = &qobject_cast<SpartaGui *>(parent())->sparta;
+    SpartaWrapper *sparta = &mainWindow->sparta;
     int nmix              = sparta->idCount("mixture");
     for (int i = 0; i < nmix; ++i) {
         const QString name = sparta->idName("mixture", i);
@@ -523,7 +524,7 @@ void CodeEditor::dropEvent(QDropEvent *event)
     if (event->mimeData()->hasUrls()) {
         event->accept();
         auto file = event->mimeData()->urls()[0].toLocalFile();
-        auto *gui = qobject_cast<SpartaGui *>(parent());
+        auto *gui = mainWindow;
         if (gui) {
             moveCursor(QTextCursor::Start, QTextCursor::MoveAnchor);
             gui->openFile(file);
@@ -601,7 +602,7 @@ void CodeEditor::contextMenuEvent(QContextMenuEvent *event)
 
     auto *menu = createStandardContextMenu();
     menu->addSeparator();
-    auto *gui = qobject_cast<SpartaGui *>(parent());
+    auto *gui = mainWindow;
     if (textCursor().hasSelection()) {
         addMenuAction(menu, "Comment out selection", ":/icons/comment-out.svg", this,
                       &CodeEditor::commentSelection);
@@ -1029,14 +1030,14 @@ void CodeEditor::openHelp()
 void CodeEditor::viewFile()
 {
     auto *act     = qobject_cast<QAction *>(sender());
-    auto *guimain = qobject_cast<SpartaGui *>(parent());
+    auto *guimain = mainWindow;
     guimain->viewFile(act->data().toString());
 }
 
 void CodeEditor::inspectFile()
 {
     auto *act     = qobject_cast<QAction *>(sender());
-    auto *guimain = qobject_cast<SpartaGui *>(parent());
+    auto *guimain = mainWindow;
     guimain->inspectFile(act->data().toString());
 }
 

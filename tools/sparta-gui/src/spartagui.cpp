@@ -734,7 +734,6 @@ SpartaGui::~SpartaGui()
     delete capturer;
     delete status;
     delete cpuuse;
-    delete logwindow;
     delete imagewindow;
     delete chartwindow;
     delete dirstatus;
@@ -777,8 +776,8 @@ void SpartaGui::newDocument()
         runner = nullptr;
     }
     // close windows
+    panels->clearRunPanels();
     delete chartwindow;
-    delete logwindow;
     delete slideshow;
     delete imagewindow;
     delete varwindow;
@@ -1041,8 +1040,8 @@ void SpartaGui::openFile(const QString &fileName)
         runner = nullptr;
     }
     // close windows
+    panels->clearRunPanels();
     delete chartwindow;
-    delete logwindow;
     delete slideshow;
     delete imagewindow;
     delete varwindow;
@@ -1750,22 +1749,21 @@ void SpartaGui::restartSparta()
 
 void SpartaGui::createLogWindow(QSettings &settings)
 {
-    // if configured, delete old log window before opening new one
-    if (settings.value(Keys::LOGREPLACE, true).toBool()) delete logwindow;
     logwindow = new LogWindow(currentFile, this);
     logwindow->setReadOnly(true);
     logwindow->setCenterOnScroll(true);
     logwindow->moveCursor(QTextCursor::End);
     logwindow->setLineWrapMode(LogWindow::NoWrap);
-    logwindow->setWindowTitle(
-        QString("SPARTA-GUI - Output - %1 - Run %2").arg(currentFile).arg(runCounter));
-    logwindow->setWindowIcon(QIcon(Cfg::MAIN_ICON));
-    logwindow->setMinimumSize(Cfg::MINIMUM_WIDTH, Cfg::MINIMUM_HEIGHT);
+
+    const bool keepOld = !settings.value(Keys::LOGREPLACE, true).toBool();
+    panels->setPanelWidget(PanelManager::Log, logwindow,
+                          QString("Output - %1 - Run %2").arg(currentFile).arg(runCounter),
+                          keepOld);
 
     if (settings.value(Keys::VIEWLOG, true).toBool())
-        logwindow->show();
+        panels->openPanel(PanelManager::Log);
     else
-        logwindow->hide();
+        panels->closePanel(PanelManager::Log);
 }
 
 void SpartaGui::createChartWindow(QSettings &settings)
