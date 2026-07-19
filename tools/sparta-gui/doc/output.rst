@@ -308,7 +308,7 @@ During a run, it may be of interest to monitor the value of input script
 to monitor the progress of loops.  This can be done by enabling the
 "Variables Window" in the *View* menu or by using the `Ctrl-Shift-W`
 keyboard shortcut.  This shows the currently defined variables and
-their values in a separate window.
+their values in a dockable panel.
 
 .. TODO screenshot: capture the Variables window during a run of an
    input with variables as JPG/sparta-gui-variable-info.png, then

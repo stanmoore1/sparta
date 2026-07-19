@@ -115,10 +115,15 @@ CodeEditor::CodeEditor(QWidget *parent) :
 
 CodeEditor::~CodeEditor()
 {
-    // helpAction's parent is the main window (not this widget), so we
-    // must delete it explicitly.  All other children (lineNumberArea,
-    // completers) are Qt children of this widget and are automatically
-    // deleted by Qt's parent-child ownership.
+    // helpAction's parent is the main window (not this widget), so we must
+    // delete it explicitly rather than rely on Qt's parent-child ownership.
+    // It is a QPointer because, now that this widget is nested inside the
+    // dock manager instead of being a direct child of the main window, Qt's
+    // own child-teardown order may destroy helpAction first (it is still a
+    // direct main-window child) -- QPointer turns that into a safe no-op
+    // instead of a dangling-pointer delete.  All other children
+    // (lineNumberArea, completers) are Qt children of this widget and are
+    // automatically deleted by Qt's parent-child ownership.
     delete helpAction;
 }
 

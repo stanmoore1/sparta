@@ -14,6 +14,7 @@
 
 #include <QMap>
 #include <QPlainTextEdit>
+#include <QPointer>
 #include <QString>
 #include <QStringList>
 
@@ -348,7 +349,9 @@ private:
     void popupCompletion(const QString &prefix, QAbstractItemView *oldPopup);
 
     QWidget *lineNumberArea; ///< Widget for displaying line numbers
-    QShortcut *helpAction;   ///< Keyboard shortcut for help
+    QPointer<QShortcut> helpAction; ///< Keyboard shortcut for help (parented to the main window,
+                                     ///< not this widget -- may already be destroyed by the time
+                                     ///< this widget is, depending on Qt's child-teardown order)
 
     /// @brief The main window, captured at construction time (not derived from parent()):
     /// the docked panel layout reparents this editor into the Qt-ADS dock hierarchy, so

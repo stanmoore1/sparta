@@ -356,6 +356,12 @@ ChartWindow::ChartWindow(const QString &_filename, SpartaGui *_spartagui, QWidge
     auto *copyAct = addMenuAction(file, "Copy &Graph to Clipboard", ":/icons/edit-copy.svg", this,
                                   &ChartWindow::copy);
     copyAct->setShortcut(QKeySequence(QKeySequence::Copy));
+    // WidgetWithChildrenShortcut (rather than the default WindowShortcut) so
+    // these only compete with the identically-bound main-window menu
+    // shortcuts while focus is actually inside this docked panel, instead of
+    // unconditionally while its window (now shared with the main window) is
+    // active; the eventFilter() override below resolves that in-focus case
+    copyAct->setShortcutContext(Qt::WidgetWithChildrenShortcut);
     addMenuAction(file, "&Export data to CSV...", ":/icons/csv-file-icon.svg", this,
                   &ChartWindow::exportCsv);
     addMenuAction(file, "Export data to &Gnuplot...", ":/icons/txt-file-icon.svg", this,
@@ -378,14 +384,17 @@ ChartWindow::ChartWindow(const QString &_filename, SpartaGui *_spartagui, QWidge
     auto *stopAct =
         addMenuAction(file, "Stop &Run", ":/icons/process-stop.svg", this, &ChartWindow::stopRun);
     stopAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Slash));
+    stopAct->setShortcutContext(Qt::WidgetWithChildrenShortcut);
     // without a live simulation there is nothing to stop
     if (!spartagui) stopAct->setVisible(false);
     auto *closeAct =
         addMenuAction(file, "&Close", ":/icons/window-close.svg", this, &QWidget::close);
     closeAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_W));
+    closeAct->setShortcutContext(Qt::WidgetWithChildrenShortcut);
     auto *quitAct =
         addMenuAction(file, "&Quit", ":/icons/application-exit.svg", this, &ChartWindow::quit);
     quitAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Q));
+    quitAct->setShortcutContext(Qt::WidgetWithChildrenShortcut);
     if (!spartagui) quitAct->setVisible(false); // quit == close in standalone mode
     auto *layout = new QVBoxLayout;
     layout->addLayout(top);
@@ -1493,6 +1502,16 @@ bool ChartWindow::eventFilter(QObject *watched, QEvent *event)
         }
         if (keyEvent->modifiers().testFlag(Qt::ControlModifier) && keyEvent->key() == 'W') {
             close();
+            event->accept();
+            return true;
+        }
+        if (keyEvent->modifiers().testFlag(Qt::ControlModifier) && keyEvent->key() == 'Q') {
+            quit();
+            event->accept();
+            return true;
+        }
+        if (keyEvent->modifiers().testFlag(Qt::ControlModifier) && keyEvent->key() == 'C') {
+            copy();
             event->accept();
             return true;
         }

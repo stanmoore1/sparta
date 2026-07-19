@@ -203,15 +203,17 @@ instead of "Ready."
 ..    :align: center
 ..    :scale: 75%
 
-.. admonition:: Up to three additional windows may open during a run:
+.. admonition:: Up to three additional panels may open during a run:
 
-   - An :ref:`Output window <logfile>` with the captured screen output from SPARTA
-   - A :ref:`Charts window <charts>` with line graphs created from the stats output of the run
-   - A :ref:`Slide Show window <slideshow>` with images created by a `dump image command <https://sparta.github.io/doc/dump_image.html>`_
+   - An :ref:`Output panel <logfile>` with the captured screen output from SPARTA
+   - A :ref:`Charts panel <charts>` with line graphs created from the stats output of the run
+   - A :ref:`Slide Show panel <slideshow>` with images created by a `dump image command <https://sparta.github.io/doc/dump_image.html>`_
      in the input
 
-More information on those windows and how to adjust their behavior and
-contents is given in :doc:`the next pages <output>`.
+These panels dock alongside the editor in the same main window (and can be
+undocked into floating windows if you prefer).  More information on them and
+how to adjust their behavior and contents is given in :doc:`the next pages
+<output>`.
 
 An active SPARTA run can be stopped cleanly by using either the *Stop
 SPARTA* entry in the *Run* menu, the keyboard shortcut `Ctrl-/`

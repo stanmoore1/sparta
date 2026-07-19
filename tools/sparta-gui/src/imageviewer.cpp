@@ -921,6 +921,36 @@ void ImageViewer::openSettings()
 // intercept events
 bool ImageViewer::eventFilter(QObject *watched, QEvent *event)
 {
+    // now that this window is a docked panel sharing the main window's
+    // shortcut context, its own Ctrl+S/C/W/Q would otherwise be ambiguous
+    // with the identically bound main-window menu shortcuts
+    if (event->type() == QEvent::ShortcutOverride) {
+        if (shutdown) return false;
+        auto *keyEvent = dynamic_cast<QKeyEvent *>(event);
+        if (!keyEvent) return QDialog::eventFilter(watched, event);
+        if (keyEvent->modifiers().testFlag(Qt::ControlModifier)) {
+            switch (keyEvent->key()) {
+                case 'S':
+                    if (saveAsAct->isEnabled()) saveAs();
+                    event->accept();
+                    return true;
+                case 'C':
+                    if (copyAct->isEnabled()) copy();
+                    event->accept();
+                    return true;
+                case 'W':
+                    close();
+                    event->accept();
+                    return true;
+                case 'Q':
+                    quit();
+                    event->accept();
+                    return true;
+                default:
+                    break;
+            }
+        }
+    }
     if (event->type() == QEvent::KeyPress) {
         // don't handle any more key press events after entering destructor
         if (shutdown) return false;
@@ -1179,14 +1209,22 @@ void ImageViewer::createActions()
                               &ImageViewer::saveAs);
     saveAsAct->setEnabled(false);
     saveAsAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_S));
+    // WidgetWithChildrenShortcut (rather than the default WindowShortcut) so
+    // these only compete with the identically-bound main-window menu
+    // shortcuts while focus is actually inside this docked panel, instead of
+    // unconditionally while its window (now shared with the main window) is
+    // active; the eventFilter() override below resolves that in-focus case
+    saveAsAct->setShortcutContext(Qt::WidgetWithChildrenShortcut);
     fileMenu->addSeparator();
     copyAct =
         addMenuAction(fileMenu, "Copy &Image", ":/icons/edit-copy.svg", this, &ImageViewer::copy);
     copyAct->setShortcut(QKeySequence::Copy);
     copyAct->setEnabled(false);
+    copyAct->setShortcutContext(Qt::WidgetWithChildrenShortcut);
     cmdAct = addMenuAction(fileMenu, "Copy &dump image command", ":/icons/file-clipboard.svg", this,
                            &ImageViewer::cmdToClipboard);
     cmdAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_D));
+    cmdAct->setShortcutContext(Qt::WidgetWithChildrenShortcut);
     movieAct = addMenuAction(fileMenu, "Copy dump &movie command", ":/icons/export-movie.svg", this,
                              &ImageViewer::movieToClipboard);
     fileMenu->addSeparator();
@@ -1199,10 +1237,13 @@ void ImageViewer::createActions()
         createImage();
     });
     fileMenu->addSeparator();
-    addMenuAction(fileMenu, "&Close", ":/icons/window-close.svg", this, &QWidget::close)
-        ->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_W));
-    addMenuAction(fileMenu, "&Quit", ":/icons/application-exit.svg", this, &ImageViewer::quit)
-        ->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Q));
+    auto *closeAct = addMenuAction(fileMenu, "&Close", ":/icons/window-close.svg", this, &QWidget::close);
+    closeAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_W));
+    closeAct->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+    auto *quitAct =
+        addMenuAction(fileMenu, "&Quit", ":/icons/application-exit.svg", this, &ImageViewer::quit);
+    quitAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Q));
+    quitAct->setShortcutContext(Qt::WidgetWithChildrenShortcut);
 }
 
 void ImageViewer::updateActions()
