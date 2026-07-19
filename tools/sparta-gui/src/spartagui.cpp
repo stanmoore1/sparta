@@ -734,7 +734,6 @@ SpartaGui::~SpartaGui()
     delete capturer;
     delete status;
     delete cpuuse;
-    delete imagewindow;
     delete dirstatus;
     delete varwindow;
     delete slideshow;
@@ -773,7 +772,6 @@ void SpartaGui::newDocument()
     // close windows
     panels->clearRunPanels();
     delete slideshow;
-    delete imagewindow;
     delete varwindow;
     chartwindow = nullptr;
     logwindow   = nullptr;
@@ -1036,7 +1034,6 @@ void SpartaGui::openFile(const QString &fileName)
     // close windows
     panels->clearRunPanels();
     delete slideshow;
-    delete imagewindow;
     delete varwindow;
     chartwindow = nullptr;
     logwindow   = nullptr;
@@ -1978,16 +1975,16 @@ void SpartaGui::renderImage()
                 sparta.command("undump " + id);
         }
 
-        // if configured, delete old image window before opening new one
-        if (QSettings().value(Keys::IMAGEREPLACE, true).toBool()) delete imagewindow;
         imagewindow = new ImageViewer(currentFile, &sparta, this);
-        imagewindow->setMinimumSize(Cfg::MINIMUM_WIDTH, Cfg::MINIMUM_HEIGHT);
+        const bool keepOld = !QSettings().value(Keys::IMAGEREPLACE, true).toBool();
+        panels->setPanelWidget(PanelManager::Image, imagewindow,
+                               QString("Image - %1").arg(currentFile), keepOld);
     } else {
         warning(this, "Image Viewer File Creation Error",
                 "Cannot create snapshot image while SPARTA is running");
         return;
     }
-    imagewindow->show();
+    panels->openPanel(PanelManager::Image);
 }
 
 void SpartaGui::viewSlides()
