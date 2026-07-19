@@ -120,6 +120,16 @@ private slots:
 protected:
     void showEvent(QShowEvent *event) override; ///< Redo the initial window fit once shown
 
+    /**
+     * @brief Event filter to resolve this window's own Ctrl+ shortcuts
+     *        directly instead of leaving them ambiguous with identically
+     *        bound main-window menu shortcuts now that this is a docked panel
+     * @param watched Object being watched
+     * @param event Event to filter
+     * @return true if event handled, false otherwise
+     */
+    bool eventFilter(QObject *watched, QEvent *event) override;
+
 private:
     /**
      * @brief Scale the displayed image

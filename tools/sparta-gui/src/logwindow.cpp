@@ -79,17 +79,28 @@ LogWindow::LogWindow(const QString &_filename, SpartaGui *_spartagui, QWidget *p
 
     warnings = new FlagWarnings(summary, document());
 
+    // WidgetWithChildrenShortcut (rather than the default WindowShortcut) so
+    // these only compete with the identically-bound main-window menu
+    // shortcuts while focus is actually inside this docked panel, instead of
+    // unconditionally while its window (now shared with the main window) is
+    // active; the eventFilter() override below resolves that in-focus case
     auto *action = new QShortcut(QKeySequence("Ctrl+S"), this);
+    action->setContext(Qt::WidgetWithChildrenShortcut);
     connect(action, &QShortcut::activated, this, &LogWindow::saveAs);
     action = new QShortcut(QKeySequence("Ctrl+Y"), this);
+    action->setContext(Qt::WidgetWithChildrenShortcut);
     connect(action, &QShortcut::activated, this, &LogWindow::extractYaml);
     action = new QShortcut(QKeySequence("Ctrl+Q"), this);
+    action->setContext(Qt::WidgetWithChildrenShortcut);
     connect(action, &QShortcut::activated, this, &LogWindow::quit);
     action = new QShortcut(QKeySequence("Ctrl+N"), this);
+    action->setContext(Qt::WidgetWithChildrenShortcut);
     connect(action, &QShortcut::activated, this, &LogWindow::nextWarning);
     action = new QShortcut(QKeySequence("Ctrl+/"), this);
+    action->setContext(Qt::WidgetWithChildrenShortcut);
     connect(action, &QShortcut::activated, this, &LogWindow::stopRun);
     action = new QShortcut(QKeySequence("Ctrl+Return"), this);
+    action->setContext(Qt::WidgetWithChildrenShortcut);
     connect(action, &QShortcut::activated, this, &LogWindow::runBuffer);
 
     installEventFilter(this);
@@ -289,6 +300,30 @@ bool LogWindow::eventFilter(QObject *watched, QEvent *event)
         }
         if (keyEvent->modifiers().testFlag(Qt::ControlModifier) && keyEvent->key() == 'W') {
             close();
+            event->accept();
+            return true;
+        }
+        // now that this window is a docked panel sharing the main window's
+        // shortcut context, its own Ctrl+N/S/Q/Return would otherwise be
+        // ambiguous with the identical main-window menu shortcuts
+        if (keyEvent->modifiers().testFlag(Qt::ControlModifier) && keyEvent->key() == 'N') {
+            nextWarning();
+            event->accept();
+            return true;
+        }
+        if (keyEvent->modifiers().testFlag(Qt::ControlModifier) && keyEvent->key() == 'S') {
+            saveAs();
+            event->accept();
+            return true;
+        }
+        if (keyEvent->modifiers().testFlag(Qt::ControlModifier) && keyEvent->key() == 'Q') {
+            quit();
+            event->accept();
+            return true;
+        }
+        if (keyEvent->modifiers().testFlag(Qt::ControlModifier) &&
+            keyEvent->key() == Qt::Key_Return) {
+            runBuffer();
             event->accept();
             return true;
         }

@@ -27,6 +27,7 @@
 #include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QImage>
+#include <QKeyEvent>
 #include <QKeySequence>
 #include <QLabel>
 #include <QLocale>
@@ -100,18 +101,31 @@ SlideShow::SlideShow(const QString &fileName, SpartaGui *_spartagui, QWidget *pa
     imageName->setMinimumHeight(buttonhint.height());
     imageName->setMaximumHeight(buttonhint.height());
 
+    // WidgetWithChildrenShortcut (rather than the default WindowShortcut) so
+    // these only compete with the identically-bound main-window menu
+    // shortcuts while focus is actually inside this docked panel, instead of
+    // unconditionally while its window (now shared with the main window) is
+    // active; the eventFilter() override below resolves that in-focus case
     auto *shortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_W), this);
+    shortcut->setContext(Qt::WidgetWithChildrenShortcut);
     connect(shortcut, &QShortcut::activated, this, &QWidget::close);
     shortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Slash), this);
+    shortcut->setContext(Qt::WidgetWithChildrenShortcut);
     connect(shortcut, &QShortcut::activated, this, &SlideShow::stopRun);
     shortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Q), this);
+    shortcut->setContext(Qt::WidgetWithChildrenShortcut);
     connect(shortcut, &QShortcut::activated, this, &SlideShow::quit);
     shortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_C), this);
+    shortcut->setContext(Qt::WidgetWithChildrenShortcut);
     connect(shortcut, &QShortcut::activated, this, &SlideShow::copy);
     shortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_E), this);
+    shortcut->setContext(Qt::WidgetWithChildrenShortcut);
     connect(shortcut, &QShortcut::activated, this, &SlideShow::movie);
     shortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_S), this);
+    shortcut->setContext(Qt::WidgetWithChildrenShortcut);
     connect(shortcut, &QShortcut::activated, this, &SlideShow::saveCurrentImage);
+
+    installEventFilter(this);
 
     auto *mainLayout  = new QVBoxLayout;
     auto *toolsLayout = new QHBoxLayout;
@@ -886,6 +900,49 @@ void SlideShow::showEvent(QShowEvent *event)
     // metrics and was not memoized (see fitViewerWindow()); apply the fit
     // again as soon as the shown window has settled
     if (!lastFitSize.isValid()) QTimer::singleShot(0, this, &SlideShow::adjustWindowSize);
+}
+
+// event filter to handle "Ambiguous shortcut override" issues (see LogWindow
+// and ChartWindow for the same pattern): this window's own Ctrl+ shortcuts
+// would otherwise be ambiguous with identically bound main-window menu
+// shortcuts now that this is a docked panel sharing its shortcut context
+bool SlideShow::eventFilter(QObject *watched, QEvent *event)
+{
+    if (event->type() == QEvent::ShortcutOverride) {
+        auto *keyEvent = dynamic_cast<QKeyEvent *>(event);
+        if (!keyEvent) return QDialog::eventFilter(watched, event);
+        if (keyEvent->modifiers().testFlag(Qt::ControlModifier)) {
+            switch (keyEvent->key()) {
+                case 'W':
+                    close();
+                    event->accept();
+                    return true;
+                case '/':
+                    stopRun();
+                    event->accept();
+                    return true;
+                case 'Q':
+                    quit();
+                    event->accept();
+                    return true;
+                case 'C':
+                    copy();
+                    event->accept();
+                    return true;
+                case 'E':
+                    movie();
+                    event->accept();
+                    return true;
+                case 'S':
+                    saveCurrentImage();
+                    event->accept();
+                    return true;
+                default:
+                    break;
+            }
+        }
+    }
+    return QDialog::eventFilter(watched, event);
 }
 
 void SlideShow::doImageRotateCw()
