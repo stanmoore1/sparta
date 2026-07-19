@@ -1,0 +1,207 @@
+/* SPARTA-GUI global stylesheet -- applied on top of the Fusion style and the
+ * curated light/dark palette (see src/theme.cpp).
+ *
+ * RULES OF THE ROAD (keep it this way):
+ *  - Only spacing / padding / density / borders. NO font-family or font-size
+ *    (fonts are user-configurable via QWidget::setFont; QSS fonts would clobber
+ *    them).
+ *  - Colors come from the palette. Use palette(...) roles, never hard-coded
+ *    hex, so both themes work from one file.
+ *  - Do NOT style bare QWidget, QAbstractScrollArea, CodeEditor, or set any
+ *    background-image -- that would fight the editor's banner background and
+ *    the log/image scroll areas.
+ */
+
+/* ---- Buttons -------------------------------------------------------------- */
+QPushButton {
+    padding: 4px 12px;
+    border: 1px solid palette(mid);
+    border-radius: 4px;
+    background-color: palette(button);
+    min-height: 18px;
+}
+QPushButton:hover {
+    border-color: palette(highlight);
+}
+QPushButton:pressed {
+    background-color: palette(mid);
+}
+QPushButton:default {
+    border-color: palette(highlight);
+}
+QPushButton:disabled {
+    border-color: palette(midlight);
+    color: palette(mid);
+}
+
+QToolButton {
+    padding: 3px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+}
+QToolButton:hover {
+    border-color: palette(mid);
+    background-color: palette(midlight);
+}
+QToolButton:pressed, QToolButton:checked {
+    background-color: palette(mid);
+    border-color: palette(mid);
+}
+
+/* ---- Text entry widgets --------------------------------------------------- */
+QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {
+    padding: 3px 6px;
+    border: 1px solid palette(mid);
+    border-radius: 4px;
+    background-color: palette(base);
+    selection-background-color: palette(highlight);
+    selection-color: palette(highlighted-text);
+    min-height: 18px;
+}
+QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {
+    border-color: palette(highlight);
+}
+QLineEdit:disabled, QComboBox:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled {
+    background-color: palette(window);
+    color: palette(mid);
+}
+QComboBox::drop-down {
+    border: none;
+    width: 18px;
+}
+
+/* ---- Group boxes ---------------------------------------------------------- */
+QGroupBox {
+    border: 1px solid palette(mid);
+    border-radius: 6px;
+    margin-top: 14px;
+    padding: 8px 6px 6px 6px;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    left: 10px;
+    padding: 0 4px;
+    color: palette(window-text);
+}
+
+/* ---- Tabs ----------------------------------------------------------------- */
+QTabWidget::pane {
+    border: 1px solid palette(mid);
+    border-radius: 4px;
+    top: -1px;
+}
+QTabBar::tab {
+    padding: 6px 14px;
+    border: 1px solid palette(mid);
+    border-bottom: none;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+    background-color: palette(window);
+}
+QTabBar::tab:selected {
+    background-color: palette(base);
+    border-color: palette(highlight);
+}
+QTabBar::tab:!selected {
+    margin-top: 2px;
+    color: palette(dark);
+}
+QTabBar::tab:hover {
+    background-color: palette(midlight);
+}
+
+/* ---- Menus ---------------------------------------------------------------- */
+QMenuBar {
+    padding: 2px;
+}
+QMenuBar::item {
+    padding: 4px 10px;
+    border-radius: 4px;
+    background: transparent;
+}
+QMenuBar::item:selected {
+    background-color: palette(highlight);
+    color: palette(highlighted-text);
+}
+QMenu {
+    border: 1px solid palette(mid);
+    padding: 4px;
+}
+QMenu::item {
+    padding: 5px 24px 5px 24px;
+    border-radius: 4px;
+}
+QMenu::item:selected {
+    background-color: palette(highlight);
+    color: palette(highlighted-text);
+}
+QMenu::separator {
+    height: 1px;
+    background: palette(mid);
+    margin: 4px 8px;
+}
+
+/* ---- Dialogs & message boxes --------------------------------------------- */
+QDialog {
+    /* a touch of breathing room around dialog content */
+}
+QDialogButtonBox QPushButton {
+    min-width: 84px;
+}
+
+/* ---- Scrollbars (slimmer, flat) ------------------------------------------ */
+QScrollBar:vertical {
+    background: palette(window);
+    width: 12px;
+    margin: 0;
+}
+QScrollBar:horizontal {
+    background: palette(window);
+    height: 12px;
+    margin: 0;
+}
+QScrollBar::handle {
+    background: palette(mid);
+    border-radius: 5px;
+    min-height: 24px;
+    min-width: 24px;
+    margin: 2px;
+}
+QScrollBar::handle:hover {
+    background: palette(dark);
+}
+QScrollBar::add-line, QScrollBar::sub-line {
+    width: 0;
+    height: 0;
+}
+QScrollBar::add-page, QScrollBar::sub-page {
+    background: none;
+}
+
+/* ---- Misc chrome ---------------------------------------------------------- */
+QToolTip {
+    padding: 4px 6px;
+    border: 1px solid palette(mid);
+    background-color: palette(tool-tip-base);
+    color: palette(tool-tip-text);
+}
+QStatusBar::item {
+    border: none;
+}
+QHeaderView::section {
+    padding: 4px 8px;
+    border: none;
+    border-right: 1px solid palette(mid);
+    border-bottom: 1px solid palette(mid);
+    background-color: palette(window);
+}
+QProgressBar {
+    border: 1px solid palette(mid);
+    border-radius: 4px;
+    text-align: center;
+}
+QProgressBar::chunk {
+    background-color: palette(highlight);
+    border-radius: 3px;
+}

@@ -184,6 +184,20 @@ void Preferences::accept()
     if (box) settings->setValue(Keys::VIEWCHART, box->isChecked());
     box = tabWidget->findChild<QCheckBox *>("viewslide");
     if (box) settings->setValue(Keys::VIEWSLIDE, box->isChecked());
+    box = tabWidget->findChild<QCheckBox *>("showwelcome");
+    if (box) settings->setValue(Keys::SHOWWELCOME, box->isChecked());
+
+    // appearance theme: a change only takes effect after a restart (the palette
+    // and cached theme-derived colors are set up in main()), so relaunch
+    if (auto *thememode = tabWidget->findChild<QComboBox *>("theme")) {
+        const char *const modes[] = {"system", "light", "dark"};
+        const int idx             = qBound(0, thememode->currentIndex(), 2);
+        const QString newtheme    = QString::fromLatin1(modes[idx]);
+        if (settings->value(Keys::THEME, "system").toString().toLower() != newtheme) {
+            settings->setValue(Keys::THEME, newtheme);
+            needRelaunch = true;
+        }
+    }
 
     auto *spin = tabWidget->findChild<QSpinBox *>("updfreq");
     if (spin) settings->setValue(Keys::UPDFREQ, spin->value());
@@ -281,6 +295,19 @@ GeneralTab::GeneralTab(QSettings *_settings, SpartaWrapper *_sparta, SpartaGui *
     pltr->setObjectName("chartreplace");
     pltr->setChecked(settings->value(Keys::CHARTREPLACE, true).toBool());
 
+    auto *welcome = new QCheckBox("Show welcome screen on startup");
+    welcome->setObjectName("showwelcome");
+    welcome->setChecked(settings->value(Keys::SHOWWELCOME, true).toBool());
+
+    auto *themelabel = new QLabel("Appearance theme:");
+    auto *thememode  = new QComboBox;
+    thememode->setObjectName("theme");
+    // indices must match Theme::Mode order (System=0, Light=1, Dark=2)
+    thememode->addItems({"Follow system", "Light", "Dark"});
+    thememode->setToolTip("Color theme of the application (applied after a restart)");
+    const QString curtheme = settings->value(Keys::THEME, "system").toString().toLower();
+    thememode->setCurrentIndex(curtheme == "light" ? 1 : curtheme == "dark" ? 2 : 0);
+
     auto *getallfont =
         new QPushButton(QIcon(":/icons/preferences-desktop-font.svg"), "Select &Default Font...");
     auto *gettextfont =
@@ -312,6 +339,10 @@ GeneralTab::GeneralTab(QSettings *_settings, SpartaWrapper *_sparta, SpartaGui *
     layout->addWidget(pltr, nrow++, 1);
     layout->addWidget(sldv, nrow, 0);
     layout->addWidget(imgr, nrow++, 1);
+    layout->addWidget(welcome, nrow++, 0);
+    layout->addWidget(new QHline, nrow++, 0, 1, 2);
+    layout->addWidget(themelabel, nrow, 0);
+    layout->addWidget(thememode, nrow++, 1);
     layout->addWidget(new QHline, nrow++, 0, 1, 2);
     layout->addWidget(getallfont, nrow, 0);
     layout->addWidget(gettextfont, nrow++, 1);

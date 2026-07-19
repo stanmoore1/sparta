@@ -33,6 +33,7 @@
     <file>icons/matsci18-logo.png</file>
     <file>help_index.table</file>
     <file>image_style.table</file>
+    <file>style.qss</file>
     <!-- This file is updated with: grep 'mycmd ==' ../../src/input.cpp | sed -e 's/^.*mycmd == "\(.*\)".*$/\1/' > sparta_internal_commands.txt -->
     <file>sparta_internal_commands.txt</file>
     <file>icons/birch-murnaghan-eos.png</file>

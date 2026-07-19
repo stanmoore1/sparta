@@ -111,6 +111,8 @@ constexpr double MOVIE_WARN_DISKFRAC = 0.9;
 inline const QString MAIN_ICON = QStringLiteral(":/icons/sparta-gui-icon-128x128.png");
 /** path to SPARTA Icon resource */
 inline const QString SPARTA_ICON = QStringLiteral(":/icons/sparta-icon-128x128.png");
+/** path to the global application stylesheet applied on top of the Fusion style */
+inline const QString STYLE_QSS = QStringLiteral(":/style.qss");
 
 // ---- Restart file inspection ----------------------------------------------
 /** restart files larger than this (bytes) prompt a memory-use warning */
@@ -217,12 +219,14 @@ inline const QString RAWBRUSH     = QStringLiteral("rawbrush");
 inline const QString RECENT       = QStringLiteral("recent");
 inline const QString RETURN       = QStringLiteral("return");
 inline const QString SHINYSTYLE   = QStringLiteral("shinystyle");
+inline const QString SHOWWELCOME  = QStringLiteral("showwelcome");
 inline const QString SMOOTHBRUSH  = QStringLiteral("smoothbrush");
 inline const QString SMOOTHCHOICE = QStringLiteral("smoothchoice");
 inline const QString SMOOTHORDER  = QStringLiteral("smoothorder");
 inline const QString SMOOTHWINDOW = QStringLiteral("smoothwindow");
 inline const QString SOLUTION     = QStringLiteral("solution");
 inline const QString SSAO         = QStringLiteral("ssao");
+inline const QString THEME        = QStringLiteral("theme");
 inline const QString TITLE        = QStringLiteral("title");
 inline const QString TYPE         = QStringLiteral("type");
 inline const QString UPDCHART     = QStringLiteral("updchart");

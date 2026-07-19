@@ -17,6 +17,7 @@
 #include "plotdata.h"
 #include "plotdatadialog.h"
 #include "slideshow.h"
+#include "theme.h"
 
 #include <QApplication>
 #include <QCommandLineOption>
@@ -49,6 +50,9 @@ int main(int argc, char *argv[])
     qputenv("OMP_PROC_BIND", "false");
 
     QApplication app(argc, argv);
+    // capture the OS light/dark preference now, while the palette still
+    // reflects the platform default (before the Fusion palette is installed)
+    const bool os_prefers_dark = Theme::osPrefersDark();
     QCoreApplication::setOrganizationName("The SPARTA Developers");
     QCoreApplication::setOrganizationDomain("sparta.github.io");
     QCoreApplication::setApplicationName("SPARTA-GUI (QT" stringify(QT_VERSION_MAJOR) ")");
@@ -103,6 +107,13 @@ int main(int argc, char *argv[])
 
     auto *usestyle = QStyleFactory::create(parser.value("style"));
     if (usestyle) QApplication::setStyle(usestyle);
+
+    // install the curated light/dark palette + global stylesheet on top of the
+    // (Fusion by default) style, so the app looks deliberate and identical on
+    // every platform. The theme mode follows the OS unless overridden in the
+    // preferences (Keys::THEME).
+    Theme::apply(Theme::modeFromString(QSettings().value(Keys::THEME).toString()),
+                 os_prefers_dark);
 
 #if defined(Q_OS_MACOS)
     GUI_MONOFONT = std::make_unique<QFont>("Menlo", -1, QFont::Normal);

@@ -81,6 +81,8 @@ set(PROJECT_SOURCES
   ${CMAKE_SOURCE_DIR}/src/slideshow.h
   ${CMAKE_SOURCE_DIR}/src/stdcapture.cpp
   ${CMAKE_SOURCE_DIR}/src/stdcapture.h
+  ${CMAKE_SOURCE_DIR}/src/theme.cpp
+  ${CMAKE_SOURCE_DIR}/src/theme.h
   ${CMAKE_SOURCE_DIR}/src/urldownloader.cpp
   ${CMAKE_SOURCE_DIR}/src/urldownloader.h
   ${PLUGIN_LOADER_SRC}
