@@ -14,6 +14,7 @@
 #include "aboutdialog.h"
 #include "chartviewer.h"
 #include "codeeditor.h"
+#include "dockpanels.h"
 #include "fileviewer.h"
 #include "findandreplace.h"
 #include "helpers.h"
@@ -43,6 +44,7 @@
 #include <QFontInfo>
 #include <QGridLayout>
 #include <QGuiApplication>
+#include <QKeySequence>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenu>
@@ -112,6 +114,11 @@ void SpartaGui::setupUi(QSettings &settings, QFont &allFont, QFont &monoFont)
     textEdit->setStyleSheet(bannerstyle);
     textEdit->setMinimumSize(Cfg::MINIMUM_WIDTH, Cfg::MINIMUM_HEIGHT);
 
+    // docked panel layout (Output/Charts/Image/Slide Show/Variables) replaces
+    // setCentralWidget(textEdit): PanelManager installs textEdit as the
+    // (non-closable) central dock itself
+    panels = new PanelManager(this, textEdit);
+
     // set up menu bar and menus with their actions and shortcuts
     menubar = new QMenuBar(this);
     createFileMenu();
@@ -135,7 +142,6 @@ void SpartaGui::setupUi(QSettings &settings, QFont &allFont, QFont &monoFont)
     setFont(allFont);
     textEdit->setFont(monoFont);
     document->setDefaultFont(monoFont);
-    setCentralWidget(textEdit);
 
     // set width and height of main window
     // use default so the background logo is fully shown
@@ -244,16 +250,42 @@ void SpartaGui::createRunMenu()
 void SpartaGui::createViewMenu()
 {
     auto *menu = menubar->addMenu("&View");
-    addMenuAction(menu, ":/icons/utilities-terminal.svg", "&Output Window", "Ctrl+Shift+L",
-                  &SpartaGui::viewLog);
-    addMenuAction(menu, ":/icons/x-office-drawing.svg", "&Charts Window", "Ctrl+Shift+C",
-                  &SpartaGui::viewChart);
-    addMenuAction(menu, ":/icons/image-viewer.svg", "&Image Window", "Ctrl+Shift+I",
-                  &SpartaGui::viewImage);
-    addMenuAction(menu, ":/icons/image-x-generic.svg", "&Slide Show Window", "Ctrl+L",
-                  &SpartaGui::viewSlides);
-    addMenuAction(menu, ":/icons/utilities-terminal.svg", "&Variables Window", "Ctrl+Shift+W",
-                  &SpartaGui::viewVariables);
+
+    struct Entry {
+        PanelManager::Panel panel;
+        const char *icon;
+        const char *text;
+        const char *shortcut;
+    };
+    static const Entry entries[] = {
+        {PanelManager::Log, ":/icons/utilities-terminal.svg", "&Output Window", "Ctrl+Shift+L"},
+        {PanelManager::Chart, ":/icons/x-office-drawing.svg", "&Charts Window", "Ctrl+Shift+C"},
+        {PanelManager::Image, ":/icons/image-viewer.svg", "&Image Window", "Ctrl+Shift+I"},
+        {PanelManager::Slide, ":/icons/image-x-generic.svg", "&Slide Show Window", "Ctrl+L"},
+        {PanelManager::Variables, ":/icons/utilities-terminal.svg", "&Variables Window",
+         "Ctrl+Shift+W"},
+    };
+    for (const auto &e : entries) {
+        auto *action = panels->toggleViewAction(e.panel);
+        action->setIcon(QIcon(e.icon));
+        action->setText(e.text);
+        action->setShortcut(QKeySequence(e.shortcut));
+        menu->addAction(action);
+    }
+
+    // persist only on user-driven toggles (QAction::triggered); run-driven
+    // open/close of any panel (including the run-start slideshow hide) must
+    // not touch these settings
+    connect(panels->toggleViewAction(PanelManager::Log), &QAction::triggered, this, [this]() {
+        QSettings().setValue(Keys::VIEWLOG, panels->isPanelOpen(PanelManager::Log));
+    });
+    connect(panels->toggleViewAction(PanelManager::Chart), &QAction::triggered, this, [this]() {
+        QSettings().setValue(Keys::VIEWCHART, panels->isPanelOpen(PanelManager::Chart));
+    });
+
+    menu->addSeparator();
+    addMenuAction(menu, ":/icons/preferences-reset.svg", "Reset &Layout", "",
+                  [this]() { panels->applyDefaultLayout(); });
 }
 
 void SpartaGui::createAboutMenu()
@@ -543,8 +575,9 @@ void SpartaGui::setupAccelerators(QSettings &settings)
 SpartaGui::SpartaGui(QWidget *parent, const QString &filename, int width, int height) :
     QMainWindow(parent), textEdit(nullptr), menubar(nullptr), exampleMenu(nullptr),
     highlighter(nullptr), capturer(new StdCapture), status(nullptr), cpuuse(nullptr),
-    lastCpuBucket(-1), logwindow(nullptr), imagewindow(nullptr), chartwindow(nullptr),
-    slideshow(nullptr), logupdater(nullptr), dirstatus(nullptr), progress(nullptr),
+    lastCpuBucket(-1), panels(nullptr), logwindow(nullptr), imagewindow(nullptr),
+    chartwindow(nullptr), slideshow(nullptr), logupdater(nullptr), dirstatus(nullptr),
+    progress(nullptr),
     prefdialog(nullptr), spartastatus(nullptr), varwindow(nullptr), runner(nullptr),
     runCounter(0), nthreads(1), mainx(width), mainy(height)
 {
@@ -578,6 +611,9 @@ SpartaGui::SpartaGui(QWidget *parent, const QString &filename, int width, int he
 
     // create and connect GUI elements
     setupUi(settings, allFont, monoFont);
+    // fall back to the built-in default layout if there is no saved state yet
+    // (first launch) or it doesn't match the current DOCK_LAYOUT_VERSION
+    panels->restoreLayout(settings);
 
     currentFile.clear();
     currentDir = QDir(".").absolutePath();
@@ -1359,6 +1395,7 @@ void SpartaGui::quit()
         settings.setValue(Keys::MAINX, width());
         settings.setValue(Keys::MAINY, height());
     }
+    panels->saveLayout(settings);
     settings.sync();
 
 #if QT_CONFIG(clipboard)

@@ -42,6 +42,7 @@ class CodeEditor;
 class GeneralTab;
 class Highlighter;
 class ImageViewer;
+class PanelManager;
 class SpartaRunner;
 class LogWindow;
 class Preferences;
@@ -233,20 +234,13 @@ private slots:
     /** @brief Open an external data file and plot selected columns */
     void plotDataFile();
 
-    /** @brief View a slideshow of images */
+    /// @cond -- superseded by PanelManager's toggleViewAction()s (removed step 8)
     void viewSlides();
-
-    /** @brief View a single image */
     void viewImage();
-
-    /** @brief View a chart from thermodynamic data */
     void viewChart();
-
-    /** @brief View the log window */
     void viewLog();
-
-    /** @brief View current variable definitions */
     void viewVariables();
+    /// @endcond
 
     /** @brief Show about dialog */
     void about();
@@ -380,6 +374,7 @@ private:
     QLabel *status;           ///< Status bar label for general status
     QLabel *cpuuse;           ///< Status bar label for CPU usage
     int lastCpuBucket;        ///< Last applied cpuuse color bucket (-1 = none yet)
+    PanelManager *panels;     ///< Docked-panel layout manager (Output/Charts/Image/Slide/Variables)
     LogWindow *logwindow;     ///< Window displaying SPARTA output log
     ImageViewer *imagewindow; ///< Window for viewing single images
     ChartWindow *chartwindow; ///< Window for displaying charts
@@ -387,6 +382,7 @@ private:
     /// "replace on new run" preference is off. They delete themselves when
     /// closed (the QPointer entries reset to null) and any still-open
     /// windows are deleted when the main window is destroyed.
+    /// TODO(step 5): removed once createChartWindow migrates to PanelManager.
     QList<QPointer<ChartWindow>> oldChartWindows;
     SlideShow *slideshow;    ///< Window for image slideshow
     QTimer *logupdater;      ///< Timer for periodic log updates

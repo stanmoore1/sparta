@@ -38,6 +38,11 @@ constexpr int TOOLBAR_ICON_SIZE     = 24;  ///< Icon size in pixels for tool/sta
 constexpr int TOOLBAR_BUTTON_MARGIN = 6; ///< Pixels added to the size hint for square tool buttons
 constexpr int PROGRESS_MAXIMUM      = 1000; ///< Maximum value for QProgressBar
 
+// ---- Docked panel layout --------------------------------------------------
+/** bump whenever dock objectNames or the panel topology change, so a saved
+ *  layout blob from an older version is discarded instead of misapplied */
+constexpr int DOCK_LAYOUT_VERSION = 1;
+
 // ---- File limits ---------------------------------------------------------
 constexpr int NUM_RECENT_FILES = 5; ///< Number of entries in the recent files list
 
@@ -185,6 +190,7 @@ inline const QString COLORMAP     = QStringLiteral("colormap");
 inline const QString BONDCOLORMAP = QStringLiteral("bondcolormap");
 inline const QString COMMAND      = QStringLiteral("command");
 inline const QString DIAMETER     = QStringLiteral("diameter");
+inline const QString DOCKSTATE    = QStringLiteral("dockstate");
 inline const QString ECHO          = QStringLiteral("echo");
 inline const QString EXAMPLES_PATH = QStringLiteral("examples_path");
 inline const QString GRID          = QStringLiteral("grid");
