@@ -16,7 +16,6 @@
 
 #include <QList>
 #include <QPair>
-#include <QPointer>
 #include <QString>
 #include <string>
 #include <vector>
@@ -378,12 +377,6 @@ private:
     LogWindow *logwindow;     ///< Window displaying SPARTA output log
     ImageViewer *imagewindow; ///< Window for viewing single images
     ChartWindow *chartwindow; ///< Window for displaying charts
-    /// Chart windows of previous runs kept open for comparison when the
-    /// "replace on new run" preference is off. They delete themselves when
-    /// closed (the QPointer entries reset to null) and any still-open
-    /// windows are deleted when the main window is destroyed.
-    /// TODO(step 5): removed once createChartWindow migrates to PanelManager.
-    QList<QPointer<ChartWindow>> oldChartWindows;
     SlideShow *slideshow;    ///< Window for image slideshow
     QTimer *logupdater;      ///< Timer for periodic log updates
     QLabel *dirstatus;       ///< Status bar label showing current directory

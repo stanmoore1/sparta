@@ -735,14 +735,9 @@ SpartaGui::~SpartaGui()
     delete status;
     delete cpuuse;
     delete imagewindow;
-    delete chartwindow;
     delete dirstatus;
     delete varwindow;
     delete slideshow;
-    // kept chart windows of previous runs delete themselves when closed, so
-    // their QPointer entries are null by now unless they are still open
-    for (const auto &window : oldChartWindows)
-        delete window;
 }
 
 void SpartaGui::newDocument()
@@ -777,7 +772,6 @@ void SpartaGui::newDocument()
     }
     // close windows
     panels->clearRunPanels();
-    delete chartwindow;
     delete slideshow;
     delete imagewindow;
     delete varwindow;
@@ -1041,7 +1035,6 @@ void SpartaGui::openFile(const QString &fileName)
     }
     // close windows
     panels->clearRunPanels();
-    delete chartwindow;
     delete slideshow;
     delete imagewindow;
     delete varwindow;
@@ -1768,21 +1761,12 @@ void SpartaGui::createLogWindow(QSettings &settings)
 
 void SpartaGui::createChartWindow(QSettings &settings)
 {
-    // if configured, delete old chart window before opening new one
-    if (settings.value(Keys::CHARTREPLACE, true).toBool()) {
-        delete chartwindow;
-    } else if (chartwindow) {
-        // the old chart window stays open for comparison with the new run, but
-        // its pointer is replaced below: have it delete itself when closed and
-        // remember it so windows still open at exit are deleted, too
-        chartwindow->setAttribute(Qt::WA_DeleteOnClose);
-        oldChartWindows.append(chartwindow);
-    }
     chartwindow = new ChartWindow(currentFile, this);
-    chartwindow->setWindowTitle(
-        QString("SPARTA-GUI - Charts - %1 - Run %2").arg(currentFile).arg(runCounter));
-    chartwindow->setWindowIcon(QIcon(Cfg::MAIN_ICON));
-    chartwindow->setMinimumSize(Cfg::MINIMUM_WIDTH, Cfg::MINIMUM_HEIGHT);
+
+    const bool keepOld = !settings.value(Keys::CHARTREPLACE, true).toBool();
+    panels->setPanelWidget(PanelManager::Chart, chartwindow,
+                          QString("Charts - %1 - Run %2").arg(currentFile).arg(runCounter),
+                          keepOld);
 
     const auto *unitptr = static_cast<const char *>(sparta.extractGlobal("units"));
     if (unitptr) chartwindow->setUnits(QString::fromUtf8(unitptr));
@@ -1791,9 +1775,9 @@ void SpartaGui::createChartWindow(QSettings &settings)
     chartwindow->setRangeEnabled(false);
 
     if (settings.value(Keys::VIEWCHART, true).toBool())
-        chartwindow->show();
+        panels->openPanel(PanelManager::Chart);
     else
-        chartwindow->hide();
+        panels->closePanel(PanelManager::Chart);
 }
 
 void SpartaGui::doRun(bool use_buffer)
