@@ -139,4 +139,31 @@
     <file alias="scalable/actions/edit-delete.svg">icons/edit-delete.svg</file>
     <file alias="scalable/actions/edit-select-all.svg">icons/edit-select-all.svg</file>
   </qresource>
+  <!-- Example-deck gallery thumbnails shown on the welcome screen.  These are
+       the official rendered stills from the SPARTA picture gallery
+       (https://sparta.github.io/pictures.html), one per example deck they
+       depict; decks without a gallery image are simply not shown.  See
+       examples/PROVENANCE for licensing and attribution. -->
+  <qresource prefix="/examples">
+    <file alias="ambi__in.ambi.png">examples/ambi__in.ambi.png</file>
+    <file alias="axi__in.axi.png">examples/axi__in.axi.png</file>
+    <file alias="chem__in.chem.png">examples/chem__in.chem.png</file>
+    <file alias="circle__in.circle.distributed.png">examples/circle__in.circle.distributed.png</file>
+    <file alias="circle__in.circle.png">examples/circle__in.circle.png</file>
+    <file alias="circle__in.circle.transparent.png">examples/circle__in.circle.transparent.png</file>
+    <file alias="collide__in.collide.png">examples/collide__in.collide.png</file>
+    <file alias="emit__in.emit.face.png">examples/emit__in.emit.face.png</file>
+    <file alias="emit__in.emit.face.region.png">examples/emit__in.emit.face.region.png</file>
+    <file alias="emit__in.emit.surf.boundary.png">examples/emit__in.emit.surf.boundary.png</file>
+    <file alias="emit__in.emit.surf.flow.png">examples/emit__in.emit.surf.flow.png</file>
+    <file alias="emit__in.emit.surf.flow.region.png">examples/emit__in.emit.surf.flow.region.png</file>
+    <file alias="emit__in.emit.surf.normal.png">examples/emit__in.emit.surf.normal.png</file>
+    <file alias="emit__in.emit.surf.normal.region.png">examples/emit__in.emit.surf.normal.region.png</file>
+    <file alias="flowfile__in.flowfile.png">examples/flowfile__in.flowfile.png</file>
+    <file alias="free__in.free.png">examples/free__in.free.png</file>
+    <file alias="sphere__in.sphere.distributed.png">examples/sphere__in.sphere.distributed.png</file>
+    <file alias="sphere__in.sphere.png">examples/sphere__in.sphere.png</file>
+    <file alias="spiky__in.spiky.png">examples/spiky__in.spiky.png</file>
+    <file alias="step__in.step.png">examples/step__in.step.png</file>
+  </qresource>
 </RCC>

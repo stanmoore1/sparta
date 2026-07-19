@@ -51,9 +51,9 @@ signals:
     void browseRequested();
 
 private:
-    /** @brief Best thumbnail for an example deck: a shipped :/examples image or
-     *  a generic fallback icon. */
-    QIcon thumbnailFor(const QString &inpath) const;
+    /** @brief The shipped :/examples thumbnail for a deck, or a null pixmap if
+     *  the deck has no gallery image (such decks are omitted from the gallery). */
+    QPixmap thumbnailFor(const QString &inpath) const;
 
     void rebuildRecents();
     void rebuildExamples();

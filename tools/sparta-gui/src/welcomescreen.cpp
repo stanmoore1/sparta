@@ -127,13 +127,12 @@ WelcomeScreen::WelcomeScreen(QWidget *parent) :
     outer->addLayout(columns, 1);
 }
 
-QIcon WelcomeScreen::thumbnailFor(const QString &inpath) const
+QPixmap WelcomeScreen::thumbnailFor(const QString &inpath) const
 {
-    const QString res = ":/examples/" + exampleKey(inpath) + ".png";
-    QPixmap pix(res);
-    if (!pix.isNull()) return QIcon(pix);
-    // generic fallback so no card is ever blank
-    return QIcon(":/icons/x-office-drawing.svg");
+    // an example is shown only when it has an official gallery thumbnail
+    // shipped as :/examples/<subdir>__<in.file>.png -- decks without one are
+    // skipped entirely (see rebuildExamples()).
+    return QPixmap(":/examples/" + exampleKey(inpath) + ".png");
 }
 
 void WelcomeScreen::setRecentFiles(const QStringList &files)
@@ -181,8 +180,11 @@ void WelcomeScreen::rebuildExamples()
         const auto inputs = QDir(sub.absoluteFilePath())
                                 .entryInfoList({QStringLiteral("in.*")}, QDir::Files, QDir::Name);
         for (const auto &input : inputs) {
+            // only decks with an official gallery thumbnail are shown
+            const QPixmap thumb = thumbnailFor(input.absoluteFilePath());
+            if (thumb.isNull()) continue;
             const QString label = sub.fileName() + "/" + input.fileName();
-            auto *item = new QListWidgetItem(thumbnailFor(input.absoluteFilePath()), label);
+            auto *item = new QListWidgetItem(QIcon(thumb), label);
             item->setData(Qt::UserRole, input.absoluteFilePath());
             item->setToolTip(input.absoluteFilePath());
             item->setTextAlignment(Qt::AlignHCenter | Qt::AlignTop);

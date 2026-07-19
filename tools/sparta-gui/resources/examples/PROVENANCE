@@ -1,0 +1,39 @@
+SPARTA-GUI welcome-screen example thumbnails
+============================================
+
+The PNG images in this directory are the rendered example stills published
+in the official SPARTA picture gallery:
+
+    https://sparta.github.io/pictures.html
+
+They were produced by the SPARTA developers (Sandia National Laboratories)
+from the corresponding decks in SPARTA's own examples/ tree, and are reused
+here -- downscaled to 256x256 -- as the thumbnail for each example deck shown
+on the SPARTA-GUI welcome screen.  Each file is named
+"<example-subdir>__<in.file>.png" so the welcome screen can look it up from a
+deck's path; only the example decks that have a matching gallery image are
+shown as thumbnails, the rest are simply omitted.
+
+SPARTA is distributed under the GNU General Public License (GPL) v2; these
+images are part of the SPARTA project and are used here under the same terms,
+with attribution to the SPARTA project.
+
+Source image -> deck mapping:
+
+  circle_small.jpg                  -> circle/in.circle{,.distributed,.transparent}
+  sphere_small.jpg                  -> sphere/in.sphere{,.distributed}
+  spiky_small.jpg                   -> spiky/in.spiky
+  step_small.jpg                    -> step/in.step
+  chem_small.jpg                    -> chem/in.chem
+  collide_small.jpg                 -> collide/in.collide
+  free_small.jpg                    -> free/in.free
+  flowfile_small.jpg                -> flowfile/in.flowfile
+  ambi_small.jpg                    -> ambi/in.ambi
+  axi_small.jpg                     -> axi/in.axi
+  emit.face.small.jpg               -> emit/in.emit.face
+  emit.face.region.small.jpg        -> emit/in.emit.face.region
+  emit.surf.boundary.small.jpg      -> emit/in.emit.surf.boundary
+  emit.surf.flow.small.jpg          -> emit/in.emit.surf.flow
+  emit.surf.flow.region.small.jpg   -> emit/in.emit.surf.flow.region
+  emit.surf.normal.small.jpg        -> emit/in.emit.surf.normal
+  emit.surf.normal.region.small.jpg -> emit/in.emit.surf.normal.region
