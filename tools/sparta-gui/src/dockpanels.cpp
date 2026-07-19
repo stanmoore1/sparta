@@ -21,6 +21,8 @@
 #include <QDialog>
 #include <QMainWindow>
 #include <QSettings>
+#include <QSplitter>
+#include <QTimer>
 #include <QWidget>
 
 #include <utility>
@@ -70,7 +72,10 @@ PanelManager::PanelManager(QMainWindow *mainWindow, QWidget *editor) : QObject(m
         d->setObjectName(PANEL_OBJECT_NAME[i]);
         docks[i] = d;
         connect(d, &CDockWidget::viewToggled, this, [this, i](bool open) {
-            if (open) emit panelOpened(i);
+            if (open) {
+                restoreAreaVisibility(Panel(i));
+                emit panelOpened(i);
+            }
         });
     }
 
@@ -160,6 +165,49 @@ bool PanelManager::restoreLayout(QSettings &settings)
     return dm->restoreState(blob, Cfg::DOCK_LAYOUT_VERSION);
 }
 
+void PanelManager::splitArea(CDockAreaWidget *area, int firstPercent)
+{
+    // Give the two-child splitter that contains @p area explicit pixel sizes,
+    // computed from its current width/height so they sum to the actual extent.
+    // Percentages must not be passed to setSplitterSizes() directly: QSplitter
+    // treats them as base sizes and hands the leftover space to the highest-
+    // stretch child, which for us is always the ADS central widget (the editor)
+    // -- so {62,38} would collapse a side panel to ~60px instead of ~38%.
+    if (!area) return;
+    auto *sp = qobject_cast<QSplitter *>(area->parentWidget());
+    if (!sp || sp->count() != 2) return;
+    const int total = (sp->orientation() == Qt::Horizontal) ? sp->width() : sp->height();
+    if (total <= 0) return;
+    const int first = total * firstPercent / 100;
+    dm->setSplitterSizes(area, {first, total - first});
+}
+
+void PanelManager::applySplitterProportions()
+{
+    // editor : charts/image column, horizontally 62:38
+    splitArea(editorDock->dockAreaWidget(), 62);
+    // editor row : output/variables, vertically 68:32
+    splitArea(docks[Log]->dockAreaWidget(), 68);
+    // charts : image, vertically within the right column 55:45
+    splitArea(docks[Image]->dockAreaWidget(), 55);
+}
+
+void PanelManager::restoreAreaVisibility(Panel panel)
+{
+    // When every dock in an area has been closed (the startup/reset state),
+    // Qt-ADS hides the CDockAreaWidget and does not un-hide it when one of its
+    // docks is reopened -- leaving a visible-but-zero-height pane. viewToggled
+    // also fires synchronously, before Qt has processed the re-show, so this is
+    // deferred to the next event-loop turn: show the area explicitly, then
+    // restore the splitter proportions (which QSplitter ignores while the child
+    // is hidden).
+    QTimer::singleShot(0, this, [this, panel]() {
+        if (docks[panel]->isClosed()) return;
+        if (auto *area = docks[panel]->dockAreaWidget()) area->setVisible(true);
+        applySplitterProportions();
+    });
+}
+
 void PanelManager::applyDefaultLayout()
 {
     CDockAreaWidget *chartArea = dm->addDockWidget(ads::RightDockWidgetArea, docks[Chart]);
@@ -169,9 +217,7 @@ void PanelManager::applyDefaultLayout()
     CDockAreaWidget *logArea = dm->addDockWidget(ads::BottomDockWidgetArea, docks[Log]);
     dm->addDockWidgetTabToArea(docks[Variables], logArea);
 
-    dm->setSplitterSizes(editorDock->dockAreaWidget(), {62, 38});
-    dm->setSplitterSizes(logArea, {68, 32});
-    dm->setSplitterSizes(imageArea, {55, 45});
+    applySplitterProportions();
 
     for (int i = 0; i < NPanels; ++i)
         docks[i]->toggleView(false);

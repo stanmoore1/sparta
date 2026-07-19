@@ -28,6 +28,7 @@ class QSettings;
 class QWidget;
 
 namespace ads {
+class CDockAreaWidget;
 class CDockManager;
 class CDockWidget;
 } // namespace ads
@@ -114,6 +115,20 @@ signals:
     void panelOpened(int panel);
 
 private:
+    /** @brief (Re-)apply the default splitter proportions between the editor and
+     *  the Charts/Image and Output/Variables areas. */
+    void applySplitterProportions();
+
+    /** @brief Size the two-child splitter containing @p area so its first child
+     *  gets @p firstPercent of the current extent (see the .cpp for why explicit
+     *  pixel sizes are required rather than percentages). */
+    void splitArea(ads::CDockAreaWidget *area, int firstPercent);
+
+    /** @brief Un-hide a panel's dock area and restore proportions after it is
+     *  reopened. Deferred to the next event loop -- see the implementation for
+     *  the Qt-ADS quirk this works around. */
+    void restoreAreaVisibility(Panel panel);
+
     ads::CDockManager *dm;
     ads::CDockWidget *editorDock;
     ads::CDockWidget *docks[NPanels];
