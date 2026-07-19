@@ -85,6 +85,8 @@ set(PROJECT_SOURCES
   ${CMAKE_SOURCE_DIR}/src/theme.h
   ${CMAKE_SOURCE_DIR}/src/urldownloader.cpp
   ${CMAKE_SOURCE_DIR}/src/urldownloader.h
+  ${CMAKE_SOURCE_DIR}/src/welcomescreen.cpp
+  ${CMAKE_SOURCE_DIR}/src/welcomescreen.h
   ${PLUGIN_LOADER_SRC}
   ${ICON_RC_FILE}
 )

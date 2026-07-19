@@ -15,6 +15,7 @@
 #include "chartviewer.h"
 #include "codeeditor.h"
 #include "dockpanels.h"
+#include "welcomescreen.h"
 #include "fileviewer.h"
 #include "findandreplace.h"
 #include "helpers.h"
@@ -54,6 +55,7 @@
 #include <QPushButton>
 #include <QSettings>
 #include <QStandardPaths>
+#include <QStackedWidget>
 #include <QStatusBar>
 #include <QStringList>
 #include <QTextStream>
@@ -114,10 +116,23 @@ void SpartaGui::setupUi(QSettings &settings, QFont &allFont, QFont &monoFont)
     textEdit->setStyleSheet(bannerstyle);
     textEdit->setMinimumSize(Cfg::MINIMUM_WIDTH, Cfg::MINIMUM_HEIGHT);
 
+    // the central area shows either the welcome screen (landing) or the editor;
+    // a QStackedWidget lets them swap without touching the docked layout
+    welcome      = new WelcomeScreen(this);
+    centralStack = new QStackedWidget(this);
+    centralStack->addWidget(welcome);
+    centralStack->addWidget(textEdit);
+    centralStack->setCurrentWidget(textEdit);
+    connect(welcome, &WelcomeScreen::newFileRequested, this, &SpartaGui::newDocument);
+    connect(welcome, &WelcomeScreen::browseRequested, this, &SpartaGui::open);
+    connect(welcome, &WelcomeScreen::openFileRequested, this,
+            [this](const QString &path) { openFile(path); });
+    connect(welcome, &WelcomeScreen::openExampleRequested, this, &SpartaGui::openExamplePath);
+
     // docked panel layout (Output/Charts/Image/Slide Show/Variables) replaces
-    // setCentralWidget(textEdit): PanelManager installs textEdit as the
+    // setCentralWidget(): PanelManager installs the central stack as the
     // (non-closable) central dock itself
-    panels = new PanelManager(this, textEdit);
+    panels = new PanelManager(this, centralStack);
 
     // set up menu bar and menus with their actions and shortcuts
     menubar = new QMenuBar(this);
@@ -294,6 +309,8 @@ void SpartaGui::createViewMenu()
     });
 
     menu->addSeparator();
+    addMenuAction(menu, ":/icons/help-faq.svg", "&Welcome Screen", "",
+                  [this]() { showWelcome(); });
     addMenuAction(menu, ":/icons/preferences-reset.svg", "Reset &Layout", "",
                   [this]() { panels->applyDefaultLayout(); });
 }
@@ -583,7 +600,8 @@ void SpartaGui::setupAccelerators(QSettings &settings)
 /* -------------------------------------------------------------------- */
 
 SpartaGui::SpartaGui(QWidget *parent, const QString &filename, int width, int height) :
-    QMainWindow(parent), textEdit(nullptr), menubar(nullptr), exampleMenu(nullptr),
+    QMainWindow(parent), textEdit(nullptr), centralStack(nullptr), welcome(nullptr),
+    menubar(nullptr), exampleMenu(nullptr),
     highlighter(nullptr), capturer(new StdCapture), status(nullptr), cpuuse(nullptr),
     lastCpuBucket(-1), panels(nullptr), logwindow(nullptr), imagewindow(nullptr),
     chartwindow(nullptr), slideshow(nullptr), logupdater(nullptr), dirstatus(nullptr),
@@ -659,6 +677,8 @@ SpartaGui::SpartaGui(QWidget *parent, const QString &filename, int width, int he
         openFile(filename);
     } else {
         setWindowTitle("SPARTA-GUI - Editor - *unknown*");
+        // greet the user with the welcome screen unless they turned it off
+        if (settings.value(Keys::SHOWWELCOME, true).toBool()) showWelcome();
     }
 
     // start SPARTA and initialize command completion
@@ -792,6 +812,7 @@ void SpartaGui::newDocument()
     spartastatus->hide();
     setWindowTitle("SPARTA-GUI - Editor - *unknown*");
     runCounter = 0;
+    showEditor();
 }
 
 void SpartaGui::open()
@@ -895,8 +916,12 @@ void SpartaGui::openExample()
 {
     auto *act = qobject_cast<QAction *>(sender());
     if (!act) return;
+    openExamplePath(act->data().toString());
+}
 
-    const QString srcfile = act->data().toString();
+void SpartaGui::openExamplePath(const QString &srcfile)
+{
+    if (srcfile.isEmpty()) return;
     QFileInfo srcinfo(srcfile);
     const QString srcdir = srcinfo.absolutePath();
 
@@ -927,6 +952,18 @@ void SpartaGui::openExample()
             QFile::copy(entry.absoluteFilePath(), destdir + "/" + entry.fileName());
     }
     openFile(destfile);
+}
+
+void SpartaGui::showWelcome()
+{
+    welcome->setRecentFiles(recent);
+    welcome->setExamplesDir(findExamplesDir());
+    centralStack->setCurrentWidget(welcome);
+}
+
+void SpartaGui::showEditor()
+{
+    centralStack->setCurrentWidget(textEdit);
 }
 
 void SpartaGui::updateRecents(const QString &filename)
@@ -1105,6 +1142,7 @@ void SpartaGui::openFile(const QString &fileName)
     cpuuse->hide();
 
     updateVariables();
+    showEditor();
 }
 
 // open file in read-only mode for viewing in separate window
@@ -1790,6 +1828,8 @@ void SpartaGui::doRun(bool use_buffer)
         return;
     }
 
+    // a run operates on the editor buffer, so make sure it is the visible page
+    showEditor();
     purgeInspectList();
     autoSave();
 

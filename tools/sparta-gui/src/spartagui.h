@@ -36,6 +36,8 @@ class QStatusBar;
 class QTimer;
 class QWidget;
 
+class QStackedWidget;
+
 class ChartWindow;
 class CodeEditor;
 class GeneralTab;
@@ -48,6 +50,7 @@ class Preferences;
 class SlideShow;
 class StdCapture;
 class URLDownloader;
+class WelcomeScreen;
 
 /**
  * @brief Main application window for SPARTA-GUI
@@ -193,6 +196,11 @@ private slots:
 
     /** @brief Open an example input file from the File menu */
     void openExample();
+
+    /** @brief Open an example input file by path (copying it to a writable
+     *  location first if the example directory is read-only). Shared by the
+     *  File->Open Example menu and the welcome screen's example gallery. */
+    void openExamplePath(const QString &srcfile);
 
     /** @brief Save the current file */
     void save();
@@ -353,8 +361,17 @@ private:
      * demand -- see the PanelManager::panelOpened handler in createViewMenu(). */
     void createVariableWindow();
 
+    /** @brief Show the welcome screen in the central area (rebuilding its recent
+     *  files list and example gallery first) */
+    void showWelcome();
+    /** @brief Show the code editor in the central area */
+    void showEditor();
+
     // Central GUI elements
     CodeEditor *textEdit;           ///< Custom code editor widget
+    QStackedWidget *centralStack;   ///< Hosts the welcome screen and the editor as
+                                    ///< interchangeable central-area pages
+    WelcomeScreen *welcome;         ///< Landing view (recent files + examples gallery)
     QMenuBar *menubar;              ///< Menu bar with menus and actions
     QStatusBar *statusbar;          ///< status bar
     QList<QAction *> recentActions; ///< list of actions for recent files
