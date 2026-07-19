@@ -1018,6 +1018,9 @@ template < int GASTALLY > void Collide::collisions_one_ambipolar()
         memcpy(ep,p,nbytes);
         memcpy(ep->v,velambi[plist[i]],3*sizeof(double));
         ep->ispecies = ambispecies;
+        ep->erot = 0.0;      // electron is structureless: do not carry the
+        ep->evib = 0.0;      //   parent ion's internal energy into e-heavy
+                             //   collision/reaction energy budgets
         nelectron++;
       }
     }
@@ -1349,6 +1352,9 @@ template < int GASTALLY > void Collide::collisions_group_ambipolar()
         memcpy(ep,p,nbytes);
         memcpy(ep->v,velambi[ip],3*sizeof(double));
         ep->ispecies = ambispecies;
+        ep->erot = 0.0;      // electron is structureless: do not carry the
+        ep->evib = 0.0;      //   parent ion's internal energy into e-heavy
+                             //   collision/reaction energy budgets
         nelectron++;
 
         if (ngroup[egroup] == maxgroup[egroup]) {

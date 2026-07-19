@@ -295,9 +295,11 @@ void ReactBird::init()
     if (b->type != EXCHANGE && b->type != RECOMBINATION) {
       print_reaction(b);
       error->all(FLERR,"Reverse (B-style) reactions support exchange "
-                 "reactions and recombination reactions paired with "
-                 "dissociation; for ionization the reverse rate depends on "
-                 "the electron temperature and must be supplied explicitly");
+                 "reactions (including dissociative recombination "
+                 "AB+ + e -> A + B written as an E-style line, paired "
+                 "with associative ionization) and recombination "
+                 "reactions paired with dissociation; the reverse of "
+                 "electron-impact ionization must be supplied explicitly");
     }
     if (!b->active || b->initflag) continue;
     if (b->type == RECOMBINATION && b->products[1] < 0) {
@@ -309,10 +311,18 @@ void ReactBird::init()
 
     int found = -1;
     if (b->type == EXCHANGE) {
+      // an EXCHANGE B line also pairs with a 2-product IONIZATION
+      // forward (associative ionization A + B -> AB+ + e): its reverse
+      // is dissociative recombination AB+ + e -> A + B, a 2 -> 2
+      // reaction whose Saha-type equilibrium constant comes from the
+      // same partition functions (the free electron contributes spin
+      // degeneracy 2, see partition_function)
+
       for (int f = 0; f < nlist; f++) {
         OneReaction *r = &rlist[f];
         if (f == m || !r->active || r->reverse) continue;
-        if (r->type != EXCHANGE) continue;
+        if (r->type != EXCHANGE &&
+            !(r->type == IONIZATION && r->nproduct == 2)) continue;
         if (set_match(r->reactants,r->nreactant,b->products,b->nproduct) &&
             set_match(r->products,r->nproduct,b->reactants,b->nreactant)) {
           found = f;
@@ -628,6 +638,12 @@ void ReactBird::generate_reverses()
       if (f->nproduct != 3) continue;
       if (f->reactants[1] < 0 || f->products[2] != f->reactants[1]) continue;
       rtype = RECOMBINATION;
+      reactants[0] = f->products[0]; reactants[1] = f->products[1];
+      products[0] = f->reactants[0]; products[1] = f->reactants[1];
+    } else if (f->type == IONIZATION && f->nproduct == 2) {
+      // associative ionization A + B -> AB+ + e: the reverse is
+      // dissociative recombination AB+ + e -> A + B, an exchange
+      rtype = EXCHANGE;
       reactants[0] = f->products[0]; reactants[1] = f->products[1];
       products[0] = f->reactants[0]; products[1] = f->reactants[1];
     } else continue;
@@ -1899,6 +1915,13 @@ double ReactBird::partition_function(int isp, double T)
       qelec += sp->elecdat->states[i].degen *
         exp(-sp->elecdat->states[i].temp/T);
   }
+
+  // a free electron carries spin degeneracy 2: it is structureless (no
+  // elecfile ladder), so without this factor the Saha-type equilibrium
+  // constant of an electron-producing reaction (associative ionization
+  // vs dissociative recombination) would be off by exactly 2x
+
+  else if (sp->charge < 0.0 && sp->mass < 1.0e-29) qelec = 2.0;
 
   return qtrans*qrot*qvib*qelec;
 }

@@ -378,13 +378,20 @@ with the qk and tce/qk styles.  Reactions between charged and neutral
 heavy species are fully supported: a charge-exchange reaction such as
 A+ + B --> A + B+ is an exchange (E) reaction and pairs with a B-style
 reverse like any other exchange, since no free electron participates
-and all partition functions are those of heavy particles.  What is not
-supported is a B-style reverse of an ionization (I) reaction that
-creates or consumes a free electron: its equilibrium constant contains
-the electron partition function and Boltzmann factor evaluated at the
-free-electron temperature (the Saha equation), which can differ
-greatly from the heavy-particle cell temperature and is not available
-from the ambipolar electron model; such reverse rates must be supplied
+and all partition functions are those of heavy particles.  The reverse
+of a 2-product ionization (I) reaction - associative ionization A + B
+--> AB+ + e, whose reverse is dissociative recombination AB+ + e --> A
++ B - is also supported: write the reverse as an E-style B line (it is
+a 2 -> 2 reaction).  Its Saha-type equilibrium constant is built from
+the same partition functions, with the free electron contributing its
+translational partition function and spin degeneracy 2; the reverse
+probability is resolved in the electron-ion collision energy, so with
+"fix ambipolar"_fix_ambipolar.html the recombination rate follows the
+ambipolar electron velocities (the electron energies maintained by the
+elastic-collision exchange) rather than the heavy-particle cell
+temperature.  What remains unsupported is a B-style reverse of a
+3-product electron-impact ionization (A + e --> A+ + e + e): its
+reverse is a 3-body process in the electron gas and must be supplied
 explicitly.  The KOKKOS-accelerated
 tce/kk style implements the identical path and reproduces the CPU code
 bit-for-bit when built with -DSPARTA_KOKKOS_EXACT.

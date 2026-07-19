@@ -114,6 +114,7 @@ effectively.
 
 [Related commands:]
 
-"collide_modify ambipolar yes"_collide_modify.html
+"collide_modify ambipolar yes"_collide_modify.html, "compute
+tambi/grid"_compute_tambi_grid.html
 
 [Default:] none

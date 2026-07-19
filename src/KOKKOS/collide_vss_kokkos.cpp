@@ -1119,6 +1119,9 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar< GASTALLY, AT
       ep->v[1] = d_velambi(d_plist(icell,i),1);
       ep->v[2] = d_velambi(d_plist(icell,i),2);
       ep->ispecies = ambispecies;
+      ep->erot = 0.0;      // electron is structureless: do not carry the
+      ep->evib = 0.0;      //   parent ion's internal energy into e-heavy
+                           //   collision/reaction energy budgets
       nelectron++;
     }
   }

@@ -458,6 +458,7 @@ letters in parenthesis: k = KOKKOS.
 "surf (k)"_compute_surf.html,
 "surf/collision/tally"_compute_surf_collision_tally.html,
 "surf/reaction/tally"_compute_surf_reaction_tally.html,
+"tambi/grid"_compute_tambi_grid.html,
 "telec/grid (k)"_compute_telec_grid.html,
 "temp (k)"_compute_temp.html,
 "thermal/grid (k)"_compute_thermal_grid.html,

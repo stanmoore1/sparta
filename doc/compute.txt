@@ -75,6 +75,7 @@ available in SPARTA:
 "surf"_compute_surf.html - various explicit surface element quantities
 "surf/collision/tally"_compute_surf_collision_tally.html - tallies for particle/surface collisions
 "surf/reaction/tally"_compute_surf_reaction_tally.html - tallies for particle/surface reactions
+"tambi/grid"_compute_tambi_grid.html - ambipolar electron temperature per grid cell
 "thermal/grid"_compute_thermal_grid.html - thermal temperature per grid cell
 "temp"_compute_temp.html - temperature of particles
 "tvib/grid"_compute_tvib_grid.html - vibrational temperature per grid cell :ul

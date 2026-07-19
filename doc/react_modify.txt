@@ -123,9 +123,10 @@ The {reverse} keyword set to {auto} generates a B-style
 reaction in the reaction file read by the "react"_react.html command,
 as if a corresponding B line had been written by hand (see
 "react"_react.html): every exchange reaction gains the exchange
-reverse with reactants and products swapped, and every dissociation
+reverse with reactants and products swapped, every dissociation
 reaction with an explicit third-body species gains the corresponding
-recombination.  A forward reaction is skipped if the file already
+recombination, and every 2-product (associative) ionization gains the
+corresponding dissociative recombination as an exchange reverse.  A forward reaction is skipped if the file already
 contains any reverse for it -- an explicit B line, an independently
 fitted reverse rate, or a wildcard (atom/mol) recombination covering
 the same product -- so existing reaction sets are not double counted.

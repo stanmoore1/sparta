@@ -20,10 +20,12 @@
 #
 #     species air.species <...> rotfile air.rot elecfile air.elec
 #
-# The reverses of the three associative-ionization reactions are
-# deliberately absent: an electron-producing reaction's equilibrium
-# constant is the Saha equation at the free-electron temperature, which
-# the heavy-particle detailed-balance model cannot supply.
+# The three associative-ionization reactions carry E-style B reverses
+# (dissociative recombination, e.g. NO+ + e --> O + N): their Saha-type
+# equilibrium constant comes from the same partition functions, with the
+# free electron contributing spin degeneracy 2.  The reverses of the
+# (commented-out) electron-impact ionization reactions remain absent:
+# they would need an explicit electron-temperature rate.
 #
 # Barrierless exothermic channels with negative eta (e.g. O2+ + N -> O +
 # NO+) have per-collision probabilities that grow without bound at low
@@ -157,17 +159,28 @@ O2 + N --> NO + O
 E B 0.0 0.0 0.0 0.0 0.0
 
 # ------------------------------------------------- associative ionization
-# Reverses (dissociative recombination) intentionally absent: they need
-# the Saha equilibrium constant at the electron temperature.
+# Each forward carries an E-style detailed-balance B reverse (dissociative
+# recombination): the reverse rate derives from the forward rate and the
+# Saha-type equilibrium constant built from the species partition
+# functions, the free electron contributing spin degeneracy 2.
 
 O + N --> NO+ + e
 I A 0.0 4.404e-19 8.766e-18 0.0 -4.404e-19
 
+NO+ + e --> O + N
+E B 0.0 0.0 0.0 0.0 0.0
+
 N + N --> N2+ + e
 I A 0.0 9.319e-19 3.387e-17 0.0 -9.319e-19
 
+N2+ + e --> N + N
+E B 0.0 0.0 0.0 0.0 0.0
+
 O + O --> O2+ + e
 I A 0.0 1.1128e-18 1.8580e-17 0.0 -1.1128e-18
+
+O2+ + e --> O + O
+E B 0.0 0.0 0.0 0.0 0.0
 
 # ---------------------------------------------------------- charge exchange
 # One fitted direction per pair - chosen as the direction whose published
