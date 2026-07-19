@@ -1,0 +1,22 @@
+SPARTA-GUI user-interface icons
+===============================
+
+The flat action/toolbar/menu icons in this directory (the freedesktop-named
+*.svg files and the show-box/show-axes/emblem-photos/rotate-* rasters derived
+from them) are from the Lucide icon set:
+
+    Lucide -- https://lucide.dev
+    Version: lucide-static 1.25.0
+    License: ISC (see LUCIDE-LICENSE in this directory)
+
+They were recolored to a neutral gray (#808080) that stays legible on both the
+light and dark application palettes, and rasterized to PNG where a call site
+still references a .png path. The file names are kept identical to the previous
+icon set so no C++ call site (QIcon(":/icons/NAME.svg")) needed to change.
+
+To regenerate after changing the mapping, see the icon_map.txt / gen_icons.sh
+recipe recorded with the SPARTA-GUI port notes.
+
+SPARTA branding art (sparta-*.png, sparta-gui-banner.png, sparta-plugin.png,
+sparta-logo.svg, the hicolor/ tree, the matsci*/tutorial* gallery art, and
+birch-murnaghan-eos.png) is NOT part of the Lucide set and is unchanged.

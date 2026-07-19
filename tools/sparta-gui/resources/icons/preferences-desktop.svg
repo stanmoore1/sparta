@@ -1,1 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48"><g transform="matrix(1.4475 0 0 1.4475 -10.740 -10.740)"><defs><filter id="sh" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur in="SourceAlpha" stdDeviation="0.9"/><feOffset dx="0.5" dy="1.1" result="offsetblur"/><feFlood flood-color="#000" flood-opacity="0.38"/><feComposite in2="offsetblur" operator="in"/><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter><linearGradient id="sl" x1="0" y1="8" x2="0" y2="40" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#F0EAFF"/><stop offset="0.5" stop-color="#9B7BEA"/><stop offset="1" stop-color="#6A45C8"/></linearGradient></defs><g filter="url(#sh)"><rect x="8" y="12.7" width="32" height="2.6" rx="1.3" fill="#9AA6B2"/><rect x="26" y="9" width="8" height="10" rx="2.4" fill="url(#sl)" stroke="#3C2580" stroke-width="1.5"/><rect x="27.6" y="10.4" width="4.8" height="2.4" rx="1.1" fill="#fff" opacity="0.4"/><rect x="8" y="22.7" width="32" height="2.6" rx="1.3" fill="#9AA6B2"/><rect x="12" y="19" width="8" height="10" rx="2.4" fill="url(#sl)" stroke="#3C2580" stroke-width="1.5"/><rect x="13.6" y="20.4" width="4.8" height="2.4" rx="1.1" fill="#fff" opacity="0.4"/><rect x="8" y="32.7" width="32" height="2.6" rx="1.3" fill="#9AA6B2"/><rect x="29" y="29" width="8" height="10" rx="2.4" fill="url(#sl)" stroke="#3C2580" stroke-width="1.5"/><rect x="30.6" y="30.4" width="4.8" height="2.4" rx="1.1" fill="#fff" opacity="0.4"/></g></g></svg>
+<!-- @license lucide-static v1.25.0 - ISC -->
+<svg
+  class="lucide lucide-settings"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="#808080"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915" />
+  <circle cx="12" cy="12" r="3" />
+</svg>

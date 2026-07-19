@@ -1,1 +1,18 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48"><g transform="matrix(1.0125 0 0 1.0125 -0.679 -0.679)"><defs><filter id="sh" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur in="SourceAlpha" stdDeviation="0.9"/><feOffset dx="0.5" dy="1.1" result="offsetblur"/><feFlood flood-color="#000" flood-opacity="0.38"/><feComposite in2="offsetblur" operator="in"/><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter><linearGradient id="zf" x1="0" y1="4" x2="0" y2="40" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#E8F4FF"/><stop offset="0.5" stop-color="#5BA7F0"/><stop offset="1" stop-color="#1869C8"/></linearGradient><radialGradient id="zfg" cx="16" cy="15" r="17" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#FFFFFF"/><stop offset="0.6" stop-color="#DCEBF6"/><stop offset="1" stop-color="#A9C6DD"/></radialGradient></defs><g filter="url(#sh)"><line x1="32" y1="32" x2="43" y2="43" stroke="#0E3E72" stroke-width="8.5" stroke-linecap="round"/><line x1="32" y1="32" x2="43" y2="43" stroke="url(#zf)" stroke-width="5.2" stroke-linecap="round"/><circle cx="19" cy="19" r="16.5" fill="url(#zf)" stroke="#0E3E72" stroke-width="2"/><circle cx="19" cy="19" r="11" fill="url(#zfg)" stroke="#0E3E72" stroke-width="1.6"/><g stroke="#0E3E72" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M14 18 V14 H18"/><path d="M24 14 H20 M24 14 V18"/><path d="M14 20 V24 H18"/><path d="M20 24 H24 V20"/></g></g></g></svg>
+<!-- @license lucide-static v1.25.0 - ISC -->
+<svg
+  class="lucide lucide-scan"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="#808080"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M3 7V5a2 2 0 0 1 2-2h2" />
+  <path d="M17 3h2a2 2 0 0 1 2 2v2" />
+  <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
+  <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
+</svg>

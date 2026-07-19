@@ -1,1 +1,17 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48"><g transform="matrix(1.2867 0 0 1.2867 -6.880 -6.880)"><defs><filter id="sh" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur in="SourceAlpha" stdDeviation="0.9"/><feOffset dx="0.5" dy="1.1" result="offsetblur"/><feFlood flood-color="#000" flood-opacity="0.38"/><feComposite in2="offsetblur" operator="in"/><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter><linearGradient id="hd" x1="0" y1="7" x2="0" y2="41" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#FFE39A"/><stop offset="0.5" stop-color="#F4B73E"/><stop offset="1" stop-color="#AE741A"/></linearGradient></defs><g filter="url(#sh)"><rect x="7" y="7" width="34" height="34" rx="7" fill="url(#hd)" stroke="#7A4E0E" stroke-width="2"/><rect x="10" y="10" width="28" height="7.5" rx="3.8" fill="#ffffff" opacity="0.30"/><g transform="matrix(0.62 0 0 1 9.12 0)"><text x="24" y="34.3" text-anchor="middle" font-family="DejaVu Sans" font-weight="bold" font-size="26" fill="#1F1303">HD</text><text x="24" y="32.7" text-anchor="middle" font-family="DejaVu Sans" font-weight="bold" font-size="26" fill="#FFEEBC" opacity="0.9">HD</text><text x="24" y="33.5" text-anchor="middle" font-family="DejaVu Sans" font-weight="bold" font-size="26" fill="#3A2405">HD</text></g></g></g></svg>
+<!-- @license lucide-static v1.25.0 - ISC -->
+<svg
+  class="lucide lucide-monitor"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="#808080"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <rect width="20" height="14" x="2" y="3" rx="2" />
+  <line x1="8" x2="16" y1="21" y2="21" />
+  <line x1="12" x2="12" y1="17" y2="21" />
+</svg>
