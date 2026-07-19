@@ -9,9 +9,11 @@ from them) are from the Lucide icon set:
     Version: lucide-static 1.25.0
     License: ISC (see LUCIDE-LICENSE in this directory)
 
-They were recolored to a neutral gray (#808080) that stays legible on both the
-light and dark application palettes, and rasterized to PNG where a call site
-still references a .png path. The file names are kept identical to the previous
+They were recolored by semantic category (files=blue, run=green, danger=red,
+visualization=teal, settings=purple, help=blue, warnings=amber, edit/navigation
+=neutral slate) at a mid luminance so they read on both the light and dark
+application palettes, and rasterized to PNG where a call site still references a
+.png path. The file names are kept identical to the previous
 icon set so no C++ call site (QIcon(":/icons/NAME.svg")) needed to change.
 
 To regenerate after changing the mapping, see the icon_map.txt / gen_icons.sh

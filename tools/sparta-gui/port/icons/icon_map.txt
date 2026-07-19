@@ -1,77 +1,77 @@
-antialias sparkles
-application-exit log-out
-application-plot chart-scatter
-binary-file-icon file-digit
-chart-smooth spline
-comment-out text-quote
-uncomment text-cursor
-dialog-cancel x
-dialog-no x
-dialog-ok check
-document-new file-plus
-document-open folder-open
-document-open-recent clock
-document-save save
-document-save-as save
-download-file download
-edit-copy copy
-edit-cut scissors
-edit-delete trash-2
-edit-paste clipboard-paste
-edit-redo redo-2
-edit-undo undo-2
-edit-select-all text-select
-expand-text wand-sparkles
-export-movie film
-file-clipboard clipboard-copy
-fit-window maximize
-format-indent-less-3 align-left
-go-first chevrons-left
-go-last chevrons-right
-go-next-2 chevron-right
-go-previous-2 chevron-left
-gtk-zoom-fit scan
-gtk-zoom-in zoom-in
-gtk-zoom-out zoom-out
-hd-img monitor
-help-browser book-open
-help-faq circle-help
-help-tutorial graduation-cap
-image-cache images
-image-shiny sun
-image-viewer image
-image-x-generic image
-media-playback-start-2 play
-media-playlist-repeat repeat
-move-recenter move
-object-flip-horizontal flip-horizontal-2
-object-flip-vertical flip-vertical-2
-object-rotate-left rotate-ccw
-object-rotate-right rotate-cw
-preferences-desktop-font type
-preferences-desktop-personal palette
-preferences-desktop settings
-preferences-reset list-restart
-process-stop circle-stop
-reference-lines ruler
-run-file circle-play
-search search
-system-help life-buoy
-system-restart refresh-cw
-system-run play
-trash trash-2
-txt-file-icon file-text
-utilities-terminal terminal
-vdw-style atom
-warning triangle-alert
-window-close x
-x-office-drawing chart-line
-yaml-file-icon file-code
-csv-file-icon file-spreadsheet
-rotate-up circle-arrow-up
-rotate-down circle-arrow-down
-rotate-left circle-arrow-left
-rotate-right circle-arrow-right
-show-box box
-show-axes axis-3d
-emblem-photos image
+antialias sparkles #2f9ea6
+application-exit log-out #d9534f
+application-plot chart-scatter #2f9ea6
+binary-file-icon file-digit #4a90d9
+chart-smooth spline #2f9ea6
+comment-out text-quote #7f8590
+uncomment text-cursor #7f8590
+dialog-cancel x #d9534f
+dialog-no x #d9534f
+dialog-ok check #3aa563
+document-new file-plus #4a90d9
+document-open folder-open #4a90d9
+document-open-recent clock #4a90d9
+document-save save #4a90d9
+document-save-as save #4a90d9
+download-file download #4a90d9
+edit-copy copy #7f8590
+edit-cut scissors #7f8590
+edit-delete trash-2 #d9534f
+edit-paste clipboard-paste #7f8590
+edit-redo redo-2 #7f8590
+edit-undo undo-2 #7f8590
+edit-select-all text-select #7f8590
+expand-text wand-sparkles #7f8590
+export-movie film #2f9ea6
+file-clipboard clipboard-copy #7f8590
+fit-window maximize #7f8590
+format-indent-less-3 align-left #7f8590
+go-first chevrons-left #7f8590
+go-last chevrons-right #7f8590
+go-next-2 chevron-right #7f8590
+go-previous-2 chevron-left #7f8590
+gtk-zoom-fit scan #7f8590
+gtk-zoom-in zoom-in #7f8590
+gtk-zoom-out zoom-out #7f8590
+hd-img monitor #2f9ea6
+help-browser book-open #4a90d9
+help-faq circle-help #4a90d9
+help-tutorial graduation-cap #4a90d9
+image-cache images #2f9ea6
+image-shiny sun #2f9ea6
+image-viewer image #2f9ea6
+image-x-generic image #2f9ea6
+media-playback-start-2 play #3aa563
+media-playlist-repeat repeat #3aa563
+move-recenter move #7f8590
+object-flip-horizontal flip-horizontal-2 #7f8590
+object-flip-vertical flip-vertical-2 #7f8590
+object-rotate-left rotate-ccw #7f8590
+object-rotate-right rotate-cw #7f8590
+preferences-desktop settings #8a6bbf
+preferences-desktop-font type #8a6bbf
+preferences-desktop-personal palette #8a6bbf
+preferences-reset list-restart #8a6bbf
+process-stop circle-stop #d9534f
+reference-lines ruler #2f9ea6
+run-file circle-play #3aa563
+search search #7f8590
+system-help life-buoy #4a90d9
+system-restart refresh-cw #3aa563
+system-run play #3aa563
+trash trash-2 #d9534f
+txt-file-icon file-text #4a90d9
+utilities-terminal terminal #7f8590
+vdw-style atom #2f9ea6
+warning triangle-alert #c88a1e
+window-close x #7f8590
+x-office-drawing chart-line #2f9ea6
+yaml-file-icon file-code #4a90d9
+csv-file-icon file-spreadsheet #4a90d9
+rotate-up circle-arrow-up #7f8590
+rotate-down circle-arrow-down #7f8590
+rotate-left circle-arrow-left #7f8590
+rotate-right circle-arrow-right #7f8590
+show-box box #7f8590
+show-axes axis-3d #7f8590
+emblem-photos image #2f9ea6

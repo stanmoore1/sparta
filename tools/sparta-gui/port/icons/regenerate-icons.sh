@@ -7,24 +7,25 @@
 #          | tar xz -C /tmp        # -> /tmp/package/icons/*.svg
 #   2. Run:  ./regenerate-icons.sh /tmp/package/icons
 #
-# Each app icon name is mapped to a Lucide glyph in icon_map.txt; the Lucide
-# SVG is recolored to a neutral gray legible on both the light and dark
-# application palettes and written back under the *same* file name so no C++
-# call site (QIcon(":/icons/NAME.svg")) needs to change. A handful of names are
-# also rasterized to PNG where a call site still references a .png path.
+# icon_map.txt has three columns:  <app-icon-name> <lucide-glyph> <hex-color>
+# Each Lucide SVG's currentColor is replaced with the semantic category color
+# (files=blue, run=green, danger=red, visualization=teal, settings=purple,
+# help=blue, warnings=amber, edit/nav=neutral slate) -- chosen at a mid
+# luminance so the icons read on both the light and dark application palettes.
+# Output keeps the original file name so no C++ call site changes; a handful of
+# names are also rasterized to PNG where a call site references a .png path.
 set -e
 LUC="${1:?path to lucide icons dir (…/package/icons)}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 DST="$HERE/../../resources/icons"
-COLOR="#808080"
 TMP="$(mktemp --suffix=.svg)"
 PNG_ONLY="show-box show-axes emblem-photos"
 PNG_ALSO="rotate-up rotate-down rotate-left rotate-right"
 declare -A DIM=( [show-box]=256 [show-axes]=256 [emblem-photos]=48 \
                  [rotate-up]=256 [rotate-down]=256 [rotate-left]=256 [rotate-right]=256 )
-while read -r app luc; do
+while read -r app luc color; do
   [ -z "$app" ] && continue
-  sed 's/currentColor/'"$COLOR"'/g' "$LUC/$luc.svg" > "$TMP"
+  sed 's/currentColor/'"$color"'/g' "$LUC/$luc.svg" > "$TMP"
   po=0; for p in $PNG_ONLY; do [ "$app" = "$p" ] && po=1; done
   [ $po -eq 0 ] && cp "$TMP" "$DST/$app.svg"
   np=0; for p in $PNG_ONLY $PNG_ALSO; do [ "$app" = "$p" ] && np=1; done
