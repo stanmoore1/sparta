@@ -283,13 +283,14 @@ void SpartaGui::createViewMenu()
         QSettings().setValue(Keys::VIEWCHART, panels->isPanelOpen(PanelManager::Chart));
     });
 
-    // lazily create the Slide Show view if the user opens its panel before any
-    // run has produced a dump image (mirrors the pre-dock viewSlides() behavior)
+    // lazily (re-)create views whose widget is torn down by newDocument()/
+    // openFile() if the user opens their panel again before the next run
     connect(panels, &PanelManager::panelOpened, this, [this](int panel) {
         if (panel == PanelManager::Slide && !slideshow) {
             slideshow = new SlideShow(currentFile, this);
             panels->setPanelWidget(PanelManager::Slide, slideshow, "Slide Show");
         }
+        if (panel == PanelManager::Variables && !varwindow) createVariableWindow();
     });
 
     menu->addSeparator();
@@ -744,7 +745,6 @@ SpartaGui::~SpartaGui()
     delete status;
     delete cpuuse;
     delete dirstatus;
-    delete varwindow;
 }
 
 void SpartaGui::newDocument()
@@ -779,7 +779,6 @@ void SpartaGui::newDocument()
     }
     // close windows
     panels->clearRunPanels();
-    delete varwindow;
     chartwindow = nullptr;
     logwindow   = nullptr;
     slideshow   = nullptr;
@@ -1040,7 +1039,6 @@ void SpartaGui::openFile(const QString &fileName)
     }
     // close windows
     panels->clearRunPanels();
-    delete varwindow;
     chartwindow = nullptr;
     logwindow   = nullptr;
     slideshow   = nullptr;
@@ -1995,68 +1993,9 @@ void SpartaGui::renderImage()
     panels->openPanel(PanelManager::Image);
 }
 
-void SpartaGui::viewSlides()
-{
-    if (!slideshow) {
-        slideshow = new SlideShow(currentFile, this);
-        slideshow->setMinimumSize(Cfg::MINIMUM_WIDTH, Cfg::MINIMUM_HEIGHT);
-    }
-    if (slideshow->isVisible()) {
-        slideshow->hide();
-    } else {
-        slideshow->show();
-        // make sure the window comes to the front and does not open behind
-        // the editor window (observed on macOS)
-        slideshow->raise();
-        slideshow->activateWindow();
-    }
-}
-
-void SpartaGui::viewChart()
-{
-    QSettings settings;
-    if (chartwindow) {
-        if (chartwindow->isVisible()) {
-            chartwindow->hide();
-            settings.setValue(Keys::VIEWCHART, false);
-        } else {
-            chartwindow->show();
-            settings.setValue(Keys::VIEWCHART, true);
-        }
-    }
-}
-
-void SpartaGui::viewLog()
-{
-    QSettings settings;
-    if (logwindow) {
-        if (logwindow->isVisible()) {
-            logwindow->hide();
-            settings.setValue(Keys::VIEWLOG, false);
-        } else {
-            logwindow->show();
-            settings.setValue(Keys::VIEWLOG, true);
-        }
-    }
-}
-
-void SpartaGui::viewImage()
-{
-    if (imagewindow) {
-        if (imagewindow->isVisible()) {
-            imagewindow->hide();
-        } else {
-            imagewindow->show();
-        }
-    }
-}
-
 void SpartaGui::createVariableWindow()
 {
     varwindow = new QLabel(QString());
-    varwindow->setWindowTitle(QString("SPARTA-GUI - Current Variables"));
-    varwindow->setWindowIcon(QIcon(Cfg::MAIN_ICON));
-    varwindow->setMinimumSize(100, 50);
     varwindow->setText("(none)");
 
     varwindow->setFont(monoFontFromSettings());
@@ -2067,21 +2006,7 @@ void SpartaGui::createVariableWindow()
     varwindow->setContentsMargins(5, 5, 5, 5);
     varwindow->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::MinimumExpanding);
 
-    // apply before hide(): applyWindowFlags() calls setWindowFlags(), which re-shows the widget
-    applyWindowFlags(varwindow);
-    varwindow->hide();
-}
-
-void SpartaGui::viewVariables()
-{
-    // varwindow is destroyed when the editor is reset (newDocument()/openFile()),
-    // so recreate it on demand here -- mirrors viewSlides()
-    if (!varwindow) createVariableWindow();
-    if (varwindow->isVisible()) {
-        varwindow->hide();
-    } else {
-        varwindow->show();
-    }
+    panels->setPanelWidget(PanelManager::Variables, varwindow, "Variables");
 }
 
 void SpartaGui::autoSave()

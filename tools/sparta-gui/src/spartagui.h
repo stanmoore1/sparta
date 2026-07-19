@@ -233,14 +233,6 @@ private slots:
     /** @brief Open an external data file and plot selected columns */
     void plotDataFile();
 
-    /// @cond -- superseded by PanelManager's toggleViewAction()s (removed step 8)
-    void viewSlides();
-    void viewImage();
-    void viewChart();
-    void viewLog();
-    void viewVariables();
-    /// @endcond
-
     /** @brief Show about dialog */
     void about();
 
@@ -354,11 +346,11 @@ private:
     /** @brief Create the status bar and its widgets */
     void createStatusBar();
 
-    /** @brief Create (or recreate) the floating "Current Variables" window.
+    /** @brief Create (or recreate) the docked "Variables" panel content.
      *
-     * @c varwindow is torn down together with the other output windows when the
+     * @c varwindow is torn down together with the other panel contents when the
      * editor is reset (newDocument()/openFile()), so it must be recreated on
-     * demand -- see viewVariables(). */
+     * demand -- see the PanelManager::panelOpened handler in createViewMenu(). */
     void createVariableWindow();
 
     // Central GUI elements
