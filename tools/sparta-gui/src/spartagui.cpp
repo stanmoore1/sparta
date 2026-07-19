@@ -283,6 +283,15 @@ void SpartaGui::createViewMenu()
         QSettings().setValue(Keys::VIEWCHART, panels->isPanelOpen(PanelManager::Chart));
     });
 
+    // lazily create the Slide Show view if the user opens its panel before any
+    // run has produced a dump image (mirrors the pre-dock viewSlides() behavior)
+    connect(panels, &PanelManager::panelOpened, this, [this](int panel) {
+        if (panel == PanelManager::Slide && !slideshow) {
+            slideshow = new SlideShow(currentFile, this);
+            panels->setPanelWidget(PanelManager::Slide, slideshow, "Slide Show");
+        }
+    });
+
     menu->addSeparator();
     addMenuAction(menu, ":/icons/preferences-reset.svg", "Reset &Layout", "",
                   [this]() { panels->applyDefaultLayout(); });
@@ -736,7 +745,6 @@ SpartaGui::~SpartaGui()
     delete cpuuse;
     delete dirstatus;
     delete varwindow;
-    delete slideshow;
 }
 
 void SpartaGui::newDocument()
@@ -771,7 +779,6 @@ void SpartaGui::newDocument()
     }
     // close windows
     panels->clearRunPanels();
-    delete slideshow;
     delete varwindow;
     chartwindow = nullptr;
     logwindow   = nullptr;
@@ -1033,7 +1040,6 @@ void SpartaGui::openFile(const QString &fileName)
     }
     // close windows
     panels->clearRunPanels();
-    delete slideshow;
     delete varwindow;
     chartwindow = nullptr;
     logwindow   = nullptr;
@@ -1591,14 +1597,16 @@ void SpartaGui::updateSlideShow()
 
     if (!slideshow) {
         slideshow = new SlideShow(currentFile, this);
+        panels->setPanelWidget(PanelManager::Slide, slideshow,
+                               QString("Slide Show - %1 - Run %2").arg(currentFile).arg(runCounter));
         if (QSettings().value(Keys::VIEWSLIDE, true).toBool())
-            slideshow->show();
+            panels->openPanel(PanelManager::Slide);
         else
-            slideshow->hide();
+            panels->closePanel(PanelManager::Slide);
     } else {
         slideshow->setWindowTitle(
             QString("SPARTA-GUI - Slide Show - %1 - Run %2").arg(currentFile).arg(runCounter));
-        if (QSettings().value(Keys::VIEWSLIDE, true).toBool()) slideshow->show();
+        if (QSettings().value(Keys::VIEWSLIDE, true).toBool()) panels->openPanel(PanelManager::Slide);
     }
     slideshow->addImage(imagefile);
 }
@@ -1872,7 +1880,7 @@ void SpartaGui::doRun(bool use_buffer)
     if (slideshow) {
         slideshow->setWindowTitle(QString("SPARTA-GUI - Slide Show - " + currentFile));
         slideshow->clear();
-        slideshow->hide();
+        panels->closePanel(PanelManager::Slide);
     }
 
     logupdater = new QTimer(this);
