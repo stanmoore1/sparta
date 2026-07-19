@@ -1,0 +1,16 @@
+Qt-ADS (Qt Advanced Docking System), vendored for SPARTA-GUI's docked panel layout.
+
+Origin: ADS 4.4.1, extracted from the pyside6-qtads 5.0.0 sdist
+(Qt-Advanced-Docking-System/ subtree of pyside6_qtads-5.0.0.tar.gz,
+https://pypi.org/project/pyside6-qtads/).
+
+License: LGPL-2.1 (see LICENSE, gnu-lgpl-v2.1.md).
+
+Vendored subset: top-level CMakeLists.txt, src/ (library sources, linux/,
+images/, stylesheets/, ads.qrc, src/CMakeLists.txt,
+qtadvanceddockingConfig.cmake), cmake/modules/. The demo/, examples/, doc/,
+sip/ (Python bindings), and qmake (.pro/.pri) files were not vendored --
+SPARTA-GUI only needs the C++ library.
+
+Built as a static library (BUILD_STATIC) with BUILD_EXAMPLES off; see
+tools/sparta-gui/CMakeLists.txt for the integration point.

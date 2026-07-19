@@ -49,6 +49,32 @@ if (NOT BUILD_DOC_ONLY)
   find_package(Qt6 6.2 REQUIRED COMPONENTS Gui Widgets Network Svg)
   message(STATUS "Using Qt version ${Qt6_VERSION}")
 
+  # Qt-ADS (Advanced Docking System) provides the single-window docked panel
+  # layout; vendored under thirdparty/qtads/ so the build has no network
+  # dependency. Built as a static library and linked into sparta-gui below.
+  # ADS links Qt6::GuiPrivate unconditionally on Linux, for
+  # <qpa/qplatformnativeinterface.h>; that header ships in a separate
+  # private-headers package on most distributions.
+  if (UNIX AND NOT APPLE)
+    get_target_property(_qtads_qt6gui_includedirs Qt6::Gui INTERFACE_INCLUDE_DIRECTORIES)
+    find_file(QTADS_QPA_NATIVE_INTERFACE_H
+      NAMES qpa/qplatformnativeinterface.h
+      PATHS ${_qtads_qt6gui_includedirs}
+      PATH_SUFFIXES "${Qt6_VERSION}/QtGui"
+      NO_DEFAULT_PATH
+    )
+    if (NOT QTADS_QPA_NATIVE_INTERFACE_H)
+      message(FATAL_ERROR "Qt-ADS needs Qt6 private headers "
+        "(qpa/qplatformnativeinterface.h) to build on Linux. Install your "
+        "distribution's Qt6 private-headers development package (e.g. "
+        "qt6-base-private-dev on Debian/Ubuntu) and re-run cmake.")
+    endif()
+  endif()
+  set(ADS_VERSION 4.4.1)
+  set(BUILD_STATIC ON CACHE BOOL "" FORCE)
+  set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+  add_subdirectory(${CMAKE_SOURCE_DIR}/thirdparty/qtads EXCLUDE_FROM_ALL)
+
   # the PROJECT_SOURCES file list, embedded resources, and the lepton_mini library
   include(${CMAKE_SOURCE_DIR}/cmake/Sources.cmake)
 
@@ -89,6 +115,7 @@ if (NOT BUILD_DOC_ONLY)
   target_link_libraries(sparta-gui PRIVATE lepton_mini)
   target_compile_definitions(sparta-gui PRIVATE SPARTA_GUI_VERSION="${PROJECT_VERSION}")
   target_link_libraries(sparta-gui PRIVATE Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Svg)
+  target_link_libraries(sparta-gui PRIVATE ads::qtadvanceddocking-qt6)
 
   # unit tests and code coverage, only enabled on Linux
   include(${CMAKE_SOURCE_DIR}/cmake/Testing.cmake)
