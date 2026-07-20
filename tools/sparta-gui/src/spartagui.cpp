@@ -958,6 +958,12 @@ void SpartaGui::showWelcome()
 {
     welcome->setRecentFiles(recent);
     welcome->setExamplesDir(findExamplesDir());
+    // the run panels (Output, Charts, Image, ...) only hold simulation output
+    // and would show up as empty docks stealing space on the welcome screen, so
+    // hide them all and let the welcome page use the full window. A subsequent
+    // run re-opens whichever panels the View settings call for.
+    for (int i = 0; i < PanelManager::NPanels; ++i)
+        panels->closePanel(static_cast<PanelManager::Panel>(i));
     centralStack->setCurrentWidget(welcome);
 }
 
