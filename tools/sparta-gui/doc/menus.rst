@@ -59,6 +59,17 @@ File
      `SPARTA restart <https://sparta.github.io/doc/write_restart.html>`_,
      windows with :ref:`information about the file are opened
      <inspect_restart>`.
+   - *Import Surface (STL / SPARTA)...* opens the :ref:`Import Surface wizard
+     <import_surface>` to convert an STL file (ASCII or binary) or open an
+     existing SPARTA surface file, transform and preview it, review the
+     watertightness diagnostics, optionally generate the implicit-surface
+     (ablation) commands, and insert the corresponding ``read_surf`` or
+     ``create_isurf`` block at the editor cursor.
+   - *Export to ParaView...* opens the :ref:`Export to ParaView dialog
+     <export_paraview>` to convert SPARTA surface or grid data to ParaView
+     ``.pvd`` format by running the bundled ``surf2paraview.py`` /
+     ``grid2paraview.py`` scripts with ParaView's ``pvpython`` and, optionally,
+     open the result in ParaView.  ParaView must be installed separately.
    - *Quit* exits SPARTA-GUI. If there are unsaved changes, a dialog will
      appear to either cancel the operation, or to save, or to not save the
      modified buffer.

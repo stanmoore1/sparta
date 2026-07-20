@@ -207,7 +207,7 @@ void SpartaGui::createFileMenu()
                   &SpartaGui::inspect);
     addMenuAction(menu, ":/icons/vdw-style.svg", "Import Sur&face (STL / SPARTA)...", "Ctrl+Shift+T",
                   &SpartaGui::importSurface);
-    addMenuAction(menu, ":/icons/image-x-generic.svg", "Export to Para&View...", "Ctrl+Shift+V",
+    addMenuAction(menu, ":/icons/image-x-generic.svg", "Export to Para&View...", "Ctrl+Shift+E",
                   &SpartaGui::exportParaview);
     menu->addSeparator();
 

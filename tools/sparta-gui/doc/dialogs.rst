@@ -231,3 +231,99 @@ can select whether by default the raw data, the smoothed data, or both
 will be plotted, one can set the colors for the two lines, the default
 smoothing parameters, the default size of the chart graph in pixels, and
 whether you want to display major and minor grid lines.
+
+.. _import_surface:
+
+Import Surface (STL / SPARTA)
+-----------------------------
+
+.. index:: Import Surface
+.. index:: dialogs; Import Surface
+.. index:: STL
+.. index:: surface geometry
+.. index:: read_surf
+.. index:: create_isurf
+.. index:: ablation
+
+The *Import Surface (STL / SPARTA)...* dialog (opened from the *File* menu
+or with `Ctrl+Shift+T`) is a wizard for turning surface geometry into the
+commands SPARTA needs to read it.  Industrial DSMC geometry usually arrives
+as CAD-exported STL; this wizard converts STL to a SPARTA surface file
+natively (no external ``python`` or the ``stl2surf.py`` script required),
+lets you transform and preview it the way SPARTA sees it, surfaces the
+watertightness checks as readable diagnostics, and can generate the
+implicit-surface commands used for ablation.  It also opens an existing
+SPARTA surface file directly, so it doubles as a surface validator.
+
+.. TODO screenshot: capture the Import Surface wizard (Preview tab) as
+   JPG/sparta-gui-import-surface.png
+
+The wizard is organized into tabs:
+
+- **Source** accepts either an STL file (both ASCII and binary STL are
+  detected and parsed) or an existing SPARTA surface file.  It reports the
+  point and element counts, the geometry extents, and the result of a fast
+  watertightness pre-check (the number of leaking edges and points, if any).
+- **Transform** exposes the `read_surf
+  <https://sparta.github.io/doc/read_surf.html>`_ transformations
+  (scale, translate, rotate, origin, clip, invert, transparency, group, and
+  type offset) as numeric controls with a live preview of the generated
+  ``read_surf`` command line.
+- **Preview** shows a native, interactive-free rendering of the mesh with
+  leaking triangles tinted red, and — for a watertight surface — an
+  *authoritative* SPARTA ``dump image`` render produced by loading the
+  surface into an isolated, cleared SPARTA state.
+- **Ablation** generates the implicit-surface commands (`create_isurf
+  <https://sparta.github.io/doc/create_isurf.html>`_ plus `fix ablate
+  <https://sparta.github.io/doc/fix_ablate.html>`_) and can render the
+  reconstructed implicit surface for each of the ``inout``, ``voxel``,
+  ``ave``, and ``multi`` modes side by side so you can judge how faithfully
+  each reproduces the original geometry (grid resolution is the fidelity
+  knob).
+- **Diagnostics** collects the messages SPARTA emits while reading the
+  surface, including the watertightness failures, highlighted the same way
+  as in the *Output* window.
+- **Output** lets you choose between inserting an explicit ``read_surf``
+  block or the implicit ablation block, previews the exact text, and — for an
+  imported STL — writes a ``.surf`` file next to the source before inserting
+  the snippet at the editor cursor.
+
+.. _export_paraview:
+
+Export to ParaView
+------------------
+
+.. index:: ParaView
+.. index:: dialogs; Export to ParaView
+.. index:: surf2paraview
+.. index:: grid2paraview
+.. index:: visualization; ParaView
+
+The *Export to ParaView...* dialog (opened from the *File* menu or with
+`Ctrl+Shift+E`) converts SPARTA surface or grid data to `ParaView
+<https://www.paraview.org/>`_ ``.pvd`` format and opens it.  Rather than
+re-implementing the conversion, it runs the bundled ``surf2paraview.py`` and
+``grid2paraview.py`` scripts (shipped under
+``share/sparta/tools/paraview`` with the installers), which depend on
+ParaView's VTK Python modules and therefore must run with ParaView's
+``pvpython`` interpreter.
+
+.. TODO screenshot: capture the Export to ParaView dialog as
+   JPG/sparta-gui-paraview.png
+
+The dialog auto-detects ``pvpython`` and ``paraview`` (searching the ``PATH``
+and, on macOS/Windows, the usual ParaView bundle locations); both paths are
+editable and remembered.  You choose the conversion (surface geometry via
+``surf2paraview.py`` or grid cells via ``grid2paraview.py``), the input
+file, an output name, an optional list of dump-result files to associate
+with the geometry over time, and per-mode options (Exodus II output for
+surfaces, or the ``x``/``y``/``z`` grid chunk sizes for grids).  A live
+command preview shows exactly what will run; the script's output streams
+into a log; and, when it finishes, ParaView is launched on the resulting
+``.pvd`` (this is optional and can be turned off).
+
+.. note::
+
+   You must have ParaView installed separately to use this feature.  If
+   ``pvpython`` cannot be found, install ParaView and set its path in the
+   dialog.

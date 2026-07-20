@@ -92,6 +92,12 @@ available (On macOS use the Command key instead of Ctrl/Control).
      - Plot Data File
      - Ctrl+Home / Ctrl+End
      - Go to Start / End
+   * - Ctrl+Shift+T
+     - Import Surface (STL / SPARTA)
+     - Ctrl+Shift+E
+     - Export to ParaView
+     -
+     -
 
 Further keybindings of the editor window `are documented with the Qt
 documentation

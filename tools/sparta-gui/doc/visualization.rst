@@ -790,3 +790,25 @@ image, restrict the active range, and control the slideshow settings:
   blue, while the skipped images outside it are drawn in red.
 - **Next**: Step forward to the next image.
 - **Last**: Jump to the last image of the active range.
+
+.. _paraview_export:
+
+Exporting to ParaView
+---------------------
+
+.. index:: ParaView
+.. index:: visualization; ParaView
+.. index:: surf2paraview
+.. index:: grid2paraview
+
+For interactive 3D exploration beyond the built-in :ref:`image viewer
+<snapshot_viewer>`, SPARTA surface and grid data can be exported to
+`ParaView <https://www.paraview.org/>`_.  The *File* menu entry *Export to
+ParaView...* (`Ctrl+Shift+E`) opens the :ref:`Export to ParaView dialog
+<export_paraview>`, which runs the bundled ``surf2paraview.py`` /
+``grid2paraview.py`` conversion scripts with ParaView's ``pvpython``
+interpreter and, optionally, launches ParaView on the resulting ``.pvd``.
+The scripts are shipped with the installers under
+``share/sparta/tools/paraview``; ParaView itself must be installed
+separately.  Surface geometry to be visualized (or validated) can first be
+prepared with the :ref:`Import Surface wizard <import_surface>`.
