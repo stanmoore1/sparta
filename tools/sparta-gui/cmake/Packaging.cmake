@@ -33,6 +33,26 @@ if (SPARTA_GUI_USE_PLUGIN AND NOT BUILD_DOC_ONLY)
       COMMAND ${CMAKE_COMMAND} -E echo "The flatpak and flatpak-builder commands required to build a SPARTA-GUI flatpak bundle were not found. Skipping.")
   endif()
 
+  # The ParaView conversion scripts (tools/paraview) are bundled so the
+  # File -> Export to ParaView dialog can locate surf2paraview.py /
+  # grid2paraview.py from an installed build.  The GUI looks for them under
+  # <prefix>/share/sparta/tools/paraview (and, on macOS, the .app Resources).
+  # These are shipped as-is and run with ParaView's pvpython at runtime.  The
+  # location can be overridden with -D SPARTA_PARAVIEW_DIR=...
+  if(NOT SPARTA_PARAVIEW_DIR)
+    set(SPARTA_PARAVIEW_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../paraview)
+  endif()
+  # install(DIRECTORY) runs on `cmake --install` (Linux .tar.gz and Flatpak,
+  # and stages the tree for the Windows installer); the large test_data and
+  # the unit tests are not needed at runtime.
+  if(EXISTS ${SPARTA_PARAVIEW_DIR})
+    install(DIRECTORY ${SPARTA_PARAVIEW_DIR}
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/sparta/tools
+            FILES_MATCHING PATTERN "*.py"
+            PATTERN "test_data" EXCLUDE
+            PATTERN "*_unit_test.py" EXCLUDE)
+  endif()
+
   # when compiling on macOS, create an "app bundle"
   if(APPLE)
     # additional targets to populate the bundle tree and create the .dmg image file
@@ -51,6 +71,15 @@ if (SPARTA_GUI_USE_PLUGIN AND NOT BUILD_DOC_ONLY)
                 ${SPARTA_EXAMPLES_DIR} ${APP_CONTENTS}/Resources/examples)
     endif()
 
+    # the ParaView conversion scripts are bundled next to the examples so the
+    # Export to ParaView dialog finds them via <app>/Contents/Resources/tools
+    set(BUNDLE_PARAVIEW_CMD "")
+    if(EXISTS ${SPARTA_PARAVIEW_DIR})
+      set(BUNDLE_PARAVIEW_CMD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+                ${SPARTA_PARAVIEW_DIR} ${APP_CONTENTS}/Resources/tools/paraview)
+    endif()
+
     add_custom_target(complete-bundle
       ${CMAKE_COMMAND} -E make_directory ${APP_CONTENTS}/bin
       COMMAND ${CMAKE_COMMAND} -E create_symlink ../MacOS/sparta-gui ${APP_CONTENTS}/bin/sparta-gui
@@ -59,6 +88,7 @@ if (SPARTA_GUI_USE_PLUGIN AND NOT BUILD_DOC_ONLY)
       COMMAND ${CMAKE_COMMAND} -E copy_if_different ${MACOSX_ICON_FILE} ${APP_CONTENTS}/Resources
       COMMAND ${CMAKE_COMMAND} -E copy_if_different ${MACOSX_BACKGROUND_FILE} ${APP_CONTENTS}/Resources
       ${BUNDLE_EXAMPLES_CMD}
+      ${BUNDLE_PARAVIEW_CMD}
       DEPENDS sparta-gui
       COMMENT "Copying additional files into macOS app bundle tree"
       WORKING_DIRECTORY ${CMAKE_BINARY_DIR}

@@ -144,6 +144,12 @@ Section "${SPARTAGUI}" SecSparta
   SetOutPath "$INSTDIR\Doc"
   File *.pdf
 
+  # ParaView conversion scripts (surf2paraview.py / grid2paraview.py) staged
+  # by "cmake --install" under share/sparta/tools/paraview; the Export to
+  # ParaView dialog looks for them there.  Run with the user's ParaView pvpython.
+  SetOutPath "$INSTDIR\share\sparta\tools\paraview"
+  File /nonfatal share/sparta/tools/paraview/*.py
+
   SetOutPath "$INSTDIR"
   ${registerExtension} "$INSTDIR\bin\sparta-gui.exe" ".lmp" "SPARTA Input File"
 
@@ -203,6 +209,7 @@ Section "Uninstall"
   RMDir /r /REBOOTOK "$INSTDIR\bin"
   RMDir /r /REBOOTOK "$INSTDIR\Doc"
   RMDir /r /REBOOTOK "$INSTDIR\qt6plugins"
+  RMDir /r /REBOOTOK "$INSTDIR\share"
   RMDir /REBOOTOK "$INSTDIR"
 SectionEnd
 
