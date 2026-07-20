@@ -42,6 +42,9 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QKeyEvent>
+#include <QMouseEvent>
+#include <QWheelEvent>
+#include <cmath>
 #include <QKeySequence>
 #include <QLabel>
 #include <QLinearGradient>
@@ -214,6 +217,11 @@ ImageViewer::ImageViewer(const QString &fileName, SpartaWrapper *_sparta, Sparta
     imageLabel->setBackgroundRole(QPalette::Base);
     imageLabel->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Minimum);
     imageLabel->setScaledContents(false);
+    // interactive view: drag to rotate/pan, wheel to zoom -- handled in
+    // eventFilter(), which re-renders through the same createImage() path as
+    // the toolbar buttons
+    imageLabel->installEventFilter(this);
+    imageLabel->setCursor(Qt::OpenHandCursor);
 
     scrollArea->setBackgroundRole(QPalette::Dark);
     scrollArea->setWidget(imageLabel);
@@ -927,6 +935,66 @@ void ImageViewer::openSettings()
 // intercept events
 bool ImageViewer::eventFilter(QObject *watched, QEvent *event)
 {
+    // interactive view manipulation on the rendered image: left-drag rotates
+    // (Shift+drag pans), wheel zooms. Each gesture re-renders through the same
+    // createImage() path the toolbar buttons use, guarded against re-entrancy
+    // while a run is active.
+    if (watched == imageLabel && !shutdown) {
+        const bool is2d = sparta && (sparta->extractSetting("dimension") == 2);
+        switch (event->type()) {
+        case QEvent::MouseButtonPress: {
+            auto *me = static_cast<QMouseEvent *>(event);
+            if (me->button() == Qt::LeftButton) {
+                dragLast = me->pos();
+                dragging = true;
+                imageLabel->setCursor(Qt::ClosedHandCursor);
+                return true;
+            }
+            break;
+        }
+        case QEvent::MouseMove: {
+            if (!dragging) break;
+            auto *me = static_cast<QMouseEvent *>(event);
+            const QPoint d = me->pos() - dragLast;
+            dragLast = me->pos();
+            if (sparta && sparta->isRunning()) return true;
+            if (me->modifiers().testFlag(Qt::ShiftModifier)) {
+                // pan by moving the view center (box fractions)
+                params.cx = std::clamp(params.cx - d.x() * 0.0025, 0.0, 1.0);
+                params.cy = std::clamp(params.cy + d.y() * 0.0025, 0.0, 1.0);
+                params.centerdynamic = false;
+                params.cxvar.clear();
+                params.cyvar.clear();
+            } else {
+                params.phi = wrapAzimuth(params.phi + d.x() * 0.5);
+                if (!is2d) params.theta = clampPolar(params.theta + d.y() * 0.5);
+            }
+            createImage();
+            return true;
+        }
+        case QEvent::MouseButtonRelease: {
+            if (dragging) {
+                dragging = false;
+                imageLabel->setCursor(Qt::OpenHandCursor);
+                return true;
+            }
+            break;
+        }
+        case QEvent::Wheel: {
+            auto *we = static_cast<QWheelEvent *>(event);
+            if (sparta && sparta->isRunning()) return true;
+            const double steps = we->angleDelta().y() / 120.0;
+            if (steps != 0.0) {
+                params.zoom = clampZoom(params.zoom * std::pow(1.1, steps));
+                createImage();
+            }
+            return true;
+        }
+        default:
+            break;
+        }
+    }
+
     // now that this window is a docked panel sharing the main window's
     // shortcut context, its own Ctrl+S/C/W/Q would otherwise be ambiguous
     // with the identically bound main-window menu shortcuts

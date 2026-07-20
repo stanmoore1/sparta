@@ -319,6 +319,28 @@ QString buildDumpSnippet(const DumpImageSettings &s, bool movie, const QString &
     return out;
 }
 
+double wrapAzimuth(double phi)
+{
+    // normalize into (-180, 180]
+    while (phi > 180.0) phi -= 360.0;
+    while (phi <= -180.0) phi += 360.0;
+    return phi;
+}
+
+double clampPolar(double theta)
+{
+    if (theta < 0.0) return 0.0;
+    if (theta > 180.0) return 180.0;
+    return theta;
+}
+
+double clampZoom(double zoom, double lo, double hi)
+{
+    if (zoom < lo) return lo;
+    if (zoom > hi) return hi;
+    return zoom;
+}
+
 // Local Variables:
 // c-basic-offset: 4
 // End:

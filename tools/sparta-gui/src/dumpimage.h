@@ -196,6 +196,21 @@ inline const char *const cmapModeName[DumpImageSettings::NUM_CMAP_MODES] = {
 QString buildDumpImageCommand(const DumpImageSettings &s);
 
 /**
+ * @brief Wrap an azimuth angle into the (-180, 180] range in degrees.
+ *
+ * Matches the wraparound the viewer's rotate-left/right buttons apply to
+ * `DumpImageSettings::phi`; factored out so the interactive drag path and the
+ * button path share (and can unit-test) the same math.
+ */
+double wrapAzimuth(double phi);
+
+/** @brief Clamp a polar/view angle to the [0, 180] range in degrees (theta). */
+double clampPolar(double theta);
+
+/** @brief Clamp a zoom factor to [lo, hi] (defaults match the viewer limits). */
+double clampZoom(double zoom, double lo = 0.1, double hi = 10.0);
+
+/**
  * @brief Assemble the `dump_modify` commands for all non-default modify settings
  * @param s  the populated settings struct
  * @param id the dump ID the commands refer to

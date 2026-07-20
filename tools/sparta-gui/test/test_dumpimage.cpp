@@ -467,6 +467,29 @@ TEST(DumpImage, FullFeaturedRender)
               "cmap gridx min max cf 0.0 3 min guimapx1 0.5 white max guimapx2");
 }
 
+TEST(DumpImageMath, WrapAzimuth)
+{
+    EXPECT_DOUBLE_EQ(wrapAzimuth(30.0), 30.0);
+    EXPECT_DOUBLE_EQ(wrapAzimuth(190.0), -170.0);
+    EXPECT_DOUBLE_EQ(wrapAzimuth(-190.0), 170.0);
+    EXPECT_DOUBLE_EQ(wrapAzimuth(180.0), 180.0);   // upper bound kept
+    EXPECT_DOUBLE_EQ(wrapAzimuth(540.0), 180.0);   // 540 -> 180
+}
+
+TEST(DumpImageMath, ClampPolar)
+{
+    EXPECT_DOUBLE_EQ(clampPolar(60.0), 60.0);
+    EXPECT_DOUBLE_EQ(clampPolar(-5.0), 0.0);
+    EXPECT_DOUBLE_EQ(clampPolar(200.0), 180.0);
+}
+
+TEST(DumpImageMath, ClampZoom)
+{
+    EXPECT_DOUBLE_EQ(clampZoom(1.0), 1.0);
+    EXPECT_DOUBLE_EQ(clampZoom(0.01), 0.1);
+    EXPECT_DOUBLE_EQ(clampZoom(99.0), 10.0);
+}
+
 } // namespace
 
 // Local Variables:

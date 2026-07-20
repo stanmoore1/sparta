@@ -224,11 +224,24 @@ additional controls:
 - **Help**: Opens this documentation page for the visualization
   features in SPARTA-GUI in a web browser.
 
-The image is re-rendered after each change to the buttons, text fields
-or settings dialog, and when there are many particles, grid cells, or
-surface elements to render and high quality images with anti-aliasing
-are requested, re-rendering may take several seconds.  There is no GPU
-acceleration.
+.. index:: image viewer; interactive view
+.. index:: rotate; mouse
+
+The rendered image also responds directly to the mouse for a more
+interactive feel: **drag** with the left mouse button to rotate the view
+(horizontal motion changes the azimuth, vertical motion the elevation),
+hold **Shift** while dragging to pan the view center, and use the **mouse
+wheel** to zoom in and out.  Each gesture re-renders through the same path
+as the toolbar buttons, so the same limits apply (rotation is disabled for
+2d simulations).
+
+The image is re-rendered after each change to the buttons, text fields,
+settings dialog, or mouse gesture, and when there are many particles, grid
+cells, or surface elements to render and high quality images with
+anti-aliasing are requested, re-rendering may take several seconds (it uses
+SPARTA's software renderer -- there is no GPU acceleration).  For fluid,
+GPU-accelerated exploration, export the geometry to :ref:`ParaView
+<paraview_export>`.
 
 ---------------
 

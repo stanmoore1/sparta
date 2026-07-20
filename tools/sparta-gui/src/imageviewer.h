@@ -140,6 +140,8 @@ private:
     QMenuBar *menuBar;       ///< Menu bar
     QLabel *imageLabel;      ///< Label displaying the image
     QScrollArea *scrollArea; ///< Scrollable area for image
+    QPoint dragLast;         ///< last mouse pos during an interactive view drag
+    bool dragging = false;   ///< true while dragging to rotate/pan the render
     QSize lastFitSize;       ///< Scroll area size applied by the last auto-resize
 
     QAction *saveAsAct; ///< Save As action
