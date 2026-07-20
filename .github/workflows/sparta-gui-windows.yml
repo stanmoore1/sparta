@@ -39,7 +39,7 @@ jobs:
         run: |
           dnf install -y \
             git cmake ninja-build make findutils file which wget tar \
-            dos2unix ghostscript \
+            dos2unix ghostscript osslsigncode \
             mingw64-filesystem mingw64-gcc mingw64-gcc-c++ mingw64-binutils \
             mingw64-qt6-qtbase mingw64-qt6-qtsvg \
             mingw32-nsis
@@ -49,6 +49,24 @@ jobs:
 
       - name: Mark the workspace as a safe git directory
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Prepare the Authenticode code-signing certificate (if configured)
+        env:
+          WINDOWS_SIGN_PFX_BASE64: ${{ secrets.WINDOWS_SIGN_PFX_BASE64 }}
+        run: |
+          # Decode the base64-encoded .pfx secret to the default path sign.sh
+          # looks for. When the secret is absent (forks, PRs, no cert yet) the
+          # signing steps below become graceful no-ops and the build stays
+          # unsigned. To enable signing, set two repository secrets:
+          #   WINDOWS_SIGN_PFX_BASE64 - base64 of your code-signing .pfx
+          #   WINDOWS_SIGN_PASSWORD   - the .pfx password
+          if [ -n "$WINDOWS_SIGN_PFX_BASE64" ]; then
+            mkdir -p "$HOME/.codesign"
+            printf '%s' "$WINDOWS_SIGN_PFX_BASE64" | base64 -d > "$HOME/.codesign/sparta-gui.pfx"
+            echo "Code-signing certificate installed; binaries and installer will be signed."
+          else
+            echo "No WINDOWS_SIGN_PFX_BASE64 secret set; binaries and installer will be left unsigned."
+          fi
 
       - name: Cross-build the SPARTA shared library (serial)
         run: |
@@ -84,6 +102,15 @@ jobs:
           ps2pdf manual.ps build-gui-win/sparta-gui-v1.0.0.pdf
           file build-gui-win/sparta-gui-v1.0.0.pdf
 
+      - name: Sign the SPARTA-GUI executable and library (if configured)
+        env:
+          SIGN_PASSWORD: ${{ secrets.WINDOWS_SIGN_PASSWORD }}
+        run: |
+          # sign in place before packaging so the installer bundles signed
+          # binaries; a no-op when no certificate was installed above
+          bash tools/sparta-gui/packaging/sign.sh \
+            "$SPARTA_DLL" build-gui-win/sparta-gui.exe
+
       - name: Create the NSIS installer (nsis packaging script)
         run: |
           export SPARTA_PLUGIN_LIB="$SPARTA_DLL"
@@ -91,7 +118,14 @@ jobs:
           bash "$GITHUB_WORKSPACE/tools/sparta-gui/packaging/build_windows_cross_nsis.sh" \
             "$MINGW_SYSROOT" 1.0.0 "$GITHUB_WORKSPACE/tools/sparta-gui"
           ls -la SPARTA-GUI-Win10-x86_64-*.exe
-          sha256sum SPARTA-GUI-Win10-x86_64-*.exe | tee "$GITHUB_WORKSPACE/checksum.txt"
+
+      - name: Sign the installer and record its checksum (if configured)
+        env:
+          SIGN_PASSWORD: ${{ secrets.WINDOWS_SIGN_PASSWORD }}
+        run: |
+          bash tools/sparta-gui/packaging/sign.sh build-gui-win/SPARTA-GUI-Win10-x86_64-*.exe
+          # checksum is taken after signing so it matches the uploaded installer
+          ( cd build-gui-win && sha256sum SPARTA-GUI-Win10-x86_64-*.exe ) | tee checksum.txt
 
       - name: Upload installer
         uses: actions/upload-artifact@v4
