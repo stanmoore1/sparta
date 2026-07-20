@@ -1,0 +1,103 @@
+# Build a Windows x86_64 NSIS installer of SPARTA-GUI by cross-compiling with
+# the MinGW64 / GCC toolchain on Fedora -- the same approach the LAMMPS project
+# uses for all its pre-compiled Windows GUI packages (native MSVC builds are a
+# development configuration with no packaging support).
+#
+# As with the macOS and Linux workflows, the SPARTA shared library is
+# cross-built from source in the same checkout (serial, no MPI) and bundled,
+# so no pre-compiled DLL is downloaded. SPARTA-GUI links only Qt Gui/Widgets/
+# Network/Svg (charts use a native QPainter backend, so no Qt Charts module is
+# needed). The ffmpeg/gzip helpers and the full PDF manual are optional; a
+# small placeholder manual pointing at the online docs is bundled instead.
+
+name: build-sparta-gui-windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - claude/sparta-gui-docked-layout
+    paths:
+      - 'tools/sparta-gui/**'
+      - 'src/**'
+      - 'cmake/**'
+      - '.github/workflows/sparta-gui-windows.yml'
+
+concurrency:
+  group: sparta-gui-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-nsis:
+    runs-on: ubuntu-latest
+    container:
+      image: fedora:41
+    env:
+      MINGW_SYSROOT: /usr/x86_64-w64-mingw32/sys-root/mingw
+    steps:
+      - name: Install the MinGW64 cross toolchain, Qt6, NSIS and build tools
+        run: |
+          dnf install -y \
+            git cmake ninja-build make findutils file which wget tar \
+            dos2unix ghostscript \
+            mingw64-filesystem mingw64-gcc mingw64-gcc-c++ mingw64-binutils \
+            mingw64-qt6-qtbase mingw64-qt6-qtsvg \
+            mingw32-nsis
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Mark the workspace as a safe git directory
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Cross-build the SPARTA shared library (serial)
+        run: |
+          mingw64-cmake -S cmake -B build-lib-win -G Ninja \
+            -D BUILD_SHARED_LIBS=ON \
+            -D BUILD_MPI=OFF \
+            -D CMAKE_BUILD_TYPE=Release
+          cmake --build build-lib-win -j3
+          SPARTA_DLL=$(find "$PWD/build-lib-win" -name 'libsparta*.dll' -type f | head -1)
+          echo "SPARTA_DLL=$SPARTA_DLL" >> "$GITHUB_ENV"
+          file "$SPARTA_DLL"
+
+      - name: Cross-build SPARTA-GUI (plugin mode)
+        run: |
+          mingw64-cmake -S tools/sparta-gui -B build-gui-win -G Ninja \
+            -D CMAKE_BUILD_TYPE=Release \
+            -D SPARTA_GUI_USE_PLUGIN=ON \
+            -D BUILD_DOC=OFF
+          cmake --build build-gui-win -j3
+          file build-gui-win/sparta-gui.exe
+
+      - name: Generate a placeholder manual PDF
+        run: |
+          cat > manual.ps <<'EOF'
+          %!PS
+          /Helvetica findfont 16 scalefont setfont
+          72 720 moveto (SPARTA-GUI) show
+          /Helvetica findfont 12 scalefont setfont
+          72 690 moveto (The full SPARTA-GUI manual is available online at:) show
+          72 672 moveto (https://sparta.github.io/sparta-gui/) show
+          showpage
+          EOF
+          ps2pdf manual.ps build-gui-win/sparta-gui-v1.0.0.pdf
+          file build-gui-win/sparta-gui-v1.0.0.pdf
+
+      - name: Create the NSIS installer (nsis packaging script)
+        run: |
+          export SPARTA_PLUGIN_LIB="$SPARTA_DLL"
+          cd build-gui-win
+          bash "$GITHUB_WORKSPACE/tools/sparta-gui/packaging/build_windows_cross_nsis.sh" \
+            "$MINGW_SYSROOT" 1.0.0 "$GITHUB_WORKSPACE/tools/sparta-gui"
+          ls -la SPARTA-GUI-Win10-x86_64-*.exe
+          sha256sum SPARTA-GUI-Win10-x86_64-*.exe | tee "$GITHUB_WORKSPACE/checksum.txt"
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: SPARTA-GUI-Windows-x86_64
+          path: |
+            build-gui-win/SPARTA-GUI-Win10-x86_64-*.exe
+            checksum.txt
+          if-no-files-found: error

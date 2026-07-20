@@ -14,16 +14,31 @@ DESTDIR=${DESTDIR} cmake --install .  --prefix "/"
 
 # no static libs needed
 rm -rvf ${DESTDIR}/lib ${DESTDIR}/bin/libsparta.dll
-# download a precompiled SPARTA library dll
-wget https://sparta.github.io/sparta-gui/libsparta.dll
-mv -v libsparta.dll ${DESTDIR}/bin/
-# download ffmpeg and gzip
-wget https://sparta.github.io/thirdparty/ffmpeg-win64.exe.gz
-gunzip ffmpeg-win64.exe.gz
-mv ffmpeg-win64.exe ${DESTDIR}/bin/ffmpeg.exe
-wget https://sparta.github.io/thirdparty/gzip.exe.gz
-gunzip gzip.exe.gz
-mv gzip.exe ${DESTDIR}/bin/
+# provide the SPARTA library DLL: bundle a locally cross-built one if
+# SPARTA_PLUGIN_LIB points at it (as the macOS/Linux packagers do), else
+# download a pre-compiled basic library.
+if [ -n "${SPARTA_PLUGIN_LIB}" ] && [ -f "${SPARTA_PLUGIN_LIB}" ]
+then \
+    echo "Bundle locally-built SPARTA library DLL: ${SPARTA_PLUGIN_LIB}"
+    cp -v "${SPARTA_PLUGIN_LIB}" ${DESTDIR}/bin/libsparta.dll
+else \
+    wget https://sparta.github.io/sparta-gui/libsparta.dll
+    mv -v libsparta.dll ${DESTDIR}/bin/
+fi
+# ffmpeg (movie export) and gzip (compressed dumps) are optional runtime
+# helpers; bundle them if available but do not fail the build if not.
+if wget -q https://sparta.github.io/thirdparty/ffmpeg-win64.exe.gz
+then \
+    gunzip ffmpeg-win64.exe.gz && mv ffmpeg-win64.exe ${DESTDIR}/bin/ffmpeg.exe
+else \
+    echo "NOTE: ffmpeg-win64 not available; movie export will be unavailable"
+fi
+if wget -q https://sparta.github.io/thirdparty/gzip.exe.gz
+then \
+    gunzip gzip.exe.gz && mv gzip.exe ${DESTDIR}/bin/
+else \
+    echo "NOTE: gzip.exe not available; compressed-dump support will be unavailable"
+fi
 
 skipdlls="msvcrt ADVAPI32 CFGMGR32 GDI32 KERNEL32 MPR NETAPI32 PSAPI SHELL32 USER32 USERENV UxTheme VERSION WS2_32 WSOCK32 d3d11 dwmapi libsparta msvcrt_ole32 dxgi IMM32 ole32 OLEAUT32 WINMM WTSAPI32 COMCTL32 PSAPI bcrypt CRYPT32 IPHLPAPI Secur32 api-ms-win-core-path-l1-1-0 WLDAP32 api-ms-win-core-synch-l1-2-0 AUTHZ d3d12 DWrite ntdll api-ms-win-core-winrt-l1-1-0 api-ms-win-core-winrt-string-l1-1-0 comdlg32 d2d1 d3d9 SETUPAPI SHCORE SHLWAPI DNSAPI WINHTTP ncrypt"
 echo "Copying required DLL files"
@@ -76,7 +91,13 @@ cat > ${DESTDIR}/bin/qt.conf <<EOF
 Plugins = ../qt6plugins
 EOF
 
-cp -v sparta-gui-v${VERSION}.pdf ${DESTDIR}/SPARTA-GUI-Manual.pdf
+# bundle the manual PDF if it was built; the NSIS script globs *.pdf so at
+# least one must be present in the staging dir (the workflow drops in a small
+# placeholder that points at the online manual when the full PDF is not built)
+if [ -f sparta-gui-v${VERSION}.pdf ]
+then \
+    cp -v sparta-gui-v${VERSION}.pdf ${DESTDIR}/SPARTA-GUI-Manual.pdf
+fi
 cp -v ${SRCDIR}/LICENSE ${DESTDIR}/LICENSE.txt
 unix2dos ${DESTDIR}/LICENSE.txt
 cp -v ${SRCDIR}/packaging/sparta-gui.nsis ${SRCDIR}/packaging/FileAssociation.nsh ${DESTDIR}
