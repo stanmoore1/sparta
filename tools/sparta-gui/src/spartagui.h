@@ -51,6 +51,8 @@ class SlideShow;
 class RemoteJobManager;
 class RemoteJobsPanel;
 class SweepPanel;
+class RunHistory;
+class HistoryPanel;
 class StdCapture;
 class URLDownloader;
 class WelcomeScreen;
@@ -278,6 +280,9 @@ private slots:
     /** @brief Show the docked Parametric Sweep panel */
     void runSweep();
 
+    /** @brief Show the docked Run History panel */
+    void showRunHistory();
+
     /** @brief Show about dialog */
     void about();
 
@@ -404,6 +409,12 @@ private:
     void ensureJobsPanel();
     /** @brief Lazily create + host the docked Parametric Sweep panel */
     void ensureSweepPanel();
+    /** @brief Lazily create the RunHistory controller */
+    void ensureHistory();
+    /** @brief Lazily create + host the docked Run History panel */
+    void ensureHistoryPanel();
+    /** @brief Archive the just-finished run if archiving is enabled */
+    void archiveFinishedRun(bool success);
 
     /** @brief Show the welcome screen in the central area (rebuilding its recent
      *  files list and example gallery first) */
@@ -440,6 +451,8 @@ private:
     RemoteJobManager *remoteJobs = nullptr;  ///< Controller for cluster jobs (lazy)
     RemoteJobsPanel *jobsPanel = nullptr;    ///< Docked Cluster Jobs panel (lazy)
     SweepPanel *sweepPanel = nullptr;        ///< Docked Parametric Sweep panel (lazy)
+    RunHistory *history = nullptr;           ///< Run archive controller (lazy)
+    HistoryPanel *historyPanel = nullptr;    ///< Docked Run History panel (lazy)
 
     /**
      * @brief Container for inspect dialog widgets

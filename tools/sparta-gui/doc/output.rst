@@ -334,3 +334,35 @@ command
 
 at the beginning of an input file. That would record logs to files
 ``logfile-1.txt``, ``logfile-2.txt``, and so on for successive runs.
+
+.. _run_history:
+
+Run History and Reports
+-----------------------
+
+.. index:: run history
+.. index:: provenance
+.. index:: report
+.. index:: reproducibility
+
+For traceability and reproducibility, SPARTA-GUI can archive each finished
+run and regenerate a self-contained report from it later.  Open the *Run
+History* panel from *Run → Run History...* (or the *Run History* toggle in the
+*View* menu).
+
+Archiving is **opt-in**: nothing is copied until you enable *Archive finished
+runs here automatically* in the panel.  Once enabled, every completed run is
+saved under the application data directory with a copy of the input deck, the
+captured log, run metadata (timestamp, working directory, status, SPARTA
+version, run number), and any images produced during the run.
+
+Each archived run is one row in the panel.  Selecting a run and clicking
+*Report (HTML)* or *Report (PDF)* writes a single, self-contained report — the
+metadata table, the input deck, the log, and the run's images inlined as
+``data:`` URIs so the file can be shared on its own — and opens it.  *Open
+Folder* reveals the run's archive directory, and *Delete* removes it.
+
+.. note::
+
+   When archiving is enabled during a :ref:`parametric sweep
+   <parametric_sweep>`, every individual run of the sweep is archived.

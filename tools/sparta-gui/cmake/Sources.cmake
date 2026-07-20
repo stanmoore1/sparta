@@ -79,6 +79,10 @@ set(PROJECT_SOURCES
   ${CMAKE_SOURCE_DIR}/src/remotejobmanager.h
   ${CMAKE_SOURCE_DIR}/src/remotejobspanel.cpp
   ${CMAKE_SOURCE_DIR}/src/remotejobspanel.h
+  ${CMAKE_SOURCE_DIR}/src/runarchive.cpp
+  ${CMAKE_SOURCE_DIR}/src/runarchive.h
+  ${CMAKE_SOURCE_DIR}/src/runhistory.cpp
+  ${CMAKE_SOURCE_DIR}/src/runhistory.h
   ${CMAKE_SOURCE_DIR}/src/preferences.cpp
   ${CMAKE_SOURCE_DIR}/src/preferences.h
   ${CMAKE_SOURCE_DIR}/src/qaddon.cpp

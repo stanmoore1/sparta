@@ -88,6 +88,9 @@ public:
      */
     [[nodiscard]] int imageCount() const { return imagefiles.size(); }
 
+    /** @brief The image file paths currently in the slide show (for archiving) */
+    [[nodiscard]] QStringList images() const { return imagefiles; }
+
     /**
      * @brief Clear all images from slideshow
      */

@@ -29,6 +29,7 @@
 #include "preferences.h"
 #include "remotejobmanager.h"
 #include "remotejobspanel.h"
+#include "runhistory.h"
 #include "stlimportwizard.h"
 #include "sweeppanel.h"
 #include "setvariables.h"
@@ -273,6 +274,8 @@ void SpartaGui::createRunMenu()
                   &SpartaGui::manageRemoteJobs);
     addMenuAction(menu, ":/icons/x-office-drawing.svg", "Parametric S&weep...", "",
                   &SpartaGui::runSweep);
+    addMenuAction(menu, ":/icons/document-open-recent.svg", "Run &History...", "",
+                  &SpartaGui::showRunHistory);
     menu->addSeparator();
 
     addMenuAction(menu, ":/icons/image-viewer.svg", "Create &Image", "Ctrl+I",
@@ -298,6 +301,7 @@ void SpartaGui::createViewMenu()
          "Ctrl+Shift+W"},
         {PanelManager::Jobs, ":/icons/utilities-terminal.svg", "Cluster &Jobs Window", ""},
         {PanelManager::Sweep, ":/icons/x-office-drawing.svg", "Parametric S&weep Window", ""},
+        {PanelManager::History, ":/icons/document-open-recent.svg", "Run &History Window", ""},
     };
     for (const auto &e : entries) {
         auto *action = panels->toggleViewAction(e.panel);
@@ -327,6 +331,7 @@ void SpartaGui::createViewMenu()
         if (panel == PanelManager::Variables && !varwindow) createVariableWindow();
         if (panel == PanelManager::Jobs) ensureJobsPanel();
         if (panel == PanelManager::Sweep) ensureSweepPanel();
+        if (panel == PanelManager::History) ensureHistoryPanel();
     });
 
     menu->addSeparator();
@@ -1802,6 +1807,9 @@ void SpartaGui::runDone()
     cpuuse->hide();
     dirstatus->show();
 
+    // archive this run for provenance if the user opted in (default off)
+    archiveFinishedRun(success);
+
     // let a parametric sweep (or any observer) advance to the next run
     emit runFinished(success);
 }
@@ -1997,6 +2005,50 @@ void SpartaGui::runSweep()
 {
     ensureSweepPanel();
     panels->openPanel(PanelManager::Sweep);
+}
+
+void SpartaGui::ensureHistory()
+{
+    if (history) return;
+    history = new RunHistory(this);
+    connect(history, &RunHistory::message, this,
+            [this](const QString &m) { statusBar()->showMessage(m, 8000); });
+}
+
+void SpartaGui::ensureHistoryPanel()
+{
+    ensureHistory();
+    if (historyPanel) return;
+    historyPanel = new HistoryPanel(this, history);
+    panels->setPanelWidget(PanelManager::History, historyPanel, "Run History");
+}
+
+void SpartaGui::showRunHistory()
+{
+    ensureHistoryPanel();
+    panels->openPanel(PanelManager::History);
+}
+
+void SpartaGui::archiveFinishedRun(bool success)
+{
+    if (!QSettings().value(Keys::ARCHIVE_RUNS, false).toBool()) return;
+    ensureHistory();
+
+    RunArchive::RunRecord rec;
+    rec.id = QDateTime::currentDateTime().toString("yyyyMMdd-hhmmss") + "-" +
+             QString::number(runCounter);
+    rec.timestamp = QDateTime::currentDateTime().toString(Qt::ISODate);
+    rec.deckName = currentFile.isEmpty() ? "buffer" : currentFile;
+    rec.deckText = textEdit->toPlainText();
+    rec.workDir = currentDir;
+    rec.status = success ? "ok" : "failed";
+    if (logwindow) rec.logText = logwindow->toPlainText();
+    rec.metadata.insert("Run number", QString::number(runCounter));
+    rec.metadata.insert("SPARTA version", QString::number(sparta.version()));
+
+    QStringList images;
+    if (slideshow) images = slideshow->images();
+    history->archive(rec, images);
 }
 
 void SpartaGui::submitRemote()

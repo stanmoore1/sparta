@@ -165,6 +165,17 @@ target_link_libraries(test_sweepspec PRIVATE GTest::gtest_main Qt6::Widgets)
 
 gtest_discover_tests(test_sweepspec)
 
+# Test executable for the run-provenance/report core
+add_executable(test_runarchive
+  test_runarchive.cpp
+  ${CMAKE_SOURCE_DIR}/src/runarchive.cpp
+)
+
+target_include_directories(test_runarchive PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_runarchive PRIVATE GTest::gtest_main Qt6::Widgets)
+
+gtest_discover_tests(test_runarchive)
+
 # Test executable for the movie probing and frame selection helpers
 add_executable(test_movieimport
   test_movieimport.cpp

@@ -41,7 +41,7 @@ constexpr int PROGRESS_MAXIMUM      = 1000; ///< Maximum value for QProgressBar
 // ---- Docked panel layout --------------------------------------------------
 /** bump whenever dock objectNames or the panel topology change, so a saved
  *  layout blob from an older version is discarded instead of misapplied */
-constexpr int DOCK_LAYOUT_VERSION = 3;
+constexpr int DOCK_LAYOUT_VERSION = 4;
 
 // ---- File limits ---------------------------------------------------------
 constexpr int NUM_RECENT_FILES = 5; ///< Number of entries in the recent files list
@@ -187,6 +187,7 @@ inline const QString BOXDIAM      = QStringLiteral("boxdiam");
 inline const QString CHARTREPLACE = QStringLiteral("chartreplace");
 inline const QString CHARTX       = QStringLiteral("chartx");
 inline const QString CHARTY       = QStringLiteral("charty");
+inline const QString ARCHIVE_RUNS = QStringLiteral("archive_runs");
 inline const QString COLOR        = QStringLiteral("color");
 inline const QString COLORMAP     = QStringLiteral("colormap");
 inline const QString BONDCOLORMAP = QStringLiteral("bondcolormap");
