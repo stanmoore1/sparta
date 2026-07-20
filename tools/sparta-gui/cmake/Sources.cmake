@@ -65,6 +65,10 @@ set(PROJECT_SOURCES
   ${CMAKE_SOURCE_DIR}/src/movieimport.h
   ${CMAKE_SOURCE_DIR}/src/plotdata.cpp
   ${CMAKE_SOURCE_DIR}/src/plotdata.h
+  ${CMAKE_SOURCE_DIR}/src/paraviewdialog.cpp
+  ${CMAKE_SOURCE_DIR}/src/paraviewdialog.h
+  ${CMAKE_SOURCE_DIR}/src/paraviewexport.cpp
+  ${CMAKE_SOURCE_DIR}/src/paraviewexport.h
   ${CMAKE_SOURCE_DIR}/src/plotdatadialog.cpp
   ${CMAKE_SOURCE_DIR}/src/plotdatadialog.h
   ${CMAKE_SOURCE_DIR}/src/preferences.cpp

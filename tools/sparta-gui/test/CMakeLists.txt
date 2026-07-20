@@ -131,6 +131,17 @@ target_link_libraries(test_stlimport PRIVATE GTest::gtest_main Qt6::Widgets)
 
 gtest_discover_tests(test_stlimport)
 
+# Test executable for the ParaView-export command builders
+add_executable(test_paraviewexport
+  test_paraviewexport.cpp
+  ${CMAKE_SOURCE_DIR}/src/paraviewexport.cpp
+)
+
+target_include_directories(test_paraviewexport PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_paraviewexport PRIVATE GTest::gtest_main Qt6::Widgets)
+
+gtest_discover_tests(test_paraviewexport)
+
 # Test executable for the movie probing and frame selection helpers
 add_executable(test_movieimport
   test_movieimport.cpp

@@ -24,6 +24,7 @@
 #include "spartarunner.h"
 #include "logwindow.h"
 #include "plotdata.h"
+#include "paraviewdialog.h"
 #include "plotdatadialog.h"
 #include "preferences.h"
 #include "stlimportwizard.h"
@@ -206,6 +207,8 @@ void SpartaGui::createFileMenu()
                   &SpartaGui::inspect);
     addMenuAction(menu, ":/icons/vdw-style.svg", "Import Sur&face (STL / SPARTA)...", "Ctrl+Shift+T",
                   &SpartaGui::importSurface);
+    addMenuAction(menu, ":/icons/image-x-generic.svg", "Export to Para&View...", "Ctrl+Shift+V",
+                  &SpartaGui::exportParaview);
     menu->addSeparator();
 
     recentActions.resize(Cfg::NUM_RECENT_FILES);
@@ -1933,6 +1936,18 @@ void SpartaGui::doRun(bool use_buffer)
     logupdater = new QTimer(this);
     connect(logupdater, &QTimer::timeout, this, &SpartaGui::logUpdate);
     logupdater->start(settings.value(Keys::UPDFREQ, Cfg::DATA_UPDATE_INTERVAL_DEFAULT).toInt());
+}
+
+void SpartaGui::exportParaview()
+{
+    // pre-fill the file pickers from the current deck's directory
+    QString deckDir = currentDir;
+    if (deckDir.isEmpty() && !currentFile.isEmpty())
+        deckDir = QFileInfo(currentFile).absolutePath();
+    if (deckDir.isEmpty()) deckDir = QDir::currentPath();
+
+    ParaViewExportDialog dlg(this, deckDir);
+    dlg.exec();
 }
 
 void SpartaGui::importSurface()

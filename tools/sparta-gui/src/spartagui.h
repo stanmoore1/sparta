@@ -244,6 +244,9 @@ private slots:
     /** @brief Open the STL / SPARTA-surface import wizard */
     void importSurface();
 
+    /** @brief Open the ParaView export dialog (surf2paraview / grid2paraview) */
+    void exportParaview();
+
     /** @brief Show about dialog */
     void about();
 
