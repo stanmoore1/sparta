@@ -286,6 +286,9 @@ private slots:
     /** @brief Show the docked Run History panel */
     void showRunHistory();
 
+    /** @brief Browse restart files and continue a run from a selected one */
+    void continueRestart();
+
     /** @brief Show about dialog */
     void about();
 

@@ -44,9 +44,11 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QDialogButtonBox>
+#include <QHBoxLayout>
 #include <QListWidget>
 #include <QPlainTextEdit>
 #include <QPushButton>
+#include <QSpinBox>
 #include <QSplitter>
 #include <QVBoxLayout>
 #include <QByteArray>
@@ -290,6 +292,8 @@ void SpartaGui::createRunMenu()
                   &SpartaGui::runSweep);
     addMenuAction(menu, ":/icons/document-open-recent.svg", "Run &History...", "",
                   &SpartaGui::showRunHistory);
+    addMenuAction(menu, ":/icons/binary-file-icon.svg", "Continue from &Restart...", "",
+                  &SpartaGui::continueRestart);
     menu->addSeparator();
 
     addMenuAction(menu, ":/icons/image-viewer.svg", "Create &Image", "Ctrl+I",
@@ -2208,6 +2212,77 @@ void SpartaGui::exportParaview()
 
     ParaViewExportDialog dlg(this, deckDir);
     dlg.exec();
+}
+
+void SpartaGui::continueRestart()
+{
+    QDir dir(currentDir.isEmpty() ? QDir::currentPath() : currentDir);
+    const QStringList filters = {"*.restart", "*.restart.*", "*restart*", "*.spart"};
+    const QFileInfoList found = dir.entryInfoList(filters, QDir::Files, QDir::Time);
+
+    QDialog dlg(this);
+    dlg.setWindowTitle("Continue from Restart");
+    dlg.resize(680, 420);
+    auto *outer = new QVBoxLayout(&dlg);
+    outer->addWidget(new QLabel("Restart files in the working directory:", &dlg));
+    auto *list = new QListWidget(&dlg);
+    auto addFile = [&](const QFileInfo &fi) {
+        auto *it = new QListWidgetItem(QString("%1    (%2 KB, %3)")
+                                           .arg(fi.fileName())
+                                           .arg(fi.size() / 1024)
+                                           .arg(fi.lastModified().toString("yyyy-MM-dd hh:mm")));
+        it->setData(Qt::UserRole, fi.absoluteFilePath());
+        list->addItem(it);
+    };
+    for (const auto &fi : found) addFile(fi);
+    outer->addWidget(list, 1);
+
+    auto *steprow = new QHBoxLayout;
+    steprow->addWidget(new QLabel("Additional steps:", &dlg));
+    auto *steps = new QSpinBox(&dlg);
+    steps->setRange(0, 2000000000);
+    steps->setValue(1000);
+    steprow->addWidget(steps);
+    steprow->addStretch();
+    auto *browseBtn = new QPushButton("Browse...", &dlg);
+    steprow->addWidget(browseBtn);
+    outer->addLayout(steprow);
+
+    auto *bb = new QDialogButtonBox(&dlg);
+    auto *inspectBtn = bb->addButton("Inspect", QDialogButtonBox::ActionRole);
+    bb->addButton("Insert Continue Commands", QDialogButtonBox::AcceptRole);
+    bb->addButton(QDialogButtonBox::Close);
+    outer->addWidget(bb);
+
+    connect(browseBtn, &QPushButton::clicked, &dlg, [&]() {
+        const QString f =
+            QFileDialog::getOpenFileName(&dlg, "Select restart file", dir.absolutePath());
+        if (f.isEmpty()) return;
+        addFile(QFileInfo(f));
+        list->setCurrentRow(list->count() - 1);
+    });
+    connect(inspectBtn, &QPushButton::clicked, &dlg, [&]() {
+        if (auto *cur = list->currentItem()) inspectFile(cur->data(Qt::UserRole).toString());
+    });
+    connect(bb, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+    connect(bb, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+    if (list->count()) list->setCurrentRow(0);
+
+    if (dlg.exec() != QDialog::Accepted) return;
+    auto *cur = list->currentItem();
+    if (!cur) {
+        warning(this, "Continue from Restart", "No restart file selected.");
+        return;
+    }
+    const QString path = cur->data(Qt::UserRole).toString();
+    const QString rel = QDir(currentDir).relativeFilePath(path);
+    // compose the minimal continue deck and insert it for review before running
+    const QString cmds = QString("read_restart %1\nrun %2\n").arg(rel).arg(steps->value());
+    showEditor();
+    QTextCursor c = textEdit->textCursor();
+    c.insertText(cmds);
+    textEdit->setTextCursor(c);
+    statusBar()->showMessage("Inserted read_restart + run; review and Run to continue.", 8000);
 }
 
 void SpartaGui::insertSnippet()

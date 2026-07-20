@@ -174,6 +174,14 @@ The *Parametric Sweep...* entry opens the :ref:`Parameter Sweep panel
 <parametric_sweep>`, which runs the current deck repeatedly while varying
 index variables over ranges and tabulates a chosen thermo quantity per run.
 
+The *Continue from Restart...* entry opens a small browser of the `SPARTA
+restart <https://sparta.github.io/doc/write_restart.html>`_ files in the
+working directory (with their size and modification time).  A selected file
+can be inspected (see :ref:`Inspecting restart files <inspect_restart>`) or
+used to continue a run: choosing *Insert Continue Commands* inserts a
+``read_restart <file>`` line followed by a ``run`` command for the requested
+number of additional steps at the editor cursor, ready to review and run.
+
 The *Create Image* entry will send a `dump image
 <https://sparta.github.io/doc/dump_image.html>`_ command to the SPARTA
 instance, read the resulting file, and show it in an *Image Viewer*
