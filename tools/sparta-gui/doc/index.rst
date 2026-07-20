@@ -110,6 +110,7 @@ User's Guide
    basic_usage
    output
    visualization
+   remote
    editor
    menus
    dialogs

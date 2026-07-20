@@ -164,6 +164,12 @@ rows for additional variables can be added through the *Add Row*
 button and existing rows can be deleted by clicking on the *X* icons
 on the right.
 
+The *Submit to Cluster...* and *Manage Cluster Jobs...* entries drive
+:ref:`remote/cluster execution <remote_execution>`: the former opens a
+dialog to submit the current input deck to an HPC scheduler (Slurm, PBS, or
+Flux) over SSH, and the latter shows the docked *Cluster Jobs* panel that
+tracks submitted jobs, follows their logs, and pulls results back.
+
 The *Create Image* entry will send a `dump image
 <https://sparta.github.io/doc/dump_image.html>`_ command to the SPARTA
 instance, read the resulting file, and show it in an *Image Viewer*

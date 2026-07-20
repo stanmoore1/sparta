@@ -36,9 +36,10 @@ namespace {
 // stable, unique object names -- required by CDockManager::saveState/restoreState
 const char *const PANEL_OBJECT_NAME[PanelManager::NPanels] = {"dockOutput", "dockCharts",
                                                               "dockImage", "dockSlideShow",
-                                                              "dockVariables"};
+                                                              "dockVariables", "dockJobs"};
 const char *const PANEL_TITLE[PanelManager::NPanels] = {"Output", "Charts", "Image",
-                                                        "Slide Show", "Variables"};
+                                                        "Slide Show", "Variables",
+                                                        "Cluster Jobs"};
 
 // Chart/Image/Slide Show host widgets manage their own scrolling/zooming and
 // must not be wrapped in an extra QScrollArea; Output (QPlainTextEdit) and
@@ -216,6 +217,9 @@ void PanelManager::applyDefaultLayout()
     dm->addDockWidgetTabToArea(docks[Slide], imageArea);
     CDockAreaWidget *logArea = dm->addDockWidget(ads::BottomDockWidgetArea, docks[Log]);
     dm->addDockWidgetTabToArea(docks[Variables], logArea);
+    // on-demand tool panels (Cluster Jobs) live tabbed with the Output area but
+    // start hidden; they are shown from the menu when needed
+    dm->addDockWidgetTabToArea(docks[Jobs], logArea);
 
     applySplitterProportions();
 

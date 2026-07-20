@@ -27,6 +27,8 @@
 #include "paraviewdialog.h"
 #include "plotdatadialog.h"
 #include "preferences.h"
+#include "remotejobmanager.h"
+#include "remotejobspanel.h"
 #include "stlimportwizard.h"
 #include "setvariables.h"
 #include "slideshow.h"
@@ -264,6 +266,12 @@ void SpartaGui::createRunMenu()
                   &SpartaGui::editVariables);
     menu->addSeparator();
 
+    addMenuAction(menu, ":/icons/system-run.svg", "Submit to &Cluster...", "",
+                  &SpartaGui::submitRemote);
+    addMenuAction(menu, ":/icons/utilities-terminal.svg", "Manage Cluster &Jobs...", "",
+                  &SpartaGui::manageRemoteJobs);
+    menu->addSeparator();
+
     addMenuAction(menu, ":/icons/image-viewer.svg", "Create &Image", "Ctrl+I",
                   &SpartaGui::renderImage);
 }
@@ -285,6 +293,7 @@ void SpartaGui::createViewMenu()
         {PanelManager::Slide, ":/icons/image-x-generic.svg", "&Slide Show Window", "Ctrl+L"},
         {PanelManager::Variables, ":/icons/utilities-terminal.svg", "&Variables Window",
          "Ctrl+Shift+W"},
+        {PanelManager::Jobs, ":/icons/utilities-terminal.svg", "Cluster &Jobs Window", ""},
     };
     for (const auto &e : entries) {
         auto *action = panels->toggleViewAction(e.panel);
@@ -312,6 +321,7 @@ void SpartaGui::createViewMenu()
             panels->setPanelWidget(PanelManager::Slide, slideshow, "Slide Show");
         }
         if (panel == PanelManager::Variables && !varwindow) createVariableWindow();
+        if (panel == PanelManager::Jobs) ensureJobsPanel();
     });
 
     menu->addSeparator();
@@ -759,6 +769,10 @@ SpartaGui::SpartaGui(QWidget *parent, const QString &filename, int width, int he
 
     // apply https proxy setting: prefer environment variable or fall back to preferences value
     applyProxySetting(sparta, settings);
+
+    // start the remote-job manager so previously-submitted cluster jobs are
+    // reattached and polled again from launch (the panel is still created lazily)
+    ensureRemoteJobs();
 
     // finally show the window
     showNormal();
@@ -1936,6 +1950,56 @@ void SpartaGui::doRun(bool use_buffer)
     logupdater = new QTimer(this);
     connect(logupdater, &QTimer::timeout, this, &SpartaGui::logUpdate);
     logupdater->start(settings.value(Keys::UPDFREQ, Cfg::DATA_UPDATE_INTERVAL_DEFAULT).toInt());
+}
+
+void SpartaGui::ensureRemoteJobs()
+{
+    if (remoteJobs) return;
+    remoteJobs = new RemoteJobManager(this);
+    connect(remoteJobs, &RemoteJobManager::message, this,
+            [this](const QString &m) { statusBar()->showMessage(m, 8000); });
+}
+
+void SpartaGui::ensureJobsPanel()
+{
+    ensureRemoteJobs();
+    if (jobsPanel) return;
+    jobsPanel = new RemoteJobsPanel(this, remoteJobs);
+    panels->setPanelWidget(PanelManager::Jobs, jobsPanel, "Cluster Jobs");
+    connect(jobsPanel, &RemoteJobsPanel::submitRequested, this, &SpartaGui::submitRemote);
+}
+
+void SpartaGui::manageRemoteJobs()
+{
+    ensureJobsPanel();
+    panels->openPanel(PanelManager::Jobs);
+}
+
+void SpartaGui::submitRemote()
+{
+    ensureJobsPanel();
+    if (currentFile.isEmpty() || currentFile == "*unknown*") {
+        warning(this, "Submit to Cluster",
+                "Save the input deck to a file before submitting it to a cluster.");
+        return;
+    }
+    // make sure the on-disk deck matches the buffer
+    if (textEdit->document()->isModified()) save();
+    if (textEdit->document()->isModified()) return; // save was cancelled
+
+    const QString deckPath = QDir(currentDir).absoluteFilePath(currentFile);
+    RemoteSubmitDialog dlg(this, remoteJobs, deckPath, currentDir);
+    if (dlg.exec() != QDialog::Accepted) return;
+    if (dlg.profileName().isEmpty()) {
+        warning(this, "Submit to Cluster",
+                "No connection profile selected. Create one with \"Manage...\" first.");
+        return;
+    }
+    Remote::RemoteJob draft;
+    draft.profileName = dlg.profileName();
+    draft.params = dlg.params();
+    remoteJobs->submit(draft, dlg.filesToStage());
+    panels->openPanel(PanelManager::Jobs);
 }
 
 void SpartaGui::exportParaview()

@@ -48,6 +48,8 @@ class SpartaRunner;
 class LogWindow;
 class Preferences;
 class SlideShow;
+class RemoteJobManager;
+class RemoteJobsPanel;
 class StdCapture;
 class URLDownloader;
 class WelcomeScreen;
@@ -247,6 +249,12 @@ private slots:
     /** @brief Open the ParaView export dialog (surf2paraview / grid2paraview) */
     void exportParaview();
 
+    /** @brief Open the Submit-to-Cluster dialog for remote execution */
+    void submitRemote();
+
+    /** @brief Show the docked Cluster Jobs panel */
+    void manageRemoteJobs();
+
     /** @brief Show about dialog */
     void about();
 
@@ -367,6 +375,11 @@ private:
      * demand -- see the PanelManager::panelOpened handler in createViewMenu(). */
     void createVariableWindow();
 
+    /** @brief Lazily create the RemoteJobManager (starts polling / reattach) */
+    void ensureRemoteJobs();
+    /** @brief Lazily create + host the docked Cluster Jobs panel */
+    void ensureJobsPanel();
+
     /** @brief Show the welcome screen in the central area (rebuilding its recent
      *  files list and example gallery first) */
     void showWelcome();
@@ -399,6 +412,8 @@ private:
     Preferences *prefdialog; ///< Preferences dialog
     QLabel *spartastatus;    ///< Status bar label for SPARTA state
     QLabel *varwindow;       ///< Window showing variable definitions
+    RemoteJobManager *remoteJobs = nullptr;  ///< Controller for cluster jobs (lazy)
+    RemoteJobsPanel *jobsPanel = nullptr;    ///< Docked Cluster Jobs panel (lazy)
 
     /**
      * @brief Container for inspect dialog widgets
