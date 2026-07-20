@@ -187,6 +187,7 @@ inline const QString BOXDIAM      = QStringLiteral("boxdiam");
 inline const QString CHARTREPLACE = QStringLiteral("chartreplace");
 inline const QString CHARTX       = QStringLiteral("chartx");
 inline const QString CHARTY       = QStringLiteral("charty");
+inline const QString COLOR_SCHEME = QStringLiteral("color_scheme"); // editor syntax palette
 inline const QString ARCHIVE_RUNS = QStringLiteral("archive_runs");
 inline const QString AUTOSAVE_INTERVAL = QStringLiteral("autosave_interval"); // seconds; 0 = off
 inline const QString LAST_FILE    = QStringLiteral("last_file");

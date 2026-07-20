@@ -14,6 +14,7 @@
 #include "codeeditor.h"
 #include "constants.h"
 #include "helpers.h"
+#include "highlighter.h"
 #include "spartagui.h"
 #include "spartawrapper.h"
 #include "logwindow.h"
@@ -228,6 +229,13 @@ void Preferences::accept()
     box = tabWidget->findChild<QCheckBox *>("savval");
     if (box) settings->setValue(Keys::AUTOSAVE, box->isChecked());
     settings->endGroup();
+
+    // editor syntax color scheme (index into Highlighter::schemeIds())
+    if (auto *scheme = tabWidget->findChild<QComboBox *>("colorscheme")) {
+        const QStringList ids = Highlighter::schemeIds();
+        const int idx         = qBound(0, scheme->currentIndex(), ids.size() - 1);
+        settings->setValue(Keys::COLOR_SCHEME, ids.at(idx));
+    }
 
     // chart window settings
 
@@ -886,6 +894,17 @@ EditorTab::EditorTab(QSettings *_settings, QWidget *parent) : QWidget(parent), s
     savval->setChecked(settings->value(Keys::AUTOSAVE, false).toBool());
     settings->endGroup();
 
+    // syntax highlighting color scheme (stored outside the reformat group)
+    auto *schemelbl = new QLabel("Syntax color scheme:");
+    auto *schemeval = new QComboBox;
+    schemeval->setObjectName("colorscheme");
+    schemeval->addItems(Highlighter::schemeLabels());
+    schemeval->setToolTip("Color palette used for syntax highlighting in the editor");
+    const QString curscheme =
+        settings->value(Keys::COLOR_SCHEME, Highlighter::defaultScheme()).toString();
+    const int schemeidx = Highlighter::schemeIds().indexOf(curscheme);
+    schemeval->setCurrentIndex(schemeidx < 0 ? 0 : schemeidx);
+
     int i = 0;
     grid->addWidget(reformat, i++, 0, 1, 2, Qt::AlignTop | Qt::AlignHCenter);
     grid->addWidget(cmdlbl, i, 0, Qt::AlignTop);
@@ -903,6 +922,8 @@ EditorTab::EditorTab(QSettings *_settings, QWidget *parent) : QWidget(parent), s
     grid->addWidget(new QLabel(" "), i++, 0);
     grid->addWidget(savlbl, i, 0, Qt::AlignTop);
     grid->addWidget(savval, i++, 1, Qt::AlignVCenter);
+    grid->addWidget(schemelbl, i, 0, Qt::AlignTop);
+    grid->addWidget(schemeval, i++, 1, Qt::AlignTop);
 
     grid->addItem(new QSpacerItem(100, 100, QSizePolicy::Minimum, QSizePolicy::Expanding), i, 0);
     grid->addItem(new QSpacerItem(100, 100, QSizePolicy::Minimum, QSizePolicy::Expanding), i, 1);

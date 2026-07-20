@@ -22,6 +22,27 @@ commands, styles, numbers, strings, variable references, and comments
 are colored differently, and lines that are recognized as invalid are
 flagged with an inline warning.
 
+.. index:: color scheme
+.. index:: syntax highlighting; color scheme
+
+The palette used for syntax highlighting can be selected in the
+*Preferences* dialog (the *Syntax color scheme* drop-down on the
+*Editor Settings* tab).  Four schemes are provided:
+
+- **VS Code** (the default) reproduces the familiar *Light+*/*Dark+*
+  colors of the Visual Studio Code editor.
+- **Solarized** uses the precision palette by Ethan Schoonover, a
+  widely adopted cross-editor color standard.
+- **One (Atom)** reproduces the *One Light*/*One Dark* colors from the
+  Atom editor.
+- **Classic (legacy)** is the original SPARTA-GUI palette.
+
+Each scheme automatically switches between a light and a dark variant
+to match the application appearance theme, and only
+changes the token colors (comments are always set apart with an italic,
+muted color rather than an attention-grabbing one).  Changing the scheme
+takes effect immediately, without restarting SPARTA-GUI.
+
 .. index:: auto-save
 
 The editor has an auto-save mode that can be enabled or disabled in the

@@ -44,6 +44,22 @@ public:
     Highlighter &operator=(const Highlighter &) = delete;
     Highlighter &operator=(Highlighter &&)      = delete;
 
+    /**
+     * @brief Switch the syntax color palette and re-highlight the document
+     * @param scheme scheme id (see @ref schemeIds); unknown ids fall back to the default
+     *
+     * Only the token foreground colors change; the light/dark variant is
+     * chosen automatically from the current application theme.
+     */
+    void applyScheme(const QString &scheme);
+
+    /// @brief Machine ids of the available color schemes (stored in QSettings)
+    static QStringList schemeIds();
+    /// @brief Human-readable labels for the schemes, parallel to @ref schemeIds
+    static QStringList schemeLabels();
+    /// @brief The default scheme id used when none is stored
+    static QString defaultScheme();
+
 protected:
     /**
      * @brief Highlight a single block (line) of text
@@ -74,6 +90,9 @@ private:
     QTextCharFormat formatString;             ///< Format for strings
 
     bool in_triple; ///< State flag for multi-line triple-quoted strings
+
+    /// @brief Apply a scheme's colors to the QTextCharFormat members (no rehighlight)
+    void setFormats(const QString &scheme);
 };
 #endif
 // Local Variables:

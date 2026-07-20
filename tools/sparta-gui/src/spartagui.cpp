@@ -2823,6 +2823,11 @@ void SpartaGui::preferences()
         textEdit->setReformatOnReturn(settings.value(Keys::RETURN, false).toBool());
         textEdit->setAutoComplete(settings.value(Keys::AUTOMATIC, true).toBool());
         settings.endGroup();
+        // the editor syntax color scheme may have changed: apply it live so the
+        // choice takes effect immediately without requiring a restart
+        if (highlighter)
+            highlighter->applyScheme(
+                settings.value(Keys::COLOR_SCHEME, Highlighter::defaultScheme()).toString());
         // the examples folder setting may have changed
         buildExampleMenu();
     }
