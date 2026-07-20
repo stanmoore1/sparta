@@ -385,6 +385,12 @@ ImageViewer::ImageViewer(const QString &fileName, SpartaWrapper *_sparta, Sparta
     // match the first-row controls (menu bar and size fields) to the toolbar
     // button height so both rows line up and the layout looks balanced
     menuBar->setFixedHeight(buttonhint.height());
+    // This viewer is embedded as a dock panel of the main window, so its menu
+    // bar must render inline in the panel and NOT be promoted to the native
+    // (global) macOS menu bar -- otherwise focusing the Image panel would
+    // replace the main window's menus with just this viewer's File menu, with
+    // no way back.
+    if (spartagui) menuBar->setNativeMenuBar(false);
     xval->setFixedHeight(buttonhint.height());
     yval->setFixedHeight(buttonhint.height());
 

@@ -183,7 +183,11 @@ void WelcomeScreen::rebuildExamples()
             // only decks with an official gallery thumbnail are shown
             const QPixmap thumb = thumbnailFor(input.absoluteFilePath());
             if (thumb.isNull()) continue;
-            const QString label = sub.fileName() + "/" + input.fileName();
+            // label with just the example name: drop the leading "in." from the
+            // deck file so "ambi/in.ambi" reads as "ambi", "emit/in.emit.face"
+            // as "emit.face", etc. (the full path stays in the tooltip)
+            QString label = input.fileName();
+            if (label.startsWith("in.")) label.remove(0, 3);
             auto *item = new QListWidgetItem(QIcon(thumb), label);
             item->setData(Qt::UserRole, input.absoluteFilePath());
             item->setToolTip(input.absoluteFilePath());

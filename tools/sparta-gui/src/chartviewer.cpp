@@ -199,7 +199,8 @@ void ChartWindow::applySliderWindow()
 ChartWindow::ChartWindow(const QString &_filename, SpartaGui *_spartagui, QWidget *parent) :
     // the menu bar does not take ownership of the added file menu, so it must
     // be created with the menu bar as its parent to be freed along with it
-    QWidget(parent), spartagui(_spartagui), menu(new QMenuBar), file(new QMenu("&File", menu)),
+    QWidget(parent), spartagui(_spartagui), menu(new QMenuBar),
+    file(new QMenu(_spartagui ? "&Graph" : "&File", menu)),
     smooth(nullptr), window(nullptr), order(nullptr), chartTitle(nullptr), chartYlabel(nullptr),
     chartXlabel(nullptr), units(nullptr), norm(nullptr), filename(_filename), viewer(nullptr),
     active(-1)
@@ -218,6 +219,13 @@ ChartWindow::ChartWindow(const QString &_filename, SpartaGui *_spartagui, QWidge
 
     menu->addMenu(file);
     menu->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Minimum);
+    // In live-simulation mode this ChartWindow is embedded as a dock panel of
+    // the main window, so its menu bar must render inline in the panel and NOT
+    // be promoted to the native (global) macOS menu bar -- otherwise focusing
+    // the chart panel would replace the main window's File/Edit/Run/View menus
+    // with just this Graph menu, with no way back. In standalone plot mode the
+    // ChartWindow is its own top-level window, so its menu bar stays native.
+    if (spartagui) menu->setNativeMenuBar(false);
 
     // workaround for incorrect highlight bug on macOS
     auto *dummy = new QPushButton(QIcon(), "");
