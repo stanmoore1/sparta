@@ -268,6 +268,9 @@ private slots:
     /** @brief Open the STL / SPARTA-surface import wizard */
     void importSurface();
 
+    /** @brief Open the Insert Snippet dialog and insert the chosen block */
+    void insertSnippet();
+
     /** @brief Open the ParaView export dialog (surf2paraview / grid2paraview) */
     void exportParaview();
 
@@ -416,6 +419,17 @@ private:
     /** @brief Archive the just-finished run if archiving is enabled */
     void archiveFinishedRun(bool success);
 
+    /** @brief Start the periodic crash-recovery autosave timer (if enabled) */
+    void startRecoveryTimer();
+    /** @brief Write the unsaved buffer to the recovery file (non-destructive) */
+    void writeRecoveryFile();
+    /** @brief Remove the recovery file after a clean save or exit */
+    void clearRecoveryFile();
+    /** @brief On startup, offer to recover a buffer left by a previous crash */
+    bool maybeRecoverSession();
+    /** @brief Path of the crash-recovery buffer file */
+    QString recoveryFilePath() const;
+
     /** @brief Show the welcome screen in the central area (rebuilding its recent
      *  files list and example gallery first) */
     void showWelcome();
@@ -443,6 +457,7 @@ private:
     ChartWindow *chartwindow; ///< Window for displaying charts
     SlideShow *slideshow;    ///< Window for image slideshow
     QTimer *logupdater;      ///< Timer for periodic log updates
+    QTimer *recoveryTimer = nullptr; ///< Periodic crash-recovery autosave timer
     QLabel *dirstatus;       ///< Status bar label showing current directory
     QProgressBar *progress;  ///< Progress bar for long operations
     Preferences *prefdialog; ///< Preferences dialog

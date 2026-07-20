@@ -188,6 +188,10 @@ inline const QString CHARTREPLACE = QStringLiteral("chartreplace");
 inline const QString CHARTX       = QStringLiteral("chartx");
 inline const QString CHARTY       = QStringLiteral("charty");
 inline const QString ARCHIVE_RUNS = QStringLiteral("archive_runs");
+inline const QString AUTOSAVE_INTERVAL = QStringLiteral("autosave_interval"); // seconds; 0 = off
+inline const QString LAST_FILE    = QStringLiteral("last_file");
+inline const QString RESTORE_SESSION = QStringLiteral("restore_session");
+inline const QString WINGEOMETRY  = QStringLiteral("wingeometry");
 inline const QString COLOR        = QStringLiteral("color");
 inline const QString COLORMAP     = QStringLiteral("colormap");
 inline const QString BONDCOLORMAP = QStringLiteral("bondcolormap");

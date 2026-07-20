@@ -176,6 +176,17 @@ target_link_libraries(test_runarchive PRIVATE GTest::gtest_main Qt6::Widgets)
 
 gtest_discover_tests(test_runarchive)
 
+# Test executable for the editor snippet-library parser
+add_executable(test_snippets
+  test_snippets.cpp
+  ${CMAKE_SOURCE_DIR}/src/snippets.cpp
+)
+
+target_include_directories(test_snippets PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_snippets PRIVATE GTest::gtest_main Qt6::Widgets)
+
+gtest_discover_tests(test_snippets)
+
 # Test executable for the movie probing and frame selection helpers
 add_executable(test_movieimport
   test_movieimport.cpp

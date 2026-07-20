@@ -172,3 +172,43 @@ visualization of the system in the restart.
    cluster may overload a laptop or local workstation. The *Show
    Details...* button will display a rough estimate of the additional
    memory required.
+
+.. _snippets:
+
+Snippet Library
+---------------
+
+.. index:: snippets
+.. index:: editor; snippets
+.. index:: templates
+
+Beyond single-command auto-completion, the *Edit → Insert Snippet...* dialog
+offers a library of ready-made, multi-line SPARTA command blocks for common
+tasks — a 3D or 2D flow setup, collisions, reading a surface, ablation
+(implicit surfaces), dump image/particle output, time-averaged grid stats,
+and more.  Snippets are grouped by category with a live preview; choosing one
+(or double-clicking it) inserts the block at the editor cursor.  Some snippets
+contain ``${...}`` placeholder tokens (for example a file name or step count)
+to fill in after inserting.
+
+.. _autosave_session:
+
+Autosave and Session Restore
+----------------------------
+
+.. index:: autosave
+.. index:: session restore
+.. index:: crash recovery
+
+SPARTA-GUI periodically writes any **unsaved** editor changes to a separate
+crash-recovery file (never overwriting your own file).  If the program exits
+unexpectedly, the next launch offers to recover that work.  A clean exit
+removes the recovery file, and saving your file does too.  The recovery
+interval is controlled by the ``autosave_interval`` setting (in seconds; ``0``
+disables it).  This is independent of the *Auto-save on 'Run' and 'Quit'*
+preference, which writes the buffer back to its own file.
+
+On a clean exit SPARTA-GUI also remembers the last open file and the window
+geometry, and restores them on the next launch (unless a file is given on the
+command line); set ``restore_session`` to ``false`` to disable reopening the
+last file.

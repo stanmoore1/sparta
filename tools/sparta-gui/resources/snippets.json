@@ -1,0 +1,115 @@
+[
+  {
+    "name": "3D free-stream flow",
+    "category": "Setup",
+    "description": "Box, grid, species/mixture and a free-stream inflow for a 3D case",
+    "body": [
+      "seed            12345",
+      "dimension       3",
+      "global          nrho 1.0e20 fnum 1.0e17",
+      "boundary        o p p",
+      "create_box      -1 1 -1 1 -1 1",
+      "create_grid     20 20 20",
+      "balance_grid    rcb cell",
+      "",
+      "species         air.species N2 O2",
+      "mixture         air N2 O2 vstream 1000.0 0 0 temp 300.0",
+      "",
+      "fix             in emit/face air xlo",
+      "timestep        1.0e-6"
+    ]
+  },
+  {
+    "name": "2D flow",
+    "category": "Setup",
+    "description": "Minimal 2D box + grid + mixture setup",
+    "body": [
+      "seed            12345",
+      "dimension       2",
+      "global          nrho 1.0e20 fnum 1.0e17",
+      "boundary        o p p",
+      "create_box      0 10 0 10 -0.5 0.5",
+      "create_grid     50 50 1",
+      "balance_grid    rcb cell",
+      "",
+      "species         air.species N2 O2",
+      "mixture         air N2 O2 vstream 1000.0 0 0 temp 300.0"
+    ]
+  },
+  {
+    "name": "Collisions (VSS)",
+    "category": "Physics",
+    "description": "Enable VSS collisions for the 'air' mixture",
+    "body": [
+      "collide         vss air air.vss"
+    ]
+  },
+  {
+    "name": "Read surface + collision model",
+    "category": "Geometry",
+    "description": "Read an explicit surface and assign a diffuse collision model",
+    "body": [
+      "read_surf       ${surffile}.surf",
+      "surf_collide    1 diffuse 300.0 1.0",
+      "surf_modify     all collide 1"
+    ]
+  },
+  {
+    "name": "Ablation (implicit surface)",
+    "category": "Ablation",
+    "description": "Convert a read surface to an implicit ablating surface",
+    "body": [
+      "global          surfs explicit/distributed",
+      "read_surf       ${surffile}.surf",
+      "surf_collide    1 diffuse 300.0 1.0",
+      "surf_modify     all collide 1",
+      "fix             fablate ablate all 0 0.2 random 0",
+      "create_isurf    all fablate 39.5 voxel"
+    ]
+  },
+  {
+    "name": "Dump image",
+    "category": "Output",
+    "description": "Render particles + surfaces to a PNG image sequence",
+    "body": [
+      "dump            img image all 100 image.*.ppm type type &",
+      "                surf one 0.02 size 1024 1024 zoom 1.5",
+      "dump_modify     img pad 6 scolor * gray"
+    ]
+  },
+  {
+    "name": "Dump particles",
+    "category": "Output",
+    "description": "Write per-particle attributes to a dump file",
+    "body": [
+      "dump            part particle all 100 dump.*.txt id type x y z vx vy vz"
+    ]
+  },
+  {
+    "name": "Time-averaged grid stats",
+    "category": "Diagnostics",
+    "description": "compute + fix ave/time to accumulate grid flow properties",
+    "body": [
+      "compute         g grid all species n u v w",
+      "fix             avg ave/grid all 10 100 1000 c_g[*]",
+      "dump            grid grid all 1000 grid.*.txt id f_avg[*]"
+    ]
+  },
+  {
+    "name": "Thermo output",
+    "category": "Diagnostics",
+    "description": "Standard thermodynamic output cadence and columns",
+    "body": [
+      "stats           100",
+      "stats_style     step cpu np nattempt ncoll nscoll nscheck"
+    ]
+  },
+  {
+    "name": "Run",
+    "category": "Run",
+    "description": "Advance the simulation a number of timesteps",
+    "body": [
+      "run             ${nsteps}"
+    ]
+  }
+]

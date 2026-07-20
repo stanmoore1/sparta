@@ -95,6 +95,8 @@ set(PROJECT_SOURCES
   ${CMAKE_SOURCE_DIR}/src/setvariables.h
   ${CMAKE_SOURCE_DIR}/src/slideshow.cpp
   ${CMAKE_SOURCE_DIR}/src/slideshow.h
+  ${CMAKE_SOURCE_DIR}/src/snippets.cpp
+  ${CMAKE_SOURCE_DIR}/src/snippets.h
   ${CMAKE_SOURCE_DIR}/src/stdcapture.cpp
   ${CMAKE_SOURCE_DIR}/src/stdcapture.h
   ${CMAKE_SOURCE_DIR}/src/stlimport.cpp

@@ -30,6 +30,7 @@
 #include "remotejobmanager.h"
 #include "remotejobspanel.h"
 #include "runhistory.h"
+#include "snippets.h"
 #include "stlimportwizard.h"
 #include "sweeppanel.h"
 #include "setvariables.h"
@@ -39,6 +40,15 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QDialog>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QDialogButtonBox>
+#include <QListWidget>
+#include <QPlainTextEdit>
+#include <QPushButton>
+#include <QSplitter>
+#include <QVBoxLayout>
 #include <QByteArray>
 #include <QCheckBox>
 #include <QClipboard>
@@ -238,6 +248,10 @@ void SpartaGui::createEditMenu()
         ->setEnabled(hasClipboard);
     addMenuAction(menu, ":/icons/edit-paste.svg", "&Paste", "Ctrl+V", &SpartaGui::paste)
         ->setEnabled(hasClipboard);
+    menu->addSeparator();
+
+    addMenuAction(menu, ":/icons/vdw-style.svg", "Insert &Snippet...", "",
+                  &SpartaGui::insertSnippet);
     menu->addSeparator();
 
     addMenuAction(menu, ":/icons/search.svg", "&Find and Replace...", "Ctrl+F",
@@ -703,9 +717,23 @@ SpartaGui::SpartaGui(QWidget *parent, const QString &filename, int width, int he
         openFile(filename);
     } else {
         setWindowTitle("SPARTA-GUI - Editor - *unknown*");
-        // greet the user with the welcome screen unless they turned it off
-        if (settings.value(Keys::SHOWWELCOME, true).toBool()) showWelcome();
+        // restore the previous session's window geometry
+        const QByteArray geo = settings.value(Keys::WINGEOMETRY).toByteArray();
+        if (!geo.isEmpty()) restoreGeometry(geo);
+
+        // offer to recover a buffer left by a previous crash; otherwise reopen
+        // the last session's file; otherwise greet with the welcome screen
+        bool opened = maybeRecoverSession();
+        if (!opened && settings.value(Keys::RESTORE_SESSION, true).toBool()) {
+            const QString last = settings.value(Keys::LAST_FILE).toString();
+            if (!last.isEmpty() && QFileInfo::exists(last)) {
+                openFile(last);
+                opened = true;
+            }
+        }
+        if (!opened && settings.value(Keys::SHOWWELCOME, true).toBool()) showWelcome();
     }
+    startRecoveryTimer();
 
     // start SPARTA and initialize command completion
     startSparta();
@@ -1412,6 +1440,8 @@ void SpartaGui::writeFile(const QString &fileName)
     // update list of files for completion since we may have changed the working directory
     textEdit->setFileList();
     textEdit->document()->setModified(false);
+    // the buffer now matches the file on disk; no recovery copy needed
+    clearRecoveryFile();
 }
 
 void SpartaGui::save()
@@ -1462,6 +1492,13 @@ void SpartaGui::quit()
         settings.setValue(Keys::MAINX, width());
         settings.setValue(Keys::MAINY, height());
     }
+    // persist session state for the next launch and drop the crash-recovery
+    // file (a clean exit needs no recovery)
+    settings.setValue(Keys::WINGEOMETRY, saveGeometry());
+    settings.setValue(Keys::LAST_FILE, currentFile.isEmpty()
+                                           ? QString()
+                                           : QDir(currentDir).absoluteFilePath(currentFile));
+    clearRecoveryFile();
     panels->saveLayout(settings);
     settings.sync();
 
@@ -2007,6 +2044,89 @@ void SpartaGui::runSweep()
     panels->openPanel(PanelManager::Sweep);
 }
 
+QString SpartaGui::recoveryFilePath() const
+{
+    return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) +
+           "/recovery/session.in";
+}
+
+void SpartaGui::startRecoveryTimer()
+{
+    const int secs = QSettings().value(Keys::AUTOSAVE_INTERVAL, 90).toInt();
+    if (secs <= 0) return; // disabled
+    if (!recoveryTimer) {
+        recoveryTimer = new QTimer(this);
+        connect(recoveryTimer, &QTimer::timeout, this, &SpartaGui::writeRecoveryFile);
+    }
+    recoveryTimer->start(secs * 1000);
+}
+
+void SpartaGui::writeRecoveryFile()
+{
+    // only for unsaved changes; never touches the user's real file
+    if (!textEdit->document()->isModified()) return;
+    const QString text = textEdit->toPlainText();
+    if (text.trimmed().isEmpty()) return;
+
+    const QString path = recoveryFilePath();
+    QDir().mkpath(QFileInfo(path).absolutePath());
+    QFile f(path);
+    if (f.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        f.write(text.toUtf8());
+        f.close();
+    }
+    // sidecar manifest recording where the buffer really belongs
+    QFile meta(path + ".json");
+    if (meta.open(QIODevice::WriteOnly)) {
+        QJsonObject o;
+        o["realPath"] = currentFile.isEmpty() ? QString()
+                                              : QDir(currentDir).absoluteFilePath(currentFile);
+        o["savedAt"] = QDateTime::currentDateTime().toString(Qt::ISODate);
+        meta.write(QJsonDocument(o).toJson());
+    }
+}
+
+void SpartaGui::clearRecoveryFile()
+{
+    QFile::remove(recoveryFilePath());
+    QFile::remove(recoveryFilePath() + ".json");
+}
+
+bool SpartaGui::maybeRecoverSession()
+{
+    const QString path = recoveryFilePath();
+    if (!QFileInfo::exists(path)) return false;
+
+    QString realPath, savedAt;
+    QFile meta(path + ".json");
+    if (meta.open(QIODevice::ReadOnly)) {
+        const QJsonObject o = QJsonDocument::fromJson(meta.readAll()).object();
+        realPath = o["realPath"].toString();
+        savedAt = o["savedAt"].toString();
+    }
+    const QString what = realPath.isEmpty() ? "an unsaved buffer" : realPath;
+    const auto btn = QMessageBox::question(
+        this, "Recover Unsaved Work",
+        QString("SPARTA-GUI found autosaved work from a previous session (%1%2).\n\n"
+                "Recover it into the editor?")
+            .arg(what, savedAt.isEmpty() ? "" : ", " + savedAt),
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
+    if (btn != QMessageBox::Yes) {
+        clearRecoveryFile();
+        return false;
+    }
+    QFile f(path);
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return false;
+    textEdit->setPlainText(QString::fromUtf8(f.readAll()));
+    if (!realPath.isEmpty()) {
+        currentFile = QFileInfo(realPath).fileName();
+        currentDir = QFileInfo(realPath).absolutePath();
+    }
+    textEdit->document()->setModified(true); // it is unsaved by definition
+    showEditor();
+    return true;
+}
+
 void SpartaGui::ensureHistory()
 {
     if (history) return;
@@ -2088,6 +2208,59 @@ void SpartaGui::exportParaview()
 
     ParaViewExportDialog dlg(this, deckDir);
     dlg.exec();
+}
+
+void SpartaGui::insertSnippet()
+{
+    const auto snips = Snippets::builtin();
+    if (snips.isEmpty()) {
+        warning(this, "Insert Snippet", "No snippets are available.");
+        return;
+    }
+
+    QDialog dlg(this);
+    dlg.setWindowTitle("Insert Snippet");
+    dlg.resize(700, 460);
+    auto *outer = new QVBoxLayout(&dlg);
+    auto *split = new QSplitter(Qt::Horizontal, &dlg);
+    auto *list = new QListWidget(split);
+    for (int i = 0; i < snips.size(); ++i) {
+        auto *it = new QListWidgetItem(QString("%1  —  %2").arg(snips[i].category, snips[i].name));
+        it->setData(Qt::UserRole, i);
+        it->setToolTip(snips[i].description);
+        list->addItem(it);
+    }
+    auto *preview = new QPlainTextEdit(split);
+    preview->setReadOnly(true);
+    preview->setStyleSheet("QPlainTextEdit { font-family: monospace; }");
+    split->addWidget(list);
+    split->addWidget(preview);
+    split->setStretchFactor(1, 2);
+    outer->addWidget(split, 1);
+
+    auto *bb = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
+    bb->button(QDialogButtonBox::Ok)->setText("Insert at Cursor");
+    outer->addWidget(bb);
+
+    connect(list, &QListWidget::currentItemChanged, &dlg,
+            [&, preview](QListWidgetItem *cur, QListWidgetItem *) {
+                if (!cur) { preview->clear(); return; }
+                const auto &s = snips[cur->data(Qt::UserRole).toInt()];
+                preview->setPlainText(s.description + "\n\n" + s.body);
+            });
+    connect(bb, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+    connect(bb, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+    connect(list, &QListWidget::itemDoubleClicked, &dlg, &QDialog::accept);
+    list->setCurrentRow(0);
+
+    if (dlg.exec() != QDialog::Accepted) return;
+    auto *cur = list->currentItem();
+    if (!cur) return;
+    const auto &s = snips[cur->data(Qt::UserRole).toInt()];
+    showEditor();
+    QTextCursor c = textEdit->textCursor();
+    c.insertText(s.body + "\n");
+    textEdit->setTextCursor(c);
 }
 
 void SpartaGui::importSurface()
