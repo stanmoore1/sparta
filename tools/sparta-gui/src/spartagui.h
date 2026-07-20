@@ -319,6 +319,9 @@ private slots:
     void defaults();
 
 private:
+    /** @brief Apply the stored editor color scheme to the highlighter and editor surface */
+    void applyEditorColorScheme();
+
     /** @brief Update CPU/progress/line/variable status while a run is active
      *  @return run completion in permille (1000 when not running) */
     int updateRunStatus();

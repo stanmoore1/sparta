@@ -37,11 +37,17 @@ The palette used for syntax highlighting can be selected in the
   Atom editor.
 - **Classic (legacy)** is the original SPARTA-GUI palette.
 
-Each scheme automatically switches between a light and a dark variant
-to match the application appearance theme, and only
-changes the token colors (comments are always set apart with an italic,
-muted color rather than an attention-grabbing one).  Changing the scheme
-takes effect immediately, without restarting SPARTA-GUI.
+Each scheme sets the editor background and default text color as well as
+the individual token colors, and automatically switches between a light
+and a dark variant to match the application appearance theme (the
+*Solarized*, *VS Code*, and *One* schemes use their own signature
+backgrounds; *Classic* keeps the plain theme background).  Comments are
+always set apart with an italic, muted color rather than an
+attention-grabbing one.  Changing the scheme takes effect immediately,
+without restarting SPARTA-GUI.
+
+A SPARTA-GUI logo is shown as a placeholder while the editor is empty;
+it disappears as soon as the buffer contains any text.
 
 .. index:: auto-save
 

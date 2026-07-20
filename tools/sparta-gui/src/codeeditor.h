@@ -13,12 +13,14 @@
 #define CODEEDITOR_H
 
 #include <QMap>
+#include <QPalette>
 #include <QPlainTextEdit>
 #include <QPointer>
 #include <QString>
 #include <QStringList>
 
 class QAbstractItemView;
+class QColor;
 class QCompleter;
 class QContextMenuEvent;
 class QDragEnterEvent;
@@ -91,6 +93,28 @@ public:
      * @param block Block number (line number) to position cursor
      */
     void setCursor(int block);
+
+    /**
+     * @brief Apply an editor background/foreground color scheme
+     * @param background editor background color; an invalid QColor restores the app theme
+     * @param foreground default text color; an invalid QColor restores the app theme
+     *
+     * Only the editor surface colors change here (background, default text, and a
+     * derived line-number gutter); the per-token syntax colors are handled by the
+     * Highlighter.  Passing invalid colors reverts to the palette the editor had
+     * at construction, i.e. the plain application theme.
+     */
+    void setColorScheme(const QColor &background, const QColor &foreground);
+
+    /**
+     * @brief Build the editor viewport stylesheet (optional banner + scheme colors)
+     * @param background editor background color, or an invalid QColor to omit it
+     * @param foreground default text color, or an invalid QColor to omit it
+     * @param withBanner include the centered banner watermark (empty editor only)
+     * @return a bare QSS property list for the scroll-area viewport
+     */
+    static QString editorStyleSheet(const QColor &background, const QColor &foreground,
+                                    bool withBanner);
 
     /**
      * @brief Highlight a specific line (used for error indication)
@@ -349,6 +373,12 @@ private:
     void popupCompletion(const QString &prefix, QAbstractItemView *oldPopup);
 
     QWidget *lineNumberArea; ///< Widget for displaying line numbers
+    QColor schemeBg;         ///< Active scheme editor background; invalid = app theme
+    QColor schemeFg;         ///< Active scheme text/gutter color; invalid = app theme
+    bool bannerVisible;      ///< Whether the empty-editor banner watermark is currently shown
+
+    /// @brief Re-apply the viewport stylesheet, showing the banner only on an empty editor
+    void refreshEditorStyle();
     QPointer<QShortcut> helpAction; ///< Keyboard shortcut for help (parented to the main window,
                                      ///< not this widget -- may already be destroyed by the time
                                      ///< this widget is, depending on Qt's child-teardown order)

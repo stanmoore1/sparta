@@ -115,10 +115,6 @@ void applyProxySetting(SpartaWrapper &sparta, QSettings &settings)
 // shown as the initial editor content and appended to the About info;
 // intentionally empty for SPARTA-GUI (no citation banner)
 const QString citeme;
-const QString bannerstyle("CodeEditor {background-position: center center; "
-                          "padding: 0px; "
-                          "background-repeat: no-repeat; "
-                          "background-image: url(:/icons/sparta-gui-banner.png);}");
 } // namespace
 
 void SpartaGui::setupUi(QSettings &settings, QFont &allFont, QFont &monoFont)
@@ -131,7 +127,8 @@ void SpartaGui::setupUi(QSettings &settings, QFont &allFont, QFont &monoFont)
     textEdit = new CodeEditor(this);
     textEdit->setEnabled(true);
     textEdit->setAcceptDrops(true);
-    textEdit->setStyleSheet(bannerstyle);
+    // the editor applies its own banner watermark stylesheet in its constructor;
+    // the color scheme (background/foreground) is applied later via applyEditorColorScheme()
     textEdit->setMinimumSize(Cfg::MINIMUM_WIDTH, Cfg::MINIMUM_HEIGHT);
 
     // the central area shows either the welcome screen (landing) or the editor;
@@ -175,6 +172,9 @@ void SpartaGui::setupUi(QSettings &settings, QFont &allFont, QFont &monoFont)
     setFont(allFont);
     textEdit->setFont(monoFont);
     document->setDefaultFont(monoFont);
+
+    // apply the stored editor color scheme (token colors + editor background)
+    applyEditorColorScheme();
 
     // set width and height of main window
     // use default so the background logo is fully shown
@@ -851,7 +851,7 @@ void SpartaGui::newDocument()
     currentFile.clear();
     textEdit->document()->setPlainText(citeme);
     textEdit->document()->setModified(false);
-    textEdit->setStyleSheet(bannerstyle);
+    applyEditorColorScheme();
 
     if (sparta.isRunning()) {
         stopRun();
@@ -1187,7 +1187,7 @@ void SpartaGui::openFile(const QString &fileName)
         textEdit->document()->clear();
         textEdit->document()->setPlainText(citeme);
         textEdit->document()->setModified(false);
-        textEdit->setStyleSheet(bannerstyle);
+        applyEditorColorScheme();
     } else {
         QTextStream in(&file);
         QString text = in.readAll();
@@ -2764,6 +2764,17 @@ void SpartaGui::findAndReplace()
     find.exec();
 }
 
+void SpartaGui::applyEditorColorScheme()
+{
+    const QString scheme =
+        QSettings().value(Keys::COLOR_SCHEME, Highlighter::defaultScheme()).toString();
+    const bool light = isLightTheme();
+    if (highlighter) highlighter->applyScheme(scheme);
+    if (textEdit)
+        textEdit->setColorScheme(Highlighter::schemeBackground(scheme, light),
+                                 Highlighter::schemeForeground(scheme, light));
+}
+
 void SpartaGui::preferences()
 {
     // default settings are committed to QSettings during initialization of SPARTA-GUI
@@ -2825,9 +2836,7 @@ void SpartaGui::preferences()
         settings.endGroup();
         // the editor syntax color scheme may have changed: apply it live so the
         // choice takes effect immediately without requiring a restart
-        if (highlighter)
-            highlighter->applyScheme(
-                settings.value(Keys::COLOR_SCHEME, Highlighter::defaultScheme()).toString());
+        applyEditorColorScheme();
         // the examples folder setting may have changed
         buildExampleMenu();
     }

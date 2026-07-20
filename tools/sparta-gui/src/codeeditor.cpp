@@ -111,6 +111,57 @@ CodeEditor::CodeEditor(QWidget *parent) :
     connect(this, &CodeEditor::updateRequest, this, &CodeEditor::updateLineNumberArea);
     updateLineNumberAreaWidth(0);
     setCursorWidth(2);
+
+    // banner watermark: shown only while the editor is empty; hidden once the user
+    // types or a file is loaded.  Toggle it as the document's emptiness changes.
+    bannerVisible = document()->isEmpty();
+    refreshEditorStyle();
+    connect(this, &QPlainTextEdit::textChanged, this, [this] {
+        if (document()->isEmpty() != bannerVisible) refreshEditorStyle();
+    });
+}
+
+QString CodeEditor::editorStyleSheet(const QColor &background, const QColor &foreground,
+                                     bool withBanner)
+{
+    // This is applied to the scroll-area viewport (the text surface), so it is a bare
+    // property list, not a CodeEditor{...} rule.  The background color must live in the
+    // stylesheet (not the palette): while an application-wide stylesheet is active, a
+    // widget/viewport palette change to the surface is overridden.
+    QString ss;
+    if (withBanner)
+        ss += QStringLiteral("background-position: center center; background-repeat: no-repeat; "
+                             "background-image: url(:/icons/sparta-gui-banner.png);");
+    if (background.isValid()) ss += QStringLiteral(" background-color: %1;").arg(background.name());
+    if (foreground.isValid()) ss += QStringLiteral(" color: %1;").arg(foreground.name());
+    return ss;
+}
+
+void CodeEditor::refreshEditorStyle()
+{
+    bannerVisible = document()->isEmpty();
+    viewport()->setStyleSheet(editorStyleSheet(schemeBg, schemeFg, bannerVisible));
+    viewport()->update();
+}
+
+void CodeEditor::setColorScheme(const QColor &background, const QColor &foreground)
+{
+    schemeBg = background;
+    schemeFg = foreground;
+
+    if (background.isValid() && foreground.isValid()) {
+        // Derive a subtly contrasting gutter from the background so the line-number
+        // margin stays legible without needing a separate color in every scheme.
+        const bool dark     = background.lightness() < 128;
+        const QColor gutter = dark ? background.lighter(140) : background.darker(112);
+        lineNumberArea->setStyleSheet(QStringLiteral("background-color: %1;").arg(gutter.name()));
+    } else {
+        // theme default (e.g. the "Classic" scheme): drop the overrides
+        lineNumberArea->setStyleSheet(QString());
+    }
+    refreshEditorStyle();
+    lineNumberArea->update();
+    update();
 }
 
 CodeEditor::~CodeEditor()
@@ -574,7 +625,8 @@ void CodeEditor::lineNumberAreaPaintEvent(QPaintEvent *event)
         if (block.isVisible() && bottom >= event->rect().top()) {
             QString number = QString::number(blockNumber + 1) + " ";
             if ((highlight == NO_HIGHLIGHT) || (blockNumber != highlight)) {
-                painter.setPen(palette().color(QPalette::WindowText));
+                painter.setPen(schemeFg.isValid() ? schemeFg
+                                                  : palette().color(QPalette::WindowText));
             } else {
                 number = QString(">") + QString::number(blockNumber + 1) + "<";
                 if (highlighterror)

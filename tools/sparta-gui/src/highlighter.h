@@ -12,6 +12,7 @@
 #ifndef HIGHLIGHTER_H
 #define HIGHLIGHTER_H
 
+#include <QColor>
 #include <QRegularExpression>
 #include <QSyntaxHighlighter>
 #include <QTextCharFormat>
@@ -59,6 +60,11 @@ public:
     static QStringList schemeLabels();
     /// @brief The default scheme id used when none is stored
     static QString defaultScheme();
+
+    /// @brief Editor background color for a scheme; invalid QColor means "use the app theme"
+    static QColor schemeBackground(const QString &scheme, bool light);
+    /// @brief Editor default text color for a scheme; invalid QColor means "use the app theme"
+    static QColor schemeForeground(const QString &scheme, bool light);
 
 protected:
     /**

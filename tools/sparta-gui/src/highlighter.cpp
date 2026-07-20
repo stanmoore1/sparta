@@ -27,48 +27,60 @@ namespace {
 struct Palette {
     QColor number, string, comment, special, variable;
     QColor lattice, setup, particle, run, read, output;
+    QColor background, foreground; ///< editor background and default text; invalid = use app theme
 };
 
+// order: number string comment special variable | lattice setup particle run read output
+//        | background foreground
+
 // ---- Classic (the legacy SPARTA-GUI palette) ------------------------------
-const Palette classicLight = {Qt::blue,     Qt::darkGreen, Qt::red,     Qt::darkMagenta,
-                              Qt::darkGray, Qt::darkGreen, Qt::darkCyan, Qt::darkRed,
-                              Qt::darkBlue, Qt::magenta,   Qt::darkYellow};
+// background/foreground left invalid so the editor keeps the application theme
+const Palette classicLight = {Qt::blue,      Qt::darkGreen,  Qt::red,      Qt::darkMagenta,
+                              Qt::darkGray,  Qt::darkGreen,  Qt::darkCyan, Qt::darkRed,
+                              Qt::darkBlue,  Qt::magenta,    Qt::darkYellow,
+                              QColor(),      QColor()};
 const Palette classicDark  = {
     QColorConstants::Svg::dodgerblue, QColorConstants::Green,          QColorConstants::Red,
     QColorConstants::Magenta,         QColorConstants::Svg::lightgray, QColorConstants::Svg::lightgreen,
     QColorConstants::Cyan,            QColorConstants::Svg::indianred, QColorConstants::Svg::lightskyblue,
-    QColorConstants::Svg::lightcoral, QColorConstants::Yellow};
+    QColorConstants::Svg::lightcoral, QColorConstants::Yellow,
+    QColor(),                         QColor()};
 
 // ---- Solarized (Ethan Schoonover, published cross-editor standard) --------
-// order: number string comment special variable | lattice setup particle run read output
 const Palette solarizedLight = {QColor("#6c71c4"), QColor("#2aa198"), QColor("#93a1a1"),
                                 QColor("#cb4b16"), QColor("#b58900"), QColor("#268bd2"),
                                 QColor("#859900"), QColor("#d33682"), QColor("#cb4b16"),
-                                QColor("#6c71c4"), QColor("#b58900")};
+                                QColor("#6c71c4"), QColor("#b58900"),
+                                QColor("#fdf6e3"), QColor("#657b83")};
 const Palette solarizedDark  = {QColor("#6c71c4"), QColor("#2aa198"), QColor("#586e75"),
                                 QColor("#cb4b16"), QColor("#b58900"), QColor("#268bd2"),
                                 QColor("#859900"), QColor("#d33682"), QColor("#cb4b16"),
-                                QColor("#6c71c4"), QColor("#b58900")};
+                                QColor("#6c71c4"), QColor("#b58900"),
+                                QColor("#002b36"), QColor("#93a1a1")};
 
 // ---- VS Code (Light+ / Dark+, the default in the editor most widely used) -
 const Palette vscodeLight = {QColor("#098658"), QColor("#a31515"), QColor("#008000"),
                              QColor("#af00db"), QColor("#0070c1"), QColor("#0000ff"),
                              QColor("#267f99"), QColor("#af00db"), QColor("#0000ff"),
-                             QColor("#795e26"), QColor("#001080")};
+                             QColor("#795e26"), QColor("#001080"),
+                             QColor("#ffffff"), QColor("#1e1e1e")};
 const Palette vscodeDark  = {QColor("#b5cea8"), QColor("#ce9178"), QColor("#6a9955"),
                              QColor("#c586c0"), QColor("#9cdcfe"), QColor("#569cd6"),
                              QColor("#4ec9b0"), QColor("#c586c0"), QColor("#569cd6"),
-                             QColor("#dcdcaa"), QColor("#4fc1ff")};
+                             QColor("#dcdcaa"), QColor("#4fc1ff"),
+                             QColor("#1e1e1e"), QColor("#d4d4d4")};
 
 // ---- One (Atom, One Light / One Dark) -------------------------------------
 const Palette oneLight = {QColor("#986801"), QColor("#50a14f"), QColor("#a0a1a7"),
                           QColor("#a626a4"), QColor("#e45649"), QColor("#4078f2"),
                           QColor("#0184bc"), QColor("#c18401"), QColor("#a626a4"),
-                          QColor("#986801"), QColor("#e45649")};
+                          QColor("#986801"), QColor("#e45649"),
+                          QColor("#fafafa"), QColor("#383a42")};
 const Palette oneDark  = {QColor("#d19a66"), QColor("#98c379"), QColor("#7f848e"),
                           QColor("#c678dd"), QColor("#e06c75"), QColor("#61afef"),
                           QColor("#56b6c2"), QColor("#e5c07b"), QColor("#c678dd"),
-                          QColor("#d19a66"), QColor("#e06c75")};
+                          QColor("#d19a66"), QColor("#e06c75"),
+                          QColor("#282c34"), QColor("#abb2bf")};
 
 const Palette &paletteFor(const QString &scheme, bool light)
 {
@@ -95,6 +107,16 @@ QStringList Highlighter::schemeLabels()
 QString Highlighter::defaultScheme()
 {
     return QStringLiteral("vscode");
+}
+
+QColor Highlighter::schemeBackground(const QString &scheme, bool light)
+{
+    return paletteFor(scheme, light).background;
+}
+
+QColor Highlighter::schemeForeground(const QString &scheme, bool light)
+{
+    return paletteFor(scheme, light).foreground;
 }
 
 void Highlighter::setFormats(const QString &scheme)
