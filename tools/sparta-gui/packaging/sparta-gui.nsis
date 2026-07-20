@@ -170,10 +170,10 @@ Section "${SPARTAGUI}" SecSparta
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SPARTA-GUI" \
                  "EstimatedSize" "$0"
 
-  # update path variables
-  EnVar::SetHKCU
-  # add SPARTA executable path
-  EnVar::AddValue "PATH" "$INSTDIR\bin"
+  # NOTE: adding $INSTDIR\bin to the user PATH via the EnVar NSIS plugin is
+  # disabled -- the plugin is not shipped with the MinGW cross-build NSIS used
+  # by CI, and the GUI is launched from its Start Menu / desktop shortcut, so a
+  # PATH entry is not required.
   WriteUninstaller "$INSTDIR\Uninstall.exe"
 SectionEnd
 
@@ -193,10 +193,7 @@ Section "Uninstall"
   # unregister installation
   DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SPARTA-GUI"
 
-  # update path variables
-  EnVar::SetHKCU
-  # remove SPARTA executable and dll path
-  EnVar::DeleteValue "PATH" "$INSTDIR\bin"
+  # (PATH was not modified on install -- see the note in the install section)
 
   RMDir /r "$SMPROGRAMS\${SPARTAGUI}"
 
