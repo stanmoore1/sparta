@@ -170,6 +170,10 @@ dialog to submit the current input deck to an HPC scheduler (Slurm, PBS, or
 Flux) over SSH, and the latter shows the docked *Cluster Jobs* panel that
 tracks submitted jobs, follows their logs, and pulls results back.
 
+The *Parametric Sweep...* entry opens the :ref:`Parameter Sweep panel
+<parametric_sweep>`, which runs the current deck repeatedly while varying
+index variables over ranges and tabulates a chosen thermo quantity per run.
+
 The *Create Image* entry will send a `dump image
 <https://sparta.github.io/doc/dump_image.html>`_ command to the SPARTA
 instance, read the resulting file, and show it in an *Image Viewer*

@@ -30,6 +30,7 @@
 #include "remotejobmanager.h"
 #include "remotejobspanel.h"
 #include "stlimportwizard.h"
+#include "sweeppanel.h"
 #include "setvariables.h"
 #include "slideshow.h"
 #include "stdcapture.h"
@@ -270,6 +271,8 @@ void SpartaGui::createRunMenu()
                   &SpartaGui::submitRemote);
     addMenuAction(menu, ":/icons/utilities-terminal.svg", "Manage Cluster &Jobs...", "",
                   &SpartaGui::manageRemoteJobs);
+    addMenuAction(menu, ":/icons/x-office-drawing.svg", "Parametric S&weep...", "",
+                  &SpartaGui::runSweep);
     menu->addSeparator();
 
     addMenuAction(menu, ":/icons/image-viewer.svg", "Create &Image", "Ctrl+I",
@@ -294,6 +297,7 @@ void SpartaGui::createViewMenu()
         {PanelManager::Variables, ":/icons/utilities-terminal.svg", "&Variables Window",
          "Ctrl+Shift+W"},
         {PanelManager::Jobs, ":/icons/utilities-terminal.svg", "Cluster &Jobs Window", ""},
+        {PanelManager::Sweep, ":/icons/x-office-drawing.svg", "Parametric S&weep Window", ""},
     };
     for (const auto &e : entries) {
         auto *action = panels->toggleViewAction(e.panel);
@@ -322,6 +326,7 @@ void SpartaGui::createViewMenu()
         }
         if (panel == PanelManager::Variables && !varwindow) createVariableWindow();
         if (panel == PanelManager::Jobs) ensureJobsPanel();
+        if (panel == PanelManager::Sweep) ensureSweepPanel();
     });
 
     menu->addSeparator();
@@ -1540,6 +1545,9 @@ void SpartaGui::logUpdate()
     }
 
     updateSlideShow();
+
+    // let a parametric sweep sample the current thermo values each tick
+    emit thermoSampled();
 }
 
 int SpartaGui::updateRunStatus()
@@ -1793,6 +1801,9 @@ void SpartaGui::runDone()
     progress->hide();
     cpuuse->hide();
     dirstatus->show();
+
+    // let a parametric sweep (or any observer) advance to the next run
+    emit runFinished(success);
 }
 
 void SpartaGui::restartSparta()
@@ -1973,6 +1984,19 @@ void SpartaGui::manageRemoteJobs()
 {
     ensureJobsPanel();
     panels->openPanel(PanelManager::Jobs);
+}
+
+void SpartaGui::ensureSweepPanel()
+{
+    if (sweepPanel) return;
+    sweepPanel = new SweepPanel(this, this, &sparta);
+    panels->setPanelWidget(PanelManager::Sweep, sweepPanel, "Parameter Sweep");
+}
+
+void SpartaGui::runSweep()
+{
+    ensureSweepPanel();
+    panels->openPanel(PanelManager::Sweep);
 }
 
 void SpartaGui::submitRemote()

@@ -50,6 +50,7 @@ class Preferences;
 class SlideShow;
 class RemoteJobManager;
 class RemoteJobsPanel;
+class SweepPanel;
 class StdCapture;
 class URLDownloader;
 class WelcomeScreen;
@@ -167,6 +168,14 @@ protected:
      */
     bool eventFilter(QObject *watched, QEvent *event) override;
 
+signals:
+    /** @brief Emitted at the end of runDone(); @p success is the run result.
+     *  A parametric sweep uses this to advance to the next run. */
+    void runFinished(bool success);
+
+    /** @brief Emitted each logUpdate() tick so a sweep can sample thermo. */
+    void thermoSampled();
+
 public slots:
     /** @brief Quit the application */
     void quit();
@@ -176,6 +185,17 @@ public slots:
 
     /** @brief Run SPARTA with content from editor buffer */
     void runBuffer() { doRun(true); }
+
+    /** @brief Set the index-variable overrides injected before the next run
+     *  (used by the parametric sweep driver to vary parameters per run) */
+    void setRunVariables(const QList<QPair<QString, QString>> &v) { variables = v; }
+
+    /** @brief Re-scan the editor buffer for variables and return the set */
+    QList<QPair<QString, QString>> discoverVariables()
+    {
+        updateVariables();
+        return variables;
+    }
 
 private slots:
     /** @brief Create a new document */
@@ -254,6 +274,9 @@ private slots:
 
     /** @brief Show the docked Cluster Jobs panel */
     void manageRemoteJobs();
+
+    /** @brief Show the docked Parametric Sweep panel */
+    void runSweep();
 
     /** @brief Show about dialog */
     void about();
@@ -379,6 +402,8 @@ private:
     void ensureRemoteJobs();
     /** @brief Lazily create + host the docked Cluster Jobs panel */
     void ensureJobsPanel();
+    /** @brief Lazily create + host the docked Parametric Sweep panel */
+    void ensureSweepPanel();
 
     /** @brief Show the welcome screen in the central area (rebuilding its recent
      *  files list and example gallery first) */
@@ -414,6 +439,7 @@ private:
     QLabel *varwindow;       ///< Window showing variable definitions
     RemoteJobManager *remoteJobs = nullptr;  ///< Controller for cluster jobs (lazy)
     RemoteJobsPanel *jobsPanel = nullptr;    ///< Docked Cluster Jobs panel (lazy)
+    SweepPanel *sweepPanel = nullptr;        ///< Docked Parametric Sweep panel (lazy)
 
     /**
      * @brief Container for inspect dialog widgets

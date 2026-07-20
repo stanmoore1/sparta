@@ -97,6 +97,10 @@ set(PROJECT_SOURCES
   ${CMAKE_SOURCE_DIR}/src/stlimport.h
   ${CMAKE_SOURCE_DIR}/src/stlimportwizard.cpp
   ${CMAKE_SOURCE_DIR}/src/stlimportwizard.h
+  ${CMAKE_SOURCE_DIR}/src/sweepspec.cpp
+  ${CMAKE_SOURCE_DIR}/src/sweepspec.h
+  ${CMAKE_SOURCE_DIR}/src/sweeppanel.cpp
+  ${CMAKE_SOURCE_DIR}/src/sweeppanel.h
   ${CMAKE_SOURCE_DIR}/src/theme.cpp
   ${CMAKE_SOURCE_DIR}/src/theme.h
   ${CMAKE_SOURCE_DIR}/src/urldownloader.cpp

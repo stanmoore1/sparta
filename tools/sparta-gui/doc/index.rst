@@ -111,6 +111,7 @@ User's Guide
    output
    visualization
    remote
+   sweep
    editor
    menus
    dialogs

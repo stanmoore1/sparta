@@ -154,6 +154,17 @@ target_link_libraries(test_schedulerspec PRIVATE GTest::gtest_main Qt6::Widgets)
 
 gtest_discover_tests(test_schedulerspec)
 
+# Test executable for the parametric-sweep expansion/reducers
+add_executable(test_sweepspec
+  test_sweepspec.cpp
+  ${CMAKE_SOURCE_DIR}/src/sweepspec.cpp
+)
+
+target_include_directories(test_sweepspec PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_sweepspec PRIVATE GTest::gtest_main Qt6::Widgets)
+
+gtest_discover_tests(test_sweepspec)
+
 # Test executable for the movie probing and frame selection helpers
 add_executable(test_movieimport
   test_movieimport.cpp
