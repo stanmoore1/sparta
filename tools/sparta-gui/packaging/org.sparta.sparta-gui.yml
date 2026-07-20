@@ -29,7 +29,7 @@ modules:
           -D BUILD_SHARED_LIBS=ON -D BUILD_MPI=OFF -D CMAKE_BUILD_TYPE=Release
       - cmake --build build-lib -j ${FLATPAK_BUILDER_N_JOBS:-2}
       - install -d /app/lib
-      - cp -a build-lib/libsparta*.so* /app/lib/
+      - cp -a build-lib/src/libsparta*.so* /app/lib/
     sources:
       - type: git
         url: https://github.com/stanmoore1/sparta.git

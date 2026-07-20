@@ -50,7 +50,7 @@ jobs:
           version: '6.7.3'
           host: 'linux'
           target: 'desktop'
-          arch: 'gcc_64'
+          arch: 'linux_gcc_64'
           cache: true
 
       - name: Build SPARTA shared library (serial)
