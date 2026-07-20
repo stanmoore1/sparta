@@ -241,6 +241,9 @@ private slots:
     /** @brief Open an external data file and plot selected columns */
     void plotDataFile();
 
+    /** @brief Open the STL / SPARTA-surface import wizard */
+    void importSurface();
+
     /** @brief Show about dialog */
     void about();
 

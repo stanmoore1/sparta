@@ -408,8 +408,13 @@ QString buildReadSurfCommand(const StlImportSettings &s, const QString &surfPath
 QStringList buildAblationCommands(const StlImportSettings &s, const QString &surfPath)
 {
     QStringList cmds;
-    cmds << "global surfs explicit";
+    // create_isurf requires distributed explicit surfaces
+    cmds << "global surfs explicit/distributed";
     cmds << buildReadSurfCommand(s, surfPath);
+    // every element must carry a collision model before create_isurf consumes it
+    // (verified vs examples/explicit2implicit/in.exp2imp.sphere.3d)
+    cmds << "surf_collide 1 diffuse 300.0 0.0";
+    cmds << "surf_modify all collide 1";
     // the fix ablate must be defined BEFORE create_isurf (verified vs
     // examples/explicit2implicit/in.exp2imp.sphere.3d)
     cmds << QStringLiteral("fix %1 ablate %2 %3 %4 %5 %6")

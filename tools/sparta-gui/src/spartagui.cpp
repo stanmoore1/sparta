@@ -26,6 +26,7 @@
 #include "plotdata.h"
 #include "plotdatadialog.h"
 #include "preferences.h"
+#include "stlimportwizard.h"
 #include "setvariables.h"
 #include "slideshow.h"
 #include "stdcapture.h"
@@ -203,6 +204,8 @@ void SpartaGui::createFileMenu()
                   &SpartaGui::plotDataFile);
     addMenuAction(menu, ":/icons/binary-file-icon.svg", "Inspect &Restart File", "Ctrl+Shift+R",
                   &SpartaGui::inspect);
+    addMenuAction(menu, ":/icons/vdw-style.svg", "Import Sur&face (STL / SPARTA)...", "Ctrl+Shift+T",
+                  &SpartaGui::importSurface);
     menu->addSeparator();
 
     recentActions.resize(Cfg::NUM_RECENT_FILES);
@@ -1930,6 +1933,30 @@ void SpartaGui::doRun(bool use_buffer)
     logupdater = new QTimer(this);
     connect(logupdater, &QTimer::timeout, this, &SpartaGui::logUpdate);
     logupdater->start(settings.value(Keys::UPDFREQ, Cfg::DATA_UPDATE_INTERVAL_DEFAULT).toInt());
+}
+
+void SpartaGui::importSurface()
+{
+    QString fileName = QFileDialog::getOpenFileName(
+        this, "Import Surface (STL or SPARTA surface file)", currentDir,
+        "Surface geometry (*.stl *.surf);;STL files (*.stl);;"
+        "SPARTA surface files (*.surf);;All files (*)");
+    if (fileName.isEmpty()) return;
+
+    StlImportWizard wiz(this, &sparta, fileName);
+    if (!wiz.loaded()) {
+        critical(this, "Import Surface",
+                 "Could not parse the selected file as an STL or SPARTA surface file.");
+        return;
+    }
+    if (wiz.exec() != QDialog::Accepted) return;
+
+    const QString text = wiz.generatedText();
+    if (text.isEmpty()) return;
+    showEditor();
+    QTextCursor cursor = textEdit->textCursor();
+    cursor.insertText(text + "\n");
+    textEdit->setTextCursor(cursor);
 }
 
 void SpartaGui::plotDataFile()

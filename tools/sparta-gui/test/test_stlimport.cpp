@@ -193,11 +193,13 @@ TEST(StlImport, AblationCommandOrderAndSyntax)
     s.maxrandom = 0;
 
     const QStringList c = buildAblationCommands(s, "apollo.surf");
-    ASSERT_EQ(c.size(), 4);
-    EXPECT_EQ(c[0].toStdString(), "global surfs explicit");
+    ASSERT_EQ(c.size(), 6);
+    EXPECT_EQ(c[0].toStdString(), "global surfs explicit/distributed");
     EXPECT_EQ(c[1].toStdString(), "read_surf apollo.surf");
-    EXPECT_EQ(c[2].toStdString(), "fix fablate ablate all 0 0.2 random 0");
-    EXPECT_EQ(c[3].toStdString(), "create_isurf all fablate 39.5 voxel");
+    EXPECT_EQ(c[2].toStdString(), "surf_collide 1 diffuse 300.0 0.0");
+    EXPECT_EQ(c[3].toStdString(), "surf_modify all collide 1");
+    EXPECT_EQ(c[4].toStdString(), "fix fablate ablate all 0 0.2 random 0");
+    EXPECT_EQ(c[5].toStdString(), "create_isurf all fablate 39.5 voxel");
 }
 
 TEST(StlImport, ThresholdValidation)
