@@ -1,0 +1,93 @@
+# Build a self-contained Linux x86_64 tarball of SPARTA-GUI, equivalent to
+# the LAMMPS-Linux-amd64 GUI tarballs the LAMMPS project publishes.
+#
+# Like the macOS workflow, the SPARTA shared library is built from source in
+# the same checkout (serial, no MPI) and bundled into the package, so the
+# result is self-contained and always matches the code under test -- no
+# pre-compiled library is downloaded. The GUI is built in plugin mode and the
+# `tgz` packaging target gathers the Qt runtime, platform/plugins, the SPARTA
+# library, and a launcher wrapper into SPARTA-GUI-Linux-x86_64-<version>.tar.gz.
+
+name: build-sparta-gui-linux
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - claude/sparta-gui-docked-layout
+    paths:
+      - 'tools/sparta-gui/**'
+      - 'src/**'
+      - 'cmake/**'
+      - '.github/workflows/sparta-gui-linux.yml'
+
+concurrency:
+  group: sparta-gui-linux-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-tgz:
+    # build on the oldest supported Ubuntu for the widest glibc compatibility
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build tools and X11/xcb runtime libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ninja-build \
+            libgl1-mesa-dev libglu1-mesa-dev libxkbcommon-dev \
+            libxcb1-dev libxcb-cursor0 libxcb-icccm4 libxcb-image0 \
+            libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
+            libxcb-shape0 libxcb-xinerama0 libxcb-xkb1 \
+            xvfb
+
+      - name: Install Qt (official Linux binaries)
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.7.3'
+          host: 'linux'
+          target: 'desktop'
+          arch: 'gcc_64'
+          cache: true
+
+      - name: Build SPARTA shared library (serial)
+        run: |
+          cmake -S cmake -B build-lib -G Ninja \
+            -D BUILD_SHARED_LIBS=ON \
+            -D BUILD_MPI=OFF \
+            -D CMAKE_BUILD_TYPE=Release
+          cmake --build build-lib -j3
+          SPARTA_LIB=$(find "$PWD/build-lib" -name 'libsparta*.so*' -type f | head -1)
+          echo "SPARTA_LIB=$SPARTA_LIB" >> "$GITHUB_ENV"
+          file "$SPARTA_LIB"
+
+      - name: Build SPARTA-GUI (plugin mode)
+        run: |
+          cmake -S tools/sparta-gui -B build-gui -G Ninja \
+            -D CMAKE_BUILD_TYPE=Release \
+            -D SPARTA_GUI_USE_PLUGIN=ON
+          cmake --build build-gui -j3
+
+      - name: Create Linux tarball (tgz target)
+        run: |
+          export SPARTA_PLUGIN_LIB="$SPARTA_LIB"
+          cmake --build build-gui --target tgz
+          sha256sum build-gui/SPARTA-GUI-Linux-x86_64-*.tar.gz | tee checksum.txt
+
+      - name: Verify the bundled app launches
+        run: |
+          mkdir -p unpack && tar -xzf build-gui/SPARTA-GUI-Linux-x86_64-*.tar.gz -C unpack
+          xvfb-run -a unpack/SPARTA_GUI/sparta-gui -v
+          test -f unpack/SPARTA_GUI/libexec/sparta/libsparta.so.0
+
+      - name: Upload tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: SPARTA-GUI-Linux-x86_64
+          path: |
+            build-gui/SPARTA-GUI-Linux-x86_64-*.tar.gz
+            checksum.txt
+          if-no-files-found: error

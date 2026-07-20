@@ -16,12 +16,22 @@ do \
     test -f $s && strip --strip-debug $s
 done
 
-# download pre-compiled SPARTA shared library
-if $(LD_LIBRARY_PATH=${DESTDIR}/lib ${DESTDIR}/bin/sparta-gui -h | grep -q pluginpath)
+# bundle the SPARTA shared library for plugin-mode binaries.  If
+# SPARTA_PLUGIN_LIB points at a locally-built libsparta.so (e.g. one compiled
+# alongside the GUI in CI), bundle that; otherwise fall back to downloading a
+# pre-compiled basic library from the SPARTA-GUI download site.
+# use the offscreen Qt platform so the -h probe works on headless CI runners
+if $(LD_LIBRARY_PATH=${DESTDIR}/lib QT_QPA_PLATFORM=offscreen ${DESTDIR}/bin/sparta-gui -h | grep -q pluginpath)
 then \
-    echo "Download basic SPARTA shared library"
     mkdir -p ${DESTDIR}/libexec/sparta
-    curl -L -o ${DESTDIR}/libexec/sparta/libsparta.so.0 https://sparta.github.io/sparta-gui/libsparta.so.0
+    if [ -n "${SPARTA_PLUGIN_LIB}" ] && [ -f "${SPARTA_PLUGIN_LIB}" ]
+    then \
+        echo "Bundle locally-built SPARTA shared library: ${SPARTA_PLUGIN_LIB}"
+        cp "${SPARTA_PLUGIN_LIB}" ${DESTDIR}/libexec/sparta/libsparta.so.0
+    else \
+        echo "Download basic SPARTA shared library"
+        curl -L -o ${DESTDIR}/libexec/sparta/libsparta.so.0 https://sparta.github.io/sparta-gui/libsparta.so.0
+    fi
     chmod +x ${DESTDIR}/libexec/sparta/libsparta.so.0
 fi
 
