@@ -120,6 +120,17 @@ target_link_libraries(test_dumpimage PRIVATE GTest::gtest_main Qt6::Widgets)
 
 gtest_discover_tests(test_dumpimage)
 
+# Test executable for the STL / SPARTA-surface import core
+add_executable(test_stlimport
+  test_stlimport.cpp
+  ${CMAKE_SOURCE_DIR}/src/stlimport.cpp
+)
+
+target_include_directories(test_stlimport PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_stlimport PRIVATE GTest::gtest_main Qt6::Widgets)
+
+gtest_discover_tests(test_stlimport)
+
 # Test executable for the movie probing and frame selection helpers
 add_executable(test_movieimport
   test_movieimport.cpp
