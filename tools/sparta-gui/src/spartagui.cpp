@@ -370,8 +370,11 @@ void SpartaGui::createViewMenu()
         // opening the Image window with no snapshot yet used to show an empty
         // pane; render one on demand (renderImage() creates the viewer and
         // re-opens the panel -- the !imagewindow guard prevents recursion, and
-        // if rendering is not possible it reports why instead of doing nothing)
-        if (panel == PanelManager::Image && !imagewindow) renderImage();
+        // if rendering is not possible it reports why instead of doing nothing).
+        // Only on a genuine user open, though: during startup this same signal
+        // fires from restoreLayout() -- before the SPARTA plugin is even loaded
+        // -- and rendering then would call into an unloaded library and crash.
+        if (panel == PanelManager::Image && !imagewindow && startupComplete) renderImage();
         if (panel == PanelManager::Variables && !varwindow) createVariableWindow();
         if (panel == PanelManager::Jobs) ensureJobsPanel();
         if (panel == PanelManager::Sweep) ensureSweepPanel();
@@ -850,6 +853,11 @@ SpartaGui::SpartaGui(QWidget *parent, const QString &filename, int width, int he
 
     // finally show the window
     showNormal();
+
+    // the UI is now fully built and the SPARTA plugin loaded: from here on a
+    // panelOpened(Image) is a real user action and may auto-render a snapshot
+    // (see the PanelManager::panelOpened handler in createViewMenu()).
+    startupComplete = true;
 }
 
 SpartaGui::~SpartaGui()

@@ -502,6 +502,9 @@ private:
     QTimer *autoLintTimer = nullptr;   ///< Debounce timer for auto-lint on line change (lazy)
     bool autoLintEnabled  = true;      ///< Auto-validate the deck on cursor line change
     int lastLintBlock     = -1;        ///< Editor block the cursor was last on (line-change detect)
+    bool startupComplete  = false;     ///< true once the constructor finished (plugin loaded, UI shown);
+                                       ///< gates panelOpened side effects that must not run during
+                                       ///< restoreLayout() -- e.g. auto-rendering the Image panel
 
     /**
      * @brief Container for inspect dialog widgets
