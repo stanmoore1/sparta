@@ -215,22 +215,51 @@ jobs:
           echo "--- QtNetwork deployed? ---"
           ls "$APP/Contents/Frameworks/QtNetwork.framework/Versions/A/QtNetwork"
 
+          # dylibbundler and install_name_tool rewrote Mach-O load commands, which
+          # invalidates the ad-hoc code signatures the linker/macdeployqt applied.
+          # macOS then reports the app as "damaged and can't be opened".  Re-sign
+          # everything ad-hoc, inside-out (nested dylibs/frameworks first, then the
+          # app), so the signatures are valid again.  The app is still not signed
+          # with a Developer ID / notarized, so a *downloaded* copy needs one
+          # Gatekeeper bypass (right-click > Open, or `xattr -dr
+          # com.apple.quarantine SPARTA-GUI.app`) -- but it will no longer be
+          # reported as damaged.
+          find "$APP/Contents" -type f \( -name '*.dylib' -o -name '*.so' \) \
+            -exec codesign --force --timestamp=none --sign - {} + 2>/dev/null || true
+          for fw in "$APP/Contents/Frameworks"/*.framework; do
+            [ -d "$fw" ] && codesign --force --deep --timestamp=none --sign - "$fw" || true
+          done
+          codesign --force --deep --timestamp=none --sign - "$APP"
+          codesign --verify --deep --verbose=2 "$APP" || true
+
       - name: Verify the app launches under Rosetta (loads Qt + VTK from the bundle)
         run: |
           cd build-gui
           arch -x86_64 ./sparta-gui.app/Contents/MacOS/sparta-gui -v
 
-      - name: Zip the .app
+      - name: Package as a drag-n-drop DMG
         run: |
           cd build-gui
-          ditto -c -k --keepParent sparta-gui.app SPARTA-GUI-macOS-x86_64-vtk.zip
-          shasum -a 256 SPARTA-GUI-macOS-x86_64-vtk.zip | tee checksum-vtk.txt
+          STAGE=dmg-stage
+          rm -rf "$STAGE"
+          mkdir "$STAGE"
+          # present the bundle as SPARTA-GUI.app next to an /Applications alias so
+          # the user can drag it across to install (same layout as the universal dmg)
+          cp -R sparta-gui.app "$STAGE/SPARTA-GUI.app"
+          ln -s /Applications "$STAGE/Applications"
+          hdiutil create -volname "SPARTA-GUI" -srcfolder "$STAGE" \
+            -fs HFS+ -format UDZO -ov SPARTA-GUI-macOS-x86_64-vtk.dmg
+          shasum -a 256 SPARTA-GUI-macOS-x86_64-vtk.dmg | tee checksum-vtk.txt
+          # sanity-check the app inside the dmg launches (signed) under Rosetta
+          hdiutil attach SPARTA-GUI-macOS-x86_64-vtk.dmg -mountpoint /Volumes/sgui-vtk
+          arch -x86_64 /Volumes/sgui-vtk/SPARTA-GUI.app/Contents/MacOS/sparta-gui -v
+          hdiutil detach /Volumes/sgui-vtk || hdiutil detach /Volumes/sgui-vtk -force || true
 
       - name: Upload the VTK app
         uses: actions/upload-artifact@v4
         with:
           name: SPARTA-GUI-macOS-x86_64-vtk
           path: |
-            build-gui/SPARTA-GUI-macOS-x86_64-vtk.zip
+            build-gui/SPARTA-GUI-macOS-x86_64-vtk.dmg
             build-gui/checksum-vtk.txt
           if-no-files-found: error
