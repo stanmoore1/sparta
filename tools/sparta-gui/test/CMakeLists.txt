@@ -187,6 +187,17 @@ target_link_libraries(test_snippets PRIVATE GTest::gtest_main Qt6::Widgets)
 
 gtest_discover_tests(test_snippets)
 
+# Test executable for the pre-run input-deck validator (Qt Core only)
+add_executable(test_inputcheck
+  test_inputcheck.cpp
+  ${CMAKE_SOURCE_DIR}/src/inputcheck.cpp
+)
+
+target_include_directories(test_inputcheck PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_inputcheck PRIVATE GTest::gtest_main Qt6::Core)
+
+gtest_discover_tests(test_inputcheck)
+
 # Test executable for the movie probing and frame selection helpers
 add_executable(test_movieimport
   test_movieimport.cpp
