@@ -11,21 +11,31 @@
 
 #include "vtkviewer.h"
 
+#include "chartviewer.h"
 #include "constants.h"
 #include "helpers.h"
+#include "plotdata.h"
+#include "vtkfilters.h"
 
 #include <QCheckBox>
 #include <QComboBox>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QIcon>
+#include <QInputDialog>
 #include <QLabel>
+#include <QLineEdit>
+#include <QMenu>
+#include <QMenuBar>
+#include <QMessageBox>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QResizeEvent>
 #include <QStatusBar>
 #include <QToolBar>
 #include <QWheelEvent>
+
+#include <vtkPropPicker.h>
 
 #include <vtkActor.h>
 #include <vtkAxesActor.h>
@@ -345,6 +355,21 @@ void VtkViewer::buildUi()
     tb->addAction(QIcon(":/icons/image-x-generic.svg"), "Save Screenshot...", this,
                   &VtkViewer::saveScreenshot);
 
+    // Feature 9: in-app field post-processing (cut plane, iso-surface, probes,
+    // field calculator).  Heavier analysis (streamlines, glyphs, volume
+    // rendering) is left to the "Export to ParaView" dialog.
+    auto *filtersMenu = menuBar()->addMenu("&Filters");
+    filtersMenu->addAction("Cut Plane...", this, &VtkViewer::applyCutPlane);
+    filtersMenu->addAction("Iso-surface...", this, &VtkViewer::applyIsoSurface);
+    filtersMenu->addAction("Field Calculator...", this, &VtkViewer::applyFieldCalculator);
+    filtersMenu->addAction("Line Probe...", this, &VtkViewer::applyLineProbe);
+    auto *ptProbe = filtersMenu->addAction("Point Probe (click points)");
+    ptProbe->setCheckable(true);
+    connect(ptProbe, &QAction::toggled, this, &VtkViewer::togglePointProbe);
+    filtersMenu->addSeparator();
+    filtersMenu->addAction("Heavier analysis -> Export to ParaView", this,
+                           []() {})->setEnabled(false);
+
     infoLabel = new QLabel("No data loaded.");
     statusBar()->addWidget(infoLabel);
 }
@@ -630,6 +655,225 @@ void VtkViewer::saveScreenshot()
         critical(this, "Save Screenshot", "Could not write the screenshot to:", path);
     else
         statusBar()->showMessage(QString("Saved screenshot to %1").arg(path), 5000);
+}
+
+// ======================================================================== //
+// Feature 9 -- in-app field post-processing (stock VTK filters)            //
+// ======================================================================== //
+
+vtkDataSet *VtkViewer::currentData() const
+{
+    return layers.isEmpty() ? nullptr : layers.last().data.Get();
+}
+
+QStringList VtkViewer::pointArrayNames() const
+{
+    QStringList names;
+    for (const auto &l : layers) {
+        auto *pd = l.data ? l.data->GetPointData() : nullptr;
+        if (!pd) continue;
+        for (int i = 0; i < pd->GetNumberOfArrays(); ++i) {
+            auto *a = pd->GetArray(i);
+            if (a && a->GetName() && !names.contains(a->GetName())) names << a->GetName();
+        }
+    }
+    return names;
+}
+
+void VtkViewer::applyCutPlane()
+{
+    vtkDataSet *data = currentData();
+    if (!data) { QMessageBox::information(this, "Cut Plane", "Load a dataset first."); return; }
+
+    QStringList axes = {"X", "Y", "Z"};
+    bool ok = false;
+    const QString axis = QInputDialog::getItem(this, "Cut Plane", "Slice normal to axis:",
+                                               axes, 0, false, &ok);
+    if (!ok) return;
+    const int ai = axes.indexOf(axis);
+
+    double b[6];
+    data->GetBounds(b);
+    const double lo = b[2 * ai], hi = b[2 * ai + 1], mid = 0.5 * (lo + hi);
+    const double pos = QInputDialog::getDouble(this, "Cut Plane",
+                                               QString("%1 position:").arg(axis), mid, lo, hi,
+                                               4, &ok);
+    if (!ok) return;
+
+    double origin[3] = {0.5 * (b[0] + b[1]), 0.5 * (b[2] + b[3]), 0.5 * (b[4] + b[5])};
+    origin[ai] = pos;
+    double normal[3] = {0, 0, 0};
+    normal[ai] = 1.0;
+
+    auto cut = VtkFilters::cutPlane(data, origin, normal);
+    if (!cut || cut->GetNumberOfPoints() == 0) {
+        QMessageBox::information(this, "Cut Plane", "The plane did not intersect the data.");
+        return;
+    }
+    addLayer(cut, QString("cut %1=%2").arg(axis).arg(pos, 0, 'g', 4), Kind::Generic);
+}
+
+void VtkViewer::applyIsoSurface()
+{
+    vtkDataSet *data = currentData();
+    if (!data) { QMessageBox::information(this, "Iso-surface", "Load a dataset first."); return; }
+    const QStringList arrays = pointArrayNames();
+    if (arrays.isEmpty()) {
+        QMessageBox::information(this, "Iso-surface", "This dataset has no point-scalar field.");
+        return;
+    }
+    bool ok = false;
+    const QString arr = QInputDialog::getItem(this, "Iso-surface", "Scalar field:", arrays, 0,
+                                              false, &ok);
+    if (!ok) return;
+    double range[2] = {0, 1};
+    arrayRange(arr, /*pointData=*/true, range);
+    const double val = QInputDialog::getDouble(this, "Iso-surface", "Iso value:",
+                                               0.5 * (range[0] + range[1]), range[0], range[1],
+                                               6, &ok);
+    if (!ok) return;
+
+    auto iso = VtkFilters::isoSurface(data, arr, val);
+    if (!iso || iso->GetNumberOfPoints() == 0) {
+        QMessageBox::information(this, "Iso-surface", "No surface at that value.");
+        return;
+    }
+    addLayer(iso, QString("iso %1=%2").arg(arr).arg(val, 0, 'g', 4), Kind::Generic);
+}
+
+void VtkViewer::applyFieldCalculator()
+{
+    vtkDataSet *data = currentData();
+    if (!data) { QMessageBox::information(this, "Field Calculator", "Load a dataset first."); return; }
+    bool ok = false;
+    const QString name = QInputDialog::getText(this, "Field Calculator", "New field name:",
+                                               QLineEdit::Normal, "derived", &ok);
+    if (!ok || name.isEmpty()) return;
+    const QString expr = QInputDialog::getText(
+        this, "Field Calculator",
+        "Expression using existing fields (e.g. mag(v), 2*rho):", QLineEdit::Normal, "", &ok);
+    if (!ok || expr.isEmpty()) return;
+
+    auto out = VtkFilters::calculate(data, name, expr);
+    if (!out) {
+        QMessageBox::warning(this, "Field Calculator",
+                             "Could not evaluate the expression (check the field names).");
+        return;
+    }
+    // update the last layer in place so the new field joins the color menu
+    Layer &l = layers.last();
+    l.data = out;
+    l.mapper->SetInputData(out);
+    refreshArrayCombo();
+    // color by the freshly computed field
+    for (int i = 0; i < arrayCombo->count(); ++i)
+        if (arrayCombo->itemText(i).contains(name)) { arrayCombo->setCurrentIndex(i); break; }
+    applyColoring();
+    renderArea->requestRender();
+}
+
+void VtkViewer::applyLineProbe()
+{
+    vtkDataSet *data = currentData();
+    if (!data) { QMessageBox::information(this, "Line Probe", "Load a dataset first."); return; }
+    const QStringList arrays = pointArrayNames();
+    if (arrays.isEmpty()) {
+        QMessageBox::information(this, "Line Probe", "This dataset has no point field to sample.");
+        return;
+    }
+    bool ok = false;
+    const QString arr = QInputDialog::getItem(this, "Line Probe", "Sample field:", arrays, 0,
+                                              false, &ok);
+    if (!ok) return;
+
+    double b[6];
+    data->GetBounds(b);
+    // default line: along X through the domain centre
+    double p1[3] = {b[0], 0.5 * (b[2] + b[3]), 0.5 * (b[4] + b[5])};
+    double p2[3] = {b[1], 0.5 * (b[2] + b[3]), 0.5 * (b[4] + b[5])};
+    const int nsamp = QInputDialog::getInt(this, "Line Probe", "Number of samples:", 100, 2,
+                                           100000, 1, &ok);
+    if (!ok) return;
+
+    auto line = VtkFilters::probeLine(data, p1, p2, nsamp);
+    if (!line || line->GetNumberOfPoints() == 0) {
+        QMessageBox::information(this, "Line Probe", "The probe returned no samples.");
+        return;
+    }
+    auto *field = line->GetPointData() ? line->GetPointData()->GetArray(arr.toUtf8().constData())
+                                       : nullptr;
+    if (!field) {
+        QMessageBox::information(this, "Line Probe", "The field was not sampled along the line.");
+        return;
+    }
+
+    // plot the sampled scalar vs. arc length in a chart window
+    std::vector<double> dist, vals;
+    double x0[3];
+    line->GetPoint(0, x0);
+    for (vtkIdType i = 0; i < line->GetNumberOfPoints(); ++i) {
+        double x[3];
+        line->GetPoint(i, x);
+        const double d = std::sqrt((x[0] - x0[0]) * (x[0] - x0[0]) +
+                                   (x[1] - x0[1]) * (x[1] - x0[1]) +
+                                   (x[2] - x0[2]) * (x[2] - x0[2]));
+        dist.push_back(d);
+        vals.push_back(field->GetTuple1(i));
+    }
+
+    PlotData pdata;
+    pdata.setColumnNames({"distance", arr});
+    pdata.addColumn("distance", dist);
+    pdata.addColumn(arr, vals);
+    auto *win = new ChartWindow(QString("Line probe: %1").arg(arr), nullptr);
+    win->setAttribute(Qt::WA_DeleteOnClose);
+    win->loadData(pdata, 0, {1});
+    win->show();
+}
+
+void VtkViewer::togglePointProbe(bool on)
+{
+    if (on) {
+        renderArea->setPickCallback([this](const QPoint &p) { onProbePick(p); });
+        statusBar()->showMessage("Point probe: click a point to read its field values.");
+    } else {
+        renderArea->setPickCallback(nullptr);
+        statusBar()->clearMessage();
+    }
+}
+
+void VtkViewer::onProbePick(const QPoint &pos)
+{
+    vtkDataSet *data = currentData();
+    if (!data) return;
+
+    const double dpr = renderArea->devicePixelRatioF();
+    const int h      = renderArea->window()->GetSize()[1];
+    auto picker = vtkSmartPointer<vtkPropPicker>::New();
+    if (!picker->Pick(pos.x() * dpr, h - pos.y() * dpr, 0.0, renderArea->renderer())) {
+        statusBar()->showMessage("Point probe: no geometry under the cursor.", 3000);
+        return;
+    }
+    double world[3];
+    picker->GetPickPosition(world);
+
+    auto probed = VtkFilters::probePoint(data, world);
+    QString msg = QString("(%1, %2, %3): ")
+                      .arg(world[0], 0, 'g', 4).arg(world[1], 0, 'g', 4).arg(world[2], 0, 'g', 4);
+    auto *pd = probed ? probed->GetPointData() : nullptr;
+    if (pd && pd->GetNumberOfArrays() > 0) {
+        QStringList parts;
+        for (int i = 0; i < pd->GetNumberOfArrays(); ++i) {
+            auto *a = pd->GetArray(i);
+            if (!a || !a->GetName()) continue;
+            if (a->GetNumberOfComponents() == 1)
+                parts << QString("%1=%2").arg(a->GetName()).arg(a->GetTuple1(0), 0, 'g', 5);
+        }
+        msg += parts.join("  ");
+    } else {
+        msg += "(no sampled fields)";
+    }
+    statusBar()->showMessage(msg, 15000);
 }
 
 // Local Variables:

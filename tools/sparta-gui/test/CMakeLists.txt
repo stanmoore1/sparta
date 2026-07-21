@@ -232,6 +232,21 @@ target_link_libraries(test_runcompare PRIVATE GTest::gtest_main Qt6::Core)
 
 gtest_discover_tests(test_runcompare)
 
+# Test executable for the VTK field-post-processing filters (Feature 9).
+# Only built when a suitable VTK is available; the filters need no display.
+find_package(VTK 9.0 QUIET COMPONENTS
+  CommonCore CommonDataModel FiltersCore FiltersGeneral FiltersSources)
+if (VTK_FOUND)
+  add_executable(test_vtkfilters
+    test_vtkfilters.cpp
+    ${CMAKE_SOURCE_DIR}/src/vtkfilters.cpp
+  )
+  target_include_directories(test_vtkfilters PRIVATE ${CMAKE_SOURCE_DIR}/src)
+  target_link_libraries(test_vtkfilters PRIVATE GTest::gtest_main Qt6::Core ${VTK_LIBRARIES})
+  vtk_module_autoinit(TARGETS test_vtkfilters MODULES ${VTK_LIBRARIES})
+  gtest_discover_tests(test_vtkfilters)
+endif()
+
 # Test executable for the movie probing and frame selection helpers
 add_executable(test_movieimport
   test_movieimport.cpp

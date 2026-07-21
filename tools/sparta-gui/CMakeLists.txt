@@ -94,7 +94,7 @@ if (NOT BUILD_DOC_ONLY)
     # (Qt5-built, Qt6-built, or built with no Qt at all) works.
     find_package(VTK 9.0 QUIET COMPONENTS
       CommonCore CommonDataModel CommonColor CommonMath
-      FiltersGeometry FiltersCore FiltersSources
+      FiltersGeometry FiltersCore FiltersSources FiltersGeneral
       IOXML IOLegacy
       RenderingCore RenderingOpenGL2 RenderingAnnotation RenderingFreeType)
     if (VTK_FOUND)
@@ -104,7 +104,9 @@ if (NOT BUILD_DOC_ONLY)
         ${CMAKE_SOURCE_DIR}/src/vtkviewer.cpp
         ${CMAKE_SOURCE_DIR}/src/vtkviewer.h
         ${CMAKE_SOURCE_DIR}/src/casecanvas.cpp
-        ${CMAKE_SOURCE_DIR}/src/casecanvas.h)
+        ${CMAKE_SOURCE_DIR}/src/casecanvas.h
+        ${CMAKE_SOURCE_DIR}/src/vtkfilters.cpp
+        ${CMAKE_SOURCE_DIR}/src/vtkfilters.h)
     else()
       message(WARNING "SPARTA_GUI_USE_VTK=ON but no suitable VTK was found; "
         "the 3D viewer will be disabled. Install a VTK build with Qt support "

@@ -153,6 +153,13 @@ private slots:
     void onScalarBarToggled(bool on);
     void saveScreenshot();
 
+    // Feature 9: in-app field post-processing (heavier analysis stays in ParaView)
+    void applyCutPlane();
+    void applyIsoSurface();
+    void applyFieldCalculator();
+    void applyLineProbe();
+    void togglePointProbe(bool on);
+
 private:
     /// @brief One dataset in the scene: its data, mapper and actor plus metadata.
     struct Layer {
@@ -167,6 +174,11 @@ private:
     void addLayer(const vtkSmartPointer<vtkDataSet> &data, const QString &label, Kind kind);
     void refreshArrayCombo();
     void applyColoring();
+    /// @brief The dataset most recently added (target of the filter actions), or null.
+    vtkDataSet *currentData() const;
+    /// @brief Names of the point-scalar arrays available across the layers.
+    QStringList pointArrayNames() const;
+    void onProbePick(const QPoint &pos); // point-probe click handler
     bool arrayRange(const QString &array, bool pointData, double range[2]) const;
     static vtkSmartPointer<vtkDataSet> readDataSet(const QString &path, QString *err);
 
