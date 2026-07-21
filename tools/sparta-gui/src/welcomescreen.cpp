@@ -94,7 +94,8 @@ WelcomeScreen::WelcomeScreen(QWidget *parent) :
     recentList->setObjectName("recentList");
     recentList->setIconSize(QSize(20, 20));
     recentList->setUniformItemSizes(false);
-    connect(recentList, &QListWidget::itemActivated, this, [this](QListWidgetItem *item) {
+    // a single click opens the entry (in addition to Enter / double-click)
+    connect(recentList, &QListWidget::itemClicked, this, [this](QListWidgetItem *item) {
         if (item) emit openFileRequested(item->data(Qt::UserRole).toString());
     });
     recentCol->addWidget(recentList, 1);
@@ -118,7 +119,8 @@ WelcomeScreen::WelcomeScreen(QWidget *parent) :
     exampleList->setSpacing(8);
     exampleList->setIconSize(QSize(GALLERY_ICON_W, GALLERY_ICON_H));
     exampleList->setGridSize(QSize(GALLERY_CELL_W, GALLERY_CELL_H));
-    connect(exampleList, &QListWidget::itemActivated, this, [this](QListWidgetItem *item) {
+    // a single click opens the example (in addition to Enter / double-click)
+    connect(exampleList, &QListWidget::itemClicked, this, [this](QListWidgetItem *item) {
         if (item) emit openExampleRequested(item->data(Qt::UserRole).toString());
     });
     exCol->addWidget(exampleList, 1);

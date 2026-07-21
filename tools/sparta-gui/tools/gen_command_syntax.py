@@ -70,8 +70,16 @@ def keyword_names(body):
     return names
 
 
+KEYWORD_TOKENS = {"keyword", "keywords"}
+
+
 def parse_template(line):
-    """Return (min_required, variadic) from a syntax ':pre' template line."""
+    """Return (min_required, variadic, keyword_led) from a ':pre' template line.
+
+    keyword_led is True when the variadic tail is a keyword list that starts
+    immediately after the fixed args (e.g. "global keyword values ..."), so a
+    "one or more" note in the body can require at least one keyword.
+    """
     toks = line.split()
     # drop the trailing ':pre' (and any ':ulb,l'-style tail markers)
     toks = [t for t in toks if not t.startswith(":")]
@@ -83,12 +91,14 @@ def parse_template(line):
     # toks[0] is the command name; count the fixed placeholders after it
     required = 0
     variadic = False
+    keyword_led = False
     for t in toks[1:]:
         if t == "..." or t.endswith("..."):
             variadic = True
             break
         if t.lower() in VARIADIC:
             variadic = True
+            keyword_led = t.lower() in KEYWORD_TOKENS
             break
         if has_ellipsis and numbered.match(t):
             # first element of a "one or more" series: count once, then stop
@@ -96,7 +106,7 @@ def parse_template(line):
             variadic = True
             break
         required += 1
-    return required, variadic
+    return required, variadic, keyword_led
 
 
 # phrases in the syntax body that indicate optional trailing arguments even when
@@ -143,10 +153,16 @@ def extract(path):
     parsed = parse_template(template)
     if parsed is None:
         return None
-    required, variadic = parsed
+    required, variadic, keyword_led = parsed
+    bodytext = "\n".join(body)
     # the body may reveal optional trailing keywords the template line omitted
-    if not variadic and BODY_VARIADIC.search("\n".join(body)):
+    if not variadic and BODY_VARIADIC.search(bodytext):
         variadic = True
+    # a mandatory keyword list ("one or more keyword/value pairs", not "zero or
+    # more") requires at least one keyword -- e.g. bare "global" is invalid
+    if keyword_led and re.search(r"one or more", bodytext, re.IGNORECASE) \
+            and not re.search(r"zero or more", bodytext, re.IGNORECASE):
+        required += 1
     return {
         "command": command,
         "minArgs": required,

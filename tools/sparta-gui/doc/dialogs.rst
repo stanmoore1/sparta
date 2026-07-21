@@ -211,11 +211,12 @@ IDs (e.g., for fixes or computes), and names (e.g., for mixtures or
 groups).  The value set is the minimum width for the text element and it
 can be chosen in the range between 1 and 32.
 
-The three settings which follow enable or disable the automatic
-reformatting when hitting the 'Enter' key, the automatic display of
-the completion pop-up window, and whether auto-save mode is enabled.
-In auto-save mode, the editor buffer is saved before a run or before
-exiting SPARTA-GUI.
+The settings which follow enable or disable the automatic reformatting
+when hitting the 'Enter' key, the automatic display of the completion
+pop-up window, the automatic :ref:`input check <input_validation>` when
+the cursor moves to a new line (*Auto-check input on line change*), and
+whether auto-save mode is enabled.  In auto-save mode, the editor buffer
+is saved before a run or before exiting SPARTA-GUI.
 
 Charts Settings
 ^^^^^^^^^^^^^^^

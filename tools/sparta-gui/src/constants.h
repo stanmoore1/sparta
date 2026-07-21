@@ -171,6 +171,7 @@ inline const QString ALLSIZE      = QStringLiteral("allsize");
 inline const QString ANTIALIAS    = QStringLiteral("antialias");
 inline const QString AUTOBOND     = QStringLiteral("autobond");
 inline const QString AUTOMATIC    = QStringLiteral("automatic");
+inline const QString AUTOLINT     = QStringLiteral("autolint"); // auto-validate on line change
 inline const QString AUTOSAVE     = QStringLiteral("autosave");
 inline const QString AXES         = QStringLiteral("axes");
 inline const QString AXESDIAM     = QStringLiteral("axesdiam");

@@ -73,6 +73,15 @@ background and a dot in the line-number margin on each affected line
 hovering the line, and a list in the docked *Diagnostics* window where
 clicking an entry jumps to the offending line.
 
+By default the same check also runs **automatically**, a short moment
+after the cursor moves to a different line (for example after pressing
+`Enter`), so the inline markers stay up to date as you type without
+having to invoke *Check Input* explicitly.  The automatic pass only
+updates the markers and the *Diagnostics* list; it never steals focus by
+raising the panel.  This behavior can be turned off with the *Auto-check
+input on line change* option on the *Editor* tab of the *Preferences*
+dialog; the manual *Check Input* menu entry remains available regardless.
+
 The checks are:
 
 - **Unknown command or style** -- the command name, or the style of a

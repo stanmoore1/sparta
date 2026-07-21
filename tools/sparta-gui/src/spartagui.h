@@ -291,6 +291,10 @@ private slots:
     /** @brief Statically validate the current input deck and show diagnostics */
     void checkInput();
 
+    /** @brief Auto-lint hook: re-validate after the editor cursor moves to a new
+     *  line (debounced), without stealing focus by opening the panel. */
+    void autoCheckInput();
+
     /** @brief Browse restart files and continue a run from a selected one */
     void continueRestart();
 
@@ -429,6 +433,11 @@ private:
     void ensureHistoryPanel();
     /** @brief Lazily create + host the docked Diagnostics panel */
     void ensureDiagnosticsPanel();
+    /** @brief Run the static input-deck validator and refresh the diagnostics UI.
+     *  @param interactive when true (manual "Check Input") the Diagnostics panel is
+     *  raised and a status-bar summary is shown; the auto-lint path passes false so
+     *  it updates markers quietly without stealing focus. */
+    void runInputCheck(bool interactive);
     /** @brief Build the validator context from the bundled tables + live instance */
     InputCheck::Context buildCheckContext();
     /** @brief Lazily create + host the docked Project Files navigator panel */
@@ -489,6 +498,10 @@ private:
     HistoryPanel *historyPanel = nullptr;    ///< Docked Run History panel (lazy)
     QListWidget *diagnosticsList = nullptr;  ///< Docked Diagnostics panel list (lazy)
     QListWidget *projectFilesList = nullptr; ///< Docked Project Files navigator list (lazy)
+
+    QTimer *autoLintTimer = nullptr;   ///< Debounce timer for auto-lint on line change (lazy)
+    bool autoLintEnabled  = true;      ///< Auto-validate the deck on cursor line change
+    int lastLintBlock     = -1;        ///< Editor block the cursor was last on (line-change detect)
 
     /**
      * @brief Container for inspect dialog widgets

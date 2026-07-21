@@ -226,6 +226,13 @@ void CodeEditor::setHighlight(int block, bool error)
     // also reset the cursor
     setCursor(block);
 
+    // an error highlight also paints a full-width line background in the editor
+    // body (not just the gutter marker) so the offending line stands out; the
+    // progress (green) highlight stays gutter-only to avoid flashing on every
+    // thermo update during a run.  refreshDiagSelections() draws both the
+    // diagnostic overlays and this error line, so keep them in sync here.
+    refreshDiagSelections();
+
     // update graphics
     repaint();
 }
@@ -252,7 +259,9 @@ void CodeEditor::clearDiagnostics()
 {
     if (diagMarks.isEmpty()) return;
     diagMarks.clear();
-    setExtraSelections({});
+    // rebuild (rather than clear outright) so an active run-error line highlight
+    // survives the diagnostics being cleared
+    refreshDiagSelections();
     lineNumberArea->update();
 }
 
@@ -273,6 +282,23 @@ void CodeEditor::refreshDiagSelections()
         sel.cursor.clearSelection();
         sels.append(sel);
     }
+
+    // the run-error line: a stronger full-width band so the failed (or last-run)
+    // line is obvious in the editor body, drawn last so it wins over any faint
+    // diagnostic overlay on the same line
+    if ((highlight != NO_HIGHLIGHT) && highlighterror && (highlight >= 0)) {
+        const QTextBlock bl = document()->findBlockByNumber(highlight);
+        if (bl.isValid()) {
+            const QColor band = light ? QColor(230, 60, 60, 80) : QColor(255, 80, 80, 90);
+            QTextEdit::ExtraSelection sel;
+            sel.format.setBackground(band);
+            sel.format.setProperty(QTextFormat::FullWidthSelection, true);
+            sel.cursor = QTextCursor(bl);
+            sel.cursor.clearSelection();
+            sels.append(sel);
+        }
+    }
+
     setExtraSelections(sels);
 }
 

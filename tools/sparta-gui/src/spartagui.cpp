@@ -170,6 +170,22 @@ void SpartaGui::setupUi(QSettings &settings, QFont &allFont, QFont &monoFont)
     highlighter = new Highlighter(document);
     connect(document, &QTextDocument::modificationChanged, this, &SpartaGui::modified);
 
+    // auto-lint: re-validate the deck a short moment after the cursor lands on a
+    // new line (covers pressing Enter and moving the cursor between lines).  The
+    // debounce timer coalesces rapid movements into a single check; the feature
+    // can be turned off in Preferences (autoLintEnabled) but has no menu entry.
+    autoLintTimer = new QTimer(this);
+    autoLintTimer->setSingleShot(true);
+    autoLintTimer->setInterval(500);
+    connect(autoLintTimer, &QTimer::timeout, this, &SpartaGui::autoCheckInput);
+    connect(textEdit, &QPlainTextEdit::cursorPositionChanged, this, [this]() {
+        if (!autoLintEnabled) return;
+        const int block = textEdit->textCursor().blockNumber();
+        if (block == lastLintBlock) return; // same line: nothing new to lint
+        lastLintBlock = block;
+        autoLintTimer->start();
+    });
+
     // apply font settings
     setFont(allFont);
     textEdit->setFont(monoFont);
@@ -351,6 +367,11 @@ void SpartaGui::createViewMenu()
             slideshow = new SlideShow(currentFile, this);
             panels->setPanelWidget(PanelManager::Slide, slideshow, "Slide Show");
         }
+        // opening the Image window with no snapshot yet used to show an empty
+        // pane; render one on demand (renderImage() creates the viewer and
+        // re-opens the panel -- the !imagewindow guard prevents recursion, and
+        // if rendering is not possible it reports why instead of doing nothing)
+        if (panel == PanelManager::Image && !imagewindow) renderImage();
         if (panel == PanelManager::Variables && !varwindow) createVariableWindow();
         if (panel == PanelManager::Jobs) ensureJobsPanel();
         if (panel == PanelManager::Sweep) ensureSweepPanel();
@@ -817,6 +838,7 @@ SpartaGui::SpartaGui(QWidget *parent, const QString &filename, int width, int he
     settings.beginGroup(Keys::GROUP_REFORMAT);
     textEdit->setReformatOnReturn(settings.value(Keys::RETURN, false).toBool());
     textEdit->setAutoComplete(settings.value(Keys::AUTOMATIC, true).toBool());
+    autoLintEnabled = settings.value(Keys::AUTOLINT, true).toBool();
     settings.endGroup();
 
     // apply https proxy setting: prefer environment variable or fall back to preferences value
@@ -2257,6 +2279,21 @@ InputCheck::Context SpartaGui::buildCheckContext()
 
 void SpartaGui::checkInput()
 {
+    runInputCheck(true);
+}
+
+void SpartaGui::autoCheckInput()
+{
+    if (!autoLintEnabled) return;
+    // only lint the editor, never the welcome screen; and skip while a run is
+    // active (SPARTA is not re-entrant and the buffer is being executed anyway)
+    if (centralStack->currentWidget() != textEdit) return;
+    if (sparta.isRunning()) return;
+    runInputCheck(false);
+}
+
+void SpartaGui::runInputCheck(bool interactive)
+{
     ensureDiagnosticsPanel();
     const InputCheck::Context ctx = buildCheckContext();
     const QStringList lines = textEdit->toPlainText().split(QLatin1Char('\n'));
@@ -2295,12 +2332,17 @@ void SpartaGui::checkInput()
 
     if (diags.isEmpty()) {
         diagnosticsList->addItem(new QListWidgetItem(QStringLiteral("No problems found.")));
-        statusBar()->showMessage("Input check: no problems found.", 5000);
+        if (interactive) statusBar()->showMessage("Input check: no problems found.", 5000);
     } else {
-        panels->openPanel(PanelManager::Diagnostics);
-        statusBar()->showMessage(
-            QStringLiteral("Input check: %1 error(s), %2 warning(s).").arg(errors).arg(warnings),
-            8000);
+        // the manual check raises the panel and summarizes; the auto-lint path
+        // updates the inline markers + panel contents quietly (no focus stealing)
+        if (interactive) panels->openPanel(PanelManager::Diagnostics);
+        if (interactive)
+            statusBar()->showMessage(
+                QStringLiteral("Input check: %1 error(s), %2 warning(s).")
+                    .arg(errors)
+                    .arg(warnings),
+                8000);
     }
 }
 
@@ -2552,6 +2594,12 @@ void SpartaGui::importSurface()
         "Surface geometry (*.stl *.surf);;STL files (*.stl);;"
         "SPARTA surface files (*.surf);;All files (*)");
     if (fileName.isEmpty()) return;
+
+    // ensure a SPARTA instance exists so the wizard's "Render via SPARTA" preview
+    // works (it needs the library to build the surf/grid and issue a dump image);
+    // the STL parsing/transform/watertightness steps do not need it, but the
+    // render tab otherwise reports "The SPARTA library is not loaded"
+    if (!sparta.isRunning() && !sparta.isOpen()) startSparta();
 
     StlImportWizard wiz(this, &sparta, fileName);
     if (!wiz.loaded()) {
@@ -3040,7 +3088,11 @@ void SpartaGui::preferences()
         settings.beginGroup(Keys::GROUP_REFORMAT);
         textEdit->setReformatOnReturn(settings.value(Keys::RETURN, false).toBool());
         textEdit->setAutoComplete(settings.value(Keys::AUTOMATIC, true).toBool());
+        const bool wasAutoLint = autoLintEnabled;
+        autoLintEnabled        = settings.value(Keys::AUTOLINT, true).toBool();
         settings.endGroup();
+        // if auto-lint was just turned off, drop any inline markers it left behind
+        if (wasAutoLint && !autoLintEnabled) textEdit->clearDiagnostics();
         // the editor syntax color scheme may have changed: apply it live so the
         // choice takes effect immediately without requiring a restart
         applyEditorColorScheme();

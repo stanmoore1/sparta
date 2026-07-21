@@ -189,11 +189,14 @@ the current `run <https://sparta.github.io/doc/run.html>`_ command.
 
 If an error occurs (for example when a command is misspelled or a
 required file is missing), an error message dialog is shown and the
-line of the input which triggered the error is highlighted in red.
-SPARTA reports such errors through its exception mechanism, so the GUI
-itself keeps running and the input can be corrected and run again
-right away.  The state of SPARTA in the status bar is set to "Failed."
-instead of "Ready."
+line of the input which triggered the error (or, when SPARTA cannot
+pinpoint one, the last line that was run) is highlighted in red -- both
+by a marker in the line-number margin and by a full-width red band
+across the line in the editor body, so the offending line is easy to
+find.  The cursor is also moved to that line.  SPARTA reports such
+errors through its exception mechanism, so the GUI itself keeps running
+and the input can be corrected and run again right away.  The state of
+SPARTA in the status bar is set to "Failed." instead of "Ready."
 
 .. TODO screenshot: capture the error dialog with the offending input
    line highlighted in red as JPG/sparta-gui-run-error.png, then

@@ -226,6 +226,8 @@ void Preferences::accept()
     if (box) settings->setValue(Keys::RETURN, box->isChecked());
     box = tabWidget->findChild<QCheckBox *>("autoval");
     if (box) settings->setValue(Keys::AUTOMATIC, box->isChecked());
+    box = tabWidget->findChild<QCheckBox *>("autolintval");
+    if (box) settings->setValue(Keys::AUTOLINT, box->isChecked());
     box = tabWidget->findChild<QCheckBox *>("savval");
     if (box) settings->setValue(Keys::AUTOSAVE, box->isChecked());
     settings->endGroup();
@@ -866,6 +868,7 @@ EditorTab::EditorTab(QSettings *_settings, QWidget *parent) : QWidget(parent), s
     auto *namelbl  = new QLabel("Name width:");
     auto *retlbl   = new QLabel("Reformat with 'Enter':");
     auto *autolbl  = new QLabel("Automatic completion:");
+    auto *lintlbl  = new QLabel("Auto-check input on line change:");
     auto *savlbl   = new QLabel("Auto-save on 'Run' and 'Quit':");
     auto *cmdval   = new QSpinBox;
     auto *typeval  = new QSpinBox;
@@ -873,6 +876,7 @@ EditorTab::EditorTab(QSettings *_settings, QWidget *parent) : QWidget(parent), s
     auto *nameval  = new QSpinBox;
     auto *retval   = new QCheckBox;
     auto *autoval  = new QCheckBox;
+    auto *lintval  = new QCheckBox;
     auto *savval   = new QCheckBox;
     cmdval->setObjectName("cmdval");
     cmdval->setRange(Cfg::COMPLETION_CHARS_MIN, Cfg::COMPLETION_CHARS_MAX);
@@ -890,6 +894,10 @@ EditorTab::EditorTab(QSettings *_settings, QWidget *parent) : QWidget(parent), s
     retval->setChecked(settings->value(Keys::RETURN, false).toBool());
     autoval->setObjectName("autoval");
     autoval->setChecked(settings->value(Keys::AUTOMATIC, true).toBool());
+    lintval->setObjectName("autolintval");
+    lintval->setToolTip("Statically validate the input deck automatically after the cursor "
+                        "moves to a new line (also available manually via Run → Check Input)");
+    lintval->setChecked(settings->value(Keys::AUTOLINT, true).toBool());
     savval->setObjectName("savval");
     savval->setChecked(settings->value(Keys::AUTOSAVE, false).toBool());
     settings->endGroup();
@@ -919,6 +927,8 @@ EditorTab::EditorTab(QSettings *_settings, QWidget *parent) : QWidget(parent), s
     grid->addWidget(retval, i++, 1, Qt::AlignVCenter);
     grid->addWidget(autolbl, i, 0, Qt::AlignTop);
     grid->addWidget(autoval, i++, 1, Qt::AlignVCenter);
+    grid->addWidget(lintlbl, i, 0, Qt::AlignTop);
+    grid->addWidget(lintval, i++, 1, Qt::AlignVCenter);
     grid->addWidget(new QLabel(" "), i++, 0);
     grid->addWidget(savlbl, i, 0, Qt::AlignTop);
     grid->addWidget(savval, i++, 1, Qt::AlignVCenter);

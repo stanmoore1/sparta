@@ -206,6 +206,12 @@ output, charts, slide show, variables, or snapshot images.  The
 default settings for their visibility can be changed in the
 *Preferences* dialog.
 
+Opening the *Image Window* when no snapshot has been created yet
+renders one on demand (equivalent to *Run* -> *Create Image*), so the
+window always shows an image rather than an empty pane.  If a snapshot
+cannot be created from the current input -- for example because it does
+not define a simulation box -- a message explains why instead.
+
 .. index:: Project Files
 .. index:: multi-file navigation
 
