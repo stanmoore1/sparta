@@ -88,20 +88,21 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # Second build: x86_64 (Intel) with the optional VTK 3D viewer enabled.
-  # This is a separate, single-architecture build because Homebrew's VTK is not
-  # universal -- it cannot be linked into the arm64+x86_64 bundle above -- so we
-  # build it natively on the Intel (macos-13) runner.  VTK's Qt integration is
-  # not used (the viewer renders off-screen), so any Homebrew VTK works.  Qt is
-  # bundled with macdeployqt and the VTK dylibs with dylibbundler; the finished
-  # .app is uploaded as a zip.
+  # Homebrew's VTK is single-architecture, so this is a separate x86_64-only
+  # build.  GitHub retired the Intel macos-13 runners, so we build it on the
+  # arm64 macos-14 runner by cross-compiling to x86_64 and getting an x86_64 VTK
+  # from a Rosetta (x86_64) Homebrew.  VTK's Qt integration is not used (the
+  # viewer renders off-screen).  Qt is bundled with macdeployqt and the VTK
+  # dylibs with dylibbundler; the finished .app is uploaded as a zip and runs on
+  # Intel Macs (and on Apple Silicon under Rosetta 2).
   # ---------------------------------------------------------------------------
   build-vtk-app:
-    runs-on: macos-13
+    runs-on: macos-14
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Qt (official macOS binaries)
+      - name: Install Qt (official universal macOS binaries)
         uses: jurplel/install-qt-action@v4
         with:
           version: '6.7.3'
@@ -110,11 +111,27 @@ jobs:
           arch: 'clang_64'
           cache: true
 
-      - name: Install VTK and dylibbundler (Homebrew, x86_64)
+      - name: Install Rosetta, an x86_64 Homebrew and x86_64 VTK
         run: |
-          brew install vtk dylibbundler
-          echo "VTK_PREFIX=$(brew --prefix vtk)" >> "$GITHUB_ENV"
-          find "$(brew --prefix vtk)/lib/cmake" -maxdepth 1 -name 'vtk-*' -type d
+          set -x
+          # Rosetta 2 lets the arm64 runner run x86_64 tooling (the x86_64 brew,
+          # and later the x86_64 app for the launch check).
+          softwareupdate --install-rosetta --agree-to-license
+          # A separate x86_64 Homebrew lives under /usr/local (the native arm64
+          # brew is /opt/homebrew).  Install it if the runner doesn't have one.
+          if [ ! -x /usr/local/bin/brew ]; then
+            arch -x86_64 /bin/bash -c \
+              "NONINTERACTIVE=1 $(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+          fi
+          # x86_64 VTK (and its deps) via the x86_64 brew; dylibbundler via the
+          # native brew (it only rewrites Mach-O load commands, arch-agnostic).
+          arch -x86_64 /usr/local/bin/brew install vtk
+          brew install dylibbundler
+          VTK_PREFIX="$(arch -x86_64 /usr/local/bin/brew --prefix vtk)"
+          echo "VTK_PREFIX=$VTK_PREFIX" >> "$GITHUB_ENV"
+          echo "X86_BREW=/usr/local/bin/brew" >> "$GITHUB_ENV"
+          find "$VTK_PREFIX/lib/cmake" -maxdepth 1 -name 'vtk-*' -type d
+          lipo -info "$VTK_PREFIX"/lib/libvtkCommonCore*.dylib | head -1
 
       - name: Build SPARTA shared library (serial, x86_64)
         run: |
@@ -150,6 +167,8 @@ jobs:
           cp "$SPARTA_LIB" "$APP/Contents/Frameworks/libsparta.0.dylib"
           chmod 0755 "$APP/Contents/Frameworks/libsparta.0.dylib"
           macdeployqt "$APP" -verbose=1
+          # dylibbundler (native arm64 tool) rewrites the x86_64 binary's VTK
+          # load commands and copies the x86_64 VTK dylibs into Contents/libs.
           dylibbundler -of -cd -b \
             -x "$APP/Contents/MacOS/sparta-gui" \
             -d "$APP/Contents/libs" \
@@ -157,10 +176,10 @@ jobs:
           echo "--- remaining links (should be system-only) ---"
           otool -L "$APP/Contents/MacOS/sparta-gui" | sed -n '2,$p'
 
-      - name: Verify the app launches (loads Qt + VTK from the bundle)
+      - name: Verify the app launches under Rosetta (loads Qt + VTK from the bundle)
         run: |
           cd build-gui
-          ./sparta-gui.app/Contents/MacOS/sparta-gui -v
+          arch -x86_64 ./sparta-gui.app/Contents/MacOS/sparta-gui -v
 
       - name: Zip the .app
         run: |
