@@ -1,0 +1,695 @@
+{
+"adapt_grid": {
+"args": [
+"group-ID",
+"action1"
+],
+"keywords": [
+"iterate",
+"maxlevel",
+"minlevel",
+"thresh",
+"combine",
+"cells",
+"region",
+"dir"
+],
+"syntax": "adapt_grid group-ID action1 action2 style args ... keyword args ..."
+},
+"balance_grid": {
+"args": [
+"style"
+],
+"keywords": [
+"axes",
+"flip"
+],
+"syntax": "balance_grid style args ..."
+},
+"bound_modify": {
+"args": [
+"wall1"
+],
+"keywords": [
+"collide",
+"react"
+],
+"syntax": "bound_modify wall1 wall2 ... keyword value ..."
+},
+"boundary": {
+"args": [
+"x",
+"y",
+"z"
+],
+"keywords": [],
+"syntax": "boundary x y z"
+},
+"clear": {
+"args": [],
+"keywords": [],
+"syntax": "clear"
+},
+"collide": {
+"args": [
+"style"
+],
+"keywords": [
+"relax"
+],
+"syntax": "collide style args keyword value ..."
+},
+"collide_modify": {
+"args": [],
+"keywords": [
+"vremax",
+"remain",
+"ambipolar",
+"nearcp",
+"rotate",
+"vibrate"
+],
+"syntax": "collide_modify keyword values ..."
+},
+"compute": {
+"args": [
+"ID",
+"style"
+],
+"keywords": [],
+"syntax": "compute ID style args"
+},
+"create_box": {
+"args": [
+"xlo",
+"xhi",
+"ylo",
+"yhi",
+"zlo",
+"zhi"
+],
+"keywords": [],
+"syntax": "create_box xlo xhi ylo yhi zlo zhi"
+},
+"create_grid": {
+"args": [
+"Nx",
+"Ny",
+"Nz"
+],
+"keywords": [
+"block",
+"clump",
+"random",
+"stride",
+"levels",
+"subset",
+"region",
+"inside"
+],
+"syntax": "create_grid Nx Ny Nz keyword args ..."
+},
+"create_isurf": {
+"args": [
+"group-ID",
+"ablateID",
+"thresh",
+"mode"
+],
+"keywords": [],
+"syntax": "create_isurf group-ID ablateID thresh mode ..."
+},
+"create_particles": {
+"args": [
+"mix-ID",
+"style"
+],
+"keywords": [
+"cut",
+"global",
+"region",
+"species",
+"density",
+"temperature",
+"vstream",
+"custom",
+"twopass"
+],
+"syntax": "create_particles mix-ID style args keyword value ..."
+},
+"custom": {
+"args": [
+"style",
+"action"
+],
+"keywords": [],
+"syntax": "custom style action args ... action args ..."
+},
+"dimension": {
+"args": [
+"N"
+],
+"keywords": [],
+"syntax": "dimension N"
+},
+"dump": {
+"args": [
+"ID",
+"style",
+"select-ID",
+"N",
+"file"
+],
+"keywords": [],
+"syntax": "dump ID style select-ID N file args"
+},
+"dump_modify": {
+"args": [
+"dump-ID"
+],
+"keywords": [
+"append",
+"buffer",
+"every",
+"fileper",
+"first",
+"flush",
+"format",
+"nfile",
+"pad",
+"region",
+"thresh",
+"backcolor",
+"backcolor2",
+"bitrate",
+"boxcolor",
+"cmap",
+"color",
+"framerate",
+"gcolor",
+"glinecolor",
+"gridgroup",
+"lights",
+"pcolor",
+"pdiam",
+"scolor",
+"slinecolor",
+"subboxcolor",
+"surfgroup"
+],
+"syntax": "dump_modify dump-ID keyword values ..."
+},
+"echo": {
+"args": [
+"style"
+],
+"keywords": [],
+"syntax": "echo style"
+},
+"fix": {
+"args": [
+"ID",
+"style"
+],
+"keywords": [],
+"syntax": "fix ID style args"
+},
+"global": {
+"args": [],
+"keywords": [
+"fnum",
+"nrho",
+"vstream",
+"temp",
+"field",
+"surfs",
+"surfgrid",
+"surfmax",
+"splitmax",
+"surftally",
+"gridcut",
+"comm/sort",
+"comm/style",
+"weight",
+"particle/reorder",
+"mem/limit"
+],
+"syntax": "global keyword values ..."
+},
+"group": {
+"args": [
+"ID",
+"which",
+"style"
+],
+"keywords": [],
+"syntax": "group ID which style args"
+},
+"if": {
+"args": [
+"boolean",
+"then",
+"t1"
+],
+"keywords": [],
+"syntax": "if boolean then t1 t2 ... elif boolean f1 f2 ... elif boolean f1 f2 ... else e1 e2 ..."
+},
+"include": {
+"args": [
+"file"
+],
+"keywords": [],
+"syntax": "include file"
+},
+"jump": {
+"args": [
+"file",
+"label"
+],
+"keywords": [],
+"syntax": "jump file label"
+},
+"label": {
+"args": [
+"ID"
+],
+"keywords": [],
+"syntax": "label ID"
+},
+"log": {
+"args": [
+"file"
+],
+"keywords": [
+"append"
+],
+"syntax": "log file keyword"
+},
+"mixture": {
+"args": [
+"ID",
+"species1"
+],
+"keywords": [
+"nrho",
+"vstream",
+"temp",
+"frac",
+"group",
+"copy",
+"delete"
+],
+"syntax": "mixture ID species1 species2 ... keyword args ..."
+},
+"move_surf": {
+"args": [
+"groupID",
+"style"
+],
+"keywords": [
+"connect"
+],
+"syntax": "move_surf groupID style args ... keyword value ..."
+},
+"next": {
+"args": [
+"variables"
+],
+"keywords": [],
+"syntax": "next variables"
+},
+"package": {
+"args": [
+"style"
+],
+"keywords": [
+"kokkos",
+"comm",
+"react/extra",
+"react/retry",
+"gpu/aware"
+],
+"syntax": "package style args"
+},
+"partition": {
+"args": [
+"style",
+"N",
+"command"
+],
+"keywords": [],
+"syntax": "partition style N command ..."
+},
+"print": {
+"args": [
+"string"
+],
+"keywords": [
+"file",
+"append",
+"screen"
+],
+"syntax": "print string keyword value:pre"
+},
+"python": {
+"args": [
+"mode"
+],
+"keywords": [
+"here",
+"invoke",
+"input",
+"return",
+"format",
+"length",
+"file",
+"exists"
+],
+"syntax": "python mode keyword args ..."
+},
+"quit": {
+"args": [],
+"keywords": [],
+"syntax": "quit"
+},
+"react": {
+"args": [
+"style"
+],
+"keywords": [],
+"syntax": "react style args"
+},
+"react_modify": {
+"args": [],
+"keywords": [
+"recomb",
+"rboost",
+"compute_chem_rates",
+"partial_energy"
+],
+"syntax": "react_modify keyword values ..."
+},
+"read_grid": {
+"args": [
+"filename"
+],
+"keywords": [
+"custom"
+],
+"syntax": "read_grid filename keyword args ..."
+},
+"read_isurf": {
+"args": [
+"group-ID",
+"Nx",
+"Ny",
+"Nz",
+"filename",
+"thresh",
+"ablateID"
+],
+"keywords": [
+"group",
+"type",
+"push",
+"precision",
+"read"
+],
+"syntax": "read_isurf group-ID Nx Ny Nz filename thresh ablateID keyword args ..."
+},
+"read_particles": {
+"args": [
+"file",
+"Nstep"
+],
+"keywords": [],
+"syntax": "read_particles file Nstep"
+},
+"read_restart": {
+"args": [
+"file"
+],
+"keywords": [
+"gridcut",
+"balance"
+],
+"syntax": "read_restart file keyword args ..."
+},
+"read_surf": {
+"args": [
+"filename"
+],
+"keywords": [
+"type",
+"custom",
+"origin",
+"trans",
+"atrans"
+],
+"syntax": "read_surf filename keyword args ..."
+},
+"region": {
+"args": [
+"ID",
+"style"
+],
+"keywords": [
+"side"
+],
+"syntax": "region ID style args keyword value ..."
+},
+"remove_surf": {
+"args": [
+"surfID"
+],
+"keywords": [],
+"syntax": "remove_surf surfID"
+},
+"reset_timestep": {
+"args": [
+"N"
+],
+"keywords": [],
+"syntax": "reset_timestep N"
+},
+"restart": {
+"args": [
+"N",
+"file1"
+],
+"keywords": [
+"fileper",
+"nfile"
+],
+"syntax": "restart N file1 file2 keyword value ..."
+},
+"run": {
+"args": [
+"N"
+],
+"keywords": [
+"upto",
+"start",
+"stop",
+"pre",
+"post",
+"every"
+],
+"syntax": "run N keyword values ..."
+},
+"scale_particles": {
+"args": [
+"mix-ID",
+"factor"
+],
+"keywords": [],
+"syntax": "scale_particles mix-ID factor"
+},
+"seed": {
+"args": [
+"Nvalue"
+],
+"keywords": [],
+"syntax": "seed Nvalue"
+},
+"shell": {
+"args": [
+"cmd"
+],
+"keywords": [],
+"syntax": "shell cmd args"
+},
+"species": {
+"args": [
+"file",
+"ID1"
+],
+"keywords": [
+"vibfile"
+],
+"syntax": "species file ID1 ID2 ... keyword value ..."
+},
+"species_modify": {
+"args": [
+"ID",
+"property"
+],
+"keywords": [],
+"syntax": "species_modify ID property value ..."
+},
+"stats": {
+"args": [
+"N"
+],
+"keywords": [],
+"syntax": "stats N"
+},
+"stats_modify": {
+"args": [],
+"keywords": [
+"flush",
+"format",
+"every"
+],
+"syntax": "stats_modify keyword value ..."
+},
+"stats_style": {
+"args": [
+"arg1"
+],
+"keywords": [],
+"syntax": "stats_style arg1 arg2 ..."
+},
+"suffix": {
+"args": [
+"style"
+],
+"keywords": [],
+"syntax": "suffix style args"
+},
+"surf_collide": {
+"args": [
+"ID",
+"style"
+],
+"keywords": [
+"translate",
+"rotate",
+"temp/freq",
+"partial",
+"barrier",
+"bond",
+"init_energy",
+"step",
+"double",
+"intenergy"
+],
+"syntax": "surf_collide ID style args keyword values ..."
+},
+"surf_modify": {
+"args": [
+"group-ID"
+],
+"keywords": [
+"collide"
+],
+"syntax": "surf_modify group-ID keyword args ..."
+},
+"surf_react": {
+"args": [
+"ID",
+"style"
+],
+"keywords": [],
+"syntax": "surf_react ID style args"
+},
+"timestep": {
+"args": [
+"dt"
+],
+"keywords": [],
+"syntax": "timestep dt"
+},
+"uncompute": {
+"args": [
+"compute-ID"
+],
+"keywords": [],
+"syntax": "uncompute compute-ID"
+},
+"undump": {
+"args": [
+"dump-ID"
+],
+"keywords": [],
+"syntax": "undump dump-ID"
+},
+"unfix": {
+"args": [
+"fix-ID"
+],
+"keywords": [],
+"syntax": "unfix fix-ID"
+},
+"units": {
+"args": [
+"style"
+],
+"keywords": [],
+"syntax": "units style"
+},
+"variable": {
+"args": [
+"name",
+"style"
+],
+"keywords": [],
+"syntax": "variable name style args ..."
+},
+"write_grid": {
+"args": [
+"filename"
+],
+"keywords": [
+"custom"
+],
+"syntax": "write_grid filename keyword arg ..."
+},
+"write_isurf": {
+"args": [
+"group-ID",
+"Nx",
+"Ny",
+"Nz",
+"filename",
+"ablateID"
+],
+"keywords": [
+"precision"
+],
+"syntax": "write_isurf group-ID Nx Ny Nz filename ablateID keyword args ..."
+},
+"write_restart": {
+"args": [
+"file"
+],
+"keywords": [
+"fileper",
+"nfile"
+],
+"syntax": "write_restart file keyword value ..."
+},
+"write_surf": {
+"args": [
+"file"
+],
+"keywords": [
+"points",
+"type",
+"custom",
+"fileper",
+"nfile"
+],
+"syntax": "write_surf file"
+}
+}

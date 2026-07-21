@@ -88,6 +88,11 @@ The checks are:
   ``read_grid``, ``read_restart``, or ``read_particles`` cannot be found
   in the working directory.
 
+Activating an entry in the *Diagnostics* window (double-click or `Enter`)
+jumps to the offending line and, when the problem is on a recognized
+command, shows that command's documented **syntax** in the status bar --
+so the expected form of the command is visible right next to the error.
+
 The checks are deliberately conservative to avoid false alarms:
 comments, line continuations (``&``), embedded Python (``python ... here
 """..."""``) blocks, and variable-expanded (``${...}``) command or style
@@ -136,6 +141,15 @@ command names are queried from the loaded SPARTA library, and thus the
 completion shows only options that are actually available in the SPARTA
 version and configuration in use.  For improved clarity, only the
 non-suffix (non-accelerated) versions of styles are shown.
+
+.. index:: call tip
+.. index:: command syntax
+
+When a command name is completed, a small **call tip** pops up showing
+that command's syntax -- its required positional fields and its optional
+keywords -- taken from the SPARTA documentation.  This makes it easy to
+see, for example, that ``create_box`` expects ``xlo xhi ylo yhi zlo zhi``
+or which keywords a ``run`` command accepts, without leaving the editor.
 
 Line Reformatting
 ^^^^^^^^^^^^^^^^^

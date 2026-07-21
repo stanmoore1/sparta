@@ -34,6 +34,7 @@
     <file>help_index.table</file>
     <!-- generated from the SPARTA docs with: tools/gen_command_syntax.py ../../doc resources/command_syntax.table -->
     <file>command_syntax.table</file>
+    <file>command_syntax.json</file>
     <file>snippets.json</file>
     <file>image_style.table</file>
     <file>style.qss</file>

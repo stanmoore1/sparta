@@ -239,3 +239,20 @@ TEST(InputCheck, ColumnPointsAtOffendingToken)
     // "emit/bogus" starts at column 8 (1-based) in "fix in emit/bogus ..."
     EXPECT_EQ(d.first().column, 8);
 }
+
+TEST(InputCheck, SyntaxCatalogParsesFields)
+{
+    const QByteArray json = R"({
+      "create_box": {"syntax": "create_box xlo xhi ylo yhi zlo zhi",
+                     "args": ["xlo","xhi","ylo","yhi","zlo","zhi"], "keywords": []},
+      "run": {"syntax": "run N keyword values ...", "args": ["N"],
+              "keywords": ["upto","start","stop"]}
+    })";
+    const auto cat = parseSyntaxCatalog(json);
+    ASSERT_TRUE(cat.contains("create_box"));
+    EXPECT_EQ(cat["create_box"].syntax, "create_box xlo xhi ylo yhi zlo zhi");
+    EXPECT_EQ(cat["create_box"].args.size(), 6);
+    EXPECT_TRUE(cat["create_box"].keywords.isEmpty());
+    EXPECT_EQ(cat["run"].args, QStringList{"N"});
+    EXPECT_EQ(cat["run"].keywords.size(), 3);
+}

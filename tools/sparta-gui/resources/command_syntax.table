@@ -11,8 +11,10 @@ compute 2 1
 create_box 6 0
 create_grid 3 1
 create_isurf 4 1
+create_particles 2 1
 custom 2 1
 dimension 1 0
+dump 5 1
 dump_modify 1 1
 echo 1 0
 fix 2 1
@@ -54,6 +56,7 @@ stats_style 1 1
 suffix 1 1
 surf_collide 2 1
 surf_modify 1 1
+surf_react 2 1
 timestep 1 0
 uncompute 1 0
 undump 1 0

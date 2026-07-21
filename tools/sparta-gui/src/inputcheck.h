@@ -47,6 +47,13 @@ struct CommandSpec {
     bool variadic = true;  ///< true if trailing keyword/args may follow (no maximum)
 };
 
+/// @brief Human-facing syntax help for one command, from the SPARTA docs.
+struct CommandHelp {
+    QString syntax;        ///< the verbatim Syntax: template, e.g. "create_box xlo xhi ..."
+    QStringList args;      ///< required positional field names ("xlo", "xhi", ...)
+    QStringList keywords;  ///< optional keyword names ("start", "stop", ...)
+};
+
 /// @brief A single validation finding tied to a physical line of the deck.
 struct Diagnostic {
     int line = 0;                     ///< 1-based physical line number
@@ -103,6 +110,14 @@ QList<Diagnostic> checkDeckText(const QString &text, const Context &ctx);
  * @c # comment lines ignored.  See @c tools/gen_command_syntax.py.
  */
 QHash<QString, CommandSpec> parseSyntaxTable(const QString &tableText);
+
+/**
+ * @brief Parse the generated command-syntax catalog (JSON) into per-command help.
+ * @param json contents of @c resources/command_syntax.json
+ *
+ * Used by the editor's syntax-aware autocomplete and the validator's error help.
+ */
+QHash<QString, CommandHelp> parseSyntaxCatalog(const QByteArray &json);
 
 } // namespace InputCheck
 

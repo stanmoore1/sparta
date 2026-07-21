@@ -11,6 +11,9 @@
 
 #include "inputcheck.h"
 
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QRegularExpression>
 
 namespace InputCheck {
@@ -78,6 +81,27 @@ QList<Token> tokenize(const QString &line)
             ++i;
         }
         out.append({cur, start});
+    }
+    return out;
+}
+
+// Blank out lines inside triple-quoted here-docs (e.g. the embedded Python of a
+// "python ... here \"\"\" ... \"\"\"" command), preserving line numbering so
+// those lines are not mistaken for SPARTA commands.
+QStringList stripTripleBlocks(const QStringList &lines)
+{
+    QStringList out;
+    out.reserve(lines.size());
+    bool inTriple = false;
+    for (const QString &line : lines) {
+        const int count = line.count(QStringLiteral("\"\"\""));
+        if (inTriple) {
+            out.append(QString()); // inside a here-doc: not a command
+            if (count % 2 == 1) inTriple = false;
+        } else {
+            out.append(line); // the opening line is still a real command
+            if (count % 2 == 1) inTriple = true;
+        }
     }
     return out;
 }
@@ -171,7 +195,7 @@ QString baseStyle(const QString &s)
 QList<Diagnostic> checkDeck(const QStringList &lines, const Context &ctx)
 {
     QList<Diagnostic> diags;
-    const QList<LogicalLine> logic = logicalLines(lines);
+    const QList<LogicalLine> logic = logicalLines(stripTripleBlocks(lines));
 
     // ---- pass 1: collect every defined identifier across the whole deck -------
     // (order-insensitive so we never false-flag a forward reference, and so an
@@ -314,6 +338,25 @@ QList<Diagnostic> checkDeckText(const QString &text, const Context &ctx)
     // keep empty trailing lines out but preserve interior blanks / line numbers
     const QStringList lines = text.split(QLatin1Char('\n'));
     return checkDeck(lines, ctx);
+}
+
+QHash<QString, CommandHelp> parseSyntaxCatalog(const QByteArray &json)
+{
+    QHash<QString, CommandHelp> out;
+    const QJsonDocument doc = QJsonDocument::fromJson(json);
+    if (!doc.isObject()) return out;
+    const QJsonObject root = doc.object();
+    for (auto it = root.constBegin(); it != root.constEnd(); ++it) {
+        const QJsonObject o = it.value().toObject();
+        CommandHelp h;
+        h.syntax = o.value(QStringLiteral("syntax")).toString();
+        for (const QJsonValue &v : o.value(QStringLiteral("args")).toArray())
+            h.args.append(v.toString());
+        for (const QJsonValue &v : o.value(QStringLiteral("keywords")).toArray())
+            h.keywords.append(v.toString());
+        out.insert(it.key(), h);
+    }
+    return out;
 }
 
 QHash<QString, CommandSpec> parseSyntaxTable(const QString &tableText)

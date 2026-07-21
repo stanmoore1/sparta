@@ -115,6 +115,11 @@ CodeEditor::CodeEditor(QWidget *parent) :
     updateLineNumberAreaWidth(0);
     setCursorWidth(2);
 
+    // doc-derived command syntax help for call tips + linter error help
+    QFile syntaxFile(QStringLiteral(":/command_syntax.json"));
+    if (syntaxFile.open(QIODevice::ReadOnly))
+        cmdHelp = InputCheck::parseSyntaxCatalog(syntaxFile.readAll());
+
     // banner watermark: shown only while the editor is empty; hidden once the user
     // types or a file is loaded.  Toggle it as the document's emptiness changes.
     bannerVisible = document()->isEmpty();
@@ -1109,6 +1114,23 @@ void CodeEditor::insertCompletedCommand(const QString &completion)
     cursor.movePosition(QTextCursor::NextCharacter, QTextCursor::KeepAnchor, end - begin - 1);
     cursor.insertText(completion);
     setTextCursor(cursor);
+
+    // once a command is completed, show its required/optional fields as a call tip
+    showCommandCallTip();
+}
+
+void CodeEditor::showCommandCallTip()
+{
+    if (cmdHelp.isEmpty()) return;
+    const QString first =
+        textCursor().block().text().trimmed().section(QRegularExpression("\\s+"), 0, 0);
+    const auto it = cmdHelp.constFind(first);
+    if (it == cmdHelp.constEnd() || it.value().syntax.isEmpty()) return;
+    QString tip = QStringLiteral("<b>%1</b>").arg(it.value().syntax.toHtmlEscaped());
+    if (!it.value().keywords.isEmpty())
+        tip += QStringLiteral("<br><i>keywords:</i> %1")
+                   .arg(it.value().keywords.join(QStringLiteral(", ")).toHtmlEscaped());
+    QToolTip::showText(viewport()->mapToGlobal(cursorRect().bottomLeft()), tip, this);
 }
 
 void CodeEditor::getHelp()

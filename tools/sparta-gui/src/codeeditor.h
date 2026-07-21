@@ -138,6 +138,9 @@ public:
     /// @brief Clear all diagnostic markers.
     void clearDiagnostics();
 
+    /// @brief Doc-derived per-command syntax help (for autocomplete + error help)
+    const QHash<QString, InputCheck::CommandHelp> &commandHelp() const { return cmdHelp; }
+
     /**
      * @brief Enable/disable automatic reformatting on Enter key
      * @param flag true to enable, false to disable
@@ -401,6 +404,10 @@ private:
     };
     QHash<int, DiagMark> diagMarks; ///< block number -> diagnostic marker
     void refreshDiagSelections();   ///< rebuild the per-line ExtraSelection backgrounds
+
+    QHash<QString, InputCheck::CommandHelp> cmdHelp; ///< command -> syntax help (from docs)
+    /// @brief Show a call tip with the syntax of the command on the current line
+    void showCommandCallTip();
 
     QWidget *lineNumberArea; ///< Widget for displaying line numbers
     QColor schemeBg;         ///< Active scheme editor background; invalid = app theme

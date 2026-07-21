@@ -2172,6 +2172,9 @@ void SpartaGui::ensureDiagnosticsPanel()
             textEdit->setCursor(line - 1);
             textEdit->setFocus();
         }
+        // show the command's documented syntax, if any, in the status bar
+        const QString syntax = item->data(Qt::UserRole + 1).toString();
+        if (!syntax.isEmpty()) statusBar()->showMessage(QStringLiteral("Syntax: %1").arg(syntax));
     });
     panels->setPanelWidget(PanelManager::Diagnostics, diagnosticsList, "Diagnostics");
 }
@@ -2271,6 +2274,16 @@ void SpartaGui::checkInput()
         item->setIcon(QIcon(d.severity == InputCheck::Severity::Error
                                 ? QStringLiteral(":/icons/dialog-no.svg")
                                 : QStringLiteral(":/icons/warning.svg")));
+        // attach the command's documented syntax as error help (tooltip + on click)
+        if (d.line >= 1 && d.line <= lines.size()) {
+            const QString cmd = lines.at(d.line - 1).trimmed().section(
+                QRegularExpression(QStringLiteral("\\s+")), 0, 0);
+            const auto hit = textEdit->commandHelp().constFind(cmd);
+            if (hit != textEdit->commandHelp().constEnd() && !hit.value().syntax.isEmpty()) {
+                item->setData(Qt::UserRole + 1, hit.value().syntax);
+                item->setToolTip(QStringLiteral("Syntax: %1").arg(hit.value().syntax));
+            }
+        }
         diagnosticsList->addItem(item);
     }
 
