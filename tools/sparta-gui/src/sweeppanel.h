@@ -31,6 +31,7 @@ class QLineEdit;
 class QProgressBar;
 class QPushButton;
 class QRadioButton;
+class QSpinBox;
 class QTableView;
 class QTableWidget;
 
@@ -90,9 +91,11 @@ private:
     Sweep::SweepSpec spec_;
     QList<QList<QPair<QString, QString>>> combos_;
     int index_ = -1;
+    int repIndex_ = 0;                       // replicate within the current sweep point
     bool active_ = false;
     bool stopRequested_ = false;
-    QVector<std::vector<double>> samples_; // per quantity, this run
+    QVector<std::vector<double>> samples_;    // per quantity, this run
+    QVector<std::vector<double>> repVals_;    // per quantity, reduced value of each replicate
 };
 
 // ---------------------------------------------------------------------------
@@ -125,6 +128,9 @@ private:
     QRadioButton *cartesian_ = nullptr;
     QLineEdit *quantities_ = nullptr;
     QComboBox *reducer_ = nullptr;
+    QSpinBox *replicates_ = nullptr;
+    QLineEdit *seedVar_ = nullptr;
+    QSpinBox *seedBase_ = nullptr;
     QPushButton *startBtn_ = nullptr;
     QProgressBar *progress_ = nullptr;
     QLabel *status_ = nullptr;

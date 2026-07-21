@@ -22,6 +22,7 @@
 #include <QProgressBar>
 #include <QPushButton>
 #include <QRadioButton>
+#include <QSpinBox>
 #include <QTableView>
 #include <QTableWidget>
 #include <QTextStream>
@@ -107,22 +108,34 @@ void SweepController::start(const SweepSpec &spec)
         return;
     }
     spec_ = spec;
+    if (spec_.replicates < 1) spec_.replicates = 1;
     samples_.resize(spec_.quantities.size());
+    repVals_.resize(spec_.quantities.size());
 
-    // results headers: swept variables, then quantity(reducer)
+    // results headers: swept variables, then quantity(reducer).  With replicates,
+    // each quantity becomes a mean plus a standard-error column.
+    const bool ensemble = spec_.replicates > 1;
     QStringList headers;
     for (const auto &v : spec_.vars) headers << v.name;
-    for (int q = 0; q < spec_.quantities.size(); ++q)
-        headers << QString("%1 (%2)").arg(spec_.quantities.at(q),
-                                          reducerName(spec_.reducerFor(q)));
+    for (int q = 0; q < spec_.quantities.size(); ++q) {
+        const QString base = QString("%1 (%2)").arg(spec_.quantities.at(q),
+                                                    reducerName(spec_.reducerFor(q)));
+        if (ensemble) {
+            headers << base + " mean";
+            headers << base + " +/-SE";
+        } else {
+            headers << base;
+        }
+    }
     model_->reset(headers);
 
     index_ = -1;
+    repIndex_ = 0;
     active_ = true;
     stopRequested_ = false;
     connect(gui_, &SpartaGui::runFinished, this, &SweepController::onRunFinished);
     connect(gui_, &SpartaGui::thermoSampled, this, &SweepController::onSample);
-    emit progress(0, combos_.size());
+    emit progress(0, combos_.size() * spec_.replicates);
     launchNext();
 }
 
@@ -135,8 +148,19 @@ void SweepController::stop()
 
 void SweepController::launchNext()
 {
-    ++index_;
-    emit progress(index_, combos_.size());
+    // advance the (sweep point, replicate) cursor: replicates run back-to-back,
+    // then the sweep point advances
+    if (index_ < 0) {
+        index_ = 0;
+        repIndex_ = 0;
+    } else if (++repIndex_ >= spec_.replicates) {
+        repIndex_ = 0;
+        ++index_;
+    }
+
+    const int total = combos_.size() * spec_.replicates;
+    emit progress(index_ * spec_.replicates + repIndex_, total);
+
     if (index_ >= combos_.size()) {
         active_ = false;
         disconnect(gui_, &SpartaGui::runFinished, this, &SweepController::onRunFinished);
@@ -144,8 +168,17 @@ void SweepController::launchNext()
         emit finished(!stopRequested_);
         return;
     }
+
+    if (repIndex_ == 0)
+        for (auto &r : repVals_) r.clear();   // a fresh sweep point
     for (auto &s : samples_) s.clear();
-    gui_->setRunVariables(combos_.at(index_));
+
+    // build this run's variable assignment: the swept values plus, for an
+    // ensemble, a distinct seed for this replicate
+    auto assign = combos_.at(index_);
+    if (spec_.replicates > 1 && !spec_.seedVariable.isEmpty())
+        assign.append({spec_.seedVariable, QString::number(spec_.seedFor(repIndex_))});
+    gui_->setRunVariables(assign);
     gui_->runBuffer();
 }
 
@@ -180,19 +213,31 @@ void SweepController::onRunFinished(bool success)
     if (!active_) return;
     if (index_ < 0 || index_ >= combos_.size()) return;
 
-    // assemble the results row: the swept values, then the reduced quantities
-    QStringList cells;
-    for (const auto &kv : combos_.at(index_)) cells << kv.second;
+    // reduce this run to one value per quantity and stash it for the replicate set
     for (int q = 0; q < spec_.quantities.size(); ++q) {
-        double val;
         const Reducer red = spec_.reducerFor(q);
-        if (red == Reducer::Final)
-            val = readThermo(spec_.quantities.at(q)); // just-finished run's final value
-        else
-            val = reduce(red, samples_[q]);
-        cells << (std::isnan(val) ? QString("n/a") : QString::number(val, 'g', 10));
+        const double val = (red == Reducer::Final) ? readThermo(spec_.quantities.at(q))
+                                                   : reduce(red, samples_[q]);
+        if (!std::isnan(val)) repVals_[q].push_back(val);
     }
-    model_->addRow(cells, success && !stopRequested_);
+
+    // emit a results row once the sweep point's replicates are all done
+    const bool pointDone = (repIndex_ + 1 >= spec_.replicates);
+    if (pointDone) {
+        QStringList cells;
+        for (const auto &kv : combos_.at(index_)) cells << kv.second;
+        for (int q = 0; q < spec_.quantities.size(); ++q) {
+            if (spec_.replicates > 1) {
+                const EnsembleStats es = ensembleStats(repVals_[q], spec_.ciLevel);
+                cells << (es.n > 0 ? QString::number(es.mean, 'g', 10) : QString("n/a"));
+                cells << (es.n > 1 ? QString::number(es.stderror, 'g', 6) : QString("-"));
+            } else {
+                const double v = repVals_[q].empty() ? std::nan("") : repVals_[q].back();
+                cells << (std::isnan(v) ? QString("n/a") : QString::number(v, 'g', 10));
+            }
+        }
+        model_->addRow(cells, success && !stopRequested_);
+    }
 
     if (stopRequested_) {
         active_ = false;
@@ -262,6 +307,27 @@ SweepPanel::SweepPanel(QWidget *parent, SpartaGui *gui, SpartaWrapper *sparta)
     reducer_->addItem("mean", static_cast<int>(Reducer::Mean));
     qrow->addWidget(reducer_);
     outer->addLayout(qrow);
+
+    // ensemble (replicate) controls: run each sweep point N times with a fresh
+    // seed and report mean +/- standard error
+    auto *erow2 = new QHBoxLayout;
+    erow2->addWidget(new QLabel("Replicates:", this));
+    replicates_ = new QSpinBox(this);
+    replicates_->setRange(1, 1000);
+    replicates_->setValue(1);
+    replicates_->setToolTip("Runs per sweep point, each with a distinct seed "
+                            "(1 = no ensemble). Results become mean +/- std. error.");
+    erow2->addWidget(replicates_);
+    erow2->addWidget(new QLabel("Seed variable:", this));
+    seedVar_ = new QLineEdit(this);
+    seedVar_->setPlaceholderText("e.g. seed  (referenced as ${seed} in the deck)");
+    erow2->addWidget(seedVar_, 1);
+    erow2->addWidget(new QLabel("Base seed:", this));
+    seedBase_ = new QSpinBox(this);
+    seedBase_->setRange(1, 2000000000);
+    seedBase_->setValue(12345);
+    erow2->addWidget(seedBase_);
+    outer->addLayout(erow2);
 
     // run controls
     auto *crow = new QHBoxLayout;
@@ -375,6 +441,16 @@ bool SweepPanel::buildSpec(SweepSpec &spec, QString &err) const
     const auto red = static_cast<Reducer>(reducer_->currentData().toInt());
     for (int i = 0; i < spec.quantities.size(); ++i) spec.reducers << red;
 
+    // ensemble options
+    spec.replicates   = replicates_->value();
+    spec.seedVariable = seedVar_->text().trimmed();
+    spec.seedBase     = seedBase_->value();
+    if (spec.replicates > 1 && spec.seedVariable.isEmpty()) {
+        err = "Enter a seed variable name to run replicates with distinct seeds "
+              "(and reference it as ${name} in the deck).";
+        return false;
+    }
+
     QString experr;
     if (spec.expand(&experr).isEmpty()) { err = experr; return false; }
     return true;
@@ -460,7 +536,10 @@ void SweepPanel::chartResults()
     data.setColumnNames(headers);
     for (int c = 0; c < ncol; ++c) data.addColumn(headers.at(c), cols[c]);
     QList<int> ycols;
-    for (int c = 1; c < ncol; ++c) ycols << c;
+    // plot the value/mean columns; skip the ensemble standard-error columns so
+    // they don't appear as spurious flat lines (they annotate the mean instead)
+    for (int c = 1; c < ncol; ++c)
+        if (!headers.at(c).endsWith("+/-SE")) ycols << c;
 
     auto *win = new ChartWindow("Sweep Results", nullptr);
     win->setAttribute(Qt::WA_DeleteOnClose);

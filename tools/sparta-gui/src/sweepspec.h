@@ -49,6 +49,15 @@ struct SweepSpec {
     QStringList quantities;             ///< thermo keywords to tabulate
     QList<Reducer> reducers;            ///< parallel to quantities (Final if short)
 
+    // --- ensemble (replicate) options ---
+    int replicates = 1;                 ///< runs per sweep point with distinct seeds (>=1)
+    QString seedVariable;               ///< index variable set to a fresh seed each replicate
+    int seedBase = 12345;               ///< replicate k (0-based) uses seedBase + k
+    double ciLevel = 0.95;              ///< confidence level for the reported interval
+
+    /** @brief Seed value for replicate @p k (0-based). */
+    int seedFor(int k) const { return seedBase + k; }
+
     /**
      * @brief The ordered list of runs, each a list of (name,value) assignments.
      *
@@ -68,6 +77,31 @@ struct SweepSpec {
 
 /** @brief Reduce a sampled series to one value; 0.0 for an empty series. */
 double reduce(Reducer r, const std::vector<double> &samples);
+
+/**
+ * @brief Aggregated statistics over an ensemble of replicate runs.
+ *
+ * Each replicate contributes one already-reduced scalar (e.g. the final or
+ * mean value of a thermo quantity); ensembleStats() turns those into a mean
+ * with a standard error and a Student-t confidence interval, the standard way
+ * to report a DSMC result computed from N independent-seed replicates.
+ */
+struct EnsembleStats {
+    int n           = 0;    ///< number of replicates
+    double mean     = 0.0;  ///< sample mean
+    double stddev   = 0.0;  ///< sample standard deviation (N-1)
+    double stderror = 0.0;  ///< standard error of the mean = stddev/sqrt(n)
+    double ciHalf   = 0.0;  ///< half-width of the confidence interval (t-based)
+    double ciLevel  = 0.95; ///< confidence level the interval was built for
+};
+
+/**
+ * @brief Mean +/- standard error and t-CI across replicate values.
+ * @param values   one reduced scalar per replicate
+ * @param ciLevel  two-sided confidence level (e.g. 0.95)
+ * @return statistics; for a single value stddev/stderror/ciHalf are 0
+ */
+EnsembleStats ensembleStats(const std::vector<double> &values, double ciLevel = 0.95);
 
 } // namespace Sweep
 

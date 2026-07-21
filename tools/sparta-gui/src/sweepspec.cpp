@@ -142,6 +142,81 @@ double reduce(Reducer r, const std::vector<double> &s)
     }
 }
 
+namespace {
+
+// Inverse standard-normal CDF (Acklam's rational approximation), |err| < 1.2e-9.
+double invNormalCdf(double p)
+{
+    if (p <= 0.0) return -1e18;
+    if (p >= 1.0) return 1e18;
+    static const double a[] = {-3.969683028665376e+01, 2.209460984245205e+02,
+                               -2.759285104469687e+02, 1.383577518672690e+02,
+                               -3.066479806614716e+01, 2.506628277459239e+00};
+    static const double b[] = {-5.447609879822406e+01, 1.615858368580409e+02,
+                               -1.556989798598866e+02, 6.680131188771972e+01,
+                               -1.328068155288572e+01};
+    static const double c[] = {-7.784894002430293e-03, -3.223964580411365e-01,
+                               -2.400758277161838e+00, -2.549732539343734e+00,
+                               4.374664141464968e+00, 2.938163982698783e+00};
+    static const double d[] = {7.784695709041462e-03, 3.224671290700398e-01,
+                               2.445134137142996e+00, 3.754408661907416e+00};
+    const double plow = 0.02425, phigh = 1.0 - 0.02425;
+    if (p < plow) {
+        const double q = std::sqrt(-2.0 * std::log(p));
+        return (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) /
+               ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1.0);
+    }
+    if (p > phigh) {
+        const double q = std::sqrt(-2.0 * std::log(1.0 - p));
+        return -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) /
+               ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1.0);
+    }
+    const double q = p - 0.5, r = q * q;
+    return (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q /
+           (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1.0);
+}
+
+// Student-t quantile via the Cornish-Fisher expansion from the normal quantile;
+// adequate for the small replicate counts used in ensemble reporting.
+double tQuantile(double p, int dof)
+{
+    const double z = invNormalCdf(p);
+    if (dof <= 0) return z;
+    const double g1 = (z * z * z + z) / 4.0;
+    const double g2 = (5.0 * std::pow(z, 5) + 16.0 * z * z * z + 3.0 * z) / 96.0;
+    const double g3 = (3.0 * std::pow(z, 7) + 19.0 * std::pow(z, 5) + 17.0 * z * z * z -
+                       15.0 * z) / 384.0;
+    const double n = dof;
+    return z + g1 / n + g2 / (n * n) + g3 / (n * n * n);
+}
+
+} // namespace
+
+EnsembleStats ensembleStats(const std::vector<double> &values, double ciLevel)
+{
+    EnsembleStats s;
+    s.n       = static_cast<int>(values.size());
+    s.ciLevel = ciLevel;
+    if (s.n == 0) return s;
+
+    double mean = 0.0;
+    for (double v : values) mean += v;
+    mean /= s.n;
+    s.mean = mean;
+    if (s.n < 2) return s;   // no spread from a single replicate
+
+    double ss = 0.0;
+    for (double v : values) {
+        const double d = v - mean;
+        ss += d * d;
+    }
+    s.stddev   = std::sqrt(ss / (s.n - 1));
+    s.stderror = s.stddev / std::sqrt(double(s.n));
+    const double tcrit = tQuantile(0.5 * (1.0 + ciLevel), s.n - 1);
+    s.ciHalf   = tcrit * s.stderror;
+    return s;
+}
+
 } // namespace Sweep
 
 // Local Variables:

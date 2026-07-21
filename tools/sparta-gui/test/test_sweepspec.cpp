@@ -7,6 +7,7 @@
 
 #include "gtest/gtest.h"
 
+#include <cmath>
 #include <string>
 #include <vector>
 
@@ -131,4 +132,45 @@ TEST(SweepSpec, Reducers)
     EXPECT_DOUBLE_EQ(reduce(Reducer::Max, s), 5.0);
     EXPECT_DOUBLE_EQ(reduce(Reducer::Mean, s), 14.0 / 5.0);
     EXPECT_DOUBLE_EQ(reduce(Reducer::Mean, {}), 0.0); // empty-safe
+}
+
+TEST(EnsembleStats, KnownValues)
+{
+    // {2,4,4,4,5,5,7,9}: mean 5, sample sd sqrt(32/7)=2.13809, sem sd/sqrt(8)
+    const EnsembleStats s = ensembleStats({2, 4, 4, 4, 5, 5, 7, 9}, 0.95);
+    EXPECT_EQ(s.n, 8);
+    EXPECT_NEAR(s.mean, 5.0, 1e-12);
+    EXPECT_NEAR(s.stddev, 2.138090, 1e-5);
+    EXPECT_NEAR(s.stderror, 0.755929, 1e-5);
+    // t_{0.975,7} = 2.3646; approximation within 1%
+    EXPECT_NEAR(s.ciHalf / s.stderror, 2.3646, 0.02);
+}
+
+TEST(EnsembleStats, SingleAndEmpty)
+{
+    const EnsembleStats one = ensembleStats({42.0});
+    EXPECT_EQ(one.n, 1);
+    EXPECT_NEAR(one.mean, 42.0, 1e-12);
+    EXPECT_DOUBLE_EQ(one.stderror, 0.0);
+    EXPECT_DOUBLE_EQ(one.ciHalf, 0.0);
+
+    EXPECT_EQ(ensembleStats({}).n, 0);
+}
+
+TEST(EnsembleStats, LargeNApproachesNormal)
+{
+    // for large n the t critical value approaches z_{0.975} = 1.95996
+    std::vector<double> v(1000);
+    for (std::size_t i = 0; i < v.size(); ++i) v[i] = std::sin(double(i));
+    const EnsembleStats s = ensembleStats(v, 0.95);
+    ASSERT_GT(s.stderror, 0.0);
+    EXPECT_NEAR(s.ciHalf / s.stderror, 1.95996, 0.02);
+}
+
+TEST(SweepSpec, SeedForSequence)
+{
+    SweepSpec spec;
+    spec.seedBase = 1000;
+    EXPECT_EQ(spec.seedFor(0), 1000);
+    EXPECT_EQ(spec.seedFor(5), 1005);
 }
