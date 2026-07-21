@@ -125,10 +125,16 @@ jobs:
               "NONINTERACTIVE=1 $(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
           fi
           # x86_64 VTK (and its deps) via the x86_64 brew.  One VTK dependency
-          # (python@3.14) can fail to symlink over the runner's framework Python
-          # (idle3 etc.); that makes `brew install` exit non-zero even though VTK
-          # itself is installed, so tolerate it and verify VTK actually landed.
-          arch -x86_64 /usr/local/bin/brew install vtk || true
+          # (python@3.x) can fail to symlink over the runner's pre-installed
+          # Python (idle3, 2to3, ...); that makes `brew install` exit non-zero
+          # even though VTK itself is installed.  Tolerate it, then force-link
+          # any python formula so nothing is left half-linked.  `env -u
+          # GITHUB_ACTIONS` stops Homebrew from raising the harmless link
+          # conflict as a GitHub error annotation on this (passing) job.
+          env -u GITHUB_ACTIONS arch -x86_64 /usr/local/bin/brew install vtk || true
+          for py in $(arch -x86_64 /usr/local/bin/brew list --formula 2>/dev/null | grep '^python@' || true); do
+            env -u GITHUB_ACTIONS arch -x86_64 /usr/local/bin/brew link --overwrite --force "$py" || true
+          done
           # dylibbundler via the native arm64 brew (it only rewrites Mach-O load
           # commands, so an arm64 tool handles the x86_64 binary fine).
           /opt/homebrew/bin/brew install dylibbundler
