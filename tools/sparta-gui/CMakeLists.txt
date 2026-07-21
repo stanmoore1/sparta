@@ -12,6 +12,10 @@ include(GNUInstallDirs)
 # configuration settings:
 # prefer compiling plugin version only if standalone compile
 option(SPARTA_GUI_USE_PLUGIN "Load SPARTA library dynamically at runtime" ON)
+# interactive VTK 3D viewer; off by default because it needs an external VTK
+# library (with Qt support).  When on, VTK is located with find_package; if it
+# is not found the viewer is silently disabled so the build still succeeds.
+option(SPARTA_GUI_USE_VTK "Build the interactive VTK 3D viewer (needs an external VTK library)" OFF)
 # html documentation build is off by default
 option(BUILD_DOC "Build SPARTA-GUI HTML documentation" OFF)
 option(BUILD_DOC_ONLY "Build only the documentation, skip the application" OFF)
@@ -78,6 +82,34 @@ if (NOT BUILD_DOC_ONLY)
   # the PROJECT_SOURCES file list, embedded resources, and the lepton_mini library
   include(${CMAKE_SOURCE_DIR}/cmake/Sources.cmake)
 
+  # optional VTK 3D viewer: locate VTK (with Qt support) and, if present, add the
+  # viewer source and remember to enable it below.  Missing VTK is not fatal --
+  # the viewer is simply left out and its menu entries stay hidden at runtime.
+  set(SPARTA_GUI_HAVE_VTK OFF)
+  if (SPARTA_GUI_USE_VTK)
+    # NB: we deliberately do NOT request the GUISupportQt module (QVTKOpenGLWidget).
+    # On many distributions VTK's Qt integration is built against Qt5, which cannot
+    # coexist with this Qt6 application in one process.  Instead the viewer renders
+    # VTK off-screen and blits the frame into a plain Qt6 widget, so any system VTK
+    # (Qt5-built, Qt6-built, or built with no Qt at all) works.
+    find_package(VTK 9.0 QUIET COMPONENTS
+      CommonCore CommonDataModel CommonColor CommonMath
+      FiltersGeometry FiltersCore FiltersSources
+      IOXML IOLegacy
+      RenderingCore RenderingOpenGL2 RenderingAnnotation RenderingFreeType)
+    if (VTK_FOUND)
+      message(STATUS "Building the VTK 3D viewer with VTK ${VTK_VERSION}")
+      set(SPARTA_GUI_HAVE_VTK ON)
+      list(APPEND PROJECT_SOURCES
+        ${CMAKE_SOURCE_DIR}/src/vtkviewer.cpp
+        ${CMAKE_SOURCE_DIR}/src/vtkviewer.h)
+    else()
+      message(WARNING "SPARTA_GUI_USE_VTK=ON but no suitable VTK was found; "
+        "the 3D viewer will be disabled. Install a VTK build with Qt support "
+        "(e.g. libvtk9-qt-dev) or point CMake at it with -DVTK_DIR=<path>.")
+    endif()
+  endif()
+
   qt_add_executable(sparta-gui
     MANUAL_FINALIZATION
     ${MACOSX_ICON_FILE}
@@ -116,6 +148,16 @@ if (NOT BUILD_DOC_ONLY)
   target_compile_definitions(sparta-gui PRIVATE SPARTA_GUI_VERSION="${PROJECT_VERSION}")
   target_link_libraries(sparta-gui PRIVATE Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Svg)
   target_link_libraries(sparta-gui PRIVATE ads::qtadvanceddocking-qt6)
+
+  # wire up the optional VTK 3D viewer: link the VTK modules, define the feature
+  # macro the GUI code guards on, and run vtk_module_autoinit so VTK's OpenGL /
+  # rendering object factories are registered (required or the render window
+  # comes up blank).
+  if(SPARTA_GUI_HAVE_VTK)
+    target_compile_definitions(sparta-gui PRIVATE SPARTA_GUI_HAVE_VTK)
+    target_link_libraries(sparta-gui PRIVATE ${VTK_LIBRARIES})
+    vtk_module_autoinit(TARGETS sparta-gui MODULES ${VTK_LIBRARIES})
+  endif()
 
   # unit tests and code coverage, only enabled on Linux
   include(${CMAKE_SOURCE_DIR}/cmake/Testing.cmake)

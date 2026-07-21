@@ -37,6 +37,9 @@
 #include "slideshow.h"
 #include "stdcapture.h"
 #include "urldownloader.h"
+#if defined(SPARTA_GUI_HAVE_VTK)
+#include "vtkviewer.h"
+#endif
 
 #include <QAction>
 #include <QApplication>
@@ -317,6 +320,10 @@ void SpartaGui::createRunMenu()
 
     addMenuAction(menu, ":/icons/image-viewer.svg", "Create &Image", "Ctrl+I",
                   &SpartaGui::renderImage);
+#if defined(SPARTA_GUI_HAVE_VTK)
+    addMenuAction(menu, ":/icons/image-viewer.svg", "3D &Snapshot (VTK)", "Ctrl+Shift+3",
+                  &SpartaGui::renderVtkSnapshot);
+#endif
 }
 
 void SpartaGui::createViewMenu()
@@ -387,6 +394,10 @@ void SpartaGui::createViewMenu()
     });
 
     menu->addSeparator();
+#if defined(SPARTA_GUI_HAVE_VTK)
+    addMenuAction(menu, ":/icons/image-viewer.svg", "&3D Viewer (VTK)", "",
+                  &SpartaGui::open3DViewer);
+#endif
     addMenuAction(menu, ":/icons/help-faq.svg", "&Welcome Screen", "",
                   [this]() { showWelcome(); });
     addMenuAction(menu, ":/icons/preferences-reset.svg", "Reset &Layout", "",
@@ -2323,7 +2334,21 @@ void SpartaGui::runInputCheck(bool interactive)
     ensureDiagnosticsPanel();
     const InputCheck::Context ctx = buildCheckContext();
     const QStringList lines = textEdit->toPlainText().split(QLatin1Char('\n'));
-    const QList<InputCheck::Diagnostic> diags = InputCheck::checkDeck(lines, ctx);
+    QList<InputCheck::Diagnostic> diags = InputCheck::checkDeck(lines, ctx);
+
+    // Automatic linting must not flag the line the user is still typing on: a
+    // half-written command (unknown command, too few args, ...) would light up
+    // mid-keystroke.  Suppress diagnostics on the current cursor line for the
+    // auto pass -- they appear as soon as the cursor moves to another line.
+    // The manual "Check Input" (interactive) always reports every line.
+    if (!interactive) {
+        const int curLine = textEdit->textCursor().blockNumber() + 1; // 1-based
+        diags.erase(std::remove_if(diags.begin(), diags.end(),
+                                   [curLine](const InputCheck::Diagnostic &d) {
+                                       return d.line == curLine;
+                                   }),
+                    diags.end());
+    }
 
     textEdit->setDiagnostics(diags);
 
@@ -2749,6 +2774,127 @@ void SpartaGui::renderImage()
     }
     panels->openPanel(PanelManager::Image);
 }
+
+#if defined(SPARTA_GUI_HAVE_VTK)
+void SpartaGui::open3DViewer()
+{
+    if (!vtkViewer) vtkViewer = new VtkViewer(this);
+    vtkViewer->showViewer();
+}
+
+void SpartaGui::renderVtkSnapshot()
+{
+    if (sparta.isRunning()) {
+        warning(this, "3D Snapshot", "Cannot create a 3D snapshot while SPARTA is running.");
+        return;
+    }
+    if (!vtkViewer) vtkViewer = new VtkViewer(this);
+    startSparta();
+
+    // does the loaded library actually provide the VTK dump styles?  (VTK is an
+    // optional SPARTA package; a stock build will not have them.)  If not, just
+    // open the viewer so the user can still load dump-vtk files written elsewhere.
+    bool haveVtkDump = false;
+    const int ndumpstyles = sparta.styleCount("dump");
+    for (int i = 0; i < ndumpstyles; ++i)
+        if (sparta.styleName("dump", i).endsWith("/vtk")) { haveVtkDump = true; break; }
+    if (!haveVtkDump) {
+        vtkViewer->showViewer();
+        warning(this, "3D Snapshot",
+                "This SPARTA library was built without the VTK package,",
+                "so it cannot write VTK files directly.  You can still open <code>.vtu</code> / "
+                "<code>.vtp</code> files written by a VTK-enabled SPARTA build (or the "
+                "<i>Export to ParaView</i> tools) with the viewer's <b>Open</b> button.");
+        return;
+    }
+
+    // ensure a system box exists, creating it with a "run 0" preflight of the
+    // deck up to its first run command (same approach as renderImage()).
+    if (!sparta.extractSetting("box_exist")) {
+        auto saved = textEdit->textCursor();
+        textEdit->moveCursor(QTextCursor::Start);
+        if (textEdit->find(QRegularExpression(QStringLiteral(R"(^\s*run\s+)")))) {
+            auto cursor = textEdit->textCursor();
+            cursor.movePosition(QTextCursor::PreviousBlock);
+            cursor.movePosition(QTextCursor::EndOfLine);
+            cursor.movePosition(QTextCursor::Start, QTextCursor::KeepAnchor);
+            auto selection = cursor.selectedText().replace(QChar(0x2029), '\n');
+            selection += "\nrun 0 pre yes post no";
+            textEdit->setTextCursor(saved);
+            {
+                StdoutSilencer guard;
+                sparta.command("clear");
+                clearVariables();
+                sparta.commandsString(selection);
+            }
+        }
+        textEdit->setTextCursor(saved);
+        if (!sparta.extractSetting("box_exist")) {
+            warning(this, "3D Snapshot",
+                    "Cannot create a 3D snapshot from an input that does not create a system box.");
+            return;
+        }
+    }
+
+    // purge the deck's own dumps so our "run 0" does not re-trigger them
+    {
+        StdoutSilencer guard;
+        const int ndumps = sparta.idCount("dump");
+        QStringList dumpids;
+        for (int i = 0; i < ndumps; ++i) dumpids << sparta.idName("dump", i);
+        for (const auto &id : dumpids) sparta.command("undump " + id);
+    }
+
+    // Render one category (grid / particles / surfaces) to a temp VTK file, each
+    // in its own isolated "run 0", so an empty or invalid category (e.g. surf/vtk
+    // on a deck with no surfaces) cannot spoil the others.  Returns the produced
+    // file path, or empty on failure.
+    const QString dir = QDir::tempPath();
+    auto renderCategory = [&](const QString &id, const QString &style, const QString &ext,
+                              const QString &attrs) -> QString {
+        const QString file = QString("%1/%2.0.%3").arg(dir, id, ext);
+        QFile::remove(file);
+        StdoutSilencer guard;
+        if (sparta.hasId("dump", id.toLocal8Bit())) sparta.command("undump " + id);
+        sparta.command(
+            QString("dump %1 %2 1 %3.*.%4 %5").arg(id, style, QString("%1/%2").arg(dir, id), ext, attrs));
+        const QString derr = sparta.lastErrorMessage();
+        if (!derr.isEmpty() && !derr.contains("Invalid SPARTA handle")) {
+            if (sparta.hasId("dump", id.toLocal8Bit())) sparta.command("undump " + id);
+            return QString();
+        }
+        sparta.command("run 0 pre yes post no");
+        (void)sparta.lastErrorMessage();
+        if (sparta.hasId("dump", id.toLocal8Bit())) sparta.command("undump " + id);
+        return QFileInfo::exists(file) ? file : QString();
+    };
+
+    struct Cat {
+        QString id, style, ext, attrs, label;
+        VtkViewer::Kind kind;
+    };
+    const QList<Cat> cats = {
+        {"sgvtkgrid", "grid/vtk", "vtu", "all id proc", "grid", VtkViewer::Kind::Grid},
+        {"sgvtkpart", "particle/vtk", "vtp", "all id x y z vx vy vz", "particles",
+         VtkViewer::Kind::Particles},
+        {"sgvtksurf", "surf/vtk", "vtp", "all id type", "surfaces", VtkViewer::Kind::Surface},
+    };
+
+    vtkViewer->clearScene();
+    int loaded = 0;
+    for (const auto &c : cats) {
+        const QString f = renderCategory(c.id, c.style, c.ext, c.attrs);
+        if (f.isEmpty()) continue;
+        if (vtkViewer->addDataset(f, c.label, c.kind, nullptr)) ++loaded;
+        QFile::remove(f);
+    }
+
+    vtkViewer->showViewer();
+    if (loaded == 0)
+        warning(this, "3D Snapshot",
+                "No particle, grid or surface data was produced for the current state.");
+}
+#endif // SPARTA_GUI_HAVE_VTK
 
 void SpartaGui::createVariableWindow()
 {

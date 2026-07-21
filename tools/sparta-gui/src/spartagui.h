@@ -57,6 +57,7 @@ class RunHistory;
 class HistoryPanel;
 class StdCapture;
 class URLDownloader;
+class VtkViewer; // only defined when built with SPARTA_GUI_HAVE_VTK
 class WelcomeScreen;
 
 /**
@@ -263,6 +264,13 @@ private slots:
 
     /** @brief Render an image from a dump file */
     void renderImage();
+
+#if defined(SPARTA_GUI_HAVE_VTK)
+    /** @brief Open the interactive VTK 3D viewer window (empty; load files with it) */
+    void open3DViewer();
+    /** @brief Render the current simulation state to VTK and show it in the 3D viewer */
+    void renderVtkSnapshot();
+#endif
 
     /** @brief Open an external data file and plot selected columns */
     void plotDataFile();
@@ -482,6 +490,9 @@ private:
     PanelManager *panels;     ///< Docked-panel layout manager (Output/Charts/Image/Slide/Variables)
     LogWindow *logwindow;     ///< Window displaying SPARTA output log
     ImageViewer *imagewindow; ///< Window for viewing single images
+#if defined(SPARTA_GUI_HAVE_VTK)
+    VtkViewer *vtkViewer = nullptr; ///< Interactive VTK 3D viewer window (lazy)
+#endif
     ChartWindow *chartwindow; ///< Window for displaying charts
     SlideShow *slideshow;    ///< Window for image slideshow
     QTimer *logupdater;      ///< Timer for periodic log updates
