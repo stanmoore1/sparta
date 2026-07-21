@@ -107,7 +107,10 @@ StlImportWizard::StlImportWizard(QWidget *parent, SpartaWrapper *sparta, const Q
     else
         ok = parseSurf(sourcePath_, mesh_, err); // Surf or Unknown -> try surf
     loaded_ = ok;
-    if (ok) wt_ = checkWatertightPreflight(mesh_);
+    if (ok) {
+        wt_ = checkWatertightPreflight(mesh_); // fast heuristic (drives leak highlighting)
+        runSpartaWatertight();                 // authoritative verdict from SPARTA's read_surf
+    }
 
     auto *outer = new QVBoxLayout(this);
     tabs_ = new QTabWidget;
@@ -164,19 +167,76 @@ QWidget *StlImportWizard::buildSourcePage()
     if (!mesh_.is2d)
         lay->addRow("Extent Z:", new QLabel(QString("%1 .. %2").arg(mesh_.lo[2]).arg(mesh_.hi[2])));
 
-    auto *wtl = new QLabel;
-    wtl->setWordWrap(true);
-    if (wt_.watertight())
-        wtl->setText("<b style='color:#3aa563'>Watertight:</b> the surface passes the "
-                     "closed-manifold check and can be used directly.");
-    else
-        wtl->setText(QString("<b style='color:#d9534f'>Not watertight:</b> %1 unmatched (hole) "
-                             "and %2 duplicate (non-manifold) edges. See the Preview tab (leaks in "
-                             "red) and Diagnostics.")
-                         .arg(wt_.unmatchedEdges)
-                         .arg(wt_.duplicateEdges));
-    lay->addRow(wtl);
+    wtLabel_ = new QLabel;
+    wtLabel_->setWordWrap(true);
+    updateWatertightLabel();
+    lay->addRow(wtLabel_);
     return w;
+}
+
+bool StlImportWizard::watertightVerdict() const
+{
+    // SPARTA's read_surf verdict is authoritative when we have it (it accounts
+    // for box clipping, tiny-surface deletion and boundary exceptions); fall
+    // back to the fast in-GUI preflight otherwise.
+    return spartaWt_ >= 0 ? (spartaWt_ == 1) : wt_.watertight();
+}
+
+void StlImportWizard::updateWatertightLabel()
+{
+    if (!wtLabel_) return;
+    if (watertightVerdict()) {
+        const QString how = (spartaWt_ == 1)
+            ? "SPARTA's <tt>read_surf</tt> accepted it (box clipping and tiny-surface "
+              "deletion applied)."
+            : "it passes the closed-manifold pre-check.";
+        wtLabel_->setText(QString("<b style='color:#3aa563'>Watertight:</b> %1").arg(how));
+    } else if (spartaWt_ == 0) {
+        wtLabel_->setText(QString("<b style='color:#d9534f'>Not watertight:</b> SPARTA's "
+                                  "<tt>read_surf</tt> rejected it. See the Preview tab (leaks in "
+                                  "red) and Diagnostics.<br><code>%1</code>")
+                              .arg(spartaWtMsg_.toHtmlEscaped()));
+    } else {
+        wtLabel_->setText(QString("<b style='color:#d9534f'>Not watertight:</b> %1 unmatched (hole) "
+                                  "and %2 duplicate (non-manifold) edges. See the Preview tab "
+                                  "(leaks in red) and Diagnostics.")
+                              .arg(wt_.unmatchedEdges)
+                              .arg(wt_.duplicateEdges));
+    }
+}
+
+void StlImportWizard::runSpartaWatertight()
+{
+    spartaWt_ = -1;
+    spartaWtMsg_.clear();
+    if (!sparta_ || !sparta_->isOpen() || sparta_->isRunning()) return;
+
+    const QString surf = QDir::tempPath() + "/sguiwiz_wtcheck.surf";
+    QFile f(surf);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Text)) return;
+    f.write(buildSurfFile(mesh_, QFileInfo(sourcePath_).fileName()).toUtf8());
+    f.close();
+
+    {
+        StdCapture cap;
+        cap.beginCapture();
+        sparta_->command("clear");
+        for (const auto &c : boxGridCommands()) sparta_->command(c);
+        (void)sparta_->lastErrorMessage(); // a setup error is not a watertightness verdict
+        sparta_->command(buildReadSurfCommand(settings_, surf));
+        const QString err = sparta_->lastErrorMessage();
+        cap.endCapture();
+        if (err.isEmpty())
+            spartaWt_ = 1; // read_surf ran its watertight check and accepted the surface
+        else if (err.contains("Watertight", Qt::CaseInsensitive)) {
+            spartaWt_ = 0;
+            spartaWtMsg_ = err;
+        } else {
+            spartaWt_    = -1; // some other read_surf error: fall back to the preflight
+            spartaWtMsg_ = err;
+        }
+    }
+    QFile::remove(surf);
 }
 
 QWidget *StlImportWizard::buildTransformPage()
@@ -554,7 +614,7 @@ void StlImportWizard::renderPreview()
     if (!loaded_ || !previewLabel_) return;
     const QImage img = renderMesh(wt_.leakingElems, QSize(PREVIEW_W, PREVIEW_H), true);
     previewLabel_->setPixmap(QPixmap::fromImage(img));
-    if (wt_.watertight()) {
+    if (watertightVerdict()) {
         previewNote_->setText("Native mesh preview (scale/rotate applied). This surface is "
                               "watertight — use \"Render in SPARTA\" for the authoritative view.");
         if (spartaPreviewBtn_) spartaPreviewBtn_->setEnabled(true);
@@ -704,7 +764,9 @@ void StlImportWizard::renderSpartaPreview()
 
 void StlImportWizard::renderAblation()
 {
-    if (!wt_.watertight()) {
+    runSpartaWatertight(); // re-check with the current transforms before gating
+    updateWatertightLabel();
+    if (!watertightVerdict()) {
         warning(this, "Ablation preview",
                 "create_isurf needs a watertight surface. Repair the mesh (see the red leaks in "
                 "the Preview tab) before converting it to an implicit surface.");
@@ -744,7 +806,7 @@ void StlImportWizard::renderAblation()
 
 void StlImportWizard::compareAblationModes()
 {
-    if (!wt_.watertight()) {
+    if (!watertightVerdict()) {
         warning(this, "Ablation preview", "create_isurf needs a watertight surface.");
         return;
     }

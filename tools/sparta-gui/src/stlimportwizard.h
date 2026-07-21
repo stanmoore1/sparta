@@ -84,15 +84,27 @@ private:
     void appendDiagnostics(const QString &title, const QString &text);
     void showWatertightDiagnostics();
 
+    /// @brief Run SPARTA's real read_surf workflow on the current mesh+transforms
+    /// so the watertightness verdict matches what SPARTA actually does (box
+    /// clipping, tiny-surface deletion, boundary exceptions).  Sets spartaWt_.
+    void runSpartaWatertight();
+    /// @brief Authoritative verdict: SPARTA's if available, else the fast preflight.
+    bool watertightVerdict() const;
+    /// @brief (Re)build the Source-page watertightness label from the verdict.
+    void updateWatertightLabel();
+
     SpartaWrapper *sparta_;
     QString sourcePath_;
     StlImport::SourceKind kind_ = StlImport::SourceKind::Unknown;
     StlImport::SurfMesh mesh_;
-    StlImport::WatertightReport wt_;
+    StlImport::WatertightReport wt_;   ///< fast in-GUI preflight (drives leak highlighting)
     StlImport::StlImportSettings settings_;
     QString generated_;
     QString writtenSurf_;
     bool loaded_ = false;
+    int spartaWt_ = -1;      ///< SPARTA's authoritative verdict: -1 unknown, 0 leaking, 1 watertight
+    QString spartaWtMsg_;    ///< message from SPARTA's read_surf watertight check
+    QLabel *wtLabel_ = nullptr; ///< Source-page watertightness label (refreshable)
 
     QTabWidget *tabs_ = nullptr;
 
