@@ -133,6 +133,18 @@ the Qt installation must be indicated by setting ``-D
 Qt6_DIR=/path/to/qt6/lib/cmake/Qt6``, which is a path to a folder
 inside the Qt installation that contains the file ``Qt6Config.cmake``.
 
+To build the optional :ref:`interactive VTK 3D viewer <vtk_viewer>`, add
+``-D SPARTA_GUI_USE_VTK=ON`` and make a `VTK <https://vtk.org/>`_ library
+with development headers available (e.g. ``libvtk9-dev`` on Debian/Ubuntu,
+or ``-D VTK_DIR=/path/to/vtk/lib/cmake/vtk-<ver>`` for a custom build).
+VTK's Qt integration is *not* required — the viewer renders off-screen —
+so a VTK built with or without Qt (and with either Qt5 or Qt6) works.  If
+``SPARTA_GUI_USE_VTK=ON`` is set but no suitable VTK is found, the build
+still succeeds with the viewer disabled (a status message says so).  The
+viewer reads the files written by SPARTA's ``dump particle/vtk`` /
+``grid/vtk`` / ``surf/vtk`` styles, which require SPARTA itself to be built
+with its VTK package (``-D PKG_VTK=ON`` when building the library).
+
 On the first start, SPARTA-GUI needs to be told where the SPARTA
 shared library is.  There are three equivalent ways:
 

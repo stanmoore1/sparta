@@ -804,6 +804,65 @@ image, restrict the active range, and control the slideshow settings:
 - **Next**: Step forward to the next image.
 - **Last**: Jump to the last image of the active range.
 
+.. _vtk_viewer:
+
+Interactive 3D Viewer (VTK)
+---------------------------
+
+.. index:: VTK
+.. index:: 3D viewer
+.. index:: dump particle/vtk
+.. index:: dump grid/vtk
+.. index:: dump surf/vtk
+
+SPARTA-GUI includes an optional interactive 3D viewer built on the `VTK
+<https://vtk.org/>`_ toolkit.  It renders the native VTK files written by
+SPARTA's ``dump particle/vtk``, ``dump grid/vtk`` and ``dump surf/vtk``
+styles, so — unlike the :ref:`image viewer <snapshot_viewer>`, which shows
+a fixed rendered picture — the geometry can be rotated, zoomed and colored
+by any field interactively.
+
+The viewer is a build-time option: configure the GUI with ``-D
+SPARTA_GUI_USE_VTK=on`` and a VTK library (with development headers, e.g.
+``libvtk9-dev``) available to CMake.  When it is not built in, the menu
+entries below are simply absent.  To keep the viewer compatible with any
+system VTK, it renders off-screen and displays the frames in a normal Qt
+widget rather than embedding VTK's own Qt widget; no VTK Qt integration is
+required.
+
+.. admonition:: Opening the viewer
+
+   - *View* -> *3D Viewer (VTK)* opens an empty viewer window; use its
+     **Open** toolbar button to load one or more ``.vtu`` / ``.vtp`` /
+     ``.vtk`` files (for example the output of a ``dump *vtk`` command from
+     a completed run).
+   - *Run* -> *3D Snapshot (VTK)* (`Ctrl+Shift+3`) renders the current
+     simulation state directly: it issues ``dump grid/vtk``,
+     ``dump particle/vtk`` and ``dump surf/vtk`` to temporary files and
+     loads them.  This requires the loaded SPARTA library to have been
+     built with the VTK package; if it was not, the viewer still opens so
+     ``.vtu`` / ``.vtp`` files produced elsewhere can be loaded manually.
+
+Each loaded dataset is a layer.  The toolbar offers:
+
+- **Color by**: choose any per-point (particle) or per-cell (grid/surface)
+  scalar field; the field names come from the dump attributes.
+- **Colormap**: *Rainbow*, *Cool to Warm*, *Viridis* or *Grayscale*, with a
+  scalar-bar **Legend** showing the value range.
+- **Edges**: outline grid cells / surface elements.
+- **Reset View** and **Save Screenshot...** (PNG).
+
+Drag with the left mouse button to rotate, the right (or middle) button to
+pan, and the wheel to zoom.
+
+The viewer is intentionally light-weight: it covers loading, orbiting and
+field coloring, and defers heavier analysis (clipping, streamlines,
+calculators, ...) to ParaView.  It complements — and does not replace — the
+:ref:`ParaView export <paraview_export>`: the export works with any SPARTA
+build (no VTK package required) and post-processes existing output offline,
+while the viewer needs a VTK-enabled build (or pre-written VTK files) but
+gives an immediate in-application 3D view.
+
 .. _paraview_export:
 
 Exporting to ParaView
