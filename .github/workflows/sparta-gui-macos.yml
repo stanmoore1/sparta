@@ -188,13 +188,24 @@ jobs:
             -i "$QT_ROOT_DIR"
 
           # macdeployqt then deploys the Qt frameworks (incl. QtNetwork) and
-          # plugins into Contents/Frameworks with the correct rpath.
+          # plugins into Contents/Frameworks.
           macdeployqt "$APP" -verbose=1
 
+          # Ensure the executable can actually find those frameworks.  macdeployqt
+          # only adds the @executable_path/../Frameworks rpath when it rewrites an
+          # *absolute* Qt path to @rpath; here Qt was already @rpath (and
+          # dylibbundler left only the ../libs rpath for VTK), so that rpath is
+          # missing and QtNetwork.framework (correctly deployed under Frameworks)
+          # is not found at launch.  Add it explicitly if absent.
+          EXE="$APP/Contents/MacOS/sparta-gui"
+          if ! otool -l "$EXE" | grep -q "@executable_path/../Frameworks"; then
+            install_name_tool -add_rpath "@executable_path/../Frameworks" "$EXE"
+          fi
+
           echo "--- executable load commands ---"
-          otool -L "$APP/Contents/MacOS/sparta-gui" | sed -n '2,$p'
+          otool -L "$EXE" | sed -n '2,$p'
           echo "--- rpaths ---"
-          otool -l "$APP/Contents/MacOS/sparta-gui" | grep -A2 LC_RPATH || true
+          otool -l "$EXE" | grep -A2 LC_RPATH || true
           echo "--- QtNetwork deployed? ---"
           ls "$APP/Contents/Frameworks/QtNetwork.framework/Versions/A/QtNetwork"
 
