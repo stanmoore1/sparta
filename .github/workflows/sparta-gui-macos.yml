@@ -116,22 +116,26 @@ jobs:
           set -x
           # Rosetta 2 lets the arm64 runner run x86_64 tooling (the x86_64 brew,
           # and later the x86_64 app for the launch check).
-          softwareupdate --install-rosetta --agree-to-license
+          softwareupdate --install-rosetta --agree-to-license || true
           # A separate x86_64 Homebrew lives under /usr/local (the native arm64
           # brew is /opt/homebrew).  Install it if the runner doesn't have one.
           if [ ! -x /usr/local/bin/brew ]; then
             arch -x86_64 /bin/bash -c \
               "NONINTERACTIVE=1 $(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
           fi
-          # x86_64 VTK (and its deps) via the x86_64 brew; dylibbundler via the
-          # native brew (it only rewrites Mach-O load commands, arch-agnostic).
-          arch -x86_64 /usr/local/bin/brew install vtk
-          brew install dylibbundler
+          # x86_64 VTK (and its deps) via the x86_64 brew.  One VTK dependency
+          # (python@3.14) can fail to symlink over the runner's framework Python
+          # (idle3 etc.); that makes `brew install` exit non-zero even though VTK
+          # itself is installed, so tolerate it and verify VTK actually landed.
+          arch -x86_64 /usr/local/bin/brew install vtk || true
+          # dylibbundler via the native arm64 brew (it only rewrites Mach-O load
+          # commands, so an arm64 tool handles the x86_64 binary fine).
+          /opt/homebrew/bin/brew install dylibbundler
           VTK_PREFIX="$(arch -x86_64 /usr/local/bin/brew --prefix vtk)"
+          test -d "$VTK_PREFIX/lib/cmake" || { echo "ERROR: x86_64 VTK not installed"; exit 1; }
           echo "VTK_PREFIX=$VTK_PREFIX" >> "$GITHUB_ENV"
-          echo "X86_BREW=/usr/local/bin/brew" >> "$GITHUB_ENV"
-          find "$VTK_PREFIX/lib/cmake" -maxdepth 1 -name 'vtk-*' -type d
-          lipo -info "$VTK_PREFIX"/lib/libvtkCommonCore*.dylib | head -1
+          ls -d "$VTK_PREFIX"/lib/cmake/vtk-* || true
+          lipo -info "$VTK_PREFIX"/lib/libvtkCommonCore*.dylib || true
 
       - name: Build SPARTA shared library (serial, x86_64)
         run: |
