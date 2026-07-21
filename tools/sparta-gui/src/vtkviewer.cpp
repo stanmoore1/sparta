@@ -363,14 +363,8 @@ vtkSmartPointer<vtkDataSet> VtkViewer::readDataSet(const QString &path, QString 
     return nullptr;
 }
 
-bool VtkViewer::addDataset(const QString &path, const QString &label, Kind kind, QString *err)
+void VtkViewer::addLayer(const vtkSmartPointer<vtkDataSet> &data, const QString &label, Kind kind)
 {
-    auto data = readDataSet(path, err);
-    if (!data || data->GetNumberOfPoints() == 0) {
-        if (data && err) *err = QString("%1 contains no points").arg(path);
-        return false;
-    }
-
     Layer layer;
     layer.data   = data;
     layer.label  = label;
@@ -413,7 +407,37 @@ bool VtkViewer::addDataset(const QString &path, const QString &label, Kind kind,
                            .arg(layers.size())
                            .arg(static_cast<qlonglong>(np))
                            .arg(static_cast<qlonglong>(nc)));
+}
+
+bool VtkViewer::addDataset(const QString &path, const QString &label, Kind kind, QString *err)
+{
+    auto data = readDataSet(path, err);
+    if (!data || data->GetNumberOfPoints() == 0) {
+        if (data && err) *err = QString("%1 contains no points").arg(path);
+        return false;
+    }
+    addLayer(data, label, kind);
     return true;
+}
+
+void VtkViewer::addDataSet(vtkDataSet *data, const QString &label, Kind kind)
+{
+    if (data && data->GetNumberOfPoints() > 0)
+        addLayer(vtkSmartPointer<vtkDataSet>(data), label, kind);
+}
+
+void VtkViewer::setColorField(const QString &name)
+{
+    // pick the first combo entry whose base name matches (entries read "name  (point)")
+    for (int i = 1; i < arrayCombo->count(); ++i) {
+        QString t   = arrayCombo->itemText(i);
+        const int c = t.lastIndexOf(QStringLiteral("  ("));
+        if (c > 0) t = t.left(c);
+        if (t == name) {
+            arrayCombo->setCurrentIndex(i);
+            return;
+        }
+    }
 }
 
 void VtkViewer::clearScene()

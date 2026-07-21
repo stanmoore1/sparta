@@ -116,6 +116,12 @@ public:
      */
     bool addDataset(const QString &path, const QString &label, Kind kind, QString *err = nullptr);
 
+    /// @brief Add an already-built VTK dataset as a layer (no file needed).
+    void addDataSet(vtkDataSet *data, const QString &label, Kind kind);
+
+    /// @brief Programmatically color by a named field (e.g. "leak"); no-op if absent.
+    void setColorField(const QString &name);
+
     /// @brief Remove every layer from the scene.
     void clearScene();
 
@@ -147,6 +153,7 @@ private:
     };
 
     void buildUi();
+    void addLayer(const vtkSmartPointer<vtkDataSet> &data, const QString &label, Kind kind);
     void refreshArrayCombo();
     void applyColoring();
     bool arrayRange(const QString &array, bool pointData, double range[2]) const;

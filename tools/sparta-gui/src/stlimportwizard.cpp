@@ -15,6 +15,20 @@
 #include "spartawrapper.h"
 #include "stdcapture.h"
 
+#if defined(SPARTA_GUI_HAVE_VTK)
+#include "vtkviewer.h"
+
+#include <vtkCellArray.h>
+#include <vtkCellData.h>
+#include <vtkDataSet.h>
+#include <vtkFloatArray.h>
+#include <vtkLine.h>
+#include <vtkPoints.h>
+#include <vtkPolyData.h>
+#include <vtkSmartPointer.h>
+#include <vtkTriangle.h>
+#endif
+
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialogButtonBox>
@@ -239,6 +253,55 @@ void StlImportWizard::runSpartaWatertight()
     QFile::remove(surf);
 }
 
+#if defined(SPARTA_GUI_HAVE_VTK)
+void StlImportWizard::showLeaksInVtk()
+{
+    // build a VTK polydata straight from the parsed mesh with a per-element
+    // "leak" cell scalar (1 = a non-watertight element from the pre-check), and
+    // show it in the interactive 3D viewer colored so leaks stand out in red.
+    auto pts = vtkSmartPointer<vtkPoints>::New();
+    pts->SetNumberOfPoints(mesh_.npoints());
+    for (int i = 0; i < mesh_.npoints(); ++i)
+        pts->SetPoint(i, mesh_.points[i][0], mesh_.points[i][1], mesh_.points[i][2]);
+
+    auto cells = vtkSmartPointer<vtkCellArray>::New();
+    auto leak  = vtkSmartPointer<vtkFloatArray>::New();
+    leak->SetName("leak");
+    for (int e = 0; e < mesh_.nelements(); ++e) {
+        const auto &el = mesh_.elems[e];
+        if (mesh_.is2d) {
+            auto line = vtkSmartPointer<vtkLine>::New();
+            line->GetPointIds()->SetId(0, el[0]);
+            line->GetPointIds()->SetId(1, el[1]);
+            cells->InsertNextCell(line);
+        } else {
+            auto tri = vtkSmartPointer<vtkTriangle>::New();
+            tri->GetPointIds()->SetId(0, el[0]);
+            tri->GetPointIds()->SetId(1, el[1]);
+            tri->GetPointIds()->SetId(2, el[2]);
+            cells->InsertNextCell(tri);
+        }
+        leak->InsertNextValue(wt_.leakingElems.contains(e) ? 1.0f : 0.0f);
+    }
+
+    auto pd = vtkSmartPointer<vtkPolyData>::New();
+    pd->SetPoints(pts);
+    if (mesh_.is2d)
+        pd->SetLines(cells);
+    else
+        pd->SetPolys(cells);
+    pd->GetCellData()->AddArray(leak);
+
+    if (!vtkViewer_) vtkViewer_ = new VtkViewer(this);
+    vtkViewer_->clearScene();
+    const bool leaks = !wt_.watertight();
+    vtkViewer_->addDataSet(pd, leaks ? "surface (leaks in red)" : "surface",
+                           VtkViewer::Kind::Surface);
+    if (leaks) vtkViewer_->setColorField("leak"); // 0 -> cool, 1 -> warm/red
+    vtkViewer_->showViewer();
+}
+#endif // SPARTA_GUI_HAVE_VTK
+
 QWidget *StlImportWizard::buildTransformPage()
 {
     auto *w = new QWidget;
@@ -351,6 +414,13 @@ QWidget *StlImportWizard::buildPreviewPage()
                                   "Resets the in-memory simulation; your input script is untouched.");
     connect(spartaPreviewBtn_, &QPushButton::clicked, this, &StlImportWizard::renderSpartaPreview);
     row->addWidget(spartaPreviewBtn_);
+#if defined(SPARTA_GUI_HAVE_VTK)
+    auto *vtkBtn = new QPushButton(QIcon(":/icons/image-viewer.svg"), "View in 3D (VTK)");
+    vtkBtn->setToolTip("Open the surface in the interactive VTK 3D viewer; non-watertight "
+                       "elements are highlighted in red. Rotate/zoom/pan with the mouse.");
+    connect(vtkBtn, &QPushButton::clicked, this, &StlImportWizard::showLeaksInVtk);
+    row->addWidget(vtkBtn);
+#endif
     row->addStretch();
     lay->addLayout(row);
     return w;
