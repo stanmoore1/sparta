@@ -25,8 +25,8 @@
 using namespace SPARTA_NS;
 
 // Kokkos may be initialized at most once per process and, once finalized, can
-// never be initialized again. When SPARTA is embedded as a library (e.g. the
-// SPARTA-GUI reuses one process across many open/close cycles) Kokkos must be
+// never be initialized again. When SPARTA is embedded as a library (a host
+// application reusing one process across many open/close cycles) Kokkos must be
 // initialized on first use and finalized once at process exit -- not in the
 // KokkosSPARTA destructor. These file-scope helpers track that lifetime.
 
