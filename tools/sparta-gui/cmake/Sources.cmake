@@ -54,6 +54,8 @@ set(PROJECT_SOURCES
   ${CMAKE_SOURCE_DIR}/src/imageviewer.h
   ${CMAKE_SOURCE_DIR}/src/imageviewer_internal.h
   ${CMAKE_SOURCE_DIR}/src/imageviewersettings.cpp
+  ${CMAKE_SOURCE_DIR}/src/runcompare.cpp
+  ${CMAKE_SOURCE_DIR}/src/runcompare.h
   ${CMAKE_SOURCE_DIR}/src/spartarunner.cpp
   ${CMAKE_SOURCE_DIR}/src/spartarunner.h
   ${CMAKE_SOURCE_DIR}/src/surfreport.cpp

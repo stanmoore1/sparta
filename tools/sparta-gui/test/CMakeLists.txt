@@ -220,6 +220,18 @@ target_link_libraries(test_surfreport PRIVATE GTest::gtest_main Qt6::Core)
 
 gtest_discover_tests(test_surfreport)
 
+# Test executable for the run-comparison core (Feature 5)
+add_executable(test_runcompare
+  test_runcompare.cpp
+  ${CMAKE_SOURCE_DIR}/src/runcompare.cpp
+  ${CMAKE_SOURCE_DIR}/src/runarchive.cpp
+)
+
+target_include_directories(test_runcompare PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_runcompare PRIVATE GTest::gtest_main Qt6::Core)
+
+gtest_discover_tests(test_runcompare)
+
 # Test executable for the movie probing and frame selection helpers
 add_executable(test_movieimport
   test_movieimport.cpp

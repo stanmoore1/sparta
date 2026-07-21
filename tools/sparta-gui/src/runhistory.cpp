@@ -6,6 +6,12 @@
 
 #include "runhistory.h"
 
+#include "runcompare.h"
+
+#include <QItemSelectionModel>
+
+#include <algorithm>
+
 #include "constants.h"
 
 #include <QCheckBox>
@@ -140,6 +146,31 @@ QString RunHistory::writeReportHtml(int row)
     return path;
 }
 
+QString RunHistory::writeComparisonHtml(int rowA, int rowB)
+{
+    if (rowA < 0 || rowA >= records_.size() || rowB < 0 || rowB >= records_.size())
+        return {};
+    const RunRecord &a = records_.at(rowA);
+    const RunRecord &b = records_.at(rowB);
+
+    auto loadImages = [](const RunRecord &r) {
+        QMap<QString, QByteArray> imgs;
+        for (const QString &p : r.imageFiles) {
+            QFile f(p);
+            if (f.open(QIODevice::ReadOnly)) imgs.insert(p, f.readAll());
+        }
+        return imgs;
+    };
+
+    const QString html =
+        RunCompare::buildComparisonHtml(a, b, loadImages(a), loadImages(b));
+    const QString path = recordDir(rowA) + "/compare.html";
+    QFile out(path);
+    if (!out.open(QIODevice::WriteOnly | QIODevice::Text)) return {};
+    out.write(html.toUtf8());
+    return path;
+}
+
 QString RunHistory::writeReportPdf(int row)
 {
     if (row < 0 || row >= records_.size()) return {};
@@ -200,10 +231,14 @@ HistoryPanel::HistoryPanel(QWidget *parent, RunHistory *hist) : QWidget(parent),
     auto *tb = new QHBoxLayout;
     auto *htmlBtn = new QPushButton("Report (HTML)", this);
     auto *pdfBtn = new QPushButton("Report (PDF)", this);
+    compareBtn_ = new QPushButton("Compare (2)", this);
+    compareBtn_->setToolTip("Select exactly two runs to diff their decks, metadata and images");
+    compareBtn_->setEnabled(false);
     auto *openBtn = new QPushButton("Open Folder", this);
     auto *delBtn = new QPushButton("Delete", this);
     tb->addWidget(htmlBtn);
     tb->addWidget(pdfBtn);
+    tb->addWidget(compareBtn_);
     tb->addWidget(openBtn);
     tb->addWidget(delBtn);
     tb->addStretch();
@@ -212,7 +247,8 @@ HistoryPanel::HistoryPanel(QWidget *parent, RunHistory *hist) : QWidget(parent),
     table_ = new QTableView(this);
     table_->setModel(hist_->model());
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
-    table_->setSelectionMode(QAbstractItemView::SingleSelection);
+    // allow selecting two runs for a comparison
+    table_->setSelectionMode(QAbstractItemView::ExtendedSelection);
     table_->horizontalHeader()->setStretchLastSection(true);
     table_->verticalHeader()->setVisible(false);
     outer->addWidget(table_, 1);
@@ -226,14 +262,39 @@ HistoryPanel::HistoryPanel(QWidget *parent, RunHistory *hist) : QWidget(parent),
 
     connect(htmlBtn, &QPushButton::clicked, this, &HistoryPanel::reportHtml);
     connect(pdfBtn, &QPushButton::clicked, this, &HistoryPanel::reportPdf);
+    connect(compareBtn_, &QPushButton::clicked, this, &HistoryPanel::compareSelected);
     connect(openBtn, &QPushButton::clicked, this, &HistoryPanel::openFolder);
     connect(delBtn, &QPushButton::clicked, this, &HistoryPanel::deleteSelected);
+    // enable Compare only when exactly two runs are selected
+    connect(table_->selectionModel(), &QItemSelectionModel::selectionChanged, this,
+            [this]() { compareBtn_->setEnabled(selectedRows().size() == 2); });
 }
 
 int HistoryPanel::selectedRow() const
 {
     const auto rows = table_->selectionModel()->selectedRows();
     return rows.isEmpty() ? -1 : rows.first().row();
+}
+
+QList<int> HistoryPanel::selectedRows() const
+{
+    QList<int> out;
+    for (const auto &idx : table_->selectionModel()->selectedRows()) out << idx.row();
+    std::sort(out.begin(), out.end());
+    return out;
+}
+
+void HistoryPanel::compareSelected()
+{
+    const QList<int> rows = selectedRows();
+    if (rows.size() != 2) {
+        QMessageBox::information(this, "Compare Runs", "Select exactly two runs to compare.");
+        return;
+    }
+    // the table lists newest first; compare older (A) against newer (B)
+    const QString p = hist_->writeComparisonHtml(rows.at(1), rows.at(0));
+    if (!p.isEmpty()) QDesktopServices::openUrl(QUrl::fromLocalFile(p));
+    else QMessageBox::warning(this, "Compare Runs", "Could not write the comparison report.");
 }
 
 void HistoryPanel::reportHtml()

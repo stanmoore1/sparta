@@ -54,6 +54,8 @@ public:
 
     /** @brief Write (and return the path to) an HTML report for record @p row. */
     QString writeReportHtml(int row);
+    /** @brief Write an HTML comparison of records @p rowA and @p rowB (path, or empty). */
+    QString writeComparisonHtml(int rowA, int rowB);
     /** @brief Write (and return the path to) a PDF report for record @p row (empty on failure). */
     QString writeReportPdf(int row);
     /** @brief Local archive directory for record @p row. */
@@ -83,13 +85,16 @@ public:
 private slots:
     void reportHtml();
     void reportPdf();
+    void compareSelected();
     void openFolder();
     void deleteSelected();
 
 private:
     int selectedRow() const;
+    QList<int> selectedRows() const;
     RunHistory *hist_;
     QTableView *table_ = nullptr;
+    class QPushButton *compareBtn_ = nullptr;
 };
 
 #endif // RUNHISTORY_H
