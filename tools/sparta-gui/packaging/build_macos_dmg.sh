@@ -1,74 +1,119 @@
 #!/bin/bash
 
+# Build a drag-n-drop installer .dmg from the sparta-gui.app bundle, styled with
+# the SPARTA icon, a background image, a README and an /Applications alias.
+#
+# Two modes:
+#   default        - deploy Qt with `macdeployqt -dmg` (universal, non-VTK build),
+#                    then style the image.  Backwards compatible: called with just
+#                    the version as $1 it behaves exactly as before.
+#   DMG_PREBUNDLED - the app is already fully bundled AND code-signed (e.g. a VTK
+#     =yes          build that bundled VTK with dylibbundler and re-signed).  Do
+#                    not run macdeployqt, do not copy/modify anything inside the
+#                    signed bundle (that would invalidate the signature): build
+#                    the image directly from the app and take the README and
+#                    background from this script's directory instead.
+#
+# Environment:
+#   SPARTA_PLUGIN_LIB  path to the libsparta dylib to bundle (default mode only)
+#   DMG_PREBUNDLED     "yes" to use the pre-bundled/signed path
+#   DMG_OUTPUT         output .dmg filename (default SPARTA-GUI-macOS-multiarch-v<ver>.dmg)
+
 APP_NAME=sparta-gui
 VERSION="$1"
+DMG_PREBUNDLED="${DMG_PREBUNDLED:-no}"
+DMG_OUTPUT="${DMG_OUTPUT:-SPARTA-GUI-macOS-multiarch-v${VERSION}.dmg}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 echo "Delete old files, if they exist"
-rm -f ${APP_NAME}.dmg ${APP_NAME}-rw.dmg SPARTA-GUI-macOS-multiarch*.dmg \
-   ${APP_NAME}.app/Contents/Frameworks/libsparta.0.dylib
+rm -f ${APP_NAME}.dmg ${APP_NAME}-rw.dmg "${DMG_OUTPUT}"
 
-# bundle the SPARTA shared library if this is a plugin-mode SPARTA-GUI binary.
-# the library to bundle must be passed in the SPARTA_PLUGIN_LIB environment
-# variable (e.g. a universal libsparta dylib built alongside the GUI)
-if $(./${APP_NAME}.app/Contents/MacOS/sparta-gui -h | grep -q pluginpath); then
-    if [ -z "${SPARTA_PLUGIN_LIB}" ] || [ ! -f "${SPARTA_PLUGIN_LIB}" ]; then
-        echo "ERROR: set SPARTA_PLUGIN_LIB to the path of the SPARTA shared library to bundle"
-        exit 1
-    fi
-    mkdir -p ${APP_NAME}.app/Contents/Frameworks
-    cp "${SPARTA_PLUGIN_LIB}" ${APP_NAME}.app/Contents/Frameworks/libsparta.0.dylib
-    chmod 0755 ${APP_NAME}.app/Contents/Frameworks/libsparta.0.dylib
-fi
-
-# The pre-compiled SPARTA library is built with OpenMP and records a dependency
-# on /usr/local/lib/libomp.dylib.  Apple ships no libomp, so on hosts that were
-# set up without an OpenMP runtime (e.g. CI runners) macdeployqt cannot resolve
-# or bundle it and prints a cryptic otool "can't open file" error.  Detect that
-# case so the bundle is built cleanly without OpenMP support instead.
-SKIP_LIBOMP=no
-SPARTA_LIB=${APP_NAME}.app/Contents/Frameworks/libsparta.0.dylib
-if [ -f "${SPARTA_LIB}" ] \
-   && otool -L "${SPARTA_LIB}" 2>/dev/null | grep -q '/usr/local/lib/libomp.dylib' \
-   && [ ! -e /usr/local/lib/libomp.dylib ]; then
-    echo "NOTE: libsparta references libomp.dylib but no OpenMP runtime is installed;"
-    echo "      building the bundle without OpenMP support and skipping libomp deployment."
-    SKIP_LIBOMP=yes
-fi
-
-echo "Create initial dmg file with macdeployqt"
-if [ "${SKIP_LIBOMP}" = "yes" ]; then
-    # drop the expected, harmless errors about the unresolved libomp dependency
-    macdeployqt ${APP_NAME}.app -dmg 2>&1 | grep -v 'libomp\.dylib'
+if [ "${DMG_PREBUNDLED}" = "yes" ]; then
+    # -------- pre-bundled + signed app: build the image without touching it -----
+    echo "Create initial writable dmg directly from the pre-bundled app"
+    appmb=$(du -sm ${APP_NAME}.app | awk '{print $1}')
+    sizemb=$(( appmb + 150 ))
+    hdiutil create -volname "${APP_NAME}" -srcfolder ${APP_NAME}.app \
+        -fs HFS+ -format UDRW -ov -size ${sizemb}m ${APP_NAME}-rw.dmg
 else
-    macdeployqt ${APP_NAME}.app -dmg
+    # -------- default: deploy Qt into the app and let macdeployqt make the dmg ---
+    rm -f ${APP_NAME}.app/Contents/Frameworks/libsparta.0.dylib
+
+    # bundle the SPARTA shared library if this is a plugin-mode SPARTA-GUI binary.
+    # the library to bundle must be passed in the SPARTA_PLUGIN_LIB environment
+    # variable (e.g. a universal libsparta dylib built alongside the GUI)
+    if $(./${APP_NAME}.app/Contents/MacOS/sparta-gui -h | grep -q pluginpath); then
+        if [ -z "${SPARTA_PLUGIN_LIB}" ] || [ ! -f "${SPARTA_PLUGIN_LIB}" ]; then
+            echo "ERROR: set SPARTA_PLUGIN_LIB to the path of the SPARTA shared library to bundle"
+            exit 1
+        fi
+        mkdir -p ${APP_NAME}.app/Contents/Frameworks
+        cp "${SPARTA_PLUGIN_LIB}" ${APP_NAME}.app/Contents/Frameworks/libsparta.0.dylib
+        chmod 0755 ${APP_NAME}.app/Contents/Frameworks/libsparta.0.dylib
+    fi
+
+    # The pre-compiled SPARTA library is built with OpenMP and records a dependency
+    # on /usr/local/lib/libomp.dylib.  Apple ships no libomp, so on hosts that were
+    # set up without an OpenMP runtime (e.g. CI runners) macdeployqt cannot resolve
+    # or bundle it and prints a cryptic otool "can't open file" error.  Detect that
+    # case so the bundle is built cleanly without OpenMP support instead.
+    SKIP_LIBOMP=no
+    SPARTA_LIB=${APP_NAME}.app/Contents/Frameworks/libsparta.0.dylib
+    if [ -f "${SPARTA_LIB}" ] \
+       && otool -L "${SPARTA_LIB}" 2>/dev/null | grep -q '/usr/local/lib/libomp.dylib' \
+       && [ ! -e /usr/local/lib/libomp.dylib ]; then
+        echo "NOTE: libsparta references libomp.dylib but no OpenMP runtime is installed;"
+        echo "      building the bundle without OpenMP support and skipping libomp deployment."
+        SKIP_LIBOMP=yes
+    fi
+
+    echo "Create initial dmg file with macdeployqt"
+    if [ "${SKIP_LIBOMP}" = "yes" ]; then
+        # drop the expected, harmless errors about the unresolved libomp dependency
+        macdeployqt ${APP_NAME}.app -dmg 2>&1 | grep -v 'libomp\.dylib'
+    else
+        macdeployqt ${APP_NAME}.app -dmg
+    fi
+    echo "Create writable dmg file"
+    hdiutil convert ${APP_NAME}.dmg -format UDRW -o ${APP_NAME}-rw.dmg
 fi
-echo "Create writable dmg file"
-hdiutil convert ${APP_NAME}.dmg -format UDRW -o ${APP_NAME}-rw.dmg
 
 echo "Mount writeable DMG file in read-write mode. Keep track of device and volume names"
 DEVICE=$(hdiutil attach -readwrite -noverify ${APP_NAME}-rw.dmg | grep '^/dev/' | sed 1q | awk '{print $1}')
 VOLUME=$(df | grep ${DEVICE} | sed -e 's/^.*\(\/Volumes\/\)/\1/')
 sleep 2
 
-echo "Create link to Application folder and move README and background image files"
+echo "Create link to Application folder and place README and background image files"
 
 pushd "${VOLUME}"
 ln -s /Applications .
-mv ${APP_NAME}.app/Contents/Resources/README.txt .
-mkdir  .background
-mv ${APP_NAME}.app/Contents/Resources/SPARTA_DMG_Background.png .background/background.png
-mv ${APP_NAME}.app SPARTA-GUI.app
-cd SPARTA-GUI.app/Contents
-
-echo "Attach icons to SPARTA-GUI executable and lib"
-echo "read 'icns' (-16455) \"Resources/sparta-gui.icns\";" > icon.rsrc
-Rez -a icon.rsrc -o MacOS/sparta-gui
-SetFile -a C MacOS/sparta-gui
-if [ -f Frameworks/libsparta.0.dylib ]; then
-    Rez -a icon.rsrc -o Frameworks/libsparta.0.dylib
-    SetFile -a C Frameworks/libsparta.0.dylib
+mkdir .background
+if [ "${DMG_PREBUNDLED}" = "yes" ]; then
+    # take these from the source tree so the signed app bundle is not modified
+    cp "${SCRIPT_DIR}/README.macos" README.txt
+    cp "${SCRIPT_DIR}/SPARTA_DMG_Background.png" .background/background.png
+else
+    mv ${APP_NAME}.app/Contents/Resources/README.txt .
+    mv ${APP_NAME}.app/Contents/Resources/SPARTA_DMG_Background.png .background/background.png
 fi
-rm icon.rsrc
+mv ${APP_NAME}.app SPARTA-GUI.app
+
+# Attach the icon to the executable/lib only in the default (unsigned) path;
+# doing it to a signed bundle would invalidate the code signature.  A signed
+# app already shows its icon via CFBundleIconFile in Info.plist.
+if [ "${DMG_PREBUNDLED}" != "yes" ]; then
+    cd SPARTA-GUI.app/Contents
+    echo "Attach icons to SPARTA-GUI executable and lib"
+    echo "read 'icns' (-16455) \"Resources/sparta-gui.icns\";" > icon.rsrc
+    Rez -a icon.rsrc -o MacOS/sparta-gui
+    SetFile -a C MacOS/sparta-gui
+    if [ -f Frameworks/libsparta.0.dylib ]; then
+        Rez -a icon.rsrc -o Frameworks/libsparta.0.dylib
+        SetFile -a C Frameworks/libsparta.0.dylib
+    fi
+    rm icon.rsrc
+    cd "${VOLUME}"
+fi
 popd
 
 echo 'Tell the Finder to resize the window, set the background,'
@@ -132,13 +177,13 @@ echo '
 sync
 
 echo "Unmount modified disk image and convert to compressed read-only image"
-hdiutil detach "${DEVICE}"
-hdiutil convert "${APP_NAME}-rw.dmg" -format UDZO -o "SPARTA-GUI-macOS-multiarch-v${VERSION}.dmg"
+hdiutil detach "${DEVICE}" || hdiutil detach "${DEVICE}" -force || true
+hdiutil convert "${APP_NAME}-rw.dmg" -format UDZO -o "${DMG_OUTPUT}"
 
 echo "Attach icon to .dmg file"
 echo "read 'icns' (-16455) \"sparta-gui.app/Contents/Resources/sparta-gui.icns\";" > icon.rsrc
-Rez -a icon.rsrc -o SPARTA-GUI-macOS-multiarch-v${VERSION}.dmg
-SetFile -a C SPARTA-GUI-macOS-multiarch-v${VERSION}.dmg
+Rez -a icon.rsrc -o "${DMG_OUTPUT}"
+SetFile -a C "${DMG_OUTPUT}"
 rm icon.rsrc
 
 echo "Delete temporary disk images"

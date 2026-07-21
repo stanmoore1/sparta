@@ -1,17 +1,31 @@
-# Build a universal (arm64 + x86_64) macOS disk image of SPARTA-GUI,
-# equivalent to the LAMMPS-macOS-multiarch-GUI dmg files that the
-# LAMMPS project publishes with its releases.
+# Build macOS disk images of SPARTA-GUI.
 #
-# The official Qt binaries for macOS are universal, and both SPARTA and
-# SPARTA-GUI are built with CMAKE_OSX_ARCHITECTURES="arm64;x86_64", so a
-# single .app bundle runs natively on Apple Silicon and Intel Macs.
-# The SPARTA shared library is linked into the bundle and deployed by
-# macdeployqt together with the Qt frameworks.
+# There are three builds, split by when they run:
+#
+#   build-vtk-app        x86_64 (Intel) + the optional VTK 3D viewer.  This is
+#                        the fast per-commit *test* build: it runs on every push
+#                        to the development branches so regressions are caught
+#                        early.  Homebrew's VTK is single-architecture, hence
+#                        x86_64 only (it also runs on Apple Silicon under
+#                        Rosetta 2).
+#
+#   build-dmg            universal (arm64 + x86_64), no VTK.  Release only.
+#
+#   build-vtk-universal  universal (arm64 + x86_64) + the VTK 3D viewer, with
+#                        VTK compiled from source as a universal binary (there
+#                        is no universal VTK in Homebrew).  Release only.
+#
+# The two universal images are what ships with a real SPARTA release, so they
+# only build on a published GitHub Release or a manual "Run workflow"
+# (workflow_dispatch) -- not on every commit.  Both are equivalent to the
+# LAMMPS-macOS-multiarch-GUI dmg files the LAMMPS project publishes.
 
 name: build-sparta-gui-macos
 
 on:
   workflow_dispatch:
+  release:
+    types: [published]
   push:
     branches:
       - claude/sparta-gui-lammps-adaptation-jbih8k
@@ -27,7 +41,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # ---------------------------------------------------------------------------
+  # Universal (arm64 + x86_64) image, no VTK.  Release only -- see header.
+  # The official Qt binaries for macOS are universal, and both SPARTA and
+  # SPARTA-GUI are built with CMAKE_OSX_ARCHITECTURES="arm64;x86_64", so a
+  # single .app bundle runs natively on Apple Silicon and Intel Macs.  The
+  # SPARTA shared library is linked into the bundle and deployed by macdeployqt
+  # together with the Qt frameworks.
+  # ---------------------------------------------------------------------------
   build-dmg:
+    if: ${{ github.event_name == 'release' || github.event_name == 'workflow_dispatch' }}
     runs-on: macos-14
     steps:
       - name: Checkout
@@ -63,6 +86,9 @@ jobs:
             -D CMAKE_OSX_ARCHITECTURES="arm64;x86_64" \
             -D CMAKE_OSX_DEPLOYMENT_TARGET=12.0
           cmake --build build-gui -j3
+          # copy the SPARTA icon, README, background image and examples into the
+          # bundle tree so the app shows its icon and the dmg is styled
+          cmake --build build-gui --target complete-bundle
           lipo -info build-gui/sparta-gui.app/Contents/MacOS/sparta-gui
 
       - name: Create drag-n-drop installer disk image (dmg target)
@@ -88,16 +114,18 @@ jobs:
           if-no-files-found: error
 
   # ---------------------------------------------------------------------------
-  # Second build: x86_64 (Intel) with the optional VTK 3D viewer enabled.
-  # Homebrew's VTK is single-architecture, so this is a separate x86_64-only
-  # build.  GitHub retired the Intel macos-13 runners, so we build it on the
-  # arm64 macos-14 runner by cross-compiling to x86_64 and getting an x86_64 VTK
-  # from a Rosetta (x86_64) Homebrew.  VTK's Qt integration is not used (the
-  # viewer renders off-screen).  Qt is bundled with macdeployqt and the VTK
-  # dylibs with dylibbundler; the finished .app is uploaded as a zip and runs on
-  # Intel Macs (and on Apple Silicon under Rosetta 2).
+  # Per-commit test build: x86_64 (Intel) with the optional VTK 3D viewer.
+  # Homebrew's VTK is single-architecture, so this is x86_64-only.  GitHub
+  # retired the Intel macos-13 runners, so we build it on the arm64 macos-14
+  # runner by cross-compiling to x86_64 and getting an x86_64 VTK from a Rosetta
+  # (x86_64) Homebrew.  VTK's Qt integration is not used (the viewer renders
+  # off-screen).  Qt is bundled with macdeployqt and the VTK dylibs with
+  # dylibbundler; the finished .app runs on Intel Macs (and on Apple Silicon
+  # under Rosetta 2).  Runs on every push and manual dispatch, not on releases
+  # (a release ships the universal VTK image below instead).
   # ---------------------------------------------------------------------------
   build-vtk-app:
+    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
     runs-on: macos-14
     steps:
       - name: Checkout
@@ -167,6 +195,9 @@ jobs:
             -D CMAKE_OSX_ARCHITECTURES="x86_64" \
             -D CMAKE_OSX_DEPLOYMENT_TARGET=12.0
           cmake --build build-gui -j3
+          # copy the SPARTA icon, README, background image and examples into the
+          # bundle tree so the app shows its icon and the dmg is styled
+          cmake --build build-gui --target complete-bundle
           lipo -info build-gui/sparta-gui.app/Contents/MacOS/sparta-gui
 
       - name: Bundle VTK (dylibbundler) then Qt (macdeployqt)
@@ -237,18 +268,17 @@ jobs:
           cd build-gui
           arch -x86_64 ./sparta-gui.app/Contents/MacOS/sparta-gui -v
 
-      - name: Package as a drag-n-drop DMG
+      - name: Package as a styled drag-n-drop DMG
         run: |
           cd build-gui
-          STAGE=dmg-stage
-          rm -rf "$STAGE"
-          mkdir "$STAGE"
-          # present the bundle as SPARTA-GUI.app next to an /Applications alias so
-          # the user can drag it across to install (same layout as the universal dmg)
-          cp -R sparta-gui.app "$STAGE/SPARTA-GUI.app"
-          ln -s /Applications "$STAGE/Applications"
-          hdiutil create -volname "SPARTA-GUI" -srcfolder "$STAGE" \
-            -fs HFS+ -format UDZO -ov SPARTA-GUI-macOS-x86_64-vtk.dmg
+          # The app is already fully bundled and ad-hoc signed above, so run the
+          # shared packaging script in "pre-bundled" mode: it builds the styled
+          # image (SPARTA icon, background, README, /Applications alias) directly
+          # from the app without re-running macdeployqt or touching -- and thus
+          # invalidating -- the signed bundle.
+          DMG_PREBUNDLED=yes \
+          DMG_OUTPUT=SPARTA-GUI-macOS-x86_64-vtk.dmg \
+            "$GITHUB_WORKSPACE/tools/sparta-gui/packaging/build_macos_dmg.sh" 1.0.0
           shasum -a 256 SPARTA-GUI-macOS-x86_64-vtk.dmg | tee checksum-vtk.txt
           # sanity-check the app inside the dmg launches (signed) under Rosetta
           hdiutil attach SPARTA-GUI-macOS-x86_64-vtk.dmg -mountpoint /Volumes/sgui-vtk
@@ -262,4 +292,181 @@ jobs:
           path: |
             build-gui/SPARTA-GUI-macOS-x86_64-vtk.dmg
             build-gui/checksum-vtk.txt
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # Universal (arm64 + x86_64) image WITH the VTK 3D viewer.  Release only.
+  # There is no universal VTK in Homebrew, so VTK is compiled from source as a
+  # universal binary (only the handful of modules the viewer needs, to keep the
+  # build short) and cached between runs.  This is the image a real SPARTA
+  # release ships for users who want the 3D viewer on both Apple Silicon and
+  # Intel Macs natively.
+  # ---------------------------------------------------------------------------
+  build-vtk-universal:
+    if: ${{ github.event_name == 'release' || github.event_name == 'workflow_dispatch' }}
+    runs-on: macos-14
+    env:
+      VTK_VERSION: '9.3.1'
+      VTK_SERIES: '9.3'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Qt (official universal macOS binaries)
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.7.3'
+          host: 'mac'
+          target: 'desktop'
+          arch: 'clang_64'
+          cache: true
+
+      - name: Install dylibbundler
+        run: /opt/homebrew/bin/brew install dylibbundler
+
+      - name: Cache universal VTK
+        id: cache-vtk
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/vtk-install
+          key: vtk-universal-${{ env.VTK_VERSION }}-macos12-v1
+
+      - name: Build universal VTK from source
+        if: steps.cache-vtk.outputs.cache-hit != 'true'
+        run: |
+          set -e
+          curl -fsSL -o vtk.tar.gz \
+            "https://www.vtk.org/files/release/${VTK_SERIES}/VTK-${VTK_VERSION}.tar.gz"
+          tar xf vtk.tar.gz
+          # Enable only the modules the viewer links against (see the COMPONENTS
+          # list in tools/sparta-gui/CMakeLists.txt); their dependencies
+          # (CommonCore, CommonDataModel, RenderingCore, ...) are pulled in
+          # automatically.  This keeps a universal build to ~15 min instead of
+          # the ~45 min a full VTK would take.
+          cmake -S "VTK-${VTK_VERSION}" -B vtk-build \
+            -D CMAKE_BUILD_TYPE=Release \
+            -D BUILD_SHARED_LIBS=ON \
+            -D VTK_BUILD_TESTING=OFF \
+            -D VTK_BUILD_EXAMPLES=OFF \
+            -D VTK_WRAP_PYTHON=OFF \
+            -D VTK_GROUP_ENABLE_Qt=NO \
+            -D VTK_BUILD_ALL_MODULES=OFF \
+            -D VTK_MODULE_ENABLE_VTK_CommonColor=YES \
+            -D VTK_MODULE_ENABLE_VTK_FiltersGeometry=YES \
+            -D VTK_MODULE_ENABLE_VTK_FiltersCore=YES \
+            -D VTK_MODULE_ENABLE_VTK_FiltersSources=YES \
+            -D VTK_MODULE_ENABLE_VTK_FiltersGeneral=YES \
+            -D VTK_MODULE_ENABLE_VTK_IOXML=YES \
+            -D VTK_MODULE_ENABLE_VTK_IOLegacy=YES \
+            -D VTK_MODULE_ENABLE_VTK_RenderingOpenGL2=YES \
+            -D VTK_MODULE_ENABLE_VTK_RenderingAnnotation=YES \
+            -D VTK_MODULE_ENABLE_VTK_RenderingFreeType=YES \
+            -D CMAKE_OSX_ARCHITECTURES="arm64;x86_64" \
+            -D CMAKE_OSX_DEPLOYMENT_TARGET=12.0 \
+            -D CMAKE_INSTALL_PREFIX="$GITHUB_WORKSPACE/vtk-install"
+          cmake --build vtk-build -j3
+          cmake --install vtk-build
+          lipo -info "$GITHUB_WORKSPACE"/vtk-install/lib/libvtkCommonCore*.dylib
+
+      - name: Locate VTK
+        run: |
+          VTK_PREFIX="$GITHUB_WORKSPACE/vtk-install"
+          test -d "$VTK_PREFIX/lib/cmake" || { echo "ERROR: universal VTK missing"; exit 1; }
+          echo "VTK_PREFIX=$VTK_PREFIX" >> "$GITHUB_ENV"
+          ls -d "$VTK_PREFIX"/lib/cmake/vtk-* || true
+
+      - name: Build SPARTA shared library (serial, universal)
+        run: |
+          cmake -S cmake -B build-lib \
+            -D BUILD_SHARED_LIBS=ON \
+            -D BUILD_MPI=OFF \
+            -D CMAKE_BUILD_TYPE=Release \
+            -D CMAKE_OSX_ARCHITECTURES="arm64;x86_64" \
+            -D CMAKE_OSX_DEPLOYMENT_TARGET=12.0
+          cmake --build build-lib -j3
+          SPARTA_LIB=$(find "$PWD/build-lib" -name 'libsparta*.dylib' -type f | head -1)
+          echo "SPARTA_LIB=$SPARTA_LIB" >> "$GITHUB_ENV"
+          lipo -info "$SPARTA_LIB"
+
+      - name: Build SPARTA-GUI with the VTK viewer (universal)
+        run: |
+          cmake -S tools/sparta-gui -B build-gui \
+            -D CMAKE_BUILD_TYPE=Release \
+            -D SPARTA_GUI_USE_PLUGIN=ON \
+            -D SPARTA_GUI_USE_VTK=ON \
+            -D CMAKE_PREFIX_PATH="$VTK_PREFIX" \
+            -D CMAKE_OSX_ARCHITECTURES="arm64;x86_64" \
+            -D CMAKE_OSX_DEPLOYMENT_TARGET=12.0
+          cmake --build build-gui -j3
+          # copy the SPARTA icon, README, background image and examples into the
+          # bundle tree so the app shows its icon and the dmg is styled
+          cmake --build build-gui --target complete-bundle
+          lipo -info build-gui/sparta-gui.app/Contents/MacOS/sparta-gui
+
+      - name: Bundle VTK (dylibbundler) then Qt (macdeployqt)
+        run: |
+          set -x
+          cd build-gui
+          APP=sparta-gui.app
+          FW="$PWD/$APP/Contents/Frameworks"
+          mkdir -p "$FW"
+          # the plugin loader dlopens the SPARTA library from the bundle
+          cp "$SPARTA_LIB" "$FW/libsparta.0.dylib"
+          chmod 0755 "$FW/libsparta.0.dylib"
+
+          # dylibbundler FIRST (universal VTK dylibs into Contents/libs, ignoring
+          # the Qt SDK), then macdeployqt for the Qt frameworks -- same ordering
+          # and rpath handling as the x86_64 build above (see its comments).
+          dylibbundler -of -cd -b \
+            -x "$APP/Contents/MacOS/sparta-gui" \
+            -d "$APP/Contents/libs" \
+            -p "@executable_path/../libs/" \
+            -s "$VTK_PREFIX/lib" \
+            -i "$QT_ROOT_DIR"
+
+          macdeployqt "$APP" -verbose=1
+
+          EXE="$APP/Contents/MacOS/sparta-gui"
+          if ! otool -l "$EXE" | grep -q "@executable_path/../Frameworks"; then
+            install_name_tool -add_rpath "@executable_path/../Frameworks" "$EXE"
+          fi
+
+          echo "--- executable load commands ---"
+          otool -L "$EXE" | sed -n '2,$p'
+          lipo -info "$EXE"
+
+          # re-sign ad-hoc, inside-out, after the Mach-O rewrites (see x86_64 job)
+          find "$APP/Contents" -type f \( -name '*.dylib' -o -name '*.so' \) \
+            -exec codesign --force --timestamp=none --sign - {} + 2>/dev/null || true
+          for fw in "$APP/Contents/Frameworks"/*.framework; do
+            [ -d "$fw" ] && codesign --force --deep --timestamp=none --sign - "$fw" || true
+          done
+          codesign --force --deep --timestamp=none --sign - "$APP"
+          codesign --verify --deep --verbose=2 "$APP" || true
+
+      - name: Verify the app launches (loads Qt + VTK from the bundle)
+        run: |
+          cd build-gui
+          ./sparta-gui.app/Contents/MacOS/sparta-gui -v
+
+      - name: Package as a styled drag-n-drop DMG
+        run: |
+          cd build-gui
+          # pre-bundled/signed app -> build the styled image without touching it
+          DMG_PREBUNDLED=yes \
+          DMG_OUTPUT=SPARTA-GUI-macOS-multiarch-vtk.dmg \
+            "$GITHUB_WORKSPACE/tools/sparta-gui/packaging/build_macos_dmg.sh" 1.0.0
+          shasum -a 256 SPARTA-GUI-macOS-multiarch-vtk.dmg | tee checksum-multiarch-vtk.txt
+          hdiutil attach SPARTA-GUI-macOS-multiarch-vtk.dmg -mountpoint /Volumes/sgui-uvtk
+          /Volumes/sgui-uvtk/SPARTA-GUI.app/Contents/MacOS/sparta-gui -v
+          lipo -info /Volumes/sgui-uvtk/SPARTA-GUI.app/Contents/Frameworks/libsparta.0.dylib
+          hdiutil detach /Volumes/sgui-uvtk || hdiutil detach /Volumes/sgui-uvtk -force || true
+
+      - name: Upload the universal VTK app
+        uses: actions/upload-artifact@v4
+        with:
+          name: SPARTA-GUI-macOS-multiarch-vtk
+          path: |
+            build-gui/SPARTA-GUI-macOS-multiarch-vtk.dmg
+            build-gui/checksum-multiarch-vtk.txt
           if-no-files-found: error
