@@ -342,6 +342,12 @@ private slots:
     void viewFile();
 
     /**
+     * @brief Open the file named under the cursor in the editor (e.g. an
+     *        include or read_surf target) so it can be edited
+     */
+    void openInEditor();
+
+    /**
      * @brief Inspect file at cursor
      */
     void inspectFile();

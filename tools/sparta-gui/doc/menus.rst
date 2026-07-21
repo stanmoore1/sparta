@@ -206,6 +206,18 @@ output, charts, slide show, variables, or snapshot images.  The
 default settings for their visibility can be changed in the
 *Preferences* dialog.
 
+.. index:: Project Files
+.. index:: multi-file navigation
+
+The *Project Files Window* entry shows a docked navigator that lists the
+files in the working directory of the current input deck.  Files that the
+deck references through an ``include`` or ``read_surf``/``read_grid``/
+``read_restart``/``read_particles`` command are shown in bold, and
+double-clicking any entry opens it in the editor.  Together with the
+*Open '<file>' in editor* action in the editor's right-click menu (available
+when the cursor is on a file name, e.g. the target of an ``include`` line),
+this makes it easy to move between a driver deck and the files it pulls in.
+
 About
 ^^^^^
 

@@ -431,6 +431,10 @@ private:
     void ensureDiagnosticsPanel();
     /** @brief Build the validator context from the bundled tables + live instance */
     InputCheck::Context buildCheckContext();
+    /** @brief Lazily create + host the docked Project Files navigator panel */
+    void ensureProjectFilesPanel();
+    /** @brief Refresh the Project Files list from the working directory + deck references */
+    void refreshProjectFiles();
     /** @brief Archive the just-finished run if archiving is enabled */
     void archiveFinishedRun(bool success);
 
@@ -484,6 +488,7 @@ private:
     RunHistory *history = nullptr;           ///< Run archive controller (lazy)
     HistoryPanel *historyPanel = nullptr;    ///< Docked Run History panel (lazy)
     QListWidget *diagnosticsList = nullptr;  ///< Docked Diagnostics panel list (lazy)
+    QListWidget *projectFilesList = nullptr; ///< Docked Project Files navigator list (lazy)
 
     /**
      * @brief Container for inspect dialog widgets

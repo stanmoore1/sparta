@@ -324,6 +324,7 @@ void SpartaGui::createViewMenu()
         {PanelManager::Sweep, ":/icons/x-office-drawing.svg", "Parametric S&weep Window", ""},
         {PanelManager::History, ":/icons/document-open-recent.svg", "Run &History Window", ""},
         {PanelManager::Diagnostics, ":/icons/warning.svg", "&Diagnostics Window", ""},
+        {PanelManager::ProjectFiles, ":/icons/document-open.svg", "Project &Files Window", ""},
     };
     for (const auto &e : entries) {
         auto *action = panels->toggleViewAction(e.panel);
@@ -355,6 +356,10 @@ void SpartaGui::createViewMenu()
         if (panel == PanelManager::Sweep) ensureSweepPanel();
         if (panel == PanelManager::History) ensureHistoryPanel();
         if (panel == PanelManager::Diagnostics) ensureDiagnosticsPanel();
+        if (panel == PanelManager::ProjectFiles) {
+            ensureProjectFilesPanel();
+            refreshProjectFiles();
+        }
     });
 
     menu->addSeparator();
@@ -1215,6 +1220,7 @@ void SpartaGui::openFile(const QString &fileName)
     cpuuse->hide();
 
     updateVariables();
+    if (projectFilesList) refreshProjectFiles();
     showEditor();
 }
 
@@ -2296,6 +2302,62 @@ void SpartaGui::checkInput()
             QStringLiteral("Input check: %1 error(s), %2 warning(s).").arg(errors).arg(warnings),
             8000);
     }
+}
+
+void SpartaGui::ensureProjectFilesPanel()
+{
+    if (projectFilesList) return;
+    projectFilesList = new QListWidget(this);
+    projectFilesList->setObjectName("projectFilesList");
+    projectFilesList->setToolTip("Files in the working directory; bold entries are referenced "
+                                 "by the current deck. Double-click to open.");
+    connect(projectFilesList, &QListWidget::itemActivated, this, [this](QListWidgetItem *item) {
+        if (item && !item->data(Qt::UserRole).toString().isEmpty())
+            openFile(item->data(Qt::UserRole).toString());
+    });
+    panels->setPanelWidget(PanelManager::ProjectFiles, projectFilesList, "Project Files");
+}
+
+void SpartaGui::refreshProjectFiles()
+{
+    if (!projectFilesList) return;
+    projectFilesList->clear();
+
+    // files referenced by the current deck via include / read_* commands
+    static const QRegularExpression readRe(
+        QStringLiteral("^\\s*(include|read_surf|read_grid|read_restart|read_particles|read_isurf)"
+                       "\\s+(\\S+)"),
+        QRegularExpression::MultilineOption);
+    QSet<QString> referenced;
+    auto it = readRe.globalMatch(textEdit->toPlainText());
+    while (it.hasNext()) {
+        const QString f = it.next().captured(2);
+        if (!f.contains(QLatin1Char('$')) && !f.contains(QLatin1Char('*'))) referenced.insert(f);
+    }
+
+    const QDir dir(currentDir.isEmpty() ? QDir::currentPath() : currentDir);
+    const QFileInfo curInfo(currentFile);
+    const QString curName = curInfo.fileName();
+    const QFileInfoList entries =
+        dir.entryInfoList(QDir::Files, QDir::Name | QDir::IgnoreCase);
+    for (const QFileInfo &fi : entries) {
+        const QString name = fi.fileName();
+        auto *item = new QListWidgetItem(name);
+        item->setData(Qt::UserRole, fi.absoluteFilePath());
+        item->setIcon(QIcon(":/icons/document-open.svg"));
+        // emphasize files the deck references, and the currently open file
+        if (referenced.contains(name)) {
+            QFont f = item->font();
+            f.setBold(true);
+            item->setFont(f);
+            item->setToolTip("Referenced by the current deck");
+        }
+        if (!curName.isEmpty() && name == curName)
+            item->setSelected(true);
+        projectFilesList->addItem(item);
+    }
+    if (projectFilesList->count() == 0)
+        projectFilesList->addItem(new QListWidgetItem("(no files in working directory)"));
 }
 
 void SpartaGui::archiveFinishedRun(bool success)

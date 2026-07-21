@@ -825,6 +825,16 @@ void CodeEditor::contextMenuEvent(QContextMenuEvent *event)
                     addMenuAction(menu, QString("View file '%1'").arg(word),
                                   ":/icons/document-open.svg", this, &CodeEditor::viewFile)
                         ->setData(word);
+                    // for editable (non-image/binary) files -- e.g. an include or
+                    // read_surf/read_grid target -- also offer to open it for editing
+                    static const QRegularExpression binext(
+                        QStringLiteral("\\.(png|jpe?g|gif|bmp|ppm|tiff?|mp4|avi|mov|mpe?g|gz|bz2|"
+                                       "zip|bin|so|o|a|dll|exe)$"),
+                        QRegularExpression::CaseInsensitiveOption);
+                    if (!binext.match(word).hasMatch())
+                        addMenuAction(menu, QString("Open '%1' in editor").arg(word),
+                                      ":/icons/document-open.svg", this, &CodeEditor::openInEditor)
+                            ->setData(word);
                 }
             }
         }
@@ -1188,6 +1198,12 @@ void CodeEditor::viewFile()
     auto *act     = qobject_cast<QAction *>(sender());
     auto *guimain = mainWindow;
     guimain->viewFile(act->data().toString());
+}
+
+void CodeEditor::openInEditor()
+{
+    auto *act = qobject_cast<QAction *>(sender());
+    if (act && mainWindow) mainWindow->openFile(act->data().toString());
 }
 
 void CodeEditor::inspectFile()
