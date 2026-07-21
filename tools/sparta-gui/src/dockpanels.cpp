@@ -37,11 +37,12 @@ namespace {
 const char *const PANEL_OBJECT_NAME[PanelManager::NPanels] = {"dockOutput", "dockCharts",
                                                               "dockImage", "dockSlideShow",
                                                               "dockVariables", "dockJobs",
-                                                              "dockSweep", "dockHistory"};
+                                                              "dockSweep", "dockHistory",
+                                                              "dockDiagnostics"};
 const char *const PANEL_TITLE[PanelManager::NPanels] = {"Output", "Charts", "Image",
                                                         "Slide Show", "Variables",
                                                         "Cluster Jobs", "Parameter Sweep",
-                                                        "Run History"};
+                                                        "Run History", "Diagnostics"};
 
 // Chart/Image/Slide Show host widgets manage their own scrolling/zooming and
 // must not be wrapped in an extra QScrollArea; Output (QPlainTextEdit) and
@@ -224,6 +225,7 @@ void PanelManager::applyDefaultLayout()
     dm->addDockWidgetTabToArea(docks[Jobs], logArea);
     dm->addDockWidgetTabToArea(docks[Sweep], logArea);
     dm->addDockWidgetTabToArea(docks[History], logArea);
+    dm->addDockWidgetTabToArea(docks[Diagnostics], logArea);
 
     applySplitterProportions();
 

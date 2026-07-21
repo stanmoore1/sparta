@@ -20,6 +20,7 @@
 #include <string>
 #include <vector>
 
+#include "inputcheck.h"
 #include "spartawrapper.h"
 
 // forward declarations
@@ -28,6 +29,7 @@ class QAction;
 class QEvent;
 class QFont;
 class QLabel;
+class QListWidget;
 class QMenu;
 class QMenuBar;
 class QProgressBar;
@@ -286,6 +288,9 @@ private slots:
     /** @brief Show the docked Run History panel */
     void showRunHistory();
 
+    /** @brief Statically validate the current input deck and show diagnostics */
+    void checkInput();
+
     /** @brief Browse restart files and continue a run from a selected one */
     void continueRestart();
 
@@ -422,6 +427,10 @@ private:
     void ensureHistory();
     /** @brief Lazily create + host the docked Run History panel */
     void ensureHistoryPanel();
+    /** @brief Lazily create + host the docked Diagnostics panel */
+    void ensureDiagnosticsPanel();
+    /** @brief Build the validator context from the bundled tables + live instance */
+    InputCheck::Context buildCheckContext();
     /** @brief Archive the just-finished run if archiving is enabled */
     void archiveFinishedRun(bool success);
 
@@ -474,6 +483,7 @@ private:
     SweepPanel *sweepPanel = nullptr;        ///< Docked Parametric Sweep panel (lazy)
     RunHistory *history = nullptr;           ///< Run archive controller (lazy)
     HistoryPanel *historyPanel = nullptr;    ///< Docked Run History panel (lazy)
+    QListWidget *diagnosticsList = nullptr;  ///< Docked Diagnostics panel list (lazy)
 
     /**
      * @brief Container for inspect dialog widgets

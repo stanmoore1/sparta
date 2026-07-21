@@ -62,6 +62,12 @@ def parse_template(line):
     return required, variadic
 
 
+# phrases in the syntax body that indicate optional trailing arguments even when
+# the template line itself shows a fixed argument list (e.g. write_surf)
+BODY_VARIADIC = re.compile(
+    r"zero or more|one or more|may be appended|optional (keyword|arg)", re.IGNORECASE)
+
+
 def extract(path):
     """Return (command, min_required, variadic) for a base-command doc page."""
     try:
@@ -72,7 +78,9 @@ def extract(path):
 
     command = None
     in_syntax = False
-    for i, raw in enumerate(lines):
+    template = None
+    body = []
+    for raw in lines:
         m = H3_RE.match(raw)
         if m:
             name = m.group(1).strip()
@@ -85,15 +93,24 @@ def extract(path):
             in_syntax = True
             continue
         if in_syntax:
-            if ":pre" in raw and raw.split()[0:1] == [command]:
-                parsed = parse_template(raw)
-                if parsed is None:
-                    return None
-                return (command, parsed[0], parsed[1])
-            # stop at the next section header
+            # the next section header ends the syntax block
             if raw.startswith("[") and raw.endswith("]"):
-                return None
-    return None
+                break
+            if template is None and ":pre" in raw and raw.split()[0:1] == [command]:
+                template = raw
+            else:
+                body.append(raw)
+
+    if template is None:
+        return None
+    parsed = parse_template(template)
+    if parsed is None:
+        return None
+    required, variadic = parsed
+    # the body may reveal optional trailing keywords the template line omitted
+    if not variadic and BODY_VARIADIC.search("\n".join(body)):
+        variadic = True
+    return (command, required, variadic)
 
 
 def main():

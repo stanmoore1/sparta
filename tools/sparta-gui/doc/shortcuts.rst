@@ -32,6 +32,12 @@ available (On macOS use the Command key instead of Ctrl/Control).
      - Redo edit
      - Ctrl+/
      - Stop Active Run
+   * - Ctrl+K
+     - Check Input
+     -
+     -
+     -
+     -
    * - Ctrl+Shift+F
      - View Text File
      - Ctrl+C

@@ -41,7 +41,7 @@ constexpr int PROGRESS_MAXIMUM      = 1000; ///< Maximum value for QProgressBar
 // ---- Docked panel layout --------------------------------------------------
 /** bump whenever dock objectNames or the panel topology change, so a saved
  *  layout blob from an older version is discarded instead of misapplied */
-constexpr int DOCK_LAYOUT_VERSION = 4;
+constexpr int DOCK_LAYOUT_VERSION = 5;
 
 // ---- File limits ---------------------------------------------------------
 constexpr int NUM_RECENT_FILES = 5; ///< Number of entries in the recent files list

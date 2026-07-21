@@ -55,6 +55,48 @@ The editor has an auto-save mode that can be enabled or disabled in the
 *Preferences* dialog.  In auto-save mode, the editor buffer is
 automatically saved before running SPARTA or before exiting SPARTA-GUI.
 
+.. _input_validation:
+
+Input Validation
+^^^^^^^^^^^^^^^^
+
+.. index:: input validation
+.. index:: linting
+.. index:: Check Input
+
+Selecting *Run* -> *Check Input* (keyboard shortcut ``Ctrl-K``)
+performs a static check of the current input deck **without running
+SPARTA**, so mistakes are caught before a (possibly long or remote)
+simulation is started.  Problems are shown three ways: a colored
+background and a dot in the line-number margin on each affected line
+(red for errors, amber for warnings), a tooltip with the message when
+hovering the line, and a list in the docked *Diagnostics* window where
+clicking an entry jumps to the offending line.
+
+The checks are:
+
+- **Unknown command or style** -- the command name, or the style of a
+  ``fix``/``compute``/``dump``/... command, is not recognized.
+- **Wrong number of arguments** -- a command has too few (or, for
+  fixed-length commands such as ``boundary`` or ``create_box``, too many)
+  arguments.  The required and optional arguments of every command are
+  taken from the SPARTA documentation, so the check follows the actual
+  command syntax.
+- **Undefined reference** -- a ``$``/``v_`` variable, or a ``c_``/``f_``
+  compute or fix, is used without being defined in the file.
+- **Missing file** -- a file named by ``include``, ``read_surf``,
+  ``read_grid``, ``read_restart``, or ``read_particles`` cannot be found
+  in the working directory.
+
+The checks are deliberately conservative to avoid false alarms:
+comments, line continuations (``&``), embedded Python (``python ... here
+"""..."""``) blocks, and variable-expanded (``${...}``) command or style
+names are handled correctly, and cross-reference problems that an
+``include`` file might resolve are reported as warnings rather than
+errors.  Recognized command styles come from the loaded SPARTA library,
+so style checks are most complete once a SPARTA instance has been created
+(for example after a first run).
+
 Context Specific Word Completion
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 

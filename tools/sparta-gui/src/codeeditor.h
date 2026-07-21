@@ -12,6 +12,9 @@
 #ifndef CODEEDITOR_H
 #define CODEEDITOR_H
 
+#include "inputcheck.h"
+
+#include <QHash>
 #include <QMap>
 #include <QPalette>
 #include <QPlainTextEdit>
@@ -122,6 +125,18 @@ public:
      * @param error true for the error (red) highlight, false for the normal (green) one
      */
     void setHighlight(int block, bool error);
+
+    /**
+     * @brief Show static-validation diagnostics as inline markers.
+     * @param diags diagnostics from the input-deck validator (line = 1-based)
+     *
+     * Draws a faint per-line background (red for errors, amber for warnings), a
+     * gutter dot, and a hover tooltip with the message(s) on each flagged line.
+     */
+    void setDiagnostics(const QList<InputCheck::Diagnostic> &diags);
+
+    /// @brief Clear all diagnostic markers.
+    void clearDiagnostics();
 
     /**
      * @brief Enable/disable automatic reformatting on Enter key
@@ -287,6 +302,13 @@ protected:
      */
     void keyPressEvent(QKeyEvent *event) override;
 
+    /**
+     * @brief Intercept tooltip events to show diagnostic messages on hover
+     * @param event the event to inspect
+     * @return true if handled
+     */
+    bool event(QEvent *event) override;
+
 private slots:
     /**
      * @brief Update line number area width when block count changes
@@ -371,6 +393,14 @@ private:
      * @param oldPopup Popup of the previously active completer, hidden if different
      */
     void popupCompletion(const QString &prefix, QAbstractItemView *oldPopup);
+
+    /// @brief One line's validation marker: severity rank (2=error,1=warning) + tooltip
+    struct DiagMark {
+        int severity = 0;
+        QString tip;
+    };
+    QHash<int, DiagMark> diagMarks; ///< block number -> diagnostic marker
+    void refreshDiagSelections();   ///< rebuild the per-line ExtraSelection backgrounds
 
     QWidget *lineNumberArea; ///< Widget for displaying line numbers
     QColor schemeBg;         ///< Active scheme editor background; invalid = app theme

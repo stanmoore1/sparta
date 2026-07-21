@@ -25,7 +25,7 @@ label 1 0
 log 1 1
 mixture 2 1
 move_surf 2 1
-next 1 0
+next 1 1
 package 1 1
 partition 3 1
 print 1 1
@@ -63,4 +63,4 @@ variable 2 1
 write_grid 1 1
 write_isurf 6 1
 write_restart 1 1
-write_surf 1 0
+write_surf 1 1

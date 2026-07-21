@@ -31,7 +31,10 @@
 #include <QKeySequence>
 #include <QMenu>
 #include <QMimeData>
+#include <QHelpEvent>
 #include <QPainter>
+#include <QTextEdit>
+#include <QToolTip>
 #include <QRect>
 #include <QRegularExpression>
 #include <QScrollBar>
@@ -220,6 +223,67 @@ void CodeEditor::setHighlight(int block, bool error)
 
     // update graphics
     repaint();
+}
+
+void CodeEditor::setDiagnostics(const QList<InputCheck::Diagnostic> &diags)
+{
+    diagMarks.clear();
+    for (const auto &d : diags) {
+        const int block = d.line - 1;
+        if (block < 0) continue;
+        const int rank = (d.severity == InputCheck::Severity::Error)     ? 2
+                         : (d.severity == InputCheck::Severity::Warning) ? 1
+                                                                         : 0;
+        DiagMark &m = diagMarks[block];
+        m.severity = qMax(m.severity, rank);
+        if (!m.tip.isEmpty()) m.tip += QLatin1Char('\n');
+        m.tip += d.message;
+    }
+    refreshDiagSelections();
+    lineNumberArea->update();
+}
+
+void CodeEditor::clearDiagnostics()
+{
+    if (diagMarks.isEmpty()) return;
+    diagMarks.clear();
+    setExtraSelections({});
+    lineNumberArea->update();
+}
+
+void CodeEditor::refreshDiagSelections()
+{
+    QList<QTextEdit::ExtraSelection> sels;
+    const bool light = isLightTheme();
+    // translucent overlays that read on both light and dark editor backgrounds
+    const QColor errBg = light ? QColor(220, 40, 40, 40) : QColor(255, 90, 90, 55);
+    const QColor warnBg = light ? QColor(220, 150, 0, 40) : QColor(255, 200, 60, 45);
+    for (auto it = diagMarks.constBegin(); it != diagMarks.constEnd(); ++it) {
+        const QTextBlock bl = document()->findBlockByNumber(it.key());
+        if (!bl.isValid()) continue;
+        QTextEdit::ExtraSelection sel;
+        sel.format.setBackground(it.value().severity >= 2 ? errBg : warnBg);
+        sel.format.setProperty(QTextFormat::FullWidthSelection, true);
+        sel.cursor = QTextCursor(bl);
+        sel.cursor.clearSelection();
+        sels.append(sel);
+    }
+    setExtraSelections(sels);
+}
+
+bool CodeEditor::event(QEvent *event)
+{
+    if (event->type() == QEvent::ToolTip && !diagMarks.isEmpty()) {
+        auto *he = static_cast<QHelpEvent *>(event);
+        const QTextCursor cur = cursorForPosition(viewport()->mapFrom(this, he->pos()));
+        const auto it = diagMarks.constFind(cur.blockNumber());
+        if (it != diagMarks.constEnd())
+            QToolTip::showText(he->globalPos(), it.value().tip, this);
+        else
+            QToolTip::hideText();
+        return true;
+    }
+    return QPlainTextEdit::event(event);
 }
 
 // reformat line
@@ -640,6 +704,19 @@ void CodeEditor::lineNumberAreaPaintEvent(QPaintEvent *event)
             }
             painter.drawText(0, top, lineNumberArea->width(), fontMetrics().height(),
                              Qt::AlignRight, number);
+
+            // validation marker: a small dot at the left edge of the gutter
+            const auto dm = diagMarks.constFind(blockNumber);
+            if (dm != diagMarks.constEnd()) {
+                const int h = fontMetrics().height();
+                const int d = qMax(4, h / 3);
+                painter.setRenderHint(QPainter::Antialiasing, true);
+                painter.setPen(Qt::NoPen);
+                painter.setBrush(dm.value().severity >= 2 ? QColor(210, 40, 40)
+                                                          : QColor(220, 150, 0));
+                painter.drawEllipse(2, top + (h - d) / 2, d, d);
+                painter.setRenderHint(QPainter::Antialiasing, false);
+            }
         }
 
         block  = block.next();

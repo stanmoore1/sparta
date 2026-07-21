@@ -56,7 +56,9 @@
 #include <QClipboard>
 #include <QCoreApplication>
 #include <QDesktopServices>
+#include <QDir>
 #include <QEvent>
+#include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFont>
@@ -274,6 +276,7 @@ void SpartaGui::createRunMenu()
     addMenuAction(menu, ":/icons/run-file.svg", "Run SPARTA from &File", "Ctrl+Shift+Return",
                   &SpartaGui::runFile);
     addMenuAction(menu, ":/icons/process-stop.svg", "&Stop SPARTA", "Ctrl+/", &SpartaGui::stopRun);
+    addMenuAction(menu, ":/icons/warning.svg", "Chec&k Input", "Ctrl+K", &SpartaGui::checkInput);
     menu->addSeparator();
 
     addMenuAction(menu, ":/icons/system-restart.svg", "Relaunch &SPARTA Instance", "",
@@ -320,6 +323,7 @@ void SpartaGui::createViewMenu()
         {PanelManager::Jobs, ":/icons/utilities-terminal.svg", "Cluster &Jobs Window", ""},
         {PanelManager::Sweep, ":/icons/x-office-drawing.svg", "Parametric S&weep Window", ""},
         {PanelManager::History, ":/icons/document-open-recent.svg", "Run &History Window", ""},
+        {PanelManager::Diagnostics, ":/icons/warning.svg", "&Diagnostics Window", ""},
     };
     for (const auto &e : entries) {
         auto *action = panels->toggleViewAction(e.panel);
@@ -350,6 +354,7 @@ void SpartaGui::createViewMenu()
         if (panel == PanelManager::Jobs) ensureJobsPanel();
         if (panel == PanelManager::Sweep) ensureSweepPanel();
         if (panel == PanelManager::History) ensureHistoryPanel();
+        if (panel == PanelManager::Diagnostics) ensureDiagnosticsPanel();
     });
 
     menu->addSeparator();
@@ -2151,6 +2156,133 @@ void SpartaGui::showRunHistory()
 {
     ensureHistoryPanel();
     panels->openPanel(PanelManager::History);
+}
+
+void SpartaGui::ensureDiagnosticsPanel()
+{
+    if (diagnosticsList) return;
+    diagnosticsList = new QListWidget(this);
+    diagnosticsList->setObjectName("diagnosticsList");
+    diagnosticsList->setAlternatingRowColors(true);
+    // jump to the flagged line when an entry is activated
+    connect(diagnosticsList, &QListWidget::itemActivated, this, [this](QListWidgetItem *item) {
+        if (!item) return;
+        const int line = item->data(Qt::UserRole).toInt();
+        if (line > 0) {
+            textEdit->setCursor(line - 1);
+            textEdit->setFocus();
+        }
+    });
+    panels->setPanelWidget(PanelManager::Diagnostics, diagnosticsList, "Diagnostics");
+}
+
+InputCheck::Context SpartaGui::buildCheckContext()
+{
+    InputCheck::Context ctx;
+
+    // doc-derived per-command argument specs (bundled resource)
+    QFile tf(QStringLiteral(":/command_syntax.table"));
+    if (tf.open(QIODevice::ReadOnly | QIODevice::Text))
+        ctx.commandSpecs = InputCheck::parseSyntaxTable(QString::fromUtf8(tf.readAll()));
+    for (auto it = ctx.commandSpecs.constBegin(); it != ctx.commandSpecs.constEnd(); ++it)
+        ctx.commands.insert(it.key());
+
+    // command names from the help index (2-token lines: "<page> <command>")
+    QFile hf(QStringLiteral(":/help_index.table"));
+    if (hf.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        const QStringList lines = QString::fromUtf8(hf.readAll()).split(QLatin1Char('\n'));
+        for (const QString &line : lines) {
+            const QStringList w = line.split(QLatin1Char(' '), Qt::SkipEmptyParts);
+            if (w.size() == 2) ctx.commands.insert(w.at(1));
+        }
+    }
+
+    // library-internal commands not covered by the help index
+    QFile inf(QStringLiteral(":/sparta_internal_commands.txt"));
+    if (inf.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        const QStringList lines = QString::fromUtf8(inf.readAll()).split(QLatin1Char('\n'));
+        for (const QString &raw : lines) {
+            const QString c = raw.trimmed();
+            if (!c.isEmpty() && !c.startsWith(QLatin1Char('#'))) ctx.commands.insert(c);
+        }
+    }
+
+    // Authoritative command + style names from the live SPARTA library, when an
+    // instance exists.  (The help index only lists styles that have their own
+    // doc page, so it is not a complete style dictionary -- style-name checks are
+    // skipped entirely unless the library can supply the full list.)
+    if (sparta.isOpen()) {
+        auto libStyles = [this](const char *kind) {
+            QSet<QString> out;
+            const int n = sparta.styleCount(kind);
+            for (int i = 0; i < n; ++i) {
+                QString s = sparta.styleName(kind, i);
+                if (s.isEmpty()) continue;
+                if (s.endsWith("/kk/host") || s.endsWith("/kk/device") || s.endsWith("/kk"))
+                    continue; // keep the base (non-accelerated) name only
+                out.insert(s);
+            }
+            return out;
+        };
+        const QSet<QString> cmds = libStyles("command");
+        ctx.commands.unite(cmds);
+        static const char *const kinds[] = {"fix",     "compute",      "dump",
+                                            "region",  "collide",      "react",
+                                            "surf_collide", "surf_react"};
+        for (const char *k : kinds) {
+            const QSet<QString> s = libStyles(k);
+            if (!s.isEmpty()) ctx.styles[QString::fromLatin1(k)] = s;
+        }
+    }
+
+    // resolve deck-referenced files relative to the current working directory
+    const QString dir = currentDir;
+    ctx.fileExists = [dir](const QString &name) {
+        if (name.isEmpty()) return true; // don't flag empty tokens
+        QFileInfo fi(name);
+        if (fi.isAbsolute()) return fi.exists();
+        return QFileInfo(QDir(dir), name).exists();
+    };
+    return ctx;
+}
+
+void SpartaGui::checkInput()
+{
+    ensureDiagnosticsPanel();
+    const InputCheck::Context ctx = buildCheckContext();
+    const QStringList lines = textEdit->toPlainText().split(QLatin1Char('\n'));
+    const QList<InputCheck::Diagnostic> diags = InputCheck::checkDeck(lines, ctx);
+
+    textEdit->setDiagnostics(diags);
+
+    // fill the diagnostics panel
+    diagnosticsList->clear();
+    int errors = 0, warnings = 0;
+    for (const auto &d : diags) {
+        if (d.severity == InputCheck::Severity::Error) ++errors;
+        else if (d.severity == InputCheck::Severity::Warning) ++warnings;
+        const QString sev = (d.severity == InputCheck::Severity::Error) ? QStringLiteral("error")
+                            : (d.severity == InputCheck::Severity::Warning)
+                                ? QStringLiteral("warning")
+                                : QStringLiteral("info");
+        auto *item = new QListWidgetItem(
+            QStringLiteral("line %1: %2: %3").arg(d.line).arg(sev, d.message));
+        item->setData(Qt::UserRole, d.line);
+        item->setIcon(QIcon(d.severity == InputCheck::Severity::Error
+                                ? QStringLiteral(":/icons/dialog-no.svg")
+                                : QStringLiteral(":/icons/warning.svg")));
+        diagnosticsList->addItem(item);
+    }
+
+    if (diags.isEmpty()) {
+        diagnosticsList->addItem(new QListWidgetItem(QStringLiteral("No problems found.")));
+        statusBar()->showMessage("Input check: no problems found.", 5000);
+    } else {
+        panels->openPanel(PanelManager::Diagnostics);
+        statusBar()->showMessage(
+            QStringLiteral("Input check: %1 error(s), %2 warning(s).").arg(errors).arg(warnings),
+            8000);
+    }
 }
 
 void SpartaGui::archiveFinishedRun(bool success)

@@ -23,7 +23,8 @@ Context makeContext()
                     "surf_collide", "surf_modify", "collide",  "create_particles",
                     "fix",        "compute",    "dump",       "dump_modify", "region",
                     "variable",   "timestep",   "run",        "stats",      "include",
-                    "read_grid",  "read_restart", "read_particles", "react", "surf_react"};
+                    "read_grid",  "read_restart", "read_particles", "react", "surf_react",
+                    "python"};
     ctx.styles["fix"]          = {"emit/face", "emit/surf", "ave/grid", "ave/surf"};
     ctx.styles["compute"]      = {"grid", "surf", "boundary", "thermal/grid"};
     ctx.styles["dump"]         = {"image", "grid", "surf", "particle"};
@@ -211,6 +212,23 @@ TEST(InputCheck, VariableExpandedCommandOrStyleSkipped)
     // a variable-expanded style is not flagged as unknown
     auto d2 = checkDeckText("variable s index vss\ncollide ${s} air air.vss\n", ctx);
     EXPECT_EQ(countCode(d2, "unknown-style"), 0);
+}
+
+TEST(InputCheck, TripleQuotedPythonBlockIgnored)
+{
+    Context ctx = makeContext();
+    // the embedded Python of a "python ... here \"\"\" ... \"\"\"" command must
+    // not be validated as SPARTA commands
+    const QString deck =
+        "variable foo index 1\n"
+        "python truncate return v_foo input 1 iv_arg format fi here \"\"\"\n"
+        "def truncate(x):\n"
+        "  return int(x)\n"
+        "\"\"\"\n"
+        "run 100\n";
+    const auto d = checkDeckText(deck, ctx);
+    EXPECT_EQ(countCode(d, "unknown-command"), 0);
+    EXPECT_TRUE(d.isEmpty()) << (d.isEmpty() ? "" : d.first().message.toStdString());
 }
 
 TEST(InputCheck, ColumnPointsAtOffendingToken)

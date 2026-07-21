@@ -138,6 +138,13 @@ timestep.  The *Stop SPARTA* entry will do this by activating the
 timeout mechanism of the SPARTA library, which lets the current
 timestep complete and then winds down the run cleanly.
 
+The *Check Input* entry (keyboard shortcut `Ctrl-K`) statically validates
+the current input deck without running SPARTA and reports unknown
+commands or styles, wrong argument counts, undefined variable/compute/fix
+references, and missing referenced files.  Problems are marked inline in
+the editor and listed in the docked *Diagnostics* window.  See
+:ref:`Input Validation <input_validation>` for details.
+
 The *Relaunch SPARTA Instance* entry will destroy the current SPARTA
 thread and free its data and then create a new thread with a new SPARTA
 instance.  This is usually not needed, since SPARTA-GUI tries to detect
