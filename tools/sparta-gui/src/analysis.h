@@ -33,6 +33,57 @@
  */
 std::vector<double> autocorrelation(const std::vector<double> &y, int maxlag);
 
+/**
+ * @brief Block-averaging (batch-means) uncertainty of a correlated series.
+ *
+ * DSMC thermo output is autocorrelated, so the naive standard error
+ * @f$s/\sqrt{N}@f$ underestimates the true uncertainty of the mean.  Splitting
+ * the series into @p nblocks contiguous blocks and taking the standard error of
+ * the block means gives a correlation-aware estimate, and the ratio of the two
+ * yields the statistical inefficiency @f$g=1+2\tau_\mathrm{int}@f$.
+ */
+struct BlockStats {
+    bool valid    = false; ///< false if the series was too short to analyze
+    double mean   = 0.0;   ///< grand mean of the series
+    double variance = 0.0; ///< sample variance of the samples (N-1 normalization)
+    double stderror = 0.0; ///< block-averaged standard error of the mean
+    double tauInt = 0.0;   ///< integrated autocorrelation time (in samples), >= 0
+    double nEff   = 0.0;   ///< effective number of independent samples, in [1, N]
+    int nblocks   = 0;     ///< number of blocks actually used
+};
+
+/**
+ * @brief Estimate the mean and its uncertainty by block averaging.
+ * @param y       input samples (equally spaced)
+ * @param nblocks number of blocks; if <= 1, a default ~sqrt(N) is used
+ * @return statistics; @c valid is false when @p y has fewer than 4 samples or
+ *         is constant
+ */
+BlockStats blockAverage(const std::vector<double> &y, int nblocks = 0);
+
+/**
+ * @brief Steady-state (burn-in) cutoff via the Marginal Standard Error Rule.
+ *
+ * MSER picks the truncation point @f$d@f$ that minimizes the standard error of
+ * the mean of the retained tail @f$y_d..y_{N-1}@f$, i.e. it discards the initial
+ * transient while keeping as much stationary data as possible.  The search is
+ * restricted to the first half of the series so at least half the samples are
+ * retained.
+ */
+struct SteadyState {
+    bool valid     = false; ///< false if the series was too short
+    int cutoff     = 0;     ///< index of the first retained sample (burn-in length)
+    double mean    = 0.0;   ///< mean of the retained (post-cutoff) samples
+    double stderror = 0.0;  ///< block-averaged standard error of the retained mean
+};
+
+/**
+ * @brief Detect the burn-in cutoff of a time series (MSER).
+ * @param y input samples (equally spaced)
+ * @return the cutoff index and the post-cutoff mean +/- standard error
+ */
+SteadyState steadyStateCutoff(const std::vector<double> &y);
+
 #endif
 
 // Local Variables:

@@ -730,6 +730,8 @@ void ChartWindow::postProcess()
     analysisbox->addItem("Birch-Murnaghan EOS fit");
     analysisbox->addItem("Custom function");
     analysisbox->addItem("Custom fit");
+    analysisbox->addItem("Block-average uncertainty");
+    analysisbox->addItem("Steady-state detection");
     form->addRow("Analysis:", analysisbox);
 
     auto *paramLabel = new QLabel;
@@ -781,7 +783,9 @@ void ChartWindow::postProcess()
         const bool fit       = (idx == 4); // custom-function nonlinear fit
         const bool expr      = plot || fit;
         const bool eos       = (idx == 2);
-        const bool showRange = (idx != 0); // show for all except autocorrelation
+        const bool block     = (idx == 5); // block-average uncertainty
+        const bool steady    = (idx == 6); // steady-state detection
+        const bool showRange = (idx >= 1 && idx <= 4); // fitting analyses only
         exprLabel->setVisible(expr);
         exprEdit->setVisible(expr);
         paramsLabel->setVisible(fit);
@@ -790,15 +794,18 @@ void ChartWindow::postProcess()
         fitLabelEdit->setVisible(fit);
         fitRangeLabel->setVisible(showRange);
         fitRangeWidget->setVisible(showRange);
-        paramLabel->setVisible(!expr && !eos);
+        paramLabel->setVisible(idx == 0 || idx == 1 || block);
         if (idx == 1) { // polynomial degree
             paramLabel->setText("Degree:");
             paramSpin->setVisible(true);
             paramSpin->setRange(1, qMin(npoints - 1, 8));
             paramSpin->setValue(qMin(3, qMin(npoints - 1, 8)));
-        } else if (eos) { // EOS: only show the x-axis confirmation
-            paramSpin->setVisible(false);
-        } else if (expr) { // custom function/fit: expression field(s) only
+        } else if (block) { // number of blocks for batch-means averaging
+            paramLabel->setText("Blocks:");
+            paramSpin->setVisible(true);
+            paramSpin->setRange(2, qMax(2, npoints / 2));
+            paramSpin->setValue(qBound(2, int(std::sqrt(double(npoints))), qMax(2, npoints / 2)));
+        } else if (eos || expr || steady) { // no scalar parameter needed
             paramSpin->setVisible(false);
         } else { // autocorrelation max lag
             paramLabel->setText("Max lag:");
@@ -830,8 +837,8 @@ void ChartWindow::postProcess()
 
     const int which = analysisbox->currentIndex();
 
-    // filter to the user-specified x-range for fitting analyses (not autocorrelation)
-    if (which != 0) {
+    // filter to the user-specified x-range for fitting analyses only
+    if (which >= 1 && which <= 4) {
         const double fitXmin = fitFromSpin->value();
         const double fitXmax = fitToSpin->value();
         if (fitXmin < fitXmax) {
@@ -871,6 +878,89 @@ void ChartWindow::postProcess()
         win->setMinimumSize(Cfg::MINIMUM_WIDTH, Cfg::MINIMUM_HEIGHT);
         win->loadData(result, 0, {1});
         win->show();
+        return;
+    }
+
+    if (which == 5) { // block-average (batch-means) uncertainty of the mean
+        const BlockStats bs = blockAverage(ys, paramSpin->value());
+        if (!bs.valid) {
+            warning(this, "Block averaging",
+                    "Could not analyze the series (too short or constant).");
+            return;
+        }
+        // mark the mean as a horizontal reference line, alongside any existing
+        QList<RefLine> lines = refLines;
+        RefLine ml;
+        ml.orient = RefOrient::Horizontal;
+        ml.value  = bs.mean;
+        ml.label  = QString("mean %1 +/- %2").arg(bs.mean, 0, 'g', 6).arg(bs.stderror, 0, 'g', 3);
+        ml.color  = QColor(200, 60, 60);
+        ml.anchor = RefAnchor::Start;
+        lines.append(ml);
+        chart->setReferenceLines(lines);
+
+        const double naive = std::sqrt(bs.variance / (bs.nblocks * (ys.size() / bs.nblocks)));
+        information(
+            this, "Block-average uncertainty",
+            QString("Series: %1\n\n"
+                    "  mean            = %2\n"
+                    "  std. error      = %3   (block-averaged)\n"
+                    "  naive s/sqrt(N) = %4\n"
+                    "  tau_int         = %5 samples\n"
+                    "  N_eff           = %6 of %7\n"
+                    "  blocks          = %8")
+                .arg(chart->getName())
+                .arg(bs.mean, 0, 'g', 8)
+                .arg(bs.stderror, 0, 'g', 6)
+                .arg(naive, 0, 'g', 6)
+                .arg(bs.tauInt, 0, 'f', 2)
+                .arg(bs.nEff, 0, 'f', 1)
+                .arg(int(ys.size()))
+                .arg(bs.nblocks));
+        return;
+    }
+
+    if (which == 6) { // steady-state (burn-in) cutoff detection
+        const SteadyState ss = steadyStateCutoff(ys);
+        if (!ss.valid) {
+            warning(this, "Steady-state detection",
+                    "Could not analyze the series (too short).");
+            return;
+        }
+        const double cutoffX = xs[qBound<int>(0, ss.cutoff, int(xs.size()) - 1)];
+
+        QList<RefLine> lines = refLines;
+        RefLine cut;
+        cut.orient = RefOrient::Vertical;
+        cut.value  = cutoffX;
+        cut.label  = "burn-in";
+        cut.color  = QColor(60, 120, 200);
+        cut.anchor = RefAnchor::Start;
+        lines.append(cut);
+        RefLine mean;
+        mean.orient = RefOrient::Horizontal;
+        mean.value  = ss.mean;
+        mean.label  = QString("steady mean %1 +/- %2")
+                          .arg(ss.mean, 0, 'g', 6)
+                          .arg(ss.stderror, 0, 'g', 3);
+        mean.color  = QColor(60, 160, 90);
+        mean.anchor = RefAnchor::End;
+        lines.append(mean);
+        chart->setReferenceLines(lines);
+
+        information(this, "Steady-state detection",
+                    QString("Series: %1\n\n"
+                            "  burn-in cutoff  = %2  (index %3 of %4)\n"
+                            "  steady mean     = %5\n"
+                            "  std. error      = %6   (block-averaged)\n"
+                            "  samples kept    = %7")
+                        .arg(chart->getName())
+                        .arg(cutoffX, 0, 'g', 6)
+                        .arg(ss.cutoff)
+                        .arg(int(ys.size()))
+                        .arg(ss.mean, 0, 'g', 8)
+                        .arg(ss.stderror, 0, 'g', 6)
+                        .arg(int(ys.size()) - ss.cutoff));
         return;
     }
 
