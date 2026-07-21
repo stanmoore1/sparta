@@ -59,6 +59,7 @@
 #include <QClipboard>
 #include <QCoreApplication>
 #include <QDesktopServices>
+#include <QSysInfo>
 #include <QDir>
 #include <QEvent>
 #include <QFile>
@@ -2496,6 +2497,58 @@ void SpartaGui::archiveFinishedRun(bool success)
     if (logwindow) rec.logText = logwindow->toPlainText();
     rec.metadata.insert("Run number", QString::number(runCounter));
     rec.metadata.insert("SPARTA version", QString::number(sparta.version()));
+
+    // --- rigorous DOE provenance: capture the build + host environment so an
+    //     archived run can be traced back to exactly what produced it ---
+
+    // build provenance read from the running SPARTA library
+    const QString verStr = sparta.versionString();
+    if (!verStr.isEmpty()) rec.metadata.insert("SPARTA version date", verStr);
+    const QString gitCommit = sparta.gitCommit();
+    if (!gitCommit.isEmpty()) rec.metadata.insert("SPARTA git commit", gitCommit);
+    const QString gitBranch = sparta.gitBranch();
+    if (!gitBranch.isEmpty()) rec.metadata.insert("SPARTA git branch", gitBranch);
+
+    rec.metadata.insert("Parallelism",
+                        sparta.configHasMpiSupport() ? "MPI" : "serial");
+
+    if (sparta.configHasPackage("KOKKOS")) {
+        QStringList apis;
+        for (const char *api : {"serial", "openmp", "cuda", "hip"})
+            if (sparta.configAccelerator("KOKKOS", "api", api)) apis << api;
+        rec.metadata.insert("Accelerator",
+                            "KOKKOS (" + (apis.isEmpty() ? QString("?") : apis.join('/')) + ")");
+    } else {
+        rec.metadata.insert("Accelerator", "none");
+    }
+
+    {
+        QStringList pkgs;
+        for (const char *p : {"KOKKOS", "FFT"})
+            if (sparta.configHasPackage(p)) pkgs << p;
+        rec.metadata.insert("Packages", pkgs.isEmpty() ? QString("(none)") : pkgs.join(", "));
+    }
+
+    {
+        QStringList io;
+        if (sparta.configHasPngSupport()) io << "PNG";
+        if (sparta.configHasJpegSupport()) io << "JPEG";
+        if (sparta.configHasFfmpegSupport()) io << "FFmpeg";
+        if (sparta.configHasGzipSupport()) io << "gzip";
+        rec.metadata.insert("I/O support", io.isEmpty() ? QString("(none)") : io.join(", "));
+    }
+
+    // host / OS / environment (GUI side)
+    rec.metadata.insert("Host", QSysInfo::machineHostName());
+    rec.metadata.insert("OS", QSysInfo::prettyProductName());
+    rec.metadata.insert("Kernel", QSysInfo::kernelType() + " " + QSysInfo::kernelVersion());
+    rec.metadata.insert("Architecture", QSysInfo::currentCpuArchitecture());
+    const QByteArray modules = qgetenv("LOADEDMODULES");
+    if (!modules.isEmpty())
+        rec.metadata.insert("Environment modules",
+                            QString::fromLocal8Bit(modules).replace(':', ' '));
+    rec.metadata.insert("Command line", QCoreApplication::arguments().join(' '));
+    if (!currentDir.isEmpty()) rec.metadata.insert("Working directory", currentDir);
 
     QStringList images;
     if (slideshow) images = slideshow->images();

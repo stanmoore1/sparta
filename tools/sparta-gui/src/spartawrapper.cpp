@@ -436,6 +436,39 @@ bool SpartaWrapper::configHasFfmpegSupport() const
     return SPAFN(config_has_ffmpeg_support)() != 0;
 }
 
+bool SpartaWrapper::configHasMpiSupport() const
+{
+    return SPAFN(config_has_mpi_support)() != 0;
+}
+
+bool SpartaWrapper::configHasGzipSupport() const
+{
+    return SPAFN(config_has_gzip_support)() != 0;
+}
+
+// Provenance strings read from the running instance (empty if no handle or
+// the build did not stamp git info).  Used to enrich the archived run record.
+QString SpartaWrapper::versionString() const
+{
+    if (!sparta_handle) return {};
+    auto *p = static_cast<const char *>(SPAFN(extract_global)(sparta_handle, "sparta_version"));
+    return p ? QString::fromUtf8(p) : QString();
+}
+
+QString SpartaWrapper::gitCommit() const
+{
+    if (!sparta_handle) return {};
+    auto *p = static_cast<const char *>(SPAFN(extract_global)(sparta_handle, "git_commit"));
+    return p ? QString::fromUtf8(p) : QString();
+}
+
+QString SpartaWrapper::gitBranch() const
+{
+    if (!sparta_handle) return {};
+    auto *p = static_cast<const char *>(SPAFN(extract_global)(sparta_handle, "git_branch"));
+    return p ? QString::fromUtf8(p) : QString();
+}
+
 // GPU support in SPARTA comes via Kokkos; there is no separate
 // GPU-device detection in the library interface
 bool SpartaWrapper::hasGpuDevice() const

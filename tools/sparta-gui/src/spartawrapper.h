@@ -330,6 +330,36 @@ public:
     [[nodiscard]] bool configHasFfmpegSupport() const;
 
     /**
+     * @brief Check if SPARTA was compiled with MPI (parallel) support
+     * @return true if built with MPI, false if serial (MPI STUBS)
+     */
+    [[nodiscard]] bool configHasMpiSupport() const;
+
+    /**
+     * @brief Check if SPARTA was compiled with gzip file support
+     * @return true if gzip support is available, false if not
+     */
+    [[nodiscard]] bool configHasGzipSupport() const;
+
+    /**
+     * @brief SPARTA version string ("DD Mon YYYY"), read from the instance
+     * @return version string, or empty if no instance is loaded
+     */
+    [[nodiscard]] QString versionString() const;
+
+    /**
+     * @brief Git commit the running SPARTA library was built from
+     * @return commit descriptor, or empty if unavailable / not a git build
+     */
+    [[nodiscard]] QString gitCommit() const;
+
+    /**
+     * @brief Git branch the running SPARTA library was built from
+     * @return branch name, or empty if unavailable / not a git build
+     */
+    [[nodiscard]] QString gitBranch() const;
+
+    /**
      * @brief Check if GPU device is available for GPU package
      * @return true if GPU device found, false otherwise
      */
