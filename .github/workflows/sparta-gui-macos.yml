@@ -343,6 +343,12 @@ jobs:
           # (CommonCore, CommonDataModel, RenderingCore, ...) are pulled in
           # automatically.  This keeps a universal build to ~15 min instead of
           # the ~45 min a full VTK would take.
+          #
+          # VTK_USE_EXTERNAL=OFF forces VTK to build its *vendored* third-party
+          # libraries (freetype, zlib, libpng, expat, ...).  Because they inherit
+          # CMAKE_OSX_ARCHITECTURES they come out universal along with VTK, so we
+          # do NOT need to build any TPL separately.  Left at default it could
+          # find a single-arch Homebrew copy on the runner and taint the bundle.
           cmake -S "VTK-${VTK_VERSION}" -B vtk-build \
             -D CMAKE_BUILD_TYPE=Release \
             -D BUILD_SHARED_LIBS=ON \
@@ -351,6 +357,7 @@ jobs:
             -D VTK_WRAP_PYTHON=OFF \
             -D VTK_GROUP_ENABLE_Qt=NO \
             -D VTK_BUILD_ALL_MODULES=OFF \
+            -D VTK_USE_EXTERNAL=OFF \
             -D VTK_MODULE_ENABLE_VTK_CommonColor=YES \
             -D VTK_MODULE_ENABLE_VTK_FiltersGeometry=YES \
             -D VTK_MODULE_ENABLE_VTK_FiltersCore=YES \
