@@ -1721,8 +1721,12 @@ int SpartaGui::updateRunStatus()
         }
     }
 
+    // 1-based input line -> 0-based editor block (see runDone())
     void *ptr = sparta.lastThermo("line", 0);
-    if (ptr) textEdit->setHighlight(*static_cast<int *>(ptr), false);
+    if (ptr) {
+        const int ln = *static_cast<int *>(ptr);
+        if (ln >= 1) textEdit->setHighlight(ln - 1, false);
+    }
 
     if (varwindow) {
         int nvar = sparta.idCount("variable");
@@ -1897,10 +1901,16 @@ void SpartaGui::runDone()
         }
     }
 
+    // last_thermo("line") is the 1-based input-script line of the failing
+    // command; the editor's setHighlight()/setCursor() take a 0-based block
+    // index (as the diagnostics list does with line-1), so convert here.
     int nline = CodeEditor::NO_HIGHLIGHT;
     if (valid) {
         void *ptr = sparta.lastThermo("line", 0);
-        if (ptr) nline = *static_cast<int *>(ptr);
+        if (ptr) {
+            const int ln = *static_cast<int *>(ptr);
+            if (ln >= 1) nline = ln - 1;
+        }
     }
 
     if (success) {

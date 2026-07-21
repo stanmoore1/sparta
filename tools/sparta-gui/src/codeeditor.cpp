@@ -126,6 +126,8 @@ CodeEditor::CodeEditor(QWidget *parent) :
     refreshEditorStyle();
     connect(this, &QPlainTextEdit::textChanged, this, [this] {
         if (document()->isEmpty() != bannerVisible) refreshEditorStyle();
+        // a run-error highlight is stale as soon as the deck is edited
+        clearErrorHighlight();
     });
 }
 
@@ -235,6 +237,15 @@ void CodeEditor::setHighlight(int block, bool error)
 
     // update graphics
     repaint();
+}
+
+void CodeEditor::clearErrorHighlight()
+{
+    if (highlight == NO_HIGHLIGHT || !highlighterror) return;
+    highlight      = NO_HIGHLIGHT;
+    highlighterror = false;
+    refreshDiagSelections(); // drop the red full-width band
+    lineNumberArea->update(); // drop the gutter marker
 }
 
 void CodeEditor::setDiagnostics(const QList<InputCheck::Diagnostic> &diags)

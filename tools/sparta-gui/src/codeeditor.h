@@ -127,6 +127,15 @@ public:
     void setHighlight(int block, bool error);
 
     /**
+     * @brief Clear an active run-error line highlight (gutter marker + body band).
+     *
+     * Unlike setHighlight(NO_HIGHLIGHT, ...) this does not move the cursor, so it
+     * is safe to call on every edit; it is a no-op unless an error highlight is
+     * currently shown (the green progress highlight is left untouched).
+     */
+    void clearErrorHighlight();
+
+    /**
      * @brief Show static-validation diagnostics as inline markers.
      * @param diags diagnostics from the input-deck validator (line = 1-based)
      *
