@@ -32,6 +32,7 @@
 #include "runhistory.h"
 #include "snippets.h"
 #include "stlimportwizard.h"
+#include "surfreportdialog.h"
 #include "sweeppanel.h"
 #include "setvariables.h"
 #include "slideshow.h"
@@ -248,6 +249,8 @@ void SpartaGui::createFileMenu()
                   &SpartaGui::importSurface);
     addMenuAction(menu, ":/icons/image-x-generic.svg", "Export to Para&View...", "Ctrl+Shift+E",
                   &SpartaGui::exportParaview);
+    addMenuAction(menu, ":/icons/vdw-style.svg", "Surface &Quantities Report...", "",
+                  &SpartaGui::surfaceReport);
     menu->addSeparator();
 
     recentActions.resize(Cfg::NUM_RECENT_FILES);
@@ -2594,6 +2597,19 @@ void SpartaGui::exportParaview()
     if (deckDir.isEmpty()) deckDir = QDir::currentPath();
 
     ParaViewExportDialog dlg(this, deckDir);
+    dlg.exec();
+}
+
+void SpartaGui::surfaceReport()
+{
+    if (sparta.extractSetting("surf_exist") != 1) {
+        warning(this, "Surface Quantities Report",
+                "No surfaces exist yet.  Run a deck that reads a surface and defines "
+                "a per-surf compute (e.g. \"compute 1 surf all all fx fy fz etot\"), "
+                "then open this report.");
+        return;
+    }
+    SurfReportDialog dlg(this, &sparta, textEdit->toPlainText());
     dlg.exec();
 }
 

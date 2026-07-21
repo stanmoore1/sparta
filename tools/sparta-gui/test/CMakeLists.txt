@@ -209,6 +209,17 @@ target_link_libraries(test_casemodel PRIVATE GTest::gtest_main Qt6::Core)
 
 gtest_discover_tests(test_casemodel)
 
+# Test executable for the surface-quantity reduction core (Feature 3)
+add_executable(test_surfreport
+  test_surfreport.cpp
+  ${CMAKE_SOURCE_DIR}/src/surfreport.cpp
+)
+
+target_include_directories(test_surfreport PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_surfreport PRIVATE GTest::gtest_main Qt6::Core)
+
+gtest_discover_tests(test_surfreport)
+
 # Test executable for the movie probing and frame selection helpers
 add_executable(test_movieimport
   test_movieimport.cpp

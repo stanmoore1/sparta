@@ -287,6 +287,9 @@ private slots:
     /** @brief Open the ParaView export dialog (surf2paraview / grid2paraview) */
     void exportParaview();
 
+    /** @brief Open the surface engineering-quantity report dialog */
+    void surfaceReport();
+
     /** @brief Open the Submit-to-Cluster dialog for remote execution */
     void submitRemote();
 

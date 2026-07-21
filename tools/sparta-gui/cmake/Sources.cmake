@@ -56,6 +56,10 @@ set(PROJECT_SOURCES
   ${CMAKE_SOURCE_DIR}/src/imageviewersettings.cpp
   ${CMAKE_SOURCE_DIR}/src/spartarunner.cpp
   ${CMAKE_SOURCE_DIR}/src/spartarunner.h
+  ${CMAKE_SOURCE_DIR}/src/surfreport.cpp
+  ${CMAKE_SOURCE_DIR}/src/surfreport.h
+  ${CMAKE_SOURCE_DIR}/src/surfreportdialog.cpp
+  ${CMAKE_SOURCE_DIR}/src/surfreportdialog.h
   ${CMAKE_SOURCE_DIR}/src/spartawrapper.cpp
   ${CMAKE_SOURCE_DIR}/src/spartawrapper.h
   ${CMAKE_SOURCE_DIR}/src/leastsquares.cpp

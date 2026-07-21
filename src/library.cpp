@@ -712,6 +712,8 @@ int sparta_extract_setting(void *ptr, const char *name)
     return sparta->input->variable->nvar_active();
   if (strcmp(name,"ngroup_grid") == 0) return sparta->grid->ngroup;
   if (strcmp(name,"ngroup_surf") == 0) return sparta->surf->ngroup;
+  if (strcmp(name,"nsurf") == 0) return (int) sparta->surf->nsurf;
+  if (strcmp(name,"nlocal_surf") == 0) return sparta->surf->nlocal;
 
   if (strcmp(name,"stats_every") == 0) return sparta->output->stats_every;
 
