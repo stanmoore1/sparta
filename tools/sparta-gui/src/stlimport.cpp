@@ -291,17 +291,56 @@ bool parseSurf(const QString &path, SurfMesh &out, QString &err)
 WatertightReport checkWatertightPreflight(const SurfMesh &m)
 {
     WatertightReport r;
-    // directed edge (a,b) -> element indices owning it (same direction)
-    QHash<qint64, QVector<int>> edge2elem;
     auto key = [](int a, int b) { return (static_cast<qint64>(a) << 32) | static_cast<quint32>(b); };
 
-    const int nseg = m.is2d ? 1 : 3; // 2d line = one directed edge; 3d tri = three
+    // 2d surfaces are line segments, not triangles: a watertight, manifold loop
+    // requires every point to be the *start* of exactly one line and the *end*
+    // of exactly one line (in-degree == out-degree == 1).  The 3d directed-edge
+    // reverse-matching test below is wrong for 2d -- a simple closed loop has no
+    // reverse edges, so it would flag every segment as a hole (this is why a
+    // known-good file such as examples/circle/data.circle failed).
+    if (m.is2d) {
+        QHash<int, int> inDeg, outDeg;   // point index -> incident line count
+        QHash<int, QVector<int>> touch;  // point index -> incident element ids
+        QHash<qint64, int> dirCount;     // directed line (a,b) -> multiplicity
+        for (int e = 0; e < m.nelements(); ++e) {
+            const int a = m.elems[e][0], b = m.elems[e][1];
+            ++outDeg[a];
+            ++inDeg[b];
+            touch[a].append(e);
+            touch[b].append(e);
+            ++dirCount[key(a, b)];
+        }
+        // an exactly repeated directed line is non-manifold
+        for (auto it = dirCount.constBegin(); it != dirCount.constEnd(); ++it) {
+            if (it.value() <= 1) continue;
+            const int a = static_cast<int>(it.key() >> 32);
+            const int b = static_cast<int>(static_cast<quint32>(it.key() & 0xffffffff));
+            r.duplicateEdges += it.value() - 1;
+            r.duplicateEdgeList.append({a, b});
+            for (int e : touch.value(a)) r.leakingElems.insert(e);
+        }
+        // a point whose in- and out-degree differ is an open end (a hole)
+        QSet<int> pts;
+        for (auto it = inDeg.constBegin(); it != inDeg.constEnd(); ++it) pts.insert(it.key());
+        for (auto it = outDeg.constBegin(); it != outDeg.constEnd(); ++it) pts.insert(it.key());
+        for (int p : std::as_const(pts)) {
+            const int id = inDeg.value(p), od = outDeg.value(p);
+            if (id == od) continue;
+            r.unmatchedEdges += qAbs(id - od);
+            r.unmatchedEdgeList.append({p, p}); // leak located at a point
+            for (int e : touch.value(p)) r.leakingElems.insert(e);
+        }
+        return r;
+    }
+
+    // 3d triangles: directed edge (a,b) -> element indices owning it (same direction)
+    QHash<qint64, QVector<int>> edge2elem;
+    const int nseg = 3; // 3d tri = three directed edges
     for (int e = 0; e < m.nelements(); ++e) {
         const auto &el = m.elems[e];
         for (int s = 0; s < nseg; ++s) {
-            int a, b;
-            if (m.is2d) { a = el[0]; b = el[1]; }
-            else { a = el[s]; b = el[(s + 1) % 3]; }
+            int a = el[s], b = el[(s + 1) % 3];
             edge2elem[key(a, b)].append(e);
         }
     }
