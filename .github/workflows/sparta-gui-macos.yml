@@ -15,6 +15,7 @@ on:
   push:
     branches:
       - claude/sparta-gui-lammps-adaptation-jbih8k
+      - claude/sparta-gui-docked-layout
     paths:
       - 'tools/sparta-gui/**'
       - 'src/**'
@@ -160,25 +161,42 @@ jobs:
             -D CMAKE_OSX_ARCHITECTURES="x86_64" \
             -D CMAKE_OSX_DEPLOYMENT_TARGET=12.0
           cmake --build build-gui -j3
-          cmake --build build-gui --target complete-bundle
           lipo -info build-gui/sparta-gui.app/Contents/MacOS/sparta-gui
 
-      - name: Bundle Qt, SPARTA library and VTK into the .app
+      - name: Bundle VTK (dylibbundler) then Qt (macdeployqt)
         run: |
+          set -x
           cd build-gui
           APP=sparta-gui.app
-          mkdir -p "$APP/Contents/Frameworks"
-          cp "$SPARTA_LIB" "$APP/Contents/Frameworks/libsparta.0.dylib"
-          chmod 0755 "$APP/Contents/Frameworks/libsparta.0.dylib"
-          macdeployqt "$APP" -verbose=1
-          # dylibbundler (native arm64 tool) rewrites the x86_64 binary's VTK
-          # load commands and copies the x86_64 VTK dylibs into Contents/libs.
+          FW="$PWD/$APP/Contents/Frameworks"
+          mkdir -p "$FW"
+          # the plugin loader dlopens the SPARTA library from the bundle
+          cp "$SPARTA_LIB" "$FW/libsparta.0.dylib"
+          chmod 0755 "$FW/libsparta.0.dylib"
+
+          # Bundling order matters.  dylibbundler runs FIRST and bundles ONLY the
+          # x86_64 VTK dylibs into Contents/libs, ignoring the Qt SDK so the Qt
+          # frameworks (still @rpath -> $QT_ROOT_DIR at this point) are left
+          # untouched.  Running dylibbundler AFTER macdeployqt let it re-process
+          # and corrupt the deployed QtNetwork.framework, so the app aborted at
+          # launch with "Library not loaded: @rpath/QtNetwork.framework".
           dylibbundler -of -cd -b \
             -x "$APP/Contents/MacOS/sparta-gui" \
             -d "$APP/Contents/libs" \
-            -p "@executable_path/../libs/"
-          echo "--- remaining links (should be system-only) ---"
+            -p "@executable_path/../libs/" \
+            -s "$VTK_PREFIX/lib" \
+            -i "$QT_ROOT_DIR"
+
+          # macdeployqt then deploys the Qt frameworks (incl. QtNetwork) and
+          # plugins into Contents/Frameworks with the correct rpath.
+          macdeployqt "$APP" -verbose=1
+
+          echo "--- executable load commands ---"
           otool -L "$APP/Contents/MacOS/sparta-gui" | sed -n '2,$p'
+          echo "--- rpaths ---"
+          otool -l "$APP/Contents/MacOS/sparta-gui" | grep -A2 LC_RPATH || true
+          echo "--- QtNetwork deployed? ---"
+          ls "$APP/Contents/Frameworks/QtNetwork.framework/Versions/A/QtNetwork"
 
       - name: Verify the app launches under Rosetta (loads Qt + VTK from the bundle)
         run: |
