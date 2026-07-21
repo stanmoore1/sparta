@@ -34,6 +34,8 @@
 
 #include <vtkSmartPointer.h>
 
+#include <functional>
+
 class QComboBox;
 class QCheckBox;
 class QLabel;
@@ -69,11 +71,18 @@ public:
     /// @brief Grab the current frame as a QImage (for screenshots).
     QImage grabFrame();
 
+    /// @brief Install a click handler (for face/point picking).  When set, a
+    /// left-button *click* (press+release without dragging) calls @p cb with the
+    /// widget-space position instead of being treated as a camera move; drags
+    /// still rotate/pan.  Pass a null function to disable picking.
+    void setPickCallback(std::function<void(const QPoint &)> cb);
+
 protected:
     void paintEvent(QPaintEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
+    void mouseReleaseEvent(QMouseEvent *event) override;
     void wheelEvent(QWheelEvent *event) override;
 
 private:
@@ -84,6 +93,8 @@ private:
     QImage frame;
     QPoint lastPos;
     Qt::MouseButton dragButton = Qt::NoButton;
+    std::function<void(const QPoint &)> pickCallback;
+    bool dragMoved = false;
 };
 
 /**

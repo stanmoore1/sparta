@@ -183,10 +183,24 @@ void VtkRenderArea::resizeEvent(QResizeEvent *event)
     requestRender();
 }
 
+void VtkRenderArea::setPickCallback(std::function<void(const QPoint &)> cb)
+{
+    pickCallback = std::move(cb);
+}
+
 void VtkRenderArea::mousePressEvent(QMouseEvent *event)
 {
     lastPos    = event->pos();
     dragButton = event->button();
+    dragMoved  = false;
+}
+
+void VtkRenderArea::mouseReleaseEvent(QMouseEvent *event)
+{
+    // a left-button click that did not drag is a pick, when a handler is set
+    if (pickCallback && event->button() == Qt::LeftButton && !dragMoved)
+        pickCallback(event->pos());
+    dragButton = Qt::NoButton;
 }
 
 void VtkRenderArea::mouseMoveEvent(QMouseEvent *event)
@@ -196,6 +210,8 @@ void VtkRenderArea::mouseMoveEvent(QMouseEvent *event)
     const int dx     = pos.x() - lastPos.x();
     const int dy     = pos.y() - lastPos.y();
     if (dx == 0 && dy == 0) return;
+    // any real motion past a small threshold counts as a drag, not a click
+    if (std::abs(dx) > 2 || std::abs(dy) > 2) dragMoved = true;
 
     auto *cam = ren->GetActiveCamera();
     if (dragButton == Qt::LeftButton) {

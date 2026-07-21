@@ -102,7 +102,9 @@ if (NOT BUILD_DOC_ONLY)
       set(SPARTA_GUI_HAVE_VTK ON)
       list(APPEND PROJECT_SOURCES
         ${CMAKE_SOURCE_DIR}/src/vtkviewer.cpp
-        ${CMAKE_SOURCE_DIR}/src/vtkviewer.h)
+        ${CMAKE_SOURCE_DIR}/src/vtkviewer.h
+        ${CMAKE_SOURCE_DIR}/src/casecanvas.cpp
+        ${CMAKE_SOURCE_DIR}/src/casecanvas.h)
     else()
       message(WARNING "SPARTA_GUI_USE_VTK=ON but no suitable VTK was found; "
         "the 3D viewer will be disabled. Install a VTK build with Qt support "

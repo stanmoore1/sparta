@@ -198,6 +198,17 @@ target_link_libraries(test_inputcheck PRIVATE GTest::gtest_main Qt6::Core)
 
 gtest_discover_tests(test_inputcheck)
 
+# Test executable for the case-setup model (Feature 8 canvas core)
+add_executable(test_casemodel
+  test_casemodel.cpp
+  ${CMAKE_SOURCE_DIR}/src/casemodel.cpp
+)
+
+target_include_directories(test_casemodel PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_casemodel PRIVATE GTest::gtest_main Qt6::Core)
+
+gtest_discover_tests(test_casemodel)
+
 # Test executable for the movie probing and frame selection helpers
 add_executable(test_movieimport
   test_movieimport.cpp

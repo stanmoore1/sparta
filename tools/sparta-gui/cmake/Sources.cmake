@@ -46,6 +46,8 @@ set(PROJECT_SOURCES
   ${CMAKE_SOURCE_DIR}/src/highlighter.h
   ${CMAKE_SOURCE_DIR}/src/imagecache.cpp
   ${CMAKE_SOURCE_DIR}/src/imagecache.h
+  ${CMAKE_SOURCE_DIR}/src/casemodel.cpp
+  ${CMAKE_SOURCE_DIR}/src/casemodel.h
   ${CMAKE_SOURCE_DIR}/src/inputcheck.cpp
   ${CMAKE_SOURCE_DIR}/src/inputcheck.h
   ${CMAKE_SOURCE_DIR}/src/imageviewer.cpp

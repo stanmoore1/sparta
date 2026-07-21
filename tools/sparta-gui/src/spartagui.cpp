@@ -38,6 +38,7 @@
 #include "stdcapture.h"
 #include "urldownloader.h"
 #if defined(SPARTA_GUI_HAVE_VTK)
+#include "casecanvas.h"
 #include "vtkviewer.h"
 #endif
 
@@ -398,6 +399,8 @@ void SpartaGui::createViewMenu()
 #if defined(SPARTA_GUI_HAVE_VTK)
     addMenuAction(menu, ":/icons/image-viewer.svg", "&3D Viewer (VTK)", "",
                   &SpartaGui::open3DViewer);
+    addMenuAction(menu, ":/icons/image-viewer.svg", "&Case Setup Canvas...", "",
+                  &SpartaGui::openCaseCanvas);
 #endif
     addMenuAction(menu, ":/icons/help-faq.svg", "&Welcome Screen", "",
                   [this]() { showWelcome(); });
@@ -2860,6 +2863,34 @@ void SpartaGui::open3DViewer()
 {
     if (!vtkViewer) vtkViewer = new VtkViewer(this);
     vtkViewer->showViewer();
+}
+
+void SpartaGui::openCaseCanvas()
+{
+    if (!caseCanvas) {
+        caseCanvas = new CaseCanvas(this);
+
+        // scene -> text: a pick in the canvas rewrites the editor buffer as a
+        // single undoable edit (guarded so the resulting textChanged does not
+        // bounce straight back into the canvas)
+        connect(caseCanvas, &CaseCanvas::deckEdited, this, [this](const QString &txt) {
+            applyingCanvasEdit = true;
+            QTextCursor cur(textEdit->document());
+            cur.beginEditBlock();
+            cur.select(QTextCursor::Document);
+            cur.insertText(txt);
+            cur.endEditBlock();
+            applyingCanvasEdit = false;
+        });
+
+        // text -> scene: while the canvas is open, editing the deck refreshes it
+        connect(textEdit, &QPlainTextEdit::textChanged, this, [this]() {
+            if (caseCanvas && caseCanvas->isVisible() && !applyingCanvasEdit)
+                caseCanvas->setDeck(textEdit->toPlainText(), currentDir);
+        });
+    }
+    caseCanvas->setDeck(textEdit->toPlainText(), currentDir);
+    caseCanvas->showCanvas();
 }
 
 void SpartaGui::renderVtkSnapshot()
