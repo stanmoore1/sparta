@@ -899,13 +899,22 @@ void SpartaGui::newDocument()
         runner->deleteLater();
         runner = nullptr;
     }
-    // close windows
+    // close windows.  clearRunPanels() deletes *every* docked panel widget, so
+    // every raw pointer we keep to one must be cleared here or it dangles (and
+    // e.g. the auto-lint timer would then clear() a freed diagnostics list --
+    // a crash).  Stop the pending auto-lint too so it cannot fire mid-teardown.
+    if (autoLintTimer) autoLintTimer->stop();
     panels->clearRunPanels();
-    chartwindow = nullptr;
-    logwindow   = nullptr;
-    slideshow   = nullptr;
-    imagewindow = nullptr;
-    varwindow   = nullptr;
+    chartwindow      = nullptr;
+    logwindow        = nullptr;
+    slideshow        = nullptr;
+    imagewindow      = nullptr;
+    varwindow        = nullptr;
+    diagnosticsList  = nullptr;
+    projectFilesList = nullptr;
+    jobsPanel        = nullptr;
+    sweepPanel       = nullptr;
+    historyPanel     = nullptr;
 
     {
         StdoutSilencer guard;
@@ -1182,13 +1191,22 @@ void SpartaGui::openFile(const QString &fileName)
         runner->deleteLater();
         runner = nullptr;
     }
-    // close windows
+    // close windows.  clearRunPanels() deletes *every* docked panel widget, so
+    // every raw pointer we keep to one must be cleared here or it dangles (and
+    // e.g. the auto-lint timer would then clear() a freed diagnostics list --
+    // a crash).  Stop the pending auto-lint too so it cannot fire mid-teardown.
+    if (autoLintTimer) autoLintTimer->stop();
     panels->clearRunPanels();
-    chartwindow = nullptr;
-    logwindow   = nullptr;
-    slideshow   = nullptr;
-    imagewindow = nullptr;
-    varwindow   = nullptr;
+    chartwindow      = nullptr;
+    logwindow        = nullptr;
+    slideshow        = nullptr;
+    imagewindow      = nullptr;
+    varwindow        = nullptr;
+    diagnosticsList  = nullptr;
+    projectFilesList = nullptr;
+    jobsPanel        = nullptr;
+    sweepPanel       = nullptr;
+    historyPanel     = nullptr;
     {
         StdoutSilencer guard;
         sparta.close();
