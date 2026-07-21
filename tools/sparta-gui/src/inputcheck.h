@@ -45,6 +45,11 @@ enum class Severity { Error, Warning, Info };
 struct CommandSpec {
     int minArgs = 0;       ///< minimum required arguments (excluding the command word)
     bool variadic = true;  ///< true if trailing keyword/args may follow (no maximum)
+    /// valid keyword names for a keyword-led command (empty = do not keyword-check)
+    QSet<QString> keywords;
+    /// argument index (0-based, after the command word) at which the keyword list
+    /// begins, or -1 when the command is not keyword-led / has no known keywords
+    int keywordStart = -1;
 };
 
 /// @brief Human-facing syntax help for one command, from the SPARTA docs.
@@ -52,6 +57,7 @@ struct CommandHelp {
     QString syntax;        ///< the verbatim Syntax: template, e.g. "create_box xlo xhi ..."
     QStringList args;      ///< required positional field names ("xlo", "xhi", ...)
     QStringList keywords;  ///< optional keyword names ("start", "stop", ...)
+    int keywordStart = -1; ///< arg index where the keyword list begins (-1 = N/A)
 };
 
 /// @brief A single validation finding tied to a physical line of the deck.

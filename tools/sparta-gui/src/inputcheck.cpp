@@ -280,6 +280,25 @@ QList<Diagnostic> checkDeck(const QStringList &lines, const Context &ctx)
             }
         }
 
+        // keyword-led commands (global, run, dump_modify, ...): the token that
+        // begins the keyword list must be a documented keyword.  Only the first
+        // keyword position is checked -- deeper positions need per-keyword value
+        // arities we do not track -- which already catches e.g. "global 1 1".
+        // Skipped when the keyword set is unknown (empty) to avoid false alarms.
+        if (specIt != ctx.commandSpecs.constEnd() && ctx.checkVocabulary && !argCountBad) {
+            const CommandSpec &spec = specIt.value();
+            const int slot = spec.keywordStart + 1; // +1 to skip the command word
+            if (spec.keywordStart >= 0 && !spec.keywords.isEmpty() && t.size() > slot) {
+                const Token &kwTok = t.at(slot);
+                if (!looksExpanded(kwTok.text) && !spec.keywords.contains(kwTok.text)) {
+                    diags.append({ll.startLine, ll.multiline ? 0 : kwTok.col + 1,
+                                  Severity::Error, QStringLiteral("unknown-keyword"),
+                                  QStringLiteral("'%1' is not a valid %2 keyword")
+                                      .arg(kwTok.text, cmd)});
+                }
+            }
+        }
+
         // style commands: validity of the style-name token (arg count already
         // handled above, so only report the name when the token is present)
         auto slotIt = styleSlot().constFind(cmd);
@@ -354,6 +373,7 @@ QHash<QString, CommandHelp> parseSyntaxCatalog(const QByteArray &json)
             h.args.append(v.toString());
         for (const QJsonValue &v : o.value(QStringLiteral("keywords")).toArray())
             h.keywords.append(v.toString());
+        h.keywordStart = o.value(QStringLiteral("keywordStart")).toInt(-1);
         out.insert(it.key(), h);
     }
     return out;

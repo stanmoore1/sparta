@@ -55,18 +55,34 @@ def field_names(line):
     return out
 
 
+def _strip_markers(s):
+    """Drop a trailing txt2html list marker (':l', ':ulb,l', ...) for text tests."""
+    return re.sub(r"\s*:[a-z,]+\s*$", "", s).strip()
+
+
 def keyword_names(body):
-    """Extract top-level keyword names from '{a} or {b} ...' enumerations."""
+    """Extract top-level keyword names from a 'keyword = {a} or {b} ...' list.
+
+    The enumeration may wrap across several physical lines; a wrapped line ends
+    with the word 'or' (e.g. read_surf lists its keywords over two lines), so we
+    join following lines while the accumulated text still ends in 'or' before
+    reading the ``{name}`` tokens out of the whole span.
+    """
     names = []
     seen = set()
-    for line in body:
-        # lines like: "keyword = {upto} or {start} or {stop} ... :l"
-        if "keyword" not in line or "=" not in line:
-            continue
-        for m in re.findall(r"\{([A-Za-z0-9_/]+)\}", line):
-            if m not in seen:
-                seen.add(m)
-                names.append(m)
+    i = 0
+    while i < len(body):
+        line = body[i]
+        if "keyword" in line and "=" in line:
+            acc = line
+            while _strip_markers(acc).endswith("or") and i + 1 < len(body):
+                i += 1
+                acc += " " + body[i]
+            for m in re.findall(r"\{([A-Za-z0-9_/]+)\}", acc):
+                if m not in seen:
+                    seen.add(m)
+                    names.append(m)
+        i += 1
     return names
 
 
@@ -74,11 +90,14 @@ KEYWORD_TOKENS = {"keyword", "keywords"}
 
 
 def parse_template(line):
-    """Return (min_required, variadic, keyword_led) from a ':pre' template line.
+    """Return (min_required, variadic, keyword_led, keyword_start) from a template.
 
-    keyword_led is True when the variadic tail is a keyword list that starts
-    immediately after the fixed args (e.g. "global keyword values ..."), so a
+    keyword_led is True when the variadic tail is a keyword list (e.g.
+    "global keyword values ..." or "compute_modify ID keyword value"), so a
     "one or more" note in the body can require at least one keyword.
+    keyword_start is the number of fixed placeholders that precede the keyword
+    token (0 for "global ...", 1 for "compute_modify ID ..."), i.e. the argument
+    index at which the keyword list begins -- or None when not keyword_led.
     """
     toks = line.split()
     # drop the trailing ':pre' (and any ':ulb,l'-style tail markers)
@@ -92,6 +111,7 @@ def parse_template(line):
     required = 0
     variadic = False
     keyword_led = False
+    keyword_start = None
     for t in toks[1:]:
         if t == "..." or t.endswith("..."):
             variadic = True
@@ -99,6 +119,8 @@ def parse_template(line):
         if t.lower() in VARIADIC:
             variadic = True
             keyword_led = t.lower() in KEYWORD_TOKENS
+            if keyword_led:
+                keyword_start = required  # fixed placeholders before the keyword list
             break
         if has_ellipsis and numbered.match(t):
             # first element of a "one or more" series: count once, then stop
@@ -106,7 +128,7 @@ def parse_template(line):
             variadic = True
             break
         required += 1
-    return required, variadic, keyword_led
+    return required, variadic, keyword_led, keyword_start
 
 
 # phrases in the syntax body that indicate optional trailing arguments even when
@@ -153,7 +175,7 @@ def extract(path):
     parsed = parse_template(template)
     if parsed is None:
         return None
-    required, variadic, keyword_led = parsed
+    required, variadic, keyword_led, keyword_start = parsed
     bodytext = "\n".join(body)
     # the body may reveal optional trailing keywords the template line omitted
     if not variadic and BODY_VARIADIC.search(bodytext):
@@ -163,14 +185,20 @@ def extract(path):
     if keyword_led and re.search(r"one or more", bodytext, re.IGNORECASE) \
             and not re.search(r"zero or more", bodytext, re.IGNORECASE):
         required += 1
-    return {
+    keywords = keyword_names(body)
+    rec = {
         "command": command,
         "minArgs": required,
         "variadic": variadic,
         "syntax": clean_template(template),
         "args": field_names(template),
-        "keywords": keyword_names(body),
+        "keywords": keywords,
     }
+    # only advertise a keyword list the validator can check when we actually
+    # captured the keyword names, so it never flags a valid keyword we missed
+    if keyword_led and keyword_start is not None and keywords:
+        rec["keywordStart"] = keyword_start
+    return rec
 
 
 def main():
@@ -198,8 +226,12 @@ def main():
     # syntax-aware autocomplete and linter error help
     import json
     jpath = os.path.splitext(out)[0] + ".json"
-    catalog = {r["command"]: {"syntax": r["syntax"], "args": r["args"],
-                              "keywords": r["keywords"]} for r in recs}
+    catalog = {}
+    for r in recs:
+        entry = {"syntax": r["syntax"], "args": r["args"], "keywords": r["keywords"]}
+        if "keywordStart" in r:
+            entry["keywordStart"] = r["keywordStart"]
+        catalog[r["command"]] = entry
     with open(jpath, "w", encoding="utf-8") as fh:
         json.dump(catalog, fh, indent=0, sort_keys=True)
         fh.write("\n")

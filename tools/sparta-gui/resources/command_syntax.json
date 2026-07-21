@@ -61,6 +61,7 @@
 },
 "collide_modify": {
 "args": [],
+"keywordStart": 0,
 "keywords": [
 "vremax",
 "remain",
@@ -97,6 +98,7 @@
 "Ny",
 "Nz"
 ],
+"keywordStart": 3,
 "keywords": [
 "block",
 "clump",
@@ -167,6 +169,7 @@
 "args": [
 "dump-ID"
 ],
+"keywordStart": 1,
 "keywords": [
 "append",
 "buffer",
@@ -216,6 +219,7 @@
 },
 "global": {
 "args": [],
+"keywordStart": 0,
 "keywords": [
 "fnum",
 "nrho",
@@ -280,6 +284,7 @@
 "args": [
 "file"
 ],
+"keywordStart": 1,
 "keywords": [
 "append"
 ],
@@ -344,6 +349,7 @@
 "args": [
 "string"
 ],
+"keywordStart": 1,
 "keywords": [
 "file",
 "append",
@@ -355,6 +361,7 @@
 "args": [
 "mode"
 ],
+"keywordStart": 1,
 "keywords": [
 "here",
 "invoke",
@@ -381,6 +388,7 @@
 },
 "react_modify": {
 "args": [],
+"keywordStart": 0,
 "keywords": [
 "recomb",
 "rboost",
@@ -393,6 +401,7 @@
 "args": [
 "filename"
 ],
+"keywordStart": 1,
 "keywords": [
 "custom"
 ],
@@ -408,6 +417,7 @@
 "thresh",
 "ablateID"
 ],
+"keywordStart": 7,
 "keywords": [
 "group",
 "type",
@@ -429,6 +439,7 @@
 "args": [
 "file"
 ],
+"keywordStart": 1,
 "keywords": [
 "gridcut",
 "balance"
@@ -439,12 +450,23 @@
 "args": [
 "filename"
 ],
+"keywordStart": 1,
 "keywords": [
 "type",
 "custom",
 "origin",
 "trans",
-"atrans"
+"atrans",
+"ftrans",
+"scale",
+"rotate",
+"transparent",
+"invert",
+"clip",
+"group",
+"typeadd",
+"particle",
+"file"
 ],
 "syntax": "read_surf filename keyword args ..."
 },
@@ -487,6 +509,7 @@
 "args": [
 "N"
 ],
+"keywordStart": 1,
 "keywords": [
 "upto",
 "start",
@@ -546,6 +569,7 @@
 },
 "stats_modify": {
 "args": [],
+"keywordStart": 0,
 "keywords": [
 "flush",
 "format",
@@ -590,6 +614,7 @@
 "args": [
 "group-ID"
 ],
+"keywordStart": 1,
 "keywords": [
 "collide"
 ],
@@ -650,6 +675,7 @@
 "args": [
 "filename"
 ],
+"keywordStart": 1,
 "keywords": [
 "custom"
 ],
@@ -664,6 +690,7 @@
 "filename",
 "ablateID"
 ],
+"keywordStart": 6,
 "keywords": [
 "precision"
 ],
@@ -673,6 +700,7 @@
 "args": [
 "file"
 ],
+"keywordStart": 1,
 "keywords": [
 "fileper",
 "nfile"

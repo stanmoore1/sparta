@@ -2262,6 +2262,21 @@ InputCheck::Context SpartaGui::buildCheckContext()
     QFile tf(QStringLiteral(":/command_syntax.table"));
     if (tf.open(QIODevice::ReadOnly | QIODevice::Text))
         ctx.commandSpecs = InputCheck::parseSyntaxTable(QString::fromUtf8(tf.readAll()));
+
+    // merge the richer JSON catalog's keyword sets (+ where the keyword list
+    // begins) into the specs so the validator can flag unknown keywords
+    QFile jf(QStringLiteral(":/command_syntax.json"));
+    if (jf.open(QIODevice::ReadOnly)) {
+        const auto help = InputCheck::parseSyntaxCatalog(jf.readAll());
+        for (auto it = help.constBegin(); it != help.constEnd(); ++it) {
+            if (it.value().keywordStart < 0 || it.value().keywords.isEmpty()) continue;
+            InputCheck::CommandSpec &spec = ctx.commandSpecs[it.key()];
+            spec.keywordStart = it.value().keywordStart;
+            spec.keywords = QSet<QString>(it.value().keywords.constBegin(),
+                                          it.value().keywords.constEnd());
+        }
+    }
+
     for (auto it = ctx.commandSpecs.constBegin(); it != ctx.commandSpecs.constEnd(); ++it)
         ctx.commands.insert(it.key());
 
