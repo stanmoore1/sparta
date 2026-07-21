@@ -299,6 +299,34 @@ QList<Diagnostic> checkDeck(const QStringList &lines, const Context &ctx)
             }
         }
 
+        // numeric positional args: flag a bare non-numeric word where the docs
+        // require a number (e.g. "create_box a b c d e f").  Deliberately narrow
+        // -- only a pure alphabetic word that is not a common sentinel is
+        // flagged, so numbers, variables ($x/${..}/v_..), c_/f_ references and
+        // expressions all pass untouched.
+        if (specIt != ctx.commandSpecs.constEnd() && ctx.checkVocabulary && !argCountBad) {
+            static const QRegularExpression bareWord(QStringLiteral("^[A-Za-z_]+$"));
+            // v_name / c_ID / f_ID / i_name / d_name are valid numeric operands
+            static const QRegularExpression refPrefix(QStringLiteral("^[vcfid]_"));
+            static const QSet<QString> numSentinel = {
+                QStringLiteral("none"), QStringLiteral("auto"), QStringLiteral("null"),
+                QStringLiteral("yes"),  QStringLiteral("no"),   QStringLiteral("inf"),
+                QStringLiteral("all"),  QStringLiteral("off"),  QStringLiteral("on"),
+                QStringLiteral("true"), QStringLiteral("false")};
+            for (int idx : specIt.value().numericArgs) {
+                if (idx <= 0 || idx >= t.size()) continue; // t[idx] is the arg (t[0]=command)
+                const Token &at = t.at(idx);
+                if (looksExpanded(at.text)) continue;
+                if (!bareWord.match(at.text).hasMatch()) continue; // has digits/sign/op -> fine
+                if (refPrefix.match(at.text).hasMatch()) continue; // v_/c_/f_/i_/d_ reference
+                if (numSentinel.contains(at.text.toLower())) continue;
+                diags.append({ll.startLine, ll.multiline ? 0 : at.col + 1, Severity::Error,
+                              QStringLiteral("arg-type"),
+                              QStringLiteral("'%1' should be a numeric value for '%2'")
+                                  .arg(at.text, cmd)});
+            }
+        }
+
         // style commands: validity of the style-name token (arg count already
         // handled above, so only report the name when the token is present)
         auto slotIt = styleSlot().constFind(cmd);
@@ -374,6 +402,8 @@ QHash<QString, CommandHelp> parseSyntaxCatalog(const QByteArray &json)
         for (const QJsonValue &v : o.value(QStringLiteral("keywords")).toArray())
             h.keywords.append(v.toString());
         h.keywordStart = o.value(QStringLiteral("keywordStart")).toInt(-1);
+        for (const QJsonValue &v : o.value(QStringLiteral("numericArgs")).toArray())
+            h.numericArgs.append(v.toInt());
         out.insert(it.key(), h);
     }
     return out;

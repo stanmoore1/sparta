@@ -90,6 +90,14 @@
 "zhi"
 ],
 "keywords": [],
+"numericArgs": [
+1,
+2,
+3,
+4,
+5,
+6
+],
 "syntax": "create_box xlo xhi ylo yhi zlo zhi"
 },
 "create_grid": {
@@ -109,6 +117,11 @@
 "region",
 "inside"
 ],
+"numericArgs": [
+1,
+2,
+3
+],
 "syntax": "create_grid Nx Ny Nz keyword args ..."
 },
 "create_isurf": {
@@ -119,6 +132,9 @@
 "mode"
 ],
 "keywords": [],
+"numericArgs": [
+3
+],
 "syntax": "create_isurf group-ID ablateID thresh mode ..."
 },
 "create_particles": {
@@ -343,6 +359,9 @@
 "command"
 ],
 "keywords": [],
+"numericArgs": [
+2
+],
 "syntax": "partition style N command ..."
 },
 "print": {
@@ -425,6 +444,9 @@
 "precision",
 "read"
 ],
+"numericArgs": [
+6
+],
 "syntax": "read_isurf group-ID Nx Ny Nz filename thresh ablateID keyword args ..."
 },
 "read_particles": {
@@ -433,6 +455,9 @@
 "Nstep"
 ],
 "keywords": [],
+"numericArgs": [
+2
+],
 "syntax": "read_particles file Nstep"
 },
 "read_restart": {
@@ -492,6 +517,9 @@
 "N"
 ],
 "keywords": [],
+"numericArgs": [
+1
+],
 "syntax": "reset_timestep N"
 },
 "restart": {
@@ -526,6 +554,9 @@
 "factor"
 ],
 "keywords": [],
+"numericArgs": [
+2
+],
 "syntax": "scale_particles mix-ID factor"
 },
 "seed": {
@@ -533,6 +564,9 @@
 "Nvalue"
 ],
 "keywords": [],
+"numericArgs": [
+1
+],
 "syntax": "seed Nvalue"
 },
 "shell": {
@@ -633,6 +667,9 @@
 "dt"
 ],
 "keywords": [],
+"numericArgs": [
+1
+],
 "syntax": "timestep dt"
 },
 "uncompute": {

@@ -60,6 +60,39 @@ def _strip_markers(s):
     return re.sub(r"\s*:[a-z,]+\s*$", "", s).strip()
 
 
+# words in a field's description that mark it as a numeric value, and words that
+# mark it as a string/name/keyword.  A field is treated as "numeric" only when a
+# numeric word is present and no string word is -- conservative on purpose so the
+# type check never fires on a field whose kind is ambiguous.
+_NUM_WORD = re.compile(
+    r"\b(units\)|number|bounds?|seed|integer|coordinate|coord|ratio|count|size|"
+    r"factor|fraction|temperature|density|distance|magnitude|angle|length|"
+    r"timestep|frequency|probability|cutoff|weight|threshold)\b|#", re.IGNORECASE)
+_STR_WORD = re.compile(
+    r"\b(ID|name|style|file|filename|group|keyword|mode|string|word|expression)\b"
+    r"|yes or no|=\s*\{", re.IGNORECASE)
+
+
+def arg_numeric(template, body):
+    """Classify each fixed positional field as numeric (True) or unknown (None).
+
+    Only a field whose documentation clearly describes a number (and never a
+    name/ID/style/keyword) is marked numeric; everything else stays None so the
+    validator leaves it alone.
+    """
+    text = "\n".join(body)
+    out = []
+    for f in field_names(template):
+        # find the "<field> = ..." (or combined "a,<field>,b = ...") description
+        m = re.search(r"(?mi)^\s*[\w,]*\b" + re.escape(f) + r"\b[\w,]*\s*=(.*)$", text)
+        desc = m.group(1) if m else ""
+        if desc and not _STR_WORD.search(desc) and _NUM_WORD.search(desc):
+            out.append(True)
+        else:
+            out.append(None)
+    return out
+
+
 def keyword_names(body):
     """Extract top-level keyword names from a 'keyword = {a} or {b} ...' list.
 
@@ -186,6 +219,7 @@ def extract(path):
             and not re.search(r"zero or more", bodytext, re.IGNORECASE):
         required += 1
     keywords = keyword_names(body)
+    numeric = arg_numeric(template, body)
     rec = {
         "command": command,
         "minArgs": required,
@@ -193,6 +227,8 @@ def extract(path):
         "syntax": clean_template(template),
         "args": field_names(template),
         "keywords": keywords,
+        # 1-based indices of positional args documented as numeric values
+        "numericArgs": [i + 1 for i, n in enumerate(numeric) if n],
     }
     # only advertise a keyword list the validator can check when we actually
     # captured the keyword names, so it never flags a valid keyword we missed
@@ -231,6 +267,8 @@ def main():
         entry = {"syntax": r["syntax"], "args": r["args"], "keywords": r["keywords"]}
         if "keywordStart" in r:
             entry["keywordStart"] = r["keywordStart"]
+        if r.get("numericArgs"):
+            entry["numericArgs"] = r["numericArgs"]
         catalog[r["command"]] = entry
     with open(jpath, "w", encoding="utf-8") as fh:
         json.dump(catalog, fh, indent=0, sort_keys=True)

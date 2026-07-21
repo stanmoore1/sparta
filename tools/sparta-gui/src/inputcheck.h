@@ -50,6 +50,9 @@ struct CommandSpec {
     /// argument index (0-based, after the command word) at which the keyword list
     /// begins, or -1 when the command is not keyword-led / has no known keywords
     int keywordStart = -1;
+    /// 1-based positional-argument indices the docs describe as numeric values;
+    /// a bare non-numeric word in one of these slots is flagged
+    QList<int> numericArgs;
 };
 
 /// @brief Human-facing syntax help for one command, from the SPARTA docs.
@@ -58,6 +61,7 @@ struct CommandHelp {
     QStringList args;      ///< required positional field names ("xlo", "xhi", ...)
     QStringList keywords;  ///< optional keyword names ("start", "stop", ...)
     int keywordStart = -1; ///< arg index where the keyword list begins (-1 = N/A)
+    QList<int> numericArgs; ///< 1-based positional args documented as numeric
 };
 
 /// @brief A single validation finding tied to a physical line of the deck.

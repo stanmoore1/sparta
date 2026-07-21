@@ -2269,11 +2269,13 @@ InputCheck::Context SpartaGui::buildCheckContext()
     if (jf.open(QIODevice::ReadOnly)) {
         const auto help = InputCheck::parseSyntaxCatalog(jf.readAll());
         for (auto it = help.constBegin(); it != help.constEnd(); ++it) {
-            if (it.value().keywordStart < 0 || it.value().keywords.isEmpty()) continue;
             InputCheck::CommandSpec &spec = ctx.commandSpecs[it.key()];
-            spec.keywordStart = it.value().keywordStart;
-            spec.keywords = QSet<QString>(it.value().keywords.constBegin(),
-                                          it.value().keywords.constEnd());
+            if (it.value().keywordStart >= 0 && !it.value().keywords.isEmpty()) {
+                spec.keywordStart = it.value().keywordStart;
+                spec.keywords = QSet<QString>(it.value().keywords.constBegin(),
+                                              it.value().keywords.constEnd());
+            }
+            spec.numericArgs = it.value().numericArgs;
         }
     }
 
