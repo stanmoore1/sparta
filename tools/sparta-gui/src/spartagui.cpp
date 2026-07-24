@@ -160,6 +160,7 @@ void SpartaGui::setupUi(QSettings &settings, QFont &allFont, QFont &monoFont)
     createFileMenu();
     createEditMenu();
     createRunMenu();
+    createToolsMenu();
     createViewMenu();
     createAboutMenu();
     setMenuBar(menubar);
@@ -271,12 +272,6 @@ void SpartaGui::createFileMenu()
                   &SpartaGui::plotDataFile);
     addMenuAction(menu, ":/icons/binary-file-icon.svg", "Inspect &Restart File", "Ctrl+Shift+R",
                   &SpartaGui::inspect);
-    addMenuAction(menu, ":/icons/vdw-style.svg", "Import Sur&face (STL / SPARTA)...", "Ctrl+Shift+T",
-                  &SpartaGui::importSurface);
-    addMenuAction(menu, ":/icons/image-x-generic.svg", "Export to Para&View...", "Ctrl+Shift+E",
-                  &SpartaGui::exportParaview);
-    addMenuAction(menu, ":/icons/vdw-style.svg", "Surface &Quantities Report...", "",
-                  &SpartaGui::surfaceReport);
     menu->addSeparator();
 
     recentActions.resize(Cfg::NUM_RECENT_FILES);
@@ -335,12 +330,6 @@ void SpartaGui::createRunMenu()
 
     addMenuAction(menu, ":/icons/preferences-desktop.svg", "Set &Variables...", "Ctrl+Shift+V",
                   &SpartaGui::editVariables);
-    menu->addSeparator();
-
-    addMenuAction(menu, ":/icons/x-office-drawing.svg", "Parametric S&weep...", "",
-                  &SpartaGui::runSweep);
-    addMenuAction(menu, ":/icons/document-open-recent.svg", "Run &History...", "",
-                  &SpartaGui::showRunHistory);
     addMenuAction(menu, ":/icons/binary-file-icon.svg", "Continue from &Restart...", "",
                   &SpartaGui::continueRestart);
     menu->addSeparator();
@@ -351,6 +340,28 @@ void SpartaGui::createRunMenu()
     addMenuAction(menu, ":/icons/image-viewer.svg", "3D &Snapshot (VTK)", "Ctrl+Shift+3",
                   &SpartaGui::renderVtkSnapshot);
 #endif
+}
+
+void SpartaGui::createToolsMenu()
+{
+    // Geometry conversion, external export and reporting: work on simulation
+    // data, but outside the edit-run-look loop that File and Run cover.
+    auto *menu = menubar->addMenu("&Tools");
+    addMenuAction(menu, ":/icons/vdw-style.svg", "Import Sur&face (STL / SPARTA)...", "Ctrl+Shift+T",
+                  &SpartaGui::importSurface);
+    addMenuAction(menu, ":/icons/image-x-generic.svg", "Export to Para&View...", "Ctrl+Shift+E",
+                  &SpartaGui::exportParaview);
+    addMenuAction(menu, ":/icons/vdw-style.svg", "Surface &Quantities Report...", "",
+                  &SpartaGui::surfaceReport);
+    menu->addSeparator();
+
+    // Multi-run studies: each drives the same deck repeatedly, so they belong
+    // together rather than mixed in with the single-run controls under Run.
+    auto *studies = menu->addMenu(QIcon(":/icons/x-office-drawing.svg"), "&Studies");
+    addMenuAction(studies, ":/icons/x-office-drawing.svg", "Parametric S&weep...", "",
+                  &SpartaGui::runSweep);
+    addMenuAction(studies, ":/icons/document-open-recent.svg", "Run &History...", "",
+                  &SpartaGui::showRunHistory);
 }
 
 void SpartaGui::createViewMenu()

@@ -416,6 +416,9 @@ private:
      *  status-bar mode switch (called on every mode change) */
     void syncModeControls(int mode);
 
+    /** @brief Create Tools menu actions and add them to the menu bar */
+    void createToolsMenu();
+
     /** @brief Create View menu actions and add them to the menu bar */
     void createViewMenu();
 
