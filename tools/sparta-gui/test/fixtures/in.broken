@@ -1,0 +1,12 @@
+# deliberately invalid deck: every line below should be flagged
+seed                12345
+dimension           2
+bogus_command       foo bar
+global              gridcut 0.0 comm/sort yes
+global              1 1
+create_box          0 10 0 10 -0.5 0.5
+create_grid         20 20
+compute             1 nosuchstyle all
+fix                 f1 nosuchfix
+read_surf           /nonexistent/file.surf
+run                 notanumber
