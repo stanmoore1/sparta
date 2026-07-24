@@ -15,6 +15,7 @@ on:
   push:
     branches:
       - claude/sparta-gui-docked-layout
+      - claude/sparta-gui-v1.0-beta
     paths:
       - 'tools/sparta-gui/**'
       - 'src/**'
@@ -42,7 +43,8 @@ jobs:
             libxcb1-dev libxcb-cursor0 libxcb-icccm4 libxcb-image0 \
             libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
             libxcb-shape0 libxcb-xinerama0 libxcb-xkb1 \
-            xvfb
+            xvfb \
+            libvtk9-dev
 
       - name: Install Qt (official Linux binaries)
         uses: jurplel/install-qt-action@v4
@@ -68,7 +70,8 @@ jobs:
         run: |
           cmake -S tools/sparta-gui -B build-gui -G Ninja \
             -D CMAKE_BUILD_TYPE=Release \
-            -D SPARTA_GUI_USE_PLUGIN=ON
+            -D SPARTA_GUI_USE_PLUGIN=ON \
+            -D SPARTA_GUI_USE_VTK=ON
           cmake --build build-gui -j3
 
       - name: Create Linux tarball (tgz target)
@@ -82,6 +85,14 @@ jobs:
           mkdir -p unpack && tar -xzf build-gui/SPARTA-GUI-Linux-x86_64-*.tar.gz -C unpack
           xvfb-run -a unpack/SPARTA_GUI/sparta-gui -v
           test -f unpack/SPARTA_GUI/libexec/sparta/libsparta.so.0
+          # SPARTA_GUI_USE_VTK is non-fatal when VTK is missing, so confirm the
+          # viewer is actually present instead of trusting the flag. Note the
+          # top-level sparta-gui is a symlink to the launcher script; the ELF
+          # to inspect is bin/sparta-gui.
+          ldd unpack/SPARTA_GUI/bin/sparta-gui | grep -qi vtk \
+            || { echo "ERROR: built without the VTK viewer"; exit 1; }
+          test "$(find unpack/SPARTA_GUI -name 'libvtk*' | wc -l)" -gt 0 \
+            || { echo "ERROR: no VTK libraries bundled"; exit 1; }
 
       - name: Upload tarball
         uses: actions/upload-artifact@v4

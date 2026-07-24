@@ -16,6 +16,7 @@ on:
   push:
     branches:
       - claude/sparta-gui-docked-layout
+      - claude/sparta-gui-v1.0-beta
     paths:
       - 'tools/sparta-gui/packaging/org.sparta.sparta-gui.yml'
       - '.github/workflows/sparta-gui-flatpak.yml'

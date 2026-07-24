@@ -17,6 +17,7 @@ on:
   push:
     branches:
       - claude/sparta-gui-docked-layout
+      - claude/sparta-gui-v1.0-beta
     paths:
       - 'tools/sparta-gui/**'
       - 'src/**'
