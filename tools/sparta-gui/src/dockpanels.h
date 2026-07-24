@@ -54,6 +54,17 @@ public:
     };
 
     /**
+     * @brief Task-oriented workspace mode
+     *
+     * Showing every panel at once leaves too little room for any of them, so
+     * the panels are grouped by what the user is actually doing: preparing a
+     * deck, watching a run, or studying its results. Each mode is backed by a
+     * Qt-ADS perspective, so rearranging panels inside a mode is remembered
+     * per mode rather than globally.
+     */
+    enum Mode { Setup, RunMode, Analyze, NModes };
+
+    /**
      * @brief Build the dock manager, central editor dock, and the five stable panels
      * @param mainWindow Main window the dock manager installs itself into
      * @param editor     Editor widget to install as the central (non-closable) dock
@@ -113,9 +124,33 @@ public:
     /** @brief Reset the dock layout to the initial default arrangement */
     void applyDefaultLayout();
 
+    /**
+     * @brief Switch to a workspace mode
+     *
+     * Stashes the current mode's arrangement as a perspective, then restores
+     * @p mode's previously-stored arrangement, or builds it from the mode's
+     * default panel set the first time it is entered. Only dock visibility
+     * changes: panel *content* is never destroyed, so a run's output survives
+     * a round trip through the other modes.
+     */
+    void applyMode(Mode mode);
+
+    /** @brief The workspace mode currently displayed */
+    Mode currentMode() const { return mode; }
+
+    /** @brief Discard the current mode's stored arrangement and rebuild it
+     *  from that mode's default panel set (other modes are left alone) */
+    void resetCurrentMode();
+
+    /** @brief Human-readable name of a mode, for menus and the mode switch */
+    static QString modeName(Mode mode);
+
 signals:
     /** @brief Emitted when a panel is opened by user action (for lazy view creation) */
     void panelOpened(int panel);
+
+    /** @brief Emitted after the displayed workspace mode changes */
+    void modeChanged(int mode);
 
 private:
     /** @brief (Re-)apply the default splitter proportions between the editor and
@@ -132,11 +167,33 @@ private:
      *  the Qt-ADS quirk this works around. */
     void restoreAreaVisibility(Panel panel);
 
+    /** @brief Show exactly the panels in @p mode's default set, hide the rest */
+    void applyModeDefault(Mode mode);
+
+    /** @brief Stash the current arrangement as the current mode's perspective */
+    void captureCurrentMode();
+
+    /** @brief Qt-ADS perspective name backing a mode */
+    static QString perspectiveName(Mode mode);
+
     ads::CDockManager *dm;
     ads::CDockWidget *editorDock;
     ads::CDockWidget *docks[NPanels];
     QList<QPointer<ads::CDockWidget>> archived;
     int archiveSeq = 0;
+    Mode mode = Setup;   ///< fresh profiles start where the work starts: the deck
+
+    /** @brief Whether a mode's arrangement has ever been established.
+     *  A mode that was never entered has no arrangement worth keeping, and
+     *  stashing the startup state (every dock closed) under its name would
+     *  make the mode come up empty the first time it is selected. */
+    bool modeEstablished[NModes] = {false, false, false};
+
+    /** @brief Suppresses panelOpened while a whole arrangement is being applied.
+     *  Switching modes must not trigger the lazy view creation that opening a
+     *  panel by hand does -- entering Analyze would otherwise try to render a
+     *  snapshot with no simulation box loaded. */
+    bool applyingArrangement = false;
 };
 
 #endif // DOCKPANELS_H

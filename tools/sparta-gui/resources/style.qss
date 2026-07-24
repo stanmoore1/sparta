@@ -33,6 +33,25 @@ QPushButton:disabled {
     border-color: palette(midlight);
     color: palette(mid);
 }
+/* a checkable button must look different when checked, or a toggle reads as
+   having done nothing at all */
+QPushButton:checked {
+    background-color: palette(highlight);
+    color: palette(highlighted-text);
+    border-color: palette(highlight);
+}
+
+/* ---- Workspace mode switch ------------------------------------------------
+   The Setup/Run/Analyze buttons form one segmented control, so they sit flush
+   against each other with only the outer corners rounded. */
+QPushButton[spartaModeButton="true"] {
+    padding: 2px 14px;
+    border-radius: 0;
+    margin: 0;
+}
+QPushButton[spartaModeButton="true"]:!checked {
+    background-color: palette(window);
+}
 
 QToolButton {
     padding: 3px;

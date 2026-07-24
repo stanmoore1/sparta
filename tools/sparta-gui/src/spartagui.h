@@ -25,7 +25,9 @@
 
 // forward declarations
 
+class QAbstractButton;
 class QAction;
+class QActionGroup;
 class QEvent;
 class QFont;
 class QLabel;
@@ -410,6 +412,10 @@ private:
     /** @brief Create Run menu actions and add them to the menu bar */
     void createRunMenu();
 
+    /** @brief Reflect the active workspace mode in the View menu and the
+     *  status-bar mode switch (called on every mode change) */
+    void syncModeControls(int mode);
+
     /** @brief Create View menu actions and add them to the menu bar */
     void createViewMenu();
 
@@ -471,6 +477,9 @@ private:
                                     ///< interchangeable central-area pages
     WelcomeScreen *welcome;         ///< Landing view (recent files + examples gallery)
     QMenuBar *menubar;              ///< Menu bar with menus and actions
+    QActionGroup *modeGroup = nullptr;  ///< Exclusive View-menu workspace mode actions
+    QList<QAbstractButton *> modeButtons; ///< Status-bar workspace mode switch buttons
+    bool ranThisSession = false;    ///< True once a run started (gates the auto mode switch)
     QStatusBar *statusbar;          ///< status bar
     QList<QAction *> recentActions; ///< list of actions for recent files
     QMenu *exampleMenu;             ///< File menu entry with SPARTA example inputs
@@ -504,6 +513,7 @@ private:
     QTimer *autoLintTimer = nullptr;   ///< Debounce timer for auto-lint on line change (lazy)
     bool autoLintEnabled  = true;      ///< Auto-validate the deck on cursor line change
     int lastLintBlock     = -1;        ///< Editor block the cursor was last on (line-change detect)
+    bool restoredLayout   = false;     ///< true if a saved dock layout was restored at startup
     bool startupComplete  = false;     ///< true once the constructor finished (plugin loaded, UI shown);
                                        ///< gates panelOpened side effects that must not run during
                                        ///< restoreLayout() -- e.g. auto-rendering the Image panel

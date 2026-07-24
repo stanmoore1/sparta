@@ -41,6 +41,7 @@
 #endif
 
 #include <QAction>
+#include <QActionGroup>
 #include <QApplication>
 #include <QDialog>
 #include <QJsonDocument>
@@ -165,6 +166,34 @@ void SpartaGui::setupUi(QSettings &settings, QFont &allFont, QFont &monoFont)
 
     // Status bar
     createStatusBar();
+
+    // Keep the View-menu entries and the status-bar switch in step with the
+    // active mode, and give the mode the panels it expects to find populated.
+    // Panels holding run output (Output, Charts, Image, Slide Show) are left
+    // alone: they fill up when a run produces something, and creating them
+    // here would render a snapshot with no simulation box loaded.
+    connect(panels, &PanelManager::modeChanged, this, [this](int mode) {
+        syncModeControls(mode);
+        if (!startupComplete) return;
+        // The panels are opened explicitly after their content exists: a mode
+        // only shows panels that already have a widget, so a panel created
+        // here would otherwise stay hidden until the next mode switch.
+        switch (mode) {
+            case PanelManager::Setup:
+                ensureDiagnosticsPanel();
+                ensureProjectFilesPanel();
+                refreshProjectFiles();
+                panels->openPanel(PanelManager::ProjectFiles);
+                panels->openPanel(PanelManager::Diagnostics);
+                break;
+            case PanelManager::RunMode:
+                if (!varwindow) createVariableWindow();
+                panels->openPanel(PanelManager::Variables);
+                break;
+            default: break;
+        }
+    });
+    syncModeControls(int(panels->currentMode()));
 
     // document settings
     auto *document = textEdit->document();
@@ -328,6 +357,31 @@ void SpartaGui::createViewMenu()
 {
     auto *menu = menubar->addMenu("&View");
 
+    // Workspace modes come first: they are the primary way to change what the
+    // window shows, and the individual panel toggles below are the escape hatch
+    // for tailoring a mode.
+    struct ModeEntry {
+        PanelManager::Mode mode;
+        const char *icon;
+        const char *text;
+        const char *shortcut;
+    };
+    static const ModeEntry modes[] = {
+        {PanelManager::Setup, ":/icons/document-open.svg", "&Setup Workspace", "Ctrl+1"},
+        {PanelManager::RunMode, ":/icons/system-run.svg", "&Run Workspace", "Ctrl+2"},
+        {PanelManager::Analyze, ":/icons/x-office-drawing.svg", "&Analyze Workspace", "Ctrl+3"},
+    };
+    modeGroup = new QActionGroup(this);
+    modeGroup->setExclusive(true);
+    for (const auto &m : modes) {
+        auto *act = addMenuAction(menu, m.icon, m.text, m.shortcut,
+                                  [this, m]() { panels->applyMode(m.mode); });
+        act->setCheckable(true);
+        act->setData(int(m.mode));
+        modeGroup->addAction(act);
+    }
+    menu->addSeparator();
+
     struct Entry {
         PanelManager::Panel panel;
         const char *icon;
@@ -397,7 +451,7 @@ void SpartaGui::createViewMenu()
     addMenuAction(menu, ":/icons/help-faq.svg", "&Welcome Screen", "",
                   [this]() { showWelcome(); });
     addMenuAction(menu, ":/icons/preferences-reset.svg", "Reset &Layout", "",
-                  [this]() { panels->applyDefaultLayout(); });
+                  [this]() { panels->resetCurrentMode(); });
 }
 
 void SpartaGui::createAboutMenu()
@@ -418,6 +472,13 @@ void SpartaGui::createAboutMenu()
 #endif
 }
 
+void SpartaGui::syncModeControls(int mode)
+{
+    if (modeGroup)
+        for (QAction *a : modeGroup->actions()) a->setChecked(a->data().toInt() == mode);
+    for (int i = 0; i < modeButtons.size(); ++i) modeButtons[i]->setChecked(i == mode);
+}
+
 void SpartaGui::createStatusBar()
 {
     statusbar = new QStatusBar(this);
@@ -429,6 +490,34 @@ void SpartaGui::createStatusBar()
     spartastatus->setToolTip("SPARTA instance is active");
     spartastatus->hide();
     statusbar->addWidget(spartastatus);
+
+    // Workspace mode switch: a segmented control of checkable buttons. This is
+    // the primary way to change what the window shows, so it lives permanently
+    // on screen rather than only in the View menu.
+    struct ModeBtn {
+        PanelManager::Mode mode;
+        const char *text;
+        const char *tip;
+    };
+    static const ModeBtn modebtns[] = {
+        {PanelManager::Setup, "Setup", "Prepare the input deck: project files and linter findings"},
+        {PanelManager::RunMode, "Run", "Watch a run: console output, variables and live charts"},
+        {PanelManager::Analyze, "Analyze", "Study results: charts, snapshot images and slide show"},
+    };
+    auto *modebar = new QWidget(this);
+    auto *modelay = new QHBoxLayout(modebar);
+    modelay->setContentsMargins(0, 0, 0, 0);
+    modelay->setSpacing(0);
+    for (const auto &m : modebtns) {
+        auto *b = new QPushButton(m.text, modebar);
+        b->setCheckable(true);
+        b->setToolTip(m.tip);
+        b->setProperty("spartaModeButton", true);
+        connect(b, &QPushButton::clicked, this, [this, m]() { panels->applyMode(m.mode); });
+        modelay->addWidget(b);
+        modeButtons.append(b);
+    }
+    statusbar->addWidget(modebar);
 
     auto *savebtn = new QPushButton(QIcon(":/icons/document-save.svg"), "");
     savebtn->setToolTip("Save edit buffer to file");
@@ -726,7 +815,7 @@ SpartaGui::SpartaGui(QWidget *parent, const QString &filename, int width, int he
     setupUi(settings, allFont, monoFont);
     // fall back to the built-in default layout if there is no saved state yet
     // (first launch) or it doesn't match the current DOCK_LAYOUT_VERSION
-    panels->restoreLayout(settings);
+    restoredLayout = panels->restoreLayout(settings);
 
     currentFile.clear();
     currentDir = QDir(".").absolutePath();
@@ -861,6 +950,12 @@ SpartaGui::SpartaGui(QWidget *parent, const QString &filename, int width, int he
     // panelOpened(Image) is a real user action and may auto-render a snapshot
     // (see the PanelManager::panelOpened handler in createViewMenu()).
     startupComplete = true;
+
+    // Populate the workspace the session opens in. The mode was applied while
+    // restoring the layout, before the plugin was loaded, so its panels could
+    // not be created then; do it now that everything is in place. Only for a
+    // fresh session -- a restored layout already describes what was open.
+    if (!restoredLayout) panels->applyMode(panels->currentMode());
 }
 
 SpartaGui::~SpartaGui()
@@ -1986,6 +2081,17 @@ void SpartaGui::doRun(bool use_buffer)
 
     // a run operates on the editor buffer, so make sure it is the visible page
     showEditor();
+
+    // Starting a run is a change of task, so bring up the Run workspace -- but
+    // only for the first run of a session. Doing it on every run would fight a
+    // user who deliberately switched to Analyze to watch the charts.
+    if (!ranThisSession) {
+        ranThisSession = true;
+        QSettings settings;
+        if (settings.value(Keys::RUNMODE_AUTOSWITCH, true).toBool())
+            panels->applyMode(PanelManager::RunMode);
+    }
+
     purgeInspectList();
     autoSave();
 

@@ -78,7 +78,7 @@ PanelManager::PanelManager(QMainWindow *mainWindow, QWidget *editor) : QObject(m
         connect(d, &CDockWidget::viewToggled, this, [this, i](bool open) {
             if (open) {
                 restoreAreaVisibility(Panel(i));
-                emit panelOpened(i);
+                if (!applyingArrangement) emit panelOpened(i);
             }
         });
     }
@@ -160,13 +160,40 @@ bool PanelManager::isPanelOpen(Panel panel) const
 void PanelManager::saveLayout(QSettings &settings) const
 {
     settings.setValue(Keys::DOCKSTATE, dm->saveState(Cfg::DOCK_LAYOUT_VERSION));
+    // stash how the user left the mode they are currently in, then persist all
+    // of the per-mode arrangements together with the mode to reopen on
+    settings.setValue(Keys::DOCKMODE, int(mode));
+    settings.setValue(Keys::PERSPECTIVE_VERSION, Cfg::DOCK_LAYOUT_VERSION);
+    const_cast<PanelManager *>(this)->captureCurrentMode();
+    dm->savePerspectives(settings);
 }
 
 bool PanelManager::restoreLayout(QSettings &settings)
 {
+    // Perspectives are stored by Qt-ADS without a version stamp, so guard them
+    // with our own: a blob written before a panel was added or removed names
+    // docks that no longer exist and must be discarded rather than applied.
+    if (settings.value(Keys::PERSPECTIVE_VERSION, 0).toInt() == Cfg::DOCK_LAYOUT_VERSION) {
+        dm->loadPerspectives(settings);
+        // a mode with a stored perspective was configured in an earlier session
+        const QStringList have = dm->perspectiveNames();
+        for (int i = 0; i < NModes; ++i)
+            modeEstablished[i] = have.contains(perspectiveName(Mode(i)));
+        const int m = settings.value(Keys::DOCKMODE, int(Setup)).toInt();
+        if (m >= 0 && m < NModes) mode = Mode(m);
+    } else {
+        settings.remove(QStringLiteral("Perspectives"));
+    }
+
+    applyingArrangement = true;
     const QByteArray blob = settings.value(Keys::DOCKSTATE).toByteArray();
-    if (blob.isEmpty()) return false;
-    return dm->restoreState(blob, Cfg::DOCK_LAYOUT_VERSION);
+    bool ok = false;
+    if (!blob.isEmpty()) ok = dm->restoreState(blob, Cfg::DOCK_LAYOUT_VERSION);
+    // with no usable saved session, come up in the current mode's default set
+    if (!ok) applyModeDefault(mode);
+    modeEstablished[mode] = true;
+    applyingArrangement   = false;
+    return ok;
 }
 
 void PanelManager::splitArea(CDockAreaWidget *area, int firstPercent)
@@ -188,12 +215,27 @@ void PanelManager::splitArea(CDockAreaWidget *area, int firstPercent)
 
 void PanelManager::applySplitterProportions()
 {
+    // Only reserve space for a neighbour that actually has something open.
+    // Forcing the editor to 62% when the whole right-hand column is closed --
+    // as it is in the Setup workspace -- would leave 38% of the window as an
+    // empty gap.
+    auto anyOpen = [this](std::initializer_list<Panel> ps) {
+        for (Panel p : ps)
+            if (!docks[p]->isClosed()) return true;
+        return false;
+    };
+
+    // project files navigator : everything else, horizontally 18:82 -- wide
+    // enough for real file names rather than the sliver QSplitter would
+    // otherwise give a freshly-opened left dock
+    if (anyOpen({ProjectFiles})) splitArea(docks[ProjectFiles]->dockAreaWidget(), 18);
     // editor : charts/image column, horizontally 62:38
-    splitArea(editorDock->dockAreaWidget(), 62);
-    // editor row : output/variables, vertically 68:32
-    splitArea(docks[Log]->dockAreaWidget(), 68);
+    if (anyOpen({Chart, Image, Slide})) splitArea(editorDock->dockAreaWidget(), 62);
+    // editor row : output/variables/tools, vertically 68:32
+    if (anyOpen({Log, Variables, Sweep, History, Diagnostics}))
+        splitArea(docks[Log]->dockAreaWidget(), 68);
     // charts : image, vertically within the right column 55:45
-    splitArea(docks[Image]->dockAreaWidget(), 55);
+    if (anyOpen({Chart}) && anyOpen({Image, Slide})) splitArea(docks[Image]->dockAreaWidget(), 55);
 }
 
 void PanelManager::restoreAreaVisibility(Panel panel)
@@ -232,6 +274,104 @@ void PanelManager::applyDefaultLayout()
 
     for (int i = 0; i < NPanels; ++i)
         docks[i]->toggleView(false);
+}
+
+// ---------------------------------------------------------------------------
+// Workspace modes
+// ---------------------------------------------------------------------------
+
+// Panels shown when a mode is entered for the first time. Deliberately small
+// sets: the whole point of modes is that the window is not carrying panels the
+// user is not currently looking at. Anything omitted here is still one click
+// away in the View menu, and opening it by hand becomes part of that mode's
+// remembered arrangement.
+namespace {
+const QList<PanelManager::Panel> MODE_PANELS[PanelManager::NModes] = {
+    // Setup: writing the deck -- the file navigator and the linter's findings
+    {PanelManager::ProjectFiles, PanelManager::Diagnostics},
+    // Run: watching a run -- console output, live plots, and the variables
+    {PanelManager::Log, PanelManager::Variables, PanelManager::Chart},
+    // Analyze: studying results -- plots and rendered snapshots, with the log
+    // kept for reference
+    {PanelManager::Chart, PanelManager::Image, PanelManager::Slide, PanelManager::Log},
+};
+} // namespace
+
+QString PanelManager::modeName(Mode mode)
+{
+    switch (mode) {
+        case Setup: return QStringLiteral("Setup");
+        case RunMode: return QStringLiteral("Run");
+        case Analyze: return QStringLiteral("Analyze");
+        default: return QString();
+    }
+}
+
+QString PanelManager::perspectiveName(Mode mode)
+{
+    return QStringLiteral("mode.") + modeName(mode);
+}
+
+void PanelManager::applyModeDefault(Mode m)
+{
+    const QList<Panel> &want = MODE_PANELS[m];
+    for (int i = 0; i < NPanels; ++i) {
+        // A panel belonging to this mode is only shown once it has something to
+        // show. Opening a dock that holds no widget yet gives Qt-ADS an empty
+        // dock area it never lays out properly -- the panel then stays invisible
+        // even after content arrives. Panels fill in as work produces them (a
+        // run creating the charts, the linter creating diagnostics), and
+        // setPanelWidget() opens them at that point if the mode calls for it.
+        const bool wanted = want.contains(Panel(i));
+        docks[i]->toggleView(wanted && docks[i]->widget() != nullptr);
+    }
+    applySplitterProportions();
+}
+
+void PanelManager::captureCurrentMode()
+{
+    // Only a mode that has actually been shown has an arrangement worth
+    // keeping. Capturing one that was never entered would store the startup
+    // state -- every dock closed -- and that mode would then come up empty
+    // the first time the user selects it.
+    if (!modeEstablished[mode]) return;
+    dm->addPerspective(perspectiveName(mode));
+}
+
+void PanelManager::applyMode(Mode m)
+{
+    if (m < 0 || m >= NModes) return;
+
+    // remember how the user left the mode being departed
+    if (!applyingArrangement) captureCurrentMode();
+
+    mode = m;
+
+    // Applying a whole arrangement re-opens docks wholesale. That must not be
+    // mistaken for the user opening a panel by hand, which triggers lazy view
+    // creation -- so hold panelOpened down for the duration.
+    applyingArrangement = true;
+    if (modeEstablished[m] && dm->perspectiveNames().contains(perspectiveName(m)))
+        dm->openPerspective(perspectiveName(m));
+    else
+        applyModeDefault(m);
+    modeEstablished[m]  = true;
+    applyingArrangement = false;
+
+    // the ADS quirk worked around in restoreAreaVisibility() also applies to a
+    // freshly restored arrangement, so re-assert proportions once Qt has caught up
+    QTimer::singleShot(0, this, [this]() { applySplitterProportions(); });
+
+    emit modeChanged(int(mode));
+}
+
+void PanelManager::resetCurrentMode()
+{
+    dm->removePerspective(perspectiveName(mode));
+    applyingArrangement = true;
+    applyModeDefault(mode);
+    applyingArrangement = false;
+    QTimer::singleShot(0, this, [this]() { applySplitterProportions(); });
 }
 
 // Local Variables:
