@@ -332,6 +332,14 @@ void FixEmitFace::distribute_np(int *ninsert)
    return 1 if task I's cell face can emit into the optional region
    conservative bounding-box test: a face whose extent cannot overlap the
      region bbox is excluded, so np insertions are not assigned to it
+   the test is dimension-aware, because an emitting face is degenerate along
+     its own normal (lo == hi in dim ndim) but spans a range in the other two:
+     - normal dim: insertions all land exactly on the plane x = lo[ndim], so
+       the region must contain that coord, tested inclusively (an xlo face at
+       x = box xlo must stay eligible for a region starting at the box xlo)
+     - tangential dims: insertions are drawn uniformly from [lo,hi), so a face
+       merely touching the bbox edge yields no accepted particle and is
+       excluded, otherwise it would draw Np weight and reject all of it
    if no region, or the region bbox is unusable (no computable bbox, or an
      exterior "side out" region), all faces are eligible and the per-particle
      region->match() test still filters individual insertions precisely
@@ -344,11 +352,20 @@ int FixEmitFace::task_in_region(int i)
 
   double *lo = tasks[i].lo;
   double *hi = tasks[i].hi;
+  int ndim = tasks[i].ndim;
 
-  if (hi[0] <= region->extent_xlo || lo[0] >= region->extent_xhi) return 0;
-  if (hi[1] <= region->extent_ylo || lo[1] >= region->extent_yhi) return 0;
-  if (dimension == 3)
-    if (hi[2] <= region->extent_zlo || lo[2] >= region->extent_zhi) return 0;
+  double rlo[3],rhi[3];
+  rlo[0] = region->extent_xlo; rhi[0] = region->extent_xhi;
+  rlo[1] = region->extent_ylo; rhi[1] = region->extent_yhi;
+  rlo[2] = region->extent_zlo; rhi[2] = region->extent_zhi;
+
+  for (int d = 0; d < dimension; d++) {
+    if (d == ndim) {
+      if (lo[d] < rlo[d] || lo[d] > rhi[d]) return 0;
+    } else {
+      if (hi[d] <= rlo[d] || lo[d] >= rhi[d]) return 0;
+    }
+  }
 
   return 1;
 }
