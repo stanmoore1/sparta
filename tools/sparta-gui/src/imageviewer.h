@@ -112,6 +112,10 @@ public:
     void createImage();
 
 protected:
+    /** @brief Paint the current render at 1:1, or scaled down when the
+     *  viewport is too small to show it (as in a docked panel) */
+    void updateDisplayedPixmap();
+
     bool eventFilter(QObject *watched, QEvent *event) override; ///< Intercept Alt-keystrokes
     void showEvent(QShowEvent *event) override; ///< Redo the initial window fit once shown
 
@@ -143,6 +147,7 @@ private:
     QPoint dragLast;         ///< last mouse pos during an interactive view drag
     bool dragging = false;   ///< true while dragging to rotate/pan the render
     QSize lastFitSize;       ///< Scroll area size applied by the last auto-resize
+    bool fittingPixmap = false; ///< Guards updateDisplayedPixmap() against re-entry
 
     QAction *saveAsAct; ///< Save As action
     QAction *copyAct;   ///< Copy action

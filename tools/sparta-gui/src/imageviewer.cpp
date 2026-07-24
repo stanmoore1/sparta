@@ -221,6 +221,7 @@ ImageViewer::ImageViewer(const QString &fileName, SpartaWrapper *_sparta, Sparta
     // eventFilter(), which re-renders through the same createImage() path as
     // the toolbar buttons
     imageLabel->installEventFilter(this);
+    scrollArea->viewport()->installEventFilter(this);
     imageLabel->setCursor(Qt::OpenHandCursor);
 
     scrollArea->setBackgroundRole(QPalette::Dark);
@@ -939,6 +940,11 @@ bool ImageViewer::eventFilter(QObject *watched, QEvent *event)
     // (Shift+drag pans), wheel zooms. Each gesture re-renders through the same
     // createImage() path the toolbar buttons use, guarded against re-entrancy
     // while a run is active.
+    // the panel can be resized at any time, and the fit above is computed
+    // against the viewport, so it has to be recomputed when that changes
+    if (watched == scrollArea->viewport() && event->type() == QEvent::Resize && !shutdown)
+        updateDisplayedPixmap();
+
     if (watched == imageLabel && !shutdown) {
         const bool is2d = sparta && (sparta->extractSetting("dimension") == 2);
         switch (event->type()) {
@@ -1224,13 +1230,11 @@ void ImageViewer::createImage()
 
     // show image
     image = newImage;
-    imageLabel->setPixmap(QPixmap::fromImage(image));
-    // Size the label to the image but do not make that a *minimum*: a rendered
-    // snapshot may be several thousand pixels across, and a minimum that large
-    // propagates out through the dock layout and forces the whole window wider
-    // than the screen. The enclosing scroll area exists precisely so a large
-    // image can be panned instead.
-    imageLabel->resize(image.width(), image.height());
+    updateDisplayedPixmap();
+    // The fit above measures the viewport as it is right now, which during the
+    // first render into a freshly-opened dock is not yet its final size. Fit
+    // again once the layout has settled.
+    QTimer::singleShot(0, this, [this]() { updateDisplayedPixmap(); });
     adjustWindowSize();
     restoreRenderState();
     repaint();
@@ -1328,6 +1332,44 @@ void ImageViewer::updateActions()
 {
     saveAsAct->setEnabled(!image.isNull());
     copyAct->setEnabled(!image.isNull());
+}
+
+void ImageViewer::updateDisplayedPixmap()
+{
+    if (image.isNull()) return;
+
+    // Resizing the label below can itself provoke a viewport resize, which
+    // calls back in here; without this the two would chase each other.
+    if (fittingPixmap) return;
+    fittingPixmap = true;
+
+    // Show the render at 1:1 when there is room for it, and scaled to fit when
+    // there is not. The viewer began life as a standalone window that resized
+    // itself around the image (adjustWindowSize below), but hosted in a dock it
+    // cannot resize anything: a 600x600 render then sat at 1:1 inside a panel a
+    // few hundred pixels tall and the user saw one corner of it -- usually
+    // background, so the panel looked broken rather than merely cropped.
+    //
+    // This is display scaling only. The zoom buttons move the camera and
+    // re-render through SPARTA, so the two do not interact.
+    const QSize avail = scrollArea->viewport()->size();
+    QPixmap pix       = QPixmap::fromImage(image);
+
+    if (avail.isValid() && !avail.isEmpty() &&
+        (image.width() > avail.width() || image.height() > avail.height())) {
+        pix = pix.scaled(avail, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        imageLabel->setToolTip("Scaled to fit the panel; enlarge the panel to see it at full size");
+    } else {
+        imageLabel->setToolTip(QString());
+    }
+
+    imageLabel->setPixmap(pix);
+    // Size the label to what is actually painted, and never as a *minimum*: a
+    // render can be several thousand pixels across, and a minimum that large
+    // propagates out through the dock layout and forces the window wider than
+    // the screen.
+    imageLabel->resize(pix.size());
+    fittingPixmap = false;
 }
 
 void ImageViewer::adjustWindowSize()

@@ -242,8 +242,11 @@ void PanelManager::applySplitterProportions()
     // editor row : output/variables/tools, vertically 68:32
     if (anyOpen({Log, Variables, Sweep, History, Diagnostics}))
         splitArea(docks[Log]->dockAreaWidget(), 68);
-    // charts : image, vertically within the right column 55:45
-    if (anyOpen({Chart}) && anyOpen({Image, Slide})) splitArea(docks[Image]->dockAreaWidget(), 55);
+    // charts : image, vertically within the right column. In Analyze the images
+    // are the point of the workspace and the viewer spends ~100px of its own
+    // height on toolbars, so give it the larger share there.
+    if (anyOpen({Chart}) && anyOpen({Image, Slide}))
+        splitArea(docks[Image]->dockAreaWidget(), mode == Analyze ? 38 : 55);
 }
 
 void PanelManager::restoreAreaVisibility(Panel panel)
