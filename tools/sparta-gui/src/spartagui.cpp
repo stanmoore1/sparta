@@ -2786,8 +2786,11 @@ void SpartaGui::importSurface()
 {
     QString fileName = QFileDialog::getOpenFileName(
         this, "Import Surface (STL or SPARTA surface file)", currentDir,
-        "Surface geometry (*.stl *.surf);;STL files (*.stl);;"
-        "SPARTA surface files (*.surf);;All files (*)");
+        // SPARTA's own examples name their surfaces data.circle, data.sphere and
+        // so on, so a default filter of *.stl/*.surf shows an empty directory
+        // for exactly the files most users are trying to import.
+        "Surface geometry (*.stl *.surf data.*);;STL files (*.stl);;"
+        "SPARTA surface files (*.surf data.*);;All files (*)");
     if (fileName.isEmpty()) return;
 
     // ensure a SPARTA instance exists so the wizard's "Render via SPARTA" preview
