@@ -163,6 +163,9 @@ protected:
      */
     void setFont(const QFont &newfont);
 
+    /** @brief Tear down all docked panel content and null every pointer to it */
+    void clearPanelWidgets();
+
     /** @brief Clean up the inspect file dialog list */
     void purgeInspectList();
 

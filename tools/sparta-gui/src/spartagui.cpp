@@ -1024,16 +1024,7 @@ void SpartaGui::newDocument()
     // e.g. the auto-lint timer would then clear() a freed diagnostics list --
     // a crash).  Stop the pending auto-lint too so it cannot fire mid-teardown.
     if (autoLintTimer) autoLintTimer->stop();
-    panels->clearRunPanels();
-    chartwindow      = nullptr;
-    logwindow        = nullptr;
-    slideshow        = nullptr;
-    imagewindow      = nullptr;
-    varwindow        = nullptr;
-    diagnosticsList  = nullptr;
-    projectFilesList = nullptr;
-    sweepPanel       = nullptr;
-    historyPanel     = nullptr;
+    clearPanelWidgets();
 
     {
         StdoutSilencer guard;
@@ -1315,16 +1306,7 @@ void SpartaGui::openFile(const QString &fileName)
     // e.g. the auto-lint timer would then clear() a freed diagnostics list --
     // a crash).  Stop the pending auto-lint too so it cannot fire mid-teardown.
     if (autoLintTimer) autoLintTimer->stop();
-    panels->clearRunPanels();
-    chartwindow      = nullptr;
-    logwindow        = nullptr;
-    slideshow        = nullptr;
-    imagewindow      = nullptr;
-    varwindow        = nullptr;
-    diagnosticsList  = nullptr;
-    projectFilesList = nullptr;
-    sweepPanel       = nullptr;
-    historyPanel     = nullptr;
+    clearPanelWidgets();
     {
         StdoutSilencer guard;
         sparta.close();
@@ -3057,6 +3039,24 @@ void SpartaGui::renderVtkSnapshot()
                 "No particle, grid or surface data was produced for the current state.");
 }
 #endif // SPARTA_GUI_HAVE_VTK
+
+void SpartaGui::clearPanelWidgets()
+{
+    // PanelManager::clearRunPanels() deletes each panel's inner widget, so every
+    // pointer we hold to one dangles afterwards. Keeping that bookkeeping in a
+    // single place means adding a panel cannot leave a stale pointer behind at
+    // one of the call sites.
+    panels->clearRunPanels();
+    chartwindow      = nullptr;
+    logwindow        = nullptr;
+    slideshow        = nullptr;
+    imagewindow      = nullptr;
+    varwindow        = nullptr;
+    diagnosticsList  = nullptr;
+    projectFilesList = nullptr;
+    sweepPanel       = nullptr;
+    historyPanel     = nullptr;
+}
 
 void SpartaGui::createVariableWindow()
 {
