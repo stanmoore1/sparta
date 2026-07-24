@@ -97,6 +97,9 @@ void rotationMatrix(double thetaDeg, Vec3 axis, double m[9])
     m[6] = z * x * C - y * s; m[7] = z * y * C + x * s; m[8] = c + z * z * C;
 }
 
+// grid resolution used before the Transform page (and its spin boxes) exists
+constexpr int DEFAULT_GRID_CELLS = 50;
+
 QColor scaleColor(const QColor &c, double b)
 {
     b = qBound(0.0, b, 1.0);
@@ -730,9 +733,13 @@ QStringList StlImportWizard::boxGridCommands() const
     c << "boundary p p p";
     c << QString("create_box %1 %2 %3 %4 %5 %6")
              .arg(blo[0]).arg(bhi[0]).arg(blo[1]).arg(bhi[1]).arg(blo[2]).arg(bhi[2]);
-    const int nx = grid_ ? grid_[0]->value() : 50;
-    const int ny = grid_ ? grid_[1]->value() : 50;
-    const int nz = d2 ? 1 : (grid_ ? grid_[2]->value() : 50);
+    // Guard each spin box, not the array: grid_ is an array, so `grid_ ?` tests
+    // its address and is always true. The constructor runs the watertight check
+    // before the Transform page exists, so these are still null then and the
+    // fallback below is what that first check is meant to use.
+    const int nx = grid_[0] ? grid_[0]->value() : DEFAULT_GRID_CELLS;
+    const int ny = grid_[1] ? grid_[1]->value() : DEFAULT_GRID_CELLS;
+    const int nz = d2 ? 1 : (grid_[2] ? grid_[2]->value() : DEFAULT_GRID_CELLS);
     c << QString("create_grid %1 %2 %3").arg(nx).arg(ny).arg(nz);
     return c;
 }
