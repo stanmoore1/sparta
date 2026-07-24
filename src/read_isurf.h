@@ -85,6 +85,7 @@ class ReadISurf : protected Pointers {
   void process_args(int, char **);
 
   void create_hash(int);
+  void detect_precision(char *);
   void check_file_size(FILE *, char *);
   void read_corners_serial(char *);
   void assign_corners(int, bigint, uint8_t *, double *);

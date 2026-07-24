@@ -38,7 +38,7 @@ enum{NEITHER,BAD,GOOD};
 enum{NONE,CHECK,KEEP};
 enum{UNKNOWN,OUTSIDE,INSIDE,OVERLAP};           // several files
 enum{XLO,XHI,YLO,YHI,ZLO,ZHI,INTERIOR};         // same as Domain
-enum{INT,DOUBLE};
+enum{INT,DOUBLE,AUTO};
 enum{SERIAL,PARALLEL};
 
 #define CHUNK 8192
@@ -146,6 +146,11 @@ void ReadISurf::command(int narg, char **arg)
         cvalues[i][j] = 0.0;
   }
 
+  // resolve precision = auto (the default) from the file size
+  // must precede the read, which sizes its buffers from precision
+
+  detect_precision(gridfile);
+
   // serial or parallel read of grid corner point file
   // NOTE: need to have a parallel read_types as well
   // serial read uses a hash
@@ -245,6 +250,59 @@ void ReadISurf::create_hash(int count)
      for each corner value and each of 4/8 cells it belongs to:
        if it owns the grid cell, makes copy of the corner pt
 ------------------------------------------------------------------------- */
+
+/* ----------------------------------------------------------------------
+   resolve precision = AUTO into INT or DOUBLE from the file size
+   the grid extent is fixed by the command, so an isurf file can only have
+     one of two valid sizes, header + Ncorner*1 (int) or header + Ncorner*8
+     (double), which can never coincide.  the size therefore identifies the
+     format unambiguously, even though the file stores no precision marker
+   proc 0 stats the file and broadcasts the result, so all procs agree
+     before any buffers are sized or any values are read
+   a file matching neither size is left as-is: precision is set to the
+     int/double candidate it is closest to and check_file_size() then
+     reports the mismatch with its usual diagnostic
+------------------------------------------------------------------------- */
+
+void ReadISurf::detect_precision(char *gridfile)
+{
+  if (precision != AUTO) return;
+
+  int detected = INT;
+
+  if (me == 0) {
+    FILE *fp = fopen(gridfile,"rb");
+    if (fp == NULL) {
+      char str[128];
+      snprintf(str,128,"Cannot open read_isurf grid corner point file %s",
+               gridfile);
+      error->one(FLERR,str);
+    }
+    fseek(fp,0,SEEK_END);
+    bigint fsize = (bigint) ftell(fp);
+    fclose(fp);
+
+    bigint ncval = (bigint) (nx+1) * (ny+1);
+    if (dim == 3) ncval *= (nz+1);
+    bigint header = (bigint) dim*sizeof(int);
+    bigint size_int = header + ncval*sizeof(uint8_t);
+    bigint size_double = header + ncval*sizeof(double);
+
+    if (fsize == size_double) detected = DOUBLE;
+    else if (fsize == size_int) detected = INT;
+    else {
+      // matches neither; pick the nearer candidate so check_file_size()
+      // reports a sensible expected size, then errors
+
+      bigint dint = fsize > size_int ? fsize-size_int : size_int-fsize;
+      bigint ddbl = fsize > size_double ? fsize-size_double : size_double-fsize;
+      detected = (ddbl < dint) ? DOUBLE : INT;
+    }
+  }
+
+  MPI_Bcast(&detected,1,MPI_INT,0,world);
+  precision = detected;
+}
 
 /* ----------------------------------------------------------------------
    verify an open isurf corner point file matches the requested grid
@@ -830,7 +888,7 @@ void ReadISurf::process_args(int narg, char **arg)
   sgrouparg = 0;
   typefile = NULL;
   pushflag = 1;
-  precision = INT;
+  precision = AUTO;
   readflag = SERIAL;
 
   int iarg = 0;
@@ -853,6 +911,7 @@ void ReadISurf::process_args(int narg, char **arg)
       if (iarg+2 > narg) error->all(FLERR,"Invalid read_isurf command");
       if (strcmp(arg[iarg+1],"int") == 0) precision = INT;
       else if (strcmp(arg[iarg+1],"double") == 0) precision = DOUBLE;
+      else if (strcmp(arg[iarg+1],"auto") == 0) precision = AUTO;
       else error->all(FLERR,"Invalid read_isurf command");
       iarg += 2;
     } else if (strcmp(arg[iarg],"read") == 0)  {

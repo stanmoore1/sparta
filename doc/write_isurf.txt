@@ -64,8 +64,10 @@ files, a write_isurf followed by a later "read_isurf"_read_isurf.html
 is the way to save and restore the state of an ablating surface.  To
 reproduce the saved state exactly, write the file with {precision
 double} (the default) so partially decremented corner point values are
-not truncated to integers, and read it back with the read_isurf
-{precision double} and {push no} options.  The default read_isurf
+not truncated to integers, and read it back with the read_isurf {push
+no} option.  The double precision of the file is detected automatically
+by read_isurf, so its {precision} keyword need not be specified.  The
+default read_isurf
 {push yes} re-normalizes corner point values as they are read and so
 will not reproduce a mid-ablation state exactly; see the {push} keyword
 discussion on the "read_isurf"_read_isurf.html doc page.

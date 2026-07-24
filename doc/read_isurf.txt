@@ -24,7 +24,7 @@ keyword = {group} or {type} or {push} or {precision} or {read} :l
   type arg = tfile
     tfile = binary file with per grid cell surface type values
   push arg = yes or no = whether to push corner point values to 0/255
-  precision arg = int or double
+  precision arg = auto or int or double
   read arg = serial or parallel :pre
 :ule
 
@@ -132,17 +132,32 @@ The remaining N bytes of the file are a series of corner point values.
 There are N = Nxfile * Nyfile values in 2d, and N = Nxfile * Nyfile *
 Nzfile values in 3d.
 
-If the {precision} keyword is set to {int}, which is the default, then
-the values are one-byte integers, from 0 to 255 inclusive.  If the
-{precision} keyword is set to {double}, then they are double-precision
-floating point values, from 0.0 to 255.0 inclusive.  The one-byte
-integer format is what is typically used for tomographic images.  The
-double-precision format is what is written by the
-"write_isurf"_write_isurf.html command.  The latter is typically used
-when running an ablation model via the "fix ablate"_fix_ablate.html
-command, where material is removed incrementally (from the corner
-point values) due to collisions of particles with the implicit
-surfaces.
+If the {precision} keyword is set to {int}, then the values are
+one-byte integers, from 0 to 255 inclusive.  If the {precision} keyword
+is set to {double}, then they are double-precision floating point
+values, from 0.0 to 255.0 inclusive.  The one-byte integer format is
+what is typically used for tomographic images.  The double-precision
+format is what is written by the "write_isurf"_write_isurf.html
+command.  The latter is typically used when running an ablation model
+via the "fix ablate"_fix_ablate.html command, where material is removed
+incrementally (from the corner point values) due to collisions of
+particles with the implicit surfaces.
+
+If the {precision} keyword is set to {auto}, which is the default, then
+SPARTA determines which of the two formats the file uses from its size.
+The grid extent is already fixed by the {Nx},{Ny},{Nz} arguments, so
+the file can only have one of two valid sizes, one for each format, and
+those two sizes can never coincide.  This means the {precision} keyword
+normally need not be specified at all, including for a
+"write_isurf"_write_isurf.html file being read back in.  A file whose
+size matches neither format is an error, as described below.
+
+IMPORTANT NOTE: An isurf file stores no marker identifying its format,
+so specifying the wrong {precision} explicitly would reinterpret the
+byte stream as the other format.  SPARTA checks the file size against
+the requested grid extent and format and gives an error if they are
+inconsistent, rather than reading meaningless values.  This also
+detects a truncated or corrupted file.
 
 IMPORTANT NOTE: The corner point values are a 2d or 3d regular array
 which must be ordered as follows.  The x indices (1 to Nxfile) vary
@@ -300,9 +315,10 @@ read_isurf is not an exact inverse of a "write_isurf"_write_isurf.html.
 When you use the write_isurf then read_isurf sequence to save and
 restore a partially ablated (mid-run) surface state, as described on
 the "write_isurf"_write_isurf.html doc page, use {push no} so the
-corner point values are restored exactly as written.  Also use
-{precision double} in that case (see below), so partially decremented
-corner point values are not truncated to integers.
+corner point values are restored exactly as written.  The double
+precision of such a file is detected automatically (see the
+{precision} keyword above), so partially decremented corner point
+values are not truncated to integers.
 
 The {read} keyword specifies how the input file of grid corner point
 values is read.  If the value is {serial}, which is the default, then
@@ -337,4 +353,4 @@ ablate"_fix_ablate.html
 [Default:]
 
 The optional keyword defaults are group = all, type = no, push = yes,
-precision int, and read serial.
+precision auto, and read serial.
