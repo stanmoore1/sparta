@@ -6,10 +6,11 @@
 # second module builds SPARTA-GUI itself in plugin mode. The GUI finds the
 # library on the flatpak LD_LIBRARY_PATH at runtime.
 #
-# NOTE: the manifest clones from this repository, so the branch under test must
+# NOTE: the manifest clones from this repository, so the commit under test must
 # be pushed before this workflow can succeed. The build step rewrites the
-# manifest's branch to the one being built, so the pinned value in the manifest
-# only matters for local builds.
+# manifest's git ref to this run's exact commit, so the artifact always matches
+# the commit the run reports. The branch pinned in the manifest only matters for
+# local builds.
 
 name: build-sparta-gui-flatpak
 
@@ -19,6 +20,10 @@ on:
     branches:
       - claude/sparta-gui-docked-layout
       - claude/sparta-gui-v1.0-beta
+    # Deliberately narrow: a flatpak build pulls the KDE runtime and compiles
+    # everything from source, so it is far too slow to run on every commit.
+    # It rebuilds when its own inputs change, and is run on demand (or for a
+    # release) via workflow_dispatch to produce the shipping bundle.
     paths:
       - 'tools/sparta-gui/packaging/org.sparta.sparta-gui.yml'
       - '.github/workflows/sparta-gui-flatpak.yml'
@@ -48,13 +53,15 @@ jobs:
         run: |
           VERSION=1.0.0
           MANIFEST=tools/sparta-gui/packaging/org.sparta.sparta-gui.yml
-          # The manifest names the branch to clone, so on any branch other than
-          # the one it happens to be pinned to it would quietly build somebody
-          # else's code. Point it at the branch actually being built.
-          BRANCH="${GITHUB_REF_NAME}"
-          echo "building flatpak from branch: ${BRANCH}"
-          sed -i "s|branch: claude/sparta-gui-[A-Za-z0-9._-]*|branch: ${BRANCH}|g" "${MANIFEST}"
-          grep -n 'branch:' "${MANIFEST}"
+          # The manifest clones from the remote rather than using this checkout,
+          # and it names a branch. Two problems follow: on any branch other than
+          # the pinned one it would quietly build somebody else's code, and a
+          # branch name resolves at clone time, so a push landing mid-build
+          # silently changes what ends up in the artifact. Pin to this run's
+          # exact commit instead, which is both correct and reproducible.
+          echo "building flatpak from commit: ${GITHUB_SHA}"
+          sed -i "s|branch: claude/sparta-gui-[A-Za-z0-9._-]*|commit: ${GITHUB_SHA}|g" "${MANIFEST}"
+          grep -nE 'commit:|branch:' "${MANIFEST}"
           flatpak-builder --force-clean --verbose \
             --repo=flatpak-repo --install-deps-from=flathub --user --ccache \
             --default-branch="${VERSION}" \
