@@ -244,6 +244,15 @@ HistoryPanel::HistoryPanel(QWidget *parent, RunHistory *hist) : QWidget(parent),
     tb->addStretch();
     outer->addLayout(tb);
 
+    // An empty table with archiving switched off reads as a broken feature, so
+    // say plainly why there is nothing here and what to do about it. This sits
+    // above the table: docked into the bottom strip the panel can be short, and
+    // anything below a stretching table gets pushed out of view.
+    hint_ = new QLabel(this);
+    hint_->setWordWrap(true);
+    hint_->setTextFormat(Qt::PlainText);
+    outer->addWidget(hint_);
+
     table_ = new QTableView(this);
     table_->setModel(hist_->model());
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
@@ -251,14 +260,24 @@ HistoryPanel::HistoryPanel(QWidget *parent, RunHistory *hist) : QWidget(parent),
     table_->setSelectionMode(QAbstractItemView::ExtendedSelection);
     table_->horizontalHeader()->setStretchLastSection(true);
     table_->verticalHeader()->setVisible(false);
+    // keep the table from growing so greedily that the controls below it are
+    // squeezed out when the panel is docked into a short area
+    table_->setMinimumHeight(48);
     outer->addWidget(table_, 1);
 
     auto *archiveChk = new QCheckBox(
         "Archive finished runs here automatically (deck, log, thermo, images)", this);
     archiveChk->setChecked(QSettings().value(Keys::ARCHIVE_RUNS, false).toBool());
-    connect(archiveChk, &QCheckBox::toggled, this,
-            [](bool on) { QSettings().setValue(Keys::ARCHIVE_RUNS, on); });
+    connect(archiveChk, &QCheckBox::toggled, this, [this](bool on) {
+        QSettings().setValue(Keys::ARCHIVE_RUNS, on);
+        updateHint();
+    });
     outer->addWidget(archiveChk);
+
+    connect(hist_->model(), &QAbstractItemModel::modelReset, this, &HistoryPanel::updateHint);
+    connect(hist_->model(), &QAbstractItemModel::rowsInserted, this, &HistoryPanel::updateHint);
+    connect(hist_->model(), &QAbstractItemModel::rowsRemoved, this, &HistoryPanel::updateHint);
+    updateHint();
 
     connect(htmlBtn, &QPushButton::clicked, this, &HistoryPanel::reportHtml);
     connect(pdfBtn, &QPushButton::clicked, this, &HistoryPanel::reportPdf);
@@ -333,3 +352,21 @@ void HistoryPanel::deleteSelected()
 // Local Variables:
 // c-basic-offset: 4
 // End:
+
+void HistoryPanel::updateHint()
+{
+    if (!hint_ || !hist_ || !hist_->model()) return;
+    const bool archiving = QSettings().value(Keys::ARCHIVE_RUNS, false).toBool();
+    const bool empty     = hist_->model()->rowCount() == 0;
+
+    if (!empty) {
+        hint_->hide();
+        return;
+    }
+    hint_->setText(archiving
+                       ? "No runs archived yet. The next run you finish will be recorded here."
+                       : "No runs archived. Switch on the checkbox below (or Preferences \342\206\222 "
+                         "General \342\206\222 Archive finished runs) to record each finished run "
+                         "here, which also enables comparing two runs.");
+    hint_->show();
+}

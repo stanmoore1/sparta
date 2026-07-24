@@ -211,6 +211,11 @@ void Preferences::accept()
     field = tabWidget->findChild<QLineEdit *>("examplesedit");
     if (field) settings->setValue(Keys::EXAMPLES_PATH, field->text());
 
+    if (auto *arch = tabWidget->findChild<QCheckBox *>("archiveval"))
+        settings->setValue(Keys::ARCHIVE_RUNS, arch->isChecked());
+    if (auto *rec = tabWidget->findChild<QSpinBox *>("recoverval"))
+        settings->setValue(Keys::AUTOSAVE_INTERVAL, rec->value());
+
     // reformatting settings
 
     settings->beginGroup(Keys::GROUP_REFORMAT);
@@ -420,6 +425,34 @@ GeneralTab::GeneralTab(QSettings *_settings, SpartaWrapper *_sparta, SpartaGui *
 
     layout->addWidget(exampleslabel, nrow++, 0);
     layout->addLayout(exampleslayout, nrow++, 0, 1, 2);
+    layout->addWidget(new QHline, nrow++, 0, 1, 2);
+
+    // Run archiving drives both the Run History panel and run comparison. It
+    // used to be reachable only from a checkbox inside the History panel
+    // itself, so a user who never opened that panel found it permanently empty
+    // with nothing to explain why.
+    auto *archivelabel = new QLabel("Archive finished runs:");
+    auto *archiveval   = new QCheckBox;
+    archiveval->setObjectName("archiveval");
+    archiveval->setChecked(settings->value(Keys::ARCHIVE_RUNS, false).toBool());
+    archiveval->setToolTip("Keep a copy of each finished run (deck, log, thermo data and images) "
+                           "so it can be revisited in Tools \342\206\222 Studies \342\206\222 Run "
+                           "History and compared with other runs");
+    layout->addWidget(archivelabel, nrow, 0);
+    layout->addWidget(archiveval, nrow++, 1, Qt::AlignVCenter);
+
+    // Periodic snapshot of unsaved editor content, used to offer recovery
+    // after a crash. Distinct from the auto-save on Run/Quit in the Editor tab,
+    // which writes the user's actual file.
+    auto *recoverlabel = new QLabel("Session recovery snapshot (s, 0 = off):");
+    auto *recoverval   = new QSpinBox;
+    recoverval->setObjectName("recoverval");
+    recoverval->setRange(0, Cfg::RECOVERY_INTERVAL_MAX);
+    recoverval->setValue(settings->value(Keys::AUTOSAVE_INTERVAL, Cfg::RECOVERY_INTERVAL_DEFAULT).toInt());
+    recoverval->setToolTip("How often unsaved editor content is written to a recovery file, so it "
+                           "can be offered back after a crash. This never touches your own file.");
+    layout->addWidget(recoverlabel, nrow, 0);
+    layout->addWidget(recoverval, nrow++, 1);
     layout->addWidget(new QHline, nrow++, 0, 1, 2);
 
     layout->addItem(new QSpacerItem(10, 10, QSizePolicy::Minimum, QSizePolicy::Expanding), nrow, 0);

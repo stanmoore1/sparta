@@ -90,11 +90,15 @@ private slots:
     void deleteSelected();
 
 private:
+    /** @brief Explain an empty table (archiving off vs simply no runs yet) */
+    void updateHint();
+
     int selectedRow() const;
     QList<int> selectedRows() const;
     RunHistory *hist_;
     QTableView *table_ = nullptr;
     class QPushButton *compareBtn_ = nullptr;
+    class QLabel *hint_ = nullptr;   ///< Shown only while the table is empty
 };
 
 #endif // RUNHISTORY_H

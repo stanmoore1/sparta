@@ -332,7 +332,7 @@ void SpartaGui::createRunMenu()
 
     addMenuAction(menu, ":/icons/preferences-desktop.svg", "Set &Variables...", "Ctrl+Shift+V",
                   &SpartaGui::editVariables);
-    addMenuAction(menu, ":/icons/binary-file-icon.svg", "Continue from &Restart...", "",
+    addMenuAction(menu, ":/icons/binary-file-icon.svg", "Insert &Restart Commands...", "",
                   &SpartaGui::continueRestart);
     menu->addSeparator();
 
@@ -2231,7 +2231,7 @@ QString SpartaGui::recoveryFilePath() const
 
 void SpartaGui::startRecoveryTimer()
 {
-    const int secs = QSettings().value(Keys::AUTOSAVE_INTERVAL, 90).toInt();
+    const int secs = QSettings().value(Keys::AUTOSAVE_INTERVAL, Cfg::RECOVERY_INTERVAL_DEFAULT).toInt();
     if (secs <= 0) return; // disabled
     if (!recoveryTimer) {
         recoveryTimer = new QTimer(this);
@@ -2677,14 +2677,16 @@ void SpartaGui::surfaceReport()
 void SpartaGui::continueRestart()
 {
     QDir dir(currentDir.isEmpty() ? QDir::currentPath() : currentDir);
-    const QStringList filters = {"*.restart", "*.restart.*", "*restart*", "*.spart"};
+    // Deliberately narrow: a bare "*restart*" glob also matches log files and
+    // notes that merely mention the word, offering them as restart candidates.
+    const QStringList filters = {"*.restart", "*.restart.*", "*.spart"};
     const QFileInfoList found = dir.entryInfoList(filters, QDir::Files, QDir::Time);
 
     QDialog dlg(this);
-    dlg.setWindowTitle("Continue from Restart");
+    dlg.setWindowTitle("Insert Restart Commands");
     dlg.resize(680, 420);
     auto *outer = new QVBoxLayout(&dlg);
-    outer->addWidget(new QLabel("Restart files in the working directory:", &dlg));
+    outer->addWidget(new QLabel("Restart files in the working directory. The selected file\nbecomes a read_restart + run pair inserted into the editor for review:", &dlg));
     auto *list = new QListWidget(&dlg);
     auto addFile = [&](const QFileInfo &fi) {
         auto *it = new QListWidgetItem(QString("%1    (%2 KB, %3)")
@@ -2731,7 +2733,7 @@ void SpartaGui::continueRestart()
     if (dlg.exec() != QDialog::Accepted) return;
     auto *cur = list->currentItem();
     if (!cur) {
-        warning(this, "Continue from Restart", "No restart file selected.");
+        warning(this, "Insert Restart Commands", "No restart file selected.");
         return;
     }
     const QString path = cur->data(Qt::UserRole).toString();

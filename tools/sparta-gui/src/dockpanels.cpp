@@ -78,7 +78,15 @@ PanelManager::PanelManager(QMainWindow *mainWindow, QWidget *editor) : QObject(m
         connect(d, &CDockWidget::viewToggled, this, [this, i](bool open) {
             if (open) {
                 restoreAreaVisibility(Panel(i));
-                if (!applyingArrangement) emit panelOpened(i);
+                if (!applyingArrangement) {
+                    // Six panels share the bottom dock area as tabs, so opening
+                    // one can leave it behind whichever tab is already in front
+                    // -- asking for a panel and apparently getting nothing.
+                    // Not while a whole arrangement is being applied, where
+                    // this would just leave whichever panel happened to be last.
+                    docks[i]->setAsCurrentTab();
+                    emit panelOpened(i);
+                }
             }
         });
     }

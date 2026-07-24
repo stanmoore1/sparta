@@ -45,6 +45,11 @@ constexpr int EDITOR_MIN_HEIGHT     = 160;
 /** Status-bar labels are elastic; these are floors, not fixed widths. */
 constexpr int STATUS_LABEL_MIN_WIDTH = 120;
 constexpr int PROGRESS_MIN_WIDTH     = 140;
+
+// ---- Session recovery ----------------------------------------------------
+/** seconds between recovery snapshots of unsaved editor content; 0 disables */
+constexpr int RECOVERY_INTERVAL_DEFAULT = 90;
+constexpr int RECOVERY_INTERVAL_MAX     = 3600;
 constexpr int ICON_SCALE            = 22;  ///< Status bar icon dimension in pixels
 constexpr int TOOLBAR_ICON_SIZE     = 24;  ///< Icon size in pixels for tool/status-bar buttons
 constexpr int TOOLBAR_BUTTON_MARGIN = 6; ///< Pixels added to the size hint for square tool buttons
