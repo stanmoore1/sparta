@@ -26,10 +26,11 @@ Quantified duplication on master:
 | `collisions_one_ambipolar<GASTALLY>` | collide.cpp:866-1163 | ~298 |
 | `collisions_group_ambipolar<GASTALLY>` | collide.cpp:1170-1600 | ~431 |
 
-That is ~1156 lines carrying four copies of one NTC skeleton. The
-recombination third-body block is copy-pasted verbatim four times
-(collide.cpp:509-521, 733-747, 992-1006, 1357-1372), as is the GASTALLY
-snapshot/tally pair. In addition, `src/KOKKOS/collide_vss_kokkos.cpp` contains
+That is ~1156 lines carrying four copies of one NTC skeleton. The GASTALLY
+snapshot/tally pair is copy-pasted verbatim four times. The recombination
+third-body block (collide.cpp:509-521, 733-747, 992-1006, 1357-1372) is
+near-identical four times, varying along two axes — see §2.1, which matters
+for how it is factored. In addition, `src/KOKKOS/collide_vss_kokkos.cpp` contains
 a line-for-line second copy of the VSS physics kernels (~600 lines:
 `SCATTER_*`, `EEXCHANGE_*`, `test/setup/perform_collision_kokkos`, `sample_bl`,
 etc.) differing only in accessor spellings (`params[i][j]` vs `d_params(i,j)`,
@@ -82,17 +83,20 @@ for icell in 0..nglocal:
       [E] resolve indices -> ipart/jpart # plist | plist[ilist[i]] | elist demux
                                          #   + e/e skip + electron-second swap (:956-981)
       [F] test_collision; on accept: record partner state (nn_last_partner :500-503)
-      [G] recomb 3rd-body setup          # verbatim x4, only (ii,jj) exclusions differ
-      [H] TALLY snapshot; setup_collision; perform_collision; TALLY emit
+      [G] recomb 3rd-body setup          # near-identical x4: exclusion indices AND
+                                         #   availability guard both vary (see 2.1)
+      [H] TALLY snapshot (verbatim x4); [ambi: capture jspecies :1017/:1383];
+          setup_collision; perform_collision; TALLY emit
       [I] post-reaction bookkeeping demux   # THE messy delta (see below)
       [J] pool-exhaustion break          # np<2 | group counts | nptotal<2
   [K] cell epilogue                      # ambi velambi reconciliation
-                                         #   (:1149-1161 == :1586-1598 verbatim)
+                                         #   (:1149-1161 / :1586-1598: code
+                                         #    identical, comments differ)
 ```
 
 Only `[F]→[H]` (test → setup → perform) is genuinely identical across all
-copies. The deltas concentrate in `[A]`, `[D]`, `[E]`, `[I]`, `[K]` — and they
-factor cleanly along **five orthogonal axes**:
+copies. The deltas concentrate in `[A]`, `[D]`, `[E]`, `[G]`, `[I]`, `[K]` —
+and they factor along **five axes**:
 
 | Axis | Variants today + pending | Touches |
 |---|---|---|
@@ -101,6 +105,34 @@ factor cleanly along **five orthogonal axes**:
 | Partner selection | random, nearcp, subcell (pending) | A, C, D, F, I |
 | Tally | off, gas-tally | H |
 | Weighting | uniform, SWPM (pending) | A, F(accept), post-F split, K |
+
+The axes are orthogonal in *composition* — any legal combination is expressible
+without a new loop — but they are not mutually ignorant: addressing supplies
+pool context that partner selection and particle-source resolution both read
+(§3.2, `PoolView`).
+
+### 2.1 The recombination block varies along two axes
+
+This block is the one most likely to be mis-factored, because it looks
+copy-pasted but is not. Both the exclusion indices *and* the
+third-particle-availability guard differ:
+
+| Variant | Availability guard | Exclusions `(ii,jj)` |
+|---|---|---|
+| flat/plain (:512-516) | `np <= 2` | `(i, j)` |
+| group (:736-742) | `np <= 2` | `(ilist[i], jlist[j])` |
+| flat/ambi (:995-1002) | `np == 1` **or** `np == 2 && jpart->ispecies != ambispecies` | `(i, j)` raw |
+| group/ambi (:1360-1369) | `np <= 2` | `(ilist[i], jgroup == egroup ? -1 : jlist[j])` |
+
+The flat/ambi guard is genuinely different logic, not a restatement: with an
+electron as J, two heavy particles in the cell still permit a third body, so
+`np == 2` is only disqualifying when J is *not* an electron.
+
+Consequences for the design: the shared helper must accept **both** an
+exclusion pair and a SOURCE-supplied availability predicate. Passing raw
+`(i,j)` in the flat/ambi case is safe and preserves the draw sequence exactly,
+because the third particle is drawn from `plist` (`k < np`) and can therefore
+never collide with an electron index `>= np`.
 
 The post-reaction demux `[I]` differences, verified case by case:
 
@@ -164,6 +196,27 @@ struct NTCContext {
 };
 ```
 
+ADDRESS additionally publishes a **`PoolView`** per pool — the contract that
+lets PARTNER and SOURCE stay addressing-agnostic without pretending the axes
+never interact:
+
+```cpp
+struct PoolView {
+  int *ilist, *jlist;      // AddressFlat: NULL (identity indexing)
+  int *ni, *nj;            // live pointers; group counts change under chemistry
+  bool same_pool;          // flat: always true; group: igroup == jgroup
+  int igroup, jgroup;      // flat: 0,0
+};
+```
+
+Three real dependencies motivate it, all verified in the group loop:
+the distinctness redraw `while (i == j)` must fire only when
+`igroup == jgroup` (:723-725); `find_nn` and `find_nn_group` have different
+signatures and operate on different index spaces; and ambipolar/group resolves
+electrons by testing `igroup == egroup` (:1334-1337) rather than `i < np`. For
+`AddressFlat` the view is a compile-time-degenerate constant (`same_pool =
+true`, null lists), so the base case folds away exactly as before.
+
 ### 3.2 Hook inventory per policy
 
 ```cpp
@@ -171,6 +224,8 @@ struct AddressFlat / AddressGrouped {
   cell_build(ctx);          // plist              | plist + p2g + glist + ngroup
   npools(ctx); pool_setup(k);// 1 pool over cell  | gpair enumeration
                              //                     (attempt_collision per group pair)
+                             // returns a PoolView; false = skip pool
+                             //   (group re-tests *ni/*nj, :693-694)
   pindex_i(i); pindex_j(j); // identity           | ilist[i] / jlist[j]
   move_particle(p, newgrp); // no-op              | addgroup/delgroup + list re-fetch
   remove(j);                // plist swap-pop     | delgroup + p2g repair (:800-812)
@@ -182,11 +237,16 @@ struct AddressFlat / AddressGrouped {
 struct SourcePlain / SourceAmbi {
   cell_prologue(ctx);       // no-op | pack elist from ionambi (:919-931 / :1249-1264)
   attempt_count(np);        // np    | np + nelectron
-  resolve(i,j, ipart,jpart);// plist only | elist demux + e/e short-circuit
+  resolve(i,j,pool, ipart,jpart);
+                            // plist only | elist demux + e/e short-circuit
                             //   + electron-second swap (:956-981; Flat only —
                             //   group deliberately has no e/e skip, :1339-1345,
-                            //   comment must be carried over)
-  recomb_excludes();        // (ii,jj) values per variant, see RNG contract
+                            //   comment must be carried over; group keys on
+                            //   pool.igroup == egroup, not i < np)
+  recomb_available(np,jpart);// np > 2 | ambi two-condition guard (see 2.1)
+  recomb_excludes(i,j,pool);// (ii,jj) per variant (see 2.1 table)
+  pre_collision(jpart);     // no-op | capture jspecies for ambi_reset
+                            //   (:1017 / :1383)
   post_reaction<ADDRESS>(); // plain demux | ambi_reset + electron demux,
                             //   written ONCE over ADDRESS primitives
   cell_epilogue(ctx);       // no-op | velambi reconciliation + conservation check
@@ -195,8 +255,9 @@ struct SourcePlain / SourceAmbi {
 struct PartnerRandom / PartnerNearCP / PartnerSubcell<DIM> {
   cell_setup(ctx);          // no-op | realloc+memset nn (:447-450)
                             //       | subcell binning: nsub = np^(1/DIM), rebin
-  pool_setup(ctx);          // no-op | per-group-pair nn memset (:699-705) | no-op
-  select(i) -> j;           // uniform redraw loop | find_nn/find_nn_group
+  pool_setup(ctx,pool);     // no-op | per-group-pair nn memset (:699-705) | no-op
+  select(i,pool) -> j;      // uniform draw, redrawn for distinctness only if
+                            //   pool.same_pool | find_nn / find_nn_group
                             // | same-subcell pick else expanding shell search
   record(i,j);              // no-op | nn_last_partner writes (:500-503) | same
   on_delete(j, np);         // no-op | nn[j] = nn[np] (:554, :811) | rebin
@@ -313,13 +374,28 @@ select-i draw(s), select-j draw(s), test draw, recomb draws,
 physics draws (inside perform), demux id draw (ambi electron->neutral)
 ```
 
-identical to all four current loops. The recombination helper takes
-per-variant `(ii,jj)` exclusion values so the `while (k == ii || k == jj)`
-redraw sequence is reproduced exactly; for flat/ambi, passing the raw `i,j`
-even when `>= np` reproduces :1000-1001 bit-for-bit, since `k < np` can never
-match an electron index. Every hook must document which draws it consumes;
-any intentional sequence change requires maintainer sign-off and new golden
-logs.
+identical to all four current loops.
+
+The recombination helper is the subtlest case and needs **both** SOURCE hooks
+of §2.1 to preserve the sequence:
+
+- `recomb_available()` must reproduce each variant's guard exactly, because
+  the guard decides whether the `k` draws happen at all. Collapsing the
+  flat/ambi two-condition guard into `np <= 2` would skip a draw that the
+  current code takes (`np == 2` with an electron J), desynchronizing the RNG
+  stream for the rest of the run.
+- `recomb_excludes()` must reproduce the `while (k == ii || k == jj)` redraw
+  sequence. For flat/ambi, passing raw `i,j` even when `>= np` reproduces
+  :1000-1001 bit-for-bit, since `k < np` can never match an electron index.
+
+Note also that the initial acceptance draw
+(`random->uniform() > recomb_boost_inverse`) precedes the guard in all four
+variants and is therefore taken unconditionally whenever `recomb_ijflag` is
+set — the helper must keep that ordering rather than short-circuiting on
+availability first.
+
+Every hook must document which draws it consumes; any intentional sequence
+change requires maintainer sign-off and new golden logs.
 
 ## 4. How the pending branches land
 
@@ -450,11 +526,20 @@ physically validate it before trusting it as a baseline. Add scripts capturing
 golden thermo logs at fixed seeds for the input matrix in §8.
 
 **Stage 1 — extract shared helpers in place.**
-Factor the verbatim-duplicated blocks into inline private members used by all
-four *existing* loops: recomb third-body setup (4 copies), tally
-snapshot/emit pair (4 copies), `push_dellist`, `grow_plist`, elist grow/pack
-helpers (2 copies each), velambi reconciliation epilogue (2 copies). Pure
-code motion; bit-identical by construction; shrinks every later diff.
+Factor the duplicated blocks into inline private members used by all four
+*existing* loops: tally snapshot/emit pair (4 copies), `push_dellist`,
+`grow_plist`, elist grow/pack helpers (2 copies each), velambi reconciliation
+epilogue (2 copies) — these are verbatim duplicates, so their extraction is
+pure code motion and bit-identical by construction.
+
+The recomb third-body block is the exception: it is a *parameterized*
+extraction (guard + exclusions, §2.1), not code motion, so it cannot be
+validated by inspection alone. Gate it on the ambipolar golden logs
+specifically — `examples/ambi`, `examples/ambi_3body`, and the Stage-0
+ambi+tally input — since flat/ambi is the only variant whose guard differs
+and a wrong collapse there desynchronizes the RNG stream rather than
+producing an obviously bad answer. Consider landing it as its own commit so a
+bisect can isolate it.
 
 **Stage 2 — skeleton + flat/plain path (the architectural PR).**
 New: `collide_ntc_loop.h` (skeleton + `NTCContext`, including the pool loop
@@ -555,8 +640,11 @@ design.
 
 1. **RNG sequence breaks** (highest likelihood). Mitigated by the per-hook
    draw-order contract (§3.6), fine stage granularity, byte-exact golden logs
-   including reaction-heavy inputs, and the `(ii,jj)` recomb-exclusion
-   technique.
+   including reaction-heavy inputs, and the two-part recomb contract
+   (availability predicate + exclusion pair, §2.1). The specific trap: the
+   four recomb blocks *look* identical, and the natural "deduplicate the
+   obvious copy-paste" move silently changes the flat/ambi guard. A reviewer
+   should treat any single-parameter recomb helper as a red flag.
 2. **Base-case codegen regression from the pool abstraction.** Identity
    policies are designed to constant-fold (`AddressFlat::npools() == 1`);
    verified by the asm/`perf stat` gate. Fallback if a compiler refuses: a
@@ -564,9 +652,14 @@ design.
    loop — dead-branch elimination is guaranteed.
 3. **Ambi demux unification bugs.** The 4-way jpart demux and its p2g
    interaction (:1555-1564) are subtle. Mitigated by Stage 1 shrinking the
-   diff to near-pure motion, PR comments mapping each case to old line
-   numbers, ambi_3body + chem goldens, and keeping the `ambi_check()` debug
-   validation callable.
+   diff, PR comments mapping each case to old line numbers, ambi_3body + chem
+   goldens, and keeping the `ambi_check()` debug validation callable.
+7. **Under-modelled axis interaction.** The five axes compose freely but
+   exchange pool context (§3.2 `PoolView`); an implementer who treats them as
+   fully independent will get the group distinctness redraw or the
+   `igroup == egroup` electron resolution wrong. The `PoolView` contract is
+   the mitigation — review it before Stage 3, which is where the interaction
+   first becomes load-bearing.
 4. **Template bloat / compile time.** Bounded by enumerated instantiation and
    per-family TUs; measured per stage.
 5. **Kokkos divergence during CPU stages 2-4.** Zero risk by construction:
@@ -607,3 +700,29 @@ design.
   loops, `memory->create/grow` with DELTA chunking, `template<int>` flags as
   the hot-loop specialization idiom, per-file enums, `copymode` guard for any
   new owned members, Kokkos DualView mirror pattern.
+
+## Appendix B: verification status of claims in this document
+
+Every line reference above was checked against master (09391fe) before
+publication. Confirmed by direct reading: the four loop line ranges; the
+dispatch dead-code bug (:401 and :404 test the same condition); the
+ambi+nearcp guard (:150); the flat/ambi e/e skip and electron-second swap
+(:956-981); the group/ambi commented-out e/e skip and its NOTE (:1339-1345);
+the differing elist index conventions (`elist[i-np]` flat vs `elist[i]`
+group); the gpair pool enumeration with per-pair `attempt_collision` and
+`nattempt_one` accumulation (:658-671); the Kokkos group/tally guards
+(:407-411), its mirrored dead-code branch (:432), and its State-by-reference
+signatures (collide_vss_kokkos.h:90-97); that exactly two subclasses of
+`Collide` exist; and that no code outside the collide files calls the
+per-pair virtuals or reads `precoln`/`postcoln` (the react classes mention
+them in comments only), which is what makes the Stage-6 signature change
+safe.
+
+Two claims were corrected during that audit and are stated correctly above:
+the recomb block is near-identical rather than verbatim (§2.1), and the two
+velambi epilogues are identical in code but not in their comments.
+
+Not verifiable by reading alone, and therefore deliberately expressed as
+gates rather than assertions: that the base-case instantiation compiles to
+code equivalent to today's `collisions_one<0,0>` (Stage 2 asm/`perf stat`
+gate), and the ≤1% timing bound (§8).
