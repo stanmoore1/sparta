@@ -103,8 +103,6 @@ if (NOT BUILD_DOC_ONLY)
       list(APPEND PROJECT_SOURCES
         ${CMAKE_SOURCE_DIR}/src/vtkviewer.cpp
         ${CMAKE_SOURCE_DIR}/src/vtkviewer.h
-        ${CMAKE_SOURCE_DIR}/src/casecanvas.cpp
-        ${CMAKE_SOURCE_DIR}/src/casecanvas.h
         ${CMAKE_SOURCE_DIR}/src/vtkfilters.cpp
         ${CMAKE_SOURCE_DIR}/src/vtkfilters.h)
     else()

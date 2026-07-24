@@ -56,7 +56,6 @@ class HistoryPanel;
 class StdCapture;
 class URLDownloader;
 class VtkViewer;   // only defined when built with SPARTA_GUI_HAVE_VTK
-class CaseCanvas;  // only defined when built with SPARTA_GUI_HAVE_VTK
 class WelcomeScreen;
 
 /**
@@ -270,7 +269,6 @@ private slots:
     /** @brief Render the current simulation state to VTK and show it in the 3D viewer */
     void renderVtkSnapshot();
     /** @brief Open the visual case-setup canvas seeded from the current deck */
-    void openCaseCanvas();
 #endif
 
     /** @brief Open an external data file and plot selected columns */
@@ -487,8 +485,6 @@ private:
     ImageViewer *imagewindow; ///< Window for viewing single images
 #if defined(SPARTA_GUI_HAVE_VTK)
     VtkViewer *vtkViewer = nullptr; ///< Interactive VTK 3D viewer window (lazy)
-    CaseCanvas *caseCanvas = nullptr; ///< Visual case-setup canvas (lazy)
-    bool applyingCanvasEdit = false;  ///< guard: suppress text->scene while scene->text edits
 #endif
     ChartWindow *chartwindow; ///< Window for displaying charts
     SlideShow *slideshow;    ///< Window for image slideshow
