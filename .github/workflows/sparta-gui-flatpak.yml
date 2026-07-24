@@ -6,8 +6,10 @@
 # second module builds SPARTA-GUI itself in plugin mode. The GUI finds the
 # library on the flatpak LD_LIBRARY_PATH at runtime.
 #
-# NOTE: the manifest points at this repository and branch, so the branch must
-# be pushed before this workflow can succeed.
+# NOTE: the manifest clones from this repository, so the branch under test must
+# be pushed before this workflow can succeed. The build step rewrites the
+# manifest's branch to the one being built, so the pinned value in the manifest
+# only matters for local builds.
 
 name: build-sparta-gui-flatpak
 
@@ -46,6 +48,13 @@ jobs:
         run: |
           VERSION=1.0.0
           MANIFEST=tools/sparta-gui/packaging/org.sparta.sparta-gui.yml
+          # The manifest names the branch to clone, so on any branch other than
+          # the one it happens to be pinned to it would quietly build somebody
+          # else's code. Point it at the branch actually being built.
+          BRANCH="${GITHUB_REF_NAME}"
+          echo "building flatpak from branch: ${BRANCH}"
+          sed -i "s|branch: claude/sparta-gui-[A-Za-z0-9._-]*|branch: ${BRANCH}|g" "${MANIFEST}"
+          grep -n 'branch:' "${MANIFEST}"
           flatpak-builder --force-clean --verbose \
             --repo=flatpak-repo --install-deps-from=flathub --user --ccache \
             --default-branch="${VERSION}" \
