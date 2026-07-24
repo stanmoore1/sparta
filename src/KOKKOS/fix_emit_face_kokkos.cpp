@@ -189,8 +189,12 @@ void FixEmitFaceKokkos::perform_task()
   //   so region rejection still yields ndot*dt/fnum kept particles
 
   nperdot = 0.0;
-  if (ndot > 0.0 && sumfrac > 0.0)
+  if (ndot > 0.0 && sumfrac > 0.0) {
     nperdot = ndot * dt / update->fnum / sumfrac;
+    if (nperdot > (double) MAXSMALLINT)
+      error->all(FLERR,"Fix emit/face ndot per-face insertion count exceeds "
+                 "32-bit int; reduce ndot or increase fnum");
+  }
 
   // insert particles for each task = cell/face pair
   // ntarget/ninsert is either perspecies or for all species

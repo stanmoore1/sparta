@@ -142,6 +142,34 @@ E: Cannot use fix emit/face n > 0 with perspecies yes
 This is because the perspecies option calculates the
 number of particles to insert itself.
 
+E: Cannot use fix emit/face ndot > 0 with n > 0
+
+The n and ndot keywords both set the insertion count and
+cannot be combined.
+
+E: Cannot use fix emit/face ndot > 0 with perspecies yes
+
+This is because the perspecies option calculates the
+number of particles to insert itself.
+
+E: Fix emit/face n with region requires too many insertion attempts
+
+The region covers so small a fraction of the emitting faces that the
+number of insertion attempts needed to deliver the requested count
+overflows a 32-bit int.  Restrict the emitting faces or coarsen the
+grid at the boundary.
+
+E: Fix emit/face ndot per-face insertion count exceeds 32-bit int
+
+The requested ndot, combined with the current timestep and fnum,
+would insert more particles on one face than a 32-bit int can hold.
+Reduce ndot or increase fnum.
+
+W: Fix emit/face region does not overlap any emitting face
+
+No particles will be inserted, since every insertion position would
+be rejected by the region test.
+
 E: Cannot use fix emit/face on periodic boundary
 
 Self-explanatory.

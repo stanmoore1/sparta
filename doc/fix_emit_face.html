@@ -27,9 +27,10 @@
 
 <LI>zero or more keyword/value(s) pairs may be appended 
 
-<LI>keyword = <I>n</I> or <I>nevery</I> or <I>perspecies</I> or <I>region</I> or <I>modulate</I> or <I>subsonic</I> or <I>twopass</I> 
+<LI>keyword = <I>n</I> or <I>ndot</I> or <I>nevery</I> or <I>perspecies</I> or <I>region</I> or <I>modulate</I> or <I>subsonic</I> or <I>twopass</I> 
 
 <PRE>  <I>n</I> value = Np = number of particles to create
+  <I>ndot</I> value = Ndot = number of real particles/second to create
   <I>nevery</I> value = Nstep = add particles every this many timesteps
   <I>perspecies</I> value = <I>yes</I> or <I>no</I>
   <I>region</I> value = region-ID
@@ -46,6 +47,7 @@
 </P>
 <PRE>fix in emit/face air all
 fix in emit/face mymix xlo yhi n 1000 nevery 10 region circle
+fix in emit/face mymix xlo ndot 1.0e18 perspecies no region circle
 fix in emit/face air xlo subsonic 0.1 300
 fix in emit/face air xhi subsonic 0.05 NULL twopass 
 </PRE>
@@ -125,6 +127,28 @@ added on each insertion timestep.  This is done by dividing <I>Np</I> by
 the total number of grid cells that are adjacent to the specified box
 faces and adding an equal number of particles per grid cell.
 </P>
+<P>The <I>ndot</I> keyword specifies the influx directly as a number of real
+particles per second, <I>Ndot</I>, rather than requiring it to be derived
+from the mixture number density and streaming velocity.  On each
+insertion timestep the number of simulation particles to add, summed
+over all emitting grid cell faces, is computed as <I>Ndot</I> * <I>dt</I> /
+<I>fnum</I>, where <I>dt</I> is the current timestep size as set by the
+<A HREF = "timestep.html">timestep</A> command and <I>fnum</I> is the ratio of real to
+simulation particles as set by the <A HREF = "global.html">global</A> command.
+Because this conversion is performed every insertion timestep, the
+target real particle flux <I>Ndot</I> is held fixed even if <I>dt</I> or <I>fnum</I>
+change during a simulation.  As with the unmodulated insertion count,
+if the resulting per-face count has a fractional value, the extra
+particle is added depending on the value of a random number.  Unlike
+the <I>n</I> keyword, the <I>fnum</I> and <I>nrho</I> settings are still used (via the
+conversion above), but the streaming velocity and thermal temperature
+no longer determine the total number of inserted particles, only their
+velocities.
+</P>
+<P>The <I>n</I> and <I>ndot</I> keywords cannot be used together.  Like the <I>n</I>
+keyword, <I>ndot</I> can only be used with a <I>perspecies</I> setting of <I>no</I>,
+and cannot be used with the <I>modulate</I> or <I>subsonic</I> keywords.
+</P>
 <P>The <I>nevery</I> keyword determines how often particles are added.  If
 <I>Nstep</I> > 1, this may give a non-continuous, clumpy distribution in
 the inlet flow field.
@@ -166,13 +190,38 @@ that the <I>side</I> option for the <A HREF = "region.html">region</A> command c
 used to define whether the inside or outside of the geometric region
 is considered to be "in" the region.
 </P>
-<P>IMPORTANT NOTE: If the <I>region</I> and <I>n</I> keywords are used together,
-less than N particles may be added on an insertion timestep.  This is
-because grid cells will be candidates for particle insertion, unless
-they are entirely outside the bounding box that encloses the region.
-Particles those grid cells attempt to add are included in the count
-for N, even if some or all of the particle insertions are rejected due
-to not being inside the region.
+<P>When a <I>region</I> restricts insertion, the grid cell faces touching an
+emitting boundary may lie only partially inside the region.  For the
+default flux-based insertion (i.e. when neither <I>n</I> nor <I>ndot</I> is
+used), this is handled correctly with no adjustment: the number of
+particles inserted on a face is proportional to its area, and rejecting
+per-particle positions that fall outside the region leaves a count
+proportional to the in-region area, which is the physically correct
+flux through that portion of the boundary.
+</P>
+<P>For the <I>n</I> and <I>ndot</I> keywords, which instead request a fixed total
+count or rate, the fraction of each candidate face that lies inside the
+region is estimated (by sampling a fixed lattice of points on the face)
+and the requested count/rate is spread over the summed in-region
+fraction of all candidate faces rather than over the raw number of
+faces.  This compensates for the per-particle rejection so that, on
+average, the full requested <I>Np</I> count (or <I>Ndot</I> rate) of particles is
+inserted through the region opening, rather than a smaller number.  The
+count on any single timestep will fluctuate about this target because
+the region test is applied per particle.
+</P>
+<P>IMPORTANT NOTE: Because insertion attempts are spread evenly over all
+candidate faces, the number of attempts needed to deliver the requested
+count grows as the region covers a smaller fraction of those faces.  If
+the region covers only a tiny sliver, the required attempt count can
+become impractically large, and SPARTA will stop with an error for the
+<I>n</I> keyword.  Restricting the emitting <I>face</I> list, or using a coarser
+grid at the boundary, reduces the number of candidate faces that lie
+outside the region.  Note also that if <I>Np</I> is smaller than the total
+number of candidate faces, only some faces receive an insertion attempt
+at all, so the particles delivered on a given timestep may not sample
+the region opening uniformly.  If the region does not overlap any
+emitting face, a warning is issued and no particles are inserted.
 </P>
 <P>The <I>modulate</I> keyword can be used to multiple the count of particles
 inserted at each timestep by a prefactor.  The prefactor is calcalated
@@ -275,8 +324,9 @@ Particles cannot be emitted from <I>z</I> faces of the simluation box for a
 2d simulation.
 </P>
 <P>A <I>perspecies</I> setting of <I>yes</I> can only be used with an <I>n</I> setting
-of <I>Np</I> = 0.  Likewise, the <I>modulate</I> keyword can only be used with
-an <I>n</I> setting of <I>Np</I> = 0.
+of <I>Np</I> = 0 and without the <I>ndot</I> keyword.  Likewise, the <I>modulate</I>
+keyword can only be used with an <I>n</I> setting of <I>Np</I> = 0 and without
+the <I>ndot</I> keyword.
 </P>
 <P>A warning will be issued if a specified face has an inward normal in a
 direction opposing the streaming velocity.  Particles will still be
@@ -294,8 +344,9 @@ emit/face/file</A>
 </P>
 <P><B>Default:</B>
 </P>
-<P>The keyword defaults are n = 0, nevery = 1, perspecies = yes, region =
-none, no modulate setting, no subsonic settings, no twopass setting.
+<P>The keyword defaults are n = 0, ndot = 0, nevery = 1, perspecies = yes,
+region = none, no modulate setting, no subsonic settings, no twopass
+setting.
 </P>
 <HR>
 

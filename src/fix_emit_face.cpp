@@ -261,6 +261,13 @@ void FixEmitFace::grid_changed()
     double sumfrac_me = 0.0;
     for (int i = 0; i < ntask; i++) sumfrac_me += tasks[i].region_frac;
     MPI_Allreduce(&sumfrac_me,&sumfrac,1,MPI_DOUBLE,MPI_SUM,world);
+
+    // no emitting face overlaps the region, so every insertion would be
+    //   rejected; warn rather than silently emitting nothing
+
+    if (alltask && sumfrac == 0.0 && comm->me == 0)
+      error->warning(FLERR,"Fix emit/face region does not overlap any "
+                     "emitting face; no particles will be inserted");
   }
 
   if (np > 0) {
@@ -270,10 +277,19 @@ void FixEmitFace::grid_changed()
     // scaled up by alltask/sumfrac (>= 1) to offset region rejection,
     //   so the expected # of kept particles is np
     // reduces to ntot = np when no region is used (sumfrac == alltask)
+    // computed in double first: if the region covers only a tiny sliver of
+    //   the emitting faces the scale factor blows up, and silently
+    //   overflowing the int would insert nothing at all
 
     int ntot = np;
-    if (sumfrac > 0.0)
-      ntot = static_cast<int> (((double) np)*alltask/sumfrac + 0.5);
+    if (sumfrac > 0.0) {
+      double ntot_double = ((double) np)*alltask/sumfrac;
+      if (ntot_double > (double) MAXSMALLINT)
+        error->all(FLERR,"Fix emit/face n with region requires too many "
+                   "insertion attempts; region covers too small a fraction "
+                   "of the emitting faces");
+      ntot = static_cast<int> (ntot_double + 0.5);
+    }
 
     if (alltask) {
       npertask = ntot / alltask;
@@ -523,6 +539,23 @@ double FixEmitFace::region_face_fraction(Task *task)
   double *lo = task->lo;
   double *hi = task->hi;
 
+  // fast reject: face lies entirely outside the region bounding box
+  // only valid for an interior region, since for an exterior ("side out")
+  //   region points outside the bounding box are inside the region
+  // avoids sampling every face when the region covers a small part of
+  //   the boundary, which matters when tasks are rebuilt each rebalance
+  // strict inequalities, so a face touching the bounding box exactly is
+  //   still sampled rather than rejected
+
+  if (region->interior && region->bboxflag) {
+    if (hi[0] < region->extent_xlo || lo[0] > region->extent_xhi ||
+        hi[1] < region->extent_ylo || lo[1] > region->extent_yhi)
+      return 0.0;
+    if (dimension == 3 &&
+        (hi[2] < region->extent_zlo || lo[2] > region->extent_zhi))
+      return 0.0;
+  }
+
   // lattice resolution per parallel dimension of the face
   // face is a segment in 2d (vary pdim) and a rectangle in 3d (vary pdim,qdim)
 
@@ -595,8 +628,12 @@ void FixEmitFace::perform_task_onepass()
   // recomputed each step so it tracks changes in dt and fnum
 
   double nperdot = 0.0;
-  if (ndot > 0.0 && sumfrac > 0.0)
+  if (ndot > 0.0 && sumfrac > 0.0) {
     nperdot = ndot * dt / update->fnum / sumfrac;
+    if (nperdot > (double) MAXSMALLINT)
+      error->all(FLERR,"Fix emit/face ndot per-face insertion count exceeds "
+                 "32-bit int; reduce ndot or increase fnum");
+  }
 
   // insert particles for each task = cell/face pair
   // ntarget/ninsert is either perspecies or for all species
@@ -787,8 +824,12 @@ void FixEmitFace::perform_task_twopass()
   // recomputed each step so it tracks changes in dt and fnum
 
   double nperdot = 0.0;
-  if (ndot > 0.0 && sumfrac > 0.0)
+  if (ndot > 0.0 && sumfrac > 0.0) {
     nperdot = ndot * dt / update->fnum / sumfrac;
+    if (nperdot > (double) MAXSMALLINT)
+      error->all(FLERR,"Fix emit/face ndot per-face insertion count exceeds "
+                 "32-bit int; reduce ndot or increase fnum");
+  }
 
   // insert particles for each task = cell/face pair
   // ntarget/ninsert is either perspecies or for all species

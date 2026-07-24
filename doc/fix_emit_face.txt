@@ -199,6 +199,19 @@ inserted through the region opening, rather than a smaller number.  The
 count on any single timestep will fluctuate about this target because
 the region test is applied per particle.
 
+IMPORTANT NOTE: Because insertion attempts are spread evenly over all
+candidate faces, the number of attempts needed to deliver the requested
+count grows as the region covers a smaller fraction of those faces.  If
+the region covers only a tiny sliver, the required attempt count can
+become impractically large, and SPARTA will stop with an error for the
+{n} keyword.  Restricting the emitting {face} list, or using a coarser
+grid at the boundary, reduces the number of candidate faces that lie
+outside the region.  Note also that if {Np} is smaller than the total
+number of candidate faces, only some faces receive an insertion attempt
+at all, so the particles delivered on a given timestep may not sample
+the region opening uniformly.  If the region does not overlap any
+emitting face, a warning is issued and no particles are inserted.
+
 The {modulate} keyword can be used to multiple the count of particles
 inserted at each timestep by a prefactor.  The prefactor is calcalated
 at each insertion timestep by invoking the equal-style variable whose
