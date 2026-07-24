@@ -135,7 +135,7 @@ void SpartaGui::setupUi(QSettings &settings, QFont &allFont, QFont &monoFont)
     textEdit->setAcceptDrops(true);
     // the editor applies its own banner watermark stylesheet in its constructor;
     // the color scheme (background/foreground) is applied later via applyEditorColorScheme()
-    textEdit->setMinimumSize(Cfg::MINIMUM_WIDTH, Cfg::MINIMUM_HEIGHT);
+    textEdit->setMinimumSize(Cfg::EDITOR_MIN_WIDTH, Cfg::EDITOR_MIN_HEIGHT);
 
     // the central area shows either the welcome screen (landing) or the editor;
     // a QStackedWidget lets them swap without touching the docked layout
@@ -231,8 +231,10 @@ void SpartaGui::setupUi(QSettings &settings, QFont &allFont, QFont &monoFont)
     // use default so the background logo is fully shown
     // use last values unless overridden from command-line
     // do not accept a geometry smaller than minimum, revert to default instead
-    if (mainx < Cfg::MINIMUM_WIDTH) mainx = settings.value(Keys::MAINX, 1024).toInt();
-    if (mainy < Cfg::MINIMUM_HEIGHT) mainy = settings.value(Keys::MAINY, 512).toInt();
+    if (mainx < Cfg::MINIMUM_WIDTH)
+        mainx = settings.value(Keys::MAINX, Cfg::DEFAULT_MAIN_WIDTH).toInt();
+    if (mainy < Cfg::MINIMUM_HEIGHT)
+        mainy = settings.value(Keys::MAINY, Cfg::DEFAULT_MAIN_HEIGHT).toInt();
     resize(mainx, mainy);
 
     createVariableWindow();
@@ -558,18 +560,27 @@ void SpartaGui::createStatusBar()
     statusbar->addWidget(cpuuse);
     cpuuse->hide();
 
+    // The status bar sets the floor for how narrow the window can get, so its
+    // labels are elastic rather than fixed: between them a 300px status, a
+    // 400px directory label and a 400px progress bar demanded over 1100px of
+    // width before any panel had a say. Give each a modest minimum and let the
+    // layout distribute what is actually available, eliding the directory path
+    // (from the left, so the interesting trailing component survives).
     status = new QLabel(Cfg::STATUS_READY);
-    status->setFixedWidth(300);
+    status->setMinimumWidth(Cfg::STATUS_LABEL_MIN_WIDTH);
+    status->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     statusbar->addWidget(status);
 
-    dirstatus = new QLabel(QString(" Directory: (unknown)"));
-    dirstatus->setMinimumWidth(Cfg::MINIMUM_WIDTH);
+    dirstatus = new ElidedLabel(QString(" Directory: (unknown)"));
+    dirstatus->setMinimumWidth(Cfg::STATUS_LABEL_MIN_WIDTH);
+    dirstatus->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     dirstatus->show();
-    statusbar->addWidget(dirstatus);
+    statusbar->addWidget(dirstatus, 1);
 
     progress = new QProgressBar();
     progress->setRange(0, Cfg::PROGRESS_MAXIMUM);
-    progress->setMinimumWidth(Cfg::MINIMUM_WIDTH);
+    progress->setMinimumWidth(Cfg::PROGRESS_MIN_WIDTH);
+    progress->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     progress->hide();
     statusbar->addWidget(progress);
 }

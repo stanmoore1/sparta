@@ -14,6 +14,7 @@
 
 #include <QAction>
 #include <QIcon>
+#include <QLabel>
 #include <QMenu>
 #include <QSize>
 #include <QString>
@@ -253,6 +254,43 @@ extern bool isStdoutSilenced();
  * @param active true when StdCapture starts capturing, false when it stops
  */
 extern void notifyCaptureState(bool active);
+
+/**
+ * @brief A QLabel that elides its text instead of forcing the window wider
+ *
+ * A plain QLabel reports the full width of its text as its size hint, so a
+ * long value -- a working-directory path, say -- silently becomes a floor on
+ * how narrow the window can be. This one keeps the full text for the tooltip
+ * and paints an elided copy sized to whatever width it is actually given.
+ *
+ * Elides from the left by default, which suits paths: the trailing components
+ * identify the directory, the leading ones rarely do.
+ */
+class ElidedLabel : public QLabel {
+    Q_OBJECT
+
+public:
+    explicit ElidedLabel(const QString &text = QString(), QWidget *parent = nullptr,
+                         Qt::TextElideMode mode = Qt::ElideLeft);
+
+    /** @brief Set the text; the full value is kept for the tooltip */
+    void setText(const QString &text);
+
+    /** @brief The unabridged text, regardless of what is currently painted */
+    QString fullText() const { return full; }
+
+    QSize minimumSizeHint() const override;
+
+protected:
+    void resizeEvent(QResizeEvent *event) override;
+
+private:
+    /** @brief Re-elide @ref full to the current width */
+    void updateElided();
+
+    QString full;
+    Qt::TextElideMode elideMode;
+};
 
 /**
  * @brief RAII guard that silences stdout for the duration of its scope

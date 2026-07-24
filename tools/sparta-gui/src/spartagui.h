@@ -20,6 +20,7 @@
 #include <string>
 #include <vector>
 
+#include "helpers.h"   // ElidedLabel
 #include "inputcheck.h"
 #include "spartawrapper.h"
 
@@ -502,7 +503,7 @@ private:
     SlideShow *slideshow;    ///< Window for image slideshow
     QTimer *logupdater;      ///< Timer for periodic log updates
     QTimer *recoveryTimer = nullptr; ///< Periodic crash-recovery autosave timer
-    QLabel *dirstatus;       ///< Status bar label showing current directory
+    ElidedLabel *dirstatus;  ///< Status bar label showing current directory (elided when narrow)
     QProgressBar *progress;  ///< Progress bar for long operations
     Preferences *prefdialog; ///< Preferences dialog
     QLabel *spartastatus;    ///< Status bar label for SPARTA state

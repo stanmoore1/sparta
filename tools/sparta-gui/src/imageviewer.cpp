@@ -1225,7 +1225,11 @@ void ImageViewer::createImage()
     // show image
     image = newImage;
     imageLabel->setPixmap(QPixmap::fromImage(image));
-    imageLabel->setMinimumSize(image.width(), image.height());
+    // Size the label to the image but do not make that a *minimum*: a rendered
+    // snapshot may be several thousand pixels across, and a minimum that large
+    // propagates out through the dock layout and forces the whole window wider
+    // than the screen. The enclosing scroll area exists precisely so a large
+    // image can be panned instead.
     imageLabel->resize(image.width(), image.height());
     adjustWindowSize();
     restoreRenderState();

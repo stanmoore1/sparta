@@ -33,6 +33,18 @@ constexpr int DEFAULT_BUFLEN =
 constexpr int MAX_DEFAULT_THREADS   = 16;  ///< Maximum default thread count
 constexpr int MINIMUM_WIDTH         = 400; ///< Minimum window width in pixels
 constexpr int MINIMUM_HEIGHT        = 300; ///< Minimum window height in pixels
+/** Default main-window size. Tall enough for an editor plus a docked panel
+ *  row; the old 1024x512 could not show both without squeezing each. */
+constexpr int DEFAULT_MAIN_WIDTH    = 1280;
+constexpr int DEFAULT_MAIN_HEIGHT   = 800;
+/** Editor floor. Deliberately smaller than MINIMUM_WIDTH/HEIGHT, which are
+ *  reused by many widgets: the editor sits inside the dock layout, so its
+ *  floor also bounds how far the surrounding panels can be resized. */
+constexpr int EDITOR_MIN_WIDTH      = 240;
+constexpr int EDITOR_MIN_HEIGHT     = 160;
+/** Status-bar labels are elastic; these are floors, not fixed widths. */
+constexpr int STATUS_LABEL_MIN_WIDTH = 120;
+constexpr int PROGRESS_MIN_WIDTH     = 140;
 constexpr int ICON_SCALE            = 22;  ///< Status bar icon dimension in pixels
 constexpr int TOOLBAR_ICON_SIZE     = 24;  ///< Icon size in pixels for tool/status-bar buttons
 constexpr int TOOLBAR_BUTTON_MARGIN = 6; ///< Pixels added to the size hint for square tool buttons

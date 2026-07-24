@@ -707,3 +707,41 @@ void applyWindowFlags(QWidget *window)
 // Local Variables:
 // c-basic-offset: 4
 // End:
+
+// ---------------------------------------------------------------------------
+// ElidedLabel
+// ---------------------------------------------------------------------------
+
+ElidedLabel::ElidedLabel(const QString &text, QWidget *parent, Qt::TextElideMode mode)
+    : QLabel(parent), elideMode(mode)
+{
+    setText(text);
+}
+
+void ElidedLabel::setText(const QString &text)
+{
+    full = text;
+    // the full value stays reachable even when what is painted is abridged
+    setToolTip(text);
+    updateElided();
+}
+
+void ElidedLabel::updateElided()
+{
+    const QFontMetrics fm(font());
+    QLabel::setText(fm.elidedText(full, elideMode, width()));
+}
+
+QSize ElidedLabel::minimumSizeHint() const
+{
+    // Report only the ellipsis width, not the text width: reporting the latter
+    // is exactly what makes a plain QLabel dictate the window's minimum size.
+    const QFontMetrics fm(font());
+    return {fm.horizontalAdvance(QStringLiteral("...")), QLabel::minimumSizeHint().height()};
+}
+
+void ElidedLabel::resizeEvent(QResizeEvent *event)
+{
+    QLabel::resizeEvent(event);
+    updateElided();
+}
