@@ -36,14 +36,13 @@ namespace {
 // stable, unique object names -- required by CDockManager::saveState/restoreState
 const char *const PANEL_OBJECT_NAME[PanelManager::NPanels] = {"dockOutput", "dockCharts",
                                                               "dockImage", "dockSlideShow",
-                                                              "dockVariables", "dockJobs",
-                                                              "dockSweep", "dockHistory",
-                                                              "dockDiagnostics", "dockProjectFiles"};
+                                                              "dockVariables", "dockSweep",
+                                                              "dockHistory", "dockDiagnostics",
+                                                              "dockProjectFiles"};
 const char *const PANEL_TITLE[PanelManager::NPanels] = {"Output", "Charts", "Image",
                                                         "Slide Show", "Variables",
-                                                        "Cluster Jobs", "Parameter Sweep",
-                                                        "Run History", "Diagnostics",
-                                                        "Project Files"};
+                                                        "Parameter Sweep", "Run History",
+                                                        "Diagnostics", "Project Files"};
 
 // Chart/Image/Slide Show host widgets manage their own scrolling/zooming and
 // must not be wrapped in an extra QScrollArea; Output (QPlainTextEdit) and
@@ -221,9 +220,8 @@ void PanelManager::applyDefaultLayout()
     dm->addDockWidgetTabToArea(docks[Slide], imageArea);
     CDockAreaWidget *logArea = dm->addDockWidget(ads::BottomDockWidgetArea, docks[Log]);
     dm->addDockWidgetTabToArea(docks[Variables], logArea);
-    // on-demand tool panels (Cluster Jobs, Parameter Sweep) live tabbed with the
+    // on-demand tool panels (Parameter Sweep, Run History) live tabbed with the
     // Output area but start hidden; they are shown from the menu when needed
-    dm->addDockWidgetTabToArea(docks[Jobs], logArea);
     dm->addDockWidgetTabToArea(docks[Sweep], logArea);
     dm->addDockWidgetTabToArea(docks[History], logArea);
     dm->addDockWidgetTabToArea(docks[Diagnostics], logArea);

@@ -5,7 +5,7 @@
    index variables each varied over a list/range/linspace, expanded into the
    ordered list of per-run variable assignments, plus the reducer that turns a
    run's sampled series into one tabulated number.  No Qt widgets, no SPARTA,
-   so it is unit-tested in isolation like dumpimage/stlimport/schedulerspec.
+   so it is unit-tested in isolation like dumpimage/stlimport.
 ------------------------------------------------------------------------- */
 
 #ifndef SWEEPSPEC_H

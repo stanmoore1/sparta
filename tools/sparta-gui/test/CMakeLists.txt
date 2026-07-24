@@ -142,18 +142,6 @@ target_link_libraries(test_paraviewexport PRIVATE GTest::gtest_main Qt6::Widgets
 
 gtest_discover_tests(test_paraviewexport)
 
-# Test executable for the remote-execution scheduler builders/parsers
-add_executable(test_schedulerspec
-  test_schedulerspec.cpp
-  ${CMAKE_SOURCE_DIR}/src/schedulerspec.cpp
-  ${CMAKE_SOURCE_DIR}/src/remotejob.cpp
-)
-
-target_include_directories(test_schedulerspec PRIVATE ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(test_schedulerspec PRIVATE GTest::gtest_main Qt6::Widgets)
-
-gtest_discover_tests(test_schedulerspec)
-
 # Test executable for the parametric-sweep expansion/reducers
 add_executable(test_sweepspec
   test_sweepspec.cpp

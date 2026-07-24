@@ -50,8 +50,6 @@ class SpartaRunner;
 class LogWindow;
 class Preferences;
 class SlideShow;
-class RemoteJobManager;
-class RemoteJobsPanel;
 class SweepPanel;
 class RunHistory;
 class HistoryPanel;
@@ -290,11 +288,6 @@ private slots:
     /** @brief Open the surface engineering-quantity report dialog */
     void surfaceReport();
 
-    /** @brief Open the Submit-to-Cluster dialog for remote execution */
-    void submitRemote();
-
-    /** @brief Show the docked Cluster Jobs panel */
-    void manageRemoteJobs();
 
     /** @brief Show the docked Parametric Sweep panel */
     void runSweep();
@@ -435,10 +428,6 @@ private:
      * demand -- see the PanelManager::panelOpened handler in createViewMenu(). */
     void createVariableWindow();
 
-    /** @brief Lazily create the RemoteJobManager (starts polling / reattach) */
-    void ensureRemoteJobs();
-    /** @brief Lazily create + host the docked Cluster Jobs panel */
-    void ensureJobsPanel();
     /** @brief Lazily create + host the docked Parametric Sweep panel */
     void ensureSweepPanel();
     /** @brief Lazily create the RunHistory controller */
@@ -510,8 +499,6 @@ private:
     Preferences *prefdialog; ///< Preferences dialog
     QLabel *spartastatus;    ///< Status bar label for SPARTA state
     QLabel *varwindow;       ///< Window showing variable definitions
-    RemoteJobManager *remoteJobs = nullptr;  ///< Controller for cluster jobs (lazy)
-    RemoteJobsPanel *jobsPanel = nullptr;    ///< Docked Cluster Jobs panel (lazy)
     SweepPanel *sweepPanel = nullptr;        ///< Docked Parametric Sweep panel (lazy)
     RunHistory *history = nullptr;           ///< Run archive controller (lazy)
     HistoryPanel *historyPanel = nullptr;    ///< Docked Run History panel (lazy)

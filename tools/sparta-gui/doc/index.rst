@@ -110,7 +110,6 @@ User's Guide
    basic_usage
    output
    visualization
-   remote
    sweep
    editor
    menus

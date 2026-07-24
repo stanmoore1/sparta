@@ -67,5 +67,4 @@ same :ref:`Charts <charts>` window as the live thermo plots).
 
    A swept variable must be an *index* variable defined in the deck; a name
    that is not defined that way cannot be overridden per run.  The sweep runs
-   locally and sequentially; dispatching each combination to a cluster via
-   :ref:`remote execution <remote_execution>` is a planned extension.
+   locally and sequentially, one run at a time.

@@ -81,14 +81,6 @@ set(PROJECT_SOURCES
   ${CMAKE_SOURCE_DIR}/src/paraviewexport.h
   ${CMAKE_SOURCE_DIR}/src/plotdatadialog.cpp
   ${CMAKE_SOURCE_DIR}/src/plotdatadialog.h
-  ${CMAKE_SOURCE_DIR}/src/remotejob.cpp
-  ${CMAKE_SOURCE_DIR}/src/remotejob.h
-  ${CMAKE_SOURCE_DIR}/src/schedulerspec.cpp
-  ${CMAKE_SOURCE_DIR}/src/schedulerspec.h
-  ${CMAKE_SOURCE_DIR}/src/remotejobmanager.cpp
-  ${CMAKE_SOURCE_DIR}/src/remotejobmanager.h
-  ${CMAKE_SOURCE_DIR}/src/remotejobspanel.cpp
-  ${CMAKE_SOURCE_DIR}/src/remotejobspanel.h
   ${CMAKE_SOURCE_DIR}/src/runarchive.cpp
   ${CMAKE_SOURCE_DIR}/src/runarchive.h
   ${CMAKE_SOURCE_DIR}/src/runhistory.cpp

@@ -49,7 +49,7 @@ class PanelManager : public QObject {
 public:
     /** @brief One dock panel slot; also indexes the internal dock/action arrays */
     enum Panel {
-        Log, Chart, Image, Slide, Variables, Jobs, Sweep, History, Diagnostics, ProjectFiles,
+        Log, Chart, Image, Slide, Variables, Sweep, History, Diagnostics, ProjectFiles,
         NPanels
     };
 
