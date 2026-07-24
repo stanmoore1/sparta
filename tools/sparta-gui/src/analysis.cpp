@@ -55,20 +55,38 @@ BlockStats blockAverage(const std::vector<double> &y, int nblocks)
     if (nblocks < 2) nblocks = 2;
     if (nblocks > n / 2) nblocks = n / 2;
 
-    const int L = n / nblocks;          // block length (drop the remainder)
-    const int used = L * nblocks;       // samples actually covered
+    const int L = n / nblocks;          // block length (equal-length blocks)
+    const int used = L * nblocks;       // samples covered by whole blocks
 
-    // grand mean and sample variance over the used samples
+    // Reported mean and variance describe the whole series the caller passed
+    // in.  Blocking needs equal-length blocks, so it can only cover the first
+    // `used` samples; reporting the blocked subset's mean instead would
+    // silently ignore up to nblocks-1 trailing samples, which is not what a
+    // caller asking for "the mean of this series" expects.
     double mean = 0.0;
-    for (int i = 0; i < used; ++i) mean += y[i];
-    mean /= used;
+    for (int i = 0; i < n; ++i) mean += y[i];
+    mean /= n;
     double var = 0.0;
-    for (int i = 0; i < used; ++i) {
+    for (int i = 0; i < n; ++i) {
         const double d = y[i] - mean;
         var += d * d;
     }
     if (var <= 0.0) return s;            // constant series
-    const double sampleVar = var / (used - 1);
+    const double sampleVar = var / (n - 1);
+
+    // The block-derived quantities below (block variance, statistical
+    // inefficiency, standard error) must all be computed consistently over the
+    // blocked subset, so they use its own mean and variance.
+    double usedMean = 0.0;
+    for (int i = 0; i < used; ++i) usedMean += y[i];
+    usedMean /= used;
+    double usedVar = 0.0;
+    for (int i = 0; i < used; ++i) {
+        const double d = y[i] - usedMean;
+        usedVar += d * d;
+    }
+    if (usedVar <= 0.0) return s;        // constant over the blocked subset
+    const double usedSampleVar = usedVar / (used - 1);
 
     // block means and their sample variance
     double varBlocks = 0.0;
@@ -79,7 +97,7 @@ BlockStats blockAverage(const std::vector<double> &y, int nblocks)
         bmean[b] = m / L;
     }
     for (int b = 0; b < nblocks; ++b) {
-        const double d = bmean[b] - mean;
+        const double d = bmean[b] - usedMean;
         varBlocks += d * d;
     }
     varBlocks /= (nblocks - 1);         // sample variance of the block means
@@ -88,7 +106,7 @@ BlockStats blockAverage(const std::vector<double> &y, int nblocks)
     const double sem = std::sqrt(varBlocks / nblocks);
 
     // statistical inefficiency g = L * var(blockMeans) / sampleVar ~ 1 + 2*tau
-    const double g = L * varBlocks / sampleVar;
+    const double g = L * varBlocks / usedSampleVar;
 
     s.valid    = true;
     s.mean     = mean;
