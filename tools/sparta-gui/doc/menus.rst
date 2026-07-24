@@ -6,7 +6,7 @@ Menus
 .. index:: menu bar
 .. index:: keyboard shortcuts
 
-The menu bar has entries *File*, *Edit*, *Run*, *View*, and *About*.
+The menu bar has entries *File*, *Edit*, *Run*, *Tools*, *View*, and *About*.
 Instead of using the mouse to click on them, the individual menus can
 also be activated by hitting the `Alt` key together with the
 corresponding underlined letter, that is `Alt-F` activates the
@@ -59,17 +59,6 @@ File
      `SPARTA restart <https://sparta.github.io/doc/write_restart.html>`_,
      windows with :ref:`information about the file are opened
      <inspect_restart>`.
-   - *Import Surface (STL / SPARTA)...* opens the :ref:`Import Surface wizard
-     <import_surface>` to convert an STL file (ASCII or binary) or open an
-     existing SPARTA surface file, transform and preview it, review the
-     watertightness diagnostics, optionally generate the implicit-surface
-     (ablation) commands, and insert the corresponding ``read_surf`` or
-     ``create_isurf`` block at the editor cursor.
-   - *Export to ParaView...* opens the :ref:`Export to ParaView dialog
-     <export_paraview>` to convert SPARTA surface or grid data to ParaView
-     ``.pvd`` format by running the bundled ``surf2paraview.py`` /
-     ``grid2paraview.py`` scripts with ParaView's ``pvpython`` and, optionally,
-     open the result in ParaView.  ParaView must be installed separately.
    - *Quit* exits SPARTA-GUI. If there are unsaved changes, a dialog will
      appear to either cancel the operation, or to save, or to not save the
      modified buffer.
@@ -171,10 +160,6 @@ rows for additional variables can be added through the *Add Row*
 button and existing rows can be deleted by clicking on the *X* icons
 on the right.
 
-The *Parametric Sweep...* entry opens the :ref:`Parameter Sweep panel
-<parametric_sweep>`, which runs the current deck repeatedly while varying
-index variables over ranges and tabulates a chosen thermo quantity per run.
-
 The *Continue from Restart...* entry opens a small browser of the `SPARTA
 restart <https://sparta.github.io/doc/write_restart.html>`_ files in the
 working directory (with their size and modification time).  A selected file
@@ -191,14 +176,90 @@ window (see :ref:`Snapshot Image Viewer <snapshot_viewer>`).
 View
 ^^^^
 
+.. _tools_menu:
+
+Tools Menu
+^^^^^^^^^^
+
+.. index:: Tools menu
+.. index:: menus; Tools
+
+The *Tools* menu collects the operations that work on simulation data but
+sit outside the edit-run-look loop that *File* and *Run* cover.
+
+   - *Import Surface (STL / SPARTA)...* opens the :ref:`Import Surface wizard
+     <import_surface>` to convert an STL file (ASCII or binary) or open an
+     existing SPARTA surface file, transform and preview it, review the
+     watertightness diagnostics, optionally generate the implicit-surface
+     (ablation) commands, and insert the corresponding ``read_surf`` or
+     ``create_isurf`` block at the editor cursor.
+   - *Export to ParaView...* opens the :ref:`Export to ParaView dialog
+     <export_paraview>` to convert SPARTA surface or grid data to ParaView
+     ``.pvd`` format by running the bundled ``surf2paraview.py`` /
+     ``grid2paraview.py`` scripts with ParaView's ``pvpython`` and, optionally,
+     open the result in ParaView.  ParaView must be installed separately.
+   - *Surface Quantities Report...* opens a dialog that integrates a
+     per-surface compute or fix over the surface elements of a running
+     simulation and reports forces, moments and heat flux.  It needs a live
+     simulation with surfaces and a per-surf compute defined; if either is
+     missing it says so.
+
+The *Studies* submenu gathers the features that drive the same deck
+repeatedly:
+
+   - The *Parametric Sweep...* entry opens the :ref:`Parameter Sweep panel
+     <parametric_sweep>`, which runs the current deck repeatedly while varying
+     index variables over ranges and tabulates a chosen thermo quantity per run.
+
+
+
 .. index:: View menu
 .. index:: menus; View
 .. index:: window visibility
 
-The *View* menu offers to show or hide additional windows with log
-output, charts, slide show, variables, or snapshot images.  The
-default settings for their visibility can be changed in the
-*Preferences* dialog.
+.. index:: workspaces
+.. index:: View menu; workspaces
+
+The *View* menu begins with the three **workspaces**, which are the
+main way to change what the window shows.  Rather than displaying every
+panel at once and leaving too little room for any of them, each
+workspace shows the panels that belong to one task:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 15 65
+
+   * - Workspace
+     - Shortcut
+     - Panels
+   * - *Setup*
+     - ``Ctrl+1``
+     - Project Files, Diagnostics
+   * - *Run*
+     - ``Ctrl+2``
+     - Output, Variables, Charts
+   * - *Analyze*
+     - ``Ctrl+3``
+     - Charts, Image, Slide Show, Output
+
+The workspaces are also reachable from the segmented switch in the
+status bar.  Panels can be rearranged, added or removed freely and each
+workspace remembers its own arrangement, so tailoring *Analyze* does not
+disturb *Run*.  Switching workspaces only changes what is visible --
+panel contents are never discarded, so the output of a run survives a
+round trip through the other workspaces.  *Reset Layout* at the bottom
+of the menu restores the current workspace's default arrangement and
+leaves the others alone.
+
+Starting a run switches to the *Run* workspace once per session; set
+``runmode_autoswitch`` to ``false`` in the configuration to suppress
+that.
+
+Below the workspaces, the *View* menu offers to show or hide the
+individual windows with log output, charts, slide show, variables, or
+snapshot images.  Opening one adds it to the current workspace's
+arrangement.  The default settings for their visibility on a run can be
+changed in the *Preferences* dialog.
 
 Opening the *Image Window* when no snapshot has been created yet
 renders one on demand (equivalent to *Run* -> *Create Image*), so the
