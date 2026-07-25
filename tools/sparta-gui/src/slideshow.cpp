@@ -640,16 +640,7 @@ void SlideShow::loadImage(int idx)
 
 void SlideShow::copy()
 {
-#if QT_CONFIG(clipboard)
-    auto *clip = QGuiApplication::clipboard();
-    if (clip && !image.isNull()) {
-        clip->setImage(image, QClipboard::Clipboard);
-        if (clip->supportsSelection()) clip->setImage(image, QClipboard::Selection);
-    } else
-        fprintf(stderr, "Copy image to clipboard currently not available\n");
-#else
-    fprintf(stderr, "Copy image to clipboard not supported on this platform\n");
-#endif
+    copyImageToClipboard(image);
 }
 
 void SlideShow::quit()
@@ -887,40 +878,14 @@ void SlideShow::showEvent(QShowEvent *event)
 // shortcuts now that this is a docked panel sharing its shortcut context
 bool SlideShow::eventFilter(QObject *watched, QEvent *event)
 {
-    if (event->type() == QEvent::ShortcutOverride) {
-        auto *keyEvent = dynamic_cast<QKeyEvent *>(event);
-        if (!keyEvent) return ViewerSource::eventFilter(watched, event);
-        if (keyEvent->modifiers().testFlag(Qt::ControlModifier)) {
-            switch (keyEvent->key()) {
-                case 'W':
-                    emit closeRequested();
-                    event->accept();
-                    return true;
-                case '/':
-                    stopRun();
-                    event->accept();
-                    return true;
-                case 'Q':
-                    quit();
-                    event->accept();
-                    return true;
-                case 'C':
-                    copy();
-                    event->accept();
-                    return true;
-                case 'E':
-                    movie();
-                    event->accept();
-                    return true;
-                case 'S':
-                    saveCurrentImage();
-                    event->accept();
-                    return true;
-                default:
-                    break;
-            }
-        }
-    }
+    // this panel's own Ctrl+ keys, claimed while focus is inside it
+    if (dispatchCtrlShortcut(event, {{'W', [this]() { emit closeRequested(); }},
+                                     {'/', [this]() { stopRun(); }},
+                                     {'Q', [this]() { quit(); }},
+                                     {'C', [this]() { copy(); }},
+                                     {'E', [this]() { movie(); }},
+                                     {'S', [this]() { saveCurrentImage(); }}}))
+        return true;
     return ViewerSource::eventFilter(watched, event);
 }
 

@@ -18,6 +18,9 @@
 #include <QMenu>
 #include <QSize>
 #include <QString>
+
+#include <functional>
+#include <utility>
 #include <QStringList>
 #include <QtGlobal>
 #include <initializer_list>
@@ -107,6 +110,31 @@ extern QString getSpartaDownloadUrl();
  * @param title   Warning dialog title if failed
  */
 extern void exportImage(QWidget *parent, QImage *image, const QString &title);
+
+/**
+ * @brief Put an image on the clipboard, and on the X11 selection where there
+ *        is one
+ * @param image The image to copy; a null image is reported, not copied
+ *
+ * Both viewers had a byte-identical copy of this, preprocessor branches
+ * included.
+ */
+extern void copyImageToClipboard(const QImage &image);
+
+/**
+ * @brief Resolve this widget's own Ctrl+ shortcuts out of a ShortcutOverride
+ * @param event The event handed to an eventFilter()
+ * @param table Which key runs what, e.g. {{'S', [this]{ save(); }}}
+ * @return true when the event was one of them and has been handled
+ *
+ * A docked panel shares its window with the main menu bar, so a Ctrl+ shortcut
+ * bound in both is ambiguous and Qt resolves it by doing nothing. Panels
+ * therefore claim their own keys while focus is inside them. The mechanism was
+ * written out once per panel, explanatory comment and all; only the table of
+ * keys ever differed.
+ */
+extern bool dispatchCtrlShortcut(QEvent *event,
+                                 std::initializer_list<std::pair<int, std::function<void()>>> table);
 
 /**
  * @brief Locate an executable on PATH or in common install locations

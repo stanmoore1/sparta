@@ -14,6 +14,7 @@
 
 #include <QAbstractButton>
 #include <QBrush>
+#include <QClipboard>
 #include <QColor>
 #include <QCoreApplication>
 #include <QDataStream>
@@ -23,9 +24,11 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFont>
+#include <QGuiApplication>
 #include <QFontInfo>
 #include <QIcon>
 #include <QImage>
+#include <QKeyEvent>
 #include <QImageReader>
 #include <QMessageBox>
 #include <QPalette>
@@ -374,6 +377,37 @@ void exportImage(QWidget *parent, QImage *image, const QString &title)
             warning(parent, title + " Error", "Could not save image to file " + fileName);
         }
     }
+}
+
+void copyImageToClipboard(const QImage &image)
+{
+#if QT_CONFIG(clipboard)
+    auto *clip = QGuiApplication::clipboard();
+    if (clip && !image.isNull()) {
+        clip->setImage(image, QClipboard::Clipboard);
+        if (clip->supportsSelection()) clip->setImage(image, QClipboard::Selection);
+    } else
+        fprintf(stderr, "Copy image to clipboard currently not available\n");
+#else
+    fprintf(stderr, "Copy image to clipboard not supported on this platform\n");
+#endif
+}
+
+bool dispatchCtrlShortcut(QEvent *event,
+                          std::initializer_list<std::pair<int, std::function<void()>>> table)
+{
+    if (!event || event->type() != QEvent::ShortcutOverride) return false;
+
+    auto *key = dynamic_cast<QKeyEvent *>(event);
+    if (!key || !key->modifiers().testFlag(Qt::ControlModifier)) return false;
+
+    for (const auto &entry : table) {
+        if (entry.first != key->key()) continue;
+        entry.second();
+        event->accept();
+        return true;
+    }
+    return false;
 }
 
 // find if executable is in path

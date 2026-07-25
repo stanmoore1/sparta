@@ -1044,33 +1044,14 @@ bool ImageViewer::eventFilter(QObject *watched, QEvent *event)
     // now that this window is a docked panel sharing the main window's
     // shortcut context, its own Ctrl+S/C/W/Q would otherwise be ambiguous
     // with the identically bound main-window menu shortcuts
-    if (event->type() == QEvent::ShortcutOverride) {
-        if (shutdown) return false;
-        auto *keyEvent = dynamic_cast<QKeyEvent *>(event);
-        if (!keyEvent) return ViewerSource::eventFilter(watched, event);
-        if (keyEvent->modifiers().testFlag(Qt::ControlModifier)) {
-            switch (keyEvent->key()) {
-                case 'S':
-                    if (saveAsAct->isEnabled()) saveAs();
-                    event->accept();
-                    return true;
-                case 'C':
-                    if (copyAct->isEnabled()) copy();
-                    event->accept();
-                    return true;
-                case 'W':
-                    emit closeRequested();
-                    event->accept();
-                    return true;
-                case 'Q':
-                    quit();
-                    event->accept();
-                    return true;
-                default:
-                    break;
-            }
-        }
-    }
+    // this panel's own Ctrl+ keys, claimed while focus is inside it
+    if (!shutdown &&
+        dispatchCtrlShortcut(event,
+                             {{'S', [this]() { if (saveAsAct->isEnabled()) saveAs(); }},
+                              {'C', [this]() { if (copyAct->isEnabled()) copy(); }},
+                              {'W', [this]() { emit closeRequested(); }},
+                              {'Q', [this]() { quit(); }}}))
+        return true;
     if (event->type() == QEvent::KeyPress) {
         // don't handle any more key press events after entering destructor
         if (shutdown) return false;
@@ -1288,16 +1269,7 @@ void ImageViewer::saveAs()
 
 void ImageViewer::copy()
 {
-#if QT_CONFIG(clipboard)
-    auto *clip = QGuiApplication::clipboard();
-    if (clip && !image.isNull()) {
-        clip->setImage(image, QClipboard::Clipboard);
-        if (clip->supportsSelection()) clip->setImage(image, QClipboard::Selection);
-    } else
-        fprintf(stderr, "Copy image to clipboard currently not available\n");
-#else
-    fprintf(stderr, "Copy image to clipboard not supported on this platform\n");
-#endif
+    copyImageToClipboard(image);
 }
 
 void ImageViewer::quit()
