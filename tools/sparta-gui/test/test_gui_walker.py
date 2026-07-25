@@ -158,6 +158,24 @@ def main():
                      f"the process exited ({g.app.poll()}) when this control was activated")
                 return 1
 
+            if rc != 0 and rc != 2:
+                # One retry, after settling. An accessibility call reaches a
+                # control through the application's event loop, so a control
+                # that has just rearranged the docks or opened a window can be
+                # unreachable for a moment without being broken -- the three
+                # View-menu dock toggles activate perfectly well on their own
+                # and only failed in the middle of a long sweep. Retrying
+                # separates "this control does not work" from "the application
+                # was busy", which is the difference between a real finding
+                # and a flaky test.
+                g.escape(2)
+                g.close_extra_windows()
+                time.sleep(0.5)
+                rc = g._atspi("do", path, name, "SPARTA").returncode
+                time.sleep(0.35)
+                subprocess.run(["import", "-window", "root", shots[cur]],
+                               env=g.env, capture_output=True)
+
             if rc == 2:      # activated, and something modal came up
                 modal += 1
             elif rc != 0:

@@ -40,6 +40,8 @@
 #include <QPushButton>
 #include <QRadioButton>
 #include <QClipboard>
+#include <QLabel>
+#include <QMainWindow>
 #include <QMimeData>
 #include <QSignalSpy>
 #include <QSlider>
@@ -60,7 +62,10 @@
 #include <set>
 #include <string>
 
+#include "DockWidget.h"
+
 #include "aboutdialog.h"
+#include "dockpanels.h"
 #include "codeeditor.h"
 #include "findandreplace.h"
 #include "helpers.h"
@@ -593,6 +598,52 @@ TEST(CodeEditorClipboard, MimeDataWithNoTextInsertsNothing)
     editor.paste();
     EXPECT_EQ(editor.toPlainText(), QString("run 10"));
     QGuiApplication::clipboard()->clear();
+}
+
+// ---------------------------------------------------------------------------
+// The View menu's panel entries
+// ---------------------------------------------------------------------------
+
+// Also found by the live walker: partway through a sweep the entries for
+// Output, Charts and Viewer vanished from the View menu, while the other five
+// stayed. They had not been removed -- they had been renamed. Qt-ADS retitles
+// a dock's toggleViewAction() whenever the dock's title changes, and that
+// action is the menu entry, so naming a panel after its current contents
+// rewrote the menu underneath the user: "Output Window" became "Output -
+// in.circle - Run 1" as soon as a run started.
+TEST(PanelMenu, RetitlingAPanelLeavesItsMenuEntryAlone)
+{
+    QMainWindow window;
+    CodeEditor editor(nullptr);
+    PanelManager panels(&window, &editor);
+
+    QAction *entry = panels.toggleViewAction(PanelManager::Log);
+    ASSERT_NE(entry, nullptr);
+    entry->setText("&Output Window");   // what the View menu sets it to
+
+    panels.setPanelTitle(PanelManager::Log, "Output - in.circle - Run 1");
+
+    EXPECT_EQ(entry->text(), QString("&Output Window"))
+        << "the menu entry was renamed after the panel's contents";
+    // the tab still says what it is showing, which is where that is useful
+    EXPECT_EQ(panels.dock(PanelManager::Log)->windowTitle(),
+              QString("Output - in.circle - Run 1"));
+}
+
+TEST(PanelMenu, ReplacingAPanelWidgetLeavesItsMenuEntryAlone)
+{
+    // the other path that retitles a dock: handing it a new widget
+    QMainWindow window;
+    CodeEditor editor(nullptr);
+    PanelManager panels(&window, &editor);
+
+    QAction *entry = panels.toggleViewAction(PanelManager::Viewer);
+    entry->setText("&Viewer Window");
+
+    panels.setPanelWidget(PanelManager::Viewer, new QLabel("frame"), "test.0100.ppm", false);
+
+    EXPECT_EQ(entry->text(), QString("&Viewer Window"));
+    EXPECT_EQ(panels.dock(PanelManager::Viewer)->windowTitle(), QString("test.0100.ppm"));
 }
 
 TEST(RealWindows, FindAndReplace)

@@ -124,7 +124,7 @@ void PanelManager::setPanelWidget(Panel panel, QWidget *widget, const QString &t
     }
 
     d->setWidget(widget, insertModeFor(panel));
-    d->setWindowTitle(title);
+    setPanelTitle(panel, title);
 
     // A QDialog reacts to Escape by hiding itself (QDialog::reject ->
     // finished), which would otherwise leave the dock showing a blank content
@@ -151,7 +151,21 @@ void PanelManager::setPanelWidget(Panel panel, QWidget *widget, const QString &t
 
 void PanelManager::setPanelTitle(Panel panel, const QString &title)
 {
+    // Qt-ADS retitles a dock's toggleViewAction() whenever the dock's own
+    // title changes, and that action *is* the entry in the View menu. Naming
+    // a panel after what it currently holds therefore rewrote the menu:
+    // "Output Window" became "Output - in.circle - Run 1" the moment a run
+    // started, and "Viewer Window" became the name of the last snapshot. The
+    // menu stopped reading as a list of windows, and nothing that looks an
+    // entry up by name -- someone scanning it, a screen reader, the widget
+    // walker -- could find it again.
+    //
+    // The dock's tab keeps the descriptive title, which is where it is useful;
+    // the menu entry keeps the name it was given.
+    QAction *entry         = docks[panel]->toggleViewAction();
+    const QString menuText = entry->text();
     docks[panel]->setWindowTitle(title);
+    entry->setText(menuText);
 }
 
 void PanelManager::clearRunPanels()

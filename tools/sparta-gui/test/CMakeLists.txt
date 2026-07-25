@@ -660,6 +660,17 @@ if (XDOTOOL_BINARY AND WM_BINARY AND SHOOTER_BINARY)
   set_tests_properties(GuiDrive.Features PROPERTIES
     ENVIRONMENT "${GUI_DRIVE_ENVIRONMENT};SHOT_DIR=${CMAKE_CURRENT_BINARY_DIR}/feature-shots"
     TIMEOUT 900)
+
+  # Activates every control of the running application in turn. The in-process
+  # walker builds the dialogs directly and so cannot reach the main window's
+  # menus, toolbar or dock chrome; this drives those, and it is what found the
+  # paste crash. It takes a while because it drives a hundred controls and
+  # photographs the screen after each one.
+  add_test(NAME GuiDrive.Walker
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_gui_walker.py)
+  set_tests_properties(GuiDrive.Walker PROPERTIES
+    ENVIRONMENT "${GUI_DRIVE_ENVIRONMENT};SHOT_DIR=${CMAKE_CURRENT_BINARY_DIR}/walker-shots"
+    TIMEOUT 1800)
 else()
   message(STATUS "Skipping the visual and feature GUI suites: "
     "they need xdotool, a window manager (e.g. openbox) and a screenshooter")
