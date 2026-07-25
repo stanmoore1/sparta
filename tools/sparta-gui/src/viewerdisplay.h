@@ -12,74 +12,93 @@
 #ifndef VIEWERDISPLAY_H
 #define VIEWERDISPLAY_H
 
+#include "displaytransform.h"
+
 #include <QImage>
 #include <QSize>
-#include <QStringList>
+#include <QWidget>
+
+class QLabel;
+class QScrollArea;
 
 /**
- * @brief How the image on screen is scaled, turned and mirrored
+ * @brief The surface a viewer paints its picture on.
  *
- * This is the *displayed image* transform: it changes the picture the user is
- * looking at and nothing else. It is deliberately not the camera -- moving the
- * camera re-renders the scene through SPARTA (or VTK) and produces different
- * pixels, whereas everything here is a rearrangement of pixels that already
- * exist.
+ * A scroll area holding a label holding a pixmap, plus the rules for how big
+ * that pixmap should be. Both viewers had their own copy of this, along with
+ * their own copy of the window-fitting dance around it, and the copies had
+ * drifted apart: only the image viewer would scale a picture down to fit the
+ * space it had, and only the slide show could rotate or mirror one.
  *
- * Keeping it as plain data with free functions, rather than as state inside a
- * widget, is what lets the same transform drive the screen *and* the movie
- * exporter from one definition. Those were three separate implementations of
- * the same six lines of arithmetic, and the copies had already drifted: the
- * slide show's zoom out scaled by 0.9 against a zoom in of 1.1, so zooming in
- * and back out did not return to where it started.
+ * The difference that is real is @ref FitMode. Everything else was accident.
  */
-struct DisplayTransform {
-    double scale = 1.0; ///< 1.0 is 1:1; never allowed below MIN_SCALE
-    int rotation = 0;   ///< clockwise degrees, one of 0, 90, 180, 270
-    bool flipH   = false;
-    bool flipV   = false;
+class ViewerDisplay : public QWidget {
+    Q_OBJECT
 
-    /// Below this the image is too small to see and too easy to lose entirely
-    static constexpr double MIN_SCALE = 0.1;
-    /// One press of zoom in or zoom out. Zoom out divides rather than
-    /// multiplying by 0.9, so that the two are exact inverses.
-    static constexpr double STEP = 1.1;
+public:
+    enum FitMode {
+        /// Paint at the transform's own scale and let the window grow. What a
+        /// slide show wants: the frame is the size it is.
+        Natural,
+        /// Shrink to the space available when the picture is larger. What a
+        /// rendered snapshot wants: docked in a short panel it would otherwise
+        /// show one corner of a 600x600 render, which reads as a broken panel
+        /// rather than a cropped one.
+        FitViewport,
+    };
 
-    [[nodiscard]] bool isIdentity() const
-    {
-        return (scale == 1.0) && (rotation == 0) && !flipH && !flipV;
-    }
+    explicit ViewerDisplay(FitMode mode, QWidget *parent = nullptr);
+    ~ViewerDisplay() override;
 
-    /// Does this transform exchange the width and the height?
-    [[nodiscard]] bool isTransposed() const { return (rotation == 90) || (rotation == 270); }
+    ViewerDisplay(const ViewerDisplay &)            = delete;
+    ViewerDisplay &operator=(const ViewerDisplay &) = delete;
 
-    void zoomIn() { scale *= STEP; }
-    void zoomOut() { scale = qMax(scale / STEP, MIN_SCALE); }
-    void rotateCw() { rotation = (rotation + 90) % 360; }
-    void rotateCcw() { rotation = (rotation + 270) % 360; }
-    void mirrorH() { flipH = !flipH; }
-    void mirrorV() { flipV = !flipV; }
-    void reset() { *this = DisplayTransform(); }
+    /// The picture to show, before any displayed-image transform.
+    void setImage(const QImage &image);
+    [[nodiscard]] const QImage &sourceImage() const { return raw; }
 
-    bool operator==(const DisplayTransform &o) const
-    {
-        return (scale == o.scale) && (rotation == o.rotation) && (flipH == o.flipH) &&
-               (flipV == o.flipV);
-    }
-    bool operator!=(const DisplayTransform &o) const { return !(*this == o); }
+    /// The picture as shown -- what Save As, Copy and the movie exporter act on.
+    [[nodiscard]] const QImage &displayedImage() const { return shown; }
+
+    [[nodiscard]] bool isEmpty() const { return raw.isNull(); }
+
+    [[nodiscard]] DisplayTransform transform() const { return xform; }
+    void setTransform(const DisplayTransform &t);
+
+    /// Repaint after something outside changed the fit (a resize, a new mode).
+    void refresh();
+
+    /// The label and scroll area, for hosts that install event filters on them.
+    [[nodiscard]] QLabel *label() const { return imageLabel; }
+    [[nodiscard]] QScrollArea *scrollArea() const { return area; }
+
+    /// @name Sizing the window this display is in
+    ///
+    /// Only meaningful when the display is in a window of its own; in a dock
+    /// there is nothing to resize and fitViewerWindow() says so. The memo of
+    /// the last fit lives here because both viewers kept one and both used it
+    /// the same way.
+    /// @{
+    void fitHostWindow(QWidget *host, const QSize &content, const QSize &budget);
+    void forgetHostFit() { lastFitSize = QSize(); }
+    [[nodiscard]] bool needsHostFit() const { return !lastFitSize.isValid(); }
+    /// @}
+
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override;
+
+private:
+    void repaintPixmap();
+
+    FitMode fit;
+    QLabel *imageLabel   = nullptr;
+    QScrollArea *area    = nullptr;
+    QImage raw;                 ///< as handed over
+    QImage shown;               ///< after the displayed-image transform
+    DisplayTransform xform;
+    QSize lastFitSize;
+    bool painting = false;      ///< guards repaintPixmap() against re-entry
 };
-
-/// Rotate, mirror and scale @p src, in that order.
-QImage applyDisplayTransform(const QImage &src, const DisplayTransform &t);
-
-/// Size @p raw ends up with under @p t, without doing the work of producing it.
-QSize transformedSize(const QSize &raw, const DisplayTransform &t);
-
-/// FFmpeg arguments reproducing @p t, or an empty list for an identity
-/// transform. Returned as ready-to-append arguments ("-vf", "transpose=1,hflip").
-QStringList ffmpegFilterArgs(const DisplayTransform &t);
-
-/// The same for ImageMagick ("-rotate", "90", "-flop").
-QStringList magickTransformArgs(const DisplayTransform &t);
 
 #endif
 

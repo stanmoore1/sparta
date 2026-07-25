@@ -1,4 +1,4 @@
-// Unit tests for the displayed-image transform (src/viewerdisplay.cpp).
+// Unit tests for the displayed-image transform (src/displaytransform.cpp).
 //
 // This transform is applied in three places -- the pixels on screen, the
 // ffmpeg movie export and the ImageMagick movie export -- and used to be
@@ -13,7 +13,7 @@
 // counter-clockwise. Those distinguish a correct implementation from one that
 // merely does something.
 
-#include "viewerdisplay.h"
+#include "displaytransform.h"
 
 #include <QImage>
 #include <QSize>

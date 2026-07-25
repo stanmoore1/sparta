@@ -31,6 +31,7 @@ class QEvent;
 class QLabel;
 class QObject;
 class QScrollArea;
+class ViewerDisplay;
 class QShowEvent;
 class SpartaWrapper;
 class SpartaGui;
@@ -122,13 +123,10 @@ public:
     {
         return QStringLiteral("No render yet: use Run > Create Image");
     }
-    [[nodiscard]] bool hasContent() const override { return !image.isNull(); }
-    [[nodiscard]] QImage currentImage() const override { return image; }
+    [[nodiscard]] bool hasContent() const override;
+    [[nodiscard]] QImage currentImage() const override;
 
 protected:
-    /** @brief Paint the current render at 1:1, or scaled down when the
-     *  viewport is too small to show it (as in a docked panel) */
-    void updateDisplayedPixmap();
 
     bool eventFilter(QObject *watched, QEvent *event) override; ///< Intercept Alt-keystrokes
     void showEvent(QShowEvent *event) override; ///< Redo the initial window fit once shown
@@ -154,14 +152,10 @@ private:
     /// @}
 
 private:
-    QImage image;            ///< Currently displayed image
+    ViewerDisplay *display;  ///< Scroll area, label, and the fit-to-panel rule
     QMenuBar *menuBar;       ///< Menu bar
-    QLabel *imageLabel;      ///< Label displaying the image
-    QScrollArea *scrollArea; ///< Scrollable area for image
     QPoint dragLast;         ///< last mouse pos during an interactive view drag
     bool dragging = false;   ///< true while dragging to rotate/pan the render
-    QSize lastFitSize;       ///< Scroll area size applied by the last auto-resize
-    bool fittingPixmap = false; ///< Guards updateDisplayedPixmap() against re-entry
 
     QAction *saveAsAct; ///< Save As action
     QAction *copyAct;   ///< Copy action

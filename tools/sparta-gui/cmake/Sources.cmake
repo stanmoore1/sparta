@@ -97,6 +97,8 @@ set(PROJECT_SOURCES
   ${CMAKE_SOURCE_DIR}/src/setvariables.h
   ${CMAKE_SOURCE_DIR}/src/slideshow.cpp
   ${CMAKE_SOURCE_DIR}/src/slideshow.h
+  ${CMAKE_SOURCE_DIR}/src/displaytransform.cpp
+  ${CMAKE_SOURCE_DIR}/src/displaytransform.h
   ${CMAKE_SOURCE_DIR}/src/viewerdisplay.cpp
   ${CMAKE_SOURCE_DIR}/src/viewerdisplay.h
   ${CMAKE_SOURCE_DIR}/src/viewerpanel.cpp

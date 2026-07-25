@@ -17,6 +17,7 @@
 #include "movieimport.h"
 #include "qaddon.h"
 #include "rangebandslider.h"
+#include "viewerdisplay.h"
 
 #include <QApplication>
 #include <QClipboard>
@@ -55,20 +56,14 @@ constexpr int EXTRA_HEIGHT   = 130;
 } // namespace
 
 SlideShow::SlideShow(const QString &fileName, SpartaGui *_spartagui, QWidget *parent) :
-    ViewerSource(parent), spartagui(_spartagui), playtimer(nullptr), imageLabel(new QLabel),
-    scrollArea(new QScrollArea), scrollBar(new RangeBandSlider),
+    ViewerSource(parent), spartagui(_spartagui),
+    display(new ViewerDisplay(ViewerDisplay::Natural)), playtimer(nullptr),
+    scrollBar(new RangeBandSlider),
     imageCounter(new QLabel("Image   0 /   0 :")), imageName(new QLabel("(none)")),
     startBox(new QSpinBox), stopBox(new QSpinBox), cacheButton(new QPushButton), current(0),
     maxwidth(0), maxheight(0), timerDelay(100), doLoop(true)
 {
-    imageLabel->setBackgroundRole(QPalette::Base);
-    imageLabel->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Minimum);
-    imageLabel->setScaledContents(false);
-
-    scrollArea->setBackgroundRole(QPalette::Dark);
-    scrollArea->setWidget(imageLabel);
-    scrollArea->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::MinimumExpanding);
-    scrollArea->setVisible(false);
+    display->setVisible(false);
 
     scrollBar->setMinimum(0);
     scrollBar->setMaximum(1);
@@ -312,7 +307,7 @@ SlideShow::SlideShow(const QString &fileName, SpartaGui *_spartagui, QWidget *pa
 
     mainLayout->addLayout(toolsLayout);
     mainLayout->addWidget(new QHline);
-    mainLayout->addWidget(scrollArea, 10);
+    mainLayout->addWidget(display, 10);
 
     botLayout->addWidget(goplay, 1);
     botLayout->addWidget(goloop, 1);
@@ -347,7 +342,7 @@ SlideShow::SlideShow(const QString &fileName, SpartaGui *_spartagui, QWidget *pa
 
     updateCacheIndicator();
 
-    scrollArea->setVisible(true);
+    display->setVisible(true);
     setLayout(mainLayout);
     mainLayout->setSizeConstraint(QLayout::SetMinAndMaxSize);
     adjustWindowSize();
@@ -503,13 +498,11 @@ void SlideShow::clear()
 {
     imagefiles.clear();
     imagelabels.clear();
-    image.fill(Qt::black);
-    imageLabel->setPixmap(QPixmap::fromImage(image));
-    imageLabel->resize(image.width(), image.height());
+    display->setImage(QImage());
     // forget the old sequence's dimensions so the next one sizes the window fresh
-    maxwidth    = 0;
-    maxheight   = 0;
-    lastFitSize = QSize();
+    maxwidth  = 0;
+    maxheight = 0;
+    display->forgetHostFit();
     imageCounter->setText("Image   0 /   0 :");
     imageName->setText("(none)");
     scrollBar->setMaximum(1);
@@ -621,10 +614,10 @@ void SlideShow::loadImage(int idx)
         if (newImage.isNull()) {
             --idx;
         } else {
-            rawImage  = newImage;
+            display->setImage(newImage);
             maxwidth  = qMax(maxwidth, newImage.width());
             maxheight = qMax(maxheight, newImage.height());
-            applyImageTransform();
+            adjustWindowSize();
             imageCounter->setText(
                 QString("Image %1 / %2 :").arg(idx + 1, 3).arg(imagefiles.size(), 3));
             imageName->setText(imagelabels[idx]);
@@ -640,7 +633,7 @@ void SlideShow::loadImage(int idx)
 
 void SlideShow::copy()
 {
-    copyImageToClipboard(image);
+    copyImageToClipboard(display->displayedImage());
 }
 
 void SlideShow::quit()
@@ -655,7 +648,8 @@ void SlideShow::stopRun()
 
 void SlideShow::saveCurrentImage()
 {
-    exportImage(this, &image, "SlideShow");
+    QImage shot = display->displayedImage();
+    exportImage(this, &shot, "SlideShow");
 }
 
 void SlideShow::movie()
@@ -715,7 +709,7 @@ void SlideShow::movie()
                  << "concat";
             args << "-i" << concatfile.fileName();
             // the movie must come out oriented the way the preview was
-            args << ffmpegFilterArgs(xform);
+            args << ffmpegFilterArgs(display->transform());
             args << "-b:v"
                  << "2000k";
             args << "-r" << fps;
@@ -737,7 +731,7 @@ void SlideShow::movie()
         QDir curdir(".");
         for (const auto &img : frames)
             args << curdir.absoluteFilePath(img);
-        args << magickTransformArgs(xform);
+        args << magickTransformArgs(display->transform());
         args << fileName;
 
         // run the conversion command
@@ -826,20 +820,17 @@ void SlideShow::loop()
 
 void SlideShow::zoomIn()
 {
-    xform.zoomIn();
-    loadImage(current);
+    applyTransform([](DisplayTransform &t) { t.zoomIn(); });
 }
 
 void SlideShow::zoomOut()
 {
-    xform.zoomOut();
-    loadImage(current);
+    applyTransform([](DisplayTransform &t) { t.zoomOut(); });
 }
 
 void SlideShow::normalSize()
 {
-    xform.reset();
-    loadImage(current);
+    applyTransform([](DisplayTransform &t) { t.reset(); });
 }
 
 void SlideShow::adjustWindowSize()
@@ -847,19 +838,19 @@ void SlideShow::adjustWindowSize()
     if (maxwidth == 0 || maxheight == 0) return;
 
     // size of the largest image as displayed, i.e. with the current rotation
-    // and zoom applied the same way as applyImageTransform() applies them
-    const QSize content = transformedSize(QSize(maxwidth, maxheight), xform);
+    // and zoom applied the same way the display applies them
+    const QSize content = transformedSize(QSize(maxwidth, maxheight), display->transform());
 
     // make sure the scroll area is not resized beyond a certain fraction of the screen
     const QSize avail = screen()->availableSize();
     const QSize budget(avail.width() * 3 / 4, (avail.height() * 9 / 10) - EXTRA_HEIGHT);
-    lastFitSize = fitViewerWindow(this, scrollArea, content, budget, lastFitSize);
+    display->fitHostWindow(this, content, budget);
 }
 
 void SlideShow::resetWindowSize()
 {
     // discard both a manual window resize and the memoized fit
-    lastFitSize = QSize();
+    display->forgetHostFit();
     adjustWindowSize();
 }
 
@@ -869,7 +860,7 @@ void SlideShow::showEvent(QShowEvent *event)
     // any fit computed while the window was hidden used unpolished style
     // metrics and was not memoized (see fitViewerWindow()); apply the fit
     // again as soon as the shown window has settled
-    if (!lastFitSize.isValid()) QTimer::singleShot(0, this, &SlideShow::adjustWindowSize);
+    if (display->needsHostFit()) QTimer::singleShot(0, this, &SlideShow::adjustWindowSize);
 }
 
 // event filter to handle "Ambiguous shortcut override" issues (see LogWindow
@@ -891,46 +882,36 @@ bool SlideShow::eventFilter(QObject *watched, QEvent *event)
 
 void SlideShow::doImageRotateCw()
 {
-    xform.rotateCw();
-    applyImageTransform();
-    adjustWindowSize();
+    applyTransform([](DisplayTransform &t) { t.rotateCw(); });
 }
 
 void SlideShow::doImageRotateCcw()
 {
-    xform.rotateCcw();
-    applyImageTransform();
-    adjustWindowSize();
+    applyTransform([](DisplayTransform &t) { t.rotateCcw(); });
 }
 
 void SlideShow::doImageFlipH()
 {
-    xform.mirrorH();
-    applyImageTransform();
-    adjustWindowSize();
+    applyTransform([](DisplayTransform &t) { t.mirrorH(); });
 }
 
 void SlideShow::doImageFlipV()
 {
-    xform.mirrorV();
-    applyImageTransform();
+    applyTransform([](DisplayTransform &t) { t.mirrorV(); });
+}
+
+// Change the displayed-image transform and let the window follow it.
+void SlideShow::applyTransform(const std::function<void(DisplayTransform &)> &change)
+{
+    DisplayTransform t = display->transform();
+    change(t);
+    display->setTransform(t);
     adjustWindowSize();
 }
 
-void SlideShow::applyImageTransform()
+QImage SlideShow::currentImage() const
 {
-    // If no raw image is available yet, use the current image
-    if (rawImage.isNull()) {
-        if (!image.isNull()) {
-            rawImage = image;
-        } else {
-            return;
-        }
-    }
-
-    image = applyDisplayTransform(rawImage, xform);
-    imageLabel->setPixmap(QPixmap::fromImage(image));
-    imageLabel->adjustSize();
+    return display->displayedImage();
 }
 
 // Local Variables:

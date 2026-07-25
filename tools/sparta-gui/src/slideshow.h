@@ -22,6 +22,8 @@
 #include <QString>
 #include <QStringList>
 
+#include <functional>
+
 class QLabel;
 class QPushButton;
 class QScrollArea;
@@ -30,6 +32,7 @@ class QSpinBox;
 class QTimer;
 class SpartaGui;
 class RangeBandSlider;
+class ViewerDisplay;
 
 /**
  * @brief Slideshow viewer for displaying sequences of images
@@ -110,7 +113,7 @@ public:
                               "or use File > Open Image or Movie");
     }
     [[nodiscard]] bool hasContent() const override { return !imagefiles.isEmpty(); }
-    [[nodiscard]] QImage currentImage() const override { return image; }
+    [[nodiscard]] QImage currentImage() const override;
 
 private slots:
     void quit();             ///< Quit the entire application (via SpartaGui::quit)
@@ -157,9 +160,10 @@ private:
     void loadImage(int idx);
 
     /**
-     * @brief Apply rotation and flip transformations to displayed image
+     * @brief Change the displayed-image transform and resize the window to suit
+     * @param change Applied to a copy of the current transform
      */
-    void applyImageTransform();
+    void applyTransform(const std::function<void(DisplayTransform &)> &change);
 
     /**
      * @brief Auto-resize window to fit image
@@ -195,11 +199,8 @@ private:
 private:
     SpartaGui *spartagui;       ///< Main widget pointer for receiving signals
     ImageCache cache;           ///< Converted images and extracted movie frames
-    QImage image;               ///< Currently displayed image
-    QImage rawImage;            ///< Raw image before transformations
+    ViewerDisplay *display;     ///< Scroll area, label, and the display transform
     QTimer *playtimer;          ///< Timer for automatic playback
-    QLabel *imageLabel;         ///< Label displaying the image
-    QScrollArea *scrollArea;    ///< Scrollable area for image display
     RangeBandSlider *scrollBar; ///< Scroll bar for selecting images (highlights active range)
     QLabel *imageCounter;       ///< Label showing image count
     QLabel *imageName;          ///< Label showing image filename
@@ -208,8 +209,6 @@ private:
     QPushButton *cacheButton;   ///< Image cache indicator, discards conversions when pressed
     QIcon cacheFullIcon;        ///< Cache indicator icon for a cache holding images
     QIcon cacheEmptyIcon;       ///< Grayed out cache indicator icon for an empty cache
-    DisplayTransform xform;     ///< Zoom, rotation and mirroring of the displayed image
-    QSize lastFitSize;          ///< Scroll area size applied by the last auto-resize
 
     int current;             ///< Index of current image
     int maxwidth, maxheight; ///< Maximum image dimensions

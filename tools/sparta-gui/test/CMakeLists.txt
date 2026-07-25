@@ -157,16 +157,19 @@ target_link_libraries(test_dumpimage PRIVATE GTest::gtest_main Qt6::Widgets)
 
 gtest_discover_tests(test_dumpimage)
 
-# Test executable for the displayed-image transform
-add_executable(test_viewerdisplay
-  test_viewerdisplay.cpp
-  ${CMAKE_SOURCE_DIR}/src/viewerdisplay.cpp
+# Test executable for the displayed-image transform. Deliberately links only
+# Qt6::Gui: the transform is pure, and keeping it in its own translation unit
+# apart from the widget that uses it is what lets this stay a fast unit test
+# rather than one that drags in the whole widget stack.
+add_executable(test_displaytransform
+  test_displaytransform.cpp
+  ${CMAKE_SOURCE_DIR}/src/displaytransform.cpp
 )
 
-target_include_directories(test_viewerdisplay PRIVATE ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(test_viewerdisplay PRIVATE GTest::gtest_main Qt6::Gui)
+target_include_directories(test_displaytransform PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_displaytransform PRIVATE GTest::gtest_main Qt6::Gui)
 
-gtest_discover_tests(test_viewerdisplay)
+gtest_discover_tests(test_displaytransform)
 
 # Test executable for the STL / SPARTA-surface import core
 add_executable(test_stlimport

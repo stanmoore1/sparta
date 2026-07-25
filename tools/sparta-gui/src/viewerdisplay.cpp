@@ -11,87 +11,110 @@
 
 #include "viewerdisplay.h"
 
-#include <QTransform>
+#include "helpers.h"
 
-QImage applyDisplayTransform(const QImage &src, const DisplayTransform &t)
+#include <QEvent>
+#include <QLabel>
+#include <QPalette>
+#include <QPixmap>
+#include <QScrollArea>
+#include <QVBoxLayout>
+
+////////////////////////////////////////////////////////////////////////////////
+// ViewerDisplay                                                              //
+////////////////////////////////////////////////////////////////////////////////
+
+ViewerDisplay::ViewerDisplay(FitMode mode, QWidget *parent) :
+    QWidget(parent), fit(mode), imageLabel(new QLabel), area(new QScrollArea)
 {
-    if (src.isNull() || t.isIdentity()) return src;
+    imageLabel->setBackgroundRole(QPalette::Base);
+    imageLabel->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Minimum);
+    imageLabel->setScaledContents(false);
 
-    QImage img = src;
+    area->setBackgroundRole(QPalette::Dark);
+    area->setWidget(imageLabel);
+    area->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::MinimumExpanding);
 
-    if (t.rotation != 0) {
-        QTransform rot;
-        rot.rotate(t.rotation);
-        img = img.transformed(rot, Qt::SmoothTransformation);
-    }
+    // The fit is computed against the viewport, so it has to be redone whenever
+    // that changes size.
+    area->viewport()->installEventFilter(this);
 
-    if (t.flipH) {
-#if QT_VERSION >= QT_VERSION_CHECK(6, 9, 0)
-        img = img.flipped(Qt::Horizontal);
-#else
-        img = img.mirrored(true, false);
-#endif
-    }
-
-    if (t.flipV) {
-#if QT_VERSION >= QT_VERSION_CHECK(6, 9, 0)
-        img = img.flipped(Qt::Vertical);
-#else
-        img = img.mirrored(false, true);
-#endif
-    }
-
-    if (t.scale != 1.0) {
-        // IgnoreAspectRatio is safe because both extents carry the same factor;
-        // it avoids the rounding KeepAspectRatio applies to the second one.
-        img = img.scaled(static_cast<int>(img.width() * t.scale),
-                         static_cast<int>(img.height() * t.scale), Qt::IgnoreAspectRatio,
-                         Qt::SmoothTransformation);
-    }
-
-    return img;
+    auto *layout = new QVBoxLayout(this);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->addWidget(area);
 }
 
-QSize transformedSize(const QSize &raw, const DisplayTransform &t)
+ViewerDisplay::~ViewerDisplay() = default;
+
+void ViewerDisplay::setImage(const QImage &image)
 {
-    QSize size = raw;
-    if (t.isTransposed()) size.transpose();
-    return {static_cast<int>(size.width() * t.scale), static_cast<int>(size.height() * t.scale)};
+    raw = image;
+    repaintPixmap();
 }
 
-QStringList ffmpegFilterArgs(const DisplayTransform &t)
+void ViewerDisplay::setTransform(const DisplayTransform &t)
 {
-    QStringList filters;
+    xform = t;
+    repaintPixmap();
+}
 
-    if (t.scale != 1.0) filters << QString("scale=iw*%1:-1").arg(t.scale);
+void ViewerDisplay::refresh()
+{
+    repaintPixmap();
+}
 
-    // ffmpeg has no arbitrary-angle filter in this pipeline, so a half turn is
-    // two quarter turns. transpose=1 is clockwise, transpose=2 counter.
-    switch (t.rotation) {
-        case 90: filters << "transpose=1"; break;
-        case 180: filters << "transpose=1" << "transpose=1"; break;
-        case 270: filters << "transpose=2"; break;
-        default: break;
+bool ViewerDisplay::eventFilter(QObject *watched, QEvent *event)
+{
+    if (watched == area->viewport() && event->type() == QEvent::Resize) repaintPixmap();
+    return QWidget::eventFilter(watched, event);
+}
+
+void ViewerDisplay::repaintPixmap()
+{
+    if (raw.isNull()) return;
+
+    // Resizing the label below can itself provoke a viewport resize, which
+    // calls back in here; without this the two would chase each other.
+    if (painting) return;
+    painting = true;
+
+    shown = applyDisplayTransform(raw, xform);
+    QPixmap pix = QPixmap::fromImage(shown);
+
+    if (fit == FitViewport) {
+        // maximumViewportSize(), not viewport()->size(): the viewport's actual
+        // size depends on whether a scroll bar is showing, which depends on the
+        // size of the pixmap being computed here. Feeding that back in makes
+        // the two chase each other -- fit to the full width, a vertical bar
+        // appears, the narrower viewport wants a smaller fit, the bar goes away
+        // -- and the re-entry guard above stops the oscillation wherever it
+        // happens to be, which left the picture scaled to the panel's width and
+        // cut off at the bottom. maximumViewportSize() is the room available
+        // with no bars at all, so the result does not depend on the state it
+        // produces.
+        const QSize avail = area->maximumViewportSize();
+        if (avail.isValid() && !avail.isEmpty() &&
+            (pix.width() > avail.width() || pix.height() > avail.height())) {
+            pix = pix.scaled(avail, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+            imageLabel->setToolTip(
+                "Scaled to fit the panel; enlarge the panel to see it at full size");
+        } else {
+            imageLabel->setToolTip(QString());
+        }
     }
 
-    if (t.flipH) filters << "hflip";
-    if (t.flipV) filters << "vflip";
-
-    if (filters.isEmpty()) return {};
-    return {"-vf", filters.join(',')};
+    imageLabel->setPixmap(pix);
+    // Size the label to what is actually painted, and never as a *minimum*: a
+    // render can be several thousand pixels across, and a minimum that large
+    // propagates out through the dock layout and forces the window wider than
+    // the screen.
+    imageLabel->resize(pix.size());
+    painting = false;
 }
 
-QStringList magickTransformArgs(const DisplayTransform &t)
+void ViewerDisplay::fitHostWindow(QWidget *host, const QSize &content, const QSize &budget)
 {
-    QStringList args;
-    // The percent sign is appended rather than written into the format string:
-    // "%%" is not an escape for QString::arg (that is printf, not Qt), so the
-    // obvious QString("%1%%").arg(...) yields "50%%" and ImageMagick rejects it.
-    if (t.scale != 1.0) args << "-resize" << QString::number(100.0 * t.scale) + QLatin1Char('%');
-    if (t.rotation != 0) args << "-rotate" << QString::number(t.rotation);
-    if (t.flipH) args << "-flop";
-    if (t.flipV) args << "-flip";
-    return args;
+    lastFitSize = fitViewerWindow(host, area, content, budget, lastFitSize);
 }
 
 // Local Variables:

@@ -19,6 +19,7 @@
 #include "qaddon.h"
 #include "spartagui.h"
 #include "spartawrapper.h"
+#include "viewerdisplay.h"
 #include "stdcapture.h"
 
 #include <QAction>
@@ -211,24 +212,17 @@ void selectComboItem(QComboBox *box, const QString &text)
 
 ImageViewer::ImageViewer(const QString &fileName, SpartaWrapper *_sparta, SpartaGui *_spartagui,
                          QWidget *parent) :
-    ViewerSource(parent), menuBar(new QMenuBar), imageLabel(new QLabel), scrollArea(new QScrollArea),
+    ViewerSource(parent), display(new ViewerDisplay(ViewerDisplay::FitViewport)),
+    menuBar(new QMenuBar),
     saveAsAct(nullptr), copyAct(nullptr), cmdAct(nullptr), movieAct(nullptr), sparta(_sparta),
     spartagui(_spartagui), filename(QFileInfo(fileName).fileName())
 {
-    imageLabel->setBackgroundRole(QPalette::Base);
-    imageLabel->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Minimum);
-    imageLabel->setScaledContents(false);
     // interactive view: drag to rotate/pan, wheel to zoom -- handled in
     // eventFilter(), which re-renders through the same createImage() path as
     // the toolbar buttons
-    imageLabel->installEventFilter(this);
-    scrollArea->viewport()->installEventFilter(this);
-    imageLabel->setCursor(Qt::OpenHandCursor);
-
-    scrollArea->setBackgroundRole(QPalette::Dark);
-    scrollArea->setWidget(imageLabel);
-    scrollArea->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::MinimumExpanding);
-    scrollArea->setVisible(false);
+    display->label()->installEventFilter(this);
+    display->label()->setCursor(Qt::OpenHandCursor);
+    display->setVisible(false);
 
     auto *imageLayout    = new QHBoxLayout;
     auto *settingsLayout = new QVBoxLayout;
@@ -558,7 +552,7 @@ ImageViewer::ImageViewer(const QString &fileName, SpartaWrapper *_sparta, Sparta
 
     topLayout->addWidget(buttonScroll);
     mainLayout->addLayout(topLayout);
-    imageLayout->addWidget(scrollArea, 10);
+    imageLayout->addWidget(display, 10);
     imageLayout->addWidget(settingsScroll, 0);
     imageLayout->setSpacing(LAYOUT_SPACING);
     mainLayout->addLayout(imageLayout);
@@ -582,7 +576,7 @@ ImageViewer::ImageViewer(const QString &fileName, SpartaWrapper *_sparta, Sparta
     dobox->setChecked(params.box);
     doaxes->setChecked(params.axes);
 
-    scrollArea->setVisible(true);
+    display->setVisible(true);
     updateActions();
     setLayout(mainLayout);
     // Deliberately NOT SetMinAndMaxSize. That made the widget's minimum track
@@ -982,10 +976,7 @@ bool ImageViewer::eventFilter(QObject *watched, QEvent *event)
     // while a run is active.
     // the panel can be resized at any time, and the fit above is computed
     // against the viewport, so it has to be recomputed when that changes
-    if (watched == scrollArea->viewport() && event->type() == QEvent::Resize && !shutdown)
-        updateDisplayedPixmap();
-
-    if (watched == imageLabel && !shutdown) {
+    if (watched == display->label() && !shutdown) {
         const bool is2d = sparta && (sparta->extractSetting("dimension") == 2);
         switch (event->type()) {
         case QEvent::MouseButtonPress: {
@@ -993,7 +984,7 @@ bool ImageViewer::eventFilter(QObject *watched, QEvent *event)
             if (me->button() == Qt::LeftButton) {
                 dragLast = me->pos();
                 dragging = true;
-                imageLabel->setCursor(Qt::ClosedHandCursor);
+                display->label()->setCursor(Qt::ClosedHandCursor);
                 return true;
             }
             break;
@@ -1021,7 +1012,7 @@ bool ImageViewer::eventFilter(QObject *watched, QEvent *event)
         case QEvent::MouseButtonRelease: {
             if (dragging) {
                 dragging = false;
-                imageLabel->setCursor(Qt::OpenHandCursor);
+                display->label()->setCursor(Qt::OpenHandCursor);
                 return true;
             }
             break;
@@ -1250,12 +1241,11 @@ void ImageViewer::createImage()
     }
 
     // show image
-    image = newImage;
-    updateDisplayedPixmap();
+    display->setImage(newImage);
     // The fit above measures the viewport as it is right now, which during the
     // first render into a freshly-opened dock is not yet its final size. Fit
     // again once the layout has settled.
-    QTimer::singleShot(0, this, [this]() { updateDisplayedPixmap(); });
+    QTimer::singleShot(0, this, [this]() { display->refresh(); });
     adjustWindowSize();
     restoreRenderState();
     repaint();
@@ -1264,12 +1254,13 @@ void ImageViewer::createImage()
 
 void ImageViewer::saveAs()
 {
-    exportImage(this, &image, "ImageViewer");
+    QImage shot = display->displayedImage();
+    exportImage(this, &shot, "ImageViewer");
 }
 
 void ImageViewer::copy()
 {
-    copyImageToClipboard(image);
+    copyImageToClipboard(display->displayedImage());
 }
 
 void ImageViewer::quit()
@@ -1349,55 +1340,18 @@ QIcon ImageViewer::sourceIcon() const
 
 void ImageViewer::updateActions()
 {
-    saveAsAct->setEnabled(!image.isNull());
-    copyAct->setEnabled(!image.isNull());
+    saveAsAct->setEnabled(!display->isEmpty());
+    copyAct->setEnabled(!display->isEmpty());
 }
 
-void ImageViewer::updateDisplayedPixmap()
+bool ImageViewer::hasContent() const
 {
-    if (image.isNull()) return;
+    return !display->isEmpty();
+}
 
-    // Resizing the label below can itself provoke a viewport resize, which
-    // calls back in here; without this the two would chase each other.
-    if (fittingPixmap) return;
-    fittingPixmap = true;
-
-    // Show the render at 1:1 when there is room for it, and scaled to fit when
-    // there is not. The viewer began life as a standalone window that resized
-    // itself around the image (adjustWindowSize below), but hosted in a dock it
-    // cannot resize anything: a 600x600 render then sat at 1:1 inside a panel a
-    // few hundred pixels tall and the user saw one corner of it -- usually
-    // background, so the panel looked broken rather than merely cropped.
-    //
-    // This is display scaling only. The zoom buttons move the camera and
-    // re-render through SPARTA, so the two do not interact.
-    // maximumViewportSize(), not viewport()->size(): the viewport's actual size
-    // depends on whether a scroll bar is showing, which depends on the size of
-    // the pixmap being computed here. Feeding that back in makes the two chase
-    // each other -- fit to the full width, a vertical bar appears, the narrower
-    // viewport wants a smaller fit, the bar goes away -- and the re-entry guard
-    // below stops the oscillation wherever it happens to be, which was leaving
-    // the render scaled to the panel's width and cut off at the bottom.
-    // maximumViewportSize() is the room available with no bars at all, so the
-    // result does not depend on the state it produces.
-    const QSize avail = scrollArea->maximumViewportSize();
-    QPixmap pix       = QPixmap::fromImage(image);
-
-    if (avail.isValid() && !avail.isEmpty() &&
-        (image.width() > avail.width() || image.height() > avail.height())) {
-        pix = pix.scaled(avail, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-        imageLabel->setToolTip("Scaled to fit the panel; enlarge the panel to see it at full size");
-    } else {
-        imageLabel->setToolTip(QString());
-    }
-
-    imageLabel->setPixmap(pix);
-    // Size the label to what is actually painted, and never as a *minimum*: a
-    // render can be several thousand pixels across, and a minimum that large
-    // propagates out through the dock layout and forces the window wider than
-    // the screen.
-    imageLabel->resize(pix.size());
-    fittingPixmap = false;
+QImage ImageViewer::currentImage() const
+{
+    return display->displayedImage();
 }
 
 void ImageViewer::adjustWindowSize()
@@ -1412,14 +1366,13 @@ void ImageViewer::adjustWindowSize()
     constexpr int EXTRA_HEIGHT = 100;
     const QSize budget((avail.width() * 4 / 5) - EXTRA_WIDTH,
                        (avail.height() * 9 / 10) - EXTRA_HEIGHT);
-    lastFitSize =
-        fitViewerWindow(this, scrollArea, QSize(params.xsize, params.ysize), budget, lastFitSize);
+    display->fitHostWindow(this, QSize(params.xsize, params.ysize), budget);
 }
 
 void ImageViewer::resetWindowSize()
 {
     // discard both a manual window resize and the memoized fit
-    lastFitSize = QSize();
+    display->forgetHostFit();
     adjustWindowSize();
 }
 
@@ -1429,7 +1382,7 @@ void ImageViewer::showEvent(QShowEvent *event)
     // any fit computed while the window was hidden used unpolished style
     // metrics and was not memoized (see fitViewerWindow()); apply the fit
     // again as soon as the shown window has settled
-    if (!lastFitSize.isValid()) QTimer::singleShot(0, this, &ImageViewer::adjustWindowSize);
+    if (display->needsHostFit()) QTimer::singleShot(0, this, &ImageViewer::adjustWindowSize);
 }
 
 // Local Variables:
