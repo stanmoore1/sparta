@@ -1370,33 +1370,69 @@ void FixAblate::front_speed()
   double interval = nevery * update->dt;
   if (interval <= 0.0) return;
 
-  // floor on |grad c| below which the field is too flat to place the front
-  // a nearly flat cell would give a level set speed that blows up, since a
-  //   tiny value change sweeps the isosurface clear across the cell
-  // such a cell has no well-localized surface, so leave its speed at 0 and
-  //   let the static test plus the regeneration safety net handle it
+  // measure how far the isosurface actually moved in each cell, by tracking
+  //   where it crosses the cell edges before and after the increment
+  // Marching Squares/Cubes place a vertex on an edge by linear interpolation
+  //   to thresh, so the crossing point is exactly reproducible here
+  //
+  // this is deliberately NOT the level set form s = (dc/dt)/|grad c|.  That
+  //   form divides by a gradient which goes to zero wherever the corner field
+  //   is nearly flat, so neighboring cells can get front speeds that differ by
+  //   orders of magnitude.  Since each surf element is advanced along its own
+  //   normal, the advanced front then tears apart at the cell boundary and
+  //   particles stream through the gap without ever being tested.
+  // an edge is shared by the neighboring cells that meet on it, so a
+  //   displacement measured this way is common to all of them and the
+  //   advanced front stays continuous.  It is also bounded by the cell size
+  //   by construction, so it cannot blow up.
 
-  double small = MIN(xyzsize[0],xyzsize[1]);
-  if (dim == 3) small = MIN(small,xyzsize[2]);
-  double gradmin = MINSPREAD / small;
+  // cell edges as corner index pairs, x fastest then y then z
+  // 2d uses the first 4, 3d all 12
+
+  static const int edge[12][2] =
+    {{0,1},{2,3},{0,2},{1,3},                     // 2d: 2 x-edges, 2 y-edges
+     {4,5},{6,7},{4,6},{5,7},                     // 3d: upper x and y edges
+     {0,4},{1,5},{2,6},{3,7}};                    // 3d: z-edges
+  static const int edgedim[12] =
+    {0,0,1,1, 0,0,1,1, 2,2,2,2};
+
+  int nedge = (dim == 2) ? 4 : 12;
 
   for (int icell = 0; icell < nglocal; icell++) {
     if (!(cinfo[icell].mask & groupbit)) continue;
     if (cells[icell].nsplit <= 0) continue;
 
-    double dc = 0.0;
-    for (int i = 0; i < ncorner; i++)
-      dc += cvalues[icell][i] - cvalues_prev[icell][i];
-    dc /= ncorner;
+    double *cnew = cvalues[icell];
+    double *cold = cvalues_prev[icell];
 
-    // not growing in this cell, no front to advance
+    double sum = 0.0;
+    int ncross = 0;
 
-    if (dc <= 0.0) continue;
+    for (int e = 0; e < nedge; e++) {
+      int i0 = edge[e][0];
+      int i1 = edge[e][1];
 
-    double gmag = grad_mag(icell);
-    if (gmag < gradmin) continue;
+      // the isosurface must cross this edge both before and after, else
+      //   there is no pair of crossing points to compare
 
-    sfront_cell[icell] = (dc/interval) / gmag;
+      int oldcross = (cold[i0] < thresh) != (cold[i1] < thresh);
+      int newcross = (cnew[i0] < thresh) != (cnew[i1] < thresh);
+      if (!oldcross || !newcross) continue;
+
+      double dold = cold[i1] - cold[i0];
+      double dnew = cnew[i1] - cnew[i0];
+      if (dold == 0.0 || dnew == 0.0) continue;
+
+      double told = (thresh - cold[i0]) / dold;
+      double tnew = (thresh - cnew[i0]) / dnew;
+
+      sum += fabs(tnew - told) * xyzsize[edgedim[e]];
+      ncross++;
+    }
+
+    if (!ncross) continue;
+
+    sfront_cell[icell] = (sum/ncross) / interval;
   }
 }
 
