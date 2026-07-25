@@ -159,6 +159,13 @@ def main():
         if not controls:
             return 1
 
+        # Every path that some other control's path descends from.
+        parent_paths = set()
+        for _, _, p, _ in controls:
+            parts = p.split("/")
+            for k in range(1, len(parts)):
+                parent_paths.add("/".join(parts[:k]))
+
         seen = set()
         example_done = [False]
         n = 0
@@ -196,8 +203,17 @@ def main():
 
             box = changed_box(before, after)
             if box is None:
-                rows.append((name, role, "NO VISIBLE EFFECT", ""))
-                print(f"  none  {name[:44]:44s} nothing on screen changed", flush=True)
+                # A submenu parent has an action, but performing it while the
+                # menu that holds it is closed opens nothing on screen. That is
+                # this harness's limit, not a defect: sweep_capture.py opens
+                # those submenus for real and photographs them.
+                #
+                # Accessibility gives a submenu parent the same role as a leaf
+                # entry ("menu item"), so the tree decides instead: a parent is
+                # a control other controls' paths descend from.
+                verdict = "submenu parent" if path in parent_paths else "NO VISIBLE EFFECT"
+                rows.append((name, role, verdict, "nothing on screen changed"))
+                print(f"  none  {name[:44]:44s} {verdict}", flush=True)
             else:
                 out = os.path.join(PAIRS, f"{n:03d}-{slug(name)}.png")
                 ok = pair_image(before, after, box, out, f"{name}  [{role}]")
@@ -222,8 +238,10 @@ def main():
 
     sheets = contact_sheets(pairs)
     dead = [r for r in rows if r[2] == "NO VISIBLE EFFECT"]
+    parents = [r for r in rows if r[2] == "submenu parent"]
     print(f"\n{len(pairs)} before/after pairs, {len(sheets)} contact sheets", flush=True)
-    print(f"{len(dead)} controls changed nothing on screen", flush=True)
+    print(f"{len(dead)} controls changed nothing on screen "
+          f"({len(parents)} submenu parents excluded)", flush=True)
     for r in dead:
         print(f"    {r[0]}  [{r[1]}]", flush=True)
     print(f"pairs:  {PAIRS}", flush=True)

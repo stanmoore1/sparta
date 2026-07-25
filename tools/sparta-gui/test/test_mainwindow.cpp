@@ -30,6 +30,7 @@
 #include <QKeySequence>
 #include <QMenu>
 #include <QMenuBar>
+#include <QPushButton>
 #include <QSettings>
 
 #include <DockAreaWidget.h>
@@ -493,6 +494,30 @@ TEST_F(MainWindow, TheViewerMenuEntriesEachBringUpTheirPage)
 }
 
 // ---------------------------------------------------------------- behaviour
+
+TEST_F(MainWindow, StopIsOnlyOfferedWhileSomethingIsRunning)
+{
+    // Stop was always enabled. Nothing is running here, so picking it did
+    // nothing whatsoever -- forceTimeout() on an idle instance is a no-op --
+    // and a control that can always be picked and never does anything is
+    // indistinguishable from one that is broken.
+    QAction *stop = action("&Stop SPARTA");
+    ASSERT_NE(stop, nullptr);
+    EXPECT_FALSE(stop->isEnabled())
+        << "Stop SPARTA is offered with no run in progress";
+
+    // and the status bar button beside it agrees
+    for (auto *b : gui->findChildren<QPushButton *>())
+        if (b->toolTip() == "Stop SPARTA")
+            EXPECT_FALSE(b->isEnabled()) << "the stop button is offered with no run in progress";
+
+    // the things that start a run stay available
+    for (const char *entry : {"&Run SPARTA from Editor Buffer", "Run SPARTA from &File"}) {
+        QAction *a = action(entry);
+        ASSERT_NE(a, nullptr) << entry;
+        EXPECT_TRUE(a->isEnabled()) << entry << " is greyed out with nothing running";
+    }
+}
 
 TEST_F(MainWindow, TheNonBlockingActionsCanAllBeTriggeredWithoutCrashing)
 {

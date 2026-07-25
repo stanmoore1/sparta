@@ -441,6 +441,9 @@ private:
     QAction *addMenuAction(QMenu *menu, const QString &iconpath, const QString &text,
                            const QString &shortcut, Func slot);
 
+    /** @brief Enable or disable the stop controls to match the run state */
+    void syncRunControls();
+
     /** @brief Create File menu actions and add them to the menu bar */
     void createFileMenu();
 
@@ -523,6 +526,10 @@ private:
     bool ranThisSession = false;    ///< True once a run started (gates the auto mode switch)
     QStatusBar *statusbar;          ///< status bar
     QList<QAction *> recentActions; ///< list of actions for recent files
+    /// Run > Stop SPARTA, and the status-bar button beside it. Both are only
+    /// meaningful while a run is going, so both follow the run state.
+    QAction *stopAction   = nullptr;
+    QWidget *stopButton   = nullptr;
     QMenu *exampleMenu;             ///< File menu entry with SPARTA example inputs
 
     Highlighter *highlighter; ///< Syntax highlighter for SPARTA input

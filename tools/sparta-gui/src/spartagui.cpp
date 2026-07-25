@@ -338,7 +338,9 @@ void SpartaGui::createRunMenu()
                   &SpartaGui::runBuffer);
     addMenuAction(menu, ":/icons/run-file.svg", "Run SPARTA from &File", "Ctrl+Shift+Return",
                   &SpartaGui::runFile);
-    addMenuAction(menu, ":/icons/process-stop.svg", "&Stop SPARTA", "Ctrl+/", &SpartaGui::stopRun);
+    stopAction =
+        addMenuAction(menu, ":/icons/process-stop.svg", "&Stop SPARTA", "Ctrl+/",
+                      &SpartaGui::stopRun);
     addMenuAction(menu, ":/icons/warning.svg", "Chec&k Input", "Ctrl+K", &SpartaGui::checkInput);
     menu->addSeparator();
 
@@ -597,6 +599,11 @@ void SpartaGui::createStatusBar()
     stopbtn->setToolTip("Stop SPARTA");
     connect(stopbtn, &QPushButton::released, this, &SpartaGui::stopRun);
     statusbar->addWidget(stopbtn);
+    stopButton = stopbtn;
+    // Stop is only meaningful while something is running. Left always enabled,
+    // it was a control that could be picked at any time and did nothing
+    // whatsoever -- forceTimeout() on an idle instance is a no-op.
+    syncRunControls();
 
     auto *imgbtn = new QPushButton(QIcon(":/icons/image-viewer.svg"), "");
     imgbtn->setToolTip("Create snapshot image");
@@ -1767,8 +1774,16 @@ void SpartaGui::redo()
     textEdit->redo();
 }
 
+void SpartaGui::syncRunControls()
+{
+    const bool running = sparta.isRunning();
+    if (stopAction) stopAction->setEnabled(running);
+    if (stopButton) stopButton->setEnabled(running);
+}
+
 void SpartaGui::stopRun()
 {
+    if (!sparta.isRunning()) return;
     sparta.forceTimeout();
 }
 
@@ -2038,6 +2053,7 @@ void SpartaGui::runDone()
         delete logupdater;
         logupdater = nullptr;
     }
+    syncRunControls();
     progress->setValue(Cfg::PROGRESS_MAXIMUM);
     textEdit->setHighlight(CodeEditor::NO_HIGHLIGHT, false);
 
@@ -2300,6 +2316,7 @@ void SpartaGui::doRun(bool use_buffer)
     logupdater = new QTimer(this);
     connect(logupdater, &QTimer::timeout, this, &SpartaGui::logUpdate);
     logupdater->start(settings.value(Keys::UPDFREQ, Cfg::DATA_UPDATE_INTERVAL_DEFAULT).toInt());
+    syncRunControls();
 }
 
 void SpartaGui::ensureSweepPanel()
