@@ -492,6 +492,14 @@ void SpartaGui::createViewMenu()
     addMenuAction(menu, ":/icons/image-x-generic.svg", "Slide S&how in Viewer", "Ctrl+L", [this]() {
         ensureViewerPanel();
         panels->openPanel(PanelManager::Viewer);
+        // The frame view is built by the first dump image a run writes, and
+        // showSource() does nothing for a source that does not exist yet -- so
+        // on a deck whose dumps are commented out, which is most of the
+        // examples, this menu entry silently did nothing at all. Build it
+        // empty instead: it says it has no frames, and a later run appends to
+        // the same page.
+        if (!viewer->sequence())
+            viewer->addSource(ViewerPanel::Sequence, new SlideShow(currentFile, this));
         viewer->showSource(ViewerPanel::Sequence, true);
     });
 #if defined(SPARTA_GUI_HAVE_VTK)
@@ -2614,7 +2622,24 @@ void SpartaGui::ensureProjectFilesPanel()
         if (item && !item->data(Qt::UserRole).toString().isEmpty())
             openFile(item->data(Qt::UserRole).toString());
     });
-    panels->setPanelWidget(PanelManager::ProjectFiles, projectFilesList, "Project Files");
+    // Qt-ADS hides the tab of a dock that is alone in its area, and this is the
+    // only panel with an area to itself: it came up as a title bar of buttons
+    // with no name anywhere on it. Nothing in the dock's API turns that back
+    // on, so the panel says what it is itself -- which the Parameter Sweep
+    // panel does anyway, for its own reasons.
+    auto *page   = new QWidget(this);
+    auto *layout = new QVBoxLayout(page);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(2);
+    auto *heading = new QLabel("Project Files");
+    QFont headingFont = heading->font();
+    headingFont.setBold(true);
+    heading->setFont(headingFont);
+    heading->setContentsMargins(4, 2, 4, 2);
+    layout->addWidget(heading);
+    layout->addWidget(projectFilesList);
+
+    panels->setPanelWidget(PanelManager::ProjectFiles, page, "Project Files");
 }
 
 namespace {

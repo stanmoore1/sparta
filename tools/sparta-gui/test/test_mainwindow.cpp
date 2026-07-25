@@ -32,7 +32,9 @@
 #include <QMenuBar>
 #include <QSettings>
 
+#include <DockAreaWidget.h>
 #include <DockManager.h>
+#include <DockWidgetTab.h>
 #include <DockWidget.h>
 
 #include <map>
@@ -43,6 +45,7 @@
 #include "dockpanels.h"
 #include "constants.h"
 #include "helpers.h"
+#include "slideshow.h"
 #include "spartagui.h"
 
 using ads::CDockWidget;
@@ -451,7 +454,42 @@ TEST_F(MainWindow, EveryPanelDockIsTitled)
         ASSERT_NE(d, nullptr) << e.second;
         EXPECT_FALSE(d->windowTitle().trimmed().isEmpty())
             << e.second << " has a blank tab after being opened";
+
+        // The tab has to carry that title, since the tab is what names the
+        // panel on screen. Whether it is *shown* cannot be settled here -- the
+        // window is never mapped, so every tab reports itself hidden -- and is
+        // checked by the screenshot sweep instead.
+        auto *tab = d->tabWidget();
+        ASSERT_NE(tab, nullptr) << e.second << " has no tab";
+        EXPECT_EQ(tab->text(), d->windowTitle()) << e.second;
     }
+}
+
+TEST_F(MainWindow, TheViewerMenuEntriesEachBringUpTheirPage)
+{
+    // Each of these picks which page of the viewer is in front, and each page
+    // is built lazily by whatever produces its content -- a render, a run
+    // writing dump images. An entry whose page does not exist yet used to do
+    // nothing whatsoever: on a deck with its dumps commented out, which is
+    // most of the examples, Slide Show in Viewer was a no-op with no
+    // explanation.
+    auto *dm = gui->findChild<ads::CDockManager *>();
+    ASSERT_NE(dm, nullptr);
+
+    for (const char *entry : {"S&napshot in Viewer", "Slide S&how in Viewer"}) {
+        QAction *a = action(entry);
+        ASSERT_NE(a, nullptr) << entry << " is missing";
+        a->trigger();
+        QCoreApplication::processEvents();
+
+        CDockWidget *d = dm->findDockWidget("dockViewer");
+        ASSERT_NE(d, nullptr);
+        EXPECT_FALSE(d->isClosed()) << entry << " left the viewer panel closed";
+    }
+
+    // and the frame view is really there, not merely asked for
+    EXPECT_NE(gui->findChild<SlideShow *>(), nullptr)
+        << "Slide Show in Viewer did not build a frame view";
 }
 
 // ---------------------------------------------------------------- behaviour

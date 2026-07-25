@@ -256,12 +256,20 @@ def main():
             s.capture(ident, name, expect, lambda n=name: s.action(n))
 
         # -- preferences, one screen per tab --------------------------------
+        # Full tab labels, not the leading word. "Snapshot" also names the
+        # viewer's page tab in the main window behind the dialog, and that is
+        # the one the lookup found: the Preferences dialog stayed on General
+        # Settings and the capture recorded the wrong tab as the right one.
         for label, ident, expect in [
-            ("General", "05-prefs-general", "library path, examples path, session options"),
+            ("General Settings", "05-prefs-general",
+             "library path, examples path, session options"),
             ("Accelerators", "05-prefs-accel", "None / Kokkos choice, thread and GPU settings"),
-            ("Snapshot", "05-prefs-snapshot", "default image size, anti-aliasing, background"),
-            ("Editor", "05-prefs-editor", "font, tab width, autocompletion, colour scheme"),
-            ("Charts", "05-prefs-charts", "chart colours, line width, smoothing defaults"),
+            ("Snapshot Image", "05-prefs-snapshot",
+             "default image size, anti-aliasing, background"),
+            ("Editor Settings", "05-prefs-editor",
+             "font, tab width, autocompletion, colour scheme"),
+            ("Charts Settings", "05-prefs-charts",
+             "chart colours, line width, smoothing defaults"),
         ]:
             s.capture(ident, f"Preferences > {label}", expect,
                       lambda l=label: (s.action("Preferences...") and s.tab(l)))
