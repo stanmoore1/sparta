@@ -33,10 +33,41 @@ message(STATUS "Using ${SHOOTER} as screen shooter")
 
 # configure virtual environment for tests using PyAutoGUI and Xvfb
 find_package(Python3 3.8 REQUIRED COMPONENTS Interpreter)
+
+# PyAutoGUI needs tkinter, and tkinter is a compiled stdlib module that a
+# locally built interpreter (or a slim container image) often does not have.
+# A venv inherits the stdlib of whatever built it, so picking the wrong
+# interpreter here fails at import time in every PyAutoGUI test with a message
+# about installing python3-tk -- three test failures whose cause is nowhere
+# near the tests. Probe instead, and say plainly when none of them will do.
+set(TESTENV_PYTHON "")
+foreach(_cand IN ITEMS "${Python3_EXECUTABLE}" python3 python3.13 python3.12 python3.11 python3.10)
+  if(TESTENV_PYTHON)
+    continue()
+  endif()
+  find_program(_cand_path NAMES "${_cand}")
+  if(_cand_path)
+    execute_process(COMMAND "${_cand_path}" -c "import tkinter"
+      RESULT_VARIABLE _tk_rc OUTPUT_QUIET ERROR_QUIET)
+    if(_tk_rc EQUAL 0)
+      set(TESTENV_PYTHON "${_cand_path}")
+    endif()
+  endif()
+  unset(_cand_path CACHE)
+endforeach()
+if(TESTENV_PYTHON)
+  message(STATUS "PyAutoGUI test environment will use ${TESTENV_PYTHON}")
+else()
+  set(TESTENV_PYTHON "${Python3_EXECUTABLE}")
+  message(WARNING "No Python with tkinter found: the PyAutoGUI tests "
+    "(Framebuffer.*) will fail on import. Install the tkinter package for "
+    "${Python3_EXECUTABLE} (on Debian/Ubuntu: python3-tk).")
+endif()
+
 set(TESTENV_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/testenv/bin/")
 add_custom_command(
   OUTPUT ${TESTENV_BINARY_DIR}
-  COMMAND ${Python3_EXECUTABLE} -m venv "${CMAKE_CURRENT_BINARY_DIR}/testenv"
+  COMMAND ${TESTENV_PYTHON} -m venv "${CMAKE_CURRENT_BINARY_DIR}/testenv"
   COMMAND ${TESTENV_BINARY_DIR}/pip $ENV{PIP_OPTIONS} install --upgrade pip
   COMMAND ${TESTENV_BINARY_DIR}/pip $ENV{PIP_OPTIONS} install -r ${CMAKE_CURRENT_SOURCE_DIR}/requirements.txt --upgrade
   COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/shooter.${SHOOTER} ${TESTENV_BINARY_DIR}/shooter
@@ -103,6 +134,53 @@ if (SPARTA_GUI_USE_PLUGIN)
   target_compile_definitions(test_gui_widgets PRIVATE SPARTA_GUI_USE_PLUGIN)
   target_include_directories(test_gui_widgets PRIVATE ${SPARTA_PLUGINLIB_DIR})
 endif()
+
+# The walker needs two things from outside the build to do its whole job, and
+# it skips the tests that need them rather than failing.  Both went unset in
+# every configure, so seven walks -- among them the image viewer with its eight
+# settings tabs, by far the largest window in the application -- were quietly
+# skipped everywhere instead of running.
+#
+#  SPARTA_FIXTURES   the STL meshes and the in.surfq deck; always known
+#  SPARTA_PLUGIN_LIB a shared libsparta for the windows that read species,
+#                    surfaces and box extents out of a live instance
+set(SPARTA_TEST_LIBRARY "" CACHE FILEPATH
+  "Shared libsparta used by the live-window tests (empty: probe the usual places)")
+if (SPARTA_TEST_LIBRARY)
+  set(_spa_test_lib "${SPARTA_TEST_LIBRARY}")
+elseif (SPARTA_LIBRARY)
+  # linked (non-plugin) builds already point at one
+  set(_spa_test_lib "${SPARTA_LIBRARY}")
+else()
+  # a sibling build tree of the SPARTA checkout this GUI lives in
+  file(GLOB _spa_candidates
+    "${CMAKE_SOURCE_DIR}/../../build*/src/libsparta*.so.*"
+    "${CMAKE_SOURCE_DIR}/../../build*/libsparta*.so.*")
+  if (_spa_candidates)
+    list(GET _spa_candidates 0 _spa_test_lib)
+  else()
+    set(_spa_test_lib "")
+  endif()
+endif()
+
+if (NOT _spa_test_lib OR NOT EXISTS "${_spa_test_lib}")
+  set(_spa_test_lib "")
+  message(STATUS "No shared libsparta found: the live-window tests will skip. "
+    "Point -D SPARTA_TEST_LIBRARY=... at one to run them.")
+else()
+  message(STATUS "Live-window tests will use ${_spa_test_lib}")
+endif()
+
+# Compiled in rather than passed through the ctest environment: two variables
+# is a two-element list, gtest_discover_tests writes the elements out as
+# separate arguments, and set_tests_properties then reads the second one as
+# the name of another property and drops the value.  Baking the paths in also
+# means the binary does the same thing when run by hand, which is how anyone
+# looking at a walker failure runs it.  Both are still overridable by the
+# environment.
+target_compile_definitions(test_gui_widgets PRIVATE
+  SPARTA_TEST_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures"
+  SPARTA_TEST_LIBRARY_PATH="${_spa_test_lib}")
 
 gtest_discover_tests(test_gui_widgets)
 
@@ -458,6 +536,10 @@ list(APPEND PYTHON_TEST_ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1")
 list(APPEND PYTHON_TEST_ENVIRONMENT "OMP_NUM_THREADS=1")
 list(APPEND PYTHON_TEST_ENVIRONMENT "SPARTA_GUI=$<TARGET_FILE:sparta-gui>")
 list(APPEND PYTHON_TEST_ENVIRONMENT "PATH=${TESTENV_BINARY_DIR}:$ENV{PATH}")
+# The editor tests quit the application, which it will not do while a modal is
+# up -- and with no library to load, the first thing it puts up is a modal
+# saying so.
+list(APPEND PYTHON_TEST_ENVIRONMENT "SPARTA_PLUGIN_LIB=${_spa_test_lib}")
 
 # test screen shooter wrapper script
 add_test(NAME Framebuffer.CreateScreenshot
@@ -490,9 +572,15 @@ find_program(WM_BINARY NAMES openbox matchbox-window-manager fluxbox
              DOC "Path to a minimal window manager")
 
 if (XDOTOOL_BINARY AND WM_BINARY AND SHOOTER_BINARY)
+  # SPARTA_PLUGIN_LIB is the same library the live-window walks use. Without
+  # it these suites drove an application that had no simulator behind it:
+  # SPARTA_LIB_DIR pointed at the GUI's own build directory, which never
+  # contains a libsparta, so nothing could be run and every check that needed
+  # a completed run reported a missing control instead of a missing library.
   set(GUI_DRIVE_ENVIRONMENT
     "SPARTA_GUI=$<TARGET_FILE:sparta-gui>"
     "SPARTA_LIB_DIR=${CMAKE_BINARY_DIR}"
+    "SPARTA_PLUGIN_LIB=${_spa_test_lib}"
     "SPARTA_FIXTURES=${CMAKE_CURRENT_SOURCE_DIR}/fixtures"
   )
 

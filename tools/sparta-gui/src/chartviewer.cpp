@@ -841,21 +841,9 @@ void ChartWindow::postProcess()
     if (which >= 1 && which <= 4) {
         const double fitXmin = fitFromSpin->value();
         const double fitXmax = fitToSpin->value();
-        if (fitXmin < fitXmax) {
-            std::vector<double> fxs, fys;
-            for (std::size_t i = 0; i < xs.size(); ++i) {
-                if (xs[i] >= fitXmin && xs[i] <= fitXmax) {
-                    fxs.push_back(xs[i]);
-                    fys.push_back(ys[i]);
-                }
-            }
-            if (fxs.size() >= 2) {
-                xs = std::move(fxs);
-                ys = std::move(fys);
-            } else {
-                warning(this, "Postprocess",
-                        "Fewer than 2 data points in the selected x-range; using full data.");
-            }
+        if (fitXmin < fitXmax && !restrictToXRange(xs, ys, fitXmin, fitXmax)) {
+            warning(this, "Postprocess",
+                    "Fewer than 2 data points in the selected x-range; using full data.");
         }
     }
 

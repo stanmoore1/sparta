@@ -161,12 +161,22 @@ if (NOT BUILD_DOC_ONLY)
     vtk_module_autoinit(TARGETS sparta-gui MODULES ${VTK_LIBRARIES})
   endif()
 
+  # Optional instrumentation with a code sanitizer.  This has to come *before*
+  # Testing.cmake: the test suite gates its GUI-driving tests on
+  # ENABLE_SANITIZER, and an undeclared cache variable reads as the empty
+  # string, so with the two the other way round a fresh configure compared ""
+  # against "none", took the false branch, and silently registered none of the
+  # framebuffer or GUI-drive tests at all.  It only looked correct on a second
+  # configure, when the variable was already in the loaded cache.
+  include(${CMAKE_SOURCE_DIR}/cmake/Sanitizer.cmake)
+
   # unit tests and code coverage, only enabled on Linux
   include(${CMAKE_SOURCE_DIR}/cmake/Testing.cmake)
+else()
+  # no application target to instrument, but the option still has to be
+  # declared so asking for it reports that it does nothing
+  include(${CMAKE_SOURCE_DIR}/cmake/Sanitizer.cmake)
 endif()
-
-# optional instrumentation with a code sanitizer
-include(${CMAKE_SOURCE_DIR}/cmake/Sanitizer.cmake)
 
 # documentation build with Doxygen and Sphinx
 include(${CMAKE_SOURCE_DIR}/cmake/Documentation.cmake)

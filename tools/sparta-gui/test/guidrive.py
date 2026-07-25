@@ -24,6 +24,13 @@ import time
 # already exports; the others follow the same convention.
 GUI = os.environ.get("SPARTA_GUI") or os.environ.get("GUI_BIN", "build-gui/sparta-gui")
 SPARTA_LIB_DIR = os.environ.get("SPARTA_LIB_DIR", "build-lib")
+# An explicit path to the shared libsparta, which is what the app actually
+# needs. Searching a directory for one is the fallback: the GUI's own build
+# directory never contains a libsparta, so when that was all this had, the app
+# came up with no simulator, every check that needed a run quietly found no
+# window to drive, and the suite reported a missing control rather than a
+# missing library.
+SPARTA_PLUGIN_LIB = os.environ.get("SPARTA_PLUGIN_LIB", "")
 EXAMPLE = os.environ.get("SPARTA_EXAMPLE", "examples/circle/in.circle")
 
 # Interpreter that can import pyatspi; on this system the default python3 is a
@@ -53,9 +60,17 @@ class Gui:
         cfgdir = f"{env['XDG_CONFIG_HOME']}/The SPARTA Developers"
         os.makedirs(cfgdir, exist_ok=True)
         os.makedirs(env["XDG_DATA_HOME"], exist_ok=True)
-        plugin = subprocess.run(
-            ["find", SPARTA_LIB_DIR, "-name", "libsparta*.so.*"],
-            capture_output=True, text=True).stdout.split("\n")[0]
+        plugin = SPARTA_PLUGIN_LIB
+        if not plugin:
+            plugin = subprocess.run(
+                ["find", SPARTA_LIB_DIR, "-name", "libsparta*.so.*"],
+                capture_output=True, text=True).stdout.split("\n")[0]
+        if not plugin or not os.path.exists(plugin):
+            raise RuntimeError(
+                "no SPARTA library to load: set SPARTA_PLUGIN_LIB (or point "
+                f"SPARTA_LIB_DIR at a build tree; looked in {SPARTA_LIB_DIR!r}). "
+                "Without one the application starts but cannot run anything, "
+                "and every check below would fail for the wrong reason.")
         # preseed so no modal dialog blocks an unattended run
         with open(f"{cfgdir}/SPARTA-GUI (QT6).conf", "w") as f:
             f.write("[General]\n"

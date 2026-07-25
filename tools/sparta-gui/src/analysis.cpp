@@ -163,6 +163,28 @@ SteadyState steadyStateCutoff(const std::vector<double> &y)
     return s;
 }
 
+bool restrictToXRange(std::vector<double> &x, std::vector<double> &y, double xmin, double xmax,
+                      std::size_t minPoints)
+{
+    if (!(xmin < xmax)) return false;
+    if (x.size() != y.size()) return false;
+
+    std::vector<double> fx, fy;
+    fx.reserve(x.size());
+    fy.reserve(y.size());
+    for (std::size_t i = 0; i < x.size(); ++i) {
+        if (x[i] >= xmin && x[i] <= xmax) {
+            fx.push_back(x[i]);
+            fy.push_back(y[i]);
+        }
+    }
+    if (fx.size() < minPoints) return false;
+
+    x = std::move(fx);
+    y = std::move(fy);
+    return true;
+}
+
 // Local Variables:
 // c-basic-offset: 4
 // End:

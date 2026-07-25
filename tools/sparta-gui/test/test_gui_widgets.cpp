@@ -549,6 +549,37 @@ TEST(RealWindows, ParaViewExport)
 }
 
 /**
+ * @brief Where the test fixtures are, from the environment or the build
+ *
+ * The build knows the answer, so it compiles it in; the environment overrides
+ * it for anyone running the binary against a different set. Reading only the
+ * environment is what left every fixture-backed test skipping in ordinary
+ * builds: nothing set the variable, and a skip reports as a pass.
+ */
+static QString fixturesDir()
+{
+    const QString fromEnv = QString::fromLatin1(qgetenv("SPARTA_FIXTURES"));
+    if (!fromEnv.isEmpty()) return fromEnv;
+#ifdef SPARTA_TEST_FIXTURES_DIR
+    return QStringLiteral(SPARTA_TEST_FIXTURES_DIR);
+#else
+    return {};
+#endif
+}
+
+/** @brief The shared libsparta the live-window tests load, or empty if none */
+static QString testLibrary()
+{
+    const QString fromEnv = QString::fromLatin1(qgetenv("SPARTA_PLUGIN_LIB"));
+    if (!fromEnv.isEmpty()) return fromEnv;
+#ifdef SPARTA_TEST_LIBRARY_PATH
+    return QStringLiteral(SPARTA_TEST_LIBRARY_PATH);
+#else
+    return {};
+#endif
+}
+
+/**
  * @brief Copy a fixture to a scratch dir before handing it to the wizard
  *
  * The wizard writes a .surf next to its input, so pointing it straight at the
@@ -556,7 +587,7 @@ TEST(RealWindows, ParaViewExport)
  */
 static QString stagedFixture(const QString &name, QTemporaryDir &dir)
 {
-    const QString src = QString::fromLatin1(qgetenv("SPARTA_FIXTURES")) + "/" + name;
+    const QString src = fixturesDir() + "/" + name;
     if (!QFileInfo::exists(src)) return {};
     const QString dst = dir.filePath(name);
     QFile::copy(src, dst);
@@ -597,7 +628,7 @@ TEST(RealWindows, StlImportWizardLeaky)
 /** @brief Open a SPARTA instance and bring it to a state with box, grid and surfaces */
 static bool openSparta(SpartaWrapper &sparta, const QString &deck)
 {
-    const QString lib = QString::fromLatin1(qgetenv("SPARTA_PLUGIN_LIB"));
+    const QString lib = testLibrary();
     if (lib.isEmpty() || !QFileInfo::exists(lib)) return false;
     if (!sparta.loadLib(lib)) return false;
 
@@ -629,7 +660,7 @@ static bool openSparta(SpartaWrapper &sparta, const QString &deck)
 /** @brief Path to a deck that defines a box, a grid, species and surfaces */
 static QString surfDeck()
 {
-    return QString::fromLatin1(qgetenv("SPARTA_FIXTURES")) + "/in.surfq";
+    return fixturesDir() + "/in.surfq";
 }
 
 TEST(RealWindowsLive, SurfaceReport)

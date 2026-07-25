@@ -1,5 +1,5 @@
 ## -*- Python -*- ######################################################################
-## SPARTA-GUI - A Graphical Tool to Learn and Explore the SPARTA MD Simulation Software
+## SPARTA-GUI - A Graphical Tool to Learn and Explore the SPARTA DSMC Simulation Software
 ##
 ## Copyright (c) 2023, 2024, 2025, 2026  Axel Kohlmeyer
 ##
@@ -11,7 +11,9 @@
 
 import os
 import pyautogui
+import shutil
 import subprocess
+import tempfile
 import time
 import unittest
 from PIL import Image
@@ -61,19 +63,43 @@ class GUIEditorChecks(unittest.TestCase):
     gui=None
 
     def setUp(self):
-        """Launch SPARTA-GUI and give it focus"""
+        """Launch SPARTA-GUI on a scratch profile and give it focus"""
         helptxt = subprocess.check_output([os.environ['SPARTA_GUI'], '--platform', 'offscreen', '-h'],
                                           shell=False, stderr=subprocess.STDOUT).decode()
         # get exact path of the SPARTA-GUI binary from environment variable
         cmdline = [os.environ['SPARTA_GUI'], '-x', '1000', '-y', '500']
-        # append path to SPARTA shared library, if present
-        if 'pluginpath' in helptxt:
+        # Point the plugin loader at the library the build found. The name used
+        # to be a hardcoded "libsparta.so.0", which is not a soname this
+        # project has ever produced: the app came up on a modal "no suitable
+        # SPARTA shared library found" dialog, which swallowed every keystroke
+        # afterwards, so the exit tests below timed out against a window that
+        # was never listening.
+        plugin = os.environ.get("SPARTA_PLUGIN_LIB", "")
+        if 'pluginpath' in helptxt and plugin:
             cmdline.append('-p')
-            cmdline.append('libsparta.so.0')
+            cmdline.append(plugin)
 
-        # launch SPARTA-GUI and give it a moment to come up
-        self.gui=subprocess.Popen(cmdline, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
-        time.sleep(1.0)
+        # A scratch profile, so a stored session, a remembered window layout or
+        # the first-run welcome screen from an earlier run cannot decide what
+        # this one sees.
+        self.profile = tempfile.mkdtemp()
+        env = dict(os.environ)
+        env['XDG_CONFIG_HOME'] = os.path.join(self.profile, 'config')
+        env['XDG_DATA_HOME'] = os.path.join(self.profile, 'data')
+        cfgdir = os.path.join(env['XDG_CONFIG_HOME'], 'The SPARTA Developers')
+        os.makedirs(cfgdir, exist_ok=True)
+        os.makedirs(env['XDG_DATA_HOME'], exist_ok=True)
+        with open(os.path.join(cfgdir, 'SPARTA-GUI (QT6).conf'), 'w') as f:
+            f.write("[General]\nshowwelcome=false\nrestore_session=false\n")
+            if plugin:
+                f.write("plugin_path=%s\n" % plugin)
+
+        # launch SPARTA-GUI and give it time to come up; a second is not
+        # enough on a cold cache, and a test that starts typing at a window
+        # that is not there yet fails somewhere else entirely
+        self.gui=subprocess.Popen(cmdline, env=env,
+                                  stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+        time.sleep(4.0)
         for f in ['hello.txt', 'hello1.txt', 'hello2.txt', 'empty.txt', 'complete.txt',
                   'shot1.png', 'shot2.png']:
             if os.path.exists(f):
@@ -84,6 +110,7 @@ class GUIEditorChecks(unittest.TestCase):
         """Stop SPARTA-GUI"""
         if self.gui.poll() is None:
             self.gui.terminate()
+        shutil.rmtree(getattr(self, 'profile', ''), ignore_errors=True)
 
     def testExitShortcut(self):
         """Exit SPARTA-GUI immediately via keyboard shortcut"""

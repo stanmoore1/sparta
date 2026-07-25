@@ -16,6 +16,7 @@
 // Pure functions on std::vector<double> so they can be unit-tested without a
 // GUI and reused by the chart post-processing dialog.
 
+#include <cstddef>
 #include <vector>
 
 /**
@@ -83,6 +84,28 @@ struct SteadyState {
  * @return the cutoff index and the post-cutoff mean +/- standard error
  */
 SteadyState steadyStateCutoff(const std::vector<double> &y);
+
+/**
+ * @brief Keep only the samples whose abscissa lies in [@p xmin, @p xmax].
+ *
+ * The fitting analyses let the user fit a sub-range of a chart rather than the
+ * whole of it -- the interesting part of a DSMC run is rarely the start-up
+ * transient.  Both vectors are shortened in place, and in step: dropping a
+ * point from one and not the other silently pairs each x with its neighbour's
+ * y, which fits a plausible-looking curve to data that does not exist.
+ *
+ * @param x     abscissa, shortened in place
+ * @param y     ordinate, shortened in place alongside @p x
+ * @param xmin  lower bound, inclusive
+ * @param xmax  upper bound, inclusive
+ * @param minPoints smallest useful result; below it nothing is dropped
+ * @return true if a restriction was applied; false if the range was empty or
+ *         inverted, or kept fewer than @p minPoints points -- in which case
+ *         @p x and @p y are left untouched, so a caller that ignores the
+ *         result still fits the full data rather than nothing at all
+ */
+bool restrictToXRange(std::vector<double> &x, std::vector<double> &y, double xmin, double xmax,
+                      std::size_t minPoints = 2);
 
 #endif
 
