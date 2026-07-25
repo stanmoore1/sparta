@@ -334,6 +334,37 @@ target_link_libraries(test_welcomescreen PRIVATE
   GTest::gtest_main Qt6::Widgets Qt6::Svg Qt6::Test)
 gtest_discover_tests(test_welcomescreen)
 
+# The column chooser behind File > Plot Data File. Everything it returns is an
+# index into the data it hands back, so an off-by-one between the two draws a
+# chart of the wrong quantity without complaint.
+add_executable(test_plotdatadialog
+  test_plotdatadialog.cpp
+  ${CMAKE_SOURCE_DIR}/src/plotdatadialog.cpp
+  ${CMAKE_SOURCE_DIR}/src/plotdata.cpp
+  ${CMAKE_SOURCE_DIR}/src/customfunc.cpp
+  ${CMAKE_SOURCE_DIR}/src/levmar.cpp
+  ${CMAKE_SOURCE_DIR}/src/leastsquares.cpp
+  ${CMAKE_SOURCE_DIR}/src/helpers.cpp
+)
+target_include_directories(test_plotdatadialog PRIVATE
+  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}/thirdparty/lepton/include)
+target_link_libraries(test_plotdatadialog PRIVATE
+  GTest::gtest_main Qt6::Widgets Qt6::Test lepton_mini)
+gtest_discover_tests(test_plotdatadialog)
+
+# The light/dark appearance: applied once in main() before the main window
+# exists, so anything wrong with it is wrong for the whole session. Needs the
+# resource bundle for :/style.qss.
+add_executable(test_theme
+  test_theme.cpp
+  ${CMAKE_SOURCE_DIR}/src/theme.cpp
+  ${TEST_RESOURCE_SOURCES}
+)
+target_include_directories(test_theme PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_theme PRIVATE GTest::gtest_main Qt6::Widgets Qt6::Svg)
+gtest_discover_tests(test_theme)
+
 # Test executable for helpers
 add_executable(test_helpers
   test_helpers.cpp
