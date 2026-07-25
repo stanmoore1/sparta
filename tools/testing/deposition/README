@@ -31,7 +31,16 @@ in.test.conserve
   mass.  Run over a sweep of growth rates, from slow enough that nothing is
   buried up to fast enough that some particles are, and at several Nevery
   values.  fix grid/check runs with the error setting throughout, so
-  completing the run also proves no particle was left inside the surface.
+  completing the run also proves no particle was left inside the surface,
+  and that no particle was left with coordinates outside the cell that owns
+  it.
+
+  The top of the rate sweep is close to where marching squares itself gives
+  up: above roughly 0.65 of a corner point value per step, SPARTA's own
+  watertight check on the regenerated isosurface fails.  That is not specific
+  to deposition -- the same input in ablate mode fails it too -- and it is
+  not what the half-cell-per-regeneration guard measures, since the front is
+  only advancing about a fifth of a cell there.
 
 in.test.momentum
   A growing surface in a fully PERIODIC box, so no domain boundary can take

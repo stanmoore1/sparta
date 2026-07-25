@@ -1299,9 +1299,34 @@ int FixAblate::salvage_particle(int icell, int i)
   double eps = EPSSURF * (dim == 3 ? MIN(MIN(xyzsize[0],xyzsize[1]),xyzsize[2])
                                    : MIN(xyzsize[0],xyzsize[1]));
 
-  p->x[0] = minxc[0] + eps*norm[0];
-  p->x[1] = minxc[1] + eps*norm[1];
-  if (dim == 3) p->x[2] = minxc[2] + eps*norm[2];
+  double xtry[3];
+  xtry[0] = minxc[0] + eps*norm[0];
+  xtry[1] = minxc[1] + eps*norm[1];
+  xtry[2] = (dim == 3) ? minxc[2] + eps*norm[2] : p->x[2];
+
+  // the offset must not carry the particle out of the cell that owns it
+  // it can: when the nearest point on the surface is on a cell edge or
+  //   corner, the outward normal there generally points out of the cell, and
+  //   a particle whose coords are outside its own cell breaks the move loop
+  // clamp it back inside, just off the face rather than exactly on it
+
+  double *clo = grid->cells[icell].lo;
+  double *chi = grid->cells[icell].hi;
+  int clamped = 0;
+  for (int k = 0; k < dim; k++) {
+    if (xtry[k] < clo[k]) { xtry[k] = clo[k] + eps; clamped = 1; }
+    else if (xtry[k] > chi[k]) { xtry[k] = chi[k] - eps; clamped = 1; }
+  }
+
+  // clamping moves the particle back toward the surface, so it may no longer
+  //   be outside it.  Rather than guess, ask; if it is not, say so and let
+  //   the caller bury it, which is accounted for
+
+  if (clamped && !grid->outside_surfs(icell,xtry,xcell)) return 0;
+
+  p->x[0] = xtry[0];
+  p->x[1] = xtry[1];
+  if (dim == 3) p->x[2] = xtry[2];
 
   // record the momentum the collision transfers to the surface
 

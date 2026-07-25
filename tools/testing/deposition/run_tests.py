@@ -201,7 +201,10 @@ def main():
     ok = True
     # sweep the growth rate: slow enough that nothing is buried, up to fast
     # enough that some particles are, and check the ledger balances throughout
-    for rate in (0.02, 0.05, 0.1, 0.2, 0.3):
+    # the top of this sweep is deliberately close to the point where marching
+    # squares itself gives up: above about 0.65 per step SPARTA's own
+    # watertight check fails, in ablate mode as well as deposit
+    for rate in (0.02, 0.05, 0.1, 0.2, 0.3, 0.5, 0.6):
         ok &= test_conserve(exe, rate, 1)
     # the same physics with the isosurface regenerated less often
     for nevery in (2, 5):
