@@ -13,9 +13,9 @@
 #define IMAGEVIEWER_H
 
 #include "dumpimage.h"
+#include "viewersource.h"
 
 #include <QColor>
-#include <QDialog>
 #include <QImage>
 #include <QList>
 #include <QMap>
@@ -45,7 +45,7 @@ class SpartaGui;
  * maps. Changes regenerate the image through the SPARTA library interface
  * (dump image + run 0 + undump).
  */
-class ImageViewer : public QDialog {
+class ImageViewer : public ViewerSource {
     Q_OBJECT
 
 public:
@@ -110,6 +110,20 @@ public:
      * message and returns when no simulation box or grid is defined yet.
      */
     void createImage();
+
+    // --- ViewerSource ---
+    [[nodiscard]] QString sourceLabel() const override { return QStringLiteral("Snapshot"); }
+    [[nodiscard]] QIcon sourceIcon() const override;
+    [[nodiscard]] QString sourceTip() const override
+    {
+        return QStringLiteral("The rendered SPARTA snapshot");
+    }
+    [[nodiscard]] QString emptyTip() const override
+    {
+        return QStringLiteral("No render yet: use Run > Create Image");
+    }
+    [[nodiscard]] bool hasContent() const override { return !image.isNull(); }
+    [[nodiscard]] QImage currentImage() const override { return image; }
 
 protected:
     /** @brief Paint the current render at 1:1, or scaled down when the

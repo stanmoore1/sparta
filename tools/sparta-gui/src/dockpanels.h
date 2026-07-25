@@ -99,6 +99,9 @@ public:
      */
     void setPanelWidget(Panel panel, QWidget *widget, const QString &title, bool keepOld = false);
 
+    /// @brief Retitle a panel's dock tab (a source announces its own title)
+    void setPanelTitle(Panel panel, const QString &title);
+
     /**
      * @brief Tear down all run-owned panel content before a new document/run
      *

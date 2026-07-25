@@ -17,6 +17,7 @@
 #include "plotdata.h"
 #include "plotdatadialog.h"
 #include "slideshow.h"
+#include "viewerwindow.h"
 #include "theme.h"
 
 #include <QApplication>
@@ -167,10 +168,10 @@ int main(int argc, char *argv[])
     if (parser.isSet("image")) {
         const QStringList imageFiles = parser.values("image");
         if (imageFiles.isEmpty()) return 1;
-        auto *viewer = new SlideShow(imageFiles.first());
-        viewer->setAttribute(Qt::WA_DeleteOnClose);
-        viewer->setWindowIcon(QIcon(Cfg::MAIN_ICON));
-        viewer->show();
+        auto *win = ViewerWindow::forSequence(imageFiles.first());
+        win->setAttribute(Qt::WA_DeleteOnClose);
+        win->show();
+        auto *viewer = win->sequence();
 
         // the movie import dialog is modal to the (already visible) viewer
         for (const QString &f : imageFiles) {
@@ -182,7 +183,10 @@ int main(int argc, char *argv[])
         // every movie import was canceled or failed: delete the viewer directly
         // so its image cache is removed without a running event loop
         if (viewer->imageCount() == 0) {
-            delete viewer;
+            // delete the window, not the source: it owns the slide show, and
+            // the slide show's image cache is cleaned up in its destructor,
+            // which has to happen without a running event loop here
+            delete win;
             return 0;
         }
         return app.exec();

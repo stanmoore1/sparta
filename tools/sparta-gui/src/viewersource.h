@@ -88,6 +88,12 @@ signals:
 
     /// Something appeared or went away; the host re-checks hasContent().
     void contentChanged();
+
+    /// The source's own Ctrl+W was pressed. A source cannot act on this
+    /// itself: QWidget::close() does nothing for a widget that is not a
+    /// window, so inside a dock the shortcut would silently stop working.
+    /// The host closes its panel, or its window, as appropriate.
+    void closeRequested();
 };
 
 #endif

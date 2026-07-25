@@ -12,6 +12,7 @@
 #include "dockpanels.h"
 
 #include "constants.h"
+#include "viewersource.h"
 
 #include "DockAreaWidget.h"
 #include "DockManager.h"
@@ -128,15 +129,32 @@ void PanelManager::setPanelWidget(Panel panel, QWidget *widget, const QString &t
     d->setWidget(widget, insertModeFor(panel));
     d->setWindowTitle(title);
 
-    // A QDialog (ImageViewer, SlideShow) reacts to Escape by hiding itself
-    // (QDialog::reject -> finished), which would otherwise leave the dock
-    // showing a blank content pane. Map that back to "close the panel tab".
+    // A QDialog reacts to Escape by hiding itself (QDialog::reject ->
+    // finished), which would otherwise leave the dock showing a blank content
+    // pane. Map that back to "close the panel tab". The viewers used to be
+    // dialogs and needed this; they are plain widgets now, which is the real
+    // fix, but other panels may still be handed a dialog.
     if (auto *dialog = qobject_cast<QDialog *>(widget)) {
         connect(dialog, &QDialog::finished, this, [this, panel, dialog](int) {
             dialog->show();
             closePanel(panel);
         });
     }
+
+    // A viewer source cannot close itself: QWidget::close() does nothing for a
+    // widget that is not a window, so without this its own Ctrl+W and File >
+    // Close would silently do nothing once it was docked.
+    if (auto *source = qobject_cast<ViewerSource *>(widget)) {
+        connect(source, &ViewerSource::closeRequested, this,
+                [this, panel]() { closePanel(panel); });
+        connect(source, &ViewerSource::titleChanged, this,
+                [this, panel](const QString &name) { setPanelTitle(panel, name); });
+    }
+}
+
+void PanelManager::setPanelTitle(Panel panel, const QString &title)
+{
+    docks[panel]->setWindowTitle(title);
 }
 
 void PanelManager::clearRunPanels()

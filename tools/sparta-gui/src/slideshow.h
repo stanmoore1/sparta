@@ -14,8 +14,8 @@
 
 #include "imagecache.h"
 #include "viewerdisplay.h"
+#include "viewersource.h"
 
-#include <QDialog>
 #include <QIcon>
 #include <QImage>
 #include <QSize>
@@ -40,7 +40,7 @@ class RangeBandSlider;
  * playback with configurable timing, looping, and zoom controls.
  * Images can be exported as a movie file.
  */
-class SlideShow : public QDialog {
+class SlideShow : public ViewerSource {
     Q_OBJECT
 
 public:
@@ -96,6 +96,21 @@ public:
      * @brief Clear all images from slideshow
      */
     void clear();
+
+    // --- ViewerSource ---
+    [[nodiscard]] QString sourceLabel() const override { return QStringLiteral("Sequence"); }
+    [[nodiscard]] QIcon sourceIcon() const override;
+    [[nodiscard]] QString sourceTip() const override
+    {
+        return QStringLiteral("The image sequence and slide show");
+    }
+    [[nodiscard]] QString emptyTip() const override
+    {
+        return QStringLiteral("No frames yet: run a deck with a dump image command, "
+                              "or use File > Open Image or Movie");
+    }
+    [[nodiscard]] bool hasContent() const override { return !imagefiles.isEmpty(); }
+    [[nodiscard]] QImage currentImage() const override { return image; }
 
 private slots:
     void quit();             ///< Quit the entire application (via SpartaGui::quit)

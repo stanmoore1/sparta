@@ -282,6 +282,11 @@ if (VTK_FOUND)
   vtk_module_autoinit(TARGETS test_vtkfilters MODULES ${VTK_LIBRARIES})
   gtest_discover_tests(test_vtkfilters)
 
+  # Guarded on SPARTA_GUI_HAVE_VTK rather than VTK_FOUND: the filter tests above
+  # only need VTK to exist, but this one links the scene, and the scene is only
+  # part of PROJECT_SOURCES when the application was configured to build it.
+  if (SPARTA_GUI_HAVE_VTK)
+
   # The find_package above narrowed VTK_LIBRARIES to the five modules the pure
   # filter tests need. The scene renders, so ask again for the full set the
   # application itself links -- after test_vtkfilters has already been linked,
@@ -318,6 +323,7 @@ if (VTK_FOUND)
     target_include_directories(test_vtkscene PRIVATE ${SPARTA_PLUGINLIB_DIR})
   endif()
   gtest_discover_tests(test_vtkscene)
+  endif()
 endif()
 
 # Test executable for the movie probing and frame selection helpers

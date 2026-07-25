@@ -55,7 +55,7 @@ constexpr int EXTRA_HEIGHT   = 130;
 } // namespace
 
 SlideShow::SlideShow(const QString &fileName, SpartaGui *_spartagui, QWidget *parent) :
-    QDialog(parent), spartagui(_spartagui), playtimer(nullptr), imageLabel(new QLabel),
+    ViewerSource(parent), spartagui(_spartagui), playtimer(nullptr), imageLabel(new QLabel),
     scrollArea(new QScrollArea), scrollBar(new RangeBandSlider),
     imageCounter(new QLabel("Image   0 /   0 :")), imageName(new QLabel("(none)")),
     startBox(new QSpinBox), stopBox(new QSpinBox), cacheButton(new QPushButton), current(0),
@@ -106,7 +106,7 @@ SlideShow::SlideShow(const QString &fileName, SpartaGui *_spartagui, QWidget *pa
     // active; the eventFilter() override below resolves that in-focus case
     auto *shortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_W), this);
     shortcut->setContext(Qt::WidgetWithChildrenShortcut);
-    connect(shortcut, &QShortcut::activated, this, &QWidget::close);
+    connect(shortcut, &QShortcut::activated, this, &SlideShow::closeRequested);
     shortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Slash), this);
     shortcut->setContext(Qt::WidgetWithChildrenShortcut);
     connect(shortcut, &QShortcut::activated, this, &SlideShow::stopRun);
@@ -343,7 +343,7 @@ SlideShow::SlideShow(const QString &fileName, SpartaGui *_spartagui, QWidget *pa
     goplay->setFocus();
 
     setWindowIcon(QIcon(Cfg::MAIN_ICON));
-    setWindowTitle(QString("SPARTA-GUI - Slide Show: ") + QFileInfo(fileName).fileName());
+    emit titleChanged(QFileInfo(fileName).fileName());
 
     updateCacheIndicator();
 
@@ -493,6 +493,11 @@ void SlideShow::deleteImages()
     loadImage(current);
 }
 
+QIcon SlideShow::sourceIcon() const
+{
+    return QIcon(":/icons/image-x-generic.svg");
+}
+
 void SlideShow::clear()
 {
     imagefiles.clear();
@@ -513,6 +518,7 @@ void SlideShow::clear()
     stopBox->setValue(1);
     updateSliderRange();
     updateCacheIndicator();
+    emit contentChanged();
     repaint();
 }
 
@@ -867,7 +873,7 @@ void SlideShow::resetWindowSize()
 
 void SlideShow::showEvent(QShowEvent *event)
 {
-    QDialog::showEvent(event);
+    ViewerSource::showEvent(event);
     // any fit computed while the window was hidden used unpolished style
     // metrics and was not memoized (see fitViewerWindow()); apply the fit
     // again as soon as the shown window has settled
@@ -882,11 +888,11 @@ bool SlideShow::eventFilter(QObject *watched, QEvent *event)
 {
     if (event->type() == QEvent::ShortcutOverride) {
         auto *keyEvent = dynamic_cast<QKeyEvent *>(event);
-        if (!keyEvent) return QDialog::eventFilter(watched, event);
+        if (!keyEvent) return ViewerSource::eventFilter(watched, event);
         if (keyEvent->modifiers().testFlag(Qt::ControlModifier)) {
             switch (keyEvent->key()) {
                 case 'W':
-                    close();
+                    emit closeRequested();
                     event->accept();
                     return true;
                 case '/':
@@ -914,7 +920,7 @@ bool SlideShow::eventFilter(QObject *watched, QEvent *event)
             }
         }
     }
-    return QDialog::eventFilter(watched, event);
+    return ViewerSource::eventFilter(watched, event);
 }
 
 void SlideShow::doImageRotateCw()

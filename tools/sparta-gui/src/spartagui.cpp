@@ -34,6 +34,7 @@
 #include "sweeppanel.h"
 #include "setvariables.h"
 #include "slideshow.h"
+#include "viewerwindow.h"
 #include "stdcapture.h"
 #include "urldownloader.h"
 #if defined(SPARTA_GUI_HAVE_VTK)
@@ -1425,13 +1426,13 @@ void SpartaGui::openImages()
         "*.flv *.gif);;All files (*)");
     if (files.isEmpty()) return;
 
-    auto *viewer = new SlideShow(files.first());
-    viewer->setAttribute(Qt::WA_DeleteOnClose);
-    viewer->setWindowIcon(QIcon(Cfg::MAIN_ICON));
-    viewer->show();
+    auto *win = ViewerWindow::forSequence(files.first());
+    win->setAttribute(Qt::WA_DeleteOnClose);
+    win->show();
 
     // the import dialog of a movie file is modal to the (already visible)
     // slide show window, so a movie must not be added before it is shown
+    auto *viewer = win->sequence();
     for (const QString &f : files) {
         if (isMovieFile(f))
             viewer->addMovie(f);
@@ -1440,7 +1441,7 @@ void SpartaGui::openImages()
     }
 
     // every movie import was canceled or failed and no image was selected
-    if (viewer->imageCount() == 0) viewer->close();
+    if (viewer->imageCount() == 0) win->close();
 }
 
 void SpartaGui::purgeInspectList()
@@ -1562,9 +1563,8 @@ void SpartaGui::inspectFile(const QString &fileName)
             infoviewer->show();
             ilist->info = infoviewer;
             dumpinfo.remove();
-            auto *inspect_image = new ImageViewer(fileName, &sparta, this);
+            auto *inspect_image = ViewerWindow::forSnapshot(fileName, &sparta, this, this);
             inspect_image->setFont(font());
-            inspect_image->setMinimumSize(Cfg::MINIMUM_WIDTH, Cfg::MINIMUM_HEIGHT);
             inspect_image->show();
             ilist->image = inspect_image;
         }

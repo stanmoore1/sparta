@@ -210,7 +210,7 @@ void selectComboItem(QComboBox *box, const QString &text)
 
 ImageViewer::ImageViewer(const QString &fileName, SpartaWrapper *_sparta, SpartaGui *_spartagui,
                          QWidget *parent) :
-    QDialog(parent), menuBar(new QMenuBar), imageLabel(new QLabel), scrollArea(new QScrollArea),
+    ViewerSource(parent), menuBar(new QMenuBar), imageLabel(new QLabel), scrollArea(new QScrollArea),
     saveAsAct(nullptr), copyAct(nullptr), cmdAct(nullptr), movieAct(nullptr), sparta(_sparta),
     spartagui(_spartagui), filename(QFileInfo(fileName).fileName())
 {
@@ -535,7 +535,7 @@ ImageViewer::ImageViewer(const QString &fileName, SpartaWrapper *_sparta, Sparta
     mainLayout->addLayout(imageLayout);
     mainLayout->setSpacing(LAYOUT_SPACING);
     setWindowIcon(QIcon(Cfg::MAIN_ICON));
-    setWindowTitle(QString("SPARTA-GUI - Image Viewer - ") + QFileInfo(fileName).fileName());
+    emit titleChanged(QFileInfo(fileName).fileName());
     createActions();
 
     // surfaces can only be shown when surfs are defined
@@ -1011,7 +1011,7 @@ bool ImageViewer::eventFilter(QObject *watched, QEvent *event)
     if (event->type() == QEvent::ShortcutOverride) {
         if (shutdown) return false;
         auto *keyEvent = dynamic_cast<QKeyEvent *>(event);
-        if (!keyEvent) return QDialog::eventFilter(watched, event);
+        if (!keyEvent) return ViewerSource::eventFilter(watched, event);
         if (keyEvent->modifiers().testFlag(Qt::ControlModifier)) {
             switch (keyEvent->key()) {
                 case 'S':
@@ -1023,7 +1023,7 @@ bool ImageViewer::eventFilter(QObject *watched, QEvent *event)
                     event->accept();
                     return true;
                 case 'W':
-                    close();
+                    emit closeRequested();
                     event->accept();
                     return true;
                 case 'Q':
@@ -1075,7 +1075,7 @@ bool ImageViewer::eventFilter(QObject *watched, QEvent *event)
             setFocus();
         }
     }
-    return QDialog::eventFilter(watched, event);
+    return ViewerSource::eventFilter(watched, event);
 }
 
 // Refresh the SPARTA-derived members of the settings struct right before a
@@ -1323,13 +1323,20 @@ void ImageViewer::createActions()
         createImage();
     });
     fileMenu->addSeparator();
-    auto *closeAct = addMenuAction(fileMenu, "&Close", ":/icons/window-close.svg", this, &QWidget::close);
+    auto *closeAct =
+        addMenuAction(fileMenu, "&Close", ":/icons/window-close.svg", this,
+                      &ImageViewer::closeRequested);
     closeAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_W));
     closeAct->setShortcutContext(Qt::WidgetWithChildrenShortcut);
     auto *quitAct =
         addMenuAction(fileMenu, "&Quit", ":/icons/application-exit.svg", this, &ImageViewer::quit);
     quitAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Q));
     quitAct->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+}
+
+QIcon ImageViewer::sourceIcon() const
+{
+    return QIcon(":/icons/image-viewer.svg");
 }
 
 void ImageViewer::updateActions()
@@ -1410,7 +1417,7 @@ void ImageViewer::resetWindowSize()
 
 void ImageViewer::showEvent(QShowEvent *event)
 {
-    QDialog::showEvent(event);
+    ViewerSource::showEvent(event);
     // any fit computed while the window was hidden used unpolished style
     // metrics and was not memoized (see fitViewerWindow()); apply the fit
     // again as soon as the shown window has settled
