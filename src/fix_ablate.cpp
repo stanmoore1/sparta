@@ -220,6 +220,8 @@ FixAblate::FixAblate(SPARTA *sparta, int narg, char **arg) :
   sfront = NULL;
   maxsfront = 0;
   max_advance = 0.0;
+  depo_stamp = -1;
+  for (int i = 0; i < 9; i++) depo_all[i] = 0.0;
   mvalues = NULL;
   tvalues = NULL;
   ncorner = size_per_grid_cols;
@@ -460,6 +462,20 @@ void FixAblate::init()
   if (mode == DEPOSIT && (multi_val_flag || multi_dec_flag))
     error->all(FLERR,"Fix ablate mode deposit does not yet support "
                "multivalue or multiple corner-point decrement modes");
+
+  // the advancing front is implemented in Update::move()
+  // UpdateKokkos::init() does not call Update::init() and UpdateKokkos has its
+  //   own duplicate move loop, so under Kokkos the front would never be set up
+  //   and deposition would silently run as if the surface were static
+  // these checks live here rather than in Update::init() so they are reached
+  //   on every path, Kokkos included
+
+  if (mode == DEPOSIT && sparta->kokkos)
+    error->all(FLERR,"Cannot yet use fix ablate mode deposit with Kokkos");
+
+  if (mode == DEPOSIT && domain->axisymmetric)
+    error->all(FLERR,"Cannot yet use fix ablate mode deposit with "
+               "an axisymmetric domain");
 
   if (which == COMPUTE) {
     icompute = modify->find_compute(idsource);
@@ -1548,10 +1564,12 @@ void FixAblate::epsilon_adjust()
   // a vertex exactly on a grid corner point.  When a surface feature is
   // grid-aligned this makes neighboring cells emit coincident vertices there,
   // producing a non-watertight surface (e.g. create_isurf of a body whose flat
-  // face lies on a grid line).  Removing exactly-on-threshold values is a hard
-  // numerical requirement and is always enforced.  The wider EPSILON band,
-  // which also suppresses tiny surface elements, is only applied when the user
-  // requests it via mindist > 0 so as not to change existing results.
+  // face lies on a grid line) and inconsistent inside/outside cell marking.
+  // Removing exactly-on-threshold values is a hard numerical requirement and
+  // is always enforced.  Deposition reaches this case often, since it drives
+  // corner values upward through thresh.  The wider EPSILON band, which also
+  // suppresses tiny surface elements, is only applied when the user requests
+  // it via mindist > 0 so as not to change existing results.
 
   for (icell = 0; icell < nglocal; icell++) {
     if (!(cinfo[icell].mask & groupbit)) continue;
@@ -2221,18 +2239,29 @@ double FixAblate::compute_vector(int i)
 
   // deposition diagnostics, so the mass and momentum a growing surface
   //   takes out of the gas can be audited against the gas totals
+  // the counters accumulate per proc, so they must be summed over all procs
+  //   before being output, else only one proc's share is reported
+  // reduced once per timestep and cached, since stats invokes this separately
+  //   for each requested index; all procs reach it together
 
-  if (mode == DEPOSIT) {
-    if (i == 2) return 1.0*update->nburied;
-    if (i == 3) return update->buried_mass;
-    if (i == 4) return update->buried_mom[0];
-    if (i == 5) return update->buried_mom[1];
-    if (i == 6) return update->buried_mom[2];
-    if (i == 7) return 1.0*update->nfrontreflect;
-    if (i == 8) return update->reflect_mom[0];
-    if (i == 9) return update->reflect_mom[1];
-    if (i == 10) return update->reflect_mom[2];
+  if (mode != DEPOSIT) return 0.0;
+
+  if (depo_stamp != update->ntimestep) {
+    double one[9];
+    one[0] = 1.0*update->nburied;
+    one[1] = update->buried_mass;
+    one[2] = update->buried_mom[0];
+    one[3] = update->buried_mom[1];
+    one[4] = update->buried_mom[2];
+    one[5] = 1.0*update->nfrontreflect;
+    one[6] = update->reflect_mom[0];
+    one[7] = update->reflect_mom[1];
+    one[8] = update->reflect_mom[2];
+    MPI_Allreduce(one,depo_all,9,MPI_DOUBLE,MPI_SUM,world);
+    depo_stamp = update->ntimestep;
   }
+
+  if (i >= 2 && i <= 10) return depo_all[i-2];
 
   return 0.0;
 }

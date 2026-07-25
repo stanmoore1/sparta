@@ -15,6 +15,9 @@ boundary            r r p
 create_box          0 150 0 150 -0.5 0.5
 create_grid         150 150 1
 
+# implicit surfaces need a clumped grid partition to acquire ghost cells
+balance_grid        rcb cell
+
 global              nrho 1.0 fnum 0.01
 
 species             air.species N

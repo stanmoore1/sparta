@@ -8,15 +8,17 @@ deleted.  These tests assert that property directly.
 
 Usage:
     python3 run_tests.py [--exe ../../../src/spa_serial]
+    python3 run_tests.py --exe ../../../src/spa_mpi --ranks 4
 """
 
 import argparse
 import os
-import re
 import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+
+RANKS = 1
 
 # stats_style columns: step np f_ablate f_ablate[3] f_ablate[4] f_ablate[8]
 #   f_ablate     = summed corner point values, i.e. how much material exists
@@ -31,7 +33,13 @@ def run(exe, infile, variables=None):
     cmd = [exe, "-in", infile]
     for k, v in (variables or {}).items():
         cmd += ["-var", k, str(v)]
-    p = subprocess.run(cmd, cwd=HERE, capture_output=True, text=True)
+    if RANKS > 1:
+        cmd = ["mpirun", "-n", str(RANKS), "--oversubscribe", "--bind-to", "none"] + cmd
+    env = dict(os.environ)
+    # OpenMPI refuses to run as root unless told otherwise
+    env.setdefault("OMPI_ALLOW_RUN_AS_ROOT", "1")
+    env.setdefault("OMPI_ALLOW_RUN_AS_ROOT_CONFIRM", "1")
+    p = subprocess.run(cmd, cwd=HERE, capture_output=True, text=True, env=env)
     return p.returncode, p.stdout + p.stderr
 
 
@@ -115,11 +123,17 @@ def test_ablate_unaffected(exe):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--exe", default=os.path.join(HERE, "../../../src/spa_serial"))
+    ap.add_argument("--ranks", type=int, default=1,
+                    help="MPI ranks; >1 requires an MPI build (spa_mpi)")
     args = ap.parse_args()
+
+    global RANKS
+    RANKS = args.ranks
 
     exe = os.path.abspath(args.exe)
     if not os.path.exists(exe):
         sys.exit("executable not found: %s (build it with 'make serial')" % exe)
+    print("running with %d rank(s): %s\n" % (RANKS, exe))
 
     ok = True
     # sweep the growth rate: slow enough that nothing is buried, up to fast

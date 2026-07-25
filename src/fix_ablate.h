@@ -100,6 +100,9 @@ class FixAblate : public Fix {
   int maxsfront;           // allocated length of sfront
   double max_advance;      // max observed sfront*dt / cell size, for reporting
 
+  double depo_all[9];      // deposition counters summed over all procs
+  bigint depo_stamp;       // timestep depo_all was last reduced on
+
   double *celldelta;       // per-cell delta from compute or fix source
   double **cdelta;         // per-corner point deltas
   double **cdelta_ghost;   // ditto for my ghost cells communicated to me

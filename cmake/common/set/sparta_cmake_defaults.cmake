@@ -81,6 +81,8 @@ if(SPARTA_ENABLE_TESTING)
         "in.ablation.2d"
         "in.ablation.3d"
         "in.ablate.axi.spherecone"
+        # same, plus fix ablate mode deposit is not KOKKOS-enabled
+        "in.deposition.2d"
         # surf_collide adiabatic/cll/td/impulsive styles not KOKKOS-enabled
         "in.beam.adiabatic"
         "in.beam.cll"

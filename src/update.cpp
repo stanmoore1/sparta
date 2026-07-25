@@ -956,7 +956,21 @@ template < int DIM, int SURF, int OPT, int MOVING > void Update::move()
               }
 #endif
 
-              if (hitflag && param < minparam && side == OUTSIDE) {
+              // an advancing surf also accepts a hit from the INSIDE
+              // the front sweeps a band of space between the surface geometry,
+              //   which is only rebuilt at a regeneration, and where the front
+              //   has advanced to; a particle that drifts into that band from a
+              //   neighboring cell is behind the stored surface, so the plain
+              //   OUTSIDE filter would reject its hit and let it tunnel through
+              // it has in fact been overtaken by the front and must be
+              //   reflected back out, which is what the collide model does
+              //   since it emits into the +norm hemisphere
+
+              int sideok = (side == OUTSIDE);
+              if (MOVING && !sideok && side == INSIDE &&
+                  isurf < nsfront && sfront[isurf] > 0.0) sideok = 1;
+
+              if (hitflag && param < minparam && sideok) {
                 cflag = 1;
                 minparam = param;
                 minside = side;
