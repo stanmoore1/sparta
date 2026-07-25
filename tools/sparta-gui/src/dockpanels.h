@@ -160,7 +160,7 @@ private:
     /** @brief Size the two-child splitter containing @p area so its first child
      *  gets @p firstPercent of the current extent (see the .cpp for why explicit
      *  pixel sizes are required rather than percentages). */
-    void splitArea(ads::CDockAreaWidget *area, int firstPercent);
+    void splitArea(ads::CDockAreaWidget *area, int percent, Qt::Orientation orient);
 
     /** @brief Un-hide a panel's dock area and restore proportions after it is
      *  reopened. Deferred to the next event loop -- see the implementation for

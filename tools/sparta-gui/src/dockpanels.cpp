@@ -204,21 +204,57 @@ bool PanelManager::restoreLayout(QSettings &settings)
     return ok;
 }
 
-void PanelManager::splitArea(CDockAreaWidget *area, int firstPercent)
+void PanelManager::splitArea(CDockAreaWidget *area, int percent, Qt::Orientation orient)
 {
-    // Give the two-child splitter that contains @p area explicit pixel sizes,
-    // computed from its current width/height so they sum to the actual extent.
-    // Percentages must not be passed to setSplitterSizes() directly: QSplitter
+    // Give @p area the requested share of the nearest enclosing splitter that
+    // runs along @p orient.
+    //
+    // Addressing the splitter by orientation rather than by "the parent of the
+    // area" matters because the same area sits in two of them: the editor is a
+    // child of the vertical editor/output splitter *and*, one level up, of the
+    // horizontal editor/right-column splitter. Keying off the immediate parent
+    // silently retargets whichever one the dock tree happens to nest first, so
+    // adding a panel could leave two proportions fighting over one splitter and
+    // the other never set at all.
+    //
+    // Percentages must not be passed to setSizes() directly either: QSplitter
     // treats them as base sizes and hands the leftover space to the highest-
     // stretch child, which for us is always the ADS central widget (the editor)
     // -- so {62,38} would collapse a side panel to ~60px instead of ~38%.
     if (!area) return;
-    auto *sp = qobject_cast<QSplitter *>(area->parentWidget());
-    if (!sp || sp->count() != 2) return;
-    const int total = (sp->orientation() == Qt::Horizontal) ? sp->width() : sp->height();
+
+    QWidget *child = area;
+    QSplitter *sp  = nullptr;
+    for (QWidget *p = area->parentWidget(); p; child = p, p = p->parentWidget()) {
+        auto *s = qobject_cast<QSplitter *>(p);
+        if (s && s->orientation() == orient && s->count() > 1) {
+            sp = s;
+            break;
+        }
+    }
+    if (!sp) return;
+
+    const int idx = sp->indexOf(child);
+    if (idx < 0) return;
+    const int total = (orient == Qt::Horizontal) ? sp->width() : sp->height();
     if (total <= 0) return;
-    const int first = total * firstPercent / 100;
-    dm->setSplitterSizes(area, {first, total - first});
+
+    // Hand @p area its share and divide the remainder among the other children
+    // in their current proportions, so a third pane (the file navigator) keeps
+    // the size it already had instead of being crushed to nothing.
+    QList<int> sizes = sp->sizes();
+    const int mine   = total * percent / 100;
+    int othersNow    = 0;
+    for (int i = 0; i < sizes.size(); ++i)
+        if (i != idx) othersNow += sizes[i];
+
+    const int rest = total - mine;
+    for (int i = 0; i < sizes.size(); ++i) {
+        if (i == idx) continue;
+        sizes[i] = (othersNow > 0) ? rest * sizes[i] / othersNow : rest / (sizes.size() - 1);
+    }
+    sizes[idx] = mine;
+    sp->setSizes(sizes);
 }
 
 void PanelManager::applySplitterProportions()
@@ -236,17 +272,23 @@ void PanelManager::applySplitterProportions()
     // project files navigator : everything else, horizontally 18:82 -- wide
     // enough for real file names rather than the sliver QSplitter would
     // otherwise give a freshly-opened left dock
-    if (anyOpen({ProjectFiles})) splitArea(docks[ProjectFiles]->dockAreaWidget(), 18);
-    // editor : charts/image column, horizontally 62:38
-    if (anyOpen({Chart, Image, Slide})) splitArea(editorDock->dockAreaWidget(), 62);
-    // editor row : output/variables/tools, vertically 68:32
+    if (anyOpen({ProjectFiles}))
+        splitArea(docks[ProjectFiles]->dockAreaWidget(), 18, Qt::Horizontal);
+    // editor column : charts/image column, horizontally 62:38
+    if (anyOpen({Chart, Image, Slide}))
+        splitArea(editorDock->dockAreaWidget(), 62, Qt::Horizontal);
+    // within the editor column: editor above, output/variables/tools below,
+    // vertically 68:32. Output is docked under the editor rather than across
+    // the window, so this no longer costs the right-hand column any height.
     if (anyOpen({Log, Variables, Sweep, History, Diagnostics}))
-        splitArea(docks[Log]->dockAreaWidget(), 68);
-    // charts : image, vertically within the right column. In Analyze the images
-    // are the point of the workspace and the viewer spends ~100px of its own
-    // height on toolbars, so give it the larger share there.
+        splitArea(editorDock->dockAreaWidget(), 68, Qt::Vertical);
+    // charts : image, vertically within the right column. Split it evenly: the
+    // viewer scales its render to whatever room it has and still reads
+    // correctly, whereas the chart spends a fixed ~75px on its two control rows
+    // before the plot gets anything, so an uneven split costs the chart far
+    // more than it gains the image.
     if (anyOpen({Chart}) && anyOpen({Image, Slide}))
-        splitArea(docks[Image]->dockAreaWidget(), mode == Analyze ? 38 : 55);
+        splitArea(docks[Image]->dockAreaWidget(), 50, Qt::Vertical);
 }
 
 void PanelManager::restoreAreaVisibility(Panel panel)
@@ -271,7 +313,13 @@ void PanelManager::applyDefaultLayout()
     CDockAreaWidget *imageArea =
         dm->addDockWidget(ads::BottomDockWidgetArea, docks[Image], chartArea);
     dm->addDockWidgetTabToArea(docks[Slide], imageArea);
-    CDockAreaWidget *logArea = dm->addDockWidget(ads::BottomDockWidgetArea, docks[Log]);
+    // Output belongs under the *editor*, not under the whole window. Without an
+    // explicit target Qt-ADS docks it at the container root, where it spans the
+    // full width and takes its height out of the right-hand column as well --
+    // leaving the Image panel too short for a render and cutting the snapshot
+    // off halfway.
+    CDockAreaWidget *logArea =
+        dm->addDockWidget(ads::BottomDockWidgetArea, docks[Log], editorDock->dockAreaWidget());
     dm->addDockWidgetTabToArea(docks[Variables], logArea);
     // on-demand tool panels (Parameter Sweep, Run History) live tabbed with the
     // Output area but start hidden; they are shown from the menu when needed
