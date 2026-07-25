@@ -102,6 +102,10 @@ Update::Update(SPARTA *sparta) : Pointers(sparta)
   sfront = NULL;
   nsfront = 0;
   front_step0 = -1;
+  xhead = NULL;
+  xnext = NULL;
+  xsurf = NULL;
+  nxhead = 0;
   nburied = 0;
   buried_mass = 0.0;
   buried_mom[0] = buried_mom[1] = buried_mom[2] = 0.0;
@@ -206,13 +210,8 @@ void Update::init()
     if (strcmp(modify->fix[ifix]->style,"ablate") == 0)
       if (((FixAblate *) modify->fix[ifix])->depositflag) movingflag = 1;
 
-  if (movingflag) {
-    if (domain->axisymmetric)
-      error->all(FLERR,"Cannot yet use fix ablate mode deposit with "
-                 "an axisymmetric domain");
-    if (!surf->exist)
-      error->all(FLERR,"Fix ablate mode deposit requires surfaces");
-  }
+  if (movingflag && !surf->exist)
+    error->all(FLERR,"Fix ablate mode deposit requires surfaces");
 
   // choose the appropriate move method
 
@@ -225,6 +224,12 @@ void Update::init()
       else moveptr = &Update::move<3,0,0,0>;
     }
   } else if (domain->axisymmetric) {
+    // deposition is supported in axisymmetry, but without the sub-timestep
+    //   advancing front: in the axisymmetric plane the particle path is
+    //   curved and surf segments routinely lie exactly on cell faces, which
+    //   the moving intersection does not yet handle reliably
+    // engulfed particles are instead reflected, or accounted as buried, when
+    //   the isosurface is regenerated, so nothing is silently deleted
     if (surf->exist)
       moveptr = &Update::move<1,1,0,0>;
     else {
@@ -848,8 +853,28 @@ template < int DIM, int SURF, int OPT, int MOVING > void Update::move()
             minparam = 2.0;
             csurfs = cells[icell].csurfs;
 
-            for (m = 0; m < nsurf; m++) {
-              isurf = csurfs[m];
+            // an advancing surf sweeps beyond the cells it overlaps, and the
+            //   per-cell lists are rebuilt only at a regeneration, so a surf
+            //   which reaches into this cell may not be listed in it
+            // fix ablate chains those surfs per cell for exactly this loop;
+            //   they are kept out of cells[].csurfs because that is read all
+            //   over the code as "surfs geometrically in this cell"
+            // collapses to a single pass when MOVING = 0, so the ablation
+            //   path is unchanged
+
+            int nsource = 1;
+            if (MOVING && xhead && icell < nxhead && xhead[icell] >= 0)
+              nsource = 2;
+
+            for (int isource = 0; isource < nsource; isource++) {
+            int echain = (isource == 1) ? xhead[icell] : -1;
+            int nlist = (isource == 1) ? 0 : nsurf;
+
+            for (m = 0; (isource == 1) ? (echain >= 0) : (m < nlist); m++) {
+              if (isource == 1) {
+                isurf = xsurf[echain];
+                echain = xnext[echain];
+              } else isurf = csurfs[m];
 
               // skip the just-hit surf, except for an advancing surf which
               //   can legitimately catch up with the particle again
@@ -966,8 +991,15 @@ template < int DIM, int SURF, int OPT, int MOVING > void Update::move()
               //   reflected back out, which is what the collide model does
               //   since it emits into the +norm hemisphere
 
+              // for DIM > 1, side is positional, so a particle inside the band
+              //   the front has swept reports INSIDE; it has been overtaken
+              //   and must be reflected back out rather than passed through
+              // for axisymmetry, side comes from the velocity at the collision
+              //   point instead, where INSIDE means moving away from the
+              //   surface, so that relaxation does not apply
+
               int sideok = (side == OUTSIDE);
-              if (MOVING && !sideok && side == INSIDE &&
+              if (MOVING && DIM > 1 && !sideok && side == INSIDE &&
                   isurf < nsfront && sfront[isurf] > 0.0) sideok = 1;
 
               if (hitflag && param < minparam && sideok) {
@@ -985,6 +1017,8 @@ template < int DIM, int SURF, int OPT, int MOVING > void Update::move()
               }
 
             } // END of for loop over surfs
+
+            } // END of loop over surf sources (cell list, then swept chain)
 
             // tri/line = surf that particle hit first
 

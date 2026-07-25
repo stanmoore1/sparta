@@ -61,6 +61,13 @@ class Update : protected Pointers {
   int nsfront;           // length of sfront
   bigint front_step0;    // timestep whose end_of_step last regenerated the
                          //   isosurface; the front advances from that pose
+                         // swept coverage: advancing surfs which reach into a
+                         //   cell but are not in its csurfs list, chained per
+                         //   cell.  Owned by FixAblate, read only by move().
+  int *xhead;            // per-cell head index into xnext/xsurf, -1 = none
+  int *xnext;
+  surfint *xsurf;
+  int nxhead;
   bigint nburied;        // running count of particles buried by a front
   double buried_mass;    // running mass buried
   double buried_mom[3];  // running momentum buried

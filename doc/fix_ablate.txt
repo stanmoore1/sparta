@@ -189,11 +189,22 @@ natural when the rate is derived from a surface flux, for example with
 "compute isurf/grid"_compute_isurf_grid.html.  With the default {units}
 = {corner}, the {source} has the same meaning it does for ablation.
 
+In an axisymmetric domain the sub-timestep treatment above is not
+applied.  The particle path is curved in the axisymmetric plane, and
+surface elements routinely lie exactly on grid cell faces there, which
+the moving intersection test does not yet handle reliably.  Deposition
+itself is fully supported: particles the growing surface encloses are
+reflected back into the flow, or accounted as incorporated into the
+film, when the isosurface is regenerated, so none are silently deleted.
+The practical difference is that a particle is repositioned at the
+regeneration rather than at the instant the front reaches it, so a
+smaller {Nevery} gives a more faithful answer.
+
 The {mode} = deposit option currently supports only the default
 single-value, single-decrement corner point representation; it cannot
 be combined with the {multiple} keyword or with multivalue corner
-points.  It also cannot be used with an axisymmetric domain, and like
-all of fix ablate it has no Kokkos version.
+points.  Like all of fix ablate it has no Kokkos version, and an error
+is generated if it is used with Kokkos enabled.
 
 :line
 
