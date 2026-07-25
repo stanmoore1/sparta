@@ -194,6 +194,19 @@ void SpartaGui::setupUi(QSettings &settings, QFont &allFont, QFont &monoFont)
                 if (!varwindow) createVariableWindow();
                 panels->openPanel(PanelManager::Variables);
                 break;
+            case PanelManager::Analyze:
+                // Plots and pictures side by side. Both are built lazily -- the
+                // charts by a run, the viewer by a render -- so before either
+                // has happened this mode showed the deck and nothing else.
+                ensureChartPanel();
+                ensureViewerPanel();
+                panels->openPanel(PanelManager::Chart);
+                panels->openPanel(PanelManager::Viewer);
+                break;
+            case PanelManager::Visualize:
+                ensureViewerPanel();
+                panels->openPanel(PanelManager::Viewer);
+                break;
             default: break;
         }
     });
@@ -340,7 +353,7 @@ void SpartaGui::createRunMenu()
     menu->addSeparator();
 
     addMenuAction(menu, ":/icons/image-viewer.svg", "Create &Image", "Ctrl+I",
-                  &SpartaGui::renderImage);
+                  [this]() { renderImage(); });
 #if defined(SPARTA_GUI_HAVE_VTK)
     addMenuAction(menu, ":/icons/image-viewer.svg", "3D &Snapshot (VTK)", "Ctrl+Shift+3",
                   &SpartaGui::renderVtkSnapshot);
@@ -419,7 +432,7 @@ void SpartaGui::createViewMenu()
     for (const auto &e : entries) {
         auto *action = panels->toggleViewAction(e.panel);
         action->setIcon(QIcon(e.icon));
-        action->setText(e.text);
+        panels->setPanelMenuText(e.panel, e.text);
         action->setShortcut(QKeySequence(e.shortcut));
         menu->addAction(action);
     }
@@ -454,8 +467,9 @@ void SpartaGui::createViewMenu()
         // asked for a snapshot.
         if (panel == PanelManager::Viewer && viewer && !viewer->snapshot() && startupComplete &&
             !sparta.isRunning())
-            renderImage();
+            renderImage(/*quiet=*/true);
         if (panel == PanelManager::Log) ensureLogPanel();
+        if (panel == PanelManager::Chart) ensureChartPanel();
         if (panel == PanelManager::Variables && !varwindow) createVariableWindow();
         if (panel == PanelManager::Sweep) ensureSweepPanel();
         if (panel == PanelManager::History) ensureHistoryPanel();
@@ -578,7 +592,7 @@ void SpartaGui::createStatusBar()
 
     auto *imgbtn = new QPushButton(QIcon(":/icons/image-viewer.svg"), "");
     imgbtn->setToolTip("Create snapshot image");
-    connect(imgbtn, &QPushButton::released, this, &SpartaGui::renderImage);
+    connect(imgbtn, &QPushButton::released, this, [this]() { renderImage(); });
     statusbar->addWidget(imgbtn);
 
     // square status-bar buttons with a snug, uniform icon (shared policy)
@@ -2102,6 +2116,18 @@ void SpartaGui::ensureLogPanel()
     panels->setPanelWidget(PanelManager::Log, logwindow, "Output");
 }
 
+void SpartaGui::ensureChartPanel()
+{
+    if (chartwindow) return;
+    chartwindow = new ChartWindow(currentFile, this);
+    // Plain "Charts", for the same reason ensureLogPanel() uses plain "Output":
+    // the "Charts - <file> - Run <n>" title createChartWindow() applies would be
+    // naming a run that has not happened.
+    panels->setPanelWidget(PanelManager::Chart, chartwindow, "Charts");
+    chartwindow->setNorm(false);
+    chartwindow->setRangeEnabled(false);
+}
+
 void SpartaGui::createLogWindow(QSettings &settings)
 {
     logwindow = new LogWindow(currentFile, this);
@@ -2591,6 +2617,28 @@ void SpartaGui::ensureProjectFilesPanel()
     panels->setPanelWidget(PanelManager::ProjectFiles, projectFilesList, "Project Files");
 }
 
+namespace {
+// Icon for an entry of the project file list.  These are files, so the
+// document-open glyph the list used for every one of them -- an opening folder,
+// the icon of the *action* that opens a file -- was wrong for all of them and
+// told the reader nothing about what any entry was.
+QString projectFileIcon(const QFileInfo &fi)
+{
+    const QString name = fi.fileName();
+    const QString ext  = fi.suffix().toLower();
+
+    if (name.startsWith("in.")) return ":/icons/run-file.svg";
+    if (name.startsWith("log.") || ext == "log" || ext == "txt")
+        return ":/icons/txt-file-icon.svg";
+    if (isMovieFile(name) || isImageFile(name)) return ":/icons/image-x-generic.svg";
+    if (ext == "csv") return ":/icons/csv-file-icon.svg";
+    if (ext == "yaml" || ext == "yml") return ":/icons/yaml-file-icon.svg";
+    // restart files are named <base>.<step> or .restart, and are binary
+    if (ext == "restart" || name.contains(".restart")) return ":/icons/binary-file-icon.svg";
+    return ":/icons/txt-file-icon.svg";
+}
+} // namespace
+
 void SpartaGui::refreshProjectFiles()
 {
     if (!projectFilesList) return;
@@ -2617,7 +2665,7 @@ void SpartaGui::refreshProjectFiles()
         const QString name = fi.fileName();
         auto *item = new QListWidgetItem(name);
         item->setData(Qt::UserRole, fi.absoluteFilePath());
-        item->setIcon(QIcon(":/icons/document-open.svg"));
+        item->setIcon(QIcon(projectFileIcon(fi)));
         // emphasize files the deck references, and the currently open file
         if (referenced.contains(name)) {
             QFont f = item->font();
@@ -2926,8 +2974,19 @@ void SpartaGui::plotDataFile()
     win->show();
 }
 
-void SpartaGui::renderImage()
+void SpartaGui::renderImage(bool quiet)
 {
+    // "quiet" is for the renders nobody asked for: opening the viewer panel, or
+    // entering a workspace that shows it, renders so the pane is not blank. A
+    // deck that cannot be rendered is a perfectly ordinary state for that path
+    // -- an empty buffer, or one that never creates a box -- and answering a
+    // workspace switch with a modal error dialog is not acceptable. An explicit
+    // Create Image still reports why nothing appeared.
+    auto complain = [this, quiet](const QString &title, const QString &text,
+                                  const QString &detail = QString()) {
+        if (!quiet) warning(this, title, text, detail);
+    };
+
     // SPARTA is not re-entrant, so we can only query SPARTA when it is not running
     if (!sparta.isRunning()) {
         startSparta();
@@ -2956,17 +3015,17 @@ void SpartaGui::renderImage()
                 const QString errmsg = sparta.lastErrorMessage();
                 // ignore "Invalid SPARTA handle", but report other errors
                 if (!errmsg.isEmpty() && !errmsg.contains("Invalid SPARTA handle")) {
-                    warning(this, "Image Viewer File Creation Error",
-                            "SPARTA failed to create the image:",
-                            QString("<br><code>%1</code>").arg(errmsg));
+                    complain("Image Viewer File Creation Error",
+                             "SPARTA failed to create the image:",
+                             QString("<br><code>%1</code>").arg(errmsg));
                     return;
                 }
             }
             textEdit->setTextCursor(saved);
             // still no system box. bail out with a suitable message
             if (!sparta.extractSetting("box_exist")) {
-                warning(this, "Image Viewer File Creation Error",
-                        "Cannot create snapshot image from an input not creating a system box");
+                complain("Image Viewer File Creation Error",
+                         "Cannot create snapshot image from an input not creating a system box");
                 return;
             }
         }
@@ -3002,8 +3061,8 @@ void SpartaGui::renderImage()
         }
         viewer->addSource(ViewerPanel::Snapshot, new ImageViewer(currentFile, &sparta, this));
     } else {
-        warning(this, "Image Viewer File Creation Error",
-                "Cannot create snapshot image while SPARTA is running");
+        complain("Image Viewer File Creation Error",
+                 "Cannot create snapshot image while SPARTA is running");
         return;
     }
     panels->openPanel(PanelManager::Viewer);

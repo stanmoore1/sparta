@@ -28,15 +28,12 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from guidrive import Gui
+from guidrive import Gui, EXAMPLE, SPARTA_EXAMPLES
 
 OUT = os.environ.get("SWEEP_DIR", "/tmp/sweep")
 SCREENS = os.path.join(OUT, "screens")
-EXAMPLES = os.environ.get("SPARTA_EXAMPLES", "/home/user/sparta/examples")
-# Absolute, because the application resolves a relative deck against its own
-# working directory: a relative path here loads nothing and leaves a "cannot
-# open file" modal sitting over every screen that follows.
-DECK = os.environ.get("SPARTA_EXAMPLE", os.path.join(EXAMPLES, "circle", "in.circle"))
+EXAMPLES = SPARTA_EXAMPLES
+DECK = EXAMPLE
 
 manifest = []
 
@@ -193,16 +190,19 @@ def main():
             s.capture(f"01-menu-{name.lower()}", f"the {name} menu, open",
                       expect, lambda k=key: s.menu(k))
 
-        # Two submenus, one level down.
+        # Two submenus, one level down.  Reach them by mnemonic rather than by
+        # counting Down presses: arrow navigation skips disabled entries (Open
+        # Example is disabled until the examples tree has been probed), and a
+        # Right press on an entry that has no submenu walks the menu bar to the
+        # next menu instead.  Both together silently captured Edit in place of
+        # File > Open Example and View in place of Tools > Studies.
         s.capture("01-menu-file-examples", "File > Open Example submenu",
                   "a list of example categories (ablation, adapt, circle, ...), each "
                   "with its own submenu of in.* decks",
-                  lambda: (s.menu("f"), g.key("Down", 0.3), g.key("Down", 0.3),
-                           g.key("Down", 0.3), g.key("Right", 0.8)))
+                  lambda: (s.menu("f"), g.key("e", 0.8)))
         s.capture("01-menu-tools-studies", "Tools > Studies submenu",
                   "Parametric Sweep and Run History",
-                  lambda: (s.menu("t"), g.key("Down", 0.4), g.key("Down", 0.4),
-                           g.key("Down", 0.4), g.key("Down", 0.4), g.key("Right", 0.8)))
+                  lambda: (s.menu("t"), g.key("s", 0.8)))
 
         # -- workspace modes ------------------------------------------------
         for n, (key, mode, expect) in enumerate([

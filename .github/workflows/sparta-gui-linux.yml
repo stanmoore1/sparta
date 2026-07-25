@@ -102,3 +102,75 @@ jobs:
             build-gui/SPARTA-GUI-Linux-x86_64-*.tar.gz
             checksum.txt
           if-no-files-found: error
+
+  # The test suite. Until this existed no workflow ran it: all four sparta-gui
+  # jobs built the application and stopped there, so the ~460 tests only ever
+  # ran on someone's machine.
+  #
+  # Split in two. The unit suite is a couple of minutes and runs on every push.
+  # The suites that drive the real application under Xvfb (GuiDrive.*) take
+  # closer to fifteen and are opt-in, because a push should not wait on them.
+  test:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build and test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ninja-build \
+            libgl1-mesa-dev libglu1-mesa-dev libxkbcommon-dev \
+            libxcb1-dev libxcb-cursor0 libxcb-icccm4 libxcb-image0 \
+            libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
+            libxcb-shape0 libxcb-xinerama0 libxcb-xkb1 \
+            libvtk9-dev \
+            xvfb imagemagick xdotool openbox dbus-x11 \
+            at-spi2-core python3-tk python3-gi gir1.2-atspi-2.0
+          # PyAutoGUI needs tkinter and the accessibility helper needs pyatspi;
+          # the CMake probes report plainly when either is missing, but the
+          # tests that use them would then be reduced to skips.
+
+      - name: Install Qt (official Linux binaries)
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.7.3'
+          host: 'linux'
+          target: 'desktop'
+          arch: 'linux_gcc_64'
+          cache: true
+
+      - name: Build SPARTA shared library (serial)
+        run: |
+          cmake -S cmake -B build-lib -G Ninja \
+            -D BUILD_SHARED_LIBS=ON \
+            -D BUILD_MPI=OFF \
+            -D CMAKE_BUILD_TYPE=Release
+          cmake --build build-lib -j3
+          SPARTA_LIB=$(find "$PWD/build-lib" -name 'libsparta*.so*' -type f | head -1)
+          echo "SPARTA_LIB=$SPARTA_LIB" >> "$GITHUB_ENV"
+
+      - name: Build SPARTA-GUI with tests
+        run: |
+          # SPARTA_TEST_LIBRARY is what lets the live-window walks actually run
+          # rather than skip: they read species, surfaces and box extents out of
+          # a real instance.
+          cmake -S tools/sparta-gui -B build-test -G Ninja \
+            -D CMAKE_BUILD_TYPE=Release \
+            -D SPARTA_GUI_USE_PLUGIN=ON \
+            -D SPARTA_GUI_USE_VTK=ON \
+            -D ENABLE_TESTING=ON \
+            -D SPARTA_TEST_LIBRARY="$SPARTA_LIB"
+          cmake --build build-test -j3
+
+      - name: Run the unit suite
+        working-directory: build-test
+        run: ctest --output-on-failure -j3 -E 'GuiDrive|Framebuffer'
+
+      - name: Run the application-driving suites
+        if: github.event_name == 'workflow_dispatch'
+        working-directory: build-test
+        env:
+          SPARTA_PLUGIN_LIB: ${{ env.SPARTA_LIB }}
+        run: ctest --output-on-failure -R 'GuiDrive|Framebuffer'

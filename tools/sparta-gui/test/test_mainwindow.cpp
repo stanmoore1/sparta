@@ -1,0 +1,504 @@
+// -*- c++ -*- /////////////////////////////////////////////////////////////////////////
+// SPARTA-GUI - A Graphical Tool to Learn and Explore the SPARTA DSMC Simulation Software
+//
+// Copyright (c) 2023, 2024, 2025, 2026  Axel Kohlmeyer
+//
+// Documentation: https://sparta.github.io/sparta-gui/
+// Contact: akohlmey@gmail.com
+//
+// This software is distributed under the GNU General Public License version 2 or later.
+////////////////////////////////////////////////////////////////////////////////////////
+
+// The main window itself.
+//
+// Nothing constructed SpartaGui outside of main(), so the largest source file
+// in the application had no test at all: the menus, their shortcuts, and which
+// panels each workspace comes up with were only ever checked by driving the
+// running program under Xvfb, which takes minutes and needs a display.
+//
+// This runs offscreen in under a second. It deliberately drives only what is
+// safe to trigger unattended -- anything that opens a modal file dialog, writes
+// a file, or starts a run would block or leave debris, so those actions are
+// checked for existence, shortcut and icon rather than triggered.
+
+#include <gtest/gtest.h>
+
+#include <QAction>
+#include <QApplication>
+#include <QFont>
+#include <QIcon>
+#include <QKeySequence>
+#include <QMenu>
+#include <QMenuBar>
+#include <QSettings>
+
+#include <DockManager.h>
+#include <DockWidget.h>
+
+#include <map>
+#include <memory>
+#include <set>
+#include <string>
+
+#include "dockpanels.h"
+#include "constants.h"
+#include "helpers.h"
+#include "spartagui.h"
+
+using ads::CDockWidget;
+
+namespace {
+
+// Names of the actions that must not be triggered unattended: each opens a
+// modal dialog that would sit there with nobody to dismiss it, writes to the
+// filesystem, or starts a simulation.
+const std::set<QString> BLOCKING = {
+    "&New Input File",
+    "&Open Input File",
+    "&Save Input File",
+    "Save Input File &As",
+    "&View Text File",
+    "View &Image or Movie File(s)...",
+    "&Plot Data File...",
+    "Inspect &Restart File",
+    "&Quit",
+    "&Find and Replace...",
+    "Insert &Snippet...",
+    "P&references...",
+    "Reset Preferences to &Defaults",
+    "&Run SPARTA from Editor Buffer",
+    "Run SPARTA from &File",
+    "&Stop SPARTA",
+    "Chec&k Input",
+    "Relaunch &SPARTA Instance",
+    "Set &Variables...",
+    "Insert &Restart Commands...",
+    "Create &Image",
+    "3D &Snapshot (VTK)",
+    "Import Sur&face (STL / SPARTA)...",
+    "Export to Para&View...",
+    "Surface &Quantities Report...",
+    "Parametric S&weep...",
+    "Run &History...",
+    "&About SPARTA-GUI",
+    "Quick &Help",
+    "SPARTA-&GUI Documentation",
+    "SPARTA Online &Manual",
+    "Check for &SPARTA update",
+};
+
+// Where to find a shared libsparta. Baked in by the build; the environment
+// still wins so the binary can be run by hand against another one.
+const char *testLibrary()
+{
+    static const QByteArray env = qgetenv("SPARTA_PLUGIN_LIB");
+    if (!env.isEmpty()) return env.constData();
+#if defined(SPARTA_TEST_LIBRARY_PATH)
+    return SPARTA_TEST_LIBRARY_PATH;
+#else
+    return "";
+#endif
+}
+
+#define REQUIRE_LIBRARY()                                                                  \
+    do {                                                                                   \
+        if (!*testLibrary())                                                               \
+            GTEST_SKIP() << "no shared libsparta: configure with -D SPARTA_TEST_LIBRARY="; \
+    } while (0)
+
+// A window per test, on a settings scope of its own, so one test's preferences
+// cannot decide another's outcome.
+class MainWindow : public ::testing::Test {
+protected:
+    void SetUp() override
+    {
+        REQUIRE_LIBRARY();
+        QCoreApplication::setOrganizationName("SPARTA-GUI test");
+        QCoreApplication::setApplicationName("test_mainwindow");
+        QSettings settings;
+        settings.clear();
+        // Without this the constructor puts up its "No SPARTA Shared Library"
+        // box and loops on it until someone picks a library or exits -- which
+        // offscreen, with nobody to click, is a hang rather than a failure.
+        settings.setValue(Keys::PLUGIN_PATH, QString::fromLocal8Bit(testLibrary()));
+        settings.setValue(Keys::SHOWWELCOME, false);
+        settings.sync();
+        gui = new SpartaGui(nullptr, QString(), 800, 600);
+    }
+    void TearDown() override
+    {
+        delete gui;
+        gui = nullptr;
+        QSettings().clear();
+    }
+
+    // Walk the menu bar rather than findChildren<QAction*>(). Qt-ADS drops a
+    // dock widget out of the window's object tree when it is hidden inside a
+    // tabbed area, taking its toggle action with it -- four of the eight panel
+    // entries were invisible to findChildren even though the View menu shows
+    // all eight. The menu is also what a user actually has in front of them.
+    static void collect(QMenu *menu, QList<QAction *> &out)
+    {
+        for (auto *a : menu->actions()) {
+            if (a->isSeparator()) continue;
+            out.append(a);
+            if (a->menu()) collect(a->menu(), out);
+        }
+    }
+
+    QList<QAction *> allActions() const
+    {
+        QList<QAction *> out;
+        auto *bar = gui->findChild<QMenuBar *>();
+        if (bar)
+            for (auto *top : bar->actions()) {
+                out.append(top);
+                if (top->menu()) collect(top->menu(), out);
+            }
+        return out;
+    }
+
+    QAction *action(const QString &text) const
+    {
+        for (auto *a : allActions())
+            if (a->text() == text) return a;
+        return nullptr;
+    }
+
+    // Asked of the dock manager by object name rather than of PanelManager, so
+    // this needs no access to a private member. findChild() is not enough: a
+    // dock hidden inside a tabbed area is not in the window's object tree, and
+    // four of the eight panels are exactly that.
+    bool panelOpen(const char *objectName) const
+    {
+        auto *dm = gui->findChild<ads::CDockManager *>();
+        if (!dm) return false;
+        CDockWidget *d = dm->findDockWidget(objectName);
+        EXPECT_NE(d, nullptr) << objectName << " does not exist";
+        return d && !d->isClosed();
+    }
+
+    void enterWorkspace(const QString &name)
+    {
+        QAction *a = action(name);
+        ASSERT_NE(a, nullptr) << name.toStdString() << " is missing";
+        a->trigger();
+        QCoreApplication::processEvents();
+    }
+
+    SpartaGui *gui = nullptr;
+};
+
+} // namespace
+
+// ---------------------------------------------------------------- inventory
+
+TEST_F(MainWindow, HasTheSixTopLevelMenus)
+{
+    auto *bar = gui->findChild<QMenuBar *>();
+    ASSERT_NE(bar, nullptr);
+
+    QStringList titles;
+    for (auto *a : bar->actions())
+        if (a->menu()) titles << a->text();
+
+    EXPECT_EQ(titles, (QStringList{"&File", "&Edit", "&Run", "&Tools", "&View", "&About"}));
+}
+
+TEST_F(MainWindow, EveryMenuActionHasTextAndAnIcon)
+{
+    auto *bar = gui->findChild<QMenuBar *>();
+    ASSERT_NE(bar, nullptr);
+
+    int checked = 0;
+    for (auto *top : bar->actions()) {
+        QMenu *menu = top->menu();
+        if (!menu) continue;
+        for (auto *a : menu->actions()) {
+            if (a->isSeparator()) continue;
+            EXPECT_FALSE(a->text().isEmpty())
+                << "an entry of " << top->text().toStdString() << " has no text";
+            // The recent-file slots are numbered placeholders until a file has
+            // been opened, and the panel toggles take the dock's own icon.
+            if (a->text().size() > 3)
+                EXPECT_FALSE(a->icon().isNull())
+                    << a->text().toStdString() << " has no icon";
+            ++checked;
+        }
+    }
+    EXPECT_GT(checked, 40) << "only " << checked << " menu entries found; the menus look truncated";
+}
+
+TEST_F(MainWindow, NoTwoActionsShareAShortcut)
+{
+    std::map<QString, QString> seen;
+    for (auto *a : allActions()) {
+        const QKeySequence key = a->shortcut();
+        if (key.isEmpty()) continue;
+        const QString text = key.toString();
+        auto it = seen.find(text);
+        if (it != seen.end())
+            ADD_FAILURE() << text.toStdString() << " is bound to both \""
+                          << it->second.toStdString() << "\" and \"" << a->text().toStdString()
+                          << "\"";
+        else
+            seen.emplace(text, a->text());
+    }
+    EXPECT_GT(seen.size(), 25u) << "only " << seen.size()
+                                << " shortcuts found; the menus look truncated";
+}
+
+TEST_F(MainWindow, TheDocumentedShortcutsAreBound)
+{
+    // Every shortcut the manual lists. A rename that drops one of these breaks
+    // muscle memory silently.
+    const std::map<QString, QString> expected = {
+        {"&New Input File", "Ctrl+N"},        {"&Open Input File", "Ctrl+O"},
+        {"&Save Input File", "Ctrl+S"},       {"Save Input File &As", "Ctrl+Shift+S"},
+        {"&View Text File", "Ctrl+Shift+F"},  {"&Plot Data File...", "Ctrl+Shift+P"},
+        {"Inspect &Restart File", "Ctrl+Shift+R"},
+        {"View &Image or Movie File(s)...", "Ctrl+Shift+J"},
+        {"&Quit", "Ctrl+Q"},                  {"&Undo", "Ctrl+Z"},
+        {"&Redo", "Ctrl+Shift+Z"},            {"&Copy", "Ctrl+C"},
+        {"Cu&t", "Ctrl+X"},                   {"&Paste", "Ctrl+V"},
+        {"&Find and Replace...", "Ctrl+F"},   {"P&references...", "Ctrl+P"},
+        {"Chec&k Input", "Ctrl+K"},           {"Set &Variables...", "Ctrl+Shift+V"},
+        {"Create &Image", "Ctrl+I"},          {"3D &Snapshot (VTK)", "Ctrl+Shift+3"},
+        {"&Run SPARTA from Editor Buffer", "Ctrl+Return"},
+        {"Run SPARTA from &File", "Ctrl+Shift+Return"},
+        {"&Stop SPARTA", "Ctrl+/"},           {"Slide S&how in Viewer", "Ctrl+L"},
+        {"&Setup Workspace", "Ctrl+1"},       {"&Run Workspace", "Ctrl+2"},
+        {"&Analyze Workspace", "Ctrl+3"},     {"&Visualize Workspace", "Ctrl+4"},
+        {"&Output Window", "Ctrl+Shift+L"},   {"&Charts Window", "Ctrl+Shift+C"},
+        {"&Viewer Window", "Ctrl+Shift+I"},   {"&Variables Window", "Ctrl+Shift+W"},
+        {"Import Sur&face (STL / SPARTA)...", "Ctrl+Shift+T"},
+        {"Export to Para&View...", "Ctrl+Shift+E"},
+        {"&About SPARTA-GUI", "Ctrl+Shift+A"},
+        {"Quick &Help", "Ctrl+Shift+H"},
+        {"SPARTA-&GUI Documentation", "Ctrl+Shift+G"},
+        {"SPARTA Online &Manual", "Ctrl+Shift+M"},
+        {"Check for &SPARTA update", "Ctrl+Shift+U"},
+    };
+
+    for (const auto &[text, key] : expected) {
+        QAction *a = action(text);
+        ASSERT_NE(a, nullptr) << text.toStdString() << " is gone";
+        EXPECT_EQ(a->shortcut(), QKeySequence(key))
+            << text.toStdString() << " is bound to \"" << a->shortcut().toString().toStdString()
+            << "\" rather than " << key.toStdString();
+    }
+}
+
+// ---------------------------------------------------------------- workspaces
+
+TEST_F(MainWindow, SetupComesUpAsTheEditorAndItsOutput)
+{
+    enterWorkspace("&Setup Workspace");
+
+    EXPECT_TRUE(panelOpen("dockOutput"))
+        << "Setup came up with no output panel. It is created lazily by a run, and a workspace "
+           "only opens a panel that already holds a widget, so without ensureLogPanel() this "
+           "mode is a bare editor until the user runs something.";
+    EXPECT_FALSE(panelOpen("dockDiagnostics")) << "Setup opened the linter";
+    EXPECT_FALSE(panelOpen("dockProjectFiles")) << "Setup opened the file navigator";
+    EXPECT_FALSE(panelOpen("dockCharts")) << "Setup opened the charts";
+    EXPECT_FALSE(panelOpen("dockViewer")) << "Setup opened the viewer";
+}
+
+TEST_F(MainWindow, RunAddsTheVariablesToTheEditorAndItsOutput)
+{
+    enterWorkspace("&Run Workspace");
+
+    EXPECT_TRUE(panelOpen("dockOutput"));
+    EXPECT_TRUE(panelOpen("dockVariables"));
+    EXPECT_FALSE(panelOpen("dockCharts")) << "Run opened the charts, squeezing the deck";
+    EXPECT_FALSE(panelOpen("dockViewer")) << "Run opened the viewer, squeezing the deck";
+}
+
+TEST_F(MainWindow, AnalyzeShowsPlotsAndPicturesBeforeAnythingHasRun)
+{
+    enterWorkspace("&Analyze Workspace");
+
+    // Both panels are built lazily -- the charts by a run, the viewer by a
+    // render -- and a workspace only opens a panel that already holds a widget.
+    // Before this was arranged, selecting Analyze on a freshly opened deck
+    // showed the deck and nothing else.
+    EXPECT_TRUE(panelOpen("dockCharts")) << "Analyze came up with no chart panel";
+    EXPECT_TRUE(panelOpen("dockViewer")) << "Analyze came up with no viewer panel";
+}
+
+TEST_F(MainWindow, VisualizeShowsThePicturesBeforeAnythingHasRun)
+{
+    enterWorkspace("&Visualize Workspace");
+
+    EXPECT_TRUE(panelOpen("dockViewer")) << "Visualize came up with no viewer panel";
+    EXPECT_FALSE(panelOpen("dockCharts"))
+        << "Visualize opened the charts; the whole window is meant to be the pictures";
+}
+
+TEST_F(MainWindow, EveryWorkspaceOpensExactlyWhatItDocuments)
+{
+    const struct {
+        const char *action;
+        PanelManager::Mode mode;
+    } modes[] = {
+        {"&Setup Workspace", PanelManager::Setup},
+        {"&Run Workspace", PanelManager::RunMode},
+        {"&Analyze Workspace", PanelManager::Analyze},
+        {"&Visualize Workspace", PanelManager::Visualize},
+    };
+    const struct {
+        const char *dock;
+        PanelManager::Panel panel;
+    } panels[] = {
+        {"dockOutput", PanelManager::Log},        {"dockCharts", PanelManager::Chart},
+        {"dockViewer", PanelManager::Viewer},     {"dockVariables", PanelManager::Variables},
+        {"dockSweep", PanelManager::Sweep},       {"dockHistory", PanelManager::History},
+        {"dockDiagnostics", PanelManager::Diagnostics},
+        {"dockProjectFiles", PanelManager::ProjectFiles},
+    };
+
+    for (const auto &m : modes) {
+        enterWorkspace(m.action);
+        for (const auto &p : panels)
+            EXPECT_EQ(panelOpen(p.dock), PanelManager::modeShows(m.mode, p.panel))
+                << PanelManager::panelName(p.panel).toStdString() << " in the "
+                << PanelManager::modeName(m.mode).toStdString() << " workspace";
+    }
+}
+
+// ---------------------------------------------------------------- panel menu
+
+TEST_F(MainWindow, EveryPanelCanBeOpenedFromTheViewMenu)
+{
+    // The View menu names the panels as windows; each entry has to build its
+    // content on demand, because nothing else will have before the first run.
+    const struct {
+        const char *entry;
+        const char *dock;
+    } entries[] = {
+        {"&Output Window", "dockOutput"},
+        {"&Charts Window", "dockCharts"},
+        {"&Viewer Window", "dockViewer"},
+        {"&Variables Window", "dockVariables"},
+        {"Parametric S&weep Window", "dockSweep"},
+        {"Run &History Window", "dockHistory"},
+        {"&Diagnostics Window", "dockDiagnostics"},
+        {"Project &Files Window", "dockProjectFiles"},
+    };
+
+    for (const auto &e : entries) {
+        QAction *a = action(e.entry);
+        ASSERT_NE(a, nullptr) << e.entry << " is missing from the View menu";
+        if (!a->isChecked()) {
+            a->trigger();
+            QCoreApplication::processEvents();
+        }
+        EXPECT_TRUE(panelOpen(e.dock))
+            << e.entry << " left its panel closed, which is what happens when the panel has no "
+                          "widget yet and nothing creates one on demand";
+
+        a->trigger(); // and back, so the next entry starts from a known state
+        QCoreApplication::processEvents();
+        EXPECT_FALSE(panelOpen(e.dock)) << e.entry << " could not close its panel again";
+    }
+}
+
+TEST_F(MainWindow, ThePanelMenuEntriesKeepTheirNamesWhenThePanelIsRetitled)
+{
+    // The dock's title and its menu entry are different strings: the title
+    // carries the file and run number, the menu entry stays "Output Window".
+    // Qt-ADS overwrites the entry from the title unless that is undone.
+    QAction *entry = action("&Output Window");
+    ASSERT_NE(entry, nullptr);
+
+    auto *dock = gui->findChild<CDockWidget *>("dockOutput");
+    ASSERT_NE(dock, nullptr);
+    dock->setWindowTitle("Output - in.circle - Run 3");
+    QCoreApplication::processEvents();
+
+    EXPECT_EQ(entry->text(), QString("&Output Window"))
+        << "the View menu now reads \"" << entry->text().toStdString() << "\"";
+}
+
+TEST_F(MainWindow, EveryPanelDockIsTitled)
+{
+    // A dock with an empty title shows a blank tab: the panel is on screen with
+    // nothing naming it, which is how Project Files looked.
+    auto *dm = gui->findChild<ads::CDockManager *>();
+    ASSERT_NE(dm, nullptr);
+
+    for (const char *name : {"dockOutput", "dockCharts", "dockViewer", "dockVariables",
+                             "dockSweep", "dockHistory", "dockDiagnostics", "dockProjectFiles"}) {
+        CDockWidget *d = dm->findDockWidget(name);
+        ASSERT_NE(d, nullptr) << name;
+        EXPECT_FALSE(d->windowTitle().trimmed().isEmpty()) << name << " has a blank tab";
+    }
+
+    // and again once each has been opened and filled in on demand
+    for (const auto &e : {std::make_pair("&Output Window", "dockOutput"),
+                          std::make_pair("&Charts Window", "dockCharts"),
+                          std::make_pair("&Variables Window", "dockVariables"),
+                          std::make_pair("Parametric S&weep Window", "dockSweep"),
+                          std::make_pair("Run &History Window", "dockHistory"),
+                          std::make_pair("&Diagnostics Window", "dockDiagnostics"),
+                          std::make_pair("Project &Files Window", "dockProjectFiles")}) {
+        QAction *a = action(e.first);
+        ASSERT_NE(a, nullptr) << e.first;
+        if (!a->isChecked()) a->trigger();
+        QCoreApplication::processEvents();
+        CDockWidget *d = dm->findDockWidget(e.second);
+        ASSERT_NE(d, nullptr) << e.second;
+        EXPECT_FALSE(d->windowTitle().trimmed().isEmpty())
+            << e.second << " has a blank tab after being opened";
+    }
+}
+
+// ---------------------------------------------------------------- behaviour
+
+TEST_F(MainWindow, TheNonBlockingActionsCanAllBeTriggeredWithoutCrashing)
+{
+    int triggered = 0;
+    for (auto *a : allActions()) {
+        if (a->text().isEmpty() || BLOCKING.count(a->text())) continue;
+        if (!a->isEnabled()) continue;
+        a->trigger();
+        QCoreApplication::processEvents();
+        ++triggered;
+    }
+    EXPECT_GT(triggered, 15) << "only " << triggered
+                             << " actions were safe to trigger; the menus look truncated";
+    // Getting here at all is the assertion: any of these taking the window down
+    // fails the test by killing the process.
+    SUCCEED();
+}
+
+TEST_F(MainWindow, TheWindowKeepsTheSizeItWasAskedFor)
+{
+    EXPECT_EQ(gui->width(), 800);
+    EXPECT_EQ(gui->height(), 600);
+}
+
+int main(int argc, char **argv)
+{
+    // offscreen, so this needs no display and no window manager
+    qputenv("QT_QPA_PLATFORM", "offscreen");
+    // A native file or colour picker runs its own event loop that nothing here
+    // can reach into; Qt's own dialogs are ordinary widgets.
+    QApplication::setAttribute(Qt::AA_DontUseNativeDialogs);
+    QApplication app(argc, argv);
+
+    // main() is deliberately not linked here, so this stands in for the part of
+    // it the window reads while constructing itself.
+    GUI_MONOFONT = std::make_unique<QFont>("Monospace", -1, QFont::Normal);
+    GUI_ALLFONT  = std::make_unique<QFont>("Arial", -1, QFont::Normal);
+    GUI_MONOFONT->setStyleHint(QFont::Monospace, QFont::PreferQuality);
+    GUI_MONOFONT->setFixedPitch(true);
+    GUI_ALLFONT->setStyleHint(QFont::SansSerif, QFont::PreferQuality);
+    Q_INIT_RESOURCE(spartagui);
+    QIcon::setThemeSearchPaths(QStringList() << ":/icons");
+    QIcon::setThemeName("spartagui");
+
+    ::testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
+}

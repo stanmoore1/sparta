@@ -184,6 +184,51 @@ target_compile_definitions(test_gui_widgets PRIVATE
 
 gtest_discover_tests(test_gui_widgets)
 
+# The main window.  Same source list as the walker -- the whole application
+# minus its main() -- because this constructs the real SpartaGui rather than a
+# stand-in.  Nothing did that before, so the largest source file in the tree
+# had its menus, shortcuts and workspace layouts checked only by driving the
+# running program under Xvfb.  This runs offscreen in about a second.
+add_executable(test_mainwindow
+  test_mainwindow.cpp
+  ${GUI_WALKER_SOURCES}
+)
+target_include_directories(test_mainwindow PRIVATE
+  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}/thirdparty/rangeslider
+)
+target_compile_definitions(test_mainwindow PRIVATE
+  SPARTA_GUI_VERSION="${PROJECT_VERSION}"
+  # The window's constructor loops on a modal until it has a library to load,
+  # so without one this suite would hang rather than fail. It skips instead.
+  SPARTA_TEST_LIBRARY_PATH="${_spa_test_lib}")
+target_link_libraries(test_mainwindow PRIVATE
+  GTest::gtest_main Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Svg Qt6::Test
+  lepton_mini ads::qtadvanceddocking-qt6)
+
+if (SPARTA_GUI_HAVE_VTK)
+  target_compile_definitions(test_mainwindow PRIVATE SPARTA_GUI_HAVE_VTK)
+  target_link_libraries(test_mainwindow PRIVATE ${VTK_LIBRARIES})
+  vtk_module_autoinit(TARGETS test_mainwindow MODULES ${VTK_LIBRARIES})
+endif()
+if (SPARTA_GUI_USE_PLUGIN)
+  target_compile_definitions(test_mainwindow PRIVATE SPARTA_GUI_USE_PLUGIN)
+  target_include_directories(test_mainwindow PRIVATE ${SPARTA_PLUGINLIB_DIR})
+endif()
+
+# One ctest entry rather than gtest_discover_tests, under Xvfb: the workspaces
+# that show the viewer build a VTK scene, and VTK's "off-screen" rendering is
+# still vtkXOpenGLRenderWindow speaking GLX, so it needs an X server even though
+# Qt itself is on the offscreen platform.  TEST_LAUNCHER, which would let the
+# discovered per-case commands be wrapped, is CMake 3.29 and this targets 3.20.
+if (SPARTA_GUI_HAVE_VTK)
+  add_test(NAME MainWindow.All COMMAND ${XVFB_RUNNER} -n 15 -s "-screen 0 1024x768x24" -w 1
+    $<TARGET_FILE:test_mainwindow>)
+  set_tests_properties(MainWindow.All PROPERTIES TIMEOUT 300)
+else()
+  gtest_discover_tests(test_mainwindow)
+endif()
+
 # Test executable for helpers
 add_executable(test_helpers
   test_helpers.cpp
@@ -647,6 +692,12 @@ if (XDOTOOL_BINARY AND WM_BINARY AND SHOOTER_BINARY)
     "SPARTA_LIB_DIR=${CMAKE_BINARY_DIR}"
     "SPARTA_PLUGIN_LIB=${_spa_test_lib}"
     "SPARTA_FIXTURES=${CMAKE_CURRENT_SOURCE_DIR}/fixtures"
+    # Absolute, and pinned to this checkout. The application resolves a relative
+    # deck against its own working directory, not the harness's, so a relative
+    # path opened nothing and left a "cannot open file" modal over every
+    # screenshot that followed -- which then compared equal to the reference and
+    # reported working actions as doing nothing.
+    "SPARTA_EXAMPLES=${CMAKE_SOURCE_DIR}/../../examples"
   )
 
   add_test(NAME GuiDrive.VisualEffects
@@ -659,6 +710,16 @@ if (XDOTOOL_BINARY AND WM_BINARY AND SHOOTER_BINARY)
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_gui_features.py)
   set_tests_properties(GuiDrive.Features PROPERTIES
     ENVIRONMENT "${GUI_DRIVE_ENVIRONMENT};SHOT_DIR=${CMAKE_CURRENT_BINARY_DIR}/feature-shots"
+    TIMEOUT 900)
+
+  # Every menu action, judged against an idle reference: an action meant to
+  # open something that leaves the screen byte-identical did nothing. This
+  # suite has existed since the menus were built and was never registered, so
+  # it had never run once.
+  add_test(NAME GuiDrive.Actions
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_gui_actions.py)
+  set_tests_properties(GuiDrive.Actions PROPERTIES
+    ENVIRONMENT "${GUI_DRIVE_ENVIRONMENT};SHOT_DIR=${CMAKE_CURRENT_BINARY_DIR}/action-shots"
     TIMEOUT 900)
 
   # Activates every control of the running application in turn. The in-process

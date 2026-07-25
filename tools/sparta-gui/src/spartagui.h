@@ -268,7 +268,16 @@ private slots:
     void editVariables();
 
     /** @brief Render an image from a dump file */
-    void renderImage();
+    /**
+     * @brief Render a snapshot of the current system into the viewer panel
+     * @param quiet Suppress the "cannot render" dialogs
+     *
+     * Quiet is for renders the user did not ask for -- opening the viewer
+     * panel, or entering a workspace that shows it. A deck that cannot be
+     * rendered is ordinary there, and a modal error in answer to a workspace
+     * switch is not.
+     */
+    void renderImage(bool quiet = false);
 
 #if defined(SPARTA_GUI_HAVE_VTK)
     /** @brief Open the interactive VTK 3D viewer window (empty; load files with it) */
@@ -363,6 +372,16 @@ private:
      * no output panel at all until the user had run something.
      */
     void ensureLogPanel();
+
+    /**
+     * @brief Create an empty chart panel if a run has not created one yet
+     *
+     * The Analyze workspace is plots beside pictures, and a mode only shows a
+     * panel that already holds a widget. With the chart window built by the run
+     * alone, selecting Analyze before running anything left the deck on its own
+     * and the workspace looked broken.
+     */
+    void ensureChartPanel();
 
     /** @brief Append any newly rendered dump image to the slideshow */
     void updateSlideShow();

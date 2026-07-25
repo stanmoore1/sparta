@@ -16,10 +16,9 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from guidrive import Gui
+from guidrive import Gui, EXAMPLE
 
 OUT = os.environ.get("SHOT_DIR", "gui-actions-shots")
-EXAMPLE = os.environ.get("SPARTA_EXAMPLE", "examples/circle/in.circle")
 
 # (id, description, keys to send, seconds to wait, expects_visible_change)
 CASES = [

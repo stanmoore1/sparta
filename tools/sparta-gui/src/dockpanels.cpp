@@ -72,7 +72,25 @@ PanelManager::PanelManager(QMainWindow *mainWindow, QWidget *editor) : QObject(m
     for (int i = 0; i < NPanels; ++i) {
         auto *d = new CDockWidget(dm, PANEL_TITLE[i]);
         d->setObjectName(PANEL_OBJECT_NAME[i]);
-        docks[i] = d;
+        docks[i]    = d;
+        menuText[i] = PANEL_TITLE[i];
+
+        // Qt-ADS retitles a dock's toggleViewAction() whenever the dock's own
+        // title changes, and that action *is* the entry in the View menu.
+        // Naming a panel after what it currently holds therefore rewrote the
+        // menu: "Output Window" became "Output - in.circle - Run 1" the moment
+        // a run started, and "Viewer Window" became the name of the last
+        // snapshot. The menu stopped reading as a list of windows, and nothing
+        // that looks an entry up by name -- someone scanning it, a screen
+        // reader, the widget walker -- could find it again.
+        //
+        // Undone here rather than at each call site, so it holds however the
+        // title comes to change. The dock's tab keeps the descriptive title,
+        // which is where it is useful; the menu entry keeps its own name.
+        connect(d, &CDockWidget::titleChanged, this, [this, i](const QString &) {
+            QAction *entry = docks[i]->toggleViewAction();
+            if (entry->text() != menuText[i]) entry->setText(menuText[i]);
+        });
         connect(d, &CDockWidget::viewToggled, this, [this, i](bool open) {
             if (open) {
                 restoreAreaVisibility(Panel(i));
@@ -149,23 +167,17 @@ void PanelManager::setPanelWidget(Panel panel, QWidget *widget, const QString &t
     }
 }
 
+void PanelManager::setPanelMenuText(Panel panel, const QString &text)
+{
+    menuText[panel] = text;
+    docks[panel]->toggleViewAction()->setText(text);
+}
+
 void PanelManager::setPanelTitle(Panel panel, const QString &title)
 {
-    // Qt-ADS retitles a dock's toggleViewAction() whenever the dock's own
-    // title changes, and that action *is* the entry in the View menu. Naming
-    // a panel after what it currently holds therefore rewrote the menu:
-    // "Output Window" became "Output - in.circle - Run 1" the moment a run
-    // started, and "Viewer Window" became the name of the last snapshot. The
-    // menu stopped reading as a list of windows, and nothing that looks an
-    // entry up by name -- someone scanning it, a screen reader, the widget
-    // walker -- could find it again.
-    //
-    // The dock's tab keeps the descriptive title, which is where it is useful;
-    // the menu entry keeps the name it was given.
-    QAction *entry         = docks[panel]->toggleViewAction();
-    const QString menuText = entry->text();
+    // The View menu entry is preserved by the titleChanged connection made in
+    // the constructor, so this is only the dock's own tab.
     docks[panel]->setWindowTitle(title);
-    entry->setText(menuText);
 }
 
 void PanelManager::clearRunPanels()

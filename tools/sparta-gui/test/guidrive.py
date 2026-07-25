@@ -31,7 +31,16 @@ SPARTA_LIB_DIR = os.environ.get("SPARTA_LIB_DIR", "build-lib")
 # window to drive, and the suite reported a missing control rather than a
 # missing library.
 SPARTA_PLUGIN_LIB = os.environ.get("SPARTA_PLUGIN_LIB", "")
-EXAMPLE = os.environ.get("SPARTA_EXAMPLE", "examples/circle/in.circle")
+# The examples tree, and the deck the suites open by default. Absolute, because
+# the application resolves a relative deck against its own working directory
+# rather than the harness's: a relative default loaded nothing and left a
+# "cannot open file" modal sitting over every screen that followed.
+SPARTA_EXAMPLES = os.environ.get(
+    "SPARTA_EXAMPLES",
+    os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                  "..", "..", "..", "examples")))
+EXAMPLE = os.environ.get("SPARTA_EXAMPLE",
+                         os.path.join(SPARTA_EXAMPLES, "circle", "in.circle"))
 
 # Interpreter that can import pyatspi; on this system the default python3 is a
 # local build without the gobject bindings, so the distribution one is used.
@@ -79,6 +88,20 @@ class Gui:
                     f"SPARTA_LIB_DIR at a build tree; looked in {SPARTA_LIB_DIR!r}). "
                     "Without one the application starts but cannot run anything, "
                     "and every check below would fail for the wrong reason.")
+        # Every argument that looks like a path has to exist. A deck that does
+        # not puts up a "Cannot open file ... will create new file on saving"
+        # modal over the whole window before the harness takes its first
+        # screenshot; every later shot then shows that same modal, so a
+        # screen-changed comparison against the first one reports no change and
+        # the run comes back as "the action did nothing" for a working action.
+        for arg in self.args:
+            if arg.startswith("-"):
+                continue
+            if not os.path.exists(arg):
+                raise RuntimeError(
+                    f"no such file to open: {arg!r}. The application would come "
+                    "up behind a modal error dialog and every check below would "
+                    "fail for the wrong reason.")
         # preseed so no modal dialog blocks an unattended run
         with open(f"{cfgdir}/SPARTA-GUI (QT6).conf", "w") as f:
             f.write("[General]\n"
@@ -86,7 +109,7 @@ class Gui:
                     "restore_session=false\n")
             if plugin:
                 f.write(f"plugin_path={plugin}\n")
-            f.write("examples_path=/home/user/sparta/examples\n")
+            f.write(f"examples_path={SPARTA_EXAMPLES}\n")
         self.env = env
 
         self.xvfb = subprocess.Popen(

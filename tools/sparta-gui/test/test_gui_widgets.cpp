@@ -620,7 +620,7 @@ TEST(PanelMenu, RetitlingAPanelLeavesItsMenuEntryAlone)
 
     QAction *entry = panels.toggleViewAction(PanelManager::Log);
     ASSERT_NE(entry, nullptr);
-    entry->setText("&Output Window");   // what the View menu sets it to
+    panels.setPanelMenuText(PanelManager::Log, "&Output Window"); // what the View menu names it
 
     panels.setPanelTitle(PanelManager::Log, "Output - in.circle - Run 1");
 
@@ -639,7 +639,7 @@ TEST(PanelMenu, ReplacingAPanelWidgetLeavesItsMenuEntryAlone)
     PanelManager panels(&window, &editor);
 
     QAction *entry = panels.toggleViewAction(PanelManager::Viewer);
-    entry->setText("&Viewer Window");
+    panels.setPanelMenuText(PanelManager::Viewer, "&Viewer Window");
 
     panels.setPanelWidget(PanelManager::Viewer, new QLabel("frame"), "test.0100.ppm", false);
 

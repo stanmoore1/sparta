@@ -7,7 +7,7 @@
 if(ENABLE_TESTING AND (NOT CMAKE_CROSSCOMPILING) AND (CMAKE_SYSTEM_NAME STREQUAL "Linux"))
   message(STATUS "Testing is enabled")
   include(CTest)
-  add_subdirectory(test)
+
   # Compiler specific features for testing
   if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     option(ENABLE_COVERAGE "Enable collecting code coverage data" OFF)
@@ -15,6 +15,22 @@ if(ENABLE_TESTING AND (NOT CMAKE_CROSSCOMPILING) AND (CMAKE_SYSTEM_NAME STREQUAL
       target_compile_options(sparta-gui PUBLIC --coverage)
       target_link_options(sparta-gui PUBLIC --coverage)
 
+      # ...and everything created from here down, which is where the test
+      # binaries are. Instrumenting the sparta-gui target alone covered the
+      # application binary only: the test executables compile their own copies
+      # of the sources rather than linking that target (it is an executable,
+      # nothing can link it), so no .gcda was ever written for them and the
+      # report reflected only the few suites that drive the built application.
+      # These have to be set before add_subdirectory(test) to reach it.
+      add_compile_options(--coverage)
+      add_link_options(--coverage)
+    endif()
+  endif()
+
+  add_subdirectory(test)
+
+  if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    if(ENABLE_COVERAGE)
       find_program(GCOVR_BINARY gcovr)
       include(FindPackageHandleStandardArgs)
       find_package_handle_standard_args(GCOVR DEFAULT_MSG GCOVR_BINARY)
@@ -26,9 +42,17 @@ if(ENABLE_TESTING AND (NOT CMAKE_CROSSCOMPILING) AND (CMAKE_SYSTEM_NAME STREQUAL
         add_custom_target(coverage_html_folder
           COMMAND ${CMAKE_COMMAND} -E make_directory ${COVERAGE_HTML_DIR})
 
+        # The excludes keep the report about this project: with the test
+        # binaries instrumented too, GoogleTest and the vendored dependencies
+        # would otherwise dominate it and bury the numbers that matter.
         add_custom_target(
           coverage
-          COMMAND ${GCOVR_BINARY} -s  --html --html-nested --html-self-contained -r ${ABSOLUTE_SOURCE_DIR} --object-directory=${CMAKE_BINARY_DIR} -o ${COVERAGE_HTML_DIR}/index.html
+          COMMAND ${GCOVR_BINARY} -s --html --html-nested --html-self-contained
+                  -r ${ABSOLUTE_SOURCE_DIR} --object-directory=${CMAKE_BINARY_DIR}
+                  --exclude "${ABSOLUTE_SOURCE_DIR}/thirdparty/.*"
+                  --exclude "${ABSOLUTE_SOURCE_DIR}/test/.*"
+                  --exclude ".*/_deps/.*"
+                  -o ${COVERAGE_HTML_DIR}/index.html
           WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
           COMMENT "Generating HTML coverage report..."
         )

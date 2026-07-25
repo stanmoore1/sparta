@@ -103,6 +103,15 @@ public:
     void setPanelTitle(Panel panel, const QString &title);
 
     /**
+     * @brief Name a panel's entry in the View menu
+     *
+     * Separate from the dock's own title, which follows whatever the panel is
+     * currently showing.  The name given here is what the menu keeps, however
+     * often the title changes underneath it.
+     */
+    void setPanelMenuText(Panel panel, const QString &text);
+
+    /**
      * @brief Tear down all run-owned panel content before a new document/run
      *
      * Detaches and deletes each panel's current inner widget, deletes any
@@ -192,6 +201,8 @@ private:
     ads::CDockManager *dm;
     ads::CDockWidget *editorDock;
     ads::CDockWidget *docks[NPanels];
+    /// Name each panel's View menu entry keeps, whatever the dock is titled
+    QString menuText[NPanels];
     QList<QPointer<ads::CDockWidget>> archived;
     int archiveSeq = 0;
     Mode mode = Setup;   ///< fresh profiles start where the work starts: the deck
