@@ -848,7 +848,11 @@ void SlideShow::zoomIn()
 
 void SlideShow::zoomOut()
 {
-    scaleImage(0.9);
+    // 1/1.1, not 0.9: the two buttons are advertised as "by 10 percent" each
+    // and users expect zooming in and back out to land where they started.
+    // Multiplying by 0.9 makes them non-inverse (1.1 * 0.9 = 0.99), so every
+    // in-out cycle silently shrank the image by another one percent.
+    scaleImage(1.0 / 1.1);
 }
 
 void SlideShow::normalSize()
