@@ -88,14 +88,19 @@ def slug(name):
 def changed_box(before, after):
     """Bounding box of the pixels that differ, as (x, y, w, h), or None.
 
-    ImageMagick reports the difference image's trim geometry, which is exactly
-    the region that changed -- so the crop is measured rather than guessed, and
-    a control whose effect is a single repainted line is not cropped away.
+    A plain difference composite: identical pixels come out black, changed ones
+    do not, and trimming the black border leaves exactly the region that
+    changed. So the crop is measured rather than guessed, and a control whose
+    effect is one repainted line is not cropped away.
+
+    Not `compare`: its output image is the second picture lowlighted with the
+    differences drawn over it, not a mask, so nothing about it is black and
+    -trim returns the whole frame for every control alike.
     """
     r = subprocess.run(
         ["sh", "-c",
-         f"compare -metric AE '{before}' '{after}' miff:- 2>/dev/null | "
-         f"convert miff:- -fuzz 5% -trim -format '%wx%h%X%Y' info:"],
+         f"convert '{before}' '{after}' -compose difference -composite "
+         f"-colorspace gray -fuzz 12% -trim -format '%wx%h%X%Y' info: 2>/dev/null"],
         capture_output=True, text=True)
     m = re.match(r"^(\d+)x(\d+)([-+]\d+)([-+]\d+)$", (r.stdout or "").strip())
     if not m:
