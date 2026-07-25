@@ -58,7 +58,7 @@ class RunHistory;
 class HistoryPanel;
 class StdCapture;
 class URLDownloader;
-class VtkViewer;   // only defined when built with SPARTA_GUI_HAVE_VTK
+class SceneWindow; // only defined when built with SPARTA_GUI_HAVE_VTK
 class WelcomeScreen;
 
 /**
@@ -500,7 +500,7 @@ private:
     LogWindow *logwindow;     ///< Window displaying SPARTA output log
     ImageViewer *imagewindow; ///< Window for viewing single images
 #if defined(SPARTA_GUI_HAVE_VTK)
-    VtkViewer *vtkViewer = nullptr; ///< Interactive VTK 3D viewer window (lazy)
+    SceneWindow *sceneWindow = nullptr; ///< Interactive 3D scene window (lazy)
 #endif
     ChartWindow *chartwindow; ///< Window for displaying charts
     SlideShow *slideshow;    ///< Window for image slideshow

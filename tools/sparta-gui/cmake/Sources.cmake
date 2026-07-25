@@ -99,6 +99,7 @@ set(PROJECT_SOURCES
   ${CMAKE_SOURCE_DIR}/src/slideshow.h
   ${CMAKE_SOURCE_DIR}/src/viewerdisplay.cpp
   ${CMAKE_SOURCE_DIR}/src/viewerdisplay.h
+  ${CMAKE_SOURCE_DIR}/src/viewersource.h
   ${CMAKE_SOURCE_DIR}/src/snippets.cpp
   ${CMAKE_SOURCE_DIR}/src/snippets.h
   ${CMAKE_SOURCE_DIR}/src/stdcapture.cpp

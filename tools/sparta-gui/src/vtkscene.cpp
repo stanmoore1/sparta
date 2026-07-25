@@ -9,7 +9,7 @@
 // This software is distributed under the GNU General Public License version 2 or later.
 ////////////////////////////////////////////////////////////////////////////////////////
 
-#include "vtkviewer.h"
+#include "vtkscene.h"
 
 #include "chartviewer.h"
 #include "constants.h"
@@ -31,8 +31,9 @@
 #include <QMouseEvent>
 #include <QPainter>
 #include <QResizeEvent>
-#include <QStatusBar>
+#include <QTimer>
 #include <QToolBar>
+#include <QVBoxLayout>
 #include <QWheelEvent>
 
 #include <vtkPropPicker.h>
@@ -288,24 +289,46 @@ void VtkRenderArea::pan(int fromX, int fromY, int toX, int toY)
 }
 
 // ======================================================================== //
-// VtkViewer -- toolbar + render area + coloring logic                       //
+// VtkScene -- toolbar + render area + coloring logic                        //
 // ======================================================================== //
 
-VtkViewer::VtkViewer(QWidget *parent) : QMainWindow(parent)
+VtkScene::VtkScene(QWidget *parent) : ViewerSource(parent)
 {
-    setWindowTitle("SPARTA 3D Viewer");
-    setWindowIcon(QIcon(Cfg::MAIN_ICON));
-    setMinimumSize(Cfg::MINIMUM_WIDTH, Cfg::MINIMUM_HEIGHT);
     buildUi();
 }
 
-VtkViewer::~VtkViewer() = default;
+VtkScene::~VtkScene() = default;
 
-void VtkViewer::buildUi()
+QIcon VtkScene::sourceIcon() const
+{
+    return QIcon(":/icons/x-office-drawing.svg");
+}
+
+QImage VtkScene::currentImage() const
+{
+    return renderArea ? renderArea->grabFrame() : QImage();
+}
+
+void VtkScene::showStatus(const QString &msg, int ms)
+{
+    if (!infoLabel) return;
+    infoLabel->setText(msg);
+    if (!statusTimer) {
+        statusTimer = new QTimer(this);
+        statusTimer->setSingleShot(true);
+        connect(statusTimer, &QTimer::timeout, this,
+                [this]() { infoLabel->setText(restingStatus); });
+    }
+    if (ms > 0)
+        statusTimer->start(ms);
+    else
+        statusTimer->stop();
+}
+
+void VtkScene::buildUi()
 {
     renderArea = new VtkRenderArea(this);
     renderArea->setObjectName("vtkRenderArea");
-    setCentralWidget(renderArea);
 
     // color legend, hidden until an array is chosen
     scalarBar = vtkSmartPointer<vtkScalarBarActor>::New();
@@ -315,7 +338,7 @@ void VtkViewer::buildUi()
     scalarBar->VisibilityOff();
     renderArea->renderer()->AddActor2D(scalarBar);
 
-    auto *tb = addToolBar("View");
+    auto *tb = new QToolBar("View", this);
     tb->setMovable(false);
 
     // Toolbar actions do not go through styleToolButtons(), so nothing here
@@ -324,7 +347,7 @@ void VtkViewer::buildUi()
     // or every control in this window is anonymous to a screen reader -- and
     // unreachable by the GUI tests, which is why the 3D viewer had none.
     auto *openAct = tb->addAction(QIcon(":/icons/document-open.svg"), "Open VTK File...", this,
-                                  &VtkViewer::openFileDialog);
+                                  &VtkScene::openFileDialog);
     openAct->setToolTip("Open a VTK data file (.vtu, .vtp or .vtk)");
     tb->addSeparator();
 
@@ -334,33 +357,33 @@ void VtkViewer::buildUi()
     arrayCombo->setMinimumWidth(170);
     arrayCombo->setToolTip("Per-point or per-cell scalar field used to color the data");
     connect(arrayCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-            &VtkViewer::onColorArrayChanged);
+            &VtkScene::onColorArrayChanged);
     tb->addWidget(arrayCombo);
 
     tb->addWidget(new QLabel("  Colormap: "));
     cmapCombo = new QComboBox(tb);
     cmapCombo->addItems({"Rainbow", "Cool to Warm", "Viridis", "Grayscale"});
     connect(cmapCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-            &VtkViewer::onColorMapChanged);
+            &VtkScene::onColorMapChanged);
     tb->addWidget(cmapCombo);
 
     tb->addSeparator();
     edgesBox = new QCheckBox("Edges", tb);
     edgesBox->setToolTip("Draw the outlines of grid cells / surface elements");
-    connect(edgesBox, &QCheckBox::toggled, this, &VtkViewer::onEdgesToggled);
+    connect(edgesBox, &QCheckBox::toggled, this, &VtkScene::onEdgesToggled);
     tb->addWidget(edgesBox);
 
     scalarBarBox = new QCheckBox("Legend", tb);
     scalarBarBox->setChecked(true);
-    connect(scalarBarBox, &QCheckBox::toggled, this, &VtkViewer::onScalarBarToggled);
+    connect(scalarBarBox, &QCheckBox::toggled, this, &VtkScene::onScalarBarToggled);
     tb->addWidget(scalarBarBox);
 
     tb->addSeparator();
     auto *resetAct = tb->addAction(QIcon(":/icons/preferences-reset.svg"), "Reset View", this,
-                                   &VtkViewer::resetView);
+                                   &VtkScene::resetView);
     resetAct->setToolTip("Camera reset to frame all layers");
     auto *shotAct = tb->addAction(QIcon(":/icons/image-x-generic.svg"), "Save Screenshot...", this,
-                                  &VtkViewer::saveScreenshot);
+                                  &VtkScene::saveScreenshot);
     shotAct->setToolTip("Save the current 3D view to an image file");
 
     cmapCombo->setToolTip("Color map applied to the selected scalar field");
@@ -372,23 +395,32 @@ void VtkViewer::buildUi()
     // Feature 9: in-app field post-processing (cut plane, iso-surface, probes,
     // field calculator).  Heavier analysis (streamlines, glyphs, volume
     // rendering) is left to the "Export to ParaView" dialog.
-    auto *filtersMenu = menuBar()->addMenu("&Filters");
-    filtersMenu->addAction("Cut Plane...", this, &VtkViewer::applyCutPlane);
-    filtersMenu->addAction("Iso-surface...", this, &VtkViewer::applyIsoSurface);
-    filtersMenu->addAction("Field Calculator...", this, &VtkViewer::applyFieldCalculator);
-    filtersMenu->addAction("Line Probe...", this, &VtkViewer::applyLineProbe);
+    auto *bar   = new QMenuBar(this);
+    filtersMenu = bar->addMenu("&Filters");
+    filtersMenu->addAction("Cut Plane...", this, &VtkScene::applyCutPlane);
+    filtersMenu->addAction("Iso-surface...", this, &VtkScene::applyIsoSurface);
+    filtersMenu->addAction("Field Calculator...", this, &VtkScene::applyFieldCalculator);
+    filtersMenu->addAction("Line Probe...", this, &VtkScene::applyLineProbe);
     auto *ptProbe = filtersMenu->addAction("Point Probe (click points)");
     ptProbe->setCheckable(true);
-    connect(ptProbe, &QAction::toggled, this, &VtkViewer::togglePointProbe);
+    connect(ptProbe, &QAction::toggled, this, &VtkScene::togglePointProbe);
     filtersMenu->addSeparator();
     filtersMenu->addAction("Heavier analysis -> Export to ParaView", this,
                            []() {})->setEnabled(false);
 
     infoLabel = new QLabel("No data loaded.");
-    statusBar()->addWidget(infoLabel);
+    restingStatus = infoLabel->text();
+
+    auto *layout = new QVBoxLayout(this);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(0);
+    layout->addWidget(bar);
+    layout->addWidget(tb);
+    layout->addWidget(renderArea, 1);
+    layout->addWidget(infoLabel);
 }
 
-vtkSmartPointer<vtkDataSet> VtkViewer::readDataSet(const QString &path, QString *err)
+vtkSmartPointer<vtkDataSet> VtkScene::readDataSet(const QString &path, QString *err)
 {
     const QString ext  = QFileInfo(path).suffix().toLower();
     const QByteArray p = path.toLocal8Bit();
@@ -418,7 +450,7 @@ vtkSmartPointer<vtkDataSet> VtkViewer::readDataSet(const QString &path, QString 
     return nullptr;
 }
 
-void VtkViewer::addLayer(const vtkSmartPointer<vtkDataSet> &data, const QString &label, Kind kind)
+void VtkScene::addLayer(const vtkSmartPointer<vtkDataSet> &data, const QString &label, Kind kind)
 {
     Layer layer;
     layer.data   = data;
@@ -458,13 +490,15 @@ void VtkViewer::addLayer(const vtkSmartPointer<vtkDataSet> &data, const QString 
         np += l.data->GetNumberOfPoints();
         nc += l.data->GetNumberOfCells();
     }
-    infoLabel->setText(QString("%1 layer(s), %2 points, %3 cells")
-                           .arg(layers.size())
-                           .arg(static_cast<qlonglong>(np))
-                           .arg(static_cast<qlonglong>(nc)));
+    restingStatus = QString("%1 layer(s), %2 points, %3 cells")
+                        .arg(layers.size())
+                        .arg(static_cast<qlonglong>(np))
+                        .arg(static_cast<qlonglong>(nc));
+    showStatus(restingStatus);
+    emit contentChanged();
 }
 
-bool VtkViewer::addDataset(const QString &path, const QString &label, Kind kind, QString *err)
+bool VtkScene::addDatasetFile(const QString &path, const QString &label, Kind kind, QString *err)
 {
     auto data = readDataSet(path, err);
     if (!data || data->GetNumberOfPoints() == 0) {
@@ -475,13 +509,13 @@ bool VtkViewer::addDataset(const QString &path, const QString &label, Kind kind,
     return true;
 }
 
-void VtkViewer::addDataSet(vtkDataSet *data, const QString &label, Kind kind)
+void VtkScene::addDataset(vtkDataSet *data, const QString &label, Kind kind)
 {
     if (data && data->GetNumberOfPoints() > 0)
         addLayer(vtkSmartPointer<vtkDataSet>(data), label, kind);
 }
 
-void VtkViewer::setColorField(const QString &name)
+void VtkScene::setColorField(const QString &name)
 {
     // pick the first combo entry whose base name matches (entries read "name  (point)")
     for (int i = 1; i < arrayCombo->count(); ++i) {
@@ -495,30 +529,25 @@ void VtkViewer::setColorField(const QString &name)
     }
 }
 
-void VtkViewer::clearScene()
+void VtkScene::clearScene()
 {
     for (const auto &l : layers) renderArea->renderer()->RemoveActor(l.actor);
     layers.clear();
     scalarBar->VisibilityOff();
     refreshArrayCombo();
-    infoLabel->setText("No data loaded.");
+    restingStatus = "No data loaded.";
+    showStatus(restingStatus);
     renderArea->requestRender();
+    emit contentChanged();
 }
 
-void VtkViewer::resetView()
+void VtkScene::resetView()
 {
     renderArea->resetCamera();
 }
 
-void VtkViewer::showViewer()
-{
-    show();
-    raise();
-    activateWindow();
-    renderArea->resetCamera();
-}
 
-void VtkViewer::refreshArrayCombo()
+void VtkScene::refreshArrayCombo()
 {
     const QString prev = arrayCombo->currentText();
     QSignalBlocker block(arrayCombo);
@@ -548,7 +577,7 @@ void VtkViewer::refreshArrayCombo()
     arrayCombo->setCurrentIndex(idx >= 0 ? idx : 0);
 }
 
-bool VtkViewer::arrayRange(const QString &array, bool pointData, double range[2]) const
+bool VtkScene::arrayRange(const QString &array, bool pointData, double range[2]) const
 {
     bool found        = false;
     range[0] = range[1] = 0.0;
@@ -574,7 +603,7 @@ bool VtkViewer::arrayRange(const QString &array, bool pointData, double range[2]
     return found;
 }
 
-void VtkViewer::applyColoring()
+void VtkScene::applyColoring()
 {
     const int sel = arrayCombo->currentIndex();
     if (sel <= 0) { // solid color
@@ -625,40 +654,40 @@ void VtkViewer::applyColoring()
     renderArea->requestRender();
 }
 
-void VtkViewer::onColorArrayChanged()
+void VtkScene::onColorArrayChanged()
 {
     applyColoring();
 }
 
-void VtkViewer::onColorMapChanged()
+void VtkScene::onColorMapChanged()
 {
     applyColoring();
 }
 
-void VtkViewer::onEdgesToggled(bool on)
+void VtkScene::onEdgesToggled(bool on)
 {
     for (const auto &l : layers)
         if (l.kind != Kind::Particles) l.actor->GetProperty()->SetEdgeVisibility(on);
     renderArea->requestRender();
 }
 
-void VtkViewer::onScalarBarToggled(bool on)
+void VtkScene::onScalarBarToggled(bool on)
 {
     scalarBar->SetVisibility(on && arrayCombo->currentIndex() > 0);
     renderArea->requestRender();
 }
 
-void VtkViewer::openFileDialog()
+void VtkScene::openFileDialog()
 {
     const QString path = QFileDialog::getOpenFileName(
         this, "Open VTK Dataset", QString(), "VTK datasets (*.vtu *.vtp *.vtk);;All files (*)");
     if (path.isEmpty()) return;
     QString err;
-    if (!addDataset(path, QFileInfo(path).fileName(), Kind::Generic, &err))
+    if (!addDatasetFile(path, QFileInfo(path).fileName(), Kind::Generic, &err))
         critical(this, "Open VTK Dataset", "Could not open the selected file:", err);
 }
 
-void VtkViewer::saveScreenshot()
+void VtkScene::saveScreenshot()
 {
     const QString path = QFileDialog::getSaveFileName(this, "Save Screenshot", "sparta-view.png",
                                                       "PNG image (*.png)");
@@ -668,19 +697,19 @@ void VtkViewer::saveScreenshot()
     if (img.isNull() || !img.save(path))
         critical(this, "Save Screenshot", "Could not write the screenshot to:", path);
     else
-        statusBar()->showMessage(QString("Saved screenshot to %1").arg(path), 5000);
+        showStatus(QString("Saved screenshot to %1").arg(path), 5000);
 }
 
 // ======================================================================== //
 // Feature 9 -- in-app field post-processing (stock VTK filters)            //
 // ======================================================================== //
 
-vtkDataSet *VtkViewer::currentData() const
+vtkDataSet *VtkScene::currentData() const
 {
     return layers.isEmpty() ? nullptr : layers.last().data.Get();
 }
 
-QStringList VtkViewer::pointArrayNames() const
+QStringList VtkScene::pointArrayNames() const
 {
     QStringList names;
     for (const auto &l : layers) {
@@ -694,7 +723,7 @@ QStringList VtkViewer::pointArrayNames() const
     return names;
 }
 
-void VtkViewer::applyCutPlane()
+void VtkScene::applyCutPlane()
 {
     vtkDataSet *data = currentData();
     if (!data) { QMessageBox::information(this, "Cut Plane", "Load a dataset first."); return; }
@@ -727,7 +756,7 @@ void VtkViewer::applyCutPlane()
     addLayer(cut, QString("cut %1=%2").arg(axis).arg(pos, 0, 'g', 4), Kind::Generic);
 }
 
-void VtkViewer::applyIsoSurface()
+void VtkScene::applyIsoSurface()
 {
     vtkDataSet *data = currentData();
     if (!data) { QMessageBox::information(this, "Iso-surface", "Load a dataset first."); return; }
@@ -755,7 +784,7 @@ void VtkViewer::applyIsoSurface()
     addLayer(iso, QString("iso %1=%2").arg(arr).arg(val, 0, 'g', 4), Kind::Generic);
 }
 
-void VtkViewer::applyFieldCalculator()
+void VtkScene::applyFieldCalculator()
 {
     vtkDataSet *data = currentData();
     if (!data) { QMessageBox::information(this, "Field Calculator", "Load a dataset first."); return; }
@@ -786,7 +815,7 @@ void VtkViewer::applyFieldCalculator()
     renderArea->requestRender();
 }
 
-void VtkViewer::applyLineProbe()
+void VtkScene::applyLineProbe()
 {
     vtkDataSet *data = currentData();
     if (!data) { QMessageBox::information(this, "Line Probe", "Load a dataset first."); return; }
@@ -845,18 +874,18 @@ void VtkViewer::applyLineProbe()
     win->show();
 }
 
-void VtkViewer::togglePointProbe(bool on)
+void VtkScene::togglePointProbe(bool on)
 {
     if (on) {
         renderArea->setPickCallback([this](const QPoint &p) { onProbePick(p); });
-        statusBar()->showMessage("Point probe: click a point to read its field values.");
+        showStatus("Point probe: click a point to read its field values.");
     } else {
         renderArea->setPickCallback(nullptr);
-        statusBar()->clearMessage();
+        showStatus(restingStatus);
     }
 }
 
-void VtkViewer::onProbePick(const QPoint &pos)
+void VtkScene::onProbePick(const QPoint &pos)
 {
     vtkDataSet *data = currentData();
     if (!data) return;
@@ -865,7 +894,7 @@ void VtkViewer::onProbePick(const QPoint &pos)
     const int h      = renderArea->window()->GetSize()[1];
     auto picker = vtkSmartPointer<vtkPropPicker>::New();
     if (!picker->Pick(pos.x() * dpr, h - pos.y() * dpr, 0.0, renderArea->renderer())) {
-        statusBar()->showMessage("Point probe: no geometry under the cursor.", 3000);
+        showStatus("Point probe: no geometry under the cursor.", 3000);
         return;
     }
     double world[3];
@@ -887,7 +916,59 @@ void VtkViewer::onProbePick(const QPoint &pos)
     } else {
         msg += "(no sampled fields)";
     }
-    statusBar()->showMessage(msg, 15000);
+    showStatus(msg, 15000);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// SceneWindow -- the same scene on its own                                   //
+////////////////////////////////////////////////////////////////////////////////
+
+SceneWindow::SceneWindow(QWidget *parent) : QMainWindow(parent), view(new VtkScene)
+{
+    setWindowTitle("SPARTA 3D Viewer");
+    setWindowIcon(QIcon(Cfg::MAIN_ICON));
+    setMinimumSize(Cfg::MINIMUM_WIDTH, Cfg::MINIMUM_HEIGHT);
+    setCentralWidget(view);
+}
+
+SceneWindow::~SceneWindow() = default;
+
+bool SceneWindow::addDatasetFile(const QString &path, const QString &label, Kind kind, QString *err)
+{
+    return view->addDatasetFile(path, label, kind, err);
+}
+
+void SceneWindow::addDataset(vtkDataSet *data, const QString &label, Kind kind)
+{
+    view->addDataset(data, label, kind);
+}
+
+void SceneWindow::setColorField(const QString &name)
+{
+    view->setColorField(name);
+}
+
+void SceneWindow::clearScene()
+{
+    view->clearScene();
+}
+
+void SceneWindow::resetView()
+{
+    view->resetView();
+}
+
+bool SceneWindow::hasContent() const
+{
+    return view->hasContent();
+}
+
+void SceneWindow::showViewer()
+{
+    show();
+    raise();
+    activateWindow();
+    view->resetView();
 }
 
 // Local Variables:

@@ -41,7 +41,7 @@ class QSpinBox;
 class QTabWidget;
 
 class SpartaWrapper;
-class VtkViewer; // only defined when built with SPARTA_GUI_HAVE_VTK
+class SceneWindow; // only defined when built with SPARTA_GUI_HAVE_VTK
 
 class StlImportWizard : public QDialog {
     Q_OBJECT
@@ -66,7 +66,7 @@ private slots:
     void rebuildOutput();
     void accept() override;
 #if defined(SPARTA_GUI_HAVE_VTK)
-    void showLeaksInVtk();      // open the mesh in the interactive VTK viewer, leaks red
+    void showLeaksIn3D();       // open the mesh in the interactive 3D viewer, leaks red
 #endif
 
 private:
@@ -110,7 +110,7 @@ private:
     QString spartaWtMsg_;    ///< message from SPARTA's read_surf watertight check
     QLabel *wtLabel_ = nullptr; ///< Source-page watertightness label (refreshable)
 #if defined(SPARTA_GUI_HAVE_VTK)
-    VtkViewer *vtkViewer_ = nullptr; ///< interactive 3D leak viewer (lazy)
+    SceneWindow *leakWindow_ = nullptr; ///< interactive 3D leak viewer (lazy)
 #endif
 
     QTabWidget *tabs_ = nullptr;

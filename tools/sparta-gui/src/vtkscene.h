@@ -9,8 +9,8 @@
 // This software is distributed under the GNU General Public License version 2 or later.
 ////////////////////////////////////////////////////////////////////////////////////////
 
-#ifndef VTKVIEWER_H
-#define VTKVIEWER_H
+#ifndef VTKSCENE_H
+#define VTKSCENE_H
 
 // This widget is only compiled when SPARTA-GUI is built with an external VTK
 // library (-D SPARTA_GUI_USE_VTK=on).  It renders the native VTK files written by
@@ -24,6 +24,8 @@
 // moves.  It is a deliberately light-weight, interactive viewer (rotate/zoom/pan,
 // color by a scalar field, pick a colormap) and leaves heavier analysis to
 // ParaView (see the "Export to ParaView" dialog).
+
+#include "viewersource.h"
 
 #include <QImage>
 #include <QMainWindow>
@@ -39,6 +41,7 @@
 class QComboBox;
 class QCheckBox;
 class QLabel;
+class QTimer;
 
 class vtkActor;
 class vtkDataSet;
@@ -98,37 +101,43 @@ private:
 };
 
 /**
- * @brief Interactive VTK-based 3D viewer window for SPARTA particle/grid/surf data.
+ * @brief Interactive VTK 3D scene for SPARTA particle/grid/surf data.
  *
- * A standalone top-level window: a toolbar (open file, color-by-field, colormap,
- * edges, legend, reset, screenshot) above a @ref VtkRenderArea.  Datasets loaded
- * from @c .vtu / @c .vtp / @c .vtk files are shown as separate layers.
+ * A toolbar (open file, color-by-field, colormap, edges, legend, camera reset,
+ * screenshot) above a @ref VtkRenderArea, with a Filters menu and a status
+ * line.  Datasets read from @c .vtu / @c .vtp / @c .vtk files become separate
+ * layers.
+ *
+ * This is a plain widget rather than a window so that it can be shown either
+ * inside the viewer panel or, via @ref SceneWindow, on its own.
  */
-class VtkViewer : public QMainWindow {
+class VtkScene : public ViewerSource {
     Q_OBJECT
 
 public:
     /// @brief The kind of SPARTA data a layer holds (drives default appearance).
     enum class Kind { Particles, Grid, Surface, Generic };
 
-    explicit VtkViewer(QWidget *parent = nullptr);
-    ~VtkViewer() override;
-
-    VtkViewer(const VtkViewer &)            = delete;
-    VtkViewer &operator=(const VtkViewer &) = delete;
+    explicit VtkScene(QWidget *parent = nullptr);
+    ~VtkScene() override;
 
     /**
-     * @brief Load a VTK dataset file and add it to the scene as a named layer.
+     * @brief Read a VTK dataset file and add it to the scene as a named layer.
      * @param path  path to a @c .vtu, @c .vtp or @c .vtk file
      * @param label human-readable layer name (shown in the status line)
      * @param kind  particle/grid/surface (selects default point size, color, ...)
      * @param err   optional error-message sink
      * @return true on success
+     *
+     * Named apart from the in-memory overload below on purpose: the two used to
+     * be addDataset() and addDataSet(), one capital letter apart, which is a
+     * typo waiting to compile.
      */
-    bool addDataset(const QString &path, const QString &label, Kind kind, QString *err = nullptr);
+    bool addDatasetFile(const QString &path, const QString &label, Kind kind,
+                        QString *err = nullptr);
 
     /// @brief Add an already-built VTK dataset as a layer (no file needed).
-    void addDataSet(vtkDataSet *data, const QString &label, Kind kind);
+    void addDataset(vtkDataSet *data, const QString &label, Kind kind);
 
     /// @brief Programmatically color by a named field (e.g. "leak"); no-op if absent.
     void setColorField(const QString &name);
@@ -139,11 +148,20 @@ public:
     /// @brief Reset the camera to frame all layers.
     void resetView();
 
-    /// @brief Show, raise and activate the viewer window.
-    void showViewer();
-
-    /// @brief Whether the scene currently holds any layer.
-    bool hasContent() const { return !layers.isEmpty(); }
+    // --- ViewerSource ---
+    [[nodiscard]] QString sourceLabel() const override { return QStringLiteral("3D"); }
+    [[nodiscard]] QIcon sourceIcon() const override;
+    [[nodiscard]] QString sourceTip() const override
+    {
+        return QStringLiteral("The interactive 3D scene");
+    }
+    [[nodiscard]] QString emptyTip() const override
+    {
+        return QStringLiteral("No 3D data yet: use Run > 3D Snapshot, or open a VTK file");
+    }
+    [[nodiscard]] bool hasContent() const override { return !layers.isEmpty(); }
+    [[nodiscard]] QImage currentImage() const override;
+    QMenu *sourceMenu() override { return filtersMenu; }
 
 private slots:
     void openFileDialog();
@@ -171,6 +189,10 @@ private:
     };
 
     void buildUi();
+    /// Put @p msg on the scene's own status line, optionally clearing it after
+    /// @p ms milliseconds. Replaces QMainWindow::statusBar(), which a plain
+    /// widget does not have.
+    void showStatus(const QString &msg, int ms = 0);
     void addLayer(const vtkSmartPointer<vtkDataSet> &data, const QString &label, Kind kind);
     void refreshArrayCombo();
     void applyColoring();
@@ -193,12 +215,52 @@ private:
     QCheckBox *edgesBox     = nullptr;
     QCheckBox *scalarBarBox = nullptr;
     QLabel *infoLabel       = nullptr;
+    QMenu *filtersMenu      = nullptr;
+    QTimer *statusTimer     = nullptr;
+    QString restingStatus;  ///< what the status line says when no message is up
 
     /// @brief Combo item-data bit marking a "point" (vs "cell") array entry.
     static constexpr int RolePointData = 0x1;
 };
 
-#endif // VTKVIEWER_H
+/**
+ * @brief A @ref VtkScene on its own, as a top-level window.
+ *
+ * The STL import wizard needs this: it is itself a dialog running over the main
+ * window, and its leak view is part of that workflow, so the result must not be
+ * docked into the main window behind the dialog the user is still in.
+ */
+class SceneWindow : public QMainWindow {
+    Q_OBJECT
+
+public:
+    using Kind = VtkScene::Kind;
+
+    explicit SceneWindow(QWidget *parent = nullptr);
+    ~SceneWindow() override;
+
+    SceneWindow(const SceneWindow &)            = delete;
+    SceneWindow &operator=(const SceneWindow &) = delete;
+
+    [[nodiscard]] VtkScene *scene() const { return view; }
+
+    bool addDatasetFile(const QString &path, const QString &label, Kind kind,
+                        QString *err = nullptr);
+    void addDataset(vtkDataSet *data, const QString &label, Kind kind);
+    void setColorField(const QString &name);
+    void clearScene();
+    void resetView();
+
+    /// @brief Show, raise and activate the window.
+    void showViewer();
+
+    [[nodiscard]] bool hasContent() const;
+
+private:
+    VtkScene *view = nullptr;
+};
+
+#endif // VTKSCENE_H
 
 // Local Variables:
 // c-basic-offset: 4

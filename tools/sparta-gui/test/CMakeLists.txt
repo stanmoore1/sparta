@@ -281,6 +281,43 @@ if (VTK_FOUND)
   target_link_libraries(test_vtkfilters PRIVATE GTest::gtest_main Qt6::Core ${VTK_LIBRARIES})
   vtk_module_autoinit(TARGETS test_vtkfilters MODULES ${VTK_LIBRARIES})
   gtest_discover_tests(test_vtkfilters)
+
+  # The find_package above narrowed VTK_LIBRARIES to the five modules the pure
+  # filter tests need. The scene renders, so ask again for the full set the
+  # application itself links -- after test_vtkfilters has already been linked,
+  # so that target keeps its smaller dependency.
+  find_package(VTK 9.0 QUIET COMPONENTS
+    CommonCore CommonDataModel CommonColor CommonMath
+    FiltersGeometry FiltersCore FiltersSources FiltersGeneral
+    IOXML IOLegacy
+    RenderingCore RenderingOpenGL2 RenderingAnnotation RenderingFreeType)
+
+  # The 3D scene widget and its standalone window. Links the application
+  # sources the same way the widget walker does: the scene reaches into the
+  # chart window for its line probe, and hand-listing that dependency chain
+  # drifts out of date the moment anything moves.
+  set(VTK_SCENE_SOURCES ${PROJECT_SOURCES})
+  list(FILTER VTK_SCENE_SOURCES EXCLUDE REGEX "/src/main\\.cpp$")
+
+  add_executable(test_vtkscene
+    test_vtkscene.cpp
+    ${VTK_SCENE_SOURCES}
+  )
+  target_include_directories(test_vtkscene PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/thirdparty/rangeslider
+  )
+  target_compile_definitions(test_vtkscene PRIVATE
+    SPARTA_GUI_VERSION="${PROJECT_VERSION}" SPARTA_GUI_HAVE_VTK)
+  target_link_libraries(test_vtkscene PRIVATE
+    GTest::gtest Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Svg
+    lepton_mini ads::qtadvanceddocking-qt6 ${VTK_LIBRARIES})
+  vtk_module_autoinit(TARGETS test_vtkscene MODULES ${VTK_LIBRARIES})
+  if (SPARTA_GUI_USE_PLUGIN)
+    target_compile_definitions(test_vtkscene PRIVATE SPARTA_GUI_USE_PLUGIN)
+    target_include_directories(test_vtkscene PRIVATE ${SPARTA_PLUGINLIB_DIR})
+  endif()
+  gtest_discover_tests(test_vtkscene)
 endif()
 
 # Test executable for the movie probing and frame selection helpers

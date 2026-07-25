@@ -101,8 +101,8 @@ if (NOT BUILD_DOC_ONLY)
       message(STATUS "Building the VTK 3D viewer with VTK ${VTK_VERSION}")
       set(SPARTA_GUI_HAVE_VTK ON)
       list(APPEND PROJECT_SOURCES
-        ${CMAKE_SOURCE_DIR}/src/vtkviewer.cpp
-        ${CMAKE_SOURCE_DIR}/src/vtkviewer.h
+        ${CMAKE_SOURCE_DIR}/src/vtkscene.cpp
+        ${CMAKE_SOURCE_DIR}/src/vtkscene.h
         ${CMAKE_SOURCE_DIR}/src/vtkfilters.cpp
         ${CMAKE_SOURCE_DIR}/src/vtkfilters.h)
     else()

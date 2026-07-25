@@ -37,7 +37,7 @@
 #include "stdcapture.h"
 #include "urldownloader.h"
 #if defined(SPARTA_GUI_HAVE_VTK)
-#include "vtkviewer.h"
+#include "vtkscene.h"
 #endif
 
 #include <QAction>
@@ -2925,8 +2925,8 @@ void SpartaGui::renderImage()
 #if defined(SPARTA_GUI_HAVE_VTK)
 void SpartaGui::open3DViewer()
 {
-    if (!vtkViewer) vtkViewer = new VtkViewer(this);
-    vtkViewer->showViewer();
+    if (!sceneWindow) sceneWindow = new SceneWindow(this);
+    sceneWindow->showViewer();
 }
 
 void SpartaGui::renderVtkSnapshot()
@@ -2935,7 +2935,7 @@ void SpartaGui::renderVtkSnapshot()
         warning(this, "3D Snapshot", "Cannot create a 3D snapshot while SPARTA is running.");
         return;
     }
-    if (!vtkViewer) vtkViewer = new VtkViewer(this);
+    if (!sceneWindow) sceneWindow = new SceneWindow(this);
     startSparta();
 
     // does the loaded library actually provide the VTK dump styles?  (VTK is an
@@ -2946,7 +2946,7 @@ void SpartaGui::renderVtkSnapshot()
     for (int i = 0; i < ndumpstyles; ++i)
         if (sparta.styleName("dump", i).endsWith("/vtk")) { haveVtkDump = true; break; }
     if (!haveVtkDump) {
-        vtkViewer->showViewer();
+        sceneWindow->showViewer();
         warning(this, "3D Snapshot",
                 "This SPARTA library was built without the VTK package,",
                 "so it cannot write VTK files directly.  You can still open <code>.vtu</code> / "
@@ -3018,25 +3018,25 @@ void SpartaGui::renderVtkSnapshot()
 
     struct Cat {
         QString id, style, ext, attrs, label;
-        VtkViewer::Kind kind;
+        SceneWindow::Kind kind;
     };
     const QList<Cat> cats = {
-        {"sgvtkgrid", "grid/vtk", "vtu", "all id proc", "grid", VtkViewer::Kind::Grid},
+        {"sgvtkgrid", "grid/vtk", "vtu", "all id proc", "grid", SceneWindow::Kind::Grid},
         {"sgvtkpart", "particle/vtk", "vtp", "all id x y z vx vy vz", "particles",
-         VtkViewer::Kind::Particles},
-        {"sgvtksurf", "surf/vtk", "vtp", "all id type", "surfaces", VtkViewer::Kind::Surface},
+         SceneWindow::Kind::Particles},
+        {"sgvtksurf", "surf/vtk", "vtp", "all id type", "surfaces", SceneWindow::Kind::Surface},
     };
 
-    vtkViewer->clearScene();
+    sceneWindow->clearScene();
     int loaded = 0;
     for (const auto &c : cats) {
         const QString f = renderCategory(c.id, c.style, c.ext, c.attrs);
         if (f.isEmpty()) continue;
-        if (vtkViewer->addDataset(f, c.label, c.kind, nullptr)) ++loaded;
+        if (sceneWindow->addDatasetFile(f, c.label, c.kind, nullptr)) ++loaded;
         QFile::remove(f);
     }
 
-    vtkViewer->showViewer();
+    sceneWindow->showViewer();
     if (loaded == 0)
         warning(this, "3D Snapshot",
                 "No particle, grid or surface data was produced for the current state.");

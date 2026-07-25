@@ -16,7 +16,7 @@
 #include "stdcapture.h"
 
 #if defined(SPARTA_GUI_HAVE_VTK)
-#include "vtkviewer.h"
+#include "vtkscene.h"
 
 #include <vtkCellArray.h>
 #include <vtkCellData.h>
@@ -257,7 +257,7 @@ void StlImportWizard::runSpartaWatertight()
 }
 
 #if defined(SPARTA_GUI_HAVE_VTK)
-void StlImportWizard::showLeaksInVtk()
+void StlImportWizard::showLeaksIn3D()
 {
     // build a VTK polydata straight from the parsed mesh with a per-element
     // "leak" cell scalar (1 = a non-watertight element from the pre-check), and
@@ -295,13 +295,13 @@ void StlImportWizard::showLeaksInVtk()
         pd->SetPolys(cells);
     pd->GetCellData()->AddArray(leak);
 
-    if (!vtkViewer_) vtkViewer_ = new VtkViewer(this);
-    vtkViewer_->clearScene();
+    if (!leakWindow_) leakWindow_ = new SceneWindow(this);
+    leakWindow_->clearScene();
     const bool leaks = !wt_.watertight();
-    vtkViewer_->addDataSet(pd, leaks ? "surface (leaks in red)" : "surface",
-                           VtkViewer::Kind::Surface);
-    if (leaks) vtkViewer_->setColorField("leak"); // 0 -> cool, 1 -> warm/red
-    vtkViewer_->showViewer();
+    leakWindow_->addDataset(pd, leaks ? "surface (leaks in red)" : "surface",
+                           SceneWindow::Kind::Surface);
+    if (leaks) leakWindow_->setColorField("leak"); // 0 -> cool, 1 -> warm/red
+    leakWindow_->showViewer();
 }
 #endif // SPARTA_GUI_HAVE_VTK
 
@@ -421,7 +421,7 @@ QWidget *StlImportWizard::buildPreviewPage()
     auto *vtkBtn = new QPushButton(QIcon(":/icons/image-viewer.svg"), "View in 3D (VTK)");
     vtkBtn->setToolTip("Open the surface in the interactive VTK 3D viewer; non-watertight "
                        "elements are highlighted in red. Rotate/zoom/pan with the mouse.");
-    connect(vtkBtn, &QPushButton::clicked, this, &StlImportWizard::showLeaksInVtk);
+    connect(vtkBtn, &QPushButton::clicked, this, &StlImportWizard::showLeaksIn3D);
     row->addWidget(vtkBtn);
 #endif
     row->addStretch();
