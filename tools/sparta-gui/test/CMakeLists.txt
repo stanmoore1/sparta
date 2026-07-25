@@ -278,6 +278,62 @@ endif()
 
 gtest_discover_tests(test_render)
 
+# The chart renderer. It draws every chart the application shows and had no
+# test at all; a setter that stores its argument and a renderer that ignores it
+# look identical from outside, so these render into an image and ask the pixels.
+add_executable(test_plotwidget
+  test_plotwidget.cpp
+  ${CMAKE_SOURCE_DIR}/src/plotwidget.cpp
+  ${CMAKE_SOURCE_DIR}/src/plotaxismath.cpp
+)
+target_include_directories(test_plotwidget PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_plotwidget PRIVATE GTest::gtest_main Qt6::Widgets)
+gtest_discover_tests(test_plotwidget)
+
+# The parametric sweep's results table: the only table filled in while runs are
+# happening, one row at a time, from a driver that can be stopped part way. A
+# model that miscounts or forgets to bracket an insertion corrupts the view
+# rather than failing, so QAbstractItemModelTester watches it too.
+# Links the whole application: sweeppanel.cpp also holds SweepController, which
+# drives the main window and the chart panel, so the model cannot be compiled
+# on its own.
+add_executable(test_sweeppanel
+  test_sweeppanel.cpp
+  ${GUI_WALKER_SOURCES}
+)
+target_include_directories(test_sweeppanel PRIVATE
+  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}/thirdparty/rangeslider
+)
+target_compile_definitions(test_sweeppanel PRIVATE SPARTA_GUI_VERSION="${PROJECT_VERSION}")
+target_link_libraries(test_sweeppanel PRIVATE
+  GTest::gtest_main Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Svg Qt6::Test
+  lepton_mini ads::qtadvanceddocking-qt6)
+if (SPARTA_GUI_HAVE_VTK)
+  target_compile_definitions(test_sweeppanel PRIVATE SPARTA_GUI_HAVE_VTK)
+  target_link_libraries(test_sweeppanel PRIVATE ${VTK_LIBRARIES})
+  vtk_module_autoinit(TARGETS test_sweeppanel MODULES ${VTK_LIBRARIES})
+endif()
+if (SPARTA_GUI_USE_PLUGIN)
+  target_compile_definitions(test_sweeppanel PRIVATE SPARTA_GUI_USE_PLUGIN)
+  target_include_directories(test_sweeppanel PRIVATE ${SPARTA_PLUGINLIB_DIR})
+endif()
+gtest_discover_tests(test_sweeppanel)
+
+# The welcome screen: the first thing a new user sees, and untested. Needs the
+# resource bundle, because the gallery only offers decks it has a shipped
+# thumbnail for.
+add_executable(test_welcomescreen
+  test_welcomescreen.cpp
+  ${CMAKE_SOURCE_DIR}/src/welcomescreen.cpp
+  ${CMAKE_SOURCE_DIR}/src/helpers.cpp
+  ${TEST_RESOURCE_SOURCES}
+)
+target_include_directories(test_welcomescreen PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_welcomescreen PRIVATE
+  GTest::gtest_main Qt6::Widgets Qt6::Svg Qt6::Test)
+gtest_discover_tests(test_welcomescreen)
+
 # Test executable for helpers
 add_executable(test_helpers
   test_helpers.cpp
