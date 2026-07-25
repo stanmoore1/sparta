@@ -50,6 +50,12 @@ AboutDialog::AboutDialog(const QString &version, const QString &info, const QStr
     topLayout->addWidget(iconLabel);
     auto *versionLabel = new QLabel(version, this);
     versionLabel->setMargin(LABEL_MARGIN);
+    // This label carries the Qt version and the full path of the loaded
+    // plugin. Without wrapping, any ordinary absolute path runs past the right
+    // edge and is silently cut off -- no ellipsis, no scrollbar, no way to
+    // read it -- and which library got loaded is the one thing someone opens
+    // this dialog to find out when the plugin is misbehaving.
+    versionLabel->setWordWrap(true);
     versionLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
     topLayout->addWidget(versionLabel, 1);
     mainLayout->addLayout(topLayout);
@@ -112,12 +118,34 @@ AboutDialog::AboutDialog(const QString &version, const QString &info, const QStr
     // add space for icon and title line
     desiredWidth = std::max(desiredWidth, iconLabel->sizeHint().width());
     desiredWidth = std::max(desiredWidth, infoLabel->sizeHint().width());
+    // The version/plugin-path line was left out of this, which is why it was
+    // the one that got clipped. It wraps now, so ask only for a readable width
+    // rather than the whole single-line length -- a deeply nested plugin path
+    // would otherwise demand a dialog wider than the screen (the cap below
+    // would then trim it back and the clipping would return).
+    desiredWidth = std::max(desiredWidth,
+                            std::min(versionLabel->sizeHint().width(), 3 * minwidth / 2));
     desiredWidth += 4 * LABEL_MARGIN;
     desiredWidth += infoScrollArea->verticalScrollBar()->sizeHint().width();
 
     // add spacer icon, credits, and close button
-    desiredHeight += iconLabel->height() + creditsLabel->sizeHint().height() +
-                     closeButton->height();
+    //
+    // The top row is as tall as the taller of the icon and the wrapped version
+    // block, not simply the icon: now that the version text wraps, a long
+    // plugin path becomes three or four lines, and reserving only the icon's
+    // 64 pixels cuts the last of them off -- trading a clip at the right edge
+    // for one at the bottom.
+    //
+    // The wrapped height is made a hard minimum rather than an estimate fed
+    // into the total. Estimating it means guessing the width the layout will
+    // settle on, and being a few pixels optimistic there costs a whole line;
+    // a minimum makes the layout grow the dialog to fit whatever it turns out
+    // to be.
+    const int versionWidth =
+        std::max(120, desiredWidth - iconLabel->width() - 8 * LABEL_MARGIN);
+    versionLabel->setMinimumHeight(versionLabel->heightForWidth(versionWidth));
+    desiredHeight += std::max(iconLabel->height(), versionLabel->minimumHeight()) +
+                     creditsLabel->sizeHint().height() + closeButton->height();
 
     // Apply size constraints based on screen dimensions
     auto *screen = QGuiApplication::primaryScreen();

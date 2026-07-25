@@ -43,11 +43,17 @@ def sh(*args, **kw):
 
 
 class Gui:
-    def __init__(self, display=50, size=(1280, 900), outdir="/tmp/guitest/shots", args=None):
+    def __init__(self, display=50, size=(1280, 900), outdir="/tmp/guitest/shots", args=None,
+                 no_library=False):
         self.display = f":{display}"
         self.w, self.h = size
         self.outdir = outdir
         self.args = args if args is not None else [EXAMPLE]
+        # Start with no simulator on purpose. Normally that is a mistake and
+        # __enter__ refuses, because every later check would fail for the wrong
+        # reason; but the "no suitable SPARTA shared library" dialog is itself a
+        # state worth photographing, and this is the only way to reach it.
+        self.no_library = no_library
         self.profile = tempfile.mkdtemp()
         os.makedirs(outdir, exist_ok=True)
         self.captured = []
@@ -60,24 +66,27 @@ class Gui:
         cfgdir = f"{env['XDG_CONFIG_HOME']}/The SPARTA Developers"
         os.makedirs(cfgdir, exist_ok=True)
         os.makedirs(env["XDG_DATA_HOME"], exist_ok=True)
-        plugin = SPARTA_PLUGIN_LIB
-        if not plugin:
-            plugin = subprocess.run(
-                ["find", SPARTA_LIB_DIR, "-name", "libsparta*.so.*"],
-                capture_output=True, text=True).stdout.split("\n")[0]
-        if not plugin or not os.path.exists(plugin):
-            raise RuntimeError(
-                "no SPARTA library to load: set SPARTA_PLUGIN_LIB (or point "
-                f"SPARTA_LIB_DIR at a build tree; looked in {SPARTA_LIB_DIR!r}). "
-                "Without one the application starts but cannot run anything, "
-                "and every check below would fail for the wrong reason.")
+        plugin = ""
+        if not self.no_library:
+            plugin = SPARTA_PLUGIN_LIB
+            if not plugin:
+                plugin = subprocess.run(
+                    ["find", SPARTA_LIB_DIR, "-name", "libsparta*.so.*"],
+                    capture_output=True, text=True).stdout.split("\n")[0]
+            if not plugin or not os.path.exists(plugin):
+                raise RuntimeError(
+                    "no SPARTA library to load: set SPARTA_PLUGIN_LIB (or point "
+                    f"SPARTA_LIB_DIR at a build tree; looked in {SPARTA_LIB_DIR!r}). "
+                    "Without one the application starts but cannot run anything, "
+                    "and every check below would fail for the wrong reason.")
         # preseed so no modal dialog blocks an unattended run
         with open(f"{cfgdir}/SPARTA-GUI (QT6).conf", "w") as f:
             f.write("[General]\n"
                     "showwelcome=false\n"
-                    "restore_session=false\n"
-                    f"plugin_path={plugin}\n"
-                    "examples_path=/home/user/sparta/examples\n")
+                    "restore_session=false\n")
+            if plugin:
+                f.write(f"plugin_path={plugin}\n")
+            f.write("examples_path=/home/user/sparta/examples\n")
         self.env = env
 
         self.xvfb = subprocess.Popen(

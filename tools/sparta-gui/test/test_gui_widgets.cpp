@@ -668,6 +668,38 @@ TEST(RealWindows, AboutDialog)
     walkWindow(&dlg, "AboutDialog", 1);
 }
 
+// Found by looking at the dialog: the version line, which also carries the
+// full path of the loaded plugin, ran past the right edge and was cut off --
+// no ellipsis, no scrollbar, no way to read it. Which library got loaded is
+// the one thing this dialog is opened for when a plugin misbehaves, and an
+// ordinary absolute path was long enough to lose it.
+TEST(AboutDialogLayout, TheVersionAndPluginPathAreReadable)
+{
+    const QString version = "This is SPARTA-GUI version 1.0.0 using Qt version 6.4.2\n"
+                            "SPARTA library loaded as plugin from file "
+                            "/tmp/claude-0/-home-user-sparta/cb58d289-558d-510d-8b18-"
+                            "9976ada54800/scratchpad/v1beta/build-lib/src/libsparta_.so";
+    AboutDialog dlg(version, "SPARTA version: 24 Sep 2025\nKOKKOS package: not included",
+                    "Fix styles:\nablate adapt ambipolar ave/grid", 400);
+    dlg.show();
+    QApplication::processEvents();
+
+    QLabel *versionLabel = nullptr;
+    for (auto *l : dlg.findChildren<QLabel *>())
+        if (l->text().startsWith("This is SPARTA-GUI")) versionLabel = l;
+    ASSERT_NE(versionLabel, nullptr);
+
+    EXPECT_TRUE(versionLabel->wordWrap())
+        << "word wrap is off, so a path longer than the dialog is silently truncated";
+
+    // With wrapping on, the text has to fit in the height the layout gave it.
+    const int needed = versionLabel->heightForWidth(versionLabel->width());
+    EXPECT_LE(needed, versionLabel->height())
+        << "the version block is taller than the space it has, so its last line is cut off";
+    // and the label must not be narrower than the dialog can afford
+    EXPECT_GT(versionLabel->width(), 200);
+}
+
 TEST(RealWindows, ParaViewExport)
 {
     ParaViewExportDialog dlg(nullptr, QDir::tempPath());
