@@ -880,6 +880,10 @@ void FixAblate::create_surfs(int outflag)
       // there is no surf left in the cell to reflect off, so the molecule
       //   is buried, i.e. incorporated into the film, with full accounting
       if (mode == DEPOSIT && cinfo[icell].type == INSIDE) {
+        if (salvage_to_neighbor(icell,i)) {
+          particles = particle->particles;
+          continue;
+        }
         update->bury_particle(&particles[i]);
         particles[i].flag = PDISCARD;
         ncount++;
@@ -914,7 +918,9 @@ void FixAblate::create_surfs(int outflag)
     //   accretion, so the lattice atoms the molecule strikes are at rest
     // momentum given to the surface is recorded so nothing is unaccounted
 
-    if (!pflag && mode == DEPOSIT && salvage_particle(icell,i)) {
+    if (!pflag && mode == DEPOSIT &&
+        (salvage_particle(icell,i) || salvage_to_neighbor(icell,i))) {
+      particles = particle->particles;
       particles[i].flag = PKEEP;
       continue;
     }
@@ -1363,6 +1369,148 @@ int FixAblate::salvage_particle(int icell, int i)
   update->reflect_mom[2] += wmass * (vold[2] - p->v[2]);
 
   return 1;
+}
+
+/* ----------------------------------------------------------------------
+   the film has closed over particle I completely within its own cell ICELL,
+     so there is no surface left there to reflect it from
+   if a face neighbor still holds gas, the molecule was not sealed in: the
+     film squeezed it, and it should be pushed out through that face rather
+     than incorporated.  Measurement says this is what most burials are --
+     at moderate growth rates every one of them has a neighbor with gas in it,
+     and refining the timestep does not reduce their number, because the cause
+     is the cell the salvage looks in, not the size of the step.
+   reflect off the closing film, taking its normal to be the face the molecule
+     leaves through, and reassign the particle to the neighbor cell
+   only owned cells are considered: pushing a particle into a ghost cell would
+     mean migrating it to another proc from inside a fix.  A molecule whose
+     only gas neighbor is off-proc is buried, as it was before.
+   return 1 if the particle was moved, 0 if it must be buried
+------------------------------------------------------------------------- */
+
+int FixAblate::salvage_to_neighbor(int icell, int i)
+{
+  Grid::ChildCell *cells = grid->cells;
+  Grid::ChildInfo *cinfo = grid->cinfo;
+
+  if (isc_default < 0) return 0;
+
+  static const int fdim[6] = {0,0,1,1,2,2};
+  int nface = (dim == 2) ? 4 : 6;
+
+  Particle::OnePart *p = &particle->particles[i];
+
+  double eps = EPSSURF * (dim == 3 ?
+                          MIN(MIN(xyzsize[0],xyzsize[1]),xyzsize[2]) :
+                          MIN(xyzsize[0],xyzsize[1]));
+
+  for (int f = 0; f < nface; f++) {
+    if (grid->neigh_decode(cells[icell].nmask,f) != NCHILD) continue;
+
+    int jcell = cells[icell].neigh[f];
+    if (jcell < 0 || jcell >= grid->nlocal) continue;
+    if (cinfo[jcell].type == INSIDE) continue;
+
+    // step just past the shared face, keeping the other coords, so the
+    //   molecule moves as little as possible
+
+    double xtry[3];
+    xtry[0] = p->x[0];
+    xtry[1] = p->x[1];
+    xtry[2] = p->x[2];
+
+    int d = fdim[f];
+    if (f % 2 == 0) xtry[d] = cells[jcell].hi[d] - eps;   // neighbor below
+    else xtry[d] = cells[jcell].lo[d] + eps;              // neighbor above
+    for (int k = 0; k < dim; k++) {
+      if (xtry[k] < cells[jcell].lo[k]) xtry[k] = cells[jcell].lo[k] + eps;
+      else if (xtry[k] > cells[jcell].hi[k]) xtry[k] = cells[jcell].hi[k] - eps;
+    }
+
+    // a split cell owns no particles, its sub cells do
+
+    int kcell = jcell;
+    if (cells[jcell].nsplit > 1) {
+      if (dim == 2) kcell = update->split2d(jcell,xtry);
+      else kcell = update->split3d(jcell,xtry);
+      if (kcell < 0 || kcell >= grid->nlocal) continue;
+      if (cinfo[kcell].type == INSIDE) continue;
+    }
+    if (cinfo[kcell].volume == 0.0) continue;
+
+    double vold[3];
+    vold[0] = p->v[0];
+    vold[1] = p->v[1];
+    vold[2] = p->v[2];
+    double xold[3];
+    xold[0] = p->x[0];
+    xold[1] = p->x[1];
+    xold[2] = p->x[2];
+
+    p->x[0] = xtry[0];
+    p->x[1] = xtry[1];
+    if (dim == 3) p->x[2] = xtry[2];
+
+    int done = 0;
+
+    if (cells[kcell].nsurf == 0) {
+
+      // the neighbor is all gas, so the molecule is simply through the face
+      // reflect off the film it is leaving, whose local normal here is that
+      //   face; the wall is stationary, as everywhere else in deposition
+
+      double norm[3];
+      norm[0] = norm[1] = norm[2] = 0.0;
+      norm[d] = (f % 2 == 0) ? -1.0 : 1.0;
+
+      int reaction = 0;
+      double dtremain = 0.0;
+      Particle::OnePart *jp = surf->sc[isc_default]->
+        collide(p,dtremain,-1,norm,isr_default,reaction);
+      if (p && !jp) done = 1;
+
+    } else {
+
+      // the neighbor is cut by the surface, and stepping through the face
+      //   usually lands in ITS solid part, since the film is what closed the
+      //   molecule in.  Hand it to the ordinary in-cell salvage, which
+      //   ray-traces to the flow side of that cell and reflects off the surf
+      //   that separates the two -- the right surface and the right normal.
+
+      done = salvage_particle(kcell,i);
+    }
+
+    if (!done) {
+      p->x[0] = xold[0];
+      p->x[1] = xold[1];
+      p->x[2] = xold[2];
+      p->v[0] = vold[0];
+      p->v[1] = vold[1];
+      p->v[2] = vold[2];
+      continue;
+    }
+
+    p->icell = kcell;
+    cinfo[kcell].count++;
+    cinfo[icell].count--;
+
+    // salvage_particle already accounted its own reflection
+
+    if (cells[kcell].nsurf == 0) {
+      double mass = particle->species[p->ispecies].mass;
+      double weight = 1.0;
+      if (grid->cellweightflag) weight = p->weight;
+      double wmass = weight * mass;
+      update->nfrontreflect++;
+      update->reflect_mom[0] += wmass * (vold[0] - p->v[0]);
+      update->reflect_mom[1] += wmass * (vold[1] - p->v[1]);
+      update->reflect_mom[2] += wmass * (vold[2] - p->v[2]);
+    }
+
+    return 1;
+  }
+
+  return 0;
 }
 
 /* ----------------------------------------------------------------------

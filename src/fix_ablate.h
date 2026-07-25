@@ -167,6 +167,7 @@ class FixAblate : public Fix {
   double grad_mag(int);
 
   int salvage_particle(int, int);
+  int salvage_to_neighbor(int, int);
   void decrement_multiv();
   void decrement_multid_inside();
   void decrement_multid_outside();

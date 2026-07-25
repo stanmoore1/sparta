@@ -46,10 +46,19 @@ in.test.conserve
   in.test.grow does, and in.test.fill puts the corner point grid on the whole
   box and runs to rate 1.0.
 
-  Nearly every burial in this test is a grid cell that became entirely solid
-  in one regeneration, leaving no surface in the cell to reflect from.  At
-  rate 0.5, 13104 overtaken particles are reflected back into the flow and
-  377 are buried, so about 97% are salvaged.
+  Every burial in this test is a grid cell that became entirely solid in one
+  regeneration, leaving no surface in the cell to reflect from.  A molecule
+  whose own cell filled while a neighbor still held gas is pushed out through
+  the shared face rather than buried, so what is left buried is the molecule
+  that really was closed in on every side.  Measured before that was added,
+  the fraction of burials with a non-solid face neighbor was 100% at rate
+  0.3, 85% at 0.5 and 0.6, and 64% in in.test.fill at rate 1.0; the burial
+  counts fell by almost exactly those fractions when it was.
+
+  Burial is not a timestep artifact.  Refining the timestep eightfold at a
+  fixed physical growth rate and a fixed total deposition leaves the count
+  where it was (41, 55, 37, 38), because the cause is which cell the salvage
+  can see, not how big the step is.
 
 in.test.grow
   Corner point values exist only on the grid group fix ablate is defined on,

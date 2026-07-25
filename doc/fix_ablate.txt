@@ -158,10 +158,25 @@ stationary, and any motion of those atoms is already represented by the
 
 If a particle ends up somewhere the surface has closed over completely,
 so that there is no longer a surface element to reflect it from, it is
-buried, i.e. incorporated into the growing film.  In practice this is
-what nearly every burial is: the grid cell holding the particle became
-entirely solid in one regeneration, so the cell contains no surface to
-reflect from and no gas-side point to reflect toward.  This is physical, and
+buried, i.e. incorporated into the growing film.  This is what nearly
+every burial is: the grid cell holding the particle became entirely solid
+in one regeneration, so that cell contains no surface to reflect from and
+no gas-side point to reflect toward.
+
+Most of those molecules are not actually sealed in.  Their own cell
+filled while a neighboring cell still held gas, so the film squeezed them
+rather than enclosing them, and they are pushed out through the shared
+face and reflected off the film there instead of being buried.  What
+remains buried is the molecule that really was closed in on every side,
+which is a physical outcome: a growing film does trap gas.  Burial is
+also not a discretization artifact -- refining the timestep at a fixed
+growth rate does not reduce it, because the cause is geometric.
+
+For any physically realistic deposition rate there are no burials at all.
+They begin to appear only when the front advances at a percent or so of
+the thermal speed, which is many orders of magnitude faster than film
+growth in a real system, and they are used here mainly as a way to prove
+that nothing is ever lost silently.  This is physical, and
 it is rare unless the deposition rate is large.  A buried particle is
 removed from the gas, and its mass, momentum and energy are accumulated
 and can be output (see below), so no particle is ever discarded without
