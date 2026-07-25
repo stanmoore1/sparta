@@ -329,7 +329,16 @@ void *Stats::last_thermo(const char *what, int index)
   if (strcmp(what,"step") == 0) return (void *) &cache_step;
   if (strcmp(what,"num") == 0) return (void *) &cache_num;
   if (strcmp(what,"setup") == 0) return (void *) &cache_setup;
-  if (strcmp(what,"line") == 0) return (void *) &cache_line;
+  // "line" reports the *live* line number of the command currently being
+  // executed by the library command processor (Input::line_num, updated per
+  // command in sparta_commands_string), not the value cached at the last
+  // thermo output.  This is what lets the GUI highlight the exact input line
+  // that triggered an error even when the error happens before any thermo
+  // output has been produced (e.g. a bad "global" command): cache_line would
+  // still be 0 there and wrongly point at the first line.  During a run it is
+  // the line of the executing "run" command, so the progress highlight is
+  // unchanged.
+  if (strcmp(what,"line") == 0) return (void *) &input->line_num;
   if (strcmp(what,"imagename") == 0) {
     if (cache_imagename.empty()) return NULL;
     return (void *) cache_imagename.c_str();

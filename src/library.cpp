@@ -369,8 +369,18 @@ void *sparta_extract_global(void *ptr, const char *name)
   // these entries do not require an instance,
   // e.g. so a version check can be done before calling sparta_open()
 
+  // optional build-time git provenance (guarded; absence is harmless so a
+  // plain non-git build still returns an empty/"(unknown)" string)
+#ifndef SPARTA_GIT_COMMIT
+#define SPARTA_GIT_COMMIT ""
+#endif
+#ifndef SPARTA_GIT_BRANCH
+#define SPARTA_GIT_BRANCH ""
+#endif
+
   if (strcmp(name,"sparta_version") == 0) return (void *) SPARTA_VERSION;
-  if (strcmp(name,"git_branch") == 0) return (void *) "";
+  if (strcmp(name,"git_branch") == 0) return (void *) SPARTA_GIT_BRANCH;
+  if (strcmp(name,"git_commit") == 0) return (void *) SPARTA_GIT_COMMIT;
 
   if (!sparta) return NULL;
 
@@ -702,6 +712,8 @@ int sparta_extract_setting(void *ptr, const char *name)
     return sparta->input->variable->nvar_active();
   if (strcmp(name,"ngroup_grid") == 0) return sparta->grid->ngroup;
   if (strcmp(name,"ngroup_surf") == 0) return sparta->surf->ngroup;
+  if (strcmp(name,"nsurf") == 0) return (int) sparta->surf->nsurf;
+  if (strcmp(name,"nlocal_surf") == 0) return sparta->surf->nlocal;
 
   if (strcmp(name,"stats_every") == 0) return sparta->output->stats_every;
 
@@ -924,7 +936,9 @@ int sparta_has_id(void *ptr, const char *category, const char *name)
 }
 
 /* ----------------------------------------------------------------------
-   copy the name of variable number idx into buffer
+   copy a human-readable description of variable number idx into buffer
+   (name, style, and definition), matching the LAMMPS lammps_variable_info
+   contract so the GUI can display one variable per line
    returns 1 if successful, 0 if not
 ------------------------------------------------------------------------- */
 
@@ -933,7 +947,8 @@ int sparta_variable_info(void *ptr, int idx, char *buffer, int buf_size)
   SPARTA *sparta = (SPARTA *) ptr;
 
   if (idx < 0 || idx >= sparta->input->variable->nvar_active()) return 0;
-  return copy_string(sparta->input->variable->name(idx),buffer,buf_size);
+  std::string info = sparta->input->variable->get_info(idx);
+  return copy_string(info.c_str(),buffer,buf_size);
 }
 
 // ----------------------------------------------------------------------
