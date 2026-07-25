@@ -1466,9 +1466,12 @@ void FixAblate::check_group_boundary()
   if (all)
     error->all(FLERR,
                "Fix ablate deposition has grown the surface out to the edge "
-               "of the fix's grid group; the surface cannot continue past it. "
-               "Define the fix on a larger group of grid cells, or deposit "
-               "less material");
+               "of the fix's grid group, where there are no corner point "
+               "values for it to continue into.  The group is fixed when the "
+               "implicit surface is created, by read_isurf or create_isurf, "
+               "so use one that covers more of the domain, or deposit less "
+               "material.  A group reaching the simulation box is not "
+               "limited this way, since a surface may end on the box");
 }
 
 /* ----------------------------------------------------------------------

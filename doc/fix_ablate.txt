@@ -213,9 +213,15 @@ Corner point values exist only on the group of grid cells the fix is
 defined on, so a growing surface cannot continue past the edge of that
 group: its elements there would have a free end with nothing on the
 other side to meet.  An error is generated if the surface reaches that
-edge; define the fix on a larger group of grid cells, or deposit less
+edge.  The group is fixed when the implicit surface is created, by
+"read_isurf"_read_isurf.html or "create_isurf"_create_isurf.html, whose
+grid must match the surface data exactly, so this is decided at setup
+time: use a group that covers more of the domain, or deposit less
 material.  An outer face of the group that lies on the simulation box is
-exempt, since a surface is allowed to end on the box.
+not limited this way, since a surface is allowed to end on the box; a
+fix defined on the whole box can therefore grow until it runs out of box.
+This restriction does not arise for ablation, where the surface only
+recedes.
 
 If the {units} keyword is set to {distance}, the {source} is interpreted
 as a deposition rate in units of length/time, rather than as a corner

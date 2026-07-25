@@ -99,6 +99,39 @@ def test_conserve(exe, rate, nevery):
     return ok
 
 
+def test_fill(exe, rate):
+    """The film may grow until it runs out of box, and still balance.
+
+    Here the corner point grid is the whole box, so nothing stops the surface
+    short.  That covers the case in.test.conserve cannot: a surface ending on
+    the simulation box is legal, and the group boundary check has to allow it.
+    """
+    label = "fill (rate=%s)" % rate
+    rc, out = run(exe, "in.test.fill", {"RATE": rate})
+    if rc != 0:
+        err = next((l for l in out.splitlines() if "ERROR" in l), "no stats")
+        return check(label, False, err.strip()[:100])
+
+    rows = stats_rows(out)
+    if len(rows) < 2:
+        return check(label, False, "no stats rows")
+
+    lost = rows[0][1] - rows[-1][1]
+    nburied, buried_mass, nreflect = rows[-1][3], rows[-1][4], rows[-1][5]
+    material = rows[-1][2]
+
+    ok = check(label + " : lost == buried", lost == nburied,
+               "lost=%d buried=%d" % (lost, nburied))
+    expect = nburied * MASS_N
+    tol = max(1e-12 * max(expect, 1e-30), 1e-30)
+    ok &= check(label + " : buried mass ledger", abs(buried_mass - expect) <= tol,
+                "got=%g expect=%g" % (buried_mass, expect))
+    # 101 x 101 corner points, 255 max each
+    print("      (film reached %.0f%% of a solid box, %d reflections salvaged)"
+          % (100.0 * material / (101 * 101 * 255), nreflect))
+    return ok
+
+
 def test_momentum(exe, rate, nevery, infile="in.test.momentum", label=""):
     """In a periodic box the surface is the only place gas momentum can go."""
     name = "momentum (rate=%s nevery=%s)%s" % (rate, nevery, label)
@@ -209,6 +242,9 @@ def main():
     # the same physics with the isosurface regenerated less often
     for nevery in (2, 5):
         ok &= test_conserve(exe, 0.05 * nevery, nevery)
+    # with the corner point grid on the whole box the film can grow until it
+    # runs out of box, which is legal and has to stay accounted for
+    ok &= test_fill(exe, 1.0)
     # momentum: gas + surface + buried + reflected must balance
     for rate, nevery in ((0.2, 1), (0.5, 5), (1.0, 20)):
         ok &= test_momentum(exe, rate, nevery)
