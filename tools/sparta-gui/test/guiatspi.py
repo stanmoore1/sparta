@@ -70,9 +70,15 @@ def controls(app_fragment="SPARTA"):
     if app is None:
         return []
     found = []
+    # "label" is included because Qt-ADS renders dock tabs as custom widgets
+    # whose only named part is their title label -- without it a tabbed panel
+    # cannot be raised, and every control behind it stays unreachable.
+    # "image" is included so a capture can crop to the render area's real
+    # geometry instead of a hand-measured rectangle that silently clips
+    # whatever is drawn outside it.
     wanted = {"push button", "toggle button", "check box", "radio button",
               "combo box", "spin button", "slider", "page tab", "text",
-              "menu item", "entry"}
+              "menu item", "entry", "label", "image"}
     for node in _walk(app):
         try:
             role = node.getRoleName()

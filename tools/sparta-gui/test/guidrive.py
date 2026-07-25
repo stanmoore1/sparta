@@ -188,6 +188,44 @@ class Gui:
                             int(parts[4]), int(parts[5])))
         return out
 
+    def render_geometry(self, index=-1):
+        """ImageMagick crop spec for the largest rendered image on screen.
+
+        Hand-measured rectangles silently clip: an axis or a label drawn just
+        outside one makes a working control look like a dead one.
+        """
+        best = None
+        for name, role, x, y, w, h in self.controls():
+            if role != "image" or w <= 0 or h <= 0:
+                continue
+            if best is None or w * h > best[2] * best[3]:
+                best = (x, y, w, h)
+        if best is None:
+            return None
+        x, y, w, h = best
+        return f"{w}x{h}+{x}+{y}"
+
+    def capture_render(self, path, geom=None):
+        """Photograph the rendered image alone, cropped to the render widget.
+
+        The crop always comes off a capture of the *root* window. Accessibility
+        reports geometry in screen coordinates, so cropping those coordinates
+        out of a per-window capture shifts everything by the window's position:
+        the result still looks like a plausible screenshot, which is how a
+        working control ends up being reported as dead.
+        """
+        geom = geom or self.render_geometry()
+        if not geom:
+            return None
+        root = f"{path}.root.png"
+        subprocess.run(["import", "-window", "root", root], env=self.env,
+                       capture_output=True)
+        subprocess.run(["convert", root, "-crop", geom, "+repage", path],
+                       capture_output=True)
+        if os.path.exists(root):
+            os.remove(root)
+        return path if os.path.exists(path) else None
+
     def click_named(self, fragment, role=None, pause=1.2):
         """Click the centre of the control whose accessible name contains @p fragment.
 
