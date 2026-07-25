@@ -2085,7 +2085,12 @@ void SpartaGui::createLogWindow(QSettings &settings)
 {
     logwindow = new LogWindow(currentFile, this);
     logwindow->setReadOnly(true);
-    logwindow->setCenterOnScroll(true);
+    // Deliberately NOT setCenterOnScroll(true). That parks the last line in the
+    // middle of the viewport, so half the panel sits empty below the newest
+    // output and the same number of earlier lines is pushed off the top -- on a
+    // tall panel that is a lot of log the user cannot see. Scrolled normally,
+    // the last line sits at the bottom and the whole panel shows text.
+    logwindow->setCenterOnScroll(false);
     logwindow->moveCursor(QTextCursor::End);
     logwindow->setLineWrapMode(LogWindow::NoWrap);
 
