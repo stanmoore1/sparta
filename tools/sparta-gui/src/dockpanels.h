@@ -138,6 +138,13 @@ public:
      */
     void applyMode(Mode mode);
 
+    /** @brief Does @p mode's default set include this panel?
+     *
+     * Lets a run ask "should this workspace be showing charts at all" before
+     * opening one, rather than opening it and taking space the workspace was
+     * arranged to give to something else. */
+    static bool modeShows(Mode mode, Panel panel);
+
     /** @brief The workspace mode currently displayed */
     Mode currentMode() const { return mode; }
 

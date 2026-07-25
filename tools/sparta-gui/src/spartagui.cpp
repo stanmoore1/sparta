@@ -1927,7 +1927,10 @@ void SpartaGui::updateSlideShow()
 
     viewer->sequence()->addImage(imagefile);
 
-    if (QSettings().value(Keys::VIEWSLIDE, true).toBool()) {
+    // Same again: frames pile up in the sequence either way, but the panel only
+    // comes forward in a workspace that shows pictures.
+    if (QSettings().value(Keys::VIEWSLIDE, true).toBool() &&
+        PanelManager::modeShows(panels->currentMode(), PanelManager::Viewer)) {
         panels->openPanel(PanelManager::Viewer);
         // frames arriving on their own must not take the view away from
         // whatever the user chose to look at during the run
@@ -2120,7 +2123,12 @@ void SpartaGui::createChartWindow(QSettings &settings)
     chartwindow->setNorm(false);
     chartwindow->setRangeEnabled(false);
 
-    if (settings.value(Keys::VIEWCHART, true).toBool())
+    // Only where the workspace has room for it. The editing and running
+    // workspaces are a deck beside its output, deliberately, so a run must not
+    // push a chart into that column and halve both -- the plots are what the
+    // Analyze workspace is for, one keystroke away.
+    if (settings.value(Keys::VIEWCHART, true).toBool() &&
+        PanelManager::modeShows(panels->currentMode(), PanelManager::Chart))
         panels->openPanel(PanelManager::Chart);
     else
         panels->closePanel(PanelManager::Chart);

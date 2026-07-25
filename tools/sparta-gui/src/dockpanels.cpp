@@ -42,15 +42,16 @@ const char *const PANEL_TITLE[PanelManager::NPanels] = {
     "Output", "Charts", "Viewer",     "Variables",   "Parameter Sweep",
     "Run History", "Diagnostics", "Project Files"};
 
-// The Charts and Viewer host widgets manage their own scrolling/zooming and
-// must not be wrapped in an extra QScrollArea; Output (QPlainTextEdit) and
-// Variables (a bare QLabel) get the default auto-detected behavior -- the
-// QLabel in particular gets a free scroll wrapper it would not otherwise have.
+// Widgets that scroll themselves must not be wrapped in another scroll area.
+// The Charts and Viewer hosts manage their own scrolling and zooming, and
+// Output is a QPlainTextEdit, which is a scroll area already. Variables is a
+// bare QLabel and does want the free wrapper.
 CDockWidget::eInsertMode insertModeFor(PanelManager::Panel panel)
 {
     switch (panel) {
         case PanelManager::Chart:
         case PanelManager::Viewer:
+        case PanelManager::Log:
             return CDockWidget::ForceNoScrollArea;
         default:
             return CDockWidget::AutoScrollArea;
@@ -288,15 +289,18 @@ void PanelManager::applySplitterProportions()
     // otherwise give a freshly-opened left dock
     if (anyOpen({ProjectFiles}))
         splitArea(docks[ProjectFiles]->dockAreaWidget(), 18, Qt::Horizontal);
-    // editor column : viewer column, horizontally. Visualize exists to give the
-    // pictures the window, so the editor keeps only enough to stay usable.
-    if (anyOpen({Chart, Viewer}))
-        splitArea(editorDock->dockAreaWidget(), mode == Visualize ? 25 : 62, Qt::Horizontal);
-    // within the editor column: editor above, output/variables/tools below,
-    // vertically 68:32. Output is docked under the editor rather than across
-    // the window, so this no longer costs the right-hand column any height.
-    if (anyOpen({Log, Variables, Sweep, History, Diagnostics}))
-        splitArea(editorDock->dockAreaWidget(), 68, Qt::Vertical);
+    // editor : right-hand column, horizontally. An even split while the column
+    // is just the output, because a deck and its output deserve the same width;
+    // less for the editor once the pictures are up, and least of all in
+    // Visualize, which exists to give them the window.
+    if (anyOpen({Log, Variables, Sweep, History, Diagnostics, Chart, Viewer})) {
+        int editorShare = 50;
+        if (mode == Visualize)
+            editorShare = 25;
+        else if (anyOpen({Chart, Viewer}))
+            editorShare = 40;
+        splitArea(editorDock->dockAreaWidget(), editorShare, Qt::Horizontal);
+    }
     // charts : image, vertically within the right column. Split it evenly: the
     // viewer scales its render to whatever room it has and still reads
     // correctly, whereas the chart spends a fixed ~75px on its two control rows
@@ -304,6 +308,9 @@ void PanelManager::applySplitterProportions()
     // more than it gains the image.
     if (anyOpen({Chart}) && anyOpen({Viewer}))
         splitArea(docks[Viewer]->dockAreaWidget(), 50, Qt::Vertical);
+    // and the output's share of that column when it is up alongside them
+    if (anyOpen({Log}) && anyOpen({Chart, Viewer}))
+        splitArea(docks[Log]->dockAreaWidget(), 34, Qt::Vertical);
 }
 
 void PanelManager::restoreAreaVisibility(Panel panel)
@@ -324,15 +331,18 @@ void PanelManager::restoreAreaVisibility(Panel panel)
 
 void PanelManager::applyDefaultLayout()
 {
-    CDockAreaWidget *chartArea = dm->addDockWidget(ads::RightDockWidgetArea, docks[Chart]);
+    // One right-hand column beside the editor, holding everything in a vertical
+    // stack: Output on top, then the charts, then the viewer. Which of them is
+    // open is what each workspace decides, and Qt-ADS gives the whole column to
+    // whatever is left -- so while only Output is open it runs the full height
+    // of the window beside the editor, and the two of them split the width
+    // evenly. That is the editing screen: a deck on the left, its output on the
+    // right, nothing else competing for the space.
+    CDockAreaWidget *logArea = dm->addDockWidget(ads::RightDockWidgetArea, docks[Log]);
+    CDockAreaWidget *chartArea =
+        dm->addDockWidget(ads::BottomDockWidgetArea, docks[Chart], logArea);
     dm->addDockWidget(ads::BottomDockWidgetArea, docks[Viewer], chartArea);
-    // Output belongs under the *editor*, not under the whole window. Without an
-    // explicit target Qt-ADS docks it at the container root, where it spans the
-    // full width and takes its height out of the right-hand column as well --
-    // leaving the Viewer panel too short for a render and cutting the snapshot
-    // off halfway.
-    CDockAreaWidget *logArea =
-        dm->addDockWidget(ads::BottomDockWidgetArea, docks[Log], editorDock->dockAreaWidget());
+
     dm->addDockWidgetTabToArea(docks[Variables], logArea);
     // on-demand tool panels (Parameter Sweep, Run History) live tabbed with the
     // Output area but start hidden; they are shown from the menu when needed
@@ -359,18 +369,27 @@ void PanelManager::applyDefaultLayout()
 // remembered arrangement.
 namespace {
 const QList<PanelManager::Panel> MODE_PANELS[PanelManager::NModes] = {
-    // Setup: writing the deck -- the file navigator and the linter's findings
-    {PanelManager::ProjectFiles, PanelManager::Diagnostics},
-    // Run: watching a run -- console output, live plots, and the variables
-    {PanelManager::Log, PanelManager::Variables, PanelManager::Chart},
-    // Analyze: studying results -- plots and pictures side by side, with the
-    // log kept for reference. Both at once is the point: a spike in a curve is
-    // read against what the flow looked like at that step.
-    {PanelManager::Chart, PanelManager::Viewer, PanelManager::Log},
+    // Setup: writing the deck. The editor and its output, side by side and full
+    // height, and nothing else -- the linter's findings and the file navigator
+    // are a keystroke away in the View menu when they are wanted.
+    {PanelManager::Log},
+    // Run: watching a run. Same two columns, plus the variables tabbed behind
+    // the output. Charts and pictures deliberately stay out: on a single screen
+    // there is not enough width for them and a readable deck at the same time.
+    {PanelManager::Log, PanelManager::Variables},
+    // Analyze: plots and pictures side by side, which is the point -- a spike in
+    // a curve is read against what the flow looked like at that step.
+    {PanelManager::Chart, PanelManager::Viewer},
     // Visualize: the pictures, with the whole window given over to them
-    {PanelManager::Viewer, PanelManager::Log},
+    {PanelManager::Viewer},
 };
 } // namespace
+
+bool PanelManager::modeShows(Mode mode, Panel panel)
+{
+    if (mode < 0 || mode >= NModes) return false;
+    return MODE_PANELS[mode].contains(panel);
+}
 
 QString PanelManager::modeName(Mode mode)
 {
