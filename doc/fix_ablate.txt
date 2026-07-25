@@ -168,15 +168,29 @@ filled while a neighboring cell still held gas, so the film squeezed them
 rather than enclosing them, and they are pushed out through the shared
 face and reflected off the film there instead of being buried.  What
 remains buried is the molecule that really was closed in on every side,
-which is a physical outcome: a growing film does trap gas.  Burial is
-also not a discretization artifact -- refining the timestep at a fixed
-growth rate does not reduce it, because the cause is geometric.
+which is a physical outcome: a growing film does trap gas.
+
+Whether a molecule escapes is decided by one ratio: its thermal speed
+divided by the speed of the front.  That is how many times it can cross
+a cell while the front closes one, i.e. how many chances it gets to find
+a way out.  Lowering the deposition rate raises the ratio and burials
+disappear; in a 2d test at 300 K they go from 104 at a ratio of 17, to 54
+at 22, to none at 40 and above.
+
+Reducing the timestep does NOT reduce them, which is worth understanding
+rather than being surprised by.  Halving the timestep at a fixed
+deposition rate halves the material added per step, so the front still
+advances at the same speed, the ratio above is unchanged, and the
+molecule gets exactly as much time to escape as before -- only resolved
+more finely.  Refining the timestep therefore converges to the burial
+count rather than removing it, which is the correct behavior for a
+quantity that is physical at a given growth rate.
 
 For any physically realistic deposition rate there are no burials at all.
-They begin to appear only when the front advances at a percent or so of
-the thermal speed, which is many orders of magnitude faster than film
-growth in a real system, and they are used here mainly as a way to prove
-that nothing is ever lost silently.  This is physical, and
+They begin to appear only once the front advances at a few percent of the
+thermal speed, which is many orders of magnitude faster than film growth
+in a real system.  In practice they serve mainly to prove that nothing is
+ever lost silently.  This is physical, and
 it is rare unless the deposition rate is large.  A buried particle is
 removed from the gas, and its mass, momentum and energy are accumulated
 and can be output (see below), so no particle is ever discarded without

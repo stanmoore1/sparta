@@ -55,10 +55,26 @@ in.test.conserve
   0.3, 85% at 0.5 and 0.6, and 64% in in.test.fill at rate 1.0; the burial
   counts fell by almost exactly those fractions when it was.
 
-  Burial is not a timestep artifact.  Refining the timestep eightfold at a
-  fixed physical growth rate and a fixed total deposition leaves the count
-  where it was (41, 55, 37, 38), because the cause is which cell the salvage
-  can see, not how big the step is.
+  Whether a molecule escapes is set by the ratio of its thermal speed to the
+  speed of the front -- how many times it can cross a cell while the front
+  closes one.  Measured in this test at 300 K, where the thermal speed is
+  597 m/s and cells are one unit across:
+
+      rate    front speed   v/s    buried
+      0.1        2.4 m/s    251      0
+      0.2        7.2 m/s     83      0
+      0.3       14.8 m/s     40      0
+      0.5       27.6 m/s     22     54
+      0.6       35.5 m/s     17    104
+
+  Reducing the timestep does not move that.  Halving the timestep at a fixed
+  deposition rate halves the material added per step, so the front speed is
+  unchanged -- rate 0.15 at dt 5e-5, 0.075 at 2.5e-5 and 0.0375 at 1.25e-5 all
+  measure 14.8 m/s, exactly like rate 0.3 at dt 1e-4, and all four bury the
+  same number.  The molecule gets the same physical time to escape either way.
+  Refining the timestep converges to the burial count instead of removing it,
+  which is what should happen to a quantity that is physical at a given growth
+  rate.
 
 in.test.grow
   Corner point values exist only on the grid group fix ablate is defined on,
