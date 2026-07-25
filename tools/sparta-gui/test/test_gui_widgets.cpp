@@ -37,6 +37,7 @@
 #include <QDoubleSpinBox>
 #include <QLineEdit>
 #include <QPlainTextEdit>
+#include <QScrollArea>
 #include <QPushButton>
 #include <QRadioButton>
 #include <QClipboard>
@@ -875,6 +876,74 @@ TEST(RealWindowsLive, ImageViewer)
     // above provides both
     ImageViewer viewer("test", &sparta, nullptr);
     walkWindow(&viewer, "ImageViewer", 20);
+}
+
+// In the Analyze workspace the viewer's Settings column shows Particles, Grid
+// and Grid Planes and then runs out of panel -- the other five sit below the
+// fold. They are still reachable, because the column scrolls, which is what
+// this pins down: the scroll area has to stay able to be shorter than what it
+// holds. Give its layout a minimum-size constraint and it can no longer shrink
+// below its contents, at which point it stops scrolling and is simply clipped,
+// and five of the eight settings tabs become unreachable in the workspace the
+// viewer lives in by default.
+//
+// Written after mistaking the screenshot for exactly that failure. It was not
+// one -- but nothing was stopping it from becoming one.
+TEST(ImageViewerLayout, EverySettingsButtonIsReachableInAShortPanel)
+{
+    SpartaWrapper sparta;
+    if (!openSparta(sparta, surfDeck()))
+        GTEST_SKIP() << "needs SPARTA_PLUGIN_LIB and the in.surfq fixture";
+
+    // Inside a ViewerPanel, which is how it ships: the panel adds a tab bar
+    // above and the dock hosting it uses ForceNoScrollArea, so nothing outside
+    // the viewer will scroll on its behalf.
+    ViewerPanel panel;
+    auto *viewerPtr = new ImageViewer("test", &sparta, nullptr);
+    panel.addSource(ViewerPanel::Snapshot, viewerPtr);
+    panel.showSource(ViewerPanel::Snapshot, true);
+    ImageViewer &viewer = *viewerPtr;
+    // roughly the height the Viewer dock gets in the Analyze workspace, where
+    // it shares the right-hand column with the chart
+    panel.resize(900, 340);
+    panel.show();
+    QApplication::processEvents();
+    QTest::qWait(50);
+    QApplication::processEvents();
+
+    static const char *tips[] = {
+        "Particle display settings",  "Grid volume rendering settings",
+        "Grid cut plane rendering",   "Surface element display settings",
+        "Box, sub-box, and axes",     "View direction, center, up vector",
+        "Render quality, background", "Color maps for particles",
+    };
+
+    QScrollArea *column = nullptr;
+    for (auto *b : viewer.findChildren<QPushButton *>()) {
+        if (!b->toolTip().startsWith("Particle display settings")) continue;
+        for (QWidget *p = b->parentWidget(); p; p = p->parentWidget())
+            if (auto *sa = qobject_cast<QScrollArea *>(p)) { column = sa; break; }
+        break;
+    }
+    ASSERT_NE(column, nullptr) << "the settings buttons are not in a scroll area at all";
+
+    // The scroll area must be able to be shorter than what it holds, or there
+    // is nothing to scroll and the overflow is simply lost.
+    EXPECT_LT(column->minimumSizeHint().height(), column->widget()->sizeHint().height())
+        << "the settings column cannot shrink below its contents, so it never scrolls";
+
+    for (const char *tip : tips) {
+        QPushButton *found = nullptr;
+        for (auto *b : viewer.findChildren<QPushButton *>())
+            if (b->toolTip().startsWith(QLatin1String(tip))) found = b;
+        ASSERT_NE(found, nullptr) << tip << " button is missing entirely";
+        // Reachable means: either already on screen, or the column can scroll
+        // to bring it there.
+        column->ensureWidgetVisible(found);
+        QApplication::processEvents();
+        EXPECT_FALSE(found->visibleRegion().isEmpty())
+            << tip << " cannot be brought on screen in a short panel";
+    }
 }
 
 // The merged viewer panel: the tab bar plus whichever source is in front. The

@@ -65,6 +65,23 @@ class Sweep:
                 return True
         return False
 
+    def action_like(self, fragment, pause=1.5):
+        """Activate the first control whose accessible name contains @p fragment.
+
+        Asking the control to perform its action, rather than clicking where it
+        is drawn, is what makes this work for anything scrolled out of view.
+        The viewer's eight settings buttons live in a column taller than the
+        panel, so five of them sit below the fold; a coordinate click lands
+        wherever those coordinates happen to be, which is how they first showed
+        up here as "could not be opened".
+        """
+        for n, role, path, enabled in self.g.actions():
+            if fragment.lower() in n.lower():
+                self.g._atspi("do", path, n, "SPARTA")
+                time.sleep(pause)
+                return True
+        return False
+
     def tab(self, label, pause=0.8):
         """Raise a tab by its visible label."""
         ok = self.g.click_named(label, role="page tab", pause=pause)
@@ -273,32 +290,38 @@ def main():
 
         # The image viewer has eight settings buttons, one per tab of the
         # settings dialog; each carries the tab it should open on. Driving them
-        # by their own tooltips checks that mapping too -- a button that opens
-        # the dialog on the wrong tab is exactly the sort of thing that only
-        # shows up when someone looks.
-        for tip, ident, expect in [
-            ("Particle display settings", "12-ivs-particles",
+        # by name checks that mapping too -- a button that opens the dialog on
+        # the wrong tab is exactly the sort of thing only a look will catch.
+        #
+        # By button *text*, not tooltip: these buttons have labels, so that is
+        # their accessible name. (The icon-only toolbar buttons elsewhere are
+        # the ones named after their tooltips.) And by action rather than by
+        # click, because the column is taller than the panel and five of the
+        # eight sit below the fold -- a coordinate click would land wherever
+        # those coordinates happened to be.
+        for label, ident, expect in [
+            ("Particles...", "12-ivs-particles",
              "the Particles tab: mixture selector, colour-by attribute, diameter "
              "controls, per-species colour rows"),
-            ("Grid volume rendering settings", "12-ivs-grid",
+            ("Grid...", "12-ivs-grid",
              "the Grid tab: grid enable, colour-by source, grid-line controls"),
-            ("Grid cut plane rendering settings", "12-ivs-planes",
+            ("Grid Planes...", "12-ivs-planes",
              "the Grid Planes tab: per-axis gridx/gridy/gridz enables with coordinate sliders"),
-            ("Surface element display settings", "12-ivs-surfaces",
+            ("Surfaces...", "12-ivs-surfaces",
              "the Surfaces tab: enable, colour mode, element diameter, surface lines"),
-            ("Box, sub-box, and axes display settings", "12-ivs-box",
+            ("Box & Axes...", "12-ivs-box",
              "the Box/Axes tab: box, axes and subbox toggles with colour and diameter"),
-            ("View direction, center, up vector, and zoom", "12-ivs-camera",
+            ("Camera...", "12-ivs-camera",
              "the Camera tab: theta/phi, centre, up vector, zoom; persp greyed out"),
-            ("Render quality, background, and lights", "12-ivs-quality",
+            ("Quality...", "12-ivs-quality",
              "the Quality tab: SSAO, shiny, FSAA, background colour and gradient, lights"),
-            ("Color maps for particles, grid, surfaces, and grid planes", "12-ivs-colormaps",
+            ("Color Maps...", "12-ivs-colormaps",
              "the Color Maps tab: a map selector per mode with preview swatches"),
         ]:
-            s.capture(ident, f"Image Viewer settings, opened by '{tip}'", expect,
-                      lambda t=tip: (g.focus_main(), g.key("ctrl+3", 1.5),
-                                     g.click_named("Snapshot", role="page tab", pause=1.0),
-                                     g.click_named(t, pause=2.0))[-1])
+            s.capture(ident, f"Image Viewer settings, opened by '{label}'", expect,
+                      lambda l=label: (g.focus_main(), g.key("ctrl+3", 1.5),
+                                       g.click_named("Snapshot", role="page tab", pause=1.0),
+                                       s.action_like(l, pause=2.0))[-1])
 
         for name, ident, expect in [
             ("Surface Quantities Report...", "13-surfreport",
