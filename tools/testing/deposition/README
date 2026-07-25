@@ -35,12 +35,17 @@ in.test.conserve
   and that no particle was left with coordinates outside the cell that owns
   it.
 
-  The top of the rate sweep is close to where marching squares itself gives
-  up: above roughly 0.65 of a corner point value per step, SPARTA's own
-  watertight check on the regenerated isosurface fails.  That is not specific
-  to deposition -- the same input in ablate mode fails it too -- and it is
-  not what the half-cell-per-regeneration guard measures, since the front is
-  only advancing about a fifth of a cell there.
+  The top of the rate sweep is close to where this particular geometry runs
+  out of room: above roughly 0.65 of a corner point value per step, the film
+  grows all the way out to the edge of the "inner" grid group the fix is
+  defined on within the 200 steps, and fix ablate stops with an error saying
+  so.  That is a property of the test setup, not a limit on the deposition
+  rate; a larger group would run further.
+
+  Nearly every burial in this test is a grid cell that became entirely solid
+  in one regeneration, leaving no surface in the cell to reflect from.  At
+  rate 0.5, 13104 overtaken particles are reflected back into the flow and
+  377 are buried, so about 97% are salvaged.
 
 in.test.momentum
   A growing surface in a fully PERIODIC box, so no domain boundary can take

@@ -158,7 +158,10 @@ stationary, and any motion of those atoms is already represented by the
 
 If a particle ends up somewhere the surface has closed over completely,
 so that there is no longer a surface element to reflect it from, it is
-buried, i.e. incorporated into the growing film.  This is physical, and
+buried, i.e. incorporated into the growing film.  In practice this is
+what nearly every burial is: the grid cell holding the particle became
+entirely solid in one regeneration, so the cell contains no surface to
+reflect from and no gas-side point to reflect toward.  This is physical, and
 it is rare unless the deposition rate is large.  A buried particle is
 removed from the gas, and its mass, momentum and energy are accumulated
 and can be output (see below), so no particle is ever discarded without
@@ -205,6 +208,14 @@ only once per {Nevery} steps.  In every case a smaller {Nevery} gives a
 more faithful answer, and an error is generated if the isosurface would
 move more than half a grid cell in a single regeneration; reduce {Nevery}
 or the deposition rate if this occurs.
+
+Corner point values exist only on the group of grid cells the fix is
+defined on, so a growing surface cannot continue past the edge of that
+group: its elements there would have a free end with nothing on the
+other side to meet.  An error is generated if the surface reaches that
+edge; define the fix on a larger group of grid cells, or deposit less
+material.  An outer face of the group that lies on the simulation box is
+exempt, since a surface is allowed to end on the box.
 
 If the {units} keyword is set to {distance}, the {source} is interpreted
 as a deposition rate in units of length/time, rather than as a corner

@@ -619,7 +619,10 @@ void FixAblate::end_of_step()
   // measure the normal speed of the advancing front over this interval
   // must be done before create_surfs(), which needs it to set per-surf speeds
 
-  if (mode == DEPOSIT) front_speed();
+  if (mode == DEPOSIT) {
+    front_speed();
+    check_group_boundary();
+  }
 
   // re-create implicit surfs
 
@@ -1412,6 +1415,60 @@ void FixAblate::front_speed()
     sfront_cell[icell] =
       edge_displacement(cvalues_prev[icell],cvalues[icell]);
   }
+}
+
+/* ----------------------------------------------------------------------
+   error if a growing surface has reached the edge of this fix's grid group
+   corner point values exist only on the group, so the surface simply stops
+     at the group boundary: its elements there have a free end with nothing
+     on the other side to meet.  SPARTA's watertight check does catch that,
+     but reports it as unmatched points, which gives no hint of the cause.
+   an outer face of the group that lies on the simulation box is exempt, since
+     a surface is allowed to end on the box and the watertight check says so
+------------------------------------------------------------------------- */
+
+void FixAblate::check_group_boundary()
+{
+  Grid::ChildCell *cells = grid->cells;
+  Grid::ChildInfo *cinfo = grid->cinfo;
+  double *boxlo = domain->boxlo;
+  double *boxhi = domain->boxhi;
+
+  int ncell[3] = {nx,ny,nz};
+  int checklo[3],checkhi[3];
+  for (int d = 0; d < 3; d++) {
+    checklo[d] = (cornerlo[d] != boxlo[d]);
+    checkhi[d] = (cornerlo[d] + ncell[d]*xyzsize[d] != boxhi[d]);
+  }
+
+  // a corner point index has bit d set when the corner is on the cell's
+  //   upper face in dimension d, x fastest then y then z
+
+  int flag = 0;
+
+  for (int icell = 0; icell < nglocal && !flag; icell++) {
+    if (!(cinfo[icell].mask & groupbit)) continue;
+    if (cells[icell].nsplit <= 0) continue;
+
+    for (int d = 0; d < dim; d++) {
+      int bit = 1 << d;
+      if (checklo[d] && ixyz[icell][d] == 1)
+        for (int i = 0; i < ncorner; i++)
+          if (!(i & bit) && cvalues[icell][i] >= thresh) flag = 1;
+      if (checkhi[d] && ixyz[icell][d] == ncell[d])
+        for (int i = 0; i < ncorner; i++)
+          if ((i & bit) && cvalues[icell][i] >= thresh) flag = 1;
+    }
+  }
+
+  int all;
+  MPI_Allreduce(&flag,&all,1,MPI_INT,MPI_MAX,world);
+  if (all)
+    error->all(FLERR,
+               "Fix ablate deposition has grown the surface out to the edge "
+               "of the fix's grid group; the surface cannot continue past it. "
+               "Define the fix on a larger group of grid cells, or deposit "
+               "less material");
 }
 
 /* ----------------------------------------------------------------------

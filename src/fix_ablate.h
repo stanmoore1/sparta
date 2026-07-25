@@ -163,6 +163,7 @@ class FixAblate : public Fix {
   void front_speed();
   void refresh_surfs();
   double edge_displacement(double *, double *);
+  void check_group_boundary();
   double grad_mag(int);
 
   int salvage_particle(int, int);
