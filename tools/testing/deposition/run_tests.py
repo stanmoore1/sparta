@@ -132,6 +132,52 @@ def test_fill(exe, rate):
     return ok
 
 
+def test_grow(exe):
+    """A growing film must be able to leave the block it was read into.
+
+    Corner point values exist only on the fix's grid group, so that group is
+    the room the surface has.  For ablation the block the surface file
+    describes is always enough; for deposition it is not, so fix ablate may be
+    defined on a larger group than read_isurf reads into.
+
+    Same input twice at a rate that decides it: with the fix on the read block
+    the surface reaches its edge and fix ablate says so, and with the fix on
+    the whole grid it grows on out of the block.
+    """
+    ok = True
+
+    rc, out = run(exe, "in.test.conserve", {"RATE": 0.65, "NEVERY": 1})
+    saw = "grown the surface out to the edge" in out
+    ok &= check("fix group = read block : surface stops at its edge",
+                rc != 0 and saw,
+                "rc=%d" % rc if not saw else "")
+
+    rc, out = run(exe, "in.test.grow", {})
+    if rc != 0:
+        err = next((l for l in out.splitlines() if "ERROR" in l), "no stats")
+        return check("fix group = whole grid : surface grows past it", False,
+                     err.strip()[:100])
+    rows = stats_rows(out)
+    if len(rows) < 2:
+        return check("fix group = whole grid : surface grows past it", False,
+                     "no stats rows")
+    lost = rows[0][1] - rows[-1][1]
+    nburied, buried_mass, nreflect = rows[-1][3], rows[-1][4], rows[-1][5]
+
+    ok &= check("fix group = whole grid : surface grows past it", True,
+                "ran to completion, material %g vs %g at the start"
+                % (rows[-1][2], rows[0][2]))
+    ok &= check("fix group = whole grid : lost == buried", lost == nburied,
+                "lost=%d buried=%d" % (lost, nburied))
+    expect = nburied * MASS_N
+    tol = max(1e-12 * max(expect, 1e-30), 1e-30)
+    ok &= check("fix group = whole grid : buried mass ledger",
+                abs(buried_mass - expect) <= tol,
+                "got=%g expect=%g" % (buried_mass, expect))
+    print("      (%d reflections salvaged)" % nreflect)
+    return ok
+
+
 def test_momentum(exe, rate, nevery, infile="in.test.momentum", label=""):
     """In a periodic box the surface is the only place gas momentum can go."""
     name = "momentum (rate=%s nevery=%s)%s" % (rate, nevery, label)
@@ -242,6 +288,8 @@ def main():
     # the same physics with the isosurface regenerated less often
     for nevery in (2, 5):
         ok &= test_conserve(exe, 0.05 * nevery, nevery)
+    # a growing film must be able to leave the block it was read into
+    ok &= test_grow(exe)
     # with the corner point grid on the whole box the film can grow until it
     # runs out of box, which is legal and has to stay accounted for
     ok &= test_fill(exe, 1.0)

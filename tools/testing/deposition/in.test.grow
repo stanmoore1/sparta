@@ -1,0 +1,73 @@
+# Deposition growing out of the block the surface was read into
+#
+# Corner point values exist only on the grid group fix ablate is defined on,
+# so that group is the room the surface has.  For ablation it never matters:
+# a receding surface only ever needs the room it started with, so the group
+# can be the block the surface file describes.  A growing surface is the
+# opposite case -- the film should be free to spread through the domain, and
+# tying it to the block it started in is the wrong model.
+#
+# So fix ablate may be defined on a LARGER group than read_isurf reads into.
+# The file says where the surface starts; the fix's group says where it may
+# go.  Cells in between hold zero, i.e. empty space, and the film grows into
+# them exactly as it grows into any other empty space.
+#
+# This input is in.test.conserve with the fix defined on "all" rather than on
+# "inner".  Everything else is identical, and at this rate that one difference
+# decides the outcome: in.test.conserve stops with
+#
+#   Fix ablate deposition has grown the surface out to the edge of the fix's
+#   grid group ...
+#
+# while this runs on, and the surface ends up spanning roughly 23.6 to 126.4
+# in both x and y -- well outside the 25 to 125 block it was read into.
+#
+# mindist is set because at this rate the surface otherwise trips a marching
+# squares degeneracy that has nothing to do with deposition; ablate mode trips
+# the same one, and mindist is the existing cure for it.
+
+variable            RATE index 0.65
+variable            NEVERY index 1
+variable            SEED index 12345
+
+seed                ${SEED}
+dimension           2
+global              gridcut 0.0 comm/sort yes
+
+boundary            r r p
+
+create_box          0 150 0 150 -0.5 0.5
+create_grid         150 150 1
+
+# implicit surfaces need a clumped grid partition to acquire ghost cells
+balance_grid        rcb cell
+
+global              nrho 1.0 fnum 0.01
+
+species             air.species N
+mixture             air N
+
+region              inner block 25.5 124.5 25.5 124.5 INF INF
+group               inner grid region inner one
+
+# the fix owns the whole grid, so the film may grow anywhere in it
+fix                 ablate ablate all ${NEVERY} ${RATE} uniform 1 &
+                    mode deposit mindist 0.02
+
+global              surfs implicit
+read_isurf          inner 100 100 1 ../../../examples/ablation/binary.101x101 &
+                    180.5 ablate
+
+surf_collide        1 diffuse 300.0 1.0
+surf_modify         all collide 1
+
+timestep            0.0001
+
+create_particles    air n 200000
+
+fix                 check grid/check 1 error
+
+stats               50
+stats_style         step np f_ablate f_ablate[3] f_ablate[4] f_ablate[8]
+
+run                 400

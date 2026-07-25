@@ -217,6 +217,16 @@ point values to surface elements (line segments or triangles) and also
 optinally allows for the surface to be ablated during a simulation due
 to particles colliding with the surface elements.
 
+The fix's grid group is normally the same {group-ID} this command reads
+into.  It may also be a larger group, as long as the read group lies
+inside it and the larger group is itself a contiguous block of uniform
+grid cells.  Cells of the fix's group outside the read group are given
+corner point values of zero, i.e. empty space.  This is what a
+depositing surface needs, since it grows and its corner point values
+only exist on the fix's group; see the {mode} keyword of "fix
+ablate"_fix_ablate.html.  For a receding (ablating) surface there is no
+reason to use it.
+
 :line
 
 The following optional keywords affect attributes of the read-in

@@ -41,13 +41,26 @@ in.test.conserve
   grid group to match the surface file exactly and binary.101x101 is 100x100
   cells.  Above roughly 0.65 per step the film reaches the edge of that block
   within the 200 steps and fix ablate stops with an error saying so.  That is
-  a property of the test setup, not a limit on the deposition rate --
-  in.test.fill puts the corner point grid on the whole box and runs to 1.0.
+  a property of the test setup, not a limit on the deposition rate: defining
+  the fix on a larger group lets the film keep going, which is what
+  in.test.grow does, and in.test.fill puts the corner point grid on the whole
+  box and runs to rate 1.0.
 
   Nearly every burial in this test is a grid cell that became entirely solid
   in one regeneration, leaving no surface in the cell to reflect from.  At
   rate 0.5, 13104 overtaken particles are reflected back into the flow and
   377 are buried, so about 97% are salvaged.
+
+in.test.grow
+  Corner point values exist only on the grid group fix ablate is defined on,
+  so that group is the room the surface has.  For ablation the block the
+  surface file describes is always enough; a growing surface needs more, so
+  fix ablate may be defined on a larger group than read_isurf reads into.
+  This is in.test.conserve with the fix on "all" instead of on "inner", run
+  at a rate where that one difference decides the outcome: the read-block
+  version stops at the block edge with an error saying so, and this one grows
+  on out of it, ending up spanning about 23.6 to 126.4 in x and y rather than
+  stopping at 25 to 125.
 
 in.test.fill
   The same conservation identity with the corner point grid covering the

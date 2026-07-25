@@ -210,18 +210,26 @@ move more than half a grid cell in a single regeneration; reduce {Nevery}
 or the deposition rate if this occurs.
 
 Corner point values exist only on the group of grid cells the fix is
-defined on, so a growing surface cannot continue past the edge of that
-group: its elements there would have a free end with nothing on the
-other side to meet.  An error is generated if the surface reaches that
-edge.  The group is fixed when the implicit surface is created, by
-"read_isurf"_read_isurf.html or "create_isurf"_create_isurf.html, whose
-grid must match the surface data exactly, so this is decided at setup
-time: use a group that covers more of the domain, or deposit less
-material.  An outer face of the group that lies on the simulation box is
-not limited this way, since a surface is allowed to end on the box; a
-fix defined on the whole box can therefore grow until it runs out of box.
-This restriction does not arise for ablation, where the surface only
-recedes.
+defined on, so that group is the room the surface has: a growing surface
+cannot continue past its edge, where its elements would have a free end
+with nothing on the other side to meet.  An error is generated if the
+surface reaches that edge.
+
+For ablation this never matters, since a receding surface only ever needs
+the room it started with, and the fix is normally defined on the same
+group the surface was read into.  A growing surface is the opposite case,
+so for deposition the fix may be defined on a LARGER group than
+"read_isurf"_read_isurf.html reads into, as long as the read group lies
+inside it.  The surface file then says where the surface starts, and the
+fix's group says where it may go; cells in between hold zero, i.e. empty
+space the film grows into exactly as it grows into any other empty space.
+Defining the fix on {all} lets the film spread through the whole grid:
+
+fix                 fablate ablate all 1 0.2 uniform 1 mode deposit
+read_isurf          inner 100 100 1 binary.101x101 180.5 fablate :pre
+
+An outer face of the group that lies on the simulation box is not limited
+at all, since a surface is allowed to end on the box.
 
 If the {units} keyword is set to {distance}, the {source} is interpreted
 as a deposition rate in units of length/time, rather than as a corner

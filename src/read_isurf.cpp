@@ -108,8 +108,6 @@ void ReadISurf::command(int narg, char **arg)
   if (strcmp(modify->fix[ifix]->style,"ablate") != 0)
     error->all(FLERR,"Fix for read_isurf is not a fix ablate");
   ablate = (FixAblate *) modify->fix[ifix];
-  if (ggroup != ablate->igroup)
-    error->all(FLERR,"Read_isurf group does not match fix ablate group");
 
   // process optional command line args
 
@@ -122,6 +120,50 @@ void ReadISurf::command(int narg, char **arg)
   int count = grid->check_uniform_group(ggroup,nxyz,corner,xyzsize);
   if (nx != nxyz[0] || ny != nxyz[1] || nz != nxyz[2])
     error->all(FLERR,"Read_isurf grid group does not match nx,ny,nz");
+
+  // the corner point lattice belongs to the FIX's grid group, which is
+  //   allowed to be larger than the group the file is read into
+  // that is what gives a growing surface somewhere to go.  Corner point
+  //   values exist only on the fix's group, so the fix's group is the room
+  //   the surface has, while the file only says where the surface starts.
+  //   Cells of the fix's group outside the read group keep the zero values
+  //   cvalues was initialized with, which is empty space a depositing film
+  //   grows into exactly as it grows into any other empty space.
+  // for ablation the two groups are normally the same, since a receding
+  //   surface never needs room it did not start with
+
+  int anxyz[3];
+  double acorner[3],axyzsize[3];
+
+  if (ggroup == ablate->igroup) {
+    anxyz[0] = nxyz[0]; anxyz[1] = nxyz[1]; anxyz[2] = nxyz[2];
+    memcpy(acorner,corner,3*sizeof(double));
+    memcpy(axyzsize,xyzsize,3*sizeof(double));
+
+  } else {
+
+    // the read group must lie inside the fix's group, else the file would be
+    //   writing corner points the fix does not own
+
+    int gbit = grid->bitmask[ggroup];
+    int abit = grid->bitmask[ablate->igroup];
+    Grid::ChildInfo *cinfo = grid->cinfo;
+    int outside = 0;
+    for (int icell = 0; icell < grid->nlocal; icell++) {
+      if (grid->cells[icell].nsplit <= 0) continue;
+      if ((cinfo[icell].mask & gbit) && !(cinfo[icell].mask & abit)) outside++;
+    }
+    int alloutside;
+    MPI_Allreduce(&outside,&alloutside,1,MPI_INT,MPI_SUM,world);
+    if (alloutside)
+      error->all(FLERR,"Read_isurf group is not contained in the fix ablate "
+                 "group");
+
+    // check_uniform_group also enforces one refinement level and a
+    //   contiguous brick, so containment makes the two lattices align
+
+    grid->check_uniform_group(ablate->igroup,anxyz,acorner,axyzsize);
+  }
 
   // read grid corner point values
   // create and destroy dictionary of my grid cells in group
@@ -156,6 +198,9 @@ void ReadISurf::command(int narg, char **arg)
 
   if (typefile) {
     memory->create(tvalues,grid->nlocal,"readisurf:tvalues");
+    // cells of the fix's group outside the read group get no type from the
+    //   file, so give them the same untyped value as cells outside it
+    for (int i = 0; i < grid->nlocal; i++) tvalues[i] = 0;
     read_types_serial(typefile);
   }
 
@@ -172,7 +217,7 @@ void ReadISurf::command(int narg, char **arg)
   char *sgroupID = NULL;
   if (sgrouparg) sgroupID = arg[sgrouparg];
 
-  ablate->store_corners(nx,ny,nz,corner,xyzsize,
+  ablate->store_corners(anxyz[0],anxyz[1],anxyz[2],acorner,axyzsize,
                         cvalues,NULL,tvalues,thresh,sgroupID,pushflag);
 
   if (ablate->nevery == 0) modify->delete_fix(ablateID);
