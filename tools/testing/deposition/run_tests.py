@@ -99,6 +99,33 @@ def test_conserve(exe, rate, nevery):
     return ok
 
 
+def test_momentum(exe, rate, nevery, label=""):
+    """In a periodic box the surface is the only place gas momentum can go."""
+    name = "momentum (rate=%s nevery=%s)%s" % (rate, nevery, label)
+    rc, out = run(exe, "in.test.momentum", {"RATE": rate, "NEVERY": nevery})
+    if rc != 0:
+        err = next((l for l in out.splitlines() if "ERROR" in l), "no stats")
+        return check(name, False, err.strip()[:90])
+
+    rows = stats_rows(out)
+    if len(rows) < 2:
+        return check(name, False, "no stats rows")
+    f, l = rows[0], rows[-1]
+
+    # cols: 0 step, 1 np, 2-4 summed velocity, 5-7 surface, 8-10 buried,
+    #       11-13 reflected
+    total = []
+    for k in range(3):
+        dgas = MASS_N * (l[2+k] - f[2+k])
+        total.append(dgas + (l[5+k]-f[5+k]) + (l[8+k]-f[8+k]) + (l[11+k]-f[11+k]))
+
+    scale = max(max(abs(MASS_N*f[2+k]), abs(MASS_N*l[2+k])) for k in range(3))
+    rel = max(abs(t) for t in total) / scale
+
+    # round-off over ~10^6 collisions, not a physics tolerance
+    return check(name, rel < 1e-5, "relative residual %.2e" % rel)
+
+
 def test_guard(exe):
     """A front that outruns its collision lists must be refused."""
     rc, out = run(exe, "in.test.guard")
@@ -143,6 +170,9 @@ def main():
     # the same physics with the isosurface regenerated less often
     for nevery in (2, 5):
         ok &= test_conserve(exe, 0.05 * nevery, nevery)
+    # momentum: gas + surface + buried + reflected must balance
+    for rate, nevery in ((0.2, 1), (0.5, 5), (1.0, 20)):
+        ok &= test_momentum(exe, rate, nevery)
     ok &= test_guard(exe)
     ok &= test_ablate_unaffected(exe)
 

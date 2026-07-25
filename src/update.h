@@ -64,6 +64,9 @@ class Update : protected Pointers {
   double buried_erot,buried_evib,buried_ke;   // running energy buried
   bigint nfrontreflect;  // running count of reflections back into the flow
   double reflect_mom[3]; // momentum those reflections gave to the surface
+  double surf_mom[3];    // momentum ordinary collisions gave to the surface
+                         //   only accumulated for a growing surface, so the
+                         //   ledger gas + surface + buried can be checked
 
                          // collision geometry of a growing surface, refreshed
                          //   every step by FixAblate from the corner point

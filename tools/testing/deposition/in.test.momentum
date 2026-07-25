@@ -1,0 +1,59 @@
+# Deposition momentum conservation test
+#
+# A growing surface in a fully periodic box.  With no domain boundary to
+# exchange momentum with, and gas-gas collisions conserving it internally,
+# the surface is the only place gas momentum can go.  So the ledger
+#
+#   [ P_gas(end) - P_gas(0) ] + P_surf + P_buried + P_reflect  ==  0
+#
+# must close, where the three surface terms are the momentum handed to the
+# growing surface by ordinary collisions, by particles it buried, and by the
+# reflections that push enclosed particles back into the flow.
+#
+# Single species, so gas momentum is just the species mass times the summed
+# velocity, and every term is in the same units.
+
+variable            RATE index 0.2
+variable            NEVERY index 1
+
+seed                12345
+dimension           2
+global              gridcut 0.0 comm/sort yes
+
+boundary            p p p
+
+create_box          0 150 0 150 -0.5 0.5
+create_grid         150 150 1
+balance_grid        rcb cell
+
+global              nrho 1.0 fnum 0.01
+
+species             air.species N
+mixture             air N
+
+region              inner block 25.5 124.5 25.5 124.5 INF INF
+group               inner grid region inner one
+
+fix                 ablate ablate inner ${NEVERY} ${RATE} uniform 1 mode deposit
+
+global              surfs implicit
+read_isurf          inner 100 100 1 ../../../examples/ablation/binary.101x101 180.5 ablate
+
+surf_collide        1 diffuse 300.0 1.0
+surf_modify         all collide 1
+
+timestep            0.0001
+
+create_particles    air n 200000
+
+compute             MOM reduce sum vx vy vz
+
+fix                 check grid/check 1 error
+
+stats               50
+stats_style         step np c_MOM[1] c_MOM[2] c_MOM[3] &
+                    f_ablate[12] f_ablate[13] f_ablate[14] &
+                    f_ablate[5] f_ablate[6] f_ablate[7] &
+                    f_ablate[9] f_ablate[10] f_ablate[11]
+
+run                 200

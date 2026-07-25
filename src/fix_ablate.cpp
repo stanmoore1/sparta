@@ -208,7 +208,7 @@ FixAblate::FixAblate(SPARTA *sparta, int narg, char **arg) :
 
   scalar_flag = 1;
   vector_flag = 1;
-  size_vector = 11;   // 0-1 ablation, 2-10 deposition diagnostics
+  size_vector = 14;   // 0-1 ablation, 2-13 deposition diagnostics
   global_freq = 1;
   sum_delta = 0.0;
   ndelete = 0;
@@ -224,7 +224,7 @@ FixAblate::FixAblate(SPARTA *sparta, int narg, char **arg) :
   nseg = NULL;
   maxsegcell = segstride = 0;
   depo_stamp = -1;
-  for (int i = 0; i < 9; i++) depo_all[i] = 0.0;
+  for (int i = 0; i < 12; i++) depo_all[i] = 0.0;
   mvalues = NULL;
   tvalues = NULL;
   ncorner = size_per_grid_cols;
@@ -2418,7 +2418,7 @@ double FixAblate::compute_vector(int i)
   if (mode != DEPOSIT) return 0.0;
 
   if (depo_stamp != update->ntimestep) {
-    double one[9];
+    double one[12];
     one[0] = 1.0*update->nburied;
     one[1] = update->buried_mass;
     one[2] = update->buried_mom[0];
@@ -2428,11 +2428,14 @@ double FixAblate::compute_vector(int i)
     one[6] = update->reflect_mom[0];
     one[7] = update->reflect_mom[1];
     one[8] = update->reflect_mom[2];
-    MPI_Allreduce(one,depo_all,9,MPI_DOUBLE,MPI_SUM,world);
+    one[9] = update->surf_mom[0];
+    one[10] = update->surf_mom[1];
+    one[11] = update->surf_mom[2];
+    MPI_Allreduce(one,depo_all,12,MPI_DOUBLE,MPI_SUM,world);
     depo_stamp = update->ntimestep;
   }
 
-  if (i >= 2 && i <= 10) return depo_all[i-2];
+  if (i >= 2 && i <= 13) return depo_all[i-2];
 
   return 0.0;
 }

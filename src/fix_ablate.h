@@ -115,7 +115,7 @@ class FixAblate : public Fix {
   int maxsegcell;
   int segstride;           // max elements per cell
 
-  double depo_all[9];      // deposition counters summed over all procs
+  double depo_all[12];      // deposition counters summed over all procs
   bigint depo_stamp;       // timestep depo_all was last reduced on
 
   double *celldelta;       // per-cell delta from compute or fix source

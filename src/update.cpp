@@ -102,6 +102,7 @@ Update::Update(SPARTA *sparta) : Pointers(sparta)
   buried_erot = buried_evib = buried_ke = 0.0;
   nfrontreflect = 0;
   reflect_mom[0] = reflect_mom[1] = reflect_mom[2] = 0.0;
+  surf_mom[0] = surf_mom[1] = surf_mom[2] = 0.0;
   segpt = segnorm = NULL;
   nseg = NULL;
   nsegcell = 0;
@@ -1022,7 +1023,10 @@ template < int DIM, int SURF, int OPT, int MOVING > void Update::move()
               ipart->icell = icell;
               dtremain *= 1.0 - minparam*frac;
 
-              if (nsurf_tally)
+              // iorig is the pre-collision particle, needed by the surf
+              //   tallies and, for a growing surface, by the momentum ledger
+
+              if (nsurf_tally || MOVING)
                 memcpy(&iorig,&particles[i],sizeof(Particle::OnePart));
 
               // reflect off the surface where it actually is now
@@ -1055,6 +1059,37 @@ template < int DIM, int SURF, int OPT, int MOVING > void Update::move()
                 for (m = 0; m < nsurf_tally; m++)
                   slist_active[m]->surf_tally(dtremain,minsurf,icell,reaction,
                                               &iorig,ipart,jpart);
+
+              // for a growing surface, book the momentum this collision hands
+              //   to the surface, so that the gas, surface and buried terms
+              //   together can be checked to balance
+              // compiled out entirely when MOVING = 0
+
+              if (MOVING) {
+                Particle::Species *sp = particle->species;
+                double m0 = sp[iorig.ispecies].mass;
+                double w0 = 1.0;
+                if (grid->cellweightflag) w0 = iorig.weight;
+                surf_mom[0] += w0*m0*iorig.v[0];
+                surf_mom[1] += w0*m0*iorig.v[1];
+                surf_mom[2] += w0*m0*iorig.v[2];
+                if (ipart) {
+                  double m1 = sp[ipart->ispecies].mass;
+                  double w1 = 1.0;
+                  if (grid->cellweightflag) w1 = ipart->weight;
+                  surf_mom[0] -= w1*m1*ipart->v[0];
+                  surf_mom[1] -= w1*m1*ipart->v[1];
+                  surf_mom[2] -= w1*m1*ipart->v[2];
+                }
+                if (jpart) {
+                  double m2 = sp[jpart->ispecies].mass;
+                  double w2 = 1.0;
+                  if (grid->cellweightflag) w2 = jpart->weight;
+                  surf_mom[0] -= w2*m2*jpart->v[0];
+                  surf_mom[1] -= w2*m2*jpart->v[1];
+                  surf_mom[2] -= w2*m2*jpart->v[2];
+                }
+              }
 
               // stuck_iterate = consecutive iterations particle is immobile
 
