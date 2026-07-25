@@ -13,6 +13,7 @@
 #define SLIDESHOW_H
 
 #include "imagecache.h"
+#include "viewerdisplay.h"
 
 #include <QDialog>
 #include <QIcon>
@@ -135,12 +136,6 @@ protected:
 
 private:
     /**
-     * @brief Scale the displayed image
-     * @param factor Scaling factor to apply
-     */
-    void scaleImage(double factor);
-
-    /**
      * @brief Load and display image at given index
      * @param idx Image index in sequence
      */
@@ -198,7 +193,7 @@ private:
     QPushButton *cacheButton;   ///< Image cache indicator, discards conversions when pressed
     QIcon cacheFullIcon;        ///< Cache indicator icon for a cache holding images
     QIcon cacheEmptyIcon;       ///< Grayed out cache indicator icon for an empty cache
-    double scaleFactor = 1.0;   ///< Current zoom scale factor
+    DisplayTransform xform;     ///< Zoom, rotation and mirroring of the displayed image
     QSize lastFitSize;          ///< Scroll area size applied by the last auto-resize
 
     int current;             ///< Index of current image
@@ -207,9 +202,6 @@ private:
     bool doLoop;             ///< Loop playback flag
     QStringList imagefiles;  ///< List of image file paths
     QStringList imagelabels; ///< Display name of each image, parallel to imagefiles
-    int imageRotation;       ///< Image rotation angle (0, 90, 180, 270)
-    bool imageFlipH;         ///< Horizontal flip state
-    bool imageFlipV;         ///< Vertical flip state
 };
 #endif
 

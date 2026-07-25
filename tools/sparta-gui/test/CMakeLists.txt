@@ -157,6 +157,17 @@ target_link_libraries(test_dumpimage PRIVATE GTest::gtest_main Qt6::Widgets)
 
 gtest_discover_tests(test_dumpimage)
 
+# Test executable for the displayed-image transform
+add_executable(test_viewerdisplay
+  test_viewerdisplay.cpp
+  ${CMAKE_SOURCE_DIR}/src/viewerdisplay.cpp
+)
+
+target_include_directories(test_viewerdisplay PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_viewerdisplay PRIVATE GTest::gtest_main Qt6::Gui)
+
+gtest_discover_tests(test_viewerdisplay)
+
 # Test executable for the STL / SPARTA-surface import core
 add_executable(test_stlimport
   test_stlimport.cpp

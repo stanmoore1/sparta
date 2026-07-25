@@ -45,7 +45,6 @@
 #include <QSpinBox>
 #include <QTemporaryFile>
 #include <QTimer>
-#include <QTransform>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -60,8 +59,7 @@ SlideShow::SlideShow(const QString &fileName, SpartaGui *_spartagui, QWidget *pa
     scrollArea(new QScrollArea), scrollBar(new RangeBandSlider),
     imageCounter(new QLabel("Image   0 /   0 :")), imageName(new QLabel("(none)")),
     startBox(new QSpinBox), stopBox(new QSpinBox), cacheButton(new QPushButton), current(0),
-    maxwidth(0), maxheight(0), timerDelay(100), doLoop(true), imageRotation(0), imageFlipH(false),
-    imageFlipV(false)
+    maxwidth(0), maxheight(0), timerDelay(100), doLoop(true)
 {
     imageLabel->setBackgroundRole(QPalette::Base);
     imageLabel->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Minimum);
@@ -714,22 +712,8 @@ void SlideShow::movie()
             args << "-f"
                  << "concat";
             args << "-i" << concatfile.fileName();
-            QString filters;
-            if (scaleFactor != 1.0) filters += QString("scale=iw*%1:-1,").arg(scaleFactor);
-            if (imageRotation == 90.0) {
-                filters += "transpose=1,";
-            } else if (imageRotation == 180.0) {
-                filters += "transpose=1,transpose=1,";
-            } else if (imageRotation == 270.0) {
-                filters += "transpose=2,";
-            }
-            if (imageFlipH) filters += "hflip,";
-            if (imageFlipV) filters += "vflip,";
-            if (!filters.isEmpty()) {
-                // chop off trailing comma
-                filters.resize(filters.size() - 1);
-                args << "-vf" << filters;
-            }
+            // the movie must come out oriented the way the preview was
+            args << ffmpegFilterArgs(xform);
             args << "-b:v"
                  << "2000k";
             args << "-r" << fps;
@@ -751,10 +735,7 @@ void SlideShow::movie()
         QDir curdir(".");
         for (const auto &img : frames)
             args << curdir.absoluteFilePath(img);
-        if (scaleFactor != 1.0) args << "-resize" << QString("%1%%").arg(100.0 * scaleFactor);
-        if (imageRotation != 0.0) args << "-rotate" << QString("%1").arg(imageRotation);
-        if (imageFlipH) args << "-flop";
-        if (imageFlipV) args << "-flip";
+        args << magickTransformArgs(xform);
         args << fileName;
 
         // run the conversion command
@@ -843,33 +824,19 @@ void SlideShow::loop()
 
 void SlideShow::zoomIn()
 {
-    scaleImage(1.1);
+    xform.zoomIn();
+    loadImage(current);
 }
 
 void SlideShow::zoomOut()
 {
-    // 1/1.1, not 0.9: the two buttons are advertised as "by 10 percent" each
-    // and users expect zooming in and back out to land where they started.
-    // Multiplying by 0.9 makes them non-inverse (1.1 * 0.9 = 0.99), so every
-    // in-out cycle silently shrank the image by another one percent.
-    scaleImage(1.0 / 1.1);
+    xform.zoomOut();
+    loadImage(current);
 }
 
 void SlideShow::normalSize()
 {
-    scaleFactor   = 1.0;
-    imageRotation = 0;
-    imageFlipH    = false;
-    imageFlipV    = false;
-    loadImage(current);
-}
-
-void SlideShow::scaleImage(double factor)
-{
-    scaleFactor *= factor;
-    // don't let the image become smaller than 10%
-    scaleFactor = std::max(scaleFactor, 0.1);
-
+    xform.reset();
     loadImage(current);
 }
 
@@ -879,10 +846,7 @@ void SlideShow::adjustWindowSize()
 
     // size of the largest image as displayed, i.e. with the current rotation
     // and zoom applied the same way as applyImageTransform() applies them
-    QSize content(maxwidth, maxheight);
-    if ((imageRotation == 90) || (imageRotation == 270)) content.transpose();
-    content.setWidth(static_cast<int>(content.width() * scaleFactor));
-    content.setHeight(static_cast<int>(content.height() * scaleFactor));
+    const QSize content = transformedSize(QSize(maxwidth, maxheight), xform);
 
     // make sure the scroll area is not resized beyond a certain fraction of the screen
     const QSize avail = screen()->availableSize();
@@ -951,28 +915,28 @@ bool SlideShow::eventFilter(QObject *watched, QEvent *event)
 
 void SlideShow::doImageRotateCw()
 {
-    imageRotation = (imageRotation + 90) % 360;
+    xform.rotateCw();
     applyImageTransform();
     adjustWindowSize();
 }
 
 void SlideShow::doImageRotateCcw()
 {
-    imageRotation = (imageRotation + 270) % 360;
+    xform.rotateCcw();
     applyImageTransform();
     adjustWindowSize();
 }
 
 void SlideShow::doImageFlipH()
 {
-    imageFlipH = !imageFlipH;
+    xform.mirrorH();
     applyImageTransform();
     adjustWindowSize();
 }
 
 void SlideShow::doImageFlipV()
 {
-    imageFlipV = !imageFlipV;
+    xform.mirrorV();
     applyImageTransform();
     adjustWindowSize();
 }
@@ -988,38 +952,7 @@ void SlideShow::applyImageTransform()
         }
     }
 
-    QImage transformedImage = rawImage;
-
-    // Apply rotation
-    if (imageRotation != 0) {
-        QTransform transform;
-        transform.rotate(imageRotation);
-        transformedImage = transformedImage.transformed(transform, Qt::SmoothTransformation);
-    }
-
-    // Apply horizontal flip
-    if (imageFlipH) {
-#if QT_VERSION >= QT_VERSION_CHECK(6, 9, 0)
-        transformedImage = transformedImage.flipped(Qt::Horizontal);
-#else
-        transformedImage = transformedImage.mirrored(true, false);
-#endif
-    }
-
-    // Apply vertical flip
-    if (imageFlipV) {
-#if QT_VERSION >= QT_VERSION_CHECK(6, 9, 0)
-        transformedImage = transformedImage.flipped(Qt::Vertical);
-#else
-        transformedImage = transformedImage.mirrored(false, true);
-#endif
-    }
-
-    // Scale the transformed image
-    int newheight = transformedImage.height() * scaleFactor;
-    int newwidth  = transformedImage.width() * scaleFactor;
-    image         = transformedImage.scaled(newwidth, newheight, Qt::IgnoreAspectRatio,
-                                            Qt::SmoothTransformation);
+    image = applyDisplayTransform(rawImage, xform);
     imageLabel->setPixmap(QPixmap::fromImage(image));
     imageLabel->adjustSize();
 }
