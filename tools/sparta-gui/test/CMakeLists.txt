@@ -229,6 +229,32 @@ else()
   gtest_discover_tests(test_mainwindow)
 endif()
 
+# The bundled lookup tables: the help index, the image-style list, the syntax
+# table and the internal-command list. Needs the generated resource file (the
+# tables are read from the bundle, not from disk, which is how the application
+# reads them) and the library wrapper, to ask a real SPARTA which computes and
+# fixes it actually has rather than trusting the list.
+qt6_add_resources(TEST_RESOURCE_SOURCES ${CMAKE_SOURCE_DIR}/resources/spartagui.qrc)
+add_executable(test_resources
+  test_resources.cpp
+  ${CMAKE_SOURCE_DIR}/src/spartawrapper.cpp
+  ${CMAKE_SOURCE_DIR}/src/helpers.cpp
+  ${CMAKE_SOURCE_DIR}/src/stdcapture.cpp
+  ${PLUGIN_LOADER_SRC}
+  ${TEST_RESOURCE_SOURCES}
+)
+target_include_directories(test_resources PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_compile_definitions(test_resources PRIVATE
+  SPARTA_TEST_LIBRARY_PATH="${_spa_test_lib}"
+  SPARTA_DOC_DIR="${CMAKE_SOURCE_DIR}/../../doc")
+target_link_libraries(test_resources PRIVATE GTest::gtest_main Qt6::Widgets)
+if (SPARTA_GUI_USE_PLUGIN)
+  target_compile_definitions(test_resources PRIVATE SPARTA_GUI_USE_PLUGIN)
+  target_include_directories(test_resources PRIVATE ${SPARTA_PLUGINLIB_DIR})
+endif()
+
+gtest_discover_tests(test_resources)
+
 # Test executable for helpers
 add_executable(test_helpers
   test_helpers.cpp
