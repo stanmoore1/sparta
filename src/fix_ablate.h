@@ -52,9 +52,11 @@ class FixAblate : public Fix {
                      double **, double ***, int *, double, char *, int);
   double mindist;             // min fractional distance between any grid corner pt
                               //   and a generated tri vertex or line segment endpt
+  int depositflag;            // 1 if mode = deposit, so surfs advance each step
  protected:
   int me;
   int mode;               // ABLATE (recede) or DEPOSIT (grow) the surface
+  int unitsflag;          // CORNER (0-255) or DISTANCE (length/time) source units
   int groupbit,which,argindex,icompute,ifix,ivariable,maxrandom;
   double scale;
   char *idsource;
@@ -74,6 +76,8 @@ class FixAblate : public Fix {
   int nglocal;            // # of owned grid cells
 
   double **cvalues;       // corner point values
+  double **cvalues_prev;  // corner point values before the last increment
+                          //   used to measure the realized front motion
   double ***mvalues;      // corner multi values
   int *tvalues;           // per-cell type value
   int tvalues_flag;       // 1 if tvalues is defined (by ReadIsurf)
@@ -85,6 +89,16 @@ class FixAblate : public Fix {
                           // in 2d/3d ablate grid (iz = 1 for 2d)
   // DEBUG
   int **mcflags;
+
+  // advancing front, for mode = DEPOSIT
+  // the isosurface is regenerated only every Nevery steps, but the front
+  //   advances every step, so the move loop offsets each surf element
+  //   along its own normal by sfront * elapsed time since regeneration
+
+  double *sfront_cell;     // per-cell front normal speed (length/time)
+  double *sfront;          // per-surf front normal speed, indexed by isurf
+  int maxsfront;           // allocated length of sfront
+  double max_advance;      // max observed sfront*dt / cell size, for reporting
 
   double *celldelta;       // per-cell delta from compute or fix source
   double **cdelta;         // per-corner point deltas
@@ -126,6 +140,10 @@ class FixAblate : public Fix {
 
   void decrement();
   void increment();
+  void front_speed();
+  double grad_mag(int);
+  void build_sfront();
+  int salvage_particle(int, int);
   void decrement_multiv();
   void decrement_multid_inside();
   void decrement_multid_outside();

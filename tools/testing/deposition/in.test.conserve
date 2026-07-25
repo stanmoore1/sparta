@@ -1,0 +1,54 @@
+# Deposition conservation test
+#
+# A growing implicit surface in a sealed, reflective box with no inflow or
+# outflow.  The only way a particle can leave the simulation is for the
+# advancing front to bury it, so the particle count must satisfy
+#
+#   np(0) - np(t)  ==  nburied
+#
+# exactly.  Any mismatch means a particle was destroyed without being
+# accounted for, which is the failure this feature exists to prevent.
+#
+# fix grid/check with the error setting also asserts that no particle is
+# ever left sitting inside the growing surface.
+#
+# variables RATE and NEVERY are set by run_tests.py with -var
+
+variable            RATE index 0.1
+variable            NEVERY index 1
+
+seed                12345
+dimension           2
+global              gridcut 0.0 comm/sort yes
+
+boundary            r r p
+
+create_box          0 150 0 150 -0.5 0.5
+create_grid         150 150 1
+
+global              nrho 1.0 fnum 0.01
+
+species             air.species N
+mixture             air N
+
+region              inner block 25.5 124.5 25.5 124.5 INF INF
+group               inner grid region inner one
+
+fix                 ablate ablate inner ${NEVERY} ${RATE} uniform 1 mode deposit
+
+global              surfs implicit
+read_isurf          inner 100 100 1 ../../../examples/ablation/binary.101x101 180.5 ablate
+
+surf_collide        1 diffuse 300.0 1.0
+surf_modify         all collide 1
+
+timestep            0.0001
+
+create_particles    air n 200000
+
+fix                 check grid/check 1 error
+
+stats               50
+stats_style         step np f_ablate f_ablate[3] f_ablate[4] f_ablate[8]
+
+run                 200

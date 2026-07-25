@@ -311,6 +311,7 @@ class Grid : protected Pointers {
   void assign_split_cell_particles(int);
   int point_outside_surfs(int, double *);
   int outside_surfs(int, double *, double *);
+  int nearest_surf(int, double *, double *, int &, double *);
   void allocate_surf_arrays();
   int *csubs_request(int);
 

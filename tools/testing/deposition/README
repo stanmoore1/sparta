@@ -1,0 +1,67 @@
+Regression tests for "fix ablate ... mode deposit"
+==================================================
+
+Deposition grows an implicit surface into the gas, the inverse of ablation.
+A growing surface runs into gas particles.  The implementation reflects those
+particles off the advancing front instead of deleting them, and accounts for
+the few that the front genuinely buries.  These tests assert that directly.
+
+Run with:
+
+  cd sparta/src
+  make serial
+  cd ../tools/testing/deposition
+  python3 run_tests.py
+
+Optionally point at a different binary:
+
+  python3 run_tests.py --exe /path/to/spa_serial
+
+Tests
+-----
+
+in.test.conserve
+  A growing surface in a sealed, reflective box with no inflow or outflow.
+  The only way a particle can leave is for the front to bury it, so
+
+      np(start) - np(end)  ==  nburied
+
+  must hold exactly, and the buried mass must equal nburied times the species
+  mass.  Run over a sweep of growth rates, from slow enough that nothing is
+  buried up to fast enough that some particles are, and at several Nevery
+  values.  fix grid/check runs with the error setting throughout, so
+  completing the run also proves no particle was left inside the surface.
+
+in.test.guard
+  The per-cell csurfs collision lists are rebuilt only when the isosurface is
+  regenerated.  A front travelling more than half a grid cell between
+  regenerations would reach particles that are never tested against it, so
+  fix ablate must abort instead of silently overtaking them.  This input asks
+  for such a rate and is expected to fail with an error naming the advance.
+
+in.test.ablate
+  The same setup with the default mode = ablate.  A receding surface never
+  engulfs anything, so both deposition counters must stay at zero, confirming
+  the advancing-front code is inert when deposition is not in use.
+
+What the counters mean
+----------------------
+
+  f_ablate      summed corner point values, i.e. how much material exists
+  f_ablate[3]   nburied, particles incorporated into the film
+  f_ablate[4]   buried mass
+  f_ablate[8]   nfrontreflect, salvage reflections after a regeneration
+
+nfrontreflect counts particles the regenerated isosurface enclosed and that
+were pushed back into the flow.  Every one of those would have been deleted
+by a delete-on-engulf implementation, so the count is a direct measure of what
+this feature saves.  It grows with the growth rate and with Nevery, since a
+larger jump per regeneration leaves more residual work for the safety net.
+
+Not covered here
+----------------
+
+  - parallel runs; build spa_mpi and run the same inputs on 4 ranks
+  - 3d; see the 2d/3d pair used during development, the 3d path is exercised
+    by examples/ablation
+  - Kokkos, which fix ablate does not support in any mode

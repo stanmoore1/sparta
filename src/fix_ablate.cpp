@@ -19,6 +19,9 @@
 #include "update.h"
 #include "geometry.h"
 #include "grid.h"
+#include "surf.h"
+#include "surf_collide.h"
+#include "particle.h"
 #include "domain.h"
 #include "decrement_lookup_table.h"
 #include "comm.h"
@@ -41,7 +44,14 @@ using namespace SPARTA_NS;
 enum{COMPUTE,FIX,VARIABLE,RANDOM,UNIFORM};
 enum{CVALUE,CDELTA,NVERT};
 enum{ABLATE,DEPOSIT};     // surface recedes (ablate) or grows (deposit)
+enum{CORNER,DISTANCE};    // source units: corner point value or length/time
 enum{UNKNOWN,OUTSIDE,INSIDE,OVERLAP};   // cell types, same as Grid
+
+#define MINSPREAD 1.0     // min corner value variation across a cell, in the
+                          //   0-255 scale, for the isosurface to be localized
+                          //   enough that its normal speed is meaningful
+#define SWEEP_FRAC 0.5    // max front advance per step, as fraction of cell size
+#define EPSSURF 1.0e-4    // push off a surf, same as Grid::point_outside_surfs()
 
 #define INVOKED_PER_GRID 16
 #define DELTAGRID 1024            // must be bigger than split cells per cell
@@ -197,7 +207,7 @@ FixAblate::FixAblate(SPARTA *sparta, int narg, char **arg) :
 
   scalar_flag = 1;
   vector_flag = 1;
-  size_vector = 2;
+  size_vector = 11;   // 0-1 ablation, 2-10 deposition diagnostics
   global_freq = 1;
   sum_delta = 0.0;
   ndelete = 0;
@@ -205,6 +215,11 @@ FixAblate::FixAblate(SPARTA *sparta, int narg, char **arg) :
   storeflag = multi_val_flag = 0;
   isc_default = isr_default = 0;
   array_grid = cvalues = NULL;
+  cvalues_prev = NULL;
+  sfront_cell = NULL;
+  sfront = NULL;
+  maxsfront = 0;
+  max_advance = 0.0;
   mvalues = NULL;
   tvalues = NULL;
   ncorner = size_per_grid_cols;
@@ -269,6 +284,9 @@ FixAblate::~FixAblate()
 {
   delete [] idsource;
   memory->destroy(cvalues);
+  memory->destroy(cvalues_prev);
+  memory->destroy(sfront_cell);
+  memory->destroy(sfront);
   memory->destroy(mvalues);
   memory->destroy(tvalues);
 
@@ -522,6 +540,30 @@ void FixAblate::end_of_step()
   else if (which == UNIFORM) set_delta_uniform();
   else set_delta();
 
+  // for DEPOSIT, snapshot the corner values so the realized front motion
+  //   over this interval can be measured in front_speed() below
+  // if the source is in length/time, convert it to a corner value delta
+  //   here, using dc = s * |grad c| * interval
+  //   sync() gives each corner point the summed contribution of the cells
+  //   sharing it, which for a locally uniform field is celldelta itself
+
+  if (mode == DEPOSIT) {
+    for (int icell = 0; icell < nglocal; icell++)
+      for (int i = 0; i < ncorner; i++)
+        cvalues_prev[icell][i] = cvalues[icell][i];
+
+    if (unitsflag == DISTANCE) {
+      Grid::ChildCell *cells = grid->cells;
+      Grid::ChildInfo *cinfo = grid->cinfo;
+      double interval = nevery * update->dt;
+      for (int icell = 0; icell < nglocal; icell++) {
+        if (!(cinfo[icell].mask & groupbit)) continue;
+        if (cells[icell].nsplit <= 0) continue;
+        celldelta[icell] *= grad_mag(icell) * interval;
+      }
+    }
+  }
+
   // various decrement and sync routines depending on:
   // 1) are multivalues used?
   // 2) is the decrement distributed to multiple corner points?
@@ -557,9 +599,31 @@ void FixAblate::end_of_step()
   if (multi_val_flag) epsilon_adjust_multiv();
   else epsilon_adjust();
 
+  // measure the normal speed of the advancing front over this interval
+  // must be done before create_surfs(), which needs it to set per-surf speeds
+
+  if (mode == DEPOSIT) front_speed();
+
   // re-create implicit surfs
 
   create_surfs(0);
+
+  // error if the front would outrun its own collision list in one step
+  // csurfs lists each surf only in the cells it currently overlaps, so a
+  //   front advancing a full cell per step reaches particles that are never
+  //   tested against it, and they would be overtaken silently
+
+  if (mode == DEPOSIT) {
+    double allmax;
+    MPI_Allreduce(&max_advance,&allmax,1,MPI_DOUBLE,MPI_MAX,world);
+    if (allmax > SWEEP_FRAC) {
+      char str[256];
+      sprintf(str,"Fix ablate deposition front advances %g of a grid cell "
+              "between isosurface regenerations (max %g); reduce Nevery or "
+              "the deposition rate",allmax,SWEEP_FRAC);
+      error->all(FLERR,str);
+    }
+  }
 }
 
 /* ---------------------------------------------------------------------- */
@@ -718,6 +782,11 @@ void FixAblate::create_surfs(int outflag)
     particle->sorted = 0;
   }
 
+  // map the per-cell front speed onto the new surfs
+  // must follow surf2grid_implicit(), which builds the csurfs lists
+
+  if (mode == DEPOSIT) build_sfront();
+
   // notify all classes that store per-grid data that grid has changed
 
   grid->notify_changed();
@@ -772,10 +841,13 @@ void FixAblate::create_surfs(int outflag)
     icell = particles[i].icell;
     if (cells[icell].nsurf == 0) {
       // a cell with no surfs is entirely OUTSIDE or entirely INSIDE
-      // for deposition a formerly-open cell can become fully INSIDE (engulfed)
-      //   in a single step, so its particles must be discarded here since the
-      //   surf-straddle test below is skipped for no-surf cells
+      // for deposition a formerly-open cell can become fully INSIDE in one
+      //   regeneration, and the surf-straddle test below is skipped for
+      //   no-surf cells, so those particles must be handled here
+      // there is no surf left in the cell to reflect off, so the molecule
+      //   is buried, i.e. incorporated into the film, with full accounting
       if (mode == DEPOSIT && cinfo[icell].type == INSIDE) {
+        update->bury_particle(&particles[i]);
         particles[i].flag = PDISCARD;
         ncount++;
       }
@@ -800,9 +872,25 @@ void FixAblate::create_surfs(int outflag)
       if (subcell != icell) pflag = 0;
     }
 
+    // for deposition, try to salvage the particle by reflecting it off the
+    //   surf that now separates it from the flow, instead of deleting it
+    // the move loop advances the front every step and normally reflects a
+    //   particle before it can be overtaken, so this is only a safety net
+    //   for the residual jump when the isosurface is regenerated
+    // reflect against a stationary wall: a growing surface advances by
+    //   accretion, so the lattice atoms the molecule strikes are at rest
+    // momentum given to the surface is recorded so nothing is unaccounted
+
+    if (!pflag && mode == DEPOSIT && salvage_particle(icell,i)) {
+      particles[i].flag = PKEEP;
+      continue;
+    }
+
     // discard the particle if either test failed
+    // for deposition, salvage failed too, so account for it as buried
 
     if (!pflag) {
+      if (mode == DEPOSIT) update->bury_particle(&particles[i]);
       particles[i].flag = PDISCARD;
       // DEBUG - print message about MC flags for cell of deleted particle
       /*
@@ -1132,6 +1220,222 @@ void FixAblate::increment()
       }
     }
   }
+}
+
+/* ----------------------------------------------------------------------
+   try to push particle I in cell ICELL, which the regenerated isosurface
+     now encloses, back out into the flow volume
+   ray-trace from the particle toward a known flow-side point to find the
+     surf that separates it from the flow, place it just outside that surf,
+     and apply the cell's surface collision model
+   the wall is treated as stationary: a depositing surface advances by
+     accretion, so the local patch of atoms the molecule strikes is at rest,
+     and the collision is an ordinary thermal wall interaction
+   momentum handed to the surface is accumulated so it is not lost
+   return 1 if the particle was salvaged, 0 if it must be buried instead
+------------------------------------------------------------------------- */
+
+int FixAblate::salvage_particle(int icell, int i)
+{
+  int minsurf;
+  double xcell[3],minxc[3];
+
+  if (!grid->point_outside_surfs(icell,xcell)) return 0;
+  if (!grid->nearest_surf(icell,particle->particles[i].x,xcell,minsurf,minxc))
+    return 0;
+
+  Particle::OnePart *p = &particle->particles[i];
+  double *norm;
+  int isc,isr;
+
+  if (dim == 3) {
+    Surf::Tri *tri = &surf->tris[minsurf];
+    norm = tri->norm;
+    isc = tri->isc;
+    isr = tri->isr;
+  } else {
+    Surf::Line *line = &surf->lines[minsurf];
+    norm = line->norm;
+    isc = line->isc;
+    isr = line->isr;
+  }
+
+  if (isc < 0) return 0;
+
+  // place the particle just outside the surf, along its outward normal
+  // EPSSURF displacement matches what Grid::point_outside_surfs() uses,
+  //   so the particle passes the outside_surfs() test afterwards
+
+  double eps = EPSSURF * (dim == 3 ? MIN(MIN(xyzsize[0],xyzsize[1]),xyzsize[2])
+                                   : MIN(xyzsize[0],xyzsize[1]));
+
+  p->x[0] = minxc[0] + eps*norm[0];
+  p->x[1] = minxc[1] + eps*norm[1];
+  if (dim == 3) p->x[2] = minxc[2] + eps*norm[2];
+
+  // record the momentum the collision transfers to the surface
+
+  double mass = particle->species[p->ispecies].mass;
+  double weight = 1.0;
+  if (grid->cellweightflag) weight = p->weight;
+  double wmass = weight * mass;
+
+  double vold[3];
+  vold[0] = p->v[0];
+  vold[1] = p->v[1];
+  vold[2] = p->v[2];
+
+  double dtremain = 0.0;
+  int reaction = 0;
+  Particle::OnePart *jp =
+    surf->sc[isc]->collide(p,dtremain,minsurf,norm,isr,reaction);
+
+  // surface chemistry destroyed the particle, let the caller bury it
+
+  if (p == NULL) return 0;
+
+  // a chemistry product cannot be threaded back into the move loop here,
+  //   so decline the salvage and let the caller account for the particle
+
+  if (jp) return 0;
+
+  update->nfrontreflect++;
+  update->reflect_mom[0] += wmass * (vold[0] - p->v[0]);
+  update->reflect_mom[1] += wmass * (vold[1] - p->v[1]);
+  update->reflect_mom[2] += wmass * (vold[2] - p->v[2]);
+
+  return 1;
+}
+
+/* ----------------------------------------------------------------------
+   magnitude of the corner point value gradient in a cell, in value/length
+   corner ordering is x fastest, then y, then z
+   central differences over the cell extent xyzsize
+------------------------------------------------------------------------- */
+
+double FixAblate::grad_mag(int icell)
+{
+  double *c = cvalues[icell];
+  double gx,gy,gz;
+
+  if (dim == 2) {
+    gx = 0.5*((c[1]+c[3]) - (c[0]+c[2])) / xyzsize[0];
+    gy = 0.5*((c[2]+c[3]) - (c[0]+c[1])) / xyzsize[1];
+    gz = 0.0;
+  } else {
+    gx = 0.25*((c[1]+c[3]+c[5]+c[7]) - (c[0]+c[2]+c[4]+c[6])) / xyzsize[0];
+    gy = 0.25*((c[2]+c[3]+c[6]+c[7]) - (c[0]+c[1]+c[4]+c[5])) / xyzsize[1];
+    gz = 0.25*((c[4]+c[5]+c[6]+c[7]) - (c[0]+c[1]+c[2]+c[3])) / xyzsize[2];
+  }
+
+  return sqrt(gx*gx + gy*gy + gz*gz);
+}
+
+/* ----------------------------------------------------------------------
+   per-cell normal speed of the advancing deposition front
+   the isosurface is the thresh level set of the corner point field, so the
+     standard level set advection relation gives the normal speed
+       s = (dc/dt) / |grad c|
+   dc/dt = realized mean change in the cell's corner values over the interval
+     measured from the cvalues_prev snapshot, so it includes the neighbor
+     contributions applied by sync() and any clamping at 255
+   |grad c| = corner value gradient magnitude, in value/length
+   result is a length/time speed, used by the move loop to advance the front
+     analytically between the infrequent isosurface regenerations
+------------------------------------------------------------------------- */
+
+void FixAblate::front_speed()
+{
+  Grid::ChildCell *cells = grid->cells;
+  Grid::ChildInfo *cinfo = grid->cinfo;
+
+  for (int icell = 0; icell < nglocal; icell++) sfront_cell[icell] = 0.0;
+
+  double interval = nevery * update->dt;
+  if (interval <= 0.0) return;
+
+  // floor on |grad c| below which the field is too flat to place the front
+  // a nearly flat cell would give a level set speed that blows up, since a
+  //   tiny value change sweeps the isosurface clear across the cell
+  // such a cell has no well-localized surface, so leave its speed at 0 and
+  //   let the static test plus the regeneration safety net handle it
+
+  double small = MIN(xyzsize[0],xyzsize[1]);
+  if (dim == 3) small = MIN(small,xyzsize[2]);
+  double gradmin = MINSPREAD / small;
+
+  for (int icell = 0; icell < nglocal; icell++) {
+    if (!(cinfo[icell].mask & groupbit)) continue;
+    if (cells[icell].nsplit <= 0) continue;
+
+    double dc = 0.0;
+    for (int i = 0; i < ncorner; i++)
+      dc += cvalues[icell][i] - cvalues_prev[icell][i];
+    dc /= ncorner;
+
+    // not growing in this cell, no front to advance
+
+    if (dc <= 0.0) continue;
+
+    double gmag = grad_mag(icell);
+    if (gmag < gradmin) continue;
+
+    sfront_cell[icell] = (dc/interval) / gmag;
+  }
+}
+
+/* ----------------------------------------------------------------------
+   map the per-cell front speed onto the newly created surf elements
+   must be called after grid->surf2grid_implicit() has built the csurfs lists
+   a surf shared by more than one cell takes the larger speed, so that the
+     move loop never under-predicts how far the front travels
+------------------------------------------------------------------------- */
+
+void FixAblate::build_sfront()
+{
+  int nslocal = surf->nlocal;
+
+  if (nslocal > maxsfront) {
+    maxsfront = nslocal;
+    memory->grow(sfront,maxsfront,"ablate:sfront");
+  }
+
+  for (int i = 0; i < nslocal; i++) sfront[i] = 0.0;
+
+  Grid::ChildCell *cells = grid->cells;
+
+  max_advance = 0.0;
+  double small = MIN(xyzsize[0],xyzsize[1]);
+  if (dim == 3) small = MIN(small,xyzsize[2]);
+  double interval = nevery * update->dt;
+
+  for (int icell = 0; icell < nglocal; icell++) {
+    if (cells[icell].nsplit <= 0) continue;
+    double s = sfront_cell[icell];
+    if (s <= 0.0) continue;
+
+    int ns = cells[icell].nsurf;
+    surfint *cs = cells[icell].csurfs;
+    for (int m = 0; m < ns; m++) {
+      int isurf = cs[m];
+      if (isurf < 0 || isurf >= nslocal) continue;
+      if (s > sfront[isurf]) sfront[isurf] = s;
+    }
+
+    // the csurfs lists are rebuilt only at a regeneration, so the bound that
+    //   matters is how far the front travels over the whole interval, not
+    //   over one step
+
+    double advance = s * interval / small;
+    if (advance > max_advance) max_advance = advance;
+  }
+
+  // hand the per-surf speeds to Update so the move loop can advance the front
+  // front_step0 marks the pose the front advances away from
+
+  update->sfront = sfront;
+  update->nsfront = nslocal;
+  update->front_step0 = update->ntimestep;
 }
 
 /* ----------------------------------------------------------------------
@@ -1832,6 +2136,15 @@ void FixAblate::grow_percell(int nnew)
   else maxgrid += DELTAGRID;
   if (multi_val_flag) memory->grow(mvalues,maxgrid,ncorner,nmultiv,"ablate:mvalues");
   else memory->grow(cvalues,maxgrid,ncorner,"ablate:cvalues");
+  if (mode == DEPOSIT) {
+    memory->grow(cvalues_prev,maxgrid,ncorner,"ablate:cvalues_prev");
+    memory->grow(sfront_cell,maxgrid,"ablate:sfront_cell");
+
+    // zero the front speeds, since create_surfs() is called once from
+    //   store_corners() before front_speed() has ever run
+
+    for (int icell = 0; icell < maxgrid; icell++) sfront_cell[icell] = 0.0;
+  }
   if (tvalues_flag) memory->grow(tvalues,maxgrid,"ablate:tvalues");
   memory->grow(ixyz,maxgrid,3,"ablate:ixyz");
   memory->grow(mcflags,maxgrid,4,"ablate:mcflags");
@@ -1905,6 +2218,22 @@ double FixAblate::compute_vector(int i)
 {
   if (i == 0) return sum_delta;
   if (i == 1) return 1.0*ndelete;
+
+  // deposition diagnostics, so the mass and momentum a growing surface
+  //   takes out of the gas can be audited against the gas totals
+
+  if (mode == DEPOSIT) {
+    if (i == 2) return 1.0*update->nburied;
+    if (i == 3) return update->buried_mass;
+    if (i == 4) return update->buried_mom[0];
+    if (i == 5) return update->buried_mom[1];
+    if (i == 6) return update->buried_mom[2];
+    if (i == 7) return 1.0*update->nfrontreflect;
+    if (i == 8) return update->reflect_mom[0];
+    if (i == 9) return update->reflect_mom[1];
+    if (i == 10) return update->reflect_mom[2];
+  }
+
   return 0.0;
 }
 
@@ -1918,6 +2247,8 @@ void FixAblate::process_args(int narg, char **arg)
   multi_dec_flag = 0;
   minmaxflag = 0;
   mode = ABLATE;
+  depositflag = 0;
+  unitsflag = CORNER;
 
   int iarg = 0;
   while (iarg < narg) {
@@ -1925,6 +2256,13 @@ void FixAblate::process_args(int narg, char **arg)
       if (iarg+2 > narg) error->all(FLERR,"Invalid fix ablate command");
       if (strcmp(arg[iarg+1],"ablate") == 0) mode = ABLATE;
       else if (strcmp(arg[iarg+1],"deposit") == 0) mode = DEPOSIT;
+      else error->all(FLERR,"Illegal fix_ablate command");
+      depositflag = (mode == DEPOSIT);
+      iarg += 2;
+    } else if (strcmp(arg[iarg],"units") == 0)  {
+      if (iarg+2 > narg) error->all(FLERR,"Invalid fix ablate command");
+      if (strcmp(arg[iarg+1],"corner") == 0) unitsflag = CORNER;
+      else if (strcmp(arg[iarg+1],"distance") == 0) unitsflag = DISTANCE;
       else error->all(FLERR,"Illegal fix_ablate command");
       iarg += 2;
     } else if (strcmp(arg[iarg],"mindist") == 0)  {

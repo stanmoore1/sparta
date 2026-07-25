@@ -2113,6 +2113,59 @@ int Grid::point_outside_surfs_explicit(int icell, double *x)
 }
 
 /* ----------------------------------------------------------------------
+   find the first surf in icell crossed by the ray from X to Xcell
+   Xcell = reference point in the flow, from point_outside_surfs()
+   used to push a particle which a growing surface has engulfed back out
+     into the flow volume, by reflecting it off that surf
+   do NOT call for a cell with no surfs
+   if a surf is found, return 1 and set minsurf and minxc, else return 0
+------------------------------------------------------------------------- */
+
+int Grid::nearest_surf(int icell, double *x, double *xcell,
+                       int &minsurf, double *minxc)
+{
+  int dim = domain->dimension;
+  Surf::Line *lines = surf->lines;
+  Surf::Tri *tris = surf->tris;
+  surfint *csurfs = cells[icell].csurfs;
+
+  int m,isurf,hitflag,side;
+  double param;
+  double xc[3];
+  Surf::Line *line;
+  Surf::Tri *tri;
+
+  int nsurf = cells[icell].nsurf;
+
+  double minparam = 2.0;
+  minsurf = -1;
+
+  for (m = 0; m < nsurf; m++) {
+    isurf = csurfs[m];
+    if (dim == 3) {
+      tri = &tris[isurf];
+      hitflag = Geometry::
+        line_tri_intersect_noeps(x,xcell,tri->p1,tri->p2,tri->p3,
+                                 tri->norm,xc,param,side);
+    } else {
+      line = &lines[isurf];
+      hitflag = Geometry::
+        line_line_intersect(x,xcell,line->p1,line->p2,line->norm,xc,param,side);
+    }
+    if (hitflag && param < minparam) {
+      minparam = param;
+      minsurf = isurf;
+      minxc[0] = xc[0];
+      minxc[1] = xc[1];
+      minxc[2] = xc[2];
+    }
+  }
+
+  if (minsurf < 0) return 0;
+  return 1;
+}
+
+/* ----------------------------------------------------------------------
    check if particle at X is outside any surfs in icell (in the flow)
    use Xcell as reference point in flow, calculated by point_outside_surfs()
    do NOT call for a cell with no surfs

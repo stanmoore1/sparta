@@ -1,0 +1,140 @@
+#!/usr/bin/env python3
+"""Regression tests for fix ablate mode = deposit.
+
+The feature under test lets an implicit surface grow into the gas.  A growing
+surface runs into gas particles, and the whole point of the implementation is
+that those particles are reflected off the advancing front rather than
+deleted.  These tests assert that property directly.
+
+Usage:
+    python3 run_tests.py [--exe ../../../src/spa_serial]
+"""
+
+import argparse
+import os
+import re
+import subprocess
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+# stats_style columns: step np f_ablate f_ablate[3] f_ablate[4] f_ablate[8]
+#   f_ablate     = summed corner point values, i.e. how much material exists
+#   f_ablate[3]  = nburied        (particles incorporated into the film)
+#   f_ablate[4]  = buried mass
+#   f_ablate[8]  = nfrontreflect  (salvage reflections after a regeneration)
+
+MASS_N = 2.325e-26      # from air.species, used to check the mass bookkeeping
+
+
+def run(exe, infile, variables=None):
+    cmd = [exe, "-in", infile]
+    for k, v in (variables or {}).items():
+        cmd += ["-var", k, str(v)]
+    p = subprocess.run(cmd, cwd=HERE, capture_output=True, text=True)
+    return p.returncode, p.stdout + p.stderr
+
+
+def stats_rows(out):
+    """Return the stats table as a list of float lists."""
+    rows, inside = [], False
+    for line in out.splitlines():
+        if line.startswith("Step "):
+            inside = True
+            continue
+        if inside:
+            if line.startswith("Loop time") or not line.strip():
+                break
+            try:
+                rows.append([float(x) for x in line.split()])
+            except ValueError:
+                break
+    return rows
+
+
+def check(name, ok, detail=""):
+    print(("PASS  " if ok else "FAIL  ") + name + (("  -- " + detail) if detail else ""))
+    return ok
+
+
+def test_conserve(exe, rate, nevery):
+    """No particle may vanish without being counted as buried."""
+    label = "conserve (rate=%s nevery=%s)" % (rate, nevery)
+    rc, out = run(exe, "in.test.conserve", {"RATE": rate, "NEVERY": nevery})
+    if rc != 0:
+        err = next((l for l in out.splitlines() if "ERROR" in l), "no stats")
+        return check(label, False, err.strip()[:100])
+
+    rows = stats_rows(out)
+    if len(rows) < 2:
+        return check(label, False, "no stats rows")
+
+    np0, npN = rows[0][1], rows[-1][1]
+    nburied, buried_mass, nreflect = rows[-1][3], rows[-1][4], rows[-1][5]
+
+    lost = np0 - npN
+    ok = True
+
+    # the headline invariant: every particle that left was accounted for
+    ok &= check(label + " : lost == buried", lost == nburied,
+                "lost=%d buried=%d" % (lost, nburied))
+
+    # the mass ledger must match the count exactly (single species, no weighting)
+    expect = nburied * MASS_N
+    tol = max(1e-12 * max(expect, 1e-30), 1e-30)
+    ok &= check(label + " : buried mass ledger", abs(buried_mass - expect) <= tol,
+                "got=%g expect=%g" % (buried_mass, expect))
+
+    # fix grid/check ran with the error setting, so completing means no
+    # particle was ever left inside the growing surface
+    print("      (reflections salvaged: %d)" % nreflect)
+    return ok
+
+
+def test_guard(exe):
+    """A front that outruns its collision lists must be refused."""
+    rc, out = run(exe, "in.test.guard")
+    saw = "front advances" in out
+    return check("guard rejects an over-fast front", rc != 0 and saw,
+                 "rc=%d" % rc if not saw else "")
+
+
+def test_ablate_unaffected(exe):
+    """Ablation must not touch any of the deposition machinery."""
+    rc, out = run(exe, "in.test.ablate")
+    if rc != 0:
+        return check("ablate mode unaffected", False, "run failed")
+    rows = stats_rows(out)
+    if len(rows) < 2:
+        return check("ablate mode unaffected", False, "no stats rows")
+    nburied, nreflect = rows[-1][3], rows[-1][4]
+    return check("ablate mode unaffected", nburied == 0 and nreflect == 0,
+                 "buried=%d reflect=%d" % (nburied, nreflect))
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--exe", default=os.path.join(HERE, "../../../src/spa_serial"))
+    args = ap.parse_args()
+
+    exe = os.path.abspath(args.exe)
+    if not os.path.exists(exe):
+        sys.exit("executable not found: %s (build it with 'make serial')" % exe)
+
+    ok = True
+    # sweep the growth rate: slow enough that nothing is buried, up to fast
+    # enough that some particles are, and check the ledger balances throughout
+    for rate in (0.02, 0.05, 0.1, 0.2, 0.3):
+        ok &= test_conserve(exe, rate, 1)
+    # the same physics with the isosurface regenerated less often
+    for nevery in (2, 5):
+        ok &= test_conserve(exe, 0.05 * nevery, nevery)
+    ok &= test_guard(exe)
+    ok &= test_ablate_unaffected(exe)
+
+    print("\n" + ("ALL TESTS PASSED" if ok else "SOME TESTS FAILED"))
+    return 0 if ok else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

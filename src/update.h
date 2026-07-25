@@ -54,6 +54,21 @@ class Update : protected Pointers {
   int nmigrate;          // # of particles to migrate to new procs
   int *mlist;            // indices of particles to migrate
 
+                         // advancing surfaces (fix ablate mode deposit)
+  int movingflag;        // 1 if any surf advances during a timestep
+  double *sfront;        // per-surf normal advance speed, NULL if none
+                         //   owned by FixAblate, indexed by local surf index
+  int nsfront;           // length of sfront
+  bigint front_step0;    // timestep whose end_of_step last regenerated the
+                         //   isosurface; the front advances from that pose
+  bigint nburied;        // running count of particles buried by a front
+  double buried_mass;    // running mass buried
+  double buried_mom[3];  // running momentum buried
+  double buried_erot,buried_evib,buried_ke;   // running energy buried
+  bigint nfrontreflect;  // running count of safety-net reflections after
+                         //   an isosurface regeneration
+  double reflect_mom[3]; // momentum those reflections gave to the surface
+
                          // current step counters
   int niterate;          // iterations of move/comm
   int ntouch_one;        // particle-cell touches
@@ -122,6 +137,11 @@ class Update : protected Pointers {
   int split3d(int, double *);
   int split2d(int, double *);
 
+  // account for a particle buried by an advancing (depositing) surface
+  // arg is a Particle::OnePart *, kept void * to avoid a header dependency
+
+  void bury_particle(void *);
+
  protected:
   int me,nprocs;
   int maxmigrate;            // max # of particles in mlist
@@ -182,7 +202,7 @@ class Update : protected Pointers {
 
   typedef void (Update::*FnPtr)();
   FnPtr moveptr;             // ptr to move method
-  template < int, int, int > void move();
+  template < int, int, int, int > void move();
 
   int perturbflag;
   typedef void (Update::*FnPtr2)(int, int, double, double *, double *);

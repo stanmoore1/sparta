@@ -26,10 +26,13 @@ source = computeID or fixID or uniform or random :l
 
 maxrandom = maximum per grid cell decrement as an integer (only specified if source = random or uniform) :l
 zero or more keyword/value pairs may be appended :l
-keyword = {mode} or {mindist} or {multiple} :l
+keyword = {mode} or {units} or {mindist} or {multiple} :l
   {mode} value = ablate or deposit
     ablate = source decrements corner point values so the surface recedes
     deposit = source increments corner point values so the surface grows
+  {units} value = corner or distance
+    corner = source is a corner point value increment (0-255 scale)
+    distance = source is a deposition rate in length/time
   {mindist} value = fraction
     fraction = minimum fractional distance along cell edge for triangle/line vertices (value > 0 and < 0.5)
   {multiple} value = yes or no :pre
@@ -40,7 +43,8 @@ keyword = {mode} or {mindist} or {multiple} :l
 fix 1 ablate surfcells 1000 10.0 c_tally
 fix 1 ablate surfcells 0 0.0 random 10
 fix fablate ablate inner 0 0.2 random 0 mindist 0.02
-fix depo ablate inner 100 0.2 f_FIX mode deposit :pre
+fix depo ablate inner 100 0.2 f_FIX mode deposit
+fix depo ablate inner 10 1.0 c_FLUX mode deposit units distance :pre
 
 [Description:]
 
@@ -134,14 +138,62 @@ instead increments the corner point values (clamped at the maximum of
 255) so that the implicit surface grows into the gas phase, modeling
 deposition of material onto the surface.  This is the inverse operation
 of ablation and can be used for growth problems such as thin-film
-deposition or condensation.  When the growing surface engulfs gas
-particles, those particles are deleted, in the same way that a receding
-surface deletes particles left behind on the material side.
+deposition or condensation.
+
+Unlike a receding surface, a growing surface advances into the region
+the gas occupies and will run into gas particles.  Those particles are
+{not} deleted.  Instead the surface is treated as a front which advances
+along its own outward normal at a speed derived from the corner point
+increments, and the particle move is tested against that advancing
+front.  A particle the front reaches is given an ordinary gas-surface
+interaction at the point and time where the front and the particle
+trajectory actually cross, and is then advected for the remainder of the
+timestep, repeating if the front reaches it again.  The momentum it
+exchanges with the surface is tallied by "compute
+surf"_compute_surf.html and "compute isurf/grid"_compute_isurf_grid.html
+in the usual way, so a growing surface conserves momentum exactly as a
+static one does.
+
+The gas-surface interaction uses the surface at rest, not moving at the
+front speed.  A depositing surface advances by accretion rather than by
+motion of its material: at any instant the local patch of atoms a gas
+particle strikes is stationary, and any motion of those atoms is already
+represented by the "surf_collide"_surf_collide.html model.  The front
+speed therefore sets {when and where} the collision happens, not the
+velocity the particle rebounds from.
+
+If the front is advancing faster than a particle can move away from it,
+that particle cannot escape and is eventually buried, i.e. incorporated
+into the growing film.  This is physical, and it is rare unless the
+deposition rate approaches the thermal speed of the gas.  A buried
+particle is removed from the gas, and its mass, momentum and energy are
+accumulated and can be output (see below), so no particle is ever
+discarded without being accounted for.
+
+The isosurface is regenerated only every {Nevery} steps, but the front
+advances every step in between.  Its position between regenerations is
+computed analytically, so the physics does not depend on {Nevery}; a
+larger {Nevery} only reduces how often the surface geometry is rebuilt.
+Because the per-cell lists of surface elements are rebuilt only at a
+regeneration, an error is generated if the front would advance more than
+half a grid cell between regenerations, since particles further away
+would never be tested against it.  Reduce {Nevery} or the deposition
+rate if this occurs.
+
+If the {units} keyword is set to {distance}, the {source} is interpreted
+as a deposition rate in units of length/time, rather than as a corner
+point value increment.  It is converted to a corner point increment
+using the local corner point value gradient, so the rate can be
+specified directly as a surface growth speed.  This is often more
+natural when the rate is derived from a surface flux, for example with
+"compute isurf/grid"_compute_isurf_grid.html.  With the default {units}
+= {corner}, the {source} has the same meaning it does for ablation.
 
 The {mode} = deposit option currently supports only the default
 single-value, single-decrement corner point representation; it cannot
 be combined with the {multiple} keyword or with multivalue corner
-points.
+points.  It also cannot be used with an axisymmetric domain, and like
+all of fix ablate it has no Kokkos version.
 
 :line
 
@@ -307,18 +359,33 @@ and the entire surface contained within the ablated cell recedes.
 No information about this fix is written to "binary restart
 files"_restart.html.
 
-This fix computes a global scalar and a global vector of length 2.
+This fix computes a global scalar and a global vector of length 11.
 The global scalar is the current sum of unique corner point values
 across the entire grid (not counting duplicate values).  This sum
 assumes that corner point values are 0.0 on the boundary of the 2d or
 3d array of grid cells containing implicit surface elements.
 
-The 2 vector values are the (1) sum of decrement values for each grid
-cell in the most recent ablation operation, and (2) the # of particles
-deleted during the most recent ablation operation that ended up
-"inside" the newly ablated surface.  The latter quantity should be 0.
+The first 2 vector values are the (1) sum of decrement values for each
+grid cell in the most recent ablation operation, and (2) the # of
+particles deleted during the most recent ablation operation that ended
+up "inside" the newly ablated surface.  The latter quantity should be 0.
 A non-zero value indicates a corner case in the marching cubes or
 marching squares algorithm the developers still need to address.
+
+Values 3 through 11 are deposition diagnostics and are zero unless
+{mode} = deposit.  They are running totals over the whole run, so that
+what a growing surface removes from the gas can be checked against the
+gas totals.  They are (3) the # of particles buried by the advancing
+front, (4) their total mass, (5-7) their total momentum in x,y,z, (8)
+the # of particles pushed back into the flow after an isosurface
+regeneration enclosed them, and (9-11) the momentum in x,y,z those
+reflections transferred to the surface.
+
+In a closed domain with no inflow or outflow, the drop in particle count
+must exactly equal value (3): every particle a growing surface removes
+from the gas is one it buried.  Value (8) counts particles that were
+saved rather than deleted, and is expected to be non-zero; it grows with
+the deposition rate and with {Nevery}.
 
 These values can be accessed by any command that uses global values
 from a fix as input.  See "Section 6.4"_Section_howto.html#howto_4 for
@@ -346,8 +413,9 @@ that is the case.
 [Default:]
 
 The default for the {mode} keyword = ablate.  The default for the
-{mindist} keyword = 0.0, i.e. the epsilon method is used.  The default
-for the {multiple} keyword = no.
+{units} keyword = corner.  The default for the {mindist} keyword = 0.0,
+i.e. the epsilon method is used.  The default for the {multiple} keyword
+= no.
 
 :line
 
