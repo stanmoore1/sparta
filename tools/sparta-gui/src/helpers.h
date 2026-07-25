@@ -407,6 +407,17 @@ extern QSize toolButtonSize(const QAbstractButton *sample);
 extern void styleToolButtons(const QSize &size, std::initializer_list<QAbstractButton *> buttons);
 
 /**
+ * @brief Give an icon-only widget an accessible name taken from its tooltip
+ * @param widget The widget to name
+ *
+ * A button with an icon and no text has nothing for a screen reader to
+ * announce, and nothing for automation to address it by. Its tooltip already
+ * describes it, so it becomes the accessible name (with any markup flattened).
+ * Widgets that have text, or an accessible name already, are left alone.
+ */
+extern void nameFromToolTip(QWidget *widget);
+
+/**
  * @brief Apply the shared window-manager hints to a top-level output window
  *
  * Strips the dialog property (so the window is an independent top-level window,

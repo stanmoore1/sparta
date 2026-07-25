@@ -30,6 +30,7 @@
 #include <QMessageBox>
 #include <QPalette>
 #include <QPixmap>
+#include <QRegularExpression>
 #include <QProcess>
 #include <QPushButton>
 #include <QScrollArea>
@@ -658,7 +659,31 @@ void styleToolButtons(const QSize &size, std::initializer_list<QAbstractButton *
         button->setMinimumSize(size);
         button->setMaximumSize(size);
         button->setIconSize(iconsize);
+        nameFromToolTip(button);
     }
+}
+
+void nameFromToolTip(QWidget *widget)
+{
+    if (!widget) return;
+
+    // An icon-only button carries no text, so assistive technology has nothing
+    // to announce and reports it as an unnamed button -- which also makes it
+    // unaddressable to anything driving the interface by name. The tooltip
+    // already says what the button does, so use it.
+    if (auto *button = qobject_cast<QAbstractButton *>(widget)) {
+        if (!button->text().isEmpty()) return;
+    }
+    if (!widget->accessibleName().isEmpty()) return;
+
+    QString tip = widget->toolTip();
+    if (tip.isEmpty()) return;
+
+    // Tooltips may carry markup (e.g. "90<sup>o</sup> clockwise"); an
+    // accessible name is plain text, so flatten it.
+    tip.remove(QRegularExpression(QStringLiteral("<[^>]*>")));
+    tip = tip.simplified();
+    if (!tip.isEmpty()) widget->setAccessibleName(tip);
 }
 
 // shared viewer window auto-resize policy (see helpers.h)
