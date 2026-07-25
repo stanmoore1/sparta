@@ -18,6 +18,7 @@
 #include "fix_ablate.h"
 #include "update.h"
 #include "geometry.h"
+#include "math_extra.h"
 #include "grid.h"
 #include "surf.h"
 #include "surf_collide.h"
@@ -1484,14 +1485,9 @@ void FixAblate::refresh_surfs()
   if (mode != DEPOSIT || !nevery) return;
   if (update->front_step0 < 0) return;
 
-  // 2d and axisymmetric (both dim == 2) refresh their geometry here
-  // 3d would need the same factoring of MarchingCubes that MarchingSquares
-  //   has; until then a 3d growing surface is handled entirely when it is
-  //   regenerated, which is correct but resolves the growth only per Nevery
   // the KOKKOS move loop is a separate implementation and does not read the
-  //   refreshed geometry, so a Kokkos run behaves the same way
-
-  if (dim != 2) return;
+  //   refreshed geometry, so a Kokkos run resolves the growth only once per
+  //   Nevery, as it did before
 
   Grid::ChildCell *cells = grid->cells;
   Grid::ChildInfo *cinfo = grid->cinfo;
@@ -1531,16 +1527,18 @@ void FixAblate::refresh_surfs()
 
   if (nglocal > maxsegcell) {
     maxsegcell = nglocal;
-    segstride = 2;
+    // 2 line segments per cell in 2d, up to 12 triangles per cell in 3d
+    segstride = (dim == 2) ? 2 : 12;
     memory->grow(nseg,maxsegcell,"ablate:nseg");
-    memory->grow(segpt,maxsegcell,segstride*6,"ablate:segpt");
+    memory->grow(segpt,maxsegcell,segstride*3*dim,"ablate:segpt");
     memory->grow(segnorm,maxsegcell,segstride*3,"ablate:segnorm");
     memory->grow(cnow,ncorner,"ablate:cnow");
   }
 
   for (int icell = 0; icell < nglocal; icell++) nseg[icell] = 0;
 
-  double pt[4][3];
+  double pt2d[4][3];
+  double pt3d[36][3];
 
   for (int icell = 0; icell < nglocal; icell++) {
     if (!(cinfo[icell].mask & groupbit)) continue;
@@ -1558,28 +1556,57 @@ void FixAblate::refresh_surfs()
     }
     if (!moving) continue;
 
-    int ns = ms->cell_surfs(cnow,NULL,cells[icell].lo,cells[icell].hi,pt);
+    int ns;
+    if (dim == 2)
+      ns = ms->cell_surfs(cnow,NULL,cells[icell].lo,cells[icell].hi,pt2d);
+    else
+      ns = mc->cell_surfs(cnow,NULL,cells[icell].lo,cells[icell].hi,pt3d,NULL);
     if (!ns) continue;
     if (ns > segstride) ns = segstride;
 
     for (int k = 0; k < ns; k++) {
-      double *p1 = &segpt[icell][6*k];
-      double *p2 = &segpt[icell][6*k+3];
-      for (int m = 0; m < 3; m++) {
-        p1[m] = pt[2*k][m];
-        p2[m] = pt[2*k+1][m];
-      }
-
-      // outward normal by the right hand rule Surf uses: Z x (p2-p1)
-
       double *nm = &segnorm[icell][3*k];
-      nm[0] = -(p2[1]-p1[1]);
-      nm[1] = p2[0]-p1[0];
-      nm[2] = 0.0;
-      double len = sqrt(nm[0]*nm[0] + nm[1]*nm[1]);
-      if (len == 0.0) { ns = k; break; }
-      nm[0] /= len;
-      nm[1] /= len;
+
+      if (dim == 2) {
+        double *p1 = &segpt[icell][6*k];
+        double *p2 = &segpt[icell][6*k+3];
+        for (int m = 0; m < 3; m++) {
+          p1[m] = pt2d[2*k][m];
+          p2[m] = pt2d[2*k+1][m];
+        }
+
+        // outward normal by the right hand rule Surf uses: Z x (p2-p1)
+
+        nm[0] = -(p2[1]-p1[1]);
+        nm[1] = p2[0]-p1[0];
+        nm[2] = 0.0;
+        double len = sqrt(nm[0]*nm[0] + nm[1]*nm[1]);
+        if (len == 0.0) { ns = k; break; }
+        nm[0] /= len;
+        nm[1] /= len;
+
+      } else {
+
+        // Marching Cubes emits the corner points in the order add_tri() is
+        //   given them reversed, so keep the same convention here
+
+        double *p1 = &segpt[icell][9*k];
+        double *p2 = &segpt[icell][9*k+3];
+        double *p3 = &segpt[icell][9*k+6];
+        for (int m = 0; m < 3; m++) {
+          p1[m] = pt3d[3*k+2][m];
+          p2[m] = pt3d[3*k+1][m];
+          p3[m] = pt3d[3*k][m];
+        }
+
+        double e1[3],e2[3];
+        MathExtra::sub3(p2,p1,e1);
+        MathExtra::sub3(p3,p1,e2);
+        MathExtra::cross3(e1,e2,nm);
+        double len = MathExtra::len3(nm);
+        if (len == 0.0) { ns = k; break; }
+        nm[0] /= len; nm[1] /= len; nm[2] /= len;
+      }
     }
 
     nseg[icell] = ns;

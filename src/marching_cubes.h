@@ -25,6 +25,7 @@ class MarchingCubes : protected Pointers {
   MarchingCubes(class SPARTA *, int, double);
   ~MarchingCubes() {}
   void invoke(double **, double ***, int *, int **);
+  int cell_surfs(double *, double **, double *, double *, double [][3], int *);
   void cleanup();
   double mindist;
 

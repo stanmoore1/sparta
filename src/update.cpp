@@ -443,7 +443,7 @@ template < int DIM, int SURF, int OPT, int MOVING > void Update::move()
   // a refreshed element of a growing surface, and the surf it stands in for
   //   when the collision is tallied
 
-  double *rp1,*rp2,*rnorm,minrnorm[3];
+  double *rp1,*rp2,*rp3,*rnorm,minrnorm[3];
   int nrefresh,irefresh,minrefresh = 0;
 
   // extend migration list if necessary
@@ -848,8 +848,14 @@ template < int DIM, int SURF, int OPT, int MOVING > void Update::move()
               if (MOVING && nrefresh) {
                 irefresh = m;
                 isurf = csurfs[MIN(m,nsurf-1)];
-                rp1 = &segpt[icell][6*m];
-                rp2 = &segpt[icell][6*m+3];
+                if (DIM == 3) {
+                  rp1 = &segpt[icell][9*m];
+                  rp2 = &segpt[icell][9*m+3];
+                  rp3 = &segpt[icell][9*m+6];
+                } else {
+                  rp1 = &segpt[icell][6*m];
+                  rp2 = &segpt[icell][6*m+3];
+                }
                 rnorm = &segnorm[icell][3*m];
               } else isurf = csurfs[m];
 
@@ -861,7 +867,10 @@ template < int DIM, int SURF, int OPT, int MOVING > void Update::move()
               }
 
               if (MOVING && nrefresh) {
-                if (DIM == 2)
+                if (DIM == 3)
+                  hitflag = Geometry::
+                    line_tri_intersect(x,xnew,rp1,rp2,rp3,rnorm,xc,param,side);
+                else if (DIM == 2)
                   hitflag = Geometry::
                     line_line_intersect(x,xnew,rp1,rp2,rnorm,xc,param,side);
                 else
@@ -1023,7 +1032,9 @@ template < int DIM, int SURF, int OPT, int MOVING > void Update::move()
 
               if (DIM == 3)
                 jpart = surf->sc[tri->isc]->
-                  collide(ipart,dtremain,minsurf,tri->norm,tri->isr,reaction);
+                  collide(ipart,dtremain,minsurf,
+                          (MOVING && minrefresh) ? minrnorm : tri->norm,
+                          tri->isr,reaction);
               if (DIM != 3)
                 jpart = surf->sc[line->isc]->
                   collide(ipart,dtremain,minsurf,
