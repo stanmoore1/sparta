@@ -1352,7 +1352,16 @@ void ImageViewer::updateDisplayedPixmap()
     //
     // This is display scaling only. The zoom buttons move the camera and
     // re-render through SPARTA, so the two do not interact.
-    const QSize avail = scrollArea->viewport()->size();
+    // maximumViewportSize(), not viewport()->size(): the viewport's actual size
+    // depends on whether a scroll bar is showing, which depends on the size of
+    // the pixmap being computed here. Feeding that back in makes the two chase
+    // each other -- fit to the full width, a vertical bar appears, the narrower
+    // viewport wants a smaller fit, the bar goes away -- and the re-entry guard
+    // below stops the oscillation wherever it happens to be, which was leaving
+    // the render scaled to the panel's width and cut off at the bottom.
+    // maximumViewportSize() is the room available with no bars at all, so the
+    // result does not depend on the state it produces.
+    const QSize avail = scrollArea->maximumViewportSize();
     QPixmap pix       = QPixmap::fromImage(image);
 
     if (avail.isValid() && !avail.isEmpty() &&
