@@ -71,6 +71,7 @@
 #include "preferences.h"
 #include "runhistory.h"
 #include "slideshow.h"
+#include "viewerpanel.h"
 #include "stlimportwizard.h"
 #include "surfreportdialog.h"
 
@@ -684,6 +685,55 @@ TEST(RealWindowsLive, ImageViewer)
     // above provides both
     ImageViewer viewer("test", &sparta, nullptr);
     walkWindow(&viewer, "ImageViewer", 20);
+}
+
+// The merged viewer panel: the tab bar plus whichever source is in front. The
+// walk covers the front page only, which is the point -- the panel shows one
+// source at a time, and a control on a hidden page is not reachable by a user
+// either.
+TEST(RealWindowsLive, ViewerPanel)
+{
+    SpartaWrapper sparta;
+    if (!openSparta(sparta, surfDeck()))
+        GTEST_SKIP() << "needs SPARTA_PLUGIN_LIB and the in.surfq fixture";
+
+    ViewerPanel panel;
+    panel.addSource(ViewerPanel::Snapshot, new ImageViewer("test", &sparta, nullptr));
+    panel.addSource(ViewerPanel::Sequence, new SlideShow("", nullptr));
+
+    // both sources registered, both reachable by tab
+    EXPECT_TRUE(panel.hasSource(ViewerPanel::Snapshot));
+    EXPECT_TRUE(panel.hasSource(ViewerPanel::Sequence));
+
+    panel.showSource(ViewerPanel::Snapshot, true);
+    EXPECT_EQ(panel.currentSource(), ViewerPanel::Snapshot);
+    panel.showSource(ViewerPanel::Sequence, true);
+    EXPECT_EQ(panel.currentSource(), ViewerPanel::Sequence);
+
+    walkWindow(&panel, "ViewerPanel", 15);
+}
+
+// Once the user has chosen a source, frames arriving on their own must not take
+// the view away from it -- that would move the window out from under someone in
+// the middle of looking at something.
+TEST(ViewerPanelBehaviour, BackgroundContentDoesNotStealTheView)
+{
+    SpartaWrapper sparta;
+    if (!openSparta(sparta, surfDeck()))
+        GTEST_SKIP() << "needs SPARTA_PLUGIN_LIB and the in.surfq fixture";
+
+    ViewerPanel panel;
+    panel.addSource(ViewerPanel::Sequence, new SlideShow("", nullptr));
+    panel.addSource(ViewerPanel::Snapshot, new ImageViewer("test", &sparta, nullptr));
+
+    panel.showSource(ViewerPanel::Snapshot, true);      // the user picked this
+    panel.showSource(ViewerPanel::Sequence);            // a run wrote a frame
+    EXPECT_EQ(panel.currentSource(), ViewerPanel::Snapshot);
+
+    // a new run clears the choice, so the next run's frames do come forward
+    panel.unlockSource();
+    panel.showSource(ViewerPanel::Sequence);
+    EXPECT_EQ(panel.currentSource(), ViewerPanel::Sequence);
 }
 
 TEST(RealWindows, TotalCoverage)

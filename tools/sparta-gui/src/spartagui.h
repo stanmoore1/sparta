@@ -48,6 +48,7 @@ class CodeEditor;
 class GeneralTab;
 class Highlighter;
 class ImageViewer;
+class ViewerPanel;
 class PanelManager;
 class SpartaRunner;
 class LogWindow;
@@ -349,6 +350,9 @@ private:
     /** @brief Append the cached thermo columns for the current step to the charts */
     void updateChartData(int step, int ncols);
 
+    /** @brief Build the viewer panel and dock it, the first time one is needed */
+    void ensureViewerPanel();
+
     /** @brief Append any newly rendered dump image to the slideshow */
     void updateSlideShow();
 
@@ -498,12 +502,12 @@ private:
     int lastCpuBucket;        ///< Last applied cpuuse color bucket (-1 = none yet)
     PanelManager *panels;     ///< Docked-panel layout manager (Output/Charts/Image/Slide/Variables)
     LogWindow *logwindow;     ///< Window displaying SPARTA output log
-    ImageViewer *imagewindow; ///< Window for viewing single images
+    ViewerPanel *viewer;      ///< The one panel showing snapshots, frames and 3D
+    int keptRenderSeq = 0;    ///< numbers the renders kept when replace-on-render is off
 #if defined(SPARTA_GUI_HAVE_VTK)
     SceneWindow *sceneWindow = nullptr; ///< Interactive 3D scene window (lazy)
 #endif
     ChartWindow *chartwindow; ///< Window for displaying charts
-    SlideShow *slideshow;    ///< Window for image slideshow
     QTimer *logupdater;      ///< Timer for periodic log updates
     QTimer *recoveryTimer = nullptr; ///< Periodic crash-recovery autosave timer
     ElidedLabel *dirstatus;  ///< Status bar label showing current directory (elided when narrow)

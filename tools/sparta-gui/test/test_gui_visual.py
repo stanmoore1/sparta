@@ -332,13 +332,13 @@ def check_image_viewer(g, deck):
     g.key("ctrl+3", 3)                 # Analyze
     time.sleep(2)
 
-    # The Image and Slide Show panels are tabbed together and the slide show is
-    # usually in front. Its controls carry the same tooltips, so without raising
-    # the Image tab the checks below would silently drive the wrong panel.
-    # Qt-ADS tabs are custom widgets without the "page tab" role, so the tab is
-    # matched by its title instead.
-    if not g.click_named("Image - ", pause=2):
-        note("raise the Image panel", "FAIL", "Image dock tab not found")
+    # The viewer shows one source at a time, so the snapshot has to be brought
+    # to the front before its controls can be driven. This is a real QTabBar
+    # now, so it can be selected by the "page tab" role rather than by matching
+    # a dock title -- and the two families of transform no longer share names,
+    # so landing on the wrong one is no longer possible either way.
+    if not g.click_named("Snapshot", role="page tab", pause=2):
+        note("raise the Snapshot view", "FAIL", "Snapshot tab not found")
         return
     time.sleep(1)
 

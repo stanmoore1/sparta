@@ -58,7 +58,7 @@ constexpr int PROGRESS_MAXIMUM      = 1000; ///< Maximum value for QProgressBar
 // ---- Docked panel layout --------------------------------------------------
 /** bump whenever dock objectNames or the panel topology change, so a saved
  *  layout blob from an older version is discarded instead of misapplied */
-constexpr int DOCK_LAYOUT_VERSION = 7;
+constexpr int DOCK_LAYOUT_VERSION = 8;
 
 // ---- File limits ---------------------------------------------------------
 constexpr int NUM_RECENT_FILES = 5; ///< Number of entries in the recent files list
@@ -269,6 +269,7 @@ inline const QString VDWSTYLE     = QStringLiteral("vdwstyle");
 inline const QString VIEWCHART    = QStringLiteral("viewchart");
 inline const QString VIEWLOG      = QStringLiteral("viewlog");
 inline const QString VIEWSLIDE    = QStringLiteral("viewslide");
+inline const QString VIEWERSOURCE = QStringLiteral("viewersource");
 inline const QString VROT         = QStringLiteral("vrot");
 inline const QString WEBPAGE      = QStringLiteral("webpage");
 inline const QString XSIZE        = QStringLiteral("xsize");

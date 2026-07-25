@@ -43,11 +43,12 @@ CASES = [
     ("view-mode-setup",  "View > Setup workspace",       "ctrl+1",       3, None),
     ("view-mode-run",    "View > Run workspace",         "ctrl+2",       3, None),
     ("view-mode-analyze","View > Analyze workspace",     "ctrl+3",       3, None),
+    ("view-mode-visualize","View > Visualize workspace", "ctrl+4",     3, None),
     # --- View: panel toggles ---------------------------------------------
     ("view-output",      "View > Output Window",         "ctrl+shift+l", 3, None),
     ("view-charts",      "View > Charts Window",         "ctrl+shift+c", 3, None),
-    ("view-image",       "View > Image Window",          "ctrl+shift+i", 3, None),
-    ("view-slideshow",   "View > Slide Show Window",     "ctrl+l",       3, None),
+    ("view-viewer",      "View > Viewer Window",         "ctrl+shift+i", 3, None),
+    ("view-sequence",    "View > Slide Show in Viewer",  "ctrl+l",       3, None),
     ("view-variables",   "View > Variables Window",      "ctrl+shift+w", 3, None),
     # --- About ------------------------------------------------------------
     ("about-about",      "About > About SPARTA-GUI",     "ctrl+shift+a", 3, True),

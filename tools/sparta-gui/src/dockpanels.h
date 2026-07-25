@@ -12,11 +12,11 @@
 #ifndef DOCKPANELS_H
 #define DOCKPANELS_H
 
-// Single-window docked layout for the Output/Charts/Image/Slide Show/Variables
-// views, built on the vendored Qt-ADS (Advanced Docking System). All ADS-facing
-// logic is confined here; spartagui.{h,cpp} only calls the methods below, so
-// the secondary-window classes (LogWindow, ChartWindow, ImageViewer, SlideShow)
-// stay untouched for easier upstream (LAMMPS-GUI) cherry-picking.
+// Single-window docked layout for the Output/Charts/Viewer/Variables views,
+// built on the vendored Qt-ADS (Advanced Docking System). All ADS-facing logic
+// is confined here; spartagui.{h,cpp} only calls the methods below, so the
+// view classes (LogWindow, ChartWindow, ViewerPanel) stay untouched for easier
+// upstream (LAMMPS-GUI) cherry-picking.
 
 #include <QList>
 #include <QObject>
@@ -38,8 +38,8 @@ class CDockWidget;
  *
  * PanelManager creates a ads::CDockManager on top of the main window, installs
  * the editor as the (non-closable) central widget, and creates one stable,
- * initially-hidden ads::CDockWidget per secondary view (Output, Charts, Image,
- * Slide Show, Variables) in the default layout. Call sites hand it the actual
+ * initially-hidden ads::CDockWidget per secondary view (Output, Charts, Viewer,
+ * Variables) in the default layout. Call sites hand it the actual
  * view widget (LogWindow, ChartWindow, ...) via @ref setPanelWidget instead of
  * showing/hiding a top-level window.
  */
@@ -49,7 +49,7 @@ class PanelManager : public QObject {
 public:
     /** @brief One dock panel slot; also indexes the internal dock/action arrays */
     enum Panel {
-        Log, Chart, Image, Slide, Variables, Sweep, History, Diagnostics, ProjectFiles,
+        Log, Chart, Viewer, Variables, Sweep, History, Diagnostics, ProjectFiles,
         NPanels
     };
 
@@ -58,11 +58,11 @@ public:
      *
      * Showing every panel at once leaves too little room for any of them, so
      * the panels are grouped by what the user is actually doing: preparing a
-     * deck, watching a run, or studying its results. Each mode is backed by a
-     * Qt-ADS perspective, so rearranging panels inside a mode is remembered
-     * per mode rather than globally.
+     * deck, watching a run, studying its results, or looking at the pictures
+     * full size. Each mode is backed by a Qt-ADS perspective, so rearranging
+     * panels inside a mode is remembered per mode rather than globally.
      */
-    enum Mode { Setup, RunMode, Analyze, NModes };
+    enum Mode { Setup, RunMode, Analyze, Visualize, NModes };
 
     /**
      * @brief Build the dock manager, central editor dock, and the five stable panels
@@ -157,7 +157,7 @@ signals:
 
 private:
     /** @brief (Re-)apply the default splitter proportions between the editor and
-     *  the Charts/Image and Output/Variables areas. */
+     *  the Charts/Viewer and Output/Variables areas. */
     void applySplitterProportions();
 
     /** @brief Size the two-child splitter containing @p area so its first child
@@ -190,7 +190,7 @@ private:
      *  A mode that was never entered has no arrangement worth keeping, and
      *  stashing the startup state (every dock closed) under its name would
      *  make the mode come up empty the first time it is selected. */
-    bool modeEstablished[NModes] = {false, false, false};
+    bool modeEstablished[NModes] = {false, false, false, false};
 
     /** @brief Suppresses panelOpened while a whole arrangement is being applied.
      *  Switching modes must not trigger the lazy view creation that opening a

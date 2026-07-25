@@ -34,6 +34,7 @@
 #include "sweeppanel.h"
 #include "setvariables.h"
 #include "slideshow.h"
+#include "viewerpanel.h"
 #include "viewerwindow.h"
 #include "stdcapture.h"
 #include "urldownloader.h"
@@ -384,6 +385,7 @@ void SpartaGui::createViewMenu()
         {PanelManager::Setup, ":/icons/document-open.svg", "&Setup Workspace", "Ctrl+1"},
         {PanelManager::RunMode, ":/icons/system-run.svg", "&Run Workspace", "Ctrl+2"},
         {PanelManager::Analyze, ":/icons/x-office-drawing.svg", "&Analyze Workspace", "Ctrl+3"},
+        {PanelManager::Visualize, ":/icons/image-viewer.svg", "&Visualize Workspace", "Ctrl+4"},
     };
     modeGroup = new QActionGroup(this);
     modeGroup->setExclusive(true);
@@ -405,8 +407,7 @@ void SpartaGui::createViewMenu()
     static const Entry entries[] = {
         {PanelManager::Log, ":/icons/utilities-terminal.svg", "&Output Window", "Ctrl+Shift+L"},
         {PanelManager::Chart, ":/icons/x-office-drawing.svg", "&Charts Window", "Ctrl+Shift+C"},
-        {PanelManager::Image, ":/icons/image-viewer.svg", "&Image Window", "Ctrl+Shift+I"},
-        {PanelManager::Slide, ":/icons/image-x-generic.svg", "&Slide Show Window", "Ctrl+L"},
+        {PanelManager::Viewer, ":/icons/image-viewer.svg", "&Viewer Window", "Ctrl+Shift+I"},
         {PanelManager::Variables, ":/icons/utilities-terminal.svg", "&Variables Window",
          "Ctrl+Shift+W"},
         {PanelManager::Sweep, ":/icons/x-office-drawing.svg", "Parametric S&weep Window", ""},
@@ -423,7 +424,7 @@ void SpartaGui::createViewMenu()
     }
 
     // persist only on user-driven toggles (QAction::triggered); run-driven
-    // open/close of any panel (including the run-start slideshow hide) must
+    // open/close of any panel (including the run-start viewer hide) must
     // not touch these settings
     connect(panels->toggleViewAction(PanelManager::Log), &QAction::triggered, this, [this]() {
         QSettings().setValue(Keys::VIEWLOG, panels->isPanelOpen(PanelManager::Log));
@@ -435,18 +436,24 @@ void SpartaGui::createViewMenu()
     // lazily (re-)create views whose widget is torn down by newDocument()/
     // openFile() if the user opens their panel again before the next run
     connect(panels, &PanelManager::panelOpened, this, [this](int panel) {
-        if (panel == PanelManager::Slide && !slideshow) {
-            slideshow = new SlideShow(currentFile, this);
-            panels->setPanelWidget(PanelManager::Slide, slideshow, "Slide Show");
-        }
-        // opening the Image window with no snapshot yet used to show an empty
-        // pane; render one on demand (renderImage() creates the viewer and
-        // re-opens the panel -- the !imagewindow guard prevents recursion, and
-        // if rendering is not possible it reports why instead of doing nothing).
-        // Only on a genuine user open, though: during startup this same signal
-        // fires from restoreLayout() -- before the SPARTA plugin is even loaded
-        // -- and rendering then would call into an unloaded library and crash.
-        if (panel == PanelManager::Image && !imagewindow && startupComplete) renderImage();
+        if (panel == PanelManager::Viewer) ensureViewerPanel();
+        // opening the viewer with no snapshot yet used to show an empty pane;
+        // render one on demand (renderImage() creates the source and re-opens
+        // the panel -- the no-snapshot-yet guard prevents recursion, and if
+        // rendering is not possible it reports why instead of doing nothing).
+        //
+        // Not during startup: this same signal fires from restoreLayout(),
+        // before the SPARTA plugin is even loaded, and rendering then would
+        // call into an unloaded library and crash.
+        //
+        // And not while a run is going. The viewer panel is opened by the run
+        // itself as soon as it writes its first frame, so auto-rendering here
+        // would answer "Cannot create snapshot image while SPARTA is running"
+        // with a modal dialog, in the middle of the run, without anyone having
+        // asked for a snapshot.
+        if (panel == PanelManager::Viewer && viewer && !viewer->snapshot() && startupComplete &&
+            !sparta.isRunning())
+            renderImage();
         if (panel == PanelManager::Variables && !varwindow) createVariableWindow();
         if (panel == PanelManager::Sweep) ensureSweepPanel();
         if (panel == PanelManager::History) ensureHistoryPanel();
@@ -458,8 +465,26 @@ void SpartaGui::createViewMenu()
     });
 
     menu->addSeparator();
+    // The viewer is one panel now, so these pick which of its pages is in
+    // front. Ctrl+L still means "show me the frames" and Ctrl+Shift+I still
+    // opens the viewer, which is what those keys did before the merge.
+    addMenuAction(menu, ":/icons/image-viewer.svg", "S&napshot in Viewer", "", [this]() {
+        ensureViewerPanel();
+        panels->openPanel(PanelManager::Viewer);
+        viewer->showSource(ViewerPanel::Snapshot, true);
+    });
+    addMenuAction(menu, ":/icons/image-x-generic.svg", "Slide S&how in Viewer", "Ctrl+L", [this]() {
+        ensureViewerPanel();
+        panels->openPanel(PanelManager::Viewer);
+        viewer->showSource(ViewerPanel::Sequence, true);
+    });
 #if defined(SPARTA_GUI_HAVE_VTK)
-    addMenuAction(menu, ":/icons/image-viewer.svg", "&3D Viewer (VTK)", "",
+    addMenuAction(menu, ":/icons/x-office-drawing.svg", "&3D Scene in Viewer", "", [this]() {
+        ensureViewerPanel();
+        panels->openPanel(PanelManager::Viewer);
+        viewer->showSource(ViewerPanel::Scene, true);
+    });
+    addMenuAction(menu, ":/icons/image-viewer.svg", "3D Viewer &Window (VTK)", "",
                   &SpartaGui::open3DViewer);
 #endif
     addMenuAction(menu, ":/icons/help-faq.svg", "&Welcome Screen", "",
@@ -516,7 +541,8 @@ void SpartaGui::createStatusBar()
     static const ModeBtn modebtns[] = {
         {PanelManager::Setup, "Setup", "Prepare the input deck: project files and linter findings"},
         {PanelManager::RunMode, "Run", "Watch a run: console output, variables and live charts"},
-        {PanelManager::Analyze, "Analyze", "Study results: charts, snapshot images and slide show"},
+        {PanelManager::Analyze, "Analyze", "Study results: charts and pictures side by side"},
+        {PanelManager::Visualize, "Visualize", "Look at the pictures with the window given over to them"},
     };
     auto *modebar = new QWidget(this);
     auto *modelay = new QHBoxLayout(modebar);
@@ -800,8 +826,8 @@ SpartaGui::SpartaGui(QWidget *parent, const QString &filename, int width, int he
     QMainWindow(parent), textEdit(nullptr), centralStack(nullptr), welcome(nullptr),
     menubar(nullptr), exampleMenu(nullptr),
     highlighter(nullptr), capturer(new StdCapture), status(nullptr), cpuuse(nullptr),
-    lastCpuBucket(-1), panels(nullptr), logwindow(nullptr), imagewindow(nullptr),
-    chartwindow(nullptr), slideshow(nullptr), logupdater(nullptr), dirstatus(nullptr),
+    lastCpuBucket(-1), panels(nullptr), logwindow(nullptr), viewer(nullptr),
+    chartwindow(nullptr), logupdater(nullptr), dirstatus(nullptr),
     progress(nullptr),
     prefdialog(nullptr), spartastatus(nullptr), varwindow(nullptr), runner(nullptr),
     runCounter(0), nthreads(1), mainx(width), mainy(height)
@@ -1868,26 +1894,45 @@ void SpartaGui::updateChartData(int step, int ncols)
     }
 }
 
+// Create the viewer panel on first use and install it in its dock. The
+// individual sources are added as they are first needed -- a deck that never
+// renders anything never builds an image viewer.
+void SpartaGui::ensureViewerPanel()
+{
+    if (viewer) return;
+
+    viewer = new ViewerPanel;
+    panels->setPanelWidget(PanelManager::Viewer, viewer, viewer->title());
+    connect(viewer, &ViewerPanel::titleChanged, this,
+            [this](const QString &title) { panels->setPanelTitle(PanelManager::Viewer, title); });
+    connect(viewer, &ViewerPanel::closeRequested, this,
+            [this]() { panels->closePanel(PanelManager::Viewer); });
+    connect(viewer, &ViewerPanel::sourceChanged, this,
+            [](int which) { QSettings().setValue(Keys::VIEWERSOURCE, which); });
+
+#if defined(SPARTA_GUI_HAVE_VTK)
+    viewer->addSource(ViewerPanel::Scene, new VtkScene);
+#endif
+}
+
 void SpartaGui::updateSlideShow()
 {
     // update list of available image file names
     QString imagefile = sparta.lastThermoString("imagename", 0);
     if (imagefile.isEmpty()) return;
 
-    if (!slideshow) {
-        slideshow = new SlideShow(currentFile, this);
-        panels->setPanelWidget(PanelManager::Slide, slideshow,
-                               QString("Slide Show - %1 - Run %2").arg(currentFile).arg(runCounter));
-        if (QSettings().value(Keys::VIEWSLIDE, true).toBool())
-            panels->openPanel(PanelManager::Slide);
-        else
-            panels->closePanel(PanelManager::Slide);
-    } else {
-        slideshow->setWindowTitle(
-            QString("SPARTA-GUI - Slide Show - %1 - Run %2").arg(currentFile).arg(runCounter));
-        if (QSettings().value(Keys::VIEWSLIDE, true).toBool()) panels->openPanel(PanelManager::Slide);
+    ensureViewerPanel();
+    if (!viewer->sequence())
+        viewer->addSource(ViewerPanel::Sequence, new SlideShow(currentFile, this));
+
+    viewer->sequence()->addImage(imagefile);
+
+    if (QSettings().value(Keys::VIEWSLIDE, true).toBool()) {
+        panels->openPanel(PanelManager::Viewer);
+        // frames arriving on their own must not take the view away from
+        // whatever the user chose to look at during the run
+        viewer->showSource(ViewerPanel::Sequence);
     }
-    slideshow->addImage(imagefile);
 }
 
 void SpartaGui::modified()
@@ -2181,10 +2226,10 @@ void SpartaGui::doRun(bool use_buffer)
 
     createChartWindow(settings);
 
-    if (slideshow) {
-        slideshow->setWindowTitle(QString("SPARTA-GUI - Slide Show - " + currentFile));
-        slideshow->clear();
-        panels->closePanel(PanelManager::Slide);
+    if (viewer && viewer->sequence()) {
+        viewer->unlockSource();
+        viewer->sequence()->clear();
+        panels->closePanel(PanelManager::Viewer);
     }
 
     logupdater = new QTimer(this);
@@ -2627,7 +2672,7 @@ void SpartaGui::archiveFinishedRun(bool success)
     if (!currentDir.isEmpty()) rec.metadata.insert("Working directory", currentDir);
 
     QStringList images;
-    if (slideshow) images = slideshow->images();
+    if (viewer && viewer->sequence()) images = viewer->sequence()->images();
     history->archive(rec, images);
 }
 
@@ -2910,16 +2955,29 @@ void SpartaGui::renderImage()
                 sparta.command("undump " + id);
         }
 
-        imagewindow = new ImageViewer(currentFile, &sparta, this);
-        const bool keepOld = !QSettings().value(Keys::IMAGEREPLACE, true).toBool();
-        panels->setPanelWidget(PanelManager::Image, imagewindow,
-                               QString("Image - %1").arg(currentFile), keepOld);
+        ensureViewerPanel();
+        // Keeping the previous render used to spawn an extra archived dock tab.
+        // A sequence of renders is what the frame view is for, so an old one is
+        // appended there instead and the panel keeps a single snapshot page.
+        if (!QSettings().value(Keys::IMAGEREPLACE, true).toBool() && viewer->snapshot()) {
+            const QImage kept = viewer->snapshot()->currentImage();
+            const QString path =
+                QDir::tempPath() + QString("/%1.kept.%2.png").arg(QFileInfo(currentFile).fileName()).arg(++keptRenderSeq);
+            if (!kept.isNull() && kept.save(path)) {
+                if (!viewer->sequence())
+                    viewer->addSource(ViewerPanel::Sequence, new SlideShow(currentFile, this));
+                viewer->sequence()->addImage(path);
+            }
+        }
+        viewer->addSource(ViewerPanel::Snapshot, new ImageViewer(currentFile, &sparta, this));
     } else {
         warning(this, "Image Viewer File Creation Error",
                 "Cannot create snapshot image while SPARTA is running");
         return;
     }
-    panels->openPanel(PanelManager::Image);
+    panels->openPanel(PanelManager::Viewer);
+    // an explicit Create Image is a request to look at the render
+    viewer->showSource(ViewerPanel::Snapshot, true);
 }
 
 #if defined(SPARTA_GUI_HAVE_VTK)
@@ -3052,8 +3110,7 @@ void SpartaGui::clearPanelWidgets()
     panels->clearRunPanels();
     chartwindow      = nullptr;
     logwindow        = nullptr;
-    slideshow        = nullptr;
-    imagewindow      = nullptr;
+    viewer           = nullptr;
     varwindow        = nullptr;
     diagnosticsList  = nullptr;
     projectFilesList = nullptr;
@@ -3421,7 +3478,8 @@ void SpartaGui::preferences()
         // only refresh the snapshot if the instance is still alive: closing it
         // above tears down the box/grid, so a re-render would just pop a
         // "no simulation box" warning right after changing a preference.
-        if (imagewindow && !instanceClosed) imagewindow->createImage();
+        if (viewer && viewer->snapshot() && !instanceClosed)
+            viewer->snapshot()->createImage();
         settings.beginGroup(Keys::GROUP_REFORMAT);
         textEdit->setReformatOnReturn(settings.value(Keys::RETURN, false).toBool());
         textEdit->setAutoComplete(settings.value(Keys::AUTOMATIC, true).toBool());

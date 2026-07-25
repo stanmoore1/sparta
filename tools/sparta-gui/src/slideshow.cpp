@@ -392,6 +392,7 @@ void SlideShow::addImage(const QString &filename, const QString &label)
             QString("Image %1 / %2 :").arg(current + 1, 3).arg(imagefiles.size(), 3));
         adjustWindowSize();
     }
+    emit contentChanged();
 }
 
 int SlideShow::addMovie(const QString &filename)

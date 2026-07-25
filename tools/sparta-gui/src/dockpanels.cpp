@@ -35,17 +35,14 @@ using ads::CDockWidget;
 namespace {
 
 // stable, unique object names -- required by CDockManager::saveState/restoreState
-const char *const PANEL_OBJECT_NAME[PanelManager::NPanels] = {"dockOutput", "dockCharts",
-                                                              "dockImage", "dockSlideShow",
-                                                              "dockVariables", "dockSweep",
-                                                              "dockHistory", "dockDiagnostics",
-                                                              "dockProjectFiles"};
-const char *const PANEL_TITLE[PanelManager::NPanels] = {"Output", "Charts", "Image",
-                                                        "Slide Show", "Variables",
-                                                        "Parameter Sweep", "Run History",
-                                                        "Diagnostics", "Project Files"};
+const char *const PANEL_OBJECT_NAME[PanelManager::NPanels] = {
+    "dockOutput", "dockCharts", "dockViewer",     "dockVariables",   "dockSweep",
+    "dockHistory", "dockDiagnostics", "dockProjectFiles"};
+const char *const PANEL_TITLE[PanelManager::NPanels] = {
+    "Output", "Charts", "Viewer",     "Variables",   "Parameter Sweep",
+    "Run History", "Diagnostics", "Project Files"};
 
-// Chart/Image/Slide Show host widgets manage their own scrolling/zooming and
+// The Charts and Viewer host widgets manage their own scrolling/zooming and
 // must not be wrapped in an extra QScrollArea; Output (QPlainTextEdit) and
 // Variables (a bare QLabel) get the default auto-detected behavior -- the
 // QLabel in particular gets a free scroll wrapper it would not otherwise have.
@@ -53,8 +50,7 @@ CDockWidget::eInsertMode insertModeFor(PanelManager::Panel panel)
 {
     switch (panel) {
         case PanelManager::Chart:
-        case PanelManager::Image:
-        case PanelManager::Slide:
+        case PanelManager::Viewer:
             return CDockWidget::ForceNoScrollArea;
         default:
             return CDockWidget::AutoScrollArea;
@@ -292,9 +288,10 @@ void PanelManager::applySplitterProportions()
     // otherwise give a freshly-opened left dock
     if (anyOpen({ProjectFiles}))
         splitArea(docks[ProjectFiles]->dockAreaWidget(), 18, Qt::Horizontal);
-    // editor column : charts/image column, horizontally 62:38
-    if (anyOpen({Chart, Image, Slide}))
-        splitArea(editorDock->dockAreaWidget(), 62, Qt::Horizontal);
+    // editor column : viewer column, horizontally. Visualize exists to give the
+    // pictures the window, so the editor keeps only enough to stay usable.
+    if (anyOpen({Chart, Viewer}))
+        splitArea(editorDock->dockAreaWidget(), mode == Visualize ? 25 : 62, Qt::Horizontal);
     // within the editor column: editor above, output/variables/tools below,
     // vertically 68:32. Output is docked under the editor rather than across
     // the window, so this no longer costs the right-hand column any height.
@@ -305,8 +302,8 @@ void PanelManager::applySplitterProportions()
     // correctly, whereas the chart spends a fixed ~75px on its two control rows
     // before the plot gets anything, so an uneven split costs the chart far
     // more than it gains the image.
-    if (anyOpen({Chart}) && anyOpen({Image, Slide}))
-        splitArea(docks[Image]->dockAreaWidget(), 50, Qt::Vertical);
+    if (anyOpen({Chart}) && anyOpen({Viewer}))
+        splitArea(docks[Viewer]->dockAreaWidget(), 50, Qt::Vertical);
 }
 
 void PanelManager::restoreAreaVisibility(Panel panel)
@@ -328,13 +325,11 @@ void PanelManager::restoreAreaVisibility(Panel panel)
 void PanelManager::applyDefaultLayout()
 {
     CDockAreaWidget *chartArea = dm->addDockWidget(ads::RightDockWidgetArea, docks[Chart]);
-    CDockAreaWidget *imageArea =
-        dm->addDockWidget(ads::BottomDockWidgetArea, docks[Image], chartArea);
-    dm->addDockWidgetTabToArea(docks[Slide], imageArea);
+    dm->addDockWidget(ads::BottomDockWidgetArea, docks[Viewer], chartArea);
     // Output belongs under the *editor*, not under the whole window. Without an
     // explicit target Qt-ADS docks it at the container root, where it spans the
     // full width and takes its height out of the right-hand column as well --
-    // leaving the Image panel too short for a render and cutting the snapshot
+    // leaving the Viewer panel too short for a render and cutting the snapshot
     // off halfway.
     CDockAreaWidget *logArea =
         dm->addDockWidget(ads::BottomDockWidgetArea, docks[Log], editorDock->dockAreaWidget());
@@ -368,9 +363,12 @@ const QList<PanelManager::Panel> MODE_PANELS[PanelManager::NModes] = {
     {PanelManager::ProjectFiles, PanelManager::Diagnostics},
     // Run: watching a run -- console output, live plots, and the variables
     {PanelManager::Log, PanelManager::Variables, PanelManager::Chart},
-    // Analyze: studying results -- plots and rendered snapshots, with the log
-    // kept for reference
-    {PanelManager::Chart, PanelManager::Image, PanelManager::Slide, PanelManager::Log},
+    // Analyze: studying results -- plots and pictures side by side, with the
+    // log kept for reference. Both at once is the point: a spike in a curve is
+    // read against what the flow looked like at that step.
+    {PanelManager::Chart, PanelManager::Viewer, PanelManager::Log},
+    // Visualize: the pictures, with the whole window given over to them
+    {PanelManager::Viewer, PanelManager::Log},
 };
 } // namespace
 
@@ -380,6 +378,7 @@ QString PanelManager::modeName(Mode mode)
         case Setup: return QStringLiteral("Setup");
         case RunMode: return QStringLiteral("Run");
         case Analyze: return QStringLiteral("Analyze");
+        case Visualize: return QStringLiteral("Visualize");
         default: return QString();
     }
 }
