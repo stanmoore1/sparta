@@ -67,6 +67,10 @@ class Update : protected Pointers {
   double surf_mom[3];    // momentum ordinary collisions gave to the surface
                          //   only accumulated for a growing surface, so the
                          //   ledger gas + surface + buried can be checked
+  double reflect_energy; // energy those reflections gave to the surface
+  double surf_energy;    // energy ordinary collisions gave to the surface
+                         //   the energy counterparts of the two above, so the
+                         //   same ledger can be closed for energy
 
                          // collision geometry of a growing surface, refreshed
                          //   every step by FixAblate from the corner point
@@ -75,6 +79,10 @@ class Update : protected Pointers {
   double **segpt;        // per cell, end points of the refreshed elements
   double **segnorm;      // and their outward normals
   double *segspeed;      // per cell, speed the front advances along them
+  double *segband;       // per cell, distance the refreshed front has moved
+                         //   since the last isosurface rebuild.  Measured, not
+                         //   extrapolated from segspeed, so it stays right
+                         //   when the refresh is held back (see FixAblate)
   int *nseg;             // per cell, # of refreshed elements, NULL if none
   int nsegcell;          // length of nseg
   bigint front_step0;    // timestep the surface was last rebuilt on

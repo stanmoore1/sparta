@@ -156,6 +156,15 @@ any instant the local patch of atoms a gas particle strikes is
 stationary, and any motion of those atoms is already represented by the
 "surf_collide"_surf_collide.html model.
 
+Collisions during the particle move are ordinary in every way, including
+"surf_react"_surf_react.html surface chemistry.  The reflections applied
+to already-enclosed particles when the isosurface is regenerated are the
+exception: they happen outside the particle move, where a reaction
+product has no trajectory to be released onto, so the
+"surf_collide"_surf_collide.html model is applied without the reaction
+model.  Those reflections are a small fraction of all surface collisions
+and are counted separately, as value (8) below.
+
 If a particle ends up somewhere the surface has closed over completely,
 so that there is no longer a surface element to reflect it from, it is
 buried, i.e. incorporated into the growing film.  This is what nearly
@@ -233,7 +242,8 @@ apply, so a particle merely passing near a thin feature is not affected.
 In Kokkos runs the refresh is not applied, because the Kokkos particle
 move is a separate implementation; enclosed particles are then handled
 when the surface is regenerated, which is correct but resolves the growth
-only once per {Nevery} steps.  In every case a smaller {Nevery} gives a
+only once per {Nevery} steps.  A warning is printed to say so.  In every
+case a smaller {Nevery} gives a
 more faithful answer, and an error is generated if the isosurface would
 move more than half a grid cell in a single regeneration; reduce {Nevery}
 or the deposition rate if this occurs.
@@ -441,7 +451,7 @@ and the entire surface contained within the ablated cell recedes.
 No information about this fix is written to "binary restart
 files"_restart.html.
 
-This fix computes a global scalar and a global vector of length 11.
+This fix computes a global scalar and a global vector of length 19.
 The global scalar is the current sum of unique corner point values
 across the entire grid (not counting duplicate values).  This sum
 assumes that corner point values are 0.0 on the boundary of the 2d or
@@ -454,20 +464,37 @@ up "inside" the newly ablated surface.  The latter quantity should be 0.
 A non-zero value indicates a corner case in the marching cubes or
 marching squares algorithm the developers still need to address.
 
-Values 3 through 11 are deposition diagnostics and are zero unless
+Values 3 through 19 are deposition diagnostics and are zero unless
 {mode} = deposit.  They are running totals over the whole run, so that
 what a growing surface removes from the gas can be checked against the
 gas totals.  They are (3) the # of particles buried by the advancing
 front, (4) their total mass, (5-7) their total momentum in x,y,z, (8)
 the # of particles pushed back into the flow after an isosurface
-regeneration enclosed them, and (9-11) the momentum in x,y,z those
-reflections transferred to the surface.
+regeneration enclosed them, (9-11) the momentum in x,y,z those
+reflections transferred to the surface, (12-14) the momentum in x,y,z
+ordinary surface collisions transferred to the surface, (15-17) the
+translational, rotational and vibrational energy the buried particles
+carried into the film, (18) the energy ordinary surface collisions
+transferred to the surface, and (19) the energy the reflections in value
+(8) transferred to it.
 
 In a closed domain with no inflow or outflow, the drop in particle count
 must exactly equal value (3): every particle a growing surface removes
 from the gas is one it buried.  Value (8) counts particles that were
 saved rather than deleted, and is expected to be non-zero; it grows with
 the deposition rate and with {Nevery}.
+
+Values 5-7, 9-14 and 15-19 exist so that the two conservation ledgers can
+be closed directly.  In a periodic domain, where no boundary can exchange
+with the gas and gas-gas collisions conserve internally, the surface is
+the only place gas momentum and energy can go, so
+
+  [ P_gas(end) - P_gas(0) ] + P_surf + P_buried + P_reflect  ==  0
+  [ E_gas(end) - E_gas(0) ] + E_surf + E_buried + E_reflect  ==  0 :pre
+
+both hold to round-off, with P_surf = values 12-14, P_buried = values 5-7,
+P_reflect = values 9-11, E_surf = value 18, E_buried = the sum of values
+15-17, and E_reflect = value 19.
 
 These values can be accessed by any command that uses global values
 from a fix as input.  See "Section 6.4"_Section_howto.html#howto_4 for

@@ -53,6 +53,7 @@ enum{UNKNOWN,OUTSIDE,INSIDE,OVERLAP};   // cell types, same as Grid
                           //   enough that its normal speed is meaningful
 #define SWEEP_FRAC 0.5    // max front advance per regeneration, in grid cells
 #define EPSSURF 1.0e-4    // push off a surf, same as Grid::point_outside_surfs()
+#define NDEPO 17          // # of deposition diagnostic counters
 
 #define INVOKED_PER_GRID 16
 #define DELTAGRID 1024            // must be bigger than split cells per cell
@@ -208,7 +209,7 @@ FixAblate::FixAblate(SPARTA *sparta, int narg, char **arg) :
 
   scalar_flag = 1;
   vector_flag = 1;
-  size_vector = 14;   // 0-1 ablation, 2-13 deposition diagnostics
+  size_vector = 19;   // 0-1 ablation, 2-18 deposition diagnostics
   global_freq = 1;
   sum_delta = 0.0;
   ndelete = 0;
@@ -221,11 +222,11 @@ FixAblate::FixAblate(SPARTA *sparta, int narg, char **arg) :
   max_advance = 0.0;
   cnow = cnext = NULL;
   segpt = segnorm = NULL;
-  segspeed = NULL;
+  segspeed = segband = NULL;
   nseg = NULL;
   maxsegcell = segstride = 0;
   depo_stamp = -1;
-  for (int i = 0; i < 12; i++) depo_all[i] = 0.0;
+  for (int i = 0; i < NDEPO; i++) depo_all[i] = 0.0;
   mvalues = NULL;
   tvalues = NULL;
   ncorner = size_per_grid_cols;
@@ -297,6 +298,7 @@ FixAblate::~FixAblate()
   memory->destroy(segpt);
   memory->destroy(segnorm);
   memory->destroy(segspeed);
+  memory->destroy(segband);
   memory->destroy(nseg);
 
   memory->destroy(mvalues);
@@ -455,6 +457,17 @@ void FixAblate::store_corners(int nx_caller, int ny_caller, int nz_caller,
   if (dim == 2) ms->mindist = mindist;
   else mc->mindist = mindist;
 
+  // for deposition, seed the previous-field snapshot with the field as it
+  //   stands now, so that the front has not moved until the first increment
+  // without this the snapshot is read before it is ever written, and the
+  //   refreshed collision geometry of the first interval is derived from
+  //   whatever the allocation happened to contain
+
+  if (mode == DEPOSIT)
+    for (int icell = 0; icell < nglocal; icell++)
+      for (int m = 0; m < ncorner; m++)
+        cvalues_prev[icell][m] = cvalues[icell][m];
+
   // create implicit surfaces
 
   create_surfs(1);
@@ -473,6 +486,18 @@ void FixAblate::init()
   if (mode == DEPOSIT && (multi_val_flag || multi_dec_flag))
     error->all(FLERR,"Fix ablate mode deposit does not yet support "
                "multivalue or multiple corner-point decrement modes");
+
+  // the KOKKOS particle move is a separate implementation and does not read
+  //   the refreshed collision geometry, so growth is resolved only when the
+  //   isosurface is rebuilt.  That is still accounted for -- the salvage and
+  //   burial path runs there too -- but it is coarser, so say so rather than
+  //   let a Kokkos run quietly differ from the same input without Kokkos
+
+  if (mode == DEPOSIT && sparta->kokkos && me == 0)
+    error->warning(FLERR,"Fix ablate mode deposit: the KOKKOS particle move "
+                   "does not use the per-step refreshed surface, so surface "
+                   "growth is resolved only every Nevery steps; use a smaller "
+                   "Nevery, or run without the KOKKOS package");
 
   // deposition is handled entirely in this fix, when the isosurface is
   //   regenerated, so it needs no support in the move loop and works the
@@ -880,11 +905,12 @@ void FixAblate::create_surfs(int outflag)
       // there is no surf left in the cell to reflect off, so the molecule
       //   is buried, i.e. incorporated into the film, with full accounting
       if (mode == DEPOSIT && cinfo[icell].type == INSIDE) {
-        if (salvage_to_neighbor(icell,i)) {
-          particles = particle->particles;
-          continue;
-        }
-        update->bury_particle(&particles[i]);
+        int salvaged = salvage_to_neighbor(icell,i);
+        particles = particle->particles;
+        if (salvaged > 0) continue;
+        // salvaged < 0 means the surface collision model absorbed the
+        //   molecule, which has already been accounted for as buried
+        if (salvaged == 0) update->bury_particle(&particles[i]);
         particles[i].flag = PDISCARD;
         ncount++;
       }
@@ -918,18 +944,24 @@ void FixAblate::create_surfs(int outflag)
     //   accretion, so the lattice atoms the molecule strikes are at rest
     // momentum given to the surface is recorded so nothing is unaccounted
 
-    if (!pflag && mode == DEPOSIT &&
-        (salvage_particle(icell,i) || salvage_to_neighbor(icell,i))) {
+    int salvaged = 0;
+    if (!pflag && mode == DEPOSIT) {
+      salvaged = salvage_particle(icell,i);
+      if (salvaged == 0) salvaged = salvage_to_neighbor(icell,i);
       particles = particle->particles;
-      particles[i].flag = PKEEP;
-      continue;
+      if (salvaged > 0) {
+        particles[i].flag = PKEEP;
+        continue;
+      }
     }
 
     // discard the particle if either test failed
     // for deposition, salvage failed too, so account for it as buried
+    // unless a surface collision model absorbed it during the attempt, in
+    //   which case it was already accounted for there
 
     if (!pflag) {
-      if (mode == DEPOSIT) update->bury_particle(&particles[i]);
+      if (mode == DEPOSIT && salvaged == 0) update->bury_particle(&particles[i]);
       particles[i].flag = PDISCARD;
       // DEBUG - print message about MC flags for cell of deleted particle
       /*
@@ -1271,7 +1303,15 @@ void FixAblate::increment()
      accretion, so the local patch of atoms the molecule strikes is at rest,
      and the collision is an ordinary thermal wall interaction
    momentum handed to the surface is accumulated so it is not lost
-   return 1 if the particle was salvaged, 0 if it must be buried instead
+   surface chemistry is deliberately NOT applied here.  This runs from a fix,
+     outside the move loop, and there is nowhere to put a reaction product:
+     it cannot be threaded back into a trajectory, and creating one would
+     reallocate the particle list underneath the loop that called us.  The
+     collision model alone is applied, which is the reflection this path
+     exists to perform.
+   return 1 if the particle was salvaged, 0 if it must be buried instead,
+     -1 if the collision model consumed the particle, in which case it has
+     already been accounted for and the caller must only discard it
 ------------------------------------------------------------------------- */
 
 int FixAblate::salvage_particle(int icell, int i)
@@ -1285,18 +1325,16 @@ int FixAblate::salvage_particle(int icell, int i)
 
   Particle::OnePart *p = &particle->particles[i];
   double *norm;
-  int isc,isr;
+  int isc;
 
   if (dim == 3) {
     Surf::Tri *tri = &surf->tris[minsurf];
     norm = tri->norm;
     isc = tri->isc;
-    isr = tri->isr;
   } else {
     Surf::Line *line = &surf->lines[minsurf];
     norm = line->norm;
     isc = line->isc;
-    isr = line->isr;
   }
 
   if (isc < 0) return 0;
@@ -1349,24 +1387,32 @@ int FixAblate::salvage_particle(int icell, int i)
   vold[1] = p->v[1];
   vold[2] = p->v[2];
 
+  // keep a copy of the molecule as it was, so that if the collision model
+  //   absorbs it the mass, momentum and energy it carried into the surface
+  //   are still the ones that get booked
+
+  Particle::OnePart porig = *p;
+
   double dtremain = 0.0;
   int reaction = 0;
-  Particle::OnePart *jp =
-    surf->sc[isc]->collide(p,dtremain,minsurf,norm,isr,reaction);
+  surf->sc[isc]->collide(p,dtremain,minsurf,norm,-1,reaction);
 
-  // surface chemistry destroyed the particle, let the caller bury it
+  // the collision model absorbed the particle, e.g. surf_collide vanish
+  // it went into the surface, so account for it as buried and tell the
+  //   caller to discard it rather than try to save it somewhere else
 
-  if (p == NULL) return 0;
-
-  // a chemistry product cannot be threaded back into the move loop here,
-  //   so decline the salvage and let the caller account for the particle
-
-  if (jp) return 0;
+  if (p == NULL) {
+    update->bury_particle(&porig);
+    return -1;
+  }
 
   update->nfrontreflect++;
   update->reflect_mom[0] += wmass * (vold[0] - p->v[0]);
   update->reflect_mom[1] += wmass * (vold[1] - p->v[1]);
   update->reflect_mom[2] += wmass * (vold[2] - p->v[2]);
+  update->reflect_energy +=
+    0.5*wmass*(MathExtra::lensq3(vold) - MathExtra::lensq3(p->v)) +
+    weight*(porig.erot - p->erot) + weight*(porig.evib - p->evib);
 
   return 1;
 }
@@ -1385,7 +1431,10 @@ int FixAblate::salvage_particle(int icell, int i)
    only owned cells are considered: pushing a particle into a ghost cell would
      mean migrating it to another proc from inside a fix.  A molecule whose
      only gas neighbor is off-proc is buried, as it was before.
-   return 1 if the particle was moved, 0 if it must be buried
+   as in salvage_particle(), the collision model is applied without surface
+     chemistry, since a reaction product has nowhere to go from here
+   return 1 if the particle was moved, 0 if it must be buried, -1 if the
+     collision model consumed it, already accounted, and it must be discarded
 ------------------------------------------------------------------------- */
 
 int FixAblate::salvage_to_neighbor(int icell, int i)
@@ -1446,6 +1495,8 @@ int FixAblate::salvage_to_neighbor(int icell, int i)
     xold[0] = p->x[0];
     xold[1] = p->x[1];
     xold[2] = p->x[2];
+    double erotold = p->erot;
+    double evibold = p->evib;
 
     p->x[0] = xtry[0];
     p->x[1] = xtry[1];
@@ -1463,11 +1514,20 @@ int FixAblate::salvage_to_neighbor(int icell, int i)
       norm[0] = norm[1] = norm[2] = 0.0;
       norm[d] = (f % 2 == 0) ? -1.0 : 1.0;
 
+      Particle::OnePart porig = *p;
+
       int reaction = 0;
       double dtremain = 0.0;
-      Particle::OnePart *jp = surf->sc[isc_default]->
-        collide(p,dtremain,-1,norm,isr_default,reaction);
-      if (p && !jp) done = 1;
+      surf->sc[isc_default]->collide(p,dtremain,-1,norm,-1,reaction);
+
+      if (p) done = 1;
+      else {
+
+        // the collision model absorbed the molecule into the film
+
+        update->bury_particle(&porig);
+        return -1;
+      }
 
     } else {
 
@@ -1478,6 +1538,7 @@ int FixAblate::salvage_to_neighbor(int icell, int i)
       //   that separates the two -- the right surface and the right normal.
 
       done = salvage_particle(kcell,i);
+      if (done < 0) return -1;
     }
 
     if (!done) {
@@ -1487,6 +1548,8 @@ int FixAblate::salvage_to_neighbor(int icell, int i)
       p->v[0] = vold[0];
       p->v[1] = vold[1];
       p->v[2] = vold[2];
+      p->erot = erotold;
+      p->evib = evibold;
       continue;
     }
 
@@ -1505,6 +1568,9 @@ int FixAblate::salvage_to_neighbor(int icell, int i)
       update->reflect_mom[0] += wmass * (vold[0] - p->v[0]);
       update->reflect_mom[1] += wmass * (vold[1] - p->v[1]);
       update->reflect_mom[2] += wmass * (vold[2] - p->v[2]);
+      update->reflect_energy +=
+        0.5*wmass*(MathExtra::lensq3(vold) - MathExtra::lensq3(p->v)) +
+        weight*(erotold - p->erot) + weight*(evibold - p->evib);
     }
 
     return 1;
@@ -1772,6 +1838,7 @@ void FixAblate::refresh_surfs()
     memory->grow(segpt,maxsegcell,segstride*3*dim,"ablate:segpt");
     memory->grow(segnorm,maxsegcell,segstride*3,"ablate:segnorm");
     memory->grow(segspeed,maxsegcell,"ablate:segspeed");
+    memory->grow(segband,maxsegcell,"ablate:segband");
     memory->grow(cnow,ncorner,"ablate:cnow");
     memory->grow(cnext,ncorner,"ablate:cnext");
   }
@@ -1779,6 +1846,7 @@ void FixAblate::refresh_surfs()
   for (int icell = 0; icell < nglocal; icell++) {
     nseg[icell] = 0;
     segspeed[icell] = 0.0;
+    segband[icell] = 0.0;
   }
 
   // one step of the interpolation, used to measure the front speed below
@@ -1815,6 +1883,15 @@ void FixAblate::refresh_surfs()
     //   in time, and to catch a particle the front overtakes from behind
 
     segspeed[icell] = edge_displacement(cnow,cnext) / update->dt;
+
+    // and how far it now stands ahead of the committed surface, which is how
+    //   far behind it a particle may be found and still be one the front has
+    //   overtaken since the rebuild
+    // measured between the two fields rather than taken as speed x elapsed
+    //   time, since f above is held back whenever advancing it further would
+    //   empty a cell of surface, and the two then disagree
+
+    segband[icell] = edge_displacement(cvalues[icell],cnow);
 
     int ns;
     if (dim == 2)
@@ -1875,6 +1952,7 @@ void FixAblate::refresh_surfs()
   update->segpt = segpt;
   update->segnorm = segnorm;
   update->segspeed = segspeed;
+  update->segband = segband;
   update->nseg = nseg;
   update->nsegcell = nglocal;
 }
@@ -2391,6 +2469,16 @@ int FixAblate::pack_grid_one(int icell, char *buf, int memflag)
     }
   }
 
+  // the previous-field snapshot has to travel with the cell it belongs to
+  // it is what the front speed and the refreshed collision geometry are
+  //   measured against, so leaving it behind on a rebalance would pair each
+  //   cell's field with some other cell's history
+
+  if (mode == DEPOSIT) {
+    if (memflag) memcpy(ptr,cvalues_prev[icell],ncorner*sizeof(double));
+    ptr += ncorner*sizeof(double);
+  }
+
   if (tvalues_flag) {
     if (memflag) {
       double *dbuf = (double *) ptr;
@@ -2434,6 +2522,11 @@ int FixAblate::pack_grid_one(int icell, char *buf, int memflag)
         }
       }
 
+      if (mode == DEPOSIT) {
+        if (memflag) memcpy(ptr,cvalues_prev[jcell],ncorner*sizeof(double));
+        ptr += ncorner*sizeof(double);
+      }
+
     }
   }
 
@@ -2461,6 +2554,11 @@ int FixAblate::unpack_grid_one(int icell, char *buf)
       memcpy(mvalues[icell][j],ptr,nmultiv*sizeof(double));
       ptr += nmultiv*sizeof(double);
     }
+  }
+
+  if (mode == DEPOSIT) {
+    memcpy(cvalues_prev[icell],ptr,ncorner*sizeof(double));
+    ptr += ncorner*sizeof(double);
   }
 
   if (tvalues_flag) {
@@ -2501,6 +2599,11 @@ int FixAblate::unpack_grid_one(int icell, char *buf)
         }
       }
 
+      if (mode == DEPOSIT) {
+        memcpy(cvalues_prev[jcell],ptr,ncorner*sizeof(double));
+        ptr += ncorner*sizeof(double);
+      }
+
     }
     nglocal += nsplit;
   }
@@ -2522,6 +2625,9 @@ void FixAblate::copy_grid_one(int icell, int jcell)
     for (int j = 0; j < ncorner; j++)
       memcpy(mvalues[jcell][j],mvalues[icell][j],nmultiv*sizeof(double));
   }
+
+  if (mode == DEPOSIT)
+    memcpy(cvalues_prev[jcell],cvalues_prev[icell],ncorner*sizeof(double));
 
   if (tvalues_flag) tvalues[jcell] = tvalues[icell];
 
@@ -2552,6 +2658,11 @@ void FixAblate::add_grid_one()
       for (int j = 0; j < nmultiv; j++)
         mvalues[nglocal][i][j] = 0.0;
   }
+
+  // an empty cell has an empty history, so the front has not moved in it
+
+  if (mode == DEPOSIT)
+    for (int i = 0; i < ncorner; i++) cvalues_prev[nglocal][i] = 0.0;
 
   if (tvalues_flag) tvalues[nglocal] = 0;
   ixyz[nglocal][0] = 0;
@@ -2662,6 +2773,7 @@ double FixAblate::compute_scalar()
    vector outputs
    1 = last ablation decrement
    2 = # of deleted inside particles at last ablation
+   3-19 = deposition diagnostics, see compute_vector() below and the doc page
 ------------------------------------------------------------------------- */
 
 double FixAblate::compute_vector(int i)
@@ -2679,7 +2791,7 @@ double FixAblate::compute_vector(int i)
   if (mode != DEPOSIT) return 0.0;
 
   if (depo_stamp != update->ntimestep) {
-    double one[12];
+    double one[NDEPO];
     one[0] = 1.0*update->nburied;
     one[1] = update->buried_mass;
     one[2] = update->buried_mom[0];
@@ -2692,11 +2804,21 @@ double FixAblate::compute_vector(int i)
     one[9] = update->surf_mom[0];
     one[10] = update->surf_mom[1];
     one[11] = update->surf_mom[2];
-    MPI_Allreduce(one,depo_all,12,MPI_DOUBLE,MPI_SUM,world);
+
+    // energy a buried molecule carried into the film, so that the energy
+    //   the gas loses to the surface can be audited the same way its mass
+    //   and momentum are
+
+    one[12] = update->buried_ke;
+    one[13] = update->buried_erot;
+    one[14] = update->buried_evib;
+    one[15] = update->surf_energy;
+    one[16] = update->reflect_energy;
+    MPI_Allreduce(one,depo_all,NDEPO,MPI_DOUBLE,MPI_SUM,world);
     depo_stamp = update->ntimestep;
   }
 
-  if (i >= 2 && i <= 13) return depo_all[i-2];
+  if (i >= 2 && i < 2+NDEPO) return depo_all[i-2];
 
   return 0.0;
 }

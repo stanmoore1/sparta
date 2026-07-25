@@ -113,11 +113,14 @@ class FixAblate : public Fix {
   double **segpt;          // refreshed geometry per cell: element end points
   double **segnorm;        // and their outward normals
   double *segspeed;        // speed the front advances along those normals
+  double *segband;         // how far the refreshed geometry stands ahead of
+                           //   the committed surface, i.e. the width of the
+                           //   band a particle may be found behind
   int *nseg;               // # of refreshed elements in each cell
   int maxsegcell;
   int segstride;           // max elements per cell
 
-  double depo_all[12];      // deposition counters summed over all procs
+  double depo_all[17];     // deposition counters summed over all procs
   bigint depo_stamp;       // timestep depo_all was last reduced on
 
   double *celldelta;       // per-cell delta from compute or fix source

@@ -205,6 +205,37 @@ def test_momentum(exe, rate, nevery, infile="in.test.momentum", label=""):
     return check(name, rel < 1e-5, "relative residual %.2e" % rel)
 
 
+def test_energy(exe, rate, nevery):
+    """In a periodic box the surface is the only place gas energy can go.
+
+    The companion to test_momentum.  E_gas is translational plus rotational
+    plus vibrational and the gas moves energy between those reservoirs on its
+    own, so this only closes if every mode is accounted for at the surface --
+    including for the molecules the film buries.
+    """
+    name = "energy (rate=%s nevery=%s)" % (rate, nevery)
+    rc, out = run(exe, "in.test.energy", {"RATE": rate, "NEVERY": nevery})
+    if rc != 0:
+        err = next((l for l in out.splitlines() if "ERROR" in l), "no stats")
+        return check(name, False, err.strip()[:90])
+
+    rows = stats_rows(out)
+    if len(rows) < 2:
+        return check(name, False, "no stats rows")
+    f, l = rows[0], rows[-1]
+
+    # cols: 0 step, 1 np, 2 ke, 3 erot, 4 evib, 5 surf, 6 reflect,
+    #       7 buried ke, 8 buried erot, 9 buried evib, 10 nburied
+    egas0 = f[2] + f[3] + f[4]
+    egasN = l[2] + l[3] + l[4]
+    ebur = (l[7] - f[7]) + (l[8] - f[8]) + (l[9] - f[9])
+    total = (egasN - egas0) + (l[5] - f[5]) + (l[6] - f[6]) + ebur
+
+    rel = abs(total) / max(abs(egas0), abs(egasN))
+    return check(name, rel < 1e-5,
+                 "relative residual %.2e, %d buried" % (rel, l[10]))
+
+
 def test_no_wall_work(exe):
     """A growing surface must not do work on the gas.
 
@@ -299,6 +330,10 @@ def main():
     # the same ledger in 3d, which uses marching cubes and the triangle
     # intersection rather than marching squares and the line one
     ok &= test_momentum(exe, 0.5, 5, "in.test.momentum.3d", label=" 3d")
+    # energy: the same ledger for translational + rotational + vibrational,
+    # at a rate that buries nothing and one that buries plenty
+    for rate, nevery in ((0.2, 1), (0.6, 1)):
+        ok &= test_energy(exe, rate, nevery)
     # the front velocity places the collision but must not enter the rebound
     ok &= test_no_wall_work(exe)
     ok &= test_guard(exe)

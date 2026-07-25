@@ -105,8 +105,9 @@ Update::Update(SPARTA *sparta) : Pointers(sparta)
   nfrontreflect = 0;
   reflect_mom[0] = reflect_mom[1] = reflect_mom[2] = 0.0;
   surf_mom[0] = surf_mom[1] = surf_mom[2] = 0.0;
+  reflect_energy = surf_energy = 0.0;
   segpt = segnorm = NULL;
-  segspeed = NULL;
+  segspeed = segband = NULL;
   nseg = NULL;
   nsegcell = 0;
   front_step0 = -1;
@@ -413,7 +414,7 @@ template < int DIM, int SURF, int OPT, int MOVING > void Update::move()
 {
   bool hitflag;
   int m,icell,icell_original,nmask,outface,bflag,nflag,pflag,itmp;
-  int side,minside,minsurf,nsurf,cflag,isurf,exclude,stuck_iterate;
+  int side,minside,minsurf,nsurf,cflag,isurf,exclude,excluderef,stuck_iterate;
   int pstart,pstop,entryexit,any_entryexit,reaction;
   surfint *csurfs;
   cellint *neigh;
@@ -449,8 +450,8 @@ template < int DIM, int SURF, int OPT, int MOVING > void Update::move()
   //   when the collision is tallied
 
   double *rp1,*rp2,*rp3,*rnorm,minrnorm[3];
-  double rspeed,rstart[3],rend[3];
-  int nrefresh,irefresh,minrefresh = 0,overtaken,oside;
+  double rspeed,rband,rstart[3],rend[3];
+  int nrefresh,minirefresh = -1,minrefresh = 0,overtaken,oside;
   double oparam,opt[3],oend[3];
   if (DIM < 3) opt[2] = oend[2] = 0.0;
 
@@ -527,6 +528,7 @@ template < int DIM, int SURF, int OPT, int MOVING > void Update::move()
       x = particles[i].x;
       v = particles[i].v;
       exclude = -1;
+      excluderef = -1;
 
       // apply moveperturb() to PKEEP and PINSERT since are computing xnew
       // not to PENTRY,PEXIT since are just re-computing xnew of sender
@@ -852,15 +854,17 @@ template < int DIM, int SURF, int OPT, int MOVING > void Update::move()
             //   surface bookkeeping is unchanged
 
             nrefresh = 0;
-            rspeed = 0.0;
+            rspeed = rband = 0.0;
             if (MOVING && nseg && icell < nsegcell) {
               nrefresh = nseg[icell];
-              if (nrefresh) rspeed = segspeed[icell];
+              if (nrefresh) {
+                rspeed = segspeed[icell];
+                rband = segband[icell];
+              }
             }
 
             for (m = 0; m < (nrefresh ? nrefresh : nsurf); m++) {
               if (MOVING && nrefresh) {
-                irefresh = m;
                 isurf = csurfs[MIN(m,nsurf-1)];
                 if (DIM == 3) {
                   rp1 = &segpt[icell][9*m];
@@ -873,10 +877,21 @@ template < int DIM, int SURF, int OPT, int MOVING > void Update::move()
                 rnorm = &segnorm[icell][3*m];
               } else isurf = csurfs[m];
 
-              // the refreshed elements stand in for the cell's own surfs, so
-              //   the just-hit surf is skipped the same way
+              // skip the element the particle has just bounced off, so it
+              //   cannot immediately re-collide with it at param = 0
+              // a refreshed element is identified by its index within the
+              //   cell, NOT by the surf it is tallied against.  There can be
+              //   more refreshed elements than committed surfs, in which case
+              //   several of them stand in for the same surf; excluding by
+              //   surf would then skip elements the particle never touched
+              //   and let it pass straight through them.
+              // a chemistry product enters carrying only a surf index (see
+              //   the PSURF flag), so fall back to the surf test for it
 
-              if (DIM > 1) {
+              if (MOVING && nrefresh) {
+                if (m == excluderef) continue;
+                if (DIM > 1 && excluderef < 0 && isurf == exclude) continue;
+              } else if (DIM > 1) {
                 if (isurf == exclude) continue;
               }
 
@@ -894,13 +909,18 @@ template < int DIM, int SURF, int OPT, int MOVING > void Update::move()
               //   particle is behind THIS element and within reach of the
               //   front.  Using the element rather than its infinite plane is
               //   what keeps a particle beside the element from being caught.
+              // that distance is measured by FixAblate from the two fields
+              //   themselves, rather than extrapolated from the front speed:
+              //   the refresh is held back whenever advancing it further
+              //   would empty a cell of surface, and an extrapolated band
+              //   would then reach past the front and drag in particles that
+              //   are properly behind the committed surface
 
               overtaken = 0;
-              if (MOVING && nrefresh && rspeed > 0.0) {
-                double band = rspeed * (ntimestep - front_step0) * dt;
-                oend[0] = x[0] + rnorm[0]*band;
-                oend[1] = x[1] + rnorm[1]*band;
-                if (DIM == 3) oend[2] = x[2] + rnorm[2]*band;
+              if (MOVING && nrefresh && rband > 0.0) {
+                oend[0] = x[0] + rnorm[0]*rband;
+                oend[1] = x[1] + rnorm[1]*rband;
+                if (DIM == 3) oend[2] = x[2] + rnorm[2]*rband;
                 if (DIM == 3)
                   overtaken = Geometry::
                     line_tri_intersect(x,oend,rp1,rp2,rp3,rnorm,
@@ -942,7 +962,7 @@ template < int DIM, int SURF, int OPT, int MOVING > void Update::move()
               } else if (MOVING && nrefresh && DIM == 1) {
                 hitflag = Geometry::
                   axi_line_intersect(dtsurf,x,v,outface,lo,hi,rp1,rp2,
-                                     rnorm,exclude == isurf,xc,vc,param,side);
+                                     rnorm,m == excluderef,xc,vc,param,side);
               } else if (MOVING && nrefresh) {
 
                 // the front keeps advancing along its own normal while the
@@ -1091,6 +1111,7 @@ template < int DIM, int SURF, int OPT, int MOVING > void Update::move()
                 cflag = 1;
                 if (MOVING) {
                   minrefresh = nrefresh ? 1 : 0;
+                  minirefresh = nrefresh ? m : -1;
                   if (nrefresh) {
                     minrnorm[0] = rnorm[0];
                     minrnorm[1] = rnorm[1];
@@ -1189,6 +1210,8 @@ template < int DIM, int SURF, int OPT, int MOVING > void Update::move()
                 surf_mom[0] += w0*m0*iorig.v[0];
                 surf_mom[1] += w0*m0*iorig.v[1];
                 surf_mom[2] += w0*m0*iorig.v[2];
+                surf_energy += w0*(0.5*m0*MathExtra::lensq3(iorig.v) +
+                                   iorig.erot + iorig.evib);
                 if (ipart) {
                   double m1 = sp[ipart->ispecies].mass;
                   double w1 = 1.0;
@@ -1196,6 +1219,8 @@ template < int DIM, int SURF, int OPT, int MOVING > void Update::move()
                   surf_mom[0] -= w1*m1*ipart->v[0];
                   surf_mom[1] -= w1*m1*ipart->v[1];
                   surf_mom[2] -= w1*m1*ipart->v[2];
+                  surf_energy -= w1*(0.5*m1*MathExtra::lensq3(ipart->v) +
+                                     ipart->erot + ipart->evib);
                 }
                 if (jpart) {
                   double m2 = sp[jpart->ispecies].mass;
@@ -1204,6 +1229,8 @@ template < int DIM, int SURF, int OPT, int MOVING > void Update::move()
                   surf_mom[0] -= w2*m2*jpart->v[0];
                   surf_mom[1] -= w2*m2*jpart->v[1];
                   surf_mom[2] -= w2*m2*jpart->v[2];
+                  surf_energy -= w2*(0.5*m2*MathExtra::lensq3(jpart->v) +
+                                     jpart->erot + jpart->evib);
                 }
               }
 
@@ -1219,6 +1246,7 @@ template < int DIM, int SURF, int OPT, int MOVING > void Update::move()
               if (DIM != 2) xnew[2] = x[2] + dtremain*v[2];
 
               exclude = minsurf;
+              if (MOVING) excluderef = minirefresh;
               nscollide_one++;
 
 #ifdef MOVE_DEBUG
@@ -1317,6 +1345,7 @@ template < int DIM, int SURF, int OPT, int MOVING > void Update::move()
 
         dtremain *= 1.0-frac;
         exclude = -1;
+        excluderef = -1;
 
         x[0] += frac * (xnew[0]-x[0]);
         x[1] += frac * (xnew[1]-x[1]);

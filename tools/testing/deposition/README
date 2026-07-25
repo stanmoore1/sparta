@@ -112,6 +112,19 @@ in.test.momentum.3d
   The same ledger in three dimensions, which exercises marching cubes and the
   triangle intersection rather than marching squares and the line one.
 
+in.test.energy
+  The energy counterpart of in.test.momentum, in the same periodic box:
+
+      [ E_gas(end) - E_gas(0) ] + E_surf + E_buried + E_reflect  ==  0
+
+  E_gas is translational plus rotational plus vibrational, the species is N2
+  and VSS collisions are on, so the gas moves energy between those three
+  reservoirs on its own and the ledger only closes if every mode is accounted
+  for where it meets the surface.  The wall is diffuse at 1000 K against a gas
+  starting far from it, so each collision transfers a real amount.  Run at a
+  rate that buries nothing and at one that buries about 125 molecules; the
+  residual is round-off, about 1e-8 relative, in both.
+
 in.test.wall
   A depositing surface advances by accretion, not by motion of its material,
   so the atoms a molecule strikes are at rest: the front velocity decides
@@ -138,10 +151,16 @@ in.test.ablate
 What the counters mean
 ----------------------
 
-  f_ablate      summed corner point values, i.e. how much material exists
-  f_ablate[3]   nburied, particles incorporated into the film
-  f_ablate[4]   buried mass
-  f_ablate[8]   nfrontreflect, salvage reflections after a regeneration
+  f_ablate       summed corner point values, i.e. how much material exists
+  f_ablate[3]    nburied, particles incorporated into the film
+  f_ablate[4]    buried mass
+  f_ablate[5-7]  buried momentum
+  f_ablate[8]    nfrontreflect, salvage reflections after a regeneration
+  f_ablate[9-11] momentum those reflections gave the surface
+  f_ablate[12-14] momentum ordinary collisions gave the surface
+  f_ablate[15-17] buried translational, rotational, vibrational energy
+  f_ablate[18]   energy ordinary collisions gave the surface
+  f_ablate[19]   energy those reflections gave the surface
 
 nfrontreflect counts particles the regenerated isosurface enclosed and that
 were pushed back into the flow.  Every one of those would have been deleted
