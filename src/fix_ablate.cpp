@@ -47,13 +47,14 @@ enum{CVALUE,CDELTA,NVERT};
 enum{ABLATE,DEPOSIT};     // surface recedes (ablate) or grows (deposit)
 enum{CORNER,DISTANCE};    // source units: corner point value or length/time
 enum{UNKNOWN,OUTSIDE,INSIDE,OVERLAP};   // cell types, same as Grid
+enum{KEEP,DISCARD,MIGRATE};   // fate of a particle the new isosurface encloses
 
 #define MINSPREAD 1.0     // min corner value variation across a cell, in the
                           //   0-255 scale, for the isosurface to be localized
                           //   enough that its normal speed is meaningful
 #define SWEEP_FRAC 0.5    // max front advance per regeneration, in grid cells
 #define EPSSURF 1.0e-4    // push off a surf, same as Grid::point_outside_surfs()
-#define NDEPO 17          // # of deposition diagnostic counters
+#define NDEPO 18          // # of deposition diagnostic counters
 
 #define INVOKED_PER_GRID 16
 #define DELTAGRID 1024            // must be bigger than split cells per cell
@@ -209,7 +210,7 @@ FixAblate::FixAblate(SPARTA *sparta, int narg, char **arg) :
 
   scalar_flag = 1;
   vector_flag = 1;
-  size_vector = 19;   // 0-1 ablation, 2-18 deposition diagnostics
+  size_vector = 20;   // 0-1 ablation, 2-19 deposition diagnostics
   global_freq = 1;
   sum_delta = 0.0;
   ndelete = 0;
@@ -227,6 +228,8 @@ FixAblate::FixAblate(SPARTA *sparta, int narg, char **arg) :
   maxsegcell = segstride = 0;
   depo_stamp = -1;
   for (int i = 0; i < NDEPO; i++) depo_all[i] = 0.0;
+  dlist = NULL;
+  maxdlist = 0;
   mvalues = NULL;
   tvalues = NULL;
   ncorner = size_per_grid_cols;
@@ -300,6 +303,7 @@ FixAblate::~FixAblate()
   memory->destroy(segspeed);
   memory->destroy(segband);
   memory->destroy(nseg);
+  memory->destroy(dlist);
 
   memory->destroy(mvalues);
   memory->destroy(tvalues);
@@ -882,135 +886,238 @@ void FixAblate::create_surfs(int outflag)
   //         after ablation
   // similar code as in fix grid/check
 
-  Grid::ChildCell *cells = grid->cells;
-  Grid::ChildInfo *cinfo = grid->cinfo;
-  Grid::SplitInfo *sinfo = grid->sinfo;
   Particle::OnePart *particles = particle->particles;
   int pnlocal = particle->nlocal;
 
-  int ncount;
-  int icell,splitcell,subcell,pflag;
-  double *x;
-  double xcell[3];
+  int ncount = 0;
+  int nlist = 0;
 
-  ncount = 0;
+  // dlist collects every particle leaving this proc's list: the ones buried,
+  //   and for deposition the ones pushed across a face into a cell owned by
+  //   another proc.  Built in ascending order, as the compaction requires.
+
+  grow_dlist(pnlocal);
+
   for (int i = 0; i < pnlocal; i++) {
     particles[i].flag = PKEEP;
-    icell = particles[i].icell;
-    if (cells[icell].nsurf == 0) {
-      // a cell with no surfs is entirely OUTSIDE or entirely INSIDE
-      // for deposition a formerly-open cell can become fully INSIDE in one
-      //   regeneration, and the surf-straddle test below is skipped for
-      //   no-surf cells, so those particles must be handled here
-      // there is no surf left in the cell to reflect off, so the molecule
-      //   is buried, i.e. incorporated into the film, with full accounting
-      if (mode == DEPOSIT && cinfo[icell].type == INSIDE) {
-        int salvaged = salvage_to_neighbor(icell,i);
-        particles = particle->particles;
-        if (salvaged > 0) continue;
-        // salvaged < 0 means the surface collision model absorbed the
-        //   molecule, which has already been accounted for as buried
-        if (salvaged == 0) update->bury_particle(&particles[i]);
-        particles[i].flag = PDISCARD;
-        ncount++;
-      }
+    int status = resolve_engulfed(i);
+    particles = particle->particles;
+    if (status == KEEP) continue;
+    if (status == MIGRATE) {
+      dlist[nlist++] = i;
       continue;
     }
-
-    x = particles[i].x;
-
-    // check that particle is outside surfs
-    // if no xcell found, cannot check
-
-    pflag = grid->point_outside_surfs(icell,xcell);
-    if (!pflag) continue;
-    pflag = grid->outside_surfs(icell,x,xcell);
-
-    // check that particle is in correct split subcell
-
-    if (pflag && cells[icell].nsplit <= 0) {
-      splitcell = sinfo[cells[icell].isplit].icell;
-      if (dim == 2) subcell = update->split2d(splitcell,x);
-      else subcell = update->split3d(splitcell,x);
-      if (subcell != icell) pflag = 0;
-    }
-
-    // for deposition, try to salvage the particle by reflecting it off the
-    //   surf that now separates it from the flow, instead of deleting it
-    // the move loop advances the front every step and normally reflects a
-    //   particle before it can be overtaken, so this is only a safety net
-    //   for the residual jump when the isosurface is regenerated
-    // reflect against a stationary wall: a growing surface advances by
-    //   accretion, so the lattice atoms the molecule strikes are at rest
-    // momentum given to the surface is recorded so nothing is unaccounted
-
-    int salvaged = 0;
-    if (!pflag && mode == DEPOSIT) {
-      salvaged = salvage_particle(icell,i);
-      if (salvaged == 0) salvaged = salvage_to_neighbor(icell,i);
-      particles = particle->particles;
-      if (salvaged > 0) {
-        particles[i].flag = PKEEP;
-        continue;
-      }
-    }
-
-    // discard the particle if either test failed
-    // for deposition, salvage failed too, so account for it as buried
-    // unless a surface collision model absorbed it during the attempt, in
-    //   which case it was already accounted for there
-
-    if (!pflag) {
-      if (mode == DEPOSIT && salvaged == 0) update->bury_particle(&particles[i]);
-      particles[i].flag = PDISCARD;
-      // DEBUG - print message about MC flags for cell of deleted particle
-      /*
-      printf("INSIDE PART: me %d id %d coords %g %g %g "
-             "cellID %d celltype %d nsplit %d MCflags old %d %d %d %d "
-             "MCflags now %d %d %d %d corners %g %g %g %g %g %g %g %g\n",
-             comm->me,particles[i].id,x[0],x[1],x[2],
-             cells[mcell].id,cinfo[mcell].type,cells[mcell].nsplit,
-             mcflags_old[mcell][0],
-             mcflags_old[mcell][1],
-             mcflags_old[mcell][2],
-             mcflags_old[mcell][3],
-             mcflags[mcell][0],
-             mcflags[mcell][1],
-             mcflags[mcell][2],
-             mcflags[mcell][3],
-             cvalues[mcell][0],
-             cvalues[mcell][1],
-             cvalues[mcell][2],
-             cvalues[mcell][3],
-             cvalues[mcell][4],
-             cvalues[mcell][5],
-             cvalues[mcell][6],
-             cvalues[mcell][7]);
-      */
-      ncount++;
-    }
+    particles[i].flag = PDISCARD;
+    dlist[nlist++] = i;
+    ncount++;
   }
 
   memory->destroy(mcflags_old);
 
-  // compress out the deleted particles
-  // NOTE: if end up keeping this section, need logic for custom particle vectors
-  //       see Particle::compress_rebalance()
+  if (mode != DEPOSIT) {
 
-  int nbytes = sizeof(Particle::OnePart);
+    // compress out the deleted particles
+    // NOTE: if end up keeping this section, need logic for custom particle vectors
+    //       see Particle::compress_rebalance()
 
-  int i = 0;
-  while (i < pnlocal) {
-    if (particles[i].flag == PDISCARD) {
-      memcpy(&particles[i],&particles[pnlocal-1],nbytes);
-      pnlocal--;
-    } else i++;
+    int nbytes = sizeof(Particle::OnePart);
+
+    int i = 0;
+    while (i < pnlocal) {
+      if (particles[i].flag == PDISCARD) {
+        memcpy(&particles[i],&particles[pnlocal-1],nbytes);
+        pnlocal--;
+      } else i++;
+    }
+    particle->nlocal = pnlocal;
+
+  } else {
+
+    // one call both sends the molecules pushed across a proc boundary and
+    //   compresses out the buried ones, exactly as the move loop uses it
+    // it also carries any custom particle attributes, which the hand-rolled
+    //   compaction above does not
+
+    int nstart = comm->migrate_particles(nlist,dlist);
+    particles = particle->particles;
+
+    // now adjudicate what arrived.  The sending proc could not tell whether
+    //   its neighbor's cell held gas at that point, so it pushed the molecule
+    //   over optimistically; this is the owner deciding.
+
+    nlist = 0;
+    grow_dlist(particle->nlocal - nstart);
+
+    Grid::ChildCell *cells = grid->cells;
+
+    for (int i = nstart; i < particle->nlocal; i++) {
+      particles[i].flag = PKEEP;
+
+      // a split cell owns no particles, its sub cells do.  The sender could
+      //   not resolve that: the ghost cell it saw carried no split info.
+
+      int icell = particles[i].icell;
+      if (cells[icell].nsplit > 1) {
+        if (dim == 2) particles[i].icell = update->split2d(icell,particles[i].x);
+        else particles[i].icell = update->split3d(icell,particles[i].x);
+      }
+
+      int status = resolve_arrived(i);
+      particles = particle->particles;
+      if (status == KEEP) continue;
+      particles[i].flag = PDISCARD;
+      dlist[nlist++] = i;
+      ncount++;
+    }
+
+    if (nlist) particle->compress_migrate(nlist,dlist);
   }
 
   MPI_Allreduce(&ncount,&ndelete,1,MPI_INT,MPI_SUM,world);
 
-  particle->nlocal = pnlocal;
   particle->sorted = 0;
+}
+
+/* ----------------------------------------------------------------------
+   decide what becomes of particle I now that the isosurface was regenerated
+   return KEEP    = in the flow, or was put back into it
+          DISCARD = buried, already accounted for, caller must discard it
+          MIGRATE = pushed into a ghost cell, caller must migrate it
+------------------------------------------------------------------------- */
+
+int FixAblate::resolve_engulfed(int i)
+{
+  Grid::ChildCell *cells = grid->cells;
+  Grid::ChildInfo *cinfo = grid->cinfo;
+  Grid::SplitInfo *sinfo = grid->sinfo;
+  Particle::OnePart *particles = particle->particles;
+
+  int splitcell,subcell,pflag;
+  double xcell[3];
+
+  int icell = particles[i].icell;
+
+  if (cells[icell].nsurf == 0) {
+
+    // a cell with no surfs is entirely OUTSIDE or entirely INSIDE
+    // for deposition a formerly-open cell can become fully INSIDE in one
+    //   regeneration, and the surf-straddle test below is skipped for
+    //   no-surf cells, so those particles must be handled here
+    // there is no surf left in the cell to reflect off, so the molecule
+    //   is buried, i.e. incorporated into the film, with full accounting
+
+    if (mode != DEPOSIT || cinfo[icell].type != INSIDE) return KEEP;
+
+    int salvaged = salvage_to_neighbor(icell,i);
+    if (salvaged == 0) {
+      salvaged = salvage_to_ghost(icell,i);
+      if (salvaged > 0) return MIGRATE;
+    }
+    if (salvaged > 0) return KEEP;
+
+    // salvaged < 0 means the surface collision model absorbed the
+    //   molecule, which has already been accounted for as buried
+
+    if (salvaged == 0) update->bury_particle(&particle->particles[i]);
+    return DISCARD;
+  }
+
+  double *x = particles[i].x;
+
+  // check that particle is outside surfs
+  // if no xcell found, cannot check
+
+  pflag = grid->point_outside_surfs(icell,xcell);
+  if (!pflag) return KEEP;
+  pflag = grid->outside_surfs(icell,x,xcell);
+
+  // check that particle is in correct split subcell
+
+  if (pflag && cells[icell].nsplit <= 0) {
+    splitcell = sinfo[cells[icell].isplit].icell;
+    if (dim == 2) subcell = update->split2d(splitcell,x);
+    else subcell = update->split3d(splitcell,x);
+    if (subcell != icell) pflag = 0;
+  }
+
+  if (pflag) return KEEP;
+
+  // for deposition, try to salvage the particle by reflecting it off the
+  //   surf that now separates it from the flow, instead of deleting it
+  // the move loop advances the front every step and normally reflects a
+  //   particle before it can be overtaken, so this is only a safety net
+  //   for the residual jump when the isosurface is regenerated
+  // reflect against a stationary wall: a growing surface advances by
+  //   accretion, so the lattice atoms the molecule strikes are at rest
+  // momentum given to the surface is recorded so nothing is unaccounted
+
+  if (mode != DEPOSIT) return DISCARD;
+
+  int salvaged = salvage_particle(icell,i);
+  if (salvaged == 0) salvaged = salvage_to_neighbor(icell,i);
+  if (salvaged == 0) {
+    salvaged = salvage_to_ghost(icell,i);
+    if (salvaged > 0) return MIGRATE;
+  }
+  if (salvaged > 0) return KEEP;
+
+  // salvage failed too, so account for the molecule as buried, unless a
+  //   surface collision model absorbed it during the attempt, in which case
+  //   it was already accounted for there
+
+  if (salvaged == 0) update->bury_particle(&particle->particles[i]);
+  return DISCARD;
+}
+
+/* ----------------------------------------------------------------------
+   decide what becomes of particle I, which another proc pushed across a face
+     into a cell this proc owns because it had nowhere to put it
+   the sender already gave the molecule its one interaction with the closing
+     film, so the only question here is whether there is a legal place for it:
+     landing in the flow it stays exactly as it is, and landing in solid it is
+     moved out to the surface that separates it from the flow, with no second
+     collision.
+   it is deliberately not offered the neighbor hop or another proc hop.  A
+     molecule crosses at most one proc boundary and gets exactly the chances
+     it would have had with both cells on one proc -- which is the whole point
+     of doing this, so it must not quietly get more.
+   return KEEP or DISCARD
+------------------------------------------------------------------------- */
+
+int FixAblate::resolve_arrived(int i)
+{
+  Grid::ChildCell *cells = grid->cells;
+  Grid::ChildInfo *cinfo = grid->cinfo;
+  Particle::OnePart *particles = particle->particles;
+
+  int icell = particles[i].icell;
+
+  if (cells[icell].nsurf == 0) {
+    if (cinfo[icell].type != INSIDE) return KEEP;
+    update->bury_particle(&particles[i]);
+    return DISCARD;
+  }
+
+  double xcell[3];
+  if (grid->point_outside_surfs(icell,xcell) &&
+      grid->outside_surfs(icell,particles[i].x,xcell)) return KEEP;
+
+  if (salvage_particle(icell,i,0) > 0) return KEEP;
+
+  update->bury_particle(&particle->particles[i]);
+  return DISCARD;
+}
+
+/* ----------------------------------------------------------------------
+   insure dlist is long enough for N particles
+------------------------------------------------------------------------- */
+
+void FixAblate::grow_dlist(int n)
+{
+  if (n <= maxdlist) return;
+  maxdlist = n;
+  memory->destroy(dlist);
+  memory->create(dlist,maxdlist,"ablate:dlist");
 }
 
 /* ----------------------------------------------------------------------
@@ -1309,12 +1416,16 @@ void FixAblate::increment()
      reallocate the particle list underneath the loop that called us.  The
      collision model alone is applied, which is the reflection this path
      exists to perform.
+   collideflag = 0 to only move the molecule out to the surface, without a
+     collision.  Used for one that arrived from another proc, which already
+     had its one interaction with the film before it was sent, and must not
+     be given a second one just because it landed in solid on this side.
    return 1 if the particle was salvaged, 0 if it must be buried instead,
      -1 if the collision model consumed the particle, in which case it has
      already been accounted for and the caller must only discard it
 ------------------------------------------------------------------------- */
 
-int FixAblate::salvage_particle(int icell, int i)
+int FixAblate::salvage_particle(int icell, int i, int collideflag)
 {
   int minsurf;
   double xcell[3],minxc[3];
@@ -1374,6 +1485,11 @@ int FixAblate::salvage_particle(int icell, int i)
   p->x[0] = xtry[0];
   p->x[1] = xtry[1];
   if (dim == 3) p->x[2] = xtry[2];
+
+  // moving it into the flow was the whole job for a molecule that arrived
+  //   from another proc: it was reflected off the film before it was sent
+
+  if (!collideflag) return 1;
 
   // record the momentum the collision transfers to the surface
 
@@ -1572,6 +1688,133 @@ int FixAblate::salvage_to_neighbor(int icell, int i)
         0.5*wmass*(MathExtra::lensq3(vold) - MathExtra::lensq3(p->v)) +
         weight*(erotold - p->erot) + weight*(evibold - p->evib);
     }
+
+    return 1;
+  }
+
+  return 0;
+}
+
+/* ----------------------------------------------------------------------
+   the film has closed over particle I in cell ICELL and no cell this proc
+     owns can take it, but a face neighbor owned by another proc might
+   this proc cannot decide that for itself.  The test for being in the flow
+     needs the corner flags and the gas-side reference point of the cell, and
+     those exist only for owned cells; a ghost cell carries its surfs but not
+     whether a given point is inside them.  So push the molecule across the
+     face and let the owner adjudicate, which is exactly what create_surfs()
+     does with everything that arrives.
+   reflect off the closing film first, taking its normal to be the face the
+     molecule leaves through, the same as for an owned neighbor.  If the owner
+     finds it still enclosed and buries it after all, both events are real and
+     both are booked: the reflection recorded the momentum and energy the film
+     took, and the burial records what the molecule had left.
+   without this a molecule whose only gas neighbor happens to lie on another
+     proc is buried, so how many burials a run reports depends on how the grid
+     was divided up.  With it the outcome is the same either way.
+   return 1 if it was pushed across, with p->icell set to the cell it goes to,
+     0 if no neighbor would take it, -1 if the collision model consumed it
+------------------------------------------------------------------------- */
+
+int FixAblate::salvage_to_ghost(int icell, int i)
+{
+  Grid::ChildCell *cells = grid->cells;
+  Grid::ChildInfo *cinfo = grid->cinfo;
+
+  if (isc_default < 0) return 0;
+
+  static const int fdim[6] = {0,0,1,1,2,2};
+  int nface = (dim == 2) ? 4 : 6;
+  int ntotal = grid->nlocal + grid->nghost;
+
+  Particle::OnePart *p = &particle->particles[i];
+
+  double eps = EPSSURF * (dim == 3 ?
+                          MIN(MIN(xyzsize[0],xyzsize[1]),xyzsize[2]) :
+                          MIN(xyzsize[0],xyzsize[1]));
+
+  for (int f = 0; f < nface; f++) {
+    if (grid->neigh_decode(cells[icell].nmask,f) != NCHILD) continue;
+
+    int jcell = cells[icell].neigh[f];
+    if (jcell < grid->nlocal || jcell >= ntotal) continue;  // owned, or none
+
+    // an "empty" ghost cell, nsurf < 0, is the normal case here: implicit
+    //   surf elements never leave the cell that generated them, so a proc is
+    //   never sent its neighbors' surfs and every ghost arrives empty.  That
+    //   is precisely why the owner has to decide.  Its proc and ilocal are
+    //   still valid, which is all migrating the molecule needs -- the move
+    //   loop hands particles to empty ghost cells for the same reason.
+
+    // step just past the shared face, keeping the other coords
+
+    double xtry[3];
+    xtry[0] = p->x[0];
+    xtry[1] = p->x[1];
+    xtry[2] = p->x[2];
+
+    int d = fdim[f];
+    if (f % 2 == 0) xtry[d] = cells[jcell].hi[d] - eps;   // neighbor below
+    else xtry[d] = cells[jcell].lo[d] + eps;              // neighbor above
+    for (int k = 0; k < dim; k++) {
+      if (xtry[k] < cells[jcell].lo[k]) xtry[k] = cells[jcell].lo[k] + eps;
+      else if (xtry[k] > cells[jcell].hi[k]) xtry[k] = cells[jcell].hi[k] - eps;
+    }
+
+    // a split cell owns no particles, its sub cells do, but an empty ghost
+    //   carries no split info to resolve that with.  Leave it to the owner,
+    //   which does it on arrival.
+
+    // reflect off the film it is leaving, whose local normal here is that
+    //   face; the wall is stationary, as everywhere else in deposition
+    // if the owner turns out to have no room either and buries the molecule
+    //   after all, this reflection still happened and both are booked: it
+    //   took the change in momentum and energy, and the burial takes what is
+    //   left, so together they are the whole of what the molecule carried
+
+    double norm[3];
+    norm[0] = norm[1] = norm[2] = 0.0;
+    norm[d] = (f % 2 == 0) ? -1.0 : 1.0;
+
+    double vold[3];
+    vold[0] = p->v[0];
+    vold[1] = p->v[1];
+    vold[2] = p->v[2];
+    double erotold = p->erot;
+    double evibold = p->evib;
+
+    Particle::OnePart porig = *p;
+
+    int reaction = 0;
+    double dtremain = 0.0;
+    surf->sc[isc_default]->collide(p,dtremain,-1,norm,-1,reaction);
+
+    if (p == NULL) {
+
+      // the collision model absorbed the molecule into the film
+
+      update->bury_particle(&porig);
+      return -1;
+    }
+
+    p->x[0] = xtry[0];
+    p->x[1] = xtry[1];
+    if (dim == 3) p->x[2] = xtry[2];
+    p->icell = jcell;
+    cinfo[icell].count--;
+
+    double mass = particle->species[p->ispecies].mass;
+    double weight = 1.0;
+    if (grid->cellweightflag) weight = p->weight;
+    double wmass = weight * mass;
+    update->nfrontreflect++;
+    update->nfrontmigrate++;
+    update->reflect_mom[0] += wmass * (vold[0] - p->v[0]);
+    update->reflect_mom[1] += wmass * (vold[1] - p->v[1]);
+    update->reflect_mom[2] += wmass * (vold[2] - p->v[2]);
+    update->reflect_energy +=
+      0.5*wmass*(MathExtra::lensq3(vold) - MathExtra::lensq3(p->v)) +
+      weight*(erotold - p->erot) + weight*(evibold - p->evib);
 
     return 1;
   }
@@ -2773,7 +3016,7 @@ double FixAblate::compute_scalar()
    vector outputs
    1 = last ablation decrement
    2 = # of deleted inside particles at last ablation
-   3-19 = deposition diagnostics, see compute_vector() below and the doc page
+   3-20 = deposition diagnostics, see compute_vector() below and the doc page
 ------------------------------------------------------------------------- */
 
 double FixAblate::compute_vector(int i)
@@ -2814,6 +3057,7 @@ double FixAblate::compute_vector(int i)
     one[14] = update->buried_evib;
     one[15] = update->surf_energy;
     one[16] = update->reflect_energy;
+    one[17] = 1.0*update->nfrontmigrate;
     MPI_Allreduce(one,depo_all,NDEPO,MPI_DOUBLE,MPI_SUM,world);
     depo_stamp = update->ntimestep;
   }

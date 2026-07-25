@@ -63,6 +63,8 @@ class Update : protected Pointers {
   double buried_mom[3];  // running momentum buried
   double buried_erot,buried_evib,buried_ke;   // running energy buried
   bigint nfrontreflect;  // running count of reflections back into the flow
+  bigint nfrontmigrate;  // of those, the ones pushed across a proc boundary
+                         //   because the only gas next door was off-proc
   double reflect_mom[3]; // momentum those reflections gave to the surface
   double surf_mom[3];    // momentum ordinary collisions gave to the surface
                          //   only accumulated for a growing surface, so the

@@ -103,6 +103,7 @@ Update::Update(SPARTA *sparta) : Pointers(sparta)
   buried_mom[0] = buried_mom[1] = buried_mom[2] = 0.0;
   buried_erot = buried_evib = buried_ke = 0.0;
   nfrontreflect = 0;
+  nfrontmigrate = 0;
   reflect_mom[0] = reflect_mom[1] = reflect_mom[2] = 0.0;
   surf_mom[0] = surf_mom[1] = surf_mom[2] = 0.0;
   reflect_energy = surf_energy = 0.0;
@@ -887,9 +888,13 @@ template < int DIM, int SURF, int OPT, int MOVING > void Update::move()
               //   and let it pass straight through them.
               // a chemistry product enters carrying only a surf index (see
               //   the PSURF flag), so fall back to the surf test for it
+              // never skipped for axisymmetric, as in the static case: the
+              //   particle path there is an arc in the r-z plane and can
+              //   legitimately meet the same element twice, so that case is
+              //   handed to axi_line_intersect() to resolve instead
 
               if (MOVING && nrefresh) {
-                if (m == excluderef) continue;
+                if (DIM > 1 && m == excluderef) continue;
                 if (DIM > 1 && excluderef < 0 && isurf == exclude) continue;
               } else if (DIM > 1) {
                 if (isurf == exclude) continue;

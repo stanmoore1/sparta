@@ -20,26 +20,29 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 RANKS = 1
 
-# stats_style columns: step np f_ablate f_ablate[3] f_ablate[4] f_ablate[8]
+# stats_style columns:
+#   step np f_ablate f_ablate[3] f_ablate[4] f_ablate[8] f_ablate[20]
 #   f_ablate     = summed corner point values, i.e. how much material exists
 #   f_ablate[3]  = nburied        (particles incorporated into the film)
 #   f_ablate[4]  = buried mass
 #   f_ablate[8]  = nfrontreflect  (salvage reflections after a regeneration)
+#   f_ablate[20] = nfrontmigrate  (of those, pushed across a proc boundary)
 
 MASS_N = 2.325e-26      # from air.species, used to check the mass bookkeeping
 
 
-def run(exe, infile, variables=None):
+def run(exe, infile, variables=None, ranks=None, cwd=None):
     cmd = [exe, "-in", infile]
     for k, v in (variables or {}).items():
         cmd += ["-var", k, str(v)]
-    if RANKS > 1:
-        cmd = ["mpirun", "-n", str(RANKS), "--oversubscribe", "--bind-to", "none"] + cmd
+    n = RANKS if ranks is None else ranks
+    if n > 1:
+        cmd = ["mpirun", "-n", str(n), "--oversubscribe", "--bind-to", "none"] + cmd
     env = dict(os.environ)
     # OpenMPI refuses to run as root unless told otherwise
     env.setdefault("OMPI_ALLOW_RUN_AS_ROOT", "1")
     env.setdefault("OMPI_ALLOW_RUN_AS_ROOT_CONFIRM", "1")
-    p = subprocess.run(cmd, cwd=HERE, capture_output=True, text=True, env=env)
+    p = subprocess.run(cmd, cwd=cwd or HERE, capture_output=True, text=True, env=env)
     return p.returncode, p.stdout + p.stderr
 
 
@@ -205,6 +208,91 @@ def test_momentum(exe, rate, nevery, infile="in.test.momentum", label=""):
     return check(name, rel < 1e-5, "relative residual %.2e" % rel)
 
 
+def test_crossproc(exe):
+    """A molecule must not be buried just because the gas next door is off-proc.
+
+    salvage_to_neighbor can only push a molecule into a cell this proc owns.
+    Left at that, one whose only gas neighbor happens to sit on another proc
+    is buried, so the burial count grows with the number of procs -- an
+    artifact of how the grid was divided up, not physics.  Those molecules are
+    now handed to the owner, which decides.
+
+    Asserts the mechanism is live and inert in serial, and that the burial
+    count no longer walks away from the serial answer as ranks are added.
+    Before this, in.test.fill went 10574 / 10592 / 10649 / 10753 / 10891 at
+    1 / 2 / 4 / 8 / 16 ranks -- monotone, and still climbing at 16.
+    """
+    ok = True
+
+    rc, out = run(exe, "in.test.fill", {"RATE": 1.0}, ranks=1)
+    if rc != 0:
+        return check("cross-proc salvage", False, "serial run failed")
+    rows = stats_rows(out)
+    serial_buried, serial_migrated = rows[-1][3], rows[-1][6]
+
+    ok &= check("cross-proc salvage : inert on one rank", serial_migrated == 0,
+                "%d pushed across a boundary" % serial_migrated)
+
+    if RANKS < 2:
+        print("      (run with --ranks 2 or more to exercise the rest)")
+        return ok
+
+    rc, out = run(exe, "in.test.fill", {"RATE": 1.0})
+    if rc != 0:
+        return check("cross-proc salvage", False, "parallel run failed")
+    rows = stats_rows(out)
+    par_buried, par_migrated = rows[-1][3], rows[-1][6]
+
+    ok &= check("cross-proc salvage : live on %d ranks" % RANKS,
+                par_migrated > 0,
+                "%d molecules handed to another proc" % par_migrated)
+
+    # the intrinsic seed-to-seed spread of this count is about 2%, measured by
+    # varying the seed in serial, so anything inside that is noise
+    rel = abs(par_buried - serial_buried) / serial_buried
+    ok &= check("cross-proc salvage : burials match the serial answer",
+                rel < 0.02,
+                "%d on %d ranks vs %d on one, %.2f%%"
+                % (par_buried, RANKS, serial_buried, 100 * rel))
+    return ok
+
+
+def test_balance(exe):
+    """Repartitioning the grid must carry everything fix ablate keeps per cell.
+
+    fix balance moves cells between procs while the film grows.  The snapshot
+    of the corner point field that the front speed and the per-step refreshed
+    collision geometry are measured against has to move with its cell; left
+    behind, each cell is paired with another cell's history.
+
+    Also the only test that exercises pack_grid_one / unpack_grid_one at all,
+    where a byte-count mismatch would corrupt every per-cell array at once.
+    """
+    label = "grid repartitioned under a growing film"
+    rc, out = run(exe, "in.test.balance")
+    if rc != 0:
+        err = next((l for l in out.splitlines() if "ERROR" in l), "no stats")
+        return check(label, False, err.strip()[:100])
+
+    rows = stats_rows(out)
+    if len(rows) < 2:
+        return check(label, False, "no stats rows")
+
+    lost = rows[0][1] - rows[-1][1]
+    nburied, buried_mass, nreflect = rows[-1][3], rows[-1][4], rows[-1][5]
+
+    ok = check(label + " : lost == buried", lost == nburied,
+               "lost=%d buried=%d" % (lost, nburied))
+    expect = nburied * MASS_N
+    tol = max(1e-12 * max(expect, 1e-30), 1e-30)
+    ok &= check(label + " : buried mass ledger",
+                abs(buried_mass - expect) <= tol,
+                "got=%g expect=%g" % (buried_mass, expect))
+    print("      (ran under fix grid/check error, %d reflections salvaged)"
+          % nreflect)
+    return ok
+
+
 def test_energy(exe, rate, nevery):
     """In a periodic box the surface is the only place gas energy can go.
 
@@ -272,6 +360,39 @@ def test_no_wall_work(exe):
     return ok
 
 
+AXIDIR = os.path.join(HERE, "../../../examples/explicit2implicit")
+
+
+def test_axisymmetric(exe):
+    """Deposition onto an axisymmetric implicit surface.
+
+    Axisymmetric runs use the refreshed geometry but solve the intersection
+    with the surface-of-revolution test, because the particle path there is an
+    arc in the r-z plane rather than a straight line.  That test resolves a
+    re-hit of the element the particle just bounced off itself, so unlike 2d
+    and 3d that element must NOT be skipped -- getting this wrong lets a
+    molecule walk through the surface, which is what this catches.
+
+    The example runs under fix grid/check with the error setting, so
+    completing at all is the assertion.
+    """
+    label = "axisymmetric deposition"
+    rc, out = run(exe, "in.deposit.axi.spherecone", cwd=AXIDIR)
+    if rc != 0:
+        err = next((l for l in out.splitlines() if "ERROR" in l), "run failed")
+        return check(label, False, err.strip()[:110])
+
+    rows = stats_rows(out)
+    if len(rows) < 2:
+        return check(label, False, "no stats rows")
+
+    # cols: 0 step, 1 cpu, 2 np, 3 nscoll, 4 nscheck, 5 material, 6 nburied,
+    #       7 nfrontreflect
+    return check(label, True,
+                 "ran clean under fix grid/check, %d buried, %d salvaged"
+                 % (rows[-1][6], rows[-1][7]))
+
+
 def test_guard(exe):
     """A front that outruns its collision lists must be refused."""
     rc, out = run(exe, "in.test.guard")
@@ -334,6 +455,12 @@ def main():
     # at a rate that buries nothing and one that buries plenty
     for rate, nevery in ((0.2, 1), (0.6, 1)):
         ok &= test_energy(exe, rate, nevery)
+    # a molecule must not be buried because the gas next door is off-proc
+    ok &= test_crossproc(exe)
+    # everything fix ablate keeps per cell must move when the cell does
+    ok &= test_balance(exe)
+    # axisymmetry: the refreshed geometry with the surface-of-revolution test
+    ok &= test_axisymmetric(exe)
     # the front velocity places the collision but must not enter the rebound
     ok &= test_no_wall_work(exe)
     ok &= test_guard(exe)

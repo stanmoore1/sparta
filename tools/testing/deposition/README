@@ -18,6 +18,9 @@ Optionally point at a different binary, or run in parallel:
   python3 run_tests.py --exe /path/to/spa_serial
   python3 run_tests.py --exe ../../../src/spa_mpi --ranks 4
 
+Some of what a growing surface has to get right only exists in parallel, so
+run it on more than one rank as well as on one.  Verified at 1, 4 and 16.
+
 Tests
 -----
 
@@ -161,6 +164,7 @@ What the counters mean
   f_ablate[15-17] buried translational, rotational, vibrational energy
   f_ablate[18]   energy ordinary collisions gave the surface
   f_ablate[19]   energy those reflections gave the surface
+  f_ablate[20]   of the [8] reflections, those pushed onto another proc
 
 nfrontreflect counts particles the regenerated isosurface enclosed and that
 were pushed back into the flow.  Every one of those would have been deleted
@@ -168,10 +172,49 @@ by a delete-on-engulf implementation, so the count is a direct measure of what
 this feature saves.  It grows with the growth rate and with Nevery, since a
 larger jump per regeneration leaves more residual work for the safety net.
 
+in.test.crossproc (part of run_tests.py, no separate input)
+  salvage_to_neighbor can only push a squeezed molecule into a cell this proc
+  owns.  A molecule whose only gas neighbor happens to sit on another proc was
+  therefore buried, making the burial count depend on how the grid was divided
+  up rather than on the physics.  Before this was fixed, in.test.fill reported
+
+      ranks     1      2      4      8     16
+      buried  10574  10592  10649  10753  10891
+
+  -- monotone, and still climbing at 16 ranks.  Molecules are now reflected
+  off the face and handed to the owner, which decides.  The same sweep gives
+
+      ranks     1      2      4      8     16
+      buried  10574  10563  10531  10472  10485
+
+  The residual is below the noise: varying only the random seed in serial
+  gives 10543 to 10761 for the same run, a spread of 218, so the 106 left
+  across 1 to 16 ranks is not distinguishable from run-to-run variation.
+
+  The test asserts the mechanism is inert on one rank, live on more than one,
+  and that the burial count stays within 2% of the serial answer.
+
+in.test.balance
+  The same conservation identity with fix balance repartitioning the grid
+  every 10 steps while the film grows.  Everything fix ablate keeps per cell
+  has to move with the cell -- in particular the snapshot of the corner point
+  field that the front speed and the per-step refreshed geometry are measured
+  against.  This is also the only test that exercises pack_grid_one and
+  unpack_grid_one, where a byte-count mismatch would corrupt every per-cell
+  array at once.  With the snapshot left behind, the refresh degrades to
+  nonsense for the steps after each repartition and the run needs about 16%
+  more salvage reflections (5198 vs 4487) to make up for it.
+
+axisymmetric deposition (runs examples/explicit2implicit/in.deposit.axi.spherecone)
+  Axisymmetric runs use the refreshed geometry but solve the intersection with
+  the surface-of-revolution test, since the particle path there is an arc in
+  the r-z plane.  That test resolves a re-hit of the element the particle just
+  bounced off itself, so unlike 2d and 3d that element must NOT be skipped
+  first.  Skipping it lets a molecule walk through the surface; fix grid/check
+  with the error setting catches it.
+
 Not covered here
 ----------------
 
-  - axisymmetry; see examples/explicit2implicit/in.deposit.axi.spherecone,
-    which runs under fix grid/check with the error setting
   - Kokkos, whose particle move is a separate implementation and does not
     read the refreshed geometry, so growth is resolved once per Nevery there

@@ -1,0 +1,65 @@
+# Deposition with the grid repartitioned underneath it
+#
+# fix balance moves grid cells between procs while the surface is growing.
+# Everything fix ablate keeps per cell has to move with the cell, in
+# particular the snapshot of the corner point field the front speed and the
+# per-step refreshed collision geometry are measured against.  If that
+# snapshot is left behind, each cell is paired with some other cell's history
+# and the refreshed surface is derived from nonsense: the front speed guard
+# fires on rates that are actually fine, and particles are tested against a
+# surface that is not where the real one is.
+#
+# So this is in.test.conserve with the grid repartitioned every 20 steps.  It
+# runs under fix grid/check with the error setting, so completing at all means
+# no particle was ever left inside the growing surface, and the same
+# conservation identity must still hold:
+#
+#   np(0) - np(t)  ==  nburied
+#
+# Meaningful on more than one rank; on one rank fix balance has nothing to do.
+
+variable            RATE index 0.5
+variable            NEVERY index 1
+variable            SEED index 12345
+
+seed                ${SEED}
+dimension           2
+global              gridcut 0.0 comm/sort yes
+
+boundary            r r p
+
+create_box          0 150 0 150 -0.5 0.5
+create_grid         150 150 1
+balance_grid        rcb cell
+
+global              nrho 1.0 fnum 0.01
+
+species             air.species N
+mixture             air N
+
+region              inner block 25.5 124.5 25.5 124.5 INF INF
+group               inner grid region inner one
+
+fix                 ablate ablate inner ${NEVERY} ${RATE} uniform 1 mode deposit
+
+global              surfs implicit
+read_isurf          inner 100 100 1 ../../../examples/ablation/binary.101x101 180.5 ablate
+
+surf_collide        1 diffuse 300.0 1.0
+surf_modify         all collide 1
+
+timestep            0.0001
+
+create_particles    air n 200000
+
+# repartition while the film grows, so every per-cell quantity fix ablate
+# holds has to migrate with its cell
+
+fix                 bal balance 10 1.0 rcb part
+
+fix                 check grid/check 1 error
+
+stats               50
+stats_style         step np f_ablate f_ablate[3] f_ablate[4] f_ablate[8] f_ablate[20]
+
+run                 200

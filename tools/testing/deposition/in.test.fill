@@ -60,6 +60,6 @@ create_particles    air n 200000
 fix                 check grid/check 1 error
 
 stats               50
-stats_style         step np f_ablate f_ablate[3] f_ablate[4] f_ablate[8]
+stats_style         step np f_ablate f_ablate[3] f_ablate[4] f_ablate[8] f_ablate[20]
 
 run                 200

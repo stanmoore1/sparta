@@ -120,8 +120,12 @@ class FixAblate : public Fix {
   int maxsegcell;
   int segstride;           // max elements per cell
 
-  double depo_all[17];     // deposition counters summed over all procs
+  double depo_all[18];     // deposition counters summed over all procs
   bigint depo_stamp;       // timestep depo_all was last reduced on
+
+  int *dlist;              // particles leaving my list when surfs are rebuilt:
+                           //   buried, or pushed onto another proc
+  int maxdlist;
 
   double *celldelta;       // per-cell delta from compute or fix source
   double **cdelta;         // per-corner point deltas
@@ -169,8 +173,12 @@ class FixAblate : public Fix {
   void check_group_boundary();
   double grad_mag(int);
 
-  int salvage_particle(int, int);
+  int salvage_particle(int, int, int collideflag = 1);
   int salvage_to_neighbor(int, int);
+  int salvage_to_ghost(int, int);
+  int resolve_engulfed(int);
+  int resolve_arrived(int);
+  void grow_dlist(int);
   void decrement_multiv();
   void decrement_multid_inside();
   void decrement_multid_outside();

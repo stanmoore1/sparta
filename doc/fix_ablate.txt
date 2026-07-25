@@ -179,6 +179,16 @@ face and reflected off the film there instead of being buried.  What
 remains buried is the molecule that really was closed in on every side,
 which is a physical outcome: a growing film does trap gas.
 
+That neighboring cell may be owned by another processor, which cannot be
+asked about it: a processor is never sent its neighbors' implicit surf
+elements, since such an element never leaves the cell that generated it.
+The molecule is therefore reflected off the face and handed to the owner,
+which decides whether there was room for it and buries it if there was
+not.  It crosses at most one processor boundary and gets exactly the
+chances it would have had with both cells on one processor, so how many
+molecules a run buries does not depend on how the grid was divided up.
+Value (20) below counts them.
+
 Whether a molecule escapes is decided by one ratio: its thermal speed
 divided by the speed of the front.  That is how many times it can cross
 a cell while the front closes one, i.e. how many chances it gets to find
@@ -451,7 +461,7 @@ and the entire surface contained within the ablated cell recedes.
 No information about this fix is written to "binary restart
 files"_restart.html.
 
-This fix computes a global scalar and a global vector of length 19.
+This fix computes a global scalar and a global vector of length 20.
 The global scalar is the current sum of unique corner point values
 across the entire grid (not counting duplicate values).  This sum
 assumes that corner point values are 0.0 on the boundary of the 2d or
@@ -464,7 +474,7 @@ up "inside" the newly ablated surface.  The latter quantity should be 0.
 A non-zero value indicates a corner case in the marching cubes or
 marching squares algorithm the developers still need to address.
 
-Values 3 through 19 are deposition diagnostics and are zero unless
+Values 3 through 20 are deposition diagnostics and are zero unless
 {mode} = deposit.  They are running totals over the whole run, so that
 what a growing surface removes from the gas can be checked against the
 gas totals.  They are (3) the # of particles buried by the advancing
@@ -475,8 +485,9 @@ reflections transferred to the surface, (12-14) the momentum in x,y,z
 ordinary surface collisions transferred to the surface, (15-17) the
 translational, rotational and vibrational energy the buried particles
 carried into the film, (18) the energy ordinary surface collisions
-transferred to the surface, and (19) the energy the reflections in value
-(8) transferred to it.
+transferred to the surface, (19) the energy the reflections in value (8)
+transferred to it, and (20) how many of the value (8) reflections pushed
+the molecule onto another processor.
 
 In a closed domain with no inflow or outflow, the drop in particle count
 must exactly equal value (3): every particle a growing surface removes
