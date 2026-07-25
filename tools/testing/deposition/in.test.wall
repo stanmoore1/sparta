@@ -1,0 +1,72 @@
+# Deposition: the growing wall must not do work on the gas
+#
+# A depositing surface advances by accretion, not by motion of its material:
+# at any instant the patch of atoms a molecule strikes is a stationary piece
+# of lattice, and an instant later a new layer of stationary atoms sits in
+# front of it.  So the front velocity decides WHEN and WHERE a collision
+# happens, but the collision itself is an ordinary stationary-wall event and
+# the front velocity must not appear in the reflected velocity.
+#
+# That is a testable claim.  A wall physically translating at speed s is a
+# piston: every rebound adds 2s to the normal velocity and the gas heats at a
+# rate set by s.  An accreting wall does not.
+#
+# The sharp test uses a SPECULAR wall in a closed periodic box.  Specular
+# reflection off a stationary plane preserves each particle's speed exactly,
+# so the gas temperature cannot change no matter how many times the front
+# catches a particle.  Off a moving plane it would change immediately.  Run
+# over a range of RATE: with WALL = specular the temperature must be bit
+# identical to the RATE = 0 case for every rate at which nothing is buried.
+#
+# WALL = diffuse is the softer version of the same check, and shows the
+# competing effect that makes it softer: a fully accommodating wall is a
+# thermostat, and at high growth rates a large fraction of the gas is freshly
+# reflected at any instant.  Reflected molecules are drawn flux weighted, so
+# they are hotter than the bulk, and the measured temperature drifts up a
+# little with growth rate for reasons that have nothing to do with the front
+# velocity.  The specular case has no such confounder.
+
+variable            RATE index 0.1
+variable            NEVERY index 1
+variable            WALL index specular
+
+seed                12345
+dimension           2
+global              gridcut 0.0 comm/sort yes
+
+boundary            p p p
+
+create_box          0 150 0 150 -0.5 0.5
+create_grid         150 150 1
+balance_grid        rcb cell
+
+global              nrho 1.0 fnum 0.01
+
+species             air.species N
+mixture             air N temp 300.0 vstream 0.0 0.0 0.0
+
+region              inner block 25.5 124.5 25.5 124.5 INF INF
+group               inner grid region inner one
+
+fix                 ablate ablate inner ${NEVERY} ${RATE} uniform 1 mode deposit
+
+global              surfs implicit
+read_isurf          inner 100 100 1 ../../../examples/ablation/binary.101x101 &
+                    180.5 ablate
+
+if "${WALL} == diffuse" then "surf_collide 1 diffuse 300.0 1.0" &
+                     else "surf_collide 1 specular"
+surf_modify         all collide 1
+
+timestep            0.0001
+
+create_particles    air n 200000
+
+compute             TEMP temp
+
+fix                 check grid/check 1 error
+
+stats               100
+stats_style         step np c_TEMP nscoll f_ablate[3] f_ablate[8]
+
+run                 400

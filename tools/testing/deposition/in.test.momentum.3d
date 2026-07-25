@@ -1,0 +1,57 @@
+# Deposition momentum conservation test, 3d
+#
+# Same closed ledger as in.test.momentum, in three dimensions: a growing
+# surface in a fully periodic box, so the surface is the only place gas
+# momentum can go and
+#
+#   [ P_gas(end) - P_gas(0) ] + P_surf + P_buried + P_reflect  ==  0
+#
+# must hold to round-off.  Three dimensions exercises marching cubes rather
+# than marching squares, and the triangle intersection rather than the line
+# one, in both the every-step refresh and the move loop.
+
+variable            RATE index 0.5
+variable            NEVERY index 5
+
+seed                12345
+dimension           3
+global              gridcut 0.0 comm/sort yes
+
+boundary            p p p
+
+create_box          0 40 0 40 0 40
+create_grid         40 40 40 block * * *
+
+region              inner block 10.5 29.5 10.5 29.5 10.5 29.5
+group               inner grid region inner one
+balance_grid        rcb cell
+
+global              nrho 1.0 fnum 0.02
+
+species             air.species N
+mixture             air N
+
+fix                 ablate ablate inner ${NEVERY} ${RATE} uniform 1 mode deposit
+
+global              surfs implicit
+read_isurf          inner 20 20 20 ../../../examples/ablation/binary.21x21x21 &
+                    127.5 ablate
+
+surf_collide        1 diffuse 300.0 1.0
+surf_modify         all collide 1
+
+timestep            0.0002
+
+create_particles    air n 100000 twopass
+
+compute             MOM reduce sum vx vy vz
+
+fix                 check grid/check 1 error
+
+stats               25
+stats_style         step np c_MOM[1] c_MOM[2] c_MOM[3] &
+                    f_ablate[12] f_ablate[13] f_ablate[14] &
+                    f_ablate[5] f_ablate[6] f_ablate[7] &
+                    f_ablate[9] f_ablate[10] f_ablate[11]
+
+run                 100

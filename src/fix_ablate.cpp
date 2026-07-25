@@ -219,8 +219,9 @@ FixAblate::FixAblate(SPARTA *sparta, int narg, char **arg) :
   cvalues_prev = NULL;
   sfront_cell = NULL;
   max_advance = 0.0;
-  cnow = NULL;
+  cnow = cnext = NULL;
   segpt = segnorm = NULL;
+  segspeed = NULL;
   nseg = NULL;
   maxsegcell = segstride = 0;
   depo_stamp = -1;
@@ -292,8 +293,10 @@ FixAblate::~FixAblate()
   memory->destroy(cvalues_prev);
   memory->destroy(sfront_cell);
   memory->destroy(cnow);
+  memory->destroy(cnext);
   memory->destroy(segpt);
   memory->destroy(segnorm);
+  memory->destroy(segspeed);
   memory->destroy(nseg);
 
   memory->destroy(mvalues);
@@ -1378,22 +1381,34 @@ void FixAblate::front_speed()
 
   for (int icell = 0; icell < nglocal; icell++) sfront_cell[icell] = 0.0;
 
-  // measure how far the isosurface actually moved in each cell, by tracking
-  //   where it crosses the cell edges before and after the increment
-  // Marching Squares/Cubes place a vertex on an edge by linear interpolation
-  //   to thresh, so the crossing point is exactly reproducible here
-  //
-  // this is deliberately NOT the level set form s = (dc/dt)/|grad c|.  That
-  //   form divides by a gradient which goes to zero wherever the corner field
-  //   is nearly flat, so neighboring cells can get front speeds that differ by
-  //   orders of magnitude.  Since each surf element is advanced along its own
-  //   normal, the advanced front then tears apart at the cell boundary and
-  //   particles stream through the gap without ever being tested.
-  // an edge is shared by the neighboring cells that meet on it, so a
-  //   displacement measured this way is common to all of them and the
-  //   advanced front stays continuous.  It is also bounded by the cell size
-  //   by construction, so it cannot blow up.
+  for (int icell = 0; icell < nglocal; icell++) {
+    if (!(cinfo[icell].mask & groupbit)) continue;
+    if (cells[icell].nsplit <= 0) continue;
+    sfront_cell[icell] =
+      edge_displacement(cvalues_prev[icell],cvalues[icell]);
+  }
+}
 
+/* ----------------------------------------------------------------------
+   how far the isosurface moved between two corner point fields of one cell
+   measured by tracking where it crosses the cell edges before and after
+   Marching Squares/Cubes place a vertex on an edge by linear interpolation
+     to thresh, so the crossing point is exactly reproducible here
+   this is deliberately NOT the level set form s = (dc/dt)/|grad c|.  That
+     form divides by a gradient which goes to zero wherever the corner field
+     is nearly flat, so neighboring cells can get front speeds that differ by
+     orders of magnitude.  Since each surf element is advanced along its own
+     normal, the advanced front then tears apart at the cell boundary and
+     particles stream through the gap without ever being tested.
+   an edge is shared by the neighboring cells that meet on it, so a
+     displacement measured this way is common to all of them and the advanced
+     front stays continuous.  It is also bounded by the cell size by
+     construction, so it cannot blow up.
+   returns 0.0 if the surface does not cross this cell in the first field
+------------------------------------------------------------------------- */
+
+double FixAblate::edge_displacement(double *cold, double *cnew)
+{
   // cell edges as corner index pairs, x fastest then y then z
   // 2d uses the first 4, 3d all 12
 
@@ -1406,56 +1421,47 @@ void FixAblate::front_speed()
 
   int nedge = (dim == 2) ? 4 : 12;
 
-  for (int icell = 0; icell < nglocal; icell++) {
-    if (!(cinfo[icell].mask & groupbit)) continue;
-    if (cells[icell].nsplit <= 0) continue;
+  double sum = 0.0;
+  int ncross = 0;
 
-    double *cnew = cvalues[icell];
-    double *cold = cvalues_prev[icell];
+  for (int e = 0; e < nedge; e++) {
+    int i0 = edge[e][0];
+    int i1 = edge[e][1];
 
-    double sum = 0.0;
-    int ncross = 0;
+    // the isosurface must have crossed this edge in the old field,
+    //   else there is no starting point to measure from
 
-    for (int e = 0; e < nedge; e++) {
-      int i0 = edge[e][0];
-      int i1 = edge[e][1];
+    int oldcross = (cold[i0] < thresh) != (cold[i1] < thresh);
+    if (!oldcross) continue;
 
-      // the isosurface must have crossed this edge before the increment,
-      //   else there is no starting point to measure from
+    double dold = cold[i1] - cold[i0];
+    if (dold == 0.0) continue;
+    double told = (thresh - cold[i0]) / dold;
 
-      int oldcross = (cold[i0] < thresh) != (cold[i1] < thresh);
-      if (!oldcross) continue;
+    int newcross = (cnew[i0] < thresh) != (cnew[i1] < thresh);
 
-      double dold = cold[i1] - cold[i0];
-      if (dold == 0.0) continue;
-      double told = (thresh - cold[i0]) / dold;
+    if (newcross) {
+      double dnew = cnew[i1] - cnew[i0];
+      if (dnew == 0.0) continue;
+      double tnew = (thresh - cnew[i0]) / dnew;
+      sum += fabs(tnew - told) * xyzsize[edgedim[e]];
+    } else {
 
-      int newcross = (cnew[i0] < thresh) != (cnew[i1] < thresh);
+      // the surface swept clean past this edge in one step, so it moved at
+      //   least from told out to the end it exited through
+      // deposition raises the field, so it exits past the corner that was
+      //   below thresh; without this branch a very large increment would
+      //   leave no crossing to compare against and be reported as no motion
 
-      if (newcross) {
-        double dnew = cnew[i1] - cnew[i0];
-        if (dnew == 0.0) continue;
-        double tnew = (thresh - cnew[i0]) / dnew;
-        sum += fabs(tnew - told) * xyzsize[edgedim[e]];
-      } else {
-
-        // the surface swept clean past this edge in one step, so it moved at
-        //   least from told out to the end it exited through
-        // deposition raises the field, so it exits past the corner that was
-        //   below thresh; without this branch a very large increment would
-        //   leave no crossing to compare against and be reported as no motion
-
-        if (cold[i0] < thresh) sum += told * xyzsize[edgedim[e]];
-        else sum += (1.0 - told) * xyzsize[edgedim[e]];
-      }
-
-      ncross++;
+      if (cold[i0] < thresh) sum += told * xyzsize[edgedim[e]];
+      else sum += (1.0 - told) * xyzsize[edgedim[e]];
     }
 
-    if (!ncross) continue;
-
-    sfront_cell[icell] = sum/ncross;
+    ncross++;
   }
+
+  if (!ncross) return 0.0;
+  return sum/ncross;
 }
 
 /* ----------------------------------------------------------------------
@@ -1532,10 +1538,19 @@ void FixAblate::refresh_surfs()
     memory->grow(nseg,maxsegcell,"ablate:nseg");
     memory->grow(segpt,maxsegcell,segstride*3*dim,"ablate:segpt");
     memory->grow(segnorm,maxsegcell,segstride*3,"ablate:segnorm");
+    memory->grow(segspeed,maxsegcell,"ablate:segspeed");
     memory->grow(cnow,ncorner,"ablate:cnow");
+    memory->grow(cnext,ncorner,"ablate:cnext");
   }
 
-  for (int icell = 0; icell < nglocal; icell++) nseg[icell] = 0;
+  for (int icell = 0; icell < nglocal; icell++) {
+    nseg[icell] = 0;
+    segspeed[icell] = 0.0;
+  }
+
+  // one step of the interpolation, used to measure the front speed below
+
+  double fstep = 1.0/nevery;
 
   double pt2d[4][3];
   double pt3d[36][3];
@@ -1553,8 +1568,20 @@ void FixAblate::refresh_surfs()
       if (c < 0.0) c = 0.0;
       else if (c > 255.0) c = 255.0;
       cnow[i] = c;
+      c = cvalues[icell][i] + (f+fstep)*d;
+      if (c < 0.0) c = 0.0;
+      else if (c > 255.0) c = 255.0;
+      cnext[i] = c;
     }
     if (!moving) continue;
+
+    // how fast the front is advancing along its own normal, measured the
+    //   same way the guard measures it: from where the isosurface crosses
+    //   the cell edges now and one timestep from now
+    // the move loop needs this to place a collision correctly in space AND
+    //   in time, and to catch a particle the front overtakes from behind
+
+    segspeed[icell] = edge_displacement(cnow,cnext) / update->dt;
 
     int ns;
     if (dim == 2)
@@ -1614,6 +1641,7 @@ void FixAblate::refresh_surfs()
 
   update->segpt = segpt;
   update->segnorm = segnorm;
+  update->segspeed = segspeed;
   update->nseg = nseg;
   update->nsegcell = nglocal;
 }

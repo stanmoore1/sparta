@@ -99,10 +99,10 @@ def test_conserve(exe, rate, nevery):
     return ok
 
 
-def test_momentum(exe, rate, nevery, label=""):
+def test_momentum(exe, rate, nevery, infile="in.test.momentum", label=""):
     """In a periodic box the surface is the only place gas momentum can go."""
     name = "momentum (rate=%s nevery=%s)%s" % (rate, nevery, label)
-    rc, out = run(exe, "in.test.momentum", {"RATE": rate, "NEVERY": nevery})
+    rc, out = run(exe, infile, {"RATE": rate, "NEVERY": nevery})
     if rc != 0:
         err = next((l for l in out.splitlines() if "ERROR" in l), "no stats")
         return check(name, False, err.strip()[:90])
@@ -124,6 +124,42 @@ def test_momentum(exe, rate, nevery, label=""):
 
     # round-off over ~10^6 collisions, not a physics tolerance
     return check(name, rel < 1e-5, "relative residual %.2e" % rel)
+
+
+def test_no_wall_work(exe):
+    """A growing surface must not do work on the gas.
+
+    A depositing front advances by accretion, so the atoms a molecule strikes
+    are at rest and the front velocity must not enter the reflection.  Off a
+    stationary plane, specular reflection preserves speed exactly, so the gas
+    temperature must not move -- however often the front catches a particle.
+    A wall physically translating at the same speed would be a piston and
+    would heat the gas.
+    """
+    temps, ok = {}, True
+    for rate in (0.0, 0.02, 0.1):
+        rc, out = run(exe, "in.test.wall", {"RATE": rate, "WALL": "specular"})
+        if rc != 0:
+            return check("growing wall does no work", False, "run failed")
+        rows = stats_rows(out)
+        if len(rows) < 2:
+            return check("growing wall does no work", False, "no stats rows")
+        # cols: 0 step, 1 np, 2 temperature, 3 nscoll, 4 nburied, 5 nsalvaged
+        temps[rate] = (rows[-1][2], rows[-1][3], rows[-1][5], rows[-1][4])
+
+    base = temps[0.0][0]
+    for rate in (0.02, 0.1):
+        t, nscoll, nsalv, nburied = temps[rate]
+        # only meaningful while nothing is buried: burial removes the slowest
+        # particles, which shifts the mean of what is left for reasons that
+        # have nothing to do with the wall
+        ok &= check("growing wall does no work (rate=%s)" % rate,
+                    nburied == 0 and t == base,
+                    "T=%.8g vs %.8g, %d front collisions salvaged"
+                    % (t, base, nsalv))
+    print("      (surface collision rate rose from %d to %d with no change "
+          "in T)" % (temps[0.0][1], temps[0.1][1]))
+    return ok
 
 
 def test_guard(exe):
@@ -173,6 +209,11 @@ def main():
     # momentum: gas + surface + buried + reflected must balance
     for rate, nevery in ((0.2, 1), (0.5, 5), (1.0, 20)):
         ok &= test_momentum(exe, rate, nevery)
+    # the same ledger in 3d, which uses marching cubes and the triangle
+    # intersection rather than marching squares and the line one
+    ok &= test_momentum(exe, 0.5, 5, "in.test.momentum.3d", label=" 3d")
+    # the front velocity places the collision but must not enter the rebound
+    ok &= test_no_wall_work(exe)
     ok &= test_guard(exe)
     ok &= test_ablate_unaffected(exe)
 

@@ -74,6 +74,7 @@ class Update : protected Pointers {
                          //   itself is only rebuilt every Nevery steps
   double **segpt;        // per cell, end points of the refreshed elements
   double **segnorm;      // and their outward normals
+  double *segspeed;      // per cell, speed the front advances along them
   int *nseg;             // per cell, # of refreshed elements, NULL if none
   int nsegcell;          // length of nseg
   bigint front_step0;    // timestep the surface was last rebuilt on

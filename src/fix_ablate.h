@@ -109,8 +109,10 @@ class FixAblate : public Fix {
   //   and vertices are created or destroyed.
 
   double *cnow;            // corner values of one cell at the current time
+  double *cnext;           // ditto one timestep later, to measure the rate
   double **segpt;          // refreshed geometry per cell: element end points
   double **segnorm;        // and their outward normals
+  double *segspeed;        // speed the front advances along those normals
   int *nseg;               // # of refreshed elements in each cell
   int maxsegcell;
   int segstride;           // max elements per cell
@@ -160,6 +162,7 @@ class FixAblate : public Fix {
   void increment();
   void front_speed();
   void refresh_surfs();
+  double edge_displacement(double *, double *);
   double grad_mag(int);
 
   int salvage_particle(int, int);

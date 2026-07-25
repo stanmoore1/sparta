@@ -42,6 +42,8 @@
 
 using namespace SPARTA_NS;
 
+
+
 enum{XLO,XHI,YLO,YHI,ZLO,ZHI,INTERIOR};         // same as Domain
 enum{PERIODIC,OUTFLOW,REFLECT,SURFACE,AXISYM};  // same as Domain
 enum{OUTSIDE,INSIDE,ONSURF2OUT,ONSURF2IN};      // several files
@@ -104,6 +106,7 @@ Update::Update(SPARTA *sparta) : Pointers(sparta)
   reflect_mom[0] = reflect_mom[1] = reflect_mom[2] = 0.0;
   surf_mom[0] = surf_mom[1] = surf_mom[2] = 0.0;
   segpt = segnorm = NULL;
+  segspeed = NULL;
   nseg = NULL;
   nsegcell = 0;
   front_step0 = -1;
@@ -394,6 +397,7 @@ void Update::run(int nsteps)
   }
 
   modify->post_run();
+
 }
 
 /* ----------------------------------------------------------------------
@@ -445,7 +449,10 @@ template < int DIM, int SURF, int OPT, int MOVING > void Update::move()
   //   when the collision is tallied
 
   double *rp1,*rp2,*rp3,*rnorm,minrnorm[3];
+  double rspeed,rstart[3],rend[3];
   int nrefresh,irefresh,minrefresh = 0;
+
+  if (DIM < 3) rstart[2] = rend[2] = 0.0;
 
   // extend migration list if necessary
 
@@ -843,7 +850,11 @@ template < int DIM, int SURF, int OPT, int MOVING > void Update::move()
             //   surface bookkeeping is unchanged
 
             nrefresh = 0;
-            if (MOVING && nseg && icell < nsegcell) nrefresh = nseg[icell];
+            rspeed = 0.0;
+            if (MOVING && nseg && icell < nsegcell) {
+              nrefresh = nseg[icell];
+              if (nrefresh) rspeed = segspeed[icell];
+            }
 
             for (m = 0; m < (nrefresh ? nrefresh : nsurf); m++) {
               if (MOVING && nrefresh) {
@@ -867,36 +878,84 @@ template < int DIM, int SURF, int OPT, int MOVING > void Update::move()
                 if (isurf == exclude) continue;
               }
 
-              if (MOVING && nrefresh) {
+              if (MOVING && nrefresh && DIM == 1) {
+                hitflag = Geometry::
+                  axi_line_intersect(dtsurf,x,v,outface,lo,hi,rp1,rp2,
+                                     rnorm,exclude == isurf,xc,vc,param,side);
+              } else if (MOVING && nrefresh) {
+
+                // the front keeps advancing along its own normal while the
+                //   particle flies, so where and when they meet depends on
+                //   both velocities.  Reduce to the front's frame: subtract
+                //   the front's translation from the particle path.  A
+                //   straight path against a uniformly translating plane is
+                //   still a straight path against a fixed plane, so the
+                //   existing static test then solves it exactly.
+                // the refreshed geometry is the front at the middle of the
+                //   step, so the translation is measured from there.
+                // this also catches a particle the front overtakes from
+                //   behind, one moving outward more slowly than the front
+                //   advances.  Its own path never reaches the surface, so a
+                //   static test cannot see it at all, however small the
+                //   timestep; in the front's frame it approaches normally.
+
+                tc = 0.5*dt - dtremain;                  // start, from mid-step
+                tmp = tc + dtsurf;                       // end, from mid-step
+
+                rstart[0] = x[0] - rnorm[0]*rspeed*tc;
+                rstart[1] = x[1] - rnorm[1]*rspeed*tc;
+                rend[0] = xnew[0] - rnorm[0]*rspeed*tmp;
+                rend[1] = xnew[1] - rnorm[1]*rspeed*tmp;
+                if (DIM == 3) {
+                  rstart[2] = x[2] - rnorm[2]*rspeed*tc;
+                  rend[2] = xnew[2] - rnorm[2]*rspeed*tmp;
+                }
+
                 if (DIM == 3)
                   hitflag = Geometry::
-                    line_tri_intersect(x,xnew,rp1,rp2,rp3,rnorm,xc,param,side);
-                else if (DIM == 2)
-                  hitflag = Geometry::
-                    line_line_intersect(x,xnew,rp1,rp2,rnorm,xc,param,side);
+                    line_tri_intersect(rstart,rend,rp1,rp2,rp3,rnorm,
+                                       xc,param,side);
                 else
                   hitflag = Geometry::
-                    axi_line_intersect(dtsurf,x,v,outface,lo,hi,rp1,rp2,
-                                       rnorm,exclude == isurf,xc,vc,param,side);
-              } else
-              if (DIM == 3) {
-                tri = &tris[isurf];
+                    line_line_intersect(rstart,rend,rp1,rp2,rnorm,
+                                        xc,param,side);
+
+                // map the hit back out of the front's frame
+                // param is the fraction of the flight time, unchanged by the
+                //   frame shift, so the particle is where it actually got to
+
+                if (hitflag) {
+                  xc[0] = x[0] + param*(xnew[0]-x[0]);
+                  xc[1] = x[1] + param*(xnew[1]-x[1]);
+                  if (DIM == 3) xc[2] = x[2] + param*(xnew[2]-x[2]);
+                }
+              } else {
+
+                // the braces matter: without them the DIM == 2 and DIM == 1
+                //   tests below run even when a refreshed element was just
+                //   tested, and overwrite its result with the committed
+                //   geometry, so the refresh would only ever take effect in 3d
+
+                if (DIM == 3) {
+                  tri = &tris[isurf];
                   hitflag = Geometry::
                     line_tri_intersect(x,xnew,tri->p1,tri->p2,tri->p3,
                                        tri->norm,xc,param,side);
-              }
-              if (DIM == 2) {
-                line = &lines[isurf];
+                }
+                if (DIM == 2) {
+                  line = &lines[isurf];
                   hitflag = Geometry::
                     line_line_intersect(x,xnew,line->p1,line->p2,
                                         line->norm,xc,param,side);
-              }
-              if (DIM == 1) {
-                line = &lines[isurf];
-                hitflag = Geometry::
-                  axi_line_intersect(dtsurf,x,v,outface,lo,hi,line->p1,line->p2,
-                                     line->norm,exclude == isurf,
-                                     xc,vc,param,side);
+                }
+                if (DIM == 1) {
+                  line = &lines[isurf];
+                  hitflag = Geometry::
+                    axi_line_intersect(dtsurf,x,v,outface,lo,hi,
+                                       line->p1,line->p2,
+                                       line->norm,exclude == isurf,
+                                       xc,vc,param,side);
+                }
               }
 
 #ifdef MOVE_DEBUG
@@ -961,15 +1020,11 @@ template < int DIM, int SURF, int OPT, int MOVING > void Update::move()
               }
 #endif
 
-              // an advancing surf also accepts a hit from the INSIDE
-              // the front sweeps a band of space between the surface geometry,
-              //   which is only rebuilt at a regeneration, and where the front
-              //   has advanced to; a particle that drifts into that band from a
-              //   neighboring cell is behind the stored surface, so the plain
-              //   OUTSIDE filter would reject its hit and let it tunnel through
-              // it has in fact been overtaken by the front and must be
-              //   reflected back out, which is what the collide model does
-              //   since it emits into the +norm hemisphere
+              // OUTSIDE is still the right filter for an advancing surf: the
+              //   test above was done in the front's frame, and a particle
+              //   the front is about to overtake approaches that frame's
+              //   fixed plane from the outside, however it is moving in the
+              //   lab frame
 
               if (hitflag && param < minparam && side == OUTSIDE) {
                 cflag = 1;
