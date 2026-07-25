@@ -352,9 +352,9 @@ ImageViewer::ImageViewer(const QString &fileName, SpartaWrapper *_sparta, Sparta
     doaxes->setToolTip("Toggle displaying axes");
     doaxes->setObjectName("axes");
     auto *zoomin = new QPushButton(QIcon(":/icons/gtk-zoom-in.svg"), "");
-    zoomin->setToolTip("Zoom in by 10 percent");
+    zoomin->setToolTip("Camera zoom in by 10 percent");
     auto *zoomout = new QPushButton(QIcon(":/icons/gtk-zoom-out.svg"), "");
-    zoomout->setToolTip("Zoom out by 10 percent");
+    zoomout->setToolTip("Camera zoom out by 10 percent");
 // the SVG versions do not render correctly with Qt before 6.7
 #if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
     auto *rotleft  = new QPushButton(QIcon(":/icons/rotate-left.svg"), "");
@@ -367,14 +367,14 @@ ImageViewer::ImageViewer(const QString &fileName, SpartaWrapper *_sparta, Sparta
     auto *rotup    = new QPushButton(QIcon(":/icons/rotate-up.png"), "");
     auto *rotdown  = new QPushButton(QIcon(":/icons/rotate-down.png"), "");
 #endif
-    rotleft->setToolTip("Rotate left by 10 degrees");
-    rotright->setToolTip("Rotate right by 10 degrees");
-    rotup->setToolTip("Rotate up by 10 degrees");
-    rotdown->setToolTip("Rotate down by 10 degrees");
+    rotleft->setToolTip("Camera rotate left by 10 degrees");
+    rotright->setToolTip("Camera rotate right by 10 degrees");
+    rotup->setToolTip("Camera rotate up by 10 degrees");
+    rotdown->setToolTip("Camera rotate down by 10 degrees");
     auto *recenter = new QPushButton(QIcon(":/icons/move-recenter.svg"), "");
-    recenter->setToolTip("Reset view center to the box center");
-    auto *reset = new QPushButton(QIcon(":/icons/gtk-zoom-fit.svg"), "");
-    reset->setToolTip("Reset view to defaults");
+    recenter->setToolTip("Camera recenter on the box center");
+    auto *reset = new QPushButton(QIcon(":/icons/preferences-reset.svg"), "");
+    reset->setToolTip("Camera reset to the default view");
     auto *fitwin = new QPushButton(QIcon(":/icons/fit-window.svg"), "");
     fitwin->setToolTip("Resize window to fit the image size");
 
@@ -469,6 +469,10 @@ ImageViewer::ImageViewer(const QString &fileName, SpartaWrapper *_sparta, Sparta
     buttonLayout->addWidget(dosurf);
     buttonLayout->addWidget(dobox);
     buttonLayout->addWidget(doaxes);
+    // the two transform families share icons, so say which is which
+    auto *camlabel = new QLabel("Camera:");
+    camlabel->setToolTip("These controls move the camera and re-render the scene");
+    buttonLayout->addWidget(camlabel);
     buttonLayout->addWidget(zoomin);
     buttonLayout->addWidget(zoomout);
     buttonLayout->addWidget(rotleft);

@@ -318,8 +318,14 @@ void VtkViewer::buildUi()
     auto *tb = addToolBar("View");
     tb->setMovable(false);
 
-    tb->addAction(QIcon(":/icons/document-open.svg"), "Open VTK File...", this,
-                  &VtkViewer::openFileDialog);
+    // Toolbar actions do not go through styleToolButtons(), so nothing here
+    // picks up an accessible name from a tooltip the way the other viewers'
+    // buttons do. Set the tooltips and name the generated buttons explicitly,
+    // or every control in this window is anonymous to a screen reader -- and
+    // unreachable by the GUI tests, which is why the 3D viewer had none.
+    auto *openAct = tb->addAction(QIcon(":/icons/document-open.svg"), "Open VTK File...", this,
+                                  &VtkViewer::openFileDialog);
+    openAct->setToolTip("Open a VTK data file (.vtu, .vtp or .vtk)");
     tb->addSeparator();
 
     tb->addWidget(new QLabel(" Color by: "));
@@ -350,10 +356,18 @@ void VtkViewer::buildUi()
     tb->addWidget(scalarBarBox);
 
     tb->addSeparator();
-    tb->addAction(QIcon(":/icons/preferences-reset.svg"), "Reset View", this,
-                  &VtkViewer::resetView);
-    tb->addAction(QIcon(":/icons/image-x-generic.svg"), "Save Screenshot...", this,
-                  &VtkViewer::saveScreenshot);
+    auto *resetAct = tb->addAction(QIcon(":/icons/preferences-reset.svg"), "Reset View", this,
+                                   &VtkViewer::resetView);
+    resetAct->setToolTip("Camera reset to frame all layers");
+    auto *shotAct = tb->addAction(QIcon(":/icons/image-x-generic.svg"), "Save Screenshot...", this,
+                                  &VtkViewer::saveScreenshot);
+    shotAct->setToolTip("Save the current 3D view to an image file");
+
+    cmapCombo->setToolTip("Color map applied to the selected scalar field");
+    scalarBarBox->setToolTip("Show the color scale for the selected field");
+
+    for (auto *act : {openAct, resetAct, shotAct})
+        nameFromToolTip(tb->widgetForAction(act));
 
     // Feature 9: in-app field post-processing (cut plane, iso-surface, probes,
     // field calculator).  Heavier analysis (streamlines, glyphs, volume

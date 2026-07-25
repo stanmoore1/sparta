@@ -51,14 +51,29 @@ RMSE_DIFFERENT = 0.10
 # toolbar buttons is the tooltip -- rather than by coordinates. Guessed
 # coordinates break silently when a layout changes: the click lands somewhere
 # harmless and the test still reports a pass.
-BTN = {
-    "zoom_in": "Zoom in by 10 percent",
-    "zoom_out": "Zoom out by 10 percent",
-    "rotate_cw": "Rotate displayed image 90",
+#
+# There are two families and they are not interchangeable. Camera controls move
+# the point of view and re-render the scene through SPARTA or VTK; displayed
+# image controls rearrange the pixels already on screen. They used to share the
+# wording "Zoom in by 10 percent" between them, so a name alone did not say
+# which operation would happen -- and with the two panels tabbed together, a
+# lookup by name could land on either one. Each family now leads with its own
+# word, and the maps are kept apart so a test has to say which it means.
+BTN_DISPLAY = {
+    "zoom_in": "Displayed image zoom in by 10 percent",
+    "zoom_out": "Displayed image zoom out by 10 percent",
+    "rotate_cw": "Displayed image rotate 90",       # "...90o clockwise" once flattened
     "rotate_ccw": "counter-clock",
-    "flip_h": "Mirror displayed image horizontally",
-    "flip_v": "Mirror displayed image vertically",
-    "reset": "Reset zoom to normal",
+    "flip_h": "Displayed image mirror horizontally",
+    "flip_v": "Displayed image mirror vertically",
+    "reset": "Displayed image reset zoom",
+}
+BTN_CAMERA = {
+    "zoom_in": "Camera zoom in by 10 percent",
+    "zoom_out": "Camera zoom out by 10 percent",
+    "rot_left": "Camera rotate left by 10 degrees",
+    "recenter": "Camera recenter on the box center",
+    "reset": "Camera reset to the default view",
 }
 
 results = []
@@ -140,17 +155,21 @@ def describe(region):
 class Viewer:
     """Drives a viewer, photographing the render widget itself."""
 
-    def __init__(self, g):
+    def __init__(self, g, buttons):
         self.g = g
+        self.buttons = buttons      # BTN_DISPLAY or BTN_CAMERA
 
     def click(self, button, pause=1.2):
         """Press a toolbar button by name; raise if it cannot be found.
 
         Failing loudly matters: a silent miss would leave the view unchanged
         and the round-trip assertions would then "pass" for the wrong reason.
+        It also makes a renamed tooltip fail here rather than quietly
+        downgrading the suite to testing nothing.
         """
-        if not self.g.click_named(BTN[button], pause=pause):
-            raise RuntimeError(f"no control named {BTN[button]!r} on screen")
+        name = self.buttons[button]
+        if not self.g.click_named(name, pause=pause):
+            raise RuntimeError(f"no control named {name!r} on screen")
 
     def capture(self, name, geom=None):
         path = self.g.capture_render(f"{OUT}/{name}.png", geom)
@@ -171,7 +190,7 @@ def check_slideshow(g, src):
     g._xdo("windowsize", wid[-1], "1200", "900")
     time.sleep(2)
 
-    v = Viewer(g)
+    v = Viewer(g, BTN_DISPLAY)
     note("slide show opens with a frame", "PASS", os.path.basename(src))
 
     base = v.capture("00-baseline")
@@ -323,7 +342,7 @@ def check_image_viewer(g, deck):
         return
     time.sleep(1)
 
-    v = Viewer(g)
+    v = Viewer(g, BTN_CAMERA)
     geom = g.render_geometry()
     size = geometry_of(geom)
     base = v.capture("20-iv-baseline", geom)
@@ -359,16 +378,16 @@ def check_image_viewer(g, deck):
 
     # Zoom here moves the camera and re-renders through SPARTA rather than
     # scaling a pixmap, so it is a different code path from the slide show.
-    if g.click_named("Zoom in by 10 percent", pause=7):
+    if g.click_named(BTN_CAMERA["zoom_in"], pause=7):
         zi = v.capture("23-iv-zoom-in", geom)
         note("image viewer zoom in changes the render",
              "PASS" if not same(base, zi) else "FAIL", f"rmse={rmse(base, zi):.4f}")
-        g.click_named("Zoom out by 10 percent", pause=7)
+        g.click_named(BTN_CAMERA["zoom_out"], pause=7)
         zb = v.capture("24-iv-zoom-back", geom)
         note("image viewer zoom out is the inverse of zoom in",
              "PASS" if same(base, zb) else "FAIL", f"rmse={rmse(base, zb):.4f}")
 
-    if g.click_named("Reset view to defaults", pause=7):
+    if g.click_named(BTN_CAMERA["reset"], pause=7):
         rv = v.capture("25-iv-reset", geom)
         note("image viewer reset returns to the default view",
              "PASS" if same(base, rv) else "FAIL", f"rmse={rmse(base, rv):.4f}")

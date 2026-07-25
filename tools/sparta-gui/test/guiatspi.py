@@ -10,7 +10,10 @@ Qt publishes its whole widget tree over AT-SPI, including each widget's role,
 its accessible name (taken from the button text, or the tooltip when a button
 is icon-only, which most of this application's toolbar buttons are) and its
 exact position on screen. So instead of guessing, ask: find the button called
-"Zoom in by 10 percent" and click its centre.
+"Camera zoom in by 10 percent" and click its centre. (Names lead with the
+family they belong to -- "Camera ..." moves the point of view and re-renders,
+"Displayed image ..." rearranges the pixels already on screen -- so a lookup
+by name cannot land on the wrong one of the two.)
 
 This module needs an interpreter with pyatspi; on this system that is
 /usr/bin/python3.12 rather than the default python3, and it needs a session bus

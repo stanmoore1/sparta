@@ -241,19 +241,19 @@ SlideShow::SlideShow(const QString &fileName, SpartaGui *_spartagui, QWidget *pa
     goloop->setChecked(doLoop);
 
     auto *zoomin = new QPushButton(QIcon(":/icons/gtk-zoom-in.svg"), "");
-    zoomin->setToolTip("Zoom in by 10 percent");
+    zoomin->setToolTip("Displayed image zoom in by 10 percent");
     auto *zoomout = new QPushButton(QIcon(":/icons/gtk-zoom-out.svg"), "");
-    zoomout->setToolTip("Zoom out by 10 percent");
+    zoomout->setToolTip("Displayed image zoom out by 10 percent");
     auto *imgrotcw = new QPushButton(QIcon(":/icons/object-rotate-right.svg"), "");
-    imgrotcw->setToolTip("Rotate displayed image 90<sup>o</sup> clockwise");
+    imgrotcw->setToolTip("Displayed image rotate 90<sup>o</sup> clockwise");
     auto *imgrotccw = new QPushButton(QIcon(":/icons/object-rotate-left.svg"), "");
-    imgrotccw->setToolTip("Rotate displayed image 90<sup>o</sup> counter-clockwise");
+    imgrotccw->setToolTip("Displayed image rotate 90<sup>o</sup> counter-clockwise");
     auto *imgfliph = new QPushButton(QIcon(":/icons/object-flip-horizontal.svg"), "");
-    imgfliph->setToolTip("Mirror displayed image horizontally");
+    imgfliph->setToolTip("Displayed image mirror horizontally");
     auto *imgflipv = new QPushButton(QIcon(":/icons/object-flip-vertical.svg"), "");
-    imgflipv->setToolTip("Mirror displayed image vertically");
+    imgflipv->setToolTip("Displayed image mirror vertically");
     auto *normal = new QPushButton(QIcon(":/icons/gtk-zoom-fit.svg"), "");
-    normal->setToolTip("Reset zoom to normal");
+    normal->setToolTip("Displayed image reset zoom, rotation, and mirroring");
     auto *fitwin = new QPushButton(QIcon(":/icons/fit-window.svg"), "");
     fitwin->setToolTip("Resize window to fit the displayed image size");
 
@@ -292,6 +292,10 @@ SlideShow::SlideShow(const QString &fileName, SpartaGui *_spartagui, QWidget *pa
     toolsLayout->addWidget(cacheButton, 1);
     toolsLayout->addWidget(empty);
     toolsLayout->addWidget(dummy);
+    // the two transform families share icons, so say which is which
+    auto *dsplabel = new QLabel("Displayed image:");
+    dsplabel->setToolTip("These controls change the picture on screen, not the camera");
+    toolsLayout->addWidget(dsplabel, 0);
     toolsLayout->addWidget(zoomin, 1);
     toolsLayout->addWidget(zoomout, 1);
     toolsLayout->addWidget(imgrotcw, 1);
