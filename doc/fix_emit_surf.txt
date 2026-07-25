@@ -322,7 +322,8 @@ IMPORTANT NOTE: As with {subsonic}, you should use an appropriate
 on the emitting surfaces so particles hitting them disappear as if
 exiting the domain.  The {mflow} keyword cannot be combined with the
 {subsonic}, {n}, {custom}, or {region} keywords, and is currently a
-CPU-only feature (no KOKKOS variant).  The {region} restriction exists
+CPU-only feature: as with {subsonic}, using it with the {kk} suffix is an
+error, reported when the fix is defined.  The {region} restriction exists
 because insertions rejected by a region are not resampled, which would
 silently reduce the realized mass flow rate below {Mdot}.
 

@@ -42,7 +42,7 @@ using namespace SPARTA_NS;
 using namespace MathConst;
 
 enum{PKEEP,PINSERT,PDONE,PDISCARD,PENTRY,PEXIT,PSURF};   // several files
-enum{NOSUBSONIC,PTBOTH,PONLY};
+enum{NOSUBSONIC,PTBOTH,PONLY,MFLOW};   // same as fix_emit_surf.cpp
 enum{FLOW,CONSTANT,VARIABLE};
 enum{INT,DOUBLE};                                        // several files
 
@@ -77,6 +77,15 @@ FixEmitSurfKokkos::FixEmitSurfKokkos(SPARTA *sparta, int narg, char **arg) :
   datamask_modify = EMPTY_MASK;
 
   region_flag = 0;
+
+  // neither the subsonic nor the mflow boundary condition is ported to Kokkos
+  // the base class has already parsed the keywords, so check here rather than
+  // mid-run, and name the keyword the user actually gave
+
+  if (subsonic_style == MFLOW)
+    error->all(FLERR,"Cannot (yet) use mflow emission in fix emit/surf/kk");
+  else if (subsonic)
+    error->all(FLERR,"Cannot (yet) use subsonic emission in fix emit/surf/kk");
 }
 
 /* ---------------------------------------------------------------------- */
