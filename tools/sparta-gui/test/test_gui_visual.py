@@ -40,19 +40,23 @@ FIX = os.environ.get("SPARTA_FIXTURES", "fixtures")
 # same image", above it is a real visual change.
 RMSE_SAME = 0.02
 
-# Slide-show toolbar, in window-relative coordinates. Screen coordinates would
-# break the moment the window manager placed the window differently.
+# Buttons are found by their accessible name -- which for these icon-only
+# toolbar buttons is the tooltip -- rather than by coordinates. Guessed
+# coordinates break silently when a layout changes: the click lands somewhere
+# harmless and the test still reports a pass.
 BTN = {
-    "zoom_in": (228, 28),
-    "zoom_out": (268, 28),
-    "rotate_cw": (308, 28),
-    "rotate_ccw": (348, 28),
-    "flip_h": (388, 28),
-    "flip_v": (428, 28),
-    "reset": (468, 28),
+    "zoom_in": "Zoom in by 10 percent",
+    "zoom_out": "Zoom out by 10 percent",
+    "rotate_cw": "Rotate displayed image 90",
+    "rotate_ccw": "counter-clock",
+    "flip_h": "Mirror displayed image horizontally",
+    "flip_v": "Mirror displayed image vertically",
+    "reset": "Reset zoom to normal",
 }
 # the render viewport, excluding toolbars and the control strip
-VIEWPORT = "935x395+10+60"
+VIEWPORT = os.environ.get("VIEWPORT", "935x395+10+60")
+# the docked image panel inside the main window
+IV_VIEWPORT = "400x150+805+490"
 
 results = []
 
@@ -87,11 +91,15 @@ class Viewer:
         self.n = 0
 
     def click(self, button, pause=1.2):
-        x, y = BTN[button]
-        self.g._xdo("mousemove", "--window", self.wid, str(x), str(y), "click", "1")
-        time.sleep(pause)
+        """Press a toolbar button by name; raises if it cannot be found.
 
-    def capture(self, name):
+        Failing loudly matters: a silent miss would leave the view unchanged
+        and the round-trip assertions would then "pass" for the wrong reason.
+        """
+        if not self.g.click_named(BTN[button], pause=pause):
+            raise RuntimeError(f"no control named {BTN[button]!r} on screen")
+
+    def capture(self, name, geom=None):
         """Photograph the render viewport alone.
 
         Cropping matters: comparing whole windows would fold in the filename
@@ -102,7 +110,7 @@ class Viewer:
         subprocess.run(["import", "-window", self.wid, full], env=self.g.env,
                        capture_output=True)
         cropped = f"{OUT}/{name}.png"
-        subprocess.run(["convert", full, "-crop", VIEWPORT, "+repage", cropped],
+        subprocess.run(["convert", full, "-crop", geom or VIEWPORT, "+repage", cropped],
                        capture_output=True)
         os.remove(full)
         return cropped
@@ -206,6 +214,85 @@ def main():
 
         note("application still alive after every transform",
              "PASS" if g.app.poll() is None else "FAIL")
+
+    # ---------------------------------------------------------------
+    # The docked image viewer
+    # ---------------------------------------------------------------
+    # Different code path from the slide show: these controls re-render the
+    # scene through SPARTA rather than transforming an already-decoded image,
+    # so a working slide show says nothing about whether these work.
+    deck = f"{FIX}/in.surfq"
+    if not os.path.exists(deck):
+        note("image viewer checks", "SKIP", "in.surfq fixture missing")
+    else:
+        with Gui(display=84, outdir=OUT, args=[deck]) as g:
+            g.key("ctrl+2", 2)
+            g.key("ctrl+Return", 8)
+            time.sleep(20)                 # let the deck run so a box exists
+            g.focus_main()
+            g.key("ctrl+i", 16)            # Create Image
+            g.close_extra_windows()
+            g.focus_main()
+            g.key("ctrl+3", 3)             # Analyze
+            time.sleep(2)
+
+            # The Image and Slide Show panels are tabbed together and the slide
+            # show is usually in front. Its controls carry the same tooltips
+            # ("Zoom in by 10 percent"), so without raising the Image tab first
+            # the checks below would silently drive the wrong panel.
+            # Qt-ADS dock tabs are custom widgets and do not carry the
+            # "page tab" accessibility role, so match the tab's title instead.
+            if not g.click_named("Image - ", pause=2):
+                note("raise the Image panel", "FAIL", "Image dock tab not found")
+            time.sleep(1)
+
+            wid = g.main_window()
+            iv = Viewer(g, wid)
+            ivbase = iv.capture("20-iv-baseline", IV_VIEWPORT)
+            note("image viewer renders a snapshot", "PASS", "via Create Image")
+
+            # Feature toggles: each must visibly change the render, and putting
+            # it back must restore the original -- which catches a toggle wired
+            # to nothing as well as one that does not undo cleanly.
+            for label, frag in (("particles", "Toggle displaying particles"),
+                                ("surfaces", "Toggle displaying surface elements"),
+                                ("box", "Toggle displaying box"),
+                                ("axes", "Toggle displaying axes")):
+                if not g.click_named(frag, pause=6):
+                    note(f"toggle {label}", "FAIL", "control not found")
+                    continue
+                off = iv.capture(f"21-iv-{label}-toggled", IV_VIEWPORT)
+                changed = not same(ivbase, off)
+                g.click_named(frag, pause=6)
+                back = iv.capture(f"22-iv-{label}-restored", IV_VIEWPORT)
+                restored = same(ivbase, back)
+                note(f"toggle {label} changes the render",
+                     "PASS" if changed else "FAIL",
+                     f"rmse={rmse(ivbase, off):.4f}, needs >{RMSE_SAME}")
+                note(f"toggling {label} back restores the render",
+                     "PASS" if restored else "FAIL",
+                     f"rmse={rmse(ivbase, back):.4f}, needs <{RMSE_SAME}")
+
+            # Zoom here re-renders through SPARTA rather than scaling a pixmap.
+            if g.click_named("Zoom in by 10 percent", pause=7):
+                zi = iv.capture("23-iv-zoom-in", IV_VIEWPORT)
+                note("image viewer zoom in changes the render",
+                     "PASS" if not same(ivbase, zi) else "FAIL",
+                     f"rmse={rmse(ivbase, zi):.4f}, needs >{RMSE_SAME}")
+                g.click_named("Zoom out by 10 percent", pause=7)
+                zb = iv.capture("24-iv-zoom-back", IV_VIEWPORT)
+                note("image viewer zoom in then out returns to baseline",
+                     "PASS" if same(ivbase, zb) else "FAIL",
+                     f"rmse={rmse(ivbase, zb):.4f}, needs <{RMSE_SAME}")
+
+            if g.click_named("Reset view to defaults", pause=7):
+                rv = iv.capture("25-iv-reset", IV_VIEWPORT)
+                note("image viewer reset returns to the default view",
+                     "PASS" if same(ivbase, rv) else "FAIL",
+                     f"rmse={rmse(ivbase, rv):.4f}, needs <{RMSE_SAME}")
+
+            note("application alive after image viewer checks",
+                 "PASS" if g.app.poll() is None else "FAIL")
 
     print()
     npass = sum(1 for r in results if r[1] == "PASS")

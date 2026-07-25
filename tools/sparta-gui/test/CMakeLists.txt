@@ -423,4 +423,35 @@ add_test(NAME Framebuffer.GUIEditorChecks
 )
 set_tests_properties(Framebuffer.GUIEditorChecks
                      PROPERTIES ENVIRONMENT "${PYTHON_TEST_ENVIRONMENT}")
+
+# Visual-effect and end-to-end feature suites.  Unlike the tests above these
+# manage their own Xvfb (and a window manager, without which nothing ever gets
+# keyboard focus and every step after the first silently does nothing), and
+# they need no PyAutoGUI, so they run under the plain interpreter.
+find_program(XDOTOOL_BINARY xdotool DOC "Path to xdotool")
+find_program(WM_BINARY NAMES openbox matchbox-window-manager fluxbox
+             DOC "Path to a minimal window manager")
+
+if (XDOTOOL_BINARY AND WM_BINARY AND SHOOTER_BINARY)
+  set(GUI_DRIVE_ENVIRONMENT
+    "SPARTA_GUI=$<TARGET_FILE:sparta-gui>"
+    "SPARTA_LIB_DIR=${CMAKE_BINARY_DIR}"
+    "SPARTA_FIXTURES=${CMAKE_CURRENT_SOURCE_DIR}/fixtures"
+  )
+
+  add_test(NAME GuiDrive.VisualEffects
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_gui_visual.py)
+  set_tests_properties(GuiDrive.VisualEffects PROPERTIES
+    ENVIRONMENT "${GUI_DRIVE_ENVIRONMENT};SHOT_DIR=${CMAKE_CURRENT_BINARY_DIR}/visual-shots"
+    TIMEOUT 600)
+
+  add_test(NAME GuiDrive.Features
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_gui_features.py)
+  set_tests_properties(GuiDrive.Features PROPERTIES
+    ENVIRONMENT "${GUI_DRIVE_ENVIRONMENT};SHOT_DIR=${CMAKE_CURRENT_BINARY_DIR}/feature-shots"
+    TIMEOUT 900)
+else()
+  message(STATUS "Skipping the visual and feature GUI suites: "
+    "they need xdotool, a window manager (e.g. openbox) and a screenshooter")
+endif()
 endif()

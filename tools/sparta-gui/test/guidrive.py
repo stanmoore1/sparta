@@ -26,6 +26,10 @@ GUI = os.environ.get("SPARTA_GUI") or os.environ.get("GUI_BIN", "build-gui/spart
 SPARTA_LIB_DIR = os.environ.get("SPARTA_LIB_DIR", "build-lib")
 EXAMPLE = os.environ.get("SPARTA_EXAMPLE", "examples/circle/in.circle")
 
+# Interpreter that can import pyatspi; on this system the default python3 is a
+# local build without the gobject bindings, so the distribution one is used.
+ATSPI_PYTHON = os.environ.get("ATSPI_PYTHON", "/usr/bin/python3.12")
+
 
 def sh(*args, **kw):
     return subprocess.run(args, capture_output=True, text=True, **kw)
@@ -64,6 +68,25 @@ class Gui:
         self.xvfb = subprocess.Popen(
             ["Xvfb", self.display, "-screen", "0", f"{self.w}x{self.h}x24"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        time.sleep(2)
+
+        # A session bus plus QT_ACCESSIBILITY lets the app publish its widget
+        # tree over AT-SPI, so buttons can be found by name instead of by
+        # guessed coordinates (see guiatspi.py). Harmless if the bus is absent:
+        # the app simply does not export accessibility and callers fall back.
+        try:
+            out = subprocess.run(["dbus-launch"], capture_output=True, text=True).stdout
+            for line in out.splitlines():
+                if "=" in line:
+                    k, v = line.split("=", 1)
+                    env[k] = v.rstrip(";").strip("'")
+            self.dbus = env.get("DBUS_SESSION_BUS_PID")
+        except Exception:
+            self.dbus = None
+        env["QT_ACCESSIBILITY"] = "1"
+        env["QT_LINUX_ACCESSIBILITY_ALWAYS_ON"] = "1"
+        subprocess.Popen(["/usr/libexec/at-spi-bus-launcher", "--launch-immediately"],
+                         env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         time.sleep(2)
 
         # A bare X server has no window manager, so nothing ever assigns
@@ -147,6 +170,38 @@ class Gui:
         self.key(f"alt+{menu_key}", pause)
         if item_key:
             self.key(item_key, pause)
+
+    def controls(self):
+        """Every actionable control as (name, role, x, y, w, h).
+
+        Runs the AT-SPI helper under an interpreter that has pyatspi, which is
+        not necessarily the one running this harness.
+        """
+        r = subprocess.run([ATSPI_PYTHON, os.path.join(os.path.dirname(
+            os.path.abspath(__file__)), "guiatspi.py"), "SPARTA"],
+            capture_output=True, text=True, env=self.env)
+        out = []
+        for line in r.stdout.splitlines():
+            parts = line.split("\t")
+            if len(parts) == 6:
+                out.append((parts[0], parts[1], int(parts[2]), int(parts[3]),
+                            int(parts[4]), int(parts[5])))
+        return out
+
+    def click_named(self, fragment, role=None, pause=1.2):
+        """Click the centre of the control whose accessible name contains @p fragment.
+
+        Returns False when no such control exists, so a test can report a
+        missing button rather than clicking empty space and passing.
+        """
+        for name, r, x, y, w, h in self.controls():
+            if role and r != role:
+                continue
+            if fragment.lower() in name.lower():
+                self._xdo("mousemove", str(x + w // 2), str(y + h // 2), "click", "1")
+                time.sleep(pause)
+                return True
+        return False
 
     def escape(self, n=2):
         for _ in range(n):
