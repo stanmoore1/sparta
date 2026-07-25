@@ -97,6 +97,7 @@ FixAblate::FixAblate(SPARTA *sparta, int narg, char **arg) :
   if (nevery < 0) error->all(FLERR,"Illegal fix ablate command");
 
   idsource = NULL;
+  argindex = 0;         // only the c_/f_ source styles override this
 
   scale = atof(arg[4]);
   if (scale < 0.0) error->all(FLERR,"Illegal fix ablate command");
@@ -127,8 +128,13 @@ FixAblate::FixAblate(SPARTA *sparta, int narg, char **arg) :
   } else if (strncmp(arg[5],"v_",2) == 0) {
     which = VARIABLE;
 
-    int n = strlen(arg[5]);
-    char *idsource = new char[n];
+    // note the assignment is to the MEMBER idsource, not a local of the same
+    //   name.  Declaring one here instead leaves the member NULL, which is
+    //   then handed to Variable::find() below, so a v_name source has never
+    //   worked despite being fully implemented and documented
+
+    int n = strlen(arg[5]) - 1;
+    idsource = new char[n];
     strcpy(idsource,&arg[5][2]);
 
   } else if (strcmp(arg[5],"random") == 0) {
@@ -1282,6 +1288,30 @@ void FixAblate::set_delta()
 
   Grid::ChildCell *cells = grid->cells;
   Grid::ChildInfo *cinfo = grid->cinfo;
+
+  // deposition only accretes onto material that is already there, so a cell
+  //   holding no surface gets nothing
+  // ablation does not need this: decrement() drains corner values toward 0, so
+  //   a cell that is entirely gas has nothing left to give and is already
+  //   self-limiting.  increment() fills toward 255, which is not -- without
+  //   the gate a source that is uniform in space, such as a variable, would
+  //   raise corner values in open gas far from the surface and eventually
+  //   sprout material out of nowhere.
+  // this is the same test set_delta_uniform() applies; the compute and fix
+  //   sources are naturally zero away from the surface, since the isurf
+  //   computes only tally in cells that hold surface elements
+
+  if (mode == DEPOSIT) {
+    for (int icell = 0; icell < nglocal; icell++) {
+      if (!(cinfo[icell].mask & groupbit)) continue;
+      if (cells[icell].nsplit <= 0) continue;
+
+      int nin = 0;
+      for (i = 0; i < ncorner; i++)
+        if (cvalues[icell][i] > thresh) nin++;
+      if (nin == 0 || nin == ncorner) celldelta[icell] = 0.0;
+    }
+  }
 
   double sum = 0.0;
   for (int icell = 0; icell < nglocal; icell++) {

@@ -135,6 +135,43 @@ def test_fill(exe, rate):
     return ok
 
 
+def test_variable(exe):
+    """fix ablate must be drivable by a grid-style variable.
+
+    Checked against references the suite already trusts: a constant variable
+    must reproduce the dedicated "uniform" source exactly, and a rate applied
+    over half the domain must deposit twice what a quarter deposits.
+    """
+    def material(infile, variables):
+        rc, out = run(exe, infile, variables)
+        if rc != 0:
+            return None
+        rows = stats_rows(out)
+        if len(rows) < 2:
+            return None
+        return rows[-1][2] - rows[0][2]
+
+    ok = True
+
+    const = material("in.test.variable", {"RATE_EXPR": "0.2"})
+    ref = material("in.test.conserve", {"RATE": 0.2, "NEVERY": 1})
+    ok &= check("variable source : constant matches the uniform source",
+                const is not None and ref is not None and const == ref,
+                "variable=%s uniform=%s" % (const, ref))
+
+    half = material("in.test.variable", {"RATE_EXPR": "0.2*(cxlo<75)"})
+    quarter = material("in.test.variable", {"RATE_EXPR": "0.2*(cxlo<50)"})
+    if half is None or quarter is None:
+        return check("variable source : rate is applied per cell", False,
+                     "run failed")
+    # cells 25-74 vs 25-49, so twice the width for twice the material
+    rel = abs(half - 2.0 * quarter) / half
+    ok &= check("variable source : rate is applied per cell", rel < 0.02,
+                "half=%.0f quarter=%.0f, half/quarter=%.3f"
+                % (half, quarter, half / quarter))
+    return ok
+
+
 def test_grow(exe):
     """A growing film must be able to leave the block it was read into.
 
@@ -440,6 +477,8 @@ def main():
     # the same physics with the isosurface regenerated less often
     for nevery in (2, 5):
         ok &= test_conserve(exe, 0.05 * nevery, nevery)
+    # the surface must be drivable by a variable, not just a compute or fix
+    ok &= test_variable(exe)
     # a growing film must be able to leave the block it was read into
     ok &= test_grow(exe)
     # with the corner point grid on the whole box the film can grow until it

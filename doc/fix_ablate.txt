@@ -110,7 +110,13 @@ Finally, a grid-style variable can be be used as a {source}.  This
 could perform a calculation on other per grid cell quantities.  For
 example, it could add and subtract columns from the compute or fix
 just mentioned to tally adsorption versus desorption reactions and
-thus infer net mass removed from the surface.
+thus infer net mass removed from the surface.  It can also read
+per-grid-cell "custom"_custom.html attributes as {g_name}, which is how
+surface state held on the grid drives the rate.
+
+Note that the variable formula must not be quoted if it contains a
+substituted variable such as $\{expr\}, since the substitution happens
+after the quotes are stripped.
 
 For debugging purposes, the {source} can also be specified as {random}
 with an additional integer {maxrandom} value also specified.  In this
