@@ -165,14 +165,24 @@ and can be output (see below), so no particle is ever discarded without
 being accounted for.  In a closed domain the drop in particle count must
 equal the buried count exactly.
 
-Because enclosed particles are repositioned when the isosurface is
-regenerated rather than at the instant the surface reaches them, a
-smaller {Nevery} gives a more faithful answer.  An error is generated if
-the isosurface would move more than half a grid cell in a single
-regeneration, since that many particles being repositioned at once is
-not a meaningful approximation; reduce {Nevery} or the deposition rate if
-this occurs.  This treatment is identical in 2d, 3d and axisymmetric
-domains.
+Rebuilding the isosurface is expensive, so it is only done every {Nevery}
+steps, but the surface keeps growing in between.  In 2d and axisymmetric
+domains the collision geometry is therefore refreshed every step: the
+corner point field is advanced in time and the surface re-derived from
+it, so a particle is reflected off the surface where it actually is at
+that moment rather than where it was last rebuilt.  Deriving it from the
+field is what makes this reliable, since marching squares yields a valid
+watertight surface for any field, including where the surface changes
+shape and vertices appear or disappear.  Neighboring cells share the
+corner values along their common edges, so their refreshed geometry
+still meets exactly and there is no seam for a particle to slip through.
+
+In 3d, and in Kokkos runs, the refresh is not applied and enclosed
+particles are handled when the surface is regenerated, which is correct
+but resolves the growth only once per {Nevery} steps.  In every case a
+smaller {Nevery} gives a more faithful answer, and an error is generated
+if the isosurface would move more than half a grid cell in a single
+regeneration; reduce {Nevery} or the deposition rate if this occurs.
 
 If the {units} keyword is set to {distance}, the {source} is interpreted
 as a deposition rate in units of length/time, rather than as a corner

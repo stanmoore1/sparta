@@ -78,14 +78,71 @@ void MarchingSquares::invoke(double **cvalues, double ***mvalues, int *svalues)
     lo = cells[icell].lo;
     hi = cells[icell].hi;
 
+    // per-cell geometry, shared with the deposition surface refresh
+
+    if (cvalues) nsurf = cell_surfs(cvalues[icell],NULL,lo,hi,pt);
+    else nsurf = cell_surfs(NULL,mvalues[icell],lo,hi,pt);
+
+    // populate Grid and Surf data structs
+    // points will be duplicated, not unique
+    // surf ID = cell ID for all surfs in cell
+    // check if uint cell ID overflows int surf ID
+
+    if (nsurf) {
+      if (cells[icell].id > maxsurfID)
+        error->one(FLERR,"Grid cell ID overflows implicit surf ID");
+      surfID = cells[icell].id;
+    }
+
+    ptr = csurfs->get(nsurf);
+
+    ipt = 0;
+    for (i = 0; i < nsurf; i++) {
+      if (svalues) surf->add_line(surfID,svalues[icell],pt[ipt],pt[ipt+1]);
+      else surf->add_line(surfID,1,pt[ipt],pt[ipt+1]);
+      ipt += 2;
+      isurf = surf->nlocal - 1;
+      ptr[i] = isurf;
+    }
+
+    cells[icell].nsurf = nsurf;
+    if (nsurf) {
+      cells[icell].csurfs = ptr;
+      cinfo[icell].type = OVERLAP;
+    }
+  }
+}
+
+/* ----------------------------------------------------------------------
+   line segments of the isosurface within a single grid cell
+   factored out of invoke() so that the same case logic is used both when the
+     surface is regenerated and when fix ablate refreshes the collision
+     surface between regenerations for a depositing surface.  Keeping one copy
+     means the two can never disagree, which would tear the surface.
+   cvals = 4 corner values, or mvals = multivalues; the other is NULL
+   returns # of segments, fills pt with 2 end points per segment
+------------------------------------------------------------------------- */
+
+int MarchingSquares::cell_surfs(double *cvals, double **mvals,
+                                double *lo, double *hi, double pt[4][3])
+{
+  int i,nsurf,which;
+  double v00,v01,v10,v11;
+  double i0,i1,i2,i3;
+  int bit0,bit1,bit2,bit3;
+  double ave;
+
+  pt[0][2] = pt[1][2] = pt[2][2] = pt[3][2] = 0.0;
+  nsurf = 0;
+
     // cvalues are ordered lower-left, lower-right, upper-left, upper-right
     // Vyx encodes this as 0/1 in each dim
 
-    if (cvalues) {
-      v00 = cvalues[icell][0];
-      v01 = cvalues[icell][1];
-      v10 = cvalues[icell][2];
-      v11 = cvalues[icell][3];
+    if (cvals) {
+      v00 = cvals[0];
+      v01 = cvals[1];
+      v10 = cvals[2];
+      v11 = cvals[3];
 
       i0  = interpolate(v00,v01,lo[0],hi[0]);
       i1  = interpolate(v01,v11,lo[1],hi[1]);
@@ -96,10 +153,10 @@ void MarchingSquares::invoke(double **cvalues, double ***mvalues, int *svalues)
       v00 = v01 = v10 = v11 = 0.0;
 
       for (i = 0; i < 4; i++) {
-        v00 += mvalues[icell][0][i];
-        v01 += mvalues[icell][1][i];
-        v10 += mvalues[icell][2][i];
-        v11 += mvalues[icell][3][i];
+        v00 += mvals[0][i];
+        v01 += mvals[1][i];
+        v10 += mvals[2][i];
+        v11 += mvals[3][i];
       }
 
       v00 /= 4.0;
@@ -107,10 +164,10 @@ void MarchingSquares::invoke(double **cvalues, double ***mvalues, int *svalues)
       v10 /= 4.0;
       v11 /= 4.0;
 
-      i0  = interpolate(mvalues[icell][0][1],mvalues[icell][1][0],lo[0],hi[0]);
-      i1  = interpolate(mvalues[icell][1][3],mvalues[icell][3][2],lo[1],hi[1]);
-      i2  = interpolate(mvalues[icell][2][1],mvalues[icell][3][0],lo[0],hi[0]);
-      i3  = interpolate(mvalues[icell][0][3],mvalues[icell][2][2],lo[1],hi[1]);
+      i0  = interpolate(mvals[0][1],mvals[1][0],lo[0],hi[0]);
+      i1  = interpolate(mvals[1][3],mvals[3][2],lo[1],hi[1]);
+      i2  = interpolate(mvals[2][1],mvals[3][0],lo[0],hi[0]);
+      i3  = interpolate(mvals[0][3],mvals[2][2],lo[1],hi[1]);
     }
 
     // make last 2 bits consistent with Wiki page (see NOTE above)
@@ -277,34 +334,8 @@ void MarchingSquares::invoke(double **cvalues, double ***mvalues, int *svalues)
       break;
     }
 
-    // populate Grid and Surf data structs
-    // points will be duplicated, not unique
-    // surf ID = cell ID for all surfs in cell
-    // check if uint cell ID overflows int surf ID
 
-    if (nsurf) {
-      if (cells[icell].id > maxsurfID)
-        error->one(FLERR,"Grid cell ID overflows implicit surf ID");
-      surfID = cells[icell].id;
-    }
-
-    ptr = csurfs->get(nsurf);
-
-    ipt = 0;
-    for (i = 0; i < nsurf; i++) {
-      if (svalues) surf->add_line(surfID,svalues[icell],pt[ipt],pt[ipt+1]);
-      else surf->add_line(surfID,1,pt[ipt],pt[ipt+1]);
-      ipt += 2;
-      isurf = surf->nlocal - 1;
-      ptr[i] = isurf;
-    }
-
-    cells[icell].nsurf = nsurf;
-    if (nsurf) {
-      cells[icell].csurfs = ptr;
-      cinfo[icell].type = OVERLAP;
-    }
-  }
+  return nsurf;
 }
 
 /* ----------------------------------------------------------------------

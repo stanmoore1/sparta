@@ -40,6 +40,7 @@ class FixAblate : public Fix {
   void setup() {}
   void end_of_step();
 
+  void start_of_step();
   int pack_grid_one(int, char *, int);
   int unpack_grid_one(int, char *);
   void copy_grid_one(int, int);
@@ -100,6 +101,20 @@ class FixAblate : public Fix {
                            //   regeneration interval, in length units
   double max_advance;      // max of that, as a fraction of the cell size
 
+  // between regenerations the surface keeps growing, so the collision
+  //   geometry is refreshed every step from the corner point field advanced
+  //   in time.  Deriving it from the FIELD, rather than by displacing element
+  //   vertices, is what makes it robust: marching squares/cubes give a valid
+  //   watertight surface for any field, including where the topology changes
+  //   and vertices are created or destroyed.
+
+  double *cnow;            // corner values of one cell at the current time
+  double **segpt;          // refreshed geometry per cell: element end points
+  double **segnorm;        // and their outward normals
+  int *nseg;               // # of refreshed elements in each cell
+  int maxsegcell;
+  int segstride;           // max elements per cell
+
   double depo_all[9];      // deposition counters summed over all procs
   bigint depo_stamp;       // timestep depo_all was last reduced on
 
@@ -144,6 +159,7 @@ class FixAblate : public Fix {
   void decrement();
   void increment();
   void front_speed();
+  void refresh_surfs();
   double grad_mag(int);
 
   int salvage_particle(int, int);

@@ -218,6 +218,10 @@ FixAblate::FixAblate(SPARTA *sparta, int narg, char **arg) :
   cvalues_prev = NULL;
   sfront_cell = NULL;
   max_advance = 0.0;
+  cnow = NULL;
+  segpt = segnorm = NULL;
+  nseg = NULL;
+  maxsegcell = segstride = 0;
   depo_stamp = -1;
   for (int i = 0; i < 9; i++) depo_all[i] = 0.0;
   mvalues = NULL;
@@ -286,6 +290,10 @@ FixAblate::~FixAblate()
   memory->destroy(cvalues);
   memory->destroy(cvalues_prev);
   memory->destroy(sfront_cell);
+  memory->destroy(cnow);
+  memory->destroy(segpt);
+  memory->destroy(segnorm);
+  memory->destroy(nseg);
 
   memory->destroy(mvalues);
   memory->destroy(tvalues);
@@ -322,6 +330,7 @@ int FixAblate::setmask()
 {
   int mask = 0;
   if (nevery) mask |= END_OF_STEP;
+  if (nevery && mode == DEPOSIT) mask |= START_OF_STEP;
   return mask;
 }
 
@@ -794,6 +803,15 @@ void FixAblate::create_surfs(int outflag)
 
   // map the per-cell front speed onto the new surfs
   // must follow surf2grid_implicit(), which builds the csurfs lists
+
+  // record the pose the refreshed surface advances away from, and drop any
+  //   stale refresh so the move loop uses the surface just committed
+
+  if (mode == DEPOSIT) {
+    update->front_step0 = update->ntimestep;
+    update->nseg = NULL;
+    update->nsegcell = 0;
+  }
 
   // notify all classes that store per-grid data that grid has changed
 
@@ -1437,6 +1455,147 @@ void FixAblate::front_speed()
 
     sfront_cell[icell] = sum/ncross;
   }
+}
+
+/* ----------------------------------------------------------------------
+   refresh the collision geometry of a growing surface
+   the isosurface, with all of its cut-cell and connectivity work, is rebuilt
+     only every Nevery steps, but the surface keeps growing in between.  Here
+     the corner point field is advanced in time and the isosurface re-derived
+     from it, so the move loop sees the surface where it actually is now.
+   working from the FIELD is the essential point.  Displacing the element
+     vertices instead is watertight, but only describes the surface while the
+     marching squares case is unchanged; it breaks down as soon as corner
+     values cross thresh and vertices are created or destroyed.  Re-deriving
+     from the field stays correct through those topology changes, since
+     marching squares yields a valid watertight surface for whatever field it
+     is handed, and neighboring cells share the corner values along their
+     common edges so their geometry still meets exactly.
+   the field is extrapolated FORWARD from the last regeneration at the rate
+     realized over the previous interval.  Forward is what keeps it safe: the
+     refreshed surface then always holds at least as much material as the
+     committed one, so a particle outside it is outside the committed surface
+     too and remains consistent with the cell in/out typing and flow volumes,
+     which are deliberately not redone here.
+------------------------------------------------------------------------- */
+
+void FixAblate::refresh_surfs()
+{
+  if (mode != DEPOSIT || !nevery) return;
+  if (update->front_step0 < 0) return;
+
+  // 2d and axisymmetric (both dim == 2) refresh their geometry here
+  // 3d would need the same factoring of MarchingCubes that MarchingSquares
+  //   has; until then a 3d growing surface is handled entirely when it is
+  //   regenerated, which is correct but resolves the growth only per Nevery
+  // the KOKKOS move loop is a separate implementation and does not read the
+  //   refreshed geometry, so a Kokkos run behaves the same way
+
+  if (dim != 2) return;
+
+  Grid::ChildCell *cells = grid->cells;
+  Grid::ChildInfo *cinfo = grid->cinfo;
+
+  // elapsed fraction of an interval, at the middle of the step about to run
+
+  double f = (update->ntimestep - update->front_step0 - 0.5) / nevery;
+  if (f < 0.0) f = 0.0;
+
+  // do not advance the field past the point where any cell that currently
+  //   holds a piece of surface would become entirely solid
+  // beyond that the cell has no refreshed surface to offer, and the move loop
+  //   would silently fall back to the committed geometry, which by then sits
+  //   behind the real surface: particles walk straight through it
+  // the limit has to be one number for the whole domain, since neighboring
+  //   cells must evaluate the shared corner values identically or their
+  //   geometry no longer meets
+
+  double flim = f;
+  for (int icell = 0; icell < nglocal; icell++) {
+    if (!(cinfo[icell].mask & groupbit)) continue;
+    if (cells[icell].nsplit <= 0) continue;
+    if (cells[icell].nsurf == 0) continue;
+    for (int i = 0; i < ncorner; i++) {
+      double c = cvalues[icell][i];
+      double d = c - cvalues_prev[icell][i];
+      if (d <= 0.0 || c >= thresh) continue;
+      double fclose = (thresh - c) / d;
+      if (fclose < flim) flim = fclose;
+    }
+  }
+
+  double allflim;
+  MPI_Allreduce(&flim,&allflim,1,MPI_DOUBLE,MPI_MIN,world);
+  if (f > 0.9*allflim) f = 0.9*allflim;
+  if (f < 0.0) f = 0.0;
+
+  if (nglocal > maxsegcell) {
+    maxsegcell = nglocal;
+    segstride = 2;
+    memory->grow(nseg,maxsegcell,"ablate:nseg");
+    memory->grow(segpt,maxsegcell,segstride*6,"ablate:segpt");
+    memory->grow(segnorm,maxsegcell,segstride*3,"ablate:segnorm");
+    memory->grow(cnow,ncorner,"ablate:cnow");
+  }
+
+  for (int icell = 0; icell < nglocal; icell++) nseg[icell] = 0;
+
+  double pt[4][3];
+
+  for (int icell = 0; icell < nglocal; icell++) {
+    if (!(cinfo[icell].mask & groupbit)) continue;
+    if (cells[icell].nsplit <= 0) continue;
+    if (cells[icell].nsurf == 0) continue;
+
+    int moving = 0;
+    for (int i = 0; i < ncorner; i++) {
+      double d = cvalues[icell][i] - cvalues_prev[icell][i];
+      if (d != 0.0) moving = 1;
+      double c = cvalues[icell][i] + f*d;
+      if (c < 0.0) c = 0.0;
+      else if (c > 255.0) c = 255.0;
+      cnow[i] = c;
+    }
+    if (!moving) continue;
+
+    int ns = ms->cell_surfs(cnow,NULL,cells[icell].lo,cells[icell].hi,pt);
+    if (!ns) continue;
+    if (ns > segstride) ns = segstride;
+
+    for (int k = 0; k < ns; k++) {
+      double *p1 = &segpt[icell][6*k];
+      double *p2 = &segpt[icell][6*k+3];
+      for (int m = 0; m < 3; m++) {
+        p1[m] = pt[2*k][m];
+        p2[m] = pt[2*k+1][m];
+      }
+
+      // outward normal by the right hand rule Surf uses: Z x (p2-p1)
+
+      double *nm = &segnorm[icell][3*k];
+      nm[0] = -(p2[1]-p1[1]);
+      nm[1] = p2[0]-p1[0];
+      nm[2] = 0.0;
+      double len = sqrt(nm[0]*nm[0] + nm[1]*nm[1]);
+      if (len == 0.0) { ns = k; break; }
+      nm[0] /= len;
+      nm[1] /= len;
+    }
+
+    nseg[icell] = ns;
+  }
+
+  update->segpt = segpt;
+  update->segnorm = segnorm;
+  update->nseg = nseg;
+  update->nsegcell = nglocal;
+}
+
+/* ---------------------------------------------------------------------- */
+
+void FixAblate::start_of_step()
+{
+  refresh_surfs();
 }
 
 /* ----------------------------------------------------------------------

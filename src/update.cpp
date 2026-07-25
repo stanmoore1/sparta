@@ -21,6 +21,7 @@
 #include "math_const.h"
 #include "particle.h"
 #include "modify.h"
+#include "fix_ablate.h"
 #include "fix.h"
 #include "compute.h"
 #include "domain.h"
@@ -101,6 +102,10 @@ Update::Update(SPARTA *sparta) : Pointers(sparta)
   buried_erot = buried_evib = buried_ke = 0.0;
   nfrontreflect = 0;
   reflect_mom[0] = reflect_mom[1] = reflect_mom[2] = 0.0;
+  segpt = segnorm = NULL;
+  nseg = NULL;
+  nsegcell = 0;
+  front_step0 = -1;
 
   nglist_compute = nslist_compute = nblist_compute = 0;
   glist_compute = slist_compute = blist_compute = NULL;
@@ -189,34 +194,41 @@ void Update::init()
     }
   }
 
+  // a growing surface has its collision geometry refreshed every step, so
+  //   the move loop must use that instead of the last rebuilt isosurface
+  // MOVING is a compile-time template parameter, so an ablation run compiles
+  //   to exactly the code it had before
+
+  int movingflag = 0;
+  for (int ifix = 0; ifix < modify->nfix; ifix++)
+    if (strcmp(modify->fix[ifix]->style,"ablate") == 0)
+      if (((FixAblate *) modify->fix[ifix])->depositflag) movingflag = 1;
+
   // choose the appropriate move method
 
   if (domain->dimension == 3) {
-    if (surf->exist)
-      moveptr = &Update::move<3,1,0>;
-    else {
-      if (optmove_flag) moveptr = &Update::move<3,0,1>;
-      else moveptr = &Update::move<3,0,0>;
+    if (surf->exist) {
+      if (movingflag) moveptr = &Update::move<3,1,0,1>;
+      else moveptr = &Update::move<3,1,0,0>;
+    } else {
+      if (optmove_flag) moveptr = &Update::move<3,0,1,0>;
+      else moveptr = &Update::move<3,0,0,0>;
     }
   } else if (domain->axisymmetric) {
-    // deposition is supported in axisymmetry, but without the sub-timestep
-    //   advancing front: in the axisymmetric plane the particle path is
-    //   curved and surf segments routinely lie exactly on cell faces, which
-    //   the moving intersection does not yet handle reliably
-    // engulfed particles are instead reflected, or accounted as buried, when
-    //   the isosurface is regenerated, so nothing is silently deleted
-    if (surf->exist)
-      moveptr = &Update::move<1,1,0>;
-    else {
-      if (optmove_flag) moveptr = &Update::move<1,0,1>;
-      else moveptr = &Update::move<1,0,0>;
+    if (surf->exist) {
+      if (movingflag) moveptr = &Update::move<1,1,0,1>;
+      else moveptr = &Update::move<1,1,0,0>;
+    } else {
+      if (optmove_flag) moveptr = &Update::move<1,0,1,0>;
+      else moveptr = &Update::move<1,0,0,0>;
     }
   } else if (domain->dimension == 2) {
-    if (surf->exist)
-      moveptr = &Update::move<2,1,0>;
-    else {
-      if (optmove_flag) moveptr = &Update::move<2,0,1>;
-      else moveptr = &Update::move<2,0,0>;
+    if (surf->exist) {
+      if (movingflag) moveptr = &Update::move<2,1,0,1>;
+      else moveptr = &Update::move<2,1,0,0>;
+    } else {
+      if (optmove_flag) moveptr = &Update::move<2,0,1,0>;
+      else moveptr = &Update::move<2,0,0,0>;
     }
   }
 
@@ -387,10 +399,12 @@ void Update::run(int nsteps)
    advect particles thru grid
    DIM = 2/3 for 2d/3d, 1 for 2d axisymmetric
    SURF = 0/1 for no surfs or surfs
+   MOVING = 0/1 for no/yes a growing surface whose collision geometry is
+     refreshed between isosurface rebuilds, from fix ablate mode deposit
    use multiple iterations of move/comm if necessary
 ------------------------------------------------------------------------- */
 
-template < int DIM, int SURF, int OPT > void Update::move()
+template < int DIM, int SURF, int OPT, int MOVING > void Update::move()
 {
   bool hitflag;
   int m,icell,icell_original,nmask,outface,bflag,nflag,pflag,itmp;
@@ -425,6 +439,12 @@ template < int DIM, int SURF, int OPT > void Update::move()
   // xnew,xc passed to geometry routines which use or set z component
 
   if (DIM < 3) xnew[2] = xc[2] = 0.0;
+
+  // a refreshed element of a growing surface, and the surf it stands in for
+  //   when the collision is tallied
+
+  double *rp1,*rp2,*rnorm,minrnorm[3];
+  int nrefresh,irefresh,minrefresh = 0;
 
   // extend migration list if necessary
 
@@ -796,7 +816,7 @@ template < int DIM, int SURF, int OPT > void Update::move()
             // for MOVING, dtsurf = same quantity
             // used as the time window over which an advancing surf is offset
 
-            if (DIM == 1) {
+            if (DIM == 1 || MOVING) {
               if (outface == INTERIOR) dtsurf = dtremain;
               else dtsurf = dtremain * frac;
             }
@@ -812,12 +832,43 @@ template < int DIM, int SURF, int OPT > void Update::move()
             minparam = 2.0;
             csurfs = cells[icell].csurfs;
 
-            for (m = 0; m < nsurf; m++) {
-              isurf = csurfs[m];
+            // a growing surface has its geometry refreshed every step, so
+            //   test the refreshed elements of this cell instead of the ones
+            //   left over from the last isosurface rebuild
+            // the refreshed elements are derived from the corner point field,
+            //   which neighboring cells share along their common edges, so
+            //   they still meet exactly and the surface stays closed
+            // tallies are attributed to one of the cell's own surfs, so the
+            //   surface bookkeeping is unchanged
+
+            nrefresh = 0;
+            if (MOVING && nseg && icell < nsegcell) nrefresh = nseg[icell];
+
+            for (m = 0; m < (nrefresh ? nrefresh : nsurf); m++) {
+              if (MOVING && nrefresh) {
+                irefresh = m;
+                isurf = csurfs[MIN(m,nsurf-1)];
+                rp1 = &segpt[icell][6*m];
+                rp2 = &segpt[icell][6*m+3];
+                rnorm = &segnorm[icell][3*m];
+              } else isurf = csurfs[m];
+
+              // the refreshed elements stand in for the cell's own surfs, so
+              //   the just-hit surf is skipped the same way
 
               if (DIM > 1) {
                 if (isurf == exclude) continue;
               }
+
+              if (MOVING && nrefresh) {
+                if (DIM == 2)
+                  hitflag = Geometry::
+                    line_line_intersect(x,xnew,rp1,rp2,rnorm,xc,param,side);
+                else
+                  hitflag = Geometry::
+                    axi_line_intersect(dtsurf,x,v,outface,lo,hi,rp1,rp2,
+                                       rnorm,exclude == isurf,xc,vc,param,side);
+              } else
               if (DIM == 3) {
                 tri = &tris[isurf];
                   hitflag = Geometry::
@@ -912,6 +963,14 @@ template < int DIM, int SURF, int OPT > void Update::move()
 
               if (hitflag && param < minparam && side == OUTSIDE) {
                 cflag = 1;
+                if (MOVING) {
+                  minrefresh = nrefresh ? 1 : 0;
+                  if (nrefresh) {
+                    minrnorm[0] = rnorm[0];
+                    minrnorm[1] = rnorm[1];
+                    minrnorm[2] = rnorm[2];
+                  }
+                }
                 minparam = param;
                 minside = side;
                 minsurf = isurf;
@@ -957,12 +1016,19 @@ template < int DIM, int SURF, int OPT > void Update::move()
               if (nsurf_tally)
                 memcpy(&iorig,&particles[i],sizeof(Particle::OnePart));
 
+              // reflect off the surface where it actually is now
+              // the surface itself is treated as stationary: a depositing
+              //   surface advances by accretion, not by motion of its
+              //   material, so the atoms struck are at rest
+
               if (DIM == 3)
                 jpart = surf->sc[tri->isc]->
                   collide(ipart,dtremain,minsurf,tri->norm,tri->isr,reaction);
               if (DIM != 3)
                 jpart = surf->sc[line->isc]->
-                  collide(ipart,dtremain,minsurf,line->norm,line->isr,reaction);
+                  collide(ipart,dtremain,minsurf,
+                          (MOVING && minrefresh) ? minrnorm : line->norm,
+                          line->isr,reaction);
 
               if (jpart) {
                 particles = particle->particles;

@@ -65,6 +65,16 @@ class Update : protected Pointers {
   bigint nfrontreflect;  // running count of reflections back into the flow
   double reflect_mom[3]; // momentum those reflections gave to the surface
 
+                         // collision geometry of a growing surface, refreshed
+                         //   every step by FixAblate from the corner point
+                         //   field advanced in time, since the isosurface
+                         //   itself is only rebuilt every Nevery steps
+  double **segpt;        // per cell, end points of the refreshed elements
+  double **segnorm;      // and their outward normals
+  int *nseg;             // per cell, # of refreshed elements, NULL if none
+  int nsegcell;          // length of nseg
+  bigint front_step0;    // timestep the surface was last rebuilt on
+
                          // current step counters
   int niterate;          // iterations of move/comm
   int ntouch_one;        // particle-cell touches
@@ -198,7 +208,7 @@ class Update : protected Pointers {
 
   typedef void (Update::*FnPtr)();
   FnPtr moveptr;             // ptr to move method
-  template < int, int, int > void move();
+  template < int, int, int, int > void move();
 
   int perturbflag;
   typedef void (Update::*FnPtr2)(int, int, double, double *, double *);
