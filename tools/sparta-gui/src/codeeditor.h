@@ -285,6 +285,12 @@ protected:
     bool canInsertFromMimeData(const QMimeData *source) const override;
 
     /**
+     * @brief Insert clipboard or drop content as plain text
+     * @param source The MIME data to insert
+     */
+    void insertFromMimeData(const QMimeData *source) override;
+
+    /**
      * @brief Handle drag enter events
      * @param event The drag enter event
      */

@@ -312,6 +312,18 @@ target_link_libraries(test_runhistory PRIVATE
 
 gtest_discover_tests(test_runhistory)
 
+# Test executable for the dump-image colour-map table, which the command
+# builder and the settings swatches both read.
+add_executable(test_colormaps
+  test_colormaps.cpp
+  ${CMAKE_SOURCE_DIR}/src/colormaps.cpp
+)
+
+target_include_directories(test_colormaps PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_colormaps PRIVATE GTest::gtest_main Qt6::Gui)
+
+gtest_discover_tests(test_colormaps)
+
 # Test executable for the editor snippet-library parser
 add_executable(test_snippets
   test_snippets.cpp

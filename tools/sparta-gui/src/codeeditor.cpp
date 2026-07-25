@@ -676,6 +676,25 @@ void CodeEditor::dragLeaveEvent(QDragLeaveEvent *event)
     QPlainTextEdit::dragLeaveEvent(event);
 }
 
+void CodeEditor::insertFromMimeData(const QMimeData *source)
+{
+    // Paste plain text and nothing else.
+    //
+    // The inherited implementation hands the clipboard's mime data to
+    // QWidgetTextControl, which offers to interpret it as rich text --
+    // markdown, HTML, Qt's own rich-text format -- before falling back to
+    // text. In this application that path segfaulted: Ctrl+V, or Edit ->
+    // Paste, took the whole editor down with it, whatever was on the
+    // clipboard and whether or not anything was.
+    //
+    // A SPARTA input deck has no rich text in it, so none of that was ever
+    // wanted. Taking the text and inserting it is both what a user of a code
+    // editor expects (pasting from a web page gives them the commands, not
+    // the styling) and a path that does not go through the crash.
+    if (!source) return;
+    if (source->hasText()) insertPlainText(source->text());
+}
+
 bool CodeEditor::canInsertFromMimeData(const QMimeData *source) const
 {
     // QClipboard::mimeData() returns null when nothing owns the clipboard: an

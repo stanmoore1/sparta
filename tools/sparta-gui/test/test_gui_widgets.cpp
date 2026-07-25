@@ -40,6 +40,7 @@
 #include <QPushButton>
 #include <QRadioButton>
 #include <QClipboard>
+#include <QMimeData>
 #include <QSignalSpy>
 #include <QSlider>
 #include <QSpinBox>
@@ -558,6 +559,39 @@ TEST(CodeEditorClipboard, PasteInsertsTextThatIsOnTheClipboard)
     editor.setPlainText("");
     editor.paste();
     EXPECT_EQ(editor.toPlainText(), QString("stats 100"));
+    QGuiApplication::clipboard()->clear();
+}
+
+// The inherited implementation offers the clipboard's data to a rich-text
+// reader before falling back to text, and that path segfaulted here: Ctrl+V
+// took the editor down whatever was on the clipboard. An input deck has no
+// rich text in it, so the override takes the text and inserts that -- which is
+// also what someone pasting a command out of a web page wants.
+TEST(CodeEditorClipboard, RichTextIsPastedAsPlainText)
+{
+    PasteProbe editor;
+    auto *mime = new QMimeData;
+    mime->setHtml("<b>stats</b> 100");
+    mime->setText("stats 100");
+    QGuiApplication::clipboard()->setMimeData(mime);
+
+    editor.setPlainText("");
+    editor.paste();
+    EXPECT_EQ(editor.toPlainText(), QString("stats 100"))
+        << "markup reached the document, which SPARTA cannot parse";
+    QGuiApplication::clipboard()->clear();
+}
+
+TEST(CodeEditorClipboard, MimeDataWithNoTextInsertsNothing)
+{
+    PasteProbe editor;
+    auto *mime = new QMimeData;
+    mime->setData("application/octet-stream", QByteArray("\x01\x02", 2));
+    QGuiApplication::clipboard()->setMimeData(mime);
+
+    editor.setPlainText("run 10");
+    editor.paste();
+    EXPECT_EQ(editor.toPlainText(), QString("run 10"));
     QGuiApplication::clipboard()->clear();
 }
 
