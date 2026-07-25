@@ -50,7 +50,6 @@ enum{UNKNOWN,OUTSIDE,INSIDE,OVERLAP};   // cell types, same as Grid
 #define MINSPREAD 1.0     // min corner value variation across a cell, in the
                           //   0-255 scale, for the isosurface to be localized
                           //   enough that its normal speed is meaningful
-#define SWEPT_MAXR 3      // max cells out that swept coverage registers a surf
 #define SWEEP_FRAC 0.5    // max front advance per regeneration, in grid cells
 #define EPSSURF 1.0e-4    // push off a surf, same as Grid::point_outside_surfs()
 
@@ -218,15 +217,7 @@ FixAblate::FixAblate(SPARTA *sparta, int narg, char **arg) :
   array_grid = cvalues = NULL;
   cvalues_prev = NULL;
   sfront_cell = NULL;
-  sfront = NULL;
-  maxsfront = 0;
   max_advance = 0.0;
-  extra_head = NULL;
-  maxswcell = 0;
-  entnext = NULL;
-  entsurf = NULL;
-  nent = maxent = 0;
-  sweptr = 0;
   depo_stamp = -1;
   for (int i = 0; i < 9; i++) depo_all[i] = 0.0;
   mvalues = NULL;
@@ -295,10 +286,7 @@ FixAblate::~FixAblate()
   memory->destroy(cvalues);
   memory->destroy(cvalues_prev);
   memory->destroy(sfront_cell);
-  memory->destroy(sfront);
-  memory->destroy(extra_head);
-  memory->destroy(entnext);
-  memory->destroy(entsurf);
+
   memory->destroy(mvalues);
   memory->destroy(tvalues);
 
@@ -473,15 +461,9 @@ void FixAblate::init()
     error->all(FLERR,"Fix ablate mode deposit does not yet support "
                "multivalue or multiple corner-point decrement modes");
 
-  // the advancing front is implemented in Update::move()
-  // UpdateKokkos::init() does not call Update::init() and UpdateKokkos has its
-  //   own duplicate move loop, so under Kokkos the front would never be set up
-  //   and deposition would silently run as if the surface were static
-  // these checks live here rather than in Update::init() so they are reached
-  //   on every path, Kokkos included
-
-  if (mode == DEPOSIT && sparta->kokkos)
-    error->all(FLERR,"Cannot yet use fix ablate mode deposit with Kokkos");
+  // deposition is handled entirely in this fix, when the isosurface is
+  //   regenerated, so it needs no support in the move loop and works the
+  //   same in 2d, 3d, axisymmetric and Kokkos runs
 
   if (which == COMPUTE) {
     icompute = modify->find_compute(idsource);
@@ -636,6 +618,12 @@ void FixAblate::end_of_step()
   //   tested against it, and they would be overtaken silently
 
   if (mode == DEPOSIT) {
+    double small = MIN(xyzsize[0],xyzsize[1]);
+    if (dim == 3) small = MIN(small,xyzsize[2]);
+    max_advance = 0.0;
+    for (int icell = 0; icell < nglocal; icell++)
+      if (sfront_cell[icell]/small > max_advance)
+        max_advance = sfront_cell[icell]/small;
     double allmax;
     MPI_Allreduce(&max_advance,&allmax,1,MPI_DOUBLE,MPI_MAX,world);
     if (allmax > SWEEP_FRAC) {
@@ -807,16 +795,9 @@ void FixAblate::create_surfs(int outflag)
   // map the per-cell front speed onto the new surfs
   // must follow surf2grid_implicit(), which builds the csurfs lists
 
-  if (mode == DEPOSIT) build_sfront();
-
   // notify all classes that store per-grid data that grid has changed
 
   grid->notify_changed();
-
-  // register the swept coverage AFTER notify_changed(), since that calls
-  //   grid_changed() on this fix, which drops any existing registration
-
-  if (mode == DEPOSIT) swept_assign();
 
   // ------------------------------------------------------------------------
   // DEBUG - should not have to do any of this once marching cubes is perfect
@@ -1378,9 +1359,6 @@ void FixAblate::front_speed()
 
   for (int icell = 0; icell < nglocal; icell++) sfront_cell[icell] = 0.0;
 
-  double interval = nevery * update->dt;
-  if (interval <= 0.0) return;
-
   // measure how far the isosurface actually moved in each cell, by tracking
   //   where it crosses the cell edges before and after the increment
   // Marching Squares/Cubes place a vertex on an edge by linear interpolation
@@ -1423,244 +1401,42 @@ void FixAblate::front_speed()
       int i0 = edge[e][0];
       int i1 = edge[e][1];
 
-      // the isosurface must cross this edge both before and after, else
-      //   there is no pair of crossing points to compare
+      // the isosurface must have crossed this edge before the increment,
+      //   else there is no starting point to measure from
 
       int oldcross = (cold[i0] < thresh) != (cold[i1] < thresh);
-      int newcross = (cnew[i0] < thresh) != (cnew[i1] < thresh);
-      if (!oldcross || !newcross) continue;
+      if (!oldcross) continue;
 
       double dold = cold[i1] - cold[i0];
-      double dnew = cnew[i1] - cnew[i0];
-      if (dold == 0.0 || dnew == 0.0) continue;
-
+      if (dold == 0.0) continue;
       double told = (thresh - cold[i0]) / dold;
-      double tnew = (thresh - cnew[i0]) / dnew;
 
-      sum += fabs(tnew - told) * xyzsize[edgedim[e]];
+      int newcross = (cnew[i0] < thresh) != (cnew[i1] < thresh);
+
+      if (newcross) {
+        double dnew = cnew[i1] - cnew[i0];
+        if (dnew == 0.0) continue;
+        double tnew = (thresh - cnew[i0]) / dnew;
+        sum += fabs(tnew - told) * xyzsize[edgedim[e]];
+      } else {
+
+        // the surface swept clean past this edge in one step, so it moved at
+        //   least from told out to the end it exited through
+        // deposition raises the field, so it exits past the corner that was
+        //   below thresh; without this branch a very large increment would
+        //   leave no crossing to compare against and be reported as no motion
+
+        if (cold[i0] < thresh) sum += told * xyzsize[edgedim[e]];
+        else sum += (1.0 - told) * xyzsize[edgedim[e]];
+      }
+
       ncross++;
     }
 
     if (!ncross) continue;
 
-    sfront_cell[icell] = (sum/ncross) / interval;
+    sfront_cell[icell] = sum/ncross;
   }
-}
-
-/* ----------------------------------------------------------------------
-   step from icell to its neighbor across face iface
-   tolerant version of walk_to_neigh(): returns -1 instead of erroring when
-     the neighbor is not a child cell I own, e.g. at a boundary
-------------------------------------------------------------------------- */
-
-int FixAblate::neigh_step(int icell, int iface)
-{
-  Grid::ChildCell *cells = grid->cells;
-  if (grid->neigh_decode(cells[icell].nmask,iface) != NCHILD) return -1;
-  int jcell = cells[icell].neigh[iface];
-  if (jcell < 0 || jcell >= nglocal) return -1;
-  return jcell;
-}
-
-/* ----------------------------------------------------------------------
-   drop the swept coverage registration
-   the per-cell lists are rebuilt from scratch by surf2grid_implicit() at
-     every regeneration, and by the grid itself after any grid change, so
-     the saved pointers are simply discarded rather than restored
-------------------------------------------------------------------------- */
-
-void FixAblate::swept_drop()
-{
-  nent = 0;
-  update->xhead = NULL;
-  update->xnext = NULL;
-  update->xsurf = NULL;
-  update->nxhead = 0;
-}
-
-/* ---------------------------------------------------------------------- */
-
-void FixAblate::grid_changed()
-{
-  swept_drop();
-}
-
-/* ----------------------------------------------------------------------
-   register each advancing surf in every cell its front sweeps through
-   a surf is normally listed in cells[icell].csurfs only for the cells it
-     currently overlaps, and those lists are rebuilt only when the isosurface
-     is regenerated.  Between regenerations the front travels beyond them, so
-     a particle sitting in a cell the front reaches would never be tested
-     against the surf that overtakes it, and would be passed straight through.
-   walk out to the number of cells the front actually covers this interval and
-     append the surf to those cells, deduped against what is already there
-   the merged lists live in a fix-owned page; nothing is freed from the grid
-------------------------------------------------------------------------- */
-
-void FixAblate::swept_assign()
-{
-  swept_drop();
-
-  int nslocal = surf->nlocal;
-  if (!nslocal) return;
-
-  double interval = nevery * update->dt;
-  if (interval <= 0.0) return;
-
-  double small = MIN(xyzsize[0],xyzsize[1]);
-  if (dim == 3) small = MIN(small,xyzsize[2]);
-
-  // how many cells out the fastest front reaches this interval
-
-  double amax = 0.0;
-  for (int i = 0; i < nslocal; i++)
-    if (sfront[i] > amax) amax = sfront[i];
-  amax = amax * interval / small;
-
-  sweptr = static_cast<int> (amax) + 1;
-  if (sweptr > SWEPT_MAXR) sweptr = SWEPT_MAXR;
-
-  Grid::ChildCell *cells = grid->cells;
-  Grid::ChildInfo *cinfo = grid->cinfo;
-
-  if (nglocal > maxswcell) {
-    maxswcell = nglocal;
-    memory->grow(extra_head,maxswcell,"ablate:extra_head");
-  }
-  for (int i = 0; i < nglocal; i++) extra_head[i] = -1;
-
-  // phase 1: gather (cell,surf) entries for every cell within reach
-
-  int noff = 2*sweptr + 1;
-  int nzoff = (dim == 3) ? noff : 1;
-  int zbase = (dim == 3) ? sweptr : 0;
-
-  for (int icell = 0; icell < nglocal; icell++) {
-    if (!(cinfo[icell].mask & groupbit)) continue;
-    if (cells[icell].nsplit <= 0) continue;
-    int ns = cells[icell].nsurf;
-    if (ns <= 0) continue;
-    surfint *cs = cells[icell].csurfs;
-
-    for (int m = 0; m < ns; m++) {
-      int isurf = cs[m];
-      if (isurf < 0 || isurf >= nslocal) continue;
-      if (sfront[isurf] <= 0.0) continue;
-
-      // walk the neighborhood of icell, one face step at a time
-
-      for (int iz = 0; iz < nzoff; iz++) {
-        int zc = icell;
-        int dz = iz - zbase;
-        for (int k = 0; k < abs(dz) && zc >= 0; k++)
-          zc = neigh_step(zc,(dz < 0) ? ZLO : ZHI);
-        if (zc < 0) continue;
-
-        for (int iy = 0; iy < noff; iy++) {
-          int yc = zc;
-          int dy = iy - sweptr;
-          for (int k = 0; k < abs(dy) && yc >= 0; k++)
-            yc = neigh_step(yc,(dy < 0) ? YLO : YHI);
-          if (yc < 0) continue;
-
-          for (int ix = 0; ix < noff; ix++) {
-            int jcell = yc;
-            int dx = ix - sweptr;
-            for (int k = 0; k < abs(dx) && jcell >= 0; k++)
-              jcell = neigh_step(jcell,(dx < 0) ? XLO : XHI);
-            if (jcell < 0) continue;
-            if (jcell == icell) continue;
-            if (cells[jcell].nsplit <= 0) continue;
-
-            if (nent == maxent) {
-              maxent += DELTAGRID;
-              memory->grow(entnext,maxent,"ablate:entnext");
-              memory->grow(entsurf,maxent,"ablate:entsurf");
-            }
-            // dedup against what this cell already carries
-            int dup = 0;
-            int ns2 = cells[jcell].nsurf;
-            surfint *cs2 = cells[jcell].csurfs;
-            for (int j = 0; j < ns2; j++)
-              if (cs2[j] == isurf) { dup = 1; break; }
-            if (!dup)
-              for (int e = extra_head[jcell]; e >= 0; e = entnext[e])
-                if (entsurf[e] == isurf) { dup = 1; break; }
-            if (dup) continue;
-
-            entsurf[nent] = isurf;
-            entnext[nent] = extra_head[jcell];
-            extra_head[jcell] = nent++;
-          }
-        }
-      }
-    }
-  }
-
-  // publish the chained lists for the move loop
-  // deliberately NOT written into cells[].nsurf / cells[].csurfs: those are
-  //   read all over the code as "surfs geometrically in this cell", and
-  //   inflating them breaks, among other things, the fully-interior test the
-  //   regeneration safety net uses to find engulfed particles
-
-  update->xhead = extra_head;
-  update->xnext = entnext;
-  update->xsurf = entsurf;
-  update->nxhead = nglocal;
-}
-
-/* ----------------------------------------------------------------------
-   map the per-cell front speed onto the newly created surf elements
-   must be called after grid->surf2grid_implicit() has built the csurfs lists
-   a surf shared by more than one cell takes the larger speed, so that the
-     move loop never under-predicts how far the front travels
-------------------------------------------------------------------------- */
-
-void FixAblate::build_sfront()
-{
-  int nslocal = surf->nlocal;
-
-  if (nslocal > maxsfront) {
-    maxsfront = nslocal;
-    memory->grow(sfront,maxsfront,"ablate:sfront");
-  }
-
-  for (int i = 0; i < nslocal; i++) sfront[i] = 0.0;
-
-  Grid::ChildCell *cells = grid->cells;
-
-  max_advance = 0.0;
-  double small = MIN(xyzsize[0],xyzsize[1]);
-  if (dim == 3) small = MIN(small,xyzsize[2]);
-  double interval = nevery * update->dt;
-
-  for (int icell = 0; icell < nglocal; icell++) {
-    if (cells[icell].nsplit <= 0) continue;
-    double s = sfront_cell[icell];
-    if (s <= 0.0) continue;
-
-    int ns = cells[icell].nsurf;
-    surfint *cs = cells[icell].csurfs;
-    for (int m = 0; m < ns; m++) {
-      int isurf = cs[m];
-      if (isurf < 0 || isurf >= nslocal) continue;
-      if (s > sfront[isurf]) sfront[isurf] = s;
-    }
-
-    // the csurfs lists are rebuilt only at a regeneration, so the bound that
-    //   matters is how far the front travels over the whole interval, not
-    //   over one step
-
-    double advance = s * interval / small;
-    if (advance > max_advance) max_advance = advance;
-  }
-
-  // hand the per-surf speeds to Update so the move loop can advance the front
-  // front_step0 marks the pose the front advances away from
-
-  update->sfront = sfront;
-  update->nsfront = nslocal;
-  update->front_step0 = update->ntimestep;
 }
 
 /* ----------------------------------------------------------------------

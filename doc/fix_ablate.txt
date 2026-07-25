@@ -140,45 +140,39 @@ deposition of material onto the surface.  This is the inverse operation
 of ablation and can be used for growth problems such as thin-film
 deposition or condensation.
 
-Unlike a receding surface, a growing surface advances into the region
-the gas occupies and will run into gas particles.  Those particles are
-{not} deleted.  Instead the surface is treated as a front which advances
-along its own outward normal at a speed derived from the corner point
-increments, and the particle move is tested against that advancing
-front.  A particle the front reaches is given an ordinary gas-surface
-interaction at the point and time where the front and the particle
-trajectory actually cross, and is then advected for the remainder of the
-timestep, repeating if the front reaches it again.  The momentum it
-exchanges with the surface is tallied by "compute
+Unlike a receding surface, a growing surface advances into the region the
+gas occupies and can end up enclosing gas particles.  Those particles are
+{not} deleted.  Each time the isosurface is regenerated, any particle the
+new surface encloses is given an ordinary gas-surface interaction against
+the surface element that now separates it from the flow, and is placed
+back on the flow side.  The momentum it exchanges is tallied by "compute
 surf"_compute_surf.html and "compute isurf/grid"_compute_isurf_grid.html
 in the usual way, so a growing surface conserves momentum exactly as a
 static one does.
 
-The gas-surface interaction uses the surface at rest, not moving at the
-front speed.  A depositing surface advances by accretion rather than by
-motion of its material: at any instant the local patch of atoms a gas
-particle strikes is stationary, and any motion of those atoms is already
-represented by the "surf_collide"_surf_collide.html model.  The front
-speed therefore sets {when and where} the collision happens, not the
-velocity the particle rebounds from.
+The gas-surface interaction uses the surface at rest.  A depositing
+surface advances by accretion rather than by motion of its material: at
+any instant the local patch of atoms a gas particle strikes is
+stationary, and any motion of those atoms is already represented by the
+"surf_collide"_surf_collide.html model.
 
-If the front is advancing faster than a particle can move away from it,
-that particle cannot escape and is eventually buried, i.e. incorporated
-into the growing film.  This is physical, and it is rare unless the
-deposition rate approaches the thermal speed of the gas.  A buried
-particle is removed from the gas, and its mass, momentum and energy are
-accumulated and can be output (see below), so no particle is ever
-discarded without being accounted for.
+If a particle ends up somewhere the surface has closed over completely,
+so that there is no longer a surface element to reflect it from, it is
+buried, i.e. incorporated into the growing film.  This is physical, and
+it is rare unless the deposition rate is large.  A buried particle is
+removed from the gas, and its mass, momentum and energy are accumulated
+and can be output (see below), so no particle is ever discarded without
+being accounted for.  In a closed domain the drop in particle count must
+equal the buried count exactly.
 
-The isosurface is regenerated only every {Nevery} steps, but the front
-advances every step in between.  Its position between regenerations is
-computed analytically, so the physics does not depend on {Nevery}; a
-larger {Nevery} only reduces how often the surface geometry is rebuilt.
-Because the per-cell lists of surface elements are rebuilt only at a
-regeneration, an error is generated if the front would advance more than
-half a grid cell between regenerations, since particles further away
-would never be tested against it.  Reduce {Nevery} or the deposition
-rate if this occurs.
+Because enclosed particles are repositioned when the isosurface is
+regenerated rather than at the instant the surface reaches them, a
+smaller {Nevery} gives a more faithful answer.  An error is generated if
+the isosurface would move more than half a grid cell in a single
+regeneration, since that many particles being repositioned at once is
+not a meaningful approximation; reduce {Nevery} or the deposition rate if
+this occurs.  This treatment is identical in 2d, 3d and axisymmetric
+domains.
 
 If the {units} keyword is set to {distance}, the {source} is interpreted
 as a deposition rate in units of length/time, rather than as a corner
@@ -189,22 +183,14 @@ natural when the rate is derived from a surface flux, for example with
 "compute isurf/grid"_compute_isurf_grid.html.  With the default {units}
 = {corner}, the {source} has the same meaning it does for ablation.
 
-In an axisymmetric domain the sub-timestep treatment above is not
-applied.  The particle path is curved in the axisymmetric plane, and
-surface elements routinely lie exactly on grid cell faces there, which
-the moving intersection test does not yet handle reliably.  Deposition
-itself is fully supported: particles the growing surface encloses are
-reflected back into the flow, or accounted as incorporated into the
-film, when the isosurface is regenerated, so none are silently deleted.
-The practical difference is that a particle is repositioned at the
-regeneration rather than at the instant the front reaches it, so a
-smaller {Nevery} gives a more faithful answer.
-
 The {mode} = deposit option currently supports only the default
 single-value, single-decrement corner point representation; it cannot
 be combined with the {multiple} keyword or with multivalue corner
-points.  Like all of fix ablate it has no Kokkos version, and an error
-is generated if it is used with Kokkos enabled.
+points.  It is otherwise unrestricted: because the growth and the
+handling of enclosed particles are both done by this fix when the
+isosurface is regenerated, and nothing is required of the particle move
+loop, deposition behaves identically in 2d, 3d and axisymmetric domains
+and in Kokkos runs.
 
 :line
 

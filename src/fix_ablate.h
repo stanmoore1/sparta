@@ -40,7 +40,6 @@ class FixAblate : public Fix {
   void setup() {}
   void end_of_step();
 
-  void grid_changed();
   int pack_grid_one(int, char *, int);
   int unpack_grid_one(int, char *);
   void copy_grid_one(int, int);
@@ -97,23 +96,9 @@ class FixAblate : public Fix {
   //   advances every step, so the move loop offsets each surf element
   //   along its own normal by sfront * elapsed time since regeneration
 
-  // swept coverage
-  // a surf element is normally listed only in the cells it overlaps, and the
-  //   lists are rebuilt only at a regeneration.  An advancing front reaches
-  //   beyond those cells, so particles there would never be tested against
-  //   it.  Register each advancing surf in every cell it sweeps through.
-
-  int *extra_head;         // per-cell head of the swept surf chain, -1 = none
-  int maxswcell;
-  int *entnext;            // chained entries: next index, and the surf
-  surfint *entsurf;
-  int nent,maxent;
-  int sweptr;              // radius in cells the front reaches this interval
-
-  double *sfront_cell;     // per-cell front normal speed (length/time)
-  double *sfront;          // per-surf front normal speed, indexed by isurf
-  int maxsfront;           // allocated length of sfront
-  double max_advance;      // max observed sfront*dt / cell size, for reporting
+  double *sfront_cell;     // per-cell isosurface displacement over the last
+                           //   regeneration interval, in length units
+  double max_advance;      // max of that, as a fraction of the cell size
 
   double depo_all[9];      // deposition counters summed over all procs
   bigint depo_stamp;       // timestep depo_all was last reduced on
@@ -160,10 +145,7 @@ class FixAblate : public Fix {
   void increment();
   void front_speed();
   double grad_mag(int);
-  void build_sfront();
-  void swept_assign();
-  void swept_drop();
-  int neigh_step(int, int);
+
   int salvage_particle(int, int);
   void decrement_multiv();
   void decrement_multid_inside();

@@ -21,7 +21,6 @@
 #include "math_const.h"
 #include "particle.h"
 #include "modify.h"
-#include "fix_ablate.h"
 #include "fix.h"
 #include "compute.h"
 #include "domain.h"
@@ -52,8 +51,6 @@ enum{PERAUTO,PERCELL,PERSURF};                  // several files
 enum{NOFIELD,CFIELD,PFIELD,GFIELD};             // several files
 
 #define MAXSTUCK 20
-#define MAXFRONT 10       // max consecutive hits by an advancing surf
-                          //   before a particle is treated as buried
 #define EPSPARAM 1.0e-7
 
 // either set ID or PROC/INDEX, set other to -1
@@ -98,14 +95,6 @@ Update::Update(SPARTA *sparta) : Pointers(sparta)
   maxmigrate = 0;
   mlist = NULL;
 
-  movingflag = 0;
-  sfront = NULL;
-  nsfront = 0;
-  front_step0 = -1;
-  xhead = NULL;
-  xnext = NULL;
-  xsurf = NULL;
-  nxhead = 0;
   nburied = 0;
   buried_mass = 0.0;
   buried_mom[0] = buried_mom[1] = buried_mom[2] = 0.0;
@@ -200,28 +189,14 @@ void Update::init()
     }
   }
 
-  // detect an advancing surface, from fix ablate with mode = deposit
-  // its isosurface is regenerated only every Nevery steps, but the front
-  //   advances every step, so the move loop must use the advancing
-  //   intersection test to catch particles the front runs into
-
-  movingflag = 0;
-  for (int ifix = 0; ifix < modify->nfix; ifix++)
-    if (strcmp(modify->fix[ifix]->style,"ablate") == 0)
-      if (((FixAblate *) modify->fix[ifix])->depositflag) movingflag = 1;
-
-  if (movingflag && !surf->exist)
-    error->all(FLERR,"Fix ablate mode deposit requires surfaces");
-
   // choose the appropriate move method
 
   if (domain->dimension == 3) {
-    if (surf->exist) {
-      if (movingflag) moveptr = &Update::move<3,1,0,1>;
-      else moveptr = &Update::move<3,1,0,0>;
-    } else {
-      if (optmove_flag) moveptr = &Update::move<3,0,1,0>;
-      else moveptr = &Update::move<3,0,0,0>;
+    if (surf->exist)
+      moveptr = &Update::move<3,1,0>;
+    else {
+      if (optmove_flag) moveptr = &Update::move<3,0,1>;
+      else moveptr = &Update::move<3,0,0>;
     }
   } else if (domain->axisymmetric) {
     // deposition is supported in axisymmetry, but without the sub-timestep
@@ -231,18 +206,17 @@ void Update::init()
     // engulfed particles are instead reflected, or accounted as buried, when
     //   the isosurface is regenerated, so nothing is silently deleted
     if (surf->exist)
-      moveptr = &Update::move<1,1,0,0>;
+      moveptr = &Update::move<1,1,0>;
     else {
-      if (optmove_flag) moveptr = &Update::move<1,0,1,0>;
-      else moveptr = &Update::move<1,0,0,0>;
+      if (optmove_flag) moveptr = &Update::move<1,0,1>;
+      else moveptr = &Update::move<1,0,0>;
     }
   } else if (domain->dimension == 2) {
-    if (surf->exist) {
-      if (movingflag) moveptr = &Update::move<2,1,0,1>;
-      else moveptr = &Update::move<2,1,0,0>;
-    } else {
-      if (optmove_flag) moveptr = &Update::move<2,0,1,0>;
-      else moveptr = &Update::move<2,0,0,0>;
+    if (surf->exist)
+      moveptr = &Update::move<2,1,0>;
+    else {
+      if (optmove_flag) moveptr = &Update::move<2,0,1>;
+      else moveptr = &Update::move<2,0,0>;
     }
   }
 
@@ -413,18 +387,15 @@ void Update::run(int nsteps)
    advect particles thru grid
    DIM = 2/3 for 2d/3d, 1 for 2d axisymmetric
    SURF = 0/1 for no surfs or surfs
-   MOVING = 0/1 for no/yes surfs which advance along their own normal
-     during the timestep, from fix ablate with mode = deposit
    use multiple iterations of move/comm if necessary
 ------------------------------------------------------------------------- */
 
-template < int DIM, int SURF, int OPT, int MOVING > void Update::move()
+template < int DIM, int SURF, int OPT > void Update::move()
 {
   bool hitflag;
   int m,icell,icell_original,nmask,outface,bflag,nflag,pflag,itmp;
   int side,minside,minsurf,nsurf,cflag,isurf,exclude,stuck_iterate;
   int pstart,pstop,entryexit,any_entryexit,reaction;
-  int front_iterate;
   surfint *csurfs;
   cellint *neigh;
   double dtremain,frac,newfrac,param,minparam,rnew,dtsurf,tc,tmp;
@@ -454,17 +425,6 @@ template < int DIM, int SURF, int OPT, int MOVING > void Update::move()
   // xnew,xc passed to geometry routines which use or set z component
 
   if (DIM < 3) xnew[2] = xc[2] = 0.0;
-
-  // elapsed time from the pose the advancing front starts from, to the start
-  //   of this step
-  // the isosurface is regenerated only every Nevery steps, at the end of step
-  //   front_step0, but the front keeps advancing every step in between, so
-  //   the offset must be measured from that regeneration, not from this step
-
-  double frontbase = 0.0;
-  if (MOVING && front_step0 >= 0)
-    frontbase = (ntimestep - front_step0 - 1) * dt;
-  if (frontbase < 0.0) frontbase = 0.0;
 
   // extend migration list if necessary
 
@@ -638,7 +598,6 @@ template < int DIM, int SURF, int OPT, int MOVING > void Update::move()
       neigh = cells[icell].neigh;
       nmask = cells[icell].nmask;
       stuck_iterate = 0;
-      front_iterate = 0;
       ntouch_one++;
 
       // advect one particle from cell to cell and thru surf collides til done
@@ -837,7 +796,7 @@ template < int DIM, int SURF, int OPT, int MOVING > void Update::move()
             // for MOVING, dtsurf = same quantity
             // used as the time window over which an advancing surf is offset
 
-            if (DIM == 1 || MOVING) {
+            if (DIM == 1) {
               if (outface == INTERIOR) dtsurf = dtremain;
               else dtsurf = dtremain * frac;
             }
@@ -853,60 +812,20 @@ template < int DIM, int SURF, int OPT, int MOVING > void Update::move()
             minparam = 2.0;
             csurfs = cells[icell].csurfs;
 
-            // an advancing surf sweeps beyond the cells it overlaps, and the
-            //   per-cell lists are rebuilt only at a regeneration, so a surf
-            //   which reaches into this cell may not be listed in it
-            // fix ablate chains those surfs per cell for exactly this loop;
-            //   they are kept out of cells[].csurfs because that is read all
-            //   over the code as "surfs geometrically in this cell"
-            // collapses to a single pass when MOVING = 0, so the ablation
-            //   path is unchanged
-
-            int nsource = 1;
-            if (MOVING && xhead && icell < nxhead && xhead[icell] >= 0)
-              nsource = 2;
-
-            for (int isource = 0; isource < nsource; isource++) {
-            int echain = (isource == 1) ? xhead[icell] : -1;
-            int nlist = (isource == 1) ? 0 : nsurf;
-
-            for (m = 0; (isource == 1) ? (echain >= 0) : (m < nlist); m++) {
-              if (isource == 1) {
-                isurf = xsurf[echain];
-                echain = xnext[echain];
-              } else isurf = csurfs[m];
-
-              // skip the just-hit surf, except for an advancing surf which
-              //   can legitimately catch up with the particle again
+            for (m = 0; m < nsurf; m++) {
+              isurf = csurfs[m];
 
               if (DIM > 1) {
-                if (isurf == exclude) {
-                  if (!MOVING) continue;
-                  if (isurf >= nsfront || sfront[isurf] == 0.0) continue;
-                }
+                if (isurf == exclude) continue;
               }
               if (DIM == 3) {
                 tri = &tris[isurf];
-                if (MOVING && isurf < nsfront && sfront[isurf] > 0.0)
-                  hitflag = Geometry::
-                    line_tri_advancing_intersect(x,xnew,frontbase+dt-dtremain,dtsurf,
-                                                 sfront[isurf],
-                                                 tri->p1,tri->p2,tri->p3,
-                                                 tri->norm,xc,param,side);
-                else
                   hitflag = Geometry::
                     line_tri_intersect(x,xnew,tri->p1,tri->p2,tri->p3,
                                        tri->norm,xc,param,side);
               }
               if (DIM == 2) {
                 line = &lines[isurf];
-                if (MOVING && isurf < nsfront && sfront[isurf] > 0.0)
-                  hitflag = Geometry::
-                    line_line_advancing_intersect(x,xnew,frontbase+dt-dtremain,dtsurf,
-                                                  sfront[isurf],
-                                                  line->p1,line->p2,
-                                                  line->norm,xc,param,side);
-                else
                   hitflag = Geometry::
                     line_line_intersect(x,xnew,line->p1,line->p2,
                                         line->norm,xc,param,side);
@@ -991,18 +910,7 @@ template < int DIM, int SURF, int OPT, int MOVING > void Update::move()
               //   reflected back out, which is what the collide model does
               //   since it emits into the +norm hemisphere
 
-              // for DIM > 1, side is positional, so a particle inside the band
-              //   the front has swept reports INSIDE; it has been overtaken
-              //   and must be reflected back out rather than passed through
-              // for axisymmetry, side comes from the velocity at the collision
-              //   point instead, where INSIDE means moving away from the
-              //   surface, so that relaxation does not apply
-
-              int sideok = (side == OUTSIDE);
-              if (MOVING && DIM > 1 && !sideok && side == INSIDE &&
-                  isurf < nsfront && sfront[isurf] > 0.0) sideok = 1;
-
-              if (hitflag && param < minparam && sideok) {
+              if (hitflag && param < minparam && side == OUTSIDE) {
                 cflag = 1;
                 minparam = param;
                 minside = side;
@@ -1017,8 +925,6 @@ template < int DIM, int SURF, int OPT, int MOVING > void Update::move()
               }
 
             } // END of for loop over surfs
-
-            } // END of loop over surf sources (cell list, then swept chain)
 
             // tri/line = surf that particle hit first
 
@@ -1078,26 +984,6 @@ template < int DIM, int SURF, int OPT, int MOVING > void Update::move()
               if (minparam == 0.0) stuck_iterate++;
               else stuck_iterate = 0;
 
-              // front_iterate = consecutive collisions after which the front
-              //   still outruns the particle along the surface normal
-              // such a particle cannot escape and will be overtaken again;
-              //   if that persists it is buried, i.e. incorporated into the
-              //   film, which bounds the reflect/re-advect loop
-              // a particle that reflects fast enough to outrun the front has
-              //   escaped, so the count resets: merely colliding many times
-              //   with a growing surface is normal and must not bury it
-
-              if (MOVING) {
-                if (ipart && minsurf < nsfront && sfront[minsurf] > 0.0) {
-                  double *nrm;
-                  if (DIM == 3) nrm = tris[minsurf].norm;
-                  else nrm = lines[minsurf].norm;
-                  double vdotn = v[0]*nrm[0] + v[1]*nrm[1] + v[2]*nrm[2];
-                  if (vdotn < sfront[minsurf]) front_iterate++;
-                  else front_iterate = 0;
-                } else front_iterate = 0;
-              }
-
               // reset post-bounce xnew
 
               xnew[0] = x[0] + dtremain*v[0];
@@ -1143,18 +1029,7 @@ template < int DIM, int SURF, int OPT, int MOVING > void Update::move()
               // else if particle not stuck, continue advection while loop
               // if stuck, mark for DISCARD, and drop out of SURF code
 
-              // if the advancing front has overtaken this particle MAXFRONT
-              //   times in a row, its outward velocity is persistently slower
-              //   than the front, so the molecule is buried, i.e. incorporated
-              //   into the growing film
-              // book its mass, momentum and energy so the deletion is
-              //   accounted for rather than silently dropped
-
               if (ipart == NULL) particles[i].flag = PDISCARD;
-              else if (MOVING && front_iterate >= MAXFRONT) {
-                bury_particle(&particles[i]);
-                particles[i].flag = PDISCARD;
-              }
               else if (stuck_iterate < MAXSTUCK) continue;
               else {
                 particles[i].flag = PDISCARD;

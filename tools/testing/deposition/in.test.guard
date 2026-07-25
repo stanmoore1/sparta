@@ -27,9 +27,12 @@ mixture             air N
 region              inner block 25.5 124.5 25.5 124.5 INF INF
 group               inner grid region inner one
 
-# 5 corner value units per regeneration is far too fast
+# 20 corner value units per regeneration moves the isosurface more than half
+# a grid cell in one go, which is what the guard rejects.  (Rates so extreme
+# that the surface stops being watertight are caught earlier, by SPARTA's own
+# watertight check.)
 
-fix                 ablate ablate inner 1 1.0 uniform 5 mode deposit
+fix                 ablate ablate inner 1 1.0 uniform 20 mode deposit
 
 global              surfs implicit
 read_isurf          inner 100 100 1 ../../../examples/ablation/binary.101x101 180.5 ablate

@@ -54,26 +54,15 @@ class Update : protected Pointers {
   int nmigrate;          // # of particles to migrate to new procs
   int *mlist;            // indices of particles to migrate
 
-                         // advancing surfaces (fix ablate mode deposit)
-  int movingflag;        // 1 if any surf advances during a timestep
-  double *sfront;        // per-surf normal advance speed, NULL if none
-                         //   owned by FixAblate, indexed by local surf index
-  int nsfront;           // length of sfront
-  bigint front_step0;    // timestep whose end_of_step last regenerated the
-                         //   isosurface; the front advances from that pose
-                         // swept coverage: advancing surfs which reach into a
-                         //   cell but are not in its csurfs list, chained per
-                         //   cell.  Owned by FixAblate, read only by move().
-  int *xhead;            // per-cell head index into xnext/xsurf, -1 = none
-  int *xnext;
-  surfint *xsurf;
-  int nxhead;
-  bigint nburied;        // running count of particles buried by a front
+                         // deposition (fix ablate mode deposit) bookkeeping
+                         // a growing surface can enclose gas particles; they
+                         //   are reflected back into the flow where possible,
+                         //   else counted as incorporated into the film
+  bigint nburied;        // running count of particles buried by a surface
   double buried_mass;    // running mass buried
   double buried_mom[3];  // running momentum buried
   double buried_erot,buried_evib,buried_ke;   // running energy buried
-  bigint nfrontreflect;  // running count of safety-net reflections after
-                         //   an isosurface regeneration
+  bigint nfrontreflect;  // running count of reflections back into the flow
   double reflect_mom[3]; // momentum those reflections gave to the surface
 
                          // current step counters
@@ -209,7 +198,7 @@ class Update : protected Pointers {
 
   typedef void (Update::*FnPtr)();
   FnPtr moveptr;             // ptr to move method
-  template < int, int, int, int > void move();
+  template < int, int, int > void move();
 
   int perturbflag;
   typedef void (Update::*FnPtr2)(int, int, double, double *, double *);

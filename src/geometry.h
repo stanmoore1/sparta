@@ -47,17 +47,6 @@ namespace Geometry {
                                 double *, double *, double *, double *,
                                 double *, double &param, int &);
 
-  // intersection with a surf element advancing along its own outward
-  //   normal at speed sfront, for a growing (depositing) surface
-
-  bool line_line_advancing_intersect(double *, double *,
-                                     double, double, double,
-                                     double *, double *, double *,
-                                     double *, double &param, int &);
-  bool line_tri_advancing_intersect(double *, double *,
-                                    double, double, double,
-                                    double *, double *, double *, double *,
-                                    double *, double &param, int &);
   int whichside(double *, double *, double, double, double);
   int point_on_hex(double *, double *, double *);
   int point_in_hex(double *, double *, double *);
