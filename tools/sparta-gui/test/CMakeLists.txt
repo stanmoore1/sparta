@@ -16,7 +16,7 @@ FetchContent_MakeAvailable(googletest)
 include(GoogleTest)
 
 # Find Qt6 (Qt5 is no longer supported)
-find_package(Qt6 6.2 REQUIRED COMPONENTS Widgets)
+find_package(Qt6 6.2 REQUIRED COMPONENTS Widgets Test)
 
 # check that the Xvfb runner and a supported screenshooter are present
 find_program(XVFB_RUNNER
@@ -68,6 +68,43 @@ else()
     ENVIRONMENT "OMP_NUM_THREADS=1"
     PASS_REGULAR_EXPRESSION "Options:.?  -h, --help   +Displays help on commandline options.")
 endif()
+
+# Exhaustive widget-tree walker.  Links only what the self-tests need; the
+# real-window walks below drive the application's own dialogs.
+# Links the whole application (minus its main()) so the walker can construct
+# the real dialogs rather than stand-ins.  PROJECT_SOURCES already carries the
+# generated resource file, which the dialogs need for their icons.
+set(GUI_WALKER_SOURCES ${PROJECT_SOURCES})
+list(FILTER GUI_WALKER_SOURCES EXCLUDE REGEX "/src/main\\.cpp$")
+
+add_executable(test_gui_widgets
+  test_gui_widgets.cpp
+  ${GUI_WALKER_SOURCES}
+)
+
+# mirror the application target's include paths and definitions, or the shared
+# sources compile differently here than they do in the shipped binary
+target_include_directories(test_gui_widgets PRIVATE
+  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}/thirdparty/rangeslider
+)
+target_compile_definitions(test_gui_widgets PRIVATE SPARTA_GUI_VERSION="${PROJECT_VERSION}")
+
+target_link_libraries(test_gui_widgets PRIVATE
+  GTest::gtest_main Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Svg Qt6::Test
+  lepton_mini ads::qtadvanceddocking-qt6)
+
+if (SPARTA_GUI_HAVE_VTK)
+  target_compile_definitions(test_gui_widgets PRIVATE SPARTA_GUI_HAVE_VTK)
+  target_link_libraries(test_gui_widgets PRIVATE ${VTK_LIBRARIES})
+  vtk_module_autoinit(TARGETS test_gui_widgets MODULES ${VTK_LIBRARIES})
+endif()
+if (SPARTA_GUI_USE_PLUGIN)
+  target_compile_definitions(test_gui_widgets PRIVATE SPARTA_GUI_USE_PLUGIN)
+  target_include_directories(test_gui_widgets PRIVATE ${SPARTA_PLUGINLIB_DIR})
+endif()
+
+gtest_discover_tests(test_gui_widgets)
 
 # Test executable for helpers
 add_executable(test_helpers

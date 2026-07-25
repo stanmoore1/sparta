@@ -90,6 +90,16 @@ std::unique_ptr<QFont> GUI_ALLFONT;
 QFont monoFontFromSettings()
 {
     QSettings settings;
+    // GUI_MONOFONT is set up by main(); anything that reaches this helper before
+    // that (a test binary, or a future entry point) would otherwise dereference
+    // a null unique_ptr and take the process down with no diagnostic. Fall back
+    // to the platform default instead.
+    if (!GUI_MONOFONT) {
+        QFont fallback("Monospace");
+        fallback.setStyleHint(QFont::Monospace, QFont::PreferQuality);
+        fallback.setFixedPitch(true);
+        GUI_MONOFONT = std::make_unique<QFont>(fallback);
+    }
     QFontInfo mono_info(*GUI_MONOFONT);
     QFont mono_font;
     mono_font.setFamily(settings.value(Keys::MONOFAMILY, mono_info.family()).toString());
