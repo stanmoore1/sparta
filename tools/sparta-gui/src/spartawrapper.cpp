@@ -404,14 +404,22 @@ void SpartaWrapper::finalize()
     }
 }
 
+// The build-configuration queries below are asked about a library that may not
+// be loaded: Preferences builds its accelerator tab from them, and Preferences
+// is exactly where a user goes when the library could not be found and the path
+// needs setting. In plugin mode SPAFN() dereferences the plugin handle, so
+// asking without a library segfaulted the moment that dialog opened. Answering
+// "no such feature" is both safe and true of a library that is not there.
 bool SpartaWrapper::configHasPackage(const char *package) const
 {
+    if (!hasLibrary()) return false;
     return SPAFN(config_has_package)(package) != 0;
 }
 
 bool SpartaWrapper::configAccelerator(const char *package, const char *category,
                                       const char *setting) const
 {
+    if (!hasLibrary()) return false;
     return SPAFN(config_accelerator)(package, category, setting) != 0;
 }
 
@@ -423,26 +431,31 @@ bool SpartaWrapper::configHasCurlSupport() const
 
 bool SpartaWrapper::configHasPngSupport() const
 {
+    if (!hasLibrary()) return false;
     return SPAFN(config_has_png_support)() != 0;
 }
 
 bool SpartaWrapper::configHasJpegSupport() const
 {
+    if (!hasLibrary()) return false;
     return SPAFN(config_has_jpeg_support)() != 0;
 }
 
 bool SpartaWrapper::configHasFfmpegSupport() const
 {
+    if (!hasLibrary()) return false;
     return SPAFN(config_has_ffmpeg_support)() != 0;
 }
 
 bool SpartaWrapper::configHasMpiSupport() const
 {
+    if (!hasLibrary()) return false;
     return SPAFN(config_has_mpi_support)() != 0;
 }
 
 bool SpartaWrapper::configHasGzipSupport() const
 {
+    if (!hasLibrary()) return false;
     return SPAFN(config_has_gzip_support)() != 0;
 }
 

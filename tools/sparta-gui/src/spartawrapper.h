@@ -258,6 +258,21 @@ public:
      */
     [[nodiscard]] bool isOpen() const { return sparta_handle != nullptr; }
 
+    /// @brief Is a SPARTA library actually loaded?
+    ///
+    /// Distinct from isOpen(), which asks whether an *instance* exists. The
+    /// build-configuration queries are meaningful without an instance but not
+    /// without a library, and in plugin mode calling one without a library
+    /// dereferences a null function table.
+    [[nodiscard]] bool hasLibrary() const
+    {
+#if defined(SPARTA_GUI_USE_PLUGIN)
+        return plugin_handle != nullptr;
+#else
+        return true;
+#endif
+    }
+
     /**
      * @brief Check if SPARTA is currently executing a run
      * @return true if running, false otherwise
