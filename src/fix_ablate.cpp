@@ -227,7 +227,7 @@ FixAblate::FixAblate(SPARTA *sparta, int narg, char **arg) :
   isc_default = isr_default = 0;
   array_grid = cvalues = NULL;
   cvalues_prev = NULL;
-  sfront_cell = NULL;
+  sfront_cell = sfront_normal = NULL;
   max_advance = 0.0;
   cnow = cnext = NULL;
   segpt = segnorm = NULL;
@@ -304,6 +304,7 @@ FixAblate::~FixAblate()
   memory->destroy(cvalues);
   memory->destroy(cvalues_prev);
   memory->destroy(sfront_cell);
+  memory->destroy(sfront_normal);
   memory->destroy(cnow);
   memory->destroy(cnext);
   memory->destroy(segpt);
@@ -610,7 +611,13 @@ void FixAblate::end_of_step()
     for (int icell = 0; icell < nglocal; icell++) {
       if (!(cinfo[icell].mask & groupbit)) continue;
       if (cells[icell].nsplit <= 0) continue;
-      celldelta[icell] *= grad_mag(icell) * interval;
+
+      // celldelta is a speed; turn the distance it asks for into the corner
+      //   point increment that actually delivers it
+
+      double response = front_response(icell);
+      if (response > 0.0) celldelta[icell] *= interval / response;
+      else celldelta[icell] = 0.0;
     }
   }
 
@@ -665,7 +672,6 @@ void FixAblate::end_of_step()
     front_speed();
     check_group_boundary();
   }
-
   // re-create implicit surfs
 
   create_surfs(0);
@@ -1417,6 +1423,21 @@ void FixAblate::increment()
 
     for (i = 0; i < ncorner; i++) cdelta[icell][i] = 0.0;
 
+    // a rate in length/time asks the surface to move a set distance, and the
+    //   relation end_of_step() used to convert it, dc = s*|grad c|*dt, is the
+    //   relation for a field shifted UNIFORMLY by dc.  Concentrating the
+    //   whole budget on one corner does not shift the field uniformly, and
+    //   the front then moves by only a fraction of what was asked (see the
+    //   header comment on uniform_share() for the arithmetic).
+    // so hand every corner an equal share.  sync() sums the contributions of
+    //   the cells sharing a corner point, so the share is divided by that
+    //   count and each corner ends up rising by exactly celldelta.
+
+    if (unitsflag == DISTANCE) {
+      for (i = 0; i < ncorner; i++) cdelta[icell][i] = celldelta[icell];
+      continue;
+    }
+
     total = celldelta[icell];
     corners = cvalues[icell];
     while (total > 0.0) {
@@ -1907,13 +1928,16 @@ void FixAblate::front_speed()
   Grid::ChildCell *cells = grid->cells;
   Grid::ChildInfo *cinfo = grid->cinfo;
 
-  for (int icell = 0; icell < nglocal; icell++) sfront_cell[icell] = 0.0;
+  for (int icell = 0; icell < nglocal; icell++)
+    sfront_cell[icell] = sfront_normal[icell] = 0.0;
 
   for (int icell = 0; icell < nglocal; icell++) {
     if (!(cinfo[icell].mask & groupbit)) continue;
     if (cells[icell].nsplit <= 0) continue;
     sfront_cell[icell] =
       edge_displacement(cvalues_prev[icell],cvalues[icell]);
+    sfront_normal[icell] =
+      edge_displacement(cvalues_prev[icell],cvalues[icell],grad_mag(icell));
   }
 }
 
@@ -1992,7 +2016,7 @@ void FixAblate::check_group_boundary()
    returns 0.0 if the surface does not cross this cell in the first field
 ------------------------------------------------------------------------- */
 
-double FixAblate::edge_displacement(double *cold, double *cnew)
+double FixAblate::edge_displacement(double *cold, double *cnew, double gradmag)
 {
   // cell edges as corner index pairs, x fastest then y then z
   // 2d uses the first 4, 3d all 12
@@ -2013,6 +2037,27 @@ double FixAblate::edge_displacement(double *cold, double *cnew)
     int i0 = edge[e][0];
     int i1 = edge[e][1];
 
+    // an edge crossing slides along the EDGE, which is not the direction the
+    //   surface moves unless the two happen to be parallel.  Projecting onto
+    //   the surface normal is a factor cos(theta), and for a level set the
+    //   cosine between an edge and the normal is just how much of the
+    //   gradient lies along that edge:  cos = (|c1-c0|/L) / |grad c|.
+    //   So the normal displacement is  dt * |c1-c0| / |grad c|,  and the
+    //   edge length cancels out.
+    // gradmag <= 0 asks for the raw along-edge magnitude instead, which is
+    //   what the fast growth guard wants: there an over-estimate on an
+    //   oblique front is the safe direction.
+
+    // the projection can never lengthen the displacement, since cos <= 1, so
+    //   the along-edge value is a hard ceiling.  That is not a safety epsilon
+    //   but the same geometry: where the cell gradient vanishes -- a saddle,
+    //   two opposing pieces of surface in one cell -- there is no single
+    //   normal to project onto, and the ceiling falls back to the magnitude.
+
+    double weight = xyzsize[edgedim[e]];
+    if (gradmag > 0.0)
+      weight = MIN(fabs(cold[i1] - cold[i0]) / gradmag, weight);
+
     // the isosurface must have crossed this edge in the old field,
     //   else there is no starting point to measure from
 
@@ -2029,7 +2074,7 @@ double FixAblate::edge_displacement(double *cold, double *cnew)
       double dnew = cnew[i1] - cnew[i0];
       if (dnew == 0.0) continue;
       double tnew = (thresh - cnew[i0]) / dnew;
-      sum += fabs(tnew - told) * xyzsize[edgedim[e]];
+      sum += fabs(tnew - told) * weight;
     } else {
 
       // the surface swept clean past this edge in one step, so it moved at
@@ -2038,10 +2083,86 @@ double FixAblate::edge_displacement(double *cold, double *cnew)
       //   below thresh; without this branch a very large increment would
       //   leave no crossing to compare against and be reported as no motion
 
-      if (cold[i0] < thresh) sum += told * xyzsize[edgedim[e]];
-      else sum += (1.0 - told) * xyzsize[edgedim[e]];
+      if (cold[i0] < thresh) sum += told * weight;
+      else sum += (1.0 - told) * weight;
     }
 
+    ncross++;
+  }
+
+  if (!ncross) return 0.0;
+  return sum/ncross;
+}
+
+/* ----------------------------------------------------------------------
+   how far the isosurface in this cell moves per unit rise of its corner point
+     values, i.e. d(normal displacement)/d(corner delta), evaluated on the
+     field as it stands
+   inverting this is what turns a rate in length/time into a corner point
+     increment, and it replaces the plain level set relation dc = s*|grad c|,
+     which is only the unsaturated case of it.
+   on an edge the isosurface crosses, with the low value a < thresh < b:
+     both ends free   ->  the crossing moves by  D*L/(b-a),  the level set
+                          answer, since raising both ends slides the crossing
+                          without changing the slope
+     b pinned at 255  ->  only a can rise, the slope changes as well, and the
+                          crossing moves by  D*L*(255-thresh)/(255-a)^2.
+                          A binary 0/255 field is entirely this case, and at
+                          a = 0 it is half the level set answer -- which is
+                          why asking for a speed used to deliver half of it
+   the ablate direction is the mirror image, pinned at 0 instead of 255
+   edges are enumerated and weighted exactly as edge_displacement() does, so
+     what this predicts is what that measures
+------------------------------------------------------------------------- */
+
+double FixAblate::front_response(int icell)
+{
+  static const int edge[12][2] =
+    {{0,1},{2,3},{0,2},{1,3},
+     {4,5},{6,7},{4,6},{5,7},
+     {0,4},{1,5},{2,6},{3,7}};
+  static const int edgedim[12] =
+    {0,0,1,1, 0,0,1,1, 2,2,2,2};
+
+  int nedge = (dim == 2) ? 4 : 12;
+  double *c = cvalues[icell];
+  double gradmag = grad_mag(icell);
+
+  double sum = 0.0;
+  int ncross = 0;
+
+  for (int e = 0; e < nedge; e++) {
+    int i0 = edge[e][0];
+    int i1 = edge[e][1];
+    if ((c[i0] < thresh) == (c[i1] < thresh)) continue;
+
+    double lo = MIN(c[i0],c[i1]);
+    double hi = MAX(c[i0],c[i1]);
+    double gap = hi - lo;
+    if (gap == 0.0) continue;
+
+    // project onto the surface normal, clamped by cos <= 1 as above
+
+    double weight = xyzsize[edgedim[e]];
+    if (gradmag > 0.0) weight = MIN(gap/gradmag,weight);
+
+    double deriv;
+    if (mode == DEPOSIT) {
+      if (hi < 255.0) deriv = weight / gap;
+      else {
+        double room = 255.0 - lo;
+        if (room <= 0.0) continue;
+        deriv = weight * (255.0 - thresh) / (room*room);
+      }
+    } else {
+      if (lo > 0.0) deriv = weight / gap;
+      else {
+        if (hi <= 0.0) continue;
+        deriv = weight * thresh / (hi*hi);
+      }
+    }
+
+    sum += deriv;
     ncross++;
   }
 
@@ -2168,7 +2289,7 @@ void FixAblate::refresh_surfs()
     // the move loop needs this to place a collision correctly in space AND
     //   in time, and to catch a particle the front overtakes from behind
 
-    segspeed[icell] = edge_displacement(cnow,cnext) / update->dt;
+    segspeed[icell] = edge_displacement(cnow,cnext,0.0) / update->dt;
 
     // and how far it now stands ahead of the committed surface, which is how
     //   far behind it a particle may be found and still be one the front has
@@ -2177,7 +2298,7 @@ void FixAblate::refresh_surfs()
     //   time, since f above is held back whenever advancing it further would
     //   empty a cell of surface, and the two then disagree
 
-    segband[icell] = edge_displacement(cvalues[icell],cnow);
+    segband[icell] = edge_displacement(cvalues[icell],cnow,0.0);
 
     int ns;
     if (dim == 2)
@@ -2264,7 +2385,7 @@ void FixAblate::start_of_step()
 void FixAblate::sync()
 {
   int i,ix,iy,iz,jx,jy,jz,ixfirst,iyfirst,izfirst,jcorner;
-  int icell,jcell;
+  int icell,jcell,ncontrib;
   double total;
 
   comm_neigh_corners(CDELTA);
@@ -2301,6 +2422,7 @@ void FixAblate::sync()
       // also works for 2d, since izfirst = 0
 
       total = 0.0;
+      ncontrib = 0;
       jcorner = ncorner;
 
       for (jz = izfirst; jz <= izfirst+1; jz++) {
@@ -2321,11 +2443,28 @@ void FixAblate::sync()
             // update total with one corner point of jcell
             // jcorner descends from ncorner
 
-            if (jcell < nglocal) total += cdelta[jcell][jcorner];
-            else total += cdelta_ghost[jcell-nglocal][jcorner];
+            double one;
+            if (jcell < nglocal) one = cdelta[jcell][jcorner];
+            else one = cdelta_ghost[jcell-nglocal][jcorner];
+            total += one;
+            if (one != 0.0) ncontrib++;
           }
         }
       }
+
+      // a source in length/time asks the surface to move a set distance, and
+      //   the conversion dc = s*|grad c|*dt that produced celldelta is the
+      //   relation for a field shifted UNIFORMLY by dc.  So every cell asks
+      //   for the same dc at every one of its corner points, and what a
+      //   corner point wants is the AVERAGE of what the cells sharing it
+      //   asked for, not their sum.
+      // the count has to be taken here rather than divided out beforehand,
+      //   because a cell only contributes where it holds a piece of surface:
+      //   cells that are entirely solid or entirely gas ask for nothing, and
+      //   dividing by the geometric 2^dim would then leave the corner short
+      //   by exactly the fraction of its neighbours that had nothing to say.
+
+      if (unitsflag == DISTANCE && ncontrib) total /= ncontrib;
 
       // ABLATE: newvalue = MAX(oldvalue-dsum,0)
       // DEPOSIT: newvalue = MIN(oldvalue+dsum,255)
@@ -2986,11 +3125,13 @@ void FixAblate::grow_percell(int nnew)
   if (mode == DEPOSIT) {
     memory->grow(cvalues_prev,maxgrid,ncorner,"ablate:cvalues_prev");
     memory->grow(sfront_cell,maxgrid,"ablate:sfront_cell");
+    memory->grow(sfront_normal,maxgrid,"ablate:sfront_normal");
 
     // zero the front speeds, since create_surfs() is called once from
     //   store_corners() before front_speed() has ever run
 
-    for (int icell = 0; icell < maxgrid; icell++) sfront_cell[icell] = 0.0;
+    for (int icell = 0; icell < maxgrid; icell++)
+      sfront_cell[icell] = sfront_normal[icell] = 0.0;
   }
   if (tvalues_flag) memory->grow(tvalues,maxgrid,"ablate:tvalues");
   memory->grow(ixyz,maxgrid,3,"ablate:ixyz");
@@ -3115,7 +3256,7 @@ double FixAblate::compute_vector(int i)
     one[18] = one[19] = 0.0;
     for (int icell = 0; icell < nglocal; icell++)
       if (sfront_cell[icell] > 0.0) {
-        one[18] += sfront_cell[icell];
+        one[18] += sfront_normal[icell];
         one[19] += 1.0;
       }
 

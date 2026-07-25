@@ -99,6 +99,9 @@ class FixAblate : public Fix {
 
   double *sfront_cell;     // per-cell isosurface displacement over the last
                            //   regeneration interval, in length units
+  double *sfront_normal;   // ditto projected onto the surface normal, which
+                           //   is the front speed proper; sfront_cell keeps
+                           //   the along-edge magnitude for the guard
   double max_advance;      // max of that, as a fraction of the cell size
 
   // between regenerations the surface keeps growing, so the collision
@@ -170,9 +173,10 @@ class FixAblate : public Fix {
   void increment();
   void front_speed();
   void refresh_surfs();
-  double edge_displacement(double *, double *);
+  double edge_displacement(double *, double *, double gradmag = 0.0);
   void check_group_boundary();
   double grad_mag(int);
+  double front_response(int);
 
   int salvage_particle(int, int, int collideflag = 1);
   int salvage_to_neighbor(int, int);

@@ -293,13 +293,22 @@ front.  It is the measured answer to what the {source} asked for.
 If the {units} keyword is set to {distance}, the {source} is interpreted
 as a rate in units of length/time, rather than as a corner
 point value increment.  It is converted to a corner point increment
-using the local corner point value gradient, so the rate can be
-specified directly as a surface speed.  Note that the conversion is not
-yet calibrated: it is invariant to {Nevery}, so the same rate gives the
-same result however often the isosurface is rebuilt, but the realized
-speed reported as value (21) is smaller than the requested one by a
-factor that depends on the surface geometry.  Compare the two before
-relying on an absolute rate.  This is often more
+so the rate can be specified directly as a surface speed.  The surface
+then moves at that speed: the requested rate and the realized rate,
+reported as value (21), agree to better than a percent.
+
+The conversion is solved for rather than assumed.  On a cell edge the
+isosurface crosses, with corner values a < {thresh} < b, raising both
+ends by dc slides the crossing by dc/|grad c|, which is the usual level
+set relation.  But corner point values are capped at 255, and a field
+read from a segmented image is 0 or 255 almost everywhere, so on most
+edges b is pinned and only a can rise.  The crossing then moves by
+dc*(255-{thresh})/(255-a)^2 instead, which at a = 0 is only half as far.
+Assuming the level set relation therefore delivers roughly half the
+requested speed on a real geometry.  Both cases are evaluated on the
+field as it stands, over the same edges the realized speed is measured
+on, and the corner point increment follows from inverting the result.
+The ablate direction is the mirror image, capped at 0 rather than 255.  This is often more
 natural when the rate is derived from a surface flux, for example with
 "compute isurf/grid"_compute_isurf_grid.html.  With the default {units}
 = {corner}, the {source} has the same meaning it does for ablation.

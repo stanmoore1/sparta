@@ -1,0 +1,69 @@
+# Calibration of a deposition rate given in length/time
+#
+# A flat front normal to x, so the answer is arithmetic rather than a
+# simulation result: ask the surface to advance at RATE, and it must advance at
+# RATE.  Everything curved averages over surface orientations and hides a
+# systematic error inside a spread; this does not.
+#
+# The corner point field is a linear ramp in x, so the isosurface is the plane
+# where it crosses thresh and its normal is exactly the x axis.  That matters
+# for the measurement as much as for the rate: fix ablate measures how far the
+# surface moved from how far the isosurface crossings slid along cell edges,
+# and on a front oblique to the grid an edge crossing slides further than the
+# surface actually moves.  With the front normal to x there is no such
+# projection and the measurement is exact.
+#
+# The domain is tall because the ramp has to fall to zero on the y boundary
+# too, which puts a horizontal front along the top and bottom.  Where those
+# meet the vertical front the cells are oblique and their measured
+# displacement is over-read.  Their number is fixed, so their weight in the
+# average falls as the domain gets taller: the realized/requested ratio goes
+# 1.026, 1.014, 1.007 for heights 40, 80, 160, halving each time and
+# extrapolating to 1.  It is an artifact of this geometry, not of the method
+# -- the closed body in in.test.variable has no forced boundary front and
+# comes out within 0.2%.
+#
+# There is no gas: this is a pure test of the corner point arithmetic, and
+# particles would only add noise.  Growth is driven by a constant grid-style
+# variable, the simplest source that can carry a rate in length/time.
+#
+#   f_ablate     = summed corner point values, the material present
+#   f_ablate[21] = the front speed actually realized, which is what must come
+#                  back equal to RATE
+
+variable            RATE index 1.0
+variable            NEVERY index 1
+
+seed                12345
+dimension           2
+global              gridcut 0.0 comm/sort yes
+
+boundary            r r p
+
+create_box          0 20 0 80 -0.5 0.5
+create_grid         20 80 1
+balance_grid        rcb cell
+
+global              nrho 1.0 fnum 1.0
+
+species             air.species N
+mixture             air N
+
+variable            rate grid ${RATE}
+fix                 ablate ablate all ${NEVERY} 1.0 v_rate mode deposit &
+                    units distance
+
+global              surfs implicit
+# push no keeps the linear ramp; the default flattens it to 0/255,
+# which pins the solid-side corner and no field shift can move it
+read_isurf          all 20 80 1 ramp.20x80 127.5 ablate push no
+
+surf_collide        1 diffuse 300.0 1.0
+surf_modify         all collide 1
+
+timestep            0.001
+
+stats               10
+stats_style         step f_ablate f_ablate[21]
+
+run                 50

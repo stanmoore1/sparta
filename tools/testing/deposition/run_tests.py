@@ -182,7 +182,7 @@ def test_distance_units(exe):
     gains = {}
     for nevery in (1, 2, 5, 10, 20):
         rc, out = run(exe, "in.test.variable",
-                      {"RATE_EXPR": 4.0, "NEVERY": nevery, "UNITS": "distance"})
+                      {"RATE_EXPR": 1.0, "NEVERY": nevery, "UNITS": "distance"})
         if rc != 0:
             err = next((l for l in out.splitlines() if "ERROR" in l), "no stats")
             return check("units distance : Nevery invariance", False,
@@ -198,6 +198,46 @@ def test_distance_units(exe):
     return check("units distance : Nevery invariance", spread < 0.01,
                  "gain %.0f..%.0f over Nevery 1..20, spread %.2f%%"
                  % (lo, hi, 100 * spread))
+
+
+def test_rate_calibration(exe):
+    """A rate given in length/time must be the rate the surface moves at.
+
+    Not a fitted factor: the corner point increment is solved for from the
+    field as it stands.  Raising both ends of a crossing edge slides the
+    isosurface by the level set amount, but where the solid side is pinned at
+    255 -- which is the whole of a binary 0/255 field, i.e. most real inputs
+    -- only the gas side can rise and the crossing moves by half as much.
+    front_response() accounts for that, so both geometries come out right.
+
+    Checked on a flat front, where the answer is arithmetic, and on the curved
+    blob the rest of the suite uses, where it is not.
+    """
+    ok = True
+
+    for rate in (0.5, 1.0, 2.0, 4.0):
+        rc, out = run(exe, "in.test.flat", {"RATE": rate})
+        rows = stats_rows(out) if rc == 0 else []
+        if not rows:
+            ok &= check("rate calibration flat (s=%s)" % rate, False, "run failed")
+            continue
+        got = rows[-1][2]
+        ok &= check("rate calibration, flat front (s=%s)" % rate,
+                    abs(got - rate) / rate < 0.05,
+                    "realized %.5f, ratio %.4f" % (got, got / rate))
+
+    for rate in (1.0, 4.0):
+        rc, out = run(exe, "in.test.variable",
+                      {"RATE_EXPR": rate, "NEVERY": 1, "UNITS": "distance"})
+        rows = stats_rows(out) if rc == 0 else []
+        if not rows:
+            ok &= check("rate calibration curved (s=%s)" % rate, False, "run failed")
+            continue
+        got = rows[-1][6]
+        ok &= check("rate calibration, curved front (s=%s)" % rate,
+                    abs(got - rate) / rate < 0.05,
+                    "realized %.5f, ratio %.4f" % (got, got / rate))
+    return ok
 
 
 def test_grow(exe):
@@ -507,6 +547,8 @@ def main():
         ok &= test_conserve(exe, 0.05 * nevery, nevery)
     # the surface must be drivable by a variable, not just a compute or fix
     ok &= test_variable(exe)
+    # a rate in length/time must be the rate the surface actually moves at
+    ok &= test_rate_calibration(exe)
     # a rate in length/time must not depend on the rebuild interval
     ok &= test_distance_units(exe)
     # a growing film must be able to leave the block it was read into
