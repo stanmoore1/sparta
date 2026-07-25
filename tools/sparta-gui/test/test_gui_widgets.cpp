@@ -33,6 +33,7 @@
 #include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QDialog>
 #include <QDoubleSpinBox>
 #include <QLineEdit>
 #include <QPlainTextEdit>
@@ -45,6 +46,7 @@
 #include <QTest>
 #include <QTimer>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QFont>
 #include <QIcon>
 #include <QFile>
@@ -60,10 +62,17 @@
 #include "codeeditor.h"
 #include "findandreplace.h"
 #include "helpers.h"
+#include "stdcapture.h"
 #include "paraviewdialog.h"
 #include "setvariables.h"
 #include "spartawrapper.h"
+#include "chartviewer.h"
+#include "imageviewer.h"
+#include "preferences.h"
+#include "runhistory.h"
+#include "slideshow.h"
 #include "stlimportwizard.h"
+#include "surfreportdialog.h"
 
 // ---------------------------------------------------------------------------
 // Controls that must not be clicked
@@ -87,6 +96,8 @@ static const SkipRule SKIP_RULES[] = {
     {"Delete", "removes archived runs from disk"},
     {"Browse", "opens a modal native file dialog that blocks the run"},
     {"Download", "network fetch followed by a process relaunch"},
+    {"colorSwatch", "opens a modal colour picker with its own event loop; the "
+                    "adjacent colour text field covers the same setting"},
 };
 
 /**
@@ -126,8 +137,20 @@ static bool shouldSkip(const QWidget *w, QString &reason)
 // Walker
 // ---------------------------------------------------------------------------
 
+struct WalkResult;
+static WalkResult walkWidget(QWidget *root, int budgetMs);
+
+/// Deadline shared by a window and every dialog it opens, so the cost of a
+/// window is bounded overall rather than per dialog.
+static QElapsedTimer g_windowClock;
+static int g_windowBudgetMs = 90000;
+static bool windowOutOfTime()
+{
+    return g_windowClock.isValid() && g_windowClock.elapsed() > g_windowBudgetMs;
+}
+
 /**
- * @brief Close any modal dialog that appears, so a walk cannot deadlock
+ * @brief Walk then close any modal dialog that appears
  *
  * Plenty of controls legitimately open a modal -- Convert with empty fields
  * warns, Apply may confirm. exec() on that modal blocks the walk forever.
@@ -137,7 +160,9 @@ static bool shouldSkip(const QWidget *w, QString &reason)
  */
 class ModalReaper : public QObject {
 public:
-    explicit ModalReaper(QObject *parent = nullptr) : QObject(parent)
+    /** @param own the window under test, which must never be reaped */
+    explicit ModalReaper(QWidget *own = nullptr, QObject *parent = nullptr)
+        : QObject(parent), owner(own)
     {
         connect(&timer, &QTimer::timeout, this, &ModalReaper::reap);
         timer.start(50);
@@ -145,15 +170,15 @@ public:
     int reaped() const { return count; }
 
 private:
-    void reap()
-    {
-        if (auto *m = QApplication::activeModalWidget()) {
-            ++count;
-            m->close();
-        }
-    }
+    void reap();   // defined below, once WalkResult is complete
+    QWidget *owner = nullptr;
     QTimer timer;
     int count = 0;
+    int nested = 0;
+    bool walking = false;   ///< guards against a modal opened while walking a modal
+
+public:
+    int nestedControls() const { return nested; }
 };
 
 /** @brief Tally of what a walk touched, so coverage is measurable */
@@ -166,6 +191,7 @@ struct WalkResult {
     int sliders = 0;
     int tabs = 0;
     int skipped = 0;
+    bool truncated = false;   ///< the time budget was hit mid-walk
     QStringList skipNotes;
 
     int total() const { return buttons + checkables + combos + spins + edits + sliders + tabs; }
@@ -178,9 +204,16 @@ struct WalkResult {
  * page are laid out and reachable before the sweep, otherwise every tab beyond
  * the first contributes nothing and the run still reports success.
  */
-static WalkResult walkWidget(QWidget *root)
+static WalkResult walkWidget(QWidget *root, int budgetMs)
 {
     WalkResult r;
+    QElapsedTimer clock;
+    clock.start();
+    // Some controls are expensive: the image settings dialog re-renders through
+    // SPARTA on every Apply. Bound the walk rather than let it run forever, and
+    // record when the bound was hit so a truncated walk is never mistaken for a
+    // complete one.
+    const auto outOfTime = [&]() { return clock.elapsed() > budgetMs || windowOutOfTime(); };
 
     // Tabs first, so later passes see the controls on every page.
     const auto tabWidgets = root->findChildren<QTabWidget *>();
@@ -197,6 +230,7 @@ static WalkResult walkWidget(QWidget *root)
     // asserted to have actually moved -- a checkbox wired to nothing would
     // otherwise pass simply by not crashing.
     for (auto *b : root->findChildren<QAbstractButton *>()) {
+        if (outOfTime()) { r.truncated = true; break; }
         if (!b->isEnabled() || !b->isVisible()) continue;
         QString why;
         if (shouldSkip(b, why)) {
@@ -226,6 +260,7 @@ static WalkResult walkWidget(QWidget *root)
     // Combo boxes: every index, not just a couple, since option-specific code
     // paths (e.g. a colormap that only some entries exercise) hide in the tail.
     for (auto *c : root->findChildren<QComboBox *>()) {
+        if (outOfTime()) { r.truncated = true; break; }
         if (!c->isEnabled() || c->count() == 0) continue;
         const int before = c->currentIndex();
         for (int i = 0; i < c->count(); ++i) {
@@ -240,6 +275,7 @@ static WalkResult walkWidget(QWidget *root)
     // Spin boxes: the bounds are where clamping bugs live, so drive both ends
     // and a value in between rather than nudging by one step.
     for (auto *s : root->findChildren<QSpinBox *>()) {
+        if (outOfTime()) { r.truncated = true; break; }
         if (!s->isEnabled()) continue;
         const int before = s->value();
         for (int v : {s->minimum(), s->maximum(), (s->minimum() + s->maximum()) / 2}) {
@@ -251,6 +287,7 @@ static WalkResult walkWidget(QWidget *root)
         ++r.spins;
     }
     for (auto *s : root->findChildren<QDoubleSpinBox *>()) {
+        if (outOfTime()) { r.truncated = true; break; }
         if (!s->isEnabled()) continue;
         const double before = s->value();
         for (double v : {s->minimum(), s->maximum(), (s->minimum() + s->maximum()) / 2.0}) {
@@ -265,6 +302,7 @@ static WalkResult walkWidget(QWidget *root)
     // additionally get a value it must reject, since a missing validator is a
     // real defect this suite is meant to surface.
     for (auto *e : root->findChildren<QLineEdit *>()) {
+        if (outOfTime()) { r.truncated = true; break; }
         if (!e->isEnabled() || e->isReadOnly()) continue;
         // Spin boxes own an internal QLineEdit. Driving it as a free-text field
         // types junk into the spin box's editor and counts one control twice.
@@ -283,6 +321,7 @@ static WalkResult walkWidget(QWidget *root)
     }
 
     for (auto *s : root->findChildren<QSlider *>()) {
+        if (outOfTime()) { r.truncated = true; break; }
         if (!s->isEnabled()) continue;
         const int before = s->value();
         for (int v : {s->minimum(), s->maximum(), (s->minimum() + s->maximum()) / 2}) {
@@ -297,6 +336,43 @@ static WalkResult walkWidget(QWidget *root)
     return r;
 }
 
+/**
+ * @brief Walk a modal before dismissing it
+ *
+ * Several buttons exist precisely to open a further dialog -- the image
+ * viewer's eight settings tabs are reached that way -- so closing them on sight
+ * would leave the largest window in the application untouched while the run
+ * still looked complete.
+ */
+void ModalReaper::reap()
+{
+    auto *m = QApplication::activeModalWidget();
+
+    // QColorDialog::getColor() spins its own nested event loop and does not
+    // always show up as the active modal, so also sweep the top-level widgets
+    // for a stray visible dialog. Without this a single colour swatch stalls
+    // the whole run.
+    if (!m) {
+        for (auto *w : QApplication::topLevelWidgets()) {
+            auto *d = qobject_cast<QDialog *>(w);
+            if (d && d->isVisible() && d != owner) { m = d; break; }
+        }
+    }
+    if (!m) return;
+
+    ++count;
+    if (!walking) {
+        walking = true;
+        nested += walkWidget(m, 30000).total();
+        walking = false;
+    }
+    // a dialog spinning in exec() only leaves its loop on accept/reject
+    if (auto *d = qobject_cast<QDialog *>(m))
+        d->reject();
+    else
+        m->close();
+}
+
 /** @brief Print a per-window tally; the totals are the coverage evidence */
 static void report(const QString &window, const WalkResult &r)
 {
@@ -304,6 +380,8 @@ static void report(const QString &window, const WalkResult &r)
                 "slider %d, tab %d)\n",
                 window.toStdString().c_str(), r.total(), r.buttons, r.checkables, r.combos,
                 r.spins, r.edits, r.sliders, r.tabs);
+    if (r.truncated)
+        std::printf("    NOTE: walk hit its time budget; some controls were not driven\n");
     for (const auto &note : r.skipNotes)
         std::printf("%s\n", note.toStdString().c_str());
 }
@@ -344,7 +422,7 @@ TEST(WidgetWalker, DrivesEveryControlType)
     w.show();
     QCoreApplication::processEvents();
 
-    const WalkResult r = walkWidget(&w);
+    const WalkResult r = walkWidget(&w, 120000);
     report("SelfTest", r);
 
     EXPECT_EQ(1, r.buttons) << "the plain push button was not clicked";
@@ -380,7 +458,7 @@ TEST(WidgetWalker, SkipsDestructiveControls)
     w.show();
     QCoreApplication::processEvents();
 
-    const WalkResult r = walkWidget(&w);
+    const WalkResult r = walkWidget(&w, 120000);
     report("SkipRules", r);
 
     EXPECT_EQ(0, resets) << "destructive: settings would have been wiped";
@@ -402,7 +480,7 @@ TEST(WidgetWalker, DetectsDeadCheckable)
     w.show();
     QCoreApplication::processEvents();
 
-    const WalkResult r = walkWidget(&w);
+    const WalkResult r = walkWidget(&w, 120000);
     EXPECT_EQ(1, r.checkables);
     // toggling must be observable; the walker asserts this internally
     EXPECT_FALSE(live->isChecked()) << "walker must restore the original state";
@@ -422,13 +500,17 @@ static int g_totalDriven = 0;
 /** @brief Walk a real window, record its tally, and fold it into the total */
 static void walkWindow(QWidget *w, const QString &name, int expectAtLeast)
 {
-    ModalReaper reaper;   // a control that opens a modal must not stall the walk
+    ModalReaper reaper(w);   // a control that opens a modal must not stall the walk
+    g_windowClock.start();
     w->show();
     QCoreApplication::processEvents();
-    const WalkResult r = walkWidget(w);
+    const WalkResult r = walkWidget(w, 90000);
     report(name, r);
-    if (reaper.reaped() > 0)
-        std::printf("    (%d modal dialog(s) auto-dismissed)\n", reaper.reaped());
+    if (reaper.reaped() > 0) {
+        std::printf("    (+%d controls in %d nested dialog(s))\n", reaper.nestedControls(),
+                    reaper.reaped());
+        g_totalDriven += reaper.nestedControls();
+    }
     g_totalDriven += r.total();
     EXPECT_GE(r.total(), expectAtLeast)
         << name.toStdString()
@@ -501,6 +583,109 @@ TEST(RealWindows, StlImportWizardLeaky)
     walkWindow(&dlg, "StlWizard(leaky)", 18);
 }
 
+// ---------------------------------------------------------------------------
+// Windows that need a live SPARTA instance
+// ---------------------------------------------------------------------------
+//
+// These are the large ones -- the image viewer and its eight settings tabs, the
+// surface report, run history. They read species, surfaces and box extents from
+// a running simulation to populate themselves, so a wrapper is opened and a
+// deck is run before the walk. Without that they come up empty and a walk of
+// them would report a handsome number while touching almost nothing.
+
+/** @brief Open a SPARTA instance and bring it to a state with box, grid and surfaces */
+static bool openSparta(SpartaWrapper &sparta, const QString &deck)
+{
+    const QString lib = QString::fromLatin1(qgetenv("SPARTA_PLUGIN_LIB"));
+    if (lib.isEmpty() || !QFileInfo::exists(lib)) return false;
+    if (!sparta.loadLib(lib)) return false;
+
+    char arg0[] = "sparta";
+    char argq[] = "-log";
+    char argn[] = "none";
+    char *args[] = {arg0, argq, argn};
+    sparta.open(3, args);
+    if (!sparta.isOpen()) return false;
+
+    QFile f(deck);
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return false;
+    const QString text = QString::fromUtf8(f.readAll());
+
+    // The deck names its species, collision and surface files relatively, so it
+    // only runs from its own directory. Run it there and change back, otherwise
+    // read_surf fails, no surfaces or computes exist, and the windows under test
+    // come up empty while still reporting success.
+    const QString prev = QDir::currentPath();
+    QDir::setCurrent(QFileInfo(deck).absolutePath());
+    {
+        StdoutSilencer guard;   // the deck is chatty and would drown the output
+        sparta.commandsString(text);
+    }
+    QDir::setCurrent(prev);
+    return true;
+}
+
+/** @brief Path to a deck that defines a box, a grid, species and surfaces */
+static QString surfDeck()
+{
+    return QString::fromLatin1(qgetenv("SPARTA_FIXTURES")) + "/in.surfq";
+}
+
+TEST(RealWindowsLive, SurfaceReport)
+{
+    SpartaWrapper sparta;
+    if (!openSparta(sparta, surfDeck()))
+        GTEST_SKIP() << "needs SPARTA_PLUGIN_LIB and the in.surfq fixture";
+    QFile f(surfDeck());
+    f.open(QIODevice::ReadOnly | QIODevice::Text);
+    SurfReportDialog dlg(nullptr, &sparta, QString::fromUtf8(f.readAll()));
+    walkWindow(&dlg, "SurfaceReport", 4);
+}
+
+TEST(RealWindowsLive, RunHistoryPanel)
+{
+    RunHistory hist;
+    HistoryPanel panel(nullptr, &hist);
+    // Compare starts disabled and Delete is skipped as destructive
+    walkWindow(&panel, "RunHistory", 4);
+}
+
+TEST(RealWindowsLive, Preferences)
+{
+    SpartaWrapper sparta;
+    // Preferences reads accelerator support from the library, so open it; the
+    // dialog still builds without one, just with the Kokkos option disabled.
+    openSparta(sparta, surfDeck());
+    Preferences dlg(&sparta, nullptr);
+    // five tabs; the source audit counts 64 controls across them
+    walkWindow(&dlg, "Preferences", 40);
+}
+
+TEST(RealWindowsLive, ChartWindowStandalone)
+{
+    // spartagui == nullptr selects standalone mode, which is the variant that
+    // has the X-axis field and the "add data from file" entry
+    ChartWindow win("series", nullptr);
+    walkWindow(&win, "ChartWindow", 8);
+}
+
+TEST(RealWindowsLive, SlideShowStandalone)
+{
+    SlideShow show("", nullptr);
+    walkWindow(&show, "SlideShow", 15);
+}
+
+TEST(RealWindowsLive, ImageViewer)
+{
+    SpartaWrapper sparta;
+    if (!openSparta(sparta, surfDeck()))
+        GTEST_SKIP() << "needs SPARTA_PLUGIN_LIB and the in.surfq fixture";
+    // renders on construction, which needs box and grid to exist -- the deck
+    // above provides both
+    ImageViewer viewer("test", &sparta, nullptr);
+    walkWindow(&viewer, "ImageViewer", 20);
+}
+
 TEST(RealWindows, TotalCoverage)
 {
     // ctest runs each discovered test in its own process, so the accumulator is
@@ -519,6 +704,10 @@ int main(int argc, char **argv)
     // offscreen so this runs without a display; the visual pass uses a real
     // framebuffer because it needs to photograph what was rendered
     qputenv("QT_QPA_PLATFORM", "offscreen");
+    // Native colour and file pickers run their own event loop that the reaper
+    // cannot reach into, so a single colour swatch would stall the whole run.
+    // Qt's own dialogs are ordinary widgets and close on demand.
+    QApplication::setAttribute(Qt::AA_DontUseNativeDialogs);
     QApplication app(argc, argv);
 
     // main() owns this setup and is deliberately not linked here, so the test

@@ -350,6 +350,8 @@ void ImageViewer::settingsDialog(int tab)
 
         const auto &cur = color_list[i - 1];
         auto *icon      = new QPushButton("");
+        // named so it can be found by tests: it opens a modal colour picker
+        icon->setObjectName("colorSwatch");
         icon->setIcon(color_icon(cur.second));
         auto iconhint = icon->minimumSizeHint();
         iconhint.setWidth(iconhint.height());
