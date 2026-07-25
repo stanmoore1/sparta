@@ -58,6 +58,7 @@
 #include <QRegularExpression>
 #include <QScreen>
 #include <QScrollArea>
+#include <QScrollBar>
 #include <QSettings>
 #include <QShowEvent>
 #include <QSizePolicy>
@@ -444,7 +445,6 @@ ImageViewer::ImageViewer(const QString &fileName, SpartaWrapper *_sparta, Sparta
     auto *buttonLayout = new QHBoxLayout;
     auto *topLayout    = new QVBoxLayout;
     topLayout->addLayout(menuLayout);
-    topLayout->addLayout(buttonLayout);
     topLayout->setSpacing(LAYOUT_SPACING);
 
     // a hidden dummy button as the first item works around a macOS bug where the
@@ -528,9 +528,38 @@ ImageViewer::ImageViewer(const QString &fileName, SpartaWrapper *_sparta, Sparta
     connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &ImageViewer::changeMixture);
 
+    // Both rows of chrome are wrapped in scroll areas so that a panel too small
+    // to show them scrolls instead of squashing them. Without this the toolbar
+    // buttons and the settings column are compressed to a few pixels each --
+    // present, but unreadable and barely clickable, which is worse than being
+    // one scroll away.
+    buttonLayout->addStretch(1);
+    auto *buttonBar = new QWidget;
+    buttonBar->setLayout(buttonLayout);
+    auto *buttonScroll = new QScrollArea;
+    buttonScroll->setWidget(buttonBar);
+    buttonScroll->setWidgetResizable(true);
+    buttonScroll->setFrameShape(QFrame::NoFrame);
+    buttonScroll->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    buttonScroll->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    buttonScroll->setFixedHeight(buttonBar->sizeHint().height());
+
+    settingsLayout->addStretch(1);
+    auto *settingsBar = new QWidget;
+    settingsBar->setLayout(settingsLayout);
+    auto *settingsScroll = new QScrollArea;
+    settingsScroll->setWidget(settingsBar);
+    settingsScroll->setWidgetResizable(true);
+    settingsScroll->setFrameShape(QFrame::NoFrame);
+    settingsScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    settingsScroll->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
+    settingsScroll->setFixedWidth(settingsBar->sizeHint().width() +
+                                  settingsScroll->verticalScrollBar()->sizeHint().width());
+
+    topLayout->addWidget(buttonScroll);
     mainLayout->addLayout(topLayout);
     imageLayout->addWidget(scrollArea, 10);
-    imageLayout->addLayout(settingsLayout, 0);
+    imageLayout->addWidget(settingsScroll, 0);
     imageLayout->setSpacing(LAYOUT_SPACING);
     mainLayout->addLayout(imageLayout);
     mainLayout->setSpacing(LAYOUT_SPACING);
@@ -556,7 +585,14 @@ ImageViewer::ImageViewer(const QString &fileName, SpartaWrapper *_sparta, Sparta
     scrollArea->setVisible(true);
     updateActions();
     setLayout(mainLayout);
-    mainLayout->setSizeConstraint(QLayout::SetMinAndMaxSize);
+    // Deliberately NOT SetMinAndMaxSize. That made the widget's minimum track
+    // the layout's, which suited a dialog that sized itself to its contents but
+    // is wrong for a panel: the settings column is a stack of fourteen widgets,
+    // so the minimum came out around 500px tall, the dock could not shrink the
+    // viewer that far, and the surplus was clipped off the bottom of the
+    // window. The render then fitted itself to a scroll area that was partly
+    // off screen, so the bottom of every snapshot was simply not visible.
+    mainLayout->setSizeConstraint(QLayout::SetDefaultConstraint);
     adjustWindowSize();
     menuBar->setFocus();
 
