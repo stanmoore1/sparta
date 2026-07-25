@@ -154,12 +154,6 @@ void Preferences::accept()
     field = tabWidget->findChild<QLineEdit *>("axesdiam");
     if (field)
         if (field->hasAcceptableInput()) settings->setValue(Keys::AXESDIAM, field->text());
-    box = tabWidget->findChild<QCheckBox *>("vdwstyle");
-    if (box) settings->setValue(Keys::VDWSTYLE, box->isChecked());
-    box = tabWidget->findChild<QCheckBox *>("autobond");
-    if (box) settings->setValue(Keys::AUTOBOND, box->isChecked());
-    field = tabWidget->findChild<QLineEdit *>("bondcut");
-    if (field) settings->setValue(Keys::BONDCUT, field->text());
     field = tabWidget->findChild<QLineEdit *>("backcolor");
     if (field && field->hasAcceptableInput()) settings->setValue(Keys::BACKCOLOR, field->text());
     field = tabWidget->findChild<QLineEdit *>("backcolor2");
@@ -736,9 +730,6 @@ SnapshotTab::SnapshotTab(QSettings *_settings, QWidget *parent) :
     auto *axes   = new QLabel("Show Axes:");
     auto *axlen  = new QLabel("Axes Length:");
     auto *axdia  = new QLabel("Axes Diameter:");
-    auto *vdw    = new QLabel("VDW Style:");
-    auto *bond   = new QLabel("Dynamic Bonds:");
-    auto *bclbl  = new QLabel("Bond Cutoff:");
 
     settings->beginGroup(Keys::GROUP_SNAPSHOT);
 
@@ -789,12 +780,6 @@ SnapshotTab::SnapshotTab(QSettings *_settings, QWidget *parent) :
     auto *eval     = makeCheckBox(Keys::AXES, "axes", false);
     auto *alval    = makeNumEdit(Keys::AXESLEN, "0.5", new QDoubleValidator(0.01, 10.0, 100, this));
     auto *adval = makeNumEdit(Keys::AXESDIAM, "0.05", new QDoubleValidator(0.001, 1.0, 100, this));
-    auto *vval  = makeCheckBox(Keys::VDWSTYLE, "vdwstyle", false);
-    auto *uval  = makeCheckBox(Keys::AUTOBOND, "autobond", false);
-
-    // bond cutoff has no input validator
-    auto *bcut = new QLineEdit(settings->value(Keys::BONDCUT, "1.6").toString());
-    bcut->setObjectName("bondcut");
 
     settings->endGroup();
 
@@ -843,12 +828,6 @@ SnapshotTab::SnapshotTab(QSettings *_settings, QWidget *parent) :
     grid->addWidget(alval, j++, 4, Qt::AlignTop);
     grid->addWidget(axdia, j, 3, Qt::AlignTop);
     grid->addWidget(adval, j++, 4, Qt::AlignTop);
-    grid->addWidget(vdw, j, 3, Qt::AlignTop);
-    grid->addWidget(vval, j++, 4, Qt::AlignVCenter);
-    grid->addWidget(bond, j, 3, Qt::AlignTop);
-    grid->addWidget(uval, j++, 4, Qt::AlignVCenter);
-    grid->addWidget(bclbl, j, 3, Qt::AlignTop);
-    grid->addWidget(bcut, j++, 4, Qt::AlignVCenter);
 
     // equal weight for left and right halves
     grid->setColumnStretch(0, 1);
@@ -864,30 +843,10 @@ SnapshotTab::SnapshotTab(QSettings *_settings, QWidget *parent) :
 
     setLayout(grid);
 
-    connect(vval, &QCheckBox::toggled, this, &SnapshotTab::chooseVdw);
-    connect(uval, &QCheckBox::toggled, this, &SnapshotTab::chooseBond);
 
     // the second background color only applies when the gradient is enabled
     background2->setEnabled(gradient->isChecked());
     connect(gradient, &QCheckBox::toggled, background2, &QLineEdit::setEnabled);
-}
-
-void SnapshotTab::chooseVdw()
-{
-    auto *vdw = findChild<QCheckBox *>("vdwstyle");
-    auto *bnd = findChild<QCheckBox *>("autobond");
-    if (vdw && bnd) {
-        if (vdw->isChecked()) bnd->setChecked(false);
-    }
-}
-
-void SnapshotTab::chooseBond()
-{
-    auto *vdw = findChild<QCheckBox *>("vdwstyle");
-    auto *bnd = findChild<QCheckBox *>("autobond");
-    if (vdw && bnd) {
-        if (bnd->isChecked()) vdw->setChecked(false);
-    }
 }
 
 EditorTab::EditorTab(QSettings *_settings, QWidget *parent) : QWidget(parent), settings(_settings)

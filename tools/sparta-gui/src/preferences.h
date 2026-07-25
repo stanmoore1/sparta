@@ -157,8 +157,6 @@ public:
     explicit SnapshotTab(QSettings *settings, QWidget *parent = nullptr);
 
 private slots:
-    void chooseVdw();
-    void chooseBond();
 
 private:
     QSettings *settings;
