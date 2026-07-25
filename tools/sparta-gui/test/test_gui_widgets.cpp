@@ -647,6 +647,60 @@ TEST(PanelMenu, ReplacingAPanelWidgetLeavesItsMenuEntryAlone)
     EXPECT_EQ(panels.dock(PanelManager::Viewer)->windowTitle(), QString("test.0100.ppm"));
 }
 
+// ---------------------------------------------------------------------------
+// What each workspace shows
+// ---------------------------------------------------------------------------
+
+// The Setup workspace is the editing screen: the deck on the left and its
+// output on the right, splitting the width evenly, and nothing else. It came
+// up instead as Project Files | editor | Diagnostics with no output at all --
+// the editor squeezed into a middle column between two panels the mode is
+// documented as deliberately not showing, and the one panel it is meant to
+// show missing.
+TEST(WorkspaceModes, SetupShowsTheEditorAndItsOutputAndNothingElse)
+{
+    QMainWindow window;
+    CodeEditor editor(nullptr);
+    PanelManager panels(&window, &editor);
+
+    // Output has to hold a widget before the mode can open it: a workspace
+    // only opens panels that already have one, which is what the application
+    // now arranges at startup with ensureLogPanel().
+    panels.setPanelWidget(PanelManager::Log, new QPlainTextEdit, "Output");
+    panels.applyMode(PanelManager::Setup);
+
+    EXPECT_TRUE(panels.isPanelOpen(PanelManager::Log)) << "Setup came up with no output panel";
+    for (int p = 0; p < PanelManager::NPanels; ++p) {
+        if (p == PanelManager::Log) continue;
+        EXPECT_FALSE(panels.isPanelOpen(PanelManager::Panel(p)))
+            << PanelManager::panelName(PanelManager::Panel(p)).toStdString()
+            << " is open in Setup, which is meant to show the editor and its output only";
+    }
+}
+
+TEST(WorkspaceModes, EachModeOpensWhatItDocuments)
+{
+    QMainWindow window;
+    CodeEditor editor(nullptr);
+    PanelManager panels(&window, &editor);
+
+    // give every panel a widget, so nothing is held back for want of content
+    // and what is open is purely the mode's decision
+    for (int p = 0; p < PanelManager::NPanels; ++p)
+        panels.setPanelWidget(PanelManager::Panel(p), new QPlainTextEdit, "content");
+
+    for (int m = 0; m < PanelManager::NModes; ++m) {
+        const auto mode = PanelManager::Mode(m);
+        panels.applyMode(mode);
+        for (int p = 0; p < PanelManager::NPanels; ++p) {
+            const auto panel = PanelManager::Panel(p);
+            EXPECT_EQ(panels.isPanelOpen(panel), PanelManager::modeShows(mode, panel))
+                << PanelManager::panelName(panel).toStdString() << " in "
+                << PanelManager::modeName(mode).toStdString();
+        }
+    }
+}
+
 TEST(RealWindows, FindAndReplace)
 {
     CodeEditor editor(nullptr);

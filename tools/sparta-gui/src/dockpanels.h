@@ -155,6 +155,9 @@ public:
     /** @brief Human-readable name of a mode, for menus and the mode switch */
     static QString modeName(Mode mode);
 
+    /** @brief Human-readable name of a panel, for messages about it */
+    static QString panelName(Panel panel);
+
 signals:
     /** @brief Emitted when a panel is opened by user action (for lazy view creation) */
     void panelOpened(int panel);

@@ -353,6 +353,17 @@ private:
     /** @brief Build the viewer panel and dock it, the first time one is needed */
     void ensureViewerPanel();
 
+    /**
+     * @brief Give the Output dock an empty log, so it has something to show
+     *
+     * A workspace only opens panels that already hold a widget -- an empty
+     * Qt-ADS dock never lays out properly afterwards -- and the real log is
+     * built by createLogWindow() when a run starts. Without this the Setup
+     * workspace, whose whole point is the deck beside its output, came up with
+     * no output panel at all until the user had run something.
+     */
+    void ensureLogPanel();
+
     /** @brief Append any newly rendered dump image to the slideshow */
     void updateSlideShow();
 

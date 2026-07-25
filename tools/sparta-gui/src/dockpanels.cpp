@@ -416,6 +416,12 @@ QString PanelManager::modeName(Mode mode)
     }
 }
 
+QString PanelManager::panelName(Panel panel)
+{
+    if (panel < 0 || panel >= NPanels) return {};
+    return QString::fromLatin1(PANEL_TITLE[panel]);
+}
+
 QString PanelManager::perspectiveName(Mode mode)
 {
     return QStringLiteral("mode.") + modeName(mode);

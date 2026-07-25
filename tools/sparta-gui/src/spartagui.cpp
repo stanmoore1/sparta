@@ -181,14 +181,15 @@ void SpartaGui::setupUi(QSettings &settings, QFont &allFont, QFont &monoFont)
         // The panels are opened explicitly after their content exists: a mode
         // only shows panels that already have a widget, so a panel created
         // here would otherwise stay hidden until the next mode switch.
+        //
+        // Setup deliberately has no case here. It is the editing screen -- the
+        // deck on the left and its output on the right, splitting the width
+        // evenly, and nothing else. Opening the linter and the file navigator
+        // here as well left the editor squeezed into a middle column between
+        // them, which is the opposite of what the mode is for; both are one
+        // entry away in the View menu, and the panelOpened handler below
+        // creates them when they are asked for.
         switch (mode) {
-            case PanelManager::Setup:
-                ensureDiagnosticsPanel();
-                ensureProjectFilesPanel();
-                refreshProjectFiles();
-                panels->openPanel(PanelManager::ProjectFiles);
-                panels->openPanel(PanelManager::Diagnostics);
-                break;
             case PanelManager::RunMode:
                 if (!varwindow) createVariableWindow();
                 panels->openPanel(PanelManager::Variables);
@@ -454,6 +455,7 @@ void SpartaGui::createViewMenu()
         if (panel == PanelManager::Viewer && viewer && !viewer->snapshot() && startupComplete &&
             !sparta.isRunning())
             renderImage();
+        if (panel == PanelManager::Log) ensureLogPanel();
         if (panel == PanelManager::Variables && !varwindow) createVariableWindow();
         if (panel == PanelManager::Sweep) ensureSweepPanel();
         if (panel == PanelManager::History) ensureHistoryPanel();
@@ -862,6 +864,10 @@ SpartaGui::SpartaGui(QWidget *parent, const QString &filename, int width, int he
 
     // create and connect GUI elements
     setupUi(settings, allFont, monoFont);
+    // Before the layout is applied, not after: a workspace only opens panels
+    // that already hold a widget, so the Output dock has to have one by now or
+    // the Setup workspace comes up as a bare editor.
+    ensureLogPanel();
     // fall back to the built-in default layout if there is no saved state yet
     // (first launch) or it doesn't match the current DOCK_LAYOUT_VERSION
     restoredLayout = panels->restoreLayout(settings);
@@ -2084,6 +2090,18 @@ void SpartaGui::restartSparta()
     }
 }
 
+void SpartaGui::ensureLogPanel()
+{
+    if (logwindow) return;
+    logwindow = new LogWindow(currentFile, this);
+    logwindow->setReadOnly(true);
+    logwindow->setCenterOnScroll(false);
+    logwindow->setLineWrapMode(LogWindow::NoWrap);
+    // Plain "Output": there is no run behind it yet, so the "Output - <file> -
+    // Run <n>" title createLogWindow() uses would be claiming one.
+    panels->setPanelWidget(PanelManager::Log, logwindow, "Output");
+}
+
 void SpartaGui::createLogWindow(QSettings &settings)
 {
     logwindow = new LogWindow(currentFile, this);
@@ -3129,6 +3147,16 @@ void SpartaGui::clearPanelWidgets()
     projectFilesList = nullptr;
     sweepPanel       = nullptr;
     historyPanel     = nullptr;
+
+    // Put an empty output back straight away, and re-open it if the workspace
+    // we are in is one that shows it. Neither caller re-applies the mode after
+    // clearing, so without this, opening a file left the Setup workspace --
+    // whose whole point is the deck beside its output -- as a bare editor
+    // taking the entire window, and nothing brought the panel back until the
+    // user ran something.
+    ensureLogPanel();
+    if (PanelManager::modeShows(panels->currentMode(), PanelManager::Log))
+        panels->openPanel(PanelManager::Log);
 }
 
 void SpartaGui::createVariableWindow()
