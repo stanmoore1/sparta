@@ -55,6 +55,8 @@ enum{KEEP,DISCARD,MIGRATE};   // fate of a particle the new isosurface encloses
 #define SWEEP_FRAC 0.5    // max front advance per regeneration, in grid cells
 #define EPSSURF 1.0e-4    // push off a surf, same as Grid::point_outside_surfs()
 #define NDEPO 18          // # of deposition diagnostic counters
+#define NFRONT 2          // internal accumulators for the realized front speed
+#define NREDUCE (NDEPO+NFRONT)
 
 #define INVOKED_PER_GRID 16
 #define DELTAGRID 1024            // must be bigger than split cells per cell
@@ -216,7 +218,7 @@ FixAblate::FixAblate(SPARTA *sparta, int narg, char **arg) :
 
   scalar_flag = 1;
   vector_flag = 1;
-  size_vector = 20;   // 0-1 ablation, 2-19 deposition diagnostics
+  size_vector = 21;   // 0-1 ablation, 2-19 deposition, 20 front speed
   global_freq = 1;
   sum_delta = 0.0;
   ndelete = 0;
@@ -233,7 +235,7 @@ FixAblate::FixAblate(SPARTA *sparta, int narg, char **arg) :
   nseg = NULL;
   maxsegcell = segstride = 0;
   depo_stamp = -1;
-  for (int i = 0; i < NDEPO; i++) depo_all[i] = 0.0;
+  for (int i = 0; i < NREDUCE; i++) depo_all[i] = 0.0;
   dlist = NULL;
   maxdlist = 0;
   mvalues = NULL;
@@ -592,28 +594,33 @@ void FixAblate::end_of_step()
   else if (which == UNIFORM) set_delta_uniform();
   else set_delta();
 
-  // for DEPOSIT, snapshot the corner values so the realized front motion
-  //   over this interval can be measured in front_speed() below
   // if the source is in length/time, convert it to a corner value delta
   //   here, using dc = s * |grad c| * interval
   //   sync() gives each corner point the summed contribution of the cells
   //   sharing it, which for a locally uniform field is celldelta itself
+  // this applies to a receding surface as much as a growing one, so it is
+  //   deliberately outside the DEPOSIT block below
+  // set_delta() leaves Nevery out of its prefactor for this units setting,
+  //   since the elapsed interval is what is being applied right here
+
+  if (unitsflag == DISTANCE) {
+    Grid::ChildCell *cells = grid->cells;
+    Grid::ChildInfo *cinfo = grid->cinfo;
+    double interval = nevery * update->dt;
+    for (int icell = 0; icell < nglocal; icell++) {
+      if (!(cinfo[icell].mask & groupbit)) continue;
+      if (cells[icell].nsplit <= 0) continue;
+      celldelta[icell] *= grad_mag(icell) * interval;
+    }
+  }
+
+  // for DEPOSIT, snapshot the corner values so the realized front motion
+  //   over this interval can be measured in front_speed() below
 
   if (mode == DEPOSIT) {
     for (int icell = 0; icell < nglocal; icell++)
       for (int i = 0; i < ncorner; i++)
         cvalues_prev[icell][i] = cvalues[icell][i];
-
-    if (unitsflag == DISTANCE) {
-      Grid::ChildCell *cells = grid->cells;
-      Grid::ChildInfo *cinfo = grid->cinfo;
-      double interval = nevery * update->dt;
-      for (int icell = 0; icell < nglocal; icell++) {
-        if (!(cinfo[icell].mask & groupbit)) continue;
-        if (cells[icell].nsplit <= 0) continue;
-        celldelta[icell] *= grad_mag(icell) * interval;
-      }
-    }
   }
 
   // various decrement and sync routines depending on:
@@ -1225,7 +1232,13 @@ void FixAblate::set_delta()
 {
   int i;
 
-  double prefactor = nevery*scale;
+  // Nevery is here because the source is a per-step quantity applied once per
+  //   interval.  With units = distance it is NOT: the source is a rate in
+  //   length/time, and end_of_step() multiplies by the elapsed interval when
+  //   it converts to a corner value.  Counting Nevery in both places applied
+  //   a distance rate Nevery times too strongly.
+
+  double prefactor = (unitsflag == DISTANCE) ? scale : nevery*scale;
 
   // compute/fix may invoke computes so wrap with clear/add
 
@@ -3063,8 +3076,15 @@ double FixAblate::compute_vector(int i)
 
   if (mode != DEPOSIT) return 0.0;
 
+  // the last index is the front speed the surface actually realized over the
+  //   last interval, averaged over the cells that hold a front
+  // this is the measured answer to what the source was asking for, so a run
+  //   driven by a physical rate can be checked against it directly
+  // summed as a total and a count so the average is over all procs' cells,
+  //   not an average of per-proc averages
+
   if (depo_stamp != update->ntimestep) {
-    double one[NDEPO];
+    double one[NREDUCE];
     one[0] = 1.0*update->nburied;
     one[1] = update->buried_mass;
     one[2] = update->buried_mom[0];
@@ -3088,11 +3108,29 @@ double FixAblate::compute_vector(int i)
     one[15] = update->surf_energy;
     one[16] = update->reflect_energy;
     one[17] = 1.0*update->nfrontmigrate;
-    MPI_Allreduce(one,depo_all,NDEPO,MPI_DOUBLE,MPI_SUM,world);
+
+    // the last two are not output, they are the sum and count the realized
+    //   front speed below is averaged from
+
+    one[18] = one[19] = 0.0;
+    for (int icell = 0; icell < nglocal; icell++)
+      if (sfront_cell[icell] > 0.0) {
+        one[18] += sfront_cell[icell];
+        one[19] += 1.0;
+      }
+
+    MPI_Allreduce(one,depo_all,NREDUCE,MPI_DOUBLE,MPI_SUM,world);
     depo_stamp = update->ntimestep;
   }
 
   if (i >= 2 && i < 2+NDEPO) return depo_all[i-2];
+
+  // displacement per regeneration interval, reported as a speed
+
+  if (i == 2+NDEPO) {
+    if (depo_all[NDEPO+1] == 0.0) return 0.0;
+    return depo_all[NDEPO] / depo_all[NDEPO+1] / (nevery * update->dt);
+  }
 
   return 0.0;
 }

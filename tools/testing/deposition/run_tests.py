@@ -172,6 +172,34 @@ def test_variable(exe):
     return ok
 
 
+def test_distance_units(exe):
+    """A rate in length/time must not depend on how often the surface is rebuilt.
+
+    Nevery chops the same physical growth into different sized pieces; it is
+    not part of the rate.  Applying it both in set_delta's prefactor and again
+    as the elapsed interval made a distance rate Nevery times too strong.
+    """
+    gains = {}
+    for nevery in (1, 2, 5, 10, 20):
+        rc, out = run(exe, "in.test.variable",
+                      {"RATE_EXPR": 4.0, "NEVERY": nevery, "UNITS": "distance"})
+        if rc != 0:
+            err = next((l for l in out.splitlines() if "ERROR" in l), "no stats")
+            return check("units distance : Nevery invariance", False,
+                         "nevery=%d: %s" % (nevery, err.strip()[:70]))
+        rows = stats_rows(out)
+        if len(rows) < 2:
+            return check("units distance : Nevery invariance", False,
+                         "no stats rows")
+        gains[nevery] = rows[-1][2] - rows[0][2]
+
+    lo, hi = min(gains.values()), max(gains.values())
+    spread = (hi - lo) / lo
+    return check("units distance : Nevery invariance", spread < 0.01,
+                 "gain %.0f..%.0f over Nevery 1..20, spread %.2f%%"
+                 % (lo, hi, 100 * spread))
+
+
 def test_grow(exe):
     """A growing film must be able to leave the block it was read into.
 
@@ -479,6 +507,8 @@ def main():
         ok &= test_conserve(exe, 0.05 * nevery, nevery)
     # the surface must be drivable by a variable, not just a compute or fix
     ok &= test_variable(exe)
+    # a rate in length/time must not depend on the rebuild interval
+    ok &= test_distance_units(exe)
     # a growing film must be able to leave the block it was read into
     ok &= test_grow(exe)
     # with the corner point grid on the whole box the film can grow until it

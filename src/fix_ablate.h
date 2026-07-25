@@ -120,7 +120,8 @@ class FixAblate : public Fix {
   int maxsegcell;
   int segstride;           // max elements per cell
 
-  double depo_all[18];     // deposition counters summed over all procs
+  double depo_all[20];     // deposition counters summed over all procs,
+                           //   plus the 2 internal front speed accumulators
   bigint depo_stamp;       // timestep depo_all was last reduced on
 
   int *dlist;              // particles leaving my list when surfs are rebuilt:
