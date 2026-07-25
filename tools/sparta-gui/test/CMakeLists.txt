@@ -255,6 +255,29 @@ endif()
 
 gtest_discover_tests(test_resources)
 
+# What the renderer draws. The four dump image features back-ported into the
+# SPARTA core have GUI controls and emitted-string tests; nothing ever ran the
+# C++ that has to make the picture different, so a keyword the parser accepts
+# and then ignores would pass every check that existed.
+add_executable(test_render
+  test_render.cpp
+  ${CMAKE_SOURCE_DIR}/src/spartawrapper.cpp
+  ${CMAKE_SOURCE_DIR}/src/helpers.cpp
+  ${CMAKE_SOURCE_DIR}/src/stdcapture.cpp
+  ${PLUGIN_LOADER_SRC}
+)
+target_include_directories(test_render PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_compile_definitions(test_render PRIVATE
+  SPARTA_TEST_LIBRARY_PATH="${_spa_test_lib}"
+  SPARTA_RENDER_FIXTURES="${CMAKE_SOURCE_DIR}/../../examples/circle")
+target_link_libraries(test_render PRIVATE GTest::gtest_main Qt6::Widgets)
+if (SPARTA_GUI_USE_PLUGIN)
+  target_compile_definitions(test_render PRIVATE SPARTA_GUI_USE_PLUGIN)
+  target_include_directories(test_render PRIVATE ${SPARTA_PLUGINLIB_DIR})
+endif()
+
+gtest_discover_tests(test_render)
+
 # Test executable for helpers
 add_executable(test_helpers
   test_helpers.cpp
