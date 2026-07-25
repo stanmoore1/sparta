@@ -178,6 +178,26 @@ edges, so their refreshed geometry still meets exactly and there is no
 seam for a particle to slip through.  This applies in 2d, 3d and
 axisymmetric domains alike.
 
+Within a step the front keeps advancing, so where a particle and the
+surface meet depends on how fast both are moving.  In 2d and 3d the
+intersection is therefore solved in the frame of the advancing front,
+which is exact: a straight particle path against a uniformly translating
+plane is still a straight path against a fixed plane.  This matters for
+more than accuracy.  A particle receding from the surface more slowly
+than the surface advances is overtaken by it, and its own path never
+reaches the surface at all, so no static test can find it however small
+the timestep.  In the front's frame it approaches normally and is
+reflected.  Axisymmetric runs use the refreshed geometry but solve the
+intersection with the ordinary surface-of-revolution test, since the
+particle path there is not straight.
+
+A particle can still be found behind the front, most often just after a
+regeneration or on entering a cell from a neighbor.  Whenever the surface
+has overtaken a particle, it is placed back on the outside of the front
+and reflected there.  The distance the front has advanced since the last
+rebuild bounds how far behind a particle is allowed to be for this to
+apply, so a particle merely passing near a thin feature is not affected.
+
 In Kokkos runs the refresh is not applied, because the Kokkos particle
 move is a separate implementation; enclosed particles are then handled
 when the surface is regenerated, which is correct but resolves the growth
@@ -198,11 +218,10 @@ natural when the rate is derived from a surface flux, for example with
 The {mode} = deposit option currently supports only the default
 single-value, single-decrement corner point representation; it cannot
 be combined with the {multiple} keyword or with multivalue corner
-points.  It is otherwise unrestricted: because the growth and the
-handling of enclosed particles are both done by this fix when the
-isosurface is regenerated, and nothing is required of the particle move
-loop, deposition behaves identically in 2d, 3d and axisymmetric domains
-and in Kokkos runs.
+points.  It is otherwise unrestricted, and no particle is ever lost
+without being accounted for in 2d, 3d, axisymmetric or Kokkos runs; what
+differs between them is only how finely the growth is resolved in time,
+as described above.
 
 :line
 

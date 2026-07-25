@@ -450,7 +450,9 @@ template < int DIM, int SURF, int OPT, int MOVING > void Update::move()
 
   double *rp1,*rp2,*rp3,*rnorm,minrnorm[3];
   double rspeed,rstart[3],rend[3];
-  int nrefresh,irefresh,minrefresh = 0;
+  int nrefresh,irefresh,minrefresh = 0,overtaken,oside;
+  double oparam,opt[3],oend[3];
+  if (DIM < 3) opt[2] = oend[2] = 0.0;
 
   if (DIM < 3) rstart[2] = rend[2] = 0.0;
 
@@ -878,7 +880,66 @@ template < int DIM, int SURF, int OPT, int MOVING > void Update::move()
                 if (isurf == exclude) continue;
               }
 
-              if (MOVING && nrefresh && DIM == 1) {
+              // a particle already behind the refreshed element has been
+              //   overtaken by the front and must be reflected back out now
+              // the surface geometry is only rebuilt every Nevery steps, so
+              //   between rebuilds there is a band of space between the
+              //   committed surface and where the front has advanced to.  A
+              //   particle inside that band fails every ordinary test: it
+              //   starts on the wrong side, so the hit is rejected as INSIDE
+              //   and it walks on into the solid.
+              // detect it by casting a short ray outward along the element
+              //   normal, no longer than the distance the front has advanced
+              //   since the rebuild.  If that ray crosses the element, the
+              //   particle is behind THIS element and within reach of the
+              //   front.  Using the element rather than its infinite plane is
+              //   what keeps a particle beside the element from being caught.
+
+              overtaken = 0;
+              if (MOVING && nrefresh && rspeed > 0.0) {
+                double band = rspeed * (ntimestep - front_step0) * dt;
+                oend[0] = x[0] + rnorm[0]*band;
+                oend[1] = x[1] + rnorm[1]*band;
+                if (DIM == 3) oend[2] = x[2] + rnorm[2]*band;
+                if (DIM == 3)
+                  overtaken = Geometry::
+                    line_tri_intersect(x,oend,rp1,rp2,rp3,rnorm,
+                                       opt,oparam,oside);
+                else
+                  overtaken = Geometry::
+                    line_line_intersect(x,oend,rp1,rp2,rnorm,opt,oparam,oside);
+                if (overtaken && oside != INSIDE) overtaken = 0;
+              }
+
+              if (overtaken) {
+
+                // put it back on the outside of the front and reflect there
+                // clear the front by one more step of its own advance, not
+                //   just by a rounding epsilon: the front keeps moving for
+                //   the rest of this step, and a particle left in that sliver
+                //   is swallowed again by the next rebuild, so it would come
+                //   straight back through the regeneration safety net
+                // opt lies on the element, so it is inside this cell; clamp
+                //   the offset position too, since a particle must never be
+                //   moved out of the cell that owns it
+
+                double eps = 1.0e-4 * MIN(hi[0]-lo[0],hi[1]-lo[1]);
+                if (DIM == 3) eps = MIN(eps,1.0e-4*(hi[2]-lo[2]));
+                eps += rspeed*dt;
+
+                hitflag = 1;
+                param = 0.0;
+                side = OUTSIDE;
+                xc[0] = MIN(MAX(opt[0] + eps*rnorm[0],lo[0]),hi[0]);
+                xc[1] = MIN(MAX(opt[1] + eps*rnorm[1],lo[1]),hi[1]);
+                if (DIM == 3)
+                  xc[2] = MIN(MAX(opt[2] + eps*rnorm[2],lo[2]),hi[2]);
+                if (DIM == 1) {
+                  vc[1] = v[1];
+                  vc[2] = v[2];
+                }
+
+              } else if (MOVING && nrefresh && DIM == 1) {
                 hitflag = Geometry::
                   axi_line_intersect(dtsurf,x,v,outface,lo,hi,rp1,rp2,
                                      rnorm,exclude == isurf,xc,vc,param,side);

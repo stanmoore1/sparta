@@ -7,15 +7,20 @@
 # this exercises surface growth on a body of revolution, including where the
 # body closes on the y=0 symmetry axis.
 #
-# A growing surface advances into the region the gas occupies.  In 2d and 3d
-# the move loop reflects a particle off the advancing front at the point and
-# time they actually cross.  In axisymmetry that sub-timestep treatment is not
-# applied (see the fix ablate doc page); engulfed particles are instead
-# reflected back into the flow, or accounted as incorporated into the film,
-# when the isosurface is regenerated.  Either way none are silently deleted:
+# A growing surface advances into the region the gas occupies, and the move
+# loop reflects a particle off the advancing front rather than letting it be
+# engulfed.  Axisymmetry uses the same every-step refreshed geometry as 2d and
+# 3d, but solves the crossing with the surface-of-revolution test rather than
+# in the frame of the front, since the particle path here is not straight (see
+# the fix ablate doc page).  Anything the surface does overtake is placed back
+# outside the front and reflected, or accounted as incorporated into the film.
+# Either way none are silently deleted:
 #
 #   f_fablate[3] = particles buried, i.e. incorporated into the film
 #   f_fablate[8] = particles pushed back into the flow at a regeneration
+#
+# The rate is set so the front stays within the half-cell-per-regeneration
+# limit fix ablate enforces; raising it trips that guard.
 #
 # The deposition "scale" here is chosen to make growth visible over a short
 # run; it is not a calibrated physical deposition rate.
@@ -47,8 +52,8 @@ surf_modify		all collide 1
 # over each deposition interval and fed to fix ablate
 
 compute                 COMP isurf/grid all all n
-fix                     FIX ave/grid all 1 20 20 c_COMP[*]
-fix                     fablate ablate all 20 0.5 f_FIX mode deposit
+fix                     FIX ave/grid all 1 10 10 c_COMP[*]
+fix                     fablate ablate all 10 0.2 f_FIX mode deposit
 
 # explicit -> implicit (inout mode is watertight for sharp axis features)
 
