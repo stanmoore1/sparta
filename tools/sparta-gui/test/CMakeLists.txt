@@ -396,14 +396,31 @@ if (VTK_FOUND)
   target_compile_definitions(test_vtkscene PRIVATE
     SPARTA_GUI_VERSION="${PROJECT_VERSION}" SPARTA_GUI_HAVE_VTK)
   target_link_libraries(test_vtkscene PRIVATE
-    GTest::gtest Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Svg
+    GTest::gtest Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Svg Qt6::Test
     lepton_mini ads::qtadvanceddocking-qt6 ${VTK_LIBRARIES})
   vtk_module_autoinit(TARGETS test_vtkscene MODULES ${VTK_LIBRARIES})
   if (SPARTA_GUI_USE_PLUGIN)
     target_compile_definitions(test_vtkscene PRIVATE SPARTA_GUI_USE_PLUGIN)
     target_include_directories(test_vtkscene PRIVATE ${SPARTA_PLUGINLIB_DIR})
   endif()
+  # Discovered individually, so a failure names the case that failed. These
+  # cover the bookkeeping and the file readers; the cases that actually render
+  # skip without a display and are covered by the Xvfb run below.
   gtest_discover_tests(test_vtkscene)
+
+  # VTK's off-screen rendering is off-screen only in the sense that no window
+  # appears: on Linux it is still vtkXOpenGLRenderWindow speaking GLX, so it
+  # needs an X server. gtest_discover_tests cannot wrap the per-case commands
+  # in one (TEST_LAUNCHER is CMake 3.29 and this project targets 3.20), so the
+  # rendering cases run as a single test under Xvfb. Without this the 3D
+  # viewer has no coverage of what it puts on screen at all -- which is the
+  # only thing a 3D viewer is for.
+  add_test(NAME VtkScene.Rendering
+    COMMAND ${XVFB_RUNNER} -n 14 -s "-screen 0 1024x768x24" -w 1
+    $<TARGET_FILE:test_vtkscene>
+    --gtest_filter=VtkSceneRender.*:VtkSceneFiles.*)
+  set_tests_properties(VtkScene.Rendering PROPERTIES
+    ENVIRONMENT "OMP_NUM_THREADS=1" TIMEOUT 300)
   endif()
 endif()
 

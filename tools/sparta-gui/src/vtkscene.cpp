@@ -171,6 +171,17 @@ void VtkRenderArea::requestRender()
 
 void VtkRenderArea::resetCamera()
 {
+    // Point the camera back down -Z with +Y up before re-framing.
+    // vtkRenderer::ResetCamera() on its own only moves the camera along the
+    // direction it is already looking, so after a drag it re-frames the scene
+    // at whatever angle the drag left it at. Dragging is the only way to turn
+    // this view, so without this there is no way back to a known viewpoint --
+    // a user who tumbles the scene and loses their bearings has to close the
+    // window and start again.
+    auto *cam = ren->GetActiveCamera();
+    cam->SetPosition(0.0, 0.0, 1.0);
+    cam->SetFocalPoint(0.0, 0.0, 0.0);
+    cam->SetViewUp(0.0, 1.0, 0.0);
     ren->ResetCamera();
     requestRender();
 }
@@ -381,7 +392,7 @@ void VtkScene::buildUi()
     tb->addSeparator();
     auto *resetAct = tb->addAction(QIcon(":/icons/preferences-reset.svg"), "Reset View", this,
                                    &VtkScene::resetView);
-    resetAct->setToolTip("Camera reset to frame all layers");
+    resetAct->setToolTip("Camera reset to the default view, framing all layers");
     auto *shotAct = tb->addAction(QIcon(":/icons/image-x-generic.svg"), "Save Screenshot...", this,
                                   &VtkScene::saveScreenshot);
     shotAct->setToolTip("Save the current 3D view to an image file");
