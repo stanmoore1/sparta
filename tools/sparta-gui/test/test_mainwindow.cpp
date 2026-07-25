@@ -30,6 +30,8 @@
 #include <QKeySequence>
 #include <QMenu>
 #include <QMenuBar>
+#include <QDialog>
+#include <QLabel>
 #include <QPushButton>
 #include <QSettings>
 
@@ -46,6 +48,7 @@
 #include "dockpanels.h"
 #include "constants.h"
 #include "helpers.h"
+#include "preferences.h"
 #include "slideshow.h"
 #include "spartagui.h"
 
@@ -516,6 +519,48 @@ TEST_F(MainWindow, StopIsOnlyOfferedWhileSomethingIsRunning)
         QAction *a = action(entry);
         ASSERT_NE(a, nullptr) << entry;
         EXPECT_TRUE(a->isEnabled()) << entry << " is greyed out with nothing running";
+    }
+}
+
+TEST_F(MainWindow, EnteringAWorkspaceNeverPutsUpADialog)
+{
+    // Entering Analyze or Visualize opens the viewer, and opening the viewer
+    // renders so the pane is not blank. On a buffer that cannot be rendered --
+    // an empty one, or a deck that never creates a box, which is the state
+    // here -- that render used to answer a workspace switch with a modal error
+    // box. Offscreen that is not a dialog anyone can dismiss: it is a hang.
+    for (const char *entry : {"&Setup Workspace", "&Run Workspace", "&Analyze Workspace",
+                              "&Visualize Workspace"}) {
+        enterWorkspace(entry);
+        for (auto *w : QApplication::topLevelWidgets()) {
+            auto *dlg = qobject_cast<QDialog *>(w);
+            if (dlg && dlg->isVisible())
+                ADD_FAILURE() << entry << " put up \"" << dlg->windowTitle().toStdString()
+                              << "\"";
+        }
+    }
+    EXPECT_EQ(QApplication::activeModalWidget(), nullptr)
+        << "a workspace switch left a modal dialog on screen";
+}
+
+// The snapshot preferences came across from LAMMPS carrying VDW Style,
+// Dynamic Bonds and Bond Cutoff. SPARTA has particles, grid cells and surface
+// elements -- no bonds, no van der Waals radii -- and all three only ever wrote
+// a settings key nothing read.
+TEST_F(MainWindow, TheSnapshotPreferencesOfferNothingAboutBonds)
+{
+    QSettings settings;
+    SnapshotTab tab(&settings);
+    for (const char *gone : {"vdwstyle", "autobond", "bondcut"})
+        EXPECT_EQ(tab.findChild<QWidget *>(gone), nullptr)
+            << gone << " is back in the snapshot preferences";
+
+    for (auto *label : tab.findChildren<QLabel *>()) {
+        const QString t = label->text();
+        EXPECT_FALSE(t.contains("Bond", Qt::CaseInsensitive))
+            << "a preferences label still reads \"" << t.toStdString() << "\"";
+        EXPECT_FALSE(t.contains("VDW", Qt::CaseInsensitive))
+            << "a preferences label still reads \"" << t.toStdString() << "\"";
     }
 }
 
