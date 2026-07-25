@@ -13,9 +13,10 @@ Run with:
   cd ../tools/testing/deposition
   python3 run_tests.py
 
-Optionally point at a different binary:
+Optionally point at a different binary, or run in parallel:
 
   python3 run_tests.py --exe /path/to/spa_serial
+  python3 run_tests.py --exe ../../../src/spa_mpi --ranks 4
 
 Tests
 -----
@@ -31,6 +32,33 @@ in.test.conserve
   buried up to fast enough that some particles are, and at several Nevery
   values.  fix grid/check runs with the error setting throughout, so
   completing the run also proves no particle was left inside the surface.
+
+in.test.momentum
+  A growing surface in a fully PERIODIC box, so no domain boundary can take
+  momentum from the gas and gas-gas collisions conserve it internally.  The
+  surface is then the only place gas momentum can go, and
+
+      [ P_gas(end) - P_gas(0) ] + P_surf + P_buried + P_reflect  ==  0
+
+  must close, where the three surface terms are the momentum handed to the
+  surface by ordinary collisions, by particles it buried, and by the
+  reflections that push enclosed particles back into the flow.  The residual
+  is round-off over roughly a million collisions, about 1e-8 relative.
+
+in.test.momentum.3d
+  The same ledger in three dimensions, which exercises marching cubes and the
+  triangle intersection rather than marching squares and the line one.
+
+in.test.wall
+  A depositing surface advances by accretion, not by motion of its material,
+  so the atoms a molecule strikes are at rest: the front velocity decides
+  when and where a collision happens but must not appear in the reflected
+  velocity.  A wall physically translating at the same speed would be a
+  piston and would heat the gas.  Off a stationary plane specular reflection
+  preserves each particle's speed exactly, so with a specular wall the gas
+  temperature must not move at all as the growth rate is raised.  Raising it
+  from 0 to 0.1 raises the surface collision rate by more than half and
+  leaves the temperature bit identical.
 
 in.test.guard
   The per-cell csurfs collision lists are rebuilt only when the isosurface is
@@ -61,7 +89,7 @@ larger jump per regeneration leaves more residual work for the safety net.
 Not covered here
 ----------------
 
-  - parallel runs; build spa_mpi and run the same inputs on 4 ranks
-  - 3d; see the 2d/3d pair used during development, the 3d path is exercised
-    by examples/ablation
-  - Kokkos, which fix ablate does not support in any mode
+  - axisymmetry; see examples/explicit2implicit/in.deposit.axi.spherecone,
+    which runs under fix grid/check with the error setting
+  - Kokkos, whose particle move is a separate implementation and does not
+    read the refreshed geometry, so growth is resolved once per Nevery there
