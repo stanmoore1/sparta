@@ -556,7 +556,11 @@ AcceleratorTab::AcceleratorTab(QSettings *_settings, SpartaWrapper *_sparta, QWi
     auto *choiceLayout  = new QVBoxLayout;
     QLabel *ntlabel     = nullptr;
     QLineEdit *ntchoice = nullptr;
-    if (sparta->configHasOmpSupport()) {
+    // SPARTA runs multithreaded through the KOKKOS package with an OpenMP
+    // backend; the thread count only applies when that build is available.
+    const bool ompthreads = sparta->configHasPackage("KOKKOS") &&
+                            sparta->configAccelerator("KOKKOS", "api", "openmp");
+    if (ompthreads) {
         // maximum number of threads is limited to half of available threads and no more than 16
         // unless OMP_NUM_THREADS is set to a larger value
         int maxthreads = std::min(QThread::idealThreadCount() / 2, 16);
@@ -617,10 +621,13 @@ void AcceleratorTab::updateAccel()
         }
     }
 
-    // The number of threads field is disabled and the value set to 1 for the "None" choice
+    // The number of threads field is disabled and the value set to 1 for the
+    // "None" choice or when no KOKKOS/OpenMP build is available to use threads.
+    const bool ompthreads = sparta->configHasPackage("KOKKOS") &&
+                            sparta->configAccelerator("KOKKOS", "api", "openmp");
     auto *field = findChild<QLineEdit *>("nthreads");
     if (field) {
-        if ((choice == AcceleratorTab::None) || !sparta->configHasOmpSupport()) {
+        if ((choice == AcceleratorTab::None) || !ompthreads) {
             field->setText("1");
             field->setEnabled(false);
         } else {

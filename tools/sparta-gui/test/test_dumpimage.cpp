@@ -336,13 +336,13 @@ TEST(DumpImage, CmapDiscreteAbsolute)
     m.lo      = "0";
     m.hi      = "100";
     EXPECT_EQ(modify(s), "dump_modify viz cmap surf 0 100 da 0.0 2 "
-                         "0 50 black 50 100 white");
+                         "min 50 black min max white");
 
     // absolute needs numeric bounds; with min/max it falls back to fractional
     m.lo = "min";
     m.hi = "max";
     EXPECT_EQ(modify(s), "dump_modify viz cmap surf min max df 0.0 2 "
-                         "0 0.5 black 0.5 1 white");
+                         "min 0.5 black min max white");
 }
 
 // all six color map modes are independent and emitted in a fixed order

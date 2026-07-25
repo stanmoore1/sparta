@@ -90,8 +90,9 @@ void applyProxySetting(SpartaWrapper &sparta, QSettings &settings)
     if (!proxy.isEmpty()) sparta.command(QString("shell putenv https_proxy=") + proxy);
 }
 
-const QString citeme("# When using SPARTA-GUI in your project, please cite: "
-                     "https://doi.org/10.33011/livecoms.6.1.3037\n");
+// shown as the initial editor content and appended to the About info;
+// intentionally empty for SPARTA-GUI (no citation banner)
+const QString citeme;
 const QString bannerstyle("CodeEditor {background-position: center center; "
                           "padding: 0px; "
                           "background-repeat: no-repeat; "
@@ -711,6 +712,23 @@ SpartaGui::~SpartaGui()
 
 void SpartaGui::newDocument()
 {
+    // prompt to save unsaved changes before discarding the buffer, matching
+    // the behavior of Open and Run (which already guard this)
+    if (textEdit->document()->isModified()) {
+        int rv = showUnsavedChangesDialog(
+            this, currentFile, "Do you want to save the file before starting a new one?");
+        switch (rv) {
+            case QMessageBox::Yes:
+                save();
+                break;
+            case QMessageBox::Cancel:
+                return;
+            case QMessageBox::No: // fallthrough
+            default:
+                break;
+        }
+    }
+
     currentFile.clear();
     textEdit->document()->setPlainText(citeme);
     textEdit->document()->setModified(false);
@@ -793,6 +811,12 @@ QString SpartaGui::findExamplesDir() const
     if (isExamplesDir(configured)) return QFileInfo(configured).canonicalFilePath();
 
     QStringList candidates;
+    // examples bundled inside the application (macOS .app/Contents/Resources,
+    // or a Linux/Windows install tree) are the primary location
+    const QString appdir = QCoreApplication::applicationDirPath();
+    candidates << appdir + "/../Resources/examples"     // macOS app bundle
+               << appdir + "/../share/sparta/examples"  // Linux/Windows install
+               << appdir + "/examples";
     if (!pluginPath.isEmpty()) {
         QDir libdir = QFileInfo(pluginPath).absoluteDir();
         candidates << libdir.absoluteFilePath("../../examples")
@@ -837,7 +861,39 @@ void SpartaGui::buildExampleMenu()
 void SpartaGui::openExample()
 {
     auto *act = qobject_cast<QAction *>(sender());
-    if (act) openFile(act->data().toString());
+    if (!act) return;
+
+    const QString srcfile = act->data().toString();
+    QFileInfo srcinfo(srcfile);
+    const QString srcdir = srcinfo.absolutePath();
+
+    // examples are usually bundled read-only (e.g. inside the macOS .app), so
+    // copy the whole example directory (input script plus its data files) into
+    // a writable location the first time and open the copy from there, so the
+    // simulation can actually be run and write its log and image output
+    if (QFileInfo(srcdir).isWritable()) {
+        openFile(srcfile);
+        return;
+    }
+
+    const QString subname  = QFileInfo(srcdir).fileName();
+    QDir destroot(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) +
+                  "/SPARTA-GUI Examples");
+    const QString destdir  = destroot.absoluteFilePath(subname);
+    const QString destfile = destdir + "/" + srcinfo.fileName();
+
+    if (!QFileInfo::exists(destfile)) {
+        if (!destroot.mkpath(subname)) {
+            warning(this, "Open Example", "Could not create a writable copy of the example in:",
+                    destdir);
+            return;
+        }
+        // copy the input scripts and data files, but not any subdirectories
+        const auto entries = QDir(srcdir).entryInfoList(QDir::Files);
+        for (const auto &entry : entries)
+            QFile::copy(entry.absoluteFilePath(), destdir + "/" + entry.fileName());
+    }
+    openFile(destfile);
 }
 
 void SpartaGui::updateRecents(const QString &filename)
@@ -1025,6 +1081,9 @@ void SpartaGui::openFile(const QString &fileName)
 // open file in read-only mode for viewing in separate window
 void SpartaGui::viewFile(const QString &fileName)
 {
+    // empty name means the file dialog was cancelled: nothing to view
+    if (fileName.isEmpty()) return;
+
     // a movie file is also an image file when it is an animated GIF
     if (isMovieFile(fileName)) {
         warning(this, "Cannot View Movie as Text",
@@ -1116,6 +1175,9 @@ void SpartaGui::purgeInspectList()
 // read restart file into SPARTA instance and launch image viewer
 void SpartaGui::inspectFile(const QString &fileName)
 {
+    // empty name means the file dialog was cancelled: nothing to inspect
+    if (fileName.isEmpty()) return;
+
     QFile file(fileName);
     auto shortName = QFileInfo(fileName).fileName();
 
@@ -1188,6 +1250,13 @@ void SpartaGui::inspectFile(const QString &fileName)
                     "Error reading restart file " + fileName + ":", errmsg);
             return;
         }
+
+        // read_restart does not restore the RNG seed (it is a runtime command, not
+        // stored in the restart file). Rendering the restored state runs "run 0",
+        // which requires a seeded RNG whenever the restart defines a collide or
+        // react style. Provide a fixed seed here so restart inspection can always
+        // create an image; the value is irrelevant for a static visualization.
+        sparta.command("seed 12345");
 
         auto infolog = QString("%1.info.log").arg(fileName);
         QFile dumpinfo(infolog);
@@ -1908,10 +1977,15 @@ void SpartaGui::viewSlides()
         slideshow = new SlideShow(currentFile, this);
         slideshow->setMinimumSize(Cfg::MINIMUM_WIDTH, Cfg::MINIMUM_HEIGHT);
     }
-    if (slideshow->isVisible())
+    if (slideshow->isVisible()) {
         slideshow->hide();
-    else
+    } else {
         slideshow->show();
+        // make sure the window comes to the front and does not open behind
+        // the editor window (observed on macOS)
+        slideshow->raise();
+        slideshow->activateWindow();
+    }
 }
 
 void SpartaGui::viewChart()
@@ -2082,7 +2156,8 @@ void SpartaGui::about()
     if (auto *clip = QGuiApplication::clipboard()) clip->setText(to_clipboard);
 #endif
 
-    auto fsize = QFontMetrics(QApplication::font()).size(Qt::TextSingleLine, citeme);
+    auto fsize = QFontMetrics(QApplication::font())
+                     .size(Qt::TextSingleLine, "SPARTA-GUI configuration information line width");
     AboutDialog dialog(QString::fromStdString(version).trimmed(), info.trimmed(),
                        details.trimmed(), fsize.width(), this);
     dialog.exec();
@@ -2281,6 +2356,7 @@ void SpartaGui::preferences()
         // suffixes or package commands
         int newthreads = settings.value(Keys::NTHREADS, nthreads).toInt();
         int newaccel   = settings.value(Keys::ACCELERATOR, AcceleratorTab::None).toInt();
+        bool instanceClosed = false;
         if ((oldaccel != newaccel) || (oldthreads != newthreads) ||
             (oldecho != settings.value(Keys::ECHO, false).toBool())) {
             if (sparta.isRunning()) {
@@ -2293,6 +2369,7 @@ void SpartaGui::preferences()
                 StdoutSilencer guard;
                 sparta.close();
             }
+            instanceClosed = true;
             spartastatus->hide();
             // reset nthreads if accelerator does not support threads
             if (newaccel == AcceleratorTab::None)
@@ -2301,8 +2378,22 @@ void SpartaGui::preferences()
                 nthreads = newthreads;
 
             qputenv("OMP_NUM_THREADS", QByteArray::number(nthreads));
+
+            // Kokkos can be initialized only once per process, so once a run has
+            // used it the thread count is fixed until SPARTA-GUI is restarted.
+            // Tell the user rather than let a thread-count change silently do
+            // nothing.
+            if (kokkosStarted && (oldthreads != newthreads))
+                warning(this, "Accelerator Settings",
+                        "The number of threads cannot be changed after SPARTA has "
+                        "run with the Kokkos accelerator, because Kokkos can be "
+                        "initialized only once per process.",
+                        "Restart SPARTA-GUI for the new thread count to take effect.");
         }
-        if (imagewindow) imagewindow->createImage();
+        // only refresh the snapshot if the instance is still alive: closing it
+        // above tears down the box/grid, so a re-render would just pop a
+        // "no simulation box" warning right after changing a preference.
+        if (imagewindow && !instanceClosed) imagewindow->createImage();
         settings.beginGroup(Keys::GROUP_REFORMAT);
         textEdit->setReformatOnReturn(settings.value(Keys::RETURN, false).toBool());
         textEdit->setAutoComplete(settings.value(Keys::AUTOMATIC, true).toBool());
@@ -2356,6 +2447,9 @@ void SpartaGui::startSparta()
     int narg = static_cast<int>(cargs.size());
     sparta.open(narg, cargs.data());
     spartastatus->show();
+    // Kokkos can be initialized at most once per process: record that it is now
+    // live so a later thread-count change can tell the user a restart is needed.
+    if (accel == AcceleratorTab::Kokkos) kokkosStarted = true;
 
     if (sparta.version() < Cfg::MIN_SPARTA_VERSION) {
         critical(this, "SPARTA-GUI Error", "Incompatible SPARTA Version:",

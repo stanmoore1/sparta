@@ -421,13 +421,6 @@ bool SpartaWrapper::configHasCurlSupport() const
     return false;
 }
 
-// SPARTA uses Kokkos rather than a separate OpenMP package,
-// see configAccelerator()
-bool SpartaWrapper::configHasOmpSupport() const
-{
-    return false;
-}
-
 bool SpartaWrapper::configHasPngSupport() const
 {
     return SPAFN(config_has_png_support)() != 0;

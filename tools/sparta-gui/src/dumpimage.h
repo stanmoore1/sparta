@@ -32,7 +32,8 @@
  * @ref reverse.  @ref style selects how the stops are laid out:
  * - 'c' (continuous): first stop at `min`, last at `max`, interior stops at
  *   their table positions
- * - 'd' (discrete): the stops become N equally wide value bins
+ * - 'd' (discrete): the stops become N equally wide value bins, with the
+ *   last entry emitted as the "min max" catch-all bin SPARTA requires
  * - 's' (sequential): the stops repeat in value bins of width @ref delta
  * @ref range 'f' interprets positions/bins as fractions of [lo,hi]; 'a' maps
  * them to absolute values, which requires both @ref lo and @ref hi to be

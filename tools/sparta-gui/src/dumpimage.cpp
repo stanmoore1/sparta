@@ -125,14 +125,17 @@ QString buildCmapArgs(const DumpImageSettings &s, int mode)
         for (const auto &c : colorref)
             args += " " + c;
     } else if (m.style == 'd') {
-        // discrete: one equally wide value bin per stop; numeric bounds only
-        // (SPARTA's discrete-entry parser mishandles "min"/"max" entries)
+        // discrete: one equally wide value bin per stop. the first bin is
+        // open at "min" and the last entry is the "min max" catch-all bin
+        // that SPARTA requires as the final discrete map entry
         args += QString("d%1 0.0 %2").arg(range).arg(n);
-        for (int i = 0; i < n; ++i) {
+        for (int i = 0; i < n - 1; ++i) {
+            const QString lo =
+                (i == 0) ? QStringLiteral("min") : num(mapval(static_cast<double>(i) / n));
             args += QString(" %1 %2 %3")
-                        .arg(num(mapval(static_cast<double>(i) / n)),
-                             num(mapval(static_cast<double>(i + 1) / n)), colorref[i]);
+                        .arg(lo, num(mapval(static_cast<double>(i + 1) / n)), colorref[i]);
         }
+        args += QString(" min max %1").arg(colorref[n - 1]);
     } else {
         // continuous: first entry at "min", last at "max", interior stops at
         // their (strictly ascending) table positions

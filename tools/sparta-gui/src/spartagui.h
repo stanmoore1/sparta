@@ -420,6 +420,8 @@ private:
 
 protected:
     int nthreads;      ///< Number of threads for parallel execution
+    bool kokkosStarted = false; ///< true once SPARTA has been launched with Kokkos in this process
+                                ///< (Kokkos can be initialized only once, so its thread count is fixed)
     int mainx;         ///< Override value for main editor window width or 0
     int mainy;         ///< Override value for main editor window height or 0
     bool hasClipboard; ///< true if Qt was configured with Clipboard support, otherwise false

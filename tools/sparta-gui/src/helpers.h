@@ -108,9 +108,22 @@ extern QString getSpartaDownloadUrl();
 extern void exportImage(QWidget *parent, QImage *image, const QString &title);
 
 /**
- * @brief Check if an executable is in the system PATH
+ * @brief Locate an executable on PATH or in common install locations
  * @param exe The executable name to search for
- * @return true if executable is found in PATH, false otherwise
+ * @return the full path to the executable, or an empty string if not found
+ *
+ * In addition to the PATH, this also searches Homebrew, MacPorts, and
+ * /usr/local locations, which are typically missing from the environment of
+ * a GUI application launched from a desktop (e.g. a macOS .app from Finder).
+ * Use the returned path when starting a QProcess so the tool is found even
+ * with a minimal PATH.
+ */
+[[nodiscard]] extern QString findExe(const QString &exe);
+
+/**
+ * @brief Check if an executable can be found (see findExe())
+ * @param exe The executable name to search for
+ * @return true if the executable is found, false otherwise
  */
 [[nodiscard]] extern bool hasExe(const QString &exe);
 
