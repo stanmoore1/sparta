@@ -1984,6 +1984,16 @@ ChartViewer::ChartViewer(QWidget *parent) :
                   settings.value(Keys::MINORGRID, true).toBool());
     settings.endGroup();
 
+    // Two rows of controls sit above the plot and keep their height whatever
+    // happens, so in a short panel the plot is the only thing that gives way --
+    // and a plot squeezed to a couple of dozen pixels is not a small plot, it
+    // is an unreadable one. Put a floor under it and let the splitter take the
+    // space from a neighbour instead. Sharing the right-hand column with the
+    // image viewer is the case that matters: the viewer scales its render to
+    // whatever room it is left and still reads correctly, so it is the one that
+    // should yield.
+    plot->setMinimumHeight(Cfg::CHART_PLOT_MINIMUM_HEIGHT);
+
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->addWidget(plot);

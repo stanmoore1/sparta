@@ -85,6 +85,11 @@ constexpr int CHART_UPDATE_INTERVAL_MIN     = 1;    ///< Min chart update interv
 constexpr int CHART_UPDATE_INTERVAL_MAX     = 5000; ///< Max chart update interval
 constexpr int CHART_UPDATE_INTERVAL_DEFAULT = 500;  ///< Default chart update interval
 
+/// Smallest the plot area itself may be squeezed to when the chart shares a
+/// dock column with another panel. Below roughly this the axis labels and the
+/// curve collide and the plot stops being readable at all.
+constexpr int CHART_PLOT_MINIMUM_HEIGHT = 200;
+
 // ---- Chart dimension ranges and defaults (pixels) ------------------------
 constexpr int CHART_WIDTH_MIN        = 400;   ///< Min configurable chart width
 constexpr int CHART_WIDTH_MAX        = 40000; ///< Max configurable chart width
