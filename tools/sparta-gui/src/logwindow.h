@@ -59,6 +59,11 @@ private slots:
     void openErrorUrl(); ///< Open error documentation URL in browser
 
 protected:
+    /** @brief Keep the warning badge in the strip reserved under the text */
+    void resizeEvent(QResizeEvent *event) override;
+    /** @brief Place the badge once the widget has a real size */
+    void showEvent(QShowEvent *event) override;
+
     /**
      * @brief Handle window close event
      * @param event Close event
@@ -92,11 +97,13 @@ protected:
     bool checkYaml();
 
 private:
+    void placeWarningBadge(); ///< centre the badge in its reserved strip
     QString filename;       ///< Input file name used to derive default save-file names
     SpartaGui *spartagui;   ///< Main widget pointer for receiving signals
     QString errorurl;       ///< URL of last detected error
     FlagWarnings *warnings; ///< Warning highlighter
-    QLabel *summary;        ///< Summary label for warning count
+    QLabel *summary;
+    QWidget *warningBadge = nullptr; ///< warning count, in its own strip below the text        ///< Summary label for warning count
 };
 
 #endif

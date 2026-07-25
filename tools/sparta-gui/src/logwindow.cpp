@@ -22,7 +22,6 @@
 #include <QFileDialog>
 #include <QFont>
 #include <QFontInfo>
-#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QIcon>
 #include <QKeySequence>
@@ -32,7 +31,6 @@
 #include <QRegularExpression>
 #include <QSettings>
 #include <QShortcut>
-#include <QSpacerItem>
 #include <QString>
 #include <QTextStream>
 
@@ -40,6 +38,7 @@ namespace {
 constexpr auto YAML_REGEX = R"(^(keywords:.*$|data:$|---$|\.\.\.$|  - \[.*\]$))";
 constexpr auto URL_REGEX  = "^.*(https://sparta.github.io/err[0-9]+).*$";
 QRegularExpression is_yaml(YAML_REGEX, QRegularExpression::MultilineOption);
+constexpr int BADGE_MARGIN = 3;
 } // namespace
 
 LogWindow::LogWindow(const QString &_filename, SpartaGui *_spartagui, QWidget *parent) :
@@ -62,22 +61,29 @@ LogWindow::LogWindow(const QString &_filename, SpartaGui *_spartagui, QWidget *p
     button->setToolTip("Jump to next warning");
     connect(button, &QPushButton::released, this, &LogWindow::nextWarning);
 
-    auto *spacer = new QSpacerItem(0, 0, QSizePolicy::Minimum, QSizePolicy::Expanding);
-    auto *panel  = new QHBoxLayout(frame);
-    auto *grid   = new QGridLayout(this);
-
+    auto *panel = new QHBoxLayout(frame);
     panel->addWidget(summary);
     panel->addWidget(button);
     panel->setStretchFactor(summary, 10);
     panel->setStretchFactor(button, 1);
 
-    grid->addItem(spacer, 0, 0, 1, 3);
-    grid->addWidget(frame, 1, 1, 1, 1);
-    grid->setColumnStretch(0, 5);
-    grid->setColumnStretch(1, 1);
-    grid->setColumnStretch(2, 5);
+    // The badge sits in a strip reserved below the text, not on top of it. It
+    // used to be positioned by a layout installed on this widget, which put it
+    // over the last couple of lines of output -- exactly the lines someone
+    // watching a run is reading. setViewportMargins() takes the strip out of
+    // the scrolling area instead, so text can never flow underneath.
+    warningBadge = frame;
+    // the layout used to adopt it; without one it needs a parent of its own
+    warningBadge->setParent(this);
+    warningBadge->show();
+    warningBadge->adjustSize();
+    setViewportMargins(0, 0, 0, warningBadge->sizeHint().height() + 2 * BADGE_MARGIN);
 
     warnings = new FlagWarnings(summary, document());
+
+    // the summary is rewritten as output arrives, and a longer line count needs
+    // a wider badge
+    connect(document(), &QTextDocument::contentsChanged, this, &LogWindow::placeWarningBadge);
 
     // WidgetWithChildrenShortcut (rather than the default WindowShortcut) so
     // these only compete with the identically-bound main-window menu
@@ -133,6 +139,34 @@ void LogWindow::stopRun()
 void LogWindow::runBuffer()
 {
     if (spartagui) spartagui->runBuffer();
+}
+
+// Centre the badge in the strip reserved for it under the text.
+void LogWindow::placeWarningBadge()
+{
+    if (!warningBadge) return;
+    // Re-fit every time: the summary starts at "0 Warnings / Errors - 0 Lines"
+    // and grows as the run produces output, so a width measured once at
+    // construction ends up cutting the last character off.
+    warningBadge->adjustSize();
+    const QSize hint = warningBadge->size();
+    const QRect box  = contentsRect();
+    warningBadge->setGeometry(box.center().x() - hint.width() / 2,
+                              box.bottom() - hint.height() - BADGE_MARGIN, hint.width(),
+                              hint.height());
+}
+
+void LogWindow::resizeEvent(QResizeEvent *event)
+{
+    QPlainTextEdit::resizeEvent(event);
+    placeWarningBadge();
+}
+
+void LogWindow::showEvent(QShowEvent *event)
+{
+    QPlainTextEdit::showEvent(event);
+    // the widget has its real size only once shown
+    placeWarningBadge();
 }
 
 void LogWindow::nextWarning()
