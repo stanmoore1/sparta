@@ -678,6 +678,12 @@ void CodeEditor::dragLeaveEvent(QDragLeaveEvent *event)
 
 bool CodeEditor::canInsertFromMimeData(const QMimeData *source) const
 {
+    // QClipboard::mimeData() returns null when nothing owns the clipboard: an
+    // X11 session where nothing has been copied yet, or one where whatever did
+    // the copying has since exited. QPlainTextEdit::paste() passes that null
+    // straight through to here, so Ctrl+V (or Edit -> Paste) with an empty
+    // clipboard dereferenced it and took the whole application down.
+    if (!source) return false;
     return source->hasUrls() || source->hasText();
 }
 

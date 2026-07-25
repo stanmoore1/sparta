@@ -192,9 +192,7 @@ class Gui:
         Runs the AT-SPI helper under an interpreter that has pyatspi, which is
         not necessarily the one running this harness.
         """
-        r = subprocess.run([ATSPI_PYTHON, os.path.join(os.path.dirname(
-            os.path.abspath(__file__)), "guiatspi.py"), "SPARTA"],
-            capture_output=True, text=True, env=self.env)
+        r = self._atspi("SPARTA")
         out = []
         for line in r.stdout.splitlines():
             parts = line.split("\t")
@@ -202,6 +200,35 @@ class Gui:
                 out.append((parts[0], parts[1], int(parts[2]), int(parts[3]),
                             int(parts[4]), int(parts[5])))
         return out
+
+    def _atspi(self, *args):
+        """Run the accessibility helper under an interpreter that has pyatspi."""
+        script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "guiatspi.py")
+        return subprocess.run([ATSPI_PYTHON, script, *args],
+                              capture_output=True, text=True, env=self.env)
+
+    def actions(self):
+        """Every activatable control as (name, role, path, enabled).
+
+        Unlike controls(), this reaches menu items: they are in the
+        accessibility tree whether or not their menu is open, and asking a
+        control to perform its action does not require it to be on screen.
+        Clicking coordinates does, which is why a coordinate-driven sweep can
+        only ever reach the few controls that happen to be visible -- and why
+        clicking a closed menu's item lands on whatever is underneath it.
+        """
+        out = []
+        for line in self._atspi("actions", "SPARTA").stdout.splitlines():
+            parts = line.split("\t")
+            if len(parts) == 4:
+                out.append((parts[0], parts[1], parts[2], parts[3] == "1"))
+        return out
+
+    def activate(self, path, expect_name="", pause=0.6):
+        """Perform the default action of the control at @p path."""
+        r = self._atspi("do", path, expect_name, "SPARTA")
+        time.sleep(pause)
+        return r.returncode == 0
 
     def render_geometry(self, index=-1):
         """ImageMagick crop spec for the largest rendered image on screen.

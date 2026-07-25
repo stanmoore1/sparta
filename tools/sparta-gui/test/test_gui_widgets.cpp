@@ -39,6 +39,7 @@
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QRadioButton>
+#include <QClipboard>
 #include <QSignalSpy>
 #include <QSlider>
 #include <QSpinBox>
@@ -517,6 +518,47 @@ static void walkWindow(QWidget *w, const QString &name, int expectAtLeast)
         << name.toStdString()
         << ": far fewer controls than this window is known to have -- it was probably "
            "not laid out, so most of it went undriven";
+}
+
+// ---------------------------------------------------------------------------
+// Editor clipboard handling
+// ---------------------------------------------------------------------------
+
+/// Exposes the protected override so the null case can be checked directly.
+class PasteProbe : public CodeEditor {
+public:
+    // CodeEditor deletes its default constructor in favour of the
+    // parent-taking one, so name it explicitly rather than defaulting.
+    PasteProbe() : CodeEditor(nullptr) {}
+    using CodeEditor::canInsertFromMimeData;
+};
+
+// Found by the walker driving Edit -> Paste on a fresh session: the process
+// died with SIGSEGV. QClipboard::mimeData() returns null when nothing owns the
+// clipboard -- an X11 session where nothing has been copied yet, or one where
+// the program that did the copying has exited -- and QPlainTextEdit::paste()
+// hands that null straight to canInsertFromMimeData(), which dereferenced it.
+TEST(CodeEditorClipboard, PasteWithNothingOnTheClipboardDoesNotCrash)
+{
+    PasteProbe editor;
+    EXPECT_FALSE(editor.canInsertFromMimeData(nullptr));
+
+    // and the whole path, the way the menu entry runs it
+    QGuiApplication::clipboard()->clear();
+    editor.setPlainText("run 100\n");
+    editor.paste();
+    EXPECT_EQ(editor.toPlainText(), QString("run 100\n"))
+        << "an empty clipboard changed the buffer";
+}
+
+TEST(CodeEditorClipboard, PasteInsertsTextThatIsOnTheClipboard)
+{
+    PasteProbe editor;
+    QGuiApplication::clipboard()->setText("stats 100");
+    editor.setPlainText("");
+    editor.paste();
+    EXPECT_EQ(editor.toPlainText(), QString("stats 100"));
+    QGuiApplication::clipboard()->clear();
 }
 
 TEST(RealWindows, FindAndReplace)

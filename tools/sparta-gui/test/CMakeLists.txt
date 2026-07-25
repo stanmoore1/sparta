@@ -16,7 +16,7 @@ FetchContent_MakeAvailable(googletest)
 include(GoogleTest)
 
 # Find Qt6 (Qt5 is no longer supported)
-find_package(Qt6 6.2 REQUIRED COMPONENTS Widgets Test)
+find_package(Qt6 6.2 REQUIRED COMPONENTS Widgets Test PrintSupport)
 
 # check that the Xvfb runner and a supported screenshooter are present
 find_program(XVFB_RUNNER
@@ -293,6 +293,25 @@ target_link_libraries(test_runarchive PRIVATE GTest::gtest_main Qt6::Widgets)
 
 gtest_discover_tests(test_runarchive)
 
+# Test executable for the archived-run store: the filesystem side of run
+# history, which RunArchive's own tests do not touch.
+add_executable(test_runhistory
+  test_runhistory.cpp
+  ${CMAKE_SOURCE_DIR}/src/runhistory.cpp
+  ${CMAKE_SOURCE_DIR}/src/runarchive.cpp
+  ${CMAKE_SOURCE_DIR}/src/runcompare.cpp
+  ${CMAKE_SOURCE_DIR}/src/plotdata.cpp
+  ${CMAKE_SOURCE_DIR}/src/helpers.cpp
+  ${CMAKE_SOURCE_DIR}/src/theme.cpp
+)
+
+target_include_directories(test_runhistory PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_compile_definitions(test_runhistory PRIVATE SPARTA_GUI_VERSION="${PROJECT_VERSION}")
+target_link_libraries(test_runhistory PRIVATE
+  GTest::gtest Qt6::Gui Qt6::Widgets Qt6::Svg Qt6::PrintSupport Qt6::Test)
+
+gtest_discover_tests(test_runhistory)
+
 # Test executable for the editor snippet-library parser
 add_executable(test_snippets
   test_snippets.cpp
@@ -516,6 +535,23 @@ target_include_directories(test_analysis PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_analysis PRIVATE GTest::gtest_main)
 
 gtest_discover_tests(test_analysis)
+
+# Test executable for the SPARTA syntax highlighter. Needs Widgets because it
+# builds real QTextDocuments, and helpers.cpp because the highlighter asks it
+# which way round the application theme is.
+add_executable(test_highlighter
+  test_highlighter.cpp
+  ${CMAKE_SOURCE_DIR}/src/highlighter.cpp
+  ${CMAKE_SOURCE_DIR}/src/helpers.cpp
+  ${CMAKE_SOURCE_DIR}/src/theme.cpp
+)
+
+target_include_directories(test_highlighter PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_compile_definitions(test_highlighter PRIVATE SPARTA_GUI_VERSION="${PROJECT_VERSION}")
+target_link_libraries(test_highlighter PRIVATE
+  GTest::gtest Qt6::Gui Qt6::Widgets Qt6::Svg)
+
+gtest_discover_tests(test_highlighter)
 
 # Test executable for the axis-layout helpers (Qt-free)
 add_executable(test_plotaxismath
