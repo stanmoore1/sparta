@@ -41,7 +41,6 @@ inline constexpr int CONTENT_MARGIN   = 5;
 inline constexpr int LAYOUT_SPACING   = 6;
 inline constexpr int MINIMUM_WIDTH    = 400;
 inline constexpr int MINIMUM_HEIGHT   = 300;
-inline constexpr int ICON_SIZE        = 48;
 inline constexpr int MAX_VALUE_COLS   = 99; // upper bound of the c_ID[N] column spinbox
 
 // The default per-species color assignment of SPARTA's dump image: species i
@@ -59,12 +58,11 @@ inline const QStringList particleAttributes = {"id", "type", "proc", "x",  "y", 
                                                "ke", "erot", "evib"};
 
 // ---- shared free helpers (defined in imageviewer.cpp) --------------------
-QPixmap color_icon(const QColor &color);
-QIcon gradient_icon(const QList<QPair<double, QColor>> &stops);
-QIcon sequence_icon(const QList<QColor> &colors);
+//
+// The colour swatches and selectComboItem() used to live here too; they moved
+// to qaddon.h so that wanting a swatch does not mean linking the image viewer.
 QJsonObject loadJsonColors(QWidget *parent);
 void saveJsonColors(QWidget *parent, const QJsonArray &colors, const QJsonObject &lights);
-void selectComboItem(QComboBox *box, const QString &text);
 
 #endif
 

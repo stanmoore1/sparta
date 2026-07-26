@@ -11,10 +11,16 @@
 
 #include "qaddon.h"
 
+#include <QColor>
+#include <QComboBox>
+#include <QLinearGradient>
 #include <QPainter>
+#include <QRect>
 #include <QString>
 #include <QStringList>
 #include <QWidget>
+
+#include <algorithm>
 
 namespace {
 // clang-format off
@@ -138,3 +144,73 @@ QSize VerticalLabel::minimumSizeHint() const
 // Local Variables:
 // c-basic-offset: 4
 // End:
+
+// ---------------------------------------------------------------------------
+// Colour swatches and combo-box helpers.
+//
+// These live here rather than in imageviewer.cpp so that a translation unit
+// needing a swatch does not have to link the image viewer, and through it the
+// SPARTA wrapper and the main window.  The dump-image settings dialog is the
+// case that matters: it wants swatches and nothing else from the viewer.
+// ---------------------------------------------------------------------------
+
+// 1) create a color gradient icon
+QIcon gradient_icon(const QList<QPair<double, QColor>> &stops)
+{
+    if (stops.isEmpty()) return QIcon();
+
+    // define pixmap and horizontal gradient
+    QPixmap pixmap(ICON_SIZE, ICON_SIZE);
+    pixmap.fill(Qt::transparent);
+    QPainter painter(&pixmap);
+    QLinearGradient gradient(0, 0, ICON_SIZE, 0);
+
+    // place each color at its stop position
+    for (const auto &s : stops)
+        gradient.setColorAt(std::clamp(s.first, 0.0, 1.0), s.second);
+
+    painter.fillRect(pixmap.rect(), gradient);
+    painter.end();
+
+    return QIcon(pixmap);
+}
+
+// 2) create a color sequence icon
+QIcon sequence_icon(const QList<QColor> &colors)
+{
+    // if no colors or too many colors return empty icon
+    if (colors.isEmpty() || (colors.size() * 2 > ICON_SIZE)) return QIcon();
+
+    // define pixmap
+    QPixmap pixmap(ICON_SIZE, ICON_SIZE);
+    pixmap.fill(Qt::transparent);
+    QPainter painter(&pixmap);
+
+    // distribute colors across icon in evenly sized chunks
+    const int chunk = ICON_SIZE / colors.size();
+    for (int i = 0; i < colors.size(); ++i)
+        painter.fillRect(QRect(i * chunk, 0, chunk, ICON_SIZE), colors[i]);
+
+    painter.end();
+
+    return QIcon(pixmap);
+}
+
+// 3) create a single color icon
+QPixmap color_icon(const QColor &color)
+{
+    // define pixmap and fill with color
+    QPixmap pixmap(ICON_SIZE / 2, ICON_SIZE / 2);
+    pixmap.fill(Qt::transparent);
+    QPainter painter(&pixmap);
+    painter.fillRect(pixmap.rect(), color);
+    painter.end();
+    return pixmap;
+}
+
+// select the combo box entry matching the given text, if present (leave unchanged otherwise)
+void selectComboItem(QComboBox *box, const QString &text)
+{
+    const int idx = box->findText(text);
+    if (idx >= 0) box->setCurrentIndex(idx);
+}

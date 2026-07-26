@@ -14,10 +14,32 @@
 
 #include <QCompleter>
 #include <QFrame>
+#include <QIcon>
+#include <QList>
+#include <QPair>
+#include <QPixmap>
 #include <QValidator>
 #include <QWidget>
 
+class QColor;
+class QComboBox;
 class QPaintEvent;
+
+/// Edge length of the swatch icons the colour pickers show, in pixels.
+inline constexpr int ICON_SIZE = 48;
+
+/** @brief A horizontal gradient swatch through @p stops, for a colour-map combo */
+QIcon gradient_icon(const QList<QPair<double, QColor>> &stops);
+
+/** @brief A swatch of evenly sized bands, one per colour; empty if they would
+ *         be under two pixels wide */
+QIcon sequence_icon(const QList<QColor> &colors);
+
+/** @brief A solid swatch of one colour, half the size of the others */
+QPixmap color_icon(const QColor &color);
+
+/** @brief Select the entry matching @p text, or leave the box alone if absent */
+void selectComboItem(QComboBox *box, const QString &text);
 
 /**
  * @brief Horizontal line widget for visual separation
