@@ -329,6 +329,30 @@ Controls are looked up by object name, and each object name is the
   name, without which the AT-SPI walker and the screenshot sweep cannot
   identify what they just touched
 
+test_sweeppanel.cpp
+------------------
+
+Tests for the parametric sweep (``src/sweeppanel.{h,cpp}``): the results
+model behind the table, and the panel itself.  The panel is constructible
+with neither a main window nor a simulator -- it asks the first only to
+detect variables in the deck and the second only to refuse starting on top
+of a live run -- so its controls and its spec validator are testable
+offscreen.  A small reaper reads and dismisses each ``QMessageBox``, which
+is how the validator's refusals become observable.  Test cases cover:
+
+- The results model: headers, rows, reset and clear, and the change
+  notifications a view needs
+- The panel building its controls with nothing behind it, and detecting
+  variables from an absent deck without inventing a row
+- Variable rows added and removed, each row getting its own editors, and
+  removing with nothing selected removing nothing
+- Every refusal the spec validator can produce: no variables, an empty
+  value list, a range that is not ``start:stop:step``, a linspace that is
+  not ``start:stop:count``, nothing to tabulate, and replicates asked for
+  without a seed variable
+- Exporting and charting with no results saying so, rather than opening an
+  empty file dialog or a blank chart window
+
 test_chartviewer.cpp
 -------------------
 

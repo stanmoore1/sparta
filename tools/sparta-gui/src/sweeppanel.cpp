@@ -271,7 +271,13 @@ SweepPanel::SweepPanel(QWidget *parent, SpartaGui *gui, SpartaWrapper *sparta)
     outer->addWidget(intro);
 
     // variables table
-    varTable_ = new QTableWidget(0, 3, this);
+        // Named after what they hold.  Counting widgets by type instead is a
+    // trap here: the variable-name cells are editable combo boxes, and each
+    // of those embeds a QLineEdit that turns up in findChildren<QLineEdit*>
+    // ahead of the panel's own fields.
+varTable_ = new QTableWidget(0, 3, this);
+    varTable_->setObjectName("varTable");
+    varTable_->setAccessibleName("Swept variables");
     varTable_->setHorizontalHeaderLabels({"Variable", "Type", "Specification"});
     varTable_->horizontalHeader()->setStretchLastSection(true);
     varTable_->verticalHeader()->setVisible(false);
@@ -287,6 +293,8 @@ SweepPanel::SweepPanel(QWidget *parent, SpartaGui *gui, SpartaWrapper *sparta)
     vrow->addWidget(refBtn);
     vrow->addStretch();
     cartesian_ = new QRadioButton("Cartesian product", this);
+    cartesian_->setObjectName("cartesian");
+    cartesian_->setAccessibleName("Cartesian product of the variables");
     auto *zip = new QRadioButton("Zip (parallel)", this);
     cartesian_->setChecked(true);
     vrow->addWidget(cartesian_);
@@ -297,10 +305,14 @@ SweepPanel::SweepPanel(QWidget *parent, SpartaGui *gui, SpartaWrapper *sparta)
     auto *qrow = new QHBoxLayout;
     qrow->addWidget(new QLabel("Tabulate:", this));
     quantities_ = new QLineEdit(this);
+    quantities_->setObjectName("quantities");
+    quantities_->setAccessibleName("Thermo quantities to tabulate");
     quantities_->setPlaceholderText("thermo keywords, comma-separated (e.g. Np, c_temp)");
     qrow->addWidget(quantities_, 1);
     qrow->addWidget(new QLabel("Reduce:", this));
     reducer_ = new QComboBox(this);
+    reducer_->setObjectName("reducer");
+    reducer_->setAccessibleName("How each run is reduced to one number");
     reducer_->addItem("final value", static_cast<int>(Reducer::Final));
     reducer_->addItem("minimum", static_cast<int>(Reducer::Min));
     reducer_->addItem("maximum", static_cast<int>(Reducer::Max));
@@ -313,6 +325,8 @@ SweepPanel::SweepPanel(QWidget *parent, SpartaGui *gui, SpartaWrapper *sparta)
     auto *erow2 = new QHBoxLayout;
     erow2->addWidget(new QLabel("Replicates:", this));
     replicates_ = new QSpinBox(this);
+    replicates_->setObjectName("replicates");
+    replicates_->setAccessibleName("Runs per combination");
     replicates_->setRange(1, 1000);
     replicates_->setValue(1);
     replicates_->setToolTip("Runs per sweep point, each with a distinct seed "
@@ -320,10 +334,14 @@ SweepPanel::SweepPanel(QWidget *parent, SpartaGui *gui, SpartaWrapper *sparta)
     erow2->addWidget(replicates_);
     erow2->addWidget(new QLabel("Seed variable:", this));
     seedVar_ = new QLineEdit(this);
+    seedVar_->setObjectName("seedVar");
+    seedVar_->setAccessibleName("Variable holding the per-replicate seed");
     seedVar_->setPlaceholderText("e.g. seed  (referenced as ${seed} in the deck)");
     erow2->addWidget(seedVar_, 1);
     erow2->addWidget(new QLabel("Base seed:", this));
     seedBase_ = new QSpinBox(this);
+    seedBase_->setObjectName("seedBase");
+    seedBase_->setAccessibleName("First seed value");
     seedBase_->setRange(1, 2000000000);
     seedBase_->setValue(12345);
     erow2->addWidget(seedBase_);
@@ -332,8 +350,12 @@ SweepPanel::SweepPanel(QWidget *parent, SpartaGui *gui, SpartaWrapper *sparta)
     // run controls
     auto *crow = new QHBoxLayout;
     startBtn_ = new QPushButton("Run Sweep", this);
+    startBtn_->setObjectName("startSweep");
+    startBtn_->setAccessibleName("Run or stop the sweep");
     crow->addWidget(startBtn_);
     progress_ = new QProgressBar(this);
+    progress_->setObjectName("progress");
+    progress_->setAccessibleName("Sweep progress");
     crow->addWidget(progress_, 1);
     status_ = new QLabel("Idle.", this);
     crow->addWidget(status_);
@@ -366,7 +388,9 @@ SweepPanel::SweepPanel(QWidget *parent, SpartaGui *gui, SpartaWrapper *sparta)
 void SweepPanel::refreshVariables()
 {
     discovered_.clear();
-    const auto vars = gui_->discoverVariables();
+    // the panel is constructible without a main window (the results model and
+    // the spec builder need neither), so ask only when there is one to ask
+    const auto vars = gui_ ? gui_->discoverVariables() : QList<QPair<QString, QString>>{};
     for (const auto &kv : vars)
         if (!kv.first.isEmpty()) discovered_ << kv.first;
     if (varTable_->rowCount() == 0 && !discovered_.isEmpty()) addVariableRow();
@@ -459,7 +483,7 @@ bool SweepPanel::buildSpec(SweepSpec &spec, QString &err) const
 void SweepPanel::startSweep()
 {
     if (controller_->active()) { controller_->stop(); return; }
-    if (sparta_->isRunning()) {
+    if (sparta_ && sparta_->isRunning()) {
         QMessageBox::warning(this, "Parametric Sweep",
                              "A simulation is already running; stop it first.");
         return;

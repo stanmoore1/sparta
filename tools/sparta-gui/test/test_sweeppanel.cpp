@@ -32,6 +32,14 @@
 
 #include "sweeppanel.h"
 
+#include <QComboBox>
+#include <QLineEdit>
+#include <QMessageBox>
+#include <QPushButton>
+#include <QSpinBox>
+#include <QTableWidget>
+#include <QTimer>
+
 namespace {
 
 QString cell(const SweepResultsModel &m, int row, int col)
@@ -201,10 +209,204 @@ TEST(SweepResults, ResettingAnnouncesItself)
     EXPECT_EQ(done.count(), 2) << "clearing the rows did not tell the view";
 }
 
+
+// ------------------------------------------------------------------ the panel
+//
+// SweepPanel needs no main window and no simulator to build its controls or to
+// validate what the user typed into them: gui_ is asked only to detect
+// variables in the deck, and sparta_ only to refuse starting on top of a live
+// run.  What it does need is somewhere for its refusals to go -- every one of
+// them is a QMessageBox -- so the reaper below reads the message and dismisses
+// it, which is how the spec validator's six failure messages become testable.
+
+namespace {
+
+// Reads and dismisses the next modal to appear, so a slot that ends in a
+// QMessageBox can be called from a test without stalling it.
+class ModalText : public QObject {
+public:
+    explicit ModalText(int budgetMs = 2000) : deadline(budgetMs)
+    {
+        timer.setInterval(10);
+        connect(&timer, &QTimer::timeout, this, &ModalText::poll);
+        timer.start();
+    }
+
+    // run @p fn and return the text of the message box it raised ("" if none)
+    template <class F> static QString capture(F &&fn)
+    {
+        ModalText reaper;
+        fn();
+        return reaper.seen;
+    }
+
+    QString seen;
+
+private:
+    void poll()
+    {
+        if ((deadline -= 10) < 0) { timer.stop(); return; }
+        auto *m = QApplication::activeModalWidget();
+        if (!m) return;
+        if (auto *box = qobject_cast<QMessageBox *>(m)) seen = box->text();
+        if (auto *d = qobject_cast<QDialog *>(m)) d->reject();
+        else m->close();
+        timer.stop();
+    }
+
+    QTimer timer;
+    int deadline;
+};
+
+// Add a variable row and fill it in, the way a user would.
+void addRow(SweepPanel &p, const QString &name, const QString &type, const QString &spec)
+{
+    auto *table = p.findChild<QTableWidget *>("varTable");
+    QMetaObject::invokeMethod(&p, "addVariableRow");
+    const int r = table->rowCount() - 1;
+    qobject_cast<QComboBox *>(table->cellWidget(r, 0))->setCurrentText(name);
+    qobject_cast<QComboBox *>(table->cellWidget(r, 1))->setCurrentText(type);
+    table->item(r, 2)->setText(spec);
+}
+
+// The message startSweep() refuses with, or "" if it got past validation.
+QString refusal(SweepPanel &p)
+{
+    return ModalText::capture([&p] { QMetaObject::invokeMethod(&p, "startSweep"); });
+}
+
+QLineEdit *quantitiesField(SweepPanel &p)
+{
+    return p.findChild<QLineEdit *>("quantities");
+}
+
+} // namespace
+
+TEST(SweepPanelUi, BuildsWithoutAMainWindowOrASimulator)
+{
+    SweepPanel p(nullptr, nullptr, nullptr);
+    EXPECT_NE(p.findChild<QTableWidget *>("varTable"), nullptr) << "no variables table";
+    EXPECT_GE(p.findChildren<QPushButton *>().size(), 3) << "add/remove/detect buttons";
+    EXPECT_EQ(p.findChild<QTableWidget *>("varTable")->rowCount(), 0) << "the table starts empty";
+}
+
+TEST(SweepPanelUi, DetectingVariablesWithNoDeckBehindItIsHarmless)
+{
+    SweepPanel p(nullptr, nullptr, nullptr);
+    QMetaObject::invokeMethod(&p, "refreshVariables");
+    EXPECT_EQ(p.findChild<QTableWidget *>("varTable")->rowCount(), 0)
+        << "a row was added for a variable that was never discovered";
+}
+
+TEST(SweepPanelUi, AddsAndRemovesVariableRows)
+{
+    SweepPanel p(nullptr, nullptr, nullptr);
+    auto *table = p.findChild<QTableWidget *>("varTable");
+
+    QMetaObject::invokeMethod(&p, "addVariableRow");
+    QMetaObject::invokeMethod(&p, "addVariableRow");
+    ASSERT_EQ(table->rowCount(), 2);
+    // each row gets its own editors, not shared ones
+    EXPECT_NE(table->cellWidget(0, 0), table->cellWidget(1, 0));
+    EXPECT_NE(table->cellWidget(0, 1), table->cellWidget(1, 1));
+
+    table->setCurrentCell(0, 0);
+    QMetaObject::invokeMethod(&p, "removeVariableRow");
+    EXPECT_EQ(table->rowCount(), 1);
+}
+
+TEST(SweepPanelUi, RemovingWithNothingSelectedRemovesNothing)
+{
+    SweepPanel p(nullptr, nullptr, nullptr);
+    auto *table = p.findChild<QTableWidget *>("varTable");
+    QMetaObject::invokeMethod(&p, "addVariableRow");
+    table->setCurrentCell(-1, -1);
+    QMetaObject::invokeMethod(&p, "removeVariableRow");
+    EXPECT_EQ(table->rowCount(), 1);
+}
+
+TEST(SweepPanelUi, RefusesASweepWithNoVariables)
+{
+    SweepPanel p(nullptr, nullptr, nullptr);
+    const QString msg = refusal(p);
+    EXPECT_TRUE(msg.contains("at least one variable")) << msg.toStdString();
+}
+
+TEST(SweepPanelUi, RefusesAnEmptyValueList)
+{
+    SweepPanel p(nullptr, nullptr, nullptr);
+    addRow(p, "n", "List", "   ");
+    quantitiesField(p)->setText("Np");
+    EXPECT_TRUE(refusal(p).contains("empty value list"));
+}
+
+TEST(SweepPanelUi, RefusesARangeThatIsNotStartStopStep)
+{
+    SweepPanel p(nullptr, nullptr, nullptr);
+    addRow(p, "n", "Range", "1:10");
+    quantitiesField(p)->setText("Np");
+    const QString msg = refusal(p);
+    EXPECT_TRUE(msg.contains("start:stop:step")) << msg.toStdString();
+}
+
+TEST(SweepPanelUi, RefusesALinspaceThatIsNotStartStopCount)
+{
+    SweepPanel p(nullptr, nullptr, nullptr);
+    addRow(p, "n", "Linspace", "1:10");
+    quantitiesField(p)->setText("Np");
+    const QString msg = refusal(p);
+    EXPECT_TRUE(msg.contains("start:stop:count")) << msg.toStdString();
+}
+
+TEST(SweepPanelUi, RefusesASweepWithNothingToTabulate)
+{
+    SweepPanel p(nullptr, nullptr, nullptr);
+    addRow(p, "n", "List", "1, 2, 3");
+    quantitiesField(p)->setText("");
+    const QString msg = refusal(p);
+    EXPECT_TRUE(msg.contains("thermo quantity")) << msg.toStdString();
+}
+
+TEST(SweepPanelUi, RefusesReplicatesWithoutASeedVariable)
+{
+    SweepPanel p(nullptr, nullptr, nullptr);
+    addRow(p, "n", "List", "1, 2, 3");
+    quantitiesField(p)->setText("Np");
+    p.findChild<QSpinBox *>("replicates")->setValue(3);
+    const QString msg = refusal(p);
+    EXPECT_TRUE(msg.contains("seed variable")) << msg.toStdString();
+}
+
+TEST(SweepPanelUi, ExportingWithNoResultsSaysSoInsteadOfOpeningAFileDialog)
+{
+    SweepPanel p(nullptr, nullptr, nullptr);
+    const QString msg = ModalText::capture([&p] { QMetaObject::invokeMethod(&p, "exportCsv"); });
+    EXPECT_TRUE(msg.contains("No results")) << msg.toStdString();
+}
+
+TEST(SweepPanelUi, ChartingWithNoResultsSaysSoInsteadOfOpeningAnEmptyWindow)
+{
+    SweepPanel p(nullptr, nullptr, nullptr);
+    const QString msg = ModalText::capture([&p] { QMetaObject::invokeMethod(&p, "chartResults"); });
+    EXPECT_TRUE(msg.contains("Not enough")) << msg.toStdString();
+}
+
+TEST(SweepPanelUi, ProgressAndCompletionAreReportedWithoutARun)
+{
+    SweepPanel p(nullptr, nullptr, nullptr);
+    QMetaObject::invokeMethod(&p, "onProgress", Q_ARG(int, 3), Q_ARG(int, 10));
+    QMetaObject::invokeMethod(&p, "onFinished", Q_ARG(bool, true));
+    QMetaObject::invokeMethod(&p, "onFinished", Q_ARG(bool, false));
+    SUCCEED();
+}
+
 int main(int argc, char **argv)
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QApplication app(argc, argv);
+    QCoreApplication::setOrganizationName("sparta-gui-test");
+    QCoreApplication::setApplicationName(
+        QStringLiteral("test_sweeppanel.%1").arg(QCoreApplication::applicationPid()));
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }
