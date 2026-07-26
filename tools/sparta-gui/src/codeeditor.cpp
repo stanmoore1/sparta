@@ -61,7 +61,10 @@ CodeEditor::CodeEditor(QWidget *parent) :
     fileComp(new QCompleter(this)), highlight(NO_HIGHLIGHT), highlighterror(false),
     reformatOnReturn(false), automaticCompletion(true)
 {
-    helpAction = new QShortcut(QKeySequence::fromString("Ctrl+?"), parent);
+    // the parent when there is one, so Ctrl+? works anywhere in the main
+    // window; the editor itself when there is not, rather than a shortcut
+    // with no owner that can never fire
+    helpAction = new QShortcut(QKeySequence::fromString("Ctrl+?"), parent ? parent : this);
     connect(helpAction, &QShortcut::activated, this, &CodeEditor::getHelp);
 
     // set up each completer with consistent settings
@@ -75,10 +78,26 @@ CodeEditor::CodeEditor(QWidget *parent) :
                 &CodeEditor::insertCompletedCommand);
     };
 
-    for (auto *c : {commandComp, fixComp, computeComp, dumpComp, regionComp, collideComp,
-                    reactComp, surfCollideComp, surfReactComp, variableComp, unitsComp,
-                    groupComp, varnameComp, fixidComp, compidComp, mixtureComp, fileComp})
-        setupCompleter(c);
+    // Named after the thing each one completes.  Seventeen completers built in
+    // one list are otherwise distinguishable only by their position in it, and
+    // the ones assembled by parsing the buffer -- groups, variables, compute
+    // and fix IDs, mixtures -- are exactly the ones whose contents are worth
+    // checking.
+    const struct {
+        QCompleter *comp;
+        const char *name;
+    } completers[] = {
+        {commandComp, "command"},   {fixComp, "fix"},         {computeComp, "compute"},
+        {dumpComp, "dump"},         {regionComp, "region"},   {collideComp, "collide"},
+        {reactComp, "react"},       {surfCollideComp, "surf_collide"},
+        {surfReactComp, "surf_react"}, {variableComp, "variable"}, {unitsComp, "units"},
+        {groupComp, "group"},       {varnameComp, "varname"}, {fixidComp, "fixid"},
+        {compidComp, "compid"},     {mixtureComp, "mixid"},   {fileComp, "file"},
+    };
+    for (const auto &entry : completers) {
+        entry.comp->setObjectName(QLatin1String(entry.name));
+        setupCompleter(entry.comp);
+    }
 
     // initialize help system
     QFile help_index(":/help_index.table");
@@ -456,8 +475,12 @@ void CodeEditor::setVarNameList()
     vars << QString("${gui_run}");
     vars << QString("v_gui_run");
 
-    SpartaWrapper *sparta = &mainWindow->sparta;
-    int nvar              = sparta->idCount("variable");
+    // The completers ask the running SPARTA instance for what it already
+    // knows, but the editor's constructor tolerates a parent that is not a
+    // SpartaGui -- and then there is nothing to ask.  Fall back to the names
+    // parsed out of the buffer below rather than dereferencing nothing.
+    const int nvar        = mainWindow ? mainWindow->sparta.idCount("variable") : 0;
+    SpartaWrapper *sparta = mainWindow ? &mainWindow->sparta : nullptr;
     for (int i = 0; i < nvar; ++i) {
         const QString name = sparta->variableInfo(i);
         if (!name.isEmpty()) {
@@ -548,8 +571,8 @@ void CodeEditor::setMixtureIDList()
 
     // query mixtures known to the SPARTA instance (includes the
     // predefined mixtures "all" and "species")
-    SpartaWrapper *sparta = &mainWindow->sparta;
-    int nmix              = sparta->idCount("mixture");
+    const int nmix        = mainWindow ? mainWindow->sparta.idCount("mixture") : 0;
+    SpartaWrapper *sparta = mainWindow ? &mainWindow->sparta : nullptr;
     for (int i = 0; i < nmix; ++i) {
         const QString name = sparta->idName("mixture", i);
         if (!name.isEmpty() && !mixid.contains(name)) mixid << name;
@@ -1257,9 +1280,8 @@ void CodeEditor::openHelp()
 
 void CodeEditor::viewFile()
 {
-    auto *act     = qobject_cast<QAction *>(sender());
-    auto *guimain = mainWindow;
-    guimain->viewFile(act->data().toString());
+    auto *act = qobject_cast<QAction *>(sender());
+    if (act && mainWindow) mainWindow->viewFile(act->data().toString());
 }
 
 void CodeEditor::openInEditor()
@@ -1270,9 +1292,8 @@ void CodeEditor::openInEditor()
 
 void CodeEditor::inspectFile()
 {
-    auto *act     = qobject_cast<QAction *>(sender());
-    auto *guimain = mainWindow;
-    guimain->inspectFile(act->data().toString());
+    auto *act = qobject_cast<QAction *>(sender());
+    if (act && mainWindow) mainWindow->inspectFile(act->data().toString());
 }
 
 // Local Variables:

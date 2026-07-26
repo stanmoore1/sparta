@@ -472,6 +472,34 @@ if (SPARTA_GUI_USE_PLUGIN)
 endif()
 gtest_discover_tests(test_fileviewer)
 
+# The input editor. Its text transforms -- reformatting a command into aligned
+# columns, commenting and uncommenting, and the completion lists built by
+# parsing the buffer -- are what silently damage a deck if they are wrong, and
+# were reachable only through the live walker, which types into the editor but
+# never checks what came out.
+add_executable(test_codeeditor
+  test_codeeditor.cpp
+  ${GUI_WALKER_SOURCES}
+)
+target_include_directories(test_codeeditor PRIVATE
+  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}/thirdparty/rangeslider
+)
+target_compile_definitions(test_codeeditor PRIVATE SPARTA_GUI_VERSION="${PROJECT_VERSION}")
+target_link_libraries(test_codeeditor PRIVATE
+  GTest::gtest Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Svg Qt6::Test
+  lepton_mini ads::qtadvanceddocking-qt6)
+if (SPARTA_GUI_HAVE_VTK)
+  target_compile_definitions(test_codeeditor PRIVATE SPARTA_GUI_HAVE_VTK)
+  target_link_libraries(test_codeeditor PRIVATE ${VTK_LIBRARIES})
+  vtk_module_autoinit(TARGETS test_codeeditor MODULES ${VTK_LIBRARIES})
+endif()
+if (SPARTA_GUI_USE_PLUGIN)
+  target_compile_definitions(test_codeeditor PRIVATE SPARTA_GUI_USE_PLUGIN)
+  target_include_directories(test_codeeditor PRIVATE ${SPARTA_PLUGINLIB_DIR})
+endif()
+gtest_discover_tests(test_codeeditor)
+
 # Test executable for helpers
 add_executable(test_helpers
   test_helpers.cpp

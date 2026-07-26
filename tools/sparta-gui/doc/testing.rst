@@ -354,6 +354,36 @@ class becomes when handed a data file.  Constructed with a null
 - The rendered chart checked for ink, not merely for not crashing, and an
   empty chart rendering as well
 
+test_codeeditor.cpp
+-------------------
+
+Tests for the input editor (``src/codeeditor.{h,cpp}``), the widget a user
+types their deck into.  Its text transforms are what silently damage a deck
+if they are wrong, and were previously reachable only through the live GUI
+walker, which types into the editor but never checks what came out.  Test
+cases cover:
+
+- ``reformatLine()``: a command padded to the command column, runs of
+  whitespace collapsed, a lone command left without trailing padding, a
+  comment line left exactly as it is, the ID and style of
+  ``fix``/``compute``/``dump`` padded to their own columns, the species
+  name of a ``mixture`` padded, and the whole transform idempotent so that
+  repeated reformatting does not walk the columns sideways
+- Reformatting the current line leaving every other line alone
+- Commenting and uncommenting, one line and a selection: only the first
+  ``#`` removed, leading whitespace skipped to find it without being eaten,
+  an uncommented line unchanged, and a mixed selection touching only the
+  commented lines
+- The completers built by parsing the buffer -- groups (always including
+  ``all``, each name listed once), variables (every reference form, with
+  the bare ``$x`` form only for single-character names), compute and fix
+  IDs, and mixtures -- and all of them surviving an empty buffer
+- The error-line highlight and the diagnostic overlay set and cleared,
+  including an out-of-range line
+- The line-number gutter widening as the line count gains digits
+- Pasting through ``paste()``, the route ``Ctrl+V`` takes: text inserted,
+  multiple lines kept separate, and an image on the clipboard refused
+
 test_fileviewer.cpp
 -------------------
 
