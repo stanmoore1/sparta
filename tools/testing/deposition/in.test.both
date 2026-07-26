@@ -1,0 +1,76 @@
+# Sublimation and condensation in one run
+#
+# mode = both reads the source as a SIGNED rate: positive grows the surface,
+# negative recedes it, cell by cell.  That is what a phase change looks like
+# when the surface is not everywhere on the same side of equilibrium -- warm
+# where it sublimates, cold where it condenses -- and it cannot be expressed
+# by running two fixes, since both would be writing the same corner points.
+#
+# The state that decides the sign lives in a custom per-grid attribute, which
+# a grid-style variable reads back as g_name.  Nothing here is special to
+# this fix: a custom attribute is ordinary per-cell data, evolved by whatever
+# the model calls for -- fix custom, a compute, a file -- and carried through
+# load balancing by the Grid class.  Here it is simply the sign of a static
+# temperature field, which is enough to check the mechanism.
+#
+# The film grows below the midline and recedes above it, so:
+#
+#   - the total material is nearly unchanged, since the two halves ask for
+#     the same speed in opposite directions
+#   - the surface has moved in both halves, which is what a single fix could
+#     not do before
+#
+# The rate is in length/time, which mode = both requires: a budget of corner
+# point value has no sign to read.
+
+variable            RATE index 1.0
+
+# where the surface changes sign, as a y coordinate.  Pushed past the top of
+# the box it is deposition everywhere, below the bottom it is sublimation
+# everywhere, which is how the two-sided run is checked against the one-sided
+# ones it has to sit between
+variable            SPLIT index 40
+
+# with the split pushed above the box the rate is positive everywhere, which
+# mode = deposit can express too, so the two must agree exactly there
+variable            MODE index both
+
+seed                12345
+dimension           2
+global              gridcut 0.0 comm/sort yes
+
+boundary            r r p
+
+create_box          0 20 0 80 -0.5 0.5
+create_grid         20 80 1
+balance_grid        rcb cell
+
+global              nrho 1.0e20 fnum 1.0e18
+
+species             air.species N
+mixture             air N temp 300.0 vstream 0.0 0.0 0.0
+
+# warm above the midline, cold below it, held as ordinary per-cell state
+variable            warm grid (cylo>${SPLIT})
+custom              grid create phase float 0 set phase v_warm all NULL
+
+# sublimate where it is warm, condense where it is cold
+variable            rate grid ${RATE}*(1.0-2.0*g_phase)
+fix                 ablate ablate all 1 1.0 v_rate mode ${MODE} units distance
+
+global              surfs implicit
+read_isurf          all 20 80 1 ramp.20x80 127.5 ablate push no
+
+surf_collide        1 diffuse 300.0 1.0
+surf_modify         all collide 1
+
+create_particles    air n 0
+
+fix                 check grid/check 1 error
+
+timestep            1.0e-4
+
+stats               20
+stats_style         step np f_ablate f_ablate[21]
+
+run                 100

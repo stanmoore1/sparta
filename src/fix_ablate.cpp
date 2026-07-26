@@ -45,7 +45,7 @@ using namespace SPARTA_NS;
 enum{COMPUTE,FIX,VARIABLE,RANDOM,UNIFORM,FLUX};
 enum{GRIDVAR,EQUALVAR};
 enum{CVALUE,CDELTA,NVERT};
-enum{ABLATE,DEPOSIT};     // surface recedes (ablate) or grows (deposit)
+enum{ABLATE,DEPOSIT,BOTH};     // surface recedes (ablate) or grows (deposit)
 enum{CORNER,DISTANCE};    // source units: corner point value or length/time
 enum{UNKNOWN,OUTSIDE,INSIDE,OVERLAP};   // cell types, same as Grid
 enum{KEEP,DISCARD,MIGRATE};   // fate of a particle the new isosurface encloses
@@ -421,7 +421,7 @@ int FixAblate::setmask()
 {
   int mask = 0;
   if (nevery) mask |= END_OF_STEP;
-  if (nevery && mode == DEPOSIT) mask |= START_OF_STEP;
+  if (nevery && depositflag) mask |= START_OF_STEP;
   return mask;
 }
 
@@ -548,7 +548,7 @@ void FixAblate::store_corners(int nx_caller, int ny_caller, int nz_caller,
   //   refreshed collision geometry of the first interval is derived from
   //   whatever the allocation happened to contain
 
-  if (mode == DEPOSIT)
+  if (depositflag)
     for (int icell = 0; icell < nglocal; icell++)
       for (int m = 0; m < ncorner; m++)
         cvalues_prev[icell][m] = cvalues[icell][m];
@@ -568,9 +568,16 @@ void FixAblate::init()
   // deposition prototype currently supports only the base single-value,
   //   single-decrement path (not the multivalue / multiple-decrement modes)
 
-  if (mode == DEPOSIT && (multi_val_flag || multi_dec_flag))
+  if (depositflag && (multi_val_flag || multi_dec_flag))
     error->all(FLERR,"Fix ablate mode deposit does not yet support "
                "multivalue or multiple corner-point decrement modes");
+
+  // mode = both reads the source as a SIGNED rate, and a budget of corner
+  //   point value has no sign to read: units = corner places its budget one
+  //   corner at a time, which is a rule for one direction only
+
+  if (mode == BOTH && unitsflag != DISTANCE)
+    error->all(FLERR,"Fix ablate mode both requires units distance");
 
   // the KOKKOS particle move is a separate implementation and does not read
   //   the refreshed collision geometry, so growth is resolved only when the
@@ -578,7 +585,7 @@ void FixAblate::init()
   //   burial path runs there too -- but it is coarser, so say so rather than
   //   let a Kokkos run quietly differ from the same input without Kokkos
 
-  if (mode == DEPOSIT && sparta->kokkos && me == 0)
+  if (depositflag && sparta->kokkos && me == 0)
     error->warning(FLERR,"Fix ablate mode deposit: the KOKKOS particle move "
                    "does not use the per-step refreshed surface, so surface "
                    "growth is resolved only every Nevery steps; use a smaller "
@@ -697,7 +704,13 @@ void FixAblate::end_of_step()
       // celldelta is a speed; turn the distance it asks for into the corner
       //   point increment that actually delivers it
 
-      double response = front_response(icell);
+      // with mode = both each cell picks its own direction, and the two
+      //   differ: which end of a crossed edge is pinned at 0 or 255 is not
+      //   the same going one way as the other
+
+      int grow = (mode == DEPOSIT) ||
+                 (mode == BOTH && celldelta[icell] > 0.0);
+      double response = front_response(icell,grow);
       if (response > 0.0) celldelta[icell] *= interval / response;
       else celldelta[icell] = 0.0;
     }
@@ -706,7 +719,7 @@ void FixAblate::end_of_step()
   // for DEPOSIT, snapshot the corner values so the realized front motion
   //   over this interval can be measured in front_speed() below
 
-  if (mode == DEPOSIT) {
+  if (depositflag) {
     for (int icell = 0; icell < nglocal; icell++)
       for (int i = 0; i < ncorner; i++)
         cvalues_prev[icell][i] = cvalues[icell][i];
@@ -732,7 +745,7 @@ void FixAblate::end_of_step()
     if (multi_val_flag) {
       decrement_multiv();
       sync_multiv();
-    } else if (mode == DEPOSIT) {
+    } else if (depositflag) {
       increment();
       sync();
     } else {
@@ -750,7 +763,7 @@ void FixAblate::end_of_step()
   // measure the normal speed of the advancing front over this interval
   // must be done before create_surfs(), which needs it to set per-surf speeds
 
-  if (mode == DEPOSIT) {
+  if (depositflag) {
     front_speed();
     check_group_boundary();
   }
@@ -763,7 +776,7 @@ void FixAblate::end_of_step()
   //   front advancing a full cell per step reaches particles that are never
   //   tested against it, and they would be overtaken silently
 
-  if (mode == DEPOSIT) {
+  if (depositflag) {
     double small = MIN(xyzsize[0],xyzsize[1]);
     if (dim == 3) small = MIN(small,xyzsize[2]);
     max_advance = 0.0;
@@ -944,7 +957,7 @@ void FixAblate::create_surfs(int outflag)
   // record the pose the refreshed surface advances away from, and drop any
   //   stale refresh so the move loop uses the surface just committed
 
-  if (mode == DEPOSIT) {
+  if (depositflag) {
     update->front_step0 = update->ntimestep;
     update->nseg = NULL;
     update->nsegcell = 0;
@@ -963,7 +976,7 @@ void FixAblate::create_surfs(int outflag)
   // for deposition the surface grows into the gas, so particles can be
   //   engulfed in 2d as well as 3d and must be removed
 
-  if (dim == 2 && mode != DEPOSIT) {
+  if (dim == 2 && !depositflag) {
     memory->destroy(mcflags_old);
     return;
   }
@@ -1015,7 +1028,7 @@ void FixAblate::create_surfs(int outflag)
 
   memory->destroy(mcflags_old);
 
-  if (mode != DEPOSIT) {
+  if (!depositflag) {
 
     // compress out the deleted particles
     // NOTE: if end up keeping this section, need logic for custom particle vectors
@@ -1107,7 +1120,7 @@ int FixAblate::resolve_engulfed(int i)
     // there is no surf left in the cell to reflect off, so the molecule
     //   is buried, i.e. incorporated into the film, with full accounting
 
-    if (mode != DEPOSIT || cinfo[icell].type != INSIDE) return KEEP;
+    if (!depositflag || cinfo[icell].type != INSIDE) return KEEP;
 
     int salvaged = salvage_to_neighbor(icell,i);
     if (salvaged == 0) {
@@ -1152,7 +1165,7 @@ int FixAblate::resolve_engulfed(int i)
   //   accretion, so the lattice atoms the molecule strikes are at rest
   // momentum given to the surface is recorded so nothing is unaccounted
 
-  if (mode != DEPOSIT) return DISCARD;
+  if (!depositflag) return DISCARD;
 
   int salvaged = salvage_particle(icell,i);
   if (salvaged == 0) salvaged = salvage_to_neighbor(icell,i);
@@ -1461,7 +1474,7 @@ void FixAblate::set_delta()
   //   sources are naturally zero away from the surface, since the isurf
   //   computes only tally in cells that hold surface elements
 
-  if (mode == DEPOSIT) {
+  if (depositflag) {
     for (int icell = 0; icell < nglocal; icell++) {
       if (!(cinfo[icell].mask & groupbit)) continue;
       if (cells[icell].nsplit <= 0) continue;
@@ -2323,7 +2336,7 @@ double FixAblate::cell_area(int icell)
      what this predicts is what that measures
 ------------------------------------------------------------------------- */
 
-double FixAblate::front_response(int icell)
+double FixAblate::front_response(int icell, int grow)
 {
   static const int edge[12][2] =
     {{0,1},{2,3},{0,2},{1,3},
@@ -2355,7 +2368,7 @@ double FixAblate::front_response(int icell)
     if (gradmag > 0.0) weight = MIN(gap/gradmag,weight);
 
     double deriv;
-    if (mode == DEPOSIT) {
+    if (grow) {
       if (hi < 255.0) deriv = weight / gap;
       else {
         double room = 255.0 - lo;
@@ -2402,7 +2415,7 @@ double FixAblate::front_response(int icell)
 
 void FixAblate::refresh_surfs()
 {
-  if (mode != DEPOSIT || !nevery) return;
+  if (!depositflag || !nevery) return;
   if (update->front_step0 < 0) return;
 
   // the KOKKOS move loop is a separate implementation and does not read the
@@ -2685,7 +2698,14 @@ void FixAblate::sync()
       // ABLATE: newvalue = MAX(oldvalue-dsum,0)
       // DEPOSIT: newvalue = MIN(oldvalue+dsum,255)
 
-      if (mode == DEPOSIT) {
+      if (mode == BOTH) {
+
+        // a signed shift, clamped at both ends: the sign of what the cells
+        //   sharing this corner asked for is what says which way it goes
+
+        double v = cvalues[icell][i] + total;
+        cvalues[icell][i] = MAX(0.0,MIN(255.0,v));
+      } else if (mode == DEPOSIT) {
         if (total > 255.0 - cvalues[icell][i]) cvalues[icell][i] = 255.0;
         else cvalues[icell][i] += total;
       } else {
@@ -3128,7 +3148,7 @@ int FixAblate::pack_grid_one(int icell, char *buf, int memflag)
   //   measured against, so leaving it behind on a rebalance would pair each
   //   cell's field with some other cell's history
 
-  if (mode == DEPOSIT) {
+  if (depositflag) {
     if (memflag) memcpy(ptr,cvalues_prev[icell],ncorner*sizeof(double));
     ptr += ncorner*sizeof(double);
   }
@@ -3176,7 +3196,7 @@ int FixAblate::pack_grid_one(int icell, char *buf, int memflag)
         }
       }
 
-      if (mode == DEPOSIT) {
+      if (depositflag) {
         if (memflag) memcpy(ptr,cvalues_prev[jcell],ncorner*sizeof(double));
         ptr += ncorner*sizeof(double);
       }
@@ -3210,7 +3230,7 @@ int FixAblate::unpack_grid_one(int icell, char *buf)
     }
   }
 
-  if (mode == DEPOSIT) {
+  if (depositflag) {
     memcpy(cvalues_prev[icell],ptr,ncorner*sizeof(double));
     ptr += ncorner*sizeof(double);
   }
@@ -3253,7 +3273,7 @@ int FixAblate::unpack_grid_one(int icell, char *buf)
         }
       }
 
-      if (mode == DEPOSIT) {
+      if (depositflag) {
         memcpy(cvalues_prev[jcell],ptr,ncorner*sizeof(double));
         ptr += ncorner*sizeof(double);
       }
@@ -3280,7 +3300,7 @@ void FixAblate::copy_grid_one(int icell, int jcell)
       memcpy(mvalues[jcell][j],mvalues[icell][j],nmultiv*sizeof(double));
   }
 
-  if (mode == DEPOSIT)
+  if (depositflag)
     memcpy(cvalues_prev[jcell],cvalues_prev[icell],ncorner*sizeof(double));
 
   if (tvalues_flag) tvalues[jcell] = tvalues[icell];
@@ -3315,7 +3335,7 @@ void FixAblate::add_grid_one()
 
   // an empty cell has an empty history, so the front has not moved in it
 
-  if (mode == DEPOSIT)
+  if (depositflag)
     for (int i = 0; i < ncorner; i++) cvalues_prev[nglocal][i] = 0.0;
 
   if (tvalues_flag) tvalues[nglocal] = 0;
@@ -3351,7 +3371,7 @@ void FixAblate::grow_percell(int nnew)
   else maxgrid += DELTAGRID;
   if (multi_val_flag) memory->grow(mvalues,maxgrid,ncorner,nmultiv,"ablate:mvalues");
   else memory->grow(cvalues,maxgrid,ncorner,"ablate:cvalues");
-  if (mode == DEPOSIT) {
+  if (depositflag) {
     memory->grow(cvalues_prev,maxgrid,ncorner,"ablate:cvalues_prev");
     memory->grow(sfront_cell,maxgrid,"ablate:sfront_cell");
     memory->grow(sfront_normal,maxgrid,"ablate:sfront_normal");
@@ -3445,7 +3465,7 @@ double FixAblate::compute_vector(int i)
   // reduced once per timestep and cached, since stats invokes this separately
   //   for each requested index; all procs reach it together
 
-  if (mode != DEPOSIT) return 0.0;
+  if (!depositflag) return 0.0;
 
   // the last index is the front speed the surface actually realized over the
   //   last interval, averaged over the cells that hold a front
@@ -3544,8 +3564,14 @@ void FixAblate::process_args(int narg, char **arg)
       if (iarg+2 > narg) error->all(FLERR,"Invalid fix ablate command");
       if (strcmp(arg[iarg+1],"ablate") == 0) mode = ABLATE;
       else if (strcmp(arg[iarg+1],"deposit") == 0) mode = DEPOSIT;
+      else if (strcmp(arg[iarg+1],"both") == 0) mode = BOTH;
       else error->all(FLERR,"Illegal fix_ablate command");
-      depositflag = (mode == DEPOSIT);
+
+      // the advancing front machinery is what makes a surface that moves
+      //   into the gas safe, and mode = both can do that in any cell, so it
+      //   is on for both settings
+
+      depositflag = (mode != ABLATE);
       iarg += 2;
     } else if (strcmp(arg[iarg],"density") == 0)  {
 

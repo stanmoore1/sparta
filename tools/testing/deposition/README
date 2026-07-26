@@ -181,6 +181,24 @@ in.test.stick
   length/time conversion at once.  Sigma is swept: zero must give exactly zero
   growth, and the rate must be linear in it.
 
+in.test.both
+  Sublimation and condensation in one run.  mode = both reads the source as a
+  signed rate, so the surface grows in one place and recedes in another; two
+  fixes cannot do this, since both would be writing the same corner points.
+  The sign comes from a custom per-grid attribute read back by a grid-style
+  variable as g_name.
+
+  Three runs of one input differing only in where the sign changes.  Positive
+  everywhere must reproduce mode = deposit exactly -- if it does not, the
+  signed path is not the same path.  Negative everywhere must lose the same
+  amount it gained growing.  Half and half must move the surface everywhere at
+  the requested speed while the material barely changes, which is the
+  behaviour that has no single-mode equivalent.
+
+  fix grid/check runs with the error setting throughout, so completing the
+  runs also proves the receding half left no particle inside the surface --
+  the direction the advancing-front machinery had never been exercised in.
+
 in.test.species
   Per-species sticking, again against arithmetic.  Two species of different
   mass arrive at different rates and are captured with different

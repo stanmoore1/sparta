@@ -333,6 +333,64 @@ def test_react(exe):
     return ok
 
 
+def test_both(exe):
+    """Sublimation and condensation in one run.
+
+    mode = both reads the source as a SIGNED rate, so the surface can grow in
+    one place and recede in another.  Two fixes cannot do this: both would be
+    writing the same corner points.  The sign comes from a custom per-grid
+    attribute read back by a grid-style variable, which is how any per-cell
+    state a phase-change model carries gets in.
+
+    Three runs of one input, differing only in where the sign changes:
+
+      above the box   positive everywhere, and must match mode = deposit
+                      exactly -- if it does not, the signed path is not the
+                      same path
+      below the box   negative everywhere, and must lose material
+      mid box         half and half, so the surface moves everywhere at the
+                      requested speed while the material barely changes
+
+    fix grid/check runs with the error setting throughout, so completing a
+    run also proves the receding half did not leave a particle inside the
+    surface, which is the direction the advancing-front machinery was never
+    exercised in.
+    """
+    out = {}
+    for tag, args in (("up",   {"SPLIT": "1e30", "MODE": "both"}),
+                      ("dep",  {"SPLIT": "1e30", "MODE": "deposit"}),
+                      ("down", {"SPLIT": "-1",   "MODE": "both"}),
+                      ("half", {"SPLIT": "40",   "MODE": "both"})):
+        rc, o = run(exe, "in.test.both", dict(args, RATE=1.0))
+        r = stats_rows(o) if rc == 0 else []
+        if not r:
+            err = next((l for l in o.splitlines() if "ERROR" in l), "no stats")
+            return check("mode both (%s)" % tag, False, err.strip()[:90])
+        out[tag] = r
+
+    m0 = out["up"][0][2]
+    gain = out["up"][-1][2] - m0
+    loss = m0 - out["down"][-1][2]
+    net = out["half"][-1][2] - m0
+    speed = out["half"][-1][3]
+
+    ok = check("mode both : positive everywhere == mode deposit",
+               out["up"] == out["dep"], "%g vs %g" % (out["up"][-1][2],
+                                                      out["dep"][-1][2]))
+    ok &= check("mode both : negative everywhere removes material",
+                loss > 0 and abs(loss - gain) / gain < 0.05,
+                "gained %g growing, lost %g receding" % (gain, loss))
+    ok &= check("mode both : the two halves cancel",
+                abs(net) < 0.2 * gain,
+                "net %g against %g one-sided" % (net, gain))
+    ok &= check("mode both : but the surface still moved at the asked speed",
+                abs(speed - 1.0) < 0.05, "realized %.4f" % speed)
+    ok &= check("mode both : no particle lost in either direction",
+                out["half"][-1][1] == out["half"][0][1],
+                "np %g -> %g" % (out["half"][0][1], out["half"][-1][1]))
+    return ok
+
+
 def test_species(exe):
     """Per-species sticking, against the closed form.
 
@@ -753,6 +811,7 @@ def main():
     ok &= test_stick(exe)
     ok &= test_react(exe)
     ok &= test_species(exe)
+    ok &= test_both(exe)
     ok &= test_equal_variable(exe)
     # a rate in length/time must be the rate the surface actually moves at
     ok &= test_rate_calibration(exe)

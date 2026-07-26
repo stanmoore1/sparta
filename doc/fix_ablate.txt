@@ -28,9 +28,10 @@ source = computeID or fixID or v_name or flux or uniform or random :l
 maxrandom = maximum per grid cell decrement as an integer (only specified if source = random or uniform) :l
 zero or more keyword/value pairs may be appended :l
 keyword = {mode} or {units} or {density} or {sticking} or {mindist} or {multiple} :l
-  {mode} value = ablate or deposit
+  {mode} value = ablate or deposit or both
     ablate = source decrements corner point values so the surface recedes
     deposit = source increments corner point values so the surface grows
+    both = source is signed, so the surface recedes or grows cell by cell
   {units} value = corner or distance
     corner = source is a corner point value increment (0-255 scale)
     distance = source is a deposition rate in length/time
@@ -369,9 +370,41 @@ flux is rho_gas*vbar/4 with vbar = sqrt(8kT/pi m), so a film that
 captures a fraction sigma of it grows at exactly
 sigma*rho_gas*vbar/4/rho_film, and that is what value (21) reports.
 
-The {mode} = deposit option currently supports only the default
-single-value, single-decrement corner point representation; it cannot
-be combined with the {multiple} keyword or with multivalue corner
+:line
+
+If the {mode} keyword is set to {both}, the {source} is read as a SIGNED
+rate: positive grows the surface, negative makes it recede, cell by cell
+within one fix.  That is what a phase change looks like when the surface
+is not everywhere on the same side of equilibrium -- subliming where it is
+warm, condensing where it is cold -- and it cannot be had by running two
+fixes, since both would be writing the same corner points.
+
+{units} = {distance} is required, because a budget of corner point value
+has no sign to read: the {corner} rule places its budget one corner at a
+time, which is a rule for one direction only.
+
+The state that decides the sign is usually per-cell data the model carries,
+which is what "custom"_custom.html per-grid attributes are for.  A
+grid-style "variable"_variable.html reads a custom attribute back as
+{g_name}, so any source of per-cell state -- the "custom"_custom.html or
+"fix custom"_fix_custom.html commands, a compute, a file -- can drive the
+sign, and the Grid class carries the attribute through load balancing:
+
+variable            warm grid (cylo>40)
+custom              grid create phase float 0 set phase v_warm all NULL
+variable            rate grid 1.0*(1.0-2.0*g_phase)
+fix                 ablate ablate all 1 1.0 v_rate mode both units distance :pre
+
+Everything the {deposit} mode does to keep a surface moving into the gas
+safe -- the per-step refreshed collision geometry, the salvage of molecules
+the front would otherwise engulf, the accounting for the ones it buries --
+is active for {both} as well, since a cell can be growing anywhere.
+
+:line
+
+The {mode} = deposit and {mode} = both options currently support only the
+default single-value, single-decrement corner point representation; they
+cannot be combined with the {multiple} keyword or with multivalue corner
 points.  It is otherwise unrestricted, and no particle is ever lost
 without being accounted for in 2d, 3d, axisymmetric or Kokkos runs; what
 differs between them is only how finely the growth is resolved in time,

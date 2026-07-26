@@ -185,7 +185,7 @@ class FixAblate : public Fix {
   double edge_displacement(double *, double *, double gradmag = 0.0);
   void check_group_boundary();
   double grad_mag(int);
-  double front_response(int);
+  double front_response(int, int);
   double cell_area(int);
   int interface_cell(int);
 
