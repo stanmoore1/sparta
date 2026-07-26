@@ -17,22 +17,27 @@ ablate = style name of this fix command :l
 group-ID = ID of group of grid cells that contain implicit surfaces :l
 Nevery = perform ablation once every Nevery steps :l
 scale = scale factor to convert source to grid corner point value decrement :l
-source = computeID or fixID or uniform or random :l
+source = computeID or fixID or v_name or flux or uniform or random :l
   computeID = c_ID or c_ID\[n\] for a compute that calculates per grid cell values
   fixID = f_ID or f_ID\[n\] for a fix that calculates per grid cell values
   v_name = per-grid vector calculated by a grid-style variable with name
+  flux = flux c_ID or flux f_ID for an incident mass flow per grid cell
   uniform = perform a uniform decrement
   random = perform a random decrement :pre
 
 maxrandom = maximum per grid cell decrement as an integer (only specified if source = random or uniform) :l
 zero or more keyword/value pairs may be appended :l
-keyword = {mode} or {units} or {mindist} or {multiple} :l
+keyword = {mode} or {units} or {density} or {sticking} or {mindist} or {multiple} :l
   {mode} value = ablate or deposit
     ablate = source decrements corner point values so the surface recedes
     deposit = source increments corner point values so the surface grows
   {units} value = corner or distance
     corner = source is a corner point value increment (0-255 scale)
     distance = source is a deposition rate in length/time
+  {density} value = rho
+    rho = mass density of the deposited film (only for source = flux)
+  {sticking} values = s1 s2 ... one per column of the flux source
+    sN = probability that an incident molecule of that group is captured (only for source = flux)
   {mindist} value = fraction
     fraction = minimum fractional distance along cell edge for triangle/line vertices (value > 0 and < 0.5)
   {multiple} value = yes or no :pre
@@ -44,7 +49,8 @@ fix 1 ablate surfcells 1000 10.0 c_tally
 fix 1 ablate surfcells 0 0.0 random 10
 fix fablate ablate inner 0 0.2 random 0 mindist 0.02
 fix depo ablate inner 100 0.2 f_FIX mode deposit
-fix depo ablate inner 10 1.0 c_FLUX mode deposit units distance :pre
+fix depo ablate inner 10 1.0 c_FLUX mode deposit units distance
+fix depo ablate all 100 1.0 flux f_AVG density 2000.0 sticking 1.0 mode deposit :pre
 
 [Description:]
 
@@ -308,10 +314,60 @@ Assuming the level set relation therefore delivers roughly half the
 requested speed on a real geometry.  Both cases are evaluated on the
 field as it stands, over the same edges the realized speed is measured
 on, and the corner point increment follows from inverting the result.
-The ablate direction is the mirror image, capped at 0 rather than 255.  This is often more
-natural when the rate is derived from a surface flux, for example with
+The ablate direction is the mirror image, capped at 0 rather than 255.
+
+A rate in length/time is what a physically derived rate is naturally
+expressed in, for example one built from a surface flux measured by
 "compute isurf/grid"_compute_isurf_grid.html.  With the default {units}
 = {corner}, the {source} has the same meaning it does for ablation.
+
+Because a rate in length/time asks for a displacement of the front, it
+is applied as a uniform shift of the corner point field: every corner
+of a cell holding a piece of surface is offered the same increment, and
+a corner point takes the average of what the cells sharing it asked
+for.  With {units} = {corner} the {source} is instead a budget of
+corner point value, which is placed on one corner at a time as it
+always has been, so existing inputs are unaffected.
+
+:line
+
+If the {source} is specified as {flux}, followed by a compute or fix ID,
+the deposition rate is computed from the mass the surface actually
+captures.  The source must supply the incident mass flow per grid cell,
+one column per mixture group:
+
+compute             FLUX isurf/grid all air mflux_incident norm flow
+fix                 AVG ave/grid all 1 100 100 c_FLUX\[*\]
+fix                 depo ablate all 100 1.0 flux f_AVG &
+                    density 2000.0 sticking 1.0 mode deposit :pre
+
+The rate in each cell is
+
+s = ( sum over groups of sticking\[g\] * flow\[g\] ) / ( rho * A ) :pre
+
+with {rho} the {density} keyword, i.e. the mass density of the film
+being grown, and A the total area of the surface elements in that cell,
+which the fix sums itself.  {units} = {distance} is implied.
+
+One {sticking} coefficient is required per column of the source, in
+mixture group order; a mismatch is an error.  Since the columns are
+mass flows, this fix never looks up a species mass, and per-species
+handling comes entirely from the groups of the mixture the source
+compute was defined on -- a mixture with one group per species gives
+one sticking coefficient per species.
+
+The source must use {norm} {flow} rather than the default {norm}
+{flux}.  An implicit surface element takes the ID of the grid cell that
+generated it, so a cell holding several elements has them all in one
+tally slot; with {norm} {flux} each contribution has already been
+divided by its own element's area, and the sum is not the flux of the
+cell.  The fix divides by the summed area itself.
+
+This is a closed model with no fitted constants.  For a Maxwellian gas
+at rest against a wall at the same temperature the impingement mass
+flux is rho_gas*vbar/4 with vbar = sqrt(8kT/pi m), so a film that
+captures a fraction sigma of it grows at exactly
+sigma*rho_gas*vbar/4/rho_film, and that is what value (21) reports.
 
 The {mode} = deposit option currently supports only the default
 single-value, single-decrement corner point representation; it cannot

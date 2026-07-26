@@ -59,6 +59,10 @@ class FixAblate : public Fix {
   int me;
   int mode;               // ABLATE (recede) or DEPOSIT (grow) the surface
   int unitsflag;          // CORNER (0-255) or DISTANCE (length/time) source units
+  int fluxwhich;          // COMPUTE or FIX, for the flux source style
+  double filmrho;         // mass density of the deposited film
+  double *sticking;       // per mixture group capture probability
+  int nsticking;
   int groupbit,which,argindex,icompute,ifix,ivariable,maxrandom;
   double scale;
   char *idsource;
@@ -136,6 +140,10 @@ class FixAblate : public Fix {
   double **cdelta_ghost;   // ditto for my ghost cells communicated to me
   double ***mdelta;        // cdelta for multivalues
   double ***mdelta_ghost;  // ditto for my ghost cells (multivalues)
+  double *cflag;           // 1 where the cell holds a piece of the surface,
+                           //   so its per corner delta is a statement about
+                           //   the front rather than the absence of one
+  double *cflag_ghost;     // ditto for my ghost cells communicated to me
   double **nvert;          // number of vertices around each corner
   double **nvert_ghost;    // ditto for my ghost cells communicated to me
 
@@ -177,6 +185,8 @@ class FixAblate : public Fix {
   void check_group_boundary();
   double grad_mag(int);
   double front_response(int);
+  double cell_area(int);
+  int interface_cell(int);
 
   int salvage_particle(int, int, int collideflag = 1);
   int salvage_to_neighbor(int, int);

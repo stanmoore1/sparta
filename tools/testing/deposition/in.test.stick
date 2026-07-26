@@ -1,0 +1,62 @@
+# Flux-driven deposition, against the closed-form growth rate
+#
+# This is the whole chain with no free parameters.  For a Maxwellian at rest
+# against a wall at the same temperature the impingement mass flux is
+# rho*vbar/4, so a film that captures a fraction STICK of it and has bulk
+# density RHOFILM must grow at
+#
+#   s = STICK * rho_gas * vbar / 4 / rho_film       vbar = sqrt(8kT/pi m)
+#
+# and value (21) reports what the surface actually did.  One number checks the
+# new mflux_incident keyword, the area normalization, the sticking sum and the
+# length/time conversion at once.
+#
+# The flux source consumes a mass FLOW -- norm flow, no area in it -- and
+# divides by the cell's own total surface area itself.  That is not a detail:
+# an implicit element takes the ID of the cell that made it, so a cell holding
+# several elements has them all in one tally slot, and a compute normalizing
+# by area would have divided each contribution by its own element's area and
+# summed the results.  Summing the areas once, here, is the cell's flux.
+#
+# The surface is the same flat ramp in.test.flat uses, so the front is normal
+# to x and the measurement needs no projection.
+
+variable            STICK index 1.0
+variable            NRHO index 1.0e20
+variable            TEMP index 300.0
+variable            RHOFILM index 2.0e3
+
+seed                12345
+dimension           2
+global              gridcut 0.0 comm/sort yes
+
+boundary            r r p
+
+create_box          0 20 0 80 -0.5 0.5
+create_grid         20 80 1
+balance_grid        rcb cell
+
+global              nrho ${NRHO} fnum 1.0e18
+
+species             air.species N
+mixture             air N temp ${TEMP} vstream 0.0 0.0 0.0
+
+compute             FLUX isurf/grid all all mflux_incident norm flow
+fix                 AVG ave/grid all 1 100 100 c_FLUX[*]
+fix                 ablate ablate all 100 1.0 flux f_AVG &
+                    density ${RHOFILM} sticking ${STICK} mode deposit
+
+global              surfs implicit
+read_isurf          all 20 80 1 ramp.20x80 127.5 ablate push no
+
+surf_collide        1 diffuse ${TEMP} 1.0
+surf_modify         all collide 1
+
+create_particles    air n 0
+
+timestep            1.0e-6
+
+stats               200
+stats_style         step np f_ablate f_ablate[21]
+
+run                 1000

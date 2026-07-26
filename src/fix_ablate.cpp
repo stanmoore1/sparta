@@ -42,7 +42,7 @@
 
 using namespace SPARTA_NS;
 
-enum{COMPUTE,FIX,VARIABLE,RANDOM,UNIFORM};
+enum{COMPUTE,FIX,VARIABLE,RANDOM,UNIFORM,FLUX};
 enum{CVALUE,CDELTA,NVERT};
 enum{ABLATE,DEPOSIT};     // surface recedes (ablate) or grows (deposit)
 enum{CORNER,DISTANCE};    // source units: corner point value or length/time
@@ -139,6 +139,26 @@ FixAblate::FixAblate(SPARTA *sparta, int narg, char **arg) :
     idsource = new char[n];
     strcpy(idsource,&arg[5][2]);
 
+  } else if (strcmp(arg[5],"flux") == 0) {
+
+    // flux c_ID|f_ID density RHO sticking s1 s2 ...
+    //   the source gives the incident mass FLOW onto each cell, one column
+    //   per mixture group, and the film grows at
+    //     s = sum_g( sticking_g * flow_g ) / (rho * A_cell)
+    //   which is a speed, so this source implies units = distance
+
+    iarg++;
+    if (narg < 7) error->all(FLERR,"Illegal fix ablate command");
+    which = FLUX;
+
+    if (strncmp(arg[6],"c_",2) == 0) fluxwhich = COMPUTE;
+    else if (strncmp(arg[6],"f_",2) == 0) fluxwhich = FIX;
+    else error->all(FLERR,"Fix ablate flux source must be a compute or fix");
+
+    int n = strlen(arg[6]);
+    idsource = new char[n];
+    strcpy(idsource,&arg[6][2]);
+
   } else if (strcmp(arg[5],"random") == 0) {
     iarg++;
 
@@ -198,6 +218,44 @@ FixAblate::FixAblate(SPARTA *sparta, int narg, char **arg) :
       error->all(FLERR,
                  "Fix for fix ablate not computed at compatible time");
 
+  } else if (which == FLUX) {
+    if (filmrho <= 0.0)
+      error->all(FLERR,"Fix ablate flux source requires the density keyword");
+    if (nsticking == 0)
+      error->all(FLERR,"Fix ablate flux source requires the sticking keyword");
+
+    // a flux source states a growth speed, so units is not the user's to
+    //   choose here
+
+    unitsflag = DISTANCE;
+
+    int ncol;
+    if (fluxwhich == COMPUTE) {
+      icompute = modify->find_compute(idsource);
+      if (icompute < 0)
+        error->all(FLERR,"Compute ID for fix ablate does not exist");
+      if (modify->compute[icompute]->per_grid_flag == 0)
+        error->all(FLERR,"Fix ablate compute does not calculate per-grid values");
+      if (modify->compute[icompute]->post_process_isurf_grid_flag == 0)
+        error->all(FLERR,"Fix ablate compute does not calculate isurf "
+                   "per-grid values");
+      ncol = modify->compute[icompute]->size_per_grid_cols;
+    } else {
+      ifix = modify->find_fix(idsource);
+      if (ifix < 0) error->all(FLERR,"Fix ID for fix ablate does not exist");
+      if (modify->fix[ifix]->per_grid_flag == 0)
+        error->all(FLERR,"Fix ablate fix does not calculate per-grid values");
+      ncol = modify->fix[ifix]->size_per_grid_cols;
+    }
+
+    if (ncol == 0) ncol = 1;
+    if (nsticking != ncol) {
+      char str[128];
+      sprintf(str,"Fix ablate needs %d sticking coefficients, one per column "
+              "of its flux source, but %d were given",ncol,nsticking);
+      error->all(FLERR,str);
+    }
+
   } else if (which == VARIABLE) {
     ivariable = input->variable->find(idsource);
     if (ivariable < 0)
@@ -254,6 +312,8 @@ FixAblate::FixAblate(SPARTA *sparta, int narg, char **arg) :
   cdelta_ghost = NULL;
   mdelta = NULL;
   mdelta_ghost = NULL;
+  cflag = NULL;
+  cflag_ghost = NULL;
   nvert = NULL;
   nvert_ghost = NULL;
 
@@ -313,6 +373,7 @@ FixAblate::~FixAblate()
   memory->destroy(segband);
   memory->destroy(nseg);
   memory->destroy(dlist);
+  memory->destroy(sticking);
 
   memory->destroy(mvalues);
   memory->destroy(tvalues);
@@ -326,6 +387,8 @@ FixAblate::~FixAblate()
   memory->destroy(mdelta);
   memory->destroy(mdelta_ghost);
 
+  memory->destroy(cflag);
+  memory->destroy(cflag_ghost);
   memory->destroy(nvert);
   memory->destroy(nvert_ghost);
 
@@ -524,6 +587,16 @@ void FixAblate::init()
     ifix = modify->find_fix(idsource);
     if (ifix < 0)
       error->all(FLERR,"Fix ID for fix ablate does not exist");
+  } else if (which == FLUX) {
+    if (fluxwhich == COMPUTE) {
+      icompute = modify->find_compute(idsource);
+      if (icompute < 0)
+        error->all(FLERR,"Compute ID for fix ablate does not exist");
+    } else {
+      ifix = modify->find_fix(idsource);
+      if (ifix < 0)
+        error->all(FLERR,"Fix ID for fix ablate does not exist");
+    }
   } else if (which == VARIABLE) {
     ivariable = input->variable->find(idsource);
     if (ivariable < 0)
@@ -1285,6 +1358,60 @@ void FixAblate::set_delta()
         celldelta[i] = prefactor * farray[i][im1];
     }
 
+  } else if (which == FLUX) {
+
+    // per mixture group incident mass flow onto each cell, weighted by that
+    //   group's capture probability, gives the mass the film gains per unit
+    //   time.  Divided by the film density and the cell's surface area that
+    //   is a growth speed, which the units = distance path then converts.
+    // the columns are mass flows, so nothing here needs to know a species
+    //   mass: the per species handling comes from the mixture groups of the
+    //   source compute
+
+    // a single column comes back as a vector rather than an array, which is
+    //   how every per-grid producer in SPARTA reports one value
+
+    double **carray = NULL;
+    double *cvec = NULL;
+    int ncol;
+    if (fluxwhich == COMPUTE) {
+      Compute *c = modify->compute[icompute];
+      if (!(c->invoked_flag & INVOKED_PER_GRID)) {
+        c->compute_per_grid();
+        c->invoked_flag |= INVOKED_PER_GRID;
+      }
+      c->post_process_isurf_grid();
+      ncol = c->size_per_grid_cols;
+      if (ncol == 0) cvec = c->vector_grid;
+      else carray = c->array_grid;
+    } else {
+      Fix *f = modify->fix[ifix];
+      ncol = f->size_per_grid_cols;
+      if (ncol == 0) cvec = f->vector_grid;
+      else carray = f->array_grid;
+    }
+    if (!carray && !cvec) return;
+
+    Grid::ChildCell *cells = grid->cells;
+    Grid::ChildInfo *cinfo = grid->cinfo;
+
+    for (i = 0; i < nglocal; i++) celldelta[i] = 0.0;
+
+    for (i = 0; i < nglocal; i++) {
+      if (!(cinfo[i].mask & groupbit)) continue;
+      if (cells[i].nsplit <= 0) continue;
+
+      double area = cell_area(i);
+      if (area <= 0.0) continue;
+
+      double mdot = 0.0;
+      if (cvec) mdot = sticking[0] * cvec[i];
+      else for (int g = 0; g < ncol; g++) mdot += sticking[g] * carray[i][g];
+      if (mdot <= 0.0) continue;
+
+      celldelta[i] = scale * mdot / (filmrho * area);
+    }
+
   } else if (which == VARIABLE) {
     if (nglocal > maxvar) {
       maxvar = grid->maxlocal;
@@ -1363,11 +1490,22 @@ void FixAblate::decrement()
   // total = full amount to decrement from cell
   // cdelta[icell] = amount to decrement from each corner point of icell
 
+  for (int icell = 0; icell < nglocal; icell++) cflag[icell] = 0.0;
+
   for (int icell = 0; icell < nglocal; icell++) {
     if (!(cinfo[icell].mask & groupbit)) continue;
     if (cells[icell].nsplit <= 0) continue;
 
     for (i = 0; i < ncorner; i++) cdelta[icell][i] = 0.0;
+
+    // see the comment in increment(): a rate in length/time is a uniform
+    //   shift of the field, in either direction
+
+    if (unitsflag == DISTANCE) {
+      for (i = 0; i < ncorner; i++) cdelta[icell][i] = celldelta[icell];
+      cflag[icell] = interface_cell(icell);
+      continue;
+    }
 
     total = celldelta[icell];
     corners = cvalues[icell];
@@ -1417,6 +1555,8 @@ void FixAblate::increment()
   // total = full amount to deposit onto cell
   // cdelta[icell] = amount to add to each corner point of icell
 
+  for (int icell = 0; icell < nglocal; icell++) cflag[icell] = 0.0;
+
   for (int icell = 0; icell < nglocal; icell++) {
     if (!(cinfo[icell].mask & groupbit)) continue;
     if (cells[icell].nsplit <= 0) continue;
@@ -1435,6 +1575,7 @@ void FixAblate::increment()
 
     if (unitsflag == DISTANCE) {
       for (i = 0; i < ncorner; i++) cdelta[icell][i] = celldelta[icell];
+      cflag[icell] = interface_cell(icell);
       continue;
     }
 
@@ -2095,6 +2236,59 @@ double FixAblate::edge_displacement(double *cold, double *cnew, double gradmag)
 }
 
 /* ----------------------------------------------------------------------
+   1 if icell holds a piece of the isosurface, i.e. its corner point values
+     straddle thresh, else 0
+   this is the set of cells a rate in length/time is meaningful for, and the
+     set sync() averages over
+------------------------------------------------------------------------- */
+
+int FixAblate::interface_cell(int icell)
+{
+  if (!cvalues) return 1;
+  int nin = 0;
+  for (int i = 0; i < ncorner; i++)
+    if (cvalues[icell][i] > thresh) nin++;
+  if (nin == 0 || nin == ncorner) return 0;
+  return 1;
+}
+
+/* ----------------------------------------------------------------------
+   total surface area this cell holds, summed over its own elements
+   the flux source gives a mass FLOW onto the cell, mass per unit time with
+     no area in it, and dividing by this turns it back into a flux.  Doing it
+     here rather than letting the compute do it is deliberate: an implicit
+     element takes the ID of the cell that generated it, so all the elements
+     of a cell share one tally slot, and a compute normalizing by area would
+     have divided each contribution by ITS OWN element area and summed the
+     results -- a sum of per-element fluxes, not the cell's flux.  Summing the
+     areas here and dividing once is the same quantity a single element would
+     have given.
+   axisymmetric elements are surfaces of revolution, which axi_line_size()
+     already accounts for
+------------------------------------------------------------------------- */
+
+double FixAblate::cell_area(int icell)
+{
+  Grid::ChildCell *cells = grid->cells;
+  int nsurf = cells[icell].nsurf;
+  if (!nsurf) return 0.0;
+
+  surfint *csurfs = cells[icell].csurfs;
+  int axisymmetric = domain->axisymmetric;
+  double tmp;
+
+  double area = 0.0;
+  for (int m = 0; m < nsurf; m++) {
+    int isurf = csurfs[m];
+    if (dim == 3) area += surf->tri_size(isurf,tmp);
+    else if (axisymmetric) area += surf->axi_line_size(isurf);
+    else area += surf->line_size(isurf);
+  }
+
+  return area;
+}
+
+/* ----------------------------------------------------------------------
    how far the isosurface in this cell moves per unit rise of its corner point
      values, i.e. d(normal displacement)/d(corner delta), evaluated on the
      field as it stands
@@ -2443,11 +2637,13 @@ void FixAblate::sync()
             // update total with one corner point of jcell
             // jcorner descends from ncorner
 
-            double one;
-            if (jcell < nglocal) one = cdelta[jcell][jcorner];
-            else one = cdelta_ghost[jcell-nglocal][jcorner];
-            total += one;
-            if (one != 0.0) ncontrib++;
+            if (jcell < nglocal) {
+              total += cdelta[jcell][jcorner];
+              if (cflag[jcell] != 0.0) ncontrib++;
+            } else {
+              total += cdelta_ghost[jcell-nglocal][jcorner];
+              if (cflag_ghost[jcell-nglocal] != 0.0) ncontrib++;
+            }
           }
         }
       }
@@ -2463,6 +2659,12 @@ void FixAblate::sync()
       //   cells that are entirely solid or entirely gas ask for nothing, and
       //   dividing by the geometric 2^dim would then leave the corner short
       //   by exactly the fraction of its neighbours that had nothing to say.
+      // what counts is whether the cell HOLDS a piece of surface, which is
+      //   what cflag records -- not whether it asked for a non-zero amount.
+      //   With a stochastic rate an interface cell that measured no flux
+      //   this interval is asking for zero, and treating that as an absent
+      //   neighbour would average over the cells that did measure something
+      //   and move the front too fast by exactly 1/(fraction non-zero).
 
       if (unitsflag == DISTANCE && ncontrib) total /= ncontrib;
 
@@ -2718,9 +2920,16 @@ void FixAblate::comm_neigh_corners(int which)
   // realloc sbuf if necessary
   // ncomm = ilocal + Ncorner values
 
+  // a rate in length/time also needs to know WHICH neighbours hold a piece
+  //   of surface, so sync() can tell a neighbour asking for zero from one
+  //   with nothing to say.  That is one more double per datum.
+
+  int cflagcomm = (which == CDELTA && unitsflag == DISTANCE);
+
   int ncomm;
   if (multi_val_flag && which != NVERT) ncomm = 1 + ncorner*nmultiv;
   else ncomm = 1 + ncorner;
+  if (cflagcomm) ncomm++;
 
   if (nsend*ncomm > maxbuf) {
     memory->destroy(sbuf);
@@ -2760,6 +2969,7 @@ void FixAblate::comm_neigh_corners(int which)
           if (which == CDELTA) {
             for (j = 0; j < ncorner; j++)
               sbuf[m++] = cdelta[icell][j];
+            if (cflagcomm) sbuf[m++] = cflag[icell];
           } else if (which == CVALUE) {
             for (j = 0; j < ncorner; j++)
               sbuf[m++] = cvalues[icell][j];
@@ -2793,6 +3003,10 @@ void FixAblate::comm_neigh_corners(int which)
       memory->create(cdelta_ghost,maxghost,ncorner,"ablate:cdelta_ghost");
     }
 
+    memory->destroy(cflag_ghost);
+    maxghost = grid->nghost;
+    memory->create(cflag_ghost,maxghost,"ablate:cflag_ghost");
+
     memory->destroy(nvert_ghost);
     maxghost = grid->nghost;
     memory->create(nvert_ghost,maxghost,ncorner,"ablate:nvert_ghost");
@@ -2820,6 +3034,7 @@ void FixAblate::comm_neigh_corners(int which)
       } else {
         for (j = 0; j < ncorner; j++)
           cdelta_ghost[icell][j] = rbuf[m++];
+        if (cflagcomm) cflag_ghost[icell] = rbuf[m++];
       }
     }
 
@@ -3137,6 +3352,7 @@ void FixAblate::grow_percell(int nnew)
   memory->grow(ixyz,maxgrid,3,"ablate:ixyz");
   memory->grow(mcflags,maxgrid,4,"ablate:mcflags");
   memory->grow(celldelta,maxgrid,"ablate:celldelta");
+  memory->grow(cflag,maxgrid,"ablate:cflag");
   if (multi_val_flag) memory->grow(mdelta,maxgrid,ncorner,nmultiv,"ablate:mdelta");
   else memory->grow(cdelta,maxgrid,ncorner,"ablate:cdelta");
   if (multi_dec_flag) memory->grow(nvert,maxgrid,ncorner,"ablate:nvert");
@@ -3253,12 +3469,28 @@ double FixAblate::compute_vector(int i)
     // the last two are not output, they are the sum and count the realized
     //   front speed below is averaged from
 
+    // the average runs over every cell the front passes through, not only the
+    //   ones that moved this interval.  With a stochastic rate -- a measured
+    //   flux, say -- an interface cell that happened to catch nothing is a
+    //   genuine zero of the sample, and dropping it averages over the cells
+    //   that did move, reading high by exactly the fraction that did not.
+
     one[18] = one[19] = 0.0;
-    for (int icell = 0; icell < nglocal; icell++)
-      if (sfront_cell[icell] > 0.0) {
-        one[18] += sfront_normal[icell];
-        one[19] += 1.0;
-      }
+    Grid::ChildCell *cells = grid->cells;
+    Grid::ChildInfo *cinfo = grid->cinfo;
+
+    for (int icell = 0; icell < nglocal; icell++) {
+      if (!(cinfo[icell].mask & groupbit)) continue;
+      if (cells[icell].nsplit <= 0) continue;
+      if (cvalues) {
+        int nin = 0;
+        for (int j = 0; j < ncorner; j++)
+          if (cvalues[icell][j] > thresh) nin++;
+        if (nin == 0 || nin == ncorner) continue;
+      } else if (sfront_cell[icell] <= 0.0) continue;
+      one[18] += sfront_normal[icell];
+      one[19] += 1.0;
+    }
 
     MPI_Allreduce(one,depo_all,NREDUCE,MPI_DOUBLE,MPI_SUM,world);
     depo_stamp = update->ntimestep;
@@ -3288,6 +3520,9 @@ void FixAblate::process_args(int narg, char **arg)
   mode = ABLATE;
   depositflag = 0;
   unitsflag = CORNER;
+  filmrho = 0.0;
+  sticking = NULL;
+  nsticking = 0;
 
   int iarg = 0;
   while (iarg < narg) {
@@ -3298,6 +3533,36 @@ void FixAblate::process_args(int narg, char **arg)
       else error->all(FLERR,"Illegal fix_ablate command");
       depositflag = (mode == DEPOSIT);
       iarg += 2;
+    } else if (strcmp(arg[iarg],"density") == 0)  {
+
+      // mass density of the deposited film, which converts the mass the
+      //   surface captures per unit time into a thickness per unit time
+
+      if (iarg+2 > narg) error->all(FLERR,"Invalid fix ablate command");
+      filmrho = atof(arg[iarg+1]);
+      if (filmrho <= 0.0) error->all(FLERR,"Illegal fix_ablate command");
+      iarg += 2;
+    } else if (strcmp(arg[iarg],"sticking") == 0)  {
+
+      // one capture probability per column of the flux source, in order.
+      //   With the source built on a mixture that has one group per species
+      //   that is one coefficient per species, which is where the per species
+      //   handling comes from -- fix ablate itself never looks up a mass.
+
+      int n = 0;
+      while (iarg+1+n < narg &&
+             (isdigit(arg[iarg+1+n][0]) || arg[iarg+1+n][0] == '.')) n++;
+      if (n == 0) error->all(FLERR,"Illegal fix_ablate command");
+      nsticking = n;
+      memory->destroy(sticking);
+      memory->create(sticking,nsticking,"ablate:sticking");
+      for (int k = 0; k < n; k++) {
+        sticking[k] = atof(arg[iarg+1+k]);
+        if (sticking[k] < 0.0 || sticking[k] > 1.0)
+          error->all(FLERR,"Fix ablate sticking coefficient must be "
+                     "between 0 and 1");
+      }
+      iarg += 1 + n;
     } else if (strcmp(arg[iarg],"units") == 0)  {
       if (iarg+2 > narg) error->all(FLERR,"Invalid fix ablate command");
       if (strcmp(arg[iarg+1],"corner") == 0) unitsflag = CORNER;
