@@ -545,6 +545,65 @@ if (SPARTA_GUI_USE_PLUGIN)
 endif()
 gtest_discover_tests(test_slideshow)
 
+# What ChartWindow::postProcess() does after its dialog is answered: seven
+# analyses that read the chart's data and put the answer back on it. Splitting
+# the dialog out left this half still needing a chart with data in it -- which a
+# ChartWindow loaded from a PlotData is, with no simulator involved. The test
+# drives the modal dialogs from a timer and records what they reported.
+add_executable(test_chartanalysis
+  test_chartanalysis.cpp
+  ${GUI_WALKER_SOURCES}
+)
+target_include_directories(test_chartanalysis PRIVATE
+  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}/thirdparty/rangeslider
+)
+target_compile_definitions(test_chartanalysis PRIVATE SPARTA_GUI_VERSION="${PROJECT_VERSION}")
+target_link_libraries(test_chartanalysis PRIVATE
+  GTest::gtest Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Svg Qt6::Test
+  lepton_mini ads::qtadvanceddocking-qt6)
+if (SPARTA_GUI_HAVE_VTK)
+  target_compile_definitions(test_chartanalysis PRIVATE SPARTA_GUI_HAVE_VTK)
+  target_link_libraries(test_chartanalysis PRIVATE ${VTK_LIBRARIES})
+  vtk_module_autoinit(TARGETS test_chartanalysis MODULES ${VTK_LIBRARIES})
+endif()
+if (SPARTA_GUI_USE_PLUGIN)
+  target_compile_definitions(test_chartanalysis PRIVATE SPARTA_GUI_USE_PLUGIN)
+  target_include_directories(test_chartanalysis PRIVATE ${SPARTA_PLUGINLIB_DIR})
+endif()
+gtest_discover_tests(test_chartanalysis)
+
+# The File menu, and the workers behind it. test_mainwindow.cpp keeps a list of
+# actions it must not trigger because each opens a modal nobody can answer, and
+# nearly all of them are the file actions -- which is why opening, saving,
+# viewing and inspecting a file were the largest uncovered block in the
+# application. This drives the QFileDialog from a timer (AA_DontUseNativeDialogs
+# makes it an ordinary widget) and calls the workers directly.
+add_executable(test_mainwindowfiles
+  test_mainwindowfiles.cpp
+  ${GUI_WALKER_SOURCES}
+)
+target_include_directories(test_mainwindowfiles PRIVATE
+  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}/thirdparty/rangeslider
+)
+target_compile_definitions(test_mainwindowfiles PRIVATE
+  SPARTA_GUI_VERSION="${PROJECT_VERSION}"
+  SPARTA_TEST_LIBRARY_PATH="${_spa_test_lib}")
+target_link_libraries(test_mainwindowfiles PRIVATE
+  GTest::gtest Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Svg Qt6::Test
+  lepton_mini ads::qtadvanceddocking-qt6)
+if (SPARTA_GUI_HAVE_VTK)
+  target_compile_definitions(test_mainwindowfiles PRIVATE SPARTA_GUI_HAVE_VTK)
+  target_link_libraries(test_mainwindowfiles PRIVATE ${VTK_LIBRARIES})
+  vtk_module_autoinit(TARGETS test_mainwindowfiles MODULES ${VTK_LIBRARIES})
+endif()
+if (SPARTA_GUI_USE_PLUGIN)
+  target_compile_definitions(test_mainwindowfiles PRIVATE SPARTA_GUI_USE_PLUGIN)
+  target_include_directories(test_mainwindowfiles PRIVATE ${SPARTA_PLUGINLIB_DIR})
+endif()
+gtest_discover_tests(test_mainwindowfiles)
+
 # Test executable for helpers
 add_executable(test_helpers
   test_helpers.cpp

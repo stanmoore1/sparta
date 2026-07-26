@@ -382,6 +382,72 @@ cover:
 - The rotate, flip and zoom transforms undoing one another, and the window
   rendering what it holds at mixed image sizes
 
+test_chartanalysis.cpp
+---------------------
+
+Tests for what ``ChartWindow::postProcess()`` does *after* its dialog is
+answered: the seven analyses that read the chart's data, compute something,
+and put the answer back on the chart as a fit curve or a reference line.
+Splitting the dialog out left this half still needing a chart with data in
+it -- which a ``ChartWindow`` loaded from a ``PlotData`` is, with no
+simulator involved.  A timer-driven helper fills the dialogs and records
+the text of the report that follows.  Test cases cover:
+
+- Refusing a chart with fewer than two points, and doing nothing at all
+  with no chart selected
+- Autocorrelation opening a window of its own (the abscissa becomes lag, so
+  the result cannot share the chart's axes), named after its series and
+  running to the requested maximum lag; and a constant series reporting
+  that it has none
+- Polynomial fit recovering the coefficients of a known line, renaming the
+  processed slot, honouring the fit x-range, and falling back to the whole
+  series with a warning when the range holds fewer than two points
+- A custom function plotted over the data range, and an expression that
+  does not parse refused with its reason and no curve drawn
+- A custom nonlinear fit recovering the amplitude and rate of a known
+  exponential from a deliberately wrong starting guess, taking the label it
+  was given, shortening a long one, and naming itself after its expression
+  when unlabelled; plus malformed parameters and a fit that cannot converge
+- Block-average uncertainty reporting the mean, block-averaged standard
+  error, integrated autocorrelation time and effective sample count
+- Steady-state detection reporting a burn-in cutoff, the post-burn-in mean
+  and how much data survived
+- The Birch-Murnaghan fit asking for the atom count, reporting every fitted
+  quantity, deriving a₀ = ∛(N × V₀) from its own V₀, and refusing data with
+  no minimum in it
+- Cancelling the analysis leaving the chart untouched
+
+test_mainwindowfiles.cpp
+------------------------
+
+Tests for the main window's File menu and the workers behind it.
+``test_mainwindow.cpp`` keeps a list of actions it must not trigger because
+each opens a modal nobody can answer, and nearly all of them are the file
+actions -- which is why opening, saving, viewing and inspecting a file were
+the largest uncovered block in the application.  Two things make them
+reachable: the workers take a path directly, and with
+``AA_DontUseNativeDialogs`` the ``QFileDialog`` is an ordinary widget that a
+timer can hand a filename and accept.  Test cases cover:
+
+- Opening a deck into the editor, making its folder the working directory
+  (every relative path in the deck resolves against it), and adding it to
+  the recent list
+- Opening nothing, opening a file that is not there, and opening over
+  unsaved edits asking first
+- Writing the buffer, adding a final newline when it lacks one without
+  doubling one it has, clearing the modified flag, retitling the window,
+  and a round trip through disk being lossless
+- A failed write reporting why and leaving the window title and the
+  modified flag alone
+- Save reusing the name the deck already has without asking, where Save As
+  always asks; and cancelling either writing nothing
+- Viewing a text file in a read-only window, and cancelling opening nothing
+- The image action opening a slide show on what it was given
+- Inspecting nothing, and something that is not a restart file being
+  refused rather than opening an empty inspection window
+- The snippet picker and the About box coming up and going away
+- Every file action triggered back to back, with the window still intact
+
 test_chartdialogs.cpp
 --------------------
 
