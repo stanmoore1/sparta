@@ -13,6 +13,7 @@
 #define IMAGEVIEWER_H
 
 #include "dumpimage.h"
+#include "dumpimagesettingsdialog.h"
 #include "viewersource.h"
 
 #include <QColor>
@@ -147,6 +148,8 @@ private:
     /// Show the tabbed dump-image settings dialog opened at tab @p tab;
     /// applies the widget state to params and re-renders on accept
     void settingsDialog(int tab);
+    /// Snapshot of the running simulation for the settings dialog to describe
+    ImageSettingsEnv settingsEnv();
     /// value sources ("proc" + c_/f_/v_ references) offered for grid/surf coloring
     QStringList valueSources(bool withproc, bool withone);
     /// @}
