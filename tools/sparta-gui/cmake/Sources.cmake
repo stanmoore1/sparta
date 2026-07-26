@@ -14,7 +14,9 @@ set(PROJECT_SOURCES
   ${CMAKE_SOURCE_DIR}/src/aboutdialog.h
   ${CMAKE_SOURCE_DIR}/src/analysis.cpp
   ${CMAKE_SOURCE_DIR}/src/analysis.h
+  ${CMAKE_SOURCE_DIR}/src/chartdialogs.cpp
   ${CMAKE_SOURCE_DIR}/src/chartviewer.cpp
+  ${CMAKE_SOURCE_DIR}/src/chartdialogs.h
   ${CMAKE_SOURCE_DIR}/src/chartviewer.h
   ${CMAKE_SOURCE_DIR}/src/plotwidget.cpp
   ${CMAKE_SOURCE_DIR}/src/plotwidget.h

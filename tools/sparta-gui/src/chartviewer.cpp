@@ -19,6 +19,7 @@
 #include "spartagui.h"
 #include "leastsquares.h"
 #include "plotdata.h"
+#include "chartdialogs.h"
 #include "plotdatadialog.h"
 #include "qaddon.h"
 #include "rangeslider.h"
@@ -612,122 +613,32 @@ void ChartWindow::changeStyle()
     ChartViewer *chart = currentChart();
     if (!chart) return;
 
-    QDialog dialog(this);
-    dialog.setWindowTitle("Chart Style");
-    auto *layout = new QVBoxLayout(&dialog);
+    ChartStyle current;
+    current.rawMode       = chart->displayMode();
+    current.rawColor      = chart->displayColor();
+    current.rawWidth      = chart->displayWidth();
+    current.rawPointSize  = chart->displayPointSize();
+    current.procMode      = chart->smoothMode();
+    current.procColor     = chart->smoothColor();
+    current.procWidth     = chart->smoothWidth();
+    current.procPointSize = chart->smoothPointSize();
+    current.legend        = legendPos;
 
-    // build a colored push button that edits the referenced color in place
-    auto colorButton = [&dialog](QColor &chosen) {
-        auto *btn        = new QPushButton;
-        auto setBtnColor = [btn](const QColor &c) {
-            btn->setText(c.name());
-            btn->setStyleSheet(QString("background-color: %1; color: %2;")
-                                   .arg(c.name(), (c.lightness() < 128) ? "white" : "black"));
-        };
-        setBtnColor(chosen);
-        QObject::connect(btn, &QPushButton::clicked, &dialog, [&chosen, btn, setBtnColor]() {
-            const QColor c = QColorDialog::getColor(chosen, btn, "Series Color");
-            if (c.isValid()) {
-                chosen = c;
-                setBtnColor(c);
-            }
-        });
-        return btn;
-    };
+    ChartStyleDialog dialog(current, this);
+    if (dialog.exec() != QDialog::Accepted) return;
 
-    // build a display-mode selector preset to the given mode
-    auto modeBox = [](ChartDisplayMode mode) {
-        auto *mb = new QComboBox;
-        mb->addItem("Lines", static_cast<int>(ChartDisplayMode::Lines));
-        mb->addItem("Points", static_cast<int>(ChartDisplayMode::Points));
-        mb->addItem("Lines + Points", static_cast<int>(ChartDisplayMode::LinesAndPoints));
-        mb->setCurrentIndex(static_cast<int>(mode));
-        return mb;
-    };
-
-    // build a line-width spin box preset to the given width
-    auto widthBox = [](qreal width) {
-        auto *w = new QDoubleSpinBox;
-        w->setRange(0.5, 20.0);
-        w->setSingleStep(0.5);
-        w->setValue(width);
-        return w;
-    };
-
-    // build a point-diameter spin box preset to the given size
-    auto pointBox = [](qreal size) {
-        auto *w = new QDoubleSpinBox;
-        w->setRange(1.0, 40.0);
-        w->setSingleStep(1.0);
-        w->setValue(size);
-        return w;
-    };
-
-    // raw data section
-    QColor rawChosen = chart->displayColor();
-    if (!rawChosen.isValid()) rawChosen = QColor(100, 150, 255);
-    auto *rawMode      = modeBox(chart->displayMode());
-    auto *rawColorBtn  = colorButton(rawChosen);
-    auto *rawWidthSpin = widthBox(chart->displayWidth());
-    auto *rawPointSpin = pointBox(chart->displayPointSize());
-    auto *rawBox       = new QGroupBox("Raw data");
-    auto *rawForm      = new QFormLayout(rawBox);
-    rawForm->addRow("Display:", rawMode);
-    rawForm->addRow("Color:", rawColorBtn);
-    rawForm->addRow("Line width:", rawWidthSpin);
-    rawForm->addRow("Point size:", rawPointSpin);
-    layout->addWidget(rawBox);
-
-    // processed data section
-    QColor procChosen = chart->smoothColor();
-    if (!procChosen.isValid()) procChosen = QColor(255, 125, 125);
-    auto *procMode      = modeBox(chart->smoothMode());
-    auto *procColorBtn  = colorButton(procChosen);
-    auto *procWidthSpin = widthBox(chart->smoothWidth());
-    auto *procPointSpin = pointBox(chart->smoothPointSize());
-    auto *procBox       = new QGroupBox("Processed data");
-    auto *procForm      = new QFormLayout(procBox);
-    procForm->addRow("Display:", procMode);
-    procForm->addRow("Color:", procColorBtn);
-    procForm->addRow("Line width:", procWidthSpin);
-    procForm->addRow("Point size:", procPointSpin);
-    layout->addWidget(procBox);
-
-    // in-plot legend section
-    auto *legendCombo = new QComboBox;
-    legendCombo->addItem("Off", static_cast<int>(LegendPos::Off));
-    legendCombo->addItem("Top left", static_cast<int>(LegendPos::TopLeft));
-    legendCombo->addItem("Top right", static_cast<int>(LegendPos::TopRight));
-    legendCombo->addItem("Bottom right", static_cast<int>(LegendPos::BottomRight));
-    legendCombo->addItem("Bottom left", static_cast<int>(LegendPos::BottomLeft));
-    const int legendIdx = legendCombo->findData(static_cast<int>(legendPos));
-    legendCombo->setCurrentIndex(legendIdx < 0 ? 0 : legendIdx);
-    auto *legendBox  = new QGroupBox("Legend");
-    auto *legendForm = new QFormLayout(legendBox);
-    legendForm->addRow("Placement:", legendCombo);
-    layout->addWidget(legendBox);
-
-    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
-    styleDialogButtons(buttons);
-    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
-    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
-    layout->addWidget(buttons);
-
-    if (dialog.exec() == QDialog::Accepted) {
-        chart->setDisplayStyle(static_cast<ChartDisplayMode>(rawMode->currentData().toInt()),
-                               rawChosen, rawWidthSpin->value(), rawPointSpin->value());
-        chart->setSmoothStyle(static_cast<ChartDisplayMode>(procMode->currentData().toInt()),
-                              procChosen, procWidthSpin->value(), procPointSpin->value());
-        legendPos = static_cast<LegendPos>(legendCombo->currentData().toInt());
-        // viewer is created unconditionally in the constructor and never reset to null
-        viewer->setLegendPos(legendPos);
-        QSettings settings;
-        settings.beginGroup(Keys::GROUP_CHARTS);
-        settings.setValue(Keys::LEGEND, static_cast<int>(legendPos));
-        settings.endGroup();
-        // a style change is view-only: restore the slider window the setters reset
-        applySliderWindow();
-    }
+    const ChartStyle s = dialog.style();
+    chart->setDisplayStyle(s.rawMode, s.rawColor, s.rawWidth, s.rawPointSize);
+    chart->setSmoothStyle(s.procMode, s.procColor, s.procWidth, s.procPointSize);
+    legendPos = s.legend;
+    // viewer is created unconditionally in the constructor and never reset to null
+    viewer->setLegendPos(legendPos);
+    QSettings settings;
+    settings.beginGroup(Keys::GROUP_CHARTS);
+    settings.setValue(Keys::LEGEND, static_cast<int>(legendPos));
+    settings.endGroup();
+    // a style change is view-only: restore the slider window the setters reset
+    applySliderWindow();
 }
 
 void ChartWindow::postProcess()
@@ -750,111 +661,9 @@ void ChartWindow::postProcess()
         if (x > dataXmax) dataXmax = x;
     }
 
-    QDialog dialog(this);
-    dialog.setWindowTitle("Postprocess Chart Data");
-    auto *form = new QFormLayout(&dialog);
-
-    auto *analysisbox = new QComboBox;
-    analysisbox->addItem("Autocorrelation");
-    analysisbox->addItem("Polynomial fit");
-    analysisbox->addItem("Birch-Murnaghan EOS fit");
-    analysisbox->addItem("Custom function");
-    analysisbox->addItem("Custom fit");
-    analysisbox->addItem("Block-average uncertainty");
-    analysisbox->addItem("Steady-state detection");
-    form->addRow("Analysis:", analysisbox);
-
-    auto *paramLabel = new QLabel;
-    auto *paramSpin  = new QSpinBox;
-    form->addRow(paramLabel, paramSpin);
-
-    // expression field, shown for both the custom-function plot and fit
-    auto *exprLabel = new QLabel("f(x) =");
-    auto *exprEdit  = new QLineEdit;
-    exprEdit->setPlaceholderText("e.g. 2*x^2 + 3*sin(x)");
-    exprEdit->setMinimumWidth(Cfg::POSTPROCESS_EXPR_WIDTH);
-    form->addRow(exprLabel, exprEdit);
-
-    // parameter (initial-guess) and label fields, shown only for the custom fit
-    auto *paramsLabel = new QLabel("Parameters:");
-    auto *paramsEdit  = new QLineEdit;
-    paramsEdit->setPlaceholderText("name=guess, e.g. a=1, b=0.5");
-    paramsEdit->setMinimumWidth(Cfg::POSTPROCESS_EXPR_WIDTH);
-    form->addRow(paramsLabel, paramsEdit);
-
-    auto *fitLabelLabel = new QLabel("Label:");
-    auto *fitLabelEdit  = new QLineEdit;
-    fitLabelEdit->setPlaceholderText("optional name for the fitted curve");
-    fitLabelEdit->setMinimumWidth(Cfg::POSTPROCESS_EXPR_WIDTH);
-    form->addRow(fitLabelLabel, fitLabelEdit);
-
-    // fit x-range (hidden for autocorrelation, shown for all fitting analyses)
-    auto *fitRangeLabel  = new QLabel("Fit x-range:");
-    auto *fitRangeWidget = new QWidget;
-    auto *fitRangeRow    = new QHBoxLayout(fitRangeWidget);
-    fitRangeRow->setContentsMargins(0, 0, 0, 0);
-    auto *fitFromSpin = new QDoubleSpinBox;
-    fitFromSpin->setDecimals(6);
-    fitFromSpin->setRange(-1e15, 1e15);
-    fitFromSpin->setValue(dataXmin);
-    auto *fitToSpin = new QDoubleSpinBox;
-    fitToSpin->setDecimals(6);
-    fitToSpin->setRange(-1e15, 1e15);
-    fitToSpin->setValue(dataXmax);
-    fitRangeRow->addWidget(new QLabel("from"));
-    fitRangeRow->addWidget(fitFromSpin, 1);
-    fitRangeRow->addWidget(new QLabel("to"));
-    fitRangeRow->addWidget(fitToSpin, 1);
-    form->addRow(fitRangeLabel, fitRangeWidget);
-
-    // swap the parameter widgets to match the selected analysis
-    auto configure = [=, &dialog](int idx) {
-        const bool plot      = (idx == 3); // custom-function plotting
-        const bool fit       = (idx == 4); // custom-function nonlinear fit
-        const bool expr      = plot || fit;
-        const bool eos       = (idx == 2);
-        const bool block     = (idx == 5); // block-average uncertainty
-        const bool steady    = (idx == 6); // steady-state detection
-        const bool showRange = (idx >= 1 && idx <= 4); // fitting analyses only
-        exprLabel->setVisible(expr);
-        exprEdit->setVisible(expr);
-        paramsLabel->setVisible(fit);
-        paramsEdit->setVisible(fit);
-        fitLabelLabel->setVisible(fit);
-        fitLabelEdit->setVisible(fit);
-        fitRangeLabel->setVisible(showRange);
-        fitRangeWidget->setVisible(showRange);
-        paramLabel->setVisible(idx == 0 || idx == 1 || block);
-        if (idx == 1) { // polynomial degree
-            paramLabel->setText("Degree:");
-            paramSpin->setVisible(true);
-            paramSpin->setRange(1, qMin(npoints - 1, 8));
-            paramSpin->setValue(qMin(3, qMin(npoints - 1, 8)));
-        } else if (block) { // number of blocks for batch-means averaging
-            paramLabel->setText("Blocks:");
-            paramSpin->setVisible(true);
-            paramSpin->setRange(2, qMax(2, npoints / 2));
-            paramSpin->setValue(qBound(2, int(std::sqrt(double(npoints))), qMax(2, npoints / 2)));
-        } else if (eos || expr || steady) { // no scalar parameter needed
-            paramSpin->setVisible(false);
-        } else { // autocorrelation max lag
-            paramLabel->setText("Max lag:");
-            paramSpin->setVisible(true);
-            paramSpin->setRange(1, npoints - 1);
-            paramSpin->setValue(qMin(npoints - 1, npoints / 2));
-        }
-        dialog.adjustSize();
-    };
-    configure(0);
-    connect(analysisbox, &QComboBox::currentIndexChanged, &dialog, configure);
-
-    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
-    styleDialogButtons(buttons);
-    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
-    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
-    form->addRow(buttons);
-
+    PostProcessDialog dialog(npoints, dataXmin, dataXmax, this);
     if (dialog.exec() != QDialog::Accepted) return;
+    const PostProcessSpec req = dialog.spec();
 
     // gather the (x, y) data of the selected chart
     std::vector<double> xs, ys;
@@ -865,12 +674,12 @@ void ChartWindow::postProcess()
         ys.push_back(chart->getData(i));
     }
 
-    const int which = analysisbox->currentIndex();
+    const int which = req.analysis;
 
     // filter to the user-specified x-range for fitting analyses only
-    if (which >= 1 && which <= 4) {
-        const double fitXmin = fitFromSpin->value();
-        const double fitXmax = fitToSpin->value();
+    if (req.usesFitRange()) {
+        const double fitXmin = req.fitFrom;
+        const double fitXmax = req.fitTo;
         if (fitXmin < fitXmax && !restrictToXRange(xs, ys, fitXmin, fitXmax)) {
             warning(this, "Postprocess",
                     "Fewer than 2 data points in the selected x-range; using full data.");
@@ -878,7 +687,7 @@ void ChartWindow::postProcess()
     }
 
     if (which == 0) { // autocorrelation -> new window (the abscissa becomes lag)
-        const std::vector<double> acf = autocorrelation(ys, paramSpin->value());
+        const std::vector<double> acf = autocorrelation(ys, req.param);
         if (acf.empty()) {
             warning(this, "Postprocess",
                     "Could not compute the autocorrelation (constant or insufficient data).");
@@ -900,7 +709,7 @@ void ChartWindow::postProcess()
     }
 
     if (which == 5) { // block-average (batch-means) uncertainty of the mean
-        const BlockStats bs = blockAverage(ys, paramSpin->value());
+        const BlockStats bs = blockAverage(ys, req.param);
         if (!bs.valid) {
             warning(this, "Block averaging",
                     "Could not analyze the series (too short or constant).");
@@ -989,7 +798,7 @@ void ChartWindow::postProcess()
     constexpr int Ncurve = 200;
 
     if (which == 3) { // custom function f(x) evaluated over the data x range
-        const QString expr       = exprEdit->text().trimmed();
+        const QString expr       = req.expression;
         const CustomCurve result = evalCustomCurve(expr, xmin, xmax, Ncurve);
         if (!result.ok) {
             warning(this, "Custom Function",
@@ -1014,9 +823,9 @@ void ChartWindow::postProcess()
     }
 
     if (which == 4) { // custom nonlinear least-squares fit of f(x) to the data
-        const QString expr            = exprEdit->text().trimmed();
+        const QString expr            = req.expression;
         bool paramsOk                 = false;
-        const QList<FitParam> initial = parseFitParams(paramsEdit->text(), &paramsOk);
+        const QList<FitParam> initial = parseFitParams(req.parameters, &paramsOk);
         if (!paramsOk) {
             warning(this, "Custom Fit",
                     "Enter fit parameters as name=guess pairs, e.g. \"a=1, b=0.5\".");
@@ -1028,7 +837,7 @@ void ChartWindow::postProcess()
                     QString("The fit could not be completed:\n%1").arg(fit.error));
             return;
         }
-        const QString label   = fitLabelEdit->text().trimmed();
+        const QString label   = req.label;
         const QString fitName = label.isEmpty() ? expr : label;
         chart->setFitCurve(fit.curve, fitName, /* eosMode= */ true);
         setProcessedLabel(fitName.length() > 12 ? "Custom fit" : fitName);
@@ -1048,7 +857,7 @@ void ChartWindow::postProcess()
     }
 
     if (which == 1) { // polynomial fit
-        const PolynomialFit f = polynomialFit(xs, ys, paramSpin->value());
+        const PolynomialFit f = polynomialFit(xs, ys, req.param);
         if (!f.ok) {
             warning(this, "Postprocess", "Polynomial fit failed (too few points).");
             return;
@@ -1078,38 +887,10 @@ void ChartWindow::postProcess()
         const QString xLabel = chart->getXLabel();
         const QString yLabel = chart->getYLabel().isEmpty() ? chart->getName() : chart->getYLabel();
 
-        QDialog eosConfirm(this);
-        eosConfirm.setWindowTitle("Birch-Murnaghan EOS Fit — Column Setup");
-        auto *eosLayout = new QVBoxLayout(&eosConfirm);
-        eosLayout->addWidget(new QLabel(
-            "The Birch-Murnaghan EOS fit expects volume on the x-axis and cohesive energy "
-            "on the y-axis.\n\nThis chart has:"));
-        auto *eosInfo = new QFormLayout;
-        eosInfo->addRow("x-axis:", new QLabel("<b>" + xLabel + "</b>"));
-        eosInfo->addRow("y-axis:", new QLabel("<b>" + yLabel + "</b>"));
-        eosLayout->addLayout(eosInfo);
-        eosLayout->addWidget(
-            new QLabel("\nAtoms per unit cell N: the lattice constant is derived as\n"
-                       "  a₀ = ∛(N × V₀)\n"
-                       "Use the conventional unit cell (e.g. N=4 for FCC, N=2 for BCC/HCP).\n"
-                       "Set N=1 only when the x-axis is already the conventional cell volume."));
-        auto *natSpin = new QSpinBox;
-        natSpin->setRange(1, 1000);
-        natSpin->setValue(1);
-        natSpin->setToolTip("Number of atoms in the conventional unit cell\n"
-                            "(e.g. 4 for FCC, 2 for BCC/HCP).\n"
-                            "Use N=1 when x is already the conventional cell volume.");
-        auto *natForm = new QFormLayout;
-        natForm->addRow("Atoms per unit cell N:", natSpin);
-        eosLayout->addLayout(natForm);
-        auto *eosBtns = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
-        styleDialogButtons(eosBtns);
-        connect(eosBtns, &QDialogButtonBox::accepted, &eosConfirm, &QDialog::accept);
-        connect(eosBtns, &QDialogButtonBox::rejected, &eosConfirm, &QDialog::reject);
-        eosLayout->addWidget(eosBtns);
+        EosSetupDialog eosConfirm(xLabel, yLabel, this);
         if (eosConfirm.exec() != QDialog::Accepted) return;
 
-        const int natoms = natSpin->value();
+        const int natoms = eosConfirm.atomsPerCell();
         const EosFit f   = birchMurnaghanFit(xs, ys);
         if (!f.ok) {
             warning(this, "Postprocess",
@@ -1131,52 +912,8 @@ void ChartWindow::postProcess()
         resetRangeSliders();        // a fit re-fits to the whole data set; match the sliders
         smooth->setCurrentIndex(2); // "Both" = raw points + EOS fit line
 
-        // derive lattice constant: a0 = cbrt(N * V0)
-        const double a0 = std::cbrt(static_cast<double>(natoms) * f.v0);
-
-        // Show the result in a dialog with the rendered formula
-        auto *resultDlg = new QDialog(this);
-        resultDlg->setWindowTitle("Birch-Murnaghan EOS Fit");
-        resultDlg->setAttribute(Qt::WA_DeleteOnClose);
-        auto *dlgLayout = new QVBoxLayout(resultDlg);
-
-        auto *fmtLabel = new QLabel;
-        fmtLabel->setPixmap(QPixmap(":/icons/birch-murnaghan-eos.png"));
-        fmtLabel->setAlignment(Qt::AlignCenter);
-        dlgLayout->addWidget(fmtLabel);
-
-        auto *legend = new QLabel("where <i>V</i> is the unit cell volume "
-                                  "and <i>V</i><sub>0</sub> the equilibrium volume.");
-        legend->setAlignment(Qt::AlignCenter);
-        dlgLayout->addWidget(legend);
-
-        auto *resultForm = new QFormLayout;
-        auto makeVal     = [](double v, int prec) {
-            auto *l = new QLabel(QString::number(v, 'g', prec));
-            l->setTextInteractionFlags(Qt::TextSelectableByMouse);
-            return l;
-        };
-        resultForm->addRow("<b>V<sub>0</sub></b> &mdash; Equilibrium volume (from fit):",
-                           makeVal(f.v0, 8));
-        resultForm->addRow(
-            QString("<b>a<sub>0</sub></b> &mdash; Lattice constant ∛(%1 &times; V<sub>0</sub>):")
-                .arg(natoms),
-            makeVal(a0, 8));
-        resultForm->addRow("<b>E<sub>0</sub></b> &mdash; Cohesive energy at V<sub>0</sub>:",
-                           makeVal(f.e0, 8));
-        resultForm->addRow("<b>B<sub>0</sub></b> &mdash; Bulk modulus (&minus;V<sub>0</sub> dP/dV "
-                           "at V<sub>0</sub>):",
-                           makeVal(f.b0, 8));
-        resultForm->addRow("<b>B<sub>0</sub>'</b> &mdash; Pressure derivative dB/dP at P=0:",
-                           makeVal(f.b0prime, 6));
-        resultForm->addRow("RMS residual:", makeVal(f.rms, 6));
-        dlgLayout->addLayout(resultForm);
-
-        auto *closeBtn = new QDialogButtonBox(QDialogButtonBox::Ok);
-        styleDialogButtons(closeBtn);
-        connect(closeBtn, &QDialogButtonBox::accepted, resultDlg, &QDialog::accept);
-        dlgLayout->addWidget(closeBtn);
-        resultDlg->exec();
+        EosResultDialog result(f, natoms, this);
+        result.exec();
     }
 }
 
@@ -1210,14 +947,6 @@ void ChartWindow::addDataFile()
     const std::vector<double> &xvals = plotData.column(xcol);
     const int nrow                   = plotData.rowCount();
 
-    // auto-color palette for overlay series (avoids primary raw/smooth colors)
-    static const QList<QColor> palette = {
-        QColor(220, 80, 40),  // red-orange
-        QColor(40, 160, 40),  // green
-        QColor(160, 40, 220), // purple
-        QColor(180, 140, 0),  // amber
-        QColor(0, 160, 180),  // teal
-    };
     int colorIdx = chart->overlaySeriesCount();
 
     for (int ycol : ycols) {
@@ -1227,7 +956,7 @@ void ChartWindow::addDataFile()
         const std::vector<double> &yvals = plotData.column(ycol);
         for (int r = 0; r < nrow; ++r)
             pts.append(QPointF(xvals[r], yvals[r]));
-        chart->addOverlaySeries(pts, plotData.columnName(ycol), palette[colorIdx % palette.size()]);
+        chart->addOverlaySeries(pts, plotData.columnName(ycol), overlaySeriesColor(colorIdx));
         ++colorIdx;
     }
     // new data was added (and re-fit to the full range): match the sliders to it
@@ -1238,182 +967,23 @@ void ChartWindow::referenceLines()
 {
     if (cols.empty()) return;
 
-    QDialog dialog(this);
-    dialog.setWindowTitle("Reference Lines");
-    dialog.setMinimumWidth(680); // room for the label field plus the anchor selector
-    auto *layout = new QVBoxLayout(&dialog);
-    layout->addWidget(
-        new QLabel("Reference lines (vertical at an x value or horizontal at a y value) are\n"
-                   "applied to every chart. Labels are drawn next to the line."));
+    RefLineStyle style;
+    style.fontSize = refLabelSize;
+    style.gap      = refLabelDist;
+    style.boxed    = refLabelBoxed;
 
-    // scrollable list of (x, label, color) rows
-    auto *listWidget = new QWidget;
-    auto *listLayout = new QVBoxLayout(listWidget);
-    listLayout->setContentsMargins(4, 4, 4, 4);
+    RefLinesDialog dialog(refLines, style, this);
+    if (dialog.exec() != QDialog::Accepted) return;
 
-    auto *scroll = new QScrollArea;
-    scroll->setWidgetResizable(true);
-    scroll->setWidget(listWidget);
-    scroll->setMinimumHeight(100);
-    // keep rows within the viewport width; only scroll vertically as lines are added
-    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    layout->addWidget(scroll, 1);
-
-    // helper to build one color-button (same pattern as changeStyle)
-    struct RowData {
-        QComboBox *orientCombo;
-        QDoubleSpinBox *xSpin;
-        QLineEdit *labelEdit;
-        QComboBox *anchorCombo;
-        QColor color;
-    };
-    QList<RowData *> rows;
-    QList<QPushButton *> colorBtns;
-
-    auto addRow = [&](RefOrient orient, double val, const QString &lbl, const QColor &col,
-                      RefAnchor anchor) {
-        auto *rd        = new RowData;
-        rd->orientCombo = new QComboBox;
-        rd->orientCombo->addItems({"Vertical", "Horizontal"});
-        rd->orientCombo->setCurrentIndex(orient == RefOrient::Horizontal ? 1 : 0);
-        rd->xSpin = new QDoubleSpinBox;
-        rd->xSpin->setDecimals(6);
-        rd->xSpin->setRange(-1e15, 1e15);
-        rd->xSpin->setValue(val);
-        // keep the value field compact so the label field has room
-        rd->xSpin->setMaximumWidth(110);
-        rd->labelEdit = new QLineEdit(lbl);
-        rd->labelEdit->setPlaceholderText("label");
-        rd->color = col.isValid() ? col : QColor(80, 80, 80);
-
-        // position label tracks the orientation: "x =" for vertical, "y =" for horizontal
-        auto *posLabel = new QLabel;
-        auto updatePos = [posLabel](int idx) {
-            posLabel->setText(idx == 1 ? "y =" : "x =");
-        };
-        updatePos(rd->orientCombo->currentIndex());
-        QObject::connect(rd->orientCombo, &QComboBox::currentIndexChanged, &dialog, updatePos);
-
-        // label anchor along the line; the item texts track the orientation
-        rd->anchorCombo = new QComboBox;
-        rd->anchorCombo->addItem("Top", static_cast<int>(RefAnchor::Start));
-        rd->anchorCombo->addItem("Center", static_cast<int>(RefAnchor::Center));
-        rd->anchorCombo->addItem("Bottom", static_cast<int>(RefAnchor::End));
-        rd->anchorCombo->setCurrentIndex(static_cast<int>(anchor));
-        auto *anchorCombo = rd->anchorCombo;
-        auto updateAnchor = [anchorCombo](int idx) {
-            const bool horiz = (idx == 1);
-            anchorCombo->setItemText(0, horiz ? "Left" : "Top");
-            anchorCombo->setItemText(2, horiz ? "Right" : "Bottom");
-        };
-        updateAnchor(rd->orientCombo->currentIndex());
-        QObject::connect(rd->orientCombo, &QComboBox::currentIndexChanged, &dialog, updateAnchor);
-
-        auto *colorBtn = new QPushButton;
-        auto updateBtn = [colorBtn](const QColor &c) {
-            colorBtn->setText(c.name());
-            colorBtn->setStyleSheet(QString("background-color: %1; color: %2;")
-                                        .arg(c.name(), c.lightness() < 128 ? "white" : "black"));
-        };
-        updateBtn(rd->color);
-        QObject::connect(colorBtn, &QPushButton::clicked, &dialog, [rd, colorBtn, updateBtn]() {
-            const QColor c = QColorDialog::getColor(rd->color, colorBtn, "Line Color");
-            if (c.isValid()) {
-                rd->color = c;
-                updateBtn(c);
-            }
-        });
-
-        auto *delBtn = new QPushButton("×");
-        delBtn->setFixedWidth(24);
-
-        auto *row = new QHBoxLayout;
-        row->addWidget(rd->orientCombo);
-        row->addWidget(posLabel);
-        row->addWidget(rd->xSpin, 0);
-        row->addWidget(new QLabel("Label:"));
-        row->addWidget(rd->labelEdit, 1);
-        row->addWidget(new QLabel("Pos:"));
-        row->addWidget(rd->anchorCombo);
-        row->addWidget(new QLabel("Color:"));
-        row->addWidget(colorBtn);
-        row->addWidget(delBtn);
-        listLayout->addLayout(row);
-
-        rows.append(rd);
-        colorBtns.append(colorBtn);
-
-        // remove this row when "×" is clicked
-        QObject::connect(delBtn, &QPushButton::clicked, &dialog,
-                         [rd, &rows, &colorBtns, colorBtn, row]() {
-                             rows.removeOne(rd);
-                             colorBtns.removeOne(colorBtn);
-                             delete rd;
-                             // hide all widgets in the row
-                             QLayoutItem *item;
-                             while ((item = row->takeAt(0)) != nullptr) {
-                                 if (item->widget()) item->widget()->hide();
-                                 delete item;
-                             }
-                             delete row;
-                         });
-    };
-
-    // populate with existing lines
-    for (const auto &rl : refLines)
-        addRow(rl.orient, rl.value, rl.label, rl.color, rl.anchor);
-
-    auto *addBtn = new QPushButton("Add line");
-    QObject::connect(addBtn, &QPushButton::clicked, &dialog, [&]() {
-        addRow(RefOrient::Vertical, 0.0, QString(), QColor(80, 80, 80), RefAnchor::Start);
-    });
-    layout->addWidget(addBtn);
-
-    // window-wide label style: font size, gap from the line, and a framed/opaque background
-    auto *styleRow = new QHBoxLayout;
-    auto *fontSpin = new QDoubleSpinBox;
-    fontSpin->setRange(5.0, 30.0);
-    fontSpin->setSingleStep(0.5);
-    fontSpin->setValue(refLabelSize);
-    auto *distSpin = new QSpinBox;
-    distSpin->setRange(0, 50);
-    distSpin->setValue(static_cast<int>(refLabelDist));
-    auto *boxedCheck = new QCheckBox("Boxed labels");
-    boxedCheck->setChecked(refLabelBoxed);
-    styleRow->addWidget(new QLabel("Label font:"));
-    styleRow->addWidget(fontSpin);
-    styleRow->addWidget(new QLabel("Gap:"));
-    styleRow->addWidget(distSpin);
-    styleRow->addWidget(boxedCheck);
-    styleRow->addStretch(1);
-    layout->addLayout(styleRow);
-
-    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
-    styleDialogButtons(buttons);
-    QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
-    QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
-    layout->addWidget(buttons);
-
-    if (dialog.exec() != QDialog::Accepted) {
-        qDeleteAll(rows);
-        return;
-    }
-
-    // rebuild the refLines list (window-wide) and apply to the active column;
-    // changeChart re-applies them when switching to another column
-    refLines.clear();
-    for (const auto *rd : rows) {
-        const RefOrient o = rd->orientCombo->currentIndex() == 1 ? RefOrient::Horizontal
-                                                                 : RefOrient::Vertical;
-        const auto a      = static_cast<RefAnchor>(rd->anchorCombo->currentData().toInt());
-        refLines.append({o, rd->xSpin->value(), rd->labelEdit->text().trimmed(), rd->color, a});
-    }
-    qDeleteAll(rows);
+    // the line list is window-wide and applied to the active column; changeChart
+    // re-applies it when switching to another column
+    refLines = dialog.lines();
 
     // store and apply the window-wide label style
-    refLabelSize  = fontSpin->value();
-    refLabelDist  = distSpin->value();
-    refLabelBoxed = boxedCheck->isChecked();
+    const RefLineStyle chosen = dialog.labelStyle();
+    refLabelSize              = chosen.fontSize;
+    refLabelDist              = chosen.gap;
+    refLabelBoxed             = chosen.boxed;
     viewer->setRefLabelStyle(refLabelSize, refLabelDist, refLabelBoxed);
     QSettings rls;
     rls.beginGroup(Keys::GROUP_CHARTS);
