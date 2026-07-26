@@ -333,6 +333,51 @@ def test_react(exe):
     return ok
 
 
+def test_species(exe):
+    """Per-species sticking, against the closed form.
+
+    Two species of different mass at the same temperature arrive at different
+    rates, and each is captured with its own probability:
+
+        s = sum_i sigma_i * rho_i * vbar_i / 4 / rho_film
+
+    fix ablate never looks up a species mass to do this.  The columns of the
+    source are mass flows, so the per-species handling is the mixture's: one
+    group per species gives one sticking coefficient per species.
+
+    The test also checks the answer is distinguishable from the one a fix that
+    applied a single coefficient to both would give, so passing it is not an
+    accident of the two species being similar.
+    """
+    import math
+    k, T, nrho, rhofilm = 1.380649e-23, 300.0, 1.0e20, 2.0e3
+    mn, mo, sn, so = MASS_N, 2.65e-26, 1.0, 0.25
+
+    def rate(m, sigma, frac):
+        vbar = math.sqrt(8 * k * T / (math.pi * m))
+        return sigma * frac * nrho * m * vbar / 4.0 / rhofilm
+
+    want = rate(mn, sn, 0.5) + rate(mo, so, 0.5)
+    naive = rate(mn, sn, 0.5) + rate(mo, sn, 0.5)   # one coefficient for both
+
+    rc, out = run(exe, "in.test.species",
+                  {"STICKN": sn, "STICKO": so, "NRHO": nrho, "TEMP": T,
+                   "RHOFILM": rhofilm})
+    rows = stats_rows(out) if rc == 0 else []
+    if not rows:
+        err = next((l for l in out.splitlines() if "ERROR" in l), "no stats")
+        return check("per-species sticking", False, err.strip()[:90])
+
+    got = sum(r[3] for r in rows[1:]) / (len(rows) - 1)
+    ok = check("per-species sticking : s == sum_i sigma_i*rho_i*vbar_i/4/rhofilm",
+               abs(got - want) / want < 0.06,
+               "got %.4g want %.4g" % (got, want))
+    ok &= check("per-species sticking : and not the single-coefficient answer",
+                abs(got - naive) / naive > 0.15,
+                "single-coefficient answer would be %.4g" % naive)
+    return ok
+
+
 def test_equal_variable(exe):
     """An equal-style variable source.
 
@@ -707,6 +752,7 @@ def main():
     ok &= test_flux(exe)
     ok &= test_stick(exe)
     ok &= test_react(exe)
+    ok &= test_species(exe)
     ok &= test_equal_variable(exe)
     # a rate in length/time must be the rate the surface actually moves at
     ok &= test_rate_calibration(exe)

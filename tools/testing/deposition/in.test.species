@@ -1,0 +1,64 @@
+# Per-species sticking, against the closed form
+#
+# The rate of deposition is defined by the surface flux "with per-species
+# handling".  fix ablate never looks up a species mass to do that: the flux
+# source consumes one column of mass FLOW per mixture group, so a mixture
+# with one group per species gives one sticking coefficient per species and
+# the per-species handling is the mixture's, not the fix's.
+#
+# Two species of different mass at the same temperature have different mean
+# speeds, so they arrive at different rates and each is captured with its own
+# probability:
+#
+#   s = sum_i sigma_i * rho_i * vbar_i / 4 / rho_film    vbar_i = sqrt(8kT/pi m_i)
+#
+# With sigma unequal -- 1.0 for N, 0.25 for O here -- getting this right is
+# not possible by accident: the two species differ in mass by 14%, so a fix
+# that ignored the column ordering, or applied one coefficient to both, or
+# summed the flows before weighting them, would land somewhere else.
+#
+# group SELF puts each species in its own group, which is what makes the
+# compute produce one column per species in species order.
+
+variable            STICKN index 1.0
+variable            STICKO index 0.25
+variable            NRHO index 1.0e20
+variable            TEMP index 300.0
+variable            RHOFILM index 2.0e3
+
+seed                12345
+dimension           2
+global              gridcut 0.0 comm/sort yes
+
+boundary            r r p
+
+create_box          0 20 0 80 -0.5 0.5
+create_grid         20 80 1
+balance_grid        rcb cell
+
+global              nrho ${NRHO} fnum 1.0e18
+
+species             air.species N O
+mixture             air N O temp ${TEMP} vstream 0.0 0.0 0.0
+mixture             air O frac 0.5
+mixture             air group SELF
+
+compute             FLUX isurf/grid all air mflux_incident norm flow
+fix                 AVG ave/grid all 1 100 100 c_FLUX[*]
+fix                 ablate ablate all 100 1.0 flux f_AVG &
+                    density ${RHOFILM} sticking ${STICKN} ${STICKO} mode deposit
+
+global              surfs implicit
+read_isurf          all 20 80 1 ramp.20x80 127.5 ablate push no
+
+surf_collide        1 diffuse ${TEMP} 1.0
+surf_modify         all collide 1
+
+create_particles    air n 0
+
+timestep            1.0e-6
+
+stats               200
+stats_style         step np f_ablate f_ablate[21]
+
+run                 1000

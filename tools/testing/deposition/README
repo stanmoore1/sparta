@@ -181,6 +181,17 @@ in.test.stick
   length/time conversion at once.  Sigma is swept: zero must give exactly zero
   growth, and the rate must be linear in it.
 
+in.test.species
+  Per-species sticking, again against arithmetic.  Two species of different
+  mass arrive at different rates and are captured with different
+  probabilities, and the film has to grow at the sum of their weighted
+  contributions.  fix ablate never looks up a species mass to do this: the
+  columns of the source are mass flows, so the per-species handling belongs to
+  the mixture, and one group per species gives one coefficient per species.
+  The test also asserts the answer is 39% away from what a fix applying a
+  single coefficient to both would give, so passing is not an accident of the
+  two species being similar.
+
 in.test.react
   The same physics with the capture probability moved out of fix ablate and
   into a surf_react model, consumed through the mass keyword of compute
