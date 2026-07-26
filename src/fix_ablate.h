@@ -131,6 +131,12 @@ class FixAblate : public Fix {
   double depo_all[20];     // deposition counters summed over all procs,
                            //   plus the 2 internal front speed accumulators
   bigint depo_stamp;       // timestep depo_all was last reduced on
+  double front_last;       // last realized front speed that was measurable
+  double clampsum;         // sum over crossed edges of how far the normal
+                           //   projection overshot 1, 1.0 when it did not
+  bigint ntotedge;         // crossed edges that
+                           //   projection, and the total, over one interval
+  int clampwarn;           // 1 once the oblique-field warning has been given
 
   int *dlist;              // particles leaving my list when surfs are rebuilt:
                            //   buried, or pushed onto another proc
@@ -182,8 +188,10 @@ class FixAblate : public Fix {
   void increment();
   void front_speed();
   void refresh_surfs();
-  double edge_displacement(double *, double *, double gradmag = 0.0);
+  double edge_displacement(double *, double *, double gradmag = 0.0,
+                           int fullflag = 0);
   void check_group_boundary();
+  void check_oblique();
   double grad_mag(int);
   double front_response(int, int);
   double cell_area(int);

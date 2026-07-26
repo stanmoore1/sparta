@@ -229,6 +229,25 @@ and can be output (see below), so no particle is ever discarded without
 being accounted for.  In a closed domain the drop in particle count must
 equal the buried count exactly.
 
+A rate in length/time needs to know which way the surface faces, and that
+comes from the gradient of the corner point values.  A field made only of
+0 and 255 does not carry it: wherever the front runs oblique to the grid,
+every crossed cell edge falls the full 0 to 255 whichever way the surface
+is turned, and the direction cannot be recovered.  The front still moves,
+and still moves smoothly, but not at the speed that was asked for -- a
+plane at 45 degrees to a 2d grid comes out about 1.6 times too fast, while
+the same plane on a graded field comes out within 1%.  A front normal to
+the grid is exact either way, which is what makes this easy to miss.  Fix
+ablate warns when the corner point values it has been given cannot express
+the directions its surface faces.
+
+So for {units} = distance, and for the {flux} source which implies it,
+give "read_isurf"_read_isurf.html a file with intermediate values -- a
+distance field rather than a segmented image -- and read it with {push} =
+no and without {minmax} = yes, both of which drive the field to 0 and 255.
+A rate in {units} = corner is a budget of corner point value rather than a
+distance, and is unaffected.
+
 Rebuilding the isosurface is expensive, so it is only done every {Nevery}
 steps, but the surface keeps growing in between.  The collision geometry
 is therefore refreshed every step: the corner point field is advanced in

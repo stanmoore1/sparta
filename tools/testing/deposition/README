@@ -263,6 +263,29 @@ in.test.crossproc (part of run_tests.py, no separate input)
   The test asserts the mechanism is inert on one rank, live on more than one,
   and that the burial count stays within 2% of the serial answer.
 
+in.test.oblique
+  Every other rate check in this suite is blind to an error that depends on
+  which way the surface faces.  in.test.flat has its front normal to the grid,
+  where the answer is exact whatever the projection onto the surface normal
+  does, and the curved case reads the realized speed back out of fix ablate --
+  which shares that projection with the conversion, so an error in it cancels
+  and f_ablate[21] reports the requested speed however the surface actually
+  moved.  Here the front position is measured from the corner point values
+  themselves, outside SPARTA.
+
+  The body is a diamond, so all four faces are at 45 degrees.  Measured over
+  1500 steps at a requested speed of 1.0:
+
+      graded corner values (diamond.smooth)   1.0115
+      binary 0/255         (diamond.binary)   1.6098
+
+  The binary field is not a bug in fix ablate so much as a limit of what a
+  binary field can say: on an oblique front every crossed edge falls the full
+  0 to 255 whichever way the surface is turned, so the direction the surface
+  faces is not recoverable.  fix ablate warns when its field is like that, and
+  the test asserts the warning rather than the number.  A front normal to the
+  grid is exact either way, which is why this went unnoticed.
+
 in.test.balance
   The same conservation identity with fix balance repartitioning the grid
   every 10 steps while the film grows.  Everything fix ablate keeps per cell

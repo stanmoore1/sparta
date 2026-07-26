@@ -1,0 +1,63 @@
+# Does a front NOT aligned with the grid move at the speed it was asked for?
+#
+# Every other calibration in this suite either uses a front normal to the grid,
+# where the answer is exact by construction, or reads the realized speed back
+# out of fix ablate.  Neither can see an error that depends on which way the
+# surface faces, and the second cannot see one at all: the conversion from a
+# speed to a corner point increment and the measurement of what was realized
+# share the same projection onto the surface normal, so an error in that
+# projection cancels and f_ablate[21] reports the requested speed whatever the
+# surface actually did.
+#
+# So this body is a diamond -- a square turned 45 degrees -- whose four faces
+# are all oblique to the grid, and the test measures where the isosurface
+# actually is, from the corner point values, outside SPARTA.
+#
+# FIELD = diamond.smooth   graded corner values, a linear taper across the
+#                          interface, which is what the level set relation
+#                          needs to know which way the surface faces
+# FIELD = diamond.binary   the same body as 0/255 only, which is what
+#                          read_isurf produces by default and what a
+#                          segmented image gives.  A binary field carries no
+#                          direction information on an oblique front: every
+#                          crossed edge falls the full 0 to 255 whichever way
+#                          the surface is turned.  fix ablate warns about it.
+#
+# No gas: this is the corner point arithmetic on its own.
+
+variable            RATE index 1.0
+variable            FIELD index diamond.smooth
+variable            NEVERY index 1
+
+seed                12345
+dimension           2
+global              gridcut 0.0 comm/sort yes
+boundary            r r p
+
+create_box          0 60 0 60 -0.5 0.5
+create_grid         60 60 1
+balance_grid        rcb cell
+
+global              nrho 1.0 fnum 1.0
+species             air.species N
+mixture             air N
+
+variable            rate grid ${RATE}
+fix                 ablate ablate all ${NEVERY} 1.0 v_rate mode deposit &
+                    units distance
+
+global              surfs implicit
+read_isurf          all 60 60 1 ${FIELD} 127.5 ablate push no
+
+surf_collide        1 diffuse 300.0 1.0
+surf_modify         all collide 1
+
+timestep            0.001
+
+dump                D grid all 1500 tmp.oblique.grid id xlo ylo f_ablate[1]
+dump_modify         D pad 0
+
+stats               1500
+stats_style         step f_ablate f_ablate[21]
+
+run                 1500

@@ -55,6 +55,9 @@ enum{KEEP,DISCARD,MIGRATE};   // fate of a particle the new isosurface encloses
                           //   enough that its normal speed is meaningful
 #define SWEEP_FRAC 0.5    // max front advance per regeneration, in grid cells
 #define EPSSURF 1.0e-4    // push off a surf, same as Grid::point_outside_surfs()
+#define CLAMP_FRAC 1.10   // fraction of crossed edges that may lose the
+                          //   normal projection before it is worth warning
+#define NOMEASURE (-1.0)  // edge_displacement() had no crossing to measure from
 #define NDEPO 18          // # of deposition diagnostic counters
 #define NFRONT 2          // internal accumulators for the realized front speed
 #define NREDUCE (NDEPO+NFRONT)
@@ -302,6 +305,10 @@ FixAblate::FixAblate(SPARTA *sparta, int narg, char **arg) :
   nseg = NULL;
   maxsegcell = segstride = 0;
   depo_stamp = -1;
+  front_last = 0.0;
+  clampwarn = 0;
+  clampsum = 0.0;
+  ntotedge = 0;
   for (int i = 0; i < NREDUCE; i++) depo_all[i] = 0.0;
   dlist = NULL;
   maxdlist = 0;
@@ -697,6 +704,8 @@ void FixAblate::end_of_step()
     Grid::ChildCell *cells = grid->cells;
     Grid::ChildInfo *cinfo = grid->cinfo;
     double interval = nevery * update->dt;
+    clampsum = 0.0;
+    ntotedge = 0;
     for (int icell = 0; icell < nglocal; icell++) {
       if (!(cinfo[icell].mask & groupbit)) continue;
       if (cells[icell].nsplit <= 0) continue;
@@ -714,6 +723,8 @@ void FixAblate::end_of_step()
       if (response > 0.0) celldelta[icell] *= interval / response;
       else celldelta[icell] = 0.0;
     }
+
+    check_oblique();
   }
 
   // for DEPOSIT, snapshot the corner values so the realized front motion
@@ -2096,16 +2107,23 @@ void FixAblate::front_speed()
   Grid::ChildCell *cells = grid->cells;
   Grid::ChildInfo *cinfo = grid->cinfo;
 
-  for (int icell = 0; icell < nglocal; icell++)
-    sfront_cell[icell] = sfront_normal[icell] = 0.0;
+  for (int icell = 0; icell < nglocal; icell++) {
+    sfront_cell[icell] = 0.0;
+    sfront_normal[icell] = NOMEASURE;
+  }
 
   for (int icell = 0; icell < nglocal; icell++) {
     if (!(cinfo[icell].mask & groupbit)) continue;
     if (cells[icell].nsplit <= 0) continue;
-    sfront_cell[icell] =
-      edge_displacement(cvalues_prev[icell],cvalues[icell]);
+    // sfront_cell feeds the fast-growth guard, which takes a maximum, so an
+    //   unmeasurable cell must not look like a large advance: clamp it to 0.
+    // sfront_normal feeds the realized-speed diagnostic, which takes a mean,
+    //   so it keeps the sentinel and the mean skips those cells.
+
+    double d = edge_displacement(cvalues_prev[icell],cvalues[icell]);
+    sfront_cell[icell] = MAX(d,0.0);
     sfront_normal[icell] =
-      edge_displacement(cvalues_prev[icell],cvalues[icell],grad_mag(icell));
+      edge_displacement(cvalues_prev[icell],cvalues[icell],grad_mag(icell),1);
   }
 }
 
@@ -2184,7 +2202,8 @@ void FixAblate::check_group_boundary()
    returns 0.0 if the surface does not cross this cell in the first field
 ------------------------------------------------------------------------- */
 
-double FixAblate::edge_displacement(double *cold, double *cnew, double gradmag)
+double FixAblate::edge_displacement(double *cold, double *cnew, double gradmag,
+                                    int fullflag)
 {
   // cell edges as corner index pairs, x fastest then y then z
   // 2d uses the first 4, 3d all 12
@@ -2238,6 +2257,17 @@ double FixAblate::edge_displacement(double *cold, double *cnew, double gradmag)
 
     int newcross = (cnew[i0] < thresh) != (cnew[i1] < thresh);
 
+    // fullflag wants only edges the surface crossed at both ends of the
+    //   interval, i.e. where it stayed inside this cell the whole time and
+    //   the displacement measured is the whole of it.  An edge the surface
+    //   left partway through contributes only the part of the motion that
+    //   happened inside this cell, which is right for a bound on how far the
+    //   front went but biases an average of per-cell speeds downward -- and
+    //   for a flat front every cell leaves at the same moment, so the bias
+    //   lands on every cell at once.
+
+    if (fullflag && !newcross) continue;
+
     if (newcross) {
       double dnew = cnew[i1] - cnew[i0];
       if (dnew == 0.0) continue;
@@ -2258,8 +2288,64 @@ double FixAblate::edge_displacement(double *cold, double *cnew, double gradmag)
     ncross++;
   }
 
-  if (!ncross) return 0.0;
+  // no edge of the old field crossed thresh, so there is nothing to measure
+  //   from in this cell.  That is NOT a front speed of zero: it happens
+  //   whenever the isosurface sits exactly on a plane of corner points, which
+  //   a flat front does every time it has advanced by one cell.  Reporting it
+  //   as zero made the realized speed collapse to zero on exactly those
+  //   steps, and for a flat front that is every cell at once.  Say "no
+  //   measurement" instead and let the caller decide; a cell that really did
+  //   not move still has crossings and still returns 0.
+
+  if (!ncross) return NOMEASURE;
   return sum/ncross;
+}
+
+/* ----------------------------------------------------------------------
+   warn once if the corner point field cannot support a rate in length/time
+   converting a front speed into a corner point increment needs the direction
+     the surface faces, which comes from the cell's corner value gradient.  A
+     field that is (nearly) binary carries no direction information where the
+     front runs oblique to the grid: every crossed edge falls the full 0 to
+     255 whatever way the surface is turned, the gradient the cell reports is
+     not the gradient along those edges, and the projection onto the surface
+     normal is unavailable -- front_response() clamps instead.
+   the front then still moves, and still moves smoothly, but not at the speed
+     that was asked for.  Measured on a plane at 45 degrees to a 2d grid, a
+     binary field delivers about 1.6 times the requested speed while the same
+     plane on a graded field delivers 1.01.  A front normal to the grid is
+     exact eithe way, which is why this is easy to miss.
+   so say so, once, naming the fraction of the surface affected
+------------------------------------------------------------------------- */
+
+void FixAblate::check_oblique()
+{
+  if (clampwarn) return;
+
+  double one[2],all[2];
+  one[0] = clampsum;
+  one[1] = 1.0*ntotedge;
+  MPI_Allreduce(one,all,2,MPI_DOUBLE,MPI_SUM,world);
+
+  if (all[1] == 0.0) return;
+  double excess = all[0]/all[1];
+  if (excess <= CLAMP_FRAC) return;
+
+  clampwarn = 1;
+  if (me == 0) {
+    char str[512];
+    sprintf(str,"Fix ablate: this surface faces directions its "
+            "corner point values cannot express (mean %.2f against 1.00 "
+            "for a field that can), so a rate in length/time is not delivered "
+            "accurately: a plane at 45 degrees to the grid comes out about "
+            "1.6x too fast.  This is what a binary 0/255 corner point field "
+            "looks like wherever the front is not aligned with the grid.  Use "
+            "a graded field -- read_isurf with push no on a file carrying "
+            "intermediate values, and without minmax yes -- or drive the fix "
+            "with units corner instead",
+            excess);
+    error->warning(FLERR,str);
+  }
 }
 
 /* ----------------------------------------------------------------------
@@ -2365,7 +2451,27 @@ double FixAblate::front_response(int icell, int grow)
     // project onto the surface normal, clamped by cos <= 1 as above
 
     double weight = xyzsize[edgedim[e]];
-    if (gradmag > 0.0) weight = MIN(gap/gradmag,weight);
+    if (gradmag > 0.0) {
+
+      // gap/gradmag is the edge length times the cosine between the edge and
+      //   the surface normal, so it can never exceed the edge length.  When
+      //   it does, the cell's centre gradient and the gradient along this
+      //   edge disagree, which is what a corner point field that is nearly
+      //   binary looks like where the front runs oblique to the grid.  The
+      //   clamp keeps the arithmetic sane but the projection it stands for
+      //   is then not available, and a rate in length/time is not delivered
+      //   accurately; count it so end_of_step() can say so.
+
+      // how far past 1 the cosine comes out is the size of the disagreement,
+      //   not just that there was one: a graded field can be a little over on
+      //   a few edges and still deliver the rate, while a binary field is
+      //   over by 1/cos everywhere the front runs oblique -- sqrt(2) at 45
+      //   degrees in 2d.  Accumulate the mean so the two can be told apart.
+
+      ntotedge++;
+      clampsum += MAX(1.0, gap/(gradmag*weight));
+      weight = MIN(gap/gradmag,weight);
+    }
 
     double deriv;
     if (grow) {
@@ -2510,7 +2616,7 @@ void FixAblate::refresh_surfs()
     // the move loop needs this to place a collision correctly in space AND
     //   in time, and to catch a particle the front overtakes from behind
 
-    segspeed[icell] = edge_displacement(cnow,cnext,0.0) / update->dt;
+    segspeed[icell] = MAX(edge_displacement(cnow,cnext,0.0),0.0) / update->dt;
 
     // and how far it now stands ahead of the committed surface, which is how
     //   far behind it a particle may be found and still be one the front has
@@ -2519,7 +2625,7 @@ void FixAblate::refresh_surfs()
     //   time, since f above is held back whenever advancing it further would
     //   empty a cell of surface, and the two then disagree
 
-    segband[icell] = edge_displacement(cvalues[icell],cnow,0.0);
+    segband[icell] = MAX(edge_displacement(cvalues[icell],cnow,0.0),0.0);
 
     int ns;
     if (dim == 2)
@@ -3516,12 +3622,17 @@ double FixAblate::compute_vector(int i)
     for (int icell = 0; icell < nglocal; icell++) {
       if (!(cinfo[icell].mask & groupbit)) continue;
       if (cells[icell].nsplit <= 0) continue;
-      if (cvalues) {
-        int nin = 0;
-        for (int j = 0; j < ncorner; j++)
-          if (cvalues[icell][j] > thresh) nin++;
-        if (nin == 0 || nin == ncorner) continue;
-      } else if (sfront_cell[icell] <= 0.0) continue;
+      // membership is whether the cell held a piece of front at the START of
+      //   the interval, which is exactly when its displacement is measurable.
+      //   Testing the field as it stands NOW instead dropped two sets of
+      //   cells at once every time a flat front reached a plane of corner
+      //   points: the ones that had just filled completely, and the ones the
+      //   front had just entered.  For a flat front that is every cell there
+      //   is, and the realized speed collapsed to zero on those steps.
+      // a cell that held a front and did not move still reports 0 and is
+      //   still counted, so a stochastic rate is not biased upward.
+
+      if (sfront_normal[icell] == NOMEASURE) continue;
       one[18] += sfront_normal[icell];
       one[19] += 1.0;
     }
@@ -3535,8 +3646,18 @@ double FixAblate::compute_vector(int i)
   // displacement per regeneration interval, reported as a speed
 
   if (i == 2+NDEPO) {
-    if (depo_all[NDEPO+1] == 0.0) return 0.0;
-    return depo_all[NDEPO] / depo_all[NDEPO+1] / (nevery * update->dt);
+
+    // no cell held a piece of front for the whole interval, so there is no
+    //   measurement this time.  A perfectly flat grid-aligned front does this
+    //   every time it reaches a plane of corner points: it leaves every cell
+    //   it was in at the same moment.  Report the last speed that was
+    //   measured rather than a zero the surface never moved at.
+    // a front that genuinely stopped is not this case: its cells still hold
+    //   it, still measure, and still report zero.
+
+    if (depo_all[NDEPO+1] == 0.0) return front_last;
+    front_last = depo_all[NDEPO] / depo_all[NDEPO+1] / (nevery * update->dt);
+    return front_last;
   }
 
   return 0.0;

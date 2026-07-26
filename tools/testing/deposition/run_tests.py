@@ -56,6 +56,10 @@ def stats_rows(out):
         if inside:
             if line.startswith("Loop time") or not line.strip():
                 break
+            # SPARTA may print a warning in the middle of a run, between two
+            # stats lines; that is not the end of the table
+            if line.startswith("WARNING"):
+                continue
             try:
                 rows.append([float(x) for x in line.split()])
             except ValueError:
@@ -757,6 +761,99 @@ def test_axisymmetric(exe):
                  % (rows[-1][6], rows[-1][7]))
 
 
+def _front_distance(path, ux, uy, cx=30.0, cy=30.0, th=127.5):
+    """Distance from the body centre to the isosurface along (ux,uy), per frame.
+
+    Reads the corner point values straight out of a grid dump and interpolates,
+    so it is independent of anything fix ablate reports about itself.
+    """
+    import math
+    frames, ts, cur, incells, pend = [], [], None, False, False
+    for line in open(path):
+        if line.startswith("ITEM: TIMESTEP"):
+            pend, incells = True, False; continue
+        if pend and line.strip() and not line.startswith("ITEM"):
+            ts.append(int(line)); pend = False; continue
+        if line.startswith("ITEM: CELLS"):
+            cur = {}; frames.append(cur); incells = True; continue
+        if line.startswith("ITEM:"):
+            incells = False; continue
+        if incells and line.strip():
+            f = line.split(); cur[(float(f[1]), float(f[2]))] = float(f[3])
+
+    def sample(g, x, y):
+        i, j = math.floor(x), math.floor(y)
+        v = [g.get((float(a), float(b)))
+             for a, b in ((i, j), (i+1, j), (i, j+1), (i+1, j+1))]
+        if any(z is None for z in v): return None
+        tx, ty = x - i, y - j
+        return (v[0]*(1-tx)*(1-ty) + v[1]*tx*(1-ty)
+                + v[2]*(1-tx)*ty + v[3]*tx*ty)
+
+    out = []
+    for g in frames:
+        lo, hi = 0.5, 29.0
+        for _ in range(60):
+            mid = 0.5*(lo+hi)
+            sv = sample(g, cx+ux*mid, cy+uy*mid)
+            if sv is None: hi = mid
+            elif sv >= th: lo = mid
+            else: hi = mid
+        out.append(0.5*(lo+hi))
+    return ts, out
+
+
+def test_oblique(exe):
+    """A front not aligned with the grid must still move at the asked speed.
+
+    The rest of the suite cannot see this.  in.test.flat has its front normal
+    to the grid, where the answer is exact whatever the projection onto the
+    surface normal does, and the curved case reads the realized speed back out
+    of fix ablate -- which shares that projection with the conversion, so an
+    error in it cancels and the report comes back at the requested speed
+    however the surface actually moved.  Here the front position is measured
+    from the corner point values themselves.
+
+    A diamond has all four faces at 45 degrees.  Measured on the graded field
+    the faces advance at the requested speed; on the same body as a binary
+    0/255 field they advance about 1.6x too fast, because a binary field
+    carries no direction information on an oblique front.  fix ablate warns
+    about the second, and that warning is what this asserts, since the
+    inaccuracy itself is a property of the input field rather than a bug to
+    be fixed here.
+    """
+    import math, os
+    d = 1.0/math.sqrt(2.0)
+    ok = True
+    speeds = {}
+
+    for field in ("diamond.smooth", "diamond.binary"):
+        rc, out = run(exe, "in.test.oblique", {"FIELD": field, "RATE": 1.0})
+        if rc != 0:
+            ok &= check("oblique front (%s)" % field, False, "run failed")
+            continue
+        ts, r = _front_distance(os.path.join(HERE, "tmp.oblique.grid"), d, d)
+        if len(r) < 2:
+            ok &= check("oblique front (%s)" % field, False, "no dump frames")
+            continue
+        speeds[field] = (r[-1]-r[0]) / ((ts[-1]-ts[0]) * 0.001)
+        speeds[field + ":warn"] = "faces directions its corner point" in out
+
+    if "diamond.smooth" in speeds:
+        s = speeds["diamond.smooth"]
+        ok &= check("oblique front : graded field moves at the asked speed",
+                    abs(s-1.0) < 0.05, "realized %.4f, ratio %.4f" % (s, s))
+        ok &= check("oblique front : graded field is not warned about",
+                    not speeds["diamond.smooth:warn"], "")
+
+    if "diamond.binary" in speeds:
+        s = speeds["diamond.binary"]
+        ok &= check("oblique front : binary field is warned about",
+                    speeds["diamond.binary:warn"],
+                    "it runs at %.4f of the asked speed" % s)
+    return ok
+
+
 def test_guard(exe):
     """A front that outruns its collision lists must be refused."""
     rc, out = run(exe, "in.test.guard")
@@ -838,6 +935,8 @@ def main():
     ok &= test_balance(exe)
     # axisymmetry: the refreshed geometry with the surface-of-revolution test
     ok &= test_axisymmetric(exe)
+    # a front oblique to the grid, measured outside SPARTA
+    ok &= test_oblique(exe)
     # the front velocity places the collision but must not enter the rebound
     ok &= test_no_wall_work(exe)
     ok &= test_guard(exe)
