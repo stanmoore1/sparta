@@ -333,6 +333,27 @@ def test_react(exe):
     return ok
 
 
+def test_equal_variable(exe):
+    """An equal-style variable source.
+
+    A rate that depends only on time is one number for the whole surface, not
+    a field, and writing it as a grid-style variable is busywork.  On a
+    uniform rate the two paths have to agree exactly -- if they do not, the
+    equal-style value is not reaching every cell in the group.
+    """
+    rows = {}
+    for style in ("grid", "equal"):
+        rc, out = run(exe, "in.test.flat", {"RATE": 2.0, "STYLE": style})
+        r = stats_rows(out) if rc == 0 else []
+        if not r:
+            err = next((l for l in out.splitlines() if "ERROR" in l), "no stats")
+            return check("equal-style variable source", False, err.strip()[:90])
+        rows[style] = r
+    return check("equal-style variable source : same as grid-style",
+                 rows["grid"] == rows["equal"],
+                 "material %g vs %g" % (rows["grid"][-1][1], rows["equal"][-1][1]))
+
+
 def test_flux(exe):
     """The incident flux keywords, against the closed form.
 
@@ -686,6 +707,7 @@ def main():
     ok &= test_flux(exe)
     ok &= test_stick(exe)
     ok &= test_react(exe)
+    ok &= test_equal_variable(exe)
     # a rate in length/time must be the rate the surface actually moves at
     ok &= test_rate_calibration(exe)
     # a rate in length/time must not depend on the rebuild interval

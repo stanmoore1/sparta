@@ -64,6 +64,7 @@ class FixAblate : public Fix {
   double *sticking;       // per mixture group capture probability
   int nsticking;
   int groupbit,which,argindex,icompute,ifix,ivariable,maxrandom;
+  int varstyle;           // GRIDVAR or EQUALVAR, for which = VARIABLE
   double scale;
   char *idsource;
   int storeflag;

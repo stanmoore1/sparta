@@ -43,6 +43,7 @@
 using namespace SPARTA_NS;
 
 enum{COMPUTE,FIX,VARIABLE,RANDOM,UNIFORM,FLUX};
+enum{GRIDVAR,EQUALVAR};
 enum{CVALUE,CDELTA,NVERT};
 enum{ABLATE,DEPOSIT};     // surface recedes (ablate) or grows (deposit)
 enum{CORNER,DISTANCE};    // source units: corner point value or length/time
@@ -260,8 +261,16 @@ FixAblate::FixAblate(SPARTA *sparta, int narg, char **arg) :
     ivariable = input->variable->find(idsource);
     if (ivariable < 0)
       error->all(FLERR,"Could not find fix ablate variable name");
-    if (input->variable->grid_style(ivariable) == 0)
-      error->all(FLERR,"Fix ablate variable is not grid-style variable");
+
+    // an equal-style variable is a single number for the whole surface,
+    //   which is what a rate that depends only on time looks like.  It is
+    //   applied to every cell in the group; the deposit interface gate keeps
+    //   a uniform scalar from sprouting material in open gas
+
+    if (input->variable->grid_style(ivariable)) varstyle = GRIDVAR;
+    else if (input->variable->equal_style(ivariable)) varstyle = EQUALVAR;
+    else error->all(FLERR,
+                    "Fix ablate variable is not grid-style or equal-style");
   }
 
   // this fix produces a per-grid array and a scalar
@@ -1411,6 +1420,11 @@ void FixAblate::set_delta()
 
       celldelta[i] = scale * mdot / (filmrho * area);
     }
+
+  } else if (which == VARIABLE && varstyle == EQUALVAR) {
+
+    double one = prefactor * input->variable->compute_equal(ivariable);
+    for (i = 0; i < nglocal; i++) celldelta[i] = one;
 
   } else if (which == VARIABLE) {
     if (nglocal > maxvar) {

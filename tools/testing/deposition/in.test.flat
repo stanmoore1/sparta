@@ -32,6 +32,7 @@
 #                  back equal to RATE
 
 variable            RATE index 1.0
+variable            STYLE index grid
 variable            NEVERY index 1
 
 seed                12345
@@ -49,7 +50,10 @@ global              nrho 1.0 fnum 1.0
 species             air.species N
 mixture             air N
 
-variable            rate grid ${RATE}
+# grid style by default; STYLE = equal runs the same rate through the
+# equal-style path, which is one number for the whole surface rather than a
+# field, and must give the same answer on a uniform rate
+variable            rate ${STYLE} ${RATE}
 fix                 ablate ablate all ${NEVERY} 1.0 v_rate mode deposit &
                     units distance
 
