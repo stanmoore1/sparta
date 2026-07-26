@@ -17,10 +17,14 @@ isurf/grid = style name of this compute command :l
 group-ID = group ID for which grid cells to perform calculation on :l
 mix-ID = mixture ID for particles to perform calculation on :l
 one or more values can be appended :l
-value = {n} or {nwt} or {mflux} or {fx} or {fy} or {fz} or {press} or {px} or {py} or {pz} or {shx} or {shy} or {shz} or {ke} :l
+zero or more keyword/arg pairs may be appended :l
+value = {n} or {nwt} or {nflux} or {nflux_incident} or {mflux} or {mflux_incident} or {fx} or {fy} or {fz} or {press} or {px} or {py} or {pz} or {shx} or {shy} or {shz} or {ke} :l
   n = count of particles hitting surface elements in a grid cell
   nwt = weighted count of particles hitting surface elements in a grid cell
-  mflux = flux of mass on surface elements in a grid cell
+  nflux = net flux of particles on surface elements in a grid cell
+  nflux_incident = flux of incident particles on surface elements in a grid cell
+  mflux = net flux of mass on surface elements in a grid cell
+  mflux_incident = flux of incident mass on surface elements in a grid cell
   fx,fy,fz = components of force on surface elements in a grid cell
   press = magnitude of normal pressure on surface elements in a grid cell
   px,py,pz = components of normal pressure on surface elements in a grid cell
@@ -29,6 +33,10 @@ value = {n} or {nwt} or {mflux} or {fx} or {fy} or {fz} or {press} or {px} or {p
   erot = flux of particle rotational energy on surface elements in a grid cell
   evib = flux of particle vibrational energy on surface elements in a grid cell
   etot = flux of particle total energy on surface elements in a grid cell :pre
+keyword = {norm} :l
+  {norm} value = {flux} or {flow}
+    flux = normalize the flux values by surface element area and timestep
+    flow = normalize by timestep only :pre
 :ule
 
 [Examples:]
@@ -122,6 +130,37 @@ The only difference is that the quantities are calculated on a per
 grid cell basis, summing over all the surface elements in that grid
 cell.
 
+The {nflux} and {mflux} values are NET fluxes: the outgoing particle,
+or particles, are subtracted from the incoming one.  At a surface that
+simply reflects every molecule the net mass flux is identically zero,
+since the molecule that leaves carries the mass of the one that
+arrived, and it is non-zero only where a surface reaction destroys a
+particle or changes its mass.  The {nflux_incident} and
+{mflux_incident} values instead tally only the incoming particle, and
+are what an impingement-driven model such as the {flux} source style
+of the "fix ablate"_fix_ablate.html command is built from.
+
+The {norm} keyword sets how the flux values are normalized.  With the
+default {flux} they are divided by the area of the surface element the
+collision occurred on and by the timestep, giving a flux per unit
+area.  With {flow} the area is left out and they are per unit time
+only, giving a flow.
+
+For implicit surfaces the {flow} setting is often the one that is
+wanted, because an implicit surface element takes the ID of the grid
+cell that generated it.  A cell holding more than one element
+therefore has all of them in a single tally slot, and with {flux} each
+contribution has already been divided by its own element's area before
+being summed -- the per-cell result is then the sum of the individual
+fluxes, not the flux of the cell.  With {flow} the per-cell value is
+an unambiguous mass or number flow, which a consumer can divide by the
+total surface area in the cell itself.
+
+The {norm} keyword affects the {nflux}, {nflux_incident}, {mflux},
+{mflux_incident}, {ke}, {erot}, {evib}, {etot}, force and pressure
+values, all of which carry the same normalization.  It does not affect
+{n} or {nwt}, which are counts.
+
 :line
 
 [Output info:]
@@ -154,6 +193,8 @@ for 2d simulations.
 [Related commands:]
 
 "fix ave/grid"_fix_ave_grid.html, "dump grid"_dump.html, "compute
-surf"_compute_surf.html
+surf"_compute_surf.html, "fix ablate"_fix_ablate.html
 
-[Default:] none
+[Default:]
+
+The keyword default is norm = flux.

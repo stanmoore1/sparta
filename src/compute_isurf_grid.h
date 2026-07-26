@@ -47,6 +47,7 @@ class ComputeISurfGrid : public Compute {
   int maxgrid,combined;
   double nfactor_inverse;
   int *which;
+  int normarea;            // 1 = per unit area (flux), 0 = whole rate (flow)
 
   int ntally;              // # of surfs I have tallied for
   int maxtally;            // # of tallies currently allocated

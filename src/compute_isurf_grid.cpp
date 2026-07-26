@@ -27,8 +27,8 @@
 
 using namespace SPARTA_NS;
 
-enum{NUM,NUMWT,MFLUX,FX,FY,FZ,PRESS,XPRESS,YPRESS,ZPRESS,
-     XSHEAR,YSHEAR,ZSHEAR,KE,EROT,EVIB,ETOT};
+enum{NUM,NUMWT,NFLUX,NFLUXIN,MFLUX,MFLUXIN,FX,FY,FZ,PRESS,XPRESS,YPRESS,
+     ZPRESS,XSHEAR,YSHEAR,ZSHEAR,KE,EROT,EVIB,ETOT};
 
 #define DELTA 4096
 
@@ -51,11 +51,16 @@ ComputeISurfGrid::ComputeISurfGrid(SPARTA *sparta, int narg, char **arg) :
   which = new int[nvalue];
 
   nvalue = 0;
+  normarea = 1;
+
   int iarg = 4;
   while (iarg < narg) {
     if (strcmp(arg[iarg],"n") == 0) which[nvalue++] = NUM;
     else if (strcmp(arg[iarg],"nwt") == 0) which[nvalue++] = NUMWT;
+    else if (strcmp(arg[iarg],"nflux") == 0) which[nvalue++] = NFLUX;
+    else if (strcmp(arg[iarg],"nflux_incident") == 0) which[nvalue++] = NFLUXIN;
     else if (strcmp(arg[iarg],"mflux") == 0) which[nvalue++] = MFLUX;
+    else if (strcmp(arg[iarg],"mflux_incident") == 0) which[nvalue++] = MFLUXIN;
     else if (strcmp(arg[iarg],"fx") == 0) which[nvalue++] = FX;
     else if (strcmp(arg[iarg],"fy") == 0) which[nvalue++] = FY;
     else if (strcmp(arg[iarg],"fz") == 0) which[nvalue++] = FZ;
@@ -70,6 +75,27 @@ ComputeISurfGrid::ComputeISurfGrid(SPARTA *sparta, int narg, char **arg) :
     else if (strcmp(arg[iarg],"erot") == 0) which[nvalue++] = EROT;
     else if (strcmp(arg[iarg],"evib") == 0) which[nvalue++] = EVIB;
     else if (strcmp(arg[iarg],"etot") == 0) which[nvalue++] = ETOT;
+    else if (strcmp(arg[iarg],"norm") == 0) {
+
+      // norm flux (default) divides a flux by the element area, giving a
+      //   quantity per unit area per unit time.  norm flow does not, giving
+      //   the whole rate onto the element.
+      // for implicit surfs that distinction matters more than it does for
+      //   explicit ones: an element takes the ID of the cell that generated
+      //   it, so the several elements a cell may hold share one tally slot.
+      //   Each contribution has already been divided by ITS OWN area, so the
+      //   per-cell number is a sum of per-element fluxes rather than the
+      //   cell's flux, and reads high wherever a cell holds more than one
+      //   element.  With norm flow there is no area in it and the per-cell
+      //   number is unambiguous; divide by the cell's total surface area
+      //   afterwards if a flux is what is wanted.
+
+      if (iarg+2 > narg) error->all(FLERR,"Illegal compute isurf/grid command");
+      if (strcmp(arg[iarg+1],"flux") == 0) normarea = 1;
+      else if (strcmp(arg[iarg+1],"flow") == 0) normarea = 0;
+      else error->all(FLERR,"Illegal compute isurf/grid command");
+      iarg++;
+    }
     else error->all(FLERR,"Illegal compute isurf/grid command");
     iarg++;
   }
@@ -168,7 +194,8 @@ void ComputeISurfGrid::init_normflux()
   double tmp;
 
   for (int i = 0; i < nsurf; i++) {
-    if (dim == 3) normflux[i] = surf->tri_size(i,tmp);
+    if (!normarea) normflux[i] = 1.0;
+    else if (dim == 3) normflux[i] = surf->tri_size(i,tmp);
     else if (axisymmetric) normflux[i] = surf->axi_line_size(i);
     else normflux[i] = surf->line_size(i);
     normflux[i] *= nfactor;
@@ -287,10 +314,31 @@ void ComputeISurfGrid::surf_tally(double dtremain,
     case NUMWT:
       vec[k++] += weight;
       break;
+    case NFLUX:
+      vec[k] += weight * fluxscale;
+      if (ip) vec[k] -= weight * fluxscale;
+      if (jp) vec[k] -= weight * fluxscale;
+      k++;
+      break;
+    case NFLUXIN:
+      vec[k] += weight * fluxscale;
+      k++;
+      break;
     case MFLUX:
       vec[k] += origmass * fluxscale;
       if (ip) vec[k] -= imass * fluxscale;
       if (jp) vec[k] -= jmass * fluxscale;
+      k++;
+      break;
+    case MFLUXIN:
+
+      // the mass that arrived, whatever left again.  mflux is the NET
+      //   exchange and is identically zero at a wall that does not react,
+      //   since the molecule that leaves has the mass of the one that came
+      //   in; this is the one that is non-zero for an ordinary wall, and so
+      //   the one an impingement-driven deposition rate is built from
+
+      vec[k] += origmass * fluxscale;
       k++;
       break;
     case FX:
