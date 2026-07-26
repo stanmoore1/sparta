@@ -500,6 +500,24 @@ if (SPARTA_GUI_USE_PLUGIN)
 endif()
 gtest_discover_tests(test_codeeditor)
 
+# The chart window's four modal dialogs: chart style, postprocess analysis, the
+# Birch-Murnaghan column setup and its result, and the reference lines. Each was
+# built on the stack inside a ChartWindow method and read a live ChartViewer as
+# it went, so none could be constructed without a chart with data in it. Split
+# out they are pure functions of plain structs, and this target links three leaf
+# sources -- no chart, no simulator, no display.
+add_executable(test_chartdialogs
+  test_chartdialogs.cpp
+  ${CMAKE_SOURCE_DIR}/src/chartdialogs.cpp
+  ${CMAKE_SOURCE_DIR}/src/helpers.cpp
+  ${CMAKE_SOURCE_DIR}/src/stdcapture.cpp
+)
+target_include_directories(test_chartdialogs PRIVATE ${CMAKE_SOURCE_DIR}/src)
+# GTest::gtest, not gtest_main: the test brings its own main() so it can put Qt
+# on the offscreen platform before the QApplication exists.
+target_link_libraries(test_chartdialogs PRIVATE GTest::gtest Qt6::Widgets Qt6::Test)
+gtest_discover_tests(test_chartdialogs)
+
 # Test executable for helpers
 add_executable(test_helpers
   test_helpers.cpp

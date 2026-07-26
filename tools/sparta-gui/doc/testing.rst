@@ -353,6 +353,46 @@ is how the validator's refusals become observable.  Test cases cover:
 - Exporting and charting with no results saying so, rather than opening an
   empty file dialog or a blank chart window
 
+test_chartdialogs.cpp
+--------------------
+
+Tests for the chart window's five modal dialogs
+(``src/chartdialogs.{h,cpp}``): the chart style editor, the postprocess
+analysis picker, the Birch-Murnaghan column setup and its result, and the
+reference-line editor.  Each was built on the stack inside a
+``ChartWindow`` method and read a live ``ChartViewer`` as it went, so none
+could be constructed without a chart with data in it.  Split out, each is a
+pure function of the plain struct it is handed, and the target links three
+leaf sources -- no chart, no simulator, no display.  Test cases cover:
+
+- **Chart style**: a full round trip of a populated ``ChartStyle``, the raw
+  and processed sections proved to be separate controls (both are built
+  from the same three helpers, so a copy-paste slip pointing both at the
+  raw widgets would otherwise go unnoticed), every display mode and every
+  legend placement surviving the trip, an unset colour becoming a visible
+  default rather than staying invalid, and the width and marker-size
+  ranges enforced
+- **Postprocess**: the seven analyses offered in their documented order,
+  the default max lag at half the series, the fit range defaulting to the
+  data range, the polynomial degree capped by the point count (a degree-n
+  polynomial needs n+1 points) and by 8, the block count starting at
+  sqrt(N), the parameter spin box relabelled per analysis, and the
+  expression, parameter, label and fit-range controls shown for exactly
+  the analyses that use them -- cross-checked against
+  ``PostProcessSpec::usesFitRange()``
+- **Birch-Murnaghan**: the columns it will treat as volume and energy, the
+  atom count defaulting to 1 and bounded below, the lattice constant
+  a₀ = ∛(N × V₀), and every fitted quantity reported and selectable
+- **Reference lines**: a round trip of the lines and the label style, rows
+  added and removed with a removed row proved gone from the answer, the
+  anchor item texts following the orientation without moving the
+  selection, every anchor surviving the trip, an invalid colour becoming
+  the default grey, labels trimmed, and the style controls bounded
+- **The overlay palette**: adjacent series differing, wrapping rather than
+  running out, a negative index still giving a colour, and the palette
+  avoiding the raw and processed series colours so an overlaid file does
+  not look like part of the chart
+
 test_chartviewer.cpp
 -------------------
 
