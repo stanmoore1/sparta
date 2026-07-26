@@ -35,6 +35,9 @@ keyword = {mode} or {units} or {density} or {sticking} or {mindist} or {multiple
   {units} value = corner or distance
     corner = source is a corner point value increment (0-255 scale)
     distance = source is a deposition rate in length/time
+  {response} value = normal or volume
+    normal = solve for the displacement of the surface along its own normal
+    volume = solve for the volume the surface sweeps
   {density} value = rho
     rho = mass density of the deposited film (only for source = flux)
   {sticking} values = s1 s2 ... one per column of the flux source
@@ -240,6 +243,30 @@ the same plane on a graded field comes out within 1%.  A front normal to
 the grid is exact either way, which is what makes this easy to miss.  Fix
 ablate warns when the corner point values it has been given cannot express
 the directions its surface faces.
+
+The {response} keyword offers a second way to convert a rate in
+length/time into a corner point increment, for the case above.  {response}
+= normal, the default, solves for how far the surface moves along its own
+normal, which is why it needs to know the direction the surface faces.
+{response} = volume instead solves for the volume the surface sweeps,
+speed times area times time, and takes the area off the surface the cell
+holds rather than inferring a direction from the field.  On a plane at 45
+degrees to the grid built from a binary field it delivers 1.03 of the
+requested speed where {response} = normal delivers 1.61.
+
+It is not a general answer, and is not the default for that reason.  On a
+CURVED binary surface it does not help -- a circle runs about 1.22 either
+way, because there the error is the surface reassembling as corner points
+cross the threshold rather than the direction of any one piece of it.  On
+a graded field the two agree to about 1%, with {response} = normal
+slightly the better of the two on a plane.  {response} = volume also asks
+for larger corner point increments, so it reaches the half-cell limit on
+the front advance sooner and may need a smaller {Nevery}.
+
+Note also that the volume it solves for is the volume of one cell taken on
+its own, while sync averages the increment over the cells sharing each
+corner point, so the swept volume is matched approximately rather than
+exactly.  Matching it exactly would mean solving all the cells together.
 
 So for {units} = distance, and for the {flux} source which implies it,
 give "read_isurf"_read_isurf.html a file with intermediate values -- a

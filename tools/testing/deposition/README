@@ -286,6 +286,25 @@ in.test.oblique
   the test asserts the warning rather than the number.  A front normal to the
   grid is exact either way, which is why this went unnoticed.
 
+  A second conversion is available as "response volume", which solves for the
+  volume the surface sweeps instead of its displacement along a normal it
+  cannot determine.  Measured true front speeds, requested 1.0:
+
+      geometry / corner point field        normal   volume
+      plane at 45 deg, binary              1.6098   1.0286
+      plane at  0 deg, binary              1.0005   0.9997
+      plane at 45 deg, graded              1.0115   0.9514
+      circle, all orientations, graded     1.005    1.006
+      circle, all orientations, binary     1.22     1.23
+
+  So it fixes the planar oblique case decisively and does nothing for the
+  curved binary one, which says the two failures have different causes: the
+  first is the direction of a single piece of surface, which volume does not
+  need, and the second is how the surface reassembles as corner points cross
+  the threshold, which neither conversion touches.  It also asks for larger
+  increments and trips the half-cell advance guard sooner -- blob.binary at
+  rate 1.0 runs under response normal and stops under response volume.
+
 in.test.balance
   The same conservation identity with fix balance repartitioning the grid
   every 10 steps while the film grows.  Everything fix ablate keeps per cell

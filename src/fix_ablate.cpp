@@ -47,6 +47,7 @@ enum{GRIDVAR,EQUALVAR};
 enum{CVALUE,CDELTA,NVERT};
 enum{ABLATE,DEPOSIT,BOTH};     // surface recedes (ablate) or grows (deposit)
 enum{CORNER,DISTANCE};    // source units: corner point value or length/time
+enum{RNORMAL,RVOLUME};    // how a speed becomes a corner point increment
 enum{UNKNOWN,OUTSIDE,INSIDE,OVERLAP};   // cell types, same as Grid
 enum{KEEP,DISCARD,MIGRATE};   // fate of a particle the new isosurface encloses
 
@@ -719,12 +720,44 @@ void FixAblate::end_of_step()
 
       int grow = (mode == DEPOSIT) ||
                  (mode == BOTH && celldelta[icell] > 0.0);
-      double response = front_response(icell,grow);
-      if (response > 0.0) celldelta[icell] *= interval / response;
-      else celldelta[icell] = 0.0;
+
+      if (responseflag == RVOLUME) {
+
+        // the surface has to sweep a volume of speed x area x time.  Ask the
+        //   cell's solid fraction for the corner point shift that delivers
+        //   exactly that, which needs no surface normal: the area the volume
+        //   is spread over is measured off the surface the cell holds rather
+        //   than inferred from a gradient, so a front oblique to the grid is
+        //   no harder than one aligned with it.
+        // areas here are Cartesian even in an axisymmetric run, since what
+        //   comes back out is a displacement, which is a length either way
+
+        double area = cell_area_cart(icell);
+        double cellvol = xyzsize[0]*xyzsize[1];
+        if (dim == 3) cellvol *= xyzsize[2];
+        if (area <= 0.0 || cellvol <= 0.0) {
+          celldelta[icell] = 0.0;
+          continue;
+        }
+        double dvfrac = fabs(celldelta[icell]) * interval * area / cellvol;
+        double shift = volume_shift(cvalues[icell],dvfrac,grow);
+
+        // ABLATE subtracts what it is given, DEPOSIT adds it, and BOTH reads
+        //   the sign, so only BOTH wants a negative number here
+
+        celldelta[icell] = (mode == BOTH && !grow) ? -shift : shift;
+
+      } else {
+        double response = front_response(icell,grow);
+        if (response > 0.0) celldelta[icell] *= interval / response;
+        else celldelta[icell] = 0.0;
+      }
     }
 
-    check_oblique();
+    // the warning is about the projection onto the surface normal, which the
+    //   volume response does not use
+
+    if (responseflag == RNORMAL) check_oblique();
   }
 
   // for DEPOSIT, snapshot the corner values so the realized front motion
@@ -2402,6 +2435,150 @@ double FixAblate::cell_area(int icell)
 }
 
 /* ----------------------------------------------------------------------
+   fraction of a cell that is solid, i.e. on the >= thresh side of the
+     isosurface, using exactly the linear edge crossings Marching
+     Squares/Cubes place their vertices at, so the number describes the
+     surface SPARTA actually builds rather than the field behind it
+   2d: walk the cell boundary counter-clockwise, emitting each solid corner
+     and each edge crossing, and take the area of the polygon that results
+   3d: a trilinear field is bilinear on every z slice, with the slice's four
+     corner values interpolated linearly between the bottom and top faces, so
+     integrate the 2d area over z.  Gauss-Legendre is exact for the low order
+     polynomial the area is in z away from a topology change, and close
+     enough through one.
+------------------------------------------------------------------------- */
+
+double FixAblate::solid_area_2d(double *c)
+{
+  // corners counter-clockwise: 0 (lo,lo), 1 (hi,lo), 3 (hi,hi), 2 (lo,hi)
+
+  static const int ord[4] = {0,1,3,2};
+  static const double px[4] = {0.0,1.0,1.0,0.0};
+  static const double py[4] = {0.0,0.0,1.0,1.0};
+
+  double xs[8],ys[8];
+  int n = 0;
+
+  for (int k = 0; k < 4; k++) {
+    int k1 = (k+1) % 4;
+    int a = ord[k], b = ord[k1];
+    int ain = (c[a] >= thresh), bin = (c[b] >= thresh);
+
+    if (ain) { xs[n] = px[k]; ys[n] = py[k]; n++; }
+
+    if (ain != bin) {
+      double d = c[b] - c[a];
+      double t = (d == 0.0) ? 0.5 : (thresh - c[a]) / d;
+      if (t < 0.0) t = 0.0;
+      else if (t > 1.0) t = 1.0;
+      xs[n] = px[k] + t*(px[k1]-px[k]);
+      ys[n] = py[k] + t*(py[k1]-py[k]);
+      n++;
+    }
+  }
+
+  if (n < 3) return 0.0;
+
+  double a2 = 0.0;
+  for (int i = 0; i < n; i++) {
+    int j = (i+1) % n;
+    a2 += xs[i]*ys[j] - xs[j]*ys[i];
+  }
+  return 0.5*fabs(a2);
+}
+
+/* ---------------------------------------------------------------------- */
+
+double FixAblate::solid_fraction(double *c)
+{
+  if (dim == 2) return solid_area_2d(c);
+
+  // 5 point Gauss-Legendre on [0,1]
+
+  static const double gz[5] =
+    {0.046910077030668, 0.230765344947158, 0.500000000000000,
+     0.769234655052842, 0.953089922969332};
+  static const double gw[5] =
+    {0.118463442528095, 0.239314335249683, 0.284444444444444,
+     0.239314335249683, 0.118463442528095};
+
+  double cz[4],v = 0.0;
+  for (int q = 0; q < 5; q++) {
+    double z = gz[q];
+    for (int i = 0; i < 4; i++) cz[i] = c[i]*(1.0-z) + c[i+4]*z;
+    v += gw[q] * solid_area_2d(cz);
+  }
+  return v;
+}
+
+/* ----------------------------------------------------------------------
+   the uniform corner point rise that changes this cell's solid fraction by
+     DVFRAC, growing if GROW else receding
+   this is the volume form of front_response(), and it is what a depositing
+     surface is really being told: the flux delivers a MASS, which over the
+     film density is a VOLUME.  Asking for a volume needs no surface normal,
+     and that is the whole point -- the normal form has to project an edge
+     crossing onto the direction the surface faces, and a corner point field
+     that is coarse or binary cannot say what that direction is.  Here the
+     surface area the volume is spread over is measured rather than inferred,
+     so an oblique front is no harder than a grid-aligned one.
+   the solid fraction is monotone in the shift and bounded by 0 and 1, so a
+     bisection cannot fail and needs no derivative
+------------------------------------------------------------------------- */
+
+double FixAblate::volume_shift(double *c, double dvfrac, int grow)
+{
+  if (dvfrac <= 0.0) return 0.0;
+
+  double cs[8];
+  double v0 = solid_fraction(c);
+  double target = grow ? v0 + dvfrac : v0 - dvfrac;
+  if (target >= 1.0) target = 1.0;
+  else if (target <= 0.0) target = 0.0;
+
+  // 255 always saturates the cell, so it brackets any achievable target
+
+  double lo = 0.0, hi = 255.0;
+  for (int it = 0; it < 60; it++) {
+    double mid = 0.5*(lo+hi);
+    for (int i = 0; i < ncorner; i++) {
+      double v = grow ? c[i] + mid : c[i] - mid;
+      cs[i] = MAX(0.0,MIN(255.0,v));
+    }
+    double v = solid_fraction(cs);
+    if (grow ? (v < target) : (v > target)) lo = mid;
+    else hi = mid;
+  }
+  return 0.5*(lo+hi);
+}
+
+/* ----------------------------------------------------------------------
+   surface area this cell holds, NOT revolved for an axisymmetric run
+   the volume response spreads a swept volume over the surface to get a
+     normal displacement, and a displacement is a length whether or not the
+     geometry is a surface of revolution; cell_area() is the revolved one and
+     is what an incident flux has to be divided by
+------------------------------------------------------------------------- */
+
+double FixAblate::cell_area_cart(int icell)
+{
+  Grid::ChildCell *cells = grid->cells;
+  int nsurf = cells[icell].nsurf;
+  if (!nsurf) return 0.0;
+
+  surfint *csurfs = cells[icell].csurfs;
+  double tmp;
+
+  double area = 0.0;
+  for (int m = 0; m < nsurf; m++) {
+    int isurf = csurfs[m];
+    if (dim == 3) area += surf->tri_size(isurf,tmp);
+    else area += surf->line_size(isurf);
+  }
+  return area;
+}
+
+/* ----------------------------------------------------------------------
    how far the isosurface in this cell moves per unit rise of its corner point
      values, i.e. d(normal displacement)/d(corner delta), evaluated on the
      field as it stands
@@ -3675,6 +3852,7 @@ void FixAblate::process_args(int narg, char **arg)
   mode = ABLATE;
   depositflag = 0;
   unitsflag = CORNER;
+  responseflag = RNORMAL;
   filmrho = 0.0;
   sticking = NULL;
   nsticking = 0;
@@ -3724,6 +3902,18 @@ void FixAblate::process_args(int narg, char **arg)
                      "between 0 and 1");
       }
       iarg += 1 + n;
+    } else if (strcmp(arg[iarg],"response") == 0)  {
+
+      // how a rate in length/time becomes a corner point increment.
+      // normal: solve for the displacement of the surface along its own
+      //   normal, which needs to know which way the surface faces.
+      // volume: solve for the volume the surface sweeps, which does not.
+
+      if (iarg+2 > narg) error->all(FLERR,"Invalid fix ablate command");
+      if (strcmp(arg[iarg+1],"normal") == 0) responseflag = RNORMAL;
+      else if (strcmp(arg[iarg+1],"volume") == 0) responseflag = RVOLUME;
+      else error->all(FLERR,"Illegal fix_ablate command");
+      iarg += 2;
     } else if (strcmp(arg[iarg],"units") == 0)  {
       if (iarg+2 > narg) error->all(FLERR,"Invalid fix ablate command");
       if (strcmp(arg[iarg+1],"corner") == 0) unitsflag = CORNER;

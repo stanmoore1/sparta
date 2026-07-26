@@ -828,7 +828,8 @@ def test_oblique(exe):
     speeds = {}
 
     for field in ("diamond.smooth", "diamond.binary"):
-        rc, out = run(exe, "in.test.oblique", {"FIELD": field, "RATE": 1.0})
+        rc, out = run(exe, "in.test.oblique", {"FIELD": field, "RATE": 1.0,
+                                               "RESP": "normal"})
         if rc != 0:
             ok &= check("oblique front (%s)" % field, False, "run failed")
             continue
@@ -851,6 +852,21 @@ def test_oblique(exe):
         ok &= check("oblique front : binary field is warned about",
                     speeds["diamond.binary:warn"],
                     "it runs at %.4f of the asked speed" % s)
+
+    # response volume asks the cell for a swept VOLUME instead of a normal
+    # displacement, which needs no surface normal, so the direction a binary
+    # field cannot express stops mattering for a planar front
+    rc, out = run(exe, "in.test.oblique",
+                  {"FIELD": "diamond.binary", "RATE": 1.0, "RESP": "volume"})
+    if rc != 0:
+        ok &= check("oblique front : response volume", False, "run failed")
+    else:
+        ts, r = _front_distance(os.path.join(HERE, "tmp.oblique.grid"), d, d)
+        sv = (r[-1]-r[0]) / ((ts[-1]-ts[0]) * 0.001)
+        ok &= check("oblique front : response volume fixes the binary field",
+                    abs(sv-1.0) < 0.10,
+                    "%.4f, against %.4f for response normal"
+                    % (sv, speeds.get("diamond.binary", float("nan"))))
     return ok
 
 

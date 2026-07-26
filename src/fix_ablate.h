@@ -59,6 +59,8 @@ class FixAblate : public Fix {
   int me;
   int mode;               // ABLATE (recede) or DEPOSIT (grow) the surface
   int unitsflag;          // CORNER (0-255) or DISTANCE (length/time) source units
+  int responseflag;       // RNORMAL or RVOLUME: how a speed becomes a corner
+                          //   point increment
   int fluxwhich;          // COMPUTE or FIX, for the flux source style
   double filmrho;         // mass density of the deposited film
   double *sticking;       // per mixture group capture probability
@@ -195,6 +197,10 @@ class FixAblate : public Fix {
   double grad_mag(int);
   double front_response(int, int);
   double cell_area(int);
+  double cell_area_cart(int);
+  double solid_area_2d(double *);
+  double solid_fraction(double *);
+  double volume_shift(double *, double, int);
   int interface_cell(int);
 
   int salvage_particle(int, int, int collideflag = 1);

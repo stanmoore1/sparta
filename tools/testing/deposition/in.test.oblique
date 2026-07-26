@@ -28,6 +28,7 @@
 variable            RATE index 1.0
 variable            FIELD index diamond.smooth
 variable            NEVERY index 1
+variable            RESP index normal
 
 seed                12345
 dimension           2
@@ -44,7 +45,7 @@ mixture             air N
 
 variable            rate grid ${RATE}
 fix                 ablate ablate all ${NEVERY} 1.0 v_rate mode deposit &
-                    units distance
+                    units distance response ${RESP}
 
 global              surfs implicit
 read_isurf          all 60 60 1 ${FIELD} 127.5 ablate push no
