@@ -290,12 +290,21 @@ in.test.oblique
   volume the surface sweeps instead of its displacement along a normal it
   cannot determine.  Measured true front speeds, requested 1.0:
 
-      geometry / corner point field        normal   volume
-      plane at 45 deg, binary              1.6098   1.0286
-      plane at  0 deg, binary              1.0005   0.9997
-      plane at 45 deg, graded              1.0115   0.9514
-      circle, all orientations, graded     1.005    1.006
-      circle, all orientations, binary     1.22     1.23
+                                        rate 1.0,        rate 0.5,
+                                        1.5 cells grown  6 cells grown
+      geometry / corner point field     normal  volume   normal  volume
+      plane at 45 deg, binary           1.6098  1.0286   1.4143  1.1226
+      plane at  0 deg, binary           1.0005  0.9997   1.0001  0.9996
+      plane at 45 deg, graded           1.0115  0.9514   0.9991  0.9967
+      circle, all orientations, graded   1.005   1.006   1.0046  1.0059
+      circle, all orientations, binary   1.22    1.23    1.1947  1.1624
+
+  The oblique binary numbers depend on the rate and on how far the front has
+  travelled -- the two columns are the same physics measured over a short fast
+  run and a long slow one -- so read them as a size, not a constant.  Over the
+  longer run response normal settles on 1.414, which is 1/cos(45 deg) and is
+  the projection it cannot make.  Everything else is steady to a few parts in
+  a thousand between the two.
 
   So it fixes the planar oblique case decisively and does nothing for the
   curved binary one, which says the two failures have different causes: the
@@ -304,6 +313,15 @@ in.test.oblique
   the threshold, which neither conversion touches.  It also asks for larger
   increments and trips the half-cell advance guard sooner -- blob.binary at
   rate 1.0 runs under response normal and stops under response volume.
+
+make_movies.sh, in.movie
+  Side-by-side movies of the two conversions for the five cases above, showing
+  the grid cells and the surface.  What they show that the numbers do not is
+  the SHAPE.  A rate that depends on which way the surface faces does not just
+  grow a body at the wrong speed, it grows it into the wrong shape: on a
+  binary field the diamond turns into an OCTAGON under response normal,
+  because its 45 degree faces outrun its tips, while under response volume it
+  stays a diamond with a visibly rougher surface.  Needs ffmpeg.
 
 in.test.balance
   The same conservation identity with fix balance repartitioning the grid

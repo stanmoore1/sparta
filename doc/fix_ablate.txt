@@ -252,7 +252,11 @@ normal, which is why it needs to know the direction the surface faces.
 speed times area times time, and takes the area off the surface the cell
 holds rather than inferring a direction from the field.  On a plane at 45
 degrees to the grid built from a binary field it delivers 1.03 of the
-requested speed where {response} = normal delivers 1.61.
+requested speed where {response} = normal delivers 1.61.  Those two
+numbers are a size rather than a constant: measured over a longer, slower
+run the same case gives 1.12 against 1.41, the latter being 1/cos(45
+degrees), which is exactly the projection {response} = normal cannot
+make.
 
 It is not a general answer, and is not the default for that reason.  On a
 CURVED binary surface it does not help -- a circle runs about 1.22 either
