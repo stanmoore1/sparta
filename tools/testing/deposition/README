@@ -151,6 +151,45 @@ in.test.ablate
   engulfs anything, so both deposition counters must stay at zero, confirming
   the advancing-front code is inert when deposition is not in use.
 
+in.test.flat, in.test.variable
+  A rate given in length/time is a claim about how fast the surface moves, so
+  it is checked against the surface itself: value (21) of the output vector is
+  the realized front speed, and it must read back what was asked for.  The
+  flat ramp of in.test.flat has its front normal to x, so the measurement
+  needs no projection and any error is the conversion's; in.test.variable
+  repeats it on a curved blob, where the normal projection is doing work.
+  Both hold to about 1.5% over a decade of requested rates.
+
+in.test.flux
+  The incident flux keywords of compute isurf/grid, against arithmetic.  For a
+  Maxwellian gas at rest against a wall at the same temperature the one-sided
+  impingement rate is n*vbar/4 with vbar = sqrt(8kT/pi m), so there is no
+  reference run to compare with -- the answer is known.  mflux/nflux must also
+  come out at exactly the species mass, which holds however poor the
+  statistics are.
+
+  The averaging window has to be long enough that essentially every surface
+  element records a collision in it, or averaging over the elements that did
+  is biased high.
+
+in.test.stick
+  The whole flux-driven chain with no free parameters.  A film that captures a
+  fraction sigma of the impingement mass flux and has bulk density rho_film
+  must grow at sigma*rho_gas*vbar/4/rho_film, and value (21) reports what the
+  surface actually did.  One number checks mflux_incident, the norm flow
+  normalization, the per-cell area sum, the sticking weighting and the
+  length/time conversion at once.  Sigma is swept: zero must give exactly zero
+  growth, and the rate must be linear in it.
+
+in.test.react
+  The same physics with the capture probability moved out of fix ablate and
+  into a surf_react model, consumed through the mass keyword of compute
+  react/isurf/grid.  It has to land on the same closed form, which is what
+  makes the rate available for any surf_react model and, with the sign the
+  other way, for ablation.  The reaction removes molecules from a gas that is
+  not replenished, so the expectation is corrected by the particle count in
+  the stats table rather than absorbed into the tolerance.
+
 What the counters mean
 ----------------------
 
@@ -165,6 +204,7 @@ What the counters mean
   f_ablate[18]   energy ordinary collisions gave the surface
   f_ablate[19]   energy those reflections gave the surface
   f_ablate[20]   of the [8] reflections, those pushed onto another proc
+  f_ablate[21]   realized front speed over the last regeneration interval
 
 nfrontreflect counts particles the regenerated isosurface enclosed and that
 were pushed back into the flow.  Every one of those would have been deleted

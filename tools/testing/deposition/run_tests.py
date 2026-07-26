@@ -240,6 +240,141 @@ def test_rate_calibration(exe):
     return ok
 
 
+def test_stick(exe):
+    """Flux driven deposition, against the closed form growth rate.
+
+    A film that captures a fraction STICK of the impingement mass flux and has
+    bulk density RHOFILM must grow at
+
+        s = STICK * rho_gas * vbar / 4 / rho_film
+
+    with no fitted constants anywhere.  One number checks mflux_incident, the
+    norm flow normalization, the per cell area sum, the sticking weighting and
+    the length/time conversion at once -- which is why it is worth the run
+    time.
+
+    Sticking is swept as well: the rate has to be linear in it, and zero at
+    zero.  That separates a wrong capture weighting from a wrong flux.
+    """
+    import math
+    k, T, nrho, rhofilm = 1.380649e-23, 300.0, 1.0e20, 2.0e3
+    vbar = math.sqrt(8 * k * T / (math.pi * MASS_N))
+    unit = nrho * MASS_N * vbar / 4.0 / rhofilm     # the rate at STICK = 1
+
+    ok = True
+    for stick in (0.0, 0.5, 1.0):
+        rc, out = run(exe, "in.test.stick",
+                      {"STICK": stick, "NRHO": nrho, "TEMP": T,
+                       "RHOFILM": rhofilm})
+        rows = stats_rows(out) if rc == 0 else []
+        if not rows:
+            err = next((l for l in out.splitlines() if "ERROR" in l), "no stats")
+            ok &= check("flux source (stick %g)" % stick, False,
+                        err.strip()[:90])
+            continue
+
+        # skip step 0, which is before the first regeneration
+        got = sum(r[3] for r in rows[1:]) / (len(rows) - 1)
+        want = stick * unit
+
+        if stick == 0.0:
+            ok &= check("flux source : no flux, no growth", got == 0.0,
+                        "got %.4g" % got)
+        else:
+            # the flux is a Monte Carlo estimate over a finite window, so the
+            # tolerance is set by the sampling rather than by the conversion
+            ok &= check("flux source : s == stick*rho*vbar/4/rhofilm "
+                        "(stick %g)" % stick,
+                        abs(got - want) / want < 0.06,
+                        "got %.4g want %.4g" % (got, want))
+    return ok
+
+
+def test_react(exe):
+    """Reaction driven deposition, against the same closed form.
+
+    A capture probability applied to the impingement flux is the same physics
+    whether the probability lives in fix ablate or in a surf_react model, so
+    this must land on
+
+        s = P * rho_gas * vbar / 4 / rho_film
+
+    with P read from stick.surf.  What it exercises that test_stick does not
+    is the mass weighting of compute react/isurf/grid, which is what makes
+    the rate available for any surf_react model -- and, with the sign the
+    other way, for ablation.
+
+    The reaction captures molecules and the gas is not replenished, so the
+    rate drifts down with the density.  Np is in the stats table, so the
+    expectation is corrected by it rather than fudged into the tolerance.
+    """
+    import math
+    k, T, nrho, rhofilm, prob = 1.380649e-23, 300.0, 1.0e20, 2.0e3, 0.4
+    vbar = math.sqrt(8 * k * T / (math.pi * MASS_N))
+    want0 = prob * nrho * MASS_N * vbar / 4.0 / rhofilm
+
+    rc, out = run(exe, "in.test.react",
+                  {"NRHO": nrho, "TEMP": T, "RHOFILM": rhofilm})
+    rows = stats_rows(out) if rc == 0 else []
+    if not rows:
+        err = next((l for l in out.splitlines() if "ERROR" in l), "no stats")
+        return check("reaction source", False, err.strip()[:90])
+
+    np0 = rows[0][1]
+    got = sum(r[3] for r in rows[1:]) / (len(rows) - 1)
+    # each window sees the density it was sampled at
+    want = sum(want0 * r[1] / np0 for r in rows[1:]) / (len(rows) - 1)
+
+    ok = check("reaction source : particles were captured",
+               rows[-1][1] < np0, "np %g -> %g" % (np0, rows[-1][1]))
+    ok &= check("reaction source : s == P*rho*vbar/4/rhofilm",
+                abs(got - want) / want < 0.07,
+                "got %.4g want %.4g" % (got, want))
+    return ok
+
+
+def test_flux(exe):
+    """The incident flux keywords, against the closed form.
+
+    For a Maxwellian at rest against a wall at the same temperature the
+    one-sided impingement rate is n*vbar/4 with vbar = sqrt(8kT/pi m), so
+    there is nothing to compare against but arithmetic.
+
+    compute isurf/grid had only NET mflux, which is identically zero at a wall
+    that does not react.  nflux_incident and mflux_incident are what an
+    impingement driven rate is built from.
+    """
+    import math
+    k, T, nrho = 1.380649e-23, 300.0, 1.0e20
+    vbar = math.sqrt(8 * k * T / (math.pi * MASS_N))
+    want_n = nrho * vbar / 4.0
+    want_m = nrho * MASS_N * vbar / 4.0
+
+    rc, out = run(exe, "in.test.flux", {"NRHO": nrho, "TEMP": T})
+    rows = stats_rows(out) if rc == 0 else []
+    if not rows:
+        err = next((l for l in out.splitlines() if "ERROR" in l), "no stats")
+        return check("incident flux", False, err.strip()[:90])
+
+    # average the sampled windows, skipping step 0 which has none
+    got_n = sum(r[2] for r in rows[1:]) / (len(rows) - 1)
+    got_m = sum(r[3] for r in rows[1:]) / (len(rows) - 1)
+
+    ok = check("incident flux : nflux_incident == n*vbar/4",
+               abs(got_n - want_n) / want_n < 0.05,
+               "got %.4g want %.4g" % (got_n, want_n))
+    ok &= check("incident flux : mflux_incident == rho*vbar/4",
+                abs(got_m - want_m) / want_m < 0.05,
+                "got %.4g want %.4g" % (got_m, want_m))
+    # every incident molecule of one species carries exactly that mass, so
+    # this holds however poor the statistics are; the tolerance is the width
+    # of the printed stats field, not a physical one
+    ok &= check("incident flux : mflux/nflux == species mass",
+                abs(got_m / got_n - MASS_N) / MASS_N < 1e-6,
+                "got %.6g want %.6g" % (got_m / got_n, MASS_N))
+    return ok
+
+
 def test_grow(exe):
     """A growing film must be able to leave the block it was read into.
 
@@ -547,6 +682,10 @@ def main():
         ok &= test_conserve(exe, 0.05 * nevery, nevery)
     # the surface must be drivable by a variable, not just a compute or fix
     ok &= test_variable(exe)
+    # the incident flux keywords, against the free molecular closed form
+    ok &= test_flux(exe)
+    ok &= test_stick(exe)
+    ok &= test_react(exe)
     # a rate in length/time must be the rate the surface actually moves at
     ok &= test_rate_calibration(exe)
     # a rate in length/time must not depend on the rebuild interval

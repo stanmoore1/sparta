@@ -10,7 +10,7 @@ compute react/isurf/grid command :h3
 
 [Syntax:]
 
-compute ID react/isurf/grid group-ID reaction-ID value1 value2 ... :pre
+compute ID react/isurf/grid group-ID reaction-ID value1 value2 ... keyword :pre
 
 ID is documented in "compute"_compute.html command :ulb,l
 react/isurf/grid = style name of this compute command :l
@@ -20,13 +20,17 @@ zero or more values can be appended :l
 value = {r:s1/s2/s3 ...} or {p:s1/s2/s3 ...} :l
   r: or p: = list of reactant species or product species
   s1,s2,s3 = one or more species IDs, separated by "/" character :pre
+an optional trailing keyword may be appended :l
+keyword = {mass} :l
+  mass = tally the mass flow the surface retains rather than a reaction count :pre
 :ule
 
 [Examples:]
 
 surf_react air prob air.surf
 compute 1 react/isurf/grid all air
-compute 2 react/isurf/grid all air r:N/O/N2/O2 p:N/O/NO :pre
+compute 2 react/isurf/grid all air r:N/O/N2/O2 p:N/O/NO
+compute 3 react/isurf/grid all air r:N/O mass :pre
 
 These commands will dump time averages for each grid cell to a dump
 file every 1000 steps:
@@ -77,6 +81,29 @@ product is counted as part of that tally.  Note that these rules mean
 that a single reaction may be tallied multiple times depending on
 which values it matches.
 
+If the {mass} keyword is appended, each reaction contributes the mass
+the surface retained rather than a count of one.  That is the mass of
+the incident molecule minus the mass of whatever left again: a reaction
+that simply captures the molecule retains all of it, one that returns a
+lighter molecule retains the difference, and one that puts mass back
+into the gas retains a negative amount.  The result is divided by the
+timestep and multiplied by {fnum}, so the tally is a mass flow rather
+than a mass, which is the form the {flux} source style of "fix
+ablate"_fix_ablate.html consumes:
+
+surf_react          STICK prob stick.surf
+compute             R react/isurf/grid all STICK mass
+fix                 AVG ave/grid all 1 100 100 c_R\[*\]
+fix                 depo ablate all 100 1.0 flux f_AVG &
+                    density 2000.0 sticking 1.0 mode deposit :pre
+
+This gives reaction-driven deposition, and equally reaction-driven
+ablation, with any "surf_react"_surf_react.html model on an implicit
+surface.  Note that {sticking} is 1.0 here because the reaction
+probability has already decided what was captured; the sticking
+coefficients of the {flux} source are for the case where the flux is
+the raw impingement rate.
+
 The results of this compute can be used by different commands in
 different ways.  The values for a single timestep can be output by the
 "dump grid"_dump.html command.
@@ -102,7 +129,8 @@ from a compute as input.  See "Section 6.4"_Section_howto.html#howto_4
 for an overview of SPARTA output options.
 
 The per-grid array values are counts of the number of reactions that
-occurred on surface elements in that grid cell.
+occurred on surface elements in that grid cell, or with the {mass}
+keyword the retained mass flow, in mass/time "units"_units.html.
 
 :line
 
@@ -111,6 +139,6 @@ occurred on surface elements in that grid cell.
 [Related commands:]
 
 "fix ave/grid"_fix_ave_grid.html, "dump grid"_dump.html, "compute
-react/surf"_compute_react_surf.html
+react/surf"_compute_react_surf.html, "fix ablate"_fix_ablate.html
 
 [Default:] none
