@@ -518,6 +518,33 @@ target_include_directories(test_chartdialogs PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_chartdialogs PRIVATE GTest::gtest Qt6::Widgets Qt6::Test)
 gtest_discover_tests(test_chartdialogs)
 
+# The slide show. Its sequence bookkeeping -- the active range, where "next"
+# goes at the end of it, what Start and Stop do as images arrive -- needs no
+# simulator and had no test: the live suites drive the buttons and photograph
+# the result, which catches a crash but not an off-by-one in which image shows.
+add_executable(test_slideshow
+  test_slideshow.cpp
+  ${GUI_WALKER_SOURCES}
+)
+target_include_directories(test_slideshow PRIVATE
+  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}/thirdparty/rangeslider
+)
+target_compile_definitions(test_slideshow PRIVATE SPARTA_GUI_VERSION="${PROJECT_VERSION}")
+target_link_libraries(test_slideshow PRIVATE
+  GTest::gtest Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Svg Qt6::Test
+  lepton_mini ads::qtadvanceddocking-qt6)
+if (SPARTA_GUI_HAVE_VTK)
+  target_compile_definitions(test_slideshow PRIVATE SPARTA_GUI_HAVE_VTK)
+  target_link_libraries(test_slideshow PRIVATE ${VTK_LIBRARIES})
+  vtk_module_autoinit(TARGETS test_slideshow MODULES ${VTK_LIBRARIES})
+endif()
+if (SPARTA_GUI_USE_PLUGIN)
+  target_compile_definitions(test_slideshow PRIVATE SPARTA_GUI_USE_PLUGIN)
+  target_include_directories(test_slideshow PRIVATE ${SPARTA_PLUGINLIB_DIR})
+endif()
+gtest_discover_tests(test_slideshow)
+
 # Test executable for helpers
 add_executable(test_helpers
   test_helpers.cpp

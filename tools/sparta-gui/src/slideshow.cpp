@@ -190,6 +190,13 @@ SlideShow::SlideShow(const QString &fileName, SpartaGui *_spartagui, QWidget *pa
     // stepping, movie export, and deletion. Both are 1-based to match the
     // "Image N / M" counter. Stop defaults to the last image and follows the
     // growing maximum (see addImage()) until the user sets it explicitly.
+    // Named like the delay and play controls beside them: the active range is
+    // what every button below acts on, and "the second spin box in the window"
+    // is not a stable way to reach it.
+    startBox->setObjectName("start");
+    startBox->setAccessibleName("First image of the active range");
+    stopBox->setObjectName("stop");
+    stopBox->setAccessibleName("Last image of the active range");
     startBox->setRange(1, 1);
     startBox->setValue(1);
     startBox->setToolTip("First image of the active range for play, step, movie, and delete");
@@ -758,8 +765,19 @@ void SlideShow::last()
 
 void SlideShow::play()
 {
-    // if we do not loop, start animation from beginning of the active range
-    if (!doLoop) current = startIdx();
+    // If we do not loop, start the animation from the beginning of the active
+    // range -- and draw it.  Setting current without loading meant the first
+    // timer tick advanced past the range's first image before anything was
+    // drawn, so playing a non-looping range never showed its first frame.
+    //
+    // Only when starting: this ran on the stop path too, which left current
+    // rewound to the range start while the display still showed wherever the
+    // animation had stopped, so the next Step went to the second image.
+    const bool starting = (playtimer == nullptr);
+    if (starting && !doLoop) {
+        current = startIdx();
+        loadImage(current);
+    }
     auto *delay = findChild<QSpinBox *>("delay");
 
     if (playtimer) {

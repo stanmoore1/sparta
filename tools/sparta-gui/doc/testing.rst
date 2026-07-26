@@ -353,6 +353,35 @@ is how the validator's refusals become observable.  Test cases cover:
 - Exporting and charting with no results saying so, rather than opening an
   empty file dialog or a blank chart window
 
+test_slideshow.cpp
+------------------
+
+Tests for the slide show (``src/slideshow.{h,cpp}``), the window that turns
+a run's dump images into an animation.  Its sequence bookkeeping needs no
+simulator, and the live suites that drive its buttons photograph the result
+without checking which image is showing.  Real PNG files, each a distinct
+colour, because the window reads their headers to size itself.  Test cases
+cover:
+
+- Images collected, a file already in the sequence not added twice (a
+  rescan of the run directory offers every image again), and the
+  ``contentChanged`` signal reaching the window around it
+- Clearing leaving the window empty and reusable, and leaving the files on
+  disk
+- An image the run has not finished writing still counting as part of the
+  sequence
+- The active range growing with the sequence, with Stop following the end
+  only while it was pinned there -- an explicit Stop is not dragged along
+- The Start/Stop boxes being one-based where the indices are not
+- Next and previous walking the range, the ends sticky when not looping and
+  wrapping when looping (which is the default), and both respecting a
+  narrowed range
+- Navigating and transforming an empty show, and a single-image sequence
+- Play locking the delay while it runs, and rewinding *and drawing* the
+  first image of a non-looping range
+- The rotate, flip and zoom transforms undoing one another, and the window
+  rendering what it holds at mixed image sizes
+
 test_chartdialogs.cpp
 --------------------
 
