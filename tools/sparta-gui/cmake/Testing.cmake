@@ -45,6 +45,13 @@ if(ENABLE_TESTING AND (NOT CMAKE_CROSSCOMPILING) AND (CMAKE_SYSTEM_NAME STREQUAL
         # The excludes keep the report about this project: with the test
         # binaries instrumented too, GoogleTest and the vendored dependencies
         # would otherwise dominate it and bury the numbers that matter.
+        #
+        # VERBATIM, or the generator hands the exclude patterns to a shell that
+        # expands ".*" as a glob before gcovr sees it -- ".../test/.*" arrives
+        # as ".../test/." plus a stray ".../test/..", which gcovr rejects as an
+        # unrecognized argument.  The target failed that way every time it was
+        # run, which is why these numbers had never been measured.  The double
+        # quotes in the source are CMake's, and are gone by then.
         add_custom_target(
           coverage
           COMMAND ${GCOVR_BINARY} -s --html --html-nested --html-self-contained
@@ -52,8 +59,11 @@ if(ENABLE_TESTING AND (NOT CMAKE_CROSSCOMPILING) AND (CMAKE_SYSTEM_NAME STREQUAL
                   --exclude "${ABSOLUTE_SOURCE_DIR}/thirdparty/.*"
                   --exclude "${ABSOLUTE_SOURCE_DIR}/test/.*"
                   --exclude ".*/_deps/.*"
+                  --exclude ".*/moc_.*"
+                  --exclude ".*/qrc_.*"
                   -o ${COVERAGE_HTML_DIR}/index.html
           WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+          VERBATIM
           COMMENT "Generating HTML coverage report..."
         )
         add_dependencies(coverage coverage_html_folder)
