@@ -283,6 +283,52 @@ cases cover:
 - Grid volume rendering vs. grid cut planes, surface element options,
   box/sub-box/outline/axes keywords, background gradient, and lights
 
+test_dumpimagesettings.cpp
+--------------------------
+
+Tests for the tabbed dump-image settings dialog
+(``src/dumpimagesettingsdialog.{h,cpp}``), the eight-tab editor behind the
+Image Viewer's *Settings* button.  Where ``test_dumpimage.cpp`` checks the
+commands built from a ``DumpImageSettings`` snapshot, these check the step
+before it: that each of the hundred-odd controls reads and writes the field
+it is supposed to.
+
+The dialog is a pure function of ``(DumpImageSettings, ImageSettingsEnv)``
+-- it holds no simulator and no viewer -- so the tests run offscreen in
+well under a second and need neither a display nor the SPARTA library.
+Controls are looked up by object name, and each object name is the
+``DumpImageSettings`` field it drives.  Test cases cover:
+
+- The tab inventory and the clamping of the requested tab into range
+- A full round trip: build from a populated struct, change nothing, read
+  back, and get every field unchanged -- which a control wired to the
+  wrong field cannot survive
+- Field by field, one test per tab: particles, grid, grid planes,
+  surfaces, box/axes, camera, quality, and colour maps
+- Fields the dialog has no control for (image size, SSAO seed, the movie
+  frame rate and bit rate) carried through untouched
+- The ``hasAcceptableInput()`` guards: an editor holding invalid text
+  keeps the previous value rather than resetting it, and a zero up vector
+  leaves all three components alone
+- Value sources composed with and without an array subscript, and a
+  ``v_`` reference never taking one
+- The environment shaping the dialog: a 2D deck disables the Z plane, the
+  Z view centre and the up vector; a deck with no surfaces disables the
+  Surfaces tab; the cut-plane ranges follow ``boxlo``/``boxhi``; the
+  mixture, region and group combos list what the environment says
+- Grid volume rendering and the cut planes switching each other off
+- Six independent colour-map specs, with the one on screen flushed into
+  its slot without switching modes
+- The species table, including a colour name Qt cannot parse keeping the
+  row's previous RGB
+- Degenerate environments: no mixtures, no regions, no species, no
+  surfaces, a zero-size box, and a species colour list shorter than the
+  species count
+- The Help button emitting a page name rather than opening a browser
+- Every control having a unique object name and a non-empty accessible
+  name, without which the AT-SPI walker and the screenshot sweep cannot
+  identify what they just touched
+
 test_movieimport.cpp
 --------------------
 

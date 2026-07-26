@@ -396,6 +396,26 @@ if (SPARTA_GUI_USE_PLUGIN)
 endif()
 gtest_discover_tests(test_logwindow)
 
+# The dump-image settings dialog: eight tabs and a hundred-odd controls that
+# decide what every rendered picture looks like. Until the dialog was split out
+# of ImageViewer::settingsDialog() it could not be built without a running
+# simulator, so the widget-to-struct mapping -- the part where a control wired
+# to the wrong field silently renders the wrong picture -- had never been
+# checked. Four leaf sources, no SPARTA library, no display.
+add_executable(test_dumpimagesettings
+  test_dumpimagesettings.cpp
+  ${CMAKE_SOURCE_DIR}/src/dumpimagesettingsdialog.cpp
+  ${CMAKE_SOURCE_DIR}/src/dumpimage.cpp
+  ${CMAKE_SOURCE_DIR}/src/colormaps.cpp
+  ${CMAKE_SOURCE_DIR}/src/qaddon.cpp
+)
+target_include_directories(test_dumpimagesettings PRIVATE ${CMAKE_SOURCE_DIR}/src)
+# GTest::gtest, not gtest_main: the test brings its own main() so it can put Qt
+# on the offscreen platform before the QApplication exists.
+target_link_libraries(test_dumpimagesettings PRIVATE
+  GTest::gtest Qt6::Widgets Qt6::Test)
+gtest_discover_tests(test_dumpimagesettings)
+
 # Test executable for helpers
 add_executable(test_helpers
   test_helpers.cpp
