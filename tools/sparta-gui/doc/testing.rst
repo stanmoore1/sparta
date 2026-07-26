@@ -329,6 +329,55 @@ Controls are looked up by object name, and each object name is the
   name, without which the AT-SPI walker and the screenshot sweep cannot
   identify what they just touched
 
+test_chartviewer.cpp
+-------------------
+
+Tests for the chart window (``src/chartviewer.{h,cpp}``) -- both the dock
+panel that plots live thermo output and the standalone plot window the same
+class becomes when handed a data file.  Constructed with a null
+``SpartaGui`` it needs no simulation, which is exactly the standalone mode
+"File > Plot data file" opens.  Test cases cover:
+
+- The live path: charts added and made selectable, data routed to the chart
+  whose thermo column it belongs to, data for an unknown column dropped,
+  and the window cleared and reused
+- The file path: one chart per selected column, a reload replacing rather
+  than appending, and the degenerate arguments -- an empty table, no
+  Y columns, an X column out of range, a Y column out of range skipped
+  rather than plotted, and a single-row table
+- Switching charts restoring that chart's Y-axis label while the shared
+  title and X-axis label stay put
+- All three plotted-series choices, with the Savitzky-Golay window and
+  order live only while smoothing and applied to hidden charts too
+- The range sliders narrowing the view, and both range slots being
+  harmless on an empty window
+- The rendered chart checked for ink, not merely for not crashing, and an
+  empty chart rendering as well
+
+test_fileviewer.cpp
+-------------------
+
+Tests for the read-only file viewer (``src/fileviewer.{h,cpp}``), the
+shell window the image viewer and slide show share
+(``src/viewerwindow.{h,cpp}``), and the two-colour band slider
+(``src/rangebandslider.{h,cpp}``).  Test cases cover:
+
+- Plain text shown read-only and unwrapped, positioned at the top rather
+  than the end, and titled after its file unless given a title
+- A file that cannot be opened reporting the reason in the window, which
+  is what a user sees when a run wrote no output
+- On-the-fly decompression through ``gzip``, ``bzip2``, ``xz``, ``lzma``
+  and ``zstd``, each skipping if that program is not installed; the
+  ``lzma`` case is the one entry needing an extra argument
+- A file whose suffix is not in the compression table read as plain text,
+  and a misnamed ``.gz`` shown as the text it actually is (the ``-f`` flag
+  makes the decompressors copy input they cannot decompress straight
+  through)
+- ``Ctrl+W`` closing the viewer and ``Ctrl+/`` being harmless when there is
+  no main window behind it
+- The band slider painting an inverted, empty and out-of-range band, and a
+  scale whose minimum equals its maximum
+
 test_movieimport.cpp
 --------------------
 

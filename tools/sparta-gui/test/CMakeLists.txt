@@ -444,6 +444,34 @@ if (SPARTA_GUI_USE_PLUGIN)
 endif()
 gtest_discover_tests(test_chartviewer)
 
+# The read-only file viewer, the shell window the two viewers share, and the
+# band slider. The file viewer decompresses through six external programs and
+# reports a file it cannot open in the window itself, which is what a user sees
+# when a run wrote nothing. ViewerWindow builds an ImageViewer or a SlideShow,
+# so this links the application.
+add_executable(test_fileviewer
+  test_fileviewer.cpp
+  ${GUI_WALKER_SOURCES}
+)
+target_include_directories(test_fileviewer PRIVATE
+  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}/thirdparty/rangeslider
+)
+target_compile_definitions(test_fileviewer PRIVATE SPARTA_GUI_VERSION="${PROJECT_VERSION}")
+target_link_libraries(test_fileviewer PRIVATE
+  GTest::gtest Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Svg Qt6::Test
+  lepton_mini ads::qtadvanceddocking-qt6)
+if (SPARTA_GUI_HAVE_VTK)
+  target_compile_definitions(test_fileviewer PRIVATE SPARTA_GUI_HAVE_VTK)
+  target_link_libraries(test_fileviewer PRIVATE ${VTK_LIBRARIES})
+  vtk_module_autoinit(TARGETS test_fileviewer MODULES ${VTK_LIBRARIES})
+endif()
+if (SPARTA_GUI_USE_PLUGIN)
+  target_compile_definitions(test_fileviewer PRIVATE SPARTA_GUI_USE_PLUGIN)
+  target_include_directories(test_fileviewer PRIVATE ${SPARTA_PLUGINLIB_DIR})
+endif()
+gtest_discover_tests(test_fileviewer)
+
 # Test executable for helpers
 add_executable(test_helpers
   test_helpers.cpp
