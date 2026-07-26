@@ -784,7 +784,9 @@ add_executable(test_movieimport
 )
 
 target_include_directories(test_movieimport PRIVATE ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(test_movieimport PRIVATE GTest::gtest_main Qt6::Widgets)
+# Qt6::Svg for the dialog's icons, and the resource bundle they live in
+target_sources(test_movieimport PRIVATE ${TEST_RESOURCE_SOURCES})
+target_link_libraries(test_movieimport PRIVATE GTest::gtest Qt6::Widgets Qt6::Svg)
 
 gtest_discover_tests(test_movieimport)
 

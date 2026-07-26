@@ -446,6 +446,20 @@ without ``ffprobe`` or ``ffmpeg`` installed.  Test cases cover:
   frame count or frame size, absent video stream, malformed JSON, and
   numeric fields given as JSON numbers instead of strings
 
+The import dialog itself is covered too.  It needs no ``ffmpeg``: the sample
+frame it would decode to calibrate its size estimate simply comes back
+empty, which is the branch every user without ``ffmpeg`` on their PATH
+gets.  Test cases cover:
+
+- Opening preselected on the whole movie, and showing what was probed
+- The frame range refusing to invert, in either direction
+- The extracted-image count following the range and the interval
+- The size reported as "unknown" rather than as a confident zero when
+  nothing calibrated the estimate
+- The warning raised by a very large extraction, and cleared again when the
+  selection comes back under the threshold
+- A single-frame movie
+
 test_imagecache.cpp
 -------------------
 
