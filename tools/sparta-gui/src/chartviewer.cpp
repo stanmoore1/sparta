@@ -247,11 +247,27 @@ ChartWindow::ChartWindow(const QString &_filename, SpartaGui *_spartagui, QWidge
     chartYlabel = new QLineEdit("");
     if (!spartagui) chartXlabel = new QLineEdit("");
 
+    // Named, because these are otherwise reachable only by their position among
+    // the window's QLineEdit children -- and that list also holds the editor
+    // every QSpinBox embeds, and puts the X-axis field between the title and
+    // the Y-axis field in standalone mode but not in live mode.  Positional
+    // lookup here silently addresses the wrong control.
+    chartTitle->setObjectName("chartTitle");
+    chartTitle->setAccessibleName("Chart title");
+    chartYlabel->setObjectName("chartYlabel");
+    chartYlabel->setAccessibleName("Y-axis label");
+    if (chartXlabel) {
+        chartXlabel->setObjectName("chartXlabel");
+        chartXlabel->setAccessibleName("X-axis label");
+    }
+
     // plot smoothing
     int smoothchoice = settings.value(Keys::SMOOTHCHOICE, 0).toInt();
     smoothFlagsFromChoice(smoothchoice, doRaw, doSmooth);
     // list of choices must be kept in sync with list in preferences
     smooth = new QComboBox;
+    smooth->setObjectName("smooth");
+    smooth->setAccessibleName("Plotted series");
     smooth->addItem("Raw");
     // the processed-series slot always holds the smoothed data ("Smooth"); a
     // post-process fit/function replaces it and overrides the label with its name
@@ -259,6 +275,8 @@ ChartWindow::ChartWindow(const QString &_filename, SpartaGui *_spartagui, QWidge
     smooth->addItem("Both");
     smooth->setCurrentIndex(smoothchoice);
     window = new QSpinBox;
+    window->setObjectName("smoothWindow");
+    window->setAccessibleName("Smoothing window size");
     window->setRange(Cfg::SMOOTH_WINDOW_MIN, Cfg::SMOOTH_WINDOW_MAX);
     window->setValue(settings.value(Keys::SMOOTHWINDOW, Cfg::SMOOTH_WINDOW_DEFAULT).toInt());
     window->setEnabled(doSmooth);
@@ -267,6 +285,8 @@ ChartWindow::ChartWindow(const QString &_filename, SpartaGui *_spartagui, QWidge
     // instead of re-smoothing on every typed digit
     window->setKeyboardTracking(false);
     order = new QSpinBox;
+    order->setObjectName("smoothOrder");
+    order->setAccessibleName("Smoothing polynomial order");
     order->setRange(Cfg::SMOOTH_ORDER_MIN, Cfg::SMOOTH_ORDER_MAX);
     order->setValue(settings.value(Keys::SMOOTHORDER, Cfg::SMOOTH_ORDER_DEFAULT).toInt());
     order->setEnabled(doSmooth);
@@ -275,6 +295,8 @@ ChartWindow::ChartWindow(const QString &_filename, SpartaGui *_spartagui, QWidge
     settings.endGroup();
 
     columns = new QComboBox;
+    columns->setObjectName("columns");
+    columns->setAccessibleName("Chart selector");
     row1->addWidget(menu);
     // the second addWidget() would reparent the button out of row1 again, so
     // the hidden macOS-workaround button lives in row2 only
@@ -291,11 +313,14 @@ ChartWindow::ChartWindow(const QString &_filename, SpartaGui *_spartagui, QWidge
     auto *unitsLabel = new QLabel("Units:");
     row1->addWidget(unitsLabel);
     units = new QLabel("[lj]");
+    units->setObjectName("units");
     units->setFrameStyle(QFrame::Panel | QFrame::Raised);
     row1->addWidget(units);
     auto *normLabel = new QLabel("Norm:");
     row1->addWidget(normLabel);
     norm = new QCheckBox("");
+    norm->setObjectName("norm");
+    norm->setAccessibleName("Normalize by particle count");
     norm->setChecked(false);
     norm->setEnabled(false);
     row1->addWidget(norm);
@@ -311,6 +336,8 @@ ChartWindow::ChartWindow(const QString &_filename, SpartaGui *_spartagui, QWidge
     row1->addWidget(columns, 1);
 
     xrange = new RangeSlider;
+    xrange->setObjectName("xrange");
+    xrange->setAccessibleName("X-axis range");
     xrange->setMinimum(0);
     xrange->setMaximum(SLIDER_RANGE);
     xrange->setLow(0);
@@ -319,6 +346,8 @@ ChartWindow::ChartWindow(const QString &_filename, SpartaGui *_spartagui, QWidge
     xrange->setTickPosition(QSlider::TicksBothSides);
     xrange->setTickInterval(100);
     yrange = new RangeSlider;
+    yrange->setObjectName("yrange");
+    yrange->setAccessibleName("Y-axis range");
     yrange->setMinimum(0);
     yrange->setMaximum(SLIDER_RANGE);
     yrange->setLow(0);
@@ -409,6 +438,7 @@ ChartWindow::ChartWindow(const QString &_filename, SpartaGui *_spartagui, QWidge
     layout->setSpacing(LAYOUT_SPACING);
     // the single shared chart view; it renders whichever column is active
     viewer = new ChartViewer;
+    viewer->setObjectName("chartView");
     viewer->setLegendPos(legendPos);
     viewer->setRefLabelStyle(refLabelSize, refLabelDist, refLabelBoxed);
     layout->addWidget(viewer);
@@ -2065,14 +2095,18 @@ QString ChartViewer::getYLabel() const
 
 QRectF ChartViewer::getMinMax() const
 {
-    return columnMinMax(*col);
+    // setColumn(nullptr) is a supported state -- resetCharts() leaves the view
+    // in it -- so the three methods ChartWindow can reach afterwards say so
+    // rather than dereferencing nothing.  Every call site guards on cols being
+    // empty today, which is the only reason this has not crashed.
+    return col ? columnMinMax(*col) : QRectF();
 }
 
 /* -------------------------------------------------------------------- */
 
 void ChartViewer::resetZoom()
 {
-    resetColumnZoom(plot, *col);
+    if (col) resetColumnZoom(plot, *col);
 }
 
 /* -------------------------------------------------------------------- */
@@ -2159,7 +2193,7 @@ void ChartViewer::setRefLabelStyle(double pointSize, double distance, bool boxed
 
 void ChartViewer::updateSmooth()
 {
-    refreshColumn(plot, *col);
+    if (col) refreshColumn(plot, *col);
 }
 
 // Local Variables:

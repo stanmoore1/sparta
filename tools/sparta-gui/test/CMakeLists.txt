@@ -416,6 +416,34 @@ target_link_libraries(test_dumpimagesettings PRIVATE
   GTest::gtest Qt6::Widgets Qt6::Test)
 gtest_discover_tests(test_dumpimagesettings)
 
+# The chart window: thermo output turned into plots, and the standalone plot
+# window the same class becomes when handed a data file instead of a running
+# simulation. It was the largest wholly untested source in the GUI. Handed a
+# null SpartaGui it needs no simulator, but chartviewer.cpp includes
+# spartagui.h, so this links the application the way test_mainwindow does.
+add_executable(test_chartviewer
+  test_chartviewer.cpp
+  ${GUI_WALKER_SOURCES}
+)
+target_include_directories(test_chartviewer PRIVATE
+  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}/thirdparty/rangeslider
+)
+target_compile_definitions(test_chartviewer PRIVATE SPARTA_GUI_VERSION="${PROJECT_VERSION}")
+target_link_libraries(test_chartviewer PRIVATE
+  GTest::gtest Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Svg Qt6::Test
+  lepton_mini ads::qtadvanceddocking-qt6)
+if (SPARTA_GUI_HAVE_VTK)
+  target_compile_definitions(test_chartviewer PRIVATE SPARTA_GUI_HAVE_VTK)
+  target_link_libraries(test_chartviewer PRIVATE ${VTK_LIBRARIES})
+  vtk_module_autoinit(TARGETS test_chartviewer MODULES ${VTK_LIBRARIES})
+endif()
+if (SPARTA_GUI_USE_PLUGIN)
+  target_compile_definitions(test_chartviewer PRIVATE SPARTA_GUI_USE_PLUGIN)
+  target_include_directories(test_chartviewer PRIVATE ${SPARTA_PLUGINLIB_DIR})
+endif()
+gtest_discover_tests(test_chartviewer)
+
 # Test executable for helpers
 add_executable(test_helpers
   test_helpers.cpp
