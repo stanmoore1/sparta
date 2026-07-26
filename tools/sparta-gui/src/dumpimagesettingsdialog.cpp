@@ -60,6 +60,21 @@
 
 namespace {
 
+// Give a control a stable object name and a human-readable accessible name.
+//
+// The object name is what a test looks a control up by, and it is deliberately
+// the DumpImageSettings field the control drives, so the tests read like the
+// struct.  The accessible name is what the AT-SPI walker and the screenshot
+// sweep see: without it every line edit and spin box in this dialog is
+// anonymous to them, because Qt only infers a name from a button's text or a
+// label buddy and this dialog uses neither.
+template <class W> W *named(W *w, const QString &object, const QString &human)
+{
+    w->setObjectName(QStringLiteral("ivs.") + object);
+    w->setAccessibleName(human);
+    return w;
+}
+
 // resolve a color-map stop to a QColor (named color or explicit RGB)
 QColor stopColor(const ColorMapStop &s)
 {
@@ -116,13 +131,14 @@ QString composeSource(const SourceRow &row)
 // build a color source selector row into `layout` at `row`, starting at column
 // `col`: "Source: [combo]  Column: [spin]"
 SourceRow addSourceRow(QGridLayout *layout, int row, int col, const QStringList &sources,
-                       const QString &current, QWidget *parent)
+                       const QString &current, QWidget *parent, const QString &name,
+                       const QString &human)
 {
     QString base;
     int column = 0;
     splitSource(current, base, column);
 
-    auto *box = new QComboBox(parent);
+    auto *box = named(new QComboBox(parent), name, human);
     box->setEditable(true);
     box->addItems(sources);
     if (!base.isEmpty()) {
@@ -134,7 +150,7 @@ SourceRow addSourceRow(QGridLayout *layout, int row, int col, const QStringList 
     layout->addWidget(box, row, col);
 
     layout->addWidget(new QLabel("Column:"), row, col + 1, Qt::AlignRight);
-    auto *colspin = new QSpinBox(parent);
+    auto *colspin = named(new QSpinBox(parent), name + ".col", human + " array column");
     colspin->setRange(0, MAX_VALUE_COLS);
     colspin->setValue(column);
     colspin->setSpecialValueText("none");
@@ -220,19 +236,19 @@ DumpImageSettingsDialog::DumpImageSettingsDialog(const DumpImageSettings &initia
     auto *particlePage = makeTabPage(grid);
     int row = 0;
 
-    particleshow = new QCheckBox("Show particles");
+    particleshow = named(new QCheckBox("Show particles"), "particle", "Show particles");
     particleshow->setChecked(m_initial.particle);
     grid->addWidget(particleshow, row, 0, 1, 2);
 
     grid->addWidget(new QLabel("Mixture:"), row, 2, Qt::AlignRight);
-    mixbox = new QComboBox();
+    mixbox = named(new QComboBox(), "mixture", "Mixture to render");
     mixbox->addItems(m_env.mixtures);
     selectComboItem(mixbox, m_initial.mixture);
     mixbox->setToolTip("Mixture of species rendered by the dump image command");
     grid->addWidget(mixbox, row++, 3);
 
     grid->addWidget(new QLabel("Color by:"), row, 0, Qt::AlignRight);
-    pcolorbox = new QComboBox();
+    pcolorbox = named(new QComboBox(), "color", "Particle colour source");
     pcolorbox->setEditable(true);
     pcolorbox->addItems(QStringList() << "type" << "proc" << particleAttributes);
     // offer per-particle compute/fix/variable references, too
@@ -244,7 +260,7 @@ DumpImageSettingsDialog::DumpImageSettingsDialog(const DumpImageSettings &initia
     grid->addWidget(pcolorbox, row, 1);
 
     grid->addWidget(new QLabel("Region clip:"), row, 2, Qt::AlignRight);
-    regionbox = new QComboBox();
+    regionbox = named(new QComboBox(), "region", "Region clip");
     regionbox->addItem("none");
     regionbox->addItems(m_env.regions);
     selectComboItem(regionbox, m_initial.region);
@@ -253,22 +269,22 @@ DumpImageSettingsDialog::DumpImageSettingsDialog(const DumpImageSettings &initia
 
     grid->addWidget(new QLabel("Diameter:"), row, 0, Qt::AlignRight);
     auto *diamgroup = new QButtonGroup(this);
-    auto *diamtype  = new QRadioButton("By type");
-    diamattr  = new QRadioButton("Attribute:");
-    diamnum   = new QRadioButton("Value:");
+    auto *diamtype  = named(new QRadioButton("By type"), "diameter.type", "Diameter per species");
+    diamattr  = named(new QRadioButton("Attribute:"), "diameter.attr", "Diameter from an attribute");
+    diamnum   = named(new QRadioButton("Value:"), "diameter.num", "Diameter from a value");
     diamgroup->addButton(diamtype);
     diamgroup->addButton(diamattr);
     diamgroup->addButton(diamnum);
     grid->addWidget(diamtype, row, 1);
 
-    pdiambox = new QComboBox();
+    pdiambox = named(new QComboBox(), "diameter", "Particle diameter attribute");
     pdiambox->setEditable(true);
     pdiambox->addItems(particleAttributes);
     pdiambox->removeItem(pdiambox->findText("type"));
     grid->addWidget(diamattr, row, 2, Qt::AlignRight);
     grid->addWidget(pdiambox, row++, 3);
 
-    pdiamval = new QLineEdit(QString::number(m_initial.pdiamvalue));
+    pdiamval = named(new QLineEdit(QString::number(m_initial.pdiamvalue)), "pdiamvalue", "Particle diameter value");
     pdiamval->setValidator(new QDoubleValidator(1.0e-30, 1.0e30, 10, this));
     pdiamval->setMaximumWidth(fwidth);
     pdiamval->setToolTip("Fixed particle diameter in simulation length units (pdiam keyword)");
@@ -316,8 +332,9 @@ DumpImageSettingsDialog::DumpImageSettingsDialog(const DumpImageSettings &initia
         speciesgrid->addWidget(new QLabel(m_env.species.at(i - 1)), srow, 1);
 
         const auto &cur = m_speciesColors[i - 1];
-        auto *icon = new QPushButton("");
-        icon->setObjectName("colorSwatch");
+        auto *icon = named(new QPushButton(""),
+                           QStringLiteral("particle.colorSwatch.%1").arg(i),
+                           QStringLiteral("Colour of species %1").arg(m_env.species.at(i - 1)));
         icon->setIcon(color_icon(cur.second));
         auto iconhint = icon->minimumSizeHint();
         iconhint.setWidth(iconhint.height());
@@ -327,14 +344,18 @@ DumpImageSettingsDialog::DumpImageSettingsDialog(const DumpImageSettings &initia
         speciesgrid->addWidget(icon, srow, 2);
         colicons.append(icon);
 
-        auto *name = new QLineEdit(cur.first);
+        auto *name = named(new QLineEdit(cur.first),
+                           QStringLiteral("particle.colorName.%1").arg(i),
+                           QStringLiteral("Colour name of species %1").arg(m_env.species.at(i - 1)));
         name->setCompleter(colorcompleter);
         name->setValidator(colorvalidator);
         name->setFixedWidth(metrics.averageCharWidth() * 16);
         speciesgrid->addWidget(name, srow, 3);
         colnames.append(name);
 
-        auto *diam = new QLineEdit(QString::number(curdiams[i - 1]));
+        auto *diam = named(new QLineEdit(QString::number(curdiams[i - 1])),
+                           QStringLiteral("particle.pdiam.%1").arg(i),
+                           QStringLiteral("Diameter of species %1").arg(m_env.species.at(i - 1)));
         diam->setValidator(new QDoubleValidator(1.0e-30, 1.0e30, 10, this));
         diam->setFixedWidth(metrics.averageCharWidth() * 10);
         speciesgrid->addWidget(diam, srow, 4);
@@ -368,7 +389,7 @@ DumpImageSettingsDialog::DumpImageSettingsDialog(const DumpImageSettings &initia
     auto *gridPage = makeTabPage(grid);
     row = 0;
 
-    gridshow = new QCheckBox("Render grid cells (volume)");
+    gridshow = named(new QCheckBox("Render grid cells (volume)"), "grid", "Show grid cells");
     gridshow->setChecked(m_initial.grid);
     grid->addWidget(gridshow, row++, 0, 1, 2);
 
@@ -381,17 +402,17 @@ DumpImageSettingsDialog::DumpImageSettingsDialog(const DumpImageSettings &initia
     grid->addWidget(new QLabel("Color by:"), row, 0, Qt::AlignRight);
     gridsource =
         addSourceRow(grid, row++, 1, m_env.gridSources, m_initial.grid ? m_initial.gridcolor : "proc",
-                     gridPage);
+                     gridPage, "gridcolor", "Grid colour source");
 
     grid->addWidget(new QLabel("Proc colors:"), row, 0, Qt::AlignRight);
-    gcolorrows = new QLineEdit(formatRangeColorRows(m_initial.gcolors));
+    gcolorrows = named(new QLineEdit(formatRangeColorRows(m_initial.gcolors)), "gcolors", "Per-processor grid colours");
     gcolorrows->setToolTip("Per-processor grid colors when coloring by \"proc\": "
                            "semicolon-separated \"proc-range color[/color2/...]\" entries, "
                            "e.g. \"* red/green/blue\" (dump_modify gcolor)");
     grid->addWidget(gcolorrows, row++, 1, 1, 3);
 
     grid->addWidget(new QLabel("Grid group:"), row, 0, Qt::AlignRight);
-    gridgroupbox = new QComboBox();
+    gridgroupbox = named(new QComboBox(), "gridgroup", "Grid group");
     gridgroupbox->addItems(m_env.gridGroups);
     if (gridgroupbox->count() == 0) gridgroupbox->addItem("all");
     selectComboItem(gridgroupbox, m_initial.gridgroup);
@@ -400,16 +421,16 @@ DumpImageSettingsDialog::DumpImageSettingsDialog(const DumpImageSettings &initia
 
     grid->addWidget(new QHline, row++, 0, 1, 4);
 
-    glineshow = new QCheckBox("Grid cell outlines (gline)");
+    glineshow = named(new QCheckBox("Grid cell outlines (gline)"), "gline", "Show grid outlines");
     glineshow->setChecked(m_initial.gline);
     grid->addWidget(glineshow, row, 0, 1, 2);
     grid->addWidget(new QLabel("Diameter:"), row, 2, Qt::AlignRight);
-    glinediam = new QLineEdit(QString::number(m_initial.glinediam));
+    glinediam = named(new QLineEdit(QString::number(m_initial.glinediam)), "glinediam", "Grid outline diameter");
     glinediam->setValidator(fractvalidator);
     glinediam->setMaximumWidth(fwidth);
     grid->addWidget(glinediam, row++, 3);
     grid->addWidget(new QLabel("Outline color:"), row, 2, Qt::AlignRight);
-    glinecolor = new QLineEdit(m_initial.glinecolor);
+    glinecolor = named(new QLineEdit(m_initial.glinecolor), "glinecolor", "Grid outline colour");
     glinecolor->setCompleter(colorcompleter);
     glinecolor->setValidator(colorvalidator);
     glinecolor->setMaximumWidth(fwidth * 2);
@@ -427,16 +448,21 @@ DumpImageSettingsDialog::DumpImageSettingsDialog(const DumpImageSettings &initia
     grid->addWidget(planehint, row++, 0, 1, 5);
 
     const char *planelabels[3]  = {"X plane:", "Y plane:", "Z plane:"};
+    const char *axisname[3]     = {"x", "y", "z"};
     const bool planeon[3]       = {m_initial.gridx, m_initial.gridy, m_initial.gridz};
     const double planecoords[3] = {m_initial.gridxcoord, m_initial.gridycoord, m_initial.gridzcoord};
     const QString planecolor[3] = {m_initial.gridxcolor, m_initial.gridycolor, m_initial.gridzcolor};
 
     for (int dim = 0; dim < 3; ++dim) {
-        auto *show = new QCheckBox(planelabels[dim]);
+        auto *show = named(new QCheckBox(planelabels[dim]),
+                           QStringLiteral("grid%1").arg(axisname[dim]),
+                           QStringLiteral("Show the %1 cut plane").arg(QChar('X' + dim)));
         show->setChecked(planeon[dim]);
         grid->addWidget(show, row, 0);
 
-        auto *coord = new QDoubleSpinBox;
+        auto *coord = named(new QDoubleSpinBox,
+                            QStringLiteral("grid%1coord").arg(axisname[dim]),
+                            QStringLiteral("%1 cut plane coordinate").arg(QChar('X' + dim)));
         coord->setRange(m_env.boxlo[dim], m_env.boxhi[dim]);
         coord->setDecimals(6);
         coord->setSingleStep((m_env.boxhi[dim] - m_env.boxlo[dim]) / 20.0);
@@ -447,7 +473,8 @@ DumpImageSettingsDialog::DumpImageSettingsDialog(const DumpImageSettings &initia
         const SourceRow source =
             addSourceRow(grid, row, 2, m_env.gridSources,
                          planecolor[dim].isEmpty() ? QStringLiteral("proc") : planecolor[dim],
-                         planePage);
+                         planePage, QStringLiteral("grid%1color").arg(axisname[dim]),
+                         QStringLiteral("%1 plane colour source").arg(QChar('X' + dim)));
         planes[dim] = {show, coord, source};
         ++row;
 
@@ -476,7 +503,7 @@ DumpImageSettingsDialog::DumpImageSettingsDialog(const DumpImageSettings &initia
     auto *surfPage = makeTabPage(grid);
     row = 0;
 
-    surfshow = new QCheckBox("Show surface elements");
+    surfshow = named(new QCheckBox("Show surface elements"), "surf", "Show surface elements");
     surfshow->setChecked(m_initial.surf && m_env.surfsExist);
     grid->addWidget(surfshow, row++, 0, 1, 2);
 
@@ -491,10 +518,10 @@ DumpImageSettingsDialog::DumpImageSettingsDialog(const DumpImageSettings &initia
     surfsource =
         addSourceRow(grid, row++, 1, m_env.surfSources,
                      m_initial.surfcolor.isEmpty() ? QStringLiteral("one") : m_initial.surfcolor,
-                     surfPage);
+                     surfPage, "surfcolor", "Surface colour source");
 
     grid->addWidget(new QLabel("Color for \"one\":"), row, 0, Qt::AlignRight);
-    surfonecolor = new QLineEdit(m_initial.surfcolorone);
+    surfonecolor = named(new QLineEdit(m_initial.surfcolorone), "surfcolorone", "Single surface colour");
     surfonecolor->setCompleter(colorcompleter);
     surfonecolor->setValidator(colorvalidator);
     surfonecolor->setMaximumWidth(fwidth * 2);
@@ -502,21 +529,21 @@ DumpImageSettingsDialog::DumpImageSettingsDialog(const DumpImageSettings &initia
     grid->addWidget(surfonecolor, row, 1);
 
     grid->addWidget(new QLabel("Element diameter:"), row, 2, Qt::AlignRight);
-    surfdiam = new QLineEdit(QString::number(m_initial.surfdiam));
+    surfdiam = named(new QLineEdit(QString::number(m_initial.surfdiam)), "surfdiam", "Surface element diameter");
     surfdiam->setValidator(fractvalidator);
     surfdiam->setMaximumWidth(fwidth);
     surfdiam->setToolTip("Diameter of surface elements (2d: line width fraction)");
     grid->addWidget(surfdiam, row++, 3);
 
     grid->addWidget(new QLabel("Proc colors:"), row, 0, Qt::AlignRight);
-    scolorrows = new QLineEdit(formatRangeColorRows(m_initial.scolors));
+    scolorrows = named(new QLineEdit(formatRangeColorRows(m_initial.scolors)), "scolors", "Per-processor surface colours");
     scolorrows->setToolTip("Per-processor surface colors when coloring by \"proc\": "
                            "semicolon-separated \"proc-range color[/color2/...]\" entries "
                            "(dump_modify scolor)");
     grid->addWidget(scolorrows, row++, 1, 1, 3);
 
     grid->addWidget(new QLabel("Surface group:"), row, 0, Qt::AlignRight);
-    surfgroupbox = new QComboBox();
+    surfgroupbox = named(new QComboBox(), "surfgroup", "Surface group");
     surfgroupbox->addItems(m_env.surfGroups);
     if (surfgroupbox->count() == 0) surfgroupbox->addItem("all");
     selectComboItem(surfgroupbox, m_initial.surfgroup);
@@ -526,16 +553,16 @@ DumpImageSettingsDialog::DumpImageSettingsDialog(const DumpImageSettings &initia
 
     grid->addWidget(new QHline, row++, 0, 1, 4);
 
-    slineshow = new QCheckBox("Surface element outlines (sline)");
+    slineshow = named(new QCheckBox("Surface element outlines (sline)"), "sline", "Show surface outlines");
     slineshow->setChecked(m_initial.sline);
     grid->addWidget(slineshow, row, 0, 1, 2);
     grid->addWidget(new QLabel("Diameter:"), row, 2, Qt::AlignRight);
-    slinediam = new QLineEdit(QString::number(m_initial.slinediam));
+    slinediam = named(new QLineEdit(QString::number(m_initial.slinediam)), "slinediam", "Surface outline diameter");
     slinediam->setValidator(fractvalidator);
     slinediam->setMaximumWidth(fwidth);
     grid->addWidget(slinediam, row++, 3);
     grid->addWidget(new QLabel("Outline color:"), row, 2, Qt::AlignRight);
-    slinecolor = new QLineEdit(m_initial.slinecolor);
+    slinecolor = named(new QLineEdit(m_initial.slinecolor), "slinecolor", "Surface outline colour");
     slinecolor->setCompleter(colorcompleter);
     slinecolor->setValidator(colorvalidator);
     slinecolor->setMaximumWidth(fwidth * 2);
@@ -554,48 +581,48 @@ DumpImageSettingsDialog::DumpImageSettingsDialog(const DumpImageSettings &initia
     auto *boxPage = makeTabPage(grid);
     row = 0;
 
-    boxshow = new QCheckBox("Simulation box");
+    boxshow = named(new QCheckBox("Simulation box"), "box", "Show simulation box");
     boxshow->setChecked(m_initial.box);
     grid->addWidget(boxshow, row, 0);
     grid->addWidget(new QLabel("Diameter:"), row, 1, Qt::AlignRight);
-    boxdiam = new QLineEdit(QString::number(m_initial.boxdiam));
+    boxdiam = named(new QLineEdit(QString::number(m_initial.boxdiam)), "boxdiam", "Box edge diameter");
     boxdiam->setValidator(fractvalidator);
     boxdiam->setMaximumWidth(fwidth);
     grid->addWidget(boxdiam, row, 2);
     grid->addWidget(new QLabel("Color:"), row, 3, Qt::AlignRight);
-    boxcolor = new QLineEdit(m_initial.boxcolor);
+    boxcolor = named(new QLineEdit(m_initial.boxcolor), "boxcolor", "Box colour");
     boxcolor->setCompleter(colorcompleter);
     boxcolor->setValidator(colorvalidator);
     boxcolor->setMaximumWidth(fwidth * 2);
     grid->addWidget(boxcolor, row++, 4);
 
-    subboxshow = new QCheckBox("Processor sub-boxes");
+    subboxshow = named(new QCheckBox("Processor sub-boxes"), "subbox", "Show processor sub-boxes");
     subboxshow->setChecked(m_initial.subbox);
     subboxshow->setToolTip("Draw the RCB sub-box of each processor (subbox keyword)");
     grid->addWidget(subboxshow, row, 0);
     grid->addWidget(new QLabel("Diameter:"), row, 1, Qt::AlignRight);
-    subboxdiam = new QLineEdit(QString::number(m_initial.subboxdiam));
+    subboxdiam = named(new QLineEdit(QString::number(m_initial.subboxdiam)), "subboxdiam", "Sub-box edge diameter");
     subboxdiam->setValidator(fractvalidator);
     subboxdiam->setMaximumWidth(fwidth);
     grid->addWidget(subboxdiam, row, 2);
     grid->addWidget(new QLabel("Color:"), row, 3, Qt::AlignRight);
-    subboxcolor = new QLineEdit(m_initial.subboxcolor);
+    subboxcolor = named(new QLineEdit(m_initial.subboxcolor), "subboxcolor", "Sub-box colour");
     subboxcolor->setCompleter(colorcompleter);
     subboxcolor->setValidator(colorvalidator);
     subboxcolor->setMaximumWidth(fwidth * 2);
     grid->addWidget(subboxcolor, row++, 4);
 
-    axesshow = new QCheckBox("Coordinate axes");
+    axesshow = named(new QCheckBox("Coordinate axes"), "axes", "Show coordinate axes");
     axesshow->setChecked(m_initial.axes);
     grid->addWidget(axesshow, row, 0);
     grid->addWidget(new QLabel("Length:"), row, 1, Qt::AlignRight);
-    axeslen = new QLineEdit(QString::number(m_initial.axeslen));
+    axeslen = named(new QLineEdit(QString::number(m_initial.axeslen)), "axeslen", "Axes length");
     axeslen->setValidator(fractvalidator);
     axeslen->setMaximumWidth(fwidth);
     axeslen->setToolTip("Axes length as fraction of the box size");
     grid->addWidget(axeslen, row, 2);
     grid->addWidget(new QLabel("Diameter:"), row, 3, Qt::AlignRight);
-    axesdiam = new QLineEdit(QString::number(m_initial.axesdiam));
+    axesdiam = named(new QLineEdit(QString::number(m_initial.axesdiam)), "axesdiam", "Axes diameter");
     axesdiam->setValidator(fractvalidator);
     axesdiam->setMaximumWidth(fwidth);
     grid->addWidget(axesdiam, row++, 4);
@@ -606,7 +633,7 @@ DumpImageSettingsDialog::DumpImageSettingsDialog(const DumpImageSettings &initia
     row = 0;
 
     grid->addWidget(new QLabel("View theta:"), row, 0, Qt::AlignRight);
-    thetaval = new QDoubleSpinBox();
+    thetaval = named(new QDoubleSpinBox(), "theta", "View angle theta");
     thetaval->setRange(0.0, 180.0);
     thetaval->setSingleStep(10.0);
     thetaval->setValue(m_initial.theta);
@@ -614,14 +641,14 @@ DumpImageSettingsDialog::DumpImageSettingsDialog(const DumpImageSettings &initia
     thetaval->setToolTip("Viewing angle in degrees away from the +z axis");
     grid->addWidget(thetaval, row, 1);
     grid->addWidget(new QLabel("Variable:"), row, 2, Qt::AlignRight);
-    thetavar = new QLineEdit(m_initial.thetavar);
+    thetavar = named(new QLineEdit(m_initial.thetavar), "thetavar", "Variable driving theta");
     thetavar->setToolTip(
         "Optional equal-style variable name; when set, \"v_name\" is used instead of the number");
     thetavar->setEnabled(is3d);
     grid->addWidget(thetavar, row++, 3);
 
     grid->addWidget(new QLabel("View phi:"), row, 0, Qt::AlignRight);
-    phival = new QDoubleSpinBox();
+    phival = named(new QDoubleSpinBox(), "phi", "View angle phi");
     phival->setRange(-180.0, 180.0);
     phival->setSingleStep(10.0);
     phival->setValue(m_initial.phi);
@@ -629,15 +656,15 @@ DumpImageSettingsDialog::DumpImageSettingsDialog(const DumpImageSettings &initia
     phival->setToolTip("Azimuthal viewing angle in degrees around the z axis");
     grid->addWidget(phival, row, 1);
     grid->addWidget(new QLabel("Variable:"), row, 2, Qt::AlignRight);
-    phivar = new QLineEdit(m_initial.phivar);
+    phivar = named(new QLineEdit(m_initial.phivar), "phivar", "Variable driving phi");
     phivar->setEnabled(is3d);
     grid->addWidget(phivar, row++, 3);
 
     grid->addWidget(new QHline, row++, 0, 1, 4);
 
     grid->addWidget(new QLabel("Center:"), row, 0, Qt::AlignRight);
-    auto *centerstatic  = new QRadioButton("Static");
-    centerdynamic = new QRadioButton("Dynamic");
+    auto *centerstatic  = named(new QRadioButton("Static"), "centerstatic", "Keep the view centre fixed");
+    centerdynamic = named(new QRadioButton("Dynamic"), "centerdynamic", "Recompute the view centre every frame");
     auto *centergroup   = new QButtonGroup(this);
     centergroup->addButton(centerstatic);
     centergroup->addButton(centerdynamic);
@@ -654,7 +681,8 @@ DumpImageSettingsDialog::DumpImageSettingsDialog(const DumpImageSettings &initia
     const char *centerlbl[3]    = {"X fraction:", "Y fraction:", "Z fraction:"};
     for (int dim = 0; dim < 3; ++dim) {
         grid->addWidget(new QLabel(centerlbl[dim]), row, 0, Qt::AlignRight);
-        centerspin[dim] = new QDoubleSpinBox;
+        centerspin[dim] = named(new QDoubleSpinBox, QStringLiteral("center%1").arg(dim),
+                                QStringLiteral("View centre %1").arg(QChar('x' + dim)));
         centerspin[dim]->setRange(-10.0, 10.0);
         centerspin[dim]->setDecimals(4);
         centerspin[dim]->setSingleStep(0.05);
@@ -662,7 +690,8 @@ DumpImageSettingsDialog::DumpImageSettingsDialog(const DumpImageSettings &initia
         centerspin[dim]->setToolTip("View center as fraction of the box dimension");
         grid->addWidget(centerspin[dim], row, 1);
         grid->addWidget(new QLabel("Variable:"), row, 2, Qt::AlignRight);
-        centervar[dim] = new QLineEdit(centervars[dim]);
+        centervar[dim] = named(new QLineEdit(centervars[dim]), QStringLiteral("centervar%1").arg(dim),
+                               QStringLiteral("Variable driving view centre %1").arg(QChar('x' + dim)));
         grid->addWidget(centervar[dim], row++, 3);
         if ((dim == 2) && !is3d) {
             centerspin[dim]->setEnabled(false);
@@ -677,7 +706,8 @@ DumpImageSettingsDialog::DumpImageSettingsDialog(const DumpImageSettings &initia
     grid->addWidget(uplabel, row, 0, Qt::AlignRight);
     const double upcur[3] = {m_initial.upx, m_initial.upy, m_initial.upz};
     for (int dim = 0; dim < 3; ++dim) {
-        upval[dim] = new QLineEdit(QString::number(upcur[dim]));
+        upval[dim] = named(new QLineEdit(QString::number(upcur[dim])), QStringLiteral("up%1").arg(dim),
+                           QStringLiteral("Camera up vector %1").arg(QChar('x' + dim)));
         upval[dim]->setValidator(anyvalidator);
         upval[dim]->setMaximumWidth(fwidth);
         upval[dim]->setEnabled(is3d);
@@ -686,18 +716,18 @@ DumpImageSettingsDialog::DumpImageSettingsDialog(const DumpImageSettings &initia
     ++row;
 
     grid->addWidget(new QLabel("Zoom:"), row, 0, Qt::AlignRight);
-    zoomval = new QLineEdit(QString::number(m_initial.zoom));
+    zoomval = named(new QLineEdit(QString::number(m_initial.zoom)), "zoom", "Zoom factor");
     zoomval->setValidator(zoomvalidator);
     zoomval->setMaximumWidth(fwidth);
     zoomval->setToolTip(
         QString("Zoom factor of the view (range: %1 -- %2)").arg(ZOOM_MIN).arg(ZOOM_MAX));
     grid->addWidget(zoomval, row, 1);
     grid->addWidget(new QLabel("Variable:"), row, 2, Qt::AlignRight);
-    zoomvar = new QLineEdit(m_initial.zoomvar);
+    zoomvar = named(new QLineEdit(m_initial.zoomvar), "zoomvar", "Variable driving zoom");
     grid->addWidget(zoomvar, row++, 3);
 
     grid->addWidget(new QLabel("Perspective:"), row, 0, Qt::AlignRight);
-    auto *perspval = new QLineEdit("0.0");
+    auto *perspval = named(new QLineEdit("0.0"), "persp", "Perspective (not supported)");
     perspval->setEnabled(false);
     perspval->setMaximumWidth(fwidth);
     perspval->setToolTip("The persp keyword is not yet supported by SPARTA");
@@ -708,22 +738,22 @@ DumpImageSettingsDialog::DumpImageSettingsDialog(const DumpImageSettings &initia
     auto *qualPage = makeTabPage(grid);
     row = 0;
 
-    ssaoshow = new QCheckBox("SSAO (screen-space ambient occlusion)");
+    ssaoshow = named(new QCheckBox("SSAO (screen-space ambient occlusion)"), "ssao", "Ambient occlusion");
     ssaoshow->setChecked(m_initial.ssao);
     grid->addWidget(ssaoshow, row, 0, 1, 2);
     grid->addWidget(new QLabel("Strength:"), row, 2, Qt::AlignRight);
-    ssaoval = new QDoubleSpinBox();
+    ssaoval = named(new QDoubleSpinBox(), "ssaoint", "Ambient occlusion strength");
     ssaoval->setRange(0.0, 1.0);
     ssaoval->setSingleStep(0.05);
     ssaoval->setValue(m_initial.ssaoint);
     grid->addWidget(ssaoval, row++, 3);
 
-    fsaashow = new QCheckBox("FSAA (anti-aliasing)");
+    fsaashow = named(new QCheckBox("FSAA (anti-aliasing)"), "fsaa", "Full-scene antialiasing");
     fsaashow->setChecked(m_initial.fsaa);
     grid->addWidget(fsaashow, row++, 0, 1, 2);
 
     grid->addWidget(new QLabel("Shininess:"), row, 0, Qt::AlignRight);
-    shinyslider = new QSlider(Qt::Horizontal);
+    shinyslider = named(new QSlider(Qt::Horizontal), "shiny", "Surface shininess");
     shinyslider->setRange(0, 100);
     shinyslider->setValue(static_cast<int>(m_initial.shiny * 100.0));
     shinyslider->setToolTip("Shininess of particles and surfaces (0.0 - 1.0)");
@@ -732,17 +762,17 @@ DumpImageSettingsDialog::DumpImageSettingsDialog(const DumpImageSettings &initia
     grid->addWidget(new QHline, row++, 0, 1, 4);
 
     grid->addWidget(new QLabel("Background:"), row, 0, Qt::AlignRight);
-    bgcolor = new QLineEdit(m_initial.backcolor);
+    bgcolor = named(new QLineEdit(m_initial.backcolor), "backcolor", "Background colour");
     bgcolor->setCompleter(colorcompleter);
     bgcolor->setValidator(colorvalidator);
     bgcolor->setMaximumWidth(fwidth * 2);
     grid->addWidget(bgcolor, row, 1);
-    gradientshow = new QCheckBox("Gradient to:");
+    gradientshow = named(new QCheckBox("Gradient to:"), "gradient", "Background gradient");
     gradientshow->setChecked(m_initial.gradient);
     gradientshow->setToolTip(
         "Blend the background vertically to a second color (dump_modify backcolor2)");
     grid->addWidget(gradientshow, row, 2, Qt::AlignRight);
-    bg2color = new QLineEdit(m_initial.backcolor2);
+    bg2color = named(new QLineEdit(m_initial.backcolor2), "backcolor2", "Upper background colour");
     bg2color->setCompleter(colorcompleter);
     bg2color->setValidator(colorvalidator);
     bg2color->setMaximumWidth(fwidth * 2);
@@ -754,11 +784,13 @@ DumpImageSettingsDialog::DumpImageSettingsDialog(const DumpImageSettings &initia
 
     grid->addWidget(new QLabel("Lights:"), row++, 0);
     const char *lightlbl[4]   = {"Ambient:", "Key:", "Fill:", "Back:"};
+    const char *lightnames[4] = {"Ambient", "Key", "Fill", "Back"};
     const double lightval[4] = {m_initial.amblight, m_initial.keylight, m_initial.filllight,
                                 m_initial.backlight};
     for (int i = 0; i < 4; ++i) {
         grid->addWidget(new QLabel(lightlbl[i]), row, 0, Qt::AlignRight);
-        lightslider[i] = new QSlider(Qt::Horizontal);
+        lightslider[i] = named(new QSlider(Qt::Horizontal), QStringLiteral("light%1").arg(i),
+                               QStringLiteral("%1 light intensity").arg(lightnames[i]));
         lightslider[i]->setRange(0, 100);
         lightslider[i]->setValue(static_cast<int>(lightval[i] * 100.0));
         lightslider[i]->setToolTip("Light intensity 0.0 - 1.0 (defaults: ambient 0.0, "
@@ -775,38 +807,38 @@ DumpImageSettingsDialog::DumpImageSettingsDialog(const DumpImageSettings &initia
     std::copy(m_initial.cmap, m_initial.cmap + DumpImageSettings::NUM_CMAP_MODES, cmapspec);
 
     grid->addWidget(new QLabel("Color map for:"), row, 0, Qt::AlignRight);
-    modebox = new QComboBox();
+    modebox = named(new QComboBox(), "cmap.mode", "Colour map to edit");
     for (int mode = 0; mode < DumpImageSettings::NUM_CMAP_MODES; ++mode)
         modebox->addItem(QString::fromLatin1(cmapModeName[mode]));
     grid->addWidget(modebox, row++, 1);
 
-    mapactive = new QCheckBox("Customize this color map");
+    mapactive = named(new QCheckBox("Customize this color map"), "cmap.active", "Override this colour map");
     mapactive->setToolTip("When unchecked the SPARTA default map "
                           "(continuous, blue at min to red at max) is used");
     grid->addWidget(mapactive, row++, 0, 1, 2);
 
     grid->addWidget(new QLabel("Map:"), row, 0, Qt::AlignRight);
-    mapbox = new QComboBox();
+    mapbox = named(new QComboBox(), "cmap.mapname", "Colour map");
     addColorMapItems(mapbox);
     grid->addWidget(mapbox, row, 1);
-    maprev = new QCheckBox("Reverse");
+    maprev = named(new QCheckBox("Reverse"), "cmap.reverse", "Reverse the colour map");
     grid->addWidget(maprev, row++, 2);
 
     grid->addWidget(new QLabel("Minimum:"), row, 0, Qt::AlignRight);
-    mapmin = new QLineEdit();
+    mapmin = named(new QLineEdit(), "cmap.lo", "Colour map lower bound");
     mapmin->setValidator(minmaxvalidator);
     mapmin->setToolTip("Lower bound of the map: \"min\" (auto) or a number");
     grid->addWidget(mapmin, row, 1);
     grid->addWidget(new QLabel("Maximum:"), row, 2, Qt::AlignRight);
-    mapmax = new QLineEdit();
+    mapmax = named(new QLineEdit(), "cmap.hi", "Colour map upper bound");
     mapmax->setValidator(minmaxvalidator);
     mapmax->setToolTip("Upper bound of the map: \"max\" (auto) or a number");
     grid->addWidget(mapmax, row++, 3);
 
     grid->addWidget(new QLabel("Style:"), row, 0, Qt::AlignRight);
-    stylec = new QRadioButton("Continuous");
-    styled = new QRadioButton("Discrete");
-    styles = new QRadioButton("Sequential");
+    stylec = named(new QRadioButton("Continuous"), "cmap.style.c", "Continuous colour map");
+    styled = named(new QRadioButton("Discrete"), "cmap.style.d", "Discrete colour map");
+    styles = named(new QRadioButton("Sequential"), "cmap.style.s", "Sequential colour map");
     auto *stylegroup = new QButtonGroup(this);
     stylegroup->addButton(stylec);
     stylegroup->addButton(styled);
@@ -816,8 +848,8 @@ DumpImageSettingsDialog::DumpImageSettingsDialog(const DumpImageSettings &initia
     grid->addWidget(styles, row++, 3);
 
     grid->addWidget(new QLabel("Range:"), row, 0, Qt::AlignRight);
-    rangef = new QRadioButton("Fractional");
-    rangea = new QRadioButton("Absolute");
+    rangef = named(new QRadioButton("Fractional"), "cmap.range.f", "Fractional range");
+    rangea = named(new QRadioButton("Absolute"), "cmap.range.a", "Absolute range");
     auto *rangegroup = new QButtonGroup(this);
     rangegroup->addButton(rangef);
     rangegroup->addButton(rangea);
@@ -826,7 +858,7 @@ DumpImageSettingsDialog::DumpImageSettingsDialog(const DumpImageSettings &initia
     grid->addWidget(rangea, row++, 2);
 
     grid->addWidget(new QLabel("Bin size:"), row, 0, Qt::AlignRight);
-    mapdelta = new QLineEdit();
+    mapdelta = named(new QLineEdit(), "cmap.delta", "Colour map bin width");
     mapdelta->setValidator(new QDoubleValidator(1.0e-30, 1.0e30, 10, this));
     mapdelta->setMaximumWidth(fwidth);
     mapdelta->setToolTip("Value bin width for the sequential style");
