@@ -222,9 +222,13 @@ endif()
 # Qt itself is on the offscreen platform.  TEST_LAUNCHER, which would let the
 # discovered per-case commands be wrapped, is CMake 3.29 and this targets 3.20.
 if (SPARTA_GUI_HAVE_VTK)
-  add_test(NAME MainWindow.All COMMAND ${XVFB_RUNNER} -n 15 -s "-screen 0 1024x768x24" -w 1
+  add_test(NAME MainWindow.All COMMAND ${XVFB_RUNNER} -a -s "-screen 0 1024x768x24" -w 1
     $<TARGET_FILE:test_mainwindow>)
-  set_tests_properties(MainWindow.All PROPERTIES TIMEOUT 300)
+  # RESOURCE_LOCK, because -a still races: two concurrent xvfb-run invocations
+  # can both decide the same display is free before either starts a server on
+  # it. The loser's cases all pass and xvfb-run exits non-zero anyway, so the
+  # suite is reported as failed with nothing in its output to say why.
+  set_tests_properties(MainWindow.All PROPERTIES TIMEOUT 300 RESOURCE_LOCK xvfb)
 else()
   gtest_discover_tests(test_mainwindow)
 endif()
@@ -364,6 +368,33 @@ add_executable(test_theme
 target_include_directories(test_theme PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_theme PRIVATE GTest::gtest_main Qt6::Widgets Qt6::Svg)
 gtest_discover_tests(test_theme)
+
+# The Output panel. Its warning/error badge is, on a run of thousands of lines,
+# the only thing telling the user whether anything went wrong -- and it had no
+# test. The panel's Quit/Stop/Run shortcuts call straight into the main window,
+# so this links the whole application rather than stubbing three methods.
+add_executable(test_logwindow
+  test_logwindow.cpp
+  ${GUI_WALKER_SOURCES}
+)
+target_include_directories(test_logwindow PRIVATE
+  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}/thirdparty/rangeslider
+)
+target_compile_definitions(test_logwindow PRIVATE SPARTA_GUI_VERSION="${PROJECT_VERSION}")
+target_link_libraries(test_logwindow PRIVATE
+  GTest::gtest_main Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Svg Qt6::Test
+  lepton_mini ads::qtadvanceddocking-qt6)
+if (SPARTA_GUI_HAVE_VTK)
+  target_compile_definitions(test_logwindow PRIVATE SPARTA_GUI_HAVE_VTK)
+  target_link_libraries(test_logwindow PRIVATE ${VTK_LIBRARIES})
+  vtk_module_autoinit(TARGETS test_logwindow MODULES ${VTK_LIBRARIES})
+endif()
+if (SPARTA_GUI_USE_PLUGIN)
+  target_compile_definitions(test_logwindow PRIVATE SPARTA_GUI_USE_PLUGIN)
+  target_include_directories(test_logwindow PRIVATE ${SPARTA_PLUGINLIB_DIR})
+endif()
+gtest_discover_tests(test_logwindow)
 
 # Test executable for helpers
 add_executable(test_helpers
@@ -627,12 +658,16 @@ if (VTK_FOUND)
   # rendering cases run as a single test under Xvfb. Without this the 3D
   # viewer has no coverage of what it puts on screen at all -- which is the
   # only thing a 3D viewer is for.
+  # -a rather than a pinned display number: ctest runs these side by side with
+  # the other Xvfb-wrapped suite, and two runs that each insist on one display
+  # collide -- every case passes and xvfb-run still exits non-zero, so the suite
+  # is reported as failed with nothing in its output to say why.
   add_test(NAME VtkScene.Rendering
-    COMMAND ${XVFB_RUNNER} -n 14 -s "-screen 0 1024x768x24" -w 1
+    COMMAND ${XVFB_RUNNER} -a -s "-screen 0 1024x768x24" -w 1
     $<TARGET_FILE:test_vtkscene>
     --gtest_filter=VtkSceneRender.*:VtkSceneFiles.*)
   set_tests_properties(VtkScene.Rendering PROPERTIES
-    ENVIRONMENT "OMP_NUM_THREADS=1" TIMEOUT 300)
+    ENVIRONMENT "OMP_NUM_THREADS=1" TIMEOUT 300 RESOURCE_LOCK xvfb)
   endif()
 endif()
 

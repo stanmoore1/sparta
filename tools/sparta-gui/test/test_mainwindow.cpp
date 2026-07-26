@@ -34,6 +34,8 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QSettings>
+#include <QTemporaryDir>
+#include <QTimer>
 
 #include <DockAreaWidget.h>
 #include <DockManager.h>
@@ -120,8 +122,6 @@ protected:
     void SetUp() override
     {
         REQUIRE_LIBRARY();
-        QCoreApplication::setOrganizationName("SPARTA-GUI test");
-        QCoreApplication::setApplicationName("test_mainwindow");
         QSettings settings;
         settings.clear();
         // Without this the constructor puts up its "No SPARTA Shared Library"
@@ -130,7 +130,26 @@ protected:
         settings.setValue(Keys::PLUGIN_PATH, QString::fromLocal8Bit(testLibrary()));
         settings.setValue(Keys::SHOWWELCOME, false);
         settings.sync();
+
+        // A modal must never be allowed to stop this suite. The window's
+        // constructor loops on its "No SPARTA Shared Library" box until someone
+        // answers, and offscreen nobody can -- so a settings problem shows up
+        // as a test that never returns rather than one that fails. The reaper
+        // closes anything modal and the check below turns it into a failure.
+        modalSeen = false;
+        QObject::connect(&reaper, &QTimer::timeout, [this]() {
+            if (QWidget *m = QApplication::activeModalWidget()) {
+                modalSeen = true;
+                m->close();
+            }
+        });
+        reaper.start(50);
+
         gui = new SpartaGui(nullptr, QString(), 800, 600);
+        reaper.stop();
+        ASSERT_FALSE(modalSeen)
+            << "the main window put up a modal dialog while being constructed; with no library "
+               "configured it loops on one until answered";
     }
     void TearDown() override
     {
@@ -194,6 +213,8 @@ protected:
     }
 
     SpartaGui *gui = nullptr;
+    QTimer reaper;
+    bool modalSeen = false;
 };
 
 } // namespace
@@ -270,7 +291,7 @@ TEST_F(MainWindow, TheDocumentedShortcutsAreBound)
         {"Cu&t", "Ctrl+X"},                   {"&Paste", "Ctrl+V"},
         {"&Find and Replace...", "Ctrl+F"},   {"P&references...", "Ctrl+P"},
         {"Chec&k Input", "Ctrl+K"},           {"Set &Variables...", "Ctrl+Shift+V"},
-        {"Create &Image", "Ctrl+I"},          {"3D &Snapshot (VTK)", "Ctrl+Shift+3"},
+        {"Create &Image", "Ctrl+I"},
         {"&Run SPARTA from Editor Buffer", "Ctrl+Return"},
         {"Run SPARTA from &File", "Ctrl+Shift+Return"},
         {"&Stop SPARTA", "Ctrl+/"},           {"Slide S&how in Viewer", "Ctrl+L"},
@@ -294,6 +315,20 @@ TEST_F(MainWindow, TheDocumentedShortcutsAreBound)
             << text.toStdString() << " is bound to \"" << a->shortcut().toString().toStdString()
             << "\" rather than " << key.toStdString();
     }
+
+    // The 3D entries exist only where the viewer was built, and a build without
+    // VTK is a supported configuration -- asserting them unconditionally makes
+    // this suite fail there for a reason that is not a defect.
+#if defined(SPARTA_GUI_HAVE_VTK)
+    QAction *snap = action("3D &Snapshot (VTK)");
+    ASSERT_NE(snap, nullptr) << "built with VTK but the 3D snapshot entry is gone";
+    EXPECT_EQ(snap->shortcut(), QKeySequence("Ctrl+Shift+3"));
+#else
+    EXPECT_EQ(action("3D &Snapshot (VTK)"), nullptr)
+        << "built without VTK, yet the menu offers a 3D snapshot";
+    EXPECT_EQ(action("3D Viewer &Window (VTK)"), nullptr)
+        << "built without VTK, yet the menu offers the 3D viewer window";
+#endif
 }
 
 // ---------------------------------------------------------------- workspaces
@@ -606,6 +641,21 @@ int main(int argc, char **argv)
     Q_INIT_RESOURCE(spartagui);
     QIcon::setThemeSearchPaths(QStringList() << ":/icons");
     QIcon::setThemeName("spartagui");
+
+    // Settings of this process's own, in a directory of its own.
+    //
+    // Without this every case shares one scope. That is harmless while the
+    // whole binary is one process, which is how the VTK build runs it -- but
+    // the build without VTK discovers the cases individually and ctest runs
+    // them side by side, so one case's clear() wipes the plugin path another
+    // has just written and that one then sits on the missing-library dialog
+    // for as long as ctest will wait.
+    static QTemporaryDir settingsDir;
+    QCoreApplication::setOrganizationName("SPARTA-GUI test");
+    QCoreApplication::setApplicationName(
+        QString("test_mainwindow-%1").arg(QCoreApplication::applicationPid()));
+    QSettings::setDefaultFormat(QSettings::IniFormat);
+    QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, settingsDir.path());
 
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
