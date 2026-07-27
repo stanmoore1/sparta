@@ -2459,12 +2459,14 @@ void CollideVSSKokkos::EEXCHANGE_ReactingEDisposal(int icell,
         const auto &d_vibmode = k_eiarray.view_device()[d_ewhich[index_vibmode]].k_view.view_device();
         int pindex = p - d_particles.data();
 
+        // the per-mode quanta are NOT added back to the pool here: the
+        // reacting pool starts as postcoln.etotal, which already holds the
+        // reactants' vibrational energy, and every product's evib was just
+        // zeroed (see the CPU twin in collide_vss.cpp for the full note)
+
         for (int imode = 0; imode < nmode; imode++) {
           double zeta = eff_vib_dof(d_species[sp].vibtemp[imode],tcoll);
           double b_vib = (1.5 - aveomega) + 0.5 * (remaining_dof - zeta);
-          ivib = d_vibmode(pindex,imode);
-          E_Dispose += ivib * boltz *
-          d_species[sp].vibtemp[imode];
           max_level = static_cast<int>
           (E_Dispose / (boltz * d_species[sp].vibtemp[imode]));
           do {

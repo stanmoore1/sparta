@@ -1207,12 +1207,20 @@ void CollideVSS::EEXCHANGE_ReactingEDisposal(Particle::OnePart *ip,
         int **vibmode = particle->eiarray[particle->ewhich[index_vibmode]];
         int pindex = p - particle->particles;
 
+        // NOTE: unlike the non-reacting disposal, the per-mode quantum
+        // numbers are NOT added back to the pool here.  There the pool
+        // starts as precoln.etrans, so each mode's current energy must be
+        // returned before it is resampled; here the pool starts as
+        // postcoln.etotal, which already contains the reactants' full
+        // vibrational energy, and every product's evib was just zeroed.
+        // Re-adding the stale vibmode quanta (which belong to the
+        // pre-reaction particle, or to whatever particle last occupied a
+        // reused product slot) would count that energy twice and create
+        // energy from nothing.  Cf. sparta/sparta PR #654.
+
         for (int imode = 0; imode < nmode; imode++) {
           double zeta = eff_vib_dof(species[sp].vibtemp[imode],tcoll);
           double b_vib = (1.5 - aveomega) + 0.5 * (remaining_dof - zeta);
-          ivib = vibmode[pindex][imode];
-          E_Dispose += ivib * boltz *
-          particle->species[sp].vibtemp[imode];
           max_level = static_cast<int>
           (E_Dispose / (boltz * species[sp].vibtemp[imode]));
           do {

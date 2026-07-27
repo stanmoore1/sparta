@@ -1200,7 +1200,18 @@ double Particle::erot(int isp, double temp_thermal, RanKnuth *erandom)
   if (!collide || collide->rotstyle == NONE) return 0.0;
   if (species[isp].rotdof < 2) return 0.0;
 
-  if (rotstyle == DISCRETE && species[isp].rotdof == 2) {
+  // the discrete sampler needs a rotational temperature from the species
+  // rotfile.  Collide::init() rejects a discrete-rotation run whose species
+  // lack one, but that check runs at the first "run" command, while this
+  // routine is already called by create_particles/emission before then: fall
+  // through to the continuous sampler rather than dividing by a zero
+  // rottemp, which yields tratio = +inf (passing a <= 0 test), an overflowed
+  // jmax, and a rejection loop that never terminates
+
+  int rotdiscrete = (rotstyle == DISCRETE && species[isp].nrottemp >= 1 &&
+                     species[isp].rottemp[0] > 0.0);
+
+  if (rotdiscrete && species[isp].rotdof == 2) {
     // rigid-rotor levels E_J = J(J+1) k theta_r with degeneracy 2J+1:
     // sample J from p(J) ~ (2J+1) exp(-J(J+1) theta_r/T) by rejection
     // against a uniform-J proposal normalized at the distribution peak
@@ -1222,7 +1233,7 @@ double Particle::erot(int isp, double temp_thermal, RanKnuth *erandom)
     } while (state_prob < erandom->uniform());
     eng = irot*(irot+1.0) * update->boltz *
       particle->species[isp].rottemp[0];
-  } else if (rotstyle == SMOOTH && species[isp].rotdof == 2) {
+  } else if (species[isp].rotdof == 2) {
     eng = -log(erandom->uniform()) * update->boltz * temp_thermal;
   } else {
     a = 0.5*particle->species[isp].rotdof-1.0;
