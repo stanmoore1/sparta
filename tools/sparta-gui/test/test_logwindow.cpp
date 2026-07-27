@@ -26,6 +26,15 @@
 #include <gtest/gtest.h>
 
 #include <QApplication>
+#include <QTimer>
+#include <QTemporaryDir>
+#include <QMouseEvent>
+#include <QMessageBox>
+#include <QKeyEvent>
+#include <QFileDialog>
+#include <QFile>
+#include <QDir>
+#include <QDialog>
 #include <QLabel>
 #include <QRegularExpression>
 #include <QSettings>
@@ -235,9 +244,309 @@ TEST_F(Log, SurvivesAVeryLongLineAndAVeryLargeLog)
     EXPECT_GT(linesShown(w), 2000);
 }
 
+
+// ------------------------------------------------------------------ saving
+//
+// Everything below the warning badge: writing the log out, pulling the YAML
+// blocks out of it, the context menu that offers those, and the shortcuts that
+// reach them.  None of it needed a simulator; all of it ends in a modal that
+// nothing was answering, which is why it went uncovered.
+
+namespace {
+
+// Answers the file dialog (and anything else modal) that an action raises.
+// With AA_DontUseNativeDialogs the dialog is an ordinary widget that can be
+// handed a path and accepted from a timer.
+class Answer : public QObject {
+public:
+    explicit Answer(QString path = QString(), int budgetMs = 3000) :
+        answer(std::move(path)), left(budgetMs)
+    {
+        timer.setInterval(5);
+        connect(&timer, &QTimer::timeout, this, &Answer::poll);
+        timer.start();
+    }
+
+    QString answer;
+    int fileDialogs = 0;
+    QStringList messages;
+
+    [[nodiscard]] bool said(const QString &needle) const
+    {
+        for (const auto &m : messages)
+            if (m.contains(needle)) return true;
+        return false;
+    }
+
+private:
+    void poll()
+    {
+        if ((left -= 5) < 0) { timer.stop(); return; }
+        auto *m = QApplication::activeModalWidget();
+        if (!m) return;
+        if (auto *fd = qobject_cast<QFileDialog *>(m)) {
+            ++fileDialogs;
+            if (answer.isEmpty()) {
+                static_cast<QDialog *>(fd)->reject();
+            } else {
+                fd->setDirectory(QFileInfo(answer).absolutePath());
+                fd->selectFile(answer);
+                static_cast<QDialog *>(fd)->accept();
+            }
+            return;
+        }
+        if (auto *box = qobject_cast<QMessageBox *>(m)) {
+            messages << box->text() + "\n" + box->informativeText();
+            box->accept();
+            return;
+        }
+        if (auto *d = qobject_cast<QDialog *>(m)) d->reject();
+        else m->close();
+    }
+
+    QTimer timer;
+    int left;
+};
+
+QString readAll(const QString &path)
+{
+    QFile f(path);
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return {};
+    return QString::fromUtf8(f.readAll());
+}
+
+// A log with a SPARTA YAML stats block in it, the way a deck with
+// "stats_style yaml" writes one.
+const char *const kYamlLog = "SPARTA (24 Sep 2025)\n"
+                             "Created orthogonal box\n"
+                             "---\n"
+                             "keywords: ['Step','CPU','Np',]\n"
+                             "data:\n"
+                             "  - [0, 0, 100,]\n"
+                             "  - [5, 0.01, 100,]\n"
+                             "...\n"
+                             "Loop time of 0.01 on 1 procs\n";
+
+} // namespace
+
+TEST_F(Log, SavingWritesWhatIsOnScreen)
+{
+    QTemporaryDir dir;
+    LogWindow w("in.circle", nullptr);
+    feed(w, "SPARTA (24 Sep 2025)\nWARNING: something\n");
+
+    const QString out = dir.filePath("saved.log");
+    Answer answer(out);
+    QMetaObject::invokeMethod(&w, "saveAs");
+    QCoreApplication::processEvents();
+
+    EXPECT_EQ(answer.fileDialogs, 1) << "Save Log did not ask where to save";
+    EXPECT_EQ(readAll(out), w.toPlainText());
+}
+
+TEST_F(Log, SavingAddsAFinalNewlineWhenTheLogLacksOne)
+{
+    QTemporaryDir dir;
+    LogWindow w("in.circle", nullptr);
+    feed(w, "one line with no newline after it");
+
+    const QString out = dir.filePath("nonewline.log");
+    Answer answer(out);
+    QMetaObject::invokeMethod(&w, "saveAs");
+    QCoreApplication::processEvents();
+
+    EXPECT_TRUE(readAll(out).endsWith('\n')) << "the saved log has no terminating newline";
+    EXPECT_FALSE(readAll(out).endsWith("\n\n")) << "a newline was added to one already there";
+}
+
+TEST_F(Log, CancellingTheSaveWritesNothing)
+{
+    QTemporaryDir dir;
+    LogWindow w("in.circle", nullptr);
+    feed(w, "some output\n");
+
+    Answer answer; // cancel
+    QMetaObject::invokeMethod(&w, "saveAs");
+    QCoreApplication::processEvents();
+
+    EXPECT_EQ(answer.fileDialogs, 1);
+    EXPECT_TRUE(QDir(dir.path()).entryList(QDir::Files).isEmpty());
+}
+
+TEST_F(Log, SavingSomewhereUnwritableSaysSo)
+{
+    LogWindow w("in.circle", nullptr);
+    feed(w, "some output\n");
+
+    Answer answer("/proc/definitely/not/writable/sparta.log");
+    QMetaObject::invokeMethod(&w, "saveAs");
+    QCoreApplication::processEvents();
+    EXPECT_TRUE(answer.said("Cannot save")) << answer.messages.join(" | ").toStdString();
+}
+
+// ------------------------------------------------------------------ YAML
+
+TEST_F(Log, ALogWithNoYamlOffersNothingToExtract)
+{
+    LogWindow w("in.circle", nullptr);
+    feed(w, "SPARTA (24 Sep 2025)\nStep CPU Np\n0 0 100\n");
+
+    Answer answer(QDir::tempPath() + "/should-not-be-written.yaml");
+    QMetaObject::invokeMethod(&w, "extractYaml");
+    QCoreApplication::processEvents();
+    EXPECT_EQ(answer.fileDialogs, 0)
+        << "a log with no YAML in it still asked where to save some";
+}
+
+TEST_F(Log, ExtractingYamlWritesOnlyTheYamlLines)
+{
+    QTemporaryDir dir;
+    LogWindow w("in.circle", nullptr);
+    feed(w, QString::fromLatin1(kYamlLog));
+
+    const QString out = dir.filePath("stats.yaml");
+    Answer answer(out);
+    QMetaObject::invokeMethod(&w, "extractYaml");
+    QCoreApplication::processEvents();
+
+    ASSERT_EQ(answer.fileDialogs, 1) << "the YAML export did not ask where to save";
+    const QString yaml = readAll(out);
+    EXPECT_TRUE(yaml.contains("keywords: ['Step','CPU','Np',]")) << yaml.toStdString();
+    EXPECT_TRUE(yaml.contains("  - [0, 0, 100,]")) << yaml.toStdString();
+    EXPECT_TRUE(yaml.contains("data:"));
+    EXPECT_TRUE(yaml.contains("---"));
+    EXPECT_FALSE(yaml.contains("SPARTA (24 Sep 2025)"))
+        << "the banner was written into the YAML file: " << yaml.toStdString();
+    EXPECT_FALSE(yaml.contains("Loop time"))
+        << "the run summary was written into the YAML file";
+}
+
+TEST_F(Log, CancellingTheYamlExportWritesNothing)
+{
+    QTemporaryDir dir;
+    LogWindow w("in.circle", nullptr);
+    feed(w, QString::fromLatin1(kYamlLog));
+
+    Answer answer; // cancel
+    QMetaObject::invokeMethod(&w, "extractYaml");
+    QCoreApplication::processEvents();
+    EXPECT_EQ(answer.fileDialogs, 1);
+    EXPECT_TRUE(QDir(dir.path()).entryList(QDir::Files).isEmpty());
+}
+
+// ------------------------------------------------------------------ shortcuts
+
+TEST_F(Log, ControlWClosesTheWindow)
+{
+    LogWindow w("in.circle", nullptr);
+    w.show();
+    ASSERT_TRUE(w.isVisible());
+
+    QKeyEvent close(QEvent::ShortcutOverride, 'W', Qt::ControlModifier);
+    QCoreApplication::sendEvent(&w, &close);
+    EXPECT_FALSE(w.isVisible()) << "Ctrl+W left the log window open";
+}
+
+TEST_F(Log, ControlNStepsToTheNextWarning)
+{
+    // the panel shares the main window's shortcut context, so these are claimed
+    // here rather than left ambiguous with the identical menu shortcuts
+    LogWindow w("in.circle", nullptr);
+    feed(w, "line one\nWARNING: first\nline three\nWARNING: second\n");
+    w.show();
+    w.moveCursor(QTextCursor::Start);
+
+    QKeyEvent next(QEvent::ShortcutOverride, 'N', Qt::ControlModifier);
+    QCoreApplication::sendEvent(&w, &next);
+    const int first = w.textCursor().blockNumber();
+    QCoreApplication::sendEvent(&w, &next);
+    const int second = w.textCursor().blockNumber();
+
+    EXPECT_NE(first, second) << "Ctrl+N did not move on to the next warning";
+    EXPECT_GT(second, first);
+}
+
+TEST_F(Log, ControlSAsksWhereToSave)
+{
+    QTemporaryDir dir;
+    LogWindow w("in.circle", nullptr);
+    feed(w, "some output\n");
+    w.show();
+
+    const QString out = dir.filePath("byshortcut.log");
+    Answer answer(out);
+    QKeyEvent save(QEvent::ShortcutOverride, 'S', Qt::ControlModifier);
+    QCoreApplication::sendEvent(&w, &save);
+    QCoreApplication::processEvents();
+
+    EXPECT_EQ(answer.fileDialogs, 1) << "Ctrl+S did not reach Save Log";
+    EXPECT_EQ(readAll(out), w.toPlainText());
+}
+
+TEST_F(Log, TheStopAndRunShortcutsAreHarmlessWithNoMainWindow)
+{
+    // both go through a SpartaGui the standalone log window does not have
+    LogWindow w("in.circle", nullptr);
+    w.show();
+    for (int key : {int(0x2f), int(Qt::Key_Return)}) { // Ctrl+/ and Ctrl+Return
+        QKeyEvent ev(QEvent::ShortcutOverride, key, Qt::ControlModifier);
+        QCoreApplication::sendEvent(&w, &ev);
+    }
+    EXPECT_TRUE(w.isVisible());
+}
+
+TEST_F(Log, AnUnrelatedKeyIsLeftAlone)
+{
+    LogWindow w("in.circle", nullptr);
+    feed(w, "untouched\n");
+    w.show();
+    QKeyEvent plain(QEvent::ShortcutOverride, Qt::Key_A, Qt::NoModifier);
+    QCoreApplication::sendEvent(&w, &plain);
+    EXPECT_TRUE(w.isVisible());
+    EXPECT_EQ(w.toPlainText(), "untouched\n") << "a keystroke edited a read-only log";
+}
+
+// ------------------------------------------------------------------ error links
+
+TEST_F(Log, DoubleClickingAnErrorLinkPicksTheUrlOutOfTheLine)
+{
+    // SPARTA prints a documentation URL beside an error; double-clicking it is
+    // how a user gets to the explanation
+    LogWindow w("in.circle", nullptr);
+    feed(w, "ERROR: Unknown command (https://sparta.github.io/err0042) on line 7\n");
+
+    // put the cursor inside the URL, then double-click there
+    w.moveCursor(QTextCursor::Start);
+    auto cursor = w.textCursor();
+    const int col = w.toPlainText().indexOf("https://") + 10;
+    cursor.setPosition(col);
+    w.setTextCursor(cursor);
+
+    QMouseEvent dbl(QEvent::MouseButtonDblClick, QPointF(1, 1), QPointF(1, 1),
+                    Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(w.viewport(), &dbl);
+    QCoreApplication::processEvents();
+    SUCCEED() << "double-clicking a URL did not disturb the window";
+}
+
+TEST_F(Log, DoubleClickingOrdinaryTextSelectsItInstead)
+{
+    LogWindow w("in.circle", nullptr);
+    feed(w, "just some ordinary output\n");
+    w.moveCursor(QTextCursor::Start);
+
+    QMouseEvent dbl(QEvent::MouseButtonDblClick, QPointF(5, 5), QPointF(5, 5),
+                    Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(w.viewport(), &dbl);
+    QCoreApplication::processEvents();
+    EXPECT_EQ(w.toPlainText(), "just some ordinary output\n");
+}
+
 int main(int argc, char **argv)
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
+    // a native file dialog runs its own event loop nothing here can reach into
+    QApplication::setAttribute(Qt::AA_DontUseNativeDialogs);
     QApplication app(argc, argv);
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();

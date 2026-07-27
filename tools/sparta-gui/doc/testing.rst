@@ -353,6 +353,37 @@ is how the validator's refusals become observable.  Test cases cover:
 - Exporting and charting with no results saying so, rather than opening an
   empty file dialog or a blank chart window
 
+test_stlimportwizard.cpp
+------------------------
+
+Tests for the surface import wizard (``src/stlimportwizard.{h,cpp}``): the
+six tab pages on top of the parsers and command builders that
+``test_stlimport.cpp`` already covers.  It needs no simulator -- it checks
+its ``SpartaWrapper`` before every use, and with none it falls back to the
+preflight watertightness heuristic and its own mesh renderer.  The fixture
+writes an ASCII-STL tetrahedron, and the same mesh with one facet removed
+for the open case.  Test cases cover:
+
+- An STL loading with every page usable; a source it cannot read leaving
+  only the first page and disabling *Insert into editor*, rather than
+  generating commands for a mesh it does not have
+- The default output being a ``read_surf`` command naming the ``.surf``
+  file the wizard will write
+- The transform controls reaching the command, and a scale turned back off
+  leaving it again
+- The invert, clip and transparent options, and the group name trimmed
+- All four translation kinds producing a command the builder recognises
+- Switching to implicit mode producing ``create_isurf`` and a ``fix ablate``
+  instead, its group, fix ID and threshold reaching the commands, and
+  switching back restoring ``read_surf``
+- The implicit grid resolution recorded in the settings but deliberately
+  *not* emitted -- it drives the preview, and emitting it would override
+  the grid in the deck the user already has
+- Accepting writing the surface file the command names, an existing
+  ``.surf`` used where it is rather than rewritten, and cancelling writing
+  nothing
+- A closed mesh and one with a hole in it reported differently
+
 test_slideshow.cpp
 ------------------
 

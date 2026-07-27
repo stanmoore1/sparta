@@ -324,12 +324,18 @@ QWidget *StlImportWizard::buildTransformPage()
     // scale
     auto *scaleBox = new QGroupBox("Scale (about origin)");
     auto *sl = new QHBoxLayout(scaleBox);
-    scaleOn_ = new QCheckBox("enable");
+        // Named so a test (and the AT-SPI walker) can reach a control by what it
+    // does rather than by its position among six tab pages of spin boxes.
+scaleOn_ = new QCheckBox("enable");
+    scaleOn_->setObjectName("scaleOn");
+    scaleOn_->setAccessibleName("Apply a scale factor");
     connect(scaleOn_, &QCheckBox::toggled, this, &StlImportWizard::syncControls);
     sl->addWidget(scaleOn_);
     for (int k = 0; k < 3; ++k) {
         sl->addWidget(new QLabel(QString(QChar('X' + k)) + ":"));
         scale_[k] = mkspin(1e-6, 1e6, 1.0, 0.1, 6);
+        scale_[k]->setObjectName(QStringLiteral("scale%1").arg(k));
+        scale_[k]->setAccessibleName(QStringLiteral("Scale %1").arg(QChar('x' + k)));
         sl->addWidget(scale_[k]);
     }
     lay->addWidget(scaleBox);
@@ -338,6 +344,8 @@ QWidget *StlImportWizard::buildTransformPage()
     auto *transBox = new QGroupBox("Translate");
     auto *tl = new QHBoxLayout(transBox);
     transKind_ = new QComboBox;
+    transKind_->setObjectName("transKind");
+    transKind_->setAccessibleName("Kind of translation");
     transKind_->addItems({"none", "trans (by)", "atrans (to)", "ftrans (fractional)"});
     connect(transKind_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &StlImportWizard::syncControls);
@@ -345,6 +353,8 @@ QWidget *StlImportWizard::buildTransformPage()
     for (int k = 0; k < 3; ++k) {
         tl->addWidget(new QLabel(QString(QChar('X' + k)) + ":"));
         trans_[k] = mkspin(-1e9, 1e9, 0.0, 0.1, 6);
+        trans_[k]->setObjectName(QStringLiteral("trans%1").arg(k));
+        trans_[k]->setAccessibleName(QStringLiteral("Translate %1").arg(QChar('x' + k)));
         tl->addWidget(trans_[k]);
     }
     lay->addWidget(transBox);
@@ -353,16 +363,23 @@ QWidget *StlImportWizard::buildTransformPage()
     auto *rotBox = new QGroupBox("Rotate");
     auto *rl = new QHBoxLayout(rotBox);
     rotOn_ = new QCheckBox("enable");
+    rotOn_->setObjectName("rotOn");
+    rotOn_->setAccessibleName("Apply a rotation");
     connect(rotOn_, &QCheckBox::toggled, this, &StlImportWizard::syncControls);
     rl->addWidget(rotOn_);
     rl->addWidget(new QLabel("angle:"));
     rot_[0] = mkspin(-360, 360, 0.0, 5.0, 3);
+    rot_[0]->setObjectName(QStringLiteral("rot0"));
+    rot_[0]->setAccessibleName(QStringLiteral("Rotation angle"));
     rl->addWidget(rot_[0]);
     const char *axl[3] = {"axis X:", "Y:", "Z:"};
     double axdef[3] = {0, 0, 1};
     for (int k = 0; k < 3; ++k) {
         rl->addWidget(new QLabel(axl[k]));
         rot_[k + 1] = mkspin(-1, 1, axdef[k], 0.1, 3);
+        rot_[k + 1]->setObjectName(QStringLiteral("rot%1").arg(k + 1));
+        rot_[k + 1]->setAccessibleName(
+            QStringLiteral("Rotation axis %1").arg(QChar('x' + k)));
         rl->addWidget(rot_[k + 1]);
     }
     lay->addWidget(rotBox);
@@ -370,20 +387,30 @@ QWidget *StlImportWizard::buildTransformPage()
     // flags + group
     auto *flags = new QHBoxLayout;
     invert_ = new QCheckBox("invert normals");
+    invert_->setObjectName("invert");
+    invert_->setAccessibleName("Invert the surface normals");
     transparent_ = new QCheckBox("transparent");
+    transparent_->setObjectName("transparent");
+    transparent_->setAccessibleName("Render the surface transparent");
     clipOn_ = new QCheckBox("clip to box");
+    clipOn_->setObjectName("clip");
+    clipOn_->setAccessibleName("Clip the surface to the simulation box");
     for (auto *c : {invert_, transparent_, clipOn_}) {
         connect(c, &QCheckBox::toggled, this, &StlImportWizard::syncControls);
         flags->addWidget(c);
     }
     flags->addWidget(new QLabel("group:"));
     group_ = new QLineEdit;
+    group_->setObjectName("group");
+    group_->setAccessibleName("Surface group name");
     group_->setPlaceholderText("(optional)");
     connect(group_, &QLineEdit::textChanged, this, &StlImportWizard::syncControls);
     flags->addWidget(group_);
     lay->addLayout(flags);
 
     cmdPreview_ = new QLabel;
+    cmdPreview_->setObjectName("cmdPreview");
+    cmdPreview_->setAccessibleName("read_surf command preview");
     cmdPreview_->setTextInteractionFlags(Qt::TextSelectableByMouse);
     cmdPreview_->setWordWrap(true);
     cmdPreview_->setStyleSheet("font-family: monospace; padding:6px;");
@@ -444,6 +471,8 @@ QWidget *StlImportWizard::buildAblationPage()
 
     auto *form = new QFormLayout;
     ablMode_ = new QComboBox;
+    ablMode_->setObjectName("ablMode");
+    ablMode_->setAccessibleName("Implicit surface mode");
     ablMode_->addItems({"inout", "voxel", "ave", "multi"});
     ablMode_->setCurrentText("voxel");
     connect(ablMode_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
@@ -454,6 +483,8 @@ QWidget *StlImportWizard::buildAblationPage()
     for (int k = 0; k < 3; ++k) {
         gl->addWidget(new QLabel(QString("N%1:").arg(QChar('x' + k))));
         grid_[k] = new QSpinBox;
+        grid_[k]->setObjectName(QStringLiteral("grid%1").arg(k));
+        grid_[k]->setAccessibleName(QStringLiteral("Grid cells %1").arg(k));
         grid_[k]->setRange(2, 400);
         grid_[k]->setValue(50);
         connect(grid_[k], QOverload<int>::of(&QSpinBox::valueChanged), this,
@@ -465,6 +496,8 @@ QWidget *StlImportWizard::buildAblationPage()
     form->addRow("grid resolution:", gw);
 
     thresh_ = new QDoubleSpinBox;
+    thresh_->setObjectName("thresh");
+    thresh_->setAccessibleName("Isosurface threshold");
     thresh_->setRange(0.5, 254.5);
     thresh_->setDecimals(1);
     thresh_->setValue(39.5);
@@ -473,7 +506,11 @@ QWidget *StlImportWizard::buildAblationPage()
     form->addRow("threshold (non-integer):", thresh_);
 
     isurfGroup_ = new QLineEdit("all");
+    isurfGroup_->setObjectName("isurfGroup");
+    isurfGroup_->setAccessibleName("Grid group for the implicit surface");
     ablateId_ = new QLineEdit("fablate");
+    ablateId_->setObjectName("ablateId");
+    ablateId_->setAccessibleName("Ablation fix ID");
     connect(isurfGroup_, &QLineEdit::textChanged, this, &StlImportWizard::rebuildOutput);
     connect(ablateId_, &QLineEdit::textChanged, this, &StlImportWizard::rebuildOutput);
     form->addRow("grid group / ablate ID:", isurfGroup_);
@@ -517,7 +554,11 @@ QWidget *StlImportWizard::buildOutputPage()
     auto *modeBox = new QGroupBox("Insert as");
     auto *ml = new QHBoxLayout(modeBox);
     modeExplicit_ = new QRadioButton("Explicit surface (read_surf)");
+    modeExplicit_->setObjectName("modeExplicit");
+    modeExplicit_->setAccessibleName("Explicit surface");
     modeImplicit_ = new QRadioButton("Implicit surface for ablation (create_isurf + fix ablate)");
+    modeImplicit_->setObjectName("modeImplicit");
+    modeImplicit_->setAccessibleName("Implicit surface for ablation");
     modeExplicit_->setChecked(true);
     connect(modeExplicit_, &QRadioButton::toggled, this, &StlImportWizard::rebuildOutput);
     ml->addWidget(modeExplicit_);
@@ -526,6 +567,8 @@ QWidget *StlImportWizard::buildOutputPage()
 
     lay->addWidget(new QLabel("Text inserted at the editor cursor:"));
     outputPreview_ = new QPlainTextEdit;
+    outputPreview_->setObjectName("output");
+    outputPreview_->setAccessibleName("Generated commands");
     outputPreview_->setReadOnly(true);
     outputPreview_->setStyleSheet("font-family: monospace;");
     lay->addWidget(outputPreview_, 1);

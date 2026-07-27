@@ -643,6 +643,33 @@ add_test(NAME Run.All COMMAND ${XVFB_RUNNER} -a -s "-screen 0 1024x768x24" -w 1
   $<TARGET_FILE:test_run>)
 set_tests_properties(Run.All PROPERTIES TIMEOUT 900 RESOURCE_LOCK "xvfb;sparta_run")
 
+# The surface import wizard: the six pages on top of the parsers and command
+# builders that test_stlimport.cpp already covers. It needs no simulator -- it
+# checks its SpartaWrapper before every use, and with none it falls back to the
+# preflight watertightness heuristic and its own mesh renderer.
+add_executable(test_stlimportwizard
+  test_stlimportwizard.cpp
+  ${GUI_WALKER_SOURCES}
+)
+target_include_directories(test_stlimportwizard PRIVATE
+  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}/thirdparty/rangeslider
+)
+target_compile_definitions(test_stlimportwizard PRIVATE SPARTA_GUI_VERSION="${PROJECT_VERSION}")
+target_link_libraries(test_stlimportwizard PRIVATE
+  GTest::gtest Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Svg Qt6::Test
+  lepton_mini ads::qtadvanceddocking-qt6)
+if (SPARTA_GUI_HAVE_VTK)
+  target_compile_definitions(test_stlimportwizard PRIVATE SPARTA_GUI_HAVE_VTK)
+  target_link_libraries(test_stlimportwizard PRIVATE ${VTK_LIBRARIES})
+  vtk_module_autoinit(TARGETS test_stlimportwizard MODULES ${VTK_LIBRARIES})
+endif()
+if (SPARTA_GUI_USE_PLUGIN)
+  target_compile_definitions(test_stlimportwizard PRIVATE SPARTA_GUI_USE_PLUGIN)
+  target_include_directories(test_stlimportwizard PRIVATE ${SPARTA_PLUGINLIB_DIR})
+endif()
+gtest_discover_tests(test_stlimportwizard)
+
 # Test executable for helpers
 add_executable(test_helpers
   test_helpers.cpp
