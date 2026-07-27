@@ -438,6 +438,16 @@ cover:
 - The rotate, flip and zoom transforms undoing one another, and the window
   rendering what it holds at mixed image sizes
 
+The slide-show section above also covers the destructive half -- ``deleteImages()``
+and ``purgeCache()``, the only place the application removes files from disk.
+Those cases check what survived as well as what went: the selected range
+deleted and nothing on either side of it, the sequence and the disk staying in
+step, declining deleting nothing, the confirmation naming the count and the
+bounds, and the state afterwards, where what survives becomes the whole range
+again so navigation cannot point past the end.  The conversion cache is
+exercised through a file Qt genuinely cannot decode (an SGI written by
+ImageMagick), which is the only way anything reaches it.
+
 test_run.cpp
 ------------
 
@@ -543,6 +553,100 @@ under a transposed read.  Both are guarded against going vacuous -- the
 - A source that is not per-surface refused rather than misread, missing
   labels asked for rather than guessed, and export offered only once there
   is something to export
+
+test_vtkscene.cpp
+-----------------
+
+Tests for the 3D scene widget (``src/vtkscene.cpp``), built only when
+SPARTA-GUI is configured with VTK.  Alongside the layer bookkeeping and the
+pixel checks that say the scene is drawing something rather than an empty
+grey rectangle, this covers the scene's *probes* -- ``applyLineProbe()``,
+``onProbePick()`` and ``applyCutPlane()``.
+
+Those report the only numbers the 3D viewer states as fact.  The filters
+underneath are checked in ``test_vtkfilters.cpp``; what was never checked
+is the scene's use of them, and a probe that resolves the wrong cell says a
+plausible number with no way to notice.  The probe cases therefore run
+against a field defined to be the x coordinate, so every sampled value has
+an answer that can be written down.  They cover:
+
+- The line spanning the domain and the plotted range matching the field
+- The point probe's reading agreeing with the coordinate it says it sampled
+  at, and going quiet once the tool is switched off
+- A slice becoming its own layer, a plane that misses being reported rather
+  than added empty, and cancelling changing nothing
+- The refusals: no data loaded, no point field to sample, a cancelled choice
+
+Writing them turned up a defect that made two features useless.
+``PlotData::addColumn()`` appends the column name along with the column, so
+calling ``setColumnNames()`` as well leaves that many empty columns in
+front; ``rowCount()`` reads zero from the first of them and ``loadData()``
+discards the whole table.  Both the line probe and the sweep panel's "Chart
+Results" did exactly that, so both opened an empty chart every time -- which
+reads as an analysis that found nothing rather than as a bug.  Both are now
+covered, in this suite and in ``test_sweeprun.cpp`` respectively.
+
+test_stlwizardlive.cpp
+----------------------
+
+Tests for the surface import wizard's SPARTA-facing half:
+``boxGridCommands()``, ``renderViaSparta()`` and ``runSpartaWatertight()``.
+These build the domain every surface-based simulation starts from, and
+their failures are quiet -- a box that does not enclose the geometry, or a
+grid that is not the resolution the wizard displayed, still runs and still
+produces numbers.
+
+So the assertions are against what SPARTA ended up with rather than what
+the wizard emitted: the box read back through
+``extractGlobal("boxlo"/"boxhi")`` and the cell count from SPARTA's own
+output.  The tetrahedron fixture spans exactly 0..1, which makes the padded
+box arithmetic, and a variant stretched in z pins the pad to the largest
+extent in any axis -- invisible on anything cubic.  Test cases cover:
+
+- The box enclosing the geometry with the right pad, and the pad following
+  the longest axis rather than x and y alone
+- The grid matching the resolution spin boxes, and following them when they
+  change rather than reusing the first render's values
+- A 2d surface file getting dimension 2, the standard z slab, and a single
+  layer of cells whatever the z box says
+- SPARTA accepting a closed surface and rejecting an open one, with the
+  verdict saying which -- the authoritative answer, not the preflight's
+- The diagnostics pane carrying SPARTA's own output, so a failed render can
+  be diagnosed rather than merely noticed
+- The render producing a picture with the surface actually in frame, no
+  library reported rather than silently rendering nothing, temporary frames
+  swept up afterwards, and a good surface still rendering after a bad one
+
+test_paraviewdialog.cpp
+-----------------------
+
+Tests for the ParaView export dialog's conversion run (``runConversion()``
+and ``onProcessFinished()``).  ``test_paraviewexport.cpp`` covers the pure
+part -- which arguments a set of settings turns into; this covers the
+orchestration around it.  It is the hand-off to external analysis, so its
+failures leave the application looking fine and the data wrong somewhere
+else; reporting a non-zero exit as success is the worst of them.
+
+ParaView is not needed.  The tests supply a stub ``pvpython``: a script that
+records the directory it ran in and every argument it was given, writes the
+output it was asked for, and exits with the code the test chose.  Test cases
+cover:
+
+- The arguments handed to the interpreter matching the ones the builder
+  produced, and the mode choosing which script runs
+- The conversion running in the input file's directory, so relative output
+  lands beside it
+- The log carrying the tool's own output, and the button going busy and
+  coming back
+- Success naming what it wrote; a non-zero exit reported as a failure, not
+  as done, and not followed by launching ParaView on a file that does not
+  exist
+- Refusals for a missing input, a missing interpreter and a missing script,
+  none of which start anything
+- Stale output in both directions: declining leaves the earlier file
+  untouched and converts nothing, agreeing clears it before the script trips
+  over it
+- The tool paths remembered for the next session
 
 test_recovery.cpp
 -----------------
