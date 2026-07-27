@@ -94,7 +94,10 @@ struct SPARTA_ALIGN(16) OnePart {
   double erot, evib, dtremain, weight;
 };
 
-struct Tri { double p1[3],p2[3],p3[3],norm[3]; };
+struct Tri {
+  double p1[3],p2[3],p3[3],norm[3];
+  double blo[3],bhi[3];      /* axis-aligned bounds, for the cheap reject */
+};
 
 struct SPARTA_ALIGN(64) ChildCell {
   int id, level, proc, ilocal;
@@ -241,6 +244,7 @@ struct Sim {
   std::vector<double> vremax, remain;
   RanKnuth rng;
   long nscheck, nscollide, nexit;
+  int contiguous;
   double t_move,t_sort,t_collide;
   double fnum, volume;
 
@@ -253,8 +257,10 @@ struct Sim {
     if(k<0)k=0; if(k>=nz)k=nz-1;
     return (k*ny+j)*nx+i;
   }
-  template <int MATB> void move();
+  template <int MATB, int PREFILTER> void move();
+  long nsreject;
   void sort_reorder();
+  void sort_only();
   void collide();
   void reinject(long i);
 };
@@ -295,6 +301,10 @@ int Sim<S>::load_surf(const char *path)
     for (int q=0;q<3;q++) cen[q]=(t.p1[q]+t.p2[q]+t.p3[q])/3.0;
     if (dot3(t.norm,cen) < 0.0) { t.norm[0]=-t.norm[0]; t.norm[1]=-t.norm[1];
                                   t.norm[2]=-t.norm[2]; }
+    for (int q=0;q<3;q++){
+      t.blo[q]=std::min(std::min(t.p1[q],t.p2[q]),t.p3[q]);
+      t.bhi[q]=std::max(std::max(t.p1[q],t.p2[q]),t.p3[q]);
+    }
   }
   fclose(fp);
   return ntri;
@@ -382,7 +392,7 @@ void Sim<S>::setup(int nx_,int ny_,int nz_,const char *surfpath)
     st.cs(placed,cell_of(x[0],x[1],x[2]));
     placed++;
   }
-  nscheck=nscollide=nexit=0; t_move=t_sort=t_collide=0.0;
+  nscheck=nscollide=nexit=nsreject=0; contiguous=0; t_move=t_sort=t_collide=0.0;
 }
 
 /* re-inject a particle at the inflow face; see the header note -- this is the
@@ -408,7 +418,7 @@ void Sim<S>::reinject(long i)
    entered test the particle's segment against every triangle of that cell,
    keeping the earliest hit. MATB routes the surface collision through a
    materialized OnePart, as an SoA storage would have to. */
-template <class S> template <int MATB>
+template <class S> template <int MATB, int PREFILTER>
 void Sim<S>::move()
 {
   for (long i = 0; i < nlocal; i++) {
@@ -418,6 +428,12 @@ void Sim<S>::move()
     int icell = st.cg(i);
     int exitflag = 0;
     int nloop = 0;
+    /* SPARTA's mover carries an "exclude" surface: the one just collided with
+       is skipped on the next pass, because the particle now sits exactly on it
+       and line_tri_intersect would otherwise re-detect the same triangle at
+       param 0 and collide with it again. Omitting this was why this model's
+       surface collision rate came out 18x SPARTA's. */
+    int exclude = -1;
 
     while (1) {
       if (++nloop > 100) break;
@@ -427,9 +443,23 @@ void Sim<S>::move()
       int nsurf = cc.nsurf;
       if (nsurf) {
         double minparam = 2.0; int minsurf = -1; double minxc[3];
+        /* AABB of this step's segment. At 2500 m/s and dt 1e-5 a particle
+           moves 0.025 of a cell width, so the segment is tiny compared with a
+           cell and is nowhere near most of the cell's triangles. Six compares
+           reject those before the ~40-flop plane-and-edge test. */
+        double slo[3], shi[3];
+        for (int c=0;c<3;c++){
+          slo[c]=std::min(x[c],xnew[c]); shi[c]=std::max(x[c],xnew[c]);
+        }
         for (int m = 0; m < nsurf; m++) {
           int isurf = cc.csurfs[m];
+          if (isurf == exclude) continue;
           const Tri &t = tris[isurf];
+          if (PREFILTER) {
+            if (t.bhi[0] < slo[0] || t.blo[0] > shi[0]) { nsreject++; continue; }
+            if (t.bhi[1] < slo[1] || t.blo[1] > shi[1]) { nsreject++; continue; }
+            if (t.bhi[2] < slo[2] || t.blo[2] > shi[2]) { nsreject++; continue; }
+          }
           double xc[3], param; int side;
           nscheck++;
           if (line_tri_intersect(x,xnew,t.p1,t.p2,t.p3,t.norm,xc,param,side)) {
@@ -454,6 +484,7 @@ void Sim<S>::move()
             for (int c=0;c<3;c++) v[c]=pv.v[c];
           }
           nscollide++;
+          exclude = minsurf;
           double dtr = DTSTEP*(1.0-minparam);
           for (int c=0;c<3;c++) xnew[c]=x[c]+dtr*v[c];
           continue;
@@ -469,6 +500,7 @@ void Sim<S>::move()
                                        if (f<frac){frac=f;outface=2*d+1;} }
       }
       if (outface < 0) break;
+      exclude = -1;                       /* new cell, nothing to exclude */
       for (int c=0;c<3;c++) x[c] += frac*(xnew[c]-x[c]);
       int nb = cc.neigh[outface];
       if (nb < 0) { exitflag = 1; break; }     /* open boundary: particle leaves */
@@ -482,6 +514,18 @@ void Sim<S>::move()
 }
 
 template <class S>
+void Sim<S>::sort_only()
+{
+  ChildInfo *ci = cinfo.data();
+  for (int c=0;c<ncell;c++){ ci[c].first=-1; ci[c].count=0; }
+  for (long i=nlocal-1;i>=0;i--){
+    int c=st.cg(i);
+    next[i]=ci[c].first; ci[c].first=(int)i; ci[c].count++;
+  }
+  contiguous = 0;
+}
+
+template <class S>
 void Sim<S>::sort_reorder()
 {
   ChildInfo *ci = cinfo.data();
@@ -492,6 +536,7 @@ void Sim<S>::sort_reorder()
                              sortcursor[c]=(int)m; m+=n; }
   for (long i=0;i<nlocal;i++) st.copy(sortcursor[st.cg(i)]++, i);
   st.swap();
+  contiguous = 1;
 }
 
 template <class S>
@@ -501,9 +546,14 @@ void Sim<S>::collide()
   double mr = AMASS*AMASS/(AMASS+AMASS);
   double cxs = MY_PI*DIAM*DIAM;
   double prefactor = cxs*pow(2.0*KB*TREF/mr,OMEGA-0.5)/tgamma(2.5-OMEGA);
+  std::vector<int> pl;
   for (int c=0;c<ncell;c++){
     int np=ci[c].count; if (np<=1) continue;
     long first=ci[c].first;
+    if (!contiguous) {
+      pl.clear();
+      for (int ip=ci[c].first; ip>=0; ip=next[ip]) pl.push_back(ip);
+    }
     double vrm=vremax[c];
     double att=0.5*np*(np-1)*vrm*DTSTEP*fnum/volume + remain[c];
     int natt=(int)att; remain[c]=att-natt;
@@ -511,7 +561,9 @@ void Sim<S>::collide()
       int i=(int)(np*rng.uniform()), j=(int)(np*rng.uniform());
       while(i==j) j=(int)(np*rng.uniform());
       double vi[3],vj[3];
-      for(int q=0;q<3;q++){ vi[q]=st.vg(first+i,q); vj[q]=st.vg(first+j,q); }
+      long pi = contiguous ? first+i : pl[i];
+      long pj = contiguous ? first+j : pl[j];
+      for(int q=0;q<3;q++){ vi[q]=st.vg(pi,q); vj[q]=st.vg(pj,q); }
       double du=vi[0]-vj[0],dv=vi[1]-vj[1],dw=vi[2]-vj[2];
       double vr2=du*du+dv*dv+dw*dw;
       if (vr2<EPSZERO) continue;
@@ -530,8 +582,8 @@ void Sim<S>::collide()
         vb=scale*(cosX*dv+sinX*(vr*dw*cos(eps)-du*dv*sin(eps))/d);
         wc=scale*(cosX*dw-sinX*(vr*dv*cos(eps)+du*dw*sin(eps))/d);
       } else { ua=scale*cosX*du; vb=scale*sinX*du*cos(eps); wc=scale*sinX*du*sin(eps); }
-      st.vs(first+i,0,ucmf+0.5*ua); st.vs(first+i,1,vcmf+0.5*vb); st.vs(first+i,2,wcmf+0.5*wc);
-      st.vs(first+j,0,ucmf-0.5*ua); st.vs(first+j,1,vcmf-0.5*vb); st.vs(first+j,2,wcmf-0.5*wc);
+      st.vs(pi,0,ucmf+0.5*ua); st.vs(pi,1,vcmf+0.5*vb); st.vs(pi,2,wcmf+0.5*wc);
+      st.vs(pj,0,ucmf-0.5*ua); st.vs(pj,1,vcmf-0.5*vb); st.vs(pj,2,wcmf-0.5*wc);
     }
     vremax[c]=vrm;
   }
@@ -539,23 +591,31 @@ void Sim<S>::collide()
 
 /* ---------------- driver ---------------- */
 
-struct Out { double total,move,sort,coll,bytes; long nscheck,nscollide,nmoves; };
+struct Out { double total,move,sort,coll,bytes; long nscheck,nscollide,nsreject,nmoves; };
 
-template <class S, int MATB>
-static Out run(int nx,int ny,int nz,int nsteps,const char *surf)
+/* reorder: 0 = sort only, which is what bench/in.sphere does (it sets no
+   particle/reorder, and measuring SPARTA shows enabling one makes in.sphere
+   slower: 0.318 s off against 0.367 s every step, because 10K particles fit in
+   L2 and there is no locality to buy) */
+template <class S, int MATB, int PREFILTER>
+static Out run(int nx,int ny,int nz,int nsteps,const char *surf,int reorder)
 {
   Sim<S> *m = new Sim<S>();
   m->setup(nx,ny,nz,surf);
-  for (int s=0;s<200;s++){ m->template move<MATB>(); m->sort_reorder(); m->collide(); }
-  m->nscheck=m->nscollide=0; m->t_move=m->t_sort=m->t_collide=0;
+  for (int s=0;s<200;s++){ m->template move<MATB,PREFILTER>();
+    if (reorder && s%reorder==0) m->sort_reorder(); else m->sort_only();
+    m->collide(); }
+  m->nscheck=m->nscollide=m->nsreject=0; m->t_move=m->t_sort=m->t_collide=0;
   for (int s=0;s<nsteps;s++){
-    double t=wtime(); m->template move<MATB>(); m->t_move+=wtime()-t;
-    t=wtime(); m->sort_reorder(); m->t_sort+=wtime()-t;
+    double t=wtime(); m->template move<MATB,PREFILTER>(); m->t_move+=wtime()-t;
+    t=wtime();
+    if (reorder && s%reorder==0) m->sort_reorder(); else m->sort_only();
+    m->t_sort+=wtime()-t;
     t=wtime(); m->collide(); m->t_collide+=wtime()-t;
   }
   Out o; o.move=m->t_move; o.sort=m->t_sort; o.coll=m->t_collide;
   o.total=o.move+o.sort+o.coll;
-  o.nscheck=m->nscheck; o.nscollide=m->nscollide;
+  o.nscheck=m->nscheck; o.nscollide=m->nscollide; o.nsreject=m->nsreject;
   o.nmoves=(long)m->nlocal*nsteps; o.bytes=m->st.bytes_per();
   m->teardown(); delete m;
   return o;
@@ -595,11 +655,17 @@ int main(int argc,char**argv)
          "configuration","B/p","ns/move","speedup","move","sort","coll",
          "chk/mv","coll/mv");
 
-  Out a = run<StoreAoS,0>(nx,ny,nz,ns,surf);
+  int ro = 0;                      /* in.sphere sets no particle/reorder */
+  Out a = run<StoreAoS,0,0>(nx,ny,nz,ns,surf,ro);
   double base = 1e9*a.total/a.nmoves;
   row("AoS 96 B (SPARTA today)",a,0);
-  row("AoS 96 B + mat boundary", run<StoreAoS,1>(nx,ny,nz,ns,surf), base);
-  row("SoA", run<StoreSoA,0>(nx,ny,nz,ns,surf), base);
-  row("SoA + mat boundary", run<StoreSoA,1>(nx,ny,nz,ns,surf), base);
+  row("AoS 96 B + AABB prefilter", run<StoreAoS,0,1>(nx,ny,nz,ns,surf,ro), base);
+  row("AoS 96 B + mat boundary", run<StoreAoS,1,0>(nx,ny,nz,ns,surf,ro), base);
+  row("SoA", run<StoreSoA,0,0>(nx,ny,nz,ns,surf,ro), base);
+  row("SoA + AABB prefilter", run<StoreSoA,0,1>(nx,ny,nz,ns,surf,ro), base);
+  row("SoA + prefilter + mat bnd", run<StoreSoA,1,1>(nx,ny,nz,ns,surf,ro), base);
+  printf("-- reordering, which in.sphere does not do --\n");
+  row("AoS + prefilter, reorder 1", run<StoreAoS,0,1>(nx,ny,nz,ns,surf,1), base);
+  row("AoS + prefilter, reorder 20", run<StoreAoS,0,1>(nx,ny,nz,ns,surf,20), base);
   return 0;
 }

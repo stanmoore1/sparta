@@ -3,7 +3,12 @@
 #   Move 73.5%  Coll 17.6%  Sort 5.4%
 #   2.38 surf checks per particle-move, 1.4e-4 surf collisions
 configuration                      B/p  ns/move  speedup |    move    sort    coll | chk/mv  coll/mv
-AoS 96 B (SPARTA today)             96    30.84    1.00x |   64.7%   26.4%    8.9% |   2.45  2.5e-03
-AoS 96 B + mat boundary             96    29.27    1.05x |   65.2%   26.2%    8.7% |   2.45  2.5e-03
-SoA                                 52    23.51    1.31x |   70.1%   20.8%    9.1% |   2.45  2.5e-03
-SoA + mat boundary                  52    23.86    1.29x |   70.2%   20.8%    9.0% |   2.45  2.5e-03
+AoS 96 B (SPARTA today)             96    29.19    1.00x |   69.9%    7.2%   22.8% |   2.05  1.4e-04
+AoS 96 B + AABB prefilter           96    24.23    1.20x |   65.8%    7.5%   26.6% |   0.01  1.4e-04
+AoS 96 B + mat boundary             96    28.30    1.03x |   70.0%    7.2%   22.8% |   2.05  1.4e-04
+SoA                                 52    24.74    1.18x |   72.3%    3.9%   23.8% |   2.05  1.4e-04
+SoA + AABB prefilter                52    22.36    1.31x |   68.9%    4.4%   26.8% |   0.01  1.4e-04
+SoA + prefilter + mat bnd           52    21.38    1.36x |   69.0%    4.4%   26.7% |   0.01  1.4e-04
+-- reordering, which in.sphere does not do --
+AoS + prefilter, reorder 1          96    25.05    1.17x |   58.1%   31.1%   10.8% |   0.01  1.3e-04
+AoS + prefilter, reorder 20         96    22.39    1.30x |   66.0%   10.3%   23.7% |   0.01  1.4e-04

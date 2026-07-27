@@ -57,35 +57,69 @@ problem gets roughly a quarter of what a collision-dominated one gets. Any
 decision to convert SPARTA's particle storage should be made against the mix of
 problems that matter, not against `in.collide` alone.
 
-## Validation, and one gap left open
+## Validation, after two fidelity fixes
 
-| metric | SPARTA | mini_sphere |
-|---|---:|---:|
-| surface checks per particle-move | 2.38 | **2.45** |
-| move fraction of runtime | 73.5% | 65.3% |
-| surface collisions per particle-move | 1.4e-4 | **2.5e-3** |
+| metric | SPARTA | mini_sphere before | after |
+|---|---:|---:|---:|
+| move fraction | 73.5% | 65.3% | **71.0%** |
+| sort fraction | 5.4% | 25.9% | **6.1%** |
+| surface checks per particle-move | 2.38 | 2.45 | 2.05 |
+| surface collisions per particle-move | 1.4e-4 | 2.5e-3 | **1.4e-4** |
+| ns per particle-move | 31.5 | 27.8 | 26.1 |
 
-The **check rate agrees to 3%**, which is the metric that matters here: it is the
-2.45 ray-triangle tests per move that consume the runtime, and reproducing that
-is what makes the timing comparison meaningful. The move fraction is lower than
-SPARTA's mostly because this model reorders every step where `in.sphere` sorts
-only, inflating the sort share.
+Two bugs, both found by the validation table rather than by inspection:
 
-**The surface collision rate is 18x too high and I have not tracked it down.**
-Checked and eliminated: triangle normal orientation (forcing outward normals
-changed nothing, so the vertex ordering in `data.sphere` was already consistent).
-The most likely cause is the emission model, flagged as a deliberate
-simplification at the top of the file: every particle leaving the box is
-re-injected at the -x face, so the whole population continuously streams through
-the sphere's path, whereas SPARTA's `fix emit/face` inserts a flux-weighted
-Maxwellian on all faces and reaches a steady state with a bow shock and a
-depleted wake. That would put more of this model's particles on trajectories that
-intersect the sphere.
+- **No surface exclusion.** SPARTA's mover carries an `exclude` surface: the
+  triangle just collided with is skipped on the next pass, because the particle
+  now sits exactly on it and `line_tri_intersect` would re-detect it at param 0
+  and collide again. Omitting that produced a runaway re-collision loop, capped
+  only by an iteration guard, and was the entire cause of the 18x collision
+  rate. With it, the rate matches SPARTA exactly at 1.4e-4.
+- **Reordering every step.** `bench/in.sphere` sets no `particle/reorder`, so
+  SPARTA sorts and never reorders. Reordering every step inflated the sort share
+  to 26% against SPARTA's 5.4%. Corrected, sort is 6.1%.
 
-This matters for anything that depends on the collision rate and does not matter
-for the conclusions above, both of which rest on the check rate and on a boundary
-crossing that is rare under any of these numbers. Stating it rather than quietly
-reporting the favourable metric.
+On which: **reordering does not help in.sphere, and enabling it hurts.**
+Measured in SPARTA by adding `global particle/reorder N` to the input:
+
+| reorder | 0 | 1 | 5 | 20 |
+|---|---:|---:|---:|---:|
+| loop time | **0.318 s** | 0.367 | 0.348 | 0.322 |
+
+10K particles is 0.96 MB and sits in L2, so there is no locality to buy and the
+reorder is pure overhead. The default is right, and this is the opposite of
+in.collide, where reordering is worth 1.9x.
+
+## Optimizing the move: a bounding-box prefilter
+
+The mover spends its time on 2.05 ray-triangle intersections per particle-move.
+At 2500 m/s and a 1e-5 timestep a particle moves 0.025 of a cell width, so the
+segment is tiny compared with the cell and is nowhere near most of the cell's
+triangles. Six comparisons against a precomputed triangle bounding box reject
+those before the ~40-flop plane-and-edge test:
+
+| configuration | ns/move | speedup | full intersection tests per move |
+|---|---:|---:|---:|
+| AoS 96 B (SPARTA today) | 26.1 | 1.00x | 2.05 |
+| AoS 96 B + AABB prefilter | 22.4 | **1.16x** | **0.01** |
+| SoA | 24.2 | 1.08x | 2.05 |
+| SoA + AABB prefilter | 21.2 | **1.23x** | 0.01 |
+| SoA + prefilter + mat boundary | 21.2 | 1.23x | 0.01 |
+
+**The prefilter eliminates 99.5% of the full intersection tests** — 2.05 per
+move down to 0.01 — for 1.16x overall, with the surface collision rate
+unchanged at 1.4e-4, so it rejects only triangles that would have missed.
+
+**SPARTA has no such prefilter.** `Update::move` calls
+`Geometry::line_tri_intersect` directly for every surface in the cell, after
+only the `exclude` test. This is a contained and worthwhile optimization, and
+the reason it is not implemented here is that doing it properly needs a
+precomputed bounding box per surface element — computing one inline from
+`tri->p1/p2/p3` costs about as much as the plane test it would save — which
+means a `Surf`-side array maintained anywhere tris are created or moved
+(`read_surf`, `move_surf`, `fix ablate`, implicit-surf grid adaptation,
+distributed surfs). That is a bounded change but not one to land unverified at
+the end of a session.
 
 ## Where the whole study stands
 
@@ -95,6 +129,8 @@ SPARTA performance: **7.34 s -> 6.26 s at 1M particles** (1.17x), from rounds 1-
 |---|---|---|
 | AoS, SoA or AoSoA? | SoA; ~1.9x on in.collide, **~1.2x on in.sphere** | faithful mini-apps |
 | Materialization boundary cost? | **free** — at or below noise, with and without surfaces | rounds 6, 7 |
+| Reordering for in.sphere? | **no** — 0.318 s off against 0.367 s on; 10K particles fit in L2 | SPARTA |
+| Surface bbox prefilter? | **1.16x on in.sphere**, 99.5% fewer intersection tests; SPARTA has none | round 7 |
 | Vectorized mover? | 1.46x on move, but only with SoA; 23% regression on AoS | round 6 |
 | SoA grid cells? | no — zero measured elasticity | SPARTA, by padding |
 | 64-byte particle record? | ~1.15x | SPARTA, by padding |
