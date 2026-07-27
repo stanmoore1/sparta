@@ -1137,7 +1137,7 @@ if (VTK_FOUND)
   add_test(NAME VtkScene.Rendering
     COMMAND ${XVFB_RUNNER} -a -s "-screen 0 1024x768x24" -w 1
     $<TARGET_FILE:test_vtkscene>
-    --gtest_filter=VtkSceneRender.*:VtkSceneFiles.*)
+    --gtest_filter=VtkSceneRender.*:VtkSceneFiles.*:SceneProbe.*)
   set_tests_properties(VtkScene.Rendering PROPERTIES
     ENVIRONMENT "OMP_NUM_THREADS=1" TIMEOUT 300 RESOURCE_LOCK xvfb REPEAT UNTIL_PASS:3)
   endif()
