@@ -57,7 +57,6 @@ ComputeTambiGrid::ComputeTambiGrid(SPARTA *sparta, int narg, char **arg) :
 
   npergroup = 6;
   ntotal = npergroup;
-  nmap1 = npergroup;
 
   memory->create(map,1,npergroup,"tambi/grid:map");
   for (int j = 0; j < npergroup; j++) map[0][j] = j;
@@ -146,11 +145,12 @@ void ComputeTambiGrid::compute_per_grid()
 
 int ComputeTambiGrid::query_tally_grid(int index, double **&array, int *&cols)
 {
-  index--;
-  if (index < 0) index = 0;
+  // single-valued per-grid compute: one output (electron temperature)
+  // backed by the one map row of 6 tally columns, regardless of index
+
   array = tally;
-  cols = map[index];
-  return nmap1;
+  cols = map[0];
+  return npergroup;
 }
 
 /* ----------------------------------------------------------------------
@@ -162,10 +162,9 @@ void ComputeTambiGrid::
 post_process_grid(int index, int nsample,
                   double **etally, int *emap, double *vec, int nstride)
 {
-  // index = 0 for a reference to the whole vector, 1 for c_ID[1]
-
-  index--;
-  if (index < 0) index = 0;
+  // single-valued: the one output uses the one map row (map[0]).  The
+  // passed index is ignored (callers use 0 for the whole-vector
+  // reference); this compute has no per-index columns to select.
 
   int lo = 0;
   int hi = nglocal;
@@ -174,7 +173,7 @@ post_process_grid(int index, int nsample,
   if (!etally) {
     nsample = 1;
     etally = tally;
-    emap = map[index];
+    emap = map[0];
     vec = vector_grid;
     nstride = 1;
   }

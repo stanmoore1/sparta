@@ -42,7 +42,6 @@ class ComputeTambiGrid : public Compute {
   int ntotal;                // total # of columns in tally array
   int nglocal;               // # of owned grid cells
 
-  int nmap1;                 // # of tally quantities the value uses
   int **map;                 // which tally columns the output value uses
   double **tally;            // array of tally quantities, cells by ntotal
 

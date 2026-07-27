@@ -1919,7 +1919,13 @@ double ReactBird::partition_function(int isp, double T)
   // a free electron carries spin degeneracy 2: it is structureless (no
   // elecfile ladder), so without this factor the Saha-type equilibrium
   // constant of an electron-producing reaction (associative ionization
-  // vs dissociative recombination) would be off by exactly 2x
+  // vs dissociative recombination) would be off by exactly 2x.  The
+  // electron is identified by its physics (negative charge and a mass
+  // far below any atom -- the electron is ~9.1e-31 kg, ~1800x lighter
+  // than the lightest nucleus in SI units, which SPARTA uses
+  // internally) rather than by fix ambipolar's especies: the reverse
+  // machinery also serves reactions with real electron particles and no
+  // fix ambipolar, so no especies is available here.
 
   else if (sp->charge < 0.0 && sp->mass < 1.0e-29) qelec = 2.0;
 
