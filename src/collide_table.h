@@ -110,6 +110,11 @@ E: Unknown table directive in collide table parameter file
 
 A directive line must use the keyword table, alpha, or scatter.
 
+E: Tabulated alpha must be positive
+
+The VSS deflection law uses 1/alpha, so a zero or negative tabulated
+alpha would produce an invalid scattering angle.
+
 E: A scatter table must set M > 1 on its parameter line
 
 A scatter section holds cos(chi) at M cumulative probabilities, so M must

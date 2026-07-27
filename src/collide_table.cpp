@@ -435,8 +435,21 @@ InterpTable *CollideTable::add_table(InterpTable **&list, int &n,
   double mr = params[isp][jsp].mr;
   double omega = params[isp][jsp].omega;
   double cxs = MY_PI*params[isp][jsp].diam*params[isp][jsp].diam;
-  double vssa = cxs * pow(2.0*update->boltz*params[isp][jsp].tref/mr,
-                          omega-0.5) / tgamma(2.5-omega);
+
+  // coefficients of the analytic VSS form for this quantity, y = a*x^p,
+  //   used only by the extrap vss mode
+  // for a cross section that is the VSS sigma*g; for alpha it is simply
+  //   the constant VSS alpha, which is a very different number
+
+  double vssa,vssp;
+  if (kind == KALPHA) {
+    vssa = params[isp][jsp].alpha;
+    vssp = 0.0;
+  } else {
+    vssa = cxs * pow(2.0*update->boltz*params[isp][jsp].tref/mr,
+                     omega-0.5) / tgamma(2.5-omega);
+    vssp = 1.0 - omega;
+  }
 
   tb->read(file,keyword,ncol);
 
@@ -446,7 +459,13 @@ InterpTable *CollideTable::add_table(InterpTable **&list, int &n,
   if (kind == KSCATTER && tb->ncol < 2)
     error->one(FLERR,"A scatter table must set M > 1 on its parameter line");
 
-  tb->convert(TB_XVR2,ymode,mr,vssa,1.0-omega);
+  tb->convert(TB_XVR2,ymode,mr,vssa,vssp);
+
+  // 1/alpha is taken in SCATTER_TwoBodyScattering, and a non-positive
+  //   alpha would give cosX outside [-1,1] and NaN velocities
+
+  if (kind == KALPHA && tb->ymin <= 0.0)
+    error->one(FLERR,"Tabulated alpha must be positive");
   tb->build(tabstyle,nmant);
   double maxerr = tb->check(0);
   tb->free_input();

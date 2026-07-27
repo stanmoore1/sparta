@@ -176,8 +176,15 @@ int ReactTable::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
     OneReaction *r = &rlist[list[i]];
 
     // ignore energetically impossible reactions
+    // an endothermic reaction whose energy deficit exceeds the activation
+    //   energy must be gated on the deficit, else post_etotal below goes
+    //   negative and the post-collision velocities become NaN
+    // same test as ReactTCE::attempt()
 
-    if (pre_etotal <= r->coeff[1]) continue;
+    double e_excess;
+    if (r->coeff[1] > -r->coeff[4]) e_excess = pre_etotal - r->coeff[1];
+    else e_excess = pre_etotal + r->coeff[4];
+    if (e_excess <= 0.0) continue;
 
     react_prob += rtab[list[i]]->evaluate(vr2) / sigma_t;
 

@@ -43,7 +43,7 @@ InterpTable::InterpTable(SPARTA *sparta) : Pointers(sparta)
   xvar = TB_ENERGY;
   extrap_lo = extrap_hi = TB_CONSTANT;
   logflag = 0;
-  xlo = xhi = ymax = 0.0;
+  xlo = xhi = ymin = ymax = 0.0;
   tabstyle = TB_LINEAR;
   ncoeff = nmant = shift = 0;
   offset = 0;
@@ -291,12 +291,14 @@ void InterpTable::convert(int xmode_in, int ymode_in, double mr,
     for (int c = 0; c < ncol; c++) yfile[i*ncol+c] *= yscale;
   }
 
-  ymax = 0.0;
+  ymin = yfile[0];
+  ymax = yfile[0];
   logflag = 1;
   for (int i = 0; i < n*ncol; i++) {
     if (ymode == TB_YSIGMA_G && yfile[i] < 0.0)
       error->one(FLERR,"Tabulated data has a negative cross section");
     if (yfile[i] <= 0.0) logflag = 0;
+    ymin = MIN(ymin,yfile[i]);
     ymax = MAX(ymax,yfile[i]);
   }
   for (int i = 1; i < n; i++)
@@ -688,15 +690,15 @@ void InterpTable::bcast()
 
   MPI_Bcast(&offset,sizeof(int64_t),MPI_BYTE,0,world);
 
-  double dbuf[7];
+  double dbuf[8];
   if (comm->me == 0) {
     dbuf[0] = xlo;  dbuf[1] = xhi;  dbuf[2] = alo;  dbuf[3] = plo;
-    dbuf[4] = ahi;  dbuf[5] = phi;  dbuf[6] = ymax;
+    dbuf[4] = ahi;  dbuf[5] = phi;  dbuf[6] = ymax;  dbuf[7] = ymin;
   }
-  MPI_Bcast(dbuf,7,MPI_DOUBLE,0,world);
+  MPI_Bcast(dbuf,8,MPI_DOUBLE,0,world);
   if (comm->me) {
     xlo = dbuf[0];  xhi = dbuf[1];  alo = dbuf[2];  plo = dbuf[3];
-    ahi = dbuf[4];  phi = dbuf[5];  ymax = dbuf[6];
+    ahi = dbuf[4];  phi = dbuf[5];  ymax = dbuf[6];  ymin = dbuf[7];
   }
 
   bigint ntotal = (bigint) ncoeff*ncol*nbins;

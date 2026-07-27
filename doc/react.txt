@@ -270,11 +270,15 @@ explained above.
 For the T = Tabulated style, used by the {table} react style, the second
 line is instead
 
-T Ea deltaE filename keyword :pre
+type T Ea deltaE filename keyword :pre
 
-where Ea is the activation energy and deltaE the overall reaction energy,
-both in Joules as above, and {filename} and {keyword} name a section of a
-tabulated data file holding the reaction cross section.
+where {type} is the same reaction type character as above (D, E, I or R),
+Ea is the activation energy and deltaE the overall reaction energy, both
+in Joules as above, and {filename} and {keyword} name a section of a
+tabulated data file holding the reaction cross section.  For example:
+
+N2 + O --> N + N + O
+D T 1.561e-18 -1.561e-18 n2o.tab N2O_DISS :pre
 
 :line
 

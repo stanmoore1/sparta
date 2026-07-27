@@ -65,7 +65,7 @@ class InterpTable : protected Pointers {
   int extrap_lo,extrap_hi;   // extrapolation mode below/above the range
   int logflag;               // 1 if the input was splined in log-log
   double xlo,xhi;            // run-time x range spanned by the input
-  double ymax;               // max input value, in file units
+  double ymin,ymax;          // range of the input values, in SI
   int nbins;                 // # of bins, covering whole octaves of x
 
   InterpTable(class SPARTA *);
