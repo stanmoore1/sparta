@@ -89,6 +89,11 @@ E: Invalid reaction coefficients in file
 A tabulated reaction line must give an activation energy, an energy
 release, a file name, and a section keyword.
 
+E: React table requires every reaction to use style T
+
+The style has no way to form a probability for an Arrhenius or Quantum
+reaction, so a reaction file for it may not mix styles.
+
 E: React table reaction has no cross section table
 
 A reaction was declared with style T but no table was attached to it.

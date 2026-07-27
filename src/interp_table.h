@@ -87,6 +87,12 @@ class InterpTable : protected Pointers {
 
   double interpolate(double);
 
+  // evaluate with the extrapolation policy applied but TB_ERROR treated as
+  //   TB_CONSTANT, for setup-time integrals over the whole energy axis
+  //   which must not abort a run that never samples those energies
+
+  double evaluate_noerror(double);
+
   // row lookup for NCOL > 1: linear interpolation in the row at
   //   cumulative probability u in [0,1)
 

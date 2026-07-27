@@ -110,10 +110,6 @@ E: Unknown table directive in collide table parameter file
 
 A directive line must use the keyword table, alpha, or scatter.
 
-E: Species %s in a collide table directive is not defined
-
-The directive names a species which is not in the simulation.
-
 E: A scatter table must set M > 1 on its parameter line
 
 A scatter section holds cos(chi) at M cumulative probabilities, so M must

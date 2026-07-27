@@ -90,6 +90,13 @@ void ReactTable::init()
       error->all(FLERR,
                  "React table does not currently support recombination reactions");
 
+  // every active reaction must be tabulated, since this style has no other
+  //   way to form a probability, and an untabulated one would have no table
+
+  for (int m = 0; m < nlist; m++)
+    if (rlist[m].active && rlist[m].style != TABULATED)
+      error->all(FLERR,"React table requires every reaction to use style T");
+
   // build each reaction's cross section table
   // proc 0 reads and builds, then broadcasts, as elsewhere in SPARTA
   // x is the relative translational energy, converted to vr^2 with the
@@ -186,7 +193,11 @@ int ReactTable::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
 
     if (react_prob > random_prob) {
       tally_reactions[list[i]]++;
-      if (computeChemRates) return list[i] + 1;
+
+      // compute_chem_rates only accumulates the tally, it does not perform
+      //   the reaction, so no products or energies are set and 0 is returned
+
+      if (computeChemRates) continue;
 
       ip->ispecies = r->products[0];
 

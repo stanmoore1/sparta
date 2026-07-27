@@ -266,6 +266,16 @@ void ComputeLambdaGridKokkos::compute_per_grid_kokkos()
   particle_kk->sync(Device,SPECIES_MASK);
   d_species = particle_kk->k_species.view_device();
 
+  // NOTE: the host version of this compute now obtains the effective cross
+  //   section from Collide::sigma_eff(), so that a collide style with a
+  //   tabulated cross section is respected.  this device version still
+  //   evaluates the VHS form from d_params directly, which agrees with
+  //   sigma_eff() for collide vss.  it is only reachable for a collide
+  //   style with kokkos_flag set, and collide table has none, so a
+  //   tabulated cross section cannot reach here today.  if a Kokkos
+  //   tabulated collide style is added, this must be generalized with it,
+  //   along with the downcast below
+
   CollideVSSKokkos* collide_kk = ((CollideVSSKokkos*)collide);
   d_params_const = collide_kk->d_params_const;
 

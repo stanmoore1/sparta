@@ -574,6 +574,19 @@ double InterpTable::evaluate(double x)
 }
 
 /* ----------------------------------------------------------------------
+   as evaluate(), but never raises the TB_ERROR out-of-range error
+   the extrapolation coefficients for TB_ERROR are the constant ones, so
+     this continues the end value outside the tabulated range
+------------------------------------------------------------------------- */
+
+double InterpTable::evaluate_noerror(double x)
+{
+  if (x <= xlo) return alo * pow(x,plo);
+  if (x >= xhi) return ahi * pow(x,phi);
+  return interpolate(x);
+}
+
+/* ----------------------------------------------------------------------
    sample a row at cumulative probability U in [0,1)
    the row is taken from the bin containing X, with linear interpolation
      between the two bracketing column entries

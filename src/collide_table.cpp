@@ -218,6 +218,7 @@ int CollideTable::test_collision(int icell, int igroup, int jgroup,
   if (vr2 < EPSZERO) return 0;
 
   // vre = sigma(vr) * vr, interpolated directly, no pow() and no sqrt()
+  // evaluate() applies the extrap error policy, which is the point of it
 
   double vre = sigma_tab[m]->evaluate(vr2);
 
@@ -325,7 +326,10 @@ void CollideTable::build_sigeff()
       for (int q = 0; q < NQ; q++) {
         double E = exp(e0 + q*h);
         double vr2 = 2.0*E/mr;
-        double sig = sigma_tab[m]->evaluate(vr2) / sqrt(vr2);
+        // the sweep spans energies the run may never sample, so a table
+        //   with extrap error must not abort here
+
+        double sig = sigma_tab[m]->evaluate_noerror(vr2) / sqrt(vr2);
         double w = (q == 0 || q == NQ-1) ? 0.5 : 1.0;
         sum += w * sig * E * exp(-E/kT) * E * h;   // dE = E dlnE
       }
@@ -382,7 +386,10 @@ void CollideTable::read_param_file(char *fname)
     int jsp = particle->find_species(words[1]);
 
     // silently ignore a directive for species not in this simulation,
-    //   consistent with how the VSS param lines are handled
+    //   consistent with how the VSS param lines are handled, so that one
+    //   parameter file can serve several simulations
+    // note this also means a misspelled species quietly leaves the pair on
+    //   the analytic VSS form; the per-table log lines show what was read
 
     if (isp < 0 || jsp < 0) continue;
 
