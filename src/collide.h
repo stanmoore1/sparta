@@ -52,6 +52,15 @@ class Collide : protected Pointers {
                                 Particle::OnePart *&) = 0;
   virtual double extract(int, int, const char *) {return 0.0;}
 
+  // fast path hook for the plain single-group, no-chemistry case
+  // a collide style may override this with a kernel that inlines its own
+  //   attempt/test/setup/perform math instead of reaching them through
+  //   virtual calls once per collision attempt
+  // returns 1 if it handled this timestep, 0 to fall back to the generic
+  //   templated collisions_one/collisions_group paths
+
+  virtual int collisions_one_opt() {return 0;}
+
   void modify_params(int, char **);
   void reset_vremax();
 

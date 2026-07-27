@@ -382,7 +382,10 @@ void Collide::collisions()
   if (!ambiflag) {
     if (!nearcp) {
       if (!ngas_tally) {
-        if (ngroups == 1) collisions_one<0,0>();
+        if (ngroups == 1) {
+          // let the style run its own inlined kernel if it has one
+          if (!collisions_one_opt()) collisions_one<0,0>();
+        }
         else collisions_group<0,0>();
       } else if (ngas_tally) {
         if (ngroups == 1) collisions_one<0,1>();
@@ -412,7 +415,7 @@ void Collide::collisions()
   // e.g. compress_reactions may have reallocated particle->next vector
 
   if (ndelete) particle->compress_reactions(ndelete,dellist);
-  if (react) particle->sorted = 0;
+  if (react) particle->sorted = particle->sorted_contiguous = 0;
 
   // accumulate running totals
 

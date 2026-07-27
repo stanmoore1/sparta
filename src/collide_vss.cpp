@@ -39,6 +39,20 @@ enum{CONSTANT,VARIABLE};
 #define MAXLINE 1024
 #define EPSZERO 1.0e-14
 
+// SPARTA_VSS_FASTPOW replaces pow(x,y) with exp2(y*log2(x)) in the collision
+//   kernel, which measures ~15% lower latency on the vr2 -> pow -> vre chain
+//   that the NTC acceptance test serialises on
+// results agree with pow() to ~1e-15 relative, but are NOT bit-identical, so
+//   this is off by default; see bench/opt/RESULTS.md for the measured gain
+// note that a hand-rolled polynomial pow is *slower* here despite issuing
+//   fewer instructions, because it lengthens that same dependency chain
+
+#ifdef SPARTA_VSS_FASTPOW
+#define VSS_POW(x,y) exp2((y)*log2(x))
+#else
+#define VSS_POW(x,y) pow(x,y)
+#endif
+
 /* ---------------------------------------------------------------------- */
 
 CollideVSS::CollideVSS(SPARTA *sparta, int narg, char **arg) :
@@ -193,6 +207,171 @@ double CollideVSS::attempt_collision(int icell, int igroup, int jgroup,
 }
 
 /* ----------------------------------------------------------------------
+   NTC algorithm for a single group, VSS-specific fused kernel
+   same arithmetic and same random number stream as the generic
+     Collide::collisions_one<0,0> driving the virtual CollideVSS methods,
+     so results are bit-for-bit identical; it is only the plumbing that
+     differs
+   what it avoids, per collision attempt, is four virtual calls that the
+     compiler cannot see through (attempt/test/setup/perform_collision),
+     plus re-reading per-cell and per-species-pair quantities that do not
+     change: the params/prefactor rows, vremax's three levels of pointer
+     chasing, and dt*fnum
+   also walks the per-cell particle list directly when Particle has left the
+     particles cell-contiguous, which makes plist a no-op copy
+   returns 0 without doing anything for the cases it does not implement, so
+     the caller falls back to the generic path
+------------------------------------------------------------------------- */
+
+int CollideVSS::collisions_one_opt()
+{
+  // handled here: single group, no chemistry, no ambipolar, no near-neighbor
+  //   selection, no gas tallies, no Poisson (mcflag) attempt counts
+  // the caller has already established ngroups == 1 and !nearcp and
+  //   !ngas_tally and !ambiflag
+
+  if (react || mcflag) return 0;
+
+  Grid::ChildInfo *cinfo = grid->cinfo;
+  Particle::OnePart *particles = particle->particles;
+  Particle::Species *species = particle->species;
+  int *next = particle->next;
+
+  // when the particle list is cell-contiguous, a cell's particles are
+  //   simply first, first+1, ... first+count-1 and plist is redundant
+
+  const int contiguous = particle->sorted_contiguous;
+
+  // kept in the same order as attempt_collision() multiplies them, since
+  //   floating point multiplication does not associate and the results are
+  //   meant to be bit-for-bit identical
+
+  const double dt = update->dt;
+  const double fnum = update->fnum;
+
+  for (int icell = 0; icell < nglocal; icell++) {
+    int np = cinfo[icell].count;
+    if (np <= 1) continue;
+
+    int ip = cinfo[icell].first;
+    double volume = cinfo[icell].volume / cinfo[icell].weight;
+    if (volume == 0.0) error->one(FLERR,"Collision cell volume is zero");
+
+    // setup particle list for this cell
+
+    const int *pl;
+    if (contiguous) {
+      pl = NULL;
+    } else {
+      if (np > npmax) {
+        while (np > npmax) npmax += DELTAPART;
+        memory->destroy(plist);
+        memory->create(plist,npmax,"collide:plist");
+      }
+      int n = 0;
+      while (ip >= 0) {
+        plist[n++] = ip;
+        ip = next[ip];
+      }
+      pl = plist;
+    }
+
+    // vremax for this cell held in a register for the whole cell
+    // nothing else reads or writes it while this cell is being processed,
+    //   so the running max is unchanged; write it back once at the end
+
+    double vremax_c = vremax[icell][0][0];
+
+    // attempt = exact collision attempt count for all particles in cell
+    // nattempt = rounded attempt with RN
+
+    double attempt;
+    if (remainflag) {
+      attempt = 0.5 * np * (np-1) * vremax_c * dt * fnum / volume +
+        remain[icell][0][0];
+      remain[icell][0][0] = attempt - static_cast<int> (attempt);
+    } else {
+      attempt = 0.5 * np * (np-1) * vremax_c * dt * fnum / volume +
+        random->uniform();
+    }
+
+    int nattempt = static_cast<int> (attempt);
+    if (!nattempt) continue;
+    nattempt_one += nattempt;
+
+    for (int iattempt = 0; iattempt < nattempt; iattempt++) {
+      int i = np * random->uniform();
+      int j = np * random->uniform();
+      while (i == j) j = np * random->uniform();
+
+      Particle::OnePart *ipart = &particles[contiguous ? ip+i : pl[i]];
+      Particle::OnePart *jpart = &particles[contiguous ? ip+j : pl[j]];
+
+      // test_collision
+
+      double *vi = ipart->v;
+      double *vj = jpart->v;
+      int isp = ipart->ispecies;
+      int jsp = jpart->ispecies;
+      const Params &prm = params[isp][jsp];
+
+      double du = vi[0] - vj[0];
+      double dv = vi[1] - vj[1];
+      double dw = vi[2] - vj[2];
+      double vr2 = du*du + dv*dv + dw*dw;
+
+      if (vr2 < EPSZERO && prm.omega >= 1.0) continue;
+
+      double vro = VSS_POW(vr2,1.0-prm.omega);
+      double vre = vro*prefactor[isp][jsp];
+      vremax_c = MAX(vre,vremax_c);
+      if (vre/vremax_c < random->uniform()) continue;
+      precoln.vr2 = vr2;
+
+      // setup_collision
+
+      precoln.vr = sqrt(vr2);
+      precoln.ave_rotdof = 0.5 * (species[isp].rotdof + species[jsp].rotdof);
+      precoln.ave_vibdof = 0.5 * (species[isp].vibdof + species[jsp].vibdof);
+      precoln.ave_dof = (precoln.ave_rotdof + precoln.ave_vibdof)/2.;
+
+      double imass = precoln.imass = species[isp].mass;
+      double jmass = precoln.jmass = species[jsp].mass;
+
+      precoln.etrans = 0.5 * prm.mr * vr2;
+      precoln.erot = ipart->erot + jpart->erot;
+      precoln.evib = ipart->evib + jpart->evib;
+
+      precoln.eint   = precoln.erot + precoln.evib;
+      precoln.etotal = precoln.etrans + precoln.eint;
+
+      double divisor = 1.0 / (imass+jmass);
+      precoln.ucmf = ((imass*vi[0])+(jmass*vj[0])) * divisor;
+      precoln.vcmf = ((imass*vi[1])+(jmass*vj[1])) * divisor;
+      precoln.wcmf = ((imass*vi[2])+(jmass*vj[2])) * divisor;
+
+      postcoln.etrans = precoln.etrans;
+      postcoln.erot = 0.0;
+      postcoln.evib = 0.0;
+      postcoln.eint = 0.0;
+      postcoln.etotal = precoln.etotal;
+
+      // perform_collision, with react == NULL so no reaction is possible
+      // both callees are non-virtual and defined in this file, so the
+      //   compiler can inline them here
+
+      if (precoln.ave_dof > 0.0) EEXCHANGE_NonReactingEDisposal(ipart,jpart);
+      SCATTER_TwoBodyScattering(ipart,jpart);
+      ncollide_one++;
+    }
+
+    vremax[icell][0][0] = vremax_c;
+  }
+
+  return 1;
+}
+
+/* ----------------------------------------------------------------------
    determine if collision actually occurs
    1 = yes, 0 = no
    update vremax either way
@@ -215,7 +394,7 @@ int CollideVSS::test_collision(int icell, int igroup, int jgroup,
   if (vr2 < EPSZERO && params[ispecies][jspecies].omega >= 1.0)
     return 0;
 
-  double vro = pow(vr2,1.0-params[ispecies][jspecies].omega);
+  double vro = VSS_POW(vr2,1.0-params[ispecies][jspecies].omega);
 
   // although the vremax is calculated for the group,
   // the individual collisions calculated species dependent vre
@@ -418,7 +597,7 @@ void CollideVSS::SCATTER_TwoBodyScattering(Particle::OnePart *ip,
     wc = vr*sinX*sin(eps);
   } else {
     double scale = sqrt((2.0 * postcoln.etrans) / (params[isp][jsp].mr * precoln.vr2));
-    double cosX = 2.0*pow(random->uniform(),alpha_r) - 1.0;
+    double cosX = 2.0*VSS_POW(random->uniform(),alpha_r) - 1.0;
     double sinX = sqrt(1.0 - cosX*cosX);
     vrc[0] = vi[0]-vj[0];
     vrc[1] = vi[1]-vj[1];

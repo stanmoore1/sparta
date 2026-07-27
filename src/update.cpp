@@ -180,6 +180,13 @@ void Update::init()
           error->all(FLERR,"Cannot use optimized move with fix adapt");
       }
     }
+
+    // the optimized move maps a computed cell ID to a local cell index for
+    //   every particle on every step
+    // on a uniform grid that map is dense, so ask Grid to maintain it as a
+    //   plain array; move falls back to the cell ID hash if it is unavailable
+
+    grid->request_uniform_index();
   }
 
   // choose the appropriate move method
@@ -339,9 +346,11 @@ void Update::run(int nsteps)
     int reorder_flag = (reorder_period &&
                         ntimestep % reorder_period == 0);
 
-    if (collide || reorder_flag) {
+    if (reorder_flag) {
+      particle->sort_reorder();
+      timer->stamp(TIME_SORT);
+    } else if (collide) {
       particle->sort();
-      if (reorder_flag) particle->reorder();
       timer->stamp(TIME_SORT);
     }
 
@@ -397,6 +406,9 @@ template < int DIM, int SURF, int OPT > void Update::move()
   Particle::OnePart *particles;
   Particle::OnePart *ipart,*jpart;
 
+  const int *uniform_index = NULL;
+  int unx = 0, uny = 0;
+
   if (OPT) {
     boxlo = domain->boxlo;
     boxhi = domain->boxhi;
@@ -406,6 +418,13 @@ template < int DIM, int SURF, int OPT > void Update::move()
     dx = Lx/grid->unx;
     dy = Ly/grid->uny;
     dz = Lz/grid->unz;
+    unx = grid->unx;
+    uny = grid->uny;
+
+    // dense cell ID -> cell index map, when Grid was able to build one
+    // one indexed load per particle instead of a hash lookup
+
+    if (grid->hashfilled) uniform_index = grid->uniform_index;
   }
 
   // for 2d and axisymmetry only
@@ -550,14 +569,20 @@ template < int DIM, int SURF, int OPT > void Update::move()
           int kp = 0;
           if (DIM == 3) kp = static_cast<int>((xnew[2] - boxlo[2])/dz);
 
-          int cellIdx = (kp*grid->uny + jp)*grid->unx + ip + 1;
+          int cellIdx = (kp*uny + jp)*unx + ip + 1;
 
           // particle outside ghost grid halo must use standard move
+          // dense map when available, else the cell ID hash
 
-          Grid::MyHash::iterator hashptr = grid->hash->find(cellIdx);
-          if (hashptr != grid->hash->end()) {
+          int icell = -1;
+          if (uniform_index) {
+            icell = uniform_index[cellIdx];
+          } else {
+            Grid::MyHash::iterator hashptr = grid->hash->find(cellIdx);
+            if (hashptr != grid->hash->end()) icell = hashptr->second;
+          }
 
-            int icell = hashptr->second;
+          if (icell >= 0) {
 
             // reset particle cell and coordinates
 
@@ -1309,7 +1334,7 @@ template < int DIM, int SURF, int OPT > void Update::move()
 
   // END of all move/migrate iterations
 
-  particle->sorted = 0;
+  particle->sorted = particle->sorted_contiguous = 0;
 
   // accumulate running totals
 

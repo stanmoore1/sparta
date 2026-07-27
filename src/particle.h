@@ -24,6 +24,12 @@ class Particle : protected Pointers {
  public:
   int exist;                // 1 if particles exist
   int sorted;               // 1 if particles are sorted by grid cell
+  int sorted_contiguous;    // 1 if, in addition, the particles of each grid
+                            //   cell occupy consecutive slots of particles[],
+                            //   so cinfo.first .. first+count-1 are that
+                            //   cell's particles and next[] need not be
+                            //   walked; set by reorder(), cleared by sort()
+                            //   and by anything that invalidates sorted
 
   enum{MAXVIBMODE=4};       // increase value if species need more vib modes
 
@@ -143,6 +149,7 @@ class Particle : protected Pointers {
   void compress_reactions(int, int *);
   void sort();
   void reorder();
+  void sort_reorder();
   void sort_allocate();
   void remove_all_from_cell(int);
   virtual void grow(int);
@@ -194,6 +201,16 @@ class Particle : protected Pointers {
   int maxgrid;              // max # of indices first can hold
   int maxsort;              // max # of particles next can hold
   int maxspecies;           // max size of species list
+
+  // scratch for sort_reorder()'s out-of-place counting sort
+  // sortbuf is the ping-pong partner of particles, swapped with it each time,
+  //   so it always holds whichever buffer is not currently live
+  // sortcursor[icell] is the running write position within cell icell's block
+
+  OnePart *sortbuf;
+  int maxsortbuf;
+  int *sortcursor;
+  int maxsortcursor;
 
   FILE *fp;                 // file pointer for species, rotation, vibration
   int nfile;                // # of species read from file

@@ -66,50 +66,33 @@ void RanKnuth::reset(double rseed, int offset, int warmup)
 }
 
 /* ----------------------------------------------------------------------
-   uniform RN
+   one-time seeding of the lagged Fibonacci state
+   split out of uniform(), which is inline in random_knuth.h
 ------------------------------------------------------------------------- */
 
-double RanKnuth::uniform()
+void RanKnuth::init_state()
 {
   int i,ii,k,mj,mk;
-  double rn;
 
-  if (!initflag) {
-    initflag = 1;
-    mj = labs(MSEED-labs(seed));
-    mj %= MBIG;
-    ma[55] = mj;
-    mk = 1;
-    for (i = 1; i <= 54; i++) {
-      ii = (21*i) % 55;
-      ma[ii] = mk;
-      mk = mj-mk;
-      if (mk < 0) mk += MBIG;
-      mj = ma[ii];
-    }
-    for (k=0; k<4; k++)
-      for (i=1; i<=55; i++) {
-        ma[i] -= ma[1+(i+30) % 55];
-        if (ma[i] < 0) ma[i] += MBIG;
-    }
-    inext = 0;
-    inextp = 31;
+  initflag = 1;
+  mj = labs(MSEED-labs(seed));
+  mj %= MBIG;
+  ma[55] = mj;
+  mk = 1;
+  for (i = 1; i <= 54; i++) {
+    ii = (21*i) % 55;
+    ma[ii] = mk;
+    mk = mj-mk;
+    if (mk < 0) mk += MBIG;
+    mj = ma[ii];
   }
-
-  while (1) {
-    if (++inext == 56) inext = 1;
-    if (++inextp == 56) inextp = 1;
-    mj = ma[inext] - ma[inextp];
-    if (mj < 0) mj += MBIG;
-    ma[inext] = mj;
-    rn = mj*FAC;
-
-    // make sure the random number is valid
-
-    if (rn > 0.0 && rn < 1.0) break;
+  for (k=0; k<4; k++)
+    for (i=1; i<=55; i++) {
+      ma[i] -= ma[1+(i+30) % 55];
+      if (ma[i] < 0) ma[i] += MBIG;
   }
-
-  return rn;
+  inext = 0;
+  inextp = 31;
 }
 
 /* ----------------------------------------------------------------------

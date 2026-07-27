@@ -703,7 +703,7 @@ void FixAblate::create_surfs(int outflag)
     for (int icell = 0; icell < nglocal; icell++)
       if (cells[icell].nsplit > 1)
         grid->assign_split_cell_particles(icell);
-    particle->sorted = 0;
+    particle->sorted = particle->sorted_contiguous = 0;
   }
 
   // notify all classes that store per-grid data that grid has changed
@@ -823,7 +823,7 @@ void FixAblate::create_surfs(int outflag)
   MPI_Allreduce(&ncount,&ndelete,1,MPI_INT,MPI_SUM,world);
 
   particle->nlocal = pnlocal;
-  particle->sorted = 0;
+  particle->sorted = particle->sorted_contiguous = 0;
 }
 
 /* ----------------------------------------------------------------------

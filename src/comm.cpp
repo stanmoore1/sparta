@@ -313,7 +313,7 @@ void Comm::migrate_cells(int nmigrate)
     grid->compress();
     if (surf->distributed && !surf->implicit) surf->compress_explicit();
     particle->compress_rebalance();
-  } else particle->sorted = 0;
+  } else particle->sorted = particle->sorted_contiguous = 0;
 
   // create irregular communication plan with variable size datums
   // nrecv = # of incoming grid cells

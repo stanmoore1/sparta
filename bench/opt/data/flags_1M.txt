@@ -1,0 +1,9 @@
+tag=tierA size=1M reorder=3 reps=4
+  loop_time_median=6.32745  min=6.321  max=6.81904  spread=7.87%
+  breakdown: Move=1.8726 Coll=2.5386 Sort=1.8342 Comm=0.00037885 Modify=0 Output=0.081521 
+tag=tierA_native size=1M reorder=3 reps=4
+  loop_time_median=6.21453  min=5.95957  max=6.62494  spread=10.71%
+  breakdown: Move=1.8454 Coll=2.4471 Sort=1.8463 Comm=0.00035691 Modify=0 Output=0.075216 
+tag=tierA_fast size=1M reorder=3 reps=4
+  loop_time_median=6.54558  min=5.90064  max=6.66439  spread=11.67%
+  breakdown: Move=1.9204 Coll=2.6631 Sort=1.8815 Comm=0.00036669 Modify=0 Output=0.080071 

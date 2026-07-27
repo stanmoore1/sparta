@@ -1,0 +1,171 @@
+==18021== Callgrind, a call-graph generating cache profiler
+==18021== Copyright (C) 2002-2017, and GNU GPL'd, by Josef Weidendorfer et al.
+==18021== Using Valgrind-3.22.0 and LibVEX; rerun with -h for copyright info
+==18021== Command: /tmp/sparta-base/src/spa_dbg -var x 20 -var y 20 -var z 25 -var reorder 5
+==18021== 
+--18021-- warning: L3 cache found, using its data for the LL simulation.
+--18021-- warning: specified LL cache: line_size 64  assoc 20  total_size 272,629,760
+--18021-- warning: simulated LL cache: line_size 64  assoc 33  total_size 276,824,064
+==18021== For interactive control, run 'callgrind_control -h'.
+SPARTA (24 Sep 2025)
+Running on 1 MPI task(s)
+Created orthogonal box = (0 0 0) to (0.0002 0.0002 0.00025)
+Created 10000 child grid cells
+  CPU time = 0.308092 secs
+  create/ghost percent = 45.4033 54.5967
+Balance grid migrated 0 cells
+  CPU time = 0.129217 secs
+  reassign/sort/migrate/ghost percent = 19.1383 0.414041 17.9071 62.5405
+Creating particles ...
+Created 100000 particles
+  CPU time = 2.1367 secs
+Memory usage per proc in Mbytes:
+  particles (ave,min,max) = 10.9375 10.9375 10.9375
+  grid      (ave,min,max) = 2.95129 2.95129 2.95129
+  surf      (ave,min,max) = 0 0 0
+  total     (ave,min,max) = 13.8888 13.8888 13.8888
+Step CPU Np Natt Ncoll c_temp 
+       0            0   100000        0        0    272.86255 
+      10     18.66636   100000    96159    70192    272.86255 
+      20    38.000512   100000    98954    70496    272.86255 
+      30    57.081061   100000   100205    70700    272.86255 
+Loop time of 57.0819 on 1 procs for 30 steps with 100000 particles
+Performance: 0.526 timesteps/s, 52.556 kparticle-step/s
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Move    | 8.9948     | 8.9948     | 8.9948     |   0.0 | 15.76
+Coll    | 46.67      | 46.67      | 46.67      |   0.0 | 81.76
+Sort    | 1.3562     | 1.3562     | 1.3562     |   0.0 |  2.38
+Comm    | 0.0025718  | 0.0025718  | 0.0025718  |   0.0 |  0.00
+Modify  | 0          | 0          | 0          |   0.0 |  0.00
+Output  | 0.056274   | 0.056274   | 0.056274   |   0.0 |  0.10
+Other   |            | 0.002449   |            |       |  0.00
+
+Particle moves    = 3000000 (3M)
+Cells touched     = 2501138 (2.5M)
+Particle comms    = 0 (0K)
+Boundary collides = 559594 (0.56M)
+Boundary exits    = 0 (0K)
+SurfColl checks   = 0 (0K)
+SurfColl occurs   = 0 (0K)
+Surf reactions    = 0 (0K)
+Collide attempts  = 2903234 (2.9M)
+Collide occurs    = 2107271 (2.11M)
+Gas reactions     = 0 (0K)
+Particles stuck   = 0
+Axisymm bad moves = 0
+
+Particle-moves/CPUsec/proc: 52556.1
+Particle-moves/step: 100000
+Cell-touches/particle/step: 0.833713
+Particle comm iterations/step: 1
+Particle fraction communicated: 0
+Particle fraction colliding with boundary: 0.186531
+Particle fraction exiting boundary: 0
+Surface-checks/particle/step: 0
+Surface-collisions/particle/step: 0
+Surface-reactions/particle/step: 0
+Collision-attempts/particle/step: 0.967745
+Collisions/particle/step: 0.702424
+Gas-reactions/particle/step: 0
+
+Particles: 100000 ave 100000 max 100000 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Cells:     10000 ave 10000 max 10000 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+GhostCell: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+EmptyCell: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Memory usage per proc in Mbytes:
+  particles (ave,min,max) = 10.9375 10.9375 10.9375
+  grid      (ave,min,max) = 2.95129 2.95129 2.95129
+  surf      (ave,min,max) = 0 0 0
+  total     (ave,min,max) = 13.8888 13.8888 13.8888
+Step CPU Np Natt Ncoll c_temp 
+      30            0   100000   100205    70700    272.86255 
+      40    3.5991409   100000     9039     7077    272.86255 
+      50    7.0802491   100000     9132     6993    272.86255 
+      60    10.723256   100000     9285     7020    272.86255 
+      70    14.140922   100000     9358     7064    272.86255 
+      80    17.620829   100000     9554     7154    272.86255 
+      90    21.080782   100000     9462     6936    272.86255 
+     100    24.698239   100000     9665     7087    272.86255 
+     110    28.164568   100000     9685     7102    272.86255 
+     120    31.680146   100000     9670     7039    272.86255 
+     130     35.22347   100000     9701     6994    272.86255 
+Loop time of 35.2238 on 1 procs for 100 steps with 100000 particles
+Performance: 2.839 timesteps/s, 283.899 kparticle-step/s
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Move    | 13.012     | 13.012     | 13.012     |   0.0 | 36.94
+Coll    | 18.36      | 18.36      | 18.36      |   0.0 | 52.12
+Sort    | 3.6699     | 3.6699     | 3.6699     |   0.0 | 10.42
+Comm    | 0.0025249  | 0.0025249  | 0.0025249  |   0.0 |  0.01
+Modify  | 0          | 0          | 0          |   0.0 |  0.00
+Output  | 0.17641    | 0.17641    | 0.17641    |   0.0 |  0.50
+Other   |            | 0.003193   |            |       |  0.01
+
+Particle moves    = 10000000 (10M)
+Cells touched     = 233192 (0.233M)
+Particle comms    = 0 (0K)
+Boundary collides = 186862 (0.187M)
+Boundary exits    = 0 (0K)
+SurfColl checks   = 0 (0K)
+SurfColl occurs   = 0 (0K)
+Surf reactions    = 0 (0K)
+Collide attempts  = 936789 (0.937M)
+Collide occurs    = 702074 (0.702M)
+Gas reactions     = 0 (0K)
+Particles stuck   = 0
+Axisymm bad moves = 0
+
+Particle-moves/CPUsec/proc: 283899
+Particle-moves/step: 100000
+Cell-touches/particle/step: 0.0233192
+Particle comm iterations/step: 1
+Particle fraction communicated: 0
+Particle fraction colliding with boundary: 0.0186862
+Particle fraction exiting boundary: 0
+Surface-checks/particle/step: 0
+Surface-collisions/particle/step: 0
+Surface-reactions/particle/step: 0
+Collision-attempts/particle/step: 0.0936789
+Collisions/particle/step: 0.0702074
+Gas-reactions/particle/step: 0
+
+Particles: 100000 ave 100000 max 100000 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Cells:     10000 ave 10000 max 10000 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+GhostCell: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+EmptyCell: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+==18021== 
+==18021== Events    : Ir Dr Dw I1mr D1mr D1mw ILmr DLmr DLmw Bc Bcm Bi Bim
+==18021== Collected : 5434281383 1644195352 633281041 13985 80737471 2928868 4865 49034 251878 479455523 18156255 30755974 1865088
+==18021== 
+==18021== I   refs:      5,434,281,383
+==18021== I1  misses:           13,985
+==18021== LLi misses:            4,865
+==18021== I1  miss rate:          0.00%
+==18021== LLi miss rate:          0.00%
+==18021== 
+==18021== D   refs:      2,277,476,393  (1,644,195,352 rd + 633,281,041 wr)
+==18021== D1  misses:       83,666,339  (   80,737,471 rd +   2,928,868 wr)
+==18021== LLd misses:          300,912  (       49,034 rd +     251,878 wr)
+==18021== D1  miss rate:           3.7% (          4.9%   +         0.5%  )
+==18021== LLd miss rate:           0.0% (          0.0%   +         0.0%  )
+==18021== 
+==18021== LL refs:          83,680,324  (   80,751,456 rd +   2,928,868 wr)
+==18021== LL misses:           305,777  (       53,899 rd +     251,878 wr)
+==18021== LL miss rate:            0.0% (          0.0%   +         0.0%  )
+==18021== 
+==18021== Branches:        510,211,497  (  479,455,523 cond +  30,755,974 ind)
+==18021== Mispredicts:      20,021,343  (   18,156,255 cond +   1,865,088 ind)
+==18021== Mispred rate:            3.9% (          3.8%     +         6.1%   )

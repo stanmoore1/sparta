@@ -1,0 +1,13 @@
+# built binaries and raw run output are reproducible from the scripts here
+bin/
+logs/
+prof/*.out
+prof/*.gmon.out
+
+# compiled microbenchmarks
+micro/machine_peak
+micro/micro_collide
+micro/micro_move
+micro/micro_sort
+micro/micro_thp
+micro/micro_pow

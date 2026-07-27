@@ -1,0 +1,55 @@
+{
+  "kernels": [
+    {
+      "name": "move (before)",
+      "phase": "before",
+      "ai": 0.08501705764805255,
+      "gflops": 0.5152647172484864,
+      "gbs": 6.060721595206717
+    },
+    {
+      "name": "collide (before)",
+      "phase": "before",
+      "ai": 1.0037842700279545,
+      "gflops": 0.8457878190597206,
+      "gbs": 0.8425991961760528
+    },
+    {
+      "name": "move (after)",
+      "phase": "after",
+      "ai": 0.08501705764805255,
+      "gflops": 0.6484383443207609,
+      "gbs": 7.62715579978219
+    },
+    {
+      "name": "collide (after)",
+      "phase": "after",
+      "ai": 1.0037842700279545,
+      "gflops": 0.9508683513325988,
+      "gbs": 0.9472835744936686
+    }
+  ],
+  "sort": {
+    "baseline_GBs": 5.083563508901393,
+    "tuned_GBs": 9.270885699189598,
+    "note": "sort does no floating point; reported as bandwidth only"
+  },
+  "flop_model": {
+    "move_per_particle": 12.0,
+    "test_collision_per_attempt": 82.0,
+    "setup_collision_per_collision": 36.4,
+    "scatter_per_collision": 186.20000000000002,
+    "collide_per_attempt_avg": 248.75517350657586,
+    "transcendental_FMA_equivalents": {
+      "pow": 36.0,
+      "sqrt": 5.7,
+      "sincos": 15.0
+    }
+  },
+  "bytes_model": {
+    "move_per_particle": 141.14814523076922,
+    "collide_per_attempt": 247.81736567723684,
+    "sort_per_particle_per_step": 99.62496984615385,
+    "reorder_per_particle": 52.98427076923077
+  }
+}

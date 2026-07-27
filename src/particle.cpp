@@ -52,9 +52,15 @@ Particle::Particle(SPARTA *sparta) : Pointers(sparta)
   MPI_Comm_rank(world,&me);
 
   exist = sorted = 0;
+  sorted_contiguous = 0;
   nglobal = 0;
   nlocal = maxlocal = 0;
   particles = NULL;
+
+  sortbuf = NULL;
+  maxsortbuf = 0;
+  sortcursor = NULL;
+  maxsortcursor = 0;
 
   nspecies = maxspecies = 0;
   species = NULL;
@@ -115,6 +121,8 @@ Particle::~Particle()
   memory->sfree(mixture);
 
   memory->sfree(particles);
+  memory->sfree(sortbuf);
+  memory->destroy(sortcursor);
   //memory->destroy(cellcount);
   //memory->destroy(first);
   memory->destroy(next);
@@ -237,7 +245,7 @@ void Particle::compress_migrate(int nmigrate, int *mlist)
     }
   }
 
-  sorted = 0;
+  sorted = sorted_contiguous = 0;
 }
 
 /* ----------------------------------------------------------------------
@@ -274,7 +282,7 @@ void Particle::compress_rebalance()
     }
   }
 
-  sorted = 0;
+  sorted = sorted_contiguous = 0;
 }
 
 /* ----------------------------------------------------------------------
@@ -413,6 +421,11 @@ void Particle::sort()
 {
   sorted = 1;
 
+  // sorting alone only builds the per-cell linked list; it says nothing
+  //   about where a cell's particles sit in memory
+
+  sorted_contiguous = 0;
+
   // reallocate next list as needed
   // NOTE: why not just compare maxsort to nlocal?
   //       then could realloc less often?
@@ -522,6 +535,96 @@ void Particle::reorder()
     }
     cinfo[icell].first = m;
     int last = m + cinfo[icell].count;
+    for (; m < last-1; m++) next[m] = m+1;
+    next[m++] = -1;
+  }
+
+  sorted_contiguous = 1;
+}
+
+/* ----------------------------------------------------------------------
+   sort particles into grid cells and reorder them so that each cell's
+     particles are contiguous in memory, in a single pass
+   produces exactly the same particle ordering, cinfo.first/count and next[]
+     as calling sort() followed by reorder(), but as three streaming passes
+     (count, prefix sum, scatter) instead of a random-write linked list build
+     followed by an in-place cycle permutation of 96-byte structs
+   the scatter is stable, so particles keep their relative order within a
+     cell, which is what the linked list walk in reorder() also produces
+   costs one extra particle-sized buffer, allocated only if this is used
+   invoked from Update::run() every reorder_period timesteps
+------------------------------------------------------------------------- */
+
+void Particle::sort_reorder()
+{
+  // custom per-particle data lives in separate arrays that would each need
+  //   their own out-of-place buffer; rare, so use the two-pass path instead
+
+  if (ncustom) {
+    sort();
+    reorder();
+    return;
+  }
+
+  sorted = 1;
+  sorted_contiguous = 1;
+
+  Grid::ChildInfo *cinfo = grid->cinfo;
+  int nglocal = grid->nlocal;
+
+  if (nglocal > maxsortcursor) {
+    maxsortcursor = nglocal;
+    memory->destroy(sortcursor);
+    memory->create(sortcursor,maxsortcursor,"particle:sortcursor");
+  }
+
+  // count particles per cell
+
+  for (int icell = 0; icell < nglocal; icell++) cinfo[icell].count = 0;
+  for (int i = 0; i < nlocal; i++) cinfo[particles[i].icell].count++;
+
+  // prefix sum gives each cell the start of its block in the new ordering
+
+  int m = 0;
+  for (int icell = 0; icell < nglocal; icell++) {
+    int n = cinfo[icell].count;
+    cinfo[icell].first = n ? m : -1;
+    sortcursor[icell] = m;
+    m += n;
+  }
+
+  // scatter into the spare buffer, then make it the live particle list
+  // both buffers are kept at the same capacity so maxlocal stays accurate
+  //   for the buffer that particles points at
+
+  if (maxsortbuf < maxlocal) {
+    maxsortbuf = maxlocal;
+    memory->sfree(sortbuf);
+    sortbuf = (OnePart *)
+      memory->smalloc(maxsortbuf*sizeof(OnePart),"particle:sortbuf",
+                      SPARTA_GET_ALIGN(OnePart));
+  }
+
+  for (int i = 0; i < nlocal; i++)
+    sortbuf[sortcursor[particles[i].icell]++] = particles[i];
+
+  OnePart *tmpbuf = particles;
+  particles = sortbuf;
+  sortbuf = tmpbuf;
+
+  int tmpmax = maxlocal;
+  maxlocal = maxsortbuf;
+  maxsortbuf = tmpmax;
+
+  // rebuild the per-cell linked list over the now-contiguous blocks
+
+  sort_allocate();
+
+  m = 0;
+  for (int icell = 0; icell < nglocal; icell++) {
+    int n = cinfo[icell].count;
+    if (n == 0) continue;
+    int last = m + n;
     for (; m < last-1; m++) next[m] = m+1;
     next[m++] = -1;
   }
@@ -1718,6 +1821,11 @@ bigint Particle::memory_usage()
 {
   bigint bytes = (bigint) maxlocal * sizeof(OnePart);
   bytes += (bigint) maxlocal * sizeof(int);
+
+  // sort_reorder()'s ping-pong buffer, allocated only if reordering is on
+
+  bytes += (bigint) maxsortbuf * sizeof(OnePart);
+  bytes += (bigint) maxsortcursor * sizeof(int);
   for (int i = 0; i < ncustom_ivec; i++)
     bytes += (bigint) maxlocal * sizeof(int);
   for (int i = 0; i < ncustom_iarray; i++)

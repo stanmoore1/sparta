@@ -155,6 +155,10 @@ Grid::Grid(SPARTA *sparta) : Pointers(sparta)
   hash = new MyHash();
   hashfilled = 0;
 
+  uniform_index = NULL;
+  uniform_index_n = 0;
+  uniform_index_flag = 0;
+
   copy = copymode = 0;
   uncopy = 1;
 }
@@ -182,6 +186,7 @@ Grid::~Grid()
   delete csplits;
   delete csubs;
   delete hash;
+  memory->destroy(uniform_index);
 
   for (int i = 0; i < ncustom; i++) delete [] ename[i];
   memory->sfree(ename);
@@ -1118,6 +1123,84 @@ void Grid::rehash()
   }
 
   hashfilled = 1;
+
+  // keep the dense uniform-grid map in step with the hash
+
+  if (uniform_index_flag) build_uniform_index();
+}
+
+/* ----------------------------------------------------------------------
+   ask for the dense cell ID -> local index map to be maintained
+   caller must be prepared for grid->uniform_index to still be NULL,
+     e.g. for a non-uniform grid or one too large for a dense map,
+     and fall back to the hash in that case
+------------------------------------------------------------------------- */
+
+void Grid::request_uniform_index()
+{
+  uniform_index_flag = 1;
+  if (!hashfilled) rehash();
+  else build_uniform_index();
+}
+
+/* ----------------------------------------------------------------------
+   build dense map from cell ID to local cell index, owned + ghost
+   only possible for a uniform grid, where IDs run 1 to unx*uny*unz
+   declined (uniform_index left NULL) if the dense array would be large in
+     absolute terms and also much larger than the cells this proc touches,
+     which is the case for a big grid spread over many procs
+------------------------------------------------------------------------- */
+
+void Grid::build_uniform_index()
+{
+  if (!uniform) {
+    memory->destroy(uniform_index);
+    uniform_index = NULL;
+    uniform_index_n = 0;
+    return;
+  }
+
+  // IDs are 1-based, so a cell ID needs unx*uny*unz+1 entries
+  // but Update::move's optimized path admits a particle sitting exactly on
+  //   the upper box face, for which its truncation yields ip == unx (and
+  //   likewise jp == uny, kp == unz), giving an index past the last cell ID
+  // the hash simply missed on those, so the array must be long enough to
+  //   hold a -1 for them rather than read out of bounds
+
+  bigint n = ((bigint) unz*uny + uny)*unx + unx + 2;
+  bigint mine = (bigint) nlocal + nghost + 1;
+
+  if (n > MAXSMALLINT ||
+      (n*sizeof(int) > 16*1024*1024 && n > 16*mine)) {
+    memory->destroy(uniform_index);
+    uniform_index = NULL;
+    uniform_index_n = 0;
+    return;
+  }
+
+  if (n != uniform_index_n) {
+    memory->destroy(uniform_index);
+    memory->create(uniform_index,static_cast<int>(n),"grid:uniform_index");
+    uniform_index_n = n;
+  }
+
+  for (bigint i = 0; i < n; i++) uniform_index[i] = -1;
+
+  // on a uniform grid IDs are exactly 1 to unx*uny*unz, so the bound test
+  //   never fires; it is here so that an inconsistent uniform flag degrades
+  //   into declining the map rather than into an out-of-bounds write
+
+  for (int icell = 0; icell < nlocal+nghost; icell++) {
+    if (cells[icell].nsplit <= 0) continue;
+    bigint id = (bigint) cells[icell].id;
+    if (id < 0 || id >= n) {
+      memory->destroy(uniform_index);
+      uniform_index = NULL;
+      uniform_index_n = 0;
+      return;
+    }
+    uniform_index[id] = icell;
+  }
 }
 
 /* ----------------------------------------------------------------------

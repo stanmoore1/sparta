@@ -90,6 +90,20 @@ class Grid : protected Pointers {
   MyHash *hash;
   int hashfilled;             // 1 if hash is filled with cell IDs
 
+  // dense cell ID -> local cell index map, an alternative to hash
+  // only meaningful for a uniform grid, where cell IDs are a dense range
+  //   1 to unx*uny*unz, so the map is a plain indexed array instead of
+  //   a hash lookup with its two dependent cache misses
+  // built by rehash() when uniform_index_flag is set, so it is always
+  //   exactly as up-to-date as hash is; valid only when hashfilled is 1
+  // uniform_index is NULL if the map was declined, e.g. because the dense
+  //   array would be far larger than the cells this proc actually owns,
+  //   in which case callers must fall back to hash
+
+  int *uniform_index;         // [id] = local cell index, -1 if not owned/ghost
+  bigint uniform_index_n;     // allocated length, 0 if not built
+  int uniform_index_flag;     // 1 if a caller has asked for the map
+
   // list data structs
 
   MyPage<surfint> *csurfs;    // lists of surf indices for
@@ -232,6 +246,8 @@ class Grid : protected Pointers {
   void remove_ghosts();
   void acquire_ghosts(int surfflag=1);
   void rehash();
+  void request_uniform_index();
+  void build_uniform_index();
   void find_neighbors();
   void unset_neighbors();
   void reset_neighbors();

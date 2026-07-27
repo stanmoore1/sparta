@@ -1,0 +1,25 @@
+tag=refine size=1M reorder=3 reps=5
+  loop_time_median=8.43731  min=7.75934  max=8.76821  spread=11.96%
+  moves/cpusec=1.18521e+07
+  breakdown: Move=2.3896 Coll=2.8387 Sort=3.1182 Comm=0.00031924 Modify=0 Output=0.090182 
+  log: /home/user/sparta/bench/opt/logs/refine.1M.r3.2.log
+tag=refine size=1M reorder=4 reps=5
+  loop_time_median=7.36061  min=7.09353  max=8.08376  spread=13.45%
+  moves/cpusec=1.35858e+07
+  breakdown: Move=2.273 Coll=2.6719 Sort=2.3309 Comm=0.00033212 Modify=0 Output=0.084269 
+  log: /home/user/sparta/bench/opt/logs/refine.1M.r4.2.log
+tag=refine size=1M reorder=5 reps=5
+  loop_time_median=7.33669  min=7.01058  max=8.00031  spread=13.49%
+  moves/cpusec=1.36301e+07
+  breakdown: Move=2.3289 Coll=2.7545 Sort=2.1682 Comm=0.00030041 Modify=0 Output=0.084693 
+  log: /home/user/sparta/bench/opt/logs/refine.1M.r5.3.log
+tag=refine size=1M reorder=6 reps=5
+  loop_time_median=7.76811  min=6.8174  max=8.38156  spread=20.14%
+  moves/cpusec=1.28731e+07
+  breakdown: Move=2.5067 Coll=3.0378 Sort=2.1299 Comm=0.00030398 Modify=0 Output=0.093229 
+  log: /home/user/sparta/bench/opt/logs/refine.1M.r6.1.log
+tag=refine size=1M reorder=8 reps=5
+  loop_time_median=7.6763  min=7.33767  max=8.12217  spread=10.22%
+  moves/cpusec=1.30271e+07
+  breakdown: Move=2.6414 Coll=3.0726 Sort=1.871 Comm=0.00035906 Modify=0 Output=0.090795 
+  log: /home/user/sparta/bench/opt/logs/refine.1M.r8.2.log

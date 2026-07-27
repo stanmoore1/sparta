@@ -1,0 +1,41 @@
+reorder sweep: bin=/home/user/sparta/bench/opt/bin/spa_baseline size=1M reps=3
+tag=base size=1M reorder=0 reps=3
+  loop_time_median=14.0507  min=12.7167  max=14.3532  spread=11.65%
+  moves/cpusec=7.11708e+06
+  breakdown: Move=5.8068 Coll=6.8032 Sort=1.3352 Comm=0.00036764 Modify=0 Output=0.10486 
+  log: /home/user/sparta/bench/opt/logs/base.1M.r0.0.log
+tag=base size=1M reorder=1 reps=3
+  loop_time_median=10.3219  min=9.88133  max=10.604  spread=7.00%
+  moves/cpusec=9.68811e+06
+  breakdown: Move=2.2648 Coll=2.3189 Sort=5.6556 Comm=0.00036001 Modify=0 Output=0.082143 
+  log: /home/user/sparta/bench/opt/logs/base.1M.r1.0.log
+tag=base size=1M reorder=2 reps=3
+  loop_time_median=8.61135  min=8.17202  max=8.72317  spread=6.40%
+  moves/cpusec=1.16126e+07
+  breakdown: Move=2.2031 Coll=2.5103 Sort=3.8161 Comm=0.00031209 Modify=0 Output=0.08135 
+  log: /home/user/sparta/bench/opt/logs/base.1M.r2.1.log
+tag=base size=1M reorder=5 reps=3
+  loop_time_median=7.23218  min=6.75429  max=7.48223  spread=10.07%
+  moves/cpusec=1.38271e+07
+  breakdown: Move=2.2682 Coll=2.6634 Sort=2.219 Comm=0.00029826 Modify=0 Output=0.0811 
+  log: /home/user/sparta/bench/opt/logs/base.1M.r5.0.log
+tag=base size=1M reorder=10 reps=3
+  loop_time_median=7.8426  min=7.37395  max=8.0321  spread=8.39%
+  moves/cpusec=1.27509e+07
+  breakdown: Move=2.8817 Coll=3.1157 Sort=1.7544 Comm=0.00036478 Modify=0 Output=0.090239 
+  log: /home/user/sparta/bench/opt/logs/base.1M.r10.1.log
+tag=base size=1M reorder=20 reps=3
+  loop_time_median=9.41197  min=8.89533  max=9.43881  spread=5.77%
+  moves/cpusec=1.06248e+07
+  breakdown: Move=3.8795 Coll=3.8582 Sort=1.5785 Comm=0.00035262 Modify=0 Output=0.095248 
+  log: /home/user/sparta/bench/opt/logs/base.1M.r20.2.log
+tag=base size=1M reorder=50 reps=3
+  loop_time_median=11.0731  min=10.7637  max=11.1432  spread=3.43%
+  moves/cpusec=9.0309e+06
+  breakdown: Move=4.6682 Coll=4.8539 Sort=1.4479 Comm=0.00035906 Modify=0 Output=0.10247 
+  log: /home/user/sparta/bench/opt/logs/base.1M.r50.0.log
+tag=base size=1M reorder=100 reps=3
+  loop_time_median=12.9037  min=12.733  max=12.9062  spread=1.34%
+  moves/cpusec=7.74969e+06
+  breakdown: Move=5.302 Coll=6.0721 Sort=1.43 Comm=0.00037551 Modify=0 Output=0.099023 
+  log: /home/user/sparta/bench/opt/logs/base.1M.r100.2.log
