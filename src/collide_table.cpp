@@ -109,7 +109,7 @@ CollideTable::CollideTable(SPARTA *sparta, int narg, char **arg) :
   }
   for (int m = 0; m < ntables; m++) bcast_table(&tables[m]);
 
-  if (ntables == 0)
+  if (ntables == 0 && comm->me == 0)
     error->warning(FLERR,"No cross section tables were defined by collide table");
 }
 
