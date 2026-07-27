@@ -1894,24 +1894,33 @@ double Variable::evaluate(char *str, Tree **tree)
 	  treestack[ntreestack++] = newtree;
 	
 	} else if (nbracket == 1 && size > 0) {
-	
+
+	  if (index1 < 1 || index1 > size)
+	    error->all(FLERR,"Custom attribute in variable formula is "
+		       "accessed out-of-range");
+
+	  // ptr to column index1-1 of the Nentity x size array
+	  // with nstride = size, evaluation walks down that column
+
 	  Tree *newtree = new Tree();
 	  if (type == INT) {
 	    newtree->type = ARRAYINT;
 	    if (cwhich == PARTICLE_CUSTOM)
-	      newtree->iarray = particle->eiarray[particle->ewhich[icustom]][index1-1];
+	      newtree->iarray =
+		&particle->eiarray[particle->ewhich[icustom]][0][index1-1];
 	    else if (cwhich == GRID_CUSTOM)
-	      newtree->iarray = grid->eiarray[grid->ewhich[icustom]][index1-1];
+	      newtree->iarray = &grid->eiarray[grid->ewhich[icustom]][0][index1-1];
 	    else if (cwhich == SURF_CUSTOM)
-	      newtree->iarray = surf->eiarray[surf->ewhich[icustom]][index1-1];
+	      newtree->iarray = &surf->eiarray[surf->ewhich[icustom]][0][index1-1];
 	  } else if (type == DOUBLE) {
 	    newtree->type = ARRAY;
 	    if (cwhich == PARTICLE_CUSTOM)
-	      newtree->array = particle->edvec[particle->ewhich[icustom]];
+	      newtree->array =
+		&particle->edarray[particle->ewhich[icustom]][0][index1-1];
 	    else if (cwhich == GRID_CUSTOM)
-	      newtree->array = grid->edvec[grid->ewhich[icustom]];
+	      newtree->array = &grid->edarray[grid->ewhich[icustom]][0][index1-1];
 	    else if (cwhich == SURF_CUSTOM)
-	      newtree->array = surf->edvec[surf->ewhich[icustom]];
+	      newtree->array = &surf->edarray[surf->ewhich[icustom]][0][index1-1];
 	  }
 	  newtree->nstride = size;
 	  treestack[ntreestack++] = newtree;
