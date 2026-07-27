@@ -18,3 +18,7 @@ micro/micro_layout
 # roofline.py consumes
 micro/*.out
 !micro/machine_peak.out
+micro/mini_dsmc
+micro/mini_64
+micro/mini_96
+micro/mini_128

@@ -1,0 +1,12 @@
+# mini_dsmc validation: 1M particles, 20 steps
+# compare the shape against SPARTA at the same size
+ reorder     ns/p/s     move     sort     coll      T (K)
+       0     110.15    31.90    12.32    65.93     273.01
+       1      74.05    19.72    31.17    23.15     273.01
+       2      65.58    18.50    21.92    25.16     273.01
+       3      66.48    20.23    18.38    27.88     273.01
+       5      66.49    20.25    16.52    29.72     273.01
+      10      64.34    20.82    13.53    29.99     273.01
+      20     109.14    32.67    15.53    60.94     273.01
+
+minimum at reorder 10 (64.34 ns/p/s); reorder 0 is worse, as in SPARTA

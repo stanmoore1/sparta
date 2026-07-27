@@ -524,20 +524,62 @@ int main(int argc, char **argv)
          "layout / binning", "ns/p/s", "speedup", "move", "bin", "coll",
          "T (K)", "ncoll", "MB");
 
-  printf("-- particles permuted so cells are contiguous (what SPARTA does) --\n");
-  Result p96 = run<1,AoS96>(g, npercell, nsteps, reorder);
-  double base = 1e9*p96.t_total/((double)nlocal*nsteps);
-  report("AoS 96 B", p96, nlocal, nsteps, 0);
-  report("AoS 64 B", run<1,AoS64>(g, npercell, nsteps, reorder), nlocal, nsteps, base);
-  report("SoA (doubles)", run<1,SoAd>(g, npercell, nsteps, reorder), nlocal, nsteps, base);
-  report("AoSoA V=8", run<1,AoSoA<8> >(g, npercell, nsteps, reorder), nlocal, nsteps, base);
-  report("AoSoA V=16", run<1,AoSoA<16> >(g, npercell, nsteps, reorder), nlocal, nsteps, base);
+  /* Sweep the reorder period for each layout. AoSoA loses to SoA partly on the
+     cost of relocating a particle lane by lane, so the fair question is whether
+     it wins once reordering is rare or switched off entirely -- each layout may
+     have a different optimum. Period 0 means never: bin indices only and leave
+     the particles where they are. */
 
-  printf("-- indices binned, particles never moved --\n");
-  report("AoS 96 B, index-only", run<0,AoS96>(g, npercell, nsteps, reorder), nlocal, nsteps, base);
-  report("AoS 64 B, index-only", run<0,AoS64>(g, npercell, nsteps, reorder), nlocal, nsteps, base);
-  report("SoA, index-only", run<0,SoAd>(g, npercell, nsteps, reorder), nlocal, nsteps, base);
-  report("AoSoA V=8, index-only", run<0,AoSoA<8> >(g, npercell, nsteps, reorder), nlocal, nsteps, base);
+  const int periods[] = {1, 2, 4, 8, 16, 0};
+  const int nper = 6;
+
+  printf("-- reorder period sweep (0 = never reorder, indices binned only) --\n");
+  printf("%-16s", "layout");
+  for (int q = 0; q < nper; q++) {
+    char h[16];
+    if (periods[q]) snprintf(h, sizeof(h), "every %d", periods[q]);
+    else snprintf(h, sizeof(h), "never");
+    printf(" %9s", h);
+  }
+  printf("   %s\n", "best");
+
+  double best_overall = 1e30;
+  const char *best_name = "";
+  int best_period = -1;
+
+  Result p96ref = run<1,AoS96>(g, npercell, nsteps, 2);
+  double base = 1e9*p96ref.t_total/((double)nlocal*nsteps);
+
+  for (int L = 0; L < 4; L++) {
+    const char *nm = (L==0) ? "AoS 96 B" : (L==1) ? "AoS 64 B" :
+                     (L==2) ? "SoA" : "AoSoA V=8";
+    printf("%-16s", nm);
+    double bestl = 1e30; int bestp = 0;
+    for (int q = 0; q < nper; q++) {
+      int per = periods[q];
+      Result r;
+      if (per == 0) {
+        if (L==0) r = run<0,AoS96>(g, npercell, nsteps, 1);
+        else if (L==1) r = run<0,AoS64>(g, npercell, nsteps, 1);
+        else if (L==2) r = run<0,SoAd>(g, npercell, nsteps, 1);
+        else r = run<0,AoSoA<8> >(g, npercell, nsteps, 1);
+      } else {
+        if (L==0) r = run<1,AoS96>(g, npercell, nsteps, per);
+        else if (L==1) r = run<1,AoS64>(g, npercell, nsteps, per);
+        else if (L==2) r = run<1,SoAd>(g, npercell, nsteps, per);
+        else r = run<1,AoSoA<8> >(g, npercell, nsteps, per);
+      }
+      double ns = 1e9*r.t_total/((double)nlocal*nsteps);
+      printf(" %9.2f", ns);
+      fflush(stdout);
+      if (ns < bestl) { bestl = ns; bestp = per; }
+    }
+    printf("   %.2f @ %s (%.2fx)\n", bestl,
+           bestp ? "reorder" : "never", base/bestl);
+    if (bestl < best_overall) { best_overall = bestl; best_name = nm; best_period = bestp; }
+  }
+  printf("\nbest overall: %s at period %d, %.2f ns/p/s, %.2fx over AoS-96 @2\n",
+         best_name, best_period, best_overall, base/best_overall);
 
   printf("\nreference equilibrium temperature %.2f K\n", TEMP0);
   return 0;
