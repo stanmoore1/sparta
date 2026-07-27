@@ -144,11 +144,33 @@ class Gui:
         self.wm = subprocess.Popen(["openbox"], env=env,
                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         time.sleep(2)
+        # The app writes to a log rather than /dev/null so that a startup
+        # failure can say what went wrong instead of only that it happened.
+        self.applog = os.path.join(self.outdir, "app.log")
+        self._applog = open(self.applog, "w")
         self.app = subprocess.Popen([GUI] + self.args, env=env,
-                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        time.sleep(5)
-        if self.app.poll() is not None:
-            raise RuntimeError("app exited during startup")
+                                    stdout=self._applog, stderr=subprocess.STDOUT)
+
+        # Wait for a window rather than for a fixed interval.  A blind sleep is
+        # a race on a loaded machine -- the app is still loading the simulator
+        # when the clock runs out -- and it reports every such case as a crash.
+        deadline = time.time() + 60
+        while time.time() < deadline:
+            rc = self.app.poll()
+            if rc is not None:
+                self._applog.flush()
+                try:
+                    tail = "".join(open(self.applog).readlines()[-15:])
+                except OSError:
+                    tail = "(no output)"
+                raise RuntimeError(f"app exited during startup (rc={rc}):\n{tail}")
+            if self.main_window():
+                break
+            time.sleep(0.5)
+        else:
+            raise RuntimeError("app showed no window within 60 s of starting")
+
+        time.sleep(2)  # let the first paint settle before anything is photographed
         self.focus_main()
         return self
 
@@ -161,6 +183,8 @@ class Gui:
                 p.terminate(); p.wait(timeout=5)
             except Exception:
                 p.kill()
+        if getattr(self, "_applog", None):
+            self._applog.close()
         shutil.rmtree(self.profile, ignore_errors=True)
         self.alive_at_end = alive
 

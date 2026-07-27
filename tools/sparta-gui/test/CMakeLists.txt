@@ -1294,17 +1294,23 @@ if (XDOTOOL_BINARY AND WM_BINARY AND SHOOTER_BINARY)
     "SPARTA_EXAMPLES=${CMAKE_SOURCE_DIR}/../../examples"
   )
 
+  # All four hold the xvfb lock. They use distinct display numbers, so they do
+  # not collide over a server -- but each one runs an X server, a window
+  # manager, an accessibility bus and the application, then compares
+  # screenshots against references. Four of those at once is a timing race by
+  # construction: a dialog photographed before it has painted reads as an
+  # action that did nothing.
   add_test(NAME GuiDrive.VisualEffects
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_gui_visual.py)
   set_tests_properties(GuiDrive.VisualEffects PROPERTIES
     ENVIRONMENT "${GUI_DRIVE_ENVIRONMENT};SHOT_DIR=${CMAKE_CURRENT_BINARY_DIR}/visual-shots"
-    TIMEOUT 600)
+    TIMEOUT 600 RESOURCE_LOCK xvfb)
 
   add_test(NAME GuiDrive.Features
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_gui_features.py)
   set_tests_properties(GuiDrive.Features PROPERTIES
     ENVIRONMENT "${GUI_DRIVE_ENVIRONMENT};SHOT_DIR=${CMAKE_CURRENT_BINARY_DIR}/feature-shots"
-    TIMEOUT 900)
+    TIMEOUT 900 RESOURCE_LOCK xvfb)
 
   # Every menu action, judged against an idle reference: an action meant to
   # open something that leaves the screen byte-identical did nothing. This
@@ -1314,7 +1320,7 @@ if (XDOTOOL_BINARY AND WM_BINARY AND SHOOTER_BINARY)
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_gui_actions.py)
   set_tests_properties(GuiDrive.Actions PROPERTIES
     ENVIRONMENT "${GUI_DRIVE_ENVIRONMENT};SHOT_DIR=${CMAKE_CURRENT_BINARY_DIR}/action-shots"
-    TIMEOUT 900)
+    TIMEOUT 900 RESOURCE_LOCK xvfb)
 
   # Activates every control of the running application in turn. The in-process
   # walker builds the dialogs directly and so cannot reach the main window's
@@ -1325,7 +1331,7 @@ if (XDOTOOL_BINARY AND WM_BINARY AND SHOOTER_BINARY)
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_gui_walker.py)
   set_tests_properties(GuiDrive.Walker PROPERTIES
     ENVIRONMENT "${GUI_DRIVE_ENVIRONMENT};SHOT_DIR=${CMAKE_CURRENT_BINARY_DIR}/walker-shots"
-    TIMEOUT 1800)
+    TIMEOUT 1800 RESOURCE_LOCK xvfb)
 else()
   message(STATUS "Skipping the visual and feature GUI suites: "
     "they need xdotool, a window manager (e.g. openbox) and a screenshooter")
