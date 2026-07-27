@@ -1,19 +1,25 @@
 # mini_store: 40x50x50, 1000000 particles, 20 steps, reorder 3
 # every row runs SPARTA's control flow; only the storage differs
 configuration                         B/p   ns/p/s  speedup |   move   sort   coll |   T (K)     ncoll
-AoS 96 B  (SPARTA today)               96    71.31    1.00x |  22.17  20.40  28.74 |  273.01   1413959
-AoS 64 B                               64    65.74    1.08x |  24.03  15.20  26.51 |  273.01   1413959
-SoA doubles                            56    38.73    1.84x |  13.50  10.65  14.58 |  273.01   1413959
-SoA floats                             32    31.24    2.28x |  11.22   7.42  12.60 |  273.01   1413961
-AoSoA V=8                              56    54.61    1.31x |  18.04  15.38  21.18 |  273.01   1413959
-AoSoA V=16                             56    51.93    1.37x |  17.32  14.63  19.98 |  273.01   1413959
--- plus the blocked fast-path mover that SoA makes possible --
-SoA doubles + blocked move             56    34.36    2.08x |  11.48   9.10  13.78 |  273.01   1413959
-SoA floats  + blocked move             32    34.56    2.06x |  12.38   8.16  14.01 |  273.01   1413961
-AoS 96 B    + blocked move             96    66.71    1.07x |  21.88  18.39  26.44 |  273.01   1413959
--- plus collide fused into the scatter (landed in SPARTA) --
-AoS 96 B  + fused collide              96    65.97    1.08x |  21.32  24.71  19.94 |  273.01   1413344
-SoA doubles + blocked + fused          56    44.42    1.61x |  12.95  19.30  12.17 |  273.01   1413344
-SoA floats  + blocked + fused          32    36.74    1.94x |  12.13  14.13  10.49 |  273.01   1413585
+AoS 96 B  (SPARTA today)               96    66.76    1.00x |  20.33  19.04  27.39 |  273.01   1413959
+AoS 64 B                               64    62.69    1.06x |  21.78  14.75  26.15 |  273.01   1413959
+SoA doubles                            56    41.23    1.62x |  16.05  10.15  15.03 |  273.01   1413959
+SoA floats                             32    33.52    1.99x |  12.81   7.75  12.96 |  273.01   1413961
+AoSoA V=8                              56    49.29    1.35x |  17.65  13.24  18.40 |  273.01   1413959
+AoSoA V=16                             56    48.46    1.38x |  17.67  13.16  17.63 |  273.01   1413959
+-- blocked fast-path mover (per-block fallback, not per-array) --
+AoS 96 B    + blocked move             96    54.38    1.23x |  13.46  16.76  24.16 |  273.01   1413959
+SoA doubles + blocked move             56    31.35    2.13x |   9.21   8.41  13.73 |  273.01   1413959
+SoA floats  + blocked move             32    32.23    2.07x |   9.94   8.34  13.95 |  273.01   1413961
+AoSoA V=8   + blocked move             56    41.31    1.62x |  10.36  12.78  18.17 |  273.01   1413959
+-- materialization boundary: every boundary interaction goes
+   through a real OnePart, as it must if the rest of SPARTA is
+   to keep taking OnePart* --
+SoA doubles + mat boundary             56    37.86    1.76x |  14.34   9.57  13.95 |  273.01   1413959
+SoA floats  + mat boundary             32    34.41    1.94x |  13.70   7.59  13.13 |  273.01   1413961
+SoA dbl + blocked + mat bnd            56    32.01    2.09x |   9.23   9.09  13.69 |  273.01   1413959
+AoS 96 B    + mat boundary             96    64.93    1.03x |  19.12  19.08  26.73 |  273.01   1413959
+-- collide fused into the scatter (landed in SPARTA) --
+AoS 96 B  + fused collide              96    60.79    1.10x |  19.17  23.21  18.40 |  273.01   1413344
 
 reference equilibrium temperature 273.15 K

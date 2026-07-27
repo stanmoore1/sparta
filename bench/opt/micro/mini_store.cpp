@@ -315,6 +315,52 @@ struct StoreAoSoA {
   }
 };
 
+/* ================= the materialization boundary =================
+ *
+ * If particle storage becomes SoA, the hot kernels are rewritten natively --
+ * but the rest of SPARTA passes Particle::OnePart* by pointer into every
+ * surface-collision model, every compute and fix, the Kokkos package and the
+ * restart format. Those callers cannot all be converted, so an SoA storage
+ * needs a boundary where a particle is gathered into a real OnePart, handed
+ * over, and scattered back.
+ *
+ * The question is what that costs. It is paid only where the boundary is
+ * actually crossed: the mover's slow path (~1% of particles per step at this
+ * timestep, which is where Domain::collide and the surf models are called),
+ * and whatever computes and dumps touch on output steps.
+ */
+
+struct SPARTA_ALIGN(16) OnePartView {
+  int id, ispecies, icell, flag;
+  double x[3], v[3];
+  double erot, evib, dtremain, weight;
+};
+
+/* stands in for Domain::collide / SurfCollide::collide: an out-of-line callee
+   that takes a OnePart* and mutates it, so it cannot be inlined away */
+__attribute__((noinline))
+static void boundary_collide(OnePartView *p, int dim, double wall)
+{
+  p->v[dim] = -p->v[dim];
+  p->x[dim] = 2.0*wall - p->x[dim];
+}
+
+template <class S>
+static inline void materialize(const S &st, long i, OnePartView &p)
+{
+  for (int c = 0; c < 3; c++) { p.x[c] = st.xg(i,c); p.v[c] = st.vg(i,c); }
+  p.icell = st.cg(i); p.flag = st.fg(i);
+  p.id = 0; p.ispecies = 0;
+  p.erot = p.evib = p.dtremain = 0.0; p.weight = 1.0;
+}
+
+template <class S>
+static inline void writeback(S &st, long i, const OnePartView &p)
+{
+  for (int c = 0; c < 3; c++) { st.xs(i,c,p.x[c]); st.vs(i,c,p.v[c]); }
+  st.cs(i,p.icell); st.fs(i,p.flag);
+}
+
 /* ================= the simulation, generic over storage ================= */
 
 template <class S>
@@ -354,7 +400,10 @@ struct Sim {
 
   void setup(int nx_, int ny_, int nz_, int npercell);
   void teardown();
-  template <int VEC> void move();
+  template <int MATB> inline void move_one(long i);
+  template <int VEC, int MATB> void move();
+  void materialize_all();      /* worst case: a compute touching every particle */
+  long nboundary;
   void sort();
   void sort_reorder(int fuse);
   void collide();
@@ -444,7 +493,7 @@ void Sim<S>::setup(int nx_, int ny_, int nz_, int npercell)
       st.fs(m, PKEEP);
       m++;
     }
-  ncollide_one=nattempt_one=0; t_move=t_sort=t_collide=0.0;
+  ncollide_one=nattempt_one=0; nboundary=0; t_move=t_sort=t_collide=0.0;
 }
 
 template <class S>
@@ -460,95 +509,143 @@ void Sim<S>::teardown()
 /* ---- move: SPARTA's control flow. VEC=1 additionally runs the in-box fast
         path over blocks of 8 with no per-particle early exit, which is the
         restructuring SoA makes possible and AoS does not. ---- */
-template <class S> template <int VEC>
-void Sim<S>::move()
+/* one particle, SPARTA's control flow.
+   MATB = 1 routes every boundary interaction through a materialized OnePart,
+   which is what an SoA storage would have to do to keep calling the existing
+   Domain::collide and SurfCollide models. */
+template <class S> template <int MATB>
+inline void Sim<S>::move_one(long i)
 {
   ChildCell *cs_ = cells;
   const int *uidx = uniform_index.data();
   const double *lo = boxlo, *hi = boxhi;
 
+  int pflag = st.fg(i);
+  if (pflag == PDONE) st.fs(i,PKEEP);
+  double xnew[3], v[3], x[3];
+  for (int c=0;c<3;c++) { x[c]=st.xg(i,c); v[c]=st.vg(i,c); }
+  for (int c=0;c<3;c++) xnew[c] = x[c] + dt*v[c];
+
+  int optmove = 1;
+  for (int c=0;c<3;c++) if (xnew[c] < lo[c] || xnew[c] > hi[c]) optmove = 0;
+
+  if (optmove) {
+    int ip=(int)((xnew[0]-lo[0])/dx), jp=(int)((xnew[1]-lo[1])/dy),
+        kp=(int)((xnew[2]-lo[2])/dz);
+    int icell = uidx[(kp*ny+jp)*nx+ip+1];
+    if (icell >= 0) {
+      for (int c=0;c<3;c++) st.xs(i,c,xnew[c]);
+      st.cs(i,icell); st.fs(i,PKEEP);
+      if (cs_[icell].proc != me) st.fs(i,PDONE);
+      return;
+    }
+  }
+
+  st.fs(i,PKEEP);
+  nboundary++;
+  int icell = st.cg(i);
+  while (1) {
+    double *clo = cs_[icell].lo, *chi = cs_[icell].hi;
+    cellint *neigh = cs_[icell].neigh;
+    int outface = -1; double frac = 1.0;
+    for (int d=0;d<3;d++) {
+      if (xnew[d] < clo[d]) { double f=(clo[d]-x[d])/(xnew[d]-x[d]); if (f<frac){frac=f;outface=2*d;} }
+      else if (xnew[d] > chi[d]) { double f=(chi[d]-x[d])/(xnew[d]-x[d]); if (f<frac){frac=f;outface=2*d+1;} }
+    }
+    if (outface < 0) break;
+    for (int c=0;c<3;c++) x[c] += frac*(xnew[c]-x[c]);
+    int nb = neigh[outface];
+    if (nb < 0) {
+      int d = outface/2;
+      double wall = (outface & 1) ? hi[d] : lo[d];
+      if (MATB) {
+        /* the boundary: gather into a real OnePart, hand it to the existing
+           collision model, scatter the result back */
+        OnePartView pv;
+        materialize(st, i, pv);
+        for (int c=0;c<3;c++) pv.x[c] = xnew[c];
+        pv.v[d] = v[d];
+        boundary_collide(&pv, d, wall);
+        v[d] = pv.v[d];
+        xnew[d] = pv.x[d];
+        writeback(st, i, pv);
+        st.vs(i,d,v[d]);
+      } else {
+        v[d] = -v[d]; st.vs(i,d,v[d]);
+        xnew[d] = 2.0*wall - xnew[d];
+      }
+      continue;
+    }
+    icell = nb;
+  }
+  for (int c=0;c<3;c++) {
+    double q = xnew[c];
+    if (q < lo[c]) q = lo[c];
+    if (q > hi[c]) q = hi[c]*(1.0-1e-15);
+    st.xs(i,c,q);
+  }
+  st.cs(i, uidx[cell_of(st.xg(i,0),st.xg(i,1),st.xg(i,2))]);
+}
+
+/* VEC = 1 runs the in-box fast path over blocks of 8 with no per-particle
+   early exit. A block containing any exception falls back to the scalar body
+   *for that block only* -- the previous version broke out of the blocked loop
+   entirely on the first exception, which at a 1% exception rate sent almost the
+   whole array down the scalar path and made the experiment meaningless. */
+template <class S> template <int VEC, int MATB>
+void Sim<S>::move()
+{
+  const int *uidx = uniform_index.data();
+  const double *lo = boxlo, *hi = boxhi;
   long i = 0;
+
   if (VEC) {
-    /* blocked fast path: compute the candidate step for 8 particles, and only
-       fall back to the general mover for a block containing an exception */
     const int B = 8;
-    for (; i + B <= nlocal; ) {
+    for (; i + B <= nlocal; i += B) {
       double xn[3][B];
-      int ok = 1;
       for (int c = 0; c < 3; c++)
         for (int l = 0; l < B; l++)
           xn[c][l] = st.xg(i+l,c) + dt*st.vg(i+l,c);
+
+      int ok = 1;
       for (int c = 0; c < 3; c++)
         for (int l = 0; l < B; l++)
           if (xn[c][l] < lo[c] || xn[c][l] > hi[c]) ok = 0;
-      if (!ok) break;
+
       int cell[B];
-      for (int l = 0; l < B; l++) {
-        int ip=(int)((xn[0][l]-lo[0])/dx), jp=(int)((xn[1][l]-lo[1])/dy),
-            kp=(int)((xn[2][l]-lo[2])/dz);
-        cell[l] = uidx[(kp*ny+jp)*nx+ip+1];
+      if (ok) {
+        for (int l = 0; l < B; l++) {
+          int ip=(int)((xn[0][l]-lo[0])/dx), jp=(int)((xn[1][l]-lo[1])/dy),
+              kp=(int)((xn[2][l]-lo[2])/dz);
+          cell[l] = uidx[(kp*ny+jp)*nx+ip+1];
+        }
+        for (int l = 0; l < B; l++) if (cell[l] < 0) ok = 0;
       }
-      int allok = 1;
-      for (int l = 0; l < B; l++) if (cell[l] < 0) allok = 0;
-      if (!allok) break;
-      for (int c = 0; c < 3; c++)
-        for (int l = 0; l < B; l++) st.xs(i+l,c,xn[c][l]);
-      for (int l = 0; l < B; l++) { st.cs(i+l,cell[l]); st.fs(i+l,PKEEP); }
-      i += B;
+
+      if (ok) {
+        for (int c = 0; c < 3; c++)
+          for (int l = 0; l < B; l++) st.xs(i+l,c,xn[c][l]);
+        for (int l = 0; l < B; l++) { st.cs(i+l,cell[l]); st.fs(i+l,PKEEP); }
+      } else {
+        for (int l = 0; l < B; l++) move_one<MATB>(i+l);
+      }
     }
   }
 
-  for (; i < nlocal; i++) {
-    int pflag = st.fg(i);
-    if (pflag == PDONE) st.fs(i,PKEEP);
-    double xnew[3], v[3], x[3];
-    for (int c=0;c<3;c++) { x[c]=st.xg(i,c); v[c]=st.vg(i,c); }
-    for (int c=0;c<3;c++) xnew[c] = x[c] + dt*v[c];
+  for (; i < nlocal; i++) move_one<MATB>(i);
+}
 
-    int optmove = 1;
-    for (int c=0;c<3;c++) if (xnew[c] < lo[c] || xnew[c] > hi[c]) optmove = 0;
-
-    if (optmove) {
-      int ip=(int)((xnew[0]-lo[0])/dx), jp=(int)((xnew[1]-lo[1])/dy),
-          kp=(int)((xnew[2]-lo[2])/dz);
-      int icell = uidx[(kp*ny+jp)*nx+ip+1];
-      if (icell >= 0) {
-        for (int c=0;c<3;c++) st.xs(i,c,xnew[c]);
-        st.cs(i,icell); st.fs(i,PKEEP);
-        if (cs_[icell].proc != me) st.fs(i,PDONE);
-        continue;
-      }
-    }
-
-    st.fs(i,PKEEP);
-    int icell = st.cg(i);
-    while (1) {
-      double *clo = cs_[icell].lo, *chi = cs_[icell].hi;
-      cellint *neigh = cs_[icell].neigh;
-      int outface = -1; double frac = 1.0;
-      for (int d=0;d<3;d++) {
-        if (xnew[d] < clo[d]) { double f=(clo[d]-x[d])/(xnew[d]-x[d]); if (f<frac){frac=f;outface=2*d;} }
-        else if (xnew[d] > chi[d]) { double f=(chi[d]-x[d])/(xnew[d]-x[d]); if (f<frac){frac=f;outface=2*d+1;} }
-      }
-      if (outface < 0) break;
-      for (int c=0;c<3;c++) x[c] += frac*(xnew[c]-x[c]);
-      int nb = neigh[outface];
-      if (nb < 0) {
-        int d = outface/2;
-        v[d] = -v[d]; st.vs(i,d,v[d]);
-        xnew[d] = (outface & 1) ? 2*hi[d]-xnew[d] : 2*lo[d]-xnew[d];
-        continue;
-      }
-      icell = nb;
-    }
-    for (int c=0;c<3;c++) {
-      double q = xnew[c];
-      if (q < lo[c]) q = lo[c];
-      if (q > hi[c]) q = hi[c]*(1.0-1e-15);
-      st.xs(i,c,q);
-    }
-    st.cs(i, uidx[cell_of(st.xg(i,0),st.xg(i,1),st.xg(i,2))]);
+/* worst case for the boundary: a compute or dump that wants every particle */
+template <class S>
+void Sim<S>::materialize_all()
+{
+  OnePartView pv;
+  double acc = 0.0;
+  for (long i = 0; i < nlocal; i++) {
+    materialize(st, i, pv);
+    acc += pv.v[0] + pv.x[1];
   }
+  if (acc == 1.2345e-300) printf("x");
 }
 
 template <class S>
@@ -699,9 +796,9 @@ double Sim<S>::temperature()
 
 /* ================= driver ================= */
 
-struct Out { double total, move, sort, coll, temp, bytes; long ncoll, natt; };
+struct Out { double total, move, sort, coll, temp, bytes; long ncoll, natt, nbound; };
 
-template <class S, int VEC, int FUSE>
+template <class S, int VEC, int FUSE, int MATB>
 static Out run(int nx,int ny,int nz,int npc,int nsteps,int reorder)
 {
   Sim<S> *m = new Sim<S>();
@@ -709,15 +806,15 @@ static Out run(int nx,int ny,int nz,int npc,int nsteps,int reorder)
 
   m->dt = 10.0*DT;
   for (int s=1;s<=30;s++) {
-    m->template move<VEC>();
+    m->template move<VEC,MATB>();
     if (reorder && s%reorder==0) m->sort_reorder(0); else m->sort();
     m->collide();
   }
   m->dt = DT;
-  m->ncollide_one = m->nattempt_one = 0;
+  m->ncollide_one = m->nattempt_one = 0; m->nboundary = 0;
 
   for (int s=1;s<=nsteps;s++) {
-    double t=wtime(); m->template move<VEC>(); m->t_move += wtime()-t;
+    double t=wtime(); m->template move<VEC,MATB>(); m->t_move += wtime()-t;
     int rf = (reorder && s%reorder==0);
     t=wtime();
     if (rf) m->sort_reorder(FUSE); else m->sort();
@@ -732,6 +829,7 @@ static Out run(int nx,int ny,int nz,int npc,int nsteps,int reorder)
   o.total=o.move+o.sort+o.coll;
   o.temp=m->temperature(); o.ncoll=m->ncollide_one; o.natt=m->nattempt_one;
   o.bytes=m->st.bytes_per();
+  o.nbound=m->nboundary;
   m->teardown();
   delete m;
   return o;
@@ -770,24 +868,31 @@ int main(int argc, char **argv)
   printf("%-34s %6s %8s %8s | %6s %6s %6s | %7s %9s\n",
          "configuration","B/p","ns/p/s","speedup","move","sort","coll","T (K)","ncoll");
 
-  Out base = run<StoreAoS<96>,0,0>(nx,ny,nz,npc,ns,ro);
+  Out base = run<StoreAoS<96>,0,0,0>(nx,ny,nz,npc,ns,ro);
   g_base = 1e9*base.total/((double)g_n*ns);
   row("AoS 96 B  (SPARTA today)", base);
-  row("AoS 64 B", run<StoreAoS<64>,0,0>(nx,ny,nz,npc,ns,ro));
-  row("SoA doubles", run<StoreSoA<double>,0,0>(nx,ny,nz,npc,ns,ro));
-  row("SoA floats", run<StoreSoA<float>,0,0>(nx,ny,nz,npc,ns,ro));
-  row("AoSoA V=8", run<StoreAoSoA<8>,0,0>(nx,ny,nz,npc,ns,ro));
-  row("AoSoA V=16", run<StoreAoSoA<16>,0,0>(nx,ny,nz,npc,ns,ro));
+  row("AoS 64 B", run<StoreAoS<64>,0,0,0>(nx,ny,nz,npc,ns,ro));
+  row("SoA doubles", run<StoreSoA<double>,0,0,0>(nx,ny,nz,npc,ns,ro));
+  row("SoA floats", run<StoreSoA<float>,0,0,0>(nx,ny,nz,npc,ns,ro));
+  row("AoSoA V=8", run<StoreAoSoA<8>,0,0,0>(nx,ny,nz,npc,ns,ro));
+  row("AoSoA V=16", run<StoreAoSoA<16>,0,0,0>(nx,ny,nz,npc,ns,ro));
 
-  printf("-- plus the blocked fast-path mover that SoA makes possible --\n");
-  row("SoA doubles + blocked move", run<StoreSoA<double>,1,0>(nx,ny,nz,npc,ns,ro));
-  row("SoA floats  + blocked move", run<StoreSoA<float>,1,0>(nx,ny,nz,npc,ns,ro));
-  row("AoS 96 B    + blocked move", run<StoreAoS<96>,1,0>(nx,ny,nz,npc,ns,ro));
+  printf("-- blocked fast-path mover (per-block fallback, not per-array) --\n");
+  row("AoS 96 B    + blocked move", run<StoreAoS<96>,1,0,0>(nx,ny,nz,npc,ns,ro));
+  row("SoA doubles + blocked move", run<StoreSoA<double>,1,0,0>(nx,ny,nz,npc,ns,ro));
+  row("SoA floats  + blocked move", run<StoreSoA<float>,1,0,0>(nx,ny,nz,npc,ns,ro));
+  row("AoSoA V=8   + blocked move", run<StoreAoSoA<8>,1,0,0>(nx,ny,nz,npc,ns,ro));
 
-  printf("-- plus collide fused into the scatter (landed in SPARTA) --\n");
-  row("AoS 96 B  + fused collide", run<StoreAoS<96>,0,1>(nx,ny,nz,npc,ns,ro));
-  row("SoA doubles + blocked + fused", run<StoreSoA<double>,1,1>(nx,ny,nz,npc,ns,ro));
-  row("SoA floats  + blocked + fused", run<StoreSoA<float>,1,1>(nx,ny,nz,npc,ns,ro));
+  printf("-- materialization boundary: every boundary interaction goes\n"
+         "   through a real OnePart, as it must if the rest of SPARTA is\n"
+         "   to keep taking OnePart* --\n");
+  row("SoA doubles + mat boundary", run<StoreSoA<double>,0,0,1>(nx,ny,nz,npc,ns,ro));
+  row("SoA floats  + mat boundary", run<StoreSoA<float>,0,0,1>(nx,ny,nz,npc,ns,ro));
+  row("SoA dbl + blocked + mat bnd", run<StoreSoA<double>,1,0,1>(nx,ny,nz,npc,ns,ro));
+  row("AoS 96 B    + mat boundary", run<StoreAoS<96>,0,0,1>(nx,ny,nz,npc,ns,ro));
+
+  printf("-- collide fused into the scatter (landed in SPARTA) --\n");
+  row("AoS 96 B  + fused collide", run<StoreAoS<96>,0,1,0>(nx,ny,nz,npc,ns,ro));
 
   printf("\nreference equilibrium temperature %.2f K\n", TEMP0);
   return 0;

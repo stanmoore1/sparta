@@ -20,6 +20,7 @@ microbenchmark and ~1.05x or less in the real code. See `ROUND3.md`.
 
 | document | what is in it |
 |---|---|
+| [`ROUND6.md`](ROUND6.md) | round 6: prototypes the SoA materialization boundary (affordable — at or below noise), and corrects round 5: a blocked SIMD mover **does** pay, but only with SoA (1.46x on move, 23% regression on AoS) |
 | [`ROUND5.md`](ROUND5.md) | round 5: the full layout sweep on the faithful benchmark — SoA is ~1.8x (not 3.6x), AoSoA ~1.6x, single precision another ~1.2x, and a SIMD mover does not pay because the slow path defeats blocking |
 | [`ROUND4.md`](ROUND4.md) | round 4: does turning reordering off rescue AoSoA (no), are SoA grid cells worth it (no, zero measured elasticity), and a rebuilt mini-app that validates itself against SPARTA and cut the prediction error from 38% to 3% |
 | [`ROUND3.md`](ROUND3.md) | round 3: AoS vs SoA vs AoSoA (SoA wins by 3.31x in the model), and a direct in-situ measurement of how much of any byte saving actually reaches SPARTA's runtime — which corrects round 2's headline recommendation |

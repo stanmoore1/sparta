@@ -27,9 +27,10 @@ the differences are layout alone.
 **SoA fell from 3.6x to ~1.9x, and that is the number to plan with.** The earlier
 `micro_layout` figure came from a model whose mover had no pflag dispatch, no
 ownership test and no slow path, so it vectorised freely and made SoA look twice
-as good as it is. With SPARTA's control flow the mover cannot vectorise, and SoA's
-remaining advantage is what it should be: narrower streams and velocity-only
-cache lines in collide.
+as good as it is. SoA's remaining advantage here is narrower streams and
+velocity-only cache lines in collide. (Round 6 adds to this: a blocked mover
+*can* vectorise even with SPARTA's control flow, but only over SoA storage —
+so SoA's real advantage is larger than this table shows.)
 
 **AoSoA closed most of the gap but still loses**, now by 1.2x rather than 1.5x.
 V=16 remains worse than V=8, for the reason identified in round 3: relocating one
@@ -43,14 +44,20 @@ caveat below.
 
 ## Two negative results worth having
 
-**Restructuring the mover for SIMD does not pay.** The blocked fast path processes
-eight particles with no per-particle early exit, which is the restructuring SoA
-is supposed to enable. It made SoA *slower* (34.9 -> 36.8). At this timestep about
-1% of particles need the slow path, so roughly 8% of eight-wide blocks contain an
-exception and must be abandoned and redone scalar — and the block does redundant
-work on the way to finding out. SPARTA's exception handling defeats blocking, and
-that is a property of the physics (particles do leave cells and boxes), not of the
-code.
+**Restructuring the mover for SIMD does not pay.**
+
+> **WRONG — corrected in round 6.** This measurement was invalid: the blocked
+> loop used `break` on the first block containing an exception, which exits the
+> blocked loop *permanently* instead of falling back for that block alone. At a
+> 1% exception rate that sent essentially the whole array down the scalar path,
+> so this row measured scalar code with extra overhead. With a per-block
+> fallback the blocked mover cuts SoA's move time by 1.46x and is worth
+> 1.70x -> 1.89x overall — and it is a 23% regression on AoS, so vectorisation
+> is available, but only with SoA. See `ROUND6.md`.
+
+The blocked fast path processes eight particles with no per-particle early exit,
+which is the restructuring SoA is supposed to enable. It appeared to make SoA
+slower (34.9 -> 36.8), for the reason given in the correction above.
 
 **Collide fusion helps AoS and hurts SoA.** AoS gains 1.13x, consistent with the
 ~1.05x it delivered in SPARTA. The SoA rows lose, but that is an artifact of this
@@ -106,6 +113,6 @@ was measured first and the measurements said no.
 | SoA grid cells? | no — zero measured elasticity | SPARTA, by padding |
 | 64-byte particle record? | ~1.15x | SPARTA, by padding |
 | Single precision x, v? | ~1.2x on top of SoA | faithful model |
-| SIMD mover? | no — the slow path defeats blocking | faithful model |
+| SIMD mover? | **yes, but only with SoA** (1.46x on move); a 23% regression on AoS | round 6 |
 | Mesh-free DSMC? | no — NTC needs volume binning | round 2 |
 | Cache tiling, fused passes, cell buckets? | no | round 2 |
