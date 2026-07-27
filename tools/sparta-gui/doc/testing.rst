@@ -475,6 +475,130 @@ cases cover:
 - The 3D snapshot refused mid-run, reporting when the library was built
   without the VTK package, and refusing a deck that creates no system box
 
+test_sweeprun.cpp
+-----------------
+
+Tests for the parametric sweep *driver* (``SweepController``) against a live
+simulator.  ``test_sweeppanel.cpp`` above covers the panel with nothing
+behind it; this covers what happens when the button is actually pressed,
+which needs a running SPARTA and so had never been exercised.  That gap
+mattered more than the line count suggested, because the driver's failure
+mode is quiet: a wrong keyword-to-row match in ``readThermo()``, or an
+off-by-one in the replicate cursor, yields a table that is entirely
+self-consistent and entirely wrong.
+
+Every assertion is therefore against an arithmetic answer.  The deck creates
+exactly ``${n}`` particles, so ``Np`` is ``n`` and the table can be checked
+digit for digit rather than merely for being present.  Registered as a
+single ctest entry under Xvfb and serialised against the other live-window
+suites.  Test cases cover:
+
+- One row per combination, in the order the values were given, with the
+  right count against the right variable value
+- Headers naming the swept variable and each quantity with its reducer
+- A cartesian sweep covering every pair with the second variable varying
+  fastest, and a zip pairing them instead
+- A quantity the run never produced tabulated as ``n/a`` rather than as a
+  zero that looks like a measurement, and the same for a reducer with no
+  samples to reduce
+- All four reducers agreeing on a conserved quantity, over a run long
+  enough for the stats poller to collect a series
+- Replicates: one row per point with a mean and a standard error, a single
+  replicate getting neither, and each replicate genuinely running with a
+  distinct seed -- checked by naming the particle count as the seed
+  variable, so four replicates read back as a mean of 41.5 and a spread of
+  ``sqrt(5/3)/2``
+- The progress bar counting every run rather than every sweep point, and
+  reporting each one as it starts
+- Stopping part way ending the sweep and saying it was stopped
+- The window usable again afterwards -- the controller lets go of the run
+  signals, so an ordinary run does not add a results row -- and a second
+  sweep replacing the first one's table rather than appending to it
+
+test_surfreportlive.cpp
+-----------------------
+
+Tests for the per-surface extraction path: ``SpartaWrapper::extractCompute``
+and ``extractFix``.  These are the only wrapper calls that hand back a
+pointer into SPARTA's own memory, and the surface report is their sole
+consumer; ``test_surfreport.cpp`` covers the reduction core, but only ever
+against hand-written arrays.  A wrong style constant, a transposed walk or a
+stride mismatch would have produced a report full of plausible numbers.
+
+The suite runs one flow past the circle fixture with a per-surf compute and
+a fix averaging it, then drives the dialog against that finished state.  Two
+checks pin the numbers: one sums a column of the exported CSV and compares
+it to the integrated total the report printed, closing the loop through both
+the library read and the reduction; the other walks the array independently,
+in the test, because the first two halves would agree with each other even
+under a transposed read.  Both are guarded against going vacuous -- the
+``fx`` column has to contain elements of both signs.  Test cases cover:
+
+- The computes and fixes the run actually defined offered as sources
+- Column labels recovered from the deck, directly for a compute and through
+  ``c_1[*]`` for the fix that averages it
+- One row read per surface element, and the fix and the compute agreeing on
+  how many there are
+- The report naming the timestep it was taken at
+- A source that is not per-surface refused rather than misread, missing
+  labels asked for rather than guessed, and export offered only once there
+  is something to export
+
+test_recovery.cpp
+-----------------
+
+Tests for crash recovery: the autosave copy of an unsaved buffer and the
+offer to restore it on the next launch.  Its failure mode is invisible until
+the session it was meant to survive, and it writes files on a timer next to
+the user's own deck, so both directions need checking.  Everything goes
+through the real triggers -- the write happens on the autosave timer (set to
+one second), the offer happens in the constructor, and the clear happens on
+save -- rather than through test-only entry points.  Test cases cover:
+
+- An unsaved buffer autosaved with its text, and a manifest recording where
+  it really belongs and when it was written
+- The user's own file on disk never touched, however long the editor has
+  been left modified
+- An unmodified buffer and a whitespace-only one not autosaved at all
+- Saving dropping the recovery copy, since the buffer now matches disk
+- The offer restoring the buffer, the file it came from, and the modified
+  flag -- without which closing would discard recovered work silently
+- The offer naming the file and the time, or saying "an unsaved buffer" when
+  there is no filename; declining discarding the copy so it is not offered
+  again; and nothing asked when there is nothing to recover
+- A recovery file whose manifest was lost to a crash between the two writes
+  still recovered, and recovered work still being autosaved afterwards
+- The new-document guard: save, discard, cancel, and no question at all for
+  an unmodified buffer
+
+test_checksum.cpp
+-----------------
+
+Tests for the integrity check on downloaded files
+(``src/urldownloader.cpp``).  This is the only code that decides whether a
+file fetched off the network may be kept, and none of it had ever run.  A
+broken integrity check is indistinguishable from a working one from outside:
+a parser that never finds the entry, or a comparison that always agrees,
+downgrades the check to nothing while still reporting success.
+
+The tests run over ``file://`` URLs, so the real fetch-parse-compare path
+runs end to end with no network and no server -- ``QNetworkAccessManager``
+treats a local directory as the remote one, ``SHA256SUMS`` and all.  Test
+cases cover:
+
+- The local hash pinned against the published SHA-256 of ``""`` and
+  ``"abc"``, a one-byte change giving a different hash, and an unreadable
+  file having none
+- The ``SHA256SUMS`` spellings real tools emit: one space, two spaces, ``*``
+  and ``./`` prefixes, uppercase hex, comments, blank and malformed lines
+- An entry for another file not accepted as this one's, including one whose
+  name merely *ends* with the name being looked up
+- A matching hash keeping the file silently; a mismatch refusing it,
+  deleting it, and showing the user both hashes
+- The fail-open case pinned explicitly: a publisher who ships no
+  ``SHA256SUMS`` cannot be checked, so the download is kept -- changing that
+  should be a decision rather than an accident
+
 test_chartanalysis.cpp
 ---------------------
 
