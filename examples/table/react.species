@@ -1,0 +1,7 @@
+# two atomic species with no internal energy, so the collision energy is
+# exactly the relative translational energy the cross section is indexed by
+# two atomic species, no internal energy, so the TCE collision energy is
+# exactly the relative translational energy
+# ID  Molwt  Molmass  rotdof rotrel vibdof vibrel vibtemp specwt charge
+X   40.00  6.63E-26  0  0.0  0  0.0  0.0  1.0  0.0
+Y   40.00  6.63E-26  0  0.0  0  0.0  0.0  1.0  0.0

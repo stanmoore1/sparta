@@ -3,17 +3,23 @@
 """
 tabulate_cross_section.py
 
-Generate a cross section table file for the SPARTA "collide table" style.
+Generate tabulated data files for the SPARTA "collide table" style.
 
-Two modes:
+Modes:
 
-  vss   emit the analytic VHS/VSS total cross section for a species pair,
-        read from a SPARTA species file and VSS parameter file.  Useful for
-        verification: "collide table" with such a table must reproduce
-        "collide vss" to within the interpolation error.
+  vss        emit the analytic VHS/VSS total cross section for a species
+             pair, read from a SPARTA species file and VSS parameter file.
+             Useful for verification: "collide table" with such a table
+             must reproduce "collide vss" to within the interpolation error.
 
-  csv   convert a two-column file of (x, sigma) values, e.g. published or
-        computed cross section data, into the table format.
+  csv        convert a two-column file of (x, sigma) values, e.g. published
+             or computed cross section data, into the table format.
+
+  potential  compute collision cross sections directly from an intermolecular
+             potential, by numerically integrating the classical deflection
+             angle.  Supports Lennard-Jones 12-6 and a tabulated V(r), and
+             emits any of the total cross section, the energy-dependent VSS
+             alpha, and the full angular distribution.
 
 Examples:
 
@@ -21,8 +27,15 @@ Examples:
       --pair Ar Ar --emin 1.0e-4 --emax 1.0e3 -n 200 \\
       --keyword AR_AR_VHS -o data/ar_ar.tab
 
-  tabulate_cross_section.py csv mydata.csv --keyword N2_N2_ELASTIC \\
-      --xunits eV --yunits A^2 -o n2_n2.tab
+  tabulate_cross_section.py potential --form lj --eps-k 119.8 --sigma 3.405e-10 \\
+      --species data/ar.species --pair Ar Ar --emit sigma alpha scatter \\
+      --keyword AR_AR -o ar_lj.tab
+
+  tabulate_cross_section.py potential --form file --vfile ar_ar_potential.txt \\
+      --species data/ar.species --pair Ar Ar --emit sigma -o ar_ab.tab
+
+The potential mode validates itself against the standard Lennard-Jones
+collision integrals with --selftest.
 
 See doc/collide.html for the table file format.
 """
@@ -37,6 +50,10 @@ EV2J = 1.602176634e-19
 XUNIT_SCALE = {"eV": EV2J, "J": 1.0, "K": BOLTZ, "m/s": 1.0}
 YUNIT_SCALE = {"m^2": 1.0, "cm^2": 1.0e-4, "A^2": 1.0e-20}
 
+
+# ----------------------------------------------------------------------
+# SPARTA file readers
+# ----------------------------------------------------------------------
 
 def read_species(fname):
     """Return {id: mass} from a SPARTA species file."""
@@ -53,6 +70,14 @@ def read_species(fname):
     return species
 
 
+def reduced_mass(species, isp, jsp):
+    for name in (isp, jsp):
+        if name not in species:
+            sys.exit("error: species %s not found in the species file" % name)
+    mi, mj = species[isp], species[jsp]
+    return mi / 2.0 if isp == jsp else mi * mj / (mi + mj)
+
+
 def read_vss(fname, isp, jsp):
     """Return (diam, omega, tref) for the isp/jsp pair from a VSS param file.
 
@@ -67,7 +92,7 @@ def read_vss(fname, isp, jsp):
             if not line:
                 continue
             words = line.split()
-            if len(words) >= 5 and words[2] == "table":
+            if len(words) >= 5 and words[2] in ("table", "alpha", "scatter"):
                 continue
             try:
                 float(words[1])
@@ -94,6 +119,10 @@ def read_vss(fname, isp, jsp):
     return tuple(0.5 * (a[k] + b[k]) for k in range(3))
 
 
+# ----------------------------------------------------------------------
+# analytic VHS/VSS cross section
+# ----------------------------------------------------------------------
+
 def vss_sigma(g, diam, omega, tref, mr):
     """VHS/VSS total cross section at relative speed g, in m^2.
 
@@ -106,14 +135,185 @@ def vss_sigma(g, diam, omega, tref, mr):
     return prefactor * g ** (1.0 - 2.0 * omega)
 
 
-def write_table(fp, keyword, xs, sigmas, xvar, xunits, yunits, extrap, header):
+# ----------------------------------------------------------------------
+# classical scattering from an intermolecular potential
+# ----------------------------------------------------------------------
+
+class Potential:
+    """Classical deflection angle and transport cross sections for a
+    spherically symmetric potential V(r).
+
+    Works in reduced units throughout: x = r/rscale, V* = V/escale,
+    E* = E/escale, b* = b/rscale.  The turning point is the smallest
+    positive root of
+
+        f(w) = 1 - b*^2 w^2 - V*(1/w)/E*,   w = rscale/r
+
+    and the deflection angle is
+
+        chi = pi - 2 b* int_0^{w_m} dw / sqrt(f(w))
+
+    The substitution w = w_m (1 - s^2) removes the inverse-square-root
+    endpoint singularity, and Gauss-Legendre nodes are interior so the
+    integrand is never evaluated at the singular point.
+    """
+
+    def __init__(self, vstar, rscale, escale, np):
+        self.vstar = vstar          # V*(x), vectorized over x
+        self.rscale = rscale        # m
+        self.escale = escale        # J
+        self.np = np
+        self.glx, self.glw = np.polynomial.legendre.leggauss(160)
+        self.glx = 0.5 * (self.glx + 1.0)
+        self.glw = 0.5 * self.glw
+
+    def _f(self, w, b, E):
+        np = self.np
+        with np.errstate(all="ignore"):
+            return 1.0 - (b * b) * w * w - self.vstar(1.0 / w) / E
+
+    def chi(self, bs, E, nscan=4000, wmax=3.0):
+        """Deflection angle for an array of impact parameters at energy E."""
+        np = self.np
+        bs = np.asarray(bs, float)
+        w = np.linspace(1e-9, wmax, nscan)[None, :]
+        F = self._f(w, bs[:, None], E)
+        neg = F <= 0.0
+        has = neg.any(axis=1)
+        idx = np.maximum(np.where(has, neg.argmax(axis=1), 1), 1)
+        lo = w[0, idx - 1].copy()
+        hi = w[0, idx].copy()
+        for _ in range(80):
+            mid = 0.5 * (lo + hi)
+            pos = self._f(mid, bs, E) > 0.0
+            lo = np.where(pos, mid, lo)
+            hi = np.where(pos, hi, mid)
+        wm = 0.5 * (lo + hi)
+
+        s = self.glx[None, :]
+        ww = wm[:, None] * (1.0 - s * s)
+        with np.errstate(all="ignore"):
+            f = self._f(ww, bs[:, None], E)
+            integ = 2.0 * wm[:, None] * s / np.sqrt(np.where(f > 0, f, np.nan))
+        val = np.nansum(self.glw[None, :] * integ, axis=1)
+        return np.where(has, math.pi - 2.0 * bs * val, 0.0)
+
+    def bgrid(self, E, nb, bmax):
+        np = self.np
+        return (np.arange(nb) + 0.5) * (bmax / nb)
+
+    def Qstar(self, E, l, nb=2400, bmax=8.0):
+        """Reduced transport cross section Q^(l)/(pi rscale^2)."""
+        np = self.np
+        b = self.bgrid(E, nb, bmax)
+        c = np.cos(self.chi(b, E))
+        return 2.0 * np.sum((1.0 - c ** l) * b) * (bmax / nb)
+
+    def Omega(self, Tstar, l, s_, ng=48, **kw):
+        """Reduced collision integral Omega^(l,s)*."""
+        np = self.np
+        x, w = np.polynomial.legendre.leggauss(ng)
+        g = 0.5 * 4.0 * (x + 1)
+        wt = 0.5 * 4.0 * w
+        norm = 1.0 - (1.0 + (-1.0) ** l) / (2.0 * (1.0 + l))
+        pref = 2.0 / (math.factorial(s_ + 1) * norm)
+        tot = sum(wi * math.exp(-gi * gi) * gi ** (2 * s_ + 3) *
+                  self.Qstar(gi * gi * Tstar, l, **kw)
+                  for gi, wi in zip(g, wt) if gi > 1e-6)
+        return pref * tot
+
+    def cos_cdf(self, E, ncos, nb=4000, bmax=8.0):
+        """Inverse CDF of cos(chi) for impact parameters sampled uniformly
+        in b^2 up to bmax, i.e. the angular distribution which accompanies
+        a total cross section of pi*(bmax*rscale)^2."""
+        np = self.np
+        b = self.bgrid(E, nb, bmax)
+        c = np.cos(self.chi(b, E))
+        wgt = 2.0 * b                                  # dP proportional to b db
+        order = np.argsort(c)
+        c = c[order]
+        wgt = wgt[order]
+        cdf = np.cumsum(wgt)
+        cdf = (cdf - 0.5 * wgt) / cdf[-1]
+        probs = (np.arange(ncos) + 0.5) / ncos
+        return np.interp(probs, cdf, c)
+
+
+def lj_potential(np):
+    """Lennard-Jones 12-6 in reduced units, V*(x) = 4(x^-12 - x^-6)."""
+    def vstar(x):
+        with np.errstate(all="ignore"):
+            return 4.0 * (x ** -12 - x ** -6)
+    return vstar
+
+
+def file_potential(np, fname, rscale, escale):
+    """Tabulated V(r) from a two-column file of r (Angstrom) and V (eV).
+
+    Interpolated with a cubic spline in r, and continued outside the
+    tabulated range by the power law implied by the two end points, which
+    is the right behaviour for both the repulsive wall and the attractive
+    tail of a physically motivated potential.
+    """
+    rs, vs = [], []
+    with open(fname) as fp:
+        for line in fp:
+            line = line.split("#")[0].strip()
+            if not line:
+                continue
+            w = line.replace(",", " ").split()
+            if len(w) < 2:
+                continue
+            rs.append(float(w[0]) * 1.0e-10)
+            vs.append(float(w[1]) * EV2J)
+    if len(rs) < 4:
+        sys.exit("error: need at least 4 points in the potential file")
+    r = np.array(rs) / rscale
+    v = np.array(vs) / escale
+    if np.any(np.diff(r) <= 0):
+        sys.exit("error: r values in the potential file must increase")
+
+    def powfit(r0, r1, v0, v1):
+        if v0 * v1 <= 0 or r0 <= 0:
+            return None
+        p = math.log(abs(v1 / v0)) / math.log(r1 / r0)
+        a = v0 / r0 ** p
+        return a, p
+
+    lo = powfit(r[0], r[1], v[0], v[1])
+    hi = powfit(r[-2], r[-1], v[-2], v[-1])
+
+    def vstar(x):
+        x = np.asarray(x, float)
+        out = np.interp(x, r, v)
+        if lo is not None:
+            out = np.where(x < r[0], lo[0] * x ** lo[1], out)
+        if hi is not None:
+            out = np.where(x > r[-1], hi[0] * x ** hi[1], out)
+        else:
+            out = np.where(x > r[-1], 0.0, out)
+        return out
+
+    return vstar
+
+
+# ----------------------------------------------------------------------
+# output
+# ----------------------------------------------------------------------
+
+def write_table(fp, keyword, xs, values, xvar, xunits, yunits, extrap,
+                header, ncol=1):
     for line in header:
         fp.write("# %s\n" % line)
     fp.write("\n%s\n" % keyword)
-    fp.write("N %d X %s XUNITS %s YUNITS %s EXTRAP %s %s\n\n" %
-             (len(xs), xvar, xunits, yunits, extrap[0], extrap[1]))
-    for i, (x, s) in enumerate(zip(xs, sigmas)):
-        fp.write("%-6d %- 20.12g %- 20.12g\n" % (i + 1, x, s))
+    mstr = "" if ncol == 1 else " M %d" % ncol
+    ystr = "" if yunits is None else " YUNITS %s" % yunits
+    fp.write("N %d%s X %s XUNITS %s%s EXTRAP %s %s\n\n" %
+             (len(xs), mstr, xvar, xunits, ystr, extrap[0], extrap[1]))
+    for i, x in enumerate(xs):
+        row = values[i] if ncol > 1 else [values[i]]
+        fp.write("%-6d %- 20.12g %s\n" %
+                 (i + 1, x, " ".join("%- 14.8g" % v for v in row)))
 
 
 def grid(lo, hi, n, logspace):
@@ -128,15 +328,14 @@ def grid(lo, hi, n, logspace):
     return [lo + i * step for i in range(n)]
 
 
+# ----------------------------------------------------------------------
+# subcommands
+# ----------------------------------------------------------------------
+
 def cmd_vss(args):
     species = read_species(args.species)
     isp, jsp = args.pair
-    for name in (isp, jsp):
-        if name not in species:
-            sys.exit("error: species %s not found in %s" % (name, args.species))
-    mi, mj = species[isp], species[jsp]
-    mr = mi / 2.0 if isp == jsp else mi * mj / (mi + mj)
-
+    mr = reduced_mass(species, isp, jsp)
     diam, omega, tref = read_vss(args.vss, isp, jsp)
 
     xs = grid(args.emin, args.emax, args.n, not args.linear)
@@ -180,6 +379,125 @@ def cmd_csv(args):
                 args.yunits, args.extrap, header)
 
 
+LJ_REFERENCE = [
+    # T*,  Omega(2,2)*, Omega(1,1)*   Hirschfelder, Curtiss & Bird
+    (1.0, 1.593, 1.440),
+    (2.0, 1.175, 1.075),
+    (4.0, 0.9700, 0.8836),
+    (10.0, 0.8242, 0.7424),
+]
+
+
+def cmd_potential(args):
+    try:
+        import numpy as np
+    except ImportError:
+        sys.exit("error: the potential mode requires numpy")
+
+    if args.form == "lj":
+        if args.eps_k is None or args.sigma is None:
+            sys.exit("error: --form lj requires --eps-k and --sigma")
+        rscale, escale = args.sigma, args.eps_k * BOLTZ
+        vstar = lj_potential(np)
+        desc = "Lennard-Jones 12-6, eps/k = %g K, sigma = %g m" % (
+            args.eps_k, args.sigma)
+    else:
+        if args.vfile is None:
+            sys.exit("error: --form file requires --vfile")
+        rscale = args.sigma if args.sigma else 1.0e-10
+        escale = (args.eps_k * BOLTZ) if args.eps_k else EV2J
+        vstar = file_potential(np, args.vfile, rscale, escale)
+        desc = "tabulated potential from %s" % args.vfile
+
+    pot = Potential(vstar, rscale, escale, np)
+
+    if args.selftest:
+        if args.form != "lj":
+            sys.exit("error: --selftest only applies to --form lj")
+        print("Lennard-Jones collision integrals vs Hirschfelder et al.:")
+        print("  T*     Omega(2,2)*  ref      Omega(1,1)*  ref")
+        worst = 0.0
+        for Ts, r22, r11 in LJ_REFERENCE:
+            v22 = pot.Omega(Ts, 2, 2, nb=args.nb, bmax=args.bmax)
+            v11 = pot.Omega(Ts, 1, 1, nb=args.nb, bmax=args.bmax)
+            worst = max(worst, abs(v22 - r22) / r22, abs(v11 - r11) / r11)
+            print("  %-6.2f %-12.4f %-8.4f %-12.4f %.4f" % (Ts, v22, r22, v11, r11))
+        print("  worst relative error: %.2f%%" % (100 * worst))
+        if worst > 0.01:
+            sys.exit("error: self test exceeded 1%")
+        return
+
+    species = read_species(args.species)
+    isp, jsp = args.pair
+    mr = reduced_mass(species, isp, jsp)
+
+    energies = grid(args.emin, args.emax, args.n, True)
+    estars = [e * EV2J / escale for e in energies]
+
+    emit = set(args.emit)
+
+    # a scatter table is the angular distribution which accompanies a
+    # hard cutoff at b_max, so it is only consistent with that sigma_T
+    if "scatter" in emit and args.mode != "cutoff":
+        sys.exit("error: --emit scatter requires --mode cutoff, since the "
+                 "tabulated angular distribution corresponds to "
+                 "sigma_T = pi*b_max^2")
+    need_q1 = ("alpha" in emit) or (args.mode == "transport")
+    sigmas, alphas, rows = [], [], []
+
+    for Es in estars:
+        q2 = pot.Qstar(Es, 2, nb=args.nb, bmax=args.bmax) * math.pi * rscale ** 2
+        q1 = (pot.Qstar(Es, 1, nb=args.nb, bmax=args.bmax) * math.pi * rscale ** 2
+              if need_q1 else 0.0)
+
+        if args.mode == "viscosity":
+            # isotropic scattering realizes Q2 = (2/3) sigma_T, so this
+            # choice reproduces the viscosity at every temperature
+            sig = 1.5 * q2
+            alpha = 1.0
+        elif args.mode == "transport":
+            # VSS gives Q1/sigma_T = 2/(1+a) and Q2/Q1 = 2a/(2+a), so
+            # sigma_T(E) with alpha(E) matches both transport cross sections
+            R = q2 / q1
+            R = min(R, 2.0 - 1.0e-9)
+            alpha = 2.0 * R / (2.0 - R)
+            sig = q1 * (1.0 + alpha) / 2.0
+        else:
+            # cutoff: sigma_T = pi*b_max^2 with the true angular distribution
+            sig = math.pi * (args.bmax * rscale) ** 2
+            alpha = 1.0
+
+        sigmas.append(sig)
+        alphas.append(alpha)
+
+    if "scatter" in emit:
+        for Es in estars:
+            rows.append(list(pot.cos_cdf(Es, args.ncos, nb=args.nb,
+                                         bmax=args.bmax)))
+
+    base = [
+        "%s for %s + %s" % (desc, isp, jsp),
+        "generated by tools/tabulate_cross_section.py",
+        "m_r = %g kg, sigma_T convention: %s" % (mr, args.mode),
+    ]
+
+    if "sigma" in emit:
+        write_table(args.output, args.keyword, energies, sigmas, "energy",
+                    "eV", "m^2", args.extrap,
+                    base + ["total collision cross section"])
+    if "alpha" in emit:
+        args.output.write("\n")
+        write_table(args.output, args.keyword + "_ALPHA", energies, alphas,
+                    "energy", "eV", None, ("constant", "constant"),
+                    base + ["energy-dependent VSS alpha"])
+    if "scatter" in emit:
+        args.output.write("\n")
+        write_table(args.output, args.keyword + "_SCATTER", energies, rows,
+                    "energy", "eV", None, ("constant", "constant"),
+                    base + ["cos(chi) at equally spaced cumulative probability"],
+                    ncol=args.ncos)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -220,7 +538,45 @@ def main():
     p.add_argument("--xunits", default="eV", choices=sorted(XUNIT_SCALE))
     p.set_defaults(func=cmd_csv)
 
+    p = sub.add_parser("potential", parents=[common],
+                       help="compute cross sections from an intermolecular potential")
+    p.add_argument("--form", default="lj", choices=["lj", "file"])
+    p.add_argument("--eps-k", type=float, default=None,
+                   help="potential well depth eps/k_B, K")
+    p.add_argument("--sigma", type=float, default=None,
+                   help="potential length scale, m")
+    p.add_argument("--vfile", default=None,
+                   help="two-column r (Angstrom) and V (eV) file, --form file")
+    p.add_argument("--species", help="SPARTA species file")
+    p.add_argument("--pair", nargs=2, metavar=("SP1", "SP2"))
+    p.add_argument("--mode", default="viscosity",
+                   choices=["viscosity", "transport", "cutoff"],
+                   help="viscosity: sigma_T = (3/2)Q2, exact viscosity with "
+                        "isotropic scattering; transport: sigma_T and alpha(E) "
+                        "matching both Q1 and Q2; cutoff: sigma_T = pi*bmax^2 "
+                        "with the true angular distribution")
+    p.add_argument("--emit", nargs="+", default=["sigma"],
+                   choices=["sigma", "alpha", "scatter"],
+                   help="which tables to write")
+    p.add_argument("--emin", type=float, default=1.0e-4)
+    p.add_argument("--emax", type=float, default=1.0e1)
+    p.add_argument("-n", type=int, default=120, help="number of energies")
+    p.add_argument("--ncos", type=int, default=64,
+                   help="angular resolution of a scatter table")
+    p.add_argument("--nb", type=int, default=2400,
+                   help="impact parameter samples per energy")
+    p.add_argument("--bmax", type=float, default=8.0,
+                   help="largest impact parameter, in units of the "
+                        "potential length scale")
+    p.add_argument("--selftest", action="store_true",
+                   help="check the numerics against tabulated LJ collision "
+                        "integrals and exit")
+    p.set_defaults(func=cmd_potential)
+
     args = parser.parse_args()
+    if args.cmd == "potential" and not args.selftest:
+        if not args.species or not args.pair:
+            sys.exit("error: --species and --pair are required")
     args.func(args)
 
 

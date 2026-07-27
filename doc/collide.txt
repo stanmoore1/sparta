@@ -230,6 +230,32 @@ no table directive uses the analytic VSS cross section, so a tabulated
 cross section can be introduced for one pair of an existing multi-species
 model without changing any of the others.
 
+Two further directives tabulate the {deflection angle} rather than the
+cross section:
+
+species-ID species-ID1 alpha filename keyword
+species-ID species-ID1 scatter filename keyword :pre
+
+An {alpha} directive supplies an energy-dependent VSS alpha, replacing the
+constant alpha from the VSS parameters for that pair.  A {scatter}
+directive supplies the full angular distribution, replacing the VSS
+scattering law entirely.  Both require the pair to also have a {table}
+directive, since they change only how a collision deflects, not whether
+it occurs.
+
+Why this matters: a total cross section with a constant alpha reproduces
+one transport cross section exactly at all temperatures.  The VSS model
+gives
+
+Q1 / sigma_T = 2/(1+alpha)
+Q2 / Q1 = 2 alpha/(2+alpha) :pre
+
+where Q1 and Q2 are the diffusion and viscosity cross sections.  With both
+sigma_T(E) and alpha(E) tabulated, both are reproduced at every collision
+energy, which no single (diam, omega, alpha) triple can do.  A {scatter}
+table goes further and reproduces the whole angular distribution, which
+matters when the flow is far from equilibrium.
+
 VSS parameters are still required for every species, even when every pair
 is tabulated.  They are used for pairs without a table, by the
 "react"_react.html styles and the "compute lambda/grid"_compute_lambda_grid.html
@@ -287,11 +313,44 @@ the simulation will silently use the extrapolation unless {error} is
 selected.  When the tables are read, SPARTA prints the energy range of
 each table so this can be checked against the temperatures in the run.
 
+A {scatter} section is two dimensional.  Its parameter line adds an {M}
+keyword giving the number of angles, and each data row holds M values of
+cos(chi) at equally spaced cumulative probabilities (j+1/2)/M, i.e. the
+inverse cumulative differential cross section at that energy:
+
+AR_AR_SCATTER
+N 120 M 64 X energy XUNITS eV EXTRAP constant constant :pre
+
+1  1.0000e-04  -0.9987 -0.9954 ... 0.9999
+... :pre
+
+An {alpha} section is an ordinary one-column section whose values are the
+VSS alpha; {YUNITS} does not apply to it.
+
 The tools directory contains {tabulate_cross_section.py}, which writes
 files in this format.  It can convert a two-column list of energy and
-cross section values, or emit the analytic VHS/VSS cross section for a
-species pair, which is useful for verifying that a tabulated run
-reproduces the equivalent {vss} run.
+cross section values, emit the analytic VHS/VSS cross section for a
+species pair (useful for verifying that a tabulated run reproduces the
+equivalent {vss} run), or compute cross sections directly from an
+intermolecular potential.
+
+The {potential} mode integrates the classical deflection angle
+
+chi(b,E) = pi - 2 b int_rm^inf dr / (r^2 sqrt(1 - b^2/r^2 - V(r)/E)) :pre
+
+for a Lennard-Jones 12-6 potential or a tabulated V(r), and forms the
+transport cross sections Q1 and Q2 from it.  It offers three conventions
+for the total cross section, which is formally infinite for a potential of
+infinite range:
+
+{viscosity} = sigma_T = (3/2) Q2, which with isotropic scattering
+  (alpha = 1) reproduces the viscosity at every temperature
+{transport} = sigma_T(E) and alpha(E) chosen to reproduce both Q1 and Q2
+{cutoff} = sigma_T = pi b_max^2 with the true angular distribution,
+  emitted as a scatter table :ul
+
+Its numerics can be checked against the standard tabulated Lennard-Jones
+collision integrals with the {--selftest} option.
 
 :line
 

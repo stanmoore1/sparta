@@ -1,0 +1,20 @@
+# Lennard-Jones argon for "collide table"
+#
+# ar_lj.tab was produced by
+#   tools/tabulate_cross_section.py potential --form lj \
+#       --eps-k 119.8 --sigma 3.405e-10 --species ar.species --pair Ar Ar \
+#       --mode transport --emit sigma alpha --keyword AR_AR_LJ
+#
+# The total cross section and the energy-dependent alpha together reproduce
+# both the diffusion and viscosity cross sections of the Lennard-Jones
+# potential at every collision energy, which no single (diam, omega, alpha)
+# triple can do.  For argon the required alpha runs from about 1.2 to 1.9
+# across the thermal range, against a fitted VSS value of 1.4.
+#
+# The VSS parameters below are still required.  They are used for any pair
+# without a table, by the react styles, and by compute lambda/grid.
+
+Ar   4.11e-10 0.81  273.15  1.4
+
+Ar Ar   table   ar_lj.tab   AR_AR_LJ
+Ar Ar   alpha   ar_lj.tab   AR_AR_LJ_ALPHA

@@ -263,6 +263,11 @@ int CollideVSS::test_collision(int icell, int igroup, int jgroup,
   double vre = vro*prefactor[ispecies][jspecies];
   vremax[icell][igroup][jgroup] = MAX(vre,vremax[icell][igroup][jgroup]);
   if (vre/vremax[icell][igroup][jgroup] < random->uniform()) return 0;
+
+  // hand the total cross section to any React style which needs it
+
+  if (react) sigma_total = vre/sqrt(vr2);
+
   precoln.vr2 = vr2;
   return 1;
 }
@@ -446,19 +451,26 @@ void CollideVSS::SCATTER_TwoBodyScattering(Particle::OnePart *ip,
   double mass_i = species[isp].mass;
   double mass_j = species[jsp].mass;
 
-  double alpha_r = 1.0 / params[isp][jsp].alpha;
+  double alpha_r = 1.0 / scatter_alpha(isp,jsp);
 
   double eps = random->uniform() * 2*MY_PI;
-  if (fabs(alpha_r - 1.0) < 0.001) {
+
+  // a child style may sample the deflection angle from a tabulated
+  //   differential cross section, in which case alpha is not used
+
+  double cosX;
+  int haveX = scatter_cosX(isp,jsp,cosX);
+
+  if (!haveX && fabs(alpha_r - 1.0) < 0.001) {
     double vr = sqrt(2.0 * postcoln.etrans / params[isp][jsp].mr);
-    double cosX = 2.0*random->uniform() - 1.0;
+    cosX = 2.0*random->uniform() - 1.0;
     double sinX = sqrt(1.0 - cosX*cosX);
     ua = vr*cosX;
     vb = vr*sinX*cos(eps);
     wc = vr*sinX*sin(eps);
   } else {
     double scale = sqrt((2.0 * postcoln.etrans) / (params[isp][jsp].mr * precoln.vr2));
-    double cosX = 2.0*pow(random->uniform(),alpha_r) - 1.0;
+    if (!haveX) cosX = 2.0*pow(random->uniform(),alpha_r) - 1.0;
     double sinX = sqrt(1.0 - cosX*cosX);
     vrc[0] = vi[0]-vj[0];
     vrc[1] = vi[1]-vj[1];

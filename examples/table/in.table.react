@@ -1,0 +1,43 @@
+################################################################################
+# tabulated reaction cross sections in a 3d box
+#
+# react table reacts a selected collision with probability
+# sigma_react(E)/sigma_total(E), so an ab initio or measured reactive cross
+# section can be used directly, with no Arrhenius fit
+#
+# Note:
+#  - The "comm/sort” option to the “global” command is used to match MPI runs.
+#  - The “twopass” option is used to match Kokkos runs.
+# The "comm/sort" and "twopass" options should not be used for production runs.
+################################################################################
+
+seed	    	    12345
+dimension   	    3
+global              gridcut 1.0e-5 comm/sort yes
+
+boundary	    rr rr rr
+
+create_box  	    0 0.0001 0 0.0001 0 0.0001
+create_grid 	    10 10 10
+
+balance_grid        rcb part
+
+species		    react.species X Y
+mixture		    air X Y vstream 0.0 0.0 0.0 temp 8000.0
+mixture             air X frac 1.0
+mixture             air Y frac 0.0
+
+global              nrho 7.07043E22
+global              fnum 7.07043E5
+
+collide		    vss air react.vss
+react               table react.reactions
+
+create_particles    air n 10000 twopass
+
+stats		    500
+compute             temp temp
+stats_style	    step cpu np nattempt ncoll nreact c_temp
+
+timestep 	    7.00E-9
+run 		    5000

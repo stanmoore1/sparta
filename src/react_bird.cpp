@@ -33,7 +33,7 @@ using namespace SPARTA_NS;
 using namespace MathConst;
 
 enum{DISSOCIATION,EXCHANGE,IONIZATION,RECOMBINATION};  // other react files
-enum{ARRHENIUS,QUANTUM};                               // other react files
+enum{ARRHENIUS,QUANTUM,TABULATED};                     // other react files
 
 #define MAXREACTANT 2
 #define MAXPRODUCT 3
@@ -51,16 +51,44 @@ ReactBird::ReactBird(SPARTA *sparta, int narg, char **arg) :
 
   nlist = maxlist = 0;
   rlist = NULL;
-  readfile(arg[1]);
+  reactions = NULL;
+  list_ij = NULL;
+  sp2recomb_ij = NULL;
+
+  setup_reactions(arg[1]);
+}
+
+/* ----------------------------------------------------------------------
+   constructor for derived classes
+   does not read the reaction file, so that a child class which overrides
+     read_style() or read_coeffs() gets its own versions called
+   child is responsible for calling setup_reactions()
+------------------------------------------------------------------------- */
+
+ReactBird::ReactBird(SPARTA *sparta, int narg, char **arg, int /*flag*/) :
+  React(sparta, narg, arg)
+{
+  if (narg != 2) error->all(FLERR,"Illegal react command");
+
+  nlist = maxlist = 0;
+  rlist = NULL;
+  reactions = NULL;
+  list_ij = NULL;
+  sp2recomb_ij = NULL;
+}
+
+/* ----------------------------------------------------------------------
+   read the reaction file and set up the per-reaction tallies
+------------------------------------------------------------------------- */
+
+void ReactBird::setup_reactions(char *fname)
+{
+  readfile(fname);
   check_duplicate();
 
   tally_reactions = new bigint[nlist];
   tally_reactions_all = new bigint[nlist];
   tally_flag = 0;
-
-  reactions = NULL;
-  list_ij = NULL;
-  sp2recomb_ij = NULL;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -221,6 +249,11 @@ void ReactBird::init()
     if (!r->active) continue;
     if (r->initflag) continue;
     r->initflag = 1;
+
+    // the coeffs below are the TCE Arrhenius pre-computation
+    // a style whose reaction probability comes from elsewhere skips it
+
+    if (r->style == TABULATED) continue;
 
     int isp = r->reactants[0];
     int jsp = r->reactants[1];
@@ -717,23 +750,12 @@ void ReactBird::readfile(char *fname)
       print_reaction(copy1,copy2);
       error->all(FLERR,"Invalid reaction style in file");
     }
-    if (word[0] == 'A' || word[0] == 'a') r->style = ARRHENIUS;
-    else if (word[0] == 'Q' || word[0] == 'q') r->style = QUANTUM;
-    else {
+    if (!read_style(r,word)) {
       print_reaction(copy1,copy2);
       error->all(FLERR,"Invalid reaction style in file");
     }
 
-    if (r->style == ARRHENIUS || r->style == QUANTUM) r->ncoeff = 5;
-
-    for (int i = 0; i < r->ncoeff; i++) {
-      word = strtok(NULL," \t\n\r");
-      if (!word) {
-        print_reaction(copy1,copy2);
-        error->all(FLERR,"Invalid reaction coefficients in file");
-      }
-      r->coeff[i] = input->numeric(FLERR,word);
-    }
+    read_coeffs(r,copy1,copy2);
 
     word = strtok(NULL," \t\n\r");
     if (word) {
@@ -745,6 +767,37 @@ void ReactBird::readfile(char *fname)
   }
 
   if (comm->me == 0) fclose(fp);
+}
+
+/* ----------------------------------------------------------------------
+   recognize a reaction style letter, 1 = yes
+------------------------------------------------------------------------- */
+
+int ReactBird::read_style(OneReaction *r, char *word)
+{
+  if (word[0] == 'A' || word[0] == 'a') r->style = ARRHENIUS;
+  else if (word[0] == 'Q' || word[0] == 'q') r->style = QUANTUM;
+  else return 0;
+  return 1;
+}
+
+/* ----------------------------------------------------------------------
+   read the numeric coefficients which follow the style letter
+   continues tokenizing the line already handed to strtok
+------------------------------------------------------------------------- */
+
+void ReactBird::read_coeffs(OneReaction *r, char *copy1, char *copy2)
+{
+  r->ncoeff = 5;
+
+  for (int i = 0; i < r->ncoeff; i++) {
+    char *word = strtok(NULL," \t\n\r");
+    if (!word) {
+      print_reaction(copy1,copy2);
+      error->all(FLERR,"Invalid reaction coefficients in file");
+    }
+    r->coeff[i] = input->numeric(FLERR,word);
+  }
 }
 
 /* ----------------------------------------------------------------------
@@ -852,9 +905,10 @@ void ReactBird::print_reaction(OneReaction *r)
   else if (r->type == IONIZATION) type = 'I';
   else if (r->type == RECOMBINATION) type = 'R';
 
-  char style;
+  char style = '?';
   if (r->style == ARRHENIUS) style = 'A';
   else if (r->style == QUANTUM) style = 'Q';
+  else if (r->style == TABULATED) style = 'T';
 
   if (r->nproduct == 1)
     printf("  %c %c: %s + %s --> %s\n",type,style,

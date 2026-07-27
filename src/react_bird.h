@@ -24,6 +24,7 @@ namespace SPARTA_NS {
 class ReactBird : public React {
  public:
   ReactBird(class SPARTA *, int, char **);
+  ReactBird(class SPARTA *, int, char **, int);   // ctor for derived classes
   ReactBird(class SPARTA *);
   virtual ~ReactBird();
   virtual void init();
@@ -57,6 +58,14 @@ class ReactBird : public React {
 
   OneReaction *rlist;              // list of all reactions read from file
   int maxlist;                     // max # of reactions in rlist
+
+  // hooks so a child class can add a reaction style to the file format
+  // read_style returns 1 if it recognized the style letter
+  // read_coeffs continues tokenizing the same line for that style's data
+
+  virtual int read_style(OneReaction *, char *);
+  virtual void read_coeffs(OneReaction *, char *, char *);
+  void setup_reactions(char *);
 
   // all reactions a pair of reactant species is part of
 

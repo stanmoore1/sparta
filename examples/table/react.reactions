@@ -1,0 +1,13 @@
+# Tabulated reaction cross section for react table.
+#
+# style T: activation energy, energy release, then the file and section
+# keyword holding sigma_react(E) in the collide table file format.
+#
+# react.tab holds the cross section which the TCE model implies for the
+# Arrhenius rate A = 1.0e-16, b = 0.5, Ea = 5.0e-20 J, so this run must
+# reproduce "react tce" with those coefficients.  Because the probability
+# is sigma_react/sigma_total, the reaction rate is also independent of the
+# total cross section the collide style uses to select pairs.
+
+X + X --> Y + Y
+E T 5.0e-20 -5.0e-20 react.tab XX_RXN

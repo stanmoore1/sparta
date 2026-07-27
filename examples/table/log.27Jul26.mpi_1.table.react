@@ -1,0 +1,128 @@
+SPARTA (24 Sep 2025)
+Running on 1 MPI task(s)
+################################################################################
+# tabulated reaction cross sections in a 3d box
+#
+# react table reacts a selected collision with probability
+# sigma_react(E)/sigma_total(E), so an ab initio or measured reactive cross
+# section can be used directly, with no Arrhenius fit
+#
+# Note:
+#  - The "comm/sort” option to the “global” command is used to match MPI runs.
+#  - The “twopass” option is used to match Kokkos runs.
+# The "comm/sort" and "twopass" options should not be used for production runs.
+################################################################################
+
+seed	    	    12345
+dimension   	    3
+global              gridcut 1.0e-5 comm/sort yes
+
+boundary	    rr rr rr
+
+create_box  	    0 0.0001 0 0.0001 0 0.0001
+Created orthogonal box = (0 0 0) to (0.0001 0.0001 0.0001)
+create_grid 	    10 10 10
+Created 1000 child grid cells
+  CPU time = 0.000803947 secs
+  create/ghost percent = 85.7058 14.2942
+
+balance_grid        rcb part
+Balance grid migrated 0 cells
+  CPU time = 0.000123024 secs
+  reassign/sort/migrate/ghost percent = 54.4574 0.775194 12.9845 31.7829
+
+species		    react.species X Y
+mixture		    air X Y vstream 0.0 0.0 0.0 temp 8000.0
+mixture             air X frac 1.0
+mixture             air Y frac 0.0
+
+global              nrho 7.07043E22
+global              fnum 7.07043E5
+
+collide		    vss air react.vss
+react               table react.reactions
+
+create_particles    air n 10000 twopass
+Created 10000 particles
+  CPU time = 0.00170207 secs
+
+stats		    500
+compute             temp temp
+stats_style	    step cpu np nattempt ncoll nreact c_temp
+
+timestep 	    7.00E-9
+run 		    5000
+Reaction cross section XX_RXN from react.tab for X + X --> Y + Y:
+  500 values, E = 0.001 to 1e+04 eV, max 6.141e-18 m^2, 23785 bins
+Memory usage per proc in Mbytes:
+  particles (ave,min,max) = 1.5625 1.5625 1.5625
+  grid      (ave,min,max) = 1.51379 1.51379 1.51379
+  surf      (ave,min,max) = 0 0 0
+  total     (ave,min,max) = 3.07629 3.07629 3.07629
+Step CPU Np Natt Ncoll Nreact c_temp 
+       0            0    10000        0        0        0    8002.0803 
+WARNING: Reaction cross section exceeds the total cross section, reaction rate will be underpredicted (../react_table.cpp:183)
+     500   0.31932998    10000      473      134        0     6900.183 
+    1000     0.630795    10000      475      110        0    6851.4137 
+    1500   0.97099805    10000      459      120        0    6831.1334 
+    2000    1.3261409    10000      487      135        0    6824.6147 
+    2500     1.686202    10000      449      120        0    6819.7861 
+    3000    2.0068629    10000      481      113        0    6814.2331 
+    3500    2.3502989    10000      458      127        0    6811.0945 
+    4000    2.7454069    10000      489      139        0    6808.4387 
+    4500     3.093756    10000      478      121        0    6806.2658 
+    5000    3.4469678    10000      464      130        0    6805.0587 
+Loop time of 3.44698 on 1 procs for 5000 steps with 10000 particles
+Performance: 1450.546 timesteps/s, 14.505 Mparticle-step/s
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Move    | 2.8955     | 2.8955     | 2.8955     |   0.0 | 84.00
+Coll    | 0.44225    | 0.44225    | 0.44225    |   0.0 | 12.83
+Sort    | 0.10323    | 0.10323    | 0.10323    |   0.0 |  2.99
+Comm    | 0.0029194  | 0.0029194  | 0.0029194  |   0.0 |  0.08
+Modify  | 0          | 0          | 0          |   0.0 |  0.00
+Output  | 0.00039291 | 0.00039291 | 0.00039291 |   0.0 |  0.01
+Other   |            | 0.002645   |            |       |  0.08
+
+Particle moves    = 50000000 (50M)
+Cells touched     = 140044084 (140M)
+Particle comms    = 0 (0K)
+Boundary collides = 10004605 (10M)
+Boundary exits    = 0 (0K)
+SurfColl checks   = 0 (0K)
+SurfColl occurs   = 0 (0K)
+Surf reactions    = 0 (0K)
+Collide attempts  = 2396263 (2.4M)
+Collide occurs    = 650939 (0.651M)
+Reactions         = 4958 (4.96K)
+Particles stuck   = 0
+Axisymm bad moves = 0
+
+Particle-moves/CPUsec/proc: 1.45055e+07
+Particle-moves/step: 10000
+Cell-touches/particle/step: 2.80088
+Particle comm iterations/step: 1
+Particle fraction communicated: 0
+Particle fraction colliding with boundary: 0.200092
+Particle fraction exiting boundary: 0
+Surface-checks/particle/step: 0
+Surface-collisions/particle/step: 0
+Surf-reactions/particle/step: 0
+Collision-attempts/particle/step: 0.0479253
+Collisions/particle/step: 0.0130188
+Reactions/particle/step: 9.916e-05
+
+Gas reaction tallies:
+  style table #-of-reactions 1
+  reaction X + X --> Y + Y: 4958
+
+Particles: 10000 ave 10000 max 10000 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Cells:      1000 ave 1000 max 1000 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+GhostCell: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+EmptyCell: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0

@@ -12,7 +12,7 @@ react command :h3
 
 react style args :pre
 
-style = {none} or {tce} or {qk} or {tce/qk} :ulb,l
+style = {none} or {tce} or {qk} or {tce/qk} or {table} :ulb,l
 args = arguments for that style :l
   {none} args = none
   {tce} args = infile
@@ -22,6 +22,8 @@ args = arguments for that style :l
   {tce/qk} args = infile
     infile = file with list of gas-phase chemistry reactions
   {tce/kk} args = infile
+    infile = file with list of gas-phase chemistry reactions
+  {table} args = infile
     infile = file with list of gas-phase chemistry reactions :pre
 :ule
 
@@ -247,7 +249,8 @@ The {style} of each reaction is a single character (upper or lower
 case) with the following meaning:
 
 A = Arrhenius 
-Q = Quantum :ul
+Q = Quantum
+T = Tabulated cross section, only for the {table} react style :ul
 
 The style determines how many reaction coefficients are listed as C1,
 C2, etc, and how they are interpreted by SPARTA.
@@ -263,6 +266,45 @@ C5 = overall reaction energy (positive for exothermic) :ul
 
 The different reaction styles use these values in different ways, as
 explained above.
+
+For the T = Tabulated style, used by the {table} react style, the second
+line is instead
+
+T Ea deltaE filename keyword :pre
+
+where Ea is the activation energy and deltaE the overall reaction energy,
+both in Joules as above, and {filename} and {keyword} name a section of a
+tabulated data file holding the reaction cross section.
+
+:line
+
+The {table} style reads a reaction cross section sigma_react(E) from a
+file and reacts a selected collision with probability
+
+P_react = sigma_react(E) / sigma_total(E) :pre
+
+where sigma_total is the total cross section that the "collide"_collide.html
+style actually used to select the pair, and E is the relative translational
+energy.  This is the same relation the TCE model applies, but with the
+reaction cross section read from a file rather than derived from an
+Arrhenius fit, so a measured or ab initio reactive cross section can be
+used directly and no Arrhenius fit is needed.
+
+The file format is the same as for the "collide table"_collide.html style,
+a keyword-delimited section with an N/X/XUNITS/YUNITS/EXTRAP parameter
+line followed by N rows of index, energy and cross section.  A threshold
+is expressed simply by tabulating a zero cross section below it.
+
+The reaction rate this produces does not depend on the total cross section
+used to select collisions, since a larger sigma_total selects
+proportionally more pairs and reacts proportionally fewer of them.  If
+sigma_react exceeds sigma_total at some energy, however, the reaction
+probability is clipped at 1 and the rate is underpredicted; SPARTA issues
+a warning once when this happens.
+
+Note that the tabulated cross section is indexed by relative translational
+energy, not the total collision energy the TCE model uses, since that is
+what measured and computed reactive cross sections are tabulated against.
 
 :line
 
@@ -352,7 +394,10 @@ effectively.
 
 :line
 
-[Restrictions:] none
+[Restrictions:]
+
+The {table} style does not currently support recombination reactions, and
+has no {kk} suffixed variant.
 
 [Related commands:]
 

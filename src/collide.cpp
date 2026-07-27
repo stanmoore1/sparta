@@ -27,10 +27,12 @@
 #include "compute.h"
 #include "random_mars.h"
 #include "random_knuth.h"
+#include "math_const.h"
 #include "memory.h"
 #include "error.h"
 
 using namespace SPARTA_NS;
+using namespace MathConst;
 
 enum{NONE,DISCRETE,SMOOTH};       // several files  (NOTE: change order)
 enum{PKEEP,PINSERT,PDONE,PDISCARD,PENTRY,PEXIT,PSURF};   // several files
@@ -86,6 +88,7 @@ Collide::Collide(SPARTA *sparta, int, char **arg) : Pointers(sparta)
   nearlimit = 10;
   mcflag = 0;
   vssflag = 0;
+  sigma_total = 0.0;
   react_prob_factor = 1.0;
 
   recomb_ijflag = NULL;
@@ -141,6 +144,23 @@ Collide::~Collide()
   memory->destroy(nn_last_partner_jgroup);
 
   memory->destroy(recomb_ijflag);
+}
+
+/* ----------------------------------------------------------------------
+   effective total cross section for species pair I,J at temperature T
+   default is the VHS form built from the params a style exposes via
+     extract(), which is what compute lambda/grid assumed historically
+   a style with a tabulated cross section overrides this
+------------------------------------------------------------------------- */
+
+double Collide::sigma_eff(int isp, int jsp, double temp)
+{
+  double dref = extract(isp,jsp,"diam");
+  double tref = extract(isp,jsp,"tref");
+  double omega = extract(isp,jsp,"omega");
+  double cxs = MY_PI*dref*dref;
+  if (temp <= 0.0 || temp == tref) return cxs;
+  return cxs * pow(tref/temp,omega-0.5);
 }
 
 /* ---------------------------------------------------------------------- */

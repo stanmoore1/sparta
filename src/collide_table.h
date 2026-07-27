@@ -21,101 +21,69 @@ CollideStyle(table,CollideTable)
 #ifndef SPARTA_COLLIDE_TABLE_H
 #define SPARTA_COLLIDE_TABLE_H
 
-#include "stdint.h"
 #include "collide_vss.h"
 #include "particle.h"
 
 namespace SPARTA_NS {
 
+/* ----------------------------------------------------------------------
+   collide table = tabulated collision model
+
+   three quantities may be tabulated per species pair, independently:
+
+     table    total cross section sigma_T(E), used to select pairs
+     alpha    energy-dependent VSS alpha, used to deflect them
+     scatter  cos(chi) as a function of (E, cumulative probability),
+                i.e. the inverse cumulative differential cross section
+
+   sigma_T(E) with a constant alpha reproduces one transport cross
+     section exactly at all temperatures; adding alpha(E) reproduces both
+     the diffusion and viscosity cross sections at every energy; a scatter
+     table reproduces the full angular distribution
+
+   anything not tabulated for a pair falls back to the analytic VSS form,
+     so a tabulated pair can be introduced into an existing model without
+     disturbing the others
+------------------------------------------------------------------------- */
+
 class CollideTable : public CollideVSS {
  public:
   CollideTable(class SPARTA *, int, char **);
   virtual ~CollideTable();
+  virtual void init();
 
   double vremax_init(int, int);
   virtual int test_collision(int, int, int, Particle::OnePart *,
                              Particle::OnePart *);
+  double sigma_eff(int, int, double);
 
  protected:
+  int tabstyle;              // TB_LOOKUP, TB_LINEAR, or TB_SPLINE
+  int nmant;                 // # of mantissa bits used to index a bin
 
-  // one tabulated total cross section, for one species pair
-  //
-  // the run-time table stores sigma*g as a function of vr^2
-  //   sigma*g is the only combination test_collision() needs, and both
-  //   vr^2 and the relative translational energy 1/2*m_r*vr^2 index the
-  //   same grid, so no sqrt() and no pow() is needed
-  //
-  // bins are spaced logarithmically, since cross section data spans decades
-  //   of collision energy.  the bin index is read straight out of the IEEE-754
-  //   exponent and the leading NMANT mantissa bits of vr^2, so there is one
-  //   shift and one subtract and no transcendental call, the same trick the
-  //   LAMMPS bitmapped pair tables use.  each bin therefore spans a fixed
-  //   ratio 2^(1/2^NMANT) in energy, i.e. equal relative resolution at all
-  //   energies, and there are 2^NMANT bins per factor of 2 in energy
+  int nsigma,nalpha,nscatter;      // # of tables of each kind
+  class InterpTable **sigma_tab;
+  class InterpTable **alpha_tab;
+  class InterpTable **scatter_tab;
 
-  struct Table {
-    char *file,*keyword;     // provenance, for log and error messages
-    int isp,jsp;             // a species pair which uses this table
-    int ninput;              // # of (x,sigma) values read from file
-    int xvar;                // ENERGY or SPEED, independent var in the file
-    int extrap_lo,extrap_hi; // extrapolation mode below/above the table range
-    double xscale,yscale;    // file units -> SI, used only while reading
-    int logflag;             // 1 if the input data is splined in log-log
+  int **sigma_index;         // index into the tables for each species pair,
+  int **alpha_index;         //   -1 = none, use the analytic VSS form
+  int **scatter_index;
 
-    // input data and its spline, freed once the binned table is built
-    // sigma, not sigma*g, is splined: it is the smooth quantity the data
-    //   describes, so sparse or widely spaced input is reproduced correctly
-    // log-log is used whenever every sigma is positive, which makes a power
-    //   law exact and matches how cross section data is normally tabulated
+  // effective cross section vs temperature for compute lambda/grid,
+  //   built once per tabulated pair from the cross section table
 
-    double *xfile;           // ninput values of vr^2, converted from file x
-    double *sfile;           // ninput values of sigma in m^2
-    double *xspl,*yspl;      // spline abscissa/ordinate, raw or logged
-    double *yspl2;           // spline 2nd derivatives
+  double **sigeff;
+  double tlo,tinvdelta;
 
-    double vr2lo,vr2hi;      // vr^2 range spanned by the file data
-    int nbins;               // # of bins, covering whole octaves of vr^2
-    int shift;               // right shift which maps vr^2 bits to a bin
-    int64_t offset;          // bin index of the first bin
-    double *coeff;           // ncoeff values per bin, see sigma_g()
-
-    // extrapolation outside [vr2lo,vr2hi] is always a power law in vr^2:
-    //   sigma*g = a * vr2^p
-    // constant sigma is p = 1/2, the VSS fallback is p = 1-omega
-
-    double alo,plo,ahi,phi;
-
-    double sigmax;           // max of sigma over the input values
-  };
-
-  int tabstyle;              // LOOKUP, LINEAR, or SPLINE
-  int ncoeff;                // # of coefficients stored per bin
-  int nmant;                 // # of mantissa bits used to index a bin,
-                             //   so 2^nmant bins per factor of 2 in energy
-  int ntables;               // # of tables read
-  Table *tables;
-  int **tabindex;            // index into tables for each species pair,
-                             //   -1 = no table, use the analytic VSS form
-
-  double sigma_g(int, double);
-  double interp_sigma_g(Table *, double);
-  int bin_index(Table *, double);
-  double bin_lower(Table *, int);
+  double scatter_alpha(int, int);
+  int scatter_cosX(int, int, double &);
 
   void read_param_file(char *);
   int skip_param_line(int, char **);
-  void read_table(Table *, char *, char *);
-  void param_extract(Table *, char *, char *, char *);
-  void convert_table(Table *);
-  void compute_table(Table *);
-  void check_table(Table *);
-  void input_sg(Table *, double, double *, double *);
-  void bcast_table(Table *);
-  void null_table(Table *);
-  void free_table(Table *);
-
-  void spline(double *, double *, int, double, double, double *);
-  void splint(double *, double *, double *, int, double, double *, double *);
+  class InterpTable *add_table(class InterpTable **&, int &, int, int,
+                               char *, char *, int, int, int);
+  void build_sigeff();
 };
 
 }
@@ -138,66 +106,31 @@ E: Illegal number of collide table entries
 
 N must be between 1 and 2^20.
 
-E: Cross section table spans too many bins
+E: Unknown table directive in collide table parameter file
 
-The tabulated energy range together with N requires more than 2^24 bins.
-Reduce N or narrow the range of the table.
+A directive line must use the keyword table, alpha, or scatter.
 
-E: Cannot open cross section table file %s
+E: Species %s in a collide table directive is not defined
 
-Self-explanatory.
+The directive names a species which is not in the simulation.
 
-E: Did not find keyword %s in cross section table file %s
+E: A scatter table must set M > 1 on its parameter line
 
-The requested section keyword does not appear in the file.
+A scatter section holds cos(chi) at M cumulative probabilities, so M must
+be greater than 1.
 
-E: Premature end of cross section table file
+E: Cross section table is required for a pair with an alpha or scatter table
 
-The file ended before N rows of data were read.
-
-E: Incorrect line format in cross section table file
-
-A data row must have 3 columns: index, x, sigma.
-
-E: Invalid keyword in cross section table parameters
-
-A keyword on the parameter line following the section keyword is not
-recognized, or its value is missing.
-
-E: Cross section table parameters did not set N for keyword %s in file %s
-
-The parameter line must include "N <n>".
-
-E: Invalid cross section table length
-
-N on the parameter line must be > 1, and > 3 if the spline style is used.
-
-E: Cross section table values are not increasing
-
-The independent variable in the table must increase monotonically.
-
-E: Cross section table values must be positive
-
-The independent variable must be > 0, since a zero relative energy or
-speed corresponds to no collision.
-
-E: Cross section table has a negative cross section
-
-Cross sections must be >= 0.
-
-E: Collision energy is outside the cross section table range
-
-The table specified "extrap error" for this end of its range, and a
-collision was attempted outside it.  Widen the table or select a
-different extrapolation mode.
-
-W: Cross section table does not reproduce its input values
-
-The binned table does not reproduce the values read from the file to
-within 1%.  Increase N or use the spline style.
+An alpha or scatter table changes only the deflection angle, so the pair
+must also have a total cross section table.
 
 W: No cross section tables were defined by collide table
 
 The style will behave exactly like collide vss.
+
+W: Tabulated data does not reproduce its input values
+
+The binned table does not reproduce the values read from the file to
+within 1%.  Increase N or use the spline style.
 
 */

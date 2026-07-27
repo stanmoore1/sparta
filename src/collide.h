@@ -35,6 +35,11 @@ class Collide : protected Pointers {
   int vssflag;        // 1 if style provides VSS params via extract(),
                       //   i.e. diam/omega/tref, as required by react styles
 
+  double sigma_total;         // total cross section used to select the
+                              //   current collision pair, set by
+                              //   test_collision, read by React styles which
+                              //   form a probability as sigma_react/sigma_total
+
   double react_prob_factor;   // multiplies the reaction probability computed by
                               //   a React style, to correct for a collision
                               //   style whose total cross section differs from
@@ -59,6 +64,11 @@ class Collide : protected Pointers {
   virtual int perform_collision(Particle::OnePart *&, Particle::OnePart *&,
                                 Particle::OnePart *&) = 0;
   virtual double extract(int, int, const char *) {return 0.0;}
+
+  // effective total cross section for species pair I,J at temperature T
+  // used by compute lambda/grid, which must not assume the VHS form
+
+  virtual double sigma_eff(int, int, double);
 
   void modify_params(int, char **);
   void reset_vremax();

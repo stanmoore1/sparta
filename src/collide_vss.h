@@ -86,8 +86,16 @@ class CollideVSS : public Collide {
   Params **params;             // VSS params for each species
   int nparams;                // # of per-species params read in
 
-  void SCATTER_TwoBodyScattering(Particle::OnePart *,
-                                 Particle::OnePart *);
+  virtual void SCATTER_TwoBodyScattering(Particle::OnePart *,
+                                         Particle::OnePart *);
+
+  // hooks so a child style can replace the deflection angle model
+  // scatter_alpha returns the VSS alpha to use for this pair
+  // scatter_cosX returns 1 and sets cosX if the child sampled it directly
+
+  virtual double scatter_alpha(int isp, int jsp) {return params[isp][jsp].alpha;}
+  virtual int scatter_cosX(int, int, double &) {return 0;}
+
   void EEXCHANGE_NonReactingEDisposal(Particle::OnePart *,
                                       Particle::OnePart *);
   void SCATTER_ThreeBodyScattering(Particle::OnePart *,
