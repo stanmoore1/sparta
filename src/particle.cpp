@@ -64,6 +64,9 @@ Particle::Particle(SPARTA *sparta) : Pointers(sparta)
   cellcount = NULL;
   maxcellcount = 0;
   ncellcount = -1;
+  newcell = NULL;
+  maxnewcell = 0;
+  defer_flag = 0;
 
   nspecies = maxspecies = 0;
   species = NULL;
@@ -127,6 +130,7 @@ Particle::~Particle()
   memory->sfree(sortbuf);
   memory->destroy(sortcursor);
   memory->destroy(cellcount);
+  memory->destroy(newcell);
   //memory->destroy(first);
   memory->destroy(next);
 
@@ -606,9 +610,6 @@ void Particle::sort_reorder(Collide *fuse)
     m += n;
   }
 
-  // the counts describe the pre-scatter list and are stale once it completes
-
-  cellcount_stop();
 
   // scatter into the spare buffer, then make it the live particle list
   // both buffers are kept at the same capacity so maxlocal stays accurate
@@ -631,7 +632,33 @@ void Particle::sort_reorder(Collide *fuse)
   //   random number stream differs from the unfused path; results are
   //   statistically identical, not bit-for-bit identical
 
-  if (fuse) {
+  // when the move deferred the displacement, apply it here as each particle is
+  //   copied: the record is being written anyway, so the position update rides
+  //   along for free and the move was spared a 96-byte-per-particle write pass
+  // newcell[i] >= 0 means pending; its complement means the move already
+  //   completed that particle and the record is copied as it stands
+
+  if (defer_flag) {
+    const double dt = update->dt;
+    for (int i = 0; i < nlocal; i++) {
+      int code = newcell[i];
+      int icell;
+      OnePart p = particles[i];
+      if (code >= 0) {
+        icell = code;
+        p.icell = icell;
+        p.flag = PKEEP;
+        p.x[0] += dt*p.v[0];
+        p.x[1] += dt*p.v[1];
+        p.x[2] += dt*p.v[2];
+      } else icell = ~code;
+      int w = sortcursor[icell]++;
+      sortbuf[w] = p;
+      int n = cinfo[icell].count;
+      if (fuse && sortcursor[icell] == cinfo[icell].first + n)
+        fuse->collide_one_cell(icell,&sortbuf[cinfo[icell].first],n);
+    }
+  } else if (fuse) {
     for (int i = 0; i < nlocal; i++) {
       int icell = particles[i].icell;
       int w = sortcursor[icell]++;
@@ -652,6 +679,11 @@ void Particle::sort_reorder(Collide *fuse)
   int tmpmax = maxlocal;
   maxlocal = maxsortbuf;
   maxsortbuf = tmpmax;
+
+  // the counts and deferred-displacement state describe the pre-scatter list
+  //   and are stale now that it has completed
+
+  cellcount_stop();
 
   // rebuild the per-cell linked list over the now-contiguous blocks
 
@@ -685,6 +717,12 @@ void Particle::cellcount_start()
 
   for (int icell = 0; icell < nglocal; icell++) cellcount[icell] = 0;
   ncellcount = 0;
+
+  if (defer_flag && nlocal > maxnewcell) {
+    maxnewcell = maxlocal;
+    memory->destroy(newcell);
+    memory->create(newcell,maxnewcell,"particle:newcell");
+  }
 }
 
 /* ---------------------------------------------------------------------- */
@@ -692,6 +730,7 @@ void Particle::cellcount_start()
 void Particle::cellcount_stop()
 {
   ncellcount = -1;
+  defer_flag = 0;
 }
 
 /* ----------------------------------------------------------------------

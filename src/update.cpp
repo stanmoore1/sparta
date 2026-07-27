@@ -336,8 +336,16 @@ void Update::run(int nsteps)
     int reorder_flag = (reorder_period && docollide &&
                         ntimestep % reorder_period == 0);
 
-    if (reorder_flag && !particle->ncustom) particle->cellcount_start();
-    else particle->cellcount_stop();
+    // the move may also defer each particle's displacement to the scatter,
+    //   but only when nothing between the two can observe a stale position:
+    //   one proc (so no migration and no compression), the optmove fast path
+    //   (so no surfaces and a uniform grid), no custom attributes and no
+    //   cell weighting (both of which add or reorder particles)
+
+    if (reorder_flag && !particle->ncustom) {
+      particle->defer_flag = (nprocs == 1 && optmove_flag && !cellweightflag);
+      particle->cellcount_start();
+    } else particle->cellcount_stop();
 
     // move particles
 
@@ -422,6 +430,7 @@ template < int DIM, int SURF, int OPT > void Update::move()
   // per-cell counting is enabled by Update::run() only on steps where
   //   Particle::sort_reorder() will consume the counts
   int *cellcount = particle->ncellcount >= 0 ? particle->cellcount : NULL;
+  int *newcell = (cellcount && particle->defer_flag) ? particle->newcell : NULL;
   int ncellcount = 0;
   int side,minside,minsurf,nsurf,cflag,isurf,exclude,stuck_iterate;
   int pstart,pstop,entryexit,any_entryexit,reaction;
@@ -616,6 +625,21 @@ template < int DIM, int SURF, int OPT > void Update::move()
           }
 
           if (icell >= 0) {
+
+            // when the sort is about to copy every record anyway, record only
+            //   the destination cell and let the scatter apply the
+            //   displacement; this skips writing 96 bytes per particle here
+            //   and the position is computed from the same x and v either way
+            // enabled only when nothing between here and the sort can observe
+            //   the stale positions, so the ownership test is not needed --
+            //   deferral requires a single proc
+
+            if (newcell) {
+              newcell[i] = icell;
+              cellcount[icell]++;
+              ncellcount++;
+              continue;
+            }
 
             // reset particle cell and coordinates
 
@@ -1351,6 +1375,9 @@ template < int DIM, int SURF, int OPT > void Update::move()
       if (cellcount && particles[i].flag == PKEEP) {
         cellcount[icell]++;
         ncellcount++;
+        // this particle took the slow path and is already fully moved, so the
+        //   scatter must copy it as it stands rather than displacing it again
+        if (newcell) newcell[i] = ~icell;
       }
 
       if (particles[i].flag != PKEEP) {

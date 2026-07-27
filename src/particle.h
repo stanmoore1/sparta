@@ -124,6 +124,20 @@ class Particle : protected Pointers {
   void cellcount_stop();
   int cellcount_usable();
 
+  // deferred displacement: on steps that reorder, Update::move can skip
+  //   writing each particle's new position back into a 96-byte record that
+  //   sort_reorder() is about to copy anyway, and record only the destination
+  //   cell here; the scatter then applies x += v*dt as it copies
+  // newcell[i] holds the destination cell for a particle whose displacement is
+  //   still pending, or its bitwise complement for one the move already wrote
+  //   in full (the slow path), which the scatter copies verbatim
+  // defer_flag is set by Update::run only when nothing between the move and
+  //   the sort can observe the stale positions
+
+  int *newcell;
+  int maxnewcell;
+  int defer_flag;
+
   // extra custom vectors/arrays for per-particle data
   // ncustom > 0 if there are any extra arrays
   // custom attributes are created by various commands
