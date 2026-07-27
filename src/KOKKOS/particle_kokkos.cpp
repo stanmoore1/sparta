@@ -719,9 +719,22 @@ maxelecstate);
   auto h_elec_wt = Kokkos::create_mirror_view(d_elec_wt);
   auto h_enforce_spin_conservation = Kokkos::create_mirror_view(d_enforce_spin_conservation);
 
+  // every mirror must be initialized: MemKK::realloc_kokkos allocates with
+  // Kokkos::NoInit and create_mirror_view does not initialize either, so any
+  // entry not written by the loop below (a species with no elecdat, or a
+  // state index >= that species' nelecstate) would otherwise hold host garbage
+
   Kokkos::deep_copy(h_nelecstates,0);
+  Particle::ElecState zerostate;
+  zerostate.temp = 0.0;
+  zerostate.degen = 0;
+  zerostate.spin = 0;
+  zerostate.dof = 0.0;
+  Kokkos::deep_copy(h_elecstates,zerostate);
+  Kokkos::deep_copy(h_elec_default_rels,0.0);
   Kokkos::deep_copy(h_elec_species_rels,-1.0);
   Kokkos::deep_copy(h_elec_wt,0.0);
+  Kokkos::deep_copy(h_enforce_spin_conservation,0);
 
   for (int isp = 0; isp < nspecies; ++isp) {
     if (!species[isp].elecdat) continue;

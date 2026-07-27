@@ -815,6 +815,22 @@ void CollideVSS::relax_electronic_mode(Particle::OnePart *p, Particle::OnePart *
 }
 
 /* ----------------------------------------------------------------------
+   return 1 if particle p has per-particle custom storage (vibmode, elecstate,
+   eelec), i.e. it lives in particle->particles
+   ambipolar electrons are held in the scratch elist array instead, so they
+   have no custom data and p - particle->particles is not a valid index
+   this must be a pointer test, not p->ispecies == ambispecies: in the
+   reacting disposal the reaction has already overwritten p->ispecies with
+   the product species, while the particle itself is still in elist
+------------------------------------------------------------------------- */
+
+int CollideVSS::has_custom(Particle::OnePart *p)
+{
+  if (!ambiflag) return 1;
+  return p >= particle->particles && p < particle->particles + particle->nlocal;
+}
+
+/* ----------------------------------------------------------------------
    reset the electronic state/energy of particle p to the ground state
    skip ambipolar electrons: they live in a separate scratch array (elist),
    not in particle->particles, so they have no custom storage to reset
@@ -822,7 +838,7 @@ void CollideVSS::relax_electronic_mode(Particle::OnePart *p, Particle::OnePart *
 
 void CollideVSS::zero_elec(Particle::OnePart *p)
 {
-  if (ambiflag && p->ispecies == ambispecies) return;
+  if (!has_custom(p)) return;
   int *estates = particle->eivec[particle->ewhich[index_elecstate]];
   double *eelecs = particle->edvec[particle->ewhich[index_eelec]];
   eelecs[p - particle->particles] = 0.0;
@@ -1200,7 +1216,7 @@ void CollideVSS::EEXCHANGE_ReactingEDisposal(Particle::OnePart *ip,
         sample_bl(random,0.5*species[sp].vibdof-1.0, b_vib);
         E_Dispose -= p->evib;
         remaining_dof -= vibdof;
-      } else if (vibdof > 2 && vibstyle == DISCRETE) {
+      } else if (vibdof > 2 && vibstyle == DISCRETE && has_custom(p)) {
         p->evib = 0.0;
 
         int nmode = particle->species[sp].nvibmode;
@@ -1245,7 +1261,7 @@ void CollideVSS::EEXCHANGE_ReactingEDisposal(Particle::OnePart *ip,
     // The (p,p) partner argument only matters for the relaxation-number
     // lookup, which the reacting path skips.
 
-    if (elecstyle == DISCRETE && species[sp].elecdat != NULL) {
+    if (elecstyle == DISCRETE && species[sp].elecdat != NULL && has_custom(p)) {
       double zeta_el = eff_elec_dof(sp,tcoll);
       double omega_eff = aveomega - 0.5 * (remaining_dof - zeta_el);
       relax_electronic_mode(p, p, E_Dispose, omega_eff, true);
@@ -1260,9 +1276,9 @@ void CollideVSS::EEXCHANGE_ReactingEDisposal(Particle::OnePart *ip,
   postcoln.eelec = 0.0;
   if (elecstyle == DISCRETE) {
     double *eelecs = particle->edvec[particle->ewhich[index_eelec]];
-    if (species[ip->ispecies].elecdat != NULL)
+    if (species[ip->ispecies].elecdat != NULL && has_custom(ip))
       postcoln.eelec += eelecs[ip - particle->particles];
-    if (species[jp->ispecies].elecdat != NULL)
+    if (species[jp->ispecies].elecdat != NULL && has_custom(jp))
       postcoln.eelec += eelecs[jp - particle->particles];
   }
 
@@ -1271,7 +1287,7 @@ void CollideVSS::EEXCHANGE_ReactingEDisposal(Particle::OnePart *ip,
     postcoln.evib += kp->evib;
     if (elecstyle == DISCRETE) {
       double *eelecs = particle->edvec[particle->ewhich[index_eelec]];
-      if (species[kp->ispecies].elecdat != NULL)
+      if (species[kp->ispecies].elecdat != NULL && has_custom(kp))
         postcoln.eelec += eelecs[kp - particle->particles];
     }
   }

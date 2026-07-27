@@ -144,6 +144,22 @@ void CollideVSSKokkos::init()
   // check that extra rotation/vibration info is defined
   // for species that require it
 
+  if (rotstyle == DISCRETE) {
+    Particle::Species *species = particle->species;
+    int nspecies = particle->nspecies;
+
+    int flag = 0;
+    for (int isp = 0; isp < nspecies; isp++) {
+      if (species[isp].rotdof == 2 && species[isp].nrottemp != 1) flag++;
+    }
+    if (flag) {
+      char str[128];
+      sprintf(str,"%d species do not define a rotational "
+              "temperature for the discrete rotation model",flag);
+      error->all(FLERR,str);
+    }
+  }
+
   if (vibstyle == DISCRETE) {
     index_vibmode = particle->find_custom((char *) "vibmode");
 
@@ -174,6 +190,16 @@ void CollideVSSKokkos::init()
         error->all(FLERR,
                    "Fix elecmode must be used with discrete electronic modes");
     }
+
+    // catch a misconfigured run whose species all lack electronic data,
+    // else electronic relaxation would be silently skipped
+
+    int anyelec = 0;
+    for (int isp = 0; isp < particle->nspecies; isp++)
+      if (particle->species[isp].elecdat != NULL) anyelec = 1;
+    if (!anyelec)
+      error->all(FLERR,"Discrete electronic modes require species "
+                 "electronic data defined via the species elecfile keyword");
 
     // rebuild the flattened electronic-data views if they are stale,
     // e.g. species read from a restart file without a new species command;
@@ -292,6 +318,15 @@ void CollideVSSKokkos::init()
       if (strcmp(modify->fix[ifix]->style,"ambipolar") == 0) break;
     FixAmbipolar *afix = (FixAmbipolar *) modify->fix[ifix];
     ambispecies = afix->especies;
+
+    // ambipolar electrons live in a scratch array (elist), not in
+    // particle->particles, so they have no per-particle electronic
+    // storage: the electron species must not define electronic states
+
+    if (elecstyle == DISCRETE &&
+        particle->species[ambispecies].elecdat != NULL)
+      error->all(FLERR,"Ambipolar electron species cannot have "
+                 "electronic states defined in the species elecfile");
   }
 
   // if ambipolar and multiple groups in mixture, ambispecies must be its own group
@@ -1387,6 +1422,24 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar< GASTALLY, AT
         //memcpy(&particles[index],jpart,nbytes);
         d_particles[index] = *jpart;
         d_particles[index].id = MAXSMALLINT*rand_gen.drand();
+
+        // jpart was an ambipolar electron living in d_elist, so it has no
+        // custom data of its own: the slot it lands in still holds the custom
+        // values of whatever particle used it last, so reset the discrete
+        // internal-mode attributes (mirrors particle->zero_custom() in the
+        // CollideVSS twin; ionambi is set explicitly just below)
+
+        if (vibstyle == DISCRETE && index_vibmode >= 0) {
+          const auto &d_vibmode = k_eiarray.view_device()[d_ewhich[index_vibmode]].k_view.view_device();
+          for (int imode = 0; imode < d_vibmode.extent(1); imode++)
+            d_vibmode(index,imode) = 0;
+        }
+        if (elecstyle == DISCRETE && index_elecstate >= 0 && index_eelec >= 0) {
+          auto &d_estates = k_eivec.view_device()[d_ewhich[index_elecstate]].k_view.view_device();
+          auto &d_eelecs = k_edvec.view_device()[d_ewhich[index_eelec]].k_view.view_device();
+          d_estates[index] = 0;
+          d_eelecs[index] = 0.0;
+        }
         d_ionambi[index] = 0;
 
         //if (nelectron-1 != j-np) memcpy(&d_elist(icell,j-np),&d_elist(icell,nelectron-1),nbytes);
@@ -1987,6 +2040,24 @@ void CollideVSSKokkos::relax_electronic_mode(Particle::OnePart *p,
 }
 
 /* ----------------------------------------------------------------------
+   return 1 if particle p has per-particle custom storage (vibmode, elecstate,
+   eelec), i.e. it lives in d_particles
+   ambipolar electrons are held in the scratch d_elist view instead, so they
+   have no custom data and p - d_particles.data() is not a valid index
+   this must be a pointer test, not p->ispecies == ambispecies: in the
+   reacting disposal the reaction has already overwritten p->ispecies with
+   the product species, while the particle itself is still in d_elist
+   (mirrors CollideVSS::has_custom)
+------------------------------------------------------------------------- */
+
+KOKKOS_INLINE_FUNCTION
+int CollideVSSKokkos::has_custom(Particle::OnePart *p) const
+{
+  if (!ambiflag) return 1;
+  return p >= d_particles.data() && p < d_particles.data() + d_particles.extent(0);
+}
+
+/* ----------------------------------------------------------------------
    reset the electronic state/energy of particle p to the ground state
    skip ambipolar electrons: they live in a separate scratch array (elist),
    not in d_particles, so they have no custom storage to reset
@@ -1995,7 +2066,7 @@ void CollideVSSKokkos::relax_electronic_mode(Particle::OnePart *p,
 KOKKOS_INLINE_FUNCTION
 void CollideVSSKokkos::zero_elec(Particle::OnePart *p) const
 {
-  if (ambiflag && p->ispecies == ambispecies) return;
+  if (!has_custom(p)) return;
   auto &d_estates = k_eivec.view_device()[d_ewhich[index_elecstate]].k_view.view_device();
   auto &d_eelecs = k_edvec.view_device()[d_ewhich[index_eelec]].k_view.view_device();
   d_eelecs[p - d_particles.data()] = 0.0;
@@ -2452,7 +2523,7 @@ void CollideVSSKokkos::EEXCHANGE_ReactingEDisposal(int icell,
           sample_bl(rand_gen,0.5*d_species[sp].vibdof-1.0, b_vib);
         E_Dispose -= p->evib;
         remaining_dof -= vibdof;
-      } else if (vibdof > 2 && vibstyle == DISCRETE) {
+      } else if (vibdof > 2 && vibstyle == DISCRETE && has_custom(p)) {
         p->evib = 0.0;
 
         int nmode = d_species[sp].nvibmode;
@@ -2491,7 +2562,7 @@ void CollideVSSKokkos::EEXCHANGE_ReactingEDisposal(int icell,
     // The (p,p) partner argument only matters for the relaxation-number
     // lookup, which the reacting path skips.
 
-    if (elecstyle == DISCRETE && d_nelecstates[sp] > 0) {
+    if (elecstyle == DISCRETE && d_nelecstates[sp] > 0 && has_custom(p)) {
       double zeta_el = eff_elec_dof(sp,tcoll);
       double omega_eff = aveomega - 0.5 * (remaining_dof - zeta_el);
       relax_electronic_mode(p, p, E_Dispose, omega_eff, rand_gen, true);
@@ -2506,9 +2577,9 @@ void CollideVSSKokkos::EEXCHANGE_ReactingEDisposal(int icell,
   postcoln.eelec = 0.0;
   if (elecstyle == DISCRETE) {
     auto &d_eelecs = k_edvec.view_device()[d_ewhich[index_eelec]].k_view.view_device();
-    if (d_nelecstates[ip->ispecies] > 0)
+    if (d_nelecstates[ip->ispecies] > 0 && has_custom(ip))
       postcoln.eelec += d_eelecs[ip - d_particles.data()];
-    if (d_nelecstates[jp->ispecies] > 0)
+    if (d_nelecstates[jp->ispecies] > 0 && has_custom(jp))
       postcoln.eelec += d_eelecs[jp - d_particles.data()];
   }
 
@@ -2517,7 +2588,7 @@ void CollideVSSKokkos::EEXCHANGE_ReactingEDisposal(int icell,
     postcoln.evib += kp->evib;
     if (elecstyle == DISCRETE) {
       auto &d_eelecs = k_edvec.view_device()[d_ewhich[index_eelec]].k_view.view_device();
-      if (d_nelecstates[kp->ispecies] > 0)
+      if (d_nelecstates[kp->ispecies] > 0 && has_custom(kp))
         postcoln.eelec += d_eelecs[kp - d_particles.data()];
     }
   }

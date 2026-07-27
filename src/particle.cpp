@@ -786,6 +786,8 @@ void Particle::add_species(int narg, char **arg)
       break;
     } else if (strcmp(arg[iarg],"vibfile") == 0) {
       break;
+    } else if (strcmp(arg[iarg],"elecfile") == 0) {
+      break;
     } else {
       newspecies++;
     }
@@ -1323,26 +1325,32 @@ int Particle::ielec(int isp, double temp_elec, RanKnuth *erandom)
 
 double* Particle::electronic_distribution_func(int isp, double temp_elec) {
   double* distribution = cumulative_probabilities;
-  int elecstyle = NONE;
-  if (collide) elecstyle = collide->elecstyle;
-  if (elecstyle == DISCRETE) {
-    const Species &species = particle->species[isp];
-    double partition_function = 0.0;
 
-    for (int i = 0; i < species.elecdat->nelecstate; ++i) {
+  // the Boltzmann distribution is a pure function of the species electronic
+  // data, so do not gate it on collide->elecstyle: callers dereference the
+  // returned buffer unconditionally, and skipping the fill would hand back
+  // the previous call's contents (or NULL when maxelecstate is 0)
 
-      // Calculate boltzmann fractions
+  const Species &species = particle->species[isp];
+  if (species.elecdat == NULL || distribution == NULL)
+    error->one(FLERR,"Species has no electronic data for "
+               "electronic distribution");
 
-      distribution[i] = species.elecdat->states[i].degen*exp(-species.elecdat->states[i].temp/temp_elec);
+  double partition_function = 0.0;
 
-      // Calculate partition function
+  for (int i = 0; i < species.elecdat->nelecstate; ++i) {
 
-      partition_function += distribution[i];
-    }
+    // Calculate boltzmann fractions
 
-    for (int i = 0; i < species.elecdat->nelecstate; ++i)
-      distribution[i] /= partition_function;
+    distribution[i] = species.elecdat->states[i].degen*exp(-species.elecdat->states[i].temp/temp_elec);
+
+    // Calculate partition function
+
+    partition_function += distribution[i];
   }
+
+  for (int i = 0; i < species.elecdat->nelecstate; ++i)
+    distribution[i] /= partition_function;
 
   return distribution;
 }
@@ -2121,7 +2129,7 @@ double Particle::elec_energy(int isp, double temp_elec) {
 
 /* ---------------------------------------------------------------------- */
 
-double Particle::bisectTelec(int isp, double eelec, int count)
+double Particle::bisectTelec(int isp, double eelec, double count)
 {
   double first_elec_eng, t_elec, degen0, degen1, numer, denom;
   double boltz = update->boltz;
