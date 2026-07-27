@@ -24,7 +24,12 @@
 #include <gtest/gtest.h>
 
 #include <QApplication>
+#include <QDialog>
+#include <QFile>
 #include <QImage>
+#include <QMessageBox>
+#include <QProcess>
+#include <QTimer>
 #include <QRegularExpression>
 #include <QLabel>
 #include <QPushButton>
@@ -34,6 +39,50 @@
 #include <QTemporaryDir>
 
 namespace {
+
+/// Answers the confirmation the destructive actions put up, and records what it
+/// said -- a delete that asks the wrong question is as bad as one that deletes
+/// the wrong files.
+class Confirm : public QObject {
+public:
+    explicit Confirm(QMessageBox::StandardButton button, int budgetMs = 5000) :
+        button(button), left(budgetMs)
+    {
+        timer.setInterval(5);
+        connect(&timer, &QTimer::timeout, this, &Confirm::poll);
+        timer.start();
+    }
+    QStringList asked;
+    int boxes = 0;
+
+    [[nodiscard]] bool said(const QString &needle) const
+    {
+        for (const auto &a : asked)
+            if (a.contains(needle)) return true;
+        return false;
+    }
+    [[nodiscard]] QString all() const { return asked.join(" | "); }
+
+private:
+    void poll()
+    {
+        auto *m = QApplication::activeModalWidget();
+        if ((left -= 5) < 0) {
+            timer.stop();
+            if (auto *d = qobject_cast<QDialog *>(m)) d->reject();
+            return;
+        }
+        if (auto *box = qobject_cast<QMessageBox *>(m)) {
+            ++boxes;
+            asked << box->text() + " " + box->informativeText();
+            if (auto *b = box->button(button)) b->click();
+            else box->reject();
+        }
+    }
+    QTimer timer;
+    QMessageBox::StandardButton button;
+    int left;
+};
 
 // A slide show as "File > View Image File" opens it: no main window behind it,
 // so no live simulation feeding images in.
@@ -81,6 +130,27 @@ protected:
         }
         return -1;
     }
+
+    /// An image Qt cannot decode, so displaying it goes through the cache's
+    /// ImageMagick conversion -- which is the only way anything lands in the
+    /// converted-image cache that purgeCache() discards.
+    QString unreadableImage(int n) const
+    {
+        const QString path = dir.filePath(QString("sgi.%1.sgi").arg(n, 4, 10, QChar('0')));
+        QProcess p;
+        p.start("convert", {"-size", "24x18", QString("xc:rgb(%1,60,90)").arg(n * 20 % 256), path});
+        p.waitForFinished(10000);
+        return QFile::exists(path) ? path : QString();
+    }
+
+    static bool haveImageMagick()
+    {
+        QProcess p;
+        p.start("convert", {"-version"});
+        return p.waitForFinished(5000) && p.exitCode() == 0;
+    }
+
+    QPushButton *cacheButton() const { return ctl<QPushButton>("cache"); }
 
     QTemporaryDir dir;
     SlideShow *show = nullptr;
@@ -365,6 +435,215 @@ TEST_F(Show, ImagesOfDifferentSizesAreAllAccepted)
     QMetaObject::invokeMethod(show, "next");
     QMetaObject::invokeMethod(show, "next");
     EXPECT_EQ(shownIndex(), 2);
+}
+
+// ------------------------------------------------------- deleting from disk
+
+// The only place the application removes the user's own files.  The dialog says
+// "This operation cannot be undone", which is exactly what makes a wrong range
+// unrecoverable rather than merely annoying -- so every case here checks what
+// survived as well as what went.
+
+TEST_F(Show, DeletesExactlyTheSelectedRangeAndNothingElse)
+{
+    addImages(6);
+    const QStringList before = show->images();
+    startBox()->setValue(3); // images 3..4, one-based
+    stopBox()->setValue(4);
+
+    Confirm yes(QMessageBox::Yes);
+    QMetaObject::invokeMethod(show, "deleteImages");
+
+    EXPECT_EQ(yes.boxes, 1) << "files were deleted without asking";
+    EXPECT_EQ(show->imageCount(), 4);
+    for (int i = 0; i < before.size(); ++i) {
+        const bool doomed = (i == 2 || i == 3);
+        EXPECT_EQ(QFile::exists(before.at(i)), !doomed)
+            << "image " << i + 1 << (doomed ? " survived the delete" : " was deleted with the range");
+        EXPECT_EQ(show->images().contains(before.at(i)), !doomed)
+            << "image " << i + 1 << " is out of step between the sequence and the disk";
+    }
+}
+
+TEST_F(Show, TheConfirmationSaysHowManyAndWhich)
+{
+    addImages(5);
+    startBox()->setValue(2);
+    stopBox()->setValue(4);
+
+    Confirm no(QMessageBox::No);
+    QMetaObject::invokeMethod(show, "deleteImages");
+    EXPECT_TRUE(no.said("Delete 3 image files")) << no.all().toStdString();
+    EXPECT_TRUE(no.said("image 2 to 4")) << no.all().toStdString();
+    EXPECT_TRUE(no.said("cannot be undone")) << no.all().toStdString();
+}
+
+TEST_F(Show, DecliningDeletesNothing)
+{
+    addImages(4);
+    const QStringList before = show->images();
+    Confirm no(QMessageBox::No);
+    QMetaObject::invokeMethod(show, "deleteImages");
+
+    EXPECT_EQ(no.boxes, 1);
+    EXPECT_EQ(show->imageCount(), 4);
+    for (const QString &f : before) EXPECT_TRUE(QFile::exists(f)) << "declining still deleted " << f.toStdString();
+}
+
+TEST_F(Show, ASingleImageRangeDeletesOneImage)
+{
+    addImages(3);
+    const QStringList before = show->images();
+    startBox()->setValue(2);
+    stopBox()->setValue(2);
+
+    Confirm yes(QMessageBox::Yes);
+    QMetaObject::invokeMethod(show, "deleteImages");
+    EXPECT_TRUE(yes.said("Delete 1 image file")) << yes.all().toStdString();
+    EXPECT_EQ(show->imageCount(), 2);
+    EXPECT_TRUE(QFile::exists(before.at(0)));
+    EXPECT_FALSE(QFile::exists(before.at(1)));
+    EXPECT_TRUE(QFile::exists(before.at(2)));
+}
+
+TEST_F(Show, DeletingEverythingLeavesTheEmptyState)
+{
+    addImages(4);
+    const QStringList before = show->images();
+    Confirm yes(QMessageBox::Yes);
+    QMetaObject::invokeMethod(show, "deleteImages"); // the default range is the whole set
+
+    EXPECT_EQ(show->imageCount(), 0);
+    EXPECT_FALSE(show->hasContent());
+    for (const QString &f : before) EXPECT_FALSE(QFile::exists(f));
+    // and the controls have to come back to a state the next sequence can use
+    EXPECT_EQ(startBox()->value(), 1);
+    EXPECT_EQ(stopBox()->value(), 1);
+    EXPECT_EQ(startBox()->maximum(), 1);
+}
+
+TEST_F(Show, WhatSurvivesBecomesTheWholeRangeAgain)
+{
+    // the boxes still held the old sequence's bounds; leaving them there would
+    // point navigation at images that are gone
+    addImages(6);
+    startBox()->setValue(5);
+    stopBox()->setValue(6);
+    Confirm yes(QMessageBox::Yes);
+    QMetaObject::invokeMethod(show, "deleteImages");
+
+    ASSERT_EQ(show->imageCount(), 4);
+    EXPECT_EQ(startBox()->value(), 1);
+    EXPECT_EQ(stopBox()->value(), 4);
+    EXPECT_EQ(startBox()->maximum(), 4) << "the range can still be set past the end";
+    EXPECT_EQ(stopBox()->maximum(), 4);
+}
+
+TEST_F(Show, TheDisplayedImageStaysInRangeAfterDeletingTheTail)
+{
+    addImages(5);
+    QMetaObject::invokeMethod(show, "last"); // showing image 5
+    ASSERT_EQ(shownIndex(), 4);
+
+    startBox()->setValue(4);
+    stopBox()->setValue(5);
+    Confirm yes(QMessageBox::Yes);
+    QMetaObject::invokeMethod(show, "deleteImages");
+
+    ASSERT_EQ(show->imageCount(), 3);
+    EXPECT_GE(shownIndex(), 0) << "the window is showing an image that was deleted";
+    EXPECT_LT(shownIndex(), 3);
+}
+
+TEST_F(Show, DeletingAnEmptyShowAsksNothing)
+{
+    Confirm yes(QMessageBox::Yes);
+    QMetaObject::invokeMethod(show, "deleteImages");
+    EXPECT_EQ(yes.boxes, 0) << "an empty sequence offered to delete something";
+}
+
+TEST_F(Show, AddingAgainAfterADeleteReusesTheFreedNames)
+{
+    // the sequence refuses a path it already holds; a deleted path must no
+    // longer count as held, or a re-render of the same frame never appears
+    addImages(2);
+    const QStringList before = show->images();
+    Confirm yes(QMessageBox::Yes);
+    QMetaObject::invokeMethod(show, "deleteImages");
+    ASSERT_EQ(show->imageCount(), 0);
+
+    QImage img(40, 30, QImage::Format_RGB32);
+    img.fill(Qt::green);
+    ASSERT_TRUE(img.save(before.at(0)));
+    show->addImage(before.at(0));
+    EXPECT_EQ(show->imageCount(), 1) << "a re-rendered frame was refused as a duplicate";
+}
+
+// ------------------------------------------------------- the conversion cache
+
+TEST_F(Show, WithNothingConvertedThereIsNothingToDiscard)
+{
+    addImages(3); // PNGs: Qt reads them directly, so nothing is ever converted
+    QMetaObject::invokeMethod(show, "first");
+
+    EXPECT_FALSE(cacheButton()->isEnabled())
+        << "the cache offers to discard something it does not hold";
+    Confirm yes(QMessageBox::Yes);
+    QMetaObject::invokeMethod(show, "purgeCache");
+    EXPECT_EQ(yes.boxes, 0) << "an empty cache asked about discarding: " << yes.all().toStdString();
+}
+
+TEST_F(Show, DiscardingConversionsKeepsTheOriginals)
+{
+    if (!haveImageMagick()) GTEST_SKIP() << "no ImageMagick: nothing can be converted";
+    const QString sgi = unreadableImage(1);
+    ASSERT_FALSE(sgi.isEmpty()) << "could not produce a file Qt cannot read";
+
+    show->addImage(sgi);
+    QMetaObject::invokeMethod(show, "first"); // decoding it fills the conversion cache
+    ASSERT_TRUE(cacheButton()->isEnabled())
+        << "displaying an unreadable image did not convert it";
+
+    Confirm yes(QMessageBox::Yes);
+    QMetaObject::invokeMethod(show, "purgeCache");
+    EXPECT_EQ(yes.boxes, 1);
+    EXPECT_TRUE(yes.said("original image files are not touched")) << yes.all().toStdString();
+
+    EXPECT_FALSE(cacheButton()->isEnabled()) << "the conversions were not discarded";
+    EXPECT_TRUE(QFile::exists(sgi)) << "discarding conversions deleted the original";
+    EXPECT_EQ(show->imageCount(), 1) << "the sequence lost an image to a cache purge";
+}
+
+TEST_F(Show, DecliningKeepsTheConversions)
+{
+    if (!haveImageMagick()) GTEST_SKIP() << "no ImageMagick: nothing can be converted";
+    const QString sgi = unreadableImage(2);
+    ASSERT_FALSE(sgi.isEmpty());
+    show->addImage(sgi);
+    QMetaObject::invokeMethod(show, "first");
+    ASSERT_TRUE(cacheButton()->isEnabled());
+
+    Confirm no(QMessageBox::No);
+    QMetaObject::invokeMethod(show, "purgeCache");
+    EXPECT_EQ(no.boxes, 1);
+    EXPECT_TRUE(cacheButton()->isEnabled()) << "declining still discarded the conversions";
+}
+
+TEST_F(Show, DeletingAConvertedImageDropsItsConversionToo)
+{
+    // the conversion of a file that no longer exists can never be used again
+    if (!haveImageMagick()) GTEST_SKIP() << "no ImageMagick: nothing can be converted";
+    const QString sgi = unreadableImage(3);
+    ASSERT_FALSE(sgi.isEmpty());
+    show->addImage(sgi);
+    QMetaObject::invokeMethod(show, "first");
+    ASSERT_TRUE(cacheButton()->isEnabled());
+
+    Confirm yes(QMessageBox::Yes);
+    QMetaObject::invokeMethod(show, "deleteImages");
+    ASSERT_FALSE(QFile::exists(sgi));
+    EXPECT_FALSE(cacheButton()->isEnabled())
+        << "the conversion of a deleted file is still held";
 }
 
 int main(int argc, char **argv)

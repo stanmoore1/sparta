@@ -84,6 +84,7 @@ SlideShow::SlideShow(const QString &fileName, SpartaGui *_spartagui, QWidget *pa
 
     auto *stoprun = new QPushButton(QIcon(":/icons/process-stop.svg"), "");
     stoprun->setToolTip("Stop running simulation");
+    stoprun->setObjectName("stoprun");
     // shared toolbar button policy (matches the image viewer); the spin boxes
     // and image-name/counter labels below are matched to the button height
     const QSize buttonhint = toolButtonSize(stoprun);
@@ -133,17 +134,21 @@ SlideShow::SlideShow(const QString &fileName, SpartaGui *_spartagui, QWidget *pa
 
     auto *tomovie = new QPushButton(QIcon(":/icons/export-movie.svg"), "");
     tomovie->setToolTip("Export to movie file");
+    tomovie->setObjectName("tomovie");
     // always enabled: movie() explains what to install if no encoder is found,
     // rather than leaving a dead, disabled button
 
     auto *toimage = new QPushButton(QIcon(":/icons/document-save-as.svg"), "");
     toimage->setToolTip("Export to image file");
+    toimage->setObjectName("saveimage");
 
     auto *toclip = new QPushButton(QIcon(":/icons/edit-copy.svg"), "");
     toclip->setToolTip("Copy image to clipboard");
+    toclip->setObjectName("copy");
 
     auto *totrash = new QPushButton(QIcon(":/icons/trash.svg"), "");
     totrash->setToolTip("Delete image files in the selected range");
+    totrash->setObjectName("delete");
 
     // The cache indicator is colored while the cache holds images and grayed
     // out when it is empty. Both states are given to the icon for the disabled
@@ -157,6 +162,7 @@ SlideShow::SlideShow(const QString &fileName, SpartaGui *_spartagui, QWidget *pa
     cacheFullIcon.addPixmap(cachePix, QIcon::Disabled);
     cacheEmptyIcon.addPixmap(grayPix, QIcon::Normal);
     cacheEmptyIcon.addPixmap(grayPix, QIcon::Disabled);
+    cacheButton->setObjectName("cache");
     cacheButton->setIcon(cacheEmptyIcon);
 
     // a standalone slideshow (no live simulation) has no run to stop, and must
@@ -226,8 +232,10 @@ SlideShow::SlideShow(const QString &fileName, SpartaGui *_spartagui, QWidget *pa
 
     auto *gofirst = new QPushButton(QIcon(":/icons/go-first.svg"), "");
     gofirst->setToolTip("Go to first image");
+    gofirst->setObjectName("first");
     auto *goprev = new QPushButton(QIcon(":/icons/go-previous-2.svg"), "");
     goprev->setToolTip("Go to previous image");
+    goprev->setObjectName("previous");
     auto *goplay = new QPushButton(QIcon(":/icons/media-playback-start-2.svg"), "");
     goplay->setToolTip("Play animation");
     goplay->setCheckable(true);
@@ -235,29 +243,40 @@ SlideShow::SlideShow(const QString &fileName, SpartaGui *_spartagui, QWidget *pa
     goplay->setObjectName("play");
     auto *gonext = new QPushButton(QIcon(":/icons/go-next-2.svg"), "");
     gonext->setToolTip("Go to next image");
+    gonext->setObjectName("next");
     auto *golast = new QPushButton(QIcon(":/icons/go-last.svg"), "");
     golast->setToolTip("Go to last image");
+    golast->setObjectName("last");
     auto *goloop = new QPushButton(QIcon(":/icons/media-playlist-repeat.svg"), "");
     goloop->setToolTip("Loop animation");
+    goloop->setObjectName("loop");
     goloop->setCheckable(true);
     goloop->setChecked(doLoop);
 
     auto *zoomin = new QPushButton(QIcon(":/icons/gtk-zoom-in.svg"), "");
     zoomin->setToolTip("Displayed image zoom in by 10 percent");
+    zoomin->setObjectName("zoomin");
     auto *zoomout = new QPushButton(QIcon(":/icons/gtk-zoom-out.svg"), "");
     zoomout->setToolTip("Displayed image zoom out by 10 percent");
+    zoomout->setObjectName("zoomout");
     auto *imgrotcw = new QPushButton(QIcon(":/icons/object-rotate-right.svg"), "");
     imgrotcw->setToolTip("Displayed image rotate 90<sup>o</sup> clockwise");
+    imgrotcw->setObjectName("rotatecw");
     auto *imgrotccw = new QPushButton(QIcon(":/icons/object-rotate-left.svg"), "");
     imgrotccw->setToolTip("Displayed image rotate 90<sup>o</sup> counter-clockwise");
+    imgrotccw->setObjectName("rotateccw");
     auto *imgfliph = new QPushButton(QIcon(":/icons/object-flip-horizontal.svg"), "");
     imgfliph->setToolTip("Displayed image mirror horizontally");
+    imgfliph->setObjectName("fliph");
     auto *imgflipv = new QPushButton(QIcon(":/icons/object-flip-vertical.svg"), "");
     imgflipv->setToolTip("Displayed image mirror vertically");
+    imgflipv->setObjectName("flipv");
     auto *normal = new QPushButton(QIcon(":/icons/gtk-zoom-fit.svg"), "");
     normal->setToolTip("Displayed image reset zoom, rotation, and mirroring");
+    normal->setObjectName("resetview");
     auto *fitwin = new QPushButton(QIcon(":/icons/fit-window.svg"), "");
     fitwin->setToolTip("Resize window to fit the displayed image size");
+    fitwin->setObjectName("fitwindow");
 
     // square toolbar buttons with a snug, uniform icon (shared policy)
     styleToolButtons(buttonhint,
