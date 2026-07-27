@@ -195,7 +195,12 @@ struct Mini {
   int nlocal;
   int sorted_contiguous;
 
-  std::vector<ChildCell> cells;
+  /* ChildCell is alignas(64) and std::vector does not honour over-aligned
+     types before C++17; with -march=native the compiler emits aligned AVX-512
+     moves against the declared alignment and faults. SPARTA allocates these
+     through memory->smalloc with SPARTA_GET_ALIGN, so allocate them aligned
+     here too rather than quietly dropping the alignment. */
+  ChildCell *cells;
   std::vector<ChildInfo> cinfo;
   std::vector<int> uniform_index;
 
@@ -250,7 +255,8 @@ void Mini::setup(int nx_, int ny_, int nz_, int npercell, int)
   boxhi[0] = nx*CELLL; boxhi[1] = ny*CELLL; boxhi[2] = nz*CELLL;
   dx = dy = dz = CELLL;
 
-  cells.resize(ncell);
+  if (posix_memalign((void**)&cells,64,(size_t)ncell*sizeof(ChildCell))) exit(1);
+  memset(cells,0,(size_t)ncell*sizeof(ChildCell));
   cinfo.resize(ncell);
   for (int c = 0; c < ncell; c++) {
     int i = c % nx, j = (c/nx) % ny, k = c/(nx*ny);
@@ -371,6 +377,7 @@ void Mini::setup(int nx_, int ny_, int nz_, int npercell, int)
 
 void Mini::teardown()
 {
+  free(cells);
   free(species); free(params_data); free(params);
   free(prefactor_data); free(prefactor);
   free(vremax_data); free(remain_data);
@@ -388,7 +395,7 @@ void Mini::teardown()
 void Mini::move()
 {
   OnePart *p = particles.data();
-  ChildCell *cs = cells.data();
+  ChildCell *cs = cells;
   const int *uidx = uniform_index.data();
   const double *lo = boxlo, *hi = boxhi;
   ntouch_one = nboundary_one = 0;

@@ -1,0 +1,19 @@
+# mini_store: 40x50x50, 1000000 particles, 20 steps, reorder 3
+# every row runs SPARTA's control flow; only the storage differs
+configuration                         B/p   ns/p/s  speedup |   move   sort   coll |   T (K)     ncoll
+AoS 96 B  (SPARTA today)               96    71.31    1.00x |  22.17  20.40  28.74 |  273.01   1413959
+AoS 64 B                               64    65.74    1.08x |  24.03  15.20  26.51 |  273.01   1413959
+SoA doubles                            56    38.73    1.84x |  13.50  10.65  14.58 |  273.01   1413959
+SoA floats                             32    31.24    2.28x |  11.22   7.42  12.60 |  273.01   1413961
+AoSoA V=8                              56    54.61    1.31x |  18.04  15.38  21.18 |  273.01   1413959
+AoSoA V=16                             56    51.93    1.37x |  17.32  14.63  19.98 |  273.01   1413959
+-- plus the blocked fast-path mover that SoA makes possible --
+SoA doubles + blocked move             56    34.36    2.08x |  11.48   9.10  13.78 |  273.01   1413959
+SoA floats  + blocked move             32    34.56    2.06x |  12.38   8.16  14.01 |  273.01   1413961
+AoS 96 B    + blocked move             96    66.71    1.07x |  21.88  18.39  26.44 |  273.01   1413959
+-- plus collide fused into the scatter (landed in SPARTA) --
+AoS 96 B  + fused collide              96    65.97    1.08x |  21.32  24.71  19.94 |  273.01   1413344
+SoA doubles + blocked + fused          56    44.42    1.61x |  12.95  19.30  12.17 |  273.01   1413344
+SoA floats  + blocked + fused          32    36.74    1.94x |  12.13  14.13  10.49 |  273.01   1413585
+
+reference equilibrium temperature 273.15 K

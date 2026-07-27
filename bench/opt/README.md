@@ -20,6 +20,7 @@ microbenchmark and ~1.05x or less in the real code. See `ROUND3.md`.
 
 | document | what is in it |
 |---|---|
+| [`ROUND5.md`](ROUND5.md) | round 5: the full layout sweep on the faithful benchmark — SoA is ~1.8x (not 3.6x), AoSoA ~1.6x, single precision another ~1.2x, and a SIMD mover does not pay because the slow path defeats blocking |
 | [`ROUND4.md`](ROUND4.md) | round 4: does turning reordering off rescue AoSoA (no), are SoA grid cells worth it (no, zero measured elasticity), and a rebuilt mini-app that validates itself against SPARTA and cut the prediction error from 38% to 3% |
 | [`ROUND3.md`](ROUND3.md) | round 3: AoS vs SoA vs AoSoA (SoA wins by 3.31x in the model), and a direct in-situ measurement of how much of any byte saving actually reaches SPARTA's runtime — which corrects round 2's headline recommendation |
 | [`ROUND2.md`](ROUND2.md) | round 2: what the bottleneck actually is (the 96-byte particle record), the full design-space exploration, and why tiling / fusion / buckets / mesh-free all lose to simply shrinking the record |
@@ -59,6 +60,7 @@ minutes. Build any of them with `g++ -O3 -std=c++11 -o NAME NAME.cpp`
 | `micro_pow.cpp` | `pow` throughput *and* latency, which turned out to be the distinction that mattered |
 | `micro_thp.cpp` | do huge pages help the counting sort's scattered writes? |
 | `mini_dsmc.cpp` | **the faithful one.** SPARTA's real structures at real sizes with real indirections, move and collide transcribed from the actual kernels, an equilibration phase, and a `-validate` mode that checks its reorder curve against SPARTA's before it is allowed to predict anything |
+| `mini_store.cpp` | the kitchen sink: one faithful timestep templated on storage (AoS 64/96, SoA double/float, AoSoA 8/16) crossed with a blocked SIMD mover and collide fusion |
 | `micro_layout.cpp` | AoS vs SoA vs AoSoA(8,16), crossed with permuting the particles vs binning indices only |
 | `micro_design.cpp` | the round-2 design space: nine ways to structure the whole timestep, from the current three passes to tiled fusion, per-cell buckets, mesh-free binning and smaller particle records |
 
