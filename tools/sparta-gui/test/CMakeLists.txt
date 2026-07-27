@@ -927,6 +927,35 @@ target_link_libraries(test_surfreport PRIVATE GTest::gtest_main Qt6::Core)
 
 gtest_discover_tests(test_surfreport)
 
+# The per-surface extraction path against a live simulation.  extractCompute and
+# extractFix are the only wrapper calls that return a pointer into SPARTA's own
+# memory, and the surface report is their sole consumer; the reduction core
+# above has only ever seen hand-written arrays.  A wrong style constant or a
+# stride mismatch would yield a report full of plausible numbers.
+add_executable(test_surfreportlive
+  test_surfreportlive.cpp
+  ${CMAKE_SOURCE_DIR}/src/surfreportdialog.cpp
+  ${CMAKE_SOURCE_DIR}/src/surfreport.cpp
+  ${CMAKE_SOURCE_DIR}/src/casemodel.cpp
+  ${CMAKE_SOURCE_DIR}/src/spartawrapper.cpp
+  ${CMAKE_SOURCE_DIR}/src/helpers.cpp
+  ${PLUGIN_LOADER_SRC}
+)
+target_include_directories(test_surfreportlive PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_compile_definitions(test_surfreportlive PRIVATE
+  SPARTA_TEST_LIBRARY_PATH="${_spa_test_lib}"
+  SPARTA_SURF_FIXTURES="${CMAKE_SOURCE_DIR}/../../examples/circle")
+target_link_libraries(test_surfreportlive PRIVATE GTest::gtest_main Qt6::Widgets)
+if (SPARTA_GUI_USE_PLUGIN)
+  target_compile_definitions(test_surfreportlive PRIVATE SPARTA_GUI_USE_PLUGIN)
+  target_include_directories(test_surfreportlive PRIVATE ${SPARTA_PLUGINLIB_DIR})
+endif()
+
+# one process, one SPARTA instance shared by the suite: the run is the expensive
+# part and every case reads the same finished state
+add_test(NAME SurfReport.Live COMMAND $<TARGET_FILE:test_surfreportlive>)
+set_tests_properties(SurfReport.Live PROPERTIES TIMEOUT 600 RESOURCE_LOCK "sparta_run")
+
 # Test executable for the run-comparison core (Feature 5)
 add_executable(test_runcompare
   test_runcompare.cpp

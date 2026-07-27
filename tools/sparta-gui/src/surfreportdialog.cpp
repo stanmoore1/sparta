@@ -50,6 +50,8 @@ SurfReportDialog::SurfReportDialog(QWidget *parent, SpartaWrapper *sparta,
 
     auto *form = new QFormLayout;
     source_ = new QComboBox(this);
+    source_->setObjectName("source");
+    source_->setAccessibleName("Per-surface compute or fix to report on");
     // per-surf sources: computes and fixes (the user picks; a non-surf pick is
     // reported as such when computed)
     const int nc = sparta_->idCount("compute");
@@ -59,6 +61,8 @@ SurfReportDialog::SurfReportDialog(QWidget *parent, SpartaWrapper *sparta,
     form->addRow("Source:", source_);
 
     labels_ = new QLineEdit(this);
+    labels_->setObjectName("labels");
+    labels_->setAccessibleName("Column labels for the per-surface array");
     labels_->setPlaceholderText("comma-separated value labels, e.g. fx, fy, fz, etot");
     labels_->setToolTip("Column labels for the per-surf array; auto-filled from the "
                         "deck when possible.  fx/fy/fz -> force, tx/ty/tz -> moment, "
@@ -68,7 +72,9 @@ SurfReportDialog::SurfReportDialog(QWidget *parent, SpartaWrapper *sparta,
 
     auto *btnRow = new QHBoxLayout;
     auto *computeBtn = new QPushButton("Compute Report", this);
+    computeBtn->setObjectName("compute");
     csvBtn_ = new QPushButton("Export CSV...", this);
+    csvBtn_->setObjectName("csv");
     csvBtn_->setEnabled(false);
     btnRow->addWidget(computeBtn);
     btnRow->addWidget(csvBtn_);
@@ -76,6 +82,8 @@ SurfReportDialog::SurfReportDialog(QWidget *parent, SpartaWrapper *sparta,
     outer->addLayout(btnRow);
 
     report_ = new QPlainTextEdit(this);
+    report_->setObjectName("report");
+    report_->setAccessibleName("Surface quantities report");
     report_->setReadOnly(true);
     report_->setLineWrapMode(QPlainTextEdit::NoWrap);
     outer->addWidget(report_, 1);
