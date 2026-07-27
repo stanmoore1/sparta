@@ -648,6 +648,83 @@ cover:
   over it
 - The tool paths remembered for the next session
 
+test_datafileplot.cpp
+---------------------
+
+Tests for plotting a data file: ``SpartaGui::plotDataFile()`` and
+``ChartWindow::addDataFile()`` -- how a user gets somebody else's numbers onto
+a chart, whether that is a reference curve, a previous run's output or a table
+from a paper.  The parsers are covered in ``test_plotdata.cpp`` and the column
+picker in ``test_plotdatadialog.cpp``; neither end of the path joining them had
+been driven, because both sit behind a file dialog and then a second modal.
+Nothing checked that the columns the user picked are the ones that reach the
+chart -- and a curve from the wrong column is still a curve, labelled from the
+same picker.  The fixture writes a table whose columns are separable on sight
+(x, 2x, 10x), so the plotted range says which was used.  Test cases cover:
+
+- The default selection becoming one chart per column, and an explicitly
+  chosen y column or x column being the one plotted
+- Both refusals -- a cancelled file dialog and a cancelled picker -- and an
+  empty selection reported rather than opening an empty chart
+- A file that is not a table, and a directory, refused with a reason
+- The overlay half: a second file drawn onto the chart already shown and
+  included in its range, both of its refusals, and two overlays coming out in
+  different colours (asked of the pixels, since no accessor exposes a series
+  colour)
+
+test_imageviewerinput.cpp
+-------------------------
+
+Tests for steering the snapshot with the mouse (``ImageViewer::eventFilter``):
+drag to rotate, shift-drag to pan, wheel to zoom.  It is how the viewer is
+actually used, and the live screenshot suites can only say the picture changed
+-- not that a drag to the right turned the camera to the right, or by how much.
+
+The view state is private, so every check reads it back out of the ``dump
+image`` command the viewer emits for the clipboard: the same state the render
+uses, and the form the user can paste into a deck.  Settings still at their
+default are left out of that command, so the readers fall back to the
+documented defaults rather than treating "absent" as "missing".  Test cases
+cover:
+
+- A rotation in the direction of the drag, proportional to its length, and
+  reversible by dragging back
+- A vertical drag changing the elevation without also turning the azimuth
+- A two-dimensional view never asking for camera angles, which SPARTA would
+  ignore
+- Shift-dragging panning instead of rotating, and the centre staying inside
+  the box however far it is pushed
+- The wheel zooming by a fixed factor per notch, reversibly, within its limits
+- A drag that began on another widget, and a move after the button was
+  released, both ignored
+- Reset undoing every gesture
+
+test_inspect.cpp
+----------------
+
+Tests for reading a restart file (``SpartaGui::inspectFile()`` and
+``purgeInspectList()``).  This is the one place the application opens somebody's
+saved simulation without running it, and it is not a read-only path: it loads
+the file into the live SPARTA instance, replacing what was there, and writes a
+temporary log beside the user's file.  Test cases cover:
+
+- A file refused by signature rather than by name -- an input deck called
+  ``.restart`` must not be half-read into the live instance
+- The summary window showing SPARTA's own account of the grid and the particles,
+  and naming the file it came from
+- The temporary ``.info.log`` not surviving beside the user's file
+- The fixed seed inspection supplies, without which rendering a restored state
+  that defines a collide style fails
+- The window still usable afterwards, since inspection clears the instance
+- The purge contract in both directions: windows the user still has open survive
+  the next inspection, the ones they closed are collected
+
+Writing it turned up a crash on quit.  The inspect windows were never cleaned
+up in ``~SpartaGui``, so Qt destroyed them as children in ``~QWidget`` -- after
+the ``sparta`` member was gone -- and the Hide event reaching their event filter
+called the simulator through a wrapper that no longer existed.  Removing the fix
+crashes this suite, which is how it stays fixed.
+
 test_recovery.cpp
 -----------------
 
