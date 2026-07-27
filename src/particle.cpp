@@ -61,6 +61,9 @@ Particle::Particle(SPARTA *sparta) : Pointers(sparta)
   maxsortbuf = 0;
   sortcursor = NULL;
   maxsortcursor = 0;
+  cellcount = NULL;
+  maxcellcount = 0;
+  ncellcount = -1;
 
   nspecies = maxspecies = 0;
   species = NULL;
@@ -123,7 +126,7 @@ Particle::~Particle()
   memory->sfree(particles);
   memory->sfree(sortbuf);
   memory->destroy(sortcursor);
-  //memory->destroy(cellcount);
+  memory->destroy(cellcount);
   //memory->destroy(first);
   memory->destroy(next);
 
@@ -579,20 +582,33 @@ void Particle::sort_reorder(Collide *fuse)
     memory->create(sortcursor,maxsortcursor,"particle:sortcursor");
   }
 
-  // count particles per cell
+  // count particles per cell, unless Update::move already did it as a side
+  //   effect of moving them, in which case that pass over particles[] --- a
+  //   full streaming read of the entire array to fetch one int per 96-byte
+  //   record --- is skipped and the counts fold into the prefix sum below
 
-  for (int icell = 0; icell < nglocal; icell++) cinfo[icell].count = 0;
-  for (int i = 0; i < nlocal; i++) cinfo[particles[i].icell].count++;
+  int havecounts = cellcount_usable();
+
+  if (!havecounts) {
+    for (int icell = 0; icell < nglocal; icell++) cinfo[icell].count = 0;
+    for (int i = 0; i < nlocal; i++) cinfo[particles[i].icell].count++;
+  }
 
   // prefix sum gives each cell the start of its block in the new ordering
 
   int m = 0;
   for (int icell = 0; icell < nglocal; icell++) {
-    int n = cinfo[icell].count;
+    int n;
+    if (havecounts) n = cinfo[icell].count = cellcount[icell];
+    else n = cinfo[icell].count;
     cinfo[icell].first = n ? m : -1;
     sortcursor[icell] = m;
     m += n;
   }
+
+  // the counts describe the pre-scatter list and are stale once it completes
+
+  cellcount_stop();
 
   // scatter into the spare buffer, then make it the live particle list
   // both buffers are kept at the same capacity so maxlocal stays accurate
@@ -649,6 +665,45 @@ void Particle::sort_reorder(Collide *fuse)
     for (; m < last-1; m++) next[m] = m+1;
     next[m++] = -1;
   }
+}
+
+/* ----------------------------------------------------------------------
+   enable per-cell counting by Update::move for the coming timestep
+   zeroing nglocal ints is a few hundred KB against the tens of MB that the
+     counting pass it replaces would have to stream
+------------------------------------------------------------------------- */
+
+void Particle::cellcount_start()
+{
+  int nglocal = grid->nlocal;
+
+  if (nglocal > maxcellcount) {
+    maxcellcount = nglocal;
+    memory->destroy(cellcount);
+    memory->create(cellcount,maxcellcount,"particle:cellcount");
+  }
+
+  for (int icell = 0; icell < nglocal; icell++) cellcount[icell] = 0;
+  ncellcount = 0;
+}
+
+/* ---------------------------------------------------------------------- */
+
+void Particle::cellcount_stop()
+{
+  ncellcount = -1;
+}
+
+/* ----------------------------------------------------------------------
+   1 if the counts accumulated during the move can be trusted
+   they cannot if counting was never enabled, or if the number counted
+     differs from nlocal, which catches anything that added, received, cloned
+     or otherwise disturbed the particle list between the move and here
+------------------------------------------------------------------------- */
+
+int Particle::cellcount_usable()
+{
+  return ncellcount >= 0 && ncellcount == nlocal;
 }
 
 /* ----------------------------------------------------------------------

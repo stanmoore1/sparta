@@ -104,13 +104,25 @@ class Particle : protected Pointers {
   int maxlocal;             // max # particles list can hold
   OnePart *particles;       // list of particles I own
 
-  // currently stored in grid.h for every cell, whether I own it or not
-  // not sure why storing it here is slower
-
-  //int *cellcount;           // count of particles in each grid cell I own
   //int *first;               // index of first particle in each grid cell
 
   int *next;                // index of next particle in each grid cell
+
+  // per-cell particle counts accumulated by Update::move as a side effect of
+  //   moving, so sort_reorder() does not need its own pass over particles[]
+  //   just to read one int out of every 96-byte record
+  // cellcount is NULL when counting is off; ncellcount is the number of
+  //   particles counted, and counts are only trusted when it equals nlocal,
+  //   which fails safe if anything added, received or cloned particles
+  //   between the move and the sort
+
+  int *cellcount;
+  int maxcellcount;
+  int ncellcount;
+
+  void cellcount_start();
+  void cellcount_stop();
+  int cellcount_usable();
 
   // extra custom vectors/arrays for per-particle data
   // ncustom > 0 if there are any extra arrays

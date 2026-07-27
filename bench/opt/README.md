@@ -20,6 +20,7 @@ microbenchmark and ~1.05x or less in the real code. See `ROUND3.md`.
 
 | document | what is in it |
 |---|---|
+| [`ROUND9.md`](ROUND9.md) | round 9: steps back and ranks the five best remaining ideas, then tries them. Three land bitwise — counting during the move (1.045x), reordering every step (1.037x), and hoisting the plane-rejection test into the surface loop (**1.13x on in.sphere**). The record-size elasticity is re-measured at **1.17x for 96 -> 80 bytes**, five times round 3's estimate |
 | [`ROUND8.md`](ROUND8.md) | round 8: collision sub-cycling (`global collide/every N`) — **1.50x on in.collide** at K=8 with the collision rate held to 0.5%, 1.25x on in.sphere. Also the comparison that matters: raising `dt` beats sub-cycling wherever the mover has slack (4.34x on in.sphere), and the number that decides which is `Cell-touches/particle/step` |
 | [`ROUND7.md`](ROUND7.md) | round 7: a mini-app for `bench/in.sphere`, which is a different machine — move is 73% and dominated by ray-triangle intersection. Settles the boundary question (free, with surfaces too) and shows SoA is worth ~1.2x here against ~1.9x on in.collide |
 | [`ROUND6.md`](ROUND6.md) | round 6: prototypes the SoA materialization boundary (affordable — at or below noise), and corrects round 5: a blocked SIMD mover **does** pay, but only with SoA (1.46x on move, 23% regression on AoS) |

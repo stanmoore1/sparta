@@ -326,6 +326,19 @@ void Update::run(int nsteps)
       timer->stamp(TIME_MODIFY);
     }
 
+    // decide up front whether this step reorders, because if it does then
+    //   the move can tally each cell's particle count as it goes and
+    //   sort_reorder() is spared a pass over the whole particle array
+
+    int docollide = (ntimestep % collide_every == 0);
+    if (collide) collide->nstep_collide = collide_every;
+
+    int reorder_flag = (reorder_period && docollide &&
+                        ntimestep % reorder_period == 0);
+
+    if (reorder_flag && !particle->ncustom) particle->cellcount_start();
+    else particle->cellcount_stop();
+
     // move particles
 
     if (cellweightflag) particle->pre_weight();
@@ -348,12 +361,7 @@ void Update::run(int nsteps)
     //   collide_every times the attempt count, which leaves the mean collision
     //   rate unchanged because the NTC attempt count is linear in dt
     // sorting is only needed on steps that collide
-
-    int docollide = (ntimestep % collide_every == 0);
-    if (collide) collide->nstep_collide = collide_every;
-
-    int reorder_flag = (reorder_period && docollide &&
-                        ntimestep % reorder_period == 0);
+    // docollide and reorder_flag were computed before the move, above
 
     // when reordering runs this step and the collide style can be driven one
     //   cell at a time, hand it to sort_reorder(), which collides each cell
@@ -411,6 +419,10 @@ template < int DIM, int SURF, int OPT > void Update::move()
 {
   bool hitflag;
   int m,icell,icell_original,nmask,outface,bflag,nflag,pflag,itmp;
+  // per-cell counting is enabled by Update::run() only on steps where
+  //   Particle::sort_reorder() will consume the counts
+  int *cellcount = particle->ncellcount >= 0 ? particle->cellcount : NULL;
+  int ncellcount = 0;
   int side,minside,minsurf,nsurf,cflag,isurf,exclude,stuck_iterate;
   int pstart,pstop,entryexit,any_entryexit,reaction;
   surfint *csurfs;
@@ -617,6 +629,9 @@ template < int DIM, int SURF, int OPT > void Update::move()
               mlist[nmigrate++] = i;
               particles[i].flag = PDONE;
               ncomm_one++;
+            } else if (cellcount) {
+              cellcount[icell]++;
+              ncellcount++;
             }
 
             continue;
@@ -851,6 +866,27 @@ template < int DIM, int SURF, int OPT > void Update::move()
               }
               if (DIM == 3) {
                 tri = &tris[isurf];
+
+                // reject before the call when the segment lies wholly on one
+                //   side of the triangle's plane, or wholly within it
+                // this is exactly the test line_tri_intersect() performs
+                //   first, hoisted here so the overwhelming majority of
+                //   candidates never pay for the call; the arithmetic and its
+                //   order are identical, so the outcome is unchanged
+                // at 1e-5 s and 2500 m/s a particle covers a few percent of a
+                //   cell per step, so nearly every triangle in the cell is
+                //   rejected by this test
+
+                const double *tn = tri->norm;
+                const double *tv0 = tri->p1;
+                double dxs0 = x[0]-tv0[0], dxs1 = x[1]-tv0[1], dxs2 = x[2]-tv0[2];
+                double dxe0 = xnew[0]-tv0[0], dxe1 = xnew[1]-tv0[1], dxe2 = xnew[2]-tv0[2];
+                double dstart = tn[0]*dxs0 + tn[1]*dxs1 + tn[2]*dxs2;
+                double dstop  = tn[0]*dxe0 + tn[1]*dxe1 + tn[2]*dxe2;
+                if (dstart < 0.0 && dstop < 0.0) continue;
+                if (dstart > 0.0 && dstop > 0.0) continue;
+                if (dstart == 0.0 && dstop == 0.0) continue;
+
                 hitflag = Geometry::
                   line_tri_intersect(x,xnew,tri->p1,tri->p2,tri->p3,
                                      tri->norm,xc,param,side);
@@ -1307,6 +1343,16 @@ template < int DIM, int SURF, int OPT > void Update::move()
 
       particles[i].icell = icell;
 
+      // tally the cell this particle ended in, so Particle::sort_reorder()
+      //   does not have to re-read the whole particle array to count
+      // only particles staying on this proc are tallied; the count is
+      //   validated against nlocal before it is used
+
+      if (cellcount && particles[i].flag == PKEEP) {
+        cellcount[icell]++;
+        ncellcount++;
+      }
+
       if (particles[i].flag != PKEEP) {
         mlist[nmigrate++] = i;
         if (particles[i].flag != PDISCARD) {
@@ -1356,6 +1402,7 @@ template < int DIM, int SURF, int OPT > void Update::move()
   // END of all move/migrate iterations
 
   particle->sorted = particle->sorted_contiguous = 0;
+  if (cellcount) particle->ncellcount = ncellcount;
 
   // accumulate running totals
 
