@@ -26,6 +26,7 @@
 
 #include "spartagui.h"
 
+#include "chartviewer.h"
 #include "codeeditor.h"
 #include "constants.h"
 #include "spartawrapper.h"
@@ -584,6 +585,38 @@ TEST_F(Sweeping, TheResultsSurviveAndCanBeSweptAgain)
     ASSERT_TRUE(runSweep());
     EXPECT_EQ(results()->rowCount(), 1)
         << "the second sweep appended to the first one's results";
+}
+
+TEST_F(Sweeping, ChartingTheResultsPlotsThemRatherThanAnEmptyWindow)
+{
+    // the chart is how a sweep is read; one that opens with no curve in it looks
+    // like a sweep that found nothing
+    addVariable("n", "List", "40, 80, 120");
+    setQuantities("Np");
+    ASSERT_TRUE(runSweep());
+    ASSERT_EQ(results()->rowCount(), 3);
+
+    QMetaObject::invokeMethod(panel(), "chartResults");
+    QCoreApplication::processEvents();
+
+    ChartWindow *chart = nullptr;
+    for (auto *w : QApplication::topLevelWidgets())
+        if (auto *c = qobject_cast<ChartWindow *>(w)) chart = c;
+    ASSERT_NE(chart, nullptr) << "charting the results opened no window";
+
+    auto *view = chart->findChild<ChartViewer *>();
+    ASSERT_NE(view, nullptr);
+    const QRectF box = view->getMinMax();
+    const double ylo = qMin(box.top(), box.bottom()), yhi = qMax(box.top(), box.bottom());
+    const double ypad = Cfg::CHART_YPAD_FRACTION * (yhi - ylo) / (1 + 2 * Cfg::CHART_YPAD_FRACTION);
+
+    // x is the swept n, y is Np, and the deck makes them equal
+    EXPECT_NEAR(box.left(), 40.0, 1e-6) << "the chart is empty or starts at the wrong value";
+    EXPECT_NEAR(box.right(), 120.0, 1e-6);
+    EXPECT_NEAR(ylo + ypad, 40.0, 1e-6) << "the plotted values are not the tabulated ones";
+    EXPECT_NEAR(yhi - ypad, 120.0, 1e-6);
+    chart->close(); // WA_DeleteOnClose
+    QCoreApplication::processEvents();
 }
 
 int main(int argc, char **argv)

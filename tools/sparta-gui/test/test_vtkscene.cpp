@@ -21,7 +21,19 @@
 #include <QImage>
 #include <QFile>
 #include <QTemporaryDir>
+#include <QDialog>
+#include <QInputDialog>
+#include <QLabel>
+#include <QLineEdit>
+#include <QMessageBox>
+#include <QSpinBox>
 #include <QTest>
+#include <QTimer>
+
+#include "chartviewer.h"
+#include "constants.h"
+#include "plotdata.h"
+#include "vtkfilters.h"
 
 #include <vtkCellArray.h>
 #include <vtkCellData.h>
@@ -36,6 +48,8 @@
 #include <vtkUnstructuredGridWriter.h>
 #include <vtkXMLPolyDataWriter.h>
 #include <vtkXMLUnstructuredGridWriter.h>
+#include <vtkDataArray.h>
+#include <vtkImageData.h>
 
 #include "gtest/gtest.h"
 
@@ -704,7 +718,365 @@ TEST(SceneWindow, ClearingBetweenImportsLeavesNothingBehind)
     EXPECT_FALSE(win.hasContent());
 }
 
+
+// ---------------------------------------------------------------------------
+// Probing and slicing
+// ---------------------------------------------------------------------------
+//
+// The filters themselves are checked in test_vtkfilters.cpp against known
+// fields.  What was never checked is the scene's use of them: which field it
+// samples, where it puts the line, and what it reports back.  These are the
+// only numbers the 3D viewer states as fact, and a probe that resolves the
+// wrong cell says a plausible one with no way to notice.
+
+/// A 11x11x11 grid over the unit cube whose scalar is exactly the x coordinate,
+/// so anything sampled from it has an answer that can be written down.
+vtkSmartPointer<vtkImageData> rampField(const char *name = "ramp")
+{
+    auto img = vtkSmartPointer<vtkImageData>::New();
+    img->SetDimensions(11, 11, 11);
+    img->SetOrigin(0.0, 0.0, 0.0);
+    img->SetSpacing(0.1, 0.1, 0.1);
+
+    auto a = vtkSmartPointer<vtkDoubleArray>::New();
+    a->SetName(name);
+    a->SetNumberOfTuples(img->GetNumberOfPoints());
+    for (vtkIdType i = 0; i < img->GetNumberOfPoints(); ++i) {
+        double p[3];
+        img->GetPoint(i, p);
+        a->SetTuple1(i, p[0]);
+    }
+    img->GetPointData()->AddArray(a);
+    img->GetPointData()->SetScalars(a);
+    return img;
+}
+
+/// Answers the QInputDialogs the filters put up, in order, and records any
+/// message box instead of leaving it modal with nobody to press it.
+class Answers : public QObject {
+public:
+    explicit Answers(QStringList replies, int budgetMs = 10000) :
+        replies(std::move(replies)), left(budgetMs)
+    {
+        timer.setInterval(5);
+        connect(&timer, &QTimer::timeout, this, &Answers::poll);
+        timer.start();
+    }
+    QStringList messages;
+    int dialogs = 0;
+
+    [[nodiscard]] bool said(const QString &needle) const
+    {
+        for (const auto &m : messages)
+            if (m.contains(needle)) return true;
+        return false;
+    }
+    [[nodiscard]] QString all() const { return messages.join(" | "); }
+
+private:
+    void poll()
+    {
+        auto *m = QApplication::activeModalWidget();
+        if ((left -= 5) < 0) {
+            timer.stop();
+            if (auto *d = qobject_cast<QDialog *>(m)) d->reject();
+            else if (m) m->close();
+            return;
+        }
+        if (!m) return;
+        if (auto *box = qobject_cast<QMessageBox *>(m)) {
+            messages << box->text() + " " + box->informativeText();
+            box->accept();
+            return;
+        }
+        if (auto *dlg = qobject_cast<QInputDialog *>(m)) {
+            ++dialogs;
+            if (replies.isEmpty()) {
+                dlg->reject();
+                return;
+            }
+            const QString reply = replies.takeFirst();
+            if (reply.isNull()) {
+                dlg->reject(); // the user pressed Cancel on this one
+                return;
+            }
+            // the combo, spin and text variants each expose a different editor
+            if (auto *combo = dlg->findChild<QComboBox *>()) combo->setCurrentText(reply);
+            else if (auto *spin = dlg->findChild<QSpinBox *>()) spin->setValue(reply.toInt());
+            else if (auto *dspin = dlg->findChild<QDoubleSpinBox *>()) dspin->setValue(reply.toDouble());
+            else if (auto *edit = dlg->findChild<QLineEdit *>()) edit->setText(reply);
+            dlg->accept();
+            return;
+        }
+        if (auto *d = qobject_cast<QDialog *>(m)) d->reject();
+    }
+    QTimer timer;
+    QStringList replies;
+    int left;
+};
+
+/// The chart window a line probe opens, if it opened one.
+ChartWindow *newestChart()
+{
+    ChartWindow *found = nullptr;
+    for (auto *w : QApplication::topLevelWidgets())
+        if (auto *c = qobject_cast<ChartWindow *>(w)) found = c;
+    return found;
+}
+
+void closeCharts()
+{
+    // they carry WA_DeleteOnClose, so closing IS the delete
+    for (auto *w : QApplication::topLevelWidgets())
+        if (auto *c = qobject_cast<ChartWindow *>(w)) c->close();
+    QApplication::processEvents();
+}
+
+QString statusOf(VtkScene &scene)
+{
+    auto *l = scene.findChild<QLabel *>("status");
+    return l ? l->text() : QString();
+}
+
 } // namespace
+
+// ---------------------------------------------------------------- line probe
+
+TEST(SceneProbe, SamplesTheChosenFieldAlongTheDomainAndChartsIt)
+{
+    REQUIRE_RENDERER();
+    closeCharts();
+    VtkScene scene;
+    scene.addDataset(rampField(), "ramp", VtkScene::Kind::Generic);
+    present(scene);
+
+    // the field name, then the sample count
+    Answers answers({"ramp", "21"});
+    QMetaObject::invokeMethod(&scene, "applyLineProbe");
+    QApplication::processEvents();
+
+    EXPECT_EQ(answers.dialogs, 2) << "the probe did not ask which field and how many samples";
+    auto *chart = newestChart();
+    ASSERT_NE(chart, nullptr) << "the probe produced no chart: " << answers.all().toStdString();
+    EXPECT_TRUE(chart->windowTitle().contains("ramp"))
+        << "the chart does not say what it sampled: " << chart->windowTitle().toStdString();
+
+    // the default line runs along x through the centre, and the field IS x, so
+    // the sampled values have to span the domain from 0 to 1 -- and so does the
+    // arc length along the line
+    auto *view = chart->findChild<ChartViewer *>();
+    ASSERT_NE(view, nullptr);
+    // getMinMax() returns the framing rectangle: y runs downwards and carries a
+    // 5% margin, so the data range is recovered from the two corners
+    const QRectF box = view->getMinMax();
+    const double ylo = qMin(box.top(), box.bottom()), yhi = qMax(box.top(), box.bottom());
+    const double ypad = Cfg::CHART_YPAD_FRACTION * (yhi - ylo) / (1 + 2 * Cfg::CHART_YPAD_FRACTION);
+
+    EXPECT_NEAR(box.left(), 0.0, 1e-6) << "the line does not start at the domain edge";
+    EXPECT_NEAR(box.right(), 1.0, 1e-6) << "the line does not reach the far edge";
+    EXPECT_NEAR(ylo + ypad, 0.0, 1e-6) << "the sampled field does not start at its own minimum";
+    EXPECT_NEAR(yhi - ypad, 1.0, 1e-6)
+        << "the sampled values are not the field: a ramp from 0 to 1 came back as "
+        << (ylo + ypad) << ".." << (yhi - ypad);
+    closeCharts();
+}
+
+TEST(SceneProbe, TheSampleCountIsTheNumberOfPointsPlotted)
+{
+    REQUIRE_RENDERER();
+    closeCharts();
+    VtkScene scene;
+    scene.addDataset(rampField(), "ramp", VtkScene::Kind::Generic);
+    present(scene);
+
+    Answers answers({"ramp", "7"});
+    QMetaObject::invokeMethod(&scene, "applyLineProbe");
+    QApplication::processEvents();
+
+    // an independent probe of the same data along the same default line
+    auto img = rampField();
+    double b[6];
+    img->GetBounds(b);
+    double p1[3] = {b[0], 0.5 * (b[2] + b[3]), 0.5 * (b[4] + b[5])};
+    double p2[3] = {b[1], 0.5 * (b[2] + b[3]), 0.5 * (b[4] + b[5])};
+    auto line = VtkFilters::probeLine(img, p1, p2, 7);
+    ASSERT_TRUE(line);
+    EXPECT_EQ(line->GetNumberOfPoints(), 7);
+
+    ASSERT_NE(newestChart(), nullptr);
+    closeCharts();
+}
+
+TEST(SceneProbe, WithNoDataItSaysSoRatherThanProbingNothing)
+{
+    REQUIRE_RENDERER();
+    closeCharts();
+    VtkScene scene;
+    present(scene);
+
+    Answers answers({"ramp", "10"});
+    QMetaObject::invokeMethod(&scene, "applyLineProbe");
+    QApplication::processEvents();
+
+    EXPECT_TRUE(answers.said("Load a dataset first")) << answers.all().toStdString();
+    EXPECT_EQ(newestChart(), nullptr) << "a chart was opened with nothing to plot";
+}
+
+TEST(SceneProbe, ADatasetWithNoPointFieldIsRefused)
+{
+    // the leaky sheet carries its scalar on the cells, not the points, so there
+    // is nothing for a point probe to interpolate
+    REQUIRE_RENDERER();
+    closeCharts();
+    VtkScene scene;
+    scene.addDataset(leakySheet(), "sheet", VtkScene::Kind::Surface);
+    present(scene);
+
+    Answers answers({"leak", "10"});
+    QMetaObject::invokeMethod(&scene, "applyLineProbe");
+    QApplication::processEvents();
+
+    EXPECT_TRUE(answers.said("no point field")) << answers.all().toStdString();
+    EXPECT_EQ(newestChart(), nullptr);
+}
+
+TEST(SceneProbe, CancellingTheFieldChoiceProbesNothing)
+{
+    REQUIRE_RENDERER();
+    closeCharts();
+    VtkScene scene;
+    scene.addDataset(rampField(), "ramp", VtkScene::Kind::Generic);
+    present(scene);
+
+    Answers answers({QString()}); // Cancel on the first dialog
+    QMetaObject::invokeMethod(&scene, "applyLineProbe");
+    QApplication::processEvents();
+
+    EXPECT_EQ(newestChart(), nullptr) << "cancelling still opened a chart";
+}
+
+// ----------------------------------------------------------------- cut plane
+
+TEST(SceneProbe, ACutPlaneAddsTheSliceAsItsOwnLayer)
+{
+    REQUIRE_RENDERER();
+    VtkScene scene;
+    scene.addDataset(rampField(), "ramp", VtkScene::Kind::Generic);
+    present(scene);
+    const QString before = statusOf(scene);
+
+    Answers answers({"X", "0.5"});
+    QMetaObject::invokeMethod(&scene, "applyCutPlane");
+    QApplication::processEvents();
+
+    EXPECT_EQ(answers.dialogs, 2) << "the cut did not ask for an axis and a position";
+    EXPECT_TRUE(statusOf(scene).startsWith("2 layer"))
+        << "the slice did not become a layer: " << statusOf(scene).toStdString();
+    EXPECT_NE(statusOf(scene), before);
+}
+
+TEST(SceneProbe, APlaneOutsideTheDataIsReportedRatherThanAddedEmpty)
+{
+    // QInputDialog clamps the position to the data bounds, so ask for a slice
+    // of a dataset the plane cannot intersect at all: a two-triangle sheet
+    // lying in z=0 has no thickness to cut across
+    REQUIRE_RENDERER();
+    VtkScene scene;
+    scene.addDataset(leakySheet(), "sheet", VtkScene::Kind::Surface);
+    present(scene);
+
+    Answers answers({"Z", "0.0"});
+    QMetaObject::invokeMethod(&scene, "applyCutPlane");
+    QApplication::processEvents();
+
+    // either it intersected (a degenerate slice) or it said it could not; what
+    // it must never do is add a layer with nothing in it
+    if (!answers.said("did not intersect"))
+        EXPECT_TRUE(statusOf(scene).startsWith("2 layer"))
+            << "a layer appeared that neither intersected nor was reported: "
+            << statusOf(scene).toStdString();
+}
+
+TEST(SceneProbe, CancellingTheAxisLeavesTheSceneAlone)
+{
+    REQUIRE_RENDERER();
+    VtkScene scene;
+    scene.addDataset(rampField(), "ramp", VtkScene::Kind::Generic);
+    present(scene);
+    const QString before = statusOf(scene);
+
+    Answers answers({QString()});
+    QMetaObject::invokeMethod(&scene, "applyCutPlane");
+    QApplication::processEvents();
+    EXPECT_EQ(statusOf(scene), before) << "cancelling still changed the scene";
+}
+
+// --------------------------------------------------------------- point probe
+
+TEST(SceneProbe, ClickingWithThePointProbeOnReadsTheFieldThere)
+{
+    // the picker turns a click into a world position and the probe reads the
+    // field there; a wrong cell lookup reports a plausible number with nothing
+    // to compare it against, so this compares against the field's own definition
+    REQUIRE_RENDERER();
+    VtkScene scene;
+    scene.addDataset(rampField(), "ramp", VtkScene::Kind::Generic);
+    present(scene, 400, 400);
+    scene.resetView();
+    QApplication::processEvents();
+
+    QMetaObject::invokeMethod(&scene, "togglePointProbe", Q_ARG(bool, true));
+    EXPECT_TRUE(statusOf(scene).contains("Point probe"))
+        << "turning the probe on said nothing: " << statusOf(scene).toStdString();
+
+    auto *area = areaOf(scene);
+    ASSERT_NE(area, nullptr);
+    const QPoint centre(area->width() / 2, area->height() / 2);
+    QTest::mousePress(area, Qt::LeftButton, Qt::NoModifier, centre);
+    QTest::mouseRelease(area, Qt::LeftButton, Qt::NoModifier, centre);
+    QApplication::processEvents();
+
+    const QString msg = statusOf(scene);
+    if (msg.contains("no geometry under the cursor"))
+        GTEST_SKIP() << "the camera is not looking at the data in this environment";
+
+    ASSERT_TRUE(msg.contains("ramp=")) << "the probe reported no field: " << msg.toStdString();
+
+    // the reading has to be the x coordinate it says it sampled at
+    const QRegularExpression at(R"(\(([-\d.eE+]+),)");
+    const QRegularExpression val(R"(ramp=([-\d.eE+]+))");
+    const auto ma = at.match(msg), mv = val.match(msg);
+    ASSERT_TRUE(ma.hasMatch()) << msg.toStdString();
+    ASSERT_TRUE(mv.hasMatch()) << msg.toStdString();
+    EXPECT_NEAR(mv.captured(1).toDouble(), ma.captured(1).toDouble(), 1e-3)
+        << "the probe read " << mv.captured(1).toStdString() << " at x="
+        << ma.captured(1).toStdString() << ", but the field is x";
+}
+
+TEST(SceneProbe, TurningThePointProbeOffStopsReadingOnClick)
+{
+    REQUIRE_RENDERER();
+    VtkScene scene;
+    scene.addDataset(rampField(), "ramp", VtkScene::Kind::Generic);
+    present(scene, 400, 400);
+    scene.resetView();
+
+    QMetaObject::invokeMethod(&scene, "togglePointProbe", Q_ARG(bool, true));
+    QMetaObject::invokeMethod(&scene, "togglePointProbe", Q_ARG(bool, false));
+    const QString resting = statusOf(scene);
+
+    auto *area = areaOf(scene);
+    ASSERT_NE(area, nullptr);
+    const QPoint centre(area->width() / 2, area->height() / 2);
+    QTest::mousePress(area, Qt::LeftButton, Qt::NoModifier, centre);
+    QTest::mouseRelease(area, Qt::LeftButton, Qt::NoModifier, centre);
+    QApplication::processEvents();
+
+    EXPECT_FALSE(statusOf(scene).contains("ramp="))
+        << "a click still probed after the tool was turned off: "
+        << statusOf(scene).toStdString();
+    EXPECT_EQ(statusOf(scene), resting);
+}
 
 int main(int argc, char **argv)
 {

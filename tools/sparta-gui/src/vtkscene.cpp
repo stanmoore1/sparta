@@ -420,6 +420,8 @@ void VtkScene::buildUi()
                            []() {})->setEnabled(false);
 
     infoLabel = new QLabel("No data loaded.");
+    infoLabel->setObjectName("status");
+    infoLabel->setAccessibleName("Scene status and probe readout");
     restingStatus = infoLabel->text();
 
     auto *layout = new QVBoxLayout(this);
@@ -875,12 +877,16 @@ void VtkScene::applyLineProbe()
         vals.push_back(field->GetTuple1(i));
     }
 
+    // addColumn() appends a column *and* its name, so setColumnNames() must not
+    // be called as well: doing both leaves the first columns empty, rowCount()
+    // reads zero from them and loadData() discards the whole table.
     PlotData pdata;
-    pdata.setColumnNames({"distance", arr});
     pdata.addColumn("distance", dist);
     pdata.addColumn(arr, vals);
     auto *win = new ChartWindow(QString("Line probe: %1").arg(arr), nullptr);
     win->setAttribute(Qt::WA_DeleteOnClose);
+    win->setWindowTitle(QString("Line probe: %1 - SPARTA-GUI").arg(arr));
+    win->setWindowIcon(QIcon(Cfg::MAIN_ICON));
     win->loadData(pdata, 0, {1});
     win->show();
 }

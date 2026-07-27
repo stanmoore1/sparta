@@ -88,6 +88,11 @@ public:
      * @param data Column values
      *
      * Used by the column-wise parsers (e.g. JSON object-of-arrays).
+     *
+     * @warning This appends the name too, so it must NOT be combined with
+     * setColumnNames(): that call creates its own empty columns, and the ones
+     * added here land after them.  rowCount() then reads zero from the empty
+     * first column and the whole table counts as empty.  Use one or the other.
      */
     void addColumn(const QString &name, std::vector<double> data);
 

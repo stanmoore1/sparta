@@ -562,8 +562,10 @@ void SweepPanel::chartResults()
                                  "No fully-numeric rows to chart (the x variable must be numeric).");
         return;
     }
+    // addColumn() appends the name with the column, so setColumnNames() must not
+    // be called as well -- that leaves ncol empty columns in front and the whole
+    // table reads as having no rows.
     PlotData data;
-    data.setColumnNames(headers);
     for (int c = 0; c < ncol; ++c) data.addColumn(headers.at(c), cols[c]);
     QList<int> ycols;
     // plot the value/mean columns; skip the ensemble standard-error columns so
@@ -573,6 +575,7 @@ void SweepPanel::chartResults()
 
     auto *win = new ChartWindow("Sweep Results", nullptr);
     win->setAttribute(Qt::WA_DeleteOnClose);
+    win->setWindowTitle("Sweep Results - SPARTA-GUI");
     win->loadData(data, 0, ycols);
     win->show();
 }
