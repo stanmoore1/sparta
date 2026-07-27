@@ -56,6 +56,18 @@ int FixCustom::setmask()
 }
 
 /* ----------------------------------------------------------------------
+   re-resolve the IDs stored in the Action list
+   custom attributes, variables, mixtures, groups, and regions can all be
+     redefined between runs, which invalidates the indices and ptrs that
+     were resolved when this fix was defined
+------------------------------------------------------------------------- */
+
+void FixCustom::init()
+{
+  custom->init_actions();
+}
+
+/* ----------------------------------------------------------------------
    invoked once every Nevery steps
 ------------------------------------------------------------------------- */
 

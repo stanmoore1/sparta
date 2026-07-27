@@ -46,7 +46,11 @@ enum{TEXT,BINARY};
 
 /* ---------------------------------------------------------------------- */
 
-Custom::Custom(SPARTA *sparta) : Pointers(sparta) {}
+Custom::Custom(SPARTA *sparta) : Pointers(sparta)
+{
+  naction = 0;
+  actions = NULL;
+}
 
 /* ---------------------------------------------------------------------- */
 
@@ -56,12 +60,20 @@ Custom::~Custom()
 
   for (int i = 0; i < naction; i++) {
     int action = actions[i].action;
-    if (action == FILESTYLE || action == FILECOARSE) {
+    if (action == SET) {
+      delete [] actions[i].aname;
+      delete [] actions[i].vname;
+      delete [] actions[i].gname;
+      delete [] actions[i].rname;
+    } else if (action == FILESTYLE || action == FILECOARSE) {
       delete [] actions[i].fname;
       delete [] actions[i].cindex_file;
       delete [] actions[i].ctype_file;
       delete [] actions[i].csize_file;
       delete [] actions[i].ccol_file;
+      for (int j = 0; j < actions[i].colcount; j++)
+        delete [] actions[i].aname_file[j];
+      delete [] actions[i].aname_file;
     }
   }
 
@@ -128,9 +140,9 @@ bigint Custom::process_actions(int narg, char **arg, int external)
     error->all(FLERR,"Cannot use custom surf command before surfaces are defined");
 
   // loop over actions
+  // naction/actions are initialized by the constructor, not reset here,
+  //   so a second call appends rather than leaking the existing list
 
-  naction = 0;
-  actions = NULL;
   bigint count = 0;
 
   int iarg = 1;
@@ -223,23 +235,7 @@ bigint Custom::process_actions(int narg, char **arg, int external)
       int ccol = attribute_bracket(aname);
 
       int cindex,ctype,csize;
-      if (mode == PARTICLE) {
-        cindex = particle->find_custom(aname);
-        if (cindex < 0) error->all(FLERR,"Custom attribute name does not exist");
-        ctype = particle->etype[cindex];
-        csize = particle->esize[cindex];
-      } else if (mode == GRID) {
-        cindex = grid->find_custom(aname);
-        if (cindex < 0) error->all(FLERR,"Custom attribute name does not exist");
-        ctype = grid->etype[cindex];
-        csize = grid->esize[cindex];
-      } else if (mode == SURF) {
-        cindex = surf->find_custom(aname);
-        if (cindex < 0) error->all(FLERR,"Custom attribute name does not exist");
-        ctype = surf->etype[cindex];
-        csize = surf->esize[cindex];
-      }
-
+      resolve_attribute(aname,cindex,ctype,csize);
       check_attribute_column(csize,ccol);
 
       // variable name
@@ -251,51 +247,23 @@ bigint Custom::process_actions(int narg, char **arg, int external)
       char *vname = new char[n];
       strcpy(vname,&arg[iarg+2][2]);
 
-      Variable *variable = input->variable;
-      int vindex = variable->find(vname);
-      if (vindex < 0) error->all(FLERR,"Custom variable name does not exist");
-
-      int vstyle;
-      if (variable->equal_style(vindex)) vstyle = EQUAL;
-      else if (variable->particle_style(vindex)) vstyle = PARTICLE;
-      else if (variable->grid_style(vindex)) vstyle = GRID;
-      else if (variable->surf_style(vindex)) vstyle = SURF;
-      else error->all(FLERR,"Custom variable style is invalid");
-      if (vstyle != EQUAL && vstyle != mode)
-        error->all(FLERR,"Custom variable style is invalid");
+      int vindex,vstyle;
+      resolve_variable(vname,vindex,vstyle);
 
       // mixture or group ID
 
       Mixture *mixture;
       int groupbit;
-
-      if (mode == PARTICLE) {
-        int imix = particle->find_mixture(arg[iarg+3]);
-        if (imix < 0) error->all(FLERR,"Custom mixture ID does not exist");
-        mixture = particle->mixture[imix];
-        mixture->init();
-      } else if (mode == GRID) {
-        int igroup = grid->find_group(arg[iarg+3]);
-        if (igroup < 0) error->all(FLERR,"Custom grid group ID does not exist");
-        groupbit = grid->bitmask[igroup];
-      } else if (mode == SURF) {
-        int igroup = surf->find_group(arg[iarg+3]);
-        if (igroup < 0) error->all(FLERR,"Custom surf group ID does not exist");
-        groupbit = surf->bitmask[igroup];
-      }
+      resolve_group(arg[iarg+3],mixture,groupbit);
 
       // region ID
 
       Region *region;
-      if (strcmp(arg[iarg+4],"NULL") == 0) region = NULL;
-      else {
-        int iregion = domain->find_region(arg[iarg+4]);
-        if (iregion < 0) error->all(FLERR,"Custom region ID does not exist");
-        region = domain->regions[iregion];
-      }
+      resolve_region(arg[iarg+4],region);
 
       // if not external: invoke action now
       // else: store info in Action list for FixCustom
+      //   also store the IDs so FixCustom::init() can re-resolve them
 
       if (!external)
         action_set(vstyle,vindex,cindex,ctype,csize,ccol,groupbit,mixture,region);
@@ -310,6 +278,10 @@ bigint Custom::process_actions(int narg, char **arg, int external)
         actions[naction].groupbit = groupbit;
         actions[naction].mixture = mixture;
         actions[naction].region = region;
+        actions[naction].aname = copy_string(aname);
+        actions[naction].vname = copy_string(vname);
+        actions[naction].gname = copy_string(arg[iarg+3]);
+        actions[naction].rname = copy_string(arg[iarg+4]);
         naction++;
       }
 
@@ -348,27 +320,13 @@ bigint Custom::process_actions(int narg, char **arg, int external)
       int *ctype = new int[colcount];
       int *csize = new int[colcount];
       int *ccol = new int[colcount];
+      char **anames = new char*[colcount];
 
       for (int i = 0; i < colcount; i++) {
-        int n = strlen(arg[iarg+3+i]) + 1;
-        char *aname = new char[n];
-        strcpy(aname,arg[iarg+3+i]);
-        ccol[i] = attribute_bracket(aname);
-        if (mode == GRID) {
-          cindex[i] = grid->find_custom(aname);
-          if (cindex[i] < 0)
-            error->all(FLERR,"Custom attribute name does not exist");
-          ctype[i] = grid->etype[cindex[i]];
-          csize[i] = grid->esize[cindex[i]];
-        } else if (mode == SURF) {
-          cindex[i] = surf->find_custom(aname);
-          if (cindex[i] < 0)
-            error->all(FLERR,"Custom attribute name does not exist");
-          ctype[i] = surf->etype[cindex[i]];
-          csize[i] = surf->esize[cindex[i]];
-        }
+        anames[i] = copy_string(arg[iarg+3+i]);
+        ccol[i] = attribute_bracket(anames[i]);
+        resolve_attribute(anames[i],cindex[i],ctype[i],csize[i]);
         check_attribute_column(csize[i],ccol[i]);
-        delete [] aname;
       }
 
       // if not external: invoke action now
@@ -398,6 +356,8 @@ bigint Custom::process_actions(int narg, char **arg, int external)
         delete [] ctype;
         delete [] csize;
         delete [] ccol;
+        for (int i = 0; i < colcount; i++) delete [] anames[i];
+        delete [] anames;
 
       } else {
         actions[naction].action = action;
@@ -407,6 +367,7 @@ bigint Custom::process_actions(int narg, char **arg, int external)
         actions[naction].ctype_file = ctype;
         actions[naction].csize_file = csize;
         actions[naction].ccol_file = ccol;
+        actions[naction].aname_file = anames;
         naction++;
       }
 
@@ -455,19 +416,13 @@ bigint Custom::process_actions(int narg, char **arg, int external)
       int *ctype = new int[colcount];
       int *csize = new int[colcount];
       int *ccol = new int[colcount];
+      char **anames = new char*[colcount];
 
       for (int i = 0; i < colcount; i++) {
-        int n = strlen(arg[iarg+5+i]) + 1;
-        char *aname = new char[n];
-        strcpy(aname,arg[iarg+5+i]);
-        ccol[i] = attribute_bracket(aname);
-        cindex[i] = grid->find_custom(aname);
-        if (cindex[i] < 0)
-          error->all(FLERR,"Custom attribute name does not exist");
-        ctype[i] = grid->etype[cindex[i]];
-        csize[i] = grid->esize[cindex[i]];
+        anames[i] = copy_string(arg[iarg+5+i]);
+        ccol[i] = attribute_bracket(anames[i]);
+        resolve_attribute(anames[i],cindex[i],ctype[i],csize[i]);
         check_attribute_column(csize[i],ccol[i]);
-        delete [] aname;
       }
 
       // if not external: invoke action now
@@ -514,6 +469,8 @@ bigint Custom::process_actions(int narg, char **arg, int external)
         delete [] ctype;
         delete [] csize;
         delete [] ccol;
+        for (int i = 0; i < colcount; i++) delete [] anames[i];
+        delete [] anames;
 
         memory->destroy(xyz_coarse);
         memory->destroy(values_coarse);
@@ -528,6 +485,7 @@ bigint Custom::process_actions(int narg, char **arg, int external)
         actions[naction].ctype_file = ctype;
         actions[naction].csize_file = csize;
         actions[naction].ccol_file = ccol;
+        actions[naction].aname_file = anames;
         naction++;
       }
 
@@ -1677,6 +1635,137 @@ void Custom::check_attribute_column(int csize, int ccol)
     error->all(FLERR,"Custom attribute vector cannot use bracketed index");
   if (csize && (ccol < 1 || ccol > csize))
     error->all(FLERR,"Custom attribute array is accessed out-of-range");
+}
+
+/* ----------------------------------------------------------------------
+   return a newly allocated copy of STR
+---------------------------------------------------------------------- */
+
+char *Custom::copy_string(const char *str)
+{
+  int n = strlen(str) + 1;
+  char *copy = new char[n];
+  strcpy(copy,str);
+  return copy;
+}
+
+/* ----------------------------------------------------------------------
+   look up custom attribute ANAME for the current mode
+   set cindex = its index, ctype = INT/DOUBLE, csize = 0 or # of columns
+---------------------------------------------------------------------- */
+
+void Custom::resolve_attribute(char *aname, int &cindex, int &ctype, int &csize)
+{
+  if (mode == PARTICLE) cindex = particle->find_custom(aname);
+  else if (mode == GRID) cindex = grid->find_custom(aname);
+  else cindex = surf->find_custom(aname);
+
+  if (cindex < 0) error->all(FLERR,"Custom attribute name does not exist");
+
+  if (mode == PARTICLE) {
+    ctype = particle->etype[cindex];
+    csize = particle->esize[cindex];
+  } else if (mode == GRID) {
+    ctype = grid->etype[cindex];
+    csize = grid->esize[cindex];
+  } else {
+    ctype = surf->etype[cindex];
+    csize = surf->esize[cindex];
+  }
+}
+
+/* ----------------------------------------------------------------------
+   look up variable VNAME (name only, no leading "v_")
+   set vindex = its index, vstyle = EQUAL/PARTICLE/GRID/SURF
+   per-entity styles must match the current mode
+---------------------------------------------------------------------- */
+
+void Custom::resolve_variable(char *vname, int &vindex, int &vstyle)
+{
+  Variable *variable = input->variable;
+
+  vindex = variable->find(vname);
+  if (vindex < 0) error->all(FLERR,"Custom variable name does not exist");
+
+  if (variable->equal_style(vindex)) vstyle = EQUAL;
+  else if (variable->particle_style(vindex)) vstyle = PARTICLE;
+  else if (variable->grid_style(vindex)) vstyle = GRID;
+  else if (variable->surf_style(vindex)) vstyle = SURF;
+  else error->all(FLERR,"Custom variable style is invalid");
+
+  if (vstyle != EQUAL && vstyle != mode)
+    error->all(FLERR,"Custom variable style is invalid");
+}
+
+/* ----------------------------------------------------------------------
+   look up GNAME as a particle mixture ID or a grid/surf group ID
+   set mixture for mode = PARTICLE, groupbit for mode = GRID/SURF
+   always set both, so the unused one is never left uninitialized
+---------------------------------------------------------------------- */
+
+void Custom::resolve_group(char *gname, Mixture *&mixture, int &groupbit)
+{
+  mixture = NULL;
+  groupbit = 0;
+
+  if (mode == PARTICLE) {
+    int imix = particle->find_mixture(gname);
+    if (imix < 0) error->all(FLERR,"Custom mixture ID does not exist");
+    mixture = particle->mixture[imix];
+    mixture->init();
+  } else if (mode == GRID) {
+    int igroup = grid->find_group(gname);
+    if (igroup < 0) error->all(FLERR,"Custom grid group ID does not exist");
+    groupbit = grid->bitmask[igroup];
+  } else {
+    int igroup = surf->find_group(gname);
+    if (igroup < 0) error->all(FLERR,"Custom surf group ID does not exist");
+    groupbit = surf->bitmask[igroup];
+  }
+}
+
+/* ----------------------------------------------------------------------
+   look up region ID RNAME, or set region = NULL if RNAME is "NULL"
+---------------------------------------------------------------------- */
+
+void Custom::resolve_region(char *rname, Region *&region)
+{
+  if (strcmp(rname,"NULL") == 0) {
+    region = NULL;
+    return;
+  }
+
+  int iregion = domain->find_region(rname);
+  if (iregion < 0) error->all(FLERR,"Custom region ID does not exist");
+  region = domain->regions[iregion];
+}
+
+/* ----------------------------------------------------------------------
+   re-resolve all stored IDs in the Action list
+   invoked by FixCustom::init() before each run
+   custom indices, variable indices, mixture/region ptrs stored when the
+     fix was defined all go stale if any of those are redefined between runs
+---------------------------------------------------------------------- */
+
+void Custom::init_actions()
+{
+  for (int i = 0; i < naction; i++) {
+    if (actions[i].action == SET) {
+      resolve_attribute(actions[i].aname,actions[i].cindex,
+                        actions[i].ctype,actions[i].csize);
+      check_attribute_column(actions[i].csize,actions[i].ccol);
+      resolve_variable(actions[i].vname,actions[i].vindex,actions[i].vstyle);
+      resolve_group(actions[i].gname,actions[i].mixture,actions[i].groupbit);
+      resolve_region(actions[i].rname,actions[i].region);
+
+    } else {
+      for (int j = 0; j < actions[i].colcount; j++) {
+        resolve_attribute(actions[i].aname_file[j],actions[i].cindex_file[j],
+                          actions[i].ctype_file[j],actions[i].csize_file[j]);
+        check_attribute_column(actions[i].csize_file[j],actions[i].ccol_file[j]);
+      }
+    }
+  }
 }
 
 // ----------------------------------------------------------------------

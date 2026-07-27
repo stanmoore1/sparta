@@ -31,6 +31,7 @@ class FixCustom : public Fix {
   FixCustom(class SPARTA *, int, char **);
   virtual ~FixCustom();
   int setmask();
+  void init();
   virtual void end_of_step();
 
 private:

@@ -35,6 +35,7 @@ class Custom : protected Pointers {
 
   bigint process_actions(int, char **, int);
   bigint process_actions();
+  void init_actions();
 
  private:
   struct Action {
@@ -48,6 +49,13 @@ class Custom : protected Pointers {
     char *fname;
     int colcount;
     int *cindex_file,*ctype_file,*csize_file,*ccol_file;
+
+    // IDs are stored so FixCustom can re-resolve them in init()
+    // indices and ptrs above go stale if a custom attribute, variable,
+    //   mixture, group, or region is redefined between runs
+
+    char *aname,*vname,*gname,*rname;
+    char **aname_file;
   };
 
   int naction;
@@ -68,6 +76,15 @@ class Custom : protected Pointers {
   bigint coarse_tree_neighbor_assign(int, int, int *, int *, int *, int *);
   int attribute_bracket(char *);
   void check_attribute_column(int, int);
+  char *copy_string(const char *);
+
+  // resolve input script IDs to indices/ptrs
+  // used both when parsing and when FixCustom re-resolves in init()
+
+  void resolve_attribute(char *, int &, int &, int &);
+  void resolve_variable(char *, int &, int &);
+  void resolve_group(char *, class Mixture *&, int &);
+  void resolve_region(char *, class Region *&);
 };
 
 // K-D tree class
