@@ -185,6 +185,8 @@ QWidget *StlImportWizard::buildSourcePage()
         lay->addRow("Extent Z:", new QLabel(QString("%1 .. %2").arg(mesh_.lo[2]).arg(mesh_.hi[2])));
 
     wtLabel_ = new QLabel;
+    wtLabel_->setObjectName("watertight");
+    wtLabel_->setAccessibleName("Watertightness verdict");
     wtLabel_->setWordWrap(true);
     updateWatertightLabel();
     lay->addRow(wtLabel_);
@@ -426,12 +428,15 @@ QWidget *StlImportWizard::buildPreviewPage()
     auto *lay = new QVBoxLayout(w);
 
     previewLabel_ = new QLabel;
+    previewLabel_->setObjectName("preview");
+    previewLabel_->setAccessibleName("Surface preview render");
     previewLabel_->setAlignment(Qt::AlignCenter);
     previewLabel_->setMinimumSize(PREVIEW_W, PREVIEW_H);
     previewLabel_->setStyleSheet("background:#1c1e22;");
     lay->addWidget(previewLabel_, 1);
 
     previewNote_ = new QLabel;
+    previewNote_->setObjectName("previewNote");
     previewNote_->setWordWrap(true);
     lay->addWidget(previewNote_);
 
@@ -518,6 +523,8 @@ QWidget *StlImportWizard::buildAblationPage()
     lay->addLayout(form);
 
     ablationLabel_ = new QLabel;
+    ablationLabel_->setObjectName("ablation");
+    ablationLabel_->setAccessibleName("Ablation mode render");
     ablationLabel_->setAlignment(Qt::AlignCenter);
     ablationLabel_->setMinimumSize(PREVIEW_W, 260);
     ablationLabel_->setStyleSheet("background:#1c1e22;");
@@ -540,6 +547,8 @@ QWidget *StlImportWizard::buildDiagnosticsPage()
     auto *w = new QWidget;
     auto *lay = new QVBoxLayout(w);
     diag_ = new QPlainTextEdit;
+    diag_->setObjectName("diagnostics");
+    diag_->setAccessibleName("SPARTA diagnostic output");
     diag_->setReadOnly(true);
     diag_->setStyleSheet("font-family: monospace;");
     lay->addWidget(diag_);

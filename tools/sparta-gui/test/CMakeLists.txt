@@ -727,6 +727,40 @@ if (SPARTA_GUI_USE_PLUGIN)
 endif()
 gtest_discover_tests(test_stlimportwizard)
 
+# The wizard's SPARTA-facing half, against a live simulator: the domain it
+# builds for the surface it just imported, which is where every surface-based
+# simulation starts. Its failures are quiet -- a box that does not enclose the
+# geometry still runs -- so the assertions are against the box SPARTA ended up
+# with, read back through the library.
+add_executable(test_stlwizardlive
+  test_stlwizardlive.cpp
+  ${GUI_WALKER_SOURCES}
+)
+target_include_directories(test_stlwizardlive PRIVATE
+  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}/thirdparty/rangeslider
+)
+target_compile_definitions(test_stlwizardlive PRIVATE
+  SPARTA_GUI_VERSION="${PROJECT_VERSION}"
+  SPARTA_TEST_LIBRARY_PATH="${_spa_test_lib}")
+target_link_libraries(test_stlwizardlive PRIVATE
+  GTest::gtest Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Svg Qt6::Test
+  lepton_mini ads::qtadvanceddocking-qt6)
+if (SPARTA_GUI_HAVE_VTK)
+  target_compile_definitions(test_stlwizardlive PRIVATE SPARTA_GUI_HAVE_VTK)
+  target_link_libraries(test_stlwizardlive PRIVATE ${VTK_LIBRARIES})
+  vtk_module_autoinit(TARGETS test_stlwizardlive MODULES ${VTK_LIBRARIES})
+endif()
+if (SPARTA_GUI_USE_PLUGIN)
+  target_compile_definitions(test_stlwizardlive PRIVATE SPARTA_GUI_USE_PLUGIN)
+  target_include_directories(test_stlwizardlive PRIVATE ${SPARTA_PLUGINLIB_DIR})
+endif()
+
+# One process, one SPARTA instance: each case clears and rebuilds it, so they
+# must not interleave with the other suites that load the library.
+add_test(NAME StlWizard.Live COMMAND $<TARGET_FILE:test_stlwizardlive>)
+set_tests_properties(StlWizard.Live PROPERTIES TIMEOUT 900 RESOURCE_LOCK "sparta_run")
+
 # The species colour file: what "Save Colors" writes and "Load Colors" reads.
 # It is the one thing the image viewer persists that a user can hand to someone
 # else, so it carries a header saying what it is and a revision to refuse a
