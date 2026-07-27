@@ -353,6 +353,31 @@ is how the validator's refusals become observable.  Test cases cover:
 - Exporting and charting with no results saying so, rather than opening an
   empty file dialog or a blank chart window
 
+test_jsoncolors.cpp
+-------------------
+
+Tests for the species colour file (``loadJsonColors()`` /
+``saveJsonColors()`` in ``src/imageviewer.cpp``) -- what *Save Colors*
+writes and *Load Colors* reads.  It is the one thing the image viewer
+persists that a user can hand to someone else, so it carries a header
+naming the application and format and a revision number.  Both ends go
+through a file dialog, which is why neither had been checked.  Test cases
+cover:
+
+- A well-formed file read back with its colours and light intensities
+- A round trip: what ``saveJsonColors()`` writes read back by
+  ``loadJsonColors()``, header and revision included
+- Cancelling either end doing nothing
+- Malformed JSON, and JSON that is not an object, refused with the reason
+- Someone else's JSON refused rather than misread -- without the header
+  check it would come back as an empty colour list and silently reset
+  every species
+- The right application with the wrong format still refused
+- A newer revision refused rather than guessed at
+- A directory handed over by the dialog refused as unreadable
+- An empty colour list still producing a file with its header, so it can
+  be read back at all
+
 test_stlimportwizard.cpp
 ------------------------
 

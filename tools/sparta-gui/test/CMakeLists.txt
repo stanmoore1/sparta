@@ -670,6 +670,34 @@ if (SPARTA_GUI_USE_PLUGIN)
 endif()
 gtest_discover_tests(test_stlimportwizard)
 
+# The species colour file: what "Save Colors" writes and "Load Colors" reads.
+# It is the one thing the image viewer persists that a user can hand to someone
+# else, so it carries a header saying what it is and a revision to refuse a
+# format it does not understand. Both ends go through a file dialog, which is
+# why neither end had been checked.
+add_executable(test_jsoncolors
+  test_jsoncolors.cpp
+  ${GUI_WALKER_SOURCES}
+)
+target_include_directories(test_jsoncolors PRIVATE
+  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}/thirdparty/rangeslider
+)
+target_compile_definitions(test_jsoncolors PRIVATE SPARTA_GUI_VERSION="${PROJECT_VERSION}")
+target_link_libraries(test_jsoncolors PRIVATE
+  GTest::gtest Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Svg Qt6::Test
+  lepton_mini ads::qtadvanceddocking-qt6)
+if (SPARTA_GUI_HAVE_VTK)
+  target_compile_definitions(test_jsoncolors PRIVATE SPARTA_GUI_HAVE_VTK)
+  target_link_libraries(test_jsoncolors PRIVATE ${VTK_LIBRARIES})
+  vtk_module_autoinit(TARGETS test_jsoncolors MODULES ${VTK_LIBRARIES})
+endif()
+if (SPARTA_GUI_USE_PLUGIN)
+  target_compile_definitions(test_jsoncolors PRIVATE SPARTA_GUI_USE_PLUGIN)
+  target_include_directories(test_jsoncolors PRIVATE ${SPARTA_PLUGINLIB_DIR})
+endif()
+gtest_discover_tests(test_jsoncolors)
+
 # Test executable for helpers
 add_executable(test_helpers
   test_helpers.cpp
