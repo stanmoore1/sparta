@@ -269,7 +269,15 @@ double ParticleKokkos::erot(int isp, double temp_thermal, rand_type &erandom) co
  if (!collide_rot) return 0.0;
  if (d_species[isp].rotdof < 2) return 0.0;
 
- if (rotstyle == DISCRETE && d_species[isp].rotdof == 2) {
+ // see Particle::erot: the discrete sampler needs a rotational temperature
+ // from the species rotfile, and create_particles/emission call this before
+ // Collide::init() can reject a run whose species lack one.  Fall through to
+ // the continuous sampler rather than dividing by a zero rottemp
+
+ int rotdiscrete = (rotstyle == DISCRETE && d_species[isp].nrottemp >= 1 &&
+                    d_species[isp].rottemp[0] > 0.0);
+
+ if (rotdiscrete && d_species[isp].rotdof == 2) {
    // rigid-rotor levels E_J = J(J+1) k theta_r with degeneracy 2J+1:
    // must match Particle::erot draw-for-draw for SPARTA_KOKKOS_EXACT
    double tratio = temp_thermal / d_species[isp].rottemp[0];

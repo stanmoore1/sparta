@@ -1201,6 +1201,13 @@ template < int GASTALLY > void Collide::collisions_one_ambipolar()
           int index = particle->nlocal-1;
           memcpy(&particles[index],jpart,nbytes);
           particles[index].id = MAXSMALLINT*random->uniform();
+
+          // jpart was an ambipolar electron living in elist, so it has no
+          // custom data of its own: the slot it lands in still holds the
+          // custom values of whatever particle used it last, so reset them
+          // (add_particle() does not, unlike the add_particle(...) overload)
+
+          if (particle->ncustom) particle->zero_custom(index);
           ionambi[index] = 0;
 
           if (nelectron-1 != j-np) memcpy(&elist[j-np],&elist[nelectron-1],nbytes);
@@ -1627,6 +1634,11 @@ template < int GASTALLY > void Collide::collisions_group_ambipolar()
             int index = particle->nlocal-1;
             memcpy(&particles[index],jpart,nbytes);
             particles[index].id = MAXSMALLINT*random->uniform();
+
+            // see the collisions_one_ambipolar() twin above: an electron
+            // promoted out of elist has no custom data, so clear the slot
+
+            if (particle->ncustom) particle->zero_custom(index);
             ionambi[index] = 0;
 
             if (nelectron-1 != j) memcpy(&elist[j],&elist[nelectron-1],nbytes);

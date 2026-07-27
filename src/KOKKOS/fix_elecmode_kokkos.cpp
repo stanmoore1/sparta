@@ -61,6 +61,7 @@ FixElecmodeKokkos::FixElecmodeKokkos(SPARTA *sparta) :
 #endif
             )
 {
+  copy = 1;
   random = NULL;
   id = NULL;
   style = NULL;
