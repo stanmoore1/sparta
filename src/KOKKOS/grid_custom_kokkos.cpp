@@ -219,6 +219,8 @@ void GridKokkos::reallocate_custom(int /*nold*/, int nnew)
     sync(Device,CUSTOM_MASK);
 
   for (int ic = 0; ic < ncustom; ic++) {
+    if (ename[ic] == NULL) continue;
+
     if (etype[ic] == INT) {
       if (esize[ic] == 0) {
         int *ivector = eivec[ewhich[ic]];
