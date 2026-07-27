@@ -57,13 +57,18 @@ void SpartaWrapper::open(int narg, char **args)
 {
     // since there may only be one SPARTA instance in SPARTA-GUI we don't open a second one
     if (sparta_handle) return;
+#if defined(SPARTA_GUI_USE_PLUGIN)
+    // and with no function table there is nothing to open it through: isOpen()
+    // cannot serve as the guard here, because it is false in exactly this case
+    if (!plugin_handle) return;
+#endif
     sparta_handle = SPAFN(open_no_mpi)(narg, args, nullptr);
 }
 
 int SpartaWrapper::version()
 {
     int val = 0;
-    if (sparta_handle) {
+    if (isOpen()) {
         val = SPAFN(version)(sparta_handle);
     }
     return val;
@@ -72,7 +77,7 @@ int SpartaWrapper::version()
 int SpartaWrapper::extractSetting(const char *keyword)
 {
     int val = 0;
-    if (sparta_handle) {
+    if (isOpen()) {
         val = SPAFN(extract_setting)(sparta_handle, keyword);
     }
     return val;
@@ -81,7 +86,7 @@ int SpartaWrapper::extractSetting(const char *keyword)
 void *SpartaWrapper::extractGlobal(const char *keyword)
 {
     void *val = nullptr;
-    if (sparta_handle) {
+    if (isOpen()) {
         val = SPAFN(extract_global)(sparta_handle, keyword);
     }
     return val;
@@ -198,7 +203,7 @@ void *SpartaWrapper::extractFix(const QString &id, int style, int type, int, int
 int SpartaWrapper::extractVariableDatatype(const QString &keyword)
 {
     int type = -1;
-    if (sparta_handle) {
+    if (isOpen()) {
         type = SPAFN(extract_variable_datatype)(sparta_handle, keyword.toLocal8Bit());
     }
     switch (type) {
@@ -223,7 +228,7 @@ int SpartaWrapper::extractVariableDatatype(const QString &keyword)
 double SpartaWrapper::extractVariable(const char *keyword)
 {
     void *ptr = nullptr;
-    if (sparta_handle) {
+    if (isOpen()) {
         ptr = SPAFN(extract_variable)(sparta_handle, keyword);
     }
     double val = (ptr) ? *(static_cast<double *>(ptr)) : 0.0;
@@ -234,7 +239,7 @@ double SpartaWrapper::extractVariable(const char *keyword)
 int SpartaWrapper::idCount(const char *idtype)
 {
     int val = 0;
-    if (sparta_handle) {
+    if (isOpen()) {
         val = SPAFN(id_count)(sparta_handle, idtype);
     }
     return val;
@@ -243,7 +248,7 @@ int SpartaWrapper::idCount(const char *idtype)
 int SpartaWrapper::hasId(const char *idtype, const char *id)
 {
     int val = 0;
-    if (sparta_handle) {
+    if (isOpen()) {
         val = SPAFN(has_id)(sparta_handle, idtype, id);
     }
     return val;
@@ -252,7 +257,7 @@ int SpartaWrapper::hasId(const char *idtype, const char *id)
 int SpartaWrapper::idName(const char *keyword, int idx, char *buf, int len)
 {
     int val = 0;
-    if (sparta_handle) {
+    if (isOpen()) {
         val = SPAFN(id_name)(sparta_handle, keyword, idx, buf, len);
     }
     return val;
@@ -268,7 +273,7 @@ QString SpartaWrapper::idName(const char *keyword, int idx)
 int SpartaWrapper::styleCount(const char *keyword)
 {
     int val = 0;
-    if (sparta_handle) {
+    if (isOpen()) {
         val = SPAFN(style_count)(sparta_handle, keyword);
     }
     return val;
@@ -277,7 +282,7 @@ int SpartaWrapper::styleCount(const char *keyword)
 int SpartaWrapper::styleName(const char *keyword, int idx, char *buf, int len)
 {
     int val = 0;
-    if (sparta_handle) {
+    if (isOpen()) {
         val = SPAFN(style_name)(sparta_handle, keyword, idx, buf, len);
     }
     return val;
@@ -293,7 +298,7 @@ QString SpartaWrapper::styleName(const char *keyword, int idx)
 int SpartaWrapper::variableInfo(int idx, char *buf, int len)
 {
     int val = 0;
-    if (sparta_handle) {
+    if (isOpen()) {
         val = SPAFN(variable_info)(sparta_handle, idx, buf, len);
     }
     return val;
@@ -309,7 +314,7 @@ QString SpartaWrapper::variableInfo(int idx)
 double SpartaWrapper::getThermo(const char *keyword)
 {
     double val = 0.0;
-    if (sparta_handle) {
+    if (isOpen()) {
         val = SPAFN(get_thermo)(sparta_handle, keyword);
     }
     return val;
@@ -318,7 +323,7 @@ double SpartaWrapper::getThermo(const char *keyword)
 void *SpartaWrapper::lastThermo(const char *keyword, int index)
 {
     void *ptr = nullptr;
-    if (sparta_handle) {
+    if (isOpen()) {
         ptr = SPAFN(last_thermo)(sparta_handle, keyword, index);
     }
     return ptr;
@@ -327,7 +332,7 @@ void *SpartaWrapper::lastThermo(const char *keyword, int index)
 bool SpartaWrapper::isRunning()
 {
     int val = 0;
-    if (sparta_handle) {
+    if (isOpen()) {
         val = SPAFN(is_running)(sparta_handle);
     }
     return val != 0;
@@ -335,34 +340,34 @@ bool SpartaWrapper::isRunning()
 
 void SpartaWrapper::command(const QString &input)
 {
-    if (sparta_handle) {
+    if (isOpen()) {
         SPAFN(command)(sparta_handle, input.toLocal8Bit());
     }
 }
 
 void SpartaWrapper::file(const QString &filename)
 {
-    if (sparta_handle) {
+    if (isOpen()) {
         SPAFN(file)(sparta_handle, filename.toLocal8Bit());
     }
 }
 
 void SpartaWrapper::commandsString(const QString &input)
 {
-    if (sparta_handle) {
+    if (isOpen()) {
         SPAFN(commands_string)(sparta_handle, input.toLocal8Bit());
     }
 }
 
 bool SpartaWrapper::hasError() const
 {
-    if (!sparta_handle) return false;
+    if (!isOpen()) return false;
     return SPAFN(has_error)(sparta_handle) != 0;
 }
 
 int SpartaWrapper::getLastErrorMessage(char *buf, int buflen)
 {
-    if (!sparta_handle) {
+    if (!isOpen()) {
         if (buf && (buflen > 0)) buf[0] = '\0';
         return 0;
     }
@@ -379,7 +384,7 @@ QString SpartaWrapper::lastErrorMessage()
 
 void SpartaWrapper::forceTimeout()
 {
-    if (sparta_handle) SPAFN(force_timeout)(sparta_handle);
+    if (isOpen()) SPAFN(force_timeout)(sparta_handle);
 }
 
 void SpartaWrapper::close()
@@ -387,7 +392,7 @@ void SpartaWrapper::close()
 #if defined(SPARTA_GUI_USE_PLUGIN)
     if (sparta_handle && plugin_handle) ((libspartaplugin_t *)plugin_handle)->close(sparta_handle);
 #else
-    if (sparta_handle) sparta_close(sparta_handle);
+    if (isOpen()) sparta_close(sparta_handle);
 #endif
     sparta_handle = nullptr;
 }
@@ -396,7 +401,7 @@ void SpartaWrapper::finalize()
 {
     // SPARTA has no separate mpi/kokkos finalization in its library
     // interface; closing the instance is all that is needed
-    if (sparta_handle) {
+    if (isOpen()) {
         SPAFN(close)(sparta_handle);
         // otherwise isOpen() reports an instance that no longer exists and a
         // later close() would close the stale handle a second time
@@ -463,21 +468,21 @@ bool SpartaWrapper::configHasGzipSupport() const
 // the build did not stamp git info).  Used to enrich the archived run record.
 QString SpartaWrapper::versionString() const
 {
-    if (!sparta_handle) return {};
+    if (!isOpen()) return {};
     auto *p = static_cast<const char *>(SPAFN(extract_global)(sparta_handle, "sparta_version"));
     return p ? QString::fromUtf8(p) : QString();
 }
 
 QString SpartaWrapper::gitCommit() const
 {
-    if (!sparta_handle) return {};
+    if (!isOpen()) return {};
     auto *p = static_cast<const char *>(SPAFN(extract_global)(sparta_handle, "git_commit"));
     return p ? QString::fromUtf8(p) : QString();
 }
 
 QString SpartaWrapper::gitBranch() const
 {
-    if (!sparta_handle) return {};
+    if (!isOpen()) return {};
     auto *p = static_cast<const char *>(SPAFN(extract_global)(sparta_handle, "git_branch"));
     return p ? QString::fromUtf8(p) : QString();
 }
@@ -611,6 +616,7 @@ bool SpartaWrapper::loadLib(const QString &libfile)
     // the other failure paths
     libspartaplugin_release(lmp);
     plugin_handle = nullptr;
+    sparta_handle = nullptr; // the instance lived inside the library just unloaded
     return false;
 }
 #else

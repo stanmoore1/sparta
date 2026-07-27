@@ -256,7 +256,24 @@ public:
      * @brief Check if SPARTA instance is open
      * @return true if SPARTA is initialized, false otherwise
      */
-    [[nodiscard]] bool isOpen() const { return sparta_handle != nullptr; }
+    /**
+     * @brief True when a SPARTA instance is open AND callable
+     *
+     * In plugin mode every library call goes through the function table at
+     * @c plugin_handle, so a null table is as fatal as a null instance -- and
+     * the two are not always cleared together: loadLib() releases the plugin on
+     * every rejected library (missing symbol, version too old) while an
+     * instance opened from an earlier, good library is still recorded.  Calling
+     * through the released table jumps to whatever the null struct points at.
+     */
+    [[nodiscard]] bool isOpen() const
+    {
+#if defined(SPARTA_GUI_USE_PLUGIN)
+        return (sparta_handle != nullptr) && (plugin_handle != nullptr);
+#else
+        return sparta_handle != nullptr;
+#endif
+    }
 
     /// @brief Is a SPARTA library actually loaded?
     ///

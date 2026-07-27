@@ -675,6 +675,74 @@ if (SPARTA_GUI_USE_PLUGIN)
 endif()
 gtest_discover_tests(test_datafileplot)
 
+# Steering the snapshot with the mouse: ImageViewer::eventFilter().  Drag to
+# rotate, shift-drag to pan, wheel to zoom -- how the viewer is actually used,
+# and never run under test.  The view state is private, so the checks read it
+# back out of the dump image command the viewer emits, which is the same state
+# the render uses.
+add_executable(test_imageviewerinput
+  test_imageviewerinput.cpp
+  ${GUI_WALKER_SOURCES}
+)
+target_include_directories(test_imageviewerinput PRIVATE
+  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}/thirdparty/rangeslider
+)
+target_compile_definitions(test_imageviewerinput PRIVATE
+  SPARTA_GUI_VERSION="${PROJECT_VERSION}"
+  SPARTA_TEST_LIBRARY_PATH="${_spa_test_lib}")
+target_link_libraries(test_imageviewerinput PRIVATE
+  GTest::gtest Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Svg Qt6::Test
+  lepton_mini ads::qtadvanceddocking-qt6)
+if (SPARTA_GUI_HAVE_VTK)
+  target_compile_definitions(test_imageviewerinput PRIVATE SPARTA_GUI_HAVE_VTK)
+  target_link_libraries(test_imageviewerinput PRIVATE ${VTK_LIBRARIES})
+  vtk_module_autoinit(TARGETS test_imageviewerinput MODULES ${VTK_LIBRARIES})
+endif()
+if (SPARTA_GUI_USE_PLUGIN)
+  target_compile_definitions(test_imageviewerinput PRIVATE SPARTA_GUI_USE_PLUGIN)
+  target_include_directories(test_imageviewerinput PRIVATE ${SPARTA_PLUGINLIB_DIR})
+endif()
+
+# each case loads the SPARTA library into this process and chdirs to build a
+# scene, so they must not interleave with the other live suites
+add_test(NAME ImageViewer.Input COMMAND $<TARGET_FILE:test_imageviewerinput>)
+set_tests_properties(ImageViewer.Input PROPERTIES TIMEOUT 900 RESOURCE_LOCK "sparta_run")
+
+# Inspecting a restart file.  The one place the application opens somebody's
+# saved simulation without running it -- and not a read-only path: it loads the
+# file into the live instance, replacing what was there, and writes a temporary
+# log beside the user's file.
+add_executable(test_inspect
+  test_inspect.cpp
+  ${GUI_WALKER_SOURCES}
+)
+target_include_directories(test_inspect PRIVATE
+  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}/thirdparty/rangeslider
+)
+target_compile_definitions(test_inspect PRIVATE
+  SPARTA_GUI_VERSION="${PROJECT_VERSION}"
+  SPARTA_TEST_LIBRARY_PATH="${_spa_test_lib}")
+target_link_libraries(test_inspect PRIVATE
+  GTest::gtest Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Svg Qt6::Test
+  lepton_mini ads::qtadvanceddocking-qt6)
+if (SPARTA_GUI_HAVE_VTK)
+  target_compile_definitions(test_inspect PRIVATE SPARTA_GUI_HAVE_VTK)
+  target_link_libraries(test_inspect PRIVATE ${VTK_LIBRARIES})
+  vtk_module_autoinit(TARGETS test_inspect MODULES ${VTK_LIBRARIES})
+endif()
+if (SPARTA_GUI_USE_PLUGIN)
+  target_compile_definitions(test_inspect PRIVATE SPARTA_GUI_USE_PLUGIN)
+  target_include_directories(test_inspect PRIVATE ${SPARTA_PLUGINLIB_DIR})
+endif()
+
+# it runs a deck to produce the restart file, so it takes the run lock; under
+# Xvfb because inspecting opens the snapshot viewer, which renders
+add_test(NAME Inspect.All COMMAND ${XVFB_RUNNER} -a -s "-screen 0 1024x768x24" -w 1
+  $<TARGET_FILE:test_inspect>)
+set_tests_properties(Inspect.All PROPERTIES TIMEOUT 900 RESOURCE_LOCK "xvfb;sparta_run")
+
 # Integrity checking of downloaded files.  This is the only code that decides
 # whether a file fetched off the network may be kept, and none of it had ever
 # run: a parser that misses the entry, or a comparison that always agrees,

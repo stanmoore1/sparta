@@ -1044,6 +1044,20 @@ SpartaGui::SpartaGui(QWidget *parent, const QString &filename, int width, int he
 
 SpartaGui::~SpartaGui()
 {
+    // The restart-inspection windows first: they hold a pointer to `sparta`,
+    // which is a member of this object.  Left to Qt they would be destroyed by
+    // ~QWidget as children -- after the members are gone -- and the Hide event
+    // that reaches their event filter on the way out would call the simulator
+    // through a wrapper that no longer exists.  purgeInspectList() only
+    // collects the ones already hidden, which is right while the window is
+    // alive and wrong now, so this takes them regardless.
+    for (auto *item : inspectList) {
+        delete item->info;
+        delete item->image;
+        delete item;
+    }
+    inspectList.clear();
+
     delete highlighter;
     delete capturer;
     delete status;
