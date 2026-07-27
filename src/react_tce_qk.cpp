@@ -36,8 +36,8 @@ ReactTCEQK::ReactTCEQK(SPARTA *sparta, int narg, char **arg) :
 
 void ReactTCEQK::init()
 {
-  if (!collide || strcmp(collide->style,"vss") != 0)
-    error->all(FLERR,"React tce/qk can only be used with collide vss");
+  if (!collide || !collide->vssflag)
+    error->all(FLERR,"React tce/qk can only be used with a VSS-based collide style");
 
   ReactBird::init();
 
@@ -127,6 +127,13 @@ int ReactTCEQK::attempt_tce(Particle::OnePart *ip, Particle::OnePart *jp,
   double react_prob = 0.0;
   double random_prob = random->uniform();
 
+  // correct for a collide style whose total cross section differs from the
+  //   VHS form assumed by the reaction model, see ReactTCE::attempt()
+  // scaling the random number is equivalent to scaling react_prob
+  // react_prob_factor is 1.0 for collide vss
+
+  random_prob /= collide->react_prob_factor;
+
   double pre_etotal = pre_etrans + pre_erot + pre_evib;
 
   double ecc = pre_etrans;
@@ -191,6 +198,13 @@ int ReactTCEQK::attempt_qk(Particle::OnePart *ip, Particle::OnePart *jp,
 
   double react_prob = 0.0;
   double random_prob = random->uniform();
+
+  // correct for a collide style whose total cross section differs from the
+  //   VHS form assumed by the reaction model, see ReactTCE::attempt()
+  // scaling the random number is equivalent to scaling react_prob
+  // react_prob_factor is 1.0 for collide vss
+
+  random_prob /= collide->react_prob_factor;
 
   double pre_etotal = pre_etrans + pre_erot + pre_evib;
 

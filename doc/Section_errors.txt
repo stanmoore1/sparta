@@ -281,6 +281,45 @@ A simulation box can only be defined once. :dd
 
 Self-explantory. :dd
 
+{Cannot open cross section table file %s} :dt
+
+Self-explanatory. :dd
+
+{Collision energy is outside the cross section table range} :dt
+
+The cross section table specified "EXTRAP error" for this end of its
+range, and a collision was attempted outside it.  Widen the table or
+select a different extrapolation mode. :dd
+
+{Cross section table does not reproduce its input values} :dt
+
+The binned table does not reproduce the cross section data read from
+the file to within 1%.  Increase N or use the spline interpolation
+style.  This is a warning. :dd
+
+{Cross section table has a negative cross section} :dt
+
+Cross sections must be >= 0. :dd
+
+{Cross section table parameters did not set N for keyword %s in file %s} :dt
+
+The parameter line which follows a section keyword must include "N <n>". :dd
+
+{Cross section table spans too many bins} :dt
+
+The tabulated energy range together with N requires more than 2^24 bins.
+Reduce N or narrow the range of the table. :dd
+
+{Cross section table values are not increasing} :dt
+
+The independent variable in a cross section table must increase
+monotonically. :dd
+
+{Cross section table values must be positive} :dt
+
+The independent variable in a cross section table must be > 0, since a
+zero relative energy or speed corresponds to no collision. :dd
+
 {Cannot open dir to search for restart file} :dt
 
 Using a "*" in the name of the restart file will open the current
@@ -806,6 +845,10 @@ processor.  Please report the issue to the SPARTA developers. :dd
 One or more unsplit grid cells in the restart file were not assigned
 to a processor.  Please report the issue to the SPARTA developers. :dd
 
+{Did not find keyword %s in cross section table file %s} :dt
+
+The requested section keyword does not appear in the file. :dd
+
 {Dimension command after simulation box is defined} :dt
 
 The dimension command cannot be used after a read_data,
@@ -1317,6 +1360,15 @@ happen.  Please report the issue to the SPARTA developers. :dd
 
 Number of words in a parent cell line was not the expected number. :dd
 
+{Illegal number of collide table entries} :dt
+
+N in the collide table command must be between 1 and 2^20. :dd
+
+{Incorrect line format in cross section table file} :dt
+
+A data row in a cross section table section must have 3 columns:
+index, x, and sigma. :dd
+
 {Incorrect line format in VSS parameter file} :dt
 
 Number of parameters in a line read from file is not valid. :dd
@@ -1401,6 +1453,16 @@ sign, or a minus sign. :dd
 {Invalid collide style} :dt
 
 The choice of collision style is unknown. :dd
+
+{Invalid cross section table length} :dt
+
+N on the parameter line of a cross section table section must be > 1,
+and > 3 if the spline interpolation style is used. :dd
+
+{Invalid keyword in cross section table parameters} :dt
+
+A keyword on the parameter line which follows a cross section table
+section keyword is not recognized, or its value is missing. :dd
 
 {Invalid color in dump_modify command} :dt
 
@@ -1732,6 +1794,12 @@ The -in command-line option must be used to specify a file. :dd
 
 This is to insure they stay in sync. :dd
 
+{No cross section tables were defined by collide table} :dt
+
+None of the table directives in the parameter file matched a species
+pair in this simulation, so the style will behave exactly like collide
+vss.  This is a warning. :dd
+
 {No dump grid attributes specified} :dt
 
 Self-explanatory. :dd
@@ -1876,14 +1944,19 @@ issue to the SPARTA developers. :dd
 
 Self-explanatory. :dd
 
+{Premature end of cross section table file} :dt
+
+The file ended before N rows of data were read. :dd
+
 {Processor partitions are inconsistent} :dt
 
 The total number of processors in all partitions must match the number
 of processors SPARTA is running on. :dd
 
-{React tce can only be used with collide vss} :dt
+{React tce can only be used with a VSS-based collide style} :dt
 
-Self-explanatory. :dd
+The react styles require the VSS parameters diam, omega, and tref,
+which only the collide vss and collide table styles provide. :dd
 
 {Read_grid did not find parents section of grid file} :dt
 

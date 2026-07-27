@@ -32,6 +32,14 @@ class Collide : protected Pointers {
   int nearlimit;      // limit on neighbor serach for near neigh collisions
   int mcflag;         // 0 for NTC attempt counts (default)
                       // 1 for majorant collision frequency (MCF) attempt counts
+  int vssflag;        // 1 if style provides VSS params via extract(),
+                      //   i.e. diam/omega/tref, as required by react styles
+
+  double react_prob_factor;   // multiplies the reaction probability computed by
+                              //   a React style, to correct for a collision
+                              //   style whose total cross section differs from
+                              //   the VHS form assumed by the TCE model
+                              // 1.0 for all styles which use the VHS form
 
   int ncollide_one,nattempt_one,nreact_one;
   bigint ncollide_running,nattempt_running,nreact_running;

@@ -37,8 +37,8 @@ ReactTCEKokkos::ReactTCEKokkos(SPARTA *sparta, int narg, char **arg) :
 
 void ReactTCEKokkos::init()
 {
-  if (!collide || (strcmp(collide->style,"vss") != 0 && strcmp(collide->style,"vss/kk") != 0))
-    error->all(FLERR,"React tce can only be used with collide vss");
+  if (!collide || !collide->vssflag)
+    error->all(FLERR,"React tce can only be used with a VSS-based collide style");
 
   ReactBirdKokkos::init();
 

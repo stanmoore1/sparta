@@ -85,6 +85,8 @@ Collide::Collide(SPARTA *sparta, int, char **arg) : Pointers(sparta)
   nearcp = 0;
   nearlimit = 10;
   mcflag = 0;
+  vssflag = 0;
+  react_prob_factor = 1.0;
 
   recomb_ijflag = NULL;
 

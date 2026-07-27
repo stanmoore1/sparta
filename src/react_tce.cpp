@@ -36,8 +36,8 @@ ReactTCE::ReactTCE(SPARTA *sparta, int narg, char **arg) :
 
 void ReactTCE::init()
 {
-  if (!collide || strcmp(collide->style,"vss") != 0)
-    error->all(FLERR,"React tce can only be used with collide vss");
+  if (!collide || !collide->vssflag)
+    error->all(FLERR,"React tce can only be used with a VSS-based collide style");
 
   ReactBird::init();
 }
@@ -68,6 +68,14 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
 
   double react_prob = 0.0;
   double random_prob = random->uniform();
+
+  // TCE reaction probability is sigma_react/sigma_total, where sigma_total is
+  //   the VHS cross section assumed when the reaction coeffs were derived
+  // if the collide style selects pairs with a different total cross section,
+  //   scale by sigma_VHS/sigma_style so the reaction rate is unchanged
+  // factor is 1.0 for collide vss
+
+  double sigma_factor = collide->react_prob_factor;
   double zi = 0.0;
   double zj = 0.0;
   int avei = 0;
@@ -152,7 +160,7 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
     case IONIZATION:
     case EXCHANGE:
       {
-        react_prob += r->coeff[2] * tgamma(z+2.5-r->coeff[5]) / MAX(1.0e-6,tgamma(z+r->coeff[3]+1.5)) *
+        react_prob += sigma_factor * r->coeff[2] * tgamma(z+2.5-r->coeff[5]) / MAX(1.0e-6,tgamma(z+r->coeff[3]+1.5)) *
           pow(ecc-r->coeff[1],r->coeff[3]-1+r->coeff[5]) *
           pow(1.0-r->coeff[1]/ecc,z+1.5-r->coeff[5]);
         break;
@@ -172,7 +180,7 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
         int *sp2recomb = reactions[isp][jsp].sp2recomb;
         if (sp2recomb[recomb_species] != list[i]) continue;
 
-        react_prob += recomb_boost * recomb_density * r->coeff[2] *
+        react_prob += sigma_factor * recomb_boost * recomb_density * r->coeff[2] *
           tgamma(z+2.5-r->coeff[5]) / MAX(1.0e-6,tgamma(z+r->coeff[3]+1.5)) *
           pow(ecc-r->coeff[1],r->coeff[3]-1+r->coeff[5]) *  // extended to general recombination case with non-zero activation energy
           pow(1.0-r->coeff[1]/ecc,z+1.5-r->coeff[5]);

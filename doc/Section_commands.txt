@@ -472,7 +472,8 @@ SPARTA is built with the "appropriate accelerated
 package"_Section_accelerate.html.  This is indicated by additional
 letters in parenthesis: k = KOKKOS.
 
-"vss (k)"_collide.html :tb(c=1,ea=c)
+"table"_collide.html,
+"vss (k)"_collide.html :tb(c=2,ea=c)
 
 :line
 

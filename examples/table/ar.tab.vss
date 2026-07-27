@@ -1,0 +1,23 @@
+# Collision parameters for "collide table"
+#
+# This file is a VSS parameter file with additional "table" directive lines.
+#
+# The VSS parameters are required for every species.  They are used for any
+# species pair without a table, by the React styles and by compute lambda/grid
+# via Collide::extract(), and by the "extrap vss" option in a table file.
+#
+# diameter (m)
+# omega
+# tref
+# alpha
+
+Ar   4.11e-10 0.81  273.15  1.4
+
+# tabulated total cross section for a species pair:
+#   <species1> <species2> table <filename> <keyword>
+#
+# ar_ar.tab was generated from the VHS parameters above with
+#   tools/tabulate_cross_section.py, so this run must reproduce
+#   "collide vss air ar.vss" to within the interpolation error
+
+Ar Ar   table   ar_ar.tab   AR_AR_VHS

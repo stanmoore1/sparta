@@ -46,11 +46,52 @@ CollideVSS::CollideVSS(SPARTA *sparta, int narg, char **arg) :
 {
   if (narg < 3) error->all(FLERR,"Illegal collide command");
 
+  vssflag = 1;
+  params = NULL;
+  prefactor = NULL;
+  nparams = 0;
+
   // optional args
 
   relaxflag = CONSTANT;
+  parse_vss_args(3,narg,arg);
 
-  int iarg = 3;
+  // allocate params and prefactor
+  // proc 0 reads file to extract params for current species
+  // broadcasts params to all procs
+
+  allocate_params();
+  if (comm->me == 0) read_param_file(arg[2]);
+  MPI_Bcast(params[0],nparams*nparams*sizeof(Params),MPI_BYTE,0,world);
+}
+
+/* ----------------------------------------------------------------------
+   constructor for derived classes
+   does not parse style args or read the param file, so that a child class
+     can parse its own args first and use its own read_param_file() override
+   child class is responsible for calling parse_vss_args(), allocate_params(),
+     read_param_file() on proc 0, and broadcasting params
+------------------------------------------------------------------------- */
+
+CollideVSS::CollideVSS(SPARTA *sparta, int narg, char **arg, int /*flag*/) :
+  Collide(sparta, narg, arg)
+{
+  if (narg < 3) error->all(FLERR,"Illegal collide command");
+
+  vssflag = 1;
+  params = NULL;
+  prefactor = NULL;
+  nparams = 0;
+  relaxflag = CONSTANT;
+}
+
+/* ----------------------------------------------------------------------
+   parse optional VSS args starting at iarg
+   also invoked by child classes after they parse their own args
+------------------------------------------------------------------------- */
+
+void CollideVSS::parse_vss_args(int iarg, int narg, char **arg)
+{
   while (iarg < narg) {
     if (strcmp(arg[iarg],"relax") == 0) {
       if (iarg+2 > narg) error->all(FLERR,"Illegal collide command");
@@ -60,20 +101,19 @@ CollideVSS::CollideVSS(SPARTA *sparta, int narg, char **arg) :
       iarg += 2;
     } else error->all(FLERR,"Illegal collide command");
   }
+}
 
-  // proc 0 reads file to extract params for current species
-  // broadcasts params to all procs
+/* ----------------------------------------------------------------------
+   allocate per-species-pair params and prefactor arrays
+------------------------------------------------------------------------- */
 
+void CollideVSS::allocate_params()
+{
   nparams = particle->nspecies;
   if (nparams == 0)
     error->all(FLERR,"Cannot use collide command with no species defined");
 
   memory->create(params,nparams,nparams,"collide:params");
-  if (comm->me == 0) read_param_file(arg[2]);
-  MPI_Bcast(params[0],nparams*nparams*sizeof(Params),MPI_BYTE,0,world);
-
-  // allocate per-species prefactor array
-
   memory->create(prefactor,nparams,nparams,"collide:prefactor");
 }
 
@@ -1012,6 +1052,12 @@ void CollideVSS::read_param_file(char *fname)
     if (pre == strlen(line) || line[pre] == '#') continue;
 
     int nwords = wordparse(REQWORDS+1,line,words);
+
+    // give a child style a chance to claim the line
+    //   e.g. collide table claims its "table" directive lines
+
+    if (skip_param_line(nwords,words)) continue;
+
     if (nwords < REQWORDS)
       error->one(FLERR,"Incorrect line format in VSS parameter file");
 

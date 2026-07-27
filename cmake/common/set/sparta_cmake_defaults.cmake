@@ -34,6 +34,7 @@ if(SPARTA_ENABLE_TESTING)
       "flowfile"
       "emit"
       "collide"
+      "table"
       "circle"
       "chem"
       "cylinder"

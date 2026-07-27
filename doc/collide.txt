@@ -12,7 +12,7 @@ collide command :h3
 
 collide style args keyword value ... :pre
 
-style = {none} or {vss} :ulb,l
+style = {none} or {vss} or {table} :ulb,l
 args = arguments for that style :l
   {none} args = none
   {vss} args = mix-ID file
@@ -20,7 +20,13 @@ args = arguments for that style :l
     file = filename that lists species with their VSS model parameters
   {vss/kk} args = mix-ID file
     mix-ID = ID of mixture to use for group definitions
-    file = filename that lists species with their VSS model parameters :pre
+    file = filename that lists species with their VSS model parameters
+  {table} args = mix-ID file interp N
+    mix-ID = ID of mixture to use for group definitions
+    file = filename that lists species with their VSS model parameters
+           and their tabulated cross sections
+    interp = {lookup} or {linear} or {spline} = interpolation style
+    N = # of interpolation points per factor of 2 in collision energy :pre
 zero or more keyword/value pairs may be appended :l
 keyword = {relax} :l
   {relax} value = {constant} or {variable} :pre
@@ -30,7 +36,9 @@ keyword = {relax} :l
 
 collide none
 collide vss all ../data/air.vss
-collide vss species all.vss relax variable :pre
+collide vss species all.vss relax variable
+collide table air ar.tab.vss linear 64
+collide table species all.tab.vss spline 32 relax variable :pre
 
 [Description:]
 
@@ -194,6 +202,128 @@ follows:
 
 species-ID species-ID1 -1 omega -1 -1 -1 -1 -1 -1 :pre
 
+:line
+
+The {table} style replaces the analytic VHS/VSS total cross section with
+an arbitrary cross section read from a file and interpolated at run time.
+It is the collision analog of the "pair_style table" command in LAMMPS.
+Use it when the interaction of interest is not well described by the
+single power law the VSS model assumes, e.g. for ab initio elastic cross
+sections, momentum-transfer cross sections derived from collision
+integrals, or resonant charge-exchange data.
+
+Everything other than the total cross section is inherited from the {vss}
+style: the number of attempted collisions, the post-collision scattering
+angle, rotational and vibrational energy exchange, chemistry, and the
+ambipolar approximation all behave exactly as described above.  Only the
+probability that a selected pair actually collides is changed.
+
+The {file} argument is a VSS parameter file, in exactly the format
+described above for the {vss} style, with additional "table" directive
+lines which may appear anywhere in the file:
+
+species-ID species-ID1 table filename keyword :pre
+
+This assigns the cross section stored in section {keyword} of the file
+{filename} to collisions between species-ID and species-ID1.  A pair with
+no table directive uses the analytic VSS cross section, so a tabulated
+cross section can be introduced for one pair of an existing multi-species
+model without changing any of the others.
+
+VSS parameters are still required for every species, even when every pair
+is tabulated.  They are used for pairs without a table, by the
+"react"_react.html styles and the "compute lambda/grid"_compute_lambda_grid.html
+command, and by the {vss} extrapolation mode described below.
+
+:line
+
+A cross section file contains one or more sections.  Each section begins
+with a keyword line naming the section, followed by a parameter line,
+followed by N lines of data.  Blank lines and comment lines beginning
+with "#" may appear anywhere.  For example:
+
+# Ar-Ar elastic total cross section :pre
+
+AR_AR_ELASTIC
+N 200 X energy XUNITS eV YUNITS A^2 EXTRAP powerlaw constant :pre
+
+1     1.0000e-04   1.352e+02
+2     1.2000e-04   1.301e+02
+...
+200   1.0000e+03   3.110e+00 :pre
+
+Each data line has 3 columns: an index, the independent variable, and the
+total cross section.  The index is ignored.  The independent variable must
+be positive and must increase monotonically.  The cross section must be
+non-negative.
+
+The parameter line keywords may appear in any order.  Only {N} is
+required:
+
+{N} n = number of data lines in this section
+{X} {energy} or {speed} = independent variable, default {energy}
+  {energy} = relative translational energy 1/2*m_r*g^2
+  {speed} = relative speed g
+{XUNITS} {eV} or {J} or {K} or {m/s} = units of the independent variable
+  default is {eV} for {energy} and {m/s} for {speed}
+  {K} means the energy is given as E/k_B
+{YUNITS} {m^2} or {cm^2} or {A^2} = cross section units, default {m^2}
+{EXTRAP} lo hi = behavior below and above the tabulated range,
+  each of {constant} or {powerlaw} or {vss} or {error},
+  default {constant} {constant} :ul
+
+The {EXTRAP} modes are:
+
+{constant} = hold the cross section fixed at its value at that end
+{powerlaw} = extend the power law fit to the two end points, which is
+  the right choice for a cross section which continues to rise or fall
+  as a power of the energy, such as a polarization-limited tail
+{vss} = fall back to the analytic VSS cross section for that species pair
+{error} = abort if a collision is attempted outside the tabulated range :ul
+
+Note that the extrapolated cross section is used for any collision energy
+outside the table, so a table which does not span the energies sampled by
+the simulation will silently use the extrapolation unless {error} is
+selected.  When the tables are read, SPARTA prints the energy range of
+each table so this can be checked against the temperatures in the run.
+
+The tools directory contains {tabulate_cross_section.py}, which writes
+files in this format.  It can convert a two-column list of energy and
+cross section values, or emit the analytic VHS/VSS cross section for a
+species pair, which is useful for verifying that a tabulated run
+reproduces the equivalent {vss} run.
+
+:line
+
+The {interp} and {N} arguments control how the tabulated data is
+interpolated, in the same spirit as the LAMMPS "pair_style table"
+command.  When the file is read, the input data is splined, in log-log
+whenever every cross section is positive, and resampled into an internal
+table of bins.  At run time the bin holding a collision is found directly
+from the exponent and leading mantissa bits of the relative velocity
+squared, so a lookup requires no division, square root, logarithm, or
+power, and is somewhat cheaper than evaluating the analytic VSS cross
+section.
+
+Because the bins are found from the floating-point exponent, they are
+spaced logarithmically: {N} is the number of bins per factor of 2 in
+collision energy, and is rounded up to a power of 2.  Every bin therefore
+has the same relative width, and a table may span many decades of energy
+without losing resolution at the low end.  {N} = 64 gives bins about 1%
+wide in energy, which is accurate to roughly 1 part in 10^5 with the
+{linear} style for a smooth cross section.
+
+The interpolation styles are:
+
+{lookup} = use the value at the center of the bin, no interpolation
+{linear} = linear interpolation within the bin
+{spline} = cubic interpolation within the bin, matching the value and
+  slope of the input data at both bin edges :ul
+
+After each table is built, SPARTA compares it against the input data, at
+every input point and at the center of every bin, and prints the largest
+relative deviation.  A warning is issued if it exceeds 1%, which
+indicates that {N} is too small to resolve the structure in the data.
 
 :line
 
@@ -220,7 +350,18 @@ effectively.
 
 :line
 
-[Restrictions:] none
+[Restrictions:]
+
+The {table} style has no {kk} suffixed variant, so it cannot be used
+when SPARTA is run with the KOKKOS package.
+
+The "react tce"_react.html model derives its reaction probability as the
+ratio of the reaction cross section to the VHS total cross section.  When
+a tabulated total cross section is used to select collision pairs, SPARTA
+rescales that probability by the ratio of the VHS to the tabulated cross
+section, so that the reaction rate coefficients in the reaction file are
+still reproduced.  This means the reaction rates depend on the VSS
+parameters in the collision file, not on the tabulated cross sections.
 
 [Related commands:]
 
@@ -229,8 +370,10 @@ effectively.
 
 [Default:]
 
-Style = none is the default (no collisions).  If the vss style is
-specified, then relax = constant is the default.
+Style = none is the default (no collisions).  If the vss or table style
+is specified, then relax = constant is the default.  For the table style,
+a cross section file section with no {EXTRAP} keyword uses {constant}
+extrapolation at both ends.
 
 :line
 

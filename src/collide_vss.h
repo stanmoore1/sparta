@@ -74,6 +74,8 @@ class CollideVSS : public Collide {
   };
 
  protected:
+  CollideVSS(class SPARTA *, int, char **, int);   // ctor for derived classes
+
   int relaxflag,eng_exchange;
   double vr_indice;
   double **prefactor; // static portion of collision attempt frequency
@@ -101,7 +103,10 @@ class CollideVSS : public Collide {
   double rotrel (int, double);
   double vibrel (int, double);
 
-  void read_param_file(char *);
+  void parse_vss_args(int, int, char **);
+  void allocate_params();
+  virtual void read_param_file(char *);
+  virtual int skip_param_line(int, char **) {return 0;}
   int wordparse(int, char *, char **);
 };
 

@@ -37,8 +37,8 @@ ReactQK::ReactQK(SPARTA *sparta, int narg, char **arg) :
 
 void ReactQK::init()
 {
-  if (!collide || strcmp(collide->style,"vss") != 0)
-    error->all(FLERR,"React qk can only be used with collide vss");
+  if (!collide || !collide->vssflag)
+    error->all(FLERR,"React qk can only be used with a VSS-based collide style");
 
   ReactBird::init();
 
@@ -82,6 +82,13 @@ int ReactQK::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
 
   double react_prob = 0.0;
   double random_prob = random->uniform();
+
+  // correct for a collide style whose total cross section differs from the
+  //   VHS form assumed by the reaction model, see ReactTCE::attempt()
+  // scaling the random number is equivalent to scaling react_prob
+  // react_prob_factor is 1.0 for collide vss
+
+  random_prob /= collide->react_prob_factor;
 
   // loop over possible reactions for these 2 species
 
