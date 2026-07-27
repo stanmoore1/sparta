@@ -1,0 +1,9 @@
+# mini_sphere: 10x10x10 grid, 1000 steps, surf ../../data.sphere
+# SPARTA bench/in.sphere at 10x10x10 measures:
+#   Move 73.5%  Coll 17.6%  Sort 5.4%
+#   2.38 surf checks per particle-move, 1.4e-4 surf collisions
+configuration                      B/p  ns/move  speedup |    move    sort    coll | chk/mv  coll/mv
+AoS 96 B (SPARTA today)             96    30.84    1.00x |   64.7%   26.4%    8.9% |   2.45  2.5e-03
+AoS 96 B + mat boundary             96    29.27    1.05x |   65.2%   26.2%    8.7% |   2.45  2.5e-03
+SoA                                 52    23.51    1.31x |   70.1%   20.8%    9.1% |   2.45  2.5e-03
+SoA + mat boundary                  52    23.86    1.29x |   70.2%   20.8%    9.0% |   2.45  2.5e-03

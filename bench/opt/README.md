@@ -20,6 +20,7 @@ microbenchmark and ~1.05x or less in the real code. See `ROUND3.md`.
 
 | document | what is in it |
 |---|---|
+| [`ROUND7.md`](ROUND7.md) | round 7: a mini-app for `bench/in.sphere`, which is a different machine — move is 73% and dominated by ray-triangle intersection. Settles the boundary question (free, with surfaces too) and shows SoA is worth ~1.2x here against ~1.9x on in.collide |
 | [`ROUND6.md`](ROUND6.md) | round 6: prototypes the SoA materialization boundary (affordable — at or below noise), and corrects round 5: a blocked SIMD mover **does** pay, but only with SoA (1.46x on move, 23% regression on AoS) |
 | [`ROUND5.md`](ROUND5.md) | round 5: the full layout sweep on the faithful benchmark — SoA is ~1.8x (not 3.6x), AoSoA ~1.6x, single precision another ~1.2x, and a SIMD mover does not pay because the slow path defeats blocking |
 | [`ROUND4.md`](ROUND4.md) | round 4: does turning reordering off rescue AoSoA (no), are SoA grid cells worth it (no, zero measured elasticity), and a rebuilt mini-app that validates itself against SPARTA and cut the prediction error from 38% to 3% |
@@ -61,6 +62,7 @@ minutes. Build any of them with `g++ -O3 -std=c++11 -o NAME NAME.cpp`
 | `micro_pow.cpp` | `pow` throughput *and* latency, which turned out to be the distinction that mattered |
 | `micro_thp.cpp` | do huge pages help the counting sort's scattered writes? |
 | `mini_dsmc.cpp` | **the faithful one.** SPARTA's real structures at real sizes with real indirections, move and collide transcribed from the actual kernels, an equilibration phase, and a `-validate` mode that checks its reorder curve against SPARTA's before it is allowed to predict anything |
+| `mini_sphere.cpp` | `bench/in.sphere`: the real 1200-triangle sphere, per-cell surface lists, `line_tri_intersect` transcribed, diffuse wall collisions across the materialization boundary |
 | `mini_store.cpp` | the kitchen sink: one faithful timestep templated on storage (AoS 64/96, SoA double/float, AoSoA 8/16) crossed with a blocked SIMD mover and collide fusion |
 | `micro_layout.cpp` | AoS vs SoA vs AoSoA(8,16), crossed with permuting the particles vs binning indices only |
 | `micro_design.cpp` | the round-2 design space: nine ways to structure the whole timestep, from the current three passes to tiled fusion, per-cell buckets, mesh-free binning and smaller particle records |
