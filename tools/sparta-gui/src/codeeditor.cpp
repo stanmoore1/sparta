@@ -839,16 +839,22 @@ void CodeEditor::contextMenuEvent(QContextMenuEvent *event)
                       &CodeEditor::uncommentLine);
     }
     menu->addSeparator();
-    SpartaWrapper *sparta = &gui->sparta;
-    if (sparta->isRunning()) {
-        addMenuAction(menu, "Stop SPARTA", ":/icons/process-stop.svg", gui, &SpartaGui::stopRun);
-    } else {
-        addMenuAction(menu, "Run SPARTA from Editor Buffer", ":/icons/system-run.svg", gui,
-                      &SpartaGui::runBuffer);
-        addMenuAction(menu, "Run SPARTA from File", ":/icons/run-file.svg", gui,
-                      &SpartaGui::runFile);
+    // Only offer to start or stop a run when there is something to start it
+    // with.  The constructor qobject_casts its parent, so an editor whose
+    // parent is not the main window has none -- the same case the completers
+    // and the file actions already check for.
+    if (gui) {
+        if (gui->sparta.isRunning()) {
+            addMenuAction(menu, "Stop SPARTA", ":/icons/process-stop.svg", gui,
+                          &SpartaGui::stopRun);
+        } else {
+            addMenuAction(menu, "Run SPARTA from Editor Buffer", ":/icons/system-run.svg", gui,
+                          &SpartaGui::runBuffer);
+            addMenuAction(menu, "Run SPARTA from File", ":/icons/run-file.svg", gui,
+                          &SpartaGui::runFile);
+        }
+        menu->addSeparator();
     }
-    menu->addSeparator();
 
     // print augmented context menu if an entry was found
     if (!help.isEmpty()) {

@@ -636,6 +636,28 @@ cases cover:
 - Pasting through ``paste()``, the route ``Ctrl+V`` takes: text inserted,
   multiple lines kept separate, and an image on the clipboard refused
 
+The same file covers the completion machinery and the context menu.
+``runCompletion()`` is a dispatch table -- which of the seventeen completers
+applies depends on the position of the word under the cursor and on the
+command that starts the line, with the ``c_``/``f_``/``v_`` reference
+prefixes applying where the command has no list of its own.  Getting an
+entry wrong offers the user the wrong list, which looks like the feature
+working.  Test cases cover each word position, every command that has a list
+at it, the reference prefixes (upper and lower case), a command's own list
+taking precedence at the third word, the directory listing disappearing once
+a path separator is typed, and nothing at all on an empty or commented line.
+Accepting a completion is driven through the completer's own ``activated``
+signal, which is the path the popup takes, including the check that refuses
+a completion from another editor's completer.
+
+The context menu is caught as it is shown and its entries read back: comment
+entries for the line or the selection, documentation for the command on the
+line and -- for a styled command like ``fix ID ave/time`` -- for both the
+style and the command, a file name under the cursor offered for viewing (and
+for editing unless it is binary), and no run entries at all when there is no
+main window behind the editor.
+
+
 test_fileviewer.cpp
 -------------------
 
