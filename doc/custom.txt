@@ -400,6 +400,17 @@ one, with names cfile.grid.1, cfile.grid.2, and cfile.grid.3.
 
 :line
 
+For {mode} = {grid}, the {set} action assigns values only to the grid
+cells owned by each processor.  Ghost cell values are not updated at
+that point; they are refreshed the next time SPARTA acquires ghost
+cells, which happens when the grid or the domain decomposition changes.
+A command or fix that reads custom grid values on ghost cells should
+therefore not assume they reflect the most recent {set} action.  The
+{file} action does not have this limitation, because grid cell IDs in
+the file are matched against both owned and ghost cells.
+
+:line
+
 [Restrictions:] none
 
 [Related commands:]

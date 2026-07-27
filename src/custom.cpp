@@ -38,9 +38,9 @@ enum{INT,DOUBLE};                       // several files
 enum{TEXT,BINARY};
 
 #define MAXLINE 1024
-#define CHUNK 4     // NOTE: make this larger after debugging
+#define CHUNK 1024  // # of file lines read and broadcast at a time
 #define BIG 1.0e20
-#define MAXTIE 16   // NOTE: make this larger after debugging
+#define MAXTIE 64   // max # of coarse points equidistant from a cell center
 #define EPSCUT 1.0e-6
 #define MAXCOARSE 1000000    // threshold of 1M coarse points
 
@@ -1373,7 +1373,9 @@ void Custom::read_coarse_files(char *fname, int numfile, int colcount)
   MPI_Allreduce(&count,&count_all,1,MPI_INT,MPI_SUM,world);
 
   if (count_all) {
-    error->all(FLERR,"How many coarse grid points are outside simulation box");
+    char str[128];
+    sprintf(str,"%d coarse grid points are outside simulation box",count_all);
+    error->all(FLERR,str);
   }
 
   // perform Allgatherv() so each proc has copy of all coarse points read by all procs
@@ -1775,7 +1777,7 @@ void Custom::init_actions()
 // ----------------------------------------------------------------------
 
 enum{BRANCH,LEAF};
-#define DELTANODE 4       // NOTE: make this larger after debugging
+#define DELTANODE 1024    // # of KD tree nodes allocated at a time
 
 /* ---------------------------------------------------------------------- */
 
@@ -1809,6 +1811,11 @@ KDTree::~KDTree()
 
 void KDTree::create_tree(int iparent, int n, int *plist)
 {
+  // no points is not a valid subtree
+  // would recurse forever below, since an empty bbox splits into 2 empty lists
+
+  if (n == 0) error->one(FLERR,"KDTree split produced an empty branch");
+
   // single point, create LEAF node
 
   if (n == 1) {
@@ -1857,7 +1864,7 @@ void KDTree::create_tree(int iparent, int n, int *plist)
       bboxlo[2] == bboxhi[2]) flag = 1;
   if (flag) error->one(FLERR,"Multiple coarse grid points with same coords");
 
-  // splitdim = which dim to split points in (minimum bbox edge)
+  // splitdim = which dim to split points in (maximum bbox edge)
   // split = splitting value in that dim
 
   double xdelta = bboxhi[0] - bboxlo[0];
