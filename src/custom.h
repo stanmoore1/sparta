@@ -67,6 +67,7 @@ class Custom : protected Pointers {
   void read_coarse_files(char *, int, int);
   bigint coarse_tree_neighbor_assign(int, int, int *, int *, int *, int *);
   int attribute_bracket(char *);
+  void check_attribute_column(int, int);
 };
 
 // K-D tree class
