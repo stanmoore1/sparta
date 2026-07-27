@@ -1,0 +1,142 @@
+"SPARTA WWW Site"_sws - "SPARTA Documentation"_sd - "SPARTA Commands"_sc :c
+
+:link(sws,https://sparta.github.io)
+:link(sd,Manual.html)
+:link(sc,Section_commands.html#comm)
+
+:line
+
+Custom attribute support gaps :h3
+
+This page lists SPARTA features that do not currently support per-particle,
+per-grid, or per-surf custom attributes but where support would be a natural
+fit.  It is a survey of the current code, meant as a work list; nothing here
+is a promise that any of it will be implemented.
+
+See "Section_howto 4.13"_Section_howto.html#howto_13 for the list of commands
+that do support custom attributes today, and the "custom"_custom.html and
+"fix custom"_fix_custom.html commands for how attributes are created and set.
+
+Throughout, {p_name}, {g_name}, and {s_name} are the input script syntax for
+referencing a per-particle, per-grid, and per-surf custom attribute.
+
+:line
+
+High value, low effort :h4
+
+These are features whose argument parsers already accept {c_}, {f_}, and {v_}
+references and would take a custom reference the same way.  Most of them
+already route their arguments through Input::expand_args(), which knows how to
+expand a {[*]} wildcard on {p_}, {g_}, and {s_} names, so the wildcard support
+is in place and only the per-command parsing is missing.
+
+"fix ave/time"_fix_ave_time.html :ulb,l
+"fix ave/histo"_fix_ave_histo.html and {fix ave/histo/weight} :l
+"compute property/grid"_compute_property_grid.html and
+"compute property/surf"_compute_property_surf.html -- these expose a fixed
+list of per-entity quantities, which is exactly the shape of a custom
+attribute :l
+"stats"_stats.html -- there is currently no way to output a custom attribute
+in the stats table without routing it through "compute
+reduce"_compute_reduce.html first :l
+"read_particles"_read_particles.html -- has no custom support at all, which is
+asymmetric with {read_grid custom} and {read_surf custom}.  Note also that the
+{file} action of the "custom"_custom.html command rejects {mode} = {particle},
+so there is presently no way to read per-particle custom values from a file at
+all :l
+:ule
+
+:line
+
+Medium :h4
+
+"fix emit/face"_fix_emit_face.html and {fix emit/face/file} have no {custom}
+keyword, while "fix emit/surf"_fix_emit_surf.html and
+"create_particles"_create_particles.html both do.  Per-grid custom attributes
+driving face emission would mirror what create_particles already supports. :ulb,l
+
+"dump image"_dump_image.html coloring accepts only {c_}, {f_}, and {v_}
+references. :l
+
+{dump_modify thresh} is implemented only for "dump particle"_dump.html.
+Neither "dump grid"_dump.html nor "dump surf"_dump.html implements
+modify_param() at all, so per-grid and per-surf custom values cannot be used
+to threshold dump output. :l
+
+"surf_collide"_surf_collide.html accepts {s_name} only for the {tsurf}
+argument.  Accommodation coefficients and the {acc}, {tt}, {tr}, {tv}
+arguments of the various models are numeric or variable only.
+"surf_react"_surf_react.html has no custom support in its arguments. :l
+
+"fix ablate"_fix_ablate.html accepts {c_}, {f_}, {v_} but not {g_} for its
+per-grid corner point values. :l
+
+"compute lambda/grid"_compute_lambda_grid.html accepts only {c_} and {f_} for
+its nrho and temperature inputs. :l
+:ule
+
+:line
+
+Larger, needs design work :h4
+
+{Grid custom values are not propagated by grid adaptation.}  When
+"adapt_grid"_adapt_grid.html or "fix adapt"_fix_adapt.html refines or coarsens
+a cell, the new cells get zero-filled custom values -- there is no analog of
+the parent-to-child interpolation you would want.  Only the per-surf {estatus}
+flags are cleared.  This is arguably a bug rather than a gap and is the most
+consequential item on this page: a simulation that sets per-grid custom values
+and then adapts silently loses them for every changed cell. :ulb,l
+
+{There is no Grid::spread_custom().}  Surf has one, to push owned values out to
+the local+ghost copies, and Surf::estatus tracks whether that has been done.
+Grid declares estatus with the same documented meaning but nothing ever reads
+it, and grid custom values reach ghost cells only as a side effect of
+Grid::acquire_ghosts() packing them.  So a {custom grid set} between runs
+leaves ghost values stale with no way to refresh them.  See the note in
+grid.h and the discussion in "custom"_custom.html. :l
+
+{Implicit surfaces are not supported} by {dump surf custom} or {write_surf
+custom}; both reject them explicitly. :l
+
+{No library or Python API.}  src/library.cpp and the python/ directory contain
+no custom attribute entry points, so custom data cannot be read or written
+from a coupled code even though "python"_python.html mentions custom
+attributes. :l
+
+{No VTK dump support.}  The dump styles in src/VTK do not handle custom
+attributes. :l
+
+{Binary coarse files} are not implemented for the {file/coarse} action of the
+"custom"_custom.html command. :l
+:ule
+
+:line
+
+Testing :h4
+
+examples/custom is verified by manually diffing against dated reference logs;
+there is no automated harness.  Two gaps in coverage are worth noting:
+
+Until recently no example read a column of a custom {array} back through a
+particle, grid, or surf style variable -- existing scripts only referenced
+custom {vectors} that way and reached array columns through dump fields, which
+use a different code path.  in.custom.array.variable now covers this. :ulb,l
+
+The KOKKOS custom paths are exercised only indirectly.  examples/custom can be
+run against a Kokkos build with {-k on -sf kk} when that build is configured
+with {-DSPARTA_KOKKOS_EXACT=ON}, which is worth doing routinely -- several
+custom routines in src/KOKKOS had diverged from their host counterparts. :l
+:ule
+
+:line
+
+Known KOKKOS divergences not related to custom attributes :h4
+
+Running examples/custom against a Kokkos Serial build with
+{-DSPARTA_KOKKOS_EXACT=ON} reproduces the non-Kokkos results for every script
+except in the {f_1[*]} columns of in.custom.cube.read and in.custom.cube.set,
+which are "fix balance"_fix_balance.html outputs rather than custom attribute
+values.  The particle counts, collision counts, and all custom attribute
+columns match.  The four {in.custom.*.restart} scripts are already listed as
+failing in SPARTA_DISABLED_TESTS in
+cmake/common/set/sparta_cmake_defaults.cmake.

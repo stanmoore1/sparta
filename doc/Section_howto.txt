@@ -1755,6 +1755,10 @@ surface element in per-surf attributes.  These will vary over the
 course of a simulation, and their status can be monitored with the
 various output commands listed above.
 
+Features which do not currently support custom attributes, but where
+support would be a natural fit, are surveyed in "custom attribute
+support gaps"_custom_gaps.html.
+
 :line
 
 6.18 Variable timestep simulations :link(howto_18),h4
