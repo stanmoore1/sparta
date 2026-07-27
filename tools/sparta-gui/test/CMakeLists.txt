@@ -615,6 +615,36 @@ if (SPARTA_GUI_USE_PLUGIN)
 endif()
 gtest_discover_tests(test_mainwindowfiles)
 
+# Crash recovery: the autosave copy of an unsaved buffer and the offer to
+# restore it.  Its failure mode is invisible until the session it was meant to
+# survive, and it writes files on a timer next to the user's own deck, so both
+# directions need checking.  Driven through the real triggers -- the autosave
+# timer, the constructor's offer, and the clear on save.
+add_executable(test_recovery
+  test_recovery.cpp
+  ${GUI_WALKER_SOURCES}
+)
+target_include_directories(test_recovery PRIVATE
+  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}/thirdparty/rangeslider
+)
+target_compile_definitions(test_recovery PRIVATE
+  SPARTA_GUI_VERSION="${PROJECT_VERSION}"
+  SPARTA_TEST_LIBRARY_PATH="${_spa_test_lib}")
+target_link_libraries(test_recovery PRIVATE
+  GTest::gtest Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Svg Qt6::Test
+  lepton_mini ads::qtadvanceddocking-qt6)
+if (SPARTA_GUI_HAVE_VTK)
+  target_compile_definitions(test_recovery PRIVATE SPARTA_GUI_HAVE_VTK)
+  target_link_libraries(test_recovery PRIVATE ${VTK_LIBRARIES})
+  vtk_module_autoinit(TARGETS test_recovery MODULES ${VTK_LIBRARIES})
+endif()
+if (SPARTA_GUI_USE_PLUGIN)
+  target_compile_definitions(test_recovery PRIVATE SPARTA_GUI_USE_PLUGIN)
+  target_include_directories(test_recovery PRIVATE ${SPARTA_PLUGINLIB_DIR})
+endif()
+gtest_discover_tests(test_recovery)
+
 # The run path: doRun(), archiveFinishedRun(), continueRestart() and
 # renderVtkSnapshot(). Three of the four need a simulation actually running,
 # which this suite can have -- the same shared libsparta the window loads

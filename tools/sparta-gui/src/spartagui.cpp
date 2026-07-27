@@ -2409,6 +2409,10 @@ bool SpartaGui::maybeRecoverSession()
     if (!realPath.isEmpty()) {
         currentFile = QFileInfo(realPath).fileName();
         currentDir = QFileInfo(realPath).absolutePath();
+        // and say so: with currentFile set, Save writes straight to that file,
+        // so a title still reading *unknown* would have the user believe the
+        // buffer is nameless right up to the point it overwrites their deck
+        setWindowTitle(QString("SPARTA-GUI - Editor - " + currentFile));
     }
     textEdit->document()->setModified(true); // it is unsaved by definition
     showEditor();
