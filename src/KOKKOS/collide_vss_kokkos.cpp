@@ -1431,7 +1431,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar< GASTALLY, AT
 
         if (vibstyle == DISCRETE && index_vibmode >= 0) {
           const auto &d_vibmode = k_eiarray.view_device()[d_ewhich[index_vibmode]].k_view.view_device();
-          for (int imode = 0; imode < d_vibmode.extent(1); imode++)
+          for (int imode = 0; imode < (int) d_vibmode.extent(1); imode++)
             d_vibmode(index,imode) = 0;
         }
         if (elecstyle == DISCRETE && index_elecstate >= 0 && index_eelec >= 0) {
