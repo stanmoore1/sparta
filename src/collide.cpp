@@ -60,6 +60,7 @@ Collide::Collide(SPARTA *sparta, int, char **arg) : Pointers(sparta)
   ngroups = 0;
 
   npmax = 0;
+  vremax1 = remain1 = NULL;
   plist = NULL;
   p2g = NULL;
 
@@ -267,6 +268,8 @@ void Collide::init()
         vremax_initial[igroup][jgroup] = vremax_init(igroup,jgroup);
   }
 
+  set_flat_vremax();
+
   // if recombination reactions exist, set flags per species pair
 
   recombflag = 0;
@@ -355,7 +358,28 @@ void Collide::setup()
    NTC algorithm
 ------------------------------------------------------------------------- */
 
-void Collide::collisions()
+/* ----------------------------------------------------------------------
+   per-step bookkeeping that brackets the collision kernel
+   split out of collisions() so that the fused path, where Particle drives
+     the kernel one cell at a time from inside its sort, can reuse it
+------------------------------------------------------------------------- */
+
+/* ----------------------------------------------------------------------
+   refresh the flat single-group views of vremax and remain
+   called wherever those arrays are created, grown or reallocated
+------------------------------------------------------------------------- */
+
+void Collide::set_flat_vremax()
+{
+  vremax1 = remain1 = NULL;
+  if (ngroups != 1 || nglocalmax <= 0) return;
+  if (vremax) vremax1 = &vremax[0][0][0];
+  if (remain) remain1 = &remain[0][0][0];
+}
+
+/* ---------------------------------------------------------------------- */
+
+void Collide::collisions_pre()
 {
   // if requested, reset vrwmax & remain
 
@@ -372,6 +396,31 @@ void Collide::collisions()
 
   ncollide_one = nattempt_one = nreact_one = 0;
   ndelete = 0;
+}
+
+/* ---------------------------------------------------------------------- */
+
+void Collide::collisions_post()
+{
+  // remove any particles deleted in chemistry reactions
+  // if reactions occurred, particles are no longer sorted
+  // e.g. compress_reactions may have reallocated particle->next vector
+
+  if (ndelete) particle->compress_reactions(ndelete,dellist);
+  if (react) particle->sorted = particle->sorted_contiguous = 0;
+
+  // accumulate running totals
+
+  nattempt_running += nattempt_one;
+  ncollide_running += ncollide_one;
+  nreact_running += nreact_one;
+}
+
+/* ---------------------------------------------------------------------- */
+
+void Collide::collisions()
+{
+  collisions_pre();
 
   // perform collisions:
   // variant for ambipolar approximation or not
@@ -410,18 +459,7 @@ void Collide::collisions()
     }
   }
 
-  // remove any particles deleted in chemistry reactions
-  // if reactions occurred, particles are no longer sorted
-  // e.g. compress_reactions may have reallocated particle->next vector
-
-  if (ndelete) particle->compress_reactions(ndelete,dellist);
-  if (react) particle->sorted = particle->sorted_contiguous = 0;
-
-  // accumulate running totals
-
-  nattempt_running += nattempt_one;
-  ncollide_running += ncollide_one;
-  nreact_running += nreact_one;
+  collisions_post();
 }
 
 /* ----------------------------------------------------------------------
@@ -1940,6 +1978,8 @@ void Collide::adapt_grid()
         vremax[icell][igroup][jgroup] = vremax_initial[igroup][jgroup];
         if (remainflag) remain[icell][igroup][jgroup] = 0.0;
       }
+
+  set_flat_vremax();
 }
 
 /* ----------------------------------------------------------------------
@@ -1953,6 +1993,7 @@ void Collide::grow_percell(int n)
   memory->grow(vremax,nglocalmax,ngroups,ngroups,"collide:vremax");
   if (remainflag)
     memory->grow(remain,nglocalmax,ngroups,ngroups,"collide:remain");
+  set_flat_vremax();
 }
 
 /* ----------------------------------------------------------------------

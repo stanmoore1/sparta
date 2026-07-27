@@ -149,7 +149,7 @@ class Particle : protected Pointers {
   void compress_reactions(int, int *);
   void sort();
   void reorder();
-  void sort_reorder();
+  void sort_reorder(class Collide *fuse = NULL);
   void sort_allocate();
   void remove_all_from_cell(int);
   virtual void grow(int);

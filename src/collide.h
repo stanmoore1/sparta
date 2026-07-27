@@ -61,6 +61,19 @@ class Collide : protected Pointers {
 
   virtual int collisions_one_opt() {return 0;}
 
+  // per-cell entry point, so that Particle::sort_reorder() can collide a cell
+  //   the instant its scatter has finished writing it and the cell's
+  //   particles are still in cache, turning the separate collision pass over
+  //   the whole particle array into no pass at all
+  // collide_fused_supported() reports whether this style can be driven that
+  //   way; collisions_pre/post do the per-step bookkeeping that
+  //   collisions() would otherwise do around the kernel
+
+  virtual int collide_fused_supported() {return 0;}
+  virtual void collide_one_cell(int, Particle::OnePart *, int) {}
+  void collisions_pre();
+  void collisions_post();
+
   void modify_params(int, char **);
   void reset_vremax();
 
@@ -111,6 +124,19 @@ class Collide : protected Pointers {
   double ***vremax;   // max relative velocity, per cell, per group pair
   double ***remain;   // collision number remainder, per cell, per group pair
   double **vremax_initial;   // initial vremax value, per group pair
+
+  // flat views of vremax/remain, valid only when ngroups == 1
+  // vremax[icell][0][0] costs two dependent pointer loads before the value;
+  //   walking cells in order those prefetch, but any access pattern that is
+  //   not sequential in icell turns them into two cache misses per cell
+  // the 3D data block is contiguous, so with a single group the same value is
+  //   vremax1[icell] -- one load, no chasing
+  // NULL when ngroups > 1
+
+  double *vremax1;
+  double *remain1;
+
+  void set_flat_vremax();
 
   int ngas_tally;            // copy of gas/gas Compute info setup by Update
   class Compute **glist_active;

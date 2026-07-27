@@ -5,12 +5,12 @@
 #   global optmove yes            -- optimized move for uniform grid, no surfs
 #   global particle/reorder N     -- reorder particles by grid cell every N steps
 # reorder period is settable from the command line, e.g. -var reorder 10
-# the default of 3 is the measured optimum at 1M particles; see bench/opt/RESULTS.md
+# the default of 2 is the measured optimum at 1M particles; see bench/opt/ROUND2.md
 
 variable            x index 10
 variable            y index 10
 variable            z index 10
-variable            reorder index 3
+variable            reorder index 2
 
 variable            lx equal $x*1.0e-5
 variable            ly equal $y*1.0e-5

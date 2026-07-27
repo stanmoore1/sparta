@@ -555,7 +555,7 @@ void Particle::reorder()
    invoked from Update::run() every reorder_period timesteps
 ------------------------------------------------------------------------- */
 
-void Particle::sort_reorder()
+void Particle::sort_reorder(Collide *fuse)
 {
   // custom per-particle data lives in separate arrays that would each need
   //   their own out-of-place buffer; rare, so use the two-pass path instead
@@ -563,6 +563,7 @@ void Particle::sort_reorder()
   if (ncustom) {
     sort();
     reorder();
+    if (fuse) fuse->collisions();
     return;
   }
 
@@ -605,8 +606,28 @@ void Particle::sort_reorder()
                       SPARTA_GET_ALIGN(OnePart));
   }
 
-  for (int i = 0; i < nlocal; i++)
-    sortbuf[sortcursor[particles[i].icell]++] = particles[i];
+  // the scatter writes each particle to its final slot, so a cell is complete
+  //   the moment its cursor reaches first+count -- and at that instant the
+  //   cell's particles are still in L1
+  // colliding right there removes the separate collision pass over the whole
+  //   particle array, which at 1M particles is a full re-read from DRAM
+  // cells therefore complete in scatter order rather than cell order, so the
+  //   random number stream differs from the unfused path; results are
+  //   statistically identical, not bit-for-bit identical
+
+  if (fuse) {
+    for (int i = 0; i < nlocal; i++) {
+      int icell = particles[i].icell;
+      int w = sortcursor[icell]++;
+      sortbuf[w] = particles[i];
+      int n = cinfo[icell].count;
+      if (sortcursor[icell] == cinfo[icell].first + n)
+        fuse->collide_one_cell(icell,&sortbuf[cinfo[icell].first],n);
+    }
+  } else {
+    for (int i = 0; i < nlocal; i++)
+      sortbuf[sortcursor[particles[i].icell]++] = particles[i];
+  }
 
   OnePart *tmpbuf = particles;
   particles = sortbuf;

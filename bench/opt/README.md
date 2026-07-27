@@ -4,14 +4,20 @@ A profile-guided optimization pass over SPARTA's serial CPU performance on the
 `in.collide` DSMC benchmark: measure a baseline, profile it, quantify the remaining
 headroom with a roofline, optimize, remeasure.
 
-**Result: 1.20x at 1M particles, from changes that reproduce the baseline output
-bit for bit.**
+**Round 1: 1.20x at 1M particles**, from changes that reproduce the baseline output
+bit for bit. **Round 2** diagnosed what remains: the step is limited by the size of
+the 96-byte particle record, 32 bytes of which are dead for this class of run.
+Shrinking it to 64 bytes measures **1.58x** on its own — more than rounds 1 and 2
+combined — while every algorithmic restructuring tried (cache tiling, pass fusion,
+fixed-capacity buckets, mesh-free binning, a branchless mover) is worth at most
+1.26x in a microbenchmark and ~1.05x in the real code. See `ROUND2.md`.
 
 ## Read in this order
 
 | document | what is in it |
 |---|---|
-| [`RESULTS.md`](RESULTS.md) | the reorder-period sweeps, every optimization and its measured effect, verification, and the summary table |
+| [`ROUND2.md`](ROUND2.md) | round 2: what the bottleneck actually is (the 96-byte particle record), the full design-space exploration, and why tiling / fusion / buckets / mesh-free all lose to simply shrinking the record |
+| [`RESULTS.md`](RESULTS.md) | round 1: the reorder-period sweeps, every optimization and its measured effect, verification, and the summary table |
 | [`PROFILE.md`](PROFILE.md) | gprof and callgrind profiles of the baseline: instruction mix, cache misses, branch behaviour |
 | [`ROOFLINE.md`](ROOFLINE.md) | measured machine ceilings, per-kernel arithmetic intensity, and what the plot says about remaining headroom |
 
@@ -46,12 +52,14 @@ minutes. Build any of them with `g++ -O3 -std=c++11 -o NAME NAME.cpp`
 | `micro_collide.cpp` | virtual vs inlined, `plist` vs contiguous, `pow` vs fast `pow` |
 | `micro_pow.cpp` | `pow` throughput *and* latency, which turned out to be the distinction that mattered |
 | `micro_thp.cpp` | do huge pages help the counting sort's scattered writes? |
+| `micro_design.cpp` | the round-2 design space: nine ways to structure the whole timestep, from the current three passes to tiled fusion, per-cell buckets, mesh-free binning and smaller particle records |
 
 ## Benchmark input
 
 `bench/in.collide.opt` is `bench/in.collide` plus `global optmove yes` and
 `global particle/reorder ${reorder}`, with the reorder period settable from the
-command line. Its default of 3 is the measured optimum after these changes.
+command line. Its default of 2 is the measured optimum after the round-2 changes
+(it was 3 after round 1, and 5 before either).
 
 ```
 cd bench

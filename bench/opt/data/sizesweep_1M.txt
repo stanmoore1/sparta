@@ -1,0 +1,18 @@
+tag=sizesweep size=10,10,10 reorder=3 reps=3
+  loop_time_median=0.029274  min=0.0269189  max=0.0393288  spread=42.39%
+  breakdown: Move=0.010075 Coll=0.013621 Sort=0.0050828 Comm=0.00010514 Modify=0 Output=0.00034189 
+tag=sizesweep size=15,15,15 reorder=3 reps=3
+  loop_time_median=0.124763  min=0.119554  max=0.129322  spread=7.83%
+  breakdown: Move=0.038263 Coll=0.056183 Sort=0.028526 Comm=0.00020266 Modify=0 Output=0.001482 
+tag=sizesweep size=20,20,25 reorder=3 reps=3
+  loop_time_median=0.400489  min=0.397854  max=0.403704  spread=1.46%
+  breakdown: Move=0.10922 Coll=0.18031 Sort=0.10596 Comm=0.00014758 Modify=0 Output=0.00475 
+tag=sizesweep size=30,30,30 reorder=3 reps=3
+  loop_time_median=1.12729  min=1.12402  max=1.17845  spread=4.83%
+  breakdown: Move=0.30026 Coll=0.49242 Sort=0.32157 Comm=0.00016284 Modify=0 Output=0.012772 
+tag=sizesweep size=40,40,40 reorder=3 reps=3
+  loop_time_median=3.39262  min=3.3394  max=3.44985  spread=3.26%
+  breakdown: Move=0.98277 Coll=1.3504 Sort=1.0155 Comm=0.00029469 Modify=0 Output=0.043519 
+tag=sizesweep size=40,50,50 reorder=3 reps=3
+  loop_time_median=6.34971  min=6.05972  max=6.45827  spread=6.28%
+  breakdown: Move=1.914 Coll=2.5025 Sort=1.8502 Comm=0.00035024 Modify=0 Output=0.08244 

@@ -346,15 +346,27 @@ void Update::run(int nsteps)
     int reorder_flag = (reorder_period &&
                         ntimestep % reorder_period == 0);
 
+    // when reordering runs this step and the collide style can be driven one
+    //   cell at a time, hand it to sort_reorder(), which collides each cell
+    //   as soon as its scatter completes and the cell is still in cache
+    // that removes the separate collision pass over the whole particle array;
+    //   the collide work is then counted under Sort rather than Coll
+
+    int fuse_collide = 0;
+    if (reorder_flag && collide && !particle->ncustom)
+      fuse_collide = collide->collide_fused_supported();
+
     if (reorder_flag) {
-      particle->sort_reorder();
+      if (fuse_collide) collide->collisions_pre();
+      particle->sort_reorder(fuse_collide ? collide : NULL);
+      if (fuse_collide) collide->collisions_post();
       timer->stamp(TIME_SORT);
     } else if (collide) {
       particle->sort();
       timer->stamp(TIME_SORT);
     }
 
-    if (collide) {
+    if (collide && !fuse_collide) {
       collide->collisions();
       timer->stamp(TIME_COLLIDE);
     }

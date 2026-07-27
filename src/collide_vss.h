@@ -41,6 +41,8 @@ class CollideVSS : public Collide {
   virtual int perform_collision(Particle::OnePart *&, Particle::OnePart *&,
                                 Particle::OnePart *&);
   virtual int collisions_one_opt();
+  virtual int collide_fused_supported();
+  virtual void collide_one_cell(int, Particle::OnePart *, int);
   double extract(int, int, const char *);
 
   struct State {      // two-particle state
@@ -84,6 +86,11 @@ class CollideVSS : public Collide {
 
   Params **params;             // VSS params for each species
   int nparams;                // # of per-species params read in
+
+  // CONTIG selects between a cell whose particles are consecutive in
+  //   memory and one that must be reached through a list of indices
+  template <int CONTIG>
+  void collide_cell_kernel(int, Particle::OnePart *, const int *, int);
 
   void SCATTER_TwoBodyScattering(Particle::OnePart *,
                                  Particle::OnePart *);

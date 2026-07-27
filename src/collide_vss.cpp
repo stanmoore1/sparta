@@ -223,6 +223,160 @@ double CollideVSS::attempt_collision(int icell, int igroup, int jgroup,
      the caller falls back to the generic path
 ------------------------------------------------------------------------- */
 
+/* ----------------------------------------------------------------------
+   collide the NP particles that occupy p[0..np-1], which are all in cell
+     ICELL and contiguous in memory
+   shared by the whole-step kernel below and by the fused path that Particle
+     calls as soon as its sort has finished writing a cell
+------------------------------------------------------------------------- */
+
+template <int CONTIG>
+void CollideVSS::collide_cell_kernel(int icell, Particle::OnePart *base,
+                                     const int *pl, int np)
+{
+  if (np <= 1) return;
+
+  Grid::ChildInfo *cinfo = grid->cinfo;
+  Particle::Species *species = particle->species;
+
+  double volume = cinfo[icell].volume / cinfo[icell].weight;
+  if (volume == 0.0) error->one(FLERR,"Collision cell volume is zero");
+
+  // kept in the same order attempt_collision() multiplies them, since
+  //   floating point multiplication does not associate
+
+  const double dt = update->dt;
+  const double fnum = update->fnum;
+
+  // vremax for this cell held in a register for the whole cell; nothing else
+  //   reads or writes it meanwhile, so the running max is unchanged
+
+  double *vrm = vremax1 ? &vremax1[icell] : &vremax[icell][0][0];
+  double vremax_c = *vrm;
+
+  double attempt;
+  if (remainflag) {
+    double *rem = remain1 ? &remain1[icell] : &remain[icell][0][0];
+    attempt = 0.5 * np * (np-1) * vremax_c * dt * fnum / volume + *rem;
+    *rem = attempt - static_cast<int> (attempt);
+  } else {
+    attempt = 0.5 * np * (np-1) * vremax_c * dt * fnum / volume +
+      random->uniform();
+  }
+
+  int nattempt = static_cast<int> (attempt);
+  if (!nattempt) return;
+  nattempt_one += nattempt;
+
+  for (int iattempt = 0; iattempt < nattempt; iattempt++) {
+    int i = np * random->uniform();
+    int j = np * random->uniform();
+    while (i == j) j = np * random->uniform();
+
+    Particle::OnePart *ipart = CONTIG ? &base[i] : &base[pl[i]];
+    Particle::OnePart *jpart = CONTIG ? &base[j] : &base[pl[j]];
+
+    // test_collision
+
+    double *vi = ipart->v;
+    double *vj = jpart->v;
+    int isp = ipart->ispecies;
+    int jsp = jpart->ispecies;
+    const Params &prm = params[isp][jsp];
+
+    double du = vi[0] - vj[0];
+    double dv = vi[1] - vj[1];
+    double dw = vi[2] - vj[2];
+    double vr2 = du*du + dv*dv + dw*dw;
+
+    if (vr2 < EPSZERO && prm.omega >= 1.0) continue;
+
+    double vro = VSS_POW(vr2,1.0-prm.omega);
+    double vre = vro*prefactor[isp][jsp];
+    vremax_c = MAX(vre,vremax_c);
+    if (vre/vremax_c < random->uniform()) continue;
+    precoln.vr2 = vr2;
+
+    // setup_collision
+
+    precoln.vr = sqrt(vr2);
+    precoln.ave_rotdof = 0.5 * (species[isp].rotdof + species[jsp].rotdof);
+    precoln.ave_vibdof = 0.5 * (species[isp].vibdof + species[jsp].vibdof);
+    precoln.ave_dof = (precoln.ave_rotdof + precoln.ave_vibdof)/2.;
+
+    double imass = precoln.imass = species[isp].mass;
+    double jmass = precoln.jmass = species[jsp].mass;
+
+    precoln.etrans = 0.5 * prm.mr * vr2;
+    precoln.erot = ipart->erot + jpart->erot;
+    precoln.evib = ipart->evib + jpart->evib;
+
+    precoln.eint   = precoln.erot + precoln.evib;
+    precoln.etotal = precoln.etrans + precoln.eint;
+
+    double divisor = 1.0 / (imass+jmass);
+    precoln.ucmf = ((imass*vi[0])+(jmass*vj[0])) * divisor;
+    precoln.vcmf = ((imass*vi[1])+(jmass*vj[1])) * divisor;
+    precoln.wcmf = ((imass*vi[2])+(jmass*vj[2])) * divisor;
+
+    postcoln.etrans = precoln.etrans;
+    postcoln.erot = 0.0;
+    postcoln.evib = 0.0;
+    postcoln.eint = 0.0;
+    postcoln.etotal = precoln.etotal;
+
+    // perform_collision, with react == NULL so no reaction is possible
+    // both callees are non-virtual and defined in this file, so the compiler
+    //   can inline them here
+
+    if (precoln.ave_dof > 0.0) EEXCHANGE_NonReactingEDisposal(ipart,jpart);
+    SCATTER_TwoBodyScattering(ipart,jpart);
+    ncollide_one++;
+  }
+
+  *vrm = vremax_c;
+}
+
+/* ----------------------------------------------------------------------
+   collide the NP particles starting at P, which are all in cell ICELL and
+     contiguous in memory
+   this is what Particle::sort_reorder() calls the instant its scatter has
+     finished writing a cell, while that cell is still in cache
+------------------------------------------------------------------------- */
+
+void CollideVSS::collide_one_cell(int icell, Particle::OnePart *p, int np)
+{
+  collide_cell_kernel<1>(icell,p,NULL,np);
+}
+
+/* ----------------------------------------------------------------------
+   1 if this style can have its per-cell collisions driven one cell at a
+     time by Particle::sort_reorder(), which is only true for the plain
+     single-group no-chemistry case that collide_one_cell() implements
+------------------------------------------------------------------------- */
+
+int CollideVSS::collide_fused_supported()
+{
+  if (react || mcflag) return 0;
+  if (ambiflag || nearcp || ngas_tally || ngroups != 1) return 0;
+  return 1;
+}
+
+/* ----------------------------------------------------------------------
+   NTC algorithm for a single group, VSS-specific fused kernel
+   same arithmetic and same random number stream as the generic
+     Collide::collisions_one<0,0> driving the virtual CollideVSS methods,
+     so results are bit-for-bit identical; it is only the plumbing that
+     differs
+   what it avoids, per collision attempt, is four virtual calls that the
+     compiler cannot see through (attempt/test/setup/perform_collision),
+     plus re-reading per-cell and per-species-pair quantities that do not
+     change: the params/prefactor rows, vremax's three levels of pointer
+     chasing, and dt*fnum
+   returns 0 without doing anything for the cases it does not implement, so
+     the caller falls back to the generic path
+------------------------------------------------------------------------- */
+
 int CollideVSS::collisions_one_opt()
 {
   // handled here: single group, no chemistry, no ambipolar, no near-neighbor
@@ -234,138 +388,39 @@ int CollideVSS::collisions_one_opt()
 
   Grid::ChildInfo *cinfo = grid->cinfo;
   Particle::OnePart *particles = particle->particles;
-  Particle::Species *species = particle->species;
   int *next = particle->next;
 
-  // when the particle list is cell-contiguous, a cell's particles are
-  //   simply first, first+1, ... first+count-1 and plist is redundant
+  // when the particle list is cell-contiguous a cell's particles are simply
+  //   first, first+1, ... first+count-1, and plist is a redundant copy
 
-  const int contiguous = particle->sorted_contiguous;
+  if (particle->sorted_contiguous) {
+    for (int icell = 0; icell < nglocal; icell++) {
+      int np = cinfo[icell].count;
+      if (np <= 1) continue;
+      collide_one_cell(icell,&particles[cinfo[icell].first],np);
+    }
+    return 1;
+  }
 
-  // kept in the same order as attempt_collision() multiplies them, since
-  //   floating point multiplication does not associate and the results are
-  //   meant to be bit-for-bit identical
-
-  const double dt = update->dt;
-  const double fnum = update->fnum;
+  // otherwise gather the cell's particles through the linked list first
 
   for (int icell = 0; icell < nglocal; icell++) {
     int np = cinfo[icell].count;
     if (np <= 1) continue;
 
+    if (np > npmax) {
+      while (np > npmax) npmax += DELTAPART;
+      memory->destroy(plist);
+      memory->create(plist,npmax,"collide:plist");
+    }
+    int n = 0;
     int ip = cinfo[icell].first;
-    double volume = cinfo[icell].volume / cinfo[icell].weight;
-    if (volume == 0.0) error->one(FLERR,"Collision cell volume is zero");
-
-    // setup particle list for this cell
-
-    const int *pl;
-    if (contiguous) {
-      pl = NULL;
-    } else {
-      if (np > npmax) {
-        while (np > npmax) npmax += DELTAPART;
-        memory->destroy(plist);
-        memory->create(plist,npmax,"collide:plist");
-      }
-      int n = 0;
-      while (ip >= 0) {
-        plist[n++] = ip;
-        ip = next[ip];
-      }
-      pl = plist;
+    while (ip >= 0) {
+      plist[n++] = ip;
+      ip = next[ip];
     }
 
-    // vremax for this cell held in a register for the whole cell
-    // nothing else reads or writes it while this cell is being processed,
-    //   so the running max is unchanged; write it back once at the end
-
-    double vremax_c = vremax[icell][0][0];
-
-    // attempt = exact collision attempt count for all particles in cell
-    // nattempt = rounded attempt with RN
-
-    double attempt;
-    if (remainflag) {
-      attempt = 0.5 * np * (np-1) * vremax_c * dt * fnum / volume +
-        remain[icell][0][0];
-      remain[icell][0][0] = attempt - static_cast<int> (attempt);
-    } else {
-      attempt = 0.5 * np * (np-1) * vremax_c * dt * fnum / volume +
-        random->uniform();
-    }
-
-    int nattempt = static_cast<int> (attempt);
-    if (!nattempt) continue;
-    nattempt_one += nattempt;
-
-    for (int iattempt = 0; iattempt < nattempt; iattempt++) {
-      int i = np * random->uniform();
-      int j = np * random->uniform();
-      while (i == j) j = np * random->uniform();
-
-      Particle::OnePart *ipart = &particles[contiguous ? ip+i : pl[i]];
-      Particle::OnePart *jpart = &particles[contiguous ? ip+j : pl[j]];
-
-      // test_collision
-
-      double *vi = ipart->v;
-      double *vj = jpart->v;
-      int isp = ipart->ispecies;
-      int jsp = jpart->ispecies;
-      const Params &prm = params[isp][jsp];
-
-      double du = vi[0] - vj[0];
-      double dv = vi[1] - vj[1];
-      double dw = vi[2] - vj[2];
-      double vr2 = du*du + dv*dv + dw*dw;
-
-      if (vr2 < EPSZERO && prm.omega >= 1.0) continue;
-
-      double vro = VSS_POW(vr2,1.0-prm.omega);
-      double vre = vro*prefactor[isp][jsp];
-      vremax_c = MAX(vre,vremax_c);
-      if (vre/vremax_c < random->uniform()) continue;
-      precoln.vr2 = vr2;
-
-      // setup_collision
-
-      precoln.vr = sqrt(vr2);
-      precoln.ave_rotdof = 0.5 * (species[isp].rotdof + species[jsp].rotdof);
-      precoln.ave_vibdof = 0.5 * (species[isp].vibdof + species[jsp].vibdof);
-      precoln.ave_dof = (precoln.ave_rotdof + precoln.ave_vibdof)/2.;
-
-      double imass = precoln.imass = species[isp].mass;
-      double jmass = precoln.jmass = species[jsp].mass;
-
-      precoln.etrans = 0.5 * prm.mr * vr2;
-      precoln.erot = ipart->erot + jpart->erot;
-      precoln.evib = ipart->evib + jpart->evib;
-
-      precoln.eint   = precoln.erot + precoln.evib;
-      precoln.etotal = precoln.etrans + precoln.eint;
-
-      double divisor = 1.0 / (imass+jmass);
-      precoln.ucmf = ((imass*vi[0])+(jmass*vj[0])) * divisor;
-      precoln.vcmf = ((imass*vi[1])+(jmass*vj[1])) * divisor;
-      precoln.wcmf = ((imass*vi[2])+(jmass*vj[2])) * divisor;
-
-      postcoln.etrans = precoln.etrans;
-      postcoln.erot = 0.0;
-      postcoln.evib = 0.0;
-      postcoln.eint = 0.0;
-      postcoln.etotal = precoln.etotal;
-
-      // perform_collision, with react == NULL so no reaction is possible
-      // both callees are non-virtual and defined in this file, so the
-      //   compiler can inline them here
-
-      if (precoln.ave_dof > 0.0) EEXCHANGE_NonReactingEDisposal(ipart,jpart);
-      SCATTER_TwoBodyScattering(ipart,jpart);
-      ncollide_one++;
-    }
-
-    vremax[icell][0][0] = vremax_c;
+    collide_cell_kernel<0>(icell,particles,plist,np);
   }
 
   return 1;
