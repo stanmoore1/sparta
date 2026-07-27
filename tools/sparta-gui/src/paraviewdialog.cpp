@@ -97,12 +97,18 @@ ParaViewExportDialog::ParaViewExportDialog(QWidget *parent, const QString &deckD
     outer->addLayout(form);
 
     mode_ = new QComboBox(this);
+
+    mode_->setObjectName("mode");
+
+    mode_->setAccessibleName("Conversion mode");
     mode_->addItem("Surface geometry (surf2paraview)", static_cast<int>(Mode::Surface));
     mode_->addItem("Grid (grid2paraview)", static_cast<int>(Mode::Grid));
     form->addRow("Convert:", mode_);
 
     // input file + browse
     inputEdit_ = new QLineEdit(this);
+    inputEdit_->setObjectName("input");
+    inputEdit_->setAccessibleName("Input file to convert");
     auto *inputRow = new QHBoxLayout;
     inputRow->addWidget(inputEdit_);
     auto *inBrowse = new QPushButton("Browse...", this);
@@ -110,10 +116,16 @@ ParaViewExportDialog::ParaViewExportDialog(QWidget *parent, const QString &deckD
     form->addRow("Input file:", inputRow);
 
     outputEdit_ = new QLineEdit(this);
+
+    outputEdit_->setObjectName("output");
+
+    outputEdit_->setAccessibleName("Name of the converted output");
     form->addRow("Output name:", outputEdit_);
 
     // optional dump result files
     resultsEdit_ = new QLineEdit(this);
+    resultsEdit_->setObjectName("results");
+    resultsEdit_->setAccessibleName("Results file or pattern");
     resultsEdit_->setPlaceholderText("optional: dump files, e.g. tmp_surf.* (space-separated globs)");
     auto *resRow = new QHBoxLayout;
     resRow->addWidget(resultsEdit_);
@@ -128,6 +140,8 @@ ParaViewExportDialog::ParaViewExportDialog(QWidget *parent, const QString &deckD
     auto *surfLay = new QHBoxLayout(surfPage);
     surfLay->setContentsMargins(0, 0, 0, 0);
     exodus_ = new QCheckBox("Write Exodus II (.ex2) instead of .pvd", surfPage);
+    exodus_->setObjectName("exodus");
+    exodus_->setAccessibleName("Write Exodus II instead of pvd");
     surfLay->addWidget(exodus_);
     surfLay->addStretch();
     modeOpts_->addWidget(surfPage);
@@ -139,6 +153,8 @@ ParaViewExportDialog::ParaViewExportDialog(QWidget *parent, const QString &deckD
     for (int i = 0; i < 3; ++i) {
         gridLay->addWidget(new QLabel(labels[i], gridPage));
         chunk_[i] = new QSpinBox(gridPage);
+        chunk_[i]->setObjectName(QStringLiteral("chunk%1").arg(i));
+        chunk_[i]->setAccessibleName(QStringLiteral("Chunk size %1").arg(i));
         chunk_[i]->setRange(1, 100000);
         chunk_[i]->setValue(100);
         gridLay->addWidget(chunk_[i]);
@@ -151,12 +167,16 @@ ParaViewExportDialog::ParaViewExportDialog(QWidget *parent, const QString &deckD
     auto *toolBox = new QGroupBox("ParaView tools", this);
     auto *toolForm = new QFormLayout(toolBox);
     pvpythonEdit_ = new QLineEdit(pvpython, toolBox);
+    pvpythonEdit_->setObjectName("pvpython");
+    pvpythonEdit_->setAccessibleName("Path to the pvpython interpreter");
     auto *pvRow = new QHBoxLayout;
     pvRow->addWidget(pvpythonEdit_);
     auto *pvBrowse = new QPushButton("Browse...", toolBox);
     pvRow->addWidget(pvBrowse);
     toolForm->addRow("pvpython:", pvRow);
     paraviewEdit_ = new QLineEdit(paraview, toolBox);
+    paraviewEdit_->setObjectName("paraview");
+    paraviewEdit_->setAccessibleName("Path to the ParaView executable");
     auto *pwRow = new QHBoxLayout;
     pwRow->addWidget(paraviewEdit_);
     auto *pwBrowse = new QPushButton("Browse...", toolBox);
@@ -165,16 +185,28 @@ ParaViewExportDialog::ParaViewExportDialog(QWidget *parent, const QString &deckD
     outer->addWidget(toolBox);
 
     openAfter_ = new QCheckBox("Open the result in ParaView when the conversion finishes", this);
+
+    openAfter_->setObjectName("openAfter");
+
+    openAfter_->setAccessibleName("Open the result when the conversion finishes");
     openAfter_->setChecked(true);
     outer->addWidget(openAfter_);
 
     preview_ = new QLabel(this);
+
+    preview_->setObjectName("preview");
+
+    preview_->setAccessibleName("The command that will be run");
     preview_->setTextInteractionFlags(Qt::TextSelectableByMouse);
     preview_->setWordWrap(true);
     preview_->setStyleSheet("QLabel { font-family: monospace; }");
     outer->addWidget(preview_);
 
     log_ = new QPlainTextEdit(this);
+
+    log_->setObjectName("log");
+
+    log_->setAccessibleName("Conversion output");
     log_->setReadOnly(true);
     log_->setMinimumHeight(140);
     log_->setPlaceholderText("Conversion output appears here.");
@@ -182,6 +214,7 @@ ParaViewExportDialog::ParaViewExportDialog(QWidget *parent, const QString &deckD
 
     auto *buttons = new QDialogButtonBox(this);
     runButton_ = buttons->addButton("Convert", QDialogButtonBox::AcceptRole);
+    runButton_->setObjectName("convert");
     buttons->addButton(QDialogButtonBox::Close);
     outer->addWidget(buttons);
 

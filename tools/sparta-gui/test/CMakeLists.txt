@@ -909,6 +909,23 @@ target_link_libraries(test_paraviewexport PRIVATE GTest::gtest_main Qt6::Widgets
 
 gtest_discover_tests(test_paraviewexport)
 
+# The export dialog's conversion run.  The pure part is covered above; this is
+# the orchestration around it -- locating the script, refusing to start without
+# the tools, replacing stale output, running pvpython in the right directory and
+# deciding afterwards whether it worked.  ParaView is not needed: the tests
+# supply a stub pvpython that records how it was called and exits how they ask.
+add_executable(test_paraviewdialog
+  test_paraviewdialog.cpp
+  ${CMAKE_SOURCE_DIR}/src/paraviewdialog.cpp
+  ${CMAKE_SOURCE_DIR}/src/paraviewexport.cpp
+  ${CMAKE_SOURCE_DIR}/src/helpers.cpp
+)
+target_include_directories(test_paraviewdialog PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_paraviewdialog PRIVATE
+  GTest::gtest Qt6::Widgets Qt6::Svg)
+
+gtest_discover_tests(test_paraviewdialog)
+
 # Test executable for the parametric-sweep expansion/reducers
 add_executable(test_sweepspec
   test_sweepspec.cpp
