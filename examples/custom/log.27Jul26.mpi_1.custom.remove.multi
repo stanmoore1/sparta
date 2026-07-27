@@ -1,0 +1,393 @@
+SPARTA (24 Sep 2025)
+Running on 1 MPI task(s)
+################################################################################
+# remove some of several per-grid custom attributes, then force the grid to grow
+#
+# Grid::remove_custom() tombstones a slot by setting ename[index] = NULL while
+# leaving etype/esize/ewhich stale, and only resets ncustom to 0 once every slot
+# is empty.  So removing some of several attributes leaves ncustom > 0 with live
+# tombstones.  Grid::reallocate_custom(), called from grow_cells(), used to loop
+# over all of ncustom without checking ename, dereferencing the stale ewhich
+# under the stale etype/esize.
+#
+# This exercises that path: four attributes spanning all four storage containers
+# (int vector, int array, float vector, float array), two of them removed, then
+# adapt_grid to force grow_cells().  Afterwards the surviving attributes are
+# re-set from a variable and reduced; c_direct[k] must match c_expect[k].  A
+# clobbered slot pointer shows up as a mismatch, a crash, or an ASan report.
+#
+# A new attribute is also created after the removals, so it reuses a tombstoned
+# index and a recycled storage slot.
+#
+# No miscomputed value was observed from the missing guard in these scenarios --
+# eicol/edcol are indexed by ewhich and stay consistent, so the redundant work
+# lands on a live attribute rather than corrupting one.  This is a regression
+# guard for the path, not a reproducer of a wrong answer.
+#
+# Notes:
+#  - The "comm/sort" option to the "global" command is used to match MPI runs.
+#  - The "twopass" option is used to match Kokkos runs.
+# The "comm/sort" and "twopass" options should not be used for production runs.
+################################################################################
+
+seed	    	    12345
+dimension   	    2
+
+global              gridcut 0.0 comm/sort yes
+
+boundary	    or r p
+
+create_box  	    0 10 0 10 -0.5 0.5
+Created orthogonal box = (0 0 -0.5) to (10 10 0.5)
+create_grid 	    10 10 1
+Created 100 child grid cells
+  CPU time = 0.000857037 secs
+  create/ghost percent = 95.6627 4.33727
+balance_grid        rcb cell
+Balance grid migrated 0 cells
+  CPU time = 0.000103283 secs
+  reassign/sort/migrate/ghost percent = 81.2128 0.456997 10.8362 7.49397
+
+global		    nrho 1.0 fnum 0.01
+
+species		    air.species N O
+mixture		    air N O vstream 100.0 0 0
+
+compute             cid property/grid all id
+
+run                 0
+Memory usage per proc in Mbytes:
+  particles (ave,min,max) = 0 0 0
+  grid      (ave,min,max) = 1.51379 1.51379 1.51379
+  surf      (ave,min,max) = 0 0 0
+  total     (ave,min,max) = 1.51456 1.51456 1.51456
+Step CPU Np 
+       0            0        0 
+Loop time of 7.3e-07 on 1 procs for 0 steps with 0 particles
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Move    | 0          | 0          | 0          |   0.0 |  0.00
+Coll    | 0          | 0          | 0          |   0.0 |  0.00
+Sort    | 0          | 0          | 0          |   0.0 |  0.00
+Comm    | 0          | 0          | 0          |   0.0 |  0.00
+Modify  | 0          | 0          | 0          |   0.0 |  0.00
+Output  | 0          | 0          | 0          |   0.0 |  0.00
+Other   |            | 7.3e-07    |            |       |100.00
+
+Particle moves    = 0 (0K)
+Cells touched     = 0 (0K)
+Particle comms    = 0 (0K)
+Boundary collides = 0 (0K)
+Boundary exits    = 0 (0K)
+SurfColl checks   = 0 (0K)
+SurfColl occurs   = 0 (0K)
+Surf reactions    = 0 (0K)
+Collide attempts  = 0 (0K)
+Collide occurs    = 0 (0K)
+Reactions         = 0 (0K)
+Particles stuck   = 0
+Axisymm bad moves = 0
+
+Particle-moves/CPUsec/proc: 0
+Particle-moves/step: 0
+Cell-touches/particle/step: 0
+Particle comm iterations/step: 0
+Particle fraction communicated: 0
+Particle fraction colliding with boundary: 0
+Particle fraction exiting boundary: 0
+Surface-checks/particle/step: 0
+Surface-collisions/particle/step: 0
+Surf-reactions/particle/step: 0
+Collision-attempts/particle/step: 0
+Collisions/particle/step: 0
+Reactions/particle/step: 0
+
+Particles: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Cells:      100 ave 100 max 100 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+GhostCell: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+EmptyCell: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+variable            v1 grid c_cid
+variable            v2 grid c_cid*10
+variable            v3 grid c_cid+0.25
+variable            v4 grid c_cid*10+0.5
+
+# four attributes, one in each of the four storage containers
+
+custom              grid create givec int 0 set givec v_v1 all NULL
+Custom grid attributes set = 0
+custom              grid create giarray int 2 set giarray[1] v_v1 all NULL
+Custom grid attributes set = 0
+custom              grid set giarray[2] v_v2 all NULL
+Custom grid attributes set = 0
+custom              grid create gdvec float 0 set gdvec v_v3 all NULL
+Custom grid attributes set = 0
+custom              grid create gdarray float 2 set gdarray[1] v_v3 all NULL
+Custom grid attributes set = 0
+custom              grid set gdarray[2] v_v4 all NULL
+Custom grid attributes set = 0
+
+compute             all4 reduce ave g_givec g_giarray[*] g_gdvec g_gdarray[*]
+
+stats		    50
+stats_style	    step cpu np c_all4[*]
+
+fix		    in emit/face air xlo twopass
+timestep 	    0.0001
+
+run 		    100
+Memory usage per proc in Mbytes:
+  particles (ave,min,max) = 0 0 0
+  grid      (ave,min,max) = 1.51379 1.51379 1.51379
+  surf      (ave,min,max) = 0 0 0
+  total     (ave,min,max) = 1.51456 1.51456 1.51456
+Step CPU Np c_all4[1] c_all4[2] c_all4[3] c_all4[4] c_all4[5] c_all4[6] 
+       0            0        0         50.5         50.5          505        50.75        50.75        505.5 
+      50  0.001179322     1049         50.5         50.5          505        50.75        50.75        505.5 
+     100  0.001895892     2099         50.5         50.5          505        50.75        50.75        505.5 
+Loop time of 0.00189936 on 1 procs for 100 steps with 2099 particles
+Performance: 52649.230 timesteps/s, 110.511 Mparticle-step/s
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Move    | 0.00071629 | 0.00071629 | 0.00071629 |   0.0 | 37.71
+Coll    | 0          | 0          | 0          |   0.0 |  0.00
+Sort    | 0          | 0          | 0          |   0.0 |  0.00
+Comm    | 8.743e-06  | 8.743e-06  | 8.743e-06  |   0.0 |  0.46
+Modify  | 0.0011439  | 0.0011439  | 0.0011439  |   0.0 | 60.22
+Output  | 1.7993e-05 | 1.7993e-05 | 1.7993e-05 |   0.0 |  0.95
+Other   |            | 1.249e-05  |            |       |  0.66
+
+Particle moves    = 105974 (0.106M)
+Cells touched     = 113532 (0.114M)
+Particle comms    = 0 (0K)
+Boundary collides = 314 (0.314K)
+Boundary exits    = 0 (0K)
+SurfColl checks   = 0 (0K)
+SurfColl occurs   = 0 (0K)
+Surf reactions    = 0 (0K)
+Collide attempts  = 0 (0K)
+Collide occurs    = 0 (0K)
+Reactions         = 0 (0K)
+Particles stuck   = 0
+Axisymm bad moves = 0
+
+Particle-moves/CPUsec/proc: 5.57945e+07
+Particle-moves/step: 1059.74
+Cell-touches/particle/step: 1.07132
+Particle comm iterations/step: 1
+Particle fraction communicated: 0
+Particle fraction colliding with boundary: 0.00296299
+Particle fraction exiting boundary: 0
+Surface-checks/particle/step: 0
+Surface-collisions/particle/step: 0
+Surf-reactions/particle/step: 0
+Collision-attempts/particle/step: 0
+Collisions/particle/step: 0
+Reactions/particle/step: 0
+
+Particles: 2099 ave 2099 max 2099 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Cells:      100 ave 100 max 100 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+GhostCell: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+EmptyCell: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+# remove the two int attributes
+# ncustom stays 4, so slots 0 and 1 are now tombstones with stale ewhich
+
+stats_style	    step cpu np
+uncompute           all4
+
+custom              grid remove givec
+Custom grid attributes set = 0
+custom              grid remove giarray
+Custom grid attributes set = 0
+
+# force grow_cells(), which calls reallocate_custom() with the tombstones present
+
+adapt_grid          all refine random 1.0 0.0
+Adapting grid ...
+  100 cells refined, 0 cells coarsened
+  adapted to 400 grid cells
+  CPU time = 0.000234128 secs
+  adapt/redo percent = 72.1507 27.8493
+
+# re-set the surviving float attributes on the new grid, then check them
+# against the same variables they were assigned from
+
+custom              grid set gdvec v_v3 all NULL
+Custom grid attributes set = 0
+custom              grid set gdarray[1] v_v3 all NULL
+Custom grid attributes set = 0
+custom              grid set gdarray[2] v_v4 all NULL
+Custom grid attributes set = 0
+
+# add a new int vector, which reuses the storage slot that reallocate_custom
+# had grown on behalf of the removed givec tombstone
+
+custom              grid create gnew int 0 set gnew v_v1 all NULL
+Custom grid attributes set = 0
+
+compute             direct reduce ave g_gdvec g_gdarray[1] g_gdarray[2] g_gnew
+compute             expect reduce ave v_v3 v_v3 v_v4 v_v1
+
+stats_style	    step cpu np c_direct[*] c_expect[*]
+
+run 		    100
+Memory usage per proc in Mbytes:
+  particles (ave,min,max) = 1.5625 1.5625 1.5625
+  grid      (ave,min,max) = 1.51379 1.51379 1.51379
+  surf      (ave,min,max) = 0 0 0
+  total     (ave,min,max) = 3.07935 3.07935 3.07935
+Step CPU Np c_direct[1] c_direct[2] c_direct[3] c_direct[4] c_expect[1] c_expect[2] c_expect[3] c_expect[4] 
+     100            0     2099       370.75       370.75       3705.5        370.5       370.75       370.75       3705.5        370.5 
+     150  0.001377497     3176       370.75       370.75       3705.5        370.5       370.75       370.75       3705.5        370.5 
+     200  0.003155606     4203       370.75       370.75       3705.5        370.5       370.75       370.75       3705.5        370.5 
+Loop time of 0.00315884 on 1 procs for 100 steps with 4203 particles
+Performance: 31657.161 timesteps/s, 133.055 Mparticle-step/s
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Move    | 0.0026579  | 0.0026579  | 0.0026579  |   0.0 | 84.14
+Coll    | 0          | 0          | 0          |   0.0 |  0.00
+Sort    | 0          | 0          | 0          |   0.0 |  0.00
+Comm    | 9.552e-06  | 9.552e-06  | 9.552e-06  |   0.0 |  0.30
+Modify  | 0.0004331  | 0.0004331  | 0.0004331  |   0.0 | 13.71
+Output  | 4.5417e-05 | 4.5417e-05 | 4.5417e-05 |   0.0 |  1.44
+Other   |            | 1.292e-05  |            |       |  0.41
+
+Particle moves    = 317598 (0.318M)
+Cells touched     = 368715 (0.369M)
+Particle comms    = 0 (0K)
+Boundary collides = 1653 (1.65K)
+Boundary exits    = 21 (0.021K)
+SurfColl checks   = 0 (0K)
+SurfColl occurs   = 0 (0K)
+Surf reactions    = 0 (0K)
+Collide attempts  = 0 (0K)
+Collide occurs    = 0 (0K)
+Reactions         = 0 (0K)
+Particles stuck   = 0
+Axisymm bad moves = 0
+
+Particle-moves/CPUsec/proc: 1.00543e+08
+Particle-moves/step: 3175.98
+Cell-touches/particle/step: 1.16095
+Particle comm iterations/step: 1
+Particle fraction communicated: 0
+Particle fraction colliding with boundary: 0.00520469
+Particle fraction exiting boundary: 6.61213e-05
+Surface-checks/particle/step: 0
+Surface-collisions/particle/step: 0
+Surf-reactions/particle/step: 0
+Collision-attempts/particle/step: 0
+Collisions/particle/step: 0
+Reactions/particle/step: 0
+
+Particles: 4203 ave 4203 max 4203 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Cells:      400 ave 400 max 400 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+GhostCell: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+EmptyCell: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+# remove one more, leaving a single live attribute among four slots,
+# and grow the grid again
+
+stats_style	    step cpu np
+uncompute           direct
+uncompute           expect
+
+custom              grid remove gdvec
+Custom grid attributes set = 0
+
+adapt_grid          all refine random 1.0 0.0
+Adapting grid ...
+  400 cells refined, 0 cells coarsened
+  adapted to 1600 grid cells
+  CPU time = 0.000737392 secs
+  adapt/redo percent = 61.091 38.909
+
+custom              grid set gdarray[1] v_v3 all NULL
+Custom grid attributes set = 0
+custom              grid set gdarray[2] v_v4 all NULL
+Custom grid attributes set = 0
+
+compute             direct2 reduce ave g_gdarray[1] g_gdarray[2]
+compute             expect2 reduce ave v_v3 v_v4
+
+stats_style	    step cpu np c_direct2[*] c_expect2[*]
+
+run 		    100
+Memory usage per proc in Mbytes:
+  particles (ave,min,max) = 1.5625 1.5625 1.5625
+  grid      (ave,min,max) = 1.51379 1.51379 1.51379
+  surf      (ave,min,max) = 0 0 0
+  total     (ave,min,max) = 3.0885 3.0885 3.0885
+Step CPU Np c_direct2[1] c_direct2[2] c_expect2[1] c_expect2[2] 
+     200            0     4203      2930.75      29305.5      2930.75      29305.5 
+     250  0.003278921     5141      2930.75      29305.5      2930.75      29305.5 
+     300  0.007003492     5953      2930.75      29305.5      2930.75      29305.5 
+Loop time of 0.00700847 on 1 procs for 100 steps with 5953 particles
+Performance: 14268.449 timesteps/s, 84.940 Mparticle-step/s
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Move    | 0.0063781  | 0.0063781  | 0.0063781  |   0.0 | 91.01
+Coll    | 0          | 0          | 0          |   0.0 |  0.00
+Sort    | 0          | 0          | 0          |   0.0 |  0.00
+Comm    | 1.7084e-05 | 1.7084e-05 | 1.7084e-05 |   0.0 |  0.24
+Modify  | 0.00047235 | 0.00047235 | 0.00047235 |   0.0 |  6.74
+Output  | 0.00012473 | 0.00012473 | 0.00012473 |   0.0 |  1.78
+Other   |            | 1.617e-05  |            |       |  0.23
+
+Particle moves    = 511947 (0.512M)
+Cells touched     = 677970 (0.678M)
+Particle comms    = 0 (0K)
+Boundary collides = 2933 (2.93K)
+Boundary exits    = 348 (0.348K)
+SurfColl checks   = 0 (0K)
+SurfColl occurs   = 0 (0K)
+Surf reactions    = 0 (0K)
+Collide attempts  = 0 (0K)
+Collide occurs    = 0 (0K)
+Reactions         = 0 (0K)
+Particles stuck   = 0
+Axisymm bad moves = 0
+
+Particle-moves/CPUsec/proc: 7.30469e+07
+Particle-moves/step: 5119.47
+Cell-touches/particle/step: 1.3243
+Particle comm iterations/step: 1
+Particle fraction communicated: 0
+Particle fraction colliding with boundary: 0.00572911
+Particle fraction exiting boundary: 0.000679758
+Surface-checks/particle/step: 0
+Surface-collisions/particle/step: 0
+Surf-reactions/particle/step: 0
+Collision-attempts/particle/step: 0
+Collisions/particle/step: 0
+Reactions/particle/step: 0
+
+Particles: 5953 ave 5953 max 5953 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Cells:      1600 ave 1600 max 1600 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+GhostCell: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+EmptyCell: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0

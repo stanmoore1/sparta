@@ -1,0 +1,202 @@
+SPARTA (24 Sep 2025)
+Running on 1 MPI task(s)
+################################################################################
+# time-average per-grid custom attributes with fix ave/grid
+#
+# fix ave/grid has always had complete downstream support for g_name inputs
+# (validation, init, accumulation of both vectors and array columns), and the
+# docs list it as supported, but its argument parser accepted only c_/f_/v_ so
+# every g_ input was rejected as an illegal command.  This exercises the
+# now-reachable path for a custom vector and for both columns of a custom
+# array, of int and float type.
+#
+# The custom values are constant in time, so each running average must equal
+# the underlying value.  c_direct[k] reduces the custom data directly and
+# c_ave[k] reduces the fix ave/grid output; the two must agree.
+#
+# Notes:
+#  - The "comm/sort" option to the "global" command is used to match MPI runs.
+#  - The "twopass" option is used to match Kokkos runs.
+# The "comm/sort" and "twopass" options should not be used for production runs.
+################################################################################
+
+seed	    	    12345
+dimension   	    2
+
+global              gridcut 0.0 comm/sort yes
+
+boundary	    or r p
+
+create_box  	    0 10 0 10 -0.5 0.5
+Created orthogonal box = (0 0 -0.5) to (10 10 0.5)
+create_grid 	    10 10 1
+Created 100 child grid cells
+  CPU time = 0.000739296 secs
+  create/ghost percent = 95.7055 4.29449
+balance_grid        rcb cell
+Balance grid migrated 0 cells
+  CPU time = 8.8396e-05 secs
+  reassign/sort/migrate/ghost percent = 81.1801 0.490972 10.1848 8.14403
+
+global		    nrho 1.0 fnum 0.01
+
+species		    air.species N O
+mixture		    air N O vstream 100.0 0 0
+
+compute             cid property/grid all id
+
+run                 0
+Memory usage per proc in Mbytes:
+  particles (ave,min,max) = 0 0 0
+  grid      (ave,min,max) = 1.51379 1.51379 1.51379
+  surf      (ave,min,max) = 0 0 0
+  total     (ave,min,max) = 1.51456 1.51456 1.51456
+Step CPU Np 
+       0            0        0 
+Loop time of 6.59e-07 on 1 procs for 0 steps with 0 particles
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Move    | 0          | 0          | 0          |   0.0 |  0.00
+Coll    | 0          | 0          | 0          |   0.0 |  0.00
+Sort    | 0          | 0          | 0          |   0.0 |  0.00
+Comm    | 0          | 0          | 0          |   0.0 |  0.00
+Modify  | 0          | 0          | 0          |   0.0 |  0.00
+Output  | 0          | 0          | 0          |   0.0 |  0.00
+Other   |            | 6.59e-07   |            |       |100.00
+
+Particle moves    = 0 (0K)
+Cells touched     = 0 (0K)
+Particle comms    = 0 (0K)
+Boundary collides = 0 (0K)
+Boundary exits    = 0 (0K)
+SurfColl checks   = 0 (0K)
+SurfColl occurs   = 0 (0K)
+Surf reactions    = 0 (0K)
+Collide attempts  = 0 (0K)
+Collide occurs    = 0 (0K)
+Reactions         = 0 (0K)
+Particles stuck   = 0
+Axisymm bad moves = 0
+
+Particle-moves/CPUsec/proc: 0
+Particle-moves/step: 0
+Cell-touches/particle/step: 0
+Particle comm iterations/step: 0
+Particle fraction communicated: 0
+Particle fraction colliding with boundary: 0
+Particle fraction exiting boundary: 0
+Surface-checks/particle/step: 0
+Surface-collisions/particle/step: 0
+Surf-reactions/particle/step: 0
+Collision-attempts/particle/step: 0
+Collisions/particle/step: 0
+Reactions/particle/step: 0
+
+Particles: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Cells:      100 ave 100 max 100 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+GhostCell: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+EmptyCell: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+variable            v1 grid c_cid
+variable            v2 grid c_cid*10
+variable            v3 grid c_cid+0.25
+variable            v4 grid c_cid*10+0.5
+
+custom              grid create givec int 0 set givec v_v1 all NULL
+Custom grid attributes set = 0
+custom              grid create gdvec float 0 set gdvec v_v3 all NULL
+Custom grid attributes set = 0
+
+custom              grid create giarray int 2 set giarray[1] v_v1 all NULL
+Custom grid attributes set = 0
+custom              grid set giarray[2] v_v2 all NULL
+Custom grid attributes set = 0
+
+custom              grid create gdarray float 2 set gdarray[1] v_v3 all NULL
+Custom grid attributes set = 0
+custom              grid set gdarray[2] v_v4 all NULL
+Custom grid attributes set = 0
+
+# time-average the custom vectors and array columns
+# this is the command that used to be rejected
+
+fix                 avg ave/grid all 10 5 50                     g_givec g_gdvec g_giarray[1] g_giarray[2]                     g_gdarray[1] g_gdarray[2]
+
+fix		    in emit/face air xlo twopass
+
+timestep 	    0.0001
+
+compute             direct reduce ave g_givec g_gdvec                     g_giarray[*] g_gdarray[*]
+compute             ave reduce ave f_avg[1] f_avg[2] f_avg[3] f_avg[4]                     f_avg[5] f_avg[6]
+
+stats		    50
+stats_style	    step cpu np c_direct[*] c_ave[*]
+
+run 		    200
+Memory usage per proc in Mbytes:
+  particles (ave,min,max) = 0 0 0
+  grid      (ave,min,max) = 1.51379 1.51379 1.51379
+  surf      (ave,min,max) = 0 0 0
+  total     (ave,min,max) = 1.52371 1.52371 1.52371
+Step CPU Np c_direct[1] c_direct[2] c_direct[3] c_direct[4] c_direct[5] c_direct[6] c_ave[1] c_ave[2] c_ave[3] c_ave[4] c_ave[5] c_ave[6] 
+       0            0        0         50.5        50.75         50.5          505        50.75        505.5            0            0            0            0            0            0 
+      50  0.001074815     1049         50.5        50.75         50.5          505        50.75        505.5         50.5        50.75         50.5          505        50.75        505.5 
+     100  0.001734267     2099         50.5        50.75         50.5          505        50.75        505.5         50.5        50.75         50.5          505        50.75        505.5 
+     150  0.002801573     3147         50.5        50.75         50.5          505        50.75        505.5         50.5        50.75         50.5          505        50.75        505.5 
+     200  0.004135846     4183         50.5        50.75         50.5          505        50.75        505.5         50.5        50.75         50.5          505        50.75        505.5 
+Loop time of 0.00414007 on 1 procs for 200 steps with 4183 particles
+Performance: 48308.339 timesteps/s, 202.074 Mparticle-step/s
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Move    | 0.0025748  | 0.0025748  | 0.0025748  |   0.0 | 62.19
+Coll    | 0          | 0          | 0          |   0.0 |  0.00
+Sort    | 0          | 0          | 0          |   0.0 |  0.00
+Comm    | 2.5547e-05 | 2.5547e-05 | 2.5547e-05 |   0.0 |  0.62
+Modify  | 0.001488   | 0.001488   | 0.001488   |   0.0 | 35.94
+Output  | 2.7893e-05 | 2.7893e-05 | 2.7893e-05 |   0.0 |  0.67
+Other   |            | 2.381e-05  |            |       |  0.58
+
+Particle moves    = 421488 (0.421M)
+Cells touched     = 453075 (0.453M)
+Particle comms    = 0 (0K)
+Boundary collides = 1953 (1.95K)
+Boundary exits    = 21 (0.021K)
+SurfColl checks   = 0 (0K)
+SurfColl occurs   = 0 (0K)
+Surf reactions    = 0 (0K)
+Collide attempts  = 0 (0K)
+Collide occurs    = 0 (0K)
+Reactions         = 0 (0K)
+Particles stuck   = 0
+Axisymm bad moves = 0
+
+Particle-moves/CPUsec/proc: 1.01807e+08
+Particle-moves/step: 2107.44
+Cell-touches/particle/step: 1.07494
+Particle comm iterations/step: 1
+Particle fraction communicated: 0
+Particle fraction colliding with boundary: 0.00463358
+Particle fraction exiting boundary: 4.98235e-05
+Surface-checks/particle/step: 0
+Surface-collisions/particle/step: 0
+Surf-reactions/particle/step: 0
+Collision-attempts/particle/step: 0
+Collisions/particle/step: 0
+Reactions/particle/step: 0
+
+Particles: 4183 ave 4183 max 4183 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Cells:      100 ave 100 max 100 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+GhostCell: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+EmptyCell: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
