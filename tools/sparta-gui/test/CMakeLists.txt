@@ -645,6 +645,21 @@ if (SPARTA_GUI_USE_PLUGIN)
 endif()
 gtest_discover_tests(test_recovery)
 
+# Integrity checking of downloaded files.  This is the only code that decides
+# whether a file fetched off the network may be kept, and none of it had ever
+# run: a parser that misses the entry, or a comparison that always agrees,
+# downgrades the check to nothing while still reporting success.  Driven over
+# file:// URLs, so the real fetch-parse-compare path runs with no network.
+add_executable(test_checksum
+  test_checksum.cpp
+  ${CMAKE_SOURCE_DIR}/src/urldownloader.cpp
+  ${CMAKE_SOURCE_DIR}/src/helpers.cpp
+)
+target_include_directories(test_checksum PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_checksum PRIVATE GTest::gtest Qt6::Widgets Qt6::Network Qt6::Svg)
+
+gtest_discover_tests(test_checksum)
+
 # The run path: doRun(), archiveFinishedRun(), continueRestart() and
 # renderVtkSnapshot(). Three of the four need a simulation actually running,
 # which this suite can have -- the same shared libsparta the window loads
