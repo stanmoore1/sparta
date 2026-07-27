@@ -604,6 +604,45 @@ if (SPARTA_GUI_USE_PLUGIN)
 endif()
 gtest_discover_tests(test_mainwindowfiles)
 
+# The run path: doRun(), archiveFinishedRun(), continueRestart() and
+# renderVtkSnapshot(). Three of the four need a simulation actually running,
+# which this suite can have -- the same shared libsparta the window loads
+# anyway, driven through the window's own Run action on a deck small enough to
+# finish in a moment. One ctest entry rather than per-case discovery: every case
+# loads the SPARTA library into this process, runs a simulation and chdirs to do
+# it, so the cases must not race each other or the other live-window suites.
+add_executable(test_run
+  test_run.cpp
+  ${GUI_WALKER_SOURCES}
+)
+target_include_directories(test_run PRIVATE
+  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}/thirdparty/rangeslider
+)
+target_compile_definitions(test_run PRIVATE
+  SPARTA_GUI_VERSION="${PROJECT_VERSION}"
+  SPARTA_TEST_LIBRARY_PATH="${_spa_test_lib}")
+target_link_libraries(test_run PRIVATE
+  GTest::gtest Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Svg Qt6::Test
+  lepton_mini ads::qtadvanceddocking-qt6)
+if (SPARTA_GUI_HAVE_VTK)
+  target_compile_definitions(test_run PRIVATE SPARTA_GUI_HAVE_VTK)
+  target_link_libraries(test_run PRIVATE ${VTK_LIBRARIES})
+  vtk_module_autoinit(TARGETS test_run MODULES ${VTK_LIBRARIES})
+endif()
+if (SPARTA_GUI_USE_PLUGIN)
+  target_compile_definitions(test_run PRIVATE SPARTA_GUI_USE_PLUGIN)
+  target_include_directories(test_run PRIVATE ${SPARTA_PLUGINLIB_DIR})
+endif()
+# Under Xvfb: VTK renders through its own X connection even when Qt is on the
+# offscreen platform, so the 3D snapshot cases abort on "bad X server
+# connection" without a display. Both locks -- the Xvfb one it shares with the
+# other display-using suites, and its own, because each case loads the SPARTA
+# library into this process and chdirs to run a simulation.
+add_test(NAME Run.All COMMAND ${XVFB_RUNNER} -a -s "-screen 0 1024x768x24" -w 1
+  $<TARGET_FILE:test_run>)
+set_tests_properties(Run.All PROPERTIES TIMEOUT 900 RESOURCE_LOCK "xvfb;sparta_run")
+
 # Test executable for helpers
 add_executable(test_helpers
   test_helpers.cpp

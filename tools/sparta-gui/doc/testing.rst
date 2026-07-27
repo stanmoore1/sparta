@@ -382,6 +382,43 @@ cover:
 - The rotate, flip and zoom transforms undoing one another, and the window
   rendering what it holds at mixed image sizes
 
+test_run.cpp
+------------
+
+Tests for the run path: ``doRun()``, ``archiveFinishedRun()``,
+``continueRestart()`` and ``renderVtkSnapshot()``.  Three of the four need a
+simulation actually running, which this suite has -- the same shared
+libsparta the window loads anyway, driven through the window's own Run
+action on a deck small enough to finish in a moment.  A run is
+asynchronous, so every case waits on the ``runFinished`` signal rather than
+assuming the run is over when the call returns.  Registered as a single
+ctest entry under Xvfb (VTK renders through its own X connection even when
+Qt is offscreen) and serialised against the other live-window suites.  Test
+cases cover:
+
+- A run finishing and reporting success, its output reaching the log
+  window, and its thermo columns reaching the chart
+- ``gui_run``, the index variable SPARTA-GUI defines so a deck can name its
+  output after the run it came from, readable from the deck and advancing
+  between runs -- and each run getting a fresh log window
+- An invalid deck reported as a failure rather than a success
+- A deck containing ``quit`` asking first, because SPARTA's ``quit`` calls
+  ``exit()`` and would take the whole application with it; the word
+  appearing inside a comment or another word not triggering it
+- A second run on top of a running one refused, and a run ending when
+  stopped
+- Archiving off by default; an archived run recording the deck, the log,
+  the timestamp and the build/host provenance that makes it traceable; a
+  failed run archived as failed; a saved deck archived under its own name;
+  and each run getting its own entry
+- Continuing from a restart file: the working directory's restart files
+  listed (and only those -- a bare glob would offer notes that merely
+  mention the word), the selected one becoming a ``read_restart`` + ``run``
+  pair in the editor with the step count from the dialog, cancelling
+  writing nothing, and accepting with nothing selected saying so
+- The 3D snapshot refused mid-run, reporting when the library was built
+  without the VTK package, and refusing a deck that creates no system box
+
 test_chartanalysis.cpp
 ---------------------
 
