@@ -870,6 +870,126 @@ def test_oblique(exe):
     return ok
 
 
+def _sphere3d(path, binary):
+    """Write a 24^3 corner point file holding a sphere, if it is not there."""
+    import os, struct, math
+    if os.path.exists(path): return
+    N = 24; n = N+1; c = 12.0; R = 7.0
+    out = struct.pack('<iii', n, n, n); vals = []
+    for k in range(n):
+        for j in range(n):
+            for i in range(n):
+                d = R - math.sqrt((i-c)**2 + (j-c)**2 + (k-c)**2)
+                v = (255 if d > 0 else 0) if binary else \
+                    int(round(255*min(1.0, max(0.0, 0.5 + d/4.0))))
+                if i in (0, n-1) or j in (0, n-1) or k in (0, n-1): v = 0
+                vals.append(v)
+    open(path, 'wb').write(out + bytes(vals))
+
+
+def _radius3d(path, u, c=12.0, th=127.5):
+    """Sphere radius along direction u, per dump frame, from corner values."""
+    import math
+    frames, ts, cur, incells, pend = [], [], None, False, False
+    for line in open(path):
+        if line.startswith("ITEM: TIMESTEP"):
+            pend, incells = True, False; continue
+        if pend and line.strip() and not line.startswith("ITEM"):
+            ts.append(int(line)); pend = False; continue
+        if line.startswith("ITEM: CELLS"):
+            cur = {}; frames.append(cur); incells = True; continue
+        if line.startswith("ITEM:"):
+            incells = False; continue
+        if incells and line.strip():
+            f = line.split()
+            cur[(float(f[1]), float(f[2]), float(f[3]))] = float(f[4])
+
+    def sample(g, x, y, z):
+        i, j, k = math.floor(x), math.floor(y), math.floor(z)
+        tx, ty, tz = x-i, y-j, z-k
+        tot = 0.0
+        for dx in (0, 1):
+            for dy in (0, 1):
+                for dz in (0, 1):
+                    v = g.get((float(i+dx), float(j+dy), float(k+dz)))
+                    if v is None: return None
+                    tot += ((tx if dx else 1-tx) * (ty if dy else 1-ty)
+                            * (tz if dz else 1-tz) * v)
+        return tot
+
+    out = []
+    for g in frames:
+        lo, hi = 0.5, 11.0
+        for _ in range(50):
+            m = 0.5*(lo+hi)
+            sv = sample(g, c+u[0]*m, c+u[1]*m, c+u[2]*m)
+            if sv is None: hi = m
+            elif sv >= th: lo = m
+            else: hi = m
+        out.append(0.5*(lo+hi))
+    return ts, out
+
+
+def test_rate3d(exe):
+    """The length/time rate in 3d, which nothing else in this suite covers.
+
+    A sphere is the whole test: it presents every orientation at once, and
+    the radius must grow at the requested speed in every direction.  On a
+    binary corner point field it does not -- the error is 1/cos of the angle
+    to the grid, which is sqrt(2) along a face diagonal and sqrt(3) along a
+    body diagonal, so the sphere grows into a rounded cube.  read_isurf
+    smooth removes it.
+    """
+    import math, os
+    _sphere3d(os.path.join(HERE, "sph3d.smooth"), False)
+    _sphere3d(os.path.join(HERE, "sph3d.binary"), True)
+
+    d2 = 1.0/math.sqrt(2.0); d3 = 1.0/math.sqrt(3.0)
+    dirs = [("+x", (1.0, 0.0, 0.0)), ("face diag", (d2, d2, 0.0)),
+            ("body diag", (d3, d3, d3))]
+    RATE = 0.5
+    ok = True
+
+    def speeds(field, smooth):
+        rc, out = run(exe, "in.test.rate3d",
+                      {"FIELD": field, "SMOOTH": smooth, "RATE": RATE})
+        if rc != 0: return None, out
+        got = []
+        for _, u in dirs:
+            ts, r = _radius3d(os.path.join(HERE, "tmp.rate3d.grid"), u)
+            got.append((r[-1]-r[0]) / ((ts[-1]-ts[0]) * 0.001 * RATE))
+        return got, out
+
+    # a graded field must be right in every direction
+    s, out = speeds("sph3d.smooth", 0)
+    if s is None:
+        ok &= check("3d rate : graded field", False, "run failed")
+    else:
+        ok &= check("3d rate : graded field grows at the asked speed",
+                    max(abs(x-1.0) for x in s) < 0.05,
+                    ", ".join("%s %.3f" % (n, v) for (n, _), v in zip(dirs, s)))
+
+    # a binary field must not, and must say so
+    s, out = speeds("sph3d.binary", 0)
+    if s is None:
+        ok &= check("3d rate : binary field", False, "run failed")
+    else:
+        warned = "faces directions its corner point" in out
+        ok &= check("3d rate : binary field is wrong by 1/cos, and warned",
+                    warned and s[2] > 1.3,
+                    ", ".join("%s %.3f" % (n, v) for (n, _), v in zip(dirs, s)))
+
+    # read_isurf smooth must fix it
+    s, out = speeds("sph3d.binary", 0.5)
+    if s is None:
+        ok &= check("3d rate : smooth on a binary field", False, "run failed")
+    else:
+        ok &= check("3d rate : read_isurf smooth fixes the binary field",
+                    max(abs(x-1.0) for x in s) < 0.10,
+                    ", ".join("%s %.3f" % (n, v) for (n, _), v in zip(dirs, s)))
+    return ok
+
+
 def test_guard(exe):
     """A front that outruns its collision lists must be refused."""
     rc, out = run(exe, "in.test.guard")
@@ -953,6 +1073,8 @@ def main():
     ok &= test_axisymmetric(exe)
     # a front oblique to the grid, measured outside SPARTA
     ok &= test_oblique(exe)
+    # the length/time rate in 3d, which nothing else here covers
+    ok &= test_rate3d(exe)
     # the front velocity places the collision but must not enter the rebound
     ok &= test_no_wall_work(exe)
     ok &= test_guard(exe)

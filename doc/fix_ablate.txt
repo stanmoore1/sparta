@@ -273,9 +273,12 @@ corner point, so the swept volume is matched approximately rather than
 exactly.  Matching it exactly would mean solving all the cells together.
 
 So for {units} = distance, and for the {flux} source which implies it,
-give "read_isurf"_read_isurf.html a file with intermediate values -- a
-distance field rather than a segmented image -- and read it with {push} =
-no and without {minmax} = yes, both of which drive the field to 0 and 255.
+give "read_isurf"_read_isurf.html a graded field.  The simplest way is its
+{smooth} keyword, which rewrites a binary field as a distance field
+without moving the body; {smooth} 0.5 is a good choice.  Failing that,
+supply a file that already carries intermediate values and read it with
+{push} = no and without {minmax} = yes, both of which drive the field to 0
+and 255.
 A rate in {units} = corner is a budget of corner point value rather than a
 distance, and is unaffected.
 

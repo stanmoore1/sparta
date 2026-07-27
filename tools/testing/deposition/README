@@ -323,6 +323,34 @@ make_movies.sh, in.movie
   because its 45 degree faces outrun its tips, while under response volume it
   stays a diamond with a visibly rougher surface.  Needs ffmpeg.
 
+in.test.rate3d
+  The length/time rate in 3d, which nothing else in this suite covered: the
+  one other 3d input here drives the surface with units corner, where the
+  direction it faces never enters.  3d is where it matters most.  A sphere
+  presents every orientation at once, and its radius must grow at the
+  requested speed in all of them.  Requested 0.5, ratio realized/requested:
+
+                              along +x   face diagonal   body diagonal
+      binary corner values      1.002        1.416           1.734
+      binary + smooth 0.5       0.974        1.018           0.954
+      graded corner values      0.990        1.024           1.000
+
+  1.416 and 1.734 are sqrt(2) and sqrt(3), i.e. 1/cos of the angle between
+  the surface and the grid.  On a binary field the error is worse in 3d than
+  in 2d, where it tops out at sqrt(2), and it is a wrong SHAPE rather than
+  just a wrong rate -- the sphere grows into a rounded cube.
+
+  read_isurf smooth rewrites the binary field as a distance field without
+  moving the body, and removes it.  In 2d the same option takes the 45 degree
+  plane from 1.6098 to 0.9992 and the circle from 1.2107 to 1.0649 -- the
+  curved binary case that neither response conversion could touch.  Band
+  widths measured, worst direction:
+
+      band    0     0.5    1.0    1.5    2.0    3.0
+      3d    +73%   -4.6%  -14%   -7%    +7%   guard trips
+
+  0.5 is the value to use; wider is not better.
+
 in.test.balance
   The same conservation identity with fix balance repartitioning the grid
   every 10 steps while the film grows.  Everything fix ablate keeps per cell

@@ -1,0 +1,56 @@
+# Does a deposition rate in length/time come out right in 3d?
+#
+# Until this test existed, every rate feature -- units distance, the flux
+# source, sticking, mode both, response volume -- was exercised in 2d only.
+# The one 3d test in this suite drives the surface with units corner, where
+# the direction the surface faces never enters the arithmetic.
+#
+# 3d is where it matters most.  A corner point field that is binary 0/255
+# cannot say which way an oblique surface faces, and the error that follows
+# is 1/cos of the angle between the surface normal and the grid.  In 2d that
+# tops out at sqrt(2) on a 45 degree plane.  In 3d a facet normal to a cell
+# body diagonal gives sqrt(3), so a sphere on a binary field grows
+#
+#   1.000 along +x, 1.414 along a face diagonal, 1.732 along a body diagonal
+#
+# which is not just a wrong rate, it is a wrong shape.  read_isurf smooth
+# replaces the binary field with a graded one and removes it.
+#
+# No gas: this is the corner point arithmetic on its own.  Nevery is 5 rather
+# than 1 only to keep the test cheap; the rate must not depend on it.
+
+variable            RATE index 0.5
+variable            FIELD index sph3d.smooth
+variable            SMOOTH index 0
+variable            NEVERY index 5
+
+seed                12345
+dimension           3
+global              gridcut 0.0 comm/sort yes
+boundary            r r r
+
+create_box          0 24 0 24 0 24
+create_grid         24 24 24
+balance_grid        rcb cell
+
+global              nrho 1.0 fnum 1.0
+species             air.species N
+mixture             air N
+
+variable            rate grid ${RATE}
+fix                 ablate ablate all ${NEVERY} 1.0 v_rate mode deposit &
+                    units distance
+
+global              surfs implicit
+read_isurf          all 24 24 24 ${FIELD} 127.5 ablate push no smooth ${SMOOTH}
+
+surf_collide        1 diffuse 300.0 1.0
+surf_modify         all collide 1
+timestep            0.001
+
+dump                G grid all 2000 tmp.rate3d.grid id xlo ylo zlo f_ablate[1]
+dump_modify         G pad 0
+
+stats               2000
+stats_style         step f_ablate f_ablate[21]
+run                 2000

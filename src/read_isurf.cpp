@@ -218,7 +218,8 @@ void ReadISurf::command(int narg, char **arg)
   if (sgrouparg) sgroupID = arg[sgrouparg];
 
   ablate->store_corners(anxyz[0],anxyz[1],anxyz[2],acorner,axyzsize,
-                        cvalues,NULL,tvalues,thresh,sgroupID,pushflag);
+                        cvalues,NULL,tvalues,thresh,sgroupID,pushflag,
+                        smoothband);
 
   if (ablate->nevery == 0) modify->delete_fix(ablateID);
 
@@ -840,6 +841,7 @@ void ReadISurf::process_args(int narg, char **arg)
   sgrouparg = 0;
   typefile = NULL;
   pushflag = 1;
+  smoothband = 0.0;
   precision = INT;
   readflag = SERIAL;
 
@@ -858,6 +860,16 @@ void ReadISurf::process_args(int narg, char **arg)
       if (strcmp(arg[iarg+1],"yes") == 0) pushflag = 1;
       else if (strcmp(arg[iarg+1],"no") == 0) pushflag = 0;
       else error->all(FLERR,"Invalid read_isurf command");
+      iarg += 2;
+    } else if (strcmp(arg[iarg],"smooth") == 0)  {
+
+      // replace a binary 0/255 corner point field with a graded one, which
+      //   is what a deposition rate in length/time needs; see fix ablate
+
+      if (iarg+2 > narg) error->all(FLERR,"Invalid read_isurf command");
+      smoothband = atof(arg[iarg+1]);
+      if (smoothband < 0.0)
+        error->all(FLERR,"Read_isurf smooth band cannot be negative");
       iarg += 2;
     } else if (strcmp(arg[iarg],"precision") == 0)  {
       if (iarg+2 > narg) error->all(FLERR,"Invalid read_isurf command");

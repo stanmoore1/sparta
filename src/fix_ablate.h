@@ -51,7 +51,8 @@ class FixAblate : public Fix {
   double memory_usage();
 
   void store_corners(int, int, int, double *, double *,
-                     double **, double ***, int *, double, char *, int);
+                     double **, double ***, int *, double, char *, int,
+                     double smoothband = 0.0);
   double mindist;             // min fractional distance between any grid corner pt
                               //   and a generated tri vertex or line segment endpt
   int depositflag;            // 1 if mode = deposit, so surfs advance each step
@@ -139,6 +140,8 @@ class FixAblate : public Fix {
   bigint ntotedge;         // crossed edges that
                            //   projection, and the total, over one interval
   int clampwarn;           // 1 once the oblique-field warning has been given
+  int smoothed;            // 1 if the corner point field was distance
+                           //   transformed on read, so the warning is moot
 
   int *dlist;              // particles leaving my list when surfs are rebuilt:
                            //   buried, or pushed onto another proc
@@ -196,6 +199,7 @@ class FixAblate : public Fix {
   void check_oblique();
   double grad_mag(int);
   double front_response(int, int);
+  void distance_transform(double);
   double cell_area(int);
   double cell_area_cart(int);
   double solid_area_2d(double *);

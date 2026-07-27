@@ -58,6 +58,7 @@ enum{KEEP,DISCARD,MIGRATE};   // fate of a particle the new isosurface encloses
 #define EPSSURF 1.0e-4    // push off a surf, same as Grid::point_outside_surfs()
 #define CLAMP_FRAC 1.10   // fraction of crossed edges that may lose the
                           //   normal projection before it is worth warning
+#define BIGDIST 1.0e20   // no cell offered a distance for this corner point
 #define NOMEASURE (-1.0)  // edge_displacement() had no crossing to measure from
 #define NDEPO 18          // # of deposition diagnostic counters
 #define NFRONT 2          // internal accumulators for the realized front speed
@@ -308,6 +309,7 @@ FixAblate::FixAblate(SPARTA *sparta, int narg, char **arg) :
   depo_stamp = -1;
   front_last = 0.0;
   clampwarn = 0;
+  smoothed = 0;
   clampsum = 0.0;
   ntotedge = 0;
   for (int i = 0; i < NREDUCE; i++) depo_all[i] = 0.0;
@@ -443,7 +445,8 @@ void FixAblate::store_corners(int nx_caller, int ny_caller, int nz_caller,
                               double *cornerlo_caller, double *xyzsize_caller,
                               double **cvalues_caller, double ***mvalues_caller,
                               int *tvalues_caller,
-                              double thresh_caller, char *sgroupID, int pushflag)
+                              double thresh_caller, char *sgroupID, int pushflag,
+                              double smoothband)
 {
   storeflag = 1;
   if(mvalues_caller) {
@@ -549,6 +552,18 @@ void FixAblate::store_corners(int nx_caller, int ny_caller, int nz_caller,
   // set minimum distance between vertex and grid point (mindist) in marching
   if (dim == 2) ms->mindist = mindist;
   else mc->mindist = mindist;
+
+  // optionally replace a binary field with a graded one, before anything is
+  //   built from it, so the surface and the cell marking are derived once
+  //   from the field the run will actually use
+
+  if (smoothband > 0.0) {
+    if (multi_val_flag)
+      error->all(FLERR,"Read_isurf smooth does not support multivalue "
+                 "corner points");
+    distance_transform(smoothband);
+  }
+  smoothed = (smoothband > 0.0);
 
   // for deposition, seed the previous-field snapshot with the field as it
   //   stands now, so that the front has not moved until the first increment
@@ -2363,6 +2378,14 @@ void FixAblate::check_oblique()
 {
   if (clampwarn) return;
 
+  // the advice this warning carries is "give it a graded field".  Once that
+  //   has been done there is nothing further to say: what is left is the
+  //   ordinary discretization error of a surface on a grid, and the measure
+  //   below does not rank that -- a narrow graded band scores worse on it
+  //   than a wide one while being the more accurate of the two.
+
+  if (smoothed) return;
+
   double one[2],all[2];
   one[0] = clampsum;
   one[1] = 1.0*ntotedge;
@@ -2440,6 +2463,154 @@ double FixAblate::cell_area(int icell)
   }
 
   return area;
+}
+
+/* ----------------------------------------------------------------------
+   replace a binary 0/255 corner point field with a graded one, by giving
+     each corner point near the surface a value proportional to its signed
+     distance from that surface
+   this is what a rate in length/time needs and a segmented image cannot
+     give.  On a binary field every crossed cell edge falls the full 0 to 255
+     whichever way the surface is turned, so the direction the surface faces
+     is not recoverable, and a speed cannot be converted into a corner point
+     increment.  Measured on a plane oblique to the grid the front then runs
+     at 1/cos of the speed asked for -- sqrt(2) at 45 degrees in 2d, sqrt(3)
+     down a cell diagonal in 3d.
+   the surface is not moved: the distance is measured to the surface marching
+     squares/cubes builds from the field AS READ, so the graded field
+     describes the same body, only in a form that says which way it faces.
+   BAND is the half width of the graded band in grid cells.  Outside it the
+     field stays saturated, which is what keeps the isosurface local and the
+     cell in/out marking unchanged.
+   each cell can only see its own surface elements -- implicit elements never
+     leave the cell that made them, so a neighbour's are not available even as
+     ghosts -- so every cell offers a distance for each of its own corner
+     points and the corner takes the smallest offered.  That is the same
+     2x2x2 stencil sync() gathers over, so the same halo exchange serves.
+------------------------------------------------------------------------- */
+
+void FixAblate::distance_transform(double band)
+{
+  Grid::ChildCell *cells = grid->cells;
+  Grid::ChildInfo *cinfo = grid->cinfo;
+
+  double hmin = MIN(xyzsize[0],xyzsize[1]);
+  if (dim == 3) hmin = MIN(hmin,xyzsize[2]);
+  double scale_d = MIN(thresh,255.0-thresh) / (band*hmin);
+
+  double pt2d[4][3],pt3d[36][3];
+
+  // every cell offers a distance for each of its own corner points, BIGDIST
+  //   where it has nothing to say
+
+  for (int icell = 0; icell < nglocal; icell++) {
+    for (int i = 0; i < ncorner; i++) cdelta[icell][i] = BIGDIST;
+
+    if (!(cinfo[icell].mask & groupbit)) continue;
+    if (cells[icell].nsplit <= 0) continue;
+    if (!interface_cell(icell)) continue;
+
+    int ns;
+    if (dim == 2)
+      ns = ms->cell_surfs(cvalues[icell],NULL,cells[icell].lo,
+                          cells[icell].hi,pt2d);
+    else
+      ns = mc->cell_surfs(cvalues[icell],NULL,cells[icell].lo,
+                          cells[icell].hi,pt3d,NULL);
+    if (!ns) continue;
+
+    for (int i = 0; i < ncorner; i++) {
+
+      // corner point coords, x fastest then y then z
+
+      double x[3];
+      x[0] = (i & 1) ? cells[icell].hi[0] : cells[icell].lo[0];
+      x[1] = (i & 2) ? cells[icell].hi[1] : cells[icell].lo[1];
+      x[2] = (dim == 3 && (i & 4)) ? cells[icell].hi[2] : cells[icell].lo[2];
+
+      double best = BIGDIST;
+      for (int k = 0; k < ns; k++) {
+        double n[3],p1[3],d;
+        if (dim == 2) {
+          for (int m = 0; m < 3; m++) p1[m] = pt2d[2*k][m];
+          double e0 = pt2d[2*k+1][0]-p1[0];
+          double e1 = pt2d[2*k+1][1]-p1[1];
+          double len = sqrt(e0*e0+e1*e1);
+          if (len == 0.0) continue;
+          n[0] = -e1/len; n[1] = e0/len; n[2] = 0.0;
+          d = fabs((x[0]-p1[0])*n[0] + (x[1]-p1[1])*n[1]);
+        } else {
+          double e1v[3],e2v[3];
+          for (int m = 0; m < 3; m++) p1[m] = pt3d[3*k][m];
+          MathExtra::sub3(&pt3d[3*k+1][0],p1,e1v);
+          MathExtra::sub3(&pt3d[3*k+2][0],p1,e2v);
+          MathExtra::cross3(e1v,e2v,n);
+          double len = MathExtra::len3(n);
+          if (len == 0.0) continue;
+          n[0] /= len; n[1] /= len; n[2] /= len;
+          d = fabs((x[0]-p1[0])*n[0] + (x[1]-p1[1])*n[1] + (x[2]-p1[2])*n[2]);
+        }
+        if (d < best) best = d;
+      }
+
+      // sign it from the marking the field already carries, rather than from
+      //   the element normal, so the graded field can never disagree with the
+      //   side of the surface a corner point was on
+
+      if (best < BIGDIST)
+        cdelta[icell][i] = (cvalues[icell][i] >= thresh) ? best : -best;
+    }
+  }
+
+  // a corner point is shared by up to 2^dim cells and takes the smallest
+  //   distance any of them offered, which is the nearest piece of surface
+
+  comm_neigh_corners(CDELTA);
+
+  int ix,iy,iz,jx,jy,jz,jcorner,jcell;
+
+  for (int icell = 0; icell < nglocal; icell++) {
+    if (!(cinfo[icell].mask & groupbit)) continue;
+    if (cells[icell].nsplit <= 0) continue;
+
+    ix = ixyz[icell][0];
+    iy = ixyz[icell][1];
+    iz = ixyz[icell][2];
+
+    for (int i = 0; i < ncorner; i++) {
+      int ixfirst = (i % 2) - 1;
+      int iyfirst = (i/2 % 2) - 1;
+      int izfirst = (dim == 2) ? 0 : (i / 4) - 1;
+
+      double best = BIGDIST;
+      jcorner = ncorner;
+
+      for (jz = izfirst; jz <= izfirst+1; jz++) {
+        for (jy = iyfirst; jy <= iyfirst+1; jy++) {
+          for (jx = ixfirst; jx <= ixfirst+1; jx++) {
+            jcorner--;
+            if (ix+jx < 1 || ix+jx > nx) continue;
+            if (iy+jy < 1 || iy+jy > ny) continue;
+            if (iz+jz < 1 || iz+jz > nz) continue;
+            jcell = walk_to_neigh(icell,jx,jy,jz);
+            double cand;
+            if (jcell < nglocal) cand = cdelta[jcell][jcorner];
+            else cand = cdelta_ghost[jcell-nglocal][jcorner];
+            if (fabs(cand) < fabs(best)) best = cand;
+          }
+        }
+      }
+
+      if (best == BIGDIST) continue;
+      double v = thresh + scale_d*best;
+      cvalues[icell][i] = MAX(0.0,MIN(255.0,v));
+    }
+  }
+
+  // a value landing exactly on thresh puts a vertex exactly on a grid corner
+  //   point, which is what epsilon_adjust() exists to prevent
+
+  epsilon_adjust();
 }
 
 /* ----------------------------------------------------------------------
