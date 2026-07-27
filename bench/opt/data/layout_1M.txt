@@ -1,0 +1,15 @@
+# micro_layout: 40x50x50 = 100000 cells, 1000000 particles, 20 steps, reorder every 2
+layout / binning                          ns/p/s  speedup |   move    bin   coll |   T (K)     ncoll     MB
+-- particles permuted so cells are contiguous (what SPARTA does) --
+AoS 96 B                                   73.32    1.00x |  16.71  31.31  25.29 |  273.01   1364058    187
+AoS 64 B                                   50.03    1.47x |  11.21  19.73  19.10 |  273.01   1364058    126
+SoA (doubles)                              22.41    3.27x |   4.67   8.44   9.30 |  273.01   1364058    103
+AoSoA V=8                                  39.09    1.88x |   7.77  14.92  16.41 |  273.01   1364058    111
+AoSoA V=16                                 42.94    1.71x |   8.43  16.70  17.81 |  273.01   1364058    111
+-- indices binned, particles never moved --
+AoS 96 B, index-only                       45.43    1.61x |  12.73  13.43  19.27 |  273.01   1363850     95
+AoS 64 B, index-only                       31.57    2.32x |   7.50   8.89  15.18 |  273.01   1363850     65
+SoA, index-only                            21.92    3.35x |   4.80   2.90  14.21 |  273.01   1363850     53
+AoSoA V=8, index-only                      28.15    2.60x |   4.74   7.86  15.55 |  273.01   1363850     57
+
+reference equilibrium temperature 273.15 K

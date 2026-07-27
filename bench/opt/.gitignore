@@ -12,6 +12,7 @@ micro/micro_sort
 micro/micro_thp
 micro/micro_pow
 micro/micro_design
+micro/micro_layout
 
 # microbenchmark run output, except the measured machine ceilings that
 # roofline.py consumes

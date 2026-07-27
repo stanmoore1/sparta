@@ -154,10 +154,17 @@ and indeed D6's three kernels all improved by the predicted ratio.
 
 ## 5. The recommendation for the next round
 
+> **Corrected by round 3.** The 1.58x below is the microbenchmark's figure.
+> Round 3 measured the same thing directly in SPARTA, by padding `OnePart` from
+> 96 to 128 bytes and re-timing: the elasticity of runtime to record size in the
+> real code is only ~0.4, which puts the 64-byte record at **~1.14x, not 1.58x**.
+> See `ROUND3.md`. The reasoning below still holds; the size of the prize does
+> not.
+
 **Shrink `Particle::OnePart`.** It is 96 bytes, of which 32 (`erot`, `evib`,
 `dtremain`, `weight`) are dead for a monatomic, unweighted, surface-free run — and
-every one of the three passes pays to stream them. Measured worth: **1.58x**, more
-than everything in rounds 1 and 2 combined.
+every one of the three passes pays to stream them. Microbenchmark worth: 1.58x;
+measured worth in SPARTA: ~1.14x.
 
 Note this is *not* the hot/cold split declined in round 1, and round 1's reasoning
 for declining that was right: splitting into two arrays that both still have to be

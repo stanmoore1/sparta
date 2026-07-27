@@ -7,15 +7,20 @@ headroom with a roofline, optimize, remeasure.
 **Round 1: 1.20x at 1M particles**, from changes that reproduce the baseline output
 bit for bit. **Round 2** diagnosed what remains: the step is limited by the size of
 the 96-byte particle record, 32 bytes of which are dead for this class of run.
-Shrinking it to 64 bytes measures **1.58x** on its own — more than rounds 1 and 2
-combined — while every algorithmic restructuring tried (cache tiling, pass fusion,
-fixed-capacity buckets, mesh-free binning, a branchless mover) is worth at most
-1.26x in a microbenchmark and ~1.05x in the real code. See `ROUND2.md`.
+**Round 3** answered the layout question — **SoA > AoSoA > AoS**, by 3.31x and
+1.89x over AoS-96 in a full rebuild of the timestep — and then measured, in
+SPARTA rather than in a proxy, how much of a byte saving actually reaches
+runtime. The elasticity is ~0.4, which puts a 64-byte record at **1.14x, not the
+1.58x** the microbenchmark predicted. Every algorithmic restructuring tried
+across both rounds (cache tiling, pass fusion, fixed-capacity buckets, mesh-free
+binning, a branchless mover, index-only binning) is worth at most 1.26x in a
+microbenchmark and ~1.05x or less in the real code. See `ROUND3.md`.
 
 ## Read in this order
 
 | document | what is in it |
 |---|---|
+| [`ROUND3.md`](ROUND3.md) | round 3: AoS vs SoA vs AoSoA (SoA wins by 3.31x in the model), and a direct in-situ measurement of how much of any byte saving actually reaches SPARTA's runtime — which corrects round 2's headline recommendation |
 | [`ROUND2.md`](ROUND2.md) | round 2: what the bottleneck actually is (the 96-byte particle record), the full design-space exploration, and why tiling / fusion / buckets / mesh-free all lose to simply shrinking the record |
 | [`RESULTS.md`](RESULTS.md) | round 1: the reorder-period sweeps, every optimization and its measured effect, verification, and the summary table |
 | [`PROFILE.md`](PROFILE.md) | gprof and callgrind profiles of the baseline: instruction mix, cache misses, branch behaviour |
@@ -52,6 +57,7 @@ minutes. Build any of them with `g++ -O3 -std=c++11 -o NAME NAME.cpp`
 | `micro_collide.cpp` | virtual vs inlined, `plist` vs contiguous, `pow` vs fast `pow` |
 | `micro_pow.cpp` | `pow` throughput *and* latency, which turned out to be the distinction that mattered |
 | `micro_thp.cpp` | do huge pages help the counting sort's scattered writes? |
+| `micro_layout.cpp` | AoS vs SoA vs AoSoA(8,16), crossed with permuting the particles vs binning indices only |
 | `micro_design.cpp` | the round-2 design space: nine ways to structure the whole timestep, from the current three passes to tiled fusion, per-cell buckets, mesh-free binning and smaller particle records |
 
 ## Benchmark input
