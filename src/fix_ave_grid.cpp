@@ -64,7 +64,8 @@ FixAveGrid::FixAveGrid(SPARTA *sparta, int narg, char **arg) :
   while (iarg < narg) {
     if ((strncmp(arg[iarg],"c_",2) == 0) ||
         (strncmp(arg[iarg],"f_",2) == 0) ||
-        (strncmp(arg[iarg],"v_",2) == 0)) {
+        (strncmp(arg[iarg],"v_",2) == 0) ||
+        (strncmp(arg[iarg],"g_",2) == 0)) {
       nvalues++;
       iarg++;
     } else break;
@@ -96,6 +97,7 @@ FixAveGrid::FixAveGrid(SPARTA *sparta, int narg, char **arg) :
     if (arg[i][0] == 'c') which[i] = COMPUTE;
     else if (arg[i][0] == 'f') which[i] = FIX;
     else if (arg[i][0] == 'v') which[i] = VARIABLE;
+    else if (arg[i][0] == 'g') which[i] = CUSTOM;
 
     int n = strlen(arg[i]);
     char *suffix = new char[n];
@@ -203,6 +205,7 @@ FixAveGrid::FixAveGrid(SPARTA *sparta, int narg, char **arg) :
       if (argindex[i] && argindex[i] > grid->esize[icustom])
         error->all(FLERR,"Fix ave/grid custom attribute array is "
 		   "accessed out-of-range");
+      flavor_pergrid = 1;
     }
   }
 
