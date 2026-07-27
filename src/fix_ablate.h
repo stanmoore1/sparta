@@ -62,6 +62,9 @@ class FixAblate : public Fix {
   int unitsflag;          // CORNER (0-255) or DISTANCE (length/time) source units
   int responseflag;       // RNORMAL or RVOLUME: how a speed becomes a corner
                           //   point increment
+  int checkevery;         // run the watertight check every Nth rebuild,
+                          //   0 to never run it
+  bigint nrebuild;        // # of isosurface rebuilds so far
   int fluxwhich;          // COMPUTE or FIX, for the flux source style
   double filmrho;         // mass density of the deposited film
   double *sticking;       // per mixture group capture probability
@@ -184,6 +187,7 @@ class FixAblate : public Fix {
   void process_args(int, char **);
 
   void create_surfs(int);
+  int set_inout_implicit();
 
   void set_delta();
   void set_delta_random();

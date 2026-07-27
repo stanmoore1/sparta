@@ -370,6 +370,53 @@ axisymmetric deposition (runs examples/explicit2implicit/in.deposit.axi.sphereco
   first.  Skipping it lets a molecule walk through the surface; fix grid/check
   with the error setting catches it.
 
+Cost of a rebuild
+-----------------
+
+  Deposition rebuilds the isosurface every Nevery steps for the whole run,
+  where ablation on a slow-receding surface can get away with Nevery in the
+  thousands.  That makes FixAblate::create_surfs() a per-step cost rather
+  than a setup cost, and most of what it does scales with the TOTAL number of
+  grid cells rather than with the number that hold surface.  Measured on a
+  48x48x48 grid, no gas, one rank, a sphere of 7448 triangles, ms per
+  rebuild:
+
+      marching cubes proper                 6.4
+      Grid::clear_surf                      6.1
+      MarchingCubes::cleanup                2.8
+      ghost acquire + Grid::reset_neighbors 37     (two full cycles)
+      Grid::surf2grid_implicit             19.4
+      Grid::set_inout                      28.7
+      watertight + type_check              15.2
+
+  Extracting the surface is 5% of it.  Two changes came out of that:
+
+  - Grid::set_inout() flood fills the grid outward from the cells holding
+    surface, iterating with an MPI_Allreduce and an irregular exchange per
+    pass until no proc has a marking left to hand across a boundary.  For an
+    implicit surface the answer is already in the corner point field, so
+    FixAblate::set_inout_implicit() reads it off directly -- one local pass,
+    no communication.  It falls back to the fill when the field cannot answer
+    (fix group smaller than the whole grid, multi-value corner points, all
+    surfs transparent).
+
+  - the watertight and cell-type validations are checks on marching
+    squares/cubes, not part of building the surface.  fix ablate's new
+    check keyword puts them on their own schedule.
+
+  Same case, ms per create_surfs() call:
+
+      before                                123.5
+      direct inside/outside marking          96.5   -22%
+      + check 0                              80.7   -35%
+
+  End to end on 4 ranks, 100 steps of the same case, best of 3: 9.47 s to
+  8.58 s, since create_surfs is about half of a step here.  The default is
+  check 1, so a run that says nothing keeps every validation it had before.
+
+  The reference logs in examples/ablation reproduce bit for bit at 1 and 4
+  ranks, in 2d and 3d, for ablation and for the multi-inner variant.
+
 Not covered here
 ----------------
 

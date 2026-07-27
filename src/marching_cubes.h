@@ -23,7 +23,7 @@ namespace SPARTA_NS {
 class MarchingCubes : protected Pointers {
  public:
   MarchingCubes(class SPARTA *, int, double);
-  ~MarchingCubes() {}
+  ~MarchingCubes();
   void invoke(double **, double ***, int *, int **);
   int cell_surfs(double *, double **, double *, double *, double [][3], int *);
   void cleanup();
@@ -40,6 +40,10 @@ class MarchingCubes : protected Pointers {
   double i0,i1,i2,i3,i4,i5,i6,i7,i8,i9,i10,i11;
   int bit0,bit1,bit2,bit3,bit4,bit5,bit6,bit7;
   double pt[36][3];
+
+  int **nfacetri;      // per cell per face triangle counts, kept between
+  int ***facetris;     //   calls to cleanup() rather than reallocated
+  int maxfacecell;
 
   int config;     // configuration of the active cube
   int subconfig;  // subconfiguration of the active cube

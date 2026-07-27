@@ -27,7 +27,7 @@ source = computeID or fixID or v_name or flux or uniform or random :l
 
 maxrandom = maximum per grid cell decrement as an integer (only specified if source = random or uniform) :l
 zero or more keyword/value pairs may be appended :l
-keyword = {mode} or {units} or {density} or {sticking} or {mindist} or {multiple} :l
+keyword = {mode} or {units} or {response} or {density} or {sticking} or {mindist} or {check} or {multiple} :l
   {mode} value = ablate or deposit or both
     ablate = source decrements corner point values so the surface recedes
     deposit = source increments corner point values so the surface grows
@@ -44,6 +44,8 @@ keyword = {mode} or {units} or {density} or {sticking} or {mindist} or {multiple
     sN = probability that an incident molecule of that group is captured (only for source = flux)
   {mindist} value = fraction
     fraction = minimum fractional distance along cell edge for triangle/line vertices (value > 0 and < 0.5)
+  {check} value = N
+    N = validate the rebuilt surface every Nth rebuild (0 = never, 1 = every rebuild)
   {multiple} value = yes or no :pre
 :ule
 
@@ -592,6 +594,22 @@ point is at least {mindist}
 
 :line
 
+The {check} keyword sets how often the rebuilt isosurface is validated.
+After every rebuild SPARTA checks that the surface Marching Squares or
+Marching Cubes produced is watertight, and that no grid cell was left
+with an unknown inside/outside type.  Those are checks on the surface
+generator, not part of building the surface, and they are not free: on a
+48x48x48 grid they are about a sixth of the cost of a rebuild, paid
+again every {Nevery} steps for the length of the run.  {check} = 1, the
+default, runs them on every rebuild, which is what the fix has always
+done.  {check} = N runs them on every Nth rebuild, and {check} = 0 never
+runs them.  Turning the checks off is worth doing only for a
+configuration that has already run clean with them on: if the surface
+generator does fail, the first symptom will instead be a wrong answer or
+a crash somewhere further downstream.
+
+:line
+
 :c,image(JPG/multipoint_decrement_small.png)
 
 The {multiple} option allows a multipoint decrement "(Hong24)"_#Hong24 to be used. 
@@ -702,9 +720,10 @@ that is the case.
 [Default:]
 
 The default for the {mode} keyword = ablate.  The default for the
-{units} keyword = corner.  The default for the {mindist} keyword = 0.0,
-i.e. the epsilon method is used.  The default for the {multiple} keyword
-= no.
+{units} keyword = corner.  The default for the {response} keyword =
+normal.  The default for the {mindist} keyword = 0.0, i.e. the epsilon
+method is used.  The default for the {check} keyword = 1.  The default
+for the {multiple} keyword = no.
 
 :line
 

@@ -19,6 +19,7 @@
 #include "update.h"
 #include "geometry.h"
 #include "math_extra.h"
+#include "math_const.h"
 #include "grid.h"
 #include "surf.h"
 #include "surf_collide.h"
@@ -41,6 +42,7 @@
 #include "error.h"
 
 using namespace SPARTA_NS;
+using namespace MathConst;
 
 enum{COMPUTE,FIX,VARIABLE,RANDOM,UNIFORM,FLUX};
 enum{GRIDVAR,EQUALVAR};
@@ -309,6 +311,7 @@ FixAblate::FixAblate(SPARTA *sparta, int narg, char **arg) :
   depo_stamp = -1;
   front_last = 0.0;
   clampwarn = 0;
+  nrebuild = 0;
   smoothed = 0;
   clampsum = 0.0;
   ntotedge = 0;
@@ -869,8 +872,12 @@ void FixAblate::create_surfs(int outflag)
   // DEBUG
   // store copy of last ablation's per-cell MC flags before a new ablation
 
-  int **mcflags_old = mcflags;
-  memory->create(mcflags,maxgrid,4,"ablate:mcflags");
+  // mcflags is already grown to maxgrid by grow_percell(), so reset it in
+  //   place.  it used to be reallocated here and the previous one kept as
+  //   mcflags_old, an allocate and a free of 4 ints per grid cell on every
+  //   rebuild, where mcflags_old was only ever read by a debug print that
+  //   is commented out
+
   for (int i = 0; i < maxgrid; i++)
     mcflags[i][0] = mcflags[i][1] = mcflags[i][2] = mcflags[i][3] = -1;
 
@@ -976,8 +983,19 @@ void FixAblate::create_surfs(int outflag)
 
   // watertight check can be done before surfs are mapped to grid cells
 
-  if (dim == 2) surf->check_watertight_2d();
-  else surf->check_watertight_3d();
+  // it is a check on Marching Squares/Cubes rather than part of building the
+  //   surface, and it is not free: on a 48^3 grid it is a tenth of a rebuild,
+  //   paid again every Nevery steps for the length of the run.  checkevery
+  //   lets a run that has been validated stop paying for it, and gates
+  //   Grid::type_check() below on the same schedule
+
+  int docheck = checkevery > 0 && (nrebuild % checkevery) == 0;
+  nrebuild++;
+
+  if (docheck) {
+    if (dim == 2) surf->check_watertight_2d();
+    else surf->check_watertight_3d();
+  }
 
   // if no surfs created, use clear_surf to set all celltypes = OUTSIDE
 
@@ -1003,9 +1021,23 @@ void FixAblate::create_surfs(int outflag)
   comm->reset_neighbors();
 
   // flag cells and corners as OUTSIDE or INSIDE
+  // Grid::set_inout() discovers this by flood filling the whole grid outward
+  //   from the cells that hold surface, iterating with irregular comm until
+  //   no proc has anything left to hand across a proc boundary.  For an
+  //   implicit surface the answer is already in the corner point field --
+  //   a cell is inside where its corner values exceed the threshold -- so
+  //   the fill is a rediscovery of what this fix already knows.  Do it
+  //   directly instead, and fall back to the sweep when the field cannot
+  //   answer (a fix group smaller than the whole grid, or multi-value
+  //   corner points)
 
-  grid->set_inout();
-  grid->type_check(outflag);
+  if (!set_inout_implicit()) grid->set_inout();
+
+  // type_check() is validation of the marking above, not part of it, and it
+  //   costs two MPI_Allreduce plus a sweep of the grid.  it runs on the same
+  //   schedule as the watertight check
+
+  if (outflag || docheck) grid->type_check(outflag);
 
   // reassign particles in a split cell to sub cell owner
   // particles are unsorted afterwards, within new sub cells
@@ -1044,7 +1076,6 @@ void FixAblate::create_surfs(int outflag)
   //   engulfed in 2d as well as 3d and must be removed
 
   if (dim == 2 && !depositflag) {
-    memory->destroy(mcflags_old);
     return;
   }
 
@@ -1052,7 +1083,6 @@ void FixAblate::create_surfs(int outflag)
   //         eventually this should work
 
   // if (dim == 3) {
-  //   memory->destroy(mcflags_old);
   //   return;
   // }
 
@@ -1060,7 +1090,6 @@ void FixAblate::create_surfs(int outflag)
   // if these lines are uncommented, all particles are wiped out
 
   // particle->nlocal = 0;
-  // memory->destroy(mcflags_old);
   // return;
 
   // DEBUG - remove only the particles that are inside the surfs
@@ -1092,8 +1121,6 @@ void FixAblate::create_surfs(int outflag)
     dlist[nlist++] = i;
     ncount++;
   }
-
-  memory->destroy(mcflags_old);
 
   if (!depositflag) {
 
@@ -1157,6 +1184,132 @@ void FixAblate::create_surfs(int outflag)
   MPI_Allreduce(&ncount,&ndelete,1,MPI_INT,MPI_SUM,world);
 
   particle->sorted = 0;
+}
+
+/* ----------------------------------------------------------------------
+   mark every owned cell OUTSIDE or INSIDE straight from the corner point
+     field, in place of Grid::set_inout()'s flood fill
+   the field is the definition of the surface, so it already carries the
+     answer: a corner point above the threshold is inside the material, and
+     a cell whose corner points do not straddle the threshold holds no piece
+     of the surface and is entirely on one side of it
+   this is exact, not an approximation of the fill, and it is local: no
+     iteration and no communication, where the fill needs an MPI_Allreduce
+     per pass plus an irregular exchange to carry markings across proc
+     boundaries
+   return 0 if the field cannot answer, so the caller falls back to the fill:
+     - a fix group smaller than the whole grid leaves cells with no corner
+       point values at all
+     - multi-value corner points describe several materials per cell
+     - a cell with straddling corner points that marching squares/cubes did
+       not make OVERLAP would mean the two disagree, which is a bug rather
+       than a case to paper over, but falling back is the safe response
+------------------------------------------------------------------------- */
+
+int FixAblate::set_inout_implicit()
+{
+  if (multi_val_flag || !cvalues) return 0;
+
+  // group 0 is "all", and only then is every cell's corner point value mine
+  //   to read.  ReadISurf allows its own group to be a subset of the fix's,
+  //   filling the rest with empty space, so the fix's group is exactly the
+  //   set of cells the field describes
+
+  if (igroup != 0) return 0;
+
+  // transparent surfs are not a boundary between inside and outside, and
+  //   Grid::set_inout() marks the whole grid OUTSIDE when they are all
+  //   transparent.  the field knows nothing of that, so leave it to the fill
+
+  if (surf->all_transparent()) return 0;
+
+  Grid::ChildCell *cells = grid->cells;
+  Grid::ChildInfo *cinfo = grid->cinfo;
+  Grid::SplitInfo *sinfo = grid->sinfo;
+  int nlocal = grid->nlocal;
+
+  // pass 1: decide, and check the field against marching squares/cubes
+  // nothing is written until the check passes on every proc, so a fallback
+  //   hands Grid::set_inout() the same state it would have seen
+
+  int disagree = 0;
+
+  for (int icell = 0; icell < nlocal; icell++) {
+    if (cells[icell].nsplit <= 0) continue;
+    if (cinfo[icell].type != UNKNOWN) continue;
+    double *c = cvalues[icell];
+    int nin = 0;
+    for (int i = 0; i < ncorner; i++)
+      if (c[i] > thresh) nin++;
+    if (nin && nin < ncorner) disagree++;
+  }
+
+  int disagree_any;
+  MPI_Allreduce(&disagree,&disagree_any,1,MPI_INT,MPI_SUM,world);
+  if (disagree_any) return 0;
+
+  // pass 2: mark
+  // a cell marching squares/cubes left alone takes its type from the field
+  // an OVERLAP cell keeps whatever Cut2d/Cut3d worked out, except when the
+  //   cut left its corner flags UNKNOWN, which happens when the surface only
+  //   touches the cell at a point or an edge; then the field supplies them,
+  //   per corner rather than all-or-nothing as the fill would
+
+  int dimension = domain->dimension;
+
+  for (int icell = 0; icell < nlocal; icell++) {
+    if (cells[icell].nsplit <= 0) continue;
+    double *c = cvalues[icell];
+
+    if (cinfo[icell].type == UNKNOWN) {
+      cinfo[icell].type = c[0] > thresh ? INSIDE : OUTSIDE;
+      continue;
+    }
+
+    if (cinfo[icell].type != OVERLAP) continue;
+    if (cinfo[icell].corner[0] != UNKNOWN) continue;
+
+    int nin = 0;
+    for (int i = 0; i < ncorner; i++) {
+      cinfo[icell].corner[i] = c[i] > thresh ? INSIDE : OUTSIDE;
+      if (c[i] > thresh) nin++;
+    }
+
+    // the cut gave this cell no volume, so supply one when the corner points
+    //   agree on which side of the surface the whole cell lies
+
+    if (nin == ncorner) cinfo[icell].volume = 0.0;
+    else if (nin == 0) {
+      double *lo = cells[icell].lo;
+      double *hi = cells[icell].hi;
+      if (dimension == 3)
+        cinfo[icell].volume = (hi[0]-lo[0]) * (hi[1]-lo[1]) * (hi[2]-lo[2]);
+      else if (domain->axisymmetric)
+        cinfo[icell].volume =
+          MY_PI * (hi[1]*hi[1]-lo[1]*lo[1]) * (hi[0]-lo[0]);
+      else
+        cinfo[icell].volume = (hi[0]-lo[0]) * (hi[1]-lo[1]);
+    }
+  }
+
+  // sub cells take type and corner flags from the split cell they belong to,
+  //   which is always at a lower index, so one pass suffices
+  // zero volume of INSIDE cells in the same pass, so Collide and
+  //   FixGridCheck can catch a particle that ended up in one
+
+  int nsplit = grid->nsplitlocal;
+
+  for (int icell = 0; icell < nlocal; icell++) {
+    if (nsplit && cells[icell].nsplit <= 0) {
+      int splitcell = sinfo[cells[icell].isplit].icell;
+      cinfo[icell].type = cinfo[splitcell].type;
+      for (int j = 0; j < ncorner; j++)
+        cinfo[icell].corner[j] = cinfo[splitcell].corner[j];
+    }
+    if (cinfo[icell].type == INSIDE) cinfo[icell].volume = 0.0;
+  }
+
+  return 1;
 }
 
 /* ----------------------------------------------------------------------
@@ -4032,6 +4185,7 @@ void FixAblate::process_args(int narg, char **arg)
   depositflag = 0;
   unitsflag = CORNER;
   responseflag = RNORMAL;
+  checkevery = 1;
   filmrho = 0.0;
   sticking = NULL;
   nsticking = 0;
@@ -4081,6 +4235,16 @@ void FixAblate::process_args(int narg, char **arg)
                      "between 0 and 1");
       }
       iarg += 1 + n;
+    } else if (strcmp(arg[iarg],"check") == 0)  {
+
+      // how often to validate the surface just built -- watertightness and
+      //   grid cell types.  1 = every rebuild, the default and what it has
+      //   always done.  0 = never.  N = every Nth.
+
+      if (iarg+2 > narg) error->all(FLERR,"Invalid fix ablate command");
+      checkevery = atoi(arg[iarg+1]);
+      if (checkevery < 0) error->all(FLERR,"Illegal fix_ablate command");
+      iarg += 2;
     } else if (strcmp(arg[iarg],"response") == 0)  {
 
       // how a rate in length/time becomes a corner point increment.
