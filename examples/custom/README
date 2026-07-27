@@ -122,3 +122,21 @@ spa_mpi < in.custom.circle.set.fix.distributed
 mv log.sparta log.mpi_1.custom.circle.set.fix.distributed
 mpirun -np 4 spa_mpi < in.custom.circle.set.fix.distributed
 mv log.sparta log.mpi_4.custom.circle.set.fix.distributed
+
+# custom array columns read back through variables,
+# fix ave/grid with custom inputs, and removal of some of several attributes
+
+spa_mpi < in.custom.array.variable
+mv log.sparta log.mpi_1.custom.array.variable
+mpirun -np 4 spa_mpi < in.custom.array.variable
+mv log.sparta log.mpi_4.custom.array.variable
+
+spa_mpi < in.custom.ave.grid
+mv log.sparta log.mpi_1.custom.ave.grid
+mpirun -np 4 spa_mpi < in.custom.ave.grid
+mv log.sparta log.mpi_4.custom.ave.grid
+
+spa_mpi < in.custom.remove.multi
+mv log.sparta log.mpi_1.custom.remove.multi
+mpirun -np 4 spa_mpi < in.custom.remove.multi
+mv log.sparta log.mpi_4.custom.remove.multi

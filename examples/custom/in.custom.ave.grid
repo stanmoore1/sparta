@@ -1,0 +1,74 @@
+################################################################################
+# time-average per-grid custom attributes with fix ave/grid
+#
+# fix ave/grid has always had complete downstream support for g_name inputs
+# (validation, init, accumulation of both vectors and array columns), and the
+# docs list it as supported, but its argument parser accepted only c_/f_/v_ so
+# every g_ input was rejected as an illegal command.  This exercises the
+# now-reachable path for a custom vector and for both columns of a custom
+# array, of int and float type.
+#
+# The custom values are constant in time, so each running average must equal
+# the underlying value.  c_direct[k] reduces the custom data directly and
+# c_ave[k] reduces the fix ave/grid output; the two must agree.
+#
+# Notes:
+#  - The "comm/sort" option to the "global" command is used to match MPI runs.
+#  - The "twopass" option is used to match Kokkos runs.
+# The "comm/sort" and "twopass" options should not be used for production runs.
+################################################################################
+
+seed	    	    12345
+dimension   	    2
+
+global              gridcut 0.0 comm/sort yes
+
+boundary	    or r p
+
+create_box  	    0 10 0 10 -0.5 0.5
+create_grid 	    10 10 1
+balance_grid        rcb cell
+
+global		    nrho 1.0 fnum 0.01
+
+species		    air.species N O
+mixture		    air N O vstream 100.0 0 0
+
+compute             cid property/grid all id
+
+run                 0
+
+variable            v1 grid c_cid
+variable            v2 grid c_cid*10
+variable            v3 grid c_cid+0.25
+variable            v4 grid c_cid*10+0.5
+
+custom              grid create givec int 0 set givec v_v1 all NULL
+custom              grid create gdvec float 0 set gdvec v_v3 all NULL
+
+custom              grid create giarray int 2 set giarray[1] v_v1 all NULL
+custom              grid set giarray[2] v_v2 all NULL
+
+custom              grid create gdarray float 2 set gdarray[1] v_v3 all NULL
+custom              grid set gdarray[2] v_v4 all NULL
+
+# time-average the custom vectors and array columns
+# this is the command that used to be rejected
+
+fix                 avg ave/grid all 10 5 50 &
+                    g_givec g_gdvec g_giarray[1] g_giarray[2] &
+                    g_gdarray[1] g_gdarray[2]
+
+fix		    in emit/face air xlo twopass
+
+timestep 	    0.0001
+
+compute             direct reduce ave g_givec g_gdvec &
+                    g_giarray[*] g_gdarray[*]
+compute             ave reduce ave f_avg[1] f_avg[2] f_avg[3] f_avg[4] &
+                    f_avg[5] f_avg[6]
+
+stats		    50
+stats_style	    step cpu np c_direct[*] c_ave[*]
+
+run 		    200

@@ -1,0 +1,126 @@
+################################################################################
+# remove some of several per-grid custom attributes, then force the grid to grow
+#
+# Grid::remove_custom() tombstones a slot by setting ename[index] = NULL while
+# leaving etype/esize/ewhich stale, and only resets ncustom to 0 once every slot
+# is empty.  So removing some of several attributes leaves ncustom > 0 with live
+# tombstones.  Grid::reallocate_custom(), called from grow_cells(), used to loop
+# over all of ncustom without checking ename, dereferencing the stale ewhich
+# under the stale etype/esize.
+#
+# This exercises that path: four attributes spanning all four storage containers
+# (int vector, int array, float vector, float array), two of them removed, then
+# adapt_grid to force grow_cells().  Afterwards the surviving attributes are
+# re-set from a variable and reduced; c_direct[k] must match c_expect[k].  A
+# clobbered slot pointer shows up as a mismatch, a crash, or an ASan report.
+#
+# A new attribute is also created after the removals, so it reuses a tombstoned
+# index and a recycled storage slot.
+#
+# No miscomputed value was observed from the missing guard in these scenarios --
+# eicol/edcol are indexed by ewhich and stay consistent, so the redundant work
+# lands on a live attribute rather than corrupting one.  This is a regression
+# guard for the path, not a reproducer of a wrong answer.
+#
+# Notes:
+#  - The "comm/sort" option to the "global" command is used to match MPI runs.
+#  - The "twopass" option is used to match Kokkos runs.
+# The "comm/sort" and "twopass" options should not be used for production runs.
+################################################################################
+
+seed	    	    12345
+dimension   	    2
+
+global              gridcut 0.0 comm/sort yes
+
+boundary	    or r p
+
+create_box  	    0 10 0 10 -0.5 0.5
+create_grid 	    10 10 1
+balance_grid        rcb cell
+
+global		    nrho 1.0 fnum 0.01
+
+species		    air.species N O
+mixture		    air N O vstream 100.0 0 0
+
+compute             cid property/grid all id
+
+run                 0
+
+variable            v1 grid c_cid
+variable            v2 grid c_cid*10
+variable            v3 grid c_cid+0.25
+variable            v4 grid c_cid*10+0.5
+
+# four attributes, one in each of the four storage containers
+
+custom              grid create givec int 0 set givec v_v1 all NULL
+custom              grid create giarray int 2 set giarray[1] v_v1 all NULL
+custom              grid set giarray[2] v_v2 all NULL
+custom              grid create gdvec float 0 set gdvec v_v3 all NULL
+custom              grid create gdarray float 2 set gdarray[1] v_v3 all NULL
+custom              grid set gdarray[2] v_v4 all NULL
+
+compute             all4 reduce ave g_givec g_giarray[*] g_gdvec g_gdarray[*]
+
+stats		    50
+stats_style	    step cpu np c_all4[*]
+
+fix		    in emit/face air xlo twopass
+timestep 	    0.0001
+
+run 		    100
+
+# remove the two int attributes
+# ncustom stays 4, so slots 0 and 1 are now tombstones with stale ewhich
+
+stats_style	    step cpu np
+uncompute           all4
+
+custom              grid remove givec
+custom              grid remove giarray
+
+# force grow_cells(), which calls reallocate_custom() with the tombstones present
+
+adapt_grid          all refine random 1.0 0.0
+
+# re-set the surviving float attributes on the new grid, then check them
+# against the same variables they were assigned from
+
+custom              grid set gdvec v_v3 all NULL
+custom              grid set gdarray[1] v_v3 all NULL
+custom              grid set gdarray[2] v_v4 all NULL
+
+# add a new int vector, which reuses the storage slot that reallocate_custom
+# had grown on behalf of the removed givec tombstone
+
+custom              grid create gnew int 0 set gnew v_v1 all NULL
+
+compute             direct reduce ave g_gdvec g_gdarray[1] g_gdarray[2] g_gnew
+compute             expect reduce ave v_v3 v_v3 v_v4 v_v1
+
+stats_style	    step cpu np c_direct[*] c_expect[*]
+
+run 		    100
+
+# remove one more, leaving a single live attribute among four slots,
+# and grow the grid again
+
+stats_style	    step cpu np
+uncompute           direct
+uncompute           expect
+
+custom              grid remove gdvec
+
+adapt_grid          all refine random 1.0 0.0
+
+custom              grid set gdarray[1] v_v3 all NULL
+custom              grid set gdarray[2] v_v4 all NULL
+
+compute             direct2 reduce ave g_gdarray[1] g_gdarray[2]
+compute             expect2 reduce ave v_v3 v_v4
+
+stats_style	    step cpu np c_direct2[*] c_expect2[*]
+
+run 		    100

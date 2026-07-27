@@ -1,0 +1,147 @@
+################################################################################
+# read columns of custom arrays back through particle/grid/surf-style variables
+#
+# This is a self-checking test.  For every custom array column it computes the
+# same average twice:
+#   c_gdirect[k] reduces the custom array column directly (compute reduce)
+#   c_gvar[k]    reduces a variable whose formula is g_name[k]
+# The two paths must agree.  They did not before the variable formula parser
+# was fixed to point at column index1-1 of the array rather than at row
+# index1-1 (INT) or at the unrelated double vector container (DOUBLE).
+#
+# Notes:
+#  - The "comm/sort" option to the "global" command is used to match MPI runs.
+#  - The "twopass" option is used to match Kokkos runs.
+# The "comm/sort" and "twopass" options should not be used for production runs.
+################################################################################
+
+seed	    	    12345
+dimension   	    2
+
+global              gridcut 0.0 comm/sort yes
+global              surfs explicit/distributed
+
+boundary	    or r p
+
+create_box  	    0 10 0 10 -0.5 0.5
+create_grid 	    10 10 1
+balance_grid        rcb cell
+
+global		    nrho 1.0 fnum 0.01
+
+species		    air.species N O
+mixture		    air N O vstream 100.0 0 0
+
+read_surf	    data.step &
+                    trans 5 5 0 scale 0.75 0.75 1 &
+                    rotate 45 0 0 1 invert
+
+surf_collide	    1 diffuse 300.0 0.0
+surf_modify         all collide 1
+
+collide             vss air air.vss
+
+# ---------------------------------------------------------------------------
+# per-grid custom array, 3 int columns and 3 float columns
+# column K is set to a value that is distinct for every K,
+#   so reading the wrong column cannot accidentally look correct
+# ---------------------------------------------------------------------------
+
+compute             cid property/grid all id
+
+run                 0
+
+variable            gi1 grid c_cid
+variable            gi2 grid c_cid*10
+variable            gi3 grid c_cid*100
+variable            gd1 grid c_cid+0.25
+variable            gd2 grid c_cid*10+0.5
+variable            gd3 grid c_cid*100+0.75
+
+custom              grid create giarray int 3 set giarray[1] v_gi1 all NULL
+custom              grid set giarray[2] v_gi2 all NULL
+custom              grid set giarray[3] v_gi3 all NULL
+
+custom              grid create gdarray float 3 set gdarray[1] v_gd1 all NULL
+custom              grid set gdarray[2] v_gd2 all NULL
+custom              grid set gdarray[3] v_gd3 all NULL
+
+# read every column back through a grid-style variable
+
+variable            rgi1 grid g_giarray[1]
+variable            rgi2 grid g_giarray[2]
+variable            rgi3 grid g_giarray[3]
+variable            rgd1 grid g_gdarray[1]
+variable            rgd2 grid g_gdarray[2]
+variable            rgd3 grid g_gdarray[3]
+
+compute             gdirect reduce ave g_giarray[*] g_gdarray[*]
+compute             gvar reduce ave v_rgi1 v_rgi2 v_rgi3 v_rgd1 v_rgd2 v_rgd3
+
+# ---------------------------------------------------------------------------
+# per-surf custom array, same pattern
+# ---------------------------------------------------------------------------
+
+compute             sid property/surf all id
+
+run                 0
+
+variable            si1 surf c_sid
+variable            si2 surf c_sid*10
+variable            sd1 surf c_sid+0.25
+variable            sd2 surf c_sid*10+0.5
+
+custom              surf create siarray int 2 set siarray[1] v_si1 all NULL
+custom              surf set siarray[2] v_si2 all NULL
+
+custom              surf create sdarray float 2 set sdarray[1] v_sd1 all NULL
+custom              surf set sdarray[2] v_sd2 all NULL
+
+variable            rsi1 surf s_siarray[1]
+variable            rsi2 surf s_siarray[2]
+variable            rsd1 surf s_sdarray[1]
+variable            rsd2 surf s_sdarray[2]
+
+compute             sdirect reduce ave s_siarray[*] s_sdarray[*]
+compute             svar reduce ave v_rsi1 v_rsi2 v_rsd1 v_rsd2
+
+# ---------------------------------------------------------------------------
+# populate the domain, then do the same for per-particle custom arrays
+# ---------------------------------------------------------------------------
+
+fix		    in emit/face air xlo twopass
+
+timestep 	    0.0001
+
+stats		    100
+stats_style	    step cpu np &
+                    c_gdirect[*] c_gvar[*] c_sdirect[*] c_svar[*]
+
+run 		    200
+
+variable            pi1 particle id/100000
+variable            pi2 particle id/100000*10
+variable            pd1 particle id/100000+0.25
+variable            pd2 particle id/100000*10+0.5
+
+custom              particle create piarray int 2 set piarray[1] v_pi1 all NULL
+custom              particle set piarray[2] v_pi2 all NULL
+
+custom              particle create pdarray float 2 set pdarray[1] v_pd1 all NULL
+custom              particle set pdarray[2] v_pd2 all NULL
+
+variable            rpi1 particle p_piarray[1]
+variable            rpi2 particle p_piarray[2]
+variable            rpd1 particle p_pdarray[1]
+variable            rpd2 particle p_pdarray[2]
+
+compute             pdirect reduce ave p_piarray[*] p_pdarray[*]
+compute             pvar reduce ave v_rpi1 v_rpi2 v_rpd1 v_rpd2
+
+stats		    100
+stats_style	    step cpu np &
+                    c_gdirect[*] c_gvar[*] &
+                    c_sdirect[*] c_svar[*] &
+                    c_pdirect[*] c_pvar[*]
+
+run 		    200
