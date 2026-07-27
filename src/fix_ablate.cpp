@@ -587,6 +587,14 @@ void FixAblate::init()
   if (mode == BOTH && unitsflag != DISTANCE)
     error->all(FLERR,"Fix ablate mode both requires units distance");
 
+  // response says how a SPEED becomes a corner point increment, and units
+  //   corner never states a speed, so asking for one there is a mistake
+  //   rather than a setting with no effect
+
+  if (responseflag != RNORMAL && unitsflag != DISTANCE)
+    error->all(FLERR,"Fix ablate response is only meaningful with "
+               "units distance, where the source states a speed");
+
   // the KOKKOS particle move is a separate implementation and does not read
   //   the refreshed collision geometry, so growth is resolved only when the
   //   isosurface is rebuilt.  That is still accounted for -- the salvage and
