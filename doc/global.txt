@@ -13,7 +13,7 @@ global command :h3
 global keyword values ... :pre
 
 one or more keyword/value pairs :ulb,l
-keyword = {fnum} or {nrho} or {vstream} or {temp} or {field} or {surfs} or {surfgrid} or {surfmax} or {splitmax} or {surftally} or {gridcut} or {comm/sort} or {comm/style} or {weight} or {particle/reorder} or {mem/limit} :l
+keyword = {fnum} or {nrho} or {vstream} or {temp} or {field} or {surfs} or {surfgrid} or {surfmax} or {splitmax} or {surftally} or {gridcut} or {comm/sort} or {comm/style} or {weight} or {particle/reorder} or {collide/every} or {mem/limit} :l
   {fnum} value = ratio
     ratio = Fnum ratio of physical particles to simulation particles
   {nrho} value = density
@@ -62,6 +62,7 @@ keyword = {fnum} or {nrho} or {vstream} or {temp} or {field} or {surfs} or {surf
     wstyle = {cell}
     mode = {none} or {volume} or {radius} or {radius/only}
   {particle/reorder} value = {nsteps}
+  {collide/every} value = {nsteps}
     nsteps = reorder the particles every this many timesteps
   {mem/limit} value = {grid} or bytes
     grid = limit extra memory for load-balancing, particle reordering, and restart file read/write to grid cell memory
@@ -359,6 +360,42 @@ cases too. Reordering requires sorting the particles, which is done
 automatically when collisions are enabled. If collisions are not enabled, then
 sorting will also be performed in addition to reordering.
 
+The {collide/every} keyword sub-cycles the collision operator: collisions
+are computed every {nsteps} timesteps instead of every timestep, with the
+NTC attempt count for each cell multiplied by {nsteps}.  Because the NTC
+attempt count is linear in the timestep, this leaves the mean collision
+rate per unit of physical time unchanged.  Particle sorting is likewise
+only performed on timesteps that collide.  A value of 1, the default,
+computes collisions every timestep and is the usual setting.
+
+This can be a substantial speedup for problems where the timestep is set
+by how far particles move rather than by how often they collide, since
+the collision and sort work is then reduced by a factor of {nsteps}.  It
+is only valid when the particle population of a grid cell is
+statistically unchanging over {nsteps} timesteps, because the entire
+{nsteps} worth of collisions is computed from a single snapshot of that
+population.  Two conditions should be checked before using it:
+
+{nsteps} times the timestep must remain smaller than the mean time
+between collisions.  The {Collisions/particle/step} value printed at the
+end of a run gives this directly; its reciprocal is the mean number of
+timesteps between collisions for a particle. :ulb,l
+
+The flow must not be evolving appreciably over {nsteps} timesteps.  A
+steady or equilibrium flow is the favorable case; a startup transient, a
+moving shock, or a relaxation measurement will be coarsened in time and
+requires a smaller {nsteps}, validated against the quantity of interest
+rather than against the equilibrium collision rate. :l
+:ule
+
+If the timestep is limited by collisions rather than by particle motion,
+or if particles are moving less than a fraction of a grid cell per
+timestep, it is usually better to increase the timestep itself than to
+use this keyword.  The {Cell-touches/particle/step} value printed at the
+end of a run, minus one, is the mean number of grid cell boundaries a
+particle crosses per timestep, and indicates how much room the timestep
+has to grow.
+
 The {mem/limit} keyword limits the amount of memory allocated for 
 several operations: load balancing, reordering of particles, and restart 
 file read/write. This should only be necessary for very large 
@@ -432,4 +469,5 @@ The keyword defaults are fnum = 1.0, nrho = 1.0, vstream = 0.0 0.0
 0.0, temp = 273.15, field = none, surfs = explicit, surfgrid = auto,
 surfmax = 100, splitmax = 10, surftally = auto,
 gridcut = -1.0, comm/sort = no, comm/style = neigh, weight = cell
-none, particle/reorder = 0, mem/limit = 0, optmove = no.
+none, particle/reorder = 0, collide/every = 1, mem/limit = 0,
+optmove = no.

@@ -105,6 +105,7 @@ Update::Update(SPARTA *sparta) : Pointers(sparta)
   ranmaster = new RanMars(sparta);
 
   reorder_period = 0;
+  collide_every = 1;
   global_mem_limit = 0;
   mem_limit_grid_flag = 0;
 
@@ -343,7 +344,15 @@ void Update::run(int nsteps)
     // reorder() must be called here, not from within sort(), so that it
     //   only acts on the main timestep loop and not other sort() callers
 
-    int reorder_flag = (reorder_period &&
+    // collisions may be sub-cycled: run them every collide_every steps with
+    //   collide_every times the attempt count, which leaves the mean collision
+    //   rate unchanged because the NTC attempt count is linear in dt
+    // sorting is only needed on steps that collide
+
+    int docollide = (ntimestep % collide_every == 0);
+    if (collide) collide->nstep_collide = collide_every;
+
+    int reorder_flag = (reorder_period && docollide &&
                         ntimestep % reorder_period == 0);
 
     // when reordering runs this step and the collide style can be driven one
@@ -353,7 +362,7 @@ void Update::run(int nsteps)
     //   the collide work is then counted under Sort rather than Coll
 
     int fuse_collide = 0;
-    if (reorder_flag && collide && !particle->ncustom)
+    if (reorder_flag && collide && docollide && !particle->ncustom)
       fuse_collide = collide->collide_fused_supported();
 
     if (reorder_flag) {
@@ -361,12 +370,12 @@ void Update::run(int nsteps)
       particle->sort_reorder(fuse_collide ? collide : NULL);
       if (fuse_collide) collide->collisions_post();
       timer->stamp(TIME_SORT);
-    } else if (collide) {
+    } else if (collide && docollide) {
       particle->sort();
       timer->stamp(TIME_SORT);
     }
 
-    if (collide && !fuse_collide) {
+    if (collide && docollide && !fuse_collide) {
       collide->collisions();
       timer->stamp(TIME_COLLIDE);
     }
@@ -1839,6 +1848,11 @@ void Update::global(int narg, char **arg)
       else if (strcmp(arg[iarg+1],"reduce") == 0) surf->tally_comm = TALLYREDUCE;
       else if (strcmp(arg[iarg+1],"rvous") == 0) surf->tally_comm = TALLYRVOUS;
       else error->all(FLERR,"Illegal global command");
+      iarg += 2;
+    } else if (strcmp(arg[iarg],"collide/every") == 0) {
+      if (iarg+2 > narg) error->all(FLERR,"Illegal global command");
+      collide_every = input->inumeric(FLERR,arg[iarg+1]);
+      if (collide_every < 1) error->all(FLERR,"Illegal global command");
       iarg += 2;
     } else if (strcmp(arg[iarg],"particle/reorder") == 0) {
       reorder_period = input->inumeric(FLERR,arg[iarg+1]);

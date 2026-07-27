@@ -151,7 +151,7 @@ double CollideVSS::vremax_init(int igroup, int jgroup)
 double CollideVSS::attempt_collision(int icell, int np, double volume)
 {
   double fnum = update->fnum;
-  double dt = update->dt;
+  double dt = update->dt * nstep_collide;
 
   double nattempt;
 
@@ -245,7 +245,9 @@ void CollideVSS::collide_cell_kernel(int icell, Particle::OnePart *base,
   // kept in the same order attempt_collision() multiplies them, since
   //   floating point multiplication does not associate
 
-  const double dt = update->dt;
+  // dt scaled by the number of timesteps this call covers when collisions
+  //   are sub-cycled; nstep_collide is 1 in the normal case
+  const double dt = update->dt * nstep_collide;
   const double fnum = update->fnum;
 
   // vremax for this cell held in a register for the whole cell; nothing else

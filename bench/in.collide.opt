@@ -11,6 +11,7 @@ variable            x index 10
 variable            y index 10
 variable            z index 10
 variable            reorder index 2
+variable            cevery index 1
 
 variable            lx equal $x*1.0e-5
 variable            ly equal $y*1.0e-5
@@ -41,6 +42,7 @@ create_particles    air n $n
 
 global              optmove yes
 global              particle/reorder ${reorder}
+global              collide/every ${cevery}
 
 stats		    10
 compute             temp temp

@@ -243,10 +243,11 @@ struct Sim {
   std::vector<int> csurf_pool, next, sortcursor;
   std::vector<double> vremax, remain;
   RanKnuth rng;
-  long nscheck, nscollide, nexit;
+  long nscheck, nscollide, nexit, ngascoll;
   int contiguous;
   double t_move,t_sort,t_collide;
   double fnum, volume;
+  int collide_every;
 
   int load_surf(const char *path);
   void setup(int,int,int,const char*);
@@ -392,7 +393,7 @@ void Sim<S>::setup(int nx_,int ny_,int nz_,const char *surfpath)
     st.cs(placed,cell_of(x[0],x[1],x[2]));
     placed++;
   }
-  nscheck=nscollide=nexit=nsreject=0; contiguous=0; t_move=t_sort=t_collide=0.0;
+  nscheck=nscollide=nexit=nsreject=ngascoll=0; contiguous=0; collide_every=1; t_move=t_sort=t_collide=0.0;
 }
 
 /* re-inject a particle at the inflow face; see the header note -- this is the
@@ -555,7 +556,7 @@ void Sim<S>::collide()
       for (int ip=ci[c].first; ip>=0; ip=next[ip]) pl.push_back(ip);
     }
     double vrm=vremax[c];
-    double att=0.5*np*(np-1)*vrm*DTSTEP*fnum/volume + remain[c];
+    double att=0.5*np*(np-1)*vrm*DTSTEP*collide_every*fnum/volume + remain[c];
     int natt=(int)att; remain[c]=att-natt;
     for (int t=0;t<natt;t++){
       int i=(int)(np*rng.uniform()), j=(int)(np*rng.uniform());
@@ -570,6 +571,7 @@ void Sim<S>::collide()
       double vre=pow(vr2,1.0-OMEGA)*prefactor;
       vrm=std::max(vre,vrm);
       if (vre/vrm < rng.uniform()) continue;
+      ngascoll++;
       double vr=sqrt(vr2), etrans=0.5*mr*vr2;
       double ucmf=0.5*(vi[0]+vj[0]),vcmf=0.5*(vi[1]+vj[1]),wcmf=0.5*(vi[2]+vj[2]);
       double eps=rng.uniform()*2*MY_PI;
@@ -591,31 +593,38 @@ void Sim<S>::collide()
 
 /* ---------------- driver ---------------- */
 
-struct Out { double total,move,sort,coll,bytes; long nscheck,nscollide,nsreject,nmoves; };
+struct Out { double total,move,sort,coll,bytes; long nscheck,nscollide,nsreject,ngascoll,nmoves; };
 
 /* reorder: 0 = sort only, which is what bench/in.sphere does (it sets no
    particle/reorder, and measuring SPARTA shows enabling one makes in.sphere
    slower: 0.318 s off against 0.367 s every step, because 10K particles fit in
    L2 and there is no locality to buy) */
 template <class S, int MATB, int PREFILTER>
-static Out run(int nx,int ny,int nz,int nsteps,const char *surf,int reorder)
+static Out run(int nx,int ny,int nz,int nsteps,const char *surf,int reorder,
+               int collide_every = 1)
 {
   Sim<S> *m = new Sim<S>();
   m->setup(nx,ny,nz,surf);
+  m->collide_every = collide_every;
   for (int s=0;s<200;s++){ m->template move<MATB,PREFILTER>();
-    if (reorder && s%reorder==0) m->sort_reorder(); else m->sort_only();
-    m->collide(); }
-  m->nscheck=m->nscollide=m->nsreject=0; m->t_move=m->t_sort=m->t_collide=0;
+    if (s % m->collide_every == 0) {
+      if (reorder && s%reorder==0) m->sort_reorder(); else m->sort_only();
+      m->collide();
+    } }
+  m->nscheck=m->nscollide=m->nsreject=m->ngascoll=0;
+  m->t_move=m->t_sort=m->t_collide=0;
   for (int s=0;s<nsteps;s++){
     double t=wtime(); m->template move<MATB,PREFILTER>(); m->t_move+=wtime()-t;
+    int doc = (s % m->collide_every == 0);
     t=wtime();
-    if (reorder && s%reorder==0) m->sort_reorder(); else m->sort_only();
+    if (doc) { if (reorder && s%reorder==0) m->sort_reorder(); else m->sort_only(); }
     m->t_sort+=wtime()-t;
-    t=wtime(); m->collide(); m->t_collide+=wtime()-t;
+    t=wtime(); if (doc) m->collide(); m->t_collide+=wtime()-t;
   }
   Out o; o.move=m->t_move; o.sort=m->t_sort; o.coll=m->t_collide;
   o.total=o.move+o.sort+o.coll;
   o.nscheck=m->nscheck; o.nscollide=m->nscollide; o.nsreject=m->nsreject;
+  o.ngascoll=m->ngascoll;
   o.nmoves=(long)m->nlocal*nsteps; o.bytes=m->st.bytes_per();
   m->teardown(); delete m;
   return o;
@@ -664,6 +673,19 @@ int main(int argc,char**argv)
   row("SoA", run<StoreSoA,0,0>(nx,ny,nz,ns,surf,ro), base);
   row("SoA + AABB prefilter", run<StoreSoA,0,1>(nx,ny,nz,ns,surf,ro), base);
   row("SoA + prefilter + mat bnd", run<StoreSoA,1,1>(nx,ny,nz,ns,surf,ro), base);
+  printf("-- collide sub-cycling: every K steps with K x the attempts --\n");
+  {
+    double b2 = 0;
+    for (int K=1; K<=8; K*=2) {
+      Out o = run<StoreAoS,0,1>(nx,ny,nz,ns,surf,ro,K);
+      double v = 1e9*o.total/o.nmoves;
+      if (K==1) b2 = v;
+      printf("  K=%-2d %28s %8.2f %7.2fx | surf coll/mv %8.1e  gas coll/step %8.0f\n",
+             K,"",v,b2/v,(double)o.nscollide/o.nmoves,
+             (double)o.ngascoll/ns);
+      fflush(stdout);
+    }
+  }
   printf("-- reordering, which in.sphere does not do --\n");
   row("AoS + prefilter, reorder 1", run<StoreAoS,0,1>(nx,ny,nz,ns,surf,1), base);
   row("AoS + prefilter, reorder 20", run<StoreAoS,0,1>(nx,ny,nz,ns,surf,20), base);

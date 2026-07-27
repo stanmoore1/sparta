@@ -60,6 +60,7 @@ Collide::Collide(SPARTA *sparta, int, char **arg) : Pointers(sparta)
   ngroups = 0;
 
   npmax = 0;
+  nstep_collide = 1;
   vremax1 = remain1 = NULL;
   plist = NULL;
   p2g = NULL;
@@ -382,10 +383,13 @@ void Collide::set_flat_vremax()
 void Collide::collisions_pre()
 {
   // if requested, reset vrwmax & remain
+  // >= not ==, and vre_next recomputed rather than incremented, because when
+  //   collisions are sub-cycled this function is not called on every timestep
+  //   and would otherwise step straight over vre_next and never reset again
 
-  if (update->ntimestep == vre_next) {
+  if (vre_every && update->ntimestep >= vre_next) {
     reset_vremax();
-    vre_next += vre_every;
+    vre_next = (update->ntimestep/vre_every)*vre_every + vre_every;
   }
 
   // copy Update count of gas/gas collision computes active on this timestep

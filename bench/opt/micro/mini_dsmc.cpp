@@ -210,6 +210,7 @@ struct Mini {
   double *vremax_data, *remain_data;
   double **vremax_lvl2, **remain_lvl2;
   double dt;                       /* current timestep */
+  int collide_every;               /* collide every K steps, K x attempts */
   int flat_vremax;                 /* 1 to use the flattened single-group view */
   double *vremax1, *remain1;
 
@@ -251,6 +252,7 @@ void Mini::setup(int nx_, int ny_, int nz_, int npercell, int)
   ncell = nx*ny*nz;
   me = 0;
   dt = DT;
+  collide_every = 1;
   boxlo[0] = boxlo[1] = boxlo[2] = 0.0;
   boxhi[0] = nx*CELLL; boxhi[1] = ny*CELLL; boxhi[2] = nz*CELLL;
   dx = dy = dz = CELLL;
@@ -548,7 +550,7 @@ void Mini::collide_one_cell(int icell, OnePart *base, const int *pl, int np,
   double *rem = flat_vremax ? &remain1[icell] : &remain[icell][0][0];
   double vremax_c = *vrm;
 
-  double attempt = 0.5*np*(np-1)*vremax_c*dt*FNUM/volume + *rem;
+  double attempt = 0.5*np*(np-1)*vremax_c*dt*collide_every*FNUM/volume + *rem;
   int nattempt = (int) attempt;
   *rem = attempt - nattempt;
   if (!nattempt) { *vrm = vremax_c; return; }
@@ -653,10 +655,12 @@ double Mini::temperature()
 
 struct Out { double total, move, sort, coll, temp; long ncoll, natt; };
 
-static Out run(int nx, int ny, int nz, int npercell, int nsteps, int reorder)
+static Out run(int nx, int ny, int nz, int npercell, int nsteps, int reorder,
+               int collide_every = 1)
 {
   Mini m;
   m.setup(nx, ny, nz, npercell, 0);
+  m.collide_every = collide_every;
 
   /* bench/in.collide equilibrates for 30 steps at a 10x timestep before the
      measured run, and its README says why: "The equilibration insures particles
@@ -668,7 +672,7 @@ static Out run(int nx, int ny, int nz, int npercell, int nsteps, int reorder)
     m.move();
     int rf = (reorder && step % reorder == 0);
     if (rf) m.sort_reorder(); else m.sort();
-    m.collide();
+    if (step % m.collide_every == 0) m.collide();
   }
   m.dt = DT;
   m.ncollide_one = m.nattempt_one = 0;
@@ -678,14 +682,16 @@ static Out run(int nx, int ny, int nz, int npercell, int nsteps, int reorder)
     m.move();
     m.t_move += wtime() - t;
 
-    int reorder_flag = (reorder && step % reorder == 0);
+    /* collisions need cell contiguity, so only reorder on steps that collide */
+    int docollide = (step % m.collide_every == 0);
+    int reorder_flag = (reorder && docollide && (step/m.collide_every) % reorder == 0);
     t = wtime();
     if (reorder_flag) m.sort_reorder();
-    else m.sort();
+    else if (docollide) m.sort();
     m.t_sort += wtime() - t;
 
     t = wtime();
-    m.collide();
+    if (docollide) m.collide();
     m.t_collide += wtime() - t;
   }
 
@@ -700,6 +706,38 @@ static Out run(int nx, int ny, int nz, int npercell, int nsteps, int reorder)
 
 int main(int argc, char **argv)
 {
+  if (argc > 1 && strcmp(argv[1], "-subcycle") == 0) {
+    /* Collide every K steps with K x the attempt count. The NTC attempt count
+       is linear in dt, so the mean collision rate is preserved; what changes is
+       the time resolution of the collision process. DSMC already requires the
+       timestep to be well under the mean collision time, and here that margin
+       is about 14 steps, so K of a few is inside the regime where this is the
+       same class of approximation as a multiple-timestep method in MD.
+       Whether it actually holds is what the temperature and collision count
+       columns are for. */
+    int nx=40, ny=50, nz=50, npc=10, ns=40;
+    long n = (long)nx*ny*nz*npc;
+    printf("# collide sub-cycling: 1M particles, %d steps, reorder 2\n", ns);
+    printf("%8s %10s %8s | %6s %6s %6s | %8s %12s %12s\n",
+           "every K","ns/p/s","speedup","move","sort","coll","T (K)",
+           "collisions","coll/step");
+    double base = 0;
+    for (int K = 1; K <= 8; K *= 2) {
+      Out o = run(nx,ny,nz,npc,ns,2,K);
+      double v = 1e9*o.total/((double)n*ns);
+      if (K == 1) base = v;
+      printf("%8d %10.2f %7.2fx | %6.2f %6.2f %6.2f | %8.2f %12ld %12.0f\n",
+             K, v, base/v,
+             1e9*o.move/((double)n*ns), 1e9*o.sort/((double)n*ns),
+             1e9*o.coll/((double)n*ns), o.temp, o.ncoll,
+             (double)o.ncoll/ns);
+      fflush(stdout);
+    }
+    printf("\nreference: 273.15 K; collisions/step must be flat for the\n"
+           "statistics to be preserved\n");
+    return 0;
+  }
+
   if (argc > 1 && strcmp(argv[1], "-validate") == 0) {
     /* The point of this mode: SPARTA's own reorder curve at 1M particles has a
        shallow minimum around period 2-3 and gets much *worse* when reordering

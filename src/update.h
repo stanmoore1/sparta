@@ -80,6 +80,8 @@ class Update : protected Pointers {
                              // when move logic thinks it is inside cell
 
   int reorder_period;        // # of timesteps between particle reordering
+  int collide_every;         // # of timesteps between collision steps
+                             // collisions are sub-cycled when > 1
   int global_mem_limit;      // max # of bytes in arrays for rebalance and reordering
   int mem_limit_grid_flag;   // 1 if using size of grid as memory limit
   void set_mem_limit_grid(int gnlocal = 0);

@@ -33,6 +33,8 @@ class Collide : protected Pointers {
   int mcflag;         // 0 for NTC attempt counts (default)
                       // 1 for majorant collision frequency (MCF) attempt counts
 
+  int nstep_collide;  // # of timesteps this collision call covers,
+                      //   set by Update when collisions are sub-cycled
   int ncollide_one,nattempt_one,nreact_one;
   bigint ncollide_running,nattempt_running,nreact_running;
 
