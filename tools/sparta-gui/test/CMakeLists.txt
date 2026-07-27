@@ -645,6 +645,36 @@ if (SPARTA_GUI_USE_PLUGIN)
 endif()
 gtest_discover_tests(test_recovery)
 
+# Plotting a data file: SpartaGui::plotDataFile() and ChartWindow::addDataFile().
+# The parsers and the column picker are covered separately; neither end of the
+# path that joins them had been driven, so nothing checked that the columns the
+# user picked are the ones that reach the chart.  A curve from the wrong column
+# is still a curve, and it is labelled from the same picker.
+add_executable(test_datafileplot
+  test_datafileplot.cpp
+  ${GUI_WALKER_SOURCES}
+)
+target_include_directories(test_datafileplot PRIVATE
+  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}/thirdparty/rangeslider
+)
+target_compile_definitions(test_datafileplot PRIVATE
+  SPARTA_GUI_VERSION="${PROJECT_VERSION}"
+  SPARTA_TEST_LIBRARY_PATH="${_spa_test_lib}")
+target_link_libraries(test_datafileplot PRIVATE
+  GTest::gtest Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Svg Qt6::Test
+  lepton_mini ads::qtadvanceddocking-qt6)
+if (SPARTA_GUI_HAVE_VTK)
+  target_compile_definitions(test_datafileplot PRIVATE SPARTA_GUI_HAVE_VTK)
+  target_link_libraries(test_datafileplot PRIVATE ${VTK_LIBRARIES})
+  vtk_module_autoinit(TARGETS test_datafileplot MODULES ${VTK_LIBRARIES})
+endif()
+if (SPARTA_GUI_USE_PLUGIN)
+  target_compile_definitions(test_datafileplot PRIVATE SPARTA_GUI_USE_PLUGIN)
+  target_include_directories(test_datafileplot PRIVATE ${SPARTA_PLUGINLIB_DIR})
+endif()
+gtest_discover_tests(test_datafileplot)
+
 # Integrity checking of downloaded files.  This is the only code that decides
 # whether a file fetched off the network may be kept, and none of it had ever
 # run: a parser that misses the entry, or a comparison that always agrees,
