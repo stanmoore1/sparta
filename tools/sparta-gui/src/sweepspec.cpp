@@ -132,7 +132,12 @@ QList<QList<QPair<QString, QString>>> SweepSpec::expand(QString *err) const
 
 double reduce(Reducer r, const std::vector<double> &s)
 {
-    if (s.empty()) return 0.0;
+    // No samples is not a measurement of zero.  A run whose quantity never
+    // appeared -- a misspelt keyword, or a run too short for the stats poller to
+    // catch a line -- has to reach the table as "n/a"; a 0.0 here would sit in
+    // the results indistinguishable from a real reading, and would drag an
+    // ensemble mean down with it.
+    if (s.empty()) return std::nan("");
     switch (r) {
     case Reducer::Min:  return *std::min_element(s.begin(), s.end());
     case Reducer::Max:  return *std::max_element(s.begin(), s.end());

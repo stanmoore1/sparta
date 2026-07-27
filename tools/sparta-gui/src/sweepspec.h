@@ -75,7 +75,8 @@ struct SweepSpec {
     Reducer reducerFor(int i) const;
 };
 
-/** @brief Reduce a sampled series to one value; 0.0 for an empty series. */
+/** @brief Reduce a sampled series to one value; NaN for an empty series,
+ *         which the results table shows as "n/a" rather than as a zero. */
 double reduce(Reducer r, const std::vector<double> &samples);
 
 /**

@@ -131,7 +131,11 @@ TEST(SweepSpec, Reducers)
     EXPECT_DOUBLE_EQ(reduce(Reducer::Min, s), 1.0);
     EXPECT_DOUBLE_EQ(reduce(Reducer::Max, s), 5.0);
     EXPECT_DOUBLE_EQ(reduce(Reducer::Mean, s), 14.0 / 5.0);
-    EXPECT_DOUBLE_EQ(reduce(Reducer::Mean, {}), 0.0); // empty-safe
+
+    // Nothing sampled is not a reading of zero: every reducer has to say so,
+    // or a run that produced no data lands in the table looking measured
+    for (auto r : {Reducer::Final, Reducer::Min, Reducer::Max, Reducer::Mean})
+        EXPECT_TRUE(std::isnan(reduce(r, {}))) << reducerName(r).toStdString();
 }
 
 TEST(EnsembleStats, KnownValues)

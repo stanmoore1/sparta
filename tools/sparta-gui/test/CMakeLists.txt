@@ -710,6 +710,39 @@ if (SPARTA_GUI_USE_PLUGIN)
 endif()
 gtest_discover_tests(test_jsoncolors)
 
+# The parametric sweep driver and the library boundary it reads through.
+# SweepController runs unattended over many combinations and hands back a table
+# the user reads as science; its failures are quiet, so every assertion is
+# against an arithmetic answer. Live, like Run.All, and under the same locks:
+# each case loads the SPARTA library into this process and chdirs to run.
+add_executable(test_sweeprun
+  test_sweeprun.cpp
+  ${GUI_WALKER_SOURCES}
+)
+target_include_directories(test_sweeprun PRIVATE
+  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}/thirdparty/rangeslider
+)
+target_compile_definitions(test_sweeprun PRIVATE
+  SPARTA_GUI_VERSION="${PROJECT_VERSION}"
+  SPARTA_TEST_LIBRARY_PATH="${_spa_test_lib}")
+target_link_libraries(test_sweeprun PRIVATE
+  GTest::gtest Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Svg Qt6::Test
+  lepton_mini ads::qtadvanceddocking-qt6)
+if (SPARTA_GUI_HAVE_VTK)
+  target_compile_definitions(test_sweeprun PRIVATE SPARTA_GUI_HAVE_VTK)
+  target_link_libraries(test_sweeprun PRIVATE ${VTK_LIBRARIES})
+  vtk_module_autoinit(TARGETS test_sweeprun MODULES ${VTK_LIBRARIES})
+endif()
+if (SPARTA_GUI_USE_PLUGIN)
+  target_compile_definitions(test_sweeprun PRIVATE SPARTA_GUI_USE_PLUGIN)
+  target_include_directories(test_sweeprun PRIVATE ${SPARTA_PLUGINLIB_DIR})
+endif()
+add_test(NAME Sweep.All COMMAND ${XVFB_RUNNER} -a -s "-screen 0 1024x768x24" -w 1
+  $<TARGET_FILE:test_sweeprun>)
+set_tests_properties(Sweep.All PROPERTIES TIMEOUT 1800 RESOURCE_LOCK "xvfb;sparta_run"
+  REPEAT UNTIL_PASS:3)
+
 # Test executable for helpers
 add_executable(test_helpers
   test_helpers.cpp

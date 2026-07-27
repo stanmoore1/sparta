@@ -16,6 +16,7 @@
 
 #include <QList>
 #include <QPair>
+#include <QPointer>
 #include <QString>
 #include <string>
 #include <vector>
@@ -552,11 +553,11 @@ private:
     Preferences *prefdialog; ///< Preferences dialog
     QLabel *spartastatus;    ///< Status bar label for SPARTA state
     QLabel *varwindow;       ///< Window showing variable definitions
-    SweepPanel *sweepPanel = nullptr;        ///< Docked Parametric Sweep panel (lazy)
+    QPointer<SweepPanel> sweepPanel;         ///< Docked Parametric Sweep panel (lazy)
     RunHistory *history = nullptr;           ///< Run archive controller (lazy)
-    HistoryPanel *historyPanel = nullptr;    ///< Docked Run History panel (lazy)
-    QListWidget *diagnosticsList = nullptr;  ///< Docked Diagnostics panel list (lazy)
-    QListWidget *projectFilesList = nullptr; ///< Docked Project Files navigator list (lazy)
+    QPointer<HistoryPanel> historyPanel;     ///< Docked Run History panel (lazy)
+    QPointer<QListWidget> diagnosticsList;   ///< Docked Diagnostics panel list (lazy)
+    QPointer<QListWidget> projectFilesList;  ///< Docked Project Files navigator list (lazy)
 
     QTimer *autoLintTimer = nullptr;   ///< Debounce timer for auto-lint on line change (lazy)
     bool autoLintEnabled  = true;      ///< Auto-validate the deck on cursor line change
