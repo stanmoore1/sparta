@@ -542,6 +542,27 @@ int InterpTable::bin_index(double x)
    lower edge of bin K, the inverse of bin_index()
 ------------------------------------------------------------------------- */
 
+/* ----------------------------------------------------------------------
+   export the binned representation for an accelerator copy
+------------------------------------------------------------------------- */
+
+void InterpTable::export_table(int &tabstyle_, int &ncoeff_, int &shift_,
+                               int64_t &offset_, int &nbins_,
+                               double &alo_, double &plo_,
+                               double &ahi_, double &phi_, double *&coeff_)
+{
+  tabstyle_ = tabstyle;
+  ncoeff_ = ncoeff;
+  shift_ = shift;
+  offset_ = offset;
+  nbins_ = nbins;
+  alo_ = alo; plo_ = plo;
+  ahi_ = ahi; phi_ = phi;
+  coeff_ = coeff;
+}
+
+/* ---------------------------------------------------------------------- */
+
 double InterpTable::bin_lower(int k)
 {
   DoubleBits v;

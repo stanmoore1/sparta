@@ -140,6 +140,7 @@ class CollideVSS : public Collide {
   double rotrel (int, double);
   double vibrel (int, double);
 
+  void setup_vss(int, char **);
   void parse_vss_args(int, int, char **);
   void allocate_params();
   virtual void read_param_file(char *);

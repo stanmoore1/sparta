@@ -53,7 +53,16 @@ enum{CONSTANT,VARIABLE};
 /* ---------------------------------------------------------------------- */
 
 CollideVSSKokkos::CollideVSSKokkos(SPARTA *sparta, int narg, char **arg) :
-  CollideVSS(sparta, narg, arg),
+  CollideVSSKokkos(sparta, narg, arg, 1) {}
+
+/* ----------------------------------------------------------------------
+   flag = 1 for the vss/kk style, which wants the full VSS setup here
+   flag = 0 for a derived table style, which parses its own args first
+------------------------------------------------------------------------- */
+
+CollideVSSKokkos::CollideVSSKokkos(SPARTA *sparta, int narg, char **arg,
+                                   int flag) :
+  CollideTable(sparta, narg, arg, flag),
   rand_pool(12345 + comm->me
 #ifdef SPARTA_KOKKOS_EXACT
             , sparta
@@ -62,6 +71,8 @@ CollideVSSKokkos::CollideVSSKokkos(SPARTA *sparta, int narg, char **arg) :
   grid_kk_copy(sparta),
   react_kk_copy(sparta)
 {
+  ntab_kk = nalphatab_kk = 0;
+
   kokkos_flag = 1;
 
   // use 1D view for scalars to reduce GPU memory operations
@@ -1439,6 +1450,23 @@ int CollideVSSKokkos::test_collision_kokkos(int icell, int igroup, int jgroup,
   double dw  = vi[2] - vj[2];
   double vr2 = du*du + dv*dv + dw*dw;
 
+  // tabulated total cross section for this pair, if one is defined
+  // sigma*g is interpolated directly, so there is no pow() and no sqrt()
+  // mirrors CollideTable::test_collision(), including the order in which
+  //   random numbers are drawn, so the two builds agree bit for bit
+
+  if (ntab_kk) {
+    const int m = d_sigidx(ispecies,jspecies);
+    if (m >= 0) {
+      if (vr2 < EPSZERO) return 0;
+      const double vre = tab_evaluate(m,vr2);
+      d_vremax(icell,igroup,jgroup) = MAX(vre,d_vremax(icell,igroup,jgroup));
+      if (vre/d_vremax(icell,igroup,jgroup) < rand_gen.drand()) return 0;
+      precoln.vr2 = vr2;
+      return 1;
+    }
+  }
+
   // prevent division by zero
 
   if (vr2 < EPSZERO && d_params(ispecies,jspecies).omega >= 1.0)
@@ -1635,7 +1663,7 @@ void CollideVSSKokkos::SCATTER_TwoBodyScattering(Particle::OnePart *ip,
   double mass_i = d_species[isp].mass;
   double mass_j = d_species[jsp].mass;
 
-  double alpha_r = 1.0 / d_params(isp,jsp).alpha;
+  double alpha_r = 1.0 / scatter_alpha_kokkos(isp,jsp,precoln.vr2);
 
   double eps = rand_gen.drand() * 2*MY_PI;
   if (fabs(alpha_r - 1.0) < 0.001) {

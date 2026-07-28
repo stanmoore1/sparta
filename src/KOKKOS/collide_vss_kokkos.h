@@ -21,7 +21,7 @@ CollideStyle(vss/kk,CollideVSSKokkos)
 #ifndef SPARTA_COLLIDE_VSS_KOKKOS_H
 #define SPARTA_COLLIDE_VSS_KOKKOS_H
 
-#include "collide_vss.h"
+#include "collide_table.h"
 #include "collide_vss_kokkos.h"
 #include "particle_kokkos.h"
 #include "grid_kokkos.h"
@@ -60,11 +60,19 @@ struct TagCollideCollisionsOne{};
 template < int GASTALLY, int ATOMIC_REDUCTION >
 struct TagCollideCollisionsOneAmbipolar{};
 
-class CollideVSSKokkos : public CollideVSS {
+// derives from CollideTable rather than CollideVSS: the collision kernels
+// are launched as parallel_for(policy,*this), which slices the object to this
+// class, so device code cannot dispatch virtually to a style derived from it.
+// the table state has to be reachable from here for collide table/kk to work.
+// with no tables built every CollideTable method falls back to the analytic
+// VSS form, so collide vss/kk is unchanged.
+
+class CollideVSSKokkos : public CollideTable {
  public:
   typedef COLLIDE_REDUCE value_type;
 
   CollideVSSKokkos(class SPARTA *, int, char **);
+  CollideVSSKokkos(class SPARTA *, int, char **, int);   // for derived styles
   ~CollideVSSKokkos();
   void init();
   void collisions();
@@ -123,6 +131,69 @@ class CollideVSSKokkos : public CollideVSS {
   typedef tdual_params_2d::t_dev t_params_2d;
   typedef tdual_params_2d::t_dev_const t_params_2d_const;
   t_params_2d_const d_params_const;
+
+ protected:
+
+  // device copies of the tabulated cross sections, filled by
+  // CollideTableKokkos.  ntab_kk is 0 for the vss style and none of this is
+  // read.  TabMeta mirrors the private state of InterpTable which
+  // InterpTable::evaluate() needs: the bit-indexed bin lookup and the power
+  // law extrapolation on each end.
+
+  struct TabMeta {
+    double xlo,xhi,alo,plo,ahi,phi;
+    int64_t offset;             // bin index of the first bin
+    int64_t coffset;            // start of this table inside d_tabcoeff
+    int shift;                  // right shift mapping the x bits to a bin
+    int nbins,ncoeff,tabstyle;
+  };
+
+  typedef Kokkos::DualView<TabMeta*,DeviceType::array_layout,DeviceType>
+    tdual_tabmeta_1d;
+  typedef tdual_tabmeta_1d::t_dev t_tabmeta_1d;
+
+  int ntab_kk;                  // # of cross section tables, 0 for vss
+  int nalphatab_kk;             // # of alpha tables, 0 for vss
+  tdual_tabmeta_1d k_tabmeta;
+  t_tabmeta_1d d_tabmeta;
+  DAT::tdual_float_1d k_tabcoeff;
+  DAT::t_float_1d d_tabcoeff;
+  DAT::tdual_int_2d k_sigidx;
+  DAT::t_int_2d d_sigidx;
+  DAT::tdual_int_2d k_alphaidx;
+  DAT::t_int_2d d_alphaidx;
+
+  // the same expression as InterpTable::evaluate()
+
+  KOKKOS_INLINE_FUNCTION
+  double tab_evaluate(int m, double x) const {
+    const TabMeta &t = d_tabmeta(m);
+    if (x <= t.xlo) return t.alo * pow(x,t.plo);
+    if (x >= t.xhi) return t.ahi * pow(x,t.phi);
+
+    union { double d; uint64_t u; } v;
+    v.d = x;
+    int64_t k = (int64_t) (v.u >> t.shift) - t.offset;
+    if (k < 0) k = 0;
+    else if (k > t.nbins-1) k = t.nbins-1;
+
+    const int64_t b = t.coffset + t.ncoeff*k;
+    if (t.tabstyle == 1) return d_tabcoeff(b) + x*d_tabcoeff(b+1);  // linear
+    if (t.tabstyle == 0) return d_tabcoeff(b);                      // lookup
+    const double u = x - d_tabcoeff(b);                             // spline
+    return d_tabcoeff(b+1) +
+      u*(d_tabcoeff(b+2) + u*(d_tabcoeff(b+3) + u*d_tabcoeff(b+4)));
+  }
+
+  // VSS alpha for this pair, from a table when one is defined
+
+  KOKKOS_INLINE_FUNCTION
+  double scatter_alpha_kokkos(int isp, int jsp, double vr2) const {
+    if (!nalphatab_kk) return d_params(isp,jsp).alpha;
+    const int m = d_alphaidx(isp,jsp);
+    if (m < 0) return d_params(isp,jsp).alpha;
+    return tab_evaluate(m,vr2);
+  }
 
  private:
   KOKKOS_INLINE_FUNCTION

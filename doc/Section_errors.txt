@@ -291,6 +291,35 @@ The cross section table specified "EXTRAP error" for this end of its
 range, and a collision was attempted outside it.  Widen the table or
 select a different extrapolation mode. :dd
 
+{Collide table/kk does not support scatter tables} :dt
+
+A scatter table samples the deflection angle from an inverse cumulative
+differential cross section, which is not ported to the KOKKOS package.
+Run this model without the kk suffix. :dd
+
+{Collide table/kk does not support a tabulated pair with internal energy} :dt
+
+The Larsen-Borgnakke detailed balance correction which a tabulated cross
+section requires is not ported to the KOKKOS package, and without it an
+equilibrium gas drifts.  Run this model without the kk suffix. :dd
+
+{Collide table/kk does not support chemistry} :dt
+
+The reaction probability factor which relates a tabulated total cross
+section to the TCE model is not ported to the KOKKOS package, and react
+table has no kk variant.  Run this model without the kk suffix. :dd
+
+{Collide table/kk does not support EXTRAP error} :dt
+
+Device code cannot raise an error, so a table which must abort outside its
+range cannot be used with the KOKKOS package. :dd
+
+{React table has no kk variant and cannot be used with the KOKKOS package} :dt
+
+The KOKKOS collide styles reach the react style through a cast to the
+KOKKOS TCE style, so a non-KOKKOS react style used with them is undefined
+behaviour.  Run this model without the kk suffix. :dd
+
 {Tabulated data does not reproduce its input values} :dt
 
 The binned table does not reproduce the cross section data read from

@@ -64,6 +64,48 @@ enum{KSIGMA,KALPHA,KSCATTER};
 CollideTable::CollideTable(SPARTA *sparta, int narg, char **arg) :
   CollideVSS(sparta, narg, arg, 0)
 {
+  null_tables();
+  setup_tables(narg,arg);
+}
+
+/* ----------------------------------------------------------------------
+   ctor for a derived style which is not itself a table style
+   the parent reads the parameter file with the plain VSS parser, and every
+     table is left NULL so each method falls back to the analytic VSS form
+------------------------------------------------------------------------- */
+
+CollideTable::CollideTable(SPARTA *sparta, int narg, char **arg, int flag) :
+  CollideVSS(sparta, narg, arg, 0)
+{
+  null_tables();
+
+  // flag = 1 means the derived style is a plain vss style, so run the VSS
+  //   setup here; flag = 0 means it is a table style which will call
+  //   setup_tables() itself once its own args are parsed
+
+  if (flag) setup_vss(narg,arg);
+}
+
+/* ---------------------------------------------------------------------- */
+
+void CollideTable::null_tables()
+{
+  tabstyle = TB_LINEAR;
+  nmant = 0;
+  nsigma = nalpha = nscatter = 0;
+  sigma_tab = alpha_tab = scatter_tab = NULL;
+  sigma_index = alpha_index = scatter_index = NULL;
+  sigeff = NULL;
+  lb_index = NULL;
+  lbratio = lbmax = NULL;
+  nlbpair = 0;
+  lbwarn = 0;
+}
+
+/* ---------------------------------------------------------------------- */
+
+void CollideTable::setup_tables(int narg, char **arg)
+{
   if (narg < 5) error->all(FLERR,"Illegal collide command");
 
   if (strcmp(arg[3],"lookup") == 0) tabstyle = TB_LOOKUP;
@@ -83,15 +125,6 @@ CollideTable::CollideTable(SPARTA *sparta, int narg, char **arg) :
   // remaining args are the standard VSS optional args
 
   parse_vss_args(5,narg,arg);
-
-  nsigma = nalpha = nscatter = 0;
-  sigma_tab = alpha_tab = scatter_tab = NULL;
-  sigeff = NULL;
-
-  lb_index = NULL;
-  lbratio = lbmax = NULL;
-  nlbpair = 0;
-  lbwarn = 0;
 
   // proc 0 reads the param file, which yields both the VSS params
   //   and the per-pair tables, then broadcasts everything
@@ -179,6 +212,7 @@ void CollideTable::init()
 double CollideTable::vremax_init(int igroup, int jgroup)
 {
   double vrmgroup = CollideVSS::vremax_init(igroup,jgroup);
+  if (!sigma_index) return vrmgroup;
 
   double *vscale = mixture->vscale;
   int *mix2group = mixture->mix2group;
@@ -214,7 +248,7 @@ int CollideTable::test_collision(int icell, int igroup, int jgroup,
 {
   int ispecies = ip->ispecies;
   int jspecies = jp->ispecies;
-  int m = sigma_index[ispecies][jspecies];
+  int m = sigma_index ? sigma_index[ispecies][jspecies] : -1;
 
   // no cross section table for this pair, use the analytic VSS form
 
@@ -264,6 +298,7 @@ int CollideTable::test_collision(int icell, int igroup, int jgroup,
 
 double CollideTable::scatter_alpha(int isp, int jsp)
 {
+  if (!alpha_index) return params[isp][jsp].alpha;
   int m = alpha_index[isp][jsp];
   if (m < 0) return params[isp][jsp].alpha;
   return alpha_tab[m]->evaluate(precoln.vr2);
@@ -276,6 +311,7 @@ double CollideTable::scatter_alpha(int isp, int jsp)
 
 int CollideTable::scatter_cosX(int isp, int jsp, double &cosX)
 {
+  if (!scatter_index) return 0;
   int m = scatter_index[isp][jsp];
   if (m < 0) return 0;
   cosX = scatter_tab[m]->interpolate_row(precoln.vr2,random->uniform());
@@ -293,7 +329,7 @@ int CollideTable::scatter_cosX(int isp, int jsp, double &cosX)
 
 int CollideTable::tabulated_pair(int isp, int jsp)
 {
-  if (!sigeff) return 0;
+  if (!sigeff || !sigma_index) return 0;
   return sigma_index[isp][jsp] >= 0;
 }
 
@@ -313,6 +349,7 @@ int CollideTable::tabulated_pair(int isp, int jsp)
 
 double CollideTable::lb_weight(int isp, int jsp, double etrans, double ec)
 {
+  if (!lb_index) return -1.0;
   int row = lb_index[isp][jsp];
   if (row < 0) return -1.0;
   if (etrans <= 0.0) return 0.0;
@@ -364,6 +401,7 @@ double CollideTable::lb_weight(int isp, int jsp, double etrans, double ec)
 void CollideTable::build_lbratio()
 {
   if (lbratio) return;
+  if (nsigma == 0) return;
 
   int nspecies = particle->nspecies;
   Particle::Species *species = particle->species;
@@ -457,8 +495,9 @@ void CollideTable::build_lbratio()
 
 double CollideTable::sigma_eff(int isp, int jsp, double temp)
 {
+  if (!sigma_index || !sigeff) return Collide::sigma_eff(isp,jsp,temp);
   int m = sigma_index[isp][jsp];
-  if (m < 0 || !sigeff) return Collide::sigma_eff(isp,jsp,temp);
+  if (m < 0) return Collide::sigma_eff(isp,jsp,temp);
   if (temp <= 0.0) temp = params[isp][jsp].tref;
 
   double f = (log(temp) - tlo) * tinvdelta;
@@ -534,6 +573,11 @@ void CollideTable::read_param_file(char *fname)
   // skip_param_line() makes the parent loop ignore the directives
 
   CollideVSS::read_param_file(fname);
+
+  // a derived style which is not a table style has no table arrays, so the
+  //   directive pass would have nowhere to put anything
+
+  if (!sigma_index) return;
 
   // second pass: the table directives
   // params[][].mr and the VSS params are set by now, and both the unit
@@ -695,6 +739,8 @@ InterpTable *CollideTable::add_table(InterpTable **&list, int &n,
 
 int CollideTable::skip_param_line(int nwords, char **words)
 {
+  if (!sigma_index) return 0;
+
   if (nwords < 3) return 0;
   if (strcmp(words[2],"table") == 0) return 1;
   if (strcmp(words[2],"alpha") == 0) return 1;

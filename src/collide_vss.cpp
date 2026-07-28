@@ -58,6 +58,17 @@ CollideVSS::CollideVSS(SPARTA *sparta, int narg, char **arg) :
   prefactor = NULL;
   nparams = 0;
 
+  setup_vss(narg,arg);
+}
+
+/* ----------------------------------------------------------------------
+   parse the optional VSS args and read the parameter file
+   split out of the ctor so a derived style which defers construction can
+     run it once it has decided which of the two it is
+------------------------------------------------------------------------- */
+
+void CollideVSS::setup_vss(int narg, char **arg)
+{
   // optional args
 
   relaxflag = CONSTANT;

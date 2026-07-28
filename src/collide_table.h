@@ -60,6 +60,25 @@ class CollideTable : public CollideVSS {
   double lb_weight(int, int, double, double);
 
  protected:
+
+  // ctor for a derived style which is not itself a table style
+  //
+  // CollideVSSKokkos derives from this class rather than from CollideVSS,
+  // because the KOKKOS collision kernels are launched as
+  // parallel_for(policy,*this), which slices the object to CollideVSSKokkos
+  // and so cannot dispatch virtually to a style derived from it.  the table
+  // state therefore has to be reachable from CollideVSSKokkos itself.  this
+  // ctor leaves every table NULL, and each method below falls back to the
+  // analytic VSS form when they are, so collide vss/kk is unaffected.
+
+  CollideTable(class SPARTA *, int, char **, int);
+
+  // parse the table arguments, read the parameter file and broadcast it
+  // called by the public ctor here and by CollideTableKokkos
+
+  void setup_tables(int, char **);
+  void null_tables();
+
   int tabstyle;              // TB_LOOKUP, TB_LINEAR, or TB_SPLINE
   int nmant;                 // # of mantissa bits used to index a bin
 

@@ -26,7 +26,9 @@ args = arguments for that style :l
     file = filename that lists species with their VSS model parameters
            and their tabulated cross sections
     interp = {lookup} or {linear} or {spline} = interpolation style
-    N = # of interpolation points per factor of 2 in collision energy :pre
+    N = # of interpolation points per factor of 2 in collision energy
+  {table/kk} args = mix-ID file interp N
+    same arguments as the {table} style :pre
 zero or more keyword/value pairs may be appended :l
 keyword = {relax} :l
   {relax} value = {constant} or {variable} :pre
@@ -513,8 +515,14 @@ effectively.
 
 [Restrictions:]
 
-The {table} style has no {kk} suffixed variant, so it cannot be used
-when SPARTA is run with the KOKKOS package.
+The {table} style has a {kk} suffixed variant which covers the total cross
+section and the energy-dependent alpha.  The rest of the style raises an
+error at setup under the KOKKOS package rather than being silently skipped,
+since each of these changes the answer: a scatter table, a tabulated pair
+whose species have rotational or vibrational modes, since the
+Larsen-Borgnakke correction is not ported, chemistry of any kind, and a
+table whose extrapolation mode is {error}, since device code cannot raise
+one.  Run those models without the {kk} suffix.
 
 The "react tce"_react.html model derives its reaction probability as the
 ratio of the reaction cross section to the VHS total cross section.  When

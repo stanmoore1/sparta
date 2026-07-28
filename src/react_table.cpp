@@ -85,6 +85,13 @@ void ReactTable::init()
   if (!collide || !collide->vssflag)
     error->all(FLERR,"React table can only be used with a VSS-based collide style");
 
+  // the KOKKOS collide styles cast react to ReactTCEKokkos without checking,
+  //   so a non-KOKKOS react style reached from them is undefined behaviour
+
+  if (sparta->kokkos)
+    error->all(FLERR,"React table has no kk variant and cannot be used with "
+               "the KOKKOS package");
+
   ReactBird::init();
 
   // every active reaction must be tabulated, since this style has no other

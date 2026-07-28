@@ -100,6 +100,12 @@ class InterpTable : protected Pointers {
 
   double bin_lower(int);
 
+  // export the binned representation so an accelerator package can copy it
+  //   to device memory; the fields are exactly what evaluate() reads
+
+  void export_table(int &, int &, int &, int64_t &, int &,
+                    double &, double &, double &, double &, double *&);
+
  private:
   int tabstyle;              // TB_LOOKUP, TB_LINEAR, or TB_SPLINE
   int ncoeff;                // # of stored coefficients per bin per column
