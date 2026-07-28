@@ -399,7 +399,13 @@ DumpImage::DumpImage(SPARTA *sparta, int narg, char **arg) :
         int n = strlen(&arg[iarg+2][2]) + 1;
         upystr = new char[n];
         strcpy(upystr,&arg[iarg+2][2]);
-      } else image->up[1] = atof(arg[iarg+1]);
+        // arg[iarg+2], not arg[iarg+1]: the y component was read from the x
+        // argument, so "up 0 1 0" -- the natural choice for a 2d view --
+        // arrived as (0,0,0) and was rejected as an invalid up vector, and any
+        // other vector rendered from a camera orientation the user did not ask
+        // for.  Long-standing, but the GUI's camera panel is the first thing
+        // that emits "up" as a matter of course.
+      } else image->up[1] = atof(arg[iarg+2]);
       if (strstr(arg[iarg+3],"v_") == arg[iarg+3]) {
         int n = strlen(&arg[iarg+3][2]) + 1;
         upzstr = new char[n];
@@ -1099,9 +1105,15 @@ void DumpImage::write()
     }
   }
 
-  // record completed image filename, e.g. for a GUI to display
+  // record completed image filename, e.g. for a GUI to display.
+  //
+  // Only when there is one.  DumpMovie inherits this write() but overrides
+  // openfile() to open an ffmpeg pipe, and that override never sets filelast --
+  // so a movie reported a NULL name here, which cleared the name that a
+  // `dump image` defined alongside it had just recorded, and the GUI's slide
+  // show went blank whenever a deck wrote both.
 
-  output->stats->set_last_image(filelast);
+  if (filelast) output->stats->set_last_image(filelast);
 }
 
 /* ----------------------------------------------------------------------
