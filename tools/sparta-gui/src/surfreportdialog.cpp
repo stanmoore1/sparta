@@ -254,6 +254,31 @@ void SurfReportDialog::computeReport()
                .arg(qint64(sparta_->getThermo("step")));
     out += QString("Surface elements: %1\n\n").arg(t.nsurf);
 
+    // A `compute surf` accumulates its tallies over a run and keeps them until
+    // the next setup clears them -- and creating an image is a setup: the
+    // render issues `run 0 pre yes post no` against the live instance, which
+    // discards them.  So a report taken after a picture has been drawn reads
+    // back as all zeros, and a table of zeros looks exactly like a simulation
+    // in which nothing ever hit the surface.  The two are worth telling apart,
+    // and the reader cannot do it from the numbers.  A `fix ave/surf` keeps its
+    // own averaged copy and is unaffected, which is the way out.
+    if (!isFix) {
+        bool allZero = true;
+        for (const QVector<double> &r : rows) {
+            for (double v : r)
+                if (v != 0.0) { allZero = false; break; }
+            if (!allZero) break;
+        }
+        if (allZero)
+            out += QString(
+                       "Note: '%1' read back as all zeros. Either nothing struck the\n"
+                       "surface, or the tallies have been cleared since the run -- "
+                       "creating\nan image re-runs setup, which does that. A `fix ave/surf` "
+                       "over this\ncompute keeps its own averaged copy; report on that "
+                       "instead, or\nre-run the deck.\n\n")
+                       .arg(source);
+    }
+
     if (t.hasForce)
         out += QString("Integrated force   Fx=%1  Fy=%2  Fz=%3   |F|=%4\n")
                    .arg(t.force[0], 0, 'g', 6).arg(t.force[1], 0, 'g', 6)

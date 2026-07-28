@@ -462,6 +462,39 @@ TEST_F(SurfReportLive, ExportBeforeAnyReportWritesNothing)
     delete d;
 }
 
+TEST_F(SurfReportLive, AComputeClearedBySetupSaysSoInsteadOfPrintingZeros)
+{
+    // Creating an image renders through `run 0 pre yes post no`, and that setup
+    // discards a `compute surf`'s accumulated tallies.  The report then reads
+    // back all zeros, which is indistinguishable from a surface nothing ever
+    // hit -- so it has to say which it is.  `run 0` here is exactly what the
+    // render does, without needing an image.
+    //
+    // The instance is shared by the whole fixture, so the tallies are put back
+    // before returning: this test must leave the next one the data it expects,
+    // whatever order they run in.
+    auto *d = dialog();
+    selectSource(d, "c_1");
+
+    sparta->commandsString("run 0 pre yes post no");
+    compute(d);
+    const QString cleared = reportOf(d);
+    EXPECT_TRUE(cleared.contains("read back as all zeros"))
+        << "a report with nothing in it was presented as a result:\n"
+        << cleared.toStdString();
+    EXPECT_TRUE(cleared.contains("fix ave/surf"))
+        << "the note does not say what to do about it:\n"
+        << cleared.toStdString();
+
+    sparta->commandsString("run 100");
+    compute(d);
+    const QString restored = reportOf(d);
+    EXPECT_FALSE(restored.contains("read back as all zeros"))
+        << "the note is printed over real data as well, so it says nothing:\n"
+        << restored.toStdString();
+    delete d;
+}
+
 int main(int argc, char **argv)
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
