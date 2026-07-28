@@ -171,6 +171,35 @@ else()
   message(STATUS "Live-window tests will use ${_spa_test_lib}")
 endif()
 
+# The standalone executable, for the one suite that needs a second opinion:
+# the end-to-end workflow compares the numbers the application produced against
+# the same deck run outside it. Without it that suite has nothing to check the
+# application against and says so rather than reporting a pass.
+set(SPARTA_TEST_BINARY "" CACHE FILEPATH
+  "Standalone SPARTA used as the workflow suite's reference (empty: probe)")
+if (SPARTA_TEST_BINARY)
+  set(_spa_test_bin "${SPARTA_TEST_BINARY}")
+else()
+  get_filename_component(_spa_lib_dir "${_spa_test_lib}" DIRECTORY)
+  file(GLOB _spa_bin_candidates
+    "${_spa_lib_dir}/spa_*"
+    "${CMAKE_SOURCE_DIR}/../../build*/src/spa_*"
+    "${CMAKE_SOURCE_DIR}/../../src/spa_*")
+  set(_spa_test_bin "")
+  foreach(_cand IN LISTS _spa_bin_candidates)
+    # the glob also matches libsparta's own name in some layouts
+    if (NOT IS_DIRECTORY "${_cand}" AND NOT _cand MATCHES "\\.(so|a|dylib|dll)")
+      set(_spa_test_bin "${_cand}")
+      break()
+    endif()
+  endforeach()
+endif()
+if (_spa_test_bin AND EXISTS "${_spa_test_bin}")
+  message(STATUS "Workflow reference run will use ${_spa_test_bin}")
+else()
+  set(_spa_test_bin "")
+endif()
+
 # Compiled in rather than passed through the ctest environment: two variables
 # is a two-element list, gtest_discover_tests writes the elements out as
 # separate arguments, and set_tests_properties then reads the second one as
@@ -1656,6 +1685,21 @@ if (XDOTOOL_BINARY AND WM_BINARY AND SHOOTER_BINARY)
   set_tests_properties(GuiDrive.PluginSetup PROPERTIES
     ENVIRONMENT "${GUI_DRIVE_ENVIRONMENT};SHOT_DIR=${CMAKE_CURRENT_BINARY_DIR}/plugin-shots"
     TIMEOUT 900 RESOURCE_LOCK xvfb)
+
+  # One DSMC study from beginning to end, the way a user does it: open the
+  # example, check the input, run it, chart the result, look at the output,
+  # render the geometry, read the surface report and the run history, export
+  # for ParaView. Every other suite asks whether a control reacts; this one
+  # asks whether the answer is right, by running the same deck outside the
+  # application and requiring the two stats tables to agree column for column.
+  # The physics is checked too -- the domain fills to a plateau, the surface
+  # collision rate settles about a steady mean -- so that a run which agrees
+  # with a broken reference still cannot pass.
+  add_test(NAME GuiDrive.Workflow
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_workflow.py)
+  set_tests_properties(GuiDrive.Workflow PROPERTIES
+    ENVIRONMENT "${GUI_DRIVE_ENVIRONMENT};SHOT_DIR=${CMAKE_CURRENT_BINARY_DIR}/workflow-shots;SPARTA_BIN=${_spa_test_bin}"
+    TIMEOUT 1800 RESOURCE_LOCK xvfb)
 else()
   message(STATUS "Skipping the visual and feature GUI suites: "
     "they need xdotool, a window manager (e.g. openbox) and a screenshooter")

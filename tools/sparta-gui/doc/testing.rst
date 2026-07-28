@@ -872,6 +872,89 @@ Windows are matched by the process id rather than by name: the machine may
 be running another GUI suite on another display, and matching by name listed
 that one's windows as this one's.
 
+test_workflow.py
+----------------
+
+One DSMC study from beginning to end, in a single session of the real
+application: open ``examples/circle``, check the input, run it, chart the
+result, read the output, render the geometry, open the surface report and the
+run history, export for ParaView, and move through all four workspaces
+afterwards.  A screenshot is kept at every step.
+
+What separates it from the other live suites is what it asserts.  They ask
+whether a control reacts; this one asks whether the answer is **right**.  The
+same deck is run outside the application first, with the standalone
+executable, and its stats table is the ground truth: ``examples/circle`` is
+deterministic (fixed ``seed``, ``comm/sort yes``), so two serial runs of it
+are bit-identical and the two tables must agree row for row.  Every column but
+the wall-clock one is compared -- CPU time is the one number that cannot match
+between runs.
+
+The physics is checked independently as well, so that a run agreeing with a
+broken reference still cannot pass: the domain starts empty, the particle
+count climbs and then stops climbing (the last four samples within a few
+percent of each other while the first is far below them), and the surface
+collision rate settles about a steady mean, computed here by an independent
+reimplementation of the batch-means estimator in ``analysis.cpp``.
+
+The same standard is applied to the Surface Quantities Report.  The staged
+deck defines a ``compute surf``, a ``fix ave/surf`` over it, and a ``dump
+surf`` of that fix; the suite drives the report onto the fix, exports its
+per-element CSV, and requires it to reproduce the dumped values element for
+element -- 50 elements by three values, to a few parts in a million, which is
+the precision of SPARTA's own six-significant-figure dump and not a slack
+chosen to make it pass.  That closes the whole path at once: the library read,
+the array stride, the integration and the export.  A transposed column pair,
+a one-element stride shift, or a single value one percent out all fail it.
+
+Several things about driving the application this way are worth recording,
+because each of them first produced a check that passed while testing nothing:
+
+- **Menu items cannot be clicked at their accessible coordinates.**  A closed
+  menu still reports a position, and it is not where the item will be once the
+  menu opens, so the click lands on whatever is there instead -- silently.
+  Actions are triggered by their shortcuts, and menus opened by their
+  mnemonics (``alt+t`` then ``q``).
+- **The status bar is invisible to accessibility.**  A clean deck's Check
+  Input report is one ``QStatusBar::showMessage()`` line, which paints text
+  rather than creating a child widget, and expires after five seconds.  It is
+  photographed at 0.6 s and compared against the idle window by pixel count;
+  a second shot six seconds later requires the window to be *exactly* as it
+  was, which is what makes it a report rather than a state change.
+- **The application starts SPARTA with ``-log none``**, so a run through the
+  GUI writes no log file at all.  The suite adds one ``log`` line to its copy
+  of the deck -- something a user does anyway -- and watches that file; a
+  version that watched ``log.sparta`` concluded the run had never started
+  while it was in fact finishing normally.
+- **The chart is identified by its dock title**, ``Charts - in.circle - Run
+  1``, not by "a combo box is on screen": the snapshot viewer has one too, so
+  counting selectors passed whether the chart had opened or not.
+- **A combo box reports its old text while its popup is open**, so a loop that
+  presses Down and asks after each press whether the wanted entry is current
+  never matches, and reports the selection as having failed when it worked.
+  The entry is chosen and *then* read back.
+- **The run history opens on a "No runs archived" placeholder** unless
+  archiving is switched on, and that placeholder differs from the editor by
+  half a million pixels -- so "the panel changed the screen" passed against an
+  empty history.  Archiving is preseeded into the profile, and the check reads
+  the deck name out of the history's own index file rather than off the
+  screen: the panel is a ``QTableView`` and its cells are table cells, a role
+  the accessibility sweep does not collect.
+- **Creating an image clears a compute's surface tallies.**  The render goes
+  through ``run 0 pre yes post no``, and that setup discards them, so a report
+  taken on a ``compute surf`` after a picture has been drawn reads back as all
+  zeros -- indistinguishable, in the report, from a surface nothing ever hit.
+  This was found here and fixed in the product: the dialog now says so instead
+  of presenting the zeros as a result, and
+  ``SurfReportLive.AComputeClearedBySetupSaysSoInsteadOfPrintingZeros`` holds
+  it in place.  The workflow reports on the ``fix ave/surf``, which keeps its
+  own averaged copy and is unaffected.
+
+If no standalone SPARTA can be found the suite reports a skip and returns
+success without checking anything, rather than claiming a pass it cannot
+support.  Point ``-D SPARTA_TEST_BINARY=...`` at one, or set ``SPARTA_BIN``
+in the environment.
+
 test_imageviewerbuttons.cpp
 ---------------------------
 
