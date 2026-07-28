@@ -23,6 +23,7 @@
 
 #include "chartviewer.h"
 
+#include "analysis.h"
 #include "chartdialogs.h"
 #include "plotdata.h"
 
@@ -35,10 +36,12 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
+#include <QRegularExpression>
 #include <QSpinBox>
 #include <QTimer>
 
 #include <cmath>
+#include <vector>
 
 namespace {
 
@@ -70,6 +73,25 @@ public:
         for (const auto &r : reports)
             if (r.contains(needle)) return true;
         return false;
+    }
+
+    /// The number a report gave for @p key, as in "  mean  = 12.5", or NaN if
+    /// no report carried that key.
+    ///
+    /// reported("c[0] = 3") is not an assertion that the constant term came
+    /// back as 3: it matches 3.7 and 30 just as happily, so a fit that had
+    /// drifted would still pass.  Everything numeric below goes through this
+    /// instead, so the assertion is on the value and not on its first digit.
+    [[nodiscard]] double value(const QString &key) const
+    {
+        const QRegularExpression re(
+            QRegularExpression::escape(key) +
+            R"(\s*=\s*([-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?))");
+        for (const auto &r : reports) {
+            const auto m = re.match(r);
+            if (m.hasMatch()) return m.captured(1).toDouble();
+        }
+        return std::nan("");
     }
 
 private:
@@ -238,8 +260,9 @@ TEST_F(Analysis, PolynomialFitOverlaysACurveAndReportsItsCoefficients)
     EXPECT_TRUE(view()->isEosFit()) << "no fit curve was put on the chart";
     EXPECT_EQ(processedLabel(), "Poly deg 1") << "the processed slot was not renamed";
     EXPECT_TRUE(d.reported("Polynomial fit of degree 1")) << d.reports.join(" | ").toStdString();
-    EXPECT_TRUE(d.reported("c[0] = 3")) << "the constant term was not recovered";
-    EXPECT_TRUE(d.reported("c[1] = 2")) << "the slope was not recovered";
+    EXPECT_NEAR(d.value("c[0]"), 3.0, 1.0e-6)
+        << "the constant term was not recovered: " << d.reports.join(" | ").toStdString();
+    EXPECT_NEAR(d.value("c[1]"), 2.0, 1.0e-6) << "the slope was not recovered";
 }
 
 TEST_F(Analysis, ThePolynomialFitHonoursTheXRange)
@@ -317,9 +340,9 @@ TEST_F(Analysis, ACustomFitRecoversTheParametersItWasGivenAGuessFor)
     EXPECT_EQ(processedLabel(), "decay") << "the fit did not take the label it was given";
     EXPECT_TRUE(d.reported("Custom fit of f(x) = a*exp(-b*x)"))
         << d.reports.join(" | ").toStdString();
-    EXPECT_TRUE(d.reported("a = 3")) << "the amplitude was not recovered: "
-                                     << d.reports.join(" | ").toStdString();
-    EXPECT_TRUE(d.reported("b = 0.2")) << "the rate was not recovered";
+    EXPECT_NEAR(d.value("a"), 3.0, 1.0e-4) << "the amplitude was not recovered: "
+                                           << d.reports.join(" | ").toStdString();
+    EXPECT_NEAR(d.value("b"), 0.2, 1.0e-5) << "the rate was not recovered";
 }
 
 TEST_F(Analysis, ACustomFitWithoutParametersSaysWhatItWanted)
@@ -372,8 +395,14 @@ TEST_F(Analysis, ALongFitNameIsShortenedForTheSlot)
 
 TEST_F(Analysis, BlockAveragingReportsAMeanAndMarksItOnTheChart)
 {
-    // a noisy series about a known mean
-    load(series(400, [](double x) { return 10.0 + std::sin(x) + 0.25 * std::cos(x / 3.0); }));
+    // A bounded oscillation about 10: the sum of sin(i) over i = 0..399 is
+    // bounded by 1/sin(0.5) ~ 2.1 and the cosine term by 0.25/sin(1/6) ~ 1.5,
+    // so the mean of these 400 samples is 10 to within 0.01 whatever the
+    // implementation does.  That is the independent anchor; the rest of the
+    // report is then checked against what blockAverage() returns for the same
+    // data, which is what says the chart is reading the fields it means to.
+    const auto f = [](double x) { return 10.0 + std::sin(x) + 0.25 * std::cos(x / 3.0); };
+    load(series(400, f));
 
     Driver d;
     d.request.analysis = PostProcessSpec::BlockAverage;
@@ -384,6 +413,48 @@ TEST_F(Analysis, BlockAveragingReportsAMeanAndMarksItOnTheChart)
     EXPECT_TRUE(d.reported("std. error")) << "the block-averaged error was not reported";
     EXPECT_TRUE(d.reported("tau_int")) << "the integrated autocorrelation time was not reported";
     EXPECT_TRUE(d.reported("N_eff")) << "the effective sample count was not reported";
+
+    EXPECT_NEAR(d.value("mean"), 10.0, 0.01)
+        << "the reported mean is not the mean of the series: " << d.reports.join(" | ").toStdString();
+
+    std::vector<double> ys;
+    ys.reserve(400);
+    for (int i = 0; i < 400; ++i) ys.push_back(f(i));
+    const BlockStats bs = blockAverage(ys, 20);
+    ASSERT_TRUE(bs.valid);
+
+    EXPECT_NEAR(d.value("mean"), bs.mean, 1.0e-6);
+    EXPECT_NEAR(d.value("std. error"), bs.stderror, 1.0e-5 * std::max(1.0, bs.stderror))
+        << "the number under 'std. error' is not the block-averaged error";
+    EXPECT_NEAR(d.value("tau_int"), bs.tauInt, 0.005) << "tau_int is not the one that was computed";
+    EXPECT_NEAR(d.value("N_eff"), bs.nEff, 0.05) << "N_eff is not the one that was computed";
+    EXPECT_EQ(int(d.value("blocks")), bs.nblocks) << "the block count was misreported";
+
+    // the comparison line only means something if it is the naive error rather
+    // than a second copy of the block-averaged one
+    EXPECT_NEAR(d.value("naive s/sqrt(N)"), std::sqrt(bs.variance / 400.0), 1.0e-6);
+    EXPECT_NE(d.value("naive s/sqrt(N)"), d.value("std. error"));
+}
+
+TEST_F(Analysis, BlockAveragingASeriesWhoseBlocksAgreeExactlyReportsNoError)
+{
+    // A period-20 sawtooth cut into 20 blocks of 20: every block holds one whole
+    // period, so all twenty block means are identical and the batch-means error
+    // is exactly zero.  An analytic answer that does not come from the same code
+    // the chart calls -- and one no plausible off-by-one survives, since a block
+    // boundary out of step with the period would break the agreement.
+    load(series(400, [](double x) { return 5.0 + std::fmod(x, 20.0); }));
+
+    Driver d;
+    d.request.analysis = PostProcessSpec::BlockAverage;
+    d.request.param    = 20;
+    run(d);
+
+    EXPECT_NEAR(d.value("mean"), 5.0 + 9.5, 1.0e-6) << d.reports.join(" | ").toStdString();
+    EXPECT_NEAR(d.value("std. error"), 0.0, 1.0e-9)
+        << "blocks that agree to the last digit were given a nonzero error";
+    EXPECT_GT(d.value("naive s/sqrt(N)"), 0.2)
+        << "the naive error should be large here -- the series itself has spread";
 }
 
 TEST_F(Analysis, BlockAveragingAConstantSeriesSaysItCannot)
@@ -413,6 +484,29 @@ TEST_F(Analysis, SteadyStateDetectionFindsABurnInAndReportsIt)
     EXPECT_TRUE(d.reported("burn-in cutoff")) << d.reports.join(" | ").toStdString();
     EXPECT_TRUE(d.reported("steady mean")) << "the post-burn-in mean was not reported";
     EXPECT_TRUE(d.reported("samples kept")) << "how much data survived was not reported";
+
+    // The transient runs from 50 down to 10 over the first hundred samples and
+    // the series is flat about 10 after that, so a cutoff that has genuinely
+    // found the burn-in lands inside the transient and the mean it reports is
+    // the flat level rather than one dragged up by the ramp.
+    const double cutoff = d.value("burn-in cutoff");
+    EXPECT_GT(cutoff, 0.0) << "nothing was discarded from a series that plainly has a transient";
+    EXPECT_LE(cutoff, 140.0) << "the cutoff threw away data well past the end of the transient";
+    EXPECT_NEAR(d.value("steady mean"), 10.0, 0.5)
+        << "the reported mean still carries the transient: " << d.reports.join(" | ").toStdString();
+    EXPECT_NEAR(d.value("samples kept"), 400.0 - cutoff, 0.5)
+        << "the kept-sample count does not follow from the cutoff";
+
+    // and the numbers are the ones the analysis returned, not neighbouring fields
+    std::vector<double> ys;
+    ys.reserve(400);
+    for (int i = 0; i < 400; ++i)
+        ys.push_back(i < 100 ? 50.0 - 0.4 * i : 10.0 + 0.5 * std::sin(i));
+    const SteadyState ss = steadyStateCutoff(ys);
+    ASSERT_TRUE(ss.valid);
+    EXPECT_EQ(int(cutoff), ss.cutoff);
+    EXPECT_NEAR(d.value("steady mean"), ss.mean, 1.0e-6);
+    EXPECT_NEAR(d.value("std. error"), ss.stderror, 1.0e-5 * std::max(1.0, ss.stderror));
 }
 
 TEST_F(Analysis, SteadyStateDetectionOnTooShortASeriesSaysSo)
