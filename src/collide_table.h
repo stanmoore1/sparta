@@ -107,6 +107,8 @@ class CollideTable : public CollideVSS {
   double **lbratio;          // sigma_table/sigma_VHS on the grid
   double **lbmax;            // running max of lbratio up to each grid point
   double lblo,lbinvdelta;
+  int nlbgrid;               // # of grid points, so an accelerator package
+                             //   can size its copy without the NLB define
   int lbwarn;                // 1 once the out-of-range warning has fired
 
   void build_lbratio();

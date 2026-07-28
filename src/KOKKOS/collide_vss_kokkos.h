@@ -145,7 +145,8 @@ class CollideVSSKokkos : public CollideTable {
     int64_t offset;             // bin index of the first bin
     int64_t coffset;            // start of this table inside d_tabcoeff
     int shift;                  // right shift mapping the x bits to a bin
-    int nbins,ncoeff,tabstyle;
+    int nbins,ncoeff,ncol,tabstyle;
+    int errlo,errhi;            // 1 if EXTRAP error applies on that end
   };
 
   typedef Kokkos::DualView<TabMeta*,DeviceType::array_layout,DeviceType>
@@ -154,6 +155,8 @@ class CollideVSSKokkos : public CollideTable {
 
   int ntab_kk;                  // # of cross section tables, 0 for vss
   int nalphatab_kk;             // # of alpha tables, 0 for vss
+  int nscattertab_kk;           // # of scatter tables, 0 for vss
+  int nlbpair_kk;               // # of pairs needing the LB correction
   tdual_tabmeta_1d k_tabmeta;
   t_tabmeta_1d d_tabmeta;
   DAT::tdual_float_1d k_tabcoeff;
@@ -162,27 +165,99 @@ class CollideVSSKokkos : public CollideTable {
   DAT::t_int_2d d_sigidx;
   DAT::tdual_int_2d k_alphaidx;
   DAT::t_int_2d d_alphaidx;
+  DAT::tdual_int_2d k_scatteridx;
+  DAT::t_int_2d d_scatteridx;
+
+  // Larsen-Borgnakke acceptance normalization, mirroring CollideTable
+
+  DAT::tdual_int_2d k_lbidx;
+  DAT::t_int_2d d_lbidx;
+  DAT::tdual_float_2d k_lbratio;
+  DAT::t_float_2d d_lbratio;
+  DAT::tdual_float_2d k_lbmax;
+  DAT::t_float_2d d_lbmax;
+  double lblo_kk,lbinvdelta_kk;
+  int nlbgrid_kk;
+
+  // set on device when a table with EXTRAP error is evaluated out of range,
+  //   checked on the host after the collision kernel since device code
+  //   cannot raise an error itself
+
+  DAT::t_int_scalar d_tab_error;
+  HAT::t_int_scalar h_tab_error;
+
+  // set on device when a Larsen-Borgnakke acceptance loop runs out of
+  //   retries, so the host can warn exactly as CollideVSS::lb_capcheck does
+
+  DAT::t_int_scalar d_lb_cap;
+  HAT::t_int_scalar h_lb_cap;
 
   // the same expression as InterpTable::evaluate()
 
   KOKKOS_INLINE_FUNCTION
-  double tab_evaluate(int m, double x) const {
-    const TabMeta &t = d_tabmeta(m);
-    if (x <= t.xlo) return t.alo * pow(x,t.plo);
-    if (x >= t.xhi) return t.ahi * pow(x,t.phi);
-
+  int tab_bin(const TabMeta &t, double x) const {
     union { double d; uint64_t u; } v;
     v.d = x;
     int64_t k = (int64_t) (v.u >> t.shift) - t.offset;
     if (k < 0) k = 0;
     else if (k > t.nbins-1) k = t.nbins-1;
+    return (int) k;
+  }
 
-    const int64_t b = t.coffset + t.ncoeff*k;
+  KOKKOS_INLINE_FUNCTION
+  double tab_evaluate(int m, double x) const {
+    const TabMeta &t = d_tabmeta(m);
+
+    // the host style aborts here when the table says EXTRAP error; device
+    //   code cannot, so record it and let the host raise it after the kernel
+
+    if (x <= t.xlo) {
+      if (t.errlo) d_tab_error() = 1;
+      return t.alo * pow(x,t.plo);
+    }
+    if (x >= t.xhi) {
+      if (t.errhi) d_tab_error() = 1;
+      return t.ahi * pow(x,t.phi);
+    }
+
+    const int64_t b = t.coffset + (int64_t) t.ncoeff*tab_bin(t,x);
     if (t.tabstyle == 1) return d_tabcoeff(b) + x*d_tabcoeff(b+1);  // linear
     if (t.tabstyle == 0) return d_tabcoeff(b);                      // lookup
     const double u = x - d_tabcoeff(b);                             // spline
     return d_tabcoeff(b+1) +
       u*(d_tabcoeff(b+2) + u*(d_tabcoeff(b+3) + u*d_tabcoeff(b+4)));
+  }
+
+  // row lookup for a multi-column table, the same expression as
+  //   InterpTable::interpolate_row()
+
+  KOKKOS_INLINE_FUNCTION
+  double tab_interpolate_row(int m, double x, double u) const {
+    const TabMeta &t = d_tabmeta(m);
+    const int64_t b = t.coffset + (int64_t) t.ncol*tab_bin(t,x);
+    double f = u*t.ncol - 0.5;
+    if (f <= 0.0) return d_tabcoeff(b);
+    if (f >= t.ncol-1) return d_tabcoeff(b+t.ncol-1);
+    const int j = (int) f;
+    return d_tabcoeff(b+j) + (f-j)*(d_tabcoeff(b+j+1)-d_tabcoeff(b+j));
+  }
+
+  // cos(chi) sampled from a tabulated differential cross section
+  //   returns 1 and sets cosX when the pair has a scatter table
+
+  // the random number is drawn inside, and only when the pair has a table,
+  //   so the stream matches CollideTable::scatter_cosX() exactly
+
+  KOKKOS_INLINE_FUNCTION
+  int scatter_cosX_kokkos(int isp, int jsp, double vr2, double &cosX,
+                          rand_type &rand_gen) const {
+    if (!nscattertab_kk) return 0;
+    const int m = d_scatteridx(isp,jsp);
+    if (m < 0) return 0;
+    cosX = tab_interpolate_row(m,vr2,rand_gen.drand());
+    if (cosX > 1.0) cosX = 1.0;
+    else if (cosX < -1.0) cosX = -1.0;
+    return 1;
   }
 
   // VSS alpha for this pair, from a table when one is defined
@@ -193,6 +268,37 @@ class CollideVSSKokkos : public CollideTable {
     const int m = d_alphaidx(isp,jsp);
     if (m < 0) return d_params(isp,jsp).alpha;
     return tab_evaluate(m,vr2);
+  }
+
+  // Larsen-Borgnakke acceptance probability, the same expression as
+  //   CollideTable::lb_weight(); -1.0 when the pair needs no correction
+
+  KOKKOS_INLINE_FUNCTION
+  double lb_weight_kokkos(int isp, int jsp, double etrans, double ec) const {
+    if (!nlbpair_kk) return -1.0;
+    const int row = d_lbidx(isp,jsp);
+    if (row < 0) return -1.0;
+    if (etrans <= 0.0) return 0.0;
+
+    double f = (log(etrans/1.602176634e-19) - lblo_kk) * lbinvdelta_kk;
+    double g = (log(ec/1.602176634e-19) - lblo_kk) * lbinvdelta_kk;
+
+    if (f < 0.0) f = 0.0;
+    if (g > nlbgrid_kk-1) g = nlbgrid_kk-1;
+
+    int i = (int) f;
+    double r;
+    if (i >= nlbgrid_kk-1) r = d_lbratio(row,nlbgrid_kk-1);
+    else r = d_lbratio(row,i) + (f-i)*(d_lbratio(row,i+1)-d_lbratio(row,i));
+
+    int j = (int) g;
+    if (j < 0) j = 0;
+    else if (j > nlbgrid_kk-2) j = nlbgrid_kk-2;
+    const double rmax = d_lbmax(row,j+1);
+
+    if (rmax <= 0.0) return -1.0;
+    const double w = r / rmax;
+    return (w > 1.0) ? 1.0 : w;
   }
 
  private:

@@ -56,23 +56,6 @@ void CollideTableKokkos::init()
   // refuse what the device path does not implement, rather than silently
   //   producing a different answer from the non-KOKKOS build
 
-  if (nscatter)
-    error->all(FLERR,"Collide table/kk does not support scatter tables");
-  if (nlbpair)
-    error->all(FLERR,"Collide table/kk does not support a tabulated pair "
-               "with internal energy");
-  if (react)
-    error->all(FLERR,"Collide table/kk does not support chemistry");
-
-  for (int m = 0; m < nsigma; m++)
-    if (sigma_tab[m]->extrap_lo == TB_ERROR ||
-        sigma_tab[m]->extrap_hi == TB_ERROR)
-      error->all(FLERR,"Collide table/kk does not support EXTRAP error");
-  for (int m = 0; m < nalpha; m++)
-    if (alpha_tab[m]->extrap_lo == TB_ERROR ||
-        alpha_tab[m]->extrap_hi == TB_ERROR)
-      error->all(FLERR,"Collide table/kk does not support EXTRAP error");
-
   copy_tables_to_device();
 }
 
@@ -84,20 +67,20 @@ void CollideTableKokkos::init()
 
 void CollideTableKokkos::copy_tables_to_device()
 {
-  const int ntot = nsigma + nalpha;
+  const int ntot = nsigma + nalpha + nscatter;
   if (ntot == 0) return;
 
   // first pass sizes the flat coefficient array
 
   bigint ncoeff_total = 0;
   for (int m = 0; m < ntot; m++) {
-    InterpTable *t = (m < nsigma) ? sigma_tab[m] : alpha_tab[m-nsigma];
+    InterpTable *t = table_at(m);
     int tabstyle_,ncoeff_,shift_,nbins_;
     int64_t offset_;
     double alo_,plo_,ahi_,phi_,*coeff_;
     t->export_table(tabstyle_,ncoeff_,shift_,offset_,nbins_,
                     alo_,plo_,ahi_,phi_,coeff_);
-    ncoeff_total += (bigint) ncoeff_*nbins_;
+    ncoeff_total += (bigint) ncoeff_*t->ncol*nbins_;
   }
 
   k_tabmeta = tdual_tabmeta_1d("collide/table/kk:tabmeta",ntot);
@@ -105,7 +88,7 @@ void CollideTableKokkos::copy_tables_to_device()
 
   bigint offset_into_coeff = 0;
   for (int m = 0; m < ntot; m++) {
-    InterpTable *t = (m < nsigma) ? sigma_tab[m] : alpha_tab[m-nsigma];
+    InterpTable *t = table_at(m);
     int tabstyle_,ncoeff_,shift_,nbins_;
     int64_t offset_;
     double alo_,plo_,ahi_,phi_,*coeff_;
@@ -124,6 +107,9 @@ void CollideTableKokkos::copy_tables_to_device()
     meta.shift = shift_;
     meta.nbins = nbins_;
     meta.ncoeff = ncoeff_;
+    meta.ncol = t->ncol;
+    meta.errlo = (t->extrap_lo == TB_ERROR);
+    meta.errhi = (t->extrap_hi == TB_ERROR);
 
     // tab_evaluate() branches on 0 = lookup, 1 = linear, else spline, which
     //   is the order of the TB_ enum
@@ -131,7 +117,7 @@ void CollideTableKokkos::copy_tables_to_device()
     meta.tabstyle = tabstyle_;
     k_tabmeta.view_host()(m) = meta;
 
-    const bigint n = (bigint) ncoeff_*nbins_;
+    const bigint n = (bigint) ncoeff_*t->ncol*nbins_;
     for (bigint k = 0; k < n; k++)
       k_tabcoeff.view_host()(offset_into_coeff+k) = coeff_[k];
     offset_into_coeff += n;
@@ -150,11 +136,14 @@ void CollideTableKokkos::copy_tables_to_device()
   const int ns = particle->nspecies;
   k_sigidx = DAT::tdual_int_2d("collide/table/kk:sigidx",ns,ns);
   k_alphaidx = DAT::tdual_int_2d("collide/table/kk:alphaidx",ns,ns);
+  k_scatteridx = DAT::tdual_int_2d("collide/table/kk:scatteridx",ns,ns);
   for (int i = 0; i < ns; i++)
     for (int j = 0; j < ns; j++) {
       k_sigidx.view_host()(i,j) = sigma_index[i][j];
       const int a = alpha_index[i][j];
       k_alphaidx.view_host()(i,j) = (a < 0) ? -1 : nsigma + a;
+      const int c = scatter_index[i][j];
+      k_scatteridx.view_host()(i,j) = (c < 0) ? -1 : nsigma + nalpha + c;
     }
   k_sigidx.modify_host();
   k_sigidx.sync_device();
@@ -162,7 +151,94 @@ void CollideTableKokkos::copy_tables_to_device()
   k_alphaidx.modify_host();
   k_alphaidx.sync_device();
   d_alphaidx = k_alphaidx.view_device();
+  k_scatteridx.modify_host();
+  k_scatteridx.sync_device();
+  d_scatteridx = k_scatteridx.view_device();
 
   ntab_kk = nsigma;
   nalphatab_kk = nalpha;
+  nscattertab_kk = nscatter;
+
+  copy_lb_to_device();
+}
+
+/* ----------------------------------------------------------------------
+   pick out table M of the concatenated sigma, alpha, scatter lists
+------------------------------------------------------------------------- */
+
+InterpTable *CollideTableKokkos::table_at(int m)
+{
+  if (m < nsigma) return sigma_tab[m];
+  if (m < nsigma+nalpha) return alpha_tab[m-nsigma];
+  return scatter_tab[m-nsigma-nalpha];
+}
+
+/* ----------------------------------------------------------------------
+   copy the Larsen-Borgnakke acceptance normalization to the device
+------------------------------------------------------------------------- */
+
+void CollideTableKokkos::copy_lb_to_device()
+{
+  const int ns = particle->nspecies;
+  k_lbidx = DAT::tdual_int_2d("collide/table/kk:lbidx",ns,ns);
+  for (int i = 0; i < ns; i++)
+    for (int j = 0; j < ns; j++)
+      k_lbidx.view_host()(i,j) = lb_index ? lb_index[i][j] : -1;
+  k_lbidx.modify_host();
+  k_lbidx.sync_device();
+  d_lbidx = k_lbidx.view_device();
+
+  nlbpair_kk = nlbpair;
+  if (nlbpair == 0) return;
+
+  // the grid is the one CollideTable::build_lbratio() laid down
+
+  nlbgrid_kk = nlbgrid;
+  lblo_kk = lblo;
+  lbinvdelta_kk = lbinvdelta;
+
+  k_lbratio = DAT::tdual_float_2d("collide/table/kk:lbratio",nlbpair,nlbgrid_kk);
+  k_lbmax = DAT::tdual_float_2d("collide/table/kk:lbmax",nlbpair,nlbgrid_kk);
+  for (int r = 0; r < nlbpair; r++)
+    for (int k = 0; k < nlbgrid_kk; k++) {
+      k_lbratio.view_host()(r,k) = lbratio[r][k];
+      k_lbmax.view_host()(r,k) = lbmax[r][k];
+    }
+  k_lbratio.modify_host();
+  k_lbratio.sync_device();
+  d_lbratio = k_lbratio.view_device();
+  k_lbmax.modify_host();
+  k_lbmax.sync_device();
+  d_lbmax = k_lbmax.view_device();
+
+  lbflag = 1;
+}
+
+/* ----------------------------------------------------------------------
+   run the collision kernel, then raise any error the device recorded
+------------------------------------------------------------------------- */
+
+void CollideTableKokkos::collisions()
+{
+  Kokkos::deep_copy(d_tab_error,0);
+  Kokkos::deep_copy(d_lb_cap,0);
+
+  CollideVSSKokkos::collisions();
+
+  Kokkos::deep_copy(h_tab_error,d_tab_error);
+  if (h_tab_error())
+    error->one(FLERR,"Value is outside the tabulated data range");
+
+  // same one-time warning as CollideVSS::lb_capcheck()
+
+  Kokkos::deep_copy(h_lb_cap,d_lb_cap);
+  if (h_lb_cap() && !lbcapflag) {
+    lbcapflag = 1;
+    if (comm->me == 0)
+      error->warning(FLERR,"Larsen-Borgnakke acceptance loop hit its retry "
+                     "cap; the tabulated cross section is far from the VSS "
+                     "parameters of that pair, so its internal energy "
+                     "exchange is biased toward the VSS law.  Fit diam and "
+                     "omega to the table");
+  }
 }

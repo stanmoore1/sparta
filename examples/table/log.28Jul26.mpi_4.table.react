@@ -24,13 +24,13 @@ Created orthogonal box = (0 0 0) to (0.0001 0.0001 0.0001)
 create_grid 	    10 10 10
 WARNING: Could not acquire nearby ghost cells b/c grid partition is not clumped (../grid.cpp:473)
 Created 1000 child grid cells
-  CPU time = 0.00102635 secs
-  create/ghost percent = 87.8127 12.1873
+  CPU time = 0.0400029 secs
+  create/ghost percent = 20.0061 79.9939
 
 balance_grid        rcb part
 Balance grid migrated 740 cells
-  CPU time = 0.000660631 secs
-  reassign/sort/migrate/ghost percent = 48.1155 0.319392 18.7397 32.8254
+  CPU time = 0.000820005 secs
+  reassign/sort/migrate/ghost percent = 50.0066 0.480485 21.4052 28.1076
 
 species		    react.species X Y
 mixture		    air X Y vstream 0.0 0.0 0.0 temp 8000.0
@@ -45,7 +45,7 @@ react               table react.reactions
 
 create_particles    air n 10000 twopass
 Created 10000 particles
-  CPU time = 0.00131601 secs
+  CPU time = 0.00169913 secs
 
 stats		    500
 compute             temp temp
@@ -62,30 +62,30 @@ Memory usage per proc in Mbytes:
   total     (ave,min,max) = 3.07629 3.07629 3.07629
 Step CPU Np Natt Ncoll Nreact c_temp 
        0            0    10000        0        0        0    8014.2103 
-WARNING: Reaction cross section exceeds the total cross section, reaction rate will be underpredicted; give that pair a collide table cross section which envelopes the reactive one (../react_table.cpp:230)
-     500   0.13010723    10000      488      128        1    6912.0716 
-    1000   0.25691888    10000      492      148        0    6861.6123 
-    1500   0.38968394    10000      482      124        0    6843.5049 
-    2000   0.52250145    10000      476      129        0    6836.2619 
-    2500   0.65074577    10000      476      137        0    6829.7432 
-    3000   0.77737169    10000      485      132        0    6824.4317 
-    3500   0.91510033    10000      478      123        0    6822.2588 
-    4000    1.0441174    10000      489      135        0    6821.5345 
-    4500    1.1745447    10000      464      120        0    6819.3616 
-    5000    1.3068279    10000      480      129        0    6818.8788 
-Loop time of 1.30691 on 4 procs for 5000 steps with 10000 particles
-Performance: 3825.812 timesteps/s, 38.258 Mparticle-step/s
+WARNING: Reaction cross section exceeds the total cross section, reaction rate will be underpredicted; give that pair a collide table cross section which envelopes the reactive one (../react_table.cpp:237)
+     500   0.13973234    10000      488      128        1    6912.0716 
+    1000   0.26491715    10000      492      148        0    6861.6123 
+    1500   0.38346388    10000      482      124        0    6843.5049 
+    2000   0.50114547    10000      476      129        0    6836.2619 
+    2500   0.62316999    10000      476      137        0    6829.7432 
+    3000   0.74262306    10000      485      132        0    6824.4317 
+    3500   0.85924063    10000      478      123        0    6822.2588 
+    4000   0.97799129    10000      489      135        0    6821.5345 
+    4500    1.1049993    10000      464      120        0    6819.3616 
+    5000    1.2342586    10000      480      129        0    6818.8788 
+Loop time of 1.23435 on 4 procs for 5000 steps with 10000 particles
+Performance: 4050.712 timesteps/s, 40.507 Mparticle-step/s
 
 MPI task timing breakdown:
 Section |  min time  |  avg time  |  max time  |%varavg| %total
 ---------------------------------------------------------------
-Move    | 0.85411    | 0.86238    | 0.87764    |   1.0 | 65.99
-Coll    | 0.10682    | 0.11009    | 0.11713    |   1.2 |  8.42
-Sort    | 0.019565   | 0.020032   | 0.020775   |   0.3 |  1.53
-Comm    | 0.20872    | 0.21413    | 0.21692    |   0.7 | 16.38
+Move    | 0.76633    | 0.78173    | 0.80222    |   1.7 | 63.33
+Coll    | 0.098695   | 0.10084    | 0.10202    |   0.4 |  8.17
+Sort    | 0.01843    | 0.018927   | 0.019593   |   0.3 |  1.53
+Comm    | 0.209      | 0.21155    | 0.21596    |   0.6 | 17.14
 Modify  | 0          | 0          | 0          |   0.0 |  0.00
-Output  | 0.00029778 | 0.00042597 | 0.00078219 |   0.0 |  0.03
-Other   |            | 0.09986    |            |       |  7.64
+Output  | 0.0003076  | 0.00050443 | 0.0010641  |   0.0 |  0.04
+Other   |            | 0.1208     |            |       |  9.79
 
 Particle moves    = 50000000 (50M)
 Cells touched     = 140557446 (141M)
@@ -101,7 +101,7 @@ Reactions         = 4951 (4.95K)
 Particles stuck   = 0
 Axisymm bad moves = 0
 
-Particle-moves/CPUsec/proc: 9.56453e+06
+Particle-moves/CPUsec/proc: 1.01268e+07
 Particle-moves/step: 10000
 Cell-touches/particle/step: 2.81115
 Particle comm iterations/step: 2.004

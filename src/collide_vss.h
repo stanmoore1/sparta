@@ -58,6 +58,15 @@ class CollideVSS : public Collide {
     double ucmf;
     double vcmf;
     double wcmf;
+
+    // ratio of the VHS total cross section to the one actually used to
+    //   select this pair, so a react style which derives its probability
+    //   from the VHS form still reproduces its rate coefficients.  1.0
+    //   unless a tabulated cross section selected the pair.  the host
+    //   styles read Collide::react_prob_factor instead; this is here for
+    //   the KOKKOS path, whose react styles take it as an argument
+
+    double react_prob_factor;
   };
 
   struct Params {             // VSS model parameters

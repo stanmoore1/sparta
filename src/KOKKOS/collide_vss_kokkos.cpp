@@ -47,6 +47,7 @@ enum{CONSTANT,VARIABLE};
 #define DELTACELLCOUNT 2
 
 #define MAXLINE 1024
+#define LBMAXTRY_KK 1000   // matches LBMAXTRY in collide_vss.cpp
 #define EPSZERO 1.0e-14
 #define BIG 1.0e20
 
@@ -71,7 +72,13 @@ CollideVSSKokkos::CollideVSSKokkos(SPARTA *sparta, int narg, char **arg,
   grid_kk_copy(sparta),
   react_kk_copy(sparta)
 {
-  ntab_kk = nalphatab_kk = 0;
+  ntab_kk = nalphatab_kk = nscattertab_kk = nlbpair_kk = 0;
+  nlbgrid_kk = 0;
+  lblo_kk = lbinvdelta_kk = 0.0;
+  d_tab_error = DAT::t_int_scalar("collide/kk:tab_error");
+  h_tab_error = Kokkos::create_mirror_view(d_tab_error);
+  d_lb_cap = DAT::t_int_scalar("collide/kk:lb_cap");
+  h_lb_cap = Kokkos::create_mirror_view(d_lb_cap);
 
   kokkos_flag = 1;
 
@@ -1462,6 +1469,16 @@ int CollideVSSKokkos::test_collision_kokkos(int icell, int igroup, int jgroup,
       const double vre = tab_evaluate(m,vr2);
       d_vremax(icell,igroup,jgroup) = MAX(vre,d_vremax(icell,igroup,jgroup));
       if (vre/d_vremax(icell,igroup,jgroup) < rand_gen.drand()) return 0;
+
+      // a react style which derives its probability from the VHS cross
+      //   section needs the ratio which restores its intended rate, as
+      //   CollideTable::test_collision() computes for the host styles
+
+      if (react_defined)
+        precoln.react_prob_factor =
+          d_prefactor(ispecies,jspecies) *
+          pow(vr2,1.0-d_params(ispecies,jspecies).omega) / vre;
+
       precoln.vr2 = vr2;
       return 1;
     }
@@ -1480,6 +1497,7 @@ int CollideVSSKokkos::test_collision_kokkos(int icell, int igroup, int jgroup,
   double vre = vro*d_prefactor(ispecies,jspecies);
   d_vremax(icell,igroup,jgroup) = MAX(vre,d_vremax(icell,igroup,jgroup));
   if (vre/d_vremax(icell,igroup,jgroup) < rand_gen.drand()) return 0;
+  if (react_defined) precoln.react_prob_factor = 1.0;
   precoln.vr2 = vr2;
   return 1;
 }
@@ -1549,7 +1567,8 @@ int CollideVSSKokkos::perform_collision_kokkos(Particle::OnePart *&ip,
     reaction = react_kk_copy.obj.attempt_kk(ip,jp,
                                              precoln.etrans,precoln.erot,
                                              precoln.evib,postcoln.etotal,kspecies,
-                                             recomb_species,recomb_density,d_species);
+                                             recomb_species,recomb_density,d_species,
+                                             precoln.react_prob_factor);
   else reaction = 0;
 
   // just collision, no reaction
@@ -1666,7 +1685,14 @@ void CollideVSSKokkos::SCATTER_TwoBodyScattering(Particle::OnePart *ip,
   double alpha_r = 1.0 / scatter_alpha_kokkos(isp,jsp,precoln.vr2);
 
   double eps = rand_gen.drand() * 2*MY_PI;
-  if (fabs(alpha_r - 1.0) < 0.001) {
+
+  // a scatter table samples the deflection angle directly, in which case
+  //   alpha is not used; same draw order as CollideVSS
+
+  double cosXtab;
+  const int haveX = scatter_cosX_kokkos(isp,jsp,precoln.vr2,cosXtab,rand_gen);
+
+  if (!haveX && fabs(alpha_r - 1.0) < 0.001) {
     double vr = sqrt(2.0 * postcoln.etrans / d_params(isp,jsp).mr);
     double cosX = 2.0*rand_gen.drand() - 1.0;
     double sinX = sqrt(1.0 - cosX*cosX);
@@ -1675,7 +1701,7 @@ void CollideVSSKokkos::SCATTER_TwoBodyScattering(Particle::OnePart *ip,
     wc = vr*sinX*sin(eps);
   } else {
     double scale = sqrt((2.0 * postcoln.etrans) / (d_params(isp,jsp).mr * precoln.vr2));
-    double cosX = 2.0*pow(rand_gen.drand(),alpha_r) - 1.0;
+    double cosX = haveX ? cosXtab : 2.0*pow(rand_gen.drand(),alpha_r) - 1.0;
     double sinX = sqrt(1.0 - cosX*cosX);
     vrc[0] = vi[0]-vj[0];
     vrc[1] = vi[1]-vj[1];
@@ -1760,16 +1786,32 @@ void CollideVSSKokkos::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
 
           } else if (rotstyle != NONE && rotdof == 2) {
             E_Dispose += p->erot;
-            Fraction_Rot =
-              1- pow(rand_gen.drand(),
-                     (1/(2.5-d_params(ip->ispecies,jp->ispecies).omega)));
+            double w;
+            int ntry = 0;
+            do {
+              Fraction_Rot =
+                1- pow(rand_gen.drand(),
+                       (1/(2.5-d_params(ip->ispecies,jp->ispecies).omega)));
+            } while (lbflag && ++ntry < LBMAXTRY_KK &&
+                     (w = lb_weight_kokkos(ip->ispecies,jp->ispecies,
+                                           (1.0-Fraction_Rot)*E_Dispose,E_Dispose))
+                     >= 0.0 && w < rand_gen.drand());
+            if (ntry >= LBMAXTRY_KK) d_lb_cap() = 1;
             p->erot = Fraction_Rot * E_Dispose;
             E_Dispose -= p->erot;
           } else {
             E_Dispose += p->erot;
-            p->erot = E_Dispose *
-              sample_bl(rand_gen,0.5*d_species[sp].rotdof-1.0,
-                        1.5-d_params(ip->ispecies,jp->ispecies).omega);
+            double frac,w;
+            int ntry = 0;
+            do {
+              frac = sample_bl(rand_gen,0.5*d_species[sp].rotdof-1.0,
+                               1.5-d_params(ip->ispecies,jp->ispecies).omega);
+            } while (lbflag && ++ntry < LBMAXTRY_KK &&
+                     (w = lb_weight_kokkos(ip->ispecies,jp->ispecies,
+                                           (1.0-frac)*E_Dispose,E_Dispose))
+                     >= 0.0 && w < rand_gen.drand());
+            if (ntry >= LBMAXTRY_KK) d_lb_cap() = 1;
+            p->erot = E_Dispose * frac;
             E_Dispose -= p->erot;
           }
         }
@@ -1788,8 +1830,16 @@ void CollideVSSKokkos::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
           } else if (vibdof == 2) {
             if (vibstyle == SMOOTH) {
               E_Dispose += p->evib;
-              Fraction_Vib =
-                1.0 - pow(rand_gen.drand(),(1.0/(2.5-d_params(ip->ispecies,jp->ispecies).omega)));
+              double w;
+              int ntry = 0;
+              do {
+                Fraction_Vib =
+                  1.0 - pow(rand_gen.drand(),(1.0/(2.5-d_params(ip->ispecies,jp->ispecies).omega)));
+              } while (lbflag && ++ntry < LBMAXTRY_KK &&
+                       (w = lb_weight_kokkos(ip->ispecies,jp->ispecies,
+                                             (1.0-Fraction_Vib)*E_Dispose,E_Dispose))
+                       >= 0.0 && w < rand_gen.drand());
+              if (ntry >= LBMAXTRY_KK) d_lb_cap() = 1;
               p->evib= Fraction_Vib * E_Dispose;
               E_Dispose -= p->evib;
 
@@ -1803,15 +1853,28 @@ void CollideVSSKokkos::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
                 p->evib = ivib * boltz * d_species[sp].vibtemp[0];
                 State_prob = pow((1.0 - p->evib / E_Dispose),
                                  (1.5 - d_params(ip->ispecies,jp->ispecies).omega));
+                if (lbflag) {
+                  const double w = lb_weight_kokkos(ip->ispecies,jp->ispecies,
+                                                    E_Dispose-p->evib,E_Dispose);
+                  if (w >= 0.0) State_prob *= w;
+                }
               } while (State_prob < rand_gen.drand());
               E_Dispose -= p->evib;
             }
           } else if (vibdof > 2) {
             if (vibstyle == SMOOTH) {
               E_Dispose += p->evib;
-              p->evib = E_Dispose *
-                sample_bl(rand_gen,0.5*d_species[sp].vibdof-1.0,
-                          1.5-d_params(ip->ispecies,jp->ispecies).omega);
+              double frac,w;
+              int ntry = 0;
+              do {
+                frac = sample_bl(rand_gen,0.5*d_species[sp].vibdof-1.0,
+                                 1.5-d_params(ip->ispecies,jp->ispecies).omega);
+              } while (lbflag && ++ntry < LBMAXTRY_KK &&
+                       (w = lb_weight_kokkos(ip->ispecies,jp->ispecies,
+                                             (1.0-frac)*E_Dispose,E_Dispose))
+                       >= 0.0 && w < rand_gen.drand());
+              if (ntry >= LBMAXTRY_KK) d_lb_cap() = 1;
+              p->evib = E_Dispose * frac;
               E_Dispose -= p->evib;
 
             } else if (vibstyle == DISCRETE) {
@@ -1834,6 +1897,11 @@ void CollideVSSKokkos::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
                   pevib = ivib * boltz * d_species[sp].vibtemp[imode];
                   State_prob = pow((1.0 - pevib / E_Dispose),
                                    (1.5 - d_params(ip->ispecies,jp->ispecies).omega));
+                  if (lbflag) {
+                    const double w = lb_weight_kokkos(ip->ispecies,jp->ispecies,
+                                                      E_Dispose-pevib,E_Dispose);
+                    if (w >= 0.0) State_prob *= w;
+                  }
                 } while (State_prob < rand_gen.drand());
 
                 d_vibmode(pindex,imode) = ivib;

@@ -99,6 +99,7 @@ void CollideTable::null_tables()
   lb_index = NULL;
   lbratio = lbmax = NULL;
   nlbpair = 0;
+  nlbgrid = 0;
   lbwarn = 0;
 }
 
@@ -429,6 +430,7 @@ void CollideTable::build_lbratio()
   memory->create(lbmax,nlbpair,NLB,"collide/table:lbmax");
   lblo = log(LBLO);
   lbinvdelta = (NLB-1) / (log(LBHI) - lblo);
+  nlbgrid = NLB;
   double delta = 1.0 / lbinvdelta;
 
   for (int i = 0; i < nspecies; i++)

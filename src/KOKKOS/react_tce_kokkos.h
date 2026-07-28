@@ -132,7 +132,9 @@ KOKKOS_INLINE_FUNCTION
 int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
          double pre_etrans, double pre_erot, double pre_evib,
          double &post_etotal, int &kspecies,
-         int &recomb_species, double &recomb_density, const t_species_1d_const &d_species) const
+         int &recomb_species, double &recomb_density,
+         const t_species_1d_const &d_species,
+         double sigma_factor) const
 {
   OneReactionKokkos *r;
 
@@ -238,7 +240,7 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
     case IONIZATION:
     case EXCHANGE:
       {
-        react_prob += r->d_coeff[2] * tgamma(z+2.5-r->d_coeff[5]) / MAX(1.0e-6,tgamma(z+r->d_coeff[3]+1.5)) *
+        react_prob += sigma_factor * r->d_coeff[2] * tgamma(z+2.5-r->d_coeff[5]) / MAX(1.0e-6,tgamma(z+r->d_coeff[3]+1.5)) *
           pow(ecc-r->d_coeff[1],r->d_coeff[3]-1+r->d_coeff[5]) *
           pow(1.0-r->d_coeff[1]/ecc,z+1.5-r->d_coeff[5]);
         break;
@@ -258,7 +260,7 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
         auto& d_sp2recomb = d_reactions(isp,jsp).d_sp2recomb;
         if (d_sp2recomb[recomb_species] != d_list[i]) continue;
 
-        react_prob += recomb_boost * recomb_density * r->d_coeff[2] *
+        react_prob += sigma_factor * recomb_boost * recomb_density * r->d_coeff[2] *
           tgamma(z+2.5-r->d_coeff[5]) / MAX(1.0e-6,tgamma(z+r->d_coeff[3]+1.5)) *
           pow(ecc-r->d_coeff[1],r->d_coeff[3]-1+r->d_coeff[5]) *  // extended to general recombination case with non-zero activation energy
           pow(1.0-r->d_coeff[1]/ecc,z+1.5-r->d_coeff[5]);

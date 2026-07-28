@@ -55,8 +55,12 @@ class CollideTableKokkos : public CollideVSSKokkos {
   ~CollideTableKokkos();
   void init();
 
+  void collisions();
+
  protected:
   void copy_tables_to_device();
+  void copy_lb_to_device();
+  class InterpTable *table_at(int);
 };
 
 }
