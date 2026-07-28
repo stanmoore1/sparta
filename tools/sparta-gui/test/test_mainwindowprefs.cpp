@@ -37,9 +37,11 @@
 #include <QAction>
 #include <QApplication>
 #include <QCheckBox>
+#include <QDesktopServices>
 #include <QDialog>
 #include <QDir>
 #include <QFile>
+#include <QFileDialog>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QMenu>
@@ -455,6 +457,146 @@ TEST_F(Prefs, CancellingTheVariablesDialogKeepsTheOldSet)
                                         << seen.join(", ").toStdString();
 }
 
+// -------------------------------------------------------------- help menu
+
+// Collects the URLs the application asks the desktop to open, instead of
+// letting them reach a browser that is not there.
+class UrlSink : public QObject {
+    Q_OBJECT
+public:
+    QStringList urls;
+public slots:
+    void take(const QUrl &u) { urls << u.toString(); }
+};
+
+TEST_F(Prefs, QuickHelpNamesTheVersionItIsDescribing)
+{
+    // the quick help is the one place a user reads which build they are on
+    // without going near a terminal
+    QStringList seen;
+    QTimer poll;
+    int left = 8000;
+    QObject::connect(&poll, &QTimer::timeout, [&]() {
+        auto *m = QApplication::activeModalWidget();
+        if ((left -= 5) < 0) {
+            poll.stop();
+            if (auto *d = qobject_cast<QDialog *>(m)) d->reject();
+            return;
+        }
+        if (auto *box = qobject_cast<QMessageBox *>(m)) {
+            seen << box->windowTitle() + "\n" + box->text() + "\n" + box->informativeText();
+            box->accept();
+        }
+    });
+    poll.setInterval(5);
+    poll.start();
+    call("help");
+    poll.stop();
+
+    ASSERT_FALSE(seen.isEmpty()) << "no help was shown";
+    const QString text = seen.join("\n");
+    EXPECT_TRUE(text.contains("Quick Help")) << text.toStdString();
+    EXPECT_TRUE(text.contains(SPARTA_GUI_VERSION))
+        << "the quick help does not say which version this is";
+    // and it has to describe this application rather than the one it came from
+    EXPECT_TRUE(text.contains("SPARTA-GUI"));
+    EXPECT_FALSE(text.contains("LAMMPS"));
+}
+
+TEST_F(Prefs, TheManualAndHowToLinksPointAtTheSpartaDocumentation)
+{
+    // a wrong URL here is invisible in every other test: the browser is not
+    // there to open it, so nothing fails
+    UrlSink sink;
+    QDesktopServices::setUrlHandler("https", &sink, "take");
+
+    call("manual");
+    call("howto");
+
+    QDesktopServices::unsetUrlHandler("https");
+    ASSERT_EQ(sink.urls.size(), 2) << sink.urls.join(", ").toStdString();
+    EXPECT_TRUE(sink.urls.at(0).contains("Manual.html")) << sink.urls.at(0).toStdString();
+    for (const auto &u : sink.urls) {
+        EXPECT_TRUE(u.startsWith("https://sparta.github.io")) << u.toStdString();
+        EXPECT_FALSE(u.contains("lammps")) << u.toStdString();
+    }
+}
+
+// ---------------------------------------------------------- import surface
+
+TEST_F(Prefs, ASurfaceFileThatCannotBeParsedIsRefusedRatherThanInserted)
+{
+    const QString junk = QDir(examples.path()).filePath("notasurface.stl");
+    write(junk, "this is not an STL and not a SPARTA surface file either\n");
+    ASSERT_NE(editor(), nullptr);
+    editor()->setPlainText("# nothing yet\n");
+
+    QStringList seen;
+    QTimer poll;
+    int left = 20000;
+    QObject::connect(&poll, &QTimer::timeout, [&]() {
+        auto *m = QApplication::activeModalWidget();
+        if ((left -= 5) < 0) {
+            poll.stop();
+            if (auto *d = qobject_cast<QDialog *>(m)) d->reject();
+            return;
+        }
+        if (auto *box = qobject_cast<QMessageBox *>(m)) {
+            seen << box->windowTitle() + " " + box->text();
+            box->accept();
+            return;
+        }
+        if (auto *fd = qobject_cast<QFileDialog *>(m)) {
+            fd->setDirectory(QFileInfo(junk).absolutePath());
+            fd->selectFile(junk);
+            static_cast<QDialog *>(fd)->accept();
+            return;
+        }
+        if (auto *d = qobject_cast<QDialog *>(m)) d->reject();
+    });
+    poll.setInterval(5);
+    poll.start();
+    call("importSurface");
+    poll.stop();
+
+    EXPECT_FALSE(seen.filter("Import Surface").isEmpty())
+        << "a file it could not read was accepted without a word: "
+        << seen.join(" | ").toStdString();
+    EXPECT_EQ(editor()->toPlainText(), "# nothing yet\n")
+        << "something was inserted for a file that would not parse";
+}
+
+TEST_F(Prefs, CancellingTheSurfaceImportInsertsNothing)
+{
+    ASSERT_NE(editor(), nullptr);
+    editor()->setPlainText("# nothing yet\n");
+
+    int dialogs = 0;
+    QTimer poll;
+    int left = 8000;
+    QObject::connect(&poll, &QTimer::timeout, [&]() {
+        auto *m = QApplication::activeModalWidget();
+        if ((left -= 5) < 0) {
+            poll.stop();
+            if (auto *d = qobject_cast<QDialog *>(m)) d->reject();
+            return;
+        }
+        if (auto *fd = qobject_cast<QFileDialog *>(m)) {
+            ++dialogs;
+            static_cast<QDialog *>(fd)->reject();
+            return;
+        }
+        if (auto *d = qobject_cast<QDialog *>(m)) d->reject();
+    });
+    poll.setInterval(5);
+    poll.start();
+    call("importSurface");
+    poll.stop();
+
+    EXPECT_EQ(dialogs, 1) << "it did not ask which surface to import";
+    EXPECT_EQ(editor()->toPlainText(), "# nothing yet\n");
+}
+
 int main(int argc, char **argv)
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
@@ -484,6 +626,8 @@ int main(int argc, char **argv)
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }
+
+#include "test_mainwindowprefs.moc"
 
 // Local Variables:
 // c-basic-offset: 4

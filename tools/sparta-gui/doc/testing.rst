@@ -1032,6 +1032,14 @@ run.  Test cases cover:
   leaving it on keeping them
 - A variable surviving into the next visit to the Set Variables dialog, and
   a cancelled dialog keeping the old set rather than the rejected rows
+- The quick help naming the version it is describing -- the one place a user
+  reads which build they are on without going near a terminal -- and
+  describing this application rather than the one it was ported from
+- The manual and how-to links pointing at the SPARTA documentation.  A wrong
+  URL is invisible everywhere else, since no browser is there to open it;
+  ``QDesktopServices::setUrlHandler`` collects them instead
+- A surface file that will not parse refused with a message rather than
+  inserted, and a cancelled import inserting nothing
 
 The example folders are named ``guitest_*`` on purpose: with no configured
 folder the window falls back to whichever examples tree it finds beside the
