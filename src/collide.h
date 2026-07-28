@@ -67,8 +67,12 @@ class Collide : protected Pointers {
 
   // effective total cross section for species pair I,J at temperature T
   // used by compute lambda/grid, which must not assume the VHS form
+  // tabulated_pair() lets a caller keep its historical VHS arithmetic
+  //   verbatim for the pairs where the two agree, so that adding this
+  //   hook does not perturb existing results in the last bits
 
   virtual double sigma_eff(int, int, double);
+  virtual int tabulated_pair(int, int) {return 0;}
 
   void modify_params(int, char **);
   void reset_vremax();

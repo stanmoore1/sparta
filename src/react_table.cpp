@@ -87,11 +87,6 @@ void ReactTable::init()
 
   ReactBird::init();
 
-  for (int m = 0; m < nlist; m++)
-    if (rlist[m].active && rlist[m].type == RECOMBINATION)
-      error->all(FLERR,
-                 "React table does not currently support recombination reactions");
-
   // every active reaction must be tabulated, since this style has no other
   //   way to form a probability, and an untabulated one would have no table
 
@@ -125,13 +120,18 @@ void ReactTable::init()
       rtab[m]->build(TB_LINEAR,10);
       rtab[m]->free_input();
 
+      // a recombination table is a cross section per unit third-body
+      //   number density, so it carries an extra volume
+
+      const char *units = (r->type == RECOMBINATION) ? "m^5" : "m^2";
+
       char str[512];
       sprintf(str,"Reaction cross section %s from %s for %s:\n"
-              "  %d values, E = %.4g to %.4g eV, max %.4g m^2, %d bins",
+              "  %d values, E = %.4g to %.4g eV, max %.4g %s, %d bins",
               tabkey[m],tabfile[m],r->id,rtab[m]->ninput,
               0.5*mr*rtab[m]->xlo/1.602176634e-19,
               0.5*mr*rtab[m]->xhi/1.602176634e-19,
-              rtab[m]->ymax,rtab[m]->nbins);
+              rtab[m]->ymax,units,rtab[m]->nbins);
       if (screen) fprintf(screen,"%s\n",str);
       if (logfile) fprintf(logfile,"%s\n",str);
     }
@@ -190,16 +190,45 @@ int ReactTable::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
     // index the table by the energy this reaction was tabulated against
 
     double ereact = tabetot[list[i]] ? pre_etotal : pre_etrans;
-    react_prob += rtab[list[i]]->evaluate(2.0*ereact/mr) / sigma_t;
+    double sigma_r = rtab[list[i]]->evaluate(2.0*ereact/mr);
+
+    if (r->type == RECOMBINATION) {
+
+      // Collide::collisions() picked a 3rd particle for this collision, or
+      //   -1 if it skipped the selection.  the boost factor makes that
+      //   selection rare and the probability is scaled back up by it, so
+      //   the statistics are unchanged; same scheme as ReactTCE
+      // the 3rd particle only selects which recombination reaction applies,
+      //   so skip this one unless it is the reaction that species maps to
+
+      if (recomb_species < 0) continue;
+      int *sp2recomb = reactions[isp][jsp].sp2recomb;
+      if (sp2recomb[recomb_species] != list[i]) continue;
+
+      // sigma_r is a cross section per unit third-body number density, in
+      //   m^5, so that n3*sigma_r is an area and <sigma_r g> is the usual
+      //   three-body rate coefficient in m^6/s
+
+      react_prob += recomb_boost * recomb_density * sigma_r / sigma_t;
+
+    } else react_prob += sigma_r / sigma_t;
 
     // sigma_react exceeding sigma_total means the collide style's total
     //   cross section does not envelope the reactive one, which clips the
     //   rate.  warn once rather than on every collision
+    // for recombination the boost factor multiplies the probability, and
+    //   its default of 1000 is large enough that it is the usual cause,
+    //   so point at it rather than at the cross sections
 
     if (react_prob > 1.0 && !warnflag) {
       warnflag = 1;
-      error->warning(FLERR,"Reaction cross section exceeds the total cross "
-                     "section, reaction rate will be underpredicted");
+      if (r->type == RECOMBINATION)
+        error->warning(FLERR,"Boosted recombination probability exceeds 1, "
+                       "recombination rate will be underpredicted; reduce "
+                       "the react_modify rboost factor");
+      else
+        error->warning(FLERR,"Reaction cross section exceeds the total cross "
+                       "section, reaction rate will be underpredicted");
     }
 
     if (react_prob > random_prob) {
@@ -218,6 +247,13 @@ int ReactTable::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
       case EXCHANGE:
         {
           jp->ispecies = r->products[1];
+          break;
+        }
+      case RECOMBINATION:
+        {
+          // the 2nd reactant is always consumed
+
+          jp->ispecies = -1;
           break;
         }
       }

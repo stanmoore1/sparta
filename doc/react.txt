@@ -314,6 +314,35 @@ collision energy the TCE model uses, and is the right choice for a cross
 section that was itself fitted against a total-energy variable.  For
 reactants with no internal energy the two are identical.
 
+Recombination reactions are three-body, so their probability also carries
+the number density n3 of the third particle which SPARTA selects from the
+same grid cell:
+
+P_react = n3 * sigma_rec(E) / sigma_total(E) :pre
+
+The tabulated sigma_rec is therefore a cross section per unit third-body
+number density, and its YUNITS must be m^5, cm^5 or A^5 rather than an
+area.  With that convention the average <sigma_rec*g> over the relative
+speed distribution is the ordinary three-body rate coefficient in m^6/s,
+which is how measured and computed recombination rates are reported.  For
+example:
+
+O + O --> O2
+R T 0.0 8.197e-19 o2_recomb.tab O2_RECOMB :pre
+
+Which reaction a given third-body species selects follows the same rules
+as the Arrhenius and Quantum styles, so the third body may be named
+explicitly as the second product, may use the atom/molecule wildcards, or
+may be left unspecified as above so that any species can act as the third
+body.  See the discussion of recombination reactions above.
+
+The "react_modify rboost"_react_modify.html factor applies to the {table}
+style exactly as it does to the other styles: SPARTA selects a third
+particle only 1/rboost of the time and scales the probability up by
+rboost, leaving the rate unchanged.  A large boost factor with a large
+sigma_rec can drive the probability above 1, which clips the rate; the
+same probability-exceeds-1 warning is issued when this happens.
+
 :line
 
 If the ambipolar approximation is being used, via the "fix
@@ -404,8 +433,10 @@ effectively.
 
 [Restrictions:]
 
-The {table} style does not currently support recombination reactions, and
-has no {kk} suffixed variant.
+The {table} style requires every reaction in its file to use the T style;
+it cannot mix tabulated reactions with Arrhenius or Quantum ones, since it
+has no way to form a probability for the latter.  It has no {kk} suffixed
+variant.
 
 [Related commands:]
 

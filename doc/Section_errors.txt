@@ -297,6 +297,22 @@ The binned table does not reproduce the cross section data read from
 the file to within 1%.  Increase N or use the spline interpolation
 style.  This is a warning. :dd
 
+{Collision energy is outside the Larsen-Borgnakke normalization grid, internal energy exchange for the tabulated pair reverts to the VSS law} :dt
+
+The acceptance test which restores detailed balance for a tabulated
+cross section is normalized on an energy grid spanning 1e-9 to 1e6 eV.
+A collision energy above that range cannot be bounded by it, so the
+exchange falls back to the uncorrected VSS sampling for those
+collisions.  This is a warning. :dd
+
+{Boosted recombination probability exceeds 1, recombination rate will be underpredicted; reduce the react_modify rboost factor} :dt
+
+The recombination probability is scaled up by the rboost factor, whose
+default of 1000 is chosen for the Arrhenius styles.  With a tabulated
+recombination cross section it can push the probability past 1, which
+clips the rate.  Lower rboost until the warning stops.  This is a
+warning. :dd
+
 {Tabulated data has a negative cross section} :dt
 
 Cross sections must be >= 0. :dd

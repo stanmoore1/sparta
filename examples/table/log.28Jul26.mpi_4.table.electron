@@ -1,5 +1,5 @@
 SPARTA (24 Sep 2025)
-Running on 1 MPI task(s)
+Running on 4 MPI task(s)
 ################################################################################
 # electron-neutral collisions with a tabulated cross section
 #
@@ -45,14 +45,15 @@ boundary	    rr rr rr
 create_box  	    0 0.0001 0 0.0001 0 0.0001
 Created orthogonal box = (0 0 0) to (0.0001 0.0001 0.0001)
 create_grid 	    10 10 10
+WARNING: Could not acquire nearby ghost cells b/c grid partition is not clumped (../grid.cpp:473)
 Created 1000 child grid cells
-  CPU time = 0.00079298 secs
-  create/ghost percent = 84.4859 15.5141
+  CPU time = 0.00104808 secs
+  create/ghost percent = 91.372 8.62804
 
 balance_grid        rcb part
-Balance grid migrated 0 cells
-  CPU time = 0.000169992 secs
-  reassign/sort/migrate/ghost percent = 62.9734 0.56101 10.0982 26.3675
+Balance grid migrated 740 cells
+  CPU time = 0.000698218 secs
+  reassign/sort/migrate/ghost percent = 50.2213 0.450576 22.49 26.8382
 
 species		    en.species N2 N2+ e
 # the ambipolar electron must be in a collision group of its own, both
@@ -77,7 +78,7 @@ collide_modify      ambipolar yes
 
 create_particles    plasma n 20000 twopass
 Created 20000 particles
-  CPU time = 0.00477195 secs
+  CPU time = 0.00233253 secs
 
 stats		    200
 compute             temp temp
@@ -85,70 +86,72 @@ stats_style	    step cpu np nattempt ncoll c_temp
 
 timestep 	    1.0E-9
 run 		    2000
+Larsen-Borgnakke detailed balance corrected for 2 tabulated species pairs
+  worst-case acceptance ratio 0.32
 Memory usage per proc in Mbytes:
-  particles (ave,min,max) = 4 4 4
+  particles (ave,min,max) = 2 2 2
   grid      (ave,min,max) = 1.51379 1.51379 1.51379
   surf      (ave,min,max) = 0 0 0
-  total     (ave,min,max) = 5.51379 5.51379 5.51379
+  total     (ave,min,max) = 3.51379 3.51379 3.51379
 Step CPU Np Natt Ncoll c_temp 
-       0            0    20000        0        0    10003.386 
-     200   0.26496005    20000    11008     1343    10084.321 
-     400     0.520787    20000    11004     1333    10154.331 
-     600   0.77103114    20000    10951     1284    10178.639 
-     800    1.0221682    20000    11041     1258    10252.006 
-    1000    1.2782631    20000    11022     1299    10254.487 
-    1200    1.5500851    20000    11100     1262    10308.152 
-    1400    1.8185999    20000    10959     1208    10302.434 
-    1600     2.084825    20000    11035     1343    10298.655 
-    1800    2.3374422    20000    11120     1294    10230.759 
-    2000    2.5901051    20000    11078     1346    10231.475 
-Loop time of 2.59012 on 1 procs for 2000 steps with 20000 particles
-Performance: 772.166 timesteps/s, 15.443 Mparticle-step/s
+       0            0    20000        0        0    9928.2195 
+     200   0.11163703    20000    11204     3252    9969.3445 
+     400   0.21288141    20000    11184     3177    9922.9509 
+     600   0.32488162    20000    11228     3415    9916.9949 
+     800   0.43800977    20000    11199     3230    9940.3687 
+    1000   0.55159575    20000    11123     3363    9966.2163 
+    1200   0.67959512    20000    11245     3474    9992.8429 
+    1400   0.79084544    20000    11198     3298    9965.8066 
+    1600   0.88974815    20000    11086     3160    9958.5762 
+    1800   0.99135852    20000    11160     3194    9957.3981 
+    2000    1.1137771    20000    11190     3152    9954.4057 
+Loop time of 1.11387 on 4 procs for 2000 steps with 20000 particles
+Performance: 1795.535 timesteps/s, 35.911 Mparticle-step/s
 
 MPI task timing breakdown:
 Section |  min time  |  avg time  |  max time  |%varavg| %total
 ---------------------------------------------------------------
-Move    | 0.68949    | 0.68949    | 0.68949    |   0.0 | 26.62
-Coll    | 1.8134     | 1.8134     | 1.8134     |   0.0 | 70.01
-Sort    | 0.083309   | 0.083309   | 0.083309   |   0.0 |  3.22
-Comm    | 0.001683   | 0.001683   | 0.001683   |   0.0 |  0.06
+Move    | 0.18491    | 0.1902     | 0.19901    |   1.2 | 17.08
+Coll    | 0.62882    | 0.65365    | 0.69936    |   3.4 | 58.68
+Sort    | 0.01666    | 0.017507   | 0.019527   |   0.9 |  1.57
+Comm    | 0.087014   | 0.087858   | 0.089843   |   0.4 |  7.89
 Modify  | 0          | 0          | 0          |   0.0 |  0.00
-Output  | 0.00084472 | 0.00084472 | 0.00084472 |   0.0 |  0.03
-Other   |            | 0.001392   |            |       |  0.05
+Output  | 0.00062776 | 0.0010398  | 0.0015823  |   1.1 |  0.09
+Other   |            | 0.1636     |            |       | 14.69
 
 Particle moves    = 40000000 (40M)
-Cells touched     = 55009433 (55M)
-Particle comms    = 0 (0K)
-Boundary collides = 1667106 (1.67M)
+Cells touched     = 54814357 (54.8M)
+Particle comms    = 1090611 (1.09M)
+Boundary collides = 1646203 (1.65M)
 Boundary exits    = 0 (0K)
 SurfColl checks   = 0 (0K)
 SurfColl occurs   = 0 (0K)
 Surf reactions    = 0 (0K)
-Collide attempts  = 21990741 (22M)
-Collide occurs    = 2608800 (2.61M)
+Collide attempts  = 22357172 (22.4M)
+Collide occurs    = 6533935 (6.53M)
 Reactions         = 0 (0K)
 Particles stuck   = 0
 Axisymm bad moves = 0
 
-Particle-moves/CPUsec/proc: 1.54433e+07
+Particle-moves/CPUsec/proc: 8.97768e+06
 Particle-moves/step: 20000
-Cell-touches/particle/step: 1.37524
+Cell-touches/particle/step: 1.37036
 Particle comm iterations/step: 1
-Particle fraction communicated: 0
-Particle fraction colliding with boundary: 0.0416776
+Particle fraction communicated: 0.0272653
+Particle fraction colliding with boundary: 0.0411551
 Particle fraction exiting boundary: 0
 Surface-checks/particle/step: 0
 Surface-collisions/particle/step: 0
 Surf-reactions/particle/step: 0
-Collision-attempts/particle/step: 0.549769
-Collisions/particle/step: 0.06522
+Collision-attempts/particle/step: 0.558929
+Collisions/particle/step: 0.163348
 Reactions/particle/step: 0
 
-Particles: 20000 ave 20000 max 20000 min
-Histogram: 1 0 0 0 0 0 0 0 0 0
-Cells:      1000 ave 1000 max 1000 min
-Histogram: 1 0 0 0 0 0 0 0 0 0
-GhostCell: 0 ave 0 max 0 min
-Histogram: 1 0 0 0 0 0 0 0 0 0
-EmptyCell: 0 ave 0 max 0 min
-Histogram: 1 0 0 0 0 0 0 0 0 0
+Particles: 5000 ave 5052 max 4951 min
+Histogram: 2 0 0 0 0 0 0 0 1 1
+Cells:      250 ave 250 max 250 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+GhostCell: 172.5 ave 240 max 110 min
+Histogram: 1 0 0 0 2 0 0 0 0 1
+EmptyCell: 62.5 ave 130 max 0 min
+Histogram: 1 0 0 0 2 0 0 0 0 1

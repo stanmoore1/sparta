@@ -53,6 +53,7 @@ See doc/collide.html for the table file format.
 
 import argparse
 import math
+import re
 import sys
 
 BOLTZ = 1.380649e-23
@@ -343,6 +344,9 @@ LXCAT_PROCESSES = ("ELASTIC", "EFFECTIVE", "MOMENTUM", "EXCITATION",
                    "IONIZATION", "ATTACHMENT", "ROTATIONAL", "VIBRATIONAL")
 
 
+LXCAT_KEY = re.compile(r"^[A-Z][A-Z0-9 .'/-]*:")
+
+
 def read_lxcat(fp):
     """Parse an LXCat export file into a list of process blocks.
 
@@ -351,31 +355,63 @@ def read_lxcat(fp):
     optional parameter, a set of KEY: value header lines, and the data
     bracketed by lines of dashes.  Database-level headers that precede the
     blocks supply the attribution text.
+
+    A KEY: value field may wrap onto following indented lines, and the
+    attribution fields routinely do, so continuations are joined back on.
+    Both the group-level COMMENT that precedes a species and the block's
+    own COMMENT lines are kept: they carry the specific paper reference,
+    and in some databases a version number that the database requires be
+    cited.
     """
     lines = fp.read().splitlines()
     database = ""
     reference = ""
+    retrieved = ""
+    comment = ""
     blocks = []
     i = 0
     while i < len(lines):
         raw = lines[i]
         line = raw.strip()
 
-        if line.startswith("DATABASE:"):
-            database = line.split(":", 1)[1].strip()
-        elif line.startswith("HOW TO REFERENCE:"):
-            reference = line.split(":", 1)[1].strip()
-        elif line.startswith("PERMLINK:") and not reference:
-            reference = line.split(":", 1)[1].strip()
+        # a database-level field, plus any indented continuation lines
+
+        key = LXCAT_KEY.match(line)
+        if key and raw[:1].strip():
+            name = key.group(0)[:-1]
+            text = line.split(":", 1)[1].strip()
+            j = i + 1
+            while (j < len(lines) and lines[j][:1] in (" ", "\t")
+                   and lines[j].strip() and not LXCAT_KEY.match(lines[j].strip())):
+                text += " " + lines[j].strip()
+                j += 1
+            if name == "DATABASE":
+                database = text
+            elif name == "HOW TO REFERENCE":
+                reference = text
+            elif name == "PERMLINK" and not reference:
+                reference = text
+            elif name == "COMMENT":
+                comment = text
+            if name in ("DATABASE", "HOW TO REFERENCE", "PERMLINK", "COMMENT"):
+                i = j
+                continue
+
+        if line.startswith("Generated on "):
+            retrieved = line[len("Generated on "):].split(".")[0].strip()
 
         if line in LXCAT_PROCESSES:
             blk = {"process": line, "database": database,
-                   "reference": reference, "header": [], "data": []}
+                   "reference": reference, "retrieved": retrieved,
+                   "groupcomment": comment, "comment": "",
+                   "header": [], "data": []}
             i += 1
             if i < len(lines):
                 blk["target"] = lines[i].strip()
                 i += 1
             # header lines up to the first dashed separator
+            # a block may carry several COMMENT lines; they are one sentence
+            blkcomment = []
             while i < len(lines) and not lines[i].strip().startswith("---"):
                 h = lines[i].strip()
                 if h:
@@ -384,7 +420,11 @@ def read_lxcat(fp):
                         blk["desc"] = h.split(":", 1)[1].strip()
                     elif h.startswith("HOW TO REFERENCE:"):
                         blk["reference"] = h.split(":", 1)[1].strip()
+                    elif h.startswith("COMMENT:"):
+                        blkcomment.append(h.split(":", 1)[1].strip())
                 i += 1
+            if blkcomment:
+                blk["comment"] = " ".join(blkcomment)
             i += 1                       # skip the opening dashes
             while i < len(lines) and not lines[i].strip().startswith("---"):
                 w = lines[i].replace(",", " ").split()
@@ -400,18 +440,34 @@ def read_lxcat(fp):
     return blocks
 
 
+def wrap_header(label, text, width=72):
+    """Wrap one attribution field for the generated file's comment header."""
+    out = []
+    line = "  "
+    for word in text.split():
+        if len(line) + len(word) + 1 > width and line.strip():
+            out.append(line)
+            line = "    " + word
+        else:
+            line += (" " if line.strip() else "") + word
+    if line.strip():
+        out.append(line)
+    return [label] + out
+
+
 def cmd_lxcat(args):
     blocks = read_lxcat(args.input)
     if not blocks:
         sys.exit("error: no cross section blocks found; is this an LXCat export?")
 
     if args.list:
-        print("# %-3s %-12s %-8s %-24s %6s  %s" %
-              ("idx", "process", "target", "database", "points", "description"))
+        fmt = "%-3s %-11s %-22s %-24s %6s  %s"
+        print("#" + fmt % ("idx", "process", "target", "database",
+                           "points", "description"))
         for n, b in enumerate(blocks):
-            print("  %-3d %-12s %-8s %-24s %6d  %s" %
-                  (n, b["process"], b.get("target", "?"), b["database"][:24],
-                   len(b["data"]), b.get("desc", "")[:50]))
+            print(" " + fmt % (n, b["process"], b.get("target", "?")[:22],
+                               b["database"][:24], len(b["data"]),
+                               b.get("desc", "")[:50]))
         return
 
     sel = [b for b in blocks
@@ -442,13 +498,24 @@ def cmd_lxcat(args):
     header = ["converted from an LXCat export by tools/tabulate_cross_section.py",
               "",
               "LXCat, www.lxcat.net, retrieved from the file %s" % args.input.name,
-              "database: %s" % (b["database"] or "unknown"),
-              "process : %s" % b.get("desc", b["process"]),
-              ""]
+              "database : %s" % (b["database"] or "unknown"),
+              "process  : %s" % b.get("desc", b["process"])]
+    if b["retrieved"]:
+        header.append("retrieved: %s" % b["retrieved"])
+    header.append("")
     if b["reference"]:
-        header += ["HOW TO REFERENCE (from the LXCat file):", "  " + b["reference"], ""]
+        header += wrap_header("HOW TO REFERENCE (from the LXCat file):",
+                              b["reference"]) + [""]
+    for label, text in (("COMMENT on this cross section (from the LXCat file):",
+                         b["comment"]),
+                        ("COMMENT on this data group (from the LXCat file):",
+                         b["groupcomment"])):
+        if text:
+            header += wrap_header(label, text) + [""]
     header += ["Cite the database above and the LXCat project when publishing",
-               "results obtained with this data."]
+               "results obtained with this data.  LXCat asks that the retrieval",
+               "date be given, and its terms of use forbid redistributing the",
+               "data, so do not commit this file to a public repository."]
 
     write_table(args.output, args.keyword, xs, ys, "energy", "eV",
                 args.yunits, args.extrap, header)

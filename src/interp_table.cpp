@@ -27,6 +27,12 @@ using namespace SPARTA_NS;
 #define EV2J 1.602176634e-19        // electron volt in Joules
 #define ANG2SQ 1.0e-20              // Angstrom^2 in m^2
 #define CM2SQ 1.0e-4                // cm^2 in m^2
+
+// a three-body recombination cross section is a cross section per unit
+//   third-body number density, so it carries one extra power of length^3
+
+#define ANG5 1.0e-50                // Angstrom^5 in m^5
+#define CM5 1.0e-10                 // cm^5 in m^5
 #define MAXBIN (1 << 24)            // max bins in one table
 #define MAXCHECK 20000              // max bins sampled by the accuracy check
 
@@ -231,6 +237,9 @@ void InterpTable::param_extract(char *line)
       if (strcmp(word,"m^2") == 0) yscale = 1.0;
       else if (strcmp(word,"cm^2") == 0) yscale = CM2SQ;
       else if (strcmp(word,"A^2") == 0) yscale = ANG2SQ;
+      else if (strcmp(word,"m^5") == 0) yscale = 1.0;
+      else if (strcmp(word,"cm^5") == 0) yscale = CM5;
+      else if (strcmp(word,"A^5") == 0) yscale = ANG5;
       else error->one(FLERR,"Invalid keyword in tabulated data parameters");
 
     } else if (strcmp(word,"EXTRAP") == 0) {

@@ -42,6 +42,14 @@ using namespace MathConst;
 #define TEMPLO 1.0
 #define TEMPHI 1.0e6
 
+// energy grid, in eV, for the Larsen-Borgnakke acceptance normalization
+// wide enough that any translational energy a collision can produce falls
+//   inside it, so the running maximum is a true bound
+
+#define NLB 481
+#define LBLO 1.0e-9
+#define LBHI 1.0e6
+
 // kinds of table directive
 
 enum{KSIGMA,KALPHA,KSCATTER};
@@ -79,6 +87,11 @@ CollideTable::CollideTable(SPARTA *sparta, int narg, char **arg) :
   nsigma = nalpha = nscatter = 0;
   sigma_tab = alpha_tab = scatter_tab = NULL;
   sigeff = NULL;
+
+  lb_index = NULL;
+  lbratio = lbmax = NULL;
+  nlbpair = 0;
+  lbwarn = 0;
 
   // proc 0 reads the param file, which yields both the VSS params
   //   and the per-pair tables, then broadcasts everything
@@ -139,6 +152,9 @@ CollideTable::~CollideTable()
   memory->destroy(alpha_index);
   memory->destroy(scatter_index);
   memory->destroy(sigeff);
+  memory->destroy(lb_index);
+  memory->destroy(lbratio);
+  memory->destroy(lbmax);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -147,6 +163,7 @@ void CollideTable::init()
 {
   CollideVSS::init();
   build_sigeff();
+  build_lbratio();
 }
 
 /* ----------------------------------------------------------------------
@@ -273,6 +290,152 @@ int CollideTable::scatter_cosX(int isp, int jsp, double &cosX)
      average, which reduces exactly to the VHS expression when sigma has
      the VHS form.  interpolated from a table built at init
 ------------------------------------------------------------------------- */
+
+int CollideTable::tabulated_pair(int isp, int jsp)
+{
+  if (!sigeff) return 0;
+  return sigma_index[isp][jsp] >= 0;
+}
+
+/* ----------------------------------------------------------------------
+   Larsen-Borgnakke acceptance probability for a candidate split of the
+     exchange energy EC which leaves ETRANS in translation
+   the VSS sampler drew ETRANS from a density proportional to
+     sigma_VHS(Et)*Et*(Ec-Et)^(zeta/2-1); accepting with a probability
+     proportional to sigma_table(Et)/sigma_VHS(Et) makes the accepted
+     sample come from the same expression with the true sigma, which is
+     the equilibrium conditional derived in collide_vss.h
+   dividing by the running maximum of that ratio over [0,Ec] keeps the
+     acceptance a probability while staying as close to 1 as the table
+     allows, so a table that is close to a power law costs almost nothing
+   returns -1.0 for a pair that needs no correction
+------------------------------------------------------------------------- */
+
+double CollideTable::lb_weight(int isp, int jsp, double etrans, double ec)
+{
+  int row = lb_index[isp][jsp];
+  if (row < 0) return -1.0;
+  if (etrans <= 0.0) return 0.0;
+
+  double f = (log(etrans/EV2J) - lblo) * lbinvdelta;
+  double g = (log(ec/EV2J) - lblo) * lbinvdelta;
+
+  // an energy outside the grid cannot be bounded by it.  clamping is the
+  //   safe choice, since it only reverts that draw toward the VSS law, but
+  //   say so once rather than bias silently
+
+  if (f < 0.0 || g >= NLB-1) {
+    if (!lbwarn && g >= NLB-1) {
+      lbwarn = 1;
+      error->warning(FLERR,"Collision energy is outside the Larsen-Borgnakke "
+                     "normalization grid, internal energy exchange for the "
+                     "tabulated pair reverts to the VSS law");
+    }
+    if (f < 0.0) f = 0.0;
+    if (g > NLB-1) g = NLB-1;
+  }
+
+  int i = (int) f;
+  double r;
+  if (i >= NLB-1) r = lbratio[row][NLB-1];
+  else r = lbratio[row][i] + (f-i)*(lbratio[row][i+1]-lbratio[row][i]);
+
+  // the bound must not be interpolated downward, so take the grid point
+  //   at or above Ec
+
+  int j = (int) g;
+  if (j < 0) j = 0;
+  else if (j > NLB-2) j = NLB-2;
+  double rmax = lbmax[row][j+1];
+
+  if (rmax <= 0.0) return -1.0;
+  double w = r / rmax;
+  return (w > 1.0) ? 1.0 : w;
+}
+
+/* ----------------------------------------------------------------------
+   tabulate sigma_table/sigma_VHS vs translational energy, and its running
+     maximum, for every pair that has a cross section table and an internal
+     mode which can exchange energy with translation
+   both cross sections are evaluated as sigma*g, in which the relative speed
+     cancels from the ratio, so no square root is needed
+------------------------------------------------------------------------- */
+
+void CollideTable::build_lbratio()
+{
+  if (lbratio) return;
+
+  int nspecies = particle->nspecies;
+  Particle::Species *species = particle->species;
+
+  memory->create(lb_index,nparams,nparams,"collide/table:lb_index");
+  for (int i = 0; i < nparams; i++)
+    for (int j = 0; j < nparams; j++) lb_index[i][j] = -1;
+
+  // a pair needs the correction only if it has a table and at least one of
+  //   the two species has an internal mode to exchange with
+
+  nlbpair = 0;
+  for (int i = 0; i < nspecies; i++)
+    for (int j = 0; j < nspecies; j++) {
+      if (sigma_index[i][j] < 0) continue;
+      if (species[i].rotdof == 0 && species[i].vibdof == 0 &&
+          species[j].rotdof == 0 && species[j].vibdof == 0) continue;
+      lb_index[i][j] = nlbpair++;
+    }
+
+  if (nlbpair == 0) return;
+  lbflag = 1;
+
+  memory->create(lbratio,nlbpair,NLB,"collide/table:lbratio");
+  memory->create(lbmax,nlbpair,NLB,"collide/table:lbmax");
+  lblo = log(LBLO);
+  lbinvdelta = (NLB-1) / (log(LBHI) - lblo);
+  double delta = 1.0 / lbinvdelta;
+
+  for (int i = 0; i < nspecies; i++)
+    for (int j = 0; j < nspecies; j++) {
+      int row = lb_index[i][j];
+      if (row < 0) continue;
+      int m = sigma_index[i][j];
+      double omega = params[i][j].omega;
+      double mr = params[i][j].mr;
+
+      double running = 0.0;
+      for (int k = 0; k < NLB; k++) {
+        double e = exp(lblo + k*delta) * EV2J;
+        double vr2 = 2.0*e/mr;
+
+        // sigma*g for both laws; prefactor[][] is the VSS sigma*g coefficient
+
+        double vhs = prefactor[i][j] * pow(vr2,1.0-omega);
+        double tab = sigma_tab[m]->evaluate_noerror(vr2);
+        double r = (vhs > 0.0) ? tab/vhs : 0.0;
+
+        lbratio[row][k] = r;
+        running = MAX(running,r);
+        lbmax[row][k] = running;
+      }
+    }
+
+  if (comm->me == 0) {
+    double worst = 1.0;
+    for (int row = 0; row < nlbpair; row++) {
+      double mean = 0.0;
+      for (int k = 0; k < NLB; k++) mean += lbratio[row][k];
+      mean /= NLB;
+      if (mean > 0.0) worst = MAX(worst,lbmax[row][NLB-1]/mean);
+    }
+    char str[256];
+    sprintf(str,"Larsen-Borgnakke detailed balance corrected for %d tabulated "
+            "species pair%s\n  worst-case acceptance ratio %.3g",
+            nlbpair,nlbpair == 1 ? "" : "s",1.0/worst);
+    if (screen) fprintf(screen,"%s\n",str);
+    if (logfile) fprintf(logfile,"%s\n",str);
+  }
+}
+
+/* ---------------------------------------------------------------------- */
 
 double CollideTable::sigma_eff(int isp, int jsp, double temp)
 {

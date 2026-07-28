@@ -39,6 +39,12 @@ enum{CONSTANT,VARIABLE};
 #define MAXLINE 1024
 #define EPSZERO 1.0e-14
 
+// cap on the Larsen-Borgnakke acceptance-rejection loop, so that a cross
+//   section which is zero over most of the reachable range cannot spin.
+//   only reached when the acceptance is below 1e-3, where the residual
+//   bias is far under the statistical noise of any run
+#define LBMAXTRY 1000
+
 /* ---------------------------------------------------------------------- */
 
 CollideVSS::CollideVSS(SPARTA *sparta, int narg, char **arg) :
@@ -47,6 +53,7 @@ CollideVSS::CollideVSS(SPARTA *sparta, int narg, char **arg) :
   if (narg < 3) error->all(FLERR,"Illegal collide command");
 
   vssflag = 1;
+  lbflag = 0;
   params = NULL;
   prefactor = NULL;
   nparams = 0;
@@ -79,6 +86,7 @@ CollideVSS::CollideVSS(SPARTA *sparta, int narg, char **arg, int /*flag*/) :
   if (narg < 3) error->all(FLERR,"Illegal collide command");
 
   vssflag = 1;
+  lbflag = 0;
   params = NULL;
   prefactor = NULL;
   nparams = 0;
@@ -553,16 +561,30 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
             p->erot = 0.0;
           } else if (rotstyle != NONE && rotdof == 2) {
             E_Dispose += p->erot;
-            Fraction_Rot =
-              1- pow(random->uniform(),
-                     (1/(2.5-params[ip->ispecies][jp->ispecies].omega)));
+            double w;
+            int ntry = 0;
+            do {
+              Fraction_Rot =
+                1- pow(random->uniform(),
+                       (1/(2.5-params[ip->ispecies][jp->ispecies].omega)));
+            } while (lbflag && ++ntry < LBMAXTRY &&
+                     (w = lb_weight(ip->ispecies,jp->ispecies,
+                                    (1.0-Fraction_Rot)*E_Dispose,E_Dispose))
+                     >= 0.0 && w < random->uniform());
             p->erot = Fraction_Rot * E_Dispose;
             E_Dispose -= p->erot;
           } else {
             E_Dispose += p->erot;
-            p->erot = E_Dispose *
-              sample_bl(random,0.5*species[sp].rotdof-1.0,
-                        1.5-params[ip->ispecies][jp->ispecies].omega);
+            double frac,w;
+            int ntry = 0;
+            do {
+              frac = sample_bl(random,0.5*species[sp].rotdof-1.0,
+                               1.5-params[ip->ispecies][jp->ispecies].omega);
+            } while (lbflag && ++ntry < LBMAXTRY &&
+                     (w = lb_weight(ip->ispecies,jp->ispecies,
+                                    (1.0-frac)*E_Dispose,E_Dispose))
+                     >= 0.0 && w < random->uniform());
+            p->erot = E_Dispose * frac;
             E_Dispose -= p->erot;
           }
         }
@@ -581,9 +603,16 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
           } else if (vibdof == 2) {
             if (vibstyle == SMOOTH) {
               E_Dispose += p->evib;
-              Fraction_Vib =
-                1.0 - pow(random->uniform(),
-                          (1.0/(2.5-params[ip->ispecies][jp->ispecies].omega)));
+              double w;
+              int ntry = 0;
+              do {
+                Fraction_Vib =
+                  1.0 - pow(random->uniform(),
+                            (1.0/(2.5-params[ip->ispecies][jp->ispecies].omega)));
+              } while (lbflag && ++ntry < LBMAXTRY &&
+                       (w = lb_weight(ip->ispecies,jp->ispecies,
+                                      (1.0-Fraction_Vib)*E_Dispose,E_Dispose))
+                       >= 0.0 && w < random->uniform());
               p->evib= Fraction_Vib * E_Dispose;
               E_Dispose -= p->evib;
 
@@ -597,6 +626,11 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
                 p->evib = ivib * update->boltz * species[sp].vibtemp[0];
                 State_prob = pow((1.0 - p->evib / E_Dispose),
                                  (1.5 - params[ip->ispecies][jp->ispecies].omega));
+                if (lbflag) {
+                  double w = lb_weight(ip->ispecies,jp->ispecies,
+                                       E_Dispose-p->evib,E_Dispose);
+                  if (w >= 0.0) State_prob *= w;
+                }
               } while (State_prob < random->uniform());
               E_Dispose -= p->evib;
             }
@@ -604,9 +638,16 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
           } else if (vibdof > 2) {
             if (vibstyle == SMOOTH) {
               E_Dispose += p->evib;
-              p->evib = E_Dispose *
-                sample_bl(random,0.5*species[sp].vibdof-1.0,
-                          1.5-params[ip->ispecies][jp->ispecies].omega);
+              double frac,w;
+              int ntry = 0;
+              do {
+                frac = sample_bl(random,0.5*species[sp].vibdof-1.0,
+                                 1.5-params[ip->ispecies][jp->ispecies].omega);
+              } while (lbflag && ++ntry < LBMAXTRY &&
+                       (w = lb_weight(ip->ispecies,jp->ispecies,
+                                      (1.0-frac)*E_Dispose,E_Dispose))
+                       >= 0.0 && w < random->uniform());
+              p->evib = E_Dispose * frac;
               E_Dispose -= p->evib;
 
             } else if (vibstyle == DISCRETE) {
@@ -630,6 +671,11 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
                   pevib = ivib * update->boltz * species[sp].vibtemp[imode];
                   State_prob = pow((1.0 - pevib / E_Dispose),
                                    (1.5 - params[ip->ispecies][jp->ispecies].omega));
+                  if (lbflag) {
+                    double w = lb_weight(ip->ispecies,jp->ispecies,
+                                         E_Dispose-pevib,E_Dispose);
+                    if (w >= 0.0) State_prob *= w;
+                  }
                 } while (State_prob < random->uniform());
 
                 vibmode[pindex][imode] = ivib;

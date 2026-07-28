@@ -54,6 +54,19 @@ namespace SPARTA_NS {
    adds the rotational and vibrational energy of both reactants, which is
    the collision energy the TCE model uses and is the right choice for a
    cross section that was itself fitted against a total-energy variable.
+
+   a recombination reaction is three-body, so its probability also carries
+   the number density of the third particle that Collide::collisions()
+   selected from the same grid cell:
+
+     P_react = n3 * sigma_rec(E) / sigma_total(E)
+
+   the tabulated sigma_rec is therefore a cross section per unit third-body
+   number density, with units of m^5 (or cm^5 or A^5), so that <sigma_rec g>
+   is the ordinary three-body rate coefficient in m^6/s.  which reaction a
+   given third-body species selects follows the same rules as the Bird
+   styles, so the reaction file may name the third body explicitly, use the
+   atom/molecule wildcards, or leave it unspecified for any species.
 ------------------------------------------------------------------------- */
 
 class ReactTable : public ReactBird {
@@ -89,10 +102,6 @@ E: React table can only be used with a VSS-based collide style
 The style needs the total cross section which was used to select the
 collision pair, which only the vss and table collide styles provide.
 
-E: React table does not currently support recombination reactions
-
-Self-explanatory.
-
 E: Invalid reaction coefficients in file
 
 A tabulated reaction line must give an activation energy, an energy
@@ -110,5 +119,17 @@ reaction, so a reaction file for it may not mix styles.
 E: React table reaction has no cross section table
 
 A reaction was declared with style T but no table was attached to it.
+
+W: Reaction cross section exceeds the total cross section, reaction rate will be underpredicted
+
+The collide style's total cross section does not envelope the tabulated
+reaction cross section, so the reaction probability is clipped at 1.
+
+W: Boosted recombination probability exceeds 1, recombination rate will be underpredicted; reduce the react_modify rboost factor
+
+The recombination probability is scaled up by the rboost factor, whose
+default of 1000 is chosen for the Arrhenius styles.  With a tabulated
+recombination cross section it can push the probability past 1, which
+clips the rate.  Lower rboost until the warning stops.
 
 */

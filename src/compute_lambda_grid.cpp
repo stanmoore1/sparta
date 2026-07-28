@@ -583,38 +583,53 @@ void ComputeLambdaGrid::compute_per_grid()
   // compute mean free path for each grid cell
   // formula from Bird, eq 4.77
 
-  // sigma is the effective total cross section for the pair at the local
-  //   temperature, obtained from the collide style rather than assumed to
-  //   have the VHS form, so that a tabulated cross section is respected
-  // the VHS expressions this replaces are
-  //   sigma          = pi*dref^2 * (tref/T)^(omega-1/2)
-  //   1/tau          = n * sigma * <g>,  <g> = sqrt(8*k*T/(pi*mr))
-  // and T defaults to tref when no temperature is available, which
-  //   reproduces the original behavior exactly
+  // a pair with a tabulated cross section cannot use the VHS expressions,
+  //   so ask the collide style for the effective cross section at the local
+  //   temperature and form the same quantities from it:
+  //     sigma = pi*dref^2 * (tref/T)^(omega-1/2)
+  //     1/tau = n * sigma * <g>,  <g> = sqrt(8*k*T/(pi*mr))
+  // for every other pair the two are algebraically the same, but the VHS
+  //   expressions are kept verbatim so results do not shift in the last
+  //   bits, which matters where a fix adapt threshold depends on them
 
   double nrhosum,lambda,tau;
-  double tref,sigma,mj,mk,mr,tcell;
+  double dref,tref,omega,sigma,mj,mk,mr,tcell;
 
   for (int i = 0; i < nglocal; i++) {
     nrhosum = lambda = tau = 0.0;
     for (int j = 0; j < nspecies; j++) {
       nrhosum += nrho[i][j];
       for (int k = 0; k < nspecies; k++) {
+        dref = collide->extract(j,k,"diam");
         tref = collide->extract(j,k,"tref");
+        omega = collide->extract(j,k,"omega");
         mj = particle->species[j].mass;
         mk = particle->species[k].mass;
         mr = mj * mk / (mj + mk);
 
-        if (tempwhich == NONE || temp[i] == 0.0) tcell = tref;
-        else tcell = temp[i];
+        if (collide->tabulated_pair(j,k)) {
+          if (tempwhich == NONE || temp[i] == 0.0) tcell = tref;
+          else tcell = temp[i];
 
-        sigma = collide->sigma_eff(j,k,tcell);
+          sigma = collide->sigma_eff(j,k,tcell);
 
-        if (lambdaflag)
-          lambdainv[i][j] += sqrt(1+mj/mk) * sigma * nrho[i][k];
-        if (tauflag)
-          tauinv[i][j] += sigma * nrho[i][k] *
-            sqrt(8.0 * update->boltz * tcell / (MY_PI * mr));
+          if (lambdaflag)
+            lambdainv[i][j] += sqrt(1+mj/mk) * sigma * nrho[i][k];
+          if (tauflag)
+            tauinv[i][j] += sigma * nrho[i][k] *
+              sqrt(8.0 * update->boltz * tcell / (MY_PI * mr));
+
+        } else if (tempwhich == NONE || temp[i] == 0.0) {
+          if (lambdaflag)
+            lambdainv[i][j] += (MY_PI * sqrt (1+mj/mk) * pow(dref,2.0) * nrho[i][k]);
+          if (tauflag)
+            tauinv[i][j] += (2.0 * pow(dref,2.0) * nrho[i][k] * sqrt (2.0 * MY_PI * update->boltz * tref / mr));
+        } else {
+          if (lambdaflag)
+            lambdainv[i][j] += (MY_PI * sqrt (1+mj/mk) * pow(dref,2.0) * nrho[i][k] * pow(tref/temp[i],omega-0.5));
+          if (tauflag)
+            tauinv[i][j] += (2.0 * pow(dref,2.0) * nrho[i][k] * sqrt (2.0 * MY_PI * update->boltz * tref / mr) * pow(temp[i]/tref,1.0-omega));
+        }
       }
     }
 

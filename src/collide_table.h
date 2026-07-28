@@ -56,6 +56,8 @@ class CollideTable : public CollideVSS {
   virtual int test_collision(int, int, int, Particle::OnePart *,
                              Particle::OnePart *);
   double sigma_eff(int, int, double);
+  int tabulated_pair(int, int);
+  double lb_weight(int, int, double, double);
 
  protected:
   int tabstyle;              // TB_LOOKUP, TB_LINEAR, or TB_SPLINE
@@ -75,6 +77,20 @@ class CollideTable : public CollideVSS {
 
   double **sigeff;
   double tlo,tinvdelta;
+
+  // running maximum of sigma_table/sigma_VHS over [0,E], used to normalize
+  //   the Larsen-Borgnakke acceptance so it stays a probability.  one row
+  //   per species pair that has both a cross section table and an internal
+  //   mode to exchange with, on a log energy grid
+
+  int **lb_index;            // row for a pair, -1 = no correction needed
+  int nlbpair;
+  double **lbratio;          // sigma_table/sigma_VHS on the grid
+  double **lbmax;            // running max of lbratio up to each grid point
+  double lblo,lbinvdelta;
+  int lbwarn;                // 1 once the out-of-range warning has fired
+
+  void build_lbratio();
 
   double scatter_alpha(int, int);
   int scatter_cosX(int, int, double &);
@@ -128,6 +144,13 @@ must also have a total cross section table.
 W: No cross section tables were defined by collide table
 
 The style will behave exactly like collide vss.
+
+W: Collision energy is outside the Larsen-Borgnakke normalization grid, internal energy exchange for the tabulated pair reverts to the VSS law
+
+The acceptance test which restores detailed balance for a tabulated cross
+section is normalized on an energy grid spanning 1e-9 to 1e6 eV.  A
+collision energy above that range cannot be bounded by it, so the exchange
+falls back to the uncorrected VSS sampling for those collisions.
 
 W: Tabulated data does not reproduce its input values
 

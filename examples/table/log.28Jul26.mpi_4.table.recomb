@@ -1,0 +1,151 @@
+SPARTA (24 Sep 2025)
+Running on 4 MPI task(s)
+################################################################################
+# tabulated three-body recombination in a 3d box
+#
+# O + O + M --> O2 + M, with the recombination cross section read from a
+# file.  Because the reaction is three-body, react table multiplies the
+# tabulated cross section by the number density of the third particle
+# SPARTA selects from the same grid cell, so the tabulated quantity is a
+# cross section per unit density with units of m^5.
+#
+# The cross section is constant here so the initial rate is analytic.  With
+# n_O = 1e22 /m^3, T = 10000 K, sigma_rec = 5e-43 m^5 and a mean relative
+# speed <g> = sqrt(8kT/pi mr) = 5147 m/s, the recombination rate is
+#
+#   1/2 n_O^2 n_M sigma_rec <g> * V/fnum * dt = 2.57 reactions per step
+#
+# or 2.83 per step after the small correction for the fluctuation in the
+# number of particles per grid cell, against 2.63 measured over the first
+# 200 steps.  Thereafter the rate falls off as n_O^2 as O is consumed,
+# each recombination destroys a particle so Np drops, and the 8.197e-19 J
+# released per reaction heats the gas.
+#
+# Note:
+#  - The "comm/sort” option to the “global” command is used to match MPI runs.
+#  - The “twopass” option is used to match Kokkos runs.
+# The "comm/sort" and "twopass" options should not be used for production runs.
+################################################################################
+
+seed	    	    12345
+dimension   	    3
+global              gridcut 0.0 comm/sort yes
+
+boundary	    p p p
+
+create_box  	    0 0.0001 0 0.0001 0 0.0001
+Created orthogonal box = (0 0 0) to (0.0001 0.0001 0.0001)
+create_grid 	    10 10 10
+WARNING: Could not acquire nearby ghost cells b/c grid partition is not clumped (../grid.cpp:473)
+Created 1000 child grid cells
+  CPU time = 0.00173082 secs
+  create/ghost percent = 87.2112 12.7888
+
+balance_grid        rcb cell
+Balance grid migrated 740 cells
+  CPU time = 0.000865322 secs
+  reassign/sort/migrate/ghost percent = 36.8785 0.406207 29.0661 33.6492
+
+species		    recomb.species O O2
+mixture		    gas O O2 vstream 0.0 0.0 0.0 temp 10000.0
+mixture             gas O frac 1.0
+mixture             gas O2 frac 0.0
+
+global              nrho 1.0E22
+global              fnum 5.0E5
+
+collide		    vss gas recomb.vss
+react               table recomb.reactions
+
+# SPARTA selects a third particle only 1/rboost of the time and scales the
+# probability up by rboost, which leaves the rate unchanged as long as the
+# boosted probability stays below 1.  The default of 1000 is chosen for the
+# Arrhenius styles; with this tabulated cross section it would push the
+# probability well past 1 and clip the rate, so turn the boost off.
+
+react_modify        rboost 1.0
+
+create_particles    gas n 20000 twopass
+Created 20000 particles
+  CPU time = 0.00224071 secs
+
+stats		    200
+compute             temp temp
+compute             c count O O2
+stats_style	    step cpu np nattempt ncoll nreact c_temp c_c[1] c_c[2]
+
+timestep 	    1.0E-9
+run 		    2000
+Reaction cross section O2_RECOMB from recomb.tab for O + O --> O2:
+  2 values, E = 1e-06 to 1e+04 eV, max 5e-43 m^5, 34047 bins
+Memory usage per proc in Mbytes:
+  particles (ave,min,max) = 1.5625 1.5625 1.5625
+  grid      (ave,min,max) = 1.51379 1.51379 1.51379
+  surf      (ave,min,max) = 0 0 0
+  total     (ave,min,max) = 3.07629 3.07629 3.07629
+Step CPU Np Natt Ncoll Nreact c_temp c_c[1] c_c[2] 
+       0            0    20000        0        0        0    9984.3286        20000            0 
+     200  0.042423582    19460      235       46        2    10717.351        18920          540 
+     400  0.091064234    18963      236       51        2    11496.558        17926         1037 
+     600   0.13638113    18519      212       46        0    12276.987        17038         1481 
+     800   0.18056093    18158      212       52        3    12923.917        16316         1842 
+    1000   0.22032769    17792      209       56        3    13690.382        15584         2208 
+    1200    0.2602057    17457      172       40        2    14413.926        14914         2543 
+    1400   0.30603678    17139      197       50        1    15127.964        14278         2861 
+    1600    0.3448925    16855      185       37        1    15790.304        13710         3145 
+    1800    0.3839322    16593      151       39        1    16385.347        13186         3407 
+    2000   0.42563949    16347      179       40        0    16964.202        12694         3653 
+Loop time of 0.42573 on 4 procs for 2000 steps with 16347 particles
+Performance: 4697.810 timesteps/s, 76.795 Mparticle-step/s
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Move    | 0.21441    | 0.21878    | 0.2283     |   1.2 | 51.39
+Coll    | 0.035952   | 0.036667   | 0.037433   |   0.3 |  8.61
+Sort    | 0.012945   | 0.013842   | 0.014674   |   0.5 |  3.25
+Comm    | 0.10351    | 0.10667    | 0.11039    |   0.8 | 25.06
+Modify  | 0          | 0          | 0          |   0.0 |  0.00
+Output  | 0.00049658 | 0.00072283 | 0.0013913  |   0.0 |  0.17
+Other   |            | 0.04905    |            |       | 11.52
+
+Particle moves    = 35817321 (35.8M)
+Cells touched     = 57428474 (57.4M)
+Particle comms    = 2848017 (2.85M)
+Boundary collides = 0 (0K)
+Boundary exits    = 0 (0K)
+SurfColl checks   = 0 (0K)
+SurfColl occurs   = 0 (0K)
+Surf reactions    = 0 (0K)
+Collide attempts  = 394652 (0.395M)
+Collide occurs    = 88077 (88.1K)
+Reactions         = 3653 (3.65K)
+Particles stuck   = 0
+Axisymm bad moves = 0
+
+Particle-moves/CPUsec/proc: 2.10329e+07
+Particle-moves/step: 17908.7
+Cell-touches/particle/step: 1.60337
+Particle comm iterations/step: 2.999
+Particle fraction communicated: 0.0795151
+Particle fraction colliding with boundary: 0
+Particle fraction exiting boundary: 0
+Surface-checks/particle/step: 0
+Surface-collisions/particle/step: 0
+Surf-reactions/particle/step: 0
+Collision-attempts/particle/step: 0.0110185
+Collisions/particle/step: 0.00245906
+Reactions/particle/step: 0.00010199
+
+Gas reaction tallies:
+  style table #-of-reactions 1
+  reaction O + O --> O2: 3653
+
+Particles: 4086.75 ave 4165 max 3970 min
+Histogram: 1 0 0 0 0 1 0 0 1 1
+Cells:      250 ave 250 max 250 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+GhostCell: 240 ave 240 max 240 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+EmptyCell: 130 ave 130 max 130 min
+Histogram: 4 0 0 0 0 0 0 0 0 0

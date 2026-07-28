@@ -1,0 +1,20 @@
+# Three-body recombination cross section for O + O + M --> O2 + M.
+#
+# sigma_rec is a cross section per unit third-body number density, so
+# its units are m^5 and <sigma_rec*g> is the three-body rate
+# coefficient in m^6/s.
+#
+# A constant value is used here so the resulting rate is exactly
+# predictable and the example can be checked against theory:
+#
+#   reactions per volume per time = 1/2 n_O^2 n_M K <g>
+#
+# with <g> = sqrt(8kT/pi mr) the mean relative speed.  A real
+# recombination cross section would fall off with energy; tabulate it
+# here in exactly the same way.
+
+O2_RECOMB
+N 2 X energy XUNITS eV YUNITS m^5 EXTRAP constant constant
+
+1      1.0e-6   5e-43
+2      1.0e+4   5e-43

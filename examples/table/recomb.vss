@@ -1,0 +1,5 @@
+# VSS collision parameters
+# diameter (m), omega, tref, alpha
+
+O    3.0E-10   0.80  273.15  1.0
+O2   3.96E-10  0.77  273.15  1.4

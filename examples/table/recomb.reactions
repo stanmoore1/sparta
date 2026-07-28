@@ -1,0 +1,21 @@
+# Tabulated three-body recombination for react table.
+#
+# style T: activation energy, energy release, then the file and section
+# keyword holding the recombination cross section.
+#
+# A recombination reaction is three-body, so its probability carries the
+# number density n3 of the third particle SPARTA picks from the same grid
+# cell:
+#
+#   P_react = n3 * sigma_rec(E) / sigma_total(E)
+#
+# sigma_rec is therefore a cross section per unit third-body number
+# density, tabulated in m^5, so that <sigma_rec*g> is the ordinary
+# three-body rate coefficient in m^6/s.
+#
+# Writing the reaction with a single product leaves the third body
+# unspecified, so any species can act as it.  Naming a species as a second
+# product instead restricts the reaction to that third body.
+
+O + O --> O2
+R T 0.0 8.197e-19 recomb.tab O2_RECOMB

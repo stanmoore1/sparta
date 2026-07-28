@@ -218,6 +218,42 @@ angle, rotational and vibrational energy exchange, chemistry, and the
 ambipolar approximation all behave exactly as described above.  Only the
 probability that a selected pair actually collides is changed.
 
+One consequence of that inheritance needs care, and the {table} style
+handles it for you.  For a colliding pair in equilibrium, the joint
+density of the relative translational energy Et and one internal mode of
+zeta degrees of freedom is
+
+f(Et,Ei) ~ sigma(Et) Et Ei^(zeta/2-1) exp(-(Et+Ei)/kT) :pre
+
+the Et factor being sigma(Et)*g times the Et^1/2 density of states.  A
+Larsen-Borgnakke exchange holds Ec = Et + Ei fixed, so it leaves that
+density stationary exactly when the post-collision Et is drawn from
+
+P(Et|Ec) ~ sigma(Et) Et (Ec-Et)^(zeta/2-1) :pre
+
+For the VHS law sigma ~ Et^(1/2-omega) this is the Et^(3/2-omega) weight
+the {vss} style samples, which is where its exponent comes from.  A
+tabulated cross section is not that power law, so sampling the VSS weight
+would break detailed balance and let a gas started in equilibrium drift.
+The {table} style therefore makes the same draw and then accepts it with
+probability proportional to sigma_table(Et)/sigma_VHS(Et), normalized by
+the largest that ratio attains over the energies reachable at this Ec.
+That is an exact sampler for P(Et|Ec) for any cross section whatsoever,
+not an approximation, and it reduces to the {vss} sampler identically when
+the table follows the VHS law.
+
+The correction is applied only to pairs which have both a cross section
+table and an internal mode, and it costs one acceptance test per draw.
+SPARTA prints the worst-case acceptance ratio at setup.  A table close to
+the VHS power law of its pair accepts almost every draw; one that departs
+far from it accepts less often and the energy exchange for that pair is
+correspondingly slower.  Choosing {diam} and {omega} for the pair to
+follow the table reduces the cost, and now affects only the cost, never
+the answer.
+
+The translational part of the collision conserves momentum and energy
+exactly whatever the cross section, and always did.
+
 The {file} argument is a VSS parameter file, in exactly the format
 described above for the {vss} style, with additional "table" directive
 lines which may appear anywhere in the file:
@@ -360,9 +396,24 @@ equivalent {vss} run), compute cross sections directly from an
 intermolecular potential, or convert a file exported from the
 "LXCat"_https://www.lxcat.net project, which is the standard source of
 electron-neutral cross sections.  The {lxcat} mode lists the processes in a
-downloaded file, converts the one selected, and copies the database name and
-that database's own "HOW TO REFERENCE" text into the generated table, so the
-attribution LXCat asks for travels with the data.
+downloaded file, converts the one selected, and copies the database name,
+the retrieval date, that database's own "HOW TO REFERENCE" text, and the
+comments attached to the data group and to the individual cross section
+into the generated table, so the attribution LXCat asks for travels with
+the data.  Note that LXCat's terms of use forbid redistributing the data,
+so a converted table should not be committed to a public repository.
+
+Note also what LXCat means by its process keywords.  {ELASTIC} denotes the
+elastic momentum-transfer cross section Q1, not the integral elastic cross
+section, and {EFFECTIVE} denotes the total momentum transfer, i.e. the sum
+of the elastic momentum transfer and the total inelastic cross sections.
+Neither is a total collision cross section.  Using either as a {table}
+cross section is nevertheless the right thing to do provided the pair
+scatters isotropically, alpha = 1, because for isotropic scattering Q1 and
+sigma_T coincide, so the simulation reproduces the tabulated
+momentum-transfer rate exactly.  Do not combine an {EFFECTIVE} set with
+separate inelastic cross sections for the same pair, or the inelastic
+channels are counted twice.
 
 The {potential} mode integrates the classical deflection angle
 

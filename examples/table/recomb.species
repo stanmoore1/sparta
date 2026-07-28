@@ -1,0 +1,6 @@
+# atomic oxygen and its recombined molecule
+
+# ID  Molwt  Molmass  rotdof rotrel vibdof vibrel vibtemp specwt charge
+
+O   16.00  2.65E-26  0  0.0  0  0.0     0.0     1.0  0.0
+O2  32.00  5.31E-26  2  0.2   2  5.58659E-5  2256.0  1.0  0.0
