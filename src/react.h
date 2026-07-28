@@ -54,10 +54,16 @@ class React : protected Pointers {
                              // ELEC_EXCLUDE = excluded from the
                              //   reaction energy; equilibrium
                              //   consistency with the input Arrhenius rates
+                             //   but excited states react at same rate as
+                             //   ground state
                              // ELEC_INCLUDE = added to the reaction energy
-                             //   with per-state DOF from the elecfile
-                             //   (historical behavior; overpredicts
-                             //   equilibrium rates)
+                             //   with per-state DOF from the elecfile,
+                             //   requires recalibration of Arrhenius rates
+                             //   and per-state DOF with electronic mode
+                             //   awareness. Arrhenius rates are interpreted
+                             //   as rates for ground state, and using existing
+                             //   rate models will overpredict overall chemical
+                             //   rates.
                              // ELEC_MICRO (default) = added to the reaction
                              //   energy with the TCE energy factor replaced by
                              //   its microcanonical average over the pair's
