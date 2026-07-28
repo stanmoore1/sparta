@@ -41,6 +41,13 @@ FindAndReplace::FindAndReplace(CodeEditor *_editor, QWidget *parent) :
     withcase      = new QCheckBox("Match case");
     wrap          = new QCheckBox("Wrap around");
     whole         = new QCheckBox("Whole word");
+    // named so tests and the accessibility walk can reach them; the text
+    // fields are otherwise indistinguishable from one another
+    search->setObjectName("search");
+    replace->setObjectName("replace");
+    withcase->setObjectName("withcase");
+    wrap->setObjectName("wrap");
+    whole->setObjectName("whole");
     auto *next    = new QPushButton("&Next");
     auto *replone = new QPushButton("&Replace");
     auto *replall = new QPushButton("Replace &All");
@@ -118,22 +125,34 @@ void FindAndReplace::replaceNext()
 
 void FindAndReplace::replaceAll()
 {
-    auto text = search->text();
+    const auto text = search->text();
     if (text.isEmpty()) return;
 
-    // drop selection if we have one
-    auto cursor = editor->textCursor();
-    if (cursor.hasSelection()) cursor.movePosition(QTextCursor::Left);
+    // Deliberately not findNext(): that one wraps to the top when it reaches
+    // the end, and with wrapping on -- the default -- it re-found the text this
+    // loop had just inserted.  Replacing "fix" with "fix all" then never
+    // terminated: the GUI hung and the document grew until memory ran out.
+    //
+    // Searching forward from the start of the document without wrapping is both
+    // the fix and what Replace All is normally understood to mean.  Each search
+    // resumes at the end of the text just inserted, so the position strictly
+    // advances and the loop ends at the last match whatever the replacement
+    // contains.
+    auto find_flags = QTextDocument::FindFlags();
+    if (withcase->isChecked()) find_flags |= QTextDocument::FindCaseSensitively;
+    if (whole->isChecked()) find_flags |= QTextDocument::FindWholeWords;
 
-    findNext();
-    cursor = editor->textCursor();
+    QTextDocument *doc = editor->document();
 
-    // keep replacing until findNext() does not find anything anymore
-    while (cursor.hasSelection()) {
-        cursor.insertText(replace->text());
-        findNext();
-        cursor = editor->textCursor();
+    // one undo step for the whole operation, rather than one per occurrence
+    QTextCursor anchor(doc);
+    anchor.beginEditBlock();
+    QTextCursor found = doc->find(text, QTextCursor(doc), find_flags);
+    while (!found.isNull()) {
+        found.insertText(replace->text());
+        found = doc->find(text, found, find_flags);
     }
+    anchor.endEditBlock();
 }
 
 /* ---------------------------------------------------------------------- */

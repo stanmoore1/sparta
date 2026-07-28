@@ -709,6 +709,51 @@ TEST(RealWindows, FindAndReplace)
     walkWindow(&dlg, "FindAndReplace", 8);
 }
 
+// Replace All used to loop forever whenever the replacement contained the
+// search text: it drove findNext(), which wraps to the top of the document when
+// it runs off the end, so it kept re-finding the text it had itself just
+// inserted.  "Wrap around" is on by default and "fix" -> "fix all" is an
+// ordinary edit, so this was easy to hit; the window stopped responding and the
+// document grew until memory ran out.
+//
+// If the fix is reverted this test hangs rather than fails.  That is the honest
+// shape for it -- the defect *is* non-termination -- and the suite's ctest
+// TIMEOUT is what turns it back into a failure.
+TEST(RealWindows, ReplaceAllEndsWhenTheReplacementContainsTheSearchText)
+{
+    CodeEditor editor(nullptr);
+    editor.setPlainText("fix in emit/face\nfix out emit/face\n");
+    FindAndReplace dlg(&editor);
+    dlg.findChild<QLineEdit *>("search")->setText("fix");
+    dlg.findChild<QLineEdit *>("replace")->setText("fix all");
+    ASSERT_TRUE(dlg.findChild<QCheckBox *>("wrap")->isChecked())
+        << "the loop only ran away with wrapping on, which is the default";
+
+    QMetaObject::invokeMethod(&dlg, "replaceAll");
+    EXPECT_EQ(editor.toPlainText().toStdString(),
+              "fix all in emit/face\nfix all out emit/face\n");
+}
+
+TEST(RealWindows, ReplaceAllReplacesEveryOccurrenceAndUndoesInOneStep)
+{
+    CodeEditor editor(nullptr);
+    editor.setPlainText("run 100\nrun 200\nrun 300\n");
+    const QString before = editor.toPlainText();
+    FindAndReplace dlg(&editor);
+    dlg.findChild<QLineEdit *>("search")->setText("run");
+    dlg.findChild<QLineEdit *>("replace")->setText("step");
+
+    // the cursor sits at the top, but Replace All must not depend on where it
+    // is: it starts from the beginning of the document by definition
+    editor.moveCursor(QTextCursor::End);
+    QMetaObject::invokeMethod(&dlg, "replaceAll");
+    EXPECT_EQ(editor.toPlainText().toStdString(), "step 100\nstep 200\nstep 300\n");
+
+    editor.undo();
+    EXPECT_EQ(editor.toPlainText().toStdString(), before.toStdString())
+        << "one undo should take back the whole operation, not one occurrence";
+}
+
 TEST(RealWindows, SetVariables)
 {
     QList<QPair<QString, QString>> vars{{"seed", "12345"}, {"nsteps", "200"}};
