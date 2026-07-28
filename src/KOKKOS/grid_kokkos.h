@@ -36,6 +36,7 @@ class GridKokkos : public Grid {
   // methods
 
   GridKokkos(class SPARTA *);
+  GridKokkos(class SPARTA *, KKShallow);   // needed for Kokkos
   ~GridKokkos();
   void wrap_kokkos();
   void wrap_kokkos_graphs();

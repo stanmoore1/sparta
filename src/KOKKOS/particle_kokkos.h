@@ -43,6 +43,7 @@ class ParticleKokkos : public Particle {
   // methods
 
   ParticleKokkos(class SPARTA *);
+  ParticleKokkos(class SPARTA *, KKShallow);   // needed for Kokkos
   ~ParticleKokkos() override;
   static KOKKOS_INLINE_FUNCTION
   int add_particle_kokkos(t_particle_1d particles, int, int, int, int,

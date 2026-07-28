@@ -15,34 +15,29 @@
 #ifndef SPARTA_KK_COPY_H
 #define SPARTA_KK_COPY_H
 
-#include <cstdlib>
-#include <cstring>
+#include <type_traits>
 
 #include "pointers.h"
 
-// Need a copy of classes instantiated on the stack at the class level scope.
-// However, this isn't directly possible due to issues with pointers.h
-//  and Kokkos allocation tracking.
-// This class is a workaround, using low-level memory operations.
+// Hold a copy of a SPARTA class as a member, so that it can be captured by
+//  value into a Kokkos functor and its KOKKOS_INLINE_FUNCTION methods called
+//  from device code.  Virtual functions are not available on the GPU, so the
+//  caller keeps one KKCopy per concrete style instead of a base class pointer.
 //
-// copy() blits the live object's bytes over obj.  That deliberately bypasses
-//  Kokkos View reference counting, so obj ends up holding View handles whose
-//  reference count was never incremented.  Such a handle must never reach a
-//  View destructor: it would decrement a count it never incremented, which
-//  aborts with "SharedAllocationRecord failed decrement count = 0" and frees
-//  memory the original object still owns.
+// copy() is ordinary copy assignment, so Kokkos View reference counting is
+//  correct by construction: View::operator= releases the handle obj held and
+//  retains the new one.  obj.copy is then set so the wrapped class' destructor
+//  frees nothing -- the original object it was copied from still owns all of
+//  it, and obj's own View members release their references normally when obj
+//  is destroyed.
 //
-// The constructor therefore snapshots obj's pristine, correctly reference
-//  counted bytes, and the destructor puts them back before obj is destroyed.
-//  Restoring in the destructor is also what makes nesting work: a wrapped
-//  class that itself contains KKCopy members has those members restored by
-//  ordinary C++ destruction order.
+// This is possible because Pointers defines operator= as a no-op; without it
+//  the reference members of Pointers would make every SPARTA class
+//  non-assignable, which is what previously forced this class to use memcpy.
 //
-// A copy constructed KKCopy -- which is what happens when an enclosing class
-//  is captured by value into a Kokkos functor -- must be non-owning.  Its obj
-//  is properly copy constructed, so its View reference counts are already
-//  correct, and the snapshot belongs to the original: freeing it here would
-//  leave the original restoring from freed memory.
+// Nesting needs no special handling.  A wrapped class that itself contains
+//  KKCopy members is copied by its own compiler-generated assignment
+//  operator, which recurses into them.
 
 namespace SPARTA_NS {
 
@@ -51,42 +46,24 @@ class KKCopy {
  public:
   ClassStyle obj;
 
-  KKCopy(SPARTA *sparta):
-  obj(sparta) {
-    ptr_temp = NULL;
-    save();
-    obj.copy = 1;
-  }
+  KKCopy(SPARTA *sparta) : obj(construct(sparta)) {}
 
-  // a copy is non-owning: it restores nothing and frees nothing
-
-  KKCopy(const KKCopy &other) : obj(other.obj) {
-    ptr_temp = NULL;
-  }
-
-  KKCopy &operator=(const KKCopy &) = delete;
-
-  ~KKCopy() { restore(); }
-
-  void copy(const ClassStyle* orig) {
-    if (ptr_temp == NULL) save();
-    memcpy((void*)&obj, (const void*)orig, sizeof(ClassStyle));
+  void copy(const ClassStyle *orig) {
+    obj = *orig;
     obj.copy = 1;
   }
 
  private:
-  void* ptr_temp;
 
-  void save() {
-    ptr_temp = (ClassStyle*) malloc(sizeof(ClassStyle));
-    memcpy(ptr_temp, (void*)&obj, sizeof(ClassStyle));
-  }
+  // classes whose only SPARTA* constructor is the real, allocating one
+  //  provide a KKShallow overload instead; everything else already has a
+  //  cheap SPARTA*-only constructor meant for exactly this
 
-  void restore() {
-    if (ptr_temp == NULL) return;
-    memcpy((void*)&obj, ptr_temp, sizeof(ClassStyle));
-    free(ptr_temp);
-    ptr_temp = NULL;
+  static ClassStyle construct(SPARTA *sparta) {
+    if constexpr (std::is_constructible<ClassStyle,SPARTA*,KKShallow>::value)
+      return ClassStyle(sparta,KKShallow());
+    else
+      return ClassStyle(sparta);
   }
 
 };

@@ -71,6 +71,13 @@ GridKokkos::GridKokkos(SPARTA *sparta) : Grid(sparta)
   k_edarray = tdual_struct_tdual_float_2d_1d("grid:edarray",0);
 }
 
+GridKokkos::GridKokkos(SPARTA *sparta, KKShallow) : Grid(sparta, KKShallow())
+{
+  // shallow instance for KKCopy; allocates nothing
+
+  copy = 1;
+}
+
 GridKokkos::~GridKokkos()
 {
   if (copy || copymode) return;

@@ -215,6 +215,19 @@ Grid::~Grid()
 }
 
 /* ----------------------------------------------------------------------
+   shallow constructor used only by the Kokkos KKCopy wrapper
+   allocates nothing: a copy of the real Grid is assigned over this
+   object before it is used, and copy = 1 keeps the destructor from
+   freeing anything the real object still owns
+------------------------------------------------------------------------- */
+
+Grid::Grid(SPARTA *sparta, KKShallow) : Pointers(sparta)
+{
+  copy = 1;
+  copymode = 0;
+}
+
+/* ----------------------------------------------------------------------
    remove existing grid
    called by AdaptGrid when it reads a new grid from file
 ------------------------------------------------------------------------- */

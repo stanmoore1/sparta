@@ -219,6 +219,7 @@ class Grid : protected Pointers {
   // methods
 
   Grid(class SPARTA *);
+  Grid(class SPARTA *, KKShallow);   // needed for Kokkos
   ~Grid();
   void remove();
   void init();

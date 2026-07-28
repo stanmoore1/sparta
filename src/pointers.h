@@ -43,6 +43,12 @@ namespace SPARTA_NS {
 #define IROUNDUP(A) ((((int) (A) + 7) / 8) * 8)
 #define BIROUNDUP(A) ((((bigint) (A) + 7) / 8) * 8)
 
+// tag selecting the "shallow" constructor of a class that the Kokkos package
+// wraps in KKCopy: build only what a device-side copy needs, allocating
+// nothing, since a copy of the real object is assigned over it before use
+
+struct KKShallow {};
+
 class Pointers {
  public:
   Pointers(SPARTA *ptr) :
@@ -70,6 +76,20 @@ class Pointers {
     logfile(ptr->logfile) {}
 
   virtual ~Pointers() noexcept(false) {}
+
+  Pointers(const Pointers &) = default;
+
+  // the implicit operator= would be deleted, since the members below are
+  // references, and that is what forced the Kokkos package to copy these
+  // classes with memcpy instead.  defining it lets KKCopy use ordinary value
+  // semantics, so Kokkos View reference counting stays correct.
+  //
+  // it is a no-op because references cannot be rebound: both objects must
+  // belong to the same SPARTA instance, and all Pointers of one instance bind
+  // to that instance's pointer slots, so there is genuinely nothing to assign.
+  // assigning across two SPARTA instances is not supported.
+
+  Pointers &operator=(const Pointers &) { return *this; }
 
  protected:
   SPARTA *sparta;

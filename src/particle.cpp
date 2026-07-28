@@ -143,6 +143,19 @@ Particle::~Particle()
   delete wrandom;
 }
 
+/* ----------------------------------------------------------------------
+   shallow constructor used only by the Kokkos KKCopy wrapper
+   allocates nothing: a copy of the real Particle is assigned over this
+   object before it is used, and copy = 1 keeps the destructor from
+   freeing anything the real object still owns
+------------------------------------------------------------------------- */
+
+Particle::Particle(SPARTA *sparta, KKShallow) : Pointers(sparta)
+{
+  copy = 1;
+  copymode = 0;
+}
+
 /* ---------------------------------------------------------------------- */
 
 void Particle::init()

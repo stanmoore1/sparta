@@ -135,6 +135,7 @@ class Particle : protected Pointers {
   // methods
 
   Particle(class SPARTA *);
+  Particle(class SPARTA *, KKShallow);   // needed for Kokkos
   virtual ~Particle();
   void init();
   virtual void compress_migrate(int, int *);
