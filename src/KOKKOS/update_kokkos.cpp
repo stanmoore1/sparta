@@ -74,8 +74,10 @@ enum{NOFIELD,CFIELD,PFIELD,GFIELD};             // several files
 //  from that size: below 4KB it rides in the kernel parameters, below 32KB in
 //  constant memory, and above that Kokkos does a cudaMemcpyAsync of the whole
 //  object per launch.  This class has been in the last regime for a long time
-//  (60KB before the surf collide slots were unified, 84KB after), so the guard
-//  below is only a tripwire against an accidental blowup, not a threshold.
+//  -- 60KB before the surf collide and surf react slots were unified, 91KB
+//  after -- so the guard below is only a tripwire against an accidental
+//  blowup, not a threshold.  KOKKOS_MAX_TOT_SURF_COLL and
+//  KOKKOS_MAX_TOT_SURF_REACT are now the only knobs trading capacity for size.
 
 static_assert(sizeof(UpdateKokkos) < 128*1024,
               "UpdateKokkos has grown unexpectedly large; it is copied to the "

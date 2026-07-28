@@ -25,8 +25,7 @@ ComputeStyle(surf/kk,ComputeSurfKokkos)
 #include "kokkos_type.h"
 #include "math_extra_kokkos.h"
 #include "kokkos_copy.h"
-#include "surf_react_global_kokkos.h"
-#include "surf_react_prob_kokkos.h"
+#include "surf_react_kokkos_variant.h"
 
 namespace SPARTA_NS {
 
@@ -403,11 +402,13 @@ void surf_tally_kk(double /*dtremain*/, int isurf, int icell, int reaction,
       break;
     case ECHEM:
       if (reaction && !transparent) {
-        int sr_type = sr_type_list[isr];
-        int m = sr_map[isr];
+        // only the prob style carries per-reaction coefficients
+
         double r_coeff = 0.0;
-        if (sr_type == 1)
-          r_coeff = sr_kk_prob_copy[m].obj.d_coeffs(reaction-1,1);
+        kk_visit(sr_copies[isr],[&](auto &sr) {
+          if constexpr (requires { sr.d_coeffs; })
+            r_coeff = sr.d_coeffs(reaction-1,1);
+        });
         a_array_surf_tally(itally,k++) += weight * r_coeff * fluxscale;
       }
       break;
@@ -429,11 +430,13 @@ void surf_tally_kk(double /*dtremain*/, int isurf, int icell, int reaction,
         etot = 0.5*mvv2e*(ivsqpost + jvsqpost - vsqpre) +
           weight * (iother + jother - otherpre);
         if (reaction) {
-          int sr_type = sr_type_list[isr];
-          int m = sr_map[isr];
+          // only the prob style carries per-reaction coefficients
+
           double r_coeff = 0.0;
-          if (sr_type == 1)
-            r_coeff = sr_kk_prob_copy[m].obj.d_coeffs(reaction-1,1);
+          kk_visit(sr_copies[isr],[&](auto &sr) {
+            if constexpr (requires { sr.d_coeffs; })
+              r_coeff = sr.d_coeffs(reaction-1,1);
+          });
           etot -= weight * r_coeff;
         }
       }
@@ -467,10 +470,7 @@ void surf_tally_kk(double /*dtremain*/, int isurf, int icell, int reaction,
   t_line_1d d_lines;
   t_tri_1d d_tris;
 
-  int sr_type_list[KOKKOS_MAX_TOT_SURF_REACT];
-  int sr_map[KOKKOS_MAX_TOT_SURF_REACT];
-  KKCopy<SurfReactGlobalKokkos> sr_kk_global_copy[KOKKOS_MAX_SURF_REACT_PER_TYPE];
-  KKCopy<SurfReactProbKokkos> sr_kk_prob_copy[KOKKOS_MAX_SURF_REACT_PER_TYPE];
+  Kokkos::Array<SurfReactKKVariant,KOKKOS_MAX_TOT_SURF_REACT> sr_copies;
 
   void grow_tally();
 };

@@ -29,8 +29,7 @@ SurfCollideStyle(diffuse/kk,SurfCollideDiffuseKokkos)
 #include "kokkos_copy.h"
 #include "fix_ambipolar_kokkos.h"
 #include "fix_vibmode_kokkos.h"
-#include "surf_react_global_kokkos.h"
-#include "surf_react_prob_kokkos.h"
+#include "surf_react_kokkos_variant.h"
 
 namespace SPARTA_NS {
 
@@ -89,10 +88,7 @@ class SurfCollideDiffuseKokkos : public SurfCollideDiffuse {
   KKCopy<FixAmbipolarKokkos> fix_ambi_kk_copy;
   KKCopy<FixVibmodeKokkos> fix_vibmode_kk_copy;
 
-  int sr_type_list[KOKKOS_MAX_TOT_SURF_REACT];
-  int sr_map[KOKKOS_MAX_TOT_SURF_REACT];
-  KKCopy<SurfReactGlobalKokkos> sr_kk_global_copy[KOKKOS_MAX_SURF_REACT_PER_TYPE];
-  KKCopy<SurfReactProbKokkos> sr_kk_prob_copy[KOKKOS_MAX_SURF_REACT_PER_TYPE];
+  Kokkos::Array<SurfReactKKVariant,KOKKOS_MAX_TOT_SURF_REACT> sr_copies;
 
  public:
 
@@ -131,16 +127,9 @@ class SurfCollideDiffuseKokkos : public SurfCollideDiffuse {
     if (REACT) {
       if (ambi_flag || vibmode_flag) memcpy(&iorig,ip,sizeof(Particle::OnePart));
 
-      int sr_type = sr_type_list[isr];
-      int m = sr_map[isr];
-
-      if (sr_type == 0) {
-        reaction = sr_kk_global_copy[m].obj.
-          react_kokkos<ATOMIC_REDUCTION>(ip,isurf,norm,jp,velreset,d_retry,d_nlocal);
-      } else if (sr_type == 1) {
-        reaction = sr_kk_prob_copy[m].obj.
-          react_kokkos<ATOMIC_REDUCTION>(ip,isurf,norm,jp,velreset,d_retry,d_nlocal);
-      }
+      kk_visit(sr_copies[isr],[&](auto &sr) {
+        reaction = sr.template react_kokkos<ATOMIC_REDUCTION>(ip,isurf,norm,jp,velreset,d_retry,d_nlocal);
+      });
 
       if (reaction) {
         if (ATOMIC_REDUCTION == 0)

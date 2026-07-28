@@ -28,24 +28,17 @@
 
 using namespace SPARTA_NS;
 
-#define VAL_1(X) X
-#define VAL_2(X) VAL_1(X), VAL_1(X)
-
 /* ---------------------------------------------------------------------- */
 
 ComputeSurfKokkos::ComputeSurfKokkos(SPARTA *sparta, int narg, char **arg) :
-  ComputeSurf(sparta, narg, arg),
-  sr_kk_global_copy{VAL_2(KKCopy<SurfReactGlobalKokkos>(sparta))},
-  sr_kk_prob_copy{VAL_2(KKCopy<SurfReactProbKokkos>(sparta))}
+  ComputeSurf(sparta, narg, arg)
 {
   kokkos_flag = 1;
   d_which = DAT::t_int_1d("surf:which",nvalue);
 }
 
 ComputeSurfKokkos::ComputeSurfKokkos(SPARTA *sparta) :
-  ComputeSurf(sparta),
-  sr_kk_global_copy{VAL_2(KKCopy<SurfReactGlobalKokkos>(sparta))},
-  sr_kk_prob_copy{VAL_2(KKCopy<SurfReactProbKokkos>(sparta))}
+  ComputeSurf(sparta)
 {
   copy = 1;
 }
@@ -142,32 +135,15 @@ void ComputeSurfKokkos::pre_surf_tally()
   if (surf->nsr > KOKKOS_MAX_TOT_SURF_REACT)
     error->all(FLERR,"Kokkos currently supports a limited number of surface reaction methods");
 
-  if (surf->nsr > 0) {
-    int nglob,nprob;
-    nglob = nprob = 0;
-    for (int n = 0; n < surf->nsr; n++) {
-      if (!surf->sr[n]->kokkosable)
-        error->all(FLERR,"Must use Kokkos-enabled surface reaction method with Kokkos");
-      if (strcmp(surf->sr[n]->style,"global") == 0) {
-        if (nglob >= KOKKOS_MAX_SURF_REACT_PER_TYPE)
-          error->all(FLERR,"Kokkos currently supports two instances of each surface reaction method");
-        sr_kk_global_copy[nglob].copy((SurfReactGlobalKokkos*)(surf->sr[n]));
-        sr_kk_global_copy[nglob].obj.pre_react();
-        sr_type_list[n] = 0;
-        sr_map[n] = nglob;
-        nglob++;
-      } else if (strcmp(surf->sr[n]->style,"prob") == 0) {
-        if (nprob >= KOKKOS_MAX_SURF_REACT_PER_TYPE)
-          error->all(FLERR,"Kokkos currently supports two instances of each surface reaction method");
-        sr_kk_prob_copy[nprob].copy((SurfReactProbKokkos*)(surf->sr[n]));
-        sr_kk_prob_copy[nprob].obj.pre_react();
-        sr_type_list[n] = 1;
-        sr_map[n] = nprob;
-        nprob++;
-      } else {
-        error->all(FLERR,"Unknown Kokkos surface reaction method");
-      }
-    }
+  for (int n = 0; n < surf->nsr; n++) {
+    if (!surf->sr[n]->kokkosable)
+      error->all(FLERR,"Must use Kokkos-enabled surface reaction method with Kokkos");
+    int type = SurfReactKKVariant::style_index(surf->sr[n]->style);
+    if (type < 0)
+      error->all(FLERR,"Unknown Kokkos surface reaction method");
+    sr_copies[n].ensure(type,sparta);
+    sr_copies[n].assign(surf->sr[n]);
+    kk_visit(sr_copies[n],[](auto &sr) { sr.pre_react(); });
   }
 }
 
