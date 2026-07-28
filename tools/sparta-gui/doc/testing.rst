@@ -777,6 +777,44 @@ cover:
   released, both ignored
 - Reset undoing every gesture
 
+test_startup.py
+---------------
+
+Tests for what the application does before it has a main window:
+``src/main.cpp``.  ``main()`` is one function ending in ``app.exec()``, so
+nothing in it is reachable from an in-process test -- which is why it was
+the least covered file in the project.  Everything below the option parsing
+is a standalone mode reachable only from the command line: ``-c`` opens a
+data file in a chart window, ``-i`` opens images or movies in the snapshot
+viewer, ``-t`` opens a file in the text viewer, ``-p`` records the SPARTA
+shared library to use.  Each either opens a window and runs the event loop
+or refuses the file and exits 1 behind a modal.  The suite therefore runs
+the real binary as a subprocess, on an Xvfb and in a settings profile of its
+own, dismisses whatever modal comes up and checks the exit status, the
+windows it mapped, and the settings it left behind.  Test cases cover:
+
+- ``--version`` and ``--help`` exiting 0, the help naming every documented
+  option and the configured plugin path
+- ``-p`` recording the library it was given, starting from a profile that
+  has none (and with a real deck rather than ``--help``: ``process()``
+  prints the help and exits before any of main's own handling runs)
+- ``-t`` opening a viewer on an ordinary file, and refusing a movie, an
+  image and a binary file -- each checked by the *title* of the box it put
+  up, since all three exit 1 alike and the message is the difference between
+  sending the user to ``-i`` and telling them their file looks binary
+- ``-i`` opening the snapshot viewer, and a second ``-i`` adding to the same
+  viewer rather than opening a window of its own
+- ``-c`` offering the column picker on a readable data file, and refusing a
+  file with no columns in it or one that is not there
+- a positional deck opening the editor on it, and ``-x``/``-y`` sizing the
+  window (checked against a size above the layout's own minimum, since a
+  smaller request is clamped up and would satisfy a loose bound whatever
+  main did)
+
+Windows are matched by the process id rather than by name: the machine may
+be running another GUI suite on another display, and matching by name listed
+that one's windows as this one's.
+
 test_imageviewerbuttons.cpp
 ---------------------------
 

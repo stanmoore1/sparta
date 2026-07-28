@@ -1633,6 +1633,17 @@ if (XDOTOOL_BINARY AND WM_BINARY AND SHOOTER_BINARY)
   set_tests_properties(GuiDrive.Walker PROPERTIES
     ENVIRONMENT "${GUI_DRIVE_ENVIRONMENT};SHOT_DIR=${CMAKE_CURRENT_BINARY_DIR}/walker-shots"
     TIMEOUT 1800 RESOURCE_LOCK xvfb)
+
+  # What the application does before it has a main window: src/main.cpp. main()
+  # is one function ending in app.exec(), so nothing in it is reachable from an
+  # in-process test -- which is why it was the least covered file in the
+  # project. This runs the real binary as a subprocess for each command line
+  # and checks the exit status and the window it left behind.
+  add_test(NAME GuiDrive.Startup
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_startup.py)
+  set_tests_properties(GuiDrive.Startup PROPERTIES
+    ENVIRONMENT "${GUI_DRIVE_ENVIRONMENT}"
+    TIMEOUT 900 RESOURCE_LOCK xvfb)
 else()
   message(STATUS "Skipping the visual and feature GUI suites: "
     "they need xdotool, a window manager (e.g. openbox) and a screenshooter")
