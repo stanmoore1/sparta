@@ -29,8 +29,6 @@
 namespace SPARTA_NS {
 
 #define KOKKOS_MAX_TOT_SURF_COLL 10
-#define KOKKOS_MAX_BLIST 2
-#define KOKKOS_MAX_SLIST 2
 
 struct s_UPDATE_REDUCE {
   int ntouch_one,nexit_one,nboundary_one,
@@ -130,9 +128,8 @@ class UpdateKokkos : public Update {
 
   Kokkos::Array<SurfCollideKKVariant,KOKKOS_MAX_TOT_SURF_COLL> sc_copies;
 
-  //KKCopy<ComputeSurfKokkos> blist_active_copy[KOKKOS_MAX_GLIST];
-  KKCopy<ComputeSurfKokkos> slist_active_copy[KOKKOS_MAX_SLIST];
-  KKCopy<ComputeBoundaryKokkos> blist_active_copy[KOKKOS_MAX_BLIST];
+  Kokkos::Array<KKCopy<ComputeSurfKokkos>,KOKKOS_MAX_SLIST> slist_active_copy;
+  Kokkos::Array<KKCopy<ComputeBoundaryKokkos>,KOKKOS_MAX_BLIST> blist_active_copy;
 
   ComputeBoundaryKokkos tmp_compute_boundary_kk;
   ComputeSurfKokkos tmp_compute_surf_kk;

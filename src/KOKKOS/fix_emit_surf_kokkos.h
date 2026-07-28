@@ -33,7 +33,6 @@ FixStyle(emit/surf/kk,FixEmitSurfKokkos)
 
 namespace SPARTA_NS {
 
-#define KOKKOS_MAX_SLIST 2
 
 struct TagFixEmitSurf_ninsert{};
 struct TagFixEmitSurf_perform_task{};
@@ -78,7 +77,7 @@ class FixEmitSurfKokkos : public FixEmitSurf {
   int npcurrent,nsurf_tally,nlocal_before,nlocal_surf,region_flag;
 
   KKCopy<ParticleKokkos> particle_kk_copy;
-  KKCopy<ComputeSurfKokkos> slist_active_copy[KOKKOS_MAX_SLIST];
+  Kokkos::Array<KKCopy<ComputeSurfKokkos>,KOKKOS_MAX_SLIST> slist_active_copy;
   KKCopy<RegBlockKokkos> regblock_kk_copy;
   KKCopy<RegCylinderKokkos> regcylinder_kk_copy;
   KKCopy<RegPlaneKokkos> regplane_kk_copy;

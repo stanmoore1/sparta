@@ -16,6 +16,9 @@
 #define SPARTA_KK_COPY_H
 
 #include <type_traits>
+#include <utility>
+
+#include <Kokkos_Core.hpp>
 
 #include "pointers.h"
 
@@ -67,6 +70,23 @@ class KKCopy {
   }
 
 };
+
+// KKCopy has no default constructor, so an array of them needs one initializer
+//  per element.  Writing those out by hand couples the array length to the
+//  initializer, which a macro cannot check; build it from the length instead
+
+template <class ClassStyle, std::size_t... Is>
+Kokkos::Array<KKCopy<ClassStyle>,sizeof...(Is)>
+kk_fill_array(SPARTA *sparta, std::index_sequence<Is...>)
+{
+  return {{ (void(Is),KKCopy<ClassStyle>(sparta))... }};
+}
+
+template <class ClassStyle, int N>
+Kokkos::Array<KKCopy<ClassStyle>,N> kk_make_array(SPARTA *sparta)
+{
+  return kk_fill_array<ClassStyle>(sparta,std::make_index_sequence<N>{});
+}
 
 }
 

@@ -49,9 +49,6 @@ enum{INT,DOUBLE};                                        // several files
 #define DELTATASK 256
 #define TEMPLIMIT 1.0e5
 
-#define VAL_1(X) X
-#define VAL_2(X) VAL_1(X), VAL_1(X)
-
 /* ----------------------------------------------------------------------
    insert particles in grid cells with surfs touching inflow boundaries
 ------------------------------------------------------------------------- */
@@ -64,7 +61,7 @@ FixEmitSurfKokkos::FixEmitSurfKokkos(SPARTA *sparta, int narg, char **arg) :
 #endif
             ),
   particle_kk_copy(sparta),
-  slist_active_copy{VAL_2(KKCopy<ComputeSurfKokkos>(sparta))},
+  slist_active_copy(kk_make_array<ComputeSurfKokkos,KOKKOS_MAX_SLIST>(sparta)),
   tmp_compute_surf_kk(sparta),
   regblock_kk_copy(sparta),
   regcylinder_kk_copy(sparta),

@@ -27,8 +27,13 @@
 #define MAX_TYPES_STACKPARAMS 12
 #define NeighClusterSize 8
 
-#define KOKKOS_MAX_SURF_REACT_PER_TYPE 2
 #define KOKKOS_MAX_TOT_SURF_REACT 4
+
+// max active compute surf / compute boundary instances a kernel can tally to;
+//  shared by UpdateKokkos and FixEmitSurfKokkos, which must agree
+
+#define KOKKOS_MAX_SLIST 2
+#define KOKKOS_MAX_BLIST 2
 
 namespace Kokkos {
   static auto NoInit = [](std::string const& label) {

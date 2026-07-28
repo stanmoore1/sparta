@@ -66,9 +66,6 @@ enum{NOFIELD,CFIELD,PFIELD,GFIELD};             // several files
 #define MOVE_DEBUG_INDEX -1   // particle index on owning proc
 #define MOVE_DEBUG_STEP 4107    // timestep
 
-#define VAL_1(X) X
-#define VAL_2(X) VAL_1(X), VAL_1(X)
-
 // This class is its own Kokkos functor, so its size is what gets shipped to
 //  the device on every kernel launch.  CUDA chooses a launch mechanism purely
 //  from that size: below 4KB it rides in the kernel parameters, below 32KB in
@@ -88,8 +85,8 @@ static_assert(sizeof(UpdateKokkos) < 128*1024,
 UpdateKokkos::UpdateKokkos(SPARTA *sparta) : Update(sparta),
   grid_kk_copy(sparta),
   domain_kk_copy(sparta),
-  slist_active_copy{VAL_2(KKCopy<ComputeSurfKokkos>(sparta))},
-  blist_active_copy{VAL_2(KKCopy<ComputeBoundaryKokkos>(sparta))},
+  slist_active_copy(kk_make_array<ComputeSurfKokkos,KOKKOS_MAX_SLIST>(sparta)),
+  blist_active_copy(kk_make_array<ComputeBoundaryKokkos,KOKKOS_MAX_BLIST>(sparta)),
   tmp_compute_boundary_kk(sparta),
   tmp_compute_surf_kk(sparta)
 {
