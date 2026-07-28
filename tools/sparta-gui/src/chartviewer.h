@@ -81,6 +81,16 @@ public:
                          QWidget *parent = nullptr);
 
     /**
+     * @brief Destructor
+     *
+     * Takes down the connections into this object before ~QWidget starts: the
+     * axis-label fields are wired to editingFinished(), which Qt also emits
+     * when a field merely loses focus -- including the focus change that hiding
+     * the window during destruction causes.
+     */
+    ~ChartWindow() override;
+
+    /**
      * @brief Get the number of charts currently displayed
      * @return Number of charts
      */

@@ -376,6 +376,21 @@ SlideShow::SlideShow(const QString &fileName, SpartaGui *_spartagui, QWidget *pa
     applyWindowFlags(this);
 }
 
+SlideShow::~SlideShow()
+{
+    // Before ~QWidget starts: hiding the window moves the keyboard focus, the
+    // spin box that held it emits editingFinished(), and the member-function
+    // connection behind that is dispatched on an object whose derived
+    // destructor has already run.  The snapshot viewer crashed on exactly this
+    // sequence; here a debug Qt catches it as an assertion.
+    //
+    // Per child, not in one call: QObject::disconnect() takes the sender as its
+    // first argument and that argument may never be null, so the "any sender"
+    // form does not exist and disconnect(nullptr, ...) is a silent no-op.
+    for (QObject *child : findChildren<QObject *>())
+        QObject::disconnect(child, nullptr, this, nullptr);
+}
+
 void SlideShow::addImage(const QString &filename, const QString &label)
 {
     if (imagefiles.contains(filename)) return;

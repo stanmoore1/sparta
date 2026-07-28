@@ -450,7 +450,9 @@ ImageMagick), which is the only way anything reaches it.
 - Closing the panel with the keyboard focus in the delay field.  The
   sibling snapshot viewer crashed exactly there: hiding a widget moves the
   focus, the field emits ``editingFinished()``, and the slot behind it ran
-  on an object ``~QWidget`` was halfway through destroying
+  on an object ``~QWidget`` was halfway through destroying -- and this panel
+  turned out to have the same fault, which is what the case was written on
+  the chance of
 
 test_run.cpp
 ------------

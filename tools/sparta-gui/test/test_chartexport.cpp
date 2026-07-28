@@ -573,6 +573,30 @@ TEST_F(Export, AnOrdinaryKeyIsLeftAlone)
     EXPECT_FALSE(key.isAccepted()) << "the chart window swallowed a key it has no use for";
 }
 
+// Closing the window with the keyboard focus in one of its label fields.
+//
+// The snapshot viewer crashed on exactly this: hiding a widget moves the focus,
+// the field that had it emits editingFinished(), and the member-function slot
+// behind that is dispatched on an object whose derived destructor has already
+// run.  The chart window's three axis-label fields are wired the same way.
+TEST_F(Export, ClosingWithTheFocusInALabelFieldDoesNotCrash)
+{
+    win->show();
+    QApplication::processEvents();
+
+    auto *title = win->findChild<QLineEdit *>("chartTitle");
+    ASSERT_NE(title, nullptr) << "no chart-title field to focus";
+    title->setFocus();
+    title->setText("something new");
+    QApplication::processEvents();
+    ASSERT_TRUE(title->hasFocus());
+
+    delete win;
+    win = nullptr;
+    QApplication::processEvents();
+    SUCCEED(); // getting here is the assertion
+}
+
 int main(int argc, char **argv)
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");

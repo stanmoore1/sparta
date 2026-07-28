@@ -106,6 +106,24 @@ class GUIEditorChecks(unittest.TestCase):
                 os.remove(f)
         focus()
 
+    def exited(self, timeout=20.0):
+        """The application's exit status, waiting up to @p timeout for it.
+
+        poll() asked once is a race: the keystroke that ends the run has only
+        just been delivered, and under a loaded machine -- four suites at once,
+        an instrumented build -- the process has not always finished tearing
+        down by the time the next line executes.  A single poll() then reports
+        None and the case fails for the machine's speed rather than the
+        application's behaviour.
+        """
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            rc = self.gui.poll()
+            if rc is not None:
+                return rc
+            time.sleep(0.25)
+        return self.gui.poll()
+
     def tearDown(self):
         """Stop SPARTA-GUI"""
         if self.gui.poll() is None:
@@ -117,7 +135,7 @@ class GUIEditorChecks(unittest.TestCase):
         screenshot("shot1.png")
         pyautogui.hotkey('ctrl','q')
         screenshot("shot2.png")
-        self.assertEqual(self.gui.poll(), 0)
+        self.assertEqual(self.exited(), 0)
         self.assertTrue(check_image('shot1.png', (255,255,255), 10))
         self.assertTrue(check_image('shot2.png', (0,0,0), 1))
 
@@ -127,7 +145,7 @@ class GUIEditorChecks(unittest.TestCase):
         pyautogui.hotkey('alt','f')
         pyautogui.press('q')
         screenshot("shot2.png")
-        self.assertEqual(self.gui.poll(), 0)
+        self.assertEqual(self.exited(), 0)
         self.assertTrue(check_image('shot1.png', (255,255,255), 10))
         self.assertTrue(check_image('shot2.png', (0,0,0), 1))
 
@@ -142,7 +160,7 @@ class GUIEditorChecks(unittest.TestCase):
         focus()
         pyautogui.hotkey('ctrl','q')
         pyautogui.hotkey('alt','n')
-        self.assertEqual(self.gui.poll(), 0)
+        self.assertEqual(self.exited(), 0)
 
     @unittest.skip("unreliable interaction with the modal save dialog; needs rework")
     def testExitModSave(self):
@@ -165,7 +183,7 @@ class GUIEditorChecks(unittest.TestCase):
             self.assertEqual(lines[1],"Hello, World!")
             f.close()
             os.remove('hello.txt')
-        self.assertEqual(self.gui.poll(), 0)
+        self.assertEqual(self.exited(), 0)
 
     @unittest.skip("unreliable interaction with the modal file dialogs; needs rework")
     def testEditSaveLoad(self):
@@ -254,7 +272,7 @@ class GUIEditorChecks(unittest.TestCase):
         focus()
         pyautogui.hotkey('ctrl','q')
         time.sleep(0.2)
-        self.assertEqual(self.gui.poll(), 0)
+        self.assertEqual(self.exited(), 0)
 
     @unittest.skip("depends on completion popup timing; needs rework")
     def testEditCompletion(self):
@@ -306,7 +324,7 @@ class GUIEditorChecks(unittest.TestCase):
         focus()
         pyautogui.hotkey('ctrl','q')
         time.sleep(0.2)
-        self.assertEqual(self.gui.poll(), 0)
+        self.assertEqual(self.exited(), 0)
 
 ##############################
 if __name__ == "__main__":

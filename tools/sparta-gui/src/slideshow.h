@@ -60,7 +60,17 @@ public:
     /**
      * @brief Destructor
      */
-    ~SlideShow() override = default;
+    /**
+     * @brief Destructor
+     *
+     * Takes down the connections into this object before ~QWidget starts.
+     * Destroying a widget hides it, which moves the keyboard focus, which makes
+     * whichever spin box held it emit editingFinished() -- and by then `this` is
+     * no longer a SlideShow, so a connection made to a member function pointer
+     * is dispatched on the wrong type.  A debug Qt asserts on exactly that; a
+     * release build calls through whatever is at the address.
+     */
+    ~SlideShow() override;
 
     SlideShow()                             = delete;
     SlideShow(const SlideShow &)            = delete;

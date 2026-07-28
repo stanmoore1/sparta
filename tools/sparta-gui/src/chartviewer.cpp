@@ -175,6 +175,17 @@ int ChartWindow::activeIndex() const
     return cols.empty() ? -1 : 0;
 }
 
+ChartWindow::~ChartWindow()
+{
+    // See ~ImageViewer: hiding the window on the way out moves the keyboard
+    // focus, whichever label field held it emits editingFinished(), and the
+    // member-function connection behind that is dispatched on an object whose
+    // derived destructor has already run.  Per child, because disconnect()
+    // takes the sender first and that argument may never be null.
+    for (QObject *child : findChildren<QObject *>())
+        QObject::disconnect(child, nullptr, this, nullptr);
+}
+
 void ChartWindow::setProcessedLabel(const QString &label)
 {
     if (active >= 0) cols[active]->procLabel = label;
