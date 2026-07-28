@@ -147,7 +147,7 @@ void *SpartaWrapper::extractCompute(const QString &id, int style, int type)
             break;
     }
 
-    if (sparta_handle && (mystyle >= 0) && (mytype >= 0)) {
+    if (isOpen() && (mystyle >= 0) && (mytype >= 0)) {
         return SPAFN(extract_compute)(sparta_handle, id.toLocal8Bit(), mystyle, mytype);
     }
     return nullptr;
@@ -194,7 +194,7 @@ void *SpartaWrapper::extractFix(const QString &id, int style, int type, int, int
             break;
     }
 
-    if (sparta_handle && (mystyle >= 0) && (mytype >= 0)) {
+    if (isOpen() && (mystyle >= 0) && (mytype >= 0)) {
         return SPAFN(extract_fix)(sparta_handle, id.toLocal8Bit(), mystyle, mytype);
     }
     return nullptr;
@@ -227,11 +227,13 @@ int SpartaWrapper::extractVariableDatatype(const QString &keyword)
 // note: equal style and compatible variables only
 double SpartaWrapper::extractVariable(const char *keyword)
 {
-    void *ptr = nullptr;
-    if (isOpen()) {
-        ptr = SPAFN(extract_variable)(sparta_handle, keyword);
-    }
-    double val = (ptr) ? *(static_cast<double *>(ptr)) : 0.0;
+    // the free() belongs inside the guard as much as the extract does: it is
+    // itself a call through the function table, so releasing a pointer that was
+    // never allocated -- because there is no table -- dereferences the absent
+    // table to find free() and jumps through it
+    if (!isOpen()) return 0.0;
+    void *ptr        = SPAFN(extract_variable)(sparta_handle, keyword);
+    const double val = ptr ? *(static_cast<double *>(ptr)) : 0.0;
     SPAFN(free)(ptr);
     return val;
 }

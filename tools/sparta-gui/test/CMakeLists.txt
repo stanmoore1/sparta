@@ -1275,6 +1275,31 @@ target_link_libraries(test_movielive PRIVATE GTest::gtest Qt6::Widgets Qt6::Svg)
 add_test(NAME Movie.Live COMMAND $<TARGET_FILE:test_movielive>)
 set_tests_properties(Movie.Live PROPERTIES TIMEOUT 900 RESOURCE_LOCK "ffmpeg")
 
+# Loading the SPARTA library, and what the wrapper does when that fails.  Every
+# other suite uses a library that loads; this one uses the ones that do not.  In
+# plugin mode every call goes through a function table that is absent from
+# application start until a library is chosen, so a call with no guard jumps
+# through it -- writing these found two.
+add_executable(test_wrapperload
+  test_wrapperload.cpp
+  ${CMAKE_SOURCE_DIR}/src/spartawrapper.cpp
+  ${CMAKE_SOURCE_DIR}/src/helpers.cpp
+  ${CMAKE_SOURCE_DIR}/src/qaddon.cpp
+  ${PLUGIN_LOADER_SRC}
+)
+target_include_directories(test_wrapperload PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_compile_definitions(test_wrapperload PRIVATE
+  SPARTA_TEST_LIBRARY_PATH="${_spa_test_lib}")
+target_link_libraries(test_wrapperload PRIVATE GTest::gtest Qt6::Widgets Qt6::Svg)
+if (SPARTA_GUI_USE_PLUGIN)
+  target_compile_definitions(test_wrapperload PRIVATE SPARTA_GUI_USE_PLUGIN)
+  target_include_directories(test_wrapperload PRIVATE ${SPARTA_PLUGINLIB_DIR})
+endif()
+
+# it opens and closes SPARTA instances of its own
+add_test(NAME Wrapper.Load COMMAND $<TARGET_FILE:test_wrapperload>)
+set_tests_properties(Wrapper.Load PROPERTIES TIMEOUT 300 RESOURCE_LOCK "sparta_run")
+
 # Test executable for the converted image cache
 add_executable(test_imagecache
   test_imagecache.cpp
