@@ -121,7 +121,9 @@ class CollideVSS : public Collide {
   // vss style never evaluates it and its random number stream is unchanged.
 
   int lbflag;
+  int lbcapflag;                  // 1 once the retry-cap warning has fired
   virtual double lb_weight(int, int, double, double) {return -1.0;}
+  void lb_capcheck(int);
 
   void EEXCHANGE_NonReactingEDisposal(Particle::OnePart *,
                                       Particle::OnePart *);

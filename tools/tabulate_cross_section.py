@@ -470,8 +470,11 @@ def cmd_lxcat(args):
                                b.get("desc", "")[:50]))
         return
 
-    sel = [b for b in blocks
-           if (args.index is None or blocks.index(b) == args.index)
+    # index by position, not by value: two blocks can compare equal and
+    #   blocks.index() would then return the same index for both
+
+    sel = [b for n, b in enumerate(blocks)
+           if (args.index is None or n == args.index)
            and (args.process is None or b["process"] == args.process.upper())
            and (args.target is None or b.get("target") == args.target)]
     if not sel:

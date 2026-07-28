@@ -418,17 +418,35 @@ void CollideTable::build_lbratio()
       }
     }
 
+  // report how far the tables depart from their own VSS reference, over the
+  //   energies each table actually covers.  outside that range the table is
+  //   extrapolated and the ratio is dominated by the extrapolation, which
+  //   says nothing useful about the data the user supplied
+
   if (comm->me == 0) {
     double worst = 1.0;
-    for (int row = 0; row < nlbpair; row++) {
-      double mean = 0.0;
-      for (int k = 0; k < NLB; k++) mean += lbratio[row][k];
-      mean /= NLB;
-      if (mean > 0.0) worst = MAX(worst,lbmax[row][NLB-1]/mean);
-    }
+    for (int i = 0; i < nspecies; i++)
+      for (int j = 0; j < nspecies; j++) {
+        int row = lb_index[i][j];
+        if (row < 0) continue;
+        int m = sigma_index[i][j];
+        double mr = params[i][j].mr;
+        double elo = 0.5*mr*sigma_tab[m]->xlo/EV2J;
+        double ehi = 0.5*mr*sigma_tab[m]->xhi/EV2J;
+        int klo = (int) MAX(0.0,(log(elo)-lblo)*lbinvdelta);
+        int khi = (int) MIN((double)(NLB-1),(log(ehi)-lblo)*lbinvdelta);
+        double hi = 0.0, lo = 0.0;
+        int n = 0;
+        for (int k = klo; k <= khi; k++) {
+          hi = MAX(hi,lbratio[row][k]);
+          lo += lbratio[row][k];
+          n++;
+        }
+        if (n && lo > 0.0) worst = MAX(worst,hi/(lo/n));
+      }
     char str[256];
     sprintf(str,"Larsen-Borgnakke detailed balance corrected for %d tabulated "
-            "species pair%s\n  worst-case acceptance ratio %.3g",
+            "species pair%s\n  mean acceptance over the tabulated range >= %.3g",
             nlbpair,nlbpair == 1 ? "" : "s",1.0/worst);
     if (screen) fprintf(screen,"%s\n",str);
     if (logfile) fprintf(logfile,"%s\n",str);

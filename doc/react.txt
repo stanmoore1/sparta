@@ -330,6 +330,14 @@ example:
 O + O --> O2
 R T 0.0 8.197e-19 o2_recomb.tab O2_RECOMB :pre
 
+Note that SPARTA treats the third body as a spectator which selects the
+rate but does not take part in the collision, so the released energy and
+the relative translational energy of the two reactants have nowhere to go
+unless the recombined molecule has internal modes.  Give the product
+rotational and vibrational degrees of freedom in the species file, or that
+energy is silently dropped.  This is a property of SPARTA's recombination
+model and applies equally to the Arrhenius and Quantum styles.
+
 Which reaction a given third-body species selects follows the same rules
 as the Arrhenius and Quantum styles, so the third body may be named
 explicitly as the second product, may use the atom/molecule wildcards, or

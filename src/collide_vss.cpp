@@ -53,7 +53,7 @@ CollideVSS::CollideVSS(SPARTA *sparta, int narg, char **arg) :
   if (narg < 3) error->all(FLERR,"Illegal collide command");
 
   vssflag = 1;
-  lbflag = 0;
+  lbflag = lbcapflag = 0;
   params = NULL;
   prefactor = NULL;
   nparams = 0;
@@ -86,7 +86,7 @@ CollideVSS::CollideVSS(SPARTA *sparta, int narg, char **arg, int /*flag*/) :
   if (narg < 3) error->all(FLERR,"Illegal collide command");
 
   vssflag = 1;
-  lbflag = 0;
+  lbflag = lbcapflag = 0;
   params = NULL;
   prefactor = NULL;
   nparams = 0;
@@ -508,6 +508,24 @@ void CollideVSS::SCATTER_TwoBodyScattering(Particle::OnePart *ip,
   vj[2] = precoln.wcmf - (mass_i*divisor)*wc;
 }
 
+/* ----------------------------------------------------------------------
+   report once if a Larsen-Borgnakke acceptance loop ran out of retries
+   only reachable when the tabulated cross section is so unlike the VSS law
+     of its pair that acceptance falls below ~1/LBMAXTRY, in which case that
+     draw keeps the VSS sample and detailed balance is not fully restored
+------------------------------------------------------------------------- */
+
+void CollideVSS::lb_capcheck(int ntry)
+{
+  if (ntry < LBMAXTRY || lbcapflag) return;
+  lbcapflag = 1;
+  if (comm->me == 0)
+    error->warning(FLERR,"Larsen-Borgnakke acceptance loop hit its retry cap; "
+                   "the tabulated cross section is far from the VSS parameters "
+                   "of that pair, so its internal energy exchange is biased "
+                   "toward the VSS law.  Fit diam and omega to the table");
+}
+
 /* ---------------------------------------------------------------------- */
 
 void CollideVSS::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
@@ -571,6 +589,7 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
                      (w = lb_weight(ip->ispecies,jp->ispecies,
                                     (1.0-Fraction_Rot)*E_Dispose,E_Dispose))
                      >= 0.0 && w < random->uniform());
+            lb_capcheck(ntry);
             p->erot = Fraction_Rot * E_Dispose;
             E_Dispose -= p->erot;
           } else {
@@ -584,6 +603,7 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
                      (w = lb_weight(ip->ispecies,jp->ispecies,
                                     (1.0-frac)*E_Dispose,E_Dispose))
                      >= 0.0 && w < random->uniform());
+            lb_capcheck(ntry);
             p->erot = E_Dispose * frac;
             E_Dispose -= p->erot;
           }
@@ -613,6 +633,7 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
                        (w = lb_weight(ip->ispecies,jp->ispecies,
                                       (1.0-Fraction_Vib)*E_Dispose,E_Dispose))
                        >= 0.0 && w < random->uniform());
+              lb_capcheck(ntry);
               p->evib= Fraction_Vib * E_Dispose;
               E_Dispose -= p->evib;
 
@@ -647,6 +668,7 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
                        (w = lb_weight(ip->ispecies,jp->ispecies,
                                       (1.0-frac)*E_Dispose,E_Dispose))
                        >= 0.0 && w < random->uniform());
+              lb_capcheck(ntry);
               p->evib = E_Dispose * frac;
               E_Dispose -= p->evib;
 
