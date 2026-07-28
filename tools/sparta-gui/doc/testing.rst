@@ -648,6 +648,84 @@ cover:
   over it
 - The tool paths remembered for the next session
 
+test_movielive.cpp
+------------------
+
+The movie import against a real movie.  ``test_movieimport.cpp`` parses
+ffprobe's JSON from hand-written strings; the half that talks to ffmpeg had
+never run -- probing a container that stores no frame count, turning a
+selection into a filter expression, and deciding afterwards whether the
+extraction worked.
+
+That half is where a silent wrong answer lives: the extracted frames are what
+the user then measures, and a stride that is off by one produces a slide show
+that looks entirely normal and is not the part of the trajectory that was
+asked for.  So the fixture encodes movies whose frames are individually
+identifiable -- each a flat colour derived from its number -- and reads the
+colours back out of the extracted PNGs.  Test cases cover:
+
+- Size, rate and duration of a real movie, and the packet-counting fallback
+  for webm, which stores no frame count
+- A text file and a missing file refused with a reason
+- The selected range and stride coming back as exactly the right source
+  frames, in order, as absolute paths; the whole movie; a single frame
+- An impossible range, and an extraction that matched nothing, both reported
+  rather than returned empty
+- A failure clearing its own output *and* any frames an abandoned earlier
+  import left in the directory -- otherwise the failure is reported and the
+  slide show still finds a full-looking sequence of somebody else's frames
+
+Recorded in the file header: the upper bound of the range is enforced twice,
+by the select filter and again by ``-frames:v``, so breaking either alone
+changes nothing observable.  That is belt and braces, not a gap.
+
+test_wrapperload.cpp
+--------------------
+
+Loading the SPARTA library, and what the wrapper does when that fails.  Every
+other suite uses a library that loads; this one uses the ones that do not: a
+file that is not there, one that is not an ELF object, a truncated one, an ELF
+header with no body, and a good one loaded on top of an open instance.
+
+In plugin mode every library call goes through a function table, and that
+table is absent from application start until the user has chosen a library --
+so a call that is unguarded dereferences it to find the function and jumps
+through the result.  Writing these found two such calls: ``extractVariable()``
+guarded the extract but not the ``free()`` that follows it (itself a table
+call), and the two extract paths guarded on the instance handle alone inside a
+compound condition that the earlier sweep had not reached.  Both are fixed, and
+an audit of every ``SPAFN`` use against its enclosing guard now comes back
+clean.  Test cases also cover the truncated-library check that exists so a
+corrupt download is refused rather than taken down inside the dynamic linker,
+recovery after a rejected library, one instance at a time, and the port's
+constant stubs answering the same with and without a simulator.
+
+The file header records that the two safeguards keeping the instance and the
+table in step -- ``loadLib()`` closing the instance before releasing the table,
+and ``isOpen()`` requiring both -- are redundant with each other: removing
+either alone leaves every check here passing.
+
+test_exportimage.cpp
+--------------------
+
+Saving a snapshot to a file (``exportImage()``): the only way a rendered frame
+leaves the application, used by both viewers and the chart window, and never
+run.  Qt writes a handful of formats directly; for anything else the image goes
+to a temporary PNG that ImageMagick converts to the name the user typed.  Test
+cases cover the formats Qt writes, the converter fallback (an SGI, read back
+through the converter to prove the file holds the image that went in), a
+cancelled dialog writing nothing and complaining about nothing, no image at all
+not even asking, an unwritable destination reported, and the error naming which
+viewer was saving -- the same function serves three of them.
+
+Two of the three failure branches around the converter are unreachable on a
+Linux box that has ImageMagick, which the file header says rather than leaving
+them looking like a gap: ``findExe()`` searches ``/usr/bin`` whatever ``PATH``
+says, so "the converter is absent" cannot be produced; and ImageMagick answers
+an unrecognised extension by falling back to its own default format and exiting
+zero, so "the conversion failed" needs a destination that cannot be written at
+all -- where there is nothing left to clean up either.
+
 test_datafileplot.cpp
 ---------------------
 
