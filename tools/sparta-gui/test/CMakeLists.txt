@@ -1300,6 +1300,20 @@ endif()
 add_test(NAME Wrapper.Load COMMAND $<TARGET_FILE:test_wrapperload>)
 set_tests_properties(Wrapper.Load PROPERTIES TIMEOUT 300 RESOURCE_LOCK "sparta_run")
 
+# Saving a snapshot to a file: the only way a rendered frame leaves the
+# application, and never run.  Qt writes a few formats directly; anything else
+# goes through a temporary PNG and ImageMagick, which is the half that had no
+# coverage at all.
+add_executable(test_exportimage
+  test_exportimage.cpp
+  ${CMAKE_SOURCE_DIR}/src/helpers.cpp
+  ${CMAKE_SOURCE_DIR}/src/qaddon.cpp
+)
+target_include_directories(test_exportimage PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_exportimage PRIVATE GTest::gtest Qt6::Widgets Qt6::Svg)
+
+gtest_discover_tests(test_exportimage)
+
 # Test executable for the converted image cache
 add_executable(test_imagecache
   test_imagecache.cpp
