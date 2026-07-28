@@ -364,6 +364,37 @@ TEST_F(Run, ADeckThatCannotRunReportsFailureRatherThanClaimingSuccess)
     EXPECT_FALSE(ok) << "an invalid deck was reported as a successful run";
 }
 
+// The commonest thing a user gets wrong is a line in their deck, and until this
+// was fixed that mistake wedged the application for the rest of the session.
+//
+// Run::command set update->runflag on entry and cleared it at the bottom, and
+// Error::all() throws now, so an error inside the run unwound past the reset and
+// left the flag set.  isRunning() then answered "yes" forever: every later run
+// was refused with "Must stop current run before starting a new run" with no run
+// to stop, and the paths that do stop one called wait() on a SpartaRunner that
+// had already finished and been freed by its own finished() connection.
+//
+// The deck has to fail *inside* the run, not while it is being read, or it never
+// reaches the code that sets the flag.  `compute surf` in a deck with no
+// surfaces is exactly that: the command itself is accepted, and the compute's
+// init() -- which the run's setup calls, whether or not anything references it
+// -- is what rejects it.  Nearly every other way of writing a bad line is
+// caught at parse time and leaves runflag untouched, which is a trap: an
+// earlier version of this test used one and passed with the fix removed.
+TEST_F(Run, AnErrorInsideARunDoesNotWedgeTheApplication)
+{
+    Modals modals;
+    setBuffer(QString::fromLatin1(kDeck).replace("run             5\n",
+                                                 "compute cbad surf all air fx\n"
+                                                 "run             5\n"));
+    EXPECT_FALSE(runBuffer()) << "a deck that fails in the run reported success";
+
+    // the whole point: the next run is allowed to start, and finishes
+    setBuffer(QString::fromLatin1(kDeck));
+    EXPECT_TRUE(runBuffer())
+        << "the application refused to run again after an error -- it is wedged";
+}
+
 TEST_F(Run, TheProgressAndStatusIndicatorsComeUpForARun)
 {
     Modals modals;

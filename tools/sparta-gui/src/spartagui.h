@@ -583,6 +583,19 @@ private:
     QList<QString> recent;                    ///< List of recently opened files
     QList<QPair<QString, QString>> variables; ///< Index-style variable definitions
 
+    /** @brief Whether the worker thread is alive.
+     *
+     * Not the same question as SpartaWrapper::isRunning(), which reports
+     * SPARTA's update->runflag and so is true only inside its run loop.  The
+     * thread is alive for the whole deck -- read_surf, create_grid,
+     * create_particles and everything else before the first `run` -- and it is
+     * thread liveness, not run state, that decides whether it is safe to close
+     * the instance or start another run. */
+    bool workerActive() const;
+
+    /** @brief Stop any run in progress and reap the worker thread. */
+    void stopAndReapRunner();
+
     SpartaWrapper sparta;                ///< Interface to SPARTA library
     SpartaRunner *runner;                ///< Thread for running SPARTA simulations
     QString pluginPath;                  ///< Path to SPARTA shared library (plugin mode)

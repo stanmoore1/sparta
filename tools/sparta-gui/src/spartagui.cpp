@@ -1089,12 +1089,7 @@ void SpartaGui::newDocument()
     textEdit->document()->setModified(false);
     applyEditorColorScheme();
 
-    if (sparta.isRunning()) {
-        stopRun();
-        runner->wait();
-        runner->deleteLater();
-        runner = nullptr;
-    }
+    stopAndReapRunner();
     // close windows.  clearRunPanels() deletes *every* docked panel widget, so
     // every raw pointer we keep to one must be cleared here or it dangles (and
     // e.g. the auto-lint timer would then clear() a freed diagnostics list --
@@ -1371,12 +1366,7 @@ void SpartaGui::openFile(const QString &fileName)
     // do nothing, if no file name provided
     if (fileName.isEmpty()) return;
 
-    if (sparta.isRunning()) {
-        stopRun();
-        runner->wait();
-        runner->deleteLater();
-        runner = nullptr;
-    }
+    stopAndReapRunner();
     // close windows.  clearRunPanels() deletes *every* docked panel widget, so
     // every raw pointer we keep to one must be cleared here or it dangles (and
     // e.g. the auto-lint timer would then clear() a freed diagnostics list --
@@ -1700,12 +1690,7 @@ void SpartaGui::saveAs()
 
 void SpartaGui::quit()
 {
-    if (sparta.isRunning()) {
-        stopRun();
-        runner->wait();
-        runner->deleteLater();
-        runner = nullptr;
-    }
+    stopAndReapRunner();
 
     autoSave();
     if (textEdit->document()->isModified()) {
@@ -1799,6 +1784,42 @@ void SpartaGui::stopRun()
 {
     if (!sparta.isRunning()) return;
     sparta.forceTimeout();
+}
+
+bool SpartaGui::workerActive() const
+{
+    return runner && runner->isRunning();
+}
+
+void SpartaGui::stopAndReapRunner()
+{
+    // Guarded on thread liveness rather than on sparta.isRunning(), which was
+    // the wrong question in both directions.
+    //
+    // It is false while the worker thread is still working: runflag is set only
+    // inside SPARTA's run loop, so through read_surf, create_grid,
+    // create_particles and the rest of a deck's setup this block was skipped
+    // and the instance was closed, or replaced, underneath a live thread.
+    //
+    // And it stayed true after an error until Run::command was fixed to reset
+    // it -- at which point the thread had long since finished and been freed by
+    // its own finished() connection, so wait() ran on freed memory.
+    //
+    // runner is null once that connection has fired, so a stale pointer cannot
+    // be reached through here at all.
+    if (!runner) return;
+    if (runner->isRunning()) {
+        stopRun();
+        runner->wait();
+    }
+    // Freeing it is the finished() handler's job, and only its job.  Every
+    // runner has one, it runs exactly once, and doing it here as well raced
+    // with it: this call could delete the object before the queued handler had
+    // run, or -- if a later run had already installed a new runner -- leave the
+    // old one for a handler that no longer recognised it.  Dropping the
+    // reference is all that is wanted here.  The runner is a child of this
+    // window in any case, so it cannot outlive it.
+    runner = nullptr;
 }
 
 void SpartaGui::logUpdate()
@@ -2132,7 +2153,10 @@ void SpartaGui::runDone()
 
 void SpartaGui::restartSparta()
 {
-    if (sparta.isRunning()) {
+    // workerActive() too: runflag is clear while the thread is still in a
+    // deck's setup, and a second run started there overwrote the runner and
+    // issued "clear" -- tearing SPARTA down under the first one.
+    if (sparta.isRunning() || workerActive()) {
         warning(this, "SPARTA-GUI Warning", "Must stop current run before relaunching SPARTA");
         return;
     }
@@ -2218,7 +2242,10 @@ void SpartaGui::createChartWindow(QSettings &settings)
 
 void SpartaGui::doRun(bool use_buffer)
 {
-    if (sparta.isRunning()) {
+    // workerActive() too: runflag is clear while the thread is still in a
+    // deck's setup, and a second run started there overwrote the runner and
+    // issued "clear" -- tearing SPARTA down under the first one.
+    if (sparta.isRunning() || workerActive()) {
         warning(this, "SPARTA-GUI Warning", "Must stop current run before starting a new run");
         return;
     }
@@ -2314,7 +2341,19 @@ void SpartaGui::doRun(bool use_buffer)
     applyProxySetting(sparta, settings);
 
     connect(runner, &SpartaRunner::resultReady, this, &SpartaGui::runDone);
-    connect(runner, &SpartaRunner::finished, runner, &QObject::deleteLater);
+    // Clear the member as well as freeing the object.  Connecting finished
+    // straight to deleteLater left `runner` pointing at freed memory the moment
+    // a run ended, and every use of it after that was live only by luck of the
+    // guard in front of it.  The captured pointer is compared before clearing,
+    // so a runner created for a later run is never disowned by an older one's
+    // finished().
+    connect(runner, &SpartaRunner::finished, this, [this, r = runner]() {
+        // Drop the reference only if it is still this runner -- a later run may
+        // have installed its own by the time this arrives -- but free the object
+        // unconditionally, because this handler is the one place that does.
+        if (runner == r) runner = nullptr;
+        r->deleteLater();
+    });
     runner->start();
 
     createLogWindow(settings);
@@ -3551,12 +3590,7 @@ void SpartaGui::editVariables()
     vars.setFont(font());
     if (vars.exec() == QDialog::Accepted) {
         variables = newvars;
-        if (sparta.isRunning()) {
-            stopRun();
-            runner->wait();
-            runner->deleteLater();
-            runner = nullptr;
-        }
+        stopAndReapRunner();
         {
             StdoutSilencer guard;
             sparta.close();
@@ -3604,12 +3638,7 @@ void SpartaGui::preferences()
         bool instanceClosed = false;
         if ((oldaccel != newaccel) || (oldthreads != newthreads) ||
             (oldecho != settings.value(Keys::ECHO, false).toBool())) {
-            if (sparta.isRunning()) {
-                stopRun();
-                runner->wait();
-                runner->deleteLater();
-                runner = nullptr;
-            }
+            stopAndReapRunner();
             {
                 StdoutSilencer guard;
                 sparta.close();
