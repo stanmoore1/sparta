@@ -584,6 +584,36 @@ if (SPARTA_GUI_USE_PLUGIN)
 endif()
 gtest_discover_tests(test_chartanalysis)
 
+# The rest of the chart window: the four ways data leaves it (PNG, DAT, CSV,
+# YAML), the two dialogs that write back into it (style, reference lines) and
+# the keys it claims for itself. All of it sat behind a QFileDialog or a modal,
+# which is why it had never run. The exports matter more than their line count:
+# chartsToPlotData() underneath them reads every column while the window shows
+# one, so an export that dropped the off-screen columns would look right on
+# screen and wrong in the file.
+add_executable(test_chartexport
+  test_chartexport.cpp
+  ${GUI_WALKER_SOURCES}
+)
+target_include_directories(test_chartexport PRIVATE
+  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}/thirdparty/rangeslider
+)
+target_compile_definitions(test_chartexport PRIVATE SPARTA_GUI_VERSION="${PROJECT_VERSION}")
+target_link_libraries(test_chartexport PRIVATE
+  GTest::gtest Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Svg Qt6::Test
+  lepton_mini ads::qtadvanceddocking-qt6)
+if (SPARTA_GUI_HAVE_VTK)
+  target_compile_definitions(test_chartexport PRIVATE SPARTA_GUI_HAVE_VTK)
+  target_link_libraries(test_chartexport PRIVATE ${VTK_LIBRARIES})
+  vtk_module_autoinit(TARGETS test_chartexport MODULES ${VTK_LIBRARIES})
+endif()
+if (SPARTA_GUI_USE_PLUGIN)
+  target_compile_definitions(test_chartexport PRIVATE SPARTA_GUI_USE_PLUGIN)
+  target_include_directories(test_chartexport PRIVATE ${SPARTA_PLUGINLIB_DIR})
+endif()
+gtest_discover_tests(test_chartexport)
+
 # The File menu, and the workers behind it. test_mainwindow.cpp keeps a list of
 # actions it must not trigger because each opens a modal nobody can answer, and
 # nearly all of them are the file actions -- which is why opening, saving,

@@ -885,13 +885,54 @@ the text of the report that follows.  Test cases cover:
   was given, shortening a long one, and naming itself after its expression
   when unlabelled; plus malformed parameters and a fit that cannot converge
 - Block-average uncertainty reporting the mean, block-averaged standard
-  error, integrated autocorrelation time and effective sample count
-- Steady-state detection reporting a burn-in cutoff, the post-burn-in mean
-  and how much data survived
+  error, integrated autocorrelation time and effective sample count -- as
+  numbers rather than as labels.  The mean of a bounded oscillation about
+  10 is 10 to within 0.01 whatever the implementation does, which is the
+  independent anchor; a period-20 sawtooth cut into blocks of 20 puts one
+  whole period in every block, so the block means agree exactly and the
+  batch-means error is analytically zero while the naive error is not
+- Steady-state detection reporting a burn-in cutoff that lands inside the
+  transient, a mean that is the flat level rather than one dragged up by
+  the ramp, and a kept-sample count that follows from the cutoff
 - The Birch-Murnaghan fit asking for the atom count, reporting every fitted
   quantity, deriving a₀ = ∛(N × V₀) from its own V₀, and refusing data with
   no minimum in it
 - Cancelling the analysis leaving the chart untouched
+
+test_chartexport.cpp
+--------------------
+
+Tests for the rest of the chart window: the four ways data leaves it, the
+two dialogs that write back into it, and the keys it claims for itself.
+All of it sat behind a ``QFileDialog`` or a modal, which is why it had
+never run.  The exports matter more than their line count suggests --
+``chartsToPlotData()`` beneath them reads *every* column while the window
+on screen shows one, so an export that dropped the off-screen columns would
+look correct in the window right up to the point the file was opened
+somewhere else.  A two-column chart is used throughout so the difference
+shows.  Test cases cover:
+
+- CSV carrying every column and every row, with the column that is not on
+  screen present and correct
+- Gnuplot ``.dat`` opening with a comment header, naming the run it came
+  from, and holding one data line per sample
+- YAML holding both column names and the last sample
+- A cancelled export writing nothing, and an unwritable destination leaving
+  no half-file at the name the user chose
+- ``Save As`` writing a readable image of the chart, and offering a default
+  name that identifies both the run and the column
+- An empty chart neither exporting nor asking where to
+- Copy putting the plot on the clipboard
+- The style dialog's choices reaching the chart (raw and processed draw
+  mode, width and marker size), the legend corner surviving into settings,
+  and a cancelled dialog changing nothing
+- A reference line surviving into the next visit to the dialog, a cancelled
+  dialog keeping the old set rather than the rejected rows, the label style
+  stored for every chart window, and an empty chart having no lines to edit
+- ``Ctrl+C``, ``Ctrl+W``, ``Ctrl+Q`` and ``Ctrl+/`` claimed by the window
+  itself -- it is a docked panel sharing the main window's shortcut context,
+  so leaving them to Qt makes them ambiguous -- while an ordinary key is
+  left alone
 
 test_mainwindowfiles.cpp
 ------------------------
