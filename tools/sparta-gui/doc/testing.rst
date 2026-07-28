@@ -777,6 +777,43 @@ cover:
   released, both ignored
 - Reset undoing every gesture
 
+test_imageviewerbuttons.cpp
+---------------------------
+
+Tests for the snapshot viewer's toolbar, its colour files, and the keys the
+panel claims for itself.  Every toggle slot reads ``sender()``, so none of
+them can be invoked directly -- they do nothing unless a real button emitted
+the click, which is why they had never run.  What a click did is read back
+out of the ``dump image`` command the viewer puts on the clipboard, so a
+toggle that flipped the button but not the render setting is told apart from
+one that did both.  Test cases cover:
+
+- Every render toggle flipping its setting and its button together, with the
+  polarity each one expects: the command builder omits settings still at
+  their SPARTA default, so particles and the box (drawn by default) appear
+  in the command when switched *off* while the rest appear when switched on
+- Shininess checked as a number rather than a flag, since it carries a value
+- The surface toggle offered only when a surface exists, and drawing it when
+  one does (a tetrahedron read from a ``read_surf`` file)
+- Turning the grid volume on taking an already-enabled cut plane back off
+  and supplying a colour source -- SPARTA refuses a command carrying both,
+  and refuses ``grid`` with nothing to colour it by
+- The width and height fields reaching the rendered image
+- The rotate buttons turning ten degrees each way and undoing each other,
+  the zoom buttons stepping ten percent, recenter putting the camera back on
+  the box centre, and reset restoring the command byte for byte
+- The movie command being a ``dump movie`` of the same scene rather than the
+  image command verbatim
+- Colours and lights surviving a save and a load, a cancelled save writing
+  nothing, and a refused file leaving the view alone
+- ``Alt-W``, ``Alt-H`` and ``Alt-X`` reaching the width field, the height
+  field and the mixture chooser, a stray ``Alt`` key closing the mixture
+  list rather than leaving it open over the image -- and, in its own case,
+  that no settings button carries a mnemonic that collides with them.  Qt
+  matches a button mnemonic before the panel's event filter is consulted, so
+  a button spelt ``Bo&x`` silently took ``Alt-X`` away from the chooser and
+  opened a dialog instead
+
 test_inspect.cpp
 ----------------
 
@@ -933,6 +970,36 @@ shows.  Test cases cover:
   itself -- it is a docked panel sharing the main window's shortcut context,
   so leaving them to Qt makes them ambiguous -- while an ordinary key is
   left alone
+
+test_mainwindowprefs.cpp
+------------------------
+
+Tests for the two main-window dialogs that write back into the running
+application -- Preferences and Set Variables -- and the Open Example menu
+they can rebuild.  Both are on ``test_mainwindow.cpp``'s do-not-trigger list
+because each opens a modal nobody was there to answer, so what happens
+*after* the dialog is accepted, which is the whole point of both, had never
+run.  Test cases cover:
+
+- A changed examples folder rebuilding the Open Example menu: the setting
+  alone is only half the job, since the menu is built once at startup
+- A directory holding no input deck getting neither entries nor a submenu of
+  its own -- an empty submenu is a dead end the user opens and closes again
+- Every entry carrying the path it opens (the text is only the file name),
+  and triggering one loading that deck into the editor
+- A folder that is not an examples tree adding nothing
+- A cancelled Preferences dialog storing nothing and rebuilding nothing
+- Turning auto-lint off clearing the markers it already left in the editor,
+  which the setting alone would leave sitting in the margin for good; and
+  leaving it on keeping them
+- A variable surviving into the next visit to the Set Variables dialog, and
+  a cancelled dialog keeping the old set rather than the rejected rows
+
+The example folders are named ``guitest_*`` on purpose: with no configured
+folder the window falls back to whichever examples tree it finds beside the
+shared library, and a case checking a folder was *not* picked up cannot tell
+"circle came from my temporary directory" from "circle came from SPARTA's
+own examples".
 
 test_mainwindowfiles.cpp
 ------------------------

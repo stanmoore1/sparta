@@ -289,8 +289,10 @@ ImageViewer::ImageViewer(const QString &fileName, SpartaWrapper *_sparta, Sparta
     doaxes->setObjectName("axes");
     auto *zoomin = new QPushButton(QIcon(":/icons/gtk-zoom-in.svg"), "");
     zoomin->setToolTip("Camera zoom in by 10 percent");
+    zoomin->setObjectName("zoomin");
     auto *zoomout = new QPushButton(QIcon(":/icons/gtk-zoom-out.svg"), "");
     zoomout->setToolTip("Camera zoom out by 10 percent");
+    zoomout->setObjectName("zoomout");
 // the SVG versions do not render correctly with Qt before 6.7
 #if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
     auto *rotleft  = new QPushButton(QIcon(":/icons/rotate-left.svg"), "");
@@ -304,15 +306,22 @@ ImageViewer::ImageViewer(const QString &fileName, SpartaWrapper *_sparta, Sparta
     auto *rotdown  = new QPushButton(QIcon(":/icons/rotate-down.png"), "");
 #endif
     rotleft->setToolTip("Camera rotate left by 10 degrees");
+    rotleft->setObjectName("rotleft");
     rotright->setToolTip("Camera rotate right by 10 degrees");
+    rotright->setObjectName("rotright");
     rotup->setToolTip("Camera rotate up by 10 degrees");
+    rotup->setObjectName("rotup");
     rotdown->setToolTip("Camera rotate down by 10 degrees");
+    rotdown->setObjectName("rotdown");
     auto *recenter = new QPushButton(QIcon(":/icons/move-recenter.svg"), "");
     recenter->setToolTip("Camera recenter on the box center");
+    recenter->setObjectName("recenter");
     auto *reset = new QPushButton(QIcon(":/icons/preferences-reset.svg"), "");
     reset->setToolTip("Camera reset to the default view");
+    reset->setObjectName("resetview");
     auto *fitwin = new QPushButton(QIcon(":/icons/fit-window.svg"), "");
     fitwin->setToolTip("Resize window to fit the image size");
+    fitwin->setObjectName("fitwindow");
 
     // rotations only apply to 3d systems
     if (sparta->extractSetting("dimension") == 2) {
@@ -326,6 +335,13 @@ ImageViewer::ImageViewer(const QString &fileName, SpartaWrapper *_sparta, Sparta
     styleToolButtons(buttonhint,
                      {dossao, doanti, doshiny, dopart, dogrid, dosurf, dobox, doaxes, zoomin,
                       zoomout, rotleft, rotright, rotup, rotdown, recenter, reset, fitwin});
+
+    // These carry an icon and no text, so without an accessible name they reach
+    // the AT-SPI walker (and the screenshot sweep) as anonymous buttons. The
+    // tooltip already says what each one does, so it is the name to use.
+    for (auto *b : {dossao, doanti, doshiny, dopart, dogrid, dosurf, dobox, doaxes, zoomin,
+                    zoomout, rotleft, rotright, rotup, rotdown, recenter, reset, fitwin})
+        b->setAccessibleName(b->toolTip());
 
     // match the first-row controls (menu bar and size fields) to the toolbar
     // button height so both rows line up and the layout looks balanced
@@ -343,27 +359,39 @@ ImageViewer::ImageViewer(const QString &fileName, SpartaWrapper *_sparta, Sparta
     auto *partviz = new QPushButton("&Particles...");
     partviz->setToolTip("Particle display settings: color, diameter, species colors, region clip");
     partviz->setProperty("tab", 0);
+    partviz->setObjectName("particlesettings");
     auto *gridviz = new QPushButton("&Grid...");
     gridviz->setToolTip("Grid volume rendering settings");
     gridviz->setProperty("tab", 1);
+    gridviz->setObjectName("gridsettings");
     auto *planeviz = new QPushButton("Grid Pla&nes...");
     planeviz->setToolTip("Grid cut plane rendering settings");
     planeviz->setProperty("tab", 2);
+    planeviz->setObjectName("planes");
     auto *surfviz = new QPushButton("S&urfaces...");
     surfviz->setToolTip("Surface element display settings");
     surfviz->setProperty("tab", 3);
-    auto *boxviz = new QPushButton("Bo&x && Axes...");
+    surfviz->setObjectName("surfsettings");
+    // NOT "Bo&x": Alt-X is the documented shortcut for the mixture chooser, and
+    // a button mnemonic is matched by Qt's shortcut map before the panel's event
+    // filter ever sees the key -- so the mixture shortcut silently opened this
+    // dialog instead.  B is free among the settings buttons (P, G, N, U, C, Q, M).
+    auto *boxviz = new QPushButton("&Box && Axes...");
     boxviz->setToolTip("Box, sub-box, and axes display settings");
     boxviz->setProperty("tab", 4);
+    boxviz->setObjectName("boxsettings");
     auto *camviz = new QPushButton("&Camera...");
     camviz->setToolTip("View direction, center, up vector, and zoom");
     camviz->setProperty("tab", 5);
+    camviz->setObjectName("camera");
     auto *qualviz = new QPushButton("&Quality...");
     qualviz->setToolTip("Render quality, background, and lights");
     qualviz->setProperty("tab", 6);
+    qualviz->setObjectName("quality");
     auto *mapviz = new QPushButton("Color &Maps...");
     mapviz->setToolTip("Color maps for particles, grid, surfaces, and grid planes");
     mapviz->setProperty("tab", 7);
+    mapviz->setObjectName("colormaps");
     auto *help = new QPushButton("Help");
     help->setToolTip("Open online help");
     help->setObjectName("visualization.html");
@@ -646,6 +674,10 @@ void ImageViewer::syncButtons()
 
 void ImageViewer::editSize()
 {
+    // this arrives from editingFinished(), which Qt also emits when the field
+    // merely loses focus -- including the focus change that hiding the widget
+    // during destruction causes
+    if (shutdown) return;
     auto *field = qobject_cast<QSpinBox *>(sender());
     if (!field) return;
     if (field->objectName() == "xsize") {
@@ -1202,6 +1234,16 @@ void ImageViewer::saveAs()
 void ImageViewer::copy()
 {
     copyImageToClipboard(display->displayedImage());
+}
+
+ImageViewer::~ImageViewer()
+{
+    // Before any member is gone: ~QWidget hides the window, the focus moves off
+    // whichever size field held it, and the editingFinished() that follows
+    // re-enters editSize() and createImage() on an object that is halfway
+    // destroyed.  Focusing a size field and then closing the panel was enough
+    // to crash the application.
+    shutdown = true;
 }
 
 void ImageViewer::quit()

@@ -63,8 +63,15 @@ public:
 
     /**
      * @brief Destructor
+     *
+     * Raises the shutdown flag before anything else.  Destroying a widget makes
+     * Qt hide it, which moves the keyboard focus, which makes whichever spin box
+     * held it emit editingFinished() -- and that is wired to editSize(), which
+     * re-renders.  With the flag still down that render reads members which by
+     * then no longer exist.  The flag has always been documented as meaning
+     * "the destructor has been entered"; until now only quit() ever set it.
      */
-    ~ImageViewer() override = default;
+    ~ImageViewer() override;
 
     ImageViewer()                               = delete;
     ImageViewer(const ImageViewer &)            = delete;

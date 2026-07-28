@@ -614,6 +614,38 @@ if (SPARTA_GUI_USE_PLUGIN)
 endif()
 gtest_discover_tests(test_chartexport)
 
+# The two main-window dialogs that write back into the running application:
+# Preferences and Set Variables, plus the Open Example menu they can rebuild.
+# Both are on test_mainwindow.cpp's do-not-trigger list because each opens a
+# modal nobody was there to answer, so what happens after the dialog is accepted
+# -- which is the whole point of both -- had never run.
+add_executable(test_mainwindowprefs
+  test_mainwindowprefs.cpp
+  ${GUI_WALKER_SOURCES}
+)
+target_include_directories(test_mainwindowprefs PRIVATE
+  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}/thirdparty/rangeslider
+)
+target_compile_definitions(test_mainwindowprefs PRIVATE
+  SPARTA_GUI_VERSION="${PROJECT_VERSION}"
+  SPARTA_TEST_LIBRARY_PATH="${_spa_test_lib}")
+target_link_libraries(test_mainwindowprefs PRIVATE
+  GTest::gtest Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Svg Qt6::Test
+  lepton_mini ads::qtadvanceddocking-qt6)
+if (SPARTA_GUI_HAVE_VTK)
+  target_compile_definitions(test_mainwindowprefs PRIVATE SPARTA_GUI_HAVE_VTK)
+  target_link_libraries(test_mainwindowprefs PRIVATE ${VTK_LIBRARIES})
+  vtk_module_autoinit(TARGETS test_mainwindowprefs MODULES ${VTK_LIBRARIES})
+endif()
+if (SPARTA_GUI_USE_PLUGIN)
+  target_compile_definitions(test_mainwindowprefs PRIVATE SPARTA_GUI_USE_PLUGIN)
+  target_include_directories(test_mainwindowprefs PRIVATE ${SPARTA_PLUGINLIB_DIR})
+endif()
+# the window loads the SPARTA library into this process
+add_test(NAME MainWindow.Prefs COMMAND $<TARGET_FILE:test_mainwindowprefs>)
+set_tests_properties(MainWindow.Prefs PROPERTIES TIMEOUT 900 RESOURCE_LOCK "sparta_run")
+
 # The File menu, and the workers behind it. test_mainwindow.cpp keeps a list of
 # actions it must not trigger because each opens a modal nobody can answer, and
 # nearly all of them are the file actions -- which is why opening, saving,
@@ -738,6 +770,38 @@ endif()
 # scene, so they must not interleave with the other live suites
 add_test(NAME ImageViewer.Input COMMAND $<TARGET_FILE:test_imageviewerinput>)
 set_tests_properties(ImageViewer.Input PROPERTIES TIMEOUT 900 RESOURCE_LOCK "sparta_run")
+
+# The snapshot viewer's toolbar, its colour files, and the keys it claims.
+# Every toggle slot reads sender(), so none of them can be invoked directly --
+# they do nothing unless a real button emitted the click, which is why they had
+# never run. What each click did is read back out of the dump image command the
+# viewer puts on the clipboard, so a toggle that flipped the button but not the
+# render setting is told apart from one that did both.
+add_executable(test_imageviewerbuttons
+  test_imageviewerbuttons.cpp
+  ${GUI_WALKER_SOURCES}
+)
+target_include_directories(test_imageviewerbuttons PRIVATE
+  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}/thirdparty/rangeslider
+)
+target_compile_definitions(test_imageviewerbuttons PRIVATE
+  SPARTA_GUI_VERSION="${PROJECT_VERSION}"
+  SPARTA_TEST_LIBRARY_PATH="${_spa_test_lib}")
+target_link_libraries(test_imageviewerbuttons PRIVATE
+  GTest::gtest Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Svg Qt6::Test
+  lepton_mini ads::qtadvanceddocking-qt6)
+if (SPARTA_GUI_HAVE_VTK)
+  target_compile_definitions(test_imageviewerbuttons PRIVATE SPARTA_GUI_HAVE_VTK)
+  target_link_libraries(test_imageviewerbuttons PRIVATE ${VTK_LIBRARIES})
+  vtk_module_autoinit(TARGETS test_imageviewerbuttons MODULES ${VTK_LIBRARIES})
+endif()
+if (SPARTA_GUI_USE_PLUGIN)
+  target_compile_definitions(test_imageviewerbuttons PRIVATE SPARTA_GUI_USE_PLUGIN)
+  target_include_directories(test_imageviewerbuttons PRIVATE ${SPARTA_PLUGINLIB_DIR})
+endif()
+add_test(NAME ImageViewer.Buttons COMMAND $<TARGET_FILE:test_imageviewerbuttons>)
+set_tests_properties(ImageViewer.Buttons PROPERTIES TIMEOUT 900 RESOURCE_LOCK "sparta_run")
 
 # Inspecting a restart file.  The one place the application opens somebody's
 # saved simulation without running it -- and not a read-only path: it loads the
