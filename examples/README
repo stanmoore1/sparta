@@ -39,7 +39,8 @@ surf = change surfaces between or during runs
 surf_collide = variety of surface collision models
 surf_react_adsorb = surface reaction adsorb models, both GS and PS variants
 table = tabulated cross sections, scattering, reactions, three-body
-        recombination and electron-neutral collisions
+        recombination, electron-neutral collisions, and a 2d flow over a
+        cylinder driven by a Lennard-Jones cross section
 tally_computes = tally gas or surface collision and reaction info
 thermostat = use of fix temp/rescale as a thermostat
 variable_timestep = use of a variable global timestep

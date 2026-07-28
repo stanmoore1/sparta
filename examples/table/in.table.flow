@@ -1,0 +1,67 @@
+################################################################################
+# 2d flow over a cylinder with Lennard-Jones collision cross sections
+#
+# The box examples in this directory exercise the tabulated cross sections in
+# isolation.  This one puts them in the setting a production run actually
+# uses: a surface, an inflow, grid adaptation driven by the local mean free
+# path, a timestep reset from the local collision time, and load balancing.
+#
+# Everything downstream of the cross section follows the table:
+#   compute lambda/grid takes its cross section from the collide style rather
+#     than assuming the VHS form, so the mean free path which drives fix adapt
+#     and the collision time which drives fix dt/reset are the tabulated ones
+#   the grid refines from 400 to about 17000 cells around the body, capped
+#     at 4 levels of refinement, and the timestep falls to about half its
+#     initial value as the flow compresses ahead of the cylinder
+#
+# ar_lj.tab holds the total cross section and the energy-dependent alpha of
+# the Lennard-Jones 12-6 potential for argon; see ar.lj.vss.
+#
+# Note:
+#  - The "comm/sort” option to the “global” command is used to match MPI runs.
+#  - The “twopass” option is used to match Kokkos runs.
+# The "comm/sort" and "twopass" options should not be used for production runs.
+################################################################################
+
+seed	    	    12345
+dimension   	    2
+global              gridcut 0.0 comm/sort yes
+
+boundary	    o r p
+
+create_box  	    0 10 0 10 -0.5 0.5
+create_grid 	    20 20 1
+
+balance_grid        rcb cell
+
+global		    nrho 1.0E19 fnum 5.0E16
+
+species		    ar.species Ar
+mixture		    air Ar vstream 1000.0 0.0 0.0 temp 300.0
+
+read_surf           data.circle
+surf_collide	    1 diffuse 300.0 0.0
+surf_modify         all collide 1
+
+collide		    table air ar.lj.vss linear 256
+
+fix		    in emit/face air xlo twopass
+
+# grid adaptation and timestep control, both fed by the tabulated cross
+# section through compute lambda/grid
+
+compute             g1 grid all species nrho temp usq vsq wsq
+fix                 av ave/grid all 1 100 100 c_g1[*] ave one
+compute             lam lambda/grid f_av[1] f_av[2] lambda tau knall
+fix                 ad adapt 100 all refine coarsen value c_lam[3] 2.0 4.5 &
+                    combine min thresh less more cells 2 2 1 maxlevel 4
+fix                 bal balance 200 1.1 rcb part
+
+compute             dt dt/grid all 0.25 0.1 c_lam[2] f_av[2] f_av[3] f_av[4] f_av[5]
+fix                 dtr dt/reset 200 c_dt 0.5 1
+
+stats		    200
+stats_style	    step cpu np nattempt ncoll nscoll ngrid maxlevel dt
+
+timestep 	    1.0E-5
+run 		    2000
