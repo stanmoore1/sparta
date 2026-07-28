@@ -447,6 +447,10 @@ bounds, and the state afterwards, where what survives becomes the whole range
 again so navigation cannot point past the end.  The conversion cache is
 exercised through a file Qt genuinely cannot decode (an SGI written by
 ImageMagick), which is the only way anything reaches it.
+- Closing the panel with the keyboard focus in the delay field.  The
+  sibling snapshot viewer crashed exactly there: hiding a widget moves the
+  focus, the field emits ``editingFinished()``, and the slot behind it ran
+  on an object ``~QWidget`` was halfway through destroying
 
 test_run.cpp
 ------------

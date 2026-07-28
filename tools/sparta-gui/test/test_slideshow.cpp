@@ -646,6 +646,32 @@ TEST_F(Show, DeletingAConvertedImageDropsItsConversionToo)
         << "the conversion of a deleted file is still held";
 }
 
+// Closing the panel with the keyboard focus in one of its spin boxes.
+//
+// The sibling snapshot viewer crashed exactly here: hiding a widget moves the
+// focus, the field that had it emits editingFinished(), and the slot behind
+// that ran on an object ~QWidget was halfway through destroying.  This panel's
+// delay field is wired the same way, so the same sequence is worth pinning --
+// its slot only stores an integer, but nothing says it has to stay that way.
+TEST_F(Show, ClosingWithTheFocusInTheDelayFieldDoesNotCrash)
+{
+    addImages(3);
+    show->show();
+    QApplication::processEvents();
+
+    auto *delay = ctl<QSpinBox>("delay");
+    ASSERT_NE(delay, nullptr) << "no delay field to focus";
+    delay->setFocus();
+    delay->setValue(delay->value() + 1);
+    QApplication::processEvents();
+    ASSERT_TRUE(delay->hasFocus());
+
+    delete show;
+    show = nullptr;
+    QApplication::processEvents();
+    SUCCEED(); // getting here is the assertion
+}
+
 int main(int argc, char **argv)
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
