@@ -42,11 +42,18 @@ namespace SPARTA_NS {
    the file format extends the Bird reaction file with a style letter T:
 
      N2 + O --> N + N + O
-     D T <activation energy> <energy release> <file> <keyword>
+     D T <activation energy> <energy release> <file> <keyword> [etrans|etotal]
 
    the two numbers are in Joules, as elsewhere in a reaction file.  the
    activation energy only gates energetically impossible collisions; the
    threshold behaviour comes from the tabulated cross section itself.
+
+   the optional last token chooses which energy indexes the table.  the
+   default etrans is the relative translational energy, which is what beam
+   experiments and quasi-classical trajectory calculations report.  etotal
+   adds the rotational and vibrational energy of both reactants, which is
+   the collision energy the TCE model uses and is the right choice for a
+   cross section that was itself fitted against a total-energy variable.
 ------------------------------------------------------------------------- */
 
 class ReactTable : public ReactBird {
@@ -60,6 +67,8 @@ class ReactTable : public ReactBird {
  protected:
   class InterpTable **rtab;   // cross section table per reaction, or NULL
   char **tabfile,**tabkey;    // file and section keyword per reaction
+  int *tabetot;               // 1 if the table is indexed by the total
+                              //   collision energy, 0 by the translational
   int maxtab;
   int warnflag;               // 1 once the probability>1 warning has fired
 
@@ -88,6 +97,10 @@ E: Invalid reaction coefficients in file
 
 A tabulated reaction line must give an activation energy, an energy
 release, a file name, and a section keyword.
+
+E: Invalid energy variable for a tabulated reaction
+
+The optional token after the section keyword must be etrans or etotal.
 
 E: React table requires every reaction to use style T
 

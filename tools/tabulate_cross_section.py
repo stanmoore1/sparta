@@ -21,6 +21,13 @@ Modes:
              emits any of the total cross section, the energy-dependent VSS
              alpha, and the full angular distribution.
 
+  lxcat      convert a file exported from the LXCat project (www.lxcat.net)
+             into the table format.  LXCat is the standard source of
+             electron-neutral cross sections.  The database name, process
+             description and the database's own "HOW TO REFERENCE" text are
+             copied into the generated file, so the attribution required by
+             LXCat travels with the data.
+
 Examples:
 
   tabulate_cross_section.py vss --species data/ar.species --vss data/ar.vss \\
@@ -33,6 +40,10 @@ Examples:
 
   tabulate_cross_section.py potential --form file --vfile ar_ar_potential.txt \\
       --species data/ar.species --pair Ar Ar --emit sigma -o ar_ab.tab
+
+  tabulate_cross_section.py lxcat N2_phelps.txt --list
+  tabulate_cross_section.py lxcat N2_phelps.txt --process ELASTIC --target N2 \\
+      --keyword E_N2_MT -o e_n2.tab
 
 The potential mode validates itself against the standard Lennard-Jones
 collision integrals with --selftest.
@@ -222,6 +233,33 @@ class Potential:
                   for gi, wi in zip(g, wt) if gi > 1e-6)
         return pref * tot
 
+    def bmax_for_chimin(self, E, chimin, blo=1e-3, bhi=40.0, nscan=600):
+        """Largest impact parameter that still deflects by at least chimin.
+
+        sigma_T is formally infinite for a potential of infinite range, so a
+        cutoff is unavoidable.  Cutting on deflection angle rather than on a
+        fixed b_max keeps sigma_T as small as the requested angular
+        resolution allows, which is what controls how many near-zero
+        deflection collisions the simulation has to perform.
+        """
+        np = self.np
+        b = np.linspace(blo, bhi, nscan)
+        c = np.abs(self.chi(b, E))
+        big = np.where(c >= chimin)[0]
+        if len(big) == 0:
+            return blo
+        i = big[-1]
+        if i >= nscan - 1:
+            return bhi
+        lo, hi = b[i], b[i + 1]
+        for _ in range(60):
+            mid = 0.5 * (lo + hi)
+            if abs(self.chi(np.array([mid]), E)[0]) >= chimin:
+                lo = mid
+            else:
+                hi = mid
+        return 0.5 * (lo + hi)
+
     def cos_cdf(self, E, ncos, nb=4000, bmax=8.0):
         """Inverse CDF of cos(chi) for impact parameters sampled uniformly
         in b^2 up to bmax, i.e. the angular distribution which accompanies
@@ -295,6 +333,125 @@ def file_potential(np, fname, rscale, escale):
         return out
 
     return vstar
+
+
+# ----------------------------------------------------------------------
+# LXCat export format
+# ----------------------------------------------------------------------
+
+LXCAT_PROCESSES = ("ELASTIC", "EFFECTIVE", "MOMENTUM", "EXCITATION",
+                   "IONIZATION", "ATTACHMENT", "ROTATIONAL", "VIBRATIONAL")
+
+
+def read_lxcat(fp):
+    """Parse an LXCat export file into a list of process blocks.
+
+    The format is a sequence of blocks, each opening with a process-type
+    keyword on a line of its own, followed by the target species, an
+    optional parameter, a set of KEY: value header lines, and the data
+    bracketed by lines of dashes.  Database-level headers that precede the
+    blocks supply the attribution text.
+    """
+    lines = fp.read().splitlines()
+    database = ""
+    reference = ""
+    blocks = []
+    i = 0
+    while i < len(lines):
+        raw = lines[i]
+        line = raw.strip()
+
+        if line.startswith("DATABASE:"):
+            database = line.split(":", 1)[1].strip()
+        elif line.startswith("HOW TO REFERENCE:"):
+            reference = line.split(":", 1)[1].strip()
+        elif line.startswith("PERMLINK:") and not reference:
+            reference = line.split(":", 1)[1].strip()
+
+        if line in LXCAT_PROCESSES:
+            blk = {"process": line, "database": database,
+                   "reference": reference, "header": [], "data": []}
+            i += 1
+            if i < len(lines):
+                blk["target"] = lines[i].strip()
+                i += 1
+            # header lines up to the first dashed separator
+            while i < len(lines) and not lines[i].strip().startswith("---"):
+                h = lines[i].strip()
+                if h:
+                    blk["header"].append(h)
+                    if h.startswith("PROCESS:"):
+                        blk["desc"] = h.split(":", 1)[1].strip()
+                    elif h.startswith("HOW TO REFERENCE:"):
+                        blk["reference"] = h.split(":", 1)[1].strip()
+                i += 1
+            i += 1                       # skip the opening dashes
+            while i < len(lines) and not lines[i].strip().startswith("---"):
+                w = lines[i].replace(",", " ").split()
+                if len(w) >= 2:
+                    try:
+                        blk["data"].append((float(w[0]), float(w[1])))
+                    except ValueError:
+                        pass
+                i += 1
+            if blk["data"]:
+                blocks.append(blk)
+        i += 1
+    return blocks
+
+
+def cmd_lxcat(args):
+    blocks = read_lxcat(args.input)
+    if not blocks:
+        sys.exit("error: no cross section blocks found; is this an LXCat export?")
+
+    if args.list:
+        print("# %-3s %-12s %-8s %-24s %6s  %s" %
+              ("idx", "process", "target", "database", "points", "description"))
+        for n, b in enumerate(blocks):
+            print("  %-3d %-12s %-8s %-24s %6d  %s" %
+                  (n, b["process"], b.get("target", "?"), b["database"][:24],
+                   len(b["data"]), b.get("desc", "")[:50]))
+        return
+
+    sel = [b for b in blocks
+           if (args.index is None or blocks.index(b) == args.index)
+           and (args.process is None or b["process"] == args.process.upper())
+           and (args.target is None or b.get("target") == args.target)]
+    if not sel:
+        sys.exit("error: no block matched; run with --list to see what is available")
+    if len(sel) > 1:
+        sys.exit("error: %d blocks matched, narrow it with --index/--process/--target"
+                 % len(sel))
+    b = sel[0]
+
+    xs = [e for e, s in b["data"]]
+    ys = [s for e, s in b["data"]]
+
+    # LXCat tables normally start at exactly 0 eV, which the table format
+    # cannot index; drop leading non-positive energies
+    while xs and xs[0] <= 0.0:
+        xs.pop(0)
+        ys.pop(0)
+    if len(xs) < 2:
+        sys.exit("error: fewer than 2 positive-energy points in the block")
+    for k in range(1, len(xs)):
+        if xs[k] <= xs[k - 1]:
+            sys.exit("error: energies are not increasing at row %d" % (k + 1))
+
+    header = ["converted from an LXCat export by tools/tabulate_cross_section.py",
+              "",
+              "LXCat, www.lxcat.net, retrieved from the file %s" % args.input.name,
+              "database: %s" % (b["database"] or "unknown"),
+              "process : %s" % b.get("desc", b["process"]),
+              ""]
+    if b["reference"]:
+        header += ["HOW TO REFERENCE (from the LXCat file):", "  " + b["reference"], ""]
+    header += ["Cite the database above and the LXCat project when publishing",
+               "results obtained with this data."]
+
+    write_table(args.output, args.keyword, xs, ys, "energy", "eV",
+                args.yunits, args.extrap, header)
 
 
 # ----------------------------------------------------------------------
@@ -436,6 +593,13 @@ def cmd_potential(args):
 
     emit = set(args.emit)
 
+    # in cutoff mode a deflection-angle cutoff sets b_max per energy
+    bmax_of = {}
+    if args.mode == "cutoff" and args.chimin > 0.0:
+        chimin = math.radians(args.chimin)
+        for Es in [e * EV2J / escale for e in grid(args.emin, args.emax, args.n, True)]:
+            bmax_of[Es] = pot.bmax_for_chimin(Es, chimin)
+
     # a scatter table is the angular distribution which accompanies a
     # hard cutoff at b_max, so it is only consistent with that sigma_T
     if "scatter" in emit and args.mode != "cutoff":
@@ -464,7 +628,10 @@ def cmd_potential(args):
             sig = q1 * (1.0 + alpha) / 2.0
         else:
             # cutoff: sigma_T = pi*b_max^2 with the true angular distribution
-            sig = math.pi * (args.bmax * rscale) ** 2
+            # with --chimin, b_max is set by the smallest deflection angle
+            #   worth simulating, which keeps sigma_T as small as possible
+            bm = bmax_of[Es] if bmax_of else args.bmax
+            sig = math.pi * (bm * rscale) ** 2
             alpha = 1.0
 
         sigmas.append(sig)
@@ -472,8 +639,8 @@ def cmd_potential(args):
 
     if "scatter" in emit:
         for Es in estars:
-            rows.append(list(pot.cos_cdf(Es, args.ncos, nb=args.nb,
-                                         bmax=args.bmax)))
+            bm = bmax_of[Es] if bmax_of else args.bmax
+            rows.append(list(pot.cos_cdf(Es, args.ncos, nb=args.nb, bmax=bm)))
 
     base = [
         "%s for %s + %s" % (desc, isp, jsp),
@@ -506,7 +673,7 @@ def main():
     sub.required = True
 
     common = argparse.ArgumentParser(add_help=False)
-    common.add_argument("--keyword", required=True,
+    common.add_argument("--keyword", default="XSEC",
                         help="section keyword to write into the table file")
     common.add_argument("--yunits", default="m^2", choices=sorted(YUNIT_SCALE),
                         help="cross section units to write (default m^2)")
@@ -538,6 +705,18 @@ def main():
     p.add_argument("--xunits", default="eV", choices=sorted(XUNIT_SCALE))
     p.set_defaults(func=cmd_csv)
 
+    p = sub.add_parser("lxcat", parents=[common],
+                       help="convert a file exported from www.lxcat.net")
+    p.add_argument("input", type=argparse.FileType("r"))
+    p.add_argument("--list", action="store_true",
+                   help="list the cross section blocks in the file and exit")
+    p.add_argument("--process", default=None,
+                   help="select by process type, e.g. ELASTIC or MOMENTUM")
+    p.add_argument("--target", default=None, help="select by target species")
+    p.add_argument("--index", type=int, default=None,
+                   help="select by the index shown by --list")
+    p.set_defaults(func=cmd_lxcat)
+
     p = sub.add_parser("potential", parents=[common],
                        help="compute cross sections from an intermolecular potential")
     p.add_argument("--form", default="lj", choices=["lj", "file"])
@@ -568,12 +747,21 @@ def main():
     p.add_argument("--bmax", type=float, default=8.0,
                    help="largest impact parameter, in units of the "
                         "potential length scale")
+    p.add_argument("--chimin", type=float, default=0.0,
+                   help="cutoff mode only: set b_max per energy from the "
+                        "smallest deflection angle in degrees worth "
+                        "simulating, instead of a fixed --bmax.  A larger "
+                        "value gives a smaller sigma_T and so far fewer "
+                        "near-zero deflection collisions")
     p.add_argument("--selftest", action="store_true",
                    help="check the numerics against tabulated LJ collision "
                         "integrals and exit")
     p.set_defaults(func=cmd_potential)
 
     args = parser.parse_args()
+    if args.cmd == "lxcat" and args.list:
+        cmd_lxcat(args)
+        return
     if args.cmd == "potential" and not args.selftest:
         if not args.species or not args.pair:
             sys.exit("error: --species and --pair are required")

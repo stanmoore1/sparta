@@ -43,6 +43,7 @@ ReactTable::ReactTable(SPARTA *sparta, int narg, char **arg) :
 
   rtab = NULL;
   tabfile = tabkey = NULL;
+  tabetot = NULL;
   maxtab = 0;
   warnflag = 0;
 
@@ -74,6 +75,7 @@ ReactTable::~ReactTable()
     delete [] tabfile;
     delete [] tabkey;
   }
+  delete [] tabetot;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -167,7 +169,6 @@ int ReactTable::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
   double mi = species[isp].mass;
   double mj = species[jsp].mass;
   double mr = (isp == jsp) ? mi/2.0 : mi*mj/(mi+mj);
-  double vr2 = 2.0*pre_etrans/mr;
 
   double react_prob = 0.0;
   double random_prob = random->uniform();
@@ -186,7 +187,10 @@ int ReactTable::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
     else e_excess = pre_etotal + r->coeff[4];
     if (e_excess <= 0.0) continue;
 
-    react_prob += rtab[list[i]]->evaluate(vr2) / sigma_t;
+    // index the table by the energy this reaction was tabulated against
+
+    double ereact = tabetot[list[i]] ? pre_etotal : pre_etrans;
+    react_prob += rtab[list[i]]->evaluate(2.0*ereact/mr) / sigma_t;
 
     // sigma_react exceeding sigma_total means the collide style's total
     //   cross section does not envelope the reactive one, which clips the
@@ -266,6 +270,7 @@ void ReactTable::read_coeffs(OneReaction *r, char *copy1, char *copy2)
   char *w2 = strtok(NULL," \t\n\r");
   char *w3 = strtok(NULL," \t\n\r");
   char *w4 = strtok(NULL," \t\n\r");
+  char *w5 = strtok(NULL," \t\n\r");
   if (!w1 || !w2 || !w3 || !w4) {
     print_reaction(copy1,copy2);
     error->all(FLERR,"Invalid reaction coefficients in file");
@@ -280,6 +285,15 @@ void ReactTable::read_coeffs(OneReaction *r, char *copy1, char *copy2)
   strcpy(tabfile[m],w3);
   tabkey[m] = new char[strlen(w4)+1];
   strcpy(tabkey[m],w4);
+
+  tabetot[m] = 0;
+  if (w5) {
+    if (strcmp(w5,"etotal") == 0) tabetot[m] = 1;
+    else if (strcmp(w5,"etrans") != 0) {
+      print_reaction(copy1,copy2);
+      error->all(FLERR,"Invalid energy variable for a tabulated reaction");
+    }
+  }
 }
 
 /* ---------------------------------------------------------------------- */
@@ -293,14 +307,16 @@ void ReactTable::grow_tab(int n)
   InterpTable **nt = new InterpTable*[maxtab];
   char **nf = new char*[maxtab];
   char **nk = new char*[maxtab];
+  int *ne = new int[maxtab];
   for (int m = 0; m < old; m++) {
-    nt[m] = rtab[m]; nf[m] = tabfile[m]; nk[m] = tabkey[m];
+    nt[m] = rtab[m]; nf[m] = tabfile[m]; nk[m] = tabkey[m]; ne[m] = tabetot[m];
   }
   for (int m = old; m < maxtab; m++) {
-    nt[m] = NULL; nf[m] = NULL; nk[m] = NULL;
+    nt[m] = NULL; nf[m] = NULL; nk[m] = NULL; ne[m] = 0;
   }
   delete [] rtab;
   delete [] tabfile;
   delete [] tabkey;
-  rtab = nt; tabfile = nf; tabkey = nk;
+  delete [] tabetot;
+  rtab = nt; tabfile = nf; tabkey = nk; tabetot = ne;
 }

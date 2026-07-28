@@ -327,12 +327,42 @@ N 120 M 64 X energy XUNITS eV EXTRAP constant constant :pre
 An {alpha} section is an ordinary one-column section whose values are the
 VSS alpha; {YUNITS} does not apply to it.
 
+Electron-neutral collisions are a natural use of this style, since
+electron-neutral cross sections are measured rather than modelled and often
+have structure, such as a Ramsauer-Townsend minimum, that no VHS power law
+can represent at all.  They work with the ambipolar approximation: an
+ambipolar electron carries its own velocity into the collision, so a
+tabulated sigma(E) is evaluated at the true electron energy even though the
+electron is advected with its parent ion.
+
+When electrons are present, put the electron species in a collision group of
+its own.  The "fix ambipolar"_fix_ambipolar.html command requires this
+whenever the mixture has more than one group, as noted above, and it also
+matters for cost: grouping the fast electrons together with the heavy
+species makes the NTC attempt count much larger, since the attempt rate for
+the whole group is set by the fastest pairs in it.  In the
+examples/table/in.table.electron problem, moving the electron into its own
+group cuts the attempt count by a factor of five and the run time by nearly
+three.
+
+Note also that a tabulated electron-neutral cross section is indexed by the
+relative translational energy, whose reduced mass is essentially the
+electron mass, so the energy axis of an electron-neutral table is unrelated
+to that of a neutral-neutral table for the same species.
+{tabulate_cross_section.py} takes the masses from the species file and
+handles this.
+
 The tools directory contains {tabulate_cross_section.py}, which writes
 files in this format.  It can convert a two-column list of energy and
 cross section values, emit the analytic VHS/VSS cross section for a
 species pair (useful for verifying that a tabulated run reproduces the
-equivalent {vss} run), or compute cross sections directly from an
-intermolecular potential.
+equivalent {vss} run), compute cross sections directly from an
+intermolecular potential, or convert a file exported from the
+"LXCat"_https://www.lxcat.net project, which is the standard source of
+electron-neutral cross sections.  The {lxcat} mode lists the processes in a
+downloaded file, converts the one selected, and copies the database name and
+that database's own "HOW TO REFERENCE" text into the generated table, so the
+attribution LXCat asks for travels with the data.
 
 The {potential} mode integrates the classical deflection angle
 
@@ -348,6 +378,17 @@ infinite range:
 {transport} = sigma_T(E) and alpha(E) chosen to reproduce both Q1 and Q2
 {cutoff} = sigma_T = pi b_max^2 with the true angular distribution,
   emitted as a scatter table :ul
+
+In {cutoff} mode the choice of b_max sets how many collisions the
+simulation performs, and a b_max large enough to capture the potential's
+tail makes sigma_T very large, so most collisions barely deflect.  The
+{--chimin} option instead fixes b_max at each energy from the smallest
+deflection angle worth simulating.  For Lennard-Jones argon at 0.03 eV,
+cutting at 1 degree gives a sigma_T ten times smaller than a fixed b_max of
+8 sigma while changing the viscosity cross section by 0.03%; cutting at 5
+degrees gives eighteen times smaller for 0.5%.  The
+"collide_modify scheme mcf"_collide_modify.html majorant scheme can also be
+used with any tabulated cross section.
 
 Its numerics can be checked against the standard tabulated Lennard-Jones
 collision integrals with the {--selftest} option.

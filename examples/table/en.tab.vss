@@ -1,0 +1,17 @@
+# Collision parameters for the electron-neutral example.
+#
+# The VSS parameters are required for every species: they are used for
+# every pair without a table, by the react styles, and by compute
+# lambda/grid.  Only the e + N2 pair is tabulated here.
+#
+# diameter (m), omega, tref, alpha
+
+N2   4.07E-10    0.74  273.15  1.6
+N2+  4.07E-10    0.74  273.15  1.6
+e    7.0E-13     0.50  273.15  1.0
+
+# electron-neutral momentum-transfer cross section.  en_demo.tab is a
+# SYNTHETIC model, not measured data; see its header and the header of
+# in.table.electron for how to substitute a real LXCat cross section.
+
+e N2   table   en_demo.tab   EN_RAMSAUER_DEMO

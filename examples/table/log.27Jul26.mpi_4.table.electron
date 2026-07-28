@@ -1,0 +1,155 @@
+SPARTA (24 Sep 2025)
+Running on 4 MPI task(s)
+################################################################################
+# electron-neutral collisions with a tabulated cross section
+#
+# Electrons are handled with the ambipolar approximation ("fix ambipolar"):
+# each electron stays with its parent ion and the pair is advected together,
+# so no self-consistent electric field is solved and a normal timestep can be
+# used.  At collision time SPARTA gives each ambipolar electron its own
+# velocity, so a tabulated sigma(E) is evaluated at the true electron energy.
+#
+# This is valid for a quasi-neutral, weakly ionised gas on scales much larger
+# than the Debye length.  It cannot represent sheaths, charge separation, or
+# an electron energy distribution driven by an applied field, since the
+# electron's trajectory is its ion's.  Those need a PIC code.
+#
+# NOTE ON THE CROSS SECTION: en_demo.tab is a SYNTHETIC model with a
+# Ramsauer-type minimum and a resonance peak.  It is not data for nitrogen.
+# It is here so this example runs and so the shape exercises structure that
+# no VHS power law can reproduce.  To do real physics:
+#
+#   1. Download an electron-neutral cross section from www.lxcat.net,
+#      choosing a database and accepting its terms.
+#   2. Convert it, which copies the database's own reference text into the
+#      generated file:
+#        tools/tabulate_cross_section.py lxcat <download>.txt --list
+#        tools/tabulate_cross_section.py lxcat <download>.txt \
+#            --process ELASTIC --target N2 --keyword E_N2_MT \
+#            --extrap constant powerlaw -o e_n2.tab
+#   3. Point the "e N2 table" line in en.tab.vss at it.
+#   4. Cite the database and the LXCat project in any publication.
+#
+# Note:
+#  - The "comm/sort” option to the “global” command is used to match MPI runs.
+#  - The “twopass” option is used to match Kokkos runs.
+# The "comm/sort" and "twopass" options should not be used for production runs.
+################################################################################
+
+seed	    	    12345
+dimension   	    3
+global              gridcut 1.0e-5 comm/sort yes
+
+boundary	    rr rr rr
+
+create_box  	    0 0.0001 0 0.0001 0 0.0001
+Created orthogonal box = (0 0 0) to (0.0001 0.0001 0.0001)
+create_grid 	    10 10 10
+WARNING: Could not acquire nearby ghost cells b/c grid partition is not clumped (../grid.cpp:473)
+Created 1000 child grid cells
+  CPU time = 0.000856822 secs
+  create/ghost percent = 93.6136 6.38639
+
+balance_grid        rcb part
+Balance grid migrated 740 cells
+  CPU time = 0.000727588 secs
+  reassign/sort/migrate/ghost percent = 50.2055 0.326009 24.5242 24.9443
+
+species		    en.species N2 N2+ e
+# the ambipolar electron must be in a collision group of its own, both
+# because "fix ambipolar" requires it whenever the mixture has more than one
+# group and because putting the fast electrons in with the heavy species
+# makes the NTC attempt count enormous
+
+mixture		    plasma N2 N2+ e vstream 0.0 0.0 0.0 temp 10000.0
+mixture             plasma N2 frac 0.90 group heavy
+mixture             plasma N2+ frac 0.10 group heavy
+mixture             plasma e frac 0.0 group electron
+
+global              nrho 1.0E22
+global              fnum 1.0E6
+
+fix                 ambi ambipolar e N2+
+collide		    table plasma en.tab.vss linear 128
+Tabulated cross section EN_RAMSAUER_DEMO from en_demo.tab for e N2:
+  300 values, E = 0.001 to 1000 eV, max 2.793e-19, log-log interpolation
+  2553 bins, 128 per factor of 2 in energy, reproduces input to 0.0056%
+collide_modify      ambipolar yes
+
+create_particles    plasma n 20000 twopass
+Created 20000 particles
+  CPU time = 0.00203516 secs
+
+stats		    200
+compute             temp temp
+stats_style	    step cpu np nattempt ncoll c_temp
+
+timestep 	    1.0E-9
+run 		    2000
+Memory usage per proc in Mbytes:
+  particles (ave,min,max) = 2 2 2
+  grid      (ave,min,max) = 1.51379 1.51379 1.51379
+  surf      (ave,min,max) = 0 0 0
+  total     (ave,min,max) = 3.51379 3.51379 3.51379
+Step CPU Np Natt Ncoll c_temp 
+       0            0    20000        0        0    9928.2195 
+     200  0.082435363    20000    11125     1366    10055.985 
+     400   0.15494759    20000    11146     1386    10150.103 
+     600   0.22893483    20000    11191     1328    10163.943 
+     800   0.30140737    20000    11212     1382    10146.867 
+    1000   0.37447317    20000    11273     1405    10151.175 
+    1200   0.44919793    20000    11178     1282    10191.082 
+    1400   0.51834877    20000    11119     1219    10266.586 
+    1600   0.58730375    20000    11205     1295    10170.323 
+    1800   0.65674848    20000    11156     1300    10220.024 
+    2000   0.72983868    20000    11156     1251    10234.818 
+Loop time of 0.729913 on 4 procs for 2000 steps with 20000 particles
+Performance: 2740.051 timesteps/s, 54.801 Mparticle-step/s
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Move    | 0.16667    | 0.16839    | 0.17277    |   0.6 | 23.07
+Coll    | 0.34514    | 0.3783     | 0.46539    |   8.2 | 51.83
+Sort    | 0.012033   | 0.012212   | 0.01236    |   0.1 |  1.67
+Comm    | 0.062773   | 0.064338   | 0.06659    |   0.6 |  8.81
+Modify  | 0          | 0          | 0          |   0.0 |  0.00
+Output  | 0.00028439 | 0.00085608 | 0.0015348  |   0.0 |  0.12
+Other   |            | 0.1058     |            |       | 14.50
+
+Particle moves    = 40000000 (40M)
+Cells touched     = 54961114 (55M)
+Particle comms    = 1100168 (1.1M)
+Boundary collides = 1662569 (1.66M)
+Boundary exits    = 0 (0K)
+SurfColl checks   = 0 (0K)
+SurfColl occurs   = 0 (0K)
+Surf reactions    = 0 (0K)
+Collide attempts  = 22313534 (22.3M)
+Collide occurs    = 2666924 (2.67M)
+Reactions         = 0 (0K)
+Particles stuck   = 0
+Axisymm bad moves = 0
+
+Particle-moves/CPUsec/proc: 1.37003e+07
+Particle-moves/step: 20000
+Cell-touches/particle/step: 1.37403
+Particle comm iterations/step: 1
+Particle fraction communicated: 0.0275042
+Particle fraction colliding with boundary: 0.0415642
+Particle fraction exiting boundary: 0
+Surface-checks/particle/step: 0
+Surface-collisions/particle/step: 0
+Surf-reactions/particle/step: 0
+Collision-attempts/particle/step: 0.557838
+Collisions/particle/step: 0.0666731
+Reactions/particle/step: 0
+
+Particles: 5000 ave 5103 max 4935 min
+Histogram: 1 1 0 0 1 0 0 0 0 1
+Cells:      250 ave 250 max 250 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+GhostCell: 172.5 ave 240 max 110 min
+Histogram: 1 0 0 0 2 0 0 0 0 1
+EmptyCell: 62.5 ave 130 max 0 min
+Histogram: 1 0 0 0 2 0 0 0 0 1

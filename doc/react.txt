@@ -270,7 +270,7 @@ explained above.
 For the T = Tabulated style, used by the {table} react style, the second
 line is instead
 
-type T Ea deltaE filename keyword :pre
+type T Ea deltaE filename keyword [etrans or etotal] :pre
 
 where {type} is the same reaction type character as above (D, E, I or R),
 Ea is the activation energy and deltaE the overall reaction energy, both
@@ -306,9 +306,13 @@ sigma_react exceeds sigma_total at some energy, however, the reaction
 probability is clipped at 1 and the rate is underpredicted; SPARTA issues
 a warning once when this happens.
 
-Note that the tabulated cross section is indexed by relative translational
-energy, not the total collision energy the TCE model uses, since that is
-what measured and computed reactive cross sections are tabulated against.
+The optional last token selects which energy indexes the table.  The
+default {etrans} is the relative translational energy, which is what beam
+experiments and quasi-classical trajectory calculations report.  {etotal}
+adds the rotational and vibrational energy of both reactants, which is the
+collision energy the TCE model uses, and is the right choice for a cross
+section that was itself fitted against a total-energy variable.  For
+reactants with no internal energy the two are identical.
 
 :line
 
