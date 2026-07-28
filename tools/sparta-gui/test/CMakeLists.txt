@@ -1644,6 +1644,18 @@ if (XDOTOOL_BINARY AND WM_BINARY AND SHOOTER_BINARY)
   set_tests_properties(GuiDrive.Startup PROPERTIES
     ENVIRONMENT "${GUI_DRIVE_ENVIRONMENT}"
     TIMEOUT 900 RESOURCE_LOCK xvfb)
+
+  # The missing-library dialog: the first thing a user without a SPARTA shared
+  # library sees, and the one place the application can strand them. Every
+  # branch of it ends in exit(1) or in a re-exec, so it cannot be driven in
+  # process -- an in-process test would take the runner with it. The buttons
+  # are pressed through accessibility, which is also the only way to reach the
+  # middle one: Enter hits the default (Download) and Escape hits Exit.
+  add_test(NAME GuiDrive.PluginSetup
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_pluginsetup.py)
+  set_tests_properties(GuiDrive.PluginSetup PROPERTIES
+    ENVIRONMENT "${GUI_DRIVE_ENVIRONMENT};SHOT_DIR=${CMAKE_CURRENT_BINARY_DIR}/plugin-shots"
+    TIMEOUT 900 RESOURCE_LOCK xvfb)
 else()
   message(STATUS "Skipping the visual and feature GUI suites: "
     "they need xdotool, a window manager (e.g. openbox) and a screenshooter")

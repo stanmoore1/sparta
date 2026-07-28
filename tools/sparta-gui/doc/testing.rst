@@ -793,6 +793,47 @@ cover:
    showed a segfault under one particular ordering, while the debug build
    named the cause.
 
+test_pluginsetup.py
+-------------------
+
+Tests for ``SpartaGui::setupPlugin()`` -- the first thing a user without a
+SPARTA shared library sees.  Before the main window exists, the constructor
+puts up a dialog offering three ways out (download one, browse for one, give
+up) and loops on it until one of them works.  77 lines, and none of it had
+ever run: every branch ends in ``exit(1)`` or in ``relaunchApplication()``,
+which replaces the process image, so an in-process test would take the runner
+down with it.
+
+The suite therefore drives the real binary as a subprocess and presses the
+buttons through accessibility rather than at guessed coordinates.  That is
+also the only way to reach a *specific* button: ``Enter`` hits the default
+(Download) and ``Escape`` hits Exit, so the middle one is unreachable from the
+keyboard alone.  Test cases cover:
+
+- The dialog explaining itself and offering all three buttons, with no editor
+  window behind it -- there is nothing to edit yet
+- ``Exit`` really ending the process, and with a failure status: a user left
+  with a process still running, or one that reports success, has no way to
+  tell that nothing happened
+- ``Browse`` then cancelling coming back to the dialog rather than falling
+  through to an application with no library, no dialog and no main window
+- A file whose name is not ``libsparta*`` refused.  The decoy is a *copy of
+  the real library* under another name, which is the only way to tell the
+  check from its absence: a file that would fail to load anyway ends up back
+  at this dialog either way -- stored, tried on the relaunch, rejected,
+  forgotten -- so the end state cannot say whether the name was looked at
+- The recovery path end to end: choosing a library stores it and re-execs, and
+  the application comes back up with the editor and the choice written down
+- A download that cannot be fetched saying so and returning to the dialog.
+  The whole attempt takes well under a second here, so the error box has to be
+  waited for rather than sampled
+- A stored path that no longer loads being forgotten, so the next start does
+  not read the same bad path and ask again with no way past it
+
+One equivalent mutant is recorded in the file rather than contorted around:
+removing the *first* ``settings.remove(PLUGIN_PATH)`` changes nothing
+observable, because the loop removes the key again on every pass.
+
 test_startup.py
 ---------------
 

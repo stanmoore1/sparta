@@ -14,6 +14,7 @@ so dialogs are cropped to themselves rather than photographed against whatever
 happens to be behind them.
 """
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -53,7 +54,7 @@ def sh(*args, **kw):
 
 class Gui:
     def __init__(self, display=50, size=(1280, 900), outdir="/tmp/guitest/shots", args=None,
-                 no_library=False):
+                 no_library=False, settings=None):
         self.display = f":{display}"
         self.w, self.h = size
         self.outdir = outdir
@@ -63,6 +64,10 @@ class Gui:
         # reason; but the "no suitable SPARTA shared library" dialog is itself a
         # state worth photographing, and this is the only way to reach it.
         self.no_library = no_library
+        # Extra "key=value" lines for the preseeded settings file, for a case
+        # that needs the application to start from a particular stored state --
+        # a plugin path that no longer loads, say.
+        self.settings = settings or {}
         self.profile = tempfile.mkdtemp()
         os.makedirs(outdir, exist_ok=True)
         self.captured = []
@@ -110,6 +115,8 @@ class Gui:
             if plugin:
                 f.write(f"plugin_path={plugin}\n")
             f.write(f"examples_path={SPARTA_EXAMPLES}\n")
+            for k, v in self.settings.items():
+                f.write(f"{k}={v}\n")
         self.env = env
 
         self.xvfb = subprocess.Popen(
@@ -187,6 +194,43 @@ class Gui:
             self._applog.close()
         shutil.rmtree(self.profile, ignore_errors=True)
         self.alive_at_end = alive
+
+    def stored_settings(self):
+        """The application's settings file as a dict, or {} if it is gone.
+
+        Read inside the `with`: __exit__ removes the profile.
+        """
+        path = (f"{self.profile}/config/The SPARTA Developers/SPARTA-GUI (QT6).conf")
+        out = {}
+        try:
+            with open(path) as f:
+                for line in f:
+                    if "=" in line and not line.startswith("["):
+                        k, v = line.split("=", 1)
+                        out[k.strip()] = v.strip()
+        except OSError:
+            pass
+        return out
+
+    def window_titles(self):
+        """The titles of this run's mapped windows, largest first.
+
+        By process id: the machine may be running another GUI suite on another
+        display, and matching by name would list that one's windows as ours.
+        """
+        ids = self._xdo("search", "--pid", str(self.app.pid)).stdout.split()
+        out = []
+        for wid in ids:
+            name = self._xdo("getwindowname", wid).stdout.strip()
+            geo = self._xdo("getwindowgeometry", wid).stdout
+            m = re.search(r"Geometry: (\d+)x(\d+)", geo)
+            if name and m:
+                out.append((int(m.group(1)) * int(m.group(2)), name))
+        return [n for _, n in sorted(out, reverse=True)]
+
+    def type_text(self, text, pause=0.6):
+        self._xdo("type", "--delay", "20", text)
+        time.sleep(pause)
 
     # -- X helpers ---------------------------------------------------------
     def _xdo(self, *args):
