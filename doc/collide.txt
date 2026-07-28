@@ -388,6 +388,16 @@ to that of a neutral-neutral table for the same species.
 {tabulate_cross_section.py} takes the masses from the species file and
 handles this.
 
+Each table is binned logarithmically with N bins per factor of 2 in
+energy, so a table spanning a factor R in energy holds N*log2(R) bins, and
+each bin holds 1, 2 or 5 coefficients for the {lookup}, {linear} and
+{spline} styles.  A table covering 1e-3 to 1e3 eV at N = 256 with {linear}
+is about 5000 bins, or 80 KB, and every MPI rank holds a copy of every
+table.  That is negligible for a handful of pairs, but a model which
+tabulates all pairs of a many-species mixture at large N with {spline}
+should be sized before it is run.  The per-table bin count is printed at
+setup.
+
 The tools directory contains {tabulate_cross_section.py}, which writes
 files in this format.  It can convert a two-column list of energy and
 cross section values, emit the analytic VHS/VSS cross section for a

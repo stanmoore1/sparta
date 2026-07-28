@@ -228,7 +228,9 @@ int ReactTable::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
                        "the react_modify rboost factor");
       else
         error->warning(FLERR,"Reaction cross section exceeds the total cross "
-                       "section, reaction rate will be underpredicted");
+                       "section, reaction rate will be underpredicted; give "
+                       "that pair a collide table cross section which "
+                       "envelopes the reactive one");
     }
 
     if (react_prob > random_prob) {

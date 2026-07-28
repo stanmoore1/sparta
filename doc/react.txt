@@ -306,6 +306,33 @@ sigma_react exceeds sigma_total at some energy, however, the reaction
 probability is clipped at 1 and the rate is underpredicted; SPARTA issues
 a warning once when this happens.
 
+This matters whenever a reactive cross section rivals the elastic one.
+Resonant charge exchange is the standard case: the charge exchange cross
+section for Ar+ + Ar is larger than the VHS elastic cross section over
+most of the energy range, so running it against "collide vss"_collide.html
+clips the probability and loses more than half the rate.  The remedy is
+what the {table} collide style is for: give that pair a tabulated total
+cross section which envelopes the reactive channel, for instance the sum
+of the elastic and charge exchange cross sections.  With that in place the
+realized rate reproduces the analytic n <sigma_cx g>.
+
+Note also which channels this style can and cannot express.  An inelastic
+energy loss which does not change the species, such as electron impact
+vibrational excitation, is written as an exchange reaction to a distinct
+product species, e.g.
+
+e + N2 --> e + N2v
+E T 4.646e-20 -4.646e-20 e_n2_v1.tab E_N2_V1 :pre
+
+which removes the threshold energy from the collision and tracks the
+excited population as its own species.  That species then needs its own
+VSS parameters and its own de-excitation reaction if the reverse process
+matters, and it is not coupled to SPARTA's vibrational energy model.
+Dissociative attachment is an exchange reaction.  Simple two-body
+attachment, e + X --> X-, cannot be expressed: a two-reactant one-product
+reaction is a recombination, and SPARTA always multiplies a recombination
+by a third-body number density.
+
 The optional last token selects which energy indexes the table.  The
 default {etrans} is the relative translational energy, which is what beam
 experiments and quasi-classical trajectory calculations report.  {etotal}

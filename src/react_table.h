@@ -120,10 +120,12 @@ E: React table reaction has no cross section table
 
 A reaction was declared with style T but no table was attached to it.
 
-W: Reaction cross section exceeds the total cross section, reaction rate will be underpredicted
+W: Reaction cross section exceeds the total cross section, reaction rate will be underpredicted; give that pair a collide table cross section which envelopes the reactive one
 
 The collide style's total cross section does not envelope the tabulated
-reaction cross section, so the reaction probability is clipped at 1.
+reaction cross section, so the reaction probability is clipped at 1.  A
+reaction whose cross section rivals the elastic one, such as resonant
+charge exchange, needs a tabulated total cross section for the pair.
 
 W: Boosted recombination probability exceeds 1, recombination rate will be underpredicted; reduce the react_modify rboost factor
 
