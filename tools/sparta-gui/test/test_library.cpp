@@ -240,8 +240,16 @@ int main(int argc, char **argv)
 
   command(spa,"variable foo equal 2*3");
   check(id_count(spa,"variable") == 1,"id_count(variable) == 1");
-  check(variable_info(spa,0,buffer,256) == 1 && strcmp(buffer,"foo") == 0,
-        "variable_info(0)");
+  // variable_info returns the descriptive line the Variables window shows --
+  // name, style and definition -- not the bare name.  The bare name comes from
+  // id_name("variable"), which is what the editor's completer needs; asking
+  // for it here rather than assuming they are the same is what showed that the
+  // completer had been using the wrong one.
+  check(variable_info(spa,0,buffer,256) == 1 && strstr(buffer,"foo") != NULL &&
+        strstr(buffer,"equal") != NULL,
+        "variable_info(0) describes the variable");
+  check(id_name(spa,"variable",0,buffer,256) == 1 && strcmp(buffer,"foo") == 0,
+        "id_name(variable,0) is the bare name");
 
   // run in a worker thread and poll the stats cache from this thread,
   // like the GUI does
@@ -318,6 +326,26 @@ int main(int argc, char **argv)
   commands_string(spa,"run 100\n");
   check(has_error(spa) == 0,"instance recovers after failed commands");
 
+  // an error raised from inside a run leaves is_running false.
+  //
+  // Run::command sets update->runflag on entry and clears it at the bottom.
+  // Error::all() throws rather than exiting the process, so an error in setup
+  // or in the middle of timestepping unwound straight past that and left the
+  // flag set for good.  is_running is what a GUI reads to decide whether it may
+  // start a run, stop one, or shut down -- stuck at 1 it refuses all three and
+  // waits on a worker thread it has already reaped.  A typo in a deck was
+  // enough to reach it, so this is the first thing a user would have hit.
+
+  commands_string(spa,"compute cbad surf all air fx\nstats_style step c_cbad[99]\n");
+  commands_string(spa,"run 100\n");
+  check(has_error(spa) == 1,"an error inside a run is reported");
+  get_last_error_message(spa,buffer,256);
+  check(is_running(spa) == 0,"is_running false after a run that failed");
+
+  commands_string(spa,"uncompute cbad\nstats_style step np\nrun 100\n");
+  check(has_error(spa) == 0,"instance runs again after a failed run");
+  check(is_running(spa) == 0,"is_running false after recovering");
+
   // dump image render + imagename in the stats cache
 
   commands_string(spa,
@@ -332,6 +360,26 @@ int main(int argc, char **argv)
   bool has_image = imagename && strstr(imagename,"test_render") != NULL;
   last_thermo(spa,"unlock",0);
   check(has_image,"last_thermo imagename set after dump image");
+
+  // the camera up vector, which the GUI's Camera panel emits as a matter of
+  // course.  Its y component was read from the x argument, so "up 0 1 0" -- the
+  // obvious choice for a two-dimensional view -- arrived as (0,0,0) and was
+  // rejected outright, and every other vector rendered from an orientation the
+  // user had not asked for.  A render that completes without an error is the
+  // whole check: (0,0,0) cannot produce one.
+
+  commands_string(spa,
+    "dump upimg image all 100 test_up.*.ppm type type surf proc 0.02 "
+    "up 0 1 0 size 200 200\n"
+    "run 100\n"
+    "undump upimg\n");
+  check(has_error(spa) == 0,"dump image accepts up 0 1 0");
+
+  // A movie has no per-frame file, and DumpImage::write() used to report that
+  // absent name anyway -- clearing the name a `dump image` in the same deck had
+  // just set.  Exercising it needs a library built with SPARTA_FFMPEG, which
+  // this one is not, so the guard is checked by the fact that the image name
+  // above survives; the movie half is verified in the GUI's own movie suite.
 
   close(spa);
   printf("\n%d passed, %d failed\n",npass,nfail);

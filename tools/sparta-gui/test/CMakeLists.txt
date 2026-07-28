@@ -200,6 +200,31 @@ else()
   set(_spa_test_bin "")
 endif()
 
+# The library interface itself, dlopened exactly as the plugin loader does it.
+# This is the harness that proved the extended library API before there was any
+# Qt code, and it had never been registered -- so the contract the whole GUI
+# rests on was only ever checked by hand. It needs no display and no Qt; it
+# needs a shared libsparta and the circle data files, which are in fixtures/.
+if (_spa_test_lib)
+  add_executable(test_library ${CMAKE_CURRENT_SOURCE_DIR}/test_library.cpp)
+  find_package(Threads REQUIRED)
+  target_link_libraries(test_library PRIVATE ${CMAKE_DL_LIBS} Threads::Threads)
+
+  # The deck reads data.circle/air.species/air.vss by bare name and the render
+  # step writes frames next to them, so it gets a copy of the fixtures in a
+  # directory of its own rather than writing into the source tree.
+  set(_libtest_dir "${CMAKE_CURRENT_BINARY_DIR}/libtest")
+  file(MAKE_DIRECTORY "${_libtest_dir}")
+  foreach(_f data.circle air.species air.vss)
+    configure_file("${CMAKE_CURRENT_SOURCE_DIR}/fixtures/${_f}"
+                   "${_libtest_dir}/${_f}" COPYONLY)
+  endforeach()
+
+  add_test(NAME Library.Interface
+    COMMAND $<TARGET_FILE:test_library> "${_spa_test_lib}" "${_libtest_dir}")
+  set_tests_properties(Library.Interface PROPERTIES TIMEOUT 900)
+endif()
+
 # Compiled in rather than passed through the ctest environment: two variables
 # is a two-element list, gtest_discover_tests writes the elements out as
 # separate arguments, and set_tests_properties then reads the second one as

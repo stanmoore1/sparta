@@ -34,6 +34,37 @@ using namespace SPARTA_NS;
 
 Run::Run(SPARTA *sparta) : Pointers(sparta) {}
 
+/* ----------------------------------------------------------------------
+   put the run state back on the way out of Run::command, whichever way out
+   it takes.  Error::all() throws rather than exiting the process, so an
+   error raised during setup or in the middle of timestepping unwinds
+   straight past the assignments at the bottom of command() that used to do
+   this -- leaving update->runflag set.  That flag is what
+   sparta_is_running() reports, and an embedder reads it to decide whether it
+   may start a run, stop one, or shut down; stuck at 1 it refuses all three.
+   A mistake in an input deck is the commonest thing a user makes, so this
+   was reachable on the first one.  The copied per-step commands are freed
+   here too, for the same reason.
+------------------------------------------------------------------------- */
+
+namespace {
+struct RunCleanup {
+  SPARTA_NS::Update *update;
+  char ***commands;
+  int *ncommands;
+  ~RunCleanup() {
+    update->runflag = 0;
+    update->firststep = update->laststep = 0;
+    update->beginstep = update->endstep = 0;
+    if (*commands) {
+      for (int i = 0; i < *ncommands; i++) delete [] (*commands)[i];
+      delete [] *commands;
+      *commands = NULL;
+    }
+  }
+};
+}
+
 /* ---------------------------------------------------------------------- */
 
 void Run::command(int narg, char **arg)
@@ -144,6 +175,7 @@ void Run::command(int narg, char **arg)
   // required because re-parsing commands via input->one() will wipe out args
 
   char **commands = NULL;
+  RunCleanup cleanup = {update, &commands, &ncommands};
   if (nevery && ncommands > 0) {
     commands = new char*[ncommands];
     ncommands = 0;
@@ -246,12 +278,6 @@ void Run::command(int narg, char **arg)
     }
   }
 
-  update->runflag = 0;
-  update->firststep = update->laststep = 0;
-  update->beginstep = update->endstep = 0;
-
-  if (commands) {
-    for (int i = 0; i < ncommands; i++) delete [] commands[i];
-    delete [] commands;
-  }
+  // runflag, the step bounds and the copied commands are all reset by
+  // ~RunCleanup, so that they are reset on the error paths as well
 }

@@ -482,7 +482,12 @@ void CodeEditor::setVarNameList()
     const int nvar        = mainWindow ? mainWindow->sparta.idCount("variable") : 0;
     SpartaWrapper *sparta = mainWindow ? &mainWindow->sparta : nullptr;
     for (int i = 0; i < nvar; ++i) {
-        const QString name = sparta->variableInfo(i);
+        // idName(), not variableInfo(): the latter returns the whole
+        // "Variable[  0]: foo  style = equal  def = ..." line that the
+        // Variables window displays, and completing on it offered entries like
+        // "v_Variable[  0]: foo  style = ..." -- which is what went into the
+        // deck when one was accepted.
+        const QString name = sparta->idName("variable", i);
         if (!name.isEmpty()) {
             if (name.size() == 1) vars << QString("$%1").arg(name);
             vars << QString("${%1}").arg(name);

@@ -1550,6 +1550,14 @@ int Update::tally_setup()
 
   glist_compute = slist_compute = blist_compute = NULL;
 
+  // and the active lists, which were deleted just above but not cleared.
+  // They are only reallocated below when the matching count is non-zero, so
+  // removing the last tallying compute -- "uncompute" on the one compute surf
+  // in a deck -- left a freed pointer here for ~Update() to free a second
+  // time.  A GUI that lets the user delete a compute and then close the
+  // instance hit it every time.
+  glist_active = slist_active = blist_active = NULL;
+
   nglist_compute = nslist_compute = nblist_compute = 0;
   for (int i = 0; i < modify->ncompute; i++) {
     if (modify->compute[i]->gas_tally_flag) nglist_compute++;
