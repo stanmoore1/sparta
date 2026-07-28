@@ -1244,6 +1244,21 @@ ImageViewer::~ImageViewer()
     // destroyed.  Focusing a size field and then closing the panel was enough
     // to crash the application.
     shutdown = true;
+
+    // The flag alone is not enough, because the call itself is already invalid
+    // by then: with ~ImageViewer finished and ~QWidget running, `this` is no
+    // longer an ImageViewer, and a connection made to a member function pointer
+    // is dispatched on the wrong type before the guard inside it can run.  A
+    // debug build of Qt asserts on exactly that ("Called object is not of the
+    // correct type (class destructor may have already run)"); a release build
+    // dereferences whatever is there.
+    //
+    // So the connections into this object come down here, while it still is
+    // one.  Per child rather than in one call: QObject::disconnect() takes the
+    // sender as its first argument and that argument may never be null, so the
+    // "any sender" form is not available and would silently do nothing.
+    for (QObject *child : findChildren<QObject *>())
+        QObject::disconnect(child, nullptr, this, nullptr);
 }
 
 void ImageViewer::quit()

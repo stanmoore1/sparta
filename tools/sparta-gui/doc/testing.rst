@@ -781,6 +781,16 @@ cover:
   released, both ignored
 - Reset undoing every gesture
 
+.. note::
+
+   The coverage tree is a **Debug** build, and it is worth running the suite
+   there as well as in the release tree: a debug Qt asserts on a signal
+   delivered to an object whose derived destructor has already run, where a
+   release build merely dereferences whatever is at the address.  Both of the
+   destructor problems above were found that way -- the release build only
+   showed a segfault under one particular ordering, while the debug build
+   named the cause.
+
 test_startup.py
 ---------------
 

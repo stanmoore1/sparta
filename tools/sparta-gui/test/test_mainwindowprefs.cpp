@@ -531,12 +531,23 @@ TEST_F(Prefs, ASurfaceFileThatCannotBeParsedIsRefusedRatherThanInserted)
     ASSERT_NE(editor(), nullptr);
     editor()->setPlainText("# nothing yet\n");
 
+    // The reaper answers the file dialog and then waits for the refusal.  It
+    // must NOT reject whatever else it finds modal in the meantime: between
+    // answering the file dialog and the message box appearing, the wizard --
+    // built on the stack and never shown -- can be what activeModalWidget()
+    // reports, and rejecting it there was enough to make the refusal never
+    // arrive.  So unexpected dialogs are only recorded, and only taken down
+    // once the budget is nearly gone, which is also what keeps a wizard that
+    // really did open from hanging the run.
     QStringList seen;
+    QStringList others;
     QTimer poll;
-    int left = 20000;
+    constexpr int kBudget = 20000;
+    int left = kBudget;
     QObject::connect(&poll, &QTimer::timeout, [&]() {
         auto *m = QApplication::activeModalWidget();
-        if ((left -= 5) < 0) {
+        const bool giveUp = (left -= 5) < 500;
+        if (left < 0) {
             poll.stop();
             if (auto *d = qobject_cast<QDialog *>(m)) d->reject();
             return;
@@ -552,7 +563,10 @@ TEST_F(Prefs, ASurfaceFileThatCannotBeParsedIsRefusedRatherThanInserted)
             static_cast<QDialog *>(fd)->accept();
             return;
         }
-        if (auto *d = qobject_cast<QDialog *>(m)) d->reject();
+        if (auto *d = qobject_cast<QDialog *>(m)) {
+            others << d->metaObject()->className();
+            if (giveUp) d->reject();
+        }
     });
     poll.setInterval(5);
     poll.start();
@@ -561,7 +575,8 @@ TEST_F(Prefs, ASurfaceFileThatCannotBeParsedIsRefusedRatherThanInserted)
 
     EXPECT_FALSE(seen.filter("Import Surface").isEmpty())
         << "a file it could not read was accepted without a word: "
-        << seen.join(" | ").toStdString();
+        << seen.join(" | ").toStdString() << " (other dialogs: " << others.join(", ").toStdString()
+        << ")";
     EXPECT_EQ(editor()->toPlainText(), "# nothing yet\n")
         << "something was inserted for a file that would not parse";
 }
