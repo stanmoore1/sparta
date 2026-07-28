@@ -96,6 +96,7 @@ void CollideTable::null_tables()
   sigma_tab = alpha_tab = scatter_tab = NULL;
   sigma_index = alpha_index = scatter_index = NULL;
   sigeff = NULL;
+  ntemp = 0;
   lb_index = NULL;
   lbratio = lbmax = NULL;
   nlbpair = 0;
@@ -521,6 +522,7 @@ void CollideTable::build_sigeff()
   if (sigeff) return;
 
   memory->create(sigeff,nsigma,NTEMP,"collide/table:sigeff");
+  ntemp = NTEMP;
   tlo = log(TEMPLO);
   tinvdelta = (NTEMP-1) / (log(TEMPHI) - tlo);
 

@@ -24,6 +24,8 @@ args = arguments for that style :l
   {tce/kk} args = infile
     infile = file with list of gas-phase chemistry reactions
   {table} args = infile
+    infile = file with list of gas-phase chemistry reactions
+  {table/kk} args = infile
     infile = file with list of gas-phase chemistry reactions :pre
 :ule
 
@@ -470,8 +472,12 @@ effectively.
 
 The {table} style requires every reaction in its file to use the T style;
 it cannot mix tabulated reactions with Arrhenius or Quantum ones, since it
-has no way to form a probability for the latter.  It has no {kk} suffixed
-variant.
+has no way to form a probability for the latter.  It has a {kk} suffixed
+variant which implements everything the plain style does, including the
+{error} extrapolation mode, which is recorded on the device and raised by
+the host after the collision kernel since device code cannot raise an
+error itself.  It is verified against the non-KOKKOS build with
+SPARTA_KOKKOS_EXACT, which makes the two agree bit for bit.
 
 [Related commands:]
 

@@ -266,18 +266,21 @@ void ComputeLambdaGridKokkos::compute_per_grid_kokkos()
   particle_kk->sync(Device,SPECIES_MASK);
   d_species = particle_kk->k_species.view_device();
 
-  // NOTE: the host version of this compute now obtains the effective cross
-  //   section from Collide::sigma_eff(), so that a collide style with a
-  //   tabulated cross section is respected.  this device version still
-  //   evaluates the VHS form from d_params directly, which agrees with
-  //   sigma_eff() for collide vss.  it is only reachable for a collide
-  //   style with kokkos_flag set, and collide table has none, so a
-  //   tabulated cross section cannot reach here today.  if a Kokkos
-  //   tabulated collide style is added, this must be generalized with it,
-  //   along with the downcast below
+  // the host version of this compute obtains the effective cross section of
+  //   a tabulated pair from Collide::sigma_eff() rather than the VHS form.
+  //   collide table/kk puts the same tabulation on the device, so take it
+  //   from there and reproduce that branch below.  the counter is 0 for
+  //   collide vss/kk, and then nothing here changes
 
   CollideVSSKokkos* collide_kk = ((CollideVSSKokkos*)collide);
   d_params_const = collide_kk->d_params_const;
+
+  nsigeff_kk = collide_kk->nsigeff_kk;
+  ntemp_kk = collide_kk->ntemp_kk;
+  sigeff_tlo = collide_kk->sigeff_tlo_kk;
+  sigeff_tinvdelta = collide_kk->sigeff_tinvdelta_kk;
+  d_sigidx = collide_kk->d_sigidx;
+  d_sigeff = collide_kk->d_sigeff;
 
   // compute mean free path for each grid cell
   // formula from Bird, eq 4.77
@@ -371,7 +374,23 @@ void ComputeLambdaGridKokkos::operator()(TagComputeLambdaGrid_ComputePerGrid, co
       const double mk = d_species[k].mass;
       const double mr = mj * mk / (mj + mk);
 
-      if (tempwhich == NONE || d_temp[i] == 0.0) {
+      // a pair with a tabulated cross section cannot use the VHS
+      //   expressions; the same branch ComputeLambdaGrid takes on the host
+
+      if (nsigeff_kk && d_sigidx(j,k) >= 0) {
+        double tcell;
+        if (tempwhich == NONE || d_temp[i] == 0.0) tcell = tref;
+        else tcell = d_temp[i];
+
+        const double sigma = sigma_eff_dev(j,k,tcell);
+
+        if (lambdaflag)
+          d_lambdainv(i,j) += sqrt(1+mj/mk) * sigma * d_nrho(i,k);
+        if (tauflag)
+          d_tauinv(i,j) += sigma * d_nrho(i,k) *
+            sqrt(8.0 * boltz * tcell / (MY_PI * mr));
+
+      } else if (tempwhich == NONE || d_temp[i] == 0.0) {
         if (lambdaflag)
           d_lambdainv(i,j) += (MY_PI * sqrt (1+mj/mk) * pow(dref,2.0) * d_nrho(i,k));
         if (tauflag)

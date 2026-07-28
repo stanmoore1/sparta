@@ -70,15 +70,19 @@ CollideVSSKokkos::CollideVSSKokkos(SPARTA *sparta, int narg, char **arg,
 #endif
             ),
   grid_kk_copy(sparta),
+  react_table_kk_copy(sparta),
   react_kk_copy(sparta)
 {
   ntab_kk = nalphatab_kk = nscattertab_kk = nlbpair_kk = 0;
+  nsigeff_kk = ntemp_kk = 0;
+  sigeff_tlo_kk = sigeff_tinvdelta_kk = 0.0;
+  react_table_defined = 0;
   nlbgrid_kk = 0;
   lblo_kk = lbinvdelta_kk = 0.0;
-  d_tab_error = DAT::t_int_scalar("collide/kk:tab_error");
-  h_tab_error = Kokkos::create_mirror_view(d_tab_error);
   d_lb_cap = DAT::t_int_scalar("collide/kk:lb_cap");
   h_lb_cap = Kokkos::create_mirror_view(d_lb_cap);
+  d_lb_range = DAT::t_int_scalar("collide/kk:lb_range");
+  h_lb_range = Kokkos::create_mirror_view(d_lb_range);
 
   kokkos_flag = 1;
 
@@ -125,6 +129,7 @@ CollideVSSKokkos::~CollideVSSKokkos()
 
   grid_kk_copy.uncopy();
   react_kk_copy.uncopy();
+  react_table_kk_copy.uncopy();
 
   memoryKK->destroy_kokkos(k_dellist,dellist);
 
@@ -255,8 +260,10 @@ void CollideVSSKokkos::init()
   // if recombination reactions exist, set flags per species pair
 
   recombflag = 0;
+  react_table_defined = 0;
   if (react) {
     react_defined = 1;
+    react_table_defined = react->tabulated_flag;
     recombflag = react->recombflag;
     recomb_boost_inverse = react->recomb_boost_inverse;
   }
@@ -390,6 +397,8 @@ void CollideVSSKokkos::operator()(TagCollideResetVremax, const int &icell) const
 
 void CollideVSSKokkos::collisions()
 {
+  if (react_table_defined) ((ReactTableKokkos*) react)->clear_flags();
+
   // if requested, reset vrwmax & remain
 
   if (update->ntimestep == vre_next) {
@@ -486,6 +495,8 @@ void CollideVSSKokkos::collisions()
   nattempt_running += nattempt_one;
   ncollide_running += ncollide_one;
   nreact_running += nreact_one;
+
+  if (react_table_defined) ((ReactTableKokkos*) react)->check_flags();
 }
 
 /* ----------------------------------------------------------------------
@@ -510,11 +521,11 @@ template < int NEARCP, int GASTALLY > void CollideVSSKokkos::collisions_one(COLL
   grid_kk->sync(Device,CINFO_MASK);
   d_plist = grid_kk->d_plist;
 
-  if (react) {
-    ReactTCEKokkos* react_kk = (ReactTCEKokkos*) react;
-    if (!react_kk)
-      error->all(FLERR,"Must use TCE reactions with Kokkos");
-  }
+  // the casts below are unchecked, so a react style with no kk variant
+  //   reaching them is undefined behaviour; require one of the two
+
+  if (react && !react->kokkos_flag)
+    error->all(FLERR,"Must use a Kokkos-supported react style with Kokkos");
 
   copymode = 1;
 
@@ -582,7 +593,10 @@ template < int NEARCP, int GASTALLY > void CollideVSSKokkos::collisions_one(COLL
     Kokkos::deep_copy(d_scalars,h_scalars);
 
     grid_kk_copy.copy(grid_kk);
-    if (react) {
+    if (react_table_defined) {
+      ReactTableKokkos* react_kk = (ReactTableKokkos*) react;
+      react_table_kk_copy.copy(react_kk);
+    } else if (react) {
       ReactTCEKokkos* react_kk = (ReactTCEKokkos*) react;
       react_kk_copy.copy(react_kk);
     }
@@ -863,11 +877,11 @@ void CollideVSSKokkos::collisions_one_ambipolar(COLLIDE_REDUCE &reduce)
   grid_kk->sync(Device,CINFO_MASK);
   d_plist = grid_kk->d_plist;
 
-  if (react) {
-    ReactTCEKokkos* react_kk = (ReactTCEKokkos*) react;
-    if (!react_kk)
-      error->all(FLERR,"Must use TCE reactions with Kokkos");
-  }
+  // the casts below are unchecked, so a react style with no kk variant
+  //   reaching them is undefined behaviour; require one of the two
+
+  if (react && !react->kokkos_flag)
+    error->all(FLERR,"Must use a Kokkos-supported react style with Kokkos");
 
   copymode = 1;
 
@@ -946,7 +960,10 @@ void CollideVSSKokkos::collisions_one_ambipolar(COLLIDE_REDUCE &reduce)
     Kokkos::deep_copy(d_scalars,h_scalars);
 
     grid_kk_copy.copy(grid_kk);
-    if (react) {
+    if (react_table_defined) {
+      ReactTableKokkos* react_kk = (ReactTableKokkos*) react;
+      react_table_kk_copy.copy(react_kk);
+    } else if (react) {
       ReactTCEKokkos* react_kk = (ReactTCEKokkos*) react;
       react_kk_copy.copy(react_kk);
     }
@@ -1466,7 +1483,7 @@ int CollideVSSKokkos::test_collision_kokkos(int icell, int igroup, int jgroup,
     const int m = d_sigidx(ispecies,jspecies);
     if (m >= 0) {
       if (vr2 < EPSZERO) return 0;
-      const double vre = tab_evaluate(m,vr2);
+      const double vre = tabdev.evaluate(m,vr2);
       d_vremax(icell,igroup,jgroup) = MAX(vre,d_vremax(icell,igroup,jgroup));
       if (vre/d_vremax(icell,igroup,jgroup) < rand_gen.drand()) return 0;
 
@@ -1474,10 +1491,12 @@ int CollideVSSKokkos::test_collision_kokkos(int icell, int igroup, int jgroup,
       //   section needs the ratio which restores its intended rate, as
       //   CollideTable::test_collision() computes for the host styles
 
-      if (react_defined)
+      if (react_defined) {
         precoln.react_prob_factor =
           d_prefactor(ispecies,jspecies) *
           pow(vr2,1.0-d_params(ispecies,jspecies).omega) / vre;
+        precoln.sigma_total = vre/sqrt(vr2);
+      }
 
       precoln.vr2 = vr2;
       return 1;
@@ -1497,7 +1516,10 @@ int CollideVSSKokkos::test_collision_kokkos(int icell, int igroup, int jgroup,
   double vre = vro*d_prefactor(ispecies,jspecies);
   d_vremax(icell,igroup,jgroup) = MAX(vre,d_vremax(icell,igroup,jgroup));
   if (vre/d_vremax(icell,igroup,jgroup) < rand_gen.drand()) return 0;
-  if (react_defined) precoln.react_prob_factor = 1.0;
+  if (react_defined) {
+    precoln.react_prob_factor = 1.0;
+    precoln.sigma_total = vre/sqrt(vr2);
+  }
   precoln.vr2 = vr2;
   return 1;
 }
@@ -1563,7 +1585,13 @@ int CollideVSSKokkos::perform_collision_kokkos(Particle::OnePart *&ip,
   // reaction = 1 to N for which reaction occurs
   // reaction is returned to caller
 
-  if (react_defined)
+  if (react_table_defined)
+    reaction = react_table_kk_copy.obj.attempt_kk(ip,jp,
+                                             precoln.etrans,precoln.erot,
+                                             precoln.evib,postcoln.etotal,kspecies,
+                                             recomb_species,recomb_density,d_species,
+                                             precoln.sigma_total);
+  else if (react_defined)
     reaction = react_kk_copy.obj.attempt_kk(ip,jp,
                                              precoln.etrans,precoln.erot,
                                              precoln.evib,postcoln.etotal,kspecies,

@@ -32,6 +32,9 @@ React::React(SPARTA *sparta, int, char **arg) : Pointers(sparta)
   style = new char[n];
   strcpy(style,arg[0]);
 
+  kokkos_flag = 0;
+  tabulated_flag = 0;
+
   recombflag_user = 1;
   recomb_boost = 1000.0;
   recomb_boost_inverse = 0.001;

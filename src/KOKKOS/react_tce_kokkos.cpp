@@ -31,7 +31,7 @@ enum{DISSOCIATION,EXCHANGE,IONIZATION,RECOMBINATION};   // other files
 /* ---------------------------------------------------------------------- */
 
 ReactTCEKokkos::ReactTCEKokkos(SPARTA *sparta, int narg, char **arg) :
-  ReactBirdKokkos(sparta, narg, arg) {}
+  ReactBirdKokkos(sparta, narg, arg) {kokkos_flag = 1;}
 
 /* ---------------------------------------------------------------------- */
 

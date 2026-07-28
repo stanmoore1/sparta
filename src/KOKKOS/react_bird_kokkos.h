@@ -29,6 +29,8 @@ namespace SPARTA_NS {
 class ReactBirdKokkos : public ReactBird {
  public:
   ReactBirdKokkos(class SPARTA *, int, char **);
+  ReactBirdKokkos(class SPARTA *, int, char **, int);  // for derived styles
+  void init_kokkos();
   ReactBirdKokkos(class SPARTA* sparta) : ReactBird(sparta),
                                           rand_pool(1
 #ifdef SPARTA_KOKKOS_EXACT

@@ -34,6 +34,7 @@ fi
 
 # list of files with optional dependencies
 
+action interp_table_kokkos.h
 action collide_table_kokkos.cpp
 action collide_table_kokkos.h
 action collide_vss_kokkos.cpp
@@ -117,6 +118,8 @@ action rand_pool_wrap.cpp
 action rand_pool_wrap.h
 action react_bird_kokkos.cpp
 action react_bird_kokkos.h
+action react_table_kokkos.cpp
+action react_table_kokkos.h
 action react_tce_kokkos.cpp
 action react_tce_kokkos.h
 action surf_collide_diffuse_kokkos.cpp

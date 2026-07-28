@@ -25,6 +25,9 @@ class React : protected Pointers {
   char *style;
   int nlist;                 // # of reactions read from file
 
+  int kokkos_flag;           // 1 if this style has a KOKKOS device path
+  int tabulated_flag;        // 1 if it forms P from sigma_react/sigma_total
+
   int recombflag;            // 1 if any recombination reactions defined
   int recombflag_user;       // 0 if user has turned off recomb reactions
   int recomb_species;        // species of 3rd particle in recomb reaction

@@ -50,6 +50,32 @@ ReactBirdKokkos::ReactBirdKokkos(SPARTA *sparta, int narg, char **arg) :
 #endif
             )
 {
+  init_kokkos();
+}
+
+/* ----------------------------------------------------------------------
+   ctor for a derived style which parses its own reaction file
+   does not read it here, so the child's read_style() and read_coeffs()
+     overrides are in place by the time setup_reactions() runs
+------------------------------------------------------------------------- */
+
+ReactBirdKokkos::ReactBirdKokkos(SPARTA *sparta, int narg, char **arg,
+                                 int /*flag*/) :
+  ReactBird(sparta, narg, arg, 0),
+  rand_pool(12345 + comm->me
+#ifdef SPARTA_KOKKOS_EXACT
+            , sparta
+#endif
+            )
+{
+  // nlist is still 0 here, so the child calls init_kokkos() once it has
+  //   read its reaction file
+}
+
+/* ---------------------------------------------------------------------- */
+
+void ReactBirdKokkos::init_kokkos()
+{
   delete [] tally_reactions;
   delete [] tally_reactions_all;
   memoryKK->create_kokkos(k_tally_reactions,tally_reactions,nlist,"react_bird:tally_reactions");

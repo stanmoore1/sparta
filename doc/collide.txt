@@ -515,14 +515,17 @@ effectively.
 
 [Restrictions:]
 
-The {table} style has a {kk} suffixed variant which covers the total cross
-section and the energy-dependent alpha.  The rest of the style raises an
-error at setup under the KOKKOS package rather than being silently skipped,
-since each of these changes the answer: a scatter table, a tabulated pair
-whose species have rotational or vibrational modes, since the
-Larsen-Borgnakke correction is not ported, chemistry of any kind, and a
-table whose extrapolation mode is {error}, since device code cannot raise
-one.  Run those models without the {kk} suffix.
+The {table} style has a {kk} suffixed variant which implements everything
+the plain style does: the total cross section, the energy-dependent alpha,
+the scatter table, the Larsen-Borgnakke detailed balance correction, and
+the {error} extrapolation mode, which is recorded on the device and raised
+by the host after the collision kernel since device code cannot raise an
+error itself.  "compute lambda/grid"_compute_lambda_grid.html also takes
+the tabulated cross section on the device, so the mean free path and
+collision time which drive "fix adapt"_fix_adapt.html and "fix
+dt/reset"_fix_dt_reset.html are the tabulated ones there too.  It is
+verified against the non-KOKKOS build with SPARTA_KOKKOS_EXACT, which
+makes the two agree bit for bit.
 
 The "react tce"_react.html model derives its reaction probability as the
 ratio of the reaction cross section to the VHS total cross section.  When

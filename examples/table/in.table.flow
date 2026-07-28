@@ -21,6 +21,13 @@
 #  - The "comm/sort” option to the “global” command is used to match MPI runs.
 #  - The “twopass” option is used to match Kokkos runs.
 # The "comm/sort" and "twopass" options should not be used for production runs.
+#
+#  - This is the one example in this directory which does not reproduce under
+#    the KOKKOS package.  The cause is not the tabulated cross section: the
+#    same input with "collide vss" diverges in the same way, because "fix
+#    dt/reset" and "fix adapt" used together do not yet agree with the
+#    non-KOKKOS build, and abort on more than one proc.  The box examples
+#    here do agree with KOKKOS bit for bit.
 ################################################################################
 
 seed	    	    12345

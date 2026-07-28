@@ -96,6 +96,7 @@ class CollideTable : public CollideVSS {
 
   double **sigeff;
   double tlo,tinvdelta;
+  int ntemp;                 // # of temperature points per sigeff row
 
   // running maximum of sigma_table/sigma_VHS over [0,E], used to normalize
   //   the Larsen-Borgnakke acceptance so it stays a probability.  one row

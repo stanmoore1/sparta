@@ -22,10 +22,12 @@ CollideStyle(vss/kk,CollideVSSKokkos)
 #define SPARTA_COLLIDE_VSS_KOKKOS_H
 
 #include "collide_table.h"
+#include "interp_table_kokkos.h"
 #include "collide_vss_kokkos.h"
 #include "particle_kokkos.h"
 #include "grid_kokkos.h"
 #include "react_tce_kokkos.h"
+#include "react_table_kokkos.h"
 #include "kokkos_type.h"
 #include "Kokkos_Random.hpp"
 #include "rand_pool_wrap.h"
@@ -132,37 +134,35 @@ class CollideVSSKokkos : public CollideTable {
   typedef tdual_params_2d::t_dev_const t_params_2d_const;
   t_params_2d_const d_params_const;
 
+  // public alongside d_params_const, and for the same reason: compute
+  //   lambda/grid reads the cross section of a pair from the collide style,
+  //   and takes it from the table when the pair has one
+
+  DAT::tdual_int_2d k_sigidx;
+  DAT::t_int_2d d_sigidx;
+
+  // effective total cross section vs temperature, mirroring CollideTable's
+  //   sigeff.  nsigeff_kk is 0 for the vss style, and a caller which sees
+  //   that keeps whatever VHS arithmetic it used before
+
+  int nsigeff_kk;               // # of rows in d_sigeff, 0 for vss
+  int ntemp_kk;                 // # of temperature points per row
+  double sigeff_tlo_kk,sigeff_tinvdelta_kk;
+  DAT::tdual_float_2d k_sigeff;
+  DAT::t_float_2d d_sigeff;
+
  protected:
 
   // device copies of the tabulated cross sections, filled by
-  // CollideTableKokkos.  ntab_kk is 0 for the vss style and none of this is
-  // read.  TabMeta mirrors the private state of InterpTable which
-  // InterpTable::evaluate() needs: the bit-indexed bin lookup and the power
-  // law extrapolation on each end.
-
-  struct TabMeta {
-    double xlo,xhi,alo,plo,ahi,phi;
-    int64_t offset;             // bin index of the first bin
-    int64_t coffset;            // start of this table inside d_tabcoeff
-    int shift;                  // right shift mapping the x bits to a bin
-    int nbins,ncoeff,ncol,tabstyle;
-    int errlo,errhi;            // 1 if EXTRAP error applies on that end
-  };
-
-  typedef Kokkos::DualView<TabMeta*,DeviceType::array_layout,DeviceType>
-    tdual_tabmeta_1d;
-  typedef tdual_tabmeta_1d::t_dev t_tabmeta_1d;
+  // CollideTableKokkos.  the tables are held in one InterpTableKokkos in
+  // the order sigma, alpha, scatter, and ntab_kk is 0 for the vss style so
+  // none of this is read.
 
   int ntab_kk;                  // # of cross section tables, 0 for vss
   int nalphatab_kk;             // # of alpha tables, 0 for vss
   int nscattertab_kk;           // # of scatter tables, 0 for vss
   int nlbpair_kk;               // # of pairs needing the LB correction
-  tdual_tabmeta_1d k_tabmeta;
-  t_tabmeta_1d d_tabmeta;
-  DAT::tdual_float_1d k_tabcoeff;
-  DAT::t_float_1d d_tabcoeff;
-  DAT::tdual_int_2d k_sigidx;
-  DAT::t_int_2d d_sigidx;
+  InterpTableKokkos tabdev;
   DAT::tdual_int_2d k_alphaidx;
   DAT::t_int_2d d_alphaidx;
   DAT::tdual_int_2d k_scatteridx;
@@ -179,74 +179,23 @@ class CollideVSSKokkos : public CollideTable {
   double lblo_kk,lbinvdelta_kk;
   int nlbgrid_kk;
 
-  // set on device when a table with EXTRAP error is evaluated out of range,
-  //   checked on the host after the collision kernel since device code
-  //   cannot raise an error itself
-
-  DAT::t_int_scalar d_tab_error;
-  HAT::t_int_scalar h_tab_error;
-
   // set on device when a Larsen-Borgnakke acceptance loop runs out of
   //   retries, so the host can warn exactly as CollideVSS::lb_capcheck does
 
   DAT::t_int_scalar d_lb_cap;
   HAT::t_int_scalar h_lb_cap;
 
+  // set on device when a collision energy falls outside the acceptance
+  //   normalization grid, the warning CollideTable::lb_weight issues inline
+
+  DAT::t_int_scalar d_lb_range;
+  HAT::t_int_scalar h_lb_range;
+
   // the same expression as InterpTable::evaluate()
 
-  KOKKOS_INLINE_FUNCTION
-  int tab_bin(const TabMeta &t, double x) const {
-    union { double d; uint64_t u; } v;
-    v.d = x;
-    int64_t k = (int64_t) (v.u >> t.shift) - t.offset;
-    if (k < 0) k = 0;
-    else if (k > t.nbins-1) k = t.nbins-1;
-    return (int) k;
-  }
-
-  KOKKOS_INLINE_FUNCTION
-  double tab_evaluate(int m, double x) const {
-    const TabMeta &t = d_tabmeta(m);
-
-    // the host style aborts here when the table says EXTRAP error; device
-    //   code cannot, so record it and let the host raise it after the kernel
-
-    if (x <= t.xlo) {
-      if (t.errlo) d_tab_error() = 1;
-      return t.alo * pow(x,t.plo);
-    }
-    if (x >= t.xhi) {
-      if (t.errhi) d_tab_error() = 1;
-      return t.ahi * pow(x,t.phi);
-    }
-
-    const int64_t b = t.coffset + (int64_t) t.ncoeff*tab_bin(t,x);
-    if (t.tabstyle == 1) return d_tabcoeff(b) + x*d_tabcoeff(b+1);  // linear
-    if (t.tabstyle == 0) return d_tabcoeff(b);                      // lookup
-    const double u = x - d_tabcoeff(b);                             // spline
-    return d_tabcoeff(b+1) +
-      u*(d_tabcoeff(b+2) + u*(d_tabcoeff(b+3) + u*d_tabcoeff(b+4)));
-  }
-
-  // row lookup for a multi-column table, the same expression as
-  //   InterpTable::interpolate_row()
-
-  KOKKOS_INLINE_FUNCTION
-  double tab_interpolate_row(int m, double x, double u) const {
-    const TabMeta &t = d_tabmeta(m);
-    const int64_t b = t.coffset + (int64_t) t.ncol*tab_bin(t,x);
-    double f = u*t.ncol - 0.5;
-    if (f <= 0.0) return d_tabcoeff(b);
-    if (f >= t.ncol-1) return d_tabcoeff(b+t.ncol-1);
-    const int j = (int) f;
-    return d_tabcoeff(b+j) + (f-j)*(d_tabcoeff(b+j+1)-d_tabcoeff(b+j));
-  }
-
   // cos(chi) sampled from a tabulated differential cross section
-  //   returns 1 and sets cosX when the pair has a scatter table
-
-  // the random number is drawn inside, and only when the pair has a table,
-  //   so the stream matches CollideTable::scatter_cosX() exactly
+  //   the random number is drawn inside, and only when the pair has a
+  //   table, so the stream matches CollideTable::scatter_cosX() exactly
 
   KOKKOS_INLINE_FUNCTION
   int scatter_cosX_kokkos(int isp, int jsp, double vr2, double &cosX,
@@ -254,7 +203,7 @@ class CollideVSSKokkos : public CollideTable {
     if (!nscattertab_kk) return 0;
     const int m = d_scatteridx(isp,jsp);
     if (m < 0) return 0;
-    cosX = tab_interpolate_row(m,vr2,rand_gen.drand());
+    cosX = tabdev.interpolate_row(m,vr2,rand_gen.drand());
     if (cosX > 1.0) cosX = 1.0;
     else if (cosX < -1.0) cosX = -1.0;
     return 1;
@@ -267,7 +216,31 @@ class CollideVSSKokkos : public CollideTable {
     if (!nalphatab_kk) return d_params(isp,jsp).alpha;
     const int m = d_alphaidx(isp,jsp);
     if (m < 0) return d_params(isp,jsp).alpha;
-    return tab_evaluate(m,vr2);
+    return tabdev.evaluate(m,vr2);
+  }
+
+  // does this pair carry a tabulated cross section?
+  //   the same test as CollideTable::tabulated_pair()
+
+  KOKKOS_INLINE_FUNCTION
+  int tabulated_pair_kokkos(int isp, int jsp) const {
+    if (!nsigeff_kk) return 0;
+    return d_sigidx(isp,jsp) >= 0;
+  }
+
+  // effective total cross section at temperature TEMP, the same expression
+  //   as CollideTable::sigma_eff(); only call it when the test above passes
+
+  KOKKOS_INLINE_FUNCTION
+  double sigma_eff_kokkos(int isp, int jsp, double temp) const {
+    const int m = d_sigidx(isp,jsp);
+    if (temp <= 0.0) temp = d_params(isp,jsp).tref;
+
+    double f = (log(temp) - sigeff_tlo_kk) * sigeff_tinvdelta_kk;
+    if (f <= 0.0) return d_sigeff(m,0);
+    if (f >= ntemp_kk-1) return d_sigeff(m,ntemp_kk-1);
+    int k = (int) f;
+    return d_sigeff(m,k) + (f-k)*(d_sigeff(m,k+1)-d_sigeff(m,k));
   }
 
   // Larsen-Borgnakke acceptance probability, the same expression as
@@ -282,6 +255,12 @@ class CollideVSSKokkos : public CollideTable {
 
     double f = (log(etrans/1.602176634e-19) - lblo_kk) * lbinvdelta_kk;
     double g = (log(ec/1.602176634e-19) - lblo_kk) * lbinvdelta_kk;
+
+    // an energy above the grid cannot be bounded by it, so the draw reverts
+    //   toward the VSS law.  record it for the one-time warning the host
+    //   style issues inline, since device code cannot warn itself
+
+    if (g >= nlbgrid_kk-1) d_lb_range() = 1;
 
     if (f < 0.0) f = 0.0;
     if (g > nlbgrid_kk-1) g = nlbgrid_kk-1;
@@ -317,6 +296,8 @@ class CollideVSSKokkos : public CollideTable {
 
   KKCopy<GridKokkos> grid_kk_copy;
   KKCopy<ReactTCEKokkos> react_kk_copy;
+  KKCopy<ReactTableKokkos> react_table_kk_copy;
+  int react_table_defined;   // 1 if the react style is table/kk
 
   t_particle_1d d_particles;
   t_species_1d_const d_species;

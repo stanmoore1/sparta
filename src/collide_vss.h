@@ -67,6 +67,12 @@ class CollideVSS : public Collide {
     //   the KOKKOS path, whose react styles take it as an argument
 
     double react_prob_factor;
+
+    // the total cross section which selected this pair, needed by a react
+    //   style that forms its probability as sigma_react/sigma_total.  the
+    //   host styles read Collide::sigma_total instead
+
+    double sigma_total;
   };
 
   struct Params {             // VSS model parameters

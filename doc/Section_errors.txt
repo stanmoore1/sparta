@@ -291,34 +291,84 @@ The cross section table specified "EXTRAP error" for this end of its
 range, and a collision was attempted outside it.  Widen the table or
 select a different extrapolation mode. :dd
 
-{Collide table/kk does not support scatter tables} :dt
+{React table cannot be used with the KOKKOS package; use react table/kk} :dt
 
-A scatter table samples the deflection angle from an inverse cumulative
-differential cross section, which is not ported to the KOKKOS package.
-Run this model without the kk suffix. :dd
+The KOKKOS collide styles reach the react style through a cast, so the
+host-only style must not get there.  The suffix machinery normally makes
+this substitution for you. :dd
 
-{Collide table/kk does not support a tabulated pair with internal energy} :dt
+{Must use a Kokkos-supported react style with Kokkos} :dt
 
-The Larsen-Borgnakke detailed balance correction which a tabulated cross
-section requires is not ported to the KOKKOS package, and without it an
-equilibrium gas drifts.  Run this model without the kk suffix. :dd
+The KOKKOS collide styles reach the react style through a cast, so a react
+style with no device path cannot be used with them.  Use the kk variant of
+the react style. :dd
 
-{Collide table/kk does not support chemistry} :dt
+{Unknown table style in collide table} :dt
 
-The reaction probability factor which relates a tabulated total cross
-section to the TCE model is not ported to the KOKKOS package, and react
-table has no kk variant.  Run this model without the kk suffix. :dd
+The interpolation style of the collide table command must be lookup,
+linear, or spline. :dd
 
-{Collide table/kk does not support EXTRAP error} :dt
+{Illegal number of collide table entries} :dt
 
-Device code cannot raise an error, so a table which must abort outside its
-range cannot be used with the KOKKOS package. :dd
+The N argument of the collide table command must be a positive number of
+interpolation bins. :dd
 
-{React table has no kk variant and cannot be used with the KOKKOS package} :dt
+{Cross section table is required for a pair with an alpha or scatter table} :dt
 
-The KOKKOS collide styles reach the react style through a cast to the
-KOKKOS TCE style, so a non-KOKKOS react style used with them is undefined
-behaviour.  Run this model without the kk suffix. :dd
+An alpha or scatter table refines how a pair scatters, but a pair which
+has one of those must also have a total cross section table.  Add a table
+directive for that pair. :dd
+
+{A scatter table must set M > 1 on its parameter line} :dt
+
+A scatter table is a two-dimensional inverse cumulative distribution, so
+its parameter line must give the number of columns as M with M > 1. :dd
+
+{Tabulated alpha must be positive} :dt
+
+The VSS alpha exponent controls the deflection angle distribution and has
+no meaning at or below zero.  Check the alpha table. :dd
+
+{React table can only be used with a VSS-based collide style} :dt
+
+{React table/kk can only be used with a VSS-based collide style} :dt
+
+The style forms its probability as the ratio of the reaction cross
+section to the total cross section which selected the pair, which only
+the vss and table collide styles provide. :dd
+
+{React table requires every reaction to use style T} :dt
+
+{React table/kk requires every reaction to use style T} :dt
+
+The style has no way to form a probability for an Arrhenius or Quantum
+reaction, so a reaction file for it may not mix styles. :dd
+
+{React table reaction has no cross section table} :dt
+
+{React table/kk reaction has no cross section table} :dt
+
+A reaction was declared with style T but no table was attached to it. :dd
+
+{Invalid energy variable for a tabulated reaction} :dt
+
+The optional last word of a style T reaction line selects the energy the
+cross section is a function of, and must be etrans or etotal. :dd
+
+{Larsen-Borgnakke acceptance loop hit its retry cap; the tabulated cross section is far from the VSS parameters of that pair, so its internal energy exchange is biased toward the VSS law.  Fit diam and omega to the table} :dt
+
+The correction which restores detailed balance for a tabulated cross
+section is a rejection test against the VSS sampler, so it is efficient
+only while the two are of comparable size.  When they are not, the loop
+gives up and the exchange reverts to the uncorrected VSS law.  Refit diam
+and omega in the collision file to the table.  This is a warning. :dd
+
+{Reaction cross section exceeds the total cross section, reaction rate will be underpredicted; give that pair a collide table cross section which envelopes the reactive one} :dt
+
+The reaction probability is the ratio of the reaction cross section to
+the total cross section which selected the pair, so it is clipped at 1.
+Give that pair a total cross section table which is everywhere at least
+the sum of its reactive channels.  This is a warning. :dd
 
 {Tabulated data does not reproduce its input values} :dt
 
@@ -1999,6 +2049,10 @@ The total number of processors in all partitions must match the number
 of processors SPARTA is running on. :dd
 
 {React tce can only be used with a VSS-based collide style} :dt
+
+{React qk can only be used with a VSS-based collide style} :dt
+
+{React tce/qk can only be used with a VSS-based collide style} :dt
 
 The react styles require the VSS parameters diam, omega, and tref,
 which only the collide vss and collide table styles provide. :dd

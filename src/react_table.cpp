@@ -41,6 +41,8 @@ ReactTable::ReactTable(SPARTA *sparta, int narg, char **arg) :
   // the per-reaction table storage must exist before the file is read,
   //   since read_coeffs() fills it as each reaction is parsed
 
+  tabulated_flag = 1;
+
   rtab = NULL;
   tabfile = tabkey = NULL;
   tabetot = NULL;
@@ -85,12 +87,14 @@ void ReactTable::init()
   if (!collide || !collide->vssflag)
     error->all(FLERR,"React table can only be used with a VSS-based collide style");
 
-  // the KOKKOS collide styles cast react to ReactTCEKokkos without checking,
-  //   so a non-KOKKOS react style reached from them is undefined behaviour
+  // the KOKKOS collide styles reach the react style through a cast, so this
+  //   host-only style must not get there.  the suffix machinery normally
+  //   substitutes react table/kk, so this only fires if the suffix was
+  //   turned off for this command
 
   if (sparta->kokkos)
-    error->all(FLERR,"React table has no kk variant and cannot be used with "
-               "the KOKKOS package");
+    error->all(FLERR,"React table cannot be used with the KOKKOS package; "
+               "use react table/kk");
 
   ReactBird::init();
 

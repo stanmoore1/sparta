@@ -52,6 +52,29 @@ namespace SPARTA_NS {
     t_species_1d d_species;
     CollideVSSKokkos::t_params_2d_const d_params_const;
 
+    // effective cross section of a tabulated pair, copied from the collide
+    //   style.  nsigeff_kk is 0 unless the style has cross section tables,
+    //   and then every pair takes the VHS branch as it always did
+
+    int nsigeff_kk,ntemp_kk;
+    double sigeff_tlo,sigeff_tinvdelta;
+    DAT::t_int_2d d_sigidx;
+    DAT::t_float_2d d_sigeff;
+
+    // CollideTable::sigma_eff() for a pair known to be tabulated
+
+    KOKKOS_INLINE_FUNCTION
+    double sigma_eff_dev(int isp, int jsp, double temp) const {
+      const int m = d_sigidx(isp,jsp);
+      if (temp <= 0.0) temp = d_params_const(isp,jsp).tref;
+
+      double f = (log(temp) - sigeff_tlo) * sigeff_tinvdelta;
+      if (f <= 0.0) return d_sigeff(m,0);
+      if (f >= ntemp_kk-1) return d_sigeff(m,ntemp_kk-1);
+      int k = (int) f;
+      return d_sigeff(m,k) + (f-k)*(d_sigeff(m,k+1)-d_sigeff(m,k));
+    }
+
     DAT::t_float_1d d_temp,d_lambda_grid;
     DAT::t_float_2d d_array_grid1,d_lambdainv,d_tauinv;
     DAT::t_float_2d_lr d_nrho;
