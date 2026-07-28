@@ -1256,6 +1256,25 @@ target_link_libraries(test_movieimport PRIVATE GTest::gtest Qt6::Widgets Qt6::Sv
 
 gtest_discover_tests(test_movieimport)
 
+# The same code against a real movie.  The suite above parses ffprobe output
+# from hand-written strings; this runs ffmpeg both ways -- building a movie
+# whose frames are individually identifiable by colour, then checking that the
+# frames extracted are the ones selected.  A stride that is off by one produces
+# a slide show that looks entirely normal and is the wrong part of the run.
+add_executable(test_movielive
+  test_movielive.cpp
+  ${CMAKE_SOURCE_DIR}/src/movieimport.cpp
+  ${CMAKE_SOURCE_DIR}/src/helpers.cpp
+  ${CMAKE_SOURCE_DIR}/src/qaddon.cpp
+)
+target_include_directories(test_movielive PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_movielive PRIVATE GTest::gtest Qt6::Widgets Qt6::Svg)
+
+# one ctest entry: each case encodes and decodes a movie, and running several
+# ffmpeg jobs beside the rest of the suite is what makes them time out
+add_test(NAME Movie.Live COMMAND $<TARGET_FILE:test_movielive>)
+set_tests_properties(Movie.Live PROPERTIES TIMEOUT 900 RESOURCE_LOCK "ffmpeg")
+
 # Test executable for the converted image cache
 add_executable(test_imagecache
   test_imagecache.cpp
