@@ -21,17 +21,13 @@
 #include "grid_kokkos.h"
 #include "domain_kokkos.h"
 #include "kokkos_copy.h"
-#include "surf_collide_diffuse_kokkos.h"
-#include "surf_collide_specular_kokkos.h"
-#include "surf_collide_vanish_kokkos.h"
-#include "surf_collide_piston_kokkos.h"
-#include "surf_collide_transparent_kokkos.h"
+#include "kokkos_style_list.h"
+#include "surf_collide_kokkos_variant.h"
 #include "compute_boundary_kokkos.h"
 #include "compute_surf_kokkos.h"
 
 namespace SPARTA_NS {
 
-#define KOKKOS_MAX_SURF_COLL_PER_TYPE 2
 #define KOKKOS_MAX_TOT_SURF_COLL 10
 #define KOKKOS_MAX_BLIST 2
 #define KOKKOS_MAX_SLIST 2
@@ -129,13 +125,10 @@ class UpdateKokkos : public Update {
   KKCopy<GridKokkos> grid_kk_copy;
   KKCopy<DomainKokkos> domain_kk_copy;
 
-  int sc_type_list[KOKKOS_MAX_TOT_SURF_COLL];
-  int sc_map[KOKKOS_MAX_TOT_SURF_COLL];
-  KKCopy<SurfCollideSpecularKokkos> sc_kk_specular_copy[KOKKOS_MAX_SURF_COLL_PER_TYPE];
-  KKCopy<SurfCollideDiffuseKokkos> sc_kk_diffuse_copy[KOKKOS_MAX_SURF_COLL_PER_TYPE];
-  KKCopy<SurfCollideVanishKokkos> sc_kk_vanish_copy[KOKKOS_MAX_SURF_COLL_PER_TYPE];
-  KKCopy<SurfCollidePistonKokkos> sc_kk_piston_copy[KOKKOS_MAX_SURF_COLL_PER_TYPE];
-  KKCopy<SurfCollideTransparentKokkos> sc_kk_transparent_copy[KOKKOS_MAX_SURF_COLL_PER_TYPE];
+  // one slot per surf collide model, each able to hold any style, so the
+  //  budget is shared instead of being a fixed allowance per style
+
+  Kokkos::Array<SurfCollideKKVariant,KOKKOS_MAX_TOT_SURF_COLL> sc_copies;
 
   //KKCopy<ComputeSurfKokkos> blist_active_copy[KOKKOS_MAX_GLIST];
   KKCopy<ComputeSurfKokkos> slist_active_copy[KOKKOS_MAX_SLIST];
