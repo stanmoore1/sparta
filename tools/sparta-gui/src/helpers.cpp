@@ -177,14 +177,24 @@ QStringList splitLine(const QString &text)
             continue;
         };
         len = 0;
+        // per-word, like len: without this a word that set it (the triple-quote
+        // branch below) shifted the start of every word after it.
+        add = 0;
 
     // handle escaped/quoted text.
     quoted:
 
         if (c == '\'') { // handle single quote
             add = 0;
-            len = 1;
-            c   = *++buf;
+            // NOT len = 1: this label is jumped to from the unquoted loop with
+            // len already holding the characters scanned before the quote, and
+            // resetting it dropped them -- text.mid() then returned a word that
+            // started in the right place and stopped short.  Reformatting a line
+            // writes the result back, so `read_surf /home/o'brien/data.surf` lost
+            // its extension.  Entering here directly leaves len at 0, so the
+            // increment still gives the 1 that was meant.
+            ++len;
+            c = *++buf;
             while ((c != '\'') && (c != '\0')) {
                 if ((c == '\\') && (buf[1] == '\'')) {
                     ++buf;
@@ -193,8 +203,14 @@ QStringList splitLine(const QString &text)
                 c = *++buf;
                 ++len;
             }
-            ++len;
-            c = *++buf;
+            // Only step over the quote that ended the scan.  The loop also ends
+            // at the terminator, and advancing there walked off the end of the
+            // string -- an ordinary comment containing an apostrophe was enough,
+            // and this runs on every keystroke through the completer.
+            if (c == '\'') {
+                ++len;
+                c = *++buf;
+            }
 
             // handle triple double quotation marks
         } else if ((c == '"') && (buf[1] == '"') && (buf[2] == '"') && (buf[3] != '"')) {
@@ -205,8 +221,8 @@ QStringList splitLine(const QString &text)
 
         } else if (c == '"') { // handle double quote
             add = 0;
-            len = 1;
-            c   = *++buf;
+            ++len; // see the single-quote branch
+            c = *++buf;
             while ((c != '"') && (c != '\0')) {
                 if ((c == '\\') && (buf[1] == '"')) {
                     ++buf;
@@ -215,8 +231,10 @@ QStringList splitLine(const QString &text)
                 c = *++buf;
                 ++len;
             }
-            ++len;
-            c = *++buf;
+            if (c == '"') {
+                ++len;
+                c = *++buf;
+            }
         }
 
         while (true) { // unquoted

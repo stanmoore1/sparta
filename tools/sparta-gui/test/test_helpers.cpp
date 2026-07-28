@@ -442,6 +442,56 @@ TEST_F(HelpersTest, SplitLineSpecialCharacters)
     EXPECT_EQ(result[4], "2.5");
 }
 
+// A quote is not always the first character of a word, and it is not always
+// closed.  Both cases used to be mishandled, and neither is exotic: the first
+// is any path with an apostrophe in it, the second is any comment containing
+// one.  splitLine() runs on every keystroke through the completer, and
+// CodeEditor::reformatLine() rebuilds the line out of what it returns and
+// writes that back -- so a word that came back short was silently removed from
+// the user's input deck.
+
+TEST_F(HelpersTest, SplitLineKeepsAWordWhoseQuoteIsNotTheFirstCharacter)
+{
+    // the characters before the quote were dropped from the length, so the word
+    // started in the right place and stopped short
+    EXPECT_EQ(splitLine("abc\"def\""), QStringList{"abc\"def\""});
+
+    const QStringList path = splitLine("read_surf /home/o'brien/data.surf");
+    ASSERT_EQ(path.size(), 2);
+    EXPECT_EQ(path[0], "read_surf");
+    EXPECT_EQ(path[1], "/home/o'brien/data.surf")
+        << "reformatting a line writes this back, so a short read loses part of the path";
+}
+
+TEST_F(HelpersTest, SplitLineDoesNotRunPastAnUnterminatedQuote)
+{
+    // The scan loop ends either at the closing quote or at the end of the
+    // string, and the closing quote used to be stepped over in both cases --
+    // walking off the end of the buffer.  The overread itself needs a sanitizer
+    // to see; what is visible here is the word it returned, which ran past the
+    // text and so came back with the wrong length.
+    const QStringList comment = splitLine("# don't forget this");
+    ASSERT_EQ(comment.size(), 2);
+    EXPECT_EQ(comment[0], "#");
+    EXPECT_EQ(comment[1], "don't forget this");
+
+    EXPECT_EQ(splitLine("print 'unterminated"), (QStringList{"print", "'unterminated"}));
+    EXPECT_EQ(splitLine("print \"unterminated"), (QStringList{"print", "\"unterminated"}));
+
+    // a quote as the very last character: the scan ends immediately, at the
+    // terminator, with nothing after it to step onto
+    EXPECT_EQ(splitLine("print '"), (QStringList{"print", "'"}));
+    EXPECT_EQ(splitLine("'"), QStringList{"'"});
+}
+
+TEST_F(HelpersTest, SplitLineStillHandlesProperlyQuotedText)
+{
+    // the fixes above must not change what a well-formed line does
+    EXPECT_EQ(splitLine("print \"hello world\""), (QStringList{"print", "\"hello world\""}));
+    EXPECT_EQ(splitLine("variable a string 'one two'"),
+              (QStringList{"variable", "a", "string", "'one two'"}));
+}
+
 // Additional hasExe tests
 
 TEST_F(HelpersTest, HasExeEmptyString)
