@@ -43,11 +43,6 @@ void ReactTCE::init()
 
   ReactBird::init();
 
-  // error/warn if the temperature exponent of any reaction is out of
-  //   bounds for the TCE reaction probability
-
-  check_tce_bounds();
-
   // reverse exchange reactions are implemented by microcanonical
   // detailed-balance tables, which are built on the total-energy model
 
@@ -222,6 +217,14 @@ double ReactTCE::channel_prob(int rindex, Particle::OnePart *ip,
   int jsp = jp->ispecies;
 
   OneReaction *r = &rlist[rindex];
+
+    // a channel switched off by check_tce_bounds() (temperature exponent
+    // outside the TCE validity range) must contribute nothing: its
+    // probability would be negative, which would also corrupt the pair's
+    // cumulative channel sum in attempt().  The per-pair reaction lists are
+    // built before that check runs, so the channel is still listed here
+
+    if (!r->active) return 0.0;
 
     // ignore energetically impossible reactions
 

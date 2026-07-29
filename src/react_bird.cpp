@@ -12,6 +12,7 @@
    See the README file in the top-level SPARTA directory.
 ------------------------------------------------------------------------- */
 
+#include <cmath>
 #include "math.h"
 #include "string.h"
 #include "stdlib.h"
@@ -42,6 +43,13 @@ enum{NONE,DISCRETE,SMOOTH};                            // several files
 
 #define MAXLINE 1024
 #define DELTALIST 16
+
+// detailed-balance table self-check thresholds: a small drift between the
+// two calibration temperatures is grid discretization (warn), a gross one
+// means the reverse rate cannot reproduce k_f/Keq at all (fatal)
+
+#define DB_DRIFT_WARN 0.02
+#define DB_DRIFT_FATAL 0.25
 
 /* ----------------------------------------------------------------------
    return 1 if the two small unordered species-index sets are identical
@@ -292,6 +300,14 @@ void ReactBird::init()
   for (int m = 0; m < nlist; m++) {
     OneReaction *b = &rlist[m];
     if (!b->reverse) continue;
+
+    // skip inactive/already-initialized entries BEFORE validating the
+    // reaction type: a reaction file may legitimately contain B lines for
+    // species absent from this run, and those are deactivated at read time
+    // like every other reaction rather than being an error
+
+    if (!b->active || b->initflag) continue;
+
     if (b->type != EXCHANGE && b->type != RECOMBINATION) {
       print_reaction(b);
       error->all(FLERR,"Reverse (B-style) reactions support exchange "
@@ -301,7 +317,6 @@ void ReactBird::init()
                  "reactions paired with dissociation; the reverse of "
                  "electron-impact ionization must be supplied explicitly");
     }
-    if (!b->active || b->initflag) continue;
     if (b->type == RECOMBINATION && b->products[1] < 0) {
       print_reaction(b);
       error->all(FLERR,"Reverse (B-style) recombination requires an "
@@ -321,6 +336,10 @@ void ReactBird::init()
       for (int f = 0; f < nlist; f++) {
         OneReaction *r = &rlist[f];
         if (f == m || !r->active || r->reverse) continue;
+        // only an Arrhenius forward can seed a detailed-balance reverse:
+        // a QK reaction's coefficients are not (A, Ea, eta) and would be
+        // silently misread as such (cf. generate_reverses)
+        if (r->style != ARRHENIUS) continue;
         if (r->type != EXCHANGE &&
             !(r->type == IONIZATION && r->nproduct == 2)) continue;
         if (set_match(r->reactants,r->nreactant,b->products,b->nproduct) &&
@@ -333,6 +352,7 @@ void ReactBird::init()
       for (int f = 0; f < nlist; f++) {
         OneReaction *r = &rlist[f];
         if (f == m || !r->active || r->reverse) continue;
+        if (r->style != ARRHENIUS) continue;   // see note above
         if (r->type != DISSOCIATION) continue;
         // F: AB + M -> A + B + M   vs   B: A + B -> AB + M
         if (r->reactants[0] != b->products[0]) continue;   // AB
@@ -482,6 +502,14 @@ void ReactBird::init()
       r->coeff[6] = momega;
     }
   }
+
+  // validate the TCE temperature exponents now that coeff[5] = omega is
+  // set.  This must happen inside init(), before ReactBirdKokkos::init()
+  // mirrors rlist onto the device, so that a channel switched off by the
+  // check is switched off on the GPU too.  It only inspects ARRHENIUS
+  // reactions, so the qk and tce/qk styles are unaffected.
+
+  check_tce_bounds();
 
   // set recombflag = 0/1 if any recombination reactions are defined & active
   // check for user disabling them is at top of this method
@@ -976,7 +1004,21 @@ void ReactBird::fit_keq_residual(int i)
     for (int c = 0; c < 6; c++) {
       double t = m[col][c]; m[col][c] = m[piv][c]; m[piv][c] = t;
     }
+    // a zero (or non-finite) pivot means the normal equations are singular
+    // -- degenerate/insufficient sample points, or a Keq curve that made a
+    // basis column non-finite.  Dividing by it would poison every
+    // coefficient with inf/NaN, and a NaN keq_resid_coeff silently turns
+    // the reverse probability into NaN at run time, which removes the whole
+    // species pair from the chemistry without any diagnostic.  Fail here
+    // instead, where the cause is still identifiable.
     double d = m[col][col];
+    if (!(fabs(d) > 0.0) || !std::isfinite(d)) {
+      char str[MAXLINE+128];
+      sprintf(str,"Reverse reaction %s: external-Keq residual fit is "
+              "singular (zero pivot); check the keq_file fit coefficients "
+              "and the species partition-function data",b->id);
+      error->all(FLERR,str);
+    }
     for (int c = col; c < 6; c++) m[col][c] /= d;
     for (int r = 0; r < 5; r++) {
       if (r == col) continue;
@@ -984,7 +1026,16 @@ void ReactBird::fit_keq_residual(int i)
       for (int c = col; c < 6; c++) m[r][c] -= fac*m[col][c];
     }
   }
-  for (int a = 0; a < 5; a++) b->keq_resid_coeff[a] = m[a][5];
+  for (int a = 0; a < 5; a++) {
+    if (!std::isfinite(m[a][5])) {
+      char str[MAXLINE+128];
+      sprintf(str,"Reverse reaction %s: external-Keq residual fit produced "
+              "a non-finite coefficient; check the keq_file fit and the "
+              "species partition-function data",b->id);
+      error->all(FLERR,str);
+    }
+    b->keq_resid_coeff[a] = m[a][5];
+  }
 
   // goodness-of-fit self-check: the Park basis reproduces a statistical-
   // mechanics / Park-fit Keq ratio to well under 1% in practice, but a
@@ -1003,9 +1054,11 @@ void ReactBird::fit_keq_residual(int i)
       keq_sm /= partition_function(f->reactants[j],T);
     double lnR = log(keq_sm) - log(keq_eval(b->keq_coeff,T));
     double err = fabs(keq_eval(b->keq_resid_coeff,T)/exp(lnR) - 1.0);
-    if (err > maxerr) maxerr = err;
+    // NOTE: written so that a NaN err is caught (NaN fails every ordered
+    // comparison, so "err > maxerr" alone would silently ignore it)
+    if (!(err <= maxerr)) maxerr = err;
   }
-  if (maxerr > 0.02 && comm->me == 0) {
+  if (!(maxerr <= 0.02) && comm->me == 0) {
     char str[MAXLINE+128];
     sprintf(str,"Reverse reaction %s: external-Keq residual fit is off by "
             "%g%% within %g-%g K; the reproduced Keq will be biased by that "
@@ -1058,6 +1111,12 @@ void ReactBird::check_tce_bounds()
     OneReaction *r = &rlist[m];
     if (!r->active) continue;
 
+    // the bounds below are properties of the TCE reaction probability, so
+    // they apply only to Arrhenius-style reactions; a QK reaction's
+    // coefficients mean something else entirely
+
+    if (r->style != ARRHENIUS) continue;
+
     int isp = r->reactants[0];
     int jsp = r->reactants[1];
 
@@ -1077,11 +1136,24 @@ void ReactBird::check_tce_bounds()
     // (1) and (2) are lower bounds on eta, (3) is an upper bound
 
     if (eta <= -(z+1.5)) {
-      sprintf(str,"Reaction %s: temperature exponent %g must be > %g, "
-              "else the gamma function is negative or infinite and "
-              "the reaction probability is erroneous or NaN",
-              r->id,eta,-(z+1.5));
-      error->all(FLERR,str);
+      // the TCE normalization divides by Gamma(z+eta+3/2), which is
+      // negative (or a pole) here, so this channel's probability comes out
+      // negative and, being summed into the pair's cumulative total in
+      // ReactTCE::attempt(), would also corrupt the selection of every
+      // OTHER channel the same species pair participates in.  Deactivate
+      // the channel and warn rather than aborting: several shipped rate
+      // sets (e.g. the charge-exchange fits in examples/ambi/air.tce)
+      // contain such exponents, and with the reaction switched off the
+      // rest of the mechanism runs exactly as it did before this check
+      // existed -- the channel was already inert, just destructively so
+      r->active = 0;
+      if (comm->me == 0) {
+        sprintf(str,"Reaction %s: temperature exponent %g must be > %g, "
+                "else the gamma function is negative or infinite and the "
+                "reaction probability is erroneous; reaction deactivated",
+                r->id,eta,-(z+1.5));
+        error->warning(FLERR,str);
+      }
     } else if (ea > 0.0 && eta < -(z+0.5)) {
       // strict inequality: at eta = -(z+1/2) the near-threshold factor is
       // (Ec-Ea)^0 = 1 (finite, integrable), which is the exponent of the
@@ -2155,7 +2227,20 @@ void ReactBird::build_db_table(int i)
     double target2 = r->reverse_A * pow(tcal2,r->reverse_bf) * qratio2 *
       exp(-(ea_eff-eaP)/(boltz*tcal2));
     double drift = kb2/target2 - 1.0;
-    if (fabs(drift) > 0.02 && comm->me == 0) {
+    // the calibrated table must reproduce k_b = k_f/Keq at EVERY
+    // temperature, so a large drift means the reverse rate actually
+    // produced is wrong by that much -- the guarantee the B style exists
+    // to provide.  Warn on a small drift (grid discretization), refuse to
+    // run on a gross one, which in practice means missing or inconsistent
+    // level data (e.g. no rotfile).  Written NaN-safely.
+    if (!(fabs(drift) <= DB_DRIFT_FATAL)) {
+      sprintf(str,"Reverse reaction %s: detailed-balance table drifts "
+              "%g%% between %g and %g K, so its reverse rate cannot "
+              "reproduce k_f/Keq; the species level data "
+              "(elecfile/rotfile/vibfile) are missing or inconsistent",
+              r->id,100.0*drift,tcal,tcal2);
+      error->all(FLERR,str);
+    } else if (fabs(drift) > DB_DRIFT_WARN && comm->me == 0) {
       sprintf(str,"Reverse reaction %s: detailed-balance table drifts "
               "%g%% between %g and %g K; check the species level data "
               "(elecfile/rotfile/vibfile) for consistency",
@@ -2452,7 +2537,20 @@ void ReactBird::build_db3_table(int i)
   if (tcal2 > umax/(10.0*boltz)) tcal2 = umax/(10.0*boltz);
   if (tcal2 != tcal) {
     double drift = scale*kr_model(tcal2)/kr_target(tcal2) - 1.0;
-    if (fabs(drift) > 0.02 && comm->me == 0) {
+    // the calibrated table must reproduce k_b = k_f/Keq at EVERY
+    // temperature, so a large drift means the reverse rate actually
+    // produced is wrong by that much -- the guarantee the B style exists
+    // to provide.  Warn on a small drift (grid discretization), refuse to
+    // run on a gross one, which in practice means missing or inconsistent
+    // level data (e.g. no rotfile).  Written NaN-safely.
+    if (!(fabs(drift) <= DB_DRIFT_FATAL)) {
+      sprintf(str,"Reverse reaction %s: detailed-balance table drifts "
+              "%g%% between %g and %g K, so its reverse rate cannot "
+              "reproduce k_f/Keq; the species level data "
+              "(elecfile/rotfile/vibfile) are missing or inconsistent",
+              r->id,100.0*drift,tcal,tcal2);
+      error->all(FLERR,str);
+    } else if (fabs(drift) > DB_DRIFT_WARN && comm->me == 0) {
       sprintf(str,"Reverse reaction %s: detailed-balance table drifts "
               "%g%% between %g and %g K; check the species level data "
               "(elecfile/rotfile/vibfile) for consistency",
