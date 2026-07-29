@@ -18,6 +18,34 @@ change since then lives in its own commit on top, so
 `git log -- tools/sparta-gui/<file>` shows exactly how any file
 diverges from upstream.
 
+## Reviewed upstream releases
+
+Upstream releases are reviewed rather than merged wholesale, since much of the
+divergence is in files SPARTA-GUI rewrote. What has been looked at so far:
+
+- **v3.0.4 – v3.0.6** (107 commits, reviewed): four features taken —
+  *Extend Run*, *Write Restart File*, the download hardening (cancel, stall
+  timeout, keep-the-old-library-until-the-new-one-is-good) and the Set
+  Variables/deck synchronisation. Deliberately **not** taken:
+
+  - the introspection-driven syntax engine (`lammpssyntax.*`) and its lint
+    checker (`syntaxcheck.*`). SPARTA-GUI already has `inputcheck.*`, which
+    covers the same ground — per-line diagnostics with severities, argument
+    specs, cross-reference checks, Check Input, inline markers and call tips.
+    Theirs is driven by library introspection, ours by the SPARTA docs, which
+    are the authority for SPARTA's argument grammar. Adopting theirs would be
+    a rewrite for parity.
+  - atom-radius and pair-style diameter heuristics, and hybrid sub-styles:
+    no SPARTA analogue (particles are sized through mixtures).
+  - Windows signing, resources and console capture: not a target platform.
+  - macOS Homebrew/MacPorts helper lookup, already present here.
+
+  Still open, and worth doing when SPARTA's renderer next gets attention:
+  the `defocus`, `gamma` and `depth` cueing image keywords. Upstream's GUI
+  emits them, but SPARTA's `image.cpp` implements none of them, so they need a
+  core back-port first — the same shape of work as the `fsaa`/`subbox`/
+  `backcolor2`/`lights` back-ports already done.
+
 ## File classification
 
 - **Mechanical files** — identical to upstream after applying
