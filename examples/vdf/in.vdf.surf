@@ -1,0 +1,67 @@
+################################################################################
+# energy and angular distributions of the flux at a surface
+#
+# equilibrium Ar gas surrounding a circle whose wall is fully diffuse at 1000 K
+#
+# the EDF of the reflected flux should reproduce dN/dE ~ E*exp(-E/k/Tsurf),
+#   a Gamma distribution with mean 2*k*Tsurf = 2.761e-20 J
+# the ADF of both the incident and the reflected flux should follow the
+#   cosine law, dN/dtheta ~ sin(theta)*cos(theta), which peaks at 45 degrees
+#
+# Note:
+#  - The "comm/sort" option to the "global" command is used to match MPI runs.
+#  - The "twopass" option is used to match Kokkos runs.
+# The "comm/sort" and "twopass" options should not be used for production runs.
+################################################################################
+
+seed	    	    12345
+dimension   	    2
+global              gridcut 0.0 comm/sort yes
+
+boundary	    rr rr pp
+
+create_box  	    0 10 0 10 -0.5 0.5
+create_grid 	    20 20 1
+
+balance_grid        rcb part
+
+read_surf           data.circle
+
+species		    ar.species Ar
+mixture		    air Ar vstream 0.0 0.0 0.0 temp 300.0
+
+global              nrho 1.0e20
+global              fnum 1.0e18
+
+collide		    vss air ar.vss
+
+surf_collide	    1 diffuse 1000.0 1.0
+surf_modify         all collide 1
+
+create_particles    air n 0 twopass
+
+# 20 energy bins from 0 to 1e-19 J, 18 angle bins spanning 0 to 90 degrees
+
+compute             edf edf/surf all air 20 0.0 1.0e-19 dir reflected
+compute             adfi adf/surf all air 18 dir incident
+compute             adfr adf/surf all air 18 dir reflected
+
+fix                 fe ave/surf all 1 100 100 c_edf[*] ave running
+fix                 fai ave/surf all 1 100 100 c_adfi[*] ave running
+fix                 far ave/surf all 1 100 100 c_adfr[*] ave running
+
+# sum each histogram bin over all surface elements, so the log file records
+#   the distributions
+
+compute             se reduce sum f_fe[*]
+compute             sai reduce sum f_fai[*]
+compute             sar reduce sum f_far[*]
+
+stats		    100
+stats_style	    step cpu np nscoll c_se[3] c_se[6] c_se[12] &
+                    c_sai[5] c_sai[9] c_sai[14] c_sar[5] c_sar[9] c_sar[14]
+
+dump                1 surf all 1000 tmp.vdf.surf id f_fe[*] f_fai[*] f_far[*]
+
+timestep 	    1.0e-4
+run 		    1000

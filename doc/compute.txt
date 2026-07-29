@@ -50,10 +50,12 @@ Each compute style has its own doc page which describes its arguments
 and what it does.  Here is an alphabetic list of compute styles
 available in SPARTA:
 
+"adf/surf"_compute_edf_surf.html - angular distribution of the flux per surface element
 "boundary"_compute_boundary.html - various quantities on each global boundary 
 "count"_compute_count.html - particle counts for species and mixtures and mixture groups
 "distsurf/grid"_compute_distsurf_grid.html - distance from grid cells to surface
 "dt/grid"_compute_dt_grid.html - optimal timestep per grid cell
+"edf/surf"_compute_edf_surf.html - energy distribution of the flux per surface element
 "eflux/grid"_compute_eflux_grid.html - energy flux density per grid cell
 "fft/grid"_compute_fft_grid.html - FFTs across grid cells
 "gas/collision/grid"_compute_gas_collision_grid.html - gas particle collisions per grid cell
@@ -77,7 +79,8 @@ available in SPARTA:
 "surf/reaction/tally"_compute_surf_reaction_tally.html - tallies for particle/surface reactions
 "thermal/grid"_compute_thermal_grid.html - thermal temperature per grid cell
 "temp"_compute_temp.html - temperature of particles
-"tvib/grid"_compute_tvib_grid.html - vibrational temperature per grid cell :ul
+"tvib/grid"_compute_tvib_grid.html - vibrational temperature per grid cell
+"vdf/grid"_compute_vdf_grid.html - velocity distribution function per grid cell :ul
 
 There are also additional accelerated compute styles included in the
 SPARTA distribution for faster performance on specific hardware.  The

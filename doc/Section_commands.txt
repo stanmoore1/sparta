@@ -433,10 +433,12 @@ is built with the "appropriate accelerated
 package"_Section_accelerate.html.  This is indicated by additional
 letters in parenthesis: k = KOKKOS.
 
+"adf/surf"_compute_edf_surf.html,
 "boundary (k)"_compute_boundary.html,
 "count (k)"_compute_count.html,
 "distsurf/grid (k)"_compute_distsurf_grid.html,
 "dt/grid (k)"_compute_dt_grid.html,
+"edf/surf"_compute_edf_surf.html,
 "eflux/grid (k)"_compute_eflux_grid.html,
 "fft/grid (k)"_compute_fft_grid.html,
 "gas/collision/grid"_compute_gas_collision_grid.html,
@@ -460,7 +462,8 @@ letters in parenthesis: k = KOKKOS.
 "surf/reaction/tally"_compute_surf_reaction_tally.html,
 "temp (k)"_compute_temp.html,
 "thermal/grid (k)"_compute_thermal_grid.html,
-"tvib/grid (k)"_compute_tvib_grid.html :tb(c=6,ea=c)
+"tvib/grid (k)"_compute_tvib_grid.html,
+"vdf/grid"_compute_vdf_grid.html :tb(c=6,ea=c)
 
 :line
 

@@ -1,0 +1,178 @@
+"SPARTA WWW Site"_sws - "SPARTA Documentation"_sd - "SPARTA Commands"_sc :c
+
+:link(sws,https://sparta.github.io)
+:link(sd,Manual.html)
+:link(sc,Section_commands.html#comm)
+
+:line
+
+compute edf/surf command :h3
+compute adf/surf command :h3
+
+[Syntax:]
+
+compute ID edf/surf group-ID mix-ID Nbin lo hi keyword args ... :pre
+compute ID adf/surf group-ID mix-ID Nbin keyword args ... :pre
+
+ID is documented in "compute"_compute.html command :ulb,l
+edf/surf or adf/surf = style name of this compute command :l
+group-ID = group ID for which surface elements to perform calculation on :l
+mix-ID = mixture ID to perform calculation on :l
+Nbin = # of histogram bins :l
+lo,hi = lower and upper bound of the energy histogram, for {edf/surf} only :l
+zero or more keyword/arg pairs may be appended :l
+keyword = {dir} or {value} or {oob} or {weight} :l
+  {dir} arg = {incident} or {reflected}
+    {incident} = histogram the particle before it hits the surface
+    {reflected} = histogram the particle(s) leaving the surface
+  {value} arg = {ke} or {erot} or {evib} or {etot}, for {edf/surf} only
+    {ke} = translational kinetic energy
+    {erot} = rotational energy
+    {evib} = vibrational energy
+    {etot} = sum of the 3 energies above
+  {oob} arg = {ignore} or {clamp}
+    {ignore} = discard samples outside the histogram range
+    {clamp} = accumulate samples outside the range in the first or last bin
+  {weight} arg = {no} or {yes}
+    {no} = each particle contributes 1.0 to a bin
+    {yes} = each particle contributes its grid cell weight to a bin :pre
+:ule
+
+[Examples:]
+
+compute 1 edf/surf all all 40 0.0 1.0e-19
+compute 2 edf/surf all species 30 0.0 5.0e-20 dir reflected
+compute 3 adf/surf all all 18
+compute 4 adf/surf plate air 45 dir reflected :pre
+
+These commands will time average the incident energy distribution on
+each surface element and write it to a dump file every 1000 steps:
+
+compute 1 edf/surf all all 40 0.0 1.0e-19
+fix 1 ave/surf all 10 100 1000 c_1\[*\]
+dump 1 surf all 1000 tmp.surf id f_1\[*\] :pre
+
+[Description:]
+
+Define a computation that histograms a per particle quantity for each
+collision with a surface element, producing a discretized energy
+distribution function (EDF) or angular distribution function (ADF) for
+each element.
+
+The {edf/surf} style bins an energy, so it produces the incident or
+reflected energy distribution, e.g. an ion energy distribution function
+(IEDF).  The {adf/surf} style bins the polar angle of the particle
+velocity measured from the surface normal, so it produces the angular
+distribution of the incident or reflected flux.  Apart from the binned
+quantity the two styles behave identically.
+
+These are the quantities needed to compare a simulation against
+molecular beam scattering measurements, and they are the input to
+erosion, sputtering yield and contamination models, all of which depend
+on the incident energy and angle rather than on the total flux which
+"compute surf"_compute_surf.html calculates.
+
+Only surface elements in the group specified by {group-ID} are included
+in the calculation.  See the "group surf"_group.html command for info on
+how surface elements can be assigned to surface groups.  Only particles
+in the mixture specified by {mix-ID} are included; see the
+"mixture"_mixture.html command.  A histogram is tallied separately for
+each group in the mixture, as described below.
+
+For {edf/surf} the histogram spans {lo} to {hi} in energy units, for
+the unit system in use by the simulation.  See the "units"_units.html
+command.  For {adf/surf} the histogram always spans 0 to 90 degrees, so
+no bounds are specified; 0 degrees is a particle travelling along the
+surface normal and 90 degrees is a particle grazing the surface.  In
+both cases the bins are of uniform width.
+
+The {dir} keyword selects which particles are histogrammed.  For
+{incident} the pre-collision particle is used.  For {reflected} the
+post-collision particle is used; if the collision triggered a surface
+reaction which produced two particles then both are histogrammed, and if
+it produced no particles then nothing is histogrammed.  Because a
+surface reaction can change the species, a reflected particle is
+assigned to the mixture group of its own post-collision species, not
+that of the incident particle.
+
+A "transparent"_read_surf.html surface element does not alter the
+particles which pass through it, so there is nothing reflected from it.
+Only {dir incident} tallies for transparent elements, which makes these
+computes a convenient way to measure the energy or angular distribution
+of the flux crossing a diagnostic plane.  See "Section
+6.15"_Section_howto.html#howto_15 for more info on transparent
+surfaces.
+
+The {value} keyword selects which energy {edf/surf} bins.  It is not
+allowed for {adf/surf}.  Note that {erot} and {evib} are only non-zero
+if rotational or vibrational energy modes are enabled; see the
+"collide_modify"_collide_modify.html command.
+
+The {oob} keyword determines what happens to a sample which falls
+outside the histogram range.  For the default {ignore} setting the
+sample is discarded.  For the {clamp} setting it is accumulated in the
+first or last bin, which conserves the total count and makes a poorly
+chosen range visible as a spike in an end bin.  A sample exactly equal
+to the upper bound is always counted in the last bin.  For {adf/surf}
+no sample can fall outside 0 to 90 degrees, so this keyword has no
+effect.
+
+By default the tallied values are raw collision counts, i.e. each
+particle contributes 1.0 to one bin.  Counts are not scaled by
+"fnum"_global.html, by the element area, or by the timestep size, unlike
+the flux quantities computed by "compute surf"_compute_surf.html.  This
+makes each tally a sample count in the statistical sense, and it makes
+the output a linear function of the tallies, so that "fix
+ave/surf"_fix_ave_surf.html can time average the output of this compute
+directly.  To normalize a histogram to a probability density, divide
+each bin by the bin width and by the sum of the bins.
+
+If the {weight} keyword is set to {yes}, each particle instead
+contributes the weight of the grid cell the collision occurred in, as
+set by the "global weight"_global.html command.  This matters when
+per-cell weighting is enabled, e.g. for an axisymmetric model using
+{global weight cell radius}.  A single surface element can be cut by
+several grid cells of differing weight, so in that case {weight yes}
+changes the shape of the element's histogram, not just its scale, and it
+is the setting which makes the histogram an unbiased estimate of the
+real distribution.  If per-cell weighting is not enabled this keyword
+has no effect.
+
+:line
+
+[Output info:]
+
+This compute calculates a per-surf array with Ngroup*Nbin columns,
+where Ngroup is the number of groups in the specified mixture.
+
+The columns are ordered by mixture group first.  Within the block of
+Nbin columns for one group, the bins are ordered from the lower to the
+upper bound of the histogram.  For example, for a mixture with 2 groups
+and Nbin = 10, columns 1-10 are the bins for group 1 and columns 11-20
+are the bins for group 2.
+
+The array can be accessed by any command that uses per-surf values from
+a compute as input.  See "Section 6.4"_Section_howto.html#howto_4 for
+an overview of SPARTA output options.
+
+The array values are counts, which are dimensionless.
+
+[Restrictions:]
+
+These computes can only be used if surface elements exist, and only for
+explicit surface elements, not "implicit"_read_isurf.html ones.
+
+They cannot be used with the KOKKOS package.  They have no accelerated
+version, and Kokkos only drives surface tallying through Kokkos-enabled
+computes.
+
+[Related commands:]
+
+"compute surf"_compute_surf.html, "compute
+property/surf"_compute_property_surf.html, "compute
+vdf/grid"_compute_vdf_grid.html, "fix ave/surf"_fix_ave_surf.html,
+"dump surf"_dump.html
+
+[Default:]
+
+The defaults are dir = incident, value = ke, oob = ignore, weight = no.

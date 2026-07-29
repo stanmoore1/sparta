@@ -1,0 +1,125 @@
+SPARTA (24 Sep 2025)
+Running on 4 MPI task(s)
+################################################################################
+# per grid cell velocity distribution functions in an equilibrium 3d gas
+#
+# the speed histogram should reproduce the Maxwell-Boltzmann speed distribution
+#   for Ar at 273.15 K, whose most probable speed is 337 m/s
+# the vx histogram should reproduce a Gaussian of width sqrt(kT/m) = 238 m/s
+#
+# Note:
+#  - The "comm/sort" option to the "global" command is used to match MPI runs.
+#  - The "twopass" option is used to match Kokkos runs.
+# The "comm/sort" and "twopass" options should not be used for production runs.
+################################################################################
+
+seed	    	    12345
+dimension   	    3
+global              gridcut 1.0e-5 comm/sort yes
+
+boundary	    rr rr rr
+
+create_box  	    0 0.0001 0 0.0001 0 0.0001
+Created orthogonal box = (0 0 0) to (0.0001 0.0001 0.0001)
+create_grid 	    5 5 5
+WARNING: Could not acquire nearby ghost cells b/c grid partition is not clumped (../grid.cpp:473)
+Created 125 child grid cells
+  CPU time = 0.00116966 secs
+  create/ghost percent = 88.8495 11.1505
+
+balance_grid        rcb part
+Balance grid migrated 82 cells
+  CPU time = 0.000375054 secs
+  reassign/sort/migrate/ghost percent = 64.4177 0.387944 13.5818 21.6126
+
+species		    ar.species Ar
+mixture		    air Ar vstream 0.0 0.0 0.0 temp 273.15
+
+global              nrho 7.07043E22
+global              fnum 7.07043E6
+
+collide		    vss air ar.vss
+
+create_particles    air n 10000 twopass
+Created 10000 particles
+  CPU time = 0.0011498 secs
+
+# 12 speed bins from 0 to 1200 m/s, then 12 vx bins from -900 to 900 m/s
+# histograms are raw sample counts, so fix ave/grid can time average them
+
+compute             vdf vdf/grid all air speed 12 0.0 1200.0 vx 12 -900.0 900.0
+fix                 avdf ave/grid all 10 20 200 c_vdf[*]
+
+# sum each histogram bin over all grid cells, so the log file records the VDF
+
+compute             sum reduce sum c_vdf[*]
+
+compute             temp temp
+stats		    100
+stats_style	    step cpu np ncoll c_temp c_sum[3] c_sum[4] c_sum[5]                     c_sum[15] c_sum[18] c_sum[21]
+
+dump                1 grid all 200 tmp.vdf.grid id f_avdf[*]
+
+timestep 	    7.00E-9
+run 		    400
+Memory usage per proc in Mbytes:
+  particles (ave,min,max) = 1.5625 1.5625 1.5625
+  grid      (ave,min,max) = 1.51379 1.51379 1.51379
+  surf      (ave,min,max) = 0 0 0
+  total     (ave,min,max) = 3.09346 3.09332 3.09387
+Step CPU Np Ncoll c_temp c_sum[3] c_sum[4] c_sum[5] c_sum[15] c_sum[18] c_sum[21] 
+       0            0    10000        0    277.84745         2060         2474         1940          241         2314          772 
+     100  0.009516269    10000      725    277.84745         2046         2457         2028          234         2359          760 
+     200  0.020133891    10000      695    277.84745         2049         2380         2067          239         2284          746 
+     300  0.029671117    10000      722    277.84745         1994         2374         2039          246         2302          769 
+     400  0.041636853    10000      695    277.84745         2081         2416         1946          237         2282          759 
+Loop time of 0.0416867 on 4 procs for 400 steps with 10000 particles
+Performance: 9595.396 timesteps/s, 95.954 Mparticle-step/s
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Move    | 0.010883   | 0.011307   | 0.011764   |   0.3 | 27.12
+Coll    | 0.012356   | 0.012969   | 0.013457   |   0.4 | 31.11
+Sort    | 0.001058   | 0.0011215  | 0.001181   |   0.2 |  2.69
+Comm    | 0.0099091  | 0.010219   | 0.01063    |   0.3 | 24.51
+Modify  | 0.0007354  | 0.00076049 | 0.00079001 |   0.0 |  1.82
+Output  | 0.00063997 | 0.00067707 | 0.00077901 |   0.0 |  1.62
+Other   |            | 0.004632   |            |       | 11.11
+
+Particle moves    = 4000000 (4M)
+Cells touched     = 4644956 (4.64M)
+Particle comms    = 212508 (0.213M)
+Boundary collides = 161124 (0.161M)
+Boundary exits    = 0 (0K)
+SurfColl checks   = 0 (0K)
+SurfColl occurs   = 0 (0K)
+Surf reactions    = 0 (0K)
+Collide attempts  = 417329 (0.417M)
+Collide occurs    = 283368 (0.283M)
+Reactions         = 0 (0K)
+Particles stuck   = 0
+Axisymm bad moves = 0
+
+Particle-moves/CPUsec/proc: 2.39885e+07
+Particle-moves/step: 10000
+Cell-touches/particle/step: 1.16124
+Particle comm iterations/step: 1
+Particle fraction communicated: 0.053127
+Particle fraction colliding with boundary: 0.040281
+Particle fraction exiting boundary: 0
+Surface-checks/particle/step: 0
+Surface-collisions/particle/step: 0
+Surf-reactions/particle/step: 0
+Collision-attempts/particle/step: 0.104332
+Collisions/particle/step: 0.070842
+Reactions/particle/step: 0
+
+Particles: 2500 ave 2552 max 2471 min
+Histogram: 2 0 0 1 0 0 0 0 0 1
+Cells:      31.25 ave 32 max 31 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+GhostCell: 48.75 ave 49 max 48 min
+Histogram: 1 0 0 0 0 0 0 0 0 3
+EmptyCell: 0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0

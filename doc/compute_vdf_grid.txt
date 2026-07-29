@@ -1,0 +1,170 @@
+"SPARTA WWW Site"_sws - "SPARTA Documentation"_sd - "SPARTA Commands"_sc :c
+
+:link(sws,https://sparta.github.io)
+:link(sd,Manual.html)
+:link(sc,Section_commands.html#comm)
+
+:line
+
+compute vdf/grid command :h3
+
+[Syntax:]
+
+compute ID vdf/grid group-ID mix-ID value1 Nbin1 lo1 hi1 value2 Nbin2 lo2 hi2 ... keyword args ... :pre
+
+ID is documented in "compute"_compute.html command :ulb,l
+vdf/grid = style name of this compute command :l
+group-ID = group ID for which grid cells to perform calculation on :l
+mix-ID = mixture ID to perform calculation on :l
+one or more groups of 4 arguments can be appended :l
+value = {speed} or {vx} or {vy} or {vz} or {ke} or {erot} or {evib} :l
+  {speed} = magnitude of the particle velocity
+  {vx} = x component of the particle velocity
+  {vy} = y component of the particle velocity
+  {vz} = z component of the particle velocity
+  {ke} = translational kinetic energy of the particle
+  {erot} = rotational energy of the particle
+  {evib} = vibrational energy of the particle :pre
+Nbin = # of histogram bins for this value :l
+lo,hi = lower and upper bound of the histogram for this value :l
+zero or more keyword/arg pairs may be appended :l
+keyword = {oob} or {weight} :l
+  {oob} arg = {ignore} or {clamp}
+    {ignore} = discard samples outside the lo to hi range
+    {clamp} = accumulate samples outside the range in the first or last bin
+  {weight} arg = {no} or {yes}
+    {no} = each particle contributes 1.0 to a bin
+    {yes} = each particle contributes its grid cell weight to a bin :pre
+:ule
+
+[Examples:]
+
+compute 1 vdf/grid all all speed 50 0.0 3000.0
+compute 2 vdf/grid all species vx 40 -2000.0 2000.0 vy 40 -2000.0 2000.0
+compute 3 vdf/grid subset air ke 30 0.0 1.0e-19 oob clamp :pre
+
+These commands will time average the per grid cell speed distribution
+and write it to a dump file every 1000 steps:
+
+compute 1 vdf/grid all all speed 50 0.0 3000.0
+fix 1 ave/grid all 10 100 1000 c_1\[*\]
+dump 1 grid all 1000 tmp.grid id f_1\[*\] :pre
+
+[Description:]
+
+Define a computation that histograms a per particle quantity within
+each grid cell, producing a discretized velocity distribution function
+(VDF) or energy distribution function for the cell.  This is a
+diagnostic which exposes the full distribution of particle velocities
+in a cell, as opposed to the low-order moments of the distribution
+which "compute grid"_compute_grid.html, "compute
+thermal/grid"_compute_thermal_grid.html, "compute
+sonine/grid"_compute_sonine_grid.html and other computes calculate.
+
+It is the natural output to compare against molecular beam, laser
+induced fluorescence (LIF) or time-of-flight (TOF) measurements, and it
+is the way to detect a strongly non-equilibrium distribution, e.g. the
+bimodal VDF found inside a strong shock wave, which no set of moments
+reveals directly.
+
+Only grid cells in the grid group specified by {group-ID} are included
+in the calculation.  See the "group grid"_group.html command for info
+on how grid cells can be assigned to grid groups.  Only particles in
+the mixture specified by {mix-ID} are included; see the
+"mixture"_mixture.html command.  A histogram is tallied separately for
+each group in the mixture, as described below.
+
+Each value is specified by 4 arguments: the name of the per particle
+quantity to histogram, the number of bins, and the lower and upper
+bound of the histogram.  Every value has its own independent binning,
+which allows e.g. a {speed} histogram running from 0 to some maximum
+speed to be combined in one compute with a {vx} histogram which is
+symmetric about zero.  The bins are of uniform width (hi-lo)/Nbin.
+
+The {speed}, {vx}, {vy} and {vz} values are in velocity units, and
+{ke}, {erot} and {evib} are in energy units, for the unit system in use
+by the simulation.  See the "units"_units.html command.  Note that
+{erot} and {evib} are only non-zero if rotational or vibrational
+energy modes are enabled; see the "collide_modify"_collide_modify.html
+command.
+
+The velocities are the laboratory-frame velocities stored with each
+particle.  They are not shifted by the mean velocity of the cell, so
+for a streaming flow the histogram is centered on the streaming
+velocity, not on zero.
+
+The {oob} keyword determines what happens to a sample which falls
+outside the lo to hi range.  For the default {ignore} setting the
+sample is discarded, which means the histogram may account for fewer
+particles than the cell contains.  For the {clamp} setting the sample
+is accumulated in the first bin (if below {lo}) or the last bin (if at
+or above {hi}), which conserves the total count.  Using {clamp} is a
+convenient way to detect a poorly chosen range, since a truncated
+distribution appears as a spike in an end bin.  Note that a sample
+exactly equal to {hi} is always counted in the last bin, for either
+setting.
+
+By default the tallied values are raw sample counts, i.e. each particle
+contributes 1.0 to one bin per value.  Counts are not scaled by
+"fnum"_global.html or by the cell volume.  This makes each tally a
+sample count in the statistical sense, and it makes the output a linear
+function of the tallies, so that "fix ave/grid"_fix_ave_grid.html can
+time average the output of this compute directly.  To normalize a
+histogram to a probability density, divide each bin by the bin width
+and by the sum of the bins, or by the particle count from "compute
+grid n"_compute_grid.html.
+
+If the {weight} keyword is set to {yes}, each particle instead
+contributes the weight of the grid cell it is in, as set by the "global
+weight"_global.html command.  This matters when per-cell weighting is
+enabled, e.g. for an axisymmetric model using {global weight cell
+radius}, where one simulation particle stands for a different number of
+real molecules in each cell.  With {weight yes} the histogram of a
+single cell is simply rescaled, but a histogram summed over cells of
+differing weight, e.g. with "compute reduce"_compute_reduce.html,
+becomes an unbiased estimate of the real distribution instead of being
+biased toward the low-weight cells.  If per-cell weighting is not
+enabled this keyword has no effect.
+
+:line
+
+[Output info:]
+
+This compute calculates a per-grid array with Ngroup*Nbintotal
+columns, where Ngroup is the number of groups in the specified mixture
+and Nbintotal is the sum of the Nbin arguments over all the specified
+values.
+
+The columns are ordered by mixture group first.  Within the block of
+columns for one group, all the bins of the first value appear first,
+then all the bins of the second value, and so on.  Within one value,
+the bins are ordered from {lo} to {hi}.  For example, for a mixture
+with 2 groups and a compute specifying {speed} with 10 bins followed by
+{vx} with 4 bins, the 28 columns are: columns 1-10 = speed bins for
+group 1, columns 11-14 = vx bins for group 1, columns 15-24 = speed
+bins for group 2, columns 25-28 = vx bins for group 2.
+
+The array can be accessed by any command that uses per-grid values from
+a compute as input.  See "Section 6.4"_Section_howto.html#howto_4 for
+an overview of SPARTA output options.
+
+The array values are counts, which are dimensionless.
+
+[Restrictions:]
+
+This compute cannot be used with the KOKKOS package.  It has no
+accelerated version, and the host copy of the particle list it reads is
+not guaranteed to be current in a Kokkos run, so it refuses to run
+rather than histogram stale data.
+
+[Related commands:]
+
+"compute grid"_compute_grid.html, "compute
+thermal/grid"_compute_thermal_grid.html, "compute
+sonine/grid"_compute_sonine_grid.html, "compute
+edf/surf"_compute_edf_surf.html, "fix ave/grid"_fix_ave_grid.html,
+"dump grid"_dump.html
+
+[Default:]
+
+The defaults are oob = ignore, weight = no.

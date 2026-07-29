@@ -1,0 +1,53 @@
+################################################################################
+# per grid cell velocity distribution functions in an equilibrium 3d gas
+#
+# the speed histogram should reproduce the Maxwell-Boltzmann speed distribution
+#   for Ar at 273.15 K, whose most probable speed is 337 m/s
+# the vx histogram should reproduce a Gaussian of width sqrt(kT/m) = 238 m/s
+#
+# Note:
+#  - The "comm/sort" option to the "global" command is used to match MPI runs.
+#  - The "twopass" option is used to match Kokkos runs.
+# The "comm/sort" and "twopass" options should not be used for production runs.
+################################################################################
+
+seed	    	    12345
+dimension   	    3
+global              gridcut 1.0e-5 comm/sort yes
+
+boundary	    rr rr rr
+
+create_box  	    0 0.0001 0 0.0001 0 0.0001
+create_grid 	    5 5 5
+
+balance_grid        rcb part
+
+species		    ar.species Ar
+mixture		    air Ar vstream 0.0 0.0 0.0 temp 273.15
+
+global              nrho 7.07043E22
+global              fnum 7.07043E6
+
+collide		    vss air ar.vss
+
+create_particles    air n 10000 twopass
+
+# 12 speed bins from 0 to 1200 m/s, then 12 vx bins from -900 to 900 m/s
+# histograms are raw sample counts, so fix ave/grid can time average them
+
+compute             vdf vdf/grid all air speed 12 0.0 1200.0 vx 12 -900.0 900.0
+fix                 avdf ave/grid all 10 20 200 c_vdf[*]
+
+# sum each histogram bin over all grid cells, so the log file records the VDF
+
+compute             sum reduce sum c_vdf[*]
+
+compute             temp temp
+stats		    100
+stats_style	    step cpu np ncoll c_temp c_sum[3] c_sum[4] c_sum[5] &
+                    c_sum[15] c_sum[18] c_sum[21]
+
+dump                1 grid all 200 tmp.vdf.grid id f_avdf[*]
+
+timestep 	    7.00E-9
+run 		    400

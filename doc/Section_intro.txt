@@ -140,6 +140,8 @@ Diagnostics :h4
   "global boundary statistics"_compute_boundary.html
   "per grid cell statistics"_compute_grid.html
   "per surface element statistics"_compute_surf.html
+  "per grid cell velocity distribution functions"_compute_vdf_grid.html
+  "per surface element energy and angular distributions"_compute_edf_surf.html
   time-averaging of "global"_fix_ave_time.html, "grid"_fix_ave_grid.html, "surface"_fix_ave_surf.html statistics :ul
 
 Output :h4
