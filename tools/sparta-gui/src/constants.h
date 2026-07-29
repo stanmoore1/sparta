@@ -139,6 +139,9 @@ inline const QString STYLE_QSS = QStringLiteral(":/style.qss");
 /** default number of steps offered by Run -> Extend Run */
 constexpr int EXTEND_STEPS_DEFAULT = 1000;
 
+/** default seconds without data before a download is abandoned */
+constexpr int DOWNLOAD_TIMEOUT_DEFAULT = 30;
+
 // ---- Restart file inspection ----------------------------------------------
 /** restart files larger than this (bytes) prompt a memory-use warning */
 constexpr qint64 INSPECT_WARN_SIZE = 262144000LL;
@@ -231,6 +234,8 @@ inline const QString EXAMPLES_PATH = QStringLiteral("examples_path");
 inline const QString GRID          = QStringLiteral("grid");
 inline const QString HROT         = QStringLiteral("hrot");
 inline const QString HTTPS_PROXY  = QStringLiteral("https_proxy");
+/** seconds a download may go without receiving data before it is given up on */
+inline const QString DOWNLOAD_TIMEOUT = QStringLiteral("download_timeout");
 inline const QString ID           = QStringLiteral("id");
 inline const QString IMAGEREPLACE = QStringLiteral("imagereplace");
 inline const QString LOGREPLACE   = QStringLiteral("logreplace");

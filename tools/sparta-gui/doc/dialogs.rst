@@ -132,6 +132,12 @@ General Settings
      window <charts>`.  The default is to redraw the plots every 500
      milliseconds.  This is just for the drawing; data collection is
      managed with the previous setting.
+   - **Download timeout (seconds without data):** how long a download may go
+     without receiving any data before it is abandoned.  This measures the gap
+     between reads rather than the total duration, so a slow but progressing
+     transfer is never cut off by it; it only fires when a server has stopped
+     answering.  Downloads show a progress dialog with a *Cancel* button, and
+     cancelling is not reported as an error.
    - **Path to SPARTA Shared Library File:** this option is only visible
      when SPARTA-GUI was compiled to load the SPARTA library at runtime
      instead of being linked to it directly (plugin mode, the default).

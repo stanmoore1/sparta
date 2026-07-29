@@ -796,7 +796,7 @@ void SpartaGui::setupPlugin(QSettings &settings)
                 auto dlUrl   = getSpartaDownloadUrl();
 
                 URLDownloader downloader(this);
-                if (downloader.download(dlUrl, libPath, true)) {
+                if (downloader.download(dlUrl, libPath, true, true)) {
                     // try loading the downloaded library
                     if (sparta.loadLib(libPath)) {
                         pluginPath = libPath;
@@ -816,7 +816,8 @@ void SpartaGui::setupPlugin(QSettings &settings)
                                  "<p align=\"justify\">The downloaded shared library file "
                                  "does not seem to be compatible with this system.</p>");
                     }
-                } else {
+                } else if (!downloader.wasAborted()) {
+                    // cancelling is a choice, not a failure to report back
                     critical(this, "SPARTA-GUI Error", "Failed to download SPARTA shared library.",
                              downloader.errorString());
                 }
@@ -3655,12 +3656,12 @@ void SpartaGui::checkUpdate()
         button->setIcon(QIcon(":/icons/dialog-no.svg"));
 
         if (mb.exec() == QMessageBox::Yes) {
-            if (downloader.download(dlUrl, libPath, true)) {
+            if (downloader.download(dlUrl, libPath, true, true)) {
                 warning(this, "SPARTA Shared Library Updated",
                         "The latest SPARTA library has been downloaded successfully. "
                         "SPARTA-GUI must be relaunched to activate it.");
                 relaunchApplication();
-            } else {
+            } else if (!downloader.wasAborted()) {
                 critical(this, "Check for SPARTA Update",
                          "Failed to download SPARTA shared library.", downloader.errorString());
             }

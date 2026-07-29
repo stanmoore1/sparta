@@ -306,6 +306,76 @@ TEST_F(Checksum, WithNoSumsFilePublishedTheDownloadIsKept)
     EXPECT_EQ(modals.boxes, 0) << modals.all().toStdString();
 }
 
+// ------------------------------------------------ replacing an existing file
+
+// The download this class exists for replaces the SPARTA shared library, which
+// the running process may already have dlopen()ed.  Overwriting that file in
+// place changes the pages the loader has mapped; renaming it does not, because
+// the old inode stays alive until the process lets go of it.  So the previous
+// file is moved aside rather than written over -- and put back if anything
+// about the new one turns out to be wrong.
+
+TEST_F(Checksum, ReplacingAFileKeepsThePreviousOneUntilTheNewOneIsGood)
+{
+    const QString url = publish("payload.bin", kPayload);
+    const QString out = path("libsparta.so");
+
+    // something is already there, as it would be on a second download
+    QFile old(out);
+    ASSERT_TRUE(old.open(QIODevice::WriteOnly));
+    old.write("previous library");
+    old.close();
+
+    URLDownloader dl;
+    ASSERT_TRUE(dl.download(url, out, false, true)) << dl.errorString().toStdString();
+
+    QFile got(out);
+    ASSERT_TRUE(got.open(QIODevice::ReadOnly));
+    EXPECT_EQ(got.readAll(), kPayload) << "the new file did not land";
+    EXPECT_FALSE(QFileInfo::exists(out + ".bak"))
+        << "the backup is still there after a good download";
+}
+
+TEST_F(Checksum, AReplacementThatFailsItsChecksumPutsThePreviousFileBack)
+{
+    // The failure has to happen *after* the existing file was moved aside, or
+    // the restore path is never reached and the test passes on a no-op.  A
+    // source that does not exist fails at the transfer, before any of that; a
+    // file that downloads fine and then fails its checksum is the case that
+    // matters anyway -- a corrupted or tampered download must not cost the user
+    // the working library they already had.
+    Modals modals;
+    const QString url = publish("payload.tar.gz", kPayload);
+    publishSums((sha256("what the publisher meant to ship") + "  payload.tar.gz\n").toUtf8());
+
+    const QString out         = path("libsparta.so");
+    const QByteArray previous = "previous library";
+    QFile old(out);
+    ASSERT_TRUE(old.open(QIODevice::WriteOnly));
+    old.write(previous);
+    old.close();
+
+    URLDownloader dl;
+    EXPECT_FALSE(dl.download(url, out, false, true)) << "a file failing its checksum was accepted";
+
+    ASSERT_TRUE(QFileInfo::exists(out)) << "the previous library was lost to a bad download";
+    QFile back(out);
+    ASSERT_TRUE(back.open(QIODevice::ReadOnly));
+    EXPECT_EQ(back.readAll(), previous) << "what came back is not what was there";
+    EXPECT_FALSE(QFileInfo::exists(out + ".bak")) << "the backup was left lying about";
+}
+
+TEST_F(Checksum, AFailedDownloadThatWasNotCancelledSaysSo)
+{
+    URLDownloader dl;
+    EXPECT_FALSE(dl.wasAborted()) << "nothing has been cancelled yet";
+    EXPECT_FALSE(dl.download(QUrl::fromLocalFile(path("no-such-file")).toString(),
+                             path("out.bin")));
+    EXPECT_FALSE(dl.wasAborted())
+        << "a failure was reported as a cancellation, which callers stay quiet about";
+    EXPECT_FALSE(dl.errorString().isEmpty()) << "a failure with no explanation";
+}
+
 TEST_F(Checksum, ASourceThatDoesNotExistIsAnErrorNotAnEmptyFile)
 {
     Modals modals;

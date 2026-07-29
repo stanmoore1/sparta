@@ -15,6 +15,7 @@
 #include <QString>
 
 class QNetworkAccessManager;
+class QNetworkReply;
 class QWidget;
 
 /**
@@ -54,17 +55,30 @@ public:
      *
      * @param url   The HTTPS URL to download from
      * @param file  The local file path to write to
-     * @param showDialog  Display a dialog with the downloaded URL and target file location while
-     * downloading
+     * @param showDialog  Show a progress dialog that can cancel the transfer
+     * @param keepBackup  Move an existing @p file aside before writing rather
+     *                    than overwriting it, and put it back if the download
+     *                    fails.  Needed when replacing a library that the
+     *                    running process may still have loaded.
      * @return true if the download completed successfully, false otherwise
      */
-    bool download(const QString &url, const QString &file, bool showDialog = false);
+    bool download(const QString &url, const QString &file, bool showDialog = false,
+                  bool keepBackup = false);
 
     /**
      * @brief Return the last error message
      * @return Human-readable error description or empty string
      */
     QString errorString() const { return lastError; }
+
+    /** @brief Cancel a transfer in progress. */
+    void abort();
+
+    /** @brief Whether the last transfer ended because abort() was called.
+     *
+     * Distinguishes a user cancelling from a failure, so the caller can stay
+     * quiet about the former. */
+    [[nodiscard]] bool wasAborted() const { return aborted; }
 
     /**
      * @brief Return the remote SHA-256 checksum for a given URL
@@ -103,6 +117,9 @@ private:
     QNetworkAccessManager *manager; ///< Qt network access manager
     QWidget *parentWidget;          ///< Parent widget for dialogs
     QString lastError;              ///< Last error message
+    QNetworkReply *currentReply = nullptr; ///< Reply of the transfer in flight
+    bool aborted = false;           ///< abort() was called on this transfer
+    int stallTimeout = 0;           ///< seconds without data before giving up
 };
 
 #endif // URLDOWNLOADER_H

@@ -202,6 +202,9 @@ void Preferences::accept()
     field = tabWidget->findChild<QLineEdit *>("proxyval");
     if (field) settings->setValue(Keys::HTTPS_PROXY, field->text());
 
+    spin = tabWidget->findChild<QSpinBox *>("dltimeout");
+    if (spin) settings->setValue(Keys::DOWNLOAD_TIMEOUT, spin->value());
+
     field = tabWidget->findChild<QLineEdit *>("examplesedit");
     if (field) settings->setValue(Keys::EXAMPLES_PATH, field->text());
 
@@ -375,6 +378,19 @@ GeneralTab::GeneralTab(QSettings *_settings, SpartaWrapper *_sparta, SpartaGui *
         layout->addWidget(new QLabel(https_proxy), nrow++, 1);
     }
 
+    // How long a download may receive nothing before it is abandoned.  Qt
+    // measures the gap between reads, not the total time, so a slow but
+    // progressing transfer is never cut off by this.
+    layout->addWidget(new QLabel("Download timeout (seconds without data):"), nrow, 0);
+    auto *dltimeout = new QSpinBox;
+    dltimeout->setObjectName("dltimeout");
+    dltimeout->setRange(5, 3600);
+    dltimeout->setValue(settings->value(Keys::DOWNLOAD_TIMEOUT, Cfg::DOWNLOAD_TIMEOUT_DEFAULT).toInt());
+    dltimeout->setToolTip("A download that receives no data for this long is given up on, "
+                          "rather than leaving the window waiting on a server that has "
+                          "stopped answering.");
+    layout->addWidget(dltimeout, nrow++, 1);
+
 #if defined(SPARTA_GUI_USE_PLUGIN)
     layout->addWidget(new QHline, nrow++, 0, 1, 2);
     auto *pluginlabel = new QLabel("Path to SPARTA Shared Library File:");
@@ -528,7 +544,9 @@ void GeneralTab::downloadPlugin()
     auto dlUrl   = getSpartaDownloadUrl();
 
     URLDownloader downloader(this);
-    if (downloader.download(dlUrl, libPath, true)) {
+    // keepBackup: this may be replacing the very library the running process
+    // has already loaded
+    if (downloader.download(dlUrl, libPath, true, true)) {
         auto canonical = QFileInfo(libPath).canonicalFilePath();
         settings->setValue(Keys::PLUGIN_PATH, canonical);
         auto *field = findChild<QLineEdit *>("pluginedit");
@@ -536,6 +554,12 @@ void GeneralTab::downloadPlugin()
         settings->sync();
 
         if (auto *prefs = qobject_cast<Preferences *>(window())) prefs->setRelaunch(true);
+    } else if (!downloader.wasAborted()) {
+        // Cancelling is not a failure and says nothing; anything else did, and
+        // used to say nothing either -- the dialog simply closed and the path
+        // was silently left as it was.
+        critical(this, "SPARTA-GUI Error", "Downloading the SPARTA library failed:",
+                 downloader.errorString());
     }
 }
 
