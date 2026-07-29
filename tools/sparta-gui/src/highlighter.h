@@ -95,7 +95,6 @@ private:
     QRegularExpression isString;              ///< Regular strings
     QTextCharFormat formatString;             ///< Format for strings
 
-    bool in_triple; ///< State flag for multi-line triple-quoted strings
 
     /// @brief Apply a scheme's colors to the QTextCharFormat members (no rehighlight)
     void setFormats(const QString &scheme);

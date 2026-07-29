@@ -194,7 +194,7 @@ Highlighter::Highlighter(QTextDocument *parent) :
     isContinue(QStringLiteral("&$")), isComment(QStringLiteral("#.*")),
     isQuotedComment(QStringLiteral("(\".*#.*\"|'.*#.*')")),
     isTriple(QStringLiteral("[^\"]*\"\"\"[^\"]*")),
-    isString(QStringLiteral("(\".+?\"|'.+?'|\"\"\".*\"\"\")")), in_triple(false)
+    isString(QStringLiteral("(\".+?\"|'.+?'|\"\"\".*\"\"\")"))
 {
     // pick the syntax color palette from the stored preference (default: VS Code);
     // the light/dark variant follows the current application theme
@@ -332,10 +332,17 @@ void Highlighter::highlightBlock(const QString &text)
         setFormat(hit.capturedStart(), hit.capturedLength(), formatSpecial);
     }
 
+    // Whether this line begins inside a triple-quoted string, taken from the
+    // block state rather than from a member -- see the end of this function.
+    const bool startedInTriple = previousBlockState() == 1;
+
     // comments, must come before strings but after other keywords.
     auto comment = isComment.match(text);
-    if (comment.hasMatch() && !isQuotedComment.match(text).hasMatch() && !in_triple) {
+    if (comment.hasMatch() && !isQuotedComment.match(text).hasMatch() && !startedInTriple) {
         setFormat(comment.capturedStart(0), comment.capturedLength(0), formatComment);
+        // a comment line cannot open or close a triple quote, but the state
+        // still has to be recorded or the next block inherits -1
+        setCurrentBlockState(0);
         return;
     }
 
@@ -346,18 +353,34 @@ void Highlighter::highlightBlock(const QString &text)
         setFormat(hit.capturedStart(), hit.capturedLength(), formatString);
     }
 
-    auto triple = isTriple.match(text);
-    if (triple.hasMatch()) {
-        if (in_triple) {
-            in_triple = false;
-            setFormat(0, triple.capturedStart(0) + triple.capturedLength(0), formatString);
+    // Triple-quoted strings, which SPARTA allows to span lines.
+    //
+    // The state lives in the block, not in a member of the highlighter.  Qt
+    // re-highlights one block at a time -- the edited one, and then following
+    // blocks only while the state keeps changing -- so a member depended on the
+    // order highlightBlock() happened to be called in, and editing any line
+    // reused whatever the flag had been left at, colouring lines that contain
+    // no quotes at all.
+    //
+    // And every delimiter on the line is counted, not just the first.  SPARTA
+    // allows a complete triple-quoted argument on one line, and matching once
+    // meant `variable v string """a b c"""` turned the state on and never off,
+    // painting the entire rest of the deck as a string.
+    bool inside   = startedInTriple;
+    int segstart  = inside ? 0 : -1;
+    int pos       = 0;
+    while ((pos = text.indexOf(QLatin1String("\"\"\""), pos)) != -1) {
+        if (inside) {
+            setFormat(segstart, pos + 3 - segstart, formatString);
+            inside = false;
         } else {
-            in_triple = true;
-            setFormat(triple.capturedStart(0), -1, formatString);
+            segstart = pos;
+            inside   = true;
         }
-    } else {
-        if (in_triple) setFormat(0, text.size(), formatString);
+        pos += 3;
     }
+    if (inside) setFormat(segstart, text.size() - segstart, formatString);
+    setCurrentBlockState(inside ? 1 : 0);
 }
 // Local Variables:
 // c-basic-offset: 4

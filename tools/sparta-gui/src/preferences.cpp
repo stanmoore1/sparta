@@ -733,8 +733,13 @@ SnapshotTab::SnapshotTab(QSettings *_settings, QWidget *parent) :
 
     settings->beginGroup(Keys::GROUP_SNAPSHOT);
 
-    auto *colorcompleter = new QColorCompleter();
-    auto *colorvalidator = new QColorValidator();
+    // Parented, like their counterparts in dumpimagesettingsdialog.cpp.
+    // QLineEdit::setCompleter() and setValidator() do not take ownership, and
+    // nothing else here deletes them, so every opening of the Preferences
+    // dialog leaked a completer -- with the 140-entry colour list its model
+    // holds -- and a validator.
+    auto *colorcompleter = new QColorCompleter(this);
+    auto *colorvalidator = new QColorValidator(this);
     QFontMetrics metrics(fontMetrics());
     auto *intval = new QIntValidator(100, 100000, this);
 

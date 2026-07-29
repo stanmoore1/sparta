@@ -1168,8 +1168,21 @@ void CodeEditor::runCompletion()
         if (words[0][0] == '#') return;
 
         currentComp = nullptr;
-        // "dump ID style mix-ID ..." and "fix ID emit/... mix-ID ..." take a mixture ID
-        if ((words[0] == "dump") || ((words[0] == "fix") && words[2].startsWith("emit/")))
+        // "dump ID style select-ID ...": what select-ID names depends on the
+        // style (doc/dump.txt) -- a mixture for particle, image and movie, a
+        // grid group for grid, a surface group for surf, and nothing at all for
+        // tally.  Offering mixtures for every style put identifiers into the
+        // deck that SPARTA then rejects with "Dump grid group ID does not
+        // exist".
+        if (words[0] == "dump") {
+            const QString &style = words[2];
+            if (style == QLatin1String("particle") || style == QLatin1String("image") ||
+                style == QLatin1String("movie"))
+                currentComp = mixtureComp;
+            else if (style == QLatin1String("grid") || style == QLatin1String("surf"))
+                currentComp = groupComp;
+        } else if ((words[0] == "fix") && words[2].startsWith("emit/"))
+            // "fix ID emit/... mix-ID ..."
             currentComp = mixtureComp;
         else if (selected.startsWith("v_"))
             currentComp = varnameComp;
