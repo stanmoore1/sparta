@@ -14,6 +14,7 @@
 
 #include <QMainWindow>
 
+#include <QHash>
 #include <QList>
 #include <QPair>
 #include <QPointer>
@@ -141,8 +142,12 @@ protected:
     /** @brief Delete all variables defined in the SPARTA instance */
     void clearVariables();
 
-    /** @brief Rebuild the variables list from the editor buffer */
-    void updateVariables();
+    /** @brief Rebuild the variables list from the editor buffer.
+     * @param keepOverrides  keep values the user has already set for names that
+     *                       are still defined, instead of resetting them to the
+     *                       deck's.  False when a different file is opened;
+     *                       true when re-reading the same buffer. */
+    void updateVariables(bool keepOverrides = false);
 
     /**
      * @brief Execute a SPARTA simulation
@@ -610,6 +615,11 @@ private:
     QString currentDir;                       ///< Current working directory
     QList<QString> recent;                    ///< List of recently opened files
     QList<QPair<QString, QString>> variables; ///< Index-style variable definitions
+    /// value each index variable is given in the deck, by name.  Kept beside
+    /// `variables` rather than folded into it because that list is public API
+    /// the sweep panel exchanges; this only records what the deck itself says,
+    /// so the dialog can show which entries actually override something.
+    QHash<QString, QString> scriptVariables;
 
     /** @brief Whether the worker thread is alive.
      *

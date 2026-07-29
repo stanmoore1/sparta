@@ -28,18 +28,46 @@ namespace {
 constexpr int LAYOUT_SPACING = 6;
 }
 
-SetVariables::SetVariables(QList<QPair<QString, QString>> &_vars, QWidget *parent) :
-    QDialog(parent), vars(_vars), layout(new QVBoxLayout)
+namespace {
+/// Bold a value that differs from the deck's own, and say so in a tooltip.
+void markOverride(QLineEdit *val)
+{
+    const QString scriptValue = val->property("scriptValue").toString();
+    const bool overridden     = !scriptValue.isEmpty() && val->text() != scriptValue;
+    val->setStyleSheet(overridden ? "font-weight: bold" : "");
+    if (overridden)
+        val->setToolTip(QString("Overrides the input deck value: %1").arg(scriptValue));
+    else if (!scriptValue.isEmpty())
+        val->setToolTip("Value from the input deck");
+    else
+        val->setToolTip("Not defined in the input deck; passed to the run like -var");
+}
+} // namespace
+
+SetVariables::SetVariables(QList<QPair<QString, QString>> &_vars,
+                           const QHash<QString, QString> &_script, QWidget *parent) :
+    QDialog(parent), vars(_vars), scriptValues(_script), layout(new QVBoxLayout)
 {
     auto *top = new QLabel("Set Variables:");
     layout->addWidget(top, 0, Qt::AlignHCenter);
+    // Which of these actually change anything is otherwise invisible: the list
+    // is seeded from the deck, so most rows repeat what the deck already says
+    // and only the edited ones have any effect at run time.
+    auto *hint = new QLabel("Bold values override the definition in the input deck");
+    hint->setStyleSheet("font-style: italic");
+    layout->addWidget(hint, 0, Qt::AlignHCenter);
     layout->setSpacing(LAYOUT_SPACING);
 
-    int i = 1;
+    // 2, not 1: the two labels above occupy indices 0 and 1, and delRow()
+    // takes the row at the index stored in the button's object name.
+    int i = 2;
     for (const auto &v : vars) {
         auto *row  = new QHBoxLayout;
         auto *name = new QLineEdit(v.first);
         auto *val  = new QLineEdit(v.second);
+        val->setProperty("scriptValue", scriptValues.value(v.first));
+        connect(val, &QLineEdit::textChanged, val, [val]() { markOverride(val); });
+        markOverride(val);
         auto *del  = new QPushButton(QIcon(":/icons/edit-delete.svg"), "");
         del->setObjectName(QString::number(i));
         connect(del, &QPushButton::released, this, &SetVariables::delRow);
@@ -74,7 +102,9 @@ void SetVariables::accept()
     // store all data in variables class and then confirm accepting
     vars.clear();
     int nrows = layout->count() - 2;
-    for (int i = 1; i < nrows; ++i) {
+    // from 2: index 0 is the title and index 1 the override hint, neither of
+    // which is a row layout -- reading them as one dereferences a null layout
+    for (int i = 2; i < nrows; ++i) {
         auto *row = layout->itemAt(i)->layout();
         auto *var = qobject_cast<QLineEdit *>(row->itemAt(0)->widget());
         auto *val = qobject_cast<QLineEdit *>(row->itemAt(1)->widget());

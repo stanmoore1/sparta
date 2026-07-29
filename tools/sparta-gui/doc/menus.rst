@@ -179,6 +179,17 @@ rows for additional variables can be added through the *Add Row*
 button and existing rows can be deleted by clicking on the *X* icons
 on the right.
 
+The list is re-read from the editor each time the dialog is opened, so index
+variables added to, or re-valued in, the deck after it was loaded are shown.
+Values that were set by hand are kept across that re-read, as are rows for
+variables the deck does not define at all -- those are passed to the run the
+way ``-var`` does on the command line.
+
+A value that differs from the one the deck gives the same variable is shown in
+bold, with a tooltip naming the value it overrides.  Without that the list
+gives no hint which of its rows change anything: it is seeded from the deck, so
+most rows simply repeat what the deck already says.
+
 The *Continue from Restart...* entry opens a small browser of the `SPARTA
 restart <https://sparta.github.io/doc/write_restart.html>`_ files in the
 working directory (with their size and modification time).  A selected file

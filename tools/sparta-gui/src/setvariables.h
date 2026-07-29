@@ -13,6 +13,7 @@
 #define SET_VARIABLES_H
 
 #include <QDialog>
+#include <QHash>
 #include <QList>
 #include <QPair>
 #include <QString>
@@ -34,7 +35,16 @@ public:
      * @param vars Reference to list of variable name-value pairs (modified in place)
      * @param parent Parent widget
      */
-    explicit SetVariables(QList<QPair<QString, QString>> &vars, QWidget *parent = nullptr);
+    /**
+     * @param vars    name/value pairs to edit, updated in place on accept
+     * @param script  the value each variable is given in the input deck, by
+     *                name.  Used only to show which entries override the deck;
+     *                a name absent from it is one the deck does not define.
+     * @param parent  parent widget
+     */
+    explicit SetVariables(QList<QPair<QString, QString>> &vars,
+                          const QHash<QString, QString> &script = {},
+                          QWidget *parent = nullptr);
 
     /**
      * @brief Destructor
@@ -65,6 +75,7 @@ private slots:
 
 private:
     QList<QPair<QString, QString>> &vars; ///< Reference to variable list
+    QHash<QString, QString> scriptValues; ///< value each name has in the deck
     class QVBoxLayout *layout;            ///< Dialog layout
 };
 

@@ -419,6 +419,63 @@ TEST_F(Prefs, AVariableSurvivesIntoTheNextVisitToTheDialog)
     EXPECT_TRUE(seen.contains("1.0e20")) << seen.join(", ").toStdString();
 }
 
+TEST_F(Prefs, TheVariablesDialogReflectsIndexVariablesAddedToTheDeck)
+{
+    // The list used to be built only when a file was opened, so an index
+    // variable written into the deck afterwards was simply not in the dialog.
+    editor()->setPlainText("variable nrho index 1.0e20\nvariable seed index 42\nrun 0\n");
+
+    QStringList seen;
+    Answer<SetVariables> look([&seen](SetVariables *v) {
+        for (auto *e : v->findChildren<QLineEdit *>())
+            seen << e->text();
+    });
+    call("editVariables");
+    ASSERT_EQ(look.dialogs, 1) << "the variables dialog never appeared";
+    EXPECT_TRUE(seen.contains("nrho")) << seen.join(", ").toStdString();
+    EXPECT_TRUE(seen.contains("1.0e20")) << seen.join(", ").toStdString();
+    EXPECT_TRUE(seen.contains("seed")) << seen.join(", ").toStdString();
+}
+
+TEST_F(Prefs, AValueSetByTheUserIsNotOverwrittenByTheDeckAndIsMarkedAsAnOverride)
+{
+    editor()->setPlainText("variable nrho index 1.0e20\nrun 0\n");
+
+    // set it to something the deck does not say
+    {
+        Answer<SetVariables> edit([](SetVariables *v) {
+            const auto edits = v->findChildren<QLineEdit *>();
+            for (int i = 0; i + 1 < edits.size(); ++i)
+                if (edits.at(i)->text() == "nrho") edits.at(i + 1)->setText("5.0e20");
+        });
+        call("editVariables");
+        ASSERT_EQ(edit.dialogs, 1);
+    }
+
+    // re-opening re-reads the deck, but must not undo that
+    QStringList seen;
+    bool bold = false;
+    QString tip;
+    Answer<SetVariables> again([&](SetVariables *v) {
+        const auto edits = v->findChildren<QLineEdit *>();
+        for (int i = 0; i + 1 < edits.size(); ++i) {
+            seen << edits.at(i)->text();
+            if (edits.at(i)->text() == "nrho") {
+                bold = edits.at(i + 1)->styleSheet().contains("bold");
+                tip  = edits.at(i + 1)->toolTip();
+                seen << edits.at(i + 1)->text();
+            }
+        }
+    });
+    call("editVariables");
+    ASSERT_EQ(again.dialogs, 1);
+    EXPECT_TRUE(seen.contains("5.0e20"))
+        << "the deck's value overwrote the one the user set: " << seen.join(", ").toStdString();
+    EXPECT_TRUE(bold) << "an overriding value is not marked as one";
+    EXPECT_TRUE(tip.contains("1.0e20")) << "the tooltip does not say what is being overridden: "
+                                        << tip.toStdString();
+}
+
 TEST_F(Prefs, CancellingTheVariablesDialogKeepsTheOldSet)
 {
     {

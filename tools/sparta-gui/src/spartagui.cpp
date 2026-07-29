@@ -1312,8 +1312,18 @@ void SpartaGui::clearVariables()
     }
 }
 
-void SpartaGui::updateVariables()
+void SpartaGui::updateVariables(bool keepOverrides)
 {
+    // what the user has set so far, so a re-scan of the same buffer does not
+    // throw it away
+    QHash<QString, QString> previous;
+    QList<QPair<QString, QString>> previousList;
+    if (keepOverrides) {
+        previousList = variables;
+        for (const auto &v : std::as_const(variables))
+            previous.insert(v.first, v.second);
+    }
+
     const auto doc = textEdit->toPlainText().replace('\t', ' ').split('\n');
     QStringList known;
     QRegularExpression indexvar(R"(^\s*variable\s+(\w+)\s+index\s+(.*))");
@@ -1323,6 +1333,7 @@ void SpartaGui::updateVariables()
 
     // forget previously listed variables
     variables.clear();
+    scriptVariables.clear();
 
     for (const auto &line : doc) {
 
@@ -1335,9 +1346,14 @@ void SpartaGui::updateVariables()
 
         if (index.hasMatch()) {
             if (index.lastCapturedIndex() >= 2) {
-                auto name = index.captured(1);
+                auto name              = index.captured(1);
+                const QString deckValue = index.captured(2);
                 if (!known.contains(name)) {
-                    variables.append(qMakePair(name, index.captured(2)));
+                    // the deck's own value is recorded either way; the value
+                    // offered for editing is the user's if they set one
+                    scriptVariables.insert(name, deckValue);
+                    variables.append(
+                        qMakePair(name, previous.value(name, deckValue)));
                     known.append(name);
                 }
             }
@@ -1366,6 +1382,14 @@ void SpartaGui::updateVariables()
             }
         }
     }
+
+    // Variables the user added by hand are not in the deck, so the scan above
+    // cannot find them -- but they are still theirs, and are passed to the run
+    // the way -var does on the command line.  Dropping them here would quietly
+    // undo an edit made in the Set Variables dialog.
+    if (keepOverrides)
+        for (const auto &v : std::as_const(previousList))
+            if (!known.contains(v.first)) variables.append(v);
 }
 
 // open file and switch CWD to path of file
@@ -3751,8 +3775,13 @@ void SpartaGui::defaults()
 
 void SpartaGui::editVariables()
 {
+    // Re-read the buffer first: the list was last built when the file was
+    // opened, so index variables added, removed or re-valued since then were
+    // not in the dialog at all.  Values the user has already set are kept.
+    updateVariables(true);
+
     QList<QPair<QString, QString>> newvars = variables;
-    SetVariables vars(newvars);
+    SetVariables vars(newvars, scriptVariables, this);
     vars.setFont(font());
     if (vars.exec() == QDialog::Accepted) {
         variables = newvars;
