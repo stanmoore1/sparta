@@ -247,6 +247,14 @@ public:
      * @param idx Index for vector quantities
      * @return The value as a QString (empty if unavailable)
      */
+    /// @warning Call between lastThermo("lock",0) and lastThermo("unlock",0).
+    ///
+    /// The pointer underneath is the stats cache's own storage, and the run
+    /// thread writes to it -- the keyword strings when a stats line is
+    /// computed, the image name when a dump frame is finished.  Copying out of
+    /// it without the lock races with that write.  It cannot take the lock
+    /// itself: the callers that read keywords are already inside the critical
+    /// section, and the cache mutex is not recursive.
     QString lastThermoString(const char *keyword, int idx)
     {
         return QString::fromLocal8Bit(static_cast<const char *>(lastThermo(keyword, idx)));

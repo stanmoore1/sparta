@@ -1835,24 +1835,32 @@ void SpartaGui::logUpdate()
         }
     }
 
-    // get timestep
+    // Everything read out of the stats cache comes out under one lock.
+    //
+    // The timestep was read here, outside the lock, and the column values below
+    // it, inside -- so a run that completed another stats line in between gave
+    // this one step's x with the next step's y, and the chart quietly plotted
+    // points that never existed.  The "setup" flag had the same problem, and
+    // reading `bigint` is a build constant that need not be in the critical
+    // section at all.
+    const bool bigint4 = sparta.extractSetting("bigint") == 4;
+
     int step = 0;
-    if (sparta.extractSetting("bigint") == 4)
-        step = sparta.lastThermoAs<int>("step", 0);
-    else
-        step = static_cast<int>(sparta.lastThermoAs<int64_t>("step", 0));
-
-    // extract cached stats data while SPARTA is executing a run command
-    if (chartwindow && sparta.isRunning()) {
-        // thermo data is not yet valid during setup
-        if (sparta.lastThermoAs<int>("setup", 0)) return;
-
-        sparta.lastThermo("lock", 0);
-        const int ncols = sparta.lastThermoAs<int>("num", 0);
+    int ncols = 0;
+    sparta.lastThermo("lock", 0);
+    // thermo data is not yet valid during setup
+    const bool insetup = sparta.lastThermoAs<int>("setup", 0) != 0;
+    if (!insetup) {
+        step = bigint4 ? sparta.lastThermoAs<int>("step", 0)
+                       : static_cast<int>(sparta.lastThermoAs<int64_t>("step", 0));
+        if (chartwindow && sparta.isRunning()) ncols = sparta.lastThermoAs<int>("num", 0);
         if (ncols > 0) updateChartData(step, ncols);
-        sparta.lastThermo("unlock", 0);
     }
+    sparta.lastThermo("unlock", 0);
 
+    // Not skipped during setup any more.  This used to sit behind an early
+    // return taken while the run was setting up, so any image the deck wrote
+    // before the first timestep never reached the slide show.
     updateSlideShow();
 
     // let a parametric sweep sample the current thermo values each tick
@@ -1995,8 +2003,16 @@ void SpartaGui::ensureViewerPanel()
 
 void SpartaGui::updateSlideShow()
 {
-    // update list of available image file names
-    QString imagefile = sparta.lastThermoString("imagename", 0);
+    // Under the lock, like every other read of the cache.  This one was not,
+    // and it is the read that matters most: last_thermo("imagename") hands back
+    // the internal std::string's buffer, and DumpImage::write() assigns to that
+    // same string from the worker thread every time it finishes a frame.  A
+    // deck writing images during a run therefore had the GUI copying from a
+    // buffer that was being reallocated underneath it -- a garbled file name
+    // when it was lucky, freed memory when it was not.
+    sparta.lastThermo("lock", 0);
+    const QString imagefile = sparta.lastThermoString("imagename", 0);
+    sparta.lastThermo("unlock", 0);
     if (imagefile.isEmpty()) return;
 
     ensureViewerPanel();
@@ -2091,6 +2107,14 @@ void SpartaGui::runDone()
     syncRunControls();
     progress->setValue(Cfg::PROGRESS_MAXIMUM);
     textEdit->setHighlight(CodeEditor::NO_HIGHLIGHT, false);
+
+    // The chart was built before the run started, so the units it read were the
+    // ones in force then, not any the deck went on to set.  Now that the thread
+    // has finished, unit_style is nobody else's to free and can be read safely.
+    if (chartwindow) {
+        const auto *unitptr = static_cast<const char *>(sparta.extractGlobal("units"));
+        if (unitptr) chartwindow->setUnits(QString::fromUtf8(unitptr));
+    }
 
     capturer->endCapture();
 
@@ -2354,11 +2378,17 @@ void SpartaGui::doRun(bool use_buffer)
         if (runner == r) runner = nullptr;
         r->deleteLater();
     });
-    runner->start();
-
+    // Built before the thread is let loose, not after.  createChartWindow()
+    // reads extractGlobal("units"), which hands back update->unit_style itself
+    // -- and Update::set_units() does `delete [] unit_style` before replacing
+    // it.  A deck whose first lines include a `units` command (the normal place
+    // for it) had the worker thread freeing that buffer microseconds after
+    // start(), while this thread was copying out of it.
     createLogWindow(settings);
 
     createChartWindow(settings);
+
+    runner->start();
 
     if (viewer && viewer->sequence()) {
         viewer->unlockSource();
@@ -3732,6 +3762,25 @@ void SpartaGui::startSparta()
     // Kokkos can be initialized at most once per process: record that it is now
     // live so a later thread-count change can tell the user a restart is needed.
     if (accel == AcceleratorTab::Kokkos) kokkosStarted = true;
+
+    // A failed open is not a version problem, and saying so was actively
+    // misleading.  version() answers 0 when there is no instance, so the test
+    // below was trivially true whenever open() had failed: the user was told
+    // their SPARTA was too old and the process exited, while the real reason sat
+    // in lastErrorMessage() a few lines further down, which the exit made
+    // unreachable.  The ordinary way to get here is the accelerator settings
+    // adding "-k on ... -sf kk" arguments that the SPARTA constructor rejects.
+    // startSparta() is also reached from the About dialog and the image render,
+    // so opening About could end the session outright.
+    if (!sparta.isOpen()) {
+        const QString why = sparta.lastErrorMessage();
+        spartaArgs.resize(initial_narg);
+        critical(this, "SPARTA-GUI Error", "Error launching SPARTA:",
+                 why.isEmpty() ? QStringLiteral("SPARTA could not be started with the "
+                                                "current settings.")
+                               : why);
+        return;
+    }
 
     if (sparta.version() < Cfg::MIN_SPARTA_VERSION) {
         critical(this, "SPARTA-GUI Error", "Incompatible SPARTA Version:",
