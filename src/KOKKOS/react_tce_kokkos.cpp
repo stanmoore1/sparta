@@ -43,11 +43,6 @@ void ReactTCEKokkos::init()
 
   ReactBirdKokkos::init();
 
-  // error/warn if the temperature exponent of any reaction is out of
-  //   bounds for the TCE reaction probability
-
-  check_tce_bounds();
-
   // reverse exchange reactions are implemented by microcanonical
   // detailed-balance tables, which are built on the total-energy model
 
