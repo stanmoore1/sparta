@@ -136,6 +136,9 @@ inline const QString SPARTA_ICON = QStringLiteral(":/icons/sparta-icon-128x128.p
 /** path to the global application stylesheet applied on top of the Fusion style */
 inline const QString STYLE_QSS = QStringLiteral(":/style.qss");
 
+/** default number of steps offered by Run -> Extend Run */
+constexpr int EXTEND_STEPS_DEFAULT = 1000;
+
 // ---- Restart file inspection ----------------------------------------------
 /** restart files larger than this (bytes) prompt a memory-use warning */
 constexpr qint64 INSPECT_WARN_SIZE = 262144000LL;

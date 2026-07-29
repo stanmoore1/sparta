@@ -59,6 +59,11 @@ File
      `SPARTA restart <https://sparta.github.io/doc/write_restart.html>`_,
      windows with :ref:`information about the file are opened
      <inspect_restart>`.
+   - *Write Restart File...* writes the state of the running SPARTA instance to a
+     `restart file <https://sparta.github.io/doc/write_restart.html>`_, which can
+     later be read back with *Inspect Restart File* or a ``read_restart`` command.
+     It needs a system state, so it stays greyed out until the input has been run
+     at least as far as defining the box and grid.
    - *Quit* exits SPARTA-GUI. If there are unsaved changes, a dialog will
      appear to either cancel the operation, or to save, or to not save the
      modified buffer.
@@ -126,6 +131,20 @@ data from the running SPARTA instance and tell it to stop at the next
 timestep.  The *Stop SPARTA* entry will do this by activating the
 timeout mechanism of the SPARTA library, which lets the current
 timestep complete and then winds down the run cleanly.
+
+The *Extend Run* entry (keyboard shortcut `Ctrl-E`) continues the previous
+run by a number of additional steps, asked for in a dialog.  The state is
+kept rather than rebuilt: no ``clear`` is issued, so the grid, the particles
+and every definition carry over and the timestep counter continues where it
+stopped.  Like *Write Restart File...* it needs a system state and is greyed
+out until there is one -- including the state of an inspected restart file,
+which can be extended even though no run produced it in this session.
+
+Internally this issues ``run <steps> pre yes post no``.  The setup phase is
+deliberately *not* skipped: each run executes on a new worker thread with its
+own thread pool, and only the setup re-initialises the per-thread data of a
+threaded accelerator such as Kokkos/OpenMP for that pool.  ``post no`` merely
+omits the timing summary of the extension.
 
 The *Check Input* entry (keyboard shortcut `Ctrl-K`) statically validates
 the current input deck without running SPARTA and reports unknown

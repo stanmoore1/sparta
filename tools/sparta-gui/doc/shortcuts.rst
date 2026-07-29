@@ -80,6 +80,8 @@ available (On macOS use the Command key instead of Ctrl/Control).
      - Quick Help
      - Ctrl+Shift+G
      - SPARTA-GUI Docs
+   * - Ctrl+E
+     - Extend Run
    * - Ctrl+Shift+R
      - Inspect Restart File
      - Ctrl+Shift+L

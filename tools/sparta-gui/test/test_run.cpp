@@ -42,6 +42,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileDialog>
+#include <QInputDialog>
 #include <QFont>
 #include <QIcon>
 #include <QListWidget>
@@ -172,6 +173,80 @@ public:
     using SpartaGui::SpartaGui;
     using SpartaGui::openFile;
     using SpartaGui::writeFile;
+    using SpartaGui::hasSystemState;
+};
+
+/// Answers the Extend Run step-count dialog with a chosen number of steps.
+class AnswerSteps : public QObject {
+public:
+    explicit AnswerSteps(int steps, int budgetMs = 15000) : steps(steps), left(budgetMs)
+    {
+        timer.setInterval(10);
+        connect(&timer, &QTimer::timeout, this, &AnswerSteps::poll);
+        timer.start();
+    }
+    int dialogs = 0;
+
+private:
+    void poll()
+    {
+        auto *m = QApplication::activeModalWidget();
+        if ((left -= 10) < 0) {
+            timer.stop();
+            if (auto *d = qobject_cast<QDialog *>(m)) d->reject();
+            return;
+        }
+        if (auto *in = qobject_cast<QInputDialog *>(m)) {
+            ++dialogs;
+            in->setIntValue(steps);
+            static_cast<QDialog *>(in)->accept();
+        }
+    }
+    QTimer timer;
+    int steps;
+    int left;
+};
+
+/// Answers a save-file dialog with a path of our choosing.
+class SaveAs : public QObject {
+public:
+    explicit SaveAs(QString path, int budgetMs = 15000) : answer(std::move(path)), left(budgetMs)
+    {
+        timer.setInterval(10);
+        connect(&timer, &QTimer::timeout, this, &SaveAs::poll);
+        timer.start();
+    }
+    int dialogs = 0;
+
+private:
+    void poll()
+    {
+        auto *m = QApplication::activeModalWidget();
+        if ((left -= 10) < 0) {
+            timer.stop();
+            if (auto *d = qobject_cast<QDialog *>(m)) d->reject();
+            return;
+        }
+        if (auto *fd = qobject_cast<QFileDialog *>(m)) {
+            // Two ticks: choose on the first, accept on the second.  Accepting
+            // in the same tick the dialog appears in returns the name the
+            // dialog was constructed with, because the selection made here has
+            // not been applied yet -- the file landed under the suggested name
+            // and the test looked for it under the chosen one.
+            if (!primed) {
+                ++dialogs;
+                fd->setDirectory(QFileInfo(answer).absolutePath());
+                fd->selectFile(answer);
+                primed = true;
+                return;
+            }
+            static_cast<QDialog *>(fd)->accept();
+        }
+    }
+    QTimer timer;
+    QString answer;
+    int left;
+    bool primed = false;
 };
 
 class Run : public ::testing::Test {
@@ -393,6 +468,112 @@ TEST_F(Run, AnErrorInsideARunDoesNotWedgeTheApplication)
     setBuffer(QString::fromLatin1(kDeck));
     EXPECT_TRUE(runBuffer())
         << "the application refused to run again after an error -- it is wedged";
+}
+
+// ---------------------------------------------------------------- extend run
+
+TEST_F(Run, ExtendingARunContinuesFromTheStateItLeft)
+{
+    // Modals is scoped to the run only.  Its poll() rejects any QDialog it does
+    // not recognise, which includes the step-count dialog -- two reapers alive
+    // at once both answer the next modal and race.
+    // kDeck sets no timestep, so SPARTA's default -- which is enormous for a
+    // DSMC case -- carries every particle out of the box on the first step.
+    // That is harmless for tests that only ask whether a run completes, but
+    // this one wants a state worth continuing, so it uses closed boundaries and
+    // a physical timestep and keeps its particles.
+    setBuffer(QString::fromLatin1(kDeck)
+                  .replace("boundary        o r p", "boundary        r r p")
+                  .replace("stats           1", "timestep        0.0001\nstats           1"));
+    {
+        Modals modals;
+        ASSERT_TRUE(runBuffer());
+    }
+
+    const double npbefore = gui->simulator().getThermo("np");
+    EXPECT_DOUBLE_EQ(gui->simulator().getThermo("step"), 5.0) << "the deck runs 5 steps";
+    ASSERT_GT(npbefore, 0.0) << "there should be particles to carry over";
+
+    // runFinished is emitted from runDone(), which runs while the worker thread
+    // is still winding down; Extend Run refuses until it is really gone.  A user
+    // clicking a menu is never this fast, but a test is.
+    ASSERT_TRUE(waitFor([this] { return gui->hasSystemState(); }, 10000))
+        << "the worker thread was never reaped";
+
+    {
+        AnswerSteps steps(7);
+        QSignalSpy finished(gui, &SpartaGui::runFinished);
+        QMetaObject::invokeMethod(gui, "extendRun");
+        ASSERT_TRUE(waitFor([&finished] { return !finished.isEmpty(); }, 30000))
+            << "the extended run did not finish";
+        EXPECT_EQ(steps.dialogs, 1) << "the step count was never asked for";
+    }
+
+    // continued, not restarted: the timestep counter carries on rather than
+    // going back to zero, which is what "clear" would have done
+    EXPECT_DOUBLE_EQ(gui->simulator().getThermo("step"), 12.0)
+        << "5 + 7 steps; a restart from scratch would show 7";
+    EXPECT_DOUBLE_EQ(gui->simulator().getThermo("np"), npbefore)
+        << "the particles were discarded rather than carried over";
+}
+
+TEST_F(Run, ExtendRunIsRefusedAndDisabledWithoutASystemState)
+{
+    EXPECT_FALSE(gui->hasSystemState())
+        << "nothing has been run, so there is no state to continue from";
+
+    QAction *extend = nullptr;
+    for (auto *a : allActions())
+        if (a->text().contains("Extend Run")) extend = a;
+    ASSERT_NE(extend, nullptr) << "the Run menu offers no Extend Run entry";
+    EXPECT_FALSE(extend->isEnabled()) << "Extend Run is offered before there is anything to extend";
+
+    // and invoking it anyway says why rather than doing something undefined
+    Modals modals;
+    QMetaObject::invokeMethod(gui, "extendRun");
+    EXPECT_TRUE(modals.said("without a system state")) << modals.seen.join(" | ").toStdString();
+}
+
+// ------------------------------------------------------------- write restart
+
+TEST_F(Run, WritingARestartFileProducesAFileSpartaCanReadBack)
+{
+    // Modals only for the run: it rejects any QFileDialog it sees, which would
+    // cancel the save dialog before SaveAs could answer it.
+    setBuffer(QString::fromLatin1(kDeck));
+    {
+        Modals modals;
+        ASSERT_TRUE(runBuffer());
+    }
+    ASSERT_TRUE(waitFor([this] { return gui->hasSystemState(); }, 10000))
+        << "the worker thread was never reaped";
+
+    const QString out = QDir(dir.path()).filePath("state.restart");
+    {
+        SaveAs answer(out);
+        QMetaObject::invokeMethod(gui, "writeRestart");
+        ASSERT_TRUE(waitFor([&] { return QFileInfo::exists(out); }, 15000))
+            << "no restart file appeared";
+        EXPECT_EQ(answer.dialogs, 1);
+    }
+    EXPECT_GT(QFileInfo(out).size(), 0) << "the restart file is empty";
+
+    // the real check: SPARTA accepts it back.  A file that merely exists could
+    // be a truncated write or the wrong format entirely.
+    gui->simulator().command(QString("clear"));
+    gui->simulator().command(QString("read_restart '%1'").arg(out));
+    EXPECT_TRUE(gui->simulator().lastErrorMessage().isEmpty())
+        << "reading the restart back failed: "
+        << gui->simulator().lastErrorMessage().toStdString();
+    EXPECT_NE(gui->simulator().extractSetting("box_exist"), 0)
+        << "the restart restored no simulation box";
+}
+
+TEST_F(Run, WriteRestartIsRefusedWithoutASystemState)
+{
+    Modals modals;
+    QMetaObject::invokeMethod(gui, "writeRestart");
+    EXPECT_TRUE(modals.said("without a system state")) << modals.seen.join(" | ").toStdString();
 }
 
 TEST_F(Run, TheProgressAndStatusIndicatorsComeUpForARun)

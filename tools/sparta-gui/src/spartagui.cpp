@@ -72,6 +72,7 @@
 #include <QGridLayout>
 #include <QGuiApplication>
 #include <QKeySequence>
+#include <QInputDialog>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenu>
@@ -92,6 +93,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
+#include <limits>
 #include <string>
 #include <utility>
 
@@ -290,6 +292,8 @@ void SpartaGui::createFileMenu()
                   &SpartaGui::plotDataFile);
     addMenuAction(menu, ":/icons/binary-file-icon.svg", "Inspect &Restart File", "Ctrl+Shift+R",
                   &SpartaGui::inspect);
+    restartAction = addMenuAction(menu, ":/icons/document-save.svg", "&Write Restart File...", "",
+                                  &SpartaGui::writeRestart);
     menu->addSeparator();
 
     recentActions.resize(Cfg::NUM_RECENT_FILES);
@@ -341,6 +345,8 @@ void SpartaGui::createRunMenu()
     stopAction =
         addMenuAction(menu, ":/icons/process-stop.svg", "&Stop SPARTA", "Ctrl+/",
                       &SpartaGui::stopRun);
+    extendAction = addMenuAction(menu, ":/icons/go-last.svg", "&Extend Run...", "Ctrl+E",
+                                 &SpartaGui::extendRun);
     addMenuAction(menu, ":/icons/warning.svg", "Chec&k Input", "Ctrl+K", &SpartaGui::checkInput);
     menu->addSeparator();
 
@@ -861,7 +867,8 @@ SpartaGui::SpartaGui(QWidget *parent, const QString &filename, int width, int he
     chartwindow(nullptr), logupdater(nullptr), dirstatus(nullptr),
     progress(nullptr),
     prefdialog(nullptr), spartastatus(nullptr), varwindow(nullptr), runner(nullptr),
-    runCounter(0), nthreads(1), mainx(width), mainy(height)
+    runCounter(0), extendSteps(Cfg::EXTEND_STEPS_DEFAULT), nthreads(1), mainx(width),
+    mainy(height)
 {
 #if QT_CONFIG(clipboard)
     hasClipboard = true;
@@ -1775,9 +1782,14 @@ void SpartaGui::redo()
 
 void SpartaGui::syncRunControls()
 {
-    const bool running = sparta.isRunning();
+    const bool running = sparta.isRunning() || workerActive();
     if (stopAction) stopAction->setEnabled(running);
     if (stopButton) stopButton->setEnabled(running);
+    // Extending needs a state to continue from and nothing in flight.  Greyed
+    // out rather than hidden, so the entry is discoverable before the first run
+    // explains what it is for.
+    if (extendAction) extendAction->setEnabled(!running && hasSystemState());
+    if (restartAction) restartAction->setEnabled(!running && hasSystemState());
 }
 
 void SpartaGui::stopRun()
@@ -2339,7 +2351,6 @@ void SpartaGui::doRun(bool use_buffer)
     if (!sparta.isOpen()) return;
     capturer->beginCapture();
 
-    runner = new SpartaRunner(this);
     ++runCounter;
 
     // must delete all variables since clear does not delete them
@@ -2354,15 +2365,31 @@ void SpartaGui::doRun(bool use_buffer)
         if (!var.first.isEmpty() && !var.second.isEmpty())
             sparta.command(QString("variable %1 index %2").arg(var.first, var.second));
     }
-    if (use_buffer) {
-        // always add final newline since the text edit widget does not do it
-        runner->setupRun(&sparta, (textEdit->toPlainText() + "\n").toStdString());
-    } else {
-        runner->setupRun(&sparta, {}, currentFile.toStdString());
-    }
-
     // apply https proxy setting: prefer environment variable or fall back to preferences value
     applyProxySetting(sparta, settings);
+
+    if (use_buffer) {
+        // always add final newline since the text edit widget does not do it
+        launchRunner((textEdit->toPlainText() + "\n").toStdString(), {}, true);
+    } else {
+        launchRunner({}, currentFile.toStdString(), true);
+    }
+
+    if (viewer && viewer->sequence()) {
+        viewer->unlockSource();
+        viewer->sequence()->clear();
+        panels->closePanel(PanelManager::Viewer);
+    }
+    syncRunControls();
+}
+
+/* ---------------------------------------------------------------------- */
+
+void SpartaGui::launchRunner(std::string input, std::string file, bool clearfirst)
+{
+    QSettings settings;
+    runner = new SpartaRunner(this);
+    runner->setupRun(&sparta, std::move(input), std::move(file), clearfirst);
 
     connect(runner, &SpartaRunner::resultReady, this, &SpartaGui::runDone);
     // Clear the member as well as freeing the object.  Connecting finished
@@ -2377,6 +2404,12 @@ void SpartaGui::doRun(bool use_buffer)
         // unconditionally, because this handler is the one place that does.
         if (runner == r) runner = nullptr;
         r->deleteLater();
+        // The run controls are also synced from runDone(), but that runs off
+        // resultReady() while this thread is still alive -- so anything gated on
+        // workerActive(), such as Extend Run and Write Restart, was switched off
+        // there and had nothing to switch it back on.  This is the point where
+        // the worker is really gone.
+        syncRunControls();
     });
     // Built before the thread is let loose, not after.  createChartWindow()
     // reads extractGlobal("units"), which hands back update->unit_style itself
@@ -2390,17 +2423,119 @@ void SpartaGui::doRun(bool use_buffer)
 
     runner->start();
 
-    if (viewer && viewer->sequence()) {
-        viewer->unlockSource();
-        viewer->sequence()->clear();
-        panels->closePanel(PanelManager::Viewer);
-    }
-
     logupdater = new QTimer(this);
     connect(logupdater, &QTimer::timeout, this, &SpartaGui::logUpdate);
     logupdater->start(settings.value(Keys::UPDFREQ, Cfg::DATA_UPDATE_INTERVAL_DEFAULT).toInt());
+}
+
+/* ---------------------------------------------------------------------- */
+
+bool SpartaGui::hasSystemState()
+{
+    // A box is the minimum a continued run needs: `run` without one fails, and
+    // so does writing a restart.  isRunning()/workerActive() because SPARTA is
+    // not re-entrant -- commands may only be issued between runs.
+    return sparta.isOpen() && !sparta.isRunning() && !workerActive() &&
+           sparta.extractSetting("box_exist") != 0;
+}
+
+/* ---------------------------------------------------------------------- */
+
+void SpartaGui::extendRun()
+{
+    if (sparta.isRunning() || workerActive()) {
+        warning(this, "SPARTA-GUI Warning", "Must stop the current run before extending it");
+        return;
+    }
+    if (!hasSystemState()) {
+        warning(this, "SPARTA-GUI Warning",
+                "Cannot extend a run without a system state.\n"
+                "Run the input at least as far as defining the box and grid first.");
+        return;
+    }
+
+    bool ok           = false;
+    const int nsteps  = QInputDialog::getInt(this, "Extend Run", "Number of steps to add:",
+                                             extendSteps, 1, std::numeric_limits<int>::max(), 1, &ok);
+    if (!ok) return;
+    extendSteps = nsteps;
+
+    QSettings settings;
+    progress->setValue(0);
+    progress->show();
+    status->setText(QString("Extending run by %1 steps ...").arg(nsteps));
+    status->repaint();
+
+    capturer->beginCapture();
+
+    // The windows of the run being extended are reused; they are only created
+    // when missing, which happens when the state came from an inspected restart
+    // file rather than from a run in this session.
+    if (!logwindow) createLogWindow(settings);
+    if (!chartwindow) createChartWindow(settings);
+
+    logwindow->moveCursor(QTextCursor::End);
+    logwindow->insertPlainText(
+        QString("\n========== Extending run by %1 steps ==========\n\n").arg(nsteps));
+    logwindow->moveCursor(QTextCursor::End);
+
+    // "pre yes", not "pre no", even though the state is already set up: each run
+    // gets a fresh runner thread with its own thread pool, and only the setup
+    // phase re-initialises the per-thread data of a threaded accelerator for
+    // that pool -- skipping it crashes a Kokkos/OpenMP run.  "post no" only
+    // drops the timing summary of the extension.  SPARTA clears a forced
+    // timeout at the top of Run::command, so a run stopped with the Stop button
+    // does not need it undone here.
+    //
+    // clearfirst is false: "clear" would destroy the very state being extended.
+    launchRunner(QString("run %1 pre yes post no\n").arg(nsteps).toStdString(), {}, false);
     syncRunControls();
 }
+
+/* ---------------------------------------------------------------------- */
+
+void SpartaGui::writeRestart()
+{
+    // SPARTA is not re-entrant: commands may only be issued between runs.
+    if (sparta.isRunning() || workerActive()) {
+        warning(this, "SPARTA-GUI Warning",
+                "Must stop the current run before writing a restart file");
+        return;
+    }
+    if (!hasSystemState()) {
+        warning(this, "SPARTA-GUI Warning",
+                "Cannot write a restart file without a system state.\n"
+                "Run the input at least as far as defining the box and grid first.");
+        return;
+    }
+
+    QFileInfo deck(currentFile);
+    const QString suggested =
+        QDir::current().absoluteFilePath((deck.completeBaseName().isEmpty()
+                                              ? QStringLiteral("sparta")
+                                              : deck.completeBaseName()) +
+                                         ".restart");
+    QString fileName = QFileDialog::getSaveFileName(this, "Write Restart File", suggested,
+                                                    "Restart files (*.restart);;All files (*)");
+    if (fileName.isEmpty()) return;
+    if (!fileName.endsWith(".restart")) fileName += ".restart";
+
+    {
+        StdoutSilencer guard;
+        // quoted: a path chosen from a file dialog may contain spaces, and
+        // SPARTA splits its command line on them
+        sparta.command(QString("write_restart '%1'").arg(fileName));
+    }
+
+    const QString errmsg = sparta.lastErrorMessage();
+    if (!errmsg.isEmpty()) {
+        critical(this, "SPARTA-GUI Error", "Error writing restart file:", errmsg);
+    } else {
+        status->setText(QString("Wrote restart file %1").arg(QFileInfo(fileName).fileName()));
+    }
+}
+
+/* ---------------------------------------------------------------------- */
 
 void SpartaGui::ensureSweepPanel()
 {

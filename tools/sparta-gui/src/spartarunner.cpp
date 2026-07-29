@@ -16,12 +16,15 @@
 
 SpartaRunner::SpartaRunner(QObject *parent) : QThread(parent), sparta(nullptr) {}
 
-void SpartaRunner::setupRun(SpartaWrapper *_sparta, std::string _input, std::string _file)
+void SpartaRunner::setupRun(SpartaWrapper *_sparta, std::string _input, std::string _file,
+                            bool _clearfirst)
 {
     sparta = _sparta;
     input  = std::move(_input);
     file   = std::move(_file);
-    sparta->command("clear");
+    // Not when continuing: "clear" destroys the grid, the particles and every
+    // definition, which is exactly what an extended run needs to keep.
+    if (_clearfirst) sparta->command("clear");
 }
 
 void SpartaRunner::run()

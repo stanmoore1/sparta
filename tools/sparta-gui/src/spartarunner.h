@@ -52,12 +52,16 @@ public:
      * @param _sparta Pointer to SpartaWrapper instance
      * @param _input  String of SPARTA commands to execute (can be empty)
      * @param _file   Input file path to execute (can be empty)
+     * @param _clearfirst  Issue "clear" before running, discarding the current
+     *                     state.  True for running a deck from the top; false
+     *                     for continuing from the state a previous run left,
+     *                     which is what "Extend Run" does.
      *
-     * Sets up the runner with the SPARTA instance and input. Clears any
-     * previous SPARTA state with the "clear" command. Either input or
+     * Sets up the runner with the SPARTA instance and input. Either input or
      * file should be provided, not both.
      */
-    void setupRun(SpartaWrapper *_sparta, std::string _input, std::string _file = {});
+    void setupRun(SpartaWrapper *_sparta, std::string _input, std::string _file = {},
+                  bool _clearfirst = true);
 
 signals:
     /**

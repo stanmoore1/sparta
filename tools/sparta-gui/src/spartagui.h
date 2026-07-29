@@ -153,6 +153,18 @@ protected:
     /** @brief Initialize and start a new SPARTA instance */
     void startSparta();
 
+    /** @brief Create the worker thread and hand it the input to execute.
+     * @param clearfirst  discard the current state first (a run from the top)
+     *                    or continue from it (Extend Run) */
+    void launchRunner(std::string input, std::string file, bool clearfirst);
+
+    /** @brief Whether there is a system state a run could continue from.
+     *
+     * True when an instance is open, nothing is running, and a simulation box
+     * exists -- the minimum for `run` to continue or `write_restart` to have
+     * something to write. */
+    [[nodiscard]] bool hasSystemState();
+
     /** @brief Handle completion of a SPARTA run */
     void runDone();
 
@@ -187,12 +199,26 @@ signals:
     /** @brief Emitted each logUpdate() tick so a sweep can sample thermo. */
     void thermoSampled();
 
+public:
+    /** @brief The SPARTA instance this window drives.
+     *
+     * Already handed out by pointer to the parametric sweep panel; this names
+     * that access rather than leaving it to friendship, and lets tests ask the
+     * simulator what state a menu action actually left behind. */
+    SpartaWrapper &simulator() { return sparta; }
+
 public slots:
     /** @brief Quit the application */
     void quit();
 
     /** @brief Stop a running SPARTA simulation */
     void stopRun();
+
+    /** @brief Continue the previous run by a number of additional steps */
+    void extendRun();
+
+    /** @brief Write a restart file holding the current system state */
+    void writeRestart();
 
     /** @brief Run SPARTA with content from editor buffer */
     void runBuffer() { doRun(true); }
@@ -530,6 +556,8 @@ private:
     /// Run > Stop SPARTA, and the status-bar button beside it. Both are only
     /// meaningful while a run is going, so both follow the run state.
     QAction *stopAction   = nullptr;
+    QAction *extendAction = nullptr;
+    QAction *restartAction = nullptr;
     QWidget *stopButton   = nullptr;
     QMenu *exampleMenu;             ///< File menu entry with SPARTA example inputs
 
@@ -600,6 +628,7 @@ private:
     SpartaRunner *runner;                ///< Thread for running SPARTA simulations
     QString pluginPath;                  ///< Path to SPARTA shared library (plugin mode)
     int runCounter;                      ///< Counter for simulation runs
+    int extendSteps;                     ///< Step count last used by Extend Run
     std::vector<std::string> spartaArgs; ///< Command-line arguments for SPARTA
 
 protected:
