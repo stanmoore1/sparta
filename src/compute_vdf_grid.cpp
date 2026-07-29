@@ -168,14 +168,13 @@ void ComputeVDFGrid::init()
     error->all(FLERR,"Number of groups in compute vdf/grid "
                "mixture has changed");
 
-  // this compute reads the host copy of the particle list, which Kokkos only
-  //   syncs before output, not before Modify::end_of_step().  Invoking it from
-  //   e.g. fix ave/grid would silently histogram stale data, so refuse to run
-  //   rather than produce wrong answers.  Remove once a Kokkos port exists.
+  // the non-Kokkos version reads the host copy of the particle list, which
+  //   Kokkos only syncs before output, not before Modify::end_of_step(), so
+  //   invoking it from e.g. fix ave/grid would silently histogram stale data
+  // ComputeVDFGridKokkos sets kokkos_flag and does its own device tally
 
-  if (sparta->kokkos)
-    error->all(FLERR,"Cannot (yet) use compute vdf/grid "
-               "with the KOKKOS package");
+  if (sparta->kokkos && !kokkos_flag)
+    error->all(FLERR,"Must use compute vdf/grid/kk if Kokkos is enabled");
 
   // only consult the per-particle weight if cell weighting is enabled,
   //   else it is not maintained and every sample counts 1.0

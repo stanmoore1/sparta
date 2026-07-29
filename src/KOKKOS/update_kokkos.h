@@ -28,6 +28,7 @@
 #include "surf_collide_transparent_kokkos.h"
 #include "compute_boundary_kokkos.h"
 #include "compute_surf_kokkos.h"
+#include "compute_edf_surf_kokkos.h"
 
 namespace SPARTA_NS {
 
@@ -35,6 +36,9 @@ namespace SPARTA_NS {
 #define KOKKOS_MAX_TOT_SURF_COLL 10
 #define KOKKOS_MAX_BLIST 2
 #define KOKKOS_MAX_SLIST 2
+// energy plus incident and reflected angle distributions is the natural set,
+//   so allow a little more than the 2 that compute surf is capped at
+#define KOKKOS_MAX_EDFLIST 4
 
 struct s_UPDATE_REDUCE {
   int ntouch_one,nexit_one,nboundary_one,
@@ -141,8 +145,16 @@ class UpdateKokkos : public Update {
   KKCopy<ComputeSurfKokkos> slist_active_copy[KOKKOS_MAX_SLIST];
   KKCopy<ComputeBoundaryKokkos> blist_active_copy[KOKKOS_MAX_BLIST];
 
+  // surf tally computes are split by class, because surf_tally_kk() is a
+  //   non-virtual device method resolved on the concrete type
+
+  KKCopy<ComputeEDFSurfKokkos> edflist_active_copy[KOKKOS_MAX_EDFLIST];
+  int nsurf_tally_surf;      // # of compute surf styles in slist_active
+  int nsurf_tally_edf;       // # of compute edf/surf, adf/surf styles
+
   ComputeBoundaryKokkos tmp_compute_boundary_kk;
   ComputeSurfKokkos tmp_compute_surf_kk;
+  ComputeEDFSurfKokkos tmp_compute_edf_surf_kk;
 
   typedef Kokkos::DualView<int[14], DeviceType::array_layout, DeviceType> tdual_int_14;
   typedef tdual_int_14::t_dev t_int_14;

@@ -185,13 +185,12 @@ void ComputeEDFSurf::init()
   if (ngroup != particle->mixture[imix]->ngroup)
     error->all(FLERR,"Number of groups in compute edf/surf mixture has changed");
 
-  // UpdateKokkos only drives surf tallying through ComputeSurfKokkos, so say so
-  //   here rather than let the generic cast failure in UpdateKokkos report it.
-  //   Remove once a Kokkos port exists.
+  // UpdateKokkos only drives surf tallying through Kokkos-enabled computes
+  // ComputeEDFSurfKokkos sets kokkos_flag and does its own device tally
 
-  if (sparta->kokkos) {
+  if (sparta->kokkos && !kokkos_flag) {
     char str[128];
-    sprintf(str,"Cannot (yet) use compute %s with the KOKKOS package",style);
+    sprintf(str,"Must use compute %s/kk if Kokkos is enabled",style);
     error->all(FLERR,str);
   }
 
@@ -199,6 +198,10 @@ void ComputeEDFSurf::init()
   //   else it is not maintained and every sample counts 1.0
 
   cellweightflag = grid->cellweightflag ? 1 : 0;
+
+  // Kokkos version sizes its device tally arrays by surf count here
+
+  allocate_tally();
 
   // initialize tally array in case accessed before a tally timestep
 

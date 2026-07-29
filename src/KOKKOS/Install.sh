@@ -44,6 +44,8 @@ action compute_distsurf_grid_kokkos.cpp
 action compute_distsurf_grid_kokkos.h
 action compute_dt_grid_kokkos.cpp
 action compute_dt_grid_kokkos.h
+action compute_edf_surf_kokkos.cpp
+action compute_edf_surf_kokkos.h
 action compute_eflux_grid_kokkos.cpp
 action compute_eflux_grid_kokkos.h
 action compute_grid_kokkos.cpp
@@ -66,6 +68,8 @@ action compute_thermal_grid_kokkos.cpp
 action compute_thermal_grid_kokkos.h
 action compute_tvib_grid_kokkos.cpp
 action compute_tvib_grid_kokkos.h
+action compute_vdf_grid_kokkos.cpp
+action compute_vdf_grid_kokkos.h
 action comm_kokkos.cpp
 action comm_kokkos.h
 action domain_kokkos.cpp

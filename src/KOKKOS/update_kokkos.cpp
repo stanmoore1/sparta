@@ -68,6 +68,7 @@ enum{NOFIELD,CFIELD,PFIELD,GFIELD};             // several files
 
 #define VAL_1(X) X
 #define VAL_2(X) VAL_1(X), VAL_1(X)
+#define VAL_4(X) VAL_2(X), VAL_2(X)
 
 /* ---------------------------------------------------------------------- */
 
@@ -82,9 +83,13 @@ UpdateKokkos::UpdateKokkos(SPARTA *sparta) : Update(sparta),
   sc_kk_transparent_copy{VAL_2(KKCopy<SurfCollideTransparentKokkos>(sparta))},
   blist_active_copy{VAL_2(KKCopy<ComputeBoundaryKokkos>(sparta))},
   slist_active_copy{VAL_2(KKCopy<ComputeSurfKokkos>(sparta))},
+  edflist_active_copy{VAL_4(KKCopy<ComputeEDFSurfKokkos>(sparta))},
   tmp_compute_boundary_kk(sparta),
-  tmp_compute_surf_kk(sparta)
+  tmp_compute_surf_kk(sparta),
+  tmp_compute_edf_surf_kk(sparta)
 {
+  nsurf_tally_surf = nsurf_tally_edf = 0;
+
 
   // use 1D view for scalars to reduce GPU memory operations
 
@@ -138,6 +143,7 @@ UpdateKokkos::~UpdateKokkos()
 
   tmp_compute_boundary_kk.uncopy = 1;
   tmp_compute_surf_kk.uncopy = 1;
+  tmp_compute_edf_surf_kk.uncopy = 1;
 
   for (int i=0; i<KOKKOS_MAX_SURF_COLL_PER_TYPE; i++) {
     sc_kk_specular_copy[i].uncopy();
@@ -153,6 +159,10 @@ UpdateKokkos::~UpdateKokkos()
 
   for (int i=0; i<KOKKOS_MAX_SLIST; i++) {
     slist_active_copy[i].uncopy();
+  }
+
+  for (int i=0; i<KOKKOS_MAX_EDFLIST; i++) {
+    edflist_active_copy[i].uncopy();
   }
 }
 
@@ -797,8 +807,16 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
 
   if (nsurf_tally) {
     for (int m = 0; m < nsurf_tally; m++) {
-      ComputeSurfKokkos* compute_surf_kk = (ComputeSurfKokkos*)(slist_active[m]);
-      compute_surf_kk->post_surf_tally();
+
+      // dispatch on the actual class, slist_active mixes compute surf with
+      //   compute edf/surf and adf/surf
+
+      if (ComputeSurfKokkos* compute_surf_kk =
+          dynamic_cast<ComputeSurfKokkos*>(slist_active[m]))
+        compute_surf_kk->post_surf_tally();
+      else if (ComputeEDFSurfKokkos* compute_edf_kk =
+               dynamic_cast<ComputeEDFSurfKokkos*>(slist_active[m]))
+        compute_edf_kk->post_surf_tally();
     }
   }
 
@@ -1412,10 +1430,16 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
             jpart->weight = particle_i.weight;
           }
 
-          if (nsurf_tally)
-            for (m = 0; m < nsurf_tally; m++)
-              slist_active_copy[m].obj.
-                    surf_tally_kk<ATOMIC_REDUCTION>(dtremain,minsurf,icell,reaction,&iorig,ipart,jpart);
+          // use local loop indices, so that when there are no surf tally
+          //   computes nothing in the enclosing scope is disturbed
+
+          for (int im = 0; im < nsurf_tally_surf; im++)
+            slist_active_copy[im].obj.
+                  surf_tally_kk<ATOMIC_REDUCTION>(dtremain,minsurf,icell,reaction,&iorig,ipart,jpart);
+
+          for (int im = 0; im < nsurf_tally_edf; im++)
+            edflist_active_copy[im].obj.
+                  surf_tally_kk<ATOMIC_REDUCTION>(dtremain,minsurf,icell,reaction,&iorig,ipart,jpart);
 
           // stuck_iterate = consecutive iterations particle is immobile
 
@@ -1967,32 +1991,46 @@ void UpdateKokkos::tally_set(bigint ntimestep)
     }
   }
 
-  if (nsurf_tally > KOKKOS_MAX_SLIST)
-    error->all(FLERR,"Kokkos currently only supports two instances of compute surface");
+  // partition the surf tally computes by class
+  // surf_tally_kk() is a non-virtual device method, so each class needs its
+  //   own list of copies and its own loop in the move kernel
 
-  if (nsurf_tally) {
-    for (i = 0; i < nsurf_tally; i++) {
-      if (strcmp(slist_active[i]->style,"isurf/grid") == 0)
-        error->all(FLERR,"Kokkos doesn't yet support compute isurf/grid");
-      ComputeSurfKokkos* compute_surf_kk = dynamic_cast<ComputeSurfKokkos*>(slist_active[i]);
-      if (!compute_surf_kk) {
-        char str[128];
-        sprintf(str,"Kokkos does not (yet) support compute %s",
-                slist_active[i]->style);
-        error->all(FLERR,str);
-      }
+  nsurf_tally_surf = nsurf_tally_edf = 0;
+
+  for (i = 0; i < nsurf_tally; i++) {
+    if (strcmp(slist_active[i]->style,"isurf/grid") == 0)
+      error->all(FLERR,"Kokkos doesn't yet support compute isurf/grid");
+
+    if (ComputeSurfKokkos* compute_surf_kk =
+        dynamic_cast<ComputeSurfKokkos*>(slist_active[i])) {
+      if (nsurf_tally_surf == KOKKOS_MAX_SLIST)
+        error->all(FLERR,"Kokkos currently only supports two instances of compute surface");
       compute_surf_kk->pre_surf_tally();
-      slist_active_copy[i].copy(compute_surf_kk);
-    }
-  } else {
-    for (int i = 0; i < KOKKOS_MAX_SLIST; i++) {
+      slist_active_copy[nsurf_tally_surf++].copy(compute_surf_kk);
 
-      // use temporary to avoid the copy getting stale leading to an issue
-      //  with view reference counting
+    } else if (ComputeEDFSurfKokkos* compute_edf_kk =
+               dynamic_cast<ComputeEDFSurfKokkos*>(slist_active[i])) {
+      if (nsurf_tally_edf == KOKKOS_MAX_EDFLIST)
+        error->all(FLERR,"Kokkos supports at most KOKKOS_MAX_EDFLIST instances of compute edf/surf plus adf/surf, raise it in update_kokkos.h and rebuild");
+      compute_edf_kk->pre_surf_tally();
+      edflist_active_copy[nsurf_tally_edf++].copy(compute_edf_kk);
 
-      slist_active_copy[i].copy(&tmp_compute_surf_kk);
+    } else {
+      char str[128];
+      sprintf(str,"Kokkos does not (yet) support compute %s",
+              slist_active[i]->style);
+      error->all(FLERR,str);
     }
   }
+
+  // use temporaries for the unused slots to avoid a copy getting stale,
+  //   which would break view reference counting
+
+  for (i = nsurf_tally_surf; i < KOKKOS_MAX_SLIST; i++)
+    slist_active_copy[i].copy(&tmp_compute_surf_kk);
+
+  for (i = nsurf_tally_edf; i < KOKKOS_MAX_EDFLIST; i++)
+    edflist_active_copy[i].copy(&tmp_compute_edf_surf_kk);
 
   if (ngas_tally)
     error->all(FLERR,"Kokkos does not (yet) support tallying gas/gas collisions or reactions");

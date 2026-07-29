@@ -97,9 +97,10 @@ E: Number of groups in compute vdf/grid mixture has changed
 This mixture property cannot be changed after this compute command is
 issued.
 
-E: Cannot (yet) use compute vdf/grid with the KOKKOS package
+E: Must use compute vdf/grid/kk if Kokkos is enabled
 
-This compute has no Kokkos version, and the host copy of the particle
-list it reads is not guaranteed to be current in a Kokkos run.
+The host copy of the particle list this compute reads is not guaranteed
+to be current in a Kokkos run, so the Kokkos version must be used.  The
+-sf kk command-line switch selects it automatically.
 
 */

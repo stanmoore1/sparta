@@ -7,6 +7,7 @@
 :line
 
 compute vdf/grid command :h3
+compute vdf/grid/kk command :h3
 
 [Syntax:]
 
@@ -152,10 +153,11 @@ The array values are counts, which are dimensionless.
 
 [Restrictions:]
 
-This compute cannot be used with the KOKKOS package.  It has no
-accelerated version, and the host copy of the particle list it reads is
-not guaranteed to be current in a Kokkos run, so it refuses to run
-rather than histogram stale data.
+The non-Kokkos version of this compute cannot be used in a Kokkos run,
+because the host copy of the particle list it reads is only synced before
+output, not before "fix ave/grid"_fix_ave_grid.html is invoked.  If
+Kokkos is enabled the {vdf/grid/kk} style must be used, which tallies on
+the device; the {-sf kk} command-line switch selects it automatically.
 
 [Related commands:]
 

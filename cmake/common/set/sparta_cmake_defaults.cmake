@@ -102,9 +102,6 @@ if(SPARTA_ENABLE_TESTING)
         # VTK dump styles have no KOKKOS variant
         "in.vtk"
         "in.vtk.3d"
-        # compute vdf/grid and edf/surf, adf/surf have no KOKKOS variant
-        "in.vdf"
-        "in.vdf.surf"
     )
   endif()
 

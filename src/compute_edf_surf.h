@@ -33,14 +33,15 @@ namespace SPARTA_NS {
 class ComputeEDFSurf : public Compute {
  public:
   ComputeEDFSurf(class SPARTA *, int, char **);
+  ComputeEDFSurf(class SPARTA* sparta) : Compute(sparta) {} // needed for Kokkos
   ~ComputeEDFSurf();
-  void init();
+  virtual void init();
   void compute_per_surf();
-  void clear();
-  void surf_tally(double, int, int, int, Particle::OnePart *,
-                  Particle::OnePart *, Particle::OnePart *);
-  int tallyinfo(surfint *&);
-  void post_process_surf();
+  virtual void clear();
+  virtual void surf_tally(double, int, int, int, Particle::OnePart *,
+                          Particle::OnePart *, Particle::OnePart *);
+  virtual int tallyinfo(surfint *&);
+  virtual void post_process_surf();
   bigint memory_usage();
 
  protected:
@@ -79,7 +80,12 @@ class ComputeEDFSurf : public Compute {
   Surf::Line *lines;
   Surf::Tri *tris;
 
-  void grow_tally();
+  // allocate the tally arrays, called by init() and whenever the grid changes
+  // the host version grows them on demand instead, so it is a no-op here
+
+  virtual void allocate_tally() {}
+
+  virtual void grow_tally();
 };
 
 }
@@ -134,9 +140,10 @@ E: Number of groups in compute edf/surf mixture has changed
 This mixture property cannot be changed after this compute command is
 issued.
 
-E: Cannot (yet) use compute edf/surf with the KOKKOS package
+E: Must use compute edf/surf/kk if Kokkos is enabled
 
-This compute has no Kokkos version, and UpdateKokkos only drives surface
-tallying through Kokkos-enabled computes.
+UpdateKokkos only drives surface tallying through Kokkos-enabled
+computes, so the Kokkos version must be used.  The -sf kk command-line
+switch selects it automatically.
 
 */

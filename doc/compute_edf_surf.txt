@@ -7,7 +7,9 @@
 :line
 
 compute edf/surf command :h3
+compute edf/surf/kk command :h3
 compute adf/surf command :h3
+compute adf/surf/kk command :h3
 
 [Syntax:]
 
@@ -162,9 +164,13 @@ The array values are counts, which are dimensionless.
 These computes can only be used if surface elements exist, and only for
 explicit surface elements, not "implicit"_read_isurf.html ones.
 
-They cannot be used with the KOKKOS package.  They have no accelerated
-version, and Kokkos only drives surface tallying through Kokkos-enabled
-computes.
+The non-Kokkos versions cannot be used in a Kokkos run, because Kokkos
+only drives surface tallying through Kokkos-enabled computes.  If Kokkos
+is enabled the {edf/surf/kk} and {adf/surf/kk} styles must be used, which
+tally on the device; the {-sf kk} command-line switch selects them
+automatically.  Kokkos supports a limited number of concurrent instances
+of these two styles combined, set by KOKKOS_MAX_EDFLIST in
+src/KOKKOS/update_kokkos.h.
 
 [Related commands:]
 
