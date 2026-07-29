@@ -52,6 +52,18 @@ FixEmitFace::FixEmitFace(SPARTA *sparta, int narg, char **arg) :
 {
   if (narg < 4) error->all(FLERR,"Illegal fix emit/face command");
 
+  // Both cached here as well as in init(), because they are read before init()
+  // ever runs: grid_changed() -> create_tasks() -> create_task() is called
+  // whenever the grid changes, and read_surf/balance_grid do that while the
+  // deck is still being read.  Left unset until init(), `axisymmetric` was an
+  // uninitialised read on that path -- harmless-looking, and at -O3 it crashed
+  // the Kokkos build outright in create_task().  domain->axisymmetric is fixed
+  // by the `dimension` command, which necessarily precedes a fix, so reading it
+  // here gives the same answer init() will.
+
+  dimension = domain->dimension;
+  axisymmetric = domain->axisymmetric;
+
   imix = particle->find_mixture(arg[2]);
   if (imix < 0) error->all(FLERR,"Fix emit/face mixture ID does not exist");
 
