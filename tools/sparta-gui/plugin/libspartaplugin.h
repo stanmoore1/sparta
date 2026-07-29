@@ -49,6 +49,12 @@ enum _SPARTA_DATATYPE_CONST {
   SPARTA_STRING = 6     /*!< C-String */
 };
 
+/* The same constants are declared in SPARTA's src/library.h.  This header has
+ * to stand alone -- the loader dlopen()s a library it has no headers for --
+ * so it carries its own copy, skipped when library.h got here first. */
+
+#ifndef SPARTA_LIBRARY_H_HAS_SPA_CONSTANTS
+
 /* Style constants for extracting data from computes and fixes.
  * These differ from LAMMPS: SPARTA data is global, per-particle,
  * per-grid, per-surf, or per-tally. */
@@ -83,6 +89,8 @@ enum _SPA_VAR_CONST {
   SPA_VAR_STRING = 4,   /*!< return value will be a string (catch-all) */
   SPA_VAR_INTERNAL = 5  /*!< internal variables */
 };
+
+#endif /* SPARTA_LIBRARY_H_HAS_SPA_CONSTANTS */
 
 #ifdef __cplusplus
 extern "C" {

@@ -48,6 +48,51 @@ enum _SPARTA_VAR_STYLE {
   SPARTA_VAR_INTERNAL = 5  /* internal variables */
 };
 
+/* Short-form constants for sparta_extract_compute()/sparta_extract_fix().
+ *
+ * These live here, and not only in the plugin loader's header, because a
+ * client linked directly against libsparta sees only this file.  SPARTA-GUI's
+ * wrapper uses them in both modes, so without them the documented linked
+ * (non-plugin) build did not compile at all.  liblammps puts its LMP_STYLE_*
+ * set in library.h for the same reason.
+ *
+ * The values are duplicated in tools/sparta-gui/plugin/libspartaplugin.h,
+ * which has to stand alone for the dlopen loader; that copy is skipped when
+ * this header has already been included, so a translation unit may include
+ * both. */
+
+#define SPARTA_LIBRARY_H_HAS_SPA_CONSTANTS 1
+
+/* what kind of data a compute or fix returns */
+
+enum _SPA_STYLE_CONST {
+  SPA_STYLE_GLOBAL = 0,   /* global data */
+  SPA_STYLE_PARTICLE = 1, /* per-particle data */
+  SPA_STYLE_GRID = 2,     /* per-grid data */
+  SPA_STYLE_SURF = 3,     /* per-surf data */
+  SPA_STYLE_TALLY = 4     /* per-tally data */
+};
+
+/* which of it: for global data scalar/vector/array; for the per-X styles the
+   vector, or a 1-based array column when greater than 1 */
+
+enum _SPA_TYPE_CONST {
+  SPA_TYPE_SCALAR = 0, /* scalar */
+  SPA_TYPE_VECTOR = 1, /* vector */
+  SPA_TYPE_ARRAY = 2   /* array */
+};
+
+/* variable styles, the same values as _SPARTA_VAR_STYLE above */
+
+enum _SPA_VAR_CONST {
+  SPA_VAR_EQUAL = 0,    /* equal-style (and compatible) variables */
+  SPA_VAR_PARTICLE = 1, /* particle-style variables */
+  SPA_VAR_GRID = 2,     /* grid-style variables */
+  SPA_VAR_SURF = 3,     /* surf-style variables */
+  SPA_VAR_STRING = 4,   /* string-valued variables */
+  SPA_VAR_INTERNAL = 5  /* internal variables */
+};
+
 /* ifdefs allow this file to be included in a C program */
 
 #ifdef __cplusplus
