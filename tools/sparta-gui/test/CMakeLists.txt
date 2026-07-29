@@ -65,18 +65,50 @@ else()
 endif()
 
 set(TESTENV_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/testenv/bin/")
+
+# Discard an existing environment whose interpreter cannot import tkinter.
+#
+# The probe above picks a Python that has it, but that only decides what a
+# *new* environment is built from.  An environment left over from an earlier
+# configure -- or restored from a snapshot, which is how this was hit -- keeps
+# whatever bin/python pointed at then, and the build below has no reason to
+# touch it.  The result is three PyAutoGUI tests failing on "You must install
+# tkinter", with a pyvenv.cfg naming an interpreter that does have it: the
+# config records what created the environment, not what bin/python resolves to
+# now.  Ask the environment itself rather than believing the file.
+if (EXISTS "${TESTENV_BINARY_DIR}/python")
+  execute_process(COMMAND "${TESTENV_BINARY_DIR}/python" -c "import tkinter"
+    RESULT_VARIABLE _testenv_tk OUTPUT_QUIET ERROR_QUIET)
+  if (NOT _testenv_tk EQUAL 0)
+    message(STATUS "Existing test environment cannot import tkinter: rebuilding it")
+    file(REMOVE_RECURSE "${CMAKE_CURRENT_BINARY_DIR}/testenv")
+    file(REMOVE "${CMAKE_CURRENT_BINARY_DIR}/testenv.stamp")
+  endif()
+endif()
+
+# A stamp file rather than the bin/ directory as the output: a directory's
+# timestamp changes for reasons unrelated to whether the environment inside it
+# is usable, so the recipe was considered up to date and skipped exactly when
+# it most needed to run.
+set(TESTENV_STAMP "${CMAKE_CURRENT_BINARY_DIR}/testenv.stamp")
 add_custom_command(
-  OUTPUT ${TESTENV_BINARY_DIR}
-  COMMAND ${TESTENV_PYTHON} -m venv "${CMAKE_CURRENT_BINARY_DIR}/testenv"
+  OUTPUT ${TESTENV_STAMP}
+  # --clear so a directory that is already there is emptied first; without it
+  # venv keeps the old bin/python symlinks and the interpreter probed above is
+  # silently not the one the tests end up running
+  COMMAND ${TESTENV_PYTHON} -m venv --clear "${CMAKE_CURRENT_BINARY_DIR}/testenv"
   COMMAND ${TESTENV_BINARY_DIR}/pip $ENV{PIP_OPTIONS} install --upgrade pip
   COMMAND ${TESTENV_BINARY_DIR}/pip $ENV{PIP_OPTIONS} install -r ${CMAKE_CURRENT_SOURCE_DIR}/requirements.txt --upgrade
   COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/shooter.${SHOOTER} ${TESTENV_BINARY_DIR}/shooter
+  COMMAND ${CMAKE_COMMAND} -E touch ${TESTENV_STAMP}
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-  DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/requirements.txt
+  # rebuilt when the requirements change, and when the interpreter it is built
+  # from is replaced
+  DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/requirements.txt ${TESTENV_PYTHON}
 )
 add_custom_target(setup_tests ALL
   ${CMAKE_COMMAND} -E echo "Setting up virtual environment for testing"
-  DEPENDS ${TESTENV_BINARY_DIR}
+  DEPENDS ${TESTENV_STAMP}
   SOURCES requirements.txt shooter.magick shooter.import shooter.xfce4-screenshooter shooter.gnome-screenshot
 )
 set_target_properties(setup_tests PROPERTIES ADDITIONAL_CLEAN_FILES ${CMAKE_CURRENT_BINARY_DIR}/testenv)
