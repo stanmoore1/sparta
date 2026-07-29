@@ -63,6 +63,8 @@ DumpImage::DumpImage(SPARTA *sparta, int narg, char **arg) :
 {
   if (binary || multiproc) error->all(FLERR,"Invalid dump image filename");
 
+  multifile_override = 0;
+
   // set filetype based on filename suffix
 
   int n = strlen(filename);
@@ -602,7 +604,9 @@ DumpImage::~DumpImage()
 
 void DumpImage::init_style()
 {
-  if (multifile == 0)
+  // write_dump sets multifile_override, since it writes a single snapshot
+
+  if (multifile == 0 && !multifile_override)
     error->all(FLERR,"Dump image requires one snapshot per file");
 
   DumpParticle::init_style();

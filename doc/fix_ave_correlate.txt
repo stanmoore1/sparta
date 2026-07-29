@@ -1,0 +1,205 @@
+"SPARTA WWW Site"_sws - "SPARTA Documentation"_sd - "SPARTA Commands"_sc :c
+
+:link(sws,https://sparta.github.io)
+:link(sd,Manual.html)
+:link(sc,Section_commands.html#comm)
+
+:line
+
+fix ave/correlate command :h3
+
+[Syntax:]
+
+fix ID ave/correlate Nevery Nrepeat Nfreq value1 value2 ... keyword args ... :pre
+
+ID is documented in "fix"_fix.html command :ulb,l
+ave/correlate = style name of this fix command :l
+Nevery = use input values every this many timesteps :l
+Nrepeat = # of correlation time windows to accumulate :l
+Nfreq = calculate time window averages every this many timesteps :l
+one or more input values can be listed :l
+value = c_ID, c_ID\[N\], f_ID, f_ID\[N\], v_name :l
+  c_ID = global scalar calculated by a compute with ID
+  c_ID\[I\] = Ith component of global vector calculated by a compute with ID
+  f_ID = global scalar calculated by a fix with ID
+  f_ID\[I\] = Ith component of global vector calculated by a fix with ID
+  v_name = global value calculated by an equal-style variable with name :pre
+zero or more keyword/arg pairs may be appended :l
+keyword = {type} or {ave} or {start} or {prefactor} or {file} or {overwrite} or {title1} or {title2} or {title3} :l
+  {type} arg = {auto} or {upper} or {lower} or {auto/upper} or {auto/lower} or {full}
+    auto = correlate each value with itself
+    upper = correlate each value with each succeeding value
+    lower = correlate each value with each preceding value
+    auto/upper = auto + upper
+    auto/lower = auto + lower
+    full = correlate each value with every other value
+  {ave} args = {one} or {running}
+    one = zero the correlation accumulation every Nfreq steps
+    running = accumulate correlations continuously
+  {start} args = Nstart
+    Nstart = start accumulating correlations on this timestep
+  {prefactor} args = value
+    value = numeric prefactor to multiply all correlation data by
+  {file} arg = filename
+    filename = name of file to output correlation data to
+  {overwrite} arg = none = overwrite output file with only latest output
+  {title1} arg = string
+    string = text to print as 1st line of output file
+  {title2} arg = string
+    string = text to print as 2nd line of output file
+  {title3} arg = string
+    string = text to print as 3rd line of output file :pre
+:ule
+
+[Examples:]
+
+fix 1 ave/correlate 5 100 1000 c_myTemp file temp.correlate
+fix 1 ave/correlate 1 50 10000 c_pflux\[1\] c_pflux\[2\] c_pflux\[3\] &
+                    type upper ave running prefactor 1.0e-6 &
+                    title1 "My correlation data" :pre
+
+[Description:]
+
+Use one or more global values as inputs every few timesteps, and
+calculate time correlations between them at varying time intervals
+between the values.  The correlation data can be time averaged and
+either written to a file or accessed by other commands.
+
+The group of particles or grid cells the inputs are calculated over is
+determined by the compute, fix, or variable that produces each value;
+this fix has no group of its own.
+
+Each listed value must be a global scalar or an element of a global
+vector.  See the "compute"_compute.html and "fix"_fix.html doc pages
+for descriptions of which of them produce global values, and the
+"variable"_variable.html doc page for {equal}-style variables.  Note
+that "compute reduce"_compute_reduce.html can be used to reduce a
+per-grid or per-surface quantity to a single global value, and that
+"compute temp"_compute_temp.html produces a global scalar.
+
+If a value begins with "c_", a compute ID must follow which has been
+previously defined in the input script.  If no bracketed term is
+appended, the global scalar calculated by the compute is used.  If a
+bracketed term is appended, the Ith element of the global vector
+calculated by the compute is used.  Values beginning with "f_" and
+"v_" are treated the same way, for a "fix"_fix.html or an equal-style
+"variable"_variable.html.
+
+Note that for a value from a fix, the fix must produce its global
+values on timesteps that are a multiple of {Nevery}, else an error is
+generated.
+
+If a bracketed index is specified as a wildcard "*", it is expanded to
+the full range of the global vector, e.g. c_myFix\[*\] becomes
+c_myFix\[1\] c_myFix\[2\] ... as if each element had been listed
+individually.
+
+:line
+
+The {Nevery}, {Nrepeat}, and {Nfreq} arguments specify on what
+timesteps the input values will be used to calculate correlation data.
+The input values are sampled every {Nevery} timesteps.  The
+correlation data for the preceding samples is computed on timesteps
+that are a multiple of {Nfreq}.  Consider a set of samples from some
+initial time up to an output timestep.  The initial time could be the
+beginning of the simulation, or the {Nstart} timestep specified by the
+{start} keyword, or a timestep {Nfreq} steps earlier if the {ave one}
+setting is used.  The correlation value Cij for a pair of input values
+i and j, at time interval delta, is the average over all pairs of
+samples separated by delta:
+
+Cij(delta) = ave(Vi(t)*Vj(t+delta)) :pre
+
+The average is over all possible pairs of samples in the sample set
+that are separated by time delta.  {Nrepeat} correlation values are
+computed, for time intervals delta = 0, {Nevery}, 2*{Nevery}, ...,
+({Nrepeat}-1)*{Nevery} timesteps.  {Nfreq} must be a multiple of
+{Nevery}.
+
+For example, if Nevery=5, Nrepeat=6, and Nfreq=100, then values on
+timesteps 0,5,10,...,95,100 will be used to compute the final averages
+on timestep 100.  Six correlation values will be computed, for delta =
+0, 5, 10, 15, 20, and 25 timesteps.
+
+:line
+
+The {type} keyword determines which pairs of input values are
+correlated with each other.  For N input values Vi, let the number of
+correlation pairs be Npair.  For {type} = {auto}, each value is
+correlated only with itself, so Npair = N.  For {type} = {upper},
+Npair = N*(N-1)/2 and the pairs are (V1,V2), (V1,V3), ..., (V2,V3),
+....  For {type} = {lower}, Npair = N*(N-1)/2 and the pairs are
+(V2,V1), (V3,V1), ....  For {type} = {auto/upper} and {auto/lower},
+Npair = N*(N+1)/2, since each value is also correlated with itself.
+For {type} = {full}, Npair = N^2 and every ordered pair is computed.
+
+The {ave} keyword determines what happens to the accumulation of
+correlation samples every {Nfreq} timesteps.  If the {ave} setting is
+{one}, then the accumulation is restarted after each output; the
+correlation values printed on each output timestep are based only on
+the samples from the preceding {Nfreq} steps.  If the {ave} setting is
+{running}, then the accumulation is never zeroed, so the correlation
+values printed reflect all samples since the start of the run (or
+since {Nstart}).  For computing a transport coefficient from a
+Green-Kubo integral, {ave running} is usually what is wanted, since it
+maximizes the number of samples contributing to each time interval.
+
+The {start} keyword specifies what timestep the accumulation of
+correlation samples will begin on.  A common use of this keyword is to
+allow a simulation to equilibrate before accumulating correlation
+data.
+
+The {prefactor} keyword specifies a constant which multiplies all the
+correlation data.  This is a convenient way to include the volume,
+timestep, and temperature factors that appear in a Green-Kubo
+expression, so the array this fix produces can be integrated directly.
+
+The {file} keyword allows a filename to be specified.  Every {Nfreq}
+steps, one time window of correlation data is written to the file.
+This is a header line with the timestep and the number of time
+windows, followed by {Nrepeat} lines, each with the time window index,
+the time delta in timesteps, the number of samples contributing to
+that delta, and the Npair correlation values.
+
+The {overwrite} keyword will continuously overwrite the output file
+with the latest output, so that it only contains one time window of
+data.  It can only be used with the {ave running} setting.
+
+The {title1}, {title2}, and {title3} keywords allow the 3 default
+header lines of the output file to be replaced by user-specified text.
+
+:line
+
+[Restrictions:]
+
+This fix must be used with the {ave running} setting if the
+{overwrite} keyword is used.
+
+[Related commands:]
+
+"fix ave/time"_fix_ave_time.html, "fix ave/histo"_fix_ave_histo.html,
+"fix ave/grid"_fix_ave_grid.html, "compute"_compute.html,
+"compute reduce"_compute_reduce.html, "variable"_variable.html
+
+[Output info:]
+
+This fix computes a global array of values which can be accessed by
+various "output commands"_Section_howto.html#howto_4.  The values can
+only be accessed on timesteps that are multiples of {Nfreq}.
+
+The global array has {Nrepeat} rows and Npair+2 columns.  The first
+column has the time delta (in timesteps) for that row.  The second
+column has the number of samples contributing to the correlation
+values in that row.  The remaining Npair columns are the correlation
+values themselves, already divided by the sample count and multiplied
+by the {prefactor}.
+
+For example, if the fix ID is "myCorr", then f_myCorr\[3\]\[4\] is the
+correlation value for the 2nd pair of input values at the 3rd time
+delta.
+
+[Default:]
+
+The option defaults are type = auto, ave = one, start = 0,
+prefactor = 1.0, no file output, and the title strings are as
+described above.

@@ -68,6 +68,7 @@ styles available in SPARTA:
 "ablate"_fix_ablate.html - alter implicit surfaces within each grid cell
 "adapt"_fix_adapt.html - on-the-fly grid adaptation
 "ambipolar"_fix_ambipolar.html - ambipolar approximation for ionized plasmas
+"ave/correlate"_fix_ave_correlate.html - compute/output time correlations of global quantities
 "ave/grid"_fix_ave_grid.html - compute per grid cell time-averaged quantities
 "ave/histo"_fix_ave_histo.html - compute/output time averaged histograms
 "ave/histo/weight"_fix_ave_histo.html - compute/output weighted histograms

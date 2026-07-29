@@ -1,0 +1,141 @@
+"SPARTA WWW Site"_sws - "SPARTA Documentation"_sd - "SPARTA Commands"_sc :c
+
+:link(sws,https://sparta.github.io)
+:link(sd,Manual.html)
+:link(sc,Section_commands.html#comm)
+
+:line
+
+info command :h3
+
+[Syntax:]
+
+info args :pre
+
+args = one or more of the following keywords :ulb,l
+  {all} = print all sections below except {styles}
+  {config} = SPARTA version and compile-time settings
+  {system} = global settings, simulation box, particles, grid, surfaces
+  {communication} = MPI library and communication settings
+  {computes} = IDs and styles of all defined computes
+  {fixes} = IDs and styles of all defined fixes
+  {dumps} = IDs and styles of all defined dumps
+  {variables} = names, styles, and definitions of all defined variables
+  {regions} = IDs and styles of all defined regions
+  {groups} = names of all defined grid and surface groups
+  {species} = properties of all defined particle species
+  {mixtures} = composition of all defined mixtures
+  {surf_collide} = IDs and styles of all surface collision models
+  {surf_react} = IDs and styles of all surface reaction models
+  {memory} = per-processor memory usage
+  {time} = CPU and wall time used so far
+  {styles} = all styles compiled into this executable :pre
+{out} arg = {screen} or {log} or {append} file or {overwrite} file :l
+  {screen} = write the report to the screen (default)
+  {log} = write the report to the log file
+  {append} file = append the report to the named file
+  {overwrite} file = overwrite the named file with the report :pre
+:ule
+
+[Examples:]
+
+info
+info all
+info computes fixes variables
+info system memory
+info styles
+info all out overwrite info.txt
+info config out log :pre
+
+[Description:]
+
+Print a summary of the current state of the simulation to the screen,
+the log file, or a named file.  This is a diagnostic command; it does
+not change the state of the simulation in any way.
+
+The command is most useful when debugging an input script, since it
+reports what SPARTA thinks has been defined at the point in the script
+where the command appears.  It is also useful for recording the
+provenance of a simulation, since the {config} section identifies the
+executable and its compile-time settings.
+
+If no keywords are specified, the command behaves as if the {all}
+keyword were given.  Any number of keywords may be given; the
+corresponding sections are printed in a fixed order, regardless of the
+order the keywords appear in.
+
+The {all} keyword selects every section except {styles}, which is
+listed separately because it is long and does not depend on the input
+script.
+
+The {config} section prints the SPARTA version string, the sizes of
+the integer types the executable was built with (see the {-DSPARTA_SMALL},
+{-DSPARTA_BIG}, and {-DSPARTA_BIGBIG} settings in
+"Section 2.2"_Section_start.html#start_2), the compiler used, whether
+MPI, GZIP, JPEG, PNG, and FFMPEG support are available, and which
+optional packages are installed.  If SPARTA was built with the KOKKOS
+package, the enabled Kokkos backends are also listed.
+
+The {system} section prints the "units"_units.html style, the
+"dimension"_dimension.html, the current timestep and simulation time,
+the "timestep"_timestep.html size, the global {fnum}, {nrho}, {temp},
+and {vstream} settings from the "global"_global.html command, the
+simulation box bounds and "boundary"_boundary.html conditions, and
+summary counts for particles, species, mixtures, grid cells, and
+surface elements.  Per-processor particle and grid cell counts are
+reported as ave/min/max across all processors, which is a quick way to
+detect a load imbalance.  Any custom per-particle, per-grid, or
+per-surface attributes defined by the "custom"_custom.html command are
+also listed, as are the current "collide"_collide.html and
+"react"_react.html styles.
+
+The {communication} section prints the MPI library version, the number
+of processors, the particle communication settings from the
+"global"_global.html command, and whether grid cell ownership is
+currently clumped (which "balance_grid"_balance_grid.html affects).
+
+The {computes}, {fixes}, {dumps}, {regions}, {surf_collide}, and
+{surf_react} sections list the ID and style of each defined instance.
+The {variables} section lists the name, style, and definition of each
+defined variable.  The {groups} section lists the names of all grid
+and surface groups defined by the "group"_group.html command.  The
+{species} section lists the molecular weight, charge, and rotational
+and vibrational degrees of freedom of each species.  The {mixtures}
+section lists the species and group counts of each mixture.
+
+The {memory} section prints the per-processor memory usage in Mbytes
+for particles, grid cells, surface elements, and fixes/computes, as
+ave/min/max across all processors.  This is the same accounting that
+is printed at the end of a run.
+
+The {time} section prints the CPU and wall time used since SPARTA
+started, and, if a "run"_run.html has completed, the breakdown of the
+most recent run into its move, collide, sort, comm, modify, and output
+phases.
+
+The {styles} section lists every command, compute, fix, dump, region,
+collide, react, surf_collide, and surf_react style compiled into the
+executable.  This is the same information printed by the {-h} or
+{-help} command-line switch, in a more compact form.
+
+The {out} keyword redirects the report.  The default is {screen}.  If
+{log} is used the report goes to the log file.  If {append} or
+{overwrite} is used, the report is written to the named file, either
+appended to its current contents or replacing them.  The {out} keyword
+may appear anywhere in the argument list; it applies to the entire
+report, not just to the keywords that follow it.
+
+Only the first processor writes the report, but all processors must
+execute the command, since some sections perform collective MPI
+operations to gather the ave/min/max values.
+
+[Restrictions:] none
+
+[Related commands:]
+
+"print"_print.html, "stats_style"_stats_style.html
+
+[Default:]
+
+If no keywords are specified, {all} is assumed.  The default output
+target is {screen}.

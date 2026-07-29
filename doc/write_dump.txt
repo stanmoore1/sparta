@@ -1,0 +1,85 @@
+"SPARTA WWW Site"_sws - "SPARTA Documentation"_sd - "SPARTA Commands"_sc :c
+
+:link(sws,https://sparta.github.io)
+:link(sd,Manual.html)
+:link(sc,Section_commands.html#comm)
+
+:line
+
+write_dump command :h3
+
+[Syntax:]
+
+write_dump style select-ID file args keyword values :pre
+
+style = {particle} or {grid} or {surf} or {tally} or {image} :ulb,l
+select-ID = which particles, grid cells, surface elements to dump :l
+  for dump style = particle or image, use a mixture ID
+  for style = grid, use a grid group ID
+  for style = surf, use a surface group ID
+  for style = tally, select-ID is ignored :pre
+file = name of file to write dump info to :l
+args = list of arguments for a particular style, same as for the
+       "dump"_dump.html command :l
+keyword = {modify} :l
+  {modify} values = all remaining arguments are passed to
+                    "dump_modify"_dump_modify.html :pre
+:ule
+
+[Examples:]
+
+write_dump particle air current.dump id x y z vx vy vz
+write_dump grid all grid.dump id xc yc zc c_myGrid\[1\]
+write_dump surf all surf.dump id v1x v1y v2x v2y
+write_dump particle air snap.dump id x y z modify format float %20.15g
+write_dump image air view.ppm type type pdiam 3.0e-6 modify backcolor white :pre
+
+[Description:]
+
+Dump a single snapshot of particle, grid cell, or surface element
+quantities to one or more files, using the current state of the
+simulation.
+
+This is a one-time operation, in contrast to the "dump"_dump.html
+command which sets up a dump that writes a snapshot every N timesteps
+during subsequent runs.  Internally the write_dump command creates a
+dump with the requested style and arguments, writes one snapshot, then
+deletes it.  The dump is never added to the list of dumps that
+"run"_run.html knows about, so it has no effect on later output.
+
+The {style}, {select-ID}, and {args} arguments have exactly the same
+meaning as for the "dump"_dump.html command, with the exception that
+the N argument (dump every N timesteps) is omitted, since a single
+snapshot is written immediately.  See the "dump"_dump.html and "dump
+image"_dump_image.html doc pages for details on the available styles
+and their arguments.
+
+If the {modify} keyword is used, all arguments that follow it are
+passed to the "dump_modify"_dump_modify.html command for this dump,
+before the snapshot is written.  This is the only way to alter dump
+settings for a write_dump command, since the dump has no ID that a
+separate dump_modify command could refer to.
+
+This command is useful for writing a snapshot at a point in an input
+script where no run is in progress, for example after a
+"read_restart"_read_restart.html command to inspect the restored
+state, or after "create_particles"_create_particles.html to verify an
+initial condition, or between two "run"_run.html commands.
+
+If the filename contains a "*", it is replaced with the current
+timestep, as it is for the "dump"_dump.html command.  If it contains a
+"%", one file per processor is written.  If it ends in ".gz", the file
+is written in gzipped format.
+
+[Restrictions:]
+
+Dump style {movie} cannot be used with the write_dump command, since a
+movie is a sequence of frames written during a run.  Use dump style
+{image} instead to write a single image file.
+
+[Related commands:]
+
+"dump"_dump.html, "dump image"_dump_image.html,
+"dump_modify"_dump_modify.html, "undump"_undump.html
+
+[Default:] none

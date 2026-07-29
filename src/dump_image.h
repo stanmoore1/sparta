@@ -27,6 +27,9 @@ namespace SPARTA_NS {
 
 class DumpImage : public DumpParticle {
  public:
+  int multifile_override;          // 1 if a single image file is allowed,
+                                   //   set by the write_dump command
+
   DumpImage(class SPARTA *, int, char**);
   ~DumpImage();
 

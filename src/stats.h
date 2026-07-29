@@ -42,6 +42,10 @@ class Stats : protected Pointers {
   void set_last_image(const char *);
   void reset_cache();
 
+  // wall clock time when SPARTA started, used by the info command
+
+  double wall_start() const { return wall0; }
+
  private:
   char *line;
   char **keyword;

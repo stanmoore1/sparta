@@ -291,8 +291,9 @@ Output:
 "dump_modify"_dump_modify.html, "restart"_restart.html,
 "stats"_stats.html, "stats_modify"_stats_modify.html,
 "stats_style"_stats_style.html, "undump"_undump.html,
-"write_grid"_write_grid.html, "write_isurf"_write_isurf.html,
-"write_surf"_write_surf.html, "write_restart"_write_restart.html
+"write_dump"_write_dump.html, "write_grid"_write_grid.html,
+"write_isurf"_write_isurf.html, "write_surf"_write_surf.html,
+"write_restart"_write_restart.html
 
 Actions:
 
@@ -302,8 +303,9 @@ Actions:
 Miscellaneous:
 
 "clear"_clear.html, "echo"_echo.html, "if"_if.html,
-"include"_include.html, "jump"_jump.html, "label"_label.html,
-"log"_log.html, "next"_next.html, "partition"_partition.html,
+"include"_include.html, "info"_info.html, "jump"_jump.html,
+"label"_label.html, "log"_log.html, "next"_next.html,
+"partition"_partition.html,
 "print"_print.html, "python"_python.html, "quit"_quit.html,
 "shell"_shell.html, "variable"_variable.html
 
@@ -340,6 +342,7 @@ section"_#cmd_4 lists many of the same commands, grouped by category.
 "group"_group.html,
 "if"_if.html,
 "include"_include.html,
+"info"_info.html,
 "jump"_jump.html,
 "label"_label.html,
 "log"_log.html,
@@ -381,6 +384,7 @@ section"_#cmd_4 lists many of the same commands, grouped by category.
 "unfix"_unfix.html,
 "units"_units.html,
 "variable"_variable.html,
+"write_dump"_write_dump.html,
 "write_grid"_write_grid.html,
 "write_isurf"_write_isurf.html,
 "write_restart"_write_restart.html,
@@ -399,6 +403,7 @@ This is indicated by additional letters in parenthesis: k = KOKKOS.
 "ablate"_fix_ablate.html,
 "adapt (k)"_fix_adapt.html,
 "ambipolar (k)"_fix_ambipolar.html,
+"ave/correlate"_fix_ave_correlate.html,
 "ave/grid (k)"_fix_ave_grid.html,
 "ave/histo (k)"_fix_ave_histo.html,
 "ave/histo/weight (k)"_fix_ave_histo.html,
