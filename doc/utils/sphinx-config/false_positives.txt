@@ -50,6 +50,7 @@ Adri
 adsp
 advect
 advected
+advecting
 advection
 advects
 affine
@@ -686,6 +687,7 @@ Coord
 coord
 CoordN
 coords
+coplanar
 copymode
 coreshell
 cornflowerblue
@@ -1470,6 +1472,7 @@ func
 funcs
 functionalities
 functionals
+functors
 funroll
 Furuholt
 fvec
@@ -1525,6 +1528,7 @@ Germano
 Gerolf
 gerolf
 Gershgorin
+getenv
 getrusage
 getter
 gettimeofday
@@ -3271,6 +3275,7 @@ Parallelizable
 parallelization
 parallelize
 parallelized
+parallelizes
 parallelizing
 param
 parameterization
@@ -3698,6 +3703,7 @@ rebo
 rebomos
 recomb
 recurse
+recurses
 recursing
 Redeclare
 Ree
@@ -4394,6 +4400,7 @@ timespan
 timestamp
 timestamps
 timestep
+timestepper
 timestepping
 timesteps
 TiN
@@ -4425,6 +4432,7 @@ toctree
 Toennies
 Tohoku
 tokenizer
+tokenizing
 tokyo
 tol
 tomic

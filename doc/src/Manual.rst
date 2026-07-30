@@ -63,6 +63,7 @@ every SPARTA command.
    Section_python
    Section_errors
    Section_history
+   Developer
 
 .. toctree::
    :maxdepth: 1

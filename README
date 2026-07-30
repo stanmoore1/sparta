@@ -44,4 +44,6 @@ Good places to start:
 
 doc/src/Section_intro.rst    hi-level introduction to SPARTA
 doc/src/Section_start.rst    how to build and use SPARTA
+doc/src/Section_modify.rst   how to add a new style to SPARTA
+doc/src/Developer.rst        how SPARTA works internally
 doc/README                   how to build the manual
