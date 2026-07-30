@@ -32,7 +32,9 @@ STYLE_RE = re.compile(
 # :doc:`text <page>`, optionally with a "(k)" accelerator marker in the text
 DOC_LINK_RE = re.compile(r':doc:`([^`<]+?)\s*(?:\(k\))?\s*<([^>]+)>`')
 
-INDEX_PAGE = 'Section_commands.rst'
+# the command listings live on the Commands chapter and the topic pages it
+# splits into (Commands_category, Commands_all, ...)
+INDEX_PAGES = ('Section_commands.rst', 'Commands_*.rst')
 
 
 def unescape(text):
@@ -59,12 +61,22 @@ def registered_styles(src_dir):
     return styles
 
 
+def index_files(doc_dir):
+    import glob
+    files = []
+    for pattern in INDEX_PAGES:
+        files.extend(sorted(glob.glob(os.path.join(doc_dir, pattern))))
+    return files
+
+
 def listed_styles(doc_dir):
-    """Style names linked from the listings in Section_commands.rst."""
-    path = os.path.join(doc_dir, INDEX_PAGE)
-    with open(path, 'r', errors='replace') as f:
-        text = f.read()
-    return {unescape(m.group(1)) for m in DOC_LINK_RE.finditer(text)}
+    """Style names linked from the command listings."""
+    listed = set()
+    for path in index_files(doc_dir):
+        with open(path, 'r', errors='replace') as f:
+            text = f.read()
+        listed |= {unescape(m.group(1)) for m in DOC_LINK_RE.finditer(text)}
+    return listed
 
 
 def main():
@@ -74,8 +86,8 @@ def main():
                     help='documentation src directory with the .rst files')
     args = ap.parse_args()
 
-    if not os.path.isfile(os.path.join(args.doc, INDEX_PAGE)):
-        print("check-styles: %s not found in %s" % (INDEX_PAGE, args.doc),
+    if not index_files(args.doc):
+        print("check-styles: no command listing pages found in %s" % args.doc,
               file=sys.stderr)
         return 1
 
@@ -92,8 +104,8 @@ def main():
             missing.append((category, name))
 
     if missing:
-        print("Styles registered in %s but not listed in %s/%s:"
-              % (args.src, args.doc, INDEX_PAGE))
+        print("Styles registered in %s but not listed in the command "
+              "listings under %s:" % (args.src, args.doc))
         for category, name in missing:
             print("  %-18s %s" % (category + 'Style', name))
         return 1
