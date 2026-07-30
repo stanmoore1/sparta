@@ -115,5 +115,7 @@ if(BUILD_DOC)
     DEPENDS html
     SOURCES ${SPARTA_DOC_DIR}/utils/requirements.txt ${DOC_SOURCES})
 
+  # provides CMAKE_INSTALL_DOCDIR
+  include(GNUInstallDirs)
   install(DIRECTORY ${DOC_BUILD_DIR}/html DESTINATION ${CMAKE_INSTALL_DOCDIR})
 endif()

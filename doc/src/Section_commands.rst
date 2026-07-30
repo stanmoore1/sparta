@@ -484,6 +484,69 @@ letters in parenthesis: k = KOKKOS.
 +-----------------------------------+--------------------------------+
 
 
+----------
+
+
+Dump styles
+-----------
+
+See the :doc:`dump <dump>` command for details of each style.  The
+*image* and *movie* styles are documented on the
+:doc:`dump image <dump_image>` page, and the VTK styles on the
+:doc:`dump vtk <dump_vtk>` page.  Some of the styles have accelerated
+versions, which can be used if SPARTA is built with the
+:doc:`appropriate accelerated package <Section_accelerate>`.  This is
+indicated by additional letters in parenthesis: k = KOKKOS.
+
+.. table_from_list::
+   :columns: 4
+
+   * :doc:`grid <dump>`
+   * :doc:`grid/vtk <dump_vtk>`
+   * :doc:`image <dump_image>`
+   * :doc:`movie <dump_image>`
+   * :doc:`particle <dump>`
+   * :doc:`particle/vtk <dump_vtk>`
+   * :doc:`surf <dump>`
+   * :doc:`surf/vtk <dump_vtk>`
+   * :doc:`tally <dump>`
+
+
+----------
+
+
+Reaction styles
+---------------
+
+See the :doc:`react <react>` command for details of each style.
+
+.. table_from_list::
+   :columns: 4
+
+   * :doc:`qk <react>`
+   * :doc:`tce <react>`
+   * :doc:`tce/qk <react>`
+
+
+----------
+
+
+Region styles
+-------------
+
+See the :doc:`region <region>` command for details of each style.
+
+.. table_from_list::
+   :columns: 4
+
+   * :doc:`block <region>`
+   * :doc:`cylinder <region>`
+   * :doc:`intersect <region>`
+   * :doc:`plane <region>`
+   * :doc:`sphere <region>`
+   * :doc:`union <region>`
+
+
 .. _sws: https://sparta.github.io
 .. _sd: Manual.html
 .. _sc: Section_commands.html
