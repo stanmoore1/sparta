@@ -58,7 +58,7 @@ src/MAKE/Makefile.foo and perform the build in the directory
 Obj\_shared\_foo.  This is so that each file can be compiled with the
 -fPIC flag which is required for inclusion in a shared library.  The
 build will create the file libsparta\_foo.so which another application
-can link to dyamically.  It will also create a soft link libsparta.so,
+can link to dynamically.  It will also create a soft link libsparta.so,
 which will point to the most recently built shared library.  This is
 the file the Python wrapper loads by default.
 

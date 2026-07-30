@@ -12,7 +12,7 @@ particle/surface collisions can be efficiently computed.
 SPARTA uses a Cartesian hierarchical grid.  Cartesian means that the
 faces of a grid cell, at any level of the hierarchy, are aligned with
 the Cartesian xyz axes.  I.e. each grid cell is an axis-aligned
-pallelpiped or rectangular box.
+parallelepiped or rectangular box.
 
 The hierarchy of grid cells is defined for N levels, from 1 to N.  The
 entire simulation box is a single parent grid cell, conceptually at
@@ -74,7 +74,7 @@ various attributes and are distributed across processors, so that each
 child cell is owned by exactly one processor, as discussed below.
 
 When surface objects are defined via the :doc:`read\_surf <read_surf>`
-command, they intersect child cells.  In this contex "intersection" by
+command, they intersect child cells.  In this context "intersection" by
 a surface element means a geometric overlap between the area of the
 surface element and the volume of the grid cell (or length of element
 and area of grid cell in 2d).  Thus an intersection includes a surface
@@ -123,7 +123,7 @@ and 1st cell in z.  I.e. 4 = (z-1)\*4 + (y-1)\*2 + (x-1) + 1.
 
 This level 2 cell could itself be a parent cell if it were further
 sub-divided, or a child cell if not.  In either case its ID is the
-same and is calcluated as follows.  The rightmost 11 bits of the
+same and is calculated as follows.  The rightmost 11 bits of the
 integer ID are encoded with 376.  This is because it requires 11 bits
 to represent 2000 cells (1 to 2000) at level 1.  The next 4 bits are
 encoded with 4, because it requires 4 bits to represent 8 cells (1 to
@@ -182,7 +182,7 @@ If the spatial distribution of particles is highly irregular and/or
 dynamically changing, or if the computational work per grid cell is
 otherwise highly imbalanced, a clumped assignment of grid cells to
 processors may not lead to optimal balancing.  In these scenarios a
-dispersed assignment of grid cells to processsors may run faster even
+dispersed assignment of grid cells to processors may run faster even
 with the overhead of increased particle communication.  This is
 because randomly assigning grid cells to processors can balance the
 computational load in a statistical sense.

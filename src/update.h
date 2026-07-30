@@ -248,7 +248,7 @@ developers.
 
 E: Cannot set global surfmax when surfaces already exist
 
-This setting must be made before any surfac elements are
+This setting must be made before any surface elements are
 read via the read_surf command.
 
 E: Global mem/limit setting cannot exceed 2GB

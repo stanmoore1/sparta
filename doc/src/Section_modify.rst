@@ -53,7 +53,7 @@ CollideStyle(foo,CollideFoo)
 ...
 #endif
 
-where "foo" is the style keyword in the collid command, and CollideFoo
+where "foo" is the style keyword in the collide command, and CollideFoo
 is the class name defined in your collide\_foo.cpp and collide\_foo.h
 files.
 

@@ -10,7 +10,7 @@ insert particles, perform load-balancing, or perform time-averaging of
 various quantities.  They can also define and maintain new
 per-particle vectors and arrays that define quantities that move with
 particles when they migrate from processor to processor or when the
-grid is rebalanced or adapated.  They can also produce output of
+grid is rebalanced or adapted.  They can also produce output of
 various kinds, similar to :doc:`compute <compute>` commands.
 
 Here is a brief description of methods to define in a new derived
@@ -50,5 +50,5 @@ values.  These are the relevant Particle class methods:
 
 See the :doc:`fix ambipolar <fix_ambipolar>` for an example of how these
 are used.  It define an integer vector called "ionambi" to flag
-particles as ambipolar ions, and a floatin-point array called
+particles as ambipolar ions, and a floating-point array called
 "velambi" to store the velocity vector for the associated electron.

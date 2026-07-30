@@ -2,7 +2,7 @@ How-to discussions
 ==================
 
 The following sections describe how to perform common tasks using
-SPARTA, as well as provide some techinical details about how
+SPARTA, as well as provide some technical details about how
 SPARTA works.
 
 

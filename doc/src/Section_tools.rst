@@ -45,7 +45,7 @@ SPARTA distribution.  Each is described in more detail below.
 * :ref:`paraview <paraviewtools>` - converters of SPARTA data to `ParaView <paraview_>`_ format
 * :ref:`stl2surf <stl2surf>` - convert an STL text file into a SPARTA surface file
 * :ref:`surf\_create <surfcreate>` - create a surface file with simple objects
-* :ref:`surf\_transform <surftransform>` - transform surface via tranlate/scale/rotate operations
+* :ref:`surf\_transform <surftransform>` - transform surface via translate/scale/rotate operations
 
 .. _paraview: http://www.paraview.org
 
@@ -149,7 +149,7 @@ These are 2 Python scripts (jagged2d.py and jagged3d.py) which can be
 used to generate SPARTA surface files in a pattern that can be very
 jagged.  The surfaces can contain huge numbers of surface elements and
 be read by the :doc:`read\_surf <read_surf>` command.  They are useful
-for stress testing the explict surface options in SPARTA, including
+for stress testing the explicit surface options in SPARTA, including
 distributed or non-distributed storage, as selected by the :doc:`global surfs <global>` command.
 
 See the header of the scripts for the syntax used to run them.
@@ -270,7 +270,7 @@ surf\_create tool
 ----------------------------------
 
 This is a Python script that creates a SPARTA surface file containing
-one or more simple objects whose surface is represented as triangules
+one or more simple objects whose surface is represented as triangles
 (3d) or line segments (2d).  Such files can be read by the
 :doc:`read\_surf <read_surf>` command.  The 3d objects it supports are a
 sphere, box, and spikysphere (randomized radius at each point).  The

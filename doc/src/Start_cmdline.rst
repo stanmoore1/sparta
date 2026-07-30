@@ -194,7 +194,7 @@ processors.  Note that with MPI installed on a machine (e.g. your
 desktop), you can run on more (virtual) processors than you have
 physical processors.
 
-To run multiple independent simulatoins from one input script, using
+To run multiple independent simulations from one input script, using
 multiple partitions, see :ref:`Section 6.3 <howto_3>` of
 the manual.  World- and universe-style variables are useful in this
 context.

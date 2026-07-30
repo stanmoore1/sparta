@@ -62,7 +62,7 @@ less efficient, though still accurate.
 
 For non-equilibrium flows, it is typically desirable to reset Vremax
 to zero fairly frequently (e.g. every 1000 steps) so that it does not
-become large, due to anomolously fast moving particles.  In contrast,
+become large, due to anomalously fast moving particles.  In contrast,
 when a system is at equilibrium, it is typically desirable to not
 reset Vremax to zero since it will also stay roughly constant.
 
@@ -109,7 +109,7 @@ The *nearcp* keyword stands for "near collision partner" and affects
 how collision partners are selected.  If *no* is specified, which is
 the default, then collision partner pairs are selected randomly from
 all particles in the grid cell.  In this case the *Nlimit* parameter
-is ignored, though it must still be specfied.
+is ignored, though it must still be specified.
 
 If *yes* is specified, then up to *Nlimit* collision partners are
 considered for each collision.  The first partner I is chosen randomly

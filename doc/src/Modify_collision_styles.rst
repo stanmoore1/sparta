@@ -21,7 +21,7 @@ except init() and modify\_params().
 +--------------------+---------------------------------------------------------------------------------------+
 | attempt\_collision | compute # of collisions to attempt between 2 species groups                           |
 +--------------------+---------------------------------------------------------------------------------------+
-| test\_collision    | determine if a collision bewteen 2 particles occurs                                   |
+| test\_collision    | determine if a collision between 2 particles occurs                                   |
 +--------------------+---------------------------------------------------------------------------------------+
 | setup\_collision   | pre-computation before a 2-particle collision                                         |
 +--------------------+---------------------------------------------------------------------------------------+

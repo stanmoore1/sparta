@@ -3,10 +3,10 @@
 What is SPARTA
 ==============
 
-SPARTA is a Direct Simulation Montel Carlo code that models rarefied
+SPARTA is a Direct Simulation Monte Carlo code that models rarefied
 gases, using collision, chemistry, and boundary condition models.  It
 uses a hierarchical Cartesian grid to track and group particles for 3d
-or 2d or axisymmetric models.  Objects emedded in the gas are
+or 2d or axisymmetric models.  Objects embedded in the gas are
 represented as triangulated surfaces and cut through grid cells.
 
 For examples of SPARTA simulations, see the `SPARTA WWW Site <sws_>`_.
@@ -44,7 +44,7 @@ more details.
 
 SPARTA is written in C++ which is used at a hi-level to structure the
 code and its options in an object-oriented fashion.  The kernel
-computations use simple data structures and C-like code for effciency.
+computations use simple data structures and C-like code for efficiency.
 So SPARTA is really written in an object-oriented C style.
 
 SPARTA was developed with internal funding at `Sandia National Laboratories <snl_>`_, a US Department of Energy lab.  See :ref:`Section 1.5 <intro_5>` below for more information on SPARTA funding and

@@ -81,7 +81,7 @@ per-surf attributes.  Particle-style attributes cannot be reset with
 the *file* action.
 
 Custom attributes can be vectors (single value per entity) or arrays
-(mutiple values per entity).  They can also be integer or floating
+(multiple values per entity).  They can also be integer or floating
 point values.  See :ref:`Section 6.17 <howto_17>` for an
 explanation of custom attributes.
 
@@ -197,7 +197,7 @@ The format of each attribute value line is as follows:
 ID value1 value2 ... valueM
 
 ID is the integer ID of the grid cell or surface element.  Note that
-for hierarchial grids, it must be the integer form of the ID, not the
+for hierarchical grids, it must be the integer form of the ID, not the
 string form (possibly with dashes).  M values follow, corresponding to
 the *M* argument in the input script, following the *fname* argument.
 
@@ -277,7 +277,7 @@ cell cell.  Here are a few additional details.
   surface of an object.  The mapping operation described above is not
   performed for SPARTA grid cells wholly inside surface objects; their
   custom attribute values are set to zero.  If a SPARTA grid cell is cut
-  by surface elements, its center point may be inside a suface object.
+  by surface elements, its center point may be inside a surface object.
   In this case it should be fine to assign the grid cell values from the
   nearest coarse grid point in the flow.
 

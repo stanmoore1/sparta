@@ -7,7 +7,7 @@ The ambipolar approximation is a computationally efficient way to
 model low-density plasmas which contain positively-charged ions and
 negatively-charged electrons.  In this model, electrons are not free
 particles which move independently.  This would require a simulation
-with a very small timestep due to electon's small mass and high speed
+with a very small timestep due to electron's small mass and high speed
 (1000x that of an ion or neutral particle).
 
 Instead each ambipolar electron is assumed to stay "close" to its
@@ -28,7 +28,7 @@ actually not performed, but are tallied in the overall collision count
 multiple groups).  If gas-phase chemistry is turned on, reactions
 involving ions and electrons can be specified, which include
 dissociation, ionization, exchange, and recombination reactions.  At
-the end of the collision/chemsitry operations for the grid cell, there
+the end of the collision/chemistry operations for the grid cell, there
 is still a one-to-one pairing between ambipolar ions and electrons.
 Each pair is recombined into a single particle.
 
@@ -73,7 +73,7 @@ large disparity in electron versus ion/neutral velocities.
 If you want to perform gas-phase chemistry for reactions involving
 ambipolar ions and electrons, use the :doc:`react <react>` command with
 an input file of reactions that include the ambipolar electron and ion
-species defined by the fix ambipolar commmand.  See the
+species defined by the fix ambipolar command.  See the
 :doc:`react <react>` command doc page for info the syntax required for
 ambipolar reactions.  Their reactants and products must be listed in
 specific order.
@@ -111,7 +111,7 @@ assign the surface reaction model to surface or the simulation box
 boundaries via the :doc:`surf\_modify <surf_modify>` and
 :doc:`bound\_modify <bound_modify>` commands.
 
-For diagnositics and output, you can use the :doc:`compute count <compute_count>` and :doc:`dump particle <dump>` commands.  The
+For diagnostics and output, you can use the :doc:`compute count <compute_count>` and :doc:`dump particle <dump>` commands.  The
 :doc:`compute count <compute_count>` command generate counts of
 individual species, entire mixtures, and groups within mixtures.  For
 example these commands will include counts of ambipolar ions in
@@ -123,7 +123,7 @@ statistical output:
    compute myCount O+ N+ NO+ e
    stats_style step nsreact nsreactave cpu np c_myCount
 
-Note that the count for species "e" = ambipolar electrons should alwas
+Note that the count for species "e" = ambipolar electrons should always
 be zero, since those particles only exist during gas and surface
 collisions.  The :doc:`stats\_style <stats_style>` *nsreact* and
 *nsreactave* keywords print tallies of surface reactions taking place.
@@ -140,5 +140,5 @@ E.g. this command
 will output the ionambi flag = 1 for ambipolar ions, along with the vy
 of their associated ambipolar electrons.
 
-The :ref:`fix ambipolar <fix>` ambiploar.html doc page explains how to
+The :ref:`fix ambipolar <fix>` ambipolar.html doc page explains how to
 restart ambipolar simulations where the fix is used.

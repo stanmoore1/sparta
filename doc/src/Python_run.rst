@@ -92,7 +92,7 @@ returned.  You need to specify the appropriate data type via the type
 argument.
 
 For extract\_compute(), the global, per particle, per grid cell, or per
-surface element results calulated by the compute can be accessed.
+surface element results calculated by the compute can be accessed.
 What is returned depends on whether the compute calculates a scalar or
 vector or array.  For a scalar, a single double value is returned.  If
 the compute or fix calculates a vector or array, a pointer to the

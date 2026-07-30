@@ -95,7 +95,7 @@ sampling steps.
 ----------
 
 
-Calculation of the energy flux density is done by first calcuating the
+Calculation of the energy flux density is done by first calculating the
 center-of-mass (COM) velocity of particles for each group with a grid
 cell.  This is done as follows:
 

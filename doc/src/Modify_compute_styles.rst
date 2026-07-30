@@ -35,7 +35,7 @@ class.  See compute.h for details.  All of these methods are optional.
 Note that computes with "/particle" in their style name calculate per
 particle quantities, with "/grid" in their name calculate per grid
 cell quantities, and with "/surf" in their name calculate per surface
-element properties.  All others calcuulate global quantities.
+element properties.  All others calculate global quantities.
 
 Flags may also need to be set by a compute to enable specific
 properties.  See the compute.h header file for one-line descriptions.

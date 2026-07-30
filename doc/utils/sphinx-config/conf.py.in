@@ -90,8 +90,17 @@ html_theme_options = {
     'collapse_navigation': True,
 }
 
-html_static_path = ['_static']
-html_extra_path = ['_extra']
+# MathJax is a full git clone and lives in its own static root, so the epub
+# builder -- which pre-renders equations with imgmath and never loads
+# MathJax -- can leave it out instead of copying the repo into the book and
+# warning about every file in it without a known mimetype.  Both roots are
+# copied into _static/ in the output, so mathjax_path stays the same.
+if 'epub' in sys.argv:
+    html_static_path = ['_static']
+    html_extra_path = []
+else:
+    html_static_path = ['_static', '_mathjax']
+    html_extra_path = ['_extra']
 html_show_sourcelink = False
 html_title = 'SPARTA Documentation'
 html_short_title = 'SPARTA'

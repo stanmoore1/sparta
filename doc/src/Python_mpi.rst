@@ -68,7 +68,7 @@ and from its "source" directory, type
 Again, the "sudo" is only needed if required to copy Pypar files into
 your Python distribution's site-packages directory.
 
-If you have successully installed Pypar, you should be able to run
+If you have successfully installed Pypar, you should be able to run
 Python and type
 
 

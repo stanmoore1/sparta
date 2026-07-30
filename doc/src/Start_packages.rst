@@ -35,7 +35,7 @@ from within the build directory.
 If you use a command in a SPARTA input script that is part of a
 package, you must have built SPARTA with that package, else you will
 get an error that the style is invalid or the command is unknown.
-Every command's doc page specfies if it is part of a package.
+Every command's doc page specifies if it is part of a package.
 
 
 ----------

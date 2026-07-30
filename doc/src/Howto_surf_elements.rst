@@ -37,7 +37,7 @@ explicit versus implicit, and distributed versus non-distributed
 surface elements.
 
 Unless noted, the following surface-related commands work with either
-explict or implicit surfaces, whether they are distributed or not.
+explicit or implicit surfaces, whether they are distributed or not.
 For large data sets, the read and write surf and isurf commands have
 options to use multiple files and/or operate in parallel which can
 reduce I/O times.

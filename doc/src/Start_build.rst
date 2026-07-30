@@ -211,7 +211,7 @@ blank; the MPI wrapper knows where to find the needed files.  If not,
 and MPI is installed on your system in the usual place (under
 /usr/local), you also may not need to specify these 3 variables.  On
 some large parallel machines which use "modules" for their
-compile/link environements, you may simply need to include the correct
+compile/link environments, you may simply need to include the correct
 module in your build environment.  Or the parallel machine may have a
 vendor-provided MPI which the compiler has no trouble finding.
 
@@ -288,7 +288,7 @@ with oneMKL using the Kokkos SYCL backend.
 You may also need to set the FFT\_INC, FFT\_PATH, and FFT\_LIB variables,
 so the compiler and linker can find the needed FFT header and library
 files.  Note that on some large parallel machines which use "modules"
-for their compile/link environements, you may simply need to include
+for their compile/link environments, you may simply need to include
 the correct module in your build environment.  Or the parallel machine
 may have a vendor-provided FFT library which the compiler has no
 trouble finding.
@@ -471,7 +471,7 @@ building object files.  Note that if you change any -D setting in this section,
 you should do a full re-compile, after typing "make clean".
 
 The SPARTA\_DEFAULT\_CXX\_COMPILE\_FLAGS option is typically used to include options
-that turn on ifdefs within the SPARTA code.  The options that are currently recogized are:
+that turn on ifdefs within the SPARTA code.  The options that are currently recognized are:
 
 * -DSPARTA\_GZIP
 * -DSPARTA\_JPEG
@@ -618,7 +618,7 @@ Note that this documentation link is for CMake version 3.12.
 **Step 7**
 
 When the SPARTA FFT package is enabled with cmake -DPKG\_FFT=ON, you may select
-between 3 thiry party libraries (TPLs) for 1d FFTs, which SPARTA uses when
+between 3 thirty party libraries (TPLs) for 1d FFTs, which SPARTA uses when
 configured with cmake -DFFT=\ *FFTW3,MKL,KISS*\ .
 
 By default SPARTA will use the open-source `KISS FFT library <http://kissfft.sf.net>`_, which is included in the SPARTA distribution.

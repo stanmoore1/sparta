@@ -8,7 +8,7 @@ machines or different numbers of processors, this is typically not a
 bug.  On different machines, there can be numerical round-off in the
 computations which causes slight differences in particle trajectories
 or the number of particles, which will lead to numerical divergence of
-the particle trajectores and averaged statistical quantities within a
+the particle trajectories and averaged statistical quantities within a
 few 100s or few 1000s of timesteps.  When running on different numbers
 of processors, random numbers are used in different ways, so two
 simulations can be immediately different.  However, the statistical

@@ -15,7 +15,7 @@ For make, from the src directory, type
 
    make mode=shlib foo
 
-For CMake, from the build directory, tyoe
+For CMake, from the build directory, type
 
 
 .. parsed-literal::

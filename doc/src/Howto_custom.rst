@@ -12,7 +12,7 @@ referred to as a custom per-particle, per-grid, or per-surf array (an
 array can have a single column and thus a single value per entity).
 Each custom attribute has a name, which allows them to be specified in
 input scripts as arguments to various commands.  The values each
-attricute stores can be either integer or floating point numbers.
+attribute stores can be either integer or floating point numbers.
 
 The :doc:`custom <custom>` command can create and set/reset custom
 attribute values for all 3 flavors of attributes.  Either by invoking
@@ -20,7 +20,7 @@ per-particle, per-grid, or per-surf variables, or by reading a file
 with one line of attribute values per particle/grid/surf.  In the case
 of per-grid attributes, it can also read a coarse file with values for
 coarse grid points.  The attributed values for each grid cell are set
-to values of the nearset coarse grid point.  The :doc:`fix custom <fix_custom>` command can do the same thing periodically as
+to values of the nearest coarse grid point.  The :doc:`fix custom <fix_custom>` command can do the same thing periodically as
 a simulation runs.  :doc:`Dump <dump>` commands can output all 3 flavors
 of attributes.
 
@@ -65,7 +65,7 @@ various ways:
 * :doc:`write\_surf <write_surf>` - write per-surf attributes to a surf data file
 
 Per-surf custom attributes can be defined for explicit or
-explicit/distributed surface elements, as set by the :doc:`global surfs <global>` comand.  But they cannot be used for implicit
+explicit/distributed surface elements, as set by the :doc:`global surfs <global>` command.  But they cannot be used for implicit
 surface elements.  Conceptually, implicit surfaces are defined on a
 per-grid cell basis, so per-grid custom attributes can be used instead
 to define attributes of implicit surfaces.
@@ -90,7 +90,7 @@ In both cases, the custom per-surf temperature can be used by the
 surface temperature for performing particle/surface element
 collisions.  Likewise the :doc:`fix emit/surf <fix_emit_surf>` command
 can use the current custom per-surf temperature to alter the emission
-properties of each surface elemnt.
+properties of each surface element.
 
 Another use of dynamic custom attributes is by the :doc:`fix ambipolar <fix_ambipolar>` and :doc:`surf\_react adsorb <surf_react>`
 commands.  The former stores the ambipolar state of each particle in

@@ -134,7 +134,7 @@ vector with 3 values.
 The *Nevery*\ , *Nrepeat*\ , and *Nfreq* arguments specify on what
 timesteps the input values will be used in order to contribute to the
 average.  The final averaged quantities are generated on timesteps
-that are a mlutiple of *Nfreq*\ .  The average is over *Nrepeat*
+that are a multiple of *Nfreq*\ .  The average is over *Nrepeat*
 quantities, computed in the preceding portion of the simulation every
 *Nevery* timesteps.  *Nfreq* must be a multiple of *Nevery* and
 *Nevery* must be non-zero even if *Nrepeat* is 1.  Also, the timesteps
@@ -218,7 +218,7 @@ output as-is without further averaging.
 
 If the *ave* setting is *running*\ , then the values produced on
 timesteps that are multiples of *Nfreq* are summed and averaged in a
-cummulative sense before being output.  Each output value is thus the
+cumulative sense before being output.  Each output value is thus the
 average of the value produced on that timestep with all preceding
 values.  This running average begins when the fix is defined; it can
 only be restarted by deleting the fix via the :doc:`unfix <unfix>`

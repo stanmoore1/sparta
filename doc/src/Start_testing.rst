@@ -73,7 +73,7 @@ the SPARTA\_DSMC\_TESTING\_PATH/regression.py script.
 
 The SPARTA\_CTEST\_CONFIGS option allows the user to run the same set of binaries
 with different arguments. SPARTA\_CTEST\_CONFIGS lets the user add additional ctest
-configurations, seperated by ';', that allow SPARTA\_SPA\_ARGS\_CONFIG\_NAME
+configurations, separated by ';', that allow SPARTA\_SPA\_ARGS\_CONFIG\_NAME
 or SPARTA\_DSMC\_TESTING\_DRIVER\_ARGS\_CONFIG\_NAME to be specified. For example:
 
 cmake -C /path/to/sparta/cmake/presets/NAME.cmake   -DSPARTA\_MACHINE=advanced-test-tutorial   -DSPARTA\_DSMC\_TESTING\_PATH=/path/to/dsmc\_testing   -DSPARTA\_CTEST\_CONFIGS="PARALLEL;SERIAL"   -DSPARTA\_SPA\_ARGS\_SERIAL=spa\_serial\_args   -DSPARTA\_SPA\_ARGS\_PARALLEL=spa\_parallel\_args   -DSPARTA\_DSMC\_TESTING\_DRIVER\_ARGS\_PARALLEL=driver\_parallel\_args   -DSPARTA\_DSMC\_TESTING\_DRIVER\_ARGS\_PARALLEL=driver\_serial\_args   /path/to/sparta/cmake

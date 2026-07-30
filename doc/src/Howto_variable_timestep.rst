@@ -21,7 +21,7 @@ mean collision and particle transit times.  These cell-based timesteps
 are only used to compute the global timestep and are not used to
 advance the solution locally. The benefit of the global timestep
 calculation is that it will automatically reduce the timestep if the
-intial value is too large, leading to higher accuracy, and it will
+initial value is too large, leading to higher accuracy, and it will
 automatically increase the timestep if the initial value is too small,
 speeding up the simulation. The overhead of using the variable
 timestep option is the computational time involved in computing the

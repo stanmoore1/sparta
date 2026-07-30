@@ -23,7 +23,7 @@ model.
   setting to calculate numbers of particles to create or insert.  It is
   also used to compute collision frequencies.
 * If surfaces are defined via the :doc:`read\_surf <read_surf>` command,
-  use 2d objects defined by line segements.
+  use 2d objects defined by line segments.
 
 Many of the example input scripts included in the SPARTA distribution
 are for 2d models.

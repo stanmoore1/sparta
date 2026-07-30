@@ -82,7 +82,7 @@ Restrictions
 """"""""""""
 
 This fix is required if "collide\_modify vibrate discrete" is used and
-there is one or more species defined which haave multiple vibrational
+there is one or more species defined which have multiple vibrational
 energy modes (2 or more).  In this scenario, if it is not defined, an
 error will occur when a "create\_particles" or :doc:`run <run>` command
 is issued.  Conversely, if no species has multiple vibrational modes,

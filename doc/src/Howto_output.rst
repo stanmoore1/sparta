@@ -50,7 +50,7 @@ Global/per-particle/per-grid/per-surf/pre-tally data
 Various output-related commands work with four different styles of
 data: global, per particle, per grid, or per surf.  A global datum is
 one or more system-wide values, e.g. the temperature of the system.  A
-per particle datum is one or more values per partice, e.g. the kinetic
+per particle datum is one or more values per particle, e.g. the kinetic
 energy of each particle.  A per grid datum is one or more values per
 grid cell, e.g. the temperature of the particles in the grid cell.  A
 per surf datum is one or more values per surface element, e.g. the
@@ -200,7 +200,7 @@ commands.
 
 The :doc:`fix ave/grid <fix_ave_grid>` command enables time-averaging of
 per grid vectors.  The user specifies one or more quantities as input.
-These can be per grid vectors or ararys from :doc:`compute <compute>` or
+These can be per grid vectors or arrays from :doc:`compute <compute>` or
 :doc:`fix <fix>` commands.  If the input is a single vector, then the
 fix generates a per grid vector.  If the input is multiple vectors or
 array, the fix generates a per grid array.  The time-averaged output
@@ -208,7 +208,7 @@ of this fix can also be used as input to other output commands.
 
 The :doc:`fix ave/surf <fix_ave_surf>` command enables time-averaging of
 per surf vectors.  The user specifies one or more quantities as input.
-These can be per surf vectors or ararys from :doc:`compute <compute>` or
+These can be per surf vectors or arrays from :doc:`compute <compute>` or
 :doc:`fix <fix>` commands.  If the input is a single vector, then the
 fix generates a per surf vector.  If the input is multiple vectors or
 array, the fix generates a per surf array.  The time-averaged output

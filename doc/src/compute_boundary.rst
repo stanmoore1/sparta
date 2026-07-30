@@ -44,7 +44,7 @@ Examples
    compute mine boundary species press shx shy shz
 
 These commands will print values for the current timestep for 
-the xlo and xhi boundaryies, as part of statistical output:
+the xlo and xhi boundaries, as part of statistical output:
 
 
 .. parsed-literal::
@@ -169,7 +169,7 @@ real/simulated particle ratio set by the :doc:`global fnum <global>`
 command.
 
 The *shx*\ , *shy*\ , *shz* values calculate the shear pressure components
-Sx, Sy, Sz extered on the boundary in the tangential direction to its
+Sx, Sy, Sz extended on the boundary in the tangential direction to its
 normal by particles in the group, with respect to the x, y, z
 coordinate axes.  These are computed as
 

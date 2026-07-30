@@ -16,7 +16,7 @@ RSTDIR         = $(BUILDDIR)/src
 VENV           = $(BUILDDIR)/docenv
 ANCHORCHECK    = $(VENV)/bin/rst_anchor_check
 SPHINXCONFIG   = $(BUILDDIR)/utils/sphinx-config
-MATHJAX        = $(SPHINXCONFIG)/_static/mathjax
+MATHJAX        = $(SPHINXCONFIG)/_mathjax/mathjax
 MATHJAXTAG     = 4.1.3
 
 PYTHON         = $(word 3,$(shell type python3))

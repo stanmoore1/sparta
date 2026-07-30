@@ -30,7 +30,7 @@ Description
 
 Set the size of the simulation box.
 
-For a 2d simulation, as specifed by the :doc:`dimension <dimension>`
+For a 2d simulation, as specified by the :doc:`dimension <dimension>`
 command, *zlo* < 0.0 and *zhi* > 0.0 is required.  This means the z
 dimensions straddle 0.0.  Typical values are -0.5 and 0.5, but this is
 not required.  See :ref:`Section 6.1 <howto_1>` of the
