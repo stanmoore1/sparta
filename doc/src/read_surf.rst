@@ -332,7 +332,7 @@ named flags which stores 3 values per line.
 .. warning::
 
    If the read\_surf command is used when custom attributes already
-   exist, and values for custom attributes aren’t defined in the current file
+   exist, and values for custom attributes aren't defined in the current file
    being read, then the new custom values will be set to 0.0.
 
 

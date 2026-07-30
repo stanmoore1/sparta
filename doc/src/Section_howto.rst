@@ -1019,7 +1019,7 @@ this script is based on.  If that script had the line
 
 .. parsed-literal::
 
-   restart	        50 tmp.restart
+   restart              50 tmp.restart
 
 added to it, it would produce 2 binary restart files (tmp.restart.50
 and tmp.restart.100) as it ran for 130 steps, one at step 50, and one
@@ -1031,17 +1031,17 @@ the last 80 timesteps:
 
 .. parsed-literal::
 
-   read_restart	    tmp.restart.50
+   read_restart     tmp.restart.50
 
-   seed	    	    12345
-   collide		    vss air ar.vss
+   seed             12345
+   collide                  vss air ar.vss
 
-   stats		    10
+   stats                    10
    compute             temp temp
-   stats_style	    step cpu np nattempt ncoll c_temp
+   stats_style      step cpu np nattempt ncoll c_temp
 
-   timestep 	    7.00E-9
-   run 		    80
+   timestep         7.00E-9
+   run              80
 
 Note that the following commands do not need to be repeated because
 their settings are included in the restart file: *dimension, global,

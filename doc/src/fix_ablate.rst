@@ -155,8 +155,8 @@ examples/ablation/in.ablation.3d.reactions input script:
 
 .. parsed-literal::
 
-   surf_collide	    1 diffuse 300.0 1.0
-   surf_react	      2 prob air.surf
+   surf_collide     1 diffuse 300.0 1.0
+   surf_react         2 prob air.surf
 
    compute             10 react/isurf/grid all 2
    fix                 10 ave/grid all 1 100 100 c_10[\*]
@@ -284,7 +284,7 @@ point is at least *mindist*
    :target: JPG/multipoint_decrement.png
    :align: center
 
-The *multiple* option allows a multipoint decrement :ref:`(Hong24) <Hong24>` to be used. 
+The *multiple* option allows a multipoint decrement :ref:`(Hong24) <Hong24_fix_ablate>` to be used. 
 In a cell, three types of corners are identified: inside, outside or
 interface.  An **inside** point is a point inside the surface (its
 values is greater than the specified threshold).  An **outside** point
@@ -374,7 +374,7 @@ is used.  The default for the *multiple* keyword = no.
 **(Labelle07)** F. Labelle, and J. R.. Shewchuk, "Isosurface stuffing:
 Fast Tetrahedral Meshes with Good Dihedral Angles," SIGGRAPH (2007).
 
-.. _Hong24:
+.. _Hong24_fix_ablate:
 
 
 

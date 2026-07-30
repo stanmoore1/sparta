@@ -109,20 +109,20 @@ then continues iterating thru the outer loop.
 
 .. parsed-literal::
 
-   label	    loopa
+   label            loopa
    variable    a loop 5
-     label	    loopb
+     label          loopb
      variable  b loop 5
-     print	    "A,B = $a,$b"
+     print          "A,B = $a,$b"
      run       10000
-     if	    $b > 2 then "jump in.script break"
-     next	    b
-     jump	    in.script loopb
-   label	    break
+     if     $b > 2 then "jump in.script break"
+     next           b
+     jump           in.script loopb
+   label            break
    variable    b delete
 
-   next	    a
-   jump	    in.script loopa
+   next     a
+   jump     in.script loopa
 
 Restrictions
 """"""""""""

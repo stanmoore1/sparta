@@ -107,8 +107,8 @@ a simulation where something goes wrong at step 1163:
 
 .. parsed-literal::
 
-   variable	s equal stride(1100,1200,1)
-   restart		v_s tmp.restart
+   variable     s equal stride(1100,1200,1)
+   restart              v_s tmp.restart
 
 
 ----------

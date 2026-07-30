@@ -75,10 +75,10 @@ For example, consider these commands followed by 10 run commands:
 
    variable     myTemp equal ramp(300,500)
    surf_collide 1 diffuse v_myTemp 0.5
-   run	     1000 start 0 stop 10000
-   run	     1000 start 0 stop 10000
+   run       1000 start 0 stop 10000
+   run       1000 start 0 stop 10000
    ...
-   run	     1000 start 0 stop 10000
+   run       1000 start 0 stop 10000
 
 The ramp() function in the :doc:`variable <variable>` and its use in the
 "surf\_collide" command will ramp the target temperature from 300 to

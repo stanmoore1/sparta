@@ -96,8 +96,8 @@ timesteps 0,10,20,30,100,200,300,1000,2000,etc:
 
 .. parsed-literal::
 
-   variable	s equal logfreq(10,3,10)
-   stats_modify	1 every v_s
+   variable     s equal logfreq(10,3,10)
+   stats_modify 1 every v_s
 
 Note that the *every* keyword overrides the output frequency setting
 made by the :doc:`stats <stats>` command, by setting it to 0.  If the

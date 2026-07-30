@@ -107,7 +107,7 @@ finished) and play it in the Firefox browser:
 .. parsed-literal::
 
    dump                4 image all 100 tmp.\*.jpg type type pdiam 0.2 view 90 -90 
-   dump_modify	    4 pad 4
+   dump_modify      4 pad 4
    % convert tmp\*jpg tmp.gif
    % firefox tmp.gif
 

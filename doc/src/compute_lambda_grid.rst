@@ -96,7 +96,7 @@ or coarsening based on a mean free path metric.
 
 
 The formula used to calculate the mean free path (lambda) is given in
-:ref:`(Bird94) <Bird94>` as equation 4.77:
+:ref:`(Bird94) <Bird94_compute_lambda_grid>` as equation 4.77:
 
 .. math::
 
@@ -105,7 +105,7 @@ The formula used to calculate the mean free path (lambda) is given in
 .. warning::
 
    Prior to October 2024, a simpler formula was used for
-   the mean free path, also from :ref:`(Bird94) <Bird94>`, equation 4.65:
+   the mean free path, also from :ref:`(Bird94) <Bird94_compute_lambda_grid>`, equation 4.65:
 
 .. math::
 
@@ -119,7 +119,7 @@ mixtures, in particular for reacting flow problems where the
 composition of the mixture changes significantly over time.
 
 The formula used to calculate the mean collision time (tau) is given in
-:ref:`(Bird94) <Bird94>` as equation 1.38 combined with 4.75:
+:ref:`(Bird94) <Bird94_compute_lambda_grid>` as equation 1.38 combined with 4.75:
 
 .. math::
 
@@ -298,7 +298,7 @@ Related commands
 ----------
 
 
-.. _Bird94:
+.. _Bird94_compute_lambda_grid:
 
 
 

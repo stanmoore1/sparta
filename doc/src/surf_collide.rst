@@ -289,7 +289,7 @@ valid for particle collisions not for potential surface reactions.
 
 
 The *td* style computes the thermal desorption surface collision model
-proposed by Swaminathan Gopalan *et al.* :ref:`(SG18) <SG18>`, which is
+proposed by Swaminathan Gopalan *et al.* :ref:`(SG18) <SG18_surf_collide>`, which is
 similar to *diffuse* style with an accommodation coefficient *acc* =
 1.0.
 
@@ -311,7 +311,7 @@ normal and the plane tangent to the surface given by:
 
 
 The *impuslive* style computes the surface collision model proposed by
-Swaminathan Gopalan *et al.* :ref:`(SG18) <SG18>`. The model has 8
+Swaminathan Gopalan *et al.* :ref:`(SG18) <SG18_surf_collide>`. The model has 8
 parameters.  Within impulsive scattering, two different models are
 available, namely *softsphere* and *tempvar*\ . The *softsphere*
 argument uses the soft sphere model and has two parameters: *en\_ratio*
@@ -405,7 +405,7 @@ were moving with specified velocity *Vwall* away from the incident
 particle.  Thus the "collision" actually occurs later in the timestep
 and the reflected velocity is less than it would be for reflection
 from a stationary surface.  This calculation is performed using
-equations 12.30 and 12.31 in :ref:`(Bird94) <Bird94>`) to compute the
+equations 12.30 and 12.31 in :ref:`(Bird94) <Bird94_surf_collide>`) to compute the
 reflected velocity and final position of the particle.  If the
 particle does not return within the timestep to a position inside the
 simulation box (for a boundary surface) or to the same side of the
@@ -413,7 +413,7 @@ initial surface that it started from (for a surface element
 collision), the particle is deleted.  This effectively induces
 particles at the boundary to have a velocity distribution consistent
 with a subsonic pressure boundary condition, as explained in
-:ref:`(Bird94) <Bird94>`).
+:ref:`(Bird94) <Bird94_surf_collide>`).
 
 *Vwall* should be chosen to correspond to a desired pressure condition
 for the density of particles in the system.
@@ -680,7 +680,7 @@ The default for the *temp/freq* keyword = 1.
 ----------
 
 
-.. _Bird94:
+.. _Bird94_surf_collide:
 
 
 
@@ -710,7 +710,7 @@ on Rarefied Gas Dynamics, Germany, July (1990).
 gas-surface interaction model, Physics of Fluids A: Fluid Dynamics,
 Jan (1991).
 
-.. _SG18:
+.. _SG18_surf_collide:
 
 
 
@@ -788,7 +788,7 @@ specular scattering in the H-LiF (001) system, Surface Science, (1974).
 
 **(Mohammadzadeh16)** A. Mohammadzadeh, A. Rana, and H. Struchtrup,
 DSMC and R13 modeling of the adiabatic surface, International Journal
-of Thermal Sciences, vol. 101, pp. 9–23, March (2016).
+of Thermal Sciences, vol. 101, pp. 9-23, March (2016).
 
 
 .. _sws: https://sparta.github.io

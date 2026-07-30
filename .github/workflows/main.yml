@@ -145,6 +145,31 @@ jobs:
         sudo rm /bin/sh
         sudo ln -s /bin/bash /bin/sh
         ctest --output-on-failure -j4
+  docs:
+    runs-on: ubuntu-22.04
+    steps:
+    - uses: actions/checkout@v4
+
+    # sphinx and its extensions are installed into doc/docenv by the
+    # Makefile; enchant is only needed by "make spelling", which is not
+    # run here.
+    - name: Install Dependencies
+      run: sudo apt-get update && sudo apt-get install -y python3-venv
+
+    # builds the manual and runs anchor_check, style_check, char_check
+    # and role_check inline. Sphinx warnings are turned into errors so a
+    # broken :doc:/:ref: cross-reference fails the PR.
+    - name: Build manual
+      run: make -C doc html SPHINXEXTRA="-j auto -W --keep-going"
+
+    - name: Run doc checks
+      run: make -C doc check
+
+    - uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: 'manual-html'
+        path: 'doc/html/'
   bigbig:
     runs-on: ubuntu-22.04
     steps:

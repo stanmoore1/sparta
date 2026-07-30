@@ -84,7 +84,7 @@ model.
 
 Using kinetic theory, the TCE model allows for reaction probabilities
 to be defined based on known, measured, reaction rates.  The model is
-described in detail in :ref:`(Bird94) <Bird94>`; see chapter 6. The required
+described in detail in :ref:`(Bird94) <Bird94_react>`; see chapter 6. The required
 input parameters for each reaction (discussed below) are values that
 permit its effective Arrhenius rate to be calculated, namely
 
@@ -99,7 +99,7 @@ parameters as discussed below.
 
 All 5 reactions coefficients read from the reaction file (described
 below) are used to calculate terms in equation 6.10 of
-:ref:`(Bird94) <Bird94>` for the probability that a reaction takes place.
+:ref:`(Bird94) <Bird94_react>` for the probability that a reaction takes place.
 
 The C2, C3, C4 values are the Arrhenius activation energy Ea,
 prefactor A, and exponent b, used in the rate formula above.
@@ -143,7 +143,7 @@ SPARTA.
 For the QK model, SPARTA reads the same 5 coefficients per reaction
 from the reaction file (described below) as for the TCE model.  Three
 of the coefficients (C1,C2,C5) are used to calculate terms in equation
-6.10 of :ref:`(Bird94) <Bird94>` for the probability that a reaction takes
+6.10 of :ref:`(Bird94) <Bird94_react>` for the probability that a reaction takes
 place.  The Arrhenius rate parameters C3 and C4 are ignored by the QK
 model.
 
@@ -414,7 +414,7 @@ style = none
 ----------
 
 
-.. _Bird94:
+.. _Bird94_react:
 
 
 
@@ -443,7 +443,7 @@ rates", Physics of Fluids, 23, 106101, (2011).
 Kinetic-Theory Approach for Computing Chemical-Reaction Rates in
 Upper-Atmosphere Hypersonic Flows", J Chem Phys, 131, 124311, (2009).
 
-.. _Gallis11:
+.. _Gallis11_react:
 
 
 

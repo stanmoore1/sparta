@@ -57,6 +57,28 @@ For "make fasthtml": pandoc.
 
 For "make spelling": the enchant library and an en_US dictionary.
 
+Publishing
+----------
+
+The generated manual is not committed. Two mechanisms distribute it:
+
+  * The website. sparta.github.io is a separate repository which serves
+    the manual at https://sparta.github.io/doc/. It rebuilds the manual
+    from these sources and commits the result into its own doc/
+    directory. The workflow that does this is kept here as
+    utils/website-publish.yml.template; copy it to
+    .github/workflows/publish-manual.yml in the website repository. It
+    needs no secrets.
+
+  * Releases. .github/workflows/docs-release.yml builds the HTML and PDF
+    manuals and attaches them to each GitHub release, so a release
+    download still includes the standalone offline manual. Note that
+    GitHub's auto-generated source tarballs contain only tracked files
+    and therefore do not include it.
+
+Every pull request builds the manual with warnings treated as errors and
+runs the checks above, so a broken cross-reference fails CI.
+
 Editing
 -------
 

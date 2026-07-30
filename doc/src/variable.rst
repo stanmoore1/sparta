@@ -207,13 +207,13 @@ commands before the variable would become exhausted.  For example,
 
 .. parsed-literal::
 
-   label	    loop
+   label            loop
    variable    a loop 5
-   print	    "A = $a"
-   if	    "$a > 2" then "jump in.script break"
-   next	    a
-   jump	    in.script loop
-   label	    break
+   print            "A = $a"
+   if       "$a > 2" then "jump in.script break"
+   next     a
+   jump     in.script loop
+   label            break
    variable    a delete
 
 

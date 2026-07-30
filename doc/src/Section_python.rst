@@ -511,23 +511,23 @@ C or Fortran program.
 
    fnum = spa.extract_global(name,type) # extract a global quantity
                                         # name = "dt", "fnum", etc
-   				     # type = 0 = int
-   				     #        1 = double
+                                     # type = 0 = int
+                                     #        1 = double
 
    temp = spa.extract_compute(id,style,type) # extract value(s) from a compute
                                              # id = ID of compute
-   					  # style = 0 = global data
-   					  #	    1 = per particle data
-   					  #	    2 = per grid cell data
-   					  #	    3 = per surf element data
-   					  # type = 0 = scalar
-   					  #	   1 = vector
-   					  #        2 = array
+                                          # style = 0 = global data
+                                          #         1 = per particle data
+                                          #         2 = per grid cell data
+                                          #         3 = per surf element data
+                                          # type = 0 = scalar
+                                          #        1 = vector
+                                          #        2 = array
 
    var = spa.extract_variable(name,flag)  # extract value(s) from a variable
-   	                               # name = name of variable
-   				       # flag = 0 = equal-style variable
-   				       #        1 = particle-style variable
+                                       # name = name of variable
+                                       # flag = 0 = equal-style variable
+                                       #        1 = particle-style variable
 
 
 ----------

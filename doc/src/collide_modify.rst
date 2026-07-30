@@ -85,7 +85,7 @@ probability of 0.3, using a random number.
 The *scheme* keyword selects the numerical scheme used to compute the
 number of collisions attempted in each grid cell (for each pair of
 collision groups) each timestep.  For *ntc*\ , which is the default,
-Bird's no-time-counter scheme is used (:ref:`(Bird94) <Bird94>`): the
+Bird's no-time-counter scheme is used (:ref:`(Bird94) <Bird94_collide_modify>`): the
 attempt count is the integer part of the expected number of attempts
 Nattempt = 1/2 \* N \* (N-1) \* Fnum \* Vremax \* dt / Vcell, with the
 fractional part treated as described above for the *remain* keyword.
@@ -122,7 +122,7 @@ are within a distance R, the closest J particle to I is selected.  An
 exception to these rules is that a particle J is not considered for a
 collision if the I,J pair were the most recent collision partners (in
 the current timestep) for each other.  The convergence properties of
-this near-neighbor algorithm are described in :ref:`(Gallis11) <Gallis11>`.
+this near-neighbor algorithm are described in :ref:`(Gallis11) <Gallis11_collide_modify>`.
 Note that choosing *Nlimit* judiciously will avoid costly searches
 when there are large numbers of particles in some or all grid cells.
 
@@ -189,14 +189,14 @@ ambipolar no, nearcp no, rotate smooth, and vibrate = no.
 ----------
 
 
-.. _Bird94:
+.. _Bird94_collide_modify:
 
 
 
 **(Bird94)** G. A. Bird, Molecular Gas Dynamics and the Direct
 Simulation of Gas Flows, Clarendon Press, Oxford (1994).
 
-.. _Gallis11:
+.. _Gallis11_collide_modify:
 
 
 

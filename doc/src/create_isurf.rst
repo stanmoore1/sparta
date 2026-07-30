@@ -57,7 +57,7 @@ points.  See the `read\_isurf <read_isurf>`_ command for details.
 
 This command derives the 2d or 3d grid of corner point values from the
 set of explicit surface elements, rather then reading them from a
-file :ref:`(Hong24) <Hong24>`.  It then proceeds similarly to the `read\_isurf <read_isurf>`_
+file :ref:`(Hong24) <Hong24_create_isurf>`.  It then proceeds similarly to the `read\_isurf <read_isurf>`_
 command where implicit line segments or triangles within each grid
 cell are calculated from the 4 or 8 corner points of the cell.  When
 the process is complete, all explicit surfaces are removed from the
@@ -318,7 +318,7 @@ none
 ----------
 
 
-.. _Hong24:
+.. _Hong24_create_isurf:
 
 
 

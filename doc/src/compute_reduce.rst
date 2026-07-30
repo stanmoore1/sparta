@@ -63,7 +63,7 @@ all grid cells, in the stats output:
 .. parsed-literal::
 
    compute 1 temp
-   compute	2 grid all all temp
+   compute      2 grid all all temp
    compute 3 reduce ave c_2[1]
    stats_style step c_temp c_3
 
@@ -223,8 +223,8 @@ of particles for the grid cell with the maximum number of particles:
 .. parsed-literal::
 
    compute 1 property/grid id
-   compute	2 grid all n
-   compute	3 reduce max c_1 c_2[1] replace 1 2
+   compute      2 grid all n
+   compute      3 reduce max c_1 c_2[1] replace 1 2
    stats_style step c_temp c_3[1] c_3[2]
 
 The first two input values in the compute reduce command are vectors

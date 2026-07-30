@@ -148,7 +148,7 @@ Next the probabilities of each reaction are recomputed and a new
 reaction is chosen based on these probabilties and performed.  This
 process is repeated till the probability of all the reactions reaches
 zero. A detailed description can be found in Swaminathan Gopalan *et
-al.* :ref:`(SG18) <SG18>`.
+al.* :ref:`(SG18) <SG18_surf_react_adsorb>`.
 
 
 ----------
@@ -257,7 +257,7 @@ R2). The incident gas-phase particle can either adsorb P2(s) or
 scatter from the surface P2(g) post collision.
 
 A detailed description of the various types of reactions can be found
-in Swaminathan Gopalan *et al.* :ref:`(SG18) <SG18>`.  Here is a table of
+in Swaminathan Gopalan *et al.* :ref:`(SG18) <SG18_surf_react_adsorb>`.  Here is a table of
 examples for each type of GS reaction.
 
 .. list-table:: Gas-surface (GS) reaction types, with examples
@@ -329,7 +329,7 @@ undergoes a transformation from solid to gas, to form gas-phase
 product P1(g).
 
 A detailed description of the various types of reactions can be found
-in Swaminathan Gopalan *et al.* :ref:`(SG18) <SG18>`.  Here is a table of
+in Swaminathan Gopalan *et al.* :ref:`(SG18) <SG18_surf_react_adsorb>`.  Here is a table of
 examples for each type of PS reaction.
 
 .. list-table:: Pure-surface (PS) reaction types, with examples
@@ -432,7 +432,7 @@ The final rate of the reaction is computed by the product of the
 reaction rate constant and the surface coverage of all the adsorbed
 reactants. The reaction probability is obtained by normalized all the
 reaction rates. A detailed description can be found in Swaminathan
-Gopalan *et al.* :ref:`(SG18) <SG18>`.
+Gopalan *et al.* :ref:`(SG18) <SG18_surf_react_adsorb>`.
 
 
 ----------
@@ -514,7 +514,7 @@ Related commands
 ----------
 
 
-.. _SG18:
+.. _SG18_surf_react_adsorb:
 
 
 

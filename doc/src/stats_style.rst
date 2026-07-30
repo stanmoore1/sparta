@@ -18,15 +18,15 @@ Syntax
        possible keywords = step, elapsed, elaplong, dt, time, cpu, tpcpu, spcpu,
                            wall, np, npave, ntouch, ntouchave, ncomm, ncommave,
                            nbound, nboundave, nexit, nexitave,
-     		      nscoll, nscollave, nscheck, nscheckave,
+                      nscoll, nscollave, nscheck, nscheckave,
                            ncoll, ncollave, nattempt, nattemptave,
                            nreact, nreactave, nsreact, nsreactave,
                            ngrid, nsplit, maxlevel,
-     		      vol, lx, ly, lz,
-     		      xlo, xhi, ylo, yhi, zlo, zhi,
-     		      c_ID, c_ID[I], c_ID[I][J],
+                      vol, lx, ly, lz,
+                      xlo, xhi, ylo, yhi, zlo, zhi,
+                      c_ID, c_ID[I], c_ID[I][J],
                            f_ID, f_ID[I], f_ID[I][J],
-     		      sc_ID[I], sr_ID[I],
+                      sc_ID[I], sr_ID[I],
                            v_name
 
   

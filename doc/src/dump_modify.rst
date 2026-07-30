@@ -208,9 +208,9 @@ write snapshots at timesteps 0,10,20,30,100,200,300,1000,2000,etc:
 
 .. parsed-literal::
 
-   variable	        s equal logfreq(10,3,10)
-   dump		1 particle all 100 tmp.dump id type x y z
-   dump_modify	1 every v_s first yes
+   variable             s equal logfreq(10,3,10)
+   dump         1 particle all 100 tmp.dump id type x y z
+   dump_modify  1 every v_s first yes
 
 
 ----------

@@ -1,0 +1,57 @@
+name: Attach manual to release
+
+# The generated manual is not committed (see doc/.gitignore), and GitHub's
+# auto-generated source tarballs contain only tracked files. This workflow
+# builds the manual and attaches it to each release, so anyone downloading a
+# release still gets the standalone offline manual that doc/*.html used to
+# provide.
+
+on:
+  release:
+    types: [published]
+  # allow re-attaching to an existing release without re-publishing it
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to attach the manual to'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  manual:
+    runs-on: ubuntu-22.04
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y python3-venv latexmk texlive-latex-recommended \
+                                texlive-latex-extra texlive-fonts-recommended \
+                                dvipng
+
+    - name: Build HTML manual
+      run: make -C doc html
+
+    - name: Build PDF manual
+      run: make -C doc pdf
+
+    # the html tree is self-contained (MathJax is cloned into it), so the
+    # archive renders offline from file://
+    - name: Package
+      run: |
+        tag="${{ github.event.release.tag_name || inputs.tag }}"
+        tar czf "sparta-manual-${tag}.tar.gz" -C doc html
+        cp doc/Manual.pdf "sparta-manual-${tag}.pdf"
+
+    - name: Attach to release
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        tag="${{ github.event.release.tag_name || inputs.tag }}"
+        gh release upload "$tag" \
+          "sparta-manual-${tag}.tar.gz" \
+          "sparta-manual-${tag}.pdf" \
+          --clobber
