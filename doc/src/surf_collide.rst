@@ -235,8 +235,9 @@ surface temperature.  The new velocity will have thermal components in
 the direction of the outward surface normal and the plane tangent to
 the surface given by:
 
-.. image:: Eqs/diffuse_normal.jpg
-   :align: center
+.. math::
+
+   u =  \{-ln(R_f)\}^{1/2}/\beta
 
 
 ----------
@@ -301,8 +302,9 @@ distribution conisstent with the surface temperture.  The new velocity
 will have thermal components in the direction of the outward surface
 normal and the plane tangent to the surface given by:
 
-.. image:: Eqs/diffuse_normal.jpg
-   :align: center
+.. math::
+
+   u =  \{-ln(R_f)\}^{1/2}/\beta
 
 
 ----------
@@ -339,16 +341,18 @@ the impulsive scattering model can be represented using a Gaussian
 distribution with a mean *u0* and a variance *\alpha* following
 Rettner :ref:`(Rettner94a) <Rettner94a>`
 
-.. image:: Eqs/impulsive_u0.JPG
-   :align: center
+.. math::
+
+   f_{impulsive}(u) \propto u^{2} \hspace{1mm} exp\left(-\frac{(u-u_0)^{2}}{2\alpha^2}\right)
 
 The variance parameter is directly specified by the user. The value of *u0* 
 can be provided directly using the *tempvar* model in which it is represented 
 as a linear function of temperature. The linear term *a1* and constant term 
 *a0* are given as inputs.
 
-.. image:: Eqs/impulsive_softsphere.JPG
-   :align: center
+.. math::
+
+   \textlangle E_{f}\textrangle = E_{i} \left(1 - \frac{2\mu}{\left(\mu+1\right)^{2}}\left[1 + \mu sin^{2}\chi + \frac{E_{int}}{E_{i}}\left(\frac{\mu+1}{2\mu}\right) - cos\chi\sqrt{1 - \mu^{2}sin^{2}\chi - \frac{E_{int}}{E_{i}}\left(\mu+1\right)}\right]\right)
 
 The *u0* parameter can also be specified by a more physical model such
 as the soft sphere scattering model :ref:`(Alexander12) <Alexander12>`. This
@@ -358,8 +362,9 @@ to determine the average final energy and then the average final
 velocity *u0*\ . Within the soft sphere model, the average final
 velocity will vary as a function of the final polar angle.
 
-.. image:: Eqs/impulsive_tempvar.JPG
-   :align: center
+.. math::
+
+   u_{0} =  a_{1}*T + a_{0}
 
 Both the polar and azimuthal angular distribution are lobular in
 nature and sharply peaked. These distributions can be represented
@@ -373,11 +378,13 @@ parameters. A factor of 2 is present in the azimuthal distribution to
 ensure the function remians positive within the range of the azimuthal
 angle: (-180, 180)
 
-.. image:: Eqs/impulsive_theta.JPG
-   :align: center
+.. math::
 
-.. image:: Eqs/impulsive_phi.JPG
-   :align: center
+   N(\theta) \propto cos^{n} (\theta-\theta_{peak})
+
+.. math::
+
+   N(\phi) \propto cos^{m} \left(\frac{\phi}{2}\right)
 
 The internal (rotational and vibrational) energy of an incident
 molecule remains unchanged within the *impulsive* model unless the
@@ -530,11 +537,13 @@ as a result of the desorption barrier. The angular distributions are
 peaked more towards the normal and are often described by a cosine
 power law distribution.
 
-.. image:: Eqs/td_barrier_Tnorm.JPG
-   :align: center
+.. math::
 
-.. image:: Eqs/td_barrier_dist.JPG
-   :align: center
+   T_{norm} = T_{surf}\left(1 + \frac{E_{barrier}}{k_{b}}\right).
+
+.. math::
+
+   f(v) \propto v^2 exp\left(-\frac{mv^2}{2k_{b}}\left(\frac{cos^2\theta}{T_{norm}} + \frac{sin^2\theta}{T_{surf}}\right)\right)
 
 In addition to the desorption energy barrier, products formed through
 thermal mechanisms might have energies exceeding those corresponding
@@ -549,8 +558,9 @@ used to account for this scenario. This requires three arguments: the
 amount of energy (in temperature units) going into the translational,
 rotational and vibrational mode.
 
-.. image:: Eqs/td_bond.JPG
-   :align: center
+.. math::
+
+   E_{prod} = k_{b}T_{s} + k_{b}\sigma_2
 
 The higher energy during desorption might also arise due to the energy
 deposited by high speed of the incoming gas-phase particles. Since the
@@ -564,8 +574,9 @@ within SPARTA using the optional keyword *initenergy*\ . It requires 3
 arguments: fraction of the initial translational energy going into the
 translational, rotational and vibrational modes.
 
-.. image:: Eqs/td_initenergy.JPG
-   :align: center
+.. math::
+
+   E_{prod} = k_{b}T_{s} + \sigma_1 E_{in}
 
 The keywords *step*\ , *double*\ , and *intenergy* can only be applied to
 the *impulsive* style. In some cases, it is observed that the polar
@@ -577,8 +588,12 @@ average height H and average periodicity L. The ratio of the height to
 periodicity is *epsilon* and the correction to the angular
 distribution is given by
 
-.. image:: Eqs/impulsive_step.JPG
-   :align: center
+.. math::
+
+   f_{corr} = \begin{cases}
+   1 - \epsilon \hspace{0.5mm} tan(\theta_{0}), & \text{if} \tan(\theta_{0}) < \epsilon^{-1} \\
+   0, & \text{otherwise}
+   \end{cases}
 
 This optional argument can be accessed using the keyword *step*\ , and
 *epsilon* parameter must be specified. Another optional argument to

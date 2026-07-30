@@ -98,16 +98,18 @@ or coarsening based on a mean free path metric.
 The formula used to calculate the mean free path (lambda) is given in
 :ref:`(Bird94) <Bird94>` as equation 4.77:
 
-.. image:: Eqs/lambda.png
-   :align: center
+.. math::
+
+   \lambda = \sum_{p=1}^{s} \frac{n_{p}}{n} \left [ \sum_{q=1}^{s}  \left \{ \pi (d_{\rm ref})^2_{pq} n_{q} \left (\frac{(T_{\rm ref})_{pq}}{T} \right )^{\omega_{pq} - 1/2} \left (1+\frac{m_{p}}{m_{q}} \right )^{1/2} \right \} \right ]^{-1}
 
 .. warning::
 
    Prior to October 2024, a simpler formula was used for
    the mean free path, also from :ref:`(Bird94) <Bird94>`, equation 4.65:
 
-.. image:: Eqs/lambda_old.jpg
-   :align: center
+   .. math::
+
+      \lambda = \left \{ \sqrt{2} \pi D_{\rm ref}^2 n (T_{\rm ref}/T)^{\omega - 1/2} \right \}^{-1}
 
 The new formula is more accurate as it uses the number densities and
 VSS parameters of all gas species (sum over *s*\ ) in the system, as
@@ -119,8 +121,9 @@ composition of the mixture changes significantly over time.
 The formula used to calculate the mean collision time (tau) is given in
 :ref:`(Bird94) <Bird94>` as equation 1.38 combined with 4.75:
 
-.. image:: Eqs/tau.png
-   :align: center
+.. math::
+
+   \tau = \sum_{p=1}^{s} \frac{n_{p}}{n} \left [ \sum_{q=1}^{s}  \left \{ 2(d_{\rm ref})^2_{pq} n_{q} \left (\frac{T}{(T_{\rm ref})_{pq}} \right )^{1 - \omega_{pq}} \left ( \frac{2 \pi k (T_{\rm ref})_{pq}}{m_{r}} \right )^{1/2} \right \} \right ]^{-1}
 
 These two formulas are the exact mean free path (MFP) and mean
 collision time (MCT) for a multi-species mixture, suitable for

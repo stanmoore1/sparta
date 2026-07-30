@@ -57,8 +57,9 @@ The *tfraction* and *cfraction* arguments are both values from 0.0 to
 1.0 which are applied to the transit term and collision term in the
 example formula for a candidate cell timestep below.
 
-.. image:: Eqs/cell_timestep.jpg
-   :align: center
+.. math::
+
+   \Delta t_{cell} = min(\textnormal{cfraction} * \textnormal{mean\_collision\_time}, \textnormal{tfraction} * \Delta x / \textnormal{max\_most\_probable\_speed})
 
 In practice, multiple transit-based timestep candidates are
 constructed based on the cell dimensions in each coordinate direction

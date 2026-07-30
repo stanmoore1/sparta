@@ -277,6 +277,7 @@ point is at least *mindist*
 
 
 .. image:: JPG/multipoint_decrement_small.png
+   :target: JPG/multipoint_decrement.png
    :align: center
 
 The *multiple* option allows a multipoint decrement :ref:`(Hong24) <Hong24>` to be used. 

@@ -199,6 +199,7 @@ assigned to the inside corner point is the average of the values
 computed for the individual cell edges.
 
 .. image:: JPG/multivalues_small.png
+   :target: JPG/multivalues.png
    :align: center
 
 The *multi* mode utilizes multivalues. Each corner stores 4 values in
@@ -240,12 +241,16 @@ Examples of the effects of last two bullet points are illustrated in
 the following diagrams for 2d geomtries (similar effects occur in 3d).
 
 .. image:: JPG/implicit_bend_uneven_small.png
+   :target: JPG/implicit_bend_uneven.png
 
 .. image:: JPG/implicit_bend_small.png
+   :target: JPG/implicit_bend.png
 
 .. image:: JPG/implicit_corner_small.png
+   :target: JPG/implicit_corner.png
 
 .. image:: JPG/implicit_pointy_small.png
+   :target: JPG/implicit_pointy.png
 
 In the images above, the explicit surface is represented by solid red
 lines whereas the generated implicit surface is dotted blue lines.
