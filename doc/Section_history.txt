@@ -22,7 +22,7 @@ molecular dynamics codes I've distributed.
 The "wish list link"_https://sparta.github.io/future.html on the
 SPARTA web page gives a list of features we are planning to add to
 SPARTA in the future.  Please contact the
-"developers"__https://sparta.github.io/authors.html you are interested
+"developers"_https://sparta.github.io/authors.html you are interested
 in contributing to the those developments or would be a future user of
 that feature.
 

@@ -131,7 +131,7 @@ command.  Two different styles of variable can be used.
 The first is an equal-style variable which evaulates to a single
 scalar value, which will be the temperature assigned to every surface
 element.  Equal-style variables can specify formulas with various
-mathematical functions, and include "stats_style"_status_style.html
+mathematical functions, and include "stats_style"_stats_style.html
 command keywords and timestep and elapsed time.  Thus it is easy to
 specify a time-dependent temperature.
 

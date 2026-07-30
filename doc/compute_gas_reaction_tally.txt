@@ -52,7 +52,7 @@ Tally various values for each gas-phase reaction of two particles
 during the current timestep.  Only gas collisions which result in a
 chemical reactions are tallied by this command, as enabled by the
 "react"_react.html command.  See the related "compute
-gas/collide/tally"_compute_gas_collide_tally.html command to tally
+gas/collide/tally"_compute_gas_collision_tally.html command to tally
 collisions which do not induce reactions.  It provides different tally
 value options than this compute.
 

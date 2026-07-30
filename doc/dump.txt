@@ -164,7 +164,7 @@ x-dimension, and similarly for y and z.  The "xx yy zz" represent 6
 characters that encode the style of boundary for each of the 6
 simulation box boundaries (xlo,xhi and ylo,yhi and zlo,zhi).  Each of
 the 6 characters is either o = outflow, p = periodic, or s = specular.
-See the "boundary"_doc/boundary.html command for details.
+See the "boundary"_boundary.html command for details.
 
 The "ITEM: NUMBER OF ATOMS" or "ITEM: NUMBER OF CELLS" or "ITEM:
 NUMBER OF SURFS" or "ITEM: NUMBER OF TALLIES" entry in each snapshot
@@ -270,7 +270,7 @@ the appropriate distance "units"_units.html.  Use {xs}, {ys}, {zs} to
 vibrational energies of the particle.  A particle's kinetic energy is
 given by 1/2 m (vx^2 + vy^2 + vz^2).  The way that rotational and
 vibrational energy is treated in collisions and stored by particles is
-affected by the "collide_modify"_collid_modify.html command.
+affected by the "collide_modify"_collide_modify.html command.
 
 The {c_ID} and {c_ID\[N\]} attributes allow per-particle vectors or
 arrays calculated by a "compute"_compute.html to be output.  The ID in
@@ -423,8 +423,8 @@ vectors or arrays defined by some other command to be output.  The
 name should be replaced by the name of the attribute.  See "Section
 6.17"_Section_howto.html#howto_17 for more discussion of custom
 attributes and command that define them.  For example, the
-"read_grid"_read_grid.html and "surf_react
-implicit"_surf_react_implicit.html commands can define per-grid
+"read_grid"_read_grid.html and surf_react
+implicit commands can define per-grid
 attributes.  (The surf/react implicit command has not yet been
 released in public SPARTA).
 

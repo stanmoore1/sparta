@@ -515,7 +515,7 @@ code directly from an input script:
 There are SPARTA input script commands which can invoke Python code directly.
 
 "python"_python.html
-"python-style variables"_varaible.html
+"python-style variables"_variable.html
 "equal-style and grid-style variables with formulas containing Python function wrappers"_variable.html :ul
 
 The "python"_python.html command can be used to define and execute a

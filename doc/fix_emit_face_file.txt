@@ -375,7 +375,7 @@ Particles cannot be added on periodic faces of the simulation box.
 Particles cannot be added on {z} faces of the simluation box for a 2d
 simulation.
 
-Unlike the "fix emit/face"_fix_emit/face.html command, no warning is
+Unlike the "fix emit/face"_fix_emit_face.html command, no warning is
 issued if the specified emission face has an inward normal in a
 direction opposing the streaming velocity, as defined by the mixture.
 This is because the streaming velocity as defined by the specified

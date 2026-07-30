@@ -771,14 +771,14 @@ encoded with 4, because it requires 4 bits to represent 8 cells (1 to
 376 = 8568.  In string format it would be 376-4, with dashes
 separating each of the levels.  Either of these formats (integer or
 string) can be specified as id or idstr for output of grid cell info
-with the "dump grid"_dump_grid.html command; see its doc page for more
+with the "dump grid"_dump.html command; see its doc page for more
 details.
 
 Note that a child cell has the same ID whether it is unsplit, cut, or
 split.  Currently, sub cells of a split cell also have the same ID,
 though that may change in the future.
 
-The "create_grid"_create_grid.html and "balance"_balance.html and "fix
+The "create_grid"_create_grid.html and "balance_grid"_balance_grid.html and "fix
 balance"_fix_balance.html commands determine the assignment of child
 cells to processors.  If a child cell is assigned to a processor, that
 processor owns the cell whether it is an unsplit, cut, or split cell.
@@ -1032,7 +1032,7 @@ ambipolar reactions.  Their reactants and products must be listed in
 specific order.
 
 When creating particles, either by the
-"create_particles"_create_particles.html or "fix emit"_fix_emit.html
+"create_particles"_create_particles.html or "fix emit"_fix_emit_face.html
 command variants, do NOT use a mixture that includes the ambipolar
 electron species.  If you do this, you will create "free" electrons
 which are not coupled to an ambipolar ion.  You can include ambipolar
@@ -1194,7 +1194,7 @@ reduce I/O times.
 "compute_surf"_compute_surf.html                # for explicit surfs
 "dump surf"_dump.html
 "dump image"_dump_image.html
-"fix adapt/grid"_fix_adapt_grid.html
+"fix adapt/grid"_fix_adapt.html
 "fix emit/surf"_fix_emit_surf.html
 "group surf"_group.html
 "read_isurf"_read_isurf.html                    # for implicit surfs
@@ -1332,7 +1332,7 @@ The "compute_surf"_compute_surf.html command can be used to tally the
 count, mass flux, and energy flux of particles that pass through
 transparent surface elements.  These quantities can then be time
 averaged via the "fix ave/surf"_fix_ave_surf.html command or output
-via the "dump surf"_dump_surf.html command in the usual ways,
+via the "dump surf"_dump.html command in the usual ways,
 as described in "Section 6.4"_Section_howto.html#howto_4.
 
 The examples/circle/in.circle.transparent script shows how to use
@@ -1342,7 +1342,7 @@ particle count and kinetic energy flux in both directions in front of
 the object.  These are defined in the data.plane1 and data.plane2
 files.  The resulting tallies are output with the
 "stats_style"_stats_style.html command.  They could also be output
-with a "dump surf"_dump_surf.html command for more resolution if the 2
+with a "dump surf"_dump.html command for more resolution if the 2
 lines were each defined as multiple line segments.
 
 :line

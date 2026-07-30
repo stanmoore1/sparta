@@ -1006,7 +1006,7 @@ string between the parenthesis as an equal-style variable formula.
 
 Referencing a variable with a leading "v_" is an optional or required
 kind of argument for some commands (e.g. the "fix
-ave/spatial"_fix_ave_spatial.html or "dump custom"_dump.html or
+ave/grid"_fix_ave_grid.html or "dump custom"_dump.html or
 "stats_style"_stats_style.html commands) if you wish it to evaluate a
 variable periodically during a run.  It can also be used in a variable
 formula if you wish to reference a second variable.  The second

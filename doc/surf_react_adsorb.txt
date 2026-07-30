@@ -385,7 +385,7 @@ appropriately when that occurs.
 
 [Related commands:]
 
-"surf_react"_aurf_react.html, "react"_react.html, 
+"surf_react"_surf_react.html, "react"_react.html, 
 "surf_modify"_surf_modify.html,
 "bound_modify"_bound_modify.html, 
 

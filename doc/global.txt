@@ -298,7 +298,7 @@ there may be no particle migration needed to upwind processors, so the
 {all} method can generate smaller counts of neighboring processors.
 
 Note that the {neigh} style only has an effect (at run time) when the
-grid is decomposed by the RCB option of the "balance"_balance.html or
+grid is decomposed by the RCB option of the "balance_grid"_balance_grid.html or
 "fix balance"_fix_balance.html commands.  If that is not the case,
 SPARTA performs the particle communication as if the {all} setting
 were in place.
