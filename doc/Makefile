@@ -124,7 +124,7 @@ fasthtml/%.html: $(RSTDIR)/%.rst
 	@if [ "$(HAS_PANDOC)" == "NO" ] ; then echo "Make 'fasthtml' requires the 'pandoc' software" 1>&2; exit 1; fi
 	@mkdir -p fasthtml
 	@echo converting $< to $@
-	@pandoc -s --mathml --css="pandoc.css" --metadata title="$@" -o $@ $<
+	@pandoc -s --mathml --css="pandoc.css" --template=$(BUILDDIR)/utils/pandoc.html --metadata title="$@" -o $@ $<
 
 # use a dedicated doctree cache: the html/epub/pdf builds use -E (which would
 # discard it) and produce different doctrees (e.g. from the sphinx-tabs hack

@@ -1,0 +1,20 @@
+:orphan:
+
+Page not found
+==============
+
+The page you requested does not exist.
+
+The manual was reorganized when SPARTA moved from the old txt2html
+documentation format to Sphinx. Page addresses were preserved, but
+links to a specific section within a page may have changed.
+
+Try one of these instead:
+
+* `Manual <https://sparta.github.io/doc/Manual.html>`_ -- the top of the manual
+* `Commands <https://sparta.github.io/doc/Section_commands.html>`_ -- every SPARTA command, by category and alphabetically
+* `Getting started <https://sparta.github.io/doc/Section_start.html>`_ -- building and running SPARTA
+* `SPARTA website <https://sparta.github.io>`_
+
+The search box in the sidebar covers the whole manual and is usually
+the fastest way to find a command.

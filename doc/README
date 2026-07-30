@@ -1,0 +1,72 @@
+SPARTA Documentation
+====================
+
+The SPARTA manual is written in reStructuredText and built with Sphinx.
+The sources are in src/; everything else in this directory is build
+machinery. Generated output (html/, latex/, Manual.pdf, ...) is not
+committed -- see .gitignore.
+
+Building
+--------
+
+  make html      HTML manual in doc/html (start at doc/html/Manual.html)
+  make pdf       Manual.pdf in this directory
+  make epub      SPARTA.epub for e-book readers
+  make fasthtml  quick approximate HTML preview, for editing (needs pandoc)
+  make help      the full target list
+
+The first build creates a Python virtual environment in doc/docenv and
+installs the packages listed in utils/requirements.txt into it, so it
+needs network access and takes a few minutes. Later builds reuse it.
+"make clean-all" removes it.
+
+Alternatively, cmake can drive the same build:
+
+  cmake -S cmake -B build -DBUILD_DOC=ON
+  cmake --build build --target doc
+
+Checking
+--------
+
+  make check         run all of the checks below
+  make anchor_check  scan for duplicate anchor labels
+  make style_check   check that every style in src/ is documented
+  make char_check    check for non-ASCII characters
+  make role_check    check for misformatted reST roles
+  make link_check    check external links (slow, needs network)
+  make spelling      spell-check the manual (needs enchant)
+
+Requirements
+------------
+
+  * python3 (3.8 or later) with the venv module
+  * git, for cloning MathJax into the html tree so equations render
+    without network access
+
+For "make pdf", additionally:
+
+  * pdflatex and latexmk
+  * LaTeX packages: amsmath, anysize, babel, capt-of, cmap, dvipng,
+    fncychap, framed, geometry, gyre, hyperref, hypcap, needspace,
+    times, tabulary, titlesec, upquote, wrapfig
+
+For "make epub": dvipng (equations are pre-rendered, since e-readers
+cannot run MathJax).
+
+For "make fasthtml": pandoc.
+
+For "make spelling": the enchant library and an en_US dictionary.
+
+Editing
+-------
+
+Doc pages are one .rst file per command, plus the Section_*.rst
+chapters. Cross-reference other pages with :doc:`text <page>` and
+labelled anchors with :ref:`text <label>`; both are validated at build
+time, so a typo in a link fails the build rather than shipping a dead
+link.
+
+utils/converters/ holds the txt2html-to-reST converter used for the
+one-time migration from the old doc/*.txt format. It is kept because
+the rst_anchor_check tool ships in the same package, and is installed
+into the virtual environment by "make html".

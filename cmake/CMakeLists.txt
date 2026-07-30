@@ -70,6 +70,7 @@ set(SPARTA_TPL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../lib)
 set(SPARTA_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../src)
 set(SPARTA_EXAMPLES_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../examples)
 set(SPARTA_TOOLS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../tools)
+set(SPARTA_DOC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../doc)
 set(PARAVIEW_TOOLS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../tools/paraview)
 set(SPARTA_DSMC_TESTING_EXAMPLES_DIR ${SPARTA_DSMC_TESTING_PATH}/examples)
 set(SPARTA_CMAKE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
@@ -182,6 +183,16 @@ include(${SPARTA_CMAKE_COMMON_DIR}/print/sparta_options.cmake)
 # ######### BEGIN TEST PARAVIEW SPARTA OPTIONS ##########
 include(${SPARTA_CMAKE_COMMON_DIR}/test/sparta_test_paraview.cmake)
 # ######### END   TEST PARAVIEW SPARTA OPTIONS ##########
+
+# ######### BEGIN DOCUMENTATION ##########
+# Optional Sphinx HTML manual, enabled with -DBUILD_DOC=ON. doc/Makefile
+# remains the primary way to build the manual; this is an alternative entry
+# point for people who prefer to drive everything through cmake.
+include(Documentation)
+if(BUILD_DOC)
+  message(STATUS "<<< Building HTML Manual >>>")
+endif()
+# ######### END   DOCUMENTATION ##########
 
 add_subdirectory(${SPARTA_SRC_DIR} ${CMAKE_CURRENT_BINARY_DIR}/src)
 add_subdirectory(${PARAVIEW_TOOLS_DIR} ${CMAKE_CURRENT_BINARY_DIR}/paraview)
