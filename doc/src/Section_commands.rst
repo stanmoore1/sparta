@@ -173,15 +173,18 @@ continuation character.
 
 For example:
 
-print "Volume = $v"
-print 'Volume = $v'
-print """
-System volume = $v
-System temperature = $t
-"""
-variable a string "red green blue &
-                   purple orange cyan"
-if "$\ *steps* > 1000" then quit
+
+.. parsed-literal::
+
+   print "Volume = $v"
+   print 'Volume = $v'
+   print """
+   System volume = $v
+   System temperature = $t
+   """
+   variable a string "red green blue &
+                      purple orange cyan"
+   if "$\ *steps* > 1000" then quit
 
 In each of these cases, the single, double, or triple quotes are
 removed and the enclosed text stored internally as a single argument.

@@ -108,6 +108,18 @@ def flatten_nested_inline_markup(content):
     return re.sub(r'\*\*\\ \*([^*]+)\*\\ \*\*', r'**\1**', content)
 
 
+def blank_line_after_directive_options(content):
+    """Ensure a directive's option block is followed by a blank line.
+
+    ``:c,image(f,l)`` emits ".. image:: f" plus ":target:"/":align:" option
+    lines.  When the next paragraph follows immediately, docutils reports
+    "Explicit markup ends without a blank line; unexpected unindent" and
+    swallows the paragraph into the directive.
+    """
+    return re.sub(r'^(   :(?:align|target|width|height|scale|alt): .*\n)(?=\S)',
+                  r'\1\n', content, flags=re.M)
+
+
 def escape_backticks_in_literal_blocks(content):
     """Escape stray backticks inside ``.. parsed-literal::`` blocks.
 

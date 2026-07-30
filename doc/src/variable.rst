@@ -809,15 +809,18 @@ complex formula.
 A Python function wrapper can be used in the following manner by an
 input script:
 
-variable        foo python truncate
-python          truncate return v\_foo input 1 iv\_arg format fi here """
-def truncate(x):
- return int(x)
-"""
-variable        xtrunc particle py\_foo(x)
-variable        ytrunc particle py\_foo(y)
-variable        ztrunc particle py\_foo(z)
-dump            1 particle all 100 tmp.dump id x y z v\_xtrunc v\_ytrunc v\_ztrunc
+
+.. parsed-literal::
+
+   variable        foo python truncate
+   python          truncate return v_foo input 1 iv_arg format fi here """
+   def truncate(x):
+    return int(x)
+   """
+   variable        xtrunc particle py_foo(x)
+   variable        ytrunc particle py_foo(y)
+   variable        ztrunc particle py_foo(z)
+   dump            1 particle all 100 tmp.dump id x y z v_xtrunc v_ytrunc v_ztrunc
 
 The first two commands define a python-style variable *foo* and couple
 it to the Python-coded function *truncate()* which takes a single

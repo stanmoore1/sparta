@@ -126,6 +126,7 @@ larger version.
 .. image:: JPG/adapt_2d_small.jpg
    :target: JPG/adapt_2d.jpg
    :align: center
+
 .. image:: JPG/adapt_3d_small.jpg
    :target: JPG/adapt_3d.jpg
    :align: center

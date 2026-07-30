@@ -221,8 +221,8 @@ simulation box.  Click on the image for a larger picture.
    :target: JPG/shuttle.jpg
    :align: center
 
-See :ref:`Sections 4.9 <howto_9>` and
-:ref:`4.10 <>` for more details of both the grids and
+See :ref:`Sections 6.8 <howto_8>` and
+:ref:`6.9 <howto_9>` for more details of both the grids and
 surface objects that SPARTA supports and how to define them.
 
 

@@ -362,9 +362,7 @@ All the other values are calculated as described above.  This means
 they will be zero, since the incident and outgoing particle have the
 same mass and velocity.
 
-IMPORTANT NOTE:
-
-Transparent surface elements can intersect standard non-transparent
+IMPORTANT NOTE: Transparent surface elements can intersect standard non-transparent
 surface elements.  For example, to model flow around a spherical
 object, the sphere would be defined by the usual non-transparent
 triangles which interact with flow particles.  A plane of transparent

@@ -12,7 +12,7 @@ together.
 * 11.6 :ref:`Example Python scripts that use SPARTA <py_6>`
 * 11.7 :ref:`Calling Python from SPARTA <py_7>`
 
-If you are not familiar with `Python <<https://www.python.org>>`_, it is
+If you are not familiar with `Python <https://www.python.org>`_, it is
 a powerful scripting and programming language which can do almost
 everything that compiled languages like C, C++, or Fortran can do in
 fewer lines of code. It also comes with a large collection of add-on

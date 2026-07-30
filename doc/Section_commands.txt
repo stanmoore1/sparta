@@ -162,8 +162,8 @@ System temperature = $t
 """
 variable a string "red green blue &
                    purple orange cyan"
-if "${steps} > 1000" then quit
-   
+if "${steps} > 1000" then quit :pre
+
 In each of these cases, the single, double, or triple quotes are
 removed and the enclosed text stored internally as a single argument.
    

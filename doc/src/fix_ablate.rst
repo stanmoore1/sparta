@@ -73,15 +73,19 @@ bottom.
 .. image:: JPG/porous2d_initial_small.png
    :target: JPG/porous2d_initial.png
    :align: center
+
 .. image:: JPG/porous2d_ablated_small.png
    :target: JPG/porous2d_ablated.png
    :align: center
+
 .. image:: JPG/porous3d_initial_small.png
    :target: JPG/porous3d_initial.png
    :align: center
+
 .. image:: JPG/porous3d_ablated_small.png
    :target: JPG/porous3d_ablated.png
    :align: center
+
 The specified *group-ID* must be the name of a grid cell group, as
 defined by the :doc:`group grid <group>` command, which contains a set
 of grid cells, all of which are the same size, and which comprise a

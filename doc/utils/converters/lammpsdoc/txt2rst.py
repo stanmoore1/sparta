@@ -371,6 +371,7 @@ class Txt2Rst(TxtParser):
         self.document_filters.append(sparta_filters.promote_doc_keywords)
         self.document_filters.append(sparta_filters.merge_preformatted_sections)
         self.document_filters.append(sparta_filters.flatten_nested_inline_markup)
+        self.document_filters.append(sparta_filters.blank_line_after_directive_options)
         self.document_filters.append(sparta_filters.escape_backticks_in_literal_blocks)
 
     def is_ignored_textblock_begin(self, line):

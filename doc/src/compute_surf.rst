@@ -416,19 +416,18 @@ same mass and velocity.
 
 .. warning::
 
-
-Transparent surface elements can intersect standard non-transparent
-surface elements.  For example, to model flow around a spherical
-object, the sphere would be defined by the usual non-transparent
-triangles which interact with flow particles.  A plane of transparent
-surface elements normal to the flow direction could be defined which
-cut through the sphere.  In this case some or all of the transparent
-triangles will be partially or wholly inside the sphere.  SPARTA does
-not attempt to calculate the portion of a tranparent triangle (or line
-segment in 2d) which is inside the flow volume.  The "area" specified
-in all the formulas above will be the area of the entire transparent
-triangle (or line segment in 2d), which may or may not be what you
-want.
+   Transparent surface elements can intersect standard non-transparent
+   surface elements.  For example, to model flow around a spherical
+   object, the sphere would be defined by the usual non-transparent
+   triangles which interact with flow particles.  A plane of transparent
+   surface elements normal to the flow direction could be defined which
+   cut through the sphere.  In this case some or all of the transparent
+   triangles will be partially or wholly inside the sphere.  SPARTA does
+   not attempt to calculate the portion of a tranparent triangle (or line
+   segment in 2d) which is inside the flow volume.  The "area" specified
+   in all the formulas above will be the area of the entire transparent
+   triangle (or line segment in 2d), which may or may not be what you
+   want.
 
 See the optional norm keyword (below) to calculate flux values
 un-normalized by the surface element area.  Also see the "sum-area"

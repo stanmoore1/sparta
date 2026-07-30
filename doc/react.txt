@@ -382,6 +382,7 @@ Kinetic-Theory Approach for Computing Chemical-Reaction Rates in
 Upper-Atmosphere Hypersonic Flows", J Chem Phys, 131, 124311, (2009).
 
 :link(Gallis11)
+:link(Gallis10)
 [(Gallis10)] M. A. Gallis, R. B. Bond, and J. R.Torczynski,
 "Assessment of Collision-Energy-Based Models for Atmospheric-Species
 Reactions in Hypersonic Flows", J Thermophysics and Heat Transfer,

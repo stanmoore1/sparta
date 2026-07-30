@@ -447,6 +447,10 @@ Upper-Atmosphere Hypersonic Flows", J Chem Phys, 131, 124311, (2009).
 
 
 
+.. _Gallis10:
+
+
+
 **(Gallis10)** M. A. Gallis, R. B. Bond, and J. R.Torczynski,
 "Assessment of Collision-Energy-Based Models for Atmospheric-Species
 Reactions in Hypersonic Flows", J Thermophysics and Heat Transfer,

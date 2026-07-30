@@ -739,7 +739,7 @@ def truncate(x):
 variable        xtrunc particle py_foo(x)
 variable        ytrunc particle py_foo(y)
 variable        ztrunc particle py_foo(z)
-dump            1 particle all 100 tmp.dump id x y z v_xtrunc v_ytrunc v_ztrunc
+dump            1 particle all 100 tmp.dump id x y z v_xtrunc v_ytrunc v_ztrunc :pre
 
 The first two commands define a python-style variable {foo} and couple
 it to the Python-coded function {truncate()} which takes a single

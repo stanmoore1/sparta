@@ -19,7 +19,7 @@ together.
 11.6 "Example Python scripts that use SPARTA"_#py_6
 11.7 "Calling Python from SPARTA"_#py_7 :ul
 
-If you are not familiar with "Python"_<https://www.python.org>, it is
+If you are not familiar with "Python"_https://www.python.org, it is
 a powerful scripting and programming language which can do almost
 everything that compiled languages like C, C++, or Fortran can do in
 fewer lines of code. It also comes with a large collection of add-on
