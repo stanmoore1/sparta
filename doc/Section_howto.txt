@@ -225,7 +225,7 @@ to output and the kind of data they operate on and produce:
 
 "Global/per-particle/per-grid/per-surf/per-tally data"_#global
 "Scalar/vector/array data"_#scalar
-"Statistical output"_#stat
+"Statistical output"_#stats
 "Dump file output"_#dump
 "Fixes that write output files"_#fixoutput
 "Computes that process output quantities"_#computeoutput
@@ -612,7 +612,7 @@ examples/COUPLE/README for more details.
 IMPORTANT NOTE: The examples/COUPLE dir has not been added to the
 distribution yet.
 
-"Section 2.3"_Section_start.html#start3 of the manual describes how to
+"Section 2.3"_Section_start.html#start_3 of the manual describes how to
 build SPARTA as a library.  Once this is done, you can interface with
 SPARTA either via C++, C, Fortran, or Python (or any other language
 that supports a vanilla C-like interface).  For example, from C++ you
@@ -672,7 +672,7 @@ As described below, each child cell is assigned an ID which encodes
 the cell's logical position within in the hierarchical grid, as a
 32-bit or 64-bit unsigned integer ID.  The precision is set by the
 -DSPARTA_BIG or -DSPARTA_SMALL or -DSPARTA_BIGBIG compiler switch, as
-described in "Section 2.2"_Section_start.html#start2_2.  The number of
+described in "Section 2.2"_Section_start.html#start_2.  The number of
 grid levels that can be used depends on this precision and the
 resolution of the grid at each level.  For example, in a 3d
 simulation, a level that is refined with a 2x2x2 sub-grid requires 4
@@ -1282,7 +1282,7 @@ both kinds of files.  The "write_surf"_write_surf.html command can
 also output implicit surface elements for visualization by tools such
 as ParaView which can read SPARTA surface element files after suitable
 post-processing.  See the "Section tools
-paraview"_Section_tools.html#paraview doc page for more details.
+paraview"_Section_tools.html#paraviewtools doc page for more details.
 
 :line
 

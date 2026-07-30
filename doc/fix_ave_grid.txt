@@ -221,8 +221,7 @@ only be accessed on timesteps that are multiples of {Nfreq} since that
 is when averaging is performed.
 
 This fix performs averaging for all child grid cells in the
-simulation, which includes unsplit, split, and sub cells.  "Section
-4.8"_Section_howto.html#howto_ of the manual gives details of how
+simulation, which includes unsplit, split, and sub cells.  "Section 6.8"_Section_howto.html#howto_8 of the manual gives details of how
 SPARTA defines child, unsplit, split, and sub cells.
 
 Grid cells not in the specified {group-ID} will output zeroes for all

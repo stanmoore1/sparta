@@ -168,10 +168,16 @@ class RSTFormatting(Formatting):
         return converted + content.strip()
 
     def named_link(self, paragraph, name):
+        # markup escaping has already run over the paragraph, so an anchor
+        # like :link(start_2_1) arrives as "start\_2_1".  A reST label must
+        # carry the literal name or every :ref: pointing at it dangles.
+        name = self.markup.unescape_rst_chars(name)
         self.markup.add_internal_reference(name)
         return (".. _%s:\n\n" % name) + paragraph
 
     def define_link_alias(self, paragraph, alias, value):
+        alias = self.markup.unescape_rst_chars(alias)
+        value = self.markup.unescape_rst_chars(value)
         self.markup.add_link_alias(alias, value)
         return (".. _%s: %s\n\n" % (alias, value)) + paragraph
 
@@ -364,6 +370,8 @@ class Txt2Rst(TxtParser):
         self.document_filters.append(sparta_filters.filter_multiple_horizontal_rules)
         self.document_filters.append(sparta_filters.promote_doc_keywords)
         self.document_filters.append(sparta_filters.merge_preformatted_sections)
+        self.document_filters.append(sparta_filters.flatten_nested_inline_markup)
+        self.document_filters.append(sparta_filters.escape_backticks_in_literal_blocks)
 
     def is_ignored_textblock_begin(self, line):
         return line.startswith('<!-- HTML_ONLY -->')

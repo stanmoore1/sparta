@@ -97,6 +97,41 @@ def filter_multiple_horizontal_rules(content):
     return re.sub(r"----------[\s\n]+----------", '', content)
 
 
+def flatten_nested_inline_markup(content):
+    """Collapse bold-wrapping-italic to plain bold.
+
+    txt2html allows [{text}], which nests <B> and <I>. reST has no nested
+    inline markup, so the converter emits ``**\\ *text*\\ **``, which docutils
+    rejects with "Inline strong start-string without end-string". Keeping the
+    bold and dropping the emphasis is the conventional workaround.
+    """
+    return re.sub(r'\*\*\\ \*([^*]+)\*\\ \*\*', r'**\1**', content)
+
+
+def escape_backticks_in_literal_blocks(content):
+    """Escape stray backticks inside ``.. parsed-literal::`` blocks.
+
+    Unlike a plain literal block, parsed-literal interprets inline markup, so
+    an unpaired backtick -- common in captured linker output such as
+    `.rodata' -- opens an interpreted-text span that never closes.
+    """
+    out = []
+    in_block = False
+    for line in content.split('\n'):
+        if line.strip().startswith('.. parsed-literal::'):
+            in_block = True
+            out.append(line)
+            continue
+        if in_block:
+            # the block ends at the first non-blank, non-indented line
+            if line.strip() and not line.startswith('   '):
+                in_block = False
+            elif line.count('`') % 2 == 1:
+                line = line.replace('`', '\\`')
+        out.append(line)
+    return '\n'.join(out)
+
+
 def merge_preformatted_sections(content):
     mergable_section_pattern = re.compile(r"\.\. parsed-literal::\n"
                                           r"\n"
