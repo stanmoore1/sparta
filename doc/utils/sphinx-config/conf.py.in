@@ -1,0 +1,207 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+#
+# SPARTA documentation build configuration file.
+#
+# This is a template.  doc/Makefile generates conf.py from it by substituting
+# the @SPARTA_*_DIR@ placeholders, which is why conf.py itself is not
+# committed.  Edit conf.py.in, never conf.py.
+#
+# Adapted from the LAMMPS doc/utils/sphinx-config/conf.py.in.
+
+import os
+import sys
+from datetime import date
+
+has_enchant = False
+try:
+    import enchant
+    has_enchant = True
+except ImportError:
+    pass
+
+SPARTA_DOC_DIR = '@SPARTA_DOC_DIR@'
+SPARTA_SOURCE_DIR = '@SPARTA_SOURCE_DIR@'
+SPARTA_PYTHON_DIR = '@SPARTA_PYTHON_DIR@'
+
+# local sphinx extensions
+sys.path.append(os.path.join(SPARTA_DOC_DIR, 'src', '_ext'))
+# the custom Pygments lexer lives next to this file
+sys.path.append(os.path.join(SPARTA_DOC_DIR, 'utils', 'sphinx-config'))
+
+# -- General configuration ------------------------------------------------
+
+needs_sphinx = '6.0'
+
+extensions = [
+    'sphinx.ext.mathjax',
+    'sphinx.ext.imgmath',
+    'sphinxcontrib.jquery',
+    'sphinx_tabs.tabs',
+    'sphinx_design',
+    'sphinx_sitemap',
+    'notfound.extension',
+    'table_from_list',
+    'tab_or_note',
+]
+
+templates_path = ['_templates']
+
+source_suffix = {'.rst': 'restructuredtext'}
+
+master_doc = 'Manual'
+
+project = 'SPARTA'
+copyright = '2014-{} Sandia Corporation'.format(date.today().year)
+
+
+def get_sparta_version():
+    """Read the version string out of src/version.h.
+
+    SPARTA's "version" is the release date, e.g. "24 Sep 2025", and every
+    commit on master is a release, so unlike LAMMPS there is no
+    development/stable distinction to encode here.
+    """
+    try:
+        with open(os.path.join(SPARTA_SOURCE_DIR, 'version.h'), 'r') as f:
+            line = f.readline()
+            start_pos = line.find('"') + 1
+            end_pos = line.find('"', start_pos)
+            return line[start_pos:end_pos]
+    except OSError:
+        return 'Development'
+
+
+version = get_sparta_version()
+release = version
+
+exclude_patterns = ['false_positives.txt']
+
+# no syntax highlighting unless a block asks for it explicitly
+highlight_language = 'none'
+pygments_style = 'default'
+
+# -- Options for HTML output ----------------------------------------------
+
+html_theme = 'sphinx_rtd_theme'
+
+html_theme_options = {
+    'navigation_depth': 3,
+    'collapse_navigation': True,
+}
+
+# MathJax is a full git clone and lives in its own static root, so the epub
+# builder -- which pre-renders equations with imgmath and never loads
+# MathJax -- can leave it out instead of copying the repo into the book and
+# warning about every file in it without a known mimetype.  Both roots are
+# copied into _static/ in the output, so mathjax_path stays the same.
+if 'epub' in sys.argv:
+    html_static_path = ['_static']
+    html_extra_path = []
+else:
+    html_static_path = ['_static', '_mathjax']
+    html_extra_path = ['_extra']
+html_show_sourcelink = False
+html_title = 'SPARTA Documentation'
+html_short_title = 'SPARTA'
+
+# canonical URL, so search engines do not treat the per-page copies served
+# from the tarball and the website as competing duplicates
+html_baseurl = 'https://sparta.github.io/doc/'
+
+# sphinx-notfound-page: the web server serves the generated 404.html for any
+# missing URL including ones in subdirectories, so its links must be absolute.
+notfound_urls_prefix = '/doc/'
+sitemap_excludes = ['404.html']
+sitemap_url_scheme = "{link}"
+sitemap_filename = "sitemap.xml"
+
+if 'epub' in sys.argv:
+    # epub readers cannot run MathJax, so equations are pre-rendered
+    html_math_renderer = 'imgmath'
+else:
+    html_math_renderer = 'mathjax'
+
+# relative path, so MathJax is looked up inside the built html tree and the
+# manual still renders equations with no network access
+mathjax_path = 'mathjax/tex-mml-chtml.js'
+
+# add the :sparta: role for inline input-script highlighting
+rst_prolog = r"""
+
+.. role:: sparta(code)
+    :language: SPARTA
+    :class: highlight
+
+"""
+
+# -- Options for LaTeX output ---------------------------------------------
+
+latex_engine = 'pdflatex'
+latex_toplevel_sectioning = 'part'
+latex_domain_indices = False
+latex_show_urls = 'no'
+
+latex_elements = {
+    'papersize': 'letterpaper',
+    'pointsize': '11pt',
+    'preamble': r'''
+\renewcommand{\AA}{\text{Å}}
+''',
+}
+
+latex_documents = [
+    (master_doc, 'SPARTA.tex', 'SPARTA Documentation',
+     'Sandia National Laboratories', 'manual'),
+]
+
+# -- Options for EPUB output ----------------------------------------------
+
+epub_title = 'SPARTA Documentation'
+epub_author = 'The SPARTA Developers'
+epub_publisher = 'Sandia National Laboratories'
+epub_copyright = copyright
+epub_basename = 'SPARTA'
+epub_exclude_files = ['search.html']
+
+# -- Custom Pygments lexer ------------------------------------------------
+
+try:
+    import SPARTALexer
+    from sphinx.highlighting import lexers
+    lexers['SPARTA'] = SPARTALexer.SPARTALexer(startinline=True)
+except ImportError:
+    pass
+
+# -- Spell checking -------------------------------------------------------
+
+import importlib.util
+
+spelling_spec = importlib.util.find_spec("sphinxcontrib.spelling")
+if spelling_spec and has_enchant:
+    extensions.append('sphinxcontrib.spelling')
+    spelling_lang = 'en_US'
+    spelling_word_list_filename = 'false_positives.txt'
+
+# 'release' embeds a version string that changes with every release.  It does
+# not appear in spelling builder output, but it is an 'env'-rebuild option, so
+# letting it vary would invalidate the cached build environment and force a
+# re-read of every source file.  Keep it constant when spell checking.
+if 'spelling' in sys.argv:
+    release = ''
+
+
+def _restore_static_path(app, env):
+    # the sphinx_tabs and sphinx_design extensions insert generated paths
+    # into html_static_path at 'builder-inited' time, i.e. *after* sphinx has
+    # compared the configuration against the cached build environment.  The
+    # mutated list is stored in the environment pickle and can then never
+    # match a freshly loaded conf.py, so every incremental run claims
+    # "The configuration has changed (html_static_path)".  Builders that
+    # copy no static files can safely store the pristine value instead.
+    if app.builder.name in ('spelling', 'linkcheck'):
+        app.config.html_static_path[:] = ['_static']
+
+
+def setup(app):
+    app.connect('env-updated', _restore_static_path)

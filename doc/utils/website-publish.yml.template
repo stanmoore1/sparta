@@ -1,0 +1,69 @@
+# Template workflow for the sparta.github.io repository.
+#
+# This file does NOT run from the sparta repository. Copy it to
+#
+#     sparta.github.io/.github/workflows/publish-manual.yml
+#
+# where it rebuilds the manual from the sparta sources and commits the
+# result into the website's own doc/ directory, preserving every existing
+# https://sparta.github.io/doc/<page>.html URL.
+#
+# It needs no secrets: sparta is public so the checkout needs no
+# credential, and the workflow only writes to its own repository, which the
+# default GITHUB_TOKEN already permits.
+
+name: Publish SPARTA manual
+
+on:
+  # rebuild nightly so doc changes on master reach the site without anyone
+  # remembering to copy files
+  schedule:
+    - cron: '0 6 * * *'
+  # ...and on demand
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-22.04
+    steps:
+    - name: Check out the website repository
+      uses: actions/checkout@v4
+
+    - name: Check out the SPARTA sources
+      uses: actions/checkout@v4
+      with:
+        repository: sparta/sparta
+        path: sparta-src
+        fetch-depth: 0
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y python3-venv
+
+    - name: Build the manual
+      run: make -C sparta-src/doc html
+
+    # replace rather than merge, so pages deleted upstream also disappear
+    # from the site instead of lingering
+    - name: Stage into doc/
+      run: |
+        rm -rf doc
+        mkdir -p doc
+        cp -a sparta-src/doc/html/. doc/
+        rm -rf sparta-src
+
+    - name: Commit if changed
+      run: |
+        git config user.name  "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git add -A doc
+        if git diff --cached --quiet; then
+          echo "manual unchanged"
+        else
+          git commit -m "Rebuild manual from sparta master"
+          git push
+        fi
