@@ -107,8 +107,8 @@ open build-sparta-gui-macos/sparta-gui.app
 
 The SPARTA-GUI manual sources are in `doc/` (Sphinx format) and can
 be built with `-D SPARTA_GUI_BUILD_DOC=ON`. A short overview is also
-included in the SPARTA manual (`doc/sparta_gui.html` in the SPARTA
-distribution).
+included in the SPARTA manual (`doc/src/sparta_gui.rst` in the SPARTA
+distribution, rendered at https://sparta.github.io/doc/sparta_gui.html).
 
 ## Citing
 

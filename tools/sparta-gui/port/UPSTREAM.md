@@ -65,6 +65,23 @@ divergence is in files SPARTA-GUI rewrote. What has been looked at so far:
   urldownloader.* (LAMMPS tutorial downloads have no SPARTA
   equivalent).
 
+## The SPARTA documentation as an input
+
+Three bundled resources are generated rather than written, two of them from
+the SPARTA manual:
+
+| resource | generator | reads |
+| --- | --- | --- |
+| `resources/help_index.table` | `resources/update-help-index.sh` | `doc/src/*.rst` section titles ending in " command" |
+| `resources/command_syntax.{table,json}` | `tools/gen_command_syntax.py` | the `Syntax` section of each `doc/src/*.rst` |
+| `resources/image_style.table` | `resources/update-image-styles.sh` | `src/*.cpp` (`per_grid_flag`/`per_surf_flag`) |
+
+Regenerate the first two after any SPARTA doc change that adds, renames or
+re-argues a command, and commit the result; `test_resources.cpp` checks that
+every entry still resolves. The manual was txt2html until the Sphinx
+migration, so both generators parse reST now — see their comments for which
+reST constructs stand in for which txt2html markers.
+
 ## Porting an upstream update
 
 1. Fetch the upstream diff between the pinned baseline and the new
