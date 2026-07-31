@@ -11,11 +11,15 @@ then
     exit 1
 fi
 
+# resolve the source directory before cd'ing away from the caller's directory,
+# so a relative path on the command line still means what the caller meant
+SRCDIR="$(cd "$1" && pwd)" || exit 1
+
 cd "$(dirname $0)" || exit 1
 
 STYLELIST=""
-for s in $(grep -l 'per_\(grid\|surf\)_flag = 1' "$1"/{compute,fix}_*.cpp \
-               "$1"/*/{compute,fix}_*.cpp 2> /dev/null)
+for s in $(grep -l 'per_\(grid\|surf\)_flag = 1' "${SRCDIR}"/{compute,fix}_*.cpp \
+               "${SRCDIR}"/*/{compute,fix}_*.cpp 2> /dev/null)
 do \
     h="${s%.cpp}.h"
     [ -f "$h" ] && STYLELIST="${STYLELIST} ${h}"
