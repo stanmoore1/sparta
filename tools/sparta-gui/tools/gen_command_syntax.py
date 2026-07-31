@@ -1,23 +1,34 @@
 #!/usr/bin/env python3
 """Generate the SPARTA-GUI command-syntax table from the SPARTA documentation.
 
-Each SPARTA command has a doc page ``doc/<cmd>.txt`` whose ``[Syntax:]`` block
-contains a ``:pre`` template line, e.g.::
+Each SPARTA command has a doc page ``doc/src/<cmd>.rst`` whose ``Syntax``
+section opens with a ``.. parsed-literal::`` block holding the template, e.g.::
 
-    create_box xlo xhi ylo yhi zlo zhi :pre
-    run N keyword values ... :pre
-    fix ID style args :pre
+    Syntax
+    \"\"\"\"\"\"
+
+    .. parsed-literal::
+
+       create_box xlo xhi ylo yhi zlo zhi
+
+followed by a bullet list describing each placeholder.
 
 This script parses those templates into a compact table consumed by the
 pre-run input validator (``src/inputcheck.cpp``).  For every *base* command
-(a single token before ``command :h3`` -- style pages such as
-``fix ave/grid command`` are skipped) it emits one line::
+(a single token before ``command`` in the page's first title -- style pages
+such as ``fix ave/grid command`` are skipped) it emits one line::
 
     <command> <min_required_args> <variadic 0|1>
 
 where ``min_required_args`` counts the fixed leading placeholders up to the
 first variadic/optional marker, and ``variadic`` is 1 when trailing
 ``args``/``keyword``/``values``/``...`` may follow (so no maximum is enforced).
+
+The manual used to be txt2html, whose markup this converts back to before
+parsing: reST emphasis ``*fnum*`` is what ``{fnum}`` was, bullets are what the
+``:ulb,l`` list markers were, and ``:doc:`text <page>``` is what ``"text"_page``
+was.  Normalising to that shape keeps one description-parsing implementation
+rather than two.
 
 Usage:  gen_command_syntax.py <sparta_doc_dir> <output_table>
 """
@@ -30,17 +41,41 @@ import sys
 VARIADIC = {"args", "arg", "keyword", "keywords", "value", "values",
             "params", "arary", "..."}
 
-H3_RE = re.compile(r"^(.*\S)\s+command\s+:h3\s*$")
+# reST section underline: a run of one punctuation character
+UNDERLINE_RE = re.compile(r"^([=\-`:'\"~^_*+#])\1*\s*$")
+
+# ---------------------------------------------------------------- reST markup
+
+_ROLE_RE = re.compile(r":[a-z:]+:`([^`<]*?)\s*(?:<[^`>]*>)?`")
+_LITERAL_RE = re.compile(r"``([^`]*)``")
+_EMPHASIS_RE = re.compile(r"\*([A-Za-z0-9_/][^*\n]*?)\*")
 
 
-def clean_template(line):
-    """Return the syntax template text with trailing ':pre'-style markers removed."""
-    return " ".join(t for t in line.split() if not t.startswith(":"))
+def unrest(line):
+    """Return a reST body line in the markup the description parser expects.
+
+    Emphasis becomes ``{braces}`` (what txt2html used), roles and inline
+    literals collapse to their text, list bullets and backslash escapes go
+    away.  Indentation is preserved: the nesting of a description list is what
+    tells one placeholder's sub-values from the next placeholder.
+    """
+    # a list bullet, which needs whitespace after it -- "*fnum*" is emphasis
+    line = re.sub(r"^(\s*)[*+-]\s+", r"\1", line)
+    line = _ROLE_RE.sub(r"\1", line)
+    line = _LITERAL_RE.sub(r"\1", line)
+    line = _EMPHASIS_RE.sub(r"{\1}", line)
+    line = re.sub(r"\\(.)", r"\1", line)
+    return line.rstrip()
+
+
+def is_directive(line):
+    """True for a reST directive line ('.. parsed-literal::', '.. index:: x')."""
+    return line.lstrip().startswith("..")
 
 
 def field_names(line):
     """Return the fixed leading placeholder names of a template (before variadic)."""
-    toks = [t for t in line.split() if not t.startswith(":")]
+    toks = line.split()
     if not toks:
         return []
     has_ellipsis = any(t == "..." or t.endswith("...") for t in toks)
@@ -53,11 +88,6 @@ def field_names(line):
         if has_ellipsis and numbered.match(t):
             break
     return out
-
-
-def _strip_markers(s):
-    """Drop a trailing txt2html list marker (':l', ':ulb,l', ...) for text tests."""
-    return re.sub(r"\s*:[a-z,]+\s*$", "", s).strip()
 
 
 # words in a field's description that mark it as a numeric value, and words that
@@ -108,7 +138,7 @@ def keyword_names(body):
         line = body[i]
         if "keyword" in line and "=" in line:
             acc = line
-            while _strip_markers(acc).endswith("or") and i + 1 < len(body):
+            while acc.strip().endswith("or") and i + 1 < len(body):
                 i += 1
                 acc += " " + body[i]
             for m in re.findall(r"\{([A-Za-z0-9_/]+)\}", acc):
@@ -133,8 +163,6 @@ def parse_template(line):
     index at which the keyword list begins -- or None when not keyword_led.
     """
     toks = line.split()
-    # drop the trailing ':pre' (and any ':ulb,l'-style tail markers)
-    toks = [t for t in toks if not t.startswith(":")]
     if not toks:
         return None
     # a "name1 name2 ..." series means one-or-more of that placeholder
@@ -170,45 +198,88 @@ BODY_VARIADIC = re.compile(
     r"zero or more|one or more|may be appended|optional (keyword|arg)", re.IGNORECASE)
 
 
+def page_command(lines):
+    """Return the base command a page documents, or None.
+
+    The command is the first section title reading "<name> command".  A title
+    naming a style ("fix ave/grid command") means a style page, which has no
+    entry of its own -- the base command's own page carries the syntax.
+    """
+    for i in range(len(lines) - 1):
+        title, under = lines[i], lines[i + 1]
+        if not title.strip() or title[:1].isspace() or is_directive(title):
+            continue
+        if not UNDERLINE_RE.match(under) or len(under.rstrip()) < len(title.rstrip()):
+            continue
+        name = unrest(title).strip()
+        if not name.endswith(" command"):
+            continue
+        name = name[: -len(" command")].strip()
+        return None if (" " in name or "/" in name) else name
+    return None
+
+
+def syntax_section(lines):
+    """Return the body lines of the page's "Syntax" section, or []."""
+    for i in range(len(lines) - 1):
+        if lines[i].strip() != "Syntax" or not UNDERLINE_RE.match(lines[i + 1]):
+            continue
+        out = []
+        j = i + 2
+        while j < len(lines):
+            # the next section title ends the block
+            if (j + 1 < len(lines) and lines[j].strip() and not lines[j][:1].isspace()
+                    and UNDERLINE_RE.match(lines[j + 1])
+                    and len(lines[j + 1].rstrip()) >= len(lines[j].rstrip())):
+                break
+            out.append(lines[j])
+            j += 1
+        return out
+    return []
+
+
 def extract(path):
-    """Return (command, min_required, variadic) for a base-command doc page."""
+    """Return the syntax record for a base-command doc page, or None."""
     try:
         with open(path, encoding="utf-8", errors="replace") as fh:
             lines = fh.read().splitlines()
     except OSError:
         return None
 
-    command = None
-    in_syntax = False
-    template = None
-    body = []
-    for raw in lines:
-        m = H3_RE.match(raw)
-        if m and command is None:
-            name = m.group(1).strip()
-            # base command only: a single token (style pages have "fix ave/grid")
-            if " " in name or "/" in name:
-                return None
-            command = name
-            continue
-        if raw.strip() == "[Syntax:]":
-            in_syntax = True
-            continue
-        if in_syntax:
-            # the next section header ends the syntax block
-            if raw.startswith("[") and raw.endswith("]"):
-                break
-            if template is None and ":pre" in raw and raw.split()[0:1] == [command]:
-                template = raw
-            else:
-                body.append(raw)
+    command = page_command(lines)
+    if command is None:
+        return None
 
-    if template is None:
+    templates = []
+    body = []
+    for raw in syntax_section(lines):
+        if is_directive(raw):
+            continue
+        text = unrest(raw)
+        # A template is a literal-block line that starts with the command, and
+        # they all come first: once the description list has begun, a line that
+        # happens to start with the command is prose about it, not another form
+        # of it (variable.rst describes "variable references = v_name" among the
+        # things an equal-style expression may contain).
+        if not body and raw[:1].isspace() and text.split()[0:1] == [command]:
+            templates.append(text.strip())
+        elif text.strip() or body:
+            body.append(text)
+
+    if not templates:
         return None
-    parsed = parse_template(template)
-    if parsed is None:
+    parsed = [p for p in (parse_template(t) for t in templates) if p is not None]
+    if not parsed:
         return None
-    required, variadic, keyword_led, keyword_start = parsed
+    # A command may document alternative forms ("restart 0" as well as
+    # "restart N root keyword value ..."). The shortest of them is what the
+    # validator may demand; the fullest is what to show in a call tip, and is
+    # the one the txt2html sources marked with ":pre".
+    template = templates[-1]
+    required = min(p[0] for p in parsed)
+    variadic = any(p[1] for p in parsed)
+    _, _, keyword_led, keyword_start = parsed[-1]
+
     bodytext = "\n".join(body)
     # the body may reveal optional trailing keywords the template line omitted
     if not variadic and BODY_VARIADIC.search(bodytext):
@@ -224,7 +295,7 @@ def extract(path):
         "command": command,
         "minArgs": required,
         "variadic": variadic,
-        "syntax": clean_template(template),
+        "syntax": template,
         "args": field_names(template),
         "keywords": keywords,
         # 1-based indices of positional args documented as numeric values
@@ -241,13 +312,18 @@ def main():
     if len(sys.argv) != 3:
         sys.exit("usage: gen_command_syntax.py <sparta_doc_dir> <output_table>")
     docdir, out = sys.argv[1], sys.argv[2]
+    # accept either the doc directory or the reST source directory inside it
+    if os.path.isdir(os.path.join(docdir, "src")):
+        docdir = os.path.join(docdir, "src")
     recs = []
     for fname in sorted(os.listdir(docdir)):
-        if not fname.endswith(".txt"):
+        if not fname.endswith(".rst"):
             continue
         rec = extract(os.path.join(docdir, fname))
         if rec:
             recs.append(rec)
+    if not recs:
+        sys.exit("%s: no command pages found in %s" % (sys.argv[0], docdir))
     recs.sort(key=lambda r: r["command"])
 
     # compact table consumed by the validator (src/inputcheck.cpp)

@@ -65,6 +65,7 @@
 "keywords": [
 "vremax",
 "remain",
+"scheme",
 "ambipolar",
 "nearcp",
 "rotate",
@@ -188,6 +189,7 @@
 "keywordStart": 1,
 "keywords": [
 "append",
+"binary",
 "buffer",
 "every",
 "fileper",
@@ -374,7 +376,7 @@
 "append",
 "screen"
 ],
-"syntax": "print string keyword value:pre"
+"syntax": "print string keyword value"
 },
 "python": {
 "args": [

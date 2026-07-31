@@ -6,7 +6,10 @@ print command
 Syntax
 """"""
 
-print string keyword value:pre
+
+.. parsed-literal::
+
+   print string keyword value
 
 * string = text string to print, which may contain variables
 * zero or more keyword/value pairs may be appended

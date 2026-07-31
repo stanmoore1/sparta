@@ -43,7 +43,7 @@ read_surf 1 1
 region 2 1
 remove_surf 1 0
 reset_timestep 1 0
-restart 2 1
+restart 1 1
 run 1 1
 scale_particles 2 0
 seed 1 0
