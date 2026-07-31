@@ -347,7 +347,8 @@ add_executable(test_resources
 target_include_directories(test_resources PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_compile_definitions(test_resources PRIVATE
   SPARTA_TEST_LIBRARY_PATH="${_spa_test_lib}"
-  SPARTA_DOC_DIR="${CMAKE_SOURCE_DIR}/../../doc")
+  SPARTA_DOC_DIR="${CMAKE_SOURCE_DIR}/../../doc/src"
+  SPARTA_GUI_DOC_DIR="${CMAKE_SOURCE_DIR}/doc")
 target_link_libraries(test_resources PRIVATE GTest::gtest_main Qt6::Widgets)
 if (SPARTA_GUI_USE_PLUGIN)
   target_compile_definitions(test_resources PRIVATE SPARTA_GUI_USE_PLUGIN)

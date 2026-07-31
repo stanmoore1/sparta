@@ -36,11 +36,24 @@
 
 namespace {
 
-// The SPARTA documentation tree, beside the GUI in the same checkout.
+// The SPARTA documentation sources, beside the GUI in the same checkout. The
+// manual is Sphinx, and its HTML is built rather than committed, so what the
+// checkout has to compare against is doc/src/<page>.rst -- one reST source per
+// rendered <page>.html.
 QString docDir()
 {
 #if defined(SPARTA_DOC_DIR)
     return QString(SPARTA_DOC_DIR);
+#else
+    return QString();
+#endif
+}
+
+// This manual's own reST sources.
+QString guiDocDir()
+{
+#if defined(SPARTA_GUI_DOC_DIR)
+    return QString(SPARTA_GUI_DOC_DIR);
 #else
     return QString();
 #endif
@@ -114,11 +127,53 @@ TEST(Resources, EveryHelpPageExists)
     QStringList missing;
     for (const QString &row : rows) {
         const QString page = row.section(QRegularExpression("\\s+"), 0, 0);
-        if (!QFileInfo::exists(doc.filePath(page))) missing << page;
+        QString source     = page;
+        source.replace(QRegularExpression("\\.html$"), ".rst");
+        if (!QFileInfo::exists(doc.filePath(source))) missing << page;
     }
     EXPECT_TRUE(missing.isEmpty())
         << missing.size() << " help pages do not exist, so those commands' help opens nothing: "
         << missing.join(", ").toStdString();
+}
+
+// This manual links into the SPARTA manual by URL, which is not something
+// either Sphinx build can check: the two are separate projects, so a page that
+// gets renamed or dropped on the SPARTA side leaves a link here that still
+// builds and still looks fine, and only 404s for the reader who clicks it.
+// Both trees are in the same checkout, so the link target can be checked
+// against the reST source it will be rendered from.
+TEST(Resources, EveryLinkIntoTheSpartaManualNamesAPageThatExists)
+{
+    if (docDir().isEmpty() || guiDocDir().isEmpty()) GTEST_SKIP() << "no documentation trees";
+    const QDir doc(docDir());
+    const QDir guidoc(guiDocDir());
+    ASSERT_TRUE(doc.exists()) << docDir().toStdString();
+    ASSERT_TRUE(guidoc.exists()) << guiDocDir().toStdString();
+
+    const QRegularExpression link("https://sparta\\.github\\.io/doc/([A-Za-z0-9_]+)\\.html");
+    QStringList dead;
+    int checked = 0;
+    for (const QString &name : guidoc.entryList({"*.rst"}, QDir::Files)) {
+        QFile f(guidoc.filePath(name));
+        if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) continue;
+        QTextStream in(&f);
+        int lineno = 0;
+        while (!in.atEnd()) {
+            const QString line = in.readLine();
+            ++lineno;
+            auto it = link.globalMatch(line);
+            while (it.hasNext()) {
+                const QString page = it.next().captured(1);
+                ++checked;
+                if (!QFileInfo::exists(doc.filePath(page + ".rst")))
+                    dead << QString("%1:%2: %3.html").arg(name).arg(lineno).arg(page);
+            }
+        }
+    }
+    ASSERT_GT(checked, 0) << "found no links into the SPARTA manual at all, so this checks nothing";
+    EXPECT_TRUE(dead.isEmpty())
+        << dead.size() << " links point at pages the SPARTA manual does not have: "
+        << dead.join(", ").toStdString();
 }
 
 // ------------------------------------------------------------ image_style

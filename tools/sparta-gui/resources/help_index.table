@@ -59,6 +59,9 @@ dump.html dump
 dump_image.html dump image
 dump_image.html dump movie
 dump_modify.html dump_modify
+dump_vtk.html dump grid/vtk
+dump_vtk.html dump particle/vtk
+dump_vtk.html dump surf/vtk
 echo.html echo
 fix.html fix
 fix_ablate.html fix ablate
