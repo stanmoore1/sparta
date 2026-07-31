@@ -260,7 +260,7 @@ Support Components
 Helper Functions
 ----------------
 
-The :ref:`helpers module <helper_functions>` provides utility functions
+The ``helpers`` module provides utility functions
 used throughout the application:
 
 - Date comparison (``dateCompare`` for version comparisons)

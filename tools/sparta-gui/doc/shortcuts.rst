@@ -80,8 +80,6 @@ available (On macOS use the Command key instead of Ctrl/Control).
      - Quick Help
      - Ctrl+Shift+G
      - SPARTA-GUI Docs
-   * - Ctrl+E
-     - Extend Run
    * - Ctrl+Shift+R
      - Inspect Restart File
      - Ctrl+Shift+L
@@ -104,8 +102,14 @@ available (On macOS use the Command key instead of Ctrl/Control).
      - Import Surface (STL / SPARTA)
      - Ctrl+Shift+E
      - Export to ParaView
-     -
-     -
+     - Ctrl+E
+     - Extend Run
+   * - Ctrl+Shift+3
+     - 3D Snapshot (VTK)
+     - Ctrl+Shift+U
+     - Check for SPARTA Update
+     - Ctrl+1 … Ctrl+4
+     - Setup / Run / Analyze / Visualize workspace
 
 Further keybindings of the editor window `are documented with the Qt
 documentation

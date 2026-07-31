@@ -250,27 +250,36 @@ repeatedly:
 .. index:: workspaces
 .. index:: View menu; workspaces
 
-The *View* menu begins with the three **workspaces**, which are the
+The *View* menu begins with the four **workspaces**, which are the
 main way to change what the window shows.  Rather than displaying every
 panel at once and leaving too little room for any of them, each
-workspace shows the panels that belong to one task:
+workspace shows the panels that belong to one task.  The deck is always
+visible; the table lists what is shown beside it:
 
 .. list-table::
    :header-rows: 1
-   :widths: 20 15 65
+   :widths: 18 12 70
 
    * - Workspace
      - Shortcut
-     - Panels
+     - Panels shown by default
    * - *Setup*
      - ``Ctrl+1``
-     - Project Files, Diagnostics
+     - Output.  Writing the deck: the editor and its output side by side and
+       nothing else -- the linter's findings and the file navigator are a
+       keystroke away in this menu when they are wanted.
    * - *Run*
      - ``Ctrl+2``
-     - Output, Variables, Charts
+     - Output, Variables.  Watching a run.  Charts and pictures deliberately
+       stay out: on a single screen there is not enough width for them and a
+       readable deck at the same time.
    * - *Analyze*
      - ``Ctrl+3``
-     - Charts, Image, Slide Show, Output
+     - Charts, Viewer.  Plots and pictures side by side, which is the point --
+       a spike in a curve is read against what the flow looked like there.
+   * - *Visualize*
+     - ``Ctrl+4``
+     - Viewer, with the whole window given over to it.
 
 The workspaces are also reachable from the segmented switch in the
 status bar.  Panels can be rearranged, added or removed freely and each

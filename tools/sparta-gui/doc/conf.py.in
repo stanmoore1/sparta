@@ -49,6 +49,7 @@ needs_sphinx = '6.0.0'
 extensions = []
 
 exclude_patterns = ['_build']
+suppress_warnings = []
 
 # The API reference is extracted from the C++ sources with Doxygen and
 # imported through the "breathe" extension.  Both are optional: when the
@@ -65,6 +66,10 @@ if importlib.util.find_spec("breathe") and os.path.isdir(breathe_xml_dir):
     breathe_default_members = ('members', 'undoc-members')
 else:
     exclude_patterns.append('api_reference.rst')
+    # index.rst lists the page in its toctree unconditionally, which is right
+    # for the full build; without it the reference is dangling by construction,
+    # so the warning says nothing a reader of this build can act on.
+    suppress_warnings.append('toc.excluded')
 
 # optional extensions used for the full documentation build; a plain
 # sphinx-build still works when they are not installed
@@ -100,7 +105,10 @@ master_doc = 'index'
 
 html_title = 'SPARTA-GUI Documentation'
 html_short_title = 'SPARTA-GUI'
-html_logo = 'sparta-gui-banner.png'
+# under _images/, where the file actually is; without the directory Sphinx
+# resolves it against the config directory, finds nothing, and every page
+# is built with no logo at all
+html_logo = '_images/sparta-gui-banner.png'
 html_theme = 'sphinxdoc'
 html_theme_options = {
         "body_min_width": 700,
@@ -141,7 +149,7 @@ if spelling_spec and has_enchant:
 # configure latex output
 latex_engine = 'pdflatex'
 latex_theme = 'howto'
-latex_logo = 'sparta-gui-banner.png'
+latex_logo = '_images/sparta-gui-banner.png'
 latex_elements = {
     'preamble': format("""
     \\usepackage[columns=1]{idxlayout}

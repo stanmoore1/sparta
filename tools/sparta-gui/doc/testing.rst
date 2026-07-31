@@ -330,7 +330,7 @@ Controls are looked up by object name, and each object name is the
   identify what they just touched
 
 test_sweeppanel.cpp
-------------------
+-------------------
 
 Tests for the parametric sweep (``src/sweeppanel.{h,cpp}``): the results
 model behind the table, and the panel itself.  The panel is constructible
@@ -447,6 +447,7 @@ bounds, and the state afterwards, where what survives becomes the whole range
 again so navigation cannot point past the end.  The conversion cache is
 exercised through a file Qt genuinely cannot decode (an SGI written by
 ImageMagick), which is the only way anything reaches it.
+
 - Closing the panel with the keyboard focus in the delay field.  The
   sibling snapshot viewer crashed exactly there: hiding a widget moves the
   focus, the field emits ``editingFinished()``, and the slot behind it ran
@@ -1074,7 +1075,7 @@ cases cover:
   should be a decision rather than an accident
 
 test_chartanalysis.cpp
----------------------
+----------------------
 
 Tests for what ``ChartWindow::postProcess()`` does *after* its dialog is
 answered: the seven analyses that read the chart's data, compute something,
@@ -1219,7 +1220,7 @@ timer can hand a filename and accept.  Test cases cover:
 - Every file action triggered back to back, with the window still intact
 
 test_chartdialogs.cpp
---------------------
+---------------------
 
 Tests for the chart window's five modal dialogs
 (``src/chartdialogs.{h,cpp}``): the chart style editor, the postprocess
@@ -1259,7 +1260,7 @@ leaf sources -- no chart, no simulator, no display.  Test cases cover:
   not look like part of the chart
 
 test_chartviewer.cpp
--------------------
+--------------------
 
 Tests for the chart window (``src/chartviewer.{h,cpp}``) -- both the dock
 panel that plots live thermo output and the standalone plot window the same
