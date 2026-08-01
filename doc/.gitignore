@@ -17,3 +17,4 @@
 *.pyc
 __pycache__
 *.egg-info
+/utils/converters/build
