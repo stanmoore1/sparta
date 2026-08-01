@@ -90,10 +90,15 @@ functionality:
   internal SPARTA data structures or algorithms, feel free to send an
   email to the `developers <https://sparta.github.io/authors.html>`_.
 
-* If you add something you think is generally useful, also send an email
-  to the `developers <https://sparta.github.io/authors.html>`_ so we can
-  consider adding it to the SPARTA distribution.
+* If you add something you think is generally useful, contribute it back.
+  :doc:`Modify_contribute` describes how to open a pull request,
+  :doc:`Modify_requirements` lists what a contribution has to include,
+  and :doc:`Modify_style` gives the formatting conventions the source
+  follows.
 
+
+The following pages describe the methods a new style of each kind must
+provide:
 
 .. toctree::
    :maxdepth: 1
@@ -106,3 +111,12 @@ functionality:
    Modify_chemistry_styles
    Modify_dump_styles
    Modify_command
+
+and these describe how to contribute what you have written:
+
+.. toctree::
+   :maxdepth: 1
+
+   Modify_contribute
+   Modify_requirements
+   Modify_style
