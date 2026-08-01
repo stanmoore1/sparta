@@ -7,7 +7,7 @@ Syntax
 """"""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    reset_timestep N
 
@@ -17,7 +17,7 @@ Examples
 """"""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    reset_timestep 0
    reset_timestep 4000000

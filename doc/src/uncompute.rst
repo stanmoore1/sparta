@@ -7,7 +7,7 @@ Syntax
 """"""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    uncompute compute-ID
 
@@ -17,7 +17,7 @@ Examples
 """"""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    uncompute 2
    uncompute lower-boundary

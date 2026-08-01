@@ -7,7 +7,7 @@ Syntax
 """"""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    boundary x y z
 
@@ -27,7 +27,7 @@ Examples
 """"""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    boundary o p p
    boundary os o o
@@ -94,7 +94,7 @@ Default
 """""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    boundary p p p
 

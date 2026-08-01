@@ -10,7 +10,7 @@ Syntax
 """"""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    fix ID ambipolar especies ion1 ion2 ...
 
@@ -23,7 +23,7 @@ Examples
 """"""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    fix 1 ambipolar e N+ O+ NO+
 

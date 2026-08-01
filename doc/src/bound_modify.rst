@@ -7,7 +7,7 @@ Syntax
 """"""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    bound_modify wall1 wall2 ... keyword value ...
 
@@ -28,7 +28,7 @@ Examples
 """"""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    bound_modify yhi collide 1 react 2
    bound_modify zlo zhi collide hotwall

@@ -10,7 +10,7 @@ Syntax
 """"""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    compute ID sonine/grid group-ID mix-ID keyword values ...
 
@@ -37,7 +37,7 @@ Examples
 """"""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    compute 1 sonine/grid all air a x 5 b xy 5
    compute 1 sonine/grid subset air a x 5
@@ -46,11 +46,11 @@ These commands will dump time averaged sonine moments for each
 species and each grid cell to a dump file every 1000 steps:
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    compute 1 sonine/grid all species a x 5 b xy 5
-   fix 1 ave/grid 10 100 1000 c_1[\*]
-   dump 1 grid all 1000 tmp.grid id f_1[\*]
+   fix 1 ave/grid 10 100 1000 c_1[*]
+   dump 1 grid all 1000 tmp.grid id f_1[*]
 
 Description
 """""""""""

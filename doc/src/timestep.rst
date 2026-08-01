@@ -7,7 +7,7 @@ Syntax
 """"""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    timestep dt
 
@@ -17,7 +17,7 @@ Examples
 """"""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    timestep 2.0 
    timestep 0.003
@@ -38,7 +38,7 @@ Default
 """""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    timestep 1.0
 

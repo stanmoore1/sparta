@@ -10,7 +10,7 @@ Syntax
 """"""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    compute ID count id1 id2 ...
 
@@ -30,7 +30,7 @@ Examples
 """"""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    compute 1 count species
    compute Ncounts count N N2 N+ air/O
@@ -59,7 +59,7 @@ as if the command had been specified with explicit names for all 10
 species, e.g.
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    compute 1 count O2 N2 O N NO O2+ N2+ O+ N+ NO+
 

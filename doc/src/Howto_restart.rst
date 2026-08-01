@@ -22,7 +22,7 @@ directory of the SPARTA distribution to see the original script that
 this script is based on.  If that script had the line
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    restart              50 tmp.restart
 
@@ -34,7 +34,7 @@ This script could be used to read the first restart file and re-run
 the last 80 timesteps:
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    read_restart     tmp.restart.50
 

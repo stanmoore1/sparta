@@ -7,7 +7,7 @@ Syntax
 """"""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    write_surf file
 
@@ -32,7 +32,7 @@ Examples
 """"""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    write_surf data.surf
    write_surf data.surf type custom temperature custom flags

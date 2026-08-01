@@ -7,7 +7,7 @@ Syntax
 """"""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    stats_style arg1 arg2 ...
 
@@ -74,11 +74,11 @@ Examples
 """"""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    stats_style step cpu np
    stats_style step cpu spcpu np xlo xhi c_myCount[2]
-   stats_style step cpu spcpu np xlo xhi c_myCount[\*]
+   stats_style step cpu spcpu np xlo xhi c_myCount[*]
 
 Description
 """""""""""
@@ -129,7 +129,7 @@ the following manner:
    portion of input script
    variable            t2 equal $t
    variable            delta equal v_2-v_1
-   print               "Delta time = $\ *delta*\ "
+   print               "Delta time = ${delta}"
 
 
 ----------
@@ -220,10 +220,10 @@ are equivalent, since the :doc:`compute reduce <compute_reduce>` command
 creates a global vector with 6 values.
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    compute myCount reduce max x y z vx vy vz
-   stats_style step np c_myCount[\*]
+   stats_style step np c_myCount[*]
    stats_style step np c_myCount[1] c_myCount[2] c_myCount[3] &
                        c_myCount[4] c_myCount[5] c_myCount[6]
 
@@ -295,7 +295,7 @@ Default
 """""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    stats_style step cpu np
 

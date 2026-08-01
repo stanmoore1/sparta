@@ -7,7 +7,7 @@ Syntax
 """"""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    fix ID emit/surf mix-ID group-ID keyword value ...
 
@@ -39,7 +39,7 @@ Examples
 """"""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    fix in emit/surf air all
    fix in emit/face mymix myPatch region circle normal yes

@@ -7,7 +7,7 @@ Syntax
 """"""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    compute ID property/surf group-ID input1 input2 ...
 
@@ -37,7 +37,7 @@ Examples
 """"""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    compute 1 property/surf all id xc yc zc
 

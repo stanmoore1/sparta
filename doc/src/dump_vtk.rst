@@ -13,7 +13,7 @@ Syntax
 """"""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    dump ID particle/vtk mix-ID N file args
 
@@ -33,13 +33,13 @@ Examples
 """"""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
-   dump 1 particle/vtk 100 dump.\*.vtu all x y z vx vy vz
+   dump 1 particle/vtk 100 dump.*.vtu all x y z vx vy vz
 
-   dump 2 grid/vtk 100 tmp.grid.\*.vtu all id proc vol
+   dump 2 grid/vtk 100 tmp.grid.*.vtu all id proc vol
 
-   dump 3 surf/vtk 100 tmp.surf.%.\*.vtp all id type
+   dump 3 surf/vtk 100 tmp.surf.%.*.vtp all id type
 
 Description
 """""""""""
@@ -101,7 +101,7 @@ The :doc:`dump\_modify <dump_modify>` *binary* keyword is specific to
 these styles:
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    dump_modify ID binary yes
 

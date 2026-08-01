@@ -7,7 +7,7 @@ Syntax
 """"""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    fix ID surf/temp surf-ID Nevery source Tinit emisurf custom-name
 
@@ -30,7 +30,7 @@ Examples
 """"""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    compute 1 surf all all etot
    fix 1 surf/temp all 1000 c_1 250 0.9 temperature

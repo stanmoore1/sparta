@@ -7,7 +7,7 @@ Syntax
 """"""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    fix ID emit/face/file mix-ID face filename boundary-ID keyword value ...
 
@@ -33,7 +33,7 @@ Examples
 """"""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    fix in emit/face/file air xlo input.data xlo
    fix in emit/face/file mymix ylo file.txt oneface frac 0.1 nevery 10

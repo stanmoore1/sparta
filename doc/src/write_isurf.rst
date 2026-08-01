@@ -7,7 +7,7 @@ Syntax
 """"""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    write_isurf group-ID Nx Ny Nz filename ablateID keyword args ...
 
@@ -28,9 +28,9 @@ Examples
 """"""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
-   write_isurf block 100 100 200 isurf.material.\* ablation
+   write_isurf block 100 100 200 isurf.material.* ablation
 
 Description
 """""""""""

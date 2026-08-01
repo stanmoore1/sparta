@@ -7,7 +7,7 @@ Syntax
 """"""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    balance_grid style args ...
 
@@ -40,10 +40,10 @@ Examples
 """"""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
-   balance_grid block \* \* \*
-   balance_grid block \* 4 \*
+   balance_grid block * * *
+   balance_grid block * 4 *
    balance_grid clump yxz
    balance_grid random
    balance_grid rcb part

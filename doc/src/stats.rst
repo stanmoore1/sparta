@@ -7,7 +7,7 @@ Syntax
 """"""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    stats N
 
@@ -17,7 +17,7 @@ Examples
 """"""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    stats 100
 
@@ -47,7 +47,7 @@ Default
 """""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    stats 0
 

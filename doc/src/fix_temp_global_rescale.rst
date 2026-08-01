@@ -7,7 +7,7 @@ Syntax
 """"""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    fix ID temp/global/rescale N Tstart Tstop fraction
 
@@ -21,7 +21,7 @@ Examples
 """"""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    fix 1 temp/global/rescale 100 300.0 300.0 0.5
    fix 5 temp/global/rescale 10 300.0 10.0 1.0

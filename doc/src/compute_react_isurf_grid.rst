@@ -7,7 +7,7 @@ Syntax
 """"""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    compute ID react/isurf/grid group-ID reaction-ID value1 value2 ...
 
@@ -29,7 +29,7 @@ Examples
 """"""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    surf_react air prob air.surf
    compute 1 react/isurf/grid all air
@@ -39,11 +39,11 @@ These commands will dump time averages for each grid cell to a dump
 file every 1000 steps:
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    compute 2 react/isurf/grid all air r:N/O/N2/O2 p:N/O/NO
-   fix 1 ave/grid all 10 100 1000 c_2[\*]
-   dump 1 grid all 1000 tmp.surgrid id f_1[\*]
+   fix 1 ave/grid all 10 100 1000 c_2[*]
+   dump 1 grid all 1000 tmp.surgrid id f_1[*]
 
 Description
 """""""""""

@@ -10,7 +10,7 @@ Syntax
 """"""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    fix ID move/surf groupID Nevery Nlarge args ...
 
@@ -25,7 +25,7 @@ Examples
 """"""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    fix 1 move/surf all 100 1000 trans 1 0 0
    fix 1 move/surf partial 100 10000 rotate 360 0 0 1 5 5 0 connect yes

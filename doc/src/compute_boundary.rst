@@ -7,7 +7,7 @@ Syntax
 """"""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    compute ID boundary mix-ID value1 value2 ...
 
@@ -38,7 +38,7 @@ Examples
 """"""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    compute 1 boundary all n press eng
    compute mine boundary species press shx shy shz
@@ -47,7 +47,7 @@ These commands will print values for the current timestep for
 the xlo and xhi boundaries, as part of statistical output:
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    compute 1 boundary all n press
    stats_style step np c_1[1][1] c_1[1][2] c_1[2][1] c_1[2][2]
@@ -56,10 +56,10 @@ These commands will dump time averages for each species and each
 boundary to a file every 1000 steps:
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    compute 1 boundary species n press shx shy shz
-   fix 1 ave/time 10 100 1000 c_1[\*] mode vector file tmp.boundary
+   fix 1 ave/time 10 100 1000 c_1[*] mode vector file tmp.boundary
 
 Description
 """""""""""

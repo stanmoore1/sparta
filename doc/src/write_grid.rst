@@ -7,7 +7,7 @@ Syntax
 """"""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    write_grid filename keyword arg ...
 
@@ -26,7 +26,7 @@ Examples
 """"""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    write_grid data.grid
    write_grid data.grid custom flags

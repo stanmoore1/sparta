@@ -10,7 +10,7 @@ Syntax
 """"""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    compute ID pflux/grid group-ID mix-ID value1 value2 ...
 
@@ -32,7 +32,7 @@ Examples
 """"""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    compute 1 pflux/grid all species momxx momyy momzz
    compute 1 pflux/grid subset species momxx momxy
@@ -41,11 +41,11 @@ These commands will dump time averaged momentum flux densities for
 each species and each grid cell to a dump file every 1000 steps:
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    compute 1 pflux/grid all species momxx momyy momzz
-   fix 1 ave/grid 10 100 1000 c_1[\*]
-   dump 1 grid all 1000 tmp.grid id f_1[\*]
+   fix 1 ave/grid 10 100 1000 c_1[*]
+   dump 1 grid all 1000 tmp.grid id f_1[*]
 
 Description
 """""""""""

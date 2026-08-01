@@ -11,7 +11,7 @@ more timesteps, then you simply use the :doc:`run <run>` command
 multiple times.  For example, this script
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    read_grid data.grid
    create_particles 1000000
@@ -29,7 +29,7 @@ the :doc:`clear <clear>` command can be used in between them to
 re-initialize SPARTA.  For example, this script
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    read_grid data.grid
    create_particles 1000000
@@ -48,7 +48,7 @@ times with different settings.  For example, this script, named
 in.flow
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    variable d index run1 run2 run3 run4 run5 run6 run7 run8
    shell cd $d

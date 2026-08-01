@@ -7,7 +7,7 @@ Syntax
 """"""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    move_surf groupID style args ... keyword value ...
 
@@ -37,7 +37,7 @@ Examples
 """"""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    move_surf all trans 1 0 0
    move_surf partial rotate 360 0 0 1 5 5 0 connect yes

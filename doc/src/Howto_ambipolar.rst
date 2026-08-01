@@ -90,7 +90,7 @@ You can use the :doc:`mixture copy <mixture>` and :doc:`mixture delete <mixture>
 the ambipolar electron species, e.g.
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    mixture all copy noElectron
    mixture noElectron delete e
@@ -118,7 +118,7 @@ example these commands will include counts of ambipolar ions in
 statistical output:
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    compute myCount O+ N+ NO+ e
    stats_style step nsreact nsreactave cpu np c_myCount
@@ -133,7 +133,7 @@ attributes defined by the :doc:`fix ambipolar <fix_ambipolar>` command.
 E.g. this command
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    dump 1 particle 1000 tmp.dump id type x y z p_ionambi p_velambi[2]
 

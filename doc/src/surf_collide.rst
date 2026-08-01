@@ -7,7 +7,7 @@ Syntax
 """"""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    surf_collide ID style args keyword values ...
 
@@ -96,7 +96,7 @@ Examples
 """"""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    surf_collide 1 specular
    surf_collide 1 transparent

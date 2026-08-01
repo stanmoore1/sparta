@@ -47,7 +47,7 @@ attributes defined by the :doc:`fix vibmode <fix_vibmode>` command.
 E.g. this command
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    dump 1 particle 1000 tmp.dump id type x y z evib p_vibmode[1] p_vibmode[2] p_vibmode[3]
 

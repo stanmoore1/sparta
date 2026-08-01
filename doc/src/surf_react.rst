@@ -13,7 +13,7 @@ Syntax
 """"""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    surf_react ID style args
 
@@ -50,7 +50,7 @@ Examples
 """"""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    surf_react 1 global 0.2 0.15
    surf_react 1 prob air.surf  

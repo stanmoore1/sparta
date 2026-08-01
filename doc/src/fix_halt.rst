@@ -7,7 +7,7 @@ Syntax
 """"""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    fix ID halt N attribute operator avalue keyword value ...
 
@@ -37,7 +37,7 @@ Examples
 """"""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    fix 1 halt 10 tlimit > 3600.0
    fix 1 halt 10 v_myCheck != 0 error soft
@@ -74,7 +74,7 @@ example, the following two versions of a fix halt command will both
 stop the run after an hour of walltime:
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    fix 1 halt 10 tlimit > 3600.0
 
@@ -87,7 +87,7 @@ one can also stop the run after a predetermined amount of *total*
 walltime:
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    variable wall equal wall
    fix 1 halt 10 v_wall > 3600.0
@@ -96,7 +96,7 @@ Similarly one can stop the run after a predetermined amount of
 simulation time, which is useful when using a :doc:`variable timestep <fix_dt_reset>`:
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    variable time equal time
    fix 1 halt 10 v_time > 1.0e-3
@@ -105,7 +105,7 @@ One can also stop the run if a file exists. The example below
 checks for a file named "EXIT" in the current directory:
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    variable file equal is_file(EXIT)
    fix 1 halt 10 v_file > 0

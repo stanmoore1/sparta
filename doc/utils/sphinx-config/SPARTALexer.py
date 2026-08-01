@@ -54,7 +54,10 @@ class SPARTALexer(RegexLexer):
         'common': [
             (r'#.*?\n', Comment.Single),
             # variable references: v_name, c_ID, f_ID, ${name}, $(expr), $x
-            (r'[vcfsgp]_[\w\[\]\*\.-]+', Name.Variable),
+            # a trailing [i] or [*] is part of the reference, but an operator
+            # after it is not -- so the bracket group is matched explicitly
+            # rather than folded into the name character class
+            (r'[vcfsgp]_[\w.-]+(\[[\w*]*\])?', Name.Variable),
             (r'\$\{[^}]*\}', Name.Variable),
             (r'\$\([^)]*\)', Name.Variable),
             (r'\$\w', Name.Variable),

@@ -7,7 +7,7 @@ Syntax
 """"""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    compute ID isurf/grid group-ID mix-ID value1 value2 ...
 
@@ -38,7 +38,7 @@ Examples
 """"""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    compute 1 isurf/grid all all n press eng
    compute mine isurf/grid sphere species press shx shy shz
@@ -47,21 +47,21 @@ These commands will dump time averages for each species and each
 grid cell to a dump file every 1000 steps:
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    compute 1 isurfgrid all species n press shx shy shz
-   fix 1 ave/grid all 10 100 1000 c_1[\*]
-   dump 1 grid all 1000 tmp.grid id f_1[\*]
+   fix 1 ave/grid all 10 100 1000 c_1[*]
+   dump 1 grid all 1000 tmp.grid id f_1[*]
 
 These commands will time-average the force surface elements in each
 grid cell, then sum them across grid cells to compute drag (fx) and
 lift (fy) on the set of implicit surfs:
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    compute 1 isurf/grid all all fx fy
-   fix 1 ave/grid all 10 100 1000 c_1[\*]
+   fix 1 ave/grid all 10 100 1000 c_1[*]
    compute 2 reduce sum f_1[1] f_1[2]
    stats 1000
    stats_style step cpu np c_2[1] c_2[2]

@@ -24,8 +24,8 @@ this to your ~/.cshrc file, one line for each of the two files:
 
 .. parsed-literal::
 
-   setenv PYTHONPATH $\ *PYTHONPATH*\ :/home/sjplimp/sparta/python
-   setenv LD_LIBRARY_PATH $*LD_LIBRARY_PATH*:/home/sjplimp/sparta/src
+   setenv PYTHONPATH ${PYTHONPATH}:/home/sjplimp/sparta/python
+   setenv LD_LIBRARY_PATH ${LD_LIBRARY_PATH}:/home/sjplimp/sparta/src
 
 If you use the python/install.py script, you need to invoke it every
 time you rebuild SPARTA (as a shared library) or make changes to the

@@ -7,7 +7,7 @@ Syntax
 """"""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    surf_modify group-ID keyword args ...
 
@@ -28,7 +28,7 @@ Examples
 """"""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    surf_modify sphere collide 1
    surf_modify all collide sphere react sphere

@@ -76,7 +76,7 @@ Replacing the "spa = sparta()" line above with
 
 .. parsed-literal::
 
-   spa = sparta("",\ **"-v","x","100","-v","y","100","-v","z","100"**\ )
+   spa = sparta("",["-v","x","100","-v","y","100","-v","z","100"])
 
 is the same as typing
 

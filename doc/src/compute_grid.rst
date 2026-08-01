@@ -10,7 +10,7 @@ Syntax
 """"""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    compute ID grid group-ID mix-ID value1 value2 ...
 
@@ -52,7 +52,7 @@ Examples
 """"""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    compute 1 grid all species n u v w usq vsq wsq
    compute 1 grid subset air n u v w
@@ -61,11 +61,11 @@ These commands will dump time averages for each species and each grid
 cell to a dump file every 1000 steps:
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    compute 1 grid all species n u v w usq vsq wsq
-   fix 1 ave/grid 10 100 1000 c_1[\*]
-   dump 1 grid all 1000 tmp.grid id f_1[\*]
+   fix 1 ave/grid 10 100 1000 c_1[*]
+   dump 1 grid all 1000 tmp.grid id f_1[*]
 
 Description
 """""""""""

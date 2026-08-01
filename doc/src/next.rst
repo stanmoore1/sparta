@@ -7,7 +7,7 @@ Syntax
 """"""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    next variables
 
@@ -17,7 +17,7 @@ Examples
 """"""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    next x
    next a t x myTemp
@@ -125,7 +125,7 @@ Here is an example of a double loop which uses the :doc:`if <if>` and
 condition is met, then continues iterating thru the outer loop.
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    label            loopa
    variable    a loop 5

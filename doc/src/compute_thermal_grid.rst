@@ -10,7 +10,7 @@ Syntax
 """"""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    compute ID thermal/grid group-ID mix-ID value1 value2 ...
 
@@ -32,7 +32,7 @@ Examples
 """"""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    compute 1 thermal/grid all species temp
    compute 1 thermal/grid subset air temp press
@@ -41,11 +41,11 @@ These commands will dump time averaged thermal temperatures for
 each species and each grid cell to a dump file every 1000 steps:
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    compute 1 thermal/grid species temp
-   fix 1 ave/grid 10 100 1000 c_1[\*]
-   dump 1 grid all 1000 tmp.grid id f_1[\*]
+   fix 1 ave/grid 10 100 1000 c_1[*]
+   dump 1 grid all 1000 tmp.grid id f_1[*]
 
 Description
 """""""""""

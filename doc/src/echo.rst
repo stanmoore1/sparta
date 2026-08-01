@@ -7,7 +7,7 @@ Syntax
 """"""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    echo style
 
@@ -17,7 +17,7 @@ Examples
 """"""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    echo both
    echo log
@@ -41,7 +41,7 @@ Default
 """""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    echo log
 

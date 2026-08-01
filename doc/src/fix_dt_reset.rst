@@ -7,7 +7,7 @@ Syntax
 """"""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    fix ID dt/reset Nfreq step weight resetflag
 
@@ -23,10 +23,10 @@ Examples
 """"""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    compute 1 grid all mymixture nrho temp usq vsq wsq
-   fix 1 ave/grid all 10 50 500 c_1[\*]
+   fix 1 ave/grid all 10 50 500 c_1[*]
    compute mct lambda/grid f_1[1] f_1[2] tau
    compute tstep dt/grid all 0.25 0.1 c_mct f_1[2] f_1[3] f_1[4] f_1[5]
 

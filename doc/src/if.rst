@@ -7,7 +7,7 @@ Syntax
 """"""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    if boolean then t1 t2 ... elif boolean f1 f2 ... elif boolean f1 f2 ... else e1 e2 ...
 
@@ -23,7 +23,7 @@ Examples
 """"""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    if "${steps} > 1000" then quit
    if "${myString} == a10" then quit
@@ -79,7 +79,7 @@ Note that by using the line continuation character "&", the if command
 can be spread across many lines, though it is still a single command:
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    if "$a < $b" then &
      "print 'Minimum value = $a'" &
@@ -101,7 +101,7 @@ Here is an example of a double loop which uses the if and
 condition is met, then continues iterating thru the outer loop.
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    label            loopa
    variable    a loop 5

@@ -7,7 +7,7 @@ Syntax
 """"""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    create_isurf group-ID ablateID thresh mode ...
 
@@ -29,7 +29,7 @@ Examples
 """"""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    create_isurf all fablate 40.0 inout
    create_isurf subset fablate 100.0 ave

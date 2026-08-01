@@ -10,7 +10,7 @@ Syntax
 """"""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    fix ID temp/rescale N Tstart Tstop keyword value ...
 
@@ -31,7 +31,7 @@ Examples
 """"""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    fix 1 temp/rescale 100 300.0 300.0
    fix 5 temp/rescale 10 300.0 10.0 ave yes

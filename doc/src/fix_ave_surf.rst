@@ -7,7 +7,7 @@ Syntax
 """"""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    fix ID ave/surf group-ID Nevery Nrepeat Nfreq value1 value2 ... keyword args ...
 
@@ -45,22 +45,22 @@ Examples
 """"""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    fix 1 ave/surf all 1 100 100 c_surf ave running
    fix 1 ave/surf leftcircle 10 20 1000 c_mine[2]
-   fix 1 ave/surf leftcircle 10 20 1000 c_mine[\*]
+   fix 1 ave/surf leftcircle 10 20 1000 c_mine[*]
    fix 1 ave/surf all 5 20 100 v_myEng
 
 These commands will dump time averages for each species and each
 surface element to a dump file every 1000 steps:
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    compute 1 surf all species n press shx shy shz
-   fix 1 ave/surf all 10 100 1000 c_1[\*]
-   dump 1 surf all 1000 tmp.surf id f_1[\*]
+   fix 1 ave/surf all 10 100 1000 c_1[*]
+   dump 1 surf all 1000 tmp.surf id f_1[*]
 
 Description
 """""""""""
@@ -105,10 +105,10 @@ equivalent, since the :doc:`compute surf <compute_grid>` command creates
 a per-surf array with 4 columns:
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    compute mySurf all all n fx fy fz
-   fix 1 ave/surf all 10 20 1000 c_mySurf[\*]
+   fix 1 ave/surf all 10 20 1000 c_mySurf[*]
    fix 1 ave/surf all 10 20 1000 c_mySurf[1] c_mySurf[2] &
                                  c_mySurf[3] c_mySurf[4]
 

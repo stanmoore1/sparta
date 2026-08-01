@@ -47,7 +47,7 @@ to use numeric formulas in an input script without having to assign
 them to variable names.  For example, these 3 input script lines:
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    variable X equal (xlo+xhi)/2+sqrt(v_area)
    region 1 block $X 2 INF INF EDGE EDGE
@@ -56,7 +56,7 @@ them to variable names.  For example, these 3 input script lines:
 can be replaced by
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    region 1 block $((xlo+xhi)/2+sqrt(v_area)) 2 INF INF EDGE EDGE
 
@@ -67,7 +67,7 @@ contain nested $ characters for other variables to substitute for.
 Thus you cannot do this:
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    variable        a equal 2
    variable        b2 equal 4
@@ -112,7 +112,7 @@ For example:
    """
    variable a string "red green blue &
                       purple orange cyan"
-   if "$\ *steps* > 1000" then quit
+   if "${steps} > 1000" then quit
 
 In each of these cases, the single, double, or triple quotes are
 removed and the enclosed text stored internally as a single argument.

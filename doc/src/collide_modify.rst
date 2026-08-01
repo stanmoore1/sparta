@@ -7,7 +7,7 @@ Syntax
 """"""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    collide_modify keyword values ...
 
@@ -34,7 +34,7 @@ Examples
 """"""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    collide_modify vremax 1000 yes
    collide_modify vremax 0 no remain no

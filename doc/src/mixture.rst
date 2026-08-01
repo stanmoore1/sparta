@@ -7,7 +7,7 @@ Syntax
 """"""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    mixture ID species1 species2 ... keyword args ...
 
@@ -44,7 +44,7 @@ Examples
 """"""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    mixture air N O NO group lite
    mixture air N O NO vstream 250.0 0.0 0.0 group species

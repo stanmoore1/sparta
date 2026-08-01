@@ -7,7 +7,7 @@ Syntax
 """"""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    global keyword values ...
 
@@ -77,7 +77,7 @@ Examples
 """"""""
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    global fnum 1.0e20
    global vstream 100.0 0 0 fnum 5.0e18
