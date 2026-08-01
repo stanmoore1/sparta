@@ -289,7 +289,7 @@ valid for particle collisions not for potential surface reactions.
 
 
 The *td* style computes the thermal desorption surface collision model
-proposed by Swaminathan Gopalan *et al.* :ref:`(SG18) <SG18_surf_collide>`, which is
+proposed by Swaminathan Gopalan *et al.* :ref:`(SG18) <SG18>`, which is
 similar to *diffuse* style with an accommodation coefficient *acc* =
 1.0.
 
@@ -311,7 +311,7 @@ normal and the plane tangent to the surface given by:
 
 
 The *impuslive* style computes the surface collision model proposed by
-Swaminathan Gopalan *et al.* :ref:`(SG18) <SG18_surf_collide>`. The model has 8
+Swaminathan Gopalan *et al.* :ref:`(SG18) <SG18>`. The model has 8
 parameters.  Within impulsive scattering, two different models are
 available, namely *softsphere* and *tempvar*\ . The *softsphere*
 argument uses the soft sphere model and has two parameters: *en\_ratio*
@@ -405,7 +405,7 @@ were moving with specified velocity *Vwall* away from the incident
 particle.  Thus the "collision" actually occurs later in the timestep
 and the reflected velocity is less than it would be for reflection
 from a stationary surface.  This calculation is performed using
-equations 12.30 and 12.31 in :ref:`(Bird94) <Bird94_surf_collide>`) to compute the
+equations 12.30 and 12.31 in :ref:`(Bird94) <Bird94>`) to compute the
 reflected velocity and final position of the particle.  If the
 particle does not return within the timestep to a position inside the
 simulation box (for a boundary surface) or to the same side of the
@@ -413,7 +413,7 @@ initial surface that it started from (for a surface element
 collision), the particle is deleted.  This effectively induces
 particles at the boundary to have a velocity distribution consistent
 with a subsonic pressure boundary condition, as explained in
-:ref:`(Bird94) <Bird94_surf_collide>`).
+:ref:`(Bird94) <Bird94>`).
 
 *Vwall* should be chosen to correspond to a desired pressure condition
 for the density of particles in the system.
@@ -675,121 +675,6 @@ Default
 """""""
 
 The default for the *temp/freq* keyword = 1.
-
-
-----------
-
-
-.. _Bird94_surf_collide:
-
-
-
-**(Bird94)** G. A. Bird, Molecular Gas Dynamics and the Direct
-Simulation of Gas Flows, Clarendon Press, Oxford (1994).
-
-.. _Cercignani71:
-
-
-
-**(Cercignani71)** Cercignani C, Lampis M, Kinetic models for
-gas-surface interactions, Transport theory and statistical physics,
-Jan (1971).
-
-.. _Lord90:
-
-
-
-**(Lord90)** R. G. Lord, presented at the 17th International Symposium
-on Rarefied Gas Dynamics, Germany, July (1990).
-
-.. _Lord91:
-
-
-
-**(Lord91)** R. G. Lord, Some extensions of the Cercignani-Lampis
-gas-surface interaction model, Physics of Fluids A: Fluid Dynamics,
-Jan (1991).
-
-.. _SG18_surf_collide:
-
-
-
-**(SG18)** K. Swaminathan Gopalan, Development of a detailed surface
-chemistry framework in DSMC, AIAA Aerospace Sciences Meeting, Jan
-(2018).
-
-.. _Rettner94a:
-
-
-
-**(Rettner94a)** C. T. Rettner, Reaction of an H-atom beam with
-Cl/Au(111): Dynamics of concurrent EleyRideal and Langmuir-Hinshelwood
-mechanisms, Journal of Chemical Physics, (1994).
-
-.. _Alexander12:
-
-
-
-**(Alexander12)** W. A. Alexander, *et al*\ , Kinematics and dynamics of
-atomic-beam scattering on liquid and self-assembled monolayer
-surfaces, Faraday discussions, (2012)
-
-.. _Glatzer97:
-
-
-
-**(Glatzer97)** D. Glatzer, *et al*\ , Rotationally excited NO molecules
-incident on a graphite surface: in- and out-of-plane angular
-distributions, Surface Science, (1997)
-
-.. _Lord95:
-
-
-
-**(Lord95)** R. G. Lord, Some further extensions of the
-Cercignani-Lampis gas-surface interaction model, Physics of Fluids,
-May (1995).
-
-.. _Goodman72:
-
-
-
-**(Goodman72)** F. O. Goodman, Simple model for the velocity
-distribution of molecules desorbed from surfaces following
-recombination of atoms, Surface Science, (1972).
-
-.. _Rettner94b:
-
-
-
-**(Rettner94b)** C. T. Rettner and J. Lee, Dynamic displacement of o2
-from pt (111): A new desorption mechanism, The Journal of chemical
-physics, (1994).
-
-.. _Beckerle90:
-
-
-
-**(Beckerle90)** J. Beckerle, A. Johnson, and S. Ceyer,
-Collision-induced desorption of physisorbed CH4 from Ni (111):
-Experiments and simulations, The Journal of Chemical Physics, (1990).
-
-.. _Goodman74:
-
-
-
-**(Goodman74)** F. O. Goodman, Determination of characteristic surface
-vibration temperatures by molecular beam scattering: Application to
-specular scattering in the H-LiF (001) system, Surface Science, (1974).
-
-.. _Mohammadzadeh16:
-
-
-
-**(Mohammadzadeh16)** A. Mohammadzadeh, A. Rana, and H. Struchtrup,
-DSMC and R13 modeling of the adiabatic surface, International Journal
-of Thermal Sciences, vol. 101, pp. 9-23, March (2016).
-
 
 .. _sws: https://sparta.github.io
 .. _sd: Manual.html

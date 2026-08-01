@@ -73,7 +73,7 @@ computations to add particles.  The particles are added at the
 beginning of the SPARTA timestep.
 
 The molecular flux across a grid cell face per unit time is given by
-equation 4.22 of :ref:`(Bird94) <Bird94_fix_emit_face>`.  The number of particles *M* to
+equation 4.22 of :ref:`(Bird94) <Bird94>`.  The number of particles *M* to
 insert on a particular grid cell face is based on this flux and
 additional global, flow, and cell face properties:
 
@@ -189,13 +189,13 @@ current timestep, so this is a simple way to insert a time-varying
 flow of particles.
 
 The *subsonic* keyword uses the method of Fang and Liou
-:ref:`(Fang02) <Fang02_fix_emit_face>` to determine the number of particles to insert in
+:ref:`(Fang02) <Fang02>` to determine the number of particles to insert in
 each grid cell on the emitting face(s).  They used the method of
 characteristics to calculate the mean properties of the incoming
 molecular flux, so that the prescribed pressure condition is achieved.
 These properties are then applied to calculate the molecular flux
 across a grid cell face per unit time, as given by equation 4.22 of
-:ref:`(Bird94) <Bird94_fix_emit_face>`.
+:ref:`(Bird94) <Bird94>`.
 
 This keyword allows specification of both the pressure and temperature
 at the boundary or just the pressure (by specifying the temperature as
@@ -309,25 +309,6 @@ Default
 
 The keyword defaults are n = 0, nevery = 1, perspecies = yes, region =
 none, no modulate setting, no subsonic settings, no twopass setting.
-
-
-----------
-
-
-.. _Bird94_fix_emit_face:
-
-
-
-**(Bird94)** G. A. Bird, Molecular Gas Dynamics and the Direct
-Simulation of Gas Flows, Clarendon Press, Oxford (1994).
-
-.. _Fang02_fix_emit_face:
-
-
-
-**(Fang02)** Y. Fang and W. W. Liou, Microfluid Flow Computations 
-Using a Parallel DSMC Code, AIAA 2002-1057. (2002).
-
 
 .. _sws: https://sparta.github.io
 .. _sd: Manual.html

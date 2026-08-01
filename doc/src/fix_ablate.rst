@@ -284,7 +284,7 @@ point is at least *mindist*
    :target: JPG/multipoint_decrement.png
    :align: center
 
-The *multiple* option allows a multipoint decrement :ref:`(Hong24) <Hong24_fix_ablate>` to be used. 
+The *multiple* option allows a multipoint decrement :ref:`(Hong24) <Hong24>` to be used. 
 In a cell, three types of corners are identified: inside, outside or
 interface.  An **inside** point is a point inside the surface (its
 values is greater than the specified threshold).  An **outside** point
@@ -362,24 +362,6 @@ Default
 
 The default for the *mindist* keyword = 0.0, i.e. the epsilon method
 is used.  The default for the *multiple* keyword = no.
-
-
-----------
-
-
-.. _Labelle07:
-
-
-
-**(Labelle07)** F. Labelle, and J. R.. Shewchuk, "Isosurface stuffing:
-Fast Tetrahedral Meshes with Good Dihedral Angles," SIGGRAPH (2007).
-
-.. _Hong24_fix_ablate:
-
-
-
-**(Hong24)** A. Y. K. Hong, M. A. Gallis, S. G Moore, and S. J. Plimpton, "Towards physically realistic ablation modeling in direct simulation Monte Carlo," Physics of Fluids (2024).
-
 
 .. _sws: https://sparta.github.io
 .. _sd: Manual.html

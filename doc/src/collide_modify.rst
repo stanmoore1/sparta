@@ -85,7 +85,7 @@ probability of 0.3, using a random number.
 The *scheme* keyword selects the numerical scheme used to compute the
 number of collisions attempted in each grid cell (for each pair of
 collision groups) each timestep.  For *ntc*\ , which is the default,
-Bird's no-time-counter scheme is used (:ref:`(Bird94) <Bird94_collide_modify>`): the
+Bird's no-time-counter scheme is used (:ref:`(Bird94) <Bird94>`): the
 attempt count is the integer part of the expected number of attempts
 Nattempt = 1/2 \* N \* (N-1) \* Fnum \* Vremax \* dt / Vcell, with the
 fractional part treated as described above for the *remain* keyword.
@@ -122,7 +122,7 @@ are within a distance R, the closest J particle to I is selected.  An
 exception to these rules is that a particle J is not considered for a
 collision if the I,J pair were the most recent collision partners (in
 the current timestep) for each other.  The convergence properties of
-this near-neighbor algorithm are described in :ref:`(Gallis11) <Gallis11_collide_modify>`.
+this near-neighbor algorithm are described in :ref:`(Gallis11) <Gallis11>`.
 Note that choosing *Nlimit* judiciously will avoid costly searches
 when there are large numbers of particles in some or all grid cells.
 
@@ -184,45 +184,6 @@ Default
 
 The option defaults are vremax = (0,yes), remain = yes, scheme = ntc,
 ambipolar no, nearcp no, rotate smooth, and vibrate = no.
-
-
-----------
-
-
-.. _Bird94_collide_modify:
-
-
-
-**(Bird94)** G. A. Bird, Molecular Gas Dynamics and the Direct
-Simulation of Gas Flows, Clarendon Press, Oxford (1994).
-
-.. _Gallis11_collide_modify:
-
-
-
-**(Gallis11)** M. A. Gallis, J. R. Torczynski, "Effect of
-Collision-Partner Selection Schemes on the Accuracy and Efficiency of
-the Direct Simulation Monte Carlo Method," International Journal for
-Numerical Methods in Fluids, 67(8):1057-1072. DOI:10.1002/fld.2409
-(2011).
-
-.. _Ivanov88:
-
-
-
-**(Ivanov88)** M. S. Ivanov, S. V. Rogasinsky, "Analysis of numerical
-techniques of the direct simulation Monte Carlo method in the rarefied
-gas dynamics," Soviet Journal of Numerical Analysis and Mathematical
-Modelling, 3(6):453-465 (1988).
-
-.. _Pikus19:
-
-
-
-**(Pikus19)** A. Pikus, I. B. Sebastiao, S. Jaiswal, M. A. Gallis,
-A. A. Alexeenko, "DSMC-SPARTA implementation of majorant collision
-frequency scheme," AIP Conference Proceedings, 2132, 070026 (2019).
-
 
 .. _sws: https://sparta.github.io
 .. _sd: Manual.html

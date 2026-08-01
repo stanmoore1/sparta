@@ -64,6 +64,7 @@ every SPARTA command.
    Section_errors
    Section_history
    Developer
+   Bibliography
 
 .. toctree::
    :maxdepth: 1

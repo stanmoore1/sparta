@@ -77,7 +77,7 @@ Consider a cell with N particles and a mixture with M groups.  Based
 on its species, each particle is assigned to one of the M groups.
 Each unique pair of groups is considered, including each group paired
 with itself.  For each pair of groups a value *Nattempt* 
-(see equation 11.3 in :ref:`(Bird94) <Bird94_collide>`) is calculated  
+(see equation 11.3 in :ref:`(Bird94) <Bird94>`) is calculated  
 which is the number of collisions to attempt.  This is a function of
 N1 and N2 (the number of particles in each group), the grid cell
 volume, and other parameters of the collision style.
@@ -86,7 +86,7 @@ For each collision attempt, a random pair of particles is selected,
 with one particle from each group.  Whether the collision occurs or
 not is a function of the relative velocities of the two particles,
 their respective species, and other parameters of the collision
-style; see equation 11.4 in :ref:`(Bird94) <Bird94_collide>`.
+style; see equation 11.4 in :ref:`(Bird94) <Bird94>`.
 
 .. note::
 
@@ -110,11 +110,11 @@ performed, i.e. the simulation models free-molecular flow.
 The *vss* style implements the Variable Soft Sphere (VSS) model for
 collisions.  As discussed below, with appropriate parameter choices,
 it can also compute the Variable Hard Sphere (VHS) model and the Hard
-Sphere (HS) model.  See chapters 2.6 and 2.7 in :ref:`(Bird94) <Bird94_collide>` for
+Sphere (HS) model.  See chapters 2.6 and 2.7 in :ref:`(Bird94) <Bird94>` for
 details.
 
 In DSMC, the variable-soft-sphere (VSS) interaction of :ref:`Koura and Matsumoto <Koura92>` and the variable-hard-sphere (VHS) interaction of
-:ref:`Bird <Bird94_collide>` are used to approximate molecular interactions.  Both
+:ref:`Bird <Bird94>` are used to approximate molecular interactions.  Both
 models yield transport properties proportional to a power (omega) of
 the gas temperature.  This temperature dependence of the transport
 properties is similar to the Inverse Power Law model (IPL) for which
@@ -158,7 +158,7 @@ The meaning of additional properties is as follows:
 * alpha = angular scattering parameter (unitless)
 
 The methodology for deriving VSS/VHS parameters from these properties
-is explained in Chapter 3 of :ref:`(Bird94) <Bird94_collide>`.  Parameter values for
+is explained in Chapter 3 of :ref:`(Bird94) <Bird94>`.  Parameter values for
 the most common gases are given in Appendix A of the same book.  These
 values are based on the first-order approximation of the
 Chapman-Enskog theory.  Infinite-order parameters are described in
@@ -182,7 +182,7 @@ affect rotational relaxation; parameters 7 and 8 affect vibrational
 relaxation.  In this case the rotational and vibrational relaxation
 during a collision is treated as a variable and is computed for each
 collision.  This calculation is only performed for polyatomic species,
-using equations A5 and A6 on pages 413 and 414 in :ref:`(Bird94) <Bird94_collide>`,
+using equations A5 and A6 on pages 413 and 414 in :ref:`(Bird94) <Bird94>`,
 with the modification that the collision temperature is calculated
 using energy in the internal mode as well as the translational mode.
 Zrotinf and T\* are parameters in the numerator and denominator of eq
@@ -262,34 +262,6 @@ Default
 
 Style = none is the default (no collisions).  If the vss style is
 specified, then relax = constant is the default.
-
-
-----------
-
-
-.. _Koura92:
-
-
-
-**(Koura92)** K. Koura and H. Matsumoto, "Variable soft sphere molecular
-model for air species," Phys Fluids A, 4, 1083 (1992).
-
-.. _Bird94_collide:
-
-
-
-**(Bird94)** G. A. Bird, Molecular Gas Dynamics and the Direct
-Simulation of Gas Flows, Clarendon Press, Oxford (1994).
-
-.. _Gallis04:
-
-
-
-**(Gallis04)** M. A. Gallis, J. R. Torczynski, and D. J. Rader,
-"Molecular gas dynamics observations of Chapman-Enskog behavior and
-departures therefrom in nonequilibrium gases," Phys Rev E, 69, 042201
-(2004).
-
 
 .. _sws: https://sparta.github.io
 .. _sd: Manual.html

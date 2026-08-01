@@ -57,7 +57,7 @@ points.  See the :doc:`read_isurf <read_isurf>` command for details.
 
 This command derives the 2d or 3d grid of corner point values from the
 set of explicit surface elements, rather then reading them from a
-file :ref:`(Hong24) <Hong24_create_isurf>`.  It then proceeds similarly to the :doc:`read_isurf <read_isurf>`
+file :ref:`(Hong24) <Hong24>`.  It then proceeds similarly to the :doc:`read_isurf <read_isurf>`
 command where implicit line segments or triangles within each grid
 cell are calculated from the 4 or 8 corner points of the cell.  When
 the process is complete, all explicit surfaces are removed from the
@@ -313,17 +313,6 @@ Default
 """""""
 
 none
-
-
-----------
-
-
-.. _Hong24_create_isurf:
-
-
-
-**(Hong24)** A. Y. K. Hong, M. A. Gallis, S. G Moore, and S. J. Plimpton, "Towards physically realistic ablation modeling in direct simulation Monte Carlo," Physics of Fluids (2024).
-
 
 .. _sws: https://sparta.github.io
 .. _sd: Manual.html

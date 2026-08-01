@@ -148,7 +148,7 @@ Next the probabilities of each reaction are recomputed and a new
 reaction is chosen based on these probabilities and performed.  This
 process is repeated till the probability of all the reactions reaches
 zero. A detailed description can be found in Swaminathan Gopalan *et
-al.* :ref:`(SG18) <SG18_surf_react_adsorb>`.
+al.* :ref:`(SG18) <SG18>`.
 
 
 ----------
@@ -257,7 +257,7 @@ R2). The incident gas-phase particle can either adsorb P2(s) or
 scatter from the surface P2(g) post collision.
 
 A detailed description of the various types of reactions can be found
-in Swaminathan Gopalan *et al.* :ref:`(SG18) <SG18_surf_react_adsorb>`.  Here is a table of
+in Swaminathan Gopalan *et al.* :ref:`(SG18) <SG18>`.  Here is a table of
 examples for each type of GS reaction.
 
 .. list-table:: Gas-surface (GS) reaction types, with examples
@@ -329,7 +329,7 @@ undergoes a transformation from solid to gas, to form gas-phase
 product P1(g).
 
 A detailed description of the various types of reactions can be found
-in Swaminathan Gopalan *et al.* :ref:`(SG18) <SG18_surf_react_adsorb>`.  Here is a table of
+in Swaminathan Gopalan *et al.* :ref:`(SG18) <SG18>`.  Here is a table of
 examples for each type of PS reaction.
 
 .. list-table:: Pure-surface (PS) reaction types, with examples
@@ -432,7 +432,7 @@ The final rate of the reaction is computed by the product of the
 reaction rate constant and the surface coverage of all the adsorbed
 reactants. The reaction probability is obtained by normalized all the
 reaction rates. A detailed description can be found in Swaminathan
-Gopalan *et al.* :ref:`(SG18) <SG18_surf_react_adsorb>`.
+Gopalan *et al.* :ref:`(SG18) <SG18>`.
 
 
 ----------
@@ -509,35 +509,6 @@ Related commands
 :doc:`bound\_modify <bound_modify>`,
 
 **Default:** none
-
-
-----------
-
-
-.. _SG18_surf_react_adsorb:
-
-
-
-**(SG18)** K. Swaminathan Gopalan, "Development of a detailed surface
-chemistry framework in DSMC", AIAA Aerospace Sciences Meeting, Jan
-(2018).
-
-.. _Kisliuk57:
-
-
-
-**(Kisliuk57)** P. Kisliuk, "The sticking probabilities of gases
-chemisorbed on the surfaces of solids", Journal of Physics and
-Chemistry of Solids, vol. 3, no. 1-2, pp. 95-101, 1957.
-
-.. _Beckerle89:
-
-
-
-**(Beckerle89)** J. Beckerle, A. Johnson, and S. Ceyer, "Observation and
-mechanism of collision-induced desorption: CH4 on Ni (111)", Physical
-Review Letters, vol. 62, no. 6, p. 685, 1989.
-
 
 .. _sws: https://sparta.github.io
 .. _sd: Manual.html

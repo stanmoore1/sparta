@@ -173,17 +173,6 @@ Related commands
 
 **Default:** none
 
-
-----------
-
-
-.. _Bird2013:
-
-
-
-**(Bird2013)** G. A. Bird, The DSMC method, CreateSpace Independent Publishing Platform, 2013.
-
-
 .. _sws: https://sparta.github.io
 .. _sd: Manual.html
 .. _sc: Section_commands.html
