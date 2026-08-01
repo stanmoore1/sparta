@@ -352,7 +352,7 @@ specified before the Python function is invoked for the first time.
 Each time the variable is evaluated, the associated Python function is
 invoked, and the value it returns is also returned by the variable.
 Since the Python function can use other SPARTA variables as input, or
-query interal SPARTA quantities to perform its computation, this means
+query internal SPARTA quantities to perform its computation, this means
 the variable can return a different value each time it is evaluated.
 
 The type of value stored in the variable is determined by the *format*

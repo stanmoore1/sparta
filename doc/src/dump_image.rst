@@ -98,7 +98,7 @@ Examples
    dump myDump image all 100 dump.*.jpg type type
    dump myDump movie all 100 movie.mpg type type
 
-These commands will dump shapshot images of all particles whose
+These commands will dump snapshot images of all particles whose
 species are in the *mix-ID* to a file every 100 steps.  The last two
 shell command will make a movie from the JPG files (once the run has
 finished) and play it in the Firefox browser:

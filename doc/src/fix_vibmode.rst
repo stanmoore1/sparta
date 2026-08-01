@@ -28,7 +28,7 @@ Description
 Enable multiple vibrational energy levels, defined on a per-species
 basis, to be used in a simulation.  This fix is meant to be used with
 the :doc:`collide\_modify vibrate discrete <collide_modify>` setting
-which means that the vibrational energy of each (non-monoatomic)
+which means that the vibrational energy of each (non-monatomic)
 particle is discretized across one or more energy modes, each with its
 own characteristic vibrational temperature.  This fix allocates
 per-particle storage for the mode indices and also has code to

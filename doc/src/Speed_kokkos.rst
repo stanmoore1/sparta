@@ -424,7 +424,7 @@ Library) environment variable before running:
 
    For good performance of the KOKKOS package on GPUs, you must
    have Kepler generation GPUs (or later). The Kokkos library exploits
-   texture cache options not supported by Telsa generation GPUs (or
+   texture cache options not supported by Tesla generation GPUs (or
    older).
 
 .. note::
