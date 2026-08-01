@@ -68,7 +68,7 @@ included.  See the :doc:`group grid <group>` command for info on how
 surface elements can be assigned to surface groups.
 
 This compute can be used for simulations with either explicit or
-implicit surface elements.  See `Section 6.13 <Section_howto_13>`_ for
+implicit surface elements.  See :doc:`Howto_surf_elements` for
 more discussion of explicit and implicit surfaces.
 
 The results of this compute can be used by different commands in
@@ -93,12 +93,12 @@ number from 1 to N, where N is the number of reactions defined by the
 The *id/surf* value is the ID of the surface element.  For explicit
 surfaces, surface element IDs are unique.  For implicit surfaces, the
 surface ID of all the surface elements within a grid cell are the grid
-cell ID.  See `Section 6.13 <Section_howto_13>`_ for more discussion of
+cell ID.  See :doc:`Howto_surf_elements` for more discussion of
 explicit and implicit surfaces.
 
 The *id/pre* value is the ID of the incident particle.  Note that
 particle IDs are generated randomly.  Thus multiple particles in the
-system can potentially have the same ID.  See `Section 6.17 <Section_howto_17>`_ for more details on particle IDs.
+system can potentially have the same ID.  See :doc:`Howto_particles` for more details on particle IDs.
 
 The *id1/post* and *id2/post* values are the post-collision IDs of the
 0, 1, or 2 resulting particles.  If the incident particle vanished in
@@ -110,7 +110,7 @@ created particle.
 The *type/pre* value is the integer index for the incident particle
 species.  It is a value from 1 to Nspecies. The value corresponds to
 the order in which species were defined via the :doc:`species <species>`
-command.  See `Section 6.17 <Section_howto_17>`_ for more details on
+command.  See :doc:`Howto_particles` for more details on
 particle types.
 
 The *type1/post* and *type2/post* values are the post-collision

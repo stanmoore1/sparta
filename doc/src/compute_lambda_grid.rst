@@ -274,11 +274,11 @@ Restrictions
 """"""""""""
 
 To use this compute, a collision style must be defined via the
-`collide.html <collide>`_ command, which defines properties for the
+:doc:`collide <collide>` command, which defines properties for the
 mixture *species*\ .
 
 As explained above, to use this compute with *nrho* or *temp* defined
-as input from a `fix\_ave\_grid.html <fix>`_ ave/grid command, this compute
+as input from a :doc:`fix ave/grid <fix_ave_grid>` command, this compute
 must only be invoked on timesteps that are multiples of the *Nfreq*
 argument used by the fix, since those are the steps when it produces
 output.

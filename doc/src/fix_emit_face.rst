@@ -77,7 +77,7 @@ equation 4.22 of :ref:`(Bird94) <Bird94_fix_emit_face>`.  The number of particle
 insert on a particular grid cell face is based on this flux and
 additional global, flow, and cell face properties:
 
-* global property: *fnum* ratio as specified by the `global <global.html">`_ command
+* global property: *fnum* ratio as specified by the :doc:`global <global>` command
 * flow properties: number density, streaming velocity, and thermal temperature
 * cell face properties: area of face and its orientation relative to the streaming velocity
 
@@ -220,7 +220,7 @@ each timestep.
 
    When using this keyword, you should also use an
    appropriate boundary collision or chemistry model via the
-   `boundary <boundary.htmo>`_ or :doc:`bound\_modify <bound_modify>` or
+   :doc:`boundary <boundary>` or :doc:`bound\_modify <bound_modify>` or
    :doc:`surf\_collide <surf_collide>` or :doc:`surf\_react <surf_react>`
    commands, so that particles hitting the surface disappear as if they
    were exiting the simulation domain.  That is necessary to produce the

@@ -13,10 +13,17 @@ as a library and allow MPI functions to be called from Python.
 These include
 
 * `pyMPI <http://pympi.sourceforge.net/>`_
-* `maroonmpi <http://code.google.com/p/maroonmpi/>`_
-* `mpi4py <http://code.google.com/p/mpi4py/>`_
-* `myMPI <http://nbcr.sdsc.edu/forum/viewtopic.php?t=89&sid=c997fefc3933bd66204875b436940f16>`_
-* `Pypar <http://code.google.com/p/pypar>`_
+* `maroonmpi <https://code.google.com/archive/p/maroonmpi>`_
+* `mpi4py <https://github.com/mpi4py/mpi4py>`_
+* myMPI
+* `Pypar <https://code.google.com/archive/p/pypar>`_
+
+.. note::
+
+   Of these, only mpi4py is still actively developed.  maroonmpi and Pypar
+   were hosted on Google Code, which shut down in 2016; the links above go
+   to its read-only archive.  myMPI is no longer distributed at all.  If
+   you are setting this up today, use mpi4py.
 
 All of these except pyMPI work by wrapping the MPI library and
 exposing (some portion of) its interface to your Python script.  This
@@ -35,7 +42,7 @@ with their installation.  It's not clear if some of the packages are
 still being actively developed and supported.
 
 The one I recommend, since I have successfully used it with SPARTA, is
-Pypar.  Pypar requires the ubiquitous `Numpy package <http://numpy.scipy.org>`_ be installed in your Python.  After
+Pypar.  Pypar requires the ubiquitous `Numpy package <https://numpy.org/>`_ be installed in your Python.  After
 launching python, type
 
 

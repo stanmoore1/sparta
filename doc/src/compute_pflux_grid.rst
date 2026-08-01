@@ -206,7 +206,7 @@ effectively.
 Related commands
 """"""""""""""""
 
-`compute grid <compute_grid.txt>`_, `compute thermal/grid <compute_thermal_grid.txt>`_, `compute eflux/grid <compute_eflux_grid.txt>`_, :doc:`fix ave/grid <fix_ave_grid>`,
+:doc:`compute grid <compute_grid>`, :doc:`compute thermal/grid <compute_thermal_grid>`, :doc:`compute eflux/grid <compute_eflux_grid>`, :doc:`fix ave/grid <fix_ave_grid>`,
 :doc:`dump grid <dump>`
 
 **Default:** none

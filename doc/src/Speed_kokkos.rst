@@ -13,7 +13,7 @@ compile time) the memory layout of data structures like 2d and 3d
 arrays to optimize performance on different hardware. For more
 information on Kokkos, see
 `Github <https://github.com/kokkos/kokkos>`_. Kokkos is part of
-`Trilinos <http://trilinos.sandia.gov/packages/kokkos>`_. The Kokkos
+`Trilinos <https://github.com/kokkos/kokkos>`_. The Kokkos
 library was written primarily by Carter Edwards, Christian Trott, and
 Dan Sunderland (all Sandia).
 
@@ -153,7 +153,9 @@ Build for A100 GPUs (override the default Hopper arch):
 
    mkdir build
    cd build
-   cmake -C /path/to/sparta/cmake/presets/kokkos_cuda.cmake   -DKokkos_ARCH_HOPPER90=OFF -DKokkos_ARCH_AMPERE80=ON   /path/to/sparta/cmake
+   cmake -C /path/to/sparta/cmake/presets/kokkos_cuda.cmake \
+     -DKokkos_ARCH_HOPPER90=OFF -DKokkos_ARCH_AMPERE80=ON \
+     /path/to/sparta/cmake
    make -j 4
 
 Build for V100 GPUs:
@@ -163,7 +165,9 @@ Build for V100 GPUs:
 
    mkdir build
    cd build
-   cmake -C /path/to/sparta/cmake/presets/kokkos_cuda.cmake   -DKokkos_ARCH_HOPPER90=OFF -DKokkos_ARCH_VOLTA70=ON   /path/to/sparta/cmake
+   cmake -C /path/to/sparta/cmake/presets/kokkos_cuda.cmake \
+     -DKokkos_ARCH_HOPPER90=OFF -DKokkos_ARCH_VOLTA70=ON \
+     /path/to/sparta/cmake
    make -j 4
 
 The resulting executable will be named spa\_kokkos\_cuda.
@@ -199,7 +203,9 @@ Build for MI300X GPUs (override the default MI250X arch):
 
    mkdir build
    cd build
-   cmake -C /path/to/sparta/cmake/presets/kokkos_hip.cmake   -DKokkos_ARCH_VEGA90A=OFF -DKokkos_ARCH_AMD_GFX942=ON   /path/to/sparta/cmake
+   cmake -C /path/to/sparta/cmake/presets/kokkos_hip.cmake \
+     -DKokkos_ARCH_VEGA90A=OFF -DKokkos_ARCH_AMD_GFX942=ON \
+     /path/to/sparta/cmake
    make -j 4
 
 For AMD MI300A APU systems using Cray MPICH (e.g. El Capitan):

@@ -17,7 +17,7 @@ parallel machine that compiles C++ and supports the `MPI <mpi_>`_
 message-passing library.  This includes distributed- or shared-memory
 parallel machines as well as commodity clusters.
 
-.. _mpi: http://www-unix.mcs.anl.gov/mpi
+.. _mpi: https://www.mcs.anl.gov/research/projects/mpi/
 
 
 
@@ -27,13 +27,13 @@ performance and scalability, or the Benchmarks section of the `SPARTA WWW Site <
 
 SPARTA is a freely-available open-source code, distributed under the
 terms of the `GNU Public License <gnu_>`_, or sometimes by request under
-the terms of the `GNU Lesser General Public License (LGPL) <gnu2>`_,
+the terms of the `GNU Lesser General Public License (LGPL) <https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html>`_,
 which means you can use or modify the code however you wish.  The only
 restrictions imposed by the GPL or LGPL are on how you distribute the
 code further.  See :ref:`Section 1.4 <intro_4>` below for a brief discussion
 of the open-source philosophy.
 
-.. _gnu: http://www.gnu.org/copyleft/gpl.html
+.. _gnu: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
 
 
 
@@ -50,6 +50,6 @@ So SPARTA is really written in an object-oriented C style.
 SPARTA was developed with internal funding at `Sandia National Laboratories <snl_>`_, a US Department of Energy lab.  See :ref:`Section 1.5 <intro_5>` below for more information on SPARTA funding and
 individuals who have contributed to SPARTA.
 
-.. _snl: http://www.sandia.gov
+.. _snl: https://www.sandia.gov/
 
 .. _sws: https://sparta.github.io

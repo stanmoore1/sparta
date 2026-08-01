@@ -173,14 +173,14 @@ The order of these commands matter, so here is the explanation.
 The :doc:`surf\_modify <surf_modify>` command must come after the
 :doc:`read\_isurf <read_isurf>` command, because surfaces must exist
 before assigning collision and reaction models to them.  The :doc:`fix ablate <fix_ablate>` command must come before the
-:doc:`read\_isurf <read_isurf>` command, since it uses the ID of the `fix ablate <fix_ablate>`_ command as an argument to create implicit surfaces.
+:doc:`read\_isurf <read_isurf>` command, since it uses the ID of the :doc:`fix ablate <fix_ablate>` command as an argument to create implicit surfaces.
 The :doc:`fix ablate <fix_ablate>` command takes a compute or fix as an
 argument, in this case the ID of the :doc:`compute react/isurf/grid <compute_react_isurf_grid>` command.  This is to
 specify what calculation drives the ablation.  In this case, it is the
 :doc:`compute react/isurf/grid <compute_react_isurf_grid>` command (or
 could be the :doc:`fix ave/grid <fix_ave_grid>` command) which tallies
 counts of surface reactions for implicit triangles in each grid cell.
-The `compute react/isurf/grid <compute>`_ react/isurf/grid command
+The :doc:`compute react/isurf/grid <compute_react_isurf_grid>` command
 requires the ID of a surface reaction model, so that it knows the list
 of possible reactions to tally.  In this case the reaction is set by
 the :doc:`surf\_react <surf_react>` command, which must therefore comes

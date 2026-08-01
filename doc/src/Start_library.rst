@@ -93,7 +93,7 @@ As an example, here is how to build and install the `MPICH library <mpich_>`_, a
 Argonne National Labs, as a shared library in the default
 /usr/local/lib location:
 
-.. _mpich: http://www-unix.mcs.anl.gov/mpi
+.. _mpich: https://www.mcs.anl.gov/research/projects/mpi/
 
 
 

@@ -101,7 +101,7 @@ Output info
 
 This compute calculates a per-grid array, with the number of columns
 either equal to the number of reactions defined by the
-`surf\_react <surf_react>`_ style (if no values are specified) or equal to
+:doc:`surf_react <surf_react>` style (if no values are specified) or equal to
 M = the # of values specified.
 
 Grid cells not in the specified *group-ID* or whose implicit surfaces

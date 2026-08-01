@@ -14,7 +14,7 @@ represented with analytic equations, which allows for fast particle
 tracking.
 
 Some details about ICARUS, including simulation snapshots and papers,
-are discussed on `this page <http://sjplimp.github.io/dsmc.html>`_
+are discussed on `this page <https://sjplimp.github.io/dsmc.html>`_
 
 Performance-wise ICARUS scaled quite well on several generations of
 parallel machines, and is still used by Sandia researchers today.
@@ -26,7 +26,7 @@ SPARTA development began in late 2011.  In contrast to ICARUS, it is a
 track particles.  Surfaces are embedded in the grid, which cuts and
 splits their flow volumes.
 
-The `Authors link <https://sparta.github.io/history.html>`_ on the SPARTA
+The `Authors link <https://sparta.github.io/authors.html>`_ on the SPARTA
 web page gives a timeline of features added to the code since it's
 initial open-source release.
 

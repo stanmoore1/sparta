@@ -213,7 +213,7 @@ effectively.
 Related commands
 """"""""""""""""
 
-`compute grid <compute_grid.txt>`_, :doc:`fix ave/grid <fix_ave_grid>`,
+:doc:`compute grid <compute_grid>`, :doc:`fix ave/grid <fix_ave_grid>`,
 :doc:`dump grid <dump>`
 
 **Default:** none

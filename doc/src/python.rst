@@ -738,7 +738,7 @@ and global variables will become invisible.
 Related commands
 """"""""""""""""
 
-:doc:`shell <shell>`, `variable <variable,html>`_
+:doc:`shell <shell>`, :doc:`variable <variable>`
 
 **Default:** none
 

@@ -15,7 +15,7 @@ included in the SPARTA distribution.
 
 
 
-.. _opensource: http://www.opensource.org
+.. _opensource: https://opensource.org/
 
 
 
@@ -72,5 +72,5 @@ topics.
   Leave on desk.  VISA also accepted.  Chocolate chip cookies
   encouraged.
 
-.. _gnu: http://www.gnu.org/copyleft/gpl.html
+.. _gnu: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
 .. _sws: https://sparta.github.io

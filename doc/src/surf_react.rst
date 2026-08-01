@@ -215,7 +215,7 @@ it supports is given on a separate
 ----------
 
 
-If the ambipolar approximation is being used, via the `fix ambipolar <fix_ambipolar.hmtl>`_ command, then reactions which involve
+If the ambipolar approximation is being used, via the :doc:`fix ambipolar <fix_ambipolar>` command, then reactions which involve
 either ambipolar ions or the ambipolar electron have more restrictive
 rules about the ordering of reactants and products, than those
 described in the preceding section for the *prob* style.

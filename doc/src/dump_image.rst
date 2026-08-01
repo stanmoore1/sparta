@@ -640,7 +640,7 @@ MPEG or other movie file you can:
 
 
   Frontends for FFmpeg exist for multiple platforms. For more
-  information see the `FFmpeg homepage <http://www.ffmpeg.org/>`_
+  information see the `FFmpeg homepage <https://ffmpeg.org/>`_
 
 
 
@@ -665,7 +665,7 @@ You can play a movie file as follows:
      % ffplay bar.avi
 
 * c) Use the `Pizza.py <https://lammps.github.io/pizza>`_
-  `animate tool <https://lammps.gitbug.io/pizza/doc/animate.html>`_,
+  `animate tool <https://lammps.github.io/pizza/doc/animate.html>`_,
   which works directly on a series of image files.
   
   .. parsed-literal::

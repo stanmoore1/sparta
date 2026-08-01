@@ -12,11 +12,11 @@ Our group has also written and released a separate toolkit called
 plotting, and visualization for SPARTA simulations.  Pizza.py is
 written in `Python <python_>`_ and is available for download from `the Pizza.py web site <pizza_>`_.
 
-.. _pizza: http://pizza.sandia.gov
+.. _pizza: https://lammps.github.io/pizza/
 
 
 
-.. _python: http://www.python.org
+.. _python: https://www.python.org/
 
 
 
@@ -47,7 +47,7 @@ SPARTA distribution.  Each is described in more detail below.
 * :ref:`surf\_create <surfcreate>` - create a surface file with simple objects
 * :ref:`surf\_transform <surftransform>` - transform surface via translate/scale/rotate operations
 
-.. _paraview: http://www.paraview.org
+.. _paraview: https://www.paraview.org/
 
 
 
@@ -62,7 +62,7 @@ dump2cfg tool
 
 This is a Python script that converts a SPARTA particle dump file into
 extended CFG format so that it can be visualized by the
-`AtomEye <http://mt.seas.upenn.edu/Archive/Graphics/A>`_ visualization
+`AtomEye <http://li.mit.edu/Archive/Graphics/A/>`_ visualization
 program.  AtomEye is a very fast particle visualizer, capable of
 interactive visualizations of millions of particles on a desktop
 machine.  It is commonly used in the materials modeling community.

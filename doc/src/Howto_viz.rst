@@ -31,7 +31,7 @@ snapshots.
 Additional Pizza.py tools may be added that allow visualization of
 surface and grid cell information as output by SPARTA.
 
-.. _pizza: http://lammps.github.io/pizza
+.. _pizza: https://lammps.github.io/pizza/
 
 
 
@@ -39,4 +39,4 @@ surface and grid cell information as output by SPARTA.
 
 
 
-.. _ensight: http://www.ensight.com
+.. _ensight: https://www.ansys.com/products/fluids/ansys-ensight

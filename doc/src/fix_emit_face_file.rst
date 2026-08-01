@@ -73,7 +73,7 @@ equation 4.22 of :ref:`(Bird94) <Bird94_fix_emit_face_file>`.  The number of par
 add on a particular grid cell face is based on this flux and
 additional global, flow, and cell face properties:
 
-* global property: *fnum* ratio as specified by the `global <global.html">`_ command
+* global property: *fnum* ratio as specified by the :doc:`global <global>` command
 * flow properties: number density, streaming velocity, and thermal temperature
 * cell face properties: area of face and its orientation relative to the streaming velocity
 
@@ -292,7 +292,7 @@ determine the properties of inserted particles on each timestep.
 
    When using a subsonic pressure boundary condition, you
    should also use an appropriate boundary collision or chemistry model
-   via the `boundary <boundary.htmo>`_ or :doc:`bound\_modify <bound_modify>`
+   via the :doc:`boundary <boundary>` or :doc:`bound\_modify <bound_modify>`
    or :doc:`surf\_collide <surf_collide>` or :doc:`surf\_react <surf_react>`
    commands, so that particles hitting the surface disappear as if they
    were exiting the simulation domain.  That is necessary to produce the

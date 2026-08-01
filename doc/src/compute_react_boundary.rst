@@ -89,7 +89,7 @@ Output info
 
 This compute calculates a global array, with the number of columns
 either equal to the number of reactions defined by the
-`surf\_react <surf_react>`_ style (if no values are specified) or equal to
+:doc:`surf_react <surf_react>` style (if no values are specified) or equal to
 M = the # of values specified.  The number of rows is 4 for a 2d
 simulation for the 4 faces (xlo, xhi, ylo, yhi), and it is 6 for a 3d
 simulation (xlo, xhi, ylo, yhi, zlo, zhi).

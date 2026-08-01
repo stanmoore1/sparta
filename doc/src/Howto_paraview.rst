@@ -271,7 +271,7 @@ There is an option in *grid2paraview.py* to execute a ParaView Catalyst Python
 script that has been exported from the ParaView GUI. For more details on
 Catalyst, please see the Catalyst user guide, located here.
 
-`Kitware ParaView Catalyst in-situ <https://www.paraview.org/in-situ/>`_
+`Kitware ParaView Catalyst in-situ <https://catalyst-in-situ.readthedocs.io/en/latest/>`_
 
 The Catalyst script will generate images or data extracts for each time-step.
 This will avoid having to run ParaView as a separate step to generate

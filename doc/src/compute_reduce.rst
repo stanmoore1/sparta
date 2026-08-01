@@ -78,7 +78,7 @@ Particle attributes are per-particle quantities.
 three kinds of quantities.  :doc:`Particle-style, grid-style, and surf-style variables <variable>` generate per-particle, per-grid,
 or per-surf quantities respectively.  Custom attributes can be
 per-particle, per-grid, or per-surf quantities.  See the
-`variable <variable>`_ command and its special functions which can
+:doc:`variable <variable>` command and its special functions which can
 perform the same operations as the compute reduce command on global
 vectors.
 

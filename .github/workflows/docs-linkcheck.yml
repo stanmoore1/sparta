@@ -1,0 +1,35 @@
+# Validate the manual's external links.
+#
+# This is deliberately not part of the per-PR CI in main.yml.  It reaches out
+# to every external host the manual cites, so it is slow and it fails for
+# reasons that have nothing to do with the pull request that triggered it --
+# a site being down for ten minutes, a host rate-limiting the checker.  A
+# weekly run reports genuine link rot without blocking anyone's work.
+name: Doc link check
+
+on:
+  schedule:
+    # Mondays at 07:00 UTC
+    - cron: '0 7 * * 1'
+  workflow_dispatch:
+
+jobs:
+  link_check:
+    runs-on: ubuntu-22.04
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Dependencies
+      run: sudo apt-get update && sudo apt-get install -y python3-venv
+
+    # Hosts that block automated clients are listed in linkcheck_ignore in
+    # doc/utils/sphinx-config/conf.py.in, so anything reported here is a URL
+    # that actually moved or died.
+    - name: Check external links
+      run: make -C doc link_check
+
+    - uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: 'linkcheck-report'
+        path: 'doc/linkcheck/'

@@ -76,12 +76,12 @@ takes place.
 The *id1* and *id2* values are the IDs of the colliding particles.
 Note that particle IDs are generated randomly.  Thus multiple
 particles in the system can potentially have the same ID.  See
-`Section 6.17 <Section_howto_17>`_ for more details on particle IDs.
+:doc:`Howto_particles` for more details on particle IDs.
 
 The *type1* and *type2* values are the integer index for the particle
 species of the colliding particles.  They are values from 1 to
 Nspecies. The values corresponds to the order in which species were
-defined via the :doc:`species <species>` command.  See `Section 6.17 <Section_howto_17>`_ for more details on particle types.
+defined via the :doc:`species <species>` command.  See :doc:`Howto_particles` for more details on particle types.
 
 The *vx1/pre*\ , *vy1/pre*\ , *vz1/pre*\ , *vx2/pre*\ , *vy2/pre*\ , *vz2/pre*
 values are the velocity components of the two particles before the

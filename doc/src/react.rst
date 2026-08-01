@@ -270,7 +270,7 @@ P2.
 .. warning::
 
    If the ambipolar approximation is being used, via the
-   `fix ambipolar <fix_ambipolar.hmtl>`_ and :doc:`collide\_modify ambipolar yes <collide_modify>` commands, then reactions which involve either
+   :doc:`fix ambipolar <fix_ambipolar>` and :doc:`collide\_modify ambipolar yes <collide_modify>` commands, then reactions which involve either
    ambipolar ions or the ambipolar electron have more restrictive rules
    about the ordering of reactants and products.  See the next section
    for a discussion of these requirements.
@@ -306,7 +306,7 @@ rules about the ordering of reactants and products, than those
 described in the preceding section.
 
 Note that ambipolar collisions are turned on via the :doc:`collide\_modify ambipolar yes <collide_modify>` commands, which in turn requires
-that the `fix ambipolar <fix_ambipolar.hmtl>`_ is defined in your input
+that the :doc:`fix ambipolar <fix_ambipolar>` is defined in your input
 script.  This fix defines a particular species as an ambipolar
 electron, written as "e" in the reactions that follow.  It also
 defines a list of ambipolar ions, which are written as species with a

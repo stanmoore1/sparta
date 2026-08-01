@@ -135,6 +135,21 @@ rst_prolog = r"""
 
 """
 
+# -- Options for the linkcheck builder ------------------------------------
+
+# The report is advisory: `make link_check` exits 0 whatever it finds, and
+# the scheduled CI job uploads the report rather than failing the build.
+# So nothing is ignored here -- a URL that a host refuses to serve to an
+# automated client still deserves to show up and be triaged by a human,
+# and silencing whole domains would hide it if the page later disappeared.
+#
+# Expect a few false positives in any run.  Some hosts answer a 403 to any
+# client that is not a browser, and some corporate proxies do the same on
+# their behalf.  Confirm with curl before "fixing" a reported URL.
+linkcheck_timeout = 30
+linkcheck_retries = 2
+linkcheck_workers = 5
+
 # -- Options for LaTeX output ---------------------------------------------
 
 latex_engine = 'pdflatex'

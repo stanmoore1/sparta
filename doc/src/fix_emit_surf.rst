@@ -79,7 +79,7 @@ given by equation 4.22 of :ref:`(Bird94) <Bird94_fix_emit_surf>`.  The number of
 within a grid cell is based on this flux and additional global, flow,
 and surface element properties:
 
-* global property: *fnum* ratio as specified by the `global <global.html">`_ command
+* global property: *fnum* ratio as specified by the :doc:`global <global>` command
 * flow properties: number density, streaming velocity, and thermal temperature
 * surface element properties: portion of surface element area that overlaps with the grid cell and its orientation relative to the streaming velocity
 

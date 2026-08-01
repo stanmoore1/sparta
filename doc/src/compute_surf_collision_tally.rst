@@ -62,7 +62,7 @@ included.  See the :doc:`group grid <group>` command for info on how
 surface elements can be assigned to surface groups.
 
 This compute can be used for simulations with either explicit or
-implicit surface elements.  See `Section 6.13 <Section_howto_13>`_ for
+implicit surface elements.  See :doc:`Howto_surf_elements` for
 more discussion of explicit and implicit surfaces.
 
 The results of this compute can be used by different commands in
@@ -77,18 +77,18 @@ accessing the tallied values.
 The *id/surf* value is the ID of the surface element.  For explicit
 surfaces, surface element IDs are unique.  For implicit surfaces, the
 surface ID of all the surface elements within a grid cell are the grid
-cell ID.  See `Section 6.13 <Section_howto_13>`_ for more discussion of
+cell ID.  See :doc:`Howto_surf_elements` for more discussion of
 explicit and implicit surfaces.
 
 The *id* value is the ID of the particle.  Note that particle IDs are
 generated randomly.  Thus multiple particles in the system can
-potentially have the same ID.  See `Section 6.17 <Section_howto_17>`_ for
+potentially have the same ID.  See :doc:`Howto_particles` for
 more details on particle IDs.
 
 The *type* value is an integer index for the particle species.  It is
 a value from 1 to Nspecies. The value corresponds to the order in
 which species were defined via the :doc:`species <species>` command.
-See `Section 6.17 <Section_howto_17>`_ for more details on particle
+See :doc:`Howto_particles` for more details on particle
 types.
 
 The *time* value is the point in time within the timestep when the

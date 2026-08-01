@@ -170,7 +170,8 @@ To select a specific CPU architecture (e.g. Haswell):
 
 .. parsed-literal::
 
-   cmake -C /path/to/sparta/cmake/presets/kokkos_omp.cmake   -DKokkos_ARCH_HSW=ON /path/to/sparta/cmake
+   cmake -C /path/to/sparta/cmake/presets/kokkos_omp.cmake \
+     -DKokkos_ARCH_HSW=ON /path/to/sparta/cmake
    make
 
 **For MPI-only (no threading):**
@@ -197,7 +198,9 @@ For A100 GPUs (Ampere):
 
 .. parsed-literal::
 
-   cmake -C /path/to/sparta/cmake/presets/kokkos_cuda.cmake   -DKokkos_ARCH_HOPPER90=OFF -DKokkos_ARCH_AMPERE80=ON   /path/to/sparta/cmake
+   cmake -C /path/to/sparta/cmake/presets/kokkos_cuda.cmake \
+     -DKokkos_ARCH_HOPPER90=OFF -DKokkos_ARCH_AMPERE80=ON \
+     /path/to/sparta/cmake
    make
 
 For V100 GPUs (Volta):
@@ -205,7 +208,9 @@ For V100 GPUs (Volta):
 
 .. parsed-literal::
 
-   cmake -C /path/to/sparta/cmake/presets/kokkos_cuda.cmake   -DKokkos_ARCH_HOPPER90=OFF -DKokkos_ARCH_VOLTA70=ON   /path/to/sparta/cmake
+   cmake -C /path/to/sparta/cmake/presets/kokkos_cuda.cmake \
+     -DKokkos_ARCH_HOPPER90=OFF -DKokkos_ARCH_VOLTA70=ON \
+     /path/to/sparta/cmake
    make
 
 **For AMD GPUs using HIP:**
@@ -222,7 +227,9 @@ MI300X/MI300A GPUs:
 
 .. parsed-literal::
 
-   cmake -C /path/to/sparta/cmake/presets/kokkos_hip.cmake   -DKokkos_ARCH_VEGA90A=OFF -DKokkos_ARCH_AMD_GFX942=ON   /path/to/sparta/cmake
+   cmake -C /path/to/sparta/cmake/presets/kokkos_hip.cmake \
+     -DKokkos_ARCH_VEGA90A=OFF -DKokkos_ARCH_AMD_GFX942=ON \
+     /path/to/sparta/cmake
    make
 
 **For Intel GPUs using SYCL:**
@@ -295,7 +302,8 @@ can locate your VTK install, then enable both the package and its TPL:
 .. parsed-literal::
 
    cd build
-   cmake -C /path/to/sparta/cmake/presets/machine.cmake   -DPKG_VTK=ON -DBUILD_VTK=ON /path/to/sparta/cmake
+   cmake -C /path/to/sparta/cmake/presets/machine.cmake \
+     -DPKG_VTK=ON -DBUILD_VTK=ON /path/to/sparta/cmake
    make
 
 To uninstall (disable) the VTK package:
@@ -303,7 +311,8 @@ To uninstall (disable) the VTK package:
 
 .. parsed-literal::
 
-   cmake -C /path/to/sparta/cmake/presets/machine.cmake   -DPKG_VTK=OFF -DBUILD_VTK=OFF /path/to/sparta/cmake
+   cmake -C /path/to/sparta/cmake/presets/machine.cmake \
+     -DPKG_VTK=OFF -DBUILD_VTK=OFF /path/to/sparta/cmake
    make
 
 **Supporting info:**

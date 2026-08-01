@@ -43,7 +43,7 @@ to N.  They also encode the cell's logical position within the grid
 hierarchy.
 
 The file is in the following format which is the same as the input
-file used by the `read\_grid <read_grid.html">`_ command.  Thus the file
+file used by the :doc:`read_grid <read_grid>` command.  Thus the file
 can be used to start a subsequent simulation with the same grid
 topology.
 

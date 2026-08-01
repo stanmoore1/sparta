@@ -3,12 +3,13 @@
 Coming attractions
 ==================
 
-The `wish list link <https://sparta.github.io/future.html>`_ on the
-SPARTA web page gives a list of features we are planning to add to
-SPARTA in the future.  Please contact the
-`developers <https://sparta.github.io/authors.html>`_ you are interested
-in contributing to the those developments or would be a future user of
-that feature.
+Features that have been requested but not yet implemented are tracked as
+`issues <https://github.com/sparta/sparta/issues>`_ in the SPARTA GitHub
+repository.  Please contact the
+`developers <https://sparta.github.io/authors.html>`_ if you are
+interested in contributing to any of those developments, or would be a
+future user of that feature.
 
-You can also send `email to the developers <https://sparta.github.io/authors.html>`_ if you want to add
-your wish to the list.
+You can request a new feature by opening an issue, or through the
+`request form <https://sparta.github.io/unbug.html>`_ on the SPARTA web
+page.

@@ -218,7 +218,7 @@ Restrictions
 """"""""""""
 
 This command can only be used after the grid has been created by the
-:doc:`create\_grid <create_grid>`, `read\_grid <read_grid>`_, or
+:doc:`create\_grid <create_grid>`, :doc:`read_grid <read_grid>`, or
 :doc:`read\_restart <read_restart>` commands.
 
 This command also initializes various options in SPARTA before

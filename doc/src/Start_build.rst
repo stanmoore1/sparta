@@ -109,7 +109,7 @@ compiler it wraps.  Vendor compilers often produce faster code.  On
 boxes with Intel CPUs, we suggest using the commercial Intel icc
 compiler, which can be downloaded from `Intel's compiler site <intel_>`_.
 
-.. _intel: http://www.intel.com/software/products/noncom
+.. _intel: https://www.intel.com/content/www/us/en/developer/tools/oneapi/toolkits.html
 
 
 
@@ -222,7 +222,7 @@ Makefile.serial for an example of how this can be done.
 
 If you are installing MPI yourself, we recommend MPICH 1.2 or 2.0 or
 OpenMPI.  MPICH can be downloaded from the `Argonne MPI site <https://www.mpich.org>`_.  OpenMPI can be downloaded from the
-`OpenMPI site <http://www.open-mpi.org>`_.  If you are running on a big
+`OpenMPI site <https://www.open-mpi.org/>`_.  If you are running on a big
 parallel platform, your system admins or the vendor should have
 already installed a version of MPI, which will be faster than MPICH or
 OpenMPI, so find out how to build and link with it.  If you use MPICH
@@ -255,7 +255,7 @@ contains commands that invoke FFTs.
 
 SPARTA supports various open-source or vendor-supplied FFT libraries
 for this purpose.  If you leave these 3 variables blank, SPARTA will
-use the open-source `KISS FFT library <http://kissfft.sf.net>`_, which is
+use the open-source `KISS FFT library <https://github.com/mborgerding/kissfft>`_, which is
 included in the SPARTA distribution.  This library is portable to all
 platforms and for typical SPARTA simulations is almost as fast as FFTW
 or vendor optimized libraries.  If you are not including the FFT
@@ -268,7 +268,7 @@ are: MKL or FFTW3.
 Selecting -DFFT\_FFTW will use the FFTW3 library.
 
 Similarly a separate FFT library can be specified for KOKKOS package.
-By default, SPARTA will use a Kokkos version of the open-source `KISS FFT library <http://kissfft.sf.net>`_, which is included in the SPARTA
+By default, SPARTA will use a Kokkos version of the open-source `KISS FFT library <https://github.com/mborgerding/kissfft>`_, which is included in the SPARTA
 distribution. Note that using the KISS FFT library on GPUs may give
 suboptimal performance. Other options can be specified using the form
 -DFFT\_KOKKOS\_XXX. Available values for XXX when using Kokkos are:
@@ -452,17 +452,22 @@ cmake -LH. For the SPARTA\_DEFAULT\_CXX\_COMPILE\_FLAGS option, see Step 4.
 For a full list of CMake option value pairs, see cmake -LAH. The most relevant
 CMake options (with example values) for our purposes here are:
 
--DCMAKE\_C_COMPILER=gcc
--DCMAKE\_CXX\_COMPILER=/usr/local/bin/g++
--DCMAKE\_CXX\_FLAGS=-O3
+.. code-block:: bash
+
+   -DCMAKE_C_COMPILER=gcc
+   -DCMAKE_CXX_COMPILER=/usr/local/bin/g++
+   -DCMAKE_CXX_FLAGS=-O3
 
 If your cmake command line is getting too long, consider placing it in a bash
 script and escaping newlines. For example:
 
 
-.. parsed-literal::
+.. code-block:: bash
 
-   cmake -C /path/to/sparta/cmake/presets/NAME.cmake -D<OPTION_NAME>=<VALUE> /path/to/sparta/cmake
+   cmake \
+   -C /path/to/sparta/cmake/presets/NAME.cmake \
+   -D<OPTION_NAME>=<VALUE> \
+   /path/to/sparta/cmake
 
 **Step 4**
 
@@ -621,7 +626,7 @@ When the SPARTA FFT package is enabled with cmake -DPKG\_FFT=ON, you may select
 between 3 thirty party libraries (TPLs) for 1d FFTs, which SPARTA uses when
 configured with cmake -DFFT=\ *FFTW3,MKL,KISS*\ .
 
-By default SPARTA will use the open-source `KISS FFT library <http://kissfft.sf.net>`_, which is included in the SPARTA distribution.
+By default SPARTA will use the open-source `KISS FFT library <https://github.com/mborgerding/kissfft>`_, which is included in the SPARTA distribution.
 This library is portable to all platforms and for typical SPARTA simulations is
 almost as fast as FFTW or vendor optimized libraries.
 
@@ -630,7 +635,7 @@ which SPARTA uses when configured with cmake
 -DFFT\_KOKKOS=\ *CUFFT,HIPFFT,FFTW3,MKL,KISS*\ . This requires enabling the SPARTA
 FFT package which can be selected with cmake -DPKG\_FFT=ON.
 
-By default, SPARTA will use a Kokkos version of the open-source `KISS FFT library <http://kissfft.sf.net>`_, which is included in the SPARTA distribution.
+By default, SPARTA will use a Kokkos version of the open-source `KISS FFT library <https://github.com/mborgerding/kissfft>`_, which is included in the SPARTA distribution.
 Note that using the KISS FFT library on GPUs may give suboptimal performance.
 Other options for -DFFT\_KOKKOS are CUFFT, HIPFFT, MKL or FFTW3. When using the
 Kokkos CUDA backend, either CUFFT or KISS must be used. When using the Kokkos
@@ -776,7 +781,9 @@ Example: build for NVIDIA A100 GPUs (override the default Hopper arch):
 
    mkdir build
    cd build
-   cmake -C /path/to/sparta/cmake/presets/kokkos_cuda.cmake       -DKokkos_ARCH_HOPPER90=OFF -DKokkos_ARCH_AMPERE80=ON       /path/to/sparta/cmake
+   cmake -C /path/to/sparta/cmake/presets/kokkos_cuda.cmake \
+     -DKokkos_ARCH_HOPPER90=OFF -DKokkos_ARCH_AMPERE80=ON \
+     /path/to/sparta/cmake
    make -j 4
 
 Example: build for NVIDIA V100 GPUs:
@@ -786,7 +793,9 @@ Example: build for NVIDIA V100 GPUs:
 
    mkdir build
    cd build
-   cmake -C /path/to/sparta/cmake/presets/kokkos_cuda.cmake       -DKokkos_ARCH_HOPPER90=OFF -DKokkos_ARCH_VOLTA70=ON       /path/to/sparta/cmake
+   cmake -C /path/to/sparta/cmake/presets/kokkos_cuda.cmake \
+     -DKokkos_ARCH_HOPPER90=OFF -DKokkos_ARCH_VOLTA70=ON \
+     /path/to/sparta/cmake
    make -j 4
 
 Example: build for AMD MI300X GPUs:
@@ -796,7 +805,9 @@ Example: build for AMD MI300X GPUs:
 
    mkdir build
    cd build
-   cmake -C /path/to/sparta/cmake/presets/kokkos_hip.cmake       -DKokkos_ARCH_VEGA90A=OFF -DKokkos_ARCH_AMD_GFX942=ON       /path/to/sparta/cmake
+   cmake -C /path/to/sparta/cmake/presets/kokkos_hip.cmake \
+     -DKokkos_ARCH_VEGA90A=OFF -DKokkos_ARCH_AMD_GFX942=ON \
+     /path/to/sparta/cmake
    make -j 4
 
 After building, run SPARTA with the KOKKOS package using the -k, -sf,

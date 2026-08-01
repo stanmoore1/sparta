@@ -49,21 +49,21 @@ segments.  However each element is contained within a single grid
 cell.
 
 A related command which defines implicit surfaces is the
-`read\_isurf <read_isurf>`_ command which reads a file of corner point
+:doc:`read_isurf <read_isurf>` command which reads a file of corner point
 values defined on a 2d or 3d grid, which is mapped to (a portion of)
 the SPARTA grid.  It then calculates appropriate implicit line
 segments or triangles within each grid cell based on its 4 or 8 corner
-points.  See the `read\_isurf <read_isurf>`_ command for details.
+points.  See the :doc:`read_isurf <read_isurf>` command for details.
 
 This command derives the 2d or 3d grid of corner point values from the
 set of explicit surface elements, rather then reading them from a
-file :ref:`(Hong24) <Hong24_create_isurf>`.  It then proceeds similarly to the `read\_isurf <read_isurf>`_
+file :ref:`(Hong24) <Hong24_create_isurf>`.  It then proceeds similarly to the :doc:`read_isurf <read_isurf>`
 command where implicit line segments or triangles within each grid
 cell are calculated from the 4 or 8 corner points of the cell.  When
 the process is complete, all explicit surfaces are removed from the
 simulation.  This is because SPARTA does not currently allow both
 implicit and explicit surfaces to simultaneously exist.  The
-`read\_isurf <read_isurf>`_ doc page has additional information about
+:doc:`read_isurf <read_isurf>` doc page has additional information about
 using implicit surfaces in a simulation, which also apply to this
 command.
 
@@ -282,7 +282,7 @@ after this command is used.
 This command can only be used after the simulation box is defined by
 the :doc:`create\_box <create_box>` command, and after a grid has been
 created by the :doc:`create\_grid <create_grid>` command.  Additionally,
-explicit surfaces must already be defined by the `read\_surf <read_surf>`_
+explicit surfaces must already be defined by the :doc:`read_surf <read_surf>`
 command.  Simulations with implicit surfaces cannot perform grid
 adaptation.
 
