@@ -182,6 +182,16 @@ void ComputeSurfKokkos::post_surf_tally()
 
   k_tally2surf.modify_device();
   k_array_surf_tally.modify_device();
+
+  // pre_surf_tally() has each active surf react model retain a reference to
+  //  the particle list.  Release it before the next pre_surf_tally() blits
+  //  over the member: a blit does not release, so the reference would be
+  //  orphaned and its allocation never freed
+
+  for (int n = 0; n < surf->nsr; n++) {
+    if (sr_type_list[n] == 0) sr_kk_global_copy[sr_map[n]].obj.post_react();
+    else sr_kk_prob_copy[sr_map[n]].obj.post_react();
+  }
 }
 
 /* ----------------------------------------------------------------------
