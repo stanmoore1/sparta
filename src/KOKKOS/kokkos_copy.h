@@ -68,9 +68,9 @@ class KKCopy {
 
   ~KKCopy() { restore(); }
 
-  void copy(void* orig) {
+  void copy(const ClassStyle* orig) {
     if (ptr_temp == NULL) save();
-    memcpy((void*)&obj, orig, sizeof(ClassStyle));
+    memcpy((void*)&obj, (const void*)orig, sizeof(ClassStyle));
     obj.copy = 1;
   }
 

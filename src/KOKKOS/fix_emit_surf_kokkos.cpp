@@ -284,25 +284,26 @@ void FixEmitSurfKokkos::perform_task()
   nsurf_tally = update->nsurf_tally;
   Compute **slist_active = update->slist_active;
 
-  if (nsurf_tally) {
-    for (int i = 0; i < nsurf_tally; i++) {
-      if (strcmp(slist_active[i]->style,"isurf/grid") == 0)
-        error->all(FLERR,"Kokkos doesn't yet support compute isurf/grid");
-      ComputeSurfKokkos* compute_surf_kk = dynamic_cast<ComputeSurfKokkos*>(slist_active[i]);
-      if (!compute_surf_kk)
-        error->all(FLERR,"Kokkos does not (yet) support compute surf/collision/tally or compute surf/reaction/tally");
-      compute_surf_kk->pre_surf_tally();
-      slist_active_copy[i].copy(compute_surf_kk);
-    }
-  } else {
-    for (int i = 0; i < KOKKOS_MAX_SLIST; i++) {
+  if (nsurf_tally > KOKKOS_MAX_SLIST)
+    error->all(FLERR,"Kokkos currently only supports two instances of compute surface");
 
-      // use temporary to avoid the copy getting stale leading to an issue
-      //  with view reference counting
-
-      slist_active_copy[i].copy(&tmp_compute_surf_kk);
-    }
+  for (int i = 0; i < nsurf_tally; i++) {
+    if (strcmp(slist_active[i]->style,"isurf/grid") == 0)
+      error->all(FLERR,"Kokkos doesn't yet support compute isurf/grid");
+    ComputeSurfKokkos* compute_surf_kk = dynamic_cast<ComputeSurfKokkos*>(slist_active[i]);
+    if (!compute_surf_kk)
+      error->all(FLERR,"Kokkos does not (yet) support compute surf/collision/tally or compute surf/reaction/tally");
+    compute_surf_kk->pre_surf_tally();
+    slist_active_copy[i].copy(compute_surf_kk);
   }
+
+  // every Kokkos functor captures the whole array by value, so the unused
+  //  slots must not alias a compute that may be reallocated or deleted while
+  //  they still reference count it: point them at a temporary that lives as
+  //  long as this class
+
+  for (int i = nsurf_tally; i < KOKKOS_MAX_SLIST; i++)
+    slist_active_copy[i].copy(&tmp_compute_surf_kk);
 
   auto ninsert_dim1 = perspecies ? nspecies : 1;
   if (d_ninsert.extent(0) < ntask * ninsert_dim1)
