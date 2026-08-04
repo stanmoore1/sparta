@@ -179,7 +179,12 @@ KokkosSPARTA::KokkosSPARTA(SPARTA *sparta, int narg, char **arg) : Pointers(spar
 
   if (ngpus > 0) {
     comm_serial = 0;
-#ifdef KOKKOS_ARCH_AMD_GFX942
+
+    // must match the architectures that UpdateKokkos::move() dispatches the
+    //  ATOMIC_REDUCTION = -1 (parallel_reduce) kernel for, since the counters
+    //  are read back from the reduction result only when atomic_reduction is 0
+
+#if defined(KOKKOS_ARCH_AMD_GFX940) || defined(KOKKOS_ARCH_AMD_GFX942) || defined(KOKKOS_ARCH_AMD_GFX942_APU)
     atomic_reduction = 0;
 #else
     atomic_reduction = 1;
