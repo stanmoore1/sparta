@@ -103,7 +103,7 @@ void SurfCollidePistonKokkos::pre_collide()
   }
 
   if (surf->nsr > KOKKOS_MAX_TOT_SURF_REACT)
-    error->all(FLERR,"Kokkos currently supports two instances of each surface reaction method");
+    error->all(FLERR,"Kokkos currently supports a limited number of surface reaction methods");
 
   if (surf->nsr > 0) {
     int nglob,nprob;
@@ -112,12 +112,16 @@ void SurfCollidePistonKokkos::pre_collide()
       if (!surf->sr[n]->kokkosable)
         error->all(FLERR,"Must use Kokkos-enabled surface reaction method with Kokkos");
       if (strcmp(surf->sr[n]->style,"global") == 0) {
+        if (nglob >= KOKKOS_MAX_SURF_REACT_PER_TYPE)
+          error->all(FLERR,"Kokkos currently supports two instances of each surface reaction method");
         sr_kk_global_copy[nglob].copy((SurfReactGlobalKokkos*)(surf->sr[n]));
         sr_kk_global_copy[nglob].obj.pre_react();
         sr_type_list[n] = 0;
-        sr_map[n] = nprob;
+        sr_map[n] = nglob;
         nglob++;
       } else if (strcmp(surf->sr[n]->style,"prob") == 0) {
+        if (nprob >= KOKKOS_MAX_SURF_REACT_PER_TYPE)
+          error->all(FLERR,"Kokkos currently supports two instances of each surface reaction method");
         sr_kk_prob_copy[nprob].copy((SurfReactProbKokkos*)(surf->sr[n]));
         sr_kk_prob_copy[nprob].obj.pre_react();
         sr_type_list[n] = 1;
@@ -127,9 +131,6 @@ void SurfCollidePistonKokkos::pre_collide()
         error->all(FLERR,"Unknown Kokkos surface reaction method");
       }
     }
-
-    if (nglob > KOKKOS_MAX_SURF_REACT_PER_TYPE || nprob > KOKKOS_MAX_SURF_REACT_PER_TYPE)
-      error->all(FLERR,"Kokkos currently supports two instances of each surface reaction method");
   }
 
   ParticleKokkos* particle_kk = (ParticleKokkos*) particle;
@@ -152,6 +153,17 @@ void SurfCollidePistonKokkos::post_collide()
   auto sc = surf->sc[m]; // can't modify the copy directly, use the original
   sc->nsingle += h_nsingle();
   surf->nreact_one += h_nreact_one();
+  d_particles = {};
+
+  // pre_collide() runs on this KKCopy and has each active surf react model
+  //  retain a reference to the particle list.  Release it before the next
+  //  copy() blits over the member: a blit does not release, so the reference
+  //  would be orphaned and its allocation never freed
+
+  for (int n = 0; n < surf->nsr; n++) {
+    if (sr_type_list[n] == 0) sr_kk_global_copy[sr_map[n]].obj.post_react();
+    else sr_kk_prob_copy[sr_map[n]].obj.post_react();
+  }
 }
 
 /* ---------------------------------------------------------------------- */
