@@ -5,3 +5,6 @@ sph3d.*
 blob.*
 square.binary
 movies/
+slab.smooth
+cup.smooth
+disc.smooth

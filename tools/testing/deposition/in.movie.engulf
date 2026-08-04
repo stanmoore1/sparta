@@ -1,0 +1,69 @@
+# frames for the particle engulfment movies
+#
+# A growing surface runs into gas.  A molecule the front encloses is not
+# simply deleted: the fix tries to put it back into the flow ahead of the
+# front, and only buries it -- with its mass, momentum and energy booked
+# into the film -- when there is nowhere to put it.  These movies are about
+# seeing that happen.
+#
+# The domain is closed on every side, so the particle count can only fall by
+# burial.  Value (3) of the fix output counts the buried, value (8) the ones
+# pushed back into the flow.
+
+variable            RATE index 0.5
+variable            NEVERY index 1
+variable            FIELD index cup.smooth
+variable            NSTEP index 10000
+variable            NIMG index 100
+variable            NPART index 8000
+variable            OUT index frames
+
+seed                12345
+dimension           2
+global              gridcut 0.0 comm/sort yes
+boundary            r r p
+
+create_box          0 60 0 60 -0.5 0.5
+create_grid         60 60 1
+balance_grid        rcb cell
+
+global              nrho 1.0 fnum 1.0
+species             air.species N
+mixture             air N
+
+variable            rate grid ${RATE}
+fix                 ablate ablate all ${NEVERY} 1.0 v_rate mode deposit &
+                    units distance
+
+global              surfs implicit
+read_isurf          all 60 60 1 ${FIELD} 127.5 ablate push no
+
+surf_collide        1 diffuse 300.0 1.0
+surf_modify         all collide 1
+
+create_particles    air n ${NPART} twopass
+
+timestep            0.001
+
+# the film is shaded by cell volume: a cell the film has taken has none left,
+#   so solid reads as one flat colour and gas as another, and a cut cell
+#   somewhere between.  That is the same quantity the move loop uses to
+#   decide where a particle may be, so what is shaded solid really is where
+#   no particle can survive.
+# particles are dots on top of it, and the isosurface is the red outline
+
+compute             PG property/grid all vol
+
+dump                IMG image air ${NIMG} ${OUT}/f.*.ppm type type &
+                    particle yes pdiam 0.5 &
+                    grid c_PG &
+                    gline yes 0.0012 &
+                    surf one 0.007 &
+                    size 800 800 zoom 1.8 box no 0.0
+dump_modify         IMG pad 5 backcolor white glinecolor gray scolor * red
+dump_modify         IMG pcolor * darkblue
+dump_modify         IMG cmap grid 0 1 cf 0 3 min tan 0.5 wheat max white
+
+stats               ${NIMG}
+stats_style         step np f_ablate[3] f_ablate[8]
+run                 ${NSTEP}
