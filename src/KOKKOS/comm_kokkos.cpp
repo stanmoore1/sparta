@@ -50,8 +50,6 @@ CommKokkos::~CommKokkos()
 {
   if (copymode) return;
 
-  particle_kk_copy.uncopy();
-
   if (!sparta->kokkos->comm_serial) {
     pproc = NULL;
   }

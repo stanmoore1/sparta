@@ -41,7 +41,6 @@ class SurfCollidePistonKokkos : public SurfCollidePiston {
 
   SurfCollidePistonKokkos(class SPARTA *, int, char **);
   SurfCollidePistonKokkos(class SPARTA *);
-  ~SurfCollidePistonKokkos();
   void init();
   void pre_collide();
   void post_collide();

@@ -85,18 +85,6 @@ FixEmitSurfKokkos::~FixEmitSurfKokkos()
 {
   if (copymode) return;
 
-  particle_kk_copy.uncopy();
-  regblock_kk_copy.uncopy();
-  regcylinder_kk_copy.uncopy();
-  regplane_kk_copy.uncopy();
-  regsphere_kk_copy.uncopy();
-
-  for (int i=0; i<KOKKOS_MAX_SLIST; i++) {
-    slist_active_copy[i].uncopy();
-  }
-
-  tmp_compute_surf_kk.uncopy = 1;
-
 #ifdef SPARTA_KOKKOS_EXACT
   rand_pool.destroy();
 #endif

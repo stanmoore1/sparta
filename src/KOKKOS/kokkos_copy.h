@@ -56,7 +56,6 @@ class KKCopy {
     ptr_temp = NULL;
     save();
     obj.copy = 1;
-    obj.uncopy = 0;
   }
 
   // a copy is non-owning: it restores nothing and frees nothing
@@ -73,12 +72,6 @@ class KKCopy {
     if (ptr_temp == NULL) save();
     memcpy((void*)&obj, orig, sizeof(ClassStyle));
     obj.copy = 1;
-    obj.uncopy = 0;
-  }
-
-  void uncopy() {
-    restore();
-    obj.uncopy = 1;
   }
 
  private:

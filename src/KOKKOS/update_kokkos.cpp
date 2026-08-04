@@ -132,28 +132,6 @@ UpdateKokkos::~UpdateKokkos()
 
   memoryKK->destroy_kokkos(k_mlist,mlist);
   mlist = NULL;
-
-  grid_kk_copy.uncopy();
-  domain_kk_copy.uncopy();
-
-  tmp_compute_boundary_kk.uncopy = 1;
-  tmp_compute_surf_kk.uncopy = 1;
-
-  for (int i=0; i<KOKKOS_MAX_SURF_COLL_PER_TYPE; i++) {
-    sc_kk_specular_copy[i].uncopy();
-    sc_kk_diffuse_copy[i].uncopy();
-    sc_kk_vanish_copy[i].uncopy();
-    sc_kk_piston_copy[i].uncopy();
-    sc_kk_transparent_copy[i].uncopy();
-  }
-
-  for (int i=0; i<KOKKOS_MAX_BLIST; i++) {
-    blist_active_copy[i].uncopy();
-  }
-
-  for (int i=0; i<KOKKOS_MAX_SLIST; i++) {
-    slist_active_copy[i].uncopy();
-  }
 }
 
 /* ---------------------------------------------------------------------- */

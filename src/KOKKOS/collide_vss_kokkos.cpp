@@ -105,9 +105,6 @@ CollideVSSKokkos::~CollideVSSKokkos()
 {
   if (copymode) return;
 
-  grid_kk_copy.uncopy();
-  react_kk_copy.uncopy();
-
   memoryKK->destroy_kokkos(k_dellist,dellist);
 
 #ifdef SPARTA_KOKKOS_EXACT
