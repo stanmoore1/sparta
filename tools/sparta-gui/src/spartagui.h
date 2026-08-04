@@ -62,6 +62,7 @@ class HistoryPanel;
 class StdCapture;
 class URLDownloader;
 class SceneWindow; // only defined when built with SPARTA_GUI_HAVE_VTK
+class VtkScene;    // ditto
 class WelcomeScreen;
 
 /**
@@ -316,6 +317,13 @@ private slots:
     void open3DViewer();
     /** @brief Render the current simulation state to VTK and show it in the 3D viewer */
     void renderVtkSnapshot();
+    /// @brief Render the current state to VTK and load it into @p scene, drawing
+    /// only the categories the scene's toggles ask for. Returns the number of
+    /// layers loaded; @p quiet suppresses the "nothing to show" dialogs, which
+    /// is what the automatic refreshes want.
+    int fillVtkScene(VtkScene *scene, bool quiet);
+    /// @brief Refresh the docked 3D view from the deck's current state.
+    void refreshDocked3DScene();
     /** @brief Open the visual case-setup canvas seeded from the current deck */
 #endif
 

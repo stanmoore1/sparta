@@ -24,6 +24,8 @@
 #include <QIcon>
 #include <QInputDialog>
 #include <QLabel>
+#include <QSettings>
+#include <QSignalBlocker>
 #include <QLineEdit>
 #include <QMenu>
 #include <QMenuBar>
@@ -378,6 +380,35 @@ void VtkScene::buildUi()
             &VtkScene::onColorMapChanged);
     tb->addWidget(cmapCombo);
 
+    // Which of SPARTA's three data kinds to draw. They occupy the same space --
+    // the grid encloses the surface, the particles fill both -- so looking at
+    // any one of them means turning the others off. Each stays disabled until
+    // the scene actually holds a layer of that kind, so the row also says what
+    // the current snapshot contains.
+    tb->addSeparator();
+    const struct {
+        Kind kind;
+        const char *label, *object, *tip;
+    } kinds[] = {
+        {Kind::Particles, "Particles", "vtkShowParticles", "Draw the particles"},
+        {Kind::Grid, "Grid", "vtkShowGrid", "Draw the grid cells"},
+        {Kind::Surface, "Surfaces", "vtkShowSurfaces", "Draw the surface elements"},
+    };
+    QSettings settings;
+    for (const auto &k : kinds) {
+        const int i = int(k.kind);
+        kindShown[i] =
+            settings.value(QString("vtkshow/%1").arg(QLatin1String(k.object)), true).toBool();
+        kindBox[i] = new QCheckBox(k.label, tb);
+        kindBox[i]->setObjectName(QLatin1String(k.object));
+        kindBox[i]->setToolTip(QLatin1String(k.tip));
+        kindBox[i]->setChecked(kindShown[i]);
+        kindBox[i]->setEnabled(false);
+        connect(kindBox[i], &QCheckBox::toggled, this,
+                [this, kind = k.kind](bool on) { setKindVisible(kind, on); });
+        tb->addWidget(kindBox[i]);
+    }
+
     tb->addSeparator();
     edgesBox = new QCheckBox("Edges", tb);
     edgesBox->setToolTip("Draw the outlines of grid cells / surface elements");
@@ -490,10 +521,14 @@ void VtkScene::addLayer(const vtkSmartPointer<vtkDataSet> &data, const QString &
         default: prop->SetColor(0.75, 0.75, 0.78); break;
     }
     prop->SetEdgeVisibility(edgesBox && edgesBox->isChecked());
+    // A kind the user turned off stays off as later frames arrive: a new run
+    // repopulating the scene must not undo the choice made about the last one.
+    if (int(kind) < NKinds) layer.actor->SetVisibility(kindShown[int(kind)]);
 
     renderArea->renderer()->AddActor(layer.actor);
     layers.append(layer);
 
+    syncKindBoxes();
     refreshArrayCombo();
     applyColoring();
     resetView();
@@ -542,11 +577,58 @@ void VtkScene::setColorField(const QString &name)
     }
 }
 
+void VtkScene::setKindVisible(Kind kind, bool on)
+{
+    const int i = int(kind);
+    if (i < 0 || i >= NKinds) return;
+    kindShown[i] = on;
+    QSettings().setValue(QString("vtkshow/%1").arg(kindBox[i] ? kindBox[i]->objectName()
+                                                              : QString::number(i)),
+                         on);
+    if (kindBox[i] && kindBox[i]->isChecked() != on) {
+        QSignalBlocker block(kindBox[i]);
+        kindBox[i]->setChecked(on);
+    }
+    applyKindVisibility();
+}
+
+bool VtkScene::kindVisible(Kind kind) const
+{
+    const int i = int(kind);
+    return (i < 0 || i >= NKinds) ? true : kindShown[i];
+}
+
+int VtkScene::layerCount(Kind kind) const
+{
+    int n = 0;
+    for (const auto &l : layers)
+        if (l.kind == kind) ++n;
+    return n;
+}
+
+void VtkScene::applyKindVisibility()
+{
+    for (const auto &l : layers) {
+        const int i = int(l.kind);
+        if (i < NKinds) l.actor->SetVisibility(kindShown[i]);
+    }
+    renderArea->requestRender();
+}
+
+void VtkScene::syncKindBoxes()
+{
+    // A toggle for a kind the scene does not hold would do nothing when
+    // clicked; disabled, the row doubles as a statement of what is loaded.
+    for (int i = 0; i < NKinds; ++i)
+        if (kindBox[i]) kindBox[i]->setEnabled(layerCount(Kind(i)) > 0);
+}
+
 void VtkScene::clearScene()
 {
     for (const auto &l : layers) renderArea->renderer()->RemoveActor(l.actor);
     layers.clear();
     scalarBar->VisibilityOff();
+    syncKindBoxes();
     refreshArrayCombo();
     restingStatus = "No data loaded.";
     showStatus(restingStatus);

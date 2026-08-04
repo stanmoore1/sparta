@@ -324,7 +324,11 @@ ChartWindow::ChartWindow(const QString &_filename, SpartaGui *_spartagui, QWidge
     row1->addWidget(chartYlabel, 1);
     auto *unitsLabel = new QLabel("Units:");
     row1->addWidget(unitsLabel);
-    units = new QLabel("[lj]");
+    // SPARTA's default unit style, not LAMMPS' "lj", which SPARTA does not have.
+    // This is what shows until the library is asked: the chart is built before
+    // the run starts, so a deck that sets its units has not done so yet, and
+    // runDone() re-reads them once the thread has finished.
+    units = new QLabel(QString("[%1]").arg(Cfg::DEFAULT_UNITS));
     units->setObjectName("units");
     units->setFrameStyle(QFrame::Panel | QFrame::Raised);
     row1->addWidget(units);
@@ -336,13 +340,19 @@ ChartWindow::ChartWindow(const QString &_filename, SpartaGui *_spartagui, QWidge
     norm->setChecked(false);
     norm->setEnabled(false);
     row1->addWidget(norm);
-    // units and normalization are SPARTA thermo settings we do not know when
-    // plotting external data files (no live simulation), so hide them then
+    // Normalization is LAMMPS' "thermo_modify norm", which divides extensive
+    // thermo quantities by the atom count. SPARTA has no equivalent -- stats
+    // output is never normalized -- so the control had nothing behind it and
+    // was left permanently disabled: a checkbox that cannot be ticked and would
+    // do nothing if it could. Gone rather than greyed.
+    normLabel->hide();
+    norm->hide();
+
+    // Units are a property of a live simulation, so they say nothing when
+    // plotting an external data file.
     if (!spartagui) {
         unitsLabel->hide();
         units->hide();
-        normLabel->hide();
-        norm->hide();
     }
     row1->addWidget(new QLabel(" Data:"));
     row1->addWidget(columns, 1);

@@ -142,6 +142,23 @@ public:
     /// @brief Programmatically color by a named field (e.g. "leak"); no-op if absent.
     void setColorField(const QString &name);
 
+    /**
+     * @brief Show or hide every layer of one kind.
+     *
+     * The three kinds SPARTA writes -- particles, grid cells, surface elements
+     * -- occupy the same space, and which of them is worth looking at changes
+     * from moment to moment: the grid hides the surface inside it, the
+     * particles hide both. Toggling is therefore a property of the scene rather
+     * than of a layer, so a category stays hidden as later frames arrive.
+     */
+    void setKindVisible(Kind kind, bool on);
+
+    /// @brief Is this kind currently shown? (True for a kind with no layers.)
+    [[nodiscard]] bool kindVisible(Kind kind) const;
+
+    /// @brief How many layers of a kind the scene holds.
+    [[nodiscard]] int layerCount(Kind kind) const;
+
     /// @brief Remove every layer from the scene.
     void clearScene();
 
@@ -210,10 +227,22 @@ private:
 
     QList<Layer> layers;
 
+    /// @brief Apply the per-kind show/hide state to every layer's actor.
+    void applyKindVisibility();
+    /// @brief Enable each kind's toggle only while the scene has layers of it.
+    void syncKindBoxes();
+
     QComboBox *arrayCombo   = nullptr;
     QComboBox *cmapCombo    = nullptr;
     QCheckBox *edgesBox     = nullptr;
     QCheckBox *scalarBarBox = nullptr;
+
+    /// Indexed by Kind. Generic has no toggle: it is whatever the user opened
+    /// by hand from a file, and hiding that behind a category button would be
+    /// a control with nothing predictable behind it.
+    static constexpr int NKinds = 3;
+    QCheckBox *kindBox[NKinds]  = {};
+    bool kindShown[NKinds]      = {true, true, true};
     QLabel *infoLabel       = nullptr;
     QMenu *filtersMenu      = nullptr;
     QTimer *statusTimer     = nullptr;

@@ -206,6 +206,14 @@ void SpartaGui::setupUi(QSettings &settings, QFont &allFont, QFont &monoFont)
             case PanelManager::Visualize:
                 ensureViewerPanel();
                 panels->openPanel(PanelManager::Viewer);
+#if defined(SPARTA_GUI_HAVE_VTK)
+                // The 3D view came up empty here, with its own Filters menu and
+                // no other tab beside it to go back to. Entering the workspace
+                // that exists to show it is as clear a request for its content
+                // as there is, so fill it: the box and whatever surfaces the
+                // deck reads before a run, everything after one.
+                refreshDocked3DScene();
+#endif
                 break;
             default: break;
         }
@@ -2173,6 +2181,15 @@ void SpartaGui::runDone()
 
     finalizeChartData();
 
+#if defined(SPARTA_GUI_HAVE_VTK)
+    // A finished run is the state worth looking at, and it is the only point at
+    // which particles exist. Refresh only where the pictures are what the window
+    // is showing: rendering three dump files costs a "run 0" apiece, which is
+    // not something to spend on a workspace the user is not looking at.
+    if (PanelManager::modeShows(panels->currentMode(), PanelManager::Viewer))
+        refreshDocked3DScene();
+#endif
+
     bool success         = true;
     bool valid           = true;
     const QString errmsg = sparta.lastErrorMessage();
@@ -3387,6 +3404,22 @@ void SpartaGui::renderVtkSnapshot()
         return;
     }
     if (!sceneWindow) sceneWindow = new SceneWindow(this);
+    sceneWindow->showViewer();
+    fillVtkScene(sceneWindow->scene(), /*quiet=*/false);
+}
+
+// Render the current state to VTK files and load them into @p scene.  Shared by
+// the explicit "3D Snapshot" action, which reports what went wrong, and by the
+// automatic refreshes of the docked 3D view, which must stay silent: a deck with
+// no surfaces is not an error worth a dialog every time a run ends.
+//
+// Only the categories the scene's toggles ask for are rendered.  That is what
+// ties the Particles/Grid/Surfaces buttons to the "dump ... /vtk" commands
+// emitted below -- a category turned off is one SPARTA is never asked to write,
+// rather than one written and then hidden.
+int SpartaGui::fillVtkScene(VtkScene *scene, bool quiet)
+{
+    if (!scene || sparta.isRunning()) return 0;
     startSparta();
 
     // does the loaded library actually provide the VTK dump styles?  (VTK is an
@@ -3397,13 +3430,13 @@ void SpartaGui::renderVtkSnapshot()
     for (int i = 0; i < ndumpstyles; ++i)
         if (sparta.styleName("dump", i).endsWith("/vtk")) { haveVtkDump = true; break; }
     if (!haveVtkDump) {
-        sceneWindow->showViewer();
-        warning(this, "3D Snapshot",
-                "This SPARTA library was built without the VTK package,",
-                "so it cannot write VTK files directly.  You can still open <code>.vtu</code> / "
-                "<code>.vtp</code> files written by a VTK-enabled SPARTA build (or the "
-                "<i>Export to ParaView</i> tools) with the viewer's <b>Open</b> button.");
-        return;
+        if (!quiet)
+            warning(this, "3D Snapshot",
+                    "This SPARTA library was built without the VTK package,",
+                    "so it cannot write VTK files directly.  You can still open <code>.vtu</code> / "
+                    "<code>.vtp</code> files written by a VTK-enabled SPARTA build (or the "
+                    "<i>Export to ParaView</i> tools) with the viewer's <b>Open</b> button.");
+        return 0;
     }
 
     // ensure a system box exists, creating it with a "run 0" preflight of the
@@ -3428,9 +3461,11 @@ void SpartaGui::renderVtkSnapshot()
         }
         textEdit->setTextCursor(saved);
         if (!sparta.extractSetting("box_exist")) {
-            warning(this, "3D Snapshot",
-                    "Cannot create a 3D snapshot from an input that does not create a system box.");
-            return;
+            if (!quiet)
+                warning(this, "3D Snapshot",
+                        "Cannot create a 3D snapshot from an input that does not create a "
+                        "system box.");
+            return 0;
         }
     }
 
@@ -3469,28 +3504,42 @@ void SpartaGui::renderVtkSnapshot()
 
     struct Cat {
         QString id, style, ext, attrs, label;
-        SceneWindow::Kind kind;
+        VtkScene::Kind kind;
     };
     const QList<Cat> cats = {
-        {"sgvtkgrid", "grid/vtk", "vtu", "all id proc", "grid", SceneWindow::Kind::Grid},
+        {"sgvtkgrid", "grid/vtk", "vtu", "all id proc", "grid", VtkScene::Kind::Grid},
         {"sgvtkpart", "particle/vtk", "vtp", "all id x y z vx vy vz", "particles",
-         SceneWindow::Kind::Particles},
-        {"sgvtksurf", "surf/vtk", "vtp", "all id type", "surfaces", SceneWindow::Kind::Surface},
+         VtkScene::Kind::Particles},
+        {"sgvtksurf", "surf/vtk", "vtp", "all id type", "surfaces", VtkScene::Kind::Surface},
     };
 
-    sceneWindow->clearScene();
+    scene->clearScene();
     int loaded = 0;
     for (const auto &c : cats) {
+        if (!scene->kindVisible(c.kind)) continue;
         const QString f = renderCategory(c.id, c.style, c.ext, c.attrs);
         if (f.isEmpty()) continue;
-        if (sceneWindow->addDatasetFile(f, c.label, c.kind, nullptr)) ++loaded;
+        if (scene->addDatasetFile(f, c.label, c.kind, nullptr)) ++loaded;
         QFile::remove(f);
     }
 
-    sceneWindow->showViewer();
-    if (loaded == 0)
+    if (loaded == 0 && !quiet)
         warning(this, "3D Snapshot",
                 "No particle, grid or surface data was produced for the current state.");
+    return loaded;
+}
+
+// Put whatever the deck currently describes into the docked 3D view.  Called
+// when the Visualize workspace is entered and again when a run finishes, so the
+// view is never the empty scene with one dead tab that it used to be: before a
+// run that is the box and any surfaces the input reads, and afterwards it is
+// the particles and grid as well.
+void SpartaGui::refreshDocked3DScene()
+{
+    if (!viewer) return;
+    auto *scene = qobject_cast<VtkScene *>(viewer->source(ViewerPanel::Scene));
+    if (!scene) return;
+    fillVtkScene(scene, /*quiet=*/true);
 }
 #endif // SPARTA_GUI_HAVE_VTK
 

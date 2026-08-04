@@ -388,14 +388,31 @@ TEST_F(Chart, RangeControlsCanBeDisabledWholesale)
 
 // ---------------------------------------------------------------- units and normalisation
 
-TEST_F(Chart, UnitsAndNormalisationAreSettable)
+TEST_F(Chart, TheUnitsShownAreSpartasOwnUntilTheLibrarySaysOtherwise)
 {
-    win->setUnits("si");
-    win->setNorm(true);
+    auto *units = ctl<QLabel>("units");
+    ASSERT_NE(units, nullptr);
+
+    // The chart is built before the run starts, so a deck that sets its units
+    // has not run that command yet and the library has nothing to report. What
+    // showed until it did was "[lj]" -- a LAMMPS unit style that SPARTA does
+    // not have at all, carried over from upstream.
+    EXPECT_EQ(units->text().toStdString(), "[si]");
+
+    win->setUnits("cgs");
+    EXPECT_EQ(units->text().toStdString(), "cgs");
+}
+
+// LAMMPS' "thermo_modify norm" divides extensive thermo quantities by the atom
+// count; SPARTA's stats output has no equivalent and is never normalized. The
+// control was left visible but permanently disabled, which reads as a feature
+// that is temporarily unavailable rather than one that does not exist.
+TEST_F(Chart, ThereIsNoNormalisationControl)
+{
     auto *norm = ctl<QCheckBox>("norm");
-    EXPECT_TRUE(norm->isChecked());
-    win->setNorm(false);
-    EXPECT_FALSE(norm->isChecked());
+    ASSERT_NE(norm, nullptr) << "the widget is still built, only hidden";
+    EXPECT_FALSE(norm->isVisibleTo(win))
+        << "the normalisation checkbox is on screen, and nothing in SPARTA can make it work";
 }
 
 // ---------------------------------------------------------------- the view itself

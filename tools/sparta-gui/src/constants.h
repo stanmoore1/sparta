@@ -156,6 +156,7 @@ constexpr int SSAO_SEED = 453983;
 
 // ---- Documentation ---------------------------------------------------------
 /** base URL of the SPARTA online documentation */
+inline const char *const DEFAULT_UNITS = "si"; ///< SPARTA's own default unit style
 inline const QString DOCS_URL = QStringLiteral("https://sparta.github.io");
 
 // ---- Charts ----------------------------------------------------------------
