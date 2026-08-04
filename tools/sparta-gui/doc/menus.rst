@@ -250,7 +250,7 @@ repeatedly:
 .. index:: workspaces
 .. index:: View menu; workspaces
 
-The *View* menu begins with the four **workspaces**, which are the
+The *View* menu begins with the three **workspaces**, which are the
 main way to change what the window shows.  Rather than displaying every
 panel at once and leaving too little room for any of them, each
 workspace shows the panels that belong to one task.  The deck is always
@@ -263,28 +263,28 @@ visible; the table lists what is shown beside it:
    * - Workspace
      - Shortcut
      - Panels shown by default
-   * - *Setup*
-     - ``Ctrl+1``
-     - Output.  Writing the deck: the editor and its output side by side and
-       nothing else -- the linter's findings and the file navigator are a
-       keystroke away in this menu when they are wanted.
    * - *Run*
-     - ``Ctrl+2``
-     - Output, Variables.  Watching a run.  Charts and pictures deliberately
-       stay out: on a single screen there is not enough width for them and a
-       readable deck at the same time.
+     - ``Ctrl+1``
+     - Output, Variables.  Writing a deck and watching it run: the editor and
+       its output side by side, with the variables tabbed behind the output.
+       Charts and pictures deliberately stay out -- on a single screen there is
+       not enough width for them and a readable deck at the same time.  The
+       linter's findings and the file navigator are a keystroke away in this
+       menu when they are wanted.
    * - *Analyze*
-     - ``Ctrl+3``
-     - Charts, Viewer.  Plots and pictures side by side, which is the point --
-       a spike in a curve is read against what the flow looked like there.
+     - ``Ctrl+2``
+     - Charts, with the whole window given over to them.
    * - *Visualize*
-     - ``Ctrl+4``
+     - ``Ctrl+3``
      - Viewer, with the whole window given over to it.
 
 The workspaces are also reachable from the segmented switch in the
 status bar.  Panels can be rearranged, added or removed freely and each
 workspace remembers its own arrangement, so tailoring *Analyze* does not
-disturb *Run*.  Switching workspaces only changes what is visible --
+disturb *Run*.  Starting a run from *Analyze* or *Visualize* raises only
+that workspace's own panel: choosing them says to watch the plots or the
+pictures, so the console output is collected without taking a column of
+the window.  Switching workspaces only changes what is visible --
 panel contents are never discarded, so the output of a run survives a
 round trip through the other workspaces.  *Reset Layout* at the bottom
 of the menu restores the current workspace's default arrangement and

@@ -57,12 +57,12 @@ public:
      * @brief Task-oriented workspace mode
      *
      * Showing every panel at once leaves too little room for any of them, so
-     * the panels are grouped by what the user is actually doing: preparing a
-     * deck, watching a run, studying its results, or looking at the pictures
-     * full size. Each mode is backed by a Qt-ADS perspective, so rearranging
-     * panels inside a mode is remembered per mode rather than globally.
+     * the panels are grouped by what the user is actually doing: watching a
+     * run, studying its results, or looking at the pictures full size. Each
+     * mode is backed by a Qt-ADS perspective, so rearranging panels inside a
+     * mode is remembered per mode rather than globally.
      */
-    enum Mode { Setup, RunMode, Analyze, Visualize, NModes };
+    enum Mode { RunMode, Analyze, Visualize, NModes };
 
     /**
      * @brief Build the dock manager, central editor dock, and the five stable panels
@@ -205,13 +205,13 @@ private:
     QString menuText[NPanels];
     QList<QPointer<ads::CDockWidget>> archived;
     int archiveSeq = 0;
-    Mode mode = Setup;   ///< fresh profiles start where the work starts: the deck
+    Mode mode = RunMode; ///< fresh profiles start where the work starts: the deck
 
     /** @brief Whether a mode's arrangement has ever been established.
      *  A mode that was never entered has no arrangement worth keeping, and
      *  stashing the startup state (every dock closed) under its name would
      *  make the mode come up empty the first time it is selected. */
-    bool modeEstablished[NModes] = {false, false, false, false};
+    bool modeEstablished[NModes] = {};
 
     /** @brief Suppresses panelOpened while a whole arrangement is being applied.
      *  Switching modes must not trigger the lazy view creation that opening a

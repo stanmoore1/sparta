@@ -108,8 +108,8 @@ available (On macOS use the Command key instead of Ctrl/Control).
      - 3D Snapshot (VTK)
      - Ctrl+Shift+U
      - Check for SPARTA Update
-     - Ctrl+1 … Ctrl+4
-     - Setup / Run / Analyze / Visualize workspace
+     - Ctrl+1 … Ctrl+3
+     - Run / Analyze / Visualize workspace
 
 Further keybindings of the editor window `are documented with the Qt
 documentation

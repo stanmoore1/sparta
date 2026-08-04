@@ -295,8 +295,8 @@ TEST_F(MainWindow, TheDocumentedShortcutsAreBound)
         {"&Run SPARTA from Editor Buffer", "Ctrl+Return"},
         {"Run SPARTA from &File", "Ctrl+Shift+Return"},
         {"&Stop SPARTA", "Ctrl+/"},           {"Slide S&how in Viewer", "Ctrl+L"},
-        {"&Setup Workspace", "Ctrl+1"},       {"&Run Workspace", "Ctrl+2"},
-        {"&Analyze Workspace", "Ctrl+3"},     {"&Visualize Workspace", "Ctrl+4"},
+        {"&Run Workspace", "Ctrl+1"},         {"&Analyze Workspace", "Ctrl+2"},
+        {"&Visualize Workspace", "Ctrl+3"},
         {"&Output Window", "Ctrl+Shift+L"},   {"&Charts Window", "Ctrl+Shift+C"},
         {"&Viewer Window", "Ctrl+Shift+I"},   {"&Variables Window", "Ctrl+Shift+W"},
         {"Import Sur&face (STL / SPARTA)...", "Ctrl+Shift+T"},
@@ -333,40 +333,32 @@ TEST_F(MainWindow, TheDocumentedShortcutsAreBound)
 
 // ---------------------------------------------------------------- workspaces
 
-TEST_F(MainWindow, SetupComesUpAsTheEditorAndItsOutput)
-{
-    enterWorkspace("&Setup Workspace");
-
-    EXPECT_TRUE(panelOpen("dockOutput"))
-        << "Setup came up with no output panel. It is created lazily by a run, and a workspace "
-           "only opens a panel that already holds a widget, so without ensureLogPanel() this "
-           "mode is a bare editor until the user runs something.";
-    EXPECT_FALSE(panelOpen("dockDiagnostics")) << "Setup opened the linter";
-    EXPECT_FALSE(panelOpen("dockProjectFiles")) << "Setup opened the file navigator";
-    EXPECT_FALSE(panelOpen("dockCharts")) << "Setup opened the charts";
-    EXPECT_FALSE(panelOpen("dockViewer")) << "Setup opened the viewer";
-}
-
 TEST_F(MainWindow, RunAddsTheVariablesToTheEditorAndItsOutput)
 {
     enterWorkspace("&Run Workspace");
 
-    EXPECT_TRUE(panelOpen("dockOutput"));
+    EXPECT_TRUE(panelOpen("dockOutput"))
+        << "Run came up with no output panel. It is created lazily by a run, and a workspace "
+           "only opens a panel that already holds a widget, so without ensureLogPanel() this "
+           "mode is a bare editor until the user runs something.";
     EXPECT_TRUE(panelOpen("dockVariables"));
     EXPECT_FALSE(panelOpen("dockCharts")) << "Run opened the charts, squeezing the deck";
     EXPECT_FALSE(panelOpen("dockViewer")) << "Run opened the viewer, squeezing the deck";
+    EXPECT_FALSE(panelOpen("dockDiagnostics")) << "Run opened the linter";
+    EXPECT_FALSE(panelOpen("dockProjectFiles")) << "Run opened the file navigator";
 }
 
-TEST_F(MainWindow, AnalyzeShowsPlotsAndPicturesBeforeAnythingHasRun)
+TEST_F(MainWindow, AnalyzeShowsThePlotsBeforeAnythingHasRun)
 {
     enterWorkspace("&Analyze Workspace");
 
-    // Both panels are built lazily -- the charts by a run, the viewer by a
-    // render -- and a workspace only opens a panel that already holds a widget.
-    // Before this was arranged, selecting Analyze on a freshly opened deck
-    // showed the deck and nothing else.
+    // The chart panel is built lazily by a run, and a workspace only opens a
+    // panel that already holds a widget. Before this was arranged, selecting
+    // Analyze on a freshly opened deck showed the deck and nothing else.
     EXPECT_TRUE(panelOpen("dockCharts")) << "Analyze came up with no chart panel";
-    EXPECT_TRUE(panelOpen("dockViewer")) << "Analyze came up with no viewer panel";
+    EXPECT_FALSE(panelOpen("dockViewer"))
+        << "Analyze opened the viewer; the whole window is meant to be the plots";
+    EXPECT_FALSE(panelOpen("dockOutput")) << "Analyze opened the console output";
 }
 
 TEST_F(MainWindow, VisualizeShowsThePicturesBeforeAnythingHasRun)
@@ -384,7 +376,6 @@ TEST_F(MainWindow, EveryWorkspaceOpensExactlyWhatItDocuments)
         const char *action;
         PanelManager::Mode mode;
     } modes[] = {
-        {"&Setup Workspace", PanelManager::Setup},
         {"&Run Workspace", PanelManager::RunMode},
         {"&Analyze Workspace", PanelManager::Analyze},
         {"&Visualize Workspace", PanelManager::Visualize},
@@ -454,7 +445,12 @@ TEST_F(MainWindow, ThePanelMenuEntriesKeepTheirNamesWhenThePanelIsRetitled)
     QAction *entry = action("&Output Window");
     ASSERT_NE(entry, nullptr);
 
-    auto *dock = gui->findChild<CDockWidget *>("dockOutput");
+    // Asked of the dock manager, not findChild(): a dock that is closed or is
+    // hidden inside a tabbed area is not in the window's object tree, which is
+    // the same reason panelOpen() above goes through the manager.
+    auto *dm = gui->findChild<ads::CDockManager *>();
+    ASSERT_NE(dm, nullptr);
+    auto *dock = dm->findDockWidget("dockOutput");
     ASSERT_NE(dock, nullptr);
     dock->setWindowTitle("Output - in.circle - Run 3");
     QCoreApplication::processEvents();
@@ -564,8 +560,7 @@ TEST_F(MainWindow, EnteringAWorkspaceNeverPutsUpADialog)
     // an empty one, or a deck that never creates a box, which is the state
     // here -- that render used to answer a workspace switch with a modal error
     // box. Offscreen that is not a dialog anyone can dismiss: it is a hang.
-    for (const char *entry : {"&Setup Workspace", "&Run Workspace", "&Analyze Workspace",
-                              "&Visualize Workspace"}) {
+    for (const char *entry : {"&Run Workspace", "&Analyze Workspace", "&Visualize Workspace"}) {
         enterWorkspace(entry);
         for (auto *w : QApplication::topLevelWidgets()) {
             auto *dlg = qobject_cast<QDialog *>(w);

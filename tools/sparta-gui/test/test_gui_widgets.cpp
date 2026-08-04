@@ -657,7 +657,7 @@ TEST(PanelMenu, ReplacingAPanelWidgetLeavesItsMenuEntryAlone)
 // the editor squeezed into a middle column between two panels the mode is
 // documented as deliberately not showing, and the one panel it is meant to
 // show missing.
-TEST(WorkspaceModes, SetupShowsTheEditorAndItsOutputAndNothingElse)
+TEST(WorkspaceModes, RunShowsTheEditorAndItsOutputAndNothingUnrelated)
 {
     QMainWindow window;
     CodeEditor editor(nullptr);
@@ -667,15 +667,50 @@ TEST(WorkspaceModes, SetupShowsTheEditorAndItsOutputAndNothingElse)
     // only opens panels that already have one, which is what the application
     // now arranges at startup with ensureLogPanel().
     panels.setPanelWidget(PanelManager::Log, new QPlainTextEdit, "Output");
-    panels.applyMode(PanelManager::Setup);
+    panels.applyMode(PanelManager::RunMode);
 
-    EXPECT_TRUE(panels.isPanelOpen(PanelManager::Log)) << "Setup came up with no output panel";
+    EXPECT_TRUE(panels.isPanelOpen(PanelManager::Log)) << "Run came up with no output panel";
     for (int p = 0; p < PanelManager::NPanels; ++p) {
-        if (p == PanelManager::Log) continue;
-        EXPECT_FALSE(panels.isPanelOpen(PanelManager::Panel(p)))
-            << PanelManager::panelName(PanelManager::Panel(p)).toStdString()
-            << " is open in Setup, which is meant to show the editor and its output only";
+        const auto panel = PanelManager::Panel(p);
+        if (PanelManager::modeShows(PanelManager::RunMode, panel)) continue;
+        EXPECT_FALSE(panels.isPanelOpen(panel))
+            << PanelManager::panelName(panel).toStdString()
+            << " is open in Run, which is meant to show the deck and its output only";
     }
+}
+
+// The Setup workspace was dropped: it showed the deck beside its output, which
+// is exactly what Run shows, so it was a click that changed nothing. Anything
+// still naming four workspaces -- a stored dockmode index, a saved perspective
+// -- has to land somewhere sane rather than one past the end of the enum.
+TEST(WorkspaceModes, ThereAreThreeWorkspacesAndRunIsTheDefault)
+{
+    QMainWindow window;
+    CodeEditor editor(nullptr);
+    PanelManager panels(&window, &editor);
+
+    EXPECT_EQ(int(PanelManager::NModes), 3);
+    EXPECT_EQ(panels.currentMode(), PanelManager::RunMode);
+
+    QStringList names;
+    for (int m = 0; m < PanelManager::NModes; ++m)
+        names << PanelManager::modeName(PanelManager::Mode(m));
+    EXPECT_EQ(names.join(',').toStdString(), "Run,Analyze,Visualize");
+}
+
+// Starting a run from Analyze or Visualize is a request to watch the plots or
+// the pictures. Both used to get the console output forced into a column of a
+// workspace chosen for something else, and Analyze also gave half its width to
+// a viewer that a run does not fill.
+TEST(WorkspaceModes, AnalyzeShowsTheChartsAloneAndVisualizeThePicturesAlone)
+{
+    EXPECT_TRUE(PanelManager::modeShows(PanelManager::Analyze, PanelManager::Chart));
+    EXPECT_FALSE(PanelManager::modeShows(PanelManager::Analyze, PanelManager::Viewer));
+    EXPECT_FALSE(PanelManager::modeShows(PanelManager::Analyze, PanelManager::Log));
+
+    EXPECT_TRUE(PanelManager::modeShows(PanelManager::Visualize, PanelManager::Viewer));
+    EXPECT_FALSE(PanelManager::modeShows(PanelManager::Visualize, PanelManager::Log));
+    EXPECT_FALSE(PanelManager::modeShows(PanelManager::Visualize, PanelManager::Chart));
 }
 
 TEST(WorkspaceModes, EachModeOpensWhatItDocuments)

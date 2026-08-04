@@ -197,13 +197,11 @@ void SpartaGui::setupUi(QSettings &settings, QFont &allFont, QFont &monoFont)
                 panels->openPanel(PanelManager::Variables);
                 break;
             case PanelManager::Analyze:
-                // Plots and pictures side by side. Both are built lazily -- the
-                // charts by a run, the viewer by a render -- so before either
-                // has happened this mode showed the deck and nothing else.
+                // The plots, with the window given over to them. The chart panel
+                // is built lazily by a run, so before one has happened this mode
+                // showed the deck and nothing else.
                 ensureChartPanel();
-                ensureViewerPanel();
                 panels->openPanel(PanelManager::Chart);
-                panels->openPanel(PanelManager::Viewer);
                 break;
             case PanelManager::Visualize:
                 ensureViewerPanel();
@@ -404,10 +402,9 @@ void SpartaGui::createViewMenu()
         const char *shortcut;
     };
     static const ModeEntry modes[] = {
-        {PanelManager::Setup, ":/icons/document-open.svg", "&Setup Workspace", "Ctrl+1"},
-        {PanelManager::RunMode, ":/icons/system-run.svg", "&Run Workspace", "Ctrl+2"},
-        {PanelManager::Analyze, ":/icons/x-office-drawing.svg", "&Analyze Workspace", "Ctrl+3"},
-        {PanelManager::Visualize, ":/icons/image-viewer.svg", "&Visualize Workspace", "Ctrl+4"},
+        {PanelManager::RunMode, ":/icons/system-run.svg", "&Run Workspace", "Ctrl+1"},
+        {PanelManager::Analyze, ":/icons/x-office-drawing.svg", "&Analyze Workspace", "Ctrl+2"},
+        {PanelManager::Visualize, ":/icons/image-viewer.svg", "&Visualize Workspace", "Ctrl+3"},
     };
     modeGroup = new QActionGroup(this);
     modeGroup->setExclusive(true);
@@ -571,9 +568,8 @@ void SpartaGui::createStatusBar()
         const char *tip;
     };
     static const ModeBtn modebtns[] = {
-        {PanelManager::Setup, "Setup", "Prepare the input deck: project files and linter findings"},
-        {PanelManager::RunMode, "Run", "Watch a run: console output, variables and live charts"},
-        {PanelManager::Analyze, "Analyze", "Study results: charts and pictures side by side"},
+        {PanelManager::RunMode, "Run", "Prepare a deck and watch it run: console output and variables"},
+        {PanelManager::Analyze, "Analyze", "Study results: the charts, full size"},
         {PanelManager::Visualize, "Visualize", "Look at the pictures with the window given over to them"},
     };
     auto *modebar = new QWidget(this);
@@ -2269,7 +2265,13 @@ void SpartaGui::createLogWindow(QSettings &settings)
                           QString("Output - %1 - Run %2").arg(currentFile).arg(runCounter),
                           keepOld);
 
-    if (settings.value(Keys::VIEWLOG, true).toBool())
+    // Only where the workspace has room for it, same rule as the chart below.
+    // Starting a run from Analyze or Visualize is a request to watch the plots
+    // or the pictures; the console output taking a column of those workspaces
+    // is exactly what choosing them said not to do. The output is still being
+    // collected, and the Run workspace (or the View menu) still has it.
+    if (settings.value(Keys::VIEWLOG, true).toBool() &&
+        PanelManager::modeShows(panels->currentMode(), PanelManager::Log))
         panels->openPanel(PanelManager::Log);
     else
         panels->closePanel(PanelManager::Log);

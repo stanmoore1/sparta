@@ -39,10 +39,9 @@ CASES = [
     ("tools-import-surf","Tools > Import Surface",       "ctrl+shift+t", 6, True),
     ("tools-paraview",   "Tools > Export to ParaView",   "ctrl+shift+e", 5, True),
     # --- View: workspace modes -------------------------------------------
-    ("view-mode-setup",  "View > Setup workspace",       "ctrl+1",       3, None),
-    ("view-mode-run",    "View > Run workspace",         "ctrl+2",       3, None),
-    ("view-mode-analyze","View > Analyze workspace",     "ctrl+3",       3, None),
-    ("view-mode-visualize","View > Visualize workspace", "ctrl+4",     3, None),
+    ("view-mode-run",    "View > Run workspace",         "ctrl+1",       3, None),
+    ("view-mode-analyze","View > Analyze workspace",     "ctrl+2",       3, None),
+    ("view-mode-visualize","View > Visualize workspace", "ctrl+3",     3, None),
     # --- View: panel toggles ---------------------------------------------
     ("view-output",      "View > Output Window",         "ctrl+shift+l", 3, None),
     ("view-charts",      "View > Charts Window",         "ctrl+shift+c", 3, None),

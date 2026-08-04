@@ -211,7 +211,10 @@ void PanelManager::saveLayout(QSettings &settings) const
     settings.setValue(Keys::DOCKSTATE, dm->saveState(Cfg::DOCK_LAYOUT_VERSION));
     // stash how the user left the mode they are currently in, then persist all
     // of the per-mode arrangements together with the mode to reopen on
-    settings.setValue(Keys::DOCKMODE, int(mode));
+    // Stored by name, not by index: the enum has been renumbered once already
+    // (the Setup workspace was folded into Run), and a stored index then names
+    // a different workspace -- or one past the end -- in the next version.
+    settings.setValue(Keys::DOCKMODE, modeName(mode));
     settings.setValue(Keys::PERSPECTIVE_VERSION, Cfg::DOCK_LAYOUT_VERSION);
     const_cast<PanelManager *>(this)->captureCurrentMode();
     dm->savePerspectives(settings);
@@ -228,8 +231,12 @@ bool PanelManager::restoreLayout(QSettings &settings)
         const QStringList have = dm->perspectiveNames();
         for (int i = 0; i < NModes; ++i)
             modeEstablished[i] = have.contains(perspectiveName(Mode(i)));
-        const int m = settings.value(Keys::DOCKMODE, int(Setup)).toInt();
-        if (m >= 0 && m < NModes) mode = Mode(m);
+        // An index left by a version that still had the Setup workspace is not
+        // a name, and is not worth decoding -- come up in Run, which is where
+        // Setup's profiles belong now anyway.
+        const QString m = settings.value(Keys::DOCKMODE).toString();
+        for (int i = 0; i < NModes; ++i)
+            if (modeName(Mode(i)) == m) mode = Mode(i);
     } else {
         settings.remove(QStringLiteral("Perspectives"));
     }
@@ -302,8 +309,8 @@ void PanelManager::applySplitterProportions()
 {
     // Only reserve space for a neighbour that actually has something open.
     // Forcing the editor to 62% when the whole right-hand column is closed --
-    // as it is in the Setup workspace -- would leave 38% of the window as an
-    // empty gap.
+    // as it is before a run has produced any output -- would leave 38% of the
+    // window as an empty gap.
     auto anyOpen = [this](std::initializer_list<Panel> ps) {
         for (Panel p : ps)
             if (!docks[p]->isClosed()) return true;
@@ -395,18 +402,16 @@ void PanelManager::applyDefaultLayout()
 // remembered arrangement.
 namespace {
 const QList<PanelManager::Panel> MODE_PANELS[PanelManager::NModes] = {
-    // Setup: writing the deck. The editor and its output, side by side and full
-    // height, and nothing else -- the linter's findings and the file navigator
-    // are a keystroke away in the View menu when they are wanted.
-    {PanelManager::Log},
-    // Run: watching a run. Same two columns, plus the variables tabbed behind
-    // the output. Charts and pictures deliberately stay out: on a single screen
-    // there is not enough width for them and a readable deck at the same time.
+    // Run: writing a deck and watching it run -- the editor and its output side
+    // by side, plus the variables tabbed behind the output. This is also where
+    // the deck is prepared: a separate Setup workspace showed the same two
+    // columns and was not worth the click. The linter's findings and the file
+    // navigator are a keystroke away in the View menu when they are wanted.
     {PanelManager::Log, PanelManager::Variables},
-    // Analyze: plots and pictures side by side, which is the point -- a spike in
-    // a curve is read against what the flow looked like at that step.
-    {PanelManager::Chart, PanelManager::Viewer},
-    // Visualize: the pictures, with the whole window given over to them
+    // Analyze: the plots, with the window given over to them. A run started
+    // from here raises the chart and nothing else.
+    {PanelManager::Chart},
+    // Visualize: the pictures, with the window given over to them
     {PanelManager::Viewer},
 };
 } // namespace
@@ -420,7 +425,6 @@ bool PanelManager::modeShows(Mode mode, Panel panel)
 QString PanelManager::modeName(Mode mode)
 {
     switch (mode) {
-        case Setup: return QStringLiteral("Setup");
         case RunMode: return QStringLiteral("Run");
         case Analyze: return QStringLiteral("Analyze");
         case Visualize: return QStringLiteral("Visualize");
