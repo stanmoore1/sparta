@@ -327,10 +327,22 @@ void SpartaGui::createEditMenu()
                   &SpartaGui::findAndReplace);
     menu->addSeparator();
 
-    addMenuAction(menu, ":/icons/preferences-desktop.svg", "P&references...", "Ctrl+P",
-                  &SpartaGui::preferences);
-    addMenuAction(menu, ":/icons/preferences-reset.svg", "Reset Preferences to &Defaults", "",
-                  &SpartaGui::defaults);
+    // On macOS Qt guesses an action's menu role from its text and moves anything
+    // it reads as "preferences" into the application menu. Guessing is what goes
+    // wrong here: both entries below have "Preferences" in them, so say which is
+    // which rather than leaving it to a string match. Ctrl+P is also the wrong
+    // key there -- it arrives as Cmd+P, which is Print -- so the entry that does
+    // move gets the shortcut the platform expects for it.
+    auto *prefsAction = addMenuAction(menu, ":/icons/preferences-desktop.svg", "P&references...",
+                                      "Ctrl+P", &SpartaGui::preferences);
+    prefsAction->setMenuRole(QAction::PreferencesRole);
+#if defined(Q_OS_MACOS)
+    prefsAction->setShortcut(QKeySequence::Preferences);
+#endif
+    auto *defaultsAction = addMenuAction(menu, ":/icons/preferences-reset.svg",
+                                         "Reset Preferences to &Defaults", "",
+                                         &SpartaGui::defaults);
+    defaultsAction->setMenuRole(QAction::NoRole);
 }
 
 void SpartaGui::createRunMenu()
