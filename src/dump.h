@@ -163,6 +163,12 @@ E: Dump_modify buffer yes not allowed for this style
 Not all dump styles allow dump_modify buffer yes.  See the dump_modify
 doc page.
 
+E: Dump_modify every requires a dump defined by the dump command
+
+The dump frequency is stored by the Output class, so dump_modify every
+can only be used on a dump that was created by the dump command and is
+in the Output list of dumps.
+
 E: Cannot use dump_modify fileper without % in dump file name
 
 Self-explanatory.
