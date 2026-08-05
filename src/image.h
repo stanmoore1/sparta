@@ -83,14 +83,18 @@ class Image : protected Pointers {
   void write_PPM(FILE *);
   void view_params(double, double, double, double, double, double);
 
-  void draw_line(double *, double *, double *, double);
-  void draw_box(double (*)[3], double *, double);
-  void draw_box2d(double (*)[3], double *, double);
-  void draw_axes(double (*)[3], double);
-  void draw_sphere(double *, double *, double);
-  void draw_brick(double *, double *, double *);
-  void draw_cylinder(double *, double *, double *, double, int);
-  void draw_triangle(double *, double *, double *, double *);
+  // all draw methods take an optional opacity for screen-door transparency
+
+  void draw_line(double *, double *, double *, double, double opacity = 1.0);
+  void draw_box(double (*)[3], double *, double, double opacity = 1.0);
+  void draw_box2d(double (*)[3], double *, double, double opacity = 1.0);
+  void draw_axes(double (*)[3], double, double opacity = 1.0);
+  void draw_sphere(double *, double *, double, double opacity = 1.0);
+  void draw_brick(double *, double *, double *, double opacity = 1.0);
+  void draw_cylinder(double *, double *, double *, double, int,
+                     double opacity = 1.0);
+  void draw_triangle(double *, double *, double *, double *,
+                     double opacity = 1.0);
 
   int map_dynamic(int);
   int map_reset(int, int, char **);

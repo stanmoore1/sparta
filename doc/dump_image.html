@@ -587,6 +587,13 @@ flickering shading in movies.  Different <I>seed</I> values shift the noise
 pattern.  The number of sampling directions per pixel can be selected
 with the <A HREF = "dump_modify.html">dump_modify ssaosamples</A> option.
 </P>
+<P>If any object is drawn transparently via the transparency options of
+the <A HREF = "dump_modify.html">dump_modify</A> command, the pixels its dither
+pattern leaves out are treated as background by the SSAO calculation.
+Transparent objects therefore receive weaker and slightly patterned
+depth shading.  Enabling the <I>fsaa</I> keyword averages most of that
+pattern away.
+</P>
 <P>The <I>fsaa</I> keyword turns on/off full scene anti-aliasing (FSAA).  If
 <I>yes</I> is set, the image is rendered internally at twice the requested
 size and then scaled back down by averaging, which smooths jagged
@@ -594,6 +601,11 @@ edges of rendered objects.  This increases the cost of computing the
 image by roughly 4x.  The written image has the size requested by the
 <I>size</I> keyword, regardless of this setting.  If <I>no</I> is set, no
 anti-aliasing is performed.
+</P>
+<P>Enabling FSAA is also recommended whenever any of the transparency
+options of the <A HREF = "dump_modify.html">dump_modify</A> command are used, since
+the averaging is what blends the drawn and undrawn pixels of a
+transparent object together.
 </P>
 <P>The <I>depthcue</I> keyword turns on/off depth cueing.  If <I>yes</I> is set,
 rendered objects fade toward the fog color the more distant from the
@@ -618,6 +630,12 @@ avoids darkening most of the scene when the rendered objects span a
 large depth range.  The fading always ends at the most distant
 rendered object.  Unlike the <I>ssao</I> keyword, depth cueing adds no
 significant computational cost, and both can be combined.
+</P>
+<P>The pixels that a transparent object leaves out are not faded, since
+they carry no depth.  A distant transparent object therefore appears
+somewhat less faded than an opaque one at the same distance.  This is
+only noticeable with a fog color that differs markedly from the
+background color.
 </P>
 <P>The <I>defocus</I> keyword turns on/off defocusing of distant objects.  If
 <I>yes</I> is set, objects are blurred the more distant from the viewer
@@ -651,6 +669,12 @@ samples per pixel.  As with the <I>ssao</I> keyword, the result does not
 depend on the number of MPI ranks, so images of an unchanged scene are
 exactly reproducible.
 </P>
+<P>Defocusing combines well with the transparency options of the
+<A HREF = "dump_modify.html">dump_modify</A> command: the pixels a transparent object
+leaves out are treated as maximally blurred background and are covered
+over by their drawn neighbors, which turns a distant transparent object
+into a genuine translucent haze.
+</P>
 <P>The <I>outline</I> keyword turns on/off drawing outlines where the distance
 from the viewer jumps, i.e. along the visible edges of particles and
 other objects in front of the background or in front of more distant
@@ -659,6 +683,13 @@ to hand-drawn molecular graphics, especially when combined with
 reduced shininess or increased ambient lighting.  The <I>width</I> value
 sets the width of the outlines in pixels of the final image; the
 <I>color</I> value sets their color, e.g. black.
+</P>
+<P>IMPORTANT NOTE: The <I>outline</I> keyword should not be combined with the
+transparency options of the <A HREF = "dump_modify.html">dump_modify</A> command.
+Outlines are drawn where the distance to the viewer jumps, and every
+pixel left out by the dither pattern of a transparent object looks like
+such a jump, so a transparent object is outlined pixel by pixel and is
+filled almost entirely with the outline color.
 </P>
 <HR>
 

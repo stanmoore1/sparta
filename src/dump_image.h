@@ -50,6 +50,8 @@ class DumpImage : public DumpParticle {
   double subboxdiam;               // params for drawing sub-boxes
   double *subboxcolor;
   double *boxcolor;                // colors for drawing box/grid/surf lines
+  double boxtrans,subboxtrans;     // opacity of box and sub-box lines
+  double axestrans;                // opacity of the XYZ axes
 
   int viewflag;                    // overall view is static or dynamic
 
@@ -62,6 +64,7 @@ class DumpImage : public DumpParticle {
 
   double **pcolortype;             // per-type particle colors
   double *pdiamtype;               // per-type particle diameters
+  double *ptranstype;              // per-type particle opacities
   double *pcolorproc;              // particle color for me
 
   // grid drawing
@@ -75,6 +78,7 @@ class DumpImage : public DumpParticle {
   int grid_groupbit;               // bit mask for dump_modify gridgroup
 
   double *gcolorproc;              // grid color for me
+  double gtrans;                   // opacity of grid cells and cutting planes
 
   // grid plane drawing
 
@@ -95,6 +99,7 @@ class DumpImage : public DumpParticle {
   int glineflag;                   // 0/1 for draw grid cell lines
   double glinediam;                // diameter of lines
   double *glinecolor;              // color of lines
+  double glinetrans;               // opacity of grid cell/plane outlines
 
   // surf drawing
 
@@ -109,12 +114,14 @@ class DumpImage : public DumpParticle {
   int surf_groupbit;               // bit mask for dump_modify surfgroup
 
   double *scolorproc;              // surf color for me
+  double strans;                   // opacity of surf elements
 
   // surf line drawing
 
   int slineflag;                   // 0/1 for draw surf lines
   double slinediam;                // diameter of lines
   double *slinecolor;              // color of lines
+  double slinetrans;               // opacity of surf element outlines
 
   // methods
 

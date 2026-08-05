@@ -117,6 +117,12 @@ DumpImage::DumpImage(SPARTA *sparta, int narg, char **arg) :
   glinecolor = image->color2rgb("white");
   slinecolor = image->color2rgb("white");
 
+  // all drawn objects are fully opaque by default
+
+  boxtrans = subboxtrans = axestrans = 1.0;
+  gtrans = glinetrans = 1.0;
+  strans = slinetrans = 1.0;
+
   // set defaults for optional args
 
   particleflag = 1;
@@ -595,9 +601,16 @@ DumpImage::DumpImage(SPARTA *sparta, int narg, char **arg) :
   int ntypes = particle->nspecies;
   pcolortype = new double*[ntypes+1];
   pdiamtype = new double[ntypes+1];
+  ptranstype = new double[ntypes+1];
+
+  // index 0 is the fallback used by create_image() when the species of a
+  // particle is not available in the dump buffer, see the ptrans keyword
+
+  ptranstype[0] = 1.0;
 
   for (int i = 1; i <= ntypes; i++) {
     pdiamtype[i] = 1.0;
+    ptranstype[i] = 1.0;
     if (i % 6 == 1) pcolortype[i] = image->color2rgb("red");
     else if (i % 6 == 2) pcolortype[i] = image->color2rgb("green");
     else if (i % 6 == 3) pcolortype[i] = image->color2rgb("blue");
@@ -651,6 +664,7 @@ DumpImage::~DumpImage()
 
   delete [] pcolortype;
   delete [] pdiamtype;
+  delete [] ptranstype;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -1260,6 +1274,11 @@ void DumpImage::create_image()
     for (i = 0; i < nchoose; i++) {
       j = clist[i];
 
+      // the species of a particle is only in the dump buffer when the color
+      // or diameter setting is TYPE; index 0 is the fallback otherwise
+
+      itype = 0;
+
       if (pcolor == TYPE) {
         itype = ubuf(buf[m]).i;
         color = pcolortype[itype];
@@ -1278,7 +1297,7 @@ void DumpImage::create_image()
         diameter = buf[m+1];
       }
 
-      image->draw_sphere(particles[j].x,color,diameter);
+      image->draw_sphere(particles[j].x,color,diameter,ptranstype[itype]);
       m += size_one;
     }
   }
@@ -1351,7 +1370,7 @@ void DumpImage::create_image()
 
       if (region && !region->match(x)) continue;
 
-      image->draw_brick(x,color,diam);
+      image->draw_brick(x,color,diam,gtrans);
     }
   }
 
@@ -1458,7 +1477,7 @@ void DumpImage::create_image()
           x[0] = gridxcoord;
           x[1] = 0.5*(lo[1]+hi[1]);
           x[2] = 0.5*(lo[2]+hi[2]);
-          if (!region || region->match(x)) image->draw_brick(x,color,diam);
+          if (!region || region->match(x)) image->draw_brick(x,color,diam,gtrans);
         }
       }
 
@@ -1482,7 +1501,7 @@ void DumpImage::create_image()
           x[0] = 0.5*(lo[0]+hi[0]);
           x[1] = gridycoord;
           x[2] = 0.5*(lo[2]+hi[2]);
-          if (!region || region->match(x)) image->draw_brick(x,color,diam);
+          if (!region || region->match(x)) image->draw_brick(x,color,diam,gtrans);
         }
       }
 
@@ -1506,7 +1525,7 @@ void DumpImage::create_image()
           x[0] = 0.5*(lo[0]+hi[0]);
           x[1] = 0.5*(lo[1]+hi[1]);
           x[2] = gridzcoord;
-          if (!region || region->match(x)) image->draw_brick(x,color,diam);
+          if (!region || region->match(x)) image->draw_brick(x,color,diam,gtrans);
         }
       }
     }
@@ -1551,7 +1570,7 @@ void DumpImage::create_image()
             box[1][0] = gridxcoord; box[1][1] = hi[1]; box[1][2] = lo[2];
             box[2][0] = gridxcoord; box[2][1] = lo[1]; box[2][2] = hi[2];
             box[3][0] = gridxcoord; box[3][1] = hi[1]; box[3][2] = hi[2];
-            image->draw_box2d(box,glinecolor,diameter);
+            image->draw_box2d(box,glinecolor,diameter,glinetrans);
           }
         }
       }
@@ -1565,7 +1584,7 @@ void DumpImage::create_image()
             box[1][0] = hi[0]; box[1][1] = gridycoord; box[1][2] = lo[2];
             box[2][0] = lo[0]; box[2][1] = gridycoord; box[2][2] = hi[2];
             box[3][0] = hi[0]; box[3][1] = gridycoord; box[3][2] = hi[2];
-            image->draw_box2d(box,glinecolor,diameter);
+            image->draw_box2d(box,glinecolor,diameter,glinetrans);
           }
         }
       }
@@ -1579,7 +1598,7 @@ void DumpImage::create_image()
             box[1][0] = hi[0]; box[1][1] = lo[1]; box[1][2] = gridzcoord;
             box[2][0] = lo[0]; box[2][1] = hi[1]; box[2][2] = gridzcoord;
             box[3][0] = hi[0]; box[3][1] = hi[1]; box[3][2] = gridzcoord;
-            image->draw_box2d(box,glinecolor,diameter);
+            image->draw_box2d(box,glinecolor,diameter,glinetrans);
           }
         }
       }
@@ -1628,7 +1647,7 @@ void DumpImage::create_image()
       box[6][0] = lo[0]; box[6][1] = hi[1]; box[6][2] = hi[2];
       box[7][0] = hi[0]; box[7][1] = hi[1]; box[7][2] = hi[2];
 
-      image->draw_box(box,glinecolor,diameter);
+      image->draw_box(box,glinecolor,diameter,glinetrans);
     }
   }
 
@@ -1702,10 +1721,10 @@ void DumpImage::create_image()
 
       if (dim == 2) {
         if (!(lines[m].mask & surf_groupbit)) continue;
-        image->draw_line(lines[m].p1,lines[m].p2,color,diameter);
+        image->draw_line(lines[m].p1,lines[m].p2,color,diameter,strans);
       } else {
         if (!(tris[m].mask & surf_groupbit)) continue;
-        image->draw_triangle(tris[m].p1,tris[m].p2,tris[m].p3,color);
+        image->draw_triangle(tris[m].p1,tris[m].p2,tris[m].p3,color,strans);
       }
     }
   }
@@ -1748,16 +1767,16 @@ void DumpImage::create_image()
         if (strided) m = me + isurf*nprocs;
         else m = isurf;
         if (!(lines[m].mask & surf_groupbit)) continue;
-        image->draw_line(lines[m].p1,lines[m].p2,slinecolor,diameter);
+        image->draw_line(lines[m].p1,lines[m].p2,slinecolor,diameter,slinetrans);
       }
     } else {
       for (int isurf = 0; isurf < nsurf; isurf++) {
         if (strided) m = me + isurf*nprocs;
         else m = isurf;
         if (!(tris[m].mask & surf_groupbit)) continue;
-        image->draw_line(tris[m].p1,tris[m].p2,slinecolor,diameter);
-        image->draw_line(tris[m].p2,tris[m].p3,slinecolor,diameter);
-        image->draw_line(tris[m].p3,tris[m].p1,slinecolor,diameter);
+        image->draw_line(tris[m].p1,tris[m].p2,slinecolor,diameter,slinetrans);
+        image->draw_line(tris[m].p2,tris[m].p3,slinecolor,diameter,slinetrans);
+        image->draw_line(tris[m].p3,tris[m].p1,slinecolor,diameter,slinetrans);
       }
     }
   }
@@ -1779,7 +1798,7 @@ void DumpImage::create_image()
     box[6][0] = boxxlo; box[6][1] = boxyhi; box[6][2] = boxzhi;
     box[7][0] = boxxhi; box[7][1] = boxyhi; box[7][2] = boxzhi;
 
-    image->draw_box(box,boxcolor,diameter);
+    image->draw_box(box,boxcolor,diameter,boxtrans);
   }
 
   // render XYZ axes in red/green/blue
@@ -1814,7 +1833,7 @@ void DumpImage::create_image()
     axes[3][1] = axes[0][1] + axeslen*(axes[3][1]-axes[0][1]);
     axes[3][2] = axes[0][2] + axeslen*(axes[3][2]-axes[0][2]);
 
-    image->draw_axes(axes,diameter);
+    image->draw_axes(axes,diameter,axestrans);
   }
 
   // render each proc's RCB sub-box
@@ -1835,7 +1854,7 @@ void DumpImage::create_image()
       box[1][0] = rcbhi[0]; box[1][1] = rcblo[1]; box[1][2] = boxzhi;
       box[2][0] = rcblo[0]; box[2][1] = rcbhi[1]; box[2][2] = boxzhi;
       box[3][0] = rcbhi[0]; box[3][1] = rcbhi[1]; box[3][2] = boxzhi;
-      image->draw_box2d(box,subboxcolor,diameter);
+      image->draw_box2d(box,subboxcolor,diameter,subboxtrans);
     } else {
       double box[8][3];
       box[0][0] = rcblo[0]; box[0][1] = rcblo[1]; box[0][2] = rcblo[2];
@@ -1846,7 +1865,7 @@ void DumpImage::create_image()
       box[5][0] = rcbhi[0]; box[5][1] = rcblo[1]; box[5][2] = rcbhi[2];
       box[6][0] = rcblo[0]; box[6][1] = rcbhi[1]; box[6][2] = rcbhi[2];
       box[7][0] = rcbhi[0]; box[7][1] = rcbhi[1]; box[7][2] = rcbhi[2];
-      image->draw_box(box,subboxcolor,diameter);
+      image->draw_box(box,subboxcolor,diameter,subboxtrans);
     }
   }
 }
@@ -1895,11 +1914,35 @@ int DumpImage::modify_param(int narg, char **arg)
     return 2;
   }
 
+  if (strcmp(arg[0],"axestrans") == 0) {
+    if (narg < 2) error->all(FLERR,"Illegal dump_modify command");
+    axestrans = atof(arg[1]);
+    if (axestrans < 0.0 || axestrans > 1.0)
+      error->all(FLERR,"Illegal dump_modify command");
+    return 2;
+  }
+
+  if (strcmp(arg[0],"boxtrans") == 0) {
+    if (narg < 2) error->all(FLERR,"Illegal dump_modify command");
+    boxtrans = atof(arg[1]);
+    if (boxtrans < 0.0 || boxtrans > 1.0)
+      error->all(FLERR,"Illegal dump_modify command");
+    return 2;
+  }
+
   if (strcmp(arg[0],"subboxcolor") == 0) {
     if (narg < 2) error->all(FLERR,"Illegal dump_modify command");
     subboxcolor = image->color2rgb(arg[1]);
     if (subboxcolor == NULL)
       error->all(FLERR,"Invalid color in dump_modify command");
+    return 2;
+  }
+
+  if (strcmp(arg[0],"subboxtrans") == 0) {
+    if (narg < 2) error->all(FLERR,"Illegal dump_modify command");
+    subboxtrans = atof(arg[1]);
+    if (subboxtrans < 0.0 || subboxtrans > 1.0)
+      error->all(FLERR,"Illegal dump_modify command");
     return 2;
   }
 
@@ -2067,6 +2110,22 @@ int DumpImage::modify_param(int narg, char **arg)
     return 2;
   }
 
+  if (strcmp(arg[0],"glinetrans") == 0) {
+    if (narg < 2) error->all(FLERR,"Illegal dump_modify command");
+    glinetrans = atof(arg[1]);
+    if (glinetrans < 0.0 || glinetrans > 1.0)
+      error->all(FLERR,"Illegal dump_modify command");
+    return 2;
+  }
+
+  if (strcmp(arg[0],"gtrans") == 0) {
+    if (narg < 2) error->all(FLERR,"Illegal dump_modify command");
+    gtrans = atof(arg[1]);
+    if (gtrans < 0.0 || gtrans > 1.0)
+      error->all(FLERR,"Illegal dump_modify command");
+    return 2;
+  }
+
   if (strcmp(arg[0],"gridgroup") == 0) {
     if (narg < 2) error->all(FLERR,"Illegal dump_modify command");
     int igroup = grid->find_group(arg[1]);
@@ -2136,6 +2195,23 @@ int DumpImage::modify_param(int narg, char **arg)
     return 3;
   }
 
+  if (strcmp(arg[0],"ptrans") == 0) {
+    if (narg < 3) error->all(FLERR,"Illegal dump_modify command");
+    int err,nlo,nhi;
+    err = MathExtra::bounds(arg[1],particle->nspecies,nlo,nhi);
+    if (err) error->all(FLERR,"Illegal dump_modify command");
+    double opacity = atof(arg[2]);
+    if (opacity < 0.0 || opacity > 1.0)
+      error->all(FLERR,"Illegal dump_modify command");
+    for (int i = nlo; i <= nhi; i++) ptranstype[i] = opacity;
+
+    // a full-range setting also sets the fallback used by create_image()
+    // when the particle species is not available in the dump buffer
+
+    if (nlo == 1 && nhi == particle->nspecies) ptranstype[0] = opacity;
+    return 3;
+  }
+
   if (strcmp(arg[0],"scolor") == 0) {
     if (narg < 3) error->all(FLERR,"Illegal dump_modify command");
     int err,nlo,nhi;
@@ -2186,6 +2262,22 @@ int DumpImage::modify_param(int narg, char **arg)
     slinecolor = image->color2rgb(arg[1]);
     if (slinecolor == NULL)
       error->all(FLERR,"Invalid color in dump_modify command");
+    return 2;
+  }
+
+  if (strcmp(arg[0],"slinetrans") == 0) {
+    if (narg < 2) error->all(FLERR,"Illegal dump_modify command");
+    slinetrans = atof(arg[1]);
+    if (slinetrans < 0.0 || slinetrans > 1.0)
+      error->all(FLERR,"Illegal dump_modify command");
+    return 2;
+  }
+
+  if (strcmp(arg[0],"strans") == 0) {
+    if (narg < 2) error->all(FLERR,"Illegal dump_modify command");
+    strans = atof(arg[1]);
+    if (strans < 0.0 || strans > 1.0)
+      error->all(FLERR,"Illegal dump_modify command");
     return 2;
   }
 

@@ -48,9 +48,11 @@
 </PRE>
 <LI>these keywords apply only to the (image</I> and <I>movie</I> <A HREF = "dump_image.html">styles</A> 
 
-<LI>keyword = <I>backcolor</I> or <I>backcolor2</I> or <I>bitrate</I> or <I>boxcolor</I> or <I>cmap</I> or <I>color</I> or <I>framerate</I> or <I>gamma</I> or <I>gcolor</I> or <I>glinecolor</I> or <I>gridgroup</I> or <I>lights</I> or <I>metal</I> or <I>metalfinish</I> or <I>pcolor</I> or <I>pdiam</I> or <I>scolor</I> or <I>slinecolor</I> or <I>specular</I> or <I>ssaosamples</I> or <I>subboxcolor</I> or <I>surfgroup</I> 
+<LI>keyword = <I>axestrans</I> or <I>backcolor</I> or <I>backcolor2</I> or <I>bitrate</I> or <I>boxcolor</I> or <I>boxtrans</I> or <I>cmap</I> or <I>color</I> or <I>framerate</I> or <I>gamma</I> or <I>gcolor</I> or <I>glinecolor</I> or <I>glinetrans</I> or <I>gridgroup</I> or <I>gtrans</I> or <I>lights</I> or <I>metal</I> or <I>metalfinish</I> or <I>pcolor</I> or <I>pdiam</I> or <I>ptrans</I> or <I>scolor</I> or <I>slinecolor</I> or <I>slinetrans</I> or <I>specular</I> or <I>ssaosamples</I> or <I>strans</I> or <I>subboxcolor</I> or <I>subboxtrans</I> or <I>surfgroup</I> 
 
-<PRE>  <I>backcolor</I> arg = color
+<PRE>  <I>axestrans</I> arg = opacity
+    opacity = opacity of the XYZ axes, from 0.0 (invisible) to 1.0 (opaque)
+  <I>backcolor</I> arg = color
     color = name of color for background
   <I>backcolor2</I> arg = color
     color = name of second color for background gradient, or <I>none</I>
@@ -58,6 +60,8 @@
     rate = target bitrate for movie in kbps
   <I>boxcolor</I> arg = color
     color = name of color for box lines
+  <I>boxtrans</I> arg = opacity
+    opacity = opacity of the simulation box lines, from 0.0 to 1.0
   <I>cmap</I> args = mode lo hi style delta N entry1 entry2 ... entryN
     mode = <I>particle</I> or <I>grid</I> or <I>surf</I> or <I>gridx</I> or <I>gridy</I> or <I>gridz</I>
     lo = number or <I>min</I> = lower bound of range of color map
@@ -91,8 +95,12 @@
     color = name of color or color1/color2/...
   <I>glinecolor</I> arg = color
     color = name of color for grid cell outlines
+  <I>glinetrans</I> arg = opacity
+    opacity = opacity of the grid cell outlines, from 0.0 to 1.0
   <I>gridgroup</I> arg = group-ID
     group-ID = name of a user-defined grid group, see the <A HREF = "group.html">group</A> command
+  <I>gtrans</I> arg = opacity
+    opacity = opacity of the grid cells and cutting planes, from 0.0 to 1.0
   <I>lights</I> args = ambient key fill back
     ambient = intensity of ambient light from 0.0 to 1.0
     key = intensity of key light from 0.0 to 1.0
@@ -108,17 +116,26 @@
   <I>pdiam</I> args = type diam
     type = particle type or range of types (see below)
     diam = diameter of particles of that type (distance units)
+  <I>ptrans</I> args = type opacity
+    type = particle type or range of types (see below)
+    opacity = opacity of particles of that type, from 0.0 to 1.0
   <I>scolor</I> args = proc color
     proc = proc ID or range of IDs (see below)
     color = name of color for surf one option
   <I>slinecolor</I> arg = color
     color = name of color for surface element outlines
+  <I>slinetrans</I> arg = opacity
+    opacity = opacity of the surface element outlines, from 0.0 to 1.0
   <I>specular</I> arg = style
     style = <I>none</I> or <I>wide</I> or <I>narrow</I> or <I>tight</I> = specular highlights off or their width
   <I>ssaosamples</I> arg = nsamples
     nsamples = number of SSAO sampling directions per pixel (from 4 to 64)
+  <I>strans</I> arg = opacity
+    opacity = opacity of the surface elements, from 0.0 to 1.0
   <I>subboxcolor</I> arg = color
     color = name of color for processor sub-box lines
+  <I>subboxtrans</I> arg = opacity
+    opacity = opacity of the processor sub-box lines, from 0.0 to 1.0
   <I>surfgroup</I> arg = group-ID
     group-ID = name of a user-defined surf group, see the <A HREF = "group.html">group</A> command 
 </PRE>
@@ -336,6 +353,65 @@ threshold.
 image, also affects a movie, since the movie is simply a collection of
 images.  Some of the keywords only affect the <A HREF = "dump_image.html">dump
 movie</A> style.  The descriptions give details.
+</P>
+<HR>
+
+<P>The <I>axestrans</I>, <I>boxtrans</I>, <I>glinetrans</I>, <I>gtrans</I>, <I>ptrans</I>,
+<I>slinetrans</I>, <I>strans</I> and <I>subboxtrans</I> keywords can be used with the
+<A HREF = "dump_image.html">dump image</A> command to render an object as partially
+transparent.  Each sets the opacity of one kind of drawn object: the
+XYZ axes, the simulation box lines, the grid cell outlines, the grid
+cells and cutting planes, the particles, the surface element outlines,
+the surface elements, and the processor sub-box lines, respectively.
+The opacity value must be between 0.0 (invisible) and 1.0 (fully
+opaque); the default for all of them is 1.0.  An opacity of 0.0 renders
+exactly as if the object were not drawn at all.
+</P>
+<P>The most common use is to make a surface transparent with <I>strans</I> so
+that the particles and grid cells inside it become visible, or to thin
+out a dense particle field with <I>ptrans</I> so that a surface inside it can
+be seen.
+</P>
+<P>The <I>ptrans</I> keyword sets the opacity per particle species.  The
+specified <I>type</I> should be an integer from 1 to Nspecies, and a wildcard
+asterisk can be used in place of or in conjunction with the <I>type</I>
+argument to specify a range of species, in the same manner as described
+for the <I>pdiam</I> keyword.  Note that a per-species setting only takes
+effect if the particle color or diameter setting of the <A HREF = "dump_image.html">dump
+image</A> command is <I>type</I>, since only in that case is the
+species of each particle known to the dump.  A setting for the full
+range of species, e.g. <I>ptrans * 0.5</I>, is applied to all particles
+regardless of the color and diameter settings.
+</P>
+<P>Transparency is rendered with the so-called screen-door method: only a
+subset of the pixels of an object is drawn, chosen from a repeating
+16x16 ordered dither pattern.  No blending of colors is performed.  This
+has three consequences worth knowing about.
+</P>
+<P>First, the effect looks best when the <I>fsaa</I> keyword of the <A HREF = "dump_image.html">dump
+image</A> command is also enabled, since the image is then
+rendered at twice the size and averaged down, which blends the drawn and
+undrawn pixels together.  Recommended opacity values are 0.25, 0.5, and
+0.75.
+</P>
+<P>Second, the dither pattern is anchored to the screen and not to the
+object.  Two objects with the <I>same</I> opacity that overlap on the screen
+therefore leave out the same pixels, so the more distant of the two is
+not visible through the nearer one.  Objects only show through each
+other if their opacity values differ.
+</P>
+<P>Third, the pixels that are left out are indistinguishable from the
+background in the depth buffer, which the <I>ssao</I> keyword and the
+post-processing of the <I>outline</I>, <I>depthcue</I> and <I>defocus</I> keywords of
+the <A HREF = "dump_image.html">dump image</A> command all read.  See the discussion
+of those keywords on the <A HREF = "dump_image.html">dump image</A> doc page.
+</P>
+<P>IMPORTANT NOTE: Transparency should not be combined with the <I>outline</I>
+keyword of the <A HREF = "dump_image.html">dump image</A> command.  Outlines are drawn
+where the distance to the viewer jumps, and every pixel left out by the
+dither pattern looks like such a jump, so a transparent object is
+outlined pixel by pixel and is filled almost entirely with the outline
+color.
 </P>
 <HR>
 
@@ -781,9 +857,11 @@ defined by the <A HREF = "group.html">group surf</A> command.
 </P>
 <UL><LI>append = no
 <LI>buffer = yes for all dump styles except <I>image</I> and <I>movie</I>
+<LI>axestrans = 1.0
 <LI>backcolor = black
 <LI>backcolor2 = none
 <LI>boxcolor = yellow
+<LI>boxtrans = 1.0
 <LI>subboxcolor = yellow
 <LI>lights = 0.0 0.9 0.45 0.9
 <LI>cmap = mode min max cf 0.0 2 min blue max red, for all modes
@@ -796,18 +874,24 @@ defined by the <A HREF = "group.html">group surf</A> command.
 <LI>gamma = 1.0
 <LI>gcolor = * red/green/blue/yellow/aqua/cyan
 <LI>glinecolor = white
+<LI>glinetrans = 1.0
 <LI>gridgroup = all
+<LI>gtrans = 1.0
 <LI>metal = 0.0
 <LI>metalfinish = satin
 <LI>nfile = 1
 <LI>pad = 0
 <LI>pcolor = * red/green/blue/yellow/aqua/cyan
 <LI>pdiam = * 1.0
+<LI>ptrans = * 1.0
 <LI>region = none
 <LI>scolor = * gray
 <LI>slinecolor = white
+<LI>slinetrans = 1.0
 <LI>specular = width derived from the <I>shiny</I> keyword of the dump image command
 <LI>ssaosamples = number derived from the <I>dfactor</I> value of the <I>ssao</I> keyword
+<LI>strans = 1.0
+<LI>subboxtrans = 1.0
 <LI>surfgroup = all
 <LI>thresh = none 
 </UL>
