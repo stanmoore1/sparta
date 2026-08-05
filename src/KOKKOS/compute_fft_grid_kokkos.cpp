@@ -329,7 +329,10 @@ void ComputeFFTGridKokkos::compute_per_grid_kokkos()
 
   // scale results if requested
 
-  if (scalefactor == 1.0) return;
+  if (scalefactor == 1.0) {
+    copymode = 0;
+    return;
+  }
 
   if (ncol == 1) {
     Kokkos::parallel_for(nglocal, SPARTA_CLASS_LAMBDA(int i) {
@@ -392,7 +395,10 @@ void ComputeFFTGridKokkos::reallocate()
   // convert to distance from (0,0,0) cell using PBC
   // klen = length of K-space vector
 
-  if (!startcol) return;
+  if (!startcol) {
+    copymode = 0;
+    return;
+  }
 
   int i,j,k;
   double ikx,iky,ikz;
