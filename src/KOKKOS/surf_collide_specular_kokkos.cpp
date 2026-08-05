@@ -64,22 +64,27 @@ void SurfCollideSpecularKokkos::init()
 {
   SurfCollideSpecular::init();
 
+  // scan the fix list directly rather than testing modify->n_update_custom
+  //  first: SPARTA::init() runs surf->init() before modify->init(), so that
+  //  count still holds its value from the previous run (0 on the first one)
+
   ambi_flag = vibmode_flag = 0;
-  if (modify->n_update_custom) {
-    for (int ifix = 0; ifix < modify->nfix; ifix++) {
-      if (strcmp(modify->fix[ifix]->style,"ambipolar") == 0) {
-        ambi_flag = 1;
-        FixAmbipolar *afix = (FixAmbipolar *) modify->fix[ifix];
-        if (!afix->kokkos_flag)
-          error->all(FLERR,"Must use fix ambipolar/kk when Kokkos is enabled");
-        afix_kk = (FixAmbipolarKokkos*)afix;
-      } else if (strcmp(modify->fix[ifix]->style,"vibmode") == 0) {
-        vibmode_flag = 1;
-        FixVibmode *vfix = (FixVibmode *) modify->fix[ifix];
-        if (!vfix->kokkos_flag)
-          error->all(FLERR,"Must use fix vibmode/kk when Kokkos is enabled");
-        vfix_kk = (FixVibmodeKokkos*)vfix;
-      }
+  afix_kk = NULL;
+  vfix_kk = NULL;
+
+  for (int ifix = 0; ifix < modify->nfix; ifix++) {
+    if (strcmp(modify->fix[ifix]->style,"ambipolar") == 0) {
+      ambi_flag = 1;
+      FixAmbipolar *afix = (FixAmbipolar *) modify->fix[ifix];
+      if (!afix->kokkos_flag)
+        error->all(FLERR,"Must use fix ambipolar/kk when Kokkos is enabled");
+      afix_kk = (FixAmbipolarKokkos*)afix;
+    } else if (strcmp(modify->fix[ifix]->style,"vibmode") == 0) {
+      vibmode_flag = 1;
+      FixVibmode *vfix = (FixVibmode *) modify->fix[ifix];
+      if (!vfix->kokkos_flag)
+        error->all(FLERR,"Must use fix vibmode/kk when Kokkos is enabled");
+      vfix_kk = (FixVibmodeKokkos*)vfix;
     }
   }
 }
