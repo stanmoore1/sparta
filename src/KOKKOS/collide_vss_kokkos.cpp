@@ -566,6 +566,14 @@ template < int NEARCP, int GASTALLY > void CollideVSSKokkos::collisions_one(COLL
       react_kk_copy.copy(react_kk);
     }
 
+    // zero the custom attributes of the slots a reaction can fill
+    // must precede the kernel, not follow it: EEXCHANGE_ReactingEDisposal()
+    //   sets the vibrational mode levels of the third product it just created
+    // repeated on each retry, since a rolled back attempt leaves values
+    //   behind in those slots
+
+    if (react) particle_kk->zero_custom_kokkos();
+
     if (sparta->kokkos->atomic_reduction) {
       if (sparta->kokkos->need_atomics)
         Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagCollideCollisionsOne<NEARCP,GASTALLY,1> >(0,nglocal),*this);
@@ -612,9 +620,7 @@ template < int NEARCP, int GASTALLY > void CollideVSSKokkos::collisions_one(COLL
 
   ndelete = h_ndelete();
 
-  const int nlocal_before_react = particle->nlocal;
   particle->nlocal = h_nlocal();
-  particle_kk->zero_custom_kokkos(nlocal_before_react,particle->nlocal);
 
   copymode = 0;
 
@@ -932,6 +938,15 @@ void CollideVSSKokkos::collisions_one_ambipolar(COLLIDE_REDUCE &reduce)
       react_kk_copy.copy(react_kk);
     }
 
+    // zero the custom attributes of the slots a reaction can fill
+    // must precede the kernel, not follow it: ambi_reset_kokkos() sets the
+    //   ion flag of the third product the reaction just created, and
+    //   EEXCHANGE_ReactingEDisposal() sets its vibrational mode levels
+    // repeated on each retry, since a rolled back attempt leaves values
+    //   behind in those slots
+
+    if (react) particle_kk->zero_custom_kokkos();
+
     if (sparta->kokkos->atomic_reduction) {
       if (sparta->kokkos->need_atomics)
         Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagCollideCollisionsOneAmbipolar<GASTALLY,1> >(0,nglocal),*this);
@@ -992,9 +1007,7 @@ void CollideVSSKokkos::collisions_one_ambipolar(COLLIDE_REDUCE &reduce)
 
   ndelete = h_ndelete();
 
-  const int nlocal_before_react = particle->nlocal;
   particle->nlocal = h_nlocal();
-  particle_kk->zero_custom_kokkos(nlocal_before_react,particle->nlocal);
 
   copymode = 0;
 

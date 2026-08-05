@@ -350,6 +350,23 @@ void ParticleKokkos::zero_custom_kokkos(int lo, int hi)
 }
 
 /* ----------------------------------------------------------------------
+   zero the custom attributes of the unused slots nlocal through maxlocal-1
+   for a kernel which only creates particles, zeroing the new particles once
+     the kernel is done is enough.  but a kernel may also set custom
+     attributes of a particle it just created, e.g. SurfCollide calls
+     FixAmbipolar::update_custom_kokkos() for the products of a surf
+     reaction, and zeroing afterwards would wipe those values out
+   so instead zero every slot such a kernel could fill before launching it,
+     which is all of nlocal to maxlocal-1: add_particle_kokkos() hands out
+     slots above nlocal and sets the retry flag once maxlocal is reached
+------------------------------------------------------------------------- */
+
+void ParticleKokkos::zero_custom_kokkos()
+{
+  zero_custom_kokkos(nlocal,maxlocal);
+}
+
+/* ----------------------------------------------------------------------
    copy info for one particle in custom attribute vectors/arrays
    into location I from location J
 ------------------------------------------------------------------------- */

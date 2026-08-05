@@ -603,6 +603,14 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
 
       Kokkos::deep_copy(d_scalars,h_scalars);
 
+      // zero the custom attributes of the slots a surf reaction can fill
+      // must precede the kernel, not follow it: SurfCollide calls
+      //   update_custom_kokkos() for a particle the reaction just created
+      // repeated on each retry, since a rolled back attempt leaves values
+      //   behind in those slots
+
+      if (surf->nsr) particle_kk->zero_custom_kokkos();
+
       copymode = 1;
 
     /* ATOMIC_REDUCTION: 1 = use atomics
@@ -667,9 +675,7 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
 
     nmigrate = h_nmigrate();
 
-    const int nlocal_before_surfreact = particle->nlocal;
     particle->nlocal = h_nlocal();
-    particle_kk->zero_custom_kokkos(nlocal_before_surfreact,particle->nlocal);
 
     int error_flag;
 

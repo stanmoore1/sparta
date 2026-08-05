@@ -39,6 +39,7 @@ ComputeSurfKokkos::ComputeSurfKokkos(SPARTA *sparta, int narg, char **arg) :
   sr_kk_prob_copy{VAL_2(KKCopy<SurfReactProbKokkos>(sparta))}
 {
   kokkos_flag = 1;
+  compressed = 0;
   d_which = DAT::t_int_1d("surf:which",nvalue);
 }
 
@@ -48,6 +49,7 @@ ComputeSurfKokkos::ComputeSurfKokkos(SPARTA *sparta) :
   sr_kk_prob_copy{VAL_2(KKCopy<SurfReactProbKokkos>(sparta))}
 {
   copy = 1;
+  compressed = 0;
 }
 
 /* ---------------------------------------------------------------------- */
