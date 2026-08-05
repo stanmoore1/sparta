@@ -567,8 +567,12 @@ void FixAblate::create_surfs(int outflag)
   // DEBUG
   // store copy of last ablation's per-cell MC flags before a new ablation
 
-  int **mcflags_old = mcflags;
-  memory->create(mcflags,maxgrid,4,"ablate:mcflags");
+  // mcflags is already grown to maxgrid by grow_percell(), so reset it in
+  //   place.  It used to be reallocated here and the previous one kept as
+  //   mcflags_old, an allocate and a free of 4 ints per grid cell on every
+  //   rebuild, where mcflags_old was only ever read by a debug print that
+  //   is commented out below
+
   for (int i = 0; i < maxgrid; i++)
     mcflags[i][0] = mcflags[i][1] = mcflags[i][2] = mcflags[i][3] = -1;
 
@@ -724,24 +728,17 @@ void FixAblate::create_surfs(int outflag)
   // DEBUG - should not have to do any of this once marching cubes is perfect
   // only necessary for 3d
 
-  if (dim == 2) {
-    memory->destroy(mcflags_old);
-    return;
-  }
+  if (dim == 2) return;
 
   // DEBUG - if this line is uncommented, code will do delete no particles
   //         eventually this should work
 
-  // if (dim == 3) {
-  //   memory->destroy(mcflags_old);
-  //   return;
-  // }
+  // if (dim == 3) return;
 
   // DEBUG - remove all particles
   // if these lines are uncommented, all particles are wiped out
 
   // particle->nlocal = 0;
-  // memory->destroy(mcflags_old);
   // return;
 
   // DEBUG - remove only the particles that are inside the surfs
@@ -789,14 +786,10 @@ void FixAblate::create_surfs(int outflag)
       // DEBUG - print message about MC flags for cell of deleted particle
       /*
       printf("INSIDE PART: me %d id %d coords %g %g %g "
-             "cellID %d celltype %d nsplit %d MCflags old %d %d %d %d "
+             "cellID %d celltype %d nsplit %d "
              "MCflags now %d %d %d %d corners %g %g %g %g %g %g %g %g\n",
              comm->me,particles[i].id,x[0],x[1],x[2],
              cells[mcell].id,cinfo[mcell].type,cells[mcell].nsplit,
-             mcflags_old[mcell][0],
-             mcflags_old[mcell][1],
-             mcflags_old[mcell][2],
-             mcflags_old[mcell][3],
              mcflags[mcell][0],
              mcflags[mcell][1],
              mcflags[mcell][2],
@@ -813,8 +806,6 @@ void FixAblate::create_surfs(int outflag)
       ncount++;
     }
   }
-
-  memory->destroy(mcflags_old);
 
   // compress out the deleted particles
   // NOTE: if end up keeping this section, need logic for custom particle vectors
