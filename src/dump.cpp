@@ -530,9 +530,16 @@ void Dump::modify_params(int narg, char **arg)
 
     } else if (strcmp(arg[iarg],"every") == 0) {
       if (iarg+2 > narg) error->all(FLERR,"Illegal dump_modify command");
+      // this dump must be one Output knows about, since the dump frequency
+      // is stored by Output, not by the dump itself
+      // a dump created by write_dump is not in the Output list
+
       int idump;
       for (idump = 0; idump < output->ndump; idump++)
         if (strcmp(id,output->dump[idump]->id) == 0) break;
+      if (idump == output->ndump)
+        error->all(FLERR,"Dump_modify every requires a dump "
+                   "defined by the dump command");
       int n;
       if (strstr(arg[iarg+1],"v_") == arg[iarg+1]) {
         delete [] output->var_dump[idump];
