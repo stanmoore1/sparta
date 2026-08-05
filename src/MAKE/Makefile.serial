@@ -63,6 +63,18 @@ JPG_INC =
 JPG_PATH = 	
 JPG_LIB =	
 
+# ZLIB library, OPTIONAL
+# only needed if -DSPARTA_ZLIB listed with SPARTA_INC
+# it lets the VTK dump styles compress their binary XML output, as the
+# VTK library does; without it those files are still valid, just larger
+# INC = path for zlib.h
+# PATH = path for zlib library
+# LIB = name of zlib library
+
+ZLIB_INC =      
+ZLIB_PATH = 	
+ZLIB_LIB =	
+
 # ---------------------------------------------------------------------
 # build rules and dependencies
 # no need to edit this section
@@ -70,9 +82,9 @@ JPG_LIB =
 include Makefile.package.settings
 include Makefile.package
 
-EXTRA_INC = $(SPARTA_INC) $(PKG_INC) $(MPI_INC) $(FFT_INC) $(JPG_INC) $(PKG_SYSINC)
-EXTRA_PATH = $(PKG_PATH) $(MPI_PATH) $(FFT_PATH) $(JPG_PATH) $(PKG_SYSPATH)
-EXTRA_LIB = $(PKG_LIB) $(MPI_LIB) $(FFT_LIB) $(JPG_LIB) $(PKG_SYSLIB)
+EXTRA_INC = $(SPARTA_INC) $(PKG_INC) $(MPI_INC) $(FFT_INC) $(JPG_INC) $(ZLIB_INC) $(PKG_SYSINC)
+EXTRA_PATH = $(PKG_PATH) $(MPI_PATH) $(FFT_PATH) $(JPG_PATH) $(ZLIB_PATH) $(PKG_SYSPATH)
+EXTRA_LIB = $(PKG_LIB) $(MPI_LIB) $(FFT_LIB) $(JPG_LIB) $(ZLIB_LIB) $(PKG_SYSLIB)
 EXTRA_CPP_DEPENDS = $(PKG_CPP_DEPENDS)
 EXTRA_LINK_DEPENDS = $(PKG_LINK_DEPENDS)
 

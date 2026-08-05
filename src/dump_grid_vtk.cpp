@@ -22,14 +22,7 @@
 #include "memory.h"
 #include "error.h"
 
-#include <vtkVersion.h>
-#include <vtkCellType.h>
-#include <vtkCellData.h>
-#include <vtkDoubleArray.h>
-#include <vtkLongLongArray.h>
-#include <vtkStringArray.h>
-#include <vtkUnstructuredGridWriter.h>
-#include <vtkXMLUnstructuredGridWriter.h>
+#include <utility>
 
 using namespace SPARTA_NS;
 
@@ -47,11 +40,13 @@ DumpGridVTK::DumpGridVTK(SPARTA *sparta, int narg, char **arg) :
   n_calls_ = 0;
   filecurrent = NULL;
   parallelfilecurrent = NULL;
+  prec = VTKWriter::DOUBLE;
+  warned_precision = 0;
 
   // VTK cell geometry: voxel (3d) or pixel (2d)
 
-  if (dimension == 3) { celltype = VTK_VOXEL; ncorner = 8; ngeom = 6; }
-  else                { celltype = VTK_PIXEL; ncorner = 4; ngeom = 4; }
+  if (dimension == 3) { celltype = VTKWriter::VOXEL; ncorner = 8; ngeom = 6; }
+  else                { celltype = VTKWriter::PIXEL; ncorner = 4; ngeom = 4; }
 
   // determine file format from extension: .vtu / .vtk (unstructured only)
 
@@ -221,11 +216,14 @@ void DumpGridVTK::pack()
 
 void DumpGridVTK::write_data(int n, double *mybuf)
 {
-  if (vtk_file_format == VTU || vtk_file_format == PVTU) write_vtu(n,mybuf);
-  else write_vtk(n,mybuf);
+  write_file(n,mybuf);
 }
 
-/* ---------------------------------------------------------------------- */
+/* ----------------------------------------------------------------------
+   append the packed rows in mybuf to the accumulating data containers.
+   each cell contributes its own ncorner corner points, in the corner
+   order a VTK voxel/pixel expects
+------------------------------------------------------------------------- */
 
 void DumpGridVTK::buf2arrays(int n, double *mybuf)
 {
@@ -233,40 +231,34 @@ void DumpGridVTK::buf2arrays(int n, double *mybuf)
     int base = i*size_one;
     double *g = &mybuf[base+ndata];
 
-    vtkIdType ids[8];
     if (dimension == 3) {
       double xlo=g[0],ylo=g[1],zlo=g[2],xhi=g[3],yhi=g[4],zhi=g[5];
-      ids[0] = points->InsertNextPoint(xlo,ylo,zlo);
-      ids[1] = points->InsertNextPoint(xhi,ylo,zlo);
-      ids[2] = points->InsertNextPoint(xlo,yhi,zlo);
-      ids[3] = points->InsertNextPoint(xhi,yhi,zlo);
-      ids[4] = points->InsertNextPoint(xlo,ylo,zhi);
-      ids[5] = points->InsertNextPoint(xhi,ylo,zhi);
-      ids[6] = points->InsertNextPoint(xlo,yhi,zhi);
-      ids[7] = points->InsertNextPoint(xhi,yhi,zhi);
+      const double corners[8][3] = {{xlo,ylo,zlo},{xhi,ylo,zlo},
+                                    {xlo,yhi,zlo},{xhi,yhi,zlo},
+                                    {xlo,ylo,zhi},{xhi,ylo,zhi},
+                                    {xlo,yhi,zhi},{xhi,yhi,zhi}};
+      for (int c = 0; c < 8; c++)
+        for (int j = 0; j < 3; j++) points.push_back(corners[c][j]);
     } else {
       double xlo=g[0],ylo=g[1],xhi=g[2],yhi=g[3];
-      ids[0] = points->InsertNextPoint(xlo,ylo,0.0);
-      ids[1] = points->InsertNextPoint(xhi,ylo,0.0);
-      ids[2] = points->InsertNextPoint(xlo,yhi,0.0);
-      ids[3] = points->InsertNextPoint(xhi,yhi,0.0);
+      const double corners[4][3] = {{xlo,ylo,0.0},{xhi,ylo,0.0},
+                                    {xlo,yhi,0.0},{xhi,yhi,0.0}};
+      for (int c = 0; c < 4; c++)
+        for (int j = 0; j < 3; j++) points.push_back(corners[c][j]);
     }
-    ugrid->InsertNextCell(celltype,ncorner,ids);
 
     for (int f = 0; f < (int) fields.size(); f++) {
       int c = base + fields[f].col;
-      vtkAbstractArray *paa = myarrays[f];
       if (fields[f].type == DOUBLE)
-        ((vtkDoubleArray *) paa)->InsertNextValue(mybuf[c]);
+        ddata[f].push_back(mybuf[c]);
       else if (fields[f].type == STRING) {
         // idstr: buf holds the numeric cell ID (ubuf-encoded); convert to the
         // hierarchical string form, mirroring DumpGrid::write_text
         char str[32];
         grid->id_num2str((cellint) ubuf(mybuf[c]).i,str);
-        ((vtkStringArray *) paa)->InsertNextValue(str);
+        sdata[f].push_back(str);
       } else
-        ((vtkLongLongArray *) paa)->
-          InsertNextValue((long long) ubuf(mybuf[c]).i);
+        ldata[f].push_back((int64_t) ubuf(mybuf[c]).i);
     }
   }
 }
@@ -275,79 +267,58 @@ void DumpGridVTK::buf2arrays(int n, double *mybuf)
 
 void DumpGridVTK::reset_vtk_data_containers()
 {
-  points = vtkSmartPointer<vtkPoints>::New();
-  ugrid = vtkSmartPointer<vtkUnstructuredGrid>::New();
-  ugrid->Allocate();
+  points.clear();
+  ddata.assign(fields.size(),std::vector<double>());
+  ldata.assign(fields.size(),std::vector<int64_t>());
+  sdata.assign(fields.size(),std::vector<std::string>());
+}
 
-  myarrays.clear();
-  for (int f = 0; f < (int) fields.size(); f++) {
-    vtkSmartPointer<vtkAbstractArray> arr;
-    if (fields[f].type == DOUBLE)
-      arr = vtkSmartPointer<vtkDoubleArray>::New();
-    else if (fields[f].type == STRING)
-      arr = vtkSmartPointer<vtkStringArray>::New();
-    else
-      arr = vtkSmartPointer<vtkLongLongArray>::New();
-    arr->SetName(fields[f].name.c_str());
-    myarrays.push_back(arr);
+/* ----------------------------------------------------------------------
+   write one piece file: grid cells as voxels (3d) or pixels (2d) in an
+   unstructured grid, with the data arrays attached as cell data
+------------------------------------------------------------------------- */
+
+void DumpGridVTK::write_file(int n, double *mybuf)
+{
+  ++n_calls_;
+  buf2arrays(n,mybuf);
+  if (n_calls_ < nclusterprocs) return;
+
+  setFileCurrent();
+
+  const int xml = (vtk_file_format != VTK);
+  VTKWriter writer(xml ? VTKWriter::XML : VTKWriter::LEGACY,binary,prec);
+
+  try {
+    writer.set_unstructured_grid(std::move(points),celltype,ncorner);
+
+    for (int f = 0; f < (int) fields.size(); f++) {
+      if (fields[f].type == DOUBLE)
+        writer.add_cell_array(fields[f].name,1,std::move(ddata[f]));
+      else if (fields[f].type == STRING)
+        writer.add_cell_array(fields[f].name,std::move(sdata[f]));
+      else
+        writer.add_cell_array(fields[f].name,1,std::move(ldata[f]));
+    }
+
+    writer.write(filecurrent);
+
+    // single precision only resolves so much of a box far from the origin
+
+    double lbox = MAX(domain->xprd,domain->yprd);
+    if (dimension == 3) lbox = MAX(lbox,domain->zprd);
+    double res = VTKWriter::single_precision_resolution
+      (writer.max_single_precision_value(),lbox);
+    if (res > 0.0 && !warned_precision) {
+      warned_precision = 1;
+      char str[128];
+      sprintf(str,"Dump grid/vtk in single precision resolves coordinates "
+              "only to %g",res);
+      error->warning(FLERR,str);
+    }
+  } catch (VTKWriterException &e) {
+    error->one(FLERR,e.what());
   }
-}
-
-/* ---------------------------------------------------------------------- */
-
-void DumpGridVTK::write_vtk(int n, double *mybuf)
-{
-  ++n_calls_;
-  buf2arrays(n,mybuf);
-  if (n_calls_ < nclusterprocs) return;
-
-  setFileCurrent();
-
-  ugrid->SetPoints(points);
-  for (int f = 0; f < (int) myarrays.size(); f++)
-    ugrid->GetCellData()->AddArray(myarrays[f]);
-
-  vtkSmartPointer<vtkUnstructuredGridWriter> writer =
-    vtkSmartPointer<vtkUnstructuredGridWriter>::New();
-  writer->SetHeader("Generated by SPARTA");
-  if (binary) writer->SetFileTypeToBinary();
-  else        writer->SetFileTypeToASCII();
-#if VTK_MAJOR_VERSION < 6
-  writer->SetInput(ugrid);
-#else
-  writer->SetInputData(ugrid);
-#endif
-  writer->SetFileName(filecurrent);
-  writer->Write();
-
-  reset_vtk_data_containers();
-}
-
-/* ---------------------------------------------------------------------- */
-
-void DumpGridVTK::write_vtu(int n, double *mybuf)
-{
-  ++n_calls_;
-  buf2arrays(n,mybuf);
-  if (n_calls_ < nclusterprocs) return;
-
-  setFileCurrent();
-
-  ugrid->SetPoints(points);
-  for (int f = 0; f < (int) myarrays.size(); f++)
-    ugrid->GetCellData()->AddArray(myarrays[f]);
-
-  vtkSmartPointer<vtkXMLUnstructuredGridWriter> writer =
-    vtkSmartPointer<vtkXMLUnstructuredGridWriter>::New();
-  if (binary) writer->SetDataModeToBinary();
-  else        writer->SetDataModeToAscii();
-#if VTK_MAJOR_VERSION < 6
-  writer->SetInput(ugrid);
-#else
-  writer->SetInputData(ugrid);
-#endif
-  writer->SetFileName(filecurrent);
-  writer->Write();
 
   if (me == 0 && multiproc) write_pvtk();
 
@@ -441,19 +412,19 @@ void DumpGridVTK::write_pvtk()
   FILE *fp = fopen(parallelfilecurrent,"w");
   if (!fp) error->one(FLERR,"Cannot open dump grid/vtk parallel file");
 
-  int one = 1;
-  const char *byte_order =
-    (*((char *) &one)) ? "LittleEndian" : "BigEndian";
+  // the summary must declare exactly the types the piece files contain
+
+  const char *realtype = VTKWriter::xml_real_type(prec);
 
   fprintf(fp,"<?xml version=\"1.0\"?>\n");
   fprintf(fp,"<VTKFile type=\"PUnstructuredGrid\" version=\"1.0\" "
-          "byte_order=\"%s\">\n",byte_order);
+          "byte_order=\"%s\">\n",VTKWriter::xml_byte_order());
   fprintf(fp,"  <PUnstructuredGrid GhostLevel=\"0\">\n");
 
   fprintf(fp,"    <PCellData>\n");
   for (int f = 0; f < (int) fields.size(); f++) {
     const char *type = "Int64";
-    if (fields[f].type == DOUBLE) type = "Float64";
+    if (fields[f].type == DOUBLE) type = realtype;
     else if (fields[f].type == STRING) type = "String";
     fprintf(fp,"      <PDataArray type=\"%s\" Name=\"%s\"/>\n",
             type,fields[f].name.c_str());
@@ -461,8 +432,8 @@ void DumpGridVTK::write_pvtk()
   fprintf(fp,"    </PCellData>\n");
 
   fprintf(fp,"    <PPoints>\n");
-  fprintf(fp,"      <PDataArray type=\"Float32\" Name=\"Points\" "
-          "NumberOfComponents=\"3\"/>\n");
+  fprintf(fp,"      <PDataArray type=\"%s\" Name=\"Points\" "
+          "NumberOfComponents=\"3\"/>\n",realtype);
   fprintf(fp,"    </PPoints>\n");
 
   int npieces = (multiproc > 1) ? multiproc : nprocs;
@@ -482,6 +453,13 @@ int DumpGridVTK::modify_param(int narg, char **arg)
     if (narg < 2) error->all(FLERR,"Illegal dump_modify command");
     if (strcmp(arg[1],"yes") == 0) binary = 1;
     else if (strcmp(arg[1],"no") == 0) binary = 0;
+    else error->all(FLERR,"Illegal dump_modify command");
+    return 2;
+  }
+  if (strcmp(arg[0],"double") == 0) {
+    if (narg < 2) error->all(FLERR,"Illegal dump_modify command");
+    if (strcmp(arg[1],"yes") == 0) prec = VTKWriter::DOUBLE;
+    else if (strcmp(arg[1],"no") == 0) prec = VTKWriter::SINGLE;
     else error->all(FLERR,"Illegal dump_modify command");
     return 2;
   }

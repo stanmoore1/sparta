@@ -28,14 +28,10 @@ DumpStyle(grid/vtk,DumpGridVTK)
 #define SPARTA_DUMP_GRID_VTK_H
 
 #include "dump_grid.h"
+#include "vtk_writer.h"
+#include <stdint.h>
 #include <string>
 #include <vector>
-
-#include <vtkPoints.h>
-#include <vtkUnstructuredGrid.h>
-#include <vtkSmartPointer.h>
-
-class vtkAbstractArray;
 
 namespace SPARTA_NS {
 
@@ -60,9 +56,18 @@ class DumpGridVTK : public DumpGrid {
   char *filecurrent;
   char *parallelfilecurrent;
 
-  vtkSmartPointer<vtkPoints> points;
-  vtkSmartPointer<vtkUnstructuredGrid> ugrid;
-  std::vector<vtkSmartPointer<vtkAbstractArray> > myarrays;
+  VTKWriter::Precision prec; // precision of floating point output
+  int warned_precision;      // 1 after warning that single precision is coarse
+
+  // data accumulated across write_data() calls, flushed once the filewriter
+  // has received all nclusterprocs contributions.  points holds 3 coords per
+  // cell corner; ddata/ldata/sdata hold one vector per entry in fields, in
+  // the same order, with one value per cell
+
+  std::vector<double> points;
+  std::vector<std::vector<double> > ddata;
+  std::vector<std::vector<int64_t> > ldata;
+  std::vector<std::vector<std::string> > sdata;
 
   void init_style();
   void openfile();
@@ -77,8 +82,7 @@ class DumpGridVTK : public DumpGrid {
   void buf2arrays(int, double *);
   void reset_vtk_data_containers();
 
-  void write_vtk(int, double *);
-  void write_vtu(int, double *);
+  void write_file(int, double *);
   void write_pvtk();
   std::string pvtk_piece_filename(int);
 };
@@ -104,5 +108,12 @@ E: Dump grid/vtk legacy .vtk format does not support '%' in filename; use .vtu
 
 The legacy VTK format is single-file only.  Use .vtu for per-processor
 output.
+
+W: Dump grid/vtk in single precision resolves coordinates only to ...
+
+dump_modify double no selected single precision, but the coordinates
+are far enough from the origin relative to the size of the box that
+single precision no longer resolves one part in a million of it.  Use
+dump_modify double yes to write the coordinates as Float64.
 
 */

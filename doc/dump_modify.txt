@@ -15,10 +15,11 @@ dump_modify dump-ID keyword values ... :pre
 dump-ID = ID of dump to modify :ulb,l
 one or more keyword/value pairs may be appended :l
 these keywords apply to various dump styles :l
-keyword = {append} or {binary} or {buffer} or {every} or {fileper} or {first} or {flush} or {format} or {nfile} or {pad} or {region} or {thresh} :l
+keyword = {append} or {binary} or {buffer} or {double} or {every} or {fileper} or {first} or {flush} or {format} or {nfile} or {pad} or {region} or {thresh} :l
   {append} arg = {yes} or {no}
   {binary} arg = {yes} or {no}
   {buffer} arg = {yes} or {no}
+  {double} arg = {yes} or {no}
   {every} arg = N
     N = dump every this many timesteps
     N can be a variable (see below)
@@ -139,12 +140,24 @@ this keyword has no further effect.
 :line
 
 The {binary} keyword applies only to the "dump particle/vtk, dump grid/vtk, and
-dump surf/vtk"_dump_vtk.html styles of the VTK package.  If specified as {yes},
+dump surf/vtk"_dump_vtk.html styles.  If specified as {yes},
 the VTK data is written in compact binary form; if {no} (the default), it is
 written as ASCII which is human-readable but typically requires larger file
 sizes than binary. This is a per-dump setting because the VTK styles select
 their file format from the filename extension, which would otherwise conflict
 with SPARTA's usual ".bin" binary-file convention.
+
+:line
+
+The {double} keyword applies only to the "dump particle/vtk, dump grid/vtk, and
+dump surf/vtk"_dump_vtk.html styles.  It selects the precision of every
+floating point value written, that is the point coordinates and the
+double-valued data arrays.  If specified as {yes} (the default), they are
+written as Float64.  If {no}, they are written as Float32, which halves their
+size in the file and matches what visualization programs use internally.
+Single precision resolves about 7 significant digits, so SPARTA warns if the
+coordinates grow large enough that this no longer resolves one part in a
+million of the simulation box.
 
 :line
 
@@ -670,7 +683,9 @@ defined by the "group surf"_group.html command.
 The option defaults are
 
 append = no
+binary = no for the {particle/vtk}, {grid/vtk}, {surf/vtk} styles
 buffer = yes for all dump styles except {image} and {movie}
+double = yes for the {particle/vtk}, {grid/vtk}, {surf/vtk} styles
 backcolor = black
 backcolor2 = none
 boxcolor = yellow

@@ -54,10 +54,8 @@ data in a native VTK file format that can be visualized directly in
 ParaView or VisIt, without the offline conversion done by the scripts
 in the tools/paraview directory.
 </P>
-<P>They are part of the VTK package and require SPARTA to be built with an
-external VTK library.  See the <A HREF = "Section_packages.html#VTK">Section
-2.2</A> doc page for how to build SPARTA with
-the VTK package.
+<P>SPARTA writes these files itself, so no external VTK library is needed
+and the styles are always available.
 </P>
 <P>The geometry written for each style is:
 </P>
@@ -107,23 +105,33 @@ grid/vtk supports only the .vtu / .pvtu (and legacy .vtk) formats, not
 </P>
 <P><B>Dump modify options:</B>
 </P>
-<P>The <A HREF = "dump_modify.html">dump_modify</A> <I>binary</I> keyword is specific to
-these styles:
+<P>The <A HREF = "dump_modify.html">dump_modify</A> <I>binary</I> and <I>double</I> keywords are
+specific to these styles:
 </P>
 <PRE>dump_modify ID binary yes 
 </PRE>
-<P>writes the VTK data in binary (yes) or ASCII (no, the default) form.
+<PRE>dump_modify ID double no 
+</PRE>
+<P>The <I>binary</I> keyword writes the VTK data in binary (yes) or ASCII (no,
+the default) form.  If SPARTA was built with zlib (-DSPARTA_ZLIB with
+GNU make, or -DBUILD_ZLIB=ON with CMake), the binary data in the XML
+formats is compressed, which typically halves the file size.  Without
+zlib the files are still valid, just larger.
+</P>
+<P>The <I>double</I> keyword selects the precision of every floating point
+value written, that is the point coordinates and the double-valued data
+arrays.  If <I>yes</I> (the default), they are written as Float64.  If <I>no</I>,
+they are written as Float32, which halves their size in the file and
+matches what visualization programs use internally.  Single precision
+resolves about 7 significant digits, so SPARTA warns if the coordinates
+grow large enough that this no longer resolves one part in a million of
+the simulation box, which happens for a small box far from the origin.
 </P>
 <P>For dump particle/vtk the <A HREF = "dump_modify.html">dump_modify</A> <I>region</I> and
 <I>thresh</I> keywords are also supported, exactly as for <A HREF = "dump.html">dump
 particle</A>, to restrict which particles are written.
 </P>
 <P><B>Restrictions:</B>
-</P>
-<P>These styles are part of the VTK package.  They are only enabled if
-SPARTA was built with that package and an external VTK library.  See
-the <A HREF = "Section_packages.html#VTK">Section 2.2</A> doc page for details.  The
-VTK package must be built with CMake.
 </P>
 <P>For dump grid/vtk, split grid cells (cells cut by a surface into
 multiple sub-cells) are written as multiple VTK cells that share the
@@ -142,6 +150,6 @@ image</A>
 </P>
 <P><B>Default:</B>
 </P>
-<P>binary no (ASCII).
+<P>binary no (ASCII), double yes (Float64).
 </P>
 </HTML>

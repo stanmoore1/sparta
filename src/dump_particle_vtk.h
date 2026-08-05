@@ -29,14 +29,10 @@ DumpStyle(particle/vtk,DumpParticleVTK)
 #define SPARTA_DUMP_PARTICLE_VTK_H
 
 #include "dump_particle.h"
+#include "vtk_writer.h"
+#include <stdint.h>
 #include <string>
 #include <vector>
-
-#include <vtkCellArray.h>
-#include <vtkPoints.h>
-#include <vtkSmartPointer.h>
-
-class vtkAbstractArray;
 
 namespace SPARTA_NS {
 
@@ -68,11 +64,17 @@ class DumpParticleVTK : public DumpParticle {
   char *filecurrent;         // piece file name for this proc/timestep
   char *parallelfilecurrent; // .pvtp/.pvtu summary file name (rank 0 only)
 
-  // vtk data containers, accumulated across write_data() calls
+  VTKWriter::Precision prec; // precision of floating point output
+  int warned_precision;      // 1 after warning that single precision is coarse
 
-  vtkSmartPointer<vtkPoints> points;
-  vtkSmartPointer<vtkCellArray> pointsCells;
-  std::vector<vtkSmartPointer<vtkAbstractArray> > myarrays;
+  // data accumulated across write_data() calls, flushed once the filewriter
+  // has received all nclusterprocs contributions.  points holds 3 coords per
+  // particle; ddata/ldata hold one vector per entry in fields, in the same
+  // order, with ncomp values per particle
+
+  std::vector<double> points;
+  std::vector<std::vector<double> > ddata;
+  std::vector<std::vector<int64_t> > ldata;
 
   void init_style();
   void openfile();
@@ -85,9 +87,7 @@ class DumpParticleVTK : public DumpParticle {
   void buf2arrays(int, double *);
   void reset_vtk_data_containers();
 
-  void write_vtk(int, double *);
-  void write_vtp(int, double *);
-  void write_vtu(int, double *);
+  void write_file(int, double *);
   void write_pvtk(int);
   std::string pvtk_piece_filename(int);
 };
@@ -117,5 +117,12 @@ included in the attribute list.
 E: Dump particle/vtk does not support string attributes
 
 Self-explanatory.
+
+W: Dump particle/vtk in single precision resolves coordinates only to ...
+
+dump_modify double no selected single precision, but the coordinates
+are far enough from the origin relative to the size of the box that
+single precision no longer resolves one part in a million of it.  Use
+dump_modify double yes to write the coordinates as Float64.
 
 */

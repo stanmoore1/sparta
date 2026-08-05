@@ -22,17 +22,7 @@
 #include "memory.h"
 #include "error.h"
 
-#include <vtkVersion.h>
-#include <vtkCellType.h>
-#include <vtkCellData.h>
-#include <vtkDoubleArray.h>
-#include <vtkLongLongArray.h>
-#include <vtkPolyData.h>
-#include <vtkPolyDataWriter.h>
-#include <vtkXMLPolyDataWriter.h>
-#include <vtkUnstructuredGrid.h>
-#include <vtkUnstructuredGridWriter.h>
-#include <vtkXMLUnstructuredGridWriter.h>
+#include <utility>
 
 using namespace SPARTA_NS;
 
@@ -50,6 +40,8 @@ DumpSurfVTK::DumpSurfVTK(SPARTA *sparta, int narg, char **arg) :
   n_calls_ = 0;
   filecurrent = NULL;
   parallelfilecurrent = NULL;
+  prec = VTKWriter::DOUBLE;
+  warned_precision = 0;
 
   // surf element geometry: line (2d) or triangle (3d)
 
@@ -214,12 +206,13 @@ void DumpSurfVTK::pack()
 
 void DumpSurfVTK::write_data(int n, double *mybuf)
 {
-  if (vtk_file_format == VTP || vtk_file_format == PVTP) write_vtp(n,mybuf);
-  else if (vtk_file_format == VTU || vtk_file_format == PVTU) write_vtu(n,mybuf);
-  else write_vtk(n,mybuf);
+  write_file(n,mybuf);
 }
 
-/* ---------------------------------------------------------------------- */
+/* ----------------------------------------------------------------------
+   append the packed rows in mybuf to the accumulating data containers.
+   each element contributes its own ncorner vertices
+------------------------------------------------------------------------- */
 
 void DumpSurfVTK::buf2arrays(int n, double *mybuf)
 {
@@ -227,25 +220,19 @@ void DumpSurfVTK::buf2arrays(int n, double *mybuf)
     int base = i*size_one;
     double *g = &mybuf[base+ndata];
 
-    vtkIdType ids[3];
     if (dimension == 3) {
-      ids[0] = points->InsertNextPoint(g[0],g[1],g[2]);
-      ids[1] = points->InsertNextPoint(g[3],g[4],g[5]);
-      ids[2] = points->InsertNextPoint(g[6],g[7],g[8]);
+      for (int v = 0; v < 9; v++) points.push_back(g[v]);
     } else {
-      ids[0] = points->InsertNextPoint(g[0],g[1],0.0);
-      ids[1] = points->InsertNextPoint(g[2],g[3],0.0);
+      points.push_back(g[0]); points.push_back(g[1]); points.push_back(0.0);
+      points.push_back(g[2]); points.push_back(g[3]); points.push_back(0.0);
     }
-    cellArray->InsertNextCell(ncorner,ids);
 
     for (int f = 0; f < (int) fields.size(); f++) {
       int c = base + fields[f].col;
-      vtkAbstractArray *paa = myarrays[f];
       if (fields[f].type == DOUBLE)
-        ((vtkDoubleArray *) paa)->InsertNextValue(mybuf[c]);
+        ddata[f].push_back(mybuf[c]);
       else
-        ((vtkLongLongArray *) paa)->
-          InsertNextValue((long long) ubuf(mybuf[c]).i);
+        ldata[f].push_back((int64_t) ubuf(mybuf[c]).i);
     }
   }
 }
@@ -254,118 +241,62 @@ void DumpSurfVTK::buf2arrays(int n, double *mybuf)
 
 void DumpSurfVTK::reset_vtk_data_containers()
 {
-  points = vtkSmartPointer<vtkPoints>::New();
-  cellArray = vtkSmartPointer<vtkCellArray>::New();
+  points.clear();
+  ddata.assign(fields.size(),std::vector<double>());
+  ldata.assign(fields.size(),std::vector<int64_t>());
+}
 
-  myarrays.clear();
-  for (int f = 0; f < (int) fields.size(); f++) {
-    vtkSmartPointer<vtkAbstractArray> arr;
-    if (fields[f].type == DOUBLE)
-      arr = vtkSmartPointer<vtkDoubleArray>::New();
+/* ----------------------------------------------------------------------
+   write one piece file: surf elements as triangles (3d) or lines (2d),
+   with the data arrays attached as cell data.  legacy .vtk and .vtu use an
+   unstructured grid, .vtp uses polydata
+------------------------------------------------------------------------- */
+
+void DumpSurfVTK::write_file(int n, double *mybuf)
+{
+  ++n_calls_;
+  buf2arrays(n,mybuf);
+  if (n_calls_ < nclusterprocs) return;
+
+  setFileCurrent();
+
+  const int xml = (vtk_file_format != VTK);
+  const int celltype = (dimension == 3) ? VTKWriter::TRIANGLE : VTKWriter::LINE;
+  VTKWriter writer(xml ? VTKWriter::XML : VTKWriter::LEGACY,binary,prec);
+
+  try {
+    if (vtk_file_format == VTP || vtk_file_format == PVTP)
+      writer.set_polydata(std::move(points),celltype,ncorner);
     else
-      arr = vtkSmartPointer<vtkLongLongArray>::New();
-    arr->SetName(fields[f].name.c_str());
-    myarrays.push_back(arr);
+      writer.set_unstructured_grid(std::move(points),celltype,ncorner);
+
+    for (int f = 0; f < (int) fields.size(); f++) {
+      if (fields[f].type == DOUBLE)
+        writer.add_cell_array(fields[f].name,1,std::move(ddata[f]));
+      else
+        writer.add_cell_array(fields[f].name,1,std::move(ldata[f]));
+    }
+
+    writer.write(filecurrent);
+
+    // single precision only resolves so much of a box far from the origin
+
+    double lbox = MAX(domain->xprd,domain->yprd);
+    if (dimension == 3) lbox = MAX(lbox,domain->zprd);
+    double res = VTKWriter::single_precision_resolution
+      (writer.max_single_precision_value(),lbox);
+    if (res > 0.0 && !warned_precision) {
+      warned_precision = 1;
+      char str[128];
+      sprintf(str,"Dump surf/vtk in single precision resolves coordinates "
+              "only to %g",res);
+      error->warning(FLERR,str);
+    }
+  } catch (VTKWriterException &e) {
+    error->one(FLERR,e.what());
   }
-}
 
-/* ---------------------------------------------------------------------- */
-
-void DumpSurfVTK::write_vtk(int n, double *mybuf)
-{
-  ++n_calls_;
-  buf2arrays(n,mybuf);
-  if (n_calls_ < nclusterprocs) return;
-
-  setFileCurrent();
-
-  vtkSmartPointer<vtkUnstructuredGrid> ugrid =
-    vtkSmartPointer<vtkUnstructuredGrid>::New();
-  ugrid->SetPoints(points);
-  ugrid->SetCells(dimension == 3 ? VTK_TRIANGLE : VTK_LINE,cellArray);
-  for (int f = 0; f < (int) myarrays.size(); f++)
-    ugrid->GetCellData()->AddArray(myarrays[f]);
-
-  vtkSmartPointer<vtkUnstructuredGridWriter> writer =
-    vtkSmartPointer<vtkUnstructuredGridWriter>::New();
-  writer->SetHeader("Generated by SPARTA");
-  if (binary) writer->SetFileTypeToBinary();
-  else        writer->SetFileTypeToASCII();
-#if VTK_MAJOR_VERSION < 6
-  writer->SetInput(ugrid);
-#else
-  writer->SetInputData(ugrid);
-#endif
-  writer->SetFileName(filecurrent);
-  writer->Write();
-
-  reset_vtk_data_containers();
-}
-
-/* ---------------------------------------------------------------------- */
-
-void DumpSurfVTK::write_vtp(int n, double *mybuf)
-{
-  ++n_calls_;
-  buf2arrays(n,mybuf);
-  if (n_calls_ < nclusterprocs) return;
-
-  setFileCurrent();
-
-  vtkSmartPointer<vtkPolyData> polyData = vtkSmartPointer<vtkPolyData>::New();
-  polyData->SetPoints(points);
-  if (dimension == 3) polyData->SetPolys(cellArray);
-  else                polyData->SetLines(cellArray);
-  for (int f = 0; f < (int) myarrays.size(); f++)
-    polyData->GetCellData()->AddArray(myarrays[f]);
-
-  vtkSmartPointer<vtkXMLPolyDataWriter> writer =
-    vtkSmartPointer<vtkXMLPolyDataWriter>::New();
-  if (binary) writer->SetDataModeToBinary();
-  else        writer->SetDataModeToAscii();
-#if VTK_MAJOR_VERSION < 6
-  writer->SetInput(polyData);
-#else
-  writer->SetInputData(polyData);
-#endif
-  writer->SetFileName(filecurrent);
-  writer->Write();
-
-  if (me == 0 && multiproc) write_pvtk(PVTP);
-
-  reset_vtk_data_containers();
-}
-
-/* ---------------------------------------------------------------------- */
-
-void DumpSurfVTK::write_vtu(int n, double *mybuf)
-{
-  ++n_calls_;
-  buf2arrays(n,mybuf);
-  if (n_calls_ < nclusterprocs) return;
-
-  setFileCurrent();
-
-  vtkSmartPointer<vtkUnstructuredGrid> ugrid =
-    vtkSmartPointer<vtkUnstructuredGrid>::New();
-  ugrid->SetPoints(points);
-  ugrid->SetCells(dimension == 3 ? VTK_TRIANGLE : VTK_LINE,cellArray);
-  for (int f = 0; f < (int) myarrays.size(); f++)
-    ugrid->GetCellData()->AddArray(myarrays[f]);
-
-  vtkSmartPointer<vtkXMLUnstructuredGridWriter> writer =
-    vtkSmartPointer<vtkXMLUnstructuredGridWriter>::New();
-  if (binary) writer->SetDataModeToBinary();
-  else        writer->SetDataModeToAscii();
-#if VTK_MAJOR_VERSION < 6
-  writer->SetInput(ugrid);
-#else
-  writer->SetInputData(ugrid);
-#endif
-  writer->SetFileName(filecurrent);
-  writer->Write();
-
-  if (me == 0 && multiproc) write_pvtk(PVTU);
+  if (me == 0 && multiproc) write_pvtk(vtk_file_format);
 
   reset_vtk_data_containers();
 }
@@ -461,26 +392,26 @@ void DumpSurfVTK::write_pvtk(int fileformat)
 
   const char *gridtype =
     (fileformat == PVTP) ? "PPolyData" : "PUnstructuredGrid";
-  int one = 1;
-  const char *byte_order =
-    (*((char *) &one)) ? "LittleEndian" : "BigEndian";
+  // the summary must declare exactly the types the piece files contain
+
+  const char *realtype = VTKWriter::xml_real_type(prec);
 
   fprintf(fp,"<?xml version=\"1.0\"?>\n");
   fprintf(fp,"<VTKFile type=\"%s\" version=\"1.0\" byte_order=\"%s\">\n",
-          gridtype,byte_order);
+          gridtype,VTKWriter::xml_byte_order());
   fprintf(fp,"  <%s GhostLevel=\"0\">\n",gridtype);
 
   fprintf(fp,"    <PCellData>\n");
   for (int f = 0; f < (int) fields.size(); f++) {
-    const char *type = (fields[f].type == DOUBLE) ? "Float64" : "Int64";
+    const char *type = (fields[f].type == DOUBLE) ? realtype : "Int64";
     fprintf(fp,"      <PDataArray type=\"%s\" Name=\"%s\"/>\n",
             type,fields[f].name.c_str());
   }
   fprintf(fp,"    </PCellData>\n");
 
   fprintf(fp,"    <PPoints>\n");
-  fprintf(fp,"      <PDataArray type=\"Float32\" Name=\"Points\" "
-          "NumberOfComponents=\"3\"/>\n");
+  fprintf(fp,"      <PDataArray type=\"%s\" Name=\"Points\" "
+          "NumberOfComponents=\"3\"/>\n",realtype);
   fprintf(fp,"    </PPoints>\n");
 
   int npieces = (multiproc > 1) ? multiproc : nprocs;
@@ -500,6 +431,13 @@ int DumpSurfVTK::modify_param(int narg, char **arg)
     if (narg < 2) error->all(FLERR,"Illegal dump_modify command");
     if (strcmp(arg[1],"yes") == 0) binary = 1;
     else if (strcmp(arg[1],"no") == 0) binary = 0;
+    else error->all(FLERR,"Illegal dump_modify command");
+    return 2;
+  }
+  if (strcmp(arg[0],"double") == 0) {
+    if (narg < 2) error->all(FLERR,"Illegal dump_modify command");
+    if (strcmp(arg[1],"yes") == 0) prec = VTKWriter::DOUBLE;
+    else if (strcmp(arg[1],"no") == 0) prec = VTKWriter::SINGLE;
     else error->all(FLERR,"Illegal dump_modify command");
     return 2;
   }

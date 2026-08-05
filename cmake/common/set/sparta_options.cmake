@@ -29,9 +29,6 @@ sparta_option(
   PKG_PYTHON "Enable or disable sparta python package. Default: OFF." OFF
   SPARTA_PKG_LIST)
 
-sparta_option(
-  PKG_VTK "Enable or disable sparta vtk dump package. Default: OFF." OFF
-  SPARTA_PKG_LIST)
 # ######### END   SPARTA OPTIONAL DEPENDENCIES ##########
 
 # ######### BEGIN SPARTA TPL DEPENDENCIES ##########
@@ -52,7 +49,7 @@ sparta_option(BUILD_JPEG "Enable or disable JPEG TPL. Default: OFF." OFF
 sparta_option(BUILD_PNG "Enable or disable PNG TPL. Default: OFF." OFF
               SPARTA_BUILD_TPL_LIST)
 
-sparta_option(BUILD_VTK "Enable or disable VTK TPL. Default: OFF." OFF
+sparta_option(BUILD_ZLIB "Enable or disable ZLIB TPL. Default: OFF." OFF
               SPARTA_BUILD_TPL_LIST)
 
 set(FFT "OFF" CACHE STRING "Select a FFT TPL from FFTW3, MKL, or KISS. Default: KISS.")

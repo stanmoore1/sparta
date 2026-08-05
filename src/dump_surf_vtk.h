@@ -29,14 +29,10 @@ DumpStyle(surf/vtk,DumpSurfVTK)
 #define SPARTA_DUMP_SURF_VTK_H
 
 #include "dump_surf.h"
+#include "vtk_writer.h"
+#include <stdint.h>
 #include <string>
 #include <vector>
-
-#include <vtkPoints.h>
-#include <vtkCellArray.h>
-#include <vtkSmartPointer.h>
-
-class vtkAbstractArray;
 
 namespace SPARTA_NS {
 
@@ -59,9 +55,17 @@ class DumpSurfVTK : public DumpSurf {
   char *filecurrent;
   char *parallelfilecurrent;
 
-  vtkSmartPointer<vtkPoints> points;
-  vtkSmartPointer<vtkCellArray> cellArray;
-  std::vector<vtkSmartPointer<vtkAbstractArray> > myarrays;
+  VTKWriter::Precision prec; // precision of floating point output
+  int warned_precision;      // 1 after warning that single precision is coarse
+
+  // data accumulated across write_data() calls, flushed once the filewriter
+  // has received all nclusterprocs contributions.  points holds 3 coords per
+  // element vertex; ddata/ldata hold one vector per entry in fields, in the
+  // same order, with one value per element
+
+  std::vector<double> points;
+  std::vector<std::vector<double> > ddata;
+  std::vector<std::vector<int64_t> > ldata;
 
   void init_style();
   void openfile();
@@ -76,9 +80,7 @@ class DumpSurfVTK : public DumpSurf {
   void buf2arrays(int, double *);
   void reset_vtk_data_containers();
 
-  void write_vtk(int, double *);
-  void write_vtp(int, double *);
-  void write_vtu(int, double *);
+  void write_file(int, double *);
   void write_pvtk(int);
   std::string pvtk_piece_filename(int);
 };
@@ -103,5 +105,12 @@ The legacy VTK format is single-file only.  Use an XML format (.vtu or
 E: Dump surf/vtk does not support string attributes
 
 Self-explanatory.
+
+W: Dump surf/vtk in single precision resolves coordinates only to ...
+
+dump_modify double no selected single precision, but the coordinates
+are far enough from the origin relative to the size of the box that
+single precision no longer resolves one part in a million of it.  Use
+dump_modify double yes to write the coordinates as Float64.
 
 */

@@ -25,27 +25,12 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    # Make the apt download cache writable so actions/cache can restore .deb
-    # files into it before "apt install" runs. libvtk9-dev pulls in a large
-    # dependency tree; caching the debs avoids re-downloading them each run.
-    - name: Prepare apt cache
-      run: sudo chmod -R a+rwx /var/cache/apt/archives
-
-    - name: Cache apt packages
-      uses: actions/cache@v4
-      with:
-        path: /var/cache/apt/archives
-        key: apt-archives-${{ runner.os }}-vtk
-
     - name: Install Dependencies
       env:
         DEBIAN_FRONTEND: noninteractive
       run: |
-        # Keep downloaded .deb files so actions/cache can save them for reuse.
-        echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' \
-          | sudo tee /etc/apt/apt.conf.d/99keep-debs
         sudo apt-get update
-        sudo apt-get install -y openmpi-bin libopenmpi-dev libvtk9-dev
+        sudo apt-get install -y openmpi-bin libopenmpi-dev
 
     - name: Configure
       run: |
@@ -55,8 +40,6 @@ jobs:
           -DSPARTA_ENABLE_TESTING=ON \
           -DPKG_FFT=ON \
           -DPKG_PYTHON=ON \
-          -DPKG_VTK=ON \
-          -DBUILD_VTK=ON \
           ../cmake
 
     - name: Build

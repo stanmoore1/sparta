@@ -203,17 +203,9 @@ endif()
   set(BUILD_KOKKOS ON)
 endif()
 
-if(PKG_VTK)
-  set(TARGET_SPARTA_PKG_VTK pkg_vtk)
-  list(APPEND TARGET_SPARTA_PKGS ${TARGET_SPARTA_PKG_VTK})
-  set(SPARTA_DEFAULT_CXX_COMPILE_FLAGS -DSPARTA_VTK
-                                       ${SPARTA_DEFAULT_CXX_COMPILE_FLAGS})
-  # PKG_VTK depends on the VTK third-party library
-  set(BUILD_VTK ON)
-  # the examples/vtk regression suite requires the VTK dump styles
-  if(SPARTA_ENABLE_TESTING)
-    set(SPARTA_ENABLED_TEST_SUITES ${SPARTA_ENABLED_TEST_SUITES} "vtk")
-  endif()
+# the VTK dump styles are part of the core, so their tests always run
+if(SPARTA_ENABLE_TESTING)
+  set(SPARTA_ENABLED_TEST_SUITES ${SPARTA_ENABLED_TEST_SUITES} "vtk")
 endif()
 # ################### END PROCESS PKGS ####################
 
@@ -241,22 +233,22 @@ if(BUILD_JPEG)
                                        ${SPARTA_DEFAULT_CXX_COMPILE_FLAGS})
 endif()
 
+if(BUILD_ZLIB)
+  # zlib is optional and only compresses the binary XML files written by the
+  # VTK dump styles, which the VTK library also compresses.  Without it those
+  # files are still valid, just larger.
+  find_package(ZLIB REQUIRED)
+  set(TARGET_SPARTA_BUILD_ZLIB ZLIB::ZLIB)
+  list(APPEND TARGET_SPARTA_BUILD_TPLS ${TARGET_SPARTA_BUILD_ZLIB})
+  set(SPARTA_DEFAULT_CXX_COMPILE_FLAGS -DSPARTA_ZLIB
+                                       ${SPARTA_DEFAULT_CXX_COMPILE_FLAGS})
+endif()
+
 if(BUILD_PNG)
   find_package(PNG REQUIRED)
   set(TARGET_SPARTA_BUILD_PNG PNG::PNG)
   list(APPEND TARGET_SPARTA_BUILD_TPLS ${TARGET_SPARTA_BUILD_PNG})
   set(SPARTA_DEFAULT_CXX_COMPILE_FLAGS -DSPARTA_PNG
-                                       ${SPARTA_DEFAULT_CXX_COMPILE_FLAGS})
-endif()
-
-if(BUILD_VTK)
-  # VTK 9+ uses component-based modules; set VTK_ROOT (CMP0074 is NEW) to
-  # point at a non-standard install.  VTK_LIBRARIES holds the module targets.
-  find_package(VTK REQUIRED
-               COMPONENTS CommonCore CommonDataModel IOLegacy IOXML)
-  set(TARGET_SPARTA_BUILD_VTK ${VTK_LIBRARIES})
-  list(APPEND TARGET_SPARTA_BUILD_TPLS ${TARGET_SPARTA_BUILD_VTK})
-  set(SPARTA_DEFAULT_CXX_COMPILE_FLAGS -DSPARTA_VTK
                                        ${SPARTA_DEFAULT_CXX_COMPILE_FLAGS})
 endif()
 

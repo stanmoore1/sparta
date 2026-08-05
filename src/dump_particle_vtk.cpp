@@ -14,7 +14,8 @@
 
 /* ----------------------------------------------------------------------
    Contributing author: ported from the LAMMPS VTK package (dump_vtk),
-   originally from LIGGGHTS (www.liggghts.com).
+   originally from LIGGGHTS (www.liggghts.com).  The VTK files are written
+   by SPARTA's own VTKWriter, see src/vtk_writer.cpp.
 ------------------------------------------------------------------------- */
 
 #include "mpi.h"
@@ -26,17 +27,7 @@
 #include "memory.h"
 #include "error.h"
 
-#include <vtkVersion.h>
-#include <vtkCellType.h>
-#include <vtkPointData.h>
-#include <vtkDoubleArray.h>
-#include <vtkLongLongArray.h>
-#include <vtkPolyData.h>
-#include <vtkPolyDataWriter.h>
-#include <vtkXMLPolyDataWriter.h>
-#include <vtkUnstructuredGrid.h>
-#include <vtkUnstructuredGridWriter.h>
-#include <vtkXMLUnstructuredGridWriter.h>
+#include <utility>
 
 using namespace SPARTA_NS;
 
@@ -57,6 +48,8 @@ DumpParticleVTK::DumpParticleVTK(SPARTA *sparta, int narg, char **arg) :
   filecurrent = NULL;
   parallelfilecurrent = NULL;
   gx = gy = gz = -1;
+  prec = VTKWriter::DOUBLE;
+  warned_precision = 0;
 
   // determine which VTK file format from the filename extension
   // default = legacy .vtk; .vtp = PolyData, .vtu = UnstructuredGrid
@@ -182,16 +175,11 @@ void DumpParticleVTK::write_header(bigint) { n_calls_ = 0; }
 
 void DumpParticleVTK::write_data(int n, double *mybuf)
 {
-  if (vtk_file_format == VTP || vtk_file_format == PVTP)
-    write_vtp(n,mybuf);
-  else if (vtk_file_format == VTU || vtk_file_format == PVTU)
-    write_vtu(n,mybuf);
-  else
-    write_vtk(n,mybuf);
+  write_file(n,mybuf);
 }
 
 /* ----------------------------------------------------------------------
-   append the packed rows in mybuf to the accumulating VTK containers
+   append the packed rows in mybuf to the accumulating data containers
 ------------------------------------------------------------------------- */
 
 void DumpParticleVTK::buf2arrays(int n, double *mybuf)
@@ -199,25 +187,21 @@ void DumpParticleVTK::buf2arrays(int n, double *mybuf)
   for (int i = 0; i < n; i++) {
     int base = i*size_one;
 
-    vtkIdType pid[1];
-    pid[0] = points->InsertNextPoint(mybuf[base+gx],mybuf[base+gy],
-                                     mybuf[base+gz]);
+    points.push_back(mybuf[base+gx]);
+    points.push_back(mybuf[base+gy]);
+    points.push_back(mybuf[base+gz]);
 
     for (int f = 0; f < (int) fields.size(); f++) {
       int c = base + fields[f].col;
-      vtkAbstractArray *paa = myarrays[f];
       if (fields[f].ncomp == 3) {
-        double t[3] = {mybuf[c],mybuf[c+1],mybuf[c+2]};
-        ((vtkDoubleArray *) paa)->InsertNextTuple(t);
-      } else if (fields[f].type == DOUBLE) {
-        ((vtkDoubleArray *) paa)->InsertNextValue(mybuf[c]);
-      } else {
-        ((vtkLongLongArray *) paa)->
-          InsertNextValue((long long) ubuf(mybuf[c]).i);
-      }
+        ddata[f].push_back(mybuf[c]);
+        ddata[f].push_back(mybuf[c+1]);
+        ddata[f].push_back(mybuf[c+2]);
+      } else if (fields[f].type == DOUBLE)
+        ddata[f].push_back(mybuf[c]);
+      else
+        ldata[f].push_back((int64_t) ubuf(mybuf[c]).i);
     }
-
-    pointsCells->InsertNextCell(1,pid);
   }
 }
 
@@ -225,120 +209,62 @@ void DumpParticleVTK::buf2arrays(int n, double *mybuf)
 
 void DumpParticleVTK::reset_vtk_data_containers()
 {
-  points = vtkSmartPointer<vtkPoints>::New();
-  pointsCells = vtkSmartPointer<vtkCellArray>::New();
+  points.clear();
+  ddata.assign(fields.size(),std::vector<double>());
+  ldata.assign(fields.size(),std::vector<int64_t>());
+}
 
-  myarrays.clear();
-  for (int f = 0; f < (int) fields.size(); f++) {
-    vtkSmartPointer<vtkAbstractArray> arr;
-    if (fields[f].type == DOUBLE || fields[f].ncomp == 3) {
-      vtkSmartPointer<vtkDoubleArray> da =
-        vtkSmartPointer<vtkDoubleArray>::New();
-      if (fields[f].ncomp == 3) da->SetNumberOfComponents(3);
-      arr = da;
-    } else {
-      arr = vtkSmartPointer<vtkLongLongArray>::New();
+/* ----------------------------------------------------------------------
+   write one piece file: particles as VTK_VERTEX cells, one point each,
+   with the data arrays attached as point data
+------------------------------------------------------------------------- */
+
+void DumpParticleVTK::write_file(int n, double *mybuf)
+{
+  ++n_calls_;
+  buf2arrays(n,mybuf);
+  if (n_calls_ < nclusterprocs) return;
+
+  setFileCurrent();
+
+  const int xml = (vtk_file_format != VTK);
+  VTKWriter writer(xml ? VTKWriter::XML : VTKWriter::LEGACY,binary,prec);
+
+  try {
+    // legacy .vtk and .vtp are polydata, .vtu is an unstructured grid
+
+    if (vtk_file_format == VTU || vtk_file_format == PVTU)
+      writer.set_unstructured_grid(std::move(points),VTKWriter::VERTEX,1);
+    else
+      writer.set_polydata(std::move(points),VTKWriter::VERTEX,1);
+
+    for (int f = 0; f < (int) fields.size(); f++) {
+      if (fields[f].ncomp == 3 || fields[f].type == DOUBLE)
+        writer.add_point_array(fields[f].name,fields[f].ncomp,std::move(ddata[f]));
+      else
+        writer.add_point_array(fields[f].name,1,std::move(ldata[f]));
     }
-    arr->SetName(fields[f].name.c_str());
-    myarrays.push_back(arr);
+
+    writer.write(filecurrent);
+
+    // single precision only resolves so much of a box far from the origin
+
+    double lbox = MAX(domain->xprd,domain->yprd);
+    if (domain->dimension == 3) lbox = MAX(lbox,domain->zprd);
+    double res = VTKWriter::single_precision_resolution
+      (writer.max_single_precision_value(),lbox);
+    if (res > 0.0 && !warned_precision) {
+      warned_precision = 1;
+      char str[128];
+      sprintf(str,"Dump particle/vtk in single precision resolves coordinates "
+              "only to %g",res);
+      error->warning(FLERR,str);
+    }
+  } catch (VTKWriterException &e) {
+    error->one(FLERR,e.what());
   }
-}
 
-/* ---------------------------------------------------------------------- */
-
-void DumpParticleVTK::write_vtk(int n, double *mybuf)
-{
-  ++n_calls_;
-  buf2arrays(n,mybuf);
-  if (n_calls_ < nclusterprocs) return;
-
-  setFileCurrent();
-
-  vtkSmartPointer<vtkPolyData> polyData = vtkSmartPointer<vtkPolyData>::New();
-  polyData->SetPoints(points);
-  polyData->SetVerts(pointsCells);
-  for (int f = 0; f < (int) myarrays.size(); f++)
-    polyData->GetPointData()->AddArray(myarrays[f]);
-
-  vtkSmartPointer<vtkPolyDataWriter> writer =
-    vtkSmartPointer<vtkPolyDataWriter>::New();
-  writer->SetHeader("Generated by SPARTA");
-  if (binary) writer->SetFileTypeToBinary();
-  else        writer->SetFileTypeToASCII();
-#if VTK_MAJOR_VERSION < 6
-  writer->SetInput(polyData);
-#else
-  writer->SetInputData(polyData);
-#endif
-  writer->SetFileName(filecurrent);
-  writer->Write();
-
-  reset_vtk_data_containers();
-}
-
-/* ---------------------------------------------------------------------- */
-
-void DumpParticleVTK::write_vtp(int n, double *mybuf)
-{
-  ++n_calls_;
-  buf2arrays(n,mybuf);
-  if (n_calls_ < nclusterprocs) return;
-
-  setFileCurrent();
-
-  vtkSmartPointer<vtkPolyData> polyData = vtkSmartPointer<vtkPolyData>::New();
-  polyData->SetPoints(points);
-  polyData->SetVerts(pointsCells);
-  for (int f = 0; f < (int) myarrays.size(); f++)
-    polyData->GetPointData()->AddArray(myarrays[f]);
-
-  vtkSmartPointer<vtkXMLPolyDataWriter> writer =
-    vtkSmartPointer<vtkXMLPolyDataWriter>::New();
-  if (binary) writer->SetDataModeToBinary();
-  else        writer->SetDataModeToAscii();
-#if VTK_MAJOR_VERSION < 6
-  writer->SetInput(polyData);
-#else
-  writer->SetInputData(polyData);
-#endif
-  writer->SetFileName(filecurrent);
-  writer->Write();
-
-  if (me == 0 && multiproc) write_pvtk(PVTP);
-
-  reset_vtk_data_containers();
-}
-
-/* ---------------------------------------------------------------------- */
-
-void DumpParticleVTK::write_vtu(int n, double *mybuf)
-{
-  ++n_calls_;
-  buf2arrays(n,mybuf);
-  if (n_calls_ < nclusterprocs) return;
-
-  setFileCurrent();
-
-  vtkSmartPointer<vtkUnstructuredGrid> ugrid =
-    vtkSmartPointer<vtkUnstructuredGrid>::New();
-  ugrid->SetPoints(points);
-  ugrid->SetCells(VTK_VERTEX,pointsCells);
-  for (int f = 0; f < (int) myarrays.size(); f++)
-    ugrid->GetPointData()->AddArray(myarrays[f]);
-
-  vtkSmartPointer<vtkXMLUnstructuredGridWriter> writer =
-    vtkSmartPointer<vtkXMLUnstructuredGridWriter>::New();
-  if (binary) writer->SetDataModeToBinary();
-  else        writer->SetDataModeToAscii();
-#if VTK_MAJOR_VERSION < 6
-  writer->SetInput(ugrid);
-#else
-  writer->SetInputData(ugrid);
-#endif
-  writer->SetFileName(filecurrent);
-  writer->Write();
-
-  if (me == 0 && multiproc) write_pvtk(PVTU);
+  if (me == 0 && multiproc) write_pvtk(vtk_file_format);
 
   reset_vtk_data_containers();
 }
@@ -443,19 +369,20 @@ void DumpParticleVTK::write_pvtk(int fileformat)
 
   const char *gridtype =
     (fileformat == PVTP) ? "PPolyData" : "PUnstructuredGrid";
-  int one = 1;
-  const char *byte_order =
-    (*((char *) &one)) ? "LittleEndian" : "BigEndian";
+
+  // the summary must declare exactly the types the piece files contain
+
+  const char *realtype = VTKWriter::xml_real_type(prec);
 
   fprintf(fp,"<?xml version=\"1.0\"?>\n");
   fprintf(fp,"<VTKFile type=\"%s\" version=\"1.0\" byte_order=\"%s\">\n",
-          gridtype,byte_order);
+          gridtype,VTKWriter::xml_byte_order());
   fprintf(fp,"  <%s GhostLevel=\"0\">\n",gridtype);
 
   fprintf(fp,"    <PPointData>\n");
   for (int f = 0; f < (int) fields.size(); f++) {
     const char *type = (fields[f].type == DOUBLE || fields[f].ncomp == 3) ?
-      "Float64" : "Int64";
+      realtype : "Int64";
     if (fields[f].ncomp == 3)
       fprintf(fp,"      <PDataArray type=\"%s\" Name=\"%s\" "
               "NumberOfComponents=\"3\"/>\n",type,fields[f].name.c_str());
@@ -466,8 +393,8 @@ void DumpParticleVTK::write_pvtk(int fileformat)
   fprintf(fp,"    </PPointData>\n");
 
   fprintf(fp,"    <PPoints>\n");
-  fprintf(fp,"      <PDataArray type=\"Float32\" Name=\"Points\" "
-          "NumberOfComponents=\"3\"/>\n");
+  fprintf(fp,"      <PDataArray type=\"%s\" Name=\"Points\" "
+          "NumberOfComponents=\"3\"/>\n",realtype);
   fprintf(fp,"    </PPoints>\n");
 
   int npieces = (multiproc > 1) ? multiproc : nprocs;
@@ -480,7 +407,8 @@ void DumpParticleVTK::write_pvtk(int fileformat)
 }
 
 /* ----------------------------------------------------------------------
-   dump_modify options: "binary yes/no" toggles VTK binary output,
+   dump_modify options: "binary yes/no" toggles VTK binary output and
+   "double yes/no" selects Float64 vs Float32 for all floating point data,
    everything else is handled by DumpParticle (region, thresh)
 ------------------------------------------------------------------------- */
 
@@ -490,6 +418,13 @@ int DumpParticleVTK::modify_param(int narg, char **arg)
     if (narg < 2) error->all(FLERR,"Illegal dump_modify command");
     if (strcmp(arg[1],"yes") == 0) binary = 1;
     else if (strcmp(arg[1],"no") == 0) binary = 0;
+    else error->all(FLERR,"Illegal dump_modify command");
+    return 2;
+  }
+  if (strcmp(arg[0],"double") == 0) {
+    if (narg < 2) error->all(FLERR,"Illegal dump_modify command");
+    if (strcmp(arg[1],"yes") == 0) prec = VTKWriter::DOUBLE;
+    else if (strcmp(arg[1],"no") == 0) prec = VTKWriter::SINGLE;
     else error->all(FLERR,"Illegal dump_modify command");
     return 2;
   }

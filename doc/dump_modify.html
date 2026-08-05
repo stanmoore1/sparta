@@ -21,11 +21,12 @@
 
 <LI>these keywords apply to various dump styles 
 
-<LI>keyword = <I>append</I> or <I>binary</I> or <I>buffer</I> or <I>every</I> or <I>fileper</I> or <I>first</I> or <I>flush</I> or <I>format</I> or <I>nfile</I> or <I>pad</I> or <I>region</I> or <I>thresh</I> 
+<LI>keyword = <I>append</I> or <I>binary</I> or <I>buffer</I> or <I>double</I> or <I>every</I> or <I>fileper</I> or <I>first</I> or <I>flush</I> or <I>format</I> or <I>nfile</I> or <I>pad</I> or <I>region</I> or <I>thresh</I> 
 
 <PRE>  <I>append</I> arg = <I>yes</I> or <I>no</I>
   <I>binary</I> arg = <I>yes</I> or <I>no</I>
   <I>buffer</I> arg = <I>yes</I> or <I>no</I>
+  <I>double</I> arg = <I>yes</I> or <I>no</I>
   <I>every</I> arg = N
     N = dump every this many timesteps
     N can be a variable (see below)
@@ -151,12 +152,24 @@ this keyword has no further effect.
 <HR>
 
 <P>The <I>binary</I> keyword applies only to the <A HREF = "dump_vtk.html">dump particle/vtk, dump grid/vtk, and
-dump surf/vtk</A> styles of the VTK package.  If specified as <I>yes</I>,
+dump surf/vtk</A> styles.  If specified as <I>yes</I>,
 the VTK data is written in compact binary form; if <I>no</I> (the default), it is
 written as ASCII which is human-readable but typically requires larger file
 sizes than binary. This is a per-dump setting because the VTK styles select
 their file format from the filename extension, which would otherwise conflict
 with SPARTA's usual ".bin" binary-file convention.
+</P>
+<HR>
+
+<P>The <I>double</I> keyword applies only to the <A HREF = "dump_vtk.html">dump particle/vtk, dump grid/vtk, and
+dump surf/vtk</A> styles.  It selects the precision of every
+floating point value written, that is the point coordinates and the
+double-valued data arrays.  If specified as <I>yes</I> (the default), they are
+written as Float64.  If <I>no</I>, they are written as Float32, which halves their
+size in the file and matches what visualization programs use internally.
+Single precision resolves about 7 significant digits, so SPARTA warns if the
+coordinates grow large enough that this no longer resolves one part in a
+million of the simulation box.
 </P>
 <HR>
 
@@ -683,7 +696,9 @@ defined by the <A HREF = "group.html">group surf</A> command.
 <P>The option defaults are
 </P>
 <UL><LI>append = no
+<LI>binary = no for the <I>particle/vtk</I>, <I>grid/vtk</I>, <I>surf/vtk</I> styles
 <LI>buffer = yes for all dump styles except <I>image</I> and <I>movie</I>
+<LI>double = yes for the <I>particle/vtk</I>, <I>grid/vtk</I>, <I>surf/vtk</I> styles
 <LI>backcolor = black
 <LI>backcolor2 = none
 <LI>boxcolor = yellow

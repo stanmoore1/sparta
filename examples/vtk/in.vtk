@@ -1,5 +1,5 @@
 # 2d flow around a circle, writing native VTK dump files
-# exercises dump particle/vtk, grid/vtk, and surf/vtk (VTK package)
+# exercises dump particle/vtk, grid/vtk, and surf/vtk
 
 seed        12345
 dimension   2
