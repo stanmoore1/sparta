@@ -333,6 +333,15 @@ void GridKokkos::remove_custom(int index)
     if (ename[i]) empty = 0;
   if (empty) ncustom = 0;
 
+  // all four outer views may have been compacted above
+  // must flag them modified on host or the syncs below are no-ops
+  //   and the device keeps the stale pre-removal ordering
+
+  k_eivec.modify_host();
+  k_eiarray.modify_host();
+  k_edvec.modify_host();
+  k_edarray.modify_host();
+
   k_eivec.sync_device();
   k_eiarray.sync_device();
   k_edvec.sync_device();
