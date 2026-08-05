@@ -85,6 +85,14 @@ UpdateKokkos::UpdateKokkos(SPARTA *sparta) : Update(sparta),
   tmp_compute_boundary_kk(sparta),
   tmp_compute_surf_kk(sparta)
 {
+  // the Kokkos views of Particle/Grid/Surf are populated from the host data
+  //   once, by setup() when prewrap is set, which then clears prewrap
+  // a "clear" command destroys and recreates all of these classes but not
+  //   KokkosSPARTA, so prewrap has to be re-armed here or the second problem
+  //   runs with empty device views
+  // this is a no-op on the first construction, KokkosSPARTA sets prewrap = 1
+
+  sparta->kokkos->prewrap = 1;
 
   // use 1D view for scalars to reduce GPU memory operations
 
