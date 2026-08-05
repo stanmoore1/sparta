@@ -121,13 +121,6 @@ void SurfReactGlobalKokkos::pre_react()
 
 /* ---------------------------------------------------------------------- */
 
-void SurfReactGlobalKokkos::post_react()
-{
-  d_particles = {};
-}
-
-/* ---------------------------------------------------------------------- */
-
 void SurfReactGlobalKokkos::backup()
 {
   ParticleKokkos* particle_kk = (ParticleKokkos*) particle;

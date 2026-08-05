@@ -41,7 +41,6 @@ class SurfReactProbKokkos : public SurfReactProb {
   void tally_update();
 
   void pre_react();
-  void post_react();
   void backup();
   void restore();
 

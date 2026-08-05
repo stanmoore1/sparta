@@ -277,18 +277,6 @@ void SurfCollideDiffuseKokkos::post_collide()
   sc->nsingle += h_nsingle();
   surf->nreact_one += h_nreact_one();
 
-  d_particles = {};
-  d_species = {};
-
-  // pre_collide() runs on this KKCopy and has each active surf react model
-  //  retain a reference to the particle list.  Release it before the next
-  //  copy() blits over the member: a blit does not release, so the reference
-  //  would be orphaned and its allocation never freed
-
-  for (int n = 0; n < surf->nsr; n++) {
-    if (sr_type_list[n] == 0) sr_kk_global_copy[sr_map[n]].obj.post_react();
-    else sr_kk_prob_copy[sr_map[n]].obj.post_react();
-  }
 }
 
 /* ---------------------------------------------------------------------- */

@@ -185,13 +185,6 @@ void SurfReactProbKokkos::pre_react()
 
 /* ---------------------------------------------------------------------- */
 
-void SurfReactProbKokkos::post_react()
-{
-  d_particles = {};
-}
-
-/* ---------------------------------------------------------------------- */
-
 void SurfReactProbKokkos::backup()
 {
   ParticleKokkos* particle_kk = (ParticleKokkos*) particle;
