@@ -547,6 +547,7 @@ void FixEmitSurfKokkos::operator()(TagFixEmitSurf_perform_task, const int &i, in
               (p2[1]-p1[1]);
           x[0] = p1[0] + rn * (p2[0]-p1[0]);
           x[1] = p1[1] + rn * (p2[1]-p1[1]);
+          x[2] = 0.0;
         } else {
           const double rn = rand_gen.drand();
           int ntri = task_i.npoint - 2;
@@ -661,6 +662,7 @@ void FixEmitSurfKokkos::operator()(TagFixEmitSurf_perform_task, const int &i, in
             (p2[1]-p1[1]);
         x[0] = p1[0] + rn * (p2[0]-p1[0]);
         x[1] = p1[1] + rn * (p2[1]-p1[1]);
+        x[2] = 0.0;
       } else {
         const double rn = rand_gen.drand();
         int ntri = task_i.npoint - 2;
