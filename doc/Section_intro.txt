@@ -45,7 +45,7 @@ WWW Site"_sws.
 
 SPARTA is a freely-available open-source code, distributed under the
 terms of the "GNU Public License"_gnu, or sometimes by request under
-the terms of the "GNU Lesser General Public License (LGPL)"_gnu2,
+the terms of the "GNU Lesser General Public License (LGPL)"_https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html,
 which means you can use or modify the code however you wish.  The only
 restrictions imposed by the GPL or LGPL are on how you distribute the
 code further.  See "Section 1.4"_#intro_4 below for a brief discussion

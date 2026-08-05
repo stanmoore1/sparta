@@ -1083,7 +1083,7 @@ dump 1 particle 1000 tmp.dump id type x y z p_ionambi p_velambi\[2\] :pre
 will output the ionambi flag = 1 for ambipolar ions, along with the vy
 of their associated ambipolar electrons.
 
-The "fix ambipolar"_fix ambiploar.html doc page explains how to
+The "fix ambipolar"_fix.html ambiploar.html doc page explains how to
 restart ambipolar simulations where the fix is used.
 
 :line

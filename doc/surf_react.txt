@@ -188,7 +188,7 @@ it supports is given on a separate
 :line
 
 If the ambipolar approximation is being used, via the "fix
-ambipolar"_fix_ambipolar.hmtl command, then reactions which involve
+ambipolar"_fix_ambipolar.html command, then reactions which involve
 either ambipolar ions or the ambipolar electron have more restricitve
 rules about the ordering of reactants and products, than those
 described in the preceeding section for the {prob} style.

@@ -65,7 +65,7 @@ equation 4.22 of "(Bird94)"_#Bird94.  The number of particles {M} to
 add on a particular grid cell face is based on this flux and
 additional global, flow, and cell face properties:
 
-global property: {fnum} ratio as specified by the "global"_global.html" command
+global property: {fnum} ratio as specified by the "global"_global.html command
 flow properties: number density, streaming velocity, and thermal temperature
 cell face properties: area of face and its orientation relative to the streaming velocity :ul
 
@@ -270,7 +270,7 @@ populated.
 
 IMPORTANT NOTE: When using a subsonic prsesure boundary condition, you
 should also use an appropriate boundary collision or chemistry model
-via the "boundary"_boundary.htmo or "bound_modify"_bound_modify.html
+via the "boundary"_boundary.html or "bound_modify"_bound_modify.html
 or "surf_collide"_surf_collide.html or "surf_react"_surf_react.html
 commands, so that particles hitting the surface disappear as if they
 were exiting the simulation domain.  That is necessary to produce the

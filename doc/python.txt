@@ -671,6 +671,6 @@ and global variables will become invisible.
 
 [Related commands:]
 
-"shell"_shell.html, "variable"_variable,html
+"shell"_shell.html, "variable"_variable.html
 
 [Default:] none

@@ -81,7 +81,7 @@ number from 1 to N, where N is the number of reactions defined by the
 The {id1/pre} and {id2/pre} values are the IDs of the reacting
 particles before the reaction.  Note that particle IDs are generated
 randomly.  Thus multiple particles in the system can potentially have
-the same ID.  See "Section 6.17"_Section_howto_17 for more details on
+the same ID.  See "Section 6.19"_Section_howto.html#howto_19 for more details on
 particle IDs.
 
 The {id1/post}, {id2/post}, and {id3/post} values are the
@@ -94,7 +94,7 @@ The {type1/pre} and {type2/pre} value are the integer indices for the
 species of the reacting particles before the reaction.  They are
 values from 1 to Nspecies.  The values correspond to the order in
 which species were defined via the "species"_species.html command.
-See "Section 6.17"_Section_howto_17 for more details on particle
+See "Section 6.19"_Section_howto.html#howto_19 for more details on particle
 types.
 
 The {type1/post}, {type/post2}, and {type/post3} values are the

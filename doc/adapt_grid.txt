@@ -317,7 +317,7 @@ rebalanced across processors after grid adaptation, you can use the
 [Restrictions:]
 
 This command can only be used after the grid has been created by the
-"create_grid"_create_grid.html, "read_grid"_read_grid, or
+"create_grid"_create_grid.html, "read_grid"_read_grid.html, or
 "read_restart"_read_restart.html commands.
 
 Currently a fix cannot be used with style {value} for {iterate} > 1.
