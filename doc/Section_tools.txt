@@ -224,7 +224,7 @@ one or more simple objects whose surface is represented as triangules
 "read_surf"_read_surf.html command.  The 3d objects it supports are a
 sphere, box, and spikysphere (randomized radius at each point).  The
 2d objects it supports are a circle, rectangle, triangle, and
-spikycircly (randomized radius at each point).
+spikycircle (randomized radius at each point).
 
 See the header of the script for the syntax used to run it.
 
