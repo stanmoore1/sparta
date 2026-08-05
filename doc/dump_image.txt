@@ -597,7 +597,7 @@ cat snap.*.jpg | ffmpeg -y -f image2pipe -c:v mjpeg -i - -b:v 2000k movie.m4v
 cat snap.*.ppm | ffmpeg -y -f image2pipe -c:v ppm -i - -b:v 2400k movie.avi :pre
 
 Frontends for FFmpeg exist for multiple platforms. For more
-information see the "FFmpeg homepage"_http://www.ffmpeg.org/
+information see the "FFmpeg homepage"_https://ffmpeg.org/
 
 :ule
 
@@ -618,7 +618,7 @@ variety of file formats and decoders. :l
 % ffplay bar.avi :pre
 
 c) Use the "Pizza.py"_https://lammps.github.io/pizza
-"animate tool"_https://lammps.gitbug.io/pizza/doc/animate.html,
+"animate tool"_https://lammps.github.io/pizza/doc/animate.html,
 which works directly on a series of image files. :l
 
 a = animate("foo*.jpg") :pre

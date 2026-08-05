@@ -457,9 +457,9 @@ snapshots.
 Additional Pizza.py tools may be added that allow visualization of
 surface and grid cell information as output by SPARTA.
 
-:link(pizza,http://lammps.github.io/pizza)
-:link(vmd,http://www.ks.uiuc.edu/Research/vmd)
-:link(ensight,http://www.ensight.com)
+:link(pizza,https://lammps.github.io/pizza)
+:link(vmd,https://www.ks.uiuc.edu/Research/vmd)
+:link(ensight,https://www.ansys.com/products/fluids/ansys-ensight)
 
 :line
 
@@ -1571,7 +1571,7 @@ There is an option in {grid2paraview.py} to execute a ParaView Catalyst Python
 script that has been exported from the ParaView GUI. For more details on
 Catalyst, please see the Catalyst user guide, located here.
 
-"Kitware ParaView Catalyst in-situ"_https://www.paraview.org/in-situ/
+"Kitware ParaView Catalyst in-situ"_https://catalyst-in-situ.readthedocs.io/en/latest/
 
 The Catalyst script will generate images or data extracts for each time-step.
 This will avoid having to run ParaView as a separate step to generate

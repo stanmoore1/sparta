@@ -176,10 +176,10 @@ as a library and allow MPI functions to be called from Python.
 These include
 
 "pyMPI"_http://pympi.sourceforge.net/
-"maroonmpi"_http://code.google.com/p/maroonmpi/
-"mpi4py"_http://code.google.com/p/mpi4py/
-"myMPI"_http://nbcr.sdsc.edu/forum/viewtopic.php?t=89&sid=c997fefc3933bd66204875b436940f16
-"Pypar"_http://code.google.com/p/pypar :ul
+"maroonmpi"_https://code.google.com/archive/p/maroonmpi
+"mpi4py"_https://github.com/mpi4py/mpi4py
+myMPI
+"Pypar"_https://code.google.com/archive/p/pypar :ul
 
 All of these except pyMPI work by wrapping the MPI library and
 exposing (some portion of) its interface to your Python script.  This
@@ -199,7 +199,7 @@ still being actively developed and supported.
 
 The one I recommend, since I have successfully used it with SPARTA, is
 Pypar.  Pypar requires the ubiquitous "Numpy
-package"_http://numpy.scipy.org be installed in your Python.  After
+package"_https://numpy.org be installed in your Python.  After
 launching python, type
 
 import numpy :pre
@@ -320,7 +320,7 @@ from the command line.
 [Test SPARTA and Python in parallel:] :h5
 
 To run SPARTA in parallel, assuming you have installed the
-"Pypar"_http://datamining.anu.edu.au/~ole/pypar package as discussed
+"Pypar"_https://code.google.com/archive/p/pypar package as discussed
 above, create a test.py file containing these lines:
 
 import pypar
