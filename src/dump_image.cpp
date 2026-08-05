@@ -63,6 +63,12 @@ DumpImage::DumpImage(SPARTA *sparta, int narg, char **arg) :
 {
   if (binary || multiproc) error->all(FLERR,"Invalid dump image filename");
 
+  // PPM/JPG/PNG content is raw binary written to fp, so the file must be
+  //   opened in binary mode, even though the filename is not *.bin
+  // on Windows a text-mode stream expands \n to \r\n and corrupts the image
+
+  binaryopen = 1;
+
   // set filetype based on filename suffix
 
   int n = strlen(filename);

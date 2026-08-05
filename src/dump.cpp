@@ -96,6 +96,7 @@ Dump::Dump(SPARTA *sparta, int, char **arg) : Pointers(sparta)
   singlefile_opened = 0;
   compressed = 0;
   binary = 0;
+  binaryopen = 0;
   multifile = 0;
 
   multiproc = 0;
@@ -428,7 +429,7 @@ void Dump::openfile()
 #else
       error->one(FLERR,"Cannot open gzipped file");
 #endif
-    } else if (binary) {
+    } else if (binary || binaryopen) {
       fp = fopen(filecurrent,"wb");
     } else if (append_flag) {
       fp = fopen(filecurrent,"a");
