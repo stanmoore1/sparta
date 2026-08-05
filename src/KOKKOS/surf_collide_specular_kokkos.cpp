@@ -174,6 +174,22 @@ void SurfCollideSpecularKokkos::backup()
   ParticleKokkos* particle_kk = (ParticleKokkos*) particle;
   d_particles = particle_kk->k_particles.view_device();
 
+  // the fix copies hold views into the particle list and into the custom
+  //  attribute arrays, and a retry which ran out of room grows the particle
+  //  list, reallocating both.  pre_collide() runs once per move(), before
+  //  the retry loop, so refresh them here instead: backup() runs at the top
+  //  of every retry attempt, and is the same point d_particles is refreshed
+
+  if (ambi_flag) {
+    afix_kk->pre_update_custom_kokkos();
+    fix_ambi_kk_copy.copy(afix_kk);
+  }
+
+  if (vibmode_flag) {
+    vfix_kk->pre_update_custom_kokkos();
+    fix_vibmode_kk_copy.copy(vfix_kk);
+  }
+
   if (surf->nsr > 0) {
     int nglob,nprob;
     nglob = nprob = 0;

@@ -147,10 +147,11 @@ int ParticleKokkos::add_custom(char *name, int type, int size)
 /* ----------------------------------------------------------------------
    grow the vector/array associated with custom attribute with index
    nold = old length, nnew = new length (typically maxlocal)
-   set new values to 0 via memset()
+   nold is unused: unlike memory->grow(), the resize() inside grow_kokkos()
+     value initializes, so the new values are already 0
 ------------------------------------------------------------------------- */
 
-void ParticleKokkos::grow_custom(int index, int nold, int nnew)
+void ParticleKokkos::grow_custom(int index, int /*nold*/, int nnew)
 {
   // modifies the inner part of eivec,eiarray,edvec,edarray on host, and the outer view on device
 
@@ -164,13 +165,13 @@ void ParticleKokkos::grow_custom(int index, int nold, int nnew)
     if (esize[index] == 0) {
       int *ivector = eivec[ewhich[index]];
       auto k_ivector = k_eivec.view_host()[ewhich[index]].k_view;
-      memoryKK->grow_kokkos(k_ivector,ivector,nold+nnew,"particle:ivector");
+      memoryKK->grow_kokkos(k_ivector,ivector,nnew,"particle:ivector");
       k_eivec.view_host()[ewhich[index]].k_view = k_ivector;
       eivec[ewhich[index]] = ivector;
     } else {
       int **iarray = eiarray[ewhich[index]];
       auto k_iarray = k_eiarray.view_host()[ewhich[index]].k_view;
-      memoryKK->grow_kokkos(k_iarray,iarray,nold+nnew,esize[index],"particle:iarray");
+      memoryKK->grow_kokkos(k_iarray,iarray,nnew,esize[index],"particle:iarray");
       k_eiarray.view_host()[ewhich[index]].k_view = k_iarray;
       eiarray[ewhich[index]] = iarray;
     }
@@ -179,13 +180,13 @@ void ParticleKokkos::grow_custom(int index, int nold, int nnew)
     if (esize[index] == 0) {
       double *dvector = edvec[ewhich[index]];
       auto k_dvector = k_edvec.view_host()[ewhich[index]].k_view;
-      memoryKK->grow_kokkos(k_dvector,dvector,nold+nnew,"particle:dvector");
+      memoryKK->grow_kokkos(k_dvector,dvector,nnew,"particle:dvector");
       k_edvec.view_host()[ewhich[index]].k_view = k_dvector;
       edvec[ewhich[index]] = dvector;
     } else {
       double **darray = edarray[ewhich[index]];
       auto k_darray = k_edarray.view_host()[ewhich[index]].k_view;
-      memoryKK->grow_kokkos(k_darray,darray,nold+nnew,esize[index],"particle:darray");
+      memoryKK->grow_kokkos(k_darray,darray,nnew,esize[index],"particle:darray");
       k_edarray.view_host()[ewhich[index]].k_view = k_darray;
       edarray[ewhich[index]] = darray;
     }
