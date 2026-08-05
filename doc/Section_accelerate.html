@@ -83,7 +83,7 @@ SPARTA, to obtain synchronized timings.
 
 <H4><A NAME = "acc_2"></A>5.2 Packages with optimized styles 
 </H4>
-<P>Accelerated versions of various <A HREF = "collide_style.html">collide_style</A>,
+<P>Accelerated versions of various <A HREF = "collide.html">collide_style</A>,
 <A HREF = "fix.html">fixes</A>, <A HREF = "compute.html">computes</A>, and other commands have
 been added to SPARTA via the KOKKOS package, which may run faster than
 the standard non-accelerated versions.
@@ -471,7 +471,7 @@ option, compile SPARTA the KOKKOS HWLOC=yes option as described below.
 </P>
 <P><B>Running on GPUs:</B>
 </P>
-<P>Use the "-k" <A HREF = "Section_commands.html#start_7">command-line switch</A> to
+<P>Use the "-k" <A HREF = "Section_start.html#start_7">command-line switch</A> to
 specify the number of GPUs per node, and the number of threads per MPI
 task. Typically the -np setting of the mpirun command should set the
 number of MPI tasks/node to be equal to the # of physical GPUs on the
@@ -526,7 +526,7 @@ older).
 input script does not use fix or compute styles which are not yet
 Kokkos-enabled. This allows data to stay on the GPU for multiple
 timesteps, without being copied back to the host CPU. Invoking a
-non-Kokkos fix or compute, or performing I/O for <A HREF = "stat.html">stat</A> or
+non-Kokkos fix or compute, or performing I/O for <A HREF = "stats.html">stat</A> or
 <A HREF = "dump.html">dump</A> output will cause data to be copied back to the CPU
 incurring a performance penalty.
 </P>

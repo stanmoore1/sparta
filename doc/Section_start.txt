@@ -211,7 +211,7 @@ have a regular grid with more than ~2 billion grid cells or a
 hierarchical grid with enough levels that grid cell IDs cannot fit in
 a 32-bit integer.  In either case, SPARTA will generate an error
 message for "Cell ID has too many bits".  See "Section
-4.8"_Section_howto.html#howto_8 of the manual for details on how cell
+6.8"_Section_howto.html#howto_8 of the manual for details on how cell
 IDs are formatted.  The only reason to use the SMALL setting is if
 your machine does not support 64-bit integers.
 
@@ -531,7 +531,7 @@ have a regular grid with more than ~2 billion grid cells or a
 hierarchical grid with enough levels that grid cell IDs cannot fit in
 a 32-bit integer.  In either case, SPARTA will generate an error
 message for "Cell ID has too many bits".  See "Section
-4.8"_Section_howto.html#howto_8 of the manual for details on how cell
+6.8"_Section_howto.html#howto_8 of the manual for details on how cell
 IDs are formatted.  The only reason to use the SMALL setting is if
 your machine does not support 64-bit integers.
 
@@ -1166,7 +1166,7 @@ When used from a C or Fortran program or a scripting language like
 Python, the library has a simple function-style interface, provided in
 src/library.cpp and src/library.h.
 
-See "Section_howto 4.7"_Section_howto.html#howto_7 of the manual for
+See "Section_howto 6.7"_Section_howto.html#howto_7 of the manual for
 ideas on how to couple SPARTA to other codes via its library
 interface.  See "Section_python"_Section_python.html of the manual for
 a description of the Python wrapper provided with SPARTA that operates
@@ -1174,7 +1174,7 @@ through the SPARTA library interface.
 
 The files src/library.cpp and library.h define the C-style API for
 using SPARTA as a library.  See "Section_howto
-4.6"_Section_howto.html#howto_6 of the manual for a description of the
+6.6"_Section_howto.html#howto_6 of the manual for a description of the
 interface and how to extend it for your needs.
 
 :line

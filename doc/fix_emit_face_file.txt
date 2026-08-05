@@ -375,7 +375,7 @@ Particles cannot be added on periodic faces of the simulation box.
 Particles cannot be added on {z} faces of the simluation box for a 2d
 simulation.
 
-Unlike the "fix emit/face"_fix_emit/face.html command, no warning is
+Unlike the "fix emit/face"_fix_emit_face.html command, no warning is
 issued if the specified emission face has an inward normal in a
 direction opposing the streaming velocity, as defined by the mixture.
 This is because the streaming velocity as defined by the specified
@@ -402,3 +402,7 @@ region = none.
 :link(Bird94)
 [(Bird94)] G. A. Bird, Molecular Gas Dynamics and the Direct
 Simulation of Gas Flows, Clarendon Press, Oxford (1994).
+
+:link(Fang02)
+[(Fang02)] Y. Fang and W. W. Liou, Microfluid Flow Computations 
+Using a Parallel DSMC Code, AIAA 2002-1057. (2002).

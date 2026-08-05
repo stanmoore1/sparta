@@ -141,7 +141,7 @@ emitted particles for each grid cell/surface element pair, the same as
 described in the preceeding paragraph.
 
 Equal-style variables can specify formulas with various mathematical
-functions, and include "stats_style"_status_style.html command
+functions, and include "stats_style"_stats_style.html command
 keywords for the simulation box parameters and timestep and elapsed
 time.  Thus it is easy to specify a time-dependent value of {Np}.
 
@@ -351,7 +351,7 @@ A {n} setting of {Np} > 0 or {Np} as a variable can only be used with
 a {perspecies} setting of {no}.
 
 If {normal} is set to {no}, which is the default, then unlike the "fix
-emit/face"_fix_emit/face.html command, no warning is issued if a
+emit/face"_fix_emit_face.html command, no warning is issued if a
 surface element has an inward normal in a direction opposing the
 streaming velocity, as defined by the mixture.
 

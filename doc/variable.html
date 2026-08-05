@@ -375,12 +375,12 @@ each particle whenever it is evaluated.  For <I>grid</I> style variables
 the formula computes one quantity for each grid cell whenever it is
 evaluated.  A <I>grid</I> style variable computes quantites for all flavors
 of child grid cells in the simulation, which includes unsplit, cut,
-split, and sub cells.  See <A HREF = "Section_howto.html#howto_8">Section 4.8</A> of
+split, and sub cells.  See <A HREF = "Section_howto.html#howto_8">Section 6.8</A> of
 the manual gives details of how SPARTA defines child, unsplit, split,
 and sub cells.  For <I>surf</I> style variables the formula computes one
 quantity for each surface element (line or triangle) whenever it is
 evaluated.  They can only be defined for explicit surfaces, not
-implicit surfaces.  See <A HREF = "Section_howto.html#howto_9">Section 4.9</A> of
+implicit surfaces.  See <A HREF = "Section_howto.html#howto_9">Section 6.9</A> of
 the manual for a description of both kinds of surface elements.
 </P>
 <P>Note that <I>equal</I>, <I>particle</I>, <I>grid</I>, and <I>surf</I> variables can
@@ -1013,15 +1013,15 @@ sign (e.g. $x or ${abc}) versus with a leading "v_" (e.g. v_x or
 v_abc).  The former can be used in any input script command, including
 a variable command.  The input script parser evaluates the reference
 variable immediately and substitutes its value into the command.  As
-explained in <A HREF = "Section_commands.html#3_2">Section commands 3.2</A> for
+explained in <A HREF = "Section_commands.html#cmd_2">Section commands 3.2</A> for
 "Parsing rules", you can also use un-named "immediate" variables for
 this purpose.  For example, a string like this
 $((xlo+xhi)/2+sqrt(v_area)) in an input script command evaluates the
 string between the parenthesis as an equal-style variable formula.
 </P>
 <P>Referencing a variable with a leading "v_" is an optional or required
-kind of argument for some commands (e.g. the <A HREF = "fix_ave_spatial.html">fix
-ave/spatial</A> or <A HREF = "dump.html">dump custom</A> or
+kind of argument for some commands (e.g. the <A HREF = "fix_ave_grid.html">fix
+ave/grid</A> or <A HREF = "dump.html">dump custom</A> or
 <A HREF = "stats_style.html">stats_style</A> commands) if you wish it to evaluate a
 variable periodically during a run.  It can also be used in a variable
 formula if you wish to reference a second variable.  The second
@@ -1061,7 +1061,7 @@ if it contains variables preceeded by $ signs.  For example,
 <PRE>variable nratio equal "${nfinal}/${n0}" 
 </PRE>
 <P>This is because the quotes prevent variable substitution (see <A HREF = "Section_commands.html#cmd_2">Section
-2.2</A> of the manual on parsing input script
+3.2</A> of the manual on parsing input script
 commands), and thus an error will occur when the formula for "nratio"
 is evaluated later.
 </P>

@@ -113,7 +113,7 @@ Geometry :h4
 
   "Cartesian, heirarchical grids"_#intro_3 with multiple levels of local refinement
   "create grid from input script"_create_grid.html or "read from file"_read_grid.html
-  embed :triangulated (3d) or line-segmented (2d) surfaces"_#intro_3 in grid, "read in from file"_read_surf.html :ul
+  embed "triangulated (3d) or line-segmented (2d) surfaces"_#intro_3 in grid, "read in from file"_read_surf.html :ul
 
 Gas-phase collisions and chemistry :h4
 
@@ -194,7 +194,7 @@ simulation box.  Click on the image for a larger picture.
 
 :c,image(JPG/shuttle_small.jpg,JPG/shuttle.jpg)
 
-See "Sections 4.9"_Section_howto.html#howto_9 and
+See "Sections 6.9"_Section_howto.html#howto_9 and
 "4.10"_Section_howto.html# for more details of both the grids and
 surface objects that SPARTA supports and how to define them.
 

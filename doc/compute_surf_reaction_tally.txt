@@ -155,7 +155,7 @@ as are {vx1/post}, {vy1/post}, {vz1/post} and {vx2/post}, {vy2/post},
 
 [Related commands:]
 
-"compute surf/collision/tally"_compute_surf/collision_tally.html,
+"compute surf/collision/tally"_compute_surf_collision_tally.html,
 "compute gas/reaction/tally"_compute_gas_reaction_tally.html,
 "dump tally"_dump.html
 
