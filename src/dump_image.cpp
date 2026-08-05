@@ -399,7 +399,12 @@ DumpImage::DumpImage(SPARTA *sparta, int narg, char **arg) :
         int n = strlen(&arg[iarg+2][2]) + 1;
         upystr = new char[n];
         strcpy(upystr,&arg[iarg+2][2]);
-      } else image->up[1] = atof(arg[iarg+1]);
+        // arg[iarg+2], not arg[iarg+1]: the y component was read from the x
+        // argument, so "up Ux Uy Uz" rendered as (Ux,Ux,Uz).  It is only
+        // correct when Ux happens to equal Uy -- which "up 0 0 1" does, so
+        // the common cases look right and this stayed hidden.  "up 0 1 0",
+        // restating the default, collapses to (0,0,0).
+      } else image->up[1] = atof(arg[iarg+2]);
       if (strstr(arg[iarg+3],"v_") == arg[iarg+3]) {
         int n = strlen(&arg[iarg+3][2]) + 1;
         upzstr = new char[n];
