@@ -240,10 +240,7 @@ bigint Custom::process_actions(int narg, char **arg, int external)
         csize = surf->esize[cindex];
       }
 
-      if (csize && ccol == 0)
-        error->all(FLERR,"Custom attribute array requires bracketed index");
-      if (csize == 0 && ccol)
-        error->all(FLERR,"Custom attribute vector cannot use bracketed index");
+      check_attribute_column(csize,ccol);
 
       // variable name
 
@@ -370,10 +367,7 @@ bigint Custom::process_actions(int narg, char **arg, int external)
           ctype[i] = surf->etype[cindex[i]];
           csize[i] = surf->esize[cindex[i]];
         }
-        if (csize[i] && ccol[i] == 0)
-          error->all(FLERR,"Custom attribute array requires bracketed index");
-        if (csize[i] == 0 && ccol[i])
-          error->all(FLERR,"Custom attribute vector cannot use bracketed index");
+        check_attribute_column(csize[i],ccol[i]);
         delete [] aname;
       }
 
@@ -472,10 +466,7 @@ bigint Custom::process_actions(int narg, char **arg, int external)
           error->all(FLERR,"Custom attribute name does not exist");
         ctype[i] = grid->etype[cindex[i]];
         csize[i] = grid->esize[cindex[i]];
-        if (csize[i] && ccol[i] == 0)
-          error->all(FLERR,"Custom attribute array requires bracketed index");
-        if (csize[i] == 0 && ccol[i])
-          error->all(FLERR,"Custom attribute vector cannot use bracketed index");
+        check_attribute_column(csize[i],ccol[i]);
         delete [] aname;
       }
 
@@ -1669,6 +1660,23 @@ int Custom::attribute_bracket(char *aname)
   } else ccol = 0;
 
   return ccol;
+}
+
+/* ----------------------------------------------------------------------
+   check a bracketed index CCOL against the attribute size CSIZE
+   csize = 0 for a vector attribute, N = # of columns for an array attribute
+   ccol = 0 if no brackets, else the value inside the brackets
+   error if the two are inconsistent or the column is out of range
+---------------------------------------------------------------------- */
+
+void Custom::check_attribute_column(int csize, int ccol)
+{
+  if (csize && ccol == 0)
+    error->all(FLERR,"Custom attribute array requires bracketed index");
+  if (csize == 0 && ccol)
+    error->all(FLERR,"Custom attribute vector cannot use bracketed index");
+  if (csize && (ccol < 1 || ccol > csize))
+    error->all(FLERR,"Custom attribute array is accessed out-of-range");
 }
 
 // ----------------------------------------------------------------------
