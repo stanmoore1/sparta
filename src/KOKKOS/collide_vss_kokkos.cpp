@@ -612,7 +612,9 @@ template < int NEARCP, int GASTALLY > void CollideVSSKokkos::collisions_one(COLL
 
   ndelete = h_ndelete();
 
+  const int nlocal_before_react = particle->nlocal;
   particle->nlocal = h_nlocal();
+  particle_kk->zero_custom_kokkos(nlocal_before_react,particle->nlocal);
 
   copymode = 0;
 
@@ -990,7 +992,9 @@ void CollideVSSKokkos::collisions_one_ambipolar(COLLIDE_REDUCE &reduce)
 
   ndelete = h_ndelete();
 
+  const int nlocal_before_react = particle->nlocal;
   particle->nlocal = h_nlocal();
+  particle_kk->zero_custom_kokkos(nlocal_before_react,particle->nlocal);
 
   copymode = 0;
 

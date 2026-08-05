@@ -413,6 +413,7 @@ void CreateParticlesKokkos::create_local(bigint np)
   particleKK->modify(Device,PARTICLE_MASK);
   particleKK->sync(Host,PARTICLE_MASK);
   particleKK->nlocal += nnew;
+  particleKK->zero_custom_kokkos(nlocal_before,particleKK->nlocal);
 
   auto h_cands2new = Kokkos::create_mirror_view(d_cands2new);
   Kokkos::deep_copy(h_cands2new, d_cands2new);

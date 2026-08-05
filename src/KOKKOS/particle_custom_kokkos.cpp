@@ -287,6 +287,69 @@ void ParticleKokkos::remove_custom(int index)
 }
 
 /* ----------------------------------------------------------------------
+   zero the custom attributes of particles LO through HI-1, on the device
+   Particle::add_particle() zeroes them for every particle it creates, so a
+     device path which adds particles has to do the same.  a slot at or
+     above nlocal still holds whatever the last particle there left behind,
+     and without this the new particle silently inherits it
+------------------------------------------------------------------------- */
+
+void ParticleKokkos::zero_custom_kokkos(int lo, int hi)
+{
+  if (!ncustom) return;
+  const int n = hi - lo;
+  if (n <= 0) return;
+
+  this->sync(Device,CUSTOM_MASK);
+
+  if (ncustom_ivec) {
+    auto d_ivec = k_eivec.view_device();
+    const int nvec = ncustom_ivec;
+    Kokkos::parallel_for(n, KOKKOS_LAMBDA(const int m) {
+      const int i = lo + m;
+      for (int k = 0; k < nvec; k++)
+        d_ivec[k].k_view.view_device()[i] = 0;
+    });
+  }
+
+  if (ncustom_iarray) {
+    auto d_iarray = k_eiarray.view_device();
+    auto d_icol = k_eicol.view_device();
+    const int narray = ncustom_iarray;
+    Kokkos::parallel_for(n, KOKKOS_LAMBDA(const int m) {
+      const int i = lo + m;
+      for (int k = 0; k < narray; k++)
+        for (int c = 0; c < d_icol[k]; c++)
+          d_iarray[k].k_view.view_device()(i,c) = 0;
+    });
+  }
+
+  if (ncustom_dvec) {
+    auto d_dvec = k_edvec.view_device();
+    const int nvec = ncustom_dvec;
+    Kokkos::parallel_for(n, KOKKOS_LAMBDA(const int m) {
+      const int i = lo + m;
+      for (int k = 0; k < nvec; k++)
+        d_dvec[k].k_view.view_device()[i] = 0.0;
+    });
+  }
+
+  if (ncustom_darray) {
+    auto d_darray = k_edarray.view_device();
+    auto d_dcol = k_edcol.view_device();
+    const int narray = ncustom_darray;
+    Kokkos::parallel_for(n, KOKKOS_LAMBDA(const int m) {
+      const int i = lo + m;
+      for (int k = 0; k < narray; k++)
+        for (int c = 0; c < d_dcol[k]; c++)
+          d_darray[k].k_view.view_device()(i,c) = 0.0;
+    });
+  }
+
+  this->modify(Device,CUSTOM_MASK);
+}
+
+/* ----------------------------------------------------------------------
    copy info for one particle in custom attribute vectors/arrays
    into location I from location J
 ------------------------------------------------------------------------- */

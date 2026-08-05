@@ -354,6 +354,7 @@ void FixEmitFaceKokkos::perform_task()
   });
   particleKK->nlocal = nlocal_before + nnew;
   particleKK->modify(SPARTA_NS::Device, PARTICLE_MASK);
+  particleKK->zero_custom_kokkos(nlocal_before,particleKK->nlocal);
 
   if (modify->n_update_custom) {
     auto h_keep = Kokkos::create_mirror_view(d_keep);

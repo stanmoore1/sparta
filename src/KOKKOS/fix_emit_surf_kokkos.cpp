@@ -413,6 +413,7 @@ void FixEmitSurfKokkos::perform_task()
   copymode = 0;
 
   particleKK->nlocal = nlocal_before + nnew;
+  particleKK->zero_custom_kokkos(nlocal_before,particleKK->nlocal);
   particleKK->modify(SPARTA_NS::Device, PARTICLE_MASK);
 
   if (nsurf_tally) {

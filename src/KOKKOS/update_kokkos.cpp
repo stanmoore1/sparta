@@ -667,7 +667,9 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
 
     nmigrate = h_nmigrate();
 
+    const int nlocal_before_surfreact = particle->nlocal;
     particle->nlocal = h_nlocal();
+    particle_kk->zero_custom_kokkos(nlocal_before_surfreact,particle->nlocal);
 
     int error_flag;
 
