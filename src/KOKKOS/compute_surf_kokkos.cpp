@@ -115,6 +115,7 @@ void ComputeSurfKokkos::clear()
 
   ntally = 0;
   combined = 0;
+  compressed = 0;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -200,6 +201,14 @@ void ComputeSurfKokkos::post_surf_tally()
 
 int ComputeSurfKokkos::tallyinfo(surfint *&ptr)
 {
+  // compressing below is destructive, so only do it once per clear() cycle
+
+  if (compressed) {
+    ptr = tally2surf;
+    return ntally;
+  }
+  compressed = 1;
+
   k_tally2surf.sync_host();
   ptr = tally2surf;
 
@@ -229,6 +238,25 @@ int ComputeSurfKokkos::tallyinfo(surfint *&ptr)
   }
 
   return ntally;
+}
+
+/* ----------------------------------------------------------------------
+   sum tally values to owning surfs
+   ComputeSurf::post_process_surf() collates ntally rows, but ntally is only
+     computed by tallyinfo(), which is also what copies the device tallies to
+     the host.  Only fix ave/surf calls tallyinfo(); dump surf, compute reduce
+     and surf-style variables call post_process_surf() directly, and would
+     otherwise collate the ntally = 0 left by clear() and report all zeroes.
+------------------------------------------------------------------------- */
+
+void ComputeSurfKokkos::post_process_surf()
+{
+  if (combined) return;
+
+  surfint *ptr;
+  tallyinfo(ptr);
+
+  ComputeSurf::post_process_surf();
 }
 
 /* ---------------------------------------------------------------------- */
