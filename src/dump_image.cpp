@@ -523,6 +523,61 @@ DumpImage::DumpImage(SPARTA *sparta, int narg, char **arg) :
       image->fsaa = aa;
       iarg += 2;
 
+    } else if (strcmp(arg[iarg],"depthcue") == 0) {
+      if (iarg+5 > narg) error->all(FLERR,"Illegal dump image command");
+      if (strcmp(arg[iarg+1],"yes") == 0) image->depthcue = 1;
+      else if (strcmp(arg[iarg+1],"no") == 0) image->depthcue = 0;
+      else error->all(FLERR,"Illegal dump image command");
+      double cfactor = atof(arg[iarg+2]);
+      if (cfactor < 0.0 || cfactor > 1.0)
+        error->all(FLERR,"Illegal dump image command");
+      image->depthcueint = cfactor;
+      if (strcmp(arg[iarg+3],"auto") == 0) {
+        image->depthcuecolor = NULL;
+      } else {
+        image->depthcuecolor = image->color2rgb(arg[iarg+3]);
+        if (image->depthcuecolor == NULL)
+          error->all(FLERR,"Invalid color in dump image command");
+      }
+      if (strcmp(arg[iarg+4],"auto") == 0) {
+        image->depthcuestartflag = 0;
+      } else {
+        image->depthcuestart = atof(arg[iarg+4]);
+        image->depthcuestartflag = 1;
+      }
+      iarg += 5;
+
+    } else if (strcmp(arg[iarg],"defocus") == 0) {
+      if (iarg+4 > narg) error->all(FLERR,"Illegal dump image command");
+      if (strcmp(arg[iarg+1],"yes") == 0) image->defocus = 1;
+      else if (strcmp(arg[iarg+1],"no") == 0) image->defocus = 0;
+      else error->all(FLERR,"Illegal dump image command");
+      double bfactor = atof(arg[iarg+2]);
+      if (bfactor < 0.0 || bfactor > 1.0)
+        error->all(FLERR,"Illegal dump image command");
+      image->defocusint = bfactor;
+      if (strcmp(arg[iarg+3],"auto") == 0) {
+        image->defocusstartflag = 0;
+      } else {
+        image->defocusstart = atof(arg[iarg+3]);
+        image->defocusstartflag = 1;
+      }
+      iarg += 4;
+
+    } else if (strcmp(arg[iarg],"outline") == 0) {
+      if (iarg+4 > narg) error->all(FLERR,"Illegal dump image command");
+      if (strcmp(arg[iarg+1],"yes") == 0) image->outline = 1;
+      else if (strcmp(arg[iarg+1],"no") == 0) image->outline = 0;
+      else error->all(FLERR,"Illegal dump image command");
+      int owidth = atoi(arg[iarg+2]);
+      if (owidth < 1 || owidth > 16)
+        error->all(FLERR,"Illegal dump image command");
+      image->outlinewidth = owidth;
+      image->outlinecolor = image->color2rgb(arg[iarg+3]);
+      if (image->outlinecolor == NULL)
+        error->all(FLERR,"Invalid color in dump image command");
+      iarg += 4;
+
     } else error->all(FLERR,"Illegal dump image command");
   }
 
@@ -1869,6 +1924,68 @@ int DumpImage::modify_param(int narg, char **arg)
     image->backLightColor[0] = image->backLightColor[1] =
       image->backLightColor[2] = back;
     return 5;
+  }
+
+  if (strcmp(arg[0],"gamma") == 0) {
+    if (narg < 2) error->all(FLERR,"Illegal dump_modify command");
+    double gvalue = atof(arg[1]);
+    if (gvalue < 0.1 || gvalue > 10.0)
+      error->all(FLERR,"Illegal dump_modify command");
+    image->gamma = gvalue;
+    return 2;
+  }
+
+  if (strcmp(arg[0],"ssaosamples") == 0) {
+    if (narg < 2) error->all(FLERR,"Illegal dump_modify command");
+    int nsamples = atoi(arg[1]);
+    if (nsamples < 4 || nsamples > 64)
+      error->all(FLERR,"Illegal dump_modify command");
+    image->ssaosamples = nsamples;
+    return 2;
+  }
+
+  if (strcmp(arg[0],"specular") == 0) {
+    if (narg < 2) error->all(FLERR,"Illegal dump_modify command");
+    if (strcmp(arg[1],"none") == 0) {
+      image->nospecular = 1;
+      image->specularIntensity = 0.0;
+      return 2;
+    }
+    if (strcmp(arg[1],"wide") == 0) image->specularHardness = 10.0;
+    else if (strcmp(arg[1],"narrow") == 0) image->specularHardness = 50.0;
+    else if (strcmp(arg[1],"tight") == 0) image->specularHardness = 250.0;
+    else error->all(FLERR,"Illegal dump_modify command");
+    image->specularflag = 1;
+    image->nospecular = 0;
+    image->specularIntensity = image->shiny;
+    return 2;
+  }
+
+  if (strcmp(arg[0],"metal") == 0) {
+    if (narg < 2) error->all(FLERR,"Illegal dump_modify command");
+    double mvalue = atof(arg[1]);
+    if (mvalue < 0.0 || mvalue > 1.0)
+      error->all(FLERR,"Illegal dump_modify command");
+    image->metallic = mvalue;
+    return 2;
+  }
+
+  if (strcmp(arg[0],"metalfinish") == 0) {
+    if (narg < 2) error->all(FLERR,"Illegal dump_modify command");
+    if (strcmp(arg[1],"satin") == 0) {
+      image->finishMirror = 0;
+      image->finishBand = 0.6;
+      image->finishWidth = 2.0;
+    } else if (strcmp(arg[1],"polished") == 0) {
+      image->finishMirror = 0;
+      image->finishBand = 0.6;
+      image->finishWidth = 4.0;
+    } else if (strcmp(arg[1],"mirror") == 0) {
+      image->finishMirror = 1;
+      image->finishBand = 0.4;
+      image->finishWidth = 3.0;
+    } else error->all(FLERR,"Illegal dump_modify command");
+    return 2;
   }
 
   if (strcmp(arg[0],"cmap") == 0) {

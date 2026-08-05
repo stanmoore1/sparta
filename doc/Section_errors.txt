@@ -1402,6 +1402,11 @@ sign, or a minus sign. :dd
 
 The choice of collision style is unknown. :dd
 
+{Invalid color in dump image command} :dt
+
+The specified color name was not in the list of recognized colors.
+See the dump image doc page. :dd
+
 {Invalid color in dump_modify command} :dt
 
 The specified color name was not in the list of recognized colors.

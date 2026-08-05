@@ -48,7 +48,7 @@
 </PRE>
 <LI>these keywords apply only to the (image</I> and <I>movie</I> <A HREF = "dump_image.html">styles</A> 
 
-<LI>keyword = <I>backcolor</I> or <I>backcolor2</I> or <I>bitrate</I> or <I>boxcolor</I> or <I>cmap</I> or <I>color</I> or <I>framerate</I> or <I>gcolor</I> or <I>glinecolor</I> or <I>gridgroup</I> or <I>lights</I> or <I>pcolor</I> or <I>pdiam</I> or <I>scolor</I> or <I>slinecolor</I> or <I>subboxcolor</I> or <I>surfgroup</I> 
+<LI>keyword = <I>backcolor</I> or <I>backcolor2</I> or <I>bitrate</I> or <I>boxcolor</I> or <I>cmap</I> or <I>color</I> or <I>framerate</I> or <I>gamma</I> or <I>gcolor</I> or <I>glinecolor</I> or <I>gridgroup</I> or <I>lights</I> or <I>metal</I> or <I>metalfinish</I> or <I>pcolor</I> or <I>pdiam</I> or <I>scolor</I> or <I>slinecolor</I> or <I>specular</I> or <I>ssaosamples</I> or <I>subboxcolor</I> or <I>surfgroup</I> 
 
 <PRE>  <I>backcolor</I> arg = color
     color = name of color for background
@@ -84,6 +84,8 @@
     R,G,B = red/green/blue numeric values from 0.0 to 1.0
   <I>framerate</I> arg = fps
     fps = frames per second for movie
+  <I>gamma</I> arg = gvalue
+    gvalue = gamma adjustment applied to rendered objects (from 0.1 to 10.0, 1.0 = no change)
   <I>gcolor</I> args = proc color
     proc = proc ID or range of IDs (see below)
     color = name of color or color1/color2/...
@@ -96,6 +98,10 @@
     key = intensity of key light from 0.0 to 1.0
     fill = intensity of fill light from 0.0 to 1.0
     back = intensity of back light from 0.0 to 1.0
+  <I>metal</I> arg = mfactor
+    mfactor = how metallic the rendered objects appear, from 0.0 (paint) to 1.0 (bare metal)
+  <I>metalfinish</I> arg = style
+    style = <I>satin</I> or <I>polished</I> or <I>mirror</I> = surface finish of metallic objects
   <I>pcolor</I> args = type color
     type = particle type or range of types or proc ID or range of IDs (see below)
     color = name of color or color1/color2/...
@@ -107,6 +113,10 @@
     color = name of color for surf one option
   <I>slinecolor</I> arg = color
     color = name of color for surface element outlines
+  <I>specular</I> arg = style
+    style = <I>none</I> or <I>wide</I> or <I>narrow</I> or <I>tight</I> = specular highlights off or their width
+  <I>ssaosamples</I> arg = nsamples
+    nsamples = number of SSAO sampling directions per pixel (from 4 to 64)
   <I>subboxcolor</I> arg = color
     color = name of color for processor sub-box lines
   <I>surfgroup</I> arg = group-ID
@@ -515,6 +525,23 @@ images less frequently.
 </P>
 <HR>
 
+<P>The <I>gamma</I> keyword can be used with the <A HREF = "dump_image.html">dump
+image</A> command to adjust the gamma value of the
+rendered objects: the summed up light contributions of each pixel are
+raised to the power of 1/<I>gvalue</I> before they are converted to the
+8-bit color values of the image file, similar to the gamma adjustment
+of image manipulation programs.  A value larger than 1.0 lightens the
+image, most strongly in the darker regions, and thus can bring out
+shading detail on the dimly lit side of objects; a value smaller than
+1.0 darkens the image and increases the contrast.  The default
+rendering is already tuned to look right on typical displays, and no
+gamma information is stored in the image files, so this setting
+fine-tunes the tonal balance rather than applying a required display
+correction.  The adjustment applies only to rendered objects; the
+background colors are used exactly as specified.
+</P>
+<HR>
+
 <P>The <I>gcolor</I> keyword can be used one or more times with the <A HREF = "dump_image.html">dump
 image</A> command, only when its grid color setting is
 <I>proc</I>, to set the color that grid cells will be drawn in the image.
@@ -563,6 +590,48 @@ scene.  The scene is illuminated by an ambient light, a key light, a
 fill light, and a back light, whose grayscale intensities are set by
 the four arguments, each a value from 0.0 (off) to 1.0 (brightest).
 The default lighting is ambient 0.0, key 0.9, fill 0.45, back 0.9.
+</P>
+<HR>
+
+<P>The <I>metal</I> keyword can be used with the <A HREF = "dump_image.html">dump image</A>
+command to make objects look like they are made of metal rather than
+of colored plastic.  Painted surfaces scatter light in all directions
+and reflect it without changing its color, which is what the rendering
+does by default; polished metal instead reflects light back directly
+and colors it in the process.  An <I>mfactor</I> value of 0.0 keeps the
+default appearance, 1.0 renders bare metal, and values in between
+blend the two.
+</P>
+<P>Since metal shows its surroundings rather than a color of its own, the
+rendering approximates them with a bright sky above and a dark ground
+below.  This is why metallic objects have a bright upper and a dark
+lower half, and why they need a dark background to look convincing.
+The color assigned to an object tints these reflections, so gold
+objects show a golden sheen and aluminum ones a neutral gray sheen.
+The pre-defined color <I>silver</I> is a good match for aluminum.  Colors
+chosen for paint are often too saturated for metal: for gold, for
+example, defining a color with the <I>color</I> keyword using the values
+1.0 0.766 0.336 looks more like the metal than the pre-defined color
+<I>gold</I> does.
+</P>
+<P>IMPORTANT NOTE: These settings imitate the appearance of metal with a
+few extra operations per pixel.  They do not compute how light
+actually travels through the scene.  For images where the appearance
+of the material matters, exporting the particle positions and
+rendering them with a ray tracing program will always give better
+results than any combination of these settings.
+</P>
+<HR>
+
+<P>The <I>metalfinish</I> keyword can be used with the <A HREF = "dump_image.html">dump
+image</A> command to select the surface finish used when
+the <I>metal</I> keyword is enabled.  A <I>satin</I> finish has a broad soft
+sheen and resembles brushed metal such as aluminum.  A <I>polished</I>
+finish concentrates the sheen into a narrower streak.  A <I>mirror</I>
+finish reflects the surroundings the way a curved mirror does, which
+makes spheres look like polished ball bearings, with a darker lower
+half than the other two settings.  This keyword has no effect unless
+the <I>metal</I> keyword is set to a value larger than 0.0.
 </P>
 <HR>
 
@@ -655,6 +724,34 @@ option.
 </P>
 <HR>
 
+<P>The <I>specular</I> keyword can be used with the <A HREF = "dump_image.html">dump
+image</A> command to adjust the specular highlights
+independently from the <I>shiny</I> keyword of the dump image command.  The
+<I>none</I> setting turns the highlights off entirely, which results in a
+rough, matte surface appearance from the remaining diffuse lighting.
+The other settings select the width of the highlights: <I>wide</I>
+highlights are close to the default appearance, <I>narrow</I> highlights
+are visibly smaller, and <I>tight</I> produces small sharp highlights with
+a plastic-like appearance.  The <I>sfactor</I> value of the <I>shiny</I> keyword
+scales the brightness of the highlights; without the <I>specular</I>
+keyword it also sets their width.
+</P>
+<HR>
+
+<P>The <I>ssaosamples</I> keyword can be used with the <A HREF = "dump_image.html">dump
+image</A> command to set the number of directions that
+the SSAO depth shading enabled by the <I>ssao</I> keyword examines around
+each pixel.  More directions produce smoother shading; fewer
+directions render proportionally faster but make the shading grainier.
+Without this setting the number of directions is derived from the
+<I>dfactor</I> value of the <I>ssao</I> keyword and ranges from 8 to 40.
+Reducing the number of directions is a simple way to trade some image
+quality for faster image output, for example for preview renderings.
+The graininess is less visible when the <I>fsaa</I> keyword of the dump
+image command is also enabled.
+</P>
+<HR>
+
 <P>The <I>subboxcolor</I> keyword can be used with the <A HREF = "dump_image.html">dump
 image</A> command to set the color of the processor
 sub-box boundaries drawn in each image.  See the "dump image subbox"
@@ -696,9 +793,12 @@ defined by the <A HREF = "group.html">group surf</A> command.
 <LI>first = no
 <LI>flush = yes
 <LI>format = %d and %g for each integer or floating point value
+<LI>gamma = 1.0
 <LI>gcolor = * red/green/blue/yellow/aqua/cyan
 <LI>glinecolor = white
 <LI>gridgroup = all
+<LI>metal = 0.0
+<LI>metalfinish = satin
 <LI>nfile = 1
 <LI>pad = 0
 <LI>pcolor = * red/green/blue/yellow/aqua/cyan
@@ -706,6 +806,8 @@ defined by the <A HREF = "group.html">group surf</A> command.
 <LI>region = none
 <LI>scolor = * gray
 <LI>slinecolor = white
+<LI>specular = width derived from the <I>shiny</I> keyword of the dump image command
+<LI>ssaosamples = number derived from the <I>dfactor</I> value of the <I>ssao</I> keyword
 <LI>surfgroup = all
 <LI>thresh = none 
 </UL>

@@ -33,7 +33,7 @@
 
 <LI>zero or more keyword/value pairs may be appended 
 
-<LI>keyword = <I>particle</I> or <I>pdiam</I> or <I>grid</I> or <I>gridx</I> or <I>gridy</I> or <I>gridz</I> or <I>surf</I> or <I>size</I> or <I>view</I> or <I>center</I> or <I>up</I> or <I>zoom</I> or <I>persp</I> or <I>box</I> or <I>subbox</I> or <I>gline</I> or <I>sline</I> or <I>axes</I> or <I>shiny</I> or <I>ssao</I> or <I>fsaa</I> 
+<LI>keyword = <I>particle</I> or <I>pdiam</I> or <I>grid</I> or <I>gridx</I> or <I>gridy</I> or <I>gridz</I> or <I>surf</I> or <I>size</I> or <I>view</I> or <I>center</I> or <I>up</I> or <I>zoom</I> or <I>persp</I> or <I>box</I> or <I>subbox</I> or <I>gline</I> or <I>sline</I> or <I>axes</I> or <I>shiny</I> or <I>ssao</I> or <I>fsaa</I> or <I>depthcue</I> or <I>defocus</I> or <I>outline</I> 
 
 <PRE>  <I>particle</I> = yes/no = do or do not draw particles
   <I>pdiam</I> value = number = numeric value for particle diameter (distance units)
@@ -94,7 +94,20 @@
     seed = random # seed (positive integer)
     dfactor = strength of shading from 0.0 to 1.0
   <I>fsaa</I> value = yes/no = full scene anti-aliasing
-    yes/no = do or do not anti-alias the image 
+    yes/no = do or do not anti-alias the image
+  <I>depthcue</I> values = yes/no cfactor color start = depth cueing
+    yes/no = turn depth cueing on/off
+    cfactor = strength of fading from 0.0 to 1.0
+    color = fog color name or <I>auto</I> = fade toward the background color
+    start = box fraction along the view direction where fading starts, or <I>auto</I> = nearest rendered object
+  <I>defocus</I> values = yes/no bfactor start = defocus of distant objects
+    yes/no = turn defocusing on/off
+    bfactor = strength of the blur from 0.0 to 1.0
+    start = box fraction along the view direction where blurring starts, or <I>auto</I> = nearest rendered object
+  <I>outline</I> values = yes/no width color = outlines at depth jumps
+    yes/no = turn outline drawing on/off
+    width = width of the outlines in pixels (from 1 to 16)
+    color = color name of the outlines 
 </PRE>
 
 </UL>
@@ -566,6 +579,14 @@ increase the cost of computing the image by roughly 2x.  The strength
 of the effect can be scaled by the <I>dfactor</I> parameter.  If <I>no</I> is
 set, no depth shading is performed.
 </P>
+<P>The randomization of the SSAO shading is computed from a deterministic
+noise pattern derived from the pixel position and the <I>seed</I> value.
+Rendered images do not depend on the number of MPI ranks, and images
+of an unchanged scene are exactly reproducible, which avoids
+flickering shading in movies.  Different <I>seed</I> values shift the noise
+pattern.  The number of sampling directions per pixel can be selected
+with the <A HREF = "dump_modify.html">dump_modify ssaosamples</A> option.
+</P>
 <P>The <I>fsaa</I> keyword turns on/off full scene anti-aliasing (FSAA).  If
 <I>yes</I> is set, the image is rendered internally at twice the requested
 size and then scaled back down by averaging, which smooths jagged
@@ -573,6 +594,71 @@ edges of rendered objects.  This increases the cost of computing the
 image by roughly 4x.  The written image has the size requested by the
 <I>size</I> keyword, regardless of this setting.  If <I>no</I> is set, no
 anti-aliasing is performed.
+</P>
+<P>The <I>depthcue</I> keyword turns on/off depth cueing.  If <I>yes</I> is set,
+rendered objects fade toward the fog color the more distant from the
+viewer they are, similar to looking through fog.  This is perceived as
+depth and helps to visually untangle dense systems.  The <I>cfactor</I>
+value scales the strength of the fading: with <I>cfactor</I> = 1.0 the most
+distant objects blend completely into the fog color, smaller values
+reduce the maximum amount of fading.  The <I>color</I> setting selects the
+fog color: with <I>auto</I> the objects fade toward the background color,
+following the background gradient when one is set with the
+<I>backcolor2</I> option; any color name known to SPARTA selects that color
+instead, e.g. white or gray fog over a dark background.  The <I>start</I>
+setting determines where the fading begins.  With <I>auto</I> it begins at
+the nearest rendered object, so the front of the scene never fades.  A
+numeric value instead positions the start as a fraction of the
+simulation box projected onto the view direction, similar to the
+fractions of the <I>center</I> keyword but reduced to a single number: 0.0
+starts the fading at the side of the box nearest to the camera, 0.5 at
+its middle, and 1.0 at its far side; values outside this range are
+allowed.  Objects in front of the start position are not faded, which
+avoids darkening most of the scene when the rendered objects span a
+large depth range.  The fading always ends at the most distant
+rendered object.  Unlike the <I>ssao</I> keyword, depth cueing adds no
+significant computational cost, and both can be combined.
+</P>
+<P>The <I>defocus</I> keyword turns on/off defocusing of distant objects.  If
+<I>yes</I> is set, objects are blurred the more distant from the viewer
+they are, as if the camera were focused on the front of the scene.
+This draws the attention to the objects in front and is often more
+effective for that purpose than the <I>depthcue</I> keyword, since it
+leaves the colors of the distant objects untouched.  Both can also be
+combined.
+</P>
+<P>The <I>bfactor</I> value scales the strength of the blur: with <I>bfactor</I> =
+1.0 the most distant objects are blurred over a radius of 1 percent of
+the image height, smaller values reduce the blur accordingly.
+Blurring over much more than the size of the rendered particles turns
+them into a uniform haze, which looks like fog rather than like a
+photograph taken with a shallow depth of field, so moderate values
+usually give the best result.  The <I>start</I> setting determines where
+the blurring begins and uses the same convention as the <I>start</I>
+setting of the <I>depthcue</I> keyword: with <I>auto</I> it begins at the
+nearest rendered object, so the front of the scene stays sharp, while
+a numeric value positions the start as a fraction of the simulation
+box projected onto the view direction, with 0.0 at the side of the box
+nearest to the camera, 0.5 at its middle, and 1.0 at its far side.
+Objects in front of the start position are not blurred, and the blur
+always reaches its maximum at the most distant rendered object.
+</P>
+<P>Only objects behind the start position are blurred; unlike a camera
+lens this does not blur objects in front of the plane of focus.  The
+cost of the blurring is much smaller than that of the <I>ssao</I> keyword
+and grows with the <I>bfactor</I> value, since wider blurs need more
+samples per pixel.  As with the <I>ssao</I> keyword, the result does not
+depend on the number of MPI ranks, so images of an unchanged scene are
+exactly reproducible.
+</P>
+<P>The <I>outline</I> keyword turns on/off drawing outlines where the distance
+from the viewer jumps, i.e. along the visible edges of particles and
+other objects in front of the background or in front of more distant
+objects.  This produces a flat, illustration-like appearance similar
+to hand-drawn molecular graphics, especially when combined with
+reduced shininess or increased ambient lighting.  The <I>width</I> value
+sets the width of the outlines in pixels of the final image; the
+<I>color</I> value sets their color, e.g. black.
 </P>
 <HR>
 
@@ -714,6 +800,9 @@ mp4).
 <LI>axes = no 0.0 0.0
 <LI>shiny = 1.0
 <LI>ssao = no
-<LI>fsaa = no 
+<LI>fsaa = no
+<LI>depthcue = no
+<LI>defocus = no
+<LI>outline = no 
 </UL>
 </HTML>

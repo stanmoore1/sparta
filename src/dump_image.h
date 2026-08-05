@@ -270,6 +270,11 @@ E: Invalid dump image persp value
 
 Persp value must be >= 0.0.
 
+E: Invalid color in dump image command
+
+The specified color name was not in the list of recognized colors.
+See the dump image doc page.
+
 E: Invalid color in dump_modify command
 
 The specified color name was not in the list of recognized colors.
