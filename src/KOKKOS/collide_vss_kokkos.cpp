@@ -1088,18 +1088,11 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar< GASTALLY, AT
     else jpart = &d_elist(icell,j-np);
 
     // check for e/e pair
-    // count as collision, but do not perform it
+    // no collision is performed, so it must not be counted as one; see the
+    //   same test in Collide::collisions_one_ambipolar()
 
-    if (ipart->ispecies == ambispecies && jpart->ispecies == ambispecies) {
-      if (ATOMIC_REDUCTION == 1)
-        Kokkos::atomic_fetch_add(&d_ncollide_one(),1);
-      else if (ATOMIC_REDUCTION == 0)
-        d_ncollide_one()++;
-      else
-        reduce.ncollide_one++;
-
+    if (ipart->ispecies == ambispecies && jpart->ispecies == ambispecies)
       continue;
-    }
 
     // if particle I is electron
     // swap with J, since electron must be 2nd in any ambipolar reaction
