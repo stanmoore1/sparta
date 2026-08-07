@@ -158,6 +158,11 @@ void SpartaGui::setupUi(QSettings &settings, QFont &allFont, QFont &monoFont)
     connect(welcome, &WelcomeScreen::openFileRequested, this,
             [this](const QString &path) { openFile(path); });
     connect(welcome, &WelcomeScreen::openExampleRequested, this, &SpartaGui::openExamplePath);
+    // the gallery is curated highlights; the full example list is this menu
+    connect(welcome, &WelcomeScreen::browseExamplesRequested, this,
+            [this]() { exampleMenu->popup(QCursor::pos()); });
+    connect(welcome, &WelcomeScreen::helpRequested, this, &SpartaGui::help);
+    connect(welcome, &WelcomeScreen::docsRequested, this, &SpartaGui::howto);
 
     // docked panel layout (Output/Charts/Image/Slide Show/Variables) replaces
     // setCentralWidget(): PanelManager installs the central stack as the

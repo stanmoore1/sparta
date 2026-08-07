@@ -28,6 +28,8 @@ class QListWidget;
  * directory by SpartaGui and emits requests back; SpartaGui does the actual
  * opening (reusing openFile()/openExamplePath()/newDocument()).
  */
+class QLineEdit;
+
 class WelcomeScreen : public QWidget {
     Q_OBJECT
 
@@ -49,6 +51,12 @@ signals:
     void newFileRequested();
     /** @brief The user asked to browse for a file to open */
     void browseRequested();
+    /** @brief The user asked for the full example list (gallery is curated) */
+    void browseExamplesRequested();
+    /** @brief The user asked for the Quick Help dialog */
+    void helpRequested();
+    /** @brief The user asked for the SPARTA-GUI documentation */
+    void docsRequested();
 
 private:
     /** @brief The shipped :/examples thumbnail for a deck, or a null pixmap if
@@ -57,7 +65,10 @@ private:
 
     void rebuildRecents();
     void rebuildExamples();
+    /** @brief Hide gallery/recent entries whose name does not contain @p needle */
+    void applyFilter(const QString &needle);
 
+    QLineEdit *filterEdit = nullptr;
     QListWidget *recentList;
     QListWidget *exampleList;
     QLabel *recentEmpty;

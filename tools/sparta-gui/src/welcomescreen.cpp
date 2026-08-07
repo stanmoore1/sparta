@@ -19,6 +19,7 @@
 #include <QHBoxLayout>
 #include <QIcon>
 #include <QLabel>
+#include <QLineEdit>
 #include <QListWidget>
 #include <QListWidgetItem>
 #include <QPixmap>
@@ -82,6 +83,16 @@ WelcomeScreen::WelcomeScreen(QWidget *parent) :
     rule->setFrameShadow(QFrame::Sunken);
     outer->addWidget(rule);
 
+    // one filter over both columns: with twenty-odd highlights and five
+    // recents nothing needs paging, but finding "emit" by typing beats
+    // scanning a grid of pictures
+    filterEdit = new QLineEdit;
+    filterEdit->setObjectName("welcomeFilter");
+    filterEdit->setPlaceholderText("Filter the recent files and examples...");
+    filterEdit->setClearButtonEnabled(true);
+    connect(filterEdit, &QLineEdit::textChanged, this, &WelcomeScreen::applyFilter);
+    outer->addWidget(filterEdit);
+
     // --- two columns: recent files | examples gallery --------------------
     auto *columns = new QHBoxLayout;
     columns->setSpacing(20);
@@ -109,7 +120,18 @@ WelcomeScreen::WelcomeScreen(QWidget *parent) :
 
     // examples gallery (right)
     auto *exCol = new QVBoxLayout;
-    exCol->addWidget(new QLabel("<b>Examples</b>"));
+    auto *exHead = new QHBoxLayout;
+    exHead->addWidget(new QLabel("<b>Example Highlights</b>"));
+    exHead->addStretch();
+    // The gallery is a curated set -- decks with an official rendered still --
+    // not the index. The full list stays one click away, so curation never
+    // makes anything unreachable.
+    auto *allbtn = new QPushButton("Browse all examples...");
+    allbtn->setObjectName("browseExamples");
+    allbtn->setFlat(true);
+    connect(allbtn, &QPushButton::clicked, this, &WelcomeScreen::browseExamplesRequested);
+    exHead->addWidget(allbtn);
+    exCol->addLayout(exHead);
     exampleList = new QListWidget;
     exampleList->setObjectName("exampleList");
     exampleList->setViewMode(QListView::IconMode);
@@ -127,6 +149,40 @@ WelcomeScreen::WelcomeScreen(QWidget *parent) :
     columns->addLayout(exCol, 5);
 
     outer->addLayout(columns, 1);
+
+    // footer: where to learn more, and the three keys most worth knowing
+    auto *footer = new QHBoxLayout;
+    auto *hints  = new QLabel("Run a deck: Ctrl+Enter   \u00b7   Find anything: Ctrl+Shift+P   "
+                              "\u00b7   Shortcuts: F1");
+    hints->setObjectName("welcomeHints");
+    hints->setEnabled(false);
+    footer->addWidget(hints);
+    footer->addStretch();
+    auto *helpbtn = new QPushButton(QIcon(":/icons/help-faq.svg"), "Quick Help");
+    helpbtn->setFlat(true);
+    connect(helpbtn, &QPushButton::clicked, this, &WelcomeScreen::helpRequested);
+    auto *docsbtn = new QPushButton(QIcon(":/icons/system-help.svg"), "Documentation");
+    docsbtn->setFlat(true);
+    connect(docsbtn, &QPushButton::clicked, this, &WelcomeScreen::docsRequested);
+    footer->addWidget(helpbtn);
+    footer->addWidget(docsbtn);
+    outer->addLayout(footer);
+}
+
+void WelcomeScreen::applyFilter(const QString &needle)
+{
+    const QString want = needle.trimmed();
+    for (int i = 0; i < exampleList->count(); ++i) {
+        auto *item = exampleList->item(i);
+        item->setHidden(!want.isEmpty() &&
+                        !item->text().contains(want, Qt::CaseInsensitive) &&
+                        !item->data(Qt::UserRole).toString().contains(want, Qt::CaseInsensitive));
+    }
+    for (int i = 0; i < recentList->count(); ++i) {
+        auto *item = recentList->item(i);
+        item->setHidden(!want.isEmpty() &&
+                        !item->text().contains(want, Qt::CaseInsensitive));
+    }
 }
 
 QPixmap WelcomeScreen::thumbnailFor(const QString &inpath) const

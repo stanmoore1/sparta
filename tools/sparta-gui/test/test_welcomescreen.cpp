@@ -28,7 +28,9 @@
 #include <QFile>
 #include <QIcon>
 #include <QLabel>
+#include <QLineEdit>
 #include <QListWidget>
+#include <QPushButton>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTextStream>
@@ -253,6 +255,66 @@ TEST_F(Welcome, TheNewAndBrowseButtonsAskForWhatTheySay)
 
     EXPECT_EQ(newFile.count(), 1) << "nothing on the welcome screen starts a new file";
     EXPECT_EQ(browse.count(), 1) << "nothing on the welcome screen browses for a file";
+}
+
+// One filter over both columns: the gallery is a curated set of highlights,
+// but "type a few letters" must still beat scanning a grid of pictures.
+TEST_F(Welcome, TheFilterNarrowsBothListsAndClearingRestoresThem)
+{
+    WelcomeScreen w;
+    touch(dir.filePath("circle/in.circle"));
+    touch(dir.filePath("emit/in.emit.face"));
+    // decks need committed thumbnails to appear; circle and emit.face have them
+    w.setExamplesDir(dir.path());
+    touch(dir.filePath("recent_circle.in"));
+    touch(dir.filePath("other.in"));
+    w.setRecentFiles({dir.filePath("recent_circle.in"), dir.filePath("other.in")});
+
+    auto *filter = w.findChild<QLineEdit *>("welcomeFilter");
+    ASSERT_NE(filter, nullptr) << "the welcome screen has no filter box";
+
+    auto visibleCount = [](QListWidget *l) {
+        int n = 0;
+        for (int i = 0; i < l->count(); ++i)
+            if (!l->item(i)->isHidden()) ++n;
+        return n;
+    };
+    auto *examples = w.findChild<QListWidget *>("exampleList");
+    auto *recents  = w.findChild<QListWidget *>("recentList");
+    ASSERT_NE(examples, nullptr);
+    ASSERT_NE(recents, nullptr);
+    const int allExamples = visibleCount(examples);
+    ASSERT_GE(allExamples, 2) << "test decks did not reach the gallery";
+
+    filter->setText("circle");
+    EXPECT_EQ(visibleCount(examples), 1) << "the gallery did not narrow to the match";
+    EXPECT_EQ(visibleCount(recents), 1) << "the recents did not narrow to the match";
+
+    filter->clear();
+    EXPECT_EQ(visibleCount(examples), allExamples) << "clearing the filter lost entries";
+    EXPECT_EQ(visibleCount(recents), 2);
+}
+
+// The gallery is deliberately curated; the way to everything else must still
+// be on the page, and the footer must reach the help surfaces.
+TEST_F(Welcome, TheCuratedGalleryOffersARouteToEverythingElse)
+{
+    WelcomeScreen w;
+    QSignalSpy all(&w, &WelcomeScreen::browseExamplesRequested);
+    QSignalSpy help(&w, &WelcomeScreen::helpRequested);
+    QSignalSpy docs(&w, &WelcomeScreen::docsRequested);
+
+    auto *allbtn = w.findChild<QPushButton *>("browseExamples");
+    ASSERT_NE(allbtn, nullptr) << "no way from the curated gallery to the full example list";
+    allbtn->click();
+    EXPECT_EQ(all.count(), 1);
+
+    for (auto *b : w.findChildren<QPushButton *>()) {
+        if (b->text().contains("Quick Help")) b->click();
+        if (b->text().contains("Documentation")) b->click();
+    }
+    EXPECT_EQ(help.count(), 1) << "no Quick Help on the welcome screen";
+    EXPECT_EQ(docs.count(), 1) << "no Documentation link on the welcome screen";
 }
 
 int main(int argc, char **argv)
