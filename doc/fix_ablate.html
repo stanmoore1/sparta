@@ -160,7 +160,7 @@ read_isurf          all 20 20 20 binary.21x21x21 99.5 ablate
 <A HREF = "read_isurf.html">read_isurf</A> command, because surfaces must exist
 before assigning collision and reaction models to them.  The <A HREF = "fix_ablate.html">fix
 ablate</A> command must come before the
-<A HREF = "read_isurf.html">read_isurf</A> command, since it uses the ID of the <A HREF = "fix_ablate">fix
+<A HREF = "read_isurf.html">read_isurf</A> command, since it uses the ID of the <A HREF = "fix_ablate.html">fix
 ablate</A> command as an argument to create implicit surfaces.
 The <A HREF = "fix_ablate.html">fix ablate</A> command takes a compute or fix as an
 argument, in this case the ID of the <A HREF = "compute_react_isurf_grid.html">compute
@@ -169,7 +169,7 @@ specify what calculation drives the ablation.  In this case, it is the
 <A HREF = "compute_react_isurf_grid.html">compute react/isurf/grid</A> command (or
 could be the <A HREF = "fix_ave_grid.html">fix ave/grid</A> command) which tallies
 counts of surface reactions for implicit triangles in each grid cell.
-The <A HREF = "compute">compute react/isurf/grid</A> react/isurf/grid command
+The <A HREF = "compute.html">compute react/isurf/grid</A> react/isurf/grid command
 requires the ID of a surface reaction model, so that it knows the list
 of possible reactions to tally.  In this case the reaction is set by
 the <A HREF = "surf_react.html">surf_react</A> command, which must therefore comes

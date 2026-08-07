@@ -105,9 +105,6 @@ CollideVSSKokkos::~CollideVSSKokkos()
 {
   if (copymode) return;
 
-  grid_kk_copy.uncopy();
-  react_kk_copy.uncopy();
-
   memoryKK->destroy_kokkos(k_dellist,dellist);
 
 #ifdef SPARTA_KOKKOS_EXACT
@@ -569,6 +566,14 @@ template < int NEARCP, int GASTALLY > void CollideVSSKokkos::collisions_one(COLL
       react_kk_copy.copy(react_kk);
     }
 
+    // zero the custom attributes of the slots a reaction can fill
+    // must precede the kernel, not follow it: EEXCHANGE_ReactingEDisposal()
+    //   sets the vibrational mode levels of the third product it just created
+    // repeated on each retry, since a rolled back attempt leaves values
+    //   behind in those slots
+
+    if (react) particle_kk->zero_custom_kokkos();
+
     if (sparta->kokkos->atomic_reduction) {
       if (sparta->kokkos->need_atomics)
         Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagCollideCollisionsOne<NEARCP,GASTALLY,1> >(0,nglocal),*this);
@@ -933,6 +938,15 @@ void CollideVSSKokkos::collisions_one_ambipolar(COLLIDE_REDUCE &reduce)
       react_kk_copy.copy(react_kk);
     }
 
+    // zero the custom attributes of the slots a reaction can fill
+    // must precede the kernel, not follow it: ambi_reset_kokkos() sets the
+    //   ion flag of the third product the reaction just created, and
+    //   EEXCHANGE_ReactingEDisposal() sets its vibrational mode levels
+    // repeated on each retry, since a rolled back attempt leaves values
+    //   behind in those slots
+
+    if (react) particle_kk->zero_custom_kokkos();
+
     if (sparta->kokkos->atomic_reduction) {
       if (sparta->kokkos->need_atomics)
         Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagCollideCollisionsOneAmbipolar<GASTALLY,1> >(0,nglocal),*this);
@@ -1091,18 +1105,11 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar< GASTALLY, AT
     else jpart = &d_elist(icell,j-np);
 
     // check for e/e pair
-    // count as collision, but do not perform it
+    // no collision is performed, so it must not be counted as one; see the
+    //   same test in Collide::collisions_one_ambipolar()
 
-    if (ipart->ispecies == ambispecies && jpart->ispecies == ambispecies) {
-      if (ATOMIC_REDUCTION == 1)
-        Kokkos::atomic_fetch_add(&d_ncollide_one(),1);
-      else if (ATOMIC_REDUCTION == 0)
-        d_ncollide_one()++;
-      else
-        reduce.ncollide_one++;
-
+    if (ipart->ispecies == ambispecies && jpart->ispecies == ambispecies)
       continue;
-    }
 
     // if particle I is electron
     // swap with J, since electron must be 2nd in any ambipolar reaction

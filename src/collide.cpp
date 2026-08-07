@@ -959,12 +959,15 @@ template < int GASTALLY > void Collide::collisions_one_ambipolar()
       else jpart = &elist[j-np];
 
       // check for e/e pair
-      // count as collision, but do not perform it
+      // the ambipolar model has no electron/electron interaction, so this
+      //   attempt performs no collision and must not be counted as one.
+      //   counting it inflated Ncoll by the e/e fraction of all attempts,
+      //   which made a single-group run disagree with the same problem run
+      //   with the electrons in their own group, where the e/e group pair
+      //   is skipped outright
 
-      if (ipart->ispecies == ambispecies && jpart->ispecies == ambispecies) {
-        ncollide_one++;
+      if (ipart->ispecies == ambispecies && jpart->ispecies == ambispecies)
         continue;
-      }
 
       // if particle I is electron
       // swap with J, since electron must be 2nd in any ambipolar reaction
