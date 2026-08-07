@@ -21,6 +21,8 @@
 // a file, or starts a run would block or leave debris, so those actions are
 // checked for existence, shortcut and icon rather than triggered.
 
+#include "actionscan.h"
+
 #include <gtest/gtest.h>
 
 #include <QAction>
@@ -282,6 +284,7 @@ TEST_F(MainWindow, TheDocumentedShortcutsAreBound)
     // muscle memory silently.
     const std::map<QString, QString> expected = {
         {"&New Input File", "Ctrl+N"},        {"&Open Input File", "Ctrl+O"},
+        {"&Welcome Screen", "Alt+Home"},
         {"&Save Input File", "Ctrl+S"},       {"Save Input File &As", "Ctrl+Shift+S"},
         {"&View Text File", "Ctrl+Shift+F"},  {"&Plot Data File...", "Ctrl+Shift+P"},
         {"Inspect &Restart File", "Ctrl+Shift+R"},
@@ -615,6 +618,49 @@ TEST_F(MainWindow, TheWindowKeepsTheSizeItWasAskedFor)
 {
     EXPECT_EQ(gui->width(), 800);
     EXPECT_EQ(gui->height(), 600);
+}
+
+// ------------------------------------------------------------ discoverability
+
+// The status-tip table lives apart from the ~70 addMenuAction() call sites, so
+// nothing structural keeps it complete: an action added without a table entry
+// compiles and runs, it just hovers silent. This test is the enforcement --
+// the table stays complete because forgetting it fails here, by name.
+TEST_F(MainWindow, EveryMenuActionCarriesAStatusTip)
+{
+    const auto infos = scanMenuBar(gui->findChild<QMenuBar *>());
+    ASSERT_GT(infos.size(), 40) << "the walker lost most of the menu tree";
+
+    QStringList silent;
+    for (const auto &info : infos)
+        if (info.action && info.action->statusTip().isEmpty())
+            silent << (info.path + " > " + info.text);
+
+    EXPECT_TRUE(silent.isEmpty())
+        << silent.size() << " menu entries say nothing when hovered: "
+        << silent.join(", ").toStdString();
+}
+
+// The welcome page is not the editor: while it is shown the title used to
+// claim "Editor - *unknown*", which reads as a bug ("what is unknown?") on
+// the first screen a new user ever sees.
+TEST_F(MainWindow, TheWindowTitleFollowsTheWelcomePage)
+{
+    QAction *welcome = action("&Welcome Screen");
+    ASSERT_NE(welcome, nullptr) << "the Welcome Screen entry is gone";
+    EXPECT_EQ(welcome->shortcut(), QKeySequence("Alt+Home"));
+
+    welcome->trigger();
+    QCoreApplication::processEvents();
+    EXPECT_EQ(gui->windowTitle().toStdString(), "SPARTA-GUI - Welcome");
+
+    // leaving the welcome page brings the editor title back
+    QAction *fresh = action("&New Input File");
+    ASSERT_NE(fresh, nullptr);
+    fresh->trigger();
+    QCoreApplication::processEvents();
+    EXPECT_TRUE(gui->windowTitle().contains("Editor"))
+        << gui->windowTitle().toStdString();
 }
 
 int main(int argc, char **argv)

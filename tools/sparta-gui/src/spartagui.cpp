@@ -12,6 +12,7 @@
 #include "spartagui.h"
 
 #include "aboutdialog.h"
+#include "actionmetadata.h"
 #include "chartviewer.h"
 #include "codeeditor.h"
 #include "dockpanels.h"
@@ -278,6 +279,12 @@ QAction *SpartaGui::addMenuAction(QMenu *menu, const QString &iconpath, const QS
 void SpartaGui::createFileMenu()
 {
     auto *menu = menubar->addMenu("&File");
+    // Alt+Home, not Ctrl+Home: Ctrl+Home is cursor-to-start-of-document in
+    // every text editor including ours, and stealing it from the editor to
+    // switch pages would be the kind of surprise this menu exists to avoid.
+    addMenuAction(menu, ":/icons/help-faq.svg", "&Welcome Screen", "Alt+Home",
+                  [this]() { showWelcome(); });
+    menu->addSeparator();
     addMenuAction(menu, ":/icons/document-new.svg", "&New Input File", "Ctrl+N",
                   &SpartaGui::newDocument);
     addMenuAction(menu, ":/icons/document-open.svg", "&Open Input File", "Ctrl+O",
@@ -306,6 +313,8 @@ void SpartaGui::createFileMenu()
     for (int i = 0; i < Cfg::NUM_RECENT_FILES; ++i) {
         recentActions[i] = addMenuAction(menu, ":/icons/document-open-recent.svg",
                                          QString("&%1.").arg(i + 1), "", &SpartaGui::openRecent);
+        // their text is a file name, so the status-tip table finds them by this
+        recentActions[i]->setObjectName(QString("recentfile%1").arg(i));
     }
     menu->addSeparator();
 
@@ -536,8 +545,6 @@ void SpartaGui::createViewMenu()
     addMenuAction(menu, ":/icons/image-viewer.svg", "3D Viewer &Window (VTK)", "",
                   &SpartaGui::open3DViewer);
 #endif
-    addMenuAction(menu, ":/icons/help-faq.svg", "&Welcome Screen", "",
-                  [this]() { showWelcome(); });
     addMenuAction(menu, ":/icons/preferences-reset.svg", "Reset &Layout", "",
                   [this]() { panels->resetCurrentMode(); });
 }
@@ -784,19 +791,43 @@ void SpartaGui::setupPlugin(QSettings &settings)
                 QString pluginfile = QFileDialog::getOpenFileName(
                     this, "Select SPARTA shared library to use", ".", pattern, nullptr,
                     QFileDialog::DontResolveSymlinks | QFileDialog::ReadOnly);
-                if (!pluginfile.isEmpty() && pluginfile.contains("libsparta", Qt::CaseSensitive)) {
-                    auto canonical = QFileInfo(pluginfile).canonicalFilePath();
-                    settings.setValue(Keys::PLUGIN_PATH, canonical);
-                    settings.sync();
-                    // must re-launch SPARTA-GUI to cleanly load the selected new plugin
-                    relaunchApplication();
-                    // This should not happen...
-                    critical(this, "SPARTA-GUI Error", "Relaunching SPARTA-GUI failed.",
-                             "SPARTA-GUI must be restarted to correctly load the selected "
-                             "SPARTA shared library. Click on 'Close' to exit.");
-                    exit(1);
+                // user cancelled the file dialog -> loop back to the choices
+                if (pluginfile.isEmpty()) continue;
+
+                // The name check is a heuristic, and it used to reject silently
+                // -- pick the wrong file and the same three-button dialog just
+                // came back with no hint why. Explain the rule and let the user
+                // overrule it: loadLib() below is the real test.
+                if (!pluginfile.contains("libsparta", Qt::CaseInsensitive)) {
+                    if (QMessageBox::question(
+                            this, "SPARTA-GUI - Unexpected File Name",
+                            QString("The name of\n\n%1\n\ndoes not contain \"libsparta\". "
+                                    "SPARTA-GUI expects the SPARTA shared library, e.g. "
+                                    "libsparta.so or libsparta.dylib.\n\n"
+                                    "Try to load this file anyway?")
+                                .arg(QDir::toNativeSeparators(pluginfile)),
+                            QMessageBox::Yes | QMessageBox::No,
+                            QMessageBox::No) != QMessageBox::Yes)
+                        continue;
                 }
-                // user cancelled file dialog -> loop back to show the dialog again
+
+                // No relaunch: nothing is loaded yet on this path, so the
+                // chosen library can be dlopen'ed right here and the
+                // constructor simply continues with it. (Replacing an
+                // already-loaded library, from Preferences, is what needs the
+                // relaunch.)
+                const auto canonical = QFileInfo(pluginfile).canonicalFilePath();
+                if (sparta.loadLib(canonical)) {
+                    pluginPath = canonical;
+                    settings.setValue(Keys::PLUGIN_PATH, pluginPath);
+                    settings.sync();
+                } else {
+                    critical(this, "SPARTA-GUI Error", "Selected library could not be loaded.",
+                             QString("<p align=\"justify\">%1 does not seem to be a SPARTA "
+                                     "shared library compatible with this system (wrong "
+                                     "platform, architecture, or build).</p>")
+                                 .arg(QDir::toNativeSeparators(canonical)));
+                }
 
             } else if (mb.clickedButton() == downloadBtn) {
                 // store in the same config directory where QSettings stores preferences
@@ -813,18 +844,14 @@ void SpartaGui::setupPlugin(QSettings &settings)
 
                 URLDownloader downloader(this);
                 if (downloader.download(dlUrl, libPath, true, true)) {
-                    // try loading the downloaded library
+                    // try loading the downloaded library; on success just fall
+                    // out of the loop -- the library is loaded, the constructor
+                    // continues with it, and the old forced application
+                    // relaunch here was pure ceremony
                     if (sparta.loadLib(libPath)) {
                         pluginPath = libPath;
                         settings.setValue(Keys::PLUGIN_PATH, pluginPath);
                         settings.sync();
-                        // must re-launch SPARTA-GUI to cleanly load the selected new plugin
-                        relaunchApplication();
-                        // This should not happen...
-                        critical(this, "SPARTA-GUI Error", "Relaunching SPARTA-GUI failed.",
-                                 "SPARTA-GUI must be restarted to correctly load the selected "
-                                 "SPARTA shared library. Click on 'Close' to exit.");
-                        exit(1);
                     } else {
                         QFile::remove(libPath);
                         critical(this, "SPARTA-GUI Error",
@@ -1226,6 +1253,12 @@ void SpartaGui::buildExampleMenu()
         }
     }
     exampleMenu->setEnabled(!exampleMenu->isEmpty());
+
+    // (Re-)apply the status tips over the finished menu tree. Here rather
+    // than in the constructor because this menu is the one part of the tree
+    // that is rebuilt at runtime (after a preferences change), and the fresh
+    // entries need their tips again.
+    applyActionMetadata(menubar);
 }
 
 void SpartaGui::openExample()
@@ -1268,6 +1301,13 @@ void SpartaGui::openExamplePath(const QString &srcfile)
             QFile::copy(entry.absoluteFilePath(), destdir + "/" + entry.fileName());
     }
     openFile(destfile);
+    // Say so: the file now open is not the one the user clicked, and edits land
+    // in the copy. Everything a run writes goes there too. Non-modal on purpose
+    // -- this is information, not a decision.
+    statusBar()->showMessage(
+        QString("Example copied to the writable folder %1 - editing and running the copy.")
+            .arg(QDir::toNativeSeparators(destdir)),
+        8000);
 }
 
 void SpartaGui::showWelcome()
@@ -1281,11 +1321,17 @@ void SpartaGui::showWelcome()
     for (int i = 0; i < PanelManager::NPanels; ++i)
         panels->closePanel(static_cast<PanelManager::Panel>(i));
     centralStack->setCurrentWidget(welcome);
+    // not "Editor - *unknown*": no editor is on screen and nothing is unknown
+    setWindowTitle("SPARTA-GUI - Welcome");
 }
 
 void SpartaGui::showEditor()
 {
     centralStack->setCurrentWidget(textEdit);
+    // restore the editor title the welcome page replaced
+    setWindowTitle(currentFile.isEmpty() ? QString("SPARTA-GUI - Editor - *unknown*")
+                                         : QString("SPARTA-GUI - Editor - " + currentFile));
+    if (textEdit->document()->isModified()) modified();
 }
 
 void SpartaGui::updateRecents(const QString &filename)
@@ -3831,8 +3877,23 @@ void SpartaGui::howto()
 
 void SpartaGui::defaults()
 {
+    // Everything the user has configured goes, irreversibly -- which deserves a
+    // question, not least because this entry sits one line under "Preferences".
+    if (QMessageBox::question(
+            this, "SPARTA-GUI - Reset Preferences",
+            "Reset all preferences to their defaults?\n\n"
+            "Fonts, paths, layout and editor settings will be lost. The location "
+            "of the SPARTA shared library is kept.",
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
+        return;
+
     QSettings settings;
+    // Keep the library location: it is machine configuration, not a preference,
+    // and wiping it used to drop the next launch into the missing-library
+    // dialog -- a trap for anyone who only wanted their fonts back.
+    const QString plugin = settings.value(Keys::PLUGIN_PATH).toString();
     settings.clear();
+    if (!plugin.isEmpty()) settings.setValue(Keys::PLUGIN_PATH, plugin);
     settings.sync();
 }
 

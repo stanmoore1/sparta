@@ -25,6 +25,9 @@ File
 
 .. admonition:: The *File* menu offers the usual options:
 
+   - *Welcome Screen* (``Alt+Home``) returns to the start page with the
+     recent files and the gallery of bundled examples.  Opening a file
+     from anywhere leaves it again.
    - *New Input File* clears the current buffer and resets the file name to ``*unknown*``
    - *Open Input File* opens a dialog to select a new file for editing in the *Editor*
    - *Open Example* offers a submenu with the input scripts from the

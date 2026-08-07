@@ -110,6 +110,12 @@ available (On macOS use the Command key instead of Ctrl/Control).
      - Check for SPARTA Update
      - Ctrl+1 … Ctrl+3
      - Run / Analyze / Visualize workspace
+   * - Alt+Home
+     - Welcome Screen
+     -
+     -
+     -
+     -
 
 Further keybindings of the editor window `are documented with the Qt
 documentation
