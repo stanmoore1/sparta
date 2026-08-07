@@ -26,7 +26,7 @@ GitHub repository.  Please contact the
 interested in contributing to any of those developments, or would be a
 future user of that feature.
 
-You can request a new feature by opening an issue.
+You can request a new feature by opening an issue on Github.
 
 :line
 
