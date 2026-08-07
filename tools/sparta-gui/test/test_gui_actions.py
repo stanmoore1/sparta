@@ -25,7 +25,7 @@ CASES = [
     # --- File -----------------------------------------------------------
     ("file-view-text",   "File > View Text File",        "ctrl+shift+f", 4, True),
     ("file-view-image",  "File > View Image/Movie",      "ctrl+shift+j", 4, True),
-    ("file-plot-data",   "File > Plot Data File",        "ctrl+shift+p", 4, True),
+    ("file-plot-data",   "File > Plot Data File",        "ctrl+shift+d", 4, True),
     ("file-inspect",     "File > Inspect Restart File",  "ctrl+shift+r", 4, True),
     ("file-save-as",     "File > Save Input File As",    "ctrl+shift+s", 4, True),
     # --- Edit -----------------------------------------------------------
@@ -34,8 +34,9 @@ CASES = [
     # --- Run ------------------------------------------------------------
     ("run-check-input",  "Run > Check Input",            "ctrl+k",       4, True),
     ("run-set-vars",     "Run > Set Variables",          "ctrl+shift+v", 3, True),
-    ("run-create-image", "Run > Create Image",           "ctrl+i",       8, True),
     # --- Tools ----------------------------------------------------------
+    ("tools-palette",    "Tools > Command Palette",      "ctrl+shift+p", 3, True),
+    ("tools-create-image","Tools > Create Image",        "ctrl+i",       8, True),
     ("tools-import-surf","Tools > Import Surface",       "ctrl+shift+t", 6, True),
     ("tools-paraview",   "Tools > Export to ParaView",   "ctrl+shift+e", 5, True),
     # --- View: workspace modes -------------------------------------------
@@ -48,9 +49,10 @@ CASES = [
     ("view-viewer",      "View > Viewer Window",         "ctrl+shift+i", 3, None),
     ("view-sequence",    "View > Slide Show in Viewer",  "ctrl+l",       3, None),
     ("view-variables",   "View > Variables Window",      "ctrl+shift+w", 3, None),
-    # --- About ------------------------------------------------------------
-    ("about-about",      "About > About SPARTA-GUI",     "ctrl+shift+a", 3, True),
-    ("about-help",       "About > Quick Help",           "ctrl+shift+h", 3, True),
+    # --- Help -------------------------------------------------------------
+    ("help-about",       "Help > About SPARTA-GUI",      "ctrl+shift+a", 3, True),
+    ("help-quick-help",  "Help > Quick Help",            "ctrl+shift+h", 3, True),
+    ("help-shortcuts",   "Help > Keyboard Shortcuts",    "f1",           3, True),
 ]
 
 

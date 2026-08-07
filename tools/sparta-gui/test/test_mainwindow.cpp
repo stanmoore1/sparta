@@ -22,6 +22,8 @@
 // checked for existence, shortcut and icon rather than triggered.
 
 #include "actionscan.h"
+#include "commandpalette.h"
+#include "shortcutsdialog.h"
 
 #include <gtest/gtest.h>
 
@@ -38,6 +40,10 @@
 #include <QSettings>
 #include <QTemporaryDir>
 #include <QTimer>
+#include <QLineEdit>
+#include <QTest>
+#include <QTextBrowser>
+#include <QTreeWidget>
 
 #include <DockAreaWidget.h>
 #include <DockManager.h>
@@ -86,6 +92,8 @@ const std::set<QString> BLOCKING = {
     "Insert &Restart Commands...",
     "Create &Image",
     "3D &Snapshot (VTK)",
+    "Command &Palette...",
+    "&Keyboard Shortcuts...",
     "Import Sur&face (STL / SPARTA)...",
     "Export to Para&View...",
     "Surface &Quantities Report...",
@@ -232,7 +240,7 @@ TEST_F(MainWindow, HasTheSixTopLevelMenus)
     for (auto *a : bar->actions())
         if (a->menu()) titles << a->text();
 
-    EXPECT_EQ(titles, (QStringList{"&File", "&Edit", "&Run", "&Tools", "&View", "&About"}));
+    EXPECT_EQ(titles, (QStringList{"&File", "&Edit", "&Run", "&Tools", "&View", "&Help"}));
 }
 
 TEST_F(MainWindow, EveryMenuActionHasTextAndAnIcon)
@@ -286,7 +294,7 @@ TEST_F(MainWindow, TheDocumentedShortcutsAreBound)
         {"&New Input File", "Ctrl+N"},        {"&Open Input File", "Ctrl+O"},
         {"&Welcome Screen", "Alt+Home"},
         {"&Save Input File", "Ctrl+S"},       {"Save Input File &As", "Ctrl+Shift+S"},
-        {"&View Text File", "Ctrl+Shift+F"},  {"&Plot Data File...", "Ctrl+Shift+P"},
+        {"&View Text File", "Ctrl+Shift+F"},  {"&Plot Data File...", "Ctrl+Shift+D"},
         {"Inspect &Restart File", "Ctrl+Shift+R"},
         {"View &Image or Movie File(s)...", "Ctrl+Shift+J"},
         {"&Quit", "Ctrl+Q"},                  {"&Undo", "Ctrl+Z"},
@@ -294,7 +302,7 @@ TEST_F(MainWindow, TheDocumentedShortcutsAreBound)
         {"Cu&t", "Ctrl+X"},                   {"&Paste", "Ctrl+V"},
         {"&Find and Replace...", "Ctrl+F"},   {"P&references...", "Ctrl+P"},
         {"Chec&k Input", "Ctrl+K"},           {"Set &Variables...", "Ctrl+Shift+V"},
-        {"Create &Image", "Ctrl+I"},
+        {"Create &Image", "Ctrl+I"},          {"Command &Palette...", "Ctrl+Shift+P"},
         {"&Run SPARTA from Editor Buffer", "Ctrl+Return"},
         {"Run SPARTA from &File", "Ctrl+Shift+Return"},
         {"&Stop SPARTA", "Ctrl+/"},           {"Slide S&how in Viewer", "Ctrl+L"},
@@ -639,6 +647,59 @@ TEST_F(MainWindow, EveryMenuActionCarriesAStatusTip)
     EXPECT_TRUE(silent.isEmpty())
         << silent.size() << " menu entries say nothing when hovered: "
         << silent.join(", ").toStdString();
+}
+
+// The command palette. Opening it and typing must find the action by name and
+// triggering must actually run it -- checked with a harmless, observable
+// action (a workspace switch).
+TEST_F(MainWindow, TheCommandPaletteFindsAndTriggersActions)
+{
+    QAction *open = action("Command &Palette...");
+    ASSERT_NE(open, nullptr) << "the palette has no menu entry";
+    EXPECT_EQ(open->shortcut(), QKeySequence("Ctrl+Shift+P"));
+
+    auto *palette = gui->findChild<CommandPalette *>("commandpalette");
+    EXPECT_EQ(palette, nullptr) << "built before first use";
+    open->trigger();
+    QCoreApplication::processEvents();
+    palette = gui->findChild<CommandPalette *>("commandpalette");
+    ASSERT_NE(palette, nullptr);
+
+    auto *input = palette->findChild<QLineEdit *>("paletteinput");
+    auto *list  = palette->findChild<QTreeWidget *>("palettelist");
+    ASSERT_NE(input, nullptr);
+    ASSERT_NE(list, nullptr);
+    EXPECT_GT(list->topLevelItemCount(), 40) << "the palette lost most of the menu tree";
+
+    // typing narrows to the analyze workspace and Enter switches to it
+    input->setText("analyze work");
+    QCoreApplication::processEvents();
+    auto *current = list->currentItem();
+    ASSERT_NE(current, nullptr) << "no match selected for \"analyze work\"";
+    EXPECT_TRUE(current->text(0).contains("Analyze Workspace"))
+        << current->text(0).toStdString();
+    QTest::keyClick(input, Qt::Key_Return);
+    QCoreApplication::processEvents();
+    EXPECT_FALSE(palette->isVisible()) << "the palette stayed open after triggering";
+    EXPECT_TRUE(panelOpen("dockCharts")) << "the triggered action did not switch workspaces";
+}
+
+// The shortcut sheet is generated from the menus, so it cannot disagree with
+// them -- provided it actually lists what the menus hold.
+TEST_F(MainWindow, TheShortcutSheetListsTheMenuShortcuts)
+{
+    QAction *keys = action("&Keyboard Shortcuts...");
+    ASSERT_NE(keys, nullptr) << "the shortcut sheet has no menu entry";
+    keys->trigger();
+    QCoreApplication::processEvents();
+    auto *dialog = gui->findChild<ShortcutsDialog *>("shortcutsdialog");
+    ASSERT_NE(dialog, nullptr);
+    auto *browser = dialog->findChild<QTextBrowser *>("shortcutlist");
+    ASSERT_NE(browser, nullptr);
+    const QString text = browser->toPlainText();
+    EXPECT_TRUE(text.contains("Ctrl+Return")) << "Run's own shortcut is missing";
+    EXPECT_TRUE(text.contains("Run SPARTA from Editor Buffer"));
+    EXPECT_TRUE(text.contains("Ctrl+?")) << "the non-menu editor keys are missing";
 }
 
 // The welcome page is not the editor: while it is shown the title used to

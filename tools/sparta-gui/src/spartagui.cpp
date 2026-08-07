@@ -13,8 +13,10 @@
 
 #include "aboutdialog.h"
 #include "actionmetadata.h"
+#include "commandpalette.h"
 #include "chartviewer.h"
 #include "codeeditor.h"
+#include "shortcutsdialog.h"
 #include "dockpanels.h"
 #include "welcomescreen.h"
 #include "fileviewer.h"
@@ -301,7 +303,9 @@ void SpartaGui::createFileMenu()
                   &SpartaGui::view);
     addMenuAction(menu, ":/icons/image-x-generic.svg", "View &Image or Movie File(s)...",
                   "Ctrl+Shift+J", &SpartaGui::openImages);
-    addMenuAction(menu, ":/icons/x-office-drawing.svg", "&Plot Data File...", "Ctrl+Shift+P",
+    // Ctrl+Shift+D ("data"): Ctrl+Shift+P went to the command palette, which
+    // is what that binding means in every editor of this generation.
+    addMenuAction(menu, ":/icons/x-office-drawing.svg", "&Plot Data File...", "Ctrl+Shift+D",
                   &SpartaGui::plotDataFile);
     addMenuAction(menu, ":/icons/binary-file-icon.svg", "Inspect &Restart File", "Ctrl+Shift+R",
                   &SpartaGui::inspect);
@@ -342,6 +346,15 @@ void SpartaGui::createEditMenu()
 
     addMenuAction(menu, ":/icons/search.svg", "&Find and Replace...", "Ctrl+F",
                   &SpartaGui::findAndReplace);
+    menu->addSeparator();
+
+    // The background input check finally gets a switch outside Preferences.
+    // Checkable, so the menu itself shows whether it is on.
+    auto *lintAction = addMenuAction(menu, ":/icons/warning.svg", "Autom&atic Input Checking", "",
+                                     &SpartaGui::toggleAutoLint);
+    lintAction->setCheckable(true);
+    lintAction->setChecked(QSettings().value(Keys::AUTOLINT, true).toBool());
+    autoLintAction = lintAction;
     menu->addSeparator();
 
     // On macOS Qt guesses an action's menu role from its text and moves anything
@@ -385,21 +398,32 @@ void SpartaGui::createRunMenu()
                   &SpartaGui::editVariables);
     addMenuAction(menu, ":/icons/binary-file-icon.svg", "Insert &Restart Commands...", "",
                   &SpartaGui::continueRestart);
+    // Create Image and the 3D snapshot used to end this menu; they moved to
+    // Tools beside the other artifact-producing entries, leaving Run to the
+    // run lifecycle alone.
+}
+
+void SpartaGui::createToolsMenu()
+{
+    auto *menu = menubar->addMenu("&Tools");
+    // First because it finds everything else: type a few letters, see every
+    // matching menu action with its shortcut, hit Enter.
+    addMenuAction(menu, ":/icons/search.svg", "Command &Palette...", "Ctrl+Shift+P",
+                  &SpartaGui::showPalette);
     menu->addSeparator();
 
+    // Rendering: produces artifacts from the simulation state, same species
+    // as the converters and reports below.
     addMenuAction(menu, ":/icons/image-viewer.svg", "Create &Image", "Ctrl+I",
                   [this]() { renderImage(); });
 #if defined(SPARTA_GUI_HAVE_VTK)
     addMenuAction(menu, ":/icons/image-viewer.svg", "3D &Snapshot (VTK)", "Ctrl+Shift+3",
                   &SpartaGui::renderVtkSnapshot);
 #endif
-}
+    menu->addSeparator();
 
-void SpartaGui::createToolsMenu()
-{
     // Geometry conversion, external export and reporting: work on simulation
     // data, but outside the edit-run-look loop that File and Run cover.
-    auto *menu = menubar->addMenu("&Tools");
     addMenuAction(menu, ":/icons/vdw-style.svg", "Import Sur&face (STL / SPARTA)...", "Ctrl+Shift+T",
                   &SpartaGui::importSurface);
     addMenuAction(menu, ":/icons/image-x-generic.svg", "Export to Para&View...", "Ctrl+Shift+E",
@@ -408,12 +432,12 @@ void SpartaGui::createToolsMenu()
                   &SpartaGui::surfaceReport);
     menu->addSeparator();
 
-    // Multi-run studies: each drives the same deck repeatedly, so they belong
-    // together rather than mixed in with the single-run controls under Run.
-    auto *studies = menu->addMenu(QIcon(":/icons/x-office-drawing.svg"), "&Studies");
-    addMenuAction(studies, ":/icons/x-office-drawing.svg", "Parametric S&weep...", "",
+    // Multi-run studies, directly here rather than in a "Studies" submenu: a
+    // second level hid two features that already had no shortcuts, and with
+    // the palette a submenu buys no tidiness worth that cost.
+    addMenuAction(menu, ":/icons/x-office-drawing.svg", "Parametric S&weep...", "",
                   &SpartaGui::runSweep);
-    addMenuAction(studies, ":/icons/document-open-recent.svg", "Run &History...", "",
+    addMenuAction(menu, ":/icons/document-open-recent.svg", "Run &History...", "",
                   &SpartaGui::showRunHistory);
 }
 
@@ -551,14 +575,25 @@ void SpartaGui::createViewMenu()
 
 void SpartaGui::createAboutMenu()
 {
-    auto *menu = menubar->addMenu("&About");
-    addMenuAction(menu, ":/icons/sparta-gui-icon-128x128.png", "&About SPARTA-GUI", "Ctrl+Shift+A",
-                  &SpartaGui::about);
+    // "Help", not "About": that is where every desktop convention says these
+    // live, and on macOS a menu with this title additionally gets the native
+    // help-search field. The About entry keeps its AboutRole, so macOS still
+    // relocates it into the application menu.
+    auto *menu = menubar->addMenu("&Help");
     addMenuAction(menu, ":/icons/help-faq.svg", "Quick &Help", "Ctrl+Shift+H", &SpartaGui::help);
+    // F1 through the platform mapping (Cmd+? on macOS), not hardcoded
+    auto *keysAction = addMenuAction(menu, ":/icons/preferences-desktop-font.svg",
+                                     "&Keyboard Shortcuts...", "", &SpartaGui::showShortcuts);
+    keysAction->setShortcut(QKeySequence::HelpContents);
+    menu->addSeparator();
     addMenuAction(menu, ":/icons/system-help.svg", "SPARTA-&GUI Documentation", "Ctrl+Shift+G",
                   &SpartaGui::howto);
     addMenuAction(menu, ":/icons/help-browser.svg", "SPARTA Online &Manual", "Ctrl+Shift+M",
                   &SpartaGui::manual);
+    menu->addSeparator();
+    auto *aboutAction = addMenuAction(menu, ":/icons/sparta-gui-icon-128x128.png",
+                                      "&About SPARTA-GUI", "Ctrl+Shift+A", &SpartaGui::about);
+    aboutAction->setMenuRole(QAction::AboutRole);
 
 #if defined(SPARTA_GUI_USE_PLUGIN)
     menu->addSeparator();
@@ -3806,62 +3841,31 @@ void SpartaGui::checkUpdate()
 
 void SpartaGui::help()
 {
-    QMessageBox mb(this);
-    mb.setWindowTitle("SPARTA-GUI Quick Help");
-    mb.setWindowIcon(QIcon(Cfg::MAIN_ICON));
-    mb.setText("<div>This is SPARTA-GUI version " SPARTA_GUI_VERSION "</div>");
-    mb.setInformativeText(
-        "<p>SPARTA-GUI is a graphical text editor that is customized for "
-        "editing SPARTA input files and linked to the SPARTA "
-        "library and thus can run SPARTA directly using the contents of the "
-        "text buffer as input. It can retrieve and display information from "
-        "SPARTA while it is running and display visualizations created "
-        "with the dump image command.</p>"
-        "<p>The main window of the SPARTA-GUI is a text editor window with "
-        "SPARTA specific syntax highlighting. When typing <b>Ctrl-Enter</b> "
-        "or clicking on 'Run SPARTA from Editor Buffer' in the 'Run' menu, "
-        "SPARTA will be run "
-        "with the contents of editor buffer as input. The output of the SPARTA "
-        "run is captured and displayed in an Output window. The stats output data "
-        "is displayed in a chart window. Both are updated regularly during the "
-        "run, as is a progress bar in the main window. The running simulation "
-        "can be stopped cleanly by typing <b>Ctrl-/</b> or by clicking on "
-        "'Stop SPARTA' in the 'Run' menu. While SPARTA is not running, "
-        "an image of the simulated system can be created and shown in an image "
-        "viewer window by typing <b>Ctrl-i</b> or by clicking on 'Create Image' "
-        "in the 'Run' menu. Multiple image settings can be changed through the "
-        "buttons in the menu bar and the image will be re-rendered. In case "
-        "an input file contains a dump image command, SPARTA-GUI will load "
-        "the images as they are created and display them in a slide show. </p>"
-        "<p>When opening a file, the editor will determine the directory "
-        "where the input file resides and switch its current working directory "
-        "to that same folder and thus enabling the run to read other files in "
-        "that folder, e.g. a surface or grid file. The GUI will show its current working "
-        "directory in the status bar. In addition to using the menu, the "
-        "editor window can also receive files as the first command line "
-        "argument or via drag-n-drop from a graphical file manager or a "
-        "desktop environment.</p>"
-        "<p>Almost all commands are accessible via keyboard shortcuts. Which "
-        "those shortcuts are, is typically shown next to their entries in the "
-        "menus. "
-        "In addition, the documentation for the command in the current line "
-        "can be viewed by typing <b>Ctrl-?</b> or by choosing the respective "
-        "entry in the context menu, available by right-clicking the mouse. "
-        "Log, chart, slide show, and image windows can be closed with "
-        "<b>Ctrl-W</b> and the application terminated with <b>Ctrl-Q</b>.</p>"
-        "<p>The 'About SPARTA-GUI' dialog will show the SPARTA version and the "
-        "features included into the SPARTA library linked to the SPARTA-GUI. "
-        "A number of settings can be adjusted in the 'Preferences' dialog (in "
-        "the 'Edit' menu or from <b>Ctrl-P</b>) which includes selecting "
-        "the KOKKOS accelerator package and number of OpenMP threads. Due to its nature "
-        "as a graphical application, it is <b>not</b> possible to use the "
-        "SPARTA-GUI in parallel with MPI.</p>");
-    mb.setIconPixmap(QPixmap(Cfg::MAIN_ICON).scaled(64, 64));
-    mb.setStandardButtons(QMessageBox::Close);
-    auto *button = mb.button(QMessageBox::Close);
-    button->setIcon(QIcon(":/icons/window-close.svg"));
-    mb.setFont(font());
-    mb.exec();
+    // the old Quick Help was one unscrollable QMessageBox of six dense
+    // paragraphs; the same facts now live in task-shaped sections on the
+    // first page of the help dialog, beside the generated shortcut list
+    if (!helpsheet) helpsheet = new ShortcutsDialog(menubar, this);
+    helpsheet->popup(ShortcutsDialog::GettingStarted);
+}
+
+void SpartaGui::showShortcuts()
+{
+    if (!helpsheet) helpsheet = new ShortcutsDialog(menubar, this);
+    helpsheet->popup(ShortcutsDialog::Shortcuts);
+}
+
+void SpartaGui::showPalette()
+{
+    if (!palette) palette = new CommandPalette(menubar, this);
+    palette->popup();
+}
+
+void SpartaGui::toggleAutoLint()
+{
+    autoLintEnabled = autoLintAction && autoLintAction->isChecked();
+    QSettings().setValue(Keys::AUTOLINT, autoLintEnabled);
+    // switching it on mid-edit should check what is already there
+    if (autoLintEnabled) autoCheckInput();
 }
 
 void SpartaGui::manual()

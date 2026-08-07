@@ -94,7 +94,7 @@ available (On macOS use the Command key instead of Ctrl/Control).
      - Context Help
    * - Ctrl+Shift+J
      - View Image or Movie File(s)
-     - Ctrl+Shift+P
+     - Ctrl+Shift+D
      - Plot Data File
      - Ctrl+Home / Ctrl+End
      - Go to Start / End
@@ -112,10 +112,10 @@ available (On macOS use the Command key instead of Ctrl/Control).
      - Run / Analyze / Visualize workspace
    * - Alt+Home
      - Welcome Screen
-     -
-     -
-     -
-     -
+     - Ctrl+Shift+P
+     - Command Palette
+     - F1
+     - Keyboard Shortcuts
 
 Further keybindings of the editor window `are documented with the Qt
 documentation

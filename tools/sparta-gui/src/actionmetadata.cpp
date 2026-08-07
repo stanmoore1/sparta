@@ -45,6 +45,8 @@ const QHash<QString, QString> &tipsByText()
         {"Paste", "Paste the clipboard into the editor"},
         {"Insert Snippet...", "Insert a ready-made block of input commands at the cursor"},
         {"Find and Replace...", "Search the editor, optionally replacing matches"},
+        {"Automatic Input Checking",
+         "Check the deck in the background as it is edited (also in Preferences)"},
         {"Preferences...", "Configure SPARTA-GUI: library, fonts, editor, accelerator"},
         {"Reset Preferences to Defaults",
          "Discard all settings and return to the defaults (asks first)"},
@@ -61,6 +63,8 @@ const QHash<QString, QString> &tipsByText()
         {"Create Image", "Render a snapshot of the current simulation state"},
         {"3D Snapshot (VTK)", "Render the current state into the interactive 3D viewer"},
         // ---- Tools
+        {"Command Palette...",
+         "Search every menu action by name; Enter runs the selected one"},
         {"Import Surface (STL / SPARTA)...",
          "Convert an STL or SPARTA surface file and add it to the deck"},
         {"Export to ParaView...", "Convert surface or grid data to ParaView format"},
@@ -87,6 +91,7 @@ const QHash<QString, QString> &tipsByText()
         {"Reset Layout", "Restore this workspace's default panel arrangement"},
         // ---- About
         {"About SPARTA-GUI", "Version, credits and license of SPARTA-GUI"},
+        {"Keyboard Shortcuts...", "Every keyboard shortcut, generated from the menus"},
         {"Quick Help", "A short guide to running and visualizing a deck"},
         {"SPARTA-GUI Documentation", "Open the SPARTA-GUI manual in the browser"},
         {"SPARTA Online Manual", "Open the SPARTA manual in the browser"},

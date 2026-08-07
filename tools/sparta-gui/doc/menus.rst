@@ -6,7 +6,7 @@ Menus
 .. index:: menu bar
 .. index:: keyboard shortcuts
 
-The menu bar has entries *File*, *Edit*, *Run*, *Tools*, *View*, and *About*.
+The menu bar has entries *File*, *Edit*, *Run*, *Tools*, *View*, and *Help*.
 Instead of using the mouse to click on them, the individual menus can
 also be activated by hitting the `Alt` key together with the
 corresponding underlined letter, that is `Alt-F` activates the
@@ -76,7 +76,7 @@ entry that allows re-opening recently opened files.  This list is stored
 when quitting and recovered when starting again.
 
 **Plotting external data files.** The *Plot Data File...* entry
-(`Ctrl-Shift-P`) opens a dialog to select a file with column-oriented
+(`Ctrl-Shift-D`) opens a dialog to select a file with column-oriented
 numeric data and plots it in a standalone :ref:`Charts window <charts>`
 without running a simulation.  Supported formats are whitespace-separated
 columns (``.dat``), comma-separated values (``.csv``), `YAML
@@ -97,9 +97,13 @@ Edit
 
 The *Edit* menu offers the usual editor functions like *Undo*, *Redo*,
 *Cut*, *Copy*, *Paste*, and a *Find and Replace* dialog (keyboard
-shortcut `Ctrl-F`).  It can also open a *Preferences* dialog (keyboard
-shortcut `Ctrl-P`) and allows deleting all stored preferences and
-settings, so they are reset to their default values.
+shortcut `Ctrl-F`).  The checkable *Automatic Input Checking* entry
+switches the background validation of the deck on and off (the same
+setting as in the Preferences dialog).  It can also open a *Preferences*
+dialog (keyboard shortcut `Ctrl-P`) and allows deleting all stored
+preferences and settings, so they are reset to their default values --
+after a confirmation, and keeping the configured location of the SPARTA
+shared library.
 
 .. _run_menu:
 
@@ -201,11 +205,6 @@ used to continue a run: choosing *Insert Continue Commands* inserts a
 ``read_restart <file>`` line followed by a ``run`` command for the requested
 number of additional steps at the editor cursor, ready to review and run.
 
-The *Create Image* entry will send a `dump image
-<https://sparta.github.io/doc/dump_image.html>`_ command to the SPARTA
-instance, read the resulting file, and show it in an *Image Viewer*
-window (see :ref:`Snapshot Image Viewer <snapshot_viewer>`).
-
 View
 ^^^^
 
@@ -220,6 +219,16 @@ Tools Menu
 The *Tools* menu collects the operations that work on simulation data but
 sit outside the edit-run-look loop that *File* and *Run* cover.
 
+   - *Command Palette...* (keyboard shortcut `Ctrl-Shift-P`) opens a search
+     box over every menu action: type a few letters of what you are looking
+     for, pick a match, and hit Enter to run it.  Each match shows its
+     keyboard shortcut, so the palette doubles as a way of learning them.
+   - *Create Image* (keyboard shortcut `Ctrl-I`) sends a `dump image
+     <https://sparta.github.io/doc/dump_image.html>`_ command to the SPARTA
+     instance, reads the resulting file, and shows it in the *Image Viewer*
+     (see :ref:`Snapshot Image Viewer <snapshot_viewer>`).
+   - *3D Snapshot (VTK)* renders the current state into the interactive 3D
+     scene (only in builds with the VTK viewer).
    - *Import Surface (STL / SPARTA)...* opens the :ref:`Import Surface wizard
      <import_surface>` to convert an STL file (ASCII or binary) or open an
      existing SPARTA surface file, transform and preview it, review the
@@ -237,12 +246,12 @@ sit outside the edit-run-look loop that *File* and *Run* cover.
      simulation with surfaces and a per-surf compute defined; if either is
      missing it says so.
 
-The *Studies* submenu gathers the features that drive the same deck
-repeatedly:
+Driving the same deck repeatedly:
 
    - The *Parametric Sweep...* entry opens the :ref:`Parameter Sweep panel
      <parametric_sweep>`, which runs the current deck repeatedly while varying
      index variables over ranges and tabulates a chosen thermo quantity per run.
+   - The *Run History...* entry opens the archive of earlier runs.
 
 
 
@@ -321,21 +330,24 @@ double-clicking any entry opens it in the editor.  Together with the
 when the cursor is on a file name, e.g. the target of an ``include`` line),
 this makes it easy to move between a driver deck and the files it pulls in.
 
-About
-^^^^^
+Help
+^^^^
 
-.. index:: About menu
-.. index:: menus; About
+.. index:: Help menu
+.. index:: menus; Help
 .. index:: documentation; online
 .. index:: SPARTA documentation
 .. index:: help
 
-The *About* menu finally offers a couple of dialog windows and an
+The *Help* menu finally offers a couple of dialog windows and an
 option to launch the SPARTA online documentation in a web browser.  The
-*About SPARTA-GUI* entry displays a dialog with a summary of the
-configuration settings of the SPARTA library in use and the version
-number of SPARTA-GUI itself.  The *Quick Help* displays a dialog with
-a minimal description of SPARTA-GUI.  The *SPARTA-GUI Documentation*
+*Quick Help* entry (keyboard shortcut `Ctrl-Shift-H`) opens a dialog of
+short, task-shaped sections -- run a simulation, see results, check a
+deck -- and the *Keyboard Shortcuts* entry (`F1`) shows the full
+shortcut list, generated from the menus themselves so it cannot go
+stale.  The *About SPARTA-GUI* entry displays a dialog with a summary
+of the configuration settings of the SPARTA library in use and the
+version number of SPARTA-GUI itself.  The *SPARTA-GUI Documentation*
 entry will open the SPARTA-GUI documentation (this manual) in a web
 browser window.  The *SPARTA Manual* entry will open the main page of
 the `SPARTA online documentation

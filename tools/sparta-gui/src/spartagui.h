@@ -64,6 +64,8 @@ class URLDownloader;
 class SceneWindow; // only defined when built with SPARTA_GUI_HAVE_VTK
 class VtkScene;    // ditto
 class WelcomeScreen;
+class CommandPalette;
+class ShortcutsDialog;
 
 /**
  * @brief Main application window for SPARTA-GUI
@@ -370,6 +372,15 @@ private slots:
     /** @brief Show context-sensitive help */
     void help();
 
+    /** @brief Open the help dialog on the generated keyboard-shortcut list */
+    void showShortcuts();
+
+    /** @brief Open the command palette: fuzzy search over every menu action */
+    void showPalette();
+
+    /** @brief Menu toggle for the background input check (syncs Keys::AUTOLINT) */
+    void toggleAutoLint();
+
     /** @brief Open SPARTA manual */
     void manual();
 
@@ -559,6 +570,8 @@ private:
     CodeEditor *textEdit;           ///< Custom code editor widget
     QStackedWidget *centralStack;   ///< Hosts the welcome screen and the editor as
                                     ///< interchangeable central-area pages
+    CommandPalette *palette    = nullptr; ///< the command palette (created on demand)
+    ShortcutsDialog *helpsheet = nullptr; ///< help + generated shortcut sheet
     WelcomeScreen *welcome;         ///< Landing view (recent files + examples gallery)
     QMenuBar *menubar;              ///< Menu bar with menus and actions
     QActionGroup *modeGroup = nullptr;  ///< Exclusive View-menu workspace mode actions
@@ -571,6 +584,7 @@ private:
     QAction *stopAction   = nullptr;
     QAction *extendAction = nullptr;
     QAction *restartAction = nullptr;
+    QAction *autoLintAction = nullptr;
     QWidget *stopButton   = nullptr;
     QMenu *exampleMenu;             ///< File menu entry with SPARTA example inputs
 

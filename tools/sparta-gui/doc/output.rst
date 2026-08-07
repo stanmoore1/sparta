@@ -253,7 +253,7 @@ Plot imported data
 ------------------
 
 The same *Charts* window is also used to plot data from an external file
-opened with *File* -> *Plot Data File...* (`Ctrl-Shift-P`, see
+opened with *File* -> *Plot Data File...* (`Ctrl-Shift-D`, see
 :ref:`the File menu <files>`).  The column-picker dialog shown before
 the chart opens lets you select which column provides the x axis and
 which columns to plot, and also allows renaming columns.  An "X-Axis:"

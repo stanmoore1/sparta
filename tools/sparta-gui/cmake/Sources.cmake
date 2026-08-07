@@ -16,6 +16,10 @@ set(PROJECT_SOURCES
   ${CMAKE_SOURCE_DIR}/src/actionmetadata.h
   ${CMAKE_SOURCE_DIR}/src/actionscan.cpp
   ${CMAKE_SOURCE_DIR}/src/actionscan.h
+  ${CMAKE_SOURCE_DIR}/src/commandpalette.cpp
+  ${CMAKE_SOURCE_DIR}/src/commandpalette.h
+  ${CMAKE_SOURCE_DIR}/src/shortcutsdialog.cpp
+  ${CMAKE_SOURCE_DIR}/src/shortcutsdialog.h
   ${CMAKE_SOURCE_DIR}/src/analysis.cpp
   ${CMAKE_SOURCE_DIR}/src/analysis.h
   ${CMAKE_SOURCE_DIR}/src/chartdialogs.cpp
