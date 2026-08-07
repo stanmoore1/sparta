@@ -1216,6 +1216,18 @@ target_link_libraries(test_sweepspec PRIVATE GTest::gtest_main Qt6::Widgets)
 
 gtest_discover_tests(test_sweepspec)
 
+# The menu walker feeding the command palette, the generated shortcut sheet and
+# the status-tip pass.  Own main(): QMenu needs a QApplication.
+add_executable(test_actionscan
+  test_actionscan.cpp
+  ${CMAKE_SOURCE_DIR}/src/actionscan.cpp
+)
+
+target_include_directories(test_actionscan PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_actionscan PRIVATE GTest::gtest Qt6::Widgets)
+
+gtest_discover_tests(test_actionscan)
+
 # Test executable for the run-provenance/report core
 add_executable(test_runarchive
   test_runarchive.cpp

@@ -12,6 +12,10 @@ set(PROJECT_SOURCES
   ${CMAKE_SOURCE_DIR}/src/spartagui.h
   ${CMAKE_SOURCE_DIR}/src/aboutdialog.cpp
   ${CMAKE_SOURCE_DIR}/src/aboutdialog.h
+  ${CMAKE_SOURCE_DIR}/src/actionmetadata.cpp
+  ${CMAKE_SOURCE_DIR}/src/actionmetadata.h
+  ${CMAKE_SOURCE_DIR}/src/actionscan.cpp
+  ${CMAKE_SOURCE_DIR}/src/actionscan.h
   ${CMAKE_SOURCE_DIR}/src/analysis.cpp
   ${CMAKE_SOURCE_DIR}/src/analysis.h
   ${CMAKE_SOURCE_DIR}/src/chartdialogs.cpp
