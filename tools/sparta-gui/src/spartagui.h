@@ -520,6 +520,9 @@ private:
     /** @brief Create the status bar and its widgets */
     void createStatusBar();
 
+    /** @brief Create the main toolbar: primary actions and the workspace switch */
+    void createToolBar();
+
     /** @brief Create (or recreate) the docked "Variables" panel content.
      *
      * @c varwindow is torn down together with the other panel contents when the
@@ -575,7 +578,7 @@ private:
     WelcomeScreen *welcome;         ///< Landing view (recent files + examples gallery)
     QMenuBar *menubar;              ///< Menu bar with menus and actions
     QActionGroup *modeGroup = nullptr;  ///< Exclusive View-menu workspace mode actions
-    QList<QAbstractButton *> modeButtons; ///< Status-bar workspace mode switch buttons
+    QList<QAbstractButton *> modeButtons; ///< Toolbar workspace mode switch buttons
     bool ranThisSession = false;    ///< True once a run started (gates the auto mode switch)
     QStatusBar *statusbar;          ///< status bar
     QList<QAction *> recentActions; ///< list of actions for recent files
@@ -585,7 +588,15 @@ private:
     QAction *extendAction = nullptr;
     QAction *restartAction = nullptr;
     QAction *autoLintAction = nullptr;
-    QWidget *stopButton   = nullptr;
+    // shared between their menu entries and the toolbar, so enabled/checked
+    // state stays in step everywhere by construction
+    QAction *newAction     = nullptr;
+    QAction *openAction    = nullptr;
+    QAction *saveAction    = nullptr;
+    QAction *runAction     = nullptr;
+    QAction *checkAction   = nullptr;
+    QAction *varsAction    = nullptr;
+    QAction *imageAction   = nullptr;
     QMenu *exampleMenu;             ///< File menu entry with SPARTA example inputs
 
     Highlighter *highlighter; ///< Syntax highlighter for SPARTA input

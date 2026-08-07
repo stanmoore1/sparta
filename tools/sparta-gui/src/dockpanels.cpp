@@ -11,6 +11,8 @@
 
 #include "dockpanels.h"
 
+#include "emptystate.h"
+
 #include "constants.h"
 #include "viewersource.h"
 
@@ -41,6 +43,46 @@ const char *const PANEL_OBJECT_NAME[PanelManager::NPanels] = {
 const char *const PANEL_TITLE[PanelManager::NPanels] = {
     "Output", "Charts", "Viewer",     "Variables",   "Parameter Sweep",
     "Run History", "Diagnostics", "Project Files"};
+
+// What an empty panel says, and which action fills it. Installed as every
+// panel's initial widget: a dock with nothing in it used to be a blank
+// rectangle (and Qt-ADS refuses to lay out a dock with no widget at all, so
+// workspaces could not even show it).
+EmptyState *makePlaceholder(PanelManager::Panel panel)
+{
+    switch (panel) {
+        case PanelManager::Log:
+            return new EmptyState("No output yet",
+                                  "Run the deck (Ctrl+Enter) and the console output lands here.");
+        case PanelManager::Chart:
+            return new EmptyState("No chart data yet",
+                                  "The stats columns are charted here, live, during a run.");
+        case PanelManager::Viewer:
+            return new EmptyState(
+                "Nothing rendered yet",
+                "Create Image (Ctrl+I) renders the current state; frames from a dump image "
+                "command and the 3D scene appear here as well.");
+        case PanelManager::Variables:
+            return new EmptyState("No variables yet",
+                                  "Index variables from the deck and from Set Variables "
+                                  "(Ctrl+Shift+V) are listed here during a run.");
+        case PanelManager::Sweep:
+            return new EmptyState("No sweep configured",
+                                  "Tools > Parametric Sweep runs the deck repeatedly over "
+                                  "index-variable ranges and tabulates the results.");
+        case PanelManager::History:
+            return new EmptyState("No runs archived yet",
+                                  "Every finished run is archived and can be revisited here.");
+        case PanelManager::Diagnostics:
+            return new EmptyState("No problems found",
+                                  "Check Input (Ctrl+K) lists its findings here; automatic "
+                                  "checking marks them in the editor while you type.");
+        case PanelManager::ProjectFiles:
+            return new EmptyState("No input open",
+                                  "The files beside the current deck are listed here.");
+        default: return new EmptyState("Nothing here yet", QString());
+    }
+}
 
 // Widgets that scroll themselves must not be wrapped in another scroll area.
 // The Charts and Viewer hosts manage their own scrolling and zooming, and
@@ -91,6 +133,8 @@ PanelManager::PanelManager(QMainWindow *mainWindow, QWidget *editor) : QObject(m
             QAction *entry = docks[i]->toggleViewAction();
             if (entry->text() != menuText[i]) entry->setText(menuText[i]);
         });
+        d->setWidget(makePlaceholder(Panel(i)), insertModeFor(Panel(i)));
+
         connect(d, &CDockWidget::viewToggled, this, [this, i](bool open) {
             if (open) {
                 restoreAreaVisibility(Panel(i));
@@ -129,7 +173,7 @@ void PanelManager::setPanelWidget(Panel panel, QWidget *widget, const QString &t
     // installed, so it must always be detached first regardless of keepOld.
     QWidget *old = d->takeWidget();
 
-    if (old && keepOld) {
+    if (old && keepOld && !EmptyState::isPlaceholder(old)) {
         auto *arch = new CDockWidget(dm, d->windowTitle());
         arch->setObjectName(QString("%1Archived%2").arg(PANEL_OBJECT_NAME[panel]).arg(++archiveSeq));
         arch->setFeature(CDockWidget::DockWidgetDeleteOnClose, true);
@@ -184,6 +228,7 @@ void PanelManager::clearRunPanels()
 {
     for (int i = 0; i < NPanels; ++i) {
         delete docks[i]->takeWidget();
+        docks[i]->setWidget(makePlaceholder(Panel(i)), insertModeFor(Panel(i)));
         docks[i]->toggleView(false);
     }
     for (const auto &a : std::as_const(archived))
@@ -339,10 +384,16 @@ void PanelManager::applySplitterProportions()
     // correctly, whereas the chart spends a fixed ~75px on its two control rows
     // before the plot gets anything, so an uneven split costs the chart far
     // more than it gains the image.
-    if (anyOpen({Chart}) && anyOpen({Viewer}))
+    // The rules below only make sense once the user has dragged panels apart
+    // into their own areas; in the default tabbed layout they share one area
+    // and there is nothing to apportion.
+    if (anyOpen({Chart}) && anyOpen({Viewer}) &&
+        docks[Chart]->dockAreaWidget() != docks[Viewer]->dockAreaWidget())
         splitArea(docks[Viewer]->dockAreaWidget(), 50, Qt::Vertical);
     // and the output's share of that column when it is up alongside them
-    if (anyOpen({Log}) && anyOpen({Chart, Viewer}))
+    if (anyOpen({Log}) && anyOpen({Chart, Viewer}) &&
+        docks[Log]->dockAreaWidget() != docks[Chart]->dockAreaWidget() &&
+        docks[Log]->dockAreaWidget() != docks[Viewer]->dockAreaWidget())
         splitArea(docks[Log]->dockAreaWidget(), 34, Qt::Vertical);
 }
 
@@ -364,21 +415,17 @@ void PanelManager::restoreAreaVisibility(Panel panel)
 
 void PanelManager::applyDefaultLayout()
 {
-    // One right-hand column beside the editor, holding everything in a vertical
-    // stack: Output on top, then the charts, then the viewer. Which of them is
-    // open is what each workspace decides, and Qt-ADS gives the whole column to
-    // whatever is left -- so while only Output is open it runs the full height
-    // of the window beside the editor, and the two of them split the width
-    // evenly. That is the editing screen: a deck on the left, its output on the
-    // right, nothing else competing for the space.
+    // One right-hand area beside the editor, holding every panel as a TAB
+    // rather than a vertical stack. Splitting was how the window starved:
+    // with three panels open, each pane -- and the editor -- was too small to
+    // read. Tabs give whichever panel is in front the whole column, switching
+    // is one click (or the View menu), and anything the user *wants* side by
+    // side can still be dragged out into a split, which the workspace then
+    // remembers in its perspective.
     CDockAreaWidget *logArea = dm->addDockWidget(ads::RightDockWidgetArea, docks[Log]);
-    CDockAreaWidget *chartArea =
-        dm->addDockWidget(ads::BottomDockWidgetArea, docks[Chart], logArea);
-    dm->addDockWidget(ads::BottomDockWidgetArea, docks[Viewer], chartArea);
-
+    dm->addDockWidgetTabToArea(docks[Chart], logArea);
+    dm->addDockWidgetTabToArea(docks[Viewer], logArea);
     dm->addDockWidgetTabToArea(docks[Variables], logArea);
-    // on-demand tool panels (Parameter Sweep, Run History) live tabbed with the
-    // Output area but start hidden; they are shown from the menu when needed
     dm->addDockWidgetTabToArea(docks[Sweep], logArea);
     dm->addDockWidgetTabToArea(docks[History], logArea);
     dm->addDockWidgetTabToArea(docks[Diagnostics], logArea);
@@ -447,14 +494,12 @@ void PanelManager::applyModeDefault(Mode m)
 {
     const QList<Panel> &want = MODE_PANELS[m];
     for (int i = 0; i < NPanels; ++i) {
-        // A panel belonging to this mode is only shown once it has something to
-        // show. Opening a dock that holds no widget yet gives Qt-ADS an empty
-        // dock area it never lays out properly -- the panel then stays invisible
-        // even after content arrives. Panels fill in as work produces them (a
-        // run creating the charts, the linter creating diagnostics), and
-        // setPanelWidget() opens them at that point if the mode calls for it.
-        const bool wanted = want.contains(Panel(i));
-        docks[i]->toggleView(wanted && docks[i]->widget() != nullptr);
+        // Every dock always holds a widget -- real content or its EmptyState
+        // card -- so a mode can simply show its panels. Before the cards, a
+        // dock with no widget could not be shown at all (Qt-ADS never lays out
+        // an empty dock area), and a workspace entered before any run was a
+        // bare editor with no explanation.
+        docks[i]->toggleView(want.contains(Panel(i)));
     }
     applySplitterProportions();
 }

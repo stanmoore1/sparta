@@ -73,12 +73,17 @@ either an empty buffer or the contents of the file used as argument.
 .. TODO screenshot: also capture the main editor window in the dark
    theme as JPG/sparta-gui-dark.png and show both side by side.
 
-There is the typical menu bar at the top, then the main editor buffer,
-and a status bar at the bottom.  The input script contents are shown
-with line numbers on the left and the input is colored according to
-the SPARTA input script syntax.  The status bar shows the status of
-SPARTA execution on the left (e.g.  "Ready." when idle) and the current
-working directory on the right.  The name of the current file in the
+There is the typical menu bar at the top, then a toolbar with the
+primary actions -- New, Open (whose dropdown holds the bundled
+examples), Save, Run, Stop, Check, Variables and Image -- and, at its
+right edge, the workspace switch and the command-palette button.  Below
+them sit the main editor buffer and a status bar at the bottom.  The
+input script contents are shown with line numbers on the left and the
+input is colored according to the SPARTA input script syntax.  The
+status bar is pure status: the state of SPARTA execution on the left
+(e.g. "Ready." when idle), a one-line description of whatever menu
+entry is highlighted, the current working directory, and -- during a
+run -- CPU usage and a progress bar.  The name of the current file in the
 buffer is shown in the window title; the word `*modified*` is added if
 the buffer edits have not yet been saved to a file.  The geometry of the
 main window is stored when exiting and restored when starting again.
@@ -111,8 +116,8 @@ already loaded into the buffer closes that buffer.  If the buffer has
 unsaved modifications, you are asked to either cancel the operation,
 discard the changes, or save them.  A buffer with modifications can be
 saved any time from the *File* menu, by the keyboard shortcut `Ctrl-S`
-(`Command-S` on macOS), or by clicking on the *Save* button at the very
-left in the status bar.
+(`Command-S` on macOS), or by clicking on the *Save* button in the
+toolbar.
 
 Running SPARTA
 ^^^^^^^^^^^^^^
@@ -124,7 +129,7 @@ Running SPARTA
 From within the SPARTA-GUI main window SPARTA can be started either from
 the *Run* menu using the *Run SPARTA from Editor Buffer* entry, by the
 keyboard shortcut `Ctrl-Enter` (`Command-Enter` on macOS), or by
-clicking on the green *Run* button in the status bar.  All of these
+clicking on the *Run* button in the toolbar.  All of these
 operations cause SPARTA to process the entire input script in the
 editor buffer, which may contain multiple `run
 <https://sparta.github.io/doc/run.html>`_ commands.

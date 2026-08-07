@@ -290,7 +290,7 @@ def main():
                "log text in Output, a populated chart, status bar reporting the run "
                "finished, no error badge")
 
-        s.capture("11-createimage", "Run > Create Image",
+        s.capture("11-createimage", "Tools > Create Image",
                   "a rendered snapshot of the circle flow in the Viewer panel",
                   lambda: (g.key("ctrl+i", 14), g.close_extra_windows(),
                            g.focus_main(), g.key("ctrl+3", 2)), reset=False)

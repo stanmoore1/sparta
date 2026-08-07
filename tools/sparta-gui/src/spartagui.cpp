@@ -90,6 +90,8 @@
 #include <QStringList>
 #include <QTextStream>
 #include <QTimer>
+#include <QToolBar>
+#include <QToolButton>
 #include <QUrl>
 
 #include <algorithm>
@@ -174,6 +176,8 @@ void SpartaGui::setupUi(QSettings &settings, QFont &allFont, QFont &monoFont)
 
     // Status bar
     createStatusBar();
+    // and the toolbar above it, which shares the menus' QActions
+    createToolBar();
 
     // Keep the View-menu entries and the status-bar switch in step with the
     // active mode, and give the mode the panels it expects to find populated.
@@ -287,14 +291,14 @@ void SpartaGui::createFileMenu()
     addMenuAction(menu, ":/icons/help-faq.svg", "&Welcome Screen", "Alt+Home",
                   [this]() { showWelcome(); });
     menu->addSeparator();
-    addMenuAction(menu, ":/icons/document-new.svg", "&New Input File", "Ctrl+N",
-                  &SpartaGui::newDocument);
-    addMenuAction(menu, ":/icons/document-open.svg", "&Open Input File", "Ctrl+O",
-                  &SpartaGui::open);
+    newAction = addMenuAction(menu, ":/icons/document-new.svg", "&New Input File", "Ctrl+N",
+                              &SpartaGui::newDocument);
+    openAction = addMenuAction(menu, ":/icons/document-open.svg", "&Open Input File", "Ctrl+O",
+                               &SpartaGui::open);
     exampleMenu = menu->addMenu(QIcon(":/icons/document-open.svg"), "Open &Example");
     exampleMenu->setEnabled(false);
-    addMenuAction(menu, ":/icons/document-save.svg", "&Save Input File", "Ctrl+S",
-                  &SpartaGui::save);
+    saveAction = addMenuAction(menu, ":/icons/document-save.svg", "&Save Input File", "Ctrl+S",
+                               &SpartaGui::save);
     addMenuAction(menu, ":/icons/document-save-as.svg", "Save Input File &As", "Ctrl+Shift+S",
                   &SpartaGui::saveAs);
     menu->addSeparator();
@@ -378,8 +382,8 @@ void SpartaGui::createEditMenu()
 void SpartaGui::createRunMenu()
 {
     auto *menu = menubar->addMenu("&Run");
-    addMenuAction(menu, ":/icons/system-run.svg", "&Run SPARTA from Editor Buffer", "Ctrl+Return",
-                  &SpartaGui::runBuffer);
+    runAction = addMenuAction(menu, ":/icons/system-run.svg", "&Run SPARTA from Editor Buffer",
+                              "Ctrl+Return", &SpartaGui::runBuffer);
     addMenuAction(menu, ":/icons/run-file.svg", "Run SPARTA from &File", "Ctrl+Shift+Return",
                   &SpartaGui::runFile);
     stopAction =
@@ -387,15 +391,16 @@ void SpartaGui::createRunMenu()
                       &SpartaGui::stopRun);
     extendAction = addMenuAction(menu, ":/icons/go-last.svg", "&Extend Run...", "Ctrl+E",
                                  &SpartaGui::extendRun);
-    addMenuAction(menu, ":/icons/warning.svg", "Chec&k Input", "Ctrl+K", &SpartaGui::checkInput);
+    checkAction =
+        addMenuAction(menu, ":/icons/warning.svg", "Chec&k Input", "Ctrl+K", &SpartaGui::checkInput);
     menu->addSeparator();
 
     addMenuAction(menu, ":/icons/system-restart.svg", "Relaunch &SPARTA Instance", "",
                   &SpartaGui::restartSparta);
     menu->addSeparator();
 
-    addMenuAction(menu, ":/icons/preferences-desktop.svg", "Set &Variables...", "Ctrl+Shift+V",
-                  &SpartaGui::editVariables);
+    varsAction = addMenuAction(menu, ":/icons/preferences-desktop.svg", "Set &Variables...",
+                               "Ctrl+Shift+V", &SpartaGui::editVariables);
     addMenuAction(menu, ":/icons/binary-file-icon.svg", "Insert &Restart Commands...", "",
                   &SpartaGui::continueRestart);
     // Create Image and the 3D snapshot used to end this menu; they moved to
@@ -414,8 +419,8 @@ void SpartaGui::createToolsMenu()
 
     // Rendering: produces artifacts from the simulation state, same species
     // as the converters and reports below.
-    addMenuAction(menu, ":/icons/image-viewer.svg", "Create &Image", "Ctrl+I",
-                  [this]() { renderImage(); });
+    imageAction = addMenuAction(menu, ":/icons/image-viewer.svg", "Create &Image", "Ctrl+I",
+                                [this]() { renderImage(); });
 #if defined(SPARTA_GUI_HAVE_VTK)
     addMenuAction(menu, ":/icons/image-viewer.svg", "3D &Snapshot (VTK)", "Ctrl+Shift+3",
                   &SpartaGui::renderVtkSnapshot);
@@ -484,7 +489,8 @@ void SpartaGui::createViewMenu()
          "Ctrl+Shift+W"},
         {PanelManager::Sweep, ":/icons/x-office-drawing.svg", "Parametric S&weep Window", ""},
         {PanelManager::History, ":/icons/document-open-recent.svg", "Run &History Window", ""},
-        {PanelManager::Diagnostics, ":/icons/warning.svg", "&Diagnostics Window", ""},
+        {PanelManager::Diagnostics, ":/icons/warning.svg", "&Diagnostics Window",
+         "Ctrl+Shift+X"},
         {PanelManager::ProjectFiles, ":/icons/document-open.svg", "Project &Files Window", ""},
     };
     for (const auto &e : entries) {
@@ -609,21 +615,59 @@ void SpartaGui::syncModeControls(int mode)
     for (int i = 0; i < modeButtons.size(); ++i) modeButtons[i]->setChecked(i == mode);
 }
 
-void SpartaGui::createStatusBar()
+
+void SpartaGui::createToolBar()
 {
-    statusbar = new QStatusBar(this);
-    setStatusBar(statusbar);
+    // The primary actions get a first-class, labeled, always-visible surface.
+    // They used to live as four icon-only buttons inside the *status bar* --
+    // which is for output, not input -- and everything else was menu-only.
+    // Every button here is the same QAction as its menu entry, so shortcuts,
+    // enabled state and checkmarks agree everywhere by construction.
+    auto *tb = new QToolBar("Main Toolbar", this);
+    tb->setObjectName("maintoolbar");
+    tb->setMovable(false);
+    tb->setFloatable(false);
+    tb->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    // no "hide the toolbar" context-menu foot-gun: with the status-bar buttons
+    // gone this is where the primary actions live
+    tb->toggleViewAction()->setVisible(false);
+    addToolBar(Qt::TopToolBarArea, tb);
 
-    spartastatus = new QLabel(QString());
-    auto pix     = QPixmap(Cfg::SPARTA_ICON);
-    spartastatus->setPixmap(pix.scaled(Cfg::ICON_SCALE, Cfg::ICON_SCALE, Qt::KeepAspectRatio));
-    spartastatus->setToolTip("SPARTA instance is active");
-    spartastatus->hide();
-    statusbar->addWidget(spartastatus);
+    // short labels for the toolbar; the menus keep the full text
+    newAction->setIconText("New");
+    openAction->setIconText("Open");
+    saveAction->setIconText("Save");
+    runAction->setIconText("Run");
+    stopAction->setIconText("Stop");
+    checkAction->setIconText("Check");
+    varsAction->setIconText("Variables");
+    imageAction->setIconText("Image");
 
-    // Workspace mode switch: a segmented control of checkable buttons. This is
-    // the primary way to change what the window shows, so it lives permanently
-    // on screen rather than only in the View menu.
+    tb->addAction(newAction);
+    tb->addAction(openAction);
+    // Open doubles as the gateway to the bundled examples: its dropdown is
+    // the same Open Example submenu the File menu holds.
+    if (auto *openBtn = qobject_cast<QToolButton *>(tb->widgetForAction(openAction))) {
+        openBtn->setMenu(exampleMenu);
+        openBtn->setPopupMode(QToolButton::MenuButtonPopup);
+    }
+    tb->addAction(saveAction);
+    tb->addSeparator();
+    tb->addAction(runAction);
+    tb->addAction(stopAction);
+    tb->addAction(checkAction);
+    tb->addSeparator();
+    tb->addAction(varsAction);
+    tb->addAction(imageAction);
+
+    // Everything after this spacer sits on the right edge.
+    auto *spacer = new QWidget(tb);
+    spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    tb->addWidget(spacer);
+
+    // Workspace mode switch: a segmented control of checkable buttons. It
+    // decides what the window shows, so it belongs in the toolbar -- with the
+    // controls -- not in the status bar it used to sit in.
     struct ModeBtn {
         PanelManager::Mode mode;
         const char *text;
@@ -634,7 +678,7 @@ void SpartaGui::createStatusBar()
         {PanelManager::Analyze, "Analyze", "Study results: the charts, full size"},
         {PanelManager::Visualize, "Visualize", "Look at the pictures with the window given over to them"},
     };
-    auto *modebar = new QWidget(this);
+    auto *modebar = new QWidget(tb);
     auto *modelay = new QHBoxLayout(modebar);
     modelay->setContentsMargins(0, 0, 0, 0);
     modelay->setSpacing(0);
@@ -647,35 +691,29 @@ void SpartaGui::createStatusBar()
         modelay->addWidget(b);
         modeButtons.append(b);
     }
-    statusbar->addWidget(modebar);
+    tb->addWidget(modebar);
 
-    auto *savebtn = new QPushButton(QIcon(":/icons/document-save.svg"), "");
-    savebtn->setToolTip("Save edit buffer to file");
-    connect(savebtn, &QPushButton::released, this, &SpartaGui::save);
-    statusbar->addWidget(savebtn);
+    auto *paletteBtn = new QToolButton(tb);
+    paletteBtn->setIcon(QIcon(":/icons/search.svg"));
+    paletteBtn->setToolTip("Command palette: search every menu action (Ctrl+Shift+P)");
+    paletteBtn->setAccessibleName("Command palette");
+    connect(paletteBtn, &QToolButton::clicked, this, &SpartaGui::showPalette);
+    tb->addWidget(paletteBtn);
 
-    auto *runbtn = new QPushButton(QIcon(":/icons/system-run.svg"), "");
-    runbtn->setToolTip("Run SPARTA on input");
-    connect(runbtn, &QPushButton::released, this, &SpartaGui::runBuffer);
-    statusbar->addWidget(runbtn);
-
-    auto *stopbtn = new QPushButton(QIcon(":/icons/process-stop.svg"), "");
-    stopbtn->setToolTip("Stop SPARTA");
-    connect(stopbtn, &QPushButton::released, this, &SpartaGui::stopRun);
-    statusbar->addWidget(stopbtn);
-    stopButton = stopbtn;
-    // Stop is only meaningful while something is running. Left always enabled,
-    // it was a control that could be picked at any time and did nothing
-    // whatsoever -- forceTimeout() on an idle instance is a no-op.
     syncRunControls();
+}
 
-    auto *imgbtn = new QPushButton(QIcon(":/icons/image-viewer.svg"), "");
-    imgbtn->setToolTip("Create snapshot image");
-    connect(imgbtn, &QPushButton::released, this, [this]() { renderImage(); });
-    statusbar->addWidget(imgbtn);
+void SpartaGui::createStatusBar()
+{
+    statusbar = new QStatusBar(this);
+    setStatusBar(statusbar);
 
-    // square status-bar buttons with a snug, uniform icon (shared policy)
-    styleToolButtons(toolButtonSize(savebtn), {savebtn, runbtn, stopbtn, imgbtn});
+    spartastatus = new QLabel(QString());
+    auto pix     = QPixmap(Cfg::SPARTA_ICON);
+    spartastatus->setPixmap(pix.scaled(Cfg::ICON_SCALE, Cfg::ICON_SCALE, Qt::KeepAspectRatio));
+    spartastatus->setToolTip("SPARTA instance is active");
+    spartastatus->hide();
+    statusbar->addWidget(spartastatus);
 
     cpuuse = new QLabel(Cfg::STATUS_ZERO_CPU);
     cpuuse->setFixedWidth(90);
@@ -1906,7 +1944,10 @@ void SpartaGui::syncRunControls()
 {
     const bool running = sparta.isRunning() || workerActive();
     if (stopAction) stopAction->setEnabled(running);
-    if (stopButton) stopButton->setEnabled(running);
+    // Run and Create Image refuse with a modal while something is running;
+    // greyed out beats a dialog that says no.
+    if (runAction) runAction->setEnabled(!running);
+    if (imageAction) imageAction->setEnabled(!running);
     // Extending needs a state to continue from and nothing in flight.  Greyed
     // out rather than hidden, so the entry is discoverable before the first run
     // explains what it is for.

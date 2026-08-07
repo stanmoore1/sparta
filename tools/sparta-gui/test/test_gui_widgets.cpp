@@ -64,9 +64,11 @@
 #include <string>
 
 #include "DockWidget.h"
+#include "DockAreaWidget.h"
 
 #include "aboutdialog.h"
 #include "dockpanels.h"
+#include "emptystate.h"
 #include "codeeditor.h"
 #include "findandreplace.h"
 #include "helpers.h"
@@ -733,6 +735,80 @@ TEST(WorkspaceModes, EachModeOpensWhatItDocuments)
                 << PanelManager::panelName(panel).toStdString() << " in "
                 << PanelManager::modeName(mode).toStdString();
         }
+    }
+}
+
+// A panel with no content used to be a blank rectangle -- or, worse, a dock
+// Qt-ADS refused to show at all, so a workspace entered before any run was a
+// bare editor with no explanation. Every dock now always holds a widget: real
+// content, or an EmptyState card saying what is absent and which action fills
+// it.
+TEST(WorkspaceModes, EveryPanelSaysSomethingBeforeItHasContent)
+{
+    QMainWindow window;
+    CodeEditor editor(nullptr);
+    PanelManager panels(&window, &editor);
+
+    for (int p = 0; p < PanelManager::NPanels; ++p) {
+        QWidget *w = panels.dock(PanelManager::Panel(p))->widget();
+        ASSERT_NE(w, nullptr) << PanelManager::panelName(PanelManager::Panel(p)).toStdString()
+                              << " holds no widget at all";
+        EXPECT_TRUE(EmptyState::isPlaceholder(w))
+            << PanelManager::panelName(PanelManager::Panel(p)).toStdString()
+            << " does not start with its empty-state card";
+    }
+
+    // and a workspace can therefore show its panels before anything ran
+    panels.applyMode(PanelManager::Analyze);
+    EXPECT_TRUE(panels.isPanelOpen(PanelManager::Chart))
+        << "Analyze before any run shows nothing where the chart card should be";
+
+    // real content replaces the card; clearing brings a fresh card back
+    panels.setPanelWidget(PanelManager::Chart, new QPlainTextEdit, "content");
+    EXPECT_FALSE(EmptyState::isPlaceholder(panels.dock(PanelManager::Chart)->widget()));
+    panels.clearRunPanels();
+    EXPECT_TRUE(EmptyState::isPlaceholder(panels.dock(PanelManager::Chart)->widget()))
+        << "clearing run panels left the chart dock empty instead of restoring its card";
+}
+
+// The "keep the old run's panel" preference archives the displaced widget as
+// an extra tab. Displacing the empty-state card must not archive it -- an
+// archived tab of nothing is junk chrome.
+TEST(WorkspaceModes, ThePlaceholderIsNeverArchivedAsAKeptRun)
+{
+    QMainWindow window;
+    CodeEditor editor(nullptr);
+    PanelManager panels(&window, &editor);
+
+    // counted through the dock area: hidden/tabbed docks drop out of the
+    // window's own object tree, so findChildren cannot see them
+    auto *area          = panels.dock(PanelManager::Log)->dockAreaWidget();
+    const int pristine  = area->dockWidgetsCount();
+    panels.setPanelWidget(PanelManager::Log, new QPlainTextEdit, "run 1", /*keepOld=*/true);
+    EXPECT_EQ(area->dockWidgetsCount(), pristine)
+        << "displacing the placeholder created an archived tab of nothing";
+    // displacing real content with keepOld does archive
+    panels.setPanelWidget(PanelManager::Log, new QPlainTextEdit, "run 2", /*keepOld=*/true);
+    EXPECT_EQ(area->dockWidgetsCount(), pristine + 1)
+        << "displacing a real run's panel with keepOld did not archive it";
+}
+
+// With more than two panels open the old splits starved every view of space;
+// panels now come up as tabs of one side area, and side-by-side is something
+// the user drags into being (and the workspace's perspective remembers).
+TEST(WorkspaceModes, PanelsShareOneSideAreaAsTabsByDefault)
+{
+    QMainWindow window;
+    CodeEditor editor(nullptr);
+    PanelManager panels(&window, &editor);
+
+    auto *logArea = panels.dock(PanelManager::Log)->dockAreaWidget();
+    ASSERT_NE(logArea, nullptr);
+    for (auto p : {PanelManager::Chart, PanelManager::Viewer, PanelManager::Variables,
+                   PanelManager::Sweep, PanelManager::History, PanelManager::Diagnostics}) {
+        EXPECT_EQ(panels.dock(p)->dockAreaWidget(), logArea)
+            << PanelManager::panelName(p).toStdString()
+            << " opens into its own split instead of a tab of the side area";
     }
 }
 

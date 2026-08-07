@@ -290,8 +290,8 @@ visible; the table lists what is shown beside it:
      - ``Ctrl+3``
      - Viewer, with the whole window given over to it.
 
-The workspaces are also reachable from the segmented switch in the
-status bar.  Panels can be rearranged, added or removed freely and each
+The workspaces are also reachable from the segmented switch at the
+right edge of the toolbar.  Panels can be rearranged, added or removed freely and each
 workspace remembers its own arrangement, so tailoring *Analyze* does not
 disturb *Run*.  Starting a run from *Analyze* or *Visualize* raises only
 that workspace's own panel: choosing them says to watch the plots or the
