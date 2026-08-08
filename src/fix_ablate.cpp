@@ -4037,6 +4037,12 @@ void FixAblate::grow_percell(int nnew)
   memory->grow(mcflags,maxgrid,4,"ablate:mcflags");
   memory->grow(celldelta,maxgrid,"ablate:celldelta");
   memory->grow(cflag,maxgrid,"ablate:cflag");
+
+  // zero cflag: comm_neigh_corners() packs it when the units are a distance,
+  //   and distance_transform() comms before the first decrement/increment
+  //   has ever written it
+
+  for (int icell = 0; icell < maxgrid; icell++) cflag[icell] = 0.0;
   if (multi_val_flag) memory->grow(mdelta,maxgrid,ncorner,nmultiv,"ablate:mdelta");
   else memory->grow(cdelta,maxgrid,ncorner,"ablate:cdelta");
   if (multi_dec_flag) memory->grow(nvert,maxgrid,ncorner,"ablate:nvert");
@@ -4276,10 +4282,17 @@ void FixAblate::process_args(int narg, char **arg)
       //   With the source built on a mixture that has one group per species
       //   that is one coefficient per species, which is where the per species
       //   handling comes from -- fix ablate itself never looks up a mass.
+      // an arg is a coefficient only if ALL of it parses as a number, so a
+      //   following keyword or a typo like 0.5x ends the list instead of
+      //   being read as whatever prefix atof can make of it
 
       int n = 0;
-      while (iarg+1+n < narg &&
-             (isdigit(arg[iarg+1+n][0]) || arg[iarg+1+n][0] == '.')) n++;
+      char *end;
+      while (iarg+1+n < narg) {
+        strtod(arg[iarg+1+n],&end);
+        if (end == arg[iarg+1+n] || *end != '\0') break;
+        n++;
+      }
       if (n == 0) error->all(FLERR,"Illegal fix_ablate command");
       nsticking = n;
       memory->destroy(sticking);
