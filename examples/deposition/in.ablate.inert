@@ -1,0 +1,62 @@
+################################################################################
+# 2d ablation with the deposition machinery present: it must stay inert
+#
+# The same sealed box as in.deposit.conserve but with the default
+# mode = ablate.  A receding surface never engulfs a particle, so the
+# deposition counters must read zero at every output step:
+#
+#   f_ablate[3] = particles buried by an advancing front       -> 0
+#   f_ablate[8] = particles pushed back into the flow          -> 0
+#
+# which pins down that the advancing-front code is fully inert when
+# deposition is not in use.
+#
+# The accounting pair is live in ablate mode too:
+#   f_ablate[1]  = corner point value budget requested at the last event
+#   f_ablate[22] = change actually applied, negative for ablation; it agrees
+#                  with -f_ablate[1] until corner points saturate at 0, and
+#                  the f_ablate scalar moves by exactly this amount
+#
+#  - The "comm/sort" option to the "global" command is used to match MPI runs.
+#  - The "twopass" option is used to match Kokkos runs.
+################################################################################
+
+seed                12345
+dimension           2
+global              gridcut 0.0 comm/sort yes
+
+boundary            r r p
+
+create_box          0 150 0 150 -0.5 0.5
+create_grid         150 150 1
+
+# implicit surfaces need a clumped grid partition to acquire ghost cells
+balance_grid        rcb cell
+
+global              nrho 1.0 fnum 0.01
+
+species             ../ablation/air.species N
+mixture             air N
+
+region              inner block 25.5 124.5 25.5 124.5 INF INF
+group               inner grid region inner one
+
+fix                 ablate ablate inner 1 0.1 uniform 1
+
+global              surfs implicit
+read_isurf          inner 100 100 1 ../ablation/binary.101x101 180.5 ablate
+
+surf_collide        1 diffuse 300.0 1.0
+surf_modify         all collide 1
+
+timestep            0.0001
+
+create_particles    air n 200000 twopass
+
+fix                 check grid/check 1 error
+
+stats               50
+stats_style         step np f_ablate f_ablate[1] f_ablate[3] f_ablate[8] &
+                    f_ablate[22]
+
+run                 200

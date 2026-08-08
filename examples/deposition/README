@@ -1,0 +1,45 @@
+Material deposition onto implicit surfaces, via "fix ablate" with its
+mode = deposit setting: corner point values are incremented instead of
+decremented, so the surface grows into the gas instead of receding.
+
+These inputs are the regression-testable core of the deposition
+verification.  Each one's stats columns encode an invariant, so the
+reference logs in this directory enforce it on every run:
+
+1) in.deposit.conserve grows a surface in a sealed reflective box.
+   With no inflow or outflow, the drop in particle count must equal
+   the buried-particle counter exactly at every output step: nothing
+   is ever lost silently.  The rate is high enough that particles ARE
+   buried, and "fix grid/check 1 error" aborts the run if any particle
+   is ever left inside the grown surface.
+
+2) in.deposit.rate drives a flat front with a rate given in
+   length/time (units = distance) and outputs the front speed the
+   surface actually realized, which must equal the requested rate.
+   This is the analytic-rate calibration: a plane normal to x on a
+   graded corner point field moves at exactly the speed asked for.
+
+3) in.ablate.inert runs the same sealed box in the default ablate
+   mode.  The deposition counters must read zero throughout, which
+   pins down that the advancing-front machinery is fully inert when
+   deposition is not in use.
+
+All three also output the requested-vs-applied accounting pair
+(f_ablate[1] and f_ablate[22]): the corner point budget the source
+asked for, and the change the field actually took, whose difference is
+the amount discarded at saturated corner points.
+
+A much larger verification suite lives in tools/testing/deposition:
+momentum and energy conservation ledgers closed to round-off in fully
+periodic boxes, per-species sticking against free-molecular closed
+forms, oblique-front rates measured from dumped corner values outside
+SPARTA, cross-processor burial independence, load balancing under a
+growing film, and negative tests for the guards.  Run it with
+
+  cd tools/testing/deposition
+  python3 run_tests.py                 # serial
+  python3 run_tests.py --exe ../../../src/spa_mpi --ranks 4
+
+See the "fix ablate" doc page for the deposition keywords (mode, units,
+response, density, sticking) and the discussion of what the advancing
+front does to particles in its way.

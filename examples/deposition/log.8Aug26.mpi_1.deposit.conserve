@@ -1,0 +1,162 @@
+SPARTA (24 Sep 2025)
+Running on 1 MPI task(s)
+################################################################################
+# 2d deposition conservation: nothing is ever lost silently
+#
+# A growing implicit surface in a sealed, reflective box with no inflow or
+# outflow.  The only way a particle can leave the simulation is for the
+# advancing front to bury it, so at every output step
+#
+#   np(0) - np(t)  ==  f_ablate[3]     (particles buried by the front)
+#
+# exactly.  Any mismatch means a particle was destroyed without being
+# accounted for, which is the failure the deposition treatment exists to
+# prevent.  The deposition rate here is high enough that some particles ARE
+# buried, so the identity is exercised rather than trivially 0 == 0.
+#
+# The other ledger columns:
+#   f_ablate[1]  = corner point value budget requested at the last event
+#   f_ablate[4]  = total mass of the buried particles
+#   f_ablate[8]  = particles pushed back into the flow after a regeneration,
+#                  i.e. what a delete-on-engulf scheme would have destroyed
+#   f_ablate[20] = of those, how many crossed a processor boundary
+#   f_ablate[22] = corner point value change actually applied at the last
+#                  event; the f_ablate scalar moves by exactly this amount
+#
+# fix grid/check with the error setting asserts that no particle is ever
+# left sitting inside the grown surface.
+#
+#  - The "comm/sort" option to the "global" command is used to match MPI runs.
+#  - The "twopass" option is used to match Kokkos runs.
+################################################################################
+
+seed                12345
+dimension           2
+global              gridcut 0.0 comm/sort yes
+
+boundary            r r p
+
+create_box          0 150 0 150 -0.5 0.5
+Created orthogonal box = (0 0 -0.5) to (150 150 0.5)
+create_grid         150 150 1
+Created 22500 child grid cells
+  CPU time = 0.00647449 secs
+  create/ghost percent = 51.1039 48.8961
+
+# implicit surfaces need a clumped grid partition to acquire ghost cells
+balance_grid        rcb cell
+Balance grid migrated 0 cells
+  CPU time = 0.0039325 secs
+  reassign/sort/migrate/ghost percent = 48.6946 3.37389 7.98462 39.9469
+
+global              nrho 1.0 fnum 0.01
+
+species             ../ablation/air.species N
+mixture             air N
+
+region              inner block 25.5 124.5 25.5 124.5 INF INF
+group               inner grid region inner one
+0 initial grid cell count in group inner
+10000 final grid cell count in group inner
+
+fix                 ablate ablate inner 1 0.5 uniform 1 mode deposit
+
+global              surfs implicit
+read_isurf          inner 100 100 1 ../ablation/binary.101x101 180.5 ablate
+  10201 corner points
+  28744 11256 pushed corner pt values
+  25.7078 124.292 xlo xhi
+  25.7078 124.292 ylo yhi
+  0 0 zlo zhi
+  0.413172 min line length
+  7213 = cells with surfs
+  8006 = total surfs in all grid cells
+  2 = max surfs in one grid cell
+  0.413172 = min surf-size/cell-size ratio
+  7213 0 = cells overlapping surfs, overlap cells with unmarked corner pts
+  15211 76 7213 = cells outside/inside/overlapping surfs
+  7213 = surf cells with 1,2,etc splits
+  21209.8 21209.8 = cell-wise and global flow volume
+  CPU time = 0.0158399 secs
+  read/create-surfs percent = 10.654 89.346
+
+surf_collide        1 diffuse 300.0 1.0
+surf_modify         all collide 1
+
+timestep            0.0001
+
+create_particles    air n 200000 twopass
+Created 200000 particles
+  CPU time = 0.0371829 secs
+
+fix                 check grid/check 1 error
+
+stats               50
+stats_style         step np f_ablate f_ablate[1] f_ablate[3] f_ablate[4]                     f_ablate[8] f_ablate[20] f_ablate[22]
+
+run                 200
+Memory usage per proc in Mbytes:
+  particles (ave,min,max) = 20.3125 20.3125 20.3125
+  grid      (ave,min,max) = 4.38879 4.38879 4.38879
+  surf      (ave,min,max) = 0.794052 0.794052 0.794052
+  total     (ave,min,max) = 27.9844 27.9844 27.9844
+Step Np f_ablate f_ablate[1] f_ablate[3] f_ablate[4] f_ablate[8] f_ablate[20] f_ablate[22] 
+       0   200000       717570            0            0            0            0            0            0 
+      50   200000     896842.5       3606.5            0            0          198            0       3585.5 
+     100   200000    1074965.5         3478            0            0         3882            0         3457 
+     150   200000      1249295         3540            0            0         7272            0       3504.5 
+     200   199939      1419182         3350           61  1.41825e-24        13836            0    3316.9997 
+Loop time of 6.44889 on 1 procs for 200 steps with 199939 particles
+Performance: 31.013 timesteps/s, 6.201 Mparticle-step/s
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Move    | 0.72207    | 0.72207    | 0.72207    |   0.0 | 11.20
+Coll    | 0          | 0          | 0          |   0.0 |  0.00
+Sort    | 0          | 0          | 0          |   0.0 |  0.00
+Comm    | 0.00024967 | 0.00024967 | 0.00024967 |   0.0 |  0.00
+Modify  | 5.7252     | 5.7252     | 5.7252     |   0.0 | 88.78
+Output  | 0.0010324  | 0.0010324  | 0.0010324  |   0.0 |  0.02
+Other   |            | 0.000338   |            |       |  0.01
+
+Particle moves    = 39998570 (40M)
+Cells touched     = 42546624 (42.5M)
+Particle comms    = 0 (0K)
+Boundary collides = 18253 (18.3K)
+Boundary exits    = 0 (0K)
+SurfColl checks   = 13260567 (13.3M)
+SurfColl occurs   = 232541 (0.233M)
+Surf reactions    = 0 (0K)
+Collide attempts  = 0 (0K)
+Collide occurs    = 0 (0K)
+Reactions         = 0 (0K)
+Particles stuck   = 0
+Axisymm bad moves = 0
+
+Particle-moves/CPUsec/proc: 6.20239e+06
+Particle-moves/step: 199993
+Cell-touches/particle/step: 1.0637
+Particle comm iterations/step: 1
+Particle fraction communicated: 0
+Particle fraction colliding with boundary: 0.000456341
+Particle fraction exiting boundary: 0
+Surface-checks/particle/step: 0.331526
+Surface-collisions/particle/step: 0.00581373
+Surf-reactions/particle/step: 0
+Collision-attempts/particle/step: 0
+Collisions/particle/step: 0
+Reactions/particle/step: 0
+
+Particles: 199939 ave 199939 max 199939 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Cells:      22722 ave 22722 max 22722 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+GhostCell: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+EmptyCell: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Surfs:    7080 ave 7080 max 7080 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+GhostSurf: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0

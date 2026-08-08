@@ -1,0 +1,57 @@
+################################################################################
+# 2d deposition rate calibration: ask for a speed, get that speed
+#
+# A flat front normal to x, driven by a rate given in length/time, so the
+# answer is arithmetic rather than a simulation result: the surface is asked
+# to advance at 1.0 length/time and f_ablate[21], the front speed the surface
+# actually realized, must come back equal to it.  The residual few-percent
+# excess is a documented artifact of the finite domain height (cells where
+# the forced horizontal boundary front meets the vertical one are oblique and
+# over-read; their weight falls as the domain gets taller).
+#
+# The corner point field is a linear ramp in x read with push no, so the
+# isosurface is the plane where the ramp crosses thresh and its normal is
+# exactly the x axis.  A binary 0/255 field could not carry that direction,
+# and the front would not move at the requested speed; see the smooth
+# keyword of read_isurf.
+#
+# There is no gas: this is a pure test of the corner point arithmetic.
+#   f_ablate     = summed corner point values, the material present
+#   f_ablate[21] = realized front speed, which must equal the requested 1.0
+#   f_ablate[22] = corner point value change actually applied at the last
+#                  event; the f_ablate scalar moves by exactly this amount
+#
+#  - The "comm/sort" option to the "global" command is used to match MPI runs.
+################################################################################
+
+seed                12345
+dimension           2
+global              gridcut 0.0 comm/sort yes
+
+boundary            r r p
+
+create_box          0 20 0 80 -0.5 0.5
+create_grid         20 80 1
+balance_grid        rcb cell
+
+global              nrho 1.0 fnum 1.0
+
+species             ../ablation/air.species N
+mixture             air N
+
+variable            rate grid 1.0
+fix                 ablate ablate all 1 1.0 v_rate mode deposit &
+                    units distance
+
+global              surfs implicit
+read_isurf          all 20 80 1 ramp.20x80 127.5 ablate push no
+
+surf_collide        1 diffuse 300.0 1.0
+surf_modify         all collide 1
+
+timestep            0.001
+
+stats               10
+stats_style         step f_ablate f_ablate[21] f_ablate[22]
+
+run                 50

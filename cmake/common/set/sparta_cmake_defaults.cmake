@@ -21,6 +21,7 @@ if(SPARTA_ENABLE_TESTING)
   set(SPARTA_ENABLED_TEST_SUITES
       "ablation"
       "adapt"
+      "deposition"
       "vibrate"
       "surf_collide"
       "surf"
@@ -85,6 +86,11 @@ if(SPARTA_ENABLE_TESTING)
         # it with fix ave/grid on a grid/surf compute)
         "in.deposition.2d"
         "in.deposit.axi.spherecone"
+        # deposition under KOKKOS resolves growth once per Nevery rather
+        # than every step, so its stats differ from the refreshed-geometry
+        # reference logs
+        "in.deposit.conserve"
+        "in.deposit.rate"
         # surf_collide adiabatic/cll/td/impulsive styles not KOKKOS-enabled
         "in.beam.adiabatic"
         "in.beam.cll"

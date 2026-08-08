@@ -1,0 +1,69 @@
+################################################################################
+# 2d deposition conservation: nothing is ever lost silently
+#
+# A growing implicit surface in a sealed, reflective box with no inflow or
+# outflow.  The only way a particle can leave the simulation is for the
+# advancing front to bury it, so at every output step
+#
+#   np(0) - np(t)  ==  f_ablate[3]     (particles buried by the front)
+#
+# exactly.  Any mismatch means a particle was destroyed without being
+# accounted for, which is the failure the deposition treatment exists to
+# prevent.  The deposition rate here is high enough that some particles ARE
+# buried, so the identity is exercised rather than trivially 0 == 0.
+#
+# The other ledger columns:
+#   f_ablate[1]  = corner point value budget requested at the last event
+#   f_ablate[4]  = total mass of the buried particles
+#   f_ablate[8]  = particles pushed back into the flow after a regeneration,
+#                  i.e. what a delete-on-engulf scheme would have destroyed
+#   f_ablate[20] = of those, how many crossed a processor boundary
+#   f_ablate[22] = corner point value change actually applied at the last
+#                  event; the f_ablate scalar moves by exactly this amount
+#
+# fix grid/check with the error setting asserts that no particle is ever
+# left sitting inside the grown surface.
+#
+#  - The "comm/sort" option to the "global" command is used to match MPI runs.
+#  - The "twopass" option is used to match Kokkos runs.
+################################################################################
+
+seed                12345
+dimension           2
+global              gridcut 0.0 comm/sort yes
+
+boundary            r r p
+
+create_box          0 150 0 150 -0.5 0.5
+create_grid         150 150 1
+
+# implicit surfaces need a clumped grid partition to acquire ghost cells
+balance_grid        rcb cell
+
+global              nrho 1.0 fnum 0.01
+
+species             ../ablation/air.species N
+mixture             air N
+
+region              inner block 25.5 124.5 25.5 124.5 INF INF
+group               inner grid region inner one
+
+fix                 ablate ablate inner 1 0.5 uniform 1 mode deposit
+
+global              surfs implicit
+read_isurf          inner 100 100 1 ../ablation/binary.101x101 180.5 ablate
+
+surf_collide        1 diffuse 300.0 1.0
+surf_modify         all collide 1
+
+timestep            0.0001
+
+create_particles    air n 200000 twopass
+
+fix                 check grid/check 1 error
+
+stats               50
+stats_style         step np f_ablate f_ablate[1] f_ablate[3] f_ablate[4] &
+                    f_ablate[8] f_ablate[20] f_ablate[22]
+
+run                 200
