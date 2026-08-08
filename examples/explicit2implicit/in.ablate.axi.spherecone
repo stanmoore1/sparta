@@ -44,7 +44,7 @@ fix                     fablate ablate all 20 20.0 f_FIX
 
 create_isurf            all fablate 39.5 inout
 
-write_surf              sc.ablate.start.surf
+write_surf              tmp.sc.ablate.start.surf
 
 fix                     in emit/face air xlo twopass
 create_particles        air n 0 twopass
@@ -61,4 +61,4 @@ stats_style		step cpu np nscoll nscheck f_fablate
 
 run			500
 
-write_surf              sc.ablate.end.surf
+write_surf              tmp.sc.ablate.end.surf

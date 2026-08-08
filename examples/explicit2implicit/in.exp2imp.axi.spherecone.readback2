@@ -1,6 +1,6 @@
 ################################################################################
 # 2d axisymmetric: stage 2 of the write_isurf / read_isurf round trip.
-# Run in.exp2imp.axi.spherecone.readback first to create sc.corners.dat.
+# Run in.exp2imp.axi.spherecone.readback first to create tmp.sc.corners.dat.
 #
 # read_isurf reads the corner point values back and rebuilds the sphere-cone.
 # The body touches the y=0 symmetry axis at the nose and the base, which is
@@ -30,7 +30,7 @@ species			../ablation/air.species N O
 mixture			air N O vstream 3472.0 0.0 0.0 temp 300.0
 
 fix		        fablate ablate all 0 0.2 random 0
-read_isurf              all 120 60 1 sc.corners.dat 39.5 fablate &
+read_isurf              all 120 60 1 tmp.sc.corners.dat 39.5 fablate &
                         precision double push no
 
 surf_collide		1 diffuse 1000.0 1.0
