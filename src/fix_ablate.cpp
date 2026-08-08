@@ -54,18 +54,12 @@ enum{UNKNOWN,OUTSIDE,INSIDE,OVERLAP};   // cell types, same as Grid
 enum{KEEP,DISCARD,MIGRATE};   // fate of a particle the new isosurface encloses
 enum{PERIODIC,OUTFLOW,REFLECT,SURFACE,AXISYM};   // same as Domain
 
-#define MINSPREAD 1.0     // min corner value variation across a cell, in the
-                          //   0-255 scale, for the isosurface to be localized
-                          //   enough that its normal speed is meaningful
 #define SWEEP_FRAC 0.5    // max front advance per regeneration, in grid cells
 #define EPSSURF 1.0e-4    // push off a surf, same as Grid::point_outside_surfs()
 #define CLAMP_FRAC 1.10   // fraction of crossed edges that may lose the
                           //   normal projection before it is worth warning
 #define BIGDIST 1.0e20   // no cell offered a distance for this corner point
 #define NOMEASURE (-1.0)  // edge_displacement() had no crossing to measure from
-#define NDEPO 18          // # of deposition diagnostic counters
-#define NFRONT 2          // internal accumulators for the realized front speed
-#define NREDUCE (NDEPO+NFRONT)
 
 #define INVOKED_PER_GRID 16
 #define DELTAGRID 1024            // must be bigger than split cells per cell
@@ -300,7 +294,6 @@ FixAblate::FixAblate(SPARTA *sparta, int narg, char **arg) :
   array_grid = cvalues = NULL;
   cvalues_prev = NULL;
   sfront_cell = sfront_normal = NULL;
-  max_advance = 0.0;
   cnow = cnext = NULL;
   segpt = segnorm = NULL;
   segspeed = segband = NULL;
@@ -871,7 +864,7 @@ void FixAblate::end_of_step()
   if (depositflag) {
     double small = MIN(xyzsize[0],xyzsize[1]);
     if (dim == 3) small = MIN(small,xyzsize[2]);
-    max_advance = 0.0;
+    double max_advance = 0.0;
     for (int icell = 0; icell < nglocal; icell++)
       if (sfront_cell[icell]/small > max_advance)
         max_advance = sfront_cell[icell]/small;
@@ -1840,11 +1833,10 @@ void FixAblate::increment()
     //   relation end_of_step() used to convert it, dc = s*|grad c|*dt, is the
     //   relation for a field shifted UNIFORMLY by dc.  Concentrating the
     //   whole budget on one corner does not shift the field uniformly, and
-    //   the front then moves by only a fraction of what was asked (see the
-    //   header comment on uniform_share() for the arithmetic).
-    // so hand every corner an equal share.  sync() sums the contributions of
-    //   the cells sharing a corner point, so the share is divided by that
-    //   count and each corner ends up rising by exactly celldelta.
+    //   the front then moves by only a fraction of what was asked.
+    // so hand every corner an equal share.  sync() averages the contributions
+    //   of the cells sharing a corner point under these units, so each corner
+    //   ends up rising by exactly celldelta.
 
     if (unitsflag == DISTANCE) {
       for (i = 0; i < ncorner; i++) cdelta[icell][i] = celldelta[icell];
@@ -1971,11 +1963,6 @@ int FixAblate::salvage_particle(int icell, int i, int collideflag)
 
   // record the momentum the collision transfers to the surface
 
-  double mass = particle->species[p->ispecies].mass;
-  double weight = 1.0;
-  if (grid->cellweightflag) weight = p->weight;
-  double wmass = weight * mass;
-
   double vold[3];
   vold[0] = p->v[0];
   vold[1] = p->v[1];
@@ -2000,13 +1987,7 @@ int FixAblate::salvage_particle(int icell, int i, int collideflag)
     return -1;
   }
 
-  update->nfrontreflect++;
-  update->reflect_mom[0] += wmass * (vold[0] - p->v[0]);
-  update->reflect_mom[1] += wmass * (vold[1] - p->v[1]);
-  update->reflect_mom[2] += wmass * (vold[2] - p->v[2]);
-  update->reflect_energy +=
-    0.5*wmass*(MathExtra::lensq3(vold) - MathExtra::lensq3(p->v)) +
-    weight*(porig.erot - p->erot) + weight*(porig.evib - p->evib);
+  tally_reflection(p,vold,porig.erot,porig.evib);
 
   return 1;
 }
@@ -2153,19 +2134,8 @@ int FixAblate::salvage_to_neighbor(int icell, int i)
 
     // salvage_particle already accounted its own reflection
 
-    if (cells[kcell].nsurf == 0) {
-      double mass = particle->species[p->ispecies].mass;
-      double weight = 1.0;
-      if (grid->cellweightflag) weight = p->weight;
-      double wmass = weight * mass;
-      update->nfrontreflect++;
-      update->reflect_mom[0] += wmass * (vold[0] - p->v[0]);
-      update->reflect_mom[1] += wmass * (vold[1] - p->v[1]);
-      update->reflect_mom[2] += wmass * (vold[2] - p->v[2]);
-      update->reflect_energy +=
-        0.5*wmass*(MathExtra::lensq3(vold) - MathExtra::lensq3(p->v)) +
-        weight*(erotold - p->erot) + weight*(evibold - p->evib);
-    }
+    if (cells[kcell].nsurf == 0)
+      tally_reflection(p,vold,erotold,evibold);
 
     return 1;
   }
@@ -2281,23 +2251,40 @@ int FixAblate::salvage_to_ghost(int icell, int i)
     p->icell = jcell;
     cinfo[icell].count--;
 
-    double mass = particle->species[p->ispecies].mass;
-    double weight = 1.0;
-    if (grid->cellweightflag) weight = p->weight;
-    double wmass = weight * mass;
-    update->nfrontreflect++;
+    tally_reflection(p,vold,erotold,evibold);
     update->nfrontmigrate++;
-    update->reflect_mom[0] += wmass * (vold[0] - p->v[0]);
-    update->reflect_mom[1] += wmass * (vold[1] - p->v[1]);
-    update->reflect_mom[2] += wmass * (vold[2] - p->v[2]);
-    update->reflect_energy +=
-      0.5*wmass*(MathExtra::lensq3(vold) - MathExtra::lensq3(p->v)) +
-      weight*(erotold - p->erot) + weight*(evibold - p->evib);
 
     return 1;
   }
 
   return 0;
+}
+
+/* ----------------------------------------------------------------------
+   book a salvage reflection: the momentum and energy particle PTR handed
+     to the advancing front, its velocity having been VOLD and its internal
+     energies EROTOLD/EVIBOLD before the reflection
+   void * to sidestep a fix_ablate.h dependence on particle.h, same as
+     Update::bury_particle()
+------------------------------------------------------------------------- */
+
+void FixAblate::tally_reflection(void *ptr, double *vold,
+                                 double erotold, double evibold)
+{
+  Particle::OnePart *p = (Particle::OnePart *) ptr;
+
+  double mass = particle->species[p->ispecies].mass;
+  double weight = 1.0;
+  if (grid->cellweightflag) weight = p->weight;
+  double wmass = weight * mass;
+
+  update->nfrontreflect++;
+  update->reflect_mom[0] += wmass * (vold[0] - p->v[0]);
+  update->reflect_mom[1] += wmass * (vold[1] - p->v[1]);
+  update->reflect_mom[2] += wmass * (vold[2] - p->v[2]);
+  update->reflect_energy +=
+    0.5*wmass*(MathExtra::lensq3(vold) - MathExtra::lensq3(p->v)) +
+    weight*(erotold - p->erot) + weight*(evibold - p->evib);
 }
 
 /* ----------------------------------------------------------------------

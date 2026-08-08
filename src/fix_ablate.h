@@ -115,7 +115,6 @@ class FixAblate : public Fix {
   double *sfront_normal;   // ditto projected onto the surface normal, which
                            //   is the front speed proper; sfront_cell keeps
                            //   the along-edge magnitude for the guard
-  double max_advance;      // max of that, as a fraction of the cell size
 
   // between regenerations the surface keeps growing, so the collision
   //   geometry is refreshed every step from the corner point field advanced
@@ -136,14 +135,18 @@ class FixAblate : public Fix {
   int maxsegcell;
   int segstride;           // max elements per cell
 
-  double depo_all[20];     // deposition counters summed over all procs,
+  enum{NDEPO=18,           // # of deposition diagnostic counters
+       NFRONT=2,           // internal accumulators for the realized front speed
+       NREDUCE=NDEPO+NFRONT};
+
+  double depo_all[NREDUCE]; // deposition counters summed over all procs,
                            //   plus the 2 internal front speed accumulators
   bigint depo_stamp;       // timestep depo_all was last reduced on
   double front_last;       // last realized front speed that was measurable
   double clampsum;         // sum over crossed edges of how far the normal
                            //   projection overshot 1, 1.0 when it did not
-  bigint ntotedge;         // crossed edges that
-                           //   projection, and the total, over one interval
+  bigint ntotedge;         // # of crossed edges clampsum was summed over,
+                           //   both accumulated over one interval
   int clampwarn;           // 1 once the oblique-field warning has been given
   int smoothed;            // 1 if the corner point field was distance
                            //   transformed on read, so the warning is moot
@@ -217,6 +220,7 @@ class FixAblate : public Fix {
   int salvage_particle(int, int, int collideflag = 1);
   int salvage_to_neighbor(int, int);
   int salvage_to_ghost(int, int);
+  void tally_reflection(void *, double *, double, double);
   int resolve_engulfed(int);
   int resolve_arrived(int);
   void grow_dlist(int);
