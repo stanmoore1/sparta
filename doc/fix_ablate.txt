@@ -645,7 +645,7 @@ and the entire surface contained within the ablated cell recedes.
 No information about this fix is written to "binary restart
 files"_restart.html.
 
-This fix computes a global scalar and a global vector of length 21.
+This fix computes a global scalar and a global vector of length 22.
 The global scalar is the current sum of unique corner point values
 across the entire grid (not counting duplicate values).  This sum
 assumes that corner point values are 0.0 on the boundary of the 2d or
@@ -657,6 +657,17 @@ particles deleted during the most recent ablation operation that ended
 up "inside" the newly ablated surface.  The latter quantity should be 0.
 A non-zero value indicates a corner case in the marching cubes or
 marching squares algorithm the developers still need to address.
+
+Value (1) is the {requested} budget.  What a saturated corner point
+cannot absorb - one already at 0 for ablation, or at 255 for
+deposition - is discarded, so the change the corner point field
+actually took can be smaller.  Value (22) reports that applied change
+for the most recent operation, signed: negative for ablation, positive
+for deposition.  With {units} = corner the two agree exactly until
+saturation, so the difference is a direct measure of the discard.
+(With {units} = distance value (1) is a sum of speeds, not corner
+values, so it is not directly comparable; use value (21) instead.)
+The scalar changes by exactly value (22) at each operation.
 
 Values 3 through 21 are deposition diagnostics and are zero unless
 {mode} = deposit.  They are running totals over the whole run, so that

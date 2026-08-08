@@ -287,9 +287,11 @@ FixAblate::FixAblate(SPARTA *sparta, int narg, char **arg) :
 
   scalar_flag = 1;
   vector_flag = 1;
-  size_vector = 21;   // 0-1 ablation, 2-19 deposition, 20 front speed
+  size_vector = 22;   // 0-1 ablation, 2-19 deposition, 20 front speed,
+                      //   21 applied corner value change
   global_freq = 1;
   sum_delta = 0.0;
+  sum_applied = 0.0;
   ndelete = 0;
 
   storeflag = multi_val_flag = 0;
@@ -800,6 +802,14 @@ void FixAblate::end_of_step()
         cvalues_prev[icell][i] = cvalues[icell][i];
   }
 
+  // snapshot the corner point value total so the change actually applied can
+  //   be reported next to the requested budget in sum_delta.  The two differ
+  //   by whatever could not be placed: corner points already saturated at 0
+  //   or 255 absorb nothing, and for deposition saturation is the normal
+  //   endpoint of a filling cell rather than a corner case
+
+  double sum_before = corner_sum_local();
+
   // various decrement and sync routines depending on:
   // 1) are multivalues used?
   // 2) is the decrement distributed to multiple corner points?
@@ -834,6 +844,12 @@ void FixAblate::end_of_step()
 
   if (multi_val_flag) epsilon_adjust_multiv();
   else epsilon_adjust();
+
+  // signed change the field actually took over this interval: positive for
+  //   deposition, negative for ablation, either for mode both
+
+  double applied = corner_sum_local() - sum_before;
+  MPI_Allreduce(&applied,&sum_applied,1,MPI_DOUBLE,MPI_SUM,world);
 
   // measure the normal speed of the advancing front over this interval
   // must be done before create_surfs(), which needs it to set per-surf speeds
@@ -4038,6 +4054,21 @@ void FixAblate::grow_send()
 
 double FixAblate::compute_scalar()
 {
+  double sum = corner_sum_local();
+  double sumall;
+  MPI_Allreduce(&sum,&sumall,1,MPI_DOUBLE,MPI_SUM,world);
+  return sumall;
+}
+
+/* ----------------------------------------------------------------------
+   this proc's share of the corner point value total
+   each interior corner point is corner 0 of exactly one cell, so summing
+     corner 0 and skipping cells on the lo lattice boundaries counts every
+     point once, assuming boundary corner points have value = 0.0
+------------------------------------------------------------------------- */
+
+double FixAblate::corner_sum_local()
+{
   int ix,iy,iz;
 
   Grid::ChildCell *cells = grid->cells;
@@ -4065,22 +4096,28 @@ double FixAblate::compute_scalar()
 
   }
 
-  double sumall;
-  MPI_Allreduce(&sum,&sumall,1,MPI_DOUBLE,MPI_SUM,world);
-  return sumall;
+  return sum;
 }
 
 /* ----------------------------------------------------------------------
    vector outputs
-   1 = last ablation decrement
+   1 = last requested decrement/increment budget
    2 = # of deleted inside particles at last ablation
    3-20 = deposition diagnostics, see compute_vector() below and the doc page
+   21 = realized front speed over the last interval
+   22 = corner point value change actually applied over the last interval
 ------------------------------------------------------------------------- */
 
 double FixAblate::compute_vector(int i)
 {
   if (i == 0) return sum_delta;
   if (i == 1) return 1.0*ndelete;
+
+  // the change the field actually took, next to the requested budget above
+  // meaningful in every mode: ablation discards what saturated corner
+  //   points cannot absorb the same way deposition does
+
+  if (i == 3+NDEPO) return sum_applied;
 
   // deposition diagnostics, so the mass and momentum a growing surface
   //   takes out of the gas can be audited against the gas totals

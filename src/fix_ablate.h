@@ -84,6 +84,8 @@ class FixAblate : public Fix {
   int isr_default;        // default isr index for newly created implicit surfs
   double thresh;
   double sum_delta;
+  double sum_applied;     // corner point value change actually applied over
+                          //   the last interval, vs the requested sum_delta
   int ndelete;
 
   int nglocal;            // # of owned grid cells
@@ -202,6 +204,7 @@ class FixAblate : public Fix {
   void check_group_boundary();
   void check_oblique();
   double grad_mag(int);
+  double corner_sum_local();
   double front_response(int, int);
   void distance_transform(double);
   double cell_area(int);
