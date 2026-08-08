@@ -46,6 +46,7 @@ namespace Geometry {
   bool line_tri_intersect_noeps(double *, double *,
                                 double *, double *, double *, double *,
                                 double *, double &param, int &);
+
   int whichside(double *, double *, double, double, double);
   int point_on_hex(double *, double *, double *);
   int point_in_hex(double *, double *, double *);

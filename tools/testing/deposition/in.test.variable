@@ -1,0 +1,84 @@
+# Deposition driven by a variable
+#
+# fix ablate accepts a grid-style variable as its source, which is how a rate
+# that varies over the domain -- or one derived from per-cell custom state --
+# reaches the surface.  The plumbing for it was always there and always
+# documented, but the constructor declared a local `idsource` that shadowed the
+# member, so the variable name never reached Variable::find() and the source
+# could not be used at all.
+#
+# Two things are checked here, both against references the suite already
+# trusts:
+#
+#   RATE_EXPR = constant     must reproduce the dedicated "uniform" source
+#                            exactly, since the two then ask for the same
+#                            thing by different routes
+#   RATE_EXPR = half-domain  must deposit half as much material as
+#                            quarter-domain deposits twice, i.e. the rate
+#                            really is being applied per cell
+#
+# Deposition also only accretes onto material that is already there.  A cell of
+# open gas gets nothing, so a spatially uniform variable does not sprout new
+# material in the middle of the flow -- it grows the surface that exists, which
+# is why the constant case can match "uniform" at all.
+#
+# With UNITS = distance the same input checks the length/time conversion.  A
+# constant front speed must deposit the same material however often the
+# isosurface is rebuilt, since Nevery decides only how the same physical
+# growth is chopped up in time.  It did not: Nevery was applied once in
+# set_delta's prefactor and again as the elapsed interval, so a distance rate
+# came out Nevery times too strong -- at Nevery = 5 it deposited 4.7x too much
+# and at Nevery = 20 it overran the surface entirely.
+
+variable            RATE_EXPR index 0.2
+variable            NEVERY index 1
+variable            SEED index 12345
+
+# corner: RATE_EXPR is a corner point value increment (the 0-255 scale)
+# distance: RATE_EXPR is a front speed in length/time
+variable            UNITS index corner
+
+seed                ${SEED}
+dimension           2
+global              gridcut 0.0 comm/sort yes
+
+boundary            r r p
+
+create_box          0 150 0 150 -0.5 0.5
+create_grid         150 150 1
+
+# implicit surfaces need a clumped grid partition to acquire ghost cells
+balance_grid        rcb cell
+
+global              nrho 1.0 fnum 0.01
+
+species             air.species N
+mixture             air N
+
+region              inner block 25.5 124.5 25.5 124.5 INF INF
+group               inner grid region inner one
+
+# no quotes: SPARTA substitutes ${RATE_EXPR} after stripping them, so quoting
+# here would leave the quote characters inside the formula
+variable            rate grid ${RATE_EXPR}
+fix                 ablate ablate inner ${NEVERY} 1.0 v_rate mode deposit &
+                    units ${UNITS}
+
+global              surfs implicit
+read_isurf          inner 100 100 1 ../../../examples/ablation/binary.101x101 &
+                    180.5 ablate
+
+surf_collide        1 diffuse 300.0 1.0
+surf_modify         all collide 1
+
+timestep            0.0001
+
+create_particles    air n 200000
+
+fix                 check grid/check 1 error
+
+stats               50
+stats_style         step np f_ablate f_ablate[3] f_ablate[4] f_ablate[8] &
+                    f_ablate[21]
+
+run                 200

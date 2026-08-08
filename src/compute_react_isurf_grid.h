@@ -45,6 +45,8 @@ class ComputeReactISurfGrid : public Compute {
   int groupbit;
   int isr;                 // index of surface reaction model
   int ntotal,rpflag;
+  int massflag;            // 1 to tally retained mass flow, not a count
+  int weightflag;          // 1 if cell weighting is enabled
   int maxgrid,combined;
 
   int **reaction2col;      // 1 if ireaction triggers tally for icol

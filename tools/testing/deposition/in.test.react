@@ -1,0 +1,64 @@
+# Reaction driven deposition, against the closed-form growth rate
+#
+# in.test.stick drives the film from the raw impingement flux and a sticking
+# coefficient given to fix ablate.  Here the sticking is instead a surface
+# REACTION, and what fix ablate consumes is the mass that reaction removed
+# from the gas, tallied by compute react/isurf/grid with the mass keyword.
+#
+# The two have to agree, because a capture probability P applied to the
+# impingement flux is the same physics either way:
+#
+#   s = P * rho_gas * vbar / 4 / rho_film       vbar = sqrt(8kT/pi m)
+#
+# with P = 0.4 read from stick.surf.  Nothing here is fitted.  Going through
+# the reaction rather than the flux is what makes the rate available for any
+# surf_react model, and for ablation as well: a reaction that puts mass back
+# into the gas tallies a negative mass flow.
+#
+# The gas is not replenished, so it thins by a few tenths of a percent per
+# hundred steps as molecules are captured, and the measured rate drifts down
+# with it.  That is physics, not error.
+
+variable            PROB index 0.4
+variable            NRHO index 1.0e20
+variable            TEMP index 300.0
+variable            RHOFILM index 2.0e3
+
+seed                12345
+dimension           2
+global              gridcut 0.0 comm/sort yes
+
+boundary            r r p
+
+create_box          0 20 0 80 -0.5 0.5
+create_grid         20 80 1
+balance_grid        rcb cell
+
+global              nrho ${NRHO} fnum 1.0e18
+
+species             air.species N
+mixture             air N temp ${TEMP} vstream 0.0 0.0 0.0
+
+surf_react          STICK prob stick.surf
+
+# the reaction has already decided what was captured, so the sticking
+# coefficient of the flux source is 1: it is not a second probability
+compute             R react/isurf/grid all STICK mass
+fix                 AVG ave/grid all 1 100 100 c_R[*]
+fix                 ablate ablate all 100 1.0 flux f_AVG &
+                    density ${RHOFILM} sticking 1.0 mode deposit
+
+global              surfs implicit
+read_isurf          all 20 80 1 ramp.20x80 127.5 ablate push no
+
+surf_collide        1 diffuse ${TEMP} 1.0
+surf_modify         all collide 1 react STICK
+
+create_particles    air n 0
+
+timestep            1.0e-6
+
+stats               200
+stats_style         step np f_ablate f_ablate[21]
+
+run                 1000

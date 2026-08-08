@@ -52,6 +52,16 @@ ComputeReactISurfGrid(SPARTA *sparta, int narg, char **arg) :
   rpflag = 0;
   reaction2col = NULL;
 
+  // optional trailing mass keyword
+  // it can only be last, which is unambiguous because a column spec always
+  //   begins with r: or p:
+
+  massflag = 0;
+  if (narg > 4 && strcmp(arg[narg-1],"mass") == 0) {
+    massflag = 1;
+    narg--;
+  }
+
   // parse per-column reactant/product args
   // reset rpflag = 1 and ntotal = # of args
 
@@ -135,6 +145,12 @@ void ComputeReactISurfGrid::init()
     error->all(FLERR,"Cannot use compute react/isurf/grid with explicit surfs");
 
   // warn if any surfs in group are assigned to different surf react model
+
+  // set weightflag if cell weighting is enabled
+  //   yes, tally the weight of the incident particle
+
+  if (grid->cellweightflag) weightflag = 1;
+  else weightflag = 0;
 
   lines = surf->lines;
   tris = surf->tris;
@@ -260,11 +276,31 @@ void ComputeReactISurfGrid::surf_tally(double dtremain,
 
   vec = array_surf_tally[itally];
 
+  // one = what a single event contributes
+  // a plain count by default; with massflag the mass the surface KEPT,
+  //   incident minus whatever left again, divided by the timestep so the
+  //   result is a mass flow the flux source of fix ablate can consume
+  //   directly.  A reaction that simply captures the molecule keeps all of
+  //   it; one that returns a lighter molecule keeps the difference; and one
+  //   that puts mass back into the gas keeps a negative amount, which in
+  //   mode = ablate is a recession
+
+  double one = 1.0;
+  if (massflag) {
+    Particle::Species *species = particle->species;
+    double weight = 1.0;
+    if (weightflag) weight = iorig->weight;
+    double m = species[iorig->ispecies].mass;
+    if (ip) m -= species[ip->ispecies].mass;
+    if (jp) m -= species[jp->ispecies].mass;
+    one = m * weight * update->fnum / update->dt;
+  }
+
   if (rpflag) {
     int *r2c = reaction2col[reaction];
     for (int i = 0; i < ntotal; i++)
-      if (r2c[i]) vec[i] += 1.0;
-  } else vec[reaction] += 1.0;
+      if (r2c[i]) vec[i] += one;
+  } else vec[reaction] += one;
 }
 
 /* ----------------------------------------------------------------------

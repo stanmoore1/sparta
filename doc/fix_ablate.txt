@@ -17,18 +17,35 @@ ablate = style name of this fix command :l
 group-ID = ID of group of grid cells that contain implicit surfaces :l
 Nevery = perform ablation once every Nevery steps :l
 scale = scale factor to convert source to grid corner point value decrement :l
-source = computeID or fixID or uniform or random :l
+source = computeID or fixID or v_name or flux or uniform or random :l
   computeID = c_ID or c_ID\[n\] for a compute that calculates per grid cell values
   fixID = f_ID or f_ID\[n\] for a fix that calculates per grid cell values
-  v_name = per-grid vector calculated by a grid-style variable with name
+  v_name = per-grid vector from a grid-style variable, or a single value from an equal-style variable
+  flux = flux c_ID or flux f_ID for an incident mass flow per grid cell
   uniform = perform a uniform decrement
   random = perform a random decrement :pre
 
 maxrandom = maximum per grid cell decrement as an integer (only specified if source = random or uniform) :l
 zero or more keyword/value pairs may be appended :l
-keyword = {mindist} or {multiple} :l
+keyword = {mode} or {units} or {response} or {density} or {sticking} or {mindist} or {check} or {multiple} :l
+  {mode} value = ablate or deposit or both
+    ablate = source decrements corner point values so the surface recedes
+    deposit = source increments corner point values so the surface grows
+    both = source is signed, so the surface recedes or grows cell by cell
+  {units} value = corner or distance
+    corner = source is a corner point value increment (0-255 scale)
+    distance = source is a deposition rate in length/time
+  {response} value = normal or volume
+    normal = solve for the displacement of the surface along its own normal
+    volume = solve for the volume the surface sweeps
+  {density} value = rho
+    rho = mass density of the deposited film (only for source = flux)
+  {sticking} values = s1 s2 ... one per column of the flux source
+    sN = probability that an incident molecule of that group is captured (only for source = flux)
   {mindist} value = fraction
     fraction = minimum fractional distance along cell edge for triangle/line vertices (value > 0 and < 0.5)
+  {check} value = N
+    N = validate the rebuilt surface every Nth rebuild (0 = never, 1 = every rebuild)
   {multiple} value = yes or no :pre
 :ule
 
@@ -36,7 +53,10 @@ keyword = {mindist} or {multiple} :l
 
 fix 1 ablate surfcells 1000 10.0 c_tally
 fix 1 ablate surfcells 0 0.0 random 10
-fix fablate ablate inner 0 0.2 random 0 mindist 0.02 :pre
+fix fablate ablate inner 0 0.2 random 0 mindist 0.02
+fix depo ablate inner 100 0.2 f_FIX mode deposit
+fix depo ablate inner 10 1.0 c_FLUX mode deposit units distance
+fix depo ablate all 100 1.0 flux f_AVG density 2000.0 sticking 1.0 mode deposit :pre
 
 [Description:]
 
@@ -102,7 +122,13 @@ Finally, a grid-style variable can be be used as a {source}.  This
 could perform a calculation on other per grid cell quantities.  For
 example, it could add and subtract columns from the compute or fix
 just mentioned to tally adsorption versus desorption reactions and
-thus infer net mass removed from the surface.
+thus infer net mass removed from the surface.  It can also read
+per-grid-cell "custom"_custom.html attributes as {g_name}, which is how
+surface state held on the grid drives the rate.
+
+Note that the variable formula must not be quoted if it contains a
+substituted variable such as $\{expr\}, since the substitution happens
+after the quotes are stripped.
 
 For debugging purposes, the {source} can also be specified as {random}
 with an additional integer {maxrandom} value also specified.  In this
@@ -120,6 +146,324 @@ of the gas and the surface is decremented by {maxrandom}.
 
 See the explanation for the optional {mindist} and {multiple} keywords
 below.
+
+:line
+
+By default ({mode} = ablate) the {source} decrements the grid corner
+point values so that the implicit surface recedes, modeling removal of
+surface material.  If {mode} = deposit is specified, the same {source}
+instead increments the corner point values (clamped at the maximum of
+255) so that the implicit surface grows into the gas phase, modeling
+deposition of material onto the surface.  This is the inverse operation
+of ablation and can be used for growth problems such as thin-film
+deposition or condensation.
+
+Unlike a receding surface, a growing surface advances into the region the
+gas occupies and can end up enclosing gas particles.  Those particles are
+{not} deleted.  Each time the isosurface is regenerated, any particle the
+new surface encloses is given an ordinary gas-surface interaction against
+the surface element that now separates it from the flow, and is placed
+back on the flow side.  The momentum it exchanges is tallied by "compute
+surf"_compute_surf.html and "compute isurf/grid"_compute_isurf_grid.html
+in the usual way, so a growing surface conserves momentum exactly as a
+static one does.
+
+The gas-surface interaction uses the surface at rest.  A depositing
+surface advances by accretion rather than by motion of its material: at
+any instant the local patch of atoms a gas particle strikes is
+stationary, and any motion of those atoms is already represented by the
+"surf_collide"_surf_collide.html model.
+
+Collisions during the particle move are ordinary in every way, including
+"surf_react"_surf_react.html surface chemistry.  The reflections applied
+to already-enclosed particles when the isosurface is regenerated are the
+exception: they happen outside the particle move, where a reaction
+product has no trajectory to be released onto, so the
+"surf_collide"_surf_collide.html model is applied without the reaction
+model.  Those reflections are a small fraction of all surface collisions
+and are counted separately, as value (8) below.
+
+If a particle ends up somewhere the surface has closed over completely,
+so that there is no longer a surface element to reflect it from, it is
+buried, i.e. incorporated into the growing film.  This is what nearly
+every burial is: the grid cell holding the particle became entirely solid
+in one regeneration, so that cell contains no surface to reflect from and
+no gas-side point to reflect toward.
+
+Most of those molecules are not actually sealed in.  Their own cell
+filled while a neighboring cell still held gas, so the film squeezed them
+rather than enclosing them, and they are pushed out through the shared
+face and reflected off the film there instead of being buried.  What
+remains buried is the molecule that really was closed in on every side,
+which is a physical outcome: a growing film does trap gas.
+
+That neighboring cell may be owned by another processor, which cannot be
+asked about it: a processor is never sent its neighbors' implicit surf
+elements, since such an element never leaves the cell that generated it.
+The molecule is therefore reflected off the face and handed to the owner,
+which decides whether there was room for it and buries it if there was
+not.  It crosses at most one processor boundary and gets exactly the
+chances it would have had with both cells on one processor, so how many
+molecules a run buries does not depend on how the grid was divided up.
+Value (20) below counts them.
+
+Whether a molecule escapes is decided by one ratio: its thermal speed
+divided by the speed of the front.  That is how many times it can cross
+a cell while the front closes one, i.e. how many chances it gets to find
+a way out.  Lowering the deposition rate raises the ratio and burials
+disappear; in a 2d test at 300 K they go from 104 at a ratio of 17, to 54
+at 22, to none at 40 and above.
+
+Reducing the timestep does NOT reduce them, which is worth understanding
+rather than being surprised by.  Halving the timestep at a fixed
+deposition rate halves the material added per step, so the front still
+advances at the same speed, the ratio above is unchanged, and the
+molecule gets exactly as much time to escape as before -- only resolved
+more finely.  Refining the timestep therefore converges to the burial
+count rather than removing it, which is the correct behavior for a
+quantity that is physical at a given growth rate.
+
+For any physically realistic deposition rate there are no burials at all.
+They begin to appear only once the front advances at a few percent of the
+thermal speed, which is many orders of magnitude faster than film growth
+in a real system.  In practice they serve mainly to prove that nothing is
+ever lost silently.  This is physical, and
+it is rare unless the deposition rate is large.  A buried particle is
+removed from the gas, and its mass, momentum and energy are accumulated
+and can be output (see below), so no particle is ever discarded without
+being accounted for.  In a closed domain the drop in particle count must
+equal the buried count exactly.
+
+A rate in length/time needs to know which way the surface faces, and that
+comes from the gradient of the corner point values.  A field made only of
+0 and 255 does not carry it: wherever the front runs oblique to the grid,
+every crossed cell edge falls the full 0 to 255 whichever way the surface
+is turned, and the direction cannot be recovered.  The front still moves,
+and still moves smoothly, but not at the speed that was asked for -- a
+plane at 45 degrees to a 2d grid comes out about 1.6 times too fast, while
+the same plane on a graded field comes out within 1%.  A front normal to
+the grid is exact either way, which is what makes this easy to miss.  Fix
+ablate warns when the corner point values it has been given cannot express
+the directions its surface faces.
+
+The {response} keyword offers a second way to convert a rate in
+length/time into a corner point increment, for the case above.  {response}
+= normal, the default, solves for how far the surface moves along its own
+normal, which is why it needs to know the direction the surface faces.
+{response} = volume instead solves for the volume the surface sweeps,
+speed times area times time, and takes the area off the surface the cell
+holds rather than inferring a direction from the field.  On a plane at 45
+degrees to the grid built from a binary field it delivers 1.03 of the
+requested speed where {response} = normal delivers 1.61.  Those two
+numbers are a size rather than a constant: measured over a longer, slower
+run the same case gives 1.12 against 1.41, the latter being 1/cos(45
+degrees), which is exactly the projection {response} = normal cannot
+make.
+
+It is not a general answer, and is not the default for that reason.  On a
+CURVED binary surface it does not help -- a circle runs about 1.22 either
+way, because there the error is the surface reassembling as corner points
+cross the threshold rather than the direction of any one piece of it.  On
+a graded field the two agree to about 1%, with {response} = normal
+slightly the better of the two on a plane.  {response} = volume also asks
+for larger corner point increments, so it reaches the half-cell limit on
+the front advance sooner and may need a smaller {Nevery}.
+
+Note also that the volume it solves for is the volume of one cell taken on
+its own, while sync averages the increment over the cells sharing each
+corner point, so the swept volume is matched approximately rather than
+exactly.  Matching it exactly would mean solving all the cells together.
+
+So for {units} = distance, and for the {flux} source which implies it,
+give "read_isurf"_read_isurf.html a graded field.  The simplest way is its
+{smooth} keyword, which rewrites a binary field as a distance field
+without moving the body; {smooth} 0.5 is a good choice.  Failing that,
+supply a file that already carries intermediate values and read it with
+{push} = no and without {minmax} = yes, both of which drive the field to 0
+and 255.
+A rate in {units} = corner is a budget of corner point value rather than a
+distance, and is unaffected.
+
+Rebuilding the isosurface is expensive, so it is only done every {Nevery}
+steps, but the surface keeps growing in between.  The collision geometry
+is therefore refreshed every step: the corner point field is advanced in
+time and the surface re-derived from it, so a particle is reflected off
+the surface where it actually is at that moment rather than where it was
+last rebuilt.  Deriving it from the field is what makes this reliable,
+since marching squares and cubes yield a valid watertight surface for any
+field, including where the surface changes shape and vertices appear or
+disappear.  Neighboring cells share the corner values along their common
+edges, so their refreshed geometry still meets exactly and there is no
+seam for a particle to slip through.  This applies in 2d, 3d and
+axisymmetric domains alike.
+
+Within a step the front keeps advancing, so where a particle and the
+surface meet depends on how fast both are moving.  In 2d and 3d the
+intersection is therefore solved in the frame of the advancing front,
+which is exact: a straight particle path against a uniformly translating
+plane is still a straight path against a fixed plane.  This matters for
+more than accuracy.  A particle receding from the surface more slowly
+than the surface advances is overtaken by it, and its own path never
+reaches the surface at all, so no static test can find it however small
+the timestep.  In the front's frame it approaches normally and is
+reflected.  Axisymmetric runs use the refreshed geometry but solve the
+intersection with the ordinary surface-of-revolution test, since the
+particle path there is not straight.
+
+A particle can still be found behind the front, most often just after a
+regeneration or on entering a cell from a neighbor.  Whenever the surface
+has overtaken a particle, it is placed back on the outside of the front
+and reflected there.  The distance the front has advanced since the last
+rebuild bounds how far behind a particle is allowed to be for this to
+apply, so a particle merely passing near a thin feature is not affected.
+
+In Kokkos runs the refresh is not applied, because the Kokkos particle
+move is a separate implementation; enclosed particles are then handled
+when the surface is regenerated, which is correct but resolves the growth
+only once per {Nevery} steps.  A warning is printed to say so.  In every
+case a smaller {Nevery} gives a
+more faithful answer, and an error is generated if the isosurface would
+move more than half a grid cell in a single regeneration; reduce {Nevery}
+or the deposition rate if this occurs.
+
+Corner point values exist only on the group of grid cells the fix is
+defined on, so that group is the room the surface has: a growing surface
+cannot continue past its edge, where its elements would have a free end
+with nothing on the other side to meet.  An error is generated if the
+surface reaches that edge.
+
+For ablation this never matters, since a receding surface only ever needs
+the room it started with, and the fix is normally defined on the same
+group the surface was read into.  A growing surface is the opposite case,
+so for deposition the fix may be defined on a LARGER group than
+"read_isurf"_read_isurf.html reads into, as long as the read group lies
+inside it.  The surface file then says where the surface starts, and the
+fix's group says where it may go; cells in between hold zero, i.e. empty
+space the film grows into exactly as it grows into any other empty space.
+Defining the fix on {all} lets the film spread through the whole grid:
+
+fix                 fablate ablate all 1 0.2 uniform 1 mode deposit
+read_isurf          inner 100 100 1 binary.101x101 180.5 fablate :pre
+
+An outer face of the group that lies on the simulation box is not limited
+at all, since a surface is allowed to end on the box.
+
+Value (21) of the output vector is the front speed the surface actually
+realized over the last interval, averaged over the cells that hold a
+front.  It is the measured answer to what the {source} asked for.
+
+If the {units} keyword is set to {distance}, the {source} is interpreted
+as a rate in units of length/time, rather than as a corner
+point value increment.  It is converted to a corner point increment
+so the rate can be specified directly as a surface speed.  The surface
+then moves at that speed: the requested rate and the realized rate,
+reported as value (21), agree to better than a percent.
+
+The conversion is solved for rather than assumed.  On a cell edge the
+isosurface crosses, with corner values a < {thresh} < b, raising both
+ends by dc slides the crossing by dc/|grad c|, which is the usual level
+set relation.  But corner point values are capped at 255, and a field
+read from a segmented image is 0 or 255 almost everywhere, so on most
+edges b is pinned and only a can rise.  The crossing then moves by
+dc*(255-{thresh})/(255-a)^2 instead, which at a = 0 is only half as far.
+Assuming the level set relation therefore delivers roughly half the
+requested speed on a real geometry.  Both cases are evaluated on the
+field as it stands, over the same edges the realized speed is measured
+on, and the corner point increment follows from inverting the result.
+The ablate direction is the mirror image, capped at 0 rather than 255.
+
+A rate in length/time is what a physically derived rate is naturally
+expressed in, for example one built from a surface flux measured by
+"compute isurf/grid"_compute_isurf_grid.html.  With the default {units}
+= {corner}, the {source} has the same meaning it does for ablation.
+
+Because a rate in length/time asks for a displacement of the front, it
+is applied as a uniform shift of the corner point field: every corner
+of a cell holding a piece of surface is offered the same increment, and
+a corner point takes the average of what the cells sharing it asked
+for.  With {units} = {corner} the {source} is instead a budget of
+corner point value, which is placed on one corner at a time as it
+always has been, so existing inputs are unaffected.
+
+:line
+
+If the {source} is specified as {flux}, followed by a compute or fix ID,
+the deposition rate is computed from the mass the surface actually
+captures.  The source must supply the incident mass flow per grid cell,
+one column per mixture group:
+
+compute             FLUX isurf/grid all air mflux_incident norm flow
+fix                 AVG ave/grid all 1 100 100 c_FLUX\[*\]
+fix                 depo ablate all 100 1.0 flux f_AVG &
+                    density 2000.0 sticking 1.0 mode deposit :pre
+
+The rate in each cell is
+
+s = ( sum over groups of sticking\[g\] * flow\[g\] ) / ( rho * A ) :pre
+
+with {rho} the {density} keyword, i.e. the mass density of the film
+being grown, and A the total area of the surface elements in that cell,
+which the fix sums itself.  {units} = {distance} is implied.
+
+One {sticking} coefficient is required per column of the source, in
+mixture group order; a mismatch is an error.  Since the columns are
+mass flows, this fix never looks up a species mass, and per-species
+handling comes entirely from the groups of the mixture the source
+compute was defined on -- a mixture with one group per species gives
+one sticking coefficient per species.
+
+The source must use {norm} {flow} rather than the default {norm}
+{flux}.  An implicit surface element takes the ID of the grid cell that
+generated it, so a cell holding several elements has them all in one
+tally slot; with {norm} {flux} each contribution has already been
+divided by its own element's area, and the sum is not the flux of the
+cell.  The fix divides by the summed area itself.
+
+This is a closed model with no fitted constants.  For a Maxwellian gas
+at rest against a wall at the same temperature the impingement mass
+flux is rho_gas*vbar/4 with vbar = sqrt(8kT/pi m), so a film that
+captures a fraction sigma of it grows at exactly
+sigma*rho_gas*vbar/4/rho_film, and that is what value (21) reports.
+
+:line
+
+If the {mode} keyword is set to {both}, the {source} is read as a SIGNED
+rate: positive grows the surface, negative makes it recede, cell by cell
+within one fix.  That is what a phase change looks like when the surface
+is not everywhere on the same side of equilibrium -- subliming where it is
+warm, condensing where it is cold -- and it cannot be had by running two
+fixes, since both would be writing the same corner points.
+
+{units} = {distance} is required, because a budget of corner point value
+has no sign to read: the {corner} rule places its budget one corner at a
+time, which is a rule for one direction only.
+
+The state that decides the sign is usually per-cell data the model carries,
+which is what "custom"_custom.html per-grid attributes are for.  A
+grid-style "variable"_variable.html reads a custom attribute back as
+{g_name}, so any source of per-cell state -- the "custom"_custom.html or
+"fix custom"_fix_custom.html commands, a compute, a file -- can drive the
+sign, and the Grid class carries the attribute through load balancing:
+
+variable            warm grid (cylo>40)
+custom              grid create phase float 0 set phase v_warm all NULL
+variable            rate grid 1.0*(1.0-2.0*g_phase)
+fix                 ablate ablate all 1 1.0 v_rate mode both units distance :pre
+
+Everything the {deposit} mode does to keep a surface moving into the gas
+safe -- the per-step refreshed collision geometry, the salvage of molecules
+the front would otherwise engulf, the accounting for the ones it buries --
+is active for {both} as well, since a cell can be growing anywhere.
+
+:line
+
+The {mode} = deposit and {mode} = both options currently support only the
+default single-value, single-decrement corner point representation; they
+cannot be combined with the {multiple} keyword or with multivalue corner
+points.  It is otherwise unrestricted, and no particle is ever lost
+without being accounted for in 2d, 3d, axisymmetric or Kokkos runs; what
+differs between them is only how finely the growth is resolved in time,
+as described above.
 
 :line
 
@@ -250,6 +594,22 @@ point is at least {mindist}
 
 :line
 
+The {check} keyword sets how often the rebuilt isosurface is validated.
+After every rebuild SPARTA checks that the surface Marching Squares or
+Marching Cubes produced is watertight, and that no grid cell was left
+with an unknown inside/outside type.  Those are checks on the surface
+generator, not part of building the surface, and they are not free: on a
+48x48x48 grid they are about a sixth of the cost of a rebuild, paid
+again every {Nevery} steps for the length of the run.  {check} = 1, the
+default, runs them on every rebuild, which is what the fix has always
+done.  {check} = N runs them on every Nth rebuild, and {check} = 0 never
+runs them.  Turning the checks off is worth doing only for a
+configuration that has already run clean with them on: if the surface
+generator does fail, the first symptom will instead be a wrong answer or
+a crash somewhere further downstream.
+
+:line
+
 :c,image(JPG/multipoint_decrement_small.png)
 
 The {multiple} option allows a multipoint decrement "(Hong24)"_#Hong24 to be used. 
@@ -285,18 +645,54 @@ and the entire surface contained within the ablated cell recedes.
 No information about this fix is written to "binary restart
 files"_restart.html.
 
-This fix computes a global scalar and a global vector of length 2.
+This fix computes a global scalar and a global vector of length 21.
 The global scalar is the current sum of unique corner point values
 across the entire grid (not counting duplicate values).  This sum
 assumes that corner point values are 0.0 on the boundary of the 2d or
 3d array of grid cells containing implicit surface elements.
 
-The 2 vector values are the (1) sum of decrement values for each grid
-cell in the most recent ablation operation, and (2) the # of particles
-deleted during the most recent ablation operation that ended up
-"inside" the newly ablated surface.  The latter quantity should be 0.
+The first 2 vector values are the (1) sum of decrement values for each
+grid cell in the most recent ablation operation, and (2) the # of
+particles deleted during the most recent ablation operation that ended
+up "inside" the newly ablated surface.  The latter quantity should be 0.
 A non-zero value indicates a corner case in the marching cubes or
 marching squares algorithm the developers still need to address.
+
+Values 3 through 21 are deposition diagnostics and are zero unless
+{mode} = deposit.  They are running totals over the whole run, so that
+what a growing surface removes from the gas can be checked against the
+gas totals.  They are (3) the # of particles buried by the advancing
+front, (4) their total mass, (5-7) their total momentum in x,y,z, (8)
+the # of particles pushed back into the flow after an isosurface
+regeneration enclosed them, (9-11) the momentum in x,y,z those
+reflections transferred to the surface, (12-14) the momentum in x,y,z
+ordinary surface collisions transferred to the surface, (15-17) the
+translational, rotational and vibrational energy the buried particles
+carried into the film, (18) the energy ordinary surface collisions
+transferred to the surface, (19) the energy the reflections in value (8)
+transferred to it, (20) how many of the value (8) reflections pushed the
+molecule onto another processor, and (21) the front speed the surface
+realized over the last interval, averaged over the cells holding a
+front.  Value (21) is an instantaneous rate rather than a running
+total.
+
+In a closed domain with no inflow or outflow, the drop in particle count
+must exactly equal value (3): every particle a growing surface removes
+from the gas is one it buried.  Value (8) counts particles that were
+saved rather than deleted, and is expected to be non-zero; it grows with
+the deposition rate and with {Nevery}.
+
+Values 5-7, 9-14 and 15-19 exist so that the two conservation ledgers can
+be closed directly.  In a periodic domain, where no boundary can exchange
+with the gas and gas-gas collisions conserve internally, the surface is
+the only place gas momentum and energy can go, so
+
+  [ P_gas(end) - P_gas(0) ] + P_surf + P_buried + P_reflect  ==  0
+  [ E_gas(end) - E_gas(0) ] + E_surf + E_buried + E_reflect  ==  0 :pre
+
+both hold to round-off, with P_surf = values 12-14, P_buried = values 5-7,
+P_reflect = values 9-11, E_surf = value 18, E_buried = the sum of values
+15-17, and E_reflect = value 19.
 
 These values can be accessed by any command that uses global values
 from a fix as input.  See "Section 6.4"_Section_howto.html#howto_4 for
@@ -323,8 +719,11 @@ that is the case.
 
 [Default:]
 
-The default for the {mindist} keyword = 0.0, i.e. the epsilon method
-is used.  The default for the {multiple} keyword = no.
+The default for the {mode} keyword = ablate.  The default for the
+{units} keyword = corner.  The default for the {response} keyword =
+normal.  The default for the {mindist} keyword = 0.0, i.e. the epsilon
+method is used.  The default for the {check} keyword = 1.  The default
+for the {multiple} keyword = no.
 
 :line
 

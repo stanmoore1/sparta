@@ -18,7 +18,7 @@ filename = binary file with grid corner point values :l
 thresh = threshold for surface definition, value > 0.0 and < 255.0 :l
 ablateID = ID of a "fix ablate"_fix_ablate.html command :l
 zero or more keyword/args pairs may be appended :l
-keyword = {group} or {type} or {push} or {precision} or {read} :l
+keyword = {group} or {type} or {push} or {smooth} or {precision} or {read} :l
   group arg = group-ID
     group-ID = new or existing surface group to assign the surface elements to
   type arg = tfile
@@ -199,6 +199,16 @@ array must be identical for each x and z coordinate.  Otherwise the
 aggregate set of induced implicit surfaces will not be consistent
 across the y periodic boundary.
 
+For an axisymmetric domain (see the "dimension"_dimension.html and
+"boundary"_boundary.html commands), the y = 0 face of the box is the
+symmetry axis.  A body of revolution legitimately closes on itself
+there, so if the array of grid cells starts on the axis, corner point
+values on that y = 0 boundary are allowed to be non-zero.  The
+resulting surface end points lie on the box boundary, which the
+watertight check permits.  If the array of grid cells starts above the
+axis, the usual requirement that the outer boundary corner point values
+be 0 still applies.
+
 The specified {ablateID} is the fix ID of a "fix
 ablate"_fix_ablate.html command which has been previously specified in
 the input script.  It will store the grid corner point values for each
@@ -206,6 +216,16 @@ grid cell.  It also has the code logic for converting grid corner
 point values to surface elements (line segments or triangles) and also
 optinally allows for the surface to be ablated during a simulation due
 to particles colliding with the surface elements.
+
+The fix's grid group is normally the same {group-ID} this command reads
+into.  It may also be a larger group, as long as the read group lies
+inside it and the larger group is itself a contiguous block of uniform
+grid cells.  Cells of the fix's group outside the read group are given
+corner point values of zero, i.e. empty space.  This is what a
+depositing surface needs, since it grows and its corner point values
+only exist on the fix's group; see the {mode} keyword of "fix
+ablate"_fix_ablate.html.  For a receding (ablating) surface there is no
+reason to use it.
 
 :line
 
@@ -318,6 +338,37 @@ by each grid cell that owns one of the corner point values.  The
 point files and large numbers of processors.
 
 :line
+
+The {smooth} keyword replaces a binary 0/255 corner point field with a
+graded one, by giving each corner point near the surface a value
+proportional to its signed distance from that surface.  The body is not
+moved: distances are measured to the surface Marching Squares/Cubes
+builds from the file as read, so the graded field describes the same
+object.  {band} is the half width of the graded band in grid cells;
+outside it the values stay saturated.
+
+This matters for "fix ablate"_fix_ablate.html with {mode} = deposit and a
+rate in length/time, including the {flux} source.  Converting a speed into
+a corner point increment requires knowing which way the surface faces, and
+a field of only 0 and 255 cannot say: every crossed cell edge falls the
+full 0 to 255 whichever way the surface is turned.  The front then runs at
+1/cos of the speed asked for wherever it is oblique to the grid.  Measured
+on a sphere at a requested speed of 0.5, radius growth relative to
+requested:
+
+                        along +x   face diagonal   body diagonal
+  binary field            1.002        1.416           1.734
+  smooth 0.5              0.974        1.018           0.954
+  graded file (no smooth) 0.990        1.024           1.000 :pre
+
+1.416 and 1.734 are sqrt(2) and sqrt(3).  A band of about 0.5 cells is
+what to use; wider is not better, and a much wider one can trip the front
+advance check in "fix ablate"_fix_ablate.html.  Segmented image data is
+binary by construction, and {push} = yes, the default, drives any field
+toward binary, so this is the normal case rather than an unusual one.
+
+{smooth} is not needed for ablation, or for {units} = corner, where the
+direction the surface faces never enters the arithmetic.
 
 [Restrictions:]
 

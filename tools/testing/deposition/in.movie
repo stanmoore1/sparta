@@ -1,0 +1,45 @@
+# frames for the deposition rate comparison movies
+variable            RATE index 0.5
+variable            FIELD index diamond.smooth
+variable            RESP index normal
+variable            NSTEP index 12000
+variable            NIMG index 120
+variable            OUT index frames
+
+seed                12345
+dimension           2
+global              gridcut 0.0 comm/sort yes
+boundary            r r p
+
+create_box          0 60 0 60 -0.5 0.5
+create_grid         60 60 1
+balance_grid        rcb cell
+
+global              nrho 1.0 fnum 1.0
+species             air.species N
+mixture             air N
+
+variable            rate grid ${RATE}
+fix                 ablate ablate all 1 1.0 v_rate mode deposit &
+                    units distance response ${RESP}
+
+global              surfs implicit
+read_isurf          all 60 60 1 ${FIELD} 127.5 ablate push no
+
+surf_collide        1 diffuse 300.0 1.0
+surf_modify         all collide 1
+timestep            0.001
+
+dump                IMG image air ${NIMG} ${OUT}/f.*.ppm type type &
+                    particle no &
+                    gline yes 0.0030 &
+                    surf one 0.009 &
+                    size 900 900 zoom 1.55 box no 0.0
+dump_modify         IMG pad 5 backcolor white glinecolor gray scolor * red
+
+dump                G grid all ${NSTEP} ${OUT}/grid.txt id xlo ylo f_ablate[1]
+dump_modify         G pad 0
+
+stats               4000
+stats_style         step f_ablate f_ablate[21]
+run                 ${NSTEP}

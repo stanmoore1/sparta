@@ -1,0 +1,470 @@
+Regression tests for "fix ablate ... mode deposit"
+==================================================
+
+Deposition grows an implicit surface into the gas, the inverse of ablation.
+A growing surface runs into gas particles.  The implementation reflects those
+particles off the advancing front instead of deleting them, and accounts for
+the few that the front genuinely buries.  These tests assert that directly.
+
+Run with:
+
+  cd sparta/src
+  make serial
+  cd ../tools/testing/deposition
+  python3 run_tests.py
+
+Optionally point at a different binary, or run in parallel:
+
+  python3 run_tests.py --exe /path/to/spa_serial
+  python3 run_tests.py --exe ../../../src/spa_mpi --ranks 4
+
+Some of what a growing surface has to get right only exists in parallel, so
+run it on more than one rank as well as on one.  Verified at 1, 4 and 16.
+
+Tests
+-----
+
+in.test.conserve
+  A growing surface in a sealed, reflective box with no inflow or outflow.
+  The only way a particle can leave is for the front to bury it, so
+
+      np(start) - np(end)  ==  nburied
+
+  must hold exactly, and the buried mass must equal nburied times the species
+  mass.  Run over a sweep of growth rates, from slow enough that nothing is
+  buried up to fast enough that some particles are, and at several Nevery
+  values.  fix grid/check runs with the error setting throughout, so
+  completing the run also proves no particle was left inside the surface,
+  and that no particle was left with coordinates outside the cell that owns
+  it.
+
+  The top of the rate sweep is where this particular geometry runs out of
+  room.  Following examples/ablation/in.ablation.2d, the corner point grid is
+  a 100x100 sub-block of a 150x150 flow grid, because read_isurf requires the
+  grid group to match the surface file exactly and binary.101x101 is 100x100
+  cells.  Above roughly 0.65 per step the film reaches the edge of that block
+  within the 200 steps and fix ablate stops with an error saying so.  That is
+  a property of the test setup, not a limit on the deposition rate: defining
+  the fix on a larger group lets the film keep going, which is what
+  in.test.grow does, and in.test.fill puts the corner point grid on the whole
+  box and runs to rate 1.0.
+
+  Every burial in this test is a grid cell that became entirely solid in one
+  regeneration, leaving no surface in the cell to reflect from.  A molecule
+  whose own cell filled while a neighbor still held gas is pushed out through
+  the shared face rather than buried, so what is left buried is the molecule
+  that really was closed in on every side.  Measured before that was added,
+  the fraction of burials with a non-solid face neighbor was 100% at rate
+  0.3, 85% at 0.5 and 0.6, and 64% in in.test.fill at rate 1.0; the burial
+  counts fell by almost exactly those fractions when it was.
+
+  Whether a molecule escapes is set by the ratio of its thermal speed to the
+  speed of the front -- how many times it can cross a cell while the front
+  closes one.  Measured in this test at 300 K, where the thermal speed is
+  597 m/s and cells are one unit across:
+
+      rate    front speed   v/s    buried
+      0.1        2.4 m/s    251      0
+      0.2        7.2 m/s     83      0
+      0.3       14.8 m/s     40      0
+      0.5       27.6 m/s     22     54
+      0.6       35.5 m/s     17    104
+
+  Reducing the timestep does not move that.  Halving the timestep at a fixed
+  deposition rate halves the material added per step, so the front speed is
+  unchanged -- rate 0.15 at dt 5e-5, 0.075 at 2.5e-5 and 0.0375 at 1.25e-5 all
+  measure 14.8 m/s, exactly like rate 0.3 at dt 1e-4, and all four bury the
+  same number.  The molecule gets the same physical time to escape either way.
+  Refining the timestep converges to the burial count instead of removing it,
+  which is what should happen to a quantity that is physical at a given growth
+  rate.
+
+in.test.grow
+  Corner point values exist only on the grid group fix ablate is defined on,
+  so that group is the room the surface has.  For ablation the block the
+  surface file describes is always enough; a growing surface needs more, so
+  fix ablate may be defined on a larger group than read_isurf reads into.
+  This is in.test.conserve with the fix on "all" instead of on "inner", run
+  at a rate where that one difference decides the outcome: the read-block
+  version stops at the block edge with an error saying so, and this one grows
+  on out of it, ending up spanning about 23.6 to 126.4 in x and y rather than
+  stopping at 25 to 125.
+
+in.test.fill
+  The same conservation identity with the corner point grid covering the
+  whole box instead of a sub-block, so nothing stops the film short.  Covers
+  two things in.test.conserve cannot: a surface ending on the simulation box
+  is legal and must not be refused by the group boundary check, and the rate
+  can be pushed much higher.  At rate 1.0 the film reaches 78% of a solid
+  box, buries about 12% of the gas and reflects over 200000 particles back
+  into the flow, all under fix grid/check with the error setting.
+
+in.test.momentum
+  A growing surface in a fully PERIODIC box, so no domain boundary can take
+  momentum from the gas and gas-gas collisions conserve it internally.  The
+  surface is then the only place gas momentum can go, and
+
+      [ P_gas(end) - P_gas(0) ] + P_surf + P_buried + P_reflect  ==  0
+
+  must close, where the three surface terms are the momentum handed to the
+  surface by ordinary collisions, by particles it buried, and by the
+  reflections that push enclosed particles back into the flow.  The residual
+  is round-off over roughly a million collisions, about 1e-8 relative.
+
+in.test.momentum.3d
+  The same ledger in three dimensions, which exercises marching cubes and the
+  triangle intersection rather than marching squares and the line one.
+
+in.test.energy
+  The energy counterpart of in.test.momentum, in the same periodic box:
+
+      [ E_gas(end) - E_gas(0) ] + E_surf + E_buried + E_reflect  ==  0
+
+  E_gas is translational plus rotational plus vibrational, the species is N2
+  and VSS collisions are on, so the gas moves energy between those three
+  reservoirs on its own and the ledger only closes if every mode is accounted
+  for where it meets the surface.  The wall is diffuse at 1000 K against a gas
+  starting far from it, so each collision transfers a real amount.  Run at a
+  rate that buries nothing and at one that buries about 125 molecules; the
+  residual is round-off, about 1e-8 relative, in both.
+
+in.test.wall
+  A depositing surface advances by accretion, not by motion of its material,
+  so the atoms a molecule strikes are at rest: the front velocity decides
+  when and where a collision happens but must not appear in the reflected
+  velocity.  A wall physically translating at the same speed would be a
+  piston and would heat the gas.  Off a stationary plane specular reflection
+  preserves each particle's speed exactly, so with a specular wall the gas
+  temperature must not move at all as the growth rate is raised.  Raising it
+  from 0 to 0.1 raises the surface collision rate by more than half and
+  leaves the temperature bit identical.
+
+in.test.guard
+  The per-cell csurfs collision lists are rebuilt only when the isosurface is
+  regenerated.  A front travelling more than half a grid cell between
+  regenerations would reach particles that are never tested against it, so
+  fix ablate must abort instead of silently overtaking them.  This input asks
+  for such a rate and is expected to fail with an error naming the advance.
+
+in.test.ablate
+  The same setup with the default mode = ablate.  A receding surface never
+  engulfs anything, so both deposition counters must stay at zero, confirming
+  the advancing-front code is inert when deposition is not in use.
+
+in.test.flat, in.test.variable
+  A rate given in length/time is a claim about how fast the surface moves, so
+  it is checked against the surface itself: value (21) of the output vector is
+  the realized front speed, and it must read back what was asked for.  The
+  flat ramp of in.test.flat has its front normal to x, so the measurement
+  needs no projection and any error is the conversion's; in.test.variable
+  repeats it on a curved blob, where the normal projection is doing work.
+  Both hold to about 1.5% over a decade of requested rates.
+
+in.test.flux
+  The incident flux keywords of compute isurf/grid, against arithmetic.  For a
+  Maxwellian gas at rest against a wall at the same temperature the one-sided
+  impingement rate is n*vbar/4 with vbar = sqrt(8kT/pi m), so there is no
+  reference run to compare with -- the answer is known.  mflux/nflux must also
+  come out at exactly the species mass, which holds however poor the
+  statistics are.
+
+  The averaging window has to be long enough that essentially every surface
+  element records a collision in it, or averaging over the elements that did
+  is biased high.
+
+in.test.stick
+  The whole flux-driven chain with no free parameters.  A film that captures a
+  fraction sigma of the impingement mass flux and has bulk density rho_film
+  must grow at sigma*rho_gas*vbar/4/rho_film, and value (21) reports what the
+  surface actually did.  One number checks mflux_incident, the norm flow
+  normalization, the per-cell area sum, the sticking weighting and the
+  length/time conversion at once.  Sigma is swept: zero must give exactly zero
+  growth, and the rate must be linear in it.
+
+in.test.both
+  Sublimation and condensation in one run.  mode = both reads the source as a
+  signed rate, so the surface grows in one place and recedes in another; two
+  fixes cannot do this, since both would be writing the same corner points.
+  The sign comes from a custom per-grid attribute read back by a grid-style
+  variable as g_name.
+
+  Three runs of one input differing only in where the sign changes.  Positive
+  everywhere must reproduce mode = deposit exactly -- if it does not, the
+  signed path is not the same path.  Negative everywhere must lose the same
+  amount it gained growing.  Half and half must move the surface everywhere at
+  the requested speed while the material barely changes, which is the
+  behaviour that has no single-mode equivalent.
+
+  fix grid/check runs with the error setting throughout, so completing the
+  runs also proves the receding half left no particle inside the surface --
+  the direction the advancing-front machinery had never been exercised in.
+
+in.test.species
+  Per-species sticking, again against arithmetic.  Two species of different
+  mass arrive at different rates and are captured with different
+  probabilities, and the film has to grow at the sum of their weighted
+  contributions.  fix ablate never looks up a species mass to do this: the
+  columns of the source are mass flows, so the per-species handling belongs to
+  the mixture, and one group per species gives one coefficient per species.
+  The test also asserts the answer is 39% away from what a fix applying a
+  single coefficient to both would give, so passing is not an accident of the
+  two species being similar.
+
+in.test.react
+  The same physics with the capture probability moved out of fix ablate and
+  into a surf_react model, consumed through the mass keyword of compute
+  react/isurf/grid.  It has to land on the same closed form, which is what
+  makes the rate available for any surf_react model and, with the sign the
+  other way, for ablation.  The reaction removes molecules from a gas that is
+  not replenished, so the expectation is corrected by the particle count in
+  the stats table rather than absorbed into the tolerance.
+
+What the counters mean
+----------------------
+
+  f_ablate       summed corner point values, i.e. how much material exists
+  f_ablate[3]    nburied, particles incorporated into the film
+  f_ablate[4]    buried mass
+  f_ablate[5-7]  buried momentum
+  f_ablate[8]    nfrontreflect, salvage reflections after a regeneration
+  f_ablate[9-11] momentum those reflections gave the surface
+  f_ablate[12-14] momentum ordinary collisions gave the surface
+  f_ablate[15-17] buried translational, rotational, vibrational energy
+  f_ablate[18]   energy ordinary collisions gave the surface
+  f_ablate[19]   energy those reflections gave the surface
+  f_ablate[20]   of the [8] reflections, those pushed onto another proc
+  f_ablate[21]   realized front speed over the last regeneration interval
+
+nfrontreflect counts particles the regenerated isosurface enclosed and that
+were pushed back into the flow.  Every one of those would have been deleted
+by a delete-on-engulf implementation, so the count is a direct measure of what
+this feature saves.  It grows with the growth rate and with Nevery, since a
+larger jump per regeneration leaves more residual work for the safety net.
+
+in.test.crossproc (part of run_tests.py, no separate input)
+  salvage_to_neighbor can only push a squeezed molecule into a cell this proc
+  owns.  A molecule whose only gas neighbor happens to sit on another proc was
+  therefore buried, making the burial count depend on how the grid was divided
+  up rather than on the physics.  Before this was fixed, in.test.fill reported
+
+      ranks     1      2      4      8     16
+      buried  10574  10592  10649  10753  10891
+
+  -- monotone, and still climbing at 16 ranks.  Molecules are now reflected
+  off the face and handed to the owner, which decides.  The same sweep gives
+
+      ranks     1      2      4      8     16
+      buried  10574  10563  10531  10472  10485
+
+  The residual is below the noise: varying only the random seed in serial
+  gives 10543 to 10761 for the same run, a spread of 218, so the 106 left
+  across 1 to 16 ranks is not distinguishable from run-to-run variation.
+
+  The test asserts the mechanism is inert on one rank, live on more than one,
+  and that the burial count stays within 2% of the serial answer.
+
+in.test.oblique
+  Every other rate check in this suite is blind to an error that depends on
+  which way the surface faces.  in.test.flat has its front normal to the grid,
+  where the answer is exact whatever the projection onto the surface normal
+  does, and the curved case reads the realized speed back out of fix ablate --
+  which shares that projection with the conversion, so an error in it cancels
+  and f_ablate[21] reports the requested speed however the surface actually
+  moved.  Here the front position is measured from the corner point values
+  themselves, outside SPARTA.
+
+  The body is a diamond, so all four faces are at 45 degrees.  Measured over
+  1500 steps at a requested speed of 1.0:
+
+      graded corner values (diamond.smooth)   1.0115
+      binary 0/255         (diamond.binary)   1.6098
+
+  The binary field is not a bug in fix ablate so much as a limit of what a
+  binary field can say: on an oblique front every crossed edge falls the full
+  0 to 255 whichever way the surface is turned, so the direction the surface
+  faces is not recoverable.  fix ablate warns when its field is like that, and
+  the test asserts the warning rather than the number.  A front normal to the
+  grid is exact either way, which is why this went unnoticed.
+
+  A second conversion is available as "response volume", which solves for the
+  volume the surface sweeps instead of its displacement along a normal it
+  cannot determine.  Measured true front speeds, requested 1.0:
+
+                                        rate 1.0,        rate 0.5,
+                                        1.5 cells grown  6 cells grown
+      geometry / corner point field     normal  volume   normal  volume
+      plane at 45 deg, binary           1.6098  1.0286   1.4143  1.1226
+      plane at  0 deg, binary           1.0005  0.9997   1.0001  0.9996
+      plane at 45 deg, graded           1.0115  0.9514   0.9991  0.9967
+      circle, all orientations, graded   1.005   1.006   1.0046  1.0059
+      circle, all orientations, binary   1.22    1.23    1.1947  1.1624
+
+  The oblique binary numbers depend on the rate and on how far the front has
+  travelled -- the two columns are the same physics measured over a short fast
+  run and a long slow one -- so read them as a size, not a constant.  Over the
+  longer run response normal settles on 1.414, which is 1/cos(45 deg) and is
+  the projection it cannot make.  Everything else is steady to a few parts in
+  a thousand between the two.
+
+  So it fixes the planar oblique case decisively and does nothing for the
+  curved binary one, which says the two failures have different causes: the
+  first is the direction of a single piece of surface, which volume does not
+  need, and the second is how the surface reassembles as corner points cross
+  the threshold, which neither conversion touches.  It also asks for larger
+  increments and trips the half-cell advance guard sooner -- blob.binary at
+  rate 1.0 runs under response normal and stops under response volume.
+
+make_movies.sh, in.movie
+  Side-by-side movies of the two conversions for the five cases above, showing
+  the grid cells and the surface.  What they show that the numbers do not is
+  the SHAPE.  A rate that depends on which way the surface faces does not just
+  grow a body at the wrong speed, it grows it into the wrong shape: on a
+  binary field the diamond turns into an OCTAGON under response normal,
+  because its 45 degree faces outrun its tips, while under response volume it
+  stays a diamond with a visibly rougher surface.  Needs ffmpeg.
+
+in.test.rate3d
+  The length/time rate in 3d, which nothing else in this suite covered: the
+  one other 3d input here drives the surface with units corner, where the
+  direction it faces never enters.  3d is where it matters most.  A sphere
+  presents every orientation at once, and its radius must grow at the
+  requested speed in all of them.  Requested 0.5, ratio realized/requested:
+
+                              along +x   face diagonal   body diagonal
+      binary corner values      1.002        1.416           1.734
+      binary + smooth 0.5       0.974        1.018           0.954
+      graded corner values      0.990        1.024           1.000
+
+  1.416 and 1.734 are sqrt(2) and sqrt(3), i.e. 1/cos of the angle between
+  the surface and the grid.  On a binary field the error is worse in 3d than
+  in 2d, where it tops out at sqrt(2), and it is a wrong SHAPE rather than
+  just a wrong rate -- the sphere grows into a rounded cube.
+
+  read_isurf smooth rewrites the binary field as a distance field without
+  moving the body, and removes it.  In 2d the same option takes the 45 degree
+  plane from 1.6098 to 0.9992 and the circle from 1.2107 to 1.0649 -- the
+  curved binary case that neither response conversion could touch.  Band
+  widths measured, worst direction:
+
+      band    0     0.5    1.0    1.5    2.0    3.0
+      3d    +73%   -4.6%  -14%   -7%    +7%   guard trips
+
+  0.5 is the value to use; wider is not better.
+
+in.test.balance
+  The same conservation identity with fix balance repartitioning the grid
+  every 10 steps while the film grows.  Everything fix ablate keeps per cell
+  has to move with the cell -- in particular the snapshot of the corner point
+  field that the front speed and the per-step refreshed geometry are measured
+  against.  This is also the only test that exercises pack_grid_one and
+  unpack_grid_one, where a byte-count mismatch would corrupt every per-cell
+  array at once.  With the snapshot left behind, the refresh degrades to
+  nonsense for the steps after each repartition and the run needs about 16%
+  more salvage reflections (5198 vs 4487) to make up for it.
+
+axisymmetric deposition (runs examples/explicit2implicit/in.deposit.axi.spherecone)
+  Axisymmetric runs use the refreshed geometry but solve the intersection with
+  the surface-of-revolution test, since the particle path there is an arc in
+  the r-z plane.  That test resolves a re-hit of the element the particle just
+  bounced off itself, so unlike 2d and 3d that element must NOT be skipped
+  first.  Skipping it lets a molecule walk through the surface; fix grid/check
+  with the error setting catches it.
+
+make_engulf_movies.sh, in.movie.engulf
+  Movies of what a growing surface does to the gas in its way.  The counters
+  under each panel are the fix output: "pushed back" is value (8), molecules
+  the front enclosed and returned to the flow, "buried" is value (3), the
+  ones it enclosed with nowhere to put them.  Every domain is closed, so
+  "in gas" plus "buried" must stay at the starting count for the whole run,
+  and it does, frame by frame.  Cells are shaded by the volume the film has
+  left them, so solid really is where no particle can be.
+
+  engulf-front.mp4    a flat front through gas, rebuilt every step against
+                      rebuilt every 100 steps.  Same rate, same growth, same
+                      number of steps -- only how far the front jumps between
+                      rebuilds differs, and that is what decides burial:
+
+                          Nevery    pushed back    buried
+                             1          1641          7
+                           100          1581        574
+
+                      Burial is not a property of the rate, it is a property
+                      of how far the surface moves before anyone looks.
+
+  engulf-pocket.mp4   the case the salvage cannot help with.  A cup whose
+                      mouth closes seals the gas inside it into a shrinking
+                      pocket, and a molecule in there has no gas neighbour
+                      ahead of the front to be pushed into.  The pocket is
+                      buried molecule by molecule: 271 of them, against 9 in
+                      the whole run up to the moment it sealed.
+
+  engulf-fill.mp4     what usually happens instead.  A disc grows until the
+                      film holds nearly the whole box, and the gas is not
+                      consumed -- it is compressed ahead of the front into
+                      what is left.  8000 molecules start, 5209 reflections
+                      later 7988 are still in the flow and twelve are buried.
+                      A delete-on-engulf implementation would have destroyed
+                      all of them.
+
+  Needs ffmpeg.  The three corner point fields are generated by the script.
+
+  Found while making these: gas-gas collisions and a film that takes most of
+  a cell do not mix.  Collide errors with "Collision cell volume is zero" when
+  a cell it holds particles in has been cut to zero volume.  It is not a
+  particle left inside the surface -- fix grid/check with the error setting
+  runs clean over the same trajectory -- so it is a cut cell sliver, and the
+  same hazard exists for a static surface.  No test in this suite ran collide
+  with a growing film before, which is why it had not come up.
+
+Cost of a rebuild
+-----------------
+
+  Deposition rebuilds the isosurface every Nevery steps for the whole run,
+  where ablation on a slow-receding surface can get away with Nevery in the
+  thousands.  That makes FixAblate::create_surfs() a per-step cost rather
+  than a setup cost, and most of what it does scales with the TOTAL number of
+  grid cells rather than with the number that hold surface.  Measured on a
+  48x48x48 grid, no gas, one rank, a sphere of 7448 triangles, ms per
+  rebuild:
+
+      marching cubes proper                 6.4
+      Grid::clear_surf                      6.1
+      MarchingCubes::cleanup                2.8
+      ghost acquire + Grid::reset_neighbors 37     (two full cycles)
+      Grid::surf2grid_implicit             19.4
+      Grid::set_inout                      28.7
+      watertight + type_check              15.2
+
+  Extracting the surface is 5% of it.  Two changes came out of that:
+
+  - Grid::set_inout() flood fills the grid outward from the cells holding
+    surface, iterating with an MPI_Allreduce and an irregular exchange per
+    pass until no proc has a marking left to hand across a boundary.  For an
+    implicit surface the answer is already in the corner point field, so
+    FixAblate::set_inout_implicit() reads it off directly -- one local pass,
+    no communication.  It falls back to the fill when the field cannot answer
+    (fix group smaller than the whole grid, multi-value corner points, all
+    surfs transparent).
+
+  - the watertight and cell-type validations are checks on marching
+    squares/cubes, not part of building the surface.  fix ablate's new
+    check keyword puts them on their own schedule.
+
+  Same case, ms per create_surfs() call:
+
+      before                                123.5
+      direct inside/outside marking          96.5   -22%
+      + check 0                              80.7   -35%
+
+  End to end on 4 ranks, 100 steps of the same case, best of 3: 9.47 s to
+  8.58 s, since create_surfs is about half of a step here.  The default is
+  check 1, so a run that says nothing keeps every validation it had before.
+
+  The reference logs in examples/ablation reproduce bit for bit at 1 and 4
+  ranks, in 2d and 3d, for ablation and for the multi-inner variant.
+
+Not covered here
+----------------
+
+  - Kokkos, whose particle move is a separate implementation and does not
+    read the refreshed geometry, so growth is resolved once per Nevery there

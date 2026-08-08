@@ -22,6 +22,7 @@ FixStyle(ablate,FixAblate)
 #define SPARTA_FIX_ABLATE_H
 
 #include "fix.h"
+#include "my_page.h"
 
 namespace SPARTA_NS {
 
@@ -39,6 +40,7 @@ class FixAblate : public Fix {
   void setup() {}
   void end_of_step();
 
+  void start_of_step();
   int pack_grid_one(int, char *, int);
   int unpack_grid_one(int, char *);
   void copy_grid_one(int, int);
@@ -49,12 +51,26 @@ class FixAblate : public Fix {
   double memory_usage();
 
   void store_corners(int, int, int, double *, double *,
-                     double **, double ***, int *, double, char *, int);
+                     double **, double ***, int *, double, char *, int,
+                     double smoothband = 0.0);
   double mindist;             // min fractional distance between any grid corner pt
                               //   and a generated tri vertex or line segment endpt
+  int depositflag;            // 1 if mode = deposit, so surfs advance each step
  protected:
   int me;
+  int mode;               // ABLATE (recede) or DEPOSIT (grow) the surface
+  int unitsflag;          // CORNER (0-255) or DISTANCE (length/time) source units
+  int responseflag;       // RNORMAL or RVOLUME: how a speed becomes a corner
+                          //   point increment
+  int checkevery;         // run the watertight check every Nth rebuild,
+                          //   0 to never run it
+  bigint nrebuild;        // # of isosurface rebuilds so far
+  int fluxwhich;          // COMPUTE or FIX, for the flux source style
+  double filmrho;         // mass density of the deposited film
+  double *sticking;       // per mixture group capture probability
+  int nsticking;
   int groupbit,which,argindex,icompute,ifix,ivariable,maxrandom;
+  int varstyle;           // GRIDVAR or EQUALVAR, for which = VARIABLE
   double scale;
   char *idsource;
   int storeflag;
@@ -73,6 +89,8 @@ class FixAblate : public Fix {
   int nglocal;            // # of owned grid cells
 
   double **cvalues;       // corner point values
+  double **cvalues_prev;  // corner point values before the last increment
+                          //   used to measure the realized front motion
   double ***mvalues;      // corner multi values
   int *tvalues;           // per-cell type value
   int tvalues_flag;       // 1 if tvalues is defined (by ReadIsurf)
@@ -85,11 +103,62 @@ class FixAblate : public Fix {
   // DEBUG
   int **mcflags;
 
+  // advancing front, for mode = DEPOSIT
+  // the isosurface is regenerated only every Nevery steps, but the front
+  //   advances every step, so the move loop offsets each surf element
+  //   along its own normal by sfront * elapsed time since regeneration
+
+  double *sfront_cell;     // per-cell isosurface displacement over the last
+                           //   regeneration interval, in length units
+  double *sfront_normal;   // ditto projected onto the surface normal, which
+                           //   is the front speed proper; sfront_cell keeps
+                           //   the along-edge magnitude for the guard
+  double max_advance;      // max of that, as a fraction of the cell size
+
+  // between regenerations the surface keeps growing, so the collision
+  //   geometry is refreshed every step from the corner point field advanced
+  //   in time.  Deriving it from the FIELD, rather than by displacing element
+  //   vertices, is what makes it robust: marching squares/cubes give a valid
+  //   watertight surface for any field, including where the topology changes
+  //   and vertices are created or destroyed.
+
+  double *cnow;            // corner values of one cell at the current time
+  double *cnext;           // ditto one timestep later, to measure the rate
+  double **segpt;          // refreshed geometry per cell: element end points
+  double **segnorm;        // and their outward normals
+  double *segspeed;        // speed the front advances along those normals
+  double *segband;         // how far the refreshed geometry stands ahead of
+                           //   the committed surface, i.e. the width of the
+                           //   band a particle may be found behind
+  int *nseg;               // # of refreshed elements in each cell
+  int maxsegcell;
+  int segstride;           // max elements per cell
+
+  double depo_all[20];     // deposition counters summed over all procs,
+                           //   plus the 2 internal front speed accumulators
+  bigint depo_stamp;       // timestep depo_all was last reduced on
+  double front_last;       // last realized front speed that was measurable
+  double clampsum;         // sum over crossed edges of how far the normal
+                           //   projection overshot 1, 1.0 when it did not
+  bigint ntotedge;         // crossed edges that
+                           //   projection, and the total, over one interval
+  int clampwarn;           // 1 once the oblique-field warning has been given
+  int smoothed;            // 1 if the corner point field was distance
+                           //   transformed on read, so the warning is moot
+
+  int *dlist;              // particles leaving my list when surfs are rebuilt:
+                           //   buried, or pushed onto another proc
+  int maxdlist;
+
   double *celldelta;       // per-cell delta from compute or fix source
   double **cdelta;         // per-corner point deltas
   double **cdelta_ghost;   // ditto for my ghost cells communicated to me
   double ***mdelta;        // cdelta for multivalues
   double ***mdelta_ghost;  // ditto for my ghost cells (multivalues)
+  double *cflag;           // 1 where the cell holds a piece of the surface,
+                           //   so its per corner delta is a statement about
+                           //   the front rather than the absence of one
+  double *cflag_ghost;     // ditto for my ghost cells communicated to me
   double **nvert;          // number of vertices around each corner
   double **nvert_ghost;    // ditto for my ghost cells communicated to me
 
@@ -118,12 +187,36 @@ class FixAblate : public Fix {
   void process_args(int, char **);
 
   void create_surfs(int);
+  int set_inout_implicit();
 
   void set_delta();
   void set_delta_random();
   void set_delta_uniform();
 
   void decrement();
+  void increment();
+  void front_speed();
+  void refresh_surfs();
+  double edge_displacement(double *, double *, double gradmag = 0.0,
+                           int fullflag = 0);
+  void check_group_boundary();
+  void check_oblique();
+  double grad_mag(int);
+  double front_response(int, int);
+  void distance_transform(double);
+  double cell_area(int);
+  double cell_area_cart(int);
+  double solid_area_2d(double *);
+  double solid_fraction(double *);
+  double volume_shift(double *, double, int);
+  int interface_cell(int);
+
+  int salvage_particle(int, int, int collideflag = 1);
+  int salvage_to_neighbor(int, int);
+  int salvage_to_ghost(int, int);
+  int resolve_engulfed(int);
+  int resolve_arrived(int);
+  void grow_dlist(int);
   void decrement_multiv();
   void decrement_multid_inside();
   void decrement_multid_outside();

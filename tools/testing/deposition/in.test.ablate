@@ -1,0 +1,46 @@
+# Deposition must not perturb ablation
+#
+# Same setup as the conservation test but with the default mode = ablate.
+# A receding surface never engulfs a particle, so nothing should be buried
+# and no salvage reflection should ever fire.  run_tests.py checks that both
+# deposition counters stay at zero, which confirms the advancing-front code
+# is fully inert when deposition is not in use.
+
+seed                12345
+dimension           2
+global              gridcut 0.0 comm/sort yes
+
+boundary            r r p
+
+create_box          0 150 0 150 -0.5 0.5
+create_grid         150 150 1
+
+# implicit surfaces need a clumped grid partition to acquire ghost cells
+balance_grid        rcb cell
+
+global              nrho 1.0 fnum 0.01
+
+species             air.species N
+mixture             air N
+
+region              inner block 25.5 124.5 25.5 124.5 INF INF
+group               inner grid region inner one
+
+fix                 ablate ablate inner 1 0.1 uniform 1
+
+global              surfs implicit
+read_isurf          inner 100 100 1 ../../../examples/ablation/binary.101x101 180.5 ablate
+
+surf_collide        1 diffuse 300.0 1.0
+surf_modify         all collide 1
+
+timestep            0.0001
+
+create_particles    air n 200000
+
+fix                 check grid/check 1 error
+
+stats               50
+stats_style         step np f_ablate f_ablate[3] f_ablate[8]
+
+run                 200

@@ -54,6 +54,41 @@ class Update : protected Pointers {
   int nmigrate;          // # of particles to migrate to new procs
   int *mlist;            // indices of particles to migrate
 
+                         // deposition (fix ablate mode deposit) bookkeeping
+                         // a growing surface can enclose gas particles; they
+                         //   are reflected back into the flow where possible,
+                         //   else counted as incorporated into the film
+  bigint nburied;        // running count of particles buried by a surface
+  double buried_mass;    // running mass buried
+  double buried_mom[3];  // running momentum buried
+  double buried_erot,buried_evib,buried_ke;   // running energy buried
+  bigint nfrontreflect;  // running count of reflections back into the flow
+  bigint nfrontmigrate;  // of those, the ones pushed across a proc boundary
+                         //   because the only gas next door was off-proc
+  double reflect_mom[3]; // momentum those reflections gave to the surface
+  double surf_mom[3];    // momentum ordinary collisions gave to the surface
+                         //   only accumulated for a growing surface, so the
+                         //   ledger gas + surface + buried can be checked
+  double reflect_energy; // energy those reflections gave to the surface
+  double surf_energy;    // energy ordinary collisions gave to the surface
+                         //   the energy counterparts of the two above, so the
+                         //   same ledger can be closed for energy
+
+                         // collision geometry of a growing surface, refreshed
+                         //   every step by FixAblate from the corner point
+                         //   field advanced in time, since the isosurface
+                         //   itself is only rebuilt every Nevery steps
+  double **segpt;        // per cell, end points of the refreshed elements
+  double **segnorm;      // and their outward normals
+  double *segspeed;      // per cell, speed the front advances along them
+  double *segband;       // per cell, distance the refreshed front has moved
+                         //   since the last isosurface rebuild.  Measured, not
+                         //   extrapolated from segspeed, so it stays right
+                         //   when the refresh is held back (see FixAblate)
+  int *nseg;             // per cell, # of refreshed elements, NULL if none
+  int nsegcell;          // length of nseg
+  bigint front_step0;    // timestep the surface was last rebuilt on
+
                          // current step counters
   int niterate;          // iterations of move/comm
   int ntouch_one;        // particle-cell touches
@@ -122,6 +157,11 @@ class Update : protected Pointers {
   int split3d(int, double *);
   int split2d(int, double *);
 
+  // account for a particle buried by an advancing (depositing) surface
+  // arg is a Particle::OnePart *, kept void * to avoid a header dependency
+
+  void bury_particle(void *);
+
  protected:
   int me,nprocs;
   int maxmigrate;            // max # of particles in mlist
@@ -182,7 +222,7 @@ class Update : protected Pointers {
 
   typedef void (Update::*FnPtr)();
   FnPtr moveptr;             // ptr to move method
-  template < int, int, int > void move();
+  template < int, int, int, int > void move();
 
   int perturbflag;
   typedef void (Update::*FnPtr2)(int, int, double, double *, double *);

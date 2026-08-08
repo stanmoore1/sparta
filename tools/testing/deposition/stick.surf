@@ -1,0 +1,9 @@
+# every N that hits the surface is captured with probability 0.4
+#
+# R is recombination in surf_react prob terms: one reactant, no product, so
+# the molecule is removed from the gas and its mass is retained by the
+# surface.  That is a sticking coefficient by another name, and it is what
+# compute react/isurf/grid ... mass reports as a mass flow.
+
+N --> NULL
+R S 0.4 0.0

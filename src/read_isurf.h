@@ -44,6 +44,8 @@ class ReadISurf : protected Pointers {
  protected:
   int me,nprocs,dim;
   int ggroup,sgrouparg,pushflag,precision,readflag;
+  double smoothband;   // half width in grid cells of the graded band the
+                       //   corner point field is rewritten into, 0 = leave it
   int nx,ny,nz;
   double thresh;
   double corner[3],xyzsize[3];

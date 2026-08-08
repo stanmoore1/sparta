@@ -21,6 +21,7 @@
 #include "math_const.h"
 #include "particle.h"
 #include "modify.h"
+#include "fix_ablate.h"
 #include "fix.h"
 #include "compute.h"
 #include "domain.h"
@@ -40,6 +41,8 @@
 #include "error.h"
 
 using namespace SPARTA_NS;
+
+
 
 enum{XLO,XHI,YLO,YHI,ZLO,ZHI,INTERIOR};         // same as Domain
 enum{PERIODIC,OUTFLOW,REFLECT,SURFACE,AXISYM};  // same as Domain
@@ -100,6 +103,21 @@ Update::Update(SPARTA *sparta) : Pointers(sparta)
 
   maxmigrate = 0;
   mlist = NULL;
+
+  nburied = 0;
+  buried_mass = 0.0;
+  buried_mom[0] = buried_mom[1] = buried_mom[2] = 0.0;
+  buried_erot = buried_evib = buried_ke = 0.0;
+  nfrontreflect = 0;
+  nfrontmigrate = 0;
+  reflect_mom[0] = reflect_mom[1] = reflect_mom[2] = 0.0;
+  surf_mom[0] = surf_mom[1] = surf_mom[2] = 0.0;
+  reflect_energy = surf_energy = 0.0;
+  segpt = segnorm = NULL;
+  segspeed = segband = NULL;
+  nseg = NULL;
+  nsegcell = 0;
+  front_step0 = -1;
 
   nglist_compute = nslist_compute = nblist_compute = 0;
   glist_compute = slist_compute = blist_compute = NULL;
@@ -188,28 +206,41 @@ void Update::init()
     }
   }
 
+  // a growing surface has its collision geometry refreshed every step, so
+  //   the move loop must use that instead of the last rebuilt isosurface
+  // MOVING is a compile-time template parameter, so an ablation run compiles
+  //   to exactly the code it had before
+
+  int movingflag = 0;
+  for (int ifix = 0; ifix < modify->nfix; ifix++)
+    if (strcmp(modify->fix[ifix]->style,"ablate") == 0)
+      if (((FixAblate *) modify->fix[ifix])->depositflag) movingflag = 1;
+
   // choose the appropriate move method
 
   if (domain->dimension == 3) {
-    if (surf->exist)
-      moveptr = &Update::move<3,1,0>;
-    else {
-      if (optmove_flag) moveptr = &Update::move<3,0,1>;
-      else moveptr = &Update::move<3,0,0>;
+    if (surf->exist) {
+      if (movingflag) moveptr = &Update::move<3,1,0,1>;
+      else moveptr = &Update::move<3,1,0,0>;
+    } else {
+      if (optmove_flag) moveptr = &Update::move<3,0,1,0>;
+      else moveptr = &Update::move<3,0,0,0>;
     }
   } else if (domain->axisymmetric) {
-    if (surf->exist)
-      moveptr = &Update::move<1,1,0>;
-    else {
-      if (optmove_flag) moveptr = &Update::move<1,0,1>;
-      else moveptr = &Update::move<1,0,0>;
+    if (surf->exist) {
+      if (movingflag) moveptr = &Update::move<1,1,0,1>;
+      else moveptr = &Update::move<1,1,0,0>;
+    } else {
+      if (optmove_flag) moveptr = &Update::move<1,0,1,0>;
+      else moveptr = &Update::move<1,0,0,0>;
     }
   } else if (domain->dimension == 2) {
-    if (surf->exist)
-      moveptr = &Update::move<2,1,0>;
-    else {
-      if (optmove_flag) moveptr = &Update::move<2,0,1>;
-      else moveptr = &Update::move<2,0,0>;
+    if (surf->exist) {
+      if (movingflag) moveptr = &Update::move<2,1,0,1>;
+      else moveptr = &Update::move<2,1,0,0>;
+    } else {
+      if (optmove_flag) moveptr = &Update::move<2,0,1,0>;
+      else moveptr = &Update::move<2,0,0,0>;
     }
   }
 
@@ -374,20 +405,23 @@ void Update::run(int nsteps)
   }
 
   modify->post_run();
+
 }
 
 /* ----------------------------------------------------------------------
    advect particles thru grid
    DIM = 2/3 for 2d/3d, 1 for 2d axisymmetric
    SURF = 0/1 for no surfs or surfs
+   MOVING = 0/1 for no/yes a growing surface whose collision geometry is
+     refreshed between isosurface rebuilds, from fix ablate mode deposit
    use multiple iterations of move/comm if necessary
 ------------------------------------------------------------------------- */
 
-template < int DIM, int SURF, int OPT > void Update::move()
+template < int DIM, int SURF, int OPT, int MOVING > void Update::move()
 {
   bool hitflag;
   int m,icell,icell_original,nmask,outface,bflag,nflag,pflag,itmp;
-  int side,minside,minsurf,nsurf,cflag,isurf,exclude,stuck_iterate;
+  int side,minside,minsurf,nsurf,cflag,isurf,exclude,excluderef,stuck_iterate;
   int pstart,pstop,entryexit,any_entryexit,reaction;
   surfint *csurfs;
   cellint *neigh;
@@ -418,6 +452,17 @@ template < int DIM, int SURF, int OPT > void Update::move()
   // xnew,xc passed to geometry routines which use or set z component
 
   if (DIM < 3) xnew[2] = xc[2] = 0.0;
+
+  // a refreshed element of a growing surface, and the surf it stands in for
+  //   when the collision is tallied
+
+  double *rp1,*rp2,*rp3,*rnorm,minrnorm[3];
+  double rspeed,rband,rstart[3],rend[3];
+  int nrefresh,minirefresh = -1,minrefresh = 0,overtaken,oside;
+  double oparam,opt[3],oend[3];
+  if (DIM < 3) opt[2] = oend[2] = 0.0;
+
+  if (DIM < 3) rstart[2] = rend[2] = 0.0;
 
   // extend migration list if necessary
 
@@ -490,6 +535,7 @@ template < int DIM, int SURF, int OPT > void Update::move()
       x = particles[i].x;
       v = particles[i].v;
       exclude = -1;
+      excluderef = -1;
 
       // apply moveperturb() to PKEEP and PINSERT since are computing xnew
       // not to PENTRY,PEXIT since are just re-computing xnew of sender
@@ -786,8 +832,10 @@ template < int DIM, int SURF, int OPT > void Update::move()
 
             // for axisymmetric, dtsurf = time that particle stays in cell
             // used as arg to axi_line_intersect()
+            // for MOVING, dtsurf = same quantity
+            // used as the time window over which an advancing surf is offset
 
-            if (DIM == 1) {
+            if (DIM == 1 || MOVING) {
               if (outface == INTERIOR) dtsurf = dtremain;
               else dtsurf = dtremain * frac;
             }
@@ -803,30 +851,203 @@ template < int DIM, int SURF, int OPT > void Update::move()
             minparam = 2.0;
             csurfs = cells[icell].csurfs;
 
-            for (m = 0; m < nsurf; m++) {
-              isurf = csurfs[m];
+            // a growing surface has its geometry refreshed every step, so
+            //   test the refreshed elements of this cell instead of the ones
+            //   left over from the last isosurface rebuild
+            // the refreshed elements are derived from the corner point field,
+            //   which neighboring cells share along their common edges, so
+            //   they still meet exactly and the surface stays closed
+            // tallies are attributed to one of the cell's own surfs, so the
+            //   surface bookkeeping is unchanged
 
-              if (DIM > 1) {
+            nrefresh = 0;
+            rspeed = rband = 0.0;
+            if (MOVING && nseg && icell < nsegcell) {
+              nrefresh = nseg[icell];
+              if (nrefresh) {
+                rspeed = segspeed[icell];
+                rband = segband[icell];
+              }
+            }
+
+            for (m = 0; m < (nrefresh ? nrefresh : nsurf); m++) {
+              if (MOVING && nrefresh) {
+                isurf = csurfs[MIN(m,nsurf-1)];
+                if (DIM == 3) {
+                  rp1 = &segpt[icell][9*m];
+                  rp2 = &segpt[icell][9*m+3];
+                  rp3 = &segpt[icell][9*m+6];
+                } else {
+                  rp1 = &segpt[icell][6*m];
+                  rp2 = &segpt[icell][6*m+3];
+                }
+                rnorm = &segnorm[icell][3*m];
+              } else isurf = csurfs[m];
+
+              // skip the element the particle has just bounced off, so it
+              //   cannot immediately re-collide with it at param = 0
+              // a refreshed element is identified by its index within the
+              //   cell, NOT by the surf it is tallied against.  There can be
+              //   more refreshed elements than committed surfs, in which case
+              //   several of them stand in for the same surf; excluding by
+              //   surf would then skip elements the particle never touched
+              //   and let it pass straight through them.
+              // a chemistry product enters carrying only a surf index (see
+              //   the PSURF flag), so fall back to the surf test for it
+              // never skipped for axisymmetric, as in the static case: the
+              //   particle path there is an arc in the r-z plane and can
+              //   legitimately meet the same element twice, so that case is
+              //   handed to axi_line_intersect() to resolve instead
+
+              if (MOVING && nrefresh) {
+                if (DIM > 1 && m == excluderef) continue;
+                if (DIM > 1 && excluderef < 0 && isurf == exclude) continue;
+              } else if (DIM > 1) {
                 if (isurf == exclude) continue;
               }
-              if (DIM == 3) {
-                tri = &tris[isurf];
-                hitflag = Geometry::
-                  line_tri_intersect(x,xnew,tri->p1,tri->p2,tri->p3,
-                                     tri->norm,xc,param,side);
+
+              // a particle already behind the refreshed element has been
+              //   overtaken by the front and must be reflected back out now
+              // the surface geometry is only rebuilt every Nevery steps, so
+              //   between rebuilds there is a band of space between the
+              //   committed surface and where the front has advanced to.  A
+              //   particle inside that band fails every ordinary test: it
+              //   starts on the wrong side, so the hit is rejected as INSIDE
+              //   and it walks on into the solid.
+              // detect it by casting a short ray outward along the element
+              //   normal, no longer than the distance the front has advanced
+              //   since the rebuild.  If that ray crosses the element, the
+              //   particle is behind THIS element and within reach of the
+              //   front.  Using the element rather than its infinite plane is
+              //   what keeps a particle beside the element from being caught.
+              // that distance is measured by FixAblate from the two fields
+              //   themselves, rather than extrapolated from the front speed:
+              //   the refresh is held back whenever advancing it further
+              //   would empty a cell of surface, and an extrapolated band
+              //   would then reach past the front and drag in particles that
+              //   are properly behind the committed surface
+
+              overtaken = 0;
+              if (MOVING && nrefresh && rband > 0.0) {
+                oend[0] = x[0] + rnorm[0]*rband;
+                oend[1] = x[1] + rnorm[1]*rband;
+                if (DIM == 3) oend[2] = x[2] + rnorm[2]*rband;
+                if (DIM == 3)
+                  overtaken = Geometry::
+                    line_tri_intersect(x,oend,rp1,rp2,rp3,rnorm,
+                                       opt,oparam,oside);
+                else
+                  overtaken = Geometry::
+                    line_line_intersect(x,oend,rp1,rp2,rnorm,opt,oparam,oside);
+                if (overtaken && oside != INSIDE) overtaken = 0;
               }
-              if (DIM == 2) {
-                line = &lines[isurf];
+
+              if (overtaken) {
+
+                // put it back on the outside of the front and reflect there
+                // clear the front by one more step of its own advance, not
+                //   just by a rounding epsilon: the front keeps moving for
+                //   the rest of this step, and a particle left in that sliver
+                //   is swallowed again by the next rebuild, so it would come
+                //   straight back through the regeneration safety net
+                // opt lies on the element, so it is inside this cell; clamp
+                //   the offset position too, since a particle must never be
+                //   moved out of the cell that owns it
+
+                double eps = 1.0e-4 * MIN(hi[0]-lo[0],hi[1]-lo[1]);
+                if (DIM == 3) eps = MIN(eps,1.0e-4*(hi[2]-lo[2]));
+                eps += rspeed*dt;
+
+                hitflag = 1;
+                param = 0.0;
+                side = OUTSIDE;
+                xc[0] = MIN(MAX(opt[0] + eps*rnorm[0],lo[0]),hi[0]);
+                xc[1] = MIN(MAX(opt[1] + eps*rnorm[1],lo[1]),hi[1]);
+                if (DIM == 3)
+                  xc[2] = MIN(MAX(opt[2] + eps*rnorm[2],lo[2]),hi[2]);
+                if (DIM == 1) {
+                  vc[1] = v[1];
+                  vc[2] = v[2];
+                }
+
+              } else if (MOVING && nrefresh && DIM == 1) {
                 hitflag = Geometry::
-                  line_line_intersect(x,xnew,line->p1,line->p2,
-                                      line->norm,xc,param,side);
-              }
-              if (DIM == 1) {
-                line = &lines[isurf];
-                hitflag = Geometry::
-                  axi_line_intersect(dtsurf,x,v,outface,lo,hi,line->p1,line->p2,
-                                     line->norm,exclude == isurf,
-                                     xc,vc,param,side);
+                  axi_line_intersect(dtsurf,x,v,outface,lo,hi,rp1,rp2,
+                                     rnorm,m == excluderef,xc,vc,param,side);
+              } else if (MOVING && nrefresh) {
+
+                // the front keeps advancing along its own normal while the
+                //   particle flies, so where and when they meet depends on
+                //   both velocities.  Reduce to the front's frame: subtract
+                //   the front's translation from the particle path.  A
+                //   straight path against a uniformly translating plane is
+                //   still a straight path against a fixed plane, so the
+                //   existing static test then solves it exactly.
+                // the refreshed geometry is the front at the middle of the
+                //   step, so the translation is measured from there.
+                // this also catches a particle the front overtakes from
+                //   behind, one moving outward more slowly than the front
+                //   advances.  Its own path never reaches the surface, so a
+                //   static test cannot see it at all, however small the
+                //   timestep; in the front's frame it approaches normally.
+
+                tc = 0.5*dt - dtremain;                  // start, from mid-step
+                tmp = tc + dtsurf;                       // end, from mid-step
+
+                rstart[0] = x[0] - rnorm[0]*rspeed*tc;
+                rstart[1] = x[1] - rnorm[1]*rspeed*tc;
+                rend[0] = xnew[0] - rnorm[0]*rspeed*tmp;
+                rend[1] = xnew[1] - rnorm[1]*rspeed*tmp;
+                if (DIM == 3) {
+                  rstart[2] = x[2] - rnorm[2]*rspeed*tc;
+                  rend[2] = xnew[2] - rnorm[2]*rspeed*tmp;
+                }
+
+                if (DIM == 3)
+                  hitflag = Geometry::
+                    line_tri_intersect(rstart,rend,rp1,rp2,rp3,rnorm,
+                                       xc,param,side);
+                else
+                  hitflag = Geometry::
+                    line_line_intersect(rstart,rend,rp1,rp2,rnorm,
+                                        xc,param,side);
+
+                // map the hit back out of the front's frame
+                // param is the fraction of the flight time, unchanged by the
+                //   frame shift, so the particle is where it actually got to
+
+                if (hitflag) {
+                  xc[0] = x[0] + param*(xnew[0]-x[0]);
+                  xc[1] = x[1] + param*(xnew[1]-x[1]);
+                  if (DIM == 3) xc[2] = x[2] + param*(xnew[2]-x[2]);
+                }
+              } else {
+
+                // the braces matter: without them the DIM == 2 and DIM == 1
+                //   tests below run even when a refreshed element was just
+                //   tested, and overwrite its result with the committed
+                //   geometry, so the refresh would only ever take effect in 3d
+
+                if (DIM == 3) {
+                  tri = &tris[isurf];
+                  hitflag = Geometry::
+                    line_tri_intersect(x,xnew,tri->p1,tri->p2,tri->p3,
+                                       tri->norm,xc,param,side);
+                }
+                if (DIM == 2) {
+                  line = &lines[isurf];
+                  hitflag = Geometry::
+                    line_line_intersect(x,xnew,line->p1,line->p2,
+                                        line->norm,xc,param,side);
+                }
+                if (DIM == 1) {
+                  line = &lines[isurf];
+                  hitflag = Geometry::
+                    axi_line_intersect(dtsurf,x,v,outface,lo,hi,
+                                       line->p1,line->p2,
+                                       line->norm,exclude == isurf,
+                                       xc,vc,param,side);
+                }
               }
 
 #ifdef MOVE_DEBUG
@@ -891,8 +1112,23 @@ template < int DIM, int SURF, int OPT > void Update::move()
               }
 #endif
 
+              // OUTSIDE is still the right filter for an advancing surf: the
+              //   test above was done in the front's frame, and a particle
+              //   the front is about to overtake approaches that frame's
+              //   fixed plane from the outside, however it is moving in the
+              //   lab frame
+
               if (hitflag && param < minparam && side == OUTSIDE) {
                 cflag = 1;
+                if (MOVING) {
+                  minrefresh = nrefresh ? 1 : 0;
+                  minirefresh = nrefresh ? m : -1;
+                  if (nrefresh) {
+                    minrnorm[0] = rnorm[0];
+                    minrnorm[1] = rnorm[1];
+                    minrnorm[2] = rnorm[2];
+                  }
+                }
                 minparam = param;
                 minside = side;
                 minsurf = isurf;
@@ -935,15 +1171,27 @@ template < int DIM, int SURF, int OPT > void Update::move()
               ipart->icell = icell;
               dtremain *= 1.0 - minparam*frac;
 
-              if (nsurf_tally)
+              // iorig is the pre-collision particle, needed by the surf
+              //   tallies and, for a growing surface, by the momentum ledger
+
+              if (nsurf_tally || MOVING)
                 memcpy(&iorig,&particles[i],sizeof(Particle::OnePart));
+
+              // reflect off the surface where it actually is now
+              // the surface itself is treated as stationary: a depositing
+              //   surface advances by accretion, not by motion of its
+              //   material, so the atoms struck are at rest
 
               if (DIM == 3)
                 jpart = surf->sc[tri->isc]->
-                  collide(ipart,dtremain,minsurf,tri->norm,tri->isr,reaction);
+                  collide(ipart,dtremain,minsurf,
+                          (MOVING && minrefresh) ? minrnorm : tri->norm,
+                          tri->isr,reaction);
               if (DIM != 3)
                 jpart = surf->sc[line->isc]->
-                  collide(ipart,dtremain,minsurf,line->norm,line->isr,reaction);
+                  collide(ipart,dtremain,minsurf,
+                          (MOVING && minrefresh) ? minrnorm : line->norm,
+                          line->isr,reaction);
 
               if (jpart) {
                 particles = particle->particles;
@@ -960,6 +1208,43 @@ template < int DIM, int SURF, int OPT > void Update::move()
                   slist_active[m]->surf_tally(dtremain,minsurf,icell,reaction,
                                               &iorig,ipart,jpart);
 
+              // for a growing surface, book the momentum this collision hands
+              //   to the surface, so that the gas, surface and buried terms
+              //   together can be checked to balance
+              // compiled out entirely when MOVING = 0
+
+              if (MOVING) {
+                Particle::Species *sp = particle->species;
+                double m0 = sp[iorig.ispecies].mass;
+                double w0 = 1.0;
+                if (grid->cellweightflag) w0 = iorig.weight;
+                surf_mom[0] += w0*m0*iorig.v[0];
+                surf_mom[1] += w0*m0*iorig.v[1];
+                surf_mom[2] += w0*m0*iorig.v[2];
+                surf_energy += w0*(0.5*m0*MathExtra::lensq3(iorig.v) +
+                                   iorig.erot + iorig.evib);
+                if (ipart) {
+                  double m1 = sp[ipart->ispecies].mass;
+                  double w1 = 1.0;
+                  if (grid->cellweightflag) w1 = ipart->weight;
+                  surf_mom[0] -= w1*m1*ipart->v[0];
+                  surf_mom[1] -= w1*m1*ipart->v[1];
+                  surf_mom[2] -= w1*m1*ipart->v[2];
+                  surf_energy -= w1*(0.5*m1*MathExtra::lensq3(ipart->v) +
+                                     ipart->erot + ipart->evib);
+                }
+                if (jpart) {
+                  double m2 = sp[jpart->ispecies].mass;
+                  double w2 = 1.0;
+                  if (grid->cellweightflag) w2 = jpart->weight;
+                  surf_mom[0] -= w2*m2*jpart->v[0];
+                  surf_mom[1] -= w2*m2*jpart->v[1];
+                  surf_mom[2] -= w2*m2*jpart->v[2];
+                  surf_energy -= w2*(0.5*m2*MathExtra::lensq3(jpart->v) +
+                                     jpart->erot + jpart->evib);
+                }
+              }
+
               // stuck_iterate = consecutive iterations particle is immobile
 
               if (minparam == 0.0) stuck_iterate++;
@@ -972,6 +1257,7 @@ template < int DIM, int SURF, int OPT > void Update::move()
               if (DIM != 2) xnew[2] = x[2] + dtremain*v[2];
 
               exclude = minsurf;
+              if (MOVING) excluderef = minirefresh;
               nscollide_one++;
 
 #ifdef MOVE_DEBUG
@@ -1070,6 +1356,7 @@ template < int DIM, int SURF, int OPT > void Update::move()
 
         dtremain *= 1.0-frac;
         exclude = -1;
+        excluderef = -1;
 
         x[0] += frac * (xnew[0]-x[0]);
         x[1] += frac * (xnew[1]-x[1]);
@@ -1328,6 +1615,36 @@ template < int DIM, int SURF, int OPT > void Update::move()
   nscheck_running += nscheck_one;
   nscollide_running += nscollide_one;
   surf->nreact_running += surf->nreact_one;
+}
+
+/* ----------------------------------------------------------------------
+   a particle has been buried by an advancing (depositing) surface
+   the molecule is incorporated into the growing film, so it leaves the gas
+   accumulate its mass, momentum and energy, which are transferred to the
+     solid, so the deletion is accounted for rather than silently dropped
+   caller is responsible for flagging the particle PDISCARD
+------------------------------------------------------------------------- */
+
+void Update::bury_particle(void *ptr)
+{
+  Particle::OnePart *p = (Particle::OnePart *) ptr;
+  Particle::Species *species = particle->species;
+  double mass = species[p->ispecies].mass;
+
+  double weight = 1.0;
+  if (grid->cellweightflag) weight = p->weight;
+  double wmass = weight * mass;
+
+  double *v = p->v;
+
+  nburied++;
+  buried_mass += wmass;
+  buried_mom[0] += wmass * v[0];
+  buried_mom[1] += wmass * v[1];
+  buried_mom[2] += wmass * v[2];
+  buried_ke += 0.5 * wmass * (v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+  buried_erot += weight * p->erot;
+  buried_evib += weight * p->evib;
 }
 
 /* ----------------------------------------------------------------------

@@ -75,8 +75,6 @@ void ReadISurf::command(int narg, char **arg)
     error->all(FLERR,"Cannot read_isurf unless global surfs implicit is set");
   if (surf->exist)
     error->all(FLERR,"Cannot read_isurf when surfs already exist");
-  if (domain->axisymmetric)
-    error->all(FLERR,"Cannot read_isurf for axisymmetric domains");
 
   if (particle->exist)
     if (me == 0) error->warning(FLERR,"Using read_isurf when particles exist");
@@ -110,8 +108,6 @@ void ReadISurf::command(int narg, char **arg)
   if (strcmp(modify->fix[ifix]->style,"ablate") != 0)
     error->all(FLERR,"Fix for read_isurf is not a fix ablate");
   ablate = (FixAblate *) modify->fix[ifix];
-  if (ggroup != ablate->igroup)
-    error->all(FLERR,"Read_isurf group does not match fix ablate group");
 
   // process optional command line args
 
@@ -124,6 +120,50 @@ void ReadISurf::command(int narg, char **arg)
   int count = grid->check_uniform_group(ggroup,nxyz,corner,xyzsize);
   if (nx != nxyz[0] || ny != nxyz[1] || nz != nxyz[2])
     error->all(FLERR,"Read_isurf grid group does not match nx,ny,nz");
+
+  // the corner point lattice belongs to the FIX's grid group, which is
+  //   allowed to be larger than the group the file is read into
+  // that is what gives a growing surface somewhere to go.  Corner point
+  //   values exist only on the fix's group, so the fix's group is the room
+  //   the surface has, while the file only says where the surface starts.
+  //   Cells of the fix's group outside the read group keep the zero values
+  //   cvalues was initialized with, which is empty space a depositing film
+  //   grows into exactly as it grows into any other empty space.
+  // for ablation the two groups are normally the same, since a receding
+  //   surface never needs room it did not start with
+
+  int anxyz[3];
+  double acorner[3],axyzsize[3];
+
+  if (ggroup == ablate->igroup) {
+    anxyz[0] = nxyz[0]; anxyz[1] = nxyz[1]; anxyz[2] = nxyz[2];
+    memcpy(acorner,corner,3*sizeof(double));
+    memcpy(axyzsize,xyzsize,3*sizeof(double));
+
+  } else {
+
+    // the read group must lie inside the fix's group, else the file would be
+    //   writing corner points the fix does not own
+
+    int gbit = grid->bitmask[ggroup];
+    int abit = grid->bitmask[ablate->igroup];
+    Grid::ChildInfo *cinfo = grid->cinfo;
+    int outside = 0;
+    for (int icell = 0; icell < grid->nlocal; icell++) {
+      if (grid->cells[icell].nsplit <= 0) continue;
+      if ((cinfo[icell].mask & gbit) && !(cinfo[icell].mask & abit)) outside++;
+    }
+    int alloutside;
+    MPI_Allreduce(&outside,&alloutside,1,MPI_INT,MPI_SUM,world);
+    if (alloutside)
+      error->all(FLERR,"Read_isurf group is not contained in the fix ablate "
+                 "group");
+
+    // check_uniform_group also enforces one refinement level and a
+    //   contiguous brick, so containment makes the two lattices align
+
+    grid->check_uniform_group(ablate->igroup,anxyz,acorner,axyzsize);
+  }
 
   // read grid corner point values
   // create and destroy dictionary of my grid cells in group
@@ -158,6 +198,9 @@ void ReadISurf::command(int narg, char **arg)
 
   if (typefile) {
     memory->create(tvalues,grid->nlocal,"readisurf:tvalues");
+    // cells of the fix's group outside the read group get no type from the
+    //   file, so give them the same untyped value as cells outside it
+    for (int i = 0; i < grid->nlocal; i++) tvalues[i] = 0;
     read_types_serial(typefile);
   }
 
@@ -174,8 +217,9 @@ void ReadISurf::command(int narg, char **arg)
   char *sgroupID = NULL;
   if (sgrouparg) sgroupID = arg[sgrouparg];
 
-  ablate->store_corners(nx,ny,nz,corner,xyzsize,
-                        cvalues,NULL,tvalues,thresh,sgroupID,pushflag);
+  ablate->store_corners(anxyz[0],anxyz[1],anxyz[2],acorner,axyzsize,
+                        cvalues,NULL,tvalues,thresh,sgroupID,pushflag,
+                        smoothband);
 
   if (ablate->nevery == 0) modify->delete_fix(ablateID);
 
@@ -374,6 +418,13 @@ void ReadISurf::assign_corners(int n, bigint offset, uint8_t *ibuf, double *dbuf
   int pix,piy,piz;
   bigint pointindex,cellindex;
 
+  // axisflag = 1 if the piy = 0 face of the grid block is the symmetry axis
+  // create_box requires boxlo[1] = 0.0 for an axisymmetric domain, so the
+  // axis is the y = 0 plane.  A grid block that starts above the axis is
+  // still subject to the strict zero-boundary requirement.
+
+  int axisflag = domain->axisymmetric && corner[1] == domain->boxlo[1];
+
   for (int i = 0; i < n; i++) {
     pointindex = offset + i;
     pix = pointindex % (nx+1);
@@ -381,11 +432,17 @@ void ReadISurf::assign_corners(int n, bigint offset, uint8_t *ibuf, double *dbuf
     piz = pointindex / ((nx+1)*(ny+1));
 
     // check that a boundary value is 0
+    // exception: if the grid block starts on the symmetry axis of an
+    //   axisymmetric domain (y = 0), material is allowed to touch the
+    //   piy = 0 boundary.  A body of revolution legitimately closes on the
+    //   axis there, and the resulting surface end points lie on the box
+    //   boundary, which the watertight check already allows.
 
     zeroflag = 0;
     if ((precision == INT && ibuf[i]) ||
         (precision == DOUBLE && dbuf[i] != 0.0)) {
-      if (pix == 0 || piy == 0) zeroflag = 1;
+      if (pix == 0) zeroflag = 1;
+      if (piy == 0 && !axisflag) zeroflag = 1;
       if (pix == nx || piy == ny) zeroflag = 1;
       if (dim == 3 && (piz == 0 || piz == nz)) zeroflag = 1;
       if (zeroflag) error->all(FLERR,"Grid boundary value != 0");
@@ -830,6 +887,7 @@ void ReadISurf::process_args(int narg, char **arg)
   sgrouparg = 0;
   typefile = NULL;
   pushflag = 1;
+  smoothband = 0.0;
   precision = INT;
   readflag = SERIAL;
 
@@ -848,6 +906,16 @@ void ReadISurf::process_args(int narg, char **arg)
       if (strcmp(arg[iarg+1],"yes") == 0) pushflag = 1;
       else if (strcmp(arg[iarg+1],"no") == 0) pushflag = 0;
       else error->all(FLERR,"Invalid read_isurf command");
+      iarg += 2;
+    } else if (strcmp(arg[iarg],"smooth") == 0)  {
+
+      // replace a binary 0/255 corner point field with a graded one, which
+      //   is what a deposition rate in length/time needs; see fix ablate
+
+      if (iarg+2 > narg) error->all(FLERR,"Invalid read_isurf command");
+      smoothband = atof(arg[iarg+1]);
+      if (smoothband < 0.0)
+        error->all(FLERR,"Read_isurf smooth band cannot be negative");
       iarg += 2;
     } else if (strcmp(arg[iarg],"precision") == 0)  {
       if (iarg+2 > narg) error->all(FLERR,"Invalid read_isurf command");

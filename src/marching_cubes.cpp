@@ -51,6 +51,18 @@ MarchingCubes::MarchingCubes(SPARTA *sparta, int ggroup_caller,
 
   ggroup = ggroup_caller;
   thresh = thresh_caller;
+
+  nfacetri = NULL;
+  facetris = NULL;
+  maxfacecell = 0;
+}
+
+/* ---------------------------------------------------------------------- */
+
+MarchingCubes::~MarchingCubes()
+{
+  memory->destroy(nfacetri);
+  memory->destroy(facetris);
 }
 
 /* ----------------------------------------------------------------------
@@ -89,8 +101,75 @@ void MarchingCubes::invoke(double **cvalues, double ***mvalues, int *svalues, in
   for (int icell = 0; icell < nglocal; icell++) {
     if (!(cinfo[icell].mask & groupbit)) continue;
     if (cells[icell].nsplit <= 0) continue;
-    lo = cells[icell].lo;
-    hi = cells[icell].hi;
+
+    // per-cell geometry, shared with the deposition surface refresh
+
+    int mcf[3];
+    if (cvalues) nsurf = cell_surfs(cvalues[icell],NULL,
+                                    cells[icell].lo,cells[icell].hi,NULL,mcf);
+    else nsurf = cell_surfs(NULL,mvalues[icell],
+                            cells[icell].lo,cells[icell].hi,NULL,mcf);
+    icase = mcf[0];
+
+    // store 4 MC labels for FixAblate caller
+
+    mcflags[icell][0] = icase;
+    mcflags[icell][1] = config;
+    mcflags[icell][2] = subconfig;
+    mcflags[icell][3] = nsurf;
+
+    // populate Grid and Surf data structs
+    // points will be duplicated, not unique
+    // surf ID = cell ID for all surfs in cell
+    // check if uint cell ID overflows int surf ID
+
+    if (nsurf) {
+      if (cells[icell].id > maxsurfID)
+        error->one(FLERR,"Grid cell ID overflows implicit surf ID");
+      surfID = cells[icell].id;
+    }
+
+    ptr = csurfs->get(nsurf);
+
+    ipt = 0;
+    for (i = 0; i < nsurf; i++) {
+      if (svalues) surf->add_tri(surfID,svalues[icell],
+                                 pt[ipt+2],pt[ipt+1],pt[ipt]);
+      else surf->add_tri(surfID,1,pt[ipt+2],pt[ipt+1],pt[ipt]);
+      ipt += 3;
+      isurf = surf->nlocal - 1;
+      ptr[i] = isurf;
+    }
+
+    cells[icell].nsurf = nsurf;
+    if (nsurf) {
+      cells[icell].csurfs = ptr;
+      cinfo[icell].type = OVERLAP;
+    }
+  }
+}
+
+/* ----------------------------------------------------------------------
+   triangles of the isosurface within a single grid cell
+   factored out of invoke() so that the same case logic serves both the
+     isosurface rebuild and the per-step collision-geometry refresh fix ablate
+     does for a growing surface.  One copy means the two cannot disagree,
+     which would tear the surface apart between cells.
+   cvals = 8 corner values, or mvals = multivalues; the other is NULL
+   ptout, if given, receives the corner points, 3 per triangle
+   flags, if given, receives icase, config, subconfig
+   returns # of triangles
+------------------------------------------------------------------------- */
+
+int MarchingCubes::cell_surfs(double *cvals, double **mvals,
+                              double *clo, double *chi,
+                              double ptout[][3], int *flags)
+{
+  int i,j,nsurf,icase,which;
+
+  lo = clo;
+  hi = chi;
+  nsurf = 0;
 
     // nsurf = # of tris in cell
     // cvalues[8] = 8 corner point values, each is 0 to 255 inclusive
@@ -105,15 +184,15 @@ void MarchingCubes::invoke(double **cvalues, double ***mvalues, int *svalues, in
     // top-lower-left, top-lower-right, top-upper-left, top-upper-right
     // Vzyx encodes this as 0/1 in each dim
 
-    if (cvalues) {
-      v000 = cvalues[icell][0];
-      v001 = cvalues[icell][1];
-      v010 = cvalues[icell][2];
-      v011 = cvalues[icell][3];
-      v100 = cvalues[icell][4];
-      v101 = cvalues[icell][5];
-      v110 = cvalues[icell][6];
-      v111 = cvalues[icell][7];
+    if (cvals) {
+      v000 = cvals[0];
+      v001 = cvals[1];
+      v010 = cvals[2];
+      v011 = cvals[3];
+      v100 = cvals[4];
+      v101 = cvals[5];
+      v110 = cvals[6];
+      v111 = cvals[7];
 
       i0  = interpolate(v000,v001,lo[0],hi[0]);
       i1  = interpolate(v001,v011,lo[1],hi[1]);
@@ -132,7 +211,7 @@ void MarchingCubes::invoke(double **cvalues, double ***mvalues, int *svalues, in
     } else {
       for (i = 0; i < 8; i++)
         for (j = 0; j < 6; j++)
-          inval[i][j] = mvalues[icell][i][j];
+          inval[i][j] = mvals[i][j];
 
       // use averages for now
 
@@ -472,42 +551,21 @@ void MarchingCubes::invoke(double **cvalues, double ***mvalues, int *svalues, in
       break;
     };
 
-    // store 4 MC labels for FixAblate caller
 
-    mcflags[icell][0] = icase;
-    mcflags[icell][1] = config;
-    mcflags[icell][2] = subconfig;
-    mcflags[icell][3] = nsurf;
-
-    // populate Grid and Surf data structs
-    // points will be duplicated, not unique
-    // surf ID = cell ID for all surfs in cell
-    // check if uint cell ID overflows int surf ID
-
-    if (nsurf) {
-      if (cells[icell].id > maxsurfID)
-        error->one(FLERR,"Grid cell ID overflows implicit surf ID");
-      surfID = cells[icell].id;
-    }
-
-    ptr = csurfs->get(nsurf);
-
-    ipt = 0;
-    for (i = 0; i < nsurf; i++) {
-      if (svalues) surf->add_tri(surfID,svalues[icell],
-                                 pt[ipt+2],pt[ipt+1],pt[ipt]);
-      else surf->add_tri(surfID,1,pt[ipt+2],pt[ipt+1],pt[ipt]);
-      ipt += 3;
-      isurf = surf->nlocal - 1;
-      ptr[i] = isurf;
-    }
-
-    cells[icell].nsurf = nsurf;
-    if (nsurf) {
-      cells[icell].csurfs = ptr;
-      cinfo[icell].type = OVERLAP;
-    }
+  if (flags) {
+    flags[0] = icase;
+    flags[1] = config;
+    flags[2] = subconfig;
   }
+
+  if (ptout)
+    for (i = 0; i < 3*nsurf; i++) {
+      ptout[i][0] = pt[i][0];
+      ptout[i][1] = pt[i][1];
+      ptout[i][2] = pt[i][2];
+    }
+
+  return nsurf;
 }
 
 /* ----------------------------------------------------------------------
@@ -579,10 +637,18 @@ void MarchingCubes::cleanup()
 
   // count # of tris on each face of every cell I own
 
-  int **nfacetri;
-  int ***facetris;
-  memory->create(nfacetri,nglocal,6,"readisurf:nfacetri");
-  memory->create(facetris,nglocal,6,2,"readisurf:facetris");
+  // scratch for the per face triangle lists
+  // grown and kept rather than created and destroyed on every call: ablation
+  //   and deposition re-run this every time the isosurface is rebuilt, and
+  //   for N grid cells it is 18N ints allocated, zeroed and freed each time
+
+  if (nglocal > maxfacecell) {
+    maxfacecell = nglocal;
+    memory->destroy(nfacetri);
+    memory->destroy(facetris);
+    memory->create(nfacetri,maxfacecell,6,"marchingcubes:nfacetri");
+    memory->create(facetris,maxfacecell,6,2,"marchingcubes:facetris");
+  }
 
   for (icell = 0; icell < nglocal; icell++) {
     nfacetri[icell][0] = nfacetri[icell][1] = nfacetri[icell][2] =
@@ -900,8 +966,6 @@ void MarchingCubes::cleanup()
   }
 
   memory->sfree(bufrecv);
-  memory->destroy(nfacetri);
-  memory->destroy(facetris);
 
   // compress Surf::tris list to remove deleted tris
   // must sort dellist, so as to compress tris in DESCENDING index order

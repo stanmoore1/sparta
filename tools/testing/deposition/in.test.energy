@@ -1,0 +1,71 @@
+# Deposition energy conservation test
+#
+# The companion to in.test.momentum.  A growing surface in a fully periodic
+# box, so no domain boundary can exchange energy with the gas, and gas-gas
+# collisions conserve it internally.  The surface is then the only place gas
+# energy can go, and
+#
+#   [ E_gas(end) - E_gas(0) ] + E_surf + E_buried + E_reflect  ==  0
+#
+# must close, where the three surface terms are the energy handed to the
+# growing surface by ordinary collisions, by the particles it buried, and by
+# the reflections that push enclosed particles back into the flow.
+#
+# E_gas is translational plus rotational plus vibrational, so the species is
+# N2 rather than a monatomic one and VSS collisions are switched on: the gas
+# then moves energy between those three reservoirs on its own, and the test
+# only closes if every mode is accounted for where it meets the surface.
+#
+# The wall is diffuse at a temperature well away from the gas temperature, so
+# each collision transfers a substantial amount rather than nearly none.
+
+variable            RATE index 0.2
+variable            NEVERY index 1
+
+seed                12345
+dimension           2
+global              gridcut 0.0 comm/sort yes
+
+boundary            p p p
+
+create_box          0 150 0 150 -0.5 0.5
+create_grid         150 150 1
+balance_grid        rcb cell
+
+global              nrho 1.0 fnum 0.01
+
+species             air.species N2
+mixture             air N2
+collide             vss air air.vss
+
+region              inner block 25.5 124.5 25.5 124.5 INF INF
+group               inner grid region inner one
+
+fix                 ablate ablate inner ${NEVERY} ${RATE} uniform 1 mode deposit
+
+global              surfs implicit
+read_isurf          inner 100 100 1 ../../../examples/ablation/binary.101x101 180.5 ablate
+
+surf_collide        1 diffuse 1000.0 1.0
+surf_modify         all collide 1
+
+timestep            0.0001
+
+create_particles    air n 200000
+
+# one keyword per compute: "compute reduce" only assigns a flavor to some of
+# its keyword inputs, so mixing ke/erot/evib in one command is rejected
+
+compute             EKE reduce sum ke
+compute             EROT reduce sum erot
+compute             EVIB reduce sum evib
+
+fix                 check grid/check 1 error
+
+stats               50
+stats_style         step np c_EKE c_EROT c_EVIB &
+                    f_ablate[18] f_ablate[19] &
+                    f_ablate[15] f_ablate[16] f_ablate[17] &
+                    f_ablate[3]
+
+run                 200

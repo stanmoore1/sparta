@@ -24,6 +24,7 @@ class MarchingSquares : protected Pointers {
   MarchingSquares(class SPARTA *, int, double);
   ~MarchingSquares() {}
   void invoke(double **, double ***, int *);
+  int cell_surfs(double *, double **, double *, double *, double [4][3]);
   double mindist;
 
  private:
