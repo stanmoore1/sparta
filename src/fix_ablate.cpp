@@ -1035,8 +1035,11 @@ void FixAblate::create_surfs(int outflag)
   //   directly instead, and fall back to the sweep when the field cannot
   //   answer (a fix group smaller than the whole grid, or multi-value
   //   corner points)
+  // only deposition takes the direct path: it is what pays the per-interval
+  //   rebuild cost the path was written for, while ablation runs keep the
+  //   fill their reference logs were made with
 
-  if (!set_inout_implicit()) grid->set_inout();
+  if (!depositflag || !set_inout_implicit()) grid->set_inout();
 
   // type_check() is validation of the marking above, not part of it, and it
   //   costs two MPI_Allreduce plus a sweep of the grid.  it runs on the same
@@ -1209,6 +1212,7 @@ void FixAblate::create_surfs(int outflag)
      - a cell with straddling corner points that marching squares/cubes did
        not make OVERLAP would mean the two disagree, which is a bug rather
        than a case to paper over, but falling back is the safe response
+   only called in deposit mode: ablation runs always use the fill
 ------------------------------------------------------------------------- */
 
 int FixAblate::set_inout_implicit()
