@@ -27,7 +27,7 @@ source = computeID or fixID or v_name or flux or uniform or random :l
 
 maxrandom = maximum per grid cell decrement as an integer (only specified if source = random or uniform) :l
 zero or more keyword/value pairs may be appended :l
-keyword = {mode} or {units} or {response} or {density} or {sticking} or {mindist} or {check} or {multiple} :l
+keyword = {mode} or {units} or {response} or {density} or {sticking} or {mindist} or {check} or {multiple} or {minmax} :l
   {mode} value = ablate or deposit or both
     ablate = source decrements corner point values so the surface recedes
     deposit = source increments corner point values so the surface grows
@@ -46,7 +46,9 @@ keyword = {mode} or {units} or {response} or {density} or {sticking} or {mindist
     fraction = minimum fractional distance along cell edge for triangle/line vertices (value > 0 and < 0.5)
   {check} value = N
     N = validate the rebuilt surface every Nth rebuild (0 = never, 1 = every rebuild)
-  {multiple} value = yes or no :pre
+  {multiple} value = yes or no
+  {minmax} value = yes or no
+    yes = round every stored corner point value to 0 or 255 at setup :pre
 :ule
 
 [Examples:]
@@ -227,12 +229,11 @@ For any physically realistic deposition rate there are no burials at all.
 They begin to appear only once the front advances at a few percent of the
 thermal speed, which is many orders of magnitude faster than film growth
 in a real system.  In practice they serve mainly to prove that nothing is
-ever lost silently.  This is physical, and
-it is rare unless the deposition rate is large.  A buried particle is
-removed from the gas, and its mass, momentum and energy are accumulated
-and can be output (see below), so no particle is ever discarded without
-being accounted for.  In a closed domain the drop in particle count must
-equal the buried count exactly.
+ever lost silently.  A buried particle is removed from the gas, and its
+mass, momentum and energy are accumulated and can be output (see below),
+so no particle is ever discarded without being accounted for.  In a
+closed domain the drop in particle count must equal the buried count
+exactly.
 
 A rate in length/time needs to know which way the surface faces, and that
 comes from the gradient of the corner point values.  A field made only of
@@ -279,8 +280,8 @@ give "read_isurf"_read_isurf.html a graded field.  The simplest way is its
 {smooth} keyword, which rewrites a binary field as a distance field
 without moving the body; {smooth} 0.5 is a good choice.  Failing that,
 supply a file that already carries intermediate values and read it with
-{push} = no and without {minmax} = yes, both of which drive the field to 0
-and 255.
+"read_isurf"_read_isurf.html's {push} = no, without this fix's {minmax}
+= yes; either of those drives the field to 0 and 255.
 A rate in {units} = corner is a budget of corner point value rather than a
 distance, and is unaffected.
 
@@ -319,12 +320,12 @@ apply, so a particle merely passing near a thin feature is not affected.
 
 In Kokkos runs the refresh is not applied, because the Kokkos particle
 move is a separate implementation; enclosed particles are then handled
-when the surface is regenerated, which is correct but resolves the growth
-only once per {Nevery} steps.  A warning is printed to say so.  In every
-case a smaller {Nevery} gives a
-more faithful answer, and an error is generated if the isosurface would
-move more than half a grid cell in a single regeneration; reduce {Nevery}
-or the deposition rate if this occurs.
+when the surface is regenerated, which is correct but resolves the
+growth only once per {Nevery} steps.  A warning is printed to say so.
+In every case a smaller {Nevery} gives a more faithful answer, and an
+error is generated if the isosurface would move more than half a grid
+cell in a single regeneration; reduce {Nevery} or the deposition rate
+if this occurs.
 
 Corner point values exist only on the group of grid cells the fix is
 defined on, so that group is the room the surface has: a growing surface
@@ -616,6 +617,15 @@ a crash somewhere further downstream.
 
 :line
 
+The {minmax} keyword is applied once, when the corner point values are
+stored: every value below the threshold becomes 0 and every other value
+becomes 255.  It reduces a graded field to the binary form a segmented
+tomographic image has.  Do not combine it with {units} = distance, which
+needs the graded field to know which way the surface faces, as described
+above.
+
+:line
+
 :c,image(JPG/multipoint_decrement_small.png)
 
 The {multiple} option allows a multipoint decrement "(Hong24)"_#Hong24 to be used. 
@@ -740,7 +750,8 @@ The default for the {mode} keyword = ablate.  The default for the
 {units} keyword = corner.  The default for the {response} keyword =
 normal.  The default for the {mindist} keyword = 0.0, i.e. the epsilon
 method is used.  The default for the {check} keyword = 1.  The default
-for the {multiple} keyword = no.
+for the {multiple} keyword = no.  The default for the {minmax} keyword
+= no.
 
 :line
 

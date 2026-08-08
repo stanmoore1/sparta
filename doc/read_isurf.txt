@@ -24,6 +24,8 @@ keyword = {group} or {type} or {push} or {smooth} or {precision} or {read} :l
   type arg = tfile
     tfile = binary file with per grid cell surface type values
   push arg = yes or no = whether to push corner point values to 0/255
+  smooth arg = band
+    band = half-width of the smoothing band in grid cells (0.0 = no smoothing)
   precision arg = int or double
   read arg = serial or parallel :pre
 :ule
@@ -388,4 +390,4 @@ ablate"_fix_ablate.html
 [Default:]
 
 The optional keyword defaults are group = all, type = no, push = yes,
-precision int, and read serial.
+smooth = 0.0, precision int, and read serial.
