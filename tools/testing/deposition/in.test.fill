@@ -27,11 +27,15 @@ variable            RATE index 1.0
 variable            NEVERY index 1
 variable            SEED index 12345
 
+# the x boundary, overridden to p by the test that asserts a film may
+# grow to a reflecting box face but not to a periodic one
+variable            BOUNDX index r
+
 seed                ${SEED}
 dimension           2
 global              gridcut 0.0 comm/sort yes
 
-boundary            r r p
+boundary            ${BOUNDX} r p
 
 create_box          0 100 0 100 -0.5 0.5
 create_grid         100 100 1

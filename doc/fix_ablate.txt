@@ -345,8 +345,14 @@ Defining the fix on {all} lets the film spread through the whole grid:
 fix                 fablate ablate all 1 0.2 uniform 1 mode deposit
 read_isurf          inner 100 100 1 binary.101x101 180.5 fablate :pre
 
-An outer face of the group that lies on the simulation box is not limited
-at all, since a surface is allowed to end on the box.
+An outer face of the group that lies on a non-periodic simulation box
+face is not limited at all, since a surface is allowed to end on the box.
+A periodic box face is limited: corner point values are never carried
+across a periodic boundary, so a film reaching one would terminate there
+while its periodic image does not exist, and a particle wrapping around
+the boundary would find gas where it just left material.  Growth
+reaching a periodic face generates the same error as growth reaching
+the group's edge.
 
 Value (21) of the output vector is the front speed the surface actually
 realized over the last interval, averaged over the cells that hold a

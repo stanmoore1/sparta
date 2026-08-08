@@ -549,6 +549,22 @@ def test_grow(exe):
     return ok
 
 
+def test_periodic(exe):
+    """A film may grow to a reflecting box face but not to a periodic one.
+
+    sync() never carries corner point values across a periodic boundary, so a
+    film reaching one would terminate there while its periodic image does not
+    exist: a particle wrapping around the boundary would find gas where it
+    just left material.  in.test.fill grows its film out to the box faces,
+    which its reflecting boundaries legally absorb; the same input with the x
+    boundary periodic must stop with the group-edge error instead.
+    """
+    rc, out = run(exe, "in.test.fill", {"BOUNDX": "p"})
+    saw = "grown the surface out to the edge" in out
+    return check("film reaching a periodic box face : refused", rc != 0 and saw,
+                 "rc=%d" % rc if not saw else "")
+
+
 def test_momentum(exe, rate, nevery, infile="in.test.momentum", label=""):
     """In a periodic box the surface is the only place gas momentum can go."""
     name = "momentum (rate=%s nevery=%s)%s" % (rate, nevery, label)
@@ -1052,6 +1068,8 @@ def main():
     ok &= test_distance_units(exe)
     # a growing film must be able to leave the block it was read into
     ok &= test_grow(exe)
+    # a film may not rest on or grow to a periodic box face
+    ok &= test_periodic(exe)
     # with the corner point grid on the whole box the film can grow until it
     # runs out of box, which is legal and has to stay accounted for
     ok &= test_fill(exe, 1.0)

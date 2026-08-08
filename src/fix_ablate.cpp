@@ -52,6 +52,7 @@ enum{CORNER,DISTANCE};    // source units: corner point value or length/time
 enum{RNORMAL,RVOLUME};    // how a speed becomes a corner point increment
 enum{UNKNOWN,OUTSIDE,INSIDE,OVERLAP};   // cell types, same as Grid
 enum{KEEP,DISCARD,MIGRATE};   // fate of a particle the new isosurface encloses
+enum{PERIODIC,OUTFLOW,REFLECT,SURFACE,AXISYM};   // same as Domain
 
 #define MINSPREAD 1.0     // min corner value variation across a cell, in the
                           //   0-255 scale, for the isosurface to be localized
@@ -2369,6 +2370,10 @@ void FixAblate::front_speed()
      but reports it as unmatched points, which gives no hint of the cause.
    an outer face of the group that lies on the simulation box is exempt, since
      a surface is allowed to end on the box and the watertight check says so
+   a PERIODIC box face is not exempt: sync() never carries corner point
+     values across a periodic boundary, so the film would terminate at the
+     face while its periodic image does not exist, and a particle wrapping
+     around the boundary would find gas where it just left material
 ------------------------------------------------------------------------- */
 
 void FixAblate::check_group_boundary()
@@ -2381,8 +2386,10 @@ void FixAblate::check_group_boundary()
   int ncell[3] = {nx,ny,nz};
   int checklo[3],checkhi[3];
   for (int d = 0; d < 3; d++) {
-    checklo[d] = (cornerlo[d] != boxlo[d]);
-    checkhi[d] = (cornerlo[d] + ncell[d]*xyzsize[d] != boxhi[d]);
+    checklo[d] = (cornerlo[d] != boxlo[d]) ||
+      (domain->bflag[2*d] == PERIODIC);
+    checkhi[d] = (cornerlo[d] + ncell[d]*xyzsize[d] != boxhi[d]) ||
+      (domain->bflag[2*d+1] == PERIODIC);
   }
 
   // a corner point index has bit d set when the corner is on the cell's
@@ -2414,8 +2421,11 @@ void FixAblate::check_group_boundary()
                "values for it to continue into.  The group is fixed when the "
                "implicit surface is created, by read_isurf or create_isurf, "
                "so use one that covers more of the domain, or deposit less "
-               "material.  A group reaching the simulation box is not "
-               "limited this way, since a surface may end on the box");
+               "material.  A group reaching a non-periodic simulation box "
+               "face is not limited this way, since a surface may end on "
+               "the box.  A periodic face is: corner point values are never "
+               "carried across a periodic boundary, so a film cannot "
+               "continue there");
 }
 
 /* ----------------------------------------------------------------------
