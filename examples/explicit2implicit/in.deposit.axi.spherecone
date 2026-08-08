@@ -70,6 +70,7 @@ fix                     gcheck grid/check 1 error
 timestep		1.e-7
 
 stats			50
-stats_style		step cpu np nscoll nscheck f_fablate f_fablate[3] f_fablate[8]
+stats_style		step cpu np nscoll nscheck f_fablate f_fablate[3] &
+                        f_fablate[8] f_fablate[22]
 
 run			200

@@ -1,0 +1,157 @@
+SPARTA (24 Sep 2025)
+Running on 1 MPI task(s)
+################################################################################
+# 2d material deposition onto porous media (inverse of ablation)
+#
+# Same geometry as in.ablation.2d, but "fix ablate" uses "mode deposit" so the
+# implicit surface grows into the gas instead of receding.
+#
+# A growing surface advances into the region the gas occupies.  Particles the
+# advancing front reaches are given a gas-surface interaction at the point and
+# time where the front and the particle trajectory cross, and are then advected
+# for the rest of the timestep -- they are not deleted.  The momentum they
+# exchange with the surface is tallied like any other surface collision.
+#
+# The extra output columns are the deposition ledger:
+#   f_ablate[3]  = particles buried by the front, i.e. incorporated in the film
+#   f_ablate[8]  = particles pushed back into the flow after a regeneration
+#   f_ablate[22] = corner point value change actually applied at the last
+#                  deposition event; the f_ablate scalar moves by exactly this
+# f_ablate[8] counts particles that would be deleted by a delete-on-engulf
+# scheme, so it is a direct measure of what the advancing-front treatment saves.
+################################################################################
+
+seed	    	    12345
+dimension   	    2
+global              gridcut 0.0 comm/sort yes
+
+boundary	    o r p
+
+create_box  	    0 150 0 150 -0.5 0.5
+Created orthogonal box = (0 0 -0.5) to (150 150 0.5)
+create_grid 	    150 150 1
+Created 22500 child grid cells
+  CPU time = 0.00580681 secs
+  create/ghost percent = 46.889 53.111
+
+balance_grid        rcb cell
+Balance grid migrated 0 cells
+  CPU time = 0.00326494 secs
+  reassign/sort/migrate/ghost percent = 44.5451 3.83051 10.1654 41.459
+
+global		    nrho 1.0 fnum 0.01
+
+species		    air.species N O
+mixture		    air N O vstream 100.0 0 0
+
+region              inner block 25.5 124.5 25.5 124.5 INF INF
+group               inner grid region inner one
+0 initial grid cell count in group inner
+10000 final grid cell count in group inner
+
+compute             COMP isurf/grid all all n
+fix                 FIX ave/grid all 10 10 100 c_COMP[*]
+fix                 ablate ablate inner 100 0.01 f_FIX mode deposit
+
+global              surfs implicit
+read_isurf          inner 100 100 1 binary.101x101 180.5 ablate
+  10201 corner points
+  28744 11256 pushed corner pt values
+  25.7078 124.292 xlo xhi
+  25.7078 124.292 ylo yhi
+  0 0 zlo zhi
+  0.413172 min line length
+  7213 = cells with surfs
+  8006 = total surfs in all grid cells
+  2 = max surfs in one grid cell
+  0.413172 = min surf-size/cell-size ratio
+  7213 0 = cells overlapping surfs, overlap cells with unmarked corner pts
+  15211 76 7213 = cells outside/inside/overlapping surfs
+  7213 = surf cells with 1,2,etc splits
+  21209.8 21209.8 = cell-wise and global flow volume
+  CPU time = 0.0134579 secs
+  read/create-surfs percent = 9.36838 90.6316
+
+surf_collide	    1 diffuse 300.0 1.0
+surf_modify         all collide 1
+
+collide             vss air air.vss
+
+fix		    in emit/face air xlo twopass
+
+fix                 check grid/check 1 error
+
+timestep 	    0.0001
+
+fix                 bal balance 100 1.001 rcb part
+
+stats		    100
+stats_style	    step cpu np nattempt ncoll nscoll nscheck                     f_bal f_bal[2] f_ablate f_ablate[3] f_ablate[8]                     f_ablate[22]
+
+run                 500
+Memory usage per proc in Mbytes:
+  particles (ave,min,max) = 0 0 0
+  grid      (ave,min,max) = 4.38879 4.38879 4.38879
+  surf      (ave,min,max) = 0.794052 0.794052 0.794052
+  total     (ave,min,max) = 8.01526 8.01526 8.01526
+Step CPU Np Natt Ncoll Nscoll Nscheck f_bal f_bal[2] f_ablate f_ablate[3] f_ablate[8] f_ablate[22] 
+       0            0        0        0        0        0        0            1            1       717570            0            0            0 
+     100  0.092728927    31623        0        0        0        0            1            1       717570            0            0            0 
+     200   0.26140204    63223        0        0        1       30            1            1     717570.1            0            0          0.1 
+     300   0.52342548    94820        0        0       14      944            1            1     717577.3            0            1          7.2 
+     400   0.88682542   126445        0        0       72     3949            1            1       717622            0            2         44.7 
+     500    1.3675535   158002        0        0      128     8251            1            1     717721.1            0            4         99.1 
+Loop time of 1.36779 on 1 procs for 500 steps with 158002 particles
+Performance: 365.552 timesteps/s, 57.758 Mparticle-step/s
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Move    | 0.44884    | 0.44884    | 0.44884    |   0.0 | 32.82
+Coll    | 0.21004    | 0.21004    | 0.21004    |   0.0 | 15.36
+Sort    | 0.17579    | 0.17579    | 0.17579    |   0.0 | 12.85
+Comm    | 0.00053616 | 0.00053616 | 0.00053616 |   0.0 |  0.04
+Modify  | 0.53035    | 0.53035    | 0.53035    |   0.0 | 38.77
+Output  | 0.0012321  | 0.0012321  | 0.0012321  |   0.0 |  0.09
+Other   |            | 0.001004   |            |       |  0.07
+
+Particle moves    = 39590487 (39.6M)
+Cells touched     = 42787691 (42.8M)
+Particle comms    = 0 (0K)
+Boundary collides = 8148 (8.15K)
+Boundary exits    = 15 (0.015K)
+SurfColl checks   = 869891 (0.87M)
+SurfColl occurs   = 14172 (14.2K)
+Surf reactions    = 0 (0K)
+Collide attempts  = 0 (0K)
+Collide occurs    = 0 (0K)
+Reactions         = 0 (0K)
+Particles stuck   = 0
+Axisymm bad moves = 0
+
+Particle-moves/CPUsec/proc: 2.89448e+07
+Particle-moves/step: 79181
+Cell-touches/particle/step: 1.08076
+Particle comm iterations/step: 1
+Particle fraction communicated: 0
+Particle fraction colliding with boundary: 0.000205807
+Particle fraction exiting boundary: 3.78879e-07
+Surface-checks/particle/step: 0.0219722
+Surface-collisions/particle/step: 0.000357965
+Surf-reactions/particle/step: 0
+Collision-attempts/particle/step: 0
+Collisions/particle/step: 0
+Reactions/particle/step: 0
+
+Particles: 158002 ave 158002 max 158002 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Cells:      22500 ave 22500 max 22500 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+GhostCell: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+EmptyCell: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Surfs:    8006 ave 8006 max 8006 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+GhostSurf: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0

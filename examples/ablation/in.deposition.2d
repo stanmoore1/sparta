@@ -10,9 +10,11 @@
 # for the rest of the timestep -- they are not deleted.  The momentum they
 # exchange with the surface is tallied like any other surface collision.
 #
-# The two extra output columns are the deposition ledger:
-#   f_ablate[3] = particles buried by the front, i.e. incorporated in the film
-#   f_ablate[8] = particles pushed back into the flow after a regeneration
+# The extra output columns are the deposition ledger:
+#   f_ablate[3]  = particles buried by the front, i.e. incorporated in the film
+#   f_ablate[8]  = particles pushed back into the flow after a regeneration
+#   f_ablate[22] = corner point value change actually applied at the last
+#                  deposition event; the f_ablate scalar moves by exactly this
 # f_ablate[8] counts particles that would be deleted by a delete-on-engulf
 # scheme, so it is a direct measure of what the advancing-front treatment saves.
 ################################################################################
@@ -58,6 +60,7 @@ fix                 bal balance 100 1.001 rcb part
 
 stats		    100
 stats_style	    step cpu np nattempt ncoll nscoll nscheck &
-                    f_bal f_bal[2] f_ablate f_ablate[3] f_ablate[8]
+                    f_bal f_bal[2] f_ablate f_ablate[3] f_ablate[8] &
+                    f_ablate[22]
 
 run                 500
