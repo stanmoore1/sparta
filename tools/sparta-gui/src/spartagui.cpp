@@ -30,6 +30,8 @@
 #include "paraviewdialog.h"
 #include "plotdatadialog.h"
 #include "preferences.h"
+#include "libraryacquire.h"
+#include "setupcard.h"
 #include "runhistory.h"
 #include "snippets.h"
 #include "stlimportwizard.h"
@@ -164,10 +166,27 @@ void SpartaGui::setupUi(QSettings &settings, QFont &allFont, QFont &monoFont)
     connect(welcome, &WelcomeScreen::helpRequested, this, &SpartaGui::help);
     connect(welcome, &WelcomeScreen::docsRequested, this, &SpartaGui::howto);
 
+    // The setup card sits above the central stack rather than on the welcome
+    // screen, so it is there whether the session opens on the welcome page or
+    // straight into a file -- a user who launched with a deck on the command
+    // line has exactly as much need to be told the simulator is missing.
+    setupCard = new SetupCard(this);
+    setupCard->hide();
+    connect(setupCard, &SetupCard::downloadRequested, this, &SpartaGui::downloadLibrary);
+    connect(setupCard, &SetupCard::browseRequested, this, &SpartaGui::browseForLibrary);
+    connect(setupCard, &SetupCard::helpRequested, this, &SpartaGui::howto);
+
+    auto *centralArea = new QWidget(this);
+    auto *centralBox  = new QVBoxLayout(centralArea);
+    centralBox->setContentsMargins(0, 0, 0, 0);
+    centralBox->setSpacing(0);
+    centralBox->addWidget(setupCard);
+    centralBox->addWidget(centralStack, 1);
+
     // docked panel layout (Output/Charts/Image/Slide Show/Variables) replaces
-    // setCentralWidget(): PanelManager installs the central stack as the
+    // setCentralWidget(): PanelManager installs the central area as the
     // (non-closable) central dock itself
-    panels = new PanelManager(this, centralStack);
+    panels = new PanelManager(this, centralArea);
 
     // set up menu bar and menus with their actions and shortcuts
     menubar = new QMenuBar(this);
@@ -753,6 +772,13 @@ void SpartaGui::createStatusBar()
 #if defined(SPARTA_GUI_USE_PLUGIN)
 void SpartaGui::setupPlugin(QSettings &settings)
 {
+    // A way to reach the no-library state on a machine that has one, so the
+    // setup card is testable without hiding the user's library from them.
+    if (qgetenv("SPARTA_GUI_FORCE_NO_PLUGIN") == "1") {
+        pluginPath.clear();
+        return;
+    }
+
     // first try to load from existing setting
     pluginPath = settings.value(Keys::PLUGIN_PATH, "").toString();
     if (!pluginPath.isEmpty()) {
@@ -764,192 +790,174 @@ void SpartaGui::setupPlugin(QSettings &settings)
             settings.remove(Keys::PLUGIN_PATH);
         }
     }
+    if (!pluginPath.isEmpty()) return;
 
-    // set platform specific paths, library file name, config directory, and filename patterns
-    QStringList dirlist{"."};
-    const auto libName = getSpartaLibName();
-#if defined(Q_OS_MACOS)
-    const QString pattern = QStringLiteral("SPARTA shared library (libsparta*.dylib)");
-    QStringList filter("libsparta*.dylib");
-    dirlist.append(
-        QString::fromLocal8Bit(qgetenv("DYLD_LIBRARY_PATH")).split(":", Qt::SkipEmptyParts));
-    // library may be included in an application bundle:
-    dirlist.append(QCoreApplication::applicationDirPath() + "/../Frameworks");
-    dirlist.append({"/Applications/SPARTA-GUI.app/Contents/Frameworks",
-                    "/Applications/SPARTA.app/Contents/Frameworks"});
-#elif defined(Q_OS_WIN32)
-    const QString pattern = QStringLiteral("SPARTA shared library (libsparta*.dll)");
-    QStringList filter("libsparta*.dll");
-    dirlist.append(QString::fromLocal8Bit(qgetenv("PATH")).split(";", Qt::SkipEmptyParts));
-#else
-    // for Linux and other unix-like systems
-    const QString pattern = QStringLiteral("SPARTA shared library (libsparta*.so*)");
-    QStringList filter("libsparta*.so*");
-    dirlist.append(
-        QString::fromLocal8Bit(qgetenv("LD_LIBRARY_PATH")).split(":", Qt::SkipEmptyParts));
-#endif
-
-    if (pluginPath.isEmpty()) {
-        // construct list of possible standard choices for the shared library file
-        // we prefer the current directory, then the dynamic library path, then some system folders
-        // adapt file pattern and paths to the different operating systems
-
-        // also check in the config dir location for a previously downloaded library
-        dirlist.append(QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation));
-        // check some more system paths (only relevant for Linux and Unix-like
-        // systems; they simply do not exist elsewhere)
-        dirlist.append({"/usr/lib", "/usr/lib64", "/lib/x86_64-linux-gnu", "/usr/local/lib",
-                        "/usr/local/lib64"});
-
-        // construct list of matching files
-        QFileInfoList entries;
-        for (const auto &dir : dirlist)
-            entries.append(QDir(dir).entryInfoList(filter));
-
-        // convert list of paths to list of canonical file names
-        QStringList choices;
-        for (const auto &fn : entries)
-            choices.append(fn.canonicalFilePath());
-        choices.removeDuplicates();
-        for (const auto &libpath : choices) {
-            if (sparta.loadLib(libpath)) {
-                pluginPath = libpath;
-                settings.setValue(Keys::PLUGIN_PATH, pluginPath);
-                settings.sync();
-                break;
-            }
-        }
-
-        // No suitable plugin was found automatically.  Show a dialog with three choices:
-        // 1) Download a pre-compiled shared library from the SPARTA webserver
-        //    (not offered when no compatible pre-compiled library exists, i.e. with MSVC)
-        // 2) Browse the filesystem for a suitable shared library file
-        // 3) Exit SPARTA-GUI
-        const bool candownload = !getSpartaDownloadUrl().isEmpty();
-        while (pluginPath.isEmpty()) {
-            // remove key for path to the plugin so we won't get stuck in a loop reading a bad file
-            settings.remove(Keys::PLUGIN_PATH);
-
-            QMessageBox mb(this);
-            mb.setWindowTitle("SPARTA-GUI - No SPARTA Shared Library");
-            mb.setWindowIcon(QIcon(Cfg::MAIN_ICON));
-            mb.setIconPixmap(QPixmap(":/icons/sparta-plugin.png").scaled(96, 96));
-            mb.setText("No suitable SPARTA shared library found.");
-            QString infotext =
-                "<p align=\"justify\">Either the shared library path has been reset, the "
-                "configured or default library file was not found, or the selected library failed "
-                "to load.</p><p align=\"justify\">You may now either ";
-            if (candownload)
-                infotext += "download a pre-compiled SPARTA shared library file for your platform "
-                            "from the SPARTA webserver, browse the ";
-            else
-                infotext += "browse the ";
-            infotext += "filesystem for a suitable SPARTA library file, or exit SPARTA-GUI.</p>";
-            mb.setInformativeText(infotext);
-
-            QPushButton *downloadBtn = nullptr;
-            if (candownload) {
-                downloadBtn = mb.addButton("Download Library...", QMessageBox::ApplyRole);
-                downloadBtn->setIcon(QIcon(":/icons/download-file.svg"));
-            }
-            auto *browseBtn = mb.addButton("Browse Filesystem...", QMessageBox::AcceptRole);
-            browseBtn->setIcon(QIcon(":/icons/document-open.svg"));
-            auto *exitBtn = mb.addButton("Exit", QMessageBox::NoRole);
-            exitBtn->setIcon(QIcon(":/icons/application-exit.svg"));
-
-            mb.setDefaultButton(candownload ? downloadBtn : browseBtn);
-            mb.setEscapeButton(exitBtn);
-            mb.exec();
-
-            if (mb.clickedButton() == exitBtn) {
-                // we cannot use QApplication::exit() here since we are still in the constructor
-                exit(1);
-
-            } else if (mb.clickedButton() == browseBtn) {
-                QString pluginfile = QFileDialog::getOpenFileName(
-                    this, "Select SPARTA shared library to use", ".", pattern, nullptr,
-                    QFileDialog::DontResolveSymlinks | QFileDialog::ReadOnly);
-                // user cancelled the file dialog -> loop back to the choices
-                if (pluginfile.isEmpty()) continue;
-
-                // The name check is a heuristic, and it used to reject silently
-                // -- pick the wrong file and the same three-button dialog just
-                // came back with no hint why. Explain the rule and let the user
-                // overrule it: loadLib() below is the real test.
-                if (!pluginfile.contains("libsparta", Qt::CaseInsensitive)) {
-                    if (QMessageBox::question(
-                            this, "SPARTA-GUI - Unexpected File Name",
-                            QString("The name of\n\n%1\n\ndoes not contain \"libsparta\". "
-                                    "SPARTA-GUI expects the SPARTA shared library, e.g. "
-                                    "libsparta.so or libsparta.dylib.\n\n"
-                                    "Try to load this file anyway?")
-                                .arg(QDir::toNativeSeparators(pluginfile)),
-                            QMessageBox::Yes | QMessageBox::No,
-                            QMessageBox::No) != QMessageBox::Yes)
-                        continue;
-                }
-
-                // No relaunch: nothing is loaded yet on this path, so the
-                // chosen library can be dlopen'ed right here and the
-                // constructor simply continues with it. (Replacing an
-                // already-loaded library, from Preferences, is what needs the
-                // relaunch.)
-                const auto canonical = QFileInfo(pluginfile).canonicalFilePath();
-                if (sparta.loadLib(canonical)) {
-                    pluginPath = canonical;
-                    settings.setValue(Keys::PLUGIN_PATH, pluginPath);
-                    settings.sync();
-                } else {
-                    critical(this, "SPARTA-GUI Error", "Selected library could not be loaded.",
-                             QString("<p align=\"justify\">%1 does not seem to be a SPARTA "
-                                     "shared library compatible with this system (wrong "
-                                     "platform, architecture, or build).</p>")
-                                 .arg(QDir::toNativeSeparators(canonical)));
-                }
-
-            } else if (mb.clickedButton() == downloadBtn) {
-                // store in the same config directory where QSettings stores preferences
-                const auto configDir =
-                    QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
-                if (configDir.isEmpty() || !QDir().mkpath(configDir)) {
-                    critical(this, "SPARTA-GUI Error", "Cannot determine configuration directory.",
-                             "Unable to create a writable directory in the user configuration "
-                             "folder for storing the downloaded SPARTA shared library.");
-                    continue;
-                }
-                auto libPath = configDir + QDir::separator() + libName;
-                auto dlUrl   = getSpartaDownloadUrl();
-
-                URLDownloader downloader(this);
-                if (downloader.download(dlUrl, libPath, true, true)) {
-                    // try loading the downloaded library; on success just fall
-                    // out of the loop -- the library is loaded, the constructor
-                    // continues with it, and the old forced application
-                    // relaunch here was pure ceremony
-                    if (sparta.loadLib(libPath)) {
-                        pluginPath = libPath;
-                        settings.setValue(Keys::PLUGIN_PATH, pluginPath);
-                        settings.sync();
-                    } else {
-                        QFile::remove(libPath);
-                        critical(this, "SPARTA-GUI Error",
-                                 "Downloaded SPARTA library could not be loaded.",
-                                 "<p align=\"justify\">The downloaded shared library file "
-                                 "does not seem to be compatible with this system.</p>");
-                    }
-                } else if (!downloader.wasAborted()) {
-                    // cancelling is a choice, not a failure to report back
-                    critical(this, "SPARTA-GUI Error", "Failed to download SPARTA shared library.",
-                             downloader.errorString());
-                }
-            }
+    // Nothing configured, or what was configured no longer loads: try every
+    // library-shaped file this platform puts within reach, most specific first.
+    for (const auto &libpath : LibraryAcquire::candidates()) {
+        if (sparta.loadLib(libpath)) {
+            pluginPath = libpath;
+            settings.setValue(Keys::PLUGIN_PATH, pluginPath);
+            settings.sync();
+            return;
         }
     }
+
+    // Still nothing.  This is where a modal dialog used to take over and
+    // refuse to let the application start; the setup card takes it from here,
+    // and the caller carries on without a simulator.
+    settings.remove(Keys::PLUGIN_PATH);
 }
 #else
 // dummy function when linking against library directly
 void SpartaGui::setupPlugin(QSettings &) {}
 #endif
+
+void SpartaGui::browseForLibrary()
+{
+    const QString chosen = QFileDialog::getOpenFileName(
+        this, "Select SPARTA shared library to use", ".", LibraryAcquire::fileDialogPattern(),
+        nullptr, QFileDialog::DontResolveSymlinks | QFileDialog::ReadOnly);
+    if (chosen.isEmpty()) return; // cancelling is a choice, not a failure
+
+    // The name check is a heuristic and the user is allowed to overrule it;
+    // whether the file loads is the real test.
+    if (!LibraryAcquire::nameLooksRight(chosen)) {
+        if (QMessageBox::question(
+                this, "SPARTA-GUI - Unexpected File Name",
+                QString("The name of\n\n%1\n\ndoes not contain \"libsparta\". "
+                        "SPARTA-GUI expects the SPARTA shared library, e.g. "
+                        "libsparta.so or libsparta.dylib.\n\n"
+                        "Try to load this file anyway?")
+                    .arg(QDir::toNativeSeparators(chosen)),
+                QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
+            return;
+    }
+
+    if (!adoptLibrary(chosen))
+        setupCard->setError(
+            QString("%1 is not a SPARTA shared library this build can load (wrong platform, "
+                    "architecture, or build).")
+                .arg(QDir::toNativeSeparators(chosen)));
+}
+
+void SpartaGui::downloadLibrary()
+{
+    const QString dest = LibraryAcquire::downloadDestination();
+    if (dest.isEmpty()) {
+        setupCard->setError("Cannot create a writable directory in the user configuration folder "
+                            "to store the downloaded library in.");
+        return;
+    }
+
+    QString reason;
+    switch (LibraryAcquire::download(this, dest, &reason)) {
+        case LibraryAcquire::Result::Cancelled:
+            return;
+        case LibraryAcquire::Result::Failed:
+            setupCard->setError("Downloading the SPARTA shared library failed: " + reason);
+            return;
+        case LibraryAcquire::Result::Ok:
+            break;
+    }
+
+    if (!adoptLibrary(dest)) {
+        QFile::remove(dest);
+        setupCard->setError("The downloaded shared library does not seem to be compatible with "
+                            "this system.");
+    }
+}
+
+bool SpartaGui::adoptLibrary(const QString &path)
+{
+    const QString canonical = QFileInfo(path).canonicalFilePath();
+    if (canonical.isEmpty() || !sparta.loadLib(canonical)) return false;
+
+    pluginPath = canonical;
+    QSettings settings;
+    settings.setValue(Keys::PLUGIN_PATH, pluginPath);
+    settings.sync();
+
+    // Nothing was loaded before this, so the library can simply be used from
+    // here -- no relaunch.  (Replacing an already-loaded library, which is what
+    // Preferences does, is the case that needs one.)
+    finishLibraryInit(settings);
+    syncSetupCard();
+    return true;
+}
+
+void SpartaGui::syncSetupCard()
+{
+    if (!setupCard) return;
+    const bool missing = !sparta.hasLibrary();
+    setupCard->setVisible(missing);
+    if (!missing) setupCard->clearError();
+    syncRunControls();
+}
+
+void SpartaGui::finishLibraryInit(QSettings &settings)
+{
+    setupAccelerators(settings);
+
+    // again: the library's directory is one of the places examples are looked
+    // for, and it was not known when the constructor first built this
+    buildExampleMenu();
+
+    // start SPARTA and initialize command completion
+    startSparta();
+
+    // the command list is the built-in commands plus the command styles this
+    // library was built with; without a library it is the built-ins alone,
+    // which is why the internal list is loaded whether or not we get here
+    QStringList style_list;
+    QFile internal_commands(":/sparta_internal_commands.txt");
+    if (internal_commands.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        while (!internal_commands.atEnd())
+            style_list << QString(internal_commands.readLine()).trimmed();
+    }
+    internal_commands.close();
+
+    const int ncmds = sparta.styleCount("command");
+    for (int i = 0; i < ncmds; ++i) {
+        const QString style = sparta.styleName("command", i);
+        if (style.isEmpty()) continue;
+        // skip suffixed names
+        if (style.endsWith("/kk/host") || style.endsWith("/kk/device") || style.endsWith("/kk"))
+            continue;
+        style_list << style;
+    }
+    style_list.sort();
+    textEdit->setCommandList(style_list);
+
+    // build a sorted, accelerator-suffix-filtered style list for one category
+    auto styleList = [&](const char *keyword) {
+        QStringList list;
+        const int nstyles = sparta.styleCount(keyword);
+        for (int i = 0; i < nstyles; ++i) {
+            const QString style = sparta.styleName(keyword, i);
+            if (style.isEmpty()) continue;
+            if (style.endsWith("/kk") || style.endsWith("/kk/device") ||
+                style.endsWith("/kk/host"))
+                continue;
+            list << style;
+        }
+        list.sort();
+        return list;
+    };
+
+    textEdit->setFixList(styleList("fix"));
+    textEdit->setComputeList(styleList("compute"));
+    textEdit->setDumpList(styleList("dump"));
+    textEdit->setRegionList(styleList("region"));
+    textEdit->setCollideList(styleList("collide"));
+    textEdit->setReactList(styleList("react"));
+    textEdit->setSurfCollideList(styleList("surf_collide"));
+    textEdit->setSurfReactList(styleList("surf_react"));
+
+    // apply https proxy setting: prefer environment variable or fall back to
+    // preferences value
+    applyProxySetting(sparta, settings);
+}
 
 void SpartaGui::setupAccelerators(QSettings &settings)
 {
@@ -1043,9 +1051,10 @@ SpartaGui::SpartaGui(QWidget *parent, const QString &filename, int width, int he
     setAutoFillBackground(true);
 
     setupPlugin(settings);
-    setupAccelerators(settings);
 
-    // populate the File->Open Example submenu (needs the plugin path for probing)
+    // Examples are files, so they can be opened and read without a simulator.
+    // finishLibraryInit() builds this again once there is one, because the
+    // library's own location is one more place examples are looked for.
     buildExampleMenu();
 
     // set up default SPARTA thread arguments
@@ -1082,8 +1091,8 @@ SpartaGui::SpartaGui(QWidget *parent, const QString &filename, int width, int he
     }
     startRecoveryTimer();
 
-    // start SPARTA and initialize command completion
-    startSparta();
+    // The command list, so completion works on a deck the user is reading even
+    // when there is no library to add this build's command styles to it.
     QStringList style_list;
     QFile internal_commands(":/sparta_internal_commands.txt");
     if (internal_commands.open(QIODevice::ReadOnly | QIODevice::Text)) {
@@ -1092,15 +1101,6 @@ SpartaGui::SpartaGui(QWidget *parent, const QString &filename, int width, int he
         }
     }
     internal_commands.close();
-    int ncmds = sparta.styleCount("command");
-    for (int i = 0; i < ncmds; ++i) {
-        const QString style = sparta.styleName("command", i);
-        if (style.isEmpty()) continue;
-        // skip suffixed names
-        if (style.endsWith("/kk/host") || style.endsWith("/kk/device") || style.endsWith("/kk"))
-            continue;
-        style_list << style;
-    }
     style_list.sort();
     textEdit->setCommandList(style_list);
 
@@ -1122,39 +1122,20 @@ SpartaGui::SpartaGui(QWidget *parent, const QString &filename, int width, int he
 
     textEdit->setFileList();
 
-    // build a sorted, accelerator-suffix-filtered style list for one category
-    auto styleList = [&](const char *keyword) {
-        QStringList list;
-        const int nstyles = sparta.styleCount(keyword);
-        for (int i = 0; i < nstyles; ++i) {
-            const QString style = sparta.styleName(keyword, i);
-            if (style.isEmpty()) continue;
-            if (style.endsWith("/kk") || style.endsWith("/kk/device") ||
-                style.endsWith("/kk/host"))
-                continue;
-            list << style;
-        }
-        list.sort();
-        return list;
-    };
-
-    textEdit->setFixList(styleList("fix"));
-    textEdit->setComputeList(styleList("compute"));
-    textEdit->setDumpList(styleList("dump"));
-    textEdit->setRegionList(styleList("region"));
-    textEdit->setCollideList(styleList("collide"));
-    textEdit->setReactList(styleList("react"));
-    textEdit->setSurfCollideList(styleList("surf_collide"));
-    textEdit->setSurfReactList(styleList("surf_react"));
-
     settings.beginGroup(Keys::GROUP_REFORMAT);
     textEdit->setReformatOnReturn(settings.value(Keys::RETURN, false).toBool());
     textEdit->setAutoComplete(settings.value(Keys::AUTOMATIC, true).toBool());
     autoLintEnabled = settings.value(Keys::AUTOLINT, true).toBool();
     settings.endGroup();
 
-    // apply https proxy setting: prefer environment variable or fall back to preferences value
-    applyProxySetting(sparta, settings);
+    // Everything from here needs a loaded library.  Without one the editor is
+    // fully usable and the setup card says what is missing and offers the two
+    // ways out; finishLibraryInit() runs the moment one of them works.
+    if (sparta.hasLibrary())
+        finishLibraryInit(settings);
+    else
+        applyProxySetting(sparta, settings); // the download needs the proxy too
+    syncSetupCard();
 
     // finally show the window
     showNormal();
@@ -1948,16 +1929,21 @@ void SpartaGui::redo()
 void SpartaGui::syncRunControls()
 {
     const bool running = sparta.isRunning() || workerActive();
+    // Nothing can be run at all until there is a library.  The setup card above
+    // the editor says why and offers the two ways to get one; these controls
+    // being greyed is what makes the card's claim visibly true rather than an
+    // assertion the user has to take on faith.
+    const bool canRun = sparta.hasLibrary() && !running;
     if (stopAction) stopAction->setEnabled(running);
     // Run and Create Image refuse with a modal while something is running;
     // greyed out beats a dialog that says no.
-    if (runAction) runAction->setEnabled(!running);
-    if (imageAction) imageAction->setEnabled(!running);
+    if (runAction) runAction->setEnabled(canRun);
+    if (imageAction) imageAction->setEnabled(canRun);
     // Extending needs a state to continue from and nothing in flight.  Greyed
     // out rather than hidden, so the entry is discoverable before the first run
     // explains what it is for.
-    if (extendAction) extendAction->setEnabled(!running && hasSystemState());
-    if (restartAction) restartAction->setEnabled(!running && hasSystemState());
+    if (extendAction) extendAction->setEnabled(canRun && hasSystemState());
+    if (restartAction) restartAction->setEnabled(canRun && hasSystemState());
 }
 
 void SpartaGui::stopRun()
@@ -3819,10 +3805,8 @@ void SpartaGui::about()
 #if defined(SPARTA_GUI_USE_PLUGIN)
 void SpartaGui::checkUpdate()
 {
-    const auto libName   = getSpartaLibName();
-    const auto configDir = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
-    auto libPath         = configDir + QDir::separator() + libName;
-    auto dlUrl           = getSpartaDownloadUrl();
+    const auto libPath = LibraryAcquire::downloadDestination();
+    const auto dlUrl   = getSpartaDownloadUrl();
 
     if (dlUrl.isEmpty()) {
         information(this, "Check for SPARTA Update",
@@ -3870,14 +3854,16 @@ void SpartaGui::checkUpdate()
         button->setIcon(QIcon(":/icons/dialog-no.svg"));
 
         if (mb.exec() == QMessageBox::Yes) {
-            if (downloader.download(dlUrl, libPath, true, true)) {
+            QString reason;
+            const auto got = LibraryAcquire::download(this, libPath, &reason);
+            if (got == LibraryAcquire::Result::Ok) {
                 warning(this, "SPARTA Shared Library Updated",
                         "The latest SPARTA library has been downloaded successfully. "
                         "SPARTA-GUI must be relaunched to activate it.");
                 relaunchApplication();
-            } else if (!downloader.wasAborted()) {
+            } else if (got == LibraryAcquire::Result::Failed) {
                 critical(this, "Check for SPARTA Update",
-                         "Failed to download SPARTA shared library.", downloader.errorString());
+                         "Failed to download SPARTA shared library.", reason);
             }
         }
         return;

@@ -15,6 +15,26 @@ FetchContent_MakeAvailable(googletest)
 # testing is already enabled via include(CTest) in the top-level CMakeLists.txt
 include(GoogleTest)
 
+# What a display-driven test costs.
+#
+# Each of them runs an X server, a window manager, an accessibility bus and the
+# application, then waits fixed intervals for windows to appear and settle.
+# PROCESSORS ${GUI_TEST_PROCESSORS} RESOURCE_LOCK "xvfb" keeps them from running beside each other, but ctest will
+# happily fill the remaining -j slots with anything else, and on a small machine
+# that is enough: the whole set fails together with "app showed no window within
+# 60 s", each one passes alone, and it reads like the suites are broken rather
+# than starved.
+#
+# PROCESSORS is how ctest is told a test wants the machine.  A test asking for
+# more slots than -j provides runs on its own, which is the point -- these are
+# wall-clock measurements of a GUI, and a loaded machine changes the thing being
+# measured.
+include(ProcessorCount)
+ProcessorCount(GUI_TEST_PROCESSORS)
+if(GUI_TEST_PROCESSORS EQUAL 0)
+  set(GUI_TEST_PROCESSORS 8)
+endif()
+
 # Find Qt6 (Qt5 is no longer supported)
 find_package(Qt6 6.2 REQUIRED COMPONENTS Widgets Test PrintSupport)
 
@@ -324,7 +344,7 @@ if (SPARTA_GUI_HAVE_VTK)
   # can both decide the same display is free before either starts a server on
   # it. The loser's cases all pass and xvfb-run exits non-zero anyway, so the
   # suite is reported as failed with nothing in its output to say why.
-  set_tests_properties(MainWindow.All PROPERTIES TIMEOUT 300 RESOURCE_LOCK xvfb
+  set_tests_properties(MainWindow.All PROPERTIES TIMEOUT 300 PROCESSORS ${GUI_TEST_PROCESSORS} RESOURCE_LOCK xvfb
   REPEAT UNTIL_PASS:3)
 else()
   gtest_discover_tests(test_mainwindow)
@@ -922,7 +942,7 @@ endif()
 # Xvfb because inspecting opens the snapshot viewer, which renders
 add_test(NAME Inspect.All COMMAND ${XVFB_RUNNER} -a -s "-screen 0 1024x768x24" -w 1
   $<TARGET_FILE:test_inspect>)
-set_tests_properties(Inspect.All PROPERTIES TIMEOUT 900 RESOURCE_LOCK "xvfb;sparta_run")
+set_tests_properties(Inspect.All PROPERTIES TIMEOUT 900 PROCESSORS ${GUI_TEST_PROCESSORS} RESOURCE_LOCK "xvfb;sparta_run")
 
 # Integrity checking of downloaded files.  This is the only code that decides
 # whether a file fetched off the network may be kept, and none of it had ever
@@ -976,7 +996,7 @@ endif()
 # library into this process and chdirs to run a simulation.
 add_test(NAME Run.All COMMAND ${XVFB_RUNNER} -a -s "-screen 0 1024x768x24" -w 1
   $<TARGET_FILE:test_run>)
-set_tests_properties(Run.All PROPERTIES TIMEOUT 900 RESOURCE_LOCK "xvfb;sparta_run"
+set_tests_properties(Run.All PROPERTIES TIMEOUT 900 PROCESSORS ${GUI_TEST_PROCESSORS} RESOURCE_LOCK "xvfb;sparta_run"
   REPEAT UNTIL_PASS:3)
 
 # The surface import wizard: the six pages on top of the parsers and command
@@ -1098,7 +1118,7 @@ if (SPARTA_GUI_USE_PLUGIN)
 endif()
 add_test(NAME Sweep.All COMMAND ${XVFB_RUNNER} -a -s "-screen 0 1024x768x24" -w 1
   $<TARGET_FILE:test_sweeprun>)
-set_tests_properties(Sweep.All PROPERTIES TIMEOUT 1800 RESOURCE_LOCK "xvfb;sparta_run"
+set_tests_properties(Sweep.All PROPERTIES TIMEOUT 1800 PROCESSORS ${GUI_TEST_PROCESSORS} RESOURCE_LOCK "xvfb;sparta_run"
   REPEAT UNTIL_PASS:3)
 
 # Test executable for helpers
@@ -1430,7 +1450,7 @@ if (VTK_FOUND)
     $<TARGET_FILE:test_vtkscene>
     --gtest_filter=VtkSceneRender.*:VtkSceneFiles.*:SceneProbe.*)
   set_tests_properties(VtkScene.Rendering PROPERTIES
-    ENVIRONMENT "OMP_NUM_THREADS=1" TIMEOUT 300 RESOURCE_LOCK xvfb REPEAT UNTIL_PASS:3)
+    ENVIRONMENT "OMP_NUM_THREADS=1" TIMEOUT 300 PROCESSORS ${GUI_TEST_PROCESSORS} RESOURCE_LOCK xvfb REPEAT UNTIL_PASS:3)
   endif()
 endif()
 
@@ -1658,7 +1678,7 @@ add_test(NAME Framebuffer.CheckSize
 )
 set_tests_properties(Framebuffer.CreateScreenshot  Framebuffer.CheckSize
                      PROPERTIES ENVIRONMENT "${PYTHON_TEST_ENVIRONMENT}"
-                                RESOURCE_LOCK "xvfb")
+                                PROCESSORS ${GUI_TEST_PROCESSORS} RESOURCE_LOCK "xvfb")
 
 # test basic SPARTA-GUI editor tasks
 add_test(NAME Framebuffer.GUIEditorChecks
@@ -1674,7 +1694,7 @@ add_test(NAME Framebuffer.GUIEditorChecks
 # property.
 set_tests_properties(Framebuffer.GUIEditorChecks
                      PROPERTIES ENVIRONMENT "${PYTHON_TEST_ENVIRONMENT}"
-                                RESOURCE_LOCK "xvfb")
+                                PROCESSORS ${GUI_TEST_PROCESSORS} RESOURCE_LOCK "xvfb")
 
 # Visual-effect and end-to-end feature suites.  Unlike the tests above these
 # manage their own Xvfb (and a window manager, without which nothing ever gets
@@ -1713,13 +1733,13 @@ if (XDOTOOL_BINARY AND WM_BINARY AND SHOOTER_BINARY)
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_gui_visual.py)
   set_tests_properties(GuiDrive.VisualEffects PROPERTIES
     ENVIRONMENT "${GUI_DRIVE_ENVIRONMENT};SHOT_DIR=${CMAKE_CURRENT_BINARY_DIR}/visual-shots"
-    TIMEOUT 600 RESOURCE_LOCK xvfb)
+    TIMEOUT 600 PROCESSORS ${GUI_TEST_PROCESSORS} RESOURCE_LOCK xvfb)
 
   add_test(NAME GuiDrive.Features
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_gui_features.py)
   set_tests_properties(GuiDrive.Features PROPERTIES
     ENVIRONMENT "${GUI_DRIVE_ENVIRONMENT};SHOT_DIR=${CMAKE_CURRENT_BINARY_DIR}/feature-shots"
-    TIMEOUT 900 RESOURCE_LOCK xvfb)
+    TIMEOUT 900 PROCESSORS ${GUI_TEST_PROCESSORS} RESOURCE_LOCK xvfb)
 
   # Every menu action, judged against an idle reference: an action meant to
   # open something that leaves the screen byte-identical did nothing. This
@@ -1729,7 +1749,7 @@ if (XDOTOOL_BINARY AND WM_BINARY AND SHOOTER_BINARY)
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_gui_actions.py)
   set_tests_properties(GuiDrive.Actions PROPERTIES
     ENVIRONMENT "${GUI_DRIVE_ENVIRONMENT};SHOT_DIR=${CMAKE_CURRENT_BINARY_DIR}/action-shots"
-    TIMEOUT 900 RESOURCE_LOCK xvfb)
+    TIMEOUT 900 PROCESSORS ${GUI_TEST_PROCESSORS} RESOURCE_LOCK xvfb)
 
   # Activates every control of the running application in turn. The in-process
   # walker builds the dialogs directly and so cannot reach the main window's
@@ -1740,7 +1760,7 @@ if (XDOTOOL_BINARY AND WM_BINARY AND SHOOTER_BINARY)
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_gui_walker.py)
   set_tests_properties(GuiDrive.Walker PROPERTIES
     ENVIRONMENT "${GUI_DRIVE_ENVIRONMENT};SHOT_DIR=${CMAKE_CURRENT_BINARY_DIR}/walker-shots"
-    TIMEOUT 1800 RESOURCE_LOCK xvfb)
+    TIMEOUT 1800 PROCESSORS ${GUI_TEST_PROCESSORS} RESOURCE_LOCK xvfb)
 
   # What the application does before it has a main window: src/main.cpp. main()
   # is one function ending in app.exec(), so nothing in it is reachable from an
@@ -1751,7 +1771,7 @@ if (XDOTOOL_BINARY AND WM_BINARY AND SHOOTER_BINARY)
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_startup.py)
   set_tests_properties(GuiDrive.Startup PROPERTIES
     ENVIRONMENT "${GUI_DRIVE_ENVIRONMENT}"
-    TIMEOUT 900 RESOURCE_LOCK xvfb)
+    TIMEOUT 900 PROCESSORS ${GUI_TEST_PROCESSORS} RESOURCE_LOCK xvfb)
 
   # The missing-library dialog: the first thing a user without a SPARTA shared
   # library sees, and the one place the application can strand them. Every
@@ -1763,7 +1783,7 @@ if (XDOTOOL_BINARY AND WM_BINARY AND SHOOTER_BINARY)
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_pluginsetup.py)
   set_tests_properties(GuiDrive.PluginSetup PROPERTIES
     ENVIRONMENT "${GUI_DRIVE_ENVIRONMENT};SHOT_DIR=${CMAKE_CURRENT_BINARY_DIR}/plugin-shots"
-    TIMEOUT 900 RESOURCE_LOCK xvfb)
+    TIMEOUT 900 PROCESSORS ${GUI_TEST_PROCESSORS} RESOURCE_LOCK xvfb)
 
   # One DSMC study from beginning to end, the way a user does it: open the
   # example, check the input, run it, chart the result, look at the output,
@@ -1778,7 +1798,7 @@ if (XDOTOOL_BINARY AND WM_BINARY AND SHOOTER_BINARY)
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_workflow.py)
   set_tests_properties(GuiDrive.Workflow PROPERTIES
     ENVIRONMENT "${GUI_DRIVE_ENVIRONMENT};SHOT_DIR=${CMAKE_CURRENT_BINARY_DIR}/workflow-shots;SPARTA_BIN=${_spa_test_bin}"
-    TIMEOUT 1800 RESOURCE_LOCK xvfb)
+    TIMEOUT 1800 PROCESSORS ${GUI_TEST_PROCESSORS} RESOURCE_LOCK xvfb)
 else()
   message(STATUS "Skipping the visual and feature GUI suites: "
     "they need xdotool, a window manager (e.g. openbox) and a screenshooter")

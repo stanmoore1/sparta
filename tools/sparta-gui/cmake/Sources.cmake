@@ -83,6 +83,8 @@ set(PROJECT_SOURCES
   ${CMAKE_SOURCE_DIR}/src/levmar.cpp
   ${CMAKE_SOURCE_DIR}/src/levmar.h
   ${CMAKE_SOURCE_DIR}/src/linenumberarea.h
+  ${CMAKE_SOURCE_DIR}/src/libraryacquire.cpp
+  ${CMAKE_SOURCE_DIR}/src/libraryacquire.h
   ${CMAKE_SOURCE_DIR}/src/logwindow.cpp
   ${CMAKE_SOURCE_DIR}/src/logwindow.h
   ${CMAKE_SOURCE_DIR}/src/movieimport.cpp
@@ -109,6 +111,8 @@ set(PROJECT_SOURCES
   ${CMAKE_SOURCE_DIR}/thirdparty/rangeslider/rangeslider.h
   ${CMAKE_SOURCE_DIR}/src/setvariables.cpp
   ${CMAKE_SOURCE_DIR}/src/setvariables.h
+  ${CMAKE_SOURCE_DIR}/src/setupcard.cpp
+  ${CMAKE_SOURCE_DIR}/src/setupcard.h
   ${CMAKE_SOURCE_DIR}/src/slideshow.cpp
   ${CMAKE_SOURCE_DIR}/src/slideshow.h
   ${CMAKE_SOURCE_DIR}/src/displaytransform.cpp

@@ -9,26 +9,27 @@
 ## This software is distributed under the GNU General Public License version 2 or later.
 ########################################################################################
 
-"""The first thing a new user sees: SpartaGui::setupPlugin().
+"""The first thing a new user sees: SpartaGui::setupPlugin() and SetupCard.
 
-Without a SPARTA shared library the application cannot do anything at all, so
-before the main window exists the constructor puts up a dialog offering three
-ways out -- download one, browse for one, or give up -- and loops on it until
-one of them works.  77 lines, and none of it had ever run under test.
+Without a SPARTA shared library the application cannot *run* a deck.  It used
+to conclude from that that it could not start either: the constructor put up a
+modal offering download, browse or exit, and looped on it, so a user with a
+deck to read and no simulator had the choice of fetching one or leaving.
 
-It cannot: every branch ends in exit(1) or in relaunchApplication(), which
-replaces the process image outright.  An in-process test would take the whole
-test runner with it.  So this drives the real binary as a subprocess and
-presses the buttons through accessibility rather than at guessed coordinates,
-which is also the only way to press a specific one of the three -- Enter hits
-the default (Download, which would go to the network) and Escape hits Exit,
-so the middle button is unreachable from the keyboard alone.
+It comes up now, with the editor working and a card above it saying what is
+missing and offering the two ways to fix it.  These cases are about that
+promise on both sides -- that the application really is usable without a
+library, and that acquiring one really does light the rest of it up without a
+restart.
 
-What makes this worth the trouble rather than a coverage exercise: this dialog
-is the entire first-run experience, it is the one place the application can
-strand a user with no way forward, and the recovery path through it -- browse,
-pick a library, come back up working -- is a relaunch of the process, which
-nothing else in the suite exercises.
+Driven as a subprocess through accessibility rather than in-process: the
+Preferences route still re-execs, the file chooser is a native modal, and the
+buttons are found by name rather than at guessed coordinates.
+
+SPARTA_GUI_FORCE_NO_PLUGIN is what puts the application in the no-library
+state.  Without it these cases would depend on the machine not having a
+library anywhere the automatic probe looks, which on a developer's machine is
+exactly backwards.
 """
 
 import os
@@ -44,12 +45,13 @@ from guidrive import Gui, SPARTA_PLUGIN_LIB, SPARTA_LIB_DIR   # noqa: E402
 DISPLAY = 92
 OUT = os.environ.get("SHOT_DIR", "/tmp/guitest/plugin-shots")
 
-# The dialog's three buttons, by the text they carry.
-DOWNLOAD = "Download Library"
-BROWSE = "Browse Filesystem"
-EXIT = "Exit"
+# The card's buttons, by the text they carry.
+DOWNLOAD = "Download"
+BROWSE = "Browse"
+WHATIS = "What is this?"
 
-DIALOG = "No SPARTA Shared Library"
+# The card has no window of its own, so it is recognized by its heading.
+CARD = "No SPARTA shared library yet"
 
 
 def library():
@@ -62,7 +64,13 @@ def library():
 
 
 class PluginSetup(unittest.TestCase):
-    """Each case is one way through the missing-library dialog."""
+    """Each case is one way through the no-library state."""
+
+    def setUp(self):
+        os.environ["SPARTA_GUI_FORCE_NO_PLUGIN"] = "1"
+
+    def tearDown(self):
+        os.environ.pop("SPARTA_GUI_FORCE_NO_PLUGIN", None)
 
     def gui(self, **kw):
         kw.setdefault("no_library", True)
@@ -70,58 +78,81 @@ class PluginSetup(unittest.TestCase):
         kw.setdefault("outdir", OUT)
         return Gui(**kw)
 
-    def assertDialogUp(self, g, why=""):
+    def labels(self, g):
+        return [n for n, r, *_ in g.controls()]
+
+    def assertCardUp(self, g, why=""):
+        names = self.labels(g)
+        self.assertTrue(any(CARD in n for n in names),
+                        f"the setup card is not on screen{why}: {names}")
+
+    def assertCardGone(self, g, why=""):
+        names = self.labels(g)
+        self.assertFalse(any(CARD in n for n in names),
+                         f"the setup card is still on screen{why}: {names}")
+
+    def assertEditorUp(self, g, why=""):
         titles = g.window_titles()
-        self.assertTrue(any(DIALOG in t for t in titles),
-                        f"the missing-library dialog is not on screen{why}: {titles}")
+        self.assertTrue(any("Editor" in t for t in titles),
+                        f"the editor is not up{why}: {titles}")
 
     def buttons(self, g):
         return [n for n, r, *_ in g.controls() if r in ("push button", "button")]
 
     # ------------------------------------------------------------ what it offers
 
-    def testItExplainsItselfAndOffersThreeWaysOut(self):
-        """A user with no library must be told why, and given something to do."""
+    def testItComesUpUsableAndSaysWhatIsMissing(self):
+        """The whole point: no library is not a reason to refuse to start."""
         with self.gui() as g:
-            self.assertDialogUp(g)
+            self.assertEditorUp(g, " on a start with no library")
+            self.assertCardUp(g)
             names = self.buttons(g)
-            for want in (DOWNLOAD, BROWSE, EXIT):
+            for want in (DOWNLOAD, BROWSE, WHATIS):
                 self.assertTrue(any(want in n for n in names),
                                 f"no '{want}' button among {names}")
-            g.shot("plugin-dialog", DIALOG)
-            # and no main window behind it: there is nothing to edit yet
-            self.assertFalse(any("Editor" in t for t in g.window_titles()),
-                             "the editor came up behind a dialog that says it cannot run")
+            g.shot("plugin-card", CARD)
 
-    # ------------------------------------------------------------------- Exit
+    def testEditingWorksWithoutALibraryAndRunningDoesNot(self):
+        """The card's claim, checked rather than taken on faith.
 
-    def testExitEndsTheApplicationWithAFailureStatus(self):
-        """Giving up has to be a real exit, and a failure one.
-
-        A user who presses Exit and is left with a process still running -- or
-        one that reports success -- has no way to tell that nothing happened.
+        It says decks can be written and saved but not run.  A card that said
+        so while Run sat there enabled would be worse than no card: the user
+        would press it and find out the hard way.
         """
         with self.gui() as g:
-            self.assertDialogUp(g)
-            self.assertTrue(g.click_named(EXIT), "no Exit button to press")
-            deadline = time.time() + 20
-            while time.time() < deadline and g.app.poll() is None:
-                time.sleep(0.25)
-            self.assertIsNotNone(g.app.poll(), "Exit left the application running")
-        self.assertEqual(g.app.returncode, 1,
-                         "Exit reported success from a run that never started")
+            self.assertCardUp(g)
+            g.type_text("# a deck written with no simulator behind it")
+            time.sleep(0.5)
+            self.assertEditorUp(g, " while being typed into")
+
+            # actions() carries the enabled flag, so this can tell an action the
+            # application is offering from one it is refusing -- which is the
+            # whole difference the card is claiming.
+            state = {name: enabled for name, role, path, enabled in g.actions()}
+            # By the entry's own words, not by "Run": the Run *menu* is called
+            # that too, and a menu is enabled whatever is inside it.
+            offered = [n for n in state if "Run SPARTA from Editor Buffer" in n
+                       or "Create Image" in n.replace("&", "")]
+            self.assertTrue(offered, f"no Run action to check: {sorted(state)}")
+            for name in offered:
+                self.assertFalse(state[name],
+                                 f"'{name}' is offered while the card says nothing can run")
+
+            saving = [n for n in state if "Save Input File" in n]
+            self.assertTrue(saving, f"no Save action to check: {sorted(state)}")
+            for name in saving:
+                self.assertTrue(state[name],
+                                f"'{name}' is refused, but the card says decks can be saved")
+
+            g.shot("plugin-card-run-disabled", "Run greyed out with no library")
+            self.assertIsNone(g.app.poll(), "the application died while being typed into")
 
     # ----------------------------------------------------------------- Browse
 
-    def testCancellingTheBrowseComesBackToTheDialog(self):
-        """Changing your mind must not strand the user.
-
-        The browse branch has no way forward of its own: if a cancelled file
-        dialog fell through, the application would sit there with no library,
-        no dialog and no main window.
-        """
+    def testCancellingTheBrowseLeavesEverythingAsItWas(self):
+        """Changing your mind must not strand the user."""
         with self.gui() as g:
-            self.assertDialogUp(g)
+            self.assertCardUp(g)
             self.assertTrue(g.click_named(BROWSE), "no Browse button to press")
             time.sleep(2.0)
             titles = g.window_titles()
@@ -129,7 +160,7 @@ class PluginSetup(unittest.TestCase):
                                 for t in titles),
                             f"no file dialog appeared: {titles}")
             g.key("Escape", 2.0)
-            self.assertDialogUp(g, " after cancelling the file chooser")
+            self.assertCardUp(g, " after cancelling the file chooser")
             self.assertIsNone(g.app.poll(), "cancelling the file chooser ended the run")
 
     def testAFileThatIsNotNamedLikeASpartaLibraryIsRefused(self):
@@ -137,10 +168,8 @@ class PluginSetup(unittest.TestCase):
 
         The decoy is a *copy of the real library* under another name, which is
         the only way to tell the check from its absence: a file that would fail
-        to load anyway ends up back at this dialog either way -- stored, tried
-        on the relaunch, rejected, forgotten -- so the end state cannot say
-        whether the name was ever looked at.  A library that would load can
-        only be refused by the name check.
+        to load anyway leaves the card up either way.  A library that would
+        load can only be refused by the name check.
         """
         lib = library()
         if not lib:
@@ -150,63 +179,56 @@ class PluginSetup(unittest.TestCase):
         shutil.copyfile(lib, decoy)
 
         with self.gui() as g:
-            self.assertDialogUp(g)
+            self.assertCardUp(g)
             self.assertTrue(g.click_named(BROWSE))
             time.sleep(2.0)
             g.type_text(decoy)
             g.key("Return", 3.0)
 
-            # The name check explains itself rather than silently bouncing back
-            # to the same three buttons, so there is a question to answer first:
-            # "does not contain libsparta ... try to load this file anyway?".
-            # Answering No is what refusing the file means.
+            # The name check explains itself rather than silently bouncing back,
+            # so there is a question to answer first.  Escape is the reject role
+            # of a Yes/No box -- click_named("No") would match half the
+            # accessible names on screen.
             titles = g.window_titles()
             self.assertTrue(any("Unexpected File Name" in t for t in titles),
                             f"the name check said nothing about the file: {titles}")
-            # Escape rather than click_named("No"): the lookup is a
-            # case-insensitive substring over every accessible name on screen,
-            # and "no" is inside half of them.  Escape is the reject role of a
-            # Yes/No box, which is exactly the answer this case is giving.
             g.key("Escape", 1.5)
 
-            self.assertDialogUp(g, " after choosing a file whose name is not libsparta*")
-            self.assertFalse(any("Editor" in t for t in g.window_titles()),
-                             "a file the check should have refused was loaded anyway")
+            self.assertCardUp(g, " after refusing a file whose name is not libsparta*")
             self.assertNotIn("plugin_path", g.stored_settings(),
                              "a file whose name is not libsparta* was recorded anyway")
 
-    def testChoosingALibraryRestartsTheApplicationWithIt(self):
-        """The recovery path, end to end.
+    def testChoosingALibraryLightsUpTheApplicationInPlace(self):
+        """The recovery path, end to end, without a restart.
 
-        Picking a library stores it and re-execs, because a library cannot be
-        loaded cleanly into a process that has already decided it has none.
-        What has to be true afterwards is that the editor is up and the choice
-        was written down -- otherwise the next start asks again.
+        Nothing has been loaded on this path, so the chosen library can simply
+        be opened and used -- the relaunch the old flow did here was ceremony.
+        What has to be true afterwards is that the card is gone, the choice was
+        written down, and the application is the same one the user was already
+        typing into.
         """
         lib = library()
         if not lib:
             self.skipTest("no SPARTA library to choose")
 
         with self.gui() as g:
-            self.assertDialogUp(g)
+            self.assertCardUp(g)
+            before = g.app.pid
             self.assertTrue(g.click_named(BROWSE))
             time.sleep(2.0)
             g.type_text(lib)
-            g.key("Return", 3.0)
+            g.key("Return", 4.0)
 
-            # the re-exec keeps the process id, so what says it worked is the
-            # window: the dialog is gone and the editor is up
-            deadline = time.time() + 45
+            deadline = time.time() + 30
             while time.time() < deadline:
-                titles = g.window_titles()
-                if any("Editor" in t for t in titles):
+                if not any(CARD in n for n in self.labels(g)):
                     break
                 time.sleep(1.0)
-            titles = g.window_titles()
-            self.assertTrue(any("Editor" in t for t in titles),
-                            f"the application did not come back up with a library: {titles}")
-            self.assertFalse(any(DIALOG in t for t in titles),
-                             "it came up and asked for a library again")
+
+            self.assertCardGone(g, " after choosing a library that loads")
+            self.assertEditorUp(g)
+            self.assertEqual(g.app.pid, before,
+                             "the application restarted rather than adopting the library")
             g.shot("plugin-recovered")
 
             stored = g.stored_settings()
@@ -215,35 +237,30 @@ class PluginSetup(unittest.TestCase):
 
     # --------------------------------------------------------------- Download
 
-    def testADownloadThatFailsSaysSoAndComesBack(self):
-        """The third button, on a machine that cannot fetch the file.
+    def testADownloadThatFailsSaysSoOnTheCard(self):
+        """The other button, on a machine that cannot fetch the file.
 
         The download itself is not what is being tested -- there is no
         pre-compiled library at that URL for this checkout, so the request
         fails and that is the point.  What has to happen is that the user is
-        told, and is returned to the dialog rather than dropped into an
-        application with no simulator and no explanation.
-
-        The whole attempt takes well under a second here, so the error box has
-        to be waited for rather than sampled: it is modal and stays until it is
-        answered, but a poll that starts late enough can still find only the
-        window behind it.
+        told, on the card they pressed the button on, and that the application
+        carries on.
         """
         with self.gui() as g:
-            self.assertDialogUp(g)
+            self.assertCardUp(g)
             self.assertTrue(g.click_named(DOWNLOAD), "no Download button to press")
 
             deadline = time.time() + 90
             while time.time() < deadline:
-                if any("Error" in t for t in g.window_titles()):
+                if any("failed" in n.lower() for n in self.labels(g)):
                     break
                 time.sleep(0.5)
-            self.assertTrue(any("Error" in t for t in g.window_titles()),
-                            "a download that could not be fetched said nothing at all")
+            names = self.labels(g)
+            self.assertTrue(any("failed" in n.lower() for n in names),
+                            f"a download that could not be fetched said nothing at all: {names}")
             g.shot("plugin-download-failed")
 
-            g.key("Return", 2.5)          # dismiss the error
-            self.assertDialogUp(g, " after the download attempt")
+            self.assertCardUp(g, " after the download attempt")
             self.assertIsNone(g.app.poll(),
                               "a failed download took the application down with it")
             self.assertNotIn("plugin_path", g.stored_settings(),
@@ -255,22 +272,19 @@ class PluginSetup(unittest.TestCase):
         """An upgrade that moves the library must not wedge the application.
 
         The stored path is tried first; when it will not load the key has to be
-        dropped, or the next start reads the same bad path and asks again with
-        no way to get past it.
+        dropped, or the next start reads the same bad path and asks again.
         """
         decoy = os.path.join(OUT, "libsparta.so.gone")
         os.makedirs(OUT, exist_ok=True)
         with open(decoy, "wb") as f:
             f.write(b"\x7fELF" + b"\x00" * 64)
 
-        # Recorded rather than contorted around: removing *this* removal alone
-        # changes nothing observable, because the loop that shows the dialog
-        # removes the key again on every pass ("so we won't get stuck in a loop
-        # reading a bad file").  The two are redundant with each other; what is
-        # checked here is the behaviour they jointly provide.
+        # This one needs the real code path rather than the forced one, or the
+        # stored setting would never be read at all.
+        os.environ.pop("SPARTA_GUI_FORCE_NO_PLUGIN", None)
         with self.gui(settings={"plugin_path": decoy}) as g:
-            self.assertDialogUp(g, " for a stored library that does not load")
-            self.assertNotIn("plugin_path", g.stored_settings(),
+            self.assertEditorUp(g, " for a stored library that does not load")
+            self.assertNotIn(decoy, str(g.stored_settings()),
                              "a stored path that will not load was kept, so the next "
                              "start reads it again")
 

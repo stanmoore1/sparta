@@ -145,8 +145,42 @@ viewer reads the files written by SPARTA's ``dump particle/vtk`` /
 ``grid/vtk`` / ``surf/vtk`` styles, which require SPARTA itself to be built
 with its VTK package (``-D PKG_VTK=ON`` when building the library).
 
-On the first start, SPARTA-GUI needs to be told where the SPARTA
-shared library is.  There are three equivalent ways:
+.. _first_start:
+
+The first start
+---------------
+
+.. index:: shared library; first start
+
+SPARTA-GUI looks for the SPARTA shared library by itself: the path it
+last used, then the current directory, the dynamic loader's search
+path, its own configuration folder, and the usual system library
+directories.  Most installations never see anything else.
+
+When none of those turns one up, the application still starts.  Writing,
+opening, highlighting, checking and saving an input deck need no
+simulator, and a strip above the editor says what is missing and offers
+two ways to fix it:
+
+- **Download** fetches the pre-compiled library for this platform from
+  the SPARTA webserver into the configuration folder.  It is offered
+  only where such a library exists; a build that cannot use one (for
+  example an MSVC build, since the pre-compiled libraries are built
+  with MinGW) does not show the button.
+- **Browse...** picks a library already on this computer.  A file whose
+  name does not contain ``libsparta`` gets a question rather than a
+  silent refusal -- the name is a heuristic and you may overrule it, but
+  whether the file loads is the real test.
+
+Either way the library is adopted immediately: the strip goes away, the
+run controls come to life, and the choice is remembered for next time.
+Nothing restarts.
+
+The **Run** entries stay greyed out until a library is loaded, which is
+what makes the strip's claim visible rather than something to take on
+faith.
+
+There are three other ways to say where the library is:
 
 - set the path in the *Preferences* dialog ("Path to SPARTA Shared
   Library File"),
@@ -158,6 +192,15 @@ shared library is.  There are three equivalent ways:
 The setting is stored persistently.  An empty path ("") as argument to
 ``-p`` restores the default (auto-detection) behavior; this also lets
 you recover in case the configured library file no longer exists.
+Changing the library from *Preferences* relaunches the application,
+because a library that is already loaded cannot be swapped in place.
+
+.. note::
+
+   Setting ``SPARTA_GUI_FORCE_NO_PLUGIN=1`` in the environment makes
+   SPARTA-GUI behave as if no library could be found, whatever is
+   installed.  It exists so the first-start experience can be exercised
+   on a machine that has a working library.
 
 SPARTA-GUI linked version
 -------------------------

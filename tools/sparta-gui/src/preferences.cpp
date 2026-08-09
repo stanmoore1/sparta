@@ -14,12 +14,12 @@
 #include "codeeditor.h"
 #include "constants.h"
 #include "helpers.h"
+#include "libraryacquire.h"
 #include "highlighter.h"
 #include "spartagui.h"
 #include "spartawrapper.h"
 #include "logwindow.h"
 #include "qaddon.h"
-#include "urldownloader.h"
 
 #include <QApplication>
 #include <QCheckBox>
@@ -43,7 +43,6 @@
 #include <QSettings>
 #include <QSpacerItem>
 #include <QSpinBox>
-#include <QStandardPaths>
 #include <QTabWidget>
 #include <QThread>
 #include <QVBoxLayout>
@@ -529,50 +528,43 @@ void GeneralTab::newTextFont()
 
 void GeneralTab::downloadPlugin()
 {
-    // set platform-specific library file name and config directory
-    const auto libName = getSpartaLibName();
-
-    // store in the same config directory where QSettings stores preferences
-    const auto configDir = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
-    if (configDir.isEmpty() || !QDir().mkpath(configDir)) {
+    const auto libPath = LibraryAcquire::downloadDestination();
+    if (libPath.isEmpty()) {
         critical(this, "SPARTA-GUI Error", "Cannot determine configuration directory.",
                  "Unable to create a writable directory in the user configuration "
                  "folder for storing the downloaded SPARTA shared library.");
         return;
     }
-    auto libPath = configDir + QDir::separator() + libName;
-    auto dlUrl   = getSpartaDownloadUrl();
 
-    URLDownloader downloader(this);
-    // keepBackup: this may be replacing the very library the running process
-    // has already loaded
-    if (downloader.download(dlUrl, libPath, true, true)) {
-        auto canonical = QFileInfo(libPath).canonicalFilePath();
-        settings->setValue(Keys::PLUGIN_PATH, canonical);
-        auto *field = findChild<QLineEdit *>("pluginedit");
-        if (field) field->setText(canonical);
-        settings->sync();
-
-        if (auto *prefs = qobject_cast<Preferences *>(window())) prefs->setRelaunch(true);
-    } else if (!downloader.wasAborted()) {
-        // Cancelling is not a failure and says nothing; anything else did, and
-        // used to say nothing either -- the dialog simply closed and the path
-        // was silently left as it was.
-        critical(this, "SPARTA-GUI Error", "Downloading the SPARTA library failed:",
-                 downloader.errorString());
+    QString reason;
+    switch (LibraryAcquire::download(this, libPath, &reason)) {
+        case LibraryAcquire::Result::Cancelled:
+            // Cancelling is not a failure and says nothing.  Anything else did,
+            // and used to say nothing either -- the dialog simply closed and the
+            // path was silently left as it was.
+            return;
+        case LibraryAcquire::Result::Failed:
+            critical(this, "SPARTA-GUI Error", "Downloading the SPARTA library failed:", reason);
+            return;
+        case LibraryAcquire::Result::Ok:
+            break;
     }
+
+    const auto canonical = QFileInfo(libPath).canonicalFilePath();
+    settings->setValue(Keys::PLUGIN_PATH, canonical);
+    auto *field = findChild<QLineEdit *>("pluginedit");
+    if (field) field->setText(canonical);
+    settings->sync();
+
+    // Unlike the setup card's download, this one may be replacing the library
+    // the process already has open, which cannot be swapped in place.
+    if (auto *prefs = qobject_cast<Preferences *>(window())) prefs->setRelaunch(true);
 }
 
 void GeneralTab::pluginPath()
 {
     auto *field = findChild<QLineEdit *>("pluginedit");
-#if defined(Q_OS_MACOS)
-    const QString pattern = "SPARTA shared library (libsparta*.dylib)";
-#elif defined(Q_OS_WIN32)
-    const QString pattern = "SPARTA shared library (libsparta*.dll)";
-#else
-    const QString pattern = "SPARTA shared library (libsparta*.so*)";
-#endif
+    const QString pattern = LibraryAcquire::fileDialogPattern();
     if (field) {
         auto libdir      = QFileInfo(".").absoluteDir();
         const auto &path = field->text();

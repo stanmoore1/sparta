@@ -45,7 +45,9 @@
 #include <QClipboard>
 #include <QLabel>
 #include <QMainWindow>
+#include <QMenu>
 #include <QMimeData>
+#include <QSettings>
 #include <QSignalSpy>
 #include <QSlider>
 #include <QSpinBox>
@@ -72,6 +74,7 @@
 #include "aboutdialog.h"
 #include "dockpanels.h"
 #include "emptystate.h"
+#include "constants.h"
 #include "codeeditor.h"
 #include "findandreplace.h"
 #include "helpers.h"
@@ -85,6 +88,7 @@
 #include "runhistory.h"
 #include "slideshow.h"
 #include "viewerpanel.h"
+#include "spartagui.h"
 #include "viewersidebar.h"
 #include "stlimportwizard.h"
 #include "surfreportdialog.h"
@@ -1413,6 +1417,59 @@ TEST(ImageViewerLayout, TheViewerFileEntriesNameWhatTheyActOn)
         << bound.value(close).toStdString();
 }
 
+// Without a library the application used to refuse to start: a modal offering
+// download, browse or exit, looped on until one worked.  It starts now, and
+// the card carries the same offer from above the editor.  What has to hold is
+// that the card is there, that it goes when a library arrives, and that the
+// run controls track it -- a card claiming decks cannot be run while Run sits
+// enabled would be worse than no card at all.
+TEST(FirstStart, WithoutALibraryTheApplicationComesUpAndSaysWhatIsMissing)
+{
+    qputenv("SPARTA_GUI_FORCE_NO_PLUGIN", "1");
+
+    // Point the example scan at this checkout: without a library the search
+    // loses the library's own directory as a candidate, and the build tree the
+    // test runs from has no examples above it either, so an unset path would
+    // make the case about the layout of the machine rather than about the code.
+    const QString examples =
+        QDir(fixturesDir() + "/../../../../examples").canonicalPath();
+    if (!QDir(examples).exists()) GTEST_SKIP() << "needs the SPARTA examples directory";
+    QSettings().setValue(Keys::EXAMPLES_PATH, examples);
+
+    SpartaGui gui(nullptr, QString(), 1000, 700);
+    gui.show();
+    QApplication::processEvents();
+
+    auto *card = gui.findChild<QWidget *>("setupcard");
+    ASSERT_NE(card, nullptr) << "nothing tells the user why nothing can be run";
+    EXPECT_TRUE(card->isVisible());
+
+    // browse is always possible; downloading depends on the build
+    EXPECT_NE(card->findChild<QAbstractButton *>("setupbrowse"), nullptr);
+
+    QHash<QString, bool> offered;
+    for (auto *a : gui.findChildren<QAction *>())
+        if (!a->text().isEmpty()) offered[a->text()] = a->isEnabled();
+
+    // Examples are files: reading one needs no simulator, and the card says as
+    // much when it claims decks can be opened.
+    bool exampleOffered = false;
+    for (auto *m : gui.findChildren<QMenu *>())
+        if (m->title().contains("Example") && m->isEnabled() && !m->isEmpty())
+            exampleOffered = true;
+    EXPECT_TRUE(exampleOffered) << "the examples cannot be opened without a library";
+
+    for (const QString &name : offered.keys()) {
+        if (name.contains("Run SPARTA from Editor Buffer") || name.contains("Create &Image"))
+            EXPECT_FALSE(offered.value(name))
+                << name.toStdString() << " is offered with no library behind it";
+        if (name.contains("&Save Input File"))
+            EXPECT_TRUE(offered.value(name))
+                << name.toStdString() << " is refused, but a deck can be saved without a library";
+    }
+    qunsetenv("SPARTA_GUI_FORCE_NO_PLUGIN");
+}
+
 // The merged viewer panel: the tab bar plus whichever source is in front. The
 // walk covers the front page only, which is the point -- the panel shows one
 // source at a time, and a control on a hidden page is not reachable by a user
@@ -1504,6 +1561,7 @@ int main(int argc, char **argv)
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }
+
 
 
 

@@ -60,6 +60,7 @@ class SweepPanel;
 class RunHistory;
 class HistoryPanel;
 class StdCapture;
+class SetupCard;
 class URLDownloader;
 class SceneWindow; // only defined when built with SPARTA_GUI_HAVE_VTK
 class VtkScene;    // ditto
@@ -468,10 +469,40 @@ private:
     void setupUi(QSettings &settings, QFont &allFont, QFont &monoFont);
 
     /**
-     * @brief Configure, check, and download the SPARTA shared library
+     * @brief Find and load the SPARTA shared library, without asking
      * @param settings application settings class instance
+     *
+     * Tries the configured path, then everything @ref LibraryAcquire finds.
+     * Returns either way: a launch with no library used to stop here behind a
+     * modal, which made an application that can perfectly well edit a deck
+     * refuse to come up unless the user could produce a simulator.  The
+     * @ref SetupCard says the same three things from above the editor instead.
      */
     void setupPlugin(QSettings &settings);
+
+    /**
+     * @brief Everything that can only be set up once a library is loaded
+     * @param settings application settings class instance
+     *
+     * Accelerators, the SPARTA instance itself, the example menu's probing and
+     * the completion lists built from the style tables.  Called from the
+     * constructor when a library was found, and again from the setup card the
+     * moment one is.
+     */
+    void finishLibraryInit(QSettings &settings);
+
+    /// @brief Ask for a library file and adopt it (setup card "Browse...")
+    void browseForLibrary();
+
+    /// @brief Fetch the pre-compiled library and adopt it (setup card "Download")
+    void downloadLibrary();
+
+    /// @brief Take @p path as the library: load it, record it, finish setup.
+    /// @return true when it loaded; the caller reports the failure it wants to
+    bool adoptLibrary(const QString &path);
+
+    /// @brief Show or hide the setup card according to whether a library loaded
+    void syncSetupCard();
 
     /**
      * @brief Configure, check, and assign SPARTA accelerator package settings
@@ -576,6 +607,7 @@ private:
     CommandPalette *palette    = nullptr; ///< the command palette (created on demand)
     ShortcutsDialog *helpsheet = nullptr; ///< help + generated shortcut sheet
     WelcomeScreen *welcome;         ///< Landing view (recent files + examples gallery)
+    SetupCard *setupCard = nullptr; ///< Banner shown while there is no SPARTA library
     QMenuBar *menubar;              ///< Menu bar with menus and actions
     QActionGroup *modeGroup = nullptr;  ///< Exclusive View-menu workspace mode actions
     QList<QAbstractButton *> modeButtons; ///< Toolbar workspace mode switch buttons
