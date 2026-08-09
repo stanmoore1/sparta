@@ -2,7 +2,6 @@
 // SPARTA-GUI - A Graphical Tool to Learn and Explore the SPARTA DSMC Simulation Software
 //
 // Copyright (c) 2023, 2024, 2025, 2026  Axel Kohlmeyer
-// SPARTA-GUI adaptation Copyright (c) 2026 Sandia Corporation
 //
 // Documentation: https://sparta.github.io/sparta-gui/
 // Contact: akohlmey@gmail.com

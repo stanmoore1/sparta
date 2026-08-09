@@ -64,6 +64,24 @@ divergence is in files SPARTA-GUI rewrote. What has been looked at so far:
 - **Dropped files** — upstream tutorials.*, tutorialwizard.*,
   urldownloader.* (LAMMPS tutorial downloads have no SPARTA
   equivalent).
+- **Fork-local files** — no upstream counterpart at all, so an
+  upstream patch never touches them and they are free to change:
+  actionmetadata.*, actionscan.*, casemodel.*, chartdialogs.*,
+  commandpalette.*, displaytransform.*, dockpanels.*,
+  dumpimagesettingsdialog.*, emptystate.*, inputcheck.*,
+  paraviewdialog.*, paraviewexport.*, runarchive.*, runcompare.*,
+  runhistory.*, shortcutsdialog.*, snippets.*, stlimport.*,
+  stlimportwizard.*, surfreport.*, surfreportdialog.*, sweeppanel.*,
+  sweepspec.*, theme.*, viewerdisplay.*, viewerpanel.*,
+  viewersidebar.*, viewersource.h, viewerwindow.*, vtkfilters.*,
+  vtkscene.*, welcomescreen.*.
+
+  This is the preferred shape for anything new: put the behavior in a
+  fork-local file and leave only a hook line in the adapted file it
+  plugs into.  ViewerSidebar is the pattern to copy — it owns the
+  image viewer's control layout, while imageviewer.cpp changed only
+  where it assembles that layout and handed the sidebar the buttons it
+  already had.
 
 ## The SPARTA documentation as an input
 
