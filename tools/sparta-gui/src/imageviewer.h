@@ -33,6 +33,7 @@ class QLabel;
 class QObject;
 class QScrollArea;
 class ViewerDisplay;
+class ViewerSidebar;
 class QShowEvent;
 class SpartaWrapper;
 class SpartaGui;
@@ -163,6 +164,7 @@ private:
 
 private:
     ViewerDisplay *display;  ///< Scroll area, label, and the fit-to-panel rule
+    ViewerSidebar *sidebar;  ///< Per-subject control column beside the render
     QMenuBar *menuBar;       ///< Menu bar
     QPoint dragLast;         ///< last mouse pos during an interactive view drag
     bool dragging = false;   ///< true while dragging to rotate/pan the render
@@ -171,6 +173,7 @@ private:
     QAction *copyAct;   ///< Copy action
     QAction *cmdAct;    ///< Copy dump image command action
     QAction *movieAct;  ///< Copy dump movie command action
+    QAction *sidebarAct = nullptr; ///< View menu toggle for the settings sidebar
 
     QMap<QString, QString> fix_map;     ///< Fix style to help page mapping
     QMap<QString, QString> compute_map; ///< Compute style to help page mapping

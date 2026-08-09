@@ -112,15 +112,18 @@ Available controls
 
 .. index:: image viewer controls
 
-The Image Viewer window consists of three main areas: a menu/toolbar
-strip at the top, the rendered image in the center, and a settings panel
-on the right side.  Following the general theme of SPARTA-GUI of
-extensive keyboard shortcut support, you can select most controls by
-using the `Alt` key and the underlined letter.  For example the *File*
-menu is opened with `Alt-F` and its entries can be also selected the
-same way or using the cursor keys and `Enter`.  Keyboard shortcuts
-starting with `Ctrl` usually work globally inside the image window, that
-is even when the corresponding menu item is not visible.
+The Image Viewer window consists of three main areas: a menu and camera
+strip at the top, the rendered image in the center, and the settings
+sidebar on the right side.  The sidebar has one row per subject --
+particles, grid, grid planes, surfaces, box, camera, quality, color maps
+-- and each row carries both the switch that shows or hides that subject
+and the button that opens its settings.  Following the general theme of
+SPARTA-GUI of extensive keyboard shortcut support, you can select most
+controls by using the `Alt` key and the underlined letter.  For example
+the *File* menu is opened with `Alt-F` and its entries can be also
+selected the same way or using the cursor keys and `Enter`.  Keyboard
+shortcuts starting with `Ctrl` usually work globally inside the image
+window, that is even when the corresponding menu item is not visible.
 
 The **menu bar row** has:
 
@@ -156,6 +159,10 @@ The **menu bar row** has:
      color sequence of the dump image command.
    - **Close** (`Ctrl-W`): Close the Image Viewer window.
    - **Quit** (`Ctrl-Q`): Quit the entire application.
+- The **View** menu with the **Settings Sidebar** entry (`F9`), which
+  shows or hides the sidebar described below.  Hiding it gives its width
+  back to the rendered image, which matters when the viewer shares a
+  window with the editor and the log.
 - The **busy indicator**, a small palette icon that is colored |palette|
   while SPARTA is rendering a new image and grayed out |inactive| when
   rendering is complete.
@@ -163,31 +170,10 @@ The **menu bar row** has:
   the size of the rendered image in pixels can be set (the *size*
   keyword).
 
-The **toolbar buttons** row below the menu bar provides quick access to
-several rendering options and view manipulations.  From left to right
-there are:
+The **camera row** below the menu bar moves the point of view.  Every
+button here re-renders the scene immediately.  From left to right there
+are:
 
-- **SSAO** (toggle): Enable or disable `Screen Space Ambient Occlusion
-  <https://en.wikipedia.org/wiki/Screen_space_ambient_occlusion>`_
-  rendering for a more spatial, depth-shaded appearance, at the
-  expense of more CPU time (the *ssao* keyword).
-- **Anti-aliasing** (toggle): Render the image at double resolution and
-  scale down for smoother edges.  `Full Scene Anti-Aliasing (FSAA)
-  <https://en.wikipedia.org/wiki/Spatial_anti-aliasing#Super_sampling_/_full-scene_anti-aliasing>`_
-  produces higher quality images at the expense of more CPU time (the
-  *fsaa* keyword).
-- **Shininess** (toggle): Switch between shiny and matte rendering of
-  spheres and cylinders (the *shiny* keyword).
-- **Particles** (toggle): Show or hide the particles (the *particle*
-  keyword).
-- **Grid** (toggle): Show or hide the grid cell volume rendering (the
-  *grid* keyword).
-- **Surfaces** (toggle): Show or hide the surface elements (the *surf*
-  keyword).  Only enabled when the simulation defines surfaces.
-- **Box** (toggle): Show or hide the simulation box drawn as colored
-  cylinders (the *box* keyword).
-- **Axes** (toggle): Show or hide the coordinate axes (the *axes*
-  keyword).
 - **Zoom in** / **Zoom out**: Adjust the zoom level in 10
   percent increments between 0.1x and 10.0x (the *zoom* keyword).
 - **Rotate left** / **Rotate right**: Rotate the view horizontally by
@@ -208,19 +194,59 @@ The default image size, some default image quality settings, and some
 colors can be changed in the :doc:`Preferences <dialogs>` dialog
 window.
 
-The **settings panel** on the right side of the window provides
-additional controls:
+The **settings sidebar** on the right side of the window is organized by
+subject.  At its top is:
 
 - **Mixture** (`Alt-X`): A drop-down list to select which `mixture
   <https://sparta.github.io/doc/mixture.html>`_ of particles to display
   (default is "all").  Only particles whose species belong to the
   selected mixture are rendered.  The list is retrieved from the
   current SPARTA instance.
-- One button for each tab of the :ref:`Dump Image Settings dialog
-  <image_settings_dialog>` described below: **Particles...**,
-  **Grid...**, **Grid Planes...**, **Surfaces...**, **Box & Axes...**,
-  **Camera...**, **Quality...**, and **Color Maps...**.  Each button
-  opens the same dialog with the corresponding tab selected.
+
+Below it is one row per subject.  Each row's named button opens the
+:ref:`Dump Image Settings dialog <image_settings_dialog>` described
+below at the matching tab, and the icon buttons on the same row switch
+that subject on and off without opening anything:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 22 78
+
+   * - Row
+     - Switches on the row
+   * - **Particles...** (`Alt-P`)
+     - Show or hide the particles (the *particle* keyword).
+   * - **Grid...** (`Alt-G`)
+     - Show or hide the grid cell volume rendering (the *grid* keyword).
+   * - **Grid Planes...** (`Alt-N`)
+     - none; the cut planes are configured in the dialog.
+   * - **Surfaces...** (`Alt-U`)
+     - Show or hide the surface elements (the *surf* keyword).  Only
+       enabled when the simulation defines surfaces.
+   * - **Box & Axes...** (`Alt-B`)
+     - Show or hide the simulation box drawn as colored cylinders (the
+       *box* keyword), and show or hide the coordinate axes (the *axes*
+       keyword).
+   * - **Camera...** (`Alt-C`)
+     - none; use the camera row above or the dialog.
+   * - **Quality...** (`Alt-Q`)
+     - `Screen Space Ambient Occlusion
+       <https://en.wikipedia.org/wiki/Screen_space_ambient_occlusion>`_
+       for a more spatial, depth-shaded appearance (the *ssao*
+       keyword); `Full Scene Anti-Aliasing
+       <https://en.wikipedia.org/wiki/Spatial_anti-aliasing#Super_sampling_/_full-scene_anti-aliasing>`_,
+       which renders at double resolution and scales down for smoother
+       edges (the *fsaa* keyword); and shiny versus matte rendering of
+       spheres and cylinders (the *shiny* keyword).  All three cost
+       extra CPU time per frame.
+   * - **Color Maps...** (`Alt-M`)
+     - none; the maps are edited in the dialog.
+
+Two more controls belong to the sidebar itself:
+
+- The arrow in the sidebar's **Settings** header collapses it to a
+  narrow strip, and the arrow on that strip brings it back.  The
+  **View > Settings Sidebar** menu entry (`F9`) does the same thing.
 - **Help**: Opens this documentation page for the visualization
   features in SPARTA-GUI in a web browser.
 

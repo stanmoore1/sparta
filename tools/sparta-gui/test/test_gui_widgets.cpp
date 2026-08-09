@@ -35,6 +35,8 @@
 #include <QComboBox>
 #include <QDialog>
 #include <QDoubleSpinBox>
+#include <QGridLayout>
+#include <QHash>
 #include <QLineEdit>
 #include <QPlainTextEdit>
 #include <QScrollArea>
@@ -48,6 +50,7 @@
 #include <QSlider>
 #include <QSpinBox>
 #include <QTabWidget>
+#include <QToolButton>
 #include <QTest>
 #include <QTimer>
 #include <QDir>
@@ -82,6 +85,7 @@
 #include "runhistory.h"
 #include "slideshow.h"
 #include "viewerpanel.h"
+#include "viewersidebar.h"
 #include "stlimportwizard.h"
 #include "surfreportdialog.h"
 
@@ -109,6 +113,9 @@ static const SkipRule SKIP_RULES[] = {
     {"Download", "network fetch followed by a process relaunch"},
     {"colorSwatch", "opens a modal colour picker with its own event loop; the "
                     "adjacent colour text field covers the same setting"},
+    {"sidebarhide", "collapses the image viewer's settings sidebar, which would hide "
+                    "every control the walk has not reached yet; covered by the "
+                    "ImageViewerLayout cases"},
 };
 
 /**
@@ -1156,6 +1163,143 @@ TEST(ImageViewerLayout, EverySettingsButtonIsReachableInAShortPanel)
     }
 }
 
+// The render toggles and the settings buttons configure the same eight
+// subjects, and used to sit in two places with no visible relation to each
+// other -- unlabelled icons along the top, worded buttons down the side. The
+// sidebar's whole claim is that each pair now shares a line, so check the
+// pairing where it actually lives: the grid row.
+//
+// A toggle re-parented to the wrong row, or dropped from the sidebar and left
+// in the old toolbar, still passes every functional test in
+// test_imageviewerbuttons -- findChild() does not care where a button is -- so
+// nothing else would notice.
+TEST(ImageViewerLayout, EachRenderToggleSharesItsRowWithTheSettingsItControls)
+{
+    SpartaWrapper sparta;
+    if (!openSparta(sparta, surfDeck()))
+        GTEST_SKIP() << "needs SPARTA_PLUGIN_LIB and the in.surfq fixture";
+
+    ImageViewer viewer("test", &sparta, nullptr);
+    viewer.resize(900, 500);
+    viewer.show();
+    QApplication::processEvents();
+
+    auto *sidebar = viewer.findChild<QWidget *>("viewersidebar");
+    ASSERT_NE(sidebar, nullptr) << "the viewer has no settings sidebar";
+    auto *grid = sidebar->findChild<QGridLayout *>();
+    ASSERT_NE(grid, nullptr) << "the sidebar has no row grid";
+
+    // object name -> grid row, for every button the sidebar holds
+    QHash<QString, int> row;
+    for (int i = 0; i < grid->count(); ++i) {
+        int r = -1, c = -1, rs = 0, cs = 0;
+        grid->getItemPosition(i, &r, &c, &rs, &cs);
+        auto *item = grid->itemAt(i);
+        if (auto *w = item->widget()) {
+            row[w->objectName()] = r;
+        } else if (auto *sub = item->layout()) {
+            for (int j = 0; j < sub->count(); ++j)
+                if (auto *w = sub->itemAt(j)->widget()) row[w->objectName()] = r;
+        }
+    }
+
+    struct {
+        const char *toggle;   ///< the on/off button that used to be in the toolbar
+        const char *settings; ///< the button opening the dialog for the same subject
+    } pairs[] = {
+        {"particles", "particlesettings"}, {"grid", "gridsettings"},
+        {"surf", "surfsettings"},          {"box", "boxsettings"},
+        {"axes", "boxsettings"},           {"ssao", "quality"},
+        {"antialias", "quality"},          {"shiny", "quality"},
+    };
+
+    for (const auto &p : pairs) {
+        ASSERT_TRUE(row.contains(p.toggle)) << p.toggle << " is not in the sidebar at all";
+        ASSERT_TRUE(row.contains(p.settings)) << p.settings << " is not in the sidebar at all";
+        EXPECT_EQ(row.value(p.toggle), row.value(p.settings))
+            << p.toggle << " is not on the same row as " << p.settings;
+    }
+
+    // The three subjects with nothing to switch still get a row of their own.
+    for (const char *name : {"planes", "camera", "colormaps"})
+        EXPECT_TRUE(row.contains(name)) << name << " lost its row in the sidebar";
+}
+
+// Collapsing has to actually give the width back. A "collapse" that hides the
+// controls while the column keeps its old fixed width would look like it worked
+// and buy the render nothing, which is the entire reason the control exists.
+TEST(ImageViewerLayout, CollapsingTheSidebarGivesTheWidthBackToTheRender)
+{
+    SpartaWrapper sparta;
+    if (!openSparta(sparta, surfDeck()))
+        GTEST_SKIP() << "needs SPARTA_PLUGIN_LIB and the in.surfq fixture";
+
+    ImageViewer viewer("test", &sparta, nullptr);
+    viewer.resize(900, 500);
+    viewer.show();
+    QApplication::processEvents();
+
+    auto *sidebar = viewer.findChild<ViewerSidebar *>("viewersidebar");
+    ASSERT_NE(sidebar, nullptr);
+    auto *column = viewer.findChild<QScrollArea *>("settingsscroll");
+    ASSERT_NE(column, nullptr);
+
+    const int wide = column->width();
+    EXPECT_FALSE(sidebar->isCollapsed());
+
+    sidebar->setCollapsed(true);
+    QApplication::processEvents();
+    EXPECT_LT(column->width(), wide / 2)
+        << "collapsing the sidebar did not narrow the column it lives in";
+
+    // and the way back is still on screen
+    auto *handle = sidebar->findChild<QToolButton *>("sidebarhandle");
+    ASSERT_NE(handle, nullptr) << "a collapsed sidebar has no handle to bring it back";
+    EXPECT_TRUE(handle->isVisible());
+
+    handle->click();
+    QApplication::processEvents();
+    EXPECT_FALSE(sidebar->isCollapsed());
+    EXPECT_EQ(column->width(), wide);
+}
+
+// The View menu entry and the sidebar's own header button drive the same state,
+// so a check mark that stops tracking the panel is a menu that lies about it.
+TEST(ImageViewerLayout, TheViewMenuEntryTracksTheSidebarWhicheverWayItWasCollapsed)
+{
+    SpartaWrapper sparta;
+    if (!openSparta(sparta, surfDeck()))
+        GTEST_SKIP() << "needs SPARTA_PLUGIN_LIB and the in.surfq fixture";
+
+    ImageViewer viewer("test", &sparta, nullptr);
+    viewer.show();
+    QApplication::processEvents();
+
+    auto *sidebar = viewer.findChild<ViewerSidebar *>("viewersidebar");
+    ASSERT_NE(sidebar, nullptr);
+
+    QAction *entry = nullptr;
+    for (auto *a : viewer.findChildren<QAction *>())
+        if (a->text() == QLatin1String("Settings &Sidebar")) entry = a;
+    ASSERT_NE(entry, nullptr) << "there is no View menu entry for the sidebar";
+    ASSERT_TRUE(entry->isCheckable());
+    EXPECT_TRUE(entry->isChecked());
+
+    // hidden from the sidebar's own button: the menu must follow
+    auto *hide = sidebar->findChild<QToolButton *>("sidebarhide");
+    ASSERT_NE(hide, nullptr);
+    hide->click();
+    QApplication::processEvents();
+    EXPECT_TRUE(sidebar->isCollapsed());
+    EXPECT_FALSE(entry->isChecked());
+
+    // and brought back from the menu: the sidebar must follow
+    entry->trigger();
+    QApplication::processEvents();
+    EXPECT_FALSE(sidebar->isCollapsed());
+    EXPECT_TRUE(entry->isChecked());
+}
+
 // The merged viewer panel: the tab bar plus whichever source is in front. The
 // walk covers the front page only, which is the point -- the panel shows one
 // source at a time, and a control on a hidden page is not reachable by a user
@@ -1247,3 +1391,6 @@ int main(int argc, char **argv)
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }
+
+
+

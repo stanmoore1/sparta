@@ -132,7 +132,8 @@ also rebind shortcuts for window-specific actions:
   embedded YAML data, `Ctrl-Enter` runs the current input buffer.
 - *Image Viewer* window: `Ctrl-S` saves the rendered image,
   `Ctrl-C` copies it to the clipboard, `Ctrl-D` copies the
-  ``dump image`` / ``dump_modify`` commands to the clipboard.
+  ``dump image`` / ``dump_modify`` commands to the clipboard, `F9`
+  shows or hides the settings sidebar.
 - *Slide Show* window: `Ctrl-S` saves the currently displayed image,
   `Ctrl-C` copies it to the clipboard, `Ctrl-E` exports the
   image sequence to a movie file.

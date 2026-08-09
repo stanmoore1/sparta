@@ -20,6 +20,7 @@
 #include "spartagui.h"
 #include "spartawrapper.h"
 #include "viewerdisplay.h"
+#include "viewersidebar.h"
 #include "stdcapture.h"
 
 #include <QAction>
@@ -154,7 +155,7 @@ void saveJsonColors(QWidget *parent, const QJsonArray &colors, const QJsonObject
 ImageViewer::ImageViewer(const QString &fileName, SpartaWrapper *_sparta, SpartaGui *_spartagui,
                          QWidget *parent) :
     ViewerSource(parent), display(new ViewerDisplay(ViewerDisplay::FitViewport)),
-    menuBar(new QMenuBar),
+    sidebar(new ViewerSidebar), menuBar(new QMenuBar),
     saveAsAct(nullptr), copyAct(nullptr), cmdAct(nullptr), movieAct(nullptr), sparta(_sparta),
     spartagui(_spartagui), filename(QFileInfo(fileName).fileName())
 {
@@ -165,9 +166,8 @@ ImageViewer::ImageViewer(const QString &fileName, SpartaWrapper *_sparta, Sparta
     display->label()->setCursor(Qt::OpenHandCursor);
     display->setVisible(false);
 
-    auto *imageLayout    = new QHBoxLayout;
-    auto *settingsLayout = new QVBoxLayout;
-    auto *mainLayout     = new QVBoxLayout;
+    auto *imageLayout = new QHBoxLayout;
+    auto *mainLayout  = new QVBoxLayout;
 
     // list of compute and fix styles producing per-grid or per-surf data
     // usable with dump image (regenerated table)
@@ -423,16 +423,11 @@ ImageViewer::ImageViewer(const QString &fileName, SpartaWrapper *_sparta, Sparta
     menuLayout->insertStretch(-1, 50);
     menuLayout->setSpacing(LAYOUT_SPACING);
 
+    // The top row is the camera and nothing else.  It used to carry the eight
+    // render toggles as well, as unlabelled icons with no visible relation to
+    // the settings buttons down the right-hand side that configure the very
+    // same things; those have moved into the sidebar next to their subject.
     buttonLayout->addWidget(dummy2);
-    buttonLayout->addWidget(dossao);
-    buttonLayout->addWidget(doanti);
-    buttonLayout->addWidget(doshiny);
-    buttonLayout->addWidget(dopart);
-    buttonLayout->addWidget(dogrid);
-    buttonLayout->addWidget(dosurf);
-    buttonLayout->addWidget(dobox);
-    buttonLayout->addWidget(doaxes);
-    // the two transform families share icons, so say which is which
     auto *camlabel = new QLabel("Camera:");
     camlabel->setToolTip("These controls move the camera and re-render the scene");
     buttonLayout->addWidget(camlabel);
@@ -449,24 +444,33 @@ ImageViewer::ImageViewer(const QString &fileName, SpartaWrapper *_sparta, Sparta
     buttonLayout->setSizeConstraint(QLayout::SetMinimumSize);
     buttonLayout->setContentsMargins(0, 0, 0, 0);
     buttonLayout->setSpacing(LAYOUT_SPACING);
-    settingsLayout->addWidget(new QHline);
-    settingsLayout->addWidget(new QLabel("Mixture:"));
-    settingsLayout->addWidget(combo);
-    settingsLayout->addWidget(new QHline);
-    settingsLayout->addWidget(new QLabel("Settings:"));
-    settingsLayout->addWidget(partviz);
-    settingsLayout->addWidget(gridviz);
-    settingsLayout->addWidget(planeviz);
-    settingsLayout->addWidget(surfviz);
-    settingsLayout->addWidget(boxviz);
-    settingsLayout->addWidget(camviz);
-    settingsLayout->addWidget(qualviz);
-    settingsLayout->addWidget(mapviz);
-    settingsLayout->addWidget(new QHline);
-    settingsLayout->addWidget(help);
-    settingsLayout->insertStretch(-1, 10);
-    settingsLayout->setSizeConstraint(QLayout::SetMinimumSize);
-    settingsLayout->setSpacing(LAYOUT_SPACING);
+    // The sidebar puts each subject's on/off switch on the same line as the
+    // button that configures it.  The buttons are the ones built above, handed
+    // over unchanged: same object names, tooltips, mnemonics and connections,
+    // so every slot below and syncButtons() are unaffected by the move.
+    //
+    //   old top-row toggle -> sidebar row
+    //     particles  -> Particles       (primary)
+    //     grid       -> Grid            (primary)
+    //     surf       -> Surfaces        (primary)
+    //     box        -> Box & Axes      (primary)
+    //     axes       -> Box & Axes      (secondary)
+    //     ssao       -> Quality         (secondary)
+    //     antialias  -> Quality         (secondary)
+    //     shiny      -> Quality         (secondary)
+    //
+    // Grid Planes, Camera and Color Maps have no toggle of their own and so
+    // occupy only the name column.
+    sidebar->addHeader("Mixture:", combo);
+    sidebar->addRow(dopart, partviz);
+    sidebar->addRow(dogrid, gridviz);
+    sidebar->addRow(nullptr, planeviz);
+    sidebar->addRow(dosurf, surfviz);
+    sidebar->addRow(dobox, boxviz, {doaxes});
+    sidebar->addRow(nullptr, camviz);
+    sidebar->addRow(nullptr, qualviz, {dossao, doanti, doshiny});
+    sidebar->addRow(nullptr, mapviz);
+    sidebar->addFooter(help);
 
     connect(dossao, &QPushButton::released, this, &ImageViewer::toggleSsao);
     connect(doanti, &QPushButton::released, this, &ImageViewer::toggleFsaa);
@@ -507,17 +511,23 @@ ImageViewer::ImageViewer(const QString &fileName, SpartaWrapper *_sparta, Sparta
     buttonScroll->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     buttonScroll->setFixedHeight(buttonBar->sizeHint().height());
 
-    settingsLayout->addStretch(1);
-    auto *settingsBar = new QWidget;
-    settingsBar->setLayout(settingsLayout);
     auto *settingsScroll = new QScrollArea;
-    settingsScroll->setWidget(settingsBar);
+    settingsScroll->setObjectName("settingsscroll");
+    settingsScroll->setWidget(sidebar);
     settingsScroll->setWidgetResizable(true);
     settingsScroll->setFrameShape(QFrame::NoFrame);
     settingsScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     settingsScroll->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
-    settingsScroll->setFixedWidth(settingsBar->sizeHint().width() +
-                                  settingsScroll->verticalScrollBar()->sizeHint().width());
+
+    // The column is as wide as it needs to be while it is expanded and as wide
+    // as the handle once it is not, so the width has to follow the sidebar
+    // rather than be measured once at construction time.
+    auto fitSidebar = [settingsScroll, this]() {
+        settingsScroll->setFixedWidth(sidebar->sizeHint().width() +
+                                      settingsScroll->verticalScrollBar()->sizeHint().width());
+    };
+    fitSidebar();
+    connect(sidebar, &ViewerSidebar::collapsedChanged, this, [fitSidebar](bool) { fitSidebar(); });
 
     topLayout->addWidget(buttonScroll);
     mainLayout->addLayout(topLayout);
@@ -1329,6 +1339,21 @@ void ImageViewer::createActions()
         addMenuAction(fileMenu, "&Quit", ":/icons/application-exit.svg", this, &ImageViewer::quit);
     quitAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Q));
     quitAct->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+
+    // The sidebar can also be collapsed from its own header, but a menu entry
+    // is what a user looks for when a panel has gone missing, and it is the
+    // only way back if the handle is scrolled out of view in a very short panel.
+    QMenu *viewMenu = menuBar->addMenu("&View");
+    sidebarAct      = viewMenu->addAction("Settings &Sidebar");
+    sidebarAct->setCheckable(true);
+    sidebarAct->setChecked(!sidebar->isCollapsed());
+    sidebarAct->setStatusTip("Show or hide the column of per-subject display settings");
+    sidebarAct->setShortcut(QKeySequence(Qt::Key_F9));
+    sidebarAct->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+    connect(sidebarAct, &QAction::toggled, sidebar,
+            [this](bool on) { sidebar->setCollapsed(!on); });
+    connect(sidebar, &ViewerSidebar::collapsedChanged, sidebarAct,
+            [this](bool on) { sidebarAct->setChecked(!on); });
 }
 
 QIcon ImageViewer::sourceIcon() const
