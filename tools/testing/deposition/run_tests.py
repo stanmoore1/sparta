@@ -549,6 +549,20 @@ def test_grow(exe):
     return ok
 
 
+def test_minmax(exe):
+    """minmax yes with units distance must be refused.
+
+    minmax rounds every stored corner point value to 0 or 255, which erases
+    exactly the direction information a rate in length/time needs, so the
+    combination can never work; it used to run and silently deliver wrong
+    oblique rates like any other binary field.
+    """
+    rc, out = run(exe, "in.test.flat", {"MINMAX": "yes"})
+    saw = "cannot be combined with units distance" in out
+    return check("minmax yes + units distance : refused", rc != 0 and saw,
+                 "rc=%d" % rc if not saw else "")
+
+
 def test_periodic(exe):
     """A film may grow to a reflecting box face but not to a periodic one.
 
@@ -855,19 +869,27 @@ def test_oblique(exe):
             continue
         speeds[field] = (r[-1]-r[0]) / ((ts[-1]-ts[0]) * 0.001)
         speeds[field + ":warn"] = "faces directions its corner point" in out
+        speeds[field + ":setupwarn"] = "field is binary 0/255" in out
 
     if "diamond.smooth" in speeds:
         s = speeds["diamond.smooth"]
         ok &= check("oblique front : graded field moves at the asked speed",
                     abs(s-1.0) < 0.05, "realized %.4f, ratio %.4f" % (s, s))
         ok &= check("oblique front : graded field is not warned about",
-                    not speeds["diamond.smooth:warn"], "")
+                    not speeds["diamond.smooth:warn"] and
+                    not speeds["diamond.smooth:setupwarn"], "")
 
     if "diamond.binary" in speeds:
         s = speeds["diamond.binary"]
         ok &= check("oblique front : binary field is warned about",
                     speeds["diamond.binary:warn"],
                     "it runs at %.4f of the asked speed" % s)
+        # the setup warning fires before any growth, when the stored field is
+        # binary AND the surface it induces actually has oblique elements, so
+        # a wrong-rate run announces itself at step 0 rather than after the
+        # first interval
+        ok &= check("oblique front : binary field is warned about at setup",
+                    speeds["diamond.binary:setupwarn"], "")
 
     # response volume asks the cell for a swept VOLUME instead of a normal
     # displacement, which needs no surface normal, so the direction a binary
@@ -1070,6 +1092,8 @@ def main():
     ok &= test_grow(exe)
     # a film may not rest on or grow to a periodic box face
     ok &= test_periodic(exe)
+    # rounding the field to 0/255 erases what a length/time rate needs
+    ok &= test_minmax(exe)
     # with the corner point grid on the whole box the film can grow until it
     # runs out of box, which is legal and has to stay accounted for
     ok &= test_fill(exe, 1.0)

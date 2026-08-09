@@ -583,6 +583,53 @@ void FixAblate::store_corners(int nx_caller, int ny_caller, int nz_caller,
   // create implicit surfaces
 
   create_surfs(1);
+
+  // a rate in length/time on a binary 0/255 field is delivered accurately
+  //   only where the front is aligned with the grid, and both conditions are
+  //   knowable right now: the field is stored and the surface it induces has
+  //   just been built.  check_oblique() catches this too, but only after the
+  //   first interval has already run at the wrong rate, so say it at setup,
+  //   and only when oblique surface elements actually exist -- an
+  //   axis-aligned front on a binary field is exact and gets no warning
+
+  if (unitsflag == DISTANCE && !smoothed && !multi_val_flag) {
+    Grid::ChildInfo *cinfo = grid->cinfo;
+
+    int binary = 1;
+    for (int icell = 0; icell < nglocal && binary; icell++) {
+      if (!(cinfo[icell].mask & groupbit)) continue;
+      for (int m = 0; m < ncorner; m++)
+        if (cvalues[icell][m] != 0.0 && cvalues[icell][m] != 255.0) {
+          binary = 0;
+          break;
+        }
+    }
+
+    int noblique = 0;
+    int nslocal = surf->nlocal;
+    for (int i = 0; i < nslocal; i++) {
+      double *norm = (dim == 2) ? surf->lines[i].norm : surf->tris[i].norm;
+      double nmax = MAX(fabs(norm[0]),MAX(fabs(norm[1]),fabs(norm[2])));
+      if (nmax < 1.0-EPSILON) noblique++;
+    }
+
+    int flags[2],allflags[2];
+    flags[0] = 1 - binary;      // # of procs whose share of the field is graded
+    flags[1] = noblique;
+    MPI_Allreduce(flags,allflags,2,MPI_INT,MPI_SUM,world);
+
+    if (allflags[0] == 0 && allflags[1] && me == 0) {
+      char str[512];
+      sprintf(str,"Fix ablate: the corner point field is binary 0/255 and "
+              "the surface it induces has %d elements oblique to the grid, "
+              "whose direction the field cannot express, so a rate in "
+              "length/time will run up to 1/cos too fast there -- about "
+              "1.6x for a plane at 45 degrees.  Use a graded field: the "
+              "smooth keyword of read_isurf, or a file carrying "
+              "intermediate values read with push no",allflags[1]);
+      error->warning(FLERR,str);
+    }
+  }
 }
 
 /* ---------------------------------------------------------------------- */
@@ -613,6 +660,17 @@ void FixAblate::init()
   if (responseflag != RNORMAL && unitsflag != DISTANCE)
     error->all(FLERR,"Fix ablate response is only meaningful with "
                "units distance, where the source states a speed");
+
+  // a rate in length/time needs the direction the surface faces, which is
+  //   carried by the grading of the corner point field, and minmax erases
+  //   exactly that: the combination is always self-defeating
+
+  if (minmaxflag && unitsflag == DISTANCE)
+    error->all(FLERR,"Fix ablate minmax yes cannot be combined with "
+               "units distance: rounding the corner point values to 0/255 "
+               "erases the direction the surface faces, which the rate "
+               "conversion requires.  Use a graded field, see the smooth "
+               "keyword of read_isurf");
 
   // the KOKKOS particle move is a separate implementation and does not read
   //   the refreshed collision geometry, so growth is resolved only when the

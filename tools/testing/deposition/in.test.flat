@@ -35,6 +35,10 @@ variable            RATE index 1.0
 variable            STYLE index grid
 variable            NEVERY index 1
 
+# no is the default; the test that asserts minmax yes cannot be combined
+# with units distance overrides it
+variable            MINMAX index no
+
 seed                12345
 dimension           2
 global              gridcut 0.0 comm/sort yes
@@ -55,7 +59,7 @@ mixture             air N
 # field, and must give the same answer on a uniform rate
 variable            rate ${STYLE} ${RATE}
 fix                 ablate ablate all ${NEVERY} 1.0 v_rate mode deposit &
-                    units distance
+                    units distance minmax ${MINMAX}
 
 global              surfs implicit
 # push no keeps the linear ramp; the default flattens it to 0/255,

@@ -244,8 +244,11 @@ and still moves smoothly, but not at the speed that was asked for -- a
 plane at 45 degrees to a 2d grid comes out about 1.6 times too fast, while
 the same plane on a graded field comes out within 1%.  A front normal to
 the grid is exact either way, which is what makes this easy to miss.  Fix
-ablate warns when the corner point values it has been given cannot express
-the directions its surface faces.
+ablate therefore warns twice over: at setup, if the stored field is
+binary and the surface it induces has elements oblique to the grid, and
+again during the run if the conversion measures that the projection onto
+the surface normal is being lost.  An axis-aligned surface on a binary
+field is exact and generates neither warning.
 
 The {response} keyword offers a second way to convert a rate in
 length/time into a corner point increment, for the case above.  {response}
@@ -620,9 +623,9 @@ a crash somewhere further downstream.
 The {minmax} keyword is applied once, when the corner point values are
 stored: every value below the threshold becomes 0 and every other value
 becomes 255.  It reduces a graded field to the binary form a segmented
-tomographic image has.  Do not combine it with {units} = distance, which
-needs the graded field to know which way the surface faces, as described
-above.
+tomographic image has.  It cannot be combined with {units} = distance,
+which needs the graded field to know which way the surface faces, as
+described above; that combination is an error.
 
 :line
 
