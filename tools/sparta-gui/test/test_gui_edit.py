@@ -52,6 +52,27 @@ def check_image(fname, color, delta):
             print(px[60,75], px[930,75], px[930,400], px[60,400], color)
             return False
 
+def check_not_blank(fname):
+    """
+    Check that an image is not a blank screen, i.e. that something is drawn.
+
+    The exit cases used to require four fixed pixels to be the editor's white
+    text area, which made them a layout test by accident: adding the main
+    toolbar moved the editor down and two of the four landed on chrome, so
+    quitting -- which still worked -- reported failure.  What the shot before
+    the quit is really for is "the application was on screen", the complement
+    of the all-black shot after it, and that does not move when the layout
+    does.
+    """
+    with Image.open(fname) as im:
+        im = im.convert("RGB")
+        colors = {c for _, c in im.getcolors(maxcolors=1 << 20) or [((0, 0, 0), (0, 0, 0))]}
+        if len(colors) > 1:
+            os.remove(fname)
+            return True
+        print(f"{fname} is a single flat color: {colors}")
+        return False
+
 def focus():
     """Give focus to the editor window by positioning the mouse and clicking"""
     pyautogui.click(button='left', x=100, y=100)
@@ -136,7 +157,7 @@ class GUIEditorChecks(unittest.TestCase):
         pyautogui.hotkey('ctrl','q')
         screenshot("shot2.png")
         self.assertEqual(self.exited(), 0)
-        self.assertTrue(check_image('shot1.png', (255,255,255), 10))
+        self.assertTrue(check_not_blank('shot1.png'))
         self.assertTrue(check_image('shot2.png', (0,0,0), 1))
 
     def testExitMenu(self):
@@ -146,7 +167,7 @@ class GUIEditorChecks(unittest.TestCase):
         pyautogui.press('q')
         screenshot("shot2.png")
         self.assertEqual(self.exited(), 0)
-        self.assertTrue(check_image('shot1.png', (255,255,255), 10))
+        self.assertTrue(check_not_blank('shot1.png'))
         self.assertTrue(check_image('shot2.png', (0,0,0), 1))
 
     def testExitModCancelNo(self):

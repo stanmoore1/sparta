@@ -155,6 +155,20 @@ class PluginSetup(unittest.TestCase):
             time.sleep(2.0)
             g.type_text(decoy)
             g.key("Return", 3.0)
+
+            # The name check explains itself rather than silently bouncing back
+            # to the same three buttons, so there is a question to answer first:
+            # "does not contain libsparta ... try to load this file anyway?".
+            # Answering No is what refusing the file means.
+            titles = g.window_titles()
+            self.assertTrue(any("Unexpected File Name" in t for t in titles),
+                            f"the name check said nothing about the file: {titles}")
+            # Escape rather than click_named("No"): the lookup is a
+            # case-insensitive substring over every accessible name on screen,
+            # and "no" is inside half of them.  Escape is the reject role of a
+            # Yes/No box, which is exactly the answer this case is giving.
+            g.key("Escape", 1.5)
+
             self.assertDialogUp(g, " after choosing a file whose name is not libsparta*")
             self.assertFalse(any("Editor" in t for t in g.window_titles()),
                              "a file the check should have refused was loaded anyway")
