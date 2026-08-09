@@ -39,6 +39,10 @@ inline constexpr double ZOOM_MAX      = 10.0;
 inline constexpr int TITLE_MARGIN     = 10;
 inline constexpr int CONTENT_MARGIN   = 5;
 inline constexpr int LAYOUT_SPACING   = 6;
+/// bounds of the rendered image in pixels, shared by the size fields and by
+/// "Fit Render to Panel" so the two can never disagree about what is allowed
+inline constexpr int MIN_RENDER_SIZE  = 100;
+inline constexpr int MAX_RENDER_SIZE  = 10000;
 inline constexpr int MINIMUM_WIDTH    = 400;
 inline constexpr int MINIMUM_HEIGHT   = 300;
 inline constexpr int MAX_VALUE_COLS   = 99; // upper bound of the c_ID[N] column spinbox

@@ -231,22 +231,28 @@ ImageViewer::ImageViewer(const QString &fileName, SpartaWrapper *_sparta, Sparta
     renderstatus->setObjectName("renderstatus");
 
     auto *xval = new QSpinBox;
-    xval->setRange(100, 10000);
+    xval->setRange(MIN_RENDER_SIZE, MAX_RENDER_SIZE);
     xval->setStepType(QAbstractSpinBox::AdaptiveDecimalStepType);
     xval->setValue(params.xsize);
     xval->setObjectName("xsize");
     xval->setToolTip("Set rendered image width");
     xval->setMinimumSize(fsize);
     auto *yval = new QSpinBox;
-    yval->setRange(100, 10000);
+    yval->setRange(MIN_RENDER_SIZE, MAX_RENDER_SIZE);
     yval->setStepType(QAbstractSpinBox::AdaptiveDecimalStepType);
     yval->setValue(params.ysize);
     yval->setObjectName("ysize");
     yval->setToolTip("Set rendered image height");
     yval->setMinimumSize(fsize);
 
+    auto *fitrender = new QPushButton(QIcon(":/icons/gtk-zoom-fit.svg"), "");
+    fitrender->setToolTip("Render at the size of the space the picture is shown in");
+    fitrender->setObjectName("fitrender");
+    fitrender->setAccessibleName(fitrender->toolTip());
+
     connect(xval, &QAbstractSpinBox::editingFinished, this, &ImageViewer::editSize);
     connect(yval, &QAbstractSpinBox::editingFinished, this, &ImageViewer::editSize);
+    connect(fitrender, &QPushButton::released, this, &ImageViewer::fitRenderToPanel);
 
     // workaround for incorrect highlight bug on macOS
     auto *dummy1 = new QPushButton(QIcon(), "");
@@ -334,7 +340,8 @@ ImageViewer::ImageViewer(const QString &fileName, SpartaWrapper *_sparta, Sparta
     // square toolbar buttons with a snug, uniform icon (shared policy)
     styleToolButtons(buttonhint,
                      {dossao, doanti, doshiny, dopart, dogrid, dosurf, dobox, doaxes, zoomin,
-                      zoomout, rotleft, rotright, rotup, rotdown, recenter, reset, fitwin});
+                      zoomout, rotleft, rotright, rotup, rotdown, recenter, reset, fitwin,
+                      fitrender});
 
     // These carry an icon and no text, so without an accessible name they reach
     // the AT-SPI walker (and the screenshot sweep) as anonymous buttons. The
@@ -420,6 +427,7 @@ ImageViewer::ImageViewer(const QString &fileName, SpartaWrapper *_sparta, Sparta
     menuLayout->addWidget(xval);
     menuLayout->addWidget(new QLabel(" <u>H</u>eight: "));
     menuLayout->addWidget(yval);
+    menuLayout->addWidget(fitrender);
     menuLayout->insertStretch(-1, 50);
     menuLayout->setSpacing(LAYOUT_SPACING);
 
@@ -943,6 +951,43 @@ void ImageViewer::changeMixture(int)
     createImage();
 }
 
+void ImageViewer::fitRenderToPanel()
+{
+    // "Fit window" resizes the window to the picture.  This is the other
+    // direction, and the one a docked panel needs: the render is a fixed
+    // number of pixels, so a panel with room to spare -- after collapsing the
+    // sidebar, or widening the dock -- shows the same small picture with more
+    // grey around it.  Rendering at the panel's size is what actually spends
+    // the space, and it is a deliberate act rather than something that fires
+    // on every resize, because each one costs a full SPARTA render.
+    if (sparta && sparta->isRunning()) return;
+    auto *area = display->scrollArea();
+    if (!area || !area->viewport()) return;
+
+    const QSize vp = area->viewport()->size();
+    if ((vp.width() < 1) || (vp.height() < 1)) return;
+
+    auto *xfield = findChild<QSpinBox *>("xsize");
+    auto *yfield = findChild<QSpinBox *>("ysize");
+    // the same bounds the size fields carry, so the two can never disagree
+    const int wide = std::clamp(vp.width(), MIN_RENDER_SIZE, MAX_RENDER_SIZE);
+    const int high = std::clamp(vp.height(), MIN_RENDER_SIZE, MAX_RENDER_SIZE);
+    params.xsize = wide;
+    params.ysize = high;
+
+    // set the fields without their editingFinished() re-entering createImage()
+    if (xfield) {
+        QSignalBlocker block(xfield);
+        xfield->setValue(wide);
+    }
+    if (yfield) {
+        QSignalBlocker block(yfield);
+        yfield->setValue(high);
+    }
+
+    createImage();
+}
+
 void ImageViewer::openSettings()
 {
     auto *src = sender();
@@ -1298,7 +1343,12 @@ void ImageViewer::createActions()
 {
     QMenu *fileMenu = menuBar->addMenu("&File");
 
-    saveAsAct = addMenuAction(fileMenu, "&Save As...", ":/icons/document-save-as.svg", this,
+    // "Save As" and "Close" rather than "Save Image As" and "Close Panel" left
+    // the viewer's Ctrl+S and Ctrl+W looking like the main window's, which bind
+    // the same keys to the deck and the editor.  The binding is resolved by
+    // focus and always was; what was missing is any way to know that without
+    // being surprised by it, so the entries now name what they act on.
+    saveAsAct = addMenuAction(fileMenu, "&Save Image As...", ":/icons/document-save-as.svg", this,
                               &ImageViewer::saveAs);
     saveAsAct->setEnabled(false);
     saveAsAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_S));
@@ -1331,7 +1381,7 @@ void ImageViewer::createActions()
     });
     fileMenu->addSeparator();
     auto *closeAct =
-        addMenuAction(fileMenu, "&Close", ":/icons/window-close.svg", this,
+        addMenuAction(fileMenu, "&Close Panel", ":/icons/window-close.svg", this,
                       &ImageViewer::closeRequested);
     closeAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_W));
     closeAct->setShortcutContext(Qt::WidgetWithChildrenShortcut);
@@ -1354,6 +1404,17 @@ void ImageViewer::createActions()
             [this](bool on) { sidebar->setCollapsed(!on); });
     connect(sidebar, &ViewerSidebar::collapsedChanged, sidebarAct,
             [this](bool on) { sidebarAct->setChecked(!on); });
+
+    viewMenu->addSeparator();
+    auto *fitRenderAct = addMenuAction(viewMenu, "Fit &Render to Panel", ":/icons/gtk-zoom-fit.svg",
+                                       this, &ImageViewer::fitRenderToPanel);
+    fitRenderAct->setStatusTip("Render at the size of the space the picture is shown in");
+    fitRenderAct->setShortcut(QKeySequence(Qt::Key_F8));
+    fitRenderAct->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+
+    auto *fitWindowAct = addMenuAction(viewMenu, "Fit &Window to Render", ":/icons/fit-window.svg",
+                                       this, &ImageViewer::resetWindowSize);
+    fitWindowAct->setStatusTip("Resize the window so the picture is shown at its full size");
 }
 
 QIcon ImageViewer::sourceIcon() const

@@ -17,14 +17,71 @@
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QPainter>
 #include <QSizePolicy>
 #include <QToolButton>
 #include <QVBoxLayout>
 
+#include <utility>
+
 /// spacing between the rows and their controls; matches the rest of the viewer
 static constexpr int SIDEBAR_SPACING = 6;
 /// width of the strip that a collapsed sidebar leaves behind
-static constexpr int HANDLE_WIDTH = 16;
+static constexpr int HANDLE_WIDTH = 20;
+
+namespace {
+
+/**
+ * @brief The strip a collapsed sidebar leaves behind.
+ *
+ * A bare arrow is a control you have to hover to understand, and the thing it
+ * brings back is the one the user has just lost sight of.  So the strip says
+ * "Settings" down its length: what is behind it is legible before it is
+ * clicked, which is the whole difference between a control someone finds and
+ * one someone stumbles on.
+ */
+class SidebarHandle : public QToolButton {
+public:
+    explicit SidebarHandle(QString label, QWidget *parent = nullptr) :
+        QToolButton(parent), text(std::move(label))
+    {
+        setCursor(Qt::PointingHandCursor);
+    }
+
+    [[nodiscard]] QSize sizeHint() const override
+    {
+        // as long as the word plus a margin above and below it
+        return {HANDLE_WIDTH, fontMetrics().horizontalAdvance(text) + 3 * HANDLE_WIDTH};
+    }
+
+    [[nodiscard]] QSize minimumSizeHint() const override { return {HANDLE_WIDTH, HANDLE_WIDTH}; }
+
+protected:
+    void paintEvent(QPaintEvent *) override
+    {
+        QPainter p(this);
+        p.fillRect(rect(), palette().color(isDown() ? QPalette::Mid : QPalette::Button));
+        // a rule down the inner edge, so the strip reads as the edge of
+        // something folded away rather than as blank panel background
+        p.setPen(palette().color(QPalette::Mid));
+        p.drawLine(0, 0, 0, height() - 1);
+
+        p.setPen(palette().color(QPalette::ButtonText));
+        // bottom-to-top, the way a side tab reads: origin to the bottom-left
+        // corner, then a quarter turn counter-clockwise, which maps a
+        // height-by-width rectangle onto the strip exactly
+        p.translate(0, height());
+        p.rotate(-90);
+        // the word alone: a chevron turned on its side no longer points
+        // anywhere a user can read
+        p.drawText(QRect(0, 0, height(), width()), Qt::AlignCenter, text);
+    }
+
+private:
+    QString text;
+};
+
+} // namespace
 
 ViewerSidebar::ViewerSidebar(QWidget *parent) : QWidget(parent)
 {
@@ -52,6 +109,8 @@ ViewerSidebar::ViewerSidebar(QWidget *parent) : QWidget(parent)
     auto *hide = new QToolButton;
     hide->setObjectName("sidebarhide");
     hide->setArrowType(Qt::RightArrow);
+    hide->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    hide->setText("Hide");
     hide->setAutoRaise(true);
     hide->setToolTip("Hide the settings sidebar");
     hide->setAccessibleName(hide->toolTip());
@@ -71,9 +130,8 @@ ViewerSidebar::ViewerSidebar(QWidget *parent) : QWidget(parent)
     // of being spread out over its whole height.
     bodyBox->addStretch(1);
 
-    handle = new QToolButton;
+    handle = new SidebarHandle("Settings");
     handle->setObjectName("sidebarhandle");
-    handle->setArrowType(Qt::LeftArrow);
     handle->setAutoRaise(true);
     handle->setToolTip("Show the settings sidebar");
     handle->setAccessibleName(handle->toolTip());

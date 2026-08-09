@@ -128,7 +128,7 @@ window, that is even when the corresponding menu item is not visible.
 The **menu bar row** has:
 
 - The **File** menu with the following entries:
-   - **Save As...** (`Ctrl-S`): Save the rendered image to a file.  The
+   - **Save Image As...** (`Ctrl-S`): Save the rendered image to a file.  The
      file format is inferred from the file name extension.  When the
      `ImageMagick software <https://imagemagick.org/>`_ is installed,
      additional file formats beyond those natively supported by the Qt
@@ -157,18 +157,29 @@ The **menu bar row** has:
      closed).
    - **Reset Colors**: Reset the per-species colors to the default
      color sequence of the dump image command.
-   - **Close** (`Ctrl-W`): Close the Image Viewer window.
+   - **Close Panel** (`Ctrl-W`): Close the Image Viewer panel.
    - **Quit** (`Ctrl-Q`): Quit the entire application.
-- The **View** menu with the **Settings Sidebar** entry (`F9`), which
-  shows or hides the sidebar described below.  Hiding it gives its width
-  back to the rendered image, which matters when the viewer shares a
-  window with the editor and the log.
+- The **View** menu with:
+   - **Settings Sidebar** (`F9`): show or hide the sidebar described
+     below.  Hiding it gives its width back to the picture, which matters
+     when the viewer shares a window with the editor and the log.
+   - **Fit Render to Panel** (`F8`): set the render size to the size of
+     the space the picture is shown in, and re-render.  The rendered
+     image is a fixed number of pixels, so a panel with room to spare
+     otherwise shows the same picture scaled down with unused space
+     around it; this renders it at the panel's own size instead, so it
+     is drawn pixel-for-pixel with nothing wasted.  It is a deliberate
+     action rather than something that happens on every resize, because
+     each one costs a full render.
+   - **Fit Window to Render**: the other direction -- resize the window
+     so the picture is shown at its full size.
 - The **busy indicator**, a small palette icon that is colored |palette|
   while SPARTA is rendering a new image and grayed out |inactive| when
   rendering is complete.
 - The **Width** (`Alt-W`) and **Height** (`Alt-H`) spin boxes, where
   the size of the rendered image in pixels can be set (the *size*
-  keyword).
+  keyword), followed by a button that fills them in from the size of the
+  panel (the same action as **View > Fit Render to Panel**).
 
 The **camera row** below the menu bar moves the point of view.  Every
 button here re-renders the scene immediately.  From left to right there
@@ -244,9 +255,11 @@ that subject on and off without opening anything:
 
 Two more controls belong to the sidebar itself:
 
-- The arrow in the sidebar's **Settings** header collapses it to a
-  narrow strip, and the arrow on that strip brings it back.  The
-  **View > Settings Sidebar** menu entry (`F9`) does the same thing.
+- **Hide**, in the sidebar's **Settings** header, collapses it to a
+  narrow strip labelled *Settings*; clicking that strip brings it back.
+  The **View > Settings Sidebar** menu entry (`F9`) does the same thing.
+  Follow it with **Fit Render to Panel** (`F8`) to spend the reclaimed
+  width on the picture.
 - **Help**: Opens this documentation page for the visualization
   features in SPARTA-GUI in a web browser.
 

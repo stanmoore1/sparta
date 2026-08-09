@@ -1657,15 +1657,24 @@ add_test(NAME Framebuffer.CheckSize
   ${TESTENV_BINARY_DIR}/python ${CMAKE_CURRENT_SOURCE_DIR}/test_xvfbsize.py
 )
 set_tests_properties(Framebuffer.CreateScreenshot  Framebuffer.CheckSize
-                     PROPERTIES ENVIRONMENT "${PYTHON_TEST_ENVIRONMENT}")
+                     PROPERTIES ENVIRONMENT "${PYTHON_TEST_ENVIRONMENT}"
+                                RESOURCE_LOCK "xvfb")
 
 # test basic SPARTA-GUI editor tasks
 add_test(NAME Framebuffer.GUIEditorChecks
   COMMAND ${XVFB_RUNNER} -n 13 -s "-screen 0 1024x768x24" -w 1
   ${TESTENV_BINARY_DIR}/python ${CMAKE_CURRENT_SOURCE_DIR}/test_gui_edit.py
 )
+# The same "xvfb" lock the GuiDrive suites below take.  Without it this was the
+# one display-driven test ctest would schedule alongside them: it drives the
+# pointer and keyboard through PyAutoGUI and waits fixed intervals for windows
+# to settle, so four GUI applications competing for the CPU turned every one of
+# those waits into a race.  Under -j the whole set failed together and each one
+# passed alone, which reads like eight broken tests rather than one missing
+# property.
 set_tests_properties(Framebuffer.GUIEditorChecks
-                     PROPERTIES ENVIRONMENT "${PYTHON_TEST_ENVIRONMENT}")
+                     PROPERTIES ENVIRONMENT "${PYTHON_TEST_ENVIRONMENT}"
+                                RESOURCE_LOCK "xvfb")
 
 # Visual-effect and end-to-end feature suites.  Unlike the tests above these
 # manage their own Xvfb (and a window manager, without which nothing ever gets

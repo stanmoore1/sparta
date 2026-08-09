@@ -110,6 +110,7 @@ private slots:
     void saveColors();         ///< Save species colors and lighting to JSON file
     void changeMixture(int);   ///< Change mixture selection
     void openSettings();       ///< Open the tabbed settings dialog (tab from sender)
+    void fitRenderToPanel();   ///< Re-render at the size of the space it is shown in
 
 public:
     /**

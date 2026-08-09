@@ -1300,6 +1300,119 @@ TEST(ImageViewerLayout, TheViewMenuEntryTracksTheSidebarWhicheverWayItWasCollaps
     EXPECT_TRUE(entry->isChecked());
 }
 
+// The picture is a fixed number of pixels, so a panel with room to spare shows
+// the same small render with more grey around it -- which is what collapsing
+// the sidebar bought before this existed. "Fit Render to Panel" is what spends
+// the space, so the two are checked together: collapse, fit, and the render is
+// wider than the whole panel column was before.
+TEST(ImageViewerLayout, FittingTheRenderToThePanelSpendsTheSpaceTheSidebarGaveBack)
+{
+    SpartaWrapper sparta;
+    if (!openSparta(sparta, surfDeck()))
+        GTEST_SKIP() << "needs SPARTA_PLUGIN_LIB and the in.surfq fixture";
+
+    ViewerPanel panel;
+    auto *viewer = new ImageViewer("test", &sparta, nullptr);
+    panel.addSource(ViewerPanel::Snapshot, viewer);
+    panel.showSource(ViewerPanel::Snapshot, true);
+    panel.resize(1100, 700);
+    panel.show();
+    QApplication::processEvents();
+    QTest::qWait(100);
+
+    auto *fit   = viewer->findChild<QPushButton *>("fitrender");
+    auto *xsize = viewer->findChild<QSpinBox *>("xsize");
+    auto *ysize = viewer->findChild<QSpinBox *>("ysize");
+    ASSERT_NE(fit, nullptr) << "nothing offers to render at the panel size";
+    ASSERT_NE(xsize, nullptr);
+    ASSERT_NE(ysize, nullptr);
+
+    fit->click();
+    QApplication::processEvents();
+    const int wideWithSidebar = xsize->value();
+
+    auto *sidebar = viewer->findChild<ViewerSidebar *>("viewersidebar");
+    ASSERT_NE(sidebar, nullptr);
+    sidebar->setCollapsed(true);
+    QApplication::processEvents();
+    QTest::qWait(50);
+
+    fit->click();
+    QApplication::processEvents();
+    EXPECT_GT(xsize->value(), wideWithSidebar)
+        << "the width the sidebar gave back did not reach the render";
+
+    // and it settles.  Nothing can currently make it not: the display shrinks
+    // an oversized picture to fit rather than scrolling it, so the viewport
+    // this was measured against cannot move underneath it.  The assertion pins
+    // that -- a display that scrolled instead would put a scroll bar in, shrink
+    // the viewport, and step the picture down on every press.
+    const int wide = xsize->value(), high = ysize->value();
+    fit->click();
+    QApplication::processEvents();
+    EXPECT_EQ(xsize->value(), wide) << "pressing it twice keeps shrinking the render";
+    EXPECT_EQ(ysize->value(), high) << "pressing it twice keeps shrinking the render";
+}
+
+// Both halves of the collapse control used to be bare arrows: one in the
+// header, one on the strip left behind. An arrow you have to hover to
+// understand is not a control a user finds, and the strip is what brings back
+// the thing they have just lost sight of.
+TEST(ImageViewerLayout, TheCollapseControlSaysWhatItDoes)
+{
+    SpartaWrapper sparta;
+    if (!openSparta(sparta, surfDeck()))
+        GTEST_SKIP() << "needs SPARTA_PLUGIN_LIB and the in.surfq fixture";
+
+    ImageViewer viewer("test", &sparta, nullptr);
+    viewer.show();
+    QApplication::processEvents();
+
+    auto *sidebar = viewer.findChild<ViewerSidebar *>("viewersidebar");
+    ASSERT_NE(sidebar, nullptr);
+
+    auto *hide = sidebar->findChild<QToolButton *>("sidebarhide");
+    ASSERT_NE(hide, nullptr);
+    EXPECT_FALSE(hide->text().isEmpty()) << "the hide control is a bare arrow again";
+    EXPECT_NE(hide->toolButtonStyle(), Qt::ToolButtonIconOnly)
+        << "the hide control has text but does not show it";
+
+    auto *handle = sidebar->findChild<QToolButton *>("sidebarhandle");
+    ASSERT_NE(handle, nullptr);
+    // The strip paints its own rotated label, so what is checkable is that it
+    // reserves the room for one rather than collapsing to a square nub.
+    EXPECT_GT(handle->sizeHint().height(), 3 * handle->sizeHint().width())
+        << "the strip is too short to be showing a word";
+    EXPECT_FALSE(handle->accessibleName().isEmpty());
+}
+
+// The main window binds Ctrl+S and Ctrl+W to the deck and the editor, and the
+// viewer binds them to the picture and its panel. Focus decides, and always
+// did; what these entries have to do is say which is which.
+TEST(ImageViewerLayout, TheViewerFileEntriesNameWhatTheyActOn)
+{
+    SpartaWrapper sparta;
+    if (!openSparta(sparta, surfDeck()))
+        GTEST_SKIP() << "needs SPARTA_PLUGIN_LIB and the in.surfq fixture";
+
+    ImageViewer viewer("test", &sparta, nullptr);
+    viewer.show();
+    QApplication::processEvents();
+
+    QHash<QKeySequence, QString> bound;
+    for (auto *a : viewer.findChildren<QAction *>())
+        if (!a->shortcut().isEmpty()) bound[a->shortcut()] = a->text();
+
+    const QKeySequence save(Qt::CTRL | Qt::Key_S), close(Qt::CTRL | Qt::Key_W);
+    ASSERT_TRUE(bound.contains(save));
+    ASSERT_TRUE(bound.contains(close));
+    EXPECT_TRUE(bound.value(save).contains("Image"))
+        << "Ctrl+S here saves the picture, not the deck: " << bound.value(save).toStdString();
+    EXPECT_TRUE(bound.value(close).contains("Panel"))
+        << "Ctrl+W here closes the panel, not the editor tab: "
+        << bound.value(close).toStdString();
+}
+
 // The merged viewer panel: the tab bar plus whichever source is in front. The
 // walk covers the front page only, which is the point -- the panel shows one
 // source at a time, and a control on a hidden page is not reachable by a user
@@ -1391,6 +1504,8 @@ int main(int argc, char **argv)
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }
+
+
 
 
 

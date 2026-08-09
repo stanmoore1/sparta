@@ -133,7 +133,11 @@ also rebind shortcuts for window-specific actions:
 - *Image Viewer* window: `Ctrl-S` saves the rendered image,
   `Ctrl-C` copies it to the clipboard, `Ctrl-D` copies the
   ``dump image`` / ``dump_modify`` commands to the clipboard, `F9`
-  shows or hides the settings sidebar.
+  shows or hides the settings sidebar, `F8` re-renders at the size of
+  the panel.  The viewer's `Ctrl-S` and `Ctrl-W` act on the picture and
+  on the panel, not on the input deck and the editor -- which of the two
+  a keystroke reaches depends on where the focus is, so the viewer's
+  menu entries are named *Save Image As...* and *Close Panel* to say so.
 - *Slide Show* window: `Ctrl-S` saves the currently displayed image,
   `Ctrl-C` copies it to the clipboard, `Ctrl-E` exports the
   image sequence to a movie file.
