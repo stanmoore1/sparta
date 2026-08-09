@@ -48,7 +48,9 @@
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QSettings>
+#include <QTabWidget>
 #include <QTemporaryDir>
+#include <QTextBrowser>
 #include <QFont>
 #include <QIcon>
 #include <QTimer>
@@ -530,34 +532,33 @@ TEST_F(Prefs, QuickHelpNamesTheVersionItIsDescribing)
 {
     // the quick help is the one place a user reads which build they are on
     // without going near a terminal
-    QStringList seen;
-    QTimer poll;
-    int left = 8000;
-    QObject::connect(&poll, &QTimer::timeout, [&]() {
-        auto *m = QApplication::activeModalWidget();
-        if ((left -= 5) < 0) {
-            poll.stop();
-            if (auto *d = qobject_cast<QDialog *>(m)) d->reject();
-            return;
-        }
-        if (auto *box = qobject_cast<QMessageBox *>(m)) {
-            seen << box->windowTitle() + "\n" + box->text() + "\n" + box->informativeText();
-            box->accept();
-        }
-    });
-    poll.setInterval(5);
-    poll.start();
+    //
+    // It used to be a modal QMessageBox and this case polled for one.  The
+    // help is a non-modal tabbed dialog now, so the poll saw nothing and the
+    // case failed for the wrong reason -- the text it is really about was
+    // there the whole time, on the dialog's first page.
     call("help");
-    poll.stop();
+    QApplication::processEvents();
 
-    ASSERT_FALSE(seen.isEmpty()) << "no help was shown";
-    const QString text = seen.join("\n");
-    EXPECT_TRUE(text.contains("Quick Help")) << text.toStdString();
+    auto *sheet = gui->findChild<QDialog *>("shortcutsdialog");
+    ASSERT_NE(sheet, nullptr) << "no help was shown";
+    EXPECT_TRUE(sheet->isVisible()) << "the help dialog was built but not shown";
+
+    auto *tabs = sheet->findChild<QTabWidget *>("helptabs");
+    ASSERT_NE(tabs, nullptr) << "the help dialog has no pages";
+    EXPECT_EQ(tabs->currentIndex(), 0) << "Quick Help did not open on the getting-started page";
+
+    auto *started = sheet->findChild<QTextBrowser *>("gettingstarted");
+    ASSERT_NE(started, nullptr) << "the getting-started page is missing";
+    const QString text = sheet->windowTitle() + "\n" + started->toPlainText();
+
     EXPECT_TRUE(text.contains(SPARTA_GUI_VERSION))
         << "the quick help does not say which version this is";
     // and it has to describe this application rather than the one it came from
     EXPECT_TRUE(text.contains("SPARTA-GUI"));
     EXPECT_FALSE(text.contains("LAMMPS"));
+
+    sheet->close();
 }
 
 TEST_F(Prefs, TheManualAndHowToLinksPointAtTheSpartaDocumentation)

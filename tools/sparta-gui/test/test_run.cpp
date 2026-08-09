@@ -399,8 +399,18 @@ TEST_F(Run, TheRunFillsTheChartWithItsThermoColumns)
     setBuffer(QString::fromLatin1(kDeck));
     ASSERT_TRUE(runBuffer());
 
+    // Reached through the menu entry, not through findChild(): a run started
+    // in the Run workspace deliberately leaves the chart closed, and Qt-ADS
+    // reparents a closed dock out of the window, so the widget tree is not a
+    // route to it. Opening the panel is what a user does and what the run
+    // promises will work -- the plots are one keystroke away, not missing.
+    auto *open = action("&Charts Window");
+    ASSERT_NE(open, nullptr) << "no menu entry opens the charts panel";
+    if (!open->isChecked()) open->trigger();
+    QApplication::processEvents();
+
     auto *chart = gui->findChild<ChartWindow *>();
-    ASSERT_NE(chart, nullptr) << "no chart window was created for the run";
+    ASSERT_NE(chart, nullptr) << "opening the charts panel produced no chart window";
     EXPECT_GT(chart->numCharts(), 0) << "the run produced no plotted thermo columns";
     EXPECT_GE(chart->getStep(), 0) << "the chart holds no steps";
 }
