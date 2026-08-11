@@ -2316,9 +2316,10 @@ double Variable::evaluate(char *str, Tree **tree)
               error->one(FLERR,"Modulo 0 in variable formula");
             argstack[nargstack++] = fmod(value1,value2);
           } else if (opprevious == CARAT) {
-            if (value2 == 0.0)
-              error->one(FLERR,"Power by 0 in variable formula");
-            argstack[nargstack++] = pow(value1,value2);
+            if (value2 == 0.0) argstack[nargstack++] = 1.0;
+            else if (value1 == 0.0 && value2 < 0.0)
+              error->one(FLERR,"Invalid power expression in variable formula");
+            else argstack[nargstack++] = pow(value1,value2);
           } else if (opprevious == UNARY) {
             argstack[nargstack++] = -value2;
           } else if (opprevious == NOT) {
@@ -2454,8 +2455,10 @@ double Variable::collapse_tree(Tree *tree)
     arg2 = collapse_tree(tree->second);
     if (tree->first->type != VALUE || tree->second->type != VALUE) return 0.0;
     tree->type = VALUE;
-    if (arg2 == 0.0) error->one(FLERR,"Power by 0 in variable formula");
-    tree->value = pow(arg1,arg2);
+    if (arg1 == 0.0 && arg2 < 0.0)
+      error->one(FLERR,"Invalid power expression in variable formula");
+    if (arg2 == 0.0) tree->value = 1.0;
+    else tree->value = pow(arg1,arg2);
     return tree->value;
   }
 
@@ -2900,8 +2903,11 @@ double Variable::eval_tree(Tree *tree, int i)
   }
   if (tree->type == CARAT) {
     double exponent = eval_tree(tree->second,i);
-    if (exponent == 0.0) error->one(FLERR,"Power by 0 in variable formula");
-    return pow(eval_tree(tree->first,i),exponent);
+    double base = eval_tree(tree->first,i);
+    if (base == 0.0 && exponent < 0.0)
+      error->one(FLERR,"Invalid power expression in variable formula");
+    if (exponent == 0.0) return 1.0;
+    return pow(base,exponent);
   }
   if (tree->type == UNARY) return -eval_tree(tree->first,i);
 

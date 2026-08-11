@@ -474,6 +474,10 @@ convention is compatible with some programming languages, but not
 others.  As mentioned, this behavior can be easily overridden with
 parenthesis; the formula "-(2^2)" will evaluate to -4.
 
+The exponentiation operator "x^y" evaluates to 1.0 whenever y is zero,
+for any value of x.  An error is generated if x is zero and y is
+negative, since the result would be infinite.
+
 The 6 relational operators return either a 1.0 or 0.0 depending on
 whether the relationship between x and y is TRUE or FALSE.  For
 example the expression x<10.0 in a particle-style variable formula
