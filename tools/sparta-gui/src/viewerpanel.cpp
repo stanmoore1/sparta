@@ -11,13 +11,70 @@
 
 #include "viewerpanel.h"
 
+#include "emptystate.h"
 #include "imageviewer.h"
 #include "slideshow.h"
 #include "viewersource.h"
 
+#include <QIcon>
 #include <QStackedWidget>
 #include <QTabBar>
 #include <QVBoxLayout>
+
+namespace {
+
+/**
+ * @brief A stack that reports the page in front, not the biggest page.
+ *
+ * The same rule ViewerPanel::minimumSizeHint() applies across sources, applied
+ * within one: while the placeholder card is showing, the panel must be free to
+ * be as small as the card, not as small as the viewer waiting behind it.
+ */
+class PageStack : public QStackedWidget {
+public:
+    using QStackedWidget::QStackedWidget;
+
+    [[nodiscard]] QSize minimumSizeHint() const override
+    {
+        if (auto *page = currentWidget()) return page->minimumSizeHint();
+        return QStackedWidget::minimumSizeHint();
+    }
+};
+
+/// What a tab says before its viewer exists.
+///
+/// Duplicating the label and the empty text that ViewerSource also carries is
+/// deliberate and bounded: the tab has to describe a viewer that has not been
+/// built yet, and for the snapshot viewer cannot be built until a run has got
+/// far enough to render.  Once a source registers, the panel reads everything
+/// from the instance instead.  ViewerPanelChrome in the tests holds the two
+/// descriptions to each other so they cannot drift apart unnoticed.
+struct Chrome {
+    const char *label;
+    const char *icon;
+    const char *title;
+    const char *hint;
+};
+
+const Chrome CHROME[ViewerPanel::NSources] = {
+    {"Snapshot", ":/icons/image-viewer.svg", "No snapshot yet",
+     "Run \u25b8 Create Image (Ctrl+I) renders the simulation as it stands right now.\n\n"
+     "It needs a deck that has got as far as defining a box and a grid, so check or "
+     "run the input first."},
+    {"Sequence", ":/icons/media-playback-start-2.svg", "No image sequence yet",
+     "Add a dump image command to your input deck and run it. The frames it writes "
+     "appear here as they are produced, to step through or export as a movie.\n\n"
+     "For example:\n"
+     "    dump 1 image all 100 img.*.ppm type type\n\n"
+     "Already have frames on disk? File \u25b8 View Image or Movie File(s) opens them."},
+    {"3D", ":/icons/x-office-drawing.svg", "No 3D data yet",
+     "Run \u25b8 3D Snapshot builds a scene from the simulation as it stands.\n\n"
+     "For a scene that follows a run, add a VTK dump to your input deck and run it:\n"
+     "    dump 1 grid/vtk all 100 grid.*.vtu\n\n"
+     "Files written earlier can be opened from this panel\u2019s Open button."},
+};
+
+} // namespace
 
 ViewerPanel::ViewerPanel(QWidget *parent) :
     QWidget(parent), tabs(new QTabBar), stack(new QStackedWidget)
@@ -38,6 +95,31 @@ ViewerPanel::ViewerPanel(QWidget *parent) :
     layout->addWidget(tabs);
     layout->addWidget(stack, 1);
 
+    // Every tab, now, in enum order, whether or not its viewer exists.  A tab
+    // that arrives only when its source produces something is a feature the
+    // user has to stumble on; a tab that is there from the start, saying what
+    // would fill it, is one they can act on.
+    for (int i = 0; i < NSources; ++i) {
+        const Source which = Source(i);
+        if (!sourceAvailable(which)) continue;
+
+        auto *slot = new PageStack;
+        slot->setObjectName(QString("viewerslot%1").arg(i));
+        auto *card = new EmptyState(QString::fromUtf8(CHROME[i].title),
+                                    QString::fromUtf8(CHROME[i].hint));
+        card->setObjectName(QString("viewerempty%1").arg(i));
+        slot->addWidget(card);
+
+        slots_[i] = slot;
+        pageOf[i] = stack->addWidget(slot);
+
+        const int index = tabs->addTab(QIcon(QString::fromUtf8(CHROME[i].icon)),
+                                       QString::fromUtf8(CHROME[i].label));
+        tabs->setTabData(index, i);
+        tabs->setTabToolTip(index, QString::fromUtf8(CHROME[i].title) + "\n" +
+                                       QString::fromUtf8(CHROME[i].hint));
+    }
+
     connect(tabs, &QTabBar::currentChanged, this, [this](int index) {
         if (index < 0) return;
         const int which = tabs->tabData(index).toInt();
@@ -51,9 +133,25 @@ ViewerPanel::ViewerPanel(QWidget *parent) :
 
 ViewerPanel::~ViewerPanel() = default;
 
+bool ViewerPanel::sourceAvailable(Source which)
+{
+#if defined(SPARTA_GUI_HAVE_VTK)
+    Q_UNUSED(which)
+    return true;
+#else
+    // Without VTK there is no 3D viewer to build, so offering the tab would be
+    // offering a card describing something this build cannot do.
+    return which != Scene;
+#endif
+}
+
 void ViewerPanel::addSource(Source which, ViewerSource *source)
 {
     if (!source) return;
+    if (!slots_[which]) {   // a build without this source: nothing to put it in
+        source->deleteLater();
+        return;
+    }
 
     if (sources[which]) {
         replaceSource(which, source);
@@ -61,19 +159,16 @@ void ViewerPanel::addSource(Source which, ViewerSource *source)
     }
 
     sources[which] = source;
-    pageOf[which]  = stack->addWidget(source);
+    slots_[which]->addWidget(source);
 
-    // Tabs stay in enum order however the sources arrive, so the bar does not
-    // rearrange itself depending on which viewer happened to be used first.
-    int at = tabs->count();
-    for (int i = 0; i < tabs->count(); ++i) {
-        if (tabs->tabData(i).toInt() > int(which)) {
-            at = i;
-            break;
-        }
+    // The tab exists already; take its wording from the instance now that
+    // there is one, so the source stays the authority on how it describes
+    // itself.
+    const int index = tabOf(which);
+    if (index >= 0) {
+        tabs->setTabText(index, source->sourceLabel());
+        tabs->setTabIcon(index, source->sourceIcon());
     }
-    const int index = tabs->insertTab(at, source->sourceIcon(), source->sourceLabel());
-    tabs->setTabData(index, int(which));
 
     wireSource(which, source);
     updateTab(which);
@@ -82,19 +177,30 @@ void ViewerPanel::addSource(Source which, ViewerSource *source)
 void ViewerPanel::replaceSource(Source which, ViewerSource *source)
 {
     if (!source) return;
+    if (!slots_[which]) {
+        source->deleteLater();
+        return;
+    }
 
     ViewerSource *old = sources[which];
     if (old) {
-        stack->removeWidget(old);
+        slots_[which]->removeWidget(old);
         old->disconnect(this);
         old->deleteLater();
     }
 
     sources[which] = source;
-    pageOf[which]  = stack->addWidget(source);
+    slots_[which]->addWidget(source);
 
     wireSource(which, source);
     updateTab(which);
+}
+
+int ViewerPanel::tabOf(Source which) const
+{
+    for (int i = 0; i < tabs->count(); ++i)
+        if (tabs->tabData(i).toInt() == int(which)) return i;
+    return -1;
 }
 
 void ViewerPanel::wireSource(Source which, ViewerSource *source)
@@ -109,25 +215,29 @@ void ViewerPanel::wireSource(Source which, ViewerSource *source)
 
 void ViewerPanel::updateTab(Source which)
 {
+    QStackedWidget *slot = slots_[which];
+    if (!slot) return;
+
     ViewerSource *source = sources[which];
-    if (!source) return;
+    const bool ready     = source && source->hasContent();
 
-    for (int i = 0; i < tabs->count(); ++i) {
-        if (tabs->tabData(i).toInt() != int(which)) continue;
+    // Page 0 is the card that says what would fill this panel; the viewer, if
+    // one has been built, is behind it.  Swapping between them is what makes
+    // clicking an empty tab answer a question rather than show a blank pane.
+    slot->setCurrentIndex(ready ? 1 : 0);
 
-        // A tab that vanishes when it is empty tells the user nothing, so an
-        // empty source keeps its tab and says why in the tooltip: "No render
-        // yet: use Run > Create Image" is a hint, an absent tab is a mystery.
-        //
-        // The tab stays *enabled* though. Disabling it reads better right up
-        // until every source is empty, which is the state the panel opens in:
-        // QTabBar then has no enabled tab to make current, and the panel looks
-        // broken rather than merely empty. An empty page is honest and costs
-        // nothing.
-        const bool ready = source->hasContent();
-        tabs->setTabToolTip(i, ready ? source->sourceTip() : source->emptyTip());
-        break;
-    }
+    // Every tab stays *enabled*.  Disabling the empty ones reads better right
+    // up until they are all empty, which is the state the panel opens in:
+    // QTabBar then has no enabled tab to make current, and the panel looks
+    // broken rather than merely waiting.
+    const int index = tabOf(which);
+    if (index < 0) return;
+
+    if (ready) {
+        tabs->setTabToolTip(index, source->sourceTip());
+    } else if (source) {
+        tabs->setTabToolTip(index, source->emptyTitle() + "\n" + source->emptyTip());
+    }   // else: the tooltip set at construction still describes it
 }
 
 void ViewerPanel::refreshTabs()
@@ -146,19 +256,27 @@ ViewerPanel::Source ViewerPanel::currentSource() const
 
 void ViewerPanel::showSource(Source which, bool userAsked)
 {
-    if (!sources[which]) return;
+    // No guard on the source existing: the tab is real whether or not its
+    // viewer has been built, and bringing forward the card that explains how
+    // to build one is a perfectly good thing to be asked for.
+    if (!slots_[which]) return;
     if (!userAsked && sourceLockedByUser) return;
 
-    for (int i = 0; i < tabs->count(); ++i) {
-        if (tabs->tabData(i).toInt() != int(which)) continue;
+    const int index = tabOf(which);
+    if (index >= 0) {
         // A source being shown because it just produced something has content
         // by definition, but the tab may not have been told yet.
         updateTab(which);
-        tabs->setCurrentIndex(i);
-        break;
+        tabs->setCurrentIndex(index);
     }
     if (pageOf[which] >= 0) stack->setCurrentIndex(pageOf[which]);
-    if (!userAsked) sourceLockedByUser = false;   // an automatic switch is not a choice
+
+    // Set from the argument rather than left to the currentChanged handler.
+    // That handler only fires when the index actually moves, so asking for the
+    // tab that is already in front recorded no choice -- and with every tab
+    // present from the start, the tab a user picks first is very often already
+    // the current one.  An automatic switch is not a choice and clears it.
+    sourceLockedByUser = userAsked;
 }
 
 SlideShow *ViewerPanel::sequence() const
@@ -175,7 +293,14 @@ QString ViewerPanel::title() const
 {
     const Source which = currentSource();
     ViewerSource *src  = sources[which];
-    if (!src) return QStringLiteral("Viewer");
+    // A tab whose viewer has not been built yet still names itself, so the
+    // dock title follows the tab rather than falling back to a bare "Viewer"
+    // for every one of the three until a run fills it.
+    if (!src) {
+        const int index = tabOf(which);
+        if (index < 0) return QStringLiteral("Viewer");
+        return QStringLiteral("Viewer - ") + tabs->tabText(index);
+    }
 
     QString name = QStringLiteral("Viewer - ") + src->sourceLabel();
     if (!names[which].isEmpty()) name += QStringLiteral(" - ") + names[which];

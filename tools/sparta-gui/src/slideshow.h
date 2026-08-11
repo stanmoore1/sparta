@@ -117,10 +117,18 @@ public:
     {
         return QStringLiteral("The image sequence and slide show");
     }
+    [[nodiscard]] QString emptyTitle() const override
+    {
+        return QStringLiteral("No image sequence yet");
+    }
     [[nodiscard]] QString emptyTip() const override
     {
-        return QStringLiteral("No frames yet: run a deck with a dump image command, "
-                              "or use File > Open Image or Movie");
+        return QStringLiteral(
+            "Add a dump image command to your input deck and run it. The frames it writes "
+            "appear here as they are produced, to step through or export as a movie.\n\n"
+            "For example:\n"
+            "    dump 1 image all 100 img.*.ppm type type\n\n"
+            "Already have frames on disk? File \u25b8 View Image or Movie File(s) opens them.");
     }
     [[nodiscard]] bool hasContent() const override { return !imagefiles.isEmpty(); }
     [[nodiscard]] QImage currentImage() const override;

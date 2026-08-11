@@ -56,10 +56,17 @@ public:
     /// What the tab's tooltip says when the source is available
     [[nodiscard]] virtual QString sourceTip() const = 0;
 
-    /// Why the tab is disabled, when hasContent() is false. Shown as the
-    /// tooltip in that state: a source with nothing in it should say how to
-    /// put something in it, rather than being an empty pane with no
-    /// explanation -- which is what the old empty Slide Show panel was.
+    /// What is missing, when hasContent() is false: a short heading such as
+    /// "No image sequence yet".  Paired with emptyTip() on the card the panel
+    /// shows in place of the source, and in the tab's tooltip.
+    [[nodiscard]] virtual QString emptyTitle() const = 0;
+
+    /// How to put something in this source, when hasContent() is false.
+    ///
+    /// Names the command or the menu entry that fills it, because that is the
+    /// question someone looking at an empty panel is actually asking.  A tab
+    /// that merely goes quiet -- or, worse, disappears -- teaches nothing; the
+    /// old empty Slide Show panel was a blank rectangle with no explanation.
     [[nodiscard]] virtual QString emptyTip() const = 0;
 
     /// Is there anything to look at yet?

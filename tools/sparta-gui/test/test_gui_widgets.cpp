@@ -51,6 +51,7 @@
 #include <QSignalSpy>
 #include <QSlider>
 #include <QSpinBox>
+#include <QTabBar>
 #include <QTabWidget>
 #include <QToolButton>
 #include <QTest>
@@ -1493,6 +1494,12 @@ TEST(RealWindowsLive, ViewerPanel)
     panel.showSource(ViewerPanel::Sequence, true);
     EXPECT_EQ(panel.currentSource(), ViewerPanel::Sequence);
 
+    // Walk the snapshot, not the sequence.  A source with nothing in it shows
+    // the card naming what would fill it -- deliberately, that is the point of
+    // the empty tabs -- so the slide show's controls are behind it and out of
+    // reach here.  This viewer has a render, so its controls are the ones on
+    // screen; the slide show's own suite drives its.
+    panel.showSource(ViewerPanel::Snapshot, true);
     walkWindow(&panel, "ViewerPanel", 15);
 }
 
@@ -1517,6 +1524,145 @@ TEST(ViewerPanelBehaviour, BackgroundContentDoesNotStealTheView)
     panel.unlockSource();
     panel.showSource(ViewerPanel::Sequence);
     EXPECT_EQ(panel.currentSource(), ViewerPanel::Sequence);
+}
+
+// The panel used to grow its tabs as sources arrived, so it opened with one or
+// none and a user had no way to learn that a slide show or a 3D scene existed
+// until something happened to produce one. All the tabs this build offers are
+// there from the start.
+TEST(ViewerPanelBehaviour, EveryTabThisBuildOffersIsThereBeforeAnythingHasRun)
+{
+    ViewerPanel panel;
+    auto *bar = panel.findChild<QTabBar *>();
+    ASSERT_NE(bar, nullptr) << "the panel has no tab bar";
+
+    int expected = 0;
+    for (int i = 0; i < ViewerPanel::NSources; ++i)
+        if (ViewerPanel::sourceAvailable(ViewerPanel::Source(i))) ++expected;
+
+    EXPECT_EQ(bar->count(), expected)
+        << "a tab is missing before its source has been built";
+
+    // and in enum order, so the bar does not depend on what ran first
+    for (int i = 0; i < bar->count(); ++i)
+        if (i > 0) EXPECT_LT(bar->tabData(i - 1).toInt(), bar->tabData(i).toInt());
+
+#if defined(SPARTA_GUI_HAVE_VTK)
+    EXPECT_EQ(bar->count(), 3);
+#else
+    // Without VTK there is no 3D viewer to build, so a tab promising one would
+    // be describing something this build cannot do.
+    EXPECT_EQ(bar->count(), 2);
+    for (int i = 0; i < bar->count(); ++i)
+        EXPECT_NE(bar->tabData(i).toInt(), int(ViewerPanel::Scene));
+#endif
+}
+
+// The point of keeping the empty tabs: selecting one has to answer "how do I
+// get something here?", in the panel, not in a tooltip nobody hovers.
+TEST(ViewerPanelBehaviour, AnEmptyTabExplainsWhatWouldFillIt)
+{
+    ViewerPanel panel;
+    panel.resize(700, 500);
+    panel.show();
+    QApplication::processEvents();
+
+    struct {
+        ViewerPanel::Source which;
+        const char *mustSay;
+    } cases[] = {
+        {ViewerPanel::Snapshot, "Create Image"},
+        {ViewerPanel::Sequence, "dump image"},
+        {ViewerPanel::Scene, "3D Snapshot"},
+    };
+
+    for (const auto &c : cases) {
+        if (!ViewerPanel::sourceAvailable(c.which)) continue;
+
+        panel.showSource(c.which, true);
+        QApplication::processEvents();
+        EXPECT_EQ(panel.currentSource(), c.which)
+            << "an empty tab could not be selected at all";
+
+        // whatever is on screen for this tab must name the way to fill it
+        QString shown;
+        for (auto *label : panel.findChildren<QLabel *>())
+            if (label->isVisible()) shown += label->text() + "\n";
+        EXPECT_TRUE(shown.contains(QLatin1String(c.mustSay)))
+            << "the empty " << int(c.which) << " tab does not say how to fill it: "
+            << shown.left(300).toStdString();
+    }
+}
+
+// The card is scaffolding: the moment the viewer has something, it is the
+// viewer the tab shows.
+TEST(ViewerPanelBehaviour, ContentReplacesTheCardAndTheCardComesBackWithoutIt)
+{
+    SpartaWrapper sparta;
+    if (!openSparta(sparta, surfDeck()))
+        GTEST_SKIP() << "needs SPARTA_PLUGIN_LIB and the in.surfq fixture";
+
+    ViewerPanel panel;
+    panel.resize(700, 500);
+    panel.show();
+    panel.showSource(ViewerPanel::Snapshot, true);
+    QApplication::processEvents();
+
+    const auto cardShowing = [&]() {
+        for (auto *w : panel.findChildren<QWidget *>())
+            if (EmptyState::isPlaceholder(w) && w->isVisible()) return true;
+        return false;
+    };
+
+    EXPECT_TRUE(cardShowing()) << "an empty panel showed no card at all";
+
+    // a rendered snapshot arrives
+    auto *viewer = new ImageViewer("test", &sparta, nullptr);
+    panel.addSource(ViewerPanel::Snapshot, viewer);
+    panel.showSource(ViewerPanel::Snapshot, true);
+    QApplication::processEvents();
+    ASSERT_TRUE(viewer->hasContent()) << "the fixture produced no render to test with";
+    EXPECT_FALSE(cardShowing()) << "the card is still covering a viewer that has content";
+    EXPECT_TRUE(viewer->isVisible()) << "the viewer with content is not the page in front";
+}
+
+// The tab wording exists twice -- once in the panel, for a viewer that has not
+// been built, and once in the viewer itself. They describe the same thing to
+// the same user, so they have to agree; nothing else would notice if they
+// drifted, because each is only ever seen on its own.
+TEST(ViewerPanelBehaviour, ThePanelAndTheViewerDescribeASourceTheSameWay)
+{
+    SpartaWrapper sparta;
+    if (!openSparta(sparta, surfDeck()))
+        GTEST_SKIP() << "needs SPARTA_PLUGIN_LIB and the in.surfq fixture";
+
+    ViewerPanel panel;
+    auto *bar = panel.findChild<QTabBar *>();
+    ASSERT_NE(bar, nullptr);
+
+    const auto tabTextFor = [&](ViewerPanel::Source which) {
+        for (int i = 0; i < bar->count(); ++i)
+            if (bar->tabData(i).toInt() == int(which)) return bar->tabText(i);
+        return QString();
+    };
+
+    SlideShow sequence("", nullptr);
+    EXPECT_EQ(tabTextFor(ViewerPanel::Sequence), sequence.sourceLabel());
+
+    ImageViewer snapshot("test", &sparta, nullptr);
+    EXPECT_EQ(tabTextFor(ViewerPanel::Snapshot), snapshot.sourceLabel());
+
+    // and the empty-state wording: the card is built from the panel's copy,
+    // the tooltip from the viewer's, and a user meets both
+    auto *card = panel.findChild<QWidget *>("viewerempty1");
+    ASSERT_NE(card, nullptr) << "the sequence tab has no card";
+    QString cardText;
+    for (auto *label : card->findChildren<QLabel *>())
+        cardText += label->text() + "\n";
+    EXPECT_TRUE(cardText.contains(sequence.emptyTitle()))
+        << "card says: " << cardText.left(200).toStdString();
+    EXPECT_TRUE(cardText.contains(sequence.emptyTip().section('\n', 0, 0)))
+        << "card says: " << cardText.left(200).toStdString();
 }
 
 TEST(RealWindows, TotalCoverage)
@@ -1561,6 +1707,7 @@ int main(int argc, char **argv)
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }
+
 
 
 

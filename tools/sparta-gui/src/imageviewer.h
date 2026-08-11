@@ -129,9 +129,16 @@ public:
     {
         return QStringLiteral("The rendered SPARTA snapshot");
     }
+    [[nodiscard]] QString emptyTitle() const override
+    {
+        return QStringLiteral("No snapshot yet");
+    }
     [[nodiscard]] QString emptyTip() const override
     {
-        return QStringLiteral("No render yet: use Run > Create Image");
+        return QStringLiteral(
+            "Run \u25b8 Create Image (Ctrl+I) renders the simulation as it stands right now.\n\n"
+            "It needs a deck that has got as far as defining a box and a grid, so check or "
+            "run the input first.");
     }
     [[nodiscard]] bool hasContent() const override;
     [[nodiscard]] QImage currentImage() const override;

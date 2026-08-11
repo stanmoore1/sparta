@@ -2,6 +2,60 @@
 Visualization
 *************
 
+.. _viewer_panel:
+
+The Viewer panel
+^^^^^^^^^^^^^^^^
+
+.. index:: viewer panel
+.. index:: visualization
+
+Everything SPARTA-GUI draws lives in one docked **Viewer** panel
+(`Ctrl-Shift-I`), which has a tab for each of the three ways it can show
+a simulation:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 18 82
+
+   * - Tab
+     - Shows
+   * - **Snapshot**
+     - A single image of the simulation as it stands, rendered on demand
+       by SPARTA's own ray tracer.  See :ref:`Snapshot Image Viewer
+       <snapshot_viewer>` below.
+   * - **Sequence**
+     - The frames a run writes, as a slide show to step through or
+       export as a movie.  See :ref:`Slide Show viewer <slideshow>`.
+   * - **3D**
+     - An interactive 3D scene built from VTK files.  Present only in a
+       build made with the VTK viewer enabled.
+
+All of the tabs are there from the moment the panel opens, whether or
+not anything has produced a picture yet.  A tab with nothing behind it
+shows a card naming the command or the menu entry that would fill it --
+so the answer to "how do I get a slide show?" is in the panel where the
+question comes up, rather than in a tooltip:
+
+- **Snapshot**: *Run* > *Create Image* (`Ctrl-I`).
+- **Sequence**: add a `dump image
+  <https://sparta.github.io/doc/dump_image.html>`_ command to the input
+  deck and run it, or open frames already on disk with *File* > *View
+  Image or Movie File(s)*.
+- **3D**: *Run* > *3D Snapshot*, or add a ``dump grid/vtk`` (or
+  ``particle/vtk``, ``surf/vtk``) command and run it.
+
+The card is replaced by the viewer itself as soon as that viewer has
+something to show, and the *Run* menu's *Snapshot in Viewer*, *Slide
+Show in Viewer* (`Ctrl-L`) and *3D Scene in Viewer* entries bring the
+matching tab to the front.
+
+While a run is producing frames the panel follows them, unless you have
+picked a tab yourself since the run started -- content arriving in the
+background does not take the view away from what you chose to look at.
+
+-----------
+
 .. _snapshot_viewer:
 
 Snapshot Image Viewer

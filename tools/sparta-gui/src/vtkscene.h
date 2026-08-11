@@ -172,9 +172,17 @@ public:
     {
         return QStringLiteral("The interactive 3D scene");
     }
+    [[nodiscard]] QString emptyTitle() const override
+    {
+        return QStringLiteral("No 3D data yet");
+    }
     [[nodiscard]] QString emptyTip() const override
     {
-        return QStringLiteral("No 3D data yet: use Run > 3D Snapshot, or open a VTK file");
+        return QStringLiteral(
+            "Run \u25b8 3D Snapshot builds a scene from the simulation as it stands.\n\n"
+            "For a scene that follows a run, add a VTK dump to your input deck and run it:\n"
+            "    dump 1 grid/vtk all 100 grid.*.vtu\n\n"
+            "Files written earlier can be opened from this panel's Open button.");
     }
     [[nodiscard]] bool hasContent() const override { return !layers.isEmpty(); }
     [[nodiscard]] QImage currentImage() const override;

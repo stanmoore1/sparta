@@ -38,8 +38,13 @@ class ViewerSource;
  * share one toolbar would put every one of those fixes back at risk for a
  * cosmetic gain.
  *
- * A source with nothing to show keeps its tab, disabled, with a tooltip saying
- * how to fill it -- the empty slide show panel used to give no clue at all.
+ * All three tabs are there from the start, whether or not the viewer behind
+ * one has been built yet.  A tab that appears only once its source has
+ * something to show cannot teach anyone that the source exists, and the panel
+ * used to open with one tab, or none, and grow silently during a run.  Behind
+ * a tab with nothing yet is a card naming the command or menu entry that fills
+ * it, so "what do I do to get a slide show?" is answered in the place the
+ * question is asked rather than in a tooltip.
  */
 class ViewerPanel : public QWidget {
     Q_OBJECT
@@ -55,13 +60,16 @@ public:
     ViewerPanel &operator=(const ViewerPanel &) = delete;
 
     /**
-     * @brief Install a source and give it a tab.
+     * @brief Install a source behind its tab, replacing the placeholder card.
      *
-     * Only registered sources get one, which is how the 3D scene disappears
-     * cleanly from a build without VTK: it is simply never registered, and the
-     * bar comes up with two tabs instead of three.
+     * The tab already exists -- the panel makes all of them up front.  The 3D
+     * scene is the exception: without VTK there is no such viewer to build, so
+     * that tab is not created at all and the bar comes up with two.
      */
     void addSource(Source which, ViewerSource *source);
+
+    /** @brief Is this build able to offer this source at all? */
+    [[nodiscard]] static bool sourceAvailable(Source which);
 
     /** @brief Replace a registered source's widget (a new run builds a new one) */
     void replaceSource(Source which, ViewerSource *source);
@@ -121,10 +129,16 @@ protected:
 private:
     void wireSource(Source which, ViewerSource *source);
     void updateTab(Source which);
+    /// @brief The tab index carrying @p which, or -1 in a build without it.
+    [[nodiscard]] int tabOf(Source which) const;
 
     QTabBar *tabs           = nullptr;
     QStackedWidget *stack   = nullptr;
     ViewerSource *sources[NSources] = {};
+    /// Per source: a two-page stack holding the placeholder card and, once it
+    /// exists, the viewer itself.  Present from construction, so a tab always
+    /// has something to show.
+    QStackedWidget *slots_[NSources] = {};
     int pageOf[NSources]    = {-1, -1, -1};   ///< stack index per source, -1 if absent
     QString names[NSources];                  ///< last title each source announced
     bool sourceLockedByUser = false;

@@ -580,14 +580,11 @@ void SpartaGui::createViewMenu()
     addMenuAction(menu, ":/icons/image-x-generic.svg", "Slide S&how in Viewer", "Ctrl+L", [this]() {
         ensureViewerPanel();
         panels->openPanel(PanelManager::Viewer);
-        // The frame view is built by the first dump image a run writes, and
-        // showSource() does nothing for a source that does not exist yet -- so
-        // on a deck whose dumps are commented out, which is most of the
-        // examples, this menu entry silently did nothing at all. Build it
-        // empty instead: it says it has no frames, and a later run appends to
-        // the same page.
-        if (!viewer->sequence())
-            viewer->addSource(ViewerPanel::Sequence, new SlideShow(currentFile, this));
+        // No need to build an empty slide show first: the panel's tab exists
+        // whether or not a run has written a frame, and shows the card naming
+        // the dump image command that would fill it.  That used to be worked
+        // around here by constructing an empty SlideShow, which showed a blank
+        // pane and explained nothing.
         viewer->showSource(ViewerPanel::Sequence, true);
     });
 #if defined(SPARTA_GUI_HAVE_VTK)
