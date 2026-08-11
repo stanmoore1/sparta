@@ -177,8 +177,6 @@ private:
     QPoint dragLast;         ///< last mouse pos during an interactive view drag
     bool dragging = false;   ///< true while dragging to rotate/pan the render
 
-    QAction *saveAsAct; ///< Save As action
-    QAction *copyAct;   ///< Copy action
     QAction *cmdAct;    ///< Copy dump image command action
     QAction *movieAct;  ///< Copy dump movie command action
     QAction *sidebarAct = nullptr; ///< View menu toggle for the settings sidebar

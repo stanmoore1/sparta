@@ -1391,10 +1391,14 @@ TEST(ImageViewerLayout, TheCollapseControlSaysWhatItDoes)
     EXPECT_FALSE(handle->accessibleName().isEmpty());
 }
 
-// The main window binds Ctrl+S and Ctrl+W to the deck and the editor, and the
-// viewer binds them to the picture and its panel. Focus decides, and always
-// did; what these entries have to do is say which is which.
-TEST(ImageViewerLayout, TheViewerFileEntriesNameWhatTheyActOn)
+// The main window binds Ctrl+S and Ctrl+W to the deck and the editor. The
+// viewer used to bind Ctrl+S too, to its own Save As, so which one a keystroke
+// reached depended on focus; naming the entries "Save Image As..." and "Close
+// Panel" made that visible. Saving is the panel's now, one pair of controls for
+// all three tabs, so the viewer does not claim Ctrl+S at all -- the ambiguity
+// is gone rather than merely labelled. Ctrl+W still closes the panel and still
+// says so.
+TEST(ImageViewerLayout, TheViewerNoLongerClaimsTheKeysThePanelOwns)
 {
     SpartaWrapper sparta;
     if (!openSparta(sparta, surfDeck()))
@@ -1409,66 +1413,91 @@ TEST(ImageViewerLayout, TheViewerFileEntriesNameWhatTheyActOn)
         if (!a->shortcut().isEmpty()) bound[a->shortcut()] = a->text();
 
     const QKeySequence save(Qt::CTRL | Qt::Key_S), close(Qt::CTRL | Qt::Key_W);
-    ASSERT_TRUE(bound.contains(save));
+    EXPECT_FALSE(bound.contains(save))
+        << "the viewer claims Ctrl+S again, which the panel already owns: "
+        << bound.value(save).toStdString();
+
     ASSERT_TRUE(bound.contains(close));
-    EXPECT_TRUE(bound.value(save).contains("Image"))
-        << "Ctrl+S here saves the picture, not the deck: " << bound.value(save).toStdString();
     EXPECT_TRUE(bound.value(close).contains("Panel"))
         << "Ctrl+W here closes the panel, not the editor tab: "
         << bound.value(close).toStdString();
 }
 
-// Without a library the application used to refuse to start: a modal offering
-// download, browse or exit, looped on until one worked.  It starts now, and
-// the card carries the same offer from above the editor.  What has to hold is
-// that the card is there, that it goes when a library arrives, and that the
-// run controls track it -- a card claiming decks cannot be run while Run sits
-// enabled would be worse than no card at all.
-TEST(FirstStart, WithoutALibraryTheApplicationComesUpAndSaysWhatIsMissing)
+// Saving the picture and copying it were the same idea spelled three ways --
+// "Save Image As...", a button tipped "Export to image file", and "Save the
+// current 3D view to an image file" -- in three places, with the 3D scene
+// offering no copy at all. One pair now, beside the tabs, acting on whichever
+// tab is in front.
+TEST(ViewerPanelBehaviour, SavingAndCopyingAreOnePairForEveryTab)
 {
-    qputenv("SPARTA_GUI_FORCE_NO_PLUGIN", "1");
+    SpartaWrapper sparta;
+    if (!openSparta(sparta, surfDeck()))
+        GTEST_SKIP() << "needs SPARTA_PLUGIN_LIB and the in.surfq fixture";
 
-    // Point the example scan at this checkout: without a library the search
-    // loses the library's own directory as a candidate, and the build tree the
-    // test runs from has no examples above it either, so an unset path would
-    // make the case about the layout of the machine rather than about the code.
-    const QString examples =
-        QDir(fixturesDir() + "/../../../../examples").canonicalPath();
-    if (!QDir(examples).exists()) GTEST_SKIP() << "needs the SPARTA examples directory";
-    QSettings().setValue(Keys::EXAMPLES_PATH, examples);
-
-    SpartaGui gui(nullptr, QString(), 1000, 700);
-    gui.show();
+    ViewerPanel panel;
+    panel.resize(800, 560);
+    panel.show();
     QApplication::processEvents();
 
-    auto *card = gui.findChild<QWidget *>("setupcard");
-    ASSERT_NE(card, nullptr) << "nothing tells the user why nothing can be run";
-    EXPECT_TRUE(card->isVisible());
+    auto *save = panel.findChild<QToolButton *>("viewersave");
+    auto *copy = panel.findChild<QToolButton *>("viewercopy");
+    ASSERT_NE(save, nullptr) << "the panel offers no shared Save";
+    ASSERT_NE(copy, nullptr) << "the panel offers no shared Copy";
 
-    // browse is always possible; downloading depends on the build
-    EXPECT_NE(card->findChild<QAbstractButton *>("setupbrowse"), nullptr);
+    // nothing in front yet: offered, but refused, rather than absent
+    panel.showSource(ViewerPanel::Snapshot, true);
+    QApplication::processEvents();
+    EXPECT_TRUE(save->isVisible());
+    EXPECT_FALSE(save->isEnabled()) << "Save is offered for a tab with no picture";
+    EXPECT_FALSE(copy->isEnabled()) << "Copy is offered for a tab with no picture";
 
-    QHash<QString, bool> offered;
-    for (auto *a : gui.findChildren<QAction *>())
-        if (!a->text().isEmpty()) offered[a->text()] = a->isEnabled();
+    // a render arrives and the same pair comes to life
+    auto *viewer = new ImageViewer("test", &sparta, nullptr);
+    panel.addSource(ViewerPanel::Snapshot, viewer);
+    panel.showSource(ViewerPanel::Snapshot, true);
+    QApplication::processEvents();
+    ASSERT_TRUE(viewer->hasContent());
+    EXPECT_TRUE(save->isEnabled()) << "Save stayed greyed over a tab that has a picture";
+    EXPECT_TRUE(copy->isEnabled()) << "Copy stayed greyed over a tab that has a picture";
 
-    // Examples are files: reading one needs no simulator, and the card says as
-    // much when it claims decks can be opened.
-    bool exampleOffered = false;
-    for (auto *m : gui.findChildren<QMenu *>())
-        if (m->title().contains("Example") && m->isEnabled() && !m->isEmpty())
-            exampleOffered = true;
-    EXPECT_TRUE(exampleOffered) << "the examples cannot be opened without a library";
+    // and it copies that tab's picture, not something else's
+    auto *clip = QGuiApplication::clipboard();
+    ASSERT_NE(clip, nullptr);
+    clip->clear();
+    copy->defaultAction()->trigger();
+    QApplication::processEvents();
+    const QImage pasted = clip->image();
+    ASSERT_FALSE(pasted.isNull()) << "Copy put nothing on the clipboard";
+    EXPECT_EQ(pasted.size(), viewer->currentImage().size());
 
-    for (const QString &name : offered.keys()) {
-        if (name.contains("Run SPARTA from Editor Buffer") || name.contains("Create &Image"))
-            EXPECT_FALSE(offered.value(name))
-                << name.toStdString() << " is offered with no library behind it";
-        if (name.contains("&Save Input File"))
-            EXPECT_TRUE(offered.value(name))
-                << name.toStdString() << " is refused, but a deck can be saved without a library";
-    }
-    qunsetenv("SPARTA_GUI_FORCE_NO_PLUGIN");
+    // switching to a tab with nothing greys the same pair again
+    panel.showSource(ViewerPanel::Sequence, true);
+    QApplication::processEvents();
+    EXPECT_FALSE(save->isEnabled())
+        << "Save stayed live after switching to a tab with no picture";
+}
+
+// A viewer that has a menu of its own hangs it in the shared strip, so "this
+// tab has more" is in one place whichever tab that is -- and a viewer with no
+// menu leaves no empty button behind.
+TEST(ViewerPanelBehaviour, ATabWithItsOwnMenuShowsItInTheSharedStrip)
+{
+    SpartaWrapper sparta;
+    if (!openSparta(sparta, surfDeck()))
+        GTEST_SKIP() << "needs SPARTA_PLUGIN_LIB and the in.surfq fixture";
+
+    ViewerPanel panel;
+    panel.resize(800, 560);
+    panel.show();
+    panel.addSource(ViewerPanel::Snapshot, new ImageViewer("test", &sparta, nullptr));
+    panel.showSource(ViewerPanel::Snapshot, true);
+    QApplication::processEvents();
+
+    auto *more = panel.findChild<QToolButton *>("viewersourcemenu");
+    ASSERT_NE(more, nullptr);
+    // the snapshot viewer has no menu to hoist, so nothing is offered
+    EXPECT_FALSE(more->isVisible())
+        << "an empty menu button is showing for a tab that has no menu";
 }
 
 // The merged viewer panel: the tab bar plus whichever source is in front. The
@@ -1707,6 +1736,7 @@ int main(int argc, char **argv)
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }
+
 
 
 

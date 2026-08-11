@@ -424,14 +424,11 @@ void VtkScene::buildUi()
     auto *resetAct = tb->addAction(QIcon(":/icons/preferences-reset.svg"), "Reset View", this,
                                    &VtkScene::resetView);
     resetAct->setToolTip("Camera reset to the default view, framing all layers");
-    auto *shotAct = tb->addAction(QIcon(":/icons/image-x-generic.svg"), "Save Screenshot...", this,
-                                  &VtkScene::saveScreenshot);
-    shotAct->setToolTip("Save the current 3D view to an image file");
+    // No screenshot action of its own: saving the view is the viewer panel's
+    // shared Save Image As, which reaches this scene through currentImage()
+    // and is in the same place for the snapshot and the slide show too.
 
-    cmapCombo->setToolTip("Color map applied to the selected scalar field");
-    scalarBarBox->setToolTip("Show the color scale for the selected field");
-
-    for (auto *act : {openAct, resetAct, shotAct})
+    for (auto *act : {openAct, resetAct})
         nameFromToolTip(tb->widgetForAction(act));
 
     // Feature 9: in-app field post-processing (cut plane, iso-surface, probes,
@@ -780,19 +777,6 @@ void VtkScene::openFileDialog()
     QString err;
     if (!addDatasetFile(path, QFileInfo(path).fileName(), Kind::Generic, &err))
         critical(this, "Open VTK Dataset", "Could not open the selected file:", err);
-}
-
-void VtkScene::saveScreenshot()
-{
-    const QString path = QFileDialog::getSaveFileName(this, "Save Screenshot", "sparta-view.png",
-                                                      "PNG image (*.png)");
-    if (path.isEmpty()) return;
-    renderArea->requestRender();
-    const QImage img = renderArea->grabFrame();
-    if (img.isNull() || !img.save(path))
-        critical(this, "Save Screenshot", "Could not write the screenshot to:", path);
-    else
-        showStatus(QString("Saved screenshot to %1").arg(path), 5000);
 }
 
 // ======================================================================== //

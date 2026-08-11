@@ -12,13 +12,20 @@
 #include "viewerpanel.h"
 
 #include "emptystate.h"
+#include "helpers.h"
 #include "imageviewer.h"
 #include "slideshow.h"
 #include "viewersource.h"
 
+#include <QAction>
+#include <QHBoxLayout>
 #include <QIcon>
+#include <QImage>
+#include <QKeySequence>
+#include <QMenu>
 #include <QStackedWidget>
 #include <QTabBar>
+#include <QToolButton>
 #include <QVBoxLayout>
 
 namespace {
@@ -89,10 +96,55 @@ ViewerPanel::ViewerPanel(QWidget *parent) :
     tabs->setDrawBase(false);
     tabs->setUsesScrollButtons(false);
 
+    // Beside the tabs rather than on a row of their own: the viewer shares a
+    // window with the editor and the log, and a strip that costs nothing but
+    // the height already spent on the tab bar is a strip that does not have to
+    // be argued for.
+    auto *save = new QToolButton;
+    saveAction = new QAction(QIcon(":/icons/document-save-as.svg"), "Save Image &As...", this);
+    saveAction->setToolTip("Save the picture this tab is showing to a file");
+    saveAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_S));
+    saveAction->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+    save->setDefaultAction(saveAction);
+    save->setObjectName("viewersave");
+    save->setAutoRaise(true);
+    addAction(saveAction);
+
+    auto *copy = new QToolButton;
+    copyAction = new QAction(QIcon(":/icons/edit-copy.svg"), "&Copy Image", this);
+    copyAction->setToolTip("Copy the picture this tab is showing to the clipboard");
+    copyAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_C));
+    copyAction->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+    copy->setDefaultAction(copyAction);
+    copy->setObjectName("viewercopy");
+    copy->setAutoRaise(true);
+    addAction(copyAction);
+
+    connect(saveAction, &QAction::triggered, this, &ViewerPanel::saveCurrentImage);
+    connect(copyAction, &QAction::triggered, this, &ViewerPanel::copyCurrentImage);
+
+    // A source with a menu of its own (the 3D scene's filters) hangs it here,
+    // so "this tab has more" is in the same place whichever tab that is.
+    menuButton = new QToolButton;
+    menuButton->setObjectName("viewersourcemenu");
+    menuButton->setText("More");
+    menuButton->setPopupMode(QToolButton::InstantPopup);
+    menuButton->setAutoRaise(true);
+    menuButton->hide();
+
+    auto *top = new QHBoxLayout;
+    top->setContentsMargins(0, 0, 0, 0);
+    top->setSpacing(2);
+    top->addWidget(tabs);
+    top->addStretch(1);
+    top->addWidget(menuButton);
+    top->addWidget(save);
+    top->addWidget(copy);
+
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
-    layout->addWidget(tabs);
+    layout->addLayout(top);
     layout->addWidget(stack, 1);
 
     // Every tab, now, in enum order, whether or not its viewer exists.  A tab
@@ -126,6 +178,7 @@ ViewerPanel::ViewerPanel(QWidget *parent) :
         if (which < 0 || which >= NSources) return;
         if (pageOf[which] >= 0) stack->setCurrentIndex(pageOf[which]);
         sourceLockedByUser = true;
+        syncSharedControls();
         emit sourceChanged(which);
         emit titleChanged(title());
     });
@@ -196,6 +249,43 @@ void ViewerPanel::replaceSource(Source which, ViewerSource *source)
     updateTab(which);
 }
 
+void ViewerPanel::syncSharedControls()
+{
+    ViewerSource *src = sources[currentSource()];
+
+    // Greyed rather than hidden: a tab with nothing in it still says what Save
+    // and Copy would act on, and controls that come and go as tabs change read
+    // as the panel rearranging itself.
+    const bool havePicture = src && !src->currentImage().isNull();
+    if (saveAction) saveAction->setEnabled(havePicture);
+    if (copyAction) copyAction->setEnabled(havePicture);
+
+    if (!menuButton) return;
+    QMenu *own = src ? src->sourceMenu() : nullptr;
+    menuButton->setMenu(own);
+    menuButton->setVisible(own != nullptr);
+    if (own) menuButton->setToolTip(own->title().isEmpty()
+                                        ? QStringLiteral("More for this tab")
+                                        : own->title());
+}
+
+void ViewerPanel::saveCurrentImage()
+{
+    ViewerSource *src = sources[currentSource()];
+    if (!src) return;
+    QImage shot = src->currentImage();
+    if (shot.isNull()) return;
+    exportImage(this, &shot, QStringLiteral("Viewer"));
+}
+
+void ViewerPanel::copyCurrentImage()
+{
+    ViewerSource *src = sources[currentSource()];
+    if (!src) return;
+    const QImage shot = src->currentImage();
+    if (!shot.isNull()) copyImageToClipboard(shot);
+}
+
 int ViewerPanel::tabOf(Source which) const
 {
     for (int i = 0; i < tabs->count(); ++i)
@@ -225,6 +315,7 @@ void ViewerPanel::updateTab(Source which)
     // one has been built, is behind it.  Swapping between them is what makes
     // clicking an empty tab answer a question rather than show a blank pane.
     slot->setCurrentIndex(ready ? 1 : 0);
+    if (which == currentSource()) syncSharedControls();
 
     // Every tab stays *enabled*.  Disabling the empty ones reads better right
     // up until they are all empty, which is the state the panel opens in:
@@ -270,6 +361,7 @@ void ViewerPanel::showSource(Source which, bool userAsked)
         tabs->setCurrentIndex(index);
     }
     if (pageOf[which] >= 0) stack->setCurrentIndex(pageOf[which]);
+    syncSharedControls();
 
     // Set from the argument rather than left to the currentChanged handler.
     // That handler only fires when the index actually moves, so asking for the

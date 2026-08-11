@@ -138,13 +138,10 @@ SlideShow::SlideShow(const QString &fileName, SpartaGui *_spartagui, QWidget *pa
     // always enabled: movie() explains what to install if no encoder is found,
     // rather than leaving a dead, disabled button
 
-    auto *toimage = new QPushButton(QIcon(":/icons/document-save-as.svg"), "");
-    toimage->setToolTip("Export to image file");
-    toimage->setObjectName("saveimage");
-
-    auto *toclip = new QPushButton(QIcon(":/icons/edit-copy.svg"), "");
-    toclip->setToolTip("Copy image to clipboard");
-    toclip->setObjectName("copy");
+    // Saving the frame on screen and copying it are the viewer panel's shared
+    // controls now -- the same pair, in the same place, whichever tab is in
+    // front.  Exporting the whole sequence as a movie stays here: that is a
+    // slide show operation, not a "the picture I am looking at" one.
 
     auto *totrash = new QPushButton(QIcon(":/icons/trash.svg"), "");
     totrash->setToolTip("Delete image files in the selected range");
@@ -280,13 +277,11 @@ SlideShow::SlideShow(const QString &fileName, SpartaGui *_spartagui, QWidget *pa
 
     // square toolbar buttons with a snug, uniform icon (shared policy)
     styleToolButtons(buttonhint,
-                     {stoprun,  tomovie,   toimage,  toclip,   totrash, cacheButton, gofirst,
+                     {stoprun,  tomovie,   totrash,  cacheButton, gofirst,
                       goprev,   goplay,    gonext,   golast,   goloop,  zoomin,      zoomout,
                       imgrotcw, imgrotccw, imgfliph, imgflipv, normal,  fitwin});
 
     connect(tomovie, &QPushButton::released, this, &SlideShow::movie);
-    connect(toimage, &QPushButton::released, this, &SlideShow::saveCurrentImage);
-    connect(toclip, &QPushButton::released, this, &SlideShow::copy);
     connect(totrash, &QPushButton::released, this, &SlideShow::deleteImages);
     connect(cacheButton, &QPushButton::released, this, &SlideShow::purgeCache);
     connect(delay, &QAbstractSpinBox::editingFinished, this, &SlideShow::setDelay);
@@ -307,8 +302,6 @@ SlideShow::SlideShow(const QString &fileName, SpartaGui *_spartagui, QWidget *pa
     connect(fitwin, &QPushButton::released, this, &SlideShow::resetWindowSize);
 
     toolsLayout->addWidget(tomovie, 1);
-    toolsLayout->addWidget(toimage, 1);
-    toolsLayout->addWidget(toclip, 1);
     toolsLayout->addWidget(totrash, 1);
     toolsLayout->addWidget(cacheButton, 1);
     toolsLayout->addWidget(empty);

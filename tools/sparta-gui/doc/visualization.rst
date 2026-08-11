@@ -50,6 +50,29 @@ something to show, and the *Run* menu's *Snapshot in Viewer*, *Slide
 Show in Viewer* (`Ctrl-L`) and *3D Scene in Viewer* entries bring the
 matching tab to the front.
 
+.. index:: viewer panel; save and copy
+
+Beside the tabs are the two controls every tab shares:
+
+- **Save Image As...** (`Ctrl-S`) writes the picture the current tab is
+  showing to a file.
+- **Copy Image** (`Ctrl-C`) puts it on the clipboard.
+
+Both act on whichever tab is in front, and are greyed out while that tab
+has no picture.  They used to be three separate pairs -- a *Save Image
+As...* menu entry in the snapshot viewer, an *Export to image file*
+button in the slide show, and a *Save Screenshot...* action in the 3D
+scene, which offered no copy at all -- so the same idea had three names,
+three places and three shortcuts.  A tab that has a menu of its own (the
+3D scene's filters) hangs it in the same strip, under **More**.
+
+Controls that are genuinely particular to one viewer stay inside it: the
+snapshot's camera and render settings, the slide show's frame controls
+and movie export, the 3D scene's colour-by and filters.  Those are not
+the same operation even where they share an icon -- the snapshot's zoom
+moves a camera and re-renders, the slide show's scales an image that has
+already been written.
+
 While a run is producing frames the panel follows them, unless you have
 picked a tab yourself since the run started -- content arriving in the
 background does not take the view away from what you chose to look at.
@@ -181,16 +204,11 @@ window, that is even when the corresponding menu item is not visible.
 
 The **menu bar row** has:
 
-- The **File** menu with the following entries:
-   - **Save Image As...** (`Ctrl-S`): Save the rendered image to a file.  The
-     file format is inferred from the file name extension.  When the
-     `ImageMagick software <https://imagemagick.org/>`_ is installed,
-     additional file formats beyond those natively supported by the Qt
-     library become available.
-   - **Copy Image** (`Ctrl-C`): Copy the rendered image to the clipboard
-     for pasting it into another application.  This requires support
-     from the receiving application, which is the case for many common
-     applications like document editors and web browsers.
+- The **File** menu with the following entries.  Saving the render and
+  copying it are not here: they are the panel's shared controls beside
+  the tabs (see :ref:`The Viewer panel <viewer_panel>`), with the same
+  names and keys whichever tab is in front.
+
    - **Copy dump image command** (`Ctrl-D`): Copy the current `dump image
      <https://sparta.github.io/doc/dump_image.html>`_ and `dump_modify
      <https://sparta.github.io/doc/dump_modify.html>`_ commands to the
@@ -943,7 +961,8 @@ Each loaded dataset is a layer.  The toolbar offers:
 - **Colormap**: *Rainbow*, *Cool to Warm*, *Viridis* or *Grayscale*, with a
   scalar-bar **Legend** showing the value range.
 - **Edges**: outline grid cells / surface elements.
-- **Reset View** and **Save Screenshot...** (PNG).
+- **Reset View**.  Saving the view to a file is the viewer panel's
+  shared **Save Image As...**, beside the tabs.
 
 Drag with the left mouse button to rotate, the right (or middle) button to
 pan, and the wheel to zoom.

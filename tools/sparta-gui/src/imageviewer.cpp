@@ -156,7 +156,7 @@ ImageViewer::ImageViewer(const QString &fileName, SpartaWrapper *_sparta, Sparta
                          QWidget *parent) :
     ViewerSource(parent), display(new ViewerDisplay(ViewerDisplay::FitViewport)),
     sidebar(new ViewerSidebar), menuBar(new QMenuBar),
-    saveAsAct(nullptr), copyAct(nullptr), cmdAct(nullptr), movieAct(nullptr), sparta(_sparta),
+    cmdAct(nullptr), movieAct(nullptr), sparta(_sparta),
     spartagui(_spartagui), filename(QFileInfo(fileName).fileName())
 {
     // interactive view: drag to rotate/pan, wheel to zoom -- handled in
@@ -1061,15 +1061,14 @@ bool ImageViewer::eventFilter(QObject *watched, QEvent *event)
     }
 
     // now that this window is a docked panel sharing the main window's
-    // shortcut context, its own Ctrl+S/C/W/Q would otherwise be ambiguous
-    // with the identically bound main-window menu shortcuts
-    // this panel's own Ctrl+ keys, claimed while focus is inside it
+    // shortcut context, its own Ctrl+W/Q would otherwise be ambiguous with the
+    // identically bound main-window menu shortcuts.  Ctrl+S and Ctrl+C are not
+    // claimed here any more: the panel owns them for every tab, so claiming
+    // them again from inside one tab would decide by focus which of two
+    // identical actions ran.
     if (!shutdown &&
-        dispatchCtrlShortcut(event,
-                             {{'S', [this]() { if (saveAsAct->isEnabled()) saveAs(); }},
-                              {'C', [this]() { if (copyAct->isEnabled()) copy(); }},
-                              {'W', [this]() { emit closeRequested(); }},
-                              {'Q', [this]() { quit(); }}}))
+        dispatchCtrlShortcut(event, {{'W', [this]() { emit closeRequested(); }},
+                                     {'Q', [this]() { quit(); }}}))
         return true;
     if (event->type() == QEvent::KeyPress) {
         // don't handle any more key press events after entering destructor
@@ -1343,27 +1342,12 @@ void ImageViewer::createActions()
 {
     QMenu *fileMenu = menuBar->addMenu("&File");
 
-    // "Save As" and "Close" rather than "Save Image As" and "Close Panel" left
-    // the viewer's Ctrl+S and Ctrl+W looking like the main window's, which bind
-    // the same keys to the deck and the editor.  The binding is resolved by
-    // focus and always was; what was missing is any way to know that without
-    // being surprised by it, so the entries now name what they act on.
-    saveAsAct = addMenuAction(fileMenu, "&Save Image As...", ":/icons/document-save-as.svg", this,
-                              &ImageViewer::saveAs);
-    saveAsAct->setEnabled(false);
-    saveAsAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_S));
-    // WidgetWithChildrenShortcut (rather than the default WindowShortcut) so
-    // these only compete with the identically-bound main-window menu
-    // shortcuts while focus is actually inside this docked panel, instead of
-    // unconditionally while its window (now shared with the main window) is
-    // active; the eventFilter() override below resolves that in-focus case
-    saveAsAct->setShortcutContext(Qt::WidgetWithChildrenShortcut);
-    fileMenu->addSeparator();
-    copyAct =
-        addMenuAction(fileMenu, "Copy &Image", ":/icons/edit-copy.svg", this, &ImageViewer::copy);
-    copyAct->setShortcut(QKeySequence::Copy);
-    copyAct->setEnabled(false);
-    copyAct->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+    // Saving the render and copying it are the viewer panel's shared controls
+    // now, beside the tabs, with the same names and keys whichever tab is in
+    // front.  They used to be here, spelled differently from the slide show's
+    // pair of buttons doing the same thing one tab away.  What stays is what
+    // only this viewer can do: hand over the commands that reproduce the
+    // picture, and its colours.
     cmdAct = addMenuAction(fileMenu, "Copy &dump image command", ":/icons/file-clipboard.svg", this,
                            &ImageViewer::cmdToClipboard);
     cmdAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_D));
@@ -1424,8 +1408,9 @@ QIcon ImageViewer::sourceIcon() const
 
 void ImageViewer::updateActions()
 {
-    saveAsAct->setEnabled(!display->isEmpty());
-    copyAct->setEnabled(!display->isEmpty());
+    // Save and Copy live on the panel now and follow currentImage(); telling
+    // it the render arrived is this viewer's whole part in that.
+    emit contentChanged();
 }
 
 bool ImageViewer::hasContent() const

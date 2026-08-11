@@ -194,7 +194,6 @@ private slots:
     void onColorMapChanged();
     void onEdgesToggled(bool on);
     void onScalarBarToggled(bool on);
-    void saveScreenshot();
 
     // Feature 9: in-app field post-processing (heavier analysis stays in ParaView)
     void applyCutPlane();

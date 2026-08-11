@@ -15,8 +15,10 @@
 #include <QString>
 #include <QWidget>
 
+class QAction;
 class QStackedWidget;
 class QTabBar;
+class QToolButton;
 
 class ImageViewer;
 class SlideShow;
@@ -34,9 +36,20 @@ class ViewerSource;
  * This is a tab bar over a stack. Each page is one @ref ViewerSource, whole and
  * unmodified: the panel does not rearrange anything inside a source, it only
  * decides which is in front. That is deliberate. All three carry sizing and
- * layout code that took real debugging to get right, and re-laying it out to
- * share one toolbar would put every one of those fixes back at risk for a
- * cosmetic gain.
+ * layout code that took real debugging to get right, and re-laying it out
+ * wholesale would put every one of those fixes back at risk.
+ *
+ * What the panel does hoist out is the part that was the same in all three and
+ * spelled differently in each: saving the picture and copying it. Those were
+ * "Save Image As..." in one, a button tipped "Export to image file" in
+ * another, and "Save the current 3D view to an image file" in the third, with
+ * one of the three offering no copy at all -- three names, three places and
+ * three shortcuts for one idea. They are now one pair of controls beside the
+ * tabs, acting on whichever source is in front through
+ * @ref ViewerSource::currentImage(), which is what that method was declared
+ * for. Anything genuinely specific to a viewer -- a camera, a frame slider, a
+ * filter -- stays inside it, because those are not the same operation even
+ * when they share an icon.
  *
  * All three tabs are there from the start, whether or not the viewer behind
  * one has been built yet.  A tab that appears only once its source has
@@ -126,14 +139,25 @@ protected:
      */
     [[nodiscard]] QSize minimumSizeHint() const override;
 
+private slots:
+    /// @brief Save the picture the source in front is showing.
+    void saveCurrentImage();
+    /// @brief Copy the picture the source in front is showing.
+    void copyCurrentImage();
+
 private:
     void wireSource(Source which, ViewerSource *source);
     void updateTab(Source which);
+    /// @brief Point the shared controls at whatever is in front now.
+    void syncSharedControls();
     /// @brief The tab index carrying @p which, or -1 in a build without it.
     [[nodiscard]] int tabOf(Source which) const;
 
     QTabBar *tabs           = nullptr;
     QStackedWidget *stack   = nullptr;
+    QAction *saveAction     = nullptr;  ///< shared "Save Image As...", all sources
+    QAction *copyAction     = nullptr;  ///< shared "Copy Image", all sources
+    QToolButton *menuButton = nullptr;  ///< the front source's own menu, if it has one
     ViewerSource *sources[NSources] = {};
     /// Per source: a two-page stack holding the placeholder card and, once it
     /// exists, the viewer itself.  Present from construction, so a tab always
