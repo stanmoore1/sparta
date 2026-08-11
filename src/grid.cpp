@@ -96,6 +96,7 @@ Grid::Grid(SPARTA *sparta) : Pointers(sparta)
   nlocal = nghost = maxlocal = maxcell = 0;
   nsplitlocal = nsplitghost = maxsplit = 0;
   nsublocal = nsubghost = 0;
+  nempty = 0;
   nparent = maxparent = 0;
   maxlevel = 0;
   plevel_limit = MAXLEVEL;
@@ -235,6 +236,7 @@ void Grid::remove()
   nlocal = nghost = maxlocal = maxcell = 0;
   nsplitlocal = nsplitghost = maxsplit = 0;
   nsublocal = nsubghost = 0;
+  nempty = 0;
   maxlevel = 0;
 
   hash->clear();
@@ -450,7 +452,7 @@ void Grid::remove_ghosts()
 {
   hashfilled = 0;
   exist_ghost = 0;
-  nghost = nunsplitghost = nsplitghost = nsubghost = 0;
+  nghost = nunsplitghost = nsplitghost = nsubghost = nempty = 0;
   surf->remove_ghosts();
 }
 
@@ -594,6 +596,24 @@ void Grid::acquire_ghosts_near(int surfflag)
       ebbhi[i] += cell_epsilon;
   }
 
+  // touchflag = 1 if a cell which only touches the ebbox is acquired as an
+  //   EMPTY ghost, 0 if it is ignored
+  // for cutoff = 0.0, ebbox = my bbox (except across periodic boundaries),
+  //   so the cells which touch it are the immediate neighbors of my owned
+  //   cells and are the minimal set of ghosts I must store
+  //   the touch is also detected exactly, since ebblo/ebbhi are copies of
+  //   owned cell coords, not the result of any arithmetic
+  // for cutoff > 0.0, an immediate neighbor overlaps the ebbox by a finite
+  //   volume, so a cell which only touches the ebbox lies an entire layer
+  //   beyond the cutoff and is needed by no owned cell
+  //   acquiring it is also unreliable, since box_overlap() detects a touch
+  //   with an == comparison on doubles, and ebblo/ebbhi = bblo/bbhi -/+ cutoff
+  //   may or may not round exactly onto a cell face
+  //   that differs between the lo and hi side of the bbox, so acquiring these
+  //   cells made nghost vary from proc to proc for a symmetric decomposition
+
+  int touchflag = (cutoff == 0.0);
+
   // box = ebbox split across periodic BC
   // 27 is max number of periodic images in 3d
 
@@ -625,7 +645,9 @@ void Grid::acquire_ghosts_near(int surfflag)
 
   // nlist = # of boxes that overlap with my bbox, skipping self boxes
   // list = indices into boxall of overlaps
-  // overlap = true overlap or just touching
+  // overlap = true overlap, or just touching if touchflag is set
+  // if my whole bbox only touches a box, then so does each of my cells,
+  //   so that box can be skipped when touchflag is not set
 
   int nlist = 0;
   int *list;
@@ -633,15 +655,18 @@ void Grid::acquire_ghosts_near(int surfflag)
 
   for (i = 0; i < nboxall; i++) {
     if (boxall[i].proc == me) continue;
-    if (box_overlap(bblo,bbhi,boxall[i].lo,boxall[i].hi)) list[nlist++] = i;
+    int boxflag = box_overlap(bblo,bbhi,boxall[i].lo,boxall[i].hi);
+    if (!boxflag) continue;
+    if (boxflag == 2 && !touchflag) continue;
+    list[nlist++] = i;
   }
 
   // loop over my owned cells, not including sub cells
   // each may overlap with multiple boxes in list
   // on 1st pass, just tally memory to send copies of my cells
   // use lastproc to insure a cell only overlaps once per other proc
-  // if oflag = 2 = my cell just touches box,
-  // so flag grid cell as EMPTY ghost by setting nsurf = -1
+  // if oflag = 2 = my cell just touches box, skip it unless touchflag is set,
+  // else flag grid cell as EMPTY ghost by setting nsurf = -1
 
   int j,oflag,lastproc,nsurf_hold;
 
@@ -657,6 +682,7 @@ void Grid::acquire_ghosts_near(int surfflag)
       j = list[i];
       oflag = box_overlap(lo,hi,boxall[j].lo,boxall[j].hi);
       if (!oflag) continue;
+      if (oflag == 2 && !touchflag) continue;
       if (boxall[j].proc == lastproc) continue;
       lastproc = boxall[j].proc;
 
@@ -686,8 +712,8 @@ void Grid::acquire_ghosts_near(int surfflag)
 
   // on 2nd pass over local cells, fill the send buf
   // use lastproc to insure a cell only overlaps once per other proc
-  // if oflag = 2 = my cell just touches box,
-  // so flag grid cell as EMPTY ghost by setting nsurf = -1
+  // if oflag = 2 = my cell just touches box, skip it unless touchflag is set,
+  // else flag grid cell as EMPTY ghost by setting nsurf = -1
 
   nsend = 0;
   sendsize = 0;
@@ -700,6 +726,7 @@ void Grid::acquire_ghosts_near(int surfflag)
       j = list[i];
       oflag = box_overlap(lo,hi,boxall[j].lo,boxall[j].hi);
       if (!oflag) continue;
+      if (oflag == 2 && !touchflag) continue;
       if (boxall[j].proc == lastproc) continue;
       lastproc = boxall[j].proc;
 
@@ -751,6 +778,8 @@ void Grid::acquire_ghosts_near(int surfflag)
   memory->destroy(rbuf);
 
   // set nempty = # of EMPTY ghost cells I store
+  // is always 0 for cutoff > 0.0, since only cells which just touch the ebbox
+  //   are flagged EMPTY, and those are not acquired in that case
 
   nempty = 0;
   for (int icell = nlocal; icell < nlocal+nghost; icell++)
@@ -810,6 +839,24 @@ void Grid::acquire_ghosts_near_less_memory(int surfflag)
       ebbhi[i] += cell_epsilon;
   }
 
+  // touchflag = 1 if a cell which only touches the ebbox is acquired as an
+  //   EMPTY ghost, 0 if it is ignored
+  // for cutoff = 0.0, ebbox = my bbox (except across periodic boundaries),
+  //   so the cells which touch it are the immediate neighbors of my owned
+  //   cells and are the minimal set of ghosts I must store
+  //   the touch is also detected exactly, since ebblo/ebbhi are copies of
+  //   owned cell coords, not the result of any arithmetic
+  // for cutoff > 0.0, an immediate neighbor overlaps the ebbox by a finite
+  //   volume, so a cell which only touches the ebbox lies an entire layer
+  //   beyond the cutoff and is needed by no owned cell
+  //   acquiring it is also unreliable, since box_overlap() detects a touch
+  //   with an == comparison on doubles, and ebblo/ebbhi = bblo/bbhi -/+ cutoff
+  //   may or may not round exactly onto a cell face
+  //   that differs between the lo and hi side of the bbox, so acquiring these
+  //   cells made nghost vary from proc to proc for a symmetric decomposition
+
+  int touchflag = (cutoff == 0.0);
+
   // box = ebbox split across periodic BC
   // 27 is max number of periodic images in 3d
 
@@ -841,7 +888,9 @@ void Grid::acquire_ghosts_near_less_memory(int surfflag)
 
   // nlist = # of boxes that overlap with my bbox, skipping self boxes
   // list = indices into boxall of overlaps
-  // overlap = true overlap or just touching
+  // overlap = true overlap, or just touching if touchflag is set
+  // if my whole bbox only touches a box, then so does each of my cells,
+  //   so that box can be skipped when touchflag is not set
 
   int nlist = 0;
   int *list;
@@ -849,15 +898,18 @@ void Grid::acquire_ghosts_near_less_memory(int surfflag)
 
   for (i = 0; i < nboxall; i++) {
     if (boxall[i].proc == me) continue;
-    if (box_overlap(bblo,bbhi,boxall[i].lo,boxall[i].hi)) list[nlist++] = i;
+    int boxflag = box_overlap(bblo,bbhi,boxall[i].lo,boxall[i].hi);
+    if (!boxflag) continue;
+    if (boxflag == 2 && !touchflag) continue;
+    list[nlist++] = i;
   }
 
   // loop over my owned cells, not including sub cells
   // each may overlap with multiple boxes in list
   // on 1st pass, just tally memory to send copies of my cells
   // use lastproc to insure a cell only overlaps once per other proc
-  // if oflag = 2 = my cell just touches box,
-  // so flag grid cell as EMPTY ghost by setting nsurf = -1
+  // if oflag = 2 = my cell just touches box, skip it unless touchflag is set,
+  // else flag grid cell as EMPTY ghost by setting nsurf = -1
 
   int j,oflag,lastproc,nsurf_hold;
 
@@ -886,6 +938,7 @@ void Grid::acquire_ghosts_near_less_memory(int surfflag)
         j = list[i];
         oflag = box_overlap(lo,hi,boxall[j].lo,boxall[j].hi);
         if (!oflag) continue;
+        if (oflag == 2 && !touchflag) continue;
         if (boxall[j].proc == lastproc) continue;
         lastproc = boxall[j].proc;
 
@@ -917,8 +970,8 @@ void Grid::acquire_ghosts_near_less_memory(int surfflag)
 
     // on 2nd pass over local cells, fill the send buf
     // use lastproc to insure a cell only overlaps once per other proc
-    // if oflag = 2 = my cell just touches box,
-    // so flag grid cell as EMPTY ghost by setting nsurf = -1
+    // if oflag = 2 = my cell just touches box, skip it unless touchflag is set,
+    // else flag grid cell as EMPTY ghost by setting nsurf = -1
 
     nsend = 0;
     sendsize = 0;
@@ -935,6 +988,7 @@ void Grid::acquire_ghosts_near_less_memory(int surfflag)
         j = list[i];
         oflag = box_overlap(lo,hi,boxall[j].lo,boxall[j].hi);
         if (!oflag) continue;
+        if (oflag == 2 && !touchflag) continue;
         if (boxall[j].proc == lastproc) continue;
         lastproc = boxall[j].proc;
 
