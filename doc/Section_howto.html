@@ -229,7 +229,7 @@ to output and the kind of data they operate on and produce:
 </P>
 <UL><LI><A HREF = "#global">Global/per-particle/per-grid/per-surf/per-tally data</A>
 <LI><A HREF = "#scalar">Scalar/vector/array data</A>
-<LI><A HREF = "#stat">Statistical output</A>
+<LI><A HREF = "#stats">Statistical output</A>
 <LI><A HREF = "#dump">Dump file output</A>
 <LI><A HREF = "#fixoutput">Fixes that write output files</A>
 <LI><A HREF = "#computeoutput">Computes that process output quantities</A>
@@ -454,9 +454,9 @@ packages.
 <P>A Python-based toolkit distributed by our group can read SPARTA
 particle dump files with columns of user-specified particle
 information, and convert them to various formats or pipe them into
-visualization software directly.  See the <A HREF = "http://lammps.github.io/pizza">Pizza.py WWW site</A>
+visualization software directly.  See the <A HREF = "https://lammps.github.io/pizza">Pizza.py WWW site</A>
 for details.  Specifically, Pizza.py can convert SPARTA particle dump
-files into PDB, XYZ, <A HREF = "http://www.ensight.com">Ensight</A>, and VTK formats.  Pizza.py can
+files into PDB, XYZ, <A HREF = "https://www.ansys.com/products/fluids/ansys-ensight">Ensight</A>, and VTK formats.  Pizza.py can
 pipe SPARTA dump files directly into the Raster3d and RasMol
 visualization programs.  Pizza.py has tools that do interactive 3d
 OpenGL visualization and one that creates SVG images of dump file
@@ -622,7 +622,7 @@ examples/COUPLE/README for more details.
 <P>IMPORTANT NOTE: The examples/COUPLE dir has not been added to the
 distribution yet.
 </P>
-<P><A HREF = "Section_start.html#start3">Section 2.3</A> of the manual describes how to
+<P><A HREF = "Section_start.html#start_3">Section 2.3</A> of the manual describes how to
 build SPARTA as a library.  Once this is done, you can interface with
 SPARTA either via C++, C, Fortran, or Python (or any other language
 that supports a vanilla C-like interface).  For example, from C++ you
@@ -682,7 +682,7 @@ at the same level.  The per-level Nx,Ny,Nz values are defined by the
 the cell's logical position within in the hierarchical grid, as a
 32-bit or 64-bit unsigned integer ID.  The precision is set by the
 -DSPARTA_BIG or -DSPARTA_SMALL or -DSPARTA_BIGBIG compiler switch, as
-described in <A HREF = "Section_start.html#start2_2">Section 2.2</A>.  The number of
+described in <A HREF = "Section_start.html#start_2">Section 2.2</A>.  The number of
 grid levels that can be used depends on this precision and the
 resolution of the grid at each level.  For example, in a 3d
 simulation, a level that is refined with a 2x2x2 sub-grid requires 4
@@ -781,14 +781,14 @@ encoded with 4, because it requires 4 bits to represent 8 cells (1 to
 376 = 8568.  In string format it would be 376-4, with dashes
 separating each of the levels.  Either of these formats (integer or
 string) can be specified as id or idstr for output of grid cell info
-with the <A HREF = "dump_grid.html">dump grid</A> command; see its doc page for more
+with the <A HREF = "dump.html">dump grid</A> command; see its doc page for more
 details.
 </P>
 <P>Note that a child cell has the same ID whether it is unsplit, cut, or
 split.  Currently, sub cells of a split cell also have the same ID,
 though that may change in the future.
 </P>
-<P>The <A HREF = "create_grid.html">create_grid</A> and <A HREF = "balance.html">balance</A> and <A HREF = "fix_balance.html">fix
+<P>The <A HREF = "create_grid.html">create_grid</A> and <A HREF = "balance_grid.html">balance_grid</A> and <A HREF = "fix_balance.html">fix
 balance</A> commands determine the assignment of child
 cells to processors.  If a child cell is assigned to a processor, that
 processor owns the cell whether it is an unsplit, cut, or split cell.
@@ -1042,7 +1042,7 @@ ambipolar reactions.  Their reactants and products must be listed in
 specific order.
 </P>
 <P>When creating particles, either by the
-<A HREF = "create_particles.html">create_particles</A> or <A HREF = "fix_emit.html">fix emit</A>
+<A HREF = "create_particles.html">create_particles</A> or <A HREF = "fix_emit_face.html">fix emit</A>
 command variants, do NOT use a mixture that includes the ambipolar
 electron species.  If you do this, you will create "free" electrons
 which are not coupled to an ambipolar ion.  You can include ambipolar
@@ -1093,7 +1093,7 @@ E.g. this command
 <P>will output the ionambi flag = 1 for ambipolar ions, along with the vy
 of their associated ambipolar electrons.
 </P>
-<P>The <A HREF = "fix">fix ambipolar</A> ambiploar.html doc page explains how to
+<P>The <A HREF = "fix.html">fix ambipolar</A> ambiploar.html doc page explains how to
 restart ambipolar simulations where the fix is used.
 </P>
 <HR>
@@ -1204,7 +1204,7 @@ reduce I/O times.
 <LI><A HREF = "compute_surf.html">compute_surf</A>                # for explicit surfs
 <LI><A HREF = "dump.html">dump surf</A>
 <LI><A HREF = "dump_image.html">dump image</A>
-<LI><A HREF = "fix_adapt_grid.html">fix adapt/grid</A>
+<LI><A HREF = "fix_adapt.html">fix adapt/grid</A>
 <LI><A HREF = "fix_emit_surf.html">fix emit/surf</A>
 <LI><A HREF = "group.html">group surf</A>
 <LI><A HREF = "read_isurf.html">read_isurf</A>                    # for implicit surfs
@@ -1342,7 +1342,7 @@ via the <A HREF = "surf_modify.html">surf_modify</A> command.
 count, mass flux, and energy flux of particles that pass through
 transparent surface elements.  These quantities can then be time
 averaged via the <A HREF = "fix_ave_surf.html">fix ave/surf</A> command or output
-via the <A HREF = "dump_surf.html">dump surf</A> command in the usual ways,
+via the <A HREF = "dump.html">dump surf</A> command in the usual ways,
 as described in <A HREF = "Section_howto.html#howto_4">Section 6.4</A>.
 </P>
 <P>The examples/circle/in.circle.transparent script shows how to use
@@ -1352,7 +1352,7 @@ particle count and kinetic energy flux in both directions in front of
 the object.  These are defined in the data.plane1 and data.plane2
 files.  The resulting tallies are output with the
 <A HREF = "stats_style.html">stats_style</A> command.  They could also be output
-with a <A HREF = "dump_surf.html">dump surf</A> command for more resolution if the 2
+with a <A HREF = "dump.html">dump surf</A> command for more resolution if the 2
 lines were each defined as multiple line segments.
 </P>
 <HR>
@@ -1581,7 +1581,7 @@ This argument is required.
 script that has been exported from the ParaView GUI. For more details on
 Catalyst, please see the Catalyst user guide, located here.
 </P>
-<P><A HREF = "https://www.paraview.org/in-situ/">Kitware ParaView Catalyst in-situ</A>
+<P><A HREF = "https://catalyst-in-situ.readthedocs.io/en/latest/">Kitware ParaView Catalyst in-situ</A>
 </P>
 <P>The Catalyst script will generate images or data extracts for each time-step.
 This will avoid having to run ParaView as a separate step to generate
@@ -1831,10 +1831,10 @@ the weight of the cell the particle is currently in.
 <LI>velocity (3 components)
 <LI>kinetic, vibrational, and rotation energy 
 </UL>
-<P>The <A HREF = "dump.html<A HREF = "fix_ambipolar.html">>dump particle</A> command can output all of these
+<P>The <A HREF = "dump.html">dump particle</A> command can output all of these
 properties, see its doc page for the associated keywords and a further
 description of each property.  Various commands in SPARTA can define
-and set additional per-particle properties.  The fix
+and set additional per-particle properties.  The <A HREF = "fix_ambipolar.html">fix
 ambipolar</A> command is an example.
 </P>
 <P>The ID of each particle is a random integer from 1 to 2^31 in size,

@@ -29,8 +29,8 @@ class SurfReact : protected Pointers {
   int vector_flag;          // 0/1 if compute_vector() function exists
   int size_vector;          // length of global vector
   int kokkosable;           // 1 if Kokkos version
-  int copy,uncopy,copymode; // used by Kokkos, prevent deallocation of
-                            //  base class when child copy is destroyed
+  int copy,copymode; // used by Kokkos, prevent deallocation of
+                     //  base class when child copy is destroyed
 
   SurfReact(class SPARTA *, int, char **);
   SurfReact(class SPARTA *sparta) : Pointers(sparta) {} // needed for Kokkos

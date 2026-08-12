@@ -101,7 +101,6 @@ Particle::Particle(SPARTA *sparta) : Pointers(sparta)
   wrandom = NULL;
 
   copy = copymode = 0;
-  uncopy = 1;
 }
 
 /* ---------------------------------------------------------------------- */

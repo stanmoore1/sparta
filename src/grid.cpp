@@ -157,7 +157,6 @@ Grid::Grid(SPARTA *sparta) : Pointers(sparta)
   hashfilled = 0;
 
   copy = copymode = 0;
-  uncopy = 1;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -521,7 +520,7 @@ void Grid::acquire_ghosts_all(int surfflag)
 
   char *sbuf;
   memory->create(sbuf,sendsize,"grid:sbuf");
-  memset(sbuf,0,sendsize);
+  if (sendsize) memset(sbuf,0,sendsize);
 
   // pack each unsplit or split cell
   // subcells will be packed by split cell
@@ -705,7 +704,7 @@ void Grid::acquire_ghosts_near(int surfflag)
 
   char *sbuf;
   memory->create(sbuf,sendsize,"grid:sbuf");
-  memset(sbuf,0,sendsize);
+  if (sendsize) memset(sbuf,0,sendsize);
 
   int *proclist,*sizelist;
   memory->create(proclist,nsend,"grid:proclist");
@@ -760,7 +759,7 @@ void Grid::acquire_ghosts_near(int surfflag)
 
   char *rbuf;
   rbuf = (char *) memory->smalloc(recvsize,"grid:rbuf");
-  memset(rbuf,0,recvsize);
+  if (recvsize) memset(rbuf,0,recvsize);
 
   irregular->exchange_variable(sbuf,sizelist,rbuf);
   delete irregular;
@@ -963,7 +962,7 @@ void Grid::acquire_ghosts_near_less_memory(int surfflag)
 
     char *sbuf;
     memory->create(sbuf,sendsize,"grid:sbuf");
-    memset(sbuf,0,sendsize);
+    if (sendsize) memset(sbuf,0,sendsize);
 
     int *proclist,*sizelist;
     memory->create(proclist,nsend,"grid:proclist");
@@ -1017,7 +1016,7 @@ void Grid::acquire_ghosts_near_less_memory(int surfflag)
 
     char *rbuf;
     rbuf = (char *) memory->smalloc(recvsize,"grid:rbuf");
-    memset(rbuf,0,recvsize);
+    if (recvsize) memset(rbuf,0,recvsize);
 
     irregular->exchange_variable(sbuf,sizelist,rbuf);
     delete irregular;
