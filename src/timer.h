@@ -19,7 +19,18 @@
 
 namespace SPARTA_NS {
 
-enum{TIME_LOOP,TIME_MOVE,TIME_COLLIDE,TIME_SORT,TIME_COMM,TIME_MODIFY,TIME_OUTPUT,TIME_N};
+// TIME_SYNC = time waiting in blocking global collectives inside the run
+//   loop: the per-step MPI_Allreduce in move() and the closing barrier.
+//   On a fast rank this is idle time, so it measures load imbalance.
+//   It was previously discarded by an argument-less Timer::stamp() and so
+//   silently landed in the "Other" residual printed by Finish::end(), which
+//   is what made it invisible.
+// Per-step bookkeeping and post-run work are still left to that residual;
+//   measuring them as a section of their own showed them to be ~0, so they
+//   do not need one.
+
+enum{TIME_LOOP,TIME_MOVE,TIME_COLLIDE,TIME_SORT,TIME_COMM,TIME_MODIFY,
+     TIME_OUTPUT,TIME_SYNC,TIME_N};
 
 class Timer : protected Pointers {
  public:
