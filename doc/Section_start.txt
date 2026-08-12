@@ -1730,16 +1730,24 @@ The first line gives the total CPU run time for the simulation, in
 seconds.
 
 The next section gives a breakdown of the CPU timing (in seconds) in
-7 categories.  The first four are timings for particles moves, which
+8 categories.  The first four are timings for particles moves, which
 includes interaction with surface elements, then particle collisions,
 then sorting of particles (required to perform collisions), and
 communication of particles between processors.  The Modify section is
 time for operations invoked by fixes and computes.  The Output section
-is for dump command and statistical output.  The Other category is
-typically for load-imbalance, as some MPI tasks wait for others MPI
-tasks to complete.  In each category the min,ave,max time across
-processors is shown, as well as a variation, and the percentage of
-total time.
+is for dump command and statistical output.  The MPI Sync section is
+time spent waiting in the global collectives of the run loop: the
+per-timestep reduction in the move and the barrier that closes the
+loop.  On an MPI task that arrives early that wait is idle time, so
+this category is where load-imbalance shows up.  The Other category is
+the loop time minus all of the named categories above; it should be
+near zero, and a large value means some part of the loop is not being
+timed.  In each category the min,ave,max time across processors is
+shown, as well as a variation, and the percentage of total time.
+
+Note that the example above was generated before MPI Sync was measured
+separately, so its Other value still includes the collective wait time
+that MPI Sync now reports.
 
 The next section gives some statistics about the run.  These are total
 counts of particle moves, grid cells touched by particles, the number
