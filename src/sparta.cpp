@@ -52,6 +52,17 @@ SPARTA::SPARTA(int narg, char **arg, MPI_Comm communicator)
   universe = new Universe(this,communicator);
   output = NULL;
 
+  // input is not created until the end of this constructor, after the MPI
+  //   info is set up, but the switch parsing below can call error->one() for a
+  //   bad -in/-log/-screen path.  Error::one() and Error::all() echo the
+  //   input line being processed, so they read input->line, and an
+  //   indeterminate input makes that a wild dereference rather than the
+  //   "(unknown)" the guard there is meant to produce
+  // an uninitialized pointer that happens to hold 0 hides this, so it shows up
+  //   as a startup SIGSEGV in one build and a clean error message in another
+
+  input = NULL;
+
   screen = NULL;
   logfile = NULL;
 
