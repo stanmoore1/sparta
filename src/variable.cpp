@@ -1814,7 +1814,10 @@ double Variable::evaluate(char *str, Tree **tree)
 	if (strncmp(word,"p_",2) == 0) cwhich = PARTICLE_CUSTOM;
 	else if (strncmp(word,"g_",2) == 0) cwhich = GRID_CUSTOM;
 	else if (strncmp(word,"s_",2) == 0) cwhich = SURF_CUSTOM;
-	
+
+        custom_sync(cwhich);
+
+
         n = strlen(word) - 2 + 1;
         char *id = new char[n];
         strcpy(id,&word[2]);
