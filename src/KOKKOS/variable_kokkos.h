@@ -27,7 +27,7 @@ class VariableKokkos : public Variable {
 //  using Variable::Tree;
 
  private:
-  double evaluate(char *, Tree **) override;
+  void custom_sync(int) override;
   double eval_tree(Tree *, int) override;
   void particle_vector(char *, Tree **, Tree **, int &) override;
   void grid_vector(char *, Tree **, Tree **, int &) override;
