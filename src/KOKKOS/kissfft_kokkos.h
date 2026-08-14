@@ -144,6 +144,7 @@ struct kiss_fft_state_kokkos {
   typename FFT_AT::t_int_64 d_factors;
   typename FFT_AT::t_FFT_DATA_1d d_twiddles;
   typename FFT_AT::t_FFT_DATA_1d d_scratch;
+  int p_max;      // scratch elements needed by one concurrent transform
 };
 
 template<class DeviceType>
@@ -370,14 +371,20 @@ class KissFFTKokkos {
 
   KOKKOS_INLINE_FUNCTION
   static void kf_bfly_generic(typename FFT_AT::t_FFT_DATA_1d_um &d_Fout, const size_t fstride,
-                              const kiss_fft_state_kokkos<DeviceType> &st, int m, int p, int Fout_count)
+                              const kiss_fft_state_kokkos<DeviceType> &st, int m, int p, int Fout_count,
+                              int scratch_offset)
   {
       int u,k,q1,q;
       typename FFT_AT::t_FFT_DATA_1d_um d_twiddles = st.d_twiddles;
       FFT_SCALAR t[2];
       int Norig = st.nfft;
 
-      typename FFT_AT::t_FFT_DATA_1d_um d_scratch = st.d_scratch;
+      // each concurrent transform owns a p_max-sized slice of the scratch;
+      // sharing one buffer would race across transforms
+
+      typename FFT_AT::t_FFT_DATA_1d_um d_scratch =
+        Kokkos::subview(st.d_scratch,
+                        Kokkos::make_pair(scratch_offset,scratch_offset+st.p_max));
       for ( u=0; u<m; ++u ) {
           k=u;
           for ( q1=0 ; q1<p ; ++q1 ) {
@@ -410,7 +417,8 @@ class KissFFTKokkos {
   KOKKOS_INLINE_FUNCTION
   static void kf_work(typename FFT_AT::t_FFT_DATA_1d_um &d_Fout, const typename FFT_AT::t_FFT_DATA_1d_um &d_f,
                       const size_t fstride, int in_stride,
-                      const typename FFT_AT::t_int_64_um &d_factors, const kiss_fft_state_kokkos<DeviceType> &st, int Fout_count, int f_count, int factors_count)
+                      const typename FFT_AT::t_int_64_um &d_factors, const kiss_fft_state_kokkos<DeviceType> &st, int Fout_count, int f_count, int factors_count,
+                      int scratch_offset)
   {
       const int beg = Fout_count;
       const int p = d_factors[factors_count++]; /* the radix  */
@@ -430,7 +438,7 @@ class KissFFTKokkos {
                  DFT of size m*p performed by doing
                  p instances of smaller DFTs of size m,
                  each one takes a decimated version of the input */
-              kf_work(d_Fout, d_f, fstride*p, in_stride, d_factors, st, Fout_count, f_count, factors_count);
+              kf_work(d_Fout, d_f, fstride*p, in_stride, d_factors, st, Fout_count, f_count, factors_count, scratch_offset);
               f_count += fstride*in_stride;
           } while( (Fout_count += m) != end);
       }
@@ -443,7 +451,7 @@ class KissFFTKokkos {
         case 3: kf_bfly3(d_Fout,fstride,st,m,Fout_count); break;
         case 4: kf_bfly4(d_Fout,fstride,st,m,Fout_count); break;
         case 5: kf_bfly5(d_Fout,fstride,st,m,Fout_count); break;
-        default: kf_bfly_generic(d_Fout,fstride,st,m,p,Fout_count); break;
+        default: kf_bfly_generic(d_Fout,fstride,st,m,p,Fout_count,scratch_offset); break;
       }
   }
 
@@ -489,12 +497,15 @@ class KissFFTKokkos {
    * It can be freed with free(), rather than a kiss_fft-specific function.
    */
 
-  static kiss_fft_state_kokkos<DeviceType> kiss_fft_alloc_kokkos(int nfft, int inverse_fft, void * /*mem*/, size_t * /*lenmem*/)
+  static kiss_fft_state_kokkos<DeviceType> kiss_fft_alloc_kokkos(int nfft, int inverse_fft, void * /*mem*/, size_t * /*lenmem*/,
+                                                                int nwork = 1)
   {
       kiss_fft_state_kokkos<DeviceType> st;
       int i;
       st.nfft = nfft;
       st.inverse = inverse_fft;
+      st.p_max = 0;
+      if (nwork < 1) nwork = 1;
 
       typename FFT_AT::tdual_int_64 k_factors = typename FFT_AT::tdual_int_64();
       typename FFT_AT::tdual_FFT_DATA_1d k_twiddles = typename FFT_AT::tdual_FFT_DATA_1d();
@@ -508,8 +519,13 @@ class KissFFTKokkos {
               kf_cexp(k_twiddles.view_host(),i,phase );
           }
 
+          // one p_max-sized scratch slice per concurrent transform, so the
+          // generic butterfly stage does not race across transforms
+
           int p_max = kf_factor(nfft,k_factors.view_host());
-          st.d_scratch = typename FFT_AT::t_FFT_DATA_1d("kissfft:scratch",p_max);
+          st.p_max = p_max;
+          st.d_scratch = typename FFT_AT::t_FFT_DATA_1d("kissfft:scratch",
+                                                        (size_t)nwork*p_max);
       }
 
       k_factors.template modify<SPAHostType>();
@@ -524,7 +540,7 @@ class KissFFTKokkos {
   }
 
   KOKKOS_INLINE_FUNCTION
-  static void kiss_fft_stride(const kiss_fft_state_kokkos<DeviceType> &st, const typename FFT_AT::t_FFT_DATA_1d_um &d_fin, typename FFT_AT::t_FFT_DATA_1d_um &d_fout, int in_stride, int offset)
+  static void kiss_fft_stride(const kiss_fft_state_kokkos<DeviceType> &st, const typename FFT_AT::t_FFT_DATA_1d_um &d_fin, typename FFT_AT::t_FFT_DATA_1d_um &d_fout, int in_stride, int offset, int scratch_offset)
   {
       //if (d_fin.data() == d_fout.data()) {
       //    // NOTE: this is not really an in-place FFT algorithm.
@@ -533,14 +549,14 @@ class KissFFTKokkos {
       //    kf_work(d_tmpbuf,d_fin,1,in_stride,st.d_factors,st,offset,offset).re;
       //    Kokkos::deep_copy(d_fout,d_tmpbuf);
       //} else {
-        kf_work(d_fout,d_fin,1,in_stride,st.d_factors,st,offset,offset,0);
+        kf_work(d_fout,d_fin,1,in_stride,st.d_factors,st,offset,offset,0,scratch_offset);
       //}
   }
 
   KOKKOS_INLINE_FUNCTION
-  static void kiss_fft_kokkos(const kiss_fft_state_kokkos<DeviceType> &cfg, const typename FFT_AT::t_FFT_DATA_1d_um d_fin, typename FFT_AT::t_FFT_DATA_1d_um d_fout, int offset)
+  static void kiss_fft_kokkos(const kiss_fft_state_kokkos<DeviceType> &cfg, const typename FFT_AT::t_FFT_DATA_1d_um d_fin, typename FFT_AT::t_FFT_DATA_1d_um d_fout, int offset, int scratch_offset)
   {
-      kiss_fft_stride(cfg,d_fin,d_fout,1,offset);
+      kiss_fft_stride(cfg,d_fin,d_fout,1,offset,scratch_offset);
   }
 
 };

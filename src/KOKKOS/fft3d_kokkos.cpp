@@ -193,7 +193,7 @@ public:
   KOKKOS_INLINE_FUNCTION
   void operator() (const int &i) const {
     const int offset = i*length;
-    KissFFTKokkos<DeviceType>::kiss_fft_kokkos(st,d_data,d_tmp,offset);
+    KissFFTKokkos<DeviceType>::kiss_fft_kokkos(st,d_data,d_tmp,offset,i*st.p_max);
   }
 };
 #endif
@@ -773,16 +773,24 @@ struct fft_plan_3d_kokkos<DeviceType>* FFT3dKokkos<DeviceType>::fft_3d_create_pl
 
   kissfftKK = new KissFFTKokkos<DeviceType>();
 
-  plan->cfg_fast_forward = KissFFTKokkos<DeviceType>::kiss_fft_alloc_kokkos(nfast,0,nullptr,nullptr);
-  plan->cfg_fast_backward = KissFFTKokkos<DeviceType>::kiss_fft_alloc_kokkos(nfast,1,nullptr,nullptr);
+  // KISS needs one scratch slice per concurrently executing 1d FFT.
+  // A plan may share one config between stages, so size every scratch for
+  // the largest number of transforms any stage launches
+
+  int nwork = plan->total1/plan->length1;
+  nwork = MAX(nwork,plan->total2/plan->length2);
+  nwork = MAX(nwork,plan->total3/plan->length3);
+
+  plan->cfg_fast_forward = KissFFTKokkos<DeviceType>::kiss_fft_alloc_kokkos(nfast,0,nullptr,nullptr,nwork);
+  plan->cfg_fast_backward = KissFFTKokkos<DeviceType>::kiss_fft_alloc_kokkos(nfast,1,nullptr,nullptr,nwork);
 
   if (nmid == nfast) {
     plan->cfg_mid_forward = plan->cfg_fast_forward;
     plan->cfg_mid_backward = plan->cfg_fast_backward;
   }
   else {
-    plan->cfg_mid_forward = KissFFTKokkos<DeviceType>::kiss_fft_alloc_kokkos(nmid,0,nullptr,nullptr);
-    plan->cfg_mid_backward = KissFFTKokkos<DeviceType>::kiss_fft_alloc_kokkos(nmid,1,nullptr,nullptr);
+    plan->cfg_mid_forward = KissFFTKokkos<DeviceType>::kiss_fft_alloc_kokkos(nmid,0,nullptr,nullptr,nwork);
+    plan->cfg_mid_backward = KissFFTKokkos<DeviceType>::kiss_fft_alloc_kokkos(nmid,1,nullptr,nullptr,nwork);
   }
 
   if (nslow == nfast) {
@@ -794,8 +802,8 @@ struct fft_plan_3d_kokkos<DeviceType>* FFT3dKokkos<DeviceType>::fft_3d_create_pl
     plan->cfg_slow_backward = plan->cfg_mid_backward;
   }
   else {
-    plan->cfg_slow_forward = KissFFTKokkos<DeviceType>::kiss_fft_alloc_kokkos(nslow,0,nullptr,nullptr);
-    plan->cfg_slow_backward = KissFFTKokkos<DeviceType>::kiss_fft_alloc_kokkos(nslow,1,nullptr,nullptr);
+    plan->cfg_slow_forward = KissFFTKokkos<DeviceType>::kiss_fft_alloc_kokkos(nslow,0,nullptr,nullptr,nwork);
+    plan->cfg_slow_backward = KissFFTKokkos<DeviceType>::kiss_fft_alloc_kokkos(nslow,1,nullptr,nullptr,nwork);
   }
 
 #endif
