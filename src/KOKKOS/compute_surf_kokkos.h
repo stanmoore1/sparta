@@ -45,6 +45,9 @@ class ComputeSurfKokkos : public ComputeSurf {
   void update_hash();
   void pre_surf_tally();
   void post_surf_tally();
+  void backup();
+  void restore();
+  void reset_scatter_view();
 
 enum{NUM,NUMWT,NFLUX,NFLUXIN,MFLUX,MFLUXIN,FX,FY,FZ,TX,TY,TZ,
   PRESS,XPRESS,YPRESS,ZPRESS,XSHEAR,YSHEAR,ZSHEAR,KE,EROT,EVIB,ECHEM,ETOT};
@@ -452,6 +455,8 @@ void surf_tally_kk(double /*dtremain*/, int isurf, int icell, int reaction,
 
   DAT::tdual_float_2d_lr k_array_surf_tally;
   DAT::t_float_2d_lr d_array_surf_tally;  // tally values for local surfs
+  DAT::t_float_2d_lr d_array_surf_tally_backup;
+  DAT::t_int_1d d_surf2tally_backup;
 
   int need_dup;
   Kokkos::Experimental::ScatterView<F_FLOAT**, typename DAT::t_float_2d_lr::array_layout,DeviceType,typename Kokkos::Experimental::ScatterSum,typename Kokkos::Experimental::ScatterDuplicated> dup_array_surf_tally;

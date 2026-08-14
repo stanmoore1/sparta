@@ -2000,6 +2000,15 @@ void UpdateKokkos::backup()
 {
   ParticleKokkos* particle_kk = (ParticleKokkos*) particle;
   d_particles = particle_kk->k_particles.view_device();
+
+  // the surf/boundary tally scatter views accumulate for the whole
+  // timestep, so an attempt that is rolled back must not leave its
+  // tallies behind to be counted again on the replay
+
+  for (int m = 0; m < nsurf_tally; m++)
+    ((ComputeSurfKokkos*)(slist_active[m]))->backup();
+  for (int m = 0; m < nboundary_tally; m++)
+    ((ComputeBoundaryKokkos*)(blist_active[m]))->backup();
   d_particles_backup = decltype(d_particles)(Kokkos::view_alloc("update:particles_backup",Kokkos::WithoutInitializing),d_particles.extent(0));
 
   Kokkos::deep_copy(d_particles_backup,d_particles);
@@ -2029,6 +2038,11 @@ void UpdateKokkos::restore()
   ParticleKokkos* particle_kk = (ParticleKokkos*) particle;
   Kokkos::deep_copy(particle_kk->k_particles.view_device(),d_particles_backup);
   d_particles = particle_kk->k_particles.view_device();
+
+  for (int m = 0; m < nsurf_tally; m++)
+    ((ComputeSurfKokkos*)(slist_active[m]))->restore();
+  for (int m = 0; m < nboundary_tally; m++)
+    ((ComputeBoundaryKokkos*)(blist_active[m]))->restore();
 
   if (surf->nsc > 0) {
     int nspec,ndiff,nvan,npist,ntrans;

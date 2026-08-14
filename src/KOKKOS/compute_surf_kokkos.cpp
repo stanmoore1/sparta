@@ -183,6 +183,61 @@ void ComputeSurfKokkos::pre_surf_tally()
 
 /* ---------------------------------------------------------------------- */
 
+/* ----------------------------------------------------------------------
+   snapshot/restore the tally state around one react-retry attempt
+   the scatter view accumulates across the whole timestep, so an attempt
+     that is rolled back would otherwise leave its tallies behind and be
+     counted again when the move kernel is replayed
+------------------------------------------------------------------------- */
+
+void ComputeSurfKokkos::backup()
+{
+  // flush anything pending in the scatter view into the base array, so the
+  // snapshot below captures every tally accumulated so far this step
+
+  if (need_dup) {
+    Kokkos::Experimental::contribute(d_array_surf_tally, dup_array_surf_tally);
+    dup_array_surf_tally = {};
+  }
+
+  if (d_array_surf_tally_backup.extent(0) != d_array_surf_tally.extent(0) ||
+      d_array_surf_tally_backup.extent(1) != d_array_surf_tally.extent(1))
+    d_array_surf_tally_backup = DAT::t_float_2d_lr(Kokkos::view_alloc("compute/surf:array_surf_tally_backup",Kokkos::WithoutInitializing),
+                                                   d_array_surf_tally.extent(0),d_array_surf_tally.extent(1));
+  if (d_surf2tally_backup.extent(0) != d_surf2tally.extent(0))
+    d_surf2tally_backup = DAT::t_int_1d(Kokkos::view_alloc("compute/surf:surf2tally_backup",Kokkos::WithoutInitializing),
+                                        d_surf2tally.extent(0));
+
+  Kokkos::deep_copy(d_array_surf_tally_backup,d_array_surf_tally);
+  Kokkos::deep_copy(d_surf2tally_backup,d_surf2tally);
+
+  reset_scatter_view();
+}
+
+/* ---------------------------------------------------------------------- */
+
+void ComputeSurfKokkos::restore()
+{
+  Kokkos::deep_copy(d_array_surf_tally,d_array_surf_tally_backup);
+  Kokkos::deep_copy(d_surf2tally,d_surf2tally_backup);
+
+  reset_scatter_view();
+}
+
+/* ----------------------------------------------------------------------
+   re-create the scatter view so its duplicated copies start from zero
+------------------------------------------------------------------------- */
+
+void ComputeSurfKokkos::reset_scatter_view()
+{
+  if (need_dup)
+    dup_array_surf_tally = Kokkos::Experimental::create_scatter_view<typename Kokkos::Experimental::ScatterSum, typename Kokkos::Experimental::ScatterDuplicated>(d_array_surf_tally);
+  else
+    ndup_array_surf_tally = Kokkos::Experimental::create_scatter_view<typename Kokkos::Experimental::ScatterSum, typename Kokkos::Experimental::ScatterNonDuplicated>(d_array_surf_tally);
+}
+
+/* ---------------------------------------------------------------------- */
+
 void ComputeSurfKokkos::post_surf_tally()
 {
   if (need_dup) {

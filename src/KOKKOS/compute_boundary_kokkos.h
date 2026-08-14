@@ -38,6 +38,9 @@ class ComputeBoundaryKokkos : public ComputeBoundary, public KokkosBase {
   void clear();
   void pre_boundary_tally();
   void post_boundary_tally();
+  void backup();
+  void restore();
+  void reset_scatter_view();
 
   enum{XLO,XHI,YLO,YHI,ZLO,ZHI,INTERIOR};         // same as Domain
   enum{PERIODIC,OUTFLOW,REFLECT,SURFACE,AXISYM};  // same as Domain
@@ -270,6 +273,7 @@ void boundary_tally_kk(double dtremain,
 
   DAT::tdual_float_2d_lr k_myarray; // local accumulator array
   DAT::t_float_2d_lr d_myarray;
+  DAT::t_float_2d_lr d_myarray_backup;
 
   int need_dup;
   Kokkos::Experimental::ScatterView<F_FLOAT**, typename DAT::t_float_2d_lr::array_layout,DeviceType,typename Kokkos::Experimental::ScatterSum,typename Kokkos::Experimental::ScatterDuplicated> dup_myarray;

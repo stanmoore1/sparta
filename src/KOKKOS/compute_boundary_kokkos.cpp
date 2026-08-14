@@ -135,6 +135,49 @@ void ComputeBoundaryKokkos::pre_boundary_tally()
     ndup_myarray = Kokkos::Experimental::create_scatter_view<typename Kokkos::Experimental::ScatterSum, typename Kokkos::Experimental::ScatterNonDuplicated>(d_myarray);
 }
 
+/* ----------------------------------------------------------------------
+   snapshot/restore the tally state around one react-retry attempt
+   (see ComputeSurfKokkos::backup)
+------------------------------------------------------------------------- */
+
+void ComputeBoundaryKokkos::backup()
+{
+  if (need_dup) {
+    Kokkos::Experimental::contribute(d_myarray, dup_myarray);
+    dup_myarray = {};
+  }
+
+  if (d_myarray_backup.extent(0) != d_myarray.extent(0) ||
+      d_myarray_backup.extent(1) != d_myarray.extent(1))
+    d_myarray_backup = DAT::t_float_2d_lr(Kokkos::view_alloc("compute/boundary:myarray_backup",Kokkos::WithoutInitializing),
+                                          d_myarray.extent(0),d_myarray.extent(1));
+
+  Kokkos::deep_copy(d_myarray_backup,d_myarray);
+
+  reset_scatter_view();
+}
+
+/* ---------------------------------------------------------------------- */
+
+void ComputeBoundaryKokkos::restore()
+{
+  Kokkos::deep_copy(d_myarray,d_myarray_backup);
+
+  reset_scatter_view();
+}
+
+/* ---------------------------------------------------------------------- */
+
+void ComputeBoundaryKokkos::reset_scatter_view()
+{
+  if (need_dup)
+    dup_myarray = Kokkos::Experimental::create_scatter_view<typename Kokkos::Experimental::ScatterSum, typename Kokkos::Experimental::ScatterDuplicated>(d_myarray);
+  else
+    ndup_myarray = Kokkos::Experimental::create_scatter_view<typename Kokkos::Experimental::ScatterSum, typename Kokkos::Experimental::ScatterNonDuplicated>(d_myarray);
+}
+
+/* ---------------------------------------------------------------------- */
+
 void ComputeBoundaryKokkos::post_boundary_tally()
 {
   if (need_dup) {
