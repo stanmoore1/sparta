@@ -183,14 +183,26 @@ int Comm::migrate_particles(int nmigrate, int *plist)
 
   // compress my list of particles
 
-  // for optimized particle moves, call compress_reactions rather than
-  //  compress_migrate since mlist is not guaranteed to be in ascending
-  //  order
+  // compress_migrate() requires ascending indices, compress_reactions() does
+  //   not but is more expensive and leaves the surviving particles in a
+  //   different order
+  // the optimized move appends from two places in its particle loop, so test
+  //   the list rather than assume either way.  keying off optmove_flag instead
+  //   would take the compress_reactions() path on every step of an optimized
+  //   run, even though a serial loop over particles emits ascending indices,
+  //   and the reordering that follows makes "optmove yes" and "optmove no"
+  //   consume the collision RNG differently -- which costs the ability to
+  //   validate the fast path against the standard move
 
-  if (update->optmove_flag)
-    particle->compress_reactions(nmigrate,plist);
-  else
-    particle->compress_migrate(nmigrate,plist);
+  int ascending = 1;
+  for (i = 1; i < nmigrate; i++)
+    if (plist[i] <= plist[i-1]) {
+      ascending = 0;
+      break;
+    }
+
+  if (ascending) particle->compress_migrate(nmigrate,plist);
+  else particle->compress_reactions(nmigrate,plist);
 
   int ncompress = particle->nlocal;
 
