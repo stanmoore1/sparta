@@ -678,12 +678,12 @@ void ComputeLambdaGrid::compute_per_grid()
 
     if (knyflag) {
       if (noutputs == 1) vector_grid[i] = lambda / sizey;
-      array_grid[i][output_order[KNY]] = lambda / sizey;
+      else array_grid[i][output_order[KNY]] = lambda / sizey;
     }
 
     if (knzflag) {
       if (noutputs == 1) vector_grid[i] = lambda / sizez;
-      array_grid[i][output_order[KNZ]] = lambda / sizez;
+      else array_grid[i][output_order[KNZ]] = lambda / sizez;
     }
   }
 }
