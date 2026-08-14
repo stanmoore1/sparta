@@ -17,7 +17,7 @@
 #include "adapt_grid.h"
 #include "grid_kokkos.h"
 #include "particle_kokkos.h"
-#include "surf.h"
+#include "surf_kokkos.h"
 #include "comm.h"
 #include "update.h"
 #include "modify.h"
@@ -52,14 +52,20 @@ void FixAdaptKokkos::end_of_step()
 {
   GridKokkos* grid_kk = (GridKokkos*) grid;
   ParticleKokkos* particle_kk = (ParticleKokkos*) particle;
+  SurfKokkos* surf_kk = (SurfKokkos*) surf;
+
+  // adaptation reads and rewrites the surf list on the host, so the surfs
+  //  must be current there and marked modified afterwards, same as fix balance
 
   grid_kk->sync(Host,ALL_MASK);
   particle_kk->sync(Host,PARTICLE_MASK|CUSTOM_MASK);
+  surf_kk->sync(Host,ALL_MASK);
 
   FixAdapt::end_of_step();
 
   grid_kk->modify(Host,ALL_MASK);
   particle_kk->modify(Host,PARTICLE_MASK|CUSTOM_MASK);
+  surf_kk->modify(Host,ALL_MASK);
   particle_kk->sorted_kk = 0;
 
   grid_kk->wrap_kokkos_graphs();
