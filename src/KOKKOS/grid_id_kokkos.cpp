@@ -48,117 +48,28 @@ void GridKokkos::update_hash()
 }
 
 /* ----------------------------------------------------------------------
-   build d_halo_index, the dense cell-position -> local-index map used by the
-     uniform-grid fast path in UpdateKokkos::move()
-   leaves it empty (extent 0) whenever it cannot be built cheaply, in which
-     case callers use hash_kk instead
+   upload Grid::halo_index, the dense cell-position -> local-index map used by
+     the uniform-grid fast path, to the device
+   the map itself is built by Grid::update_halo_index(), called from rehash()
+     just above, so host and device agree by construction
+   leaves d_halo_index empty (extent 0) when the host map is unavailable, in
+     which case callers use hash_kk instead
 ------------------------------------------------------------------------- */
 
 void GridKokkos::update_halo_index()
 {
   d_halo_index = DAT::t_int_1d();
 
-  if (!uniform || unx <= 0 || uny <= 0 || unz <= 0) return;
+  if (!halo_index) return;
 
-  const int ntotal = nlocal + nghost;
-  if (ntotal <= 0) return;
-
-  // place cells on the lattice the same way the fast path places particles,
-  //   from coordinates rather than from the cell ID, so the two cannot
-  //   disagree about which site a cell occupies.  spacing is computed with the
-  //   identical expression UpdateKokkos::setup() uses for dx/dy/dz
-  // a cell's lo corner is a whole multiple of the spacing, so round to nearest
-
-  const int un[3] = {unx,uny,unz};
-  double inv[3];
-  for (int d = 0; d < 3; d++)
-    inv[d] = un[d]/(domain->boxhi[d]-domain->boxlo[d]);
-
-  // halo arc per dimension: mark the lattice planes this proc holds, then take
-  //   the complement of the widest empty run on the ring.  the complement of
-  //   any single empty run contains every occupied plane, so this is correct
-  //   for a non-arc decomposition too; taking the widest one makes it minimal
-  // deriving the arc from nearest-image offsets to a reference cell instead
-  //   would have to break a tie at exactly half the dimension, and that is
-  //   precisely where the wrapped ghost layer sits when a dimension is split
-  //   over two procs.  getting that tie wrong stretches the arc to the whole
-  //   dimension, which either wastes memory or trips the bounding-box test
-  //   below and silently drops this proc back to the hash
-
-  int *occ[3];
-  for (int d = 0; d < 3; d++) {
-    memory->create(occ[d],un[d],"grid:halo_occupied");
-    for (int i = 0; i < un[d]; i++) occ[d][i] = 0;
-  }
-
-  // one pass over the cells, marking all three dimensions, since ntotal is the
-  //   whole owned plus ghost list and is much larger than unx+uny+unz
-
-  for (int m = 0; m < ntotal; m++)
-    for (int d = 0; d < 3; d++) {
-      const int s =
-        static_cast<int> ((cells[m].lo[d]-domain->boxlo[d])*inv[d]+0.5);
-      if (s >= 0 && s < un[d]) occ[d][s] = 1;
-    }
-
-  int lo[3],n[3],empty = 0;
-  double box = 1.0;
-
-  for (int d = 0; d < 3; d++) {
-
-    // scan the ring starting from an occupied plane so no empty run is split
-    //   by the wrap.  gapend is the first occupied plane after the widest run,
-    //   which is where the arc begins
-
-    int first = -1;
-    for (int i = 0; i < un[d]; i++)
-      if (occ[d][i]) { first = i; break; }
-    if (first < 0) { empty = 1; break; }
-
-    int gapbest = 0,gapend = first,run = 0;
-    for (int k = 1; k <= un[d]; k++) {
-      const int i = (first+k) % un[d];
-      if (!occ[d][i]) run++;
-      else {
-        if (run > gapbest) { gapbest = run; gapend = i; }
-        run = 0;
-      }
-    }
-
-    n[d] = un[d] - gapbest;
-    lo[d] = gapend;
-    box *= n[d];
-  }
-
-  for (int d = 0; d < 3; d++) memory->destroy(occ[d]);
-  if (empty) return;
-
-  // refuse when the bounding box holds far more sites than cells: the halo is
-  //   not an arc (RCB, adaptive) and a dense map would mostly be holes
-
-  if (box > 4.0*ntotal) return;
-
-  halo_ilo = lo[0]; halo_jlo = lo[1]; halo_klo = lo[2];
-  halo_nx = n[0];   halo_ny = n[1];   halo_nz = n[2];
+  const size_t nindex = (size_t) halo_nx*halo_ny*halo_nz;
+  if (!nindex) return;
 
   HAT::t_int_1d h_halo_index(
-    Kokkos::view_alloc("grid:halo_index",Kokkos::WithoutInitializing),
-    (size_t) halo_nx*halo_ny*halo_nz);
-  for (size_t i = 0; i < h_halo_index.extent(0); i++) h_halo_index[i] = -1;
-
-  for (int m = 0; m < ntotal; m++) {
-    int l[3],ok = 1;
-    for (int d = 0; d < 3; d++) {
-      l[d] =
-        static_cast<int> ((cells[m].lo[d]-domain->boxlo[d])*inv[d]+0.5)-lo[d];
-      if (l[d] < 0) l[d] += un[d];
-      if (l[d] >= n[d]) ok = 0;
-    }
-    if (ok) h_halo_index[((size_t) l[2]*halo_ny + l[1])*halo_nx + l[0]] = m;
-  }
+    Kokkos::view_alloc("grid:halo_index",Kokkos::WithoutInitializing),nindex);
+  for (size_t i = 0; i < nindex; i++) h_halo_index[i] = halo_index[i];
 
   d_halo_index = DAT::t_int_1d(
-    Kokkos::view_alloc("grid:halo_index",Kokkos::WithoutInitializing),
-    h_halo_index.extent(0));
+    Kokkos::view_alloc("grid:halo_index",Kokkos::WithoutInitializing),nindex);
   Kokkos::deep_copy(d_halo_index,h_halo_index);
 }

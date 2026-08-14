@@ -239,12 +239,23 @@ void Finish::end(int flag, double time_multiple_runs)
 
     char str[32];
 
+    // the optimized move resolves a particle's end-of-step cell in one step,
+    //   so it touches no intermediate cells and does not count any.  what is
+    //   left in the counter is the cells touched by the particles that fell
+    //   through to the standard move, which is a different quantity and is
+    //   labelled as one rather than being passed off as the whole count
+
+    const char *touch_label = update->optmove_flag ?
+      "Cells touched (std move)" : "Cells touched";
+    const char *ctps_label = update->optmove_flag ?
+      "Cell-touches/particle/step (std move)" : "Cell-touches/particle/step";
+
     if (me == 0) {
       if (screen) {
         fprintf(screen,"\n");
         fprintf(screen,"Particle moves    = " BIGINT_FORMAT " %s\n",
                 nmove_total,MathExtra::num2str(nmove_total,str));
-        fprintf(screen,"Cells touched     = " BIGINT_FORMAT " %s\n",
+        fprintf(screen,"%-17s = " BIGINT_FORMAT " %s\n",touch_label,
                 ntouch_total,MathExtra::num2str(ntouch_total,str));
         fprintf(screen,"Particle comms    = " BIGINT_FORMAT " %s\n",
                 ncomm_total,MathExtra::num2str(ncomm_total,str));
@@ -270,7 +281,7 @@ void Finish::end(int flag, double time_multiple_runs)
         fprintf(screen,"\n");
         fprintf(screen,"Particle-moves/CPUsec/proc: %g\n",pmsp);
         fprintf(screen,"Particle-moves/step: %g\n",pms);
-        fprintf(screen,"Cell-touches/particle/step: %g\n",ctps);
+        fprintf(screen,"%s: %g\n",ctps_label,ctps);
         fprintf(screen,"Particle comm iterations/step: %g\n",cis);
         fprintf(screen,"Particle fraction communicated: %g\n",pfc);
         fprintf(screen,"Particle fraction colliding with boundary: %g\n",pfcwb);
@@ -286,7 +297,7 @@ void Finish::end(int flag, double time_multiple_runs)
         fprintf(logfile,"\n");
         fprintf(logfile,"Particle moves    = " BIGINT_FORMAT " %s\n",
                 nmove_total,MathExtra::num2str(nmove_total,str));
-        fprintf(logfile,"Cells touched     = " BIGINT_FORMAT " %s\n",
+        fprintf(logfile,"%-17s = " BIGINT_FORMAT " %s\n",touch_label,
                 ntouch_total,MathExtra::num2str(ntouch_total,str));
         fprintf(logfile,"Particle comms    = " BIGINT_FORMAT " %s\n",
                 ncomm_total,MathExtra::num2str(ncomm_total,str));
@@ -312,7 +323,7 @@ void Finish::end(int flag, double time_multiple_runs)
         fprintf(logfile,"\n");
         fprintf(logfile,"Particle-moves/CPUsec/proc: %g\n",pmsp);
         fprintf(logfile,"Particle-moves/step: %g\n",pms);
-        fprintf(logfile,"Cell-touches/particle/step: %g\n",ctps);
+        fprintf(logfile,"%s: %g\n",ctps_label,ctps);
         fprintf(logfile,"Particle comm iterations/step: %g\n",cis);
         fprintf(logfile,"Particle fraction communicated: %g\n",pfc);
         fprintf(logfile,"Particle fraction colliding with boundary: %g\n",
