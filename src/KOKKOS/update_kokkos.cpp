@@ -176,6 +176,12 @@ void UpdateKokkos::init()
           error->all(FLERR,"Cannot use optimized move with fix adapt");
       }
     }
+
+    // the dense cell index is built by rehash(), which skips it unless
+    //   optmove is on, so build it here in case optmove was turned on after
+    //   the last rehash.  during a run rehash() keeps it in step
+
+    grid->update_halo_index();
   }
 
   // choose the appropriate move method

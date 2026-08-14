@@ -91,6 +91,11 @@ Grid::Grid(SPARTA *sparta) : Pointers(sparta)
   gnames[0] = new char[n];
   strcpy(gnames[0],"all");
 
+  halo_index = NULL;
+  maxhalo = 0;
+  halo_ilo = halo_jlo = halo_klo = 0;
+  halo_nx = halo_ny = halo_nz = 0;
+
   ncell = nunsplit = nsplit = nsub = 0;
 
   nlocal = nghost = maxlocal = maxcell = 0;
@@ -174,6 +179,8 @@ Grid::~Grid()
   memory->sfree(cinfo);
   memory->sfree(sinfo);
   memory->sfree(pcells);
+
+  memory->destroy(halo_index);
 
   if (plevels)
     delete [] plevels;
@@ -1171,6 +1178,154 @@ void Grid::rehash()
   }
 
   hashfilled = 1;
+
+  update_halo_index();
+}
+
+/* ----------------------------------------------------------------------
+   build halo_index, the dense cell-position -> local-index map used by the
+     uniform-grid fast path in Update::move()
+   built alongside the hash, since the two answer the same question and go
+     stale at the same moment
+   leaves halo_index NULL whenever it is not wanted or cannot be built
+     cheaply, in which case callers use hash instead
+------------------------------------------------------------------------- */
+
+void Grid::update_halo_index()
+{
+  // only the optimized move reads this, so do not pay for it otherwise:
+  // rehash() is called by several commands that have nothing to do with move
+
+  if (!update->optmove_flag) {
+    memory->destroy(halo_index);
+    halo_index = NULL;
+    maxhalo = 0;
+    return;
+  }
+
+  int *old_index = halo_index;
+  halo_index = NULL;
+
+  if (!uniform || unx <= 0 || uny <= 0 || unz <= 0) { halo_free(old_index); return; }
+
+  const int ntotal = nlocal + nghost;
+  if (ntotal <= 0) { halo_free(old_index); return; }
+
+  // place cells on the lattice the same way the fast path places particles,
+  //   from coordinates rather than from the cell ID, so the two cannot
+  //   disagree about which site a cell occupies.  spacing is computed with the
+  //   identical expression Update::move() uses for dx/dy/dz
+  // a cell's lo corner is a whole multiple of the spacing, so round to nearest
+
+  const int un[3] = {unx,uny,unz};
+  double inv[3];
+  for (int d = 0; d < 3; d++)
+    inv[d] = un[d]/(domain->boxhi[d]-domain->boxlo[d]);
+
+  // halo arc per dimension: mark the lattice planes this proc holds, then take
+  //   the complement of the widest empty run on the ring.  the complement of
+  //   any single empty run contains every occupied plane, so this is correct
+  //   for a non-arc decomposition too; taking the widest one makes it minimal
+  // deriving the arc from nearest-image offsets to a reference cell instead
+  //   would have to break a tie at exactly half the dimension, and that is
+  //   precisely where the wrapped ghost layer sits when a dimension is split
+  //   over two procs.  getting that tie wrong stretches the arc to the whole
+  //   dimension, which either wastes memory or trips the bounding-box test
+  //   below and silently drops this proc back to the hash
+
+  int *occ[3];
+  for (int d = 0; d < 3; d++) {
+    memory->create(occ[d],un[d],"grid:halo_occupied");
+    for (int i = 0; i < un[d]; i++) occ[d][i] = 0;
+  }
+
+  // one pass over the cells, marking all three dimensions, since ntotal is the
+  //   whole owned plus ghost list and is much larger than unx+uny+unz
+
+  for (int m = 0; m < ntotal; m++)
+    for (int d = 0; d < 3; d++) {
+      const int s =
+        static_cast<int> ((cells[m].lo[d]-domain->boxlo[d])*inv[d]+0.5);
+      if (s >= 0 && s < un[d]) occ[d][s] = 1;
+    }
+
+  int lo[3],n[3],empty = 0;
+  double box = 1.0;
+
+  for (int d = 0; d < 3; d++) {
+
+    // scan the ring starting from an occupied plane so no empty run is split
+    //   by the wrap.  gapend is the first occupied plane after the widest run,
+    //   which is where the arc begins
+
+    int first = -1;
+    for (int i = 0; i < un[d]; i++)
+      if (occ[d][i]) { first = i; break; }
+    if (first < 0) { empty = 1; break; }
+
+    int gapbest = 0,gapend = first,run = 0;
+    for (int k = 1; k <= un[d]; k++) {
+      const int i = (first+k) % un[d];
+      if (!occ[d][i]) run++;
+      else {
+        if (run > gapbest) { gapbest = run; gapend = i; }
+        run = 0;
+      }
+    }
+
+    n[d] = un[d] - gapbest;
+    lo[d] = gapend;
+    box *= n[d];
+  }
+
+  for (int d = 0; d < 3; d++) memory->destroy(occ[d]);
+  if (empty) { halo_free(old_index); return; }
+
+  // refuse when the bounding box holds far more sites than cells, i.e. the
+  // halo is not a box and a dense map would mostly be holes.  a rectangular
+  // decomposition of a uniform grid gives an exact box even under RCB, so
+  // this is about ragged halos, from adaptation or from a partition that a
+  // rebalance left non-clumped
+
+  if (box > 4.0*ntotal) { halo_free(old_index); return; }
+
+  halo_ilo = lo[0]; halo_jlo = lo[1]; halo_klo = lo[2];
+  halo_nx = n[0];   halo_ny = n[1];   halo_nz = n[2];
+
+  // reuse the previous allocation when it is already big enough: rehash() runs
+  // often and this array is the size of the halo
+
+  const int nindex = halo_nx*halo_ny*halo_nz;
+  halo_index = old_index;
+  if (nindex > maxhalo) {
+    memory->destroy(halo_index);
+    halo_index = NULL;
+    maxhalo = nindex;
+    memory->create(halo_index,maxhalo,"grid:halo_index");
+  }
+
+  for (int i = 0; i < nindex; i++) halo_index[i] = -1;
+
+  for (int m = 0; m < ntotal; m++) {
+    int l[3],ok = 1;
+    for (int d = 0; d < 3; d++) {
+      l[d] =
+        static_cast<int> ((cells[m].lo[d]-domain->boxlo[d])*inv[d]+0.5)-lo[d];
+      if (l[d] < 0) l[d] += un[d];
+      if (l[d] >= n[d]) ok = 0;
+    }
+    if (ok) halo_index[(l[2]*halo_ny + l[1])*halo_nx + l[0]] = m;
+  }
+}
+
+/* ----------------------------------------------------------------------
+   release a halo_index allocation abandoned by update_halo_index()
+------------------------------------------------------------------------- */
+
+void Grid::halo_free(int *ptr)
+{
+  memory->destroy(ptr);
+  maxhalo = 0;
 }
 
 /* ----------------------------------------------------------------------

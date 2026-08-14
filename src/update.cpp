@@ -197,6 +197,12 @@ void Update::init()
           error->all(FLERR,"Cannot use optimized move with fix adapt");
       }
     }
+
+    // the dense cell index is built by rehash(), which skips it unless
+    //   optmove is on, so build it here in case optmove was turned on after
+    //   the last rehash.  during a run rehash() keeps it in step
+
+    grid->update_halo_index();
   }
 
   // choose the appropriate move method
@@ -505,9 +511,13 @@ static inline int optmove_bc(const double *xnew, double *xp, int &flip,
    second step of the optimized move: map a position inside the global box to
      the local index of the cell holding it
    caller must have established that xp is inside the box, via optmove_bc()
+   preferred path is one indexed load into grid->halo_index, keyed on the
+     cell's position within this proc's halo arc.  the conditional adds fold a
+     periodically wrapped ghost layer back into the arc
    return the local cell index, or -1 if this proc does not hold that cell
      (it is outside the owned plus ghost halo), in which case the caller uses
      the standard move
+   kept in step with UpdateKokkos::optmove_cell()
 ------------------------------------------------------------------------- */
 
 template < int DIM >
@@ -519,6 +529,17 @@ static inline int optmove_cell(const double *xp, const double *boxlo,
   int kp = 0;
   if (DIM == 3) kp = static_cast<int> ((xp[2] - boxlo[2])/dz);
 
+  if (grid->halo_index) {
+    int il = ip - grid->halo_ilo; if (il < 0) il += grid->unx;
+    int jl = jp - grid->halo_jlo; if (jl < 0) jl += grid->uny;
+    int kl = kp - grid->halo_klo; if (kl < 0) kl += grid->unz;
+    if (il < grid->halo_nx && jl < grid->halo_ny && kl < grid->halo_nz &&
+        ip < grid->unx && jp < grid->uny && kp < grid->unz)
+      return grid->halo_index[(kl*grid->halo_ny + jl)*grid->halo_nx + il];
+    return -1;
+  }
+
+  // no dense index for this decomposition: hash on the global cell ID
   // must accumulate in cellint: unx/uny/unz are int, so an int expression
   // overflows once the global cell count passes 2^31, and the wrong ID misses
   // the hash and silently disables this fast path for every particle above

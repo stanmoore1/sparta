@@ -100,6 +100,22 @@ class Grid : protected Pointers {
   MyHash *hash;
   int hashfilled;             // 1 if hash is filled with cell IDs
 
+  // dense alternative to hash for the uniform-grid fast path in Update::move()
+  //   maps a cell's position within this proc's halo straight to its local
+  //   index, so a lookup is one indexed load rather than a chain of probes
+  // sized by the halo, not the global grid, so it is O(nlocal+nghost) per proc
+  //   and constant under weak scaling
+  // halo_[ijk]lo is the ring position where the halo arc begins, so a
+  //   periodically wrapped ghost layer needs no special case
+  // NULL means unavailable -- optmove not requested, a non-uniform grid, or a
+  //   halo whose bounding box holds far more sites than it has cells -- and
+  //   callers must fall back to hash
+
+  int *halo_index;            // -1 where this proc holds no cell
+  int maxhalo;                // allocated length of halo_index
+  int halo_ilo,halo_jlo,halo_klo;
+  int halo_nx,halo_ny,halo_nz;
+
   // list data structs
 
   MyPage<surfint> *csurfs;    // lists of surf indices for
@@ -242,6 +258,8 @@ class Grid : protected Pointers {
   void remove_ghosts();
   void acquire_ghosts(int surfflag=1);
   void rehash();
+  void update_halo_index();
+  void halo_free(int *);
   void find_neighbors();
   void unset_neighbors();
   void reset_neighbors();
