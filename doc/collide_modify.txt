@@ -145,9 +145,20 @@ until candidate partners are found, and J is chosen randomly from the
 particles in that shell.  As with the {nearcp} style, a particle J is
 not selected if the I,J pair were the most recent collision partners
 (in the current timestep) for each other; a different or more distant
-particle is selected instead, unless no other candidate exists.  The
-subcell binning is discarded after each cell is processed, so the
-memory overhead of the method is negligible.
+particle is selected instead, unless no other candidate exists.
+
+In the non-KOKKOS code the subcell binning is discarded after each cell
+is processed and the vectors are reused, so the memory overhead is
+negligible.  This is not the case in the KOKKOS package, where the
+binning of every cell must be live at once so that cells can be
+processed in parallel.  There the method allocates five per-cell
+scratch views, each sized by the number of grid cells owned by a
+processor times the maximum number of particles in any of its cells.
+That is five more such views than the {nearcp} style needs, and on a
+GPU it can be a significant fraction of the device memory for a large
+number of cells.  The views are allocated and freed within each
+collision step, so they add to the peak footprint rather than to the
+persistent one.
 
 Like the {nearcp} style, the {subcell} method reduces the mean
 separation distance between colliding particles, which reduces the
@@ -158,6 +169,16 @@ as described in "(Bird09)"_#Bird09 and "(Gallis11)"_#Gallis11.  The
 cost of selecting a partner does not depend on a user-chosen search
 limit as with {nearcp}; for cells with many particles the subcell
 method is typically faster than {nearcp} with a large {Nlimit}.
+
+Note that Nsub is chosen from the number of particles in the cell and
+the cell's bounding box, without accounting for how much of the cell is
+actually open to the flow.  In a cut cell created by a surface, where
+the flow volume can be a small fraction of the bounding box, the
+particles are confined to the subcells that overlap the flow volume, so
+those subcells hold correspondingly more than one particle on average
+and the reduction in collision separation is smaller than in a
+free-stream cell.  The method is still valid in cut cells, but its
+benefit near surfaces is reduced.
 
 The {subcell} style does not yet support the ambipolar approximation or
 mixtures with multiple collision groups.  It is supported by the KOKKOS
