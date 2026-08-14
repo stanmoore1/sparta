@@ -41,6 +41,10 @@ Timer::Timer(SPARTA *sparta) : Pointers(sparta)
   _s_timeout = -1.0;
   _checkfreq = 10;
   _nextcheck = -1;
+  // init_timeout() sets this for real at the start of every run, but zero it
+  // here as well: it is read by print_timeout() and get_timeout_remain(),
+  // which the library interface may call before any run has started
+  timeout_start = 0.0;
   last_cpu_secs = -1.0;
   last_cpu_wall = -1.0;
 }
@@ -121,6 +125,17 @@ double Timer::elapsed(int which)
 
 void Timer::init_timeout()
 {
+  // open the timeout window here.  _check_timeout() and get_timeout_remain()
+  //   measure from this instant, so it must be set before any run can call
+  //   them -- leaving it unset made those reads use an uninitialized member
+
+  timeout_start = MPI_Wtime();
+
+  // snapshot the limit so reset_timeout() can restore it after a
+  //   force_timeout().  callers must have already restored _timeout (see
+  //   Run::command), otherwise an expired 0.0 would be latched here and every
+  //   later run would exit immediately
+
   _s_timeout = _timeout;
   if (_timeout < 0)
     _nextcheck = -1;
