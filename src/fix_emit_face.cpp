@@ -240,19 +240,28 @@ void FixEmitFace::grid_changed()
   //       could instead weight by cell face area
 
   if (np > 0.0) {
-    int all,nupto,tasks_with_no_extra;
-    int npint = static_cast<int> (np);
-    MPI_Allreduce(&ntask,&all,1,MPI_INT,MPI_SUM,world);
+    // compute in bigint: np is a user-supplied global count that can
+    //   exceed 2^31, and the task total summed over all procs can too
+
+    bigint all,nupto,tasks_with_no_extra;
+    bigint npint = static_cast<bigint> (np);
+    bigint ntask_big = ntask;
+    MPI_Allreduce(&ntask_big,&all,1,MPI_SPARTA_BIGINT,MPI_SUM,world);
     if (all) {
-      npertask = npint / all;
+      bigint npertask_big = npint / all;
+      if (npertask_big > MAXSMALLINT)
+        error->all(FLERR,"Fix emit/face insertion count per task "
+                   "exceeds 2^31");
+      npertask = npertask_big;
       tasks_with_no_extra = all - (npint % all);
       npremain_pertask = (np - npint) / all;
     } else {
-      npertask = tasks_with_no_extra = 0;
+      npertask = 0;
+      tasks_with_no_extra = 0;
       npremain_pertask = 0.0;
     }
 
-    MPI_Scan(&ntask,&nupto,1,MPI_INT,MPI_SUM,world);
+    MPI_Scan(&ntask_big,&nupto,1,MPI_SPARTA_BIGINT,MPI_SUM,world);
     if (tasks_with_no_extra < nupto-ntask) nthresh = 0;
     else if (tasks_with_no_extra >= nupto) nthresh = ntask;
     else nthresh = tasks_with_no_extra - (nupto-ntask);

@@ -471,7 +471,8 @@ void WriteSurf::write_file_distributed_points(char *file)
     nchar = (bigint) nmine * sizeof(SurfIDType);
   }
 
-  if (ndouble > MAXSMALLINT || nchar > MAXSMALLINT)
+  if (ndouble > MAXSMALLINT || nchar > MAXSMALLINT ||
+      (ncustom && (bigint) nmine*nvalues_custom > MAXSMALLINT))
     error->one(FLERR,"Too much distributed data to communicate");
 
   // write header info
@@ -633,7 +634,11 @@ void WriteSurf::write_file_distributed_points(char *file)
   double **cvalues = NULL;
 
   if (ncustom) {
-    memory->create(cvalues,nmine,nvalues_custom,"write_surf:cvalues");
+    // the filewriter receives other procs' custom values into this same
+    //   array, so it needs max_size_surf rows; everyone else only ever
+    //   packs and sends its own nmine rows
+    int nrows = filewriter ? max_size_surf : nmine;
+    memory->create(cvalues,nrows,nvalues_custom,"write_surf:cvalues");
     pack_custom(nmine,cvalues);
   }
 
@@ -812,7 +817,11 @@ void WriteSurf::write_file_distributed_nopoints(char *file)
   double **cvalues = NULL;
 
   if (ncustom) {
-    memory->create(cvalues,nmine,nvalues_custom,"write_surf:cvalues");
+    // the filewriter receives other procs' custom values into this same
+    //   array, so it needs max_size rows; everyone else only ever packs
+    //   and sends its own nmine rows
+    int nrows = filewriter ? max_size : nmine;
+    memory->create(cvalues,nrows,nvalues_custom,"write_surf:cvalues");
     pack_custom(nmine,cvalues);
   }
 

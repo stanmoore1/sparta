@@ -421,8 +421,10 @@ void Grid::setup_owned()
   MPI_Allreduce(&one,&ncell,1,MPI_SPARTA_BIGINT,MPI_SUM,world);
   one = nunsplitlocal = nlocal - nsplitlocal - nsublocal;
   MPI_Allreduce(&one,&nunsplit,1,MPI_SPARTA_BIGINT,MPI_SUM,world);
-  MPI_Allreduce(&nsplitlocal,&nsplit,1,MPI_INT,MPI_SUM,world);
-  MPI_Allreduce(&nsublocal,&nsub,1,MPI_INT,MPI_SUM,world);
+  one = nsplitlocal;
+  MPI_Allreduce(&one,&nsplit,1,MPI_SPARTA_BIGINT,MPI_SUM,world);
+  one = nsublocal;
+  MPI_Allreduce(&one,&nsub,1,MPI_SPARTA_BIGINT,MPI_SUM,world);
 
   // set cell_epsilon to 1/2 the smallest dimension of any grid cell
 
@@ -491,17 +493,24 @@ void Grid::acquire_ghosts_all(int surfflag)
   nempty = 0;
 
   // compute total # of ghosts so can pre-allocate cells array
+  // sum in bigint since global cell count can exceed 2^31,
+  //   in which case replicating all cells on each proc is not possible
   // issue a memory warning if grid cell count >= LARGE and
   //   user has not specified a grid cutoff
 
-  int nghost_new;
-  MPI_Allreduce(&nlocal,&nghost_new,1,MPI_INT,MPI_SUM,world);
+  bigint nlocal_big = nlocal;
+  bigint nghost_big;
+  MPI_Allreduce(&nlocal_big,&nghost_big,1,MPI_SPARTA_BIGINT,MPI_SUM,world);
 
-  if (nghost_new >= LARGE && comm->nprocs > 1 && comm->me == 0)
+  if (nghost_big >= LARGE && comm->nprocs > 1 && comm->me == 0)
     error->warning(FLERR,"Per-processor grid cell memory will be large "
                    "because global gridcut < 0.0");
 
-  nghost_new -= nlocal;
+  nghost_big -= nlocal;
+  if (nghost_big > MAXSMALLINT)
+    error->one(FLERR,"Global grid cell count exceeds 2^31, cannot replicate "
+               "all cells on each proc, use a global gridcut >= 0.0");
+  int nghost_new = nghost_big;
   grow_cells(nghost_new,0);
 
   // create buf for holding all of my cells, not including sub cells
@@ -738,8 +747,9 @@ void Grid::acquire_ghosts_near(int surfflag)
   delete irregular;
 
   // unpack received grid cells as ghost cells
+  // rbuf and offset can be larger than 2 GB
 
-  int offset = 0;
+  bigint offset = 0;
   for (i = 0; i < nrecv; i++)
     offset += grid->unpack_one(&rbuf[offset],0,0,surfflag);
 
@@ -889,7 +899,7 @@ void Grid::acquire_ghosts_near_less_memory(int surfflag)
         if (boxall[j].proc == lastproc) continue;
         lastproc = boxall[j].proc;
 
-        int n = pack_one(icell,NULL,0,0,surfflag,0);
+        bigint n = pack_one(icell,NULL,0,0,surfflag,0);
         if (n > 0 && bsendsize > 0 && bsendsize+n > update->global_mem_limit) {
           i_end = i;
           break_flag = 1;
@@ -969,8 +979,9 @@ void Grid::acquire_ghosts_near_less_memory(int surfflag)
     irregular = NULL;
 
     // unpack received grid cells as ghost cells
+    // rbuf and offset can be larger than 2 GB
 
-    int offset = 0;
+    bigint offset = 0;
     for (i = 0; i < nrecv; i++)
       offset += grid->unpack_one(&rbuf[offset],0,0,surfflag);
 
@@ -2540,43 +2551,44 @@ void Grid::read_restart(FILE *fp)
 /* ----------------------------------------------------------------------
    return size of child grid restart info for this proc
    using count of all owned cells
-   NOTE: worry about N overflowing int, and in IROUNDUP ???
+   return bigint since can exceed 2 GB at large per-proc cell counts
 ------------------------------------------------------------------------- */
 
-int Grid::size_restart()
+bigint Grid::size_restart()
 {
-  int n = 2*sizeof(int);
-  n = IROUNDUP(n);
+  bigint n = 2*sizeof(int);
+  n = BIROUNDUP(n);
   n += nlocal * sizeof(cellint);
-  n = IROUNDUP(n);
+  n = BIROUNDUP(n);
   n += nlocal * sizeof(int);
-  n = IROUNDUP(n);
+  n = BIROUNDUP(n);
   n += nlocal * sizeof(int);
-  n = IROUNDUP(n);
+  n = BIROUNDUP(n);
   n += nlocal * sizeof(int);
-  n = IROUNDUP(n);
-  n += nlocal * sizeof_custom();
+  n = BIROUNDUP(n);
+  n += (bigint) nlocal * sizeof_custom();
   return n;
 }
 
 /* ----------------------------------------------------------------------
    return size of child grid restart info
    using nlocal_restart count of all owned cells
+   return bigint since can exceed 2 GB at large per-proc cell counts
 ------------------------------------------------------------------------- */
 
-int Grid::size_restart(int nlocal_restart)
+bigint Grid::size_restart(int nlocal_restart)
 {
-  int n = 2*sizeof(int);
-  n = IROUNDUP(n);
+  bigint n = 2*sizeof(int);
+  n = BIROUNDUP(n);
   n += nlocal_restart * sizeof(cellint);
-  n = IROUNDUP(n);
+  n = BIROUNDUP(n);
   n += nlocal_restart * sizeof(int);
-  n = IROUNDUP(n);
+  n = BIROUNDUP(n);
   n += nlocal_restart * sizeof(int);
-  n = IROUNDUP(n);
+  n = BIROUNDUP(n);
   n += nlocal_restart * sizeof(int);
-  n = IROUNDUP(n);
-  n += nlocal_restart * sizeof_custom();
+  n = BIROUNDUP(n);
+  n += (bigint) nlocal_restart * sizeof_custom();
   return n;
 }
 
@@ -2586,42 +2598,41 @@ int Grid::size_restart(int nlocal_restart)
    ID, level, nsplit, mask as vectors for all owned cells
    custom data as ints and doubles
    return n = # of packed bytes
-   NOTE: worry about N overflowing int, and in IROUNDUP ???
 ------------------------------------------------------------------------- */
 
-int Grid::pack_restart(char *buf)
+bigint Grid::pack_restart(char *buf)
 {
-  int n;
+  bigint n;
 
   int *ibuf = (int *) buf;
   ibuf[0] = nlocal;
   ibuf[1] = clumped;
   n = 2*sizeof(int);
-  n = IROUNDUP(n);
+  n = BIROUNDUP(n);
 
   cellint *cbuf = (cellint *) &buf[n];
   for (int i = 0; i < nlocal; i++)
     cbuf[i] = cells[i].id;
   n += nlocal * sizeof(cellint);
-  n = IROUNDUP(n);
+  n = BIROUNDUP(n);
 
   ibuf = (int *) &buf[n];
   for (int i = 0; i < nlocal; i++)
     ibuf[i] = cells[i].level;
   n += nlocal * sizeof(int);
-  n = IROUNDUP(n);
+  n = BIROUNDUP(n);
 
   ibuf = (int *) &buf[n];
   for (int i = 0; i < nlocal; i++)
     ibuf[i] = cells[i].nsplit;
   n += nlocal * sizeof(int);
-  n = IROUNDUP(n);
+  n = BIROUNDUP(n);
 
   ibuf = (int *) &buf[n];
   for (int i = 0; i < nlocal; i++)
     ibuf[i] = cinfo[i].mask;
   n += nlocal * sizeof(int);
-  n = IROUNDUP(n);
+  n = BIROUNDUP(n);
 
   if (ncustom) {
     for (int i = 0; i < nlocal; i++)
@@ -2639,16 +2650,16 @@ int Grid::pack_restart(char *buf)
    allocate vectors here, will be deallocated by ReadRestart
 ------------------------------------------------------------------------- */
 
-int Grid::unpack_restart(char *buf)
+bigint Grid::unpack_restart(char *buf)
 {
-  int n;
+  bigint n;
   int csize = sizeof_custom();
 
   int *ibuf = (int *) buf;
   nlocal_restart = ibuf[0];
   clumped = ibuf[1];
   n = 2*sizeof(int);
-  n = IROUNDUP(n);
+  n = BIROUNDUP(n);
 
   memory->create(id_restart,nlocal_restart,"grid:id_restart");
   memory->create(level_restart,nlocal_restart,"grid:nlevel_restart");
@@ -2656,35 +2667,36 @@ int Grid::unpack_restart(char *buf)
   memory->create(mask_restart,nlocal_restart,"grid:mask_restart");
   cvalues_restart = NULL;
   if (ncustom)
-    memory->create(cvalues_restart,nlocal_restart*csize,"grid::cvalues_restart");
+    memory->create(cvalues_restart,(bigint) nlocal_restart*csize,
+                   "grid::cvalues_restart");
 
   cellint *cbuf = (cellint *) &buf[n];
   for (int i = 0; i < nlocal_restart; i++)
     id_restart[i] = cbuf[i];
   n += nlocal_restart * sizeof(cellint);
-  n = IROUNDUP(n);
+  n = BIROUNDUP(n);
 
   ibuf = (int *) &buf[n];
   for (int i = 0; i < nlocal_restart; i++)
     level_restart[i] = ibuf[i];
   n += nlocal_restart * sizeof(int);
-  n = IROUNDUP(n);
+  n = BIROUNDUP(n);
 
   ibuf = (int *) &buf[n];
   for (int i = 0; i < nlocal_restart; i++)
     nsplit_restart[i] = ibuf[i];
   n += nlocal_restart * sizeof(int);
-  n = IROUNDUP(n);
+  n = BIROUNDUP(n);
 
   ibuf = (int *) &buf[n];
   for (int i = 0; i < nlocal_restart; i++)
     mask_restart[i] = ibuf[i];
   n += nlocal_restart * sizeof(int);
-  n = IROUNDUP(n);
+  n = BIROUNDUP(n);
 
   if (ncustom) {
     for (int i = 0; i < nlocal_restart; i++) {
-      memcpy(&cvalues_restart[i*csize],&buf[n],csize);
+      memcpy(&cvalues_restart[(bigint) i*csize],&buf[n],csize);
       n += csize;
     }
   }

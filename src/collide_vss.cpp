@@ -172,9 +172,12 @@ double CollideVSS::attempt_collision(int icell, int igroup, int jgroup,
 
  // return 2x the value for igroup != jgroup, since no J,I pairing
 
+ // compute npairs in double, else the igroup != jgroup int*int product
+ //   can overflow a 32-bit int for large per-cell group counts
+
  double npairs;
  if (igroup == jgroup) npairs = 0.5 * ngroup[igroup] * (ngroup[igroup]-1);
- else npairs = ngroup[igroup] * (ngroup[jgroup]);
+ else npairs = (double) ngroup[igroup] * (ngroup[jgroup]);
  //else npairs = 0.5 * ngroup[igroup] * (ngroup[jgroup]);
 
  nattempt = npairs * vremax[icell][igroup][jgroup] * dt * fnum / volume;

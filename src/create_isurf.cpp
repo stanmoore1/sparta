@@ -1898,11 +1898,11 @@ void CreateISurf::remove_old()
   else nbytes = sizeof(Surf::Tri);
 
   if (dim == 2) {
-    llines = (Surf::Line *) memory->smalloc(nsurf*nbytes,"createisurf:lines");
-    memcpy(llines,surf->mylines,nsurf*nbytes);
+    llines = (Surf::Line *) memory->smalloc((bigint) nsurf*nbytes,"createisurf:lines");
+    memcpy(llines,surf->mylines,(bigint) nsurf*nbytes);
   } else {
-    ltris = (Surf::Tri *) memory->smalloc(nsurf*nbytes,"createisurf:ltris");
-    memcpy(ltris,surf->mytris,nsurf*nbytes);
+    ltris = (Surf::Tri *) memory->smalloc((bigint) nsurf*nbytes,"createisurf:ltris");
+    memcpy(ltris,surf->mytris,(bigint) nsurf*nbytes);
   }
 
   surf->add_surfs(1,0,llines,ltris,ncustom,index_custom,cuvalues);

@@ -68,7 +68,7 @@ class FixAblate : public Fix {
   int isr_default;        // default isr index for newly created implicit surfs
   double thresh;
   double sum_delta;
-  int ndelete;
+  bigint ndelete;
 
   int nglocal;            // # of owned grid cells
 

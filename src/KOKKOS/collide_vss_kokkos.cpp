@@ -66,32 +66,41 @@ CollideVSSKokkos::CollideVSSKokkos(SPARTA *sparta, int narg, char **arg) :
 
   // use 1D view for scalars to reduce GPU memory operations
 
-  d_scalars = t_int_11("collide:scalars");
-  h_scalars = t_host_int_11("collide:scalars_mirror");
+  // int view = flags and view-size counters, must stay int
+  // bigint view = per-step statistics counters, can exceed 2^31
+  //   in one step at large per-proc particle counts
 
-  d_nattempt_one = Kokkos::subview(d_scalars,0);
-  d_ncollide_one = Kokkos::subview(d_scalars,1);
-  d_nreact_one   = Kokkos::subview(d_scalars,2);
-  d_error_flag   = Kokkos::subview(d_scalars,3);
-  d_retry        = Kokkos::subview(d_scalars,4);
-  d_maxdelete    = Kokkos::subview(d_scalars,5);
-  d_maxcellcount = Kokkos::subview(d_scalars,6);
-  d_part_grow    = Kokkos::subview(d_scalars,7);
-  d_ndelete      = Kokkos::subview(d_scalars,8);
-  d_nlocal       = Kokkos::subview(d_scalars,9);
-  d_maxelectron  = Kokkos::subview(d_scalars,10);
+  d_scalars = t_int_8("collide:scalars");
+  h_scalars = t_host_int_8("collide:scalars_mirror");
 
-  h_nattempt_one = Kokkos::subview(h_scalars,0);
-  h_ncollide_one = Kokkos::subview(h_scalars,1);
-  h_nreact_one   = Kokkos::subview(h_scalars,2);
-  h_error_flag   = Kokkos::subview(h_scalars,3);
-  h_retry        = Kokkos::subview(h_scalars,4);
-  h_maxdelete    = Kokkos::subview(h_scalars,5);
-  h_maxcellcount = Kokkos::subview(h_scalars,6);
-  h_part_grow    = Kokkos::subview(h_scalars,7);
-  h_ndelete      = Kokkos::subview(h_scalars,8);
-  h_nlocal       = Kokkos::subview(h_scalars,9);
-  h_maxelectron  = Kokkos::subview(h_scalars,10);
+  d_scalars_big = t_bigint_3("collide:scalars_big");
+  h_scalars_big = t_host_bigint_3("collide:scalars_big_mirror");
+
+  d_error_flag   = Kokkos::subview(d_scalars,0);
+  d_retry        = Kokkos::subview(d_scalars,1);
+  d_maxdelete    = Kokkos::subview(d_scalars,2);
+  d_maxcellcount = Kokkos::subview(d_scalars,3);
+  d_part_grow    = Kokkos::subview(d_scalars,4);
+  d_ndelete      = Kokkos::subview(d_scalars,5);
+  d_nlocal       = Kokkos::subview(d_scalars,6);
+  d_maxelectron  = Kokkos::subview(d_scalars,7);
+
+  d_nattempt_one = Kokkos::subview(d_scalars_big,0);
+  d_ncollide_one = Kokkos::subview(d_scalars_big,1);
+  d_nreact_one   = Kokkos::subview(d_scalars_big,2);
+
+  h_error_flag   = Kokkos::subview(h_scalars,0);
+  h_retry        = Kokkos::subview(h_scalars,1);
+  h_maxdelete    = Kokkos::subview(h_scalars,2);
+  h_maxcellcount = Kokkos::subview(h_scalars,3);
+  h_part_grow    = Kokkos::subview(h_scalars,4);
+  h_ndelete      = Kokkos::subview(h_scalars,5);
+  h_nlocal       = Kokkos::subview(h_scalars,6);
+  h_maxelectron  = Kokkos::subview(h_scalars,7);
+
+  h_nattempt_one = Kokkos::subview(h_scalars_big,0);
+  h_ncollide_one = Kokkos::subview(h_scalars_big,1);
+  h_nreact_one   = Kokkos::subview(h_scalars_big,2);
 
   random_backup = NULL;
   react_defined = 0;
@@ -521,7 +530,7 @@ template < int NEARCP, int GASTALLY > void CollideVSSKokkos::collisions_one(COLL
     if (sparta->kokkos->react_retry_flag)
       extra_factor = sparta->kokkos->react_extra;
 
-    auto maxdelete_extra = maxdelete*extra_factor;
+    int maxdelete_extra = MIN(maxdelete*extra_factor,(double) MAXSMALLINT);
     if (d_dellist.extent(0) < maxdelete_extra) {
       memoryKK->destroy_kokkos(k_dellist,dellist);
       memoryKK->create_kokkos(k_dellist,dellist,maxdelete_extra,"collide:dellist");
@@ -529,7 +538,7 @@ template < int NEARCP, int GASTALLY > void CollideVSSKokkos::collisions_one(COLL
     }
 
     maxcellcount = particle_kk->get_maxcellcount();
-    auto maxcellcount_extra = maxcellcount*extra_factor;
+    int maxcellcount_extra = MIN(maxcellcount*extra_factor,(double) MAXSMALLINT);
     if (d_plist.extent(1) < maxcellcount_extra) {
       d_plist = {};
       Kokkos::resize(grid_kk->d_plist,nglocal,maxcellcount_extra);
@@ -538,8 +547,10 @@ template < int NEARCP, int GASTALLY > void CollideVSSKokkos::collisions_one(COLL
         MemKK::realloc_kokkos(d_nn_last_partner,"collide:nn_last_partner",nglocal,maxcellcount_extra);
     }
 
-    auto nlocal_extra = particle->nlocal*extra_factor;
-    if (d_particles.extent(0) < nlocal_extra) {
+    bigint nlocal_extra = static_cast<bigint> (particle->nlocal*extra_factor);
+    if (nlocal_extra > MAXSMALLINT)
+      error->one(FLERR,"Per-processor particle count is too big");
+    if ((bigint) d_particles.extent(0) < nlocal_extra) {
       particle->grow(nlocal_extra - particle->nlocal);
       d_particles = particle_kk->k_particles.view_device();
       k_eiarray = particle_kk->k_eiarray;
@@ -559,6 +570,7 @@ template < int NEARCP, int GASTALLY > void CollideVSSKokkos::collisions_one(COLL
     h_nlocal() = particle->nlocal;
 
     Kokkos::deep_copy(d_scalars,h_scalars);
+    Kokkos::deep_copy(d_scalars_big,h_scalars_big);
 
     grid_kk_copy.copy(grid_kk);
     if (react) {
@@ -583,6 +595,7 @@ template < int NEARCP, int GASTALLY > void CollideVSSKokkos::collisions_one(COLL
       Kokkos::parallel_reduce(Kokkos::RangePolicy<DeviceType, TagCollideCollisionsOne<NEARCP,GASTALLY,-1> >(0,nglocal),*this,reduce);
 
     Kokkos::deep_copy(h_scalars,d_scalars);
+    Kokkos::deep_copy(h_scalars_big,d_scalars_big);
 
     if (h_retry()) {
       //printf("Retrying, reason %i %i %i !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n",h_maxdelete() > d_dellist.extent(0),h_maxcellcount() > d_plist.extent(1),h_part_grow());
@@ -882,29 +895,31 @@ void CollideVSSKokkos::collisions_one_ambipolar(COLLIDE_REDUCE &reduce)
 
   maxcellcount = particle_kk->get_maxcellcount();
 
-  auto maxelectron_extra = maxcellcount*extra_factor;
+  int maxelectron_extra = MIN(maxcellcount*extra_factor,(double) MAXSMALLINT);
   if (d_elist.extent(0) < nglocal || d_elist.extent(1) < maxelectron_extra) {
     d_elist = t_particle_2d(); // reduce memory use by deallocating first
     d_elist = t_particle_2d(Kokkos::view_alloc("collide:elist",Kokkos::WithoutInitializing),nglocal,maxelectron_extra);
   }
 
   if (react) {
-    auto maxdelete_extra = maxdelete*extra_factor;
+    int maxdelete_extra = MIN(maxdelete*extra_factor,(double) MAXSMALLINT);
     if (d_dellist.extent(0) < maxdelete_extra) {
       memoryKK->destroy_kokkos(k_dellist,dellist);
       memoryKK->grow_kokkos(k_dellist,dellist,maxdelete_extra,"collide:dellist");
       d_dellist = k_dellist.view_device();
     }
 
-    auto maxcellcount_extra = maxcellcount*extra_factor;
+    int maxcellcount_extra = MIN(maxcellcount*extra_factor,(double) MAXSMALLINT);
     if (d_plist.extent(1) < maxcellcount_extra) {
       d_plist = {};
       Kokkos::resize(grid_kk->d_plist,nglocal,maxcellcount_extra);
       d_plist = grid_kk->d_plist;
     }
 
-    auto nlocal_extra = particle->nlocal*extra_factor;
-    if (d_particles.extent(0) < nlocal_extra) {
+    bigint nlocal_extra = static_cast<bigint> (particle->nlocal*extra_factor);
+    if (nlocal_extra > MAXSMALLINT)
+      error->one(FLERR,"Per-processor particle count is too big");
+    if ((bigint) d_particles.extent(0) < nlocal_extra) {
       particle->grow(nlocal_extra - particle->nlocal);
       particle_kk->sync(Device,PARTICLE_MASK|SPECIES_MASK|CUSTOM_MASK);
       d_particles = particle_kk->k_particles.view_device();
@@ -931,6 +946,7 @@ void CollideVSSKokkos::collisions_one_ambipolar(COLLIDE_REDUCE &reduce)
     h_nlocal() = particle->nlocal;
 
     Kokkos::deep_copy(d_scalars,h_scalars);
+    Kokkos::deep_copy(d_scalars_big,h_scalars_big);
 
     grid_kk_copy.copy(grid_kk);
     if (react) {
@@ -956,6 +972,7 @@ void CollideVSSKokkos::collisions_one_ambipolar(COLLIDE_REDUCE &reduce)
       Kokkos::parallel_reduce(Kokkos::RangePolicy<DeviceType, TagCollideCollisionsOneAmbipolar<GASTALLY,-1> >(0,nglocal),*this,reduce);
 
     Kokkos::deep_copy(h_scalars,d_scalars);
+    Kokkos::deep_copy(h_scalars_big,d_scalars_big);
 
     if (h_retry()) {
       //printf("Retrying, reason %i %i %i %i !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n",h_maxelectron() > d_elist.extent(1),h_maxdelete() > d_dellist.extent(0),h_maxcellcount() > d_plist.extent(1),h_part_grow());

@@ -933,7 +933,7 @@ void FixAveHisto::bin_particles(double *values, int stride)
   Region *region;
   if (regionflag) region = domain->regions[iregion];
 
-  int m = 0;
+  bigint m = 0;
 
   if (regionflag && mixflag) {
     int *s2g = particle->mixture[imix]->species2group;
@@ -970,7 +970,7 @@ void FixAveHisto::bin_grid_cells(double *values, int stride)
   Grid::ChildInfo *cinfo = grid->cinfo;
   int nglocal = grid->nlocal;
 
-  int m = 0;
+  bigint m = 0;
 
   if (groupflag) {
     for (int i = 0; i < nglocal; i++) {

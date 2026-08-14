@@ -166,9 +166,10 @@ class MyPage {
   }
 
   // return total size of all allocated pages
+  // bigint since total can exceed 2 GB
 
-  int size() {
-    return npage*pagesize*sizeof(T);
+  int64_t size() {
+    return (int64_t) npage*pagesize*sizeof(T);
   }
 
  private:

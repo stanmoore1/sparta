@@ -458,10 +458,10 @@ struct fft_plan_3d_kokkos<DeviceType>* FFT3dKokkos<DeviceType>::fft_3d_create_pl
   else {
     first_ilo = 0;
     first_ihi = nfast - 1;
-    first_jlo = ip1*nmid/np1;
-    first_jhi = (ip1+1)*nmid/np1 - 1;
-    first_klo = ip2*nslow/np2;
-    first_khi = (ip2+1)*nslow/np2 - 1;
+    first_jlo = (long long) ip1*nmid/np1;
+    first_jhi = (long long) (ip1+1)*nmid/np1 - 1;
+    first_klo = (long long) ip2*nslow/np2;
+    first_khi = (long long) (ip2+1)*nslow/np2 - 1;
     plan->pre_plan =
       remapKK->remap_3d_create_plan_kokkos(comm,in_ilo,in_ihi,in_jlo,in_jhi,in_klo,in_khi,
                            first_ilo,first_ihi,first_jlo,first_jhi,
@@ -479,12 +479,12 @@ struct fft_plan_3d_kokkos<DeviceType>* FFT3dKokkos<DeviceType>::fft_3d_create_pl
   // choose which axis is split over np1 vs np2 to minimize communication
   // second indices = distribution after 2nd set of FFTs
 
-  second_ilo = ip1*nfast/np1;
-  second_ihi = (ip1+1)*nfast/np1 - 1;
+  second_ilo = (long long) ip1*nfast/np1;
+  second_ihi = (long long) (ip1+1)*nfast/np1 - 1;
   second_jlo = 0;
   second_jhi = nmid - 1;
-  second_klo = ip2*nslow/np2;
-  second_khi = (ip2+1)*nslow/np2 - 1;
+  second_klo = (long long) ip2*nslow/np2;
+  second_khi = (long long) (ip2+1)*nslow/np2 - 1;
   plan->mid1_plan =
       remapKK->remap_3d_create_plan_kokkos(comm,
                            first_ilo,first_ihi,first_jlo,first_jhi,
@@ -518,10 +518,10 @@ struct fft_plan_3d_kokkos<DeviceType>* FFT3dKokkos<DeviceType>::fft_3d_create_pl
     third_khi = out_khi;
   }
   else {
-    third_ilo = ip1*nfast/np1;
-    third_ihi = (ip1+1)*nfast/np1 - 1;
-    third_jlo = ip2*nmid/np2;
-    third_jhi = (ip2+1)*nmid/np2 - 1;
+    third_ilo = (long long) ip1*nfast/np1;
+    third_ihi = (long long) (ip1+1)*nfast/np1 - 1;
+    third_jlo = (long long) ip2*nmid/np2;
+    third_jhi = (long long) (ip2+1)*nmid/np2 - 1;
     third_klo = 0;
     third_khi = nslow - 1;
   }
@@ -804,7 +804,7 @@ struct fft_plan_3d_kokkos<DeviceType>* FFT3dKokkos<DeviceType>::fft_3d_create_pl
     plan->scaled = 0;
   else {
     plan->scaled = 1;
-    plan->norm = 1.0/(nfast*nmid*nslow);
+    plan->norm = 1.0/((double) nfast*nmid*nslow);
     plan->normnum = (out_ihi-out_ilo+1) * (out_jhi-out_jlo+1) *
       (out_khi-out_klo+1);
   }

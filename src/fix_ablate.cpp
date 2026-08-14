@@ -821,7 +821,11 @@ void FixAblate::create_surfs(int outflag)
     } else i++;
   }
 
-  MPI_Allreduce(&ncount,&ndelete,1,MPI_INT,MPI_SUM,world);
+  // sum in bigint, global deletion count can exceed 2^31
+  //   at large proc counts
+
+  bigint ncount_big = ncount;
+  MPI_Allreduce(&ncount_big,&ndelete,1,MPI_SPARTA_BIGINT,MPI_SUM,world);
 
   particle->nlocal = pnlocal;
   particle->sorted = 0;
@@ -846,7 +850,7 @@ void FixAblate::set_delta_random()
   cellint cellID;
   int rn2,icell;
   double rn1;
-  for (int i = 0; i < grid->ncell; i++) {
+  for (bigint i = 0; i < grid->ncell; i++) {
     rn1 = random->uniform();
     rn2 = static_cast<int> (random->uniform()*maxrandom) + 1.0;
     cellID = i+1;
@@ -1292,7 +1296,8 @@ void FixAblate::push_lohi()
 
 void FixAblate::comm_neigh_corners(int which)
 {
-  int i,j,k,m,n,ix,iy,iz,jx,jy,jz;
+  int i,j,k,n,ix,iy,iz,jx,jy,jz;
+  bigint m;
   int icell,ifirst,jcell,proc,ilocal;
 
   Grid::ChildCell *cells = grid->cells;
@@ -1363,6 +1368,8 @@ void FixAblate::comm_neigh_corners(int which)
   if (multi_val_flag && which != NVERT) ncomm = 1 + ncorner*nmultiv;
   else ncomm = 1 + ncorner;
 
+  if ((bigint) nsend*ncomm > MAXSMALLINT)
+    error->one(FLERR,"Fix ablate comm buffer exceeds 2 GB");
   if (nsend*ncomm > maxbuf) {
     memory->destroy(sbuf);
     maxbuf = nsend*ncomm;
@@ -1849,17 +1856,20 @@ void FixAblate::process_args(int narg, char **arg)
 double FixAblate::memory_usage()
 {
   double bytes = 0.0;
-  if (multi_val_flag) bytes += maxgrid*ncorner*nmultiv * sizeof(double); // mvalues
-  else bytes += maxgrid*ncorner * sizeof(double);   // cvalues
+  if (multi_val_flag)
+    bytes += (bigint) maxgrid*ncorner*nmultiv * sizeof(double); // mvalues
+  else bytes += (bigint) maxgrid*ncorner * sizeof(double);   // cvalues
   if (tvalues_flag) bytes += maxgrid * sizeof(int);   // tvalues
-  bytes += maxgrid*3 * sizeof(int);            // ixyz
+  bytes += (bigint) maxgrid*3 * sizeof(int);            // ixyz
   // NOTE: add for mcflags if keep
   bytes += maxgrid * sizeof(double);           // celldelta
-  if (multi_val_flag) bytes += maxgrid*ncorner*nmultiv * sizeof(double); // mdelta
-  else bytes += maxgrid*ncorner * sizeof(double);   // cdelta
-  if (multi_val_flag) bytes += maxgrid*ncorner*nmultiv * sizeof(double); // mdelta_ghost
-  else bytes += maxgrid*ncorner * sizeof(double);   // cdelta_ghost
-  bytes += 3*maxsend * sizeof(int);            // proclist,locallist,numsend
+  if (multi_val_flag)
+    bytes += (bigint) maxgrid*ncorner*nmultiv * sizeof(double); // mdelta
+  else bytes += (bigint) maxgrid*ncorner * sizeof(double);   // cdelta
+  if (multi_val_flag)
+    bytes += (bigint) maxgrid*ncorner*nmultiv * sizeof(double); // mdelta_ghost
+  else bytes += (bigint) maxgrid*ncorner * sizeof(double);   // cdelta_ghost
+  bytes += 3*((bigint) maxsend) * sizeof(int);            // proclist,locallist,numsend
   bytes += maxbuf * sizeof(double);            // sbuf
   return bytes;
 }
