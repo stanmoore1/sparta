@@ -141,6 +141,9 @@ UpdateKokkos::UpdateKokkos(SPARTA *sparta) : Update(sparta),
   nboundary_tally = 0;
 
   for (int f = 0; f < 6; f++) bcopt[f] = BCSTD;
+
+  d_bcmirror = DAT::t_bigint_1d("update:bcmirror",6);
+  h_bcmirror = HAT::t_bigint_1d("update:bcmirror_mirror",6);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -191,6 +194,8 @@ void UpdateKokkos::init()
 
     grid->update_halo_index();
   }
+
+  optmove_surf_init();
 
   // choose the appropriate move method
 
@@ -514,8 +519,11 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
       else if (domain->bflag[f] == PERIODIC) bcopt[f] = BCWRAP;
       else if (domain->bflag[f] == REFLECT) bcopt[f] = BCMIRROR;
       else if (domain->bflag[f] == OUTFLOW) bcopt[f] = BCEXIT;
+      else if (bcmirror_surf[f]) bcopt[f] = BCMIRROR;
       else bcopt[f] = BCSTD;
     }
+
+    if (bcmirror_any) Kokkos::deep_copy(d_bcmirror,0);
   }
 
   ParticleKokkos* particle_kk = ((ParticleKokkos*)particle);
@@ -869,6 +877,14 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
   particle->sorted = 0;
   particle_kk->sorted_kk = 0;
 
+  // hand any {s} face mirrors the fast path did back to their collide models
+
+  if (OPT && bcmirror_any) {
+    Kokkos::deep_copy(h_bcmirror,d_bcmirror);
+    for (int f = 0; f < 6; f++) bcmirror_one[f] = h_bcmirror[f];
+    optmove_surf_tally();
+  }
+
   // accumulate running totals
 
   niterate_running += niterate;
@@ -901,11 +917,13 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
      end-of-step position
    xnew = position at the end of a straight-line move, not modified
    xp = xnew after any boundary condition, valid only if this returns 1
-   flip = bit per dimension whose velocity component a mirror negated.  the
-     caller applies it only once it decides to keep the particle: one that
-     falls through must reach the standard move with its velocity untouched,
-     which is also why xnew is left alone (and why xnew+L-L will not do, since
-     that is not xnew in floating point)
+   flip = bit 0/1/2 per dimension whose velocity component a mirror negated,
+     plus bit 3/4/5 when it was that dimension's upper face, so the caller can
+     name the face it reflected off.  the caller applies it only once it
+     decides to keep the particle: one that falls through must reach the
+     standard move with its velocity untouched, which is also why xnew is left
+     alone (and why xnew+L-L will not do, since that is not xnew in floating
+     point)
    bcopt[face] says what this face may do -- BCSTD nothing, BCWRAP translate,
      BCMIRROR mirror, BCEXIT delete -- so a face the fast path cannot handle
      leaves the position outside the box and the bound tests below reject it
@@ -937,7 +955,7 @@ int UpdateKokkos::optmove_bc(const double *xnew, double *xp, int &flip) const
     else if (bcopt[XLO] == BCEXIT) exitbit |= 1;
   } else if (xp[0] >= xhi) {
     if (bcopt[XHI] == BCWRAP) xp[0] -= Lx;
-    else if (bcopt[XHI] == BCMIRROR) { xp[0] = xhi - (xp[0]-xhi); flip |= 1; }
+    else if (bcopt[XHI] == BCMIRROR) { xp[0] = xhi - (xp[0]-xhi); flip |= 1|8; }
     else if (bcopt[XHI] == BCEXIT) exitbit |= 1;
   }
 
@@ -947,7 +965,7 @@ int UpdateKokkos::optmove_bc(const double *xnew, double *xp, int &flip) const
     else if (bcopt[YLO] == BCEXIT) exitbit |= 2;
   } else if (xp[1] >= yhi) {
     if (bcopt[YHI] == BCWRAP) xp[1] -= Ly;
-    else if (bcopt[YHI] == BCMIRROR) { xp[1] = yhi - (xp[1]-yhi); flip |= 2; }
+    else if (bcopt[YHI] == BCMIRROR) { xp[1] = yhi - (xp[1]-yhi); flip |= 2|16; }
     else if (bcopt[YHI] == BCEXIT) exitbit |= 2;
   }
 
@@ -958,7 +976,7 @@ int UpdateKokkos::optmove_bc(const double *xnew, double *xp, int &flip) const
       else if (bcopt[ZLO] == BCEXIT) exitbit |= 4;
     } else if (xp[2] >= zhi) {
       if (bcopt[ZHI] == BCWRAP) xp[2] -= Lz;
-      else if (bcopt[ZHI] == BCMIRROR) { xp[2] = zhi - (xp[2]-zhi); flip |= 4; }
+      else if (bcopt[ZHI] == BCMIRROR) { xp[2] = zhi - (xp[2]-zhi); flip |= 4|32; }
       else if (bcopt[ZHI] == BCEXIT) exitbit |= 4;
     }
   }
@@ -1214,6 +1232,21 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
             d_nboundary_one() += nb;
           else
             reduce.nboundary_one += nb;
+
+          // an {s} face's surf collide model keeps its own count of the
+          //   collisions it handled, so count them per face here and give them
+          //   to it after the kernel.  a {r} face has no model, and this is
+          //   skipped entirely unless some face is an {s} one, since every
+          //   reflecting particle would otherwise contend on the same counter
+
+          if (bcmirror_any) {
+            if (flip & 1)
+              Kokkos::atomic_inc(&d_bcmirror[(flip & 8) ? XHI : XLO]);
+            if (flip & 2)
+              Kokkos::atomic_inc(&d_bcmirror[(flip & 16) ? YHI : YLO]);
+            if (flip & 4)
+              Kokkos::atomic_inc(&d_bcmirror[(flip & 32) ? ZHI : ZLO]);
+          }
         }
 
         if (d_cells[icell].proc != me) {

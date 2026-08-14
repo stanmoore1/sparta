@@ -426,12 +426,19 @@ specific particle on that timestep.
 <A HREF = "boundary.html">boundary</A> condition applied. For a <I>p</I> (periodic) or
 <I>r</I> (specular reflection) face this is a translation or a reflection
 about the face, and for an <I>o</I> (outflow) face it is deleting the
-particle; the optimized move performs all three itself. For an <I>s</I>
-(surface) face it runs a surface collision model, which it does not,
-and the particle uses the normal move algorithm for that timestep. A
-particle that leaves through an outflow face also uses the normal move
-if it is outside an <I>s</I> face in another dimension, since the collision
-there could turn it around before it ever reaches the outflow face. This matters for performance
+particle; the optimized move performs all three itself. An <I>s</I>
+(surface) face runs a <A HREF = "surf_collide.html">surf_collide</A> model, which the
+optimized move does not do in general, so the particle uses the normal
+move algorithm for that timestep. The exception is a face whose model
+is a plain <I>specular</I> one with no <A HREF = "surf_react.html">surf_react</A> model
+assigned: that is a reflection about the face and nothing else, so the
+optimized move performs it, and adds the collisions to the model's own
+tally so its output is unchanged. A <I>specular</I> model with the <I>noslip</I>
+option is not such a face, since it reverses all three velocity
+components rather than reflecting. A particle that leaves through an
+outflow face also uses the normal move if it is outside a normal-move
+<I>s</I> face in another dimension, since the collision there could turn it
+around before it ever reaches the outflow face. This matters for performance
 because the processors that own the edges of the global box are the
 only ones with such particles, so leaving those faces to the normal
 move makes those processors slower than the rest, which in a parallel

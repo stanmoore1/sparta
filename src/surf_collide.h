@@ -28,6 +28,10 @@ class SurfCollide : protected Pointers {
   int allowreact;           // 1 if allows for surface reactions
   int dynamicflag;          // 1 if any param is dynamically updated
   int transparent;          // 1 if transparent collision model
+  int mirror_flag;          // 1 if this model does nothing but reflect the
+                            //   velocity about the surface normal, so a caller
+                            //   with an axis-aligned normal can negate one
+                            //   velocity component instead of calling collide()
   int vector_flag;          // 0/1 if compute_vector() function exists
   int size_vector;          // length of global vector
   int kokkosable;           // 1 if Kokkos version
