@@ -511,13 +511,16 @@ void ComputeLambdaGrid::compute_per_grid()
         }
 
         k = umap[m][0];
-        int jm1 = j - 1;
         if (nrho_values == 1) {
           compute->post_process_grid(j,1,nrho,map[0],vector_grid,1);
           for (i = 0; i < nglocal; i++) nrho[i][k] = vector_grid[i];
         } else {
+          // post_process_grid() writes column m of array_grid1 (stride
+          //   nrho_values), so read back column m, not the compute's
+          //   own bracket index
+
           compute->post_process_grid(j,1,nrho,map[m],&array_grid1[0][m],nrho_values);
-          for (i = 0; i < nglocal; i++) nrho[i][k] = array_grid1[i][jm1];
+          for (i = 0; i < nglocal; i++) nrho[i][k] = array_grid1[i][m];
         }
       } else {
         k = umap[m][0];
