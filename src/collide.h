@@ -188,6 +188,7 @@ class Collide : protected Pointers {
   void subcell_alloc();
   void subcell_rebin(int, int, int, double *, double *);
   void subcell_bin_one(int, int, int, double *, double *);
+  void subcell_unbin_one(int, int);
 
   void ambi_reset(int, int, int, Particle::OnePart *, Particle::OnePart *,
                   Particle::OnePart *, int *);

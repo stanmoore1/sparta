@@ -239,6 +239,9 @@ class CollideVSSKokkos : public CollideVSS {
   KOKKOS_INLINE_FUNCTION
   void bin_one_subcell(int, int, int, const double *, const double *) const;
 
+  KOKKOS_INLINE_FUNCTION
+  void unbin_one_subcell(int, int, int) const;
+
   template < int DIM >
   KOKKOS_INLINE_FUNCTION
   int find_nn_subcell(rand_type &, int, int, int, int, int) const;

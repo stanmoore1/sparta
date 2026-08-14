@@ -933,6 +933,7 @@ template < int DIM, int GASTALLY > void Collide::collisions_one_subcell()
         np--;
         plist[j] = plist[np];
         nn_last_partner[j] = nn_last_partner[np];
+        subcell_unbin_one(j,np);
         if (np < 2) break;
       }
 
@@ -956,14 +957,13 @@ template < int DIM, int GASTALLY > void Collide::collisions_one_subcell()
       // if plist was changed by a reaction,
       // keep the subcell vectors consistent with plist
       // keep same subcell grid even though np has changed by one
-      // a deleted particle swaps plist[np] down into slot j, which
-      //   invalidates the stored plist indices, so rebin the whole cell
-      // subcell_alloc() above discards the vectors, so a grow also
-      //   requires a full rebin
+      // a deleted particle was already unbound above by subcell_unbin_one()
       // a created particle is appended at the end of plist and moves no
       //   other particle, so it can be binned by itself in O(1)
+      // subcell_alloc() above discards the vectors, so only a grow still
+      //   requires a full rebin
 
-      if (!jpart || subcell_regrow) subcell_rebin(DIM,np,nsub,lo,ood);
+      if (subcell_regrow) subcell_rebin(DIM,np,nsub,lo,ood);
       else if (kpart) subcell_bin_one(DIM,np-1,nsub,lo,ood);
     }
   }
@@ -1067,6 +1067,63 @@ void Collide::subcell_bin_one(int dim, int n, int nsub, double *lo, double *ood)
   subcell_next[n] = subcell_first[isc];
   subcell_first[isc] = n;
   subcell_count[isc]++;
+}
+
+/* ----------------------------------------------------------------------
+   remove plist index j from the subcell chains after a reaction deleted it
+   the caller has already done np-- and plist[j] = plist[np], so the
+     particle formerly at index np now lives at index j
+   subcell_rebin() leaves every chain ordered by decreasing plist index,
+     so j is reinserted at its sorted position to preserve that ordering,
+     which makes this produce exactly the chains a full rebin would
+   chains hold ~1 particle on average, so both walks are O(1) in practice
+------------------------------------------------------------------------- */
+
+void Collide::subcell_unbin_one(int j, int np)
+{
+  int isc,jsc,prev,k;
+
+  // unlink j from its own chain
+
+  isc = subcell_id[j];
+  prev = -1;
+  k = subcell_first[isc];
+  while (k != j) {
+    prev = k;
+    k = subcell_next[k];
+  }
+  if (prev < 0) subcell_first[isc] = subcell_next[j];
+  else subcell_next[prev] = subcell_next[j];
+  subcell_count[isc]--;
+
+  // if j was the last particle there is nothing to relabel
+
+  if (np == j) return;
+
+  // unlink old index np from its chain, then relink it under its new
+  //   index j at the position that keeps the chain in decreasing order
+  // count of that chain is unchanged, one index replaces another
+
+  jsc = subcell_id[np];
+  prev = -1;
+  k = subcell_first[jsc];
+  while (k != np) {
+    prev = k;
+    k = subcell_next[k];
+  }
+  if (prev < 0) subcell_first[jsc] = subcell_next[np];
+  else subcell_next[prev] = subcell_next[np];
+
+  prev = -1;
+  k = subcell_first[jsc];
+  while (k >= 0 && k > j) {
+    prev = k;
+    k = subcell_next[k];
+  }
+  subcell_next[j] = k;
+  if (prev < 0) subcell_first[jsc] = j;
+  else subcell_next[prev] = j;
+  subcell_id[j] = jsc;
 }
 
 /* ----------------------------------------------------------------------

@@ -1171,6 +1171,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneSubcell< DIM, GASTALLY,
       np--;
       d_plist(icell,j) = d_plist(icell,np);
       d_nn_last_partner(icell,j) = d_nn_last_partner(icell,np);
+      unbin_one_subcell(icell,j,np);
       if (np < 2) break;
     }
 
@@ -1193,13 +1194,11 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneSubcell< DIM, GASTALLY,
     // so subcell vectors stay consistent with plist
     // keep same subcell grid even though np changed by one
 
-    // a deleted particle swaps plist[np] down into slot j, which
-    //   invalidates the stored plist indices, so rebin the whole cell
+    // a deleted particle was already unbound above by unbin_one_subcell()
     // a created particle is appended at the end of plist and moves no
     //   other particle, so it can be binned by itself in O(1)
 
-    if (!jpart) rebin_subcell<DIM>(icell,np,nsub,lo,ood);
-    else if (kpart) bin_one_subcell<DIM>(icell,np-1,nsub,lo,ood);
+    if (kpart) bin_one_subcell<DIM>(icell,np-1,nsub,lo,ood);
   }
 
   rand_pool.free_state(rand_gen);
@@ -1272,6 +1271,59 @@ void CollideVSSKokkos::bin_one_subcell(int icell, int n, int nsub,
   d_subcell_next(icell,n) = d_subcell_first(icell,isc);
   d_subcell_first(icell,isc) = n;
   d_subcell_count(icell,isc)++;
+}
+
+/* ----------------------------------------------------------------------
+   remove plist index j of cell icell from the subcell chains
+   Kokkos port of Collide::subcell_unbin_one()
+   caller has already done np-- and d_plist(icell,j) = d_plist(icell,np)
+   chains are kept ordered by decreasing plist index, as rebin_subcell()
+     leaves them, so this reproduces a full rebin exactly
+   only row icell is touched, and that row belongs to this thread alone
+------------------------------------------------------------------------- */
+
+KOKKOS_INLINE_FUNCTION
+void CollideVSSKokkos::unbin_one_subcell(int icell, int j, int np) const
+{
+  // unlink j from its own chain
+
+  int isc = d_subcell_id(icell,j);
+  int prev = -1;
+  int k = d_subcell_first(icell,isc);
+  while (k != j) {
+    prev = k;
+    k = d_subcell_next(icell,k);
+  }
+  if (prev < 0) d_subcell_first(icell,isc) = d_subcell_next(icell,j);
+  else d_subcell_next(icell,prev) = d_subcell_next(icell,j);
+  d_subcell_count(icell,isc)--;
+
+  // if j was the last particle there is nothing to relabel
+
+  if (np == j) return;
+
+  // unlink old index np, relink it under its new index j in sorted order
+
+  int jsc = d_subcell_id(icell,np);
+  prev = -1;
+  k = d_subcell_first(icell,jsc);
+  while (k != np) {
+    prev = k;
+    k = d_subcell_next(icell,k);
+  }
+  if (prev < 0) d_subcell_first(icell,jsc) = d_subcell_next(icell,np);
+  else d_subcell_next(icell,prev) = d_subcell_next(icell,np);
+
+  prev = -1;
+  k = d_subcell_first(icell,jsc);
+  while (k >= 0 && k > j) {
+    prev = k;
+    k = d_subcell_next(icell,k);
+  }
+  d_subcell_next(icell,j) = k;
+  if (prev < 0) d_subcell_first(icell,jsc) = j;
+  else d_subcell_next(icell,prev) = j;
+  d_subcell_id(icell,j) = jsc;
 }
 
 /* ----------------------------------------------------------------------
