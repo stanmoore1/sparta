@@ -39,8 +39,10 @@ SurfCollideTransparent(SPARTA *sparta, int narg, char **arg) :
 ------------------------------------------------------------------------- */
 
 Particle::OnePart *SurfCollideTransparent::
-collide(Particle::OnePart *&ip, double &, int, double *, int, int &)
+collide(Particle::OnePart *&ip, double &, int, double *, int, int &reaction)
 {
+  reaction = 0;
+
   nsingle++;
 
   return NULL;

@@ -38,8 +38,10 @@ SurfCollideVanish::SurfCollideVanish(SPARTA *sparta, int narg, char **arg) :
 ------------------------------------------------------------------------- */
 
 Particle::OnePart *SurfCollideVanish::
-collide(Particle::OnePart *&ip, double &, int, double *, int, int &)
+collide(Particle::OnePart *&ip, double &, int, double *, int, int &reaction)
 {
+  reaction = 0;
+
   nsingle++;
 
   ip = NULL;
