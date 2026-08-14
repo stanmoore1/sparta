@@ -539,22 +539,36 @@ template < int DIM, int SURF, int OPT > void Update::move()
       if (OPT) {
         int optmove = 1;
 
-        if (xnew[0] < boxlo[0] || xnew[0] > boxhi[0])
+        // for axisymmetry the radial coord and velocity must be remapped
+        //   before testing containment, exactly as the standard move does.
+        // remap a copy: if the optimized move is rejected below, the
+        //   standard move path does its own remap and must not see it twice
+
+        double xopt[3],vopt[3];
+        double *xo = xnew;
+        if (DIM == 1) {
+          memcpy(xopt,xnew,3*sizeof(double));
+          memcpy(vopt,v,3*sizeof(double));
+          axi_remap(xopt,vopt);
+          xo = xopt;
+        }
+
+        if (xo[0] < boxlo[0] || xo[0] > boxhi[0])
           optmove = 0;
 
-        if (xnew[1] < boxlo[1] || xnew[1] > boxhi[1])
+        if (xo[1] < boxlo[1] || xo[1] > boxhi[1])
           optmove = 0;
 
         if (DIM == 3) {
-          if (xnew[2] < boxlo[2] || xnew[2] > boxhi[2])
+          if (xo[2] < boxlo[2] || xo[2] > boxhi[2])
             optmove = 0;
         }
 
         if (optmove) {
-          const int ip = static_cast<int>((xnew[0] - boxlo[0])/dx);
-          const int jp = static_cast<int>((xnew[1] - boxlo[1])/dy);
+          const int ip = static_cast<int>((xo[0] - boxlo[0])/dx);
+          const int jp = static_cast<int>((xo[1] - boxlo[1])/dy);
           int kp = 0;
-          if (DIM == 3) kp = static_cast<int>((xnew[2] - boxlo[2])/dz);
+          if (DIM == 3) kp = static_cast<int>((xo[2] - boxlo[2])/dz);
 
           int cellIdx = (kp*grid->uny + jp)*grid->unx + ip + 1;
 
@@ -569,9 +583,10 @@ template < int DIM, int SURF, int OPT > void Update::move()
 
             particles[i].icell = icell;
             particles[i].flag = PKEEP;
-            x[0] = xnew[0];
-            x[1] = xnew[1];
-            x[2] = xnew[2];
+            x[0] = xo[0];
+            x[1] = xo[1];
+            x[2] = xo[2];
+            if (DIM == 1) memcpy(v,vopt,3*sizeof(double));
 
             if (cells[icell].proc != me) {
               mlist[nmigrate++] = i;

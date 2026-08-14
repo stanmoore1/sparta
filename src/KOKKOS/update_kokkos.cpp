@@ -926,23 +926,37 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
   if (OPT) {
     int optmove = 1;
 
-    if (xnew[0] < xlo || xnew[0] > xhi)
+    // for axisymmetry the radial coord and velocity must be remapped before
+    //   testing containment, exactly as the standard move does.  remap a
+    //   copy: if the optimized move is rejected the standard path does its
+    //   own remap and must not see it applied twice
+
+    double xopt[3],vopt[3];
+    double *xo = xnew;
+    if (DIM == 1) {
+      xopt[0] = xnew[0]; xopt[1] = xnew[1]; xopt[2] = xnew[2];
+      vopt[0] = v[0]; vopt[1] = v[1]; vopt[2] = v[2];
+      axi_remap(xopt,vopt);
+      xo = xopt;
+    }
+
+    if (xo[0] < xlo || xo[0] > xhi)
       optmove = 0;
 
-    if (xnew[1] < ylo || xnew[1] > yhi)
+    if (xo[1] < ylo || xo[1] > yhi)
       optmove = 0;
 
     if (DIM == 3) {
-      if (xnew[2] < zlo || xnew[2] > zhi)
+      if (xo[2] < zlo || xo[2] > zhi)
         optmove = 0;
     }
 
     if (optmove) {
 
-      const int ip = static_cast<int>((xnew[0] - xlo)/dx);
-      const int jp = static_cast<int>((xnew[1] - ylo)/dy);
+      const int ip = static_cast<int>((xo[0] - xlo)/dx);
+      const int jp = static_cast<int>((xo[1] - ylo)/dy);
       int kp = 0;
-      if (DIM == 3) kp = static_cast<int>((xnew[2] - zlo)/dz);
+      if (DIM == 3) kp = static_cast<int>((xo[2] - zlo)/dz);
 
       int cellIdx = (kp*ncy + jp)*ncx + ip + 1;
       auto index = hash_kk.find(static_cast<GridKokkos::key_type>(cellIdx));
@@ -957,9 +971,14 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
 
         particle_i.icell = icell;
         particle_i.flag = PKEEP;
-        x[0] = xnew[0];
-        x[1] = xnew[1];
-        x[2] = xnew[2];
+        x[0] = xo[0];
+        x[1] = xo[1];
+        x[2] = xo[2];
+        if (DIM == 1) {
+          v[0] = vopt[0];
+          v[1] = vopt[1];
+          v[2] = vopt[2];
+        }
 
         if (d_cells[icell].proc != me) {
           int indx;
