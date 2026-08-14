@@ -274,12 +274,26 @@ void CommKokkos::operator()(TagCommMigrateUnpackParticles<HAVE_CUSTOM>, const in
 
 void CommKokkos::migrate_cells(int nmigrate)
 {
+  // Comm::migrate_cells rewrites grid cells/cinfo/sinfo (+ grid custom),
+  // particles (+ particle custom), and per-cell collide data on the host,
+  // so bracket all of them, not just collide.  This also covers the
+  // balance_grid command path, which has no Kokkos subclass of its own.
+  // Redundant with FixBalanceKokkos's bracketing when called from there,
+  // but syncs and modifies are idempotent
+
+  GridKokkos* grid_kk = (GridKokkos*) grid;
+  ParticleKokkos* particle_kk = (ParticleKokkos*) particle;
   CollideVSSKokkos* collide_kk = (CollideVSSKokkos*) collide;
+
+  grid_kk->sync(Host,CELL_MASK|CINFO_MASK|SINFO_MASK|PCELL_MASK|CUSTOM_MASK);
+  particle_kk->sync(Host,PARTICLE_MASK|CUSTOM_MASK);
   if (collide)
     collide_kk->sync(Host,ALL_MASK);
 
   Comm::migrate_cells(nmigrate);
 
+  grid_kk->modify(Host,CELL_MASK|CINFO_MASK|SINFO_MASK|PCELL_MASK|CUSTOM_MASK);
+  particle_kk->modify(Host,PARTICLE_MASK|CUSTOM_MASK);
   if (collide)
     collide_kk->modified(Host,ALL_MASK);
 }

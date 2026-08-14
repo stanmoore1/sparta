@@ -586,8 +586,8 @@ void FixEmitFaceKokkos::grow_task()
   }
 
   if (subsonic_style == PONLY) {
-    k_vscale.modify_host(); // force resize on host
     k_vscale.sync_host();
+    k_vscale.modify_host(); // force resize on host
     k_vscale.resize(ntaskmax,nspecies);
     d_vscale = k_vscale.view_device();
     for (int i = 0; i < ntaskmax; i++)

@@ -111,6 +111,13 @@ void ComputeSurfKokkos::clear()
   // reset all set surf2tally values to -1
   // called by Update at beginning of timesteps surf tallying is done
 
+  // the deep_copys overwrite the device side wholesale: drop any pending
+  // modify flags (e.g. the host flag tallyinfo() sets after compaction)
+  // so the modify_device in post_surf_tally() doesn't see both sides dirty
+
+  k_array_surf_tally.clear_sync_state();
+  k_tally2surf.clear_sync_state();
+
   Kokkos::deep_copy(d_array_surf_tally,0);
 
   Kokkos::deep_copy(d_surf2tally,-1);
@@ -238,6 +245,11 @@ int ComputeSurfKokkos::tallyinfo(surfint *&ptr)
     h_surf2tally[iend] = -1;
     tally2surf[istart] = tally2surf[iend];
   }
+
+  // the compaction rewrote the host copies in place
+
+  k_array_surf_tally.modify_host();
+  k_tally2surf.modify_host();
 
   return ntally;
 }

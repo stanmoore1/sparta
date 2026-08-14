@@ -127,10 +127,8 @@ void ComputeFFTGridKokkos::compute_per_grid()
   } else {
     compute_per_grid_kokkos();
     if (ncol == 1) {
-      k_vector_grid.modify_device();
       k_vector_grid.sync_host();
     } else {
-      k_array_grid.modify_device();
       k_array_grid.sync_host();
     }
   }
@@ -329,23 +327,23 @@ void ComputeFFTGridKokkos::compute_per_grid_kokkos()
 
   // scale results if requested
 
-  if (scalefactor == 1.0) {
-    copymode = 0;
-    return;
-  }
-
-  if (ncol == 1) {
-    Kokkos::parallel_for(nglocal, SPARTA_CLASS_LAMBDA(int i) {
-      d_vector_grid[i] *= scalefactor;
-    });
-  } else {
-    Kokkos::parallel_for(nglocal, SPARTA_CLASS_LAMBDA(int i) {
-      for (int m = startcol; m < ncol; m++)
-        d_array_grid(i,m) *= scalefactor;
-    });
+  if (scalefactor != 1.0) {
+    if (ncol == 1) {
+      Kokkos::parallel_for(nglocal, SPARTA_CLASS_LAMBDA(int i) {
+        d_vector_grid[i] *= scalefactor;
+      });
+    } else {
+      Kokkos::parallel_for(nglocal, SPARTA_CLASS_LAMBDA(int i) {
+        for (int m = startcol; m < ncol; m++)
+          d_array_grid(i,m) *= scalefactor;
+      });
+    }
   }
 
   copymode = 0;
+
+  if (ncol == 1) k_vector_grid.modify_device();
+  else k_array_grid.modify_device();
 }
 
 /* ----------------------------------------------------------------------

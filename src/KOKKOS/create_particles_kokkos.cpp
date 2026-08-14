@@ -62,7 +62,7 @@ void CreateParticlesKokkos::create_local(bigint np)
   Grid::ChildInfo *cinfo = grid->cinfo;
   Grid::SplitInfo *sinfo = grid->sinfo;
   GridKokkos* grid_kk = ((GridKokkos*)grid);
-  grid_kk->sync(Host,CINFO_MASK|CELL_MASK|SINFO_MASK);
+  grid_kk->sync(Host,CINFO_MASK|CELL_MASK|SINFO_MASK|CUSTOM_MASK);
   int nglocal = grid->nlocal;
 
   if (nrho_custom_flag) nrho_custom = grid->edvec[grid->ewhich[nrho_custom_index]];

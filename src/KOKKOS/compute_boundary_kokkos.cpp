@@ -81,6 +81,7 @@ void ComputeBoundaryKokkos::compute_array()
   // sum tallies across processors
 
   if (sparta->kokkos->gpu_aware_flag) {
+    k_array.clear_sync_state();   // device side is overwritten wholesale
     MPI_Allreduce(d_myarray.data(),d_array.data(),nrow*ntotal,
                   MPI_DOUBLE,MPI_SUM,world);
     k_array.modify_device();
@@ -88,6 +89,7 @@ void ComputeBoundaryKokkos::compute_array()
   } else {
     k_myarray.modify_device();
     k_myarray.sync_host();
+    k_array.clear_sync_state();   // host side is overwritten wholesale
     MPI_Allreduce(k_myarray.view_host().data(),k_array.view_host().data(),nrow*ntotal,
                   MPI_DOUBLE,MPI_SUM,world);
   }
@@ -101,6 +103,10 @@ void ComputeBoundaryKokkos::compute_array()
       for (int i = 0; i < size_array_rows; i++)
         array[i][j] /= normflux[i];
   }
+
+  // both branches leave the freshest data on the host
+
+  k_array.modify_host();
 }
 
 /* ---------------------------------------------------------------------- */

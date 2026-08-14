@@ -46,14 +46,16 @@ void FixGridCheckKokkos::end_of_step()
   if (update->ntimestep % nevery) return;
 
   auto particleKK = dynamic_cast<ParticleKokkos*>(particle);
-  particleKK->k_particles.sync_device();
-  auto d_particles = particleKK->k_particles.view_device();
   auto gridKK = dynamic_cast<GridKokkos*>(grid);
-  gridKK->k_cells.sync_device();
+
+  // go through the mask API like every other Kokkos class so the
+  // prewrap/auto_sync bookkeeping is honored
+
+  particleKK->sync(Device,PARTICLE_MASK);
+  gridKK->sync(Device,CELL_MASK|CINFO_MASK|SINFO_MASK);
+  auto d_particles = particleKK->k_particles.view_device();
   auto d_cells = gridKK->k_cells.view_device();
-  gridKK->k_cinfo.sync_device();
   auto d_cinfo = gridKK->k_cinfo.view_device();
-  gridKK->k_sinfo.sync_device();
   auto d_sinfo = gridKK->k_sinfo.view_device();
   int nglocal = grid->nlocal;
   int nlocal = particle->nlocal;
@@ -177,16 +179,23 @@ void FixGridCheckKokkos::end_of_step()
   if (outflag == ERROR && nflag) {
     auto h_particle_problems = Kokkos::create_mirror_view(d_particle_problems);
     Kokkos::deep_copy(h_particle_problems, d_particle_problems);
+
+    // the run loop leaves particle (and possibly cell) data
+    //  device-modified; sync or the diagnostics print stale values
+
+    particleKK->sync(Host,PARTICLE_MASK);
+    gridKK->sync(Host,CELL_MASK);
     auto cells = grid->cells;
     auto particles = particle->particles;
-    char str[128];
+    char str[192];
     for (int i = 0; i < nlocal; ++i) {
       auto icell = particles[i].icell;
       if (h_particle_problems(i) & IS_IN_INVALID_CELL) {
+        // icell is out of range here, so don't index cells[] with it
         sprintf(str,
-                "Particle %d,%d on proc %d is in invalid cell " CELLINT_FORMAT
+                "Particle %d,%d on proc %d is in invalid cell index %d"
                 " on timestep " BIGINT_FORMAT,
-                i,particles[i].id,comm->me,cells[icell].id,update->ntimestep);
+                i,particles[i].id,comm->me,icell,update->ntimestep);
         error->one(FLERR,str);
       }
       if (h_particle_problems(i) & IS_OUTSIDE_CELL) {

@@ -141,8 +141,19 @@ void FixAveGridKokkos::init()
     error->all(FLERR,"Variable name for fix ave/grid does not exist");
       value2index[m] = ivariable;
 
+    } else if (which[m] == CUSTOM) {
+      int icustom = grid->find_custom(ids[m]);
+      if (icustom < 0)
+    error->all(FLERR,"Custom attribute for fix ave/grid does not exist");
+      value2index[m] = icustom;
+
     } else value2index[m] = -1;
   }
+
+  // reallocate per-grid data if necessary
+
+  nglocal = grid->nlocal;
+  grow_percell(0);
 }
 
 /* ----------------------------------------------------------------------
@@ -244,6 +255,14 @@ void FixAveGridKokkos::end_of_step()
 
     } else if (which[m] == VARIABLE) {
       k = umap[m][0];
+
+      // the variable is summed into the host tally, and earlier values in
+      // this loop (and earlier repeats) accumulated into the device tally,
+      // so pull the device tally to the host first, else the sync_device
+      // below overwrites the device accumulation with stale host data
+
+      k_tally.modify_device();
+      k_tally.sync_host();
       input->variable->compute_grid(n,&tally[0][k],ntotal,1);
       k_tally.modify_host();
       k_tally.sync_device();
@@ -511,14 +530,19 @@ void FixAveGridKokkos::operator()(TagFixAveGrid_Norm_array_grid, const int &i) c
 void FixAveGridKokkos::grow_percell(int nnew)
 {
   if (nglocal+nnew < maxgrid) return;
-  maxgrid += DELTAGRID;
+
+  int maxgridold = maxgrid;
+  while (maxgrid < nglocal+nnew) maxgrid += DELTAGRID;
   int n = maxgrid;
 
-  // resize with the device as the source of truth, then refresh the host
-  // so both copies hold valid data and no dangling modify flag remains
-  // (this is called from the grid migration hooks, which then edit the host)
+  // resize with the host as the source of truth: this is called from init()
+  // and from the host-side grid migration hooks, which may have written the
+  // host arrays without flagging them yet, and DualView::resize discards
+  // the non-authoritative side.  Pull any pending device data to the host
+  // first, bias the resize to preserve the host, then refresh the device
 
-  pergrid_sync(Device);
+  pergrid_sync(Host);
+  pergrid_modify(Host);
 
   if (nvalues == 1) {
     memoryKK->grow_kokkos(k_vector_grid,vector_grid,n,"ave/grid:vector_grid");
@@ -531,7 +555,18 @@ void FixAveGridKokkos::grow_percell(int nnew)
   memoryKK->grow_kokkos(k_tally,tally,n,ntotal,"ave/grid:tally");
   d_tally = k_tally.view_device();
 
-  pergrid_sync(Host);
+  // zero the new tail of the output array like the base class does
+
+  if (nvalues == 1)
+    for (int i = maxgridold; i < maxgrid; i++)
+      vector_grid[i] = 0.0;
+  else
+    for (int i = maxgridold; i < maxgrid; i++)
+      for (int j = 0; j < nvalues; j++)
+        array_grid[i][j] = 0.0;
+
+  pergrid_modify(Host);
+  pergrid_sync(Device);
 }
 
 /* ----------------------------------------------------------------------

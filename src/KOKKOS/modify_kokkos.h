@@ -41,6 +41,7 @@ class ModifyKokkos : public Modify {
  private:
   class ParticleKokkos* particle_kk;
   class GridKokkos* grid_kk;
+  class SurfKokkos* surf_kk;
 };
 
 }

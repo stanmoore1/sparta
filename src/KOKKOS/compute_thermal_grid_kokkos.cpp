@@ -61,7 +61,6 @@ void ComputeThermalGridKokkos::compute_per_grid()
     ComputeThermalGrid::compute_per_grid();
   } else {
     compute_per_grid_kokkos();
-    k_tally.modify_device();
     k_tally.sync_host();
   }
 }
@@ -116,6 +115,8 @@ void ComputeThermalGridKokkos::compute_per_grid_kokkos()
     Kokkos::Experimental::contribute(d_tally, dup_tally);
     dup_tally = {}; // free duplicated memory
   }
+
+  k_tally.modify_device();
 
   d_particles = t_particle_1d(); // destroy reference to reduce memory use
   d_plist = DAT::t_int_2d(); // destroy reference to reduce memory use
@@ -228,12 +229,14 @@ post_process_grid_kokkos(int index, int nsample,
   int hi = nglocal;
   //k = 0;
 
+  int vector_grid_out = 0;
   if (!d_etally.data()) {
     nsample = 1;
     d_etally = d_tally;
     emap = map[index];
     d_vec = d_vector_grid;
     nstride = 1;
+    vector_grid_out = 1;
   }
 
   this->d_etally = d_etally;
@@ -264,6 +267,8 @@ post_process_grid_kokkos(int index, int nsample,
   copymode = 1;
   Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagComputeThermalGrid_post_process_grid>(lo,hi),*this);
   copymode = 0;
+
+  if (vector_grid_out) k_vector_grid.modify_device();
 }
 
 /* ---------------------------------------------------------------------- */

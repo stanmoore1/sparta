@@ -285,6 +285,16 @@ void ParticleKokkos::remove_custom(int index)
   k_eiarray.sync_device();
   k_edvec.sync_device();
   k_edarray.sync_device();
+
+  // the ewhich/eicol/edcol index maps were compacted on the host too;
+  // push them or device code keeps using the pre-removal slot mapping
+
+  k_ewhich.modify_host();
+  k_eicol.modify_host();
+  k_edcol.modify_host();
+  k_ewhich.sync_device();
+  k_eicol.sync_device();
+  k_edcol.sync_device();
 }
 
 /* ----------------------------------------------------------------------

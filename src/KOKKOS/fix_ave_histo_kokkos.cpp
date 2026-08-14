@@ -372,6 +372,7 @@ void FixAveHistoKokkos::end_of_step()
     stats[2] = stats_all[2];
     stats[3] = stats_all[3];
     for (int i = 0; i < nbins; i++) bin[i] = bin_all[i];
+    k_bin.modify_host();
   }
 
   // if ave = ONE, only single Nfreq timestep value is needed

@@ -100,6 +100,13 @@ void ReactBirdKokkos::init()
 {
   ReactBird::init();
 
+  // ReactBird::init() zeroed the host tally_reactions (which aliases
+  // k_tally_reactions' host view); push the reset to the device, else
+  // tallies accumulate across run commands on GPU builds
+
+  k_tally_reactions.modify_host();
+  k_tally_reactions.sync_device();
+
   deallocate_views_of_views();
 
   // copy data into device views
@@ -165,6 +172,7 @@ double ReactBirdKokkos::extract_tally(int m)
     tally_flag = 1;
 
     if (sparta->kokkos->gpu_aware_flag) {
+      k_tally_reactions.modify_device();   // kernels tallied on device
       MPI_Allreduce(d_tally_reactions.data(),k_tally_reactions_all.view_device().data(),nlist,
                     MPI_SPARTA_BIGINT,MPI_SUM,world);
       k_tally_reactions_all.modify_device();
@@ -174,6 +182,7 @@ double ReactBirdKokkos::extract_tally(int m)
       k_tally_reactions.sync_host();
       MPI_Allreduce(k_tally_reactions.view_host().data(),k_tally_reactions_all.view_host().data(),nlist,
                     MPI_SPARTA_BIGINT,MPI_SUM,world);
+      k_tally_reactions_all.modify_host();
     }
 
   }

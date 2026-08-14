@@ -541,6 +541,12 @@ void ParticleKokkos::post_weight()
     k_map.modify_device();
     k_map.sync_host();
 
+    // the loop below edits the host copy in place: mark it modified now so
+    // a mid-loop k_map.resize() preserves the host data (DualView::resize
+    // keeps the side with the newest modify flag and discards the other)
+
+    k_map.modify_host();
+
     // nlocal_original-1 = index of last original particle
 
     int nlocal_original = nlocal;

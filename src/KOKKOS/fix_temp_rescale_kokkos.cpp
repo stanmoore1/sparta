@@ -83,6 +83,8 @@ void FixTempRescaleKokkos::end_of_step_no_average(double t_target_in)
 
   copymode = 0;
 
+  particle_kk->modify(Device,PARTICLE_MASK);
+
   d_plist = {};
 }
 
@@ -171,8 +173,8 @@ void FixTempRescaleKokkos::end_of_step_average(double t_target_in)
   GridKokkos* grid_kk = (GridKokkos*) grid;
   d_cellcount = grid_kk->d_cellcount;
   d_plist = grid_kk->d_plist;
-  d_cells = grid_kk->k_cells.view_device();
   grid_kk->sync(Device,CELL_MASK);
+  d_cells = grid_kk->k_cells.view_device();
 
   int nglocal = grid->nlocal;
 
@@ -217,6 +219,9 @@ void FixTempRescaleKokkos::end_of_step_average(double t_target_in)
   Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagFixTempRescale_end_of_step_average2>(0,nglocal),*this);
 
   copymode = 0;
+
+  particle_kk->modify(Device,PARTICLE_MASK);
+
   d_plist = {};
 }
 

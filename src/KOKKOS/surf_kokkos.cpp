@@ -205,8 +205,11 @@ void SurfKokkos::grow_own(int old)
       if (mylines == NULL)
           surf_kk->k_mylines = tdual_line_1d("surf:mylines",nown);
       else {
-        surf_kk->sync(Host,LINE_MASK);
-        surf_kk->modify(Host,LINE_MASK); // force resize on host
+        // no mask covers k_mylines, so bias its own flags directly:
+        // without this the resize preserves the device side and
+        // re-mirrors the host without copying, destroying mylines
+        surf_kk->k_mylines.sync_host();
+        surf_kk->k_mylines.modify_host(); // force resize on host
         surf_kk->k_mylines.resize(nown);
       }
       mylines = surf_kk->k_mylines.view_host().data();
@@ -214,8 +217,8 @@ void SurfKokkos::grow_own(int old)
       if (mytris == NULL)
           surf_kk->k_mytris = tdual_tri_1d("surf:mytris",nown);
       else {
-        surf_kk->sync(Host,TRI_MASK);
-        surf_kk->modify(Host,TRI_MASK); // force resize on host
+        surf_kk->k_mytris.sync_host();
+        surf_kk->k_mytris.modify_host(); // force resize on host
         surf_kk->k_mytris.resize(nown);
       }
       mytris = surf_kk->k_mytris.view_host().data();
@@ -227,9 +230,12 @@ void SurfKokkos::grow_own(int old)
 
 void SurfKokkos::sync(ExecutionSpace space, unsigned int mask)
 {
-  if (sparta->kokkos->prewrap)
+  if (sparta->kokkos->prewrap) {
     if (space == Device)
       error->one(FLERR,"Sync Device before wrap");
+    else
+      return;
+  }
 
   if (space == Device) {
     if (sparta->kokkos->auto_sync)
@@ -306,30 +312,45 @@ void SurfKokkos::sync(ExecutionSpace space, unsigned int mask)
 
 void SurfKokkos::modify(ExecutionSpace space, unsigned int mask)
 {
-  if (sparta->kokkos->prewrap)
+  if (sparta->kokkos->prewrap) {
     if (space == Device)
       error->one(FLERR,"Modify Device before wrap");
+    else
+      return;
+  }
 
   if (space == Device) {
     if (mask & LINE_MASK) k_lines.modify_device();
     if (mask & TRI_MASK) k_tris.modify_device();
     if (mask & CUSTOM_MASK) {
       if (ncustom) {
-        if (ncustom_ivec)
-          for (int i = 0; i < ncustom_ivec; i++)
+        if (ncustom_ivec) {
+          for (int i = 0; i < ncustom_ivec; i++) {
             k_eivec.view_host()[i].k_view.modify_device();
+            k_eivec_local.view_host()[i].k_view.modify_device();
+          }
+        }
 
-        if (ncustom_iarray)
-          for (int i = 0; i < ncustom_iarray; i++)
+        if (ncustom_iarray) {
+          for (int i = 0; i < ncustom_iarray; i++) {
             k_eiarray.view_host()[i].k_view.modify_device();
+            k_eiarray_local.view_host()[i].k_view.modify_device();
+          }
+        }
 
-        if (ncustom_dvec)
-          for (int i = 0; i < ncustom_dvec; i++)
+        if (ncustom_dvec) {
+          for (int i = 0; i < ncustom_dvec; i++) {
             k_edvec.view_host()[i].k_view.modify_device();
+            k_edvec_local.view_host()[i].k_view.modify_device();
+          }
+        }
 
-        if (ncustom_darray)
-          for (int i = 0; i < ncustom_darray; i++)
+        if (ncustom_darray) {
+          for (int i = 0; i < ncustom_darray; i++) {
             k_edarray.view_host()[i].k_view.modify_device();
+            k_edarray_local.view_host()[i].k_view.modify_device();
+          }
+        }
       }
     }
 
@@ -340,21 +361,33 @@ void SurfKokkos::modify(ExecutionSpace space, unsigned int mask)
     if (mask & TRI_MASK) k_tris.modify_host();
     if (mask & CUSTOM_MASK) {
       if (ncustom) {
-        if (ncustom_ivec)
-          for (int i = 0; i < ncustom_ivec; i++)
+        if (ncustom_ivec) {
+          for (int i = 0; i < ncustom_ivec; i++) {
             k_eivec.view_host()[i].k_view.modify_host();
+            k_eivec_local.view_host()[i].k_view.modify_host();
+          }
+        }
 
-        if (ncustom_iarray)
-          for (int i = 0; i < ncustom_iarray; i++)
+        if (ncustom_iarray) {
+          for (int i = 0; i < ncustom_iarray; i++) {
             k_eiarray.view_host()[i].k_view.modify_host();
+            k_eiarray_local.view_host()[i].k_view.modify_host();
+          }
+        }
 
-        if (ncustom_dvec)
-          for (int i = 0; i < ncustom_dvec; i++)
+        if (ncustom_dvec) {
+          for (int i = 0; i < ncustom_dvec; i++) {
             k_edvec.view_host()[i].k_view.modify_host();
+            k_edvec_local.view_host()[i].k_view.modify_host();
+          }
+        }
 
-        if (ncustom_darray)
-          for (int i = 0; i < ncustom_darray; i++)
+        if (ncustom_darray) {
+          for (int i = 0; i < ncustom_darray; i++) {
             k_edarray.view_host()[i].k_view.modify_host();
+            k_edarray_local.view_host()[i].k_view.modify_host();
+          }
+        }
       }
     }
   }

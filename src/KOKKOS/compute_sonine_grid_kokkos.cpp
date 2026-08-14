@@ -84,7 +84,6 @@ void ComputeSonineGridKokkos::compute_per_grid()
     ComputeSonineGrid::compute_per_grid();
   } else {
     compute_per_grid_kokkos();
-    k_tally.modify_device();
     k_tally.sync_host();
   }
 }
@@ -156,6 +155,8 @@ void ComputeSonineGridKokkos::compute_per_grid_kokkos()
     Kokkos::Experimental::contribute(d_tally, dup_tally);
     dup_tally = {}; // free duplicated memory
   }
+
+  k_tally.modify_device();
 
   d_plist = {};
 }
@@ -376,10 +377,12 @@ void ComputeSonineGridKokkos::post_process_grid_kokkos(int index,
   int lo = 0;
   int hi = nglocal;
 
+  int vector_grid_out = 0;
   if (!d_etally.data()) {
     d_etally = d_tally;
     emap = map[index];
     d_vec = d_vector_grid;
+    vector_grid_out = 1;
   }
 
   this->d_etally = d_etally;
@@ -390,6 +393,8 @@ void ComputeSonineGridKokkos::post_process_grid_kokkos(int index,
   copymode = 1;
   Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagComputeSonineGrid_post_process_grid>(lo,hi),*this);
   copymode = 0;
+
+  if (vector_grid_out) k_vector_grid.modify_device();
 }
 
 /* ---------------------------------------------------------------------- */

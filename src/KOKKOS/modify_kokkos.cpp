@@ -25,6 +25,7 @@
 #include "error.h"
 #include "particle_kokkos.h"
 #include "grid_kokkos.h"
+#include "surf_kokkos.h"
 #include "kokkos.h"
 
 using namespace SPARTA_NS;
@@ -42,6 +43,7 @@ ModifyKokkos::ModifyKokkos(SPARTA *sparta) : Modify(sparta)
 {
   particle_kk = (ParticleKokkos*) particle;
   grid_kk = (GridKokkos*) grid;
+  surf_kk = (SurfKokkos*) surf;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -60,6 +62,10 @@ void ModifyKokkos::start_of_step()
   for (int i = 0; i < n_start_of_step; i++) {
     int j = list_start_of_step[i];
     particle_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
+    if (!fix[j]->kokkos_flag) {
+      grid_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
+      surf_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
+    }
     int prev_auto_sync = sparta->kokkos->auto_sync;
     if (!fix[j]->kokkos_flag) sparta->kokkos->auto_sync = 1;
 
@@ -67,6 +73,10 @@ void ModifyKokkos::start_of_step()
 
     sparta->kokkos->auto_sync = prev_auto_sync;
     particle_kk->modify(fix[j]->execution_space,fix[j]->datamask_modify);
+    if (!fix[j]->kokkos_flag) {
+      grid_kk->modify(fix[j]->execution_space,fix[j]->datamask_modify);
+      surf_kk->modify(fix[j]->execution_space,fix[j]->datamask_modify);
+    }
   }
 }
 
@@ -81,6 +91,10 @@ void ModifyKokkos::end_of_step()
     if (update->ntimestep % end_of_step_every[i] == 0) {
       int j = list_end_of_step[i];
       particle_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
+      if (!fix[j]->kokkos_flag) {
+        grid_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
+        surf_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
+      }
       int prev_auto_sync = sparta->kokkos->auto_sync;
       if (!fix[j]->kokkos_flag) sparta->kokkos->auto_sync = 1;
 
@@ -88,6 +102,10 @@ void ModifyKokkos::end_of_step()
 
       sparta->kokkos->auto_sync = prev_auto_sync;
       particle_kk->modify(fix[j]->execution_space,fix[j]->datamask_modify);
+      if (!fix[j]->kokkos_flag) {
+        grid_kk->modify(fix[j]->execution_space,fix[j]->datamask_modify);
+        surf_kk->modify(fix[j]->execution_space,fix[j]->datamask_modify);
+      }
     }
 }
 
@@ -102,6 +120,10 @@ int ModifyKokkos::pack_grid_one(int icell, char *buf, int memflag)
   for (int i = 0; i < n_pergrid; i++) {
     int j = list_pergrid[i];
     particle_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
+    if (!fix[j]->kokkos_flag) {
+      grid_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
+      surf_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
+    }
     int prev_auto_sync = sparta->kokkos->auto_sync;
     if (!fix[j]->kokkos_flag) sparta->kokkos->auto_sync = 1;
 
@@ -109,6 +131,10 @@ int ModifyKokkos::pack_grid_one(int icell, char *buf, int memflag)
 
     sparta->kokkos->auto_sync = prev_auto_sync;
     particle_kk->modify(fix[j]->execution_space,fix[j]->datamask_modify);
+    if (!fix[j]->kokkos_flag) {
+      grid_kk->modify(fix[j]->execution_space,fix[j]->datamask_modify);
+      surf_kk->modify(fix[j]->execution_space,fix[j]->datamask_modify);
+    }
   }
   return ptr-buf;
 }
@@ -124,6 +150,10 @@ int ModifyKokkos::unpack_grid_one(int icell, char *buf)
   for (int i = 0; i < n_pergrid; i++) {
     int j = list_pergrid[i];
     particle_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
+    if (!fix[j]->kokkos_flag) {
+      grid_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
+      surf_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
+    }
     int prev_auto_sync = sparta->kokkos->auto_sync;
     if (!fix[j]->kokkos_flag) sparta->kokkos->auto_sync = 1;
 
@@ -131,6 +161,10 @@ int ModifyKokkos::unpack_grid_one(int icell, char *buf)
 
     sparta->kokkos->auto_sync = prev_auto_sync;
     particle_kk->modify(fix[j]->execution_space,fix[j]->datamask_modify);
+    if (!fix[j]->kokkos_flag) {
+      grid_kk->modify(fix[j]->execution_space,fix[j]->datamask_modify);
+      surf_kk->modify(fix[j]->execution_space,fix[j]->datamask_modify);
+    }
   }
   return ptr-buf;
 }
@@ -145,6 +179,10 @@ void ModifyKokkos::copy_grid_one(int icell, int jcell)
   for (int i = 0; i < n_pergrid; i++) {
     int j = list_pergrid[i];
     particle_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
+    if (!fix[j]->kokkos_flag) {
+      grid_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
+      surf_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
+    }
     int prev_auto_sync = sparta->kokkos->auto_sync;
     if (!fix[j]->kokkos_flag) sparta->kokkos->auto_sync = 1;
 
@@ -152,6 +190,10 @@ void ModifyKokkos::copy_grid_one(int icell, int jcell)
 
     sparta->kokkos->auto_sync = prev_auto_sync;
     particle_kk->modify(fix[j]->execution_space,fix[j]->datamask_modify);
+    if (!fix[j]->kokkos_flag) {
+      grid_kk->modify(fix[j]->execution_space,fix[j]->datamask_modify);
+      surf_kk->modify(fix[j]->execution_space,fix[j]->datamask_modify);
+    }
   }
 }
 
@@ -165,6 +207,10 @@ void ModifyKokkos::add_grid_one()
   for (int i = 0; i < n_pergrid; i++) {
     int j = list_pergrid[i];
     particle_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
+    if (!fix[j]->kokkos_flag) {
+      grid_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
+      surf_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
+    }
     int prev_auto_sync = sparta->kokkos->auto_sync;
     if (!fix[j]->kokkos_flag) sparta->kokkos->auto_sync = 1;
 
@@ -172,6 +218,10 @@ void ModifyKokkos::add_grid_one()
 
     sparta->kokkos->auto_sync = prev_auto_sync;
     particle_kk->modify(fix[j]->execution_space,fix[j]->datamask_modify);
+    if (!fix[j]->kokkos_flag) {
+      grid_kk->modify(fix[j]->execution_space,fix[j]->datamask_modify);
+      surf_kk->modify(fix[j]->execution_space,fix[j]->datamask_modify);
+    }
   }
 }
 
@@ -185,6 +235,10 @@ void ModifyKokkos::reset_grid_count(int nlocal)
   for (int i = 0; i < n_pergrid; i++) {
     int j = list_pergrid[i];
     particle_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
+    if (!fix[j]->kokkos_flag) {
+      grid_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
+      surf_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
+    }
     int prev_auto_sync = sparta->kokkos->auto_sync;
     if (!fix[j]->kokkos_flag) sparta->kokkos->auto_sync = 1;
 
@@ -192,6 +246,10 @@ void ModifyKokkos::reset_grid_count(int nlocal)
 
     sparta->kokkos->auto_sync = prev_auto_sync;
     particle_kk->modify(fix[j]->execution_space,fix[j]->datamask_modify);
+    if (!fix[j]->kokkos_flag) {
+      grid_kk->modify(fix[j]->execution_space,fix[j]->datamask_modify);
+      surf_kk->modify(fix[j]->execution_space,fix[j]->datamask_modify);
+    }
   }
 }
 
@@ -205,6 +263,10 @@ void ModifyKokkos::grid_changed()
   for (int i = 0; i < n_pergrid; i++) {
     int j = list_pergrid[i];
     particle_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
+    if (!fix[j]->kokkos_flag) {
+      grid_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
+      surf_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
+    }
     int prev_auto_sync = sparta->kokkos->auto_sync;
     if (!fix[j]->kokkos_flag) sparta->kokkos->auto_sync = 1;
 
@@ -212,6 +274,10 @@ void ModifyKokkos::grid_changed()
 
     sparta->kokkos->auto_sync = prev_auto_sync;
     particle_kk->modify(fix[j]->execution_space,fix[j]->datamask_modify);
+    if (!fix[j]->kokkos_flag) {
+      grid_kk->modify(fix[j]->execution_space,fix[j]->datamask_modify);
+      surf_kk->modify(fix[j]->execution_space,fix[j]->datamask_modify);
+    }
   }
 }
 
@@ -225,6 +291,10 @@ void ModifyKokkos::custom_surf_changed()
   for (int i = 0; i < n_custom_surf_changed; i++) {
     int j = list_custom_surf_changed[i];
     particle_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
+    if (!fix[j]->kokkos_flag) {
+      grid_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
+      surf_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
+    }
     int prev_auto_sync = sparta->kokkos->auto_sync;
     if (!fix[j]->kokkos_flag) sparta->kokkos->auto_sync = 1;
 
@@ -232,6 +302,10 @@ void ModifyKokkos::custom_surf_changed()
 
     sparta->kokkos->auto_sync = prev_auto_sync;
     particle_kk->modify(fix[j]->execution_space,fix[j]->datamask_modify);
+    if (!fix[j]->kokkos_flag) {
+      grid_kk->modify(fix[j]->execution_space,fix[j]->datamask_modify);
+      surf_kk->modify(fix[j]->execution_space,fix[j]->datamask_modify);
+    }
   }
 }
 
@@ -245,6 +319,10 @@ void ModifyKokkos::update_custom(int index, double temp_thermal,
   for (int i = 0; i < n_update_custom; i++) {
     int j = list_update_custom[i];
     particle_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
+    if (!fix[j]->kokkos_flag) {
+      grid_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
+      surf_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
+    }
     int prev_auto_sync = sparta->kokkos->auto_sync;
     if (!fix[j]->kokkos_flag) sparta->kokkos->auto_sync = 1;
 
@@ -253,6 +331,10 @@ void ModifyKokkos::update_custom(int index, double temp_thermal,
 
     sparta->kokkos->auto_sync = prev_auto_sync;
     particle_kk->modify(fix[j]->execution_space,fix[j]->datamask_modify);
+    if (!fix[j]->kokkos_flag) {
+      grid_kk->modify(fix[j]->execution_space,fix[j]->datamask_modify);
+      surf_kk->modify(fix[j]->execution_space,fix[j]->datamask_modify);
+    }
   }
 }
 
@@ -265,6 +347,10 @@ void ModifyKokkos::gas_react(int index)
   for (int i = 0; i < n_gas_react; i++) {
     int j = list_gas_react[i];
     particle_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
+    if (!fix[j]->kokkos_flag) {
+      grid_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
+      surf_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
+    }
     int prev_auto_sync = sparta->kokkos->auto_sync;
     if (!fix[j]->kokkos_flag) sparta->kokkos->auto_sync = 1;
 
@@ -272,6 +358,10 @@ void ModifyKokkos::gas_react(int index)
 
     sparta->kokkos->auto_sync = prev_auto_sync;
     particle_kk->modify(fix[j]->execution_space,fix[j]->datamask_modify);
+    if (!fix[j]->kokkos_flag) {
+      grid_kk->modify(fix[j]->execution_space,fix[j]->datamask_modify);
+      surf_kk->modify(fix[j]->execution_space,fix[j]->datamask_modify);
+    }
   }
 }
 
@@ -279,17 +369,28 @@ void ModifyKokkos::gas_react(int index)
    invoke surf_react() method, only for relevant fixes
 ------------------------------------------------------------------------- */
 
-void ModifyKokkos::surf_react(Particle::OnePart *iorig, int &i, int &)
+void ModifyKokkos::surf_react(Particle::OnePart *iorig, int &i, int &jp)
 {
   for (int m = 0; m < n_surf_react; m++) {
     int j = list_surf_react[m];
     particle_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
+    if (!fix[j]->kokkos_flag) {
+      grid_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
+      surf_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
+    }
     int prev_auto_sync = sparta->kokkos->auto_sync;
     if (!fix[j]->kokkos_flag) sparta->kokkos->auto_sync = 1;
 
-    fix[list_surf_react[m]]->surf_react(iorig,i,j);
+    // pass the caller's second-product particle index through, like
+    // Modify::surf_react does -- NOT the fix index j
+
+    fix[list_surf_react[m]]->surf_react(iorig,i,jp);
 
     sparta->kokkos->auto_sync = prev_auto_sync;
     particle_kk->modify(fix[j]->execution_space,fix[j]->datamask_modify);
+    if (!fix[j]->kokkos_flag) {
+      grid_kk->modify(fix[j]->execution_space,fix[j]->datamask_modify);
+      surf_kk->modify(fix[j]->execution_space,fix[j]->datamask_modify);
+    }
   }
 }

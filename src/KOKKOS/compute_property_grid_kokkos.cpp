@@ -93,10 +93,8 @@ void ComputePropertyGridKokkos::compute_per_grid()
   } else {
     compute_per_grid_kokkos();
     if (nvalues == 1) {
-      k_vector_grid.modify_device();
       k_vector_grid.sync_host();
     } else {
-      k_array_grid.modify_device();
       k_array_grid.sync_host();
     }
   }
@@ -106,9 +104,9 @@ void ComputePropertyGridKokkos::compute_per_grid()
 void ComputePropertyGridKokkos::compute_per_grid_kokkos()
 {
   GridKokkos* grid_kk = ((GridKokkos*)grid);
+  grid_kk->sync(Device,CELL_MASK|CINFO_MASK);
   d_cells = grid_kk->k_cells.view_device();
   d_cinfo = grid_kk->k_cinfo.view_device();
-  grid_kk->sync(Device,CELL_MASK|CINFO_MASK);
 
   copymode = 1;
   if (nvalues == 1)
@@ -116,6 +114,9 @@ void ComputePropertyGridKokkos::compute_per_grid_kokkos()
   else
     Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagComputePropertyGrid_ComputePerGrid_array>(0,nglocal),*this);
   copymode = 0;
+
+  if (nvalues == 1) k_vector_grid.modify_device();
+  else k_array_grid.modify_device();
 }
 
 /* ---------------------------------------------------------------------- */
