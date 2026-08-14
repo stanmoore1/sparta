@@ -411,12 +411,39 @@ However, if there are no surfaces and the grid is uniform (only a
 single level for all cells without further refinement) and the
 {optmove} keyword is set to {yes} then the particle will be moved to
 its final position in a single step, skipping all intermediate grid
-cell crossings, which can improve performance. If a particle hits a
-box boundary or leaves the owning proc's subdomain (including the
-ghost cell region), then the normal (non-optimized) move algorithm
-will be used for that specific particle on that timestep. The {optmove
-yes} option cannot be used when surfaces are defined, the grid is not
-uniform, or when fix adapt is enabled, otherwise an error will result.
+cell crossings, which can improve performance. If a particle leaves
+the owning proc's subdomain (including the ghost cell region), then
+the normal (non-optimized) move algorithm will be used for that
+specific particle on that timestep.
+
+A particle that ends the timestep outside the global box needs a
+"boundary"_boundary.html condition applied. For a {p} (periodic) or
+{r} (specular reflection) face this is a translation or a reflection
+about the face, which the optimized move performs itself. For an {o}
+(outflow) or {s} (surface) face it is not, and the particle uses the
+normal move algorithm for that timestep. This matters for performance
+because the processors that own the edges of the global box are the
+only ones with such particles, so leaving those faces to the normal
+move makes those processors slower than the rest, which in a parallel
+run costs every processor the difference. Note also that on a GPU the
+particles are moved in lockstep in groups, so one particle taking the
+normal move algorithm slows down every other particle in its group.
+
+On any timestep where a "compute boundary"_compute_boundary.html is
+being invoked, all box boundary crossings use the normal move
+algorithm, since only it tallies them.
+
+The {optmove yes} option cannot be used when surfaces are defined, the
+grid is not uniform, the simulation is axisymmetric, or when fix adapt
+is enabled, otherwise an error will result.
+
+Note that the "Cells touched" and "Cell-touches/particle/step"
+statistics printed at the end of a run count only particles that used
+the normal move algorithm, since the optimized move never visits the
+intermediate cells. With {optmove yes} these values are therefore a
+measure of how often the optimized move was not applicable, not of how
+far particles moved. A value near zero means it was used for nearly
+every particle.
 
 [Restrictions:]
 

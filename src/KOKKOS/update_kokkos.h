@@ -107,7 +107,28 @@ class UpdateKokkos : public Update {
   double dx,dy,dz,Lx,Ly,Lz;
   double xlo,ylo,zlo,xhi,yhi,zhi;
   int ncx,ncy,ncz;
+
+  // what the fast path may do for itself on each global boundary face, indexed
+  // XLO..ZHI as domain->bflag is.  0 = hand the particle to the standard move,
+  // 1 = periodic, translate by the box length, 2 = specular, mirror about the
+  // face and negate the normal velocity component.
+  // set in move() rather than init() because it depends on nboundary_tally,
+  // which is per-step
+
+  int bcopt[6];
+
   GridKokkos::hash_type hash_kk;
+
+  // dense cell lookup, see GridKokkos::update_halo_index().  extent 0 when
+  // unavailable, in which case the fast path uses hash_kk
+
+  DAT::t_int_1d d_halo_index;
+  int halo_ilo,halo_jlo,halo_klo;
+  int halo_nx,halo_ny,halo_nz;
+
+  // retake hash_kk and d_halo_index from the grid, see its definition
+
+  void grid_index_refresh();
 
   t_cell_1d d_cells;
   t_sinfo_1d d_sinfo;
@@ -243,6 +264,15 @@ class UpdateKokkos : public Update {
 
   KOKKOS_INLINE_FUNCTION
   int split2d(int, double*) const;
+
+  // the two steps of the optimized move, see their definitions and the OPT
+  // block of the move kernel
+
+  template < int DIM > KOKKOS_INLINE_FUNCTION
+  int optmove_bc(const double*, double*, int&) const;
+
+  template < int DIM > KOKKOS_INLINE_FUNCTION
+  int optmove_cell(const double*) const;
 
   // variants of moveperturb method
   // adjust end-of-move x,v due to perturbation on straight-line advection
