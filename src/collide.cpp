@@ -940,11 +940,13 @@ template < int DIM, int GASTALLY > void Collide::collisions_one_subcell()
       // kpart was just added to particle list, so index = nlocal-1
       // particle data structs may have been realloced by kpart
 
+      int subcell_regrow = 0;
       if (kpart) {
         if (np == npmax) {
           npmax += DELTAPART;
           memory->grow(plist,npmax,"collide:plist");
           subcell_alloc();
+          subcell_regrow = 1;
         }
         set_nn(np);
         plist[np++] = particle->nlocal-1;
@@ -952,10 +954,17 @@ template < int DIM, int GASTALLY > void Collide::collisions_one_subcell()
       }
 
       // if plist was changed by a reaction,
-      // rebin particles into subcells so vectors stay consistent with plist
+      // keep the subcell vectors consistent with plist
       // keep same subcell grid even though np has changed by one
+      // a deleted particle swaps plist[np] down into slot j, which
+      //   invalidates the stored plist indices, so rebin the whole cell
+      // subcell_alloc() above discards the vectors, so a grow also
+      //   requires a full rebin
+      // a created particle is appended at the end of plist and moves no
+      //   other particle, so it can be binned by itself in O(1)
 
-      if (!jpart || kpart) subcell_rebin(DIM,np,nsub,lo,ood);
+      if (!jpart || subcell_regrow) subcell_rebin(DIM,np,nsub,lo,ood);
+      else if (kpart) subcell_bin_one(DIM,np-1,nsub,lo,ood);
     }
   }
 }
@@ -1026,6 +1035,38 @@ void Collide::subcell_rebin(int dim, int np, int nsub, double *lo, double *ood)
     subcell_first[isc] = n;
     subcell_count[isc]++;
   }
+}
+
+/* ----------------------------------------------------------------------
+   bin a single particle at index n of plist into its subcell
+   used when a reaction appends one particle to the end of plist,
+     which leaves the subcell index of every other particle unchanged
+   binning arithmetic is identical to subcell_rebin()
+   n is the largest plist index, and subcell_rebin() chains particles in
+     order of decreasing index, so pushing n onto the front of its chain
+     leaves the same chain ordering a full rebin would produce
+------------------------------------------------------------------------- */
+
+void Collide::subcell_bin_one(int dim, int n, int nsub, double *lo, double *ood)
+{
+  int ix,iy,iz,isc;
+  double *x;
+
+  x = particle->particles[plist[n]].x;
+  ix = static_cast<int> ((x[0]-lo[0])*ood[0]);
+  ix = MIN(MAX(ix,0),nsub-1);
+  iy = static_cast<int> ((x[1]-lo[1])*ood[1]);
+  iy = MIN(MAX(iy,0),nsub-1);
+  if (dim == 3) {
+    iz = static_cast<int> ((x[2]-lo[2])*ood[2]);
+    iz = MIN(MAX(iz,0),nsub-1);
+  } else iz = 0;
+
+  isc = (iz*nsub + iy)*nsub + ix;
+  subcell_id[n] = isc;
+  subcell_next[n] = subcell_first[isc];
+  subcell_first[isc] = n;
+  subcell_count[isc]++;
 }
 
 /* ----------------------------------------------------------------------

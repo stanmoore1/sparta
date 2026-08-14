@@ -1193,7 +1193,13 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneSubcell< DIM, GASTALLY,
     // so subcell vectors stay consistent with plist
     // keep same subcell grid even though np changed by one
 
-    if (!jpart || kpart) rebin_subcell<DIM>(icell,np,nsub,lo,ood);
+    // a deleted particle swaps plist[np] down into slot j, which
+    //   invalidates the stored plist indices, so rebin the whole cell
+    // a created particle is appended at the end of plist and moves no
+    //   other particle, so it can be binned by itself in O(1)
+
+    if (!jpart) rebin_subcell<DIM>(icell,np,nsub,lo,ood);
+    else if (kpart) bin_one_subcell<DIM>(icell,np-1,nsub,lo,ood);
   }
 
   rand_pool.free_state(rand_gen);
@@ -1235,6 +1241,37 @@ void CollideVSSKokkos::rebin_subcell(int icell, int np, int nsub,
     d_subcell_first(icell,isc) = n;
     d_subcell_count(icell,isc)++;
   }
+}
+
+/* ----------------------------------------------------------------------
+   bin the single particle at index n of cell icell's plist
+   Kokkos port of Collide::subcell_bin_one()
+   cell icell is owned by one thread, and every view row touched here is
+     indexed by icell, so no other thread can be in these chains
+------------------------------------------------------------------------- */
+
+template < int DIM >
+KOKKOS_INLINE_FUNCTION
+void CollideVSSKokkos::bin_one_subcell(int icell, int n, int nsub,
+                                       const double *lo, const double *ood) const
+{
+  const double *x = d_particles[d_plist(icell,n)].x;
+
+  int ix = static_cast<int> ((x[0]-lo[0])*ood[0]);
+  ix = MIN(MAX(ix,0),nsub-1);
+  int iy = static_cast<int> ((x[1]-lo[1])*ood[1]);
+  iy = MIN(MAX(iy,0),nsub-1);
+  int iz;
+  if (DIM == 3) {
+    iz = static_cast<int> ((x[2]-lo[2])*ood[2]);
+    iz = MIN(MAX(iz,0),nsub-1);
+  } else iz = 0;
+
+  int isc = (iz*nsub + iy)*nsub + ix;
+  d_subcell_id(icell,n) = isc;
+  d_subcell_next(icell,n) = d_subcell_first(icell,isc);
+  d_subcell_first(icell,isc) = n;
+  d_subcell_count(icell,isc)++;
 }
 
 /* ----------------------------------------------------------------------
