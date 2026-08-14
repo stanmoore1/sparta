@@ -167,9 +167,7 @@ void ComputeThermalGridKokkos::operator()(TagComputeThermalGrid_compute_per_grid
 
     const int ispecies = d_particles[i].ispecies;
     const int igroup = d_s2g(imix,ispecies);
-  if (igroup < 0) return;
-
-    const int icell = d_particles[i].icell;
+    if (igroup < 0) continue;   // skip this particle, not the whole cell
 
     const double mass = d_species[ispecies].mass;
     double *v = d_particles[i].v;

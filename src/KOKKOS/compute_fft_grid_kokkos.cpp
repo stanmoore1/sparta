@@ -190,12 +190,13 @@ void ComputeFFTGridKokkos::compute_per_grid_kokkos()
         d_ingrid = cKKBase->d_vector_grid;
       } else {
         auto d_carray = cKKBase->d_array_grid;
-        auto d_ingrid = k_ingrid.view_device();
+        d_ingrid = k_ingrid.view_device();
+        auto d_ingrid_tmp = d_ingrid;
         const int n = grid->nlocal;
         const int aidxm1 = aidx - 1;
 
         Kokkos::parallel_for(n, SPARTA_LAMBDA(int i) {
-          d_ingrid[i] = d_carray(i,aidxm1);
+          d_ingrid_tmp[i] = d_carray(i,aidxm1);
         });
       }
 
@@ -217,12 +218,13 @@ void ComputeFFTGridKokkos::compute_per_grid_kokkos()
         d_ingrid = fixKKBase->d_vector_grid;
       } else {
         auto d_farray = fixKKBase->d_array_grid;
-        auto d_ingrid = k_ingrid.view_device();
+        d_ingrid = k_ingrid.view_device();
+        auto d_ingrid_tmp = d_ingrid;
         const int n = grid->nlocal;
         const int aidxm1 = aidx - 1;
 
         Kokkos::parallel_for(n, SPARTA_LAMBDA(int i) {
-          d_ingrid[i] = d_farray(i,aidxm1);
+          d_ingrid_tmp[i] = d_farray(i,aidxm1);
         });
       }
 
@@ -232,6 +234,7 @@ void ComputeFFTGridKokkos::compute_per_grid_kokkos()
       input->variable->compute_grid(vidx,ingrid,1,0);
       k_ingrid.modify_host();
       k_ingrid.sync_device();
+      d_ingrid = k_ingrid.view_device();
     }
 
     // ------------------------------

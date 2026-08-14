@@ -65,7 +65,7 @@ FixAveHistoKokkos::FixAveHistoKokkos(SPARTA *spa, int narg, char **arg) :
   k_stats.resize(4);
   d_stats = k_stats.view_device();
 
-  memory->destroy(bin);
+  delete [] bin;   // allocated with new [] by the base class
   bin = NULL;
   memoryKK->grow_kokkos(k_bin, bin, nbins, "ave/histo:bin");
   d_bin = k_bin.view_device();
@@ -159,6 +159,13 @@ void FixAveHistoKokkos::end_of_step()
 
   minmax_type::value_type minmax;
   minmax_type reducer(minmax);
+  reducer.init(minmax);
+
+  // running min/max across all values binned this step: each
+  // parallel_reduce overwrites minmax with only its own result
+
+  minmax_type::value_type total_minmax;
+  reducer.init(total_minmax);
 
   // accumulate results of computes,fixes,variables to local copy
   // compute/fix/variable may invoke computes so wrap with clear/add
@@ -192,7 +199,7 @@ void FixAveHistoKokkos::end_of_step()
             compute->compute_scalar();
             compute->invoked_flag |= INVOKED_SCALAR;
           }
-          bin_one(minmax, compute->scalar);
+          bin_one_host(minmax, compute->scalar);
         } else {
           error->all(FLERR,"Compute kind not compatible with fix ave/histo/kk");
           if (!(compute->invoked_flag & INVOKED_VECTOR)) {
@@ -246,7 +253,7 @@ void FixAveHistoKokkos::end_of_step()
           compute->post_process_isurf_grid();
 
         if (j == 0 || compute->post_process_grid_flag)
-          bin_grid_cells(reducer, computeKKBase->d_vector_particle);
+          bin_grid_cells(reducer, computeKKBase->d_vector_grid);
         else if (computeKKBase->d_array_grid.data())
           // @stamoor: fix_ave_histo.cpp passes compute->array_grid[0][j-1],
           // @stamoor: so send subview of d_array_grid.
@@ -265,11 +272,11 @@ void FixAveHistoKokkos::end_of_step()
 
       if (kind == GLOBAL && mode == SCALAR) {
         if (j == 0) {
-          bin_one(minmax, fix->compute_scalar());
+          bin_one_host(minmax, fix->compute_scalar());
         }
         else {
           error->all(FLERR,"Fix not compatible with fix ave/histo/kk");
-          bin_one(minmax, fix->compute_vector(j-1));
+          bin_one_host(minmax, fix->compute_vector(j-1));
         }
       } else if (kind == GLOBAL && mode == VECTOR) {
         error->all(FLERR,"Fix not compatible with fix ave/histo/kk");
@@ -288,7 +295,7 @@ void FixAveHistoKokkos::end_of_step()
           bin_particles(reducer, fix->array_particle[j-1],fix->size_per_particle_cols);
       } else if (kind == PERGRID) {
         if (j == 0) {
-          bin_grid_cells(reducer, fixKKBase->d_vector_particle);
+          bin_grid_cells(reducer, fixKKBase->d_vector_grid);
         } else if (fixKKBase->d_array_grid.data()) {
           // @stamoor: fix_ave_histo.cpp passes fix->array_grid[j-1], which is
           // not the same as what happens above with the compute object, it is
@@ -303,7 +310,7 @@ void FixAveHistoKokkos::end_of_step()
 
     } else if (which[i] == VARIABLE) {
       if (kind == GLOBAL && mode == SCALAR) {
-        bin_one(minmax,input->variable->compute_equal(m));
+        bin_one_host(minmax,input->variable->compute_equal(m));
 
       } else if (which[i] == VARIABLE && kind == PERPARTICLE) {
         if (particle->maxlocal > maxvector) {
@@ -330,6 +337,12 @@ void FixAveHistoKokkos::end_of_step()
     // explicit per-particle attributes
 
     } else bin_particles(reducer, which[i], j);
+
+    // merge this value's min/max into the running result, since each
+    // parallel_reduce overwrites minmax with only its own contribution
+
+    total_minmax.min_val = MIN(total_minmax.min_val,minmax.min_val);
+    total_minmax.max_val = MAX(total_minmax.max_val,minmax.max_val);
   }
 
   k_stats.modify_device();
@@ -338,11 +351,17 @@ void FixAveHistoKokkos::end_of_step()
   k_bin.modify_device();
   k_bin.sync_host();
 
-  // Copy data back
+  // Copy data back, accumulating min/max across repeats like the base class
+
   stats[0] = k_stats.view_host()(0);
   stats[1] = k_stats.view_host()(1);
-  stats[2] = minmax.min_val;
-  stats[3] = minmax.max_val;
+  if (irepeat == 0) {
+    stats[2] = total_minmax.min_val;
+    stats[3] = total_minmax.max_val;
+  } else {
+    stats[2] = MIN(stats[2],total_minmax.min_val);
+    stats[3] = MAX(stats[3],total_minmax.max_val);
+  }
 
   // done if irepeat < nrepeat
   // else reset irepeat and nvalid
@@ -504,19 +523,20 @@ void FixAveHistoKokkos::bin_particles(
   int n = particle->nlocal;
   int nmax = particle->maxlocal;
 
-  Region *region;
-  if (regionflag) region = domain->regions[iregion];
+  if (regionflag) {
+    Region *region = domain->regions[iregion];
 
-  if (!region->kokkos_flag)
-    error->all(FLERR,"KOKKOS package does not (yet) support chosen region style");
+    if (!region->kokkos_flag)
+      error->all(FLERR,"KOKKOS package does not (yet) support chosen region style");
 
-  KokkosBase* regionKKBase = dynamic_cast<KokkosBase*>(region);
+    KokkosBase* regionKKBase = dynamic_cast<KokkosBase*>(region);
 
-  if (k_match.extent(0) > nmax)
-    MemKK::realloc_kokkos(k_match,"fix_ave_histo_weight:match",nmax);
+    if (k_match.extent(0) < nmax)
+      MemKK::realloc_kokkos(k_match,"fix_ave_histo:match",nmax);
 
-  regionKKBase->match_all_kokkos(k_match);
-  d_match = k_match.view_device();
+    regionKKBase->match_all_kokkos(k_match);
+    d_match = k_match.view_device();
+  }
 
   if (attribute == X) {
 
@@ -568,19 +588,20 @@ void FixAveHistoKokkos::bin_particles(
 
   d_values = mirror_view_from_raw_host_array<double,DeviceType>(values, n, stride);
 
-  Region *region;
-  if (regionflag) region = domain->regions[iregion];
+  if (regionflag) {
+    Region *region = domain->regions[iregion];
 
-  if (!region->kokkos_flag)
-    error->all(FLERR,"KOKKOS package does not (yet) support chosen region style");
+    if (!region->kokkos_flag)
+      error->all(FLERR,"KOKKOS package does not (yet) support chosen region style");
 
-  KokkosBase* regionKKBase = dynamic_cast<KokkosBase*>(region);
+    KokkosBase* regionKKBase = dynamic_cast<KokkosBase*>(region);
 
-  if (k_match.extent(0) < nmax)
-    MemKK::realloc_kokkos(k_match,"fix_ave_histo_weight:match",nmax);
+    if (k_match.extent(0) < nmax)
+      MemKK::realloc_kokkos(k_match,"fix_ave_histo:match",nmax);
 
-  regionKKBase->match_all_kokkos(k_match);
-  d_match = k_match.view_device();
+    regionKKBase->match_all_kokkos(k_match);
+    d_match = k_match.view_device();
+  }
 
   if (regionflag && mixflag) {
     auto policy = RangePolicy<TagFixAveHisto_BinParticles1,DeviceType>(0, n);
@@ -613,12 +634,56 @@ void FixAveHistoKokkos::bin_grid_cells(
   if (groupflag) {
     GridKokkos* grid_kk = (GridKokkos*) grid;
     grid_kk->sync(Device, CINFO_MASK);
+    d_cinfo = grid_kk->k_cinfo.view_device();
     auto policy = RangePolicy<TagFixAveHisto_BinGridCells1,DeviceType>(0, n);
     Kokkos::parallel_reduce(policy, *this, reducer);
   } else {
     auto policy = RangePolicy<TagFixAveHisto_BinGridCells2,DeviceType>(0, n);
     Kokkos::parallel_reduce(policy, *this, reducer);
   }
+}
+
+/* ----------------------------------------------------------------------
+   bin a single value on the host (used for GLOBAL/SCALAR values)
+   the KOKKOS_INLINE bin_one operates on device views and must not be
+   called from host code
+------------------------------------------------------------------------- */
+void FixAveHistoKokkos::bin_one_host(mm_value_type& lminmax, double value)
+{
+  bin_one_host_weighted(lminmax,value,1.0);
+}
+
+void FixAveHistoKokkos::bin_one_host_weighted(mm_value_type& lminmax,
+                                              double value, double wt)
+{
+  k_stats.sync_host();
+  k_bin.sync_host();
+  auto h_stats = k_stats.view_host();
+  auto h_bin = k_bin.view_host();
+
+  lminmax.min_val = MIN(lminmax.min_val,value);
+  lminmax.max_val = MAX(lminmax.max_val,value);
+
+  if (value < lo) {
+    if (beyond == IGNORE) h_stats(1) += wt;
+    else h_bin(0) += wt;
+  } else if (value > hi) {
+    if (beyond == IGNORE) h_stats(1) += wt;
+    else h_bin(nbins-1) += wt;
+  } else {
+    int ibin = static_cast<int> ((value-lo)*bininv);
+    ibin = MIN(ibin,nbins-1);
+    if (beyond == EXTRA) ibin++;
+    h_bin(ibin) += wt;
+  }
+
+  if (!(value < lo && beyond == IGNORE) && !(value > hi && beyond == IGNORE))
+    h_stats(0) += wt;
+
+  k_stats.modify_host();
+  k_stats.sync_device();
+  k_bin.modify_host();
+  k_bin.sync_device();
 }
 
 
@@ -700,7 +765,7 @@ void
 FixAveHistoKokkos::operator()(TagFixAveHisto_BinGridCells1, const int i,
                               minmax_type::value_type& lminmax) const
 {
-  if (grid_kk->k_cinfo.view_device()[i].mask & groupbit) {
+  if (d_cinfo[i].mask & groupbit) {
     bin_one(lminmax, d_values(i));
   }
 }

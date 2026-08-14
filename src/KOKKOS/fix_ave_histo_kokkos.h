@@ -141,7 +141,7 @@ protected:
   int index;
   int stride;
   DAT::t_float_1d_strided d_values;
-  GridKokkos* grid_kk;
+  t_cinfo_1d d_cinfo;
 
   // data used by ave/histo/weight/kk
   DAT::t_float_1d_strided d_weights;
@@ -156,6 +156,8 @@ protected:
   virtual void bin_particles(minmax_type&, int, int);
   virtual void bin_particles(minmax_type&, double *, int);
   virtual void bin_grid_cells(minmax_type&, DAT::t_float_1d_strided);
+  virtual void bin_one_host(mm_value_type&, double);
+  void bin_one_host_weighted(mm_value_type&, double, double);
 
   virtual void calculate_weights() {}
 

@@ -511,6 +511,12 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
     particle_kk->sync(Device,PARTICLE_MASK);
     grid_kk->sync(Device,CELL_MASK|PCELL_MASK|SINFO_MASK|PLEVEL_MASK);
 
+    // refresh the grid hash handle: GridKokkos::update_hash() replaces the
+    // map object (e.g. fix balance mid-run), which would leave the optmove
+    // kernel reading a stale snapshot taken in setup()
+
+    hash_kk = grid_kk->hash_kk;
+
     // may be able to move this outside of the while loop
     grid_kk_copy.copy(grid_kk);
     domain_kk_copy.copy((DomainKokkos*)domain);
@@ -1624,6 +1630,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
       Particle::OnePart* ipart = &particle_i;
       lo = d_cells[icell].lo;
       hi = d_cells[icell].hi;
+      jpart = NULL;   // a surf hit earlier in this move may have set it
       if (domain_kk_copy.obj.bflag[outface] == SURFACE) {
         // treat global boundary as a surface
         // particle velocity is changed by surface collision model

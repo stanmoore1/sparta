@@ -231,9 +231,14 @@ int ComputeSurfKokkos::tallyinfo(surfint *&ptr)
   int istart = 0;
   int iend = nsurf-1;
 
+  // two-pointer compaction: istart = first untallied row, iend = last
+  // tallied row.  When they cross, rows [0,istart) are all tallied.
+  // NOTE: the scan bounds must cover the full range, else up to two
+  // trailing tallies are overwritten or dropped (and nsurf <= 2 lost all)
+
   while (1) {
-    while (h_surf2tally[istart] != -1 && istart < nsurf-2) istart++;
-    while (h_surf2tally[iend] == -1 && iend > 0) iend--;
+    while (istart < nsurf && h_surf2tally[istart] != -1) istart++;
+    while (iend >= 0 && h_surf2tally[iend] == -1) iend--;
     if (istart >= iend) {
       ntally = istart;
       break;

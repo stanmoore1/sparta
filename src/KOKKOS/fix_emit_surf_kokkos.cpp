@@ -174,10 +174,15 @@ void FixEmitSurfKokkos::grid_changed()
   // setup cummulative_custom array for nlocal surfs
 
   if (fractions_custom_flag && !perspecies) {
-    if (k_cummulative_custom.extent(0) > max_cummulative)
+    if ((int)k_cummulative_custom.extent(0) < max_cummulative ||
+        (int)k_cummulative_custom.extent(1) < nspecies)
       MemKK::realloc_kokkos(k_cummulative_custom,"fix/emit/surf:cummulative_custom",max_cummulative,nspecies);
 
-    for (int isurf = 0; isurf < max_cummulative; isurf++) {
+    // the base class fills only the first surf->nlocal rows;
+    // max_cummulative is a high-water mark
+
+    int nslocal = surf->nlocal;
+    for (int isurf = 0; isurf < nslocal; isurf++) {
       for (int isp = 0; isp < nspecies; isp++) {
         k_cummulative_custom.view_host()(isurf,isp) = cummulative_custom[isurf][isp];
       }
@@ -316,7 +321,17 @@ void FixEmitSurfKokkos::perform_task()
   int ncands;
   d_task2cand = offset_scan(d_ninsert, ncands);
 
-  if (ncands == 0) return;
+  if (ncands == 0) {
+    // pre_surf_tally() ran above and left each surf-tally compute holding
+    // scatter state and particle-list references; always pair it with
+    // post_surf_tally() so those references are released
+
+    for (int m = 0; m < nsurf_tally; m++) {
+      ComputeSurfKokkos* compute_surf_kk = (ComputeSurfKokkos*)(slist_active[m]);
+      compute_surf_kk->post_surf_tally();
+    }
+    return;
+  }
 
   if (d_x.extent(0) < ncands || d_x.extent(1) < dimension)
     d_x = DAT::t_float_2d("x", ncands, dimension);
@@ -351,9 +366,10 @@ void FixEmitSurfKokkos::perform_task()
   k_vscale_mix .sync_device();
   k_species    .sync_device();
 
-  if (fractions_custom_flag && !perspecies)
+  if (fractions_custom_flag && !perspecies) {
     k_cummulative_custom.sync_device();
-  else
+    d_cummulative_custom = k_cummulative_custom.view_device();
+  } else
     k_cummulative_mix.sync_device();
 
   ParticleKokkos* particle_kk = ((ParticleKokkos*)particle);
@@ -636,8 +652,9 @@ void FixEmitSurfKokkos::operator()(TagFixEmitSurf_perform_task, const int &i, in
     // use cummulative fractions to assign species for each insertion
     // if requested, override cummulative from mixture with cummulative for isurf
 
-    double* cummulative = &d_cummulative_mix[0];
+    const double* cummulative;
     if (fractions_custom_flag) cummulative = &d_cummulative_custom(isurf,0);
+    else cummulative = &d_cummulative_mix[0];   // unallocated when fractions_custom_flag
 
     int nactual = 0;
     for (int m = 0; m < ninsert; m++) {

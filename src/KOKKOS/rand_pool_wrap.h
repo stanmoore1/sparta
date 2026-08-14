@@ -24,10 +24,12 @@ namespace SPARTA_NS {
 
 struct RandWrap {
   class RanKnuth* rng;
+  int tid;
 
   KOKKOS_INLINE_FUNCTION
   RandWrap() {
     rng = NULL;
+    tid = -1;
   }
 
   KOKKOS_INLINE_FUNCTION
@@ -48,6 +50,9 @@ class RandPoolWrap : protected Pointers {
   void destroy();
   void init(RanKnuth*);
 
+  typedef Kokkos::Experimental::UniqueToken<
+    DeviceType, Kokkos::Experimental::UniqueTokenScope::Global> unique_token_type;
+
   KOKKOS_INLINE_FUNCTION
   RandWrap get_state() const
   {
@@ -57,23 +62,27 @@ class RandPoolWrap : protected Pointers {
 
     RandWrap rand_wrap;
 
-    typedef Kokkos::Experimental::UniqueToken<
-      DeviceType, Kokkos::Experimental::UniqueTokenScope::Global> unique_token_type;
-
 #ifndef SPARTA_KOKKOS_GPU
+    // hold the token until free_state(): releasing it here would let a
+    // concurrent thread acquire the same tid and race on the generator
+
     unique_token_type unique_token;
-    int tid = unique_token.acquire();
-    rand_wrap.rng = random_thr[tid];
-    unique_token.release(tid);
+    rand_wrap.tid = unique_token.acquire();
+    rand_wrap.rng = random_thr[rand_wrap.tid];
 #endif
 
     return rand_wrap;
   }
 
   KOKKOS_INLINE_FUNCTION
-  void free_state(RandWrap) const
+  void free_state(RandWrap rand_wrap) const
   {
-
+#ifndef SPARTA_KOKKOS_GPU
+    if (rand_wrap.tid >= 0) {
+      unique_token_type unique_token;
+      unique_token.release(rand_wrap.tid);
+    }
+#endif
   }
 
  private:

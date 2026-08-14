@@ -108,6 +108,7 @@ class FixAveHistoWeightKokkos : public FixAveHistoKokkos {
   void bin_particles(minmax_type&, int, int);
   void bin_particles(minmax_type&, double *, int);
   void bin_grid_cells(minmax_type&, DAT::t_float_1d_strided);
+  void bin_one_host(mm_value_type&, double);
 
   void calculate_weights();
 };

@@ -587,11 +587,13 @@ void ParticleKokkos::post_weight()
       if (wrandom->uniform() < fraction) nclone++;
 
       for (int m = 0; m < nclone; m++) {
-        if (k_map.extent(0) <= nlocal)
+        if (k_map.extent(0) <= nlocal) {
           k_map.resize(k_map.extent(0)*1.5);
+          h_map = k_map.view_host();   // resize reallocates the host view
+        }
 
         h_map[nlocal] = h_map[i];
-        h_map[nlocal-1].id = MAXSMALLINT*wrandom->uniform();
+        h_map[nlocal].id = MAXSMALLINT*wrandom->uniform();
         nlocal++;
       }
       i++;
@@ -697,7 +699,10 @@ void ParticleKokkos::wrap_kokkos()
   // species
 
   if (species != k_species.view_host().data()) {
-    memoryKK->wrap_kokkos(k_species,species,nspecies,"particle:species");
+    // wrap at capacity, not count: Particle::add_species() only grows the
+    // raw array when nspecies exceeds maxspecies, so wrapping at nspecies
+    // would let a later species command write past this allocation
+    memoryKK->wrap_kokkos(k_species,species,maxspecies,"particle:species");
     k_species.modify_host();
     k_species.sync_device();
     memory->sfree(species);

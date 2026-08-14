@@ -607,6 +607,8 @@ template < int NEARCP, int GASTALLY > void CollideVSSKokkos::collisions_one(COLL
         d_plist = {};
         Kokkos::resize(grid_kk->d_plist,nglocal,maxcellcount);
         d_plist = grid_kk->d_plist;
+        if (NEARCP)
+          MemKK::realloc_kokkos(d_nn_last_partner,"collide:nn_last_partner",nglocal,maxcellcount);
       }
 
       auto nlocal_new = h_nlocal();
@@ -887,6 +889,12 @@ void CollideVSSKokkos::collisions_one_ambipolar(COLLIDE_REDUCE &reduce)
     d_elist = t_particle_2d(); // reduce memory use by deallocating first
     d_elist = t_particle_2d(Kokkos::view_alloc("collide:elist",Kokkos::WithoutInitializing),nglocal,maxelectron_extra);
   }
+
+  // keep maxelectron equal to the elist capacity: it seeds the device
+  // counter below, and an overflow retry only reallocates when the
+  // counter exceeds the current extent
+
+  maxelectron = d_elist.extent(1);
 
   if (react) {
     auto maxdelete_extra = maxdelete*extra_factor;
@@ -1248,7 +1256,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar< GASTALLY, AT
 #endif
         } else {
           d_retry() = 1;
-          d_maxelectron() += DELTACELLCOUNT;
+          d_maxelectron() += DELTAELECTRON;
           rand_pool.free_state(rand_gen);
           return;
         }
@@ -1279,7 +1287,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar< GASTALLY, AT
           jpart = NULL;
         } else {
           d_retry() = 1;
-          d_maxelectron() += DELTACELLCOUNT;
+          d_maxelectron() += DELTAELECTRON;
           rand_pool.free_state(rand_gen);
           return;
         }

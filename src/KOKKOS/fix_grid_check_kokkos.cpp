@@ -78,9 +78,13 @@ void FixGridCheckKokkos::end_of_step()
     auto icell = d_particles(i).icell;
 
     // is icell a valid index
+    // every check below indexes d_cells/d_cinfo with icell,
+    //  so this particle is done
+
     if (icell < 0 || icell >= nglocal) {
       d_particle_problems(i) |= IS_IN_INVALID_CELL;
       local_nflag++;
+      return;
     }
 
     // does particle coord match icell bounds

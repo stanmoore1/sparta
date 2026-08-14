@@ -12,6 +12,9 @@
    See the README file in the top-level SPARTA directory.
 ------------------------------------------------------------------------- */
 
+#ifndef SPARTA_GEOMETRY_KOKKOS_H
+#define SPARTA_GEOMETRY_KOKKOS_H
+
 #include "math_extra_kokkos.h"
 
 #define EPSSQ 1.0e-16
@@ -1360,3 +1363,5 @@ double tri_fraction(double *x, double *v0, double *v1, double *v2)
 /* ---------------------------------------------------------------------- */
 
 }
+
+#endif

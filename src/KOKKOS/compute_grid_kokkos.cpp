@@ -55,13 +55,6 @@ ComputeGridKokkos::ComputeGridKokkos(SPARTA *sparta, int narg, char **arg) :
   k_unique.modify_host();
   k_unique.sync_device();
   d_unique = k_unique.view_device();
-
-#if defined (SPARTA_KOKKOS_GPU)
-  #if defined(FFT_KOKKOS_KISS)
-    if (comm->me == 0)
-      error->warning(FLERR,"Using default KISS FFT with Kokkos GPU backends may give suboptimal performance");
-  #endif
-#endif
 }
 
 /* ---------------------------------------------------------------------- */
@@ -234,7 +227,7 @@ void ComputeGridKokkos::operator()(TagComputeGrid_compute_per_grid, const int &i
 
     const int ispecies = d_particles[i].ispecies;
     const int igroup = d_s2g(imix,ispecies);
-    if (igroup < 0) return;
+    if (igroup < 0) continue;   // skip this particle, not the whole cell
 
     const double mass = d_species[ispecies].mass;
     double* v = d_particles[i].v;

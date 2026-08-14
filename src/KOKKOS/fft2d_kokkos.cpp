@@ -433,7 +433,7 @@ struct fft_plan_2d_kokkos<DeviceType>* FFT2dKokkos<DeviceType>::fft_2d_create_pl
   plan->mid_plan =
     remapKK->remap_2d_create_plan_kokkos(comm,first_ilo,first_ihi,first_jlo,first_jhi,
                                          second_ilo,second_ihi,second_jlo,second_jhi,
-                                         FFT_PRECISION,1,0,2,
+                                         2,1,0,FFT_PRECISION,
                                          usecollective,usegpu_aware);
   if (plan->mid_plan == nullptr) return nullptr;
 
@@ -456,7 +456,7 @@ struct fft_plan_2d_kokkos<DeviceType>* FFT2dKokkos<DeviceType>::fft_2d_create_pl
     plan->post_plan =
       remapKK->remap_2d_create_plan_kokkos(comm,second_jlo,second_jhi,second_ilo,second_ihi,
                   out_jlo,out_jhi,out_ilo,out_ihi,
-                  FFT_PRECISION,(permute+1)%2,0,2,
+                  2,(permute+1)%2,0,FFT_PRECISION,
                   usecollective,usegpu_aware);
       if (plan->post_plan == nullptr) return nullptr;
   }

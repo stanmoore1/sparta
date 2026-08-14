@@ -36,6 +36,11 @@ ComputeKEParticleKokkos::ComputeKEParticleKokkos(SPARTA *sparta, int narg, char 
   ComputeKEParticle(sparta, narg, arg)
 {
   kokkos_flag = 1;
+
+  // the base class leaves vector_particle uninitialized until the first
+  // invocation; the destructor below frees it unconditionally
+
+  vector_particle = NULL;
 }
 
 /* ---------------------------------------------------------------------- */
