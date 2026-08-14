@@ -56,3 +56,14 @@ void SurfCollideTransparentKokkos::post_collide()
   auto sc = surf->sc[m];
   sc->nsingle += h_nsingle();
 }
+
+/* ----------------------------------------------------------------------
+   a react-retry rollback re-runs the whole move kernel, so reset the
+   counter to its pre_collide() state, else the aborted attempt's
+   collisions are double-counted
+------------------------------------------------------------------------- */
+
+void SurfCollideTransparentKokkos::restore()
+{
+  Kokkos::deep_copy(d_nsingle,0);
+}

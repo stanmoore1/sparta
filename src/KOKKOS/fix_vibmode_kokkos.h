@@ -35,13 +35,15 @@ class FixVibmodeKokkos : public FixVibmode {
   FixVibmodeKokkos(class SPARTA *);
   ~FixVibmodeKokkos();
   void pre_update_custom_kokkos();
+  void backup_custom_kokkos();
+  void restore_custom_kokkos();
   void update_custom(int, double, double, double, double *);
 
   KOKKOS_INLINE_FUNCTION
   void update_custom_kokkos(int, double, double, double, const double *) const;
 
  private:
-  int boltz;
+  double boltz;
 
 #ifndef SPARTA_KOKKOS_EXACT
   Kokkos::Random_XorShift64_Pool<DeviceType> rand_pool;
@@ -58,6 +60,7 @@ class FixVibmodeKokkos : public FixVibmode {
   t_species_1d d_species;
 
   DAT::t_int_2d_lr d_vibmode;
+  DAT::t_int_2d_lr d_vibmode_backup;
 };
 
 /* ----------------------------------------------------------------------

@@ -2031,8 +2031,8 @@ void UpdateKokkos::restore()
   d_particles = particle_kk->k_particles.view_device();
 
   if (surf->nsc > 0) {
-    int nspec,ndiff,npist;
-    nspec = ndiff = npist = 0;
+    int nspec,ndiff,nvan,npist,ntrans;
+    nspec = ndiff = nvan = npist = ntrans = 0;
     for (int n = 0; n < surf->nsc; n++) {
       if (strcmp(surf->sc[n]->style,"specular") == 0) {
         sc_kk_specular_copy[nspec].obj.restore();
@@ -2040,9 +2040,15 @@ void UpdateKokkos::restore()
       } else if (strcmp(surf->sc[n]->style,"diffuse") == 0) {
         sc_kk_diffuse_copy[ndiff].obj.restore();
         ndiff++;
+      } else if (strcmp(surf->sc[n]->style,"vanish") == 0) {
+        sc_kk_vanish_copy[nvan].obj.restore();
+        nvan++;
       } else if (strcmp(surf->sc[n]->style,"piston") == 0) {
         sc_kk_piston_copy[npist].obj.restore();
         npist++;
+      } else if (strcmp(surf->sc[n]->style,"transparent") == 0) {
+        sc_kk_transparent_copy[ntrans].obj.restore();
+        ntrans++;
       }
     }
   }

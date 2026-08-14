@@ -36,6 +36,8 @@ class FixAmbipolarKokkos : public FixAmbipolar {
   FixAmbipolarKokkos(class SPARTA *);
   ~FixAmbipolarKokkos();
   void pre_update_custom_kokkos();
+  void backup_custom_kokkos();
+  void restore_custom_kokkos();
   void update_custom(int, double, double, double, double *);
 
  private:
@@ -49,6 +51,9 @@ class FixAmbipolarKokkos : public FixAmbipolar {
 
   DAT::t_int_1d d_ionambi;
   DAT::t_float_2d_lr d_velambi;
+
+  DAT::t_int_1d d_ionambi_backup;
+  DAT::t_float_2d_lr d_velambi_backup;
 
 #ifndef SPARTA_KOKKOS_EXACT
   Kokkos::Random_XorShift64_Pool<DeviceType> rand_pool;

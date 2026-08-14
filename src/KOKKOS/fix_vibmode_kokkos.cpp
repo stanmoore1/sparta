@@ -90,6 +90,34 @@ void FixVibmodeKokkos::pre_update_custom_kokkos()
 }
 
 /* ----------------------------------------------------------------------
+   snapshot/restore the vibmode custom array for the react-retry rollback:
+   the move kernel mutates it for existing particles via
+   update_custom_kokkos(), so restoring only the particle list would leave
+   the mode levels inconsistent with the rolled-back evib.
+   pre_update_custom_kokkos() must be called first so d_vibmode references
+   the current allocation
+------------------------------------------------------------------------- */
+
+void FixVibmodeKokkos::backup_custom_kokkos()
+{
+  d_vibmode_backup = DAT::t_int_2d_lr(Kokkos::view_alloc("vibmode:vibmode_backup",Kokkos::WithoutInitializing),d_vibmode.extent(0),d_vibmode.extent(1));
+  Kokkos::deep_copy(d_vibmode_backup,d_vibmode);
+}
+
+/* ---------------------------------------------------------------------- */
+
+void FixVibmodeKokkos::restore_custom_kokkos()
+{
+  if (!d_vibmode_backup.data()) return;   // already restored this attempt
+
+  Kokkos::deep_copy(d_vibmode,d_vibmode_backup);
+
+  // deallocate reference to reduce memory use
+
+  d_vibmode_backup = {};
+}
+
+/* ----------------------------------------------------------------------
    called when a particle with index is created
     or when temperature dependent properties need to be updated
    populate all vibrational modes and set evib = sum of mode energies

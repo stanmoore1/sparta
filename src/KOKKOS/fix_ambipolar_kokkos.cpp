@@ -104,6 +104,38 @@ void FixAmbipolarKokkos::pre_update_custom_kokkos()
 }
 
 /* ----------------------------------------------------------------------
+   snapshot/restore the ambipolar custom arrays for the react-retry
+   rollback: the move kernel mutates them for existing particles via
+   update_custom_kokkos()/surf_react_kokkos(), so restoring only the
+   particle list would leave them inconsistent with the rolled-back state.
+   pre_update_custom_kokkos() must be called first so d_ionambi/d_velambi
+   reference the current allocations
+------------------------------------------------------------------------- */
+
+void FixAmbipolarKokkos::backup_custom_kokkos()
+{
+  d_ionambi_backup = DAT::t_int_1d(Kokkos::view_alloc("ambipolar:ionambi_backup",Kokkos::WithoutInitializing),d_ionambi.extent(0));
+  d_velambi_backup = DAT::t_float_2d_lr(Kokkos::view_alloc("ambipolar:velambi_backup",Kokkos::WithoutInitializing),d_velambi.extent(0),d_velambi.extent(1));
+  Kokkos::deep_copy(d_ionambi_backup,d_ionambi);
+  Kokkos::deep_copy(d_velambi_backup,d_velambi);
+}
+
+/* ---------------------------------------------------------------------- */
+
+void FixAmbipolarKokkos::restore_custom_kokkos()
+{
+  if (!d_ionambi_backup.data()) return;   // already restored this attempt
+
+  Kokkos::deep_copy(d_ionambi,d_ionambi_backup);
+  Kokkos::deep_copy(d_velambi,d_velambi_backup);
+
+  // deallocate references to reduce memory use
+
+  d_ionambi_backup = {};
+  d_velambi_backup = {};
+}
+
+/* ----------------------------------------------------------------------
    called when a particle with index is created
    creation used temp_thermal and vstream to set particle velocity
    if an ion, set ionambi and velambi for particle

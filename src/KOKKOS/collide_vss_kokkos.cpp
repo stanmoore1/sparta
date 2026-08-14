@@ -2671,6 +2671,17 @@ void CollideVSSKokkos::backup()
     Kokkos::deep_copy(d_velambi_backup,d_velambi);
   }
 
+  // the collision kernels also mutate the discrete vibrational mode levels
+  // of existing particles, which a rollback must restore alongside evib
+
+  if (vibstyle == DISCRETE && index_vibmode >= 0) {
+    ParticleKokkos* particle_kk = (ParticleKokkos*) particle;
+    auto h_ewhich = particle_kk->k_ewhich.view_host();
+    auto d_vibmode = particle_kk->k_eiarray.view_host()[h_ewhich[index_vibmode]].k_view.view_device();
+    d_vibmode_backup = DAT::t_int_2d_lr(Kokkos::view_alloc("collide:vibmode_backup",Kokkos::WithoutInitializing),d_vibmode.extent(0),d_vibmode.extent(1));
+    Kokkos::deep_copy(d_vibmode_backup,d_vibmode);
+  }
+
   if (react) {
     ReactBirdKokkos* react_kk = (ReactBirdKokkos*) react;
     react_kk->backup();
@@ -2711,6 +2722,12 @@ void CollideVSSKokkos::restore()
     d_velambi = k_edarray.view_host()[h_ewhich[index_velambi]].k_view.view_device();
   }
 
+  if (vibstyle == DISCRETE && index_vibmode >= 0) {
+    auto h_ewhich = particle_kk->k_ewhich.view_host();
+    Kokkos::deep_copy(particle_kk->k_eiarray.view_host()[h_ewhich[index_vibmode]].k_view.view_device(),d_vibmode_backup);
+    k_eiarray = particle_kk->k_eiarray;
+  }
+
   if (react) {
     ReactBirdKokkos* react_kk = (ReactBirdKokkos*) react;
     react_kk->restore();
@@ -2739,4 +2756,6 @@ void CollideVSSKokkos::restore()
     d_ionambi_backup = {};
     d_velambi_backup = {};
   }
+
+  d_vibmode_backup = {};
 }

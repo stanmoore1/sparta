@@ -187,11 +187,13 @@ void SurfCollidePistonKokkos::backup()
   if (ambi_flag) {
     afix_kk->pre_update_custom_kokkos();
     fix_ambi_kk_copy.copy(afix_kk);
+    afix_kk->backup_custom_kokkos();
   }
 
   if (vibmode_flag) {
     vfix_kk->pre_update_custom_kokkos();
     fix_vibmode_kk_copy.copy(vfix_kk);
+    vfix_kk->backup_custom_kokkos();
   }
 
   if (surf->nsr > 0) {
@@ -213,6 +215,9 @@ void SurfCollidePistonKokkos::backup()
 
 void SurfCollidePistonKokkos::restore()
 {
+  if (ambi_flag) afix_kk->restore_custom_kokkos();
+  if (vibmode_flag) vfix_kk->restore_custom_kokkos();
+
   if (surf->nsr > 0) {
     int nglob,nprob;
     nglob = nprob = 0;

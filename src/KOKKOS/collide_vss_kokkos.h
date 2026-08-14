@@ -267,6 +267,7 @@ class CollideVSSKokkos : public CollideVSS {
   DAT::t_int_2d d_nn_last_partner_backup;
   DAT::t_int_1d d_ionambi_backup;
   DAT::t_float_2d_lr d_velambi_backup;
+  DAT::t_int_2d_lr d_vibmode_backup;
   RanKnuth* random_backup;
 };
 
