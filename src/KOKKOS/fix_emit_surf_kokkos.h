@@ -75,7 +75,8 @@ class FixEmitSurfKokkos : public FixEmitSurf {
 #endif
 
  private:
-  int npcurrent,nsurf_tally,nlocal_before,nlocal_surf,region_flag;
+  double npcurrent;   // Np from an equal-style variable, can be fractional
+  int nsurf_tally,nlocal_before,nlocal_surf,region_flag;
 
   KKCopy<ParticleKokkos> particle_kk_copy;
   KKCopy<ComputeSurfKokkos> slist_active_copy[KOKKOS_MAX_SLIST];

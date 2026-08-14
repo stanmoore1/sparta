@@ -150,9 +150,9 @@ public:
   typedef DeviceType device_type;
   typedef FFTArrayTypes<DeviceType> FFT_AT;
   typename FFT_AT::t_FFT_DATA_1d_um d_out;
-  int norm;
+  FFT_SCALAR norm;
 
-  norm_functor(typename FFT_AT::t_FFT_DATA_1d &d_out_, int norm_):
+  norm_functor(typename FFT_AT::t_FFT_DATA_1d &d_out_, FFT_SCALAR norm_):
     d_out(d_out_),norm(norm_) {}
 
   KOKKOS_INLINE_FUNCTION

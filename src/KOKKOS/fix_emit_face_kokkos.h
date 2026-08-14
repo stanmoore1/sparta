@@ -67,7 +67,8 @@ class FixEmitFaceKokkos : public FixEmitFace {
 #endif
 
  private:
-  int prefactor, region_flag;
+  double prefactor;   // modulation factor from an equal-style variable
+  int region_flag;
 
   KKCopy<ParticleKokkos> particle_kk_copy;
   KKCopy<RegBlockKokkos> regblock_kk_copy;
