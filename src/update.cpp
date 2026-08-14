@@ -50,6 +50,8 @@ enum{TALLYAUTO,TALLYREDUCE,TALLYRVOUS};         // same as Surf
 enum{PERAUTO,PERCELL,PERSURF};                  // several files
 enum{NOFIELD,CFIELD,PFIELD,GFIELD};             // several files
 
+#define DELTAMIGRATE 1024                       // migration list growth
+
 #define MAXSTUCK 20
 #define EPSPARAM 1.0e-7
 
@@ -377,6 +379,19 @@ void Update::run(int nsteps)
 }
 
 /* ----------------------------------------------------------------------
+   grow the migration list
+   a surf reaction that creates a second particle extends the current
+     advection loop via pstop++, so more particles can be advected -- and
+     hence migrate -- than the particle count mlist was sized for
+------------------------------------------------------------------------- */
+
+void Update::grow_mlist()
+{
+  maxmigrate += DELTAMIGRATE;
+  memory->grow(mlist,maxmigrate,"particle:mlist");
+}
+
+/* ----------------------------------------------------------------------
    advect particles thru grid
    DIM = 2/3 for 2d/3d, 1 for 2d axisymmetric
    SURF = 0/1 for no surfs or surfs
@@ -589,6 +604,7 @@ template < int DIM, int SURF, int OPT > void Update::move()
             if (DIM == 1) memcpy(v,vopt,3*sizeof(double));
 
             if (cells[icell].proc != me) {
+              if (nmigrate == maxmigrate) grow_mlist();
               mlist[nmigrate++] = i;
               particles[i].flag = PDONE;
               ncomm_one++;
@@ -1283,6 +1299,7 @@ template < int DIM, int SURF, int OPT > void Update::move()
       particles[i].icell = icell;
 
       if (particles[i].flag != PKEEP) {
+        if (nmigrate == maxmigrate) grow_mlist();
         mlist[nmigrate++] = i;
         if (particles[i].flag != PDISCARD) {
           if (cells[icell].proc == me) {

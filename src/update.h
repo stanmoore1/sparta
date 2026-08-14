@@ -122,6 +122,8 @@ class Update : protected Pointers {
   int split3d(int, double *);
   int split2d(int, double *);
 
+  void grow_mlist();
+
  protected:
   int me,nprocs;
   int maxmigrate;            // max # of particles in mlist
