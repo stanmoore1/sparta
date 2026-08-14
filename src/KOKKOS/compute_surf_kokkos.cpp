@@ -197,7 +197,7 @@ void ComputeSurfKokkos::backup()
 
   if (need_dup) {
     Kokkos::Experimental::contribute(d_array_surf_tally, dup_array_surf_tally);
-    dup_array_surf_tally = {};
+    reset_scatter_view();
   }
 
   if (d_array_surf_tally_backup.extent(0) != d_array_surf_tally.extent(0) ||
@@ -210,8 +210,6 @@ void ComputeSurfKokkos::backup()
 
   Kokkos::deep_copy(d_array_surf_tally_backup,d_array_surf_tally);
   Kokkos::deep_copy(d_surf2tally_backup,d_surf2tally);
-
-  reset_scatter_view();
 }
 
 /* ---------------------------------------------------------------------- */
@@ -221,19 +219,24 @@ void ComputeSurfKokkos::restore()
   Kokkos::deep_copy(d_array_surf_tally,d_array_surf_tally_backup);
   Kokkos::deep_copy(d_surf2tally,d_surf2tally_backup);
 
-  reset_scatter_view();
+  // discard whatever the rolled back attempt scattered
+
+  if (need_dup) reset_scatter_view();
 }
 
 /* ----------------------------------------------------------------------
-   re-create the scatter view so its duplicated copies start from zero
+   zero the duplicated copies of the scatter view
+   reset in place rather than re-creating: the move kernel tallies through
+     the byte copy of this compute that tally_set() handed to UpdateKokkos,
+     and that copy still holds the ScatterView it was blitted with, so a new
+     one here would leave the kernel scattering into an orphaned buffer
+   only meaningful when need_dup, since the non-duplicated scatter view
+     aliases d_array_surf_tally itself and resetting it would zero the tally
 ------------------------------------------------------------------------- */
 
 void ComputeSurfKokkos::reset_scatter_view()
 {
-  if (need_dup)
-    dup_array_surf_tally = Kokkos::Experimental::create_scatter_view<typename Kokkos::Experimental::ScatterSum, typename Kokkos::Experimental::ScatterDuplicated>(d_array_surf_tally);
-  else
-    ndup_array_surf_tally = Kokkos::Experimental::create_scatter_view<typename Kokkos::Experimental::ScatterSum, typename Kokkos::Experimental::ScatterNonDuplicated>(d_array_surf_tally);
+  dup_array_surf_tally.reset();
 }
 
 /* ---------------------------------------------------------------------- */

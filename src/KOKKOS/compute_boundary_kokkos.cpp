@@ -144,7 +144,7 @@ void ComputeBoundaryKokkos::backup()
 {
   if (need_dup) {
     Kokkos::Experimental::contribute(d_myarray, dup_myarray);
-    dup_myarray = {};
+    reset_scatter_view();
   }
 
   if (d_myarray_backup.extent(0) != d_myarray.extent(0) ||
@@ -153,8 +153,6 @@ void ComputeBoundaryKokkos::backup()
                                           d_myarray.extent(0),d_myarray.extent(1));
 
   Kokkos::deep_copy(d_myarray_backup,d_myarray);
-
-  reset_scatter_view();
 }
 
 /* ---------------------------------------------------------------------- */
@@ -163,17 +161,18 @@ void ComputeBoundaryKokkos::restore()
 {
   Kokkos::deep_copy(d_myarray,d_myarray_backup);
 
-  reset_scatter_view();
+  // discard whatever the rolled back attempt scattered
+
+  if (need_dup) reset_scatter_view();
 }
 
-/* ---------------------------------------------------------------------- */
+/* ----------------------------------------------------------------------
+   zero the duplicated copies in place (see ComputeSurfKokkos)
+------------------------------------------------------------------------- */
 
 void ComputeBoundaryKokkos::reset_scatter_view()
 {
-  if (need_dup)
-    dup_myarray = Kokkos::Experimental::create_scatter_view<typename Kokkos::Experimental::ScatterSum, typename Kokkos::Experimental::ScatterDuplicated>(d_myarray);
-  else
-    ndup_myarray = Kokkos::Experimental::create_scatter_view<typename Kokkos::Experimental::ScatterSum, typename Kokkos::Experimental::ScatterNonDuplicated>(d_myarray);
+  dup_myarray.reset();
 }
 
 /* ---------------------------------------------------------------------- */
