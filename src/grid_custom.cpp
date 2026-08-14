@@ -157,6 +157,8 @@ void Grid::allocate_custom(int index)
 void Grid::reallocate_custom(int nold, int nnew)
 {
   for (int ic = 0; ic < ncustom; ic++) {
+    if (ename[ic] == NULL) continue;
+
     if (etype[ic] == INT) {
       if (esize[ic] == 0) {
         int *ivector = memory->grow(eivec[ewhich[ic]],nnew,"grid:eivec");
@@ -176,7 +178,7 @@ void Grid::reallocate_custom(int nold, int nnew)
       } else {
         double **darray = memory->grow(edarray[ewhich[ic]],
                                        nnew,edcol[ewhich[ic]],"grid:edarray");
-        if (nnew - nold)
+        if (nnew > nold)
           memset(&darray[nold][0],0,
                  (nnew-nold)*edcol[ewhich[ic]]*sizeof(double));
       }

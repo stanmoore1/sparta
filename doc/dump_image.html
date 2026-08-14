@@ -103,7 +103,7 @@
 <PRE>dump myDump image all 100 dump.*.jpg type type
 dump myDump movie all 100 movie.mpg type type 
 </PRE>
-<P>These commands will dump shapshot images of all particles whose
+<P>These commands will dump snapshot images of all particles whose
 species are in the <I>mix-ID</I> to a file every 100 steps.  The last two
 shell command will make a movie from the JPG files (once the run has
 finished) and play it in the Firefox browser:
@@ -613,7 +613,7 @@ allows extremely flexible encoding and decoding of movies.
 cat snap.*.ppm | ffmpeg -y -f image2pipe -c:v ppm -i - -b:v 2400k movie.avi 
 </PRE>
 <P>Frontends for FFmpeg exist for multiple platforms. For more
-information see the <A HREF = "http://www.ffmpeg.org/">FFmpeg homepage</A>
+information see the <A HREF = "https://ffmpeg.org/">FFmpeg homepage</A>
 </P>
 
 </UL>
@@ -634,7 +634,7 @@ variety of file formats and decoders.
 % ffplay bar.avi 
 </PRE>
 <LI>c) Use the <A HREF = "https://lammps.github.io/pizza">Pizza.py</A>
-<A HREF = "https://lammps.gitbug.io/pizza/doc/animate.html">animate tool</A>,
+<A HREF = "https://lammps.github.io/pizza/doc/animate.html">animate tool</A>,
 which works directly on a series of image files. 
 
 <PRE>a = animate("foo*.jpg") 
@@ -660,7 +660,7 @@ building SPARTA.  The FFmpeg executable must also be available on the
 machine where SPARTA is being run.  Typically it's name is lowercase,
 i.e. ffmpeg.
 </P>
-<P>See <A HREF = "Section_start.html#start_2_2">Section 2.2.2</A> section of the
+<P>See <A HREF = "Section_start.html#start_2_2_2">Section 2.2.2</A> section of the
 documentation for details on how to compile with optional switches.
 </P>
 <P>Note that since FFmpeg is run as an external program via a pipe,

@@ -67,6 +67,17 @@ class ParticleKokkos : public Particle {
   KOKKOS_INLINE_FUNCTION
   void copy_custom_kokkos(int, int) const;
 
+  // zero the custom attributes of particles LO through HI-1
+  // Particle::add_particle() calls zero_custom() for every particle it
+  //   creates, so a device path which adds particles must do the same or
+  //   the new particle inherits whatever the slot last held
+  // the no-arg version zeroes the unused slots NLOCAL to MAXLOCAL-1 and is
+  //   for kernels which create a particle and then set its custom attributes
+  //   before the kernel ends, see comment in the .cpp file
+
+  void zero_custom_kokkos(int, int);
+  void zero_custom_kokkos();
+
 #ifndef SPARTA_KOKKOS_EXACT
   typedef typename Kokkos::Random_XorShift64_Pool<DeviceType>::generator_type rand_type;
 

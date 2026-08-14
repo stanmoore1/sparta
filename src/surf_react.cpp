@@ -56,7 +56,6 @@ SurfReact::SurfReact(SPARTA *sparta, int, char **arg) :
   tally_two_flag = tally_single_flag = tally_total_flag = 0;
 
   kokkosable = copy = copymode = 0;
-  uncopy = 1;
 }
 
 /* ---------------------------------------------------------------------- */

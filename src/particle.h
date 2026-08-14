@@ -129,8 +129,8 @@ class Particle : protected Pointers {
 
   // Kokkos settings
 
-  int copy,uncopy,copymode; // prevent deallocation of
-                            //  base class when child copy is destroyed
+  int copy,copymode; // prevent deallocation of
+                     //  base class when child copy is destroyed
 
   // methods
 

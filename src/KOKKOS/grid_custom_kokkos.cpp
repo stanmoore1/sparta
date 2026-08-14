@@ -219,6 +219,8 @@ void GridKokkos::reallocate_custom(int /*nold*/, int nnew)
     sync(Device,CUSTOM_MASK);
 
   for (int ic = 0; ic < ncustom; ic++) {
+    if (ename[ic] == NULL) continue;
+
     if (etype[ic] == INT) {
       if (esize[ic] == 0) {
         int *ivector = eivec[ewhich[ic]];
@@ -330,6 +332,15 @@ void GridKokkos::remove_custom(int index)
   for (int i = 0; i < ncustom; i++)
     if (ename[i]) empty = 0;
   if (empty) ncustom = 0;
+
+  // all four outer views may have been compacted above
+  // must flag them modified on host or the syncs below are no-ops
+  //   and the device keeps the stale pre-removal ordering
+
+  k_eivec.modify_host();
+  k_eiarray.modify_host();
+  k_edvec.modify_host();
+  k_edarray.modify_host();
 
   k_eivec.sync_device();
   k_eiarray.sync_device();

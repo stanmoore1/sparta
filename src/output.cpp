@@ -724,12 +724,12 @@ void Output::create_restart(int narg, char **arg)
 
 void Output::memory_usage()
 {
-  bigint pbytes,gbytes,sbytes,bytes;
+  bigint pbytes,gbytes,sbytes,mbytes,bytes;
   pbytes = particle->memory_usage();
   gbytes = grid->memory_usage();
   sbytes = surf->memory_usage();
-  bytes = pbytes + gbytes + sbytes;
-  bytes += modify->memory_usage();
+  mbytes = modify->memory_usage();
+  bytes = pbytes + gbytes + sbytes + mbytes;
 
   double scale = 1.0/1024.0/1024.0;
 
@@ -756,6 +756,13 @@ void Output::memory_usage()
   MPI_Allreduce(&sbytes,&max,1,MPI_SPARTA_BIGINT,MPI_MAX,world);
   double smax = scale * max;
 
+  MPI_Allreduce(&mbytes,&ave,1,MPI_SPARTA_BIGINT,MPI_SUM,world);
+  double mave = scale * ave/comm->nprocs;
+  MPI_Allreduce(&mbytes,&min,1,MPI_SPARTA_BIGINT,MPI_MIN,world);
+  double mmin = scale * min;
+  MPI_Allreduce(&mbytes,&max,1,MPI_SPARTA_BIGINT,MPI_MAX,world);
+  double mmax = scale * max;
+
   MPI_Allreduce(&bytes,&ave,1,MPI_SPARTA_BIGINT,MPI_SUM,world);
   double tave = scale * ave/comm->nprocs;
   MPI_Allreduce(&bytes,&min,1,MPI_SPARTA_BIGINT,MPI_MIN,world);
@@ -772,6 +779,8 @@ void Output::memory_usage()
               gave,gmin,gmax);
       fprintf(screen,"  surf      (ave,min,max) = %g %g %g\n",
               save,smin,smax);
+      fprintf(screen,"  modify    (ave,min,max) = %g %g %g\n",
+              mave,mmin,mmax);
       fprintf(screen,"  total     (ave,min,max) = %g %g %g\n",
               tave,tmin,tmax);
     }
@@ -783,6 +792,8 @@ void Output::memory_usage()
               gave,gmin,gmax);
       fprintf(logfile,"  surf      (ave,min,max) = %g %g %g\n",
               save,smin,smax);
+      fprintf(logfile,"  modify    (ave,min,max) = %g %g %g\n",
+              mave,mmin,mmax);
       fprintf(logfile,"  total     (ave,min,max) = %g %g %g\n",
               tave,tmin,tmax);
     }

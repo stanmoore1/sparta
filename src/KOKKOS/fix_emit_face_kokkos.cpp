@@ -83,12 +83,6 @@ FixEmitFaceKokkos::~FixEmitFaceKokkos()
 {
   if (copymode) return;
 
-  particle_kk_copy.uncopy();
-  regblock_kk_copy.uncopy();
-  regcylinder_kk_copy.uncopy();
-  regplane_kk_copy.uncopy();
-  regsphere_kk_copy.uncopy();
-
 #ifdef SPARTA_KOKKOS_EXACT
   rand_pool.destroy();
 #endif
@@ -360,6 +354,7 @@ void FixEmitFaceKokkos::perform_task()
   });
   particleKK->nlocal = nlocal_before + nnew;
   particleKK->modify(SPARTA_NS::Device, PARTICLE_MASK);
+  particleKK->zero_custom_kokkos(nlocal_before,particleKK->nlocal);
 
   if (modify->n_update_custom) {
     auto h_keep = Kokkos::create_mirror_view(d_keep);
