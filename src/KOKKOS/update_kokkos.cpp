@@ -607,6 +607,13 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
       h_nlocal() = particle->nlocal;
       if (continue_loop_flag) h_nmigrate() = nmigrate;
 
+      // surf reactions grow the particle list, and the sub-iteration that
+      //   moves the new particles keeps appending to the same migration
+      //   list, so k_mlist can outgrow the size chosen on entry to move().
+      //   every entry is a distinct particle index, so maxlocal is enough
+
+      grow_mlist(particle->maxlocal);
+
       Kokkos::deep_copy(d_scalars,h_scalars);
 
       // zero the custom attributes of the slots a surf reaction can fill
@@ -2011,6 +2018,20 @@ void UpdateKokkos::tally_set(bigint ntimestep)
 
   if (ngas_tally)
     error->all(FLERR,"Kokkos does not (yet) support tallying gas/gas collisions or reactions");
+}
+
+/* ----------------------------------------------------------------------
+   grow the migration list to hold nmax entries, keeping what it already has
+   a sub-iteration of move() carries its predecessor's count forward, so the
+     entries recorded so far must survive the reallocation
+------------------------------------------------------------------------- */
+
+void UpdateKokkos::grow_mlist(int nmax)
+{
+  if ((int) k_mlist.extent(0) >= nmax) return;
+
+  maxmigrate = nmax;
+  memoryKK->grow_kokkos(k_mlist,mlist,maxmigrate,"particle:mlist");
 }
 
 /* ---------------------------------------------------------------------- */

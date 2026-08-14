@@ -196,6 +196,8 @@ class UpdateKokkos : public Update {
   void restore();
   t_particle_1d d_particles_backup;
 
+  void grow_mlist(int);
+
   void tally_set(bigint);
 
   // remap x and v components into axisymmetric plane
