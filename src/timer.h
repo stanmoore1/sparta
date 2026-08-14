@@ -46,10 +46,21 @@ class Timer : protected Pointers {
   double elapsed(int);
 
   // initialize timeout timer
+  // must be called after reset_timeout(), so that the setting saved for a
+  //   later restore is the caller's real limit and never an expired 0.0
   void init_timeout();
 
   // trigger enforced timeout
-  void force_timeout() { _timeout = 0.0; }
+  // persist = 1 also expires the saved setting, so the timeout survives the
+  //   reset_timeout() that Run::command() performs at the start of every run.
+  //   "fix halt ... error soft" needs this: it is documented to skip
+  //   subsequent run commands, whereas an interrupt from the library
+  //   interface must not outlive the run it interrupted
+  void force_timeout(int persist = 0)
+  {
+    _timeout = 0.0;
+    if (persist) _s_timeout = 0.0;
+  }
 
   // restore original timeout setting after enforce timeout
   void reset_timeout() { _timeout = _s_timeout; }
@@ -77,7 +88,9 @@ class Timer : protected Pointers {
 
  private:
   double previous_time;
-  double timeout_start;
+  double timeout_start;  // wall time the timeout window opened, set by
+                         //   init_timeout().  only meaningful when
+                         //   _timeout >= 0.0
   double last_cpu_secs;     // process CPU time at last cpu_usage() call
   double last_cpu_wall;     // wall time at last cpu_usage() call
   double _timeout;      // max allowed wall time in seconds. infinity if negative
