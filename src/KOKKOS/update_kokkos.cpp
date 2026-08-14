@@ -54,6 +54,7 @@ enum{NCHILD,NPARENT,NUNKNOWN,NPBCHILD,NPBPARENT,NPBUNKNOWN,NBOUND};  // Grid
 enum{TALLYAUTO,TALLYREDUCE,TALLYLOCAL};         // same as Surf
 enum{PERAUTO,PERCELL,PERSURF};                  // several files
 enum{NOFIELD,CFIELD,PFIELD,GFIELD};             // several files
+enum{BCSTD,BCWRAP,BCMIRROR};                    // Update::bcopt values
 
 #define MAXSTUCK 20
 #define EPSPARAM 1.0e-7
@@ -130,6 +131,8 @@ UpdateKokkos::UpdateKokkos(SPARTA *sparta) : Update(sparta),
   h_nlocal        = Kokkos::subview(h_scalars,13);
 
   nboundary_tally = 0;
+
+  for (int f = 0; f < 6; f++) bcopt[f] = BCSTD;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -157,6 +160,16 @@ void UpdateKokkos::init()
       error->all(FLERR,"Cannot use optimized move with non-uniform grid");
     else if (surf->exist)
       error->all(FLERR,"Cannot use optimized move when surfaces are defined");
+    else if (domain->axisymmetric)
+
+      // the fast path assigns the end-of-step position straight to the
+      //   particle, but an axisymmetric move must pass through axi_remap() to
+      //   fold z back into the radial coordinate, once per cell crossing
+      // without that the particle lands off the axisymmetric plane and is then
+      //   discarded as out of its cell, so the run silently loses most of its
+      //   particles rather than giving a wrong answer in place
+
+      error->all(FLERR,"Cannot use optimized move with axisymmetric model");
     else {
       for (int ifix = 0; ifix < modify->nfix; ifix++) {
         if (strstr(modify->fix[ifix]->style,"adapt") != NULL)
@@ -180,8 +193,11 @@ void UpdateKokkos::init()
       if (surf->nsr) moveptr = &UpdateKokkos::move<1,1,1,0>;
       else moveptr = &UpdateKokkos::move<1,1,0,0>;
     } else {
-      if (optmove_flag) moveptr = &UpdateKokkos::move<1,0,0,1>;
-      else moveptr = &UpdateKokkos::move<1,0,0,0>;
+
+      // optmove is rejected above for axisymmetric, so there is no OPT
+      // instantiation of the axisymmetric kernel to select
+
+      moveptr = &UpdateKokkos::move<1,0,0,0>;
     }
   } else if (domain->dimension == 2) {
     if (surf->exist) {
@@ -285,7 +301,7 @@ void UpdateKokkos::setup()
       grid_kk->wrap_kokkos_graphs();
     }
   }
-  hash_kk = grid_kk->hash_kk;
+  grid_index_refresh();
 
   Update::setup(); // must come after prewrap since computes are called by setup()
 
@@ -298,6 +314,25 @@ void UpdateKokkos::setup()
   //  fflush(stdout);
   //  sleep(30);
   //  printf("Continuing...\n");
+}
+
+/* ----------------------------------------------------------------------
+   take the cell lookups used by the optimized move from the grid
+   both are rebuilt from scratch by GridKokkos::update_hash(), which fix
+     balance calls mid-run, so the copies held here have to be retaken
+     whenever the cell views are, not once at setup
+------------------------------------------------------------------------- */
+
+void UpdateKokkos::grid_index_refresh()
+{
+  GridKokkos* grid_kk = (GridKokkos*) grid;
+
+  hash_kk = grid_kk->hash_kk;
+
+  d_halo_index = grid_kk->d_halo_index;
+  halo_ilo = grid_kk->halo_ilo; halo_nx = grid_kk->halo_nx;
+  halo_jlo = grid_kk->halo_jlo; halo_ny = grid_kk->halo_ny;
+  halo_klo = grid_kk->halo_klo; halo_nz = grid_kk->halo_nz;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -450,6 +485,23 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
 
   dt = update->dt;
 
+  // which global boundary faces the fast path may handle itself, see the OPT
+  //   block in the move kernel below
+  // a compute boundary tallies periodic and specular crossings alike, and only
+  //   the standard move calls the tally, so give the optimization up on any
+  //   step where one is active.  nboundary_tally is set per step by tally_set()
+  // an outflow or surface face is left to the standard move: one destroys the
+  //   particle, the other runs a collision model
+
+  if (OPT) {
+    for (int f = 0; f < 6; f++) {
+      if (nboundary_tally) bcopt[f] = BCSTD;
+      else if (domain->bflag[f] == PERIODIC) bcopt[f] = BCWRAP;
+      else if (domain->bflag[f] == REFLECT) bcopt[f] = BCMIRROR;
+      else bcopt[f] = BCSTD;
+    }
+  }
+
   ParticleKokkos* particle_kk = ((ParticleKokkos*)particle);
 
   // external per particle field
@@ -488,6 +540,13 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
     d_csurfs = grid_kk->d_csurfs;
     d_csplits = grid_kk->d_csplits;
     d_csubs = grid_kk->d_csubs;
+
+    // the cell lookups are refreshed here alongside the cell views, not left
+    //   at what setup() copied: fix balance rebuilds them mid-run, into fresh
+    //   views, so a copy taken once at setup goes stale after the first
+    //   rebalance while d_cells above does not
+
+    grid_index_refresh();
 
     if (surf->exist) {
       SurfKokkos* surf_kk = ((SurfKokkos*)surf);
@@ -812,6 +871,114 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
   }
 }
 
+/* ----------------------------------------------------------------------
+   first step of the optimized move: apply the global boundary condition to an
+     end-of-step position
+   xnew = position at the end of a straight-line move, not modified
+   xp = xnew after any boundary condition, valid only if this returns 1
+   flip = bit per dimension whose velocity component a mirror negated.  the
+     caller applies it only once it decides to keep the particle: one that
+     falls through must reach the standard move with its velocity untouched,
+     which is also why xnew is left alone (and why xnew+L-L will not do, since
+     that is not xnew in floating point)
+   bcopt[face] says what this face may do -- BCSTD nothing, BCWRAP translate,
+     BCMIRROR mirror -- so a face the fast path cannot handle leaves the
+     position outside the box and the bound tests below reject it
+   one translation or mirror per dimension covers any particle that did not
+     cross a whole domain in a single step; anything still outside is rejected
+   return 1 if xp is inside the global box, 0 to use the standard move
+------------------------------------------------------------------------- */
+
+template < int DIM >
+KOKKOS_INLINE_FUNCTION
+int UpdateKokkos::optmove_bc(const double *xnew, double *xp, int &flip) const
+{
+  xp[0] = xnew[0];
+  xp[1] = xnew[1];
+  xp[2] = xnew[2];
+  flip = 0;
+
+  if (xp[0] < xlo) {
+    if (bcopt[XLO] == BCWRAP) xp[0] += Lx;
+    else if (bcopt[XLO] == BCMIRROR) { xp[0] = xlo + (xlo-xp[0]); flip |= 1; }
+  } else if (xp[0] >= xhi) {
+    if (bcopt[XHI] == BCWRAP) xp[0] -= Lx;
+    else if (bcopt[XHI] == BCMIRROR) { xp[0] = xhi - (xp[0]-xhi); flip |= 1; }
+  }
+
+  if (xp[1] < ylo) {
+    if (bcopt[YLO] == BCWRAP) xp[1] += Ly;
+    else if (bcopt[YLO] == BCMIRROR) { xp[1] = ylo + (ylo-xp[1]); flip |= 2; }
+  } else if (xp[1] >= yhi) {
+    if (bcopt[YHI] == BCWRAP) xp[1] -= Ly;
+    else if (bcopt[YHI] == BCMIRROR) { xp[1] = yhi - (xp[1]-yhi); flip |= 2; }
+  }
+
+  if (DIM == 3) {
+    if (xp[2] < zlo) {
+      if (bcopt[ZLO] == BCWRAP) xp[2] += Lz;
+      else if (bcopt[ZLO] == BCMIRROR) { xp[2] = zlo + (zlo-xp[2]); flip |= 4; }
+    } else if (xp[2] >= zhi) {
+      if (bcopt[ZHI] == BCWRAP) xp[2] -= Lz;
+      else if (bcopt[ZHI] == BCMIRROR) { xp[2] = zhi - (xp[2]-zhi); flip |= 4; }
+    }
+  }
+
+  // cell bounds are half open, [lo,hi), so a particle exactly on an upper face
+  // belongs to no cell and has to be rejected too.  with > instead of >= it
+  // would reach the lookup with an index of ncx/ncy/ncz and alias onto an
+  // unrelated cell
+
+  if (xp[0] < xlo || xp[0] >= xhi) return 0;
+  if (xp[1] < ylo || xp[1] >= yhi) return 0;
+  if (DIM == 3)
+    if (xp[2] < zlo || xp[2] >= zhi) return 0;
+
+  return 1;
+}
+
+/* ----------------------------------------------------------------------
+   second step of the optimized move: map a position inside the global box to
+     the local index of the cell holding it
+   caller must have established that xp is inside the box, via optmove_bc()
+   preferred path is one indexed load into d_halo_index, keyed on the cell's
+     position within this proc's halo arc.  the conditional adds fold a
+     periodically wrapped ghost layer back into the arc
+   return the local cell index, or -1 if this proc does not hold that cell, in
+     which case the caller uses the standard move
+------------------------------------------------------------------------- */
+
+template < int DIM >
+KOKKOS_INLINE_FUNCTION
+int UpdateKokkos::optmove_cell(const double *xp) const
+{
+  const int ip = static_cast<int> ((xp[0] - xlo)/dx);
+  const int jp = static_cast<int> ((xp[1] - ylo)/dy);
+  int kp = 0;
+  if (DIM == 3) kp = static_cast<int> ((xp[2] - zlo)/dz);
+
+  if (d_halo_index.extent(0)) {
+    int il = ip - halo_ilo; if (il < 0) il += ncx;
+    int jl = jp - halo_jlo; if (jl < 0) jl += ncy;
+    int kl = kp - halo_klo; if (kl < 0) kl += ncz;
+    if (il < halo_nx && jl < halo_ny && kl < halo_nz &&
+        ip < ncx && jp < ncy && kp < ncz)
+      return d_halo_index[((size_t) kl*halo_ny + jl)*halo_nx + il];
+    return -1;
+  }
+
+  // no dense index for this decomposition: hash on the global cell ID
+  // must accumulate in cellint, since ncx/ncy/ncz are int and an int
+  //   expression overflows once the global cell count passes 2^31, silently
+  //   disabling this fast path for every particle above that point in the grid
+
+  const cellint cellIdx = ((cellint) kp*ncy + jp)*ncx + ip + 1;
+  auto index = hash_kk.find(static_cast<GridKokkos::key_type>(cellIdx));
+  if (hash_kk.valid_at(index)) return static_cast<int> (hash_kk.value_at(index));
+
+  return -1;
+}
+
 /* ---------------------------------------------------------------------- */
 
 template<int DIM, int SURF, int REACT, int OPT, int ATOMIC_REDUCTION>
@@ -916,44 +1083,48 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
   }
 
   // optimized move
+  // resolve the particle's end-of-step cell in one step instead of walking the
+  //   grid cell by cell.  optmove_bc() applies whatever global boundary
+  //   condition is needed and optmove_cell() maps the resulting position to a
+  //   local cell index; if either declines, the particle falls through to the
+  //   standard move below with its state untouched
 
   if (OPT) {
-    int optmove = 1;
+    double xp[3];
+    int flip;
 
-    if (xnew[0] < xlo || xnew[0] > xhi)
-      optmove = 0;
+    if (optmove_bc<DIM>(xnew,xp,flip)) {
+      const int icell = optmove_cell<DIM>(xp);
 
-    if (xnew[1] < ylo || xnew[1] > yhi)
-      optmove = 0;
-
-    if (DIM == 3) {
-      if (xnew[2] < zlo || xnew[2] > zhi)
-        optmove = 0;
-    }
-
-    if (optmove) {
-
-      const int ip = static_cast<int>((xnew[0] - xlo)/dx);
-      const int jp = static_cast<int>((xnew[1] - ylo)/dy);
-      int kp = 0;
-      if (DIM == 3) kp = static_cast<int>((xnew[2] - zlo)/dz);
-
-      int cellIdx = (kp*ncy + jp)*ncx + ip + 1;
-      auto index = hash_kk.find(static_cast<GridKokkos::key_type>(cellIdx));
-
-      // particle moving outside ghost halo will be flagged for standard move
-
-      if (hash_kk.valid_at(index)) {
-
-        int icell = static_cast<int>(hash_kk.value_at(index));
+      if (icell >= 0) {
 
         // reset particle cell and coordinates
 
         particle_i.icell = icell;
         particle_i.flag = PKEEP;
-        x[0] = xnew[0];
-        x[1] = xnew[1];
-        x[2] = xnew[2];
+        x[0] = xp[0];
+        x[1] = xp[1];
+        x[2] = xp[2];
+
+        // specular reflection off a global boundary: now that the particle is
+        //   committed, negate the velocity components the mirrors flipped and
+        //   count the boundary collisions the standard move would have counted
+        // a particle that reaches two faces in one step reflects off both, and
+        //   mirroring one dimension does not change the motion in the other,
+        //   so the two are independent and each is tallied
+
+        if (flip) {
+          int nb = 0;
+          if (flip & 1) { v[0] = -v[0]; nb++; }
+          if (flip & 2) { v[1] = -v[1]; nb++; }
+          if (flip & 4) { v[2] = -v[2]; nb++; }
+          if (ATOMIC_REDUCTION == 1)
+            Kokkos::atomic_add(&d_nboundary_one(),nb);
+          else if (ATOMIC_REDUCTION == 0)
+            d_nboundary_one() += nb;
+          else
+            reduce.nboundary_one += nb;
+        }
 
         if (d_cells[icell].proc != me) {
           int indx;

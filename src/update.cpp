@@ -49,6 +49,7 @@ enum{NCHILD,NPARENT,NUNKNOWN,NPBCHILD,NPBPARENT,NPBUNKNOWN,NBOUND};  // Grid
 enum{TALLYAUTO,TALLYREDUCE,TALLYRVOUS};         // same as Surf
 enum{PERAUTO,PERCELL,PERSURF};                  // several files
 enum{NOFIELD,CFIELD,PFIELD,GFIELD};             // several files
+enum{BCSTD,BCWRAP,BCMIRROR};                    // Update::bcopt values
 
 #define MAXSTUCK 20
 #define EPSPARAM 1.0e-7
@@ -180,6 +181,16 @@ void Update::init()
       error->all(FLERR,"Cannot use optimized move with non-uniform grid");
     else if (surf->exist)
       error->all(FLERR,"Cannot use optimized move when surfaces are defined");
+    else if (domain->axisymmetric)
+
+      // the fast path assigns the end-of-step position straight to the
+      //   particle, but an axisymmetric move must pass through axi_remap() to
+      //   fold z back into the radial coordinate, once per cell crossing
+      // without that the particle lands off the axisymmetric plane and is then
+      //   discarded as out of its cell, so the run silently loses most of its
+      //   particles rather than giving a wrong answer in place
+
+      error->all(FLERR,"Cannot use optimized move with axisymmetric model");
     else {
       for (int ifix = 0; ifix < modify->nfix; ifix++) {
         if (strstr(modify->fix[ifix]->style,"adapt") != NULL)
@@ -201,8 +212,11 @@ void Update::init()
     if (surf->exist)
       moveptr = &Update::move<1,1,0>;
     else {
-      if (optmove_flag) moveptr = &Update::move<1,0,1>;
-      else moveptr = &Update::move<1,0,0>;
+
+      // optmove is rejected above for axisymmetric, so there is no OPT
+      // instantiation of the axisymmetric move to select
+
+      moveptr = &Update::move<1,0,0>;
     }
   } else if (domain->dimension == 2) {
     if (surf->exist)
@@ -377,6 +391,113 @@ void Update::run(int nsteps)
 }
 
 /* ----------------------------------------------------------------------
+   first step of the optimized move: apply the global boundary condition to an
+     end-of-step position
+   xnew = position at the end of a straight-line move, not modified
+   xp = xnew after any boundary condition, valid only if this returns 1
+   flip = bit per dimension whose velocity component a mirror negated.  the
+     caller applies it only once it decides to keep the particle: one that
+     falls through must reach the standard move with its velocity untouched,
+     which is also why xnew is left alone (and why xnew+L-L will not do, since
+     that is not xnew in floating point)
+   bcopt[face] says what this face may do -- BCSTD nothing, BCWRAP translate,
+     BCMIRROR mirror -- so a face the fast path cannot handle leaves the
+     position outside the box and the bound tests below reject it
+   one translation or mirror per dimension covers any particle that did not
+     cross a whole domain in a single step; anything still outside is rejected
+   return 1 if xp is inside the global box, 0 to use the standard move
+   kept in step with UpdateKokkos::optmove_bc(), which cannot be shared with
+     this one because it has to compile as device code
+------------------------------------------------------------------------- */
+
+template < int DIM >
+static inline int optmove_bc(const double *xnew, double *xp, int &flip,
+                             const int *bcopt,
+                             const double *boxlo, const double *boxhi,
+                             double Lx, double Ly, double Lz)
+{
+  xp[0] = xnew[0];
+  xp[1] = xnew[1];
+  xp[2] = xnew[2];
+  flip = 0;
+
+  if (xp[0] < boxlo[0]) {
+    if (bcopt[XLO] == BCWRAP) xp[0] += Lx;
+    else if (bcopt[XLO] == BCMIRROR)
+      { xp[0] = boxlo[0] + (boxlo[0]-xp[0]); flip |= 1; }
+  } else if (xp[0] >= boxhi[0]) {
+    if (bcopt[XHI] == BCWRAP) xp[0] -= Lx;
+    else if (bcopt[XHI] == BCMIRROR)
+      { xp[0] = boxhi[0] - (xp[0]-boxhi[0]); flip |= 1; }
+  }
+
+  if (xp[1] < boxlo[1]) {
+    if (bcopt[YLO] == BCWRAP) xp[1] += Ly;
+    else if (bcopt[YLO] == BCMIRROR)
+      { xp[1] = boxlo[1] + (boxlo[1]-xp[1]); flip |= 2; }
+  } else if (xp[1] >= boxhi[1]) {
+    if (bcopt[YHI] == BCWRAP) xp[1] -= Ly;
+    else if (bcopt[YHI] == BCMIRROR)
+      { xp[1] = boxhi[1] - (xp[1]-boxhi[1]); flip |= 2; }
+  }
+
+  if (DIM == 3) {
+    if (xp[2] < boxlo[2]) {
+      if (bcopt[ZLO] == BCWRAP) xp[2] += Lz;
+      else if (bcopt[ZLO] == BCMIRROR)
+        { xp[2] = boxlo[2] + (boxlo[2]-xp[2]); flip |= 4; }
+    } else if (xp[2] >= boxhi[2]) {
+      if (bcopt[ZHI] == BCWRAP) xp[2] -= Lz;
+      else if (bcopt[ZHI] == BCMIRROR)
+        { xp[2] = boxhi[2] - (xp[2]-boxhi[2]); flip |= 4; }
+    }
+  }
+
+  // cell bounds are half open, [lo,hi), so a particle exactly on an upper face
+  // belongs to no cell and has to be rejected too.  with > instead of >= it
+  // would reach the lookup with an index of unx/uny/unz, which aliases onto
+  // the first cell of the next row rather than missing the hash
+
+  if (xp[0] < boxlo[0] || xp[0] >= boxhi[0]) return 0;
+  if (xp[1] < boxlo[1] || xp[1] >= boxhi[1]) return 0;
+  if (DIM == 3)
+    if (xp[2] < boxlo[2] || xp[2] >= boxhi[2]) return 0;
+
+  return 1;
+}
+
+/* ----------------------------------------------------------------------
+   second step of the optimized move: map a position inside the global box to
+     the local index of the cell holding it
+   caller must have established that xp is inside the box, via optmove_bc()
+   return the local cell index, or -1 if this proc does not hold that cell
+     (it is outside the owned plus ghost halo), in which case the caller uses
+     the standard move
+------------------------------------------------------------------------- */
+
+template < int DIM >
+static inline int optmove_cell(const double *xp, const double *boxlo,
+                               double dx, double dy, double dz, Grid *grid)
+{
+  const int ip = static_cast<int> ((xp[0] - boxlo[0])/dx);
+  const int jp = static_cast<int> ((xp[1] - boxlo[1])/dy);
+  int kp = 0;
+  if (DIM == 3) kp = static_cast<int> ((xp[2] - boxlo[2])/dz);
+
+  // must accumulate in cellint: unx/uny/unz are int, so an int expression
+  // overflows once the global cell count passes 2^31, and the wrong ID misses
+  // the hash and silently disables this fast path for every particle above
+  // that point in the grid
+
+  const cellint cellIdx = ((cellint) kp*grid->uny + jp)*grid->unx + ip + 1;
+
+  Grid::MyHash::iterator hashptr = grid->hash->find(cellIdx);
+  if (hashptr != grid->hash->end()) return hashptr->second;
+
+  return -1;
+}
+
+/* ----------------------------------------------------------------------
    advect particles thru grid
    DIM = 2/3 for 2d/3d, 1 for 2d axisymmetric
    SURF = 0/1 for no surfs or surfs
@@ -396,6 +517,7 @@ template < int DIM, int SURF, int OPT > void Update::move()
   double *x,*v,*lo,*hi;
   double Lx,Ly,Lz,dx,dy,dz;
   double *boxlo, *boxhi;
+  int bcopt[6] = {0,0,0,0,0,0};
   Grid::ParentCell *pcell;
   Surf::Tri *tri;
   Surf::Line *line;
@@ -412,6 +534,20 @@ template < int DIM, int SURF, int OPT > void Update::move()
     dx = Lx/grid->unx;
     dy = Ly/grid->uny;
     dz = Lz/grid->unz;
+
+    // which global boundary faces the fast path may handle itself, see below
+    // a compute boundary tallies periodic and specular crossings alike, and
+    //   only the standard move calls the tally, so give the optimization up on
+    //   any step where one is active
+    // an outflow or surface face is left to the standard move: one destroys
+    //   the particle, the other runs a collision model
+
+    for (int f = 0; f < 6; f++) {
+      if (nboundary_tally) bcopt[f] = BCSTD;
+      else if (domain->bflag[f] == PERIODIC) bcopt[f] = BCWRAP;
+      else if (domain->bflag[f] == REFLECT) bcopt[f] = BCMIRROR;
+      else bcopt[f] = BCSTD;
+    }
   }
 
   // for 2d and axisymmetry only
@@ -535,43 +671,42 @@ template < int DIM, int SURF, int OPT > void Update::move()
       }
 
       // optimized move
+      // resolve the particle's end-of-step cell in one step instead of walking
+      //   the grid cell by cell.  optmove_bc() applies whatever global
+      //   boundary condition is needed and optmove_cell() maps the resulting
+      //   position to a local cell index; if either declines, the particle
+      //   falls through to the standard move below with its state untouched
 
       if (OPT) {
-        int optmove = 1;
+        double xp[3];
+        int flip;
 
-        if (xnew[0] < boxlo[0] || xnew[0] > boxhi[0])
-          optmove = 0;
+        if (optmove_bc<DIM>(xnew,xp,flip,bcopt,boxlo,boxhi,Lx,Ly,Lz)) {
+          const int icell = optmove_cell<DIM>(xp,boxlo,dx,dy,dz,grid);
 
-        if (xnew[1] < boxlo[1] || xnew[1] > boxhi[1])
-          optmove = 0;
-
-        if (DIM == 3) {
-          if (xnew[2] < boxlo[2] || xnew[2] > boxhi[2])
-            optmove = 0;
-        }
-
-        if (optmove) {
-          const int ip = static_cast<int>((xnew[0] - boxlo[0])/dx);
-          const int jp = static_cast<int>((xnew[1] - boxlo[1])/dy);
-          int kp = 0;
-          if (DIM == 3) kp = static_cast<int>((xnew[2] - boxlo[2])/dz);
-
-          int cellIdx = (kp*grid->uny + jp)*grid->unx + ip + 1;
-
-          // particle outside ghost grid halo must use standard move
-
-          Grid::MyHash::iterator hashptr = grid->hash->find(cellIdx);
-          if (hashptr != grid->hash->end()) {
-
-            int icell = hashptr->second;
+          if (icell >= 0) {
 
             // reset particle cell and coordinates
 
             particles[i].icell = icell;
             particles[i].flag = PKEEP;
-            x[0] = xnew[0];
-            x[1] = xnew[1];
-            x[2] = xnew[2];
+            x[0] = xp[0];
+            x[1] = xp[1];
+            x[2] = xp[2];
+
+            // specular reflection off a global boundary: now that the particle
+            //   is committed, negate the velocity components the mirrors
+            //   flipped and count the boundary collisions the standard move
+            //   would have counted
+            // a particle that reaches two faces in one step reflects off both,
+            //   and mirroring one dimension does not change the motion in the
+            //   other, so the two are independent and each is tallied
+
+            if (flip) {
+              if (flip & 1) { v[0] = -v[0]; nboundary_one++; }
+              if (flip & 2) { v[1] = -v[1]; nboundary_one++; }
+              if (flip & 4) { v[2] = -v[2]; nboundary_one++; }
+            }
 
             if (cells[icell].proc != me) {
               mlist[nmigrate++] = i;

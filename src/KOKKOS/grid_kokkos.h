@@ -175,6 +175,24 @@ class GridKokkos : public Grid {
   // fact that this hash lives on "device"
   hash_type hash_kk;
 
+  // dense alternative to hash_kk for the uniform-grid fast path in
+  //   UpdateKokkos::move(): maps a cell's position within this proc's halo
+  //   straight to its local index, so a lookup is one indexed load rather
+  //   than a dependent probe chain.  -1 where this proc holds no cell.
+  // sized by the halo, not the global grid, so it is O(nlocal+nghost) per
+  //   proc and constant under weak scaling.
+  // halo_[ijk]lo is the ring position where the halo arc begins, so a
+  //   periodically wrapped ghost layer needs no special case.
+  // extent 0 means unavailable (non-uniform grid, or a halo whose bounding
+  //   box is far larger than the cells in it, e.g. an RCB decomposition);
+  //   callers must fall back to hash_kk.
+
+  DAT::t_int_1d d_halo_index;
+  int halo_ilo,halo_jlo,halo_klo;
+  int halo_nx,halo_ny,halo_nz;
+
+  void update_halo_index();
+
   DAT::tdual_int_1d k_ewhich,k_eicol,k_edcol;
 
   tdual_struct_tdual_int_1d_1d k_eivec;
