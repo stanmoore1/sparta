@@ -104,6 +104,20 @@ class Update : protected Pointers {
   int nsurf_tally;         // # of Comps tallying gas/surf info this step
   int nboundary_tally;     // # of Comps tallying gas/boundary info this step
 
+  // optimized move, global boundary faces of style {s}
+  // a surf collide model that is nothing but a mirror can be applied by the
+  //   fast path itself, since the box faces are axis-aligned.  the model still
+  //   has to be told how many collisions it had, which the fast path counts
+  //   per face and optmove_surf_tally() hands back at the end of the move
+
+  int bcmirror_surf[6];    // 1 if this {s} face's model is a plain mirror
+  int bcmirror_one[6];     // fast-path mirrors on this face this step
+  int bcmirror_any;        // 1 if any face is one, so the counting can be
+                           //   skipped entirely for the common {r}-only case
+
+  void optmove_surf_init();
+  void optmove_surf_tally();
+
   class Compute **glist_active;   // list of active gas/gas Comps this step
   class Compute **slist_active;   // list of active gas/surf Comps this step
   class Compute **blist_active;   // list of active gas/boundary Comps this step

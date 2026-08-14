@@ -213,6 +213,13 @@ class UpdateKokkos : public Update {
   DAT::t_int_scalar d_nlocal;
   HAT::t_int_scalar h_nlocal;
 
+  // per-face count of the {s} face mirrors the fast path did, see
+  // Update::optmove_surf_tally().  kept out of d_scalars because it is only
+  // touched when a face qualifies, which most runs have none of
+
+  DAT::t_int_1d d_bcmirror;
+  HAT::t_int_1d h_bcmirror;
+
   void backup();
   void restore();
   t_particle_1d d_particles_backup;

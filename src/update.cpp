@@ -205,6 +205,8 @@ void Update::init()
     grid->update_halo_index();
   }
 
+  optmove_surf_init();
+
   // choose the appropriate move method
 
   if (domain->dimension == 3) {
@@ -401,11 +403,13 @@ void Update::run(int nsteps)
      end-of-step position
    xnew = position at the end of a straight-line move, not modified
    xp = xnew after any boundary condition, valid only if this returns 1
-   flip = bit per dimension whose velocity component a mirror negated.  the
-     caller applies it only once it decides to keep the particle: one that
-     falls through must reach the standard move with its velocity untouched,
-     which is also why xnew is left alone (and why xnew+L-L will not do, since
-     that is not xnew in floating point)
+   flip = bit 0/1/2 per dimension whose velocity component a mirror negated,
+     plus bit 3/4/5 when it was that dimension's upper face, so the caller can
+     name the face it reflected off.  the caller applies it only once it
+     decides to keep the particle: one that falls through must reach the
+     standard move with its velocity untouched, which is also why xnew is left
+     alone (and why xnew+L-L will not do, since that is not xnew in floating
+     point)
    bcopt[face] says what this face may do -- BCSTD nothing, BCWRAP translate,
      BCMIRROR mirror, BCEXIT delete -- so a face the fast path cannot handle
      leaves the position outside the box and the bound tests below reject it
@@ -443,7 +447,7 @@ static inline int optmove_bc(const double *xnew, double *xp, int &flip,
   } else if (xp[0] >= boxhi[0]) {
     if (bcopt[XHI] == BCWRAP) xp[0] -= Lx;
     else if (bcopt[XHI] == BCMIRROR)
-      { xp[0] = boxhi[0] - (xp[0]-boxhi[0]); flip |= 1; }
+      { xp[0] = boxhi[0] - (xp[0]-boxhi[0]); flip |= 1|8; }
     else if (bcopt[XHI] == BCEXIT) exitbit |= 1;
   }
 
@@ -455,7 +459,7 @@ static inline int optmove_bc(const double *xnew, double *xp, int &flip,
   } else if (xp[1] >= boxhi[1]) {
     if (bcopt[YHI] == BCWRAP) xp[1] -= Ly;
     else if (bcopt[YHI] == BCMIRROR)
-      { xp[1] = boxhi[1] - (xp[1]-boxhi[1]); flip |= 2; }
+      { xp[1] = boxhi[1] - (xp[1]-boxhi[1]); flip |= 2|16; }
     else if (bcopt[YHI] == BCEXIT) exitbit |= 2;
   }
 
@@ -468,7 +472,7 @@ static inline int optmove_bc(const double *xnew, double *xp, int &flip,
     } else if (xp[2] >= boxhi[2]) {
       if (bcopt[ZHI] == BCWRAP) xp[2] -= Lz;
       else if (bcopt[ZHI] == BCMIRROR)
-        { xp[2] = boxhi[2] - (xp[2]-boxhi[2]); flip |= 4; }
+        { xp[2] = boxhi[2] - (xp[2]-boxhi[2]); flip |= 4|32; }
       else if (bcopt[ZHI] == BCEXIT) exitbit |= 4;
     }
   }
@@ -604,6 +608,7 @@ template < int DIM, int SURF, int OPT > void Update::move()
       else if (domain->bflag[f] == PERIODIC) bcopt[f] = BCWRAP;
       else if (domain->bflag[f] == REFLECT) bcopt[f] = BCMIRROR;
       else if (domain->bflag[f] == OUTFLOW) bcopt[f] = BCEXIT;
+      else if (bcmirror_surf[f]) bcopt[f] = BCMIRROR;
       else bcopt[f] = BCSTD;
     }
   }
@@ -781,6 +786,17 @@ template < int DIM, int SURF, int OPT > void Update::move()
               if (flip & 1) { v[0] = -v[0]; nboundary_one++; }
               if (flip & 2) { v[1] = -v[1]; nboundary_one++; }
               if (flip & 4) { v[2] = -v[2]; nboundary_one++; }
+
+              // an {s} face's surf collide model keeps its own count of the
+              //   collisions it handled, so count them per face here and give
+              //   them to it at the end of the move.  a {r} face has no model,
+              //   and optmove_surf_tally() ignores those faces
+
+              if (bcmirror_any) {
+                if (flip & 1) bcmirror_one[(flip & 8) ? XHI : XLO]++;
+                if (flip & 2) bcmirror_one[(flip & 16) ? YHI : YLO]++;
+                if (flip & 4) bcmirror_one[(flip & 32) ? ZHI : ZLO]++;
+              }
             }
 
             if (cells[icell].proc != me) {
@@ -1527,6 +1543,10 @@ template < int DIM, int SURF, int OPT > void Update::move()
 
   particle->sorted = 0;
 
+  // hand any {s} face mirrors the fast path did back to their collide models
+
+  if (OPT && bcmirror_any) optmove_surf_tally();
+
   // accumulate running totals
 
   niterate_running += niterate;
@@ -1720,6 +1740,52 @@ int Update::collide_react_setup()
 
   if (nsc || nsr) return 1;
   return 0;
+}
+
+/* ----------------------------------------------------------------------
+   classify the global boundary faces of style {s} for the optimized move
+   a face whose surf collide model is a plain mirror and which runs no surface
+     chemistry can be reflected by the fast path itself, since the box faces
+     are axis-aligned and a mirror there is one negated velocity component
+   anything else -- a diffuse or piston or transparent model, a reaction model,
+     a face that changes its model between runs -- stays with the standard move
+   called from init(), so a surf_collide or bound_modify command between runs
+     is picked up
+------------------------------------------------------------------------- */
+
+void Update::optmove_surf_init()
+{
+  for (int f = 0; f < 6; f++) {
+    bcmirror_surf[f] = 0;
+    bcmirror_one[f] = 0;
+  }
+  bcmirror_any = 0;
+
+  if (!optmove_flag) return;
+
+  for (int f = 0; f < 6; f++) {
+    if (domain->bflag[f] != SURFACE) continue;
+    if (domain->surf_react[f] >= 0) continue;
+    const int isc = domain->surf_collide[f];
+    if (isc < 0) continue;
+    if (surf->sc[isc]->mirror_flag) bcmirror_surf[f] = bcmirror_any = 1;
+  }
+}
+
+/* ----------------------------------------------------------------------
+   give each {s} face's surf collide model the collisions the fast path did
+     for it, so its own tally matches what the standard move would have left
+   called at the end of move(), before collide_react_update() rolls nsingle
+     into the cumulative count at the end of the step
+------------------------------------------------------------------------- */
+
+void Update::optmove_surf_tally()
+{
+  for (int f = 0; f < 6; f++) {
+    if (!bcmirror_surf[f] || !bcmirror_one[f]) continue;
+    surf->sc[domain->surf_collide[f]]->nsingle += bcmirror_one[f];
+    bcmirror_one[f] = 0;
+  }
 }
 
 /* ----------------------------------------------------------------------
