@@ -49,7 +49,7 @@ enum{NCHILD,NPARENT,NUNKNOWN,NPBCHILD,NPBPARENT,NPBUNKNOWN,NBOUND};  // Grid
 enum{TALLYAUTO,TALLYREDUCE,TALLYRVOUS};         // same as Surf
 enum{PERAUTO,PERCELL,PERSURF};                  // several files
 enum{NOFIELD,CFIELD,PFIELD,GFIELD};             // several files
-enum{BCSTD,BCWRAP,BCMIRROR};                    // Update::bcopt values
+enum{BCSTD,BCWRAP,BCMIRROR,BCEXIT};             // Update::bcopt values
 
 #define MAXSTUCK 20
 #define EPSPARAM 1.0e-7
@@ -401,11 +401,12 @@ void Update::run(int nsteps)
      which is also why xnew is left alone (and why xnew+L-L will not do, since
      that is not xnew in floating point)
    bcopt[face] says what this face may do -- BCSTD nothing, BCWRAP translate,
-     BCMIRROR mirror -- so a face the fast path cannot handle leaves the
-     position outside the box and the bound tests below reject it
+     BCMIRROR mirror, BCEXIT delete -- so a face the fast path cannot handle
+     leaves the position outside the box and the bound tests below reject it
    one translation or mirror per dimension covers any particle that did not
      cross a whole domain in a single step; anything still outside is rejected
-   return 1 if xp is inside the global box, 0 to use the standard move
+   return 1 if xp is inside the global box, 0 to use the standard move,
+     -1 if the particle left through an outflow face and is to be deleted
    kept in step with UpdateKokkos::optmove_bc(), which cannot be shared with
      this one because it has to compile as device code
 ------------------------------------------------------------------------- */
@@ -421,24 +422,35 @@ static inline int optmove_bc(const double *xnew, double *xp, int &flip,
   xp[2] = xnew[2];
   flip = 0;
 
+  // exitbit records, per dimension, that the face the particle went out of is
+  //   an outflow face.  the position is left alone for those, so the bound
+  //   tests below still see the dimension as outside and can tell the two
+  //   reasons for that apart
+
+  int exitbit = 0;
+
   if (xp[0] < boxlo[0]) {
     if (bcopt[XLO] == BCWRAP) xp[0] += Lx;
     else if (bcopt[XLO] == BCMIRROR)
       { xp[0] = boxlo[0] + (boxlo[0]-xp[0]); flip |= 1; }
+    else if (bcopt[XLO] == BCEXIT) exitbit |= 1;
   } else if (xp[0] >= boxhi[0]) {
     if (bcopt[XHI] == BCWRAP) xp[0] -= Lx;
     else if (bcopt[XHI] == BCMIRROR)
       { xp[0] = boxhi[0] - (xp[0]-boxhi[0]); flip |= 1; }
+    else if (bcopt[XHI] == BCEXIT) exitbit |= 1;
   }
 
   if (xp[1] < boxlo[1]) {
     if (bcopt[YLO] == BCWRAP) xp[1] += Ly;
     else if (bcopt[YLO] == BCMIRROR)
       { xp[1] = boxlo[1] + (boxlo[1]-xp[1]); flip |= 2; }
+    else if (bcopt[YLO] == BCEXIT) exitbit |= 2;
   } else if (xp[1] >= boxhi[1]) {
     if (bcopt[YHI] == BCWRAP) xp[1] -= Ly;
     else if (bcopt[YHI] == BCMIRROR)
       { xp[1] = boxhi[1] - (xp[1]-boxhi[1]); flip |= 2; }
+    else if (bcopt[YHI] == BCEXIT) exitbit |= 2;
   }
 
   if (DIM == 3) {
@@ -446,10 +458,12 @@ static inline int optmove_bc(const double *xnew, double *xp, int &flip,
       if (bcopt[ZLO] == BCWRAP) xp[2] += Lz;
       else if (bcopt[ZLO] == BCMIRROR)
         { xp[2] = boxlo[2] + (boxlo[2]-xp[2]); flip |= 4; }
+      else if (bcopt[ZLO] == BCEXIT) exitbit |= 4;
     } else if (xp[2] >= boxhi[2]) {
       if (bcopt[ZHI] == BCWRAP) xp[2] -= Lz;
       else if (bcopt[ZHI] == BCMIRROR)
         { xp[2] = boxhi[2] - (xp[2]-boxhi[2]); flip |= 4; }
+      else if (bcopt[ZHI] == BCEXIT) exitbit |= 4;
     }
   }
 
@@ -457,11 +471,32 @@ static inline int optmove_bc(const double *xnew, double *xp, int &flip,
   // belongs to no cell and has to be rejected too.  with > instead of >= it
   // would reach the lookup with an index of unx/uny/unz, which aliases onto
   // the first cell of the next row rather than missing the hash
+  //
+  // a dimension still outside because of an outflow face means the particle
+  //   left the domain, but only if every other dimension is accounted for: a
+  //   face the fast path does not handle runs a surface collision model that
+  //   can turn the particle around before it ever reaches the outflow face, so
+  //   one of those anywhere sends the particle to the standard move instead.
+  //   a wrap or a mirror cannot, since neither changes the motion in the
+  //   dimension that exits
 
-  if (xp[0] < boxlo[0] || xp[0] >= boxhi[0]) return 0;
-  if (xp[1] < boxlo[1] || xp[1] >= boxhi[1]) return 0;
+  int exited = 0;
+
+  if (xp[0] < boxlo[0] || xp[0] >= boxhi[0]) {
+    if (!(exitbit & 1)) return 0;
+    exited = 1;
+  }
+  if (xp[1] < boxlo[1] || xp[1] >= boxhi[1]) {
+    if (!(exitbit & 2)) return 0;
+    exited = 1;
+  }
   if (DIM == 3)
-    if (xp[2] < boxlo[2] || xp[2] >= boxhi[2]) return 0;
+    if (xp[2] < boxlo[2] || xp[2] >= boxhi[2]) {
+      if (!(exitbit & 4)) return 0;
+      exited = 1;
+    }
+
+  if (exited) return -1;
 
   return 1;
 }
@@ -536,16 +571,18 @@ template < int DIM, int SURF, int OPT > void Update::move()
     dz = Lz/grid->unz;
 
     // which global boundary faces the fast path may handle itself, see below
-    // a compute boundary tallies periodic and specular crossings alike, and
-    //   only the standard move calls the tally, so give the optimization up on
-    //   any step where one is active
-    // an outflow or surface face is left to the standard move: one destroys
-    //   the particle, the other runs a collision model
+    // a compute boundary tallies every kind of crossing, and only the standard
+    //   move calls the tally, so give the optimization up on any step where one
+    //   is active
+    // a surface face is left to the standard move, since it runs a collision
+    //   model.  an outflow face only deletes the particle, so the fast path
+    //   does that itself
 
     for (int f = 0; f < 6; f++) {
       if (nboundary_tally) bcopt[f] = BCSTD;
       else if (domain->bflag[f] == PERIODIC) bcopt[f] = BCWRAP;
       else if (domain->bflag[f] == REFLECT) bcopt[f] = BCMIRROR;
+      else if (domain->bflag[f] == OUTFLOW) bcopt[f] = BCEXIT;
       else bcopt[f] = BCSTD;
     }
   }
@@ -681,7 +718,24 @@ template < int DIM, int SURF, int OPT > void Update::move()
         double xp[3];
         int flip;
 
-        if (optmove_bc<DIM>(xnew,xp,flip,bcopt,boxlo,boxhi,Lx,Ly,Lz)) {
+        const int bc =
+          optmove_bc<DIM>(xnew,xp,flip,bcopt,boxlo,boxhi,Lx,Ly,Lz);
+
+        // left through an outflow face: the standard move would walk it to the
+        //   face and delete it there, which is the same particle gone and the
+        //   same counter, so do it here
+        // a discarded particle still goes on the migrate list, since that is
+        //   what deletes it -- migration drops a PDISCARD rather than sending
+        //   it.  it is not counted in ncomm_one, which counts particles sent
+
+        if (bc < 0) {
+          particles[i].flag = PDISCARD;
+          mlist[nmigrate++] = i;
+          nexit_one++;
+          continue;
+        }
+
+        if (bc) {
           const int icell = optmove_cell<DIM>(xp,boxlo,dx,dy,dz,grid);
 
           if (icell >= 0) {
