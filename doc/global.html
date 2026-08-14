@@ -425,9 +425,13 @@ specific particle on that timestep.
 <P>A particle that ends the timestep outside the global box needs a
 <A HREF = "boundary.html">boundary</A> condition applied. For a <I>p</I> (periodic) or
 <I>r</I> (specular reflection) face this is a translation or a reflection
-about the face, which the optimized move performs itself. For an <I>o</I>
-(outflow) or <I>s</I> (surface) face it is not, and the particle uses the
-normal move algorithm for that timestep. This matters for performance
+about the face, and for an <I>o</I> (outflow) face it is deleting the
+particle; the optimized move performs all three itself. For an <I>s</I>
+(surface) face it runs a surface collision model, which it does not,
+and the particle uses the normal move algorithm for that timestep. A
+particle that leaves through an outflow face also uses the normal move
+if it is outside an <I>s</I> face in another dimension, since the collision
+there could turn it around before it ever reaches the outflow face. This matters for performance
 because the processors that own the edges of the global box are the
 only ones with such particles, so leaving those faces to the normal
 move makes those processors slower than the rest, which in a parallel
