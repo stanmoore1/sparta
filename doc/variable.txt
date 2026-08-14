@@ -52,7 +52,7 @@ style = {delete} or {index} or {loop} or {world} or {universe} or {uloop} or {st
                      sin(x), cos(x), tan(x), asin(x), acos(x), atan(x), atan2(y,x), erf(x),
                      random(x,y), normal(x,y), ceil(x), floor(x), round(x)
                      ramp(x,y), stagger(x,y), logfreq(x,y,z), stride(x,y,z), vdisplace(x,y), swiggle(x,y,z), cwiggle(x,y,z)
-    special functions = sum(x), min(x), max(x), ave(x), trap(x), slope(x), next(x), grid2part(x), is_file(x)
+    special functions = sum(x), min(x), max(x), ave(x), trap(x), slope(x), next(x), grid2part(x), is_file(x), extract_setting(name)
     python function wrapper = py_varname(x,y,z,...)
     particle vectors = id, type, mass, q, mu, x, y, z, vx, vy, vz
     grid vectors = cxlo, cxhi, cylo, cyhi, czlo, czhi
@@ -410,7 +410,7 @@ Math functions: sqrt(x), exp(x), ln(x), log(x), abs(x), sin(x), cos(x), tan(x), 
      asin(x), acos(x), atan(x), atan2(y,x), erf(x), random(x,y,z), normal(x,y,z), \
      ceil(x), floor(x), round(x), ramp(x,y), stagger(x,y), logfreq(x,y,z), \
      stride(x,y,z), vdisplace(x,y), swiggle(x,y,z), cwiggle(x,y,z)
-Special functions: sum(x), min(x), max(x), ave(x), trap(x), slope(x), next(x), grid2part(x), is_file(x)
+Special functions: sum(x), min(x), max(x), ave(x), trap(x), slope(x), next(x), grid2part(x), is_file(x), extract_setting(name)
 Python function wrapper: py_varname(x,y,z,...)
 Particle vectors: id, type, mass, q, mu, x, y, z, vx, vy, vz
 Grid vectors: cxlo, cxhi, cylo, cyhi, czlo, czhi
@@ -701,6 +701,41 @@ which column of the per-grid array is being referenced.
 The is_file(x) function is a test whether "x" is a (readable) file and
 returns 1 in this case, otherwise it returns 0. For this test, "x" is taken
 as a literal string and must not have any blanks in it.
+
+The extract_setting(name) function returns the value of the setting
+{name} as a number.  It gives an input script access to basic settings
+of the SPARTA executable and of the running simulation, by calling the
+sparta_extract_setting() library function; "Section
+howto"_Section_howto.html#howto_6 lists the settings {name} may be.
+It is an error if {name} is not one of them.  Note that {name} is taken
+as a literal string and must not have any blanks in it, and that it is
+not enclosed in quotes.
+
+This is how an input script asks for something it has no other way to
+see, most usefully the number of MPI ranks it is running on.  A script
+whose decomposition must match the launcher would otherwise have to be
+told the rank count with the "-var"_Section_start.html#start_7
+command-line switch, and when the two disagree it builds a processor
+grid for the wrong size; the mismatch then surfaces much later as a
+"Bad grid of processors" error that cannot say what was intended.  For
+example, this computes a processor grid from the rank count itself:
+
+variable nprocs equal extract_setting(world_size)
+variable px equal 2^floor(log(v_nprocs)/log(2)/3) :pre
+
+Two cautions.  A setting is read locally on each rank rather than
+through a collective, so nothing is added to the collective path and
+partitions that evaluate the variable on different code paths cannot
+deadlock on it -- but by the same token {world_rank} differs from rank
+to rank, and a variable built from it has a different value on every
+rank.  That is fine for a "print"_print.html of per-rank information
+and wrong for anything that must agree across ranks, such as a
+"region"_region.html or a "create_grid"_create_grid.html argument.
+Second, under the "-partition"_Section_start.html#start_7 switch,
+{world_size} and {world_rank} are the size of and the rank within the
+partition running the script, matching every other per-partition
+quantity a script sees; use {universe_size} and {universe_rank} for the
+totals across all partitions.
 
 :line
 
