@@ -57,7 +57,7 @@
                      sin(x), cos(x), tan(x), asin(x), acos(x), atan(x), atan2(y,x), erf(x),
                      random(x,y), normal(x,y), ceil(x), floor(x), round(x)
                      ramp(x,y), stagger(x,y), logfreq(x,y,z), stride(x,y,z), vdisplace(x,y), swiggle(x,y,z), cwiggle(x,y,z)
-    special functions = sum(x), min(x), max(x), ave(x), trap(x), slope(x), next(x), grid2part(x), is_file(x)
+    special functions = sum(x), min(x), max(x), ave(x), trap(x), slope(x), next(x), grid2part(x), is_file(x), extract_setting(name)
     python function wrapper = py_varname(x,y,z,...)
     particle vectors = id, type, mass, q, mu, x, y, z, vx, vy, vz
     grid vectors = cxlo, cxhi, cylo, cyhi, czlo, czhi
@@ -414,7 +414,7 @@ references, and references to other variables.
 <TR><TD >Stats keywords</TD><TD > step, np, vol, etc</TD></TR>
 <TR><TD >Math operators</TD><TD > (), -x, x+y, x-y, x*y, x/y, x^y, x%y, x==y, x!=y, x<y, x<=y, x>y, x>=y, x&&y, x||y, !x</TD></TR>
 <TR><TD >Math functions</TD><TD > sqrt(x), exp(x), ln(x), log(x), abs(x), sin(x), cos(x), tan(x),      asin(x), acos(x), atan(x), atan2(y,x), erf(x), random(x,y,z), normal(x,y,z),      ceil(x), floor(x), round(x), ramp(x,y), stagger(x,y), logfreq(x,y,z),      stride(x,y,z), vdisplace(x,y), swiggle(x,y,z), cwiggle(x,y,z)</TD></TR>
-<TR><TD >Special functions</TD><TD > sum(x), min(x), max(x), ave(x), trap(x), slope(x), next(x), grid2part(x), is_file(x)</TD></TR>
+<TR><TD >Special functions</TD><TD > sum(x), min(x), max(x), ave(x), trap(x), slope(x), next(x), grid2part(x), is_file(x), extract_setting(name)</TD></TR>
 <TR><TD >Python function wrapper</TD><TD > py_varname(x,y,z,...)</TD></TR>
 <TR><TD >Particle vectors</TD><TD > id, type, mass, q, mu, x, y, z, vx, vy, vz</TD></TR>
 <TR><TD >Grid vectors</TD><TD > cxlo, cxhi, cylo, cyhi, czlo, czhi</TD></TR>
@@ -710,6 +710,41 @@ which column of the per-grid array is being referenced.
 <P>The is_file(x) function is a test whether "x" is a (readable) file and
 returns 1 in this case, otherwise it returns 0. For this test, "x" is taken
 as a literal string and must not have any blanks in it.
+</P>
+<P>The extract_setting(name) function returns the value of the setting
+<I>name</I> as a number.  It gives an input script access to basic settings
+of the SPARTA executable and of the running simulation, by calling the
+sparta_extract_setting() library function; <A HREF = "Section_howto.html#howto_6">Section
+howto</A> lists the settings <I>name</I> may be.
+It is an error if <I>name</I> is not one of them.  Note that <I>name</I> is taken
+as a literal string and must not have any blanks in it, and that it is
+not enclosed in quotes.
+</P>
+<P>This is how an input script asks for something it has no other way to
+see, most usefully the number of MPI ranks it is running on.  A script
+whose decomposition must match the launcher would otherwise have to be
+told the rank count with the <A HREF = "Section_start.html#start_7">-var</A>
+command-line switch, and when the two disagree it builds a processor
+grid for the wrong size; the mismatch then surfaces much later as a
+"Bad grid of processors" error that cannot say what was intended.  For
+example, this computes a processor grid from the rank count itself:
+</P>
+<PRE>variable nprocs equal extract_setting(world_size)
+variable px equal 2^floor(log(v_nprocs)/log(2)/3)
+</PRE>
+<P>Two cautions.  A setting is read locally on each rank rather than
+through a collective, so nothing is added to the collective path and
+partitions that evaluate the variable on different code paths cannot
+deadlock on it -- but by the same token <I>world_rank</I> differs from rank
+to rank, and a variable built from it has a different value on every
+rank.  That is fine for a <A HREF = "print.html">print</A> of per-rank information
+and wrong for anything that must agree across ranks, such as a
+<A HREF = "region.html">region</A> or a <A HREF = "create_grid.html">create_grid</A> argument.
+Second, under the <A HREF = "Section_start.html#start_7">-partition</A> switch,
+<I>world_size</I> and <I>world_rank</I> are the size of and the rank within the
+partition running the script, matching every other per-partition
+quantity a script sees; use <I>universe_size</I> and <I>universe_rank</I> for the
+totals across all partitions.
 </P>
 <HR>
 

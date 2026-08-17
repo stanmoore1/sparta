@@ -31,6 +31,7 @@
 #include "surf_collide.h"
 #include "surf_react.h"
 #include "input.h"
+#include "library.h"
 #include "output.h"
 #include "spapython.h"
 #include "stats.h"
@@ -3654,7 +3655,7 @@ int Variable::special_function(char *word, char *contents, Tree **tree,
   if (strcmp(word,"sum") && strcmp(word,"min") && strcmp(word,"max") &&
       strcmp(word,"ave") && strcmp(word,"trap") && strcmp(word,"slope") &&
       strcmp(word,"next") && strcmp(word,"grid2part") &&
-      strcmp(word,"is_file"))
+      strcmp(word,"is_file") && strcmp(word,"extract_setting"))
     return 0;
 
   // parse contents for arg1,arg2,arg3 separated by commas
@@ -4016,6 +4017,37 @@ int Variable::special_function(char *word, char *contents, Tree **tree,
     FILE *fp = fopen(arg1,"r");
     value = (fp == nullptr) ? 0.0 : 1.0;
     if (fp) fclose(fp);
+
+    // save value in tree or on argstack
+
+    if (tree) {
+      Tree *newtree = new Tree();
+      newtree->type = VALUE;
+      newtree->value = value;
+      treestack[ntreestack++] = newtree;
+    } else argstack[nargstack++] = value;
+
+  // extract_setting(name) = an integer setting of the running simulation,
+  //   via the same sparta_extract_setting() the library interface exposes.
+  // this is how a script asks for something the input script itself cannot
+  //   otherwise see, such as the number of MPI ranks it is running on.
+  // the library function returns -1 for a name it does not know, and no
+  //   setting it does know is negative, so -1 is an unambiguous error
+
+  } else if (strcmp(word,"extract_setting") == 0) {
+    if (narg != 1)
+      error->all(FLERR,
+                 "Invalid extract_setting() special function in "
+                 "variable formula");
+
+    int ivalue = sparta_extract_setting((void *) sparta,arg1);
+    if (ivalue < 0) {
+      char str[128];
+      snprintf(str,128,"Unknown setting %s in extract_setting() "
+               "special function in variable formula",arg1);
+      error->all(FLERR,str);
+    }
+    value = ivalue;
 
     // save value in tree or on argstack
 
