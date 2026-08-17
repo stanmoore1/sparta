@@ -59,7 +59,7 @@ Irregular::Irregular(SPARTA *sparta) : Pointers(sparta)
   memory->create(work1,nprocs,"irregular:work1");
   memory->create(work2,nprocs,"irregular:work2");
 
-  datum_nbytes = 0;
+  datum_nbytes = -1;
 
   indexmax = 0;
   index_send = NULL;
@@ -95,7 +95,7 @@ Irregular::~Irregular()
   memory->destroy(offset_send);
   memory->destroy(buf);
 
-  if (datum_nbytes) MPI_Type_free(&datum_type);
+  if (datum_nbytes >= 0) MPI_Type_free(&datum_type);
 }
 
 /* ----------------------------------------------------------------------
@@ -795,7 +795,7 @@ int Irregular::augment_data_uniform(int n, int *proclist)
 MPI_Datatype Irregular::uniform_datum_type(int nbytes)
 {
   if (datum_nbytes != nbytes) {
-    if (datum_nbytes) MPI_Type_free(&datum_type);
+    if (datum_nbytes >= 0) MPI_Type_free(&datum_type);
     MPI_Type_contiguous(nbytes,MPI_CHAR,&datum_type);
     MPI_Type_commit(&datum_type);
     datum_nbytes = nbytes;

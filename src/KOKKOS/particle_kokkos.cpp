@@ -683,7 +683,11 @@ void ParticleKokkos::post_weight()
         if (nlocal == MAXSMALLINT)
           error->one(FLERR,"Per-processor particle count is too big");
         if (k_map.extent(0) <= nlocal) {
-          k_map.resize(k_map.extent(0)*1.5);
+          // 1.5x truncates back to the old size for the smallest views,
+          //   so always leave room for at least the particle added below
+          size_t newmax = k_map.extent(0)*1.5;
+          if (newmax <= (size_t) nlocal) newmax = nlocal + 1;
+          k_map.resize(newmax);
           // resize reallocates, so the previously bound host view now points
           //   at the freed buffer -- rebind before writing through it
           h_map = k_map.view_host();

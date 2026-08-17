@@ -379,8 +379,6 @@ int MPI_Type_contiguous(int count, MPI_Datatype oldtype,
   if (nextra_datatype == MAXEXTRA_DATATYPE) return -1;
   ptr_datatype[nextra_datatype] = newtype;
   index_datatype[nextra_datatype] = -(nextra_datatype + 1);
-  /* per-datum size, stays int: MPI_Type_size's out-param is int by the
-     MPI standard, so a derived type cannot exceed INT_MAX bytes anyway */
   size_datatype[nextra_datatype] = count * stubtypesize(oldtype);
   nextra_datatype++;
   return 0;
@@ -447,7 +445,7 @@ int MPI_Bcast(void *buf, int count, MPI_Datatype datatype,
 int MPI_Allreduce(void *sendbuf, void *recvbuf, int count,
                   MPI_Datatype datatype, MPI_Op op, MPI_Comm comm)
 {
-  size_t n = (size_t) count * stubtypesize(datatype);
+  int n = count * stubtypesize(datatype);
 
   if (sendbuf == MPI_IN_PLACE || recvbuf == MPI_IN_PLACE) return 0;
   memcpy(recvbuf,sendbuf,n);
@@ -462,7 +460,7 @@ int MPI_Reduce(void *sendbuf, void *recvbuf, int count,
                    MPI_Datatype datatype, MPI_Op op,
                    int root, MPI_Comm comm)
 {
-  size_t n = (size_t) count * stubtypesize(datatype);
+  int n = count * stubtypesize(datatype);
 
   if (sendbuf == MPI_IN_PLACE || recvbuf == MPI_IN_PLACE) return 0;
   memcpy(recvbuf,sendbuf,n);
@@ -475,7 +473,7 @@ int MPI_Reduce(void *sendbuf, void *recvbuf, int count,
 int MPI_Scan(void *sendbuf, void *recvbuf, int count,
              MPI_Datatype datatype, MPI_Op op, MPI_Comm comm)
 {
-  size_t n = (size_t) count * stubtypesize(datatype);
+  int n = count * stubtypesize(datatype);
 
   if (sendbuf == MPI_IN_PLACE || recvbuf == MPI_IN_PLACE) return 0;
   memcpy(recvbuf,sendbuf,n);
@@ -490,7 +488,7 @@ int MPI_Allgather(void *sendbuf, int sendcount, MPI_Datatype sendtype,
                   void *recvbuf, int recvcount, MPI_Datatype recvtype,
                   MPI_Comm comm)
 {
-  size_t n = (size_t) sendcount * stubtypesize(sendtype);
+  int n = sendcount * stubtypesize(sendtype);
 
   if (sendbuf == MPI_IN_PLACE || recvbuf == MPI_IN_PLACE) return 0;
   memcpy(recvbuf,sendbuf,n);
@@ -505,7 +503,7 @@ int MPI_Allgatherv(void *sendbuf, int sendcount, MPI_Datatype sendtype,
                    void *recvbuf, int *recvcounts, int *displs,
                    MPI_Datatype recvtype, MPI_Comm comm)
 {
-  size_t n = (size_t) sendcount * stubtypesize(sendtype);
+  int n = sendcount * stubtypesize(sendtype);
 
   if (sendbuf == MPI_IN_PLACE || recvbuf == MPI_IN_PLACE) return 0;
   memcpy(recvbuf,sendbuf,n);
@@ -519,7 +517,7 @@ int MPI_Allgatherv(void *sendbuf, int sendcount, MPI_Datatype sendtype,
 int MPI_Reduce_scatter(void *sendbuf, void *recvbuf, int *recvcounts,
                        MPI_Datatype datatype, MPI_Op op, MPI_Comm comm)
 {
-  size_t n = (size_t) *recvcounts * stubtypesize(datatype);
+  int n = *recvcounts * stubtypesize(datatype);
 
   if (sendbuf == MPI_IN_PLACE || recvbuf == MPI_IN_PLACE) return 0;
   memcpy(recvbuf,sendbuf,n);
@@ -534,7 +532,7 @@ int MPI_Gather(void *sendbuf, int sendcount, MPI_Datatype sendtype,
                void *recvbuf, int recvcount, MPI_Datatype recvtype,
                int root, MPI_Comm comm)
 {
-  size_t n = (size_t) sendcount * stubtypesize(sendtype);
+  int n = sendcount * stubtypesize(sendtype);
 
   if (sendbuf == MPI_IN_PLACE || recvbuf == MPI_IN_PLACE) return 0;
   memcpy(recvbuf,sendbuf,n);
@@ -549,7 +547,7 @@ int MPI_Gatherv(void *sendbuf, int sendcount, MPI_Datatype sendtype,
                 void *recvbuf, int *recvcounts, int *displs,
                 MPI_Datatype recvtype, int root, MPI_Comm comm)
 {
-  size_t n = (size_t) sendcount * stubtypesize(sendtype);
+  int n = sendcount * stubtypesize(sendtype);
 
   if (sendbuf == MPI_IN_PLACE || recvbuf == MPI_IN_PLACE) return 0;
   memcpy(recvbuf,sendbuf,n);
@@ -564,7 +562,7 @@ int MPI_Scatter(void *sendbuf, int sendcount, MPI_Datatype sendtype,
                 void *recvbuf, int recvcount, MPI_Datatype recvtype,
                 int root, MPI_Comm comm)
 {
-  size_t n = (size_t) recvcount * stubtypesize(recvtype);
+  int n = recvcount * stubtypesize(recvtype);
 
   if (sendbuf == MPI_IN_PLACE || recvbuf == MPI_IN_PLACE) return 0;
   memcpy(recvbuf,sendbuf,n);
@@ -580,7 +578,7 @@ int MPI_Scatterv(void *sendbuf, int *sendcounts, int *displs,
                  MPI_Datatype sendtype, void *recvbuf, int recvcount,
                  MPI_Datatype recvtype, int root, MPI_Comm comm)
 {
-  size_t n = (size_t) recvcount * stubtypesize(recvtype);
+  int n = recvcount * stubtypesize(recvtype);
 
   if (sendbuf == MPI_IN_PLACE || recvbuf == MPI_IN_PLACE) return 0;
   memcpy(recvbuf,sendbuf,n);
@@ -595,7 +593,7 @@ int MPI_Alltoall(void *sendbuf, int sendcount, MPI_Datatype sendtype,
                  void *recvbuf, int recvcount, MPI_Datatype recvtype,
                  MPI_Comm comm)
 {
-  size_t n = (size_t) sendcount * stubtypesize(sendtype);
+  int n = sendcount * stubtypesize(sendtype);
 
   if (sendbuf == MPI_IN_PLACE || recvbuf == MPI_IN_PLACE) return 0;
   memcpy(recvbuf,sendbuf,n);
@@ -611,7 +609,7 @@ int MPI_Alltoallv(void *sendbuf, int *sendcounts, int *sdispls,
                   void *recvbuf, int *recvcounts, int *rdispls,
                   MPI_Datatype recvtype, MPI_Comm comm)
 {
-  size_t n = (size_t) *sendcounts * stubtypesize(sendtype);
+  int n = *sendcounts * stubtypesize(sendtype);
 
   if (sendbuf == MPI_IN_PLACE || recvbuf == MPI_IN_PLACE) return 0;
   memcpy(recvbuf,sendbuf,n);

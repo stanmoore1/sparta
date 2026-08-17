@@ -26,13 +26,13 @@
 
 // offset type for the Kokkos::Crs per-cell surf/split/sub lists.
 // Under BIGBIG the total number of flattened entries on one rank can exceed
-//   2^31, so the row_map offsets must be 64-bit.  Under BIG they cannot, and
+//   2^31, so the row_map offsets must be a bigint.  Under BIG they cannot, and
 //   a 32-bit row_map halves the bytes touched by the per-particle surf
 //   lookups in the move kernel.  All declarations of these Crs objects must
 //   use this typedef so the device and host mirrors stay assignable.
 
 #ifdef SPARTA_BIGBIG
-typedef int64_t crs_size_type;
+typedef SPARTA_NS::bigint crs_size_type;
 #else
 typedef int crs_size_type;
 #endif

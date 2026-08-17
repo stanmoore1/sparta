@@ -657,8 +657,8 @@ void WriteRestart::header()
 
   write_bigint(NPARTICLE,particle->nglobal);
   write_bigint(NUNSPLIT,grid->nunsplit);
-  write_int(NSPLIT,(int) MIN(grid->nsplit,(bigint) MAXSMALLINT));
-  write_int(NSUB,(int) MIN(grid->nsub,(bigint) MAXSMALLINT));
+  write_int(NSPLIT,(int) grid->nsplit);
+  write_int(NSUB,(int) grid->nsub);
   write_bigint(NSURF,surf->nsurf);
 
   // -1 flag signals end of header

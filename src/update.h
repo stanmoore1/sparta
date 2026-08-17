@@ -75,8 +75,8 @@ class Update : protected Pointers {
   bigint nscheck_running;
   bigint nscollide_running;
 
-  bigint nstuck;             // # of particles stuck on surfs and deleted
-  bigint naxibad;            // # of particles where axisymm move was bad
+  int nstuck;                // # of particles stuck on surfs and deleted
+  int naxibad;               // # of particles where axisymm move was bad
                              // in this case, bad means particle ended up
                              // outside of final cell curved surf by epsilon
                              // when move logic thinks it is inside cell

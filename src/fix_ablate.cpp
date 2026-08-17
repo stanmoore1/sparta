@@ -573,7 +573,9 @@ void FixAblate::end_of_step()
 
       Grid::ChildCell *cells = grid->cells;
       Grid::ChildInfo *cinfo = grid->cinfo;
-      double owed_mine,owed_all;
+      double owed_mine,owed_all,owed_previous;
+
+      owed_previous = 0.0;
 
       for (int iter = 0; iter < MAXDECITER; iter++) {
         decrement();
@@ -587,7 +589,15 @@ void FixAblate::end_of_step()
         }
 
         MPI_Allreduce(&owed_mine,&owed_all,1,MPI_DOUBLE,MPI_SUM,world);
+
+        // stop when the epoch is paid in full, or when a pass paid nothing
+        //   more, which means no corner point of any cell that still owes
+        //   has material left and every later pass is a no-op that costs
+        //   another comm_neigh_corners() + Allreduce
+
         if (owed_all == 0.0) break;
+        if (iter && owed_all >= owed_previous) break;
+        owed_previous = owed_all;
       }
 
       // remaining celldelta is decrement no corner point of the cell can pay

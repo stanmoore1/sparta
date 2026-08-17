@@ -62,7 +62,7 @@ class Irregular : protected Pointers {
   MPI_Request *request;      // MPI requests for posted recvs
   MPI_Status *status;        // MPI statuses for WaitAll
   MPI_Datatype datum_type;   // committed MPI type for one uniform datum
-  int datum_nbytes;          // nbytes datum_type was built for, 0 = none yet
+  int datum_nbytes;          // nbytes datum_type was built for, -1 = none yet
   char *buf;                 // buffer for largest single send message
   int copymode;              // 1 if copy of class (prevents deallocation of
                              //   base class when child copy is destroyed)

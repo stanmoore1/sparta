@@ -45,6 +45,7 @@ public variables:
 #define SPARTA_MY_PAGE_H
 
 #include "stdlib.h"
+#include "spatype.h"
 namespace SPARTA_NS {
 
 template<class T>
@@ -168,8 +169,8 @@ class MyPage {
   // return total size of all allocated pages
   // bigint since total can exceed 2 GB
 
-  int64_t size() {
-    return (int64_t) npage*pagesize*sizeof(T);
+  bigint size() {
+    return (bigint) npage*pagesize*sizeof(T);
   }
 
  private:

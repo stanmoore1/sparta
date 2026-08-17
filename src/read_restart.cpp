@@ -235,9 +235,9 @@ void ReadRestart::command(int narg, char **arg)
 
   if (grid->nunsplit != nunsplit_file)
     error->all(FLERR,"Did not assign all restart unsplit grid cells correctly");
-  if (MIN(grid->nsplit,(bigint) MAXSMALLINT) != nsplit_file)
+  if (grid->nsplit != nsplit_file)
     error->all(FLERR,"Did not assign all restart split grid cells correctly");
-  if (MIN(grid->nsub,(bigint) MAXSMALLINT) != nsub_file)
+  if (grid->nsub != nsub_file)
     error->all(FLERR,"Did not assign all restart sub grid cells correctly");
 
   bigint btmp = particle->nlocal;
