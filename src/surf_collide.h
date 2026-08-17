@@ -50,7 +50,7 @@ class SurfCollide : protected Pointers {
 
   // nsingle = all collisions in one step
 
-  int nsingle;
+  bigint nsingle;
 
  protected:
 
@@ -58,7 +58,7 @@ class SurfCollide : protected Pointers {
   // ntotal = cumulative nsingle across all steps
   // one,all used in compute_vector()
 
-  int ntotal;
+  bigint ntotal;
   double one[2],all[2];
 
   // variables used by all SC classes which define Tsurf

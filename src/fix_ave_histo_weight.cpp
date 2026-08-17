@@ -319,8 +319,8 @@ void FixAveHistoWeight::bin_one(double value)
 
 void FixAveHistoWeight::bin_vector(int n, double *values, int stride)
 {
-  int m = 0;
-  int mwt = 0;
+  bigint m = 0;
+  bigint mwt = 0;
   for (int i = 0; i < n; i++) {
     bin_one_weight(values[m],weights[mwt]);
     m += stride;
@@ -343,7 +343,7 @@ void FixAveHistoWeight::bin_particles(int attribute, int index)
   Region *region;
   if (regionflag) region = domain->regions[iregion];
 
-  int mwt = 0;
+  bigint mwt = 0;
 
   if (attribute == X) {
     if (regionflag && mixflag) {
@@ -415,8 +415,8 @@ void FixAveHistoWeight::bin_particles(double *values, int stride)
   Region *region;
   if (regionflag) region = domain->regions[iregion];
 
-  int m = 0;
-  int mwt = 0;
+  bigint m = 0;
+  bigint mwt = 0;
 
   if (regionflag && mixflag) {
     for (int i = 0; i < nlocal; i++) {
@@ -458,8 +458,8 @@ void FixAveHistoWeight::bin_grid_cells(double *values, int stride)
   Grid::ChildInfo *cinfo = grid->cinfo;
   int nglocal = grid->nlocal;
 
-  int m = 0;
-  int mwt = 0;
+  bigint m = 0;
+  bigint mwt = 0;
 
   if (groupflag) {
     for (int i = 0; i < nglocal; i++) {

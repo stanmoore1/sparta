@@ -491,7 +491,13 @@ int Dump::convert_string(int n, double *mybuf)
         // is a grid cell ID
         // if not, might have to move this method into child classes
         // and tailor it for each dump style
-        grid->id_num2str(static_cast<int> (mybuf[m]),str);
+        // decode cell ID via ubuf, as write_text() does:
+        //   value is a bit-punned cellint, which is 64-bit under BIGBIG,
+        //   so a numeric read + int cast truncates IDs above 2^31
+        if (sizeof(cellint) == sizeof(smallint))
+          grid->id_num2str((uint32_t) ubuf(mybuf[m]).i,str);
+        else
+          grid->id_num2str((uint64_t) ubuf(mybuf[m]).i,str);
         offset += sprintf(&sbuf[offset],vformat[j],str);
       }
       m++;
