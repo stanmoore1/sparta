@@ -387,8 +387,8 @@ void CreateGrid::create_clump()
   double *boxhi = domain->boxhi;
 
   cellint ntotal = (cellint) nx * ny * nz;
-  cellint clumplo = static_cast<int> (1.0*me/nprocs * ntotal);
-  cellint clumphi = static_cast<int> (1.0*(me+1)/nprocs * ntotal) - 1;
+  cellint clumplo = static_cast<cellint> (1.0*me/nprocs * ntotal);
+  cellint clumphi = static_cast<cellint> (1.0*(me+1)/nprocs * ntotal) - 1;
 
   for (cellint m = clumplo; m <= clumphi; m++) {
     i1 = m % n1;

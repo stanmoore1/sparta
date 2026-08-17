@@ -106,9 +106,9 @@ void FixGridCheck::end_of_step()
   // check if icell is a valid cell for owning particles
   // check for split cell is whether particle is inside parent cell
 
-  int nflag = 0;
-  int nflag_surf = 0;
-  int nflag_split = 0;
+  bigint nflag = 0;
+  bigint nflag_surf = 0;
+  bigint nflag_split = 0;
 
   for (int i = 0; i < nlocal; i++) {
     icell = particles[i].icell;
@@ -119,12 +119,13 @@ void FixGridCheck::end_of_step()
       if (outflag == ERROR) {
         char str[128];
         sprintf(str,
-                "Particle %d,%d on proc %d is in invalid cell " CELLINT_FORMAT
+                "Particle %d,%d on proc %d is in invalid cell index %d"
                 " on timestep " BIGINT_FORMAT,
-                i,particles[i].id,comm->me,cells[icell].id,update->ntimestep);
+                i,particles[i].id,comm->me,icell,update->ntimestep);
         error->one(FLERR,str);
       }
       nflag++;
+      continue;
     }
 
     // does particle coord match icell bounds
@@ -255,25 +256,25 @@ void FixGridCheck::end_of_step()
   // warning messages instead of errors
 
   if (outflag == WARNING) {
-    int all;
-    MPI_Allreduce(&nflag,&all,1,MPI_INT,MPI_SUM,world);
+    bigint all;
+    MPI_Allreduce(&nflag,&all,1,MPI_SPARTA_BIGINT,MPI_SUM,world);
     if (all && comm->me == 0) {
       char str[128];
-      sprintf(str,"%d particles in wrong cells on timestep "
+      sprintf(str,BIGINT_FORMAT " particles in wrong cells on timestep "
               BIGINT_FORMAT,all,update->ntimestep);
       error->warning(FLERR,str);
     }
-    MPI_Allreduce(&nflag_surf,&all,1,MPI_INT,MPI_SUM,world);
+    MPI_Allreduce(&nflag_surf,&all,1,MPI_SPARTA_BIGINT,MPI_SUM,world);
     if (all && comm->me == 0) {
       char str[128];
-      sprintf(str,"%d particles inside surfs on timestep "
+      sprintf(str,BIGINT_FORMAT " particles inside surfs on timestep "
               BIGINT_FORMAT,all,update->ntimestep);
       error->warning(FLERR,str);
     }
-    MPI_Allreduce(&nflag_split,&all,1,MPI_INT,MPI_SUM,world);
+    MPI_Allreduce(&nflag_split,&all,1,MPI_SPARTA_BIGINT,MPI_SUM,world);
     if (all && comm->me == 0) {
       char str[128];
-      sprintf(str,"%d particles in wrong sub cells on timestep "
+      sprintf(str,BIGINT_FORMAT " particles in wrong sub cells on timestep "
               BIGINT_FORMAT,all,update->ntimestep);
       error->warning(FLERR,str);
     }

@@ -834,14 +834,14 @@ void Variable::compute_particle(int ivar, double *result,
   int nlocal = particle->nlocal;
 
   if (sumflag == 0) {
-    int m = 0;
+    bigint m = 0;
     for (int i = 0; i < nlocal; i++) {
       result[m] = eval_tree(tree,i);
       m += stride;
     }
 
   } else {
-    int m = 0;
+    bigint m = 0;
     for (int i = 0; i < nlocal; i++) {
       result[m] += eval_tree(tree,i);
       m += stride;
@@ -877,14 +877,14 @@ void Variable::compute_grid(int ivar, double *result,
   int nglocal = grid->nlocal;
 
   if (sumflag == 0) {
-    int m = 0;
+    bigint m = 0;
     for (int i = 0; i < nglocal; i++) {
       result[m] = eval_tree(tree,i);
       m += stride;
     }
 
   } else {
-    int m = 0;
+    bigint m = 0;
     for (int i = 0; i < nglocal; i++) {
       result[m] += eval_tree(tree,i);
       m += stride;
@@ -922,14 +922,14 @@ void Variable::compute_surf(int ivar, double *result,
   int nsown = surf->nown;
 
   if (sumflag == 0) {
-    int m = 0;
+    bigint m = 0;
     for (int i = 0; i < nsown; i++) {
       result[m] = eval_tree(tree,i);
       m += stride;
     }
 
   } else {
-    int m = 0;
+    bigint m = 0;
     for (int i = 0; i < nsown; i++) {
       result[m] += eval_tree(tree,i);
       m += stride;

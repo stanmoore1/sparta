@@ -556,7 +556,10 @@ template < int DIM, int SURF, int OPT > void Update::move()
           int kp = 0;
           if (DIM == 3) kp = static_cast<int>((xnew[2] - boxlo[2])/dz);
 
-          int cellIdx = (kp*grid->uny + jp)*grid->unx + ip + 1;
+          // compute cell ID in cellint (can be 64-bit), the product
+          //   overflows a 32-bit int when the grid has > 2^31 cells
+
+          cellint cellIdx = ((cellint) kp*grid->uny + jp)*grid->unx + ip + 1;
 
           // particle outside ghost grid halo must use standard move
 

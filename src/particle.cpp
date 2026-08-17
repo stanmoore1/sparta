@@ -1526,21 +1526,6 @@ void Particle::read_restart_mixture(FILE *fp)
 
 /* ----------------------------------------------------------------------
    return size of particle restart info for this proc
-   NOTE: worry about N overflowing int and IROUNDUP ???
-------------------------------------------------------------------------- */
-
-int Particle::size_restart()
-{
-  int n = sizeof(int);
-  n = IROUNDUP(n);
-  n += nlocal * sizeof(OnePartRestart);
-  n += nlocal * sizeof_custom();
-  n = IROUNDUP(n);
-  return n;
-}
-
-/* ----------------------------------------------------------------------
-   return size of particle restart info for this proc
 ------------------------------------------------------------------------- */
 
 bigint Particle::size_restart_big()
@@ -1548,7 +1533,7 @@ bigint Particle::size_restart_big()
   bigint n = sizeof(int);
   n = BIROUNDUP(n);
   n += nlocal * sizeof(OnePartRestart);
-  n += nlocal * sizeof_custom();
+  n += (bigint) nlocal * sizeof_custom();
   n = BIROUNDUP(n);
   return n;
 }
@@ -1668,10 +1653,11 @@ int Particle::unpack_restart(char *buf)
   ptr = ROUNDUP(ptr);
 
   particle_restart = (char *)
-    memory->smalloc(nlocal_restart*nbytes,"particle:particle_restart");
+    memory->smalloc((bigint) nlocal_restart*nbytes,
+                    "particle:particle_restart");
 
-  memcpy(particle_restart,ptr,nlocal_restart*nbytes);
-  ptr += nlocal_restart * sizeof(OnePartRestart);
+  memcpy(particle_restart,ptr,(bigint) nlocal_restart*nbytes);
+  ptr += (bigint) nlocal_restart * sizeof(OnePartRestart);
   ptr = ROUNDUP(ptr);
 
   return ptr - buf;
@@ -1704,9 +1690,9 @@ void Particle::unpack_restart(char *buf, int &nlocal_restart, int step, int pass
   step = end - start;
 
   particle_restart = (char *)
-    memory->smalloc(step*nbytes,"particle:particle_restart");
+    memory->smalloc((bigint) step*nbytes,"particle:particle_restart");
 
-  memcpy(particle_restart,ptr,step*nbytes);
+  memcpy(particle_restart,ptr,(bigint) step*nbytes);
 
   this->nlocal_restart = step;
 }

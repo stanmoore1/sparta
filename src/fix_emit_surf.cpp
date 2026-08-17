@@ -826,6 +826,9 @@ void FixEmitSurf::perform_task_onepass()
       if (npmode == FLOW) ntarget = tasks[i].ntarget;
       else if (npmode == CONSTANT) ntarget = np * tasks[i].ntarget;
       else if (npmode == VARIABLE) ntarget = npcurrent * tasks[i].ntarget;
+      if (ntarget >= (double) MAXSMALLINT)
+        error->one(FLERR,"Fix emit/surf insertion count per task "
+                   "exceeds 2^31");
       ninsert = static_cast<int> (ntarget + random->uniform());
 
       // loop over ninsert for all species
@@ -1007,6 +1010,9 @@ void FixEmitSurf::perform_task_twopass()
       if (npmode == FLOW) ntarget = tasks[i].ntarget;
       else if (npmode == CONSTANT) ntarget = np * tasks[i].ntarget;
       else if (npmode == VARIABLE) ntarget = npcurrent * tasks[i].ntarget;
+      if (ntarget >= (double) MAXSMALLINT)
+        error->one(FLERR,"Fix emit/surf insertion count per task "
+                   "exceeds 2^31");
       ninsert = static_cast<int> (ntarget + random->uniform());
       ninsert_values[i][0] = ninsert;
     }
