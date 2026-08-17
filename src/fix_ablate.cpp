@@ -45,6 +45,8 @@ enum{CVALUE,CDELTA,NVERT};
 #define DELTAGRID 1024            // must be bigger than split cells per cell
 #define DELTASEND 1024
 #define EPSILON 1.0e-4            // this is on a scale of 0 to 255
+#define EPSILON_DELTA 1.0e-10     // unpaid decrement small enough to call zero
+#define MAXDECITER 10             // max decrement/sync passes per ablation
 
 enum{XLO,XHI,YLO,YHI,ZLO,ZHI,INTERIOR};         // same as Domain
 enum{NCHILD,NPARENT,NUNKNOWN,NPBCHILD,NPBPARENT,NPBUNKNOWN,NBOUND};  // Update
@@ -220,6 +222,7 @@ FixAblate::FixAblate(SPARTA *sparta, int narg, char **arg) :
   ixyz = NULL;
   mcflags = NULL;
   celldelta = NULL;
+  credit = NULL;
   cdelta = NULL;
   cdelta_ghost = NULL;
   mdelta = NULL;
@@ -279,6 +282,7 @@ FixAblate::~FixAblate()
   memory->destroy(mcflags);
 
   memory->destroy(celldelta);
+  memory->destroy(credit);
   memory->destroy(cdelta);
   memory->destroy(cdelta_ghost);
   memory->destroy(mdelta);
@@ -552,8 +556,47 @@ void FixAblate::end_of_step()
       decrement_multiv();
       sync_multiv();
     } else {
-      decrement();
-      sync();
+
+      // pay each cell's decrement from its own corner point values, retrying
+      //   the part of a claim that a shared corner point could not cover
+      //   because neighbor cells claimed the same corner point in this epoch
+      // sync() credits each cell with what its claim actually removed and
+      //   leaves the rest in celldelta, so the next pass offers it to the
+      //   other corner points of the same cell, which is what this fix
+      //   documents itself as doing
+      // the first pass is exactly the single decrement/sync pair that came
+      //   before, and an epoch that pays in full stops after it, so a run
+      //   which never over-claims a corner point is unchanged and pays no
+      //   extra communication
+      // what is left after the last pass is decrement the cell has no
+      //   material left to cover, which end_of_step reports below
+
+      Grid::ChildCell *cells = grid->cells;
+      Grid::ChildInfo *cinfo = grid->cinfo;
+      double owed_mine,owed_all;
+
+      for (int iter = 0; iter < MAXDECITER; iter++) {
+        decrement();
+        sync();
+
+        owed_mine = 0.0;
+        for (int icell = 0; icell < nglocal; icell++) {
+          if (!(cinfo[icell].mask & groupbit)) continue;
+          if (cells[icell].nsplit <= 0) continue;
+          owed_mine += celldelta[icell];
+        }
+
+        MPI_Allreduce(&owed_mine,&owed_all,1,MPI_DOUBLE,MPI_SUM,world);
+        if (owed_all == 0.0) break;
+      }
+
+      // remaining celldelta is decrement no corner point of the cell can pay
+
+      for (int icell = 0; icell < nglocal; icell++) {
+        if (!(cinfo[icell].mask & groupbit)) continue;
+        if (cells[icell].nsplit <= 0) continue;
+        unpaid_mine += celldelta[icell];
+      }
     }
   }
 
@@ -1100,10 +1143,10 @@ void FixAblate::decrement()
       }
     }
 
-    // no corner point of this cell can pay the rest of total
-    // tally it in end_of_step() instead of dropping it silently
-
-    if (total > 0.0) unpaid_mine += total;
+    // celldelta[icell] is deliberately left alone: it is what this cell still
+    //   owes, and sync() subtracts from it what the claims actually remove
+    // the part of it the loop above could offer to no corner point, because
+    //   they are all spent, therefore stays owed too
   }
 }
 
@@ -1141,6 +1184,8 @@ void FixAblate::sync()
     ix = ixyz[icell][0];
     iy = ixyz[icell][1];
     iz = ixyz[icell][2];
+
+    credit[icell] = 0.0;
 
     // loop over corner points
 
@@ -1184,10 +1229,34 @@ void FixAblate::sync()
         }
       }
 
-      if (total > cvalues[icell][i]) cvalues[icell][i] = 0.0;
-      else cvalues[icell][i] -= total;
+      // removed = what this corner point can actually give up
+      // identical arithmetic to subtracting total when total fits, and an
+      //   exact 0.0 when it does not, so all Ncorner duplicates still agree
+
+      double oldvalue = cvalues[icell][i];
+      double removed = MIN(total,oldvalue);
+      cvalues[icell][i] = oldvalue - removed;
+
+      // credit this cell with its share of what the corner point gave up
+      // N cells can claim one corner point in the same epoch and only
+      //   oldvalue can be removed, so each claimant gets the fraction of the
+      //   removal its own claim asked for: the credits over all claimants
+      //   sum to exactly removed, whichever cells they belong to
+      // end_of_step() pays the uncredited remainder from another corner point
+      //   of the same cell rather than dropping it
+
+      if (total > 0.0) credit[icell] += cdelta[icell][i] * removed / total;
 
     }
+  }
+
+  // subtract what was paid, leaving the still unpaid decrement in celldelta
+
+  for (icell = 0; icell < nglocal; icell++) {
+    if (!(cinfo[icell].mask & groupbit)) continue;
+    if (cells[icell].nsplit <= 0) continue;
+    celldelta[icell] -= credit[icell];
+    if (celldelta[icell] < EPSILON_DELTA) celldelta[icell] = 0.0;
   }
 }
 
@@ -1792,6 +1861,7 @@ void FixAblate::grow_percell(int nnew)
   memory->grow(ixyz,maxgrid,3,"ablate:ixyz");
   memory->grow(mcflags,maxgrid,4,"ablate:mcflags");
   memory->grow(celldelta,maxgrid,"ablate:celldelta");
+  memory->grow(credit,maxgrid,"ablate:credit");
   if (multi_val_flag) memory->grow(mdelta,maxgrid,ncorner,nmultiv,"ablate:mdelta");
   else memory->grow(cdelta,maxgrid,ncorner,"ablate:cdelta");
   if (multi_dec_flag) memory->grow(nvert,maxgrid,ncorner,"ablate:nvert");
@@ -1915,6 +1985,7 @@ double FixAblate::memory_usage()
   bytes += (bigint) maxgrid*3 * sizeof(int);            // ixyz
   // NOTE: add for mcflags if keep
   bytes += maxgrid * sizeof(double);           // celldelta
+  bytes += maxgrid * sizeof(double);           // credit
   if (multi_val_flag)
     bytes += (bigint) maxgrid*ncorner*nmultiv * sizeof(double); // mdelta
   else bytes += (bigint) maxgrid*ncorner * sizeof(double);   // cdelta

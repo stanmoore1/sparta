@@ -92,6 +92,8 @@ class FixAblate : public Fix {
   int **mcflags;
 
   double *celldelta;       // per-cell delta from compute or fix source
+                           // reduced to what the cell still owes as it is paid
+  double *credit;          // per-cell decrement its claims actually removed
   double **cdelta;         // per-corner point deltas
   double **cdelta_ghost;   // ditto for my ghost cells communicated to me
   double ***mdelta;        // cdelta for multivalues

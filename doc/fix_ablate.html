@@ -214,6 +214,14 @@ The sum of those decrements is subtracted from the corner point,
 except that it's final value is set no smaller than 0.0.  All the
 copies of each corner point value are now identical.
 </P>
+<P>Several grid cells can decrement the same corner point in one ablation
+operation by more than its value, in which case each of them removes
+the fraction of that value its own decrement asked for, and the part of
+their decrements which the corner point could not cover is offered to
+the other corner points of their own cells, repeating the two steps
+above.  A grid cell whose decrement is fully applied in the first pass,
+which is the usual case, is not affected.
+</P>
 <HR>
 
 <P>One issue with the marching cubes or squares algorithm is that it can
@@ -327,10 +335,15 @@ chemistry created gas products for solid material that was never
 removed.  A warning is printed the first time it happens.  Note that
 this quantity is tallied for the single point decrement only.  With the
 <I>multiple</I> keyword the deficit is instead passed to the inside corner
-points, which are clamped at 0.0, and only a warning is printed.  A
-corner point claimed by more grid cells than its value can pay in the
-same ablation operation is also clamped at 0.0; that amount is normally
-much smaller and is not reported.
+points, which are clamped at 0.0, and only a warning is printed.
+</P>
+<P>For the single point decrement the sum of this quantity and the removed
+corner point values accounts for the requested decrement exactly, so it
+is the only decrement which is not applied.  It means the <I>source</I> asked
+to remove material from a grid cell which has none left, so the two are
+inconsistent: with a <I>c_ID</I> or <I>f_ID</I> source the surface chemistry
+created gas products for solid material that was not there to remove,
+which no accounting inside this fix can repair.
 </P>
 <P>These values can be accessed by any command that uses global values
 from a fix as input.  See <A HREF = "Section_howto.html#howto_4">Section 6.4</A> for
