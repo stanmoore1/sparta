@@ -994,6 +994,47 @@ int Variable::find(char *name)
 }
 
 /* ----------------------------------------------------------------------
+   return a human-readable one-line description of variable i:
+   its name, style, and definition string(s).
+   used by the library interface (sparta_variable_info) for GUI display;
+   mirrors LAMMPS Info::get_variable_info / Variable::get_info
+------------------------------------------------------------------------- */
+
+std::string Variable::get_info(int i)
+{
+  static const char *varstyles[] = {
+    "index","loop","world","universe","uloop","string","getenv",
+    "file","format","equal","particle","grid","surf","internal","python"};
+  const int nstyles = sizeof(varstyles)/sizeof(varstyles[0]);
+
+  char buf[256];
+
+  if (i < 0 || i >= nvar) {
+    snprintf(buf,sizeof(buf),"Variable[%3d]: (unknown)\n",i);
+    return std::string(buf);
+  }
+
+  const char *vstyle =
+    (style[i] >= 0 && style[i] < nstyles) ? varstyles[style[i]] : "(unknown)";
+  std::string sname = std::string(names[i]) + ",";
+  std::string sstyle = std::string(vstyle) + ",";
+  snprintf(buf,sizeof(buf),"Variable[%3d]: %-16s  style = %-16s  def =",
+           i,sname.c_str(),sstyle.c_str());
+  std::string text(buf);
+
+  if (style[i] == INTERNAL) {
+    snprintf(buf,sizeof(buf)," %.8g\n",dvalue[i]);
+    text += buf;
+    return text;
+  }
+
+  for (int j = 0; j < num[i]; ++j)
+    if (data[i][j]) { text += ' '; text += data[i][j]; }
+  text += "\n";
+  return text;
+}
+
+/* ----------------------------------------------------------------------
    called by python command in input script
    simply pass input script line args to Python class
 ------------------------------------------------------------------------- */
@@ -1853,24 +1894,33 @@ double Variable::evaluate(char *str, Tree **tree)
 	  treestack[ntreestack++] = newtree;
 	
 	} else if (nbracket == 1 && size > 0) {
-	
+
+	  if (index1 < 1 || index1 > size)
+	    error->all(FLERR,"Custom attribute in variable formula is "
+		       "accessed out-of-range");
+
+	  // ptr to column index1-1 of the Nentity x size array
+	  // with nstride = size, evaluation walks down that column
+
 	  Tree *newtree = new Tree();
 	  if (type == INT) {
 	    newtree->type = ARRAYINT;
 	    if (cwhich == PARTICLE_CUSTOM)
-	      newtree->iarray = particle->eiarray[particle->ewhich[icustom]][index1-1];
+	      newtree->iarray =
+		&particle->eiarray[particle->ewhich[icustom]][0][index1-1];
 	    else if (cwhich == GRID_CUSTOM)
-	      newtree->iarray = grid->eiarray[grid->ewhich[icustom]][index1-1];
+	      newtree->iarray = &grid->eiarray[grid->ewhich[icustom]][0][index1-1];
 	    else if (cwhich == SURF_CUSTOM)
-	      newtree->iarray = surf->eiarray[surf->ewhich[icustom]][index1-1];
+	      newtree->iarray = &surf->eiarray[surf->ewhich[icustom]][0][index1-1];
 	  } else if (type == DOUBLE) {
 	    newtree->type = ARRAY;
 	    if (cwhich == PARTICLE_CUSTOM)
-	      newtree->array = particle->edvec[particle->ewhich[icustom]];
+	      newtree->array =
+		&particle->edarray[particle->ewhich[icustom]][0][index1-1];
 	    else if (cwhich == GRID_CUSTOM)
-	      newtree->array = grid->edvec[grid->ewhich[icustom]];
+	      newtree->array = &grid->edarray[grid->ewhich[icustom]][0][index1-1];
 	    else if (cwhich == SURF_CUSTOM)
-	      newtree->array = surf->edvec[surf->ewhich[icustom]];
+	      newtree->array = &surf->edarray[surf->ewhich[icustom]][0][index1-1];
 	  }
 	  newtree->nstride = size;
 	  treestack[ntreestack++] = newtree;

@@ -54,6 +54,7 @@ class KokkosSPARTA {
   KokkosSPARTA(class SPARTA *, int, char **) {kokkos_exists = 0;}
   ~KokkosSPARTA() {}
   void accelerator(int, char **) {}
+  static void finalize() {}
 };
 
 class Kokkos {

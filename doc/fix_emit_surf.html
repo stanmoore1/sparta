@@ -81,7 +81,7 @@ given by equation 4.22 of <A HREF = "#Bird94">(Bird94)</A>.  The number of parti
 within a grid cell is based on this flux and additional global, flow,
 and surface element properties:
 </P>
-<UL><LI>global property: <I>fnum</I> ratio as specified by the <A HREF = "global.html"">global</A> command
+<UL><LI>global property: <I>fnum</I> ratio as specified by the <A HREF = "global.html">global</A> command
 <LI>flow properties: number density, streaming velocity, and thermal temperature
 <LI>surface element properties: portion of surface element area that overlaps with the grid cell and its orientation relative to the streaming velocity 
 </UL>
@@ -136,6 +136,12 @@ of emitted particles is set to its fraction of the total emission area
 that results in a fractional value, then an extra particle is emitted
 depending on the value of a random number, as explained above.
 </P>
+<P><I>Np</I> may be set to a non-integer value, e.g. 12.5 or 0.5.  Since the
+per-surface-element target is rounded stochastically, this allows for
+an emission rate of less than one particle per timestep, which is
+useful when a low inflow rate is desired through a specific group of
+surface elements without changing the global <I>fnum</I> setting.
+</P>
 <P>The <I>Np</I> value can be also be specified as an equal-style
 <A HREF = "variable.html">variable</A>.  If the value is a variable, it should be
 specified as v_name, where name is the variable name.  In this case,
@@ -145,7 +151,7 @@ emitted particles for each grid cell/surface element pair, the same as
 described in the preceeding paragraph.
 </P>
 <P>Equal-style variables can specify formulas with various mathematical
-functions, and include <A HREF = "status_style.html">stats_style</A> command
+functions, and include <A HREF = "stats_style.html">stats_style</A> command
 keywords for the simulation box parameters and timestep and elapsed
 time.  Thus it is easy to specify a time-dependent value of <I>Np</I>.
 </P>
@@ -354,7 +360,7 @@ a run is performed.
 <P>A <I>n</I> setting of <I>Np</I> > 0 or <I>Np</I> as a variable can only be used with
 a <I>perspecies</I> setting of <I>no</I>.
 </P>
-<P>If <I>normal</I> is set to <I>no</I>, which is the default, then unlike the <A HREF = "fix_emit/face.html">fix
+<P>If <I>normal</I> is set to <I>no</I>, which is the default, then unlike the <A HREF = "fix_emit_face.html">fix
 emit/face</A> command, no warning is issued if a
 surface element has an inward normal in a direction opposing the
 streaming velocity, as defined by the mixture.

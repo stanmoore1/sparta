@@ -30,6 +30,18 @@ n_sites = # of available adsorption sites per unit area (3D) or length (2D) :l
 adsp1,adsp2,... = list of species that can adsorb on surface :l
 :ule
 
+The reaction file(s) read by this command can also include the optional
+per-reaction keywords {kisliuk} and {energy}, which modify how the
+reaction rate constant is computed.  See the discussion of the reaction
+file format below for details.
+
+{kisliuk} = scale the adsorption rate constant by the Kisliuk
+  precursor-mediated sticking factor (only for adsorption reactions: AA,
+  DA, LH1, LH3, CD) :ulb,l
+{energy} = scale the rate constant by an incident-energy and
+  angle-dependent factor (only for CI) :l
+:ule
+
 [Examples:]
 
 surf_react adsorb gs gs_react.surf nsync 10 surf 1000 6.022e18 O CO
@@ -337,7 +349,7 @@ The values can be used by the "stats_style"_stats_style.html command
 and by "variables"_variable.html that define formulas.  The latter
 means they can be used by any command that uses a variable as input,
 e.g. the "fix ave/time"_fix_ave_time.html command.  See "Section
-4.4"_Section_howto.html#howto_4 for an overview of SPARTA output
+6.4"_Section_howto.html#howto_4 for an overview of SPARTA output
 options.
 
 This {adsorb} style compute a vector of length 2 + 2*nlist.  Nlist is
@@ -373,7 +385,7 @@ appropriately when that occurs.
 
 [Related commands:]
 
-"surf_react"_aurf_react.html, "react"_react.html, 
+"surf_react"_surf_react.html, "react"_react.html, 
 "surf_modify"_surf_modify.html,
 "bound_modify"_bound_modify.html, 
 

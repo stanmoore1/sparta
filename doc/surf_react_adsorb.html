@@ -44,6 +44,20 @@ n_sites = # of available adsorption sites per unit area (3D) or length (2D)
 
 
 </UL>
+<P>The reaction file(s) read by this command can also include the optional
+per-reaction keywords <I>kisliuk</I> and <I>energy</I>, which modify how the
+reaction rate constant is computed.  See the discussion of the reaction
+file format below for details.
+</P>
+<UL><LI><I>kisliuk</I> = scale the adsorption rate constant by the Kisliuk
+  precursor-mediated sticking factor (only for adsorption reactions: AA,
+  DA, LH1, LH3, CD) 
+
+<LI><I>energy</I> = scale the rate constant by an incident-energy and
+  angle-dependent factor (only for CI) 
+
+
+</UL>
 <P><B>Examples:</B>
 </P>
 <PRE>surf_react adsorb gs gs_react.surf nsync 10 surf 1000 6.022e18 O CO
@@ -353,7 +367,7 @@ The values can be used by the <A HREF = "stats_style.html">stats_style</A> comma
 and by <A HREF = "variable.html">variables</A> that define formulas.  The latter
 means they can be used by any command that uses a variable as input,
 e.g. the <A HREF = "fix_ave_time.html">fix ave/time</A> command.  See <A HREF = "Section_howto.html#howto_4">Section
-4.4</A> for an overview of SPARTA output
+6.4</A> for an overview of SPARTA output
 options.
 </P>
 <P>This <I>adsorb</I> style compute a vector of length 2 + 2*nlist.  Nlist is
@@ -389,7 +403,7 @@ appropriately when that occurs.
 </P>
 <P><B>Related commands:</B>
 </P>
-<P><A HREF = "aurf_react.html">surf_react</A>, <A HREF = "react.html">react</A>, 
+<P><A HREF = "surf_react.html">surf_react</A>, <A HREF = "react.html">react</A>, 
 <A HREF = "surf_modify.html">surf_modify</A>,
 <A HREF = "bound_modify.html">bound_modify</A>, 
 </P>

@@ -56,8 +56,8 @@ class Grid : protected Pointers {
   double tmap,tsplit;   // timing breakdowns of both grid2surf() algs
   double tcomm1,tcomm2,tcomm3,tcomm4;
 
-  int copy,uncopy,copymode; // used by Kokkos, prevent deallocation of
-                            //  base class when child copy is destroyed
+  int copy,copymode; // used by Kokkos, prevent deallocation of
+                     //  base class when child copy is destroyed
 
   // custom vectors/arrays for per-grid data
   // ncustom > 0 if there is any custom per-grid datta
@@ -68,8 +68,18 @@ class Grid : protected Pointers {
   int *etype;               // type = INT/DOUBLE of each attribute
   int *esize;               // size = 0 for vector, N for array columns
   int *estatus;             // status = 0/1 for each attribute
-                            //   0 = only owned ghost values are stored
+                            //   0 = only owned values are stored
                             //   1 = owned + ghost values are stored
+                            // NOTE: unlike Surf::estatus, this flag is written
+                            //   but never read, and there is no Grid analog of
+                            //   Surf::spread_custom() to refresh ghost values.
+                            //   Ghost custom values are only made valid by
+                            //   acquire_ghosts(), which packs them via
+                            //   pack_custom().  So after a "custom grid set"
+                            //   between runs, ghost values are stale until the
+                            //   next ghost acquisition.  Any consumer that
+                            //   needs custom values on ghost cells must not
+                            //   assume estatus == 1 means they are current.
   int *ewhich;              // index into eivec,eiarray,edvec,edarray for data
 
   int **eivec;              // pointer to each integer vector
@@ -489,6 +499,7 @@ class Grid : protected Pointers {
 
   int point_outside_surfs_implicit(int, double *);
   int point_outside_surfs_explicit(int, double *);
+  void push_reference_outside_surfs(int, double *, double);
 
   void surf2grid_stats();
   void flow_stats();

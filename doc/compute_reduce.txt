@@ -64,7 +64,7 @@ three kinds of quantities.  "Particle-style, grid-style, and
 surf-style variables"_variable.html generate per-particle, per-grid,
 or per-surf quantities respectively.  Custom attributes can be
 per-particle, per-grid, or per-surf quantities.  See the
-"variable"_variable command and its special functions which can
+"variable"_variable.html command and its special functions which can
 perform the same operations as the compute reduce command on global
 vectors.
 

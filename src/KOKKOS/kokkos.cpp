@@ -16,13 +16,23 @@
 #include "string.h"
 #include "stdlib.h"
 #include "ctype.h"
-#include "signal.h"
 #include "kokkos.h"
 #include "sparta.h"
 #include "error.h"
 #include "memory_kokkos.h"
 
 using namespace SPARTA_NS;
+
+// Kokkos may be initialized at most once per process and, once finalized, can
+// never be initialized again. When SPARTA is embedded as a library (a host
+// application reusing one process across many open/close cycles) Kokkos is
+// initialized on first use and finalized by KokkosSPARTA::finalize(), not by
+// the KokkosSPARTA destructor.  main() calls it via sparta_kokkos_finalize();
+// an embedder calls that same library function when it is done with SPARTA.
+
+int KokkosSPARTA::is_finalized = 0;
+
+static int kokkos_initialized_nthreads = 0;
 
 /* ---------------------------------------------------------------------- */
 
@@ -144,7 +154,22 @@ KokkosSPARTA::KokkosSPARTA(SPARTA *sparta, int narg, char **arg) : Pointers(spar
   args.set_num_threads(nthreads);
   args.set_device_id(device);
 
-  Kokkos::initialize(args);
+  // Initialize Kokkos only once per process (it can be initialized at most
+  // once).  On any later re-open the requested thread count cannot be changed,
+  // so keep the count Kokkos was actually initialized with -- otherwise the
+  // atomics decision below would be made for the wrong number of threads.
+  if (!Kokkos::is_initialized()) {
+    if (is_finalized)
+      error->all(FLERR,"Kokkos package already finalized, cannot re-initialize");
+    Kokkos::initialize(args);
+    kokkos_initialized_nthreads = nthreads;
+  } else {
+    if (nthreads != kokkos_initialized_nthreads && me == 0)
+      error->warning(FLERR,"Kokkos is already initialized in this process; "
+                     "ignoring the new thread count. Restart to change the "
+                     "number of threads.");
+    nthreads = kokkos_initialized_nthreads;
+  }
 
   // default settings for package kokkos command
 
@@ -154,7 +179,12 @@ KokkosSPARTA::KokkosSPARTA(SPARTA *sparta, int narg, char **arg) : Pointers(spar
 
   if (ngpus > 0) {
     comm_serial = 0;
-#ifdef KOKKOS_ARCH_AMD_GFX942
+
+    // must match the architectures that UpdateKokkos::move() dispatches the
+    //  ATOMIC_REDUCTION = -1 (parallel_reduce) kernel for, since the counters
+    //  are read back from the reduction result only when atomic_reduction is 0
+
+#if defined(KOKKOS_ARCH_AMD_GFX940) || defined(KOKKOS_ARCH_AMD_GFX942) || defined(KOKKOS_ARCH_AMD_GFX942_APU)
     atomic_reduction = 0;
 #else
     atomic_reduction = 1;
@@ -170,19 +200,29 @@ KokkosSPARTA::KokkosSPARTA(SPARTA *sparta, int narg, char **arg) : Pointers(spar
 
   react_retry_flag = 0;
   react_extra = 1.1;
-
-  // finalize Kokkos on abort
-
-  signal(SIGABRT, my_signal_handler);
 }
 
 /* ---------------------------------------------------------------------- */
 
 KokkosSPARTA::~KokkosSPARTA()
 {
-  // finalize Kokkos
+  // Kokkos is finalized by KokkosSPARTA::finalize(), not here, so a library
+  // embedder can destroy and re-create SPARTA in the same process without
+  // tripping over Kokkos's initialize-at-most-once restriction.
+}
 
-  Kokkos::finalize();
+/* ----------------------------------------------------------------------
+   shut down Kokkos
+   called from main() before it returns, and from sparta_kokkos_finalize()
+   Kokkos has to be finalized while its own state is still intact, so this
+     must not be deferred to a static destructor or an atexit handler
+------------------------------------------------------------------------- */
+
+void KokkosSPARTA::finalize()
+{
+  if (Kokkos::is_initialized() && !is_finalized)
+    Kokkos::finalize();
+  is_finalized = 1;
 }
 
 /* ----------------------------------------------------------------------
@@ -226,9 +266,4 @@ void KokkosSPARTA::accelerator(int narg, char **arg)
       iarg += 2;
     } else error->all(FLERR,"Illegal package kokkos command");
   }
-}
-
-void KokkosSPARTA::my_signal_handler(int sig)
-{
-  if (sig == SIGABRT) Kokkos::finalize();
 }

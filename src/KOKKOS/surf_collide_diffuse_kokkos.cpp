@@ -62,6 +62,12 @@ SurfCollideDiffuseKokkos::SurfCollideDiffuseKokkos(SPARTA *sparta, int narg, cha
 
 #ifdef SPARTA_KOKKOS_EXACT
   rand_pool.init(random);
+
+  // allocate on the real class instance: backup() is only ever invoked on a
+  //  KKCopy of this class, and a pointer stored there is dropped by the next
+  //  copy() of the original over it
+
+  random_backup = new RanKnuth(12345 + comm->me);
 #endif
 
   // use 1D view for scalars to reduce GPU memory operations
@@ -94,16 +100,6 @@ SurfCollideDiffuseKokkos::SurfCollideDiffuseKokkos(SPARTA *sparta) :
 
 SurfCollideDiffuseKokkos::~SurfCollideDiffuseKokkos()
 {
-  if (uncopy) {
-    fix_ambi_kk_copy.uncopy();
-    fix_vibmode_kk_copy.uncopy();
-
-    for (int i = 0; i < KOKKOS_MAX_SURF_REACT_PER_TYPE; i++) {
-      sr_kk_global_copy[i].uncopy();
-      sr_kk_prob_copy[i].uncopy();
-    }
-  }
-
   if (copy) return;
 
 #ifdef SPARTA_KOKKOS_EXACT
@@ -119,22 +115,27 @@ void SurfCollideDiffuseKokkos::init()
 {
   SurfCollideDiffuse::init();
 
+  // scan the fix list directly rather than testing modify->n_update_custom
+  //  first: SPARTA::init() runs surf->init() before modify->init(), so that
+  //  count still holds its value from the previous run (0 on the first one)
+
   ambi_flag = vibmode_flag = 0;
-  if (modify->n_update_custom) {
-    for (int ifix = 0; ifix < modify->nfix; ifix++) {
-      if (strcmp(modify->fix[ifix]->style,"ambipolar") == 0) {
-        ambi_flag = 1;
-        FixAmbipolar *afix = (FixAmbipolar *) modify->fix[ifix];
-        if (!afix->kokkos_flag)
-          error->all(FLERR,"Must use fix ambipolar/kk when Kokkos is enabled");
-        afix_kk = (FixAmbipolarKokkos*)afix;
-      } else if (strcmp(modify->fix[ifix]->style,"vibmode") == 0) {
-        vibmode_flag = 1;
-        FixVibmode *vfix = (FixVibmode *) modify->fix[ifix];
-        if (!vfix->kokkos_flag)
-          error->all(FLERR,"Must use fix vibmode/kk when Kokkos is enabled");
-        vfix_kk = (FixVibmodeKokkos*)vfix;
-      }
+  afix_kk = NULL;
+  vfix_kk = NULL;
+
+  for (int ifix = 0; ifix < modify->nfix; ifix++) {
+    if (strcmp(modify->fix[ifix]->style,"ambipolar") == 0) {
+      ambi_flag = 1;
+      FixAmbipolar *afix = (FixAmbipolar *) modify->fix[ifix];
+      if (!afix->kokkos_flag)
+        error->all(FLERR,"Must use fix ambipolar/kk when Kokkos is enabled");
+      afix_kk = (FixAmbipolarKokkos*)afix;
+    } else if (strcmp(modify->fix[ifix]->style,"vibmode") == 0) {
+      vibmode_flag = 1;
+      FixVibmode *vfix = (FixVibmode *) modify->fix[ifix];
+      if (!vfix->kokkos_flag)
+        error->all(FLERR,"Must use fix vibmode/kk when Kokkos is enabled");
+      vfix_kk = (FixVibmodeKokkos*)vfix;
     }
   }
 }
@@ -211,8 +212,12 @@ void SurfCollideDiffuseKokkos::dynamic()
 
     if (surf->estatus[tindex_custom] == 0) surf->spread_custom(tindex_custom);
 
-    h_edvec_local[tindex_custom].k_view.sync_device();
-    d_t_persurf = h_edvec_local[tindex_custom].k_view.view_device();
+    // edvec_local is indexed by the per-type slot ewhich[tindex_custom],
+    //  not by the global custom index tindex_custom (see Surf::add_custom)
+
+    int ewhich = surf->ewhich[tindex_custom];
+    h_edvec_local[ewhich].k_view.sync_device();
+    d_t_persurf = h_edvec_local[ewhich].k_view.view_device();
   }
 }
 
@@ -231,7 +236,7 @@ void SurfCollideDiffuseKokkos::pre_collide()
   }
 
   if (surf->nsr > KOKKOS_MAX_TOT_SURF_REACT)
-    error->all(FLERR,"Kokkos currently supports two instances of each surface reaction method");
+    error->all(FLERR,"Kokkos currently supports a limited number of surface reaction methods");
 
   if (surf->nsr > 0) {
     int nglob,nprob;
@@ -240,12 +245,16 @@ void SurfCollideDiffuseKokkos::pre_collide()
       if (!surf->sr[n]->kokkosable)
         error->all(FLERR,"Must use Kokkos-enabled surface reaction method with Kokkos");
       if (strcmp(surf->sr[n]->style,"global") == 0) {
+        if (nglob >= KOKKOS_MAX_SURF_REACT_PER_TYPE)
+          error->all(FLERR,"Kokkos currently supports two instances of each surface reaction method");
         sr_kk_global_copy[nglob].copy((SurfReactGlobalKokkos*)(surf->sr[n]));
         sr_kk_global_copy[nglob].obj.pre_react();
         sr_type_list[n] = 0;
-        sr_map[n] = nprob;
+        sr_map[n] = nglob;
         nglob++;
       } else if (strcmp(surf->sr[n]->style,"prob") == 0) {
+        if (nprob >= KOKKOS_MAX_SURF_REACT_PER_TYPE)
+          error->all(FLERR,"Kokkos currently supports two instances of each surface reaction method");
         sr_kk_prob_copy[nprob].copy((SurfReactProbKokkos*)(surf->sr[n]));
         sr_kk_prob_copy[nprob].obj.pre_react();
         sr_type_list[n] = 1;
@@ -255,9 +264,6 @@ void SurfCollideDiffuseKokkos::pre_collide()
         error->all(FLERR,"Unknown Kokkos surface reaction method");
       }
     }
-
-    if (nglob > KOKKOS_MAX_SURF_REACT_PER_TYPE || nprob > KOKKOS_MAX_SURF_REACT_PER_TYPE)
-      error->all(FLERR,"Kokkos currently supports two instances of each surface reaction method");
   }
 
   if (random == NULL) {
@@ -301,6 +307,17 @@ void SurfCollideDiffuseKokkos::post_collide()
   surf->nreact_one += h_nreact_one();
 
   d_particles = {};
+  d_species = {};
+
+  // pre_collide() runs on this KKCopy and has each active surf react model
+  //  retain a reference to the particle list.  Release it before the next
+  //  copy() blits over the member: a blit does not release, so the reference
+  //  would be orphaned and its allocation never freed
+
+  for (int n = 0; n < surf->nsr; n++) {
+    if (sr_type_list[n] == 0) sr_kk_global_copy[sr_map[n]].obj.post_react();
+    else sr_kk_prob_copy[sr_map[n]].obj.post_react();
+  }
 }
 
 /* ---------------------------------------------------------------------- */
@@ -309,6 +326,22 @@ void SurfCollideDiffuseKokkos::backup()
 {
   ParticleKokkos* particle_kk = (ParticleKokkos*) particle;
   d_particles = particle_kk->k_particles.view_device();
+
+  // the fix copies hold views into the particle list and into the custom
+  //  attribute arrays, and a retry which ran out of room grows the particle
+  //  list, reallocating both.  pre_collide() runs once per move(), before
+  //  the retry loop, so refresh them here instead: backup() runs at the top
+  //  of every retry attempt, and is the same point d_particles is refreshed
+
+  if (ambi_flag) {
+    afix_kk->pre_update_custom_kokkos();
+    fix_ambi_kk_copy.copy(afix_kk);
+  }
+
+  if (vibmode_flag) {
+    vfix_kk->pre_update_custom_kokkos();
+    fix_vibmode_kk_copy.copy(vfix_kk);
+  }
 
   if (surf->nsr > 0) {
     int nglob,nprob;

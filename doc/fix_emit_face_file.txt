@@ -65,7 +65,7 @@ equation 4.22 of "(Bird94)"_#Bird94.  The number of particles {M} to
 add on a particular grid cell face is based on this flux and
 additional global, flow, and cell face properties:
 
-global property: {fnum} ratio as specified by the "global"_global.html" command
+global property: {fnum} ratio as specified by the "global"_global.html command
 flow properties: number density, streaming velocity, and thermal temperature
 cell face properties: area of face and its orientation relative to the streaming velocity :ul
 
@@ -270,7 +270,7 @@ populated.
 
 IMPORTANT NOTE: When using a subsonic prsesure boundary condition, you
 should also use an appropriate boundary collision or chemistry model
-via the "boundary"_boundary.htmo or "bound_modify"_bound_modify.html
+via the "boundary"_boundary.html or "bound_modify"_bound_modify.html
 or "surf_collide"_surf_collide.html or "surf_react"_surf_react.html
 commands, so that particles hitting the surface disappear as if they
 were exiting the simulation domain.  That is necessary to produce the
@@ -375,7 +375,7 @@ Particles cannot be added on periodic faces of the simulation box.
 Particles cannot be added on {z} faces of the simluation box for a 2d
 simulation.
 
-Unlike the "fix emit/face"_fix_emit/face.html command, no warning is
+Unlike the "fix emit/face"_fix_emit_face.html command, no warning is
 issued if the specified emission face has an inward normal in a
 direction opposing the streaming velocity, as defined by the mixture.
 This is because the streaming velocity as defined by the specified
@@ -402,3 +402,7 @@ region = none.
 :link(Bird94)
 [(Bird94)] G. A. Bird, Molecular Gas Dynamics and the Direct
 Simulation of Gas Flows, Clarendon Press, Oxford (1994).
+
+:link(Fang02)
+[(Fang02)] Y. Fang and W. W. Liou, Microfluid Flow Computations 
+Using a Parallel DSMC Code, AIAA 2002-1057. (2002).

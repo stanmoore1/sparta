@@ -80,13 +80,14 @@ class FixEmitSurf : public FixEmit {
   int subsonic_window;      // EMA window for cell vstream smoothing (0 = none)
   int nmodekeyword;         // # of subsonic/mflow keywords given, must be <= 1
 
-  int npmode,np;    // npmode = FLOW,CONSTANT,VARIABLE
+  int npmode;       // npmode = FLOW,CONSTANT,VARIABLE
+  double np;        // # of particles to insert per step (CONSTANT mode)
   int npvar;
   char *npstr;
 
   // copies of data from other classes
 
-  int dimension,nspecies;
+  int dimension,axisymmetric,nspecies;
   double fnum,dt;
   double nrho,temp_thermal,temp_rot,temp_vib;
   double *fraction,*cummulative;
