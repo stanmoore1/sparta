@@ -451,8 +451,21 @@ being invoked, all box boundary crossings use the normal move
 algorithm, since only it tallies them.
 </P>
 <P>The <I>optmove yes</I> option cannot be used when surfaces are defined, the
-grid is not uniform, the simulation is axisymmetric, or when fix adapt
-is enabled, otherwise an error will result.
+grid is not uniform, or when fix adapt is enabled, otherwise an error
+will result.
+</P>
+<P>The optimized move supports <A HREF = "dimension.html">axisymmetric</A> models.  One
+remap of the end-of-step position into the axisymmetric plane replaces
+the remap the normal move performs at every cell crossing, which gives
+the same result because each remap is a rotation applied to the position
+and the velocity together and the radial coordinate is unchanged by it.
+The axis needs no boundary condition, since the remap always returns a
+non-negative radius.  There is one restriction: at the outer radial
+boundary, an <I>r</I> face or an <I>s</I> face carrying a <I>specular</I> model uses the
+normal move algorithm, because that face is a cylinder and reflecting off
+it turns the particle out of the plane it was moving in, so the radial
+path after the reflection is not a continuation of the one before.  An
+<I>o</I> face at the outer radius is handled by the optimized move as usual.
 </P>
 <P>Note that the "Cells touched" and "Cell-touches/particle/step"
 statistics printed at the end of a run count only particles that used
