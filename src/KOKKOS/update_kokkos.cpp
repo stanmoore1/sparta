@@ -171,16 +171,6 @@ void UpdateKokkos::init()
       error->all(FLERR,"Cannot use optimized move with non-uniform grid");
     else if (surf->exist)
       error->all(FLERR,"Cannot use optimized move when surfaces are defined");
-    else if (domain->axisymmetric)
-
-      // the fast path assigns the end-of-step position straight to the
-      //   particle, but an axisymmetric move must pass through axi_remap() to
-      //   fold z back into the radial coordinate, once per cell crossing
-      // without that the particle lands off the axisymmetric plane and is then
-      //   discarded as out of its cell, so the run silently loses most of its
-      //   particles rather than giving a wrong answer in place
-
-      error->all(FLERR,"Cannot use optimized move with axisymmetric model");
     else {
       for (int ifix = 0; ifix < modify->nfix; ifix++) {
         if (strstr(modify->fix[ifix]->style,"adapt") != NULL)
@@ -212,11 +202,8 @@ void UpdateKokkos::init()
       if (surf->nsr) moveptr = &UpdateKokkos::move<1,1,1,0>;
       else moveptr = &UpdateKokkos::move<1,1,0,0>;
     } else {
-
-      // optmove is rejected above for axisymmetric, so there is no OPT
-      // instantiation of the axisymmetric kernel to select
-
-      moveptr = &UpdateKokkos::move<1,0,0,0>;
+      if (optmove_flag) moveptr = &UpdateKokkos::move<1,0,0,1>;
+      else moveptr = &UpdateKokkos::move<1,0,0,0>;
     }
   } else if (domain->dimension == 2) {
     if (surf->exist) {
@@ -522,6 +509,20 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
       else if (bcmirror_surf[f]) bcopt[f] = BCMIRROR;
       else bcopt[f] = BCSTD;
     }
+    // axisymmetric: a mirror at the outer radial face is not a mirror in the
+    //   (x,r) plane.  reflecting off that cylinder turns the particle in 3d,
+    //   and the radial path after the turn is not the continuation of the one
+    //   before it, which is what mirroring r about the face would assume --
+    //   the error is percent-level, not round-off.  leave it to the standard
+    //   move, which walks to the face and reflects there
+    // outflow at that face is still exact: r(t)^2 is a parabola in t, so r is
+    //   unimodal, and a particle that starts inside can cross the face only
+    //   once, upward.  ending outside therefore means it left
+    // the axis itself needs nothing: axi_remap() returns r >= 0 = boxlo[1],
+    //   so the fast path never sees a particle below it
+
+    if (domain->axisymmetric && bcopt[YHI] == BCMIRROR) bcopt[YHI] = BCSTD;
+
 
     if (bcmirror_any) Kokkos::deep_copy(d_bcmirror,0);
   }
@@ -1171,7 +1172,28 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
     double xp[3];
     int flip;
 
-    const int bc = optmove_bc<DIM>(xnew,xp,flip);
+    // axisymmetry: fold the linear end-of-step position back into the (x,r)
+    //   plane before anything else looks at it.  one remap of the whole step
+    //   is enough, and gives the same answer as the standard move's remap at
+    //   every cell crossing: each remap is a rotation about the x axis applied
+    //   to position and velocity together, so the trajectory is unchanged and
+    //   only the frame moves, and r is invariant under it.  the intermediate
+    //   remaps are there so the cell-by-cell walk can follow the curve in
+    //   (x,r), which the fast path does not need to do
+    // remap a copy: axi_remap() rotates the velocity, and a particle that
+    //   falls through has to reach the standard move with v untouched
+
+    const double *xin = xnew;
+    double xaxi[3],vaxi[3];
+
+    if (DIM == 1) {
+      xaxi[0] = xnew[0]; xaxi[1] = xnew[1]; xaxi[2] = xnew[2];
+      vaxi[0] = v[0];    vaxi[1] = v[1];    vaxi[2] = v[2];
+      axi_remap(xaxi,vaxi);
+      xin = xaxi;
+    }
+
+    const int bc = optmove_bc<DIM>(xin,xp,flip);
 
     // left through an outflow face: the standard move would walk it to the
     //   face and delete it there, which is the same particle gone and the
@@ -1213,6 +1235,16 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
         x[0] = xp[0];
         x[1] = xp[1];
         x[2] = xp[2];
+
+        // axisymmetry: the particle is committed, so the rotated velocity from
+        //   the remap becomes its velocity.  x[2] is 0, which xp already
+        //   carries through from the remap
+
+        if (DIM == 1) {
+          v[0] = vaxi[0];
+          v[1] = vaxi[1];
+          v[2] = vaxi[2];
+        }
 
         // specular reflection off a global boundary: now that the particle is
         //   committed, negate the velocity components the mirrors flipped and
