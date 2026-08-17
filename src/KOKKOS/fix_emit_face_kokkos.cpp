@@ -83,12 +83,6 @@ FixEmitFaceKokkos::~FixEmitFaceKokkos()
 {
   if (copymode) return;
 
-  particle_kk_copy.uncopy();
-  regblock_kk_copy.uncopy();
-  regcylinder_kk_copy.uncopy();
-  regplane_kk_copy.uncopy();
-  regsphere_kk_copy.uncopy();
-
 #ifdef SPARTA_KOKKOS_EXACT
   rand_pool.destroy();
 #endif
@@ -360,6 +354,7 @@ void FixEmitFaceKokkos::perform_task()
   });
   particleKK->nlocal = nlocal_before + nnew;
   particleKK->modify(SPARTA_NS::Device, PARTICLE_MASK);
+  particleKK->zero_custom_kokkos(nlocal_before,particleKK->nlocal);
 
   if (modify->n_update_custom) {
     auto h_keep = Kokkos::create_mirror_view(d_keep);
@@ -406,12 +401,14 @@ void FixEmitFaceKokkos::operator()(TagFixEmitFace_ninsert, const int &i) const
       d_ninsert(i * nspecies + isp) = ninsert;
     }
   } else {
-    if (np == 0) {
+    if (np == 0.0) {
       auto ntarget = prefactor*d_tasks(i).ntarget + rand_gen.drand();
       ninsert = static_cast<int> (ntarget);
     } else {
       ninsert = npertask;
       if (i >= nthresh) ninsert++;
+      if (npremain_pertask > 0.0)
+        ninsert += static_cast<int> (npremain_pertask + rand_gen.drand());
     }
     d_ninsert(i) = ninsert;
   }

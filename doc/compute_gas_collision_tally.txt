@@ -1,6 +1,6 @@
 "SPARTA WWW Site"_sws - "SPARTA Documentation"_sd - "SPARTA Commands"_sc :c
 
-:link(sws,http://sparta.sandia.gov)
+:link(sws,https://sparta.github.io)
 :link(sd,Manual.html)
 :link(sc,Section_commands.html#comm)
 
@@ -63,13 +63,13 @@ takes place.
 The {id1} and {id2} values are the IDs of the colliding particles.
 Note that particle IDs are generated randomly.  Thus multiple
 particles in the system can potentially have the same ID.  See
-"Section 6.17"_Section_howto_17 for more details on particle IDs.
+"Section 6.19"_Section_howto.html#howto_19 for more details on particle IDs.
 
 The {type1} and {type2} values are the integer index for the particle
 species of the colliding particles.  They are values from 1 to
 Nspecies. The values corresponds to the order in which species were
 defined via the "species"_species.html command.  See "Section
-6.17"_Section_howto_17 for more details on particle types.
+6.19"_Section_howto.html#howto_19 for more details on particle types.
 
 The {vx1/pre}, {vy1/pre}, {vz1/pre}, {vx2/pre}, {vy2/pre}, {vz2/pre}
 values are the velocity components of the two particles before the

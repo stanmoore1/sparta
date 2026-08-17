@@ -25,6 +25,7 @@
 #include "stdio.h"
 #include "library.h"
 #include "sparta.h"
+#include "accelerator_kokkos.h"
 #include "spaexception.h"
 #include "input.h"
 #include "update.h"
@@ -237,6 +238,19 @@ void *sparta_open_no_mpi(int argc, char **argv, void **ptr)
 
   MPI_Comm communicator = MPI_COMM_WORLD;
   return sparta_open(argc,argv,communicator,ptr);
+}
+
+/* ----------------------------------------------------------------------
+   shut down the Kokkos library environment
+   Kokkos may be initialized at most once per process and can never be
+     re-initialized once finalized, so it is not shut down when a SPARTA
+     instance is closed.  Call this after the last instance is closed.
+   after calling this no Kokkos functionality may be used
+------------------------------------------------------------------------- */
+
+void sparta_kokkos_finalize()
+{
+  KokkosSPARTA::finalize();
 }
 
 /* ----------------------------------------------------------------------

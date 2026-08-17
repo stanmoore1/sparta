@@ -200,7 +200,9 @@ ComputeReduce::ComputeReduce(SPARTA *spa, int narg, char **arg) :
   // cannot use per-surf compute since data not yet summed across surfs
 
   for (int i = 0; i < nvalues; i++) {
-    if (which[i] == X || which[i] == V) flavor[i] = PARTICLE;
+    if (which[i] == X || which[i] == V ||
+        which[i] == KE || which[i] == EROT || which[i] == EVIB)
+      flavor[i] = PARTICLE;
 
     else if (which[i] == COMPUTE) {
       int icompute = modify->find_compute(ids[i]);

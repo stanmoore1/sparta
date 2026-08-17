@@ -81,7 +81,7 @@ given by equation 4.22 of "(Bird94)"_#Bird94.  The number of particles
 within a grid cell is based on this flux and additional global, flow,
 and surface element properties:
 
-global property: {fnum} ratio as specified by the "global"_global.html" command
+global property: {fnum} ratio as specified by the "global"_global.html command
 flow properties: number density, streaming velocity, and thermal temperature
 surface element properties: portion of surface element area that overlaps with the grid cell and its orientation relative to the streaming velocity :ul
 
@@ -136,6 +136,12 @@ of emitted particles is set to its fraction of the total emission area
 that results in a fractional value, then an extra particle is emitted
 depending on the value of a random number, as explained above.
 
+{Np} may be set to a non-integer value, e.g. 12.5 or 0.5.  Since the
+per-surface-element target is rounded stochastically, this allows for
+an emission rate of less than one particle per timestep, which is
+useful when a low inflow rate is desired through a specific group of
+surface elements without changing the global {fnum} setting.
+
 The {Np} value can be also be specified as an equal-style
 "variable"_variable.html.  If the value is a variable, it should be
 specified as v_name, where name is the variable name.  In this case,
@@ -145,7 +151,7 @@ emitted particles for each grid cell/surface element pair, the same as
 described in the preceeding paragraph.
 
 Equal-style variables can specify formulas with various mathematical
-functions, and include "stats_style"_status_style.html command
+functions, and include "stats_style"_stats_style.html command
 keywords for the simulation box parameters and timestep and elapsed
 time.  Thus it is easy to specify a time-dependent value of {Np}.
 
@@ -322,7 +328,8 @@ IMPORTANT NOTE: As with {subsonic}, you should use an appropriate
 on the emitting surfaces so particles hitting them disappear as if
 exiting the domain.  The {mflow} keyword cannot be combined with the
 {subsonic}, {n}, {custom}, or {region} keywords, and is currently a
-CPU-only feature (no KOKKOS variant).  The {region} restriction exists
+CPU-only feature: as with {subsonic}, using it with the {kk} suffix is an
+error, reported when the fix is defined.  The {region} restriction exists
 because insertions rejected by a region are not resampled, which would
 silently reduce the realized mass flow rate below {Mdot}.
 
@@ -430,7 +437,7 @@ A {n} setting of {Np} > 0 or {Np} as a variable can only be used with
 a {perspecies} setting of {no}.
 
 If {normal} is set to {no}, which is the default, then unlike the "fix
-emit/face"_fix_emit/face.html command, no warning is issued if a
+emit/face"_fix_emit_face.html command, no warning is issued if a
 surface element has an inward normal in a direction opposing the
 streaming velocity, as defined by the mixture.
 
