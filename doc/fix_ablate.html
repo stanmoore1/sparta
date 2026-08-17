@@ -202,7 +202,11 @@ smallest corner point value.  Except that a corner point value cannot
 become smaller than 0.0.  If this would occur, only a portion of the
 decrement is used to set the corner point to 0.0; the remainder is
 applid to the next smallest corner point value.  And so forth on
-successive corner points until all of the decrement is used.
+successive corner points until all of the decrement is used.  If the
+corner point values of the cell sum to less than its decrement value,
+they are all set to 0.0 and the rest of the decrement is dropped, since
+the cell has no material left to remove.  The dropped amount is
+reported; see the discussion of the global vector below.
 </P>
 <P>The amount of decrement applied to each corner point is next shared
 between all the grid cells (4 or 8) sharing each corner point value.
@@ -298,18 +302,35 @@ and the entire surface contained within the ablated cell recedes.
 <P>No information about this fix is written to <A HREF = "restart.html">binary restart
 files</A>.
 </P>
-<P>This fix computes a global scalar and a global vector of length 2.
+<P>This fix computes a global scalar and a global vector of length 3.
 The global scalar is the current sum of unique corner point values
 across the entire grid (not counting duplicate values).  This sum
 assumes that corner point values are 0.0 on the boundary of the 2d or
 3d array of grid cells containing implicit surface elements.
 </P>
-<P>The 2 vector values are the (1) sum of decrement values for each grid
-cell in the most recent ablation operation, and (2) the # of particles
+<P>The 3 vector values are the (1) sum of decrement values for each grid
+cell in the most recent ablation operation, (2) the # of particles
 deleted during the most recent ablation operation that ended up
-"inside" the newly ablated surface.  The latter quantity should be 0.
-A non-zero value indicates a corner case in the marching cubes or
-marching squares algorithm the developers still need to address.
+"inside" the newly ablated surface, and (3) the cumulative amount of
+requested decrement which the corner point values could not pay.  The
+second quantity should be 0.  A non-zero value indicates a corner case
+in the marching cubes or marching squares algorithm the developers
+still need to address.
+</P>
+<P>The third quantity is normally 0.0 as well.  It becomes non-zero when a
+grid cell is asked to remove more material in one ablation operation
+than the sum of its corner point values, as described above.  That is
+expected for the <I>random</I> and <I>uniform</I> sources, which keep asking after
+a cell is empty, but for a <I>c_ID</I> or <I>f_ID</I> source it means the ablative
+source removed less material than it accounted for, e.g. surface
+chemistry created gas products for solid material that was never
+removed.  A warning is printed the first time it happens.  Note that
+this quantity is tallied for the single point decrement only.  With the
+<I>multiple</I> keyword the deficit is instead passed to the inside corner
+points, which are clamped at 0.0, and only a warning is printed.  A
+corner point claimed by more grid cells than its value can pay in the
+same ablation operation is also clamped at 0.0; that amount is normally
+much smaller and is not reported.
 </P>
 <P>These values can be accessed by any command that uses global values
 from a fix as input.  See <A HREF = "Section_howto.html#howto_4">Section 6.4</A> for

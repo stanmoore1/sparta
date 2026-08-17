@@ -195,9 +195,14 @@ FixAblate::FixAblate(SPARTA *sparta, int narg, char **arg) :
 
   scalar_flag = 1;
   vector_flag = 1;
-  size_vector = 2;
+  size_vector = 3;
   global_freq = 1;
   sum_delta = 0.0;
+  sum_unpaid = 0.0;
+  unpaid_mine = 0.0;
+  clamp_mine = 0.0;
+  firstwarn_unpaid = 1;
+  firstwarn_clamp = 1;
   ndelete = 0;
 
   storeflag = multi_val_flag = 0;
@@ -527,6 +532,9 @@ void FixAblate::end_of_step()
   // 1) are multivalues used?
   // 2) is the decrement distributed to multiple corner points?
 
+  unpaid_mine = 0.0;
+  clamp_mine = 0.0;
+
   if (multi_dec_flag) {
     if (multi_val_flag) {
       decrement_multiv_multid_outside();
@@ -547,6 +555,44 @@ void FixAblate::end_of_step()
       decrement();
       sync();
     }
+  }
+
+  // report the part of this epoch's decrement that was requested but never
+  //   removed from any corner point, so it is not silently lost
+  // decrement() and decrement_multiv() stop when the corner values of a cell
+  //   sum to less than its requested decrement: the cell gives up all it has
+  //   and the rest of the request is dropped, tallied here as sum_unpaid
+  // the two distributed-decrement styles instead pass the deficit to the
+  //   inside corner points, which are then clamped at zero by their sync,
+  //   an amount that cannot be tallied without double counting corner points
+  //   shared by several cells, so only report that it happened
+  // both are expected for the random and uniform sources, which keep asking
+  //   after a cell is empty, but for a compute/fix source they mean gas
+  //   products were created for solid material that was never removed
+  // a corner point claimed by several cells in one epoch is a third path,
+  //   clamped at zero by sync(), and is not reported
+
+  double unpaid_mine_all[2],unpaid_all[2];
+  unpaid_mine_all[0] = unpaid_mine;
+  unpaid_mine_all[1] = clamp_mine;
+  MPI_Allreduce(unpaid_mine_all,unpaid_all,2,MPI_DOUBLE,MPI_SUM,world);
+
+  if (unpaid_all[0] > 0.0) {
+    sum_unpaid += unpaid_all[0];
+    if (firstwarn_unpaid) {
+      firstwarn_unpaid = 0;
+      if (comm->me == 0)
+        error->warning(FLERR,"Fix ablate decrement exceeded the corner point "
+                       "values available to pay it, remainder dropped: "
+                       "cumulative amount is in the fix vector [3]");
+    }
+  }
+
+  if (unpaid_all[1] > 0.0 && firstwarn_clamp) {
+    firstwarn_clamp = 0;
+    if (comm->me == 0)
+      error->warning(FLERR,"Fix ablate distributed decrement drove an inside "
+                     "corner point negative, remainder dropped");
   }
 
   // sync shared corner point values
@@ -1049,6 +1095,11 @@ void FixAblate::decrement()
         total -= corners[imin];
       }
     }
+
+    // no corner point of this cell can pay the rest of total
+    // tally it in end_of_step() instead of dropping it silently
+
+    if (total > 0.0) unpaid_mine += total;
   }
 }
 
@@ -1803,6 +1854,7 @@ double FixAblate::compute_vector(int i)
 {
   if (i == 0) return sum_delta;
   if (i == 1) return 1.0*ndelete;
+  if (i == 2) return sum_unpaid;
   return 0.0;
 }
 
