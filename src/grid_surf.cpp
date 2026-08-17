@@ -1253,6 +1253,12 @@ void Grid::recurse2d(cellint parentID, int level, double *plo, double *phi,
         newlo[1] = MAX(bblo[1],clo[1]);
         newhi[0] = MIN(bbhi[0],chi[0]);
         newhi[1] = MIN(bbhi[1],chi[1]);
+
+        // 3rd dim is unused in 2d, but must still be set
+        // id_point_child() reads it, and the caller of recurse2d() sets it to 0
+
+        newlo[2] = 0.0;
+        newhi[2] = 0.0;
         recurse2d(childID,level+1,clo,chi,surfindex,line,newlo,newhi,
                   npair,maxpair,pairs,chash,phash);
       }

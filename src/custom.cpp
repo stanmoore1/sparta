@@ -38,9 +38,9 @@ enum{INT,DOUBLE};                       // several files
 enum{TEXT,BINARY};
 
 #define MAXLINE 1024
-#define CHUNK 4     // NOTE: make this larger after debugging
+#define CHUNK 1024  // # of file lines read and broadcast at a time
 #define BIG 1.0e20
-#define MAXTIE 16   // NOTE: make this larger after debugging
+#define MAXTIE 64   // max # of coarse points equidistant from a cell center
 #define EPSCUT 1.0e-6
 #define MAXCOARSE 1000000    // threshold of 1M coarse points
 
@@ -240,10 +240,7 @@ bigint Custom::process_actions(int narg, char **arg, int external)
         csize = surf->esize[cindex];
       }
 
-      if (csize && ccol == 0)
-        error->all(FLERR,"Custom attribute array requires bracketed index");
-      if (csize == 0 && ccol)
-        error->all(FLERR,"Custom attribute vector cannot use bracketed index");
+      check_attribute_column(csize,ccol);
 
       // variable name
 
@@ -370,10 +367,7 @@ bigint Custom::process_actions(int narg, char **arg, int external)
           ctype[i] = surf->etype[cindex[i]];
           csize[i] = surf->esize[cindex[i]];
         }
-        if (csize[i] && ccol[i] == 0)
-          error->all(FLERR,"Custom attribute array requires bracketed index");
-        if (csize[i] == 0 && ccol[i])
-          error->all(FLERR,"Custom attribute vector cannot use bracketed index");
+        check_attribute_column(csize[i],ccol[i]);
         delete [] aname;
       }
 
@@ -472,10 +466,7 @@ bigint Custom::process_actions(int narg, char **arg, int external)
           error->all(FLERR,"Custom attribute name does not exist");
         ctype[i] = grid->etype[cindex[i]];
         csize[i] = grid->esize[cindex[i]];
-        if (csize[i] && ccol[i] == 0)
-          error->all(FLERR,"Custom attribute array requires bracketed index");
-        if (csize[i] == 0 && ccol[i])
-          error->all(FLERR,"Custom attribute vector cannot use bracketed index");
+        check_attribute_column(csize[i],ccol[i]);
         delete [] aname;
       }
 
@@ -1424,7 +1415,9 @@ void Custom::read_coarse_files(char *fname, int numfile, int colcount)
   MPI_Allreduce(&count,&count_all,1,MPI_INT,MPI_SUM,world);
 
   if (count_all) {
-    error->all(FLERR,"How many coarse grid points are outside simulation box");
+    char str[128];
+    sprintf(str,"%d coarse grid points are outside simulation box",count_all);
+    error->all(FLERR,str);
   }
 
   // perform Allgatherv() so each proc has copy of all coarse points read by all procs
@@ -1671,6 +1664,23 @@ int Custom::attribute_bracket(char *aname)
   return ccol;
 }
 
+/* ----------------------------------------------------------------------
+   check a bracketed index CCOL against the attribute size CSIZE
+   csize = 0 for a vector attribute, N = # of columns for an array attribute
+   ccol = 0 if no brackets, else the value inside the brackets
+   error if the two are inconsistent or the column is out of range
+---------------------------------------------------------------------- */
+
+void Custom::check_attribute_column(int csize, int ccol)
+{
+  if (csize && ccol == 0)
+    error->all(FLERR,"Custom attribute array requires bracketed index");
+  if (csize == 0 && ccol)
+    error->all(FLERR,"Custom attribute vector cannot use bracketed index");
+  if (csize && (ccol < 1 || ccol > csize))
+    error->all(FLERR,"Custom attribute array is accessed out-of-range");
+}
+
 // ----------------------------------------------------------------------
 // ----------------------------------------------------------------------
 // KDTree class
@@ -1678,7 +1688,7 @@ int Custom::attribute_bracket(char *aname)
 // ----------------------------------------------------------------------
 
 enum{BRANCH,LEAF};
-#define DELTANODE 4       // NOTE: make this larger after debugging
+#define DELTANODE 1024    // # of KD tree nodes allocated at a time
 
 /* ---------------------------------------------------------------------- */
 
@@ -1712,6 +1722,11 @@ KDTree::~KDTree()
 
 void KDTree::create_tree(int iparent, int n, int *plist)
 {
+  // no points is not a valid subtree
+  // would recurse forever below, since an empty bbox splits into 2 empty lists
+
+  if (n == 0) error->one(FLERR,"KDTree split produced an empty branch");
+
   // single point, create LEAF node
 
   if (n == 1) {
@@ -1760,7 +1775,7 @@ void KDTree::create_tree(int iparent, int n, int *plist)
       bboxlo[2] == bboxhi[2]) flag = 1;
   if (flag) error->one(FLERR,"Multiple coarse grid points with same coords");
 
-  // splitdim = which dim to split points in (minimum bbox edge)
+  // splitdim = which dim to split points in (maximum bbox edge)
   // split = splitting value in that dim
 
   double xdelta = bboxhi[0] - bboxlo[0];

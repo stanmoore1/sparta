@@ -62,7 +62,6 @@ SurfCollide::SurfCollide(SPARTA *sparta, int, char **arg) :
   t_owned = t_localghost = NULL;
 
   kokkosable = copy = copymode = 0;
-  uncopy = 1;
 }
 
 /* ---------------------------------------------------------------------- */

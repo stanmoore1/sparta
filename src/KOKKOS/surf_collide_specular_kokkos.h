@@ -41,7 +41,6 @@ class SurfCollideSpecularKokkos : public SurfCollideSpecular {
 
   SurfCollideSpecularKokkos(class SPARTA *, int, char **);
   SurfCollideSpecularKokkos(class SPARTA *);
-  ~SurfCollideSpecularKokkos();
   void init();
   void pre_collide();
   void post_collide();

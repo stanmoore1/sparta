@@ -190,7 +190,14 @@ void ParticleKokkos::sort_kokkos()
   //if (update->have_mem_limit())
   //  reorder_scheme = FIXEDMEMORY;
 
-  const int reorder_flag = (update->reorder_period &&
+  // reordering is a memory-locality optimization only, so it is safe to skip
+  // skip it if custom per-particle data exists: the reorder kernels below
+  //   permute only the OnePart records, they do not permute the custom
+  //   vectors/arrays, which would silently decouple custom values from their
+  //   particles.  Particle::reorder() handles this on the host via
+  //   copy_custom(); post_weight() takes the same "bail out if ncustom" tack.
+
+  const int reorder_flag = (update->reorder_period && !ncustom &&
       (update->ntimestep % update->reorder_period == 0));
 
   ngrid = grid->nlocal;

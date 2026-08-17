@@ -39,6 +39,7 @@ ComputeSurfKokkos::ComputeSurfKokkos(SPARTA *sparta, int narg, char **arg) :
   sr_kk_prob_copy{VAL_2(KKCopy<SurfReactProbKokkos>(sparta))}
 {
   kokkos_flag = 1;
+  compressed = 0;
   d_which = DAT::t_int_1d("surf:which",nvalue);
 }
 
@@ -48,20 +49,13 @@ ComputeSurfKokkos::ComputeSurfKokkos(SPARTA *sparta) :
   sr_kk_prob_copy{VAL_2(KKCopy<SurfReactProbKokkos>(sparta))}
 {
   copy = 1;
-  uncopy = 0;
+  compressed = 0;
 }
 
 /* ---------------------------------------------------------------------- */
 
 ComputeSurfKokkos::~ComputeSurfKokkos()
 {
-  if (uncopy) {
-    for (int i = 0; i < KOKKOS_MAX_SURF_REACT_PER_TYPE; i++) {
-      sr_kk_global_copy[i].uncopy();
-      sr_kk_prob_copy[i].uncopy();
-    }
-  }
-
   if (copy) return;
 
   memoryKK->destroy_kokkos(k_tally2surf,tally2surf);
@@ -123,6 +117,7 @@ void ComputeSurfKokkos::clear()
 
   ntally = 0;
   combined = 0;
+  compressed = 0;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -148,7 +143,7 @@ void ComputeSurfKokkos::pre_surf_tally()
     ndup_array_surf_tally = Kokkos::Experimental::create_scatter_view<typename Kokkos::Experimental::ScatterSum, typename Kokkos::Experimental::ScatterNonDuplicated>(d_array_surf_tally);
 
   if (surf->nsr > KOKKOS_MAX_TOT_SURF_REACT)
-    error->all(FLERR,"Kokkos currently supports two instances of each surface reaction method");
+    error->all(FLERR,"Kokkos currently supports a limited number of surface reaction methods");
 
   if (surf->nsr > 0) {
     int nglob,nprob;
@@ -157,12 +152,16 @@ void ComputeSurfKokkos::pre_surf_tally()
       if (!surf->sr[n]->kokkosable)
         error->all(FLERR,"Must use Kokkos-enabled surface reaction method with Kokkos");
       if (strcmp(surf->sr[n]->style,"global") == 0) {
+        if (nglob >= KOKKOS_MAX_SURF_REACT_PER_TYPE)
+          error->all(FLERR,"Kokkos currently supports two instances of each surface reaction method");
         sr_kk_global_copy[nglob].copy((SurfReactGlobalKokkos*)(surf->sr[n]));
         sr_kk_global_copy[nglob].obj.pre_react();
         sr_type_list[n] = 0;
-        sr_map[n] = nprob;
+        sr_map[n] = nglob;
         nglob++;
       } else if (strcmp(surf->sr[n]->style,"prob") == 0) {
+        if (nprob >= KOKKOS_MAX_SURF_REACT_PER_TYPE)
+          error->all(FLERR,"Kokkos currently supports two instances of each surface reaction method");
         sr_kk_prob_copy[nprob].copy((SurfReactProbKokkos*)(surf->sr[n]));
         sr_kk_prob_copy[nprob].obj.pre_react();
         sr_type_list[n] = 1;
@@ -172,9 +171,6 @@ void ComputeSurfKokkos::pre_surf_tally()
         error->all(FLERR,"Unknown Kokkos surface reaction method");
       }
     }
-
-    if (nglob > KOKKOS_MAX_SURF_REACT_PER_TYPE || nprob > KOKKOS_MAX_SURF_REACT_PER_TYPE)
-      error->all(FLERR,"Kokkos currently supports two instances of each surface reaction method");
   }
 }
 
@@ -189,6 +185,16 @@ void ComputeSurfKokkos::post_surf_tally()
 
   k_tally2surf.modify_device();
   k_array_surf_tally.modify_device();
+
+  // pre_surf_tally() has each active surf react model retain a reference to
+  //  the particle list.  Release it before the next pre_surf_tally() blits
+  //  over the member: a blit does not release, so the reference would be
+  //  orphaned and its allocation never freed
+
+  for (int n = 0; n < surf->nsr; n++) {
+    if (sr_type_list[n] == 0) sr_kk_global_copy[sr_map[n]].obj.post_react();
+    else sr_kk_prob_copy[sr_map[n]].obj.post_react();
+  }
 }
 
 /* ----------------------------------------------------------------------
@@ -197,6 +203,14 @@ void ComputeSurfKokkos::post_surf_tally()
 
 int ComputeSurfKokkos::tallyinfo(surfint *&ptr)
 {
+  // compressing below is destructive, so only do it once per clear() cycle
+
+  if (compressed) {
+    ptr = tally2surf;
+    return ntally;
+  }
+  compressed = 1;
+
   k_tally2surf.sync_host();
   ptr = tally2surf;
 
@@ -226,6 +240,25 @@ int ComputeSurfKokkos::tallyinfo(surfint *&ptr)
   }
 
   return ntally;
+}
+
+/* ----------------------------------------------------------------------
+   sum tally values to owning surfs
+   ComputeSurf::post_process_surf() collates ntally rows, but ntally is only
+     computed by tallyinfo(), which is also what copies the device tallies to
+     the host.  Only fix ave/surf calls tallyinfo(); dump surf, compute reduce
+     and surf-style variables call post_process_surf() directly, and would
+     otherwise collate the ntally = 0 left by clear() and report all zeroes.
+------------------------------------------------------------------------- */
+
+void ComputeSurfKokkos::post_process_surf()
+{
+  if (combined) return;
+
+  surfint *ptr;
+  tallyinfo(ptr);
+
+  ComputeSurf::post_process_surf();
 }
 
 /* ---------------------------------------------------------------------- */
