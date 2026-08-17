@@ -1011,7 +1011,18 @@ int UpdateKokkos::optmove_bc(const double *xnew, double *xp, int &flip) const
       exited = 1;
     }
 
-  if (exited) return -1;
+  // a particle that mirrored off one face and left through another cannot be
+  //   deleted here.  whether the standard move counts that boundary collision
+  //   depends on which face the particle reached first, and this does not
+  //   determine that: reaching the mirror first reflects it and then it still
+  //   leaves, since a mirror in one dimension does not change the motion in
+  //   the one it exits through, but reaching the outflow face first means the
+  //   reflection never happened.  the fate is the same either way, the tally
+  //   is not, so hand it to the standard move
+  // a wrap alongside an exit is fine and stays here, since a periodic crossing
+  //   tallies nothing
+
+  if (exited) return flip ? 0 : -1;
 
   return 1;
 }
