@@ -68,6 +68,12 @@ class FixAblate : public Fix {
   int isr_default;        // default isr index for newly created implicit surfs
   double thresh;
   double sum_delta;
+  double sum_unpaid;      // cumulative decrement no corner point could pay
+  double unpaid_mine;     // this proc's unpaid decrement, current epoch
+  double clamp_mine;      // 1.0 if this proc clamped an inside corner point
+                          // at zero this epoch, else 0.0
+  int firstwarn_unpaid;   // 1 until warned once about an unpaid decrement
+  int firstwarn_clamp;    // 1 until warned once about a clamped corner point
   bigint ndelete;
 
   int nglocal;            // # of owned grid cells
