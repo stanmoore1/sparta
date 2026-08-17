@@ -284,13 +284,12 @@ void ParticleKokkos::sort_kokkos()
 
   Kokkos::deep_copy(d_cellcount,0);
 
-  // never treat maxcellcount as smaller than d_plist already is:
-  // CollideVSSKokkos resets it from its own recomputed per-cell max, which can
-  // leave it below the allocated extent and make the binning kernel below
-  // report an overflow the existing allocation could have absorbed
-
-  if (d_plist.extent(1) > 0)
-    maxcellcount = MAX(maxcellcount,int(d_plist.extent(1)));
+  // maxcellcount tracks the per-cell count that has to fit, not the capacity
+  // that is allocated for it: CollideVSSKokkos sizes d_plist to
+  // maxcellcount*react_extra, so folding the extent back in here would make
+  // the next collide multiply its own padding again, growing d_plist by that
+  // factor every timestep.  the binning kernel bounds against the extent
+  // instead, so an allocation wider than maxcellcount is still used in full
 
   // pre-size before the binning pass, so the resize path below is only reached
   // when a cell needs more than this seed.  the resize path is itself
@@ -523,7 +522,7 @@ void ParticleKokkos::operator()(TagParticleSort<NEED_ATOMICS,REORDER_FLAG>, cons
     d_cellcount[icell]++;
   }
 
-  if (j >= maxcellcount)
+  if (j >= int(d_plist.extent(1)))
     d_resize() = MAX(d_resize(),j+1);
   else {
     d_plist(icell,j) = i;

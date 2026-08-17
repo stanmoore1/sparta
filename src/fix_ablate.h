@@ -61,6 +61,7 @@ class FixAblate : public Fix {
   int multi_val_flag;
   int multi_dec_flag;
   int minmaxflag;
+  int conserve_flag;
   int ncorner;
   int nmultiv;
   int sgroupbit;

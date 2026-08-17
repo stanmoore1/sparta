@@ -568,6 +568,10 @@ void FixAblate::end_of_step()
       //   before, and an epoch that pays in full stops after it, so a run
       //   which never over-claims a corner point is unchanged and pays no
       //   extra communication
+      // an epoch that cannot pay in full costs one more pass than that: a
+      //   pass has to run to find that it removes nothing.  the conserve
+      //   keyword turns the retry off for a run that would rather drop the
+      //   remainder than pay for the extra comm_neigh_corners()
       // what is left after the last pass is decrement the cell has no
       //   material left to cover, which end_of_step reports below
 
@@ -580,6 +584,8 @@ void FixAblate::end_of_step()
       for (int iter = 0; iter < MAXDECITER; iter++) {
         decrement();
         sync();
+
+        if (!conserve_flag) break;
 
         owed_mine = 0.0;
         for (int icell = 0; icell < nglocal; icell++) {
@@ -1954,6 +1960,7 @@ void FixAblate::process_args(int narg, char **arg)
   mindist = 0.0;
   multi_dec_flag = 0;
   minmaxflag = 0;
+  conserve_flag = 1;
 
   int iarg = 0;
   while (iarg < narg) {
@@ -1968,6 +1975,12 @@ void FixAblate::process_args(int narg, char **arg)
       if (iarg+2 > narg) error->all(FLERR,"Invalid read_isurf command");
       if (strcmp(arg[iarg+1],"no") == 0) multi_dec_flag = 0;
       else if (strcmp(arg[iarg+1],"yes") == 0) multi_dec_flag = 1;
+      else error->all(FLERR,"Illegal fix_ablate command");
+      iarg += 2;
+    } else if (strcmp(arg[iarg],"conserve") == 0) {
+      if (iarg+2 > narg) error->all(FLERR,"Invalid fix ablate command");
+      if (strcmp(arg[iarg+1],"no") == 0) conserve_flag = 0;
+      else if (strcmp(arg[iarg+1],"yes") == 0) conserve_flag = 1;
       else error->all(FLERR,"Illegal fix_ablate command");
       iarg += 2;
     } else if (strcmp(arg[iarg],"minmax") == 0) {

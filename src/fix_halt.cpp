@@ -135,9 +135,13 @@ FixHalt::FixHalt(SPARTA *sparta, int narg, char **arg) :
   //   (which is why end_of_step() wraps it in clearstep/addstep), and a
   //   non-Kokkos compute reads particle data on the host directly, so it has to
   //   be synced first
+  // datamask_read only ever reaches ParticleKokkos::sync(), so these 3 bits are
+  //   everything it can sync -- naming them is the same work as ALL_MASK and
+  //   does not suggest the grid or surf data is involved
   // this fix never writes particle data either way
 
-  datamask_read = (attribute == TLIMIT) ? EMPTY_MASK : ALL_MASK;
+  datamask_read = (attribute == TLIMIT) ?
+    EMPTY_MASK : (PARTICLE_MASK|SPECIES_MASK|CUSTOM_MASK);
   datamask_modify = EMPTY_MASK;
 }
 

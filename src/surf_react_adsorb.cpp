@@ -1577,12 +1577,18 @@ void SurfReactAdsorb::check_capacity()
 {
   if (!firstwarn_capacity) return;
 
-  double fnum = update->fnum;
+  double fnum_inv = 1.0/update->fnum;
   int flag = 0;
+
+  // stop at the first over-capacity element: this runs every Nsync step until
+  //   the warning fires, and one is enough to fire it
 
   if (mode == FACE) {
     for (int i = 0; i < nface; i++)
-      if (total_state[i] > ceil(max_cover*area[i] / (fnum*weight[i]))) flag = 1;
+      if (total_state[i] > ceil(max_cover*area[i]*fnum_inv/weight[i])) {
+        flag = 1;
+        break;
+      }
 
   } else {
     Surf::Line *lines = surf->lines;
@@ -1594,7 +1600,10 @@ void SurfReactAdsorb::check_capacity()
       if (dimension == 2) isr = lines[i].isr;
       else isr = tris[i].isr;
       if (isr < 0 || surf->sr[isr] != this) continue;
-      if (total_state[i] > ceil(max_cover*area[i] / (fnum*weight[i]))) flag = 1;
+      if (total_state[i] > ceil(max_cover*area[i]*fnum_inv/weight[i])) {
+        flag = 1;
+        break;
+      }
     }
   }
 

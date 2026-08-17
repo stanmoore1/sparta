@@ -37,11 +37,12 @@
 
 <LI>zero or more keyword/value pairs may be appended 
 
-<LI>keyword = <I>mindist</I> or <I>multiple</I> 
+<LI>keyword = <I>mindist</I> or <I>multiple</I> or <I>conserve</I> 
 
 <PRE>  <I>mindist</I> value = fraction
     fraction = minimum fractional distance along cell edge for triangle/line vertices (value > 0 and < 0.5)
-  <I>multiple</I> value = yes or no 
+  <I>multiple</I> value = yes or no
+  <I>conserve</I> value = yes or no 
 </PRE>
 
 </UL>
@@ -337,6 +338,20 @@ this quantity is tallied for the single point decrement only.  With the
 <I>multiple</I> keyword the deficit is instead passed to the inside corner
 points, which are clamped at 0.0, and only a warning is printed.
 </P>
+<P>The <I>conserve</I> keyword applies to the single point decrement only.  With
+<I>conserve</I> set to yes, the default, a grid cell whose claim on a shared
+corner point was reduced because a neighbor cell claimed the same point
+in this ablation operation is offered the remainder of its claim again,
+from the other corner points of the same cell.  This is what makes the
+third vector value above account for the requested decrement exactly.
+An ablation operation which pays every claim in full stops after the
+first decrement, so a run that never over-claims a corner point costs
+nothing extra; one that cannot pay in full runs a second decrement to
+find that nothing more can be removed, which is a second round of corner
+point communication.  Setting <I>conserve</I> to no stops after the first
+decrement, so a claim a shared corner point could not cover is dropped
+and reported rather than retried.
+</P>
 <P>For the single point decrement the sum of this quantity and the removed
 corner point values accounts for the requested decrement exactly, so it
 is the only decrement which is not applied.  It means the <I>source</I> asked
@@ -371,7 +386,8 @@ that is the case.
 <P><B>Default:</B>
 </P>
 <P>The default for the <I>mindist</I> keyword = 0.0, i.e. the epsilon method
-is used.  The default for the <I>multiple</I> keyword = no.
+is used.  The default for the <I>multiple</I> keyword = no.  The default for
+the <I>conserve</I> keyword = yes.
 </P>
 <HR>
 
