@@ -90,6 +90,7 @@ SurfReactAdsorb::SurfReactAdsorb(SPARTA *sparta, int narg, char **arg) :
   me = comm->me;
   nprocs = comm->nprocs;
   distributed = surf->distributed;
+  firstwarn_capacity = 1;
 
   // 1st arg: gas chemistry or surf chemistry or both
 
@@ -702,7 +703,19 @@ int SurfReactAdsorb::react(Particle::OnePart *&ip, int isurf, double *norm,
       {
         //check_ads = 1;
         //ads_index = i;
-        double surf_cover = total_state[isurf] * ms_inv;
+
+        // adsorption events accumulate in species_delta against the coverage
+        //   stored at the last sync, so one Nsync window can fold in more
+        //   adsorbate than the surf has sites for, i.e. total_state > maxstick
+        // clamp the coverage at full: without it (1-surf_cover) is negative,
+        //   so S_theta and prob_value are negative for a positive exponent
+        //   and NaN for a non-integer one, sum_prob goes negative, and
+        //   scatter_prob = 1-sum_prob > 1 scatters every later collision,
+        //   silently killing all reactions on this surf for the rest of run
+        // clamping leaves the theta < 1 case bit-for-bit unchanged, and the
+        //   Kisliuk branches below already guard the same way
+
+        double surf_cover = MIN(total_state[isurf] * ms_inv, 1.0);
         double S_theta = 0.0;
 
         if (r->kisliuk_flag)
@@ -726,7 +739,9 @@ int SurfReactAdsorb::react(Particle::OnePart *&ip, int isurf, double *norm,
 
     case DA:
       {
-        double surf_cover = total_state[isurf] * ms_inv;
+        // coverage clamped at full, see AA above
+
+        double surf_cover = MIN(total_state[isurf] * ms_inv, 1.0);
         double S_theta = 0.0;
 
         if (r->kisliuk_flag) {
@@ -757,7 +772,9 @@ int SurfReactAdsorb::react(Particle::OnePart *&ip, int isurf, double *norm,
 
     case LH1:
       {
-        double surf_cover = total_state[isurf] * ms_inv;
+        // coverage clamped at full, see AA above
+
+        double surf_cover = MIN(total_state[isurf] * ms_inv, 1.0);
         double S_theta = 0.0;
 
         if (r->kisliuk_flag) {
@@ -777,7 +794,9 @@ int SurfReactAdsorb::react(Particle::OnePart *&ip, int isurf, double *norm,
 
     case LH3:
       {
-        double surf_cover = total_state[isurf] * ms_inv;
+        // coverage clamped at full, see AA above
+
+        double surf_cover = MIN(total_state[isurf] * ms_inv, 1.0);
         double S_theta = 0.0;
 
         if (r->kisliuk_flag) {
@@ -797,7 +816,9 @@ int SurfReactAdsorb::react(Particle::OnePart *&ip, int isurf, double *norm,
 
     case CD:
       {
-        double surf_cover = total_state[isurf] * ms_inv;
+        // coverage clamped at full, see AA above
+
+        double surf_cover = MIN(total_state[isurf] * ms_inv, 1.0);
         double S_theta = 0.0;
 
         if (r->kisliuk_flag) {
@@ -821,8 +842,13 @@ int SurfReactAdsorb::react(Particle::OnePart *&ip, int isurf, double *norm,
         dot = 2.0;
 
         if (r->nreactant == 1) {
+
+          // empty-site count clamped at zero for the same reason the
+          //   coverage is clamped at full in AA above
+
           prob_value[i] = 2.0 * r->k_react *
-            (maxstick - total_state[isurf]) * ms_inv / fabs(dot);
+            MAX(maxstick - total_state[isurf],(long int) 0) * ms_inv /
+            fabs(dot);
         } else {
           prob_value[i] = 2.0 * r->k_react / fabs(dot);
         }
@@ -1182,6 +1208,10 @@ void SurfReactAdsorb::tally_update()
   if (mode == FACE) update_state_face();
   else if (mode == SURF) update_state_surf();
 
+  // warn once if any face/surf now holds more adsorbate than it has sites for
+
+  check_capacity();
+
   // tally only the surf phase reactions
 
   ntotal += nsingle - nsingle_gs;
@@ -1509,6 +1539,55 @@ void SurfReactAdsorb::update_state_surf()
 
   total_state = surf->eivec_local[surf->ewhich[total_state_index]];
   species_state = surf->eiarray_local[surf->ewhich[species_state_index]];
+}
+
+/* ----------------------------------------------------------------------
+   warn once if any face/surf holds more adsorbate than it has sites for
+   adsorption events of an entire Nsync window are folded into the state
+     against the coverage stored at the previous sync, so a window whose
+     influx exceeds the capacity of a face/surf overshoots it, leaving a
+     state whose coverage exceeds one
+   react() clamps the coverage so the reaction probabilities stay physical,
+     but the stored state itself is not, so tell the user rather than
+     letting a saturated surface look like a healthy one
+------------------------------------------------------------------------- */
+
+void SurfReactAdsorb::check_capacity()
+{
+  if (!firstwarn_capacity) return;
+
+  double fnum = update->fnum;
+  int flag = 0;
+
+  if (mode == FACE) {
+    for (int i = 0; i < nface; i++)
+      if (total_state[i] > ceil(max_cover*area[i] / (fnum*weight[i]))) flag = 1;
+
+  } else {
+    Surf::Line *lines = surf->lines;
+    Surf::Tri *tris = surf->tris;
+    int dimension = domain->dimension;
+    int isr;
+
+    for (int i = 0; i < surf->nlocal; i++) {
+      if (dimension == 2) isr = lines[i].isr;
+      else isr = tris[i].isr;
+      if (isr < 0 || surf->sr[isr] != this) continue;
+      if (total_state[i] > ceil(max_cover*area[i] / (fnum*weight[i]))) flag = 1;
+    }
+  }
+
+  // firstwarn_capacity is identical on all procs, so this is collective
+
+  int flagall;
+  MPI_Allreduce(&flag,&flagall,1,MPI_INT,MPI_MAX,world);
+  if (!flagall) return;
+
+  firstwarn_capacity = 0;
+  if (comm->me == 0)
+    error->warning(FLERR,"Surf_react adsorb adsorbate count exceeds surface "
+                   "site capacity, coverage clamped at one: reduce nsync or "
+                   "fnum, or increase max_cover");
 }
 
 /* ---------------------------------------------------------------------- */
