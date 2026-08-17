@@ -117,7 +117,7 @@ SurfReactAdsorb::SurfReactAdsorb(SPARTA *sparta, int narg, char **arg) :
 
   if (strcmp(arg[iarg],"nsync") != 0)
     error->all(FLERR,"Illegal surf_react adsorb command");
-  nsync = input->numeric(FLERR,arg[iarg+1]);
+  nsync = input->inumeric(FLERR,arg[iarg+1]);
   if (nsync < 1) error->all(FLERR,"Illegal surf_react adsorb command");
 
   if (strcmp(arg[iarg+2],"face") == 0) mode = FACE;
@@ -191,10 +191,10 @@ SurfReactAdsorb::SurfReactAdsorb(SPARTA *sparta, int narg, char **arg) :
   nlist = 0;
   if (gsflag) nlist += nlist_gs;
   if (psflag) nlist += nlist_ps;
-  tally_single = new int[nlist];
-  tally_total = new int[nlist];
-  tally_single_all = new int[nlist];
-  tally_total_all = new int[nlist];
+  tally_single = new bigint[nlist];
+  tally_total = new bigint[nlist];
+  tally_single_all = new bigint[nlist];
+  tally_total_all = new bigint[nlist];
 
   size_vector = 2 + 2*nlist;
 
@@ -467,7 +467,7 @@ void SurfReactAdsorb::create_per_surf_state()
   memory->create(surf_species_delta,nall,nspecies_surf,
                  "react/adsorb:surf_species_delta");
   if (nall) memset(&surf_species_delta[0][0],0,
-		   nall*nspecies_surf*sizeof(int));
+		   (bigint) nall*nspecies_surf*sizeof(int));
 
   species_delta = surf_species_delta;
 
@@ -1210,7 +1210,7 @@ void SurfReactAdsorb::grid_changed()
   memory->create(surf_species_delta,nall,nspecies_surf,
                  "react/adsorb:surf_species_delta");
   if (nall) memset(&surf_species_delta[0][0],0,
-		   nall*nspecies_surf*sizeof(int));
+		   (bigint) nall*nspecies_surf*sizeof(int));
   species_delta = surf_species_delta;
 
   memory->destroy(mark);
@@ -1331,8 +1331,16 @@ void SurfReactAdsorb::PS_chemistry()
   //   due to desorption reactions from faces or surfs
   // accumulate via Allgatherv
 
-  int nall;
-  MPI_Allreduce(&npart,&nall,1,MPI_INT,MPI_SUM,world);
+  // sum in bigint, then check the Allgatherv of all added particles
+  //   to every proc stays under 2 GB, since its counts/displs are int
+
+  bigint npart_big = npart;
+  bigint nall_big;
+  MPI_Allreduce(&npart_big,&nall_big,1,MPI_SPARTA_BIGINT,MPI_SUM,world);
+  if (nall_big > (bigint) (MAXSMALLINT/sizeof(AddParticle)))
+    error->one(FLERR,"Too many particles added by surf reactions, "
+               "allgathered byte count exceeds 2 GB");
+  int nall = nall_big;
 
   if (nall > maxallpart) {
     while (maxallpart < nall) maxallpart += DELTA_PART;
@@ -1390,23 +1398,36 @@ void SurfReactAdsorb::update_state_face()
   int i,j;
 
   // sum perspecies deltas across all procs
+  // sum in bigint: an MPI_INT sum overflows at large proc counts
 
-  MPI_Allreduce(&species_delta[0][0],&face_sum_delta[0][0],
-                nface*nspecies_surf,MPI_INT,MPI_SUM,world);
+  int n = nface*nspecies_surf;
+  bigint *delta_big,*sum_big;
+  memory->create(delta_big,n,"sr_adsorb:delta_big");
+  memory->create(sum_big,n,"sr_adsorb:sum_big");
+  for (i = 0; i < n; i++) delta_big[i] = (&species_delta[0][0])[i];
+  MPI_Allreduce(delta_big,sum_big,n,MPI_SPARTA_BIGINT,MPI_SUM,world);
+  // deltas can be negative (net desorption), so clamp both ends
+  for (i = 0; i < n; i++)
+    (&face_sum_delta[0][0])[i] =
+      (int) MAX((bigint) -MAXSMALLINT,MIN(sum_big[i],(bigint) MAXSMALLINT));
+  memory->destroy(delta_big);
+  memory->destroy(sum_big);
 
   // new perspecies state = old perspecies state + summed delta
-  // insure no counts < 0
+  // insure no counts < 0, clamp at MAXSMALLINT to avoid int overflow
   // new total state = sum of new perspecies state over species
   // re-initialize species_delta, i.e. face_species_delta
 
   for (i = 0; i < nface; i++) {
-    total_state[i] = 0;
+    bigint tot = 0;
     for (j = 0; j < nspecies_surf; j++) {
-      species_state[i][j] += face_sum_delta[i][j];
-      species_state[i][j] = MAX(0,species_state[i][j]);
-      total_state[i] += species_state[i][j];
+      bigint newval = (bigint) species_state[i][j] + face_sum_delta[i][j];
+      newval = MIN(newval,(bigint) MAXSMALLINT);
+      species_state[i][j] = MAX((bigint) 0,newval);
+      tot += species_state[i][j];
       species_delta[i][j] = 0;
     }
+    total_state[i] = (int) MIN(tot,(bigint) MAXSMALLINT);
   }
 }
 
@@ -1492,13 +1513,21 @@ void SurfReactAdsorb::update_state_surf()
 
   int nsown = surf->nown;
 
+  // clamp at MAXSMALLINT: the state is stored in int custom vectors,
+  //   and the double -> int conversion is UB once the sum exceeds 2^31
+
   for (i = 0; i < nsown; i++) {
-    total_state[i] = 0;
+    bigint tot = 0;
     for (j = 0; j < nspecies_surf; j++) {
-      species_state[i][j] += outcollate[i][j];
-      species_state[i][j] = MAX(0,species_state[i][j]);
-      total_state[i] += species_state[i][j];
+      // clamp both ends before the cast: net desorption can drive the sum
+      //   below INT_MIN, where the conversion is UB and the MAX(0,...) below
+      //   would be operating on an already-poisoned value
+      double newval = species_state[i][j] + outcollate[i][j];
+      newval = MAX(0.0,MIN(newval,(double) MAXSMALLINT));
+      species_state[i][j] = static_cast<int> (newval);
+      tot += species_state[i][j];
     }
+    total_state[i] = (int) MIN(tot,(bigint) MAXSMALLINT);
   }
 
   // spread new total and species state to all nlocal+nghost surfs

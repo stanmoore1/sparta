@@ -1540,6 +1540,11 @@ Self-explanatory. :dd
 
 Self-explanatory. :dd
 
+{Invalid power expression in variable formula} :dt
+
+A zero base cannot be raised to a negative power in a variable
+formula, since the result is infinite. :dd
+
 {Invalid react style} :dt
 
 The choice of reaction style is unknown. :dd
@@ -1871,10 +1876,6 @@ issue to the SPARTA developers. :dd
 This is an error when calculating how a 2d grid is cut or split by
 surface elements.  It should not normally occur.  Please report the
 issue to the SPARTA developers. :dd
-
-{Power by 0 in variable formula} :dt
-
-Self-explanatory. :dd
 
 {Processor partitions are inconsistent} :dt
 

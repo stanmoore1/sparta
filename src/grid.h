@@ -32,8 +32,8 @@ class Grid : protected Pointers {
 
   bigint ncell;         // global count of child cells (unsplit+split, no sub)
   bigint nunsplit;      // global count of unsplit cells
-  int nsplit;           // global count of split cells
-  int nsub;             // global count of split sub cells
+  bigint nsplit;        // global count of split cells
+  bigint nsub;          // global count of split sub cells
 
   int maxlevel;         // max level of any child cell in grid, 0 = root
   int plevel_limit;     // allocation bound of plevels
@@ -263,10 +263,10 @@ class Grid : protected Pointers {
 
   void write_restart(FILE *);
   void read_restart(FILE *);
-  int size_restart();
-  int size_restart(int);
-  int pack_restart(char *);
-  int unpack_restart(char *);
+  bigint size_restart();
+  bigint size_restart(int);
+  bigint pack_restart(char *);
+  bigint unpack_restart(char *);
 
   bigint memory_usage();
 
@@ -286,11 +286,11 @@ class Grid : protected Pointers {
 
   // grid_comm.cpp
 
-  int pack_one(int, char *, int, int, int, int);
-  int unpack_one(char *, int, int, int, int sortflag=0);
-  int pack_one_adapt(char *, char *, int);
-  int pack_particles(int, char *, int);
-  int unpack_particles(char *, int, int);
+  bigint pack_one(int, char *, int, int, int, int);
+  bigint unpack_one(char *, int, int, int, int sortflag=0);
+  bigint pack_one_adapt(char *, char *, int);
+  bigint pack_particles(int, char *, int);
+  bigint unpack_particles(char *, int, int);
   void unpack_particles_adapt(int, char *);
   void compress();
 

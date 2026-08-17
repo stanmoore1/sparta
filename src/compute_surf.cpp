@@ -707,7 +707,7 @@ void ComputeSurf::reallocate()
 bigint ComputeSurf::memory_usage()
 {
   bigint bytes = 0;
-  bytes += ntotal*maxtally * sizeof(double);    // array_surf_tally
+  bytes += (bigint) ntotal*maxtally * sizeof(double);    // array_surf_tally
   bytes += maxtally * sizeof(surfint);          // tally2surf
   return bytes;
 }

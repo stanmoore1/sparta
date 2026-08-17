@@ -24,6 +24,19 @@
 #include "spatype.h"
 #include "accelerator_kokkos_defs.h"
 
+// offset type for the Kokkos::Crs per-cell surf/split/sub lists.
+// Under BIGBIG the total number of flattened entries on one rank can exceed
+//   2^31, so the row_map offsets must be 64-bit.  Under BIG they cannot, and
+//   a 32-bit row_map halves the bytes touched by the per-particle surf
+//   lookups in the move kernel.  All declarations of these Crs objects must
+//   use this typedef so the device and host mirrors stay assignable.
+
+#ifdef SPARTA_BIGBIG
+typedef int64_t crs_size_type;
+#else
+typedef int crs_size_type;
+#endif
+
 #define MAX_TYPES_STACKPARAMS 12
 #define NeighClusterSize 8
 
@@ -431,6 +444,13 @@ typedef tdual_int_scalar::t_dev_um t_int_scalar_um;
 typedef tdual_int_scalar::t_dev_const_um t_int_scalar_const_um;
 
 typedef Kokkos::
+  DualView<SPARTA_NS::bigint, DeviceType::array_layout, DeviceType> tdual_bigint_scalar;
+typedef tdual_bigint_scalar::t_dev t_bigint_scalar;
+typedef tdual_bigint_scalar::t_dev_const t_bigint_scalar_const;
+typedef tdual_bigint_scalar::t_dev_um t_bigint_scalar_um;
+typedef tdual_bigint_scalar::t_dev_const_um t_bigint_scalar_const_um;
+
+typedef Kokkos::
   DualView<SPARTA_FLOAT, DeviceType::array_layout, DeviceType>
   tdual_float_scalar;
 typedef tdual_float_scalar::t_dev t_float_scalar;
@@ -565,6 +585,12 @@ typedef tdual_int_scalar::t_host t_int_scalar;
 typedef tdual_int_scalar::t_host_const t_int_scalar_const;
 typedef tdual_int_scalar::t_host_um t_int_scalar_um;
 typedef tdual_int_scalar::t_host_const_um t_int_scalar_const_um;
+
+typedef Kokkos::DualView<SPARTA_NS::bigint, DeviceType::array_layout, DeviceType> tdual_bigint_scalar;
+typedef tdual_bigint_scalar::t_host t_bigint_scalar;
+typedef tdual_bigint_scalar::t_host_const t_bigint_scalar_const;
+typedef tdual_bigint_scalar::t_host_um t_bigint_scalar_um;
+typedef tdual_bigint_scalar::t_host_const_um t_bigint_scalar_const_um;
 
 typedef Kokkos::DualView<SPARTA_FLOAT, DeviceType::array_layout, DeviceType> tdual_float_scalar;
 typedef tdual_float_scalar::t_host t_float_scalar;

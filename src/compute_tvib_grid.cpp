@@ -563,6 +563,6 @@ bigint ComputeTvibGrid::memory_usage()
 {
   bigint bytes;
   bytes = nglocal * sizeof(double);
-  bytes = ntally*nglocal * sizeof(double);
+  bytes += (bigint) ntally*nglocal * sizeof(double);
   return bytes;
 }

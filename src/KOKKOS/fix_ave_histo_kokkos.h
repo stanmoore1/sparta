@@ -55,7 +55,7 @@ namespace FixKokkosDetails {
     typedef Kokkos::View<ValueType*, typename out_view_type::array_layout,
                          Kokkos::HostSpace> host_view_type;
     host_view_type h_x("h_x", size);
-    for (int i=0, j=0; i<size; i++, j+=stride) h_x(i) = x[j];
+    for (bigint i=0, j=0; i<size; i++, j+=stride) h_x(i) = x[j];
     out_view_type d_x = Kokkos::create_mirror_view(out_mem_space(), h_x);
     Kokkos::deep_copy(d_x, h_x);
     return d_x;
