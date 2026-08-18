@@ -2943,9 +2943,8 @@ void Surf::read_restart(FILE *fp)
 }
 
 /* ----------------------------------------------------------------------
-   return size of owned surf info for this proc
-   using count of all owned surfs
-   NOTE: worry about N overflowing int, and in IROUNDUP ???
+   return restart size of a single owned surf, in bytes
+   a per-surf record, so this always fits in an int
 ------------------------------------------------------------------------- */
 
 int Surf::size_restart_one()
@@ -2960,11 +2959,18 @@ int Surf::size_restart_one()
   return n;
 }
 
-int Surf::size_restart()
+/* ----------------------------------------------------------------------
+   return size of owned surf info for this proc
+   using count of all owned surfs
+   returns bigint: nown * size_restart_one() exceeds 2 GB at large per-proc
+     surf counts, and returning int made the caller's 2 GB guards vacuous
+------------------------------------------------------------------------- */
+
+bigint Surf::size_restart()
 {
-  int n = sizeof(int);
-  n = IROUNDUP(n);
-  n += nown * size_restart_one();
+  bigint n = sizeof(int);
+  n = BIROUNDUP(n);
+  n += (bigint) nown * size_restart_one();
   return n;
 }
 
@@ -2976,10 +2982,11 @@ int Surf::size_restart()
    return n = # of packed bytes
    called by WriteRestart
      implicit surfs are not written to restart files
-   NOTE: worry about N overflowing int, and in IROUNDUP ???
+   returns ptr-buf as a bigint, so a >2 GB section is reported exactly;
+     WriteRestart guards the per-proc 2 GB write limit
 ------------------------------------------------------------------------- */
 
-int Surf::pack_restart(char *buf)
+bigint Surf::pack_restart(char *buf)
 {
   int start,stop,stride;
   Line *plines;

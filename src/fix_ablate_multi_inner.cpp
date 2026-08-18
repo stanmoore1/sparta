@@ -435,8 +435,12 @@ void FixAblate::sync_multid_inside()
       // should not underflow significantly. if it does, simulation parameters
       // need to be changed because ablation time scale is much larger than
       // the time step
+      // flag the underflow so end_of_step() can say it happened
 
-      if (cvalues[icell][i] < 0) cvalues[icell][i] = 0.0;
+      if (cvalues[icell][i] < 0) {
+        clamp_mine = 1.0;
+        cvalues[icell][i] = 0.0;
+      }
 
     } // end corners
   } // end cells
@@ -559,6 +563,10 @@ void FixAblate::decrement_multiv()
       }
     }
 
+    // no corner point of this cell can pay the rest of total
+    // tally it in end_of_step() instead of dropping it silently, see decrement()
+
+    if (total > 0.0) unpaid_mine += total;
   }
 }
 
@@ -932,8 +940,13 @@ void FixAblate::sync_multiv_multid_inside()
         }
       }
 
+      // underflow of an inside corner point, see sync_multid_inside()
+
       for (j = 0; j < nmultiv; j++)
-        if (mvalues[icell][i][j] < 0.0) mvalues[icell][i][j] = 0.0;
+        if (mvalues[icell][i][j] < 0.0) {
+          clamp_mine = 1.0;
+          mvalues[icell][i][j] = 0.0;
+        }
 
     } // end corners
   } // end cells

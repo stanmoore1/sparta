@@ -26,6 +26,8 @@ void GridKokkos::update_hash()
   size_type failed_count = 0;
 
   // Copy the keys:values from hash to Kokkos::UnorderedMap that lives on host
+  if (2*(bigint) hash->size() > 4294967295LL)
+    error->one(FLERR,"Grid cell hash too large for Kokkos::UnorderedMap");
   host_hash_type hash_h(2*hash->size()); // double hash capacity to prevent insertion failure
   hash_kk = hash_type(2*hash->size());
   for (volatile auto it : *hash) { // volatile keyword works around a suspected compiler bug

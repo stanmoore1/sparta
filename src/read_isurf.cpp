@@ -223,7 +223,7 @@ void ReadISurf::create_hash(int count)
     ix = static_cast<int> ((cells[icell].lo[0]-corner[0]) / xyzsize[0] + 0.5);
     iy = static_cast<int> ((cells[icell].lo[1]-corner[1]) / xyzsize[1] + 0.5);
     iz = static_cast<int> ((cells[icell].lo[2]-corner[2]) / xyzsize[2] + 0.5);
-    index = (bigint) nx * ny*iz + nx*iy + ix;
+    index = (bigint) nx * ny*iz + (bigint) nx*iy + ix;
     (*hash)[index] = icell;
   }
 }
@@ -243,6 +243,40 @@ void ReadISurf::create_hash(int count)
      for each corner value and each of 4/8 cells it belongs to:
        if it owns the grid cell, makes copy of the corner pt
 ------------------------------------------------------------------------- */
+
+/* ----------------------------------------------------------------------
+   verify an open isurf corner point file matches the requested grid
+     extent and precision, based on its total size
+   fp is positioned just past the dim-int header on entry;
+     restore that position before returning so the caller can keep reading
+   only called by proc 0
+   isurf files store no precision/format marker, so a wrong precision
+     keyword silently reinterprets the byte stream and otherwise fails
+     later with a confusing error; this gives a clear diagnostic instead
+------------------------------------------------------------------------- */
+
+void ReadISurf::check_file_size(FILE *fp, char *gridfile)
+{
+  bigint ncval = (bigint) (nx+1) * (ny+1);
+  if (dim == 3) ncval *= (nz+1);
+  int vbytes = (precision == DOUBLE) ? sizeof(double) : sizeof(uint8_t);
+  bigint expected = (bigint) dim*sizeof(int) + ncval*vbytes;
+
+  fseek(fp,0,SEEK_END);
+  bigint fsize = (bigint) ftell(fp);
+  fseek(fp,(long) dim*sizeof(int),SEEK_SET);
+
+  if (fsize != expected) {
+    char str[256];
+    snprintf(str,256,"Read_isurf file %s size (" BIGINT_FORMAT " bytes) does "
+             "not match grid extent and precision (" BIGINT_FORMAT
+             " bytes expected); check the precision keyword",
+             gridfile,fsize,expected);
+    error->one(FLERR,str);
+  }
+}
+
+/* ---------------------------------------------------------------------- */
 
 void ReadISurf::read_corners_serial(char *gridfile)
 {
@@ -268,6 +302,13 @@ void ReadISurf::read_corners_serial(char *gridfile)
       error->one(FLERR,str);
     }
     tmp = fread(nxyz,sizeof(int),dim,fp);
+
+    // sanity check the file size against the grid extent and precision
+    // isurf files carry no precision marker, so a wrong precision keyword
+    // would otherwise reinterpret the byte stream and fail later with a
+    // misleading error (e.g. "Grid boundary value != 0")
+
+    check_file_size(fp,gridfile);
   }
 
   MPI_Bcast(nxyz,dim,MPI_INT,0,world);
@@ -342,7 +383,7 @@ void ReadISurf::assign_corners(int n, bigint offset, uint8_t *ibuf, double *dbuf
     pointindex = offset + i;
     pix = pointindex % (nx+1);
     piy = (pointindex / (nx+1)) % (ny+1);
-    piz = pointindex / ((nx+1)*(ny+1));
+    piz = pointindex / ((bigint) (nx+1)*(ny+1));
 
     // check that a boundary value is 0
     // exception: if the grid block starts on the symmetry axis of an
@@ -376,7 +417,7 @@ void ReadISurf::assign_corners(int n, bigint offset, uint8_t *ibuf, double *dbuf
             ncorner--;
             if (cix < 0 || cix >= nx || ciy < 0 || ciy >=ny ||
                 ciz < 0 || ciz >= nz) continue;
-            cellindex = (bigint) nx * ny*ciz + nx*ciy + cix;
+            cellindex = (bigint) nx * ny*ciz + (bigint) nx*ciy + cix;
             if (hash->find(cellindex) == hash->end()) continue;
             icell = (*hash)[cellindex];
             if (precision == INT) cvalues[icell][ncorner] = ibuf[i];
@@ -523,6 +564,11 @@ void ReadISurf::read_corners_parallel(char *gridfile)
       error->one(FLERR,str);
     }
     tmp = fread(nxyz,sizeof(int),dim,fp);
+
+    // sanity check the file size against the grid extent and precision
+    // (see note in read_corners_serial)
+
+    check_file_size(fp,gridfile);
   }
 
   MPI_Bcast(nxyz,dim,MPI_INT,0,world);
@@ -556,7 +602,7 @@ void ReadISurf::read_corners_parallel(char *gridfile)
 
   offsetextra = (bigint) procextra * (nper+1);
   if (me < procextra) offset = (bigint) me * (nper+1);
-  else offset = offsetextra + (me-procextra) * nper;
+  else offset = offsetextra + (bigint) (me-procextra) * nper;
 
   uint8_t *ibuf = NULL;
   double *dbuf = NULL;
@@ -599,9 +645,12 @@ void ReadISurf::read_corners_parallel(char *gridfile)
   for (int icell = 0; icell < nglocal; icell++)
     if (cinfo[icell].mask & groupbit) ncell++;
 
-  int nrvous;
-  if (dim == 2) nrvous = 4*ncell;
-  else nrvous = 8*ncell;
+  bigint nrvous_big;
+  if (dim == 2) nrvous_big = (bigint) 4*ncell;
+  else nrvous_big = (bigint) 8*ncell;
+  if (nrvous_big > MAXSMALLINT)
+    error->one(FLERR,"Read_isurf corner point requests exceed 2^31 per proc");
+  int nrvous = nrvous_big;
 
   int *proclist;
   memory->create(proclist,nrvous,"read_isurf:proclist");
@@ -658,7 +707,7 @@ void ReadISurf::read_corners_parallel(char *gridfile)
     nrvous++;
 
     if (dim == 3) {
-      index += (ny+1)*(nx+1);
+      index += (bigint) (ny+1)*(nx+1);
 
       cindex = index;
       if (cindex < offsetextra) iproc = cindex / (nper+1);

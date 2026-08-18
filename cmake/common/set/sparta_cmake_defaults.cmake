@@ -100,6 +100,10 @@ if(SPARTA_ENABLE_TESTING)
         "in.circle.gs"
         "in.circle.gs_ps"
         "in.circle.ps"
+        # subsonic and mflow emission in fix emit/surf not KOKKOS-enabled
+        "in.emit.surf.mflow"
+        "in.emit.surf.mflow.single"
+        "in.emit.surf.subsonic"
         # external field fix not KOKKOS-enabled
         "in.bfield"
         "in.bfield.grid"

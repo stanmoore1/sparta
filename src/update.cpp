@@ -53,6 +53,12 @@ enum{NOFIELD,CFIELD,PFIELD,GFIELD};             // several files
 #define MAXSTUCK 20
 #define EPSPARAM 1.0e-7
 
+// max value (bytes) for global_mem_limit = 2000 MiB = 2097152000
+// kept safely below MAXSMALLINT (INT_MAX = 2147483647) so that the buffer-size
+// arithmetic in restart I/O (e.g. "max_size += 128") cannot overflow a 32-bit int
+
+#define MEMLIMIT_MAX (2000*1024*1024)
+
 // either set ID or PROC/INDEX, set other to -1
 
 //#define MOVE_DEBUG 1              // un-comment to debug one particle
@@ -330,10 +336,22 @@ void Update::run(int nsteps)
     if (cellweightflag) particle->post_weight();
     timer->stamp(TIME_COMM);
 
-    if (collide) {
-      particle->sort();
-      timer->stamp(TIME_SORT);
+    // sort particles by grid cell if collisions are enabled
+    // also sort if reordering is requested this step, since reordering
+    //   requires the particles first be sorted
+    // reorder() must be called here, not from within sort(), so that it
+    //   only acts on the main timestep loop and not other sort() callers
 
+    int reorder_flag = (reorder_period &&
+                        ntimestep % reorder_period == 0);
+
+    if (collide || reorder_flag) {
+      particle->sort();
+      if (reorder_flag) particle->reorder();
+      timer->stamp(TIME_SORT);
+    }
+
+    if (collide) {
       collide->collisions();
       timer->stamp(TIME_COLLIDE);
     }
@@ -538,7 +556,10 @@ template < int DIM, int SURF, int OPT > void Update::move()
           int kp = 0;
           if (DIM == 3) kp = static_cast<int>((xnew[2] - boxlo[2])/dz);
 
-          int cellIdx = (kp*grid->uny + jp)*grid->unx + ip + 1;
+          // compute cell ID in cellint (can be 64-bit), the product
+          //   overflows a 32-bit int when the grid has > 2^31 cells
+
+          cellint cellIdx = ((cellint) kp*grid->uny + jp)*grid->unx + ip + 1;
 
           // particle outside ghost grid halo must use standard move
 
@@ -1277,7 +1298,7 @@ template < int DIM, int SURF, int OPT > void Update::move()
 
     timer->stamp(TIME_MOVE);
     MPI_Allreduce(&entryexit,&any_entryexit,1,MPI_INT,MPI_MAX,world);
-    timer->stamp();
+    timer->stamp(TIME_SYNC);
 
     if (any_entryexit) {
       timer->stamp(TIME_MOVE);
@@ -1685,7 +1706,7 @@ void Update::global(int narg, char **arg)
       iarg += 2;
 
     } else if (strcmp(arg[iarg],"field") == 0) {
-      if (iarg+1 > narg) error->all(FLERR,"Illegal global command");
+      if (iarg+2 > narg) error->all(FLERR,"Illegal global command");
       if (strcmp(arg[iarg+1],"none") == 0) {
         fstyle = NOFIELD;
         iarg += 2;
@@ -1802,7 +1823,7 @@ void Update::global(int narg, char **arg)
         double factor = input->numeric(FLERR,arg[iarg+1]);
         bigint global_mem_limit_big = static_cast<bigint> (factor * 1024*1024);
         if (global_mem_limit_big < 0) error->all(FLERR,"Illegal global command");
-        if (global_mem_limit_big > MAXSMALLINT)
+        if (global_mem_limit_big > MEMLIMIT_MAX)
           error->all(FLERR,"Global mem/limit setting cannot exceed 2GB");
         global_mem_limit = global_mem_limit_big;
       }
@@ -1873,8 +1894,10 @@ void Update::set_mem_limit_grid(int gnlocal)
 
   bigint global_mem_limit_big = static_cast<bigint> (gnlocal*sizeof(Grid::ChildCell));
 
-  if (global_mem_limit_big > MAXSMALLINT)
-    error->one(FLERR,"Global mem/limit setting cannot exceed 2GB");
+  // cap at 2 GB rather than erroring out so large grids can still be handled
+
+  if (global_mem_limit_big > MEMLIMIT_MAX)
+    global_mem_limit_big = MEMLIMIT_MAX;
 
   global_mem_limit = global_mem_limit_big;
 }

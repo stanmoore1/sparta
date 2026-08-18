@@ -90,6 +90,7 @@ SurfReactAdsorb::SurfReactAdsorb(SPARTA *sparta, int narg, char **arg) :
   me = comm->me;
   nprocs = comm->nprocs;
   distributed = surf->distributed;
+  firstwarn_capacity = 1;
 
   // 1st arg: gas chemistry or surf chemistry or both
 
@@ -117,7 +118,7 @@ SurfReactAdsorb::SurfReactAdsorb(SPARTA *sparta, int narg, char **arg) :
 
   if (strcmp(arg[iarg],"nsync") != 0)
     error->all(FLERR,"Illegal surf_react adsorb command");
-  nsync = input->numeric(FLERR,arg[iarg+1]);
+  nsync = input->inumeric(FLERR,arg[iarg+1]);
   if (nsync < 1) error->all(FLERR,"Illegal surf_react adsorb command");
 
   if (strcmp(arg[iarg+2],"face") == 0) mode = FACE;
@@ -145,6 +146,10 @@ SurfReactAdsorb::SurfReactAdsorb(SPARTA *sparta, int narg, char **arg) :
     nspecies_surf++;
     iarg++;
   }
+
+  if (nspecies_surf == 0)
+    error->all(FLERR,"Illegal surf_react adsorb command: "
+               "at least one surface species is required");
 
   // initialize reaction data structs
 
@@ -187,10 +192,10 @@ SurfReactAdsorb::SurfReactAdsorb(SPARTA *sparta, int narg, char **arg) :
   nlist = 0;
   if (gsflag) nlist += nlist_gs;
   if (psflag) nlist += nlist_ps;
-  tally_single = new int[nlist];
-  tally_total = new int[nlist];
-  tally_single_all = new int[nlist];
-  tally_total_all = new int[nlist];
+  tally_single = new bigint[nlist];
+  tally_total = new bigint[nlist];
+  tally_single_all = new bigint[nlist];
+  tally_total_all = new bigint[nlist];
 
   size_vector = 2 + 2*nlist;
 
@@ -463,7 +468,7 @@ void SurfReactAdsorb::create_per_surf_state()
   memory->create(surf_species_delta,nall,nspecies_surf,
                  "react/adsorb:surf_species_delta");
   if (nall) memset(&surf_species_delta[0][0],0,
-		   nall*nspecies_surf*sizeof(int));
+		   (bigint) nall*nspecies_surf*sizeof(int));
 
   species_delta = surf_species_delta;
 
@@ -551,7 +556,7 @@ void SurfReactAdsorb::init()
       int m = 0;
       for (int isurf = me; isurf < nslocal; isurf += nprocs) {
 	isr = lines[isurf].isr;
-	if (surf->sr[isr] == this) {
+	if (isr >= 0 && surf->sr[isr] == this) {
 	  area[m] = surf->line_size(&lines[isurf]);
 	  weight[m] = 1.0;
 	}
@@ -562,7 +567,7 @@ void SurfReactAdsorb::init()
       int m = 0;
       for (int isurf = me; isurf < nslocal; isurf += nprocs) {
 	isr = tris[isurf].isr;
-	if (surf->sr[isr] == this) {
+	if (isr >= 0 && surf->sr[isr] == this) {
 	  area[m] = surf->tri_size(&tris[isurf],tmp);
 	  weight[m] = 1.0;
 	}
@@ -574,7 +579,7 @@ void SurfReactAdsorb::init()
     if (domain->dimension == 2) {
       for (int isurf = 0; isurf < nsown; isurf++) {
 	isr = mylines[isurf].isr;
-	if (surf->sr[isr] != this) continue;
+	if (isr < 0 || surf->sr[isr] != this) continue;
 	area[isurf] = surf->line_size(&mylines[isurf]);
 	weight[isurf] = 1.0;
       }
@@ -582,7 +587,7 @@ void SurfReactAdsorb::init()
       double tmp;
       for (int isurf = 0; isurf < nsown; isurf++) {
 	isr = mytris[isurf].isr;
-	if (surf->sr[isr] != this) continue;
+	if (isr < 0 || surf->sr[isr] != this) continue;
 	area[isurf] = surf->tri_size(&mytris[isurf],tmp);
 	weight[isurf] = 1.0;
       }
@@ -652,7 +657,7 @@ int SurfReactAdsorb::react(Particle::OnePart *&ip, int isurf, double *norm,
   if (n == 0) return 0;
 
   double fnum = update->fnum;
-  long int maxstick = ceil(max_cover*area[isurf] / (fnum*weight[isurf]));
+  bigint maxstick = ceil(max_cover*area[isurf] / (fnum*weight[isurf]));
   double factor = fnum * weight[isurf] / area[isurf];
   double ms_inv = factor / max_cover;
 
@@ -698,7 +703,19 @@ int SurfReactAdsorb::react(Particle::OnePart *&ip, int isurf, double *norm,
       {
         //check_ads = 1;
         //ads_index = i;
-        double surf_cover = total_state[isurf] * ms_inv;
+
+        // adsorption events accumulate in species_delta against the coverage
+        //   stored at the last sync, so one Nsync window can fold in more
+        //   adsorbate than the surf has sites for, i.e. total_state > maxstick
+        // clamp the coverage at full: without it (1-surf_cover) is negative,
+        //   so S_theta and prob_value are negative for a positive exponent
+        //   and NaN for a non-integer one, sum_prob goes negative, and
+        //   scatter_prob = 1-sum_prob > 1 scatters every later collision,
+        //   silently killing all reactions on this surf for the rest of run
+        // clamping leaves the theta < 1 case bit-for-bit unchanged, and the
+        //   Kisliuk branches below already guard the same way
+
+        double surf_cover = MIN(total_state[isurf] * ms_inv, 1.0);
         double S_theta = 0.0;
 
         if (r->kisliuk_flag)
@@ -722,7 +739,9 @@ int SurfReactAdsorb::react(Particle::OnePart *&ip, int isurf, double *norm,
 
     case DA:
       {
-        double surf_cover = total_state[isurf] * ms_inv;
+        // coverage clamped at full, see AA above
+
+        double surf_cover = MIN(total_state[isurf] * ms_inv, 1.0);
         double S_theta = 0.0;
 
         if (r->kisliuk_flag) {
@@ -753,7 +772,9 @@ int SurfReactAdsorb::react(Particle::OnePart *&ip, int isurf, double *norm,
 
     case LH1:
       {
-        double surf_cover = total_state[isurf] * ms_inv;
+        // coverage clamped at full, see AA above
+
+        double surf_cover = MIN(total_state[isurf] * ms_inv, 1.0);
         double S_theta = 0.0;
 
         if (r->kisliuk_flag) {
@@ -773,7 +794,9 @@ int SurfReactAdsorb::react(Particle::OnePart *&ip, int isurf, double *norm,
 
     case LH3:
       {
-        double surf_cover = total_state[isurf] * ms_inv;
+        // coverage clamped at full, see AA above
+
+        double surf_cover = MIN(total_state[isurf] * ms_inv, 1.0);
         double S_theta = 0.0;
 
         if (r->kisliuk_flag) {
@@ -793,7 +816,9 @@ int SurfReactAdsorb::react(Particle::OnePart *&ip, int isurf, double *norm,
 
     case CD:
       {
-        double surf_cover = total_state[isurf] * ms_inv;
+        // coverage clamped at full, see AA above
+
+        double surf_cover = MIN(total_state[isurf] * ms_inv, 1.0);
         double S_theta = 0.0;
 
         if (r->kisliuk_flag) {
@@ -817,8 +842,13 @@ int SurfReactAdsorb::react(Particle::OnePart *&ip, int isurf, double *norm,
         dot = 2.0;
 
         if (r->nreactant == 1) {
+
+          // empty-site count clamped at zero for the same reason the
+          //   coverage is clamped at full in AA above
+
           prob_value[i] = 2.0 * r->k_react *
-            (maxstick - total_state[isurf]) * ms_inv / fabs(dot);
+            MAX(maxstick - total_state[isurf],(bigint) 0) * ms_inv /
+            fabs(dot);
         } else {
           prob_value[i] = 2.0 * r->k_react / fabs(dot);
         }
@@ -1178,6 +1208,10 @@ void SurfReactAdsorb::tally_update()
   if (mode == FACE) update_state_face();
   else if (mode == SURF) update_state_surf();
 
+  // warn once if any face/surf now holds more adsorbate than it has sites for
+
+  check_capacity();
+
   // tally only the surf phase reactions
 
   ntotal += nsingle - nsingle_gs;
@@ -1206,7 +1240,7 @@ void SurfReactAdsorb::grid_changed()
   memory->create(surf_species_delta,nall,nspecies_surf,
                  "react/adsorb:surf_species_delta");
   if (nall) memset(&surf_species_delta[0][0],0,
-		   nall*nspecies_surf*sizeof(int));
+		   (bigint) nall*nspecies_surf*sizeof(int));
   species_delta = surf_species_delta;
 
   memory->destroy(mark);
@@ -1327,8 +1361,16 @@ void SurfReactAdsorb::PS_chemistry()
   //   due to desorption reactions from faces or surfs
   // accumulate via Allgatherv
 
-  int nall;
-  MPI_Allreduce(&npart,&nall,1,MPI_INT,MPI_SUM,world);
+  // sum in bigint, then check the Allgatherv of all added particles
+  //   to every proc stays under 2 GB, since its counts/displs are int
+
+  bigint npart_big = npart;
+  bigint nall_big;
+  MPI_Allreduce(&npart_big,&nall_big,1,MPI_SPARTA_BIGINT,MPI_SUM,world);
+  if (nall_big > (bigint) (MAXSMALLINT/sizeof(AddParticle)))
+    error->one(FLERR,"Too many particles added by surf reactions, "
+               "allgathered byte count exceeds 2 GB");
+  int nall = nall_big;
 
   if (nall > maxallpart) {
     while (maxallpart < nall) maxallpart += DELTA_PART;
@@ -1386,9 +1428,17 @@ void SurfReactAdsorb::update_state_face()
   int i,j;
 
   // sum perspecies deltas across all procs
+  // sum in bigint: an MPI_INT sum overflows at large proc counts
 
-  MPI_Allreduce(&species_delta[0][0],&face_sum_delta[0][0],
-                nface*nspecies_surf,MPI_INT,MPI_SUM,world);
+  int n = nface*nspecies_surf;
+  bigint *delta_big,*sum_big;
+  memory->create(delta_big,n,"sr_adsorb:delta_big");
+  memory->create(sum_big,n,"sr_adsorb:sum_big");
+  for (i = 0; i < n; i++) delta_big[i] = (&species_delta[0][0])[i];
+  MPI_Allreduce(delta_big,sum_big,n,MPI_SPARTA_BIGINT,MPI_SUM,world);
+  for (i = 0; i < n; i++) (&face_sum_delta[0][0])[i] = sum_big[i];
+  memory->destroy(delta_big);
+  memory->destroy(sum_big);
 
   // new perspecies state = old perspecies state + summed delta
   // insure no counts < 0
@@ -1396,13 +1446,14 @@ void SurfReactAdsorb::update_state_face()
   // re-initialize species_delta, i.e. face_species_delta
 
   for (i = 0; i < nface; i++) {
-    total_state[i] = 0;
+    bigint tot = 0;
     for (j = 0; j < nspecies_surf; j++) {
-      species_state[i][j] += face_sum_delta[i][j];
-      species_state[i][j] = MAX(0,species_state[i][j]);
-      total_state[i] += species_state[i][j];
+      bigint newval = (bigint) species_state[i][j] + face_sum_delta[i][j];
+      species_state[i][j] = MAX((bigint) 0,newval);
+      tot += species_state[i][j];
       species_delta[i][j] = 0;
     }
+    total_state[i] = tot;
   }
 }
 
@@ -1489,12 +1540,16 @@ void SurfReactAdsorb::update_state_surf()
   int nsown = surf->nown;
 
   for (i = 0; i < nsown; i++) {
-    total_state[i] = 0;
+    bigint tot = 0;
     for (j = 0; j < nspecies_surf; j++) {
-      species_state[i][j] += outcollate[i][j];
-      species_state[i][j] = MAX(0,species_state[i][j]);
-      total_state[i] += species_state[i][j];
+      // clamp at zero before the cast: net desorption can drive the sum
+      //   negative, and the state is stored in an int custom vector
+      double newval = species_state[i][j] + outcollate[i][j];
+      newval = MAX(0.0,newval);
+      species_state[i][j] = static_cast<int> (newval);
+      tot += species_state[i][j];
     }
+    total_state[i] = tot;
   }
 
   // spread new total and species state to all nlocal+nghost surfs
@@ -1505,6 +1560,64 @@ void SurfReactAdsorb::update_state_surf()
 
   total_state = surf->eivec_local[surf->ewhich[total_state_index]];
   species_state = surf->eiarray_local[surf->ewhich[species_state_index]];
+}
+
+/* ----------------------------------------------------------------------
+   warn once if any face/surf holds more adsorbate than it has sites for
+   adsorption events of an entire Nsync window are folded into the state
+     against the coverage stored at the previous sync, so a window whose
+     influx exceeds the capacity of a face/surf overshoots it, leaving a
+     state whose coverage exceeds one
+   react() clamps the coverage so the reaction probabilities stay physical,
+     but the stored state itself is not, so tell the user rather than
+     letting a saturated surface look like a healthy one
+------------------------------------------------------------------------- */
+
+void SurfReactAdsorb::check_capacity()
+{
+  if (!firstwarn_capacity) return;
+
+  double fnum_inv = 1.0/update->fnum;
+  int flag = 0;
+
+  // stop at the first over-capacity element: this runs every Nsync step until
+  //   the warning fires, and one is enough to fire it
+
+  if (mode == FACE) {
+    for (int i = 0; i < nface; i++)
+      if (total_state[i] > ceil(max_cover*area[i]*fnum_inv/weight[i])) {
+        flag = 1;
+        break;
+      }
+
+  } else {
+    Surf::Line *lines = surf->lines;
+    Surf::Tri *tris = surf->tris;
+    int dimension = domain->dimension;
+    int isr;
+
+    for (int i = 0; i < surf->nlocal; i++) {
+      if (dimension == 2) isr = lines[i].isr;
+      else isr = tris[i].isr;
+      if (isr < 0 || surf->sr[isr] != this) continue;
+      if (total_state[i] > ceil(max_cover*area[i]*fnum_inv/weight[i])) {
+        flag = 1;
+        break;
+      }
+    }
+  }
+
+  // firstwarn_capacity is identical on all procs, so this is collective
+
+  int flagall;
+  MPI_Allreduce(&flag,&flagall,1,MPI_INT,MPI_MAX,world);
+  if (!flagall) return;
+
+  firstwarn_capacity = 0;
+  if (comm->me == 0)
+    error->warning(FLERR,"Surf_react adsorb adsorbate count exceeds surface "
+                   "site capacity, coverage clamped at one: reduce nsync or "
+                   "fnum, or increase max_cover");
 }
 
 /* ---------------------------------------------------------------------- */
@@ -2798,6 +2911,7 @@ void SurfReactAdsorb::readfile_ps(char *fname)
         model = DIFFUSE;
         nflags = 0;
         ncoeffs = 2;
+        sc = new SurfCollideDiffuse(sparta,nwords,words);
       } else if (strcmp(words[1],"adiabatic") == 0) {
         model = ADIABATIC;
         nflags = ncoeffs = 0;
@@ -3042,7 +3156,7 @@ void SurfReactAdsorb::PS_react(int isurf, int isc, double *norm)
               cmodels[r->cmodel_ip]->wrapper(p,norm,r->cmodel_ip_flags,
                                              r->cmodel_ip_coeffs);
             else {
-              surf->sc[isc]->wrapper(p,norm,NULL,NULL);
+              surf->sc[isc]->persurf_wrapper(p,norm,isurf);
             }
 
             add_particle_mine(p);
@@ -3067,7 +3181,7 @@ void SurfReactAdsorb::PS_react(int isurf, int isc, double *norm)
               cmodels[r->cmodel_ip]->wrapper(p,norm,r->cmodel_ip_flags,
                                              r->cmodel_ip_coeffs);
             else {
-              surf->sc[isc]->wrapper(p,norm,NULL,NULL);
+              surf->sc[isc]->persurf_wrapper(p,norm,isurf);
             }
 
             add_particle_mine(p);
@@ -3097,7 +3211,7 @@ void SurfReactAdsorb::PS_react(int isurf, int isc, double *norm)
               cmodels[r->cmodel_ip]->wrapper(p,norm,r->cmodel_ip_flags,
                                              r->cmodel_ip_coeffs);
             else {
-              surf->sc[isc]->wrapper(p,norm,NULL,NULL);
+              surf->sc[isc]->persurf_wrapper(p,norm,isurf);
             }
 
             add_particle_mine(p);

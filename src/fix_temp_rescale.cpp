@@ -327,6 +327,6 @@ void FixTempRescale::end_of_step_average(double t_target)
 double FixTempRescale::memory_usage()
 {
   double bytes = 0.0;
-  bytes += maxgrid*3 * sizeof(double);    // vcom
+  bytes += (bigint) maxgrid*3 * sizeof(double);    // vcom
   return bytes;
 }

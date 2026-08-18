@@ -77,7 +77,7 @@ equation 4.22 of <A HREF = "#Bird94">(Bird94)</A>.  The number of particles <I>M
 add on a particular grid cell face is based on this flux and
 additional global, flow, and cell face properties:
 </P>
-<UL><LI>global property: <I>fnum</I> ratio as specified by the <A HREF = "global.html"">global</A> command
+<UL><LI>global property: <I>fnum</I> ratio as specified by the <A HREF = "global.html">global</A> command
 <LI>flow properties: number density, streaming velocity, and thermal temperature
 <LI>cell face properties: area of face and its orientation relative to the streaming velocity 
 </UL>
@@ -282,7 +282,7 @@ populated.
 </P>
 <P>IMPORTANT NOTE: When using a subsonic prsesure boundary condition, you
 should also use an appropriate boundary collision or chemistry model
-via the <A HREF = "boundary.htmo">boundary</A> or <A HREF = "bound_modify.html">bound_modify</A>
+via the <A HREF = "boundary.html">boundary</A> or <A HREF = "bound_modify.html">bound_modify</A>
 or <A HREF = "surf_collide.html">surf_collide</A> or <A HREF = "surf_react.html">surf_react</A>
 commands, so that particles hitting the surface disappear as if they
 were exiting the simulation domain.  That is necessary to produce the
@@ -387,7 +387,7 @@ a run is performed.
 Particles cannot be added on <I>z</I> faces of the simluation box for a 2d
 simulation.
 </P>
-<P>Unlike the <A HREF = "fix_emit/face.html">fix emit/face</A> command, no warning is
+<P>Unlike the <A HREF = "fix_emit_face.html">fix emit/face</A> command, no warning is
 issued if the specified emission face has an inward normal in a
 direction opposing the streaming velocity, as defined by the mixture.
 This is because the streaming velocity as defined by the specified
@@ -415,5 +415,10 @@ region = none.
 
 <P><B>(Bird94)</B> G. A. Bird, Molecular Gas Dynamics and the Direct
 Simulation of Gas Flows, Clarendon Press, Oxford (1994).
+</P>
+<A NAME = "Fang02"></A>
+
+<P><B>(Fang02)</B> Y. Fang and W. W. Liou, Microfluid Flow Computations 
+Using a Parallel DSMC Code, AIAA 2002-1057. (2002).
 </P>
 </HTML>

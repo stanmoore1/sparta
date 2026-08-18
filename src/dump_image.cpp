@@ -63,6 +63,12 @@ DumpImage::DumpImage(SPARTA *sparta, int narg, char **arg) :
 {
   if (binary || multiproc) error->all(FLERR,"Invalid dump image filename");
 
+  // PPM/JPG/PNG content is raw binary written to fp, so the file must be
+  //   opened in binary mode, even though the filename is not *.bin
+  // on Windows a text-mode stream expands \n to \r\n and corrupts the image
+
+  binaryopen = 1;
+
   // set filetype based on filename suffix
 
   int n = strlen(filename);
@@ -399,7 +405,12 @@ DumpImage::DumpImage(SPARTA *sparta, int narg, char **arg) :
         int n = strlen(&arg[iarg+2][2]) + 1;
         upystr = new char[n];
         strcpy(upystr,&arg[iarg+2][2]);
-      } else image->up[1] = atof(arg[iarg+1]);
+        // arg[iarg+2], not arg[iarg+1]: the y component was read from the x
+        // argument, so "up Ux Uy Uz" rendered as (Ux,Ux,Uz).  It is only
+        // correct when Ux happens to equal Uy -- which "up 0 0 1" does, so
+        // the common cases look right and this stayed hidden.  "up 0 1 0",
+        // restating the default, collapses to (0,0,0).
+      } else image->up[1] = atof(arg[iarg+2]);
       if (strstr(arg[iarg+3],"v_") == arg[iarg+3]) {
         int n = strlen(&arg[iarg+3][2]) + 1;
         upzstr = new char[n];
@@ -1099,9 +1110,16 @@ void DumpImage::write()
     }
   }
 
-  // record completed image filename, e.g. for a GUI to display
+  // record completed image filename, e.g. for a GUI to display.
+  //
+  // Only when there is one.  DumpMovie inherits this write() but overrides
+  // openfile() to open an ffmpeg pipe, and that override never reaches the
+  // assignment in Dump::openfile() that sets filelast -- so a movie reports
+  // NULL here, which clears the name a "dump image" in the same deck had just
+  // recorded.  A movie has no per-frame file to name, so it should leave the
+  // record alone rather than blank it.
 
-  output->stats->set_last_image(filelast);
+  if (filelast) output->stats->set_last_image(filelast);
 }
 
 /* ----------------------------------------------------------------------
@@ -1646,10 +1664,10 @@ void DumpImage::create_image()
       else m = isurf;
 
       if (dim == 2) {
-        if (!(lines[isurf].mask & surf_groupbit)) continue;
+        if (!(lines[m].mask & surf_groupbit)) continue;
         image->draw_line(lines[m].p1,lines[m].p2,color,diameter);
       } else {
-        if (!(tris[isurf].mask & surf_groupbit)) continue;
+        if (!(tris[m].mask & surf_groupbit)) continue;
         image->draw_triangle(tris[m].p1,tris[m].p2,tris[m].p3,color);
       }
     }

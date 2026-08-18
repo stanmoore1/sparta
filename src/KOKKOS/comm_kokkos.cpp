@@ -50,8 +50,6 @@ CommKokkos::~CommKokkos()
 {
   if (copymode) return;
 
-  particle_kk_copy.uncopy();
-
   if (!sparta->kokkos->comm_serial) {
     pproc = NULL;
   }
@@ -138,6 +136,7 @@ int CommKokkos::migrate_particles(int nmigrate, int *plist, const DAT::t_int_1d 
   k_nsend.sync_device();
 
   particle_kk->sync(Device,PARTICLE_MASK);
+  if (ncustom) particle_kk->sync(Device,CUSTOM_MASK);
   grid_kk->sync(Device,CELL_MASK);
 
   d_cells = grid_kk->k_cells.view_device();
@@ -229,6 +228,7 @@ int CommKokkos::migrate_particles(int nmigrate, int *plist, const DAT::t_int_1d 
   }
 
   particle_kk->modify(Device,PARTICLE_MASK);
+  if (ncustom) particle_kk->modify(Device,CUSTOM_MASK);
   d_particles = t_particle_1d(); // destroy reference to reduce memory use
   d_plist = {};
 

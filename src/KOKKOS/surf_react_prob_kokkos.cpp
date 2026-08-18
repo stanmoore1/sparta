@@ -18,6 +18,7 @@
 #include "update.h"
 #include "comm.h"
 #include "error.h"
+#include "random_knuth.h"
 #include "particle_kokkos.h"
 #include "sparta_masks.h"
 
@@ -49,6 +50,14 @@ SurfReactProbKokkos::SurfReactProbKokkos(SPARTA *sparta, int narg, char **arg) :
   h_tally_single = Kokkos::subview(h_scalars,std::make_pair(1,nlist+1));
 
   random_backup = NULL;
+
+#ifdef SPARTA_KOKKOS_EXACT
+  // allocate on the real class instance: backup() is only ever invoked on a
+  //  KKCopy of this class, and a pointer stored there is dropped by the next
+  //  copy() of the original over it
+
+  random_backup = new RanKnuth(12345 + comm->me);
+#endif
 }
 
 SurfReactProbKokkos::SurfReactProbKokkos(SPARTA *sparta) :
@@ -172,6 +181,13 @@ void SurfReactProbKokkos::pre_react()
   ParticleKokkos* particle_kk = (ParticleKokkos*) particle;
   particle_kk->sync(Device,PARTICLE_MASK);
   d_particles = particle_kk->k_particles.view_device();
+}
+
+/* ---------------------------------------------------------------------- */
+
+void SurfReactProbKokkos::post_react()
+{
+  d_particles = {};
 }
 
 /* ---------------------------------------------------------------------- */

@@ -25,8 +25,10 @@
 #include "stdio.h"
 #include "library.h"
 #include "sparta.h"
+#include "accelerator_kokkos.h"
 #include "spaexception.h"
 #include "input.h"
+#include "universe.h"
 #include "update.h"
 #include "particle.h"
 #include "mixture.h"
@@ -237,6 +239,19 @@ void *sparta_open_no_mpi(int argc, char **argv, void **ptr)
 
   MPI_Comm communicator = MPI_COMM_WORLD;
   return sparta_open(argc,argv,communicator,ptr);
+}
+
+/* ----------------------------------------------------------------------
+   shut down the Kokkos library environment
+   Kokkos may be initialized at most once per process and can never be
+     re-initialized once finalized, so it is not shut down when a SPARTA
+     instance is closed.  Call this after the last instance is closed.
+   after calling this no Kokkos functionality may be used
+------------------------------------------------------------------------- */
+
+void sparta_kokkos_finalize()
+{
+  KokkosSPARTA::finalize();
 }
 
 /* ----------------------------------------------------------------------
@@ -700,6 +715,12 @@ int sparta_extract_setting(void *ptr, const char *name)
     MPI_Comm_rank(sparta->world,&me);
     return me;
   }
+
+  // world_* is the partition running the script, universe_* is every
+  // partition, so the two differ only under the -partition switch
+
+  if (strcmp(name,"universe_size") == 0) return sparta->universe->nprocs;
+  if (strcmp(name,"universe_rank") == 0) return sparta->universe->me;
 
   if (strcmp(name,"nplocal") == 0) return sparta->particle->nlocal;
   if (strcmp(name,"nspecies") == 0) return sparta->particle->nspecies;

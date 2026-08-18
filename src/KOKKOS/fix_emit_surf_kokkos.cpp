@@ -42,7 +42,7 @@ using namespace SPARTA_NS;
 using namespace MathConst;
 
 enum{PKEEP,PINSERT,PDONE,PDISCARD,PENTRY,PEXIT,PSURF};   // several files
-enum{NOSUBSONIC,PTBOTH,PONLY};
+enum{NOSUBSONIC,PTBOTH,PONLY,MFLOW};   // same as fix_emit_surf.cpp
 enum{FLOW,CONSTANT,VARIABLE};
 enum{INT,DOUBLE};                                        // several files
 
@@ -77,6 +77,15 @@ FixEmitSurfKokkos::FixEmitSurfKokkos(SPARTA *sparta, int narg, char **arg) :
   datamask_modify = EMPTY_MASK;
 
   region_flag = 0;
+
+  // neither the subsonic nor the mflow boundary condition is ported to Kokkos
+  // the base class has already parsed the keywords, so check here rather than
+  // mid-run, and name the keyword the user actually gave
+
+  if (subsonic_style == MFLOW)
+    error->all(FLERR,"Cannot (yet) use mflow emission in fix emit/surf/kk");
+  else if (subsonic)
+    error->all(FLERR,"Cannot (yet) use subsonic emission in fix emit/surf/kk");
 }
 
 /* ---------------------------------------------------------------------- */
@@ -84,18 +93,6 @@ FixEmitSurfKokkos::FixEmitSurfKokkos(SPARTA *sparta, int narg, char **arg) :
 FixEmitSurfKokkos::~FixEmitSurfKokkos()
 {
   if (copymode) return;
-
-  particle_kk_copy.uncopy();
-  regblock_kk_copy.uncopy();
-  regcylinder_kk_copy.uncopy();
-  regplane_kk_copy.uncopy();
-  regsphere_kk_copy.uncopy();
-
-  for (int i=0; i<KOKKOS_MAX_SLIST; i++) {
-    slist_active_copy[i].uncopy();
-  }
-
-  tmp_compute_surf_kk.uncopy = 1;
 
 #ifdef SPARTA_KOKKOS_EXACT
   rand_pool.destroy();
@@ -296,25 +293,26 @@ void FixEmitSurfKokkos::perform_task()
   nsurf_tally = update->nsurf_tally;
   Compute **slist_active = update->slist_active;
 
-  if (nsurf_tally) {
-    for (int i = 0; i < nsurf_tally; i++) {
-      if (strcmp(slist_active[i]->style,"isurf/grid") == 0)
-        error->all(FLERR,"Kokkos doesn't yet support compute isurf/grid");
-      ComputeSurfKokkos* compute_surf_kk = dynamic_cast<ComputeSurfKokkos*>(slist_active[i]);
-      if (!compute_surf_kk)
-        error->all(FLERR,"Kokkos does not (yet) support compute surf/collision/tally or compute surf/reaction/tally");
-      compute_surf_kk->pre_surf_tally();
-      slist_active_copy[i].copy(compute_surf_kk);
-    }
-  } else {
-    for (int i = 0; i < KOKKOS_MAX_SLIST; i++) {
+  if (nsurf_tally > KOKKOS_MAX_SLIST)
+    error->all(FLERR,"Kokkos currently only supports two instances of compute surface");
 
-      // use temporary to avoid the copy getting stale leading to an issue
-      //  with view reference counting
-
-      slist_active_copy[i].copy(&tmp_compute_surf_kk);
-    }
+  for (int i = 0; i < nsurf_tally; i++) {
+    if (strcmp(slist_active[i]->style,"isurf/grid") == 0)
+      error->all(FLERR,"Kokkos doesn't yet support compute isurf/grid");
+    ComputeSurfKokkos* compute_surf_kk = dynamic_cast<ComputeSurfKokkos*>(slist_active[i]);
+    if (!compute_surf_kk)
+      error->all(FLERR,"Kokkos does not (yet) support compute surf/collision/tally or compute surf/reaction/tally");
+    compute_surf_kk->pre_surf_tally();
+    slist_active_copy[i].copy(compute_surf_kk);
   }
+
+  // every Kokkos functor captures the whole array by value, so the unused
+  //  slots must not alias a compute that may be reallocated or deleted while
+  //  they still reference count it: point them at a temporary that lives as
+  //  long as this class
+
+  for (int i = nsurf_tally; i < KOKKOS_MAX_SLIST; i++)
+    slist_active_copy[i].copy(&tmp_compute_surf_kk);
 
   auto ninsert_dim1 = perspecies ? nspecies : 1;
   if (d_ninsert.extent(0) < ntask * ninsert_dim1)
@@ -424,6 +422,7 @@ void FixEmitSurfKokkos::perform_task()
   copymode = 0;
 
   particleKK->nlocal = nlocal_before + nnew;
+  particleKK->zero_custom_kokkos(nlocal_before,particleKK->nlocal);
   particleKK->modify(SPARTA_NS::Device, PARTICLE_MASK);
 
   if (nsurf_tally) {
@@ -549,11 +548,15 @@ void FixEmitSurfKokkos::operator()(TagFixEmitSurf_perform_task, const int &i, in
 
         double x[3];
         if (dimension == 2) {
-          const double rn = rand_gen.drand();
+          double rn = rand_gen.drand();
           double* p1 = &d_path(i,0);
           double* p2 = &d_path(i,3);
+          if (axisymmetric && p1[1] != p2[1])
+            rn = (sqrt(p1[1]*p1[1] + rn*(p2[1]*p2[1]-p1[1]*p1[1])) - p1[1]) /
+              (p2[1]-p1[1]);
           x[0] = p1[0] + rn * (p2[0]-p1[0]);
           x[1] = p1[1] + rn * (p2[1]-p1[1]);
+          x[2] = 0.0;
         } else {
           const double rn = rand_gen.drand();
           int ntri = task_i.npoint - 2;
@@ -660,11 +663,15 @@ void FixEmitSurfKokkos::operator()(TagFixEmitSurf_perform_task, const int &i, in
 
       double x[3];
       if (dimension == 2) {
-        const double rn = rand_gen.drand();
+        double rn = rand_gen.drand();
         double* p1 = &d_path(i,0);
         double* p2 = &d_path(i,3);
+        if (axisymmetric && p1[1] != p2[1])
+          rn = (sqrt(p1[1]*p1[1] + rn*(p2[1]*p2[1]-p1[1]*p1[1])) - p1[1]) /
+            (p2[1]-p1[1]);
         x[0] = p1[0] + rn * (p2[0]-p1[0]);
         x[1] = p1[1] + rn * (p2[1]-p1[1]);
+        x[2] = 0.0;
       } else {
         const double rn = rand_gen.drand();
         int ntri = task_i.npoint - 2;

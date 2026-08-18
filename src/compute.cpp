@@ -65,7 +65,6 @@ Compute::Compute(SPARTA *sparta, int narg, char **arg) : Pointers(sparta)
 
   kokkos_flag = 0;
   copy = copymode = 0;
-  uncopy = 1;
 }
 
 /* ---------------------------------------------------------------------- */

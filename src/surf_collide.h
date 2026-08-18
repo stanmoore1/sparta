@@ -31,8 +31,8 @@ class SurfCollide : protected Pointers {
   int vector_flag;          // 0/1 if compute_vector() function exists
   int size_vector;          // length of global vector
   int kokkosable;           // 1 if Kokkos version
-  int copy,uncopy,copymode; // used by Kokkos, prevent deallocation of
-                            //  base class when child copy is destroyed
+  int copy,copymode; // used by Kokkos, prevent deallocation of
+                     //  base class when child copy is destroyed
   SurfCollide(class SPARTA *, int, char **);
   SurfCollide(class SPARTA *sparta) : Pointers(sparta) {} // needed for Kokkos
   virtual ~SurfCollide();
@@ -40,6 +40,7 @@ class SurfCollide : protected Pointers {
   virtual Particle::OnePart *collide(Particle::OnePart *&, double &,
                                      int, double *, int, int &) = 0;
   virtual void wrapper(Particle::OnePart *, double *, int *, double *) {}
+  void persurf_wrapper(Particle::OnePart *, double *, int);
   virtual void flags_and_coeffs(int *, double *) {}
 
   virtual void dynamic();
@@ -49,7 +50,7 @@ class SurfCollide : protected Pointers {
 
   // nsingle = all collisions in one step
 
-  int nsingle;
+  bigint nsingle;
 
  protected:
 
@@ -57,7 +58,7 @@ class SurfCollide : protected Pointers {
   // ntotal = cumulative nsingle across all steps
   // one,all used in compute_vector()
 
-  int ntotal;
+  bigint ntotal;
   double one[2],all[2];
 
   // variables used by all SC classes which define Tsurf

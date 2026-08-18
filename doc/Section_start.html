@@ -144,7 +144,7 @@ systems.  You can also use mpicc which will typically be available if
 MPI is installed on your system, though you should check which actual
 compiler it wraps.  Vendor compilers often produce faster code.  On
 boxes with Intel CPUs, we suggest using the commercial Intel icc
-compiler, which can be downloaded from <A HREF = "http://www.intel.com/software/products/noncom">Intel's compiler site</A>.
+compiler, which can be downloaded from <A HREF = "https://www.intel.com/content/www/us/en/developer/tools/oneapi/toolkits.html">Intel's compiler site</A>.
 </P>
 
 
@@ -216,7 +216,7 @@ have a regular grid with more than ~2 billion grid cells or a
 hierarchical grid with enough levels that grid cell IDs cannot fit in
 a 32-bit integer.  In either case, SPARTA will generate an error
 message for "Cell ID has too many bits".  See <A HREF = "Section_howto.html#howto_8">Section
-4.8</A> of the manual for details on how cell
+6.8</A> of the manual for details on how cell
 IDs are formatted.  The only reason to use the SMALL setting is if
 your machine does not support 64-bit integers.
 </P>
@@ -261,7 +261,7 @@ Makefile.serial for an example of how this can be done.
 <P>If you are installing MPI yourself, we recommend MPICH 1.2 or 2.0 or
 OpenMPI.  MPICH can be downloaded from the <A HREF = "https://www.mpich.org">Argonne MPI
 site</A>.  OpenMPI can be downloaded from the
-<A HREF = "http://www.open-mpi.org">OpenMPI site</A>.  If you are running on a big
+<A HREF = "https://www.open-mpi.org">OpenMPI site</A>.  If you are running on a big
 parallel platform, your system admins or the vendor should have
 already installed a version of MPI, which will be faster than MPICH or
 OpenMPI, so find out how to build and link with it.  If you use MPICH
@@ -294,7 +294,7 @@ contains commands that invoke FFTs.
 </P>
 <P>SPARTA supports various open-source or vendor-supplied FFT libraries
 for this purpose.  If you leave these 3 variables blank, SPARTA will
-use the open-source <A HREF = "http://kissfft.sf.net">KISS FFT library</A>, which is
+use the open-source <A HREF = "https://github.com/mborgerding/kissfft">KISS FFT library</A>, which is
 included in the SPARTA distribution.  This library is portable to all
 platforms and for typical SPARTA simulations is almost as fast as FFTW
 or vendor optimized libraries.  If you are not including the FFT
@@ -307,7 +307,7 @@ are: MKL or FFTW3.
 Selecting -DFFT_FFTW will use the FFTW3 library.
 </P>
 <P>Similarly a separate FFT library can be specified for KOKKOS package.
-By default, SPARTA will use a Kokkos version of the open-source <A HREF = "http://kissfft.sf.net">KISS
+By default, SPARTA will use a Kokkos version of the open-source <A HREF = "https://github.com/mborgerding/kissfft">KISS
 FFT library</A>, which is included in the SPARTA
 distribution. Note that using the KISS FFT library on GPUs may give
 suboptimal performance. Other options can be specified using the form
@@ -338,7 +338,7 @@ trouble finding.
 </P>
 <P>FFTW is a fast, portable library that should also work on any
 platform.  You can download it from
-<A HREF = "http://www.fftw.org">www.fftw.org</A>. The 3.X versions are supported
+<A HREF = "https://www.fftw.org">www.fftw.org</A>. The 3.X versions are supported
 as -DFFT_FFTW3.
 Building FFTW for your box should be as simple as ./configure; make.
 </P>
@@ -533,7 +533,7 @@ have a regular grid with more than ~2 billion grid cells or a
 hierarchical grid with enough levels that grid cell IDs cannot fit in
 a 32-bit integer.  In either case, SPARTA will generate an error
 message for "Cell ID has too many bits".  See <A HREF = "Section_howto.html#howto_8">Section
-4.8</A> of the manual for details on how cell
+6.8</A> of the manual for details on how cell
 IDs are formatted.  The only reason to use the SMALL setting is if
 your machine does not support 64-bit integers.
 </P>
@@ -572,7 +572,7 @@ cmake -C /path/to/sparta/cmake/presets/NEW.cmake /path/to/sparta/cmake
 make 
 </PRE>
 <P>consider sharing and vetting NEW.cmake by opening a pull request at
-https://github.com/sparta/sparta/.
+https://github.com/sparta/sparta.
 </P>
 <P><B>Step 6</B>
 </P>
@@ -626,7 +626,7 @@ Note that this documentation link is for CMake version 3.12.
 between 3 thiry party libraries (TPLs) for 1d FFTs, which SPARTA uses when
 configured with cmake -DFFT=<I>FFTW3,MKL,KISS</I>.
 </P>
-<P>By default SPARTA will use the open-source <A HREF = "http://kissfft.sf.net">KISS FFT
+<P>By default SPARTA will use the open-source <A HREF = "https://github.com/mborgerding/kissfft">KISS FFT
 library</A>, which is included in the SPARTA distribution.
 This library is portable to all platforms and for typical SPARTA simulations is
 almost as fast as FFTW or vendor optimized libraries.
@@ -636,7 +636,7 @@ which SPARTA uses when configured with cmake
 -DFFT_KOKKOS=<I>CUFFT,HIPFFT,FFTW3,MKL,KISS</I>. This requires enabling the SPARTA
 FFT package which can be selected with cmake -DPKG_FFT=ON.
 </P>
-<P>By default, SPARTA will use a Kokkos version of the open-source <A HREF = "http://kissfft.sf.net">KISS FFT
+<P>By default, SPARTA will use a Kokkos version of the open-source <A HREF = "https://github.com/mborgerding/kissfft">KISS FFT
 library</A>, which is included in the SPARTA distribution.
 Note that using the KISS FFT library on GPUs may give suboptimal performance.
 Other options for -DFFT_KOKKOS are CUFFT, HIPFFT, MKL or FFTW3. When using the
@@ -1114,7 +1114,7 @@ relocation R_X86_64_32 against `__pthread_key_create' can not be used
 when making a shared object; recompile with -fPIC
 ../../lib/colvars/libcolvars.a: error adding symbols: Bad value 
 </PRE>
-<P>As an example, here is how to build and install the <A HREF = "http://www-unix.mcs.anl.gov/mpi">MPICH
+<P>As an example, here is how to build and install the <A HREF = "https://www.mcs.anl.gov/research/projects/mpi/">MPICH
 library</A>, a popular open-source version of MPI, distributed by
 Argonne National Labs, as a shared library in the default
 /usr/local/lib location:
@@ -1161,7 +1161,7 @@ within the calling code, as needed.
 Python, the library has a simple function-style interface, provided in
 src/library.cpp and src/library.h.
 </P>
-<P>See <A HREF = "Section_howto.html#howto_7">Section_howto 4.7</A> of the manual for
+<P>See <A HREF = "Section_howto.html#howto_7">Section_howto 6.7</A> of the manual for
 ideas on how to couple SPARTA to other codes via its library
 interface.  See <A HREF = "Section_python.html">Section_python</A> of the manual for
 a description of the Python wrapper provided with SPARTA that operates
@@ -1169,7 +1169,7 @@ through the SPARTA library interface.
 </P>
 <P>The files src/library.cpp and library.h define the C-style API for
 using SPARTA as a library.  See <A HREF = "Section_howto.html#howto_6">Section_howto
-4.6</A> of the manual for a description of the
+6.6</A> of the manual for a description of the
 interface and how to extend it for your needs.
 </P>
 <HR>
@@ -1183,20 +1183,20 @@ interface and how to extend it for your needs.
 <P>To enable basic testing, use the SPARTA_ENABLE_TESTING option when configuring
 sparta:
 </P>
-<P>cmake -C /path/to/sparta/cmake/presets/NAME.cmake   -DSPARTA_MACHINE=basic-test-tutorial   -DSPARTA_ENABLE_TESTING=ON   /path/to/sparta/cmake
-</P>
+<PRE>cmake -C /path/to/sparta/cmake/presets/NAME.cmake   -DSPARTA_MACHINE=basic-test-tutorial   -DSPARTA_ENABLE_TESTING=ON   /path/to/sparta/cmake 
+</PRE>
 <P>Setting SPARTA_ENABLE_TESTING to ON, adds tests in 
 /path/to/sparta/examples/**/in.* to be run via ctest. Each in.* file corresponds
 to an individual test. If BUILD_MPI is ON, tests will be configured to run with 
 both 1 and 4 mpi ranks. If the binaries are built, tests can be run via ctest:
 </P>
-<P>make
-ctest
-</P>
+<PRE>make
+ctest 
+</PRE>
 <P>This will run all the tests in serial. To run the tests in parallel, use -j:
 </P>
-<P>ctest -j4
-</P>
+<PRE>ctest -j4 
+</PRE>
 <P>This will run up to four single rank, single thread per rank mpi_1 tests in parallel
 or up to one 4 rank, single thread per rank mpi_4 tests. ctest has many options
 including regex filters for running tests that only match the specified regex.
@@ -1217,17 +1217,17 @@ the in.TEST file by renaming the file to DISABLED.in.TEST, for example.
 <P>To enable advanced testing, use the SPARTA_DSMC_TESTING_PATH option when
 configuring sparta:
 </P>
-<P>cmake -C /path/to/sparta/cmake/presets/NAME.cmake   -DSPARTA_MACHINE=advanced-test-tutorial   -DSPARTA_DSMC_TESTING_PATH=/path/to/dsmc_testing   /path/to/sparta/cmake
-</P>
+<PRE>cmake -C /path/to/sparta/cmake/presets/NAME.cmake   -DSPARTA_MACHINE=advanced-test-tutorial   -DSPARTA_DSMC_TESTING_PATH=/path/to/dsmc_testing   /path/to/sparta/cmake 
+</PRE>
 <P>Setting SPARTA_DSMC_TESTING_PATH to a valid dsmc_testing path adds tests in
 SPARTA_DSMC_TESTING_PATH to be run by SPARTA_DSMC_TESTING_PATH/regression.py
 via ctest.
 </P>
 <P>After configuring, build the binaries and run the tests via ctest:
 </P>
-<P>make
-ctest
-</P>
+<PRE>make
+ctest 
+</PRE>
 <P>This will run all tests found in SPARTA_DSMC_TESTING_PATH/examples by
 SPARTA_DSMC_TESTING_PATH/regression.py. If SPARTA_ENABLE_TESTING is ON,
 all tests found in /path/to/sparta/examples will configured to run by
@@ -1249,30 +1249,30 @@ with different arguments. SPARTA_CTEST_CONFIGS lets the user add additional ctes
 configurations, seperated by ';', that allow SPARTA_SPA_ARGS_CONFIG_NAME
 or SPARTA_DSMC_TESTING_DRIVER_ARGS_CONFIG_NAME to be specified. For example:
 </P>
-<P>cmake -C /path/to/sparta/cmake/presets/NAME.cmake   -DSPARTA_MACHINE=advanced-test-tutorial   -DSPARTA_DSMC_TESTING_PATH=/path/to/dsmc_testing   -DSPARTA_CTEST_CONFIGS="PARALLEL;SERIAL"   -DSPARTA_SPA_ARGS_SERIAL=spa_serial_args   -DSPARTA_SPA_ARGS_PARALLEL=spa_parallel_args   -DSPARTA_DSMC_TESTING_DRIVER_ARGS_PARALLEL=driver_parallel_args   -DSPARTA_DSMC_TESTING_DRIVER_ARGS_PARALLEL=driver_serial_args   /path/to/sparta/cmake
-</P>
+<PRE>cmake -C /path/to/sparta/cmake/presets/NAME.cmake   -DSPARTA_MACHINE=advanced-test-tutorial   -DSPARTA_DSMC_TESTING_PATH=/path/to/dsmc_testing   -DSPARTA_CTEST_CONFIGS="PARALLEL;SERIAL"   -DSPARTA_SPA_ARGS_SERIAL=spa_serial_args   -DSPARTA_SPA_ARGS_PARALLEL=spa_parallel_args   -DSPARTA_DSMC_TESTING_DRIVER_ARGS_PARALLEL=driver_parallel_args   -DSPARTA_DSMC_TESTING_DRIVER_ARGS_PARALLEL=driver_serial_args   /path/to/sparta/cmake 
+</PRE>
 <P>To verify that the binaries are being run with the proper arguments:
 </P>
-<P>make
+<PRE>make
 ctest -C SERIAL -VV
-ctest -C PARALLEL -VV
-</P>
+ctest -C PARALLEL -VV 
+</PRE>
 <P>The SPARTA_MULTIBUILD_CONFIGS option allows the user to run different sets of
 binaries for the same input decks. SPARTA_MULTIBUILD_CONFIGS lets the user add
 additional build configurations, separated by ';', that will build sparta 
 with the cache file located in 
 `SPARTA_MULTIBUILD_PRESET_DIR/CONFIG_NAME.cmake`. For example:
 </P>
-<P>cmake -DSPARTA_MULTIBUILD_CONFIGS="test_mac;test_mac_mpi"       -DSPARTA_MULTIBUILD_PRESET_DIR=/path/to/sparta/cmake/presets/       /path/to/sparta/cmake
-</P>
+<PRE>cmake -DSPARTA_MULTIBUILD_CONFIGS="test_mac;test_mac_mpi"       -DSPARTA_MULTIBUILD_PRESET_DIR=/path/to/sparta/cmake/presets/       /path/to/sparta/cmake 
+</PRE>
 <P>This cmake command assumes that 
 /path/to/sparta/cmake/presets/<I>test_mac_mpi,test_mac</I>.cmake exist.
 </P>
 <P>To verify that the correct binaries are being run:
 </P>
-<P>make
-ctest -VV
-</P>
+<PRE>make
+ctest -VV 
+</PRE>
 <HR>
 
 <H4><A NAME = "start_6"></A>2.6 Running SPARTA 
@@ -1651,7 +1651,8 @@ Sort    | 0.01733    | 0.040286   | 0.063573   |  10.6 |  6.29
 Comm    | 0.02276    | 0.023555   | 0.02493    |   0.6 |  3.68
 Modify  | 0.00018167 | 0.024758   | 0.051345   |  15.6 |  3.87
 Output  | 0.0002172  | 0.0007354  | 0.0012152  |   0.0 |  0.11
-Other   |            | 0.2471     |            |       | 38.61 
+MPI Sync| 0.070519   | 0.23166    | 0.39965    |  24.7 | 36.20
+Other   |            | 0.01544    |            |       |  2.41
 </PRE>
 <PRE>Particle moves    = 38096354 (38.1M)
 Cells touched     = 43236871 (43.2M)
@@ -1709,16 +1710,20 @@ Histogram: 4 0 0 0 0 0 0 0 0 0
 seconds.
 </P>
 <P>The next section gives a breakdown of the CPU timing (in seconds) in
-7 categories.  The first four are timings for particles moves, which
+8 categories.  The first four are timings for particles moves, which
 includes interaction with surface elements, then particle collisions,
 then sorting of particles (required to perform collisions), and
 communication of particles between processors.  The Modify section is
 time for operations invoked by fixes and computes.  The Output section
-is for dump command and statistical output.  The Other category is
-typically for load-imbalance, as some MPI tasks wait for others MPI
-tasks to complete.  In each category the min,ave,max time across
-processors is shown, as well as a variation, and the percentage of
-total time.
+is for dump command and statistical output.  The MPI Sync section is
+time spent waiting in the global collectives of the run loop: the
+per-timestep reduction in the move and the barrier that closes the
+loop.  On an MPI task that arrives early that wait is idle time, so
+this category is where load-imbalance shows up.  The Other category is
+the loop time minus all of the named categories above; it should be
+near zero, and a large value means some part of the loop is not being
+timed.  In each category the min,ave,max time across processors is
+shown, as well as a variation, and the percentage of total time.
 </P>
 <P>The next section gives some statistics about the run.  These are total
 counts of particle moves, grid cells touched by particles, the number

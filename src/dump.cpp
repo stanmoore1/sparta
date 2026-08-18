@@ -96,6 +96,7 @@ Dump::Dump(SPARTA *sparta, int, char **arg) : Pointers(sparta)
   singlefile_opened = 0;
   compressed = 0;
   binary = 0;
+  binaryopen = 0;
   multifile = 0;
 
   multiproc = 0;
@@ -428,7 +429,7 @@ void Dump::openfile()
 #else
       error->one(FLERR,"Cannot open gzipped file");
 #endif
-    } else if (binary) {
+    } else if (binary || binaryopen) {
       fp = fopen(filecurrent,"wb");
     } else if (append_flag) {
       fp = fopen(filecurrent,"a");
@@ -490,7 +491,13 @@ int Dump::convert_string(int n, double *mybuf)
         // is a grid cell ID
         // if not, might have to move this method into child classes
         // and tailor it for each dump style
-        grid->id_num2str(static_cast<int> (mybuf[m]),str);
+        // decode cell ID via ubuf, as write_text() does:
+        //   value is a bit-punned cellint, which is 64-bit under BIGBIG,
+        //   so a numeric read + int cast truncates IDs above 2^31
+        if (sizeof(cellint) == sizeof(smallint))
+          grid->id_num2str((uint32_t) ubuf(mybuf[m]).i,str);
+        else
+          grid->id_num2str((uint64_t) ubuf(mybuf[m]).i,str);
         offset += sprintf(&sbuf[offset],vformat[j],str);
       }
       m++;
@@ -530,9 +537,18 @@ void Dump::modify_params(int narg, char **arg)
 
     } else if (strcmp(arg[iarg],"every") == 0) {
       if (iarg+2 > narg) error->all(FLERR,"Illegal dump_modify command");
+
+      // the dump frequency is stored by Output, not by the dump itself,
+      //   so this dump must be one that Output knows about
+      // guard the not-found case, else idump = ndump below and
+      //   var_dump/every_dump are read and written out of bounds
+
       int idump;
       for (idump = 0; idump < output->ndump; idump++)
         if (strcmp(id,output->dump[idump]->id) == 0) break;
+      if (idump == output->ndump)
+        error->all(FLERR,"Dump_modify every requires a dump "
+                   "defined by the dump command");
       int n;
       if (strstr(arg[iarg+1],"v_") == arg[iarg+1]) {
         delete [] output->var_dump[idump];

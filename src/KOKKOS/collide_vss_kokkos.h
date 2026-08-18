@@ -34,7 +34,9 @@ CollideStyle(vss/kk,CollideVSSKokkos)
 namespace SPARTA_NS {
 
 struct s_COLLIDE_REDUCE {
-  int nattempt_one,ncollide_one,nreact_one;
+  // bigint since can exceed 2^31 in one step
+  //   at large per-proc particle counts
+  bigint nattempt_one,ncollide_one,nreact_one;
   KOKKOS_INLINE_FUNCTION
   s_COLLIDE_REDUCE() {
     nattempt_one = 0;
@@ -56,6 +58,9 @@ struct TagCollideZeroNN{};
 
 template < int NEARCP, int GASTALLY, int ATOMIC_REDUCTION >
 struct TagCollideCollisionsOne{};
+
+template < int DIM, int GASTALLY, int ATOMIC_REDUCTION >
+struct TagCollideCollisionsOneSubcell{};
 
 template < int GASTALLY, int ATOMIC_REDUCTION >
 struct TagCollideCollisionsOneAmbipolar{};
@@ -110,6 +115,14 @@ class CollideVSSKokkos : public CollideVSS {
   KOKKOS_INLINE_FUNCTION
   void operator()(TagCollideCollisionsOne< NEARCP, GASTALLY, ATOMIC_REDUCTION >, const int&, COLLIDE_REDUCE&) const;
 
+  template < int DIM, int GASTALLY, int ATOMIC_REDUCTION >
+  KOKKOS_INLINE_FUNCTION
+  void operator()(TagCollideCollisionsOneSubcell< DIM, GASTALLY, ATOMIC_REDUCTION >, const int&) const;
+
+  template < int DIM, int GASTALLY, int ATOMIC_REDUCTION >
+  KOKKOS_INLINE_FUNCTION
+  void operator()(TagCollideCollisionsOneSubcell< DIM, GASTALLY, ATOMIC_REDUCTION >, const int&, COLLIDE_REDUCE&) const;
+
   template < int GASTALLY, int ATOMIC_REDUCTION >
   KOKKOS_INLINE_FUNCTION
   void operator()(TagCollideCollisionsOneAmbipolar< GASTALLY, ATOMIC_REDUCTION >, const int&) const;
@@ -161,20 +174,30 @@ class CollideVSSKokkos : public CollideVSS {
   DAT::tdual_float_3d k_remain;
   DAT::t_float_3d d_remain;
 
-  typedef Kokkos::DualView<int[11], DeviceType::array_layout, DeviceType> tdual_int_11;
-  typedef tdual_int_11::t_dev t_int_11;
-  typedef tdual_int_11::t_host t_host_int_11;
-  t_int_11 d_scalars;
-  t_host_int_11 h_scalars;
+  // int scalars = flags and view-size counters, must stay int
+  // bigint scalars = per-step statistics counters, can exceed 2^31
+  //   in one step at large per-proc particle counts
 
-  DAT::t_int_scalar d_nattempt_one;
-  HAT::t_int_scalar h_nattempt_one;
+  typedef Kokkos::DualView<int[8], DeviceType::array_layout, DeviceType> tdual_int_8;
+  typedef tdual_int_8::t_dev t_int_8;
+  typedef tdual_int_8::t_host t_host_int_8;
+  t_int_8 d_scalars;
+  t_host_int_8 h_scalars;
 
-  DAT::t_int_scalar d_ncollide_one;
-  HAT::t_int_scalar h_ncollide_one;
+  typedef Kokkos::DualView<bigint[3], DeviceType::array_layout, DeviceType> tdual_bigint_3;
+  typedef tdual_bigint_3::t_dev t_bigint_3;
+  typedef tdual_bigint_3::t_host t_host_bigint_3;
+  t_bigint_3 d_scalars_big;
+  t_host_bigint_3 h_scalars_big;
 
-  DAT::t_int_scalar d_nreact_one;
-  HAT::t_int_scalar h_nreact_one;
+  DAT::t_bigint_scalar d_nattempt_one;
+  HAT::t_bigint_scalar h_nattempt_one;
+
+  DAT::t_bigint_scalar d_ncollide_one;
+  HAT::t_bigint_scalar h_ncollide_one;
+
+  DAT::t_bigint_scalar d_nreact_one;
+  HAT::t_bigint_scalar h_nreact_one;
 
   DAT::t_int_scalar d_error_flag;
   HAT::t_int_scalar h_error_flag;
@@ -208,7 +231,34 @@ class CollideVSSKokkos : public CollideVSS {
   DAT::t_int_2d d_nn_last_partner;
 
   template < int NEARCP, int GASTALLY > void collisions_one(COLLIDE_REDUCE&);
+  template < int DIM, int GASTALLY > void collisions_one_subcell(COLLIDE_REDUCE&);
   template < int GASTALLY > void collisions_one_ambipolar(COLLIDE_REDUCE&);
+
+  // transient subcell method, per-cell scratch indexed by (icell,index)
+  // subcell_id/next indexed by particle; count/first/ring indexed by subcell
+
+  DAT::t_int_2d d_subcell_id;
+  DAT::t_int_2d d_subcell_count;
+  DAT::t_int_2d d_subcell_first;
+  DAT::t_int_2d d_subcell_next;
+  DAT::t_int_2d d_subcell_ring;
+
+  template < int DIM >
+  KOKKOS_INLINE_FUNCTION
+  void rebin_subcell(int, int, int, const double *, const double *) const;
+
+  template < int DIM >
+  KOKKOS_INLINE_FUNCTION
+  void bin_one_subcell(int, int, int, const double *, const double *) const;
+
+  KOKKOS_INLINE_FUNCTION
+  void unbin_one_subcell(int, int, int) const;
+
+  template < int DIM >
+  KOKKOS_INLINE_FUNCTION
+  int find_nn_subcell(rand_type &, int, int, int, int, int) const;
+
+  void grow_subcell_views(int, int);
 
   // VSS specific
 
@@ -243,6 +293,10 @@ class CollideVSSKokkos : public CollideVSS {
 
   KOKKOS_INLINE_FUNCTION
   double sample_bl(rand_type &, double, double) const;
+  KOKKOS_INLINE_FUNCTION
+  double eff_vib_dof(double, double) const;
+  KOKKOS_INLINE_FUNCTION
+  double vib_pool_temp(double, int, double *, double) const;
   KOKKOS_INLINE_FUNCTION
   double rotrel (int, double) const;
   KOKKOS_INLINE_FUNCTION
