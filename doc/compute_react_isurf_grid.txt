@@ -91,7 +91,7 @@ ave/grid"_fix_ave_grid.html command.
 
 This compute calculates a per-grid array, with the number of columns
 either equal to the number of reactions defined by the
-"surf_react"_surf_react style (if no values are specified) or equal to
+"surf_react"_surf_react.html style (if no values are specified) or equal to
 M = the # of values specified.
 
 Grid cells not in the specified {group-ID} or whose implicit surfaces

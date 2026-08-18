@@ -46,10 +46,11 @@ namespace SPARTA_NS {
 #define KOKKOS_MAX_SLIST 2
 
 struct s_UPDATE_REDUCE {
-  int ntouch_one,nexit_one,nboundary_one,
-      entryexit,ncomm_one,
-      nscheck_one,nscollide_one,nreact_one,nstuck,
-      naxibad,error_flag;
+  // per-step counters are bigint since they can exceed 2^31
+  //   in one step at large per-proc particle counts
+  bigint ntouch_one,nexit_one,nboundary_one,ncomm_one,
+         nscheck_one,nscollide_one,nreact_one;
+  int entryexit,nstuck,naxibad,error_flag;
   KOKKOS_INLINE_FUNCTION
   s_UPDATE_REDUCE() {
     ntouch_one    = 0;
@@ -121,9 +122,9 @@ class UpdateKokkos : public Update {
   t_sinfo_1d d_sinfo;
   t_pcell_1d d_pcells;
 
-  Kokkos::Crs<int, DeviceType, void, int> d_csurfs;
-  Kokkos::Crs<int, DeviceType, void, int> d_csplits;
-  Kokkos::Crs<int, DeviceType, void, int> d_csubs;
+  Kokkos::Crs<int, DeviceType, void, crs_size_type> d_csurfs;
+  Kokkos::Crs<int, DeviceType, void, crs_size_type> d_csplits;
+  Kokkos::Crs<int, DeviceType, void, crs_size_type> d_csubs;
 
   t_line_1d d_lines;
   t_tri_1d d_tris;
@@ -171,20 +172,30 @@ class UpdateKokkos : public Update {
   ComputeReactISurfGridKokkos tmp_compute_react_isurf_grid_kk;
   ComputeReactSurfKokkos tmp_compute_react_surf_kk;
 
-  typedef Kokkos::DualView<int[14], DeviceType::array_layout, DeviceType> tdual_int_14;
-  typedef tdual_int_14::t_dev t_int_14;
-  typedef tdual_int_14::t_host t_host_int_14;
-  t_int_14 d_scalars;
-  t_host_int_14 h_scalars;
+  // int scalars = flags and view-index counters, must stay int
+  // bigint scalars = per-step statistics counters, can exceed 2^31
+  //   in one step at large per-proc particle counts
 
-  DAT::t_int_scalar d_ntouch_one;
-  HAT::t_int_scalar h_ntouch_one;
+  typedef Kokkos::DualView<int[7], DeviceType::array_layout, DeviceType> tdual_int_7;
+  typedef tdual_int_7::t_dev t_int_7;
+  typedef tdual_int_7::t_host t_host_int_7;
+  t_int_7 d_scalars;
+  t_host_int_7 h_scalars;
 
-  DAT::t_int_scalar d_nexit_one;
-  HAT::t_int_scalar h_nexit_one;
+  typedef Kokkos::DualView<bigint[7], DeviceType::array_layout, DeviceType> tdual_bigint_7;
+  typedef tdual_bigint_7::t_dev t_bigint_7;
+  typedef tdual_bigint_7::t_host t_host_bigint_7;
+  t_bigint_7 d_scalars_big;
+  t_host_bigint_7 h_scalars_big;
 
-  DAT::t_int_scalar d_nboundary_one;
-  HAT::t_int_scalar h_nboundary_one;
+  DAT::t_bigint_scalar d_ntouch_one;
+  HAT::t_bigint_scalar h_ntouch_one;
+
+  DAT::t_bigint_scalar d_nexit_one;
+  HAT::t_bigint_scalar h_nexit_one;
+
+  DAT::t_bigint_scalar d_nboundary_one;
+  HAT::t_bigint_scalar h_nboundary_one;
 
   DAT::t_int_scalar d_nmigrate;
   HAT::t_int_scalar h_nmigrate;
@@ -192,17 +203,17 @@ class UpdateKokkos : public Update {
   DAT::t_int_scalar d_entryexit;
   HAT::t_int_scalar h_entryexit;
 
-  DAT::t_int_scalar d_ncomm_one;
-  HAT::t_int_scalar h_ncomm_one;
+  DAT::t_bigint_scalar d_ncomm_one;
+  HAT::t_bigint_scalar h_ncomm_one;
 
-  DAT::t_int_scalar d_nscheck_one;
-  HAT::t_int_scalar h_nscheck_one;
+  DAT::t_bigint_scalar d_nscheck_one;
+  HAT::t_bigint_scalar h_nscheck_one;
 
-  DAT::t_int_scalar d_nscollide_one;
-  HAT::t_int_scalar h_nscollide_one;
+  DAT::t_bigint_scalar d_nscollide_one;
+  HAT::t_bigint_scalar h_nscollide_one;
 
-  DAT::t_int_scalar d_nreact_one;
-  HAT::t_int_scalar h_nreact_one;
+  DAT::t_bigint_scalar d_nreact_one;
+  HAT::t_bigint_scalar h_nreact_one;
 
   DAT::t_int_scalar d_nstuck;
   HAT::t_int_scalar h_nstuck;

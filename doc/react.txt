@@ -241,7 +241,7 @@ you can list multiple reactions of the third kind, each with a unique
 P2.
 
 IMPORTANT NOTE: If the ambipolar approximation is being used, via the
-"fix ambipolar"_fix_ambipolar.hmtl and "collide_modify ambipolar
+"fix ambipolar"_fix_ambipolar.html and "collide_modify ambipolar
 yes"_collide_modify.html commands, then reactions which involve either
 ambipolar ions or the ambipolar electron have more restricitve rules
 about the ordering of reactants and products.  See the next section
@@ -278,7 +278,7 @@ described in the preceeding section.
 
 Note that ambipolar collisions are turned on via the "collide_modify
 ambipolar yes"_collide_modify.html commands, which in turn requries
-that the "fix ambipolar"_fix_ambipolar.hmtl is defined in your input
+that the "fix ambipolar"_fix_ambipolar.html is defined in your input
 script.  This fix defines a particular species as an ambipolar
 electron, written as "e" in the reactions that follow.  It also
 defines a list of ambipolar ions, which are written as species with a
@@ -385,7 +385,7 @@ rates", Physics of Fluids, 23, 106101, (2011).
 Kinetic-Theory Approach for Computing Chemical-Reaction Rates in
 Upper-Atmosphere Hypersonic Flows", J Chem Phys, 131, 124311, (2009).
 
-:link(Gallis11)
+:link(Gallis10)
 [(Gallis10)] M. A. Gallis, R. B. Bond, and J. R.Torczynski,
 "Assessment of Collision-Energy-Based Models for Atmospheric-Species
 Reactions in Hypersonic Flows", J Thermophysics and Heat Transfer,

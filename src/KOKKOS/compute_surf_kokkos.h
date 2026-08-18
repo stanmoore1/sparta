@@ -41,6 +41,7 @@ class ComputeSurfKokkos : public ComputeSurf {
   void init_normflux();
   void clear();
   int tallyinfo(surfint *&);
+  void post_process_surf();
   void update_hash();
   void pre_surf_tally();
   void post_surf_tally();
@@ -445,6 +446,7 @@ void surf_tally_kk(double /*dtremain*/, int isurf, int icell, int reaction,
 
  private:
   int mvv2e;
+  int compressed;     // 1 once the device tallies have been copied and compressed
 
   DAT::t_int_1d d_which;
 

@@ -38,7 +38,6 @@ ComputeReactISurfGridKokkos::ComputeReactISurfGridKokkos(SPARTA *sparta) :
   ComputeReactISurfGrid(sparta)
 {
   copy = 1;
-  uncopy = 0;
   nsurf_tally_alloc = 0;
 }
 

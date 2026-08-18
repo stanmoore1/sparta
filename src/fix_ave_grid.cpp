@@ -1015,11 +1015,11 @@ void FixAveGrid::grow_tally()
 double FixAveGrid::memory_usage()
 {
   double bytes = 0.0;
-  bytes += maxgrid*nvalues * sizeof(double);    // vector or array grid
-  if (flavor == PERGRID) bytes += ntotal*maxgrid * sizeof(double);
+  bytes += (bigint) maxgrid*nvalues * sizeof(double);    // vector or array grid
+  if (flavor == PERGRID) bytes += (bigint) ntotal*maxgrid * sizeof(double);
   if (flavor == PERGRIDSURF) {
     bytes += maxtallyID * sizeof(surfint);
-    bytes += nvalues*maxtallyID * sizeof(double);
+    bytes += (bigint) nvalues*maxtallyID * sizeof(double);
   }
   return bytes;
 }

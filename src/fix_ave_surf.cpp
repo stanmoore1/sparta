@@ -671,8 +671,8 @@ void FixAveSurf::grow_tally()
 double FixAveSurf::memory_usage()
 {
   double bytes = 0.0;
-  bytes += nown*nvalues * sizeof(double);
-  if (ave == RUNNING) bytes += nown*nvalues * sizeof(double);
+  bytes += (bigint) nown*nvalues * sizeof(double);
+  if (ave == RUNNING) bytes += (bigint) nown*nvalues * sizeof(double);
   return bytes;
 }
 

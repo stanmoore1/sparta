@@ -35,7 +35,6 @@ ComputeGasCollisionGridKokkos::ComputeGasCollisionGridKokkos(SPARTA *sparta) :
   ComputeGasCollisionGrid(sparta)
 {
   copy = 1;
-  uncopy = 0;
   vector_grid = NULL;
   nglocal = 0;
 }

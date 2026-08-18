@@ -55,6 +55,8 @@ class SurfReactAdsorb : public SurfReact {
                                     // in Surf list of all reaction models
 
   int firstflag;                    // 1 until init() of first run
+  int firstwarn_capacity;           // 1 until warned once that the adsorbate
+                                    // count exceeded a surface's capacity
 
   class RanKnuth *random;     // RNG for reaction probabilities
 
@@ -239,6 +241,7 @@ class SurfReactAdsorb : public SurfReact {
 
   void update_state_face();
   void update_state_surf();
+  void check_capacity();
 
   // NOTE: can remove these 3 at some point
   /*

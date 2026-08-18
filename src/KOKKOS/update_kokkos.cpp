@@ -97,41 +97,57 @@ UpdateKokkos::UpdateKokkos(SPARTA *sparta) : Update(sparta),
 {
   nslist_surf = nslist_isurf = nslist_react_isurf = nslist_react_surf = 0;
 
+  // the Kokkos views of Particle/Grid/Surf are populated from the host data
+  //   once, by setup() when prewrap is set, which then clears prewrap
+  // a "clear" command destroys and recreates all of these classes but not
+  //   KokkosSPARTA, so prewrap has to be re-armed here or the second problem
+  //   runs with empty device views
+  // this is a no-op on the first construction, KokkosSPARTA sets prewrap = 1
 
-  // use 1D view for scalars to reduce GPU memory operations
+  sparta->kokkos->prewrap = 1;
 
-  d_scalars = t_int_14("collide:scalars");
-  h_scalars = t_host_int_14("collide:scalars_mirror");
+  // use 1D views for scalars to reduce GPU memory operations
+  // int view = flags and view-index counters, must stay int
+  // bigint view = per-step statistics counters, can exceed 2^31
+  //   in one step at large per-proc particle counts
 
-  d_ncomm_one     = Kokkos::subview(d_scalars,0);
-  d_nexit_one     = Kokkos::subview(d_scalars,1);
-  d_nboundary_one = Kokkos::subview(d_scalars,2);
-  d_nmigrate      = Kokkos::subview(d_scalars,3);
-  d_entryexit     = Kokkos::subview(d_scalars,4);
-  d_ntouch_one    = Kokkos::subview(d_scalars,5);
-  d_nscheck_one   = Kokkos::subview(d_scalars,6);
-  d_nscollide_one = Kokkos::subview(d_scalars,7);
-  d_nreact_one    = Kokkos::subview(d_scalars,8);
-  d_nstuck        = Kokkos::subview(d_scalars,9);
-  d_naxibad       = Kokkos::subview(d_scalars,10);
-  d_error_flag    = Kokkos::subview(d_scalars,11);
-  d_retry         = Kokkos::subview(d_scalars,12);
-  d_nlocal        = Kokkos::subview(d_scalars,13);
+  d_scalars = t_int_7("update:scalars");
+  h_scalars = t_host_int_7("update:scalars_mirror");
 
-  h_ncomm_one     = Kokkos::subview(h_scalars,0);
-  h_nexit_one     = Kokkos::subview(h_scalars,1);
-  h_nboundary_one = Kokkos::subview(h_scalars,2);
-  h_nmigrate      = Kokkos::subview(h_scalars,3);
-  h_entryexit     = Kokkos::subview(h_scalars,4);
-  h_ntouch_one    = Kokkos::subview(h_scalars,5);
-  h_nscheck_one   = Kokkos::subview(h_scalars,6);
-  h_nscollide_one = Kokkos::subview(h_scalars,7);
-  h_nreact_one    = Kokkos::subview(h_scalars,8);
-  h_nstuck        = Kokkos::subview(h_scalars,9);
-  h_naxibad       = Kokkos::subview(h_scalars,10);
-  h_error_flag    = Kokkos::subview(h_scalars,11);
-  h_retry         = Kokkos::subview(h_scalars,12);
-  h_nlocal        = Kokkos::subview(h_scalars,13);
+  d_scalars_big = t_bigint_7("update:scalars_big");
+  h_scalars_big = t_host_bigint_7("update:scalars_big_mirror");
+
+  d_nmigrate      = Kokkos::subview(d_scalars,0);
+  d_entryexit     = Kokkos::subview(d_scalars,1);
+  d_nstuck        = Kokkos::subview(d_scalars,2);
+  d_naxibad       = Kokkos::subview(d_scalars,3);
+  d_error_flag    = Kokkos::subview(d_scalars,4);
+  d_retry         = Kokkos::subview(d_scalars,5);
+  d_nlocal        = Kokkos::subview(d_scalars,6);
+
+  d_ncomm_one     = Kokkos::subview(d_scalars_big,0);
+  d_nexit_one     = Kokkos::subview(d_scalars_big,1);
+  d_nboundary_one = Kokkos::subview(d_scalars_big,2);
+  d_ntouch_one    = Kokkos::subview(d_scalars_big,3);
+  d_nscheck_one   = Kokkos::subview(d_scalars_big,4);
+  d_nscollide_one = Kokkos::subview(d_scalars_big,5);
+  d_nreact_one    = Kokkos::subview(d_scalars_big,6);
+
+  h_nmigrate      = Kokkos::subview(h_scalars,0);
+  h_entryexit     = Kokkos::subview(h_scalars,1);
+  h_nstuck        = Kokkos::subview(h_scalars,2);
+  h_naxibad       = Kokkos::subview(h_scalars,3);
+  h_error_flag    = Kokkos::subview(h_scalars,4);
+  h_retry         = Kokkos::subview(h_scalars,5);
+  h_nlocal        = Kokkos::subview(h_scalars,6);
+
+  h_ncomm_one     = Kokkos::subview(h_scalars_big,0);
+  h_nexit_one     = Kokkos::subview(h_scalars_big,1);
+  h_nboundary_one = Kokkos::subview(h_scalars_big,2);
+  h_ntouch_one    = Kokkos::subview(h_scalars_big,3);
+  h_nscheck_one   = Kokkos::subview(h_scalars_big,4);
+  h_nscollide_one = Kokkos::subview(h_scalars_big,5);
+  h_nreact_one    = Kokkos::subview(h_scalars_big,6);
 
   nboundary_tally = 0;
 }
@@ -144,38 +160,6 @@ UpdateKokkos::~UpdateKokkos()
 
   memoryKK->destroy_kokkos(k_mlist,mlist);
   mlist = NULL;
-
-  grid_kk_copy.uncopy();
-  domain_kk_copy.uncopy();
-
-  tmp_compute_boundary_kk.uncopy = 1;
-  tmp_compute_surf_kk.uncopy = 1;
-  tmp_compute_isurf_grid_kk.uncopy = 1;
-  tmp_compute_react_isurf_grid_kk.uncopy = 1;
-  tmp_compute_react_surf_kk.uncopy = 1;
-
-  for (int i=0; i<KOKKOS_MAX_SURF_COLL_PER_TYPE; i++) {
-    sc_kk_specular_copy[i].uncopy();
-    sc_kk_diffuse_copy[i].uncopy();
-    sc_kk_vanish_copy[i].uncopy();
-    sc_kk_piston_copy[i].uncopy();
-    sc_kk_transparent_copy[i].uncopy();
-    sc_kk_adiabatic_copy[i].uncopy();
-    sc_kk_impulsive_copy[i].uncopy();
-    sc_kk_td_copy[i].uncopy();
-    sc_kk_cll_copy[i].uncopy();
-  }
-
-  for (int i=0; i<KOKKOS_MAX_BLIST; i++) {
-    blist_active_copy[i].uncopy();
-  }
-
-  for (int i=0; i<KOKKOS_MAX_SLIST; i++) {
-    slist_active_copy[i].uncopy();
-    slist_active_isurf_copy[i].uncopy();
-    slist_active_react_isurf_copy[i].uncopy();
-    slist_active_react_surf_copy[i].uncopy();
-  }
 }
 
 /* ---------------------------------------------------------------------- */
@@ -469,8 +453,10 @@ void UpdateKokkos::run(int nsteps)
       timer->stamp(TIME_OUTPUT);
     }
   }
-  sparta->kokkos->auto_sync = 1;
 
+  modify->post_run();
+
+  sparta->kokkos->auto_sync = 1;
   particle_kk->sync(Host,ALL_MASK);
 }
 
@@ -571,8 +557,13 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
       if (!sparta->kokkos->react_retry_flag)
         extra_factor = sparta->kokkos->react_extra;
 
-      int nlocal_extra = particle->nlocal*extra_factor;
-      if (d_particles.extent(0) < nlocal_extra) {
+      // compute in bigint and guard: the double->int conversion of
+      //   nlocal*extra_factor is UB once it exceeds 2^31
+
+      bigint nlocal_extra = static_cast<bigint> (particle->nlocal*extra_factor);
+      if (nlocal_extra > MAXSMALLINT)
+        error->one(FLERR,"Per-processor particle count is too big");
+      if ((bigint) d_particles.extent(0) < nlocal_extra) {
         particle->grow(nlocal_extra - particle->nlocal); // this!
         d_particles = particle_kk->k_particles.view_device();
       }
@@ -586,8 +577,7 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
     domain_kk_copy.copy((DomainKokkos*)domain);
 
     if (surf->nsc > KOKKOS_MAX_TOT_SURF_COLL)
-      error->all(FLERR,"Kokkos currently supports at most two instances of each "
-                       "surface collide method");
+      error->all(FLERR,"Kokkos currently supports a limited number of surface collide methods");
 
     if (surf->nsc > 0) {
       int nspec,ndiff,nvan,npist,ntrans,nadia,nimpul,ntd,ncll;
@@ -596,30 +586,40 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
         if (!surf->sc[n]->kokkosable)
           error->all(FLERR,"Must use Kokkos-enabled surface collide method with Kokkos");
         if (strcmp(surf->sc[n]->style,"specular") == 0) {
+          if (nspec >= KOKKOS_MAX_SURF_COLL_PER_TYPE)
+            error->all(FLERR,"Kokkos currently supports two instances of each surface collide method");
           sc_kk_specular_copy[nspec].copy((SurfCollideSpecularKokkos*)(surf->sc[n]));
           sc_kk_specular_copy[nspec].obj.pre_collide();
           sc_type_list[n] = 0;
           sc_map[n] = nspec;
           nspec++;
         } else if (strcmp(surf->sc[n]->style,"diffuse") == 0) {
+          if (ndiff >= KOKKOS_MAX_SURF_COLL_PER_TYPE)
+            error->all(FLERR,"Kokkos currently supports two instances of each surface collide method");
           sc_kk_diffuse_copy[ndiff].copy((SurfCollideDiffuseKokkos*)(surf->sc[n]));
           sc_kk_diffuse_copy[ndiff].obj.pre_collide();
           sc_type_list[n] = 1;
           sc_map[n] = ndiff;
           ndiff++;
         } else if (strcmp(surf->sc[n]->style,"vanish") == 0) {
+          if (nvan >= KOKKOS_MAX_SURF_COLL_PER_TYPE)
+            error->all(FLERR,"Kokkos currently supports two instances of each surface collide method");
           sc_kk_vanish_copy[nvan].copy((SurfCollideVanishKokkos*)(surf->sc[n]));
           sc_kk_vanish_copy[nvan].obj.pre_collide();
           sc_type_list[n] = 2;
           sc_map[n] = nvan;
           nvan++;
         } else if (strcmp(surf->sc[n]->style,"piston") == 0) {
+          if (npist >= KOKKOS_MAX_SURF_COLL_PER_TYPE)
+            error->all(FLERR,"Kokkos currently supports two instances of each surface collide method");
           sc_kk_piston_copy[npist].copy((SurfCollidePistonKokkos*)(surf->sc[n]));
           sc_kk_piston_copy[npist].obj.pre_collide();
           sc_type_list[n] = 3;
           sc_map[n] = npist;
           npist++;
         } else if (strcmp(surf->sc[n]->style,"transparent") == 0) {
+          if (ntrans >= KOKKOS_MAX_SURF_COLL_PER_TYPE)
+            error->all(FLERR,"Kokkos currently supports two instances of each surface collide method");
           sc_kk_transparent_copy[ntrans].copy((SurfCollideTransparentKokkos*)(surf->sc[n]));
           sc_kk_transparent_copy[ntrans].obj.pre_collide();
           sc_type_list[n] = 4;
@@ -653,15 +653,10 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
           error->all(FLERR,"Unknown Kokkos surface collide method");
         }
       }
-      if (nspec > KOKKOS_MAX_SURF_COLL_PER_TYPE || ndiff > KOKKOS_MAX_SURF_COLL_PER_TYPE ||
-          nvan > KOKKOS_MAX_SURF_COLL_PER_TYPE || npist > KOKKOS_MAX_SURF_COLL_PER_TYPE ||
-          ntrans > KOKKOS_MAX_SURF_COLL_PER_TYPE || nadia > KOKKOS_MAX_SURF_COLL_PER_TYPE ||
-          nimpul > KOKKOS_MAX_SURF_COLL_PER_TYPE || ntd > KOKKOS_MAX_SURF_COLL_PER_TYPE ||
-          ncll > KOKKOS_MAX_SURF_COLL_PER_TYPE)
-        error->all(FLERR,"Kokkos currently supports two instances of each surface collide method");
     }
 
     Kokkos::deep_copy(h_scalars,0);
+    Kokkos::deep_copy(h_scalars_big,0);
 
     if (!continue_loop_flag) {
       nmigrate = 0;
@@ -693,6 +688,15 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
       if (continue_loop_flag) h_nmigrate() = nmigrate;
 
       Kokkos::deep_copy(d_scalars,h_scalars);
+      Kokkos::deep_copy(d_scalars_big,h_scalars_big);
+
+      // zero the custom attributes of the slots a surf reaction can fill
+      // must precede the kernel, not follow it: SurfCollide calls
+      //   update_custom_kokkos() for a particle the reaction just created
+      // repeated on each retry, since a rolled back attempt leaves values
+      //   behind in those slots
+
+      if (surf->nsr) particle_kk->zero_custom_kokkos();
 
       copymode = 1;
 
@@ -726,6 +730,7 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
       copymode = 0;
 
       Kokkos::deep_copy(h_scalars,d_scalars);
+      Kokkos::deep_copy(h_scalars_big,d_scalars_big);
 
       if (h_retry()) {
         int nlocal_new = h_nlocal();
@@ -739,6 +744,7 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
         //  reset counters
 
         Kokkos::deep_copy(h_scalars,0);
+        Kokkos::deep_copy(h_scalars_big,0);
         reduce = UPDATE_REDUCE();
         h_retry() = 1;
 
@@ -853,7 +859,7 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
 
     timer->stamp(TIME_MOVE);
     MPI_Allreduce(&entryexit,&any_entryexit,1,MPI_INT,MPI_MAX,world);
-    timer->stamp();
+    timer->stamp(TIME_SYNC);
 
     if (any_entryexit) {
       if (nmigrate) {
@@ -1047,7 +1053,10 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
       int kp = 0;
       if (DIM == 3) kp = static_cast<int>((xnew[2] - zlo)/dz);
 
-      int cellIdx = (kp*ncy + jp)*ncx + ip + 1;
+      // compute cell ID in cellint (can be 64-bit), the product
+      //   overflows a 32-bit int when the grid has > 2^31 cells
+
+      cellint cellIdx = ((cellint) kp*ncy + jp)*ncx + ip + 1;
       auto index = hash_kk.find(static_cast<GridKokkos::key_type>(cellIdx));
 
       // particle moving outside ghost halo will be flagged for standard move
@@ -2108,21 +2117,19 @@ void UpdateKokkos::tally_set(bigint ntimestep)
   if (nboundary_tally > KOKKOS_MAX_BLIST)
     error->all(FLERR,"Kokkos currently only supports two instances of compute boundary");
 
-  if (nboundary_tally) {
-    for (i = 0; i < nboundary_tally; i++) {
-      ComputeBoundaryKokkos* compute_boundary_kk = (ComputeBoundaryKokkos*)(blist_active[i]);
-      compute_boundary_kk->pre_boundary_tally();
-      blist_active_copy[i].copy(compute_boundary_kk);
-    }
-  } else {
-    for (int i = 0; i < KOKKOS_MAX_BLIST; i++) {
-
-      // use temporary to avoid the copy getting stale leading to an issue
-      //  with view reference counting
-
-      blist_active_copy[i].copy(&tmp_compute_boundary_kk);
-    }
+  for (i = 0; i < nboundary_tally; i++) {
+    ComputeBoundaryKokkos* compute_boundary_kk = (ComputeBoundaryKokkos*)(blist_active[i]);
+    compute_boundary_kk->pre_boundary_tally();
+    blist_active_copy[i].copy(compute_boundary_kk);
   }
+
+  // every Kokkos functor captures the whole array by value, so the unused
+  //  slots must not alias a compute that may be reallocated or deleted while
+  //  they still reference count it: point them at a temporary that lives as
+  //  long as this class
+
+  for (i = nboundary_tally; i < KOKKOS_MAX_BLIST; i++)
+    blist_active_copy[i].copy(&tmp_compute_boundary_kk);
 
   // surf-tally compute scatter views (slist_active_copy et al.) are
   //   (re)established in setup_surf_tally_copies(), which run() calls after

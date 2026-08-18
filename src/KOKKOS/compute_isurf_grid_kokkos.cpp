@@ -34,8 +34,6 @@ ComputeISurfGridKokkos::ComputeISurfGridKokkos(SPARTA *sparta, int narg, char **
   kokkos_flag = 1;
   nsurf_tally_alloc = 0;
 
-  nsurf_tally_alloc = -1;
-
   // hash is allocated/used only on the host; not needed for device tally
 
   d_which = DAT::t_int_1d("isurf/grid:which",nvalue);
@@ -46,7 +44,6 @@ ComputeISurfGridKokkos::ComputeISurfGridKokkos(SPARTA *sparta) :
 {
   copy = 1;
   nsurf_tally_alloc = 0;
-  uncopy = 0;
 }
 
 /* ---------------------------------------------------------------------- */

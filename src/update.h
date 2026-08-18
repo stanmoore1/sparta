@@ -55,16 +55,18 @@ class Update : protected Pointers {
   int *mlist;            // indices of particles to migrate
 
                          // current step counters
+                         // bigint since can exceed 2^31 in one step
+                         //   at large per-proc particle counts
   int niterate;          // iterations of move/comm
-  int ntouch_one;        // particle-cell touches
-  int ncomm_one;         // particles migrating to new procs
-  int nboundary_one;     // particles colliding with global boundary
-  int nexit_one;         // particles exiting outflow boundary
-  int nscheck_one;       // surface elements checked for collisions
-  int nscollide_one;     // particle/surface collisions
+  bigint ntouch_one;     // particle-cell touches
+  bigint ncomm_one;      // particles migrating to new procs
+  bigint nboundary_one;  // particles colliding with global boundary
+  bigint nexit_one;      // particles exiting outflow boundary
+  bigint nscheck_one;    // surface elements checked for collisions
+  bigint nscollide_one;  // particle/surface collisions
 
   bigint first_running_step; // timestep running counts start on
-  int niterate_running;      // running count of move/comm interations
+  bigint niterate_running;   // running count of move/comm interations
   bigint nmove_running;      // running count of total particle moves
   bigint ntouch_running;     // running count of current step counters
   bigint ncomm_running;
@@ -90,7 +92,9 @@ class Update : protected Pointers {
 
   class RanMars *ranmaster;   // master random number generator
 
-  double rcblo[3],rcbhi[3];    // debug info from RCB for dump image
+  int rcbflag;                 // 1 if per-proc RCB sub-boxes are valid
+  double rcblo[3],rcbhi[3];    // most recent RCB sub-box of this proc,
+                               // e.g. for the dump image subbox keyword
 
   // hooks to computes doing on-surface collision/reaction tallying
   // public b/c accessed
@@ -246,7 +250,7 @@ developers.
 
 E: Cannot set global surfmax when surfaces already exist
 
-This setting must be made before any surfac elements are
+This setting must be made before any surface elements are
 read via the read_surf command.
 
 E: Global mem/limit setting cannot exceed 2GB

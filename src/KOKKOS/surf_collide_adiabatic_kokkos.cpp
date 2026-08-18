@@ -91,16 +91,6 @@ SurfCollideAdiabaticKokkos::SurfCollideAdiabaticKokkos(SPARTA *sparta) :
 
 SurfCollideAdiabaticKokkos::~SurfCollideAdiabaticKokkos()
 {
-  if (uncopy) {
-    fix_ambi_kk_copy.uncopy();
-    fix_vibmode_kk_copy.uncopy();
-
-    for (int i = 0; i < KOKKOS_MAX_SURF_REACT_PER_TYPE; i++) {
-      sr_kk_global_copy[i].uncopy();
-      sr_kk_prob_copy[i].uncopy();
-    }
-  }
-
   if (copy) return;
 
 #ifdef SPARTA_KOKKOS_EXACT

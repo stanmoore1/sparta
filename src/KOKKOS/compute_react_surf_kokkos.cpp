@@ -38,7 +38,6 @@ ComputeReactSurfKokkos::ComputeReactSurfKokkos(SPARTA *sparta) :
   ComputeReactSurf(sparta)
 {
   copy = 1;
-  uncopy = 0;
   nsurf_tally_alloc = 0;
 }
 

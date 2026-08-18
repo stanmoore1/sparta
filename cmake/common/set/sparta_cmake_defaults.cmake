@@ -73,9 +73,16 @@ if(SPARTA_ENABLE_TESTING)
   # the non-KOKKOS configurations.
   if(SPARTA_KOKKOS_EXACT)
     list(APPEND SPARTA_DISABLED_TESTS
+        # subsonic and mflow emission in fix emit/surf not KOKKOS-enabled
+        "in.emit.surf.mflow"
+        "in.emit.surf.mflow.single"
+        "in.emit.surf.subsonic"
         # external field fix not KOKKOS-enabled
         "in.bfield"
         "in.bfield.grid"
+        # VTK dump styles have no KOKKOS variant
+        "in.vtk"
+        "in.vtk.3d"
     )
   endif()
 
