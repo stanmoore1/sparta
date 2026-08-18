@@ -95,6 +95,8 @@ class ComputeReactSurfKokkos : public ComputeReactSurf {
 
   int nsurf_tally_alloc;
 
+  int compressed;     // 1 once the device tallies have been copied and compressed
+
   void grow_tally();
   void resize_device(int);
 };

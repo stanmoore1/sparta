@@ -100,6 +100,8 @@ class ComputeReactISurfGridKokkos : public ComputeReactISurfGrid {
 
   int nsurf_tally_alloc;            // current device tally allocation (nsurf)
 
+  int compressed;     // 1 once the device tallies have been copied and compressed
+
   void grow_tally();
   void resize_device(int);
 };

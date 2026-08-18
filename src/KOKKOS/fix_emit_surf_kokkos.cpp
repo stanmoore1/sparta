@@ -497,6 +497,8 @@ void FixEmitSurfKokkos::operator()(TagFixEmitSurf_ninsert, const int &i) const
     if (npmode == FLOW) ntarget = task_i.ntarget;
     else if (npmode == CONSTANT) ntarget = np * task_i.ntarget;
     else if (npmode == VARIABLE) ntarget = npcurrent * task_i.ntarget;
+    if (ntarget >= (double) MAXSMALLINT)
+      Kokkos::abort("Fix emit/surf insertion count per task exceeds 2^31");
     ninsert = static_cast<int> (ntarget + rand_gen.drand());
     d_ninsert(i) = ninsert;
   }

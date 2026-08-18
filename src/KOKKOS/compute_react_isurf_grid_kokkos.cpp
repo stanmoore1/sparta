@@ -31,6 +31,7 @@ ComputeReactISurfGridKokkos::ComputeReactISurfGridKokkos(SPARTA *sparta, int nar
   ComputeReactISurfGrid(sparta, narg, arg)
 {
   kokkos_flag = 1;
+  compressed = 0;
   nsurf_tally_alloc = 0;
 }
 
@@ -38,6 +39,7 @@ ComputeReactISurfGridKokkos::ComputeReactISurfGridKokkos(SPARTA *sparta) :
   ComputeReactISurfGrid(sparta)
 {
   copy = 1;
+  compressed = 0;
   nsurf_tally_alloc = 0;
 }
 
@@ -107,6 +109,7 @@ void ComputeReactISurfGridKokkos::clear()
 
   ntally = 0;
   combined = 0;
+  compressed = 0;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -145,6 +148,14 @@ void ComputeReactISurfGridKokkos::post_surf_tally()
 
 int ComputeReactISurfGridKokkos::tallyinfo(surfint *&ptr)
 {
+  // compressing below is destructive, so only do it once per clear() cycle
+
+  if (compressed) {
+    ptr = tally2surf;
+    return ntally;
+  }
+  compressed = 1;
+
   k_tally2surf.sync_host();
   ptr = tally2surf;
 

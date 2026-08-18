@@ -34,7 +34,6 @@ class ComputeISurfGridKokkos : public ComputeISurfGrid {
   ~ComputeISurfGridKokkos();
   void init();
   void init_normflux();
-  void reallocate();
   void clear();
   int tallyinfo(surfint *&);
   void post_process_isurf_grid();
@@ -280,7 +279,8 @@ void surf_tally_kk(double /*dtremain*/, int isurf, int /*icell*/, int /*reaction
   t_line_1d d_lines;
   t_tri_1d d_tris;
 
-  int nsurf_tally_alloc;   // # of surfs the per-surf tally arrays are sized for
+
+  int compressed;     // 1 once the device tallies have been copied and compressed
 
   void grow_tally();
 };

@@ -59,6 +59,7 @@ class SurfReactAdsorbKokkos : public SurfReactAdsorb {
   void tally_update();
 
   void pre_react();
+  void post_react();
   void backup();
   void restore();
 
@@ -185,7 +186,7 @@ class SurfReactAdsorbKokkos : public SurfReactAdsorb {
     if (n == 0) return 0;
 
     double fnum = fnum_;
-    long int maxstick = ceil(max_cover*d_area[idx] / (fnum*d_weight[idx]));
+    bigint maxstick = ceil(max_cover*d_area[idx] / (fnum*d_weight[idx]));
     double factor = fnum * d_weight[idx] / d_area[idx];
     double ms_inv = factor / max_cover;
 
@@ -215,7 +216,13 @@ class SurfReactAdsorbKokkos : public SurfReactAdsorb {
       case SRA_KK::LH1:
       case SRA_KK::LH3:
       case SRA_KK::CD:
-        surf_cover = d_total_state[idx] * ms_inv;
+        // adsorption events accumulate in species_delta against the coverage
+        //   stored at the last sync, so one Nsync window can fold in more
+        //   adsorbate than the surf has sites for; clamp the coverage at full
+        //   or (1-surf_cover) goes negative and all chemistry dies (see the
+        //   matching clamp in SurfReactAdsorb::react())
+
+        surf_cover = MIN(d_total_state[idx] * ms_inv, 1.0);
         S_theta = 0.0;
         if (d_kisliuk_flag(j)) {
           K_ads = d_kisliuk(j,0) * pow(twall,d_kisliuk(j,1)) *
@@ -233,8 +240,11 @@ class SurfReactAdsorbKokkos : public SurfReactAdsorb {
         {
           double dot = 2.0;
           if (d_nreactant(j) == 1)
+            // empty-site count clamped at zero for the same reason the
+            //   coverage is clamped at full above
+
             prob_value[i] = 2.0 * d_kreact(j) *
-              (maxstick - d_total_state[idx]) * ms_inv / fabs(dot);
+              MAX(maxstick - (bigint) d_total_state[idx],(bigint) 0) * ms_inv / fabs(dot);
           else
             prob_value[i] = 2.0 * d_kreact(j) / fabs(dot);
           break;
@@ -490,8 +500,12 @@ class SurfReactAdsorbKokkos : public SurfReactAdsorb {
       eng = -log(rg.drand()) * boltz_ * temp;
     } else {
       a = 0.5*d_species[isp].rotdof - 1.0;
+      // candidate range must cover the tail of x^a*exp(-x) (mode a, mean a+1,
+      // std dev sqrt(a+1)); scale the cut-off with dof rather than fixing it
+      // at 10 kT, which is below the mean for large dof
+      double xmax = a + 1.0 + 9.0*sqrt(a+1.0);
       while (1) {
-        erm = 10.0*rg.drand();
+        erm = xmax*rg.drand();
         b = pow(erm/a,a) * exp(a-erm);
         if (b > rg.drand()) break;
       }
@@ -514,8 +528,12 @@ class SurfReactAdsorbKokkos : public SurfReactAdsorb {
         eng = -log(rg.drand()) * boltz_ * temp;
       else if (d_species[isp].vibdof > 2) {
         a = 0.5*d_species[isp].vibdof - 1.0;
+        // candidate range must cover the tail of x^a*exp(-x) (mode a, mean a+1,
+        // std dev sqrt(a+1)); scale the cut-off with dof rather than fixing it
+        // at 10 kT, which is below the mean for large dof
+        double xmax = a + 1.0 + 9.0*sqrt(a+1.0);
         while (1) {
-          erm = 10.0*rg.drand();
+          erm = xmax*rg.drand();
           b = pow(erm/a,a) * exp(a-erm);
           if (b > rg.drand()) break;
         }

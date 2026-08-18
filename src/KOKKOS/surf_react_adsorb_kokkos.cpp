@@ -398,6 +398,18 @@ void SurfReactAdsorbKokkos::pre_react()
   }
 }
 
+/* ----------------------------------------------------------------------
+   release the particle-list reference retained by pre_react()
+   called from the surf collide post_collide(); the next copy() blits over
+   this member without releasing, which would orphan the reference
+------------------------------------------------------------------------- */
+
+void SurfReactAdsorbKokkos::post_react()
+{
+  d_particles = {};
+  d_species = {};
+}
+
 /* ---------------------------------------------------------------------- */
 
 void SurfReactAdsorbKokkos::tally_reset()

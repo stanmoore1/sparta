@@ -31,6 +31,7 @@ ComputeReactSurfKokkos::ComputeReactSurfKokkos(SPARTA *sparta, int narg, char **
   ComputeReactSurf(sparta, narg, arg)
 {
   kokkos_flag = 1;
+  compressed = 0;
   nsurf_tally_alloc = 0;
 }
 
@@ -38,6 +39,7 @@ ComputeReactSurfKokkos::ComputeReactSurfKokkos(SPARTA *sparta) :
   ComputeReactSurf(sparta)
 {
   copy = 1;
+  compressed = 0;
   nsurf_tally_alloc = 0;
 }
 
@@ -101,6 +103,7 @@ void ComputeReactSurfKokkos::clear()
 
   ntally = 0;
   combined = 0;
+  compressed = 0;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -138,6 +141,14 @@ void ComputeReactSurfKokkos::post_surf_tally()
 
 int ComputeReactSurfKokkos::tallyinfo(surfint *&ptr)
 {
+  // compressing below is destructive, so only do it once per clear() cycle
+
+  if (compressed) {
+    ptr = tally2surf;
+    return ntally;
+  }
+  compressed = 1;
+
   k_tally2surf.sync_host();
   ptr = tally2surf;
 
