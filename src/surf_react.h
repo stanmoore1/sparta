@@ -57,11 +57,15 @@ class SurfReact : protected Pointers {
   // tally_single = per-reaction counts in one step
   // tally_all = cumulative tally_single across all steps
   // 3 flags used in compute_vector() to minimize AllReduce calls
+  // cumulative and summed-over-procs tallies are bigint since they
+  //   can exceed 2^31 over a long run or at large proc counts
 
-  int nsingle,ntotal;
+  int nsingle;
+  bigint ntotal;
   double one[2],all[2];
-  int *tally_single,*tally_total;
-  int *tally_single_all,*tally_total_all;
+  bigint *tally_single;
+  bigint *tally_total;
+  bigint *tally_single_all,*tally_total_all;
   int tally_two_flag,tally_single_flag,tally_total_flag;
 };
 

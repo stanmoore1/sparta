@@ -209,7 +209,8 @@ void PythonImpl::command(int narg, char **arg)
     } else if (strcmp(arg[iarg], "length") == 0) {
       if (iarg + 2 > narg) utils::missing_cmd_args(FLERR, "python length", error);
       length_longstr = utils::inumeric(FLERR, arg[iarg + 1], false, sparta);
-      if (length_longstr <= 0) error->all(FLERR, "Invalid python return value length");
+      if (length_longstr <= 0 || length_longstr == MAXSMALLINT)
+        error->all(FLERR, "Invalid python return value length");
       iarg += 2;
     } else if (strcmp(arg[iarg], "file") == 0) {
       if (iarg+2 > narg) error->all(FLERR, "Invalid python file command");
@@ -409,7 +410,7 @@ void PythonImpl::invoke_function(int ifunc, char *result, double *dvalue)
       if (dvalue) *dvalue = (double) PY_INT_AS_LONG(pValue);
       else {
         char value[128];
-        sprintf(value, "%ld", PY_INT_AS_LONG(pValue));
+        sprintf(value, BIGINT_FORMAT, (bigint) PY_INT_AS_LONG(pValue));
         strncpy(result, value, Variable::VALUELENGTH - 1);
       }
     } else if (otype == DOUBLE) {

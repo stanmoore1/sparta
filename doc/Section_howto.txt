@@ -541,8 +541,70 @@ and the sparta_config_has_*_support functions for MPI, PNG, JPEG,
 FFmpeg and gzip support).  See the library.cpp file and its associated
 header file library.h for the full list and exact signatures.
 
+The sparta_extract_setting() function takes a keyword and returns an
+integer setting of the SPARTA executable or of the running simulation.
+It returns -1 for a keyword it does not recognize; no setting it does
+recognize is negative.  The keywords are grouped by what they
+describe:
+
+Integer sizes:
+
+{bigint} = size in bytes of a bigint, the type SPARTA counts timesteps and particles with :ulb,l
+:ule
+
+System status:
+
+{dimension} = 2 or 3, as set by the "dimension"_dimension.html command :ulb,l
+{box_exist} = 1 after "create_box"_create_box.html, else 0 :l
+{grid_exist} = 1 after the grid is defined, else 0 :l
+{surf_exist} = 1 if surface elements are defined, else 0 :l
+:ule
+
+Communication status:
+
+{world_size} = # of MPI ranks on SPARTA's world communicator :ulb,l
+{world_rank} = MPI rank of this processor on that communicator, 0 <= world_rank < world_size :l
+{universe_size} = # of MPI ranks on SPARTA's universe communicator, world_size <= universe_size :l
+{universe_rank} = MPI rank of this processor on that communicator :l
+:ule
+
+System sizes:
+
+{nplocal} = # of particles owned by this processor :ulb,l
+{nspecies} = # of species defined :l
+{nmixture} = # of mixtures defined :l
+{nsurf} = # of surface elements, global :l
+{nlocal_surf} = # of surface elements owned by this processor :l
+{ngroup_grid} = # of grid groups defined :l
+{ngroup_surf} = # of surface groups defined :l
+:ule
+
+Defined commands:
+
+{ncompute} = # of computes defined :ulb,l
+{nfix} = # of fixes defined :l
+{ndump} = # of dumps defined :l
+{nregion} = # of regions defined :l
+{nvariable} = # of variables defined :l
+:ule
+
+Output settings:
+
+{stats_every} = N from the "stats"_stats.html command :ulb,l
+:ule
+
+{world_size} and {world_rank} are for the partition this processor
+belongs to, so they differ from {universe_size} and {universe_rank}
+only under the "-partition"_Section_start.html#start_7 command-line
+switch.  All of these are read locally, so calling this function is
+not collective and ranks may call it independently.
+
+An input script can read the same settings without a driver program,
+through the extract_setting(name) special function of the
+"variable"_variable.html command, which calls this function.
+
 Other functions may be added to the library interface as needed to
-allow reading from or writing to internal SPARTA data structures. 
+allow reading from or writing to internal SPARTA data structures.
 
 The key idea of the library interface is that you can write any
 functions you wish to define how your code talks to SPARTA and add

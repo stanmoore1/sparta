@@ -1482,7 +1482,7 @@ void AdaptGrid::particle_surf_comm()
 
     alist[m].np[ichild] = s->np;
     alist[m].particles[ichild] = (char *) ptr;
-    ptr += s->np * nbytes_total;
+    ptr += (bigint) s->np * nbytes_total;
     ptr = ROUNDUP(ptr);
   }
 

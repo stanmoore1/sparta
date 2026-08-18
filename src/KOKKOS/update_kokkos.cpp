@@ -94,40 +94,48 @@ UpdateKokkos::UpdateKokkos(SPARTA *sparta) : Update(sparta),
 
   sparta->kokkos->prewrap = 1;
 
-  // use 1D view for scalars to reduce GPU memory operations
+  // use 1D views for scalars to reduce GPU memory operations
+  // int view = flags and view-index counters, must stay int
+  // bigint view = per-step statistics counters, can exceed 2^31
+  //   in one step at large per-proc particle counts
 
-  d_scalars = t_int_14("collide:scalars");
-  h_scalars = t_host_int_14("collide:scalars_mirror");
+  d_scalars = t_int_7("update:scalars");
+  h_scalars = t_host_int_7("update:scalars_mirror");
 
-  d_ncomm_one     = Kokkos::subview(d_scalars,0);
-  d_nexit_one     = Kokkos::subview(d_scalars,1);
-  d_nboundary_one = Kokkos::subview(d_scalars,2);
-  d_nmigrate      = Kokkos::subview(d_scalars,3);
-  d_entryexit     = Kokkos::subview(d_scalars,4);
-  d_ntouch_one    = Kokkos::subview(d_scalars,5);
-  d_nscheck_one   = Kokkos::subview(d_scalars,6);
-  d_nscollide_one = Kokkos::subview(d_scalars,7);
-  d_nreact_one    = Kokkos::subview(d_scalars,8);
-  d_nstuck        = Kokkos::subview(d_scalars,9);
-  d_naxibad       = Kokkos::subview(d_scalars,10);
-  d_error_flag    = Kokkos::subview(d_scalars,11);
-  d_retry         = Kokkos::subview(d_scalars,12);
-  d_nlocal        = Kokkos::subview(d_scalars,13);
+  d_scalars_big = t_bigint_7("update:scalars_big");
+  h_scalars_big = t_host_bigint_7("update:scalars_big_mirror");
 
-  h_ncomm_one     = Kokkos::subview(h_scalars,0);
-  h_nexit_one     = Kokkos::subview(h_scalars,1);
-  h_nboundary_one = Kokkos::subview(h_scalars,2);
-  h_nmigrate      = Kokkos::subview(h_scalars,3);
-  h_entryexit     = Kokkos::subview(h_scalars,4);
-  h_ntouch_one    = Kokkos::subview(h_scalars,5);
-  h_nscheck_one   = Kokkos::subview(h_scalars,6);
-  h_nscollide_one = Kokkos::subview(h_scalars,7);
-  h_nreact_one    = Kokkos::subview(h_scalars,8);
-  h_nstuck        = Kokkos::subview(h_scalars,9);
-  h_naxibad       = Kokkos::subview(h_scalars,10);
-  h_error_flag    = Kokkos::subview(h_scalars,11);
-  h_retry         = Kokkos::subview(h_scalars,12);
-  h_nlocal        = Kokkos::subview(h_scalars,13);
+  d_nmigrate      = Kokkos::subview(d_scalars,0);
+  d_entryexit     = Kokkos::subview(d_scalars,1);
+  d_nstuck        = Kokkos::subview(d_scalars,2);
+  d_naxibad       = Kokkos::subview(d_scalars,3);
+  d_error_flag    = Kokkos::subview(d_scalars,4);
+  d_retry         = Kokkos::subview(d_scalars,5);
+  d_nlocal        = Kokkos::subview(d_scalars,6);
+
+  d_ncomm_one     = Kokkos::subview(d_scalars_big,0);
+  d_nexit_one     = Kokkos::subview(d_scalars_big,1);
+  d_nboundary_one = Kokkos::subview(d_scalars_big,2);
+  d_ntouch_one    = Kokkos::subview(d_scalars_big,3);
+  d_nscheck_one   = Kokkos::subview(d_scalars_big,4);
+  d_nscollide_one = Kokkos::subview(d_scalars_big,5);
+  d_nreact_one    = Kokkos::subview(d_scalars_big,6);
+
+  h_nmigrate      = Kokkos::subview(h_scalars,0);
+  h_entryexit     = Kokkos::subview(h_scalars,1);
+  h_nstuck        = Kokkos::subview(h_scalars,2);
+  h_naxibad       = Kokkos::subview(h_scalars,3);
+  h_error_flag    = Kokkos::subview(h_scalars,4);
+  h_retry         = Kokkos::subview(h_scalars,5);
+  h_nlocal        = Kokkos::subview(h_scalars,6);
+
+  h_ncomm_one     = Kokkos::subview(h_scalars_big,0);
+  h_nexit_one     = Kokkos::subview(h_scalars_big,1);
+  h_nboundary_one = Kokkos::subview(h_scalars_big,2);
+  h_ntouch_one    = Kokkos::subview(h_scalars_big,3);
+  h_nscheck_one   = Kokkos::subview(h_scalars_big,4);
+  h_nscollide_one = Kokkos::subview(h_scalars_big,5);
+  h_nreact_one    = Kokkos::subview(h_scalars_big,6);
 
   nboundary_tally = 0;
 }
@@ -501,8 +509,13 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
       if (!sparta->kokkos->react_retry_flag)
         extra_factor = sparta->kokkos->react_extra;
 
-      int nlocal_extra = particle->nlocal*extra_factor;
-      if (d_particles.extent(0) < nlocal_extra) {
+      // compute in bigint and guard: the double->int conversion of
+      //   nlocal*extra_factor is UB once it exceeds 2^31
+
+      bigint nlocal_extra = static_cast<bigint> (particle->nlocal*extra_factor);
+      if (nlocal_extra > MAXSMALLINT)
+        error->one(FLERR,"Per-processor particle count is too big");
+      if ((bigint) d_particles.extent(0) < nlocal_extra) {
         particle->grow(nlocal_extra - particle->nlocal); // this!
         d_particles = particle_kk->k_particles.view_device();
       }
@@ -571,6 +584,7 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
     }
 
     Kokkos::deep_copy(h_scalars,0);
+    Kokkos::deep_copy(h_scalars_big,0);
 
     if (!continue_loop_flag) {
       nmigrate = 0;
@@ -602,6 +616,7 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
       if (continue_loop_flag) h_nmigrate() = nmigrate;
 
       Kokkos::deep_copy(d_scalars,h_scalars);
+      Kokkos::deep_copy(d_scalars_big,h_scalars_big);
 
       // zero the custom attributes of the slots a surf reaction can fill
       // must precede the kernel, not follow it: SurfCollide calls
@@ -643,6 +658,7 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
       copymode = 0;
 
       Kokkos::deep_copy(h_scalars,d_scalars);
+      Kokkos::deep_copy(h_scalars_big,d_scalars_big);
 
       if (h_retry()) {
         int nlocal_new = h_nlocal();
@@ -656,6 +672,7 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
         //  reset counters
 
         Kokkos::deep_copy(h_scalars,0);
+        Kokkos::deep_copy(h_scalars_big,0);
         reduce = UPDATE_REDUCE();
         h_retry() = 1;
 
@@ -758,7 +775,7 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
 
     timer->stamp(TIME_MOVE);
     MPI_Allreduce(&entryexit,&any_entryexit,1,MPI_INT,MPI_MAX,world);
-    timer->stamp();
+    timer->stamp(TIME_SYNC);
 
     if (any_entryexit) {
       if (nmigrate) {
@@ -938,7 +955,10 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
       int kp = 0;
       if (DIM == 3) kp = static_cast<int>((xnew[2] - zlo)/dz);
 
-      int cellIdx = (kp*ncy + jp)*ncx + ip + 1;
+      // compute cell ID in cellint (can be 64-bit), the product
+      //   overflows a 32-bit int when the grid has > 2^31 cells
+
+      cellint cellIdx = ((cellint) kp*ncy + jp)*ncx + ip + 1;
       auto index = hash_kk.find(static_cast<GridKokkos::key_type>(cellIdx));
 
       // particle moving outside ghost halo will be flagged for standard move

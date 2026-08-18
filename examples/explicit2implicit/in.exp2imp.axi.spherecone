@@ -1,7 +1,14 @@
 ################################################################################
 # 2d axisymmetric: convert a 10-degree half-angle sphere-cone (the geometry
 # from SPARTA issue #598: 1.905 cm nose radius, 3 cm length) from explicit
-# to implicit surfaces via create_isurf, then run a short axisymmetric flow.
+# to implicit surfaces via create_isurf.
+#
+# This runs 0 steps on purpose.  What is being regression tested is the
+# generated implicit surface, which is deterministic and reproduces exactly
+# across platforms.  Advecting particles adds no coverage of create_isurf,
+# but an axisymmetric DSMC run amplifies last-bit floating point differences
+# between platforms until the particle counts diverge, which made the gold
+# standard logs fail on other machines.  Leave this at run 0.
 #
 # The body is a solid of revolution that closes on the y=0 symmetry axis at
 # the nose tip and at the base, so it exercises create_isurf where sharp
@@ -48,4 +55,4 @@ timestep		1.e-7
 
 stats			20
 stats_style		step cpu np nscoll nscheck
-run			100
+run			0

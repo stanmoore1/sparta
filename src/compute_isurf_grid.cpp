@@ -527,8 +527,8 @@ void ComputeISurfGrid::reallocate()
 bigint ComputeISurfGrid::memory_usage()
 {
   bigint bytes = 0;
-  bytes += ntotal*maxgrid * sizeof(double);     // array_grid
-  bytes += ntotal*maxtally * sizeof(double);    // array_surf_tally
+  bytes += (bigint) ntotal*maxgrid * sizeof(double);     // array_grid
+  bytes += (bigint) ntotal*maxtally * sizeof(double);    // array_surf_tally
   bytes += maxtally * sizeof(surfint);          // tally2surf
   return bytes;
 }

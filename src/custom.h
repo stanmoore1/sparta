@@ -88,9 +88,12 @@ class KDTree : protected Pointers {
   double **points;
   int npoints;
 
-  int nsearch,nneigh;
+  // bigint since cumulative tree-walk counts can exceed 2^31
+  //   at large per-proc cell counts
+
+  bigint nsearch,nneigh;
   double avedist;
-  int count_node,count_leaf;
+  bigint count_node,count_leaf;
 
   struct Node {
     int which;       // STUB, BRANCH, LEAF
