@@ -164,6 +164,10 @@ void CollideVSSKokkos::init()
   if (nearcp && subcellflag)
     error->all(FLERR,"Cannot use both nearcp and subcell collision partners");
 
+  if (subcellflag && ngroups > 1)
+    error->all(FLERR,"Cannot yet use subcell collisions with "
+               "multiple collision groups");
+
   // require mixture to contain all species
 
   int imix = particle->find_mixture(mixID);
@@ -1140,9 +1144,27 @@ template < int DIM, int GASTALLY > void CollideVSSKokkos::collisions_one_subcell
 
     grid_kk_copy.copy(grid_kk);
     if (react) {
-      ReactTCEKokkos* react_kk = (ReactTCEKokkos*) react;
-      react_kk_copy.copy(react_kk);
+      ReactQKKokkos* react_qk = dynamic_cast<ReactQKKokkos*>(react);
+      ReactTCEQKKokkos* react_tceqk = dynamic_cast<ReactTCEQKKokkos*>(react);
+      if (react_tceqk) {
+        react_style = 2;
+        react_tceqk_kk_copy.copy(react_tceqk);
+      } else if (react_qk) {
+        react_style = 1;
+        react_qk_kk_copy.copy(react_qk);
+      } else {
+        react_style = 0;
+        react_kk_copy.copy((ReactTCEKokkos*) react);
+      }
     }
+
+    // zero the custom attributes of the slots a reaction can fill
+    // must precede the kernel, not follow it: EEXCHANGE_ReactingEDisposal()
+    //   sets the vibrational mode levels of the third product it just created
+    // repeated on each retry, since a rolled back attempt leaves values
+    //   behind in those slots
+
+    if (react) particle_kk->zero_custom_kokkos();
 
     if (sparta->kokkos->atomic_reduction) {
       if (sparta->kokkos->need_atomics)
@@ -1339,6 +1361,13 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneSubcell< DIM, GASTALLY,
       d_ncollide_one()++;
     else
       reduce.ncollide_one++;
+
+    if (GASTALLY) {
+      for (int m = 0; m < nglist_collision; m++)
+        glist_collision_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
+      for (int m = 0; m < nglist_reaction; m++)
+        glist_reaction_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
+    }
 
     if (reactflag) {
       if (ATOMIC_REDUCTION == 1)
@@ -1725,6 +1754,7 @@ void CollideVSSKokkos::collisions_group(COLLIDE_REDUCE &reduce)
 
   h_error_flag() = 0;
   Kokkos::deep_copy(d_scalars,h_scalars);
+  Kokkos::deep_copy(d_scalars_big,h_scalars_big);
 
   grid_kk_copy.copy(grid_kk);
 
@@ -1737,6 +1767,7 @@ void CollideVSSKokkos::collisions_group(COLLIDE_REDUCE &reduce)
     Kokkos::parallel_reduce(Kokkos::RangePolicy<DeviceType, TagCollideCollisionsGroup<NEARCP,GASTALLY,-1> >(0,nglocal),*this,reduce);
 
   Kokkos::deep_copy(h_scalars,d_scalars);
+  Kokkos::deep_copy(h_scalars_big,d_scalars_big);
 
   copymode = 0;
 
@@ -1943,6 +1974,7 @@ void CollideVSSKokkos::collisions_group_ambipolar(COLLIDE_REDUCE &reduce)
 
   h_error_flag() = 0;
   Kokkos::deep_copy(d_scalars,h_scalars);
+  Kokkos::deep_copy(d_scalars_big,h_scalars_big);
 
   grid_kk_copy.copy(grid_kk);
 
@@ -1955,6 +1987,7 @@ void CollideVSSKokkos::collisions_group_ambipolar(COLLIDE_REDUCE &reduce)
     Kokkos::parallel_reduce(Kokkos::RangePolicy<DeviceType, TagCollideCollisionsGroupAmbipolar<GASTALLY,-1> >(0,nglocal),*this,reduce);
 
   Kokkos::deep_copy(h_scalars,d_scalars);
+  Kokkos::deep_copy(h_scalars_big,d_scalars_big);
 
   copymode = 0;
 
