@@ -80,14 +80,6 @@ FixEmitSurfKokkos::FixEmitSurfKokkos(SPARTA *sparta, int narg, char **arg) :
 
   region_flag = 0;
 
-  // neither the subsonic nor the mflow boundary condition is ported to Kokkos
-  // the base class has already parsed the keywords, so check here rather than
-  // mid-run, and name the keyword the user actually gave
-
-  if (subsonic_style == MFLOW)
-    error->all(FLERR,"Cannot (yet) use mflow emission in fix emit/surf/kk");
-  else if (subsonic)
-    error->all(FLERR,"Cannot (yet) use subsonic emission in fix emit/surf/kk");
 }
 
 /* ---------------------------------------------------------------------- */
@@ -116,7 +108,7 @@ void FixEmitSurfKokkos::init()
 {
   k_tasks.sync_host();
   if (perspecies) k_ntargetsp.sync_host();
-  if (subsonic_style == PONLY || temp_custom_flag) k_vscale.sync_host();
+  if (subsonic_style == PONLY || subsonic_style == MFLOW || temp_custom_flag) k_vscale.sync_host();
 
   k_path.sync_host();
 
@@ -127,7 +119,7 @@ void FixEmitSurfKokkos::init()
 
   k_tasks.modify_host();
   if (perspecies) k_ntargetsp.modify_host();
-  if (subsonic_style == PONLY || temp_custom_flag) k_vscale.modify_host();
+  if (subsonic_style == PONLY || subsonic_style == MFLOW || temp_custom_flag) k_vscale.modify_host();
 
   k_path.modify_host();
 
@@ -212,13 +204,13 @@ void FixEmitSurfKokkos::create_tasks()
 {
   k_tasks.sync_host();
   if (perspecies) k_ntargetsp.sync_host();
-  if (subsonic_style == PONLY || temp_custom_flag) k_vscale.sync_host();
+  if (subsonic_style == PONLY || subsonic_style == MFLOW || temp_custom_flag) k_vscale.sync_host();
 
   FixEmit::create_tasks();
 
   k_tasks.modify_host();
   if (perspecies) k_ntargetsp.modify_host();
-  if (subsonic_style == PONLY || temp_custom_flag) k_vscale.modify_host();
+  if (subsonic_style == PONLY || subsonic_style == MFLOW || temp_custom_flag) k_vscale.modify_host();
 
   if (ntaskmax > k_path.extent(0) || max_npoint > k_path.extent(1)/3) {
     MemKK::realloc_kokkos(k_path,"fix_emit_surf:path",ntaskmax,max_npoint*3);
@@ -352,7 +344,7 @@ void FixEmitSurfKokkos::perform_task()
 
   k_tasks.sync_device();
   if (perspecies) k_ntargetsp.sync_device();
-  if (subsonic_style == PONLY || temp_custom_flag) k_vscale.sync_device();
+  if (subsonic_style == PONLY || subsonic_style == MFLOW || temp_custom_flag) k_vscale.sync_device();
 
   k_path.sync_device();
 
@@ -538,7 +530,7 @@ void FixEmitSurfKokkos::operator()(TagFixEmitSurf_perform_task, const int &i, in
   if (perspecies) {
     for (int isp = 0; isp < nspecies; isp++) {
 
-      double vscale = (subsonic_style == PONLY || temp_custom_flag) ?
+      double vscale = (subsonic_style == PONLY || subsonic_style == MFLOW || temp_custom_flag) ?
         d_vscale(i, isp) : d_vscale_mix(isp);
 
       const int ispecies = d_mspecies[isp];
@@ -661,7 +653,7 @@ void FixEmitSurfKokkos::operator()(TagFixEmitSurf_perform_task, const int &i, in
       int isp = 0;
       while (cummulative[isp] < rn) isp++;
 
-      double vscale = (subsonic_style == PONLY || temp_custom_flag) ?
+      double vscale = (subsonic_style == PONLY || subsonic_style == MFLOW || temp_custom_flag) ?
         d_vscale(i, isp) : d_vscale_mix(isp);
 
       const int ispecies = d_mspecies[isp];
@@ -817,7 +809,8 @@ void FixEmitSurfKokkos::subsonic_inflow()
   // if needed sort particles for grid cells with tasks
 
   subsonic_sort();
-  subsonic_grid();
+  if (subsonic_style == MFLOW) mflow_grid();
+  else subsonic_grid();
 
   // recalculate particle insertion counts for each task
   // recompute mixture vscale, since depends on temp_thermal
@@ -944,6 +937,11 @@ void FixEmitSurfKokkos::subsonic_grid()
   boltz = update->boltz;
   temp_thermal_mix = particle->mixture[imix]->temp_thermal;
 
+  // acoef = 1.0 (window = 0) -> vcom = current cell COM velocity
+
+  acoef = 1.0;
+  if (subsonic_window > 0) acoef = 1.0 / (subsonic_window + 1.0);
+
   // only track max thermal temp until the one-time warning has fired
   // avoids a per-step device->host fence once subsonic_warning is set
 
@@ -1021,12 +1019,27 @@ void FixEmitSurfKokkos::operator()(TagFixEmitSurf_subsonic_grid, const int &i) c
   // if sound speed = 0.0 due to <= 1 particle in cell or
   //   all particles having COM velocity, set via mixture properties
 
+  // vcom = cell COM velocity, optionally time-averaged (window > 0)
+  // acoef = 1.0 for window = 0, which reproduces the instantaneous value
+  // the average is kept in vcom, not vstream, so the PONLY pressure
+  //   correction added below is applied once and not integrated over steps
+
+  double vnew[3];
+  if (np && masstot > 0.0) {
+    vnew[0] = mv[0] / masstot;
+    vnew[1] = mv[1] / masstot;
+    vnew[2] = mv[2] / masstot;
+  } else vnew[0] = vnew[1] = vnew[2] = 0.0;
+
+  double *vcom = d_tasks(i).vcom;
+  vcom[0] = acoef*vnew[0] + (1.0-acoef)*vcom[0];
+  vcom[1] = acoef*vnew[1] + (1.0-acoef)*vcom[1];
+  vcom[2] = acoef*vnew[2] + (1.0-acoef)*vcom[2];
+
   double *vstream = d_tasks(i).vstream;
-  if (np) {
-    vstream[0] = mv[0] / masstot;
-    vstream[1] = mv[1] / masstot;
-    vstream[2] = mv[2] / masstot;
-  } else vstream[0] = vstream[1] = vstream[2] = 0.0;
+  vstream[0] = vcom[0];
+  vstream[1] = vcom[1];
+  vstream[2] = vcom[2];
 
   double temp_thermal_cell;
 
@@ -1086,6 +1099,178 @@ void FixEmitSurfKokkos::operator()(TagFixEmitSurf_subsonic_grid, const int &i) c
 }
 
 /* ----------------------------------------------------------------------
+   mass-flow inlet: choose a single global number density nrho_mflow each
+   step so the expected total inserted mass rate equals the target mflow
+   Kokkos port of FixEmitSurf::mflow_grid(): the per-task pass (cell COM
+   velocity, fixed inlet temps and vscale, S accumulation) runs on the
+   device as a parallel_reduce; the cross-proc S reduction stays on the host
+------------------------------------------------------------------------- */
+
+void FixEmitSurfKokkos::mflow_grid()
+{
+  ParticleKokkos* particle_kk = (ParticleKokkos*) particle;
+  particle_kk->sync(Device,PARTICLE_MASK|SPECIES_MASK);
+  d_subsonic_particles = particle_kk->k_particles.view_device();
+  d_species_all = particle_kk->k_species.view_device();
+
+  // refresh particle_kk_copy since particle data structures may
+  //   have changed since the last copy, e.g. by sort or grow
+  // reset surf compute copies carried in *this to a valid empty copy
+  //   for the kernel dispatch (real setup happens after)
+
+  particle_kk->update_class_variables();
+  particle_kk_copy.copy(particle_kk);
+  for (int n = 0; n < KOKKOS_MAX_SLIST; n++)
+    slist_active_copy[n].copy(&tmp_compute_surf_kk);
+
+  GridKokkos* grid_kk = (GridKokkos*) grid;
+  grid_kk->sync(Device,CINFO_MASK);
+  d_cinfo = grid_kk->k_cinfo.view_device();
+  d_plist = grid_kk->d_plist;
+  d_cellcount = grid_kk->d_cellcount;
+
+  SurfKokkos* surf_kk = (SurfKokkos*) surf;
+  surf_kk->sync(Device,ALL_MASK);
+  d_lines = surf_kk->k_lines.view_device();
+  d_tris = surf_kk->k_tris.view_device();
+  nlocal_surf = surf->nlocal;
+
+  k_tasks.sync_device();
+  k_vscale.sync_device();
+  k_mspecies.sync_device();
+  k_fraction.sync_device();
+
+  boltz = update->boltz;
+
+  // acoef = 1.0 (window = 0) -> vcom = current cell COM velocity
+
+  acoef = 1.0;
+  if (subsonic_window > 0) acoef = 1.0 / (subsonic_window + 1.0);
+
+  copymode = 1;
+  double S_me = 0.0;
+  Kokkos::parallel_reduce(Kokkos::RangePolicy<DeviceType, TagFixEmitSurf_mflow_grid>(0,ntask),*this,Kokkos::Sum<double>(S_me));
+  copymode = 0;
+
+  double S;
+  MPI_Allreduce(&S_me,&S,1,MPI_DOUBLE,MPI_SUM,world);
+
+  // global number density that makes expected inserted mass rate = mflow
+  // S == 0 (no inflow on any proc) -> insert nothing this step, self-corrects
+
+  nrho_mflow = 0.0;
+  if (S > 0.0) nrho_mflow = mflow / S;
+
+  copymode = 1;
+  Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagFixEmitSurf_mflow_nrho>(0,ntask),*this);
+  copymode = 0;
+
+  k_tasks.modify_device();
+  k_vscale.modify_device();
+
+  // release references to reduce memory use
+
+  d_subsonic_particles = t_particle_1d();
+  d_species_all = t_species_1d();
+  d_plist = {};
+  d_cellcount = {};
+  d_cinfo = {};
+}
+
+KOKKOS_INLINE_FUNCTION
+void FixEmitSurfKokkos::operator()(TagFixEmitSurf_mflow_grid, const int &i, double &S_me) const
+{
+  const int icell = d_tasks(i).pcell;
+  const int np = d_cellcount(icell);
+
+  // accumulate needed per-particle quantities
+  // mv = mass*velocity terms, masstot = total mass
+
+  double mv[3];
+  mv[0] = mv[1] = mv[2] = 0.0;
+  double masstot = 0.0;
+
+  // d_plist orders particles by increasing index; the non-Kokkos
+  // subsonic_sort linked list is traversed in decreasing index order.
+  // For SPARTA_KOKKOS_EXACT match that order so the per-cell moment sums
+  // are bit-identical to the non-Kokkos path (serial, single thread, host).
+
+#ifdef SPARTA_KOKKOS_EXACT
+  for (int n = np-1; n >= 0; n--) {
+#else
+  for (int n = 0; n < np; n++) {
+#endif
+    const int ip = d_plist(icell,n);
+    const int ispecies = d_subsonic_particles[ip].ispecies;
+    const double mass = d_species_all[ispecies].mass;
+    const double *v = d_subsonic_particles[ip].v;
+    mv[0] += mass*v[0];
+    mv[1] += mass*v[1];
+    mv[2] += mass*v[2];
+    masstot += mass;
+  }
+
+  // vcom = cell COM velocity, optionally time-averaged (window > 0)
+  // acoef = 1.0 for window = 0, which reproduces the instantaneous value
+
+  double vnew[3];
+  if (np && masstot > 0.0) {
+    vnew[0] = mv[0] / masstot;
+    vnew[1] = mv[1] / masstot;
+    vnew[2] = mv[2] / masstot;
+  } else vnew[0] = vnew[1] = vnew[2] = 0.0;
+
+  double *vcom = d_tasks(i).vcom;
+  vcom[0] = acoef*vnew[0] + (1.0-acoef)*vcom[0];
+  vcom[1] = acoef*vnew[1] + (1.0-acoef)*vcom[1];
+  vcom[2] = acoef*vnew[2] + (1.0-acoef)*vcom[2];
+
+  double *vstream = d_tasks(i).vstream;
+  vstream[0] = vcom[0];
+  vstream[1] = vcom[1];
+  vstream[2] = vcom[2];
+
+  // fixed inlet temperatures and per-species vscale at tmflow
+  // vscale depends only on the species, so the values are identical to the
+  //   once-per-call precompute the non-Kokkos mflow_grid() performs
+
+  d_tasks(i).temp_thermal = tmflow;
+  d_tasks(i).temp_rot = d_tasks(i).temp_vib = tmflow;
+
+  for (int isp = 0; isp < nspecies; isp++)
+    d_vscale(i,isp) = sqrt(2.0 * boltz * tmflow /
+                           d_species_all[d_mspecies[isp]].mass);
+
+  // indot identical to the subsonic_inflow tail and perform_task
+
+  double indot;
+  if (normalflag) indot = magvstream;
+  else {
+    const surfint isurf = d_tasks(i).isurf;
+    double *normal = (dimension == 2) ? d_lines[isurf].norm : d_tris[isurf].norm;
+    indot = vstream[0]*normal[0] + vstream[1]*normal[1];
+    if (dimension != 2) indot += vstream[2]*normal[2];
+  }
+
+  // mass weighting depends on how perform_task picks the species
+
+  double fluxmass = 0.0;
+  for (int isp = 0; isp < nspecies; isp++) {
+    const double flux = mol_inflow_kokkos(indot,d_vscale(i,isp),d_fraction[isp]);
+    if (perspecies) fluxmass += flux * d_species_all[d_mspecies[isp]].mass;
+    else fluxmass += flux * avemass_mixture;
+  }
+
+  S_me += fluxmass * d_tasks(i).area;
+}
+
+KOKKOS_INLINE_FUNCTION
+void FixEmitSurfKokkos::operator()(TagFixEmitSurf_mflow_nrho, const int &i) const
+{
+  d_tasks(i).nrho = nrho_mflow;
+}
+
+/* ----------------------------------------------------------------------
    grow task list
 ------------------------------------------------------------------------- */
 
@@ -1110,7 +1295,7 @@ void FixEmitSurfKokkos::grow_task()
       tasks[i].ntargetsp = &k_ntargetsp.view_host()(i,0);
   }
 
-  if (subsonic_style == PONLY || temp_custom_flag) {
+  if (subsonic_style == PONLY || subsonic_style == MFLOW || temp_custom_flag) {
     k_vscale.sync_host();
     k_vscale.modify_host(); // force resize on host
     k_vscale.resize(ntaskmax,nspecies);
@@ -1137,7 +1322,7 @@ void FixEmitSurfKokkos::realloc_nspecies()
     for (int i = 0; i < ntaskmax; i++)
       tasks[i].ntargetsp = &k_ntargetsp.view_host()(i,0);
   }
-  if (subsonic_style == PONLY || temp_custom_flag) {
+  if (subsonic_style == PONLY || subsonic_style == MFLOW || temp_custom_flag) {
     k_vscale = DAT::tdual_float_2d_lr("emit/surf:vscale",ntaskmax,nspecies);
     d_vscale = k_vscale.view_device();
     for (int i = 0; i < ntaskmax; i++)

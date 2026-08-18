@@ -39,6 +39,8 @@ struct TagFixEmitSurf_ninsert{};
 struct TagFixEmitSurf_perform_task{};
 struct TagFixEmitSurf_subsonic_inflow{};
 struct TagFixEmitSurf_subsonic_grid{};
+struct TagFixEmitSurf_mflow_grid{};
+struct TagFixEmitSurf_mflow_nrho{};
 
 template<int ATOMIC_REDUCTION>
 struct TagFixEmitSurf_insert_particles{};
@@ -67,6 +69,12 @@ class FixEmitSurfKokkos : public FixEmitSurf {
   KOKKOS_INLINE_FUNCTION
   void operator()(TagFixEmitSurf_subsonic_grid, const int&) const;
 
+  KOKKOS_INLINE_FUNCTION
+  void operator()(TagFixEmitSurf_mflow_grid, const int&, double&) const;
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()(TagFixEmitSurf_mflow_nrho, const int&) const;
+
   template<int ATOMIC_REDUCTION>
   KOKKOS_INLINE_FUNCTION
   void operator()(TagFixEmitSurf_insert_particles<ATOMIC_REDUCTION>, const int&) const;
@@ -85,6 +93,7 @@ class FixEmitSurfKokkos : public FixEmitSurf {
  private:
   int npcurrent,nsurf_tally,nlocal_before,nlocal_surf,region_flag;
   double boltz,temp_thermal_mix;
+  double acoef,nrho_mflow;
 
   KKCopy<ParticleKokkos> particle_kk_copy;
   KKCopy<ComputeSurfKokkos> slist_active_copy[KOKKOS_MAX_SLIST];
@@ -156,6 +165,7 @@ class FixEmitSurfKokkos : public FixEmitSurf {
   void subsonic_inflow() override;
   void subsonic_sort() override;
   void subsonic_grid() override;
+  void mflow_grid() override;
 
   ComputeSurfKokkos tmp_compute_surf_kk;
 };
