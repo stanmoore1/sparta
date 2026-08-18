@@ -450,7 +450,7 @@ void FixAblate::sync_multid_inside()
    version of epsilon_adjust for inner indices
 ------------------------------------------------------------------------- */
 
-void FixAblate::epsilon_adjust_multiv()
+void FixAblate::epsilon_adjust_multiv(int initflag)
 {
   int allin,mixflag;
 
@@ -495,10 +495,13 @@ void FixAblate::epsilon_adjust_multiv()
       // outside cell marking (e.g. create_isurf multi mode of a body whose
       // flat face lies on a grid line).  Nudge exactly-on-threshold values
       // just to the outside so the vertex is placed off the grid corner.
+      // Only done when the values are first created (initflag = 1), so an
+      // ongoing ablation run is not perturbed; see epsilon_adjust().
 
-      for (int j = 0; j < nmultiv; j++)
-        if (mvalues[icell][i][j] == thresh)
-          mvalues[icell][i][j] = thresh - EPSILON;
+      if (initflag)
+        for (int j = 0; j < nmultiv; j++)
+          if (mvalues[icell][i][j] == thresh)
+            mvalues[icell][i][j] = thresh - EPSILON;
 
     } // end corner
   } // end cells

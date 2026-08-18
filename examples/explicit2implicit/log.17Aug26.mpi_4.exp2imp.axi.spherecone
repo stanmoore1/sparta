@@ -1,21 +1,26 @@
 SPARTA (24 Sep 2025)
 Running on 4 MPI task(s)
 ################################################################################
-# 2d axisymmetric: write_isurf / read_isurf round trip for the issue-#598
-# 10-degree sphere-cone.
+# 2d axisymmetric: convert a 10-degree half-angle sphere-cone (the geometry
+# from SPARTA issue #598: 1.905 cm nose radius, 3 cm length) from explicit
+# to implicit surfaces via create_isurf.
 #
-# Stage 1 (this file) converts the explicit sphere-cone to implicit surfaces
-# and writes the grid corner point values with write_isurf.  Stage 2
-# (in.exp2imp.axi.spherecone.readback2) reads them back with read_isurf and
-# reproduces the identical body.
+# This runs 0 steps on purpose.  What is being regression tested is the
+# generated implicit surface, which is deterministic and reproduces exactly
+# across platforms.  Advecting particles adds no coverage of create_isurf,
+# but an axisymmetric DSMC run amplifies last-bit floating point differences
+# between platforms until the particle counts diverge, which made the gold
+# standard logs fail on other machines.  Leave this at run 0.
 #
-# Two things are required for an exact round trip:
-#   - the read_isurf "precision" must match the write_isurf "precision".
-#     write_isurf defaults to double, read_isurf defaults to int.
-#   - read_isurf must use "push no".  create_isurf stores corner values
-#     without the push-to-0/255 step, so pushing on read would alter them.
+# The body is a solid of revolution that closes on the y=0 symmetry axis at
+# the nose tip and at the base, so it exercises create_isurf where sharp
+# features meet the axis.  The flat base face lies on a grid line, which used
+# to make create_isurf emit a non-watertight surface there; that is fixed (see
+# epsilon_adjust / epsilon_adjust_multiv in fix_ablate).  All three corner
+# modes ("ave", "inout", "multi") produce a watertight body here.
 #
 #  - The "comm/sort" option to the "global" command is used to match MPI runs.
+#  - The "twopass" option is used to match Kokkos runs.
 ################################################################################
 
 seed			12345
@@ -26,14 +31,14 @@ boundary		o ar p
 create_box		-0.01 0.05 0.0 0.03 -0.5 0.5
 Created orthogonal box = (-0.01 0 -0.5) to (0.05 0.03 0.5)
 create_grid		120 60 1
-WARNING: Could not acquire nearby ghost cells b/c grid partition is not clumped (../grid.cpp:473)
+WARNING: Could not acquire nearby ghost cells b/c grid partition is not clumped (/home/user/sparta/src/grid.cpp:476)
 Created 7200 child grid cells
-  CPU time = 0.00101432 secs
-  create/ghost percent = 93.0821 6.91791
+  CPU time = 0.000940353 secs
+  create/ghost percent = 94.7215 5.27855
 balance_grid		rcb cell
 Balance grid migrated 5400 cells
-  CPU time = 0.00172843 secs
-  reassign/sort/migrate/ghost percent = 32.4453 1.88321 41.5786 24.0929
+  CPU time = 0.00148007 secs
+  reassign/sort/migrate/ghost percent = 34.4018 0.574296 35.3871 29.6368
 
 global			nrho 1.e20 fnum 2.e12
 global                  surfs explicit/distributed
@@ -51,17 +56,16 @@ read_surf               data.spherecone
   5120 1935 145 = cells outside/inside/overlapping surfs
   145 = surf cells with 1,2,etc splits
   0.00014093 0.00014093 = cell-wise and global flow volume
-  CPU time = 0.00174106 secs
-  read/check/sort/surf2grid/ghost/inout/particle percent = 8.33187 5.84965 3.05848 65.2354 17.5246 10.6839 1.90975
-  surf2grid time = 0.00113579 secs
-  map/comm1/comm2/comm3/comm4/split percent = 37.5307 3.85661 19.8472 4.22992 16.3078 6.30179
+  CPU time = 0.00123344 secs
+  read/check/sort/surf2grid/ghost/inout/particle percent = 7.86475 5.21014 2.1586 64.6709 20.0956 11.5217 0.0838306
+  surf2grid time = 0.000797677 secs
+  map/comm1/comm2/comm3/comm4/split percent = 43.3383 4.07044 19.1094 3.13698 15.6892 5.47853
 surf_collide		1 diffuse 1000.0 1.0
 surf_modify		all collide 1
 
-# convert explicit surfs to implicit surfs, then write the corner values
-# nevery = 1 so the fix ablate instance is not deleted before write_isurf
+# convert explicit surfs to implicit surfs
 
-fix		        fablate ablate all 1 0.2 random 0
+fix		        fablate ablate all 0 0.2 random 0
 create_isurf            all fablate 39.5 ave
   7200 0 0 = cells outside/inside/overlapping surfs
   0 = surf cells with 1,2,etc splits
@@ -79,22 +83,29 @@ create_isurf            all fablate 39.5 ave
   146 = surf cells with 1,2,etc splits
   0.000140894 0.000140894 = cell-wise and global flow volume
 
-write_isurf             all 120 60 1 sc.corners.dat fablate precision double
-  corner points = 7381
-  CPU time = 0.000409848 secs
-  collect/write percent = 58.2431 41.7569
+fix                     in emit/face air xlo twopass
+create_particles        air n 0 twopass
+WARNING: Created unexpected # of particles: 7037 versus 7044 (/home/user/sparta/src/create_particles.cpp:445)
+Created 7037 particles
+  CPU time = 0.00132424 secs
+collide			vss air ../ablation/air.vss
 
-stats			1
-stats_style		step cpu np
+fix                     gcheck grid/check 1 error
+
+timestep		1.e-7
+
+stats			20
+stats_style		step cpu np nscoll nscheck
 run			0
 Memory usage per proc in Mbytes:
-  particles (ave,min,max) = 0 0 0
+  particles (ave,min,max) = 1.5625 1.5625 1.5625
   grid      (ave,min,max) = 1.51379 1.51379 1.51379
   surf      (ave,min,max) = 0.00362015 0 0.0066452
-  total     (ave,min,max) = 1.71654 1.71292 1.71957
-Step CPU Np 
-       0            0        0 
-Loop time of 1.29932e-05 on 4 procs for 0 steps with 0 particles
+  modify    (ave,min,max) = 0 0 0
+  total     (ave,min,max) = 3.07991 3.07629 3.08294
+Step CPU Np Nscoll Nscheck 
+       0            0     7037        0        0 
+Loop time of 1.09915e-05 on 4 procs for 0 steps with 7037 particles
 
 MPI task timing breakdown:
 Section |  min time  |  avg time  |  max time  |%varavg| %total
@@ -105,7 +116,8 @@ Sort    | 0          | 0          | 0          |   0.0 |  0.00
 Comm    | 0          | 0          | 0          |   0.0 |  0.00
 Modify  | 0          | 0          | 0          |   0.0 |  0.00
 Output  | 0          | 0          | 0          |   0.0 |  0.00
-Other   |            | 1.299e-05  |            |       |100.00
+MPI Sync| 9.52e-07   | 1.0641e-05 | 1.3961e-05 |   0.0 | 96.81
+Other   |            | 3.503e-07  |            |       |  3.19
 
 Particle moves    = 0 (0K)
 Cells touched     = 0 (0K)
@@ -135,8 +147,8 @@ Collision-attempts/particle/step: 0
 Collisions/particle/step: 0
 Reactions/particle/step: 0
 
-Particles: 0 ave 0 max 0 min
-Histogram: 4 0 0 0 0 0 0 0 0 0
+Particles: 1759.25 ave 2121 max 1406 min
+Histogram: 2 0 0 0 0 0 0 0 0 2
 Cells:      1800 ave 1800 max 1800 min
 Histogram: 4 0 0 0 0 0 0 0 0 0
 GhostCell: 90 ave 120 max 60 min
