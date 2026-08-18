@@ -410,7 +410,7 @@ void PythonImpl::invoke_function(int ifunc, char *result, double *dvalue)
       if (dvalue) *dvalue = (double) PY_INT_AS_LONG(pValue);
       else {
         char value[128];
-        sprintf(value, "%lld", (long long) PY_INT_AS_LONG(pValue));
+        sprintf(value, BIGINT_FORMAT, (bigint) PY_INT_AS_LONG(pValue));
         strncpy(result, value, Variable::VALUELENGTH - 1);
       }
     } else if (otype == DOUBLE) {

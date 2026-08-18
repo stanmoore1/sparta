@@ -506,7 +506,9 @@ void RCB::compute(int n, double **x, double *wt, char *eligible, int flip)
       // grow geometrically, but compute the target in bigint: maxdot is an
       //   int and maxdot+maxdot/2 overflows above 2/3 of MAXSMALLINT
       bigint newmax = MAX((bigint) ndotnew,(bigint) maxdot + maxdot/2);
-      maxdot = (int) MIN(newmax,(bigint) MAXSMALLINT);
+      if (newmax > MAXSMALLINT)
+        error->one(FLERR,"Per-processor RCB dot count is too big");
+      maxdot = newmax;
       dots = (Dot *) memory->srealloc(dots,maxdot*sizeof(Dot),"RCB::dots");
       counters[6]++;
     }

@@ -284,13 +284,12 @@ void ParticleKokkos::sort_kokkos()
 
   Kokkos::deep_copy(d_cellcount,0);
 
-  // never treat maxcellcount as smaller than d_plist already is:
-  // CollideVSSKokkos resets it from its own recomputed per-cell max, which can
-  // leave it below the allocated extent and make the binning kernel below
-  // report an overflow the existing allocation could have absorbed
-
-  if (d_plist.extent(1) > 0)
-    maxcellcount = MAX(maxcellcount,int(d_plist.extent(1)));
+  // maxcellcount tracks the per-cell count that has to fit, not the capacity
+  // that is allocated for it: CollideVSSKokkos sizes d_plist to
+  // maxcellcount*react_extra, so folding the extent back in here would make
+  // the next collide multiply its own padding again, growing d_plist by that
+  // factor every timestep.  the binning kernel bounds against the extent
+  // instead, so an allocation wider than maxcellcount is still used in full
 
   // pre-size before the binning pass, so the resize path below is only reached
   // when a cell needs more than this seed.  the resize path is itself
@@ -523,7 +522,7 @@ void ParticleKokkos::operator()(TagParticleSort<NEED_ATOMICS,REORDER_FLAG>, cons
     d_cellcount[icell]++;
   }
 
-  if (j >= maxcellcount)
+  if (j >= int(d_plist.extent(1)))
     d_resize() = MAX(d_resize(),j+1);
   else {
     d_plist(icell,j) = i;
@@ -683,7 +682,11 @@ void ParticleKokkos::post_weight()
         if (nlocal == MAXSMALLINT)
           error->one(FLERR,"Per-processor particle count is too big");
         if (k_map.extent(0) <= nlocal) {
-          k_map.resize(k_map.extent(0)*1.5);
+          // 1.5x truncates back to the old size for the smallest views,
+          //   so always leave room for at least the particle added below
+          size_t newmax = k_map.extent(0)*1.5;
+          if (newmax <= (size_t) nlocal) newmax = nlocal + 1;
+          k_map.resize(newmax);
           // resize reallocates, so the previously bound host view now points
           //   at the freed buffer -- rebind before writing through it
           h_map = k_map.view_host();

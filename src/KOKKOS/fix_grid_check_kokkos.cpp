@@ -172,12 +172,11 @@ void FixGridCheckKokkos::end_of_step()
   // warning message instead of error
 
   if (outflag == WARNING) {
-    bigint ball;
-    MPI_Allreduce(&nflag,&ball,1,MPI_SPARTA_BIGINT,MPI_SUM,world);
-    int all = (int) MIN(ball,(bigint) MAXSMALLINT);
+    bigint all;
+    MPI_Allreduce(&nflag,&all,1,MPI_SPARTA_BIGINT,MPI_SUM,world);
     if (all && comm->me == 0) {
       char str[128];
-      sprintf(str,"%d particles were in wrong cells on timestep "
+      sprintf(str,BIGINT_FORMAT " particles were in wrong cells on timestep "
               BIGINT_FORMAT,all,update->ntimestep);
       error->warning(FLERR,str);
     }

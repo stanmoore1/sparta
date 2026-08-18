@@ -392,8 +392,8 @@ struct fft_plan_2d_kokkos<DeviceType>* FFT2dKokkos<DeviceType>::fft_2d_create_pl
   else {
     first_ilo = 0;
     first_ihi = nfast - 1;
-    first_jlo = (long long) me*nslow/nprocs;
-    first_jhi = (long long) (me+1)*nslow/nprocs - 1;
+    first_jlo = (bigint) me*nslow/nprocs;
+    first_jhi = (bigint) (me+1)*nslow/nprocs - 1;
     plan->pre_plan =
       remapKK->remap_2d_create_plan_kokkos(comm,in_ilo,in_ihi,in_jlo,in_jhi,
                   first_ilo,first_ihi,first_jlo,first_jhi,
@@ -424,8 +424,8 @@ struct fft_plan_2d_kokkos<DeviceType>* FFT2dKokkos<DeviceType>::fft_2d_create_pl
     second_jhi = out_jhi;
   }
   else {
-    second_ilo = (long long) me*nfast/nprocs;
-    second_ihi = (long long) (me+1)*nfast/nprocs - 1;
+    second_ilo = (bigint) me*nfast/nprocs;
+    second_ihi = (bigint) (me+1)*nfast/nprocs - 1;
     second_jlo = 0;
     second_jhi = nslow - 1;
   }
