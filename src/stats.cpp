@@ -660,7 +660,7 @@ void Stats::set_fields(int narg, char **arg)
     } else if (strcmp(arg[i],"ngrid") == 0) {
       addfield("Ngrid",&Stats::compute_ngrid,BIGINT);
     } else if (strcmp(arg[i],"nsplit") == 0) {
-      addfield("Nsplit",&Stats::compute_nsplit,INT);
+      addfield("Nsplit",&Stats::compute_nsplit,BIGINT);
     } else if (strcmp(arg[i],"maxlevel") == 0) {
       addfield("Maxlevel",&Stats::compute_maxlevel,INT);
 
@@ -1196,7 +1196,7 @@ void Stats::compute_tpcpu()
 void Stats::compute_spcpu()
 {
   double new_cpu;
-  int new_step = update->ntimestep;
+  bigint new_step = update->ntimestep;
 
   if (firststep == 0) {
     new_cpu = 0.0;
@@ -1204,7 +1204,7 @@ void Stats::compute_spcpu()
   } else {
     new_cpu = timer->elapsed(TIME_LOOP);
     double cpu_diff = new_cpu - last_spcpu;
-    int step_diff = new_step - last_step;
+    bigint step_diff = new_step - last_step;
     if (cpu_diff > 0.0) dvalue = step_diff/cpu_diff;
     else dvalue = 0.0;
   }
@@ -1448,7 +1448,7 @@ void Stats::compute_ngrid()
 
 void Stats::compute_nsplit()
 {
-  ivalue = grid->nsplit;
+  bivalue = grid->nsplit;
 }
 
 /* ---------------------------------------------------------------------- */

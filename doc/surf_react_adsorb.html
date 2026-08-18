@@ -341,6 +341,17 @@ reactants. The reaction probability is obtained by normalized all the
 reaction rates. A detailed description can be found in Swaminathan
 Gopalan <I>et al.</I> <A HREF = "#SG18">(SG18)</A>.
 </P>
+<P>Note that adsorption events are accumulated against the surface state
+stored at the most recent sync, so the influx of an entire <I>Nsync</I>
+window can adsorb more particles on a face or surface element than the
+<I>n_sites</I> value gives it room for.  When that happens, the coverage
+which scales the adsorption reactions is clamped at one, so that those
+reactions stop until the coverage drops, and a warning is printed the
+first time it happens.  Since the stored count of adsorbed particles is
+then larger than the number of sites, which is not physical, the run
+should be repeated with a smaller <I>Nsync</I> or <I>fnum</I>, or a larger
+<I>n_sites</I> value.
+</P>
 <HR>
 
 <P>If there are gas-phase products, there is an option to specify the

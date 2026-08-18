@@ -1672,7 +1672,8 @@ Sort    | 0.01733    | 0.040286   | 0.063573   |  10.6 |  6.29
 Comm    | 0.02276    | 0.023555   | 0.02493    |   0.6 |  3.68
 Modify  | 0.00018167 | 0.024758   | 0.051345   |  15.6 |  3.87
 Output  | 0.0002172  | 0.0007354  | 0.0012152  |   0.0 |  0.11
-Other   |            | 0.2471     |            |       | 38.61 :pre
+MPI Sync| 0.070519   | 0.23166    | 0.39965    |  24.7 | 36.20
+Other   |            | 0.01544    |            |       |  2.41 :pre
 
 Particle moves    = 38096354 (38.1M)
 Cells touched     = 43236871 (43.2M)
@@ -1730,16 +1731,20 @@ The first line gives the total CPU run time for the simulation, in
 seconds.
 
 The next section gives a breakdown of the CPU timing (in seconds) in
-7 categories.  The first four are timings for particles moves, which
+8 categories.  The first four are timings for particles moves, which
 includes interaction with surface elements, then particle collisions,
 then sorting of particles (required to perform collisions), and
 communication of particles between processors.  The Modify section is
 time for operations invoked by fixes and computes.  The Output section
-is for dump command and statistical output.  The Other category is
-typically for load-imbalance, as some MPI tasks wait for others MPI
-tasks to complete.  In each category the min,ave,max time across
-processors is shown, as well as a variation, and the percentage of
-total time.
+is for dump command and statistical output.  The MPI Sync section is
+time spent waiting in the global collectives of the run loop: the
+per-timestep reduction in the move and the barrier that closes the
+loop.  On an MPI task that arrives early that wait is idle time, so
+this category is where load-imbalance shows up.  The Other category is
+the loop time minus all of the named categories above; it should be
+near zero, and a large value means some part of the loop is not being
+timed.  In each category the min,ave,max time across processors is
+shown, as well as a variation, and the percentage of total time.
 
 The next section gives some statistics about the run.  These are total
 counts of particle moves, grid cells touched by particles, the number

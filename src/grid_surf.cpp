@@ -508,8 +508,9 @@ void Grid::surf2grid_surf_algorithm(int outflag)
                                               "surf2grid:sbuf1");
         }
         proclist1[nsend] = plist[i];
-        if (dim == 2) memcpy(&sbuf1[nsend*nbytes_surf],&lines[isurf],nbytes_surf);
-        else memcpy(&sbuf1[nsend*nbytes_surf],&tris[isurf],nbytes_surf);
+        if (dim == 2)
+          memcpy(&sbuf1[(bigint) nsend*nbytes_surf],&lines[isurf],nbytes_surf);
+        else memcpy(&sbuf1[(bigint) nsend*nbytes_surf],&tris[isurf],nbytes_surf);
         nsend++;
       }
     }
@@ -1143,22 +1144,26 @@ void Grid::surf2grid_split(int subflag, int outflag)
   // print info on unusual surf split cases
 
   if (dim == 3) {
-    int ntiny = cut3d->ntiny;
-    int alltiny;
-    MPI_Allreduce(&ntiny,&alltiny,1,MPI_INT,MPI_SUM,world);
+    bigint ntiny = cut3d->ntiny;
+    bigint alltiny;
+    MPI_Allreduce(&ntiny,&alltiny,1,MPI_SPARTA_BIGINT,MPI_SUM,world);
     if (alltiny && comm->me == 0) {
-      if (screen) fprintf(screen,"  %d tiny edges removed\n",alltiny);
-      if (logfile) fprintf(logfile,"  %d tiny edges removed\n",alltiny);
+      if (screen) fprintf(screen,"  " BIGINT_FORMAT " tiny edges removed\n",
+                          alltiny);
+      if (logfile) fprintf(logfile,"  " BIGINT_FORMAT " tiny edges removed\n",
+                           alltiny);
     }
 
-    int nshrink = cut3d->nshrink;
-    int allshrink;
-    MPI_Allreduce(&nshrink,&allshrink,1,MPI_INT,MPI_SUM,world);
+    bigint nshrink = cut3d->nshrink;
+    bigint allshrink;
+    MPI_Allreduce(&nshrink,&allshrink,1,MPI_SPARTA_BIGINT,MPI_SUM,world);
     if (allshrink && comm->me == 0) {
       if (screen)
-        fprintf(screen,"  %d cells shrunk to enable splitting\n",allshrink);
+        fprintf(screen,"  " BIGINT_FORMAT
+                " cells shrunk to enable splitting\n",allshrink);
       if (logfile)
-        fprintf(logfile,"  %d cells shrunk to enable splitting\n",allshrink);
+        fprintf(logfile,"  " BIGINT_FORMAT
+                " cells shrunk to enable splitting\n",allshrink);
     }
   }
 
@@ -2225,7 +2230,7 @@ void Grid::surf2grid_stats()
   int dimension = domain->dimension;
 
   int scount = 0;
-  int stotal = 0;
+  bigint stotal = 0;
   int smax = 0;
   double sratio = BIG;
 
@@ -2260,7 +2265,7 @@ void Grid::surf2grid_stats()
   }
 
   bigint bscount = scount;
-  bigint bstotal = stotal;
+  bigint bstotal = stotal;   // stotal itself is bigint, sum can exceed 2^31
   bigint scountall,stotalall;
   int smaxall;
   double sratioall;
@@ -2317,18 +2322,25 @@ void Grid::flow_stats()
     if (cinfo[icell].type != INSIDE) cellvolume += cinfo[icell].volume;
   }
 
-  int outall,inall,overall,maxsplitall;
+  // sum cell counts in bigint, global counts can exceed 2^31
+
+  bigint outall,inall,overall;
+  int maxsplitall;
   double cellvolumeall;
-  MPI_Allreduce(&outside,&outall,1,MPI_INT,MPI_SUM,world);
-  MPI_Allreduce(&inside,&inall,1,MPI_INT,MPI_SUM,world);
-  MPI_Allreduce(&overlap,&overall,1,MPI_INT,MPI_SUM,world);
+  bigint one;
+  one = outside;
+  MPI_Allreduce(&one,&outall,1,MPI_SPARTA_BIGINT,MPI_SUM,world);
+  one = inside;
+  MPI_Allreduce(&one,&inall,1,MPI_SPARTA_BIGINT,MPI_SUM,world);
+  one = overlap;
+  MPI_Allreduce(&one,&overall,1,MPI_SPARTA_BIGINT,MPI_SUM,world);
   MPI_Allreduce(&maxsplitone,&maxsplitall,1,MPI_INT,MPI_MAX,world);
   MPI_Allreduce(&cellvolume,&cellvolumeall,1,MPI_DOUBLE,MPI_SUM,world);
 
   double flowvolume = flow_volume();
 
-  int *tally = new int[maxsplitall];
-  int *tallyall = new int[maxsplitall];
+  bigint *tally = new bigint[maxsplitall];
+  bigint *tallyall = new bigint[maxsplitall];
   for (i = 0; i < maxsplitall; i++) tally[i] = 0;
 
   for (int icell = 0; icell < nlocal; icell++) {
@@ -2336,23 +2348,27 @@ void Grid::flow_stats()
     if (cinfo[icell].type == OVERLAP) tally[cells[icell].nsplit-1]++;
   }
 
-  MPI_Allreduce(tally,tallyall,maxsplitall,MPI_INT,MPI_SUM,world);
+  MPI_Allreduce(tally,tallyall,maxsplitall,MPI_SPARTA_BIGINT,MPI_SUM,world);
 
   if (comm->me == 0) {
     if (screen) {
-      fprintf(screen,"  %d %d %d = cells outside/inside/overlapping surfs\n",
+      fprintf(screen,"  " BIGINT_FORMAT " " BIGINT_FORMAT " " BIGINT_FORMAT
+              " = cells outside/inside/overlapping surfs\n",
               outall,inall,overall);
       fprintf(screen," ");
-      for (i = 0; i < maxsplitall; i++) fprintf(screen," %d",tallyall[i]);
+      for (i = 0; i < maxsplitall; i++)
+        fprintf(screen," " BIGINT_FORMAT,tallyall[i]);
       fprintf(screen," = surf cells with 1,2,etc splits\n");
       fprintf(screen,"  %.15g %.15g = cell-wise and global flow volume\n",
               cellvolumeall,flowvolume);
     }
     if (logfile) {
-      fprintf(logfile,"  %d %d %d = cells outside/inside/overlapping surfs\n",
+      fprintf(logfile,"  " BIGINT_FORMAT " " BIGINT_FORMAT " " BIGINT_FORMAT
+              " = cells outside/inside/overlapping surfs\n",
               outall,inall,overall);
       fprintf(logfile," ");
-      for (i = 0; i < maxsplitall; i++) fprintf(logfile," %d",tallyall[i]);
+      for (i = 0; i < maxsplitall; i++)
+        fprintf(logfile," " BIGINT_FORMAT,tallyall[i]);
       fprintf(logfile," = surf cells with 1,2,etc splits\n");
       fprintf(logfile,"  %g %g = cell-wise and global flow volume\n",
               cellvolumeall,flowvolume);

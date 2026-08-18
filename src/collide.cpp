@@ -1467,7 +1467,7 @@ template < int GASTALLY > void Collide::collisions_one_ambipolar()
       while (maxelectron < np) maxelectron += DELTAELECTRON;
       memory->sfree(elist);
       elist = (Particle::OnePart *)
-        memory->smalloc(maxelectron*nbytes,"collide:elist");
+        memory->smalloc((bigint) maxelectron*nbytes,"collide:elist");
     }
 
     // create electrons for ambipolar ions
@@ -1616,7 +1616,7 @@ template < int GASTALLY > void Collide::collisions_one_ambipolar()
           if (nelectron == maxelectron) {
             maxelectron += DELTAELECTRON;
             elist = (Particle::OnePart *)
-              memory->srealloc(elist,maxelectron*nbytes,"collide:elist");
+              memory->srealloc(elist,(bigint) maxelectron*nbytes,"collide:elist");
           }
           ep = &elist[nelectron];
           memcpy(ep,kpart,nbytes);
@@ -1644,7 +1644,7 @@ template < int GASTALLY > void Collide::collisions_one_ambipolar()
           if (nelectron == maxelectron) {
             maxelectron += DELTAELECTRON;
             elist = (Particle::OnePart *)
-              memory->srealloc(elist,maxelectron*nbytes,"collide:elist");
+              memory->srealloc(elist,(bigint) maxelectron*nbytes,"collide:elist");
           }
           ep = &elist[nelectron];
           memcpy(ep,jpart,nbytes);
@@ -1774,7 +1774,7 @@ template < int GASTALLY > void Collide::collisions_group_ambipolar()
       while (maxelectron < np) maxelectron += DELTAELECTRON;
       memory->sfree(elist);
       elist = (Particle::OnePart *)
-        memory->smalloc(maxelectron*nbytes,"collide:elist");
+        memory->smalloc((bigint) maxelectron*nbytes,"collide:elist");
     }
 
     // plist = particle list for entire cell
@@ -2003,7 +2003,7 @@ template < int GASTALLY > void Collide::collisions_group_ambipolar()
             if (nelectron == maxelectron) {
               maxelectron += DELTAELECTRON;
               elist = (Particle::OnePart *)
-                memory->srealloc(elist,maxelectron*nbytes,"collide:elist");
+                memory->srealloc(elist,(bigint) maxelectron*nbytes,"collide:elist");
             }
             ep = &elist[nelectron];
             memcpy(ep,kpart,nbytes);
@@ -2053,7 +2053,7 @@ template < int GASTALLY > void Collide::collisions_group_ambipolar()
             if (nelectron == maxelectron) {
               maxelectron += DELTAELECTRON;
               elist = (Particle::OnePart *)
-                memory->srealloc(elist,maxelectron*nbytes,"collide:elist");
+                memory->srealloc(elist,(bigint) maxelectron*nbytes,"collide:elist");
             }
             ep = &elist[nelectron];
             memcpy(ep,jpart,nbytes);

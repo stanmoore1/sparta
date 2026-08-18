@@ -248,7 +248,7 @@ void BalanceGrid::command(int narg, char **arg, int outflag)
       idm1 = cells[icell].id - 1;
       ix = idm1 % nx;
       iy = (idm1 / nx) % ny;
-      iz = idm1 / (nx*ny);
+      iz = idm1 / ((cellint) nx*ny);
       ipx = ix*px / nx;
       ipy = iy*py / ny;
       ipz = iz*pz / nz;

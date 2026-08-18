@@ -1137,9 +1137,10 @@ bigint Custom::read_file(int mode, int colcount,
   // read header portion of file
   // comments or blank lines are allowed
   // nfile = count of attribute lines in file
-  // NOTE: allow for nfile to be a bigint ?
+  // nfile is a bigint since the file can span > 2^31 cells or surfs
 
-  int nfile,nvalues;
+  bigint nfile;
+  int nvalues;
 
   if (me == 0) {
     char *eof,*ptr;
@@ -1159,11 +1160,10 @@ bigint Custom::read_file(int mode, int colcount,
 
     // line: Nfile Nvalues
 
-    sscanf(line,"%d %d",&nfile,&nvalues);
-    //sscanf(line,BIGINT_FORMAT,&nfile);
+    sscanf(line,BIGINT_FORMAT " %d",&nfile,&nvalues);
   }
 
-  MPI_Bcast(&nfile,1,MPI_INT,0,world);
+  MPI_Bcast(&nfile,1,MPI_SPARTA_BIGINT,0,world);
   MPI_Bcast(&nvalues,1,MPI_INT,0,world);
 
   if (nvalues != colcount)
@@ -2004,28 +2004,30 @@ int KDTree::depthwalk(int inode, int depth, int maxdepth)
 
 void KDTree::stats_search()
 {
-  int nsearch_all;
-  MPI_Allreduce(&nsearch,&nsearch_all,1,MPI_INT,MPI_SUM,world);
+  // sum in bigint, global search/walk counts can exceed 2^31
+
+  bigint nsearch_all;
+  MPI_Allreduce(&nsearch,&nsearch_all,1,MPI_SPARTA_BIGINT,MPI_SUM,world);
   double avedist_all;
   MPI_Allreduce(&avedist,&avedist_all,1,MPI_DOUBLE,MPI_SUM,world);
   avedist_all /= nsearch_all;
 
-  int count_node_all;
-  MPI_Allreduce(&count_node,&count_node_all,1,MPI_INT,MPI_SUM,world);
+  bigint count_node_all;
+  MPI_Allreduce(&count_node,&count_node_all,1,MPI_SPARTA_BIGINT,MPI_SUM,world);
   double avecount_node = (double) count_node_all / nsearch_all;
-  int count_leaf_all;
-  MPI_Allreduce(&count_leaf,&count_leaf_all,1,MPI_INT,MPI_SUM,world);
+  bigint count_leaf_all;
+  MPI_Allreduce(&count_leaf,&count_leaf_all,1,MPI_SPARTA_BIGINT,MPI_SUM,world);
   double avecount_leaf = (double) count_leaf_all / nsearch_all;
 
   if (comm->me == 0) {
     if (screen) {
-      fprintf(screen,"    %d = number of grid cell searches\n",nsearch_all);
+      fprintf(screen,"    " BIGINT_FORMAT " = number of grid cell searches\n",nsearch_all);
       fprintf(screen,"    %g = ave distance of nearest points\n",avedist_all);
       fprintf(screen,"    %g = ave node count to find nearest points\n",avecount_node);
       fprintf(screen,"    %g = ave leaf count to find nearest points\n",avecount_leaf);
     }
     if (logfile) {
-      fprintf(logfile,"    %d = number of grid cell searches\n",nsearch_all);
+      fprintf(logfile,"    " BIGINT_FORMAT " = number of grid cell searches\n",nsearch_all);
       fprintf(logfile,"    %g = ave distance of nearest points\n",avedist_all);
       fprintf(logfile,"    %g = ave node count to find nearest points\n",avecount_node);
       fprintf(logfile,"    %g = ave leaf count to find nearest points\n",avecount_leaf);
@@ -2042,16 +2044,18 @@ void KDTree::stats_search()
 
 void KDTree::stats_neighbor()
 {
-  int nsearch_all;
-  MPI_Allreduce(&nsearch,&nsearch_all,1,MPI_INT,MPI_SUM,world);
-  int nneigh_all;
-  MPI_Allreduce(&nneigh,&nneigh_all,1,MPI_INT,MPI_SUM,world);
+  // sum in bigint, global search/walk counts can exceed 2^31
 
-  int count_node_all;
-  MPI_Allreduce(&count_node,&count_node_all,1,MPI_INT,MPI_SUM,world);
+  bigint nsearch_all;
+  MPI_Allreduce(&nsearch,&nsearch_all,1,MPI_SPARTA_BIGINT,MPI_SUM,world);
+  bigint nneigh_all;
+  MPI_Allreduce(&nneigh,&nneigh_all,1,MPI_SPARTA_BIGINT,MPI_SUM,world);
+
+  bigint count_node_all;
+  MPI_Allreduce(&count_node,&count_node_all,1,MPI_SPARTA_BIGINT,MPI_SUM,world);
   double avecount_node = (double) count_node_all / nsearch_all;
-  int count_leaf_all;
-  MPI_Allreduce(&count_leaf,&count_leaf_all,1,MPI_INT,MPI_SUM,world);
+  bigint count_leaf_all;
+  MPI_Allreduce(&count_leaf,&count_leaf_all,1,MPI_SPARTA_BIGINT,MPI_SUM,world);
   double avecount_leaf = (double) count_leaf_all / nsearch_all;
 
   if (comm->me == 0) {

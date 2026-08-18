@@ -75,7 +75,8 @@ Input::Input(SPARTA *sparta, int argc, char **argv) : Pointers(sparta)
     infiles[0] = infile;
   } else infiles = NULL;
 
-  variable = new Variable(sparta);
+  if (sparta->kokkos) variable = new VariableKokkos(sparta);
+  else variable = new Variable(sparta);
 
   // process command-line args
   // check for args "-var" and "-echo"

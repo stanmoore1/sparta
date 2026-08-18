@@ -702,6 +702,8 @@ void FixEmitFaceFile::bcast_mesh()
   MPI_Bcast(mesh.which,mesh.nvalues,MPI_INT,0,world);
   MPI_Bcast(mesh.imesh,mesh.ni,MPI_DOUBLE,0,world);
   MPI_Bcast(mesh.jmesh,mesh.nj,MPI_DOUBLE,0,world);
+  if ((bigint) mesh.ni*mesh.nj*mesh.nvalues > MAXSMALLINT)
+    error->all(FLERR,"Fix emit/face/file mesh exceeds 2^31 values");
   MPI_Bcast(&mesh.values[0][0],mesh.ni*mesh.nj*mesh.nvalues,
             MPI_DOUBLE,0,world);
 
@@ -1238,7 +1240,7 @@ void FixEmitFaceFile::subsonic_grid()
       }
 
       vscale = tasks[i].vscale;
-      for (m = 0; m < nspecies; i++) {
+      for (m = 0; m < nspecies; m++) {
         ispecies = particle->mixture[imix]->species[m];
         vscale[m] = sqrt(2.0 * update->boltz * temp_thermal_cell /
                          species[ispecies].mass);

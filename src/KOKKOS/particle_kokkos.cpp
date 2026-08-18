@@ -29,6 +29,7 @@
 #include "error.h"
 #include "kokkos.h"
 #include "sparta_masks.h"
+#include <type_traits>
 
 //#include <Kokkos_Vector.hpp>
 
@@ -39,7 +40,77 @@ enum{INT,DOUBLE};                      // several files
 enum{COPYPARTICLELIST,FIXEDMEMORY};
 
 #define DELTA 16384
-#define DELTACELLCOUNT 1
+
+// per-cell particle list sizing, see cellcount_target()
+
+#define CELLCOUNT_MARGIN 4
+#define CELLCOUNT_GROWTH 1.2
+
+/* ----------------------------------------------------------------------
+   spare slots to keep above the fullest cell's count
+   scaled by sqrt of that count, not of the mean: where density is
+   non-uniform the fullest cell holds many times the mean, and it is its own
+   count that sets how far it can fluctuate
+------------------------------------------------------------------------- */
+
+static int cellcount_headroom(double count)
+{
+  if (count < 0.0) count = 0.0;
+  return MAX(CELLCOUNT_MARGIN,static_cast<int> (3.0*sqrt(count)));
+}
+
+/* ----------------------------------------------------------------------
+   first-sort seed for the largest per-cell count, before anything has been
+   measured.  assumes a near-uniform gas, where the count is ~Poisson(mean)
+   and its max over ngrid cells is near mean + sqrt(2*mean*ln(ngrid)).
+   a flow with real density structure exceeds this; being wrong costs one
+   retry in the first sort, after which the measured maximum governs
+------------------------------------------------------------------------- */
+
+static int cellcount_seed(double mean, int ngrid_in)
+{
+  double spread = sqrt(2.0*mean*log(1.0*MAX(ngrid_in,2)));
+  return static_cast<int> (mean+spread) + 1;
+}
+
+/* ----------------------------------------------------------------------
+   capacity for the per-cell particle list
+   need = smallest capacity known to be required, 0 if nothing is known yet
+
+   sizing to exactly what is required guarantees another realloc soon, as the
+   largest per-cell count creeps up while later timesteps sample the tail.
+   each realloc is ngrid x maxcellcount ints, GBs at production sizes, plus a
+   repeat of the binning pass: ~90 ms on a unified-memory APU, and every other
+   rank waits for it at the next collective in Update::move().
+
+   LayoutLeft puts spare slots in columns past the used data, never touched,
+   so headroom is free apart from memory.  LayoutRight makes maxcellcount the
+   per-cell stride, so padding pushes consecutive cells' lists further apart
+   and costs cache-line utilization in kernels that sweep cells in order:
+   size to what is required and let the growth factor supply the headroom.
+------------------------------------------------------------------------- */
+
+static int cellcount_target(int need, int nlocal_in, int ngrid_in,
+                           bool cell_contiguous)
+{
+  if (ngrid_in <= 0) return MAX(need,CELLCOUNT_MARGIN);
+
+  // fall back on the mean only when nothing is known, i.e. the first sort
+
+  int want = need;
+  if (want <= 0) {
+    double mean = 1.0*nlocal_in/ngrid_in;
+    if (mean >= 1.0) want = cellcount_seed(mean,ngrid_in);
+  }
+
+  // below ~1 particle per cell the list is narrow, so a realloc is cheap and
+  // padding it across ngrid cells is not worth the memory
+
+  if (want < 1) return 1;
+
+  if (cell_contiguous) want += cellcount_headroom(want);
+  return want;
+}
 
 /* ---------------------------------------------------------------------- */
 
@@ -213,6 +284,27 @@ void ParticleKokkos::sort_kokkos()
 
   Kokkos::deep_copy(d_cellcount,0);
 
+  // maxcellcount tracks the per-cell count that has to fit, not the capacity
+  // that is allocated for it: CollideVSSKokkos sizes d_plist to
+  // maxcellcount*react_extra, so folding the extent back in here would make
+  // the next collide multiply its own padding again, growing d_plist by that
+  // factor every timestep.  the binning kernel bounds against the extent
+  // instead, so an allocation wider than maxcellcount is still used in full
+
+  // pre-size before the binning pass, so the resize path below is only reached
+  // when a cell needs more than this seed.  the resize path is itself
+  // measurement-driven -- d_resize carries the largest count any cell actually
+  // needed -- so a wrong seed costs one retry, not a wrong capacity
+
+  // read the layout off d_plist itself, so changing its type in grid_kokkos.h
+  // cannot silently leave the padding above sized for the other layout
+
+  const bool cell_contiguous =
+    std::is_same<decltype(d_plist)::array_layout,Kokkos::LayoutLeft>::value;
+
+  maxcellcount =
+    MAX(maxcellcount,cellcount_target(0,nlocal,ngrid,cell_contiguous));
+
   if (ngrid > int(d_plist.extent(0)) || maxcellcount > int(d_plist.extent(1))) {
     d_plist = {};
     MemKK::realloc_kokkos(grid_kk->d_plist,"particle:plist",ngrid,maxcellcount);
@@ -258,7 +350,13 @@ void ParticleKokkos::sort_kokkos()
 
     if (resize) {
       Kokkos::deep_copy(d_cellcount,0);
-      maxcellcount = MAX(maxcellcount+MAX(DELTACELLCOUNT,maxcellcount*0.1),resize);
+
+      // grow with headroom, not to exactly what this step needed
+
+      maxcellcount =
+        MAX(cellcount_target(resize,nlocal,ngrid,cell_contiguous),
+            static_cast<int> (maxcellcount*CELLCOUNT_GROWTH));
+
       d_plist = {};
       MemKK::realloc_kokkos(grid_kk->d_plist,"particle:plist",ngrid,maxcellcount);
       d_plist = grid_kk->d_plist;
@@ -424,7 +522,7 @@ void ParticleKokkos::operator()(TagParticleSort<NEED_ATOMICS,REORDER_FLAG>, cons
     d_cellcount[icell]++;
   }
 
-  if (j >= maxcellcount)
+  if (j >= int(d_plist.extent(1)))
     d_resize() = MAX(d_resize(),j+1);
   else {
     d_plist(icell,j) = i;
@@ -581,11 +679,21 @@ void ParticleKokkos::post_weight()
       if (wrandom->uniform() < fraction) nclone++;
 
       for (int m = 0; m < nclone; m++) {
-        if (k_map.extent(0) <= nlocal)
-          k_map.resize(k_map.extent(0)*1.5);
+        if (nlocal == MAXSMALLINT)
+          error->one(FLERR,"Per-processor particle count is too big");
+        if (k_map.extent(0) <= nlocal) {
+          // 1.5x truncates back to the old size for the smallest views,
+          //   so always leave room for at least the particle added below
+          size_t newmax = k_map.extent(0)*1.5;
+          if (newmax <= (size_t) nlocal) newmax = nlocal + 1;
+          k_map.resize(newmax);
+          // resize reallocates, so the previously bound host view now points
+          //   at the freed buffer -- rebind before writing through it
+          h_map = k_map.view_host();
+        }
 
         h_map[nlocal] = h_map[i];
-        h_map[nlocal-1].id = MAXSMALLINT*wrandom->uniform();
+        h_map[nlocal].id = MAXSMALLINT*wrandom->uniform();
         nlocal++;
       }
       i++;

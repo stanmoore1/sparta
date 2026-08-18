@@ -164,9 +164,13 @@ class GridKokkos : public Grid {
   tdual_pcell_1d k_pcells;
   tdual_plevel_1d k_plevels;
 
-  Kokkos::Crs<int, DeviceType, void, int> d_csurfs;
-  Kokkos::Crs<int, DeviceType, void, int> d_csplits;
-  Kokkos::Crs<int, DeviceType, void, int> d_csubs;
+  // Crs row_map offsets index the flattened per-cell surf lists.  Under
+  //   BIGBIG the total entry count on a rank can exceed 2^31, so the offset
+  //   type must be 64-bit; under BIG it cannot, and a 32-bit row_map halves
+  //   the bytes touched by the per-particle surf lookups in the move kernel.
+  Kokkos::Crs<int, DeviceType, void, crs_size_type> d_csurfs;
+  Kokkos::Crs<int, DeviceType, void, crs_size_type> d_csplits;
+  Kokkos::Crs<int, DeviceType, void, crs_size_type> d_csubs;
 
   DAT::t_int_1d d_cellcount;
   DAT::t_int_2d d_plist;

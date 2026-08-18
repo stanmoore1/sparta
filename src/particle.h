@@ -167,7 +167,6 @@ class Particle : protected Pointers {
   void write_restart_mixture(FILE *fp);
   void read_restart_mixture(FILE *fp);
 
-  int size_restart();
   bigint size_restart_big();
   int pack_restart(char *);
   void pack_restart(char *, int, int);

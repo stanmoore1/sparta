@@ -33,7 +33,7 @@ class Collide : protected Pointers {
   int mcflag;         // 0 for NTC attempt counts (default)
                       // 1 for majorant collision frequency (MCF) attempt counts
 
-  int ncollide_one,nattempt_one,nreact_one;
+  bigint ncollide_one,nattempt_one,nreact_one;
   bigint ncollide_running,nattempt_running,nreact_running;
 
   Collide(class SPARTA *, int, char **);

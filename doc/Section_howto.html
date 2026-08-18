@@ -551,6 +551,62 @@ and the sparta_config_has_*_support functions for MPI, PNG, JPEG,
 FFmpeg and gzip support).  See the library.cpp file and its associated
 header file library.h for the full list and exact signatures.
 </P>
+<P>The sparta_extract_setting() function takes a keyword and returns an
+integer setting of the SPARTA executable or of the running simulation.
+It returns -1 for a keyword it does not recognize; no setting it does
+recognize is negative.  The keywords are grouped by what they
+describe:
+</P>
+<P>Integer sizes:
+</P>
+<UL><LI><I>bigint</I> = size in bytes of a bigint, the type SPARTA counts timesteps and particles with
+</UL>
+<P>System status:
+</P>
+<UL><LI><I>dimension</I> = 2 or 3, as set by the <A HREF = "dimension.html">dimension</A> command
+<LI><I>box_exist</I> = 1 after <A HREF = "create_box.html">create_box</A>, else 0
+<LI><I>grid_exist</I> = 1 after the grid is defined, else 0
+<LI><I>surf_exist</I> = 1 if surface elements are defined, else 0
+</UL>
+<P>Communication status:
+</P>
+<UL><LI><I>world_size</I> = # of MPI ranks on SPARTA's world communicator
+<LI><I>world_rank</I> = MPI rank of this processor on that communicator, 0 <= world_rank < world_size
+<LI><I>universe_size</I> = # of MPI ranks on SPARTA's universe communicator, world_size <= universe_size
+<LI><I>universe_rank</I> = MPI rank of this processor on that communicator
+</UL>
+<P>System sizes:
+</P>
+<UL><LI><I>nplocal</I> = # of particles owned by this processor
+<LI><I>nspecies</I> = # of species defined
+<LI><I>nmixture</I> = # of mixtures defined
+<LI><I>nsurf</I> = # of surface elements, global
+<LI><I>nlocal_surf</I> = # of surface elements owned by this processor
+<LI><I>ngroup_grid</I> = # of grid groups defined
+<LI><I>ngroup_surf</I> = # of surface groups defined
+</UL>
+<P>Defined commands:
+</P>
+<UL><LI><I>ncompute</I> = # of computes defined
+<LI><I>nfix</I> = # of fixes defined
+<LI><I>ndump</I> = # of dumps defined
+<LI><I>nregion</I> = # of regions defined
+<LI><I>nvariable</I> = # of variables defined
+</UL>
+<P>Output settings:
+</P>
+<UL><LI><I>stats_every</I> = N from the <A HREF = "stats.html">stats</A> command
+</UL>
+<P><I>world_size</I> and <I>world_rank</I> are for the partition this processor
+belongs to, so they differ from <I>universe_size</I> and <I>universe_rank</I>
+only under the <A HREF = "Section_start.html#start_7">-partition</A> command-line
+switch.  All of these are read locally, so calling this function is
+not collective and ranks may call it independently.
+</P>
+<P>An input script can read the same settings without a driver program,
+through the extract_setting(name) special function of the
+<A HREF = "variable.html">variable</A> command, which calls this function.
+</P>
 <P>Other functions may be added to the library interface as needed to
 allow reading from or writing to internal SPARTA data structures. 
 </P>

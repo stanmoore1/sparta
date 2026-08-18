@@ -73,9 +73,19 @@ void Run::command(int narg, char **arg)
 
   // restore timeout in case a previous run was interrupted
   // by force_timeout() via the library interface,
+  // then open a fresh timeout window for this command.
+  // the order matters: reset first so that init_timeout() saves the real limit
+  //   rather than an expired 0.0.  a "fix halt ... error soft" defeats the
+  //   reset on purpose, via force_timeout(1), because it is documented to skip
+  //   subsequent run commands
+  // init_timeout() is called once here rather than beside each
+  //   timer->barrier_start(TIME_LOOP) below, so that a "run N every M" spends
+  //   one timeout window over the whole command instead of restarting the
+  //   clock on every sub-run
   // and invalidate the stats cache of the previous run
 
   timer->reset_timeout();
+  timer->init_timeout();
   output->stats->reset_cache();
 
   if (!grid->exist)
