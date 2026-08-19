@@ -184,8 +184,32 @@ void FixAveHistoWeightKokkos::calculate_weights()
         computeKKBase->compute_per_grid_kokkos();
         compute->invoked_flag |= INVOKED_PER_GRID;
       }
-      if (j == 0) {
-        d_weights = computeKKBase->d_vector_particle;
+      if (compute->post_process_grid_flag) {
+
+        // a post-process per-grid compute (e.g. compute grid) fills its
+        // vector on demand via post_process_grid_kokkos() and never
+        // allocates array_grid.  copy the requested column into a private
+        // device buffer so the subsequent binning of the value (which may
+        // post-process the same compute again) cannot overwrite the weights.
+        // mirrors FixAveHistoWeight::calculate_weights()
+
+        computeKKBase->post_process_grid_kokkos(j,1,DAT::t_float_2d_lr(),
+                                                NULL,DAT::t_float_1d_strided());
+        if (grid->maxlocal > maxvectorwt) {
+          memoryKK->destroy_kokkos(k_vectorwt,vectorwt);
+          maxvectorwt = grid->maxlocal;
+          memoryKK->create_kokkos(k_vectorwt,vectorwt,maxvectorwt,
+                                  "ave/histo/weight:vectorwt");
+        }
+        const int nglocal = grid->nlocal;
+        auto d_vectorwt = k_vectorwt.view_device();
+        auto range = std::make_pair(0,nglocal);
+        Kokkos::deep_copy(Kokkos::subview(d_vectorwt,range),
+                          Kokkos::subview(computeKKBase->d_vector_grid,range));
+        k_vectorwt.modify_device();
+        d_weights = d_vectorwt;
+      } else if (j == 0) {
+        d_weights = computeKKBase->d_vector_grid;
       } else if (compute->array_grid) {
         d_weights = Kokkos::subview(computeKKBase->d_array_grid,Kokkos::ALL(),j-1);
       }
@@ -198,7 +222,7 @@ void FixAveHistoWeightKokkos::calculate_weights()
     Fix *fix = modify->fix[m];
     if (!fix->kokkos_flag)
       error->all(FLERR,"Cannot (yet) use non-Kokkos fixes with fix ave/histo/weight/kk");
-      KokkosBase* fixKKBase = dynamic_cast<KokkosBase*>(fix);
+    KokkosBase* fixKKBase = dynamic_cast<KokkosBase*>(fix);
 
     if (kind == GLOBAL && mode == SCALAR) {
       if (j == 0) {
@@ -228,7 +252,7 @@ void FixAveHistoWeightKokkos::calculate_weights()
 
     } else if (kind == PERGRID) {
       if (j == 0) {
-        d_weights = fixKKBase->d_vector_particle;
+        d_weights = fixKKBase->d_vector_grid;
       } else if (fixKKBase->d_array_grid.data()) {
         d_weights = Kokkos::subview(fixKKBase->d_array_grid,Kokkos::ALL(),j-1);
       }
@@ -256,7 +280,8 @@ void FixAveHistoWeightKokkos::calculate_weights()
       if (grid->maxlocal > maxvectorwt) {
         memoryKK->destroy_kokkos(k_vectorwt,vectorwt);
         maxvectorwt = grid->maxlocal;
-        memory->create(vectorwt,maxvectorwt,"ave/histo/weight:vectorwt");
+        memoryKK->create_kokkos(k_vectorwt,vectorwt,maxvectorwt,
+                                "ave/histo/weight:vectorwt");
       }
       input->variable->compute_grid(m,vectorwt,1,0);
       k_vectorwt.modify_host();

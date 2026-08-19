@@ -41,13 +41,13 @@ SurfReactProbKokkos::SurfReactProbKokkos(SPARTA *sparta, int narg, char **arg) :
 {
   kokkosable = 1;
 
-  d_scalars = DAT::t_int_1d("surf_react:scalars",nlist+1);
-  d_nsingle = Kokkos::subview(d_scalars,0);
-  d_tally_single = Kokkos::subview(d_scalars,std::make_pair(1,nlist+1));
+  k_nsingle = DAT::tdual_int_scalar("surf_react:nsingle");
+  d_nsingle = k_nsingle.view_device();
+  h_nsingle = k_nsingle.view_host();
 
-  h_scalars = HAT::t_int_1d("surf_react:scalars_mirror",nlist+1);
-  h_nsingle = Kokkos::subview(h_scalars,0);
-  h_tally_single = Kokkos::subview(h_scalars,std::make_pair(1,nlist+1));
+  k_tally_single = DAT::tdual_bigint_1d("surf_react:tally_single",nlist);
+  d_tally_single = k_tally_single.view_device();
+  h_tally_single = k_tally_single.view_host();
 
   random_backup = NULL;
 
@@ -90,7 +90,8 @@ void SurfReactProbKokkos::init()
 {
   SurfReactProb::init();
 
-  Kokkos::deep_copy(d_scalars,0);
+  Kokkos::deep_copy(d_nsingle,0);
+  Kokkos::deep_copy(d_tally_single,0);
 
 #ifdef SPARTA_KOKKOS_EXACT
   rand_pool.init(random);
@@ -103,16 +104,26 @@ void SurfReactProbKokkos::tally_reset()
 {
   SurfReact::tally_reset();
 
-  Kokkos::deep_copy(d_scalars,0);
+  Kokkos::deep_copy(d_nsingle,0);
+  Kokkos::deep_copy(d_tally_single,0);
 }
 
 /* ---------------------------------------------------------------------- */
 
 void SurfReactProbKokkos::tally_update()
 {
-  Kokkos::deep_copy(h_scalars,d_scalars);
+  Kokkos::deep_copy(h_nsingle,d_nsingle);
+  Kokkos::deep_copy(h_tally_single,d_tally_single);
+
+  // also store the per-step counts on the host: compute_vector() reports
+  //   nsingle and tally_single_all alongside the running totals
+
+  nsingle = h_nsingle();
   ntotal += h_nsingle();
-  for (int i = 0; i < nlist; i++) tally_total[i] += h_tally_single[i];
+  for (int i = 0; i < nlist; i++) {
+    tally_single[i] = h_tally_single[i];
+    tally_total[i] += h_tally_single[i];
+  }
 }
 
 /* ---------------------------------------------------------------------- */
@@ -197,6 +208,17 @@ void SurfReactProbKokkos::backup()
   ParticleKokkos* particle_kk = (ParticleKokkos*) particle;
   d_particles = particle_kk->k_particles.view_device();
 
+  if (!d_nsingle_backup.data())
+    d_nsingle_backup = DAT::t_int_scalar(
+      Kokkos::view_alloc("surf_react:nsingle_backup",Kokkos::WithoutInitializing));
+  Kokkos::deep_copy(d_nsingle_backup,d_nsingle);
+
+  if (d_tally_single_backup.extent(0) != d_tally_single.extent(0))
+    d_tally_single_backup = DAT::t_bigint_1d(
+      Kokkos::view_alloc("surf_react:tally_single_backup",Kokkos::WithoutInitializing),
+      d_tally_single.extent(0));
+  Kokkos::deep_copy(d_tally_single_backup,d_tally_single);
+
 #ifdef SPARTA_KOKKOS_EXACT
   if (!random_backup)
     random_backup = new RanKnuth(12345 + comm->me);
@@ -208,7 +230,8 @@ void SurfReactProbKokkos::backup()
 
 void SurfReactProbKokkos::restore()
 {
-  Kokkos::deep_copy(d_scalars,0);
+  Kokkos::deep_copy(d_nsingle,d_nsingle_backup);
+  Kokkos::deep_copy(d_tally_single,d_tally_single_backup);
 
 #ifdef SPARTA_KOKKOS_EXACT
   memcpy(random,random_backup,sizeof(RanKnuth));
