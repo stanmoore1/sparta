@@ -40,7 +40,8 @@
      and the data form a single encoded stream, but with compression the
      header is encoded separately and the two encodings are concatenated.
    * the compressed header is [nblocks][block size][size of last partial
-     block][compressed size per block].  we always use a single block.
+     block][compressed size per block].  we use a single block, except for
+     an empty array, which has no blocks and so no per block sizes either.
    * cell offsets are END offsets and have one entry per cell, unlike the
      legacy format where they start at zero and have one extra entry.
    * string arrays use <Array>, not <DataArray>, and their ASCII form is a
@@ -81,6 +82,11 @@ static const size_t MAX_BINARY_STRING = 63;
 static const size_t WRITE_CHUNK = 1 << 20;
 
 namespace {
+
+#if defined(SPARTA_ZLIB)
+// block size the VTK library reports in the header of compressed XML data
+const uint32_t ZLIB_BLOCK_SIZE = 32768;
+#endif
 
 const char b64chars[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
@@ -134,22 +140,43 @@ std::string encode_bytes(const std::string &raw)
                              "across more files with '%' in the file name");
 
 #if defined(SPARTA_ZLIB)
-  uLongf bound = compressBound((uLong) raw.size());
-  std::vector<unsigned char> buf(bound ? bound : 1);
-  if (compress(&buf[0],&bound,(const Bytef *) raw.data(),(uLong) raw.size()) == Z_OK &&
-      (uint64_t) bound <= 0xffffffffULL) {
-    const uint32_t header[4] = {1U,(uint32_t) raw.size(),0U,(uint32_t) bound};
-    return base64(header,sizeof(header)) + base64(&buf[0],bound);
+
+  // an empty array has no blocks at all.  the VTK library writes a 3 value
+  // header for that, without the per block sizes that follow a non-zero
+  // count, and no data.  one block of declared size zero is not the same
+  // thing, and not every reader accepts it
+
+  if (raw.empty()) {
+    const uint32_t header[3] = {0U,ZLIB_BLOCK_SIZE,0U};
+    return base64(header,sizeof(header));
   }
-  // fall through to writing the data uncompressed if zlib fails or if the
-  // compressed block would not fit the UInt32 header
-#endif
+
+  // the whole array is a single block.  the file header has already declared
+  // the compressor by the time we get here, so falling back to uncompressed
+  // data would describe the file wrongly: fail instead
+
+  uLongf bound = compressBound((uLong) raw.size());
+  std::vector<unsigned char> buf(bound);
+  if (compress(&buf[0],&bound,(const Bytef *) raw.data(),(uLong) raw.size()) != Z_OK)
+    throw VTKWriterException("Could not compress the data of a binary XML VTK file");
+  if ((uint64_t) bound > 0xffffffffULL)
+    throw VTKWriterException("Compressed VTK data array is larger than the 4 GByte "
+                             "limit of the binary XML format, write ASCII or split "
+                             "the dump across more files with '%' in the file name");
+
+  const uint32_t header[4] = {1U,(uint32_t) raw.size(),0U,(uint32_t) bound};
+  return base64(header,sizeof(header)) + base64(&buf[0],bound);
+
+#else
+
   std::string block;
   block.reserve(raw.size() + sizeof(uint32_t));
   const uint32_t nbytes = (uint32_t) raw.size();
   block.append((const char *) &nbytes,sizeof(nbytes));
   block.append(raw);
   return base64(block.data(),block.size());
+
+#endif
 }
 
 // append the raw bytes of a value in the host byte order
@@ -552,7 +579,7 @@ void VTKWriter::write(const std::string &filename)
 
   try {
     write(fp);
-  } catch (VTKWriterException &) {
+  } catch (...) {
     fclose(fp);
     throw;
   }
