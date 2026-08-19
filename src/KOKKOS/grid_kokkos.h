@@ -53,6 +53,9 @@ class GridKokkos : public Grid {
 // operations with grid cell IDs
   void update_hash();
 
+  // re-establish device state after a host fix rebuilt the grid/surfs
+  void resync_after_host_change();
+
   /* ----------------------------------------------------------------------
      compute lo/hi extent of a specific child cell within a parent cell
      plevel = level of parent

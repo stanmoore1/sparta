@@ -434,23 +434,11 @@ void UpdateKokkos::run(int nsteps)
     // Safe here: grid_kk_copy from this step's move is no longer in use and is
     // refreshed at the start of the next move.
 
-    if (grid->changed) {
-      GridKokkos* grid_kk = (GridKokkos*) grid;
-      grid_kk->modify(Host,ALL_MASK);
-      grid_kk->update_hash();
-      if (surf->exist) {
-        ((SurfKokkos*)surf)->modify(Host,ALL_MASK);
-        grid_kk->wrap_kokkos_graphs();
-      }
+    // safety net: a grid change from anywhere other than the end-of-step
+    //   batch (which resyncs per fix in ModifyKokkos) is handled here before
+    //   the next move reads the device grid
 
-      // the fix rebuilt the grid on the host and may have deleted particles
-      //   and reassigned split cell particles to new sub cells, so the device
-      //   per-cell particle lists no longer match, same as fix adapt/balance
-
-      ((ParticleKokkos*)particle)->sorted_kk = 0;
-
-      grid->changed = 0;
-    }
+    if (grid->changed) ((GridKokkos*) grid)->resync_after_host_change();
 
     // all output
 
