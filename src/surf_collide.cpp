@@ -52,6 +52,7 @@ SurfCollide::SurfCollide(SPARTA *sparta, int, char **arg) :
   dynamicflag = 0;
   allowreact = 1;
   transparent = 0;
+  mirror_flag = 0;
   vector_flag = 1;
   size_vector = 2;
 

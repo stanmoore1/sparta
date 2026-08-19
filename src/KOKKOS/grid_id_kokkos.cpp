@@ -13,6 +13,8 @@
 ------------------------------------------------------------------------- */
 #include "error.h"
 #include "grid_kokkos.h"
+#include "domain.h"
+#include "memory.h"
 
 using namespace SPARTA_NS;
 
@@ -41,5 +43,33 @@ void GridKokkos::update_hash()
   }
 
   Kokkos::deep_copy(hash_kk, hash_h);
+
+  update_halo_index();
 }
 
+/* ----------------------------------------------------------------------
+   upload Grid::halo_index, the dense cell-position -> local-index map used by
+     the uniform-grid fast path, to the device
+   the map itself is built by Grid::update_halo_index(), called from rehash()
+     just above, so host and device agree by construction
+   leaves d_halo_index empty (extent 0) when the host map is unavailable, in
+     which case callers use hash_kk instead
+------------------------------------------------------------------------- */
+
+void GridKokkos::update_halo_index()
+{
+  d_halo_index = DAT::t_int_1d();
+
+  if (!halo_index) return;
+
+  const size_t nindex = (size_t) halo_nx*halo_ny*halo_nz;
+  if (!nindex) return;
+
+  HAT::t_int_1d h_halo_index(
+    Kokkos::view_alloc("grid:halo_index",Kokkos::WithoutInitializing),nindex);
+  for (size_t i = 0; i < nindex; i++) h_halo_index[i] = halo_index[i];
+
+  d_halo_index = DAT::t_int_1d(
+    Kokkos::view_alloc("grid:halo_index",Kokkos::WithoutInitializing),nindex);
+  Kokkos::deep_copy(d_halo_index,h_halo_index);
+}

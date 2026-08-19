@@ -411,12 +411,63 @@ However, if there are no surfaces and the grid is uniform (only a
 single level for all cells without further refinement) and the
 {optmove} keyword is set to {yes} then the particle will be moved to
 its final position in a single step, skipping all intermediate grid
-cell crossings, which can improve performance. If a particle hits a
-box boundary or leaves the owning proc's subdomain (including the
-ghost cell region), then the normal (non-optimized) move algorithm
-will be used for that specific particle on that timestep. The {optmove
-yes} option cannot be used when surfaces are defined, the grid is not
-uniform, or when fix adapt is enabled, otherwise an error will result.
+cell crossings, which can improve performance. If a particle leaves
+the owning proc's subdomain (including the ghost cell region), then
+the normal (non-optimized) move algorithm will be used for that
+specific particle on that timestep.
+
+A particle that ends the timestep outside the global box needs a
+"boundary"_boundary.html condition applied. For a {p} (periodic) or
+{r} (specular reflection) face this is a translation or a reflection
+about the face, and for an {o} (outflow) face it is deleting the
+particle; the optimized move performs all three itself. An {s}
+(surface) face runs a "surf_collide"_surf_collide.html model, which the
+optimized move does not do in general, so the particle uses the normal
+move algorithm for that timestep. The exception is a face whose model
+is a plain {specular} one with no "surf_react"_surf_react.html model
+assigned: that is a reflection about the face and nothing else, so the
+optimized move performs it, and adds the collisions to the model's own
+tally so its output is unchanged. A {specular} model with the {noslip}
+option is not such a face, since it reverses all three velocity
+components rather than reflecting. A particle that leaves through an
+outflow face also uses the normal move if it is outside a normal-move
+{s} face in another dimension, since the collision there could turn it
+around before it ever reaches the outflow face. This matters for performance
+because the processors that own the edges of the global box are the
+only ones with such particles, so leaving those faces to the normal
+move makes those processors slower than the rest, which in a parallel
+run costs every processor the difference. Note also that on a GPU the
+particles are moved in lockstep in groups, so one particle taking the
+normal move algorithm slows down every other particle in its group.
+
+On any timestep where a "compute boundary"_compute_boundary.html is
+being invoked, all box boundary crossings use the normal move
+algorithm, since only it tallies them.
+
+The {optmove yes} option cannot be used when surfaces are defined, the
+grid is not uniform, or when fix adapt is enabled, otherwise an error
+will result.
+
+The optimized move supports "axisymmetric"_dimension.html models.  One
+remap of the end-of-step position into the axisymmetric plane replaces
+the remap the normal move performs at every cell crossing, which gives
+the same result because each remap is a rotation applied to the position
+and the velocity together and the radial coordinate is unchanged by it.
+The axis needs no boundary condition, since the remap always returns a
+non-negative radius.  There is one restriction: at the outer radial
+boundary, an {r} face or an {s} face carrying a {specular} model uses the
+normal move algorithm, because that face is a cylinder and reflecting off
+it turns the particle out of the plane it was moving in, so the radial
+path after the reflection is not a continuation of the one before.  An
+{o} face at the outer radius is handled by the optimized move as usual.
+
+Note that the "Cells touched" and "Cell-touches/particle/step"
+statistics printed at the end of a run count only particles that used
+the normal move algorithm, since the optimized move never visits the
+intermediate cells. With {optmove yes} these values are therefore a
+measure of how often the optimized move was not applicable, not of how
+far particles moved. A value near zero means it was used for nearly
+every particle.
 
 [Restrictions:]
 

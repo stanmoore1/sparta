@@ -51,6 +51,7 @@ if(SPARTA_ENABLE_TESTING)
       "custom"
       "explicit2implicit"
       "mfp_mct"
+      "optmove"
       "torque")
 
   set(SPARTA_DISABLED_TESTS
