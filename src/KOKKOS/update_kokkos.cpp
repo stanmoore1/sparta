@@ -442,6 +442,13 @@ void UpdateKokkos::run(int nsteps)
         ((SurfKokkos*)surf)->modify(Host,ALL_MASK);
         grid_kk->wrap_kokkos_graphs();
       }
+
+      // the fix rebuilt the grid on the host and may have deleted particles
+      //   and reassigned split cell particles to new sub cells, so the device
+      //   per-cell particle lists no longer match, same as fix adapt/balance
+
+      ((ParticleKokkos*)particle)->sorted_kk = 0;
+
       grid->changed = 0;
     }
 
@@ -540,6 +547,15 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
     d_cells = grid_kk->k_cells.view_device();
     d_sinfo = grid_kk->k_sinfo.view_device();
     d_pcells = grid_kk->k_pcells.view_device();
+
+    // GridKokkos::update_hash() builds a brand new UnorderedMap rather than
+    //   updating in place, so a copy taken at setup() goes stale as soon as
+    //   anything rehashes mid-run (fix adapt/balance/move surf, or the
+    //   grid/surf resync after fix ablate regenerates implicit surfaces).
+    //   The optimized-move kernel looks up cell IDs in it, so refresh it here
+    //   with the other grid handles or it maps IDs to pre-change cell indices
+
+    hash_kk = grid_kk->hash_kk;
 
     d_csurfs = grid_kk->d_csurfs;
     d_csplits = grid_kk->d_csplits;
