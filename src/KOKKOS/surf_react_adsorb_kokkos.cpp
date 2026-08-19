@@ -38,7 +38,7 @@ static void cmodel_sizes(int model, int &nc, int &nf)
   switch (model) {
   case SRA_KK::SPECULAR:  nf = 1; break;
   case SRA_KK::DIFFUSE:   nc = 2; break;
-  case SRA_KK::CLL:       nc = 5; nf = 1; break;
+  case SRA_KK::CLL:       nc = 6; nf = 1; break;
   case SRA_KK::TD:        nc = 8; nf = 3; break;
   case SRA_KK::IMPULSIVE: nc = 11; nf = 4; break;
   }
@@ -71,7 +71,10 @@ SurfReactAdsorbKokkos::SurfReactAdsorbKokkos(SPARTA *sparta, int narg, char **ar
 
   random_backup = NULL;
 
-  for (int i = 0; i < SRA_KK_MAXMODELS; i++) cmodel_pool[i] = NULL;
+  for (int i = 0; i < SRA_KK_MAXMODELS; i++) {
+    cmodel_pool[i] = NULL;
+    cmodel_random_backup[i] = NULL;
+  }
 }
 
 SurfReactAdsorbKokkos::SurfReactAdsorbKokkos(SPARTA *sparta) :
@@ -94,8 +97,10 @@ SurfReactAdsorbKokkos::~SurfReactAdsorbKokkos()
 #ifdef SPARTA_KOKKOS_EXACT
   rand_pool.destroy();
   if (random_backup) delete random_backup;
-  for (int i = 0; i < SRA_KK_MAXMODELS; i++)
+  for (int i = 0; i < SRA_KK_MAXMODELS; i++) {
     if (cmodel_pool[i]) { cmodel_pool[i]->destroy(); delete cmodel_pool[i]; }
+    if (cmodel_random_backup[i]) delete cmodel_random_backup[i];
+  }
 #endif
 }
 
@@ -550,6 +555,19 @@ void SurfReactAdsorbKokkos::backup()
   if (!random_backup)
     random_backup = new RanKnuth(12345 + comm->me);
   memcpy(random_backup,random,sizeof(RanKnuth));
+
+  // the device scatter kernels draw from each cmodel's own RanKnuth (thread 0
+  //   of its RandPoolWrap IS the host SurfCollide's generator), so those
+  //   streams must be rewound on a retry too, else the re-run diverges
+
+  for (int idx = 0; idx < SRA_KK_MAXMODELS; idx++) {
+    if (!cmodel_pool[idx]) continue;
+    RanKnuth *cmrand = cmodels[idx]->kokkos_random();
+    if (!cmrand) continue;
+    if (!cmodel_random_backup[idx])
+      cmodel_random_backup[idx] = new RanKnuth(12345 + comm->me);
+    memcpy(cmodel_random_backup[idx],cmrand,sizeof(RanKnuth));
+  }
 #endif
 }
 
@@ -565,5 +583,11 @@ void SurfReactAdsorbKokkos::restore()
 
 #ifdef SPARTA_KOKKOS_EXACT
   memcpy(random,random_backup,sizeof(RanKnuth));
+
+  for (int idx = 0; idx < SRA_KK_MAXMODELS; idx++) {
+    if (!cmodel_random_backup[idx]) continue;
+    memcpy(cmodels[idx]->kokkos_random(),cmodel_random_backup[idx],
+           sizeof(RanKnuth));
+  }
 #endif
 }

@@ -129,6 +129,7 @@ class FixEmitFaceKokkos : public FixEmitFace {
   DAT::t_int_2d d_plist;
   DAT::t_int_1d d_cellcount;
   DAT::t_float_scalar d_tempmax;
+  int plist_descending;   // 1 if the host walks d_plist high index -> low
 
   void create_tasks() override;
   void grow_task() override;

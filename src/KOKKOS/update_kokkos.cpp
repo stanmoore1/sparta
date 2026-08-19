@@ -630,24 +630,32 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
           sc_map[n] = ntrans;
           ntrans++;
         } else if (strcmp(surf->sc[n]->style,"adiabatic") == 0) {
+          if (nadia >= KOKKOS_MAX_SURF_COLL_PER_TYPE)
+            error->all(FLERR,"Kokkos currently supports two instances of each surface collide method");
           sc_kk_adiabatic_copy[nadia].copy((SurfCollideAdiabaticKokkos*)(surf->sc[n]));
           sc_kk_adiabatic_copy[nadia].obj.pre_collide();
           sc_type_list[n] = 5;
           sc_map[n] = nadia;
           nadia++;
         } else if (strcmp(surf->sc[n]->style,"impulsive") == 0) {
+          if (nimpul >= KOKKOS_MAX_SURF_COLL_PER_TYPE)
+            error->all(FLERR,"Kokkos currently supports two instances of each surface collide method");
           sc_kk_impulsive_copy[nimpul].copy((SurfCollideImpulsiveKokkos*)(surf->sc[n]));
           sc_kk_impulsive_copy[nimpul].obj.pre_collide();
           sc_type_list[n] = 6;
           sc_map[n] = nimpul;
           nimpul++;
         } else if (strcmp(surf->sc[n]->style,"td") == 0) {
+          if (ntd >= KOKKOS_MAX_SURF_COLL_PER_TYPE)
+            error->all(FLERR,"Kokkos currently supports two instances of each surface collide method");
           sc_kk_td_copy[ntd].copy((SurfCollideTDKokkos*)(surf->sc[n]));
           sc_kk_td_copy[ntd].obj.pre_collide();
           sc_type_list[n] = 7;
           sc_map[n] = ntd;
           ntd++;
         } else if (strcmp(surf->sc[n]->style,"cll") == 0) {
+          if (ncll >= KOKKOS_MAX_SURF_COLL_PER_TYPE)
+            error->all(FLERR,"Kokkos currently supports two instances of each surface collide method");
           sc_kk_cll_copy[ncll].copy((SurfCollideCLLKokkos*)(surf->sc[n]));
           sc_kk_cll_copy[ncll].obj.pre_collide();
           sc_type_list[n] = 8;
@@ -902,23 +910,28 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
   nscollide_running += nscollide_one;
   surf->nreact_running += surf->nreact_one;
 
+  // dispatch by dynamic_cast, not by style string, and in the same order as
+  //   setup_surf_tally_copies(): the styles are also registered under explicit
+  //   "/kk" names (e.g. react/isurf/grid/kk), so a style compare would miss a
+  //   compute the user typed with the suffix and fall through to a wrong cast
+
   if (nsurf_tally) {
     for (int m = 0; m < nsurf_tally; m++) {
-      if (strcmp(slist_active[m]->style,"isurf/grid") == 0) {
-        ComputeISurfGridKokkos* compute_isurf_kk =
-          (ComputeISurfGridKokkos*)(slist_active[m]);
+      if (ComputeISurfGridKokkos* compute_isurf_kk =
+            dynamic_cast<ComputeISurfGridKokkos*>(slist_active[m])) {
         compute_isurf_kk->post_surf_tally();
-      } else if (strcmp(slist_active[m]->style,"react/isurf/grid") == 0) {
-        ComputeReactISurfGridKokkos* compute_react_isurf_kk =
-          (ComputeReactISurfGridKokkos*)(slist_active[m]);
+      } else if (ComputeReactISurfGridKokkos* compute_react_isurf_kk =
+                   dynamic_cast<ComputeReactISurfGridKokkos*>(slist_active[m])) {
         compute_react_isurf_kk->post_surf_tally();
-      } else if (strcmp(slist_active[m]->style,"react/surf") == 0) {
-        ComputeReactSurfKokkos* compute_react_surf_kk =
-          (ComputeReactSurfKokkos*)(slist_active[m]);
+      } else if (ComputeReactSurfKokkos* compute_react_surf_kk =
+                   dynamic_cast<ComputeReactSurfKokkos*>(slist_active[m])) {
         compute_react_surf_kk->post_surf_tally();
-      } else {
-        ComputeSurfKokkos* compute_surf_kk = (ComputeSurfKokkos*)(slist_active[m]);
+      } else if (ComputeSurfKokkos* compute_surf_kk =
+                   dynamic_cast<ComputeSurfKokkos*>(slist_active[m])) {
         compute_surf_kk->post_surf_tally();
+      } else {
+        error->all(FLERR,"Kokkos does not (yet) support this surf tally compute; "
+                         "use a Kokkos-enabled surf tally compute (-sf kk)");
       }
     }
   }

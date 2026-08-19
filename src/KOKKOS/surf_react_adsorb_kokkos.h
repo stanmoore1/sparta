@@ -133,6 +133,7 @@ class SurfReactAdsorbKokkos : public SurfReactAdsorb {
 #endif
 
   RanKnuth* random_backup;
+  RanKnuth* cmodel_random_backup[SRA_KK_MAXMODELS];
 
   // snapshots for the react/retry rollback path (backup()/restore());
   //   d_species_delta and d_mark accumulate across steps until a sync step,
@@ -469,8 +470,7 @@ class SurfReactAdsorbKokkos : public SurfReactAdsorb {
     if (cmodel == SRA_KK::DIFFUSE) {
       diffuse_scatter(p,norm,cf[0],cf[1],rg);            // tsurf, acc
     } else if (cmodel == SRA_KK::CLL) {
-      double eccen = fl[0] ? cf[5] : 0.0;
-      cll_scatter(p,norm,cf[0],cf[1],cf[2],cf[3],cf[4],fl[0],eccen,rg);
+      cll_scatter(p,norm,cf[0],cf[1],cf[2],cf[3],cf[4],fl[0],cf[5],rg);
     } else if (cmodel == SRA_KK::TD) {
       double tsurf = cf[0];
       int barrier_flag = fl[0], initen_flag = fl[1], bond_flag = fl[2];

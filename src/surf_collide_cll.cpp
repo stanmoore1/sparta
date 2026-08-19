@@ -446,8 +446,8 @@ void SurfCollideCLL::wrapper(Particle::OnePart *p, double *norm,
     acc_rot = coeffs[3];
     acc_vib = coeffs[4];
 
-    if (flags[0]) eccen = coeffs[5];
-    else eccen = 0.0;
+    pflag = flags[0];
+    eccen = coeffs[5];
   }
 
   cll(p,norm);
@@ -470,9 +470,6 @@ void SurfCollideCLL::flags_and_coeffs(int *flags, double *coeffs)
   coeffs[3] = acc_rot;
   coeffs[4] = acc_vib;
 
-  flags[0] = 0;
-  if (eccen != 0.0) {
-    flags[0] = 1;
-    coeffs[5] = eccen;
-  }
+  flags[0] = pflag;
+  coeffs[5] = eccen;
 }

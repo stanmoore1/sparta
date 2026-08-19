@@ -890,6 +890,14 @@ void FixEmitSurfKokkos::operator()(TagFixEmitSurf_subsonic_inflow, const int &i)
 void FixEmitSurfKokkos::subsonic_sort()
 {
   ParticleKokkos* particle_kk = (ParticleKokkos*) particle;
+
+  // sorted_kk mirrors the host Particle::sorted flag the non-Kokkos path
+  //   tests here.  Record it BEFORE sorting: like the non-Kokkos
+  //   subsonic_sort(), a sort done on behalf of this fix builds a list that
+  //   is walked in decreasing particle index, while an already-sorted list
+  //   is walked in increasing index.
+
+  plist_descending = !particle_kk->sorted_kk;
   if (!particle_kk->sorted_kk) particle_kk->sort_kokkos();
 }
 
@@ -992,13 +1000,18 @@ void FixEmitSurfKokkos::operator()(TagFixEmitSurf_subsonic_grid, const int &i) c
   double masstot = 0.0;
   double gamma = 0.0;
 
-  // d_plist orders particles by increasing index; the non-Kokkos
-  // subsonic_sort linked list is traversed in decreasing index order.
-  // For SPARTA_KOKKOS_EXACT match that order so the per-cell moment sums
-  // are bit-identical to the non-Kokkos path (serial, single thread, host).
+  // d_plist orders particles by increasing index.  The non-Kokkos path walks
+  // whichever linked list is current: the one Particle::sort() builds (head =
+  // lowest index, so INcreasing order) when the particles were already
+  // sorted, else the one subsonic_sort() builds itself (head = highest index,
+  // so DEcreasing order).  For SPARTA_KOKKOS_EXACT match that order so the
+  // per-cell moment sums are bit-identical (serial, single thread, host).
 
 #ifdef SPARTA_KOKKOS_EXACT
-  for (int n = np-1; n >= 0; n--) {
+  const int nbeg = plist_descending ? np-1 : 0;
+  const int nend = plist_descending ? -1 : np;
+  const int ninc = plist_descending ? -1 : 1;
+  for (int n = nbeg; n != nend; n += ninc) {
 #else
   for (int n = 0; n < np; n++) {
 #endif
@@ -1190,13 +1203,18 @@ void FixEmitSurfKokkos::operator()(TagFixEmitSurf_mflow_grid, const int &i, doub
   mv[0] = mv[1] = mv[2] = 0.0;
   double masstot = 0.0;
 
-  // d_plist orders particles by increasing index; the non-Kokkos
-  // subsonic_sort linked list is traversed in decreasing index order.
-  // For SPARTA_KOKKOS_EXACT match that order so the per-cell moment sums
-  // are bit-identical to the non-Kokkos path (serial, single thread, host).
+  // d_plist orders particles by increasing index.  The non-Kokkos path walks
+  // whichever linked list is current: the one Particle::sort() builds (head =
+  // lowest index, so INcreasing order) when the particles were already
+  // sorted, else the one subsonic_sort() builds itself (head = highest index,
+  // so DEcreasing order).  For SPARTA_KOKKOS_EXACT match that order so the
+  // per-cell moment sums are bit-identical (serial, single thread, host).
 
 #ifdef SPARTA_KOKKOS_EXACT
-  for (int n = np-1; n >= 0; n--) {
+  const int nbeg = plist_descending ? np-1 : 0;
+  const int nend = plist_descending ? -1 : np;
+  const int ninc = plist_descending ? -1 : 1;
+  for (int n = nbeg; n != nend; n += ninc) {
 #else
   for (int n = 0; n < np; n++) {
 #endif

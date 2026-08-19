@@ -222,7 +222,7 @@ void FixAveHistoWeightKokkos::calculate_weights()
     Fix *fix = modify->fix[m];
     if (!fix->kokkos_flag)
       error->all(FLERR,"Cannot (yet) use non-Kokkos fixes with fix ave/histo/weight/kk");
-      KokkosBase* fixKKBase = dynamic_cast<KokkosBase*>(fix);
+    KokkosBase* fixKKBase = dynamic_cast<KokkosBase*>(fix);
 
     if (kind == GLOBAL && mode == SCALAR) {
       if (j == 0) {

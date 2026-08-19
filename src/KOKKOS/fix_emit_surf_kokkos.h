@@ -91,7 +91,9 @@ class FixEmitSurfKokkos : public FixEmitSurf {
 #endif
 
  private:
-  int npcurrent,nsurf_tally,nlocal_before,nlocal_surf,region_flag;
+  int nsurf_tally,nlocal_before,nlocal_surf,region_flag;
+  double npcurrent;       // matches the non-Kokkos double (VARIABLE npmode)
+  int plist_descending;   // 1 if the host walks d_plist high index -> low
   double boltz,temp_thermal_mix;
   double acoef,nrho_mflow;
 
