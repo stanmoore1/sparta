@@ -645,13 +645,12 @@ leaves out are treated as maximally blurred background and are covered
 over by their drawn neighbors, which turns a distant transparent object
 into a genuine translucent haze.
 
-The {outline} keyword turns on/off drawing outlines where the distance
-from the viewer jumps, i.e. along the visible edges of particles and
-other objects in front of the background or in front of more distant
-objects.  This produces a flat, illustration-like appearance similar
-to hand-drawn molecular graphics, especially when combined with
-reduced shininess or increased ambient lighting.  The {width} value
-sets the width of the outlines in pixels of the final image; the
+The {outline} keyword turns on/off drawing outlines where the distance from the
+viewer jumps, i.e. along the visible edges of particles and other objects in
+front of the background or in front of more distant objects.  This produces a
+flat, illustration-like appearance similar to hand-drawn graphics, especially
+when combined with reduced shininess or increased ambient lighting.  The
+{width} value sets the width of the outlines in pixels of the final image; the
 {color} value sets their color, e.g. black.
 
 IMPORTANT NOTE: The {outline} keyword should not be combined with the
