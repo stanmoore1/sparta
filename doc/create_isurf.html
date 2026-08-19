@@ -138,6 +138,15 @@ inferred implicit surface elements will be.
 <P>The threshold must be specified as a floating point value such that 0
 < thresh < 255.
 </P>
+<P>This command can be used in an axisymmetric domain (see the
+<A HREF = "dimension.html">dimension</A> and <A HREF = "boundary.html">boundary</A> commands).  The
+explicit surfaces are then a body of revolution about the y = 0
+symmetry axis, and the generated implicit surfaces may close on the
+axis, e.g. at the nose and base of a sphere-cone.  Subsequent ablation
+via <A HREF = "fix_ablate.html">fix ablate</A> uses the axisymmetric surface area of
+each surface element, so material recedes fastest where the incident
+flux is highest.
+</P>
 <P>The specified <I>mode</I> can be either <I>inout</I> or <I>ave</I>. The <I>inout</I> mode
 sets corner point values to zero if they are outside the volume or
 area enclosed by the explicit surfaces.  Conversely it sets corner

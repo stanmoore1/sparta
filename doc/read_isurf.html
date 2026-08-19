@@ -210,6 +210,16 @@ array must be identical for each x and z coordinate.  Otherwise the
 aggregate set of induced implicit surfaces will not be consistent
 across the y periodic boundary.
 </P>
+<P>For an axisymmetric domain (see the <A HREF = "dimension.html">dimension</A> and
+<A HREF = "boundary.html">boundary</A> commands), the y = 0 face of the box is the
+symmetry axis.  A body of revolution legitimately closes on itself
+there, so if the array of grid cells starts on the axis, corner point
+values on that y = 0 boundary are allowed to be non-zero.  The
+resulting surface end points lie on the box boundary, which the
+watertight check permits.  If the array of grid cells starts above the
+axis, the usual requirement that the outer boundary corner point values
+be 0 still applies.
+</P>
 <P>The specified <I>ablateID</I> is the fix ID of a <A HREF = "fix_ablate.html">fix
 ablate</A> command which has been previously specified in
 the input script.  It will store the grid corner point values for each
