@@ -175,7 +175,7 @@ void SurfReactAdsorbKokkos::init_cmodels_kokkos()
   for (int idx = 0; idx < SRA_KK_MAXMODELS; idx++) {
     if (cmodel_pool[idx]) continue;
     if (!cmodels[idx]) continue;
-    RanKnuth *cmrand = cmodels[idx]->kokkos_random();
+    RanKnuth *cmrand = cmodels[idx]->random;
     if (!cmrand) continue;     // e.g. specular has no RNG
     cmodel_pool[idx] = new RandPoolWrap(12345,sparta);
     cmodel_pool[idx]->init(cmrand);
@@ -562,7 +562,7 @@ void SurfReactAdsorbKokkos::backup()
 
   for (int idx = 0; idx < SRA_KK_MAXMODELS; idx++) {
     if (!cmodel_pool[idx]) continue;
-    RanKnuth *cmrand = cmodels[idx]->kokkos_random();
+    RanKnuth *cmrand = cmodels[idx]->random;
     if (!cmrand) continue;
     if (!cmodel_random_backup[idx])
       cmodel_random_backup[idx] = new RanKnuth(12345 + comm->me);
@@ -586,7 +586,7 @@ void SurfReactAdsorbKokkos::restore()
 
   for (int idx = 0; idx < SRA_KK_MAXMODELS; idx++) {
     if (!cmodel_random_backup[idx]) continue;
-    memcpy(cmodels[idx]->kokkos_random(),cmodel_random_backup[idx],
+    memcpy(cmodels[idx]->random,cmodel_random_backup[idx],
            sizeof(RanKnuth));
   }
 #endif

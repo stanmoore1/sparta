@@ -29,14 +29,11 @@ class SurfCollideImpulsive : public SurfCollide {
  public:
   SurfCollideImpulsive(class SPARTA *, int, char **);
   SurfCollideImpulsive(class SPARTA *sparta) : SurfCollide(sparta) {} // needed for Kokkos
-  ~SurfCollideImpulsive();
   void init();
   Particle::OnePart *collide(Particle::OnePart *&, double &,
                              int, double *, int, int &);
   void wrapper(Particle::OnePart *, double *, int *, double*);
   void flags_and_coeffs(int *, double *);
-
-  class RanKnuth *kokkos_random() { return random; }
 
  protected:
   double eng_ratio,eff_mass;      // energy ratio and effective mass
@@ -60,7 +57,6 @@ class SurfCollideImpulsive : public SurfCollide {
   int intenergy_flag;
 
   double vstream[3];
-  class RanKnuth *random;     // RNG for particle reflection
 
   void impulsive(Particle::OnePart *, double *);
 };

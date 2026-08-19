@@ -22,6 +22,7 @@
 #include "variable.h"
 #include "memory.h"
 #include "error.h"
+#include "random_knuth.h"
 
 using namespace SPARTA_NS;
 
@@ -62,6 +63,8 @@ SurfCollide::SurfCollide(SPARTA *sparta, int, char **arg) :
   t_owned = t_localghost = NULL;
 
   kokkosable = copy = copymode = 0;
+
+  random = NULL;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -73,6 +76,8 @@ SurfCollide::~SurfCollide()
   delete [] id;
   delete [] style;
   delete [] tname;
+
+  delete random;
 
   memory->destroy(t_owned);
   memory->destroy(t_localghost);

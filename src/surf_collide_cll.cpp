@@ -134,15 +134,6 @@ SurfCollideCLL::SurfCollideCLL(SPARTA *sparta, int narg, char **arg) :
 
 /* ---------------------------------------------------------------------- */
 
-SurfCollideCLL::~SurfCollideCLL()
-{
-  if (copy) return;
-
-  delete random;
-}
-
-/* ---------------------------------------------------------------------- */
-
 void SurfCollideCLL::init()
 {
   SurfCollide::init();

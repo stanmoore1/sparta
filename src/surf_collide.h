@@ -40,7 +40,6 @@ class SurfCollide : protected Pointers {
   virtual Particle::OnePart *collide(Particle::OnePart *&, double &,
                                      int, double *, int, int &) = 0;
   virtual void wrapper(Particle::OnePart *, double *, int *, double *) {}
-  virtual class RanKnuth *kokkos_random() { return NULL; }
   void persurf_wrapper(Particle::OnePart *, double *, int);
   virtual void flags_and_coeffs(int *, double *) {}
 
@@ -52,6 +51,11 @@ class SurfCollide : protected Pointers {
   // nsingle = all collisions in one step
 
   bigint nsingle;
+
+  // RNG used to scatter a particle, NULL for styles that do not scatter
+  //   randomly; owned by this class, allocated by the styles that use it
+
+  class RanKnuth *random;
 
  protected:
 

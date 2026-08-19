@@ -30,14 +30,11 @@ class SurfCollideCLL : public SurfCollide {
  public:
   SurfCollideCLL(class SPARTA *, int, char **);
   SurfCollideCLL(class SPARTA *sparta) : SurfCollide(sparta) {} // needed for Kokkos
-  ~SurfCollideCLL();
   void init();
   Particle::OnePart *collide(Particle::OnePart *&, double &,
                              int, double *, int, int &);
   void wrapper(Particle::OnePart *, double *, int *, double*);
   void flags_and_coeffs(int *, double *);
-
-  class RanKnuth *kokkos_random() { return random; }
 
  protected:
   double acc_n,acc_t,acc_rot,acc_vib;   // surface accomodation coeffs
@@ -53,7 +50,6 @@ class SurfCollideCLL : public SurfCollide {
                              // with partial/fully diffuse scattering
 
   double vstream[3];
-  class RanKnuth *random;     // RNG for particle reflection
 
   void cll(Particle::OnePart *, double *);
 };

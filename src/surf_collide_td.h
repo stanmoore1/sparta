@@ -29,14 +29,11 @@ class SurfCollideTD : public SurfCollide {
  public:
   SurfCollideTD(class SPARTA *, int, char **);
   SurfCollideTD(class SPARTA *sparta) : SurfCollide(sparta) {} // needed for Kokkos
-  ~SurfCollideTD();
   void init();
   Particle::OnePart *collide(Particle::OnePart *&, double &,
                              int, double *, int, int &);
   void wrapper(Particle::OnePart *, double *, int *, double*);
   void flags_and_coeffs(int *, double *);
-
-  class RanKnuth *kokkos_random() { return random; }
 
  protected:
   double barrier_val;
@@ -50,7 +47,6 @@ class SurfCollideTD : public SurfCollide {
   int barrier_flag, initen_flag,bond_flag; // optional flags
 
   double vstream[3];
-  class RanKnuth *random;     // RNG for particle reflection
 
   void td(Particle::OnePart *, double *);
 };
