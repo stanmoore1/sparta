@@ -168,6 +168,7 @@ within the SPARTA code.  The options that are currently recognized are:
 -DSPARTA_GZIP
 -DSPARTA_JPEG
 -DSPARTA_PNG
+-DSPARTA_ZLIB
 -DSPARTA_FFMPEG
 -DSPARTA_MAP
 -DSPARTA_UNORDERED_MAP
@@ -186,6 +187,12 @@ image files respectively. If not, it will only be able to write out
 PPM image files.  For JPEG files, you must also link SPARTA with a
 JPEG library, as described below.  For PNG files, you must also link
 SPARTA with a PNG library, as described below.
+
+If you use -DSPARTA_ZLIB, the "dump particle/vtk, dump grid/vtk, and dump
+surf/vtk"_dump_vtk.html commands will compress the data in the binary form
+of the VTK XML file formats, which typically halves the file size.  You
+must also link SPARTA with a zlib library, as described below.  If not,
+those files are still written and are still valid, just larger.
 
 If you use -DSPARTA_FFMPEG, the "dump movie"_dump_image.html command
 will be available to support on-the-fly generation of rendered movies
@@ -366,6 +373,13 @@ have on your platform, you'll need to set the appropriate JPG_INC,
 JPG_PATH, and JPG_LIB variables, so that the compiler and linker can
 find it.
 
+The 3 ZLIB variables work the same way for the zlib library, which the
+"dump particle/vtk, dump grid/vtk, and dump surf/vtk"_dump_vtk.html
+commands use to compress their binary VTK output. They can be left blank
+if you do not use the -DSPARTA_ZLIB switch discussed above in Step 4. A
+standard zlib library usually goes by the name libz.a or libz.so and has
+an associated header file zlib.h.
+
 As before, if these header and library files are in the usual place on
 your machine, you may not need to set these variables.
 
@@ -488,6 +502,7 @@ that turn on ifdefs within the SPARTA code.  The options that are currently reco
 -DSPARTA_GZIP
 -DSPARTA_JPEG
 -DSPARTA_PNG
+-DSPARTA_ZLIB
 -DSPARTA_FFMPEG
 -DSPARTA_MAP
 -DSPARTA_UNORDERED_MAP
@@ -506,6 +521,12 @@ image files respectively. If not, it will only be able to write out
 PPM image files.  For JPEG files, you must also link SPARTA with a
 JPEG library, as described below.  For PNG files, you must also link
 SPARTA with a PNG library, as described below.
+
+If you use -DSPARTA_ZLIB, the "dump particle/vtk, dump grid/vtk, and dump
+surf/vtk"_dump_vtk.html commands will compress the data in the binary form
+of the VTK XML file formats, which typically halves the file size.  You
+must also link SPARTA with a zlib library, as described below.  If not,
+those files are still written and are still valid, just larger.
 
 If you use -DSPARTA_FFMPEG, the "dump movie"_dump_image.html command
 will be available to support on-the-fly generation of rendered movies
@@ -687,6 +708,11 @@ cmake -DBUILD_JPEG=ON /path/to/sparta/cmake :pre
 or:
 
 cmake -DBUILD_PNG=ON /path/to/sparta/cmake :pre
+
+A third TPL, ZLIB, lets the "dump particle/vtk, dump grid/vtk, and dump
+surf/vtk"_dump_vtk.html commands compress their binary VTK output:
+
+cmake -DBUILD_ZLIB=ON /path/to/sparta/cmake :pre
 
 If you'd like to use a custom jpeg or png installation, please see 
 https://cmake.org/cmake/help/v3.12/module/FindJPEG.html or

@@ -124,14 +124,25 @@ std::string base64(const void *data, size_t len)
 
 std::string encode_bytes(const std::string &raw)
 {
+  // the byte count header is UInt32, as the VTK library also writes it by
+  // default, so a single data array cannot exceed 4 GBytes.  refuse rather
+  // than truncate the count and write a file that cannot be read back
+
+  if ((uint64_t) raw.size() > 0xffffffffULL)
+    throw VTKWriterException("VTK data array is larger than the 4 GByte limit of "
+                             "the binary XML format, write ASCII or split the dump "
+                             "across more files with '%' in the file name");
+
 #if defined(SPARTA_ZLIB)
   uLongf bound = compressBound((uLong) raw.size());
   std::vector<unsigned char> buf(bound ? bound : 1);
-  if (compress(&buf[0],&bound,(const Bytef *) raw.data(),(uLong) raw.size()) == Z_OK) {
+  if (compress(&buf[0],&bound,(const Bytef *) raw.data(),(uLong) raw.size()) == Z_OK &&
+      (uint64_t) bound <= 0xffffffffULL) {
     const uint32_t header[4] = {1U,(uint32_t) raw.size(),0U,(uint32_t) bound};
     return base64(header,sizeof(header)) + base64(&buf[0],bound);
   }
-  // fall through to writing the data uncompressed if zlib fails
+  // fall through to writing the data uncompressed if zlib fails or if the
+  // compressed block would not fit the UInt32 header
 #endif
   std::string block;
   block.reserve(raw.size() + sizeof(uint32_t));

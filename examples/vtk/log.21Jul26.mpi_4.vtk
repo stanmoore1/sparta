@@ -1,7 +1,7 @@
 SPARTA (24 Sep 2025)
 Running on 4 MPI task(s)
 # 2d flow around a circle, writing native VTK dump files
-# exercises dump particle/vtk, grid/vtk, and surf/vtk (VTK package)
+# exercises dump particle/vtk, grid/vtk, and surf/vtk
 
 seed        12345
 dimension   2
