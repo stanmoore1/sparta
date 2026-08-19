@@ -164,10 +164,6 @@ void CollideVSSKokkos::init()
   if (nearcp && subcellflag)
     error->all(FLERR,"Cannot use both nearcp and subcell collision partners");
 
-  if (subcellflag && ngroups > 1)
-    error->all(FLERR,"Cannot yet use subcell collisions with "
-               "multiple collision groups");
-
   // require mixture to contain all species
 
   int imix = particle->find_mixture(mixID);
@@ -207,6 +203,12 @@ void CollideVSSKokkos::init()
 
   oldgroups = ngroups;
   ngroups = mixture->ngroup;
+
+  // must follow ngroups assignment above, as in Collide::init()
+
+  if (subcellflag && ngroups > 1)
+    error->all(FLERR,"Cannot yet use subcell collisions with "
+               "multiple collision groups");
 
   if (ngroups != oldgroups) {
     if (oldgroups == 1) {
@@ -1183,6 +1185,10 @@ template < int DIM, int GASTALLY > void CollideVSSKokkos::collisions_one_subcell
                          " or use react/retry");
       } else
         restore();
+
+      // undo gas tally events from the aborted pass before the kernel re-runs
+
+      if (ngas_tally) clear_gas_tally();
 
       reduce = COLLIDE_REDUCE();
 

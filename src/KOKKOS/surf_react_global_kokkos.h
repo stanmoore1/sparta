@@ -66,6 +66,13 @@ class SurfReactGlobalKokkos : public SurfReactGlobal {
   DAT::t_int_scalar d_nsingle;
   DAT::t_bigint_1d d_tally_single;
 
+  // react/retry rolls the move pass back: the per-step reaction counts must be
+  //   restored to their pre-pass values, not zeroed, or counts tallied by
+  //   earlier move iterations of the same step are lost
+
+  DAT::t_int_scalar d_nsingle_backup;
+  DAT::t_bigint_1d d_tally_single_backup;
+
   HAT::t_int_scalar h_nsingle;
   HAT::t_bigint_1d h_tally_single;
 

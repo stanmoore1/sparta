@@ -252,7 +252,7 @@ void FixAveHistoWeightKokkos::calculate_weights()
 
     } else if (kind == PERGRID) {
       if (j == 0) {
-        d_weights = fixKKBase->d_vector_particle;
+        d_weights = fixKKBase->d_vector_grid;
       } else if (fixKKBase->d_array_grid.data()) {
         d_weights = Kokkos::subview(fixKKBase->d_array_grid,Kokkos::ALL(),j-1);
       }
@@ -280,7 +280,8 @@ void FixAveHistoWeightKokkos::calculate_weights()
       if (grid->maxlocal > maxvectorwt) {
         memoryKK->destroy_kokkos(k_vectorwt,vectorwt);
         maxvectorwt = grid->maxlocal;
-        memory->create(vectorwt,maxvectorwt,"ave/histo/weight:vectorwt");
+        memoryKK->create_kokkos(k_vectorwt,vectorwt,maxvectorwt,
+                                "ave/histo/weight:vectorwt");
       }
       input->variable->compute_grid(m,vectorwt,1,0);
       k_vectorwt.modify_host();
