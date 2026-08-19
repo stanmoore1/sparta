@@ -37,10 +37,11 @@ namespace SPARTA_NS {
 #define KOKKOS_MAX_SLIST 2
 
 struct s_UPDATE_REDUCE {
-  int ntouch_one,nexit_one,nboundary_one,
-      entryexit,ncomm_one,
-      nscheck_one,nscollide_one,nreact_one,nstuck,
-      naxibad,error_flag;
+  // per-step counters are bigint since they can exceed 2^31
+  //   in one step at large per-proc particle counts
+  bigint ntouch_one,nexit_one,nboundary_one,ncomm_one,
+         nscheck_one,nscollide_one,nreact_one;
+  int entryexit,nstuck,naxibad,error_flag;
   KOKKOS_INLINE_FUNCTION
   s_UPDATE_REDUCE() {
     ntouch_one    = 0;
@@ -106,15 +107,36 @@ class UpdateKokkos : public Update {
   double dx,dy,dz,Lx,Ly,Lz;
   double xlo,ylo,zlo,xhi,yhi,zhi;
   int ncx,ncy,ncz;
+
+  // what the fast path may do for itself on each global boundary face, indexed
+  // XLO..ZHI as domain->bflag is.  0 = hand the particle to the standard move,
+  // 1 = periodic, translate by the box length, 2 = specular, mirror about the
+  // face and negate the normal velocity component.
+  // set in move() rather than init() because it depends on nboundary_tally,
+  // which is per-step
+
+  int bcopt[6];
+
   GridKokkos::hash_type hash_kk;
+
+  // dense cell lookup, see GridKokkos::update_halo_index().  extent 0 when
+  // unavailable, in which case the fast path uses hash_kk
+
+  DAT::t_int_1d d_halo_index;
+  int halo_ilo,halo_jlo,halo_klo;
+  int halo_nx,halo_ny,halo_nz;
+
+  // retake hash_kk and d_halo_index from the grid, see its definition
+
+  void grid_index_refresh();
 
   t_cell_1d d_cells;
   t_sinfo_1d d_sinfo;
   t_pcell_1d d_pcells;
 
-  Kokkos::Crs<int, DeviceType, void, int> d_csurfs;
-  Kokkos::Crs<int, DeviceType, void, int> d_csplits;
-  Kokkos::Crs<int, DeviceType, void, int> d_csubs;
+  Kokkos::Crs<int, DeviceType, void, crs_size_type> d_csurfs;
+  Kokkos::Crs<int, DeviceType, void, crs_size_type> d_csplits;
+  Kokkos::Crs<int, DeviceType, void, crs_size_type> d_csubs;
 
   t_line_1d d_lines;
   t_tri_1d d_tris;
@@ -144,20 +166,30 @@ class UpdateKokkos : public Update {
   ComputeBoundaryKokkos tmp_compute_boundary_kk;
   ComputeSurfKokkos tmp_compute_surf_kk;
 
-  typedef Kokkos::DualView<int[14], DeviceType::array_layout, DeviceType> tdual_int_14;
-  typedef tdual_int_14::t_dev t_int_14;
-  typedef tdual_int_14::t_host t_host_int_14;
-  t_int_14 d_scalars;
-  t_host_int_14 h_scalars;
+  // int scalars = flags and view-index counters, must stay int
+  // bigint scalars = per-step statistics counters, can exceed 2^31
+  //   in one step at large per-proc particle counts
 
-  DAT::t_int_scalar d_ntouch_one;
-  HAT::t_int_scalar h_ntouch_one;
+  typedef Kokkos::DualView<int[7], DeviceType::array_layout, DeviceType> tdual_int_7;
+  typedef tdual_int_7::t_dev t_int_7;
+  typedef tdual_int_7::t_host t_host_int_7;
+  t_int_7 d_scalars;
+  t_host_int_7 h_scalars;
 
-  DAT::t_int_scalar d_nexit_one;
-  HAT::t_int_scalar h_nexit_one;
+  typedef Kokkos::DualView<bigint[7], DeviceType::array_layout, DeviceType> tdual_bigint_7;
+  typedef tdual_bigint_7::t_dev t_bigint_7;
+  typedef tdual_bigint_7::t_host t_host_bigint_7;
+  t_bigint_7 d_scalars_big;
+  t_host_bigint_7 h_scalars_big;
 
-  DAT::t_int_scalar d_nboundary_one;
-  HAT::t_int_scalar h_nboundary_one;
+  DAT::t_bigint_scalar d_ntouch_one;
+  HAT::t_bigint_scalar h_ntouch_one;
+
+  DAT::t_bigint_scalar d_nexit_one;
+  HAT::t_bigint_scalar h_nexit_one;
+
+  DAT::t_bigint_scalar d_nboundary_one;
+  HAT::t_bigint_scalar h_nboundary_one;
 
   DAT::t_int_scalar d_nmigrate;
   HAT::t_int_scalar h_nmigrate;
@@ -165,17 +197,17 @@ class UpdateKokkos : public Update {
   DAT::t_int_scalar d_entryexit;
   HAT::t_int_scalar h_entryexit;
 
-  DAT::t_int_scalar d_ncomm_one;
-  HAT::t_int_scalar h_ncomm_one;
+  DAT::t_bigint_scalar d_ncomm_one;
+  HAT::t_bigint_scalar h_ncomm_one;
 
-  DAT::t_int_scalar d_nscheck_one;
-  HAT::t_int_scalar h_nscheck_one;
+  DAT::t_bigint_scalar d_nscheck_one;
+  HAT::t_bigint_scalar h_nscheck_one;
 
-  DAT::t_int_scalar d_nscollide_one;
-  HAT::t_int_scalar h_nscollide_one;
+  DAT::t_bigint_scalar d_nscollide_one;
+  HAT::t_bigint_scalar h_nscollide_one;
 
-  DAT::t_int_scalar d_nreact_one;
-  HAT::t_int_scalar h_nreact_one;
+  DAT::t_bigint_scalar d_nreact_one;
+  HAT::t_bigint_scalar h_nreact_one;
 
   DAT::t_int_scalar d_nstuck;
   HAT::t_int_scalar h_nstuck;
@@ -191,6 +223,13 @@ class UpdateKokkos : public Update {
 
   DAT::t_int_scalar d_nlocal;
   HAT::t_int_scalar h_nlocal;
+
+  // per-face count of the {s} face mirrors the fast path did, see
+  // Update::optmove_surf_tally().  kept out of d_scalars because it is only
+  // touched when a face qualifies, which most runs have none of
+
+  DAT::t_bigint_1d d_bcmirror;
+  HAT::t_bigint_1d h_bcmirror;
 
   void backup();
   void restore();
@@ -232,6 +271,15 @@ class UpdateKokkos : public Update {
 
   KOKKOS_INLINE_FUNCTION
   int split2d(int, double*) const;
+
+  // the two steps of the optimized move, see their definitions and the OPT
+  // block of the move kernel
+
+  template < int DIM > KOKKOS_INLINE_FUNCTION
+  int optmove_bc(const double*, double*, int&) const;
+
+  template < int DIM > KOKKOS_INLINE_FUNCTION
+  int optmove_cell(const double*) const;
 
   // variants of moveperturb method
   // adjust end-of-move x,v due to perturbation on straight-line advection

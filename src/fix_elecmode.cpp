@@ -112,7 +112,7 @@ void FixElecmode::update_custom(int index, double temp_thermal,
   if (particle->species[isp].elecdat == NULL) {
     elecstate[index] = 0;
     eelec[index] = 0;
-    return
+    return;
   }
 
   elecstate[index] = particle->ielec(isp,temp_elec,random);

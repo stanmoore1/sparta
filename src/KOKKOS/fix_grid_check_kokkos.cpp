@@ -71,14 +71,21 @@ void FixGridCheckKokkos::end_of_step()
   // check if icell is a valid cell for owning particles
   // check for split cell is whether particle is inside parent cell
 
-  int nflag = 0;
-  Kokkos::parallel_reduce(nlocal, KOKKOS_LAMBDA(int i, int& local_nflag) {
+  // bigint accumulator: each particle can increment up to 5 times,
+  //   so this exceeds 2^31 in one step at large per-proc particle counts
+  //   (matches bigint nflag in the non-Kokkos FixGridCheck)
+
+  bigint nflag = 0;
+  Kokkos::parallel_reduce(nlocal, KOKKOS_LAMBDA(int i, bigint& local_nflag) {
     auto icell = d_particles(i).icell;
 
     // is icell a valid index
+    // return, do not fall through: every check below indexes d_cells[icell],
+    //   which would be an out-of-bounds device read (matches FixGridCheck)
     if (icell < 0 || icell >= nglocal) {
       d_particle_problems(i) |= IS_IN_INVALID_CELL;
       local_nflag++;
+      return;
     }
 
     // does particle coord match icell bounds
@@ -165,11 +172,11 @@ void FixGridCheckKokkos::end_of_step()
   // warning message instead of error
 
   if (outflag == WARNING) {
-    int all;
-    MPI_Allreduce(&nflag,&all,1,MPI_INT,MPI_SUM,world);
+    bigint all;
+    MPI_Allreduce(&nflag,&all,1,MPI_SPARTA_BIGINT,MPI_SUM,world);
     if (all && comm->me == 0) {
       char str[128];
-      sprintf(str,"%d particles were in wrong cells on timestep "
+      sprintf(str,BIGINT_FORMAT " particles were in wrong cells on timestep "
               BIGINT_FORMAT,all,update->ntimestep);
       error->warning(FLERR,str);
     }

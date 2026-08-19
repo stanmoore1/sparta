@@ -55,16 +55,18 @@ class Update : protected Pointers {
   int *mlist;            // indices of particles to migrate
 
                          // current step counters
+                         // bigint since can exceed 2^31 in one step
+                         //   at large per-proc particle counts
   int niterate;          // iterations of move/comm
-  int ntouch_one;        // particle-cell touches
-  int ncomm_one;         // particles migrating to new procs
-  int nboundary_one;     // particles colliding with global boundary
-  int nexit_one;         // particles exiting outflow boundary
-  int nscheck_one;       // surface elements checked for collisions
-  int nscollide_one;     // particle/surface collisions
+  bigint ntouch_one;     // particle-cell touches
+  bigint ncomm_one;      // particles migrating to new procs
+  bigint nboundary_one;  // particles colliding with global boundary
+  bigint nexit_one;      // particles exiting outflow boundary
+  bigint nscheck_one;    // surface elements checked for collisions
+  bigint nscollide_one;  // particle/surface collisions
 
   bigint first_running_step; // timestep running counts start on
-  int niterate_running;      // running count of move/comm interations
+  bigint niterate_running;   // running count of move/comm interations
   bigint nmove_running;      // running count of total particle moves
   bigint ntouch_running;     // running count of current step counters
   bigint ncomm_running;
@@ -90,7 +92,9 @@ class Update : protected Pointers {
 
   class RanMars *ranmaster;   // master random number generator
 
-  double rcblo[3],rcbhi[3];    // debug info from RCB for dump image
+  int rcbflag;                 // 1 if per-proc RCB sub-boxes are valid
+  double rcblo[3],rcbhi[3];    // most recent RCB sub-box of this proc,
+                               // e.g. for the dump image subbox keyword
 
   // hooks to computes doing on-surface collision/reaction tallying
   // public b/c accessed
@@ -101,6 +105,23 @@ class Update : protected Pointers {
   int ngas_tally;          // # of Comps tallying gas/gas info this step
   int nsurf_tally;         // # of Comps tallying gas/surf info this step
   int nboundary_tally;     // # of Comps tallying gas/boundary info this step
+
+  // optimized move, global boundary faces of style {s}
+  // a surf collide model that is nothing but a mirror can be applied by the
+  //   fast path itself, since the box faces are axis-aligned.  the model still
+  //   has to be told how many collisions it had, which the fast path counts
+  //   per face and optmove_surf_tally() hands back at the end of the move
+
+  int bcmirror_surf[6];    // 1 if this {s} face's model is a plain mirror
+  bigint bcmirror_one[6];  // fast-path mirrors on this face this step
+                           //   bigint like the other per-step counters, since
+                           //   it can exceed 2^31 in one step at large
+                           //   per-proc particle counts
+  int bcmirror_any;        // 1 if any face is one, so the counting can be
+                           //   skipped entirely for the common {r}-only case
+
+  void optmove_surf_init();
+  void optmove_surf_tally();
 
   class Compute **glist_active;   // list of active gas/gas Comps this step
   class Compute **slist_active;   // list of active gas/surf Comps this step
@@ -246,7 +267,7 @@ developers.
 
 E: Cannot set global surfmax when surfaces already exist
 
-This setting must be made before any surfac elements are
+This setting must be made before any surface elements are
 read via the read_surf command.
 
 E: Global mem/limit setting cannot exceed 2GB

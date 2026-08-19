@@ -31,6 +31,7 @@
 #include "surf_collide.h"
 #include "surf_react.h"
 #include "input.h"
+#include "library.h"
 #include "output.h"
 #include "spapython.h"
 #include "stats.h"
@@ -834,14 +835,14 @@ void Variable::compute_particle(int ivar, double *result,
   int nlocal = particle->nlocal;
 
   if (sumflag == 0) {
-    int m = 0;
+    bigint m = 0;
     for (int i = 0; i < nlocal; i++) {
       result[m] = eval_tree(tree,i);
       m += stride;
     }
 
   } else {
-    int m = 0;
+    bigint m = 0;
     for (int i = 0; i < nlocal; i++) {
       result[m] += eval_tree(tree,i);
       m += stride;
@@ -877,14 +878,14 @@ void Variable::compute_grid(int ivar, double *result,
   int nglocal = grid->nlocal;
 
   if (sumflag == 0) {
-    int m = 0;
+    bigint m = 0;
     for (int i = 0; i < nglocal; i++) {
       result[m] = eval_tree(tree,i);
       m += stride;
     }
 
   } else {
-    int m = 0;
+    bigint m = 0;
     for (int i = 0; i < nglocal; i++) {
       result[m] += eval_tree(tree,i);
       m += stride;
@@ -922,14 +923,14 @@ void Variable::compute_surf(int ivar, double *result,
   int nsown = surf->nown;
 
   if (sumflag == 0) {
-    int m = 0;
+    bigint m = 0;
     for (int i = 0; i < nsown; i++) {
       result[m] = eval_tree(tree,i);
       m += stride;
     }
 
   } else {
-    int m = 0;
+    bigint m = 0;
     for (int i = 0; i < nsown; i++) {
       result[m] += eval_tree(tree,i);
       m += stride;
@@ -991,6 +992,47 @@ int Variable::find(char *name)
   for (int i = 0; i < nvar; i++)
     if (strcmp(name,names[i]) == 0) return i;
   return -1;
+}
+
+/* ----------------------------------------------------------------------
+   return a human-readable one-line description of variable i:
+   its name, style, and definition string(s).
+   used by the library interface (sparta_variable_info) for GUI display;
+   mirrors LAMMPS Info::get_variable_info / Variable::get_info
+------------------------------------------------------------------------- */
+
+std::string Variable::get_info(int i)
+{
+  static const char *varstyles[] = {
+    "index","loop","world","universe","uloop","string","getenv",
+    "file","format","equal","particle","grid","surf","internal","python"};
+  const int nstyles = sizeof(varstyles)/sizeof(varstyles[0]);
+
+  char buf[256];
+
+  if (i < 0 || i >= nvar) {
+    snprintf(buf,sizeof(buf),"Variable[%3d]: (unknown)\n",i);
+    return std::string(buf);
+  }
+
+  const char *vstyle =
+    (style[i] >= 0 && style[i] < nstyles) ? varstyles[style[i]] : "(unknown)";
+  std::string sname = std::string(names[i]) + ",";
+  std::string sstyle = std::string(vstyle) + ",";
+  snprintf(buf,sizeof(buf),"Variable[%3d]: %-16s  style = %-16s  def =",
+           i,sname.c_str(),sstyle.c_str());
+  std::string text(buf);
+
+  if (style[i] == INTERNAL) {
+    snprintf(buf,sizeof(buf)," %.8g\n",dvalue[i]);
+    text += buf;
+    return text;
+  }
+
+  for (int j = 0; j < num[i]; ++j)
+    if (data[i][j]) { text += ' '; text += data[i][j]; }
+  text += "\n";
+  return text;
 }
 
 /* ----------------------------------------------------------------------
@@ -1773,7 +1815,10 @@ double Variable::evaluate(char *str, Tree **tree)
 	if (strncmp(word,"p_",2) == 0) cwhich = PARTICLE_CUSTOM;
 	else if (strncmp(word,"g_",2) == 0) cwhich = GRID_CUSTOM;
 	else if (strncmp(word,"s_",2) == 0) cwhich = SURF_CUSTOM;
-	
+
+        custom_sync(cwhich);
+
+
         n = strlen(word) - 2 + 1;
         char *id = new char[n];
         strcpy(id,&word[2]);
@@ -1853,24 +1898,33 @@ double Variable::evaluate(char *str, Tree **tree)
 	  treestack[ntreestack++] = newtree;
 	
 	} else if (nbracket == 1 && size > 0) {
-	
+
+	  if (index1 < 1 || index1 > size)
+	    error->all(FLERR,"Custom attribute in variable formula is "
+		       "accessed out-of-range");
+
+	  // ptr to column index1-1 of the Nentity x size array
+	  // with nstride = size, evaluation walks down that column
+
 	  Tree *newtree = new Tree();
 	  if (type == INT) {
 	    newtree->type = ARRAYINT;
 	    if (cwhich == PARTICLE_CUSTOM)
-	      newtree->iarray = particle->eiarray[particle->ewhich[icustom]][index1-1];
+	      newtree->iarray =
+		&particle->eiarray[particle->ewhich[icustom]][0][index1-1];
 	    else if (cwhich == GRID_CUSTOM)
-	      newtree->iarray = grid->eiarray[grid->ewhich[icustom]][index1-1];
+	      newtree->iarray = &grid->eiarray[grid->ewhich[icustom]][0][index1-1];
 	    else if (cwhich == SURF_CUSTOM)
-	      newtree->iarray = surf->eiarray[surf->ewhich[icustom]][index1-1];
+	      newtree->iarray = &surf->eiarray[surf->ewhich[icustom]][0][index1-1];
 	  } else if (type == DOUBLE) {
 	    newtree->type = ARRAY;
 	    if (cwhich == PARTICLE_CUSTOM)
-	      newtree->array = particle->edvec[particle->ewhich[icustom]];
+	      newtree->array =
+		&particle->edarray[particle->ewhich[icustom]][0][index1-1];
 	    else if (cwhich == GRID_CUSTOM)
-	      newtree->array = grid->edvec[grid->ewhich[icustom]];
+	      newtree->array = &grid->edarray[grid->ewhich[icustom]][0][index1-1];
 	    else if (cwhich == SURF_CUSTOM)
-	      newtree->array = surf->edvec[surf->ewhich[icustom]];
+	      newtree->array = &surf->edarray[surf->ewhich[icustom]][0][index1-1];
 	  }
 	  newtree->nstride = size;
 	  treestack[ntreestack++] = newtree;
@@ -2266,9 +2320,10 @@ double Variable::evaluate(char *str, Tree **tree)
               error->one(FLERR,"Modulo 0 in variable formula");
             argstack[nargstack++] = fmod(value1,value2);
           } else if (opprevious == CARAT) {
-            if (value2 == 0.0)
-              error->one(FLERR,"Power by 0 in variable formula");
-            argstack[nargstack++] = pow(value1,value2);
+            if (value2 == 0.0) argstack[nargstack++] = 1.0;
+            else if (value1 == 0.0 && value2 < 0.0)
+              error->one(FLERR,"Invalid power expression in variable formula");
+            else argstack[nargstack++] = pow(value1,value2);
           } else if (opprevious == UNARY) {
             argstack[nargstack++] = -value2;
           } else if (opprevious == NOT) {
@@ -2404,8 +2459,10 @@ double Variable::collapse_tree(Tree *tree)
     arg2 = collapse_tree(tree->second);
     if (tree->first->type != VALUE || tree->second->type != VALUE) return 0.0;
     tree->type = VALUE;
-    if (arg2 == 0.0) error->one(FLERR,"Power by 0 in variable formula");
-    tree->value = pow(arg1,arg2);
+    if (arg1 == 0.0 && arg2 < 0.0)
+      error->one(FLERR,"Invalid power expression in variable formula");
+    if (arg2 == 0.0) tree->value = 1.0;
+    else tree->value = pow(arg1,arg2);
     return tree->value;
   }
 
@@ -2850,8 +2907,11 @@ double Variable::eval_tree(Tree *tree, int i)
   }
   if (tree->type == CARAT) {
     double exponent = eval_tree(tree->second,i);
-    if (exponent == 0.0) error->one(FLERR,"Power by 0 in variable formula");
-    return pow(eval_tree(tree->first,i),exponent);
+    double base = eval_tree(tree->first,i);
+    if (base == 0.0 && exponent < 0.0)
+      error->one(FLERR,"Invalid power expression in variable formula");
+    if (exponent == 0.0) return 1.0;
+    return pow(base,exponent);
   }
   if (tree->type == UNARY) return -eval_tree(tree->first,i);
 
@@ -3595,7 +3655,7 @@ int Variable::special_function(char *word, char *contents, Tree **tree,
   if (strcmp(word,"sum") && strcmp(word,"min") && strcmp(word,"max") &&
       strcmp(word,"ave") && strcmp(word,"trap") && strcmp(word,"slope") &&
       strcmp(word,"next") && strcmp(word,"grid2part") &&
-      strcmp(word,"is_file"))
+      strcmp(word,"is_file") && strcmp(word,"extract_setting"))
     return 0;
 
   // parse contents for arg1,arg2,arg3 separated by commas
@@ -3957,6 +4017,37 @@ int Variable::special_function(char *word, char *contents, Tree **tree,
     FILE *fp = fopen(arg1,"r");
     value = (fp == nullptr) ? 0.0 : 1.0;
     if (fp) fclose(fp);
+
+    // save value in tree or on argstack
+
+    if (tree) {
+      Tree *newtree = new Tree();
+      newtree->type = VALUE;
+      newtree->value = value;
+      treestack[ntreestack++] = newtree;
+    } else argstack[nargstack++] = value;
+
+  // extract_setting(name) = an integer setting of the running simulation,
+  //   via the same sparta_extract_setting() the library interface exposes.
+  // this is how a script asks for something the input script itself cannot
+  //   otherwise see, such as the number of MPI ranks it is running on.
+  // the library function returns -1 for a name it does not know, and no
+  //   setting it does know is negative, so -1 is an unambiguous error
+
+  } else if (strcmp(word,"extract_setting") == 0) {
+    if (narg != 1)
+      error->all(FLERR,
+                 "Invalid extract_setting() special function in "
+                 "variable formula");
+
+    int ivalue = sparta_extract_setting((void *) sparta,arg1);
+    if (ivalue < 0) {
+      char str[128];
+      snprintf(str,128,"Unknown setting %s in extract_setting() "
+               "special function in variable formula",arg1);
+      error->all(FLERR,str);
+    }
+    value = ivalue;
 
     // save value in tree or on argstack
 

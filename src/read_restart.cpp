@@ -1121,7 +1121,11 @@ void ReadRestart::read_gp_multi_file_less_procs_memlimit(char *file)
       int grid_nlocal;
       tmp = fread(&grid_nlocal,sizeof(int),1,fp);
       fseek(fp,-sizeof(int),SEEK_CUR);
-      int grid_read_size = grid->size_restart(grid_nlocal);
+      bigint grid_read_size_big = grid->size_restart(grid_nlocal);
+      if (grid_read_size_big > MAXSMALLINT)
+        error->one(FLERR,"Restart file grid info exceeds 2 GB per proc, "
+                   "run on more processors");
+      int grid_read_size = grid_read_size_big;
       bigint particle_read_size = n_big - grid_read_size;
       int particle_nlocal;
       fseek(fp,grid_read_size,SEEK_CUR);
@@ -1148,7 +1152,7 @@ void ReadRestart::read_gp_multi_file_less_procs_memlimit(char *file)
 
       // number of particles per pass
 
-      step_size = MIN(particle_nlocal,update->global_mem_limit/nbytes);
+      step_size = MAX(1,MIN(particle_nlocal,update->global_mem_limit/nbytes));
 
       // extra pass for grid
 
@@ -1281,7 +1285,11 @@ void ReadRestart::read_gp_multi_file_more_procs_memlimit(char *file)
       int grid_nlocal;
       tmp = fread(&grid_nlocal,sizeof(int),1,fp);
       fseek(fp,-sizeof(int),SEEK_CUR);
-      int grid_read_size = grid->size_restart(grid_nlocal);
+      bigint grid_read_size_big = grid->size_restart(grid_nlocal);
+      if (grid_read_size_big > MAXSMALLINT)
+        error->one(FLERR,"Restart file grid info exceeds 2 GB per proc, "
+                   "run on more processors");
+      int grid_read_size = grid_read_size_big;
       bigint particle_read_size = n_big - grid_read_size;
       int particle_nlocal;
       fseek(fp,grid_read_size,SEEK_CUR);
@@ -1308,7 +1316,7 @@ void ReadRestart::read_gp_multi_file_more_procs_memlimit(char *file)
 
       // number of particles per pass
 
-      step_size = MIN(particle_nlocal,update->global_mem_limit/nbytes);
+      step_size = MAX(1,MIN(particle_nlocal,update->global_mem_limit/nbytes));
 
       // extra pass for grid
 
@@ -2082,6 +2090,8 @@ void ReadRestart::read_double_vec(int n, double *vec)
 
 void ReadRestart::read_char_vec(bigint n, char *vec)
 {
+  if (n > MAXSMALLINT)
+    error->all(FLERR,"Restart file read buffer exceeds 2 GB");
   if (me == 0) int tmp = fread(vec,sizeof(char),n,fp);
   MPI_Bcast(vec,(int)n,MPI_CHAR,0,world);
 }

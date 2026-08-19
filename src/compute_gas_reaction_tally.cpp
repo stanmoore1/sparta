@@ -321,6 +321,6 @@ void ComputeGasReactionTally::grow_tally()
 bigint ComputeGasReactionTally::memory_usage()
 {
   bigint bytes = 0;
-  bytes += nvalue*maxtally * sizeof(double);    // array_tally
+  bytes += (bigint) nvalue*maxtally * sizeof(double);    // array_tally
   return bytes;
 }

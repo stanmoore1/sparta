@@ -404,7 +404,10 @@ void FixEmitFaceFile::perform_task()
         nactual = 0;
         for (int m = 0; m < ninsert; m++) {
           x[0] = lo[0] + random->uniform() * (hi[0]-lo[0]);
-          x[1] = lo[1] + random->uniform() * (hi[1]-lo[1]);
+          if (domain->axisymmetric)
+            x[1] = sqrt(lo[1]*lo[1] +
+                        random->uniform() * (hi[1]*hi[1]-lo[1]*lo[1]));
+          else x[1] = lo[1] + random->uniform() * (hi[1]-lo[1]);
           if (dimension == 3) x[2] = lo[2] + random->uniform() * (hi[2]-lo[2]);
           else x[2] = 0.0;
 
@@ -458,7 +461,10 @@ void FixEmitFaceFile::perform_task()
         scosine = indot / vscale[isp];
 
         x[0] = lo[0] + random->uniform() * (hi[0]-lo[0]);
-        x[1] = lo[1] + random->uniform() * (hi[1]-lo[1]);
+        if (domain->axisymmetric)
+          x[1] = sqrt(lo[1]*lo[1] +
+                      random->uniform() * (hi[1]*hi[1]-lo[1]*lo[1]));
+        else x[1] = lo[1] + random->uniform() * (hi[1]-lo[1]);
         if (dimension == 3) x[2] = lo[2] + random->uniform() * (hi[2]-lo[2]);
         else x[2] = 0.0;
 
@@ -698,6 +704,8 @@ void FixEmitFaceFile::bcast_mesh()
   MPI_Bcast(mesh.which,mesh.nvalues,MPI_INT,0,world);
   MPI_Bcast(mesh.imesh,mesh.ni,MPI_DOUBLE,0,world);
   MPI_Bcast(mesh.jmesh,mesh.nj,MPI_DOUBLE,0,world);
+  if ((bigint) mesh.ni*mesh.nj*mesh.nvalues > MAXSMALLINT)
+    error->all(FLERR,"Fix emit/face/file mesh exceeds 2^31 values");
   MPI_Bcast(&mesh.values[0][0],mesh.ni*mesh.nj*mesh.nvalues,
             MPI_DOUBLE,0,world);
 
@@ -1235,7 +1243,7 @@ void FixEmitFaceFile::subsonic_grid()
       }
 
       vscale = tasks[i].vscale;
-      for (m = 0; m < nspecies; i++) {
+      for (m = 0; m < nspecies; m++) {
         ispecies = particle->mixture[imix]->species[m];
         vscale[m] = sqrt(2.0 * update->boltz * temp_thermal_cell /
                          species[ispecies].mass);

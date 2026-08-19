@@ -78,7 +78,8 @@ class Particle : protected Pointers {
     double vibrel[MAXVIBMODE];
     double vibtemp[MAXVIBMODE];
     int vibdegen[MAXVIBMODE];
-    int nmode;
+    int nmode;              // # of distinct modes (frequencies) listed
+    int ntotal;            // N = total # of oscillators = sum of degeneracies
   };
 
   struct ElecFile {
@@ -164,8 +165,8 @@ class Particle : protected Pointers {
 
   // Kokkos settings
 
-  int copy,uncopy,copymode; // prevent deallocation of
-                            //  base class when child copy is destroyed
+  int copy,copymode; // prevent deallocation of
+                     //  base class when child copy is destroyed
 
   // methods
 
@@ -177,6 +178,7 @@ class Particle : protected Pointers {
   void compress_rebalance_sorted();
   void compress_reactions(int, int *);
   void sort();
+  void reorder();
   void sort_allocate();
   void remove_all_from_cell(int);
   virtual void grow(int);
@@ -205,7 +207,6 @@ class Particle : protected Pointers {
   void write_restart_mixture(FILE *fp);
   void read_restart_mixture(FILE *fp);
 
-  int size_restart();
   bigint size_restart_big();
   int pack_restart(char *);
   void pack_restart(char *, int, int);

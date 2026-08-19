@@ -507,13 +507,17 @@ void ComputeISurfGrid::grow_tally()
 
 void ComputeISurfGrid::reallocate()
 {
+  // normflux is indexed by surf ID and is sized by the surf count,
+  // not the grid cell count, so it must be reset unconditionally
+  // implicit surfs are re-created by ablation with the grid unchanged
+
+  init_normflux();
+
   if (grid->nlocal == maxgrid) return;
 
   memory->destroy(array_grid);
   maxgrid = grid->nlocal;
   memory->create(array_grid,maxgrid,ntotal,"isurf/grid:array_grid");
-
-  init_normflux();
 }
 
 /* ----------------------------------------------------------------------
@@ -523,8 +527,8 @@ void ComputeISurfGrid::reallocate()
 bigint ComputeISurfGrid::memory_usage()
 {
   bigint bytes = 0;
-  bytes += ntotal*maxgrid * sizeof(double);     // array_grid
-  bytes += ntotal*maxtally * sizeof(double);    // array_surf_tally
+  bytes += (bigint) ntotal*maxgrid * sizeof(double);     // array_grid
+  bytes += (bigint) ntotal*maxtally * sizeof(double);    // array_surf_tally
   bytes += maxtally * sizeof(surfint);          // tally2surf
   return bytes;
 }

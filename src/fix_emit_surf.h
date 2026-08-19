@@ -47,6 +47,10 @@ class FixEmitSurf : public FixEmit {
     double temp_elec;           // from mixture or subsonic temp_thermal
     double magvstream;          // from mixture
     double vstream[3];          // from mixture or adjacent subsonic cell
+    double vcom[3];             // time-averaged cell COM velocity,
+                                //   EMA accumulator for subsonic/mflow window
+                                //   kept separate from vstream so the subsonic
+                                //   pressure correction is not integrated
     double *ntargetsp;          // # of mols to insert for each species,
                                 //   only defined for PERSPECIES
     double *vscale;             // vscale for each species,
@@ -68,13 +72,23 @@ class FixEmitSurf : public FixEmit {
   double psubsonic,tsubsonic,nsubsonic;
   double tprefactor,soundspeed_mixture;
 
-  int npmode,np;    // npmode = FLOW,CONSTANT,VARIABLE
+  // mass-flow inlet (mflow keyword)
+  // mflow is a subsonic_style, so no separate flag is needed
+
+  double mflow,tmflow;      // target mass flow rate and inlet temperature
+  double avemass_mixture;   // fraction-weighted mean mixture species mass
+
+  int subsonic_window;      // EMA window for cell vstream smoothing (0 = none)
+  int nmodekeyword;         // # of subsonic/mflow keywords given, must be <= 1
+
+  int npmode;       // npmode = FLOW,CONSTANT,VARIABLE
+  double np;        // # of particles to insert per step (CONSTANT mode)
   int npvar;
   char *npstr;
 
   // copies of data from other classes
 
-  int dimension,nspecies;
+  int dimension,axisymmetric,nspecies;
   double fnum,dt;
   double nrho,temp_thermal,temp_rot,temp_vib,temp_elec;
   double *fraction,*cummulative;
@@ -118,9 +132,11 @@ class FixEmitSurf : public FixEmit {
   void subsonic_inflow();
   void subsonic_sort();
   void subsonic_grid();
+  void mflow_grid();
 
   virtual void realloc_nspecies();
   int option(int, char **);
+  int option_window(int, char **);
 };
 
 }

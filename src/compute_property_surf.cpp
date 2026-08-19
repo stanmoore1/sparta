@@ -219,7 +219,7 @@ void ComputePropertySurf::compute_per_surf()
 bigint ComputePropertySurf::memory_usage()
 {
   bigint bytes;
-  bytes = nvalues*nsown * sizeof(double);
+  bytes = (bigint) nvalues*nsown * sizeof(double);
   return bytes;
 }
 

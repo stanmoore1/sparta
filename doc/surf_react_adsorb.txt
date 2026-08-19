@@ -323,6 +323,17 @@ reactants. The reaction probability is obtained by normalized all the
 reaction rates. A detailed description can be found in Swaminathan
 Gopalan {et al.} "(SG18)"_#SG18.
 
+Note that adsorption events are accumulated against the surface state
+stored at the most recent sync, so the influx of an entire {Nsync}
+window can adsorb more particles on a face or surface element than the
+{n_sites} value gives it room for.  When that happens, the coverage
+which scales the adsorption reactions is clamped at one, so that those
+reactions stop until the coverage drops, and a warning is printed the
+first time it happens.  Since the stored count of adsorbed particles is
+then larger than the number of sites, which is not physical, the run
+should be repeated with a smaller {Nsync} or {fnum}, or a larger
+{n_sites} value.
+
 :line
 
 If there are gas-phase products, there is an option to specify the
@@ -349,7 +360,7 @@ The values can be used by the "stats_style"_stats_style.html command
 and by "variables"_variable.html that define formulas.  The latter
 means they can be used by any command that uses a variable as input,
 e.g. the "fix ave/time"_fix_ave_time.html command.  See "Section
-4.4"_Section_howto.html#howto_4 for an overview of SPARTA output
+6.4"_Section_howto.html#howto_4 for an overview of SPARTA output
 options.
 
 This {adsorb} style compute a vector of length 2 + 2*nlist.  Nlist is
@@ -385,7 +396,7 @@ appropriately when that occurs.
 
 [Related commands:]
 
-"surf_react"_aurf_react.html, "react"_react.html, 
+"surf_react"_surf_react.html, "react"_react.html, 
 "surf_modify"_surf_modify.html,
 "bound_modify"_bound_modify.html, 
 
