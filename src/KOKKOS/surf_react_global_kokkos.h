@@ -56,17 +56,18 @@ class SurfReactGlobalKokkos : public SurfReactGlobal {
 
   RanKnuth* random_backup;
 
-  typedef Kokkos::DualView<int[3], DeviceType::array_layout, DeviceType> tdual_int_3;
-  typedef tdual_int_3::t_dev t_int_3;
-  typedef tdual_int_3::t_host t_host_int_3;
-  t_int_3 d_scalars;
-  t_host_int_3 h_scalars;
+  // nsingle stays int, matching SurfReact::nsingle; the per-reaction tallies
+  //   mirror bigint SurfReact::tally_single[], which can exceed 2^31 in one
+  //   step at large per-proc particle counts
+
+  DAT::tdual_int_scalar k_nsingle;
+  DAT::tdual_bigint_1d k_tally_single;
 
   DAT::t_int_scalar d_nsingle;
-  DAT::t_int_1d d_tally_single;
+  DAT::t_bigint_1d d_tally_single;
 
   HAT::t_int_scalar h_nsingle;
-  HAT::t_int_1d h_tally_single;
+  HAT::t_bigint_1d h_tally_single;
 
   t_particle_1d d_particles;
 

@@ -60,17 +60,20 @@ class SurfCollideAdiabaticKokkos : public SurfCollideAdiabatic {
 
   RanKnuth* random_backup;
 
-  typedef Kokkos::DualView<int[2], DeviceType::array_layout, DeviceType> tdual_int_2;
-  typedef tdual_int_2::t_dev t_int_2;
-  typedef tdual_int_2::t_host t_host_int_2;
-  t_int_2 d_scalars;
-  t_host_int_2 h_scalars;
+  // bigint scalars: mirror SurfCollide::nsingle and Surf::nreact_one,
+  //   which can exceed 2^31 in one step at large per-proc particle counts
 
-  DAT::t_int_scalar d_nsingle;
-  DAT::t_int_scalar d_nreact_one;
+  typedef Kokkos::DualView<bigint[2], DeviceType::array_layout, DeviceType> tdual_bigint_2;
+  typedef tdual_bigint_2::t_dev t_bigint_2;
+  typedef tdual_bigint_2::t_host t_host_bigint_2;
+  t_bigint_2 d_scalars;
+  t_host_bigint_2 h_scalars;
 
-  HAT::t_int_scalar h_nsingle;
-  HAT::t_int_scalar h_nreact_one;
+  DAT::t_bigint_scalar d_nsingle;
+  DAT::t_bigint_scalar d_nreact_one;
+
+  HAT::t_bigint_scalar h_nsingle;
+  HAT::t_bigint_scalar h_nreact_one;
 
   t_particle_1d d_particles;
   t_species_1d d_species;

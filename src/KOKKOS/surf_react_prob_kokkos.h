@@ -70,14 +70,18 @@ class SurfReactProbKokkos : public SurfReactProb {
 
   RanKnuth* random_backup;
 
-  DAT::t_int_1d d_scalars;
-  HAT::t_int_1d h_scalars;
+  // nsingle stays int, matching SurfReact::nsingle; the per-reaction tallies
+  //   mirror bigint SurfReact::tally_single[], which can exceed 2^31 in one
+  //   step at large per-proc particle counts
+
+  DAT::tdual_int_scalar k_nsingle;
+  DAT::tdual_bigint_1d k_tally_single;
 
   DAT::t_int_scalar d_nsingle;
-  DAT::t_int_1d d_tally_single;
+  DAT::t_bigint_1d d_tally_single;
 
   HAT::t_int_scalar h_nsingle;
-  HAT::t_int_1d h_tally_single;
+  HAT::t_bigint_1d h_tally_single;
 
   t_particle_1d d_particles;
 

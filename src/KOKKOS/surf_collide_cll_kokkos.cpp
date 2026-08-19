@@ -74,11 +74,11 @@ SurfCollideCLLKokkos::SurfCollideCLLKokkos(SPARTA *sparta, int narg, char **arg)
 
   // use 1D view for scalars to reduce GPU memory operations
 
-  d_scalars = t_int_2("surf_collide_cll:scalars");
+  d_scalars = t_bigint_2("surf_collide_cll:scalars");
   d_nsingle = Kokkos::subview(d_scalars,0);
   d_nreact_one = Kokkos::subview(d_scalars,1);
 
-  h_scalars = t_host_int_2("surf_collide_cll:scalars_mirror");
+  h_scalars = t_host_bigint_2("surf_collide_cll:scalars_mirror");
   h_nsingle = Kokkos::subview(h_scalars,0);
   h_nreact_one = Kokkos::subview(h_scalars,1);
 }

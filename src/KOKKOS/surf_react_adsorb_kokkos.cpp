@@ -61,13 +61,13 @@ SurfReactAdsorbKokkos::SurfReactAdsorbKokkos(SPARTA *sparta, int narg, char **ar
 {
   kokkosable = 1;
 
-  d_scalars = DAT::t_int_1d("surf_react_adsorb:scalars",nlist_gs+1);
-  d_nsingle = Kokkos::subview(d_scalars,0);
-  d_tally_single = Kokkos::subview(d_scalars,std::make_pair(1,nlist_gs+1));
+  k_nsingle = DAT::tdual_int_scalar("surf_react_adsorb:nsingle");
+  d_nsingle = k_nsingle.view_device();
+  h_nsingle = k_nsingle.view_host();
 
-  h_scalars = HAT::t_int_1d("surf_react_adsorb:scalars_mirror",nlist_gs+1);
-  h_nsingle = Kokkos::subview(h_scalars,0);
-  h_tally_single = Kokkos::subview(h_scalars,std::make_pair(1,nlist_gs+1));
+  k_tally_single = DAT::tdual_bigint_1d("surf_react_adsorb:tally_single",nlist_gs);
+  d_tally_single = k_tally_single.view_device();
+  h_tally_single = k_tally_single.view_host();
 
   random_backup = NULL;
 
@@ -120,7 +120,8 @@ void SurfReactAdsorbKokkos::init()
                  "an adiabatic or impulsive post-reaction collision model");
   }
 
-  Kokkos::deep_copy(d_scalars,0);
+  Kokkos::deep_copy(d_nsingle,0);
+  Kokkos::deep_copy(d_tally_single,0);
 
   init_reactions_gs_kokkos();
   init_cmodels_kokkos();
@@ -415,7 +416,8 @@ void SurfReactAdsorbKokkos::post_react()
 void SurfReactAdsorbKokkos::tally_reset()
 {
   SurfReact::tally_reset();
-  Kokkos::deep_copy(d_scalars,0);
+  Kokkos::deep_copy(d_nsingle,0);
+  Kokkos::deep_copy(d_tally_single,0);
 }
 
 /* ----------------------------------------------------------------------
@@ -447,7 +449,8 @@ void SurfReactAdsorbKokkos::tally_update()
 
   // device -> host: reaction counts (consumed by the base every step)
 
-  Kokkos::deep_copy(h_scalars,d_scalars);
+  Kokkos::deep_copy(h_nsingle,d_nsingle);
+  Kokkos::deep_copy(h_tally_single,d_tally_single);
   nsingle = h_nsingle();
   for (int i = 0; i < nlist_gs; i++) tally_single[i] = h_tally_single[i];
 
@@ -495,7 +498,8 @@ void SurfReactAdsorbKokkos::tally_update()
       k_mark.modify_host();
       k_mark.sync_device();
     }
-    Kokkos::deep_copy(d_scalars,0);
+    Kokkos::deep_copy(d_nsingle,0);
+    Kokkos::deep_copy(d_tally_single,0);
 
     // host per-slot state was just updated by update_state_*(); force
     //   pre_react() to re-push it to the device on the next step
@@ -516,11 +520,16 @@ void SurfReactAdsorbKokkos::backup()
   //   d_mark persist across steps until a sync step, so they cannot simply
   //   be zeroed on restore (unlike surf_react global/prob)
 
-  if (d_scalars_backup.extent(0) != d_scalars.extent(0))
-    d_scalars_backup = DAT::t_int_1d(
-      Kokkos::view_alloc("surf_react_adsorb:scalars_backup",Kokkos::WithoutInitializing),
-      d_scalars.extent(0));
-  Kokkos::deep_copy(d_scalars_backup,d_scalars);
+  if (!d_nsingle_backup.data())
+    d_nsingle_backup = DAT::t_int_scalar(
+      Kokkos::view_alloc("surf_react_adsorb:nsingle_backup",Kokkos::WithoutInitializing));
+  Kokkos::deep_copy(d_nsingle_backup,d_nsingle);
+
+  if (d_tally_single_backup.extent(0) != d_tally_single.extent(0))
+    d_tally_single_backup = DAT::t_bigint_1d(
+      Kokkos::view_alloc("surf_react_adsorb:tally_single_backup",Kokkos::WithoutInitializing),
+      d_tally_single.extent(0));
+  Kokkos::deep_copy(d_tally_single_backup,d_tally_single);
 
   if (d_species_delta_backup.extent(0) != d_species_delta.extent(0) ||
       d_species_delta_backup.extent(1) != d_species_delta.extent(1))
@@ -548,7 +557,8 @@ void SurfReactAdsorbKokkos::backup()
 
 void SurfReactAdsorbKokkos::restore()
 {
-  Kokkos::deep_copy(d_scalars,d_scalars_backup);
+  Kokkos::deep_copy(d_nsingle,d_nsingle_backup);
+  Kokkos::deep_copy(d_tally_single,d_tally_single_backup);
   Kokkos::deep_copy(d_species_delta,d_species_delta_backup);
   if (mode == SRA_KK::SURF)
     Kokkos::deep_copy(d_mark,d_mark_backup);
