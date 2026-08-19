@@ -531,12 +531,20 @@ static inline int optmove_cell(const double *xp, const double *boxlo,
   int kp = 0;
   if (DIM == 3) kp = static_cast<int> ((xp[2] - boxlo[2])/dz);
 
+  // optmove_bc() has already put xp inside the box, but dx is a rounded
+  //   quotient, so a position within an ulp of an upper face can still divide
+  //   to unx.  that index is not a miss to be caught by the lookup: the cell
+  //   ID it forms is the valid ID of the first cell of the next row, on the
+  //   far side of the box, and the hash would return it.  reject it here, for
+  //   both lookups
+
+  if (ip >= grid->unx || jp >= grid->uny || kp >= grid->unz) return -1;
+
   if (grid->halo_index) {
     int il = ip - grid->halo_ilo; if (il < 0) il += grid->unx;
     int jl = jp - grid->halo_jlo; if (jl < 0) jl += grid->uny;
     int kl = kp - grid->halo_klo; if (kl < 0) kl += grid->unz;
-    if (il < grid->halo_nx && jl < grid->halo_ny && kl < grid->halo_nz &&
-        ip < grid->unx && jp < grid->uny && kp < grid->unz)
+    if (il < grid->halo_nx && jl < grid->halo_ny && kl < grid->halo_nz)
       return grid->halo_index[(kl*grid->halo_ny + jl)*grid->halo_nx + il];
     return -1;
   }
@@ -1807,6 +1815,17 @@ void Update::optmove_surf_init()
   bcmirror_any = 0;
 
   if (!optmove_flag) return;
+
+  // an external field perturbs the move, and the two boundary styles then part
+  //   company.  for an {r} face Domain::collide() mirrors the end-of-step
+  //   position, which is what the fast path does, so that stays exact.  for an
+  //   {s} face it instead re-derives the position from the collision point as
+  //   x + dtremain*v, applying no field over the remainder of the step, so the
+  //   mirror lands somewhere else.  give the shortcut up rather than reproduce
+  //   that, since it is the normal move's own approximation and not a property
+  //   of the boundary
+
+  if (fstyle != NOFIELD) return;
 
   for (int f = 0; f < 6; f++) {
     if (domain->bflag[f] != SURFACE) continue;

@@ -1047,12 +1047,20 @@ int UpdateKokkos::optmove_cell(const double *xp) const
   int kp = 0;
   if (DIM == 3) kp = static_cast<int> ((xp[2] - zlo)/dz);
 
+  // optmove_bc() has already put xp inside the box, but dx is a rounded
+  //   quotient, so a position within an ulp of an upper face can still divide
+  //   to ncx.  that index is not a miss to be caught by the lookup: the cell
+  //   ID it forms is the valid ID of the first cell of the next row, on the
+  //   far side of the box, and the hash would return it.  reject it here, for
+  //   both lookups
+
+  if (ip >= ncx || jp >= ncy || kp >= ncz) return -1;
+
   if (d_halo_index.extent(0)) {
     int il = ip - halo_ilo; if (il < 0) il += ncx;
     int jl = jp - halo_jlo; if (jl < 0) jl += ncy;
     int kl = kp - halo_klo; if (kl < 0) kl += ncz;
-    if (il < halo_nx && jl < halo_ny && kl < halo_nz &&
-        ip < ncx && jp < ncy && kp < ncz)
+    if (il < halo_nx && jl < halo_ny && kl < halo_nz)
       return d_halo_index[((size_t) kl*halo_ny + jl)*halo_nx + il];
     return -1;
   }
