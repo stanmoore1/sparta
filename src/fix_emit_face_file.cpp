@@ -479,7 +479,7 @@ void FixEmitFaceFile::perform_task()
 
         v[ndim] = beta_un*vscale[isp]*normal[ndim] + vstream[ndim];
 
-        theta = MY_PI * random->uniform();
+        theta = MY_2PI * random->uniform();
         vr = vscale[isp] * sqrt(-log(random->uniform()));
         v[pdim] = vr * sin(theta) + vstream[pdim];
         v[qdim] = vr * cos(theta) + vstream[qdim];
@@ -1233,7 +1233,7 @@ void FixEmitFaceFile::subsonic_grid()
         tempmax = MAX(tempmax,temp_thermal_cell);
       }
 
-      if (np) {
+      if (np && massrho_cell*soundspeed_cell > 0.0) {
         sign = normal[ndim];
         vstream[ndim] += sign *
           (tasks[i].press - press_cell) / (massrho_cell*soundspeed_cell);

@@ -2459,7 +2459,10 @@ void Grid::group(int narg, char **arg)
     int jgroup;
     for (int iarg = 3; iarg < narg; iarg++) {
       jgroup = find_group(arg[iarg]);
-      if (jgroup == -1) error->all(FLERR,"Group ID does not exist");
+      if (jgroup == -1) {
+        delete [] list;
+        error->all(FLERR,"Group ID does not exist");
+      }
       list[iarg-3] = jgroup;
     }
 
@@ -2494,7 +2497,10 @@ void Grid::group(int narg, char **arg)
     int jgroup;
     for (int iarg = 3; iarg < narg; iarg++) {
       jgroup = find_group(arg[iarg]);
-      if (jgroup == -1) error->all(FLERR,"Group ID does not exist");
+      if (jgroup == -1) {
+        delete [] list;
+        error->all(FLERR,"Group ID does not exist");
+      }
       list[iarg-3] = jgroup;
     }
 
@@ -2521,7 +2527,10 @@ void Grid::group(int narg, char **arg)
     int jgroup;
     for (int iarg = 3; iarg < narg; iarg++) {
       jgroup = find_group(arg[iarg]);
-      if (jgroup == -1) error->all(FLERR,"Group ID does not exist");
+      if (jgroup == -1) {
+        delete [] list;
+        error->all(FLERR,"Group ID does not exist");
+      }
       list[iarg-3] = jgroup;
     }
 

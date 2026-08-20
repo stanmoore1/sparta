@@ -654,10 +654,13 @@ int Variable::next(int narg, char **arg)
       delete random;
 
       FILE *fp = fopen("tmp.sparta.variable.lock","r");
+      if (fp == NULL) error->one(FLERR,"Could not open variable lock file for reading");
       int tmp = fscanf(fp,"%d",&nextindex);
+      if (tmp != 1) error->one(FLERR,"Failed to read index from variable lock file");
       //printf("READ %d %d\n",universe->me,nextindex);
       fclose(fp);
       fp = fopen("tmp.sparta.variable.lock","w");
+      if (fp == NULL) error->one(FLERR,"Could not open variable lock file for writing");
       fprintf(fp,"%d\n",nextindex+1);
       //printf("WRITE %d %d\n",universe->me,nextindex+1);
       fclose(fp);
@@ -1325,8 +1328,10 @@ double Variable::evaluate(char *str, Tree **tree)
         strcpy(id,&word[2]);
 
         int icompute = modify->find_compute(id);
-        if (icompute < 0)
+        if (icompute < 0) {
+          delete [] id;
           error->all(FLERR,"Invalid compute ID in variable formula");
+        }
         Compute *compute = modify->compute[icompute];
         delete [] id;
 
@@ -1602,7 +1607,10 @@ double Variable::evaluate(char *str, Tree **tree)
         strcpy(id,&word[2]);
 
         int ifix = modify->find_fix(id);
-        if (ifix < 0) error->all(FLERR,"Invalid fix ID in variable formula");
+        if (ifix < 0) {
+          delete [] id;
+          error->all(FLERR,"Invalid fix ID in variable formula");
+        }
         Fix *fix = modify->fix[ifix];
         delete [] id;
 
@@ -1825,30 +1833,42 @@ double Variable::evaluate(char *str, Tree **tree)
 
 	int icustom,size,type;
 	if (cwhich == PARTICLE_CUSTOM) {
-	  if (tree == NULL || treestyle != PARTICLE)
+	  if (tree == NULL || treestyle != PARTICLE) {
+	    delete [] id;
 	    error->all(FLERR,"Per-particle custom attribute in "
 		       "non particle-style variable formula");
+	  }
 	  icustom = particle->find_custom(id);
-	  if (icustom < 0)
+	  if (icustom < 0) {
+	    delete [] id;
 	    error->all(FLERR,"Invalid custom attribute ID in variable formula");
+	  }
 	  size = particle->esize[icustom];
 	  type = particle->etype[icustom];
 	} else if (cwhich == GRID_CUSTOM) {
-	  if (tree == NULL || treestyle != GRID)
+	  if (tree == NULL || treestyle != GRID) {
+	    delete [] id;
 	    error->all(FLERR,"Per-grid custom attribute in "
 		       "non grid-style variable formula");
+	  }
 	  icustom = grid->find_custom(id);
-	  if (icustom < 0)
+	  if (icustom < 0) {
+	    delete [] id;
 	    error->all(FLERR,"Invalid custom attribute ID in variable formula");
+	  }
 	  size = grid->esize[icustom];
 	  type = grid->etype[icustom];
 	} else if (cwhich == SURF_CUSTOM) {
-	  if (tree == NULL || treestyle != SURF)
+	  if (tree == NULL || treestyle != SURF) {
+	    delete [] id;
 	    error->all(FLERR,"Per-surf custom attribute in "
 		       "non surf-style variable formula");
+	  }
 	  icustom = surf->find_custom(id);
-	  if (icustom < 0)
+	  if (icustom < 0) {
+	    delete [] id;
 	    error->all(FLERR,"Invalid custom attribute ID in variable formula");
+	  }
 	  size = surf->esize[icustom];
 	  type = surf->etype[icustom];
 	}
@@ -1947,8 +1967,10 @@ double Variable::evaluate(char *str, Tree **tree)
         strcpy(id,&word[3]);
 
         int isc = surf->find_collide(id);
-        if (isc < 0)
+        if (isc < 0) {
+          delete [] id;
           error->all(FLERR,"Invalid surf collide ID in variable formula");
+        }
         SurfCollide *sc = surf->sc[isc];
         delete [] id;
 
@@ -2002,8 +2024,10 @@ double Variable::evaluate(char *str, Tree **tree)
         strcpy(id,&word[3]);
 
         int isr = surf->find_react(id);
-        if (isr < 0)
+        if (isr < 0) {
+          delete [] id;
           error->all(FLERR,"Invalid surf reaction ID in variable formula");
+        }
         SurfReact *sr = surf->sr[isr];
         delete [] id;
 
@@ -2054,10 +2078,14 @@ double Variable::evaluate(char *str, Tree **tree)
         strcpy(id,&word[2]);
 
         int ivar = find(id);
-        if (ivar < 0)
+        if (ivar < 0) {
+          delete [] id;
           error->all(FLERR,"Invalid variable name in variable formula");
-        if (eval_in_progress[ivar])
+        }
+        if (eval_in_progress[ivar]) {
+          delete [] id;
           error->all(FLERR,"Variable has circular dependency");
+        }
 
         // parse zero or one trailing brackets
         // point i beyond last bracket
@@ -2092,8 +2120,10 @@ double Variable::evaluate(char *str, Tree **tree)
                    style[ivar] != GRID && style[ivar] != SURF) {
 
           char *var = retrieve(id);
-          if (var == NULL)
+          if (var == NULL) {
+            delete [] id;
             error->all(FLERR,"Invalid variable evaluation in variable formula");
+          }
           if (tree) {
             Tree *newtree = new Tree();
             newtree->type = VALUE;
@@ -2106,9 +2136,11 @@ double Variable::evaluate(char *str, Tree **tree)
 
         } else if (nbracket == 0 && style[ivar] == PARTICLE) {
 
-          if (tree == NULL || treestyle != PARTICLE)
+          if (tree == NULL || treestyle != PARTICLE) {
+            delete [] id;
             error->all(FLERR,"Per-particle variable in "
                        "non particle-style variable formula");
+          }
           Tree *newtree;
           evaluate(data[ivar][0],&newtree);
           treestack[ntreestack++] = newtree;
@@ -2118,9 +2150,11 @@ double Variable::evaluate(char *str, Tree **tree)
 
         } else if (nbracket == 0 && style[ivar] == GRID) {
 
-          if (tree == NULL || treestyle != GRID)
+          if (tree == NULL || treestyle != GRID) {
+            delete [] id;
             error->all(FLERR,"Per-grid variable in "
                        "non grid-style variable formula");
+          }
           Tree *newtree;
           evaluate(data[ivar][0],&newtree);
           treestack[ntreestack++] = newtree;
@@ -2130,16 +2164,21 @@ double Variable::evaluate(char *str, Tree **tree)
 
         } else if (nbracket == 0 && style[ivar] == SURF) {
 
-          if (tree == NULL || treestyle != SURF)
+          if (tree == NULL || treestyle != SURF) {
+            delete [] id;
             error->all(FLERR,"Per-surf variable in "
                        "non surf-style variable formula");
+          }
           Tree *newtree;
           evaluate(data[ivar][0],&newtree);
           treestack[ntreestack++] = newtree;
 
 	// unrecognized variable
 	
-        } else error->all(FLERR,"Mismatched variable in variable formula");
+        } else {
+          delete [] id;
+          error->all(FLERR,"Mismatched variable in variable formula");
+        }
 
         delete [] id;
 

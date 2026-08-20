@@ -668,7 +668,7 @@ void ReadSurf::base(char *file)
     fp = fopen(hfile,"r");
     if (fp == NULL) {
       char str[128];
-      sprintf(str,"Cannot open surface base file %s",hfile);
+      snprintf(str,128,"Cannot open surface base file %s",hfile);
       error->one(FLERR,str);
     }
     delete [] hfile;
@@ -2251,7 +2251,7 @@ void ReadSurf::open(char *file)
   else {
 #ifdef SPARTA_GZIP
     char gunzip[128];
-    sprintf(gunzip,"gunzip -c %s",file);
+    snprintf(gunzip,128,"gunzip -c %s",file);
     fp = popen(gunzip,"r");
 #else
     error->one(FLERR,"Cannot open gzipped file");
@@ -2260,7 +2260,7 @@ void ReadSurf::open(char *file)
 
   if (fp == NULL) {
     char str[128];
-    sprintf(str,"Cannot open file %s",file);
+    snprintf(str,128,"Cannot open file %s",file);
     error->one(FLERR,str);
   }
 }
@@ -2341,7 +2341,7 @@ void ReadSurf::file_search(char *infile, char *outfile)
 
   ptr = strchr(infile,'*');
   *ptr = '\0';
-  sprintf(outfile,"%s" BIGINT_FORMAT "%s",infile,maxnum,ptr+1);
+  snprintf(outfile,strlen(infile)+16,"%s" BIGINT_FORMAT "%s",infile,maxnum,ptr+1);
   *ptr = '*';
 
   // clean up

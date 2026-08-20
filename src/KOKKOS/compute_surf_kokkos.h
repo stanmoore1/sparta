@@ -409,8 +409,9 @@ void surf_tally_kk(double /*dtremain*/, int isurf, int icell, int reaction,
         double r_coeff = 0.0;
         if (sr_type == 1)
           r_coeff = sr_kk_prob_copy[m].obj.d_coeffs(reaction-1,1);
-        a_array_surf_tally(itally,k++) += weight * r_coeff * fluxscale;
+        a_array_surf_tally(itally,k) += weight * r_coeff * fluxscale;
       }
+      k++;
       break;
     case ETOT:
       if (iorig) vsqpre = origmass * MathExtraKokkos::lensq3(vorig);

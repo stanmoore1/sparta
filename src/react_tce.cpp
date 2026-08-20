@@ -179,13 +179,13 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
         break;
       }
 
-    if (react_prob < 0) error->warning(FLERR,"Negative reaction probability");
-    else if (react_prob > 1) error->warning(FLERR,"Reaction probability greater than 1");
-
     default:
       error->one(FLERR,"Unknown outcome in reaction");
       break;
     }
+
+    if (react_prob < 0) error->warning(FLERR,"Negative reaction probability");
+    else if (react_prob > 1) error->warning(FLERR,"Reaction probability greater than 1");
 
     // test against random number to see if this reaction occurs
     // if it does, reset species of I,J and optional K to product species
@@ -236,6 +236,8 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
 
         return list[i] + 1;
       }
+
+      break;
     }
   }
 

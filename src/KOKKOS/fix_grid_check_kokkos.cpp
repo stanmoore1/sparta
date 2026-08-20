@@ -191,9 +191,9 @@ void FixGridCheckKokkos::end_of_step()
       auto icell = particles[i].icell;
       if (h_particle_problems(i) & IS_IN_INVALID_CELL) {
         sprintf(str,
-                "Particle %d,%d on proc %d is in invalid cell " CELLINT_FORMAT
+                "Particle %d,%d on proc %d is in invalid cell index %d"
                 " on timestep " BIGINT_FORMAT,
-                i,particles[i].id,comm->me,cells[icell].id,update->ntimestep);
+                i,particles[i].id,comm->me,icell,update->ntimestep);
         error->one(FLERR,str);
       }
       if (h_particle_problems(i) & IS_OUTSIDE_CELL) {

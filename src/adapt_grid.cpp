@@ -1526,6 +1526,7 @@ int AdaptGrid::perform_coarsen()
 
     // coarsen parentID to become a new child cell
 
+    int nglocalprev = grid->nlocal;
     grid->coarsen_cell(parentID,plevel,plo,phi,nchild,
                        alist[i].index,alist[i].nsurf,alist[i].np,
                        alist[i].surfs,alist[i].particles,cut2d,cut3d);
@@ -1533,7 +1534,7 @@ int AdaptGrid::perform_coarsen()
     cells = grid->cells;
     cinfo = grid->cinfo;
     sinfo = grid->sinfo;
-    newcell = grid->nlocal - 1;
+    newcell = nglocalprev;
 
     // if new child has no surfs and any of its children was INSIDE
     // then type of new child cell = INSIDE
