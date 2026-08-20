@@ -141,13 +141,6 @@ SurfCollideImpulsive::SurfCollideImpulsive(SPARTA *sparta, int narg, char **arg)
 
 /* ---------------------------------------------------------------------- */
 
-SurfCollideImpulsive::~SurfCollideImpulsive()
-{
-  delete random;
-}
-
-/* ---------------------------------------------------------------------- */
-
 void SurfCollideImpulsive::init()
 {
   SurfCollide::init();

@@ -81,11 +81,23 @@ UpdateKokkos::UpdateKokkos(SPARTA *sparta) : Update(sparta),
   sc_kk_vanish_copy{VAL_2(KKCopy<SurfCollideVanishKokkos>(sparta))},
   sc_kk_piston_copy{VAL_2(KKCopy<SurfCollidePistonKokkos>(sparta))},
   sc_kk_transparent_copy{VAL_2(KKCopy<SurfCollideTransparentKokkos>(sparta))},
-  slist_active_copy{VAL_2(KKCopy<ComputeSurfKokkos>(sparta))},
+  sc_kk_adiabatic_copy{VAL_2(KKCopy<SurfCollideAdiabaticKokkos>(sparta))},
+  sc_kk_impulsive_copy{VAL_2(KKCopy<SurfCollideImpulsiveKokkos>(sparta))},
+  sc_kk_td_copy{VAL_2(KKCopy<SurfCollideTDKokkos>(sparta))},
+  sc_kk_cll_copy{VAL_2(KKCopy<SurfCollideCLLKokkos>(sparta))},
   blist_active_copy{VAL_2(KKCopy<ComputeBoundaryKokkos>(sparta))},
+  slist_active_copy{VAL_2(KKCopy<ComputeSurfKokkos>(sparta))},
+  slist_active_isurf_copy{VAL_2(KKCopy<ComputeISurfGridKokkos>(sparta))},
+  slist_active_react_isurf_copy{VAL_2(KKCopy<ComputeReactISurfGridKokkos>(sparta))},
+  slist_active_react_surf_copy{VAL_2(KKCopy<ComputeReactSurfKokkos>(sparta))},
   tmp_compute_boundary_kk(sparta),
-  tmp_compute_surf_kk(sparta)
+  tmp_compute_surf_kk(sparta),
+  tmp_compute_isurf_grid_kk(sparta),
+  tmp_compute_react_isurf_grid_kk(sparta),
+  tmp_compute_react_surf_kk(sparta)
 {
+  nslist_surf = nslist_isurf = nslist_react_isurf = nslist_react_surf = 0;
+
   // the Kokkos views of Particle/Grid/Surf are populated from the host data
   //   once, by setup() when prewrap is set, which then clears prewrap
   // a "clear" command destroys and recreates all of these classes but not
@@ -189,12 +201,16 @@ void UpdateKokkos::init()
 
   // choose the appropriate move method
 
+  // REACT=1 is also needed without explicit surfs when box-face/boundary
+  //   reactions are defined (e.g. surf_react adsorb in face mode)
+
   if (domain->dimension == 3) {
     if (surf->exist) {
       if (surf->nsr) moveptr = &UpdateKokkos::move<3,1,1,0>;
       else moveptr = &UpdateKokkos::move<3,1,0,0>;
     } else {
-      if (optmove_flag) moveptr = &UpdateKokkos::move<3,0,0,1>;
+      if (surf->nsr) moveptr = &UpdateKokkos::move<3,0,1,0>;
+      else if (optmove_flag) moveptr = &UpdateKokkos::move<3,0,0,1>;
       else moveptr = &UpdateKokkos::move<3,0,0,0>;
     }
   } else if (domain->axisymmetric) {
@@ -202,7 +218,8 @@ void UpdateKokkos::init()
       if (surf->nsr) moveptr = &UpdateKokkos::move<1,1,1,0>;
       else moveptr = &UpdateKokkos::move<1,1,0,0>;
     } else {
-      if (optmove_flag) moveptr = &UpdateKokkos::move<1,0,0,1>;
+      if (surf->nsr) moveptr = &UpdateKokkos::move<1,0,1,0>;
+      else if (optmove_flag) moveptr = &UpdateKokkos::move<1,0,0,1>;
       else moveptr = &UpdateKokkos::move<1,0,0,0>;
     }
   } else if (domain->dimension == 2) {
@@ -210,7 +227,8 @@ void UpdateKokkos::init()
       if (surf->nsr) moveptr = &UpdateKokkos::move<2,1,1,0>;
       else moveptr = &UpdateKokkos::move<2,1,0,0>;
     } else {
-      if (optmove_flag) moveptr = &UpdateKokkos::move<2,0,0,1>;
+      if (surf->nsr) moveptr = &UpdateKokkos::move<2,0,1,0>;
+      else if (optmove_flag) moveptr = &UpdateKokkos::move<2,0,0,1>;
       else moveptr = &UpdateKokkos::move<2,0,0,0>;
     }
   }
@@ -309,6 +327,10 @@ void UpdateKokkos::setup()
   }
   grid_index_refresh();
 
+  // device grid/surf graphs are now current; clear any pending change flag so
+  // the run loop does not do a redundant resync on the first step
+  grid->changed = 0;
+
   Update::setup(); // must come after prewrap since computes are called by setup()
 
   // For MPI debugging
@@ -390,6 +412,14 @@ void UpdateKokkos::run(int nsteps)
       timer->stamp(TIME_MODIFY);
     }
 
+    // establish surf-tally compute copies for the move kernel here, after
+    //   start-of-step fixes have run.  A fix such as fix emit/surf performs
+    //   its own surf-tally session during start_of_step that reallocates the
+    //   shared dup_array_surf_tally scatter views, so they must be recreated
+    //   now to give the move kernel a live, freshly zeroed scatter view.
+
+    if (tallyflag) setup_surf_tally_copies();
+
     // move particles
 
     if (cellweightflag) particle->pre_weight();
@@ -429,6 +459,19 @@ void UpdateKokkos::run(int nsteps)
       modify->end_of_step();
       timer->stamp(TIME_MODIFY);
     }
+
+    // if an end-of-step fix changed the grid/surf topology (e.g. fix ablate
+    // regenerated implicit surfaces), the host grid is now authoritative but
+    // the device per-cell surf graphs (d_csurfs/d_csplits/d_csubs) are stale.
+    // Resync them to the device before the next move, mirroring setup().
+    // Safe here: grid_kk_copy from this step's move is no longer in use and is
+    // refreshed at the start of the next move.
+
+    // safety net: a grid change from anywhere other than the end-of-step
+    //   batch (which resyncs per fix in ModifyKokkos) is handled here before
+    //   the next move reads the device grid
+
+    if (grid->changed) ((GridKokkos*) grid)->resync_after_host_change();
 
     // all output
 
@@ -562,6 +605,15 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
     d_sinfo = grid_kk->k_sinfo.view_device();
     d_pcells = grid_kk->k_pcells.view_device();
 
+    // GridKokkos::update_hash() builds a brand new UnorderedMap rather than
+    //   updating in place, so a copy taken at setup() goes stale as soon as
+    //   anything rehashes mid-run (fix adapt/balance/move surf, or the
+    //   grid/surf resync after fix ablate regenerates implicit surfaces).
+    //   The optimized-move kernel looks up cell IDs in it, so refresh it here
+    //   with the other grid handles or it maps IDs to pre-change cell indices
+
+    hash_kk = grid_kk->hash_kk;
+
     d_csurfs = grid_kk->d_csurfs;
     d_csplits = grid_kk->d_csplits;
     d_csubs = grid_kk->d_csubs;
@@ -608,8 +660,8 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
       error->all(FLERR,"Kokkos currently supports a limited number of surface collide methods");
 
     if (surf->nsc > 0) {
-      int nspec,ndiff,nvan,npist,ntrans;
-      nspec = ndiff = nvan = npist = ntrans = 0;
+      int nspec,ndiff,nvan,npist,ntrans,nadia,nimpul,ntd,ncll;
+      nspec = ndiff = nvan = npist = ntrans = nadia = nimpul = ntd = ncll = 0;
       for (int n = 0; n < surf->nsc; n++) {
         if (!surf->sc[n]->kokkosable)
           error->all(FLERR,"Must use Kokkos-enabled surface collide method with Kokkos");
@@ -653,6 +705,38 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
           sc_type_list[n] = 4;
           sc_map[n] = ntrans;
           ntrans++;
+        } else if (strcmp(surf->sc[n]->style,"adiabatic") == 0) {
+          if (nadia >= KOKKOS_MAX_SURF_COLL_PER_TYPE)
+            error->all(FLERR,"Kokkos currently supports two instances of each surface collide method");
+          sc_kk_adiabatic_copy[nadia].copy((SurfCollideAdiabaticKokkos*)(surf->sc[n]));
+          sc_kk_adiabatic_copy[nadia].obj.pre_collide();
+          sc_type_list[n] = 5;
+          sc_map[n] = nadia;
+          nadia++;
+        } else if (strcmp(surf->sc[n]->style,"impulsive") == 0) {
+          if (nimpul >= KOKKOS_MAX_SURF_COLL_PER_TYPE)
+            error->all(FLERR,"Kokkos currently supports two instances of each surface collide method");
+          sc_kk_impulsive_copy[nimpul].copy((SurfCollideImpulsiveKokkos*)(surf->sc[n]));
+          sc_kk_impulsive_copy[nimpul].obj.pre_collide();
+          sc_type_list[n] = 6;
+          sc_map[n] = nimpul;
+          nimpul++;
+        } else if (strcmp(surf->sc[n]->style,"td") == 0) {
+          if (ntd >= KOKKOS_MAX_SURF_COLL_PER_TYPE)
+            error->all(FLERR,"Kokkos currently supports two instances of each surface collide method");
+          sc_kk_td_copy[ntd].copy((SurfCollideTDKokkos*)(surf->sc[n]));
+          sc_kk_td_copy[ntd].obj.pre_collide();
+          sc_type_list[n] = 7;
+          sc_map[n] = ntd;
+          ntd++;
+        } else if (strcmp(surf->sc[n]->style,"cll") == 0) {
+          if (ncll >= KOKKOS_MAX_SURF_COLL_PER_TYPE)
+            error->all(FLERR,"Kokkos currently supports two instances of each surface collide method");
+          sc_kk_cll_copy[ncll].copy((SurfCollideCLLKokkos*)(surf->sc[n]));
+          sc_kk_cll_copy[ncll].obj.pre_collide();
+          sc_type_list[n] = 8;
+          sc_map[n] = ncll;
+          ncll++;
         } else {
           error->all(FLERR,"Unknown Kokkos surface collide method");
         }
@@ -808,8 +892,8 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
     }
 
     if (surf->nsc > 0) {
-      int nspec,ndiff,nvan,npist,ntrans;
-      nspec = ndiff = nvan = npist = ntrans = 0;
+      int nspec,ndiff,nvan,npist,ntrans,nadia,nimpul,ntd,ncll;
+      nspec = ndiff = nvan = npist = ntrans = nadia = nimpul = ntd = ncll = 0;
       for (int n = 0; n < surf->nsc; n++) {
         if (strcmp(surf->sc[n]->style,"specular") == 0) {
           sc_kk_specular_copy[nspec].obj.post_collide();
@@ -826,6 +910,18 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
         } else if (strcmp(surf->sc[n]->style,"transparent") == 0) {
           sc_kk_transparent_copy[ntrans].obj.post_collide();
           ntrans++;
+        } else if (strcmp(surf->sc[n]->style,"adiabatic") == 0) {
+          sc_kk_adiabatic_copy[nadia].obj.post_collide();
+          nadia++;
+        } else if (strcmp(surf->sc[n]->style,"impulsive") == 0) {
+          sc_kk_impulsive_copy[nimpul].obj.post_collide();
+          nimpul++;
+        } else if (strcmp(surf->sc[n]->style,"td") == 0) {
+          sc_kk_td_copy[ntd].obj.post_collide();
+          ntd++;
+        } else if (strcmp(surf->sc[n]->style,"cll") == 0) {
+          sc_kk_cll_copy[ncll].obj.post_collide();
+          ncll++;
         }
       }
     }
@@ -898,10 +994,29 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
   nscollide_running += nscollide_one;
   surf->nreact_running += surf->nreact_one;
 
+  // dispatch by dynamic_cast, not by style string, and in the same order as
+  //   setup_surf_tally_copies(): the styles are also registered under explicit
+  //   "/kk" names (e.g. react/isurf/grid/kk), so a style compare would miss a
+  //   compute the user typed with the suffix and fall through to a wrong cast
+
   if (nsurf_tally) {
     for (int m = 0; m < nsurf_tally; m++) {
-      ComputeSurfKokkos* compute_surf_kk = (ComputeSurfKokkos*)(slist_active[m]);
-      compute_surf_kk->post_surf_tally();
+      if (ComputeISurfGridKokkos* compute_isurf_kk =
+            dynamic_cast<ComputeISurfGridKokkos*>(slist_active[m])) {
+        compute_isurf_kk->post_surf_tally();
+      } else if (ComputeReactISurfGridKokkos* compute_react_isurf_kk =
+                   dynamic_cast<ComputeReactISurfGridKokkos*>(slist_active[m])) {
+        compute_react_isurf_kk->post_surf_tally();
+      } else if (ComputeReactSurfKokkos* compute_react_surf_kk =
+                   dynamic_cast<ComputeReactSurfKokkos*>(slist_active[m])) {
+        compute_react_surf_kk->post_surf_tally();
+      } else if (ComputeSurfKokkos* compute_surf_kk =
+                   dynamic_cast<ComputeSurfKokkos*>(slist_active[m])) {
+        compute_surf_kk->post_surf_tally();
+      } else {
+        error->all(FLERR,"Kokkos does not (yet) support this surf tally compute; "
+                         "use a Kokkos-enabled surf tally compute (-sf kk)");
+      }
     }
   }
 
@@ -1729,6 +1844,18 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
             } else if (sc_type == 4) {
               jpart = sc_kk_transparent_copy[m].obj.
                 collide_kokkos<REACT,ATOMIC_REDUCTION>(ipart,dtremain,minsurf,tri->norm,tri->isr,reaction,d_retry,d_nlocal);
+            } else if (sc_type == 5) {
+              jpart = sc_kk_adiabatic_copy[m].obj.
+                collide_kokkos<REACT,ATOMIC_REDUCTION>(ipart,dtremain,minsurf,tri->norm,tri->isr,reaction,d_retry,d_nlocal);
+            } else if (sc_type == 6) {
+              jpart = sc_kk_impulsive_copy[m].obj.
+                collide_kokkos<REACT,ATOMIC_REDUCTION>(ipart,dtremain,minsurf,tri->norm,tri->isr,reaction,d_retry,d_nlocal);
+            } else if (sc_type == 7) {
+              jpart = sc_kk_td_copy[m].obj.
+                collide_kokkos<REACT,ATOMIC_REDUCTION>(ipart,dtremain,minsurf,tri->norm,tri->isr,reaction,d_retry,d_nlocal);
+            } else if (sc_type == 8) {
+              jpart = sc_kk_cll_copy[m].obj.
+                collide_kokkos<REACT,ATOMIC_REDUCTION>(ipart,dtremain,minsurf,tri->norm,tri->isr,reaction,d_retry,d_nlocal);
             }
           }
 
@@ -1748,6 +1875,18 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
             } else if (sc_type == 4) {
               jpart = sc_kk_transparent_copy[m].obj.
                 collide_kokkos<REACT,ATOMIC_REDUCTION>(ipart,dtremain,minsurf,line->norm,line->isr,reaction,d_retry,d_nlocal);
+            } else if (sc_type == 5) {
+              jpart = sc_kk_adiabatic_copy[m].obj.
+                collide_kokkos<REACT,ATOMIC_REDUCTION>(ipart,dtremain,minsurf,line->norm,line->isr,reaction,d_retry,d_nlocal);
+            } else if (sc_type == 6) {
+              jpart = sc_kk_impulsive_copy[m].obj.
+                collide_kokkos<REACT,ATOMIC_REDUCTION>(ipart,dtremain,minsurf,line->norm,line->isr,reaction,d_retry,d_nlocal);
+            } else if (sc_type == 7) {
+              jpart = sc_kk_td_copy[m].obj.
+                collide_kokkos<REACT,ATOMIC_REDUCTION>(ipart,dtremain,minsurf,line->norm,line->isr,reaction,d_retry,d_nlocal);
+            } else if (sc_type == 8) {
+              jpart = sc_kk_cll_copy[m].obj.
+                collide_kokkos<REACT,ATOMIC_REDUCTION>(ipart,dtremain,minsurf,line->norm,line->isr,reaction,d_retry,d_nlocal);
             }
           }
 
@@ -1759,10 +1898,20 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
             jpart->weight = particle_i.weight;
           }
 
-          if (nsurf_tally)
-            for (m = 0; m < nsurf_tally; m++)
+          if (nsurf_tally) {
+            for (m = 0; m < nslist_surf; m++)
               slist_active_copy[m].obj.
                     surf_tally_kk<ATOMIC_REDUCTION>(dtremain,minsurf,icell,reaction,&iorig,ipart,jpart);
+            for (m = 0; m < nslist_isurf; m++)
+              slist_active_isurf_copy[m].obj.
+                    surf_tally_kk<ATOMIC_REDUCTION>(dtremain,minsurf,icell,reaction,&iorig,ipart,jpart);
+            for (m = 0; m < nslist_react_isurf; m++)
+              slist_active_react_isurf_copy[m].obj.
+                    surf_tally_kk<ATOMIC_REDUCTION>(dtremain,minsurf,icell,reaction,&iorig,ipart,jpart);
+            for (m = 0; m < nslist_react_surf; m++)
+              slist_active_react_surf_copy[m].obj.
+                    surf_tally_kk<ATOMIC_REDUCTION>(dtremain,minsurf,icell,reaction,&iorig,ipart,jpart);
+          }
 
           // stuck_iterate = consecutive iterations particle is immobile
 
@@ -1994,6 +2143,18 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
             collide_kokkos<REACT,ATOMIC_REDUCTION>(ipart,dtremain,-(outface+1),domain_kk_copy.obj.norm[outface],domain_kk_copy.obj.surf_react[outface],reaction,d_retry,d_nlocal);
         else if (sc_type == 4)
           jpart = sc_kk_transparent_copy[m].obj.
+            collide_kokkos<REACT,ATOMIC_REDUCTION>(ipart,dtremain,-(outface+1),domain_kk_copy.obj.norm[outface],domain_kk_copy.obj.surf_react[outface],reaction,d_retry,d_nlocal);
+        else if (sc_type == 5)
+          jpart = sc_kk_adiabatic_copy[m].obj.
+            collide_kokkos<REACT,ATOMIC_REDUCTION>(ipart,dtremain,-(outface+1),domain_kk_copy.obj.norm[outface],domain_kk_copy.obj.surf_react[outface],reaction,d_retry,d_nlocal);
+        else if (sc_type == 6)
+          jpart = sc_kk_impulsive_copy[m].obj.
+            collide_kokkos<REACT,ATOMIC_REDUCTION>(ipart,dtremain,-(outface+1),domain_kk_copy.obj.norm[outface],domain_kk_copy.obj.surf_react[outface],reaction,d_retry,d_nlocal);
+        else if (sc_type == 7)
+          jpart = sc_kk_td_copy[m].obj.
+            collide_kokkos<REACT,ATOMIC_REDUCTION>(ipart,dtremain,-(outface+1),domain_kk_copy.obj.norm[outface],domain_kk_copy.obj.surf_react[outface],reaction,d_retry,d_nlocal);
+        else if (sc_type == 8)
+          jpart = sc_kk_cll_copy[m].obj.
             collide_kokkos<REACT,ATOMIC_REDUCTION>(ipart,dtremain,-(outface+1),domain_kk_copy.obj.norm[outface],domain_kk_copy.obj.surf_react[outface],reaction,d_retry,d_nlocal);
 
         if (ipart) {
@@ -2312,24 +2473,87 @@ void UpdateKokkos::tally_set(bigint ntimestep)
   for (i = nboundary_tally; i < KOKKOS_MAX_BLIST; i++)
     blist_active_copy[i].copy(&tmp_compute_boundary_kk);
 
-  if (nsurf_tally > KOKKOS_MAX_SLIST)
-    error->all(FLERR,"Kokkos currently only supports two instances of compute surface");
+  // surf-tally compute scatter views (slist_active_copy et al.) are
+  //   (re)established in setup_surf_tally_copies(), which run() calls after
+  //   start-of-step fixes have executed.  Doing it here would be unsafe: a
+  //   start-of-step fix such as fix emit/surf runs its own surf-tally session
+  //   that reallocates each compute's dup_array_surf_tally scatter view,
+  //   freeing the one captured here and leaving the move kernel's functor
+  //   copy pointing at freed memory.  See UpdateKokkos::run().
+}
 
-  for (i = 0; i < nsurf_tally; i++) {
-    if (strcmp(slist_active[i]->style,"isurf/grid") == 0)
-      error->all(FLERR,"Kokkos doesn't yet support compute isurf/grid");
-    ComputeSurfKokkos* compute_surf_kk = dynamic_cast<ComputeSurfKokkos*>(slist_active[i]);
-    if (!compute_surf_kk)
-      error->all(FLERR,"Kokkos does not (yet) support compute surf/collision/tally or compute surf/reaction/tally");
-    compute_surf_kk->pre_surf_tally();
-    slist_active_copy[i].copy(compute_surf_kk);
+/* ----------------------------------------------------------------------
+   set up per-compute surf-tally copies used on-device by the move kernel
+   must be called after start-of-step fixes run (see tally_set/run)
+------------------------------------------------------------------------- */
+
+void UpdateKokkos::setup_surf_tally_copies()
+{
+  int i;
+
+  // partition surf tally computes into "compute surf" (slist_active_copy) and
+  //   "compute isurf/grid" (slist_active_isurf_copy); both tally on-device via
+  //   surf_tally_kk(), invoked from the move kernel's surface collision loop
+
+  nslist_surf = nslist_isurf = nslist_react_isurf = nslist_react_surf = 0;
+
+  // dispatch by dynamic_cast, not by style string: the styles are also
+  //   registered under explicit "/kk" names (e.g. isurf/grid/kk), so a
+  //   style-string compare would reject a compute the user typed with the
+  //   suffix.  The four Kokkos tally computes are unrelated class hierarchies,
+  //   so the casts are mutually exclusive and order-independent.
+
+  if (nsurf_tally) {
+    for (i = 0; i < nsurf_tally; i++) {
+      if (ComputeISurfGridKokkos* compute_isurf_kk =
+            dynamic_cast<ComputeISurfGridKokkos*>(slist_active[i])) {
+        if (nslist_isurf >= KOKKOS_MAX_SLIST)
+          error->all(FLERR,"Kokkos currently only supports two instances of compute isurf/grid");
+        compute_isurf_kk->pre_surf_tally();
+        slist_active_isurf_copy[nslist_isurf].copy(compute_isurf_kk);
+        nslist_isurf++;
+      } else if (ComputeReactISurfGridKokkos* compute_react_isurf_kk =
+                   dynamic_cast<ComputeReactISurfGridKokkos*>(slist_active[i])) {
+        if (nslist_react_isurf >= KOKKOS_MAX_SLIST)
+          error->all(FLERR,"Kokkos currently only supports two instances of compute react/isurf/grid");
+        compute_react_isurf_kk->pre_surf_tally();
+        slist_active_react_isurf_copy[nslist_react_isurf].copy(compute_react_isurf_kk);
+        nslist_react_isurf++;
+      } else if (ComputeReactSurfKokkos* compute_react_surf_kk =
+                   dynamic_cast<ComputeReactSurfKokkos*>(slist_active[i])) {
+        if (nslist_react_surf >= KOKKOS_MAX_SLIST)
+          error->all(FLERR,"Kokkos currently only supports two instances of compute react/surf");
+        compute_react_surf_kk->pre_surf_tally();
+        slist_active_react_surf_copy[nslist_react_surf].copy(compute_react_surf_kk);
+        nslist_react_surf++;
+      } else if (ComputeSurfKokkos* compute_surf_kk =
+                   dynamic_cast<ComputeSurfKokkos*>(slist_active[i])) {
+        if (nslist_surf >= KOKKOS_MAX_SLIST)
+          error->all(FLERR,"Kokkos currently only supports two instances of compute surface");
+        compute_surf_kk->pre_surf_tally();
+        slist_active_copy[nslist_surf].copy(compute_surf_kk);
+        nslist_surf++;
+      } else {
+        error->all(FLERR,"Kokkos does not (yet) support this surf tally compute; "
+                         "use a Kokkos-enabled surf tally compute (-sf kk)");
+      }
+    }
   }
 
-  for (i = nsurf_tally; i < KOKKOS_MAX_SLIST; i++)
-    slist_active_copy[i].copy(&tmp_compute_surf_kk);
+  // fill unused slots of each typed copy list with the temporary
+  //   to avoid the copy getting stale leading to an issue with view ref counting
 
-  if (ngas_tally)
-    error->all(FLERR,"Kokkos does not (yet) support tallying gas/gas collisions or reactions");
+  for (i = nslist_surf; i < KOKKOS_MAX_SLIST; i++)
+    slist_active_copy[i].copy(&tmp_compute_surf_kk);
+  for (i = nslist_isurf; i < KOKKOS_MAX_SLIST; i++)
+    slist_active_isurf_copy[i].copy(&tmp_compute_isurf_grid_kk);
+  for (i = nslist_react_isurf; i < KOKKOS_MAX_SLIST; i++)
+    slist_active_react_isurf_copy[i].copy(&tmp_compute_react_isurf_grid_kk);
+  for (i = nslist_react_surf; i < KOKKOS_MAX_SLIST; i++)
+    slist_active_react_surf_copy[i].copy(&tmp_compute_react_surf_kk);
+
+  // gas/gas tally computes are validated and set up by CollideVSSKokkos,
+  //   which invokes their on-device gas_tally_kk() from the collision kernel
 }
 
 /* ---------------------------------------------------------------------- */
@@ -2343,8 +2567,8 @@ void UpdateKokkos::backup()
   Kokkos::deep_copy(d_particles_backup,d_particles);
 
   if (surf->nsc > 0) {
-    int nspec,ndiff,npist;
-    nspec = ndiff = npist = 0;
+    int nspec,ndiff,npist,nadia,nimpul,ntd,ncll;
+    nspec = ndiff = npist = nadia = nimpul = ntd = ncll = 0;
     for (int n = 0; n < surf->nsc; n++) {
       if (strcmp(surf->sc[n]->style,"specular") == 0) {
         sc_kk_specular_copy[nspec].obj.backup();
@@ -2355,6 +2579,18 @@ void UpdateKokkos::backup()
       } else if (strcmp(surf->sc[n]->style,"piston") == 0) {
         sc_kk_piston_copy[npist].obj.backup();
         npist++;
+      } else if (strcmp(surf->sc[n]->style,"adiabatic") == 0) {
+        sc_kk_adiabatic_copy[nadia].obj.backup();
+        nadia++;
+      } else if (strcmp(surf->sc[n]->style,"impulsive") == 0) {
+        sc_kk_impulsive_copy[nimpul].obj.backup();
+        nimpul++;
+      } else if (strcmp(surf->sc[n]->style,"td") == 0) {
+        sc_kk_td_copy[ntd].obj.backup();
+        ntd++;
+      } else if (strcmp(surf->sc[n]->style,"cll") == 0) {
+        sc_kk_cll_copy[ncll].obj.backup();
+        ncll++;
       }
     }
   }
@@ -2369,8 +2605,8 @@ void UpdateKokkos::restore()
   d_particles = particle_kk->k_particles.view_device();
 
   if (surf->nsc > 0) {
-    int nspec,ndiff,npist;
-    nspec = ndiff = npist = 0;
+    int nspec,ndiff,npist,nadia,nimpul,ntd,ncll;
+    nspec = ndiff = npist = nadia = nimpul = ntd = ncll = 0;
     for (int n = 0; n < surf->nsc; n++) {
       if (strcmp(surf->sc[n]->style,"specular") == 0) {
         sc_kk_specular_copy[nspec].obj.restore();
@@ -2381,6 +2617,18 @@ void UpdateKokkos::restore()
       } else if (strcmp(surf->sc[n]->style,"piston") == 0) {
         sc_kk_piston_copy[npist].obj.restore();
         npist++;
+      } else if (strcmp(surf->sc[n]->style,"adiabatic") == 0) {
+        sc_kk_adiabatic_copy[nadia].obj.restore();
+        nadia++;
+      } else if (strcmp(surf->sc[n]->style,"impulsive") == 0) {
+        sc_kk_impulsive_copy[nimpul].obj.restore();
+        nimpul++;
+      } else if (strcmp(surf->sc[n]->style,"td") == 0) {
+        sc_kk_td_copy[ntd].obj.restore();
+        ntd++;
+      } else if (strcmp(surf->sc[n]->style,"cll") == 0) {
+        sc_kk_cll_copy[ncll].obj.restore();
+        ncll++;
       }
     }
   }

@@ -129,10 +129,10 @@ class FixEmitSurf : public FixEmit {
   virtual void perform_task_twopass();
   virtual void grow_task();
 
-  void subsonic_inflow();
-  void subsonic_sort();
-  void subsonic_grid();
-  void mflow_grid();
+  virtual void subsonic_inflow();
+  virtual void subsonic_sort();
+  virtual void subsonic_grid();
+  virtual void mflow_grid();
 
   virtual void realloc_nspecies();
   int option(int, char **);

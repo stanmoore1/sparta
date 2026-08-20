@@ -229,6 +229,10 @@ void Surf::remove_custom(int index)
 {
   if (!ename || !ename[index]) return;
 
+  // ~SurfKokkos frees and NULLs ewhich before ~Surf deletes the surf reacts
+
+  if (!ewhich) return;
+
   delete [] ename[index];
   ename[index] = NULL;
 

@@ -88,6 +88,15 @@ void ModifyKokkos::end_of_step()
 
       sparta->kokkos->auto_sync = prev_auto_sync;
       particle_kk->modify(fix[j]->execution_space,fix[j]->datamask_modify);
+
+      // a non-Kokkos fix may have rebuilt the grid and surfs on the host
+      //   (fix ablate regenerating implicit surfaces).  Resync now, not after
+      //   the whole batch: a later fix in the batch would otherwise read the
+      //   stale device grid and the per-cell particle lists built for the
+      //   pre-change grid.  Kokkos fixes that rebuild the grid (adapt,
+      //   balance) already do this inside their own end_of_step()
+
+      if (grid->changed) ((GridKokkos*) grid)->resync_after_host_change();
     }
 }
 

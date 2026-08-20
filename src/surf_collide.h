@@ -56,6 +56,11 @@ class SurfCollide : protected Pointers {
 
   bigint nsingle;
 
+  // RNG used to scatter a particle, NULL for styles that do not scatter
+  //   randomly; owned by this class, allocated by the styles that use it
+
+  class RanKnuth *random;
+
  protected:
 
   // tallies for collisions
