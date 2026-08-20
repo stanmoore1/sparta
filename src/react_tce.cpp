@@ -191,22 +191,20 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
 
     // sum of reaction probabilities should be < 1 for a valid TCE scheme,
     //   else reaction rates are biased by clipping
-    // warn only once per run to avoid flooding output, and only to the
-    //   screen: a warning inside the log's stats block would break
-    //   log-parsing tools (e.g. tools/testing regression harness)
+    // warn only once per run to avoid flooding output
 
     if (!prob_warn_flag) {
       if (react_prob < 0.0) {
         prob_warn_flag = 1;
         error->warning(FLERR,"Negative TCE reaction probability, "
                        "check reaction file coefficients "
-                       "(further warnings suppressed)",0);
+                       "(further warnings suppressed)");
       } else if (react_prob > 1.0) {
         prob_warn_flag = 1;
         error->warning(FLERR,"TCE reaction probability exceeded 1.0, "
                        "chemistry may be under-resolved, "
                        "consider reducing timestep or fnum "
-                       "(further warnings suppressed)",0);
+                       "(further warnings suppressed)");
       }
     }
 
