@@ -194,8 +194,10 @@ ComputeLambdaGrid::ComputeLambdaGrid(SPARTA *sparta, int narg, char **arg) :
 
     char *ptr = strchr(suffix,'[');
     if (ptr) {
-      if (suffix[strlen(suffix)-1] != ']')
+      if (suffix[strlen(suffix)-1] != ']') {
+        delete [] suffix;
         error->all(FLERR,"Invalid nrho in compute lambda/grid command");
+      }
       nrhoindex[i] = atoi(ptr+1);
       *ptr = '\0';
     } else nrhoindex[i] = 0;
@@ -675,12 +677,12 @@ void ComputeLambdaGrid::compute_per_grid()
 
     if (knyflag) {
       if (noutputs == 1) vector_grid[i] = lambda / sizey;
-      array_grid[i][output_order[KNY]] = lambda / sizey;
+      else array_grid[i][output_order[KNY]] = lambda / sizey;
     }
 
     if (knzflag) {
       if (noutputs == 1) vector_grid[i] = lambda / sizez;
-      array_grid[i][output_order[KNZ]] = lambda / sizez;
+      else array_grid[i][output_order[KNZ]] = lambda / sizez;
     }
   }
 }

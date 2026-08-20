@@ -982,7 +982,6 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOne< NEARCP, GASTALLY, ATO
       else
         reduce.nreact_one++;
     } else {
-      rand_pool.free_state(rand_gen);
       continue;
     }
 
@@ -2590,7 +2589,6 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar< GASTALLY, AT
       else
         reduce.nreact_one++;
     } else {
-      rand_pool.free_state(rand_gen);
       continue;
     }
 

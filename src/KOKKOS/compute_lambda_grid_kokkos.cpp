@@ -326,12 +326,12 @@ void ComputeLambdaGridKokkos::compute_per_grid_kokkos()
 
       if (l_knyflag) {
         if (l_noutputs == 1) l_vector_grid[i] = lambda / sizey;
-        l_array_grid(i,l_output_order[KNY]) = lambda / sizey;
+        else l_array_grid(i,l_output_order[KNY]) = lambda / sizey;
       }
 
       if (l_knzflag) {
         if (l_noutputs == 1) l_vector_grid[i] = lambda / sizez;
-        l_array_grid(i,l_output_order[KNZ]) = lambda / sizez;
+        else l_array_grid(i,l_output_order[KNZ]) = lambda / sizez;
       }
     });
   }

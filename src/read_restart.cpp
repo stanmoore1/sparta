@@ -110,7 +110,7 @@ void ReadRestart::command(int narg, char **arg)
     fp = fopen(hfile,"rb");
     if (fp == NULL) {
       char str[128];
-      sprintf(str,"Cannot open restart file %s",hfile);
+      snprintf(str,128,"Cannot open restart file %s",hfile);
       error->one(FLERR,str);
     }
     if (multiproc) delete [] hfile;
@@ -464,7 +464,7 @@ void ReadRestart::file_search(char *infile, char *outfile)
 
   ptr = strchr(infile,'*');
   *ptr = '\0';
-  sprintf(outfile,"%s" BIGINT_FORMAT "%s",infile,maxnum,ptr+1);
+  snprintf(outfile,strlen(infile)+16,"%s" BIGINT_FORMAT "%s",infile,maxnum,ptr+1);
   *ptr = '*';
 
   // clean up
@@ -905,7 +905,7 @@ void ReadRestart::read_gp_multi_file_less_procs(char *file)
     fp = fopen(procfile,"rb");
     if (fp == NULL) {
       char str[128];
-      sprintf(str,"Cannot open restart file %s",procfile);
+      snprintf(str,128,"Cannot open restart file %s",procfile);
       error->one(FLERR,str);
     }
 
@@ -991,7 +991,7 @@ void ReadRestart::read_gp_multi_file_more_procs(char *file)
     fp = fopen(procfile,"rb");
     if (fp == NULL) {
       char str[128];
-      sprintf(str,"Cannot open restart file %s",procfile);
+      snprintf(str,128,"Cannot open restart file %s",procfile);
       error->one(FLERR,str);
     }
     delete [] procfile;
@@ -1093,7 +1093,7 @@ void ReadRestart::read_gp_multi_file_less_procs_memlimit(char *file)
     fp = fopen(procfile,"rb");
     if (fp == NULL) {
       char str[128];
-      sprintf(str,"Cannot open restart file %s",procfile);
+      snprintf(str,128,"Cannot open restart file %s",procfile);
       error->one(FLERR,str);
     }
 
@@ -1242,7 +1242,7 @@ void ReadRestart::read_gp_multi_file_more_procs_memlimit(char *file)
     fp = fopen(procfile,"rb");
     if (fp == NULL) {
       char str[128];
-      sprintf(str,"Cannot open restart file %s",procfile);
+      snprintf(str,128,"Cannot open restart file %s",procfile);
       error->one(FLERR,str);
     }
     delete [] procfile;
@@ -1641,7 +1641,7 @@ void ReadRestart::read_surfs_multi_file_less_procs(char *file)
     fp = fopen(procfile,"rb");
     if (fp == NULL) {
       char str[128];
-      sprintf(str,"Cannot open restart file %s",procfile);
+      snprintf(str,128,"Cannot open restart file %s",procfile);
       error->one(FLERR,str);
     }
 
@@ -1734,7 +1734,7 @@ void ReadRestart::read_surfs_multi_file_more_procs(char *file)
     fp = fopen(procfile,"rb");
     if (fp == NULL) {
       char str[128];
-      sprintf(str,"Cannot open restart file %s",procfile);
+      snprintf(str,128,"Cannot open restart file %s",procfile);
       error->one(FLERR,str);
     }
     delete [] procfile;

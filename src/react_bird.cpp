@@ -71,6 +71,8 @@ ReactBird::ReactBird(SPARTA *sparta) : React(sparta)
   reactions = NULL;
   list_ij = NULL;
   sp2recomb_ij = NULL;
+  tally_reactions = NULL;
+  tally_reactions_all = NULL;
 }
 
 /* ---------------------------------------------------------------------- */
