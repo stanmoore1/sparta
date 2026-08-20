@@ -337,9 +337,9 @@ weighting is enabled.
 <A HREF = "surf_collide.html">surf_collide</A> or <A HREF = "surf_react.html">surf_react</A> model
 on the emitting surfaces so particles hitting them disappear as if
 exiting the domain.  The <I>mflow</I> keyword cannot be combined with the
-<I>subsonic</I>, <I>n</I>, <I>custom</I>, or <I>region</I> keywords, and is currently a
-CPU-only feature: as with <I>subsonic</I>, using it with the <I>kk</I> suffix is an
-error, reported when the fix is defined.  The <I>region</I> restriction exists
+<I>subsonic</I>, <I>n</I>, <I>custom</I>, or <I>region</I> keywords.  Both <I>mflow</I> and
+<I>subsonic</I> are supported by the <I>kk</I> suffix
+version of this fix.  The <I>region</I> restriction exists
 because insertions rejected by a region are not resampled, which would
 silently reduce the realized mass flow rate below <I>Mdot</I>.
 </P>
