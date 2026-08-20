@@ -23,6 +23,8 @@
 #include "error.h"
 #include "kokkos.h"
 #include "sparta_masks.h"
+#include "surf_kokkos.h"
+#include "particle_kokkos.h"
 
 using namespace SPARTA_NS;
 using namespace MathConst;
@@ -314,6 +316,33 @@ void GridKokkos::wrap_kokkos()
 
   k_plevels.modify_host();
   k_plevels.sync_device();
+}
+
+/* ---------------------------------------------------------------------- */
+
+/* ----------------------------------------------------------------------
+   re-establish device state after a host fix rebuilt the grid and surfs
+   (fix ablate regenerating implicit surfaces); the host is authoritative,
+   so push it to the device, rebuild the per-cell surf graphs and cell hash,
+   and declare the device particle sort invalid, since the fix may have
+   deleted particles and reassigned split cell particles to new sub cells
+   must run before anything else reads the grid or the per-cell lists, i.e.
+   immediately after the fix rather than after the whole end-of-step batch
+------------------------------------------------------------------------- */
+
+void GridKokkos::resync_after_host_change()
+{
+  modify(Host,ALL_MASK);
+  update_hash();
+
+  if (surf->exist) {
+    ((SurfKokkos*) surf)->modify(Host,ALL_MASK);
+    wrap_kokkos_graphs();
+  }
+
+  ((ParticleKokkos*) particle)->sorted_kk = 0;
+
+  changed = 0;
 }
 
 /* ---------------------------------------------------------------------- */

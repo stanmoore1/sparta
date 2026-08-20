@@ -208,7 +208,7 @@ void ComputeFFTGridKokkos::compute_per_grid_kokkos()
 
       KokkosBase* fixKKBase = dynamic_cast<KokkosBase*>(fix);
 
-      if (!fixKKBase || !fix->per_grid_flag)
+      if (!fixKKBase || !fix->kokkos_flag || !fix->per_grid_flag)
         error->all(FLERR,"Unsupported fix used by compute fft/grid/kk");
 
       if (update->ntimestep % modify->fix[vidx]->per_grid_freq)

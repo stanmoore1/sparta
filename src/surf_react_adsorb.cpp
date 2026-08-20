@@ -221,6 +221,8 @@ SurfReactAdsorb::SurfReactAdsorb(SPARTA *sparta, int narg, char **arg) :
 
 SurfReactAdsorb::~SurfReactAdsorb()
 {
+  if (copy) return;
+
   delete random;
 
   // surface species
@@ -2330,7 +2332,7 @@ void SurfReactAdsorb::readfile_gs(char *fname)
       } else if (strcmp(words[1],"cll") == 0) {
         model = CLL;
         nflags = 1;
-        ncoeffs = 5;
+        ncoeffs = 6;
         sc = new SurfCollideCLL(sparta,nwords,words);
       } else if (strcmp(words[1],"td") == 0) {
         model = TD;
@@ -2919,7 +2921,7 @@ void SurfReactAdsorb::readfile_ps(char *fname)
       } else if (strcmp(words[1],"cll") == 0) {
         model = CLL;
         nflags = 1;
-        ncoeffs = 5;
+        ncoeffs = 6;
         sc = new SurfCollideCLL(sparta,nwords,words);
       } else if (strcmp(words[1],"td") == 0) {
         model = TD;

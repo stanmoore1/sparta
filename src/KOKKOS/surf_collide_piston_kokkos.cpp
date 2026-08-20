@@ -41,11 +41,11 @@ SurfCollidePistonKokkos::SurfCollidePistonKokkos(SPARTA *sparta, int narg, char 
 
   // use 1D view for scalars to reduce GPU memory operations
 
-  d_scalars = t_int_2("surf_collide_piston:scalars");
+  d_scalars = t_bigint_2("surf_collide_piston:scalars");
   d_nsingle = Kokkos::subview(d_scalars,0);
   d_nreact_one = Kokkos::subview(d_scalars,1);
 
-  h_scalars = t_host_int_2("surf_collide_piston:scalars_mirror");
+  h_scalars = t_host_bigint_2("surf_collide_piston:scalars_mirror");
   h_nsingle = Kokkos::subview(h_scalars,0);
   h_nreact_one = Kokkos::subview(h_scalars,1);
 }
@@ -133,7 +133,7 @@ void SurfCollidePistonKokkos::pre_collide()
         sr_map[n] = nprob;
         nprob++;
       } else {
-        error->all(FLERR,"Unknown Kokkos surface reaction method");
+        error->all(FLERR,"This Kokkos surf_collide style supports only surf_react global/prob; surf_react adsorb requires surf_collide cll");
       }
     }
   }
