@@ -526,7 +526,13 @@ void ComputeFFTGridKokkos::fft_create()
 
   // create FFT plan
 
-  int collective_flag = 0; // not yet supported in Kokkos version
+  // collective remap is not implemented in the Kokkos remap (see the comment
+  //   in RemapKokkos2d::remap_2d_kokkos).  this matches the host on every
+  //   platform that is not Blue Gene: ComputeFFTGrid sets collective_flag
+  //   from #ifdef __bg__ and uses 0 otherwise, so there is no user-visible
+  //   setting being dropped here
+
+  int collective_flag = 0;
   int gpu_aware_flag = sparta->kokkos->gpu_aware_flag;
 
   int tmp;
