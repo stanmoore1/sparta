@@ -34,6 +34,8 @@ CollideStyle(vss/kk,CollideVSSKokkos)
 #include "kokkos_copy.h"
 #include "compute_gas_collision_grid_kokkos.h"
 #include "compute_gas_reaction_grid_kokkos.h"
+#include "compute_gas_collision_tally_kokkos.h"
+#include "compute_gas_reaction_tally_kokkos.h"
 
 #define KOKKOS_MAX_GLIST 4
 
@@ -189,9 +191,17 @@ class CollideVSSKokkos : public CollideVSS {
 
   // active gas/gas per-grid tally computes, partitioned by type
   KKCopy<ComputeGasCollisionGridKokkos> glist_collision_copy[KOKKOS_MAX_GLIST];
+  KKCopy<ComputeGasCollisionTallyKokkos> glist_coll_tally_copy[KOKKOS_MAX_GLIST];
+  KKCopy<ComputeGasReactionTallyKokkos> glist_react_tally_copy[KOKKOS_MAX_GLIST];
   KKCopy<ComputeGasReactionGridKokkos> glist_reaction_copy[KOKKOS_MAX_GLIST];
   int nglist_collision,nglist_reaction;
   ComputeGasCollisionGridKokkos tmp_compute_gas_collision_kk;
+  ComputeGasCollisionTallyKokkos tmp_compute_gas_coll_tally_kk;
+  ComputeGasReactionTallyKokkos tmp_compute_gas_react_tally_kk;
+  int nglist_coll_tally,nglist_react_tally;
+  DAT::t_int_scalar d_tally_overflow;
+  HAT::t_int_scalar h_tally_overflow;
+  void grow_gas_tally_computes();
   ComputeGasReactionGridKokkos tmp_compute_gas_reaction_kk;
   void setup_gas_tally();
   void finish_gas_tally();
@@ -226,7 +236,7 @@ class CollideVSSKokkos : public CollideVSS {
   // bigint scalars = per-step statistics counters, can exceed 2^31
   //   in one step at large per-proc particle counts
 
-  typedef Kokkos::DualView<int[8], DeviceType::array_layout, DeviceType> tdual_int_8;
+  typedef Kokkos::DualView<int[9], DeviceType::array_layout, DeviceType> tdual_int_8;
   typedef tdual_int_8::t_dev t_int_8;
   typedef tdual_int_8::t_host t_host_int_8;
   t_int_8 d_scalars;

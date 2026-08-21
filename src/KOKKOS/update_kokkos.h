@@ -32,6 +32,8 @@
 #include "surf_collide_cll_kokkos.h"
 #include "compute_boundary_kokkos.h"
 #include "compute_surf_kokkos.h"
+#include "compute_surf_collision_tally_kokkos.h"
+#include "compute_surf_reaction_tally_kokkos.h"
 #include "compute_isurf_grid_kokkos.h"
 #include "compute_react_isurf_grid_kokkos.h"
 #include "compute_react_surf_kokkos.h"
@@ -175,6 +177,8 @@ class UpdateKokkos : public Update {
   //KKCopy<ComputeSurfKokkos> blist_active_copy[KOKKOS_MAX_GLIST];
   KKCopy<ComputeSurfKokkos> slist_active_copy[KOKKOS_MAX_SLIST];
   KKCopy<ComputeISurfGridKokkos> slist_active_isurf_copy[KOKKOS_MAX_SLIST];
+  KKCopy<ComputeSurfCollisionTallyKokkos> slist_active_coll_tally_copy[KOKKOS_MAX_SLIST];
+  KKCopy<ComputeSurfReactionTallyKokkos> slist_active_react_tally_copy[KOKKOS_MAX_SLIST];
   KKCopy<ComputeReactISurfGridKokkos> slist_active_react_isurf_copy[KOKKOS_MAX_SLIST];
   KKCopy<ComputeReactSurfKokkos> slist_active_react_surf_copy[KOKKOS_MAX_SLIST];
   KKCopy<ComputeBoundaryKokkos> blist_active_copy[KOKKOS_MAX_BLIST];
@@ -186,6 +190,10 @@ class UpdateKokkos : public Update {
   // nslist_surf + nslist_isurf + nslist_react_isurf == nsurf_tally
 
   int nslist_surf,nslist_isurf,nslist_react_isurf,nslist_react_surf;
+  int nslist_coll_tally,nslist_react_tally;
+
+  // grow every per-event tally compute after an overflowed attempt
+  void grow_tally_computes();
 
   ComputeBoundaryKokkos tmp_compute_boundary_kk;
   ComputeSurfKokkos tmp_compute_surf_kk;
@@ -197,7 +205,7 @@ class UpdateKokkos : public Update {
   // bigint scalars = per-step statistics counters, can exceed 2^31
   //   in one step at large per-proc particle counts
 
-  typedef Kokkos::DualView<int[7], DeviceType::array_layout, DeviceType> tdual_int_7;
+  typedef Kokkos::DualView<int[8], DeviceType::array_layout, DeviceType> tdual_int_7;
   typedef tdual_int_7::t_dev t_int_7;
   typedef tdual_int_7::t_host t_host_int_7;
   t_int_7 d_scalars;
@@ -246,7 +254,9 @@ class UpdateKokkos : public Update {
   HAT::t_int_scalar h_error_flag;
 
   DAT::t_int_scalar d_retry;
+  DAT::t_int_scalar d_tally_overflow;
   HAT::t_int_scalar h_retry;
+  HAT::t_int_scalar h_tally_overflow;
 
   DAT::t_int_scalar d_nlocal;
   HAT::t_int_scalar h_nlocal;
