@@ -37,6 +37,15 @@ FixGridCheckKokkos::FixGridCheckKokkos(SPARTA *sparta, int narg, char **arg) :
   execution_space = Device;
   datamask_read = EMPTY_MASK;
   datamask_modify = EMPTY_MASK;
+
+  // the "outside yes" check needs Grid::outside_surfs(), which runs on the
+  //   host against the cut2d/cut3d objects and has no device equivalent, so
+  //   the block that would perform it is commented out in end_of_step().
+  //   reject the option rather than accepting it and silently not checking
+
+  if (outside_check)
+    error->all(FLERR,"Fix grid/check/kk does not (yet) support the outside "
+               "yes option; run this fix without the kk suffix");
 }
 
 /* ---------------------------------------------------------------------- */
