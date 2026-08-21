@@ -36,6 +36,12 @@ template<int NEED_ATOMICS, int REORDER_FLAG>
 struct TagParticleSort{};
 
 
+// map entry used by post_weight(): source particle index, the new particle
+//   id, and the weight ratio that decides clone/delete.  ratio rides along
+//   in the same struct so only one array crosses the bus per timestep
+
+struct PostWeightPair { int i; int id; double ratio; };
+
 class ParticleKokkos : public Particle {
  public:
   typedef int value_type;
@@ -81,6 +87,11 @@ class ParticleKokkos : public Particle {
   void zero_custom_kokkos();
 
 #ifndef SPARTA_KOKKOS_EXACT
+  // pool for post_weight_device(); seeded in the ctor, as CollideVSSKokkos
+  //   seeds its own.  only the EXACT path needs to match the host RNG stream
+  Kokkos::Random_XorShift64_Pool<DeviceType> weight_rand_pool;
+  void post_weight_device();
+
   typedef typename Kokkos::Random_XorShift64_Pool<DeviceType>::generator_type rand_type;
 
   //typedef typename Kokkos::Random_XorShift1024_Pool<DeviceType>::generator_type rand_type;
@@ -187,6 +198,10 @@ class ParticleKokkos : public Particle {
   // work memory for reduced memory reordering
   t_particle_1d d_pswap1;
   t_particle_1d d_pswap2;
+
+  // persistent scratch for post_weight(); grown, never reallocated per step
+  Kokkos::DualView<PostWeightPair*,SPADeviceType> k_map;
+  t_particle_1d d_newparticles;
 };
 
 KOKKOS_INLINE_FUNCTION
