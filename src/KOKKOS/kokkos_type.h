@@ -39,6 +39,24 @@ typedef int crs_size_type;
 
 #define NeighClusterSize 8
 
+// SPARTA_KOKKOS_FIXED_LISTS restores the original fixed-size KKCopy arrays for
+//   the per-type tally compute lists, in place of the runtime-sized device
+//   buffers that replaced them.  The buffers exist to lift the instance caps
+//   below; the fixed arrays keep every compute inside the functor that is
+//   handed by value to each kernel.
+// Which is faster is a GPU question with no obvious answer: a smaller functor
+//   can raise occupancy while costing data locality, and higher occupancy is
+//   not the same thing as higher throughput.  Neither path has been measured
+//   on an accelerator.  Both are kept so the two can be compared on real
+//   hardware by rebuilding with -DSPARTA_KOKKOS_FIXED_LISTS, rather than by
+//   reverting commits.
+
+#ifdef SPARTA_KOKKOS_FIXED_LISTS
+#define KOKKOS_MAX_SLIST 2
+#define KOKKOS_MAX_BLIST 2
+#define KOKKOS_MAX_GLIST 4
+#endif
+
 // architectures where the move kernel is dispatched with ATOMIC_REDUCTION = -1
 //   (parallel_reduce) rather than atomics.  KokkosSPARTA::accelerator() clears
 //   atomic_reduction for exactly these, and UpdateKokkos::move() reads the

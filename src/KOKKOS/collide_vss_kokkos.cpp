@@ -42,10 +42,42 @@ using namespace MathConst;
 #define VAL_1(X) X
 #define VAL_2(X) VAL_1(X), VAL_1(X)
 #define VAL_4(X) VAL_2(X), VAL_2(X)
+// blit one active gas tally compute into its per-type device buffer
+// same operation and rationale as KKCopy::copy() (kokkos_copy.h:71): the
+//   object is only read on device, through KOKKOS_INLINE_FUNCTION members,
+//   so its vtable pointer is never used and the View handles it carries stay
+//   alive in the original that update->glist_active holds
 
-// the glist KKCopy arrays below are brace-initialized with VAL_4 (4 elements)
-static_assert(KOKKOS_MAX_GLIST == 4,
-              "VAL_4 initializer lists assume KOKKOS_MAX_GLIST == 4");
+#ifndef SPARTA_KOKKOS_FIXED_LISTS
+namespace {
+
+  template<class T>
+  void gas_buf_resize(DAT::tdual_char_1d &k, DAT::t_char_1d &d, int n)
+  {
+    const size_t need = (size_t) MAX(n,1) * sizeof(T);
+    if (k.view_device().extent(0) < need) {
+      k = DAT::tdual_char_1d("collide:gas_tally_models",need);
+      d = k.view_device();
+    }
+  }
+
+  template<class T>
+  void gas_buf_blit(DAT::tdual_char_1d &k, int slot, T *obj)
+  {
+    char *dst = k.view_host().data() + (size_t) slot*sizeof(T);
+    memcpy((void*) dst, (const void*) obj, sizeof(T));
+    ((T *) dst)->copy = 1;
+  }
+
+  void gas_buf_sync(DAT::tdual_char_1d &k, DAT::t_char_1d &d)
+  {
+    if (k.view_device().extent(0) == 0) return;
+    k.modify_host();
+    k.sync_device();
+    d = k.view_device();
+  }
+}
+#endif
 
 enum{NONE,DISCRETE,SMOOTH};            // several files
 enum{CONSTANT,VARIABLE};
@@ -71,15 +103,17 @@ CollideVSSKokkos::CollideVSSKokkos(SPARTA *sparta, int narg, char **arg) :
   grid_kk_copy(sparta),
   react_kk_copy(sparta),
   react_qk_kk_copy(sparta),
-  react_tceqk_kk_copy(sparta),
-  glist_collision_copy{VAL_4(KKCopy<ComputeGasCollisionGridKokkos>(sparta))},
-  glist_coll_tally_copy{VAL_4(KKCopy<ComputeGasCollisionTallyKokkos>(sparta))},
-  glist_react_tally_copy{VAL_4(KKCopy<ComputeGasReactionTallyKokkos>(sparta))},
-  glist_reaction_copy{VAL_4(KKCopy<ComputeGasReactionGridKokkos>(sparta))},
-  tmp_compute_gas_collision_kk(sparta),
-  tmp_compute_gas_reaction_kk(sparta),
-  tmp_compute_gas_coll_tally_kk(sparta),
-  tmp_compute_gas_react_tally_kk(sparta)
+  react_tceqk_kk_copy(sparta)
+#ifdef SPARTA_KOKKOS_FIXED_LISTS
+  , glist_collision_copy{VAL_4(KKCopy<ComputeGasCollisionGridKokkos>(sparta))}
+  , glist_coll_tally_copy{VAL_4(KKCopy<ComputeGasCollisionTallyKokkos>(sparta))}
+  , glist_react_tally_copy{VAL_4(KKCopy<ComputeGasReactionTallyKokkos>(sparta))}
+  , glist_reaction_copy{VAL_4(KKCopy<ComputeGasReactionGridKokkos>(sparta))}
+  , tmp_compute_gas_collision_kk(sparta)
+  , tmp_compute_gas_reaction_kk(sparta)
+  , tmp_compute_gas_coll_tally_kk(sparta)
+  , tmp_compute_gas_react_tally_kk(sparta)
+#endif
 {
   kokkos_flag = 1;
   react_style = 0;
@@ -605,56 +639,82 @@ void CollideVSSKokkos::setup_gas_tally()
 
   // dispatch by dynamic_cast, not by style string, so a compute the user
   //   typed with the explicit "/kk" suffix is still recognized
+  // count first: the buffers have to be sized before anything is blitted in
+
+  for (int i = 0; i < ngas_tally; i++) {
+    Compute *c = update->glist_active[i];
+    if (dynamic_cast<ComputeGasCollisionGridKokkos*>(c)) nglist_collision++;
+    else if (dynamic_cast<ComputeGasReactionGridKokkos*>(c)) nglist_reaction++;
+    else if (dynamic_cast<ComputeGasCollisionTallyKokkos*>(c)) nglist_coll_tally++;
+    else if (dynamic_cast<ComputeGasReactionTallyKokkos*>(c)) nglist_react_tally++;
+    else
+      error->all(FLERR,"Kokkos does not (yet) support this gas tally compute; "
+                       "use a Kokkos-enabled gas tally compute (-sf kk)");
+  }
+
+#ifdef SPARTA_KOKKOS_FIXED_LISTS
+  if (nglist_collision > KOKKOS_MAX_GLIST || nglist_reaction > KOKKOS_MAX_GLIST ||
+      nglist_coll_tally > KOKKOS_MAX_GLIST || nglist_react_tally > KOKKOS_MAX_GLIST)
+    error->all(FLERR,"Kokkos supports at most KOKKOS_MAX_GLIST instances of each gas tally compute");
+#else
+  gas_buf_resize<ComputeGasCollisionGridKokkos>(k_glist_collision,d_glist_collision,nglist_collision);
+  gas_buf_resize<ComputeGasReactionGridKokkos>(k_glist_reaction,d_glist_reaction,nglist_reaction);
+  gas_buf_resize<ComputeGasCollisionTallyKokkos>(k_glist_coll_tally,d_glist_coll_tally,nglist_coll_tally);
+  gas_buf_resize<ComputeGasReactionTallyKokkos>(k_glist_react_tally,d_glist_react_tally,nglist_react_tally);
+#endif
+
+  int ncg = 0, nrg = 0, nct = 0, nrt = 0;
 
   for (int i = 0; i < ngas_tally; i++) {
     Compute *c = update->glist_active[i];
     if (ComputeGasCollisionGridKokkos *ckk =
           dynamic_cast<ComputeGasCollisionGridKokkos*>(c)) {
-      if (nglist_collision >= KOKKOS_MAX_GLIST)
-        error->all(FLERR,"Kokkos supports at most KOKKOS_MAX_GLIST instances of compute gas/collision/grid");
       ckk->pre_gas_tally();
-      glist_collision_copy[nglist_collision].copy(ckk);
-      nglist_collision++;
+#ifdef SPARTA_KOKKOS_FIXED_LISTS
+      glist_collision_copy[ncg++].copy(ckk);
+#else
+      gas_buf_blit(k_glist_collision,ncg++,ckk);
+#endif
     } else if (ComputeGasReactionGridKokkos *ckk =
                  dynamic_cast<ComputeGasReactionGridKokkos*>(c)) {
-      if (nglist_reaction >= KOKKOS_MAX_GLIST)
-        error->all(FLERR,"Kokkos supports at most KOKKOS_MAX_GLIST instances of compute gas/reaction/grid");
       ckk->pre_gas_tally();
-      glist_reaction_copy[nglist_reaction].copy(ckk);
-      nglist_reaction++;
+#ifdef SPARTA_KOKKOS_FIXED_LISTS
+      glist_reaction_copy[nrg++].copy(ckk);
+#else
+      gas_buf_blit(k_glist_reaction,nrg++,ckk);
+#endif
     } else if (ComputeGasCollisionTallyKokkos *ckk =
                  dynamic_cast<ComputeGasCollisionTallyKokkos*>(c)) {
-      if (nglist_coll_tally >= KOKKOS_MAX_GLIST)
-        error->all(FLERR,"Kokkos supports at most KOKKOS_MAX_GLIST instances of compute gas/collision/tally");
       ckk->pre_gas_tally();
       ckk->d_overflow = d_tally_overflow;
-      glist_coll_tally_copy[nglist_coll_tally].copy(ckk);
-      nglist_coll_tally++;
+#ifdef SPARTA_KOKKOS_FIXED_LISTS
+      glist_coll_tally_copy[nct++].copy(ckk);
+#else
+      gas_buf_blit(k_glist_coll_tally,nct++,ckk);
+#endif
     } else if (ComputeGasReactionTallyKokkos *ckk =
                  dynamic_cast<ComputeGasReactionTallyKokkos*>(c)) {
-      if (nglist_react_tally >= KOKKOS_MAX_GLIST)
-        error->all(FLERR,"Kokkos supports at most KOKKOS_MAX_GLIST instances of compute gas/reaction/tally");
       ckk->pre_gas_tally();
       ckk->d_overflow = d_tally_overflow;
-      glist_react_tally_copy[nglist_react_tally].copy(ckk);
-      nglist_react_tally++;
-    } else {
-      error->all(FLERR,"Kokkos does not (yet) support this gas tally compute; "
-                       "use a Kokkos-enabled gas tally compute (-sf kk)");
+#ifdef SPARTA_KOKKOS_FIXED_LISTS
+      glist_react_tally_copy[nrt++].copy(ckk);
+#else
+      gas_buf_blit(k_glist_react_tally,nrt++,ckk);
+#endif
     }
   }
 
-  // fill unused slots of each typed copy list with the temporary
-  //   to avoid the copy getting stale leading to an issue with view ref counting
-
-  for (int i = nglist_collision; i < KOKKOS_MAX_GLIST; i++)
-    glist_collision_copy[i].copy(&tmp_compute_gas_collision_kk);
-  for (int i = nglist_reaction; i < KOKKOS_MAX_GLIST; i++)
-    glist_reaction_copy[i].copy(&tmp_compute_gas_reaction_kk);
-  for (int i = nglist_coll_tally; i < KOKKOS_MAX_GLIST; i++)
-    glist_coll_tally_copy[i].copy(&tmp_compute_gas_coll_tally_kk);
-  for (int i = nglist_react_tally; i < KOKKOS_MAX_GLIST; i++)
-    glist_react_tally_copy[i].copy(&tmp_compute_gas_react_tally_kk);
+#ifdef SPARTA_KOKKOS_FIXED_LISTS
+  for (int i = ncg; i < KOKKOS_MAX_GLIST; i++) glist_collision_copy[i].copy(&tmp_compute_gas_collision_kk);
+  for (int i = nrg; i < KOKKOS_MAX_GLIST; i++) glist_reaction_copy[i].copy(&tmp_compute_gas_reaction_kk);
+  for (int i = nct; i < KOKKOS_MAX_GLIST; i++) glist_coll_tally_copy[i].copy(&tmp_compute_gas_coll_tally_kk);
+  for (int i = nrt; i < KOKKOS_MAX_GLIST; i++) glist_react_tally_copy[i].copy(&tmp_compute_gas_react_tally_kk);
+#else
+  gas_buf_sync(k_glist_collision,d_glist_collision);
+  gas_buf_sync(k_glist_reaction,d_glist_reaction);
+  gas_buf_sync(k_glist_coll_tally,d_glist_coll_tally);
+  gas_buf_sync(k_glist_react_tally,d_glist_react_tally);
+#endif
 }
 
 /* ----------------------------------------------------------------------
@@ -1040,13 +1100,13 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOne< NEARCP, GASTALLY, ATO
 
     if (GASTALLY) {
       for (int m = 0; m < nglist_collision; m++)
-        glist_collision_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
+        CVK_GLIST_COLLISION(m).template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
       for (int m = 0; m < nglist_reaction; m++)
-        glist_reaction_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
+        CVK_GLIST_REACTION(m).template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
       for (int m = 0; m < nglist_coll_tally; m++)
-        glist_coll_tally_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
+        CVK_GLIST_COLL_TALLY(m).template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
       for (int m = 0; m < nglist_react_tally; m++)
-        glist_react_tally_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
+        CVK_GLIST_REACT_TALLY(m).template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
     }
 
     if (reactflag) {
@@ -1468,13 +1528,13 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneSubcell< DIM, GASTALLY,
 
     if (GASTALLY) {
       for (int m = 0; m < nglist_collision; m++)
-        glist_collision_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
+        CVK_GLIST_COLLISION(m).template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
       for (int m = 0; m < nglist_reaction; m++)
-        glist_reaction_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
+        CVK_GLIST_REACTION(m).template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
       for (int m = 0; m < nglist_coll_tally; m++)
-        glist_coll_tally_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
+        CVK_GLIST_COLL_TALLY(m).template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
       for (int m = 0; m < nglist_react_tally; m++)
-        glist_react_tally_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
+        CVK_GLIST_REACT_TALLY(m).template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
     }
 
     if (reactflag) {
@@ -2192,13 +2252,13 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroup< NEARCP, GASTALLY, A
 
         if (GASTALLY) {
           for (int m = 0; m < nglist_collision; m++)
-            glist_collision_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
+            CVK_GLIST_COLLISION(m).template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
           for (int m = 0; m < nglist_reaction; m++)
-            glist_reaction_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
+            CVK_GLIST_REACTION(m).template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
           for (int m = 0; m < nglist_coll_tally; m++)
-            glist_coll_tally_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
+            CVK_GLIST_COLL_TALLY(m).template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
           for (int m = 0; m < nglist_react_tally; m++)
-            glist_react_tally_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
+            CVK_GLIST_REACT_TALLY(m).template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
         }
 
         if (reactflag) {
@@ -2551,13 +2611,13 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroupAmbipolar< GASTALLY, 
 
         if (GASTALLY) {
           for (int m = 0; m < nglist_collision; m++)
-            glist_collision_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
+            CVK_GLIST_COLLISION(m).template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
           for (int m = 0; m < nglist_reaction; m++)
-            glist_reaction_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
+            CVK_GLIST_REACTION(m).template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
       for (int m = 0; m < nglist_coll_tally; m++)
-        glist_coll_tally_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
+        CVK_GLIST_COLL_TALLY(m).template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
       for (int m = 0; m < nglist_react_tally; m++)
-        glist_react_tally_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
+        CVK_GLIST_REACT_TALLY(m).template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
         }
       }
     }
@@ -2992,13 +3052,13 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar< GASTALLY, AT
 
     if (GASTALLY) {
       for (int m = 0; m < nglist_collision; m++)
-        glist_collision_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
+        CVK_GLIST_COLLISION(m).template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
       for (int m = 0; m < nglist_reaction; m++)
-        glist_reaction_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
+        CVK_GLIST_REACTION(m).template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
       for (int m = 0; m < nglist_coll_tally; m++)
-        glist_coll_tally_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
+        CVK_GLIST_COLL_TALLY(m).template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
       for (int m = 0; m < nglist_react_tally; m++)
-        glist_react_tally_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
+        CVK_GLIST_REACT_TALLY(m).template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
     }
 
     if (reactflag) {
@@ -4699,12 +4759,25 @@ void CollideVSSKokkos::grow_gas_tally_computes()
       //   it the repeated attempt overflows on the same row and the retry
       //   loop never terminates
 
+#ifdef SPARTA_KOKKOS_FIXED_LISTS
       glist_coll_tally_copy[ncoll++].copy(ckk);
+#else
+      gas_buf_blit(k_glist_coll_tally,ncoll++,ckk);
+#endif
     } else if (ComputeGasReactionTallyKokkos *ckk = dynamic_cast<ComputeGasReactionTallyKokkos*>(c)) {
       ckk->grow_after_overflow();
+#ifdef SPARTA_KOKKOS_FIXED_LISTS
       glist_react_tally_copy[nreact++].copy(ckk);
+#else
+      gas_buf_blit(k_glist_react_tally,nreact++,ckk);
+#endif
     }
   }
+
+#ifndef SPARTA_KOKKOS_FIXED_LISTS
+  gas_buf_sync(k_glist_coll_tally,d_glist_coll_tally);
+  gas_buf_sync(k_glist_react_tally,d_glist_react_tally);
+#endif
 }
 
 /* ----------------------------------------------------------------------

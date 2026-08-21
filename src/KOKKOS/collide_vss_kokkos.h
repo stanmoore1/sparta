@@ -37,7 +37,6 @@ CollideStyle(vss/kk,CollideVSSKokkos)
 #include "compute_gas_collision_tally_kokkos.h"
 #include "compute_gas_reaction_tally_kokkos.h"
 
-#define KOKKOS_MAX_GLIST 4
 
 namespace SPARTA_NS {
 
@@ -189,21 +188,43 @@ class CollideVSSKokkos : public CollideVSS {
   KKCopy<ReactTCEQKKokkos> react_tceqk_kk_copy;
   int react_style;   // 0=TCE, 1=QK, 2=TCEQK (set in setup)
 
-  // active gas/gas per-grid tally computes, partitioned by type
+  // active gas/gas tally computes, partitioned by type.  Two representations,
+  //   selected by SPARTA_KOKKOS_FIXED_LISTS (see kokkos_type.h); the kernel
+  //   dispatch sites are written once against the CVK_* accessors below.
+
+#ifdef SPARTA_KOKKOS_FIXED_LISTS
   KKCopy<ComputeGasCollisionGridKokkos> glist_collision_copy[KOKKOS_MAX_GLIST];
   KKCopy<ComputeGasCollisionTallyKokkos> glist_coll_tally_copy[KOKKOS_MAX_GLIST];
   KKCopy<ComputeGasReactionTallyKokkos> glist_react_tally_copy[KOKKOS_MAX_GLIST];
   KKCopy<ComputeGasReactionGridKokkos> glist_reaction_copy[KOKKOS_MAX_GLIST];
-  int nglist_collision,nglist_reaction;
   ComputeGasCollisionGridKokkos tmp_compute_gas_collision_kk;
+  ComputeGasReactionGridKokkos tmp_compute_gas_reaction_kk;
   ComputeGasCollisionTallyKokkos tmp_compute_gas_coll_tally_kk;
   ComputeGasReactionTallyKokkos tmp_compute_gas_react_tally_kk;
+
+#define CVK_GLIST_COLLISION(m)   glist_collision_copy[m].obj
+#define CVK_GLIST_REACTION(m)    glist_reaction_copy[m].obj
+#define CVK_GLIST_COLL_TALLY(m)  glist_coll_tally_copy[m].obj
+#define CVK_GLIST_REACT_TALLY(m) glist_react_tally_copy[m].obj
+
+#else
+  DAT::tdual_char_1d k_glist_collision, k_glist_reaction,
+                     k_glist_coll_tally, k_glist_react_tally;
+  DAT::t_char_1d d_glist_collision, d_glist_reaction,
+                 d_glist_coll_tally, d_glist_react_tally;
+
+#define CVK_GLIST_COLLISION(m)   ((const ComputeGasCollisionGridKokkos *) d_glist_collision.data())[m]
+#define CVK_GLIST_REACTION(m)    ((const ComputeGasReactionGridKokkos *) d_glist_reaction.data())[m]
+#define CVK_GLIST_COLL_TALLY(m)  ((const ComputeGasCollisionTallyKokkos *) d_glist_coll_tally.data())[m]
+#define CVK_GLIST_REACT_TALLY(m) ((const ComputeGasReactionTallyKokkos *) d_glist_react_tally.data())[m]
+#endif
+
+  int nglist_collision,nglist_reaction;
   int nglist_coll_tally,nglist_react_tally;
   DAT::t_int_scalar d_tally_overflow;
   HAT::t_int_scalar h_tally_overflow;
   void grow_gas_tally_computes();
   void rewind_gas_tally_computes(int);
-  ComputeGasReactionGridKokkos tmp_compute_gas_reaction_kk;
   void setup_gas_tally();
   void finish_gas_tally();
   void clear_gas_tally();
