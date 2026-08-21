@@ -70,24 +70,51 @@ enum{BCSTD,BCWRAP,BCMIRROR,BCEXIT};             // Update::bcopt values
 #define VAL_1(X) X
 #define VAL_2(X) VAL_1(X), VAL_1(X)
 
+/* ----------------------------------------------------------------------
+   blit one active tally compute into its per-type device buffer
+   same operation and same rationale as KKCopy::copy() (kokkos_copy.h:71):
+     the object is only read on device, through KOKKOS_INLINE_FUNCTION
+     members, so its vtable pointer is never used and the View handles it
+     carries stay alive in the original the compute list holds
+------------------------------------------------------------------------- */
+
+namespace {
+
+  template<class T>
+  void tally_buf_resize(DAT::tdual_char_1d &k, DAT::t_char_1d &d, int n)
+  {
+    const size_t need = (size_t) MAX(n,1) * sizeof(T);
+    if (k.view_device().extent(0) < need) {
+      k = DAT::tdual_char_1d("update:tally_models",need);
+      d = k.view_device();
+    }
+  }
+
+  template<class T>
+  void tally_buf_blit(DAT::tdual_char_1d &k, int slot, T *obj)
+  {
+    char *dst = k.view_host().data() + (size_t) slot*sizeof(T);
+    memcpy((void*) dst, (const void*) obj, sizeof(T));
+    ((T *) dst)->copy = 1;
+  }
+
+  void tally_buf_sync(DAT::tdual_char_1d &k, DAT::t_char_1d &d)
+  {
+    if (k.view_device().extent(0) == 0) return;
+    k.modify_host();
+    k.sync_device();
+    d = k.view_device();
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+
+
 /* ---------------------------------------------------------------------- */
 
 UpdateKokkos::UpdateKokkos(SPARTA *sparta) : Update(sparta),
   grid_kk_copy(sparta),
-  domain_kk_copy(sparta),
-  // Virtual functions are not yet supported on the GPU, which leads to pain:
-  blist_active_copy{VAL_2(KKCopy<ComputeBoundaryKokkos>(sparta))},
-  slist_active_copy{VAL_2(KKCopy<ComputeSurfKokkos>(sparta))},
-  slist_active_isurf_copy{VAL_2(KKCopy<ComputeISurfGridKokkos>(sparta))},
-  slist_active_coll_tally_copy{VAL_2(KKCopy<ComputeSurfCollisionTallyKokkos>(sparta))},
-  slist_active_react_tally_copy{VAL_2(KKCopy<ComputeSurfReactionTallyKokkos>(sparta))},
-  slist_active_react_isurf_copy{VAL_2(KKCopy<ComputeReactISurfGridKokkos>(sparta))},
-  slist_active_react_surf_copy{VAL_2(KKCopy<ComputeReactSurfKokkos>(sparta))},
-  tmp_compute_boundary_kk(sparta),
-  tmp_compute_surf_kk(sparta),
-  tmp_compute_isurf_grid_kk(sparta),
-  tmp_compute_react_isurf_grid_kk(sparta),
-  tmp_compute_react_surf_kk(sparta)
+  domain_kk_copy(sparta)
 {
   nslist_surf = nslist_isurf = nslist_react_isurf = nslist_react_surf = 0;
   nslist_coll_tally = nslist_react_tally = 0;
@@ -1799,22 +1826,22 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
 
           if (nsurf_tally) {
             for (int m = 0; m < nslist_surf; m++)
-              slist_active_copy[m].obj.
+              ((const ComputeSurfKokkos *) d_slist_surf.data())[m].
                     surf_tally_kk<ATOMIC_REDUCTION>(dtremain,minsurf,icell,reaction,&iorig,ipart,jpart);
             for (int m = 0; m < nslist_isurf; m++)
-              slist_active_isurf_copy[m].obj.
+              ((const ComputeISurfGridKokkos *) d_slist_isurf.data())[m].
                     surf_tally_kk<ATOMIC_REDUCTION>(dtremain,minsurf,icell,reaction,&iorig,ipart,jpart);
             for (int m = 0; m < nslist_coll_tally; m++)
-              slist_active_coll_tally_copy[m].obj.
+              ((const ComputeSurfCollisionTallyKokkos *) d_slist_coll_tally.data())[m].
                     surf_tally_kk(dtremain,minsurf,icell,reaction,&iorig,ipart,jpart);
             for (int m = 0; m < nslist_react_tally; m++)
-              slist_active_react_tally_copy[m].obj.
+              ((const ComputeSurfReactionTallyKokkos *) d_slist_react_tally.data())[m].
                     surf_tally_kk(dtremain,minsurf,icell,reaction,&iorig,ipart,jpart);
             for (int m = 0; m < nslist_react_isurf; m++)
-              slist_active_react_isurf_copy[m].obj.
+              ((const ComputeReactISurfGridKokkos *) d_slist_react_isurf.data())[m].
                     surf_tally_kk<ATOMIC_REDUCTION>(dtremain,minsurf,icell,reaction,&iorig,ipart,jpart);
             for (int m = 0; m < nslist_react_surf; m++)
-              slist_active_react_surf_copy[m].obj.
+              ((const ComputeReactSurfKokkos *) d_slist_react_surf.data())[m].
                     surf_tally_kk<ATOMIC_REDUCTION>(dtremain,minsurf,icell,reaction,&iorig,ipart,jpart);
           }
 
@@ -2055,7 +2082,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
 
       if (nboundary_tally)
         for (int m = 0; m < nboundary_tally; m++)
-          blist_active_copy[m].obj.
+          ((const ComputeBoundaryKokkos *) d_blist.data())[m].
             boundary_tally_kk<ATOMIC_REDUCTION>(dtremain,outface,bflag,reaction,&iorig,ipart,jpart,domain_kk_copy.obj.norm[outface]);
 
       if (DIM == 1) {
@@ -2335,15 +2362,14 @@ void UpdateKokkos::tally_set(bigint ntimestep)
 
   int i;
 
-  if (nboundary_tally > KOKKOS_MAX_BLIST)
-    error->all(FLERR,"Kokkos currently only supports two instances of compute boundary");
-
   // dispatch by dynamic_cast, as setup_surf_tally_copies() does: compute
   //   react/boundary also sets boundary_tally_flag, but it derives straight
   //   from Compute and has no Kokkos version, so a static cast here would
   //   call ComputeBoundaryKokkos methods on an unrelated object.  The cast
   //   also fails for a plain compute boundary under "-k on" without "-sf kk",
   //   which is likewise not the Kokkos class
+
+  tally_buf_resize<ComputeBoundaryKokkos>(k_blist,d_blist,nboundary_tally);
 
   for (i = 0; i < nboundary_tally; i++) {
     ComputeBoundaryKokkos* compute_boundary_kk =
@@ -2352,16 +2378,10 @@ void UpdateKokkos::tally_set(bigint ntimestep)
       error->all(FLERR,"Kokkos does not (yet) support this boundary tally compute; "
                        "use a Kokkos-enabled boundary tally compute (-sf kk)");
     compute_boundary_kk->pre_boundary_tally();
-    blist_active_copy[i].copy(compute_boundary_kk);
+    tally_buf_blit(k_blist,i,compute_boundary_kk);
   }
 
-  // every Kokkos functor captures the whole array by value, so the unused
-  //  slots must not alias a compute that may be reallocated or deleted while
-  //  they still reference count it: point them at a temporary that lives as
-  //  long as this class
-
-  for (i = nboundary_tally; i < KOKKOS_MAX_BLIST; i++)
-    blist_active_copy[i].copy(&tmp_compute_boundary_kk);
+  tally_buf_sync(k_blist,d_blist);
 
   // surf-tally compute scatter views (slist_active_copy et al.) are
   //   (re)established in setup_surf_tally_copies(), which run() calls after
@@ -2379,85 +2399,80 @@ void UpdateKokkos::tally_set(bigint ntimestep)
 
 void UpdateKokkos::setup_surf_tally_copies()
 {
-  int i;
-
-  // partition surf tally computes into "compute surf" (slist_active_copy) and
-  //   "compute isurf/grid" (slist_active_isurf_copy); both tally on-device via
-  //   surf_tally_kk(), invoked from the move kernel's surface collision loop
+  // partition the active surf tally computes by type, one runtime-sized
+  //   device buffer each; all of them tally on-device via surf_tally_kk(),
+  //   invoked from the move kernel's surface collision loop
+  // dispatch by dynamic_cast, not by style string: the styles are also
+  //   registered under explicit "/kk" names (e.g. isurf/grid/kk), so a
+  //   style-string compare would reject a compute the user typed with the
+  //   suffix.  The Kokkos tally computes are unrelated class hierarchies,
+  //   so the casts are mutually exclusive and order-independent.
 
   nslist_surf = nslist_isurf = nslist_react_isurf = nslist_react_surf = 0;
   nslist_coll_tally = nslist_react_tally = 0;
 
-  // dispatch by dynamic_cast, not by style string: the styles are also
-  //   registered under explicit "/kk" names (e.g. isurf/grid/kk), so a
-  //   style-string compare would reject a compute the user typed with the
-  //   suffix.  The four Kokkos tally computes are unrelated class hierarchies,
-  //   so the casts are mutually exclusive and order-independent.
+  // count first: the buffers have to be sized before anything is blitted in
 
-  if (nsurf_tally) {
-    for (i = 0; i < nsurf_tally; i++) {
-      if (ComputeISurfGridKokkos* compute_isurf_kk =
-            dynamic_cast<ComputeISurfGridKokkos*>(slist_active[i])) {
-        if (nslist_isurf >= KOKKOS_MAX_SLIST)
-          error->all(FLERR,"Kokkos currently only supports two instances of compute isurf/grid");
-        compute_isurf_kk->pre_surf_tally();
-        slist_active_isurf_copy[nslist_isurf].copy(compute_isurf_kk);
-        nslist_isurf++;
-      } else if (ComputeReactISurfGridKokkos* compute_react_isurf_kk =
-                   dynamic_cast<ComputeReactISurfGridKokkos*>(slist_active[i])) {
-        if (nslist_react_isurf >= KOKKOS_MAX_SLIST)
-          error->all(FLERR,"Kokkos currently only supports two instances of compute react/isurf/grid");
-        compute_react_isurf_kk->pre_surf_tally();
-        slist_active_react_isurf_copy[nslist_react_isurf].copy(compute_react_isurf_kk);
-        nslist_react_isurf++;
-      } else if (ComputeReactSurfKokkos* compute_react_surf_kk =
-                   dynamic_cast<ComputeReactSurfKokkos*>(slist_active[i])) {
-        if (nslist_react_surf >= KOKKOS_MAX_SLIST)
-          error->all(FLERR,"Kokkos currently only supports two instances of compute react/surf");
-        compute_react_surf_kk->pre_surf_tally();
-        slist_active_react_surf_copy[nslist_react_surf].copy(compute_react_surf_kk);
-        nslist_react_surf++;
-      } else if (ComputeSurfKokkos* compute_surf_kk =
-                   dynamic_cast<ComputeSurfKokkos*>(slist_active[i])) {
-        if (nslist_surf >= KOKKOS_MAX_SLIST)
-          error->all(FLERR,"Kokkos currently only supports two instances of compute surface");
-        compute_surf_kk->pre_surf_tally();
-        slist_active_copy[nslist_surf].copy(compute_surf_kk);
-        nslist_surf++;
-      } else if (ComputeSurfCollisionTallyKokkos* compute_ct_kk =
-                   dynamic_cast<ComputeSurfCollisionTallyKokkos*>(slist_active[i])) {
-        if (nslist_coll_tally >= KOKKOS_MAX_SLIST)
-          error->all(FLERR,"Kokkos currently only supports two instances of compute surf/collision/tally");
-        compute_ct_kk->pre_surf_tally();
-        compute_ct_kk->d_overflow = d_tally_overflow;
-        slist_active_coll_tally_copy[nslist_coll_tally].copy(compute_ct_kk);
-        nslist_coll_tally++;
-      } else if (ComputeSurfReactionTallyKokkos* compute_rt_kk =
-                   dynamic_cast<ComputeSurfReactionTallyKokkos*>(slist_active[i])) {
-        if (nslist_react_tally >= KOKKOS_MAX_SLIST)
-          error->all(FLERR,"Kokkos currently only supports two instances of compute surf/reaction/tally");
-        compute_rt_kk->pre_surf_tally();
-        compute_rt_kk->d_overflow = d_tally_overflow;
-        slist_active_react_tally_copy[nslist_react_tally].copy(compute_rt_kk);
-        nslist_react_tally++;
-      } else {
-        error->all(FLERR,"Kokkos does not (yet) support this surf tally compute; "
-                         "use a Kokkos-enabled surf tally compute (-sf kk)");
-      }
+  for (int i = 0; i < nsurf_tally; i++) {
+    if (dynamic_cast<ComputeISurfGridKokkos*>(slist_active[i])) nslist_isurf++;
+    else if (dynamic_cast<ComputeReactISurfGridKokkos*>(slist_active[i])) nslist_react_isurf++;
+    else if (dynamic_cast<ComputeReactSurfKokkos*>(slist_active[i])) nslist_react_surf++;
+    else if (dynamic_cast<ComputeSurfKokkos*>(slist_active[i])) nslist_surf++;
+    else if (dynamic_cast<ComputeSurfCollisionTallyKokkos*>(slist_active[i])) nslist_coll_tally++;
+    else if (dynamic_cast<ComputeSurfReactionTallyKokkos*>(slist_active[i])) nslist_react_tally++;
+    else
+      error->all(FLERR,"Kokkos does not (yet) support this surf tally compute; "
+                       "use a Kokkos-enabled surf tally compute (-sf kk)");
+  }
+
+  tally_buf_resize<ComputeISurfGridKokkos>(k_slist_isurf,d_slist_isurf,nslist_isurf);
+  tally_buf_resize<ComputeReactISurfGridKokkos>(k_slist_react_isurf,d_slist_react_isurf,nslist_react_isurf);
+  tally_buf_resize<ComputeReactSurfKokkos>(k_slist_react_surf,d_slist_react_surf,nslist_react_surf);
+  tally_buf_resize<ComputeSurfKokkos>(k_slist_surf,d_slist_surf,nslist_surf);
+  tally_buf_resize<ComputeSurfCollisionTallyKokkos>(k_slist_coll_tally,d_slist_coll_tally,nslist_coll_tally);
+  tally_buf_resize<ComputeSurfReactionTallyKokkos>(k_slist_react_tally,d_slist_react_tally,nslist_react_tally);
+
+  // then run each compute's pre_surf_tally() in list order, as before, and
+  //   blit it into its type's buffer
+
+  int nisurf = 0, nrisurf = 0, nrsurf = 0, nsurf = 0, nct = 0, nrt = 0;
+
+  for (int i = 0; i < nsurf_tally; i++) {
+    if (ComputeISurfGridKokkos* c =
+          dynamic_cast<ComputeISurfGridKokkos*>(slist_active[i])) {
+      c->pre_surf_tally();
+      tally_buf_blit(k_slist_isurf,nisurf++,c);
+    } else if (ComputeReactISurfGridKokkos* c =
+                 dynamic_cast<ComputeReactISurfGridKokkos*>(slist_active[i])) {
+      c->pre_surf_tally();
+      tally_buf_blit(k_slist_react_isurf,nrisurf++,c);
+    } else if (ComputeReactSurfKokkos* c =
+                 dynamic_cast<ComputeReactSurfKokkos*>(slist_active[i])) {
+      c->pre_surf_tally();
+      tally_buf_blit(k_slist_react_surf,nrsurf++,c);
+    } else if (ComputeSurfKokkos* c =
+                 dynamic_cast<ComputeSurfKokkos*>(slist_active[i])) {
+      c->pre_surf_tally();
+      tally_buf_blit(k_slist_surf,nsurf++,c);
+    } else if (ComputeSurfCollisionTallyKokkos* c =
+                 dynamic_cast<ComputeSurfCollisionTallyKokkos*>(slist_active[i])) {
+      c->pre_surf_tally();
+      c->d_overflow = d_tally_overflow;
+      tally_buf_blit(k_slist_coll_tally,nct++,c);
+    } else if (ComputeSurfReactionTallyKokkos* c =
+                 dynamic_cast<ComputeSurfReactionTallyKokkos*>(slist_active[i])) {
+      c->pre_surf_tally();
+      c->d_overflow = d_tally_overflow;
+      tally_buf_blit(k_slist_react_tally,nrt++,c);
     }
   }
 
-  // fill unused slots of each typed copy list with the temporary
-  //   to avoid the copy getting stale leading to an issue with view ref counting
-
-  for (i = nslist_surf; i < KOKKOS_MAX_SLIST; i++)
-    slist_active_copy[i].copy(&tmp_compute_surf_kk);
-  for (i = nslist_isurf; i < KOKKOS_MAX_SLIST; i++)
-    slist_active_isurf_copy[i].copy(&tmp_compute_isurf_grid_kk);
-  for (i = nslist_react_isurf; i < KOKKOS_MAX_SLIST; i++)
-    slist_active_react_isurf_copy[i].copy(&tmp_compute_react_isurf_grid_kk);
-  for (i = nslist_react_surf; i < KOKKOS_MAX_SLIST; i++)
-    slist_active_react_surf_copy[i].copy(&tmp_compute_react_surf_kk);
+  tally_buf_sync(k_slist_isurf,d_slist_isurf);
+  tally_buf_sync(k_slist_react_isurf,d_slist_react_isurf);
+  tally_buf_sync(k_slist_react_surf,d_slist_react_surf);
+  tally_buf_sync(k_slist_surf,d_slist_surf);
+  tally_buf_sync(k_slist_coll_tally,d_slist_coll_tally);
+  tally_buf_sync(k_slist_react_tally,d_slist_react_tally);
 
   // gas/gas tally computes are validated and set up by CollideVSSKokkos,
   //   which invokes their on-device gas_tally_kk() from the collision kernel
@@ -2677,13 +2692,16 @@ void UpdateKokkos::grow_tally_computes()
       //   it the repeated attempt overflows on the same row and the retry
       //   loop never terminates
 
-      slist_active_coll_tally_copy[ncoll++].copy(c);
+      tally_buf_blit(k_slist_coll_tally,ncoll++,c);
     } else if (ComputeSurfReactionTallyKokkos* c =
                dynamic_cast<ComputeSurfReactionTallyKokkos*>(slist_active[m])) {
       c->grow_after_overflow();
-      slist_active_react_tally_copy[nreact++].copy(c);
+      tally_buf_blit(k_slist_react_tally,nreact++,c);
     }
   }
+
+  tally_buf_sync(k_slist_coll_tally,d_slist_coll_tally);
+  tally_buf_sync(k_slist_react_tally,d_slist_react_tally);
 }
 
 /* ----------------------------------------------------------------------

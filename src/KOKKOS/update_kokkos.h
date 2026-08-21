@@ -40,9 +40,6 @@
 
 namespace SPARTA_NS {
 
-#define KOKKOS_MAX_BLIST 2
-#define KOKKOS_MAX_SLIST 2
-
 // surf_collide style tags, used to dispatch on device where the host's
 //   virtual SurfCollide::collide() is not available
 
@@ -232,14 +229,21 @@ class UpdateKokkos : public Update {
     return NULL;
   }
 
-  //KKCopy<ComputeSurfKokkos> blist_active_copy[KOKKOS_MAX_GLIST];
-  KKCopy<ComputeSurfKokkos> slist_active_copy[KOKKOS_MAX_SLIST];
-  KKCopy<ComputeISurfGridKokkos> slist_active_isurf_copy[KOKKOS_MAX_SLIST];
-  KKCopy<ComputeSurfCollisionTallyKokkos> slist_active_coll_tally_copy[KOKKOS_MAX_SLIST];
-  KKCopy<ComputeSurfReactionTallyKokkos> slist_active_react_tally_copy[KOKKOS_MAX_SLIST];
-  KKCopy<ComputeReactISurfGridKokkos> slist_active_react_isurf_copy[KOKKOS_MAX_SLIST];
-  KKCopy<ComputeReactSurfKokkos> slist_active_react_surf_copy[KOKKOS_MAX_SLIST];
-  KKCopy<ComputeBoundaryKokkos> blist_active_copy[KOKKOS_MAX_BLIST];
+  // the active tally computes used to sit in fixed-size KKCopy arrays here,
+  //   two of each of seven types.  This class is the functor handed by value
+  //   to every move kernel, so those arrays were paid for on every launch and
+  //   capped a run at two instances of each compute.  They now live in device
+  //   memory instead, one runtime-sized buffer per type, blitted in exactly as
+  //   KKCopy::copy() does (kokkos_copy.h:71) and read on device through
+  //   KOKKOS_INLINE_FUNCTION members only -- see the surf_collide models above,
+  //   which use the same scheme for the same reason.
+
+  DAT::tdual_char_1d k_slist_surf, k_slist_isurf, k_slist_coll_tally,
+                     k_slist_react_tally, k_slist_react_isurf,
+                     k_slist_react_surf, k_blist;
+  DAT::t_char_1d d_slist_surf, d_slist_isurf, d_slist_coll_tally,
+                 d_slist_react_tally, d_slist_react_isurf,
+                 d_slist_react_surf, d_blist;
 
   // partition of slist_active (set in tally_set):
   //   nslist_surf        = # of compute surf style tallies (slist_active_copy)
@@ -254,11 +258,8 @@ class UpdateKokkos : public Update {
   void grow_tally_computes();
   void rewind_tally_computes(int);
 
-  ComputeBoundaryKokkos tmp_compute_boundary_kk;
-  ComputeSurfKokkos tmp_compute_surf_kk;
-  ComputeISurfGridKokkos tmp_compute_isurf_grid_kk;
-  ComputeReactISurfGridKokkos tmp_compute_react_isurf_grid_kk;
-  ComputeReactSurfKokkos tmp_compute_react_surf_kk;
+  // no placeholders are needed any more: with runtime-sized buffers there are
+  //   no unused slots holding a stale reference-counted copy
 
   // int scalars = flags and view-index counters, must stay int
   // bigint scalars = per-step statistics counters, can exceed 2^31
