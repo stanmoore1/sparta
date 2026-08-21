@@ -17,7 +17,7 @@ emit/surf = style name of this fix command :l
 mix-ID = ID of mixture to use when creating particles :l
 group-ID = ID of surface group that emits particles :l
 zero or more keyword/value pairs may be appended :l
-keyword = {n} or {normal} or {nevery} or {perspecies} or {region} or {subsonic} or {mflow} or {custom} :l
+keyword = {n} or {normal} or {nevery} or {perspecies} or {region} or {subsonic} or {mflow} or {custom} or {twopass} :l
   {n} value = Np = number of particles to create
                    Np can be a variable (see below)
   {normal} value = yes or no = emit normal to surface elements or with streaming velocity
@@ -36,7 +36,8 @@ keyword = {n} or {normal} or {nevery} or {perspecies} or {region} or {subsonic} 
       {window} value = Nwin = moving-average window for the cell streaming velocity
   {custom} values = attribute s_name
     attribute = {density} or {temperature} or {vstream} or {speed} or {fractions}
-    s_name = custom per-surf vector or array with name :pre
+    s_name = custom per-surf vector or array with name
+  {twopass} values = none :pre
 :ule
 
 [Examples:]
@@ -417,6 +418,16 @@ mixture.  This is determined by the "mixture"_mixture.html command.
 It is the order the gas species names were listed when the mixture
 command was specified (one or more times).
 
+The {twopass} keyword does not require a value.  If used, the
+insertion procedure will loop over the insertion surface elements
+twice, the same as the KOKKOS package version of this fix does, so
+that it can reallocate memory efficiently, e.g. on a GPU.  If this
+keyword is used the non-KOKKOS and KOKKOS version will generate
+exactly the same set of particles, which makes debugging easier.  If
+the keyword is not used, the non-KOKKOS and KOKKOS runs will use
+random numbers differently and thus generate different particles,
+though they will be statistically similar.
+
 :line
 
 [Restart, output info:]
@@ -478,9 +489,9 @@ emit/face"_fix_emit_face.html
 [Default:]
 
 The keyword defaults are n = 0, normal = no, nevery = 1, perspecies =
-yes, region = none, no subsonic settings, no mflow settings.  For the
-{subsonic} and {mflow} keywords, the moving-average window defaults to
-0 (no smoothing).
+yes, region = none, no subsonic settings, no mflow settings, no
+twopass setting.  For the {subsonic} and {mflow} keywords, the
+moving-average window defaults to 0 (no smoothing).
 
 :line
 

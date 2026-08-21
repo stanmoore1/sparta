@@ -77,6 +77,7 @@ FixEmitFaceFile::FixEmitFaceFile(SPARTA *sparta, int narg, char **arg) :
   // optional args
 
   frac_user = 1.0;
+  twopass = 0;
 
   int iarg = 6;
   options(narg-iarg,&arg[iarg]);
@@ -345,6 +346,18 @@ void FixEmitFaceFile::create_task(int icell)
 
 void FixEmitFaceFile::perform_task()
 {
+  if (!twopass) perform_task_onepass();
+  else perform_task_twopass();
+}
+
+/* ----------------------------------------------------------------------
+   perform insertion in one pass thru tasks
+   this is simpler, somewhat faster code
+   but uses random #s differently than Kokkos, so insertions are different
+------------------------------------------------------------------------- */
+
+void FixEmitFaceFile::perform_task_onepass()
+{
   int pcell,ninsert,nactual,isp,ispecies,id;
   double temp_thermal,temp_rot,temp_vib;
   double indot,scosine,rn,ntarget,vr;
@@ -502,6 +515,194 @@ void FixEmitFaceFile::perform_task()
       nsingle += nactual;
     }
   }
+}
+
+/* ----------------------------------------------------------------------
+   perform insertion the way Kokkos does in two passes thru tasks
+   this uses random #s the same as Kokkos, for easier debugging
+------------------------------------------------------------------------- */
+
+void FixEmitFaceFile::perform_task_twopass()
+{
+  int pcell,ninsert,nactual,isp,ispecies,id;
+  double temp_thermal,temp_rot,temp_vib;
+  double indot,scosine,rn,ntarget,vr;
+  double beta_un,normalized_distbn_fn,theta,erot,evib;
+  double x[3],v[3];
+  double *lo,*hi,*vstream,*cummulative,*vscale;
+  Particle::OnePart *p;
+
+  double dt = update->dt;
+  int *species = particle->mixture[imix]->species;
+
+  // if subsonic, re-compute particle inflow counts for each task
+  // also computes current temp_thermal and vstream in insertion cells
+
+  if (subsonic) subsonic_inflow();
+
+  // insert particles for each task = cell
+  // ntarget/ninsert is either perspecies or for all species
+  // for one particle:
+  //   x = random position on subset of face that overlaps with file grid
+  //   v = randomized thermal velocity + vstream
+  //       first stage: normal dimension (ndim)
+  //       second stage: parallel dimensions (pdim1,pdim2)
+
+  // double while loop until randomized particle velocity meets 2 criteria
+  // inner do-while loop:
+  //   v = vstream-component + vthermal is into simulation box
+  //   see Bird 1994, p 425
+  // outer do-while loop:
+  //   shift Maxwellian distribution by stream velocity component
+  //   see Bird 1994, p 259, eq 12.5
+
+  int nfix_update_custom = modify->n_update_custom;
+
+  // first pass: draw every task's insertion count, before any particle is
+  //   generated.  This is the ordering the Kokkos version necessarily
+  //   produces -- its scan must know all counts before candidate arrays can
+  //   be sized -- so the two agree only when this pass is used.
+  //   Mirrors FixEmitFace::perform_task_twopass() (fix_emit_face.cpp:675)
+
+  int ninsert_dim1 = perspecies ? nspecies : 1;
+  int **ninsert_values;
+  memory->create(ninsert_values,ntask,ninsert_dim1,"fix_emit_face_file:ninsert");
+
+  for (int i = 0; i < ntask; i++) {
+    if (perspecies) {
+      for (isp = 0; isp < nspecies; isp++) {
+        ntarget = tasks[i].ntargetsp[isp]+random->uniform();
+        ninsert_values[i][isp] = static_cast<int> (ntarget);
+      }
+    } else {
+      ntarget = tasks[i].ntarget+random->uniform();
+      ninsert_values[i][0] = static_cast<int> (ntarget);
+    }
+  }
+
+  for (int i = 0; i < ntask; i++) {
+    pcell = tasks[i].pcell;
+    lo = tasks[i].lo;
+    hi = tasks[i].hi;
+
+    temp_thermal = tasks[i].temp_thermal;
+    temp_rot = tasks[i].temp_rot;
+    temp_vib = tasks[i].temp_vib;
+    vscale = tasks[i].vscale;
+    vstream = tasks[i].vstream;
+
+    indot = vstream[0]*normal[0] + vstream[1]*normal[1] + vstream[2]*normal[2];
+
+    if (perspecies) {
+      for (isp = 0; isp < nspecies; isp++) {
+        ispecies = species[isp];
+        ninsert = ninsert_values[i][isp];
+        scosine = indot / vscale[isp];
+
+        nactual = 0;
+        for (int m = 0; m < ninsert; m++) {
+          x[0] = lo[0] + random->uniform() * (hi[0]-lo[0]);
+          if (domain->axisymmetric)
+            x[1] = sqrt(lo[1]*lo[1] +
+                        random->uniform() * (hi[1]*hi[1]-lo[1]*lo[1]));
+          else x[1] = lo[1] + random->uniform() * (hi[1]-lo[1]);
+          if (dimension == 3) x[2] = lo[2] + random->uniform() * (hi[2]-lo[2]);
+          else x[2] = 0.0;
+
+          if (region && !region->match(x)) continue;
+
+          do {
+            do beta_un = (6.0*random->uniform() - 3.0);
+            while (beta_un + scosine < 0.0);
+            normalized_distbn_fn = 2.0 * (beta_un + scosine) /
+              (scosine + sqrt(scosine*scosine + 2.0)) *
+              exp(0.5 + (0.5*scosine)*(scosine-sqrt(scosine*scosine + 2.0)) -
+                  beta_un*beta_un);
+          } while (normalized_distbn_fn < random->uniform());
+
+          v[ndim] = beta_un*vscale[isp]*normal[ndim] + vstream[ndim];
+
+          theta = MY_2PI * random->uniform();
+          vr = vscale[isp] * sqrt(-log(random->uniform()));
+          v[pdim] = vr * sin(theta) + vstream[pdim];
+          v[qdim] = vr * cos(theta) + vstream[qdim];
+          erot = particle->erot(ispecies,temp_rot,random);
+          evib = particle->evib(ispecies,temp_vib,random);
+          id = MAXSMALLINT*random->uniform();
+
+          particle->add_particle(id,ispecies,pcell,x,v,erot,evib);
+          nactual++;
+
+          p = &particle->particles[particle->nlocal-1];
+          p->flag = PINSERT;
+          p->dtremain = dt * random->uniform();
+
+          if (nfix_update_custom)
+            modify->update_custom(particle->nlocal-1,temp_thermal,
+                                 temp_rot,temp_vib,vstream);
+        }
+
+        nsingle += nactual;
+      }
+
+    } else {
+      cummulative = tasks[i].cummulative;
+      ninsert = ninsert_values[i][0];
+
+      nactual = 0;
+      for (int m = 0; m < ninsert; m++) {
+        rn = random->uniform();
+        isp = 0;
+        while (cummulative[isp] < rn) isp++;
+        ispecies = species[isp];
+        scosine = indot / vscale[isp];
+
+        x[0] = lo[0] + random->uniform() * (hi[0]-lo[0]);
+        if (domain->axisymmetric)
+          x[1] = sqrt(lo[1]*lo[1] +
+                      random->uniform() * (hi[1]*hi[1]-lo[1]*lo[1]));
+        else x[1] = lo[1] + random->uniform() * (hi[1]-lo[1]);
+        if (dimension == 3) x[2] = lo[2] + random->uniform() * (hi[2]-lo[2]);
+        else x[2] = 0.0;
+
+        if (region && !region->match(x)) continue;
+
+        do {
+          do beta_un = (6.0*random->uniform() - 3.0);
+          while (beta_un + scosine < 0.0);
+          normalized_distbn_fn = 2.0 * (beta_un + scosine) /
+            (scosine + sqrt(scosine*scosine + 2.0)) *
+            exp(0.5 + (0.5*scosine)*(scosine-sqrt(scosine*scosine + 2.0)) -
+                beta_un*beta_un);
+        } while (normalized_distbn_fn < random->uniform());
+
+        v[ndim] = beta_un*vscale[isp]*normal[ndim] + vstream[ndim];
+
+        theta = MY_2PI * random->uniform();
+        vr = vscale[isp] * sqrt(-log(random->uniform()));
+        v[pdim] = vr * sin(theta) + vstream[pdim];
+        v[qdim] = vr * cos(theta) + vstream[qdim];
+        erot = particle->erot(ispecies,temp_rot,random);
+        evib = particle->evib(ispecies,temp_vib,random);
+        id = MAXSMALLINT*random->uniform();
+
+        particle->add_particle(id,ispecies,pcell,x,v,erot,evib);
+        nactual++;
+
+        p = &particle->particles[particle->nlocal-1];
+        p->flag = PINSERT;
+        p->dtremain = dt * random->uniform();
+
+        if (nfix_update_custom)
+          modify->update_custom(particle->nlocal-1,temp_thermal,
+                               temp_rot,temp_vib,vstream);
+      }
+
+      nsingle += nactual;
+    }
+  }
+
+  memory->destroy(ninsert_values);
 }
 
 /* ----------------------------------------------------------------------
@@ -1303,7 +1504,12 @@ int FixEmitFaceFile::option(int narg, char **arg)
     return 2;
   }
 
-  error->all(FLERR,"Illegal fix emit/face command");
+  if (strcmp(arg[0],"twopass") == 0) {
+    twopass = 1;
+    return 1;
+  }
+
+  error->all(FLERR,"Illegal fix emit/face/file command");
   return 0;
 }
 

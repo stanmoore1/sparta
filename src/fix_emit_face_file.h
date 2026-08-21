@@ -35,7 +35,7 @@ class FixEmitFaceFile : public FixEmit {
 
  private:
   int imix,iface,subsonic,subsonic_style,subsonic_warning;
-  int npertask,nthresh;
+  int npertask,nthresh,twopass;
   double frac_user;
   double tprefactor,soundspeed_mixture;
 
@@ -126,7 +126,9 @@ class FixEmitFaceFile : public FixEmit {
   void subsonic_grid();
 
   void create_task(int);
-  void perform_task();
+  virtual void perform_task();
+  void perform_task_onepass();
+  virtual void perform_task_twopass();
   void grow_task();
 
   int option(int, char **);
