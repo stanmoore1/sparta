@@ -402,6 +402,13 @@ class DualView : public Kokkos::DualView<DataType, Properties...> {
   // copy was skipped or a claim was dropped while the data really did differ.
   // This is what catches a wrong claim, which no comparison of one side alone
   // can see.
+  //
+  // Only a sync is a fair place to ask.  At the top of modify_host() the caller
+  // has just written the host side and is about to say so, so the two sides
+  // differ with the counters still calling them reconciled -- which is the
+  // ordinary write-then-claim sequence, not a fault.  Checking there reported
+  // every correct claim in the run and drowned everything else, so the check
+  // is not made there.
 
   static const char *verify_filter()
   {
@@ -422,6 +429,16 @@ class DualView : public Kokkos::DualView<DataType, Properties...> {
       const char *h = (const char *) h_split.data();
       if (!d || !h) return;
       const size_t n = h_split.span() * sizeof(typename t_host::value_type);
+
+      // A pair parted on purpose by clear_sync_state() reads as in sync while
+      // holding different bytes, and that is not a fault.  Ask instead whether
+      // either side has changed since the two were last reconciled: only a
+      // change the counters were never told about is a dropped claim.
+      if (!same_shape(agreed_h, h_split)) return;
+      if ((first_difference(h, agreed_h.data(), n) == NO_DIFFERENCE) &&
+          (first_difference(d, agreed_d.data(), n) == NO_DIFFERENCE))
+        return;
+
       for (size_t b = 0; b < n; b++) {
         if (d[b] == h[b]) continue;
         std::fprintf(stderr,
@@ -1066,7 +1083,6 @@ class DualView : public Kokkos::DualView<DataType, Properties...> {
   {
     PoisonScope pscope(this);
     trace("modify_device");
-    verify("modify_device");
     watch("modify_device", OP_MODIFY_DEVICE);
     if constexpr (SPLIT) {
       if (!spa_flags.data()) return;
@@ -1090,7 +1106,6 @@ class DualView : public Kokkos::DualView<DataType, Properties...> {
   {
     PoisonScope pscope(this);
     trace("modify_host");
-    verify("modify_host");
     watch("modify_host", OP_MODIFY_HOST);
     if constexpr (SPLIT) {
       if (!spa_flags.data()) return;
