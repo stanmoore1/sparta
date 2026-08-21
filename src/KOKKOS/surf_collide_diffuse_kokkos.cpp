@@ -50,6 +50,7 @@ SurfCollideDiffuseKokkos::SurfCollideDiffuseKokkos(SPARTA *sparta, int narg, cha
   fix_vibmode_kk_copy(sparta),
   sr_kk_global_copy{VAL_2(KKCopy<SurfReactGlobalKokkos>(sparta))},
   sr_kk_prob_copy{VAL_2(KKCopy<SurfReactProbKokkos>(sparta))},
+  sr_kk_adsorb_copy{VAL_2(KKCopy<SurfReactAdsorbKokkos>(sparta))},
   rand_pool(12345 + comm->me
 #ifdef SPARTA_KOKKOS_EXACT
             , sparta
@@ -87,6 +88,7 @@ SurfCollideDiffuseKokkos::SurfCollideDiffuseKokkos(SPARTA *sparta) :
   fix_vibmode_kk_copy(sparta),
   sr_kk_global_copy{VAL_2(KKCopy<SurfReactGlobalKokkos>(sparta))},
   sr_kk_prob_copy{VAL_2(KKCopy<SurfReactProbKokkos>(sparta))},
+  sr_kk_adsorb_copy{VAL_2(KKCopy<SurfReactAdsorbKokkos>(sparta))},
   rand_pool(12345 // seed doesn't matter since it will just be copied over
 #ifdef SPARTA_KOKKOS_EXACT
             , sparta
@@ -239,8 +241,8 @@ void SurfCollideDiffuseKokkos::pre_collide()
     error->all(FLERR,"Kokkos currently supports a limited number of surface reaction methods");
 
   if (surf->nsr > 0) {
-    int nglob,nprob;
-    nglob = nprob = 0;
+    int nglob,nprob,nadsorb;
+    nglob = nprob = nadsorb = 0;
     for (int n = 0; n < surf->nsr; n++) {
       if (!surf->sr[n]->kokkosable)
         error->all(FLERR,"Must use Kokkos-enabled surface reaction method with Kokkos");
@@ -260,8 +262,16 @@ void SurfCollideDiffuseKokkos::pre_collide()
         sr_type_list[n] = 1;
         sr_map[n] = nprob;
         nprob++;
+      } else if (strcmp(surf->sr[n]->style,"adsorb") == 0) {
+        if (nadsorb >= KOKKOS_MAX_SURF_REACT_PER_TYPE)
+          error->all(FLERR,"Kokkos currently supports two instances of each surface reaction method");
+        sr_kk_adsorb_copy[nadsorb].copy((SurfReactAdsorbKokkos*)(surf->sr[n]));
+        sr_kk_adsorb_copy[nadsorb].obj.pre_react();
+        sr_type_list[n] = 2;
+        sr_map[n] = nadsorb;
+        nadsorb++;
       } else {
-        error->all(FLERR,"This Kokkos surf_collide style supports only surf_react global/prob; surf_react adsorb requires surf_collide cll");
+        error->all(FLERR,"Unknown Kokkos surface reaction method");
       }
     }
   }
@@ -316,7 +326,8 @@ void SurfCollideDiffuseKokkos::post_collide()
 
   for (int n = 0; n < surf->nsr; n++) {
     if (sr_type_list[n] == 0) sr_kk_global_copy[sr_map[n]].obj.post_react();
-    else sr_kk_prob_copy[sr_map[n]].obj.post_react();
+    else if (sr_type_list[n] == 1) sr_kk_prob_copy[sr_map[n]].obj.post_react();
+    else sr_kk_adsorb_copy[sr_map[n]].obj.post_react();
   }
 }
 
@@ -344,8 +355,8 @@ void SurfCollideDiffuseKokkos::backup()
   }
 
   if (surf->nsr > 0) {
-    int nglob,nprob;
-    nglob = nprob = 0;
+    int nglob,nprob,nadsorb;
+    nglob = nprob = nadsorb = 0;
     for (int n = 0; n < surf->nsr; n++) {
       if (strcmp(surf->sr[n]->style,"global") == 0) {
         sr_kk_global_copy[nglob].obj.backup();
@@ -353,6 +364,9 @@ void SurfCollideDiffuseKokkos::backup()
       } else if (strcmp(surf->sr[n]->style,"prob") == 0) {
         sr_kk_prob_copy[nprob].obj.backup();
         nprob++;
+      } else if (strcmp(surf->sr[n]->style,"adsorb") == 0) {
+        sr_kk_adsorb_copy[nadsorb].obj.backup();
+        nadsorb++;
       }
     }
   }
@@ -369,8 +383,8 @@ void SurfCollideDiffuseKokkos::backup()
 void SurfCollideDiffuseKokkos::restore()
 {
   if (surf->nsr > 0) {
-    int nglob,nprob;
-    nglob = nprob = 0;
+    int nglob,nprob,nadsorb;
+    nglob = nprob = nadsorb = 0;
     for (int n = 0; n < surf->nsr; n++) {
       if (strcmp(surf->sr[n]->style,"global") == 0) {
         sr_kk_global_copy[nglob].obj.restore();
@@ -378,6 +392,9 @@ void SurfCollideDiffuseKokkos::restore()
       } else if (strcmp(surf->sr[n]->style,"prob") == 0) {
         sr_kk_prob_copy[nprob].obj.restore();
         nprob++;
+      } else if (strcmp(surf->sr[n]->style,"adsorb") == 0) {
+        sr_kk_adsorb_copy[nadsorb].obj.restore();
+        nadsorb++;
       }
     }
   }

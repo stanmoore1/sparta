@@ -44,11 +44,6 @@ static void cmodel_sizes(int model, int &nc, int &nf)
   }
 }
 
-static bool cmodel_unsupported(int m)
-{
-  return (m == SRA_KK::ADIABATIC || m == SRA_KK::IMPULSIVE);
-}
-
 /* ---------------------------------------------------------------------- */
 
 SurfReactAdsorbKokkos::SurfReactAdsorbKokkos(SPARTA *sparta, int narg, char **arg) :
@@ -109,21 +104,6 @@ SurfReactAdsorbKokkos::~SurfReactAdsorbKokkos()
 void SurfReactAdsorbKokkos::init()
 {
   SurfReactAdsorb::init();
-
-  // Kokkos GS adsorb currently supports a restricted feature set;
-  //   error clearly at init rather than silently producing wrong results
-
-
-  for (int i = 0; i < nlist_gs; i++) {
-    OneReaction_GS *r = &rlist_gs[i];
-    if (!r->active) continue;
-    // post-reaction collision model (cmodel) scatter on device supports
-    //   NOMODEL/SPECULAR/DIFFUSE/CLL/TD; adiabatic/impulsive deferred
-
-    if (cmodel_unsupported(r->cmodel_ip) || cmodel_unsupported(r->cmodel_jp))
-      error->all(FLERR,"Kokkos surf_react adsorb does not yet support reactions with "
-                 "an adiabatic or impulsive post-reaction collision model");
-  }
 
   Kokkos::deep_copy(d_nsingle,0);
   Kokkos::deep_copy(d_tally_single,0);
