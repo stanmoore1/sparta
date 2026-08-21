@@ -60,6 +60,8 @@ class ParticleKokkos : public Particle {
   int add_custom(char *, int, int) override;
   void grow_custom(int, int, int) override;
   void remove_custom(int) override;
+  void zero_custom(int) override;
+  bigint memory_usage() override;
   void copy_custom(int, int) override;
   void pack_custom(int, char *) override;
   void unpack_custom(char *, int) override;
