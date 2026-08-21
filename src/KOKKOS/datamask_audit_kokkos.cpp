@@ -74,10 +74,23 @@ void DatamaskAudit::enable(int flag)
 {
   if (!audit_wanted()) return;
 
-  // the audit snapshots the device buffers directly, and in poison mode those
-  // bytes are off limits whenever the host side is the authoritative one, so
-  // the two cannot run together
-  if (flag && std::getenv("SPARTA_KOKKOS_POISON")) return;
+  // The audit snapshots the device buffers directly, from collect() at style
+  // boundaries -- outside any wrapper operation, so outside the window where
+  // PoisonScope has unpoisoned them.  In poison mode those bytes are off limits
+  // whenever the host side is the authoritative one, so the two cannot run
+  // together.  Say so: refusing in silence lets a run that set both look like a
+  // poison sweep that was also audited.
+  if (flag && std::getenv("SPARTA_KOKKOS_POISON")) {
+    static bool said = false;
+    if (!said) {
+      said = true;
+      std::fprintf(stderr,
+                   "[audit] SPARTA_KOKKOS_POISON is set, so the datamask audit is off "
+                   "for this run -- it reads the device buffers outside the window "
+                   "poison mode leaves them readable.  Run the two separately.\n");
+    }
+    return;
+  }
   audit_enabled = flag;
 }
 

@@ -543,7 +543,17 @@ class DualView : public Kokkos::DualView<DataType, Properties...> {
     while (pos <= list.size()) {
       const size_t end = list.find(',', pos);
       const std::string one = list.substr(pos, end == std::string::npos ? end : end - pos);
-      if (!one.empty() && label.find(one) != std::string::npos) return true;
+      // Match the whole label, not a piece of it.  As a substring test an entry
+      // also silences every label it happens to be a prefix of: in LAMMPS the
+      // entry meant for comm:k_buf_send silenced comm:k_buf_send_fix and its
+      // two siblings, and their findings were written down as things the
+      // detectors had missed.  A trailing * asks for the family on purpose.
+      if (!one.empty()) {
+        if (one.back() == '*') {
+          if (label.compare(0, one.size() - 1, one, 0, one.size() - 1) == 0) return true;
+        } else if (label == one)
+          return true;
+      }
       if (end == std::string::npos) break;
       pos = end + 1;
     }
