@@ -202,6 +202,7 @@ class CollideVSSKokkos : public CollideVSS {
   DAT::t_int_scalar d_tally_overflow;
   HAT::t_int_scalar h_tally_overflow;
   void grow_gas_tally_computes();
+  void rewind_gas_tally_computes(int);
   ComputeGasReactionGridKokkos tmp_compute_gas_reaction_kk;
   void setup_gas_tally();
   void finish_gas_tally();

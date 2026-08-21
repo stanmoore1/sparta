@@ -40,12 +40,18 @@
 
 namespace SPARTA_NS {
 
-#define KOKKOS_MAX_SURF_COLL_PER_TYPE 2
-// 9 supported surf_collide types (specular, diffuse, vanish, piston,
-//   transparent, adiabatic, impulsive, td, cll) x KOKKOS_MAX_SURF_COLL_PER_TYPE
-#define KOKKOS_MAX_TOT_SURF_COLL 18
 #define KOKKOS_MAX_BLIST 2
 #define KOKKOS_MAX_SLIST 2
+
+// surf_collide style tags, used to dispatch on device where the host's
+//   virtual SurfCollide::collide() is not available
+
+enum{SC_SPECULAR,SC_DIFFUSE,SC_VANISH,SC_PISTON,SC_TRANSPARENT,
+     SC_ADIABATIC,SC_IMPULSIVE,SC_TD,SC_CLL,SC_NSTYLE};
+
+// host-side phases every surf_collide model is run through
+
+enum{SC_PRE,SC_POST,SC_BACKUP,SC_RESTORE};
 
 struct s_UPDATE_REDUCE {
   // per-step counters are bigint since they can exceed 2^31
@@ -162,17 +168,69 @@ class UpdateKokkos : public Update {
   KKCopy<GridKokkos> grid_kk_copy;
   KKCopy<DomainKokkos> domain_kk_copy;
 
-  int sc_type_list[KOKKOS_MAX_TOT_SURF_COLL];
-  int sc_map[KOKKOS_MAX_TOT_SURF_COLL];
-  KKCopy<SurfCollideSpecularKokkos> sc_kk_specular_copy[KOKKOS_MAX_SURF_COLL_PER_TYPE];
-  KKCopy<SurfCollideDiffuseKokkos> sc_kk_diffuse_copy[KOKKOS_MAX_SURF_COLL_PER_TYPE];
-  KKCopy<SurfCollideVanishKokkos> sc_kk_vanish_copy[KOKKOS_MAX_SURF_COLL_PER_TYPE];
-  KKCopy<SurfCollidePistonKokkos> sc_kk_piston_copy[KOKKOS_MAX_SURF_COLL_PER_TYPE];
-  KKCopy<SurfCollideTransparentKokkos> sc_kk_transparent_copy[KOKKOS_MAX_SURF_COLL_PER_TYPE];
-  KKCopy<SurfCollideAdiabaticKokkos> sc_kk_adiabatic_copy[KOKKOS_MAX_SURF_COLL_PER_TYPE];
-  KKCopy<SurfCollideImpulsiveKokkos> sc_kk_impulsive_copy[KOKKOS_MAX_SURF_COLL_PER_TYPE];
-  KKCopy<SurfCollideTDKokkos> sc_kk_td_copy[KOKKOS_MAX_SURF_COLL_PER_TYPE];
-  KKCopy<SurfCollideCLLKokkos> sc_kk_cll_copy[KOKKOS_MAX_SURF_COLL_PER_TYPE];
+  // surf_collide models used to sit in fixed-size KKCopy arrays here, nine
+  //   styles x two instances.  This class is itself the functor handed by
+  //   value to every move kernel, and each model nests its own surf_react
+  //   copies, so those arrays made sizeof(UpdateKokkos) 224 KB -- copied to
+  //   the device on every launch -- while capping a run at two instances of
+  //   each style, which an ordinary model with three wall temperatures hits.
+  // The models now live in device memory instead, one buffer per style sized
+  //   at run time, and the functor carries only the buffers and two index
+  //   maps.  The bytes are blitted in rather than constructed there, which is
+  //   what KKCopy::copy() already does (see kokkos_copy.h) and is sound for
+  //   the same reason: on device the models are only read, through
+  //   KOKKOS_INLINE_FUNCTION members, so the vtable pointer is never used and
+  //   the View handles they carry are kept alive by the originals in surf->sc.
+
+  DAT::t_int_1d d_sc_type;              // surf_collide index -> style tag
+  DAT::t_int_1d d_sc_map;               // surf_collide index -> slot in style
+  DAT::tdual_char_1d k_sc[SC_NSTYLE];   // blitted models, one buffer per style
+  DAT::t_char_1d d_sc[SC_NSTYLE];
+
+  int nsc_style[SC_NSTYLE];             // # of instances of each style
+
+  static int surf_collide_style_tag(class SurfCollide *);
+  static size_t sc_sizeof(int);
+  void sc_phase(class SurfCollide *, int);
+  void setup_surf_collide_models();     // count, blit and upload, once per move
+  void upload_surf_collide_models();    // re-blit after backup()/restore()
+
+  // dispatch a surface collision to the model at surf_collide index n
+  //   the nine-way switch is what the host's virtual call becomes on device
+
+  template<int REACT, int ATOMIC_REDUCTION>
+  KOKKOS_INLINE_FUNCTION
+  Particle::OnePart* surf_collide_dispatch(const int n, Particle::OnePart *&ip,
+                                           double &dtremain, const int isurf,
+                                           const double *norm, const int isr,
+                                           int &reaction,
+                                           const DAT::t_int_scalar &d_retry,
+                                           const DAT::t_int_scalar &d_nlocal) const
+  {
+    const int m = d_sc_map[n];
+
+#define SC_CASE(TAG,TYPE)                                               \
+    case TAG:                                                           \
+      return ((const TYPE *) d_sc[TAG].data())[m].                      \
+        template collide_kokkos<REACT,ATOMIC_REDUCTION>                 \
+          (ip,dtremain,isurf,norm,isr,reaction,d_retry,d_nlocal);
+
+    switch (d_sc_type[n]) {
+      SC_CASE(SC_SPECULAR,SurfCollideSpecularKokkos)
+      SC_CASE(SC_DIFFUSE,SurfCollideDiffuseKokkos)
+      SC_CASE(SC_VANISH,SurfCollideVanishKokkos)
+      SC_CASE(SC_PISTON,SurfCollidePistonKokkos)
+      SC_CASE(SC_TRANSPARENT,SurfCollideTransparentKokkos)
+      SC_CASE(SC_ADIABATIC,SurfCollideAdiabaticKokkos)
+      SC_CASE(SC_IMPULSIVE,SurfCollideImpulsiveKokkos)
+      SC_CASE(SC_TD,SurfCollideTDKokkos)
+      SC_CASE(SC_CLL,SurfCollideCLLKokkos)
+    }
+
+#undef SC_CASE
+
+    return NULL;
+  }
 
   //KKCopy<ComputeSurfKokkos> blist_active_copy[KOKKOS_MAX_GLIST];
   KKCopy<ComputeSurfKokkos> slist_active_copy[KOKKOS_MAX_SLIST];
@@ -194,6 +252,7 @@ class UpdateKokkos : public Update {
 
   // grow every per-event tally compute after an overflowed attempt
   void grow_tally_computes();
+  void rewind_tally_computes(int);
 
   ComputeBoundaryKokkos tmp_compute_boundary_kk;
   ComputeSurfKokkos tmp_compute_surf_kk;
