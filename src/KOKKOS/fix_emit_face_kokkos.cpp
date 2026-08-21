@@ -449,7 +449,8 @@ void FixEmitFaceKokkos::operator()(TagFixEmitFace_perform_task, const int &i, in
         if (dimension == 3) x[2] = lo[2] + rand_gen.drand() * (hi[2]-lo[2]);
         else x[2] = 0.0;
 
-        if (!region_match_kk(d_region_prims,nregion_prim,region_op,
+        if (region_flag &&
+            !region_match_kk(d_region_prims,nregion_prim,region_op,
                              region_interior,x[0],x[1],x[2])) continue;
 
         nactual++;
@@ -503,7 +504,8 @@ void FixEmitFaceKokkos::operator()(TagFixEmitFace_perform_task, const int &i, in
       if (dimension == 3) x[2] = lo[2] + rand_gen.drand() * (hi[2]-lo[2]);
       else x[2] = 0.0;
 
-      if (!region_match_kk(d_region_prims,nregion_prim,region_op,
+      if (region_flag &&
+          !region_match_kk(d_region_prims,nregion_prim,region_op,
                            region_interior,x[0],x[1],x[2])) continue;
 
       nactual++;
