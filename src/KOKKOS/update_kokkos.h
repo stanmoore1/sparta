@@ -229,21 +229,58 @@ class UpdateKokkos : public Update {
     return NULL;
   }
 
-  // the active tally computes used to sit in fixed-size KKCopy arrays here,
-  //   two of each of seven types.  This class is the functor handed by value
-  //   to every move kernel, so those arrays were paid for on every launch and
-  //   capped a run at two instances of each compute.  They now live in device
-  //   memory instead, one runtime-sized buffer per type, blitted in exactly as
-  //   KKCopy::copy() does (kokkos_copy.h:71) and read on device through
-  //   KOKKOS_INLINE_FUNCTION members only -- see the surf_collide models above,
-  //   which use the same scheme for the same reason.
+  // the active tally computes, partitioned by type.  Two representations,
+  //   selected by SPARTA_KOKKOS_FIXED_LISTS (see kokkos_type.h):
+  //   - default: one runtime-sized device buffer per type, objects blitted in
+  //     exactly as KKCopy::copy() does (kokkos_copy.h:71).  No instance cap.
+  //   - SPARTA_KOKKOS_FIXED_LISTS: the original fixed-size KKCopy arrays, held
+  //     by value in this functor, capped at two instances of each type.
+  //   The dispatch sites in the move kernel are written once, against the
+  //   UK_* accessors below, so only these declarations and the setup routine
+  //   differ between the two.
 
+#ifdef SPARTA_KOKKOS_FIXED_LISTS
+  KKCopy<ComputeSurfKokkos> slist_active_copy[KOKKOS_MAX_SLIST];
+  KKCopy<ComputeISurfGridKokkos> slist_active_isurf_copy[KOKKOS_MAX_SLIST];
+  KKCopy<ComputeSurfCollisionTallyKokkos> slist_active_coll_tally_copy[KOKKOS_MAX_SLIST];
+  KKCopy<ComputeSurfReactionTallyKokkos> slist_active_react_tally_copy[KOKKOS_MAX_SLIST];
+  KKCopy<ComputeReactISurfGridKokkos> slist_active_react_isurf_copy[KOKKOS_MAX_SLIST];
+  KKCopy<ComputeReactSurfKokkos> slist_active_react_surf_copy[KOKKOS_MAX_SLIST];
+  KKCopy<ComputeBoundaryKokkos> blist_active_copy[KOKKOS_MAX_BLIST];
+
+  // unused fixed slots must not alias a compute that may be reallocated or
+  //   deleted while they still reference count it
+
+  ComputeBoundaryKokkos tmp_compute_boundary_kk;
+  ComputeSurfKokkos tmp_compute_surf_kk;
+  ComputeISurfGridKokkos tmp_compute_isurf_grid_kk;
+  ComputeReactISurfGridKokkos tmp_compute_react_isurf_grid_kk;
+  ComputeReactSurfKokkos tmp_compute_react_surf_kk;
+
+#define UK_SLIST_SURF(m)        slist_active_copy[m].obj
+#define UK_SLIST_ISURF(m)       slist_active_isurf_copy[m].obj
+#define UK_SLIST_COLL_TALLY(m)  slist_active_coll_tally_copy[m].obj
+#define UK_SLIST_REACT_TALLY(m) slist_active_react_tally_copy[m].obj
+#define UK_SLIST_REACT_ISURF(m) slist_active_react_isurf_copy[m].obj
+#define UK_SLIST_REACT_SURF(m)  slist_active_react_surf_copy[m].obj
+#define UK_BLIST(m)             blist_active_copy[m].obj
+
+#else
   DAT::tdual_char_1d k_slist_surf, k_slist_isurf, k_slist_coll_tally,
                      k_slist_react_tally, k_slist_react_isurf,
                      k_slist_react_surf, k_blist;
   DAT::t_char_1d d_slist_surf, d_slist_isurf, d_slist_coll_tally,
                  d_slist_react_tally, d_slist_react_isurf,
                  d_slist_react_surf, d_blist;
+
+#define UK_SLIST_SURF(m)        ((const ComputeSurfKokkos *) d_slist_surf.data())[m]
+#define UK_SLIST_ISURF(m)       ((const ComputeISurfGridKokkos *) d_slist_isurf.data())[m]
+#define UK_SLIST_COLL_TALLY(m)  ((const ComputeSurfCollisionTallyKokkos *) d_slist_coll_tally.data())[m]
+#define UK_SLIST_REACT_TALLY(m) ((const ComputeSurfReactionTallyKokkos *) d_slist_react_tally.data())[m]
+#define UK_SLIST_REACT_ISURF(m) ((const ComputeReactISurfGridKokkos *) d_slist_react_isurf.data())[m]
+#define UK_SLIST_REACT_SURF(m)  ((const ComputeReactSurfKokkos *) d_slist_react_surf.data())[m]
+#define UK_BLIST(m)             ((const ComputeBoundaryKokkos *) d_blist.data())[m]
+#endif
 
   // partition of slist_active (set in tally_set):
   //   nslist_surf        = # of compute surf style tallies (slist_active_copy)
@@ -258,8 +295,7 @@ class UpdateKokkos : public Update {
   void grow_tally_computes();
   void rewind_tally_computes(int);
 
-  // no placeholders are needed any more: with runtime-sized buffers there are
-  //   no unused slots holding a stale reference-counted copy
+
 
   // int scalars = flags and view-index counters, must stay int
   // bigint scalars = per-step statistics counters, can exceed 2^31
