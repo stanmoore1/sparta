@@ -1020,9 +1020,18 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
     }
   }
 
+  // dispatch by dynamic_cast for the same reason as the surf tally list above,
+  //   and because compute react/boundary also sets boundary_tally_flag but is
+  //   an unrelated class with no Kokkos version: a static cast would call a
+  //   Kokkos method on a non-Kokkos object
+
   if (nboundary_tally) {
     for (int m = 0; m < nboundary_tally; m++) {
-      ComputeBoundaryKokkos* compute_boundary_kk = (ComputeBoundaryKokkos*)(blist_active[m]);
+      ComputeBoundaryKokkos* compute_boundary_kk =
+        dynamic_cast<ComputeBoundaryKokkos*>(blist_active[m]);
+      if (!compute_boundary_kk)
+        error->all(FLERR,"Kokkos does not (yet) support this boundary tally compute; "
+                         "use a Kokkos-enabled boundary tally compute (-sf kk)");
       compute_boundary_kk->post_boundary_tally();
     }
   }
@@ -2477,8 +2486,19 @@ void UpdateKokkos::tally_set(bigint ntimestep)
   if (nboundary_tally > KOKKOS_MAX_BLIST)
     error->all(FLERR,"Kokkos currently only supports two instances of compute boundary");
 
+  // dispatch by dynamic_cast, as setup_surf_tally_copies() does: compute
+  //   react/boundary also sets boundary_tally_flag, but it derives straight
+  //   from Compute and has no Kokkos version, so a static cast here would
+  //   call ComputeBoundaryKokkos methods on an unrelated object.  The cast
+  //   also fails for a plain compute boundary under "-k on" without "-sf kk",
+  //   which is likewise not the Kokkos class
+
   for (i = 0; i < nboundary_tally; i++) {
-    ComputeBoundaryKokkos* compute_boundary_kk = (ComputeBoundaryKokkos*)(blist_active[i]);
+    ComputeBoundaryKokkos* compute_boundary_kk =
+      dynamic_cast<ComputeBoundaryKokkos*>(blist_active[i]);
+    if (!compute_boundary_kk)
+      error->all(FLERR,"Kokkos does not (yet) support this boundary tally compute; "
+                       "use a Kokkos-enabled boundary tally compute (-sf kk)");
     compute_boundary_kk->pre_boundary_tally();
     blist_active_copy[i].copy(compute_boundary_kk);
   }
