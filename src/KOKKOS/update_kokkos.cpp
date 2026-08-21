@@ -1266,8 +1266,11 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
     xnew[1] = x[1] + dtremain*v[1];
     if (DIM != 2) xnew[2] = x[2] + dtremain*v[2];
     if (fstyle == CFIELD) {
+      // DIM == 1 is the axisymmetric model, which the host treats as 2d here:
+      //   Update::init() selects field2d on domain->dimension == 2, which is
+      //   true for axisymmetric.  Do not narrow this back to DIM == 2
       if (DIM == 3) field3d(dtremain,xnew,v);
-      else if (DIM == 2) field2d(dtremain,xnew,v);
+      else field2d(dtremain,xnew,v);
     } else if (fstyle == PFIELD) field_per_particle(i,particle_i.icell,dtremain,xnew,v);
     else if (fstyle == GFIELD) field_per_grid(i,particle_i.icell,dtremain,xnew,v);
   } else if (pflag == PINSERT) {
@@ -1276,8 +1279,11 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
     xnew[1] = x[1] + dtremain*v[1];
     if (DIM != 2) xnew[2] = x[2] + dtremain*v[2];
     if (fstyle == CFIELD) {
+      // DIM == 1 is the axisymmetric model, which the host treats as 2d here:
+      //   Update::init() selects field2d on domain->dimension == 2, which is
+      //   true for axisymmetric.  Do not narrow this back to DIM == 2
       if (DIM == 3) field3d(dtremain,xnew,v);
-      else if (DIM == 2) field2d(dtremain,xnew,v);
+      else field2d(dtremain,xnew,v);
     } else if (fstyle == PFIELD) field_per_particle(i,particle_i.icell,dtremain,xnew,v);
     else if (fstyle == GFIELD) field_per_grid(i,particle_i.icell,dtremain,xnew,v);
   } else if (pflag == PENTRY) {
