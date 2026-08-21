@@ -2401,12 +2401,10 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroupAmbipolar< GASTALLY, 
 
   // build per-group particle lists for this cell, plus the electron list
   // gcount[g] = particle count in group g, with the electron count for egroup
-  // gstart[g] = offset of group g's real particles within d_glist(icell,*)
   //   (the electron group egroup has no real particles, so it adds no entries)
   // electrons (one per ambipolar ion) are created in d_elist in plist order
 
   int gcount[MAXGROUP];
-  int gstart[MAXGROUP];
   int gcursor[MAXGROUP];
 
   for (int g = 0; g < ngroups; g++) gcount[g] = 0;
@@ -2420,12 +2418,14 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroupAmbipolar< GASTALLY, 
   }
   gcount[egroup] = nelectron;
 
-  int offset = 0;
-  for (int g = 0; g < ngroups; g++) {
-    gstart[g] = offset;
-    gcursor[g] = offset;
-    if (g != egroup) offset += gcount[g];
-  }
+  // each group has its own row of d_glist, so every group fills from 0.
+  //   this used to seed the cursor from a running cross-group offset, which
+  //   was right when d_glist was one group-contiguous row per cell but wrong
+  //   once it became per-group: writes landed at [offset, offset+gcount) while
+  //   every read indexes from 0.  Only a layout with at most one non-electron
+  //   group -- which is what examples/ambi/in.ambi.group has -- hid it.
+
+  for (int g = 0; g < ngroups; g++) gcursor[g] = 0;
 
   int e = 0;
   for (int n = 0; n < np; n++) {
