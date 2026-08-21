@@ -113,8 +113,28 @@ class DualView : public Kokkos::DualView<DataType, Properties...> {
   // answer in every SPARTA build, since SPARTA names one execution space and
   // uses it everywhere.  Ask it of the memory spaces anyway, so that the
   // emulation stays keyed to the thing it is actually emulating.
+  //
+  // The emulation gives the host side a buffer of its own and moves values
+  // between the two with deep_copy, so it can only model element types for
+  // which a byte-for-byte duplicate is a second, independent value.  SPARTA has
+  // four that are not: struct_tdual_{int,float}_{1d,2d} wrap a dual view, and a
+  // dual view of those (particle:eiarray and friends) is exactly the
+  // DualView-of-DualView idiom -- grid_custom_kokkos.cpp:196 claims the outer
+  // view on the host and syncs it to the device so that device kernels can
+  // reach the inner views.  On a GPU the copy lands in device memory, where
+  // Kokkos never runs an element destructor; here both sides are HostSpace, so
+  // Kokkos destroys the elements of both, and the duplicate's reference-counted
+  // handles -- copied as bytes, never incremented -- are decremented a second
+  // time.  ASan reports the heap-use-after-free at teardown, which is the
+  // emulation's own doing and not a coherence fault.  Leave those pairs
+  // aliased: on a real GPU build this whole class is a pass-through anyway, so
+  // the only thing given up is emulated coverage of four arrays whose bytes
+  // cannot be duplicated in the first place.
+  using spa_value_type = std::remove_cv_t<typename t_dev::value_type>;
   static constexpr bool SPLIT =
-      std::is_same_v<typename t_dev::memory_space, typename t_host::memory_space>;
+      std::is_same_v<typename t_dev::memory_space, typename t_host::memory_space> &&
+      std::is_trivially_copyable_v<spa_value_type> &&
+      std::is_trivially_destructible_v<spa_value_type>;
 
   // (0) and (1) mirror Kokkos::DualView::modified_flags for the host and the
   // device side.  (2) and (3) count the claims each side has ever had and are
@@ -1252,6 +1272,14 @@ class DualView : public Kokkos::DualView<DataType, Properties...> {
       // happens only when the two sides really differ, so a build without a GPU
       // never sees the claim left behind -- and code that then marks the other
       // side without clearing this one is exactly the bug worth finding.
+      //
+      // Not modelled: Kokkos::view_alloc(SequentialHostInit) takes a different
+      // path in impl_resize() that resizes the host side, rebuilds the device
+      // side from it and marks NEITHER, so a modify_host() right afterwards is
+      // legal there and aborts here.  SPARTA passes that property on the four
+      // dual-views-of-dual-views only, and the SPLIT gate above leaves those
+      // aliased, so nothing reaches this branch with it; model it here if that
+      // ever stops being true.
       const bool on_device = (spa_flags(1) >= spa_flags(0));
 
       // Resizing on the host: fold it into the base, which the base class resize
