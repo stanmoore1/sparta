@@ -92,6 +92,14 @@ FixEmitSurfKokkos::~FixEmitSurfKokkos()
   rand_pool.destroy();
 #endif
 
+  // the loop below reads and writes the host side of k_tasks, which the
+  // emission kernels leave claimed for the device.  path and fracarea are host
+  // allocations the device never writes, so the host values are the right ones
+  // and no copy back is wanted here; say so rather than reading a side the
+  // coherence state calls stale.
+
+  k_tasks.clear_sync_state();
+
   for (int i = 0; i < ntaskmax; i++) {
     tasks[i].ntargetsp = NULL;
     tasks[i].vscale = NULL;
