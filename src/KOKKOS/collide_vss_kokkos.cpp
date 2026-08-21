@@ -669,12 +669,6 @@ template < int NEARCP, int GASTALLY > void CollideVSSKokkos::collisions_one(COLL
   grid_kk->sync(Device,CINFO_MASK);
   d_plist = grid_kk->d_plist;
 
-  if (react) {
-    ReactTCEKokkos* react_kk = (ReactTCEKokkos*) react;
-    if (!react_kk)
-      error->all(FLERR,"Must use TCE reactions with Kokkos");
-  }
-
   copymode = 1;
 
   if (NEARCP) {
@@ -1069,12 +1063,6 @@ template < int DIM, int GASTALLY > void CollideVSSKokkos::collisions_one_subcell
   GridKokkos* grid_kk = (GridKokkos*) grid;
   grid_kk->sync(Device,CINFO_MASK|CELL_MASK);
   d_plist = grid_kk->d_plist;
-
-  if (react) {
-    ReactTCEKokkos* react_kk = (ReactTCEKokkos*) react;
-    if (!react_kk)
-      error->all(FLERR,"Must use TCE reactions with Kokkos");
-  }
 
   copymode = 1;
 
@@ -2219,12 +2207,6 @@ void CollideVSSKokkos::collisions_one_ambipolar(COLLIDE_REDUCE &reduce)
   GridKokkos* grid_kk = (GridKokkos*) grid;
   grid_kk->sync(Device,CINFO_MASK);
   d_plist = grid_kk->d_plist;
-
-  if (react) {
-    ReactTCEKokkos* react_kk = (ReactTCEKokkos*) react;
-    if (!react_kk)
-      error->all(FLERR,"Must use TCE reactions with Kokkos");
-  }
 
   copymode = 1;
 
