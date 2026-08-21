@@ -263,6 +263,9 @@ void FixAveHistoKokkos::end_of_step()
       if (!fix->kokkos_flag)
         error->all(FLERR,"Cannot (yet) use non-Kokkos fixes with fix ave/histo/kk");
       KokkosBase* fixKKBase = dynamic_cast<KokkosBase*>(fix);
+      // a fix keeps its per-grid output between invocations and grid migration
+      // can leave it current on the host alone, so ask for the device copy
+      if (fixKKBase) fixKKBase->sync_pergrid_device_kokkos();
 
       if (kind == GLOBAL && mode == SCALAR) {
         if (j == 0) {

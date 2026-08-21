@@ -617,6 +617,23 @@ void FixAveGridKokkos::add_grid_one()
 }
 
 /* ----------------------------------------------------------------------
+   bring the per-grid output up to date on the device
+
+   The migration hooks above leave vector_grid/array_grid current on the host
+   only, and end_of_step() is what normally refreshes the device.  Another
+   Kokkos style can read this fix's output before then: fix adapt invokes
+   compute lambda/grid from AdaptGrid::candidates_coarsen(), which is after
+   refinement has already migrated cells, and that compute launches a kernel
+   straight on d_array_grid.  Without this the kernel reads the values the
+   cells held before the migration.
+------------------------------------------------------------------------- */
+
+void FixAveGridKokkos::sync_pergrid_device_kokkos()
+{
+  pergrid_sync(Device);
+}
+
+/* ----------------------------------------------------------------------
    sync/modify the per-grid dual views: the tally array plus whichever
    output array (vector_grid or array_grid) is in use
 ------------------------------------------------------------------------- */
