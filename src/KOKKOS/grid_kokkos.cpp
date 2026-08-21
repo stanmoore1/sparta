@@ -14,6 +14,7 @@
 
 #include "string.h"
 #include "grid_kokkos.h"
+#include "datamask_audit_kokkos.h"
 #include "geometry.h"
 #include "domain.h"
 #include "comm.h"
@@ -121,7 +122,7 @@ void GridKokkos::grow_cells(int n, int m)
         MemKK::realloc_kokkos(k_cells,"grid:cells",maxcell);
       else {
         this->sync(Device,CELL_MASK); // force resize on device
-        Kokkos::resize(Kokkos::view_alloc(Kokkos::WithoutInitializing),
+        SPARTA_NS::resize(Kokkos::view_alloc(Kokkos::WithoutInitializing),
                        k_cells,maxcell);
         this->modify(Device,CELL_MASK); // needed for auto sync
       }
@@ -136,7 +137,7 @@ void GridKokkos::grow_cells(int n, int m)
         MemKK::realloc_kokkos(k_cinfo,"grid:cinfo",maxlocal);
       else {
         this->sync(Device,CINFO_MASK); // force resize on device
-        Kokkos::resize(Kokkos::view_alloc(Kokkos::WithoutInitializing),
+        SPARTA_NS::resize(Kokkos::view_alloc(Kokkos::WithoutInitializing),
                        k_cinfo,maxlocal);
         this->modify(Device,CINFO_MASK); // needed for auto sync
       }
@@ -160,7 +161,7 @@ void GridKokkos::grow_pcells()
       MemKK::realloc_kokkos(k_pcells,"grid:pcells",maxparent);
     else {
       this->sync(Device,PCELL_MASK); // force resize on device
-      Kokkos::resize(Kokkos::view_alloc(Kokkos::WithoutInitializing),
+      SPARTA_NS::resize(Kokkos::view_alloc(Kokkos::WithoutInitializing),
                      k_pcells,maxparent);
       this->modify(Device,PCELL_MASK); // needed for auto sync
     }
@@ -184,7 +185,7 @@ void GridKokkos::grow_sinfo(int n)
         MemKK::realloc_kokkos(k_sinfo,"grid:sinfo",maxsplit);
       else {
         this->sync(Device,SINFO_MASK); // force resize on device
-        Kokkos::resize(Kokkos::view_alloc(Kokkos::WithoutInitializing),
+        SPARTA_NS::resize(Kokkos::view_alloc(Kokkos::WithoutInitializing),
                        k_sinfo,maxsplit);
         this->modify(Device,SINFO_MASK); // needed for auto sync
       }
@@ -407,6 +408,8 @@ void GridKokkos::sync(ExecutionSpace space, unsigned int mask)
           k_edarray.view_host()[i].k_view.sync_host();
     }
   }
+
+  DatamaskAudit::note_synced(mask);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -419,6 +422,8 @@ void GridKokkos::modify(ExecutionSpace space, unsigned int mask)
     else
       return;
   }
+
+  DatamaskAudit::note_modified(mask);
 
   if (space == Device) {
     if (mask & CELL_MASK) k_cells.modify_device();

@@ -199,6 +199,39 @@ endif()
     set(SPARTA_DEFAULT_CXX_COMPILE_FLAGS -DSPARTA_KOKKOS_EXACT
                                          ${SPARTA_DEFAULT_CXX_COMPILE_FLAGS})
   endif()
+
+  # SPARTA_KOKKOS_DEBUG_SYNC gives the host side of every dual view its own
+  # allocation and drives the coherence state machine in software, so that a
+  # missing sync() or modify() -- invisible on a CPU, silent corruption on a
+  # GPU -- changes the results of a plain CPU run.  A developer tool; see
+  # .github/dev-docs/kokkos-sync-debugging.md.
+  if(SPARTA_KOKKOS_DEBUG_SYNC)
+    set(SPARTA_DEFAULT_CXX_COMPILE_FLAGS -DSPARTA_KOKKOS_DEBUG_SYNC
+                                         ${SPARTA_DEFAULT_CXX_COMPILE_FLAGS})
+    # the detectors print a backtrace at the point a coherence error is found;
+    # keep the dynamic symbols so that names them rather than offsets the
+    # reader has to feed to addr2line
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+      set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -rdynamic")
+    endif()
+    message(STATUS "Checking host/device data transfers for KOKKOS package")
+  endif()
+
+  # The poison mode of the sync debugging marks the stale copy of each array as
+  # off limits through AddressSanitizer, so any access to it stops the run at
+  # the faulting line.  Built with recovery so ASAN_OPTIONS=halt_on_error=0 can
+  # turn a run into a survey that logs every stale access instead of stopping at
+  # the first.  Applied through the flag variables rather than
+  # add_compile_options() so that they reach the final link line and the
+  # sanitizer runtime does not come up undefined.
+  if(SPARTA_KOKKOS_DEBUG_SYNC_ASAN)
+    if(NOT SPARTA_KOKKOS_DEBUG_SYNC)
+      message(FATAL_ERROR "SPARTA_KOKKOS_DEBUG_SYNC_ASAN requires SPARTA_KOKKOS_DEBUG_SYNC=on")
+    endif()
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fsanitize-recover=address")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address")
+    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fsanitize=address")
+  endif()
   # PKG_KOKKOS depends on BUILD_KOKKOS
   set(BUILD_KOKKOS ON)
 endif()

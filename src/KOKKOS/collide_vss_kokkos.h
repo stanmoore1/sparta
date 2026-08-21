@@ -226,13 +226,13 @@ class CollideVSSKokkos : public CollideVSS {
   // bigint scalars = per-step statistics counters, can exceed 2^31
   //   in one step at large per-proc particle counts
 
-  typedef Kokkos::DualView<int[8], DeviceType::array_layout, DeviceType> tdual_int_8;
+  typedef SPARTA_NS::DualView<int[8], DeviceType::array_layout, DeviceType> tdual_int_8;
   typedef tdual_int_8::t_dev t_int_8;
   typedef tdual_int_8::t_host t_host_int_8;
   t_int_8 d_scalars;
   t_host_int_8 h_scalars;
 
-  typedef Kokkos::DualView<bigint[3], DeviceType::array_layout, DeviceType> tdual_bigint_3;
+  typedef SPARTA_NS::DualView<bigint[3], DeviceType::array_layout, DeviceType> tdual_bigint_3;
   typedef tdual_bigint_3::t_dev t_bigint_3;
   typedef tdual_bigint_3::t_host t_host_bigint_3;
   t_bigint_3 d_scalars_big;

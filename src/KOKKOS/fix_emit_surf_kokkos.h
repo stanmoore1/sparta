@@ -104,7 +104,7 @@ class FixEmitSurfKokkos : public FixEmitSurf {
   KKCopy<RegPlaneKokkos> regplane_kk_copy;
   KKCopy<RegSphereKokkos> regsphere_kk_copy;
 
-  typedef Kokkos::DualView<Task*, DeviceType::array_layout, DeviceType> tdual_task_1d;
+  typedef SPARTA_NS::DualView<Task*, DeviceType::array_layout, DeviceType> tdual_task_1d;
   typedef tdual_task_1d::t_dev t_task_1d;
   tdual_task_1d k_tasks;
   t_task_1d d_tasks;

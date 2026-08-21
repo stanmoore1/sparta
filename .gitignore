@@ -42,3 +42,6 @@ Thumbs.db
 /spa
 
 doc/PDFgen.sh
+
+# out-of-source cmake build trees
+/build-*/

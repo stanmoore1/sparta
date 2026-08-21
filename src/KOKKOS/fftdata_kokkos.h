@@ -207,13 +207,13 @@ typedef Kokkos::
 typedef tdual_FFT_SCALAR_1d::t_dev t_FFT_SCALAR_1d;
 typedef tdual_FFT_SCALAR_1d::t_dev_um t_FFT_SCALAR_1d_um;
 
-typedef Kokkos::DualView<FFT_SCALAR**,Kokkos::LayoutRight,SPADeviceType> tdual_FFT_SCALAR_2d;
+typedef SPARTA_NS::DualView<FFT_SCALAR**,Kokkos::LayoutRight,SPADeviceType> tdual_FFT_SCALAR_2d;
 typedef tdual_FFT_SCALAR_2d::t_dev t_FFT_SCALAR_2d;
 
-typedef Kokkos::DualView<FFT_SCALAR**[3],Kokkos::LayoutRight,SPADeviceType> tdual_FFT_SCALAR_2d_3;
+typedef SPARTA_NS::DualView<FFT_SCALAR**[3],Kokkos::LayoutRight,SPADeviceType> tdual_FFT_SCALAR_2d_3;
 typedef tdual_FFT_SCALAR_2d_3::t_dev t_FFT_SCALAR_2d_3;
 
-typedef Kokkos::DualView<FFT_SCALAR***,Kokkos::LayoutRight,SPADeviceType> tdual_FFT_SCALAR_3d;
+typedef SPARTA_NS::DualView<FFT_SCALAR***,Kokkos::LayoutRight,SPADeviceType> tdual_FFT_SCALAR_3d;
 typedef tdual_FFT_SCALAR_3d::t_dev t_FFT_SCALAR_3d;
 
 typedef Kokkos::
@@ -239,13 +239,13 @@ typedef Kokkos::
 typedef tdual_FFT_SCALAR_1d::t_host t_FFT_SCALAR_1d;
 typedef tdual_FFT_SCALAR_1d::t_host_um t_FFT_SCALAR_1d_um;
 
-typedef Kokkos::DualView<FFT_SCALAR**,Kokkos::LayoutRight,SPADeviceType> tdual_FFT_SCALAR_2d;
+typedef SPARTA_NS::DualView<FFT_SCALAR**,Kokkos::LayoutRight,SPADeviceType> tdual_FFT_SCALAR_2d;
 typedef tdual_FFT_SCALAR_2d::t_host t_FFT_SCALAR_2d;
 
-typedef Kokkos::DualView<FFT_SCALAR**[3],Kokkos::LayoutRight,SPADeviceType> tdual_FFT_SCALAR_2d_3;
+typedef SPARTA_NS::DualView<FFT_SCALAR**[3],Kokkos::LayoutRight,SPADeviceType> tdual_FFT_SCALAR_2d_3;
 typedef tdual_FFT_SCALAR_2d_3::t_host t_FFT_SCALAR_2d_3;
 
-typedef Kokkos::DualView<FFT_SCALAR***,Kokkos::LayoutRight,SPADeviceType> tdual_FFT_SCALAR_3d;
+typedef SPARTA_NS::DualView<FFT_SCALAR***,Kokkos::LayoutRight,SPADeviceType> tdual_FFT_SCALAR_3d;
 typedef tdual_FFT_SCALAR_3d::t_host t_FFT_SCALAR_3d;
 
 typedef Kokkos::

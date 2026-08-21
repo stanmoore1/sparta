@@ -14,6 +14,7 @@
 
 #include "ctype.h"
 #include "surf_kokkos.h"
+#include "datamask_audit_kokkos.h"
 #include "style_surf_collide.h"
 #include "style_surf_react.h"
 #include "surf_collide.h"
@@ -300,12 +301,16 @@ void SurfKokkos::sync(ExecutionSpace space, unsigned int mask)
       }
     }
   }
+
+  DatamaskAudit::note_synced(mask);
 }
 
 /* ---------------------------------------------------------------------- */
 
 void SurfKokkos::modify(ExecutionSpace space, unsigned int mask)
 {
+  DatamaskAudit::note_modified(mask);
+
   if (sparta->kokkos->prewrap)
     if (space == Device)
       error->one(FLERR,"Modify Device before wrap");

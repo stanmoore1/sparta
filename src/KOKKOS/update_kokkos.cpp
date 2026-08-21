@@ -18,6 +18,7 @@
 #include "stdlib.h"
 #include "string.h"
 #include "update_kokkos.h"
+#include "datamask_audit_kokkos.h"
 #include "math_const.h"
 #include "particle_kokkos.h"
 #include "modify.h"
@@ -390,6 +391,8 @@ void UpdateKokkos::run(int nsteps)
 
   // loop over timesteps
 
+  DatamaskAudit::enable(1);
+
   for (int i = 0; i < nsteps; i++) {
 
     if (timer->check_timeout(i)) {
@@ -429,7 +432,7 @@ void UpdateKokkos::run(int nsteps)
     // communicate particles
 
     if (nmigrate) {
-      k_mlist_small = Kokkos::subview(k_mlist,std::make_pair(0,nmigrate));
+      k_mlist_small = SPARTA_NS::subview(k_mlist,std::make_pair(0,nmigrate));
       k_mlist_small.sync_host();
     }
     auto mlist_small = k_mlist_small.view_host().data();
@@ -481,6 +484,9 @@ void UpdateKokkos::run(int nsteps)
       timer->stamp(TIME_OUTPUT);
     }
   }
+
+  DatamaskAudit::enable(0);
+  DatamaskAudit::report(sparta);
 
   modify->post_run();
 
@@ -951,7 +957,7 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
 
     if (any_entryexit) {
       if (nmigrate) {
-        k_mlist_small = Kokkos::subview(k_mlist,std::make_pair(0,nmigrate));
+        k_mlist_small = SPARTA_NS::subview(k_mlist,std::make_pair(0,nmigrate));
         k_mlist_small.sync_host();
       }
       auto mlist_small = k_mlist_small.view_host().data();

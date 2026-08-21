@@ -179,3 +179,26 @@ process those build options, and finally print the settings that were selected.
 cmake --log-level=VERBOSE [-C /path/to/sparta/cmake/presets/<NAME>.cmake] /path/to/sparta/cmake
 make VERBOSE=1
 ```
+
+# Debugging KOKKOS host/device sync bugs
+Two developer-only options build a `spa_` binary that checks the transfers of
+data between the host and the device:
+
+```bash
+-D SPARTA_KOKKOS_DEBUG_SYNC=on        # give the host side its own allocation
+-D SPARTA_KOKKOS_DEBUG_SYNC_ASAN=on   # add AddressSanitizer, for poison mode
+```
+
+Kokkos switches its coherence state machine off whenever the host and device
+memory spaces are the same, which is every CPU-only build, so a KOKKOS style
+that forgets a `sync()` or a `modify()` runs correctly on a CPU and silently
+corrupts results on a GPU. With the first option on, the CPU build keeps a
+separate copy for the device and performs the transfers itself, so the fault
+changes the results of a plain CPU run. Runs use about twice the memory for the
+shared arrays and are considerably slower; a build with the options off is
+unaffected.
+
+Which array and which routine is at fault is then narrowed down with a set of
+`SPARTA_KOKKOS_*` environment variables. See
+[.github/dev-docs/kokkos-sync-debugging.md](.github/dev-docs/kokkos-sync-debugging.md)
+for the working procedure and the full list.

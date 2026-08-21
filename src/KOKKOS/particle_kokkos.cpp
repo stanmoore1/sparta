@@ -18,6 +18,7 @@
 #include "stdlib.h"
 #include "ctype.h"
 #include "particle_kokkos.h"
+#include "datamask_audit_kokkos.h"
 #include "grid_kokkos.h"
 #include "update.h"
 #include "comm.h"
@@ -620,7 +621,7 @@ void ParticleKokkos::post_weight()
     auto d_particles = k_particles.view_device();
     auto d_cinfo = k_cinfo.view_device();
 
-    typedef Kokkos::DualView<PostWeightPair*,SPADeviceType> tdual_pwp_1d;
+    typedef SPARTA_NS::DualView<PostWeightPair*,SPADeviceType> tdual_pwp_1d;
     tdual_pwp_1d k_map;
     MemKK::realloc_kokkos(k_map,"post_weight:map",nlocal*1.5);
     auto d_map = k_map.view_device();
@@ -755,7 +756,7 @@ void ParticleKokkos::grow(int nextra)
     MemKK::realloc_kokkos(k_particles,"particle:particles",maxlocal);
   else {
     this->sync(Device,PARTICLE_MASK); // force resize on device
-    Kokkos::resize(Kokkos::view_alloc(Kokkos::WithoutInitializing),
+    SPARTA_NS::resize(Kokkos::view_alloc(Kokkos::WithoutInitializing),
                    k_particles,maxlocal);
     this->modify(Device,PARTICLE_MASK); // needed for auto sync
   }
@@ -784,7 +785,7 @@ void ParticleKokkos::grow_species()
       MemKK::realloc_kokkos(k_species,"particle:species",maxspecies);
     else {
       this->sync(Device,SPECIES_MASK); // force resize on device
-      Kokkos::resize(Kokkos::view_alloc(Kokkos::WithoutInitializing),
+      SPARTA_NS::resize(Kokkos::view_alloc(Kokkos::WithoutInitializing),
                      k_species,maxspecies);
       this->modify(Device,SPECIES_MASK); // needed for auto sync
     }
@@ -873,12 +874,16 @@ void ParticleKokkos::sync(ExecutionSpace space, unsigned int mask)
           k_edarray.view_host()[i].k_view.sync_host();
     }
   }
+
+  DatamaskAudit::note_synced(mask);
 }
 
 /* ---------------------------------------------------------------------- */
 
 void ParticleKokkos::modify(ExecutionSpace space, unsigned int mask)
 {
+  DatamaskAudit::note_modified(mask);
+
   if (space == Device) {
     if (mask & PARTICLE_MASK) k_particles.modify_device();
     if (mask & SPECIES_MASK) k_species.modify_device();

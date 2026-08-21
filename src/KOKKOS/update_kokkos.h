@@ -197,13 +197,13 @@ class UpdateKokkos : public Update {
   // bigint scalars = per-step statistics counters, can exceed 2^31
   //   in one step at large per-proc particle counts
 
-  typedef Kokkos::DualView<int[7], DeviceType::array_layout, DeviceType> tdual_int_7;
+  typedef SPARTA_NS::DualView<int[7], DeviceType::array_layout, DeviceType> tdual_int_7;
   typedef tdual_int_7::t_dev t_int_7;
   typedef tdual_int_7::t_host t_host_int_7;
   t_int_7 d_scalars;
   t_host_int_7 h_scalars;
 
-  typedef Kokkos::DualView<bigint[7], DeviceType::array_layout, DeviceType> tdual_bigint_7;
+  typedef SPARTA_NS::DualView<bigint[7], DeviceType::array_layout, DeviceType> tdual_bigint_7;
   typedef tdual_bigint_7::t_dev t_bigint_7;
   typedef tdual_bigint_7::t_host t_host_bigint_7;
   t_bigint_7 d_scalars_big;

@@ -69,7 +69,7 @@ class SurfCollideTDKokkos : public SurfCollideTD {
   // bigint scalars: mirror SurfCollide::nsingle and Surf::nreact_one,
   //   which can exceed 2^31 in one step at large per-proc particle counts
 
-  typedef Kokkos::DualView<bigint[2], DeviceType::array_layout, DeviceType> tdual_bigint_2;
+  typedef SPARTA_NS::DualView<bigint[2], DeviceType::array_layout, DeviceType> tdual_bigint_2;
   typedef tdual_bigint_2::t_dev t_bigint_2;
   typedef tdual_bigint_2::t_host t_host_bigint_2;
   t_bigint_2 d_scalars;

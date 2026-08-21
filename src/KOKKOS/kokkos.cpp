@@ -177,6 +177,18 @@ KokkosSPARTA::KokkosSPARTA(SPARTA *sparta, int narg, char **arg) : Pointers(spar
   auto_sync = 1;
   gpu_aware_flag = 1;
 
+#ifdef SPARTA_KOKKOS_DEBUG_SYNC
+  // Automatic syncing copies every array through the plain SPARTA pointers
+  // around each coherence call, which keeps a run alive even where the styles
+  // themselves declare nothing, and so hides exactly the faults this build
+  // exists to find.  SPARTA_KOKKOS_NO_AUTOSYNC turns it off, leaving the styles
+  // to sync for themselves; a run that only survives with it on is relying on
+  // it.  UpdateKokkos::run() already clears it for the timestep loop, so what
+  // this reaches is setup, the non-KOKKOS fix path in ModifyKokkos and the
+  // communication.  Inert in an ordinary build.
+  if (getenv("SPARTA_KOKKOS_NO_AUTOSYNC")) auto_sync = 0;
+#endif
+
   if (ngpus > 0) {
     comm_serial = 0;
 

@@ -80,8 +80,11 @@ action compute_tvib_grid_kokkos.cpp
 action compute_tvib_grid_kokkos.h
 action comm_kokkos.cpp
 action comm_kokkos.h
+action datamask_audit_kokkos.cpp
+action datamask_audit_kokkos.h
 action domain_kokkos.cpp
 action domain_kokkos.h
+action dual_view_kokkos.h
 action fix_adapt_kokkos.cpp
 action fix_adapt_kokkos.h
 action fix_ambipolar_kokkos.cpp
