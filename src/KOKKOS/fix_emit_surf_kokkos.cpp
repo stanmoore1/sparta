@@ -576,7 +576,8 @@ void FixEmitSurfKokkos::operator()(TagFixEmitSurf_perform_task, const int &i, in
           x[2] = p1[2] + alpha*e1[2] + beta*e2[2];
         }
 
-        if (!region_match_kk(d_region_prims,nregion_prim,region_op,
+        if (region_flag &&
+            !region_match_kk(d_region_prims,nregion_prim,region_op,
                              region_interior,x[0],x[1],x[2])) continue;
 
         nactual++;
@@ -684,7 +685,8 @@ void FixEmitSurfKokkos::operator()(TagFixEmitSurf_perform_task, const int &i, in
         x[2] = p1[2] + alpha*e1[2] + beta*e2[2];
       }
 
-      if (!region_match_kk(d_region_prims,nregion_prim,region_op,
+      if (region_flag &&
+          !region_match_kk(d_region_prims,nregion_prim,region_op,
                            region_interior,x[0],x[1],x[2])) continue;
 
       nactual++;
