@@ -214,7 +214,56 @@ class CollideVSSKokkos : public CollideVSS {
 
   // group collision scratch (ngroups > 1)
   DAT::t_int_1d d_species2group;
-  DAT::t_int_2d d_glist;
+  // reacting group collisions mutate group membership inside the kernel, so
+  //   the per-group lists cannot be one group-contiguous row per cell as they
+  //   were when only the non-reacting case was supported.  Each group gets its
+  //   own region of capacity d_plist.extent(1) -- a group can never hold more
+  //   than the cell does -- and d_p2g is the reverse map the host keeps in
+  //   Collide::p2g, needed so a swap-remove can fix the moved entry's owner.
+
+  Kokkos::View<int***,DeviceType> d_glist;   // (cell, group, k) -> plist index
+  Kokkos::View<int***,DeviceType> d_p2g;     // (cell, plist index) -> group, k
+
+  // near-neighbor partner history for the two groups of the current pair;
+  //   the host reallocates these per pair via set_nn_group()
+
+  DAT::t_int_2d d_nn_igroup;
+  DAT::t_int_2d d_nn_jgroup;
+
+ public:
+
+  // mirror Collide::addgroup / delgroup (collide.h:157-179) exactly, including
+  //   the swap-with-last order: a reaction that rebins a particle changes which
+  //   index a later random draw lands on, so any deviation diverges from the
+  //   host rather than merely reordering
+
+  KOKKOS_INLINE_FUNCTION
+  void addgroup_kk(const int icell, const int igroup, const int pindex,
+                   int *gcount) const
+  {
+    const int ng = gcount[igroup];
+    d_glist(icell,igroup,ng) = pindex;
+    d_p2g(icell,pindex,0) = igroup;
+    d_p2g(icell,pindex,1) = ng;
+    gcount[igroup]++;
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void delgroup_kk(const int icell, const int igroup, const int i,
+                   int *gcount) const
+  {
+    const int ng = gcount[igroup];
+    if (i < ng-1) {
+      d_glist(icell,igroup,i) = d_glist(icell,igroup,ng-1);
+      const int pindex = d_glist(icell,igroup,i);
+      d_p2g(icell,pindex,0) = igroup;
+      d_p2g(icell,pindex,1) = i;
+    }
+    gcount[igroup]--;
+  }
+
+ private:
+
   Kokkos::View<int***,DeviceType> d_nattempt_pair;
 
   DAT::t_int_1d d_ewhich;
@@ -368,6 +417,11 @@ class CollideVSSKokkos : public CollideVSS {
   int set_nn(int, int) const;
   KOKKOS_INLINE_FUNCTION
   int find_nn(rand_type &, int, int, int) const;
+
+  void grow_group_lists();
+
+  KOKKOS_INLINE_FUNCTION
+  int find_nn_group(rand_type &, int, int, int, int, int, int) const;
 
   void backup();
   void restore();

@@ -510,24 +510,25 @@ void CollideVSSKokkos::collisions()
     }
 
   // multiple groups
-  // Kokkos currently supports only non-reacting, non-near-neighbor
-  //   group collisions (with or without the ambipolar approximation)
+  // the plain group path supports reactions and near-neighbor selection;
+  //   the ambipolar group path still assumes static group membership
 
   } else {
-    if (react)
-      error->all(FLERR,"Kokkos does not (yet) support reacting group collisions");
-    if (nearcp)
-      error->all(FLERR,"Kokkos does not (yet) support near-neighbor group collisions");
     if (subcellflag)
       error->all(FLERR,"Kokkos does not (yet) support subcell partners with "
                  "multiple collision groups");
     if (!ambiflag) {
-      if (!ngas_tally) {
-        collisions_group<0,0>(reduce);
-      } else if (ngas_tally) {
-        collisions_group<0,1>(reduce);
+      if (!nearcp) {
+        if (!ngas_tally) collisions_group<0,0>(reduce);
+        else collisions_group<0,1>(reduce);
+      } else {
+        if (!ngas_tally) collisions_group<1,0>(reduce);
+        else collisions_group<1,1>(reduce);
       }
     } else if (ambiflag) {
+      if (react)
+        error->all(FLERR,"Kokkos does not (yet) support reacting group collisions "
+                   "with the ambipolar approximation");
       if (!ngas_tally) {
         collisions_group_ambipolar<0>(reduce);
       } else if (ngas_tally) {
@@ -1800,10 +1801,25 @@ int CollideVSSKokkos::find_nn_subcell(rand_type &rand_gen, int i, int np, int ic
 }
 
 /* ----------------------------------------------------------------------
+   resize the per-group lists to match the current d_plist capacity
+   a reaction can move every particle of a cell into one group, so each
+     group region must be able to hold the whole cell
+------------------------------------------------------------------------- */
+
+void CollideVSSKokkos::grow_group_lists()
+{
+  MemKK::realloc_kokkos(d_glist,"collide:glist",nglocal,ngroups,d_plist.extent(1));
+  MemKK::realloc_kokkos(d_p2g,"collide:p2g",nglocal,d_plist.extent(1),2);
+  if (nearcp) {
+    MemKK::realloc_kokkos(d_nn_igroup,"collide:nn_igroup",nglocal,d_plist.extent(1));
+    MemKK::realloc_kokkos(d_nn_jgroup,"collide:nn_jgroup",nglocal,d_plist.extent(1));
+  }
+}
+
+/* ----------------------------------------------------------------------
    NTC algorithm for multiple groups
-   Kokkos version supports only non-reacting, non-ambipolar, non-nearcp
-     collisions, so group membership is static within the timestep
-     and no particles are created or destroyed
+   supports reactions and near-neighbor selection; group membership changes
+     inside the kernel as reactions rebin, create and destroy particles
 ------------------------------------------------------------------------- */
 
 template < int NEARCP, int GASTALLY >
@@ -1832,35 +1848,172 @@ void CollideVSSKokkos::collisions_group(COLLIDE_REDUCE &reduce)
   // d_glist holds plist indices laid out group-contiguous per cell
   // d_nattempt_pair holds the pre-computed attempt count per group pair
 
+  // one region per group, each able to hold the whole cell: a reaction can
+  //   move every particle of a cell into the same group
+
   if (int(d_glist.extent(0)) < nglocal ||
-      int(d_glist.extent(1)) < int(d_plist.extent(1)))
-    MemKK::realloc_kokkos(d_glist,"collide:glist",nglocal,d_plist.extent(1));
+      int(d_glist.extent(1)) < ngroups ||
+      int(d_glist.extent(2)) < int(d_plist.extent(1))) {
+    MemKK::realloc_kokkos(d_glist,"collide:glist",nglocal,ngroups,d_plist.extent(1));
+    MemKK::realloc_kokkos(d_p2g,"collide:p2g",nglocal,d_plist.extent(1),2);
+  }
+  if (nearcp &&
+      (int(d_nn_igroup.extent(0)) < nglocal ||
+       int(d_nn_igroup.extent(1)) < int(d_plist.extent(1)))) {
+    MemKK::realloc_kokkos(d_nn_igroup,"collide:nn_igroup",nglocal,d_plist.extent(1));
+    MemKK::realloc_kokkos(d_nn_jgroup,"collide:nn_jgroup",nglocal,d_plist.extent(1));
+  }
   if (int(d_nattempt_pair.extent(0)) < nglocal ||
       int(d_nattempt_pair.extent(1)) < ngroups)
     MemKK::realloc_kokkos(d_nattempt_pair,"collide:nattempt_pair",nglocal,ngroups,ngroups);
 
   copymode = 1;
 
-  // no particles are created or destroyed for non-reacting group collisions
+  // reactions can create or delete particles, so this needs the same
+  //   grow-and-repeat loop collisions_one() uses: a Kokkos view cannot be
+  //   grown inside a parallel loop, so the kernel raises d_retry and returns,
+  //   the host reallocates, and the pass runs again
 
-  ndelete = 0;
+  h_retry() = 1;
 
-  h_error_flag() = 0;
-  Kokkos::deep_copy(d_scalars,h_scalars);
-  Kokkos::deep_copy(d_scalars_big,h_scalars_big);
+  if (react) {
+    double extra_factor = 1.0;
+    if (sparta->kokkos->react_retry_flag)
+      extra_factor = sparta->kokkos->react_extra;
 
-  grid_kk_copy.copy(grid_kk);
+    if (maxdelete*extra_factor > MAXSMALLINT)
+      error->one(FLERR,"Per-processor delete count is too big");
+    int maxdelete_extra = maxdelete*extra_factor;
+    if (d_dellist.extent(0) < maxdelete_extra) {
+      memoryKK->destroy_kokkos(k_dellist,dellist);
+      memoryKK->create_kokkos(k_dellist,dellist,maxdelete_extra,"collide:dellist");
+      d_dellist = k_dellist.view_device();
+    }
 
-  if (sparta->kokkos->atomic_reduction) {
-    if (sparta->kokkos->need_atomics)
-      Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagCollideCollisionsGroup<NEARCP,GASTALLY,1> >(0,nglocal),*this);
-    else
-      Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagCollideCollisionsGroup<NEARCP,GASTALLY,0> >(0,nglocal),*this);
-  } else
-    Kokkos::parallel_reduce(Kokkos::RangePolicy<DeviceType, TagCollideCollisionsGroup<NEARCP,GASTALLY,-1> >(0,nglocal),*this,reduce);
+    maxcellcount = particle_kk->get_maxcellcount();
+    int maxcellcount_extra = maxcellcount*extra_factor;
+    if (d_plist.extent(1) < maxcellcount_extra) {
+      d_plist = {};
+      Kokkos::resize(grid_kk->d_plist,nglocal,maxcellcount_extra);
+      d_plist = grid_kk->d_plist;
+      grow_group_lists();
+    }
 
-  Kokkos::deep_copy(h_scalars,d_scalars);
-  Kokkos::deep_copy(h_scalars_big,d_scalars_big);
+    bigint nlocal_extra = static_cast<bigint> (particle->nlocal*extra_factor);
+    if (nlocal_extra > MAXSMALLINT)
+      error->one(FLERR,"Per-processor particle count is too big");
+    if ((bigint) d_particles.extent(0) < nlocal_extra) {
+      particle->grow(nlocal_extra - particle->nlocal);
+      d_particles = particle_kk->k_particles.view_device();
+      k_eiarray = particle_kk->k_eiarray;
+    }
+  }
+
+  const int tally_backup = (nglist_coll_tally || nglist_react_tally);
+  const int do_backup =
+    (react && sparta->kokkos->react_retry_flag) || tally_backup;
+
+  if (tally_backup) rewind_gas_tally_computes(1);
+
+  while (h_retry()) {
+
+    if (do_backup) backup();
+    if (tally_backup) rewind_gas_tally_computes(0);
+
+    h_retry() = 0;
+    h_maxdelete() = maxdelete;
+    h_maxcellcount() = maxcellcount;
+    h_part_grow() = 0;
+    h_ndelete() = 0;
+    h_nlocal() = particle->nlocal;
+    h_error_flag() = 0;
+
+    Kokkos::deep_copy(d_scalars,h_scalars);
+    Kokkos::deep_copy(d_scalars_big,h_scalars_big);
+
+    grid_kk_copy.copy(grid_kk);
+    if (react) {
+      ReactQKKokkos* react_qk = dynamic_cast<ReactQKKokkos*>(react);
+      ReactTCEQKKokkos* react_tceqk = dynamic_cast<ReactTCEQKKokkos*>(react);
+      if (react_tceqk) {
+        react_style = 2;
+        react_tceqk_kk_copy.copy(react_tceqk);
+      } else if (react_qk) {
+        react_style = 1;
+        react_qk_kk_copy.copy(react_qk);
+      } else {
+        react_style = 0;
+        react_kk_copy.copy((ReactTCEKokkos*) react);
+      }
+    }
+
+    if (react) particle_kk->zero_custom_kokkos();
+
+    if (sparta->kokkos->atomic_reduction) {
+      if (sparta->kokkos->need_atomics)
+        Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagCollideCollisionsGroup<NEARCP,GASTALLY,1> >(0,nglocal),*this);
+      else
+        Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagCollideCollisionsGroup<NEARCP,GASTALLY,0> >(0,nglocal),*this);
+    } else
+      Kokkos::parallel_reduce(Kokkos::RangePolicy<DeviceType, TagCollideCollisionsGroup<NEARCP,GASTALLY,-1> >(0,nglocal),*this,reduce);
+
+    Kokkos::deep_copy(h_scalars,d_scalars);
+    Kokkos::deep_copy(h_scalars_big,d_scalars_big);
+
+    if (h_tally_overflow() && !h_retry()) {
+      grow_gas_tally_computes();
+      if (do_backup) restore();
+      if (ngas_tally) clear_gas_tally();
+      Kokkos::deep_copy(h_scalars,0);
+      Kokkos::deep_copy(h_scalars_big,0);
+      reduce = COLLIDE_REDUCE();
+      h_retry() = 1;
+      continue;
+    }
+
+    if (h_retry()) {
+      if (!do_backup) {
+        error->one(FLERR,"Ran out of space in Kokkos collisions, increase react/extra"
+                         " or use react/retry");
+      } else
+        restore();
+
+      if (ngas_tally) clear_gas_tally();
+
+      reduce = COLLIDE_REDUCE();
+
+      maxdelete = h_maxdelete();
+      if (d_dellist.extent(0) < maxdelete) {
+        memoryKK->destroy_kokkos(k_dellist,dellist);
+        memoryKK->grow_kokkos(k_dellist,dellist,maxdelete,"collide:dellist");
+        d_dellist = k_dellist.view_device();
+      }
+
+      maxcellcount = h_maxcellcount();
+      particle_kk->set_maxcellcount(maxcellcount);
+      if (d_plist.extent(1) < maxcellcount) {
+        d_plist = {};
+        Kokkos::resize(grid_kk->d_plist,nglocal,maxcellcount);
+        d_plist = grid_kk->d_plist;
+        grow_group_lists();
+      }
+
+      auto nlocal_new = h_nlocal();
+      if (d_particles.extent(0) < nlocal_new) {
+        particle->grow(nlocal_new - particle->nlocal);
+        d_particles = particle_kk->k_particles.view_device();
+        k_eiarray = particle_kk->k_eiarray;
+      }
+    }
+  }
+
+  ndelete = h_ndelete();
+
+  // publish the particles the reactions created: the kernel appended them to
+  //   the device list and counted them in d_nlocal, but until nlocal is
+  //   carried back the host cannot see them
+
+  particle->nlocal = h_nlocal();
 
   copymode = 0;
 
@@ -1872,6 +2025,8 @@ void CollideVSSKokkos::collisions_group(COLLIDE_REDUCE &reduce)
   if (vibstyle == DISCRETE) particle_kk->modify(Device,CUSTOM_MASK);
 
   d_particles = t_particle_1d(); // destroy reference to reduce memory use
+  d_nn_igroup = {};
+  d_nn_jgroup = {};
   d_plist = {};
 }
 
@@ -1894,29 +2049,15 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroup< NEARCP, GASTALLY, A
 
   // build per-group particle lists for this cell
   // gcount[g] = # of particles in group g
-  // gstart[g] = offset of group g within d_glist(icell,*)
-  // d_glist(icell,k) = plist index of kth particle, laid out group-contiguous
-  //   in the same per-group order as the non-Kokkos version
+  // d_glist(icell,g,k) = plist index of the kth particle of group g
+  // built with addgroup_kk in plist order, as the non-Kokkos version does
 
   int gcount[MAXGROUP];
-  int gstart[MAXGROUP];
-  int gcursor[MAXGROUP];
 
   for (int g = 0; g < ngroups; g++) gcount[g] = 0;
   for (int n = 0; n < np; n++) {
     const int isp = d_particles[d_plist(icell,n)].ispecies;
-    gcount[d_species2group[isp]]++;
-  }
-  int offset = 0;
-  for (int g = 0; g < ngroups; g++) {
-    gstart[g] = offset;
-    gcursor[g] = offset;
-    offset += gcount[g];
-  }
-  for (int n = 0; n < np; n++) {
-    const int isp = d_particles[d_plist(icell,n)].ispecies;
-    const int g = d_species2group[isp];
-    d_glist(icell,gcursor[g]++) = n;
+    addgroup_kk(icell,d_species2group[isp],n,gcount);
   }
 
   struct State precoln;       // state before collision
@@ -1952,27 +2093,67 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroup< NEARCP, GASTALLY, A
     for (int jg = ig; jg < ngroups; jg++) {
       const int nattempt = d_nattempt_pair(icell,ig,jg);
       if (!nattempt) continue;
-      const int ni = gcount[ig];
-      const int nj = gcount[jg];
-      if (ni == 0 || nj == 0) continue;
-      if (ig == jg && ni == 1) continue;
+      if (gcount[ig] == 0 || gcount[jg] == 0) continue;
+      if (ig == jg && gcount[ig] == 1) continue;
+
+      // near-neighbor bookkeeping is per group pair and starts cleared,
+      //   as Collide::collisions_group() does via set_nn_group()
+
+      if (NEARCP) {
+        for (int k = 0; k < gcount[ig]; k++) d_nn_igroup(icell,k) = 0;
+        if (ig != jg)
+          for (int k = 0; k < gcount[jg]; k++) d_nn_jgroup(icell,k) = 0;
+      }
 
       for (int iattempt = 0; iattempt < nattempt; iattempt++) {
-        int i = ni * rand_gen.drand();
-        int j = nj * rand_gen.drand();
-        if (ig == jg)
-          while (i == j) j = nj * rand_gen.drand();
+        const int ni = gcount[ig];
+        const int nj = gcount[jg];
 
-        Particle::OnePart* ipart = &d_particles[d_plist(icell,d_glist(icell,gstart[ig]+i))];
-        Particle::OnePart* jpart = &d_particles[d_plist(icell,d_glist(icell,gstart[jg]+j))];
+        int i = ni * rand_gen.drand();
+        int j;
+        if (NEARCP) j = find_nn_group(rand_gen,icell,i,ig,jg,ni,nj);
+        else {
+          j = nj * rand_gen.drand();
+          if (ig == jg)
+            while (i == j) j = nj * rand_gen.drand();
+        }
+
+        const int ii = d_glist(icell,ig,i);
+        const int jj = d_glist(icell,jg,j);
+
+        Particle::OnePart* ipart = &d_particles[d_plist(icell,ii)];
+        Particle::OnePart* jpart = &d_particles[d_plist(icell,jj)];
 
         // test if collision actually occurs
 
         if (!test_collision_kokkos(icell,ig,jg,ipart,jpart,precoln,rand_gen)) continue;
 
-        // perform collision
-        // non-reacting: no chemistry, no 3rd particle, no create/delete
-        // if GASTALLY: save iorig/jorig for tally (tally hook deferred)
+        if (NEARCP) {
+          d_nn_igroup(icell,i) = j+1;
+          if (ig == jg) d_nn_igroup(icell,j) = i+1;
+          else d_nn_jgroup(icell,j) = i+1;
+        }
+
+        // if recombination is possible for this IJ pair, pick a 3rd particle
+        //   and set the cell number density, unless the boost factor turns it
+        //   off or there is no 3rd particle
+
+        Particle::OnePart* recomb_part3 = NULL;
+        int recomb_species = -1;
+        double recomb_density = 0.0;
+        if (recombflag && d_recomb_ijflag(ipart->ispecies,jpart->ispecies)) {
+          if (rand_gen.drand() > recomb_boost_inverse)
+            recomb_species = -1;
+          else if (np <= 2)
+            recomb_species = -1;
+          else {
+            int k = np * rand_gen.drand();
+            while (k == ii || k == jj) k = np * rand_gen.drand();
+            recomb_part3 = &d_particles[d_plist(icell,k)];
+            recomb_species = recomb_part3->ispecies;
+            recomb_density = np * fnum / volume;
+          }
+        }
 
         Particle::OnePart iorig,jorig;
         if (GASTALLY) {
@@ -1981,14 +2162,12 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroup< NEARCP, GASTALLY, A
         }
 
         Particle::OnePart* kpart = NULL;
-        Particle::OnePart* recomb_part3 = NULL;
-        int recomb_species = -1;
-        double recomb_density = 0.0;
         int index_kpart = 0;
 
         setup_collision_kokkos(ipart,jpart,precoln,postcoln);
-        const int reactflag = perform_collision_kokkos(ipart,jpart,kpart,precoln,postcoln,rand_gen,
-                                 recomb_part3,recomb_species,recomb_density,index_kpart);
+        const int reactflag =
+          perform_collision_kokkos(ipart,jpart,kpart,precoln,postcoln,rand_gen,
+                                   recomb_part3,recomb_species,recomb_density,index_kpart);
 
         if (ATOMIC_REDUCTION == 1)
           Kokkos::atomic_inc(&d_ncollide_one());
@@ -2002,10 +2181,109 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroup< NEARCP, GASTALLY, A
             glist_collision_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
           for (int m = 0; m < nglist_reaction; m++)
             glist_reaction_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
-      for (int m = 0; m < nglist_coll_tally; m++)
-        glist_coll_tally_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
-      for (int m = 0; m < nglist_react_tally; m++)
-        glist_react_tally_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
+          for (int m = 0; m < nglist_coll_tally; m++)
+            glist_coll_tally_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
+          for (int m = 0; m < nglist_react_tally; m++)
+            glist_react_tally_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
+        }
+
+        if (reactflag) {
+          if (ATOMIC_REDUCTION == 1)
+            Kokkos::atomic_inc(&d_nreact_one());
+          else if (ATOMIC_REDUCTION == 0)
+            d_nreact_one()++;
+          else
+            reduce.nreact_one++;
+        } else continue;
+
+        // ipart may now belong to a different group
+
+        int newgroup = d_species2group[ipart->ispecies];
+        if (newgroup != ig) {
+          addgroup_kk(icell,newgroup,ii,gcount);
+          delgroup_kk(icell,ig,i,gcount);
+          // needed if jg == ig and delgroup moved the J particle
+          if (jg == ig && j == gcount[ig]) j = i;
+        }
+
+        // jpart may now belong to a different group, or have been destroyed
+
+        if (jpart) {
+          newgroup = d_species2group[jpart->ispecies];
+          if (newgroup != jg) {
+            addgroup_kk(icell,newgroup,jj,gcount);
+            delgroup_kk(icell,jg,j,gcount);
+          }
+
+        } else {
+          const int ndelete = Kokkos::atomic_fetch_add(&d_ndelete(),1);
+          if (ndelete < d_dellist.extent(0)) {
+            d_dellist(ndelete) = d_plist(icell,jj);
+          } else {
+            d_retry() = 1;
+            d_maxdelete() += DELTADELETE;
+            rand_pool.free_state(rand_gen);
+            return;
+          }
+
+          delgroup_kk(icell,jg,j,gcount);
+
+          // swap-remove jj from plist and repair the moved entry's group entry
+          //   through the reverse map, as Collide does with p2g
+
+          np--;
+          d_plist(icell,jj) = d_plist(icell,np);
+          if (jj < np) {
+            const int mg = d_p2g(icell,np,0);
+            const int mk = d_p2g(icell,np,1);
+            d_glist(icell,mg,mk) = jj;
+            d_p2g(icell,jj,0) = mg;
+            d_p2g(icell,jj,1) = mk;
+          }
+
+          if (NEARCP) {
+            if (ig == jg) d_nn_igroup(icell,j) = d_nn_igroup(icell,gcount[jg]);
+            else d_nn_jgroup(icell,j) = d_nn_jgroup(icell,gcount[jg]);
+          }
+        }
+
+        // if kpart was created, append it to plist and to its group
+
+        if (kpart) {
+          newgroup = d_species2group[kpart->ispecies];
+
+          if (np < d_plist.extent(1)) {
+            // the host clears the new particle's slot in BOTH nn arrays of
+            //   the current pair (collide.cpp:1379-1390); when ig == jg the
+            //   two alias, so one write covers it
+
+            if (NEARCP) {
+              if (newgroup == ig || newgroup == jg) {
+                const int n = gcount[newgroup];
+                d_nn_igroup(icell,n) = 0;
+                if (ig != jg) d_nn_jgroup(icell,n) = 0;
+              }
+            }
+            d_plist(icell,np) = index_kpart;
+            addgroup_kk(icell,newgroup,np,gcount);
+            np++;
+          } else {
+            d_retry() = 1;
+            d_maxcellcount() += DELTACELLCOUNT;
+            rand_pool.free_state(rand_gen);
+            return;
+          }
+        }
+
+        // stop attempting if either group has become too small
+
+        if (gcount[ig] <= 1) {
+          if (gcount[ig] == 0) break;
+          if (ig == jg) break;
+        }
+        if (gcount[jg] <= 1) {
+          if (gcount[jg] == 0) break;
+          if (ig == jg) break;
         }
       }
     }
@@ -2048,9 +2326,13 @@ void CollideVSSKokkos::collisions_group_ambipolar(COLLIDE_REDUCE &reduce)
 
   // allocate per-cell group scratch arrays (see collisions_group)
 
+  // d_glist is per group since reacting group collisions need mutable group
+  //   lists; this path keeps its groups static but shares the view
+
   if (int(d_glist.extent(0)) < nglocal ||
-      int(d_glist.extent(1)) < int(d_plist.extent(1)))
-    MemKK::realloc_kokkos(d_glist,"collide:glist",nglocal,d_plist.extent(1));
+      int(d_glist.extent(1)) < ngroups ||
+      int(d_glist.extent(2)) < int(d_plist.extent(1)))
+    grow_group_lists();
   if (int(d_nattempt_pair.extent(0)) < nglocal ||
       int(d_nattempt_pair.extent(1)) < ngroups)
     MemKK::realloc_kokkos(d_nattempt_pair,"collide:nattempt_pair",nglocal,ngroups,ngroups);
@@ -2150,7 +2432,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroupAmbipolar< GASTALLY, 
     const int ip = d_plist(icell,n);
     const int isp = d_particles[ip].ispecies;
     const int g = d_species2group[isp];
-    d_glist(icell,gcursor[g]++) = n;
+    d_glist(icell,g,gcursor[g]++) = n;
     if (d_ionambi[ip]) {
       Particle::OnePart* p = &d_particles[ip];
       Particle::OnePart* ep = &d_elist(icell,e);
@@ -2218,10 +2500,10 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroupAmbipolar< GASTALLY, 
           while (i == j) j = nj * rand_gen.drand();
 
         Particle::OnePart* ipart =
-          &d_particles[d_plist(icell,d_glist(icell,gstart[aig]+i))];
+          &d_particles[d_plist(icell,d_glist(icell,aig,i))];
         Particle::OnePart* jpart;
         if (ajg == egroup) jpart = &d_elist(icell,j);
-        else jpart = &d_particles[d_plist(icell,d_glist(icell,gstart[ajg]+j))];
+        else jpart = &d_particles[d_plist(icell,d_glist(icell,ajg,j))];
 
         // test if collision actually occurs
 
@@ -3763,6 +4045,93 @@ double CollideVSSKokkos::vibrel(int isp, double Ec) const
   double vibphi = 1.0 / (d_params(isp,isp).vibc1/pow(Tr,omega) *
                          exp(d_params(isp,isp).vibc2/pow(Tr,1.0/3.0)));
   return vibphi;
+}
+
+/* ----------------------------------------------------------------------
+   near neighbor search for a group pair
+   mirrors Collide::find_nn_group() (collide.cpp:2634).  ni/nj are the two
+     group counts; when ig == jg the host passes the same nn array for both,
+     which is d_nn_igroup here
+------------------------------------------------------------------------- */
+
+KOKKOS_INLINE_FUNCTION
+int CollideVSSKokkos::find_nn_group(rand_type &rand_gen, int icell, int i,
+                                    int ig, int jg, int ni, int nj) const
+{
+  int jneigh;
+  double dx,dy,dz,rsq;
+  double *xj;
+
+  const int same = (ig == jg);
+
+  // if same group and nj = 2, just return J = non-I particle
+
+  if (same && nj == 2) return (i+1) % 2;
+
+  Particle::OnePart *ipart,*jpart;
+
+  // thresh = distance particle I moves in this timestep
+
+  ipart = &d_particles[d_plist(icell,d_glist(icell,ig,i))];
+  double *vi = ipart->v;
+  double *xi = ipart->x;
+  double threshsq = dt*dt * (vi[0]*vi[0]+vi[1]*vi[1]+vi[2]*vi[2]);
+  double minrsq = BIG;
+
+  // nlimit = max # of J candidates to consider
+
+  int nlimit = MIN(nearlimit,nj-1);
+  int count = 0;
+
+  // pick a random starting J
+  // jneigh = collision partner when exit loop
+  //   set to initial J as default in case no Nlimit J meets criteria
+
+  int j = nj * rand_gen.drand();
+  if (same)
+    while (i == j) j = nj * rand_gen.drand();
+  jneigh = j;
+
+  while (count < nlimit) {
+    count++;
+
+    // skip this J if I,J last collided with each other
+
+    const int nnj = same ? d_nn_igroup(icell,j) : d_nn_jgroup(icell,j);
+    if (d_nn_igroup(icell,i) == j+1 && nnj == i+1) {
+      j++;
+      if (j == nj) j = 0;
+      continue;
+    }
+
+    // rsq = squared distance between particles I and J
+    // if rsq = 0.0, skip this J
+    // if rsq <= threshsq, this J is collision partner
+    // if rsq = smallest yet seen, this J is tentative collision partner
+
+    jpart = &d_particles[d_plist(icell,d_glist(icell,jg,j))];
+    xj = jpart->x;
+    dx = xi[0] - xj[0];
+    dy = xi[1] - xj[1];
+    dz = xi[2] - xj[2];
+    rsq = dx*dx + dy*dy + dz*dz;
+
+    if (rsq > 0.0) {
+      if (rsq <= threshsq) {
+        jneigh = j;
+        break;
+      }
+      if (rsq < minrsq) {
+        minrsq = rsq;
+        jneigh = j;
+      }
+    }
+
+    j++;
+    if (j == nj) j = 0;
+  }
+
+  return jneigh;
 }
 
 /* ----------------------------------------------------------------------
