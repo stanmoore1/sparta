@@ -63,7 +63,8 @@ void ModifyKokkos::start_of_step()
     particle_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
     int prev_auto_sync = sparta->kokkos->auto_sync;
     if (!fix[j]->kokkos_flag) sparta->kokkos->auto_sync = 1;
-    DatamaskAudit audit(sparta, __func__, fix[j]->style, fix[j]->datamask_modify);
+    DatamaskAudit audit(sparta, __func__, fix[j]->style, fix[j]->datamask_modify,
+                        fix[j]->execution_space);
 
     fix[list_start_of_step[i]]->start_of_step();
 
@@ -85,7 +86,8 @@ void ModifyKokkos::end_of_step()
       particle_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
       int prev_auto_sync = sparta->kokkos->auto_sync;
       if (!fix[j]->kokkos_flag) sparta->kokkos->auto_sync = 1;
-      DatamaskAudit audit(sparta, __func__, fix[j]->style, fix[j]->datamask_modify);
+      DatamaskAudit audit(sparta, __func__, fix[j]->style, fix[j]->datamask_modify,
+                        fix[j]->execution_space);
 
       fix[list_end_of_step[i]]->end_of_step();
 
@@ -116,7 +118,8 @@ int ModifyKokkos::pack_grid_one(int icell, char *buf, int memflag)
     particle_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
     int prev_auto_sync = sparta->kokkos->auto_sync;
     if (!fix[j]->kokkos_flag) sparta->kokkos->auto_sync = 1;
-    DatamaskAudit audit(sparta, __func__, fix[j]->style, fix[j]->datamask_modify);
+    DatamaskAudit audit(sparta, __func__, fix[j]->style, fix[j]->datamask_modify,
+                        fix[j]->execution_space);
 
     ptr += fix[list_pergrid[i]]->pack_grid_one(icell,ptr,memflag);
 
@@ -139,7 +142,8 @@ int ModifyKokkos::unpack_grid_one(int icell, char *buf)
     particle_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
     int prev_auto_sync = sparta->kokkos->auto_sync;
     if (!fix[j]->kokkos_flag) sparta->kokkos->auto_sync = 1;
-    DatamaskAudit audit(sparta, __func__, fix[j]->style, fix[j]->datamask_modify);
+    DatamaskAudit audit(sparta, __func__, fix[j]->style, fix[j]->datamask_modify,
+                        fix[j]->execution_space);
 
     ptr += fix[list_pergrid[i]]->unpack_grid_one(icell,ptr);
 
@@ -161,7 +165,8 @@ void ModifyKokkos::copy_grid_one(int icell, int jcell)
     particle_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
     int prev_auto_sync = sparta->kokkos->auto_sync;
     if (!fix[j]->kokkos_flag) sparta->kokkos->auto_sync = 1;
-    DatamaskAudit audit(sparta, __func__, fix[j]->style, fix[j]->datamask_modify);
+    DatamaskAudit audit(sparta, __func__, fix[j]->style, fix[j]->datamask_modify,
+                        fix[j]->execution_space);
 
     fix[j]->copy_grid_one(icell,jcell);
 
@@ -182,7 +187,8 @@ void ModifyKokkos::add_grid_one()
     particle_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
     int prev_auto_sync = sparta->kokkos->auto_sync;
     if (!fix[j]->kokkos_flag) sparta->kokkos->auto_sync = 1;
-    DatamaskAudit audit(sparta, __func__, fix[j]->style, fix[j]->datamask_modify);
+    DatamaskAudit audit(sparta, __func__, fix[j]->style, fix[j]->datamask_modify,
+                        fix[j]->execution_space);
 
     fix[j]->add_grid_one();
 
@@ -203,7 +209,8 @@ void ModifyKokkos::reset_grid_count(int nlocal)
     particle_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
     int prev_auto_sync = sparta->kokkos->auto_sync;
     if (!fix[j]->kokkos_flag) sparta->kokkos->auto_sync = 1;
-    DatamaskAudit audit(sparta, __func__, fix[j]->style, fix[j]->datamask_modify);
+    DatamaskAudit audit(sparta, __func__, fix[j]->style, fix[j]->datamask_modify,
+                        fix[j]->execution_space);
 
     fix[j]->reset_grid_count(nlocal);
 
@@ -224,7 +231,8 @@ void ModifyKokkos::grid_changed()
     particle_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
     int prev_auto_sync = sparta->kokkos->auto_sync;
     if (!fix[j]->kokkos_flag) sparta->kokkos->auto_sync = 1;
-    DatamaskAudit audit(sparta, __func__, fix[j]->style, fix[j]->datamask_modify);
+    DatamaskAudit audit(sparta, __func__, fix[j]->style, fix[j]->datamask_modify,
+                        fix[j]->execution_space);
 
     fix[j]->grid_changed();
 
@@ -245,7 +253,8 @@ void ModifyKokkos::custom_surf_changed()
     particle_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
     int prev_auto_sync = sparta->kokkos->auto_sync;
     if (!fix[j]->kokkos_flag) sparta->kokkos->auto_sync = 1;
-    DatamaskAudit audit(sparta, __func__, fix[j]->style, fix[j]->datamask_modify);
+    DatamaskAudit audit(sparta, __func__, fix[j]->style, fix[j]->datamask_modify,
+                        fix[j]->execution_space);
 
     fix[j]->custom_surf_changed();
 
@@ -266,7 +275,8 @@ void ModifyKokkos::update_custom(int index, double temp_thermal,
     particle_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
     int prev_auto_sync = sparta->kokkos->auto_sync;
     if (!fix[j]->kokkos_flag) sparta->kokkos->auto_sync = 1;
-    DatamaskAudit audit(sparta, __func__, fix[j]->style, fix[j]->datamask_modify);
+    DatamaskAudit audit(sparta, __func__, fix[j]->style, fix[j]->datamask_modify,
+                        fix[j]->execution_space);
 
     fix[list_update_custom[i]]->update_custom(index,temp_thermal,temp_rot,
                                             temp_vib,vstream);
@@ -287,7 +297,8 @@ void ModifyKokkos::gas_react(int index)
     particle_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
     int prev_auto_sync = sparta->kokkos->auto_sync;
     if (!fix[j]->kokkos_flag) sparta->kokkos->auto_sync = 1;
-    DatamaskAudit audit(sparta, __func__, fix[j]->style, fix[j]->datamask_modify);
+    DatamaskAudit audit(sparta, __func__, fix[j]->style, fix[j]->datamask_modify,
+                        fix[j]->execution_space);
 
     fix[list_gas_react[i]]->gas_react(index);
 
@@ -307,7 +318,8 @@ void ModifyKokkos::surf_react(Particle::OnePart *iorig, int &i, int &)
     particle_kk->sync(fix[j]->execution_space,fix[j]->datamask_read);
     int prev_auto_sync = sparta->kokkos->auto_sync;
     if (!fix[j]->kokkos_flag) sparta->kokkos->auto_sync = 1;
-    DatamaskAudit audit(sparta, __func__, fix[j]->style, fix[j]->datamask_modify);
+    DatamaskAudit audit(sparta, __func__, fix[j]->style, fix[j]->datamask_modify,
+                        fix[j]->execution_space);
 
     fix[list_surf_react[m]]->surf_react(iorig,i,j);
 

@@ -246,7 +246,7 @@ static void collect(SPARTA *sparta, std::vector<DatamaskAudit::Array> &out)
 /* ---------------------------------------------------------------------- */
 
 DatamaskAudit::DatamaskAudit(SPARTA *sparta_in, const char *what_in, const char *style_in,
-                             unsigned int datamask_modify) :
+                             unsigned int datamask_modify, int execution_space) :
     sparta(sparta_in), what(what_in), style(style_in ? style_in : "(unnamed)"),
     declared(datamask_modify), extents{}, active(false)
 {
@@ -290,8 +290,14 @@ DatamaskAudit::DatamaskAudit(SPARTA *sparta_in, const char *what_in, const char 
   // reads what the other side wrote -- the missing-sync half of the problem,
   // which no comparison of contents can see.
 
+  // Only for a style that runs on the device.  A Host style is meant to leave
+  // the device copy behind -- FixBalanceKokkos and FixAdaptKokkos declare
+  // execution_space = Host and do their own sync to the host -- so a stale
+  // device side at entry is what correct code looks like there, not a gap in
+  // datamask_read.
+
   for (auto &a : arrays) {
-    if (!a.stale) continue;
+    if (!a.stale || execution_space != Device) continue;
     const std::string key = style + " reads stale " + a.name;
     if (audit_found.count(key)) { audit_found[key]++; continue; }
     audit_found[key] = 1;

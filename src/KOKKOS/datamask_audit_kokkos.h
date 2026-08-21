@@ -29,7 +29,7 @@ namespace SPARTA_NS {
 
 class DatamaskAudit {
  public:
-  DatamaskAudit(SPARTA *, const char *, const char *, unsigned int) {}
+  DatamaskAudit(SPARTA *, const char *, const char *, unsigned int, int) {}
   static void enable(int) {}
   static void note_modified(unsigned int) {}
   static void note_synced(unsigned int) {}
@@ -69,7 +69,7 @@ class DatamaskAudit {
 class DatamaskAudit {
  public:
   DatamaskAudit(SPARTA *sparta, const char *what, const char *style,
-                unsigned int datamask_modify);
+                unsigned int datamask_modify, int execution_space);
   ~DatamaskAudit();
 
   // Off unless SPARTA_KOKKOS_AUDIT is set, and off outside the timestep loop
