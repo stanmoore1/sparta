@@ -532,24 +532,21 @@ incurring a performance penalty.
 
 NOTE: Most non-Kokkos styles degrade this way, costing performance but
 still producing correct results.  A few, however, are rejected outright
-and will stop the run.  As of this writing these are the per-collision
-tally computes "compute surf/collision/tally"_compute_surf_collision_tally.html,
-"compute surf/reaction/tally"_compute_surf_reaction_tally.html,
-"compute gas/collision/tally"_compute_gas_collision_tally.html and
-"compute gas/reaction/tally"_compute_gas_reaction_tally.html;
-"compute react/boundary"_compute_react_boundary.html; and the composite
-region styles "region union"_region.html and "region
-intersect"_region.html when they are used by a Kokkos-enabled fix.
+and will stop the run.  As of this writing the only such style is
+"compute react/boundary"_compute_react_boundary.html, which has no {kk}
+variant and cannot be used as a boundary tally compute under the KOKKOS
+package.
 
 NOTE: The KOKKOS package also imposes fixed limits on how many instances
 of certain styles a run may define, because each is captured by value in
-the device kernels.  At most two instances of each "surf_collide"_surf_collide.html
-style and each "surf_react"_surf_react.html style may be defined, and at
-most two active instances of "compute boundary"_compute_boundary.html,
-"compute surf"_compute_surf.html, "compute isurf/grid"_compute_isurf_grid.html,
+the device kernels.  At most two instances of each
+"surf_react"_surf_react.html style may be defined, and at most two active
+instances of "compute boundary"_compute_boundary.html, "compute
+surf"_compute_surf.html, "compute isurf/grid"_compute_isurf_grid.html,
 "compute react/surf"_compute_react_surf.html and "compute
 react/isurf/grid"_compute_react_isurf_grid.html.  Exceeding a limit stops
-the run with an explanatory message.
+the run with an explanatory message.  There is no longer a limit on the
+number of "surf_collide"_surf_collide.html instances.
 
 [Run with the KOKKOS package by editing an input script:]
 
