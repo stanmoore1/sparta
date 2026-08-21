@@ -43,7 +43,6 @@ enum{LT,LE,GT,GE,EQ,NEQ,BETWEEN};
 #define DELTA 4
 #define EPSSQ 1.0e-12
 #define BIG 1.0e20
-#define MAXGROUP 32
 
 /* ---------------------------------------------------------------------- */
 

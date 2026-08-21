@@ -37,8 +37,21 @@ typedef SPARTA_NS::bigint crs_size_type;
 typedef int crs_size_type;
 #endif
 
-#define MAX_TYPES_STACKPARAMS 12
 #define NeighClusterSize 8
+
+// architectures where the move kernel is dispatched with ATOMIC_REDUCTION = -1
+//   (parallel_reduce) rather than atomics.  KokkosSPARTA::accelerator() clears
+//   atomic_reduction for exactly these, and UpdateKokkos::move() reads the
+//   per-step counters back from the reduction result only when it is clear.
+//   The two decisions must agree or the counters come from the wrong place, so
+//   the condition is spelled out once here instead of in both files.
+
+#if defined(KOKKOS_ARCH_AMD_GFX940) || defined(KOKKOS_ARCH_AMD_GFX942) || \
+    defined(KOKKOS_ARCH_AMD_GFX942_APU)
+#define SPARTA_KOKKOS_REDUCE_ARCH 1
+#else
+#define SPARTA_KOKKOS_REDUCE_ARCH 0
+#endif
 
 #define KOKKOS_MAX_SURF_REACT_PER_TYPE 2
 #define KOKKOS_MAX_TOT_SURF_REACT 4
