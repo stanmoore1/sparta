@@ -130,8 +130,17 @@ class DualView : public Kokkos::DualView<DataType, Properties...> {
   // reader of the other side keeps the old values for good.  Unlike a
   // comparison against the shadows, which only sees the step just taken, this
   // survives every later call until a copy really does bring the two together.
+  //
+  // (6) counts the copies this class has made into the pair's buffers.  It is
+  // shared, like the rest of these, and that is the point: a subview slices the
+  // buffers but gets shadows of its own, so a sync performed through the child
+  // writes the parent's buffer while only the child's shadows learn of it.  The
+  // parent then sees its side change with nothing having claimed it and calls a
+  // copy an unclaimed write -- 363 such reports for particle:mlist on one run.
+  // Each object records the count it last saw in its own shadow_flags(6), so
+  // any object whose shadows predate a copy rebaselines instead of reporting.
   enum { AUTH_NONE = 0, AUTH_HOST = 1, AUTH_DEVICE = 2 };
-  using t_spa_flags = Kokkos::View<unsigned int[6], Kokkos::LayoutLeft, Kokkos::HostSpace>;
+  using t_spa_flags = Kokkos::View<unsigned int[8], Kokkos::LayoutLeft, Kokkos::HostSpace>;
 
  private:
   // The extra allocation is given to the HOST side, not the device side, and the
@@ -669,6 +678,16 @@ class DualView : public Kokkos::DualView<DataType, Properties...> {
       if (!spa_flags.data() || !h_split.data()) return;
       if (h_split.data() == base_type::view_host().data()) return;    // alias mode
 
+      // A copy through a view that aliases these buffers -- a subview of this
+      // one, or this one when the slice performed the sync -- has landed since
+      // these shadows were taken.  Whatever changed is that copy, not a write
+      // nobody claimed, so bring the shadows up to date and report nothing.
+      if (shadow_flags.data() && spa_flags(6) != shadow_flags(6)) {
+        watch_refresh();
+        watch_agree();
+        return;
+      }
+
       const t_dev &dev = base_type::view_device();
       if (same_shape(shadow_h, h_split)) {
         const bool host_wrote =
@@ -784,7 +803,7 @@ class DualView : public Kokkos::DualView<DataType, Properties...> {
 
       Kokkos::deep_copy(shadow_h, h_split);
       Kokkos::deep_copy(shadow_d, base_type::view_device());
-      for (int i = 0; i < 6; i++) shadow_flags(i) = spa_flags(i);
+      for (int i = 0; i < 8; i++) shadow_flags(i) = spa_flags(i);
       if (shadow_op.data() && watch_op_name()) {
         std::strncpy(shadow_op.data(), watch_op_name(), 31);
         shadow_op(31) = 0;
@@ -1145,6 +1164,7 @@ class DualView : public Kokkos::DualView<DataType, Properties...> {
       if (!spa_flags.data() || !h_split.data()) return;
       if (spa_flags(0) > spa_flags(1)) {
         Kokkos::deep_copy(base_type::view_device(), h_split);
+        spa_flags(6)++;    // see spa_flags(6): tell every aliasing view
         spa_flags(0) = spa_flags(1) = 0;
         watch_refresh();
         watch_agree();
@@ -1164,6 +1184,7 @@ class DualView : public Kokkos::DualView<DataType, Properties...> {
       if (!spa_flags.data() || !h_split.data()) return;
       if (spa_flags(1) > spa_flags(0)) {
         Kokkos::deep_copy(h_split, base_type::view_device());
+        spa_flags(6)++;    // see spa_flags(6): tell every aliasing view
         spa_flags(0) = spa_flags(1) = 0;
         watch_refresh();
         watch_agree();
