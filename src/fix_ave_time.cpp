@@ -23,6 +23,7 @@
 #include "variable.h"
 #include "memory.h"
 #include "error.h"
+#include "sparta_masks.h"
 
 using namespace SPARTA_NS;
 
@@ -312,6 +313,13 @@ FixAveTime::FixAveTime(SPARTA *sparta, int narg, char **arg) :
 
   nvalid = nextvalid();
   modify->addstep_compute_all(nvalid);
+
+  // this fix reduces global scalars/vectors and never writes particle data,
+  //   so the Kokkos wrapper need not push particles back to the device
+  //   afterwards.  datamask_read stays ALL_MASK: the inputs may be host
+  //   computes that read particle->particles
+
+  datamask_modify = EMPTY_MASK;
 }
 
 /* ---------------------------------------------------------------------- */
