@@ -325,8 +325,8 @@ class SurfReactAdsorbKokkos : public SurfReactAdsorb {
           Kokkos::atomic_add(&a_species_delta(idx,d_pad(j,k)),d_pstoich(j,k));
 
       // post-reaction particle handling, mirrors SurfReactAdsorb::react()
-      // cmodel post-reaction scatter currently supports NOMODEL and SPECULAR
-      //   (validated at init); RNG-based cmodels (diffuse/cll/td/...) deferred
+      // cmodel post-reaction scatter supports every model the host
+      //   readfile_gs() accepts; see scatter_cmodel()
 
       switch (d_type(j)) {
 
@@ -436,7 +436,7 @@ class SurfReactAdsorbKokkos : public SurfReactAdsorb {
   /* ----------------------------------------------------------------------
      apply a post-reaction collision model (cmodel) scatter to particle p
      SPECULAR mirrors SurfCollideSpecular::wrapper() (reflect, no RNG)
-     NOMODEL is a no-op; RNG-based cmodels are rejected at init
+     NOMODEL is a no-op; every other model is replicated below
   ------------------------------------------------------------------------- */
 
   KOKKOS_INLINE_FUNCTION
@@ -467,7 +467,28 @@ class SurfReactAdsorbKokkos : public SurfReactAdsorb {
     for (int k = 0; k < SRA_KK_MAXCMFLAG; k++)
       fl[k] = useJp ? d_cmjp_flags(j,k) : d_cmip_flags(j,k);
 
-    if (cmodel == SRA_KK::DIFFUSE) {
+    if (cmodel == SRA_KK::ADIABATIC) {
+      adiabatic_scatter(p,norm,rg);                      // no coeffs
+    } else if (cmodel == SRA_KK::IMPULSIVE) {
+      const double twall = cf[0];
+      const int softsphere_flag = fl[0], step_flag = fl[1];
+      const int double_flag = fl[2], intenergy_flag = fl[3];
+      double eng_ratio = 0.0, eff_mass = 0.0, u0_a = 0.0, u0_b = 0.0;
+      if (softsphere_flag) { eng_ratio = cf[1]; eff_mass = cf[2]; }
+      else { u0_a = cf[1]; u0_b = cf[2]; }
+      const double var_alpha = cf[3], theta_peak = cf[4];
+      const double cos_theta_pow = cf[5], cos_phi_pow = cf[6];
+      int m = 7;
+      double step_size = 0.0, cos_theta_pow_2 = 0.0;
+      double rot_frac = 0.0, vib_frac = 0.0;
+      if (step_flag) step_size = cf[m++];
+      if (double_flag) cos_theta_pow_2 = cf[m++];
+      if (intenergy_flag) { rot_frac = cf[m++]; vib_frac = cf[m++]; }
+      impulsive_scatter(p,norm,twall,softsphere_flag,eng_ratio,eff_mass,
+                        u0_a,u0_b,var_alpha,theta_peak,cos_theta_pow,
+                        cos_phi_pow,step_flag,step_size,double_flag,
+                        cos_theta_pow_2,intenergy_flag,rot_frac,vib_frac,rg);
+    } else if (cmodel == SRA_KK::DIFFUSE) {
       diffuse_scatter(p,norm,cf[0],cf[1],rg);            // tsurf, acc
     } else if (cmodel == SRA_KK::CLL) {
       cll_scatter(p,norm,cf[0],cf[1],cf[2],cf[3],cf[4],fl[0],cf[5],rg);
@@ -546,6 +567,193 @@ class SurfReactAdsorbKokkos : public SurfReactAdsorb {
       }
     }
     return eng;
+  }
+
+
+  /* ----------------------------------------------------------------------
+     SurfCollideAdiabatic::scatter_isotropic() -- isotropic reflection at the
+       incident speed; erot/evib are unchanged.  no coeffs, no flags
+  ------------------------------------------------------------------------- */
+
+  KOKKOS_INLINE_FUNCTION
+  void adiabatic_scatter(Particle::OnePart *p, const double *norm,
+                         rand_type &rg) const
+  {
+    double *v = p->v;
+    const double dot = MathExtraKokkos::dot3(v,norm);
+
+    double tangent1[3],tangent2[3];
+    tangent1[0] = v[0] - dot*norm[0];
+    tangent1[1] = v[1] - dot*norm[1];
+    tangent1[2] = v[2] - dot*norm[2];
+
+    if (MathExtraKokkos::lensq3(tangent1) == 0.0) {
+      tangent2[0] = rg.drand();
+      tangent2[1] = rg.drand();
+      tangent2[2] = rg.drand();
+      MathExtraKokkos::cross3(norm,tangent2,tangent1);
+    }
+
+    MathExtraKokkos::norm3(tangent1);
+    MathExtraKokkos::cross3(norm,tangent1,tangent2);
+
+    const double vmag = MathExtraKokkos::len3(v);
+    const double theta = MathConst::MY_2PI*rg.drand();
+    const double f_phi = rg.drand();
+    const double sqrt_f_phi = sqrt(f_phi);
+
+    const double vperp = vmag * sqrt(1.0 - f_phi);
+    const double vtan1 = vmag * sqrt_f_phi * sin(theta);
+    const double vtan2 = vmag * sqrt_f_phi * cos(theta);
+
+    v[0] = vperp*norm[0] + vtan1*tangent1[0] + vtan2*tangent2[0];
+    v[1] = vperp*norm[1] + vtan1*tangent1[1] + vtan2*tangent2[1];
+    v[2] = vperp*norm[2] + vtan1*tangent1[2] + vtan2*tangent2[2];
+  }
+
+  /* ----------------------------------------------------------------------
+     SurfCollideImpulsive::impulsive(), with the style's member state passed
+       in from this reaction's flattened cmodel coeffs/flags
+  ------------------------------------------------------------------------- */
+
+  KOKKOS_INLINE_FUNCTION
+  void impulsive_scatter(Particle::OnePart *p, const double *norm,
+                         const double twall,
+                         const int softsphere_flag, const double eng_ratio,
+                         const double eff_mass, const double u0_a,
+                         const double u0_b, const double var_alpha,
+                         const double theta_peak, const double cos_theta_pow,
+                         const double cos_phi_pow,
+                         const int step_flag, const double step_size,
+                         const int double_flag, const double cos_theta_pow_2,
+                         const int intenergy_flag, const double rot_frac,
+                         const double vib_frac, rand_type &rg) const
+  {
+    const double var_alpha_sq = var_alpha*var_alpha;
+    const int ispecies = p->ispecies;
+    const double mass = d_species[ispecies].mass;
+
+    double *v = p->v;
+    const double dot = MathExtraKokkos::dot3(v,norm);
+
+    double tangent1[3],tangent2[3];
+    tangent1[0] = v[0] - dot*norm[0];
+    tangent1[1] = v[1] - dot*norm[1];
+    tangent1[2] = v[2] - dot*norm[2];
+
+    if (MathExtraKokkos::lensq3(tangent1) == 0.0) {
+      tangent2[0] = rg.drand();
+      tangent2[1] = rg.drand();
+      tangent2[2] = rg.drand();
+      MathExtraKokkos::cross3(norm,tangent2,tangent1);
+    }
+
+    MathExtraKokkos::norm3(tangent1);
+    MathExtraKokkos::cross3(norm,tangent1,tangent2);
+
+    const double tan1 = MathExtraKokkos::dot3(v,tangent1);
+    const double tan2 = MathExtraKokkos::dot3(v,tangent2);
+
+    const double v_i_mag_sq = MathExtraKokkos::lensq3(v);
+    const double E_i = 0.5 * mass * v_i_mag_sq;
+    const double theta_i = acos(-dot/sqrt(v_i_mag_sq));
+    const double phi_i = atan2(tan2,tan1);
+    const double phi_peak = MathConst::MY_2PI - phi_i;
+
+    double theta_f = 0.0, phi_f = 0.0;
+    double P = 0.0;
+
+    while (rg.drand() > P) {
+      theta_f = MathConst::MY_PI2 * rg.drand();
+      P = pow(cos( theta_f - theta_peak ),cos_theta_pow) * sin(theta_f);
+      if (double_flag) {
+        if (theta_f > theta_peak)
+          P = pow(cos( theta_f - theta_peak ),cos_theta_pow_2) * sin(theta_f);
+      }
+      if (step_flag) {
+        double func_step = 0.0;
+        const double tan_theta = tan(theta_f);
+        const double cotangent = 1.0/tan_theta;
+        if (cotangent > step_size) func_step = 1 - step_size*tan_theta;
+        P *= func_step;
+      }
+    }
+
+    P = 0.0;
+    while (rg.drand() > P) {
+      phi_f = phi_peak + MathConst::MY_PI * (2*rg.drand() - 1);
+      P = pow(cos( 0.5*(phi_f - phi_peak) ),cos_phi_pow);
+    }
+
+    if (phi_f > MathConst::MY_PI) phi_f -= MathConst::MY_2PI;
+    else if (phi_f < -MathConst::MY_PI) phi_f += MathConst::MY_2PI;
+
+    double v_f_avg = 0.0;
+    if (softsphere_flag) {
+      const double mu = d_species[ispecies].molwt/eff_mass;
+      const double cos_khi = cos(MathConst::MY_PI - theta_i - theta_f);
+      const double sin_khi_sq = 1 - cos_khi*cos_khi;
+      const double dE = 2*mu/((mu+1)*(mu+1)) *
+        (1 + mu*sin_khi_sq + eng_ratio*(mu+1)/(2*mu) -
+         cos_khi*sqrt(1 - mu*mu*sin_khi_sq - eng_ratio*(mu + 1)));
+      const double E_f_avg = E_i * (1 - dE);
+      v_f_avg = var_alpha_sq * sqrt(mass/(2*E_f_avg)) *
+        (2*E_f_avg/(mass*var_alpha_sq) - 1);
+    } else {
+      v_f_avg = u0_a*twall + u0_b;
+    }
+
+    const double v_f_max = 0.5 * (v_f_avg + sqrt(v_f_avg*v_f_avg + 6*var_alpha_sq));
+    const double f_max = v_f_max*v_f_max*v_f_max *
+      exp(-(v_f_max - v_f_avg) * (v_f_max - v_f_avg)/(var_alpha_sq));
+
+    double v_f_mag = 0.0;
+    P = 0.0;
+    while (rg.drand() > P) {
+      v_f_mag = v_f_max + 3 * var_alpha * ( 2 * rg.drand() - 1 );
+      P = v_f_mag*v_f_mag*v_f_mag/(f_max) *
+        exp(-(v_f_mag - v_f_avg)*(v_f_mag - v_f_avg)/(var_alpha_sq));
+    }
+
+    const double vperp = v_f_mag * cos(theta_f);
+    const double vtan1 = v_f_mag * sin(theta_f) * cos(phi_f);
+    const double vtan2 = v_f_mag * sin(theta_f) * sin(phi_f);
+
+    v[0] = vperp*norm[0] + vtan1*tangent1[0] + vtan2*tangent2[0];
+    v[1] = vperp*norm[1] + vtan1*tangent1[1] + vtan2*tangent2[1];
+    v[2] = vperp*norm[2] + vtan1*tangent1[2] + vtan2*tangent2[2];
+
+    if (intenergy_flag) {
+      const double E_f = 0.5 * mass * v_f_mag * v_f_mag;
+      const double extra_energy = E_i - E_f;
+
+      if (rotstyle_ == SRA_KK::NONE || d_species[ispecies].rotdof < 2) p->erot = 0.0;
+      else p->erot += rot_frac*extra_energy;
+
+      const int vibdof = d_species[ispecies].vibdof;
+      if (vibstyle_ == SRA_KK::NONE || vibdof < 2) {
+        p->evib = 0.0;
+      } else {
+        const double *vibtemp = d_species[ispecies].vibtemp;
+        const double evib_val = p->evib + vib_frac*extra_energy;
+        if (vibstyle_ == SRA_KK::SMOOTH) {
+          p->evib = evib_val;
+        } else if (vibdof == 2) {
+          const int ivib = evib_val / (boltz_*vibtemp[0]);
+          p->evib = ivib * boltz_ * vibtemp[0];
+        } else {
+          const int nvibmode = d_species[ispecies].nvibmode;
+          double tot_temp = 0.0, evib_sum = 0.0;
+          for (int imode = 0; imode < nvibmode; imode++)
+            tot_temp += vibtemp[imode];
+          for (int imode = 0; imode < nvibmode; imode++) {
+            const int ivib = evib_val / (boltz_*tot_temp);
+            evib_sum += ivib * boltz_ * vibtemp[imode];
+          }
+          p->evib = evib_sum;
+        }
+      }
+    }
   }
 
   KOKKOS_INLINE_FUNCTION
