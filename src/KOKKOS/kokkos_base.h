@@ -16,6 +16,7 @@
 #define KOKKOS_BASE_H
 
 #include "kokkos_type.h"
+#include "region_prim_kokkos.h"
 
 namespace SPARTA_NS {
 
@@ -40,6 +41,13 @@ class KokkosBase {
 
   // Region
   virtual void match_all_kokkos(DAT::tdual_int_1d) {}
+
+  // flatten this region into device-resident primitive descriptors, so a
+  //   kernel can test a point against it without virtual dispatch and
+  //   without the caller holding a typed copy of every region style.
+  //   fills k_prims (already synced to device) and op, and returns the
+  //   number of primitives.  returns 0 if this region cannot be flattened
+  virtual int flatten_region_kokkos(tdual_region_prim_1d &, int &) {return 0;}
 
   KOKKOS_INLINE_FUNCTION
   int match_kokkos(double x, double y, double z) const {return 0;}

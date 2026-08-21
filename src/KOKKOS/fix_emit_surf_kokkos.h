@@ -26,10 +26,8 @@ FixStyle(emit/surf/kk,FixEmitSurfKokkos)
 #include "kokkos_copy.h"
 #include "particle_kokkos.h"
 #include "compute_surf_kokkos.h"
-#include "region_block_kokkos.h"
-#include "region_cylinder_kokkos.h"
-#include "region_plane_kokkos.h"
-#include "region_sphere_kokkos.h"
+#include "kokkos_base.h"
+#include "region_prim_kokkos.h"
 
 namespace SPARTA_NS {
 
@@ -99,10 +97,12 @@ class FixEmitSurfKokkos : public FixEmitSurf {
 
   KKCopy<ParticleKokkos> particle_kk_copy;
   KKCopy<ComputeSurfKokkos> slist_active_copy[KOKKOS_MAX_SLIST];
-  KKCopy<RegBlockKokkos> regblock_kk_copy;
-  KKCopy<RegCylinderKokkos> regcylinder_kk_copy;
-  KKCopy<RegPlaneKokkos> regplane_kk_copy;
-  KKCopy<RegSphereKokkos> regsphere_kk_copy;
+  // region flattened to device-resident primitive descriptors; replaces the
+  //   per-style KKCopy members and the caps that went with them
+
+  tdual_region_prim_1d k_region_prims;
+  t_region_prim_1d d_region_prims;
+  int nregion_prim,region_op,region_interior;
 
   typedef Kokkos::DualView<Task*, DeviceType::array_layout, DeviceType> tdual_task_1d;
   typedef tdual_task_1d::t_dev t_task_1d;
