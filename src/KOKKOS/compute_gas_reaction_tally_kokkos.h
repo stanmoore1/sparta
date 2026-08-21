@@ -64,7 +64,7 @@ class ComputeGasReactionTallyKokkos : public ComputeGasReactionTally, public Kok
   void gas_tally_kk(int icell, int reaction,
                     Particle::OnePart *iorig, Particle::OnePart *jorig,
                     Particle::OnePart *ip, Particle::OnePart *jp,
-                    Particle::OnePart * /*kp*/) const
+                    Particle::OnePart *kp) const
   {
     // this compute tallies only collisions that induce a reaction;
     //   plain collisions belong to compute gas/collision/tally
@@ -83,23 +83,41 @@ class ComputeGasReactionTallyKokkos : public ComputeGasReactionTally, public Kok
 
     for (int m = 0; m < nvalue; m++) {
       switch (d_which[m]) {
-      case IDCELL:   d_array_tally(itally,m) = ubuf(d_cells[icell].id).d; break;
-      case ID1:      d_array_tally(itally,m) = ubuf(ip->id).d; break;
-      case ID2:      d_array_tally(itally,m) = ubuf(jp->id).d; break;
-      case TYPE1:    d_array_tally(itally,m) = ubuf(ip->ispecies+1).d; break;
-      case TYPE2:    d_array_tally(itally,m) = ubuf(jp->ispecies+1).d; break;
-      case VX1PRE:   d_array_tally(itally,m) = iorig->v[0]; break;
-      case VY1PRE:   d_array_tally(itally,m) = iorig->v[1]; break;
-      case VZ1PRE:   d_array_tally(itally,m) = iorig->v[2]; break;
-      case VX2PRE:   d_array_tally(itally,m) = jorig->v[0]; break;
-      case VY2PRE:   d_array_tally(itally,m) = jorig->v[1]; break;
-      case VZ2PRE:   d_array_tally(itally,m) = jorig->v[2]; break;
-      case VX1POST:  d_array_tally(itally,m) = ip->v[0]; break;
-      case VY1POST:  d_array_tally(itally,m) = ip->v[1]; break;
-      case VZ1POST:  d_array_tally(itally,m) = ip->v[2]; break;
-      case VX2POST:  d_array_tally(itally,m) = jp->v[0]; break;
-      case VY2POST:  d_array_tally(itally,m) = jp->v[1]; break;
-      case VZ2POST:  d_array_tally(itally,m) = jp->v[2]; break;
+      case REACTION:   d_array_tally(itally,m) = ubuf(reaction).d; break;
+
+      case IDCELL:     d_array_tally(itally,m) = ubuf(d_cells[icell].id).d; break;
+      case ID1PRE:     d_array_tally(itally,m) = ubuf(iorig->id).d; break;
+      case ID2PRE:     d_array_tally(itally,m) = ubuf(jorig->id).d; break;
+      case ID1POST:    d_array_tally(itally,m) = ubuf(ip->id).d; break;
+      case ID2POST:
+        d_array_tally(itally,m) = (jp == NULL) ? ubuf(0).d : ubuf(jp->id).d; break;
+      case ID3POST:
+        d_array_tally(itally,m) = (kp == NULL) ? ubuf(0).d : ubuf(kp->id).d; break;
+
+      case TYPE1PRE:   d_array_tally(itally,m) = ubuf(iorig->ispecies+1).d; break;
+      case TYPE2PRE:   d_array_tally(itally,m) = ubuf(jorig->ispecies+1).d; break;
+      case TYPE1POST:  d_array_tally(itally,m) = ubuf(ip->ispecies+1).d; break;
+      case TYPE2POST:
+        d_array_tally(itally,m) = (jp == NULL) ? ubuf(0).d : ubuf(jp->ispecies+1).d; break;
+      case TYPE3POST:
+        d_array_tally(itally,m) = (kp == NULL) ? ubuf(0).d : ubuf(kp->ispecies+1).d; break;
+
+      case VX1PRE:     d_array_tally(itally,m) = iorig->v[0]; break;
+      case VY1PRE:     d_array_tally(itally,m) = iorig->v[1]; break;
+      case VZ1PRE:     d_array_tally(itally,m) = iorig->v[2]; break;
+      case VX2PRE:     d_array_tally(itally,m) = jorig->v[0]; break;
+      case VY2PRE:     d_array_tally(itally,m) = jorig->v[1]; break;
+      case VZ2PRE:     d_array_tally(itally,m) = jorig->v[2]; break;
+
+      case VX1POST:    d_array_tally(itally,m) = ip->v[0]; break;
+      case VY1POST:    d_array_tally(itally,m) = ip->v[1]; break;
+      case VZ1POST:    d_array_tally(itally,m) = ip->v[2]; break;
+      case VX2POST:    d_array_tally(itally,m) = (jp == NULL) ? 0.0 : jp->v[0]; break;
+      case VY2POST:    d_array_tally(itally,m) = (jp == NULL) ? 0.0 : jp->v[1]; break;
+      case VZ2POST:    d_array_tally(itally,m) = (jp == NULL) ? 0.0 : jp->v[2]; break;
+      case VX3POST:    d_array_tally(itally,m) = (kp == NULL) ? 0.0 : kp->v[0]; break;
+      case VY3POST:    d_array_tally(itally,m) = (kp == NULL) ? 0.0 : kp->v[1]; break;
+      case VZ3POST:    d_array_tally(itally,m) = (kp == NULL) ? 0.0 : kp->v[2]; break;
       }
     }
   }
@@ -107,8 +125,9 @@ class ComputeGasReactionTallyKokkos : public ComputeGasReactionTally, public Kok
  private:
   // must match the enum in compute_gas_reaction_tally.cpp
 
-  enum{IDCELL,ID1,ID2,TYPE1,TYPE2,VX1PRE,VY1PRE,VZ1PRE,VX2PRE,VY2PRE,VZ2PRE,
-       VX1POST,VY1POST,VZ1POST,VX2POST,VY2POST,VZ2POST};
+  enum{REACTION,IDCELL,ID1PRE,ID2PRE,ID1POST,ID2POST,ID3POST,TYPE1PRE,TYPE2PRE,
+       TYPE1POST,TYPE2POST,TYPE3POST,VX1PRE,VY1PRE,VZ1PRE,VX2PRE,VY2PRE,VZ2PRE,
+       VX1POST,VY1POST,VZ1POST,VX2POST,VY2POST,VZ2POST,VX3POST,VY3POST,VZ3POST};
 
   DAT::tdual_float_2d_lr k_array_tally;
   DAT::t_float_2d_lr d_array_tally;

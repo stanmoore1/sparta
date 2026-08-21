@@ -115,7 +115,7 @@ class ComputeSurfReactionTallyKokkos : public ComputeSurfReactionTally, public K
   }
 
  private:
-  // must match the enum in compute_surf_collision_tally.cpp
+  // must match the enum in compute_surf_reaction_tally.cpp
 
   enum{REACTION,IDSURF,IDPRE,ID1POST,ID2POST,TYPEPRE,TYPE1POST,TYPE2POST,TIME,
        XC,YC,ZC,VXPRE,VYPRE,VZPRE,VX1POST,VY1POST,VZ1POST,VX2POST,VY2POST,VZ2POST};
