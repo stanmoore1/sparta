@@ -26,15 +26,10 @@ FixStyle(emit/face/kk,FixEmitFaceKokkos)
 #include "kokkos_base.h"
 #include "kokkos_copy.h"
 #include "particle_kokkos.h"
-#include "region_block_kokkos.h"
-#include "region_cylinder_kokkos.h"
-#include "region_plane_kokkos.h"
-#include "region_sphere_kokkos.h"
+#include "region_prim_kokkos.h"
 
 namespace SPARTA_NS {
 
-#define KOKKOS_MAX_REGION_PER_TYPE 2
-#define KOKKOS_MAX_TOT_REGION 10
 
 struct TagFixEmitFace_ninsert{};
 struct TagFixEmitFace_perform_task{};
@@ -80,10 +75,12 @@ class FixEmitFaceKokkos : public FixEmitFace {
   double boltz,temp_thermal_mix;
 
   KKCopy<ParticleKokkos> particle_kk_copy;
-  KKCopy<RegBlockKokkos> regblock_kk_copy;
-  KKCopy<RegCylinderKokkos> regcylinder_kk_copy;
-  KKCopy<RegPlaneKokkos> regplane_kk_copy;
-  KKCopy<RegSphereKokkos> regsphere_kk_copy;
+  // region flattened to device-resident primitive descriptors; replaces the
+  //   per-style KKCopy members and the caps that went with them
+
+  tdual_region_prim_1d k_region_prims;
+  t_region_prim_1d d_region_prims;
+  int nregion_prim,region_op,region_interior;
 
   typedef Kokkos::DualView<Task*, DeviceType::array_layout, DeviceType> tdual_task_1d;
   typedef tdual_task_1d::t_dev t_task_1d;

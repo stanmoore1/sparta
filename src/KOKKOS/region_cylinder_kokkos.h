@@ -42,6 +42,27 @@ class RegCylinderKokkos : public RegCylinder, public KokkosBase {
 
   void match_all_kokkos(DAT::tdual_int_1d) override;
 
+  // flatten to a single device-resident descriptor; see region_prim_kokkos.h
+
+  int flatten_region_kokkos(tdual_region_prim_1d &k_prims, int &op) override
+  {
+    if ((int) k_prims.extent(0) < 1)
+      k_prims = tdual_region_prim_1d("region:prims",1);
+    RegionPrimKK &p = k_prims.view_host()[0];
+    p.style = RKK_CYLINDER;
+    p.interior = interior;
+    p.axis = 0;
+    p.a = p.b = p.c = p.d = p.e = p.f = 0.0;
+    p.n0 = p.n1 = p.n2 = 0.0;
+    p.axis = (axis == 'x') ? 0 : ((axis == 'y') ? 1 : 2);
+    p.a = c1; p.b = c2; p.c = radius; p.d = lo; p.e = hi;
+    k_prims.modify_host();
+    k_prims.sync_device();
+    op = RKK_OP_NONE;
+    return 1;
+  }
+
+
   KOKKOS_INLINE_FUNCTION
   void operator()(TagRegCylinderMatchAll, const int&) const;
 

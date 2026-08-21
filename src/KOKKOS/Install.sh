@@ -184,6 +184,11 @@ action region_block_kokkos.cpp
 action region_block_kokkos.h
 action region_cylinder_kokkos.cpp
 action region_cylinder_kokkos.h
+action region_intersect_kokkos.cpp
+action region_intersect_kokkos.h
+action region_prim_kokkos.h
+action region_union_kokkos.cpp
+action region_union_kokkos.h
 action region_plane_kokkos.cpp
 action region_plane_kokkos.h
 action region_sphere_kokkos.cpp
