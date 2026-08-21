@@ -56,7 +56,6 @@ enum{CONSTANT,VARIABLE};
 #define DELTACELLCOUNT 2
 #define MAXGROUP 16               // max # of collision groups for Kokkos group collisions
 
-#define MAXLINE 1024
 #define EPSZERO 1.0e-14
 #define BIG 1.0e20
 
@@ -160,6 +159,13 @@ void CollideVSSKokkos::init()
   if (nparams != particle->nspecies)
     error->all(FLERR,"VSS parameters do not match current species");
 
+  // CollideVSSKokkos::init() does not call the host base, so it carries its
+  //   own copy of the host's restriction checks.  These three mirror
+  //   Collide::init() (collide.cpp:166-176) condition-for-condition and
+  //   message-for-message: the ambipolar model has no near-neighbor or subcell
+  //   implementation on the CPU either, so they are host restrictions being
+  //   reproduced, not Kokkos limitations.
+
   if (ambiflag && nearcp)
     error->all(FLERR,"Ambipolar collision model does not yet support "
                "near-neighbor collisions");
@@ -212,6 +218,9 @@ void CollideVSSKokkos::init()
   ngroups = mixture->ngroup;
 
   // must follow ngroups assignment above, as in Collide::init()
+  // mirrors collide.cpp:274-276; the host has no multigroup subcell algorithm
+  //   either (Collide::subcell_alloc() refuses to allocate at collide.cpp:988),
+  //   so there is no host result for a Kokkos version to reproduce
 
   if (subcellflag && ngroups > 1)
     error->all(FLERR,"Cannot yet use subcell collisions with "
@@ -471,8 +480,9 @@ void CollideVSSKokkos::collisions()
   // variant for single group or multiple groups
 
   // partition active gas/gas tally computes by type into typed KKCopy lists
-  // each must be a supported Kokkos per-grid compute; call pre_gas_tally()
-  // the per-event gas/collision/tally and gas/reaction/tally are not supported
+  // each must be a Kokkos gas tally compute; call pre_gas_tally() on it
+  // covers the per-grid gas/collision/grid and gas/reaction/grid, and the
+  //   per-event gas/collision/tally and gas/reaction/tally
 
   if (ngas_tally) setup_gas_tally();
 
@@ -514,8 +524,12 @@ void CollideVSSKokkos::collisions()
   //   the ambipolar group path still assumes static group membership
 
   } else {
+    // unreachable: init() above already aborts this combination, matching the
+    //   host.  Kept as a belt-and-braces assert in case the dispatch is ever
+    //   reached by another path
+
     if (subcellflag)
-      error->all(FLERR,"Kokkos does not (yet) support subcell partners with "
+      error->all(FLERR,"Cannot yet use subcell collisions with "
                  "multiple collision groups");
     if (!ambiflag) {
       if (!nearcp) {

@@ -34,12 +34,7 @@ using namespace MathConst;
 #define DELTA 8192
 #define DELTAPARENT 1024
 #define BIG 1.0e20
-#define MAXGROUP 32
 #define MAXLEVEL 32
-
-// default value, can be overridden by global command
-
-#define MAXSURFPERCELL 100
 
 enum{XLO,XHI,YLO,YHI,ZLO,ZHI,INTERIOR};         // same as Domain
 enum{PERIODIC,OUTFLOW,REFLECT,SURFACE,AXISYM};  // same as Domain

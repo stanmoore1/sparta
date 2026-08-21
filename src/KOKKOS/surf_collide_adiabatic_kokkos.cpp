@@ -154,7 +154,7 @@ void SurfCollideAdiabaticKokkos::pre_collide()
   }
 
   if (surf->nsr > KOKKOS_MAX_TOT_SURF_REACT)
-    error->all(FLERR,"Kokkos currently supports two instances of each surface reaction method");
+    error->all(FLERR,"Kokkos currently supports a limited number of surface reaction methods");
 
   if (surf->nsr > 0) {
     int nglob,nprob,nadsorb;
