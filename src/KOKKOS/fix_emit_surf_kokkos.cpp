@@ -15,6 +15,7 @@
 #include "stdlib.h"
 #include "string.h"
 #include "fix_emit_surf_kokkos.h"
+#include "compute_isurf_grid_kokkos.h"
 #include "update.h"
 #include "domain.h"
 #include "region.h"
@@ -292,12 +293,22 @@ void FixEmitSurfKokkos::perform_task()
   if (nsurf_tally > KOKKOS_MAX_SLIST)
     error->all(FLERR,"Kokkos currently only supports two instances of compute surface");
 
+  // dispatch by dynamic_cast, not by style string: the Kokkos computes are
+  //   registered under their "/kk" names too (isurf/grid/kk et al), so a
+  //   style compare never matches a compute the user typed with the suffix
+  //   and the caller then falls through to an unrelated error message.
+  //   see the same note in UpdateKokkos::setup_surf_tally_copies()
+
   for (int i = 0; i < nsurf_tally; i++) {
-    if (strcmp(slist_active[i]->style,"isurf/grid") == 0)
-      error->all(FLERR,"Kokkos doesn't yet support compute isurf/grid");
     ComputeSurfKokkos* compute_surf_kk = dynamic_cast<ComputeSurfKokkos*>(slist_active[i]);
-    if (!compute_surf_kk)
-      error->all(FLERR,"Kokkos does not (yet) support compute surf/collision/tally or compute surf/reaction/tally");
+    if (!compute_surf_kk) {
+      if (dynamic_cast<ComputeISurfGridKokkos*>(slist_active[i]))
+        error->all(FLERR,"Kokkos does not (yet) support compute isurf/grid "
+                   "with fix emit/surf");
+      error->all(FLERR,"Kokkos does not (yet) support this surf tally compute "
+                 "with fix emit/surf; use a Kokkos-enabled surf tally compute "
+                 "(-sf kk)");
+    }
     compute_surf_kk->pre_surf_tally();
     slist_active_copy[i].copy(compute_surf_kk);
   }
