@@ -369,6 +369,13 @@ class DualView : public Kokkos::DualView<DataType, Properties...> {
   const t_spa_flags &impl_spa_flags() const { return spa_flags; }
   const t_host &impl_h_split() const { return h_split; }
 
+  // The device side without the stale check.  A detector that surveys every
+  // array -- the datamask audit does, on both ends of every style call -- is
+  // not a reader of the data, and going through the checked accessor made the
+  // audit report itself as the routine that read an array stale.  Same reason
+  // as impl_h_split() above.
+  const t_dev &impl_view_device() const { return base_type::view_device(); }
+
   // Event trace for one view, selected by a substring in SPARTA_KOKKOS_TRACE.
   // Nothing is looked up and nothing printed unless that variable is set, so an
   // ordinary sync debugging run pays only a pointer test per operation.

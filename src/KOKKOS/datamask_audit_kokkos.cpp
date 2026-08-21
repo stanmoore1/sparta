@@ -176,7 +176,7 @@ static void collect(SPARTA *sparta, std::vector<DatamaskAudit::Array> &out)
 
 #define SPARTA_AUDIT_ARRAY(BIT, NAME, KV, NLIVE)                                          \
   {                                                                                       \
-    auto v = (KV).view_device();                                                          \
+    auto v = (KV).impl_view_device();                                                     \
     take(BIT, NAME, (const char *) v.data(), v.span(),                                    \
          sizeof(typename decltype(v)::value_type), v.extent(0), (NLIVE),                  \
          (KV).need_sync_device());                                                        \
