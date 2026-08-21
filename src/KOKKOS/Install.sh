@@ -50,6 +50,14 @@ action compute_gas_collision_grid_kokkos.cpp
 action compute_gas_collision_grid_kokkos.h
 action compute_gas_reaction_grid_kokkos.cpp
 action compute_gas_reaction_grid_kokkos.h
+action compute_gas_collision_tally_kokkos.cpp
+action compute_gas_collision_tally_kokkos.h
+action compute_gas_reaction_tally_kokkos.cpp
+action compute_gas_reaction_tally_kokkos.h
+action compute_surf_collision_tally_kokkos.cpp
+action compute_surf_collision_tally_kokkos.h
+action compute_surf_reaction_tally_kokkos.cpp
+action compute_surf_reaction_tally_kokkos.h
 action compute_grid_kokkos.cpp
 action compute_grid_kokkos.h
 action compute_isurf_grid_kokkos.cpp

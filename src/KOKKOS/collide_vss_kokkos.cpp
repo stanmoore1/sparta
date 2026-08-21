@@ -74,13 +74,18 @@ CollideVSSKokkos::CollideVSSKokkos(SPARTA *sparta, int narg, char **arg) :
   react_qk_kk_copy(sparta),
   react_tceqk_kk_copy(sparta),
   glist_collision_copy{VAL_4(KKCopy<ComputeGasCollisionGridKokkos>(sparta))},
+  glist_coll_tally_copy{VAL_4(KKCopy<ComputeGasCollisionTallyKokkos>(sparta))},
+  glist_react_tally_copy{VAL_4(KKCopy<ComputeGasReactionTallyKokkos>(sparta))},
   glist_reaction_copy{VAL_4(KKCopy<ComputeGasReactionGridKokkos>(sparta))},
   tmp_compute_gas_collision_kk(sparta),
-  tmp_compute_gas_reaction_kk(sparta)
+  tmp_compute_gas_reaction_kk(sparta),
+  tmp_compute_gas_coll_tally_kk(sparta),
+  tmp_compute_gas_react_tally_kk(sparta)
 {
   kokkos_flag = 1;
   react_style = 0;
   nglist_collision = nglist_reaction = 0;
+  nglist_coll_tally = nglist_react_tally = 0;
   egroup = -1;
 
   // use 1D view for scalars to reduce GPU memory operations
@@ -103,6 +108,7 @@ CollideVSSKokkos::CollideVSSKokkos(SPARTA *sparta, int narg, char **arg) :
   d_ndelete      = Kokkos::subview(d_scalars,5);
   d_nlocal       = Kokkos::subview(d_scalars,6);
   d_maxelectron  = Kokkos::subview(d_scalars,7);
+  d_tally_overflow = Kokkos::subview(d_scalars,8);
 
   d_nattempt_one = Kokkos::subview(d_scalars_big,0);
   d_ncollide_one = Kokkos::subview(d_scalars_big,1);
@@ -116,6 +122,7 @@ CollideVSSKokkos::CollideVSSKokkos(SPARTA *sparta, int narg, char **arg) :
   h_ndelete      = Kokkos::subview(h_scalars,5);
   h_nlocal       = Kokkos::subview(h_scalars,6);
   h_maxelectron  = Kokkos::subview(h_scalars,7);
+  h_tally_overflow = Kokkos::subview(h_scalars,8);
 
   h_nattempt_one = Kokkos::subview(h_scalars_big,0);
   h_ncollide_one = Kokkos::subview(h_scalars_big,1);
@@ -579,6 +586,7 @@ void CollideVSSKokkos::collisions()
 void CollideVSSKokkos::setup_gas_tally()
 {
   nglist_collision = nglist_reaction = 0;
+  nglist_coll_tally = nglist_react_tally = 0;
 
   // dispatch by dynamic_cast, not by style string, so a compute the user
   //   typed with the explicit "/kk" suffix is still recognized
@@ -599,6 +607,22 @@ void CollideVSSKokkos::setup_gas_tally()
       ckk->pre_gas_tally();
       glist_reaction_copy[nglist_reaction].copy(ckk);
       nglist_reaction++;
+    } else if (ComputeGasCollisionTallyKokkos *ckk =
+                 dynamic_cast<ComputeGasCollisionTallyKokkos*>(c)) {
+      if (nglist_coll_tally >= KOKKOS_MAX_GLIST)
+        error->all(FLERR,"Kokkos supports at most KOKKOS_MAX_GLIST instances of compute gas/collision/tally");
+      ckk->pre_gas_tally();
+      ckk->d_overflow = d_tally_overflow;
+      glist_coll_tally_copy[nglist_coll_tally].copy(ckk);
+      nglist_coll_tally++;
+    } else if (ComputeGasReactionTallyKokkos *ckk =
+                 dynamic_cast<ComputeGasReactionTallyKokkos*>(c)) {
+      if (nglist_react_tally >= KOKKOS_MAX_GLIST)
+        error->all(FLERR,"Kokkos supports at most KOKKOS_MAX_GLIST instances of compute gas/reaction/tally");
+      ckk->pre_gas_tally();
+      ckk->d_overflow = d_tally_overflow;
+      glist_react_tally_copy[nglist_react_tally].copy(ckk);
+      nglist_react_tally++;
     } else {
       error->all(FLERR,"Kokkos does not (yet) support this gas tally compute; "
                        "use a Kokkos-enabled gas tally compute (-sf kk)");
@@ -612,6 +636,10 @@ void CollideVSSKokkos::setup_gas_tally()
     glist_collision_copy[i].copy(&tmp_compute_gas_collision_kk);
   for (int i = nglist_reaction; i < KOKKOS_MAX_GLIST; i++)
     glist_reaction_copy[i].copy(&tmp_compute_gas_reaction_kk);
+  for (int i = nglist_coll_tally; i < KOKKOS_MAX_GLIST; i++)
+    glist_coll_tally_copy[i].copy(&tmp_compute_gas_coll_tally_kk);
+  for (int i = nglist_react_tally; i < KOKKOS_MAX_GLIST; i++)
+    glist_react_tally_copy[i].copy(&tmp_compute_gas_react_tally_kk);
 }
 
 /* ----------------------------------------------------------------------
@@ -626,6 +654,10 @@ void CollideVSSKokkos::finish_gas_tally()
     if (ComputeGasCollisionGridKokkos *ckk = dynamic_cast<ComputeGasCollisionGridKokkos*>(c))
       ckk->post_gas_tally();
     else if (ComputeGasReactionGridKokkos *ckk = dynamic_cast<ComputeGasReactionGridKokkos*>(c))
+      ckk->post_gas_tally();
+    else if (ComputeGasCollisionTallyKokkos *ckk = dynamic_cast<ComputeGasCollisionTallyKokkos*>(c))
+      ckk->post_gas_tally();
+    else if (ComputeGasReactionTallyKokkos *ckk = dynamic_cast<ComputeGasReactionTallyKokkos*>(c))
       ckk->post_gas_tally();
   }
 }
@@ -776,6 +808,20 @@ template < int NEARCP, int GASTALLY > void CollideVSSKokkos::collisions_one(COLL
 
     Kokkos::deep_copy(h_scalars,d_scalars);
     Kokkos::deep_copy(h_scalars_big,d_scalars_big);
+
+    // a per-event gas tally compute ran out of room: grow it and repeat the
+    //   pass.  unlike a reaction overflow this needs no react/retry opt-in,
+    //   and clear_gas_tally() below already discards the aborted pass
+
+    if (h_tally_overflow() && !h_retry()) {
+      grow_gas_tally_computes();
+      if (ngas_tally) clear_gas_tally();
+      Kokkos::deep_copy(h_scalars,0);
+      Kokkos::deep_copy(h_scalars_big,0);
+      reduce = COLLIDE_REDUCE();
+      h_retry() = 1;
+      continue;
+    }
 
     if (h_retry()) {
       //printf("Retrying, reason %i %i %i !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n",h_maxdelete() > d_dellist.extent(0),h_maxcellcount() > d_plist.extent(1),h_part_grow());
@@ -966,6 +1012,10 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOne< NEARCP, GASTALLY, ATO
         glist_collision_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
       for (int m = 0; m < nglist_reaction; m++)
         glist_reaction_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
+      for (int m = 0; m < nglist_coll_tally; m++)
+        glist_coll_tally_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
+      for (int m = 0; m < nglist_react_tally; m++)
+        glist_react_tally_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
     }
 
     if (reactflag) {
@@ -1166,6 +1216,20 @@ template < int DIM, int GASTALLY > void CollideVSSKokkos::collisions_one_subcell
     Kokkos::deep_copy(h_scalars,d_scalars);
     Kokkos::deep_copy(h_scalars_big,d_scalars_big);
 
+    // a per-event gas tally compute ran out of room: grow it and repeat the
+    //   pass.  unlike a reaction overflow this needs no react/retry opt-in,
+    //   and clear_gas_tally() below already discards the aborted pass
+
+    if (h_tally_overflow() && !h_retry()) {
+      grow_gas_tally_computes();
+      if (ngas_tally) clear_gas_tally();
+      Kokkos::deep_copy(h_scalars,0);
+      Kokkos::deep_copy(h_scalars_big,0);
+      reduce = COLLIDE_REDUCE();
+      h_retry() = 1;
+      continue;
+    }
+
     if (h_retry()) {
       if (!sparta->kokkos->react_retry_flag) {
         error->one(FLERR,"Ran out of space in Kokkos collisions, increase react/extra"
@@ -1360,6 +1424,10 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneSubcell< DIM, GASTALLY,
         glist_collision_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
       for (int m = 0; m < nglist_reaction; m++)
         glist_reaction_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
+      for (int m = 0; m < nglist_coll_tally; m++)
+        glist_coll_tally_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
+      for (int m = 0; m < nglist_react_tally; m++)
+        glist_react_tally_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
     }
 
     if (reactflag) {
@@ -1902,6 +1970,10 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroup< NEARCP, GASTALLY, A
             glist_collision_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
           for (int m = 0; m < nglist_reaction; m++)
             glist_reaction_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
+      for (int m = 0; m < nglist_coll_tally; m++)
+        glist_coll_tally_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
+      for (int m = 0; m < nglist_react_tally; m++)
+        glist_react_tally_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
         }
       }
     }
@@ -2154,6 +2226,10 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroupAmbipolar< GASTALLY, 
             glist_collision_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
           for (int m = 0; m < nglist_reaction; m++)
             glist_reaction_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
+      for (int m = 0; m < nglist_coll_tally; m++)
+        glist_coll_tally_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
+      for (int m = 0; m < nglist_react_tally; m++)
+        glist_react_tally_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
         }
       }
     }
@@ -2327,6 +2403,20 @@ void CollideVSSKokkos::collisions_one_ambipolar(COLLIDE_REDUCE &reduce)
 
     Kokkos::deep_copy(h_scalars,d_scalars);
     Kokkos::deep_copy(h_scalars_big,d_scalars_big);
+
+    // a per-event gas tally compute ran out of room: grow it and repeat the
+    //   pass.  unlike a reaction overflow this needs no react/retry opt-in,
+    //   and clear_gas_tally() below already discards the aborted pass
+
+    if (h_tally_overflow() && !h_retry()) {
+      grow_gas_tally_computes();
+      if (ngas_tally) clear_gas_tally();
+      Kokkos::deep_copy(h_scalars,0);
+      Kokkos::deep_copy(h_scalars_big,0);
+      reduce = COLLIDE_REDUCE();
+      h_retry() = 1;
+      continue;
+    }
 
     if (h_retry()) {
       //printf("Retrying, reason %i %i %i %i !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n",h_maxelectron() > d_elist.extent(1),h_maxdelete() > d_dellist.extent(0),h_maxcellcount() > d_plist.extent(1),h_part_grow());
@@ -2561,6 +2651,10 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar< GASTALLY, AT
         glist_collision_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
       for (int m = 0; m < nglist_reaction; m++)
         glist_reaction_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
+      for (int m = 0; m < nglist_coll_tally; m++)
+        glist_coll_tally_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
+      for (int m = 0; m < nglist_react_tally; m++)
+        glist_react_tally_copy[m].obj.template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
     }
 
     if (reactflag) {
@@ -4152,5 +4246,21 @@ void CollideVSSKokkos::restore()
   if (ambiflag) {
     d_ionambi_backup = {};
     d_velambi_backup = {};
+  }
+}
+
+/* ----------------------------------------------------------------------
+   grow every per-event gas tally compute past what the failed attempt
+     needed; see the same helper in UpdateKokkos
+------------------------------------------------------------------------- */
+
+void CollideVSSKokkos::grow_gas_tally_computes()
+{
+  for (int i = 0; i < ngas_tally; i++) {
+    Compute *c = update->glist_active[i];
+    if (ComputeGasCollisionTallyKokkos *ckk = dynamic_cast<ComputeGasCollisionTallyKokkos*>(c))
+      ckk->grow_after_overflow();
+    else if (ComputeGasReactionTallyKokkos *ckk = dynamic_cast<ComputeGasReactionTallyKokkos*>(c))
+      ckk->grow_after_overflow();
   }
 }

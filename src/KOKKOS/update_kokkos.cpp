@@ -88,6 +88,8 @@ UpdateKokkos::UpdateKokkos(SPARTA *sparta) : Update(sparta),
   blist_active_copy{VAL_2(KKCopy<ComputeBoundaryKokkos>(sparta))},
   slist_active_copy{VAL_2(KKCopy<ComputeSurfKokkos>(sparta))},
   slist_active_isurf_copy{VAL_2(KKCopy<ComputeISurfGridKokkos>(sparta))},
+  slist_active_coll_tally_copy{VAL_2(KKCopy<ComputeSurfCollisionTallyKokkos>(sparta))},
+  slist_active_react_tally_copy{VAL_2(KKCopy<ComputeSurfReactionTallyKokkos>(sparta))},
   slist_active_react_isurf_copy{VAL_2(KKCopy<ComputeReactISurfGridKokkos>(sparta))},
   slist_active_react_surf_copy{VAL_2(KKCopy<ComputeReactSurfKokkos>(sparta))},
   tmp_compute_boundary_kk(sparta),
@@ -97,6 +99,7 @@ UpdateKokkos::UpdateKokkos(SPARTA *sparta) : Update(sparta),
   tmp_compute_react_surf_kk(sparta)
 {
   nslist_surf = nslist_isurf = nslist_react_isurf = nslist_react_surf = 0;
+  nslist_coll_tally = nslist_react_tally = 0;
 
   // the Kokkos views of Particle/Grid/Surf are populated from the host data
   //   once, by setup() when prewrap is set, which then clears prewrap
@@ -125,6 +128,7 @@ UpdateKokkos::UpdateKokkos(SPARTA *sparta) : Update(sparta),
   d_error_flag    = Kokkos::subview(d_scalars,4);
   d_retry         = Kokkos::subview(d_scalars,5);
   d_nlocal        = Kokkos::subview(d_scalars,6);
+  d_tally_overflow = Kokkos::subview(d_scalars,7);
 
   d_ncomm_one     = Kokkos::subview(d_scalars_big,0);
   d_nexit_one     = Kokkos::subview(d_scalars_big,1);
@@ -141,6 +145,7 @@ UpdateKokkos::UpdateKokkos(SPARTA *sparta) : Update(sparta),
   h_error_flag    = Kokkos::subview(h_scalars,4);
   h_retry         = Kokkos::subview(h_scalars,5);
   h_nlocal        = Kokkos::subview(h_scalars,6);
+  h_tally_overflow = Kokkos::subview(h_scalars,7);
 
   h_ncomm_one     = Kokkos::subview(h_scalars_big,0);
   h_nexit_one     = Kokkos::subview(h_scalars_big,1);
@@ -820,6 +825,23 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
       Kokkos::deep_copy(h_scalars,d_scalars);
       Kokkos::deep_copy(h_scalars_big,d_scalars_big);
 
+      // a per-event surf tally compute ran out of room.  the row count is
+      //   only knowable by running the move, so grow every such compute to
+      //   what this attempt actually needed and repeat, exactly as a
+      //   reaction overflow does.  unlike a reaction overflow this needs no
+      //   react/extra opt-in: nothing about the particle state forced it,
+      //   and truncating a tally would silently corrupt dump tally output
+
+      if (h_tally_overflow() && !h_retry()) {
+        grow_tally_computes();
+        if (surf->nsr && sparta->kokkos->react_retry_flag) restore();
+        Kokkos::deep_copy(h_scalars,0);
+        Kokkos::deep_copy(h_scalars_big,0);
+        reduce = UPDATE_REDUCE();
+        h_retry() = 1;
+        continue;
+      }
+
       if (h_retry()) {
         int nlocal_new = h_nlocal();
 
@@ -1013,6 +1035,12 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
       } else if (ComputeSurfKokkos* compute_surf_kk =
                    dynamic_cast<ComputeSurfKokkos*>(slist_active[m])) {
         compute_surf_kk->post_surf_tally();
+      } else if (ComputeSurfCollisionTallyKokkos* compute_ct_kk =
+                   dynamic_cast<ComputeSurfCollisionTallyKokkos*>(slist_active[m])) {
+        compute_ct_kk->post_surf_tally();
+      } else if (ComputeSurfReactionTallyKokkos* compute_rt_kk =
+                   dynamic_cast<ComputeSurfReactionTallyKokkos*>(slist_active[m])) {
+        compute_rt_kk->post_surf_tally();
       } else {
         error->all(FLERR,"Kokkos does not (yet) support this surf tally compute; "
                          "use a Kokkos-enabled surf tally compute (-sf kk)");
@@ -1938,6 +1966,12 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
             for (m = 0; m < nslist_isurf; m++)
               slist_active_isurf_copy[m].obj.
                     surf_tally_kk<ATOMIC_REDUCTION>(dtremain,minsurf,icell,reaction,&iorig,ipart,jpart);
+            for (m = 0; m < nslist_coll_tally; m++)
+              slist_active_coll_tally_copy[m].obj.
+                    surf_tally_kk(dtremain,minsurf,icell,reaction,&iorig,ipart,jpart);
+            for (m = 0; m < nslist_react_tally; m++)
+              slist_active_react_tally_copy[m].obj.
+                    surf_tally_kk(dtremain,minsurf,icell,reaction,&iorig,ipart,jpart);
             for (m = 0; m < nslist_react_isurf; m++)
               slist_active_react_isurf_copy[m].obj.
                     surf_tally_kk<ATOMIC_REDUCTION>(dtremain,minsurf,icell,reaction,&iorig,ipart,jpart);
@@ -2540,6 +2574,7 @@ void UpdateKokkos::setup_surf_tally_copies()
   //   surf_tally_kk(), invoked from the move kernel's surface collision loop
 
   nslist_surf = nslist_isurf = nslist_react_isurf = nslist_react_surf = 0;
+  nslist_coll_tally = nslist_react_tally = 0;
 
   // dispatch by dynamic_cast, not by style string: the styles are also
   //   registered under explicit "/kk" names (e.g. isurf/grid/kk), so a
@@ -2577,6 +2612,22 @@ void UpdateKokkos::setup_surf_tally_copies()
         compute_surf_kk->pre_surf_tally();
         slist_active_copy[nslist_surf].copy(compute_surf_kk);
         nslist_surf++;
+      } else if (ComputeSurfCollisionTallyKokkos* compute_ct_kk =
+                   dynamic_cast<ComputeSurfCollisionTallyKokkos*>(slist_active[i])) {
+        if (nslist_coll_tally >= KOKKOS_MAX_SLIST)
+          error->all(FLERR,"Kokkos currently only supports two instances of compute surf/collision/tally");
+        compute_ct_kk->pre_surf_tally();
+        compute_ct_kk->d_overflow = d_tally_overflow;
+        slist_active_coll_tally_copy[nslist_coll_tally].copy(compute_ct_kk);
+        nslist_coll_tally++;
+      } else if (ComputeSurfReactionTallyKokkos* compute_rt_kk =
+                   dynamic_cast<ComputeSurfReactionTallyKokkos*>(slist_active[i])) {
+        if (nslist_react_tally >= KOKKOS_MAX_SLIST)
+          error->all(FLERR,"Kokkos currently only supports two instances of compute surf/reaction/tally");
+        compute_rt_kk->pre_surf_tally();
+        compute_rt_kk->d_overflow = d_tally_overflow;
+        slist_active_react_tally_copy[nslist_react_tally].copy(compute_rt_kk);
+        nslist_react_tally++;
       } else {
         error->all(FLERR,"Kokkos does not (yet) support this surf tally compute; "
                          "use a Kokkos-enabled surf tally compute (-sf kk)");
@@ -2680,4 +2731,21 @@ void UpdateKokkos::restore()
   // deallocate references to reduce memory use
 
   d_particles_backup = {};
+}
+
+/* ----------------------------------------------------------------------
+   grow every per-event surf tally compute past what the failed attempt
+     needed, then let the caller repeat the move
+------------------------------------------------------------------------- */
+
+void UpdateKokkos::grow_tally_computes()
+{
+  for (int m = 0; m < nsurf_tally; m++) {
+    if (ComputeSurfCollisionTallyKokkos* c =
+          dynamic_cast<ComputeSurfCollisionTallyKokkos*>(slist_active[m]))
+      c->grow_after_overflow();
+    else if (ComputeSurfReactionTallyKokkos* c =
+               dynamic_cast<ComputeSurfReactionTallyKokkos*>(slist_active[m]))
+      c->grow_after_overflow();
+  }
 }
