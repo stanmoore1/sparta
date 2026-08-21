@@ -927,3 +927,56 @@ void ParticleKokkos::modify(ExecutionSpace space, unsigned int mask)
     }
   }
 }
+
+/* ----------------------------------------------------------------------
+   memory usage of Kokkos-managed data
+   Particle::memory_usage() is deliberately not called: the host arrays it
+     measures are the host mirrors of the DualViews below, so its formula
+     would double count them.  next[] is the one plain host allocation it
+     covers with no Kokkos counterpart, so it is carried over here
+   the device half is added only when it is a distinct allocation; on a
+     host-only backend the two views alias
+------------------------------------------------------------------------- */
+
+bigint ParticleKokkos::memory_usage()
+{
+  const bool device_distinct =
+    !std::is_same<DeviceType::memory_space,Kokkos::HostSpace>::value;
+
+  bigint bytes = (bigint) maxlocal * sizeof(int);   // next[]
+
+  bytes += MemKK::memory_usage(k_particles.view_host());
+  bytes += MemKK::memory_usage(k_species.view_host());
+  bytes += MemKK::memory_usage(k_species2group.view_host());
+  for (int i = 0; i < ncustom_ivec; i++)
+    bytes += MemKK::memory_usage(k_eivec.view_host()[i].k_view.view_host());
+  for (int i = 0; i < ncustom_iarray; i++)
+    bytes += MemKK::memory_usage(k_eiarray.view_host()[i].k_view.view_host());
+  for (int i = 0; i < ncustom_dvec; i++)
+    bytes += MemKK::memory_usage(k_edvec.view_host()[i].k_view.view_host());
+  for (int i = 0; i < ncustom_darray; i++)
+    bytes += MemKK::memory_usage(k_edarray.view_host()[i].k_view.view_host());
+
+  if (device_distinct) {
+    bytes += MemKK::memory_usage(k_particles.view_device());
+    bytes += MemKK::memory_usage(k_species.view_device());
+    bytes += MemKK::memory_usage(k_species2group.view_device());
+    for (int i = 0; i < ncustom_ivec; i++)
+      bytes += MemKK::memory_usage(k_eivec.view_host()[i].k_view.view_device());
+    for (int i = 0; i < ncustom_iarray; i++)
+      bytes += MemKK::memory_usage(k_eiarray.view_host()[i].k_view.view_device());
+    for (int i = 0; i < ncustom_dvec; i++)
+      bytes += MemKK::memory_usage(k_edvec.view_host()[i].k_view.view_device());
+    for (int i = 0; i < ncustom_darray; i++)
+      bytes += MemKK::memory_usage(k_edarray.view_host()[i].k_view.view_device());
+  }
+
+  // device-only scratch for the sort/reorder path, with no host counterpart
+  // in either backend
+
+  bytes += MemKK::memory_usage(d_sorted);
+  bytes += MemKK::memory_usage(d_sorted_id);
+  bytes += MemKK::memory_usage(d_offsets_part);
+
+  return bytes;
+}

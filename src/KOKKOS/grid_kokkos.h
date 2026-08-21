@@ -193,6 +193,7 @@ class GridKokkos : public Grid {
   DAT::t_int_1d d_halo_index;
 
   void update_halo_index();
+  bigint memory_usage() override;
 
   DAT::tdual_int_1d k_ewhich,k_eicol,k_edcol;
 

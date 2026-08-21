@@ -26,6 +26,8 @@
 #include "surf_kokkos.h"
 #include "particle_kokkos.h"
 
+#include <type_traits>
+
 using namespace SPARTA_NS;
 using namespace MathConst;
 
@@ -473,4 +475,66 @@ void GridKokkos::modify(ExecutionSpace space, unsigned int mask)
       }
     }
   }
+}
+
+/* ----------------------------------------------------------------------
+   memory usage of Kokkos-managed data
+   Grid::memory_usage() is deliberately not called: the cells/cinfo/sinfo
+     arrays it measures are the host mirrors of the DualViews below.  its
+     other two terms, the csurfs and csplits host pages, have no Kokkos
+     counterpart and are carried over here
+   the flattened Crs graphs, the per-cell particle lists and the halo index
+     are device-only in both backends
+------------------------------------------------------------------------- */
+
+bigint GridKokkos::memory_usage()
+{
+  const bool device_distinct =
+    !std::is_same<DeviceType::memory_space,Kokkos::HostSpace>::value;
+
+  bigint bytes = csurfs->size();
+  bytes += csplits->size();
+
+  bytes += MemKK::memory_usage(k_cells.view_host());
+  bytes += MemKK::memory_usage(k_cinfo.view_host());
+  bytes += MemKK::memory_usage(k_sinfo.view_host());
+  bytes += MemKK::memory_usage(k_pcells.view_host());
+  bytes += MemKK::memory_usage(k_plevels.view_host());
+  for (int i = 0; i < ncustom_ivec; i++)
+    bytes += MemKK::memory_usage(k_eivec.view_host()[i].k_view.view_host());
+  for (int i = 0; i < ncustom_iarray; i++)
+    bytes += MemKK::memory_usage(k_eiarray.view_host()[i].k_view.view_host());
+  for (int i = 0; i < ncustom_dvec; i++)
+    bytes += MemKK::memory_usage(k_edvec.view_host()[i].k_view.view_host());
+  for (int i = 0; i < ncustom_darray; i++)
+    bytes += MemKK::memory_usage(k_edarray.view_host()[i].k_view.view_host());
+
+  if (device_distinct) {
+    bytes += MemKK::memory_usage(k_cells.view_device());
+    bytes += MemKK::memory_usage(k_cinfo.view_device());
+    bytes += MemKK::memory_usage(k_sinfo.view_device());
+    bytes += MemKK::memory_usage(k_pcells.view_device());
+    bytes += MemKK::memory_usage(k_plevels.view_device());
+    for (int i = 0; i < ncustom_ivec; i++)
+      bytes += MemKK::memory_usage(k_eivec.view_host()[i].k_view.view_device());
+    for (int i = 0; i < ncustom_iarray; i++)
+      bytes += MemKK::memory_usage(k_eiarray.view_host()[i].k_view.view_device());
+    for (int i = 0; i < ncustom_dvec; i++)
+      bytes += MemKK::memory_usage(k_edvec.view_host()[i].k_view.view_device());
+    for (int i = 0; i < ncustom_darray; i++)
+      bytes += MemKK::memory_usage(k_edarray.view_host()[i].k_view.view_device());
+  }
+
+  bytes += MemKK::memory_usage(d_csurfs.entries);
+  bytes += MemKK::memory_usage(d_csurfs.row_map);
+  bytes += MemKK::memory_usage(d_csplits.entries);
+  bytes += MemKK::memory_usage(d_csplits.row_map);
+  bytes += MemKK::memory_usage(d_csubs.entries);
+  bytes += MemKK::memory_usage(d_csubs.row_map);
+
+  bytes += MemKK::memory_usage(d_cellcount);
+  bytes += MemKK::memory_usage(d_plist);
+  bytes += MemKK::memory_usage(d_halo_index);
+
+  return bytes;
 }
