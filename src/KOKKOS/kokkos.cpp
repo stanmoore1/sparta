@@ -190,6 +190,21 @@ KokkosSPARTA::KokkosSPARTA(SPARTA *sparta, int narg, char **arg) : Pointers(spar
     atomic_reduction = 1;
 #endif
   } else {
+
+    // on CPU the host migrate path beats the device pack/unpack kernels, so
+    //   it stays the default.  Measured on 4 MPI ranks, Serial backend, 400k
+    //   particles in a 20^3 grid over 400 steps with 2.65% of particles
+    //   migrating per step, comparing the Comm section of the timing
+    //   breakdown (median of 3):
+    //
+    //                      comm serial   comm threaded
+    //     free molecular      0.228 s       0.246 s   (+7.6%)
+    //     with VSS collide    0.211 s       0.259 s   (+22.5%)
+    //
+    //   There is no host/device transfer to avoid here, so the device path
+    //   only adds the irregular-comm plan rebuild.  Users can still ask for
+    //   it with "package kokkos comm threaded".
+
     comm_serial = 1;
     atomic_reduction = 0;
   }
