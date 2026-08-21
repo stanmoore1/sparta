@@ -33,6 +33,7 @@ ComputeSurfReactionTallyKokkos::ComputeSurfReactionTallyKokkos(SPARTA *sparta,
   ComputeSurfReactionTally(sparta, narg, arg)
 {
   kokkos_flag = 1;
+  ntally_mark = 0;
 
   d_ntally = DAT::t_int_scalar("surf/reaction/tally/kk:ntally");
   h_ntally = HAT::t_int_scalar("surf/reaction/tally/kk:ntally_mirror");
@@ -57,6 +58,7 @@ ComputeSurfReactionTallyKokkos::ComputeSurfReactionTallyKokkos(SPARTA *sparta) :
   ComputeSurfReactionTally(sparta)
 {
   copy = 1;
+  ntally_mark = 0;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -112,9 +114,12 @@ void ComputeSurfReactionTallyKokkos::post_surf_tally()
   ntally = h_ntally();
 
   // an overflowed attempt is discarded and repeated by UpdateKokkos, so do
-  //   not publish its partial rows
+  //   not publish its partial rows.  the device counter kept climbing past
+  //   the end of the buffer, so ntally is not a row count here -- leaving it
+  //   in the host base class would make dump tally read that many rows out
+  //   of an array that never held them
 
-  if (ntally > (int) d_array_tally.extent(0)) return;
+  if (ntally > (int) d_array_tally.extent(0)) { ntally = 0; return; }
 
   k_array_tally.modify_device();
   k_array_tally.sync_host();

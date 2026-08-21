@@ -759,10 +759,25 @@ template < int NEARCP, int GASTALLY > void CollideVSSKokkos::collisions_one(COLL
     }
   }
 
+  // a per-event gas tally compute can force a retry of its own, and a retry
+  //   re-runs the collision pass over the same particles.  that is only sound
+  //   if the particle list can be rolled back first, so the backup is not
+  //   gated on react/retry when one of those computes is active
+
+  const int tally_backup = (nglist_coll_tally || nglist_react_tally);
+  const int do_backup =
+    (react && sparta->kokkos->react_retry_flag) || tally_backup;
+
+  if (tally_backup) rewind_gas_tally_computes(1);
+
   while (h_retry()) {
 
-    if (react && sparta->kokkos->react_retry_flag)
-      backup();
+    if (do_backup) backup();
+
+    // discard the rows an aborted attempt appended, including an attempt
+    //   repeated for a reaction overflow rather than a tally overflow
+
+    if (tally_backup) rewind_gas_tally_computes(0);
 
     h_retry() = 0;
     h_maxdelete() = maxdelete;
@@ -815,6 +830,7 @@ template < int NEARCP, int GASTALLY > void CollideVSSKokkos::collisions_one(COLL
 
     if (h_tally_overflow() && !h_retry()) {
       grow_gas_tally_computes();
+      if (do_backup) restore();
       if (ngas_tally) clear_gas_tally();
       Kokkos::deep_copy(h_scalars,0);
       Kokkos::deep_copy(h_scalars_big,0);
@@ -825,7 +841,7 @@ template < int NEARCP, int GASTALLY > void CollideVSSKokkos::collisions_one(COLL
 
     if (h_retry()) {
       //printf("Retrying, reason %i %i %i !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n",h_maxdelete() > d_dellist.extent(0),h_maxcellcount() > d_plist.extent(1),h_part_grow());
-      if (!sparta->kokkos->react_retry_flag) {
+      if (!do_backup) {
         error->one(FLERR,"Ran out of space in Kokkos collisions, increase react/extra"
                          " or use react/retry");
       } else
@@ -1166,10 +1182,25 @@ template < int DIM, int GASTALLY > void CollideVSSKokkos::collisions_one_subcell
     }
   }
 
+  // a per-event gas tally compute can force a retry of its own, and a retry
+  //   re-runs the collision pass over the same particles.  that is only sound
+  //   if the particle list can be rolled back first, so the backup is not
+  //   gated on react/retry when one of those computes is active
+
+  const int tally_backup = (nglist_coll_tally || nglist_react_tally);
+  const int do_backup =
+    (react && sparta->kokkos->react_retry_flag) || tally_backup;
+
+  if (tally_backup) rewind_gas_tally_computes(1);
+
   while (h_retry()) {
 
-    if (react && sparta->kokkos->react_retry_flag)
-      backup();
+    if (do_backup) backup();
+
+    // discard the rows an aborted attempt appended, including an attempt
+    //   repeated for a reaction overflow rather than a tally overflow
+
+    if (tally_backup) rewind_gas_tally_computes(0);
 
     h_retry() = 0;
     h_maxdelete() = maxdelete;
@@ -1222,6 +1253,7 @@ template < int DIM, int GASTALLY > void CollideVSSKokkos::collisions_one_subcell
 
     if (h_tally_overflow() && !h_retry()) {
       grow_gas_tally_computes();
+      if (do_backup) restore();
       if (ngas_tally) clear_gas_tally();
       Kokkos::deep_copy(h_scalars,0);
       Kokkos::deep_copy(h_scalars_big,0);
@@ -1231,7 +1263,7 @@ template < int DIM, int GASTALLY > void CollideVSSKokkos::collisions_one_subcell
     }
 
     if (h_retry()) {
-      if (!sparta->kokkos->react_retry_flag) {
+      if (!do_backup) {
         error->one(FLERR,"Ran out of space in Kokkos collisions, increase react/extra"
                          " or use react/retry");
       } else
@@ -2352,10 +2384,25 @@ void CollideVSSKokkos::collisions_one_ambipolar(COLLIDE_REDUCE &reduce)
     }
   }
 
+  // a per-event gas tally compute can force a retry of its own, and a retry
+  //   re-runs the collision pass over the same particles.  that is only sound
+  //   if the particle list can be rolled back first, so the backup is not
+  //   gated on react/retry when one of those computes is active
+
+  const int tally_backup = (nglist_coll_tally || nglist_react_tally);
+  const int do_backup =
+    (react && sparta->kokkos->react_retry_flag) || tally_backup;
+
+  if (tally_backup) rewind_gas_tally_computes(1);
+
   while (h_retry()) {
 
-    if (react && sparta->kokkos->react_retry_flag)
-      backup();
+    if (do_backup) backup();
+
+    // discard the rows an aborted attempt appended, including an attempt
+    //   repeated for a reaction overflow rather than a tally overflow
+
+    if (tally_backup) rewind_gas_tally_computes(0);
 
     h_retry() = 0;
     h_maxelectron() = maxelectron;
@@ -2410,6 +2457,7 @@ void CollideVSSKokkos::collisions_one_ambipolar(COLLIDE_REDUCE &reduce)
 
     if (h_tally_overflow() && !h_retry()) {
       grow_gas_tally_computes();
+      if (do_backup) restore();
       if (ngas_tally) clear_gas_tally();
       Kokkos::deep_copy(h_scalars,0);
       Kokkos::deep_copy(h_scalars_big,0);
@@ -2422,7 +2470,7 @@ void CollideVSSKokkos::collisions_one_ambipolar(COLLIDE_REDUCE &reduce)
       //printf("Retrying, reason %i %i %i %i !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n",h_maxelectron() > d_elist.extent(1),h_maxdelete() > d_dellist.extent(0),h_maxcellcount() > d_plist.extent(1),h_part_grow());
       //printf("%i %i %i %i %i %i %i !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n",h_maxelectron(),d_elist.extent(1),h_maxdelete(),d_dellist.extent(0),h_maxcellcount(),d_plist.extent(1),h_part_grow());
 
-      if (!sparta->kokkos->react_retry_flag) {
+      if (!do_backup) {
         error->one(FLERR,"Ran out of space in Kokkos collisions, increase react/extra"
                          " or use react/retry");
       } else
@@ -4256,11 +4304,43 @@ void CollideVSSKokkos::restore()
 
 void CollideVSSKokkos::grow_gas_tally_computes()
 {
+  int ncoll = 0, nreact = 0;
+
   for (int i = 0; i < ngas_tally; i++) {
     Compute *c = update->glist_active[i];
-    if (ComputeGasCollisionTallyKokkos *ckk = dynamic_cast<ComputeGasCollisionTallyKokkos*>(c))
+    if (ComputeGasCollisionTallyKokkos *ckk = dynamic_cast<ComputeGasCollisionTallyKokkos*>(c)) {
       ckk->grow_after_overflow();
-    else if (ComputeGasReactionTallyKokkos *ckk = dynamic_cast<ComputeGasReactionTallyKokkos*>(c))
+
+      // growing reallocated the compute's row buffer, so the copy the kernel
+      //   reads still points at the old, too-small one.  Without re-blitting
+      //   it the repeated attempt overflows on the same row and the retry
+      //   loop never terminates
+
+      glist_coll_tally_copy[ncoll++].copy(ckk);
+    } else if (ComputeGasReactionTallyKokkos *ckk = dynamic_cast<ComputeGasReactionTallyKokkos*>(c)) {
       ckk->grow_after_overflow();
+      glist_react_tally_copy[nreact++].copy(ckk);
+    }
+  }
+}
+
+/* ----------------------------------------------------------------------
+   mark (mark=1) or rewind to (mark=0) the append position of every per-event
+     gas tally compute
+   an aborted attempt of the retry loop has to take back the rows it appended
+     before the pass re-runs; clear_gas_tally() only resets the per-grid
+     computes, so it does not cover these
+------------------------------------------------------------------------- */
+
+void CollideVSSKokkos::rewind_gas_tally_computes(int mark)
+{
+  for (int i = 0; i < ngas_tally; i++) {
+    Compute *c = update->glist_active[i];
+    if (ComputeGasCollisionTallyKokkos *ckk =
+          dynamic_cast<ComputeGasCollisionTallyKokkos*>(c))
+      { if (mark) ckk->mark_ntally(); else ckk->rewind_ntally(); }
+    else if (ComputeGasReactionTallyKokkos *ckk =
+               dynamic_cast<ComputeGasReactionTallyKokkos*>(c))
+      { if (mark) ckk->mark_ntally(); else ckk->rewind_ntally(); }
   }
 }

@@ -57,6 +57,20 @@ class ComputeSurfCollisionTallyKokkos : public ComputeSurfCollisionTally, public
     grow_tally_kokkos(h_ntally());
   }
 
+  // every attempt of the retry loop re-runs the whole pass, so the rows the
+  //   aborted attempt appended have to be taken back before the next one.
+  //   Not by zeroing: the move kernel runs once per migration iteration and
+  //   the tally accumulates across all of them, so an attempt rewinds to
+  //   where its own pass started, which mark_ntally() records.
+
+  void mark_ntally()
+  {
+    Kokkos::deep_copy(h_ntally,d_ntally);
+    ntally_mark = h_ntally();
+  }
+
+  void rewind_ntally() { Kokkos::deep_copy(d_ntally,ntally_mark); }
+
   DAT::t_int_scalar d_overflow;         // set by UpdateKokkos each step
 
   KOKKOS_INLINE_FUNCTION
@@ -114,6 +128,7 @@ class ComputeSurfCollisionTallyKokkos : public ComputeSurfCollisionTally, public
   DAT::tdual_float_2d_lr k_array_tally;
   DAT::t_float_2d_lr d_array_tally;
   DAT::t_int_scalar d_ntally;
+  int ntally_mark;
   HAT::t_int_scalar h_ntally;
 
   DAT::t_int_1d d_which;
