@@ -115,10 +115,19 @@ static int cellcount_target(int need, int nlocal_in, int ngrid_in,
 /* ---------------------------------------------------------------------- */
 
 ParticleKokkos::ParticleKokkos(SPARTA *sparta) : Particle(sparta)
-#ifndef SPARTA_KOKKOS_EXACT
-  , weight_rand_pool(12345 + comm->me)
-#endif
 {
+  // NOTE: the weight_rand_pool seed cannot be set here.  Every other Kokkos
+  //   class seeds its pool in the constructor initializer list with
+  //   12345 + comm->me, but those are all styles the input script creates,
+  //   long after SPARTA::create() has finished.  ParticleKokkos is built by
+  //   create() itself, at sparta.cpp:484, three lines BEFORE comm exists
+  //   (:487), and comm is not NULL-initialized -- so reading comm->me there
+  //   dereferences an uninitialized pointer.  Seed on first use instead.
+
+#ifndef SPARTA_KOKKOS_EXACT
+  weight_rand_pool_seeded = 0;
+#endif
+
 
   d_resize = DAT::t_int_scalar("particle:resize");
   h_resize = HAT::t_int_scalar("particle:resize_mirror");
@@ -1151,6 +1160,16 @@ void ParticleKokkos::post_weight_device()
 
   auto d_particles_l = k_particles.view_device();
   auto d_cinfo = grid_kk->k_cinfo.view_device();
+
+  // seed on first use: comm does not exist yet when this class is constructed
+  //   (see the constructor).  the seed matches every other Kokkos style's
+
+  if (!weight_rand_pool_seeded) {
+    weight_rand_pool =
+      Kokkos::Random_XorShift64_Pool<DeviceType>(12345 + comm->me);
+    weight_rand_pool_seeded = 1;
+  }
+
   auto l_pool = weight_rand_pool;
   const int nold = nlocal;
 

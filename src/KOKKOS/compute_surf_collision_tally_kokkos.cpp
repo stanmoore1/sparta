@@ -150,7 +150,24 @@ void ComputeSurfCollisionTallyKokkos::grow_tally_kokkos(int n)
   //   count is still climbing does not repeat the move again and again
 
   maxtally = MAX(n + DELTA, (int)(1.5*n));
-  MemKK::realloc_kokkos(k_array_tally,"surf/collision/tally/kk:array_tally",
-                        maxtally,nvalue);
+
+  // resize, not realloc: MemKK::realloc_kokkos drops the old allocation and
+  //   allocates WithoutInitializing, so every existing row becomes garbage.
+  //   The rows below ntally_mark were written by earlier migration iterations
+  //   of this same step and must survive -- rewind_ntally() only takes the
+  //   count back to the mark, and the re-run appends from there, so a
+  //   discarded prefix would be published as uninitialized tally output.
+  //   DualView::resize preserves contents, as memoryKK->grow_kokkos does.
+  //
+  //   No deck reaches that combination today: maxtally is a high-water mark
+  //   that persists across steps, so by the time a step has more than one
+  //   tallying migration iteration the buffer already fits the whole step and
+  //   never overflows again.  Probing in.surf.collision.tally at 4 ranks with
+  //   DELTA forced to 8 and then to no headroom at all gave 13 grows, every
+  //   one with ntally_mark == 0, against 40 nonzero marks elsewhere in the
+  //   same run.  This is a latent hazard closed on principle, not a
+  //   reproduced failure.
+
+  k_array_tally.resize(maxtally,nvalue);
   d_array_tally = k_array_tally.view_device();
 }

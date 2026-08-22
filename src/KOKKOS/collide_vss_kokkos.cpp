@@ -2102,8 +2102,14 @@ void CollideVSSKokkos::collisions_group(COLLIDE_REDUCE &reduce)
   if (vibstyle == DISCRETE) particle_kk->modify(Device,CUSTOM_MASK);
 
   d_particles = t_particle_1d(); // destroy reference to reduce memory use
-  d_nn_igroup = {};
-  d_nn_jgroup = {};
+
+  // d_nn_igroup/d_nn_jgroup are owned by this class, not borrowed from grid
+  //   or particle, so they are not released here.  Freeing them made the
+  //   guard above reallocate two nglocal x maxcellcount int arrays on every
+  //   timestep of every nearcp multigroup run; they are sized by that guard
+  //   and reused instead.  (d_particles and d_plist are references into
+  //   other classes' allocations, so those are still dropped.)
+
   d_plist = {};
 }
 
@@ -2117,6 +2123,12 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroup< NEARCP, GASTALLY, A
 template < int NEARCP, int GASTALLY, int ATOMIC_REDUCTION >
 KOKKOS_INLINE_FUNCTION
 void CollideVSSKokkos::operator()(TagCollideCollisionsGroup< NEARCP, GASTALLY, ATOMIC_REDUCTION >, const int &icell, COLLIDE_REDUCE &reduce) const {
+  // once any cell has raised d_retry the whole pass is going to be rolled
+  //   back and re-run, so the remaining cells should not do a full reacting
+  //   pass whose results are only going to be discarded.  the other four
+  //   collision kernels all start this way
+
+  if (d_retry()) return;
 
   int np = grid_kk_copy.obj.d_cellcount[icell];
   if (np <= 1) return;

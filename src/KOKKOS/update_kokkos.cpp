@@ -931,6 +931,11 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
 
   // END of all move/migrate iterations
 
+  // the retry-loop particle backup is reused across this step's migration
+  //   iterations; release it now so peak memory matches the old behaviour
+
+  free_particle_backup();
+
   particle->sorted = 0;
   particle_kk->sorted_kk = 0;
 
@@ -2588,7 +2593,17 @@ void UpdateKokkos::backup()
 {
   ParticleKokkos* particle_kk = (ParticleKokkos*) particle;
   d_particles = particle_kk->k_particles.view_device();
-  d_particles_backup = decltype(d_particles)(Kokkos::view_alloc("update:particles_backup",Kokkos::WithoutInitializing),d_particles.extent(0));
+
+  // reuse the buffer across the migration iterations of a step.  backup() is
+  //   called once per iteration of the retry loop, and the loop runs once per
+  //   migration iteration, so reallocating here churned a full particle-sized
+  //   allocation several times per timestep whenever a per-event surf tally
+  //   compute was active.  restore() no longer frees it; free_particle_backup()
+  //   does, once the step's migration is done, so peak memory is unchanged.
+  //   The extents must stay equal because restore() deep_copies between them.
+
+  if (d_particles_backup.extent(0) != d_particles.extent(0))
+    d_particles_backup = decltype(d_particles)(Kokkos::view_alloc("update:particles_backup",Kokkos::WithoutInitializing),d_particles.extent(0));
 
   Kokkos::deep_copy(d_particles_backup,d_particles);
 
@@ -2607,8 +2622,18 @@ void UpdateKokkos::restore()
   for (int n = 0; n < surf->nsc; n++) sc_phase(surf->sc[n],SC_RESTORE);
   upload_surf_collide_models();
 
-  // deallocate references to reduce memory use
+  // the buffer stays allocated for the next attempt of this step;
+  //   free_particle_backup() releases it once the step is done
+}
 
+/* ----------------------------------------------------------------------
+   release the particle backup buffer at the end of a step's migration
+   keeps peak memory the same as when restore() freed it, without
+     reallocating on every migration iteration
+------------------------------------------------------------------------- */
+
+void UpdateKokkos::free_particle_backup()
+{
   d_particles_backup = {};
 }
 

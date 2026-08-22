@@ -371,6 +371,7 @@ class UpdateKokkos : public Update {
   HAT::t_bigint_1d h_bcmirror;
 
   void backup();
+  void free_particle_backup();
   void restore();
   t_particle_1d d_particles_backup;
 
