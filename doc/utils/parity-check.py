@@ -36,11 +36,15 @@ import unicodedata
 DELTAS = {
     'unescaped_lt': (
         'txt2html emits a literal "<" from the source without escaping it, '
-        'so a browser parses everything up to the next ">" as a tag and '
-        'hides it.  Text like "if the ratio < 1, then the incoming particle '
-        'may be deleted" is in the published file but invisible.  Sphinx '
-        'escapes it, so the text appears.  Each occurrence is verified: the '
-        'run is only allowed if the old markup really does contain it.'
+        'so everything up to the next ">" is markup rather than text.  What '
+        'a reader saw depended on the browser: of the 84 runs this covers, '
+        'Chromium recovers 74 and shows them anyway, and genuinely loses 10 '
+        '-- the ones where the swallowed span looks like a tag name.  '
+        'Section_start\'s build instructions are among them: '
+        '"cmake -D<OPTION_NAME>=<VALUE>" is published as "cmake -D=".  '
+        'Sphinx escapes the character, so the text is there whatever the '
+        'browser.  Each occurrence is verified: the run is only allowed if '
+        'the old markup really does contain it.'
     ),
     'equations': (
         'txt2html embedded pre-rendered images from doc/Eqs.  Equations are '
