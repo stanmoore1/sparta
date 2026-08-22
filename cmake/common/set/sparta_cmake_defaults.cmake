@@ -51,6 +51,8 @@ if(SPARTA_ENABLE_TESTING)
       "custom"
       "tally_computes"
       "ambi_3body"
+      "regions"
+      "qk"
       "explicit2implicit"
       "mfp_mct"
       "optmove"
