@@ -840,7 +840,7 @@ input script:
 variable        foo python truncate
 python          truncate return v\_foo input 1 iv\_arg format fi here """
 def truncate(x):
- return int(x)
+return int(x)
 """
 variable        xtrunc particle py\_foo(x)
 variable        ytrunc particle py\_foo(y)

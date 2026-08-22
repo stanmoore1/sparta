@@ -101,10 +101,17 @@ html_theme_options = {
 }
 html_title = 'SPARTA Documentation'
 html_short_title = 'SPARTA'
-html_static_path = []
+html_static_path = ['_static']
+
+# MathJax is served from the built tree rather than a CDN.  The manual is
+# read offline -- from a release tarball, or on a machine with no outbound
+# network -- and equations that used to be images must not turn into raw
+# LaTeX because a CDN is unreachable.  The path is relative, so the built
+# tree can be copied anywhere.  The Makefile fetches it into _static.
+mathjax_path = 'mathjax/es5/tex-mml-chtml.js'
 html_show_sourcelink = False
 
 # Equations were pre-rendered images under doc/Eqs in the txt2html manual.
-# MathJax renders them from their LaTeX source instead, which is the one
+# They are now typeset by MathJax from their LaTeX source, which is the one
 # rendering difference this migration introduces; see
 # doc/utils/parity-check.py.

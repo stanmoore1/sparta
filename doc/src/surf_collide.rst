@@ -581,8 +581,9 @@ average height H and average periodicity L. The ratio of the height to
 periodicity is *epsilon* and the correction to the angular
 distribution is given by
 
-.. image:: Eqs/impulsive_step.JPG
-   :align: center
+.. math::
+
+   f_{corr} = \begin{cases} 1 - \epsilon \tan(\theta_0), & \text{if } \tan(\theta_0) < \epsilon^{-1} \\ 0, & \text{otherwise} \end{cases}
 
 This optional argument can be accessed using the keyword *step*\ , and
 *epsilon* parameter must be specified. Another optional argument to

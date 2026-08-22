@@ -260,8 +260,39 @@ A detailed description of the various types of reactions can be found
 in Swaminathan Gopalan *et al.* `(SG18) <#SG18>`_.  Here is a table of
 examples for each type of GS reaction.
 
-.. image:: Eqs/GS_list.png
-   :align: center
+.. list-table::
+   :header-rows: 1
+   :widths: 10 40 50
+
+   * - Symbol
+     - Reaction type
+     - Examples
+   * - AA
+     - Associative Adsorption
+     - | :math:`O(g) \longrightarrow O(s)`
+       | :math:`O_2(g) \longrightarrow O_2(s)`
+   * - DA
+     - Dissociative Adsorption
+     - | :math:`O_2(g) \longrightarrow O(s) + O(g)`
+       | :math:`O_2(g) \longrightarrow 2O(s)`
+   * - LH1
+     - Langmuir-Hinshelwood type 1
+     - | :math:`O(g) + O(s) \longrightarrow O_2(g)`
+       | :math:`O(g) + C(b) \longrightarrow CO(g)`
+   * - LH3
+     - Langmuir-Hinshelwood type 3
+     - | :math:`O(g) + O(s) \longrightarrow O_2(s)`
+       | :math:`O(g) + C(b) \longrightarrow CO(s)`
+   * - CD
+     - Condensation
+     - :math:`C_3(g) \longrightarrow 3C(b)`
+   * - ER
+     - Eley-Rideal
+     - :math:`CO(g) + O(s) \longrightarrow CO_2(g)`
+   * - CI
+     - Collision Induced
+     - | :math:`O(g) + CO(s) \longrightarrow CO(g) + O(s)`
+       | :math:`Ar(g) + O(s) \longrightarrow O(g) + Ar(g)`
 
 
 ----------
@@ -296,8 +327,28 @@ A detailed description of the various types of reactions can be found
 in Swaminathan Gopalan *et al.* `(SG18) <#SG18>`_.  Here is a table of
 examples for each type of PS reaction.
 
-.. image:: Eqs/PS_list.png
-   :align: center
+.. list-table::
+   :header-rows: 1
+   :widths: 10 40 50
+
+   * - Symbol
+     - Reaction type
+     - Examples
+   * - DS
+     - Desorption
+     - | :math:`O(s) \longrightarrow O(g)`
+       | :math:`O_2(s) \longrightarrow O_2(g)`
+   * - LH2
+     - Langmuir-Hinshelwood type 2
+     - | :math:`N(s) + O(s) \longrightarrow NO(g)`
+       | :math:`O(s) + C(b) \longrightarrow CO(g)`
+   * - LH4
+     - Langmuir-Hinshelwood type 4
+     - | :math:`N(s) + O(s) \longrightarrow NO(s)`
+       | :math:`O(s) + C(b) \longrightarrow CO(s)`
+   * - SB
+     - Sublimation
+     - :math:`3C(b) \longrightarrow C_3(g)`
 
 
 ----------

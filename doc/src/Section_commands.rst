@@ -188,7 +188,7 @@ System volume = $v
 System temperature = $t
 """
 variable a string "red green blue &
-                   purple orange cyan"
+purple orange cyan"
 if "$\ *steps* > 1000" then quit
 
 In each of these cases, the single, double, or triple quotes are

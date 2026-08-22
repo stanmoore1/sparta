@@ -102,8 +102,9 @@ The formula used to calculate the mean free path (lambda) is given in
 IMPORTANT NOTE: Prior to October 2024, a simpler formula was used for
 the mean free path, also from `(Bird94) <#Bird94>`_, equation 4.65:
 
-.. image:: Eqs/lambda_old.jpg
-   :align: center
+.. math::
+
+   \lambda = \{ \sqrt{2} \pi D_{\rm ref}^2 n (T_{\rm ref}/T)^{\omega - 1/2} \}^{-1}
 
 The new formula is more accurate as it uses the number densities and
 VSS parameters of all gas species (sum over *s*\ ) in the system, as

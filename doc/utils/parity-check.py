@@ -32,9 +32,11 @@ DELTAS = {
         'run is only allowed if the old markup really does contain it.'
     ),
     'equations': (
-        'txt2html embedded pre-rendered images from doc/Eqs; Sphinx renders '
-        'the same equations with MathJax, so the image alt text is replaced '
-        'by the equation source.'
+        'txt2html embedded pre-rendered images from doc/Eqs.  Equations are '
+        'now typeset by MathJax from their LaTeX source, and the two images '
+        'that were tables of surface reactions are now real tables, so the '
+        'image alt text is replaced by the text it depicted.  Every one was '
+        'compared against a screenshot of the image it replaces.'
     ),
 }
 
