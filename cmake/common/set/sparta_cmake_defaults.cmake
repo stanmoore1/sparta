@@ -49,6 +49,8 @@ if(SPARTA_ENABLE_TESTING)
       "surf_react_heatflux"
       "chem_rates"
       "custom"
+      "tally_computes"
+      "ambi_3body"
       "explicit2implicit"
       "mfp_mct"
       "optmove"
