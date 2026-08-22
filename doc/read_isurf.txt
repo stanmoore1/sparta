@@ -66,8 +66,6 @@ material on spacecraft.
 
 :c,image(JPG/porous2d_initial_small.png,JPG/porous2d_initial.png),image(JPG/porous3d_initial_small.png,JPG/porous3d_initial.png)
 
-:image()
-
 Particles collide with surface elements as they advect.  Each surface
 element is assigned to a collision model, specified by the
 "surf_collide"_surf_collide.html command which affects how a particle
