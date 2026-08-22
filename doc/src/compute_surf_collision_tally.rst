@@ -62,7 +62,7 @@ included.  See the :doc:`group grid <group>` command for info on how
 surface elements can be assigned to surface groups.
 
 This compute can be used for simulations with either explicit or
-implicit surface elements.  See :ref:`Section 6.13 <howto_13>` for
+implicit surface elements.  See `Section 6.13 <Section_howto.html#howto_13>`_ for
 more discussion of explicit and implicit surfaces.
 
 The results of this compute can be used by different commands in
@@ -77,18 +77,18 @@ accessing the tallied values.
 The *id/surf* value is the ID of the surface element.  For explicit
 surfaces, surface element IDs are unique.  For implicit surfaces, the
 surface ID of all the surface elements within a grid cell are the grid
-cell ID.  See :ref:`Section 6.13 <howto_13>` for more discussion of
+cell ID.  See `Section 6.13 <Section_howto.html#howto_13>`_ for more discussion of
 explicit and implicit surfaces.
 
 The *id* value is the ID of the particle.  Note that particle IDs are
 generated randomly.  Thus multiple particles in the system can
-potentially have the same ID.  See :ref:`Section 6.19 <howto_19>` for
+potentially have the same ID.  See `Section 6.19 <Section_howto.html#howto_19>`_ for
 more details on particle IDs.
 
 The *type* value is an integer index for the particle species.  It is
 a value from 1 to Nspecies. The value corresponds to the order in
 which species were defined via the :doc:`species <species>` command.
-See :ref:`Section 6.19 <howto_19>` for more details on particle
+See `Section 6.19 <Section_howto.html#howto_19>`_ for more details on particle
 types.
 
 The *time* value is the point in time within the timestep when the
@@ -117,7 +117,7 @@ This compute calculates a per-tally array, with the number of columns
 equal to the number of values.
 
 The array can be accessed by any command that uses per-tally values
-from a compute as input.  See :ref:`Section 6.4 <howto_4>`
+from a compute as input.  See `Section 6.4 <Section_howto.html#howto_4>`_
 for an overview of SPARTA output options.
 
 The per-tally array values will be in the :doc:`units <units>`

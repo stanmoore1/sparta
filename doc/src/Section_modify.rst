@@ -1,16 +1,16 @@
-Modifying & extending SPARTA
-============================
+10. Modifying & extending SPARTA
+================================
 
 This section describes how to extend SPARTA by modifying its source code.
 
-| 10.1 :ref:`Compute styles <mod_1>`
-| 10.2 :ref:`Fix styles <mod_2>`
-| 10.3 :ref:`Region styles <mod_3>`
-| 10.4 :ref:`Collision styles <mod_4>`
-| 10.5 :ref:`Surface collision styles <mod_5>`
-| 10.6 :ref:`Chemistry styles <mod_6>`
-| 10.7 :ref:`Dump styles <mod_7>`
-| 10.8 :ref:`Input script commands <mod_8>` 
+| 10.1 `Compute styles <#mod_1>`_
+| 10.2 `Fix styles <#mod_2>`_
+| 10.3 `Region styles <#mod_3>`_
+| 10.4 `Collision styles <#mod_4>`_
+| 10.5 `Surface collision styles <#mod_5>`_
+| 10.6 `Chemistry styles <#mod_6>`_
+| 10.7 `Dump styles <#mod_7>`_
+| 10.8 `Input script commands <#mod_8>`_ 
 | 
 
 SPARTA is designed in a modular fashion so as to be easy to modify and
@@ -109,8 +109,12 @@ functionality:
 
 .. _mod_1:
 
-Compute styles
---------------
+.. raw:: html
+
+   <span id="mod_1"></span>
+
+10.1 Compute styles
+-------------------
 
 :doc:`Compute style commands <compute>` calculate instantaneous
 properties of the simulated system.  They can be global properties, or
@@ -155,8 +159,12 @@ properties.  See the compute.h header file for one-line descriptions.
 
 .. _mod_2:
 
-Fix styles
-----------
+.. raw:: html
+
+   <span id="mod_2"></span>
+
+10.2 Fix styles
+---------------
 
 :doc:`Fix style commands <fix>` perform operations during the
 timestepping loop of a simulation.  They can define methods which are
@@ -214,8 +222,12 @@ particles as ambipolar ions, and a floatin-point array called
 
 .. _mod_3:
 
-Region styles
--------------
+.. raw:: html
+
+   <span id="mod_3"></span>
+
+10.3 Region styles
+------------------
 
 :doc:`Region style commands <region>` define geometric regions
 within the simulation box.  Other commands use regions
@@ -232,8 +244,12 @@ inside: determine whether a point is inside/outside the region
 
 .. _mod_4:
 
-Collision styles
-----------------
+.. raw:: html
+
+   <span id="mod_4"></span>
+
+10.4 Collision styles
+---------------------
 
 :doc:`Collision style commands <collide>` define collision models that
 calculate interactions between particles in the same grid cell.
@@ -266,8 +282,12 @@ except init() and modify\_params().
 
 .. _mod_5:
 
-Surface collision styles
-------------------------
+.. raw:: html
+
+   <span id="mod_5"></span>
+
+10.5 Surface collision styles
+-----------------------------
 
 :doc:`Surface collision style commands <collide>` define collision
 models that calculate interactions between a particle and surface
@@ -291,8 +311,12 @@ required except dynamic().
 
 .. _mod_6:
 
-Chemistry styles
-----------------
+.. raw:: html
+
+   <span id="mod_6"></span>
+
+10.6 Chemistry styles
+---------------------
 
 Particle/particle chemistry models in SPARTA are specified by
 :doc:`reaction style commands <react>` which define lists of possible
@@ -314,8 +338,12 @@ the attempt() method is required.
 
 .. _mod_7:
 
-Dump styles
------------
+.. raw:: html
+
+   <span id="mod_7"></span>
+
+10.7 Dump styles
+----------------
 
 :doc:`Dump commands <dump>` output snapshots of simulation data to a
 file periodically during a simulation, in a particular file format.
@@ -348,8 +376,12 @@ memory\_usage() methods are optional; all the others are required.
 
 .. _mod_8:
 
-Input script commands
----------------------
+.. raw:: html
+
+   <span id="mod_8"></span>
+
+10.8 Input script commands
+--------------------------
 
 New commands can be added to SPARTA that will be recognized in input
 scripts.  For example, the :doc:`create\_particles <create_particles>`,

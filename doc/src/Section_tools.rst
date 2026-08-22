@@ -1,5 +1,5 @@
-Additional tools
-================
+9. Additional tools
+===================
 
 SPARTA is designed to be a computational kernel for performing DSMC
 computations.  Additional pre- and post-processing steps are often
@@ -35,17 +35,17 @@ scripts discussed below.
 This is the list of tools included in the tools directory of the
 SPARTA distribution.  Each is described in more detail below.
 
-* :ref:`dump2cfg <dump2cfg>` - convert a particle dump file to CFG format
-* :ref:`dump2xyz <dump2xyz>` - convert a particle dump file to XYZ format
-* :ref:`grid\_refine <gridrefine>` - refine a grid around a surface
-* :ref:`implicit\_grid <implicit>` - create a random porous region with implicit surfaces
-* :ref:`jagged <jagged>` - create jagged 2d/3d surfaces with explicit surfaces
-* :ref:`log2txt <log2txt>` - extract columns of info from a log file
-* :ref:`logplot <logplot>` - plot columns of info from a log file via GnuPlot
-* :ref:`paraview <paraview>` - converters of SPARTA data to `ParaView <ParaView website_>`_ format
-* :ref:`stl2surf <stl2surf>` - convert an STL text file into a SPARTA surface file
-* :ref:`surf\_create <surfcreate>` - create a surface file with simple objects
-* :ref:`surf\_transform <surftransform>` - transform surface via tranlate/scale/rotate operations
+* `dump2cfg <#dump2cfg>`_ - convert a particle dump file to CFG format
+* `dump2xyz <#dump2xyz>`_ - convert a particle dump file to XYZ format
+* `grid\_refine <#gridrefine>`_ - refine a grid around a surface
+* `implicit\_grid <#implicit>`_ - create a random porous region with implicit surfaces
+* `jagged <#jagged>`_ - create jagged 2d/3d surfaces with explicit surfaces
+* `log2txt <#log2txt>`_ - extract columns of info from a log file
+* `logplot <#logplot>`_ - plot columns of info from a log file via GnuPlot
+* `paraview <#paraview>`_ - converters of SPARTA data to `ParaView <ParaView website_>`_ format
+* `stl2surf <#stl2surf>`_ - convert an STL text file into a SPARTA surface file
+* `surf\_create <#surfcreate>`_ - create a surface file with simple objects
+* `surf\_transform <#surftransform>`_ - transform surface via tranlate/scale/rotate operations
 
 .. _ParaView website: https://www.paraview.org
 
@@ -57,8 +57,12 @@ SPARTA distribution.  Each is described in more detail below.
 
 .. _dump2cfg:
 
+.. raw:: html
+
+   <span id="dump2cfg"></span>
+
 dump2cfg tool
-----------------------------
+---------------------------------------------------------------------------
 
 This is a Python script that converts a SPARTA particle dump file into
 extended CFG format so that it can be visualized by the
@@ -81,8 +85,12 @@ Python script.
 
 .. _dump2xyz:
 
+.. raw:: html
+
+   <span id="dump2xyz"></span>
+
 dump2xyz tool
-----------------------------
+---------------------------------------------------------------------------
 
 This is a Python script that converts a SPARTA particle dump file into
 XYZ format so that it can be visualized by various visualization
@@ -104,8 +112,12 @@ Python script.
 
 .. _gridrefine:
 
+.. raw:: html
+
+   <span id="gridrefine"></span>
+
 grid\_refine tool
-----------------------------------
+-----------------------------------------------------------------------------------
 
 This is a Python script that creates a SPARTA grid file adapted
 around the lines or triangles in a SPARTA surface file.  The resulting
@@ -121,8 +133,12 @@ are supported, and the syntax used to run it.
 
 .. _implicit:
 
+.. raw:: html
+
+   <span id="implicit"></span>
+
 implicit\_grid tool
-----------------------------------
+---------------------------------------------------------------------------------
 
 This is a Python script which can be used to generate binary files
 representing porous media samples, as read by the
@@ -142,8 +158,12 @@ The examples/implicit directory uses these files as input.
 
 .. _jagged:
 
+.. raw:: html
+
+   <span id="jagged"></span>
+
 jagged tools
--------------------------
+----------------------------------------------------------------------
 
 These are 2 Python scripts (jagged2d.py and jagged3d.py) which can be
 used to generate SPARTA surface files in a pattern that can be very
@@ -162,8 +182,12 @@ The examples/jagged directory uses these files as input.
 
 .. _log2txt:
 
+.. raw:: html
+
+   <span id="log2txt"></span>
+
 log2txt tool
---------------------------
+------------------------------------------------------------------------
 
 This is a Python script that reads a SPARTA log file, extracts
 selected columns of statistical output, and writes them to a text
@@ -185,8 +209,12 @@ Python script.
 
 .. _logplot:
 
+.. raw:: html
+
+   <span id="logplot"></span>
+
 logplot tool
---------------------------
+------------------------------------------------------------------------
 
 This is a Python script that reads a SPARTA log file, extracts the
 selected columns of statistical output, and plots them via the GnuPlot
@@ -221,15 +249,19 @@ Python script.
 
 .. _paraview:
 
+.. raw:: html
+
+   <span id="paraview"></span>
+
 paraview tools
------------------------------
+----------------------------------------------------------------------------
 
 The tools/paraview directory has scripts which convert
 SPARTA grid and surface data (input and output) to ParaView format.
 
 `ParaView <ParaView website_>`_ is a popular, powerful, freely-available
 visualization package.  You must have ParaView installed to use the
-Python scripts.  See :ref:`Section 6.16 <howto_16>` for more details.
+Python scripts.  See `Section 6.16 <Section_howto.html#howto_16>`_ for more details.
 
 The scripts were developed by Tom Otahal (Sandia).
 
@@ -239,8 +271,12 @@ The scripts were developed by Tom Otahal (Sandia).
 
 .. _stl2surf:
 
+.. raw:: html
+
+   <span id="stl2surf"></span>
+
 stl2surf tool
-----------------------------
+---------------------------------------------------------------------------
 
 This is a Python script that reads a stereolithography (STL) text file
 and converts it to a SPARTA surface file.  STL files contain a
@@ -266,8 +302,12 @@ page explains what watertight means for 3d objects.
 
 .. _surfcreate:
 
+.. raw:: html
+
+   <span id="surfcreate"></span>
+
 surf\_create tool
-----------------------------------
+-----------------------------------------------------------------------------------
 
 This is a Python script that creates a SPARTA surface file containing
 one or more simple objects whose surface is represented as triangules
@@ -285,8 +325,12 @@ See the header of the script for the syntax used to run it.
 
 .. _surftransform:
 
+.. raw:: html
+
+   <span id="surftransform"></span>
+
 surf\_transform tool
-----------------------------------------
+--------------------------------------------------------------------------------------------
 
 This is a Python script that transforms a SPARTA surface file into a
 new surface file using various operations supported by the

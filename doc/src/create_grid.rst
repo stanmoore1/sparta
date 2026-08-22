@@ -57,7 +57,7 @@ Overlay a grid over the simulation domain defined by the
 :doc:`create\_box <create_box>` command.  The grid can also be defined by
 the :doc:`read\_grid <read_grid>` command.
 
-The grid in SPARTA is hierarchical, as described in :ref:`Section howto 6.8 <howto_8>`.  The entire simulation box is a
+The grid in SPARTA is hierarchical, as described in `Section howto 6.8 <Section_howto.html#howto_8>`_.  The entire simulation box is a
 single parent grid cell at level 0.  It is subdivided into Nx by Ny by
 Nz cells at level 1.  Each of those cells can be a child cell (no
 further sub-division) or can be a parent cell which is further
@@ -79,7 +79,7 @@ dispersed assignments of child cells to each processor.
 
 .. warning::
 
-   See :ref:`Section 6.8 <howto_8>` of the
+   See `Section 6.8 <Section_howto.html#howto_8>`_ of the
    manual for an explanation of clumped and dispersed grid cell
    assignments and their relative performance trade-offs.  The
    :doc:`balance\_grid <balance_grid>` command can be used after the grid is
@@ -115,7 +115,7 @@ of each processor's sub-block of cells.
 The product of Px, Py, Pz must equal P, the total # of processors
 SPARTA is running on.  For a 2d simulation, Pz must equal 1. If
 multiple partitions are being used then P is the number of processors
-in this partition; see :ref:`Section 2.6 <start_7>` for an
+in this partition; see `Section 2.6 <Section_start.html#start_7>`_ for an
 explanation of the -partition command-line switch.
 
 Note that if you run on a large, prime number of processors P, then a

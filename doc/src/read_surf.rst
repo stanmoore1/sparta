@@ -80,7 +80,7 @@ the global simulation box.
 Surfaces can be explicit or implicit.  This command reads explicit
 surfaces from a file containing a list of explicit surfaces.  See the
 :doc:`read\_isurf <read_isurf>` command to read implicit surfaces from a
-different kind of file.  See the :ref:`Howto 6.13 <howto_13>` section of the manual for an
+different kind of file.  See the `Howto 6.13 <Section_howto.html#howto_13>`_ section of the manual for an
 explantion of explicit versus implicit surfaces as well as distributed
 versus non-distributed storage.  You cannot mix explicit and implicit
 surfaces in the same simulation.
@@ -89,7 +89,7 @@ The specified file can also (optionally) include a type for each
 surface element and/or values for custom per-surf attributes which
 will be created.  This is done via the *type* and *custom* keywords
 and is explained below in the format for the *Lines* and *Triangles*
-sections of the file.  See the :ref:`Section 6.17 <howto_17>` doc page for an explanation of
+sections of the file.  See the `Section 6.17 <Section_howto.html#howto_17>`_ doc page for an explanation of
 custom per-surf attributes.
 
 Surface elements are triangles in 3d or line segments in 2d.  Surface
@@ -505,7 +505,7 @@ transparent, meaning particles pass through them.  This is useful for
 tallying flow statistics.  The :doc:`surf\_collide transparent <surf_collide>` command must also be used to assign a
 transparent collision model to those the surface elements.  The
 :doc:`compute surf <compute_surf>` command will tally fluxes differently
-for transparent surf elements.  The :ref:`Section 6.15 <howto_15>` doc page provides an overview of
+for transparent surf elements.  The `Section 6.15 <Section_howto.html#howto_15>`_ doc page provides an overview of
 transparent surfaces.  See those doc pages for details.
 
 The *invert* keyword does not change the origin or any vertex
@@ -677,7 +677,7 @@ end up inside the added surfaces.  See the *particle* keyword
 for options with regard to particles.
 
 To read gzipped surface files, you must compile SPARTA with the
--DSPARTA\_GZIP option - see :ref:`Section 2.2 <start_2>` of
+-DSPARTA\_GZIP option - see `Section 2.2 <Section_start.html#start_2>`_ of
 the manual for details.
 
 The *clip* keyword cannot be used when the :doc:`global surfs explicit/distributed <global>` command has been used.  This is

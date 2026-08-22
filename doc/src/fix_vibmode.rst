@@ -37,7 +37,7 @@ Collisions between pairs of particles will then transfer energy
 between the different modes of the two particles.
 
 An overview of how to run simulations with multiple vibrational energy
-modes is given in the :ref:`Section 6.12 <howto_12>`.
+modes is given in the `Section 6.12 <Section_howto.html#howto_12>`_.
 This includes use of the :doc:`species <species>` command with its
 *vibfile* option, and the use of the :doc:`collide\_modify vibrate discrete <collide_modify>` command.  The section also lists all the
 commands that can be used in an input script to invoke various options

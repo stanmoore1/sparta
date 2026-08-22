@@ -71,7 +71,7 @@ above.
    If a command itself requires a quoted argument (e.g. a
    :doc:`print <print>` command), then double and single quotes can be used
    and nested in the usual manner, as in the examples above and below.
-   See :ref:`Section commands 2 <cmd_2>` of the manual for
+   See `Section commands 2 <Section_commands.html#cmd_2>`_ of the manual for
    more details on using quotes in arguments.  Only one of level of
    nesting is allowed, but that should be sufficient for most use cases.
 

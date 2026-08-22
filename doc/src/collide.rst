@@ -77,7 +77,7 @@ Consider a cell with N particles and a mixture with M groups.  Based
 on its species, each particle is assigned to one of the M groups.
 Each unique pair of groups is considered, including each group paired
 with itself.  For each pair of groups a value *Nattempt* 
-(see equation 11.3 in :ref:`(Bird94) <Bird94>`) is calculated  
+(see equation 11.3 in `(Bird94) <#Bird94>`_) is calculated  
 which is the number of collisions to attempt.  This is a function of
 N1 and N2 (the number of particles in each group), the grid cell
 volume, and other parameters of the collision style.
@@ -86,12 +86,12 @@ For each collision attempt, a random pair of particles is selected,
 with one particle from each group.  Whether the collision occurs or
 not is a function of the relative velocities of the two particles,
 their respective species, and other parameters of the collision
-style; see equation 11.4 in :ref:`(Bird94) <Bird94>`.
+style; see equation 11.4 in `(Bird94) <#Bird94>`_.
 
 .. note::
 
    If you are using the ambipolar approximation with charged
-   species, as described in :ref:`Section 6.11 <howto_11>`,
+   species, as described in `Section 6.11 <Section_howto.html#howto_11>`_,
    and you have used the :doc:`collide\_modify ambipolar yes <collide_modify>` command to enable ambipolar collisions (not
    required), and you are using a mixture ID with multiple groups, then
    the ambipolar electron species must be in a group by itself.
@@ -110,11 +110,11 @@ performed, i.e. the simulation models free-molecular flow.
 The *vss* style implements the Variable Soft Sphere (VSS) model for
 collisions.  As discussed below, with appropriate parameter choices,
 it can also compute the Variable Hard Sphere (VHS) model and the Hard
-Sphere (HS) model.  See chapters 2.6 and 2.7 in :ref:`(Bird94) <Bird94>` for
+Sphere (HS) model.  See chapters 2.6 and 2.7 in `(Bird94) <#Bird94>`_ for
 details.
 
-In DSMC, the variable-soft-sphere (VSS) interaction of :ref:`Koura and Matsumoto <Koura92>` and the variable-hard-sphere (VHS) interaction of
-:ref:`Bird <Bird94>` are used to approximate molecular interactions.  Both
+In DSMC, the variable-soft-sphere (VSS) interaction of `Koura and Matsumoto <#Koura92>`_ and the variable-hard-sphere (VHS) interaction of
+`Bird <#Bird94>`_ are used to approximate molecular interactions.  Both
 models yield transport properties proportional to a power (omega) of
 the gas temperature.  This temperature dependence of the transport
 properties is similar to the Inverse Power Law model (IPL) for which
@@ -158,11 +158,11 @@ The meaning of additional properties is as follows:
 * alpha = angular scattering parameter (unitless)
 
 The methodology for deriving VSS/VHS parameters from these properties
-is explained in Chapter 3 of :ref:`(Bird94) <Bird94>`.  Parameter values for
+is explained in Chapter 3 of `(Bird94) <#Bird94>`_.  Parameter values for
 the most common gases are given in Appendix A of the same book.  These
 values are based on the first-order approximation of the
 Chapman-Enskog theory.  Infinite-order parameters are described in
-:ref:`(Gallis04) <Gallis04>`.
+`(Gallis04) <#Gallis04>`_.
 
 In the *constant* case rotational and vibrational relaxation during a
 collision is treated in the same constant manner for every collision,
@@ -182,7 +182,7 @@ affect rotational relaxation; parameters 7 and 8 affect vibrational
 relaxation.  In this case the rotational and vibrational relaxation
 during a collision is treated as a variable and is computed for each
 collision.  This calculation is only performed for polyatomic species,
-using equations A5 and A6 on pages 413 and 414 in :ref:`(Bird94) <Bird94>`,
+using equations A5 and A6 on pages 413 and 414 in `(Bird94) <#Bird94>`_,
 with the modification that the collision temperature is calculated
 using energy in the internal mode as well as the translational mode.
 Zrotinf and T\* are parameters in the numerator and denominator of eq
@@ -235,10 +235,10 @@ same results, except for different random number, round-off and
 precision issues.
 
 These accelerated styles are part of the KOKKOS package. They are only
-enabled if SPARTA was built with that package.  See the :ref:`Making SPARTA <start_3>` section for more info.
+enabled if SPARTA was built with that package.  See the `Making SPARTA <Section_start.html#start_3>`_ section for more info.
 
 You can specify the accelerated styles explicitly in your input script
-by including their suffix, or you can use the :ref:`-suffix command-line switch <start_7>` when you invoke SPARTA, or you can
+by including their suffix, or you can use the `-suffix command-line switch <Section_start.html#start_7>`_ when you invoke SPARTA, or you can
 use the :doc:`suffix <suffix>` command in your input script.
 
 See the :doc:`Accelerating SPARTA <Section_accelerate>` section of the
@@ -269,6 +269,10 @@ specified, then relax = constant is the default.
 
 .. _Koura92:
 
+.. raw:: html
+
+   <span id="Koura92"></span>
+
 
 
 **(Koura92)** K. Koura and H. Matsumoto, "Variable soft sphere molecular
@@ -276,12 +280,20 @@ model for air species," Phys Fluids A, 4, 1083 (1992).
 
 .. _Bird94:
 
+.. raw:: html
+
+   <span id="Bird94"></span>
+
 
 
 **(Bird94)** G. A. Bird, Molecular Gas Dynamics and the Direct
 Simulation of Gas Flows, Clarendon Press, Oxford (1994).
 
 .. _Gallis04:
+
+.. raw:: html
+
+   <span id="Gallis04"></span>
 
 
 

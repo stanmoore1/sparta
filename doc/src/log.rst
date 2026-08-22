@@ -39,7 +39,7 @@ the same log file.
 
 The file "log.sparta" is the default log file for a SPARTA run.  The
 name of the initial log file can also be set by the command-line
-switch -log.  See :ref:`Section 2.6 <start_7>` for
+switch -log.  See `Section 2.6 <Section_start.html#start_7>`_ for
 details.
 
 **Restrictions:** none

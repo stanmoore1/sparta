@@ -88,7 +88,7 @@ model.
 
 Using kinetic theory, the TCE model allows for reaction probabilities
 to be defined based on known, measured, reaction rates.  The model is
-described in detail in :ref:`(Bird94) <Bird94>`; see chapter 6. The required
+described in detail in `(Bird94) <#Bird94>`_; see chapter 6. The required
 input parameters for each reaction (discussed below) are values that
 permit its effective Arrhenius rate to be calculated, namely
 
@@ -102,7 +102,7 @@ parameters as discussed below.
 
 All 5 reactions coefficients read from the reaction file (described
 below) are used to calculate terms in equation 6.10 of
-:ref:`(Bird94) <Bird94>` for the probability that a reaction takes place.
+`(Bird94) <#Bird94>`_ for the probability that a reaction takes place.
 
 The C2, C3, C4 values are the Arrhenius activation energy Ea,
 prefactor A, and exponent b, used in the rate formula above.
@@ -114,8 +114,8 @@ prefactor A, and exponent b, used in the rate formula above.
 The *qk* style is Bird's Quantum-Kinetic model (QK).  When this style
 is specified, all computed reactions will use the QK model.
 
-The QK model implemented is that of :ref:`(Bird09) <Bird09>` as validated
-:ref:`(Gallis09) <Gallis09>` and modified :ref:`(Gallis10) <Gallis10>`.
+The QK model implemented is that of `(Bird09) <#Bird09>`_ as validated
+`(Gallis09) <#Gallis09>`_ and modified `(Gallis10) <#Gallis10>`_.
 
 The QK model depends solely on properties of the colliding molecules
 and unlike the TCE model makes no use of measured reaction rates or 
@@ -125,26 +125,26 @@ vibrational energy levels.
 
 According to the QK model dissociation reactions take place when the 
 maximum obtainable vibrational energy after an inelastic energy exchange
-is higher than the dissociation level :ref:`(Bird09) <Bird09>`.
+is higher than the dissociation level `(Bird09) <#Bird09>`_.
 
 .. image:: Eqs/qk_dissociation.jpg
    :align: center
 
 Exchange reactions take place when the vibrational energy after a trial 
 energy exchange is above the activation energy of the exchange reaction
-:ref:`(Gallis10) <Gallis10>`.
+`(Gallis10) <#Gallis10>`_.
 
 .. image:: Eqs/qk_exchange.jpg
    :align: center
 
 A new version of the QK model for exchange reactions has been proposed
-by :ref:`(Bird11) <Bird11>`.  This will be implemented in future releases of
+by `(Bird11) <#Bird11>`_.  This will be implemented in future releases of
 SPARTA.
 
 For the QK model, SPARTA reads the same 5 coefficients per reaction
 from the reaction file (described below) as for the TCE model.  Three
 of the coefficients (C1,C2,C5) are used to calculate terms in equation
-6.10 of :ref:`(Bird94) <Bird94>` for the probability that a reaction takes
+6.10 of `(Bird94) <#Bird94>`_ for the probability that a reaction takes
 place.  The Arrhenius rate parameters C3 and C4 are ignored by the QK
 model.
 
@@ -385,10 +385,10 @@ same results, except for different random number, round-off and
 precision issues.
 
 These accelerated styles are part of the KOKKOS package. They are only
-enabled if SPARTA was built with that package.  See the :ref:`Making SPARTA <start_3>` section for more info.
+enabled if SPARTA was built with that package.  See the `Making SPARTA <Section_start.html#start_3>`_ section for more info.
 
 You can specify the accelerated styles explicitly in your input script
-by including their suffix, or you can use the :ref:`-suffix command-line switch <start_7>` when you invoke SPARTA, or you can
+by including their suffix, or you can use the `-suffix command-line switch <Section_start.html#start_7>`_ when you invoke SPARTA, or you can
 use the :doc:`suffix <suffix>` command in your input script.
 
 See the :doc:`Accelerating SPARTA <Section_accelerate>` section of the
@@ -417,12 +417,20 @@ style = none
 
 .. _Bird94:
 
+.. raw:: html
+
+   <span id="Bird94"></span>
+
 
 
 **(Bird94)** G. A. Bird, Molecular Gas Dynamics and the Direct
 Simulation of Gas Flows, Clarendon Press, Oxford (1994).
 
 .. _Bird09:
+
+.. raw:: html
+
+   <span id="Bird09"></span>
 
 
 
@@ -431,12 +439,20 @@ Dynamics, Editor T Abe, AIP Conference Proceedings (2009).
 
 .. _Bird11:
 
+.. raw:: html
+
+   <span id="Bird11"></span>
+
 
 
 **(Bird11)** G. A. Bird, "The Q-K model for gas-phase chemical reaction
 rates", Physics of Fluids, 23, 106101, (2011).
 
 .. _Gallis09:
+
+.. raw:: html
+
+   <span id="Gallis09"></span>
 
 
 
@@ -445,6 +461,10 @@ Kinetic-Theory Approach for Computing Chemical-Reaction Rates in
 Upper-Atmosphere Hypersonic Flows", J Chem Phys, 131, 124311, (2009).
 
 .. _Gallis10:
+
+.. raw:: html
+
+   <span id="Gallis10"></span>
 
 
 

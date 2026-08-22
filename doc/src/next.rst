@@ -70,7 +70,7 @@ next value (for each variable) is assigned to whichever processor
 partition executes the command first.  All processors in the partition
 are assigned the same value(s).  Running SPARTA on multiple partitions
 of processors via the "-partition" command-line switch is described in
-:ref:`Section 2.6 <start_7>` of the manual.  *Universe*\ -
+`Section 2.6 <Section_start.html#start_7>`_ of the manual.  *Universe*\ -
 and *uloop*\ -style variables are incremented using the files
 "tmp.sparta.variable" and "tmp.sparta.variable.lock" which you will
 see in your directory during and after such a SPARTA run.

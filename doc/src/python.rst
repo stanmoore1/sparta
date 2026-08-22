@@ -705,7 +705,7 @@ Restrictions
 """"""""""""
 
 This command is part of the PYTHON package.  It is only enabled if
-SPARTA was built with that package.  See the :ref:`Section start 2.3 <start_3>` doc page for more info.
+SPARTA was built with that package.  See the `Section start 2.3 <Section_start.html#start_3>`_ doc page for more info.
 
 Building SPARTA with the PYTHON package will link SPARTA with the Python
 library on your system.  Settings to enable this are in the
@@ -715,7 +715,7 @@ information on those settings.
 If you use Python code which calls back to SPARTA, via the SELF input
 argument explained above, there is an extra step required when
 building SPARTA.  SPARTA must also be built as a shared library; see the
-:ref:`Section start 2.4 <start_4>` doc page.
+`Section start 2.4 <Section_start.html#start_4>`_ doc page.
 And your Python function must be able to load the Python module that
 wraps the SPARTA library interface.
 

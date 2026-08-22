@@ -1,5 +1,5 @@
-Performance & scalability
-=========================
+8. Performance & scalability
+============================
 
 The SPARTA distribution includes a bench sub-directory with several
 sample problems.  The Benchmarks page of the `SPARTA WWW Site <sws_>`_

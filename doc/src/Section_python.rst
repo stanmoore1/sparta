@@ -1,16 +1,16 @@
-Python interface to SPARTA
-==========================
+11. Python interface to SPARTA
+==============================
 
 This section describes various ways that SPARTA and Python can be used
 together.
 
-* 11.1 :ref:`Building SPARTA as a shared library <py_1>`
-* 11.2 :ref:`Installing the Python wrapper into Python <py_2>`
-* 11.3 :ref:`Extending Python with MPI to run in parallel <py_3>`
-* 11.4 :ref:`Testing the Python-SPARTA interface <py_4>`
-* 11.5 :ref:`Using SPARTA from Python <py_5>`
-* 11.6 :ref:`Example Python scripts that use SPARTA <py_6>`
-* 11.7 :ref:`Calling Python from SPARTA <py_7>`
+* 11.1 `Building SPARTA as a shared library <#py_1>`_
+* 11.2 `Installing the Python wrapper into Python <#py_2>`_
+* 11.3 `Extending Python with MPI to run in parallel <#py_3>`_
+* 11.4 `Testing the Python-SPARTA interface <#py_4>`_
+* 11.5 `Using SPARTA from Python <#py_5>`_
+* 11.6 `Example Python scripts that use SPARTA <#py_6>`_
+* 11.7 `Calling Python from SPARTA <#py_7>`_
 
 If you are not familiar with `Python <https://www.python.org>`_, it is
 a powerful scripting and programming language which can do almost
@@ -63,11 +63,15 @@ below.
 
 .. _py_1:
 
-Building SPARTA as a shared library
------------------------------------
+.. raw:: html
+
+   <span id="py_1"></span>
+
+11.1 Building SPARTA as a shared library
+----------------------------------------
 
 Instructions on how to build SPARTA as a shared library are given in
-:ref:`Section 2.4 <start_4>`.  A shared library is one
+`Section 2.4 <Section_start.html#start_4>`_.  A shared library is one
 that is dynamically loadable, which is what Python requires.  On Linux
 this is a library file that ends in ".so", not ".a".
 
@@ -93,7 +97,7 @@ will load by default.  Note that if you are building multiple machine
 versions of the shared library, the soft link is always set to the
 most recently built version.
 
-If this fails, see :ref:`Section 2.3 <start_3>` for more
+If this fails, see `Section 2.3 <Section_start.html#start_3>`_ for more
 details, especially if your SPARTA build uses auxiliary libraries like
 MPI which may not be built as shared libraries on your system.
 
@@ -103,8 +107,12 @@ MPI which may not be built as shared libraries on your system.
 
 .. _py_2:
 
-Installing the Python wrapper into Python
------------------------------------------
+.. raw:: html
+
+   <span id="py_2"></span>
+
+11.2 Installing the Python wrapper into Python
+----------------------------------------------
 
 For Python to invoke SPARTA, there are 2 files it needs to know about:
 
@@ -177,7 +185,7 @@ need to prefix this with "sudo".  In this mode you cannot control
 which Python is invoked by root.
 
 Note that if you want Python to be able to load different versions of
-the SPARTA shared library (see :ref:`this section <py_5>` below), you will
+the SPARTA shared library (see `this section <#py_5>`_ below), you will
 need to manually copy files like libsparta\_g++.so into the appropriate
 system directory.  This is not needed if you set the LD\_LIBRARY\_PATH
 environment variable as described above.
@@ -188,8 +196,12 @@ environment variable as described above.
 
 .. _py_3:
 
-Extending Python with MPI to run in parallel
---------------------------------------------
+.. raw:: html
+
+   <span id="py_3"></span>
+
+11.3 Extending Python with MPI to run in parallel
+-------------------------------------------------
 
 If you wish to run SPARTA in parallel from Python, you need to extend
 your Python with an interface to MPI.  This also allows you to
@@ -303,8 +315,12 @@ and see one line of output for each processor you run on.
 
 .. _py_4:
 
-Testing the Python-SPARTA interface
------------------------------------
+.. raw:: html
+
+   <span id="py_4"></span>
+
+11.4 Testing the Python-SPARTA interface
+----------------------------------------
 
 To test if SPARTA is callable from Python, launch Python interactively
 and type:
@@ -338,7 +354,7 @@ first importing from the sparta.py file:
    >>> from ctypes import CDLL
    >>> CDLL("libsparta.so")
 
-If an error occurs, carefully go thru the steps in :ref:`Section 2.4 <start_4>` and above about building a shared
+If an error occurs, carefully go thru the steps in `Section 2.4 <Section_start.html#start_4>`_ and above about building a shared
 library and about insuring Python can find the necessary two files it
 needs.
 
@@ -477,8 +493,12 @@ Python on a single processor, not in parallel.
 
 .. _py_5:
 
-Using SPARTA from Python
-------------------------
+.. raw:: html
+
+   <span id="py_5"></span>
+
+11.5 Using SPARTA from Python
+-----------------------------
 
 The Python interface to SPARTA consists of a Python "sparta" module,
 the source code for which is in python/sparta.py, which creates a
@@ -574,7 +594,7 @@ What is returned depends on whether the compute calculates a scalar or
 vector or array.  For a scalar, a single double value is returned.  If
 the compute or fix calculates a vector or array, a pointer to the
 internal SPARTA data is returned, which you can use via normal Python
-subscripting.  See :ref:`Section 6.4 <howto_4>` of the
+subscripting.  See `Section 6.4 <Section_howto.html#howto_4>`_ of the
 manual for a discussion of global, per particle, per grid, and per
 surf data, and of scalar, vector, and array data types.  See the doc
 pages for individual :doc:`computes <compute>` for a description of what
@@ -610,8 +630,12 @@ following steps:
 
 .. _py_6:
 
-Example Python scripts that use SPARTA
---------------------------------------
+.. raw:: html
+
+   <span id="py_6"></span>
+
+11.6 Example Python scripts that use SPARTA
+-------------------------------------------
 
 There are demonstration Python scripts included in the python/examples
 directory of the SPARTA distribution, to illustrate what is possible
@@ -624,8 +648,12 @@ code directly from an input script:
 
 .. _py_7:
 
-Calling Python from SPARTA
---------------------------
+.. raw:: html
+
+   <span id="py_7"></span>
+
+11.7 Calling Python from SPARTA
+-------------------------------
 
 There are SPARTA input script commands which can invoke Python code directly.
 

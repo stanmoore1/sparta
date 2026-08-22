@@ -93,7 +93,7 @@ number from 1 to N, where N is the number of reactions defined by the
 The *id1/pre* and *id2/pre* values are the IDs of the reacting
 particles before the reaction.  Note that particle IDs are generated
 randomly.  Thus multiple particles in the system can potentially have
-the same ID.  See :ref:`Section 6.19 <howto_19>` for more details on
+the same ID.  See `Section 6.19 <Section_howto.html#howto_19>`_ for more details on
 particle IDs.
 
 The *id1/post*\ , *id2/post*\ , and *id3/post* values are the
@@ -106,7 +106,7 @@ The *type1/pre* and *type2/pre* value are the integer indices for the
 species of the reacting particles before the reaction.  They are
 values from 1 to Nspecies.  The values correspond to the order in
 which species were defined via the :doc:`species <species>` command.
-See :ref:`Section 6.19 <howto_19>` for more details on particle
+See `Section 6.19 <Section_howto.html#howto_19>`_ for more details on particle
 types.
 
 The *type1/post*\ , *type/post2*\ , and *type/post3* values are the
@@ -136,7 +136,7 @@ This compute calculates a per-tally array, with the number of columns
 equal to the number of values.
 
 The array can be accessed by any command that uses per-tally values
-from a compute as input.  See :ref:`Section 6.4 <howto_4>`
+from a compute as input.  See `Section 6.4 <Section_howto.html#howto_4>`_
 for an overview of SPARTA output options.
 
 The per-tally array values will be in the :doc:`units <units>`

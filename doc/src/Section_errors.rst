@@ -1,12 +1,12 @@
-Errors
-======
+12. Errors
+==========
 
 This section describes the various kinds of errors you can encounter
 when using SPARTA.
 
-| 12.1 :ref:`Common problems <err_1>`
-| 12.2 :ref:`Reporting bugs <err_2>`
-| 12.3 :ref:`Error & warning messages <err_3>` 
+| 12.1 `Common problems <#err_1>`_
+| 12.2 `Reporting bugs <#err_2>`_
+| 12.3 `Error & warning messages <#err_3>`_ 
 | 
 
 
@@ -15,8 +15,12 @@ when using SPARTA.
 
 .. _err_1:
 
-Common problems
----------------
+.. raw:: html
+
+   <span id="err_1"></span>
+
+12.1 Common problems
+--------------------
 
 If two SPARTA runs do not produce the same answer on different
 machines or different numbers of processors, this is typically not a
@@ -46,7 +50,7 @@ the `developers <https://sparta.github.io/authors.html>`_.
 If you get an error message about an invalid command in your input
 script, you can determine what command is causing the problem by
 looking in the log.sparta file, or using the :doc:`echo command <echo>`
-in your script or "-echo screen" as a :ref:`command-line argument <start_7>` to see it on the screen.  For a
+in your script or "-echo screen" as a `command-line argument <Section_start.html#start_7>`_ to see it on the screen.  For a
 given command, SPARTA expects certain arguments in a specified order.
 If you mess this up, SPARTA will often flag the error, but it may read
 a bogus argument and assign a value that is valid, but not what you
@@ -59,7 +63,7 @@ decide if the WARNING is important or not.  A WARNING message that is
 generated in the middle of a run is only printed to the screen, not to
 the logfile, to avoid cluttering up statistical output.  If SPARTA
 crashes or hangs without spitting out an error message first then it
-could be a bug (see the :ref:`next section <err_2>`) or one of the following
+could be a bug (see the `next section <#err_2>`_) or one of the following
 cases:
 
 SPARTA runs in the available memory a processor allows to be
@@ -94,8 +98,12 @@ buffering or boost the sizes of messages that can be buffered.
 
 .. _err_2:
 
-Reporting bugs
---------------
+.. raw:: html
+
+   <span id="err_2"></span>
+
+12.2 Reporting bugs
+-------------------
 
 If you are confident that you have found a bug in SPARTA, please
 follow these steps.
@@ -118,11 +126,15 @@ problem.
 
 .. _err_3:
 
-Error & warning messages
-------------------------------------
+.. raw:: html
 
-These are two alphabetic lists of the :ref:`ERROR <error>` and
-:ref:`WARNING <warn>` messages SPARTA prints out and the reason why.  If the
+   <span id="err_3"></span>
+
+12.3 Error & warning messages
+-------------------------------------------------------------------------------------
+
+These are two alphabetic lists of the `ERROR <#error>`_ and
+`WARNING <#warn>`_ messages SPARTA prints out and the reason why.  If the
 explanation here is not sufficient, the documentation for the
 offending command may help.  Error and warning messages also list the
 source file and line number where the error was generated.  For
@@ -136,8 +148,12 @@ wrong.
 
 .. _error:
 
+.. raw:: html
+
+   <span id="error"></span>
+
 Errors:
--------------------
+---------------------------------------------------------------
 
 
 
@@ -1940,8 +1956,12 @@ Errors:
 
 .. _warn:
 
+.. raw:: html
+
+   <span id="warn"></span>
+
 Warnings:
---------------------
+---------------------------------------------------------------
 
 
 

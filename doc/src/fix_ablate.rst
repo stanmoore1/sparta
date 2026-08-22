@@ -268,7 +268,7 @@ the value is less than 1.0e-4, then it is treated as if the value were
 0.0 (the default), and the epsilon method described above is used.
 
 For values of fraction >= 1.0e-4, the "isosurface stuffing" method
-proposed by Labelle and Shewchuk :ref:`(Labelle07) <Labelle07>` is used.
+proposed by Labelle and Shewchuk `(Labelle07) <#Labelle07>`_ is used.
 The idea is as follows:
 
 If a generated triangle vertex or line segment end point could be
@@ -296,7 +296,7 @@ point is at least *mindist*
 .. image:: JPG/multipoint_decrement_small.png
    :align: center
 
-The *multiple* option allows a multipoint decrement :ref:`(Hong24) <Hong24>` to be used. 
+The *multiple* option allows a multipoint decrement `(Hong24) <#Hong24>`_ to be used. 
 In a cell, three types of corners are identified: inside, outside or
 interface.  An **inside** point is a point inside the surface (its
 values is greater than the specified threshold).  An **outside** point
@@ -381,7 +381,7 @@ created gas products for solid material that was not there to remove,
 which no accounting inside this fix can repair.
 
 These values can be accessed by any command that uses global values
-from a fix as input.  See :ref:`Section 6.4 <howto_4>` for
+from a fix as input.  See `Section 6.4 <Section_howto.html#howto_4>`_ for
 an overview of SPARTA output options.
 
 The scalar and vector values are unitless.
@@ -418,12 +418,20 @@ the *conserve* keyword = yes.
 
 .. _Labelle07:
 
+.. raw:: html
+
+   <span id="Labelle07"></span>
+
 
 
 **(Labelle07)** F. Labelle, and J. R.. Shewchuk, "Isosurface stuffing:
 Fast Tetrahedral Meshes with Good Dihedral Angles," SIGGRAPH (2007).
 
 .. _Hong24:
+
+.. raw:: html
+
+   <span id="Hong24"></span>
 
 
 

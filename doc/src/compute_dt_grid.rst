@@ -46,7 +46,7 @@ grid cell size.  The per-grid cell timesteps can be output in a
 per-grid dump file for post analyses.  Or they can be used as input to
 the :doc:`fix dt/reset <fix_dt_reset>` command to adjust the global
 timestep for a variable timestep simulation.  See this
-:ref:`section <howto_18>` of the manual for more
+`section <Section_howto.html#howto_18>`_ of the manual for more
 information on variable timestep simulations.
 
 Only grid cells in the grid group specified by *group-ID* are included
@@ -66,7 +66,7 @@ and the associated average particle velocity components in addition to
 the maximum most probable speed.  The selected cell timestep is the
 minumum of all candidate timesteps. The collision and transit
 fractions simply provide a user-defined safety margin for the
-collision time and transit time estimates. In :ref:`(Bird2013) <Bird2013>`,
+collision time and transit time estimates. In `(Bird2013) <#Bird2013>`_,
 Bird recomnmends setting the collision fraction to 0.2, which is
 likely a good starting point for the selection of both of these
 fractions.
@@ -110,7 +110,7 @@ This compute calculates a per-grid vector.
 
 This compute performs calculations for all flavors of child grid cells
 in the simulation, which includes unsplit, cut, split, and sub cells.
-See :ref:`Section 6.8 <howto_8>` of the manual for
+See `Section 6.8 <Section_howto.html#howto_8>`_ of the manual for
 details of how SPARTA defines child, unsplit, split, and sub cells.
 Note that cells inside closed surfaces contain no particles.  These
 could be unsplit or cut cells (if they have zero flow volume).  Both
@@ -124,7 +124,7 @@ cell data to be used in the timestep calculation is
 zero (including temperature, speed, and mean collision time).
 
 The vector can be accessed by any command that uses per-grid values
-from a compute as input.  See :ref:`Section 6.4 <howto_4>`
+from a compute as input.  See `Section 6.4 <Section_howto.html#howto_4>`_
 for an overview of SPARTA output options.
 
 
@@ -140,10 +140,10 @@ same results, except for different random number, round-off and
 precision issues.
 
 These accelerated styles are part of the KOKKOS package. They are only
-enabled if SPARTA was built with that package.  See the :ref:`Making SPARTA <start_3>` section for more info.
+enabled if SPARTA was built with that package.  See the `Making SPARTA <Section_start.html#start_3>`_ section for more info.
 
 You can specify the accelerated styles explicitly in your input script
-by including their suffix, or you can use the :ref:`-suffix command-line switch <start_7>` when you invoke SPARTA, or you can
+by including their suffix, or you can use the `-suffix command-line switch <Section_start.html#start_7>`_ when you invoke SPARTA, or you can
 use the :doc:`suffix <suffix>` command in your input script.
 
 See the :doc:`Accelerating SPARTA <Section_accelerate>` section of the
@@ -177,6 +177,10 @@ Related commands
 
 
 .. _Bird2013:
+
+.. raw:: html
+
+   <span id="Bird2013"></span>
 
 
 

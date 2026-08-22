@@ -53,6 +53,12 @@ TAG = re.compile(r'<[^>]+>')
 SCRIPT = re.compile(r'<(script|style)\b.*?</\1>', re.S | re.I)
 
 
+HEAD = re.compile(r'<head\b.*?</head>', re.S | re.I)
+# the theme appends a permalink anchor to every heading
+HEADERLINK = re.compile(r'<a\b[^>]*class="[^"]*headerlink[^"]*"[^>]*>.*?</a>',
+                        re.S | re.I)
+
+
 def content_only(markup):
     """Strip everything that is page furniture rather than content.
 
@@ -60,7 +66,10 @@ def content_only(markup):
     built on this is symmetric: a build compared against itself always
     reports parity.
     """
-    t = SCRIPT.sub(' ', markup)
+    # <head> is the browser tab title and document metadata, not content
+    t = HEAD.sub(' ', markup)
+    t = HEADERLINK.sub(' ', t)
+    t = SCRIPT.sub(' ', t)
     t = OLD_BANNER.sub(' ', t)
     return CHROME.sub(' ', t)
 
@@ -73,7 +82,9 @@ def visible_text(markup, *, sphinx=None):
     t = TAG.sub(' ', t)
     t = html.unescape(t)
     t = unicodedata.normalize('NFKC', t)
-    # Sphinx numbers sections and adds permalink markers
+    # Icon glyphs live in the Unicode private use area; the theme uses one
+    # for the permalink marker.  They are decoration, not words.
+    t = ''.join(' ' if '\ue000' <= c <= '\uf8ff' else c for c in t)
     t = t.replace('¶', ' ')
     return [w for w in t.split() if w]
 

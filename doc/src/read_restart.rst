@@ -66,7 +66,7 @@ simulation.  If the processor count changes, then the assignment will
 necessarily be different.  In particular, even if the original
 assignment was "clumped", meaning each processor's cells were
 geometrically compact, the new assignment will not be clumped; it will
-be "dispersed".  See :ref:`Section 6.8 <howto_8>` of the
+be "dispersed".  See `Section 6.8 <Section_howto.html#howto_8>`_ of the
 manual for an explanation of clumped and dispersed grid cell
 assignments and their relative performance trade-offs.
 

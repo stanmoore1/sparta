@@ -1,15 +1,15 @@
-Introduction
-============
+1. Introduction
+===============
 
 These sections provide an overview of what SPARTA can do, describe
 what it means for SPARTA to be an open-source code, and acknowledge
 the funding and people who have contributed to SPARTA.
 
-| 1.1 :ref:`What is SPARTA <intro_1>`
-| 1.2 :ref:`SPARTA features <intro_2>`
-| 1.3 :ref:`Grids and surfaces in SPARTA <intro_3>`
-| 1.4 :ref:`Open source distribution <intro_4>`
-| 1.5 :ref:`Acknowledgments and citations <intro_5>` 
+| 1.1 `What is SPARTA <#intro_1>`_
+| 1.2 `SPARTA features <#intro_2>`_
+| 1.3 `Grids and surfaces in SPARTA <#intro_3>`_
+| 1.4 `Open source distribution <#intro_4>`_
+| 1.5 `Acknowledgments and citations <#intro_5>`_ 
 | 
 
 
@@ -18,8 +18,12 @@ the funding and people who have contributed to SPARTA.
 
 .. _intro_1:
 
-What is SPARTA
---------------
+.. raw:: html
+
+   <span id="intro_1"></span>
+
+1.1 What is SPARTA
+------------------
 
 SPARTA is a Direct Simulation Montel Carlo code that models rarefied
 gases, using collision, chemistry, and boundary condition models.  It
@@ -48,7 +52,7 @@ terms of the `GNU Public License <gnu_>`_, or sometimes by request under
 the terms of the `GNU Lesser General Public License (LGPL) <https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html>`_,
 which means you can use or modify the code however you wish.  The only
 restrictions imposed by the GPL or LGPL are on how you distribute the
-code further.  See :ref:`Section 1.4 <intro_4>` below for a brief discussion
+code further.  See `Section 1.4 <#intro_4>`_ below for a brief discussion
 of the open-source philosophy.
 
 .. _gnu: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
@@ -65,7 +69,7 @@ code and its options in an object-oriented fashion.  The kernel
 computations use simple data structures and C-like code for effciency.
 So SPARTA is really written in an object-oriented C style.
 
-SPARTA was developed with internal funding at `Sandia National Laboratories <snl_>`_, a US Department of Energy lab.  See :ref:`Section 1.5 <intro_5>` below for more information on SPARTA funding and
+SPARTA was developed with internal funding at `Sandia National Laboratories <snl_>`_, a US Department of Energy lab.  See `Section 1.5 <#intro_5>`_ below for more information on SPARTA funding and
 individuals who have contributed to SPARTA.
 
 .. _snl: https://www.sandia.gov
@@ -78,11 +82,15 @@ individuals who have contributed to SPARTA.
 
 .. _intro_2:
 
-SPARTA features
----------------
+.. raw:: html
+
+   <span id="intro_2"></span>
+
+1.2 SPARTA features
+-------------------
 
 This section highlights SPARTA features, with links to specific
-commands which give more details.  The :ref:`next section <intro_3>`
+commands which give more details.  The `next section <#intro_3>`_
 illustrates the kinds of grid geometries and surface definitions which
 SPARTA supports.
 
@@ -103,27 +111,27 @@ General features
 * runs from an :doc:`input script <Section_commands>`
 * syntax for defining and using :doc:`variables and formulas <variable>`
 * syntax for :doc:`looping over runs <jump>` and breaking out of loops
-* run one or :ref:`multiple simulations simultaneously <howto_3>` (in parallel) from one script
-* :ref:`build as library <start_4>`, invoke SPARTA thru :ref:`library interface <howto_6>` or provided :doc:`Python wrapper <Section_python>`
-* :ref:`couple with other codes <howto_7>`: SPARTA calls other code, other code calls SPARTA, umbrella code calls both
+* run one or `multiple simulations simultaneously <Section_howto.html#howto_3>`_ (in parallel) from one script
+* `build as library <Section_start.html#start_4>`_, invoke SPARTA thru `library interface <Section_howto.html#howto_6>`_ or provided :doc:`Python wrapper <Section_python>`
+* `couple with other codes <Section_howto.html#howto_7>`_: SPARTA calls other code, other code calls SPARTA, umbrella code calls both
 
 Models
 ------
 
-* :doc:`3d or 2d <dimension>` or :ref:`2d-axisymmetric <howto_2>` domains
+* :doc:`3d or 2d <dimension>` or `2d-axisymmetric <Section_howto.html#howto_2>`_ domains
 * variety of :doc:`global boundary conditions <boundary>`
 * :doc:`create particles <create_particles>` within flow volume
 * emit particles from simulation box faces due to :doc:`flow properties <fix_emit_face>`
 * emit particles from simulation box faces due to :doc:`profile defined in file <fix_emit_face_file>`
 * emit particles from surface elements due to :doc:`normal and flow properties <fix_emit_surf>`
-* :ref:`ambipolar <howto_11>` approximation for ionized plasmas
+* `ambipolar <Section_howto.html#howto_11>`_ approximation for ionized plasmas
 
 Geometry
 --------
 
-* :ref:`Cartesian, heirarchical grids <intro_3>` with multiple levels of local refinement
+* `Cartesian, heirarchical grids <#intro_3>`_ with multiple levels of local refinement
 * :doc:`create grid from input script <create_grid>` or :doc:`read from file <read_grid>`
-* embed :ref:`triangulated (3d) or line-segmented (2d) surfaces <intro_3>` in grid, :doc:`read in from file <read_surf>`
+* embed `triangulated (3d) or line-segmented (2d) surfaces <#intro_3>`_ in grid, :doc:`read in from file <read_surf>`
 
 Gas-phase collisions and chemistry
 ----------------------------------
@@ -188,8 +196,12 @@ Pre- and post-processing
 
 .. _intro_3:
 
-Grids and surfaces in SPARTA
-----------------------------
+.. raw:: html
+
+   <span id="intro_3"></span>
+
+1.3 Grids and surfaces in SPARTA
+--------------------------------
 
 SPARTA overlays a grid over the simulation domain which is used to
 track particles and to co-locate particles in the same grid cell for
@@ -221,8 +233,8 @@ simulation box.  Click on the image for a larger picture.
    :target: JPG/shuttle.jpg
    :align: center
 
-See :ref:`Sections 6.9 <howto_9>` and
-:ref:`4.10 <>` for more details of both the grids and
+See `Sections 6.9 <Section_howto.html#howto_9>`_ and
+`4.10 <Section_howto.html#>`_ for more details of both the grids and
 surface objects that SPARTA supports and how to define them.
 
 
@@ -231,8 +243,12 @@ surface objects that SPARTA supports and how to define them.
 
 .. _intro_4:
 
-Open source distribution
-------------------------
+.. raw:: html
+
+   <span id="intro_4"></span>
+
+1.4 Open source distribution
+----------------------------
 
 SPARTA comes with no warranty of any kind.  As each source file states
 in its header, it is a copyrighted code that is distributed free-of-
@@ -278,7 +294,7 @@ topics.
 * If you find an error or omission in this manual or on the `SPARTA WWW Site <sws_>`_, or have a suggestion for something to clarify or include,
   send an email to the
   `developers <https://sparta.github.io/authors.html>`_.
-* If you find a bug, :ref:`Section 12.1 <err_2>` describes
+* If you find a bug, `Section 12.1 <Section_errors.html#err_2>`_ describes
   how to report it.
 * If you publish a paper using SPARTA results, send the citation (and
   any cool pictures or movies) to add to the Publications, Pictures, and
@@ -309,8 +325,12 @@ topics.
 
 .. _intro_5:
 
-Acknowledgments and citations
--------------------------------------------
+.. raw:: html
+
+   <span id="intro_5"></span>
+
+1.5 Acknowledgments and citations
+---------------------------------------------------------------------------------------------
 
 SPARTA development has been funded by the `US Department of Energy <doe_>`_ (DOE).
 

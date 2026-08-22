@@ -181,7 +181,7 @@ a per-grid vector as output.  Otherwise it produces a per-grid array.
 
 This compute performs calculations for all flavors of child grid cells
 in the simulation, which includes unsplit, cut, split, and sub cells.
-See :ref:`Section 6.8 <howto_8>` of the manual gives
+See `Section 6.8 <Section_howto.html#howto_8>`_ of the manual gives
 details of how SPARTA defines child, unsplit, split, and sub cells.
 Note that cells inside closed surfaces contain no particles.  These
 could be unsplit or cut cells (if they have zero flow volume).  Both
@@ -191,7 +191,7 @@ zero result.  This is because their sub-cells actually contain the
 particles that are geometrically inside the split cell.
 
 The array can be accessed by any command that uses per-grid values
-from a compute as input.  See :ref:`Section 6.4 <howto_4>`
+from a compute as input.  See `Section 6.4 <Section_howto.html#howto_4>`_
 for an overview of SPARTA output options.
 
 The per-grid vector or array values will be in the :doc:`units <units>`
@@ -214,10 +214,10 @@ same results, except for different random number, round-off and
 precision issues.
 
 These accelerated styles are part of the KOKKOS package. They are only
-enabled if SPARTA was built with that package.  See the :ref:`Making SPARTA <start_3>` section for more info.
+enabled if SPARTA was built with that package.  See the `Making SPARTA <Section_start.html#start_3>`_ section for more info.
 
 You can specify the accelerated styles explicitly in your input script
-by including their suffix, or you can use the :ref:`-suffix command-line switch <start_7>` when you invoke SPARTA, or you can
+by including their suffix, or you can use the `-suffix command-line switch <Section_start.html#start_7>`_ when you invoke SPARTA, or you can
 use the :doc:`suffix <suffix>` command in your input script.
 
 See the :doc:`Accelerating SPARTA <Section_accelerate>` section of the
@@ -232,7 +232,7 @@ Restrictions
 """"""""""""
 
 This style is part of the FFT package.  It is only enabled if SPARTA
-was built with that package.  See the :ref:`Getting Started <start_3>` section for more info.
+was built with that package.  See the `Getting Started <Section_start.html#start_3>`_ section for more info.
 
 Related commands
 """"""""""""""""

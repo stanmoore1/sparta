@@ -43,7 +43,7 @@ can also be defined by the :doc:`create\_grid <create_grid>` command.
 
 The grid file can be written by the :doc:`write\_grid <write_grid>`
 command in a previous simulation, or be created by some pre-processing
-tool.  See :ref:`Section 6.8 <howto_8>` of the manual for
+tool.  See `Section 6.8 <Section_howto.html#howto_8>`_ of the manual for
 a definition of hierarchical grids and grid cell IDs as used by
 SPARTA.  Note that if the grid is hierarchical, grid cell IDs are not
 simply numbered from 1 to N.  They also encode the cell's logical
@@ -61,7 +61,7 @@ each processor.
 
 .. warning::
 
-   See :ref:`Section 6.8 <howto_8>` of the
+   See `Section 6.8 <Section_howto.html#howto_8>`_ of the
    manual for an explanation of clumped and dispersed grid cell
    assignments and their relative performance trade-offs.  The
    :doc:`balance\_grid <balance_grid>` command can be used after the grid is
@@ -70,7 +70,7 @@ each processor.
    manner periodically during a running simulation.
 
 The *custom* keyword allows for the creation of custom per-grid
-attributes and specification of their values.  See the :ref:`Section 6.17 <howto_17>` doc page for an explanation of
+attributes and specification of their values.  See the `Section 6.17 <Section_howto.html#howto_17>`_ doc page for an explanation of
 custom per-grid attributes.  Custom vectors or arrays associate a
 single value or multiple values with each grid cell.  They can be
 output by the :doc:`dump grid <dump>` command and used as inputs by
@@ -111,7 +111,7 @@ This command can only be used after the simulation box is defined by
 the :doc:`create\_box <create_box>` command.
 
 To read gzipped grid files, you must compile SPARTA with the
--DSPARTA\_GZIP option - see :ref:`Section 2.2 <start_2>` of
+-DSPARTA\_GZIP option - see `Section 2.2 <Section_start.html#start_2>`_ of
 the manual for details.
 
 Related commands

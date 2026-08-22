@@ -27,11 +27,11 @@ Description
 """""""""""
 
 This command allows you to use variants of various styles if they
-exist.  In that respect it operates the same as the :ref:`-suffix command-line switch <start_7>`.  It also has options
+exist.  In that respect it operates the same as the `-suffix command-line switch <Section_start.html#start_7>`_.  It also has options
 to turn off or back on any suffix setting made via the command line.
 
 The specified style *kk* refers to the optional KOKKOS package that
-SPARTA can be built with, as described in :ref:`this section of the manual <start_3>`. The KOKKOS package is a collection
+SPARTA can be built with, as described in `this section of the manual <Section_start.html#start_3>`_. The KOKKOS package is a collection
 of styles optimized to run using the Kokkos library on various kinds
 of hardware, including GPUs via CUDA and many-core chips via OpenMP
 multi-threading.
@@ -59,7 +59,7 @@ commands in your input script.
 Related commands
 """"""""""""""""
 
-:ref:`Command-line switch -suffix <start_7>`
+`Command-line switch -suffix <Section_start.html#start_7>`_
 
 **Default:** none
 

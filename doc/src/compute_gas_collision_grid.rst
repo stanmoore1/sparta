@@ -55,7 +55,7 @@ This compute calculates a per-grid vector with the count of collisions
 for each grid cell.
 
 The vector can be accessed by any command that uses per-grid values
-from a compute as input.  See :ref:`Section 6.4 <howto_4>`
+from a compute as input.  See `Section 6.4 <Section_howto.html#howto_4>`_
 for an overview of SPARTA output options.
 
 

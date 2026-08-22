@@ -96,7 +96,7 @@ grid cell.  When this command writes them to a file, the surface
 element IDs in the file become integers between 1 and N, where N is
 the total number of implicit surface elements.
 
-See the :ref:`Howto 6.13 <howto_13>` section of the manual
+See the `Howto 6.13 <Section_howto.html#howto_13>`_ section of the manual
 for a discussion of explicit and implicit surfaces as well as
 distributed versus non-distributed storage of surface elements.  You
 cannot mix explicit and implicit surfaces in the same simulation.

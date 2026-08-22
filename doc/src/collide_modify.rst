@@ -90,12 +90,12 @@ probability of 0.3, using a random number.
 The *scheme* keyword selects the numerical scheme used to compute the
 number of collisions attempted in each grid cell (for each pair of
 collision groups) each timestep.  For *ntc*\ , which is the default,
-Bird's no-time-counter scheme is used (:ref:`(Bird94) <Bird94>`): the
+Bird's no-time-counter scheme is used (`(Bird94) <#Bird94>`_): the
 attempt count is the integer part of the expected number of attempts
 Nattempt = 1/2 \* N \* (N-1) \* Fnum \* Vremax \* dt / Vcell, with the
 fractional part treated as described above for the *remain* keyword.
 For *mcf*\ , the majorant collision frequency scheme of Ivanov and
-Rogasinsky is used (:ref:`(Ivanov88) <Ivanov88>`): collision events in a
+Rogasinsky is used (`(Ivanov88) <#Ivanov88>`_): collision events in a
 cell are treated as a Poisson process whose rate is the majorant
 (upper-bound) collision frequency Nattempt/dt, so the attempt count is
 drawn each timestep as a Poisson random variate whose mean is the same
@@ -106,7 +106,7 @@ mean collision frequency, but MCF also reproduces the exponential
 distribution of time between collisions exactly, which can make it
 more accurate when cells contain few particles or the timestep is
 large relative to the local mean collision time.  See
-:ref:`(Pikus19) <Pikus19>` for a comparison of the two schemes in SPARTA.
+`(Pikus19) <#Pikus19>`_ for a comparison of the two schemes in SPARTA.
 When *mcf* is specified, the *remain* keyword setting has no effect,
 since no fractional attempt count is computed.
 
@@ -133,12 +133,12 @@ are within a distance R, the closest J particle to I is selected.  An
 exception to these rules is that a particle J is not considered for a
 collision if the I,J pair were the most recent collision partners (in
 the current timestep) for each other.  The convergence properties of
-this near-neighbor algorithm are described in :ref:`(Gallis11) <Gallis11>`.
+this near-neighbor algorithm are described in `(Gallis11) <#Gallis11>`_.
 Note that choosing *Nlimit* judiciously will avoid costly searches
 when there are large numbers of particles in some or all grid cells.
 
 If *subcell* is specified, the transient adaptive subcell method of
-Bird :ref:`(Bird09) <Bird09>` is used.  Each timestep the particles in a grid
+Bird `(Bird09) <#Bird09>`_ is used.  Each timestep the particles in a grid
 cell are binned into a transient grid of subcells within the cell, with
 Nsub subcells in each dimension.  Nsub is chosen as the largest integer
 such that the number of subcells does not exceed the number of
@@ -173,7 +173,7 @@ separation distance between colliding particles, which reduces the
 spatial discretization error associated with the grid cell size.  This
 can allow accurate simulations with grid cells comparable to the local
 mean free path, instead of the usual recommendation of 1/3 or smaller,
-as described in :ref:`(Bird09) <Bird09>` and :ref:`(Gallis11) <Gallis11>`.  The
+as described in `(Bird09) <#Bird09>`_ and `(Gallis11) <#Gallis11>`_.  The
 cost of selecting a partner does not depend on a user-chosen search
 limit as with *nearcp*\ ; for cells with many particles the subcell
 method is typically faster than *nearcp* with a large *Nlimit*\ .
@@ -265,12 +265,20 @@ ambipolar no, nearcp no, subcell no, rotate smooth, and vibrate = no.
 
 .. _Bird94:
 
+.. raw:: html
+
+   <span id="Bird94"></span>
+
 
 
 **(Bird94)** G. A. Bird, Molecular Gas Dynamics and the Direct
 Simulation of Gas Flows, Clarendon Press, Oxford (1994).
 
 .. _Bird09:
+
+.. raw:: html
+
+   <span id="Bird09"></span>
 
 
 
@@ -280,6 +288,10 @@ Carlo algorithm for simulating noncontinuum gas flows," Physics of
 Fluids, 21, 017103 (2009).
 
 .. _Gallis11:
+
+.. raw:: html
+
+   <span id="Gallis11"></span>
 
 
 
@@ -291,6 +303,10 @@ Numerical Methods in Fluids, 67(8):1057-1072. DOI:10.1002/fld.2409
 
 .. _Ivanov88:
 
+.. raw:: html
+
+   <span id="Ivanov88"></span>
+
 
 
 **(Ivanov88)** M. S. Ivanov, S. V. Rogasinsky, "Analysis of numerical
@@ -299,6 +315,10 @@ gas dynamics," Soviet Journal of Numerical Analysis and Mathematical
 Modelling, 3(6):453-465 (1988).
 
 .. _Pikus19:
+
+.. raw:: html
+
+   <span id="Pikus19"></span>
 
 
 

@@ -159,7 +159,7 @@ function will be executed.
    script (with 2 exceptions, read further).  This is to allow an input
    script to be processed multiple times without resetting the variables;
    see the :doc:`jump <jump>` or :doc:`include <include>` commands.  It also
-   means that using the :ref:`command-line switch <start_7>`
+   means that using the `command-line switch <Section_start.html#start_7>`_
    -var will override a corresponding index variable setting in the input
    script.
 
@@ -183,7 +183,7 @@ Variables are \*\*not\*\* deleted by the :doc:`clear <clear>` command.
 ----------
 
 
-:ref:`Section 3.2 <cmd_2>` of the manual explains how
+`Section 3.2 <Section_commands.html#cmd_2>`_ of the manual explains how
 occurrences of a variable name in an input script line are replaced by
 the variable's string.  The variable name can be referenced as $x if
 the name "x" is a single character, or as ${LoopVar} if the name
@@ -235,7 +235,7 @@ string is assigned.  All processors assign the same string to the
 variable.
 
 *Index* style variables with a single string value can also be set by
-using the command-line switch -var; see :ref:`Section 2.6 <start_7>` of the manual for details.
+using the command-line switch -var; see `Section 2.6 <Section_start.html#start_7>`_ of the manual for details.
 
 The *loop* style is identical to the *index* style except that the
 strings are the integers from 1 to N inclusive, if only one argument N
@@ -250,7 +250,7 @@ inclusive, and the string N1 is initially assigned to the variable.
 N1 <= N2 and N2 >= 0 is required.
 
 For the *world* style, one or more strings are specified.  There must
-be one string for each processor partition or "world".  See :ref:`Section 2.6 <start_7>` of the manual for information on
+be one string for each processor partition or "world".  See `Section 2.6 <Section_start.html#start_7>`_ of the manual for information on
 running SPARTA with multiple partitions via the "-partition"
 command-line switch.  This variable command assigns one string to each
 world.  All processors in the world are assigned the same string.  The
@@ -260,7 +260,7 @@ you wish to run different simulations on different partitions.
 
 For the *universe* style, one or more strings are specified.  There
 must be at least as many strings as there are processor partitions or
-"worlds".  See :ref:`this page <start_7>` for information
+"worlds".  See `this page <Section_start.html#start_7>`_ for information
 on running SPARTA with multiple partitions via the "-partition"
 command-line switch.  This variable command initially assigns one
 string to each world.  When a :doc:`next <next>` command is encountered
@@ -389,12 +389,12 @@ each particle whenever it is evaluated.  For *grid* style variables
 the formula computes one quantity for each grid cell whenever it is
 evaluated.  A *grid* style variable computes quantites for all flavors
 of child grid cells in the simulation, which includes unsplit, cut,
-split, and sub cells.  See :ref:`Section 6.8 <howto_8>` of
+split, and sub cells.  See `Section 6.8 <Section_howto.html#howto_8>`_ of
 the manual gives details of how SPARTA defines child, unsplit, split,
 and sub cells.  For *surf* style variables the formula computes one
 quantity for each surface element (line or triangle) whenever it is
 evaluated.  They can only be defined for explicit surfaces, not
-implicit surfaces.  See :ref:`Section 6.9 <howto_9>` of
+implicit surfaces.  See `Section 6.9 <Section_howto.html#howto_9>`_ of
 the manual for a description of both kinds of surface elements.
 
 Note that *equal*\ , *particle*\ , *grid*\ , and *surf* variables can
@@ -782,7 +782,7 @@ as a literal string and must not have any blanks in it.
 The extract\_setting(name) function returns the value of the setting
 *name* as a number.  It gives an input script access to basic settings
 of the SPARTA executable and of the running simulation, by calling the
-sparta\_extract\_setting() library function; :ref:`Section howto <howto_6>` lists the settings *name* may be.
+sparta\_extract\_setting() library function; `Section howto <Section_howto.html#howto_6>`_ lists the settings *name* may be.
 It is an error if *name* is not one of them.  Note that *name* is taken
 as a literal string and must not have any blanks in it, and that it is
 not enclosed in quotes.
@@ -790,7 +790,7 @@ not enclosed in quotes.
 This is how an input script asks for something it has no other way to
 see, most usefully the number of MPI ranks it is running on.  A script
 whose decomposition must match the launcher would otherwise have to be
-told the rank count with the :ref:`-var <start_7>`
+told the rank count with the `-var <Section_start.html#start_7>`_
 command-line switch, and when the two disagree it builds a processor
 grid for the wrong size; the mismatch then surfaces much later as a
 "Bad grid of processors" error that cannot say what was intended.  For
@@ -810,7 +810,7 @@ to rank, and a variable built from it has a different value on every
 rank.  That is fine for a :doc:`print <print>` of per-rank information
 and wrong for anything that must agree across ranks, such as a
 :doc:`region <region>` or a :doc:`create\_grid <create_grid>` argument.
-Second, under the :ref:`-partition <start_7>` switch,
+Second, under the `-partition <Section_start.html#start_7>`_ switch,
 *world\_size* and *world\_rank* are the size of and the rank within the
 partition running the script, matching every other per-partition
 quantity a script sees; use *universe\_size* and *universe\_rank* for the
@@ -1059,7 +1059,7 @@ cell, or per surface element.  They can be defined and initialized in
 data files, e.g. via the :doc:`read\_surf <read_surf>` command.  Or they
 can be defined and used by specific commands, e.g. :doc:`fix ambipolar <fix_ambipolar>` or :doc:`fix surf/temp <fix_surf_temp>` or
 :doc:`surf\_react adsorb <surf_react_adsorb>`.  The name of each
-attribute sis set by the user or defined by the command.  See :ref:`Section 6.17 <howto_17>` for more discussion of custom
+attribute sis set by the user or defined by the command.  See `Section 6.17 <Section_howto.html#howto_17>`_ for more discussion of custom
 attributes.
 
 Single-value attributes are referred to as per-particle, per-grid, or
@@ -1158,7 +1158,7 @@ sign (e.g. $x or ${abc}) versus with a leading "v\_" (e.g. v\_x or
 v\_abc).  The former can be used in any input script command, including
 a variable command.  The input script parser evaluates the reference
 variable immediately and substitutes its value into the command.  As
-explained in :ref:`Section commands 3.2 <cmd_2>` for
+explained in `Section commands 3.2 <Section_commands.html#cmd_2>`_ for
 "Parsing rules", you can also use un-named "immediate" variables for
 this purpose.  For example, a string like this
 $((xlo+xhi)/2+sqrt(v\_area)) in an input script command evaluates the
@@ -1215,7 +1215,7 @@ if it contains variables preceeded by $ signs.  For example,
 
    variable nratio equal "${nfinal}/${n0}"
 
-This is because the quotes prevent variable substitution (see :ref:`Section 3.2 <cmd_2>` of the manual on parsing input script
+This is because the quotes prevent variable substitution (see `Section 3.2 <Section_commands.html#cmd_2>`_ of the manual on parsing input script
 commands), and thus an error will occur when the formula for "nratio"
 is evaluated later.
 

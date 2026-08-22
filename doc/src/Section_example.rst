@@ -1,5 +1,5 @@
-Example problems
-================
+7. Example problems
+===================
 
 The SPARTA distribution includes an examples sub-directory with
 several sample problems.  Each problem is in a sub-directory of its

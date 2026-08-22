@@ -103,7 +103,7 @@ with implicit surface elements.
 Explicit surface elements are triangles for 3d simulations and line
 segments for 2d simulations.  Unlike implicit surface elements, each
 explicit triangle or line segment may span multiple grid cells.  See
-:ref:`Section 6.9 <howto_9>` of the manual for details.
+`Section 6.9 <Section_howto.html#howto_9>`_ of the manual for details.
 
 Note that when a particle collides with a surface element, it can
 bounce off (possibly as a different species), be captured by the
@@ -394,7 +394,7 @@ the *norm* keyword below.
 **Transparent surface elements:**
 
 This compute will tally information on particles that pass through
-transparent surface elements.  The :ref:`Section 6.15 <howto_15>` doc page provides an overview of
+transparent surface elements.  The `Section 6.15 <Section_howto.html#howto_15>`_ doc page provides an overview of
 transparent surfaces and how to create them.
 
 The *n* and *nwt* value are calculated the same for transparent
@@ -407,7 +407,7 @@ incident particle as if it had struck the surface.  The outgoing
 particle is ignored.  This means the tally quantity is the flux of
 particles onto the outward face of the surface.  No tallying is done
 for particles hitting the inward face of the transparent surface.  See
-:ref:`Section 6.15 <howto_15>` for how to do tallying in
+`Section 6.15 <Section_howto.html#howto_15>`_ for how to do tallying in
 both directions.
 
 All the other values are calculated as described above.  This means
@@ -478,7 +478,7 @@ Surface elements not in the specified *group-ID* will output zeroes
 for all their values.
 
 The array can be accessed by any command that uses per-surf values
-from a compute as input.  See :ref:`Section 6.4 <howto_4>`
+from a compute as input.  See `Section 6.4 <Section_howto.html#howto_4>`_
 for an overview of SPARTA output options.
 
 The per-surf array values will be in the :doc:`units <units>`
@@ -501,10 +501,10 @@ same results, except for different random number, round-off and
 precision issues.
 
 These accelerated styles are part of the KOKKOS package. They are only
-enabled if SPARTA was built with that package.  See the :ref:`Making SPARTA <start_3>` section for more info.
+enabled if SPARTA was built with that package.  See the `Making SPARTA <Section_start.html#start_3>`_ section for more info.
 
 You can specify the accelerated styles explicitly in your input script
-by including their suffix, or you can use the :ref:`-suffix command-line switch <start_7>` when you invoke SPARTA, or you can
+by including their suffix, or you can use the `-suffix command-line switch <Section_start.html#start_7>`_ when you invoke SPARTA, or you can
 use the :doc:`suffix <suffix>` command in your input script.
 
 See the :doc:`Accelerating SPARTA <Section_accelerate>` section of the

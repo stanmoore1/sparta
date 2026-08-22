@@ -92,7 +92,7 @@ child cells to each processor.
 
 .. warning::
 
-   See :ref:`Section 6.8 <howto_8>` of the
+   See `Section 6.8 <Section_howto.html#howto_8>`_ of the
    manual for an explanation of clumped and dispersed grid cell
    assignments and their relative performance trade-offs.
 

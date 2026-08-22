@@ -60,6 +60,11 @@ extensions = [
     'anchor_compat',
 ]
 
+# Sphinx turns straight quotes into typographic ones by default.  The
+# manual quotes input-script syntax constantly, and the txt2html pages used
+# straight quotes throughout, so leave the characters as written.
+smartquotes = False
+
 source_suffix = '.rst'
 master_doc = 'Manual'
 exclude_patterns = ['_build']

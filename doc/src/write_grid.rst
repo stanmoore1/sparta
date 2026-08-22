@@ -36,7 +36,7 @@ Description
 
 Write a grid file in text format listing the grid cell IDs in the
 current hierarchical grid.  See the :doc:`read\_grid <read_grid>` and
-:doc:`create\_grid <create_grid>` commands, as well as :ref:`Section 6.8 <howto_8>` of the manual for a definition of
+:doc:`create\_grid <create_grid>` commands, as well as `Section 6.8 <Section_howto.html#howto_8>`_ of the manual for a definition of
 hierarchical grids and grid cell IDs as used by SPARTA.  Note that if
 the grid is hierarchical, grid cell IDs are not simply numbered from 1
 to N.  They also encode the cell's logical position within the grid

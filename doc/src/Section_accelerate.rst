@@ -1,5 +1,5 @@
-Accelerating SPARTA performance
-===============================
+5. Accelerating SPARTA performance
+==================================
 
 This section describes various methods for improving SPARTA
 performance for different classes of problems running on different
@@ -10,9 +10,9 @@ packages provided with SPARTA that
 contains code optimized for certain kinds of hardware, including
 multi-core CPUs and GPUs.
 
-* 5.1 :ref:`Measuring performance <acc_1>`
-* 5.2 :ref:`Accelerator packages with optimized styles <acc_2>`
-* 5.3 :ref:`KOKKOS package <acc_3>`
+* 5.1 `Measuring performance <#acc_1>`_
+* 5.2 `Accelerator packages with optimized styles <#acc_2>`_
+* 5.3 `KOKKOS package <#acc_3>`_
 
 The `Benchmark page <https://sparta.github.io/bench.html>`_ of the SPARTA
 web site gives performance results for the various accelerator
@@ -26,8 +26,12 @@ compute nodes, on different hardware platforms.
 
 .. _acc_1:
 
-Measuring performance
----------------------------------
+.. raw:: html
+
+   <span id="acc_1"></span>
+
+5.1 Measuring performance
+---------------------------------------------------------------------------------
 
 Before trying to make your simulation run faster, you should
 understand how it currently performs and where the bottlenecks are.
@@ -41,7 +45,7 @@ typically no need to run for 1000s of timesteps to get accurate
 timings; you can simply extrapolate from short runs.
 
 For the set of runs, look at the timing data printed to the screen and
-log file at the end of each SPARTA run.  :ref:`This section <start_8>` of the manual has an overview.
+log file at the end of each SPARTA run.  `This section <Section_start.html#start_8>`_ of the manual has an overview.
 
 Running on one (or a few processors) should give a good estimate of
 the serial performance and what portions of the timestep are taking
@@ -75,8 +79,12 @@ SPARTA, to obtain synchronized timings.
 
 .. _acc_2:
 
-Packages with optimized styles
-------------------------------------------
+.. raw:: html
+
+   <span id="acc_2"></span>
+
+5.2 Packages with optimized styles
+------------------------------------------------------------------------------------------
 
 Accelerated versions of various :doc:`collide\_style <collide>`,
 :doc:`fixes <fix>`, :doc:`computes <compute>`, and other commands have
@@ -106,7 +114,7 @@ random numbers.
 For example, the KOKKOS package provides an accelerated variant of the
 Temperature Compute :doc:`compute temp <compute_temp>`, namely :doc:`compute temp/kk <compute_temp>`
 
-To see what accelerate styles are currently available, see :ref:`Section 3.5 <cmd_5>` of the manual.  The doc pages for
+To see what accelerate styles are currently available, see `Section 3.5 <Section_commands.html#cmd_5>`_ of the manual.  The doc pages for
 individual commands (e.g. :doc:`compute temp <compute_temp>`) also list
 any accelerated variants available for that style.
 
@@ -125,15 +133,15 @@ using CMake from a build directory:
 
 Then do the following:
 
-+----------------------------------------------------------------------------------------------------------------------------+--------------------------------------------------------------------------------+
-| prepare and test a regular SPARTA simulation                                                                               | lmp\_kokkos\_cuda -in in.script; mpirun -np 32 lmp\_kokkos\_cuda -in in.script |
-+----------------------------------------------------------------------------------------------------------------------------+--------------------------------------------------------------------------------+
-| enable specific accelerator support via '-k on' :ref:`command-line switch <start_7>`,                                      | -k on g 1                                                                      |
-+----------------------------------------------------------------------------------------------------------------------------+--------------------------------------------------------------------------------+
-| set any needed options for the package via "-pk" :ref:`command-line switch <start_7>` or :doc:`package <package>` command, | only if defaults need to be changed, -pk kokkos react/retry yes                |
-+----------------------------------------------------------------------------------------------------------------------------+--------------------------------------------------------------------------------+
-| use accelerated styles in your input via "-sf" :ref:`command-line switch <start_7>` or :doc:`suffix <suffix>` command      | lmp\_kokkos\_cuda -in in.script -sf kk                                         |
-+----------------------------------------------------------------------------------------------------------------------------+--------------------------------------------------------------------------------+
++-------------------------------------------------------------------------------------------------------------------------------------------+--------------------------------------------------------------------------------+
+| prepare and test a regular SPARTA simulation                                                                                              | lmp\_kokkos\_cuda -in in.script; mpirun -np 32 lmp\_kokkos\_cuda -in in.script |
++-------------------------------------------------------------------------------------------------------------------------------------------+--------------------------------------------------------------------------------+
+| enable specific accelerator support via '-k on' `command-line switch <Section_start.html#start_7>`_,                                      | -k on g 1                                                                      |
++-------------------------------------------------------------------------------------------------------------------------------------------+--------------------------------------------------------------------------------+
+| set any needed options for the package via "-pk" `command-line switch <Section_start.html#start_7>`_ or :doc:`package <package>` command, | only if defaults need to be changed, -pk kokkos react/retry yes                |
++-------------------------------------------------------------------------------------------------------------------------------------------+--------------------------------------------------------------------------------+
+| use accelerated styles in your input via "-sf" `command-line switch <Section_start.html#start_7>`_ or :doc:`suffix <suffix>` command      | lmp\_kokkos\_cuda -in in.script -sf kk                                         |
++-------------------------------------------------------------------------------------------------------------------------------------------+--------------------------------------------------------------------------------+
 
 Note that the first 3 steps can be done as a single command with
 suitable make command invocations. This is discussed in :doc:`Section 4 <Section_packages>` of the manual, and its use is illustrated in
@@ -176,8 +184,12 @@ The KOKKOS accelerator package doc page explains:
 
 .. _acc_3:
 
-KOKKOS package
---------------------------
+.. raw:: html
+
+   <span id="acc_3"></span>
+
+5.3 KOKKOS package
+--------------------------------------------------------------------------
 
 Kokkos is a templated C++ library that provides abstractions to allow
 a single implementation of an application kernel (e.g. a collision
@@ -439,10 +451,10 @@ acceleration, assuming one or more 16-core nodes.
    mpirun -np 32 -ppn 4 spa_kokkos_omp -k on t 4 -sf kk -in in.collide  # 8 nodes, 4 MPI tasks/node, 4 threads/task
 
 To run using the KOKKOS package, use the "-k on", "-sf kk" and "-pk
-kokkos" :ref:`command-line switches <start_7>` in your
-mpirun command.  You must use the "-k on" :ref:`command-line switch <start_7>` to enable the KOKKOS package. It
+kokkos" `command-line switches <Section_start.html#start_7>`_ in your
+mpirun command.  You must use the "-k on" `command-line switch <Section_start.html#start_7>`_ to enable the KOKKOS package. It
 takes additional arguments for hardware settings appropriate to your
-system. Those arguments are :ref:`documented here <start_7>`. For OpenMP use:
+system. Those arguments are `documented here <Section_start.html#start_7>`_. For OpenMP use:
 
 
 .. parsed-literal::
@@ -460,7 +472,7 @@ command (with no additional arguments) which sets various KOKKOS
 options to default values, as discussed on the :doc:`package <package>`
 command doc page.
 
-The "-sf kk" :ref:`command-line switch <start_7>` will
+The "-sf kk" `command-line switch <Section_start.html#start_7>`_ will
 automatically append the "/kk" suffix to styles that support it.  In
 this manner no modification to the input script is
 needed. Alternatively, one can run with the KOKKOS package by editing
@@ -477,7 +489,7 @@ the input script as described below.
    The default for the :doc:`package kokkos <package>` command is to
    use "threaded" communication. However, when running on CPUs, it will
    typically be faster to use "classic" non-threaded communication.  Use
-   the "-pk kokkos" :ref:`command-line switch <start_7>` to
+   the "-pk kokkos" `command-line switch <Section_start.html#start_7>`_ to
    change the default :doc:`package kokkos <package>` options. See its doc
    page for details and default settings. Experimenting with its options
    can provide a speed-up for specific calculations. For example:
@@ -524,7 +536,7 @@ option, compile SPARTA the KOKKOS HWLOC=yes option as described below.
 
 **Running on GPUs:**
 
-Use the "-k" :ref:`command-line switch <start_7>` to
+Use the "-k" `command-line switch <Section_start.html#start_7>`_ to
 specify the number of GPUs per node, and the number of threads per MPI
 task. Typically the -np setting of the mpirun command should set the
 number of MPI tasks/node to be equal to the # of physical GPUs on the
@@ -553,7 +565,7 @@ one or more nodes, each with two GPUs.
 
 .. note::
 
-   Use the "-pk kokkos" :ref:`command-line switch <start_7>` to change the default :doc:`package kokkos <package>` options. See its doc page for details and default
+   Use the "-pk kokkos" `command-line switch <Section_start.html#start_7>`_ to change the default :doc:`package kokkos <package>` options. See its doc page for details and default
    settings. For example:
 
 
@@ -615,7 +627,7 @@ duplicated by adding the :doc:`package kokkos <package>` or :doc:`suffix kk <suf
 The discussion above for building SPARTA with the KOKKOS package, the
 mpirun/mpiexec command, and setting appropriate thread are the same.
 
-You must still use the "-k on" :ref:`command-line switch <start_7>` to enable the KOKKOS package, and
+You must still use the "-k on" `command-line switch <Section_start.html#start_7>`_ to enable the KOKKOS package, and
 specify its additional arguments for hardware options appropriate to
 your system, as documented above.
 
@@ -629,7 +641,7 @@ You can use the :doc:`suffix kk <suffix>` command, or you can explicitly add a
 
 You only need to use the :doc:`package kokkos <package>` command if you
 wish to change any of its option defaults, as set by the "-k on"
-:ref:`command-line switch <start_7>`.
+`command-line switch <Section_start.html#start_7>`_.
 
 **Speed-ups to expect:**
 

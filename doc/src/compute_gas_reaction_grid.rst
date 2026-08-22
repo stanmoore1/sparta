@@ -99,7 +99,7 @@ The remaining columns (one per numeric keyword) will be the counts of only
 the specific reactions listed.
 
 The vector or array can be accessed by any command that uses per-grid
-values from a compute as input.  See :ref:`Section 6.4 <howto_4>` for an overview of SPARTA output
+values from a compute as input.  See `Section 6.4 <Section_howto.html#howto_4>`_ for an overview of SPARTA output
 options.
 
 

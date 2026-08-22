@@ -360,7 +360,7 @@ means of creating quantities to output to a dump file.
 
 The *p\_name* and *p\_name[N]* attributes allow custom per-particle
 vectors or arrays defined by some other command to be output.  The
-name should be replaced by the name of the attribute.  See :ref:`Section 6.17 <howto_17>` for more discussion of custom
+name should be replaced by the name of the attribute.  See `Section 6.17 <Section_howto.html#howto_17>`_ for more discussion of custom
 attributes and command that define them.  For example, the :doc:`fix ambipolar <fix_ambipolar>` command which defines the per-particle
 custom vector "ionambi" and custom array "velambi".
 
@@ -384,7 +384,7 @@ as part of the *grid* style.
 
 Note that dump grid will output one line (per snapshot) for 3 kinds of
 child cells: unsplit cells, cut cells, and sub cells of split cells.
-:ref:`Section 6.8 <howto_8>` of the manual gives details
+`Section 6.8 <Section_howto.html#howto_8>`_ of the manual gives details
 of how SPARTA defines child, unsplit, cut, split, and sub cells.  This
 is different than :doc:`compute <compute>` or :doc:`fix <fix>` commands
 which produce per grid information; they also include split cells in
@@ -424,7 +424,7 @@ attributes are the same for multiple sub-cells of a single split cell
 they are part of.
 
 The *vol* attribute is the flow volume of the grid cell (or area in
-2d) for unsplit or cut or sub cells.  :ref:`Section 6.8 <howto_8>` of the manual gives details of how
+2d) for unsplit or cut or sub cells.  `Section 6.8 <Section_howto.html#howto_8>`_ of the manual gives details of how
 SPARTA defines unsplit and sub cells.  Flow volume is the portion of
 the grid cell that is accessible to particles, i.e. outside any closed
 surface that may intersect the cell.  Note that unsplit cells which
@@ -470,7 +470,7 @@ quantities to output to a dump file.
 
 The *g\_name* and *g\_name[N]* attributes allow custom per-grid cell
 vectors or arrays defined by some other command to be output.  The
-name should be replaced by the name of the attribute.  See :ref:`Section 6.17 <howto_17>` for more discussion of custom
+name should be replaced by the name of the attribute.  See `Section 6.17 <Section_howto.html#howto_17>`_ for more discussion of custom
 attributes and command that define them.  For example, the
 :doc:`read\_grid <read_grid>` and surf\_react implicit commands can define per-grid
 attributes.  (The surf/react implicit command has not yet been
@@ -547,7 +547,7 @@ quantities to output to a dump file.
 The *s\_name* and *s\_name[N]* attributes allow custom per-surface
 element vectors or arrays defined by some other command to be output.
 The name should be replaced by the name of the attribute.  See
-:ref:`Section 6.17 <howto_17>` for more discussion of
+`Section 6.17 <Section_howto.html#howto_17>`_ for more discussion of
 custom attributes and command that define them.  For example, the
 :doc:`read\_surf <read_surf>`, :doc:`fix surf/temp <fix_surf_temp>`, and
 :doc:`surf\_react adsorb <surf_react_adsorb>` commands can define
@@ -592,7 +592,7 @@ Restrictions
 """"""""""""
 
 To write gzipped dump files, you must compile SPARTA with the
--DSPARTA\_GZIP option - see the :ref:`Making SPARTA <start_2>`
+-DSPARTA\_GZIP option - see the `Making SPARTA <Section_start.html#start_2>`_
 section of the documentation.
 
 Related commands

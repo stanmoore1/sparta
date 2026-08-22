@@ -39,7 +39,7 @@ Description
 
 This command converts all currently defined explicit surface elements
 to implicit surface elements.  One motivation for this operation is
-that implicit surfaces can be ablated over time via the :doc:`fix ablate <fix_ablate>` command.  See the :ref:`How to 6.13 <howto_13>` section of the manual for an
+that implicit surfaces can be ablated over time via the :doc:`fix ablate <fix_ablate>` command.  See the `How to 6.13 <Section_howto.html#howto_13>`_ section of the manual for an
 explantion of explicit versus implicit surfaces.
 
 Explicit surface elements are triangles in 3d or line segments in 2d.
@@ -57,7 +57,7 @@ points.  See the :doc:`read\_isurf <read_isurf>` command for details.
 
 This command derives the 2d or 3d grid of corner point values from the
 set of explicit surface elements, rather then reading them from a
-file :ref:`(Hong24) <Hong24>`.  It then proceeds similarly to the :doc:`read\_isurf <read_isurf>`
+file `(Hong24) <#Hong24>`_.  It then proceeds similarly to the :doc:`read\_isurf <read_isurf>`
 command where implicit line segments or triangles within each grid
 cell are calculated from the 4 or 8 corner points of the cell.  When
 the process is complete, all explicit surfaces are removed from the
@@ -323,6 +323,10 @@ none
 
 
 .. _Hong24:
+
+.. raw:: html
+
+   <span id="Hong24"></span>
 
 
 

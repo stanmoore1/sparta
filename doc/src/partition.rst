@@ -31,7 +31,7 @@ Description
 
 This command invokes the specified command on a subset of the
 partitions of processors you have defined via the -partition
-command-line switch.  See :ref:`Section 2.6 <start_7>` of
+command-line switch.  See `Section 2.6 <Section_start.html#start_7>`_ of
 the manual for an explanation of the switch.
 
 Normally, every input script command in your script is invoked by
@@ -52,7 +52,7 @@ will be invoked on all the partitions which do not match the Np
 argument.
 
 Partitions are numbered from 1 to Np, where Np is the number of
-partitions specified by the :ref:`-partition command-line switch <start_7>`.
+partitions specified by the `-partition command-line switch <Section_start.html#start_7>`_.
 
 *N* can be specified in one of two ways.  An explicit numeric value
 can be used, as in the 1st example above.  Or a wild-card asterisk can

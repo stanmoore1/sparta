@@ -170,7 +170,7 @@ this is a very general means of specifying quantities to time average.
 
 If a value begins with "g\_", the name of a custom per-grid vector or
 array must follow.  Custom attributes can store either a single or
-multiple values per grid cell.  See :ref:`Section 6.17 <howto_17>` for more discussion of custom
+multiple values per grid cell.  See `Section 6.17 <Section_howto.html#howto_17>`_ for more discussion of custom
 attributes and command that define them.  For example, the
 :doc:`read\_grid <read_grid>` and surf\_react implicit commands can define per-grid
 attributes.  (The surf/react implicit command has not yet been
@@ -245,7 +245,7 @@ only be accessed on timesteps that are multiples of *Nfreq* since that
 is when averaging is performed.
 
 This fix performs averaging for all child grid cells in the
-simulation, which includes unsplit, split, and sub cells.  :ref:`Section 6.8 <howto_8>` of the manual gives details of how
+simulation, which includes unsplit, split, and sub cells.  `Section 6.8 <Section_howto.html#howto_8>`_ of the manual gives details of how
 SPARTA defines child, unsplit, split, and sub cells.
 
 Grid cells not in the specified *group-ID* will output zeroes for all
@@ -264,10 +264,10 @@ same results, except for different random number, round-off and
 precision issues.
 
 These accelerated styles are part of the KOKKOS package. They are only
-enabled if SPARTA was built with that package.  See the :ref:`Making SPARTA <start_3>` section for more info.
+enabled if SPARTA was built with that package.  See the `Making SPARTA <Section_start.html#start_3>`_ section for more info.
 
 You can specify the accelerated styles explicitly in your input script
-by including their suffix, or you can use the :ref:`-suffix command-line switch <start_7>` when you invoke SPARTA, or you can
+by including their suffix, or you can use the `-suffix command-line switch <Section_start.html#start_7>`_ when you invoke SPARTA, or you can
 use the :doc:`suffix <suffix>` command in your input script.
 
 See the :doc:`Accelerating SPARTA <Section_accelerate>` section of the

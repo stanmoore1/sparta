@@ -73,7 +73,7 @@ computations to add particles.  The particles are added at the
 beginning of the SPARTA timestep.
 
 The molecular flux across a grid cell face per unit time is given by
-equation 4.22 of :ref:`(Bird94) <Bird94>`.  The number of particles *M* to
+equation 4.22 of `(Bird94) <#Bird94>`_.  The number of particles *M* to
 insert on a particular grid cell face is based on this flux and
 additional global, flow, and cell face properties:
 
@@ -197,13 +197,13 @@ current timestep, so this is a simple way to insert a time-varying
 flow of particles.
 
 The *subsonic* keyword uses the method of Fang and Liou
-:ref:`(Fang02) <Fang02>` to determine the number of particles to insert in
+`(Fang02) <#Fang02>`_ to determine the number of particles to insert in
 each grid cell on the emitting face(s).  They used the method of
 characteristics to calculate the mean properties of the incoming
 molecular flux, so that the prescribed pressure condition is achieved.
 These properties are then applied to calculate the molecular flux
 across a grid cell face per unit time, as given by equation 4.22 of
-:ref:`(Bird94) <Bird94>`.
+`(Bird94) <#Bird94>`_.
 
 This keyword allows specification of both the pressure and temperature
 at the boundary or just the pressure (by specifying the temperature as
@@ -273,10 +273,10 @@ same results, except for different random number, round-off and
 precision issues.
 
 These accelerated styles are part of the KOKKOS package. They are only
-enabled if SPARTA was built with that package.  See the :ref:`Making SPARTA <start_3>` section for more info.
+enabled if SPARTA was built with that package.  See the `Making SPARTA <Section_start.html#start_3>`_ section for more info.
 
 You can specify the accelerated styles explicitly in your input script
-by including their suffix, or you can use the :ref:`-suffix command-line switch <start_7>` when you invoke SPARTA, or you can
+by including their suffix, or you can use the `-suffix command-line switch <Section_start.html#start_7>`_ when you invoke SPARTA, or you can
 use the :doc:`suffix <suffix>` command in your input script.
 
 See the :doc:`Accelerating SPARTA <Section_accelerate>` section of the
@@ -324,12 +324,20 @@ none, no modulate setting, no subsonic settings, no twopass setting.
 
 .. _Bird94:
 
+.. raw:: html
+
+   <span id="Bird94"></span>
+
 
 
 **(Bird94)** G. A. Bird, Molecular Gas Dynamics and the Direct
 Simulation of Gas Flows, Clarendon Press, Oxford (1994).
 
 .. _Fang02:
+
+.. raw:: html
+
+   <span id="Fang02"></span>
 
 
 

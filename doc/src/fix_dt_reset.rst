@@ -40,7 +40,7 @@ cell timesteps calculated by a compute or fix.  The new global
 timestep can be output by the :doc:`stats\_style <stats_style>` command.
 Or it can be used to overwrite the current global timestep for a
 variable time simulation.  See this
-:ref:`section <howto_17>` of the manual for more
+`section <Section_howto.html#howto_17>`_ of the manual for more
 information on variable timestep simulations.
 
 The *Nfreq* argument specifies how often the global timestep is calculated.
@@ -69,7 +69,7 @@ Note that some of the per-cell timesteps may be zero for several reasons.  First
 data used to calculate the timestep, such as mean collision time, temperature, or particle speed, may be zero.
 Also, some cells may not contain particles, either due to their type or to local flow conditions.
 For example, split cells (in which sub cells store the particles) and cells interior to surface
-objects do not store particles.  See :ref:`Section 6.8 <howto_8>` of the manual for
+objects do not store particles.  See `Section 6.8 <Section_howto.html#howto_8>`_ of the manual for
 details of how SPARTA defines child, unsplit, split, and sub cells.
 
 From the per-cell timesteps, 3 values are extracted by this fix.  They

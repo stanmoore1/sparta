@@ -46,14 +46,38 @@ def _on_page(app, pagename, templatename, context, doctree):
     body = context.get('body')
     if not body:
         return
-    have = set(re.findall(r'\bid="([^"]+)"', body))
+    have = {m.group(1): m.start() for m in re.finditer(r'\bid="([^"]+)"', body)}
     missing = [a for a in anchors if a not in have]
     if not missing:
         return
-    spans = ''.join(f'<span id="{a}"></span>' for a in missing)
-    context['body'] = body + (
-        '\n<!-- anchors from the txt2html manual, kept so inbound links '
-        'still resolve -->\n' + spans + '\n')
+
+    # An anchor is a scroll position, not just a name.  docutils usually
+    # emits the same anchor lowercased, on the very element the anchor
+    # belonged to, so put the original name immediately before that element
+    # rather than at the end of the page -- otherwise following an inbound
+    # link lands at the bottom of the page instead of at the citation or
+    # section it names.
+    inserts = []
+    trailing = []
+    for a in missing:
+        pos = have.get(a.lower())
+        if pos is None:
+            trailing.append(a)
+            continue
+        tag = body.rfind('<', 0, pos)
+        if tag < 0:
+            trailing.append(a)
+            continue
+        inserts.append((tag, a))
+
+    out = body
+    for pos, a in sorted(inserts, reverse=True):
+        out = out[:pos] + f'<span id="{a}"></span>' + out[pos:]
+    if trailing:
+        out += ('\n<!-- anchors from the txt2html manual with no equivalent '
+                'in this build -->\n'
+                + ''.join(f'<span id="{a}"></span>' for a in trailing) + '\n')
+    context['body'] = out
     app.env.sparta_legacy_added += len(missing)
 
 

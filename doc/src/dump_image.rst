@@ -201,7 +201,7 @@ framerate can be set using the :doc:`dump\_modify <dump_modify>` command.
 To write out JPEG and PNG format files, you must build SPARTA with
 support for the corresponding JPEG or PNG library.  To convert images
 into movies, SPARTA has to be compiled with the -DSPARTA\_FFMPEG flag.
-See :ref:`Section 2.2 <start_2>` of the manual for
+See `Section 2.2 <Section_start.html#start_2>`_ of the manual for
 instructions on how to do this.
 
 
@@ -798,7 +798,7 @@ building SPARTA.  The FFmpeg executable must also be available on the
 machine where SPARTA is being run.  Typically it's name is lowercase,
 i.e. ffmpeg.
 
-See :ref:`Section 2.2.2 <start_2_2_2>` section of the
+See `Section 2.2.2 <Section_start.html#start_2_2_2>`_ section of the
 documentation for details on how to compile with optional switches.
 
 Note that since FFmpeg is run as an external program via a pipe,

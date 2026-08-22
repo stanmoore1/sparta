@@ -45,7 +45,7 @@ domain, as if they were a single particle, which is how they are
 stored within SPARTA.  This means a normal timestep can be used.
 
 An overview of how to run simulations with the ambipolar approximation
-is given in the :ref:`Section 6.11 <howto_11>`.  This
+is given in the `Section 6.11 <Section_howto.html#howto_11>`_.  This
 includes gas-phase collisions and chemistry as well as surface
 chemistry when particles collide with surface elements or the global
 boundary of the simulation box.  The section also lists all the
@@ -105,10 +105,10 @@ same results, except for different random number, round-off and
 precision issues.
 
 These accelerated styles are part of the KOKKOS package. They are only
-enabled if SPARTA was built with that package.  See the :ref:`Making SPARTA <start_3>` section for more info.
+enabled if SPARTA was built with that package.  See the `Making SPARTA <Section_start.html#start_3>`_ section for more info.
 
 You can specify the accelerated styles explicitly in your input script
-by including their suffix, or you can use the :ref:`-suffix command-line switch <start_7>` when you invoke SPARTA, or you can
+by including their suffix, or you can use the `-suffix command-line switch <Section_start.html#start_7>`_ when you invoke SPARTA, or you can
 use the :doc:`suffix <suffix>` command in your input script.
 
 See the :doc:`Accelerating SPARTA <Section_accelerate>` section of the

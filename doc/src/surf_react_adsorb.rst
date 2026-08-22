@@ -76,7 +76,7 @@ reactions that can occur on the surface itself.
 
 One or more models can be defined and assigned to different surfaces
 or simulation box boundaries via the :doc:`surf\_modify <surf_modify>` or
-:doc:`bound\_modify <bound_modify>` commands.  See :ref:`Section 6.9 <howto_9>` for more details of how SPARTA defines
+:doc:`bound\_modify <bound_modify>` commands.  See `Section 6.9 <Section_howto.html#howto_9>`_ for more details of how SPARTA defines
 surfaces as collections of geometric elements, triangles in 3d and
 line segments in 2d.  Also see the :doc:`react <react>` command for
 specification of a gas-phase chemistry reaction model.
@@ -150,7 +150,7 @@ Next the probabilities of each reaction are recomputed and a new
 reaction is chosen based on these probabilties and performed.  This
 process is repeated till the probability of all the reactions reaches
 zero. A detailed description can be found in Swaminathan Gopalan *et
-al.* :ref:`(SG18) <SG18>`.
+al.* `(SG18) <#SG18>`_.
 
 
 ----------
@@ -259,7 +259,7 @@ R2). The incident gas-phase particle can either adsorb P2(s) or
 scatter from the surface P2(g) post collision.
 
 A detailed description of the various types of reactions can be found
-in Swaminathan Gopalan *et al.* :ref:`(SG18) <SG18>`.  Here is a table of
+in Swaminathan Gopalan *et al.* `(SG18) <#SG18>`_.  Here is a table of
 examples for each type of GS reaction.
 
 .. image:: Eqs/GS_list.png
@@ -295,7 +295,7 @@ undergoes a transformation from solid to gas, to form gas-phase
 product P1(g).
 
 A detailed description of the various types of reactions can be found
-in Swaminathan Gopalan *et al.* :ref:`(SG18) <SG18>`.  Here is a table of
+in Swaminathan Gopalan *et al.* `(SG18) <#SG18>`_.  Here is a table of
 examples for each type of PS reaction.
 
 .. image:: Eqs/PS_list.png
@@ -343,8 +343,8 @@ coefficients
 
 Additional optional keywords for GS reactions can be used to define
 the reaction rate constant.  These are *kisliuk*\ : proposed by Kisliuk
-:ref:`(Kisliuk57) <Kisliuk57>`; and *energy*\ : proposed by Beckerle *et al.*
-:ref:`(Beckerle89) <Beckerle89>`.
+`(Kisliuk57) <#Kisliuk57>`_; and *energy*\ : proposed by Beckerle *et al.*
+`(Beckerle89) <#Beckerle89>`_.
 
 *kisliuk* args = A\_k B\_k Ea\_k (only for reactions which includes adsorption - AA, DA, LH1, LH3, and CD)
 
@@ -371,7 +371,7 @@ The final rate of the reaction is computed by the product of the
 reaction rate constant and the surface coverage of all the adsorbed
 reactants. The reaction probability is obtained by normalized all the
 reaction rates. A detailed description can be found in Swaminathan
-Gopalan *et al.* :ref:`(SG18) <SG18>`.
+Gopalan *et al.* `(SG18) <#SG18>`_.
 
 Note that adsorption events are accumulated against the surface state
 stored at the most recent sync, so the influx of an entire *Nsync*
@@ -414,7 +414,7 @@ All the surface reaction models calculate a global vector of values.
 The values can be used by the :doc:`stats\_style <stats_style>` command
 and by :doc:`variables <variable>` that define formulas.  The latter
 means they can be used by any command that uses a variable as input,
-e.g. the :doc:`fix ave/time <fix_ave_time>` command.  See :ref:`Section 6.4 <howto_4>` for an overview of SPARTA output
+e.g. the :doc:`fix ave/time <fix_ave_time>` command.  See `Section 6.4 <Section_howto.html#howto_4>`_ for an overview of SPARTA output
 options.
 
 This *adsorb* style compute a vector of length 2 + 2\*nlist.  Nlist is
@@ -444,10 +444,10 @@ same results, except for different random number, round-off and
 precision issues.
 
 These accelerated styles are part of the KOKKOS package. They are only
-enabled if SPARTA was built with that package.  See the :ref:`Making SPARTA <start_3>` section for more info.
+enabled if SPARTA was built with that package.  See the `Making SPARTA <Section_start.html#start_3>`_ section for more info.
 
 You can specify the accelerated styles explicitly in your input script
-by including their suffix, or you can use the :ref:`-suffix command-line switch <start_7>` when you invoke SPARTA, or you can
+by including their suffix, or you can use the `-suffix command-line switch <Section_start.html#start_7>`_ when you invoke SPARTA, or you can
 use the :doc:`suffix <suffix>` command in your input script.
 
 See the :doc:`Accelerating SPARTA <Section_accelerate>` section of the
@@ -489,6 +489,10 @@ Related commands
 
 .. _SG18:
 
+.. raw:: html
+
+   <span id="SG18"></span>
+
 
 
 **(SG18)** K. Swaminathan Gopalan, "Development of a detailed surface
@@ -497,6 +501,10 @@ chemistry framework in DSMC", AIAA Aerospace Sciences Meeting, Jan
 
 .. _Kisliuk57:
 
+.. raw:: html
+
+   <span id="Kisliuk57"></span>
+
 
 
 **(Kisliuk57)** P. Kisliuk, "The sticking probabilities of gases
@@ -504,6 +512,10 @@ chemisorbed on the surfaces of solids", Journal of Physics and
 Chemistry of Solids, vol. 3, no. 1-2, pp. 95-101, 1957.
 
 .. _Beckerle89:
+
+.. raw:: html
+
+   <span id="Beckerle89"></span>
 
 
 

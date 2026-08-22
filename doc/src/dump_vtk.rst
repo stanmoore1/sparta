@@ -51,7 +51,7 @@ ParaView or VisIt, without the offline conversion done by the scripts
 in the tools/paraview directory.
 
 They are part of the VTK package and require SPARTA to be built with an
-external VTK library.  See the :ref:`Section 2.2 <VTK>` doc page for how to build SPARTA with
+external VTK library.  See the `Section 2.2 <Section_packages.html#VTK>`_ doc page for how to build SPARTA with
 the VTK package.
 
 The geometry written for each style is:
@@ -115,7 +115,7 @@ Restrictions
 
 These styles are part of the VTK package.  They are only enabled if
 SPARTA was built with that package and an external VTK library.  See
-the :ref:`Section 2.2 <VTK>` doc page for details.  The
+the `Section 2.2 <Section_packages.html#VTK>`_ doc page for details.  The
 VTK package must be built with CMake.
 
 For dump grid/vtk, split grid cells (cells cut by a surface into

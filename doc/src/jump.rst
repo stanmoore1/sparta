@@ -49,14 +49,14 @@ script is re-opened and read again.
 
 since the SELF option invokes the C-library rewind() call, which may
 not be supported for stdin on some systems or by some MPI
-implementations.  This can be worked around by using the :ref:`-in command-line argument <start_7>`, e.g.
+implementations.  This can be worked around by using the `-in command-line argument <Section_start.html#start_7>`_, e.g.
 
 
 .. parsed-literal::
 
    spa_g++ -in in.script
 
-or by using the :ref:`-var command-line argument <start_7>` to pass the script name as a
+or by using the `-var command-line argument <Section_start.html#start_7>`_ to pass the script name as a
 variable to the input script.  In the latter case, a
 :doc:`variable <variable>` called "fname" could be used in place of
 SELF, e.g.

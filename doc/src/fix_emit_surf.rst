@@ -66,7 +66,7 @@ Emit particles from a group of surface elements, continuously during a
 simulation.  If invoked every timestep, this fix creates a continuous
 outflux of particles from the surface elements in the group.  This
 command can only be used with explicit surfaces, not implicit.  See
-:ref:`Section Howto 6.13 <howto_13>` for a discussion of
+`Section Howto 6.13 <Section_howto.html#howto_13>`_ for a discussion of
 explicit and implicit surface elements.
 
 The properties of the added particles are determined by the mixture
@@ -84,7 +84,7 @@ add particles for each grid cell/surface element pairing.  The
 particles are added at the beginning of the SPARTA timestep.
 
 The molecular flux emitted from a surface element per unit time is
-given by equation 4.22 of :ref:`(Bird94) <Bird94>`.  The number of particles
+given by equation 4.22 of `(Bird94) <#Bird94>`_.  The number of particles
 *M* to insert on the portion of a surface element that is contained
 within a grid cell is based on this flux and additional global, flow,
 and surface element properties:
@@ -238,13 +238,13 @@ region.
    inside the region.
 
 The *subsonic* keyword uses the method of Fang and Liou
-:ref:`(Fang02) <Fang02>` to determine the number of particles to insert in
+`(Fang02) <#Fang02>`_ to determine the number of particles to insert in
 each grid cell on the emitting face(s).  They used the method of
 characteristics to calculate the mean properties of the incoming
 molecular flux, so that the prescribed pressure condition is achieved.
 These properties are then applied to calculate the molecular flux
 across a grid cell face per unit time, as given by equation 4.22 of
-:ref:`(Bird94) <Bird94>`.
+`(Bird94) <#Bird94>`_.
 
 This keyword allows specification of both the pressure and temperature
 at the surface or just the pressure (by specifying the temperature as
@@ -257,7 +257,7 @@ timestep.
 The optional *window* keyword applies a moving average to the cell
 streaming velocity used by the subsonic boundary condition, to reduce
 the statistical fluctuations inherent in the instantaneous cell values
-(see :ref:`(Sun05) <Sun05>`).  On each timestep the averaged velocity is
+(see `(Sun05) <#Sun05>`_).  On each timestep the averaged velocity is
 vcom = a\*vnew + (1-a)\*vold with a = 1/(Nwin+1), where vnew is the
 current center-of-mass velocity of the cell and vold is the average
 from the previous step; larger *Nwin* gives heavier smoothing.  The
@@ -309,7 +309,7 @@ On each timestep the code computes a single number density that makes
 the *expected* total inserted mass rate, summed over all emitting grid
 cell/surface element pairs (and over all processors), equal to *Mdot*\ .
 It does this from the actual molecular inflow flux (equation 4.22 of
-:ref:`(Bird94) <Bird94>`, the same flux used for insertion) evaluated over
+`(Bird94) <#Bird94>`_, the same flux used for insertion) evaluated over
 the true overlap area of each surface element with its grid cell.  The
 inlet area is therefore computed internally from the surface geometry;
 it is not a user input, so the imposed mass flow rate is independent of
@@ -377,7 +377,7 @@ custom attributes once every N timesteps, which allows for
 time-dependence in per-surface emission properties.  The :doc:`fix surf/temp <fix_surf_temp>` command resets per-surf temperatures
 based on gas collisions with each surface element.
 
-See :ref:`Section Howto 6.17 <howto_17>` for a discussion
+See `Section Howto 6.17 <Section_howto.html#howto_17>`_ for a discussion
 of custom per-surf attributes.
 
 .. warning::
@@ -496,6 +496,10 @@ yes, region = none, no subsonic settings, no mflow settings.  For the
 
 .. _Bird94:
 
+.. raw:: html
+
+   <span id="Bird94"></span>
+
 
 
 **(Bird94)** G. A. Bird, Molecular Gas Dynamics and the Direct
@@ -503,12 +507,20 @@ Simulation of Gas Flows, Clarendon Press, Oxford (1994).
 
 .. _Fang02:
 
+.. raw:: html
+
+   <span id="Fang02"></span>
+
 
 
 **(Fang02)** Y. Fang and W. W. Liou, Microfluid Flow Computations
 Using a Parallel DSMC Code, AIAA 2002-1057. (2002).
 
 .. _Sun05:
+
+.. raw:: html
+
+   <span id="Sun05"></span>
 
 
 

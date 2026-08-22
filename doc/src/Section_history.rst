@@ -1,12 +1,12 @@
-Future and history
-==================
+13. Future and history
+======================
 
 This section lists features we are planning to add to SPARTA, features
 of previous versions of SPARTA, and features of other parallel
 molecular dynamics codes I've distributed.
 
-| 13.1 :ref:`Coming attractions <hist_1>`
-| 13.2 :ref:`Past versions <hist_2>` 
+| 13.1 `Coming attractions <#hist_1>`_
+| 13.2 `Past versions <#hist_2>`_ 
 | 
 
 
@@ -15,8 +15,12 @@ molecular dynamics codes I've distributed.
 
 .. _hist_1:
 
-Coming attractions
--------------------------------
+.. raw:: html
+
+   <span id="hist_1"></span>
+
+13.1 Coming attractions
+---------------------------------------------------------------------------------
 
 Features that have been requested but not yet implemented are tracked
 as `issues <https://github.com/sparta/sparta/issues>`_ in the SPARTA
@@ -33,8 +37,12 @@ You can request a new feature by opening an issue on Github.
 
 .. _hist_2:
 
-Past versions
---------------------------
+.. raw:: html
+
+   <span id="hist_2"></span>
+
+13.2 Past versions
+----------------------------------------------------------------------------
 
 Sandia's predecessor to SPARTA is a DSMC code called ICARUS.  It was
 developed in the early 1990s by Tim Bartel and `Steve Plimpton <https://sjplimp.github.io>`_.  It was later modified and

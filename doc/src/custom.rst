@@ -82,7 +82,7 @@ the *file* action.
 
 Custom attributes can be vectors (single value per entity) or arrays
 (mutiple values per entity).  They can also be integer or floating
-point values.  See :ref:`Section 6.17 <howto_17>` for an
+point values.  See `Section 6.17 <Section_howto.html#howto_17>`_ for an
 explanation of custom attributes.
 
 The *style* setting is *particle* or *grid* or *surf* for custom

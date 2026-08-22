@@ -169,7 +169,7 @@ this is a very general means of specifying quantities to time average.
 
 If a value begins with "s\_", the name of a custom per-surf vector or
 array must follow.  Custom attributes can store either a single or
-multiple values per surface element.  See :ref:`Section 6.17 <howto_17>` for more discussion of custom
+multiple values per surface element.  See `Section 6.17 <Section_howto.html#howto_17>`_ for more discussion of custom
 attributes and command that define them.  For example, the
 :doc:`read\_surf <read_surf>`, :doc:`fix surf/temp <fix_surf_temp>`, and
 :doc:`surf\_react adsorb <surf_react_adsorb>` commands can define

@@ -134,7 +134,7 @@ be redefined, e.g. to reset a load balancing parameter.  Or this could
 be useful for invoking a command you have added to SPARTA that wraps
 some other code (e.g. as a library) to perform a computation
 periodically during a long SPARTA run.  See :doc:`Section 8 <Section_modify>` of the manual for info about how to add new
-commands to SPARTA.  See :ref:`Section 6.7 <howto_10>` of
+commands to SPARTA.  See `Section 6.7 <Section_howto.html#howto_10>`_ of
 the manual for ideas about how to couple SPARTA to other codes.
 
 With the *every* option, N total steps are simulated, in shorter runs

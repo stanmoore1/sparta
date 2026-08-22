@@ -1,5 +1,5 @@
-Packages
-========
+4. Packages
+===========
 
 This section gives an overview of the optional packages that extend
 SPARTA functionality with instructions on how to build SPARTA with
@@ -8,7 +8,7 @@ of features.  For example, the KOKKOS package provides styles that
 can run on different hardware such as GPUs.  You can see the list of all
 packages and "make" commands to manage them by typing "make package"
 from within the src directory of the SPARTA distribution or
-"cmake -DSPARTA\_LIST\_PKGS" from within a build directory.  :ref:`Section 2.3 <start_3>` gives general info on how to install
+"cmake -DSPARTA\_LIST\_PKGS" from within a build directory.  `Section 2.3 <Section_start.html#start_3>`_ gives general info on how to install
 and un-install packages as part of the SPARTA build process.
 
 Packages may require some
@@ -47,23 +47,31 @@ and use the package:
 
 .. _pkg_1:
 
+.. raw:: html
+
+   <span id="pkg_1"></span>
+
 **SPARTA packages**
 
-+------------------------+-------------------------------+-----------------------------------------------------------+-----------------------------------------------------+------------+
-| Package                | Description                   | Doc page                                                  | Example                                             | Library    |
-+------------------------+-------------------------------+-----------------------------------------------------------+-----------------------------------------------------+------------+
-| :ref:`FFT <FFT>`       | fast Fourier transforms       | :doc:`compute\_style compute/fft/grid <compute_fft_grid>` | fft                                                 | int or ext |
-+------------------------+-------------------------------+-----------------------------------------------------------+-----------------------------------------------------+------------+
-| :ref:`KOKKOS <KOKKOS>` | Kokkos-enabled styles         | :ref:`Section 5.3 <acc_3>`                                | `Benchmarks <https://sparta.github.io/bench.html>`_ | -          |
-+------------------------+-------------------------------+-----------------------------------------------------------+-----------------------------------------------------+------------+
-| :ref:`VTK <VTK>`       | native VTK-format dump output | :doc:`dump particle/vtk <dump_vtk>`                       | -                                                   | ext        |
-+------------------------+-------------------------------+-----------------------------------------------------------+-----------------------------------------------------+------------+
++---------------------+-------------------------------+-----------------------------------------------------------+-----------------------------------------------------+------------+
+| Package             | Description                   | Doc page                                                  | Example                                             | Library    |
++---------------------+-------------------------------+-----------------------------------------------------------+-----------------------------------------------------+------------+
+| `FFT <#FFT>`_       | fast Fourier transforms       | :doc:`compute\_style compute/fft/grid <compute_fft_grid>` | fft                                                 | int or ext |
++---------------------+-------------------------------+-----------------------------------------------------------+-----------------------------------------------------+------------+
+| `KOKKOS <#KOKKOS>`_ | Kokkos-enabled styles         | `Section 5.3 <Section_accelerate.html#acc_3>`_            | `Benchmarks <https://sparta.github.io/bench.html>`_ | -          |
++---------------------+-------------------------------+-----------------------------------------------------------+-----------------------------------------------------+------------+
+| `VTK <#VTK>`_       | native VTK-format dump output | :doc:`dump particle/vtk <dump_vtk>`                       | -                                                   | ext        |
++---------------------+-------------------------------+-----------------------------------------------------------+-----------------------------------------------------+------------+
 
 
 ----------
 
 
 .. _FFT:
+
+.. raw:: html
+
+   <span id="FFT"></span>
 
 FFT package
 -----------
@@ -82,7 +90,7 @@ package.  Options are CUFFT, HIPFFT, FFTW3, MKL, or MKL\_GPU. If no FFT
 library is specified in CMake, SPARTA will use the internal
 Kokkos version of the KISS FFT library that is included with SPARTA.
 
-See the see discussion in :ref:`Section 2.2 <start_2>` (step 6).
+See the see discussion in `Section 2.2 <Section_start.html#start_2>`_ (step 6).
 
 **Install or un-install with make:**
 
@@ -118,6 +126,10 @@ See the see discussion in :ref:`Section 2.2 <start_2>` (step 6).
 
 .. _KOKKOS:
 
+.. raw:: html
+
+   <span id="KOKKOS"></span>
+
 KOKKOS package
 --------------
 
@@ -127,10 +139,10 @@ Styles adapted to compile using the Kokkos library which can convert
 them to OpenMP, CUDA, HIP, or SYCL code so that they run efficiently on
 multicore CPUs, NVIDIA GPUs, AMD GPUs, or Intel
 GPUs.  All the styles have a "kk" as a suffix in their style name.
-:ref:`Section 5.3 <acc_3>` gives details of what
+`Section 5.3 <Section_accelerate.html#acc_3>`_ gives details of what
 hardware and software is required on your system, and how to build and
 use this package.  Its styles can be invoked at run time via the "-sf
-kk" or "-suffix kk" :ref:`command-line switches <start_7>`.
+kk" or "-suffix kk" `command-line switches <Section_start.html#start_7>`_.
 
 You must have a C++17 compatible compiler to use this package.
 
@@ -249,11 +261,11 @@ To uninstall (disable) the KOKKOS package:
 * src/KOKKOS: filenames -> commands
 * src/KOKKOS/README
 * lib/kokkos/README
-* the :ref:`Accelerating SPARTA <acc_3>` section
-* :ref:`Section 5.3 <acc_3>`
-* :ref:`Section 2.6 -k on ... <start_7>`
-* :ref:`Section 2.6 -sf kk <start_7>`
-* :ref:`Section 2.6 -pk kokkos <start_7>`
+* the `Accelerating SPARTA <Section_accelerate.html#acc_3>`_ section
+* `Section 5.3 <Section_accelerate.html#acc_3>`_
+* `Section 2.6 -k on ... <Section_start.html#start_7>`_
+* `Section 2.6 -sf kk <Section_start.html#start_7>`_
+* `Section 2.6 -pk kokkos <Section_start.html#start_7>`_
 * :doc:`package kokkos <package>`
 * `Benchmarks page <https://sparta.github.io/bench.html>`_ of web site
 
@@ -262,6 +274,10 @@ To uninstall (disable) the KOKKOS package:
 
 
 .. _VTK:
+
+.. raw:: html
+
+   <span id="VTK"></span>
 
 VTK package
 -----------

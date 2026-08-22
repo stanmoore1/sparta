@@ -179,7 +179,7 @@ is the value it has at the center of the particle's grid cell.
 The *surfs* keyword determines what kind of surface elements SPARTA
 uses and how they are distributed across processors.  Possible values
 are *explicit*\ , *explicit/distributed*\ , and *implicit*\ .  See the
-:ref:`Howto 6.13 <howto_13>` section of the manual for an
+`Howto 6.13 <Section_howto.html#howto_13>`_ section of the manual for an
 explantion of explicit versus implicit surfaces.  The distributed
 option can be important for models with huge numbers of surface
 elements.  Each processor stores copies of only the surfaces that
@@ -275,7 +275,7 @@ cells owned by other processors.
    later point when surfaces are read in or a simulation is performed, an
    error will result.  The solution is to use the
    :doc:`balance\_grid <balance_grid>` command to change to a clumped grid
-   cell assignment.  See :ref:`Section 6.8 <howto_8>` of the
+   cell assignment.  See `Section 6.8 <Section_howto.html#howto_8>`_ of the
    manual for an explanation of clumped and dispersed grid cell
    assignments and their relative performance trade-offs.
 
@@ -347,7 +347,7 @@ direction.  This mode attempts to preserve a uniform number of
 particles in each cell, regardless of the cell area, for a uniform
 targeted density.  For the *radius/only* option, the weight is just the
 distance the cell midpoint is from the y=0 axis of symmetry. This mode attempts to preserve a uniform distribution of particles
-per unit area, for a uniform targeted density.  See :ref:`Section 6.2 <howto_2>` for more details on axi-symmetric
+per unit area, for a uniform targeted density.  See `Section 6.2 <Section_howto.html#howto_2>`_ for more details on axi-symmetric
 models.
 
 Second, when a particle moves from an initial cell to a final cell,

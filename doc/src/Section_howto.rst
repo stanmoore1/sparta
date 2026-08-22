@@ -1,29 +1,29 @@
-How-to discussions
-==================
+6. How-to discussions
+=====================
 
 The following sections describe how to perform common tasks using
 SPARTA, as well as provide some techinical details about how
 SPARTA works.
 
-| 6.1 :ref:`2d simulations <howto_1>`
-| 6.2 :ref:`Axisymmetric simulations <howto_2>`
-| 6.3 :ref:`Running multiple simulations from one input script <howto_3>`
-| 6.4 :ref:`Output from SPARTA (stats, dumps, computes, fixes, variables) <howto_4>`
-| 6.5 :ref:`Visualizing SPARTA snapshots <howto_5>`
-| 6.6 :ref:`Library interface to SPARTA <howto_6>`
-| 6.7 :ref:`Coupling SPARTA to other codes <howto_7>` 
-| 6.8 :ref:`Details of grid geometry in SPARTA <howto_8>`
-| 6.9 :ref:`Details of surfaces in SPARTA <howto_9>`
-| 6.10 :ref:`Restarting a simulation <howto_10>`
-| 6.11 :ref:`Using the ambipolar approximation <howto_11>`
-| 6.12 :ref:`Using multiple vibrational energy levels <howto_12>`
-| 6.13 :ref:`Surface elements: explicit, implicit, distributed <howto_13>`
-| 6.14 :ref:`Implicit surface ablation <howto_14>`
-| 6.15 :ref:`Transparent surface elements <howto_15>`
-| 6.16 :ref:`Visualizing SPARTA output with ParaView <howto_16>`
-| 6.17 :ref:`Custom per-particle, per-grid, per-surf attributes <howto_17>`
-| 6.18 :ref:`Variable timestep simulations <howto_18>`
-| 6.19 :ref:`Details of particles in SPARTA <howto_19>` 
+| 6.1 `2d simulations <#howto_1>`_
+| 6.2 `Axisymmetric simulations <#howto_2>`_
+| 6.3 `Running multiple simulations from one input script <#howto_3>`_
+| 6.4 `Output from SPARTA (stats, dumps, computes, fixes, variables) <#howto_4>`_
+| 6.5 `Visualizing SPARTA snapshots <#howto_5>`_
+| 6.6 `Library interface to SPARTA <#howto_6>`_
+| 6.7 `Coupling SPARTA to other codes <#howto_7>`_ 
+| 6.8 `Details of grid geometry in SPARTA <#howto_8>`_
+| 6.9 `Details of surfaces in SPARTA <#howto_9>`_
+| 6.10 `Restarting a simulation <#howto_10>`_
+| 6.11 `Using the ambipolar approximation <#howto_11>`_
+| 6.12 `Using multiple vibrational energy levels <#howto_12>`_
+| 6.13 `Surface elements: explicit, implicit, distributed <#howto_13>`_
+| 6.14 `Implicit surface ablation <#howto_14>`_
+| 6.15 `Transparent surface elements <#howto_15>`_
+| 6.16 `Visualizing SPARTA output with ParaView <#howto_16>`_
+| 6.17 `Custom per-particle, per-grid, per-surf attributes <#howto_17>`_
+| 6.18 `Variable timestep simulations <#howto_18>`_
+| 6.19 `Details of particles in SPARTA <#howto_19>`_ 
 | 
 
 The example input scripts included in the SPARTA distribution and
@@ -36,8 +36,12 @@ show how to setup and run various kinds of simulations.
 
 .. _howto_1:
 
-2d simulations
---------------
+.. raw:: html
+
+   <span id="howto_1"></span>
+
+6.1 2d simulations
+------------------
 
 In SPARTA, as in other DSMC codes, a 2d simulation means that
 particles move only in the xy plane, but still have all 3 xyz
@@ -70,8 +74,12 @@ are for 2d models.
 
 .. _howto_2:
 
-Axisymmetric simulations
-------------------------
+.. raw:: html
+
+   <span id="howto_2"></span>
+
+6.2 Axisymmetric simulations
+----------------------------
 
 In SPARTA, an axi-symmetric model is a 2d model.  An example input
 script is provided in the examples/axisymm directory.
@@ -104,8 +112,12 @@ rotated around the y=0 axis of symmetry.
 
 .. _howto_3:
 
-Running multiple simulations from one input script
---------------------------------------------------
+.. raw:: html
+
+   <span id="howto_3"></span>
+
+6.3 Running multiple simulations from one input script
+------------------------------------------------------
 
 This can be done in several ways.  See the documentation for
 individual commands for more details on how these examples work.
@@ -189,7 +201,7 @@ storing the output in different log and dump files, for example
 All of the above examples work whether you are running on 1 or
 multiple processors, but assumed you are running SPARTA on a single
 partition of processors.  SPARTA can be run on multiple partitions via
-the "-partition" command-line switch as described in :ref:`Section 2.5 <start_7>` of the manual.
+the "-partition" command-line switch as described in `Section 2.5 <Section_start.html#start_7>`_ of the manual.
 
 In the last 2 examples, if SPARTA were run on 3 partitions, the same
 scripts could be used if the "index" and "loop" variables were
@@ -208,8 +220,12 @@ simulation, and so forth, until all 8 were completed.
 
 .. _howto_4:
 
-Output from SPARTA (stats, dumps, computes, fixes, variables)
--------------------------------------------------------------
+.. raw:: html
+
+   <span id="howto_4"></span>
+
+6.4 Output from SPARTA (stats, dumps, computes, fixes, variables)
+-----------------------------------------------------------------
 
 There are four basic kinds of SPARTA output:
 
@@ -239,21 +255,25 @@ can then be output with these commands.
 The following sub-sections discuss different SPARTA commands related
 to output and the kind of data they operate on and produce:
 
-* :ref:`Global/per-particle/per-grid/per-surf/per-tally data <global>`
-* :ref:`Scalar/vector/array data <scalar>`
-* :ref:`Statistical output <stats>`
-* :ref:`Dump file output <dump>`
-* :ref:`Fixes that write output files <fixoutput>`
-* :ref:`Computes that process output quantities <computeoutput>`
-* :ref:`Computes that generate values to output <compute>`
-* :ref:`Fixes that generate values to output <fix>`
-* :ref:`Variables that generate values to output <variable>`
-* :ref:`Summary table of output options and data flow between commands <table>`
+* `Global/per-particle/per-grid/per-surf/per-tally data <#global>`_
+* `Scalar/vector/array data <#scalar>`_
+* `Statistical output <#stats>`_
+* `Dump file output <#dump>`_
+* `Fixes that write output files <#fixoutput>`_
+* `Computes that process output quantities <#computeoutput>`_
+* `Computes that generate values to output <#compute>`_
+* `Fixes that generate values to output <#fix>`_
+* `Variables that generate values to output <#variable>`_
+* `Summary table of output options and data flow between commands <#table>`_
 
 .. _global:
 
+.. raw:: html
+
+   <span id="global"></span>
+
 Global/per-particle/per-grid/per-surf/pre-tally data
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Various output-related commands work with four different styles of
 data: global, per particle, per grid, or per surf.  A global datum is
@@ -268,8 +288,12 @@ colliding or reacting with a surface element.
 
 .. _scalar:
 
+.. raw:: html
+
+   <span id="scalar"></span>
+
 Scalar/vector/array data
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Global, per particle, per grid, per surf, and per tally datums can
 each come in two kinds: a single scalar value, a vector of values.
@@ -300,8 +324,12 @@ or array.
 
 .. _stats:
 
+.. raw:: html
+
+   <span id="stats"></span>
+
 Statistical output
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The frequency and format of statistical output is set by the
 :doc:`stats <stats>`, :doc:`stats\_style <stats_style>`, and
@@ -317,8 +345,12 @@ global values to be used as an argument of the
 
 .. _dump:
 
+.. raw:: html
+
+   <span id="dump"></span>
+
 Dump file output
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Dump file output is specified by the :doc:`dump <dump>` and
 :doc:`dump\_modify <dump_modify>` commands.  There are several
@@ -337,8 +369,12 @@ grid, or per surf values for input to the corresponding
 
 .. _fixoutput:
 
+.. raw:: html
+
+   <span id="fixoutput"></span>
+
 Fixes that write output files
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Two fixes take various quantities as input and can write output files:
 :doc:`fix ave/time <fix_ave_time>` and :doc:`fix print <fix_print>`.
@@ -368,8 +404,12 @@ quantities separate from normal statistical or dump file output.
 
 .. _computeoutput:
 
+.. raw:: html
+
+   <span id="computeoutput"></span>
+
 Computes that process output quantities
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The :doc:`compute reduce <compute_reduce>` command takes one or more per
 particle or per grid or per surf vector quantities as inputs and
@@ -379,8 +419,12 @@ commands.
 
 .. _compute:
 
+.. raw:: html
+
+   <span id="compute"></span>
+
 Computes that generate values to output
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Every :doc:`compute <compute>` in SPARTA produces either global or per
 particle or per grid or per surf values.  The values can be scalars or
@@ -393,8 +437,12 @@ produce global values.
 
 .. _fix:
 
+.. raw:: html
+
+   <span id="fix"></span>
+
 Fixes that generate values to output
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Some :doc:`fixes <fix>` in SPARTA produces either global or per particle
 or per grid or per surf values which can be accessed by other
@@ -424,8 +472,12 @@ of this fix can also be used as input to other output commands.
 
 .. _variable:
 
+.. raw:: html
+
+   <span id="variable"></span>
+
 Variables that generate values to output
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 :doc:`Variables <variable>` defined in an input script generate either a
 global scalar value or a per particle vector (only particle-style
@@ -438,8 +490,12 @@ described in this section.
 
 .. _table:
 
+.. raw:: html
+
+   <span id="table"></span>
+
 Summary table of output options and data flow between commands
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 This table summarizes the various commands that can be used for
 generating output from SPARTA.  Each command produces output data of
@@ -495,8 +551,12 @@ vector input could be a column of an array.
 
 .. _howto_5:
 
-Visualizing SPARTA snapshots
-----------------------------
+.. raw:: html
+
+   <span id="howto_5"></span>
+
+6.5 Visualizing SPARTA snapshots
+--------------------------------
 
 The :doc:`dump image <dump_image>` command can be used to do on-the-fly
 visualization as a simulation proceeds.  It works by creating a series
@@ -544,12 +604,16 @@ surface and grid cell information as output by SPARTA.
 
 .. _howto_6:
 
-Library interface to SPARTA
----------------------------
+.. raw:: html
 
-As described in :ref:`Section 2.4 <start_4>`, SPARTA can
+   <span id="howto_6"></span>
+
+6.6 Library interface to SPARTA
+-------------------------------
+
+As described in `Section 2.4 <Section_start.html#start_4>`_, SPARTA can
 be built as a library, so that it can be called by another code, used
-in a :ref:`coupled manner <howto_7>` with other codes, or
+in a `coupled manner <Section_howto.html#howto_7>`_ with other codes, or
 driven through a :doc:`Python interface <Section_python>`.
 
 All of these methodologies use a C-style interface to SPARTA that is
@@ -572,7 +636,7 @@ Library.cpp provides these core functions:
    char \*sparta_command(void \*, char \*);
 
 The sparta\_open() function is used to initialize SPARTA, passing in a
-list of strings as if they were :ref:`command-line arguments <start_7>` when SPARTA is run in
+list of strings as if they were `command-line arguments <Section_start.html#start_7>`_ when SPARTA is run in
 stand-alone mode from the command line, and a MPI communicator for
 SPARTA to run under.  It returns a ptr to the SPARTA object that is
 created, and which is used in subsequent library calls.  The
@@ -679,7 +743,7 @@ Output settings:
 
 *world\_size* and *world\_rank* are for the partition this processor
 belongs to, so they differ from *universe\_size* and *universe\_rank*
-only under the :ref:`-partition <start_7>` command-line
+only under the `-partition <Section_start.html#start_7>`_ command-line
 switch.  All of these are read locally, so calling this function is
 not collective and ranks may call it independently.
 
@@ -710,8 +774,12 @@ back into SPARTA.
 
 .. _howto_7:
 
-Coupling SPARTA to other codes
-------------------------------
+.. raw:: html
+
+   <span id="howto_7"></span>
+
+6.7 Coupling SPARTA to other codes
+----------------------------------
 
 SPARTA is designed to allow it to be coupled to other codes.  For
 example, a continuum finite element (FE) simulation might use SPARTA
@@ -765,7 +833,7 @@ examples/COUPLE/README for more details.
    The examples/COUPLE dir has not been added to the
    distribution yet.
 
-:ref:`Section 2.3 <start_3>` of the manual describes how to
+`Section 2.3 <Section_start.html#start_3>`_ of the manual describes how to
 build SPARTA as a library.  Once this is done, you can interface with
 SPARTA either via C++, C, Fortran, or Python (or any other language
 that supports a vanilla C-like interface).  For example, from C++ you
@@ -778,7 +846,7 @@ Python wrapper provided with SPARTA that operates through the SPARTA
 library interface.
 
 The files src/library.cpp and library.h contain the C-style interface
-to SPARTA.  See :ref:`Section 6.6 <howto_6>` of the manual for a description
+to SPARTA.  See `Section 6.6 <#howto_6>`_ of the manual for a description
 of the interface and how to extend it for your needs.
 
 Note that the sparta\_open() function that creates an instance of
@@ -798,8 +866,12 @@ instances of SPARTA to perform different calculations.
 
 .. _howto_8:
 
-Details of grid geometry in SPARTA
-----------------------------------
+.. raw:: html
+
+   <span id="howto_8"></span>
+
+6.8 Details of grid geometry in SPARTA
+--------------------------------------
 
 SPARTA overlays a grid over the simulation domain which is used to
 track particles and to co-locate particles in the same grid cell for
@@ -830,7 +902,7 @@ As described below, each child cell is assigned an ID which encodes
 the cell's logical position within in the hierarchical grid, as a
 32-bit or 64-bit unsigned integer ID.  The precision is set by the
 -DSPARTA\_BIG or -DSPARTA\_SMALL or -DSPARTA\_BIGBIG compiler switch, as
-described in :ref:`Section 2.2 <start_2>`.  The number of
+described in `Section 2.2 <Section_start.html#start_2>`_.  The number of
 grid levels that can be used depends on this precision and the
 resolution of the grid at each level.  For example, in a 3d
 simulation, a level that is refined with a 2x2x2 sub-grid requires 4
@@ -991,8 +1063,12 @@ computational load in a statistical sense.
 
 .. _howto_9:
 
-Details of surfaces in SPARTA
------------------------------
+.. raw:: html
+
+   <span id="howto_9"></span>
+
+6.9 Details of surfaces in SPARTA
+---------------------------------
 
 A SPARTA simulation can define one or more surface objects, each of
 which are read in via the :doc:`read\_surf <read_surf>`.  For 2d
@@ -1031,7 +1107,7 @@ off the surface can be computed.  This is done via the
 :doc:`surf\_modify <surf_modify>` and :doc:`surf\_collide <surf_collide>`
 commands.
 
-As described in the previous :ref:`Section 6.8 <howto_8>`, SPARTA overlays a
+As described in the previous `Section 6.8 <#howto_8>`_, SPARTA overlays a
 grid over the simulation domain to track particles.  Surface elements
 are also assigned to grid cells they intersect with, so that
 particle/surface collisions can be efficiently computed.  Typically a
@@ -1057,8 +1133,12 @@ overlapping surface elements must be computed.
 
 .. _howto_10:
 
-Restarting a simulation
------------------------
+.. raw:: html
+
+   <span id="howto_10"></span>
+
+6.10 Restarting a simulation
+----------------------------
 
 There are two ways to continue a long SPARTA simulation.  Multiple
 :doc:`run <run>` commands can be used in the same input script.  Each
@@ -1128,8 +1208,12 @@ the original run.
 
 .. _howto_11:
 
-Using the ambipolar approximation
----------------------------------
+.. raw:: html
+
+   <span id="howto_11"></span>
+
+6.11 Using the ambipolar approximation
+--------------------------------------
 
 The ambipolar approximation is a computationally efficient way to
 model low-density plasmas which contain positively-charged ions and
@@ -1277,8 +1361,12 @@ restart ambipolar simulations where the fix is used.
 
 .. _howto_12:
 
-Using multiple vibrational energy levels
-----------------------------------------
+.. raw:: html
+
+   <span id="howto_12"></span>
+
+6.12 Using multiple vibrational energy levels
+---------------------------------------------
 
 DSMC models for collisions between one or more polyatomic species can
 include the effect of multiple discrete vibrational levels, where a
@@ -1344,8 +1432,12 @@ used to store extra per-particle properties.
 
 .. _howto_13:
 
-Surface elements: explicit, implicit, distributed
--------------------------------------------------
+.. raw:: html
+
+   <span id="howto_13"></span>
+
+6.13 Surface elements: explicit, implicit, distributed
+------------------------------------------------------
 
 SPARTA can work with two kinds of surface elements: explicit and
 implicit.  Explicit surfaces are lines (2d) or triangles (3d) defined
@@ -1412,8 +1504,12 @@ These command do not yet support distributed surfaces:
 
 .. _howto_14:
 
-Implicit surface ablation
--------------------------
+.. raw:: html
+
+   <span id="howto_14"></span>
+
+6.14 Implicit surface ablation
+------------------------------
 
 The implicit surfaces described in the previous section can be used to
 perform ablation simulations, where the set of implicit surface
@@ -1483,7 +1579,7 @@ and :doc:`write\_isurf <write_isurf>` commands have options to work with
 both kinds of files.  The :doc:`write\_surf <write_surf>` command can
 also output implicit surface elements for visualization by tools such
 as ParaView which can read SPARTA surface element files after suitable
-post-processing.  See the :ref:`Section tools paraview <paraview>` doc page for more details.
+post-processing.  See the `Section tools paraview <Section_tools.html#paraview>`_ doc page for more details.
 
 
 ----------
@@ -1491,8 +1587,12 @@ post-processing.  See the :ref:`Section tools paraview <paraview>` doc page for 
 
 .. _howto_15:
 
-Transparent surface elements
-----------------------------
+.. raw:: html
+
+   <span id="howto_15"></span>
+
+6.15 Transparent surface elements
+---------------------------------
 
 Transparent surfaces are useful for tallying flow statistics.
 Particles pass through them unaffected.  However the flux of particles
@@ -1539,7 +1639,7 @@ count, mass flux, and energy flux of particles that pass through
 transparent surface elements.  These quantities can then be time
 averaged via the :doc:`fix ave/surf <fix_ave_surf>` command or output
 via the :doc:`dump surf <dump>` command in the usual ways,
-as described in :ref:`Section 6.4 <howto_4>`.
+as described in `Section 6.4 <Section_howto.html#howto_4>`_.
 
 The examples/circle/in.circle.transparent script shows how to use
 these commands when modeling flow around a 2d circle.  Two additional
@@ -1557,8 +1657,12 @@ lines were each defined as multiple line segments.
 
 .. _howto_16:
 
-Visualizing SPARTA output with ParaView
----------------------------------------
+.. raw:: html
+
+   <span id="howto_16"></span>
+
+6.16 Visualizing SPARTA output with ParaView
+--------------------------------------------
 
 The *sparta/tools/paraview* directory contains two Python programs
 that can be used to convert SPARTA surface and grid data to ParaView
@@ -1928,8 +2032,12 @@ generated by *sort\_sparta\_grid\_file.py*.
 
 .. _howto_17:
 
-Custom per-particle, per-grid, per-surf attributes
---------------------------------------------------
+.. raw:: html
+
+   <span id="howto_17"></span>
+
+6.17 Custom per-particle, per-grid, per-surf attributes
+-------------------------------------------------------
 
 Particles, grid cells, and surface elements can have custom attributes
 which store either single or multiple values per particle, per grid
@@ -2033,8 +2141,12 @@ various output commands listed above.
 
 .. _howto_18:
 
-Variable timestep simulations
------------------------------
+.. raw:: html
+
+   <span id="howto_18"></span>
+
+6.18 Variable timestep simulations
+----------------------------------
 
 As an alternative to utilization of a user-provided constant timestep,
 the variable timestep option enables SPARTA to compute global
@@ -2081,8 +2193,12 @@ values are also included in the :doc:`read\_restart <read_restart>` and
 
 .. _howto_19:
 
-Details of particles in SPARTA
-------------------------------
+.. raw:: html
+
+   <span id="howto_19"></span>
+
+6.19 Details of particles in SPARTA
+-----------------------------------
 
 Individual simulation particles in SPARTA are conceptually a
 collection of physical gas particles of the same molecular species.

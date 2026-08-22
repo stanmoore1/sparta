@@ -37,7 +37,7 @@ surface elements.  Code for new computes can be added to SPARTA; see
 
 Note that defining a compute does not perform a computation.  Instead
 computes are invoked by other SPARTA commands as needed, e.g. to
-generate statistics or dump file output.  See :ref:`Section 6.4 <howto_4>` for a summary of various SPARTA output
+generate statistics or dump file output.  See `Section 6.4 <Section_howto.html#howto_4>`_ for a summary of various SPARTA output
 options, many of which involve computes.
 
 The ID for a compute is used to identify the compute in other
@@ -87,7 +87,7 @@ available in SPARTA:
 There are also additional accelerated compute styles included in the
 SPARTA distribution for faster performance on specific hardware.  The
 list of these with links to the individual styles are given in the
-pair section of :ref:`this page <cmd_5>`.
+pair section of `this page <Section_commands.html#cmd_5>`_.
 
 
 ----------

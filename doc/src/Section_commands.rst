@@ -1,14 +1,14 @@
-Commands
-========
+3. Commands
+===========
 
 This section describes how a SPARTA input script is formatted and what
 commands are used to define a SPARTA simulation.
 
-| 3.1 :ref:`SPARTA input script <cmd_1>`
-| 3.2 :ref:`Parsing rules <cmd_2>`
-| 3.3 :ref:`Input script structure <cmd_3>`
-| 3.4 :ref:`Commands listed by category <cmd_4>`
-| 3.5 :ref:`Commands listed alphabetically <cmd_5>` 
+| 3.1 `SPARTA input script <#cmd_1>`_
+| 3.2 `Parsing rules <#cmd_2>`_
+| 3.3 `Input script structure <#cmd_3>`_
+| 3.4 `Commands listed by category <#cmd_4>`_
+| 3.5 `Commands listed alphabetically <#cmd_5>`_ 
 | 
 
 
@@ -17,8 +17,12 @@ commands are used to define a SPARTA simulation.
 
 .. _cmd_1:
 
-SPARTA input script
--------------------
+.. raw:: html
+
+   <span id="cmd_1"></span>
+
+3.1 SPARTA input script
+-----------------------
 
 SPARTA executes by reading commands from a input script (text file),
 one line at a time.  When the input script ends, SPARTA exits.  Each
@@ -72,8 +76,12 @@ command lists restrictions on how the command can be used.
 
 .. _cmd_2:
 
-Parsing rules
--------------
+.. raw:: html
+
+   <span id="cmd_2"></span>
+
+3.2 Parsing rules
+-----------------
 
 Each non-blank line in the input script is treated as a command.
 SPARTA commands are case sensitive.  Command names are lower-case, as
@@ -207,8 +215,12 @@ comment indicator in (2) or substituted for as a variable in (3).
 
 .. _cmd_3:
 
-Input script structure
-----------------------------------
+.. raw:: html
+
+   <span id="cmd_3"></span>
+
+3.3 Input script structure
+----------------------------------------------------------------------------------
 
 This section describes the structure of a typical SPARTA input script.
 The "examples" directory in the SPARTA distribution contains sample
@@ -284,11 +296,15 @@ A simulation is run using the :doc:`run <run>` command.
 
 .. _cmd_4:
 
-Commands listed by category
----------------------------
+.. raw:: html
+
+   <span id="cmd_4"></span>
+
+3.4 Commands listed by category
+-------------------------------
 
 This section lists many SPARTA commands, grouped by category.  The
-:ref:`next section <cmd_5>` lists all commands alphabetically.
+`next section <#cmd_5>`_ lists all commands alphabetically.
 
 Initialization:
 
@@ -342,13 +358,21 @@ Miscellaneous:
 
 .. _cmd_5:
 
+.. raw:: html
+
+   <span id="cmd_5"></span>
+
 .. _comm:
 
-Individual commands
-------------------------------------------
+.. raw:: html
+
+   <span id="comm"></span>
+
+3.5 Individual commands
+-------------------------------------------------------------------------------------------------------------------------------------
 
 This section lists all SPARTA commands alphabetically, with a separate
-listing below of styles within certain commands.  The :ref:`previous section <cmd_4>` lists many of the same commands, grouped by category.
+listing below of styles within certain commands.  The `previous section <#cmd_4>`_ lists many of the same commands, grouped by category.
 
 +-------------------------------------------+-------------------------------------+---------------------------------------+-----------------------------------------+-----------------------------------------+---------------------------------------------+
 | :doc:`adapt\_grid <adapt_grid>`           | :doc:`balance\_grid <balance_grid>` | :doc:`boundary <boundary>`            | :doc:`bound\_modify <bound_modify>`     | :doc:`clear <clear>`                    | :doc:`collide <collide>`                    |

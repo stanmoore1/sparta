@@ -53,7 +53,7 @@ This compute calculates a per-particle vector, which can be accessed
 by any command that uses per-particle values from a compute as input.
 
 The vector can be accessed by any command that uses per-particle
-values from a compute as input.  See :ref:`Section 6.4 <howto_4>` for an overview of SPARTA output
+values from a compute as input.  See `Section 6.4 <Section_howto.html#howto_4>`_ for an overview of SPARTA output
 options.
 
 The per-particle vector values will be in energy :doc:`units <units>`.
@@ -71,10 +71,10 @@ same results, except for different random number, round-off and
 precision issues.
 
 These accelerated styles are part of the KOKKOS package. They are only
-enabled if SPARTA was built with that package.  See the :ref:`Making SPARTA <start_3>` section for more info.
+enabled if SPARTA was built with that package.  See the `Making SPARTA <Section_start.html#start_3>`_ section for more info.
 
 You can specify the accelerated styles explicitly in your input script
-by including their suffix, or you can use the :ref:`-suffix command-line switch <start_7>` when you invoke SPARTA, or you can
+by including their suffix, or you can use the `-suffix command-line switch <Section_start.html#start_7>`_ when you invoke SPARTA, or you can
 use the :doc:`suffix <suffix>` command in your input script.
 
 See the :doc:`Accelerating SPARTA <Section_accelerate>` section of the

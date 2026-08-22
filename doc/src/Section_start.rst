@@ -1,17 +1,17 @@
-Getting Started
-===============
+2. Getting Started
+==================
 
 This section describes how to build and run SPARTA, for both new and
 experienced users.
 
-| 2.1 :ref:`What's in the SPARTA distribution <start_1>`
-| 2.2 :ref:`Making SPARTA <start_2>`
-| 2.3 :ref:`Making SPARTA with optional packages <start_3>`
-| 2.4 :ref:`Building SPARTA as a library <start_4>`
-| 2.5 :ref:`Testing SPARTA <start_5>`
-| 2.6 :ref:`Running SPARTA <start_6>`
-| 2.7 :ref:`Command-line options <start_7>`
-| 2.8 :ref:`Screen output <start_8>` 
+| 2.1 `What's in the SPARTA distribution <#start_1>`_
+| 2.2 `Making SPARTA <#start_2>`_
+| 2.3 `Making SPARTA with optional packages <#start_3>`_
+| 2.4 `Building SPARTA as a library <#start_4>`_
+| 2.5 `Testing SPARTA <#start_5>`_
+| 2.6 `Running SPARTA <#start_6>`_
+| 2.7 `Command-line options <#start_7>`_
+| 2.8 `Screen output <#start_8>`_ 
 | 
 
 
@@ -20,8 +20,12 @@ experienced users.
 
 .. _start_1:
 
-What's in the SPARTA distribution
------------------------------------------------
+.. raw:: html
+
+   <span id="start_1"></span>
+
+2.1 What's in the SPARTA distribution
+-------------------------------------------------------------------------------------------------
 
 When you download SPARTA you will need to unzip and untar the
 downloaded file with the following commands:
@@ -61,25 +65,33 @@ sub-directories:
 
 .. _start_2:
 
-Making SPARTA
----------------------------
+.. raw:: html
+
+   <span id="start_2"></span>
+
+2.2 Making SPARTA
+-----------------------------------------------------------------------------
 
 This section has the following sub-sections:
 
-* :ref:`Read this first <start_2_1>`
-* :ref:`Steps to build a SPARTA executable using make <start_2_2_1>`
-* :ref:`Steps to build a SPARTA executable using CMake <start_2_2_2>`
-* :ref:`Common errors that can occur when making SPARTA <start_2_3>`
-* :ref:`Additional build tips using make <start_2_4_1>`
-* :ref:`Additional build tips using CMake <start_2_4_2>`
-* :ref:`Building for a Mac <start_2_5>`
-* :ref:`Building for Windows <start_2_6>`
+* `Read this first <#start_2_1>`_
+* `Steps to build a SPARTA executable using make <#start_2_2_1>`_
+* `Steps to build a SPARTA executable using CMake <#start_2_2_2>`_
+* `Common errors that can occur when making SPARTA <#start_2_3>`_
+* `Additional build tips using make <#start_2_4_1>`_
+* `Additional build tips using CMake <#start_2_4_2>`_
+* `Building for a Mac <#start_2_5>`_
+* `Building for Windows <#start_2_6>`_
 
 
 ----------
 
 
 .. _start_2_1:
+
+.. raw:: html
+
+   <span id="start_2_1"></span>
 
 **Read this first:** 
 
@@ -112,6 +124,10 @@ send it to the
 
 .. _start_2_2_1:
 
+.. raw:: html
+
+   <span id="start_2_2_1"></span>
+
 **Steps to build a SPARTA executable using make:** 
 
 **Step 0**
@@ -138,7 +154,7 @@ If you get no errors and an executable like spa\_g++ or spa\_mac is
 produced, you're done; it's your lucky day.
 
 Note that by default none of the SPARTA optional packages are
-installed.  To build SPARTA with optional packages, see :ref:`this section <start_3>` below.
+installed.  To build SPARTA with optional packages, see `this section <#start_3>`_ below.
 
 .. warning::
 
@@ -240,7 +256,7 @@ src/spatype.h.  The only reason to use the BIGBIG setting is if you
 have a regular grid with more than ~2 billion grid cells or a
 hierarchical grid with enough levels that grid cell IDs cannot fit in
 a 32-bit integer.  In either case, SPARTA will generate an error
-message for "Cell ID has too many bits".  See :ref:`Section 6.8 <howto_8>` of the manual for details on how cell
+message for "Cell ID has too many bits".  See `Section 6.8 <Section_howto.html#howto_8>`_ of the manual for details on how cell
 IDs are formatted.  The only reason to use the SMALL setting is if
 your machine does not support 64-bit integers.
 
@@ -394,7 +410,7 @@ your machine, you may not need to set these variables.
 **Step 8**
 
 Note that by default none of the SPARTA optional packages are
-installed.  To build SPARTA with optional packages, see :ref:`this section <start_3>` below, before proceeding to Step 9.
+installed.  To build SPARTA with optional packages, see `this section <#start_3>`_ below, before proceeding to Step 9.
 
 **Step 9**
 
@@ -421,6 +437,10 @@ You should get the executable spa\_foo when the build is complete.
 
 
 .. _start_2_2_2:
+
+.. raw:: html
+
+   <span id="start_2_2_2"></span>
 
 **Steps to build a SPARTA executable using CMake:** 
 
@@ -578,7 +598,7 @@ src/spatype.h.  The only reason to use the BIGBIG setting is if you
 have a regular grid with more than ~2 billion grid cells or a
 hierarchical grid with enough levels that grid cell IDs cannot fit in
 a 32-bit integer.  In either case, SPARTA will generate an error
-message for "Cell ID has too many bits".  See :ref:`Section 6.8 <howto_8>` of the manual for details on how cell
+message for "Cell ID has too many bits".  See `Section 6.8 <Section_howto.html#howto_8>`_ of the manual for details on how cell
 IDs are formatted.  The only reason to use the SMALL setting is if
 your machine does not support 64-bit integers.
 
@@ -890,7 +910,7 @@ follows:
 * KOKKOS\_ARCH=Power9     ->  -DKokkos\_ARCH\_POWER9=ON
 * KOKKOS\_ARCH=ARMv8-TX2  ->  -DKokkos\_ARCH\_ARMV8\_THUNDERX2=ON
 
-See :ref:`Section 5.3 <acc_3>` for the full list of
+See `Section 5.3 <Section_accelerate.html#acc_3>`_ for the full list of
 architecture options and detailed instructions for each KOKKOS backend.
 
 
@@ -898,6 +918,10 @@ architecture options and detailed instructions for each KOKKOS backend.
 
 
 .. _start_2_3:
+
+.. raw:: html
+
+   <span id="start_2_3"></span>
 
 **Errors that can occur when making SPARTA:** 
 
@@ -944,6 +968,10 @@ above in Step 4.
 
 .. _start_2_4_1:
 
+.. raw:: html
+
+   <span id="start_2_4_1"></span>
+
 **Additional build tips using make:** 
 
 (1) Building SPARTA for multiple platforms.
@@ -963,6 +991,10 @@ particular machine.
 
 
 .. _start_2_4_2:
+
+.. raw:: html
+
+   <span id="start_2_4_2"></span>
 
 **Additional build tips using CMake:** 
 
@@ -986,6 +1018,10 @@ configuration.
 
 .. _start_2_5:
 
+.. raw:: html
+
+   <span id="start_2_5"></span>
+
 **Building for a Mac:** 
 
 OS X is BSD Unix, so it should just work.  See the Makefile.mac or
@@ -996,6 +1032,10 @@ cmake/presets/mac.cmake file.
 
 
 .. _start_2_6:
+
+.. raw:: html
+
+   <span id="start_2_6"></span>
 
 **Building for Windows:** 
 
@@ -1018,20 +1058,28 @@ them in the distribution.
 
 .. _start_3:
 
-Making SPARTA with optional packages
---------------------------------------------------
+.. raw:: html
+
+   <span id="start_3"></span>
+
+2.3 Making SPARTA with optional packages
+----------------------------------------------------------------------------------------------------
 
 This section has the following sub-sections:
 
-:ref:`Package basics <start_3_1>`
-:ref:`Including/excluding packages with make <start_3_2_1>`
-:ref:`Including/excluding packages with CMake <start_3_2_2>`
+`Package basics <#start_3_1>`_
+`Including/excluding packages with make <#start_3_2_1>`_
+`Including/excluding packages with CMake <#start_3_2_2>`_
 
 
 ----------
 
 
 .. _start_3_1:
+
+.. raw:: html
+
+   <span id="start_3_1"></span>
 
 **Package basics:** 
 
@@ -1060,6 +1108,10 @@ Every command's doc page specfies if it is part of a package.
 
 
 .. _start_3_2_1:
+
+.. raw:: html
+
+   <span id="start_3_2_1"></span>
 
 **Including/excluding packages with make:** 
 
@@ -1143,6 +1195,10 @@ currently installed in the src directory.
 
 .. _start_3_2_2:
 
+.. raw:: html
+
+   <span id="start_3_2_2"></span>
+
 **Including/excluding packages with CMake:** 
 
 To use (or not use) a package you must include it (or exclude it)
@@ -1199,12 +1255,16 @@ included.
 
 .. _start_4:
 
-Building SPARTA as a library
-------------------------------------------
+.. raw:: html
+
+   <span id="start_4"></span>
+
+2.4 Building SPARTA as a library
+--------------------------------------------------------------------------------------------
 
 SPARTA can be built as either a static or shared library, which can
 then be called from another application or a scripting language.  See
-:ref:`Section 6.7 <howto_7>` for more info on coupling
+`Section 6.7 <Section_howto.html#howto_7>`_ for more info on coupling
 SPARTA to other codes.  See :doc:`Section 11 <Section_python>` for more
 info on wrapping and running SPARTA from Python.
 
@@ -1344,14 +1404,14 @@ When used from a C or Fortran program or a scripting language like
 Python, the library has a simple function-style interface, provided in
 src/library.cpp and src/library.h.
 
-See :ref:`Section\_howto 6.7 <howto_7>` of the manual for
+See `Section\_howto 6.7 <Section_howto.html#howto_7>`_ of the manual for
 ideas on how to couple SPARTA to other codes via its library
 interface.  See :doc:`Section\_python <Section_python>` of the manual for
 a description of the Python wrapper provided with SPARTA that operates
 through the SPARTA library interface.
 
 The files src/library.cpp and library.h define the C-style API for
-using SPARTA as a library.  See :ref:`Section\_howto 6.6 <howto_6>` of the manual for a description of the
+using SPARTA as a library.  See `Section\_howto 6.6 <Section_howto.html#howto_6>`_ of the manual for a description of the
 interface and how to extend it for your needs.
 
 
@@ -1360,8 +1420,12 @@ interface and how to extend it for your needs.
 
 .. _start_5:
 
-Testing SPARTA
-----------------------------
+.. raw:: html
+
+   <span id="start_5"></span>
+
+2.5 Testing SPARTA
+------------------------------------------------------------------------------
 
 SPARTA can be tested by using the CMake build system.
 
@@ -1493,8 +1557,12 @@ To verify that the correct binaries are being run:
 
 .. _start_6:
 
-Running SPARTA
-----------------------------
+.. raw:: html
+
+   <span id="start_6"></span>
+
+2.6 Running SPARTA
+------------------------------------------------------------------------------
 
 By default, SPARTA runs by reading commands from standard input.  Thus
 if you run the SPARTA executable by itself, e.g.
@@ -1589,8 +1657,12 @@ more processors or setup a smaller problem.
 
 .. _start_7:
 
-Command-line options
-----------------------------------
+.. raw:: html
+
+   <span id="start_7"></span>
+
+2.7 Command-line options
+------------------------------------------------------------------------------------
 
 At run time, SPARTA recognizes several optional command-line switches
 which may be used in any order.  Either the full word or a one-or-two
@@ -1663,7 +1735,7 @@ executable.
 
 Explicitly enable or disable KOKKOS support, as provided by the KOKKOS
 package.  Even if SPARTA is built with this package, as described
-above in :ref:`Section 2.3 <start_3>`, this switch must be set to enable
+above in `Section 2.3 <#start_3>`_, this switch must be set to enable
 running with the KOKKOS-enabled styles the package provides.  If the
 switch is not set (the default), SPARTA will operate as if the KOKKOS
 package were not installed; i.e. you can run standard SPARTA 
@@ -1681,7 +1753,7 @@ Either the full word or an abbreviation can be used for the keywords.
 Note that the keywords do not use a leading minus sign.  I.e. the
 keyword is "t", not "-t".  Also note that each of the keywords has a
 default setting.  Example of when to use these options and what
-settings to use on different platforms is given in :ref:`Section 5.3 <acc_3>`.
+settings to use on different platforms is given in `Section 5.3 <Section_accelerate.html#acc_3>`_.
 
 * d or device
 * g or gpus
@@ -1784,7 +1856,7 @@ desktop), you can run on more (virtual) processors than you have
 physical processors.
 
 To run multiple independent simulatoins from one input script, using
-multiple partitions, see :ref:`Section 6.3 <howto_3>` of
+multiple partitions, see `Section 6.3 <Section_howto.html#howto_3>`_ of
 the manual.  World- and universe-style variables are useful in this
 context.
 
@@ -1859,7 +1931,7 @@ partition screen files file.N.
 
 Use variants of various styles if they exist.  The specified style can
 be *kk*\ .  This refers to optional KOKKOS package that SPARTA can be built with, as described
-above in :ref:`Section 2.3 <start_3>`.
+above in `Section 2.3 <#start_3>`_.
 
 Along with the "-package" command-line switch, this is a convenient
 mechanism for invoking the KOKKOS accelerator package and its options without
@@ -1899,7 +1971,7 @@ value2 ..."  at the beginning of the input script.  Defining an index
 variable as a command-line argument overrides any setting for the same
 index variable in the input script, since index variables cannot be
 re-defined.  See the :doc:`variable <variable>` command for more info on
-defining index and other kinds of variables and :ref:`Section 3.2 <cmd_2>` for more info on using variables in
+defining index and other kinds of variables and `Section 3.2 <Section_commands.html#cmd_2>`_ for more info on using variables in
 input scripts.
 
 .. warning::
@@ -1916,8 +1988,12 @@ input scripts.
 
 .. _start_8:
 
-SPARTA screen output
-----------------------------------
+.. raw:: html
+
+   <span id="start_8"></span>
+
+2.8 SPARTA screen output
+------------------------------------------------------------------------------------
 
 As SPARTA reads an input script, it prints information to both the
 screen and a log file about significant actions it takes to setup a

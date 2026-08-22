@@ -117,7 +117,7 @@ Description
 Define a model for particle-surface collisions.  One or more models
 can be defined and assigned to different surfaces or simulation box
 boundaries via the :doc:`surf\_modify <surf_modify>` or
-:doc:`bound\_modify <bound_modify>` commands.  See :ref:`Section 6.9 <howto_9>` for more details of how SPARTA defines
+:doc:`bound\_modify <bound_modify>` commands.  See `Section 6.9 <Section_howto.html#howto_9>`_ for more details of how SPARTA defines
 surfaces as collections of geometric elements, triangles in 3d and
 line segments in 2d.  Chemical reactions can also be part of a
 particle-surface interaction model.  See the
@@ -176,7 +176,7 @@ with floating point values for the temperature for each surface
 element.  These could be static values initialized, for example, by
 the :doc:`read\_surf <read_surf>` command.  Or they could be dynamic
 values recomputed periodically, for example, by the "fix surf/temp"
-command.  See :ref:`Section 6.17 <howto_17>` for more
+command.  See `Section 6.17 <Section_howto.html#howto_17>`_ for more
 discussion of custom attributes.
 
 Note that if the custom per-surf vector values are dynamic, then each
@@ -258,7 +258,7 @@ values must be specified even for an atomic species; however these
 values are simply ignored.
 
 The theoretical scattering kernel was proposed by Cercignani and
-Lampis :ref:`(Cercignani71) <Cercignani71>`. In this original model, two
+Lampis `(Cercignani71) <#Cercignani71>`_. In this original model, two
 accommodation coefficients for the normal and tangential directions
 are employed. Each of these quantities can take a value between 0 and
 1. Specular reflection is achieved by using the values (0,0), while
@@ -267,9 +267,9 @@ distributions is obtained using (1,1).  There is smooth variation of
 both the energy and angular distribution for values in between these
 limits leading to lobular distributions similar to those observed in
 experiments. The implementation details of this model within DSMC was
-given by Lord :ref:`(Lord90) <Lord90>`, along with extension to rotational
+given by Lord `(Lord90) <#Lord90>`_, along with extension to rotational
 and vibrational modes with both continuous and discrete levels
-:ref:`(Lord91) <Lord91>`.
+`(Lord91) <#Lord91>`_.
 
 
 ----------
@@ -277,7 +277,7 @@ and vibrational modes with both continuous and discrete levels
 
 The *adiabatic* style computes the adiabatic surface collision model
 proposed by Mohammadzadeh, Rana, and Struchtrup
-:ref:`(Mohammadzadeh16) <Mohammadzadeh16>`. This style requires no arguments.
+`(Mohammadzadeh16) <#Mohammadzadeh16>`_. This style requires no arguments.
 The adiabatic surface is modelled by scattering particles isotropically
 whilst conserving their velocity magnitude. Therefore, no energy is
 transferred between the wall and the particles. Note, that this is only
@@ -288,7 +288,7 @@ valid for particle collisions not for potential surface reactions.
 
 
 The *td* style computes the thermal desorption surface collision model
-proposed by Swaminathan Gopalan *et al.* :ref:`(SG18) <SG18>`, which is
+proposed by Swaminathan Gopalan *et al.* `(SG18) <#SG18>`_, which is
 similar to *diffuse* style with an accommodation coefficient *acc* =
 1.0.
 
@@ -309,7 +309,7 @@ normal and the plane tangent to the surface given by:
 
 
 The *impuslive* style computes the surface collision model proposed by
-Swaminathan Gopalan *et al.* :ref:`(SG18) <SG18>`. The model has 8
+Swaminathan Gopalan *et al.* `(SG18) <#SG18>`_. The model has 8
 parameters.  Within impulsive scattering, two different models are
 available, namely *softsphere* and *tempvar*\ . The *softsphere*
 argument uses the soft sphere model and has two parameters: *en\_ratio*
@@ -337,7 +337,7 @@ the structural regime, whose scattering physics and distributions are
 very different from the thermal regime. The velocity distribution of
 the impulsive scattering model can be represented using a Gaussian
 distribution with a mean *u0* and a variance *\alpha* following
-Rettner :ref:`(Rettner94a) <Rettner94a>`
+Rettner `(Rettner94a) <#Rettner94a>`_
 
 .. image:: Eqs/impulsive_u0.JPG
    :align: center
@@ -351,7 +351,7 @@ as a linear function of temperature. The linear term *a1* and constant term
    :align: center
 
 The *u0* parameter can also be specified by a more physical model such
-as the soft sphere scattering model :ref:`(Alexander12) <Alexander12>`. This
+as the soft sphere scattering model `(Alexander12) <#Alexander12>`_. This
 model uses the parameters *en\_ratio*, the fraction of energy lost in
 the collision and *eff\_mass*, the effective mass of the surface atom
 to determine the average final energy and then the average final
@@ -363,7 +363,7 @@ velocity will vary as a function of the final polar angle.
 
 Both the polar and azimuthal angular distribution are lobular in
 nature and sharply peaked. These distributions can be represented
-using the cosine power law distribution :ref:`Glatzer97 <Glatzer97>`. The
+using the cosine power law distribution `Glatzer97 <#Glatzer97>`_. The
 peak of the azimuthal distribution remains at zero, while the peak of
 the polar angle distribution is usually higher than the incident angle
 (away from the normal). Hence the peak location (\theta\_peak) and
@@ -398,7 +398,7 @@ were moving with specified velocity *Vwall* away from the incident
 particle.  Thus the "collision" actually occurs later in the timestep
 and the reflected velocity is less than it would be for reflection
 from a stationary surface.  This calculation is performed using
-equations 12.30 and 12.31 in :ref:`(Bird94) <Bird94>`) to compute the
+equations 12.30 and 12.31 in `(Bird94) <#Bird94>`_) to compute the
 reflected velocity and final position of the particle.  If the
 particle does not return within the timestep to a position inside the
 simulation box (for a boundary surface) or to the same side of the
@@ -406,7 +406,7 @@ initial surface that it started from (for a surface element
 collision), the particle is deleted.  This effectively induces
 particles at the boundary to have a velocity distribution consistent
 with a subsonic pressure boundary condition, as explained in
-:ref:`(Bird94) <Bird94>`).
+`(Bird94) <#Bird94>`_).
 
 *Vwall* should be chosen to correspond to a desired pressure condition
 for the density of particles in the system.
@@ -432,7 +432,7 @@ This is useful for tallying flow statistics.  The surface elements
 must have been flagged as transparent when they were read in, via the
 :doc:`read\_surf <read_surf>` command and its transparent keyword.  The
 :doc:`compute surf <compute_surf>` command will tally fluxes differently
-for transparent surf elements.  The :ref:`Section 6.15 <howto_15>` doc page provides an overview of
+for transparent surf elements.  The `Section 6.15 <Section_howto.html#howto_15>`_ doc page provides an overview of
 transparent surfaces.  See those doc pages for details.
 
 
@@ -503,7 +503,7 @@ which case setting Nfreq to 100 or 1000 may be desirable.
 
 The keyword *partial* can only be applied to the *cll* style. Within
 the CLL model, the energy and angular distribution are linked. Lord
-:ref:`(Lord95) <Lord95>` proposed a way to decouple the energy accommodation
+`(Lord95) <#Lord95>`_ proposed a way to decouple the energy accommodation
 from the angular distribution. This case of partially diffuse
 scattering with incomplete energy accommodation can be activated in
 SPARTA using the optional keyword *partial*\ . It requires an additional
@@ -513,7 +513,7 @@ coefficients, but the angular distribution is computed using the
 additional parameter eccentricity. The *eccen* parameter can vary
 between 0 and 1. A value of 0 represents fully diffuse scattering and
 gives a cosine angular distribution. Increasing value of *eccen*
-presents more peaked and lobular distribution :ref:`(Lord95) <Lord95>`.
+presents more peaked and lobular distribution `(Lord95) <#Lord95>`_.
 
 The keywords *barrier*\ , *bond*\ , and *initenergy* can only be applied
 to the *td* style. Due to the nature of the interaction between the
@@ -524,7 +524,7 @@ having enough energy (in the normal direction) to overcome the barrier
 will be able to desorb from the surface. This alters the velocity
 distribution of the observed products along the surface normal
 direction and thus leads to the distortion of the speed distribution
-:ref:`(Goodman72) <Goodman72>`.  The angular distributions, which represent
+`(Goodman72) <#Goodman72>`_.  The angular distributions, which represent
 the ratio of the normal to the tangential velocities, are also altered
 as a result of the desorption barrier. The angular distributions are
 peaked more towards the normal and are often described by a cosine
@@ -541,7 +541,7 @@ thermal mechanisms might have energies exceeding those corresponding
 to the bulk surface temperature. The energy of the local surface
 environment where the product formation occurs might be greater than
 the normal surface temperature due to the formation of local hot-spots
-:ref:`(Rettner94b) <Rettner94b>`.
+`(Rettner94b) <#Rettner94b>`_.
 
 These hot-spots might stem from the dissociation or bond energy of the
 intermediates or the products.  The optional keyword *bond* can be
@@ -556,7 +556,7 @@ The higher energy during desorption might also arise due to the energy
 deposited by high speed of the incoming gas-phase particles. Since the
 formation of the products is rapid, the product might form and desorb
 before this high energy dissipates from the local hot-spots
-:ref:`(Beckerle90) <Beckerle90>`. In this case, although the products are in
+`(Beckerle90) <#Beckerle90>`_. In this case, although the products are in
 thermal equilibrium with the surroundings, the energies of the
 products might not depend only on the equilibrium surface temperature,
 but also on the incoming velocities of the particles. This can be used
@@ -570,7 +570,7 @@ translational, rotational and vibrational modes.
 The keywords *step*\ , *double*\ , and *intenergy* can only be applied to
 the *impulsive* style. In some cases, it is observed that the polar
 angular distribution on either side of the peak is different. Goodman
-:ref:`Goodman74 <Goodman74>` provided a physical reasoning for the observed
+`Goodman74 <#Goodman74>`_ provided a physical reasoning for the observed
 faster decay rate in the polar angular distribution away from the
 normal with the surface assumed to consist of periodic steps of
 average height H and average periodicity L. The ratio of the height to
@@ -608,7 +608,7 @@ All the surface collide models calculate a global vector of length 2.
 The values can be used by the :doc:`stats\_style <stats_style>` command
 and by :doc:`variables <variable>` that define formulas.  The latter
 means they can be used by any command that uses a variable as input,
-e.g. the :doc:`fix ave/time <fix_ave_time>` command.  See :ref:`Section 6.4 <howto_4>` for an overview of SPARTA output
+e.g. the :doc:`fix ave/time <fix_ave_time>` command.  See `Section 6.4 <Section_howto.html#howto_4>`_ for an overview of SPARTA output
 options.
 
 The first element of the vector is the count of particles that hit
@@ -629,10 +629,10 @@ same results, except for different random number, round-off and
 precision issues.
 
 These accelerated styles are part of the KOKKOS package. They are only
-enabled if SPARTA was built with that package.  See the :ref:`Making SPARTA <start_3>` section for more info.
+enabled if SPARTA was built with that package.  See the `Making SPARTA <Section_start.html#start_3>`_ section for more info.
 
 You can specify the accelerated styles explicitly in your input script
-by including their suffix, or you can use the :ref:`-suffix command-line switch <start_7>` when you invoke SPARTA, or you can
+by including their suffix, or you can use the `-suffix command-line switch <Section_start.html#start_7>`_ when you invoke SPARTA, or you can
 use the :doc:`suffix <suffix>` command in your input script.
 
 See the :doc:`Accelerating SPARTA <Section_accelerate>` section of the
@@ -667,12 +667,20 @@ The default for the *temp/freq* keyword = 1.
 
 .. _Bird94:
 
+.. raw:: html
+
+   <span id="Bird94"></span>
+
 
 
 **(Bird94)** G. A. Bird, Molecular Gas Dynamics and the Direct
 Simulation of Gas Flows, Clarendon Press, Oxford (1994).
 
 .. _Cercignani71:
+
+.. raw:: html
+
+   <span id="Cercignani71"></span>
 
 
 
@@ -682,12 +690,20 @@ Jan (1971).
 
 .. _Lord90:
 
+.. raw:: html
+
+   <span id="Lord90"></span>
+
 
 
 **(Lord90)** R. G. Lord, presented at the 17th International Symposium
 on Rarefied Gas Dynamics, Germany, July (1990).
 
 .. _Lord91:
+
+.. raw:: html
+
+   <span id="Lord91"></span>
 
 
 
@@ -697,6 +713,10 @@ Jan (1991).
 
 .. _SG18:
 
+.. raw:: html
+
+   <span id="SG18"></span>
+
 
 
 **(SG18)** K. Swaminathan Gopalan, Development of a detailed surface
@@ -704,6 +724,10 @@ chemistry framework in DSMC, AIAA Aerospace Sciences Meeting, Jan
 (2018).
 
 .. _Rettner94a:
+
+.. raw:: html
+
+   <span id="Rettner94a"></span>
 
 
 
@@ -713,6 +737,10 @@ mechanisms, Journal of Chemical Physics, (1994).
 
 .. _Alexander12:
 
+.. raw:: html
+
+   <span id="Alexander12"></span>
+
 
 
 **(Alexander12)** W. A. Alexander, *et al*\ , Kinematics and dynamics of
@@ -720,6 +748,10 @@ atomic-beam scattering on liquid and self-assembled monolayer
 surfaces, Faraday discussions, (2012)
 
 .. _Glatzer97:
+
+.. raw:: html
+
+   <span id="Glatzer97"></span>
 
 
 
@@ -729,6 +761,10 @@ distributions, Surface Science, (1997)
 
 .. _Lord95:
 
+.. raw:: html
+
+   <span id="Lord95"></span>
+
 
 
 **(Lord95)** R. G. Lord, Some further extensions of the
@@ -736,6 +772,10 @@ Cercignani-Lampis gas-surface interaction model, Physics of Fluids,
 May (1995).
 
 .. _Goodman72:
+
+.. raw:: html
+
+   <span id="Goodman72"></span>
 
 
 
@@ -745,6 +785,10 @@ recombination of atoms, Surface Science, (1972).
 
 .. _Rettner94b:
 
+.. raw:: html
+
+   <span id="Rettner94b"></span>
+
 
 
 **(Rettner94b)** C. T. Rettner and J. Lee, Dynamic displacement of o2
@@ -752,6 +796,10 @@ from pt (111): A new desorption mechanism, The Journal of chemical
 physics, (1994).
 
 .. _Beckerle90:
+
+.. raw:: html
+
+   <span id="Beckerle90"></span>
 
 
 
@@ -761,6 +809,10 @@ Experiments and simulations, The Journal of Chemical Physics, (1990).
 
 .. _Goodman74:
 
+.. raw:: html
+
+   <span id="Goodman74"></span>
+
 
 
 **(Goodman74)** F. O. Goodman, Determination of characteristic surface
@@ -768,6 +820,10 @@ vibration temperatures by molecular beam scattering: Application to
 specular scattering in the H-LiF (001) system, Surface Science, (1974).
 
 .. _Mohammadzadeh16:
+
+.. raw:: html
+
+   <span id="Mohammadzadeh16"></span>
 
 
 

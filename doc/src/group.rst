@@ -91,7 +91,7 @@ that you can check if the command operated as you expect.
 
 Note that this command assigns all flavors of child grid cells to
 groups, which includes unsplit, cut, split, and sub cells.  See
-:ref:`Section 6.8 <howto_8>` of the manual gives details
+`Section 6.8 <Section_howto.html#howto_8>`_ of the manual gives details
 of how SPARTA defines child, unsplit, split, and sub cells.
 
 

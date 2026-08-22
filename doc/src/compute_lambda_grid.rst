@@ -96,7 +96,7 @@ or coarsening based on a mean free path metric.
 
 
 The formula used to calculate the mean free path (lambda) is given in
-:ref:`(Bird94) <Bird94>` as equation 4.77:
+`(Bird94) <#Bird94>`_ as equation 4.77:
 
 .. image:: Eqs/lambda.png
    :align: center
@@ -104,7 +104,7 @@ The formula used to calculate the mean free path (lambda) is given in
 .. warning::
 
    Prior to October 2024, a simpler formula was used for
-   the mean free path, also from :ref:`(Bird94) <Bird94>`, equation 4.65:
+   the mean free path, also from `(Bird94) <#Bird94>`_, equation 4.65:
 
 .. image:: Eqs/lambda_old.jpg
    :align: center
@@ -117,7 +117,7 @@ mixtures, in particular for reacting flow problems where the
 composition of the mixture changes significantly over time.
 
 The formula used to calculate the mean collision time (tau) is given in
-:ref:`(Bird94) <Bird94>` as equation 1.38 combined with 4.75:
+`(Bird94) <#Bird94>`_ as equation 1.38 combined with 4.75:
 
 .. image:: Eqs/tau.png
    :align: center
@@ -217,7 +217,7 @@ columns, in the order the output values were specified.
 
 This compute performs calculations for all flavors of child grid cells
 in the simulation, which includes unsplit, cut, split, and sub cells.
-See :ref:`Section 6.8 <howto_8>` of the manual gives
+See `Section 6.8 <Section_howto.html#howto_8>`_ of the manual gives
 details of how SPARTA defines child, unsplit, split, and sub cells.
 Note that cells inside closed surfaces contain no particles.  These
 could be unsplit or cut cells (if they have zero flow volume).  Both
@@ -227,7 +227,7 @@ produce a zero result.  This is because their sub-cells actually
 contain the particles that are geometrically inside the split cell.
 
 The vector or array can be accessed by any command that uses per-grid
-values from a compute as input.  See :ref:`Section 6.4 <howto_4>` for an overview of SPARTA output
+values from a compute as input.  See `Section 6.4 <Section_howto.html#howto_4>`_ for an overview of SPARTA output
 options.
 
 The per-grid values for a column of output for *lambda* will be in
@@ -253,10 +253,10 @@ same results, except for different random number, round-off and
 precision issues.
 
 These accelerated styles are part of the KOKKOS package. They are only
-enabled if SPARTA was built with that package.  See the :ref:`Making SPARTA <start_3>` section for more info.
+enabled if SPARTA was built with that package.  See the `Making SPARTA <Section_start.html#start_3>`_ section for more info.
 
 You can specify the accelerated styles explicitly in your input script
-by including their suffix, or you can use the :ref:`-suffix command-line switch <start_7>` when you invoke SPARTA, or you can
+by including their suffix, or you can use the `-suffix command-line switch <Section_start.html#start_7>`_ when you invoke SPARTA, or you can
 use the :doc:`suffix <suffix>` command in your input script.
 
 See the :doc:`Accelerating SPARTA <Section_accelerate>` section of the
@@ -296,6 +296,10 @@ Related commands
 
 
 .. _Bird94:
+
+.. raw:: html
+
+   <span id="Bird94"></span>
 
 
 
