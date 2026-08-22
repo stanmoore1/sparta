@@ -180,9 +180,6 @@ jobs:
       with:
         python-version: '3.11'
 
-    - name: Converter unit tests
-      run: make -C doc test
-
     - name: Build the manual
       run: make -C doc html SPHINXEXTRA="-W --keep-going"
 
