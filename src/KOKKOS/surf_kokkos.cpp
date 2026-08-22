@@ -337,6 +337,27 @@ void SurfKokkos::modify(ExecutionSpace space, unsigned int mask)
         if (ncustom_darray)
           for (int i = 0; i < ncustom_darray; i++)
             k_edarray.view_host()[i].k_view.modify_device();
+
+        // sync() reads the spread (_local) views under this same mask, so a
+        //   claim that marked only the owned ones could never be matched: a
+        //   host write to a spread array stayed unclaimed and the following
+        //   sync_device copied nothing.  Mark both halves.
+
+        if (ncustom_ivec)
+          for (int i = 0; i < ncustom_ivec; i++)
+            k_eivec_local.view_host()[i].k_view.modify_device();
+
+        if (ncustom_iarray)
+          for (int i = 0; i < ncustom_iarray; i++)
+            k_eiarray_local.view_host()[i].k_view.modify_device();
+
+        if (ncustom_dvec)
+          for (int i = 0; i < ncustom_dvec; i++)
+            k_edvec_local.view_host()[i].k_view.modify_device();
+
+        if (ncustom_darray)
+          for (int i = 0; i < ncustom_darray; i++)
+            k_edarray_local.view_host()[i].k_view.modify_device();
       }
     }
 
@@ -364,6 +385,27 @@ void SurfKokkos::modify(ExecutionSpace space, unsigned int mask)
         if (ncustom_darray)
           for (int i = 0; i < ncustom_darray; i++)
             k_edarray.view_host()[i].k_view.modify_host();
+
+        // sync() reads the spread (_local) views under this same mask, so a
+        //   claim that marked only the owned ones could never be matched: a
+        //   host write to a spread array stayed unclaimed and the following
+        //   sync_device copied nothing.  Mark both halves.
+
+        if (ncustom_ivec)
+          for (int i = 0; i < ncustom_ivec; i++)
+            k_eivec_local.view_host()[i].k_view.modify_host();
+
+        if (ncustom_iarray)
+          for (int i = 0; i < ncustom_iarray; i++)
+            k_eiarray_local.view_host()[i].k_view.modify_host();
+
+        if (ncustom_dvec)
+          for (int i = 0; i < ncustom_dvec; i++)
+            k_edvec_local.view_host()[i].k_view.modify_host();
+
+        if (ncustom_darray)
+          for (int i = 0; i < ncustom_darray; i++)
+            k_edarray_local.view_host()[i].k_view.modify_host();
       }
     }
   }

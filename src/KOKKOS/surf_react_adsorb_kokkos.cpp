@@ -106,6 +106,16 @@ void SurfReactAdsorbKokkos::init()
 {
   SurfReactAdsorb::init();
 
+  // SurfReactAdsorb::init()/init_surf() populate the per-surf custom arrays
+  //   (area, weight, tau) on the host through surf->edvec
+  //   (surf_react_adsorb.cpp:551-552, :460-461, :531).  That is a one-time
+  //   setup write and nothing claims it, so the first sync(Device,CUSTOM_MASK)
+  //   copies nothing and the device starts from whatever add_custom() left --
+  //   reported by the watch detector as "surf:dvector ... the device keeps
+  //   stale data" at element 0.
+
+  ((SurfKokkos *) surf)->modify(Host,CUSTOM_MASK);
+
   Kokkos::deep_copy(d_nsingle,0);
   Kokkos::deep_copy(d_tally_single,0);
 
@@ -122,6 +132,24 @@ void SurfReactAdsorbKokkos::init()
    cmodel type, each wrapping that cmodel's RanKnuth so the device scatter
    matches the host SurfCollide::wrapper bit-for-bit (EXACT serial)
 ------------------------------------------------------------------------- */
+
+/* ----------------------------------------------------------------------
+   SurfReactAdsorb::grid_changed() re-spreads the per-surf custom values to
+     the local lines/tris on the host (surf_react_adsorb.cpp:1262-1266).  Like
+     init(), nothing claims that write, so the following
+     sync(Device,CUSTOM_MASK) copies nothing and the device keeps the values
+     from before the grid changed.  Reported by the watch detector as
+     "surf/spread:edarray_local_array ... the device keeps stale data" on the
+     three ps and gs_ps adsorb decks.
+------------------------------------------------------------------------- */
+
+void SurfReactAdsorbKokkos::grid_changed()
+{
+  SurfReactAdsorb::grid_changed();
+  ((SurfKokkos *) surf)->modify(Host,CUSTOM_MASK);
+}
+
+/* ---------------------------------------------------------------------- */
 
 void SurfReactAdsorbKokkos::init_cmodels_kokkos()
 {

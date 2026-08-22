@@ -75,6 +75,7 @@ class SurfReactAdsorbKokkos : public SurfReactAdsorb {
   SurfReactAdsorbKokkos(class SPARTA *);
   ~SurfReactAdsorbKokkos();
   void init();
+  void grid_changed() override;
   void tally_reset();
   void tally_update();
 
