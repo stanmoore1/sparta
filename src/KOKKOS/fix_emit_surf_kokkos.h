@@ -97,12 +97,14 @@ class FixEmitSurfKokkos : public FixEmitSurf {
 
   KKCopy<ParticleKokkos> particle_kk_copy;
   KKCopy<ComputeSurfKokkos> slist_active_copy[KOKKOS_MAX_SLIST];
-  // region flattened to device-resident primitive descriptors; replaces the
-  //   per-style KKCopy members and the caps that went with them
+  // region flattened to a device-resident postfix token stream; replaces
+  //   the per-style KKCopy members and the caps that went with them.
+  //   region_flag says whether there is a region at all -- nregion_token and
+  //   d_region_tokens are only meaningful when it is 1
 
-  tdual_region_prim_1d k_region_prims;
-  t_region_prim_1d d_region_prims;
-  int nregion_prim,region_op,region_interior;
+  tdual_region_token_1d k_region_tokens;
+  t_region_token_1d d_region_tokens;
+  int nregion_token;
 
   typedef Kokkos::DualView<Task*, DeviceType::array_layout, DeviceType> tdual_task_1d;
   typedef tdual_task_1d::t_dev t_task_1d;

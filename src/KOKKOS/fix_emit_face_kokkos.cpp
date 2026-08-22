@@ -73,6 +73,7 @@ FixEmitFaceKokkos::FixEmitFaceKokkos(SPARTA *sparta, int narg, char **arg) :
   datamask_modify = EMPTY_MASK;
 
   region_flag = 0;
+  nregion_token = 0;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -263,20 +264,22 @@ void FixEmitFaceKokkos::perform_task()
   particle_kk->update_class_variables();
   particle_kk_copy.copy(particle_kk);
 
-  // flatten the region to device-resident primitive descriptors, so the
+  // flatten the region to a device-resident postfix token stream, so the
   //   kernel below needs no virtual dispatch and no typed copy per region
-  //   style.  see region_prim_kokkos.h
+  //   style.  the stream carries each sub-region's interior/exterior sense
+  //   and the composite's own, so nothing else needs to be passed along.
+  //   see region_prim_kokkos.h
 
   region_flag = 0;
+  nregion_token = 0;
   if (region) {
     KokkosBase* region_kkbase = dynamic_cast<KokkosBase*>(region);
     if (!region->kokkos_flag || !region_kkbase)
       error->all(FLERR,"KOKKOS package does not (yet) support chosen region style");
-    nregion_prim = region_kkbase->flatten_region_kokkos(k_region_prims,region_op);
-    if (nregion_prim <= 0)
+    nregion_token = region_kkbase->flatten_region_kokkos(k_region_tokens);
+    if (nregion_token <= 0)
       error->all(FLERR,"KOKKOS package does not (yet) support chosen region style");
-    d_region_prims = k_region_prims.view_device();
-    region_interior = region->interior;
+    d_region_tokens = k_region_tokens.view_device();
     region_flag = 1;
   }
 
@@ -450,8 +453,8 @@ void FixEmitFaceKokkos::operator()(TagFixEmitFace_perform_task, const int &i, in
         else x[2] = 0.0;
 
         if (region_flag &&
-            !region_match_kk(d_region_prims,nregion_prim,region_op,
-                             region_interior,x[0],x[1],x[2])) continue;
+            !region_match_kk(d_region_tokens,nregion_token,
+                             x[0],x[1],x[2])) continue;
 
         nactual++;
         d_keep(cand) = 1;
@@ -505,8 +508,8 @@ void FixEmitFaceKokkos::operator()(TagFixEmitFace_perform_task, const int &i, in
       else x[2] = 0.0;
 
       if (region_flag &&
-          !region_match_kk(d_region_prims,nregion_prim,region_op,
-                           region_interior,x[0],x[1],x[2])) continue;
+          !region_match_kk(d_region_tokens,nregion_token,
+                           x[0],x[1],x[2])) continue;
 
       nactual++;
       d_keep(cand) = 1;
