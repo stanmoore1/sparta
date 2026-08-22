@@ -23,6 +23,14 @@ import unicodedata
 # Intentional differences, agreed before the migration.  Anything not
 # covered here is a regression and fails the check.
 DELTAS = {
+    'unescaped_lt': (
+        'txt2html emits a literal "<" from the source without escaping it, '
+        'so a browser parses everything up to the next ">" as a tag and '
+        'hides it.  Text like "if the ratio < 1, then the incoming particle '
+        'may be deleted" is in the published file but invisible.  Sphinx '
+        'escapes it, so the text appears.  Each occurrence is verified: the '
+        'run is only allowed if the old markup really does contain it.'
+    ),
     'equations': (
         'txt2html embedded pre-rendered images from doc/Eqs; Sphinx renders '
         'the same equations with MathJax, so the image alt text is replaced '
@@ -137,6 +145,35 @@ def equation_images(markup):
             re.finditer(r'<img\b[^>]*?src\s*=\s*"(?:\./)?(Eqs/[^"]+)"', markup, re.I)}
 
 
+def hidden_by_unescaped_lt(old_markup, old_words, new_words):
+    """Count runs the old page contained but a browser could not show.
+
+    Returns 0 unless every difference is an insertion that starts with a
+    token beginning with "<" *and* the inserted words are present in the old
+    file's raw markup.  That second check is what makes this safe: it proves
+    the text was there and hidden, rather than being new text.
+    """
+    import difflib
+    raw = ' '.join(html.unescape(old_markup).split())
+    runs = 0
+    for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(
+            a=old_words, b=new_words, autojunk=False).get_opcodes():
+        if tag == 'equal':
+            continue
+        if tag == 'delete':
+            return 0
+        run = new_words[j1:j2]
+        # The run has to contain the "<" that caused the swallowing, and it
+        # has to be present verbatim in the old file.  Together those prove
+        # the text was published and hidden, not that it is new text.
+        if not run or not any('<' in w for w in run):
+            return 0
+        if ' '.join(run) not in raw:
+            return 0
+        runs += 1
+    return runs
+
+
 def diff_words(old, new, context=6):
     """First divergence between two word lists, with a little context."""
     import difflib
@@ -170,6 +207,7 @@ def main():
 
     missing, text_bad, link_bad, anchor_bad, ok = [], [], [], [], 0
     all_new_anchors = {}
+    unescaped, unescaped_pages = 0, []
 
     for name in pages:
         new_path = new_dir / name
@@ -186,8 +224,15 @@ def main():
         page_ok = True
         if ow != nw:
             d = diff_words(ow, nw)
-            # an equation site is allowed to differ
-            if not (eq and args.allow_equations and d and d['n_old'] + d['n_new'] < 400):
+            hidden = hidden_by_unescaped_lt(o, ow, nw)
+            if hidden:
+                unescaped += hidden
+                unescaped_pages.append((name, hidden))
+                if args.verbose:
+                    print(f'  ~ {name}: {hidden} run(s) the old page hid '
+                          f'behind an unescaped "<" (allowed)')
+            elif not (eq and args.allow_equations and d
+                      and d['n_old'] + d['n_new'] < 400):
                 text_bad.append((name, d))
                 page_ok = False
             elif args.verbose:
@@ -239,6 +284,9 @@ def main():
     print(f'  text differs        {len(text_bad)}')
     print(f'  links lost          {len(link_bad)}')
     print(f'  anchors lost        {len(anchor_bad)}')
+    if unescaped:
+        print(f'  text the old manual hid behind an unescaped "<": '
+              f'{unescaped} run(s) on {len(unescaped_pages)} pages')
 
     if missing:
         print('\nMISSING PAGES (URL would 404):')
