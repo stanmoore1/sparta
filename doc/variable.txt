@@ -139,7 +139,7 @@ elsewhere in SPARTA.  When a SPARTA input script or command evaluates
 an internal-style variable, it must have a current value set
 (internally) via that mechanism.  Second, python-style variables can
 be used so long as the associated Python function, as defined by the
-:doc:`python <python>` command, returns a numeric value.  When the
+"python"_python.html command, returns a numeric value.  When the
 SPARTA command evaluates the python-style variable, the Python
 function will be executed.
 
@@ -167,7 +167,7 @@ from the list of active variables, and is thus available to be
 re-defined in a subsequent variable command.  The {delete} style does
 the same thing.
 
-Variables are **not** deleted by the :doc:`clear <clear>` command.
+Variables are [not] deleted by the "clear"_clear.html command.
 
 :line
 
@@ -315,8 +315,8 @@ require them to be defined in the input script.  They create one or
 more internal-style variables if they do not already exist.  Examples
 are these commands:
 
-* :doc:`create_particles <create_particles>`
-* :doc:`python <python>` command in conjunction with Python function wrappers used in equal-, particle-, grid-, and surf-style variable formulas
+"create_particles"_create_particles.html :ulb,l
+"python"_python.html command in conjunction with Python function wrappers used in equal-, particle-, grid-, and surf-style variable formulas :ule,l
 
 ----------
 

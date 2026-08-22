@@ -170,7 +170,7 @@ from the list of active variables, and is thus available to be
 re-defined in a subsequent variable command.  The *delete* style does
 the same thing.
 
-Variables are \*\*not\*\* deleted by the :doc:`clear <clear>` command.
+Variables are **not** deleted by the :doc:`clear <clear>` command.
 
 
 ----------
@@ -323,8 +323,8 @@ require them to be defined in the input script.  They create one or
 more internal-style variables if they do not already exist.  Examples
 are these commands:
 
-\* :doc:`create\_particles <create\_particles>`
-\* :doc:`python <python>` command in conjunction with Python function wrappers used in equal-, particle-, grid-, and surf-style variable formulas
+* :doc:`create\_particles <create_particles>`
+* :doc:`python <python>` command in conjunction with Python function wrappers used in equal-, particle-, grid-, and surf-style variable formulas
 
 ----------
 

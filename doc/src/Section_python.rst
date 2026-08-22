@@ -45,8 +45,8 @@ shell prompt.
 If you create interesting Python scripts that run SPARTA or
 interesting Python functions that can be called from a SPARTA input
 script, that you think would be generally useful, please post them as
-a pull request to our "GitHub site"_
-https://github.com/sparta/sparta, and they can be added to the
+a pull request to our
+`GitHub site <https://github.com/sparta/sparta>`_, and they can be added to the
 SPARTA distribution or web page.
 
 Before using SPARTA from a Python script, you need to do two things.

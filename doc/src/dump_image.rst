@@ -701,7 +701,7 @@ step of writing (many) image snapshot file.
 To manually convert JPEG, PNG or PPM files into an animated GIF or
 MPEG or other movie file you can:
 
-* a) Use the ImageMagick convert program.
+* \a) Use the ImageMagick convert program.
   
   .. parsed-literal::
   
@@ -714,7 +714,7 @@ MPEG or other movie file you can:
   MPEG files created by ImageMagick are in MPEG-1 format with rather
   inefficient compression and low quality.
 
-* b) Use QuickTime.
+* \b) Use QuickTime.
 
   Select "Open Image Sequence" under the File menu Load the images into
   QuickTime to animate them Select "Export" under the File menu Save the
@@ -724,7 +724,7 @@ MPEG or other movie file you can:
   are not readable on all platforms until specific runtime libraries are
   installed.
 
-* c) Use FFmpeg
+* \c) Use FFmpeg
 
   FFmpeg is a command line tool that is available on many platforms and
   allows extremely flexible encoding and decoding of movies.
@@ -747,12 +747,12 @@ MPEG or other movie file you can:
 
 You can play a movie file as follows:
 
-* a) Use your browser to view an animated GIF movie.
+* \a) Use your browser to view an animated GIF movie.
 
   Select "Open File" under the File menu
   Load the animated GIF file
 
-* b) Use the freely available mplayer or ffplay tool to view a
+* \b) Use the freely available mplayer or ffplay tool to view a
   movie. Both are available for multiple OSes and support a large
   variety of file formats and decoders.
   
@@ -761,7 +761,7 @@ You can play a movie file as follows:
      % mplayer foo.mpg 
      % ffplay bar.avi
 
-* c) Use the `Pizza.py <https://lammps.github.io/pizza>`_
+* \c) Use the `Pizza.py <https://lammps.github.io/pizza>`_
   `animate tool <https://lammps.github.io/pizza/doc/animate.html>`_,
   which works directly on a series of image files.
   
@@ -769,7 +769,7 @@ You can play a movie file as follows:
   
      a = animate("foo\*.jpg")
 
-* d) QuickTime and other Windows- or MacOS-based media players can
+* \d) QuickTime and other Windows- or MacOS-based media players can
   obviously play movie files directly. Similarly for corresponding tools
   bundled with Linux desktop environments.  However, due to licensing
   issues with some file formats, the formats may require installing

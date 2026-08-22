@@ -40,7 +40,7 @@ dump\_modify command
          value = numeric value to compare to
          these 3 args can be replaced by the word "none" to turn off thresholding
 
-* these keywords apply only to the (image* and *movie* :doc:`styles <dump_image>`
+* these keywords apply only to the *image* and *movie* :doc:`styles <dump_image>`
 * keyword = *axestrans* or *backcolor* or *backcolor2* or *bitrate* or *boxcolor* or *boxtrans* or *cmap* or *color* or *framerate* or *gamma* or *gcolor* or *glinecolor* or *glinetrans* or *gridgroup* or *gtrans* or *lights* or *metal* or *metalfinish* or *pcolor* or *pdiam* or *ptrans* or *scolor* or *slinecolor* or *slinetrans* or *specular* or *ssaosamples* or *strans* or *subboxcolor* or *subboxtrans* or *surfgroup*
   
   .. parsed-literal::

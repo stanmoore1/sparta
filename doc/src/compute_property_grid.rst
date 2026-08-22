@@ -140,7 +140,7 @@ effectively.
 ----------
 
 
-**Restrictions:*
+**Restrictions:**
 
 For 2d simulations, none of the attributes which refer to the 3rd
 dimension may be used.

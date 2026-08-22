@@ -1710,7 +1710,7 @@ On Windows:
 
    pvpython is in C:\\Program Files (x86)\\ParaView 5.6.0\\bin
 
--------------------------------
+\-------------------------------
 
 \(2) Using surf2paraview.py
 
