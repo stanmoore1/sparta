@@ -125,7 +125,14 @@ class SurfCollideSpecularKokkos : public SurfCollideSpecular {
     reaction = 0;
     int velreset = 0;
 
-    if (REACT) {
+    // isr < 0 means this surface element or box face has no reaction model,
+    //   even though this surf collide instance is used somewhere that does.
+    //   REACT is a compile-time flag for the whole kernel, so the runtime test
+    //   is still needed; the host makes the same one
+    //   (surf_collide_diffuse.cpp:146 "if (isr >= 0)").  Without it,
+    //   KK_SR_TYPE(-1) reads out of bounds and dispatches on garbage
+
+    if (REACT && isr >= 0) {
       if (ambi_flag || vibmode_flag) memcpy(&iorig,ip,sizeof(Particle::OnePart));
 
       int sr_type = KK_SR_TYPE(isr);
