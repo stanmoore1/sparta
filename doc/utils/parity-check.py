@@ -37,9 +37,14 @@ CHROME = re.compile(
     r'|<div[^>]+class="[^"]*\b(sphinxsidebar|related|footer|headerlink)\b[^"]*".*?</div>',
     re.S | re.I)
 
-# the old pages carry a fixed banner and trailer that Sphinx replaces
+# Every txt2html page opens with a navigation line -- command pages carry
+# "SPARTA WWW Site - Documentation - Commands", chapter pages add Previous
+# and Next Section links around it.  Sphinx replaces both with its own
+# navigation, so neither is content.
+# bounded so it cannot swallow a later <CENTER> block (the pages use them
+# for figures too)
 OLD_BANNER = re.compile(
-    r'<CENTER>\s*<A HREF = "https?://[^"]*">SPARTA WWW Site</A>.*?</CENTER>',
+    r'<CENTER>(?:(?!</?CENTER>).)*?SPARTA WWW Site(?:(?!</?CENTER>).)*?</CENTER>',
     re.S | re.I)
 
 BLOCK = re.compile(r'</(p|div|h[1-6]|li|tr|pre|ul|ol|dl|dd|dt|table|blockquote)>',
@@ -48,15 +53,21 @@ TAG = re.compile(r'<[^>]+>')
 SCRIPT = re.compile(r'<(script|style)\b.*?</\1>', re.S | re.I)
 
 
-def visible_text(markup, *, sphinx=None):
-    """The words a reader sees, normalized so formatting cannot matter.
+def content_only(markup):
+    """Strip everything that is page furniture rather than content.
 
-    Both banner styles are stripped from both inputs, so the function is
-    symmetric: comparing a build against itself always reports parity.
+    Both banner styles are removed from both inputs, so every comparison
+    built on this is symmetric: a build compared against itself always
+    reports parity.
     """
     t = SCRIPT.sub(' ', markup)
     t = OLD_BANNER.sub(' ', t)
-    t = CHROME.sub(' ', t)
+    return CHROME.sub(' ', t)
+
+
+def visible_text(markup, *, sphinx=None):
+    """The words a reader sees, normalized so formatting cannot matter."""
+    t = content_only(markup)
     # keep block boundaries as separators so words do not run together
     t = BLOCK.sub('\n', t)
     t = TAG.sub(' ', t)
@@ -68,9 +79,15 @@ def visible_text(markup, *, sphinx=None):
 
 
 def links(markup):
-    """Where each link points, ignoring the text it is attached to."""
+    """Where each link points, ignoring the text it is attached to.
+
+    The banner and breadcrumb links are page furniture: every old page
+    carries a fixed "SPARTA WWW Site - Documentation - Commands" header and
+    Sphinx replaces it with its own navigation.  Those are excluded, so what
+    is compared is the links the page's own content makes.
+    """
     out = []
-    for m in re.finditer(r'<a\b[^>]*?href\s*=\s*"([^"]*)"', markup, re.I):
+    for m in re.finditer(r'<a\b[^>]*?href\s*=\s*"([^"]*)"', content_only(markup), re.I):
         href = html.unescape(m.group(1)).strip()
         if not href or href.startswith(('javascript:', '#')):
             continue
@@ -136,6 +153,7 @@ def main():
         pages = [p for p in pages if p == args.page or p == args.page + '.html']
 
     missing, text_bad, link_bad, anchor_bad, ok = [], [], [], [], 0
+    all_new_anchors = {}
 
     for name in pages:
         new_path = new_dir / name
@@ -165,7 +183,24 @@ def main():
         # happens to exist elsewhere on the page is still a regression.
         internal = lambda L: collections.Counter(
             x for x in L if not x.startswith(('http', 'mailto')))
-        oc, nc = internal(ol := links(o)), internal(nl := links(n))
+        oc, nc = internal(links(o)), internal(links(n))
+        # A fragment whose case changed is equivalent only if the anchor it
+        # names actually exists in the new build -- anchor_compat re-adds the
+        # original-case anchors, so both spellings resolve.  Verified per
+        # link rather than assumed.
+        def resolve(href):
+            page, _, frag = href.partition('#')
+            if not frag:
+                return href
+            target = new_dir / (page or name)
+            if not target.exists():
+                return href
+            if frag in all_new_anchors.setdefault(
+                    target.name, anchors(target.read_text(errors='replace'))):
+                return page + '#' + frag.lower()
+            return href
+        oc = collections.Counter(resolve(k) for k in oc.elements())
+        nc = collections.Counter(resolve(k) for k in nc.elements())
         lost = oc - nc
         added = nc - oc
         if lost or added:
