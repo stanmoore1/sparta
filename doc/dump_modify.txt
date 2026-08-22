@@ -38,7 +38,7 @@ keyword = {append} or {binary} or {buffer} or {every} or {fileper} or {first} or
     operation = "<" or "<=" or ">" or ">=" or "==" or "!="
     value = numeric value to compare to
     these 3 args can be replaced by the word "none" to turn off thresholding :pre
-these keywords apply only to the (image} and {movie} "styles"_dump_image.html :l
+these keywords apply only to the {image} and {movie} "styles"_dump_image.html :l
 keyword = {axestrans} or {backcolor} or {backcolor2} or {bitrate} or {boxcolor} or {boxtrans} or {cmap} or {color} or {framerate} or {gamma} or {gcolor} or {glinecolor} or {glinetrans} or {gridgroup} or {gtrans} or {lights} or {metal} or {metalfinish} or {pcolor} or {pdiam} or {ptrans} or {scolor} or {slinecolor} or {slinetrans} or {specular} or {ssaosamples} or {strans} or {subboxcolor} or {subboxtrans} or {surfgroup} :l
   {axestrans} arg = opacity
     opacity = opacity of the XYZ axes, from 0.0 (invisible) to 1.0 (opaque)
