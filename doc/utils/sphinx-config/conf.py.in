@@ -1,0 +1,105 @@
+# SPARTA documentation build configuration file.
+#
+# This is a template.  The Makefile generates conf.py from it by expanding
+# the @SPARTA_*_DIR@ placeholders, which is why conf.py itself is not
+# checked in.
+
+import os
+import re
+import sys
+
+from docutils import nodes
+
+SPARTA_DOC_DIR = '@SPARTA_DOC_DIR@'
+SPARTA_SOURCE_DIR = '@SPARTA_SOURCE_DIR@'
+
+# -- Anchor names ----------------------------------------------------------
+#
+# docutils builds an HTML id by lowercasing a string and replacing every run
+# of non-alphanumerics with a hyphen, so the txt2html anchor "start_7" would
+# become "start-7" and "Bird94" would become "bird94".  Those anchor names
+# are the manual's URLs -- they are linked to from other pages, from the
+# SPARTA web site, and from outside -- so renaming them silently breaks
+# inbound links.
+#
+# A string that is already a valid HTML id is kept exactly as it is; that
+# covers every explicit ".. _label:" the conversion produced.  Anything else
+# (notably ids derived from section titles, which contain spaces) falls
+# through to the stock behaviour, so ordinary Sphinx pages are unaffected.
+_VALID_ID = re.compile(r'^[A-Za-z][A-Za-z0-9_.-]*$')
+_docutils_make_id = nodes.make_id
+_docutils_normalize = nodes.fully_normalize_name
+
+
+def make_id(string):
+    if _VALID_ID.match(string):
+        return string
+    return _docutils_make_id(string)
+
+
+def fully_normalize_name(name):
+    # docutils lowercases every reference name, which would turn the
+    # citation anchor "Bird94" into "bird94".  A name that is already a
+    # valid id keeps its case; both the target and the references to it
+    # go through here, so matching stays consistent.
+    if _VALID_ID.match(name):
+        return name
+    return _docutils_normalize(name)
+
+
+nodes.make_id = make_id
+nodes.fully_normalize_name = fully_normalize_name
+
+# -- General ---------------------------------------------------------------
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+extensions = [
+    'sphinx.ext.mathjax',
+    'sphinxcontrib.jquery',
+    'anchor_compat',
+]
+
+source_suffix = '.rst'
+master_doc = 'Manual'
+exclude_patterns = ['_build']
+
+project = 'SPARTA'
+copyright = 'Sandia National Laboratories'
+author = 'The SPARTA Developers'
+
+
+def get_sparta_version():
+    """Read the release date out of src/version.h.
+
+    SPARTA's "version" is the release date, e.g. "24 Sep 2025", and every
+    page footer shows it, so it is taken from the source rather than
+    maintained separately here.
+    """
+    try:
+        with open(os.path.join(SPARTA_SOURCE_DIR, 'version.h'), 'r') as f:
+            line = f.readline()
+        return line.split('"')[1].strip()
+    except (IOError, IndexError):
+        return 'unknown'
+
+
+version = get_sparta_version()
+release = version
+
+# -- HTML ------------------------------------------------------------------
+
+html_theme = 'sphinx_rtd_theme'
+html_theme_options = {
+    'collapse_navigation': False,
+    'navigation_depth': 3,
+}
+html_title = 'SPARTA Documentation'
+html_short_title = 'SPARTA'
+html_static_path = []
+html_show_sourcelink = False
+
+# Equations were pre-rendered images under doc/Eqs in the txt2html manual.
+# MathJax renders them from their LaTeX source instead, which is the one
+# rendering difference this migration introduces; see
+# doc/utils/parity-check.py.

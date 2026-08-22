@@ -79,12 +79,22 @@ def links(markup):
 
 
 def anchors(markup):
-    """Anchor names other pages can link to."""
+    """Anchor names other pages can link to.
+
+    Only attributes inside a tag count.  The manual's own prose contains
+    things like 'the default mixture has an ID = "all"', which is text, not
+    an anchor, so the search is scoped to tags rather than run over the
+    whole file.
+    """
     out = set()
+    # <a name="..."> is the txt2html anchor form; id="..." on any element is
+    # the Sphinx one.  name= on other elements is not an anchor -- <meta
+    # name="author"> is document metadata, not a link target.
     for m in re.finditer(r'<a\b[^>]*?\bname\s*=\s*"([^"]+)"', markup, re.I):
         out.add(m.group(1))
-    for m in re.finditer(r'\bid\s*=\s*"([^"]+)"', markup, re.I):
-        out.add(m.group(1))
+    for tag in re.finditer(r'<[a-zA-Z][^>]*>', markup):
+        for m in re.finditer(r'\bid\s*=\s*"([^"]+)"', tag.group(0), re.I):
+            out.add(m.group(1))
     return out
 
 
