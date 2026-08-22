@@ -16,17 +16,26 @@ MATHJAXSHA     = 1b9c0a1c44df864e915690558e72adb9cc5203360daefd385084ced3b6c64c0
 PYTHON         = python3
 SPHINXEXTRA    =
 
-.PHONY: help clean clean-all html
+.PHONY: help clean clean-all html test
 
 help:
 	@echo "Usage: make <target>"
 	@echo ""
 	@echo "  html          build the HTML manual in doc/html"
+	@echo "  test          run the txt2rst converter's unit tests"
 	@echo "  clean         remove the build tree, keep the virtualenv"
 	@echo "  clean-all     also remove the virtualenv and generated conf.py"
 	@echo ""
 	@echo "  SPHINXEXTRA=... passes extra flags to sphinx-build, e.g."
 	@echo "  make html SPHINXEXTRA=\"-j auto -W --keep-going\""
+
+# The converter that produced doc/src has unit tests, and 17 of them were
+# failing because nothing ran them: they still asserted the LAMMPS
+# behaviour this copy was retargeted away from.  Give them a target so that
+# stops happening.
+test:
+	@cd $(BUILDDIR)/utils/converters && \
+	 $(PYTHON) -m unittest discover -s tests
 
 clean:
 	rm -rf $(BUILDDIR)/html $(BUILDDIR)/doctrees

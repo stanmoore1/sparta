@@ -340,9 +340,8 @@ def main():
             x for x in L if not x.startswith(('http', 'mailto')))
         oc, nc = internal(links(o)), internal(links(n))
         # A fragment whose case changed is equivalent only if the anchor it
-        # names actually exists in the new build -- anchor_compat re-adds the
-        # original-case anchors, so both spellings resolve.  Verified per
-        # link rather than assumed.
+        # names actually exists in the new build, so both spellings resolve.
+        # Verified per link rather than assumed.
         def resolve(href):
             # txt2html writes a self-reference as "thispage.html"; Sphinx
             # writes it as "#".  Same destination.

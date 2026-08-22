@@ -5,10 +5,7 @@
 # checked in.
 
 import os
-import re
 import sys
-
-from docutils import nodes
 
 SPARTA_DOC_DIR = '@SPARTA_DOC_DIR@'
 SPARTA_SOURCE_DIR = '@SPARTA_SOURCE_DIR@'
@@ -22,33 +19,18 @@ SPARTA_SOURCE_DIR = '@SPARTA_SOURCE_DIR@'
 # SPARTA web site, and from outside -- so renaming them silently breaks
 # inbound links.
 #
-# A string that is already a valid HTML id is kept exactly as it is; that
-# covers every explicit ".. _label:" the conversion produced.  Anything else
-# (notably ids derived from section titles, which contain spaces) falls
-# through to the stock behaviour, so ordinary Sphinx pages are unaffected.
-_VALID_ID = re.compile(r'^[A-Za-z][A-Za-z0-9_.-]*$')
-_docutils_make_id = nodes.make_id
-_docutils_normalize = nodes.fully_normalize_name
-
-
-def make_id(string):
-    if _VALID_ID.match(string):
-        return string
-    return _docutils_make_id(string)
-
-
-def fully_normalize_name(name):
-    # docutils lowercases every reference name, which would turn the
-    # citation anchor "Bird94" into "bird94".  A name that is already a
-    # valid id keeps its case; both the target and the references to it
-    # go through here, so matching stays consistent.
-    if _VALID_ID.match(name):
-        return name
-    return _docutils_normalize(name)
-
-
-nodes.make_id = make_id
-nodes.fully_normalize_name = fully_normalize_name
+# All 141 of them are kept by the sources themselves: alongside each
+# ".. _Bird94:" label the conversion emitted a raw-HTML
+# <span id="Bird94"></span>, which docutils passes through untouched.  Grep
+# doc/src for "raw:: html" to see them.
+#
+# Two other mechanisms for the same job used to live here -- a monkeypatch
+# of docutils' make_id and fully_normalize_name, and an anchor_compat
+# extension driven by a manifest of the published names.  Removing each in
+# turn produced a byte-identical build, so both were dead, and a dormant
+# second mechanism is worse than none: nobody would notice it had stopped
+# working.  doc/utils/parity-check.py is what actually holds the line, by
+# comparing every anchor against the txt2html manual on every run.
 
 # -- General ---------------------------------------------------------------
 
@@ -57,7 +39,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 extensions = [
     'sphinx.ext.mathjax',
     'sphinxcontrib.jquery',
-    'anchor_compat',
 ]
 
 # Sphinx turns straight quotes into typographic ones by default.  The
