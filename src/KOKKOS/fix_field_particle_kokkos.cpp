@@ -15,6 +15,7 @@
 #include "fix_field_particle_kokkos.h"
 #include "particle.h"
 #include "memory_kokkos.h"
+#include <type_traits>
 #include "sparta_masks.h"
 
 using namespace SPARTA_NS;
@@ -61,13 +62,36 @@ void FixFieldParticleKokkos::compute_field()
     MemKK::realloc_kokkos(k_array_particle,"field/particle/kk:array_particle",
                           nlocal,ncols);
 
-  auto h_array_particle = k_array_particle.view_host();
-  for (int i = 0; i < nlocal; i++)
-    for (int j = 0; j < ncols; j++)
-      h_array_particle(i,j) = array_particle[i][j];
+  // array_particle is one contiguous row-major block: Memory::create(TYPE**&,n1,n2)
+  //   (memory.h:114-127) does a single allocation of n1*n2 and points each
+  //   row pointer into it.  tdual_float_2d_lr is LayoutRight, so the two have
+  //   the same element order and the host side needs no copy at all -- wrap
+  //   the existing buffer in an unmanaged View and hand it straight to
+  //   deep_copy.  On a host backend the DualView's two views are the same
+  //   memory and this is a no-op; on a GPU it is the one H2D transfer that
+  //   has to happen either way.  The element-wise loop this replaces was
+  //   pure overhead on every step.
 
-  k_array_particle.modify_host();
-  k_array_particle.sync_device();
+  static_assert(std::is_same<F_FLOAT,double>::value,
+                "wrapping array_particle (double**) in an F_FLOAT view assumes "
+                "F_FLOAT is double; use a converting deep_copy if that changes");
+
+  Kokkos::View<F_FLOAT**,Kokkos::LayoutRight,Kokkos::HostSpace,
+               Kokkos::MemoryTraits<Kokkos::Unmanaged> >
+    h_array_particle(array_particle[0],nlocal,ncols);
+
+  // both sides can be longer than nlocal: the host array is sized to
+  //   maxparticle/maxgrid, and the DualView guard above is grow-only
+  //   (extent(0) < nlocal), so it keeps a high-water-mark row count after the
+  //   count drops.  Kokkos::deep_copy throws on any extent mismatch
+  //   (Kokkos_CopyViews.hpp:1163), so copy the leading nlocal rows rather
+  //   than the whole allocation.  A leading row range of a LayoutRight view
+  //   is still contiguous, so the subview costs nothing at runtime
+
+  auto d_rows = Kokkos::subview(k_array_particle.view_device(),
+                                Kokkos::make_pair(0,nlocal),Kokkos::ALL());
+  Kokkos::deep_copy(d_rows,h_array_particle);
+  k_array_particle.modify_device();
 
   d_array_particle = k_array_particle.view_device();
 }
