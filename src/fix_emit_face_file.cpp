@@ -729,7 +729,7 @@ void FixEmitFaceFile::read_file(char *file, char *section)
   FILE *fp = fopen(file,"r");
   if (fp == NULL) {
     char str[128];
-    sprintf(str,"Cannot open inflow file %s",file);
+    snprintf(str,sizeof(str),"Cannot open inflow file %s",file);
     error->one(FLERR,str);
   }
 

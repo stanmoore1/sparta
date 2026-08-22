@@ -204,7 +204,7 @@ void Collide::init()
     }
     if (flag) {
       char str[128];
-      sprintf(str,"%d species do not define correct rotational "
+      snprintf(str,sizeof(str),"%d species do not define correct rotational "
               "temps for discrete model",flag);
       error->all(FLERR,str);
     }
@@ -226,7 +226,7 @@ void Collide::init()
     }
     if (flag) {
       char str[128];
-      sprintf(str,"%d species do not define correct vibrational "
+      snprintf(str,sizeof(str),"%d species do not define correct vibrational "
               "modes for discrete model",flag);
       error->all(FLERR,str);
     }

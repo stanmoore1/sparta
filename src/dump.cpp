@@ -420,7 +420,7 @@ void Dump::openfile()
     if (compressed) {
 #ifdef SPARTA_GZIP
       char gzip[128];
-      sprintf(gzip,"gzip -6 > %s",filecurrent);
+      snprintf(gzip,sizeof(gzip),"gzip -6 > %s",filecurrent);
 #ifdef _WIN32
       fp = _popen(gzip,"wb");
 #else
@@ -644,7 +644,7 @@ void Dump::modify_params(int narg, char **arg)
           error->all(FLERR,
                      "Dump_modify int format does not contain d character");
         char str[8];
-        sprintf(str,"%s",BIGINT_FORMAT);
+        snprintf(str,sizeof(str),"%s",BIGINT_FORMAT);
         *ptr = '\0';
         sprintf(format_bigint_user,"%s%s%s",format_int_user,&str[1],ptr+1);
         *ptr = 'd';

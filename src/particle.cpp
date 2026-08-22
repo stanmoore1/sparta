@@ -171,7 +171,7 @@ void Particle::init()
       if (species[isp].vibdof <= 2) continue;
       if (species[isp].vibdiscrete_read == 0) {
         char str[128];
-        sprintf(str,"Discrete vibrational info for species %s not read in",
+        snprintf(str,sizeof(str),"Discrete vibrational info for species %s not read in",
                 species[isp].id);
         error->all(FLERR,str);
       }
