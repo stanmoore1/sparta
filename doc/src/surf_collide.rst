@@ -583,7 +583,7 @@ distribution is given by
 
 .. math::
 
-   f_{corr} = \begin{cases} 1 - \epsilon \tan(\theta_0), & \text{if } \tan(\theta_0) < \epsilon^{-1} \\ 0, & \text{otherwise} \end{cases}
+   f_{corr} = \begin{cases} 1 - \epsilon \hspace{0.5mm} tan(\theta_{0}), & \text{if} \tan(\theta_{0}) < \epsilon^{-1} \\ 0, & \text{otherwise} \end{cases}
 
 This optional argument can be accessed using the keyword *step*\ , and
 *epsilon* parameter must be specified. Another optional argument to

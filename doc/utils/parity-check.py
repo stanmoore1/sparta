@@ -45,10 +45,12 @@ DELTAS = {
         'txt2html embedded pre-rendered images from doc/Eqs.  Equations are '
         'now typeset by MathJax from their LaTeX source, and the two images '
         'that were tables of surface reactions are now real tables, so the '
-        'image alt text is replaced by the text it depicted.  Every one was '
-        'compared against a screenshot of the image it replaces.  Allowed '
-        'only where the old page had an equation image, and only for the '
-        'text that replaced that image.'
+        'image alt text is replaced by the text it depicted.  Allowed only '
+        'where the old page had an equation image, and only for the text '
+        'that replaced that image -- but an image contributes no words, so '
+        'there is nothing here to compare that text against.  What it says '
+        'is checked by equation-check.py, which diffs each one against the '
+        '.tex source that was published beside the image.'
     ),
     'rst_markup_in_source': (
         'variable.txt was edited at some point with reStructuredText markup '
