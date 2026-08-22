@@ -98,6 +98,30 @@ html_show_sourcelink = False
 # doc/utils/parity-check.py.
 
 
+# -- PDF -------------------------------------------------------------------
+#
+# The manual is read on the web; the PDF is the offline copy that ships in
+# the release tarball, which is why doc/ builds it at all.
+latex_documents = [
+    (master_doc, 'SPARTA.tex', 'SPARTA Documentation', author, 'manual'),
+]
+latex_elements = {
+    'papersize': 'letterpaper',
+    'pointsize': '10pt',
+    # The manual quotes input-script syntax constantly, and a long unbroken
+    # command name or path runs off the right edge of the page.  Both of
+    # these let LaTeX break inside such a word rather than overflow.
+    'preamble': r'''
+\usepackage{seqsplit}
+\setcounter{tocdepth}{2}
+\sloppy
+''',
+}
+# Sphinx repeats the whole toctree as a "domain index" the manual has no use
+# for, and its module index is empty because there are no Python modules.
+latex_domain_indices = False
+
+
 # -- Full-size images ------------------------------------------------------
 #
 # Several pages show a scaled-down picture that links to the full-size one,

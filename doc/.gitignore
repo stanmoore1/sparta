@@ -1,5 +1,9 @@
 /html
 /doctrees
+/latex
+/latexdoctrees
+/fasthtml
+/Manual.pdf
 /docenv
 /utils/sphinx-config/conf.py
 *.pyc
