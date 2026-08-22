@@ -857,6 +857,14 @@ template < int NEARCP, int GASTALLY > void CollideVSSKokkos::collisions_one(COLL
     h_ndelete() = 0;
     h_nlocal() = particle->nlocal;
 
+    // h_tally_overflow is not zeroed anywhere else on this path: the reaction
+    //   retry branch below reads maxdelete/maxcellcount/nlocal back out of
+    //   h_scalars, so unlike UpdateKokkos it cannot bulk-zero the array.  A
+    //   pass that raised both flags would otherwise push a stale 1 back to the
+    //   device and trigger a spurious grow plus a wasted sweep next attempt
+
+    h_tally_overflow() = 0;
+
     Kokkos::deep_copy(d_scalars,h_scalars);
     Kokkos::deep_copy(d_scalars_big,h_scalars_big);
 
@@ -1279,6 +1287,14 @@ template < int DIM, int GASTALLY > void CollideVSSKokkos::collisions_one_subcell
     h_part_grow() = 0;
     h_ndelete() = 0;
     h_nlocal() = particle->nlocal;
+
+    // h_tally_overflow is not zeroed anywhere else on this path: the reaction
+    //   retry branch below reads maxdelete/maxcellcount/nlocal back out of
+    //   h_scalars, so unlike UpdateKokkos it cannot bulk-zero the array.  A
+    //   pass that raised both flags would otherwise push a stale 1 back to the
+    //   device and trigger a spurious grow plus a wasted sweep next attempt
+
+    h_tally_overflow() = 0;
 
     Kokkos::deep_copy(d_scalars,h_scalars);
     Kokkos::deep_copy(d_scalars_big,h_scalars_big);
@@ -2003,6 +2019,14 @@ void CollideVSSKokkos::collisions_group(COLLIDE_REDUCE &reduce)
     h_part_grow() = 0;
     h_ndelete() = 0;
     h_nlocal() = particle->nlocal;
+
+    // h_tally_overflow is not zeroed anywhere else on this path: the reaction
+    //   retry branch below reads maxdelete/maxcellcount/nlocal back out of
+    //   h_scalars, so unlike UpdateKokkos it cannot bulk-zero the array.  A
+    //   pass that raised both flags would otherwise push a stale 1 back to the
+    //   device and trigger a spurious grow plus a wasted sweep next attempt
+
+    h_tally_overflow() = 0;
     h_error_flag() = 0;
 
     Kokkos::deep_copy(d_scalars,h_scalars);
@@ -2521,12 +2545,27 @@ void CollideVSSKokkos::collisions_group_ambipolar(COLLIDE_REDUCE &reduce)
     if (tally_backup) rewind_gas_tally_computes(0);
 
     h_retry() = 0;
+    // seed from the allocation, not from the Collide member: maxelectron
+    //   starts at 0 and the kernel only overflows against d_elist.extent(1),
+    //   so seeding it with 0 makes each retry bump the request by
+    //   DELTACELLCOUNT from zero and re-run the whole pass until it finally
+    //   exceeds the extent -- dozens of wasted sweeps before the realloc
+
+    maxelectron = d_elist.extent(1);
     h_maxelectron() = maxelectron;
     h_maxdelete() = maxdelete;
     h_maxcellcount() = maxcellcount;
     h_part_grow() = 0;
     h_ndelete() = 0;
     h_nlocal() = particle->nlocal;
+
+    // h_tally_overflow is not zeroed anywhere else on this path: the reaction
+    //   retry branch below reads maxdelete/maxcellcount/nlocal back out of
+    //   h_scalars, so unlike UpdateKokkos it cannot bulk-zero the array.  A
+    //   pass that raised both flags would otherwise push a stale 1 back to the
+    //   device and trigger a spurious grow plus a wasted sweep next attempt
+
+    h_tally_overflow() = 0;
     h_error_flag() = 0;
 
     Kokkos::deep_copy(d_scalars,h_scalars);
@@ -3180,12 +3219,27 @@ void CollideVSSKokkos::collisions_one_ambipolar(COLLIDE_REDUCE &reduce)
     if (tally_backup) rewind_gas_tally_computes(0);
 
     h_retry() = 0;
+    // seed from the allocation, not from the Collide member: maxelectron
+    //   starts at 0 and the kernel only overflows against d_elist.extent(1),
+    //   so seeding it with 0 makes each retry bump the request by
+    //   DELTACELLCOUNT from zero and re-run the whole pass until it finally
+    //   exceeds the extent -- dozens of wasted sweeps before the realloc
+
+    maxelectron = d_elist.extent(1);
     h_maxelectron() = maxelectron;
     h_maxdelete() = maxdelete;
     h_maxcellcount() = maxcellcount;
     h_part_grow() = 0;
     h_ndelete() = 0;
     h_nlocal() = particle->nlocal;
+
+    // h_tally_overflow is not zeroed anywhere else on this path: the reaction
+    //   retry branch below reads maxdelete/maxcellcount/nlocal back out of
+    //   h_scalars, so unlike UpdateKokkos it cannot bulk-zero the array.  A
+    //   pass that raised both flags would otherwise push a stale 1 back to the
+    //   device and trigger a spurious grow plus a wasted sweep next attempt
+
+    h_tally_overflow() = 0;
 
     Kokkos::deep_copy(d_scalars,h_scalars);
     Kokkos::deep_copy(d_scalars_big,h_scalars_big);
