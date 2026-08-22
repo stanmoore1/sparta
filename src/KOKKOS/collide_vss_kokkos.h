@@ -245,6 +245,18 @@ class CollideVSSKokkos : public CollideVSS {
   Kokkos::View<int***,DeviceType> d_glist;   // (cell, group, k) -> plist index
   Kokkos::View<int***,DeviceType> d_p2g;     // (cell, plist index) -> group, k
 
+  // per-group counters, formerly per-thread stack arrays dimensioned by a
+  //   compile-time MAXGROUP.  Both group kernels are one work item per grid
+  //   cell (RangePolicy over 0..nglocal indexed by icell), so icell is already
+  //   a unique, deterministic, contention-free row index -- no UniqueToken
+  //   needed.  Sized (nglocal, ngroups) alongside d_glist, which they cost
+  //   1/d_plist.extent(1) as much as.
+  //   d_gcount is used by both group kernels; d_gcursor only by the ambipolar
+  //   one, whose group lists are static and are filled in one pass.
+
+  Kokkos::View<int**,DeviceType> d_gcount;   // (cell, group) -> # in group
+  Kokkos::View<int**,DeviceType> d_gcursor;  // (cell, group) -> fill cursor
+
   // near-neighbor partner history for the two groups of the current pair;
   //   the host reallocates these per pair via set_nn_group()
 
@@ -258,29 +270,29 @@ class CollideVSSKokkos : public CollideVSS {
   //   index a later random draw lands on, so any deviation diverges from the
   //   host rather than merely reordering
 
+  // the group counts live in d_gcount(icell,*), so icell is all these need
+
   KOKKOS_INLINE_FUNCTION
-  void addgroup_kk(const int icell, const int igroup, const int pindex,
-                   int *gcount) const
+  void addgroup_kk(const int icell, const int igroup, const int pindex) const
   {
-    const int ng = gcount[igroup];
+    const int ng = d_gcount(icell,igroup);
     d_glist(icell,igroup,ng) = pindex;
     d_p2g(icell,pindex,0) = igroup;
     d_p2g(icell,pindex,1) = ng;
-    gcount[igroup]++;
+    d_gcount(icell,igroup)++;
   }
 
   KOKKOS_INLINE_FUNCTION
-  void delgroup_kk(const int icell, const int igroup, const int i,
-                   int *gcount) const
+  void delgroup_kk(const int icell, const int igroup, const int i) const
   {
-    const int ng = gcount[igroup];
+    const int ng = d_gcount(icell,igroup);
     if (i < ng-1) {
       d_glist(icell,igroup,i) = d_glist(icell,igroup,ng-1);
       const int pindex = d_glist(icell,igroup,i);
       d_p2g(icell,pindex,0) = igroup;
       d_p2g(icell,pindex,1) = i;
     }
-    gcount[igroup]--;
+    d_gcount(icell,igroup)--;
   }
 
  private:

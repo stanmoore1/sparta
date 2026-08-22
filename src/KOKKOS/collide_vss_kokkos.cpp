@@ -86,7 +86,6 @@ enum{CONSTANT,VARIABLE};
 #define DELTADELETE 1024
 #define DELTAELECTRON 128
 #define DELTACELLCOUNT 2
-#define MAXGROUP 16               // max # of collision groups for Kokkos group collisions
 
 #define EPSZERO 1.0e-14
 #define BIG 1.0e20
@@ -1899,9 +1898,6 @@ void CollideVSSKokkos::grow_group_lists()
 template < int NEARCP, int GASTALLY >
 void CollideVSSKokkos::collisions_group(COLLIDE_REDUCE &reduce)
 {
-  if (ngroups > MAXGROUP)
-    error->all(FLERR,"Too many collision groups for Kokkos group collisions");
-
   // loop over cells I own
 
   this->sync(Device,ALL_MASK);
@@ -1940,6 +1936,16 @@ void CollideVSSKokkos::collisions_group(COLLIDE_REDUCE &reduce)
   if (int(d_nattempt_pair.extent(0)) < nglocal ||
       int(d_nattempt_pair.extent(1)) < ngroups)
     MemKK::realloc_kokkos(d_nattempt_pair,"collide:nattempt_pair",nglocal,ngroups,ngroups);
+
+  // d_gcount holds the per-group particle counts the kernel used to keep in a
+  //   per-thread stack array with a compile-time group cap.  One row per cell,
+  //   so the work item's icell is the row index: no token, no contention.
+  //   Checked separately from d_glist because it does not scale with the
+  //   d_plist capacity, so a reaction retry that grows d_plist leaves it alone.
+
+  if (int(d_gcount.extent(0)) < nglocal ||
+      int(d_gcount.extent(1)) < ngroups)
+    MemKK::realloc_kokkos(d_gcount,"collide:gcount",nglocal,ngroups);
 
   copymode = 1;
 
@@ -2122,16 +2128,14 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroup< NEARCP, GASTALLY, A
   if (volume == 0.0) d_error_flag() = 1;
 
   // build per-group particle lists for this cell
-  // gcount[g] = # of particles in group g
+  // d_gcount(icell,g) = # of particles in group g
   // d_glist(icell,g,k) = plist index of the kth particle of group g
   // built with addgroup_kk in plist order, as the non-Kokkos version does
 
-  int gcount[MAXGROUP];
-
-  for (int g = 0; g < ngroups; g++) gcount[g] = 0;
+  for (int g = 0; g < ngroups; g++) d_gcount(icell,g) = 0;
   for (int n = 0; n < np; n++) {
     const int isp = d_particles[d_plist(icell,n)].ispecies;
-    addgroup_kk(icell,d_species2group[isp],n,gcount);
+    addgroup_kk(icell,d_species2group[isp],n);
   }
 
   struct State precoln;       // state before collision
@@ -2146,7 +2150,8 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroup< NEARCP, GASTALLY, A
   for (int ig = 0; ig < ngroups; ig++)
     for (int jg = ig; jg < ngroups; jg++) {
       const double attempt =
-        attempt_collision_kokkos(icell,ig,jg,gcount[ig],gcount[jg],volume,rand_gen);
+        attempt_collision_kokkos(icell,ig,jg,d_gcount(icell,ig),
+                                 d_gcount(icell,jg),volume,rand_gen);
       const int nattempt = static_cast<int> (attempt);
       d_nattempt_pair(icell,ig,jg) = nattempt;
       if (nattempt) {
@@ -2167,21 +2172,24 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroup< NEARCP, GASTALLY, A
     for (int jg = ig; jg < ngroups; jg++) {
       const int nattempt = d_nattempt_pair(icell,ig,jg);
       if (!nattempt) continue;
-      if (gcount[ig] == 0 || gcount[jg] == 0) continue;
-      if (ig == jg && gcount[ig] == 1) continue;
+      if (d_gcount(icell,ig) == 0 || d_gcount(icell,jg) == 0) continue;
+      if (ig == jg && d_gcount(icell,ig) == 1) continue;
 
       // near-neighbor bookkeeping is per group pair and starts cleared,
       //   as Collide::collisions_group() does via set_nn_group()
 
       if (NEARCP) {
-        for (int k = 0; k < gcount[ig]; k++) d_nn_igroup(icell,k) = 0;
-        if (ig != jg)
-          for (int k = 0; k < gcount[jg]; k++) d_nn_jgroup(icell,k) = 0;
+        const int nclear_i = d_gcount(icell,ig);
+        for (int k = 0; k < nclear_i; k++) d_nn_igroup(icell,k) = 0;
+        if (ig != jg) {
+          const int nclear_j = d_gcount(icell,jg);
+          for (int k = 0; k < nclear_j; k++) d_nn_jgroup(icell,k) = 0;
+        }
       }
 
       for (int iattempt = 0; iattempt < nattempt; iattempt++) {
-        const int ni = gcount[ig];
-        const int nj = gcount[jg];
+        const int ni = d_gcount(icell,ig);
+        const int nj = d_gcount(icell,jg);
 
         int i = ni * rand_gen.drand();
         int j;
@@ -2274,10 +2282,10 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroup< NEARCP, GASTALLY, A
 
         int newgroup = d_species2group[ipart->ispecies];
         if (newgroup != ig) {
-          addgroup_kk(icell,newgroup,ii,gcount);
-          delgroup_kk(icell,ig,i,gcount);
+          addgroup_kk(icell,newgroup,ii);
+          delgroup_kk(icell,ig,i);
           // needed if jg == ig and delgroup moved the J particle
-          if (jg == ig && j == gcount[ig]) j = i;
+          if (jg == ig && j == d_gcount(icell,ig)) j = i;
         }
 
         // jpart may now belong to a different group, or have been destroyed
@@ -2285,8 +2293,8 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroup< NEARCP, GASTALLY, A
         if (jpart) {
           newgroup = d_species2group[jpart->ispecies];
           if (newgroup != jg) {
-            addgroup_kk(icell,newgroup,jj,gcount);
-            delgroup_kk(icell,jg,j,gcount);
+            addgroup_kk(icell,newgroup,jj);
+            delgroup_kk(icell,jg,j);
           }
 
         } else {
@@ -2300,7 +2308,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroup< NEARCP, GASTALLY, A
             return;
           }
 
-          delgroup_kk(icell,jg,j,gcount);
+          delgroup_kk(icell,jg,j);
 
           // swap-remove jj from plist and repair the moved entry's group entry
           //   through the reverse map, as Collide does with p2g
@@ -2316,8 +2324,8 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroup< NEARCP, GASTALLY, A
           }
 
           if (NEARCP) {
-            if (ig == jg) d_nn_igroup(icell,j) = d_nn_igroup(icell,gcount[jg]);
-            else d_nn_jgroup(icell,j) = d_nn_jgroup(icell,gcount[jg]);
+            if (ig == jg) d_nn_igroup(icell,j) = d_nn_igroup(icell,d_gcount(icell,jg));
+            else d_nn_jgroup(icell,j) = d_nn_jgroup(icell,d_gcount(icell,jg));
           }
         }
 
@@ -2333,13 +2341,13 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroup< NEARCP, GASTALLY, A
 
             if (NEARCP) {
               if (newgroup == ig || newgroup == jg) {
-                const int n = gcount[newgroup];
+                const int n = d_gcount(icell,newgroup);
                 d_nn_igroup(icell,n) = 0;
                 if (ig != jg) d_nn_jgroup(icell,n) = 0;
               }
             }
             d_plist(icell,np) = index_kpart;
-            addgroup_kk(icell,newgroup,np,gcount);
+            addgroup_kk(icell,newgroup,np);
             np++;
           } else {
             d_retry() = 1;
@@ -2351,12 +2359,14 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroup< NEARCP, GASTALLY, A
 
         // stop attempting if either group has become too small
 
-        if (gcount[ig] <= 1) {
-          if (gcount[ig] == 0) break;
+        const int nig = d_gcount(icell,ig);
+        if (nig <= 1) {
+          if (nig == 0) break;
           if (ig == jg) break;
         }
-        if (gcount[jg] <= 1) {
-          if (gcount[jg] == 0) break;
+        const int njg = d_gcount(icell,jg);
+        if (njg <= 1) {
+          if (njg == 0) break;
           if (ig == jg) break;
         }
       }
@@ -2375,9 +2385,6 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroup< NEARCP, GASTALLY, A
 template < int GASTALLY >
 void CollideVSSKokkos::collisions_group_ambipolar(COLLIDE_REDUCE &reduce)
 {
-  if (ngroups > MAXGROUP)
-    error->all(FLERR,"Too many collision groups for Kokkos group collisions");
-
   // ambipolar vectors
 
   this->sync(Device,ALL_MASK);
@@ -2410,6 +2417,17 @@ void CollideVSSKokkos::collisions_group_ambipolar(COLLIDE_REDUCE &reduce)
   if (int(d_nattempt_pair.extent(0)) < nglocal ||
       int(d_nattempt_pair.extent(1)) < ngroups)
     MemKK::realloc_kokkos(d_nattempt_pair,"collide:nattempt_pair",nglocal,ngroups,ngroups);
+
+  // per-cell group counters and list-fill cursors, formerly per-thread stack
+  //   arrays with a compile-time group cap.  d_gcount is shared with
+  //   collisions_group(); d_gcursor is only used here
+
+  if (int(d_gcount.extent(0)) < nglocal ||
+      int(d_gcount.extent(1)) < ngroups)
+    MemKK::realloc_kokkos(d_gcount,"collide:gcount",nglocal,ngroups);
+  if (int(d_gcursor.extent(0)) < nglocal ||
+      int(d_gcursor.extent(1)) < ngroups)
+    MemKK::realloc_kokkos(d_gcursor,"collide:gcursor",nglocal,ngroups);
 
   // per-cell electron list; non-reacting so nelectron <= cell particle count
 
@@ -2474,23 +2492,21 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroupAmbipolar< GASTALLY, 
   if (volume == 0.0) d_error_flag() = 1;
 
   // build per-group particle lists for this cell, plus the electron list
-  // gcount[g] = particle count in group g, with the electron count for egroup
-  //   (the electron group egroup has no real particles, so it adds no entries)
+  // d_gcount(icell,g) = particle count in group g, with the electron count
+  //   for egroup (the electron group egroup has no real particles, so it
+  //   adds no entries)
   // electrons (one per ambipolar ion) are created in d_elist in plist order
 
-  int gcount[MAXGROUP];
-  int gcursor[MAXGROUP];
-
-  for (int g = 0; g < ngroups; g++) gcount[g] = 0;
+  for (int g = 0; g < ngroups; g++) d_gcount(icell,g) = 0;
 
   int nelectron = 0;
   for (int n = 0; n < np; n++) {
     const int ip = d_plist(icell,n);
     const int isp = d_particles[ip].ispecies;
-    gcount[d_species2group[isp]]++;
+    d_gcount(icell,d_species2group[isp])++;
     if (d_ionambi[ip]) nelectron++;
   }
-  gcount[egroup] = nelectron;
+  d_gcount(icell,egroup) = nelectron;
 
   // each group has its own row of d_glist, so every group fills from 0.
   //   this used to seed the cursor from a running cross-group offset, which
@@ -2499,14 +2515,15 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroupAmbipolar< GASTALLY, 
   //   every read indexes from 0.  Only a layout with at most one non-electron
   //   group -- which is what examples/ambi/in.ambi.group has -- hid it.
 
-  for (int g = 0; g < ngroups; g++) gcursor[g] = 0;
+  for (int g = 0; g < ngroups; g++) d_gcursor(icell,g) = 0;
 
   int e = 0;
   for (int n = 0; n < np; n++) {
     const int ip = d_plist(icell,n);
     const int isp = d_particles[ip].ispecies;
     const int g = d_species2group[isp];
-    d_glist(icell,g,gcursor[g]++) = n;
+    const int k = d_gcursor(icell,g)++;
+    d_glist(icell,g,k) = n;
     if (d_ionambi[ip]) {
       Particle::OnePart* p = &d_particles[ip];
       Particle::OnePart* ep = &d_elist(icell,e);
@@ -2535,7 +2552,8 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroupAmbipolar< GASTALLY, 
         continue;
       }
       const double attempt =
-        attempt_collision_kokkos(icell,ig,jg,gcount[ig],gcount[jg],volume,rand_gen);
+        attempt_collision_kokkos(icell,ig,jg,d_gcount(icell,ig),
+                                 d_gcount(icell,jg),volume,rand_gen);
       const int nattempt = static_cast<int> (attempt);
       d_nattempt_pair(icell,ig,jg) = nattempt;
       if (nattempt) {
@@ -2562,8 +2580,8 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroupAmbipolar< GASTALLY, 
       if (ig == egroup) { aig = jg; ajg = ig; }
       else { aig = ig; ajg = jg; }
 
-      const int ni = gcount[aig];
-      const int nj = gcount[ajg];
+      const int ni = d_gcount(icell,aig);
+      const int nj = d_gcount(icell,ajg);
       if (ni == 0 || nj == 0) continue;
       if (aig == ajg && ni == 1) continue;
 
