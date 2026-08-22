@@ -255,9 +255,8 @@ double ComputeReduceKokkos::compute_one_kokkos(int m, int flag)
     if (flag < nelements) {
 
       // the scalar handed to deep_copy(value,View) is a non-deduced
-      //   parameter, so it has to be spelled with the view's own value type
-      //   (SPARTA_FLOAT, which is float in an SPA_PRECISION==1 build), not
-      //   double, or template deduction fails
+      //   parameter, so it has to be spelled with the view's own value type,
+      //   SPARTA_FLOAT, not double, or template deduction fails
 
       SPARTA_FLOAT tmp = 0.0;
       Kokkos::deep_copy(tmp,Kokkos::subview(d_values,flag));
