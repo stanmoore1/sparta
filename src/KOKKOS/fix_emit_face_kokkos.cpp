@@ -186,9 +186,14 @@ void FixEmitFaceKokkos::perform_task()
   // ntarget/ninsert is either perspecies or for all species
 
   // copy needed task data to device
+  // the kernels below read d_tasks whether or not perspecies is set, so tasks
+  //   is synced unconditionally and ntargetsp in addition, the same shape as
+  //   the second copy further down this routine.  The if/else this replaces
+  //   left tasks unsynced under perspecies and was only harmless because that
+  //   later copy covered it
 
+  k_tasks.sync_device();
   if (perspecies) k_ntargetsp.sync_device();
-  else k_tasks.sync_device();
 
   auto ninsert_dim1 = perspecies ? nspecies : 1;
   if (d_ninsert.extent(0) < ntask * ninsert_dim1)
