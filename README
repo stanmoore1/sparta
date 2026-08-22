@@ -34,9 +34,13 @@ python                     Python wrapper on SPARTA as a library
 src                        source files
 tools                      pre- and post-processing tools
 
-Point your browser at any of these files to get started:
+The manual is built from reStructuredText sources in doc/src with
+Sphinx.  To build it:
 
-doc/Manual.html	           the SPARTA manual
-doc/Section_intro.html	   hi-level introduction to SPARTA
-doc/Section_start.html	   how to build and use SPARTA
-doc/Developer.pdf          SPARTA developer guide
+make -C doc html          the SPARTA manual, in doc/html
+
+Then point your browser at any of these files to get started:
+
+doc/html/Manual.html	   the SPARTA manual
+doc/html/Section_intro.html   hi-level introduction to SPARTA
+doc/html/Section_start.html   how to build and use SPARTA

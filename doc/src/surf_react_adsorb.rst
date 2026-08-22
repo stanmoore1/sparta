@@ -140,8 +140,9 @@ reaction; and a random number is used to decide which reaction occurs.
 The chosen reaction is perforemd and its time counter is modified as
 follows:
 
-.. image:: Eqs/time_counter.png
-   :align: center
+.. math::
+
+   \tau_{i} = \tau_{i} + \frac{log(Rn)}{R_{i}}
 
 Next the probabilities of each reaction are recomputed and a new
 reaction is chosen based on these probabilties and performed.  This
@@ -330,8 +331,9 @@ For A = Arrhenius style, there are three coefficients:
 
 The reaction rate constant is calculated in the following manner:
 
-.. image:: Eqs/arrhenius_2.png
-   :align: center
+.. math::
+
+   K_{arrhenius}(T)  =  A T^b e^{-Ea/T }
 
 For all the reactions types which includes adsorption - AA, DA, LH1,
 LH3, and CD; the user must specify the number of species that adsorb
@@ -351,8 +353,10 @@ the reaction rate constant.  These are *kisliuk*\ : proposed by Kisliuk
      B_k = temperature exponent
      Ea_k = activation energy for the adsorption
 
-.. image:: Eqs/k_kisliuk.png
-   :align: center
+.. math::
+
+   K_{kisliuk}(T)  =  A_k T^b_k e^{-Ea_k/T }
+   K_{reac} = K_{arrhenius} * \frac{1-\Theta}{1-\Theta+K_{kisliuk}\Theta}
 
 *energy* args = m n (only for CI)
 
@@ -361,8 +365,9 @@ the reaction rate constant.  These are *kisliuk*\ : proposed by Kisliuk
      m = energy exponent
      n = polar angle exponent
 
-.. image:: Eqs/k_energy.png
-   :align: center
+.. math::
+
+   K_{reac} = K_{arrhenius} * \left(E_{i}\right)^{m} * cos^{n}\left(\theta\right)
 
 The final rate of the reaction is computed by the product of the
 reaction rate constant and the surface coverage of all the adsorbed
