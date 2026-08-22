@@ -207,6 +207,9 @@ void ComputeFFTGridKokkos::compute_per_grid_kokkos()
       Fix *fix = modify->fix[vidx];
 
       KokkosBase* fixKKBase = dynamic_cast<KokkosBase*>(fix);
+      // a fix keeps its per-grid output between invocations and grid migration
+      // can leave it current on the host alone, so ask for the device copy
+      if (fixKKBase) fixKKBase->sync_pergrid_device_kokkos();
 
       if (!fixKKBase || !fix->kokkos_flag || !fix->per_grid_flag)
         error->all(FLERR,"Unsupported fix used by compute fft/grid/kk");
