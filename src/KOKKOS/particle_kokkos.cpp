@@ -263,8 +263,13 @@ void ParticleKokkos::sort_kokkos()
   if (reorder_flag) {
 
     if (reorder_scheme == COPYPARTICLELIST) {
-      if (d_particles.extent(0) > d_sorted.extent(0))
-        MemKK::realloc_kokkos(d_sorted,"particle:sorted",d_particles.extent(0));
+      // k_sorted is swapped with k_particles below rather than copied back,
+      //   so its extent must match exactly: after the swap it is k_particles,
+      //   and Particle::maxlocal describes that array's capacity
+      if (k_sorted.view_device().extent(0) != k_particles.view_device().extent(0))
+        MemKK::realloc_kokkos(k_sorted,"particle:sorted",
+                              k_particles.view_device().extent(0));
+      d_sorted = k_sorted.view_device();
 
       if (d_particles.extent(0) > d_sorted_id.extent(0))
         MemKK::realloc_kokkos(d_sorted_id,"particle:sorted_id",d_particles.extent(0));
@@ -281,11 +286,22 @@ void ParticleKokkos::sort_kokkos()
       Kokkos::parallel_scan(Kokkos::RangePolicy<DeviceType, TagParticleReorder_COPYPARTICLELIST1>(0,ngrid),*this);
       Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagParticleReorder_COPYPARTICLELIST2>(0,nlocal),*this);
       copymode = 0;
-      //auto tmp = k_particles.view_device();
-      //k_particles.view_device() = d_sorted;
-      //d_particles = k_particles.view_device();
-      //d_sorted = tmp;
-      Kokkos::deep_copy(d_particles,d_sorted);
+
+      // swap the two buffers instead of copying the sorted one back over the
+      //   original: the scatter above has already written every particle, so
+      //   the copy is a second full pass over the array to no further effect
+      // both sides of the DualView move together and the host pointer the rest
+      //   of SPARTA reads through is rebound, which is what a device-view-only
+      //   swap would miss -- on a host-only backend the two views alias, so
+      //   swapping just one of them would leave Particle::particles dangling
+      // sync state is cleared before marking the device side modified, since
+      //   the incoming DualView carries whatever flags it had as k_sorted
+
+      std::swap(k_particles,k_sorted);
+      k_particles.clear_sync_state();
+      d_particles = k_particles.view_device();
+      d_sorted = k_sorted.view_device();
+      particles = k_particles.view_host().data();
 
       this->modify(Device,PARTICLE_MASK);
     }

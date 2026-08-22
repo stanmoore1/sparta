@@ -144,6 +144,10 @@ class ParticleKokkos : public Particle {
   t_particle_1d d_particles;
   t_species_1d d_species;
 
+  // ping-pong partner of k_particles for the COPYPARTICLELIST reorder
+  // held as a DualView, not a bare device view, so that host and device sides
+  //   swap together and Particle::particles can be rebound consistently
+  tdual_particle_1d k_sorted;
   t_particle_1d d_sorted;
   DAT::t_int_1d d_sorted_id;
   DAT::t_int_1d d_offsets_part;
