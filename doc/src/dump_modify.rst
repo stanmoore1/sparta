@@ -17,24 +17,24 @@ dump\_modify command
   
   .. parsed-literal::
   
-       *append* arg = *yes* or *no*
-       *binary* arg = *yes* or *no*
-       *buffer* arg = *yes* or *no*
-       *every* arg = N
+       append arg = yes or no
+       binary arg = yes or no
+       buffer arg = yes or no
+       every arg = N
          N = dump every this many timesteps
          N can be a variable (see below)
-       *fileper* arg = Np
+       fileper arg = Np
          Np = write one file for every this many processors
-       *first* arg = *yes* or *no*
-       *flush* arg = *yes* or *no*
-       *format* args = *line* string, *int* string, *float* string, M string, or *none*
+       first arg = yes or no
+       flush arg = yes or no
+       format args = line string, int string, float string, M string, or none
          string = C-style format string
          M = integer from 1 to N, where N = # of per-atom quantities being output
-       *nfile* arg = Nf
+       nfile arg = Nf
          Nf = write this many files, one from each of Nf processors
-       *pad* arg = Nchar = # of characters to convert timestep to
-       *region* arg = region-ID or "none"
-       *thresh* args = attribute operation value
+       pad arg = Nchar = # of characters to convert timestep to
+       region arg = region-ID or "none"
+       thresh args = attribute operation value
          attribute = same attributes (x,fy,etotal,sxx,etc) used by dump custom style
          operation = "<" or "<=" or ">" or ">=" or "==" or "!="
          value = numeric value to compare to
@@ -45,22 +45,22 @@ dump\_modify command
   
   .. parsed-literal::
   
-       *axestrans* arg = opacity
+       axestrans arg = opacity
          opacity = opacity of the XYZ axes, from 0.0 (invisible) to 1.0 (opaque)
-       *backcolor* arg = color
+       backcolor arg = color
          color = name of color for background
-       *backcolor2* arg = color
-         color = name of second color for background gradient, or *none*
-       *bitrate* arg = rate
+       backcolor2 arg = color
+         color = name of second color for background gradient, or none
+       bitrate arg = rate
          rate = target bitrate for movie in kbps
-       *boxcolor* arg = color
+       boxcolor arg = color
          color = name of color for box lines
-       *boxtrans* arg = opacity
+       boxtrans arg = opacity
          opacity = opacity of the simulation box lines, from 0.0 to 1.0
-       *cmap* args = mode lo hi style delta N entry1 entry2 ... entryN
-         mode = *particle* or *grid* or *surf* or *gridx* or *gridy* or *gridz*
-         lo = number or *min* = lower bound of range of color map
-         hi = number or *max* = upper bound of range of color map
+       cmap args = mode lo hi style delta N entry1 entry2 ... entryN
+         mode = particle or grid or surf or gridx or gridy or gridz
+         lo = number or min = lower bound of range of color map
+         hi = number or max = upper bound of range of color map
          style = 2 letters = "c" or "d" or "s" plus "a" or "f"
            "c" for continuous
            "d" for discrete
@@ -71,67 +71,67 @@ dump\_modify command
            binsize = range is divided into bins of this width
          N = # of subsequent entries
          entry = value color (for continuous style)
-           value = number or *min* or *max* = single value within range
+           value = number or min or max = single value within range
            color = name of color used for that value
          entry = lo hi color (for discrete style)
-           lo/hi = number or *min* or *max* = lower/upper bound of subset of range
+           lo/hi = number or min or max = lower/upper bound of subset of range
            color = name of color used for that subset of values
          entry = color (for sequential style)
            color = name of color used for a bin of values
-       *color* args = name R G B
+       color args = name R G B
          name = name of color
          R,G,B = red/green/blue numeric values from 0.0 to 1.0
-       *framerate* arg = fps
+       framerate arg = fps
          fps = frames per second for movie
-       *gamma* arg = gvalue
+       gamma arg = gvalue
          gvalue = gamma adjustment applied to rendered objects (from 0.1 to 10.0, 1.0 = no change)
-       *gcolor* args = proc color
+       gcolor args = proc color
          proc = proc ID or range of IDs (see below)
          color = name of color or color1/color2/...
-       *glinecolor* arg = color
+       glinecolor arg = color
          color = name of color for grid cell outlines
-       *glinetrans* arg = opacity
+       glinetrans arg = opacity
          opacity = opacity of the grid cell outlines, from 0.0 to 1.0
-       *gridgroup* arg = group-ID
+       gridgroup arg = group-ID
          group-ID = name of a user-defined grid group, see the :doc:`group <group>` command
-       *gtrans* arg = opacity
+       gtrans arg = opacity
          opacity = opacity of the grid cells and cutting planes, from 0.0 to 1.0
-       *lights* args = ambient key fill back
+       lights args = ambient key fill back
          ambient = intensity of ambient light from 0.0 to 1.0
          key = intensity of key light from 0.0 to 1.0
          fill = intensity of fill light from 0.0 to 1.0
          back = intensity of back light from 0.0 to 1.0
-       *metal* arg = mfactor
+       metal arg = mfactor
          mfactor = how metallic the rendered objects appear, from 0.0 (paint) to 1.0 (bare metal)
-       *metalfinish* arg = style
-         style = *satin* or *polished* or *mirror* = surface finish of metallic objects
-       *pcolor* args = type color
+       metalfinish arg = style
+         style = satin or polished or mirror = surface finish of metallic objects
+       pcolor args = type color
          type = particle type or range of types or proc ID or range of IDs (see below)
          color = name of color or color1/color2/...
-       *pdiam* args = type diam
+       pdiam args = type diam
          type = particle type or range of types (see below)
          diam = diameter of particles of that type (distance units)
-       *ptrans* args = type opacity
+       ptrans args = type opacity
          type = particle type or range of types (see below)
          opacity = opacity of particles of that type, from 0.0 to 1.0
-       *scolor* args = proc color
+       scolor args = proc color
          proc = proc ID or range of IDs (see below)
          color = name of color for surf one option
-       *slinecolor* arg = color
+       slinecolor arg = color
          color = name of color for surface element outlines
-       *slinetrans* arg = opacity
+       slinetrans arg = opacity
          opacity = opacity of the surface element outlines, from 0.0 to 1.0
-       *specular* arg = style
-         style = *none* or *wide* or *narrow* or *tight* = specular highlights off or their width
-       *ssaosamples* arg = nsamples
+       specular arg = style
+         style = none or wide or narrow or tight = specular highlights off or their width
+       ssaosamples arg = nsamples
          nsamples = number of SSAO sampling directions per pixel (from 4 to 64)
-       *strans* arg = opacity
+       strans arg = opacity
          opacity = opacity of the surface elements, from 0.0 to 1.0
-       *subboxcolor* arg = color
+       subboxcolor arg = color
          color = name of color for processor sub-box lines
-       *subboxtrans* arg = opacity
+       subboxtrans arg = opacity
          opacity = opacity of the processor sub-box lines, from 0.0 to 1.0
-       *surfgroup* arg = group-ID
+       surfgroup arg = group-ID
          group-ID = name of a user-defined surf group, see the :doc:`group <group>` command
 
 

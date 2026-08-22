@@ -56,9 +56,9 @@ and use the package:
 +---------------------+-------------------------------+-----------------------------------------------------------+-----------------------------------------------------+------------+
 | `FFT <#FFT>`_       | fast Fourier transforms       | :doc:`compute\_style compute/fft/grid <compute_fft_grid>` | fft                                                 | int or ext |
 +---------------------+-------------------------------+-----------------------------------------------------------+-----------------------------------------------------+------------+
-| `KOKKOS <#KOKKOS>`_ | Kokkos-enabled styles         | `Section 5.3 <Section_accelerate.html#acc_3>`_            | `Benchmarks <https://sparta.github.io/bench.html>`_ | -          |
+| `KOKKOS <#KOKKOS>`_ | Kokkos-enabled styles         | `Section 5.3 <Section_accelerate.html#acc_3>`_            | `Benchmarks <https://sparta.github.io/bench.html>`_ |\-          |
 +---------------------+-------------------------------+-----------------------------------------------------------+-----------------------------------------------------+------------+
-| `VTK <#VTK>`_       | native VTK-format dump output | :doc:`dump particle/vtk <dump_vtk>`                       | -                                                   | ext        |
+| `VTK <#VTK>`_       | native VTK-format dump output | :doc:`dump particle/vtk <dump_vtk>`                       |\-                                                   | ext        |
 +---------------------+-------------------------------+-----------------------------------------------------------+-----------------------------------------------------+------------+
 
 

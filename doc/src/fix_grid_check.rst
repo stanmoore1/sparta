@@ -22,7 +22,7 @@ fix grid/check/kk command
   
   .. parsed-literal::
   
-       outside arg = *yes* or *no*
+       outside arg = yes or no
 
 
 

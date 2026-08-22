@@ -19,10 +19,10 @@ fix print command
   
   .. parsed-literal::
   
-       *file* value = filename
-       *append* value = filename
-       *screen* value = *yes* or *no*
-       *title* value = string
+       file value = filename
+       append value = filename
+       screen value = yes or no
+       title value = string
          string =  text to print as 1st line of output file
 
 

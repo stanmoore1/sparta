@@ -27,8 +27,8 @@ surf\_react adsorb/kk command
   
   .. parsed-literal::
   
-       one file for model *gs* or *ps*
-       two files for model *gs/ps*, gs file first, ps file second
+       one file for model gs or ps
+       two files for model gs/ps, gs file first, ps file second
 
 * Nsync = perform PS reactions and sync across processors every this many timesteps
 * type = *face* or *surf*
@@ -347,9 +347,9 @@ the reaction rate constant.  These are *kisliuk*\ : proposed by Kisliuk
 
 .. parsed-literal::
 
-     *A_k* = pre-expoential factor
-     *B_k* = temperature exponent
-     *Ea_k* = activation energy for the adsorption
+     A_k = pre-expoential factor
+     B_k = temperature exponent
+     Ea_k = activation energy for the adsorption
 
 .. image:: Eqs/k_kisliuk.png
    :align: center
@@ -358,8 +358,8 @@ the reaction rate constant.  These are *kisliuk*\ : proposed by Kisliuk
 
 .. parsed-literal::
 
-     *m* = energy exponent
-     *n* = polar angle exponent
+     m = energy exponent
+     n = polar angle exponent
 
 .. image:: Eqs/k_energy.png
    :align: center

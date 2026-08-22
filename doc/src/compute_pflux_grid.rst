@@ -22,8 +22,8 @@ compute pflux/grid/kk command
   
   .. parsed-literal::
   
-       *momxx*\ ,\ *momyy*\ ,\ *momzz* = diagonal components of momentum flux density tensor
-       *momxy*\ ,\ *momyz*\ ,\ *momxz* = off-diagonal components of momentum flux density tensor
+       momxx\ ,\ momyy\ ,\ momzz = diagonal components of momentum flux density tensor
+       momxy\ ,\ momyz\ ,\ momxz = off-diagonal components of momentum flux density tensor
 
 
 

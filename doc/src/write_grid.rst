@@ -16,7 +16,7 @@ write\_grid command
   
   .. parsed-literal::
   
-       *custom* arg = name
+       custom arg = name
          name = name of custom per-surf vector or array
 
 

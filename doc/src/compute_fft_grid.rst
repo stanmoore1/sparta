@@ -31,13 +31,13 @@ compute fft/grid/kk command
   
   .. parsed-literal::
   
-       *sum* = *yes* or *no* to sum all FFTs into a single output
-       *scale* = sfactor = numeric value to scale results by
-       *conjugate* = *yes* or *no* = perform complex conjugate multiply or not
-       *kx* = *yes* or *no* = calculate x-component of wavelength or not
-       *kx* = *yes* or *no* = calculate y-component of wavelength or not
-       *kx* = *yes* or *no* = calculate z-component of wavelength or not
-       *kmag* = *yes* or *no* = calculate wavelength magnitude or not
+       sum = yes or no to sum all FFTs into a single output
+       scale = sfactor = numeric value to scale results by
+       conjugate = yes or no = perform complex conjugate multiply or not
+       kx = yes or no = calculate x-component of wavelength or not
+       kx = yes or no = calculate y-component of wavelength or not
+       kx = yes or no = calculate z-component of wavelength or not
+       kmag = yes or no = calculate wavelength magnitude or not
 
 
 

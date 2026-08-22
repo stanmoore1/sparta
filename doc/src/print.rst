@@ -13,9 +13,9 @@ print string keyword value:pre
   
   .. parsed-literal::
   
-       *file* value = filename
-       *append* value = filename
-       *screen* value = *yes* or *no*
+       file value = filename
+       append value = filename
+       screen value = yes or no
 
 
 

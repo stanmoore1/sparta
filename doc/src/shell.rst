@@ -14,18 +14,18 @@ shell command
   
   .. parsed-literal::
   
-       *cd* arg = dir
+       cd arg = dir
          dir = directory to change to
-       *mkdir* args = dir1 dir2 ...
+       mkdir args = dir1 dir2 ...
          dir1,dir2 = one or more directories to create
-       *mv* args = old new
+       mv args = old new
          old = old filename
          new = new filename
-       *rm* args = file1 file2 ...
+       rm args = file1 file2 ...
          file1,file2 = one or more filenames to delete
-       *rmdir* args = dir1 dir2 ...
+       rmdir args = dir1 dir2 ...
          dir1,dir2 = one or more directories to delete
-       *putenv* args = var1=value1 var2=value2
+       putenv args = var1=value1 var2=value2
          var=value = one of more definitions of environment variables
        anything else is passed as a command to the shell for direct execution
 

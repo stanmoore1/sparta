@@ -22,12 +22,12 @@ compute lambda/grid/kk command
   
   .. parsed-literal::
   
-       *lambda* = calculate mean free path
-       *tau* = calculate mean collision time
-       *knall* = calculate Knudsen number based on cell size in all dimensions
-       *knx* = calculate Knudsen number based on cell size in x dimension
-       *kny* = calculate Knudsen number based on cell size in y dimension
-       *knz* = calculate Knudsen number based on cell size in z dimension
+       lambda = calculate mean free path
+       tau = calculate mean collision time
+       knall = calculate Knudsen number based on cell size in all dimensions
+       knx = calculate Knudsen number based on cell size in x dimension
+       kny = calculate Knudsen number based on cell size in y dimension
+       knz = calculate Knudsen number based on cell size in z dimension
 
 
 

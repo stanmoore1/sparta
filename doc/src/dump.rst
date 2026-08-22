@@ -31,7 +31,7 @@ dump command
   
   .. parsed-literal::
   
-       *particle* args = list of particle attributes
+       particle args = list of particle attributes
          possible attributes = id, type, proc, cellID, x, y, z, xs, ys, zs, vx, vy, vz,
                                ke, erot, evib, 
                                c_ID, c_ID[N], f_ID, f_ID[N], v_name, p_name, p_name[N]
@@ -58,7 +58,7 @@ dump command
   
   .. parsed-literal::
   
-       *grid* args = list of grid attributes
+       grid args = list of grid attributes
          possible attributes = id, idstr, split, proc, xlo, ylo, zlo, xhi, yhi, zhi,
                                c_ID, c_ID[N], f_ID, f_ID[N], v_name, g_name, g_name[N]
 
@@ -84,7 +84,7 @@ dump command
   
   .. parsed-literal::
   
-       *surf* args = list of surf attributes
+       surf args = list of surf attributes
          possible attributes = id, v1x, v1y, v1z, v2x, v2y, v2z, v3x, v3y, v3z, area,
                                c_ID, c_ID[N], f_ID, f_ID[N], v_name, s_name, s_name[N]
 
@@ -107,7 +107,7 @@ dump command
   
   .. parsed-literal::
   
-       *tally* args = list of tally computes
+       tally args = list of tally computes
          possible attributes = c_ID, c_ID[N]
 
   
@@ -119,7 +119,7 @@ dump command
   
   .. parsed-literal::
   
-       *image* args = discussed on :doc:`dump image <dump_image>` doc page
+       image args = discussed on :doc:`dump image <dump_image>` doc page
 
 
 

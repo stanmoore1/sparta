@@ -22,7 +22,7 @@ compute eflux/grid/kk command
   
   .. parsed-literal::
   
-       *heatx*\ ,\ *heaty*\ ,\ *heatz* = xyz components of energy flux density tensor
+       heatx\ ,\ heaty\ ,\ heatz = xyz components of energy flux density tensor
 
 
 

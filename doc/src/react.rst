@@ -15,18 +15,18 @@ react command
   
   .. parsed-literal::
   
-       *none* args = none
-       *tce* args = infile
+       none args = none
+       tce args = infile
          infile = file with list of gas-phase chemistry reactions
-       *qk* args = infile
+       qk args = infile
          infile = file with list of gas-phase chemistry reactions
-       *tce/qk* args = infile
+       tce/qk args = infile
          infile = file with list of gas-phase chemistry reactions
-       *tce/kk* args = infile
+       tce/kk args = infile
          infile = file with list of gas-phase chemistry reactions
-       *qk/kk* args = infile
+       qk/kk args = infile
          infile = file with list of gas-phase chemistry reactions
-       *tce/qk/kk* args = infile
+       tce/qk/kk args = infile
          infile = file with list of gas-phase chemistry reactions
 
 

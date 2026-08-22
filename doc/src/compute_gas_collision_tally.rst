@@ -19,13 +19,13 @@ compute gas/collision/tally command
   
   .. parsed-literal::
   
-       *id/cell* = grid cell ID
-       *id1*\ , *id2* = particle IDs of two particles
-       *type1*\ , *type2* = particle species of two particles
-       *vx1/pre*\ , *vy1/pre*\ , *vz1/pre* = velocity components of first particle before collision
-       *vx2/pre*\ , *vy2/pre*\ , *vz2/pre* = velocity components of second particle before collision
-       *vx1/post*\ , *vy1/post*\ , *vz1/post* = velocity components of first particle after collision
-       *vx2/post*\ , *vy2/post*\ , *vz2/post* = velocity components of second particle after collision
+       id/cell = grid cell ID
+       id1\ , id2 = particle IDs of two particles
+       type1\ , type2 = particle species of two particles
+       vx1/pre\ , vy1/pre\ , vz1/pre = velocity components of first particle before collision
+       vx2/pre\ , vy2/pre\ , vz2/pre = velocity components of second particle before collision
+       vx1/post\ , vy1/post\ , vz1/post = velocity components of first particle after collision
+       vx2/post\ , vy2/post\ , vz2/post = velocity components of second particle after collision
 
 
 

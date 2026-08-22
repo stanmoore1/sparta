@@ -113,7 +113,14 @@ def links(markup):
     out = []
     for m in re.finditer(r'<a\b[^>]*?href\s*=\s*"([^"]*)"', content_only(markup), re.I):
         href = html.unescape(m.group(1)).strip()
-        if not href or href.startswith(('javascript:', '#')):
+        if not href or href.startswith('javascript:'):
+            continue
+        if href == '#':
+            # a link to the top of the page it is on; txt2html spelled the
+            # same thing as "thispage.html"
+            out.append('#')
+            continue
+        if href.startswith('#'):
             continue
         out.append(href)
     return out
@@ -168,7 +175,19 @@ def hidden_by_unescaped_lt(old_markup, old_words, new_words):
         # the text was published and hidden, not that it is new text.
         if not run or not any('<' in w for w in run):
             return 0
-        if ' '.join(run) not in raw:
+        # Where the hidden span ends mid-paragraph the browser joins the
+        # word before it to the word after -- "x" + "These" becomes the one
+        # token "xThese" -- so the run picks up trailing words that belong
+        # to the visible text.  Trim them, but only if what is trimmed is
+        # really the tail of that merged token.
+        old_run = ''.join(old_words[i1:i2])
+        k = len(run)
+        while k > 0 and ' '.join(run[:k]) not in raw:
+            k -= 1
+        if k == 0 or not any('<' in w for w in run[:k]):
+            return 0
+        tail = ''.join(run[k:])
+        if tail and not old_run.endswith(tail):
             return 0
         runs += 1
     return runs
@@ -250,6 +269,10 @@ def main():
         # original-case anchors, so both spellings resolve.  Verified per
         # link rather than assumed.
         def resolve(href):
+            # txt2html writes a self-reference as "thispage.html"; Sphinx
+            # writes it as "#".  Same destination.
+            if href == name:
+                return '#'
             page, _, frag = href.partition('#')
             if not frag:
                 return href

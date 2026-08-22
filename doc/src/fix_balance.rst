@@ -21,19 +21,19 @@ fix balance/kk command
   
   .. parsed-literal::
   
-       *random* args = none 
-       *proc* args = none 
-       *rcb* args = weight
-         weight = *cell* or *part* or *time*
+       random args = none 
+       proc args = none 
+       rcb args = weight
+         weight = cell or part or time
 
 * zero or more keyword/value(s) pairs may be appended
 * keyword = *axes* or *flip*
   
   .. parsed-literal::
   
-       *axes* value = dims
+       axes value = dims
          dims = string with any of "x", "y", or "z" characters in it
-       *flip* value = yes or no
+       flip value = yes or no
 
 
 

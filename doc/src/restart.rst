@@ -21,9 +21,9 @@ restart command
   
   .. parsed-literal::
   
-       *fileper* arg = Np
+       fileper arg = Np
          Np = write one file for every this many processors
-       *nfile* arg = Nf
+       nfile arg = Nf
          Nf = write this many files, one from each of Nf processors
 
 

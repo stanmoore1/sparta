@@ -18,12 +18,12 @@ compute gas/reaction/grid command
   
   .. parsed-literal::
   
-       *all* = single count of all reactions in each grid cell
-         *values* = none
-       *every* = count of each defined reaction in each grid cell
-         *values* = none
-       *select* = count of selected reactions in each grid cell
-         *values* = one or more numeric indices from 1 to M where M = # of defined reactions
+       all = single count of all reactions in each grid cell
+         values = none
+       every = count of each defined reaction in each grid cell
+         values = none
+       select = count of selected reactions in each grid cell
+         values = one or more numeric indices from 1 to M where M = # of defined reactions
 
 
 

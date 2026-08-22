@@ -18,7 +18,7 @@ species command
   
   .. parsed-literal::
   
-       *vibfile* value = vfile = filename for extra vibrational info
+       vibfile value = vfile = filename for extra vibrational info
 
 
 

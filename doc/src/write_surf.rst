@@ -16,13 +16,13 @@ write\_surf command
   
   .. parsed-literal::
   
-       *points* arg = *yes* or *no* to include a Points section in the file
-       *type* arg = none
-       *custom* arg = name
+       points arg = yes or no to include a Points section in the file
+       type arg = none
+       custom arg = name
          name = name of custom per-surf vector or array
-       *fileper* arg = Np
+       fileper arg = Np
          Np = write one file for every this many processors
-       *nfile* arg = Nf
+       nfile arg = Nf
          Nf = write this many files, one from each of Nf processors
 
 

@@ -23,11 +23,11 @@ compute sonine/grid/kk command
   
   .. parsed-literal::
   
-       *a* args = dim order = sonine A moment
-         dim = *x* or *y* or *z*
+       a args = dim order = sonine A moment
+         dim = x or y or z
          order = number from 1 to 5
-       *b* args = dim2 order = sonine B moment
-         dim2 = *xx* or *yy* or *zz* or *xy* or *yz* or *xz*
+       b args = dim2 order = sonine B moment
+         dim2 = xx or yy or zz or xy or yz or xz
          order = number from 1 to 5
 
 

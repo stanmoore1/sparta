@@ -16,21 +16,21 @@ create\_grid command
   
   .. parsed-literal::
   
-       *block* args = Px Py Pz
+       block args = Px Py Pz
          Px,Py,Pz = # of processors in each dimension, any can be \* (see below)
-       *clump* arg = *xyz* or *xzy* or *yxz* or *yzx* or *zxy* or *zyx*
-       *random* args = none
-       *stride* arg = *xyz* or *xzy* or *yxz* or *yzx* or *zxy* or *zyx*
-       *levels* arg = Nlevels
-       *subset* args = Ilevel Px Py Pz Cx Cy Cz
+       clump arg = xyz or xzy or yxz or yzx or zxy or zyx
+       random args = none
+       stride arg = xyz or xzy or yxz or yzx or zxy or zyx
+       levels arg = Nlevels
+       subset args = Ilevel Px Py Pz Cx Cy Cz
          Ilevel = which level(s) to define, see syntax below
          Px Py Pz = extent of parent cells in each dimension in which to create child cells
          Cx Cy Cz = size of child sub-grid in each dimension within parent cells
-       *region* args = Ilevel reg-ID Cx Cy Cz 
+       region args = Ilevel reg-ID Cx Cy Cz 
          Ilevel = which level(s) to define, see syntax below
          reg-ID = ID of region which parent cells must be in to create child cells
          Cx Cy Cz = size of child sub-grid in each dimension within parent cells
-       *inside* args = *any* or *all*
+       inside args = any or all
 
 
 

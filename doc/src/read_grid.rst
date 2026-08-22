@@ -16,9 +16,9 @@ read\_grid command
   
   .. parsed-literal::
   
-       *custom* args = name datatype Nc
+       custom args = name datatype Nc
          name = name of custom per-grid vector or array
-         datatype = *int* or *float* = for integer or floating point values
+         datatype = int or float = for integer or floating point values
          Nc = 0 for a vector (single value), Nc >= 1 for an array (one or more values)
 
 

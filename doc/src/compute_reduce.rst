@@ -37,10 +37,10 @@ compute reduce command
   
   .. parsed-literal::
   
-       *replace* args = vec1 vec2
+       replace args = vec1 vec2
          vec1 = reduced value from this input vector will be replaced
          vec2 = replace it with vec1[N] where N is index of max/min value from vec2
-       *subset* arg = subsetID
+       subset arg = subsetID
          subsetID = mixture-ID or grid group-ID or surface group-ID
 
 

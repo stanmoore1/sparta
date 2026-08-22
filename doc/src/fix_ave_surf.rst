@@ -33,8 +33,8 @@ fix ave/surf command
   
   .. parsed-literal::
   
-     keyword = *ave*
-       *ave* args = one or running
+     keyword = ave
+       ave args = one or running
          one = output a new average value every Nfreq steps
          running = accumulate average continuously
 

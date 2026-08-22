@@ -15,27 +15,27 @@ custom command
   
   .. parsed-literal::
   
-       *create* args = cname datatype Nc
+       create args = cname datatype Nc
          cname = name of custom vector or array to create and initialize with zeroes
-         datatype = *int* or *float* = for integer or floating point values
+         datatype = int or float = for integer or floating point values
          Nc = 0 for a vector (single value), Nc >= 1 for an array (one or more values)
-       *remove* arg2 = cname
+       remove arg2 = cname
          cname = name of custom vector or array to remove
-       *set* args = cname v_name subset-ID region-ID
+       set args = cname v_name subset-ID region-ID
          cname = specify as name (no brackets) for custom vector with name
                  or as name[N] for Nth column of custom array with name
          v_name = equal-, particle-, grid-, or surf-style variable with name
          subset-ID = mixture ID (particles) or group ID (grid cells or surf elements)
          region-ID = only apply to particle/grid/surf in region, NULL to not test
-       *file* args = fname M cname1 cname2 ... cnameM
+       file args = fname M cname1 cname2 ... cnameM
          fname = name of file with custom attributes for grid cells or surf elements
          M = # of custom values listed on each line of the file
          cname1,cname2,...,cnameM = which attribute each line's values are assigned to
            cnameI = name of a custom vector
            cnameI = name[N] for Nth column of a custom array with name
-       *file/coarse* args = Nfile filestyle fname M cname1 cname2 ... cnameM
+       file/coarse args = Nfile filestyle fname M cname1 cname2 ... cnameM
          Nfile = number of coarse files
-         filestyle = *text* or *binary*
+         filestyle = text or binary
          fname = name of file with custom attributes for coarse grid cells
          M = # of custom values listed for each coarse cell entry in the file
          cname1,cname2,...,cnameM = which attribute each coarse cell's values are assigned to
@@ -58,7 +58,7 @@ custom command
    custom surf create sdvec float 0 set sdvec v_sdvec all NULL
    custom surf create darray float 2 set darray[1] v_sdarray1 all NULL
    custom surf set darray[2] v_sdarray2 all NULL
-   custom grid create gvec int 0 create garray float 2 file grid.attributes gvec garray\ **1** garray\ **2**
+   custom grid create gvec int 0 create garray float 2 file grid.attributes gvec garray\ 1 garray\ 2
    custom particle remove ivec
    custom surf remove darray
 

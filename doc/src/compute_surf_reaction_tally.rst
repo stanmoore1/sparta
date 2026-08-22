@@ -19,19 +19,19 @@ compute surf/reaction/tally command
   
   .. parsed-literal::
   
-       *reaction* = which reaction occurred (1 to N)
-       *id/surf* = surface element ID
-       *id/pre* = particle ID before reaction
-       *id1/post* = particle ID of first particle after reaction
-       *id2/post* = particle ID of second particle after reaction
-       *type/pre* = particle species before reaction
-       *type1/post* = particle species of first particle after reaction
-       *type2/post* = particle species of second particle after reaction
-       *time* = time of collision (within timestep, see below)
-       *xc*\ , *yc*\ , *zc* = coordinates of collision point
-       *vx/pre*\ , *vy/pre*\ , *vz/pre* = velocity components before reaction
-       *vx1/post*\ , *vy1/post*\ , *vz1/post* = velocity components of first particle after reaction
-       *vx2/post*\ , *vy2/post*\ , *vz2/post* = velocity components of second particle after reaction
+       reaction = which reaction occurred (1 to N)
+       id/surf = surface element ID
+       id/pre = particle ID before reaction
+       id1/post = particle ID of first particle after reaction
+       id2/post = particle ID of second particle after reaction
+       type/pre = particle species before reaction
+       type1/post = particle species of first particle after reaction
+       type2/post = particle species of second particle after reaction
+       time = time of collision (within timestep, see below)
+       xc\ , yc\ , zc = coordinates of collision point
+       vx/pre\ , vy/pre\ , vz/pre = velocity components before reaction
+       vx1/post\ , vy1/post\ , vz1/post = velocity components of first particle after reaction
+       vx2/post\ , vy2/post\ , vz2/post = velocity components of second particle after reaction
 
 
 

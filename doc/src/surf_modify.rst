@@ -16,10 +16,10 @@ surf\_modify command
   
   .. parsed-literal::
   
-       *collide* arg = sc-ID
+       collide arg = sc-ID
          sc-ID = ID of a surface collision model
-       *react* arg = sr-ID
-         sr-ID = ID of a surface reaction model or *none*
+       react arg = sr-ID
+         sr-ID = ID of a surface reaction model or none
 
 
 

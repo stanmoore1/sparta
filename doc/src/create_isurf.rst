@@ -17,10 +17,10 @@ create\_isurf command
   
   .. parsed-literal::
   
-       *inout* = mark corner points as either inside or outside surf
-       *voxel* = assign corner point values based on local solid fraction
-       *ave* = smooth values by averaging expected corner point values based on intersections between the explicit surfaces and cell edges 
-       *multi* = mark corners using multiple values (i.e. multivalues)
+       inout = mark corner points as either inside or outside surf
+       voxel = assign corner point values based on local solid fraction
+       ave = smooth values by averaging expected corner point values based on intersections between the explicit surfaces and cell edges 
+       multi = mark corners using multiple values (i.e. multivalues)
 
 
 

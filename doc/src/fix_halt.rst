@@ -27,8 +27,8 @@ fix halt command
   
   .. parsed-literal::
   
-       error value = *hard* or *soft* or *continue*
-       message value = *yes* or *no*
+       error value = hard or soft or continue
+       message value = yes or no
 
 
 

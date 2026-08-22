@@ -19,13 +19,13 @@ compute surf/collision/tally command
   
   .. parsed-literal::
   
-       *id/surf* = surface element ID
-       *id* = particle ID
-       *type* = particle species
-       *time* = time of collision (within timestep, see below)
-       *xc*\ , *yc*\ , *zc* = coordinates of collision point
-       *vx/pre*\ , *vy/pre*\ , *vz/pre* = velocity components before collision
-       *vx/post*\ , *vy/post*\ , *vz/post* = velocity components after collision
+       id/surf = surface element ID
+       id = particle ID
+       type = particle species
+       time = time of collision (within timestep, see below)
+       xc\ , yc\ , zc = coordinates of collision point
+       vx/pre\ , vy/pre\ , vz/pre = velocity components before collision
+       vx/post\ , vy/post\ , vz/post = velocity components after collision
 
 
 

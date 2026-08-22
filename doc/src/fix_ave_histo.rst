@@ -43,30 +43,30 @@ fix ave/histo/weight/kk command
   
   .. parsed-literal::
   
-       *mode* arg = *scalar* or *vector*
+       mode arg = scalar or vector
          scalar = all input values are scalars
          vector = all input values are vectors
-       *file* arg = filename
+       file arg = filename
          filename = name of file to output histogram(s) to
-       *region* arg = region-ID for particle inclusion
-       *mix* arg = mixture-ID for particle inclusion
-       *group* arg = group-ID for grid cell inclusion
-       *ave* args = *one* or *running* or *window*
+       region arg = region-ID for particle inclusion
+       mix arg = mixture-ID for particle inclusion
+       group arg = group-ID for grid cell inclusion
+       ave args = one or running or window
          one = output a new average value every Nfreq steps
          running = output cumulative average of all previous Nfreq steps
          window M = output average of M most recent Nfreq steps
-       *start* args = Nstart
+       start args = Nstart
          Nstart = start averaging on this timestep
-       *beyond* arg = *ignore* or *end* or *extra*
+       beyond arg = ignore or end or extra
          ignore = ignore values outside histogram lo/hi bounds
          end = count values outside histogram lo/hi bounds in end bins
          extra = create 2 extra bins for value outside histogram lo/hi bounds
-       *overwrite* arg = none = overwrite output file with only latest output
-       *title1* arg = string
+       overwrite arg = none = overwrite output file with only latest output
+       title1 arg = string
          string = text to print as 1st line of output file
-       *title2* arg = string
+       title2 arg = string
          string = text to print as 2nd line of output file
-       *title3* arg = string
+       title3 arg = string
          string = text to print as 3rd line of output file, only for vector mode
 
 

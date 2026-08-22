@@ -22,16 +22,16 @@ fix emit/face/kk command
   
   .. parsed-literal::
   
-       *n* value = Np = number of particles to create
-       *nevery* value = Nstep = add particles every this many timesteps
-       *perspecies* value = *yes* or *no*
-       *region* value = region-ID
-       *modulate* value = v_name
+       n value = Np = number of particles to create
+       nevery value = Nstep = add particles every this many timesteps
+       perspecies value = yes or no
+       region value = region-ID
+       modulate value = v_name
          name = name of equal-style variable which modulates inflow of particles
-       *subsonic* values = Psub Tsub
+       subsonic values = Psub Tsub
          Psub = pressure setting at inflow boundary (pressure units)
          Tsub = temperature setting at inflow boundary, can be NULL (temperature units)
-       *twopass* values = none
+       twopass values = none
 
 
 

@@ -17,39 +17,39 @@ read\_surf command
   
   .. parsed-literal::
   
-       *type* arg = none
+       type arg = none
          NOTE: if the type or custom keywords are used, they must come first, in any order
-       *custom* args = name datatype Nc
+       custom args = name datatype Nc
          NOTE: if the type or custom keywords are used, they must come first, in any order
          name = name of custom per-surf vector or array
-         datatype = *int* or *float* = for integer or floating point values
+         datatype = int or float = for integer or floating point values
          Nc = 0 for a vector (single value), Nc >= 1 for an array (one or more values)
-       *origin* args = Ox Oy Oz
+       origin args = Ox Oy Oz
          Ox,Oy,Oz = set origin of surface to this point (distance units)
-       *trans* args = Dx Dy Dz
+       trans args = Dx Dy Dz
          Dx,Dy,Dz = translate origin by this displacement (distance units)
-       *atrans* args = Ax Ay Az
+       atrans args = Ax Ay Az
          Ax,Ax,Az = translate origin to this absolute point (distance units)
-       *ftrans* args = Fx Fy Fz
+       ftrans args = Fx Fy Fz
          Fx,Fy,Fz = translate origin to this fractional point in simulation box
-       *scale* args = Sx Sy Sz
+       scale args = Sx Sy Sz
          Sx,Sy,Sz = scale surface by these factors around origin
-       *rotate* args = theta Rx Ry Rz
+       rotate args = theta Rx Ry Rz
          theta = rotate surface by this angle in counter-clockwise direction (degrees)
          Rx,Ry,Rz = rotate around vector starting at origin pointing in this direction
-       *transparent* args = none
-       *invert* args = none
-       *clip* args = none or fraction
+       transparent args = none
+       invert args = none
+       clip args = none or fraction
          fraction = push points close to the box boundary to the boundary (optional)
-       *group* arg = group-ID
+       group arg = group-ID
          group-ID = new or existing surface group to assign the surface elements to
-       *typeadd* arg = Noffset
+       typeadd arg = Noffset
          Noffset = add Noffset to the type value of each element
-       *particle* args = *none* or *check* or *keep*
+       particle args = none or check or keep
          none = allow no particles in simulation when read surfs (default)
          check = delete particles inside surfs or in cells intersected by surfs
          keep = keep all particles
-       *file* args = identical to those defined for the :doc:`write_surf <write_surf>` command
+       file args = identical to those defined for the :doc:`write_surf <write_surf>` command
          NOTE: if used, the file keyword must come last
 
 

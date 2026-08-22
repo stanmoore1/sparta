@@ -15,23 +15,23 @@ region command
   
   .. parsed-literal::
   
-       *block* or *block/kk* args = xlo xhi ylo yhi zlo zhi
+       block or block/kk args = xlo xhi ylo yhi zlo zhi
          xlo,xhi,ylo,yhi,zlo,zhi = bounds of block in all dimensions (distance units)
-       *cylinder* or *cylinder/kk* args = dim c1 c2 radius lo hi
-         dim = *x* or *y* or *z* = axis of cylinder
+       cylinder or cylinder/kk args = dim c1 c2 radius lo hi
+         dim = x or y or z = axis of cylinder
          c1,c2 = coords of cylinder axis in other 2 dimensions (distance units)
          radius = cylinder radius (distance units)
          lo,hi = bounds of cylinder in dim (distance units)
-       *plane* or *plane/kk* args = px py pz nx ny nz
+       plane or plane/kk args = px py pz nx ny nz
          px,py,pz = point on the plane (distance units)
          nx,ny,nz = direction normal to plane (distance units)
-       *sphere* or *sphere/kk* args = x y z radius
+       sphere or sphere/kk args = x y z radius
          x,y,z = center of sphere (distance units)
          radius = radius of sphere (distance units)
-       *union* args = N reg-ID1 reg-ID2 ...
+       union args = N reg-ID1 reg-ID2 ...
          N = # of regions to follow, must be 2 or greater
          reg-ID1,reg-ID2, ... = IDs of regions to join together
-       *intersect* args = N reg-ID1 reg-ID2 ...
+       intersect args = N reg-ID1 reg-ID2 ...
          N = # of regions to follow, must be 2 or greater
          reg-ID1,reg-ID2, ... = IDs of regions to intersect
 
@@ -40,9 +40,9 @@ region command
   
   .. parsed-literal::
   
-       *side* value = *in* or *out*
-         *in* = the region is inside the specified geometry
-         *out* = the region is outside the specified geometry
+       side value = in or out
+         in = the region is inside the specified geometry
+         out = the region is outside the specified geometry
 
 
 

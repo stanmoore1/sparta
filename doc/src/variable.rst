@@ -15,34 +15,34 @@ variable command
   
   .. parsed-literal::
   
-       *delete* = no args
-       *index* args = one or more strings
-       *loop* args = N
+       delete = no args
+       index args = one or more strings
+       loop args = N
          N = integer size of loop, loop from 1 to N inclusive
-       *loop* args = N pad
+       loop args = N pad
          N = integer size of loop, loop from 1 to N inclusive
          pad = all values will be same length, e.g. 001, 002, ..., 100
-       *loop* args = N1 N2
+       loop args = N1 N2
          N1,N2 = loop from N1 to N2 inclusive
-       *loop* args = N1 N2 pad
+       loop args = N1 N2 pad
          N1,N2 = loop from N1 to N2 inclusive
          pad = all values will be same length, e.g. 050, 051, ..., 100
-       *world* args = one string for each partition of processors
-       *universe* args = one or more strings
-       *uloop* args = N
+       world args = one string for each partition of processors
+       universe args = one or more strings
+       uloop args = N
          N = integer size of loop
-       *uloop* args = N pad
+       uloop args = N pad
          N = integer size of loop
          pad = all values will be same length, e.g. 001, 002, ..., 100
-       *string* arg = one string
-       *format* args = vname fstr
+       string arg = one string
+       format args = vname fstr
          vname = name of equal-style variable to evaluate
          fstr = C-style format string
-       *getenv* arg = one string
-       *file* arg = filename
-       *python* arg = function
-       *internal* arg = numeric value
-       *equal* or *particle* or *grid* or *surf* args = one formula
+       getenv arg = one string
+       file arg = filename
+       python arg = function
+       internal arg = numeric value
+       equal or particle or grid or surf args = one formula
        containing numbers, stats keywords, math operations, particle vectors, compute/fix and custom attribute and surface collision/reaction and variable references
          numbers = 0.0, 100, -5.4, 2.8e-4, etc
          constants = PI
@@ -326,7 +326,7 @@ are these commands:
 * :doc:`create\_particles <create_particles>`
 * :doc:`python <python>` command in conjunction with Python function wrappers used in equal-, particle-, grid-, and surf-style variable formulas
 
-----------
+\----------
 
 For the *python* style a Python function name is provided.  This needs
 to match a function name specified in a :doc:`python <python>` command
@@ -745,7 +745,7 @@ An example of its usage is as follows:
 
    variable     csq particle "vx\*vx + vy\*vy + vz\*vz"
    compute      therm thermal/grid all all temp press
-   variable     csq_norm particle v_csq/grid2part(c_therm\ **1**\ )
+   variable     csq_norm particle v_csq/grid2part(c_therm\ 1\ )
 
 The per-particle variable csq\_norm will calculate the kinetic energy
 for each particle, normalized by the thermal temperature of the full

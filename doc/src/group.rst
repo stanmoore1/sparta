@@ -17,7 +17,7 @@ group command
   
   .. parsed-literal::
   
-       *type* or *id* args
+       type or id args
          args = list of one or more surface element types or IDs
            any entry in list can be a range formatted as A:B
            A = starting index, B = ending index
@@ -27,16 +27,16 @@ group command
          args = logical value1 value2
            logical = "<>"
            value1,value2 = surface element types or IDs
-       *region* args = region-ID rflag
+       region args = region-ID rflag
          region-ID = ID of region which grid cell or surface element must be in
-         rflag = *one* or *all* or *center*
-           *one* = one (or more) corner points of grid cell or surface element in region
-           *all* = all corner points of grid cell or surface element in region
-           *center* = center point of grid cell or surface element in region
-       *subtract* args = two or more group IDs
-       *union* args = one or more group IDs
-       *intersect* args = two or more group IDs
-       *clear* = no args
+         rflag = one or all or center
+           one = one (or more) corner points of grid cell or surface element in region
+           all = all corner points of grid cell or surface element in region
+           center = center point of grid cell or surface element in region
+       subtract args = two or more group IDs
+       union args = one or more group IDs
+       intersect args = two or more group IDs
+       clear = no args
 
 
 

@@ -15,42 +15,42 @@ python command
   
   .. parsed-literal::
   
-       keyword = *here* or name of a *Python file*
-         *here* arg = inline
+       keyword = here or name of a Python file
+         here arg = inline
             inline = one or more lines of Python code which will be executed immediately
                        must be a single argument, typically enclosed between triple quotes
-         *Python file* = name of a file with Python code which will be executed immediately
+         Python file = name of a file with Python code which will be executed immediately
 
 * if mode is *name* of a Python function:
   
   .. parsed-literal::
   
        one or more keywords with/without arguments must be appended
-       keyword = *invoke* or *input* or *return* or *format* or *length* or *file* or *here* or *exists*
-         *invoke* arg = logreturn (optional)
+       keyword = invoke or input or return or format or length or file or here or exists
+         invoke arg = logreturn (optional)
             invoke the previously-defined Python function
             if logreturn is specified, print the return value of the invoked function to the screen and logfile
-         *input* args = N i1 i2 ... iN
+         input args = N i1 i2 ... iN
            N = # of inputs to function
            i1,...,iN = value, SELF, or SPARTA variable name
              value = integer number, floating point number, or string
              SELF = reference to SPARTA itself which can then be accessed by Python function
              variable = v_name, where name = name of SPARTA variable, e.g. v_abc
              internal variable = iv_name, where name = name of a SPARTA internal-style variable, e.g. iv_xyz
-         *return* arg = varReturn
+         return arg = varReturn
            varReturn = v_name  = SPARTA variable name which the return value of the Python function will be assigned to
-         *format* arg = fstring with M characters
+         format arg = fstring with M characters
            M = N if no return value, where N = # of inputs
            M = N+1 if there is a return value
            fstring = each character (i,f,s,p) corresponds (in order) to an input or return value
              'i' = integer, 'f' = floating point, 's' = string, 'p' = SELF
-          *length* arg = Nlen
+          length arg = Nlen
             Nlen = max length of string returned from Python function
-          *file* arg = filename
+          file arg = filename
             filename = file of Python code, which defines the Python function
-          *here* arg = one or more lines of Python code which defines the Python function
+          here arg = one or more lines of Python code which defines the Python function
                        must be a single argument, typically enclosed between triple quotes
-          *exists* arg = none = Python code has been loaded by previous python command
+          exists arg = none = Python code has been loaded by previous python command
 
 
 
@@ -555,8 +555,8 @@ by these to define grid-style variables which invoke the same Python
 .. parsed-literal::
 
    compute         1 property/grid all xc yc
-   variable        xnew grid py_foo(c_1\ **1**\ )
-   variable        ynew grid py_foo(c_1\ **2**\ )
+   variable        xnew grid py_foo(c_1\ 1\ )
+   variable        ynew grid py_foo(c_1\ 2\ )
    dump            1 grid all 1000 dump.grid.pyvar id xc yc v_xnew v_ynew
 
 When the dump command invokes the 2 grid-style variables, their
@@ -604,7 +604,7 @@ Now consider these (made up) commands:
    variable        myValue equal "2.0\*np"
    compute         1 property/grid all xc yc zc
    compute         2 grid all n
-   variable        field grid py_foo(c_1\ **1**\ +3.0,sqrt(c_1\ **2**\ ),(c_1\ **3**\ -zlo)\*c_2\ **1**\ )
+   variable        field grid py_foo(c_1\ 1\ +3.0,sqrt(c_1\ 2\ ),(c_1\ 3\ -zlo)\*c_2\ 1\ )
 
 They define a Python "mixedargs" function with 6 arguments.  Three of
 them are internal-style variables, which the variable formula

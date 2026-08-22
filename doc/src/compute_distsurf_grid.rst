@@ -22,7 +22,7 @@ compute distsurf/grid/kk command
   
   .. parsed-literal::
   
-       *dir* args = Sx Sy Sz
+       dir args = Sx Sy Sz
          Sx,Sy,Sz = direction vector used to test surf elements
 
 

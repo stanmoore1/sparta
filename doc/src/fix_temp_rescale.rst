@@ -22,7 +22,7 @@ fix temp/rescale/kk command
   
   .. parsed-literal::
   
-       ave values = *yes* or *no*
+       ave values = yes or no
 
 
 

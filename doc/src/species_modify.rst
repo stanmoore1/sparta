@@ -22,7 +22,7 @@ species\_modify command
   
   .. parsed-literal::
   
-       value for *mu* (magnetic moment units)
+       value for mu (magnetic moment units)
 
 
 

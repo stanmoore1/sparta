@@ -19,23 +19,23 @@ compute reaction/tally command
   
   .. parsed-literal::
   
-       *reaction* = which reaction occurred (1 to N)
-       *id/cell* = grid cell ID
-       *id1/pre* = particle ID of first particle before reaction
-       *id2/pre* = particle ID of second particle before reaction
-       *id1/post* = particle ID of first particle after reaction
-       *id2/post* = particle ID of second particle after reaction
-       *id3/post* = particle ID of third particle after reaction
-       *type1/pre* = particle species of first particle before reaction
-       *type2/pre* = particle species of second particle before reaction
-       *type1/post* = particle species of first particle before reaction
-       *type2/post* = particle species of second particle before reaction
-       *type3/post* = particle species of third particle before reaction
-       *vx1/pre*\ , *vy1/pre*\ , *vz1/pre* = velocity components of first particle before reaction
-       *vx2/pre*\ , *vy2/pre*\ , *vz2/pre* = velocity components of second particle before reaction
-       *vx1/post*\ , *vy1/post*\ , *vz1/post* = velocity components of first particle after reaction
-       *vx2/post*\ , *vy2/post*\ , *vz2/post* = velocity components of second particle after reaction
-       *vx3/post*\ , *vy3/post*\ , *vz3/post* = velocity components of thrid particle after reaction
+       reaction = which reaction occurred (1 to N)
+       id/cell = grid cell ID
+       id1/pre = particle ID of first particle before reaction
+       id2/pre = particle ID of second particle before reaction
+       id1/post = particle ID of first particle after reaction
+       id2/post = particle ID of second particle after reaction
+       id3/post = particle ID of third particle after reaction
+       type1/pre = particle species of first particle before reaction
+       type2/pre = particle species of second particle before reaction
+       type1/post = particle species of first particle before reaction
+       type2/post = particle species of second particle before reaction
+       type3/post = particle species of third particle before reaction
+       vx1/pre\ , vy1/pre\ , vz1/pre = velocity components of first particle before reaction
+       vx2/pre\ , vy2/pre\ , vz2/pre = velocity components of second particle before reaction
+       vx1/post\ , vy1/post\ , vz1/post = velocity components of first particle after reaction
+       vx2/post\ , vy2/post\ , vz2/post = velocity components of second particle after reaction
+       vx3/post\ , vy3/post\ , vz3/post = velocity components of thrid particle after reaction
 
 
 

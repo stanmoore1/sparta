@@ -14,24 +14,24 @@ balance\_grid command
   
   .. parsed-literal::
   
-       *none* args = none
-       *stride* args = *xyz* or *xzy* or *yxz* or *yzx* or *zxy* or *zyx*
-       *clump* args = *xyz* or *xzy* or *yxz* or *yzx* or *zxy* or *zyx*
-       *block* args = Px Py Pz
+       none args = none
+       stride args = xyz or xzy or yxz or yzx or zxy or zyx
+       clump args = xyz or xzy or yxz or yzx or zxy or zyx
+       block args = Px Py Pz
          Px,Py,Pz = # of processors in each dimension
-       *random* args = none 
-       *proc* args = none
-       *rcb* args = weight
-         weight = *cell* or *part* or *time*
+       random args = none 
+       proc args = none
+       rcb args = weight
+         weight = cell or part or time
 
 * zero or more keyword/value(s) pairs may be appended
 * keyword = *axes* or *flip*
   
   .. parsed-literal::
   
-       *axes* value = dims
+       axes value = dims
          dims = string with any of "x", "y", or "z" characters in it
-       *flip* value = yes or no
+       flip value = yes or no
 
 
 

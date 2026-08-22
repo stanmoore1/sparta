@@ -22,28 +22,28 @@ compute grid/kk command
   
   .. parsed-literal::
   
-       *n* = particle count
-       *nrho* = number density
-       *nfrac* = number fraction
-       *mass* = mass
-       *massrho* = mass density
-       *massfrac* = mass fraction
-       *u* = x component of velocity
-       *v* = y component of velocity
-       *w* = z component of velocity
-       *usq* = x component of velocity squared
-       *vsq* = y component of velocity squared
-       *wsq* = z component of velocity squared
-       *ke* = kinetic energy
-       *temp* = temperature
-       *erot* = rotational energy
-       *trot* = rotational temperature
-       *evib* = vibrational energy 
-       *tvib* = vibrational temperature (classical definition)
-       *pxrho* = x component of momentum density
-       *pyrho* = y component of momentum density
-       *pzrho* = z component of momentum density
-       *kerho* = kinetic energy density
+       n = particle count
+       nrho = number density
+       nfrac = number fraction
+       mass = mass
+       massrho = mass density
+       massfrac = mass fraction
+       u = x component of velocity
+       v = y component of velocity
+       w = z component of velocity
+       usq = x component of velocity squared
+       vsq = y component of velocity squared
+       wsq = z component of velocity squared
+       ke = kinetic energy
+       temp = temperature
+       erot = rotational energy
+       trot = rotational temperature
+       evib = vibrational energy 
+       tvib = vibrational temperature (classical definition)
+       pxrho = x component of momentum density
+       pyrho = y component of momentum density
+       pzrho = z component of momentum density
+       kerho = kinetic energy density
 
 
 

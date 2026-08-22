@@ -25,73 +25,73 @@ dump movie command
   
   .. parsed-literal::
   
-       *particle* = yes/no = do or do not draw particles
-       *pdiam* value = number = numeric value for particle diameter (distance units)
-       *grid* values = color
-         color = *proc* or per-grid compute or fix
-       *gridx* values = xcoord color
+       particle = yes/no = do or do not draw particles
+       pdiam value = number = numeric value for particle diameter (distance units)
+       grid values = color
+         color = proc or per-grid compute or fix
+       gridx values = xcoord color
          xcoord = x value to draw yz plane of grid cells at
-         color = *proc* or per-grid compute or fix
-       *gridy* values = ycoord color
+         color = proc or per-grid compute or fix
+       gridy values = ycoord color
          ycoord = y value to draw xz plane of grid cells at
-         color = *proc* or per-grid compute or fix
-       *gridz* values = zcoord color
+         color = proc or per-grid compute or fix
+       gridz values = zcoord color
          zcoord = z value to draw xy plane of grid cells at
-         color = *proc* or per-grid compute or fix
-       *surf* values = color diam
-         color = *one* or *proc* or per-surf compute or fix
+         color = proc or per-grid compute or fix
+       surf values = color diam
+         color = one or proc or per-surf compute or fix
          diam = diameter of 2d lines as fraction of shortest box length
-       *size* values = width height = size of images
+       size values = width height = size of images
          width = width of image in # of pixels
          height = height of image in # of pixels
-       *view* values = theta phi = view of simulation box
+       view values = theta phi = view of simulation box
          theta = view angle from +z axis (degrees)
          phi = azimuthal view angle (degrees)
          theta or phi can be a variable (see below)
-       *center* values = flag Cx Cy Cz = center point of image
+       center values = flag Cx Cy Cz = center point of image
          flag = "s" for static, "d" for dynamic
          Cx,Cy,Cz = center point of image as fraction of box dimension (0.5 = center of box)
          Cx,Cy,Cz can be variables (see below)
-       *up* values = Ux Uy Uz = direction that is "up" in image
+       up values = Ux Uy Uz = direction that is "up" in image
          Ux,Uy,Uz = components of up vector
          Ux,Uy,Uz can be variables (see below)
-       *zoom* value = zfactor = size that simulation box appears in image
+       zoom value = zfactor = size that simulation box appears in image
          zfactor = scale image size by factor > 1 to enlarge, factor < 1 to shrink
          zfactor can be a variable (see below)
-       *box* values = yes/no diam = draw outline of simulation box
+       box values = yes/no diam = draw outline of simulation box
          yes/no = do or do not draw simulation box lines
          diam = diameter of box lines as fraction of shortest box length
-       *subbox* values = yes/no diam = draw outline of processor sub-boxes
+       subbox values = yes/no diam = draw outline of processor sub-boxes
          yes/no = do or do not draw processor sub-box lines
          diam = diameter of sub-box lines as fraction of shortest box length
-       *gline* values = yes/no diam = draw outline of each grid cell
+       gline values = yes/no diam = draw outline of each grid cell
          yes/no = do or do not draw grid cell outlines
          diam = diameter of grid outlines as fraction of shortest box length
-       *sline* values = yes/no diam = draw outline of each surface element
+       sline values = yes/no diam = draw outline of each surface element
          yes/no = do or do not draw surf element outlines
          diam = diameter of surf element outlines as fraction of shortest box length
-       *axes* values = yes/no length diam = draw xyz axes
+       axes values = yes/no length diam = draw xyz axes
          yes/no = do or do not draw xyz axes lines next to simulation box
          length = length of axes lines as fraction of respective box lengths
          diam = diameter of axes lines as fraction of shortest box length
-       *shiny* value = sfactor = shinyness of spheres and cylinders
+       shiny value = sfactor = shinyness of spheres and cylinders
          sfactor = shinyness of spheres and cylinders from 0.0 to 1.0
-       *ssao* value = yes/no seed dfactor = SSAO depth shading
+       ssao value = yes/no seed dfactor = SSAO depth shading
          yes/no = turn depth shading on/off
          seed = random # seed (positive integer)
          dfactor = strength of shading from 0.0 to 1.0
-       *fsaa* value = yes/no = full scene anti-aliasing
+       fsaa value = yes/no = full scene anti-aliasing
          yes/no = do or do not anti-alias the image
-       *depthcue* values = yes/no cfactor color start = depth cueing
+       depthcue values = yes/no cfactor color start = depth cueing
          yes/no = turn depth cueing on/off
          cfactor = strength of fading from 0.0 to 1.0
-         color = fog color name or *auto* = fade toward the background color
-         start = box fraction along the view direction where fading starts, or *auto* = nearest rendered object
-       *defocus* values = yes/no bfactor start = defocus of distant objects
+         color = fog color name or auto = fade toward the background color
+         start = box fraction along the view direction where fading starts, or auto = nearest rendered object
+       defocus values = yes/no bfactor start = defocus of distant objects
          yes/no = turn defocusing on/off
          bfactor = strength of the blur from 0.0 to 1.0
-         start = box fraction along the view direction where blurring starts, or *auto* = nearest rendered object
-       *outline* values = yes/no width color = outlines at depth jumps
+         start = box fraction along the view direction where blurring starts, or auto = nearest rendered object
+       outline values = yes/no width color = outlines at depth jumps
          yes/no = turn outline drawing on/off
          width = width of the outlines in pixels (from 1 to 16)
          color = color name of the outlines

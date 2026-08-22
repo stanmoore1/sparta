@@ -31,24 +31,24 @@ fix ave/time command
   
   .. parsed-literal::
   
-       *mode* arg = *scalar* or *vector*
+       mode arg = scalar or vector
          scalar = all input values are global scalars
          vector = all input values are global vectors or global arrays
-       *ave* args = *one* or *running* or *window M*
+       ave args = one or running or window M
          one = output a new average value every Nfreq steps
          running = output cummulative average of all previous Nfreq steps
          window M = output average of M most recent Nfreq steps
-       *start* args = Nstart
+       start args = Nstart
          Nstart = start averaging on this timestep
-       *off* arg = M = do not average this value
+       off arg = M = do not average this value
          M = value # from 1 to Nvalues
-       *file* arg = filename
+       file arg = filename
          filename = name of file to output time averages to
-       *title1* arg = string
+       title1 arg = string
          string = text to print as 1st line of output file
-       *title2* arg = string
+       title2 arg = string
          string = text to print as 2nd line of output file
-       *title3* arg = string
+       title3 arg = string
          string = text to print as 3rd line of output file, only for vector mode
 
 

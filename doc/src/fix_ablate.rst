@@ -31,10 +31,10 @@ fix ablate command
   
   .. parsed-literal::
   
-       *mindist* value = fraction
+       mindist value = fraction
          fraction = minimum fractional distance along cell edge for triangle/line vertices (value > 0 and < 0.5)
-       *multiple* value = yes or no
-       *conserve* value = yes or no
+       multiple value = yes or no
+       conserve value = yes or no
 
 
 

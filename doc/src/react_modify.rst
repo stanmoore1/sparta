@@ -15,12 +15,12 @@ react\_modify command
   
   .. parsed-literal::
   
-       *recomb* value = yes or no = enable or disable defined recombination reactions
-       *rboost* value = rfactor
+       recomb value = yes or no = enable or disable defined recombination reactions
+       rboost value = rfactor
          rfactor = boost probability of recombination reactions by this factor
-       *compute_chem_rates* value = yes or no = enable or disable computation of Arrhenius rate for chemical
+       compute_chem_rates value = yes or no = enable or disable computation of Arrhenius rate for chemical
        reaction without performing the reaction
-       *partial_energy* = yes or no = use partial energy or total energy for TCE chemistry
+       partial_energy = yes or no = use partial energy or total energy for TCE chemistry
 
 
 

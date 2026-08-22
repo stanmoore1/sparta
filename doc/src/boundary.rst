@@ -14,11 +14,11 @@ boundary command
   
   .. parsed-literal::
   
-       *o* is outflow
-       *p* is periodic
-       *r* is specular reflection
-       *a* is axi-symmetric
-       *s* is treat boundary as a surface
+       o is outflow
+       p is periodic
+       r is specular reflection
+       a is axi-symmetric
+       s is treat boundary as a surface
 
 
 

@@ -21,10 +21,10 @@ fix emit/face/file command
   
   .. parsed-literal::
   
-       *frac* value = fraction = 0.0 to 1.0 fraction of particles to insert
-       *nevery* value = Nstep = insert every this many timesteps
-       *perspecies* value = *yes* or *no*
-       *region* value = region-ID
+       frac value = fraction = 0.0 to 1.0 fraction of particles to insert
+       nevery value = Nstep = insert every this many timesteps
+       perspecies value = yes or no
+       region value = region-ID
 
 
 

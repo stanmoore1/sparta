@@ -15,20 +15,20 @@ collide\_modify command
   
   .. parsed-literal::
   
-       *vremax* values = Nevery startflag
+       vremax values = Nevery startflag
          Nevery = zero vremax every this many timesteps
-         startflag = *yes* or *no* = zero vremax at start of every run
-       *remain* value = *yes* or *no* = hold remaining fraction of collisions over to next timestep
-       *scheme* value = *ntc* or *mcf* = scheme used to compute the number of attempted collisions
-       *partners* values = style plus optional arg = method used to select collision partners
-         style = *random* or *nearcp* or *subcell*
-           *random* = select partners randomly from all particles in the grid cell
-           *nearcp* arg = Nlimit
+         startflag = yes or no = zero vremax at start of every run
+       remain value = yes or no = hold remaining fraction of collisions over to next timestep
+       scheme value = ntc or mcf = scheme used to compute the number of attempted collisions
+       partners values = style plus optional arg = method used to select collision partners
+         style = random or nearcp or subcell
+           random = select partners randomly from all particles in the grid cell
+           nearcp arg = Nlimit
              Nlimit = max # of attempts made to find a near collision partner
-           *subcell* = select partners via the transient adaptive subcell method
-       *ambipolar* value = *no* or *yes*
-       *rotate* value = *no* or *smooth*
-       *vibrate* value = *no* or *smooth* or *discrete*
+           subcell = select partners via the transient adaptive subcell method
+       ambipolar value = no or yes
+       rotate value = no or smooth
+       vibrate value = no or smooth or discrete
 
 
 

@@ -15,10 +15,10 @@ bound\_modify command
   
   .. parsed-literal::
   
-     keywords = *collide* or *react*
-       *collide* value = sc-ID
+     keywords = collide or react
+       collide value = sc-ID
          sc-ID = ID of a surface collision model
-       *react* value = sr-ID
+       react value = sr-ID
          sr-ID = ID of a surface reaction model or none
 
 

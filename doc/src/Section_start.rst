@@ -683,7 +683,7 @@ rm -rf CMake\*
 .. parsed-literal::
 
    # cmake should print "Found MPI\*" strings
-   cmake **options** /path/to/sparta/cmake
+   cmake options /path/to/sparta/cmake
 
 Note that if the preset file you're using enables PKG\_MPI\_STUBS, MPI will not be
 searched for unless you explicitly disable PKG\_MPI\_STUBS in the preset file.
@@ -746,7 +746,7 @@ rm -rf CMake\*
 .. parsed-literal::
 
    # cmake should print "Found FFT\*" strings
-   cmake **options** /path/to/sparta/cmake
+   cmake options /path/to/sparta/cmake
 
 Note that if the preset file you're using enables PKG\_FFT, FFT will not be
 searched for unless you explicitly disable PKG\_FFT in the preset file.
@@ -804,7 +804,7 @@ do:
 .. parsed-literal::
 
    cd build
-   cmake **OPTIONS** /path/to/sparta/cmake
+   cmake OPTIONS /path/to/sparta/cmake
 
 or:
 
@@ -1523,7 +1523,7 @@ The SPARTA\_MULTIBUILD\_CONFIGS option allows the user to run different sets of
 binaries for the same input decks. SPARTA\_MULTIBUILD\_CONFIGS lets the user add
 additional build configurations, separated by ';', that will build sparta 
 with the cache file located in 
-`SPARTA\_MULTIBUILD\_PRESET\_DIR/CONFIG\_NAME.cmake`. For example:
+\`SPARTA\_MULTIBUILD\_PRESET\_DIR/CONFIG\_NAME.cmake\`. For example:
 
 
 .. parsed-literal::
@@ -2002,7 +2002,7 @@ Loop time of 0.639973 on 4 procs for 1000 steps with 45792 particles
 
    MPI task timing breakdown:
    Section \|  min time  \|  avg time  \|  max time  \|%varavg\| %total
-   ---------------------------------------------------------------
+   \---------------------------------------------------------------
    Move    \| 0.10948    \| 0.26191    \| 0.42049    \|  27.6 \| 40.92
    Coll    \| 0.013711   \| 0.041659   \| 0.070985   \|  13.5 \|  6.51
    Sort    \| 0.01733    \| 0.040286   \| 0.063573   \|  10.6 \|  6.29

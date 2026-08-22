@@ -16,9 +16,9 @@ read\_restart command
   
   .. parsed-literal::
   
-       *gridcut* arg = cutoff
+       gridcut arg = cutoff
          cutoff = acquire ghost cells up to this far away (distance units)
-       *balance* args = same as for :doc:`balance_grid <balance_grid>` command
+       balance args = same as for :doc:`balance_grid <balance_grid>` command
 
 
 

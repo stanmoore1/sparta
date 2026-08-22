@@ -15,11 +15,11 @@ collide command
   
   .. parsed-literal::
   
-       *none* args = none
-       *vss* args = mix-ID file
+       none args = none
+       vss args = mix-ID file
          mix-ID = ID of mixture to use for group definitions
          file = filename that lists species with their VSS model parameters
-       *vss/kk* args = mix-ID file
+       vss/kk args = mix-ID file
          mix-ID = ID of mixture to use for group definitions
          file = filename that lists species with their VSS model parameters
 
@@ -28,7 +28,7 @@ collide command
   
   .. parsed-literal::
   
-       *relax* value = *constant* or *variable*
+       relax value = constant or variable
 
 
 

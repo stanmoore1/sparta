@@ -126,7 +126,7 @@ the following manner:
    portion of input script
    variable            t2 equal $t
    variable            delta equal v_2-v_1
-   print               "Delta time = $\ *delta*\ "
+   print               "Delta time = $\ delta\ "
 
 
 ----------

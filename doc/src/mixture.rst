@@ -17,24 +17,24 @@ mixture command
   
   .. parsed-literal::
   
-       *nrho* arg = density
+       nrho arg = density
          density = number density of entire mixture (# per length\^3 units)
-       *vstream* args = Vx Vy Vz
+       vstream args = Vx Vy Vz
          Vx,Vy,Vz = streaming velocity of entire mixture (velocity units)
-       *temp* arg = thermal
+       temp arg = thermal
          thermal = temperature of entire mixture (temperature units)
-       *trot* arg = Trot
+       trot arg = Trot
          Trot = rotational temperature of entire mixture (temperature units)
-       *tvib* arg = Tvib
+       tvib arg = Tvib
          Tvib = vibrational temperature of entire mixture (temperature units)
-       *frac* arg = fraction
+       frac arg = fraction
          fraction = number fraction for each listed species (0 to 1)
-       *group* arg = SELF or group-ID
+       group arg = SELF or group-ID
          SELF = put each listed species (or all species if none listed) in its own group
          group-ID = put the listed species (or all species if none listed) in a group with this ID 
-       *copy* arg = new-ID
+       copy arg = new-ID
          new-ID = ID of new mixture to create, as a copy of this one
-       *delete* args = sp1 sp2 ...
+       delete args = sp1 sp2 ...
          sp1,sp2,... = species to delete from the mixture
 
 

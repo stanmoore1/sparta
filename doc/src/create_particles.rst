@@ -18,9 +18,9 @@ create\_particles/kk command
   
   .. parsed-literal::
   
-       *n* args = Np
+       n args = Np
          Np = 0 or number of particles to create
-       *single* args = species-ID x y z vx vy vz
+       single args = species-ID x y z vx vy vz
          species-ID = ID of species of single particle
          x,y,z = position of particle (distance units)
          vx,vy,vz = velocity of particle (velocity units)
@@ -30,25 +30,25 @@ create\_particles/kk command
   
   .. parsed-literal::
   
-       *cut* value = *yes* or *no*
-       *global* value = *yes* or *no*
-       *region* value = region-ID
-       *species* values = svar xvar yvar zvar
+       cut value = yes or no
+       global value = yes or no
+       region value = region-ID
+       species values = svar xvar yvar zvar
          svar = name of equal-style variable for species type
          xvar,yvar,zvar = names of internal-style variables for x,y,z
-       *density* values = dvar xvar yvar zvar
+       density values = dvar xvar yvar zvar
          svar = name of equal-style variable for density
          xvar,yvar,zvar = names of internal-style variables for x,y,z
-       *temperature* values = tvar xvar yvar zvar
+       temperature values = tvar xvar yvar zvar
          tvar = name of equal-style variable for temperature
          xvar,yvar,zvar = names of internal-style variables for x,y,z
-       *vstream* values = vxvar vyvar vzvar xvar yvar zvar
+       vstream values = vxvar vyvar vzvar xvar yvar zvar
          vxvar,vyvar,vzvar = names of equal-style variables for vx,vy,vz
          xvar,yvar,zvar = names of internal-style variables for x,y,z
-       *custom* values = attribute g_name
-         attribute = *density* or *temperature* or *vstream* or *fractions*
+       custom values = attribute g_name
+         attribute = density or temperature or vstream or fractions
          g_name = custom per-grid vector or array with name
-       *twopass* values = none
+       twopass values = none
 
 
 

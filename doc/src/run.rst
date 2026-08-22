@@ -16,14 +16,14 @@ run command
   
   .. parsed-literal::
   
-       *upto* value = none
-       *start* value = N1
+       upto value = none
+       start value = N1
          N1 = timestep at which 1st run started
-       *stop* value = N2
+       stop value = N2
          N2 = timestep at which last run will end
-       *pre* value = *no* or *yes*
-       *post* value = *no* or *yes*
-       *every* values = M c1 c2 ...
+       pre value = no or yes
+       post value = no or yes
+       every values = M c1 c2 ...
          M = break the run into M-timestep segments and invoke one or more commands between each segment
          c1,c2,...,cN = one or more SPARTA commands, each enclosed in quotes
          c1 = NULL means no command will be invoked
@@ -142,7 +142,7 @@ command is invoked.  Thus these lines:
 
    compute t temp
    variable myT equal c_t
-   run 6000 every 2000 "print 'Temp = $\ *myT*\ '"
+   run 6000 every 2000 "print 'Temp = $\ myT\ '"
 
 are the equivalent of:
 
@@ -152,11 +152,11 @@ are the equivalent of:
    compute t temp
    variable myT equal c_t
    run 2000
-   print "Temp = $\ *myT*\ "
+   print "Temp = $\ myT\ "
    run 2000
-   print "Temp = $\ *myT*\ "
+   print "Temp = $\ myT\ "
    run 2000
-   print "Temp = $\ *myT*\ "
+   print "Temp = $\ myT\ "
 
 which does 3 runs of 2000 steps and prints the x-coordinate of a
 particular atom between runs.  Note that the variable "$q" will

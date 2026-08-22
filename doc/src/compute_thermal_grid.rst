@@ -22,8 +22,8 @@ compute thermal/grid/kk command
   
   .. parsed-literal::
   
-       *temp* = temperature
-       *press* = pressure
+       temp = temperature
+       press = pressure
 
 
 

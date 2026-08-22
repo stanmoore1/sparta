@@ -44,7 +44,7 @@ compute surf/kk command
   
   .. parsed-literal::
   
-       norm arg = *flux* or *flow* for dividing flux quantities by area or not
+       norm arg = flux or flow for dividing flux quantities by area or not
        com args = Cx Cy Cz = coords of center-of-mass of body for calculating torque
 
 

@@ -16,45 +16,45 @@ surf\_collide command
   
   .. parsed-literal::
   
-       *specular* or *specular/kk* args = noslip (optional)
+       specular or specular/kk args = noslip (optional)
          noslip = reflect all velocity components off surface (not just normal component)
-       *diffuse* or *diffuse/kk* args = Tsurf acc
+       diffuse or diffuse/kk args = Tsurf acc
          Tsurf = temperature of surface (temperature units)
                  Tsurf can be a variable or custom per-surf attribute (see below)
          acc = accommodation coefficient
-       *cll* or *cll/kk* args = Tsurf acc_n acc_t acc_rot acc_vib
+       cll or cll/kk args = Tsurf acc_n acc_t acc_rot acc_vib
          Tsurf = temperature of surface (temperature units)
                  Tsurf can be a variable or custom per-surf attribute (see below)
          acc_n = accommodation coefficient in the surface normal direction
          acc_t = accommodation coefficient in the surface tangential direction
          acc_rot = accommodation coefficient for the rotational modes
          acc_vib = accommodation coefficient for the vibrational modes
-       *adiabatic* or *adiabatic/kk* args = none
-       *impulsive* or *impulsive/kk* args = Tsurf model param1 param2 var theta_peak pol_pow azi_pow
+       adiabatic or adiabatic/kk args = none
+       impulsive or impulsive/kk args = Tsurf model param1 param2 var theta_peak pol_pow azi_pow
          Tsurf = temperature of surface (temperature units)
                  Tsurf can be a variable or custom per-surf attribute (see below)
-         model can be *softsphere* or *tempvar*
-           *softsphere* args = en_ratio eff_mass
+         model can be softsphere or tempvar
+           softsphere args = en_ratio eff_mass
              param1 = en_ratio = fraction of energy lost in the collision
              param2 = eff_mass = effective mass of the surface atom
-           *tempvar* args = a1 a0
+           tempvar args = a1 a0
              param1 = a1 = linear term in the variation with temperature
              param2 = a0 = constant term in the variation with temperature
          var = variance of the scattered particle velocity distribution
          theta_peak = peak location of the polar angle distribution
          pol_pow = cosine power represeting the polar angular distribution
          azi_pow = cosine power represeting the azimuthal angular distribution
-       *td* or *td/kk* arg = Tsurf
+       td or td/kk arg = Tsurf
          Tsurf = temperature of surface (temperature units)
                  Tsurf can be a variable or custom per-surf attribute (see below)
-       *piston* or *piston/kk* args = Vwall
+       piston or piston/kk args = Vwall
          Vwall = velocity of boundary wall (velocity units)
-       *transparent* or *transparent/kk* args = none
+       transparent or transparent/kk args = none
 
   
   .. parsed-literal::
   
-       *vanish* or *vanish/kk* args = none
+       vanish or vanish/kk args = none
 
 * zero or more keyword/arg pairs may be appended
 * keyword = *translate* or *rotate* or *temp/freq* or *partial* or *barrier* or *bond* or *init\_energy* or *step* or *double* or *intenergy*
@@ -62,30 +62,30 @@ surf\_collide command
   
   .. parsed-literal::
   
-       *translate* args = Vx Vy Vz
+       translate args = Vx Vy Vz
          Vx,Vy,Vz = translational velocity of surface (velocity units)
-       *rotate* args = Pz Py Pz Wx Wy Wz
+       rotate args = Pz Py Pz Wx Wy Wz
          Px,Py,Pz = point to rotate surface around (distance units)
          Wx,Wy,Wz = angular velocity of surface around point (radians/time) 
-       *temp/freq* arg = Nfreq
+       temp/freq arg = Nfreq
          Nfreq = evaulate a temperature variable every this many timesteps (default = 1)
-       *partial* args = eccen (only for *cll* style)
+       partial args = eccen (only for cll style)
          eccen = eccentricity parameter
-       *barrier* args = bar_val (only for *td* style)
-         *bar_val* = value of the desorption barrier in temperature units 
-       *bond* args = bond_trans bond_rot bond_vib (only for *td* style)
-         *bond_trans* = amount of bond dissociation energy (in temperature units) going into translational mode 
-         *bond_rot* = amount of bond dissociation energy (in temperature units) going into rotational mode 
-         *bond_vib* = amount of bond dissociation energy (in temperature units) going into vibrational mode
-       *init_energy* = IE_trans IE_rot IE_vib (only for *td* style)
-         *IE_trans* = fraction of initial translational energy going into translational mode 
-         *IE_rot* = fraction of initial translational energy going into rotational mode
-         *IE_vib* = fraction of initial translational energy going into vibrational mode
-       *step* args = epsilon (only for *impulsive* style)
+       barrier args = bar_val (only for td style)
+         bar_val = value of the desorption barrier in temperature units 
+       bond args = bond_trans bond_rot bond_vib (only for td style)
+         bond_trans = amount of bond dissociation energy (in temperature units) going into translational mode 
+         bond_rot = amount of bond dissociation energy (in temperature units) going into rotational mode 
+         bond_vib = amount of bond dissociation energy (in temperature units) going into vibrational mode
+       init_energy = IE_trans IE_rot IE_vib (only for td style)
+         IE_trans = fraction of initial translational energy going into translational mode 
+         IE_rot = fraction of initial translational energy going into rotational mode
+         IE_vib = fraction of initial translational energy going into vibrational mode
+       step args = epsilon (only for impulsive style)
          epsilon = ratio of the height to the width of the step
-       *double* args = polar_pow_2 (only for *impulsive* style)
+       double args = polar_pow_2 (only for impulsive style)
          polar_pow_2 = cosine power for the polar angular distribution between peak and surface
-       *intenergy* args = frac_rot frac_vib (only for *impulsive* style)
+       intenergy args = frac_rot frac_vib (only for impulsive style)
          frac_rot = fraction of lost translational energy going into the rotational mode
          frac_vib = fraction of lost translational energy going into the vibrational mode
 

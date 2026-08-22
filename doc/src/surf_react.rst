@@ -19,13 +19,13 @@ surf\_react command
   
   .. parsed-literal::
   
-       *global* or *global/kk* args = pdelete pcreate
+       global or global/kk args = pdelete pcreate
          pdelete = probability that surface collision removes the incident particle
          pcreate = probability that surface collision clones the incident particle
-       *prob* or *prob/kk* args = infile
+       prob or prob/kk args = infile
          infile = file with list of surface chemistry reactions 
-       *adsorb* args = model infile(s) n=Nsync type temp n_sites adsp1 adsp2 ...
-         model = *gs* or *ps* or *gs/ps*
+       adsorb args = model infile(s) n=Nsync type temp n_sites adsp1 adsp2 ...
+         model = gs or ps or gs/ps
            gs = gas-surface reactions
            ps = pure-surface reactions
            gs/ps = both gas-surface and pure-surface reactions
@@ -33,7 +33,7 @@ surf\_react command
                      one file for model gs or ps
                      two files for model gs/ps, gs first, ps second
          Nsync = perform PS reactions and sync across processors every this many timesteps
-         type = *face* or *surf*
+         type = face or surf
            face = domain boundary treated as a surface
            surf = surface elements = triangles in 3d, lines in 2d 
          temp = temperature of the surface

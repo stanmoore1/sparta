@@ -15,59 +15,59 @@ global command
   
   .. parsed-literal::
   
-       *fnum* value = ratio
+       fnum value = ratio
          ratio = Fnum ratio of physical particles to simulation particles
-       *nrho* value = density
+       nrho value = density
          density = number density of background gas (# per length\^3 units)
-       *vstream* values = Vx Vy Vz
+       vstream values = Vx Vy Vz
          Vx,Vy,Vz = streaming velocity of background gas (velocity units)
-       *temp* values = thermal
+       temp values = thermal
          thermal = temperature of background gas (temperature units)
-       *field* values = fstyle args
-         fstyle = *none* or *constant* or *particle* or *grid*
-           *field* arg = none
-           *constant* args = mag ex ey ez
+       field values = fstyle args
+         fstyle = none or constant or particle or grid
+           field arg = none
+           constant args = mag ex ey ez
              mag = magnitude of field acceleration (acceleration units)
              ex,ey,ez = direction vector which the field acts along
-           *particle* arg = fixID
+           particle arg = fixID
              fixID = ID of fix that computes per particle field components
-           *grid* args = fixID Nfreq
+           grid args = fixID Nfreq
              fixID = ID of fix that computes per grid cell field components
              Nfreq = update field values every this many timesteps
-       *surfs* value = explicit or explicit/distributed or implicit
+       surfs value = explicit or explicit/distributed or implicit
          explicit = surfs defined in read_surf file, each proc owns copy of all surfs
          explicit/distributed = surfs defined in read_surf file, each proc owns
                                 only the surfs for its owned_ghost grid cells
          implicit = surfs defined in read_isurf file, each proc owns
                                 only the surfs for its owned+ghost grid cells
-       *surfgrid* value = *percell* or *persurf* or *auto*
+       surfgrid value = percell or persurf or auto
          percell = loop over my cells and check every surf
          persurf = loop over my surfs and cells they overlap
          auto = choose percell or persurf based on surface element and proc count
-       *surfmax* value = Nsurf
+       surfmax value = Nsurf
          Nsurf = max # of surface elements allowed in single grid cell
-       *splitmax* value = Nsplit
+       splitmax value = Nsplit
          Nsplit = max # of sub-cells one grid cell can be split into by surface elements
-       *surftally* value = *reduce* or *rvous* or *auto*
+       surftally value = reduce or rvous or auto
          reduce = tally surf collision info via MPI_Allreduce operations
          rvous = tally via a rendezvous algorithm
          auto = choose reduce or rvous based on surface element and proc count
-       *gridcut* value = cutoff
+       gridcut value = cutoff
          cutoff = acquire ghost cells up to this far away (distance units)
-       *comm/sort* value = yes or no
+       comm/sort value = yes or no
          yes/no = sort incoming messages by proc ID if yes, else no sort
-       *comm/style* value = neigh or all
+       comm/style value = neigh or all
          neigh = setup particle comm with subset of near-neighbor processor
          all = allow particle comm with potentially any processor
-       *weight* value = *wstyle* *mode*
-         wstyle = *cell*
-         mode = *none* or *volume* or *radius* or *radius/only*
-       *particle/reorder* value = *nsteps*
+       weight value = wstyle mode
+         wstyle = cell
+         mode = none or volume or radius or radius/only
+       particle/reorder value = nsteps
          nsteps = reorder the particles every this many timesteps
-       *mem/limit* value = *grid* or bytes
+       mem/limit value = grid or bytes
          grid = limit extra memory for load-balancing, particle reordering, and restart file read/write to grid cell memory
          bytes = limit extra particle memory to this amount (in MBytes)
-       *optmove* value = yes or no
+       optmove value = yes or no
          yes/no = use optimized particle move if yes, else use regular move
 
 

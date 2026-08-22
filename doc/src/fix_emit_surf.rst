@@ -19,24 +19,24 @@ fix emit/surf command
   
   .. parsed-literal::
   
-       *n* value = Np = number of particles to create
+       n value = Np = number of particles to create
                         Np can be a variable (see below)
-       *normal* value = yes or no = emit normal to surface elements or with streaming velocity
-       *nevery* value = Nstep = add particles every this many timesteps
-       *perspecies* value = *yes* or *no*
-       *region* value = region-ID
-       *subsonic* values = Psub Tsub keyword/value
+       normal value = yes or no = emit normal to surface elements or with streaming velocity
+       nevery value = Nstep = add particles every this many timesteps
+       perspecies value = yes or no
+       region value = region-ID
+       subsonic values = Psub Tsub keyword/value
          Psub = pressure setting at inflow boundary (pressure units)
          Tsub = temperature setting at inflow boundary, can be NULL (temperature units)
          zero or one additional keyword/value pair may be appended:
-           *window* value = Nwin = moving-average window for the cell streaming velocity
-       *mflow* values = Mdot Tin keyword/value
+           window value = Nwin = moving-average window for the cell streaming velocity
+       mflow values = Mdot Tin keyword/value
          Mdot = target mass flow rate through the surface group (mass/time units)
          Tin = thermal temperature of inflow particles (temperature units)
          zero or one additional keyword/value pair may be appended:
-           *window* value = Nwin = moving-average window for the cell streaming velocity
-       *custom* values = attribute s_name
-         attribute = *density* or *temperature* or *vstream* or *speed* or *fractions*
+           window value = Nwin = moving-average window for the cell streaming velocity
+       custom values = attribute s_name
+         attribute = density or temperature or vstream or speed or fractions
          s_name = custom per-surf vector or array with name
 
 
