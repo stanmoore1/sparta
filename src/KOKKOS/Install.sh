@@ -177,6 +177,8 @@ action create_particles_kokkos.cpp
 action create_particles_kokkos.h
 action fix_emit_face_kokkos.cpp
 action fix_emit_face_kokkos.h
+action fix_emit_face_file_kokkos.cpp
+action fix_emit_face_file_kokkos.h
 action fix_emit_kokkos.h
 action fix_emit_surf_kokkos.cpp
 action fix_emit_surf_kokkos.h
