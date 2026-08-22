@@ -29,10 +29,11 @@ RegionStyle(union/kk,RegUnionKokkos)
 namespace SPARTA_NS {
 
 // a composite region cannot dispatch to its sub-regions on the device, so it
-//   flattens them into a flat descriptor array instead; see
-//   region_prim_kokkos.h.  the sub-regions must themselves be Kokkos
-//   primitives -- a composite of composites is not flattenable this way and
-//   is rejected with a clear message rather than silently mismatching.
+//   flattens them into a postfix (RPN) token stream instead; see
+//   region_prim_kokkos.h.  each sub-region contributes its own whole
+//   sub-stream, so a sub-region may itself be a region union or region
+//   intersect: composites nest to arbitrary depth, bounded only by the
+//   RKK_MAX_STACK boolean stack depth checked here at flatten time.
 
 class RegUnionKokkos : public RegUnion, public KokkosBase {
 
@@ -44,15 +45,15 @@ class RegUnionKokkos : public RegUnion, public KokkosBase {
   ~RegUnionKokkos() override;
 
   void match_all_kokkos(DAT::tdual_int_1d) override;
-  int flatten_region_kokkos(tdual_region_prim_1d &, int &) override;
+  int flatten_region_kokkos(tdual_region_token_1d &) override;
 
  private:
   int groupbit;
   typename AT::t_int_1d d_match;
   t_particle_1d d_particles;
 
-  tdual_region_prim_1d k_prims;
-  int nprim;
+  tdual_region_token_1d k_tokens;   // this region's own token stream
+  int ntoken;
 };
 
 }
