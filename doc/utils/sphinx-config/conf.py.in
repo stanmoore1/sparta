@@ -7,6 +7,10 @@
 import os
 import sys
 
+from sphinx.util import logging as sphinx_logging
+
+logger = sphinx_logging.getLogger(__name__)
+
 SPARTA_DOC_DIR = '@SPARTA_DOC_DIR@'
 SPARTA_SOURCE_DIR = '@SPARTA_SOURCE_DIR@'
 
@@ -134,14 +138,24 @@ latex_domain_indices = False
 # linked files: the manual has always published these under JPG/, the web
 # site links to them from outside the manual, and keeping the directory
 # whole keeps those URLs working.
+# Loud rather than silent if the directory is not where this file was
+# generated to expect: conf.py is gitignored and carries an absolute path
+# baked in by the Makefile, so a tree that was moved without regenerating it
+# would quietly stop copying and every "click for larger version" link would
+# 404 again with nothing said.
 def copy_full_size_images(app, exception):
     import shutil
 
     if exception is not None or app.builder.name not in ('html', 'dirhtml'):
         return
     src = os.path.join(SPARTA_DOC_DIR, 'src', 'JPG')
-    if os.path.isdir(src):
-        shutil.copytree(src, os.path.join(app.outdir, 'JPG'), dirs_exist_ok=True)
+    if not os.path.isdir(src):
+        logger.warning('full-size images not copied: no such directory %s. '
+                       'The "click for larger version" links will 404. '
+                       'Run "make clean-all" to regenerate conf.py if the '
+                       'tree has moved.', src)
+        return
+    shutil.copytree(src, os.path.join(app.outdir, 'JPG'), dirs_exist_ok=True)
 
 
 def setup(app):

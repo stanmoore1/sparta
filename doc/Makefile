@@ -21,6 +21,10 @@ SPHINXEXTRA    =
 HAS_PDFLATEX   = $(shell command -v latexmk > /dev/null 2>&1 && \
                          command -v pdflatex > /dev/null 2>&1 && echo YES || echo NO)
 HAS_PANDOC     = $(shell command -v pandoc > /dev/null 2>&1 && echo YES || echo NO)
+# macOS has shasum but not GNU coreutils' sha256sum, and SPARTA builds on
+# macOS (src/MAKE/Makefile.mac); take whichever is there.
+SHA256SUM      = $(shell command -v sha256sum > /dev/null 2>&1 \
+                         && echo "sha256sum" || echo "shasum -a 256")
 FASTHTMLFILES  = $(patsubst $(RSTDIR)/%.rst,fasthtml/%.html,$(wildcard $(RSTDIR)/*.rst))
 
 help:
@@ -77,7 +81,7 @@ $(MATHJAX):
 	@tmp=$$(mktemp -d); \
 	 trap 'rm -rf $$tmp' EXIT; \
 	 curl -sSL $(MATHJAXURL) -o $$tmp/mathjax.tgz && \
-	 echo "$(MATHJAXSHA)  $$tmp/mathjax.tgz" | sha256sum -c - > /dev/null && \
+	 echo "$(MATHJAXSHA)  $$tmp/mathjax.tgz" | $(SHA256SUM) -c - > /dev/null && \
 	 tar -xzf $$tmp/mathjax.tgz -C $$tmp && \
 	 mv $$tmp/package $(MATHJAX)
 
@@ -94,7 +98,7 @@ html: $(SPHINXCONFIG)/conf.py $(VENV) $(MATHJAX)
 # LaTeX and its own Makefile into doc/latex; that Makefile drives latexmk,
 # which reruns LaTeX until the cross-references and the table of contents
 # settle.
-pdf: $(SPHINXCONFIG)/conf.py $(VENV)
+pdf: $(SPHINXCONFIG)/conf.py $(VENV) $(MATHJAX)
 	@if [ "$(HAS_PDFLATEX)" = "NO" ]; then \
 	   echo "make pdf needs latexmk and pdflatex" 1>&2; exit 1; fi
 	@. $(VENV)/bin/activate && \

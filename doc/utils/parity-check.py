@@ -26,6 +26,7 @@ import argparse
 import collections
 import html
 import pathlib
+import posixpath
 import re
 import sys
 import unicodedata
@@ -95,6 +96,19 @@ DECLARED = {
     ],
 }
 
+# What MathJax leaves in the static HTML: the LaTeX between \\[..\\] for a
+# displayed equation and \\(..\\) for an inline one.
+MATHJAX_SPAN = re.compile(r'\\\[.*?\\\]|\\\(.*?\\\)', re.S)
+
+# The two equation images that were tables of surface reactions, keyed by
+# page and the start of the text that replaced them.  They are the only
+# sites where something other than maths may stand where an image stood;
+# what they say is checked by equation-check.py.
+EQ_TABLES = {
+    ('surf_react_adsorb.html', 'Symbol Reaction type Examples AA Associative'),
+    ('surf_react_adsorb.html', 'Symbol Reaction type Examples DS Desorption'),
+}
+
 # Where an equation image stood in the old page.  Marking the site lets the
 # equation allowance be scoped to the text that replaced that image, rather
 # than to any smallish difference on a page that happens to contain one.
@@ -148,6 +162,13 @@ def content_only(markup):
     t = SCRIPT.sub(' ', t)
     t = OLD_BANNER.sub(' ', t)
     return CHROME.sub(' ', t)
+
+
+def eq_image_names(markup):
+    """Basenames of the equation images the old page embedded."""
+    return {posixpath.basename(m) for m in
+            re.findall(r'<img\b[^>]*?src\s*=\s*"(?:\./)?(Eqs/[^"]+)"',
+                       markup, re.I)}
 
 
 def visible_text(markup, *, sphinx=None):
@@ -251,9 +272,17 @@ def classify(name, raw, old_run, new_run, allow_equations):
         if o == d_old and n == d_new:
             return key
     # Scoped to the marker: the words have to be what replaced that image,
-    # not merely a difference somewhere on a page that has one.
+    # not merely a difference somewhere on a page that has one.  And what
+    # replaced it has to be maths: without that, a paragraph inserted next
+    # to an equation lands in the same difference and is waved through with
+    # it.  Once the maths is removed nothing may be left over -- except on
+    # the two sites where the image was a table of reactions rather than an
+    # equation, which equation-check.py compares row by row.
     if allow_equations and old_run and all(w == EQ_MARK for w in old_run):
-        return 'equations'
+        if (any(name == p_ and n.startswith(s) for p_, s in EQ_TABLES)
+                or MATHJAX_SPAN.sub('', n).strip() == ''):
+            return 'equations'
+        return None
     if hidden_by_unescaped_lt(raw, old_run, new_run):
         return 'unescaped_lt'
     return None
@@ -304,6 +333,7 @@ def main():
         pages = [p for p in pages if p == args.page or p == args.page + '.html']
 
     missing, text_bad, link_bad, anchor_bad, ok = [], [], [], [], 0
+    figure_bad = []
     dangling = []
     all_new_anchors = {}
     agreed_total = collections.Counter()
@@ -341,6 +371,42 @@ def main():
         internal = lambda L: collections.Counter(
             x for x in L if not x.startswith(('http', 'mailto')))
         oc, nc = internal(links(o)), internal(links(n))
+
+        # External links were left out of the comparison entirely, so a link
+        # retargeted from gnu.org to somewhere else went unreported.  They
+        # are compared on losses only: the manual gains external links --
+        # the unescaped "<" hid some, and two markup typos printed their URL
+        # as text -- and the two generators draw the line between banner and
+        # body differently, so a gained URL is not evidence of anything.  A
+        # URL that stopped being linked always is, and a retargeted link
+        # shows up as the old one lost.
+        external = lambda L: collections.Counter(
+            x for x in L if x.startswith(('http', 'mailto', 'ftp')))
+        e_lost = external(links(o)) - external(links(n))
+        if e_lost:
+            link_bad.append((name + ' (external)', sorted(e_lost.elements()), []))
+            page_ok = False
+
+        # Figures are content.  visible_text drops every tag, so an image
+        # that disappeared left no trace in the words and nothing else was
+        # looking.  Compared by file name, ignoring the directory: Sphinx
+        # republishes them under _images/ while txt2html referenced JPG/
+        # directly.
+        figures = lambda t: collections.Counter(
+            b for b in (posixpath.basename(html.unescape(m.group(1)))
+                        for m in re.finditer(
+                            r'<img\b[^>]*?src\s*=\s*"([^"]*)"',
+                            content_only(t), re.I))
+            if b)
+        fo, fn = figures(o), figures(n)
+        # the equation images are the documented delta; they are gone by
+        # design and equation-check.py is what verifies what replaced them
+        fo = collections.Counter({k: v for k, v in fo.items()
+                                  if k not in eq_image_names(o)})
+        f_lost = fo - fn
+        if f_lost:
+            figure_bad.append((name, sorted(f_lost.elements())))
+            page_ok = False
         # A fragment whose case changed is equivalent only if the anchor it
         # names actually exists in the new build, so both spellings resolve.
         # Verified per link rather than assumed.
@@ -408,12 +474,33 @@ def main():
         if page_ok:
             ok += 1
 
+    # Every file the old manual published under JPG/ has to still be
+    # published.  Six full-size images were dropped during the conversion
+    # and nothing noticed, because no page links to them -- they are the
+    # large versions of thumbnails that are shown inline, reachable only by
+    # typing the URL, which is exactly what an outside link does.  Compared
+    # as an inventory rather than through the pages for that reason.
+    #
+    # Eqs/ is excluded: those images were equations, they are typeset now,
+    # and equation-check.py verifies what replaced each one.
+    assets_lost = []
+    for sub in ('JPG',):
+        o_dir, n_dir = old_dir / sub, new_dir / sub
+        if not o_dir.is_dir():
+            continue
+        have = {f.name for f in n_dir.iterdir()} if n_dir.is_dir() else set()
+        for f in sorted(o_dir.iterdir()):
+            if f.is_file() and f.name not in have:
+                assets_lost.append(f'{sub}/{f.name}')
+
     total = len(pages)
     print(f'\n  pages compared      {total}')
     print(f'  clean               {ok}')
     print(f'  missing in new      {len(missing)}')
     print(f'  text differs        {len(text_bad)}')
     print(f'  link targets moved  {len(link_bad)}')
+    print(f'  figures lost        {len(figure_bad)}')
+    print(f'  published files gone {len(assets_lost)}')
     print(f'  links that 404      {len(dangling)}')
     print(f'  anchors lost        {len(anchor_bad)}')
     if agreed_total:
@@ -434,6 +521,14 @@ def main():
         print('\nANCHORS LOST (inbound links would break):')
         for name, a in anchor_bad[:20]:
             print(f'  {name}: {a[:8]}{" ..." if len(a) > 8 else ""}')
+    if assets_lost:
+        print('\nFILES THE OLD MANUAL PUBLISHED AND THIS BUILD DOES NOT:')
+        for a in assets_lost[:20]:
+            print(f'  {a}')
+    if figure_bad:
+        print('\nFIGURES LOST:')
+        for name, figs in figure_bad[:20]:
+            print(f'  {name}: {figs}')
     if link_bad:
         print('\nLINK TARGETS CHANGED:')
         for name, lost, added in link_bad[:20]:
@@ -451,7 +546,8 @@ def main():
             if len(diffs) > 4:
                 print(f'      ... and {len(diffs) - 4} more on this page')
 
-    failed = bool(missing or text_bad or link_bad or anchor_bad or dangling)
+    failed = bool(missing or text_bad or link_bad or anchor_bad
+                  or dangling or figure_bad or assets_lost)
     print('\n  RESULT: ' + ('PARITY FAILED' if failed else 'PARITY OK'))
     if not failed:
         print('  agreed deltas, in full:')

@@ -183,25 +183,42 @@ jobs:
     - name: Build the manual
       run: make -C doc html SPHINXEXTRA="-W --keep-going"
 
-    - name: Check every internal link resolves
+    - name: Check every internal link and anchor resolves
       run: |
         cd doc
         python3 - <<'PY'
         import pathlib, re, sys, html
         root = pathlib.Path('html')
+
+        def anchors(text):
+            found = set(re.findall(r'<a\b[^>]*?\bname\s*=\s*"([^"]+)"', text, re.I))
+            for tag in re.finditer(r'<[a-zA-Z][^>]*>', text):
+                found |= set(re.findall(r'\bid\s*=\s*"([^"]+)"', tag.group(0), re.I))
+            return found
+
+        have = {p.name: anchors(p.read_text(errors='replace'))
+                for p in root.glob('*.html')}
         bad = []
         for page in sorted(root.glob('*.html')):
             text = page.read_text(errors='replace')
             for m in re.finditer(r'<a\b[^>]*?href\s*=\s*"([^"]*)"', text, re.I):
-                href = html.unescape(m.group(1)).split('#')[0]
-                if not href or href.startswith(('http', 'mailto', 'ftp', 'javascript:')):
+                href = html.unescape(m.group(1))
+                if href.startswith(('http', 'mailto', 'ftp', 'javascript:')):
                     continue
-                if not (root / href).exists():
-                    bad.append(f'{page.name} -> {href}')
-        # Manual.pdf is built separately and dropped in beside the manual
-        bad = [b for b in bad if not b.endswith('Manual.pdf')]
+                target, _, frag = href.partition('#')
+                # Manual.pdf is built separately and dropped in beside the manual
+                if target.endswith('Manual.pdf'):
+                    continue
+                if target and not (root / target).exists():
+                    bad.append(f'{page.name} -> {target} (no such file)')
+                    continue
+                # An anchor is a URL. The migration's stated main risk is
+                # renaming one, and checking only the file would not see it.
+                dest = target or page.name
+                if frag and dest in have and frag not in have[dest]:
+                    bad.append(f'{page.name} -> {href} (no such anchor)')
         for b in sorted(set(bad)):
             print(b)
-        print(f'{len(set(bad))} dead internal link(s)')
+        print(f'{len(set(bad))} dead internal link(s) or anchor(s)')
         sys.exit(1 if bad else 0)
         PY

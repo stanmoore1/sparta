@@ -68,11 +68,31 @@ def norm(s):
     return re.sub(r'\s+', '', s)
 
 
-def reactions(text):
-    """Every $...$ or :math:`...` in a table, normalised for comparison."""
-    out = re.findall(r'\$(.*?)\$', text) + re.findall(r'\\\((.*?)\\\)', text)
-    return sorted(re.sub(r'\s+', '', r).replace('_{2}', '_2').replace('_{3}', '_3')
-                  for r in out)
+def norm_reaction(r):
+    r = re.sub(r'\s+', '', r)
+    return r.replace('_{2}', '_2').replace('_{3}', '_3')
+
+
+def tex_reactions(text):
+    """The reactions in a LaTeX tabular, as a multiset."""
+    body = text.split(r'\begin{tabular}')[-1].split(r'\end{tabular}')[0]
+    return sorted(norm_reaction(r) for r in re.findall(r'\$(.*?)\$', body))
+
+
+def html_tables(text):
+    """Each <table> on a page, as its own multiset of reactions.
+
+    Per table rather than per page: both reaction tables live on the same
+    page, so scanning the whole page cannot tell whether a row landed in
+    the right one.  A multiset rather than a set, so a duplicated or
+    dropped repeat is caught.
+    """
+    out = []
+    for m in re.finditer(r'<table\b.*?</table>', text, re.S | re.I):
+        body = H.unescape(TAG.sub(' ', m.group(0)))
+        out.append(sorted(norm_reaction(r)
+                          for r in re.findall(r'\\\((.*?)\\\)', body)))
+    return [t for t in out if t]
 
 
 def main():
@@ -98,8 +118,13 @@ def main():
         for i, img in enumerate(imgs):
             stem = pathlib.Path(img).stem
             tex = old_dir / 'Eqs' / (stem + '.tex')
-            if stem in NO_SOURCE or not tex.exists():
+            if stem in NO_SOURCE:
                 skipped.append((page, stem))
+                continue
+            if not tex.exists():
+                problems.append((page, stem, 'no .tex in the old tree',
+                                 'nothing to check this against; add it to '
+                                 'NO_SOURCE with a reason if that is right'))
                 continue
             checked += 1
             want, got = norm(tex_body(tex)), norm(eqs[i]) if i < len(eqs) else ''
@@ -120,22 +145,30 @@ def main():
                      if stem in (old_dir / p.name).read_text(errors='replace')), None)
         if not page:
             continue
-        want = reactions(tex.read_text(errors='replace'))
-        got = reactions((new_dir / page).read_text(errors='replace'))
+        want = tex_reactions(tex.read_text(errors='replace'))
+        tables = html_tables((new_dir / page).read_text(errors='replace'))
         checked += 1
-        missing = [r for r in want if r not in got]
-        if not missing:
+        # exactly one table on the page must match this one exactly
+        if want in tables:
             matched += 1
         else:
-            problems.append((page, stem, str(missing), 'not in the new table'))
+            near = min(tables, key=lambda x: len(set(x) ^ set(want)),
+                       default=[])
+            problems.append((page, stem,
+                             f'{len(want)} reactions: ' + ', '.join(want),
+                             f'closest table has {len(near)}: '
+                             + ', '.join(near)))
 
     print(f'  {checked} equations and tables compared with their .tex source')
     print(f'  {matched} match')
     for page, stem in skipped:
-        why = ALLOWED.get(stem.split(' ')[0])
-        if stem.split(' ')[0] in NO_SOURCE:
-            why = 'no .tex was published beside this image'
-        print(f'    ~ {page}: {stem} -- {why}')
+        key = stem.split(' ')[0]
+        why = ALLOWED.get(key)
+        if key in NO_SOURCE:
+            why = ('no .tex was published beside this image; its LaTeX was '
+                   'written during the migration and checked against the '
+                   'published image by eye')
+        print(f'    ~ {page}: {stem} -- {why or "no reason recorded"}')
     for page, stem, want, got in problems:
         print(f'\n  MISMATCH {page}  Eqs/{stem}')
         print(f'    tex: {want[:200]}')
