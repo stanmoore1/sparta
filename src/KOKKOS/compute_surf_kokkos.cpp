@@ -275,6 +275,18 @@ int ComputeSurfKokkos::tallyinfo(surfint *&ptr)
     tally2surf[istart] = tally2surf[iend];
   }
 
+  // the compression above rewrites the host side of both dual views in place
+  //   and the caller consumes the host pointer immediately.  Leaving the pair
+  //   in sync would let the next post_surf_tally()'s modify_device() discard
+  //   the compressed rows -- harmless where both sides are one allocation, a
+  //   silent loss on a GPU, and reported by the watch detector as
+  //   "written, never claimed, and is now lost".  The two sides are
+  //   deliberately different from here until the next clear(), which is what
+  //   clear_sync_state() declares
+
+  k_tally2surf.clear_sync_state();
+  k_array_surf_tally.clear_sync_state();
+
   return ntally;
 }
 

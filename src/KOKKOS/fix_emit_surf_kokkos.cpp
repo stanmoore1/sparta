@@ -130,6 +130,14 @@ FixEmitSurfKokkos::~FixEmitSurfKokkos()
   rand_pool.destroy();
 #endif
 
+  // tasks is the host side of k_tasks, and the last claim on it may have been
+  //   modify_device() (line 887).  Reading path/fracarea to delete them, and
+  //   writing the pointer fields, without first owning the host side is a
+  //   stale access -- poison mode traps all four of these lines on
+  //   examples/emit/in.emit.surf.mflow.  Claim the host before touching it.
+
+  k_tasks.sync_host();
+
   for (int i = 0; i < ntaskmax; i++) {
     tasks[i].ntargetsp = NULL;
     tasks[i].vscale = NULL;

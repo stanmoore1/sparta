@@ -65,7 +65,14 @@ FixAveHistoKokkos::FixAveHistoKokkos(SPARTA *spa, int narg, char **arg) :
   k_stats.resize(4);
   d_stats = k_stats.view_device();
 
-  memory->destroy(bin);
+  // FixAveHisto allocates bin with new double[] (fix_ave_histo.cpp:417) and
+  //   releases it with delete[] (:482).  memory->destroy() routes to sfree()
+  //   and so free()s a new[] allocation -- undefined behaviour, which
+  //   AddressSanitizer reports as alloc-dealloc-mismatch.  The Kokkos build
+  //   replaces the array with a dual view, so release it the way the host
+  //   allocated it before grow_kokkos() takes over
+
+  delete [] bin;
   bin = NULL;
   memoryKK->grow_kokkos(k_bin, bin, nbins, "ave/histo:bin");
   d_bin = k_bin.view_device();

@@ -19,6 +19,7 @@
 #include "update.h"
 #include "collide.h"
 #include "surf.h"
+#include "surf_kokkos.h"
 #include "surf_collide.h"
 #include "random_knuth.h"
 #include "comm.h"
@@ -482,6 +483,18 @@ void SurfReactAdsorbKokkos::tally_update()
   //   (and update_state_surf clears mark)
 
   SurfReactAdsorb::tally_update();
+
+  // update_state_face()/update_state_surf() above rewrite the per-surf custom
+  //   arrays (surf->edvec_local, surf_react_adsorb.cpp:612-613) on the host.
+  //   Nothing here claimed them, so a later SurfKokkos::sync(Device,
+  //   CUSTOM_MASK) finds clean counters, copies nothing, and the device keeps
+  //   the previous step's surface state -- invisible where both sides share
+  //   one allocation, wrong on a GPU.  The watch detector reports it as
+  //   "surf:dvector ... this sync_device has nothing to copy".
+  //   Go through the SurfKokkos wrapper, not the dual views directly, so the
+  //   mask reaches the custom arrays.
+
+  ((SurfKokkos *) surf)->modify(Host,CUSTOM_MASK);
 
   // PS chemistry may have appended particles on the host
 
