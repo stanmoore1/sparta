@@ -87,9 +87,12 @@ class ParticleKokkos : public Particle {
   void zero_custom_kokkos();
 
 #ifndef SPARTA_KOKKOS_EXACT
-  // pool for post_weight_device(); seeded in the ctor, as CollideVSSKokkos
-  //   seeds its own.  only the EXACT path needs to match the host RNG stream
+  // pool for post_weight_device().  only the EXACT path needs to match the
+  //   host RNG stream, so this exists only off EXACT.  unlike every other
+  //   Kokkos class it cannot be seeded in the ctor initializer list -- see
+  //   ParticleKokkos::ParticleKokkos() -- so it is seeded on first use
   Kokkos::Random_XorShift64_Pool<DeviceType> weight_rand_pool;
+  int weight_rand_pool_seeded;
   void post_weight_device();
 
   typedef typename Kokkos::Random_XorShift64_Pool<DeviceType>::generator_type rand_type;
