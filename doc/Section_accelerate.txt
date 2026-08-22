@@ -532,21 +532,32 @@ incurring a performance penalty.
 
 NOTE: Most non-Kokkos styles degrade this way, costing performance but
 still producing correct results.  A few, however, are rejected outright
-and will stop the run.  As of this writing the only such style is
-"compute react/boundary"_compute_react_boundary.html, which has no {kk}
-variant and cannot be used as a boundary tally compute under the KOKKOS
-package.
+and will stop the run, rather than falling back to the host.  Those
+restrictions are documented on the page for the style that imposes them.
 
-NOTE: The KOKKOS package also imposes fixed limits on how many instances
-of certain styles a run may define, because each is captured by value in
-the device kernels.  At most two instances of each
-"surf_react"_surf_react.html style may be defined, and at most two active
-instances of "compute boundary"_compute_boundary.html, "compute
+NOTE: A run may define any number of instances of the styles that the
+device kernels capture -- "surf_collide"_surf_collide.html,
+"surf_react"_surf_react.html, and the per-event tally computes such as
+"compute boundary"_compute_boundary.html, "compute
 surf"_compute_surf.html, "compute isurf/grid"_compute_isurf_grid.html,
-"compute react/surf"_compute_react_surf.html and "compute
-react/isurf/grid"_compute_react_isurf_grid.html.  Exceeding a limit stops
-the run with an explanatory message.  There is no longer a limit on the
-number of "surf_collide"_surf_collide.html instances.
+"compute react/boundary"_compute_react_boundary.html, "compute
+react/surf"_compute_react_surf.html and "compute
+react/isurf/grid"_compute_react_isurf_grid.html.  Each is held in a
+runtime-sized device buffer, so there is no compile-time cap.  The one
+remaining exception is that at most two "compute
+surf"_compute_surf.html instances may tally for a single "fix
+emit/surf"_fix_emit_surf.html; exceeding that stops the run with an
+explanatory message.
+
+NOTE: Building with -DSPARTA_KOKKOS_FIXED_LISTS instead holds those
+styles in fixed-size arrays inside the kernel functor, which restores
+the former caps: at most two instances of each
+"surf_react"_surf_react.html style, at most four surf react models in
+total, at most two active instances of each per-event tally compute
+listed above, and at most four gas-phase tally computes.  The two
+layouts produce identical results; which is faster is a
+hardware-dependent question, so both are kept so they can be compared
+by rebuilding.
 
 [Run with the KOKKOS package by editing an input script:]
 
