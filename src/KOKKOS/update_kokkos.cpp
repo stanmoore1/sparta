@@ -487,6 +487,7 @@ void UpdateKokkos::run(int nsteps)
 
   DatamaskAudit::enable(0);
   DatamaskAudit::report(sparta);
+  kk_copystats_report();
 
   modify->post_run();
 

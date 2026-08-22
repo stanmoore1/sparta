@@ -33,6 +33,7 @@ class DatamaskAudit {
   static void enable(int) {}
   static void note_modified(unsigned int) {}
   static void note_synced(unsigned int) {}
+  void note_claim_one(const void *) {}
   static void report(SPARTA *) {}
   static void trace_end(const char *, const char *) {}
 };
@@ -90,6 +91,9 @@ class DatamaskAudit {
 
   // called from the dual view once a sync has written the device side
   void rebaseline_one(const void *device_data);
+
+  // a claim made straight on a dual view, matched to its array by data pointer
+  void note_claim_one(const void *device_data);
   static void report(SPARTA *sparta);
   static void trace_end(const char *what, const char *style);
 
