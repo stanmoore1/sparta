@@ -34,9 +34,11 @@ using namespace SPARTA_NS;
 /* ---------------------------------------------------------------------- */
 
 ComputeSurfKokkos::ComputeSurfKokkos(SPARTA *sparta, int narg, char **arg) :
-  ComputeSurf(sparta, narg, arg),
-  sr_kk_global_copy{VAL_2(KKCopy<SurfReactGlobalKokkos>(sparta))},
-  sr_kk_prob_copy{VAL_2(KKCopy<SurfReactProbKokkos>(sparta))}
+  ComputeSurf(sparta, narg, arg)
+#ifdef SPARTA_KOKKOS_FIXED_LISTS
+  , sr_kk_global_copy{VAL_2(KKCopy<SurfReactGlobalKokkos>(sparta))}
+  , sr_kk_prob_copy{VAL_2(KKCopy<SurfReactProbKokkos>(sparta))}
+#endif
 {
   kokkos_flag = 1;
   compressed = 0;
@@ -44,9 +46,11 @@ ComputeSurfKokkos::ComputeSurfKokkos(SPARTA *sparta, int narg, char **arg) :
 }
 
 ComputeSurfKokkos::ComputeSurfKokkos(SPARTA *sparta) :
-  ComputeSurf(sparta),
-  sr_kk_global_copy{VAL_2(KKCopy<SurfReactGlobalKokkos>(sparta))},
-  sr_kk_prob_copy{VAL_2(KKCopy<SurfReactProbKokkos>(sparta))}
+  ComputeSurf(sparta)
+#ifdef SPARTA_KOKKOS_FIXED_LISTS
+  , sr_kk_global_copy{VAL_2(KKCopy<SurfReactGlobalKokkos>(sparta))}
+  , sr_kk_prob_copy{VAL_2(KKCopy<SurfReactProbKokkos>(sparta))}
+#endif
 {
   copy = 1;
   compressed = 0;
@@ -142,8 +146,21 @@ void ComputeSurfKokkos::pre_surf_tally()
   else
     ndup_array_surf_tally = Kokkos::Experimental::create_scatter_view<typename Kokkos::Experimental::ScatterSum, typename Kokkos::Experimental::ScatterNonDuplicated>(d_array_surf_tally);
 
+#ifdef SPARTA_KOKKOS_FIXED_LISTS
   if (surf->nsr > KOKKOS_MAX_TOT_SURF_REACT)
     error->all(FLERR,"Kokkos currently supports a limited number of surface reaction methods");
+#else
+
+  // the buffers must be sized before anything is blitted into them.  surf->nsr
+  //   bounds the count of every individual style, so sizing both of them to it
+  //   needs no counting pass, and the loop below still runs pre_react() in
+  //   surf react list order
+
+  sr_idx_resize(k_sr_type_list,d_sr_type_list,surf->nsr);
+  sr_idx_resize(k_sr_map,d_sr_map,surf->nsr);
+  sr_buf_resize<SurfReactGlobalKokkos>(k_sr_global,d_sr_global,surf->nsr);
+  sr_buf_resize<SurfReactProbKokkos>(k_sr_prob,d_sr_prob,surf->nsr);
+#endif
 
   if (surf->nsr > 0) {
     int nglob,nprob;
@@ -152,25 +169,44 @@ void ComputeSurfKokkos::pre_surf_tally()
       if (!surf->sr[n]->kokkosable)
         error->all(FLERR,"Must use Kokkos-enabled surface reaction method with Kokkos");
       if (strcmp(surf->sr[n]->style,"global") == 0) {
+#ifdef SPARTA_KOKKOS_FIXED_LISTS
         if (nglob >= KOKKOS_MAX_SURF_REACT_PER_TYPE)
           error->all(FLERR,"Kokkos currently supports two instances of each surface reaction method");
         sr_kk_global_copy[nglob].copy((SurfReactGlobalKokkos*)(surf->sr[n]));
-        sr_kk_global_copy[nglob].obj.pre_react();
-        sr_type_list[n] = 0;
-        sr_map[n] = nglob;
+#else
+        sr_buf_blit(k_sr_global,nglob,(SurfReactGlobalKokkos*)(surf->sr[n]));
+#endif
+        KK_SR_H_GLOBAL(nglob).pre_react();
+        KK_SR_H_TYPE(n) = 0;
+        KK_SR_H_MAP(n) = nglob;
         nglob++;
       } else if (strcmp(surf->sr[n]->style,"prob") == 0) {
+#ifdef SPARTA_KOKKOS_FIXED_LISTS
         if (nprob >= KOKKOS_MAX_SURF_REACT_PER_TYPE)
           error->all(FLERR,"Kokkos currently supports two instances of each surface reaction method");
         sr_kk_prob_copy[nprob].copy((SurfReactProbKokkos*)(surf->sr[n]));
-        sr_kk_prob_copy[nprob].obj.pre_react();
-        sr_type_list[n] = 1;
-        sr_map[n] = nprob;
+#else
+        sr_buf_blit(k_sr_prob,nprob,(SurfReactProbKokkos*)(surf->sr[n]));
+#endif
+        KK_SR_H_PROB(nprob).pre_react();
+        KK_SR_H_TYPE(n) = 1;
+        KK_SR_H_MAP(n) = nprob;
         nprob++;
       } else {
         error->all(FLERR,"Unknown Kokkos surface reaction method");
       }
     }
+
+#ifndef SPARTA_KOKKOS_FIXED_LISTS
+
+    // the models were blitted into the host image of the buffers and their
+    //   pre_react() ran there; push the result to the device
+
+    sr_buf_sync(k_sr_global,d_sr_global);
+    sr_buf_sync(k_sr_prob,d_sr_prob);
+    sr_idx_sync(k_sr_type_list,d_sr_type_list);
+    sr_idx_sync(k_sr_map,d_sr_map);
+#endif
   }
 }
 
@@ -192,8 +228,8 @@ void ComputeSurfKokkos::post_surf_tally()
   //  orphaned and its allocation never freed
 
   for (int n = 0; n < surf->nsr; n++) {
-    if (sr_type_list[n] == 0) sr_kk_global_copy[sr_map[n]].obj.post_react();
-    else sr_kk_prob_copy[sr_map[n]].obj.post_react();
+    if (KK_SR_H_TYPE(n) == 0) KK_SR_H_GLOBAL(KK_SR_H_MAP(n)).post_react();
+    else KK_SR_H_PROB(KK_SR_H_MAP(n)).post_react();
   }
 }
 

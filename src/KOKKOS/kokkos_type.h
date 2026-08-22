@@ -24,6 +24,8 @@
 #include "spatype.h"
 #include "accelerator_kokkos_defs.h"
 
+#include <cstring>
+
 // offset type for the Kokkos::Crs per-cell surf/split/sub lists.
 // Under BIGBIG the total number of flattened entries on one rank can exceed
 //   2^31, so the row_map offsets must be a bigint.  Under BIG they cannot, and
@@ -40,10 +42,11 @@ typedef int crs_size_type;
 #define NeighClusterSize 8
 
 // SPARTA_KOKKOS_FIXED_LISTS restores the original fixed-size KKCopy arrays for
-//   the per-type tally compute lists, in place of the runtime-sized device
-//   buffers that replaced them.  The buffers exist to lift the instance caps
-//   below; the fixed arrays keep every compute inside the functor that is
-//   handed by value to each kernel.
+//   the per-type tally compute lists and for the per-style surf react lists,
+//   in place of the runtime-sized device buffers that replaced them.  The
+//   buffers exist to lift the instance caps below; the fixed arrays keep every
+//   compute and surf react model inside the functor that is handed by value to
+//   each kernel.
 // Which is faster is a GPU question with no obvious answer: a smaller functor
 //   can raise occupancy while costing data locality, and higher occupancy is
 //   not the same thing as higher throughput.  Neither path has been measured
@@ -55,6 +58,8 @@ typedef int crs_size_type;
 #define KOKKOS_MAX_SLIST 2
 #define KOKKOS_MAX_BLIST 2
 #define KOKKOS_MAX_GLIST 4
+#define KOKKOS_MAX_SURF_REACT_PER_TYPE 2
+#define KOKKOS_MAX_TOT_SURF_REACT 4
 #endif
 
 // architectures where the move kernel is dispatched with ATOMIC_REDUCTION = -1
@@ -71,8 +76,51 @@ typedef int crs_size_type;
 #define SPARTA_KOKKOS_REDUCE_ARCH 0
 #endif
 
-#define KOKKOS_MAX_SURF_REACT_PER_TYPE 2
-#define KOKKOS_MAX_TOT_SURF_REACT 4
+// the active surf react models, as named by the eight classes that dispatch to
+//   them: compute surf, and the seven surf collide models that support surface
+//   chemistry.  Both representations are reached through these accessors, so
+//   the device dispatch site in each of those classes is written exactly once
+//   and the two modes cannot drift:
+//
+//     KK_SR_*    read on device, from the model's collide_kokkos()
+//     KK_SR_H_*  the host image of the same models, used by the
+//                pre_react()/post_react()/backup()/restore() lifecycle
+//
+//   under SPARTA_KOKKOS_FIXED_LISTS both are the same fixed KKCopy arrays, held
+//   by value in the class; otherwise the device side reads the per-style device
+//   buffer and the host side the host half of the same DualView.
+// the accessors expand to member accesses only, and all eight classes spell
+//   those members identically, so one definition here serves every one of them.
+
+#ifdef SPARTA_KOKKOS_FIXED_LISTS
+
+#define KK_SR_TYPE(n)     sr_type_list[n]
+#define KK_SR_MAP(n)      sr_map[n]
+#define KK_SR_GLOBAL(m)   sr_kk_global_copy[m].obj
+#define KK_SR_PROB(m)     sr_kk_prob_copy[m].obj
+#define KK_SR_ADSORB(m)   sr_kk_adsorb_copy[m].obj
+
+#define KK_SR_H_TYPE(n)   sr_type_list[n]
+#define KK_SR_H_MAP(n)    sr_map[n]
+#define KK_SR_H_GLOBAL(m) sr_kk_global_copy[m].obj
+#define KK_SR_H_PROB(m)   sr_kk_prob_copy[m].obj
+#define KK_SR_H_ADSORB(m) sr_kk_adsorb_copy[m].obj
+
+#else
+
+#define KK_SR_TYPE(n)     d_sr_type_list[n]
+#define KK_SR_MAP(n)      d_sr_map[n]
+#define KK_SR_GLOBAL(m)   ((const SurfReactGlobalKokkos *) d_sr_global.data())[m]
+#define KK_SR_PROB(m)     ((const SurfReactProbKokkos *) d_sr_prob.data())[m]
+#define KK_SR_ADSORB(m)   ((const SurfReactAdsorbKokkos *) d_sr_adsorb.data())[m]
+
+#define KK_SR_H_TYPE(n)   k_sr_type_list.view_host()[n]
+#define KK_SR_H_MAP(n)    k_sr_map.view_host()[n]
+#define KK_SR_H_GLOBAL(m) ((SurfReactGlobalKokkos *) k_sr_global.view_host().data())[m]
+#define KK_SR_H_PROB(m)   ((SurfReactProbKokkos *) k_sr_prob.view_host().data())[m]
+#define KK_SR_H_ADSORB(m) ((SurfReactAdsorbKokkos *) k_sr_adsorb.view_host().data())[m]
+
+#endif
 
 namespace Kokkos {
   static auto NoInit = [](std::string const& label) {
@@ -776,6 +824,68 @@ namespace SPARTA_NS {
   typedef Kokkos::DualView<struct_tdual_int_2d*, DeviceType::array_layout, DeviceType> tdual_struct_tdual_int_2d_1d;
   typedef Kokkos::DualView<struct_tdual_float_2d*, DeviceType::array_layout, DeviceType> tdual_struct_tdual_float_2d_1d;
 }
+
+#ifndef SPARTA_KOKKOS_FIXED_LISTS
+
+// the per-style device buffers behind the KK_SR_* accessors above, and the two
+//   index lists that map a surf react index to a style and to a slot within it.
+// blitting a model into a buffer is the same operation, for the same reason, as
+//   KKCopy::copy() (kokkos_copy.h:71): on device the model is only read, through
+//   KOKKOS_INLINE_FUNCTION members, so its vtable pointer is never used and the
+//   Views it carries stay alive in the original that surf->sr holds.  The host
+//   lifecycle calls are made on the host half of the same bytes -- a valid
+//   object of the class as far as the host is concerned, its vtable pointer
+//   copied from a live instance -- and pushed to the device by sr_buf_sync().
+// shared here rather than repeated in each of the eight classes that carry
+//   these lists, since all eight set them up the same way.
+
+namespace SPARTA_NS {
+
+  template<class T>
+  void sr_buf_resize(DAT::tdual_char_1d &k, DAT::t_char_1d &d, int n)
+  {
+    const size_t need = (size_t) (n > 0 ? n : 1) * sizeof(T);
+    if (k.view_device().extent(0) < need) {
+      k = DAT::tdual_char_1d("surf_react:models",need);
+      d = k.view_device();
+    }
+  }
+
+  template<class T>
+  void sr_buf_blit(DAT::tdual_char_1d &k, int slot, T *obj)
+  {
+    char *dst = k.view_host().data() + (size_t) slot*sizeof(T);
+    memcpy((void*) dst, (const void*) obj, sizeof(T));
+    ((T *) dst)->copy = 1;
+  }
+
+  inline void sr_buf_sync(DAT::tdual_char_1d &k, DAT::t_char_1d &d)
+  {
+    if (k.view_device().extent(0) == 0) return;
+    k.modify_host();
+    k.sync_device();
+    d = k.view_device();
+  }
+
+  inline void sr_idx_resize(DAT::tdual_int_1d &k, DAT::t_int_1d &d, int n)
+  {
+    const size_t need = (size_t) (n > 0 ? n : 1);
+    if (k.view_device().extent(0) < need) {
+      k = DAT::tdual_int_1d("surf_react:index",need);
+      d = k.view_device();
+    }
+  }
+
+  inline void sr_idx_sync(DAT::tdual_int_1d &k, DAT::t_int_1d &d)
+  {
+    if (k.view_device().extent(0) == 0) return;
+    k.modify_host();
+    k.sync_device();
+    d = k.view_device();
+  }
+}
+
+#endif
 
 template<class DeviceType, class BufferView, class DualView>
 void buffer_view(BufferView &buf, DualView &view,
