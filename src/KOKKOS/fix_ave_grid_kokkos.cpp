@@ -22,6 +22,7 @@
 #include "update.h"
 #include "modify.h"
 #include "compute.h"
+#include "fix.h"
 #include "input.h"
 #include "variable.h"
 #include "memory_kokkos.h"
@@ -256,23 +257,89 @@ void FixAveGridKokkos::end_of_step()
       }
 
     // access fix fields, guaranteed to be ready
+    // two paths, mirroring the host loop in FixAveGrid::end_of_step():
+    //   fast path: the fix publishes its per-grid output as a device view
+    //     (KokkosBase::d_vector_grid / d_array_grid), so accumulate on device
+    //     with the same kernels used for computes.  do NOT gate this on
+    //     fix->kokkos_flag: fix field/grid/kk deliberately clears kokkos_flag
+    //     (its variable evaluation is host-only) yet still publishes a valid
+    //     device array, while fix ave/grid/kk clears it in its PERGRIDSURF
+    //     flavor precisely because the device views are not allocated there.
+    //     the presence of a non-empty device view is the accurate test
+    //   fallback: no usable device view (a non-Kokkos fix such as fix ablate,
+    //     or the PERGRIDSURF flavor of fix ave/grid), so add the host
+    //     per-grid output into the host tally and push it to the device,
+    //     the same round trip the VARIABLE branch below performs
 
     } else if (which[m] == FIX) {
-      error->all(FLERR,"Cannot (yet) use fixes with fix ave/grid/kk");
-      //k = umap[m][0];
-      //if (j == 0) {
-      //  double *d_fix_vector = modify->fix[n]->vector_grid; // need Kokkos version
-      //  Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagFixAveGrid_Add_fix_vector>(0,nglocal),*this);
-      //} else {
-      //  int jm1 = j - 1;
-      //  double **fix_array = modify->fix[n]->array_grid; // need Kokkos version
-      //  Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagFixAveGrid_Add_fix_array>(0,nglocal),*this);
-      //}
+      Fix *ifix = modify->fix[n];
+      KokkosBase *fixKKBase = dynamic_cast<KokkosBase*>(ifix);
+      k = umap[m][0];
+
+      if (j == 0) {
+        int device_ok = fixKKBase && fixKKBase->d_vector_grid.data() &&
+          (int) fixKKBase->d_vector_grid.extent(0) >= nglocal;
+
+        if (device_ok) {
+          d_fix_vector = fixKKBase->d_vector_grid;
+          Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagFixAveGrid_Add_fix_vector>(0,nglocal),*this);
+        } else {
+          double *fix_vector = ifix->vector_grid;
+          if (nglocal && !fix_vector)
+            error->all(FLERR,"Fix used by fix ave/grid/kk does not produce "
+                       "a per-grid vector");
+
+          // the tally was last written on the device this step (zeroed and/or
+          // accumulated by the kernels above), so mark it device-modified and
+          // pull it to the host before adding to it, then push the sum back;
+          // otherwise the host add would operate on stale values and the
+          // sync_device() would clobber the on-device accumulation
+
+          k_tally.modify_device();
+          k_tally.sync_host();
+          for (int i = 0; i < nglocal; i++)
+            tally[i][k] += fix_vector[i];
+          k_tally.modify_host();
+          k_tally.sync_device();
+        }
+
+      } else {
+        jm1 = j - 1;
+        int device_ok = fixKKBase && fixKKBase->d_array_grid.data() &&
+          (int) fixKKBase->d_array_grid.extent(0) >= nglocal &&
+          (int) fixKKBase->d_array_grid.extent(1) > jm1;
+
+        if (device_ok) {
+          d_fix_array = fixKKBase->d_array_grid;
+          Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagFixAveGrid_Add_fix_array>(0,nglocal),*this);
+        } else {
+          double **fix_array = ifix->array_grid;
+          if (nglocal && !fix_array)
+            error->all(FLERR,"Fix used by fix ave/grid/kk does not produce "
+                       "a per-grid array");
+
+          k_tally.modify_device();
+          k_tally.sync_host();
+          for (int i = 0; i < nglocal; i++)
+            tally[i][k] += fix_array[i][jm1];
+          k_tally.modify_host();
+          k_tally.sync_device();
+        }
+      }
 
     // evaluate grid-style variable, sum values to Kth column of tally array
 
     } else if (which[m] == VARIABLE) {
       k = umap[m][0];
+
+      // compute_grid() with sumflag = 1 adds into the host tally, so the host
+      //   copy has to be current first: earlier values in this same command
+      //   accumulate on the device, and k_tally is not marked device-modified
+      //   until after this loop.  Without the pull-down the sum would read
+      //   stale values and the push-back would clobber the device work
+
+      k_tally.modify_device();
+      k_tally.sync_host();
       input->variable->compute_grid(n,&tally[0][k],ntotal,1);
       k_tally.modify_host();
       k_tally.sync_device();
