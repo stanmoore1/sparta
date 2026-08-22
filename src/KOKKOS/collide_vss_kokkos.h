@@ -251,11 +251,10 @@ class CollideVSSKokkos : public CollideVSS {
   //   a unique, deterministic, contention-free row index -- no UniqueToken
   //   needed.  Sized (nglocal, ngroups) alongside d_glist, which they cost
   //   1/d_plist.extent(1) as much as.
-  //   d_gcount is used by both group kernels; d_gcursor only by the ambipolar
-  //   one, whose group lists are static and are filled in one pass.
+  //   both group kernels build their lists with addgroup_kk(), which keeps
+  //   d_gcount and d_p2g in step, so no separate fill cursor is needed.
 
   Kokkos::View<int**,DeviceType> d_gcount;   // (cell, group) -> # in group
-  Kokkos::View<int**,DeviceType> d_gcursor;  // (cell, group) -> fill cursor
 
   // near-neighbor partner history for the two groups of the current pair;
   //   the host reallocates these per pair via set_nn_group()

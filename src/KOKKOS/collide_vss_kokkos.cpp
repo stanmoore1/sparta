@@ -553,8 +553,8 @@ void CollideVSSKokkos::collisions()
     }
 
   // multiple groups
-  // the plain group path supports reactions and near-neighbor selection;
-  //   the ambipolar group path still assumes static group membership
+  // both the plain and the ambipolar group paths support reactions; the
+  //   plain one also supports near-neighbor selection
 
   } else {
     // unreachable: init() above already aborts this combination, matching the
@@ -573,9 +573,6 @@ void CollideVSSKokkos::collisions()
         else collisions_group<1,1>(reduce);
       }
     } else if (ambiflag) {
-      if (react)
-        error->all(FLERR,"Kokkos does not (yet) support reacting group collisions "
-                   "with the ambipolar approximation");
       if (!ngas_tally) {
         collisions_group_ambipolar<0>(reduce);
       } else if (ngas_tally) {
@@ -2377,9 +2374,13 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroup< NEARCP, GASTALLY, A
 
 /* ----------------------------------------------------------------------
    NTC algorithm for multiple groups with ambipolar approximation
-   Kokkos version supports only the non-reacting case, so group membership
-     and the electron list are static within the timestep and no particles
-     are created or destroyed
+   supports reactions: group membership, the electron list and the cell
+     particle list all change inside the kernel as reactions rebin, create
+     and destroy particles
+   ports Collide::collisions_group_ambipolar() (collide.cpp:1727-2135); the
+     order in which the lists are mutated is load bearing, because rebinning
+     changes which index a later random draw lands on, so every add/del is
+     placed exactly where the host places it
 ------------------------------------------------------------------------- */
 
 template < int GASTALLY >
@@ -2406,9 +2407,8 @@ void CollideVSSKokkos::collisions_group_ambipolar(COLLIDE_REDUCE &reduce)
   d_plist = grid_kk->d_plist;
 
   // allocate per-cell group scratch arrays (see collisions_group)
-
-  // d_glist is per group since reacting group collisions need mutable group
-  //   lists; this path keeps its groups static but shares the view
+  // one region per group, each able to hold the whole cell: a reaction can
+  //   move every particle of a cell into the same group
 
   if (int(d_glist.extent(0)) < nglocal ||
       int(d_glist.extent(1)) < ngroups ||
@@ -2418,47 +2418,214 @@ void CollideVSSKokkos::collisions_group_ambipolar(COLLIDE_REDUCE &reduce)
       int(d_nattempt_pair.extent(1)) < ngroups)
     MemKK::realloc_kokkos(d_nattempt_pair,"collide:nattempt_pair",nglocal,ngroups,ngroups);
 
-  // per-cell group counters and list-fill cursors, formerly per-thread stack
-  //   arrays with a compile-time group cap.  d_gcount is shared with
-  //   collisions_group(); d_gcursor is only used here
+  // per-cell group counters, formerly per-thread stack arrays with a
+  //   compile-time group cap.  shared with collisions_group()
 
   if (int(d_gcount.extent(0)) < nglocal ||
       int(d_gcount.extent(1)) < ngroups)
     MemKK::realloc_kokkos(d_gcount,"collide:gcount",nglocal,ngroups);
-  if (int(d_gcursor.extent(0)) < nglocal ||
-      int(d_gcursor.extent(1)) < ngroups)
-    MemKK::realloc_kokkos(d_gcursor,"collide:gcursor",nglocal,ngroups);
-
-  // per-cell electron list; non-reacting so nelectron <= cell particle count
-
-  maxcellcount = particle_kk->get_maxcellcount();
-  if (int(d_elist.extent(0)) < nglocal || int(d_elist.extent(1)) < maxcellcount) {
-    d_elist = t_particle_2d(); // reduce memory use by deallocating first
-    d_elist = t_particle_2d(Kokkos::view_alloc("collide:elist",Kokkos::WithoutInitializing),nglocal,maxcellcount);
-  }
 
   copymode = 1;
 
-  // no particles are created or destroyed for non-reacting group collisions
+  // reactions can create or delete particles and electrons, so this needs the
+  //   same grow-and-repeat loop the other reacting paths use: a Kokkos view
+  //   cannot be grown inside a parallel loop, so the kernel raises d_retry and
+  //   returns, the host reallocates, and the pass runs again
 
-  ndelete = 0;
+  h_retry() = 1;
 
-  h_error_flag() = 0;
-  Kokkos::deep_copy(d_scalars,h_scalars);
-  Kokkos::deep_copy(d_scalars_big,h_scalars_big);
+  // the elist of split-off ambipolar electrons must be allocated whether or
+  //   not reactions are defined: ambipolar collisions create a temporary
+  //   electron for every ambipolar ion on every timestep.  only the extra
+  //   sizing for reaction-created particles and deletions is react-specific
 
-  grid_kk_copy.copy(grid_kk);
+  double extra_factor = 1.0;
+  if (react && sparta->kokkos->react_retry_flag)
+    extra_factor = sparta->kokkos->react_extra;
 
-  if (sparta->kokkos->atomic_reduction) {
-    if (sparta->kokkos->need_atomics)
-      Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagCollideCollisionsGroupAmbipolar<GASTALLY,1> >(0,nglocal),*this);
-    else
-      Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagCollideCollisionsGroupAmbipolar<GASTALLY,0> >(0,nglocal),*this);
-  } else
-    Kokkos::parallel_reduce(Kokkos::RangePolicy<DeviceType, TagCollideCollisionsGroupAmbipolar<GASTALLY,-1> >(0,nglocal),*this,reduce);
+  maxcellcount = particle_kk->get_maxcellcount();
 
-  Kokkos::deep_copy(h_scalars,d_scalars);
-  Kokkos::deep_copy(h_scalars_big,d_scalars_big);
+  int maxelectron_extra = maxcellcount*extra_factor;
+  if (int(d_elist.extent(0)) < nglocal || int(d_elist.extent(1)) < maxelectron_extra) {
+    d_elist = t_particle_2d(); // reduce memory use by deallocating first
+    d_elist = t_particle_2d(Kokkos::view_alloc("collide:elist",Kokkos::WithoutInitializing),nglocal,maxelectron_extra);
+  }
+
+  if (react) {
+    // form the product in double and check it before it becomes an int,
+    //   dellist is indexed by an int
+
+    if (maxdelete*extra_factor > MAXSMALLINT)
+      error->one(FLERR,"Per-processor delete count is too big");
+    int maxdelete_extra = maxdelete*extra_factor;
+    if (d_dellist.extent(0) < maxdelete_extra) {
+      memoryKK->destroy_kokkos(k_dellist,dellist);
+      memoryKK->grow_kokkos(k_dellist,dellist,maxdelete_extra,"collide:dellist");
+      d_dellist = k_dellist.view_device();
+    }
+
+    int maxcellcount_extra = maxcellcount*extra_factor;
+    if (d_plist.extent(1) < maxcellcount_extra) {
+      d_plist = {};
+      Kokkos::resize(grid_kk->d_plist,nglocal,maxcellcount_extra);
+      d_plist = grid_kk->d_plist;
+      grow_group_lists();
+    }
+
+    bigint nlocal_extra = static_cast<bigint> (particle->nlocal*extra_factor);
+    if (nlocal_extra > MAXSMALLINT)
+      error->one(FLERR,"Per-processor particle count is too big");
+    if ((bigint) d_particles.extent(0) < nlocal_extra) {
+      particle->grow(nlocal_extra - particle->nlocal);
+      particle_kk->sync(Device,PARTICLE_MASK|SPECIES_MASK|CUSTOM_MASK);
+      d_particles = particle_kk->k_particles.view_device();
+      auto h_ewhich = particle_kk->k_ewhich.view_host();
+      k_eivec = particle_kk->k_eivec;
+      k_eiarray = particle_kk->k_eiarray;
+      k_edarray = particle_kk->k_edarray;
+      d_ionambi = k_eivec.view_host()[h_ewhich[index_ionambi]].k_view.view_device();
+      d_velambi = k_edarray.view_host()[h_ewhich[index_velambi]].k_view.view_device();
+    }
+  }
+
+  // a per-event gas tally compute can force a retry of its own, and a retry
+  //   re-runs the collision pass over the same particles.  that is only sound
+  //   if the particle list can be rolled back first, so the backup is not
+  //   gated on react/retry when one of those computes is active
+
+  const int tally_backup = (nglist_coll_tally || nglist_react_tally);
+  const int do_backup =
+    (react && sparta->kokkos->react_retry_flag) || tally_backup;
+
+  if (tally_backup) rewind_gas_tally_computes(1);
+
+  while (h_retry()) {
+
+    if (do_backup) backup();
+
+    // discard the rows an aborted attempt appended, including an attempt
+    //   repeated for a reaction overflow rather than a tally overflow
+
+    if (tally_backup) rewind_gas_tally_computes(0);
+
+    h_retry() = 0;
+    h_maxelectron() = maxelectron;
+    h_maxdelete() = maxdelete;
+    h_maxcellcount() = maxcellcount;
+    h_part_grow() = 0;
+    h_ndelete() = 0;
+    h_nlocal() = particle->nlocal;
+    h_error_flag() = 0;
+
+    Kokkos::deep_copy(d_scalars,h_scalars);
+    Kokkos::deep_copy(d_scalars_big,h_scalars_big);
+
+    grid_kk_copy.copy(grid_kk);
+    if (react) {
+      ReactQKKokkos* react_qk = dynamic_cast<ReactQKKokkos*>(react);
+      ReactTCEQKKokkos* react_tceqk = dynamic_cast<ReactTCEQKKokkos*>(react);
+      if (react_tceqk) {
+        react_style = 2;
+        react_tceqk_kk_copy.copy(react_tceqk);
+      } else if (react_qk) {
+        react_style = 1;
+        react_qk_kk_copy.copy(react_qk);
+      } else {
+        react_style = 0;
+        react_kk_copy.copy((ReactTCEKokkos*) react);
+      }
+    }
+
+    // zero the custom attributes of the slots a reaction can fill
+    // must precede the kernel, not follow it: ambi_reset_kokkos() sets the
+    //   ion flag of the third product the reaction just created, and
+    //   EEXCHANGE_ReactingEDisposal() sets its vibrational mode levels
+
+    if (react) particle_kk->zero_custom_kokkos();
+
+    if (sparta->kokkos->atomic_reduction) {
+      if (sparta->kokkos->need_atomics)
+        Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagCollideCollisionsGroupAmbipolar<GASTALLY,1> >(0,nglocal),*this);
+      else
+        Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagCollideCollisionsGroupAmbipolar<GASTALLY,0> >(0,nglocal),*this);
+    } else
+      Kokkos::parallel_reduce(Kokkos::RangePolicy<DeviceType, TagCollideCollisionsGroupAmbipolar<GASTALLY,-1> >(0,nglocal),*this,reduce);
+
+    Kokkos::deep_copy(h_scalars,d_scalars);
+    Kokkos::deep_copy(h_scalars_big,d_scalars_big);
+
+    // a per-event gas tally compute ran out of room: grow it and repeat the
+    //   pass.  unlike a reaction overflow this needs no react/retry opt-in,
+    //   and clear_gas_tally() below already discards the aborted pass
+
+    if (h_tally_overflow() && !h_retry()) {
+      grow_gas_tally_computes();
+      if (do_backup) restore();
+      if (ngas_tally) clear_gas_tally();
+      Kokkos::deep_copy(h_scalars,0);
+      Kokkos::deep_copy(h_scalars_big,0);
+      reduce = COLLIDE_REDUCE();
+      h_retry() = 1;
+      continue;
+    }
+
+    if (h_retry()) {
+      if (!do_backup) {
+        error->one(FLERR,"Ran out of space in Kokkos collisions, increase react/extra"
+                         " or use react/retry");
+      } else
+        restore();
+
+      // undo gas tally events from the aborted pass before the kernel re-runs
+
+      if (ngas_tally) clear_gas_tally();
+
+      reduce = COLLIDE_REDUCE();
+
+      maxelectron = h_maxelectron();
+      if (int(d_elist.extent(1)) < maxelectron) {
+        d_elist = t_particle_2d(); // reduce memory use by deallocating first
+        d_elist = t_particle_2d(Kokkos::view_alloc("collide:elist",Kokkos::WithoutInitializing),nglocal,maxelectron);
+      }
+
+      maxdelete = h_maxdelete();
+      if (d_dellist.extent(0) < maxdelete) {
+        memoryKK->destroy_kokkos(k_dellist,dellist);
+        memoryKK->grow_kokkos(k_dellist,dellist,maxdelete,"collide:dellist");
+        d_dellist = k_dellist.view_device();
+      }
+
+      maxcellcount = h_maxcellcount();
+      particle_kk->set_maxcellcount(maxcellcount);
+      if (d_plist.extent(1) < maxcellcount) {
+        d_plist = {};
+        Kokkos::resize(grid_kk->d_plist,nglocal,maxcellcount);
+        d_plist = grid_kk->d_plist;
+        grow_group_lists();
+      }
+
+      auto nlocal_new = h_nlocal();
+      if (d_particles.extent(0) < nlocal_new) {
+        particle->grow(nlocal_new - particle->nlocal);
+        particle_kk->sync(Device,PARTICLE_MASK|SPECIES_MASK|CUSTOM_MASK);
+        d_particles = particle_kk->k_particles.view_device();
+        auto h_ewhich = particle_kk->k_ewhich.view_host();
+        k_eivec = particle_kk->k_eivec;
+        k_eiarray = particle_kk->k_eiarray;
+        k_edarray = particle_kk->k_edarray;
+        d_ionambi = k_eivec.view_host()[h_ewhich[index_ionambi]].k_view.view_device();
+        d_velambi = k_edarray.view_host()[h_ewhich[index_velambi]].k_view.view_device();
+      }
+    }
+  }
+
+  ndelete = h_ndelete();
+
+  // publish the particles the reactions created: the kernel appended them to
+  //   the device list and counted them in d_nlocal, but until nlocal is
+  //   carried back the host cannot see them
+
+  particle->nlocal = h_nlocal();
 
   copymode = 0;
 
@@ -2484,6 +2651,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroupAmbipolar< GASTALLY, 
 template < int GASTALLY, int ATOMIC_REDUCTION >
 KOKKOS_INLINE_FUNCTION
 void CollideVSSKokkos::operator()(TagCollideCollisionsGroupAmbipolar< GASTALLY, ATOMIC_REDUCTION >, const int &icell, COLLIDE_REDUCE &reduce) const {
+  if (d_retry()) return;
 
   int np = grid_kk_copy.obj.d_cellcount[icell];
   if (np <= 1) return;
@@ -2491,11 +2659,20 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroupAmbipolar< GASTALLY, 
   const double volume = grid_kk_copy.obj.k_cinfo.view_device()[icell].volume / grid_kk_copy.obj.k_cinfo.view_device()[icell].weight;
   if (volume == 0.0) d_error_flag() = 1;
 
-  // build per-group particle lists for this cell, plus the electron list
-  // d_gcount(icell,g) = particle count in group g, with the electron count
-  //   for egroup (the electron group egroup has no real particles, so it
-  //   adds no entries)
-  // electrons (one per ambipolar ion) are created in d_elist in plist order
+  // build the per-group particle lists for this cell and the electron list,
+  //   in one pass over plist, exactly as collide.cpp:1792-1824 does
+  // d_glist(icell,g,k) = plist index of the kth particle of group g
+  // d_p2g(icell,n,*)   = reverse map, group and slot within it, for plist n
+  // d_gcount(icell,g)  = particle count in group g
+  // d_elist(icell,e)   = the eth ionized electron, split off from its ion
+  //
+  // the electron group egroup is the one exception: its d_gcount is
+  //   maintained but its d_glist row is not written, because the host's
+  //   glist[egroup][k] is always k (electrons are appended in order and
+  //   removed by swapping the last one down), and both the host and this
+  //   kernel index elist by the drawn index directly rather than through
+  //   glist.  writing it would also need a bound the elist capacity does not
+  //   share, since maxelectron can exceed the per-group row width
 
   for (int g = 0; g < ngroups; g++) d_gcount(icell,g) = 0;
 
@@ -2503,36 +2680,17 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroupAmbipolar< GASTALLY, 
   for (int n = 0; n < np; n++) {
     const int ip = d_plist(icell,n);
     const int isp = d_particles[ip].ispecies;
-    d_gcount(icell,d_species2group[isp])++;
-    if (d_ionambi[ip]) nelectron++;
-  }
-  d_gcount(icell,egroup) = nelectron;
+    addgroup_kk(icell,d_species2group[isp],n);
 
-  // each group has its own row of d_glist, so every group fills from 0.
-  //   this used to seed the cursor from a running cross-group offset, which
-  //   was right when d_glist was one group-contiguous row per cell but wrong
-  //   once it became per-group: writes landed at [offset, offset+gcount) while
-  //   every read indexes from 0.  Only a layout with at most one non-electron
-  //   group -- which is what examples/ambi/in.ambi.group has -- hid it.
-
-  for (int g = 0; g < ngroups; g++) d_gcursor(icell,g) = 0;
-
-  int e = 0;
-  for (int n = 0; n < np; n++) {
-    const int ip = d_plist(icell,n);
-    const int isp = d_particles[ip].ispecies;
-    const int g = d_species2group[isp];
-    const int k = d_gcursor(icell,g)++;
-    d_glist(icell,g,k) = n;
     if (d_ionambi[ip]) {
-      Particle::OnePart* p = &d_particles[ip];
-      Particle::OnePart* ep = &d_elist(icell,e);
-      *ep = *p;
+      Particle::OnePart* ep = &d_elist(icell,nelectron);
+      *ep = d_particles[ip];
       ep->v[0] = d_velambi(ip,0);
       ep->v[1] = d_velambi(ip,1);
       ep->v[2] = d_velambi(ip,2);
       ep->ispecies = ambispecies;
-      e++;
+      nelectron++;
+      d_gcount(icell,egroup)++;
     }
   }
 
@@ -2580,29 +2738,62 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroupAmbipolar< GASTALLY, 
       if (ig == egroup) { aig = jg; ajg = ig; }
       else { aig = ig; ajg = jg; }
 
-      const int ni = d_gcount(icell,aig);
-      const int nj = d_gcount(icell,ajg);
-      if (ni == 0 || nj == 0) continue;
-      if (aig == ajg && ni == 1) continue;
+      // group counts are re-read from d_gcount every time, because a
+      //   reaction in an earlier pair may have emptied a group
+
+      if (d_gcount(icell,aig) == 0 || d_gcount(icell,ajg) == 0) continue;
+      if (aig == ajg && d_gcount(icell,aig) == 1) continue;
 
       for (int iattempt = 0; iattempt < nattempt; iattempt++) {
+        const int ni = d_gcount(icell,aig);
+        const int nj = d_gcount(icell,ajg);
+
         int i = ni * rand_gen.drand();
         int j = nj * rand_gen.drand();
         if (aig == ajg)
           while (i == j) j = nj * rand_gen.drand();
 
-        Particle::OnePart* ipart =
-          &d_particles[d_plist(icell,d_glist(icell,aig,i))];
+        // ii/jj are plist indices, captured before any regrouping moves them
+        // for the electron side there is no plist entry: elist is indexed by
+        //   the drawn index itself
+
+        const int ii = d_glist(icell,aig,i);
+        const int jj = (ajg == egroup) ? -1 : d_glist(icell,ajg,j);
+
+        Particle::OnePart* ipart = &d_particles[d_plist(icell,ii)];
         Particle::OnePart* jpart;
         if (ajg == egroup) jpart = &d_elist(icell,j);
-        else jpart = &d_particles[d_plist(icell,d_glist(icell,ajg,j))];
+        else jpart = &d_particles[d_plist(icell,jj)];
 
         // test if collision actually occurs
 
         if (!test_collision_kokkos(icell,aig,ajg,ipart,jpart,precoln,rand_gen)) continue;
 
-        // perform collision (non-reacting: no chemistry, no 3rd particle)
-        // if GASTALLY: save iorig/jorig for tally
+        // if recombination reaction is possible for this IJ pair
+        // pick a 3rd particle to participate and set cell number density
+        // unless boost factor turns it off, or there is no 3rd particle
+        // 3rd particle is never an electron since plist has no electrons
+        // if ajg == egroup, no need to check k for match to jj
+
+        Particle::OnePart* recomb_part3 = NULL;
+        int recomb_species = -1;
+        double recomb_density = 0.0;
+        if (recombflag && d_recomb_ijflag(ipart->ispecies,jpart->ispecies)) {
+          if (rand_gen.drand() > recomb_boost_inverse)
+            recomb_species = -1;
+          else if (np <= 2)
+            recomb_species = -1;
+          else {
+            int k = np * rand_gen.drand();
+            while (k == ii || k == jj) k = np * rand_gen.drand();
+            recomb_part3 = &d_particles[d_plist(icell,k)];
+            recomb_species = recomb_part3->ispecies;
+            recomb_density = np * fnum / volume;
+          }
+        }
+
+        // perform collision
+        // if GASTALLY: save iorig/jorig, then trigger the tally
 
         Particle::OnePart iorig,jorig;
         if (GASTALLY) {
@@ -2611,14 +2802,13 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroupAmbipolar< GASTALLY, 
         }
 
         Particle::OnePart* kpart = NULL;
-        Particle::OnePart* recomb_part3 = NULL;
-        int recomb_species = -1;
-        double recomb_density = 0.0;
         int index_kpart = 0;
 
+        const int jspecies = jpart->ispecies;
         setup_collision_kokkos(ipart,jpart,precoln,postcoln);
-        const int reactflag = perform_collision_kokkos(ipart,jpart,kpart,precoln,postcoln,rand_gen,
-                                 recomb_part3,recomb_species,recomb_density,index_kpart);
+        const int reactflag =
+          perform_collision_kokkos(ipart,jpart,kpart,precoln,postcoln,rand_gen,
+                                   recomb_part3,recomb_species,recomb_density,index_kpart);
 
         if (ATOMIC_REDUCTION == 1)
           Kokkos::atomic_inc(&d_ncollide_one());
@@ -2632,17 +2822,216 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroupAmbipolar< GASTALLY, 
             CVK_GLIST_COLLISION(m).template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
           for (int m = 0; m < nglist_reaction; m++)
             CVK_GLIST_REACTION(m).template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
-      for (int m = 0; m < nglist_coll_tally; m++)
-        CVK_GLIST_COLL_TALLY(m).template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
-      for (int m = 0; m < nglist_react_tally; m++)
-        CVK_GLIST_REACT_TALLY(m).template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
+          for (int m = 0; m < nglist_coll_tally; m++)
+            CVK_GLIST_COLL_TALLY(m).template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
+          for (int m = 0; m < nglist_react_tally; m++)
+            CVK_GLIST_REACT_TALLY(m).template gas_tally_kk<ATOMIC_REDUCTION>(icell,reactflag,&iorig,&jorig,ipart,jpart,kpart);
+        }
+
+        if (reactflag) {
+          if (ATOMIC_REDUCTION == 1)
+            Kokkos::atomic_inc(&d_nreact_one());
+          else if (ATOMIC_REDUCTION == 0)
+            d_nreact_one()++;
+          else
+            reduce.nreact_one++;
+        } else continue;
+
+        // reset ambipolar ion flags due to reaction
+        // must do now before the group reset below can break out of the loop
+
+        if (ajg == egroup)
+          ambi_reset_kokkos(d_plist(icell,ii),-1,jspecies,index_kpart,
+                            ipart,jpart,kpart,d_ionambi);
+        else
+          ambi_reset_kokkos(d_plist(icell,ii),d_plist(icell,jj),jspecies,index_kpart,
+                            ipart,jpart,kpart,d_ionambi);
+
+        // ipart may now belong to a different group
+        // ipart is never an electron, so aig is never egroup here
+
+        int newgroup = d_species2group[ipart->ispecies];
+        if (newgroup != aig) {
+          addgroup_kk(icell,newgroup,ii);
+          delgroup_kk(icell,aig,i);
+          // needed if ajg == aig and delgroup moved the J particle
+          if (ajg == aig && j == d_gcount(icell,aig)) j = i;
+        }
+
+        // if kpart was created, add it to plist or elist and to its group
+        // must come before the jpart code below, since that also appends
+
+        if (kpart) {
+          newgroup = d_species2group[kpart->ispecies];
+
+          if (newgroup != egroup) {
+            if (np < int(d_plist.extent(1))) {
+              d_plist(icell,np) = index_kpart;
+              addgroup_kk(icell,newgroup,np);
+              np++;
+            } else {
+              d_retry() = 1;
+              d_maxcellcount() += DELTACELLCOUNT;
+              rand_pool.free_state(rand_gen);
+              return;
+            }
+
+          } else {
+            if (nelectron < int(d_elist.extent(1))) {
+              Particle::OnePart* ep = &d_elist(icell,nelectron);
+              *ep = *kpart;
+              ep->ispecies = ambispecies;
+              nelectron++;
+              d_gcount(icell,egroup)++;
+#ifdef SPARTA_KOKKOS_EXACT
+              d_nlocal()--;
+#else
+              const int ndelete = Kokkos::atomic_fetch_add(&d_ndelete(),1);
+              if (ndelete < int(d_dellist.extent(0))) {
+                d_dellist(ndelete) = index_kpart;
+              } else {
+                d_retry() = 1;
+                d_maxdelete() += DELTADELETE;
+                rand_pool.free_state(rand_gen);
+                return;
+              }
+#endif
+            } else {
+              d_retry() = 1;
+              d_maxelectron() += DELTACELLCOUNT;
+              rand_pool.free_state(rand_gen);
+              return;
+            }
+          }
+        }
+
+        // jpart may now be in a different group, have become an electron,
+        //   have stopped being one, or have been destroyed.  the four cases
+        //   are Collide::collisions_group_ambipolar()'s, in its order
+
+        if (jpart) {
+          newgroup = d_species2group[jpart->ispecies];
+
+          if (newgroup == ajg) {
+            // nothing to do
+
+          } else if (ajg != egroup && newgroup != egroup) {
+            addgroup_kk(icell,newgroup,jj);
+            delgroup_kk(icell,ajg,j);
+
+          } else if (ajg != egroup && jpart->ispecies == ambispecies) {
+
+            // ionization: two neutrals became an ion plus an electron.
+            //   the electron goes to elist; jpart is nulled so the block
+            //   below removes its now-stale plist and group entries
+
+            if (nelectron < int(d_elist.extent(1))) {
+              Particle::OnePart* ep = &d_elist(icell,nelectron);
+              *ep = *jpart;
+              ep->ispecies = ambispecies;
+              nelectron++;
+              d_gcount(icell,egroup)++;
+              jpart = NULL;
+            } else {
+              d_retry() = 1;
+              d_maxelectron() += DELTACELLCOUNT;
+              rand_pool.free_state(rand_gen);
+              return;
+            }
+
+          } else if (ajg == egroup && jpart->ispecies != ambispecies) {
+
+            // exchange: an ion plus an electron became two neutrals, so the
+            //   electron becomes a real particle
+
+            const int index = Kokkos::atomic_fetch_add(&d_nlocal(),1);
+            const int reallocflag =
+              ParticleKokkos::add_particle_kokkos(d_particles,index,0,jspecies,icell,
+                                                  jpart->x,jpart->v,0.0,0.0);
+            if (reallocflag) {
+              d_retry() = 1;
+              d_part_grow() = 1;
+              rand_pool.free_state(rand_gen);
+              return;
+            }
+
+            d_particles[index] = *jpart;
+            d_particles[index].id = MAXSMALLINT*rand_gen.drand();
+            d_ionambi[index] = 0;
+
+            if (nelectron-1 != j) d_elist(icell,j) = d_elist(icell,nelectron-1);
+            nelectron--;
+            d_gcount(icell,egroup)--;
+
+            if (np < int(d_plist.extent(1))) {
+              d_plist(icell,np) = index;
+              addgroup_kk(icell,newgroup,np);
+              np++;
+            } else {
+              d_retry() = 1;
+              d_maxcellcount() += DELTACELLCOUNT;
+              rand_pool.free_state(rand_gen);
+              return;
+            }
+          }
+        }
+
+        if (!jpart && jspecies == ambispecies) {
+
+          // recombination consumed the electron: swap the last one down,
+          //   which keeps the host's glist[egroup][k] == k invariant
+
+          if (nelectron-1 != j) d_elist(icell,j) = d_elist(icell,nelectron-1);
+          nelectron--;
+          d_gcount(icell,egroup)--;
+
+        } else if (!jpart) {
+
+          // jpart was a real particle and is gone: delete it, drop it from
+          //   its group, and swap-remove it from plist, repairing the moved
+          //   entry's group slot through the reverse map as Collide does
+
+          const int ndelete = Kokkos::atomic_fetch_add(&d_ndelete(),1);
+          if (ndelete < int(d_dellist.extent(0))) {
+            d_dellist(ndelete) = d_plist(icell,jj);
+          } else {
+            d_retry() = 1;
+            d_maxdelete() += DELTADELETE;
+            rand_pool.free_state(rand_gen);
+            return;
+          }
+
+          delgroup_kk(icell,ajg,j);
+
+          np--;
+          d_plist(icell,jj) = d_plist(icell,np);
+          if (jj < np) {
+            const int mg = d_p2g(icell,np,0);
+            const int mk = d_p2g(icell,np,1);
+            d_glist(icell,mg,mk) = jj;
+            d_p2g(icell,jj,0) = mg;
+            d_p2g(icell,jj,1) = mk;
+          }
+        }
+
+        // stop attempting if either group has become too small
+
+        const int nig = d_gcount(icell,aig);
+        if (nig <= 1) {
+          if (nig == 0) break;
+          if (aig == ajg) break;
+        }
+        const int njg = d_gcount(icell,ajg);
+        if (njg <= 1) {
+          if (njg == 0) break;
+          if (aig == ajg) break;
         }
       }
     }
 
   // recombine ambipolar ions with their matching electrons
   //   by copying the (possibly scattered) electron velocity back into velambi
-  // electrons were created in plist order, so the Nth ion gets the Nth electron
+  // which ion is paired with which electron does not matter
 
   int melectron = 0;
   for (int n = 0; n < np; n++) {
