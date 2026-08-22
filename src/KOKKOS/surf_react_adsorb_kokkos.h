@@ -44,10 +44,30 @@ namespace SRA_KK {
 #define SRA_KK_MAXREACTANT 5
 #define SRA_KK_MAXPRODUCT 5
 #define SRA_KK_MAXCOEFF 4
-#define SRA_KK_MAXPERSPECIES 16   // max GS reactions a single species can be in
 #define SRA_KK_MAXMODELS 7        // = MAXMODELS
 #define SRA_KK_MAXCMCOEFF 11      // max cmodel coeffs (impulsive)
 #define SRA_KK_MAXCMFLAG 4        // max cmodel flags (impulsive)
+
+// react_kokkos() needs one scratch probability per GS reaction the incident
+//   species takes part in.  Two representations, selected by
+//   SPARTA_KOKKOS_FIXED_LISTS (see kokkos_type.h):
+//   - default: a runtime-sized device buffer, one row per concurrent thread,
+//     with the row claimed by a UniqueToken for the duration of the call.
+//     No cap on the number of GS reactions a species may appear in.
+//   - SPARTA_KOKKOS_FIXED_LISTS: the original per-thread stack array, capped
+//     at SRA_KK_MAXPERSPECIES entries and rejected at init above that.
+// Unlike the tally-compute lists, this buffer sits in the inner loop of a
+//   per-particle kernel: the stack array is small enough to be kept in
+//   registers, while the device buffer is a global memory round trip plus an
+//   acquire/release pair on every surf collision, and its footprint is
+//   concurrency*nmax doubles.  The buffer may well be the slower of the two on
+//   an accelerator; neither has been measured there.  Both are kept so the two
+//   can be compared on real hardware by rebuilding with
+//   -DSPARTA_KOKKOS_FIXED_LISTS, rather than by reverting commits.
+
+#ifdef SPARTA_KOKKOS_FIXED_LISTS
+#define SRA_KK_MAXPERSPECIES 16   // max GS reactions a single species can be in
+#endif
 
 class SurfReactAdsorbKokkos : public SurfReactAdsorb {
  public:
@@ -68,6 +88,41 @@ class SurfReactAdsorbKokkos : public SurfReactAdsorb {
 
   DAT::t_int_1d d_reactions_n;       // # of GS reactions for each species
   DAT::t_int_2d d_list;              // per-species list of reaction indices
+
+  // per-thread scratch for the probability list react_kokkos() builds (see
+  //   the SRA_KK_MAXPERSPECIES comment above).  react_kokkos() is called once
+  //   per particle from the surf collide kernels, not once per cell, so there
+  //   is no small stable index to key the scratch on -- a per-particle buffer
+  //   would be nlocal x nmax -- and the row is claimed with a UniqueToken
+  //   instead, held for exactly as long as the RNG state is.
+  // Both members are used from a const KOKKOS_INLINE_FUNCTION: UniqueToken's
+  //   acquire()/release()/size() are const, and a View hands out a writable
+  //   reference through a const object, so neither needs to be mutable.
+  // KKCopy::copy() blits this class into the surf collide functors, so the
+  //   token is memcpy'd rather than copy constructed.  That is safe for the
+  //   Global scope token for the same reason it is safe for the Views: the
+  //   lock array it references is a Kokkos owned singleton that outlives every
+  //   blitted copy (it is released in Kokkos::finalize, after SPARTA has
+  //   deleted its styles).
+  // The element type is spelled double rather than DAT::t_float_2d on
+  //   purpose: SPARTA_FLOAT is float in a mixed precision build, and the host
+  //   react() sums these probabilities in double.
+
+#ifndef SPARTA_KOKKOS_FIXED_LISTS
+  typedef Kokkos::Experimental::UniqueToken<
+    DeviceType,Kokkos::Experimental::UniqueTokenScope::Global> sra_token_type;
+  sra_token_type prob_token;
+  Kokkos::View<double**,DeviceType> d_prob;   // [prob_token.size()][nmax]
+
+  // default layout, i.e. LayoutLeft on a GPU: consecutive threads then hold
+  //   consecutive doubles for a given i, so the row access coalesces
+
+#define SRA_KK_PROB(i) d_prob(tid,i)
+#define SRA_KK_PROB_RELEASE() prob_token.release(tid)
+#else
+#define SRA_KK_PROB(i) prob_value[i]
+#define SRA_KK_PROB_RELEASE() ((void) 0)
+#endif
 
   DAT::t_int_1d d_type;              // reaction type (DISSOCIATION,...)
   DAT::t_int_1d d_style;             // SIMPLE or ARRHENIUS
@@ -196,7 +251,15 @@ class SurfReactAdsorbKokkos : public SurfReactAdsorb {
     double factor = fnum * d_weight[idx] / d_area[idx];
     double ms_inv = factor / max_cover;
 
+    // claim the scratch row before the RNG state is drawn, and release it
+    //   after the RNG state is freed, so the two nest on every exit path
+
+#ifdef SPARTA_KOKKOS_FIXED_LISTS
     double prob_value[SRA_KK_MAXPERSPECIES];
+#else
+    const int tid = prob_token.acquire();
+#endif
+
     double sum_prob = 0.0;
     double scatter_prob = 0.0, correction = 1.0;
     int coeff_val = 1;
@@ -214,7 +277,7 @@ class SurfReactAdsorbKokkos : public SurfReactAdsorb {
       case SRA_KK::DISSOCIATION:
       case SRA_KK::EXCHANGE:
       case SRA_KK::RECOMBINATION:
-        prob_value[i] = d_kreact(j);
+        SRA_KK_PROB(i) = d_kreact(j);
         break;
 
       case SRA_KK::AA:
@@ -239,7 +302,7 @@ class SurfReactAdsorbKokkos : public SurfReactAdsorb {
         } else {
           S_theta = pow((1-surf_cover),d_coeff(j,coeff_val));
         }
-        prob_value[i] = d_kreact(j)*S_theta;
+        SRA_KK_PROB(i) = d_kreact(j)*S_theta;
         break;
 
       case SRA_KK::ER:
@@ -249,22 +312,22 @@ class SurfReactAdsorbKokkos : public SurfReactAdsorb {
             // empty-site count clamped at zero for the same reason the
             //   coverage is clamped at full above
 
-            prob_value[i] = 2.0 * d_kreact(j) *
+            SRA_KK_PROB(i) = 2.0 * d_kreact(j) *
               MAX(maxstick - (bigint) d_total_state[idx],(bigint) 0) * ms_inv / fabs(dot);
           else
-            prob_value[i] = 2.0 * d_kreact(j) / fabs(dot);
+            SRA_KK_PROB(i) = 2.0 * d_kreact(j) / fabs(dot);
           break;
         }
 
       case SRA_KK::CI:
-        prob_value[i] = d_kreact(j);
+        SRA_KK_PROB(i) = d_kreact(j);
         if (d_energy_flag(j)) {
           double *v = ip->v;
           double dot = v[0]*norm[0]+v[1]*norm[1]+v[2]*norm[2];
           double vmag_sq = v[0]*v[0]+v[1]*v[1]+v[2]*v[2];
           double E_i = 0.5 * d_species[ip->ispecies].mass * vmag_sq;
           double cos_theta = fabs(dot) / sqrt(vmag_sq);
-          prob_value[i] *= pow(E_i,d_energy(j,0)) * pow(cos_theta,d_energy(j,1));
+          SRA_KK_PROB(i) *= pow(E_i,d_energy(j,0)) * pow(cos_theta,d_energy(j,1));
         }
         break;
       }
@@ -272,16 +335,16 @@ class SurfReactAdsorbKokkos : public SurfReactAdsorb {
       for (int k = 1; k < d_nreactant(j); k++) {
         if (d_rstate(j,k) == 's') {
           if (d_rpart(j,k) == 0)
-            prob_value[i] *= stoich_pow_kk(d_total_state[idx],d_rstoich(j,k)) *
+            SRA_KK_PROB(i) *= stoich_pow_kk(d_total_state[idx],d_rstoich(j,k)) *
               pow(ms_inv,d_rstoich(j,k));
           else
-            prob_value[i] *= stoich_pow_kk(d_species_state(idx,d_rad(j,k)),
-                                           d_rstoich(j,k)) *
+            SRA_KK_PROB(i) *= stoich_pow_kk(d_species_state(idx,d_rad(j,k)),
+                                             d_rstoich(j,k)) *
               pow(ms_inv,d_rstoich(j,k));
         }
       }
 
-      sum_prob += prob_value[i];
+      sum_prob += SRA_KK_PROB(i);
     }
 
     if (sum_prob > 1.0) correction = 1.0/sum_prob;
@@ -292,12 +355,13 @@ class SurfReactAdsorbKokkos : public SurfReactAdsorb {
 
     if (react_prob > random_prob) {
       rand_pool.free_state(rand_gen);
+      SRA_KK_PROB_RELEASE();
       return 0;
     }
 
     for (int i = 0; i < n; i++) {
       int j = d_list(ip->ispecies,i);
-      react_prob += prob_value[i] * correction;
+      react_prob += SRA_KK_PROB(i) * correction;
       if (react_prob <= random_prob) continue;
 
       // reaction j fires
@@ -350,16 +414,19 @@ class SurfReactAdsorbKokkos : public SurfReactAdsorb {
           if (reallocflag) {
             d_retry() = 1;
             rand_pool.free_state(rand_gen);
+            SRA_KK_PROB_RELEASE();
             return 0;
           }
           jp = &d_particles[index];
           rand_pool.free_state(rand_gen);
+          SRA_KK_PROB_RELEASE();
           return (j + 1);
         }
 
       case SRA_KK::EXCHANGE:
         ip->ispecies = d_products(j,0);
         rand_pool.free_state(rand_gen);
+        SRA_KK_PROB_RELEASE();
         return (j + 1);
 
       case SRA_KK::RECOMBINATION:
@@ -368,6 +435,7 @@ class SurfReactAdsorbKokkos : public SurfReactAdsorb {
       case SRA_KK::CD:
         ip = NULL;
         rand_pool.free_state(rand_gen);
+        SRA_KK_PROB_RELEASE();
         return (j + 1);
 
       case SRA_KK::DA:
@@ -383,12 +451,20 @@ class SurfReactAdsorbKokkos : public SurfReactAdsorb {
                   scatter_cmodel(ip,norm,d_cmodel_ip(j),j,0,rand_gen);
                   if (d_pstoich(j,pj) == 2) {
                     jp = create_particle(ip,d_products(j,pj),rand_gen,d_nlocal,d_retry);
-                    if (!jp) { rand_pool.free_state(rand_gen); return 0; }
+                    if (!jp) {
+                      rand_pool.free_state(rand_gen);
+                      SRA_KK_PROB_RELEASE();
+                      return 0;
+                    }
                     scatter_cmodel(jp,norm,d_cmodel_ip(j),j,0,rand_gen);
                   }
                 } else {
                   jp = create_particle(ip,d_products(j,pj),rand_gen,d_nlocal,d_retry);
-                  if (!jp) { rand_pool.free_state(rand_gen); return 0; }
+                  if (!jp) {
+                    rand_pool.free_state(rand_gen);
+                    SRA_KK_PROB_RELEASE();
+                    return 0;
+                  }
                   scatter_cmodel(jp,norm,d_cmodel_jp(j),j,1,rand_gen);
                 }
               }
@@ -396,6 +472,7 @@ class SurfReactAdsorbKokkos : public SurfReactAdsorb {
           }
           if (d_cmodel_ip(j) != SRA_KK::NOMODEL) velreset = 1;
           rand_pool.free_state(rand_gen);
+          SRA_KK_PROB_RELEASE();
           return (j + 1);
         }
 
@@ -405,6 +482,7 @@ class SurfReactAdsorbKokkos : public SurfReactAdsorb {
         scatter_cmodel(ip,norm,d_cmodel_ip(j),j,0,rand_gen);
         if (d_cmodel_ip(j) != SRA_KK::NOMODEL) velreset = 1;
         rand_pool.free_state(rand_gen);
+        SRA_KK_PROB_RELEASE();
         return (j + 1);
 
       case SRA_KK::CI:
@@ -414,22 +492,32 @@ class SurfReactAdsorbKokkos : public SurfReactAdsorb {
           if (d_nprod_g_tot(j) == 2) {
             if (d_pstoich(j,0) == 2) {
               jp = create_particle(ip,d_products(j,0),rand_gen,d_nlocal,d_retry);
-              if (!jp) { rand_pool.free_state(rand_gen); return 0; }
+              if (!jp) {
+                rand_pool.free_state(rand_gen);
+                SRA_KK_PROB_RELEASE();
+                return 0;
+              }
               scatter_cmodel(jp,norm,d_cmodel_ip(j),j,0,rand_gen);
             } else {
               jp = create_particle(ip,d_products(j,1),rand_gen,d_nlocal,d_retry);
-              if (!jp) { rand_pool.free_state(rand_gen); return 0; }
+              if (!jp) {
+                rand_pool.free_state(rand_gen);
+                SRA_KK_PROB_RELEASE();
+                return 0;
+              }
               scatter_cmodel(jp,norm,d_cmodel_jp(j),j,1,rand_gen);
             }
           }
           if (d_cmodel_ip(j) != SRA_KK::NOMODEL) velreset = 1;
           rand_pool.free_state(rand_gen);
+          SRA_KK_PROB_RELEASE();
           return (j + 1);
         }
       }
     }
 
     rand_pool.free_state(rand_gen);
+    SRA_KK_PROB_RELEASE();
     return 0;
   }
 
