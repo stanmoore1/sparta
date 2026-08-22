@@ -132,6 +132,12 @@ FixEmitFaceFile::FixEmitFaceFile(SPARTA *sparta, int narg, char **arg) :
 
 FixEmitFaceFile::~FixEmitFaceFile()
 {
+  // a Kokkos functor copy must not free the file mesh or the task arrays;
+  //   every sibling has this guard (fix_emit_face.cpp:117, fix_emit.cpp:63,
+  //   fix.cpp:74) and this class was missing it
+
+  if (copymode) return;
+
   delete [] mesh.which;
   delete [] mesh.imesh;
   delete [] mesh.jmesh;
