@@ -276,12 +276,12 @@ between the same inside and outside grid corner points.  The grid
 point values themselves are not changed.  There are two cases to
 consider.
 
-(1) The vertex is too close to a inside grid corner point. In this
+\(1) The vertex is too close to a inside grid corner point. In this
 case, the vertex location is shifted towards the outside corner point
 such that the relative distance from the vertex to the inside corner
 point is at least *mindist*
 
-(2) Conversely, if the vertex is too close to the outside grid corner
+\(2) Conversely, if the vertex is too close to the outside grid corner
 point, the vetex location is shifted towards the inside corner point
 such that the relative distance from the vertex to the outside corner
 point is at least *mindist*

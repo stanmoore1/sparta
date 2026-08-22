@@ -1042,11 +1042,11 @@ Errors:
    This is not allowed.  Reduce the size of the cutoff specified by the
    global gridcut command.
 
-*Grid in/out other-mark error %d\n*
+*Grid in/out other-mark error %d\\n*
    Grid cell marking as inside, outside, or overlapping with surface
    elements failed.  Please report the issue to the SPARTA developers.
 
-*Grid in/out self-mark error %d for icell %d, icorner %d, connect %d %d, other cell %d, other corner %d, values %d %d\n*
+*Grid in/out self-mark error %d for icell %d, icorner %d, connect %d %d, other cell %d, other corner %d, values %d %d\\n*
    A grid cell was incorrectly marked as inside, outside, or overlapping
    with surface elements.  Please report the issue to the SPARTA
    developers.

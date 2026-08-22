@@ -144,7 +144,7 @@ For a 3d simulation, interpolation from values on the 2d mesh points
 to any grid cell face that is on the corresponding simulation box face
 is done in the following manner.  There are 3 cases to consider.
 
-(a) For a grid cell face that is entirely inside the area defined by
+\(a) For a grid cell face that is entirely inside the area defined by
 the file mesh points, the centroid (center point) of the grid cell
 face is surrounded geometrically by 4 mesh points.  The 4 values
 defined on those 4 points are averaged in a weighted manner using
@@ -153,10 +153,10 @@ the grid cell face.  This value is then used for the calculation
 described above for *M* = the number of particles to add on the cell
 face as well as the properties of the added particles.
 
-(b) For a grid cell face that is entirely outside the area defined by
+\(b) For a grid cell face that is entirely outside the area defined by
 the file mesh points, no particles are added in that grid cell.
 
-(c) For a grid cell face that partially overlaps the area defined by
+\(c) For a grid cell face that partially overlaps the area defined by
 the file mesh points, the extent of the overlap is computed.  The
 centroid (center point) of the overlap area is surrounded
 geometrically by 4 mesh points.  The values for those 4 points are

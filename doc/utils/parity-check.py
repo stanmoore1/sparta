@@ -60,7 +60,7 @@ OLD_BANNER = re.compile(
 # literal block in its own <span>, so replacing inline tags with a space
 # would split "/path/to/x" into "/ path / to / x".
 BLOCK = re.compile(
-    r'</(p|div|h[1-6]|li|tr|pre|ul|ol|dl|dd|dt|table|blockquote)>'
+    r'</(p|div|h[1-6]|li|tr|td|th|pre|ul|ol|dl|dd|dt|table|blockquote)>'
     r'|<(br|hr)\b[^>]*>', re.I)
 TAG = re.compile(r'<[^>]+>')
 SCRIPT = re.compile(r'<(script|style)\b.*?</\1>', re.S | re.I)

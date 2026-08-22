@@ -268,19 +268,19 @@ included in the SPARTA distribution.
 
 Here is a summary of what the GPL means for SPARTA users:
 
-(1) Anyone is free to use, modify, or extend SPARTA in any way they
+\(1) Anyone is free to use, modify, or extend SPARTA in any way they
 choose, including for commercial purposes.
 
-(2) If you distribute a modified version of SPARTA, it must remain
+\(2) If you distribute a modified version of SPARTA, it must remain
 open-source, meaning you distribute it under the terms of the GPL.
 You should clearly annotate such a code as a derivative version of
 SPARTA.
 
-(3) If you release any code that includes SPARTA source code, then it
+\(3) If you release any code that includes SPARTA source code, then it
 must also be open-sourced, meaning you distribute it under the terms
 of the GPL.
 
-(4) If you give SPARTA files to someone else, the GPL LICENSE file and
+\(4) If you give SPARTA files to someone else, the GPL LICENSE file and
 source file headers (including the copyright and GPL notices) should
 remain part of the code.
 

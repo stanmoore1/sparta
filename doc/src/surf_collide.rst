@@ -333,7 +333,7 @@ internal energies, like in a beam. This type of scattering falls under
 the structural regime, whose scattering physics and distributions are
 very different from the thermal regime. The velocity distribution of
 the impulsive scattering model can be represented using a Gaussian
-distribution with a mean *u0* and a variance *\alpha* following
+distribution with a mean *u0* and a variance *\\alpha* following
 Rettner `(Rettner94a) <#Rettner94a>`_
 
 .. image:: Eqs/impulsive_u0.JPG
@@ -363,9 +363,9 @@ nature and sharply peaked. These distributions can be represented
 using the cosine power law distribution `Glatzer97 <#Glatzer97>`_. The
 peak of the azimuthal distribution remains at zero, while the peak of
 the polar angle distribution is usually higher than the incident angle
-(away from the normal). Hence the peak location (\theta\_peak) and
+(away from the normal). Hence the peak location (\\theta\_peak) and
 cosine power (n) of the polar angle distribution and the cosine power
-(m) of the azimuthal angular distribution are taken as input
+\(m) of the azimuthal angular distribution are taken as input
 parameters. A factor of 2 is present in the azimuthal distribution to
 ensure the function remians positive within the range of the azimuthal
 angle: (-180, 180)

@@ -935,7 +935,7 @@ fix.
 
 Here are two non-obvious errors that can occur:
 
-(1) If the make command breaks immediately with errors that indicate
+\(1) If the make command breaks immediately with errors that indicate
 it can't find files with a "\*" in their names, this can be because
 your machine's native make doesn't support wildcard expansion in a
 makefile.  Try gmake instead of make.  If that doesn't work, try using
@@ -953,7 +953,7 @@ The first "make" command will create a current Makefile.list with all
 the file names in your src dir.  The 2nd "make" command (make or
 gmake) will use it to build SPARTA.
 
-(2) If you get an error that says something like 'identifier "atoll"
+\(2) If you get an error that says something like 'identifier "atoll"
 is undefined', then your machine does not support "long long"
 integers.  Try using the -DSPARTA\_LONGLONG\_TO\_LONG setting described
 above in Step 4.
@@ -970,13 +970,13 @@ above in Step 4.
 
 **Additional build tips using make:** 
 
-(1) Building SPARTA for multiple platforms.
+\(1) Building SPARTA for multiple platforms.
 
 You can make SPARTA for multiple platforms from the same src
 directory.  Each target creates its own object sub-directory called
 Obj\_name where it stores the system-specific \*.o files.
 
-(2) Cleaning up.
+\(2) Cleaning up.
 
 Typing "make clean-all" or "make clean-foo" will delete \*.o object
 files created when SPARTA is built, for either all builds or for a
@@ -994,7 +994,7 @@ particular machine.
 
 **Additional build tips using CMake:** 
 
-(1) Building SPARTA for multiple platforms.
+\(1) Building SPARTA for multiple platforms.
 
 It's best to build SPARTA for multiple platforms from different
 build directories. However, each target creates its own spa\_TARGET binary and
@@ -1003,7 +1003,7 @@ object files in build/src will reflective of the most recent build
 configuration. Also note that if BUILD\_SHARED\_LIBS was enabled,
 libsparta will be reflective of the most recent build configuration.
 
-(2) Cleaning up.
+\(2) Cleaning up.
 
 Typing "make clean" will delete all binary files for the most recent build
 configuration.

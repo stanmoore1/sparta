@@ -34,7 +34,7 @@ wish to change the default.
 In many cases, the ordering of commands in an input script is not
 important.  However the following rules apply:
 
-(1) SPARTA does not read your entire input script and then perform a
+\(1) SPARTA does not read your entire input script and then perform a
 simulation with all the settings.  Rather, the input script is read
 one line at a time and each command takes effect when it is read.
 Thus this sequence of commands:
@@ -60,7 +60,7 @@ simulations of 100 timesteps each.  In the 2nd case, the default
 timestep (1.0 sec is used for the 1st 100 step simulation and a 0.5
 fmsec timestep is used for the 2nd one.
 
-(2) Some commands are only valid when they follow other commands.  For
+\(2) Some commands are only valid when they follow other commands.  For
 example you cannot define the grid overlaying the simulation box until
 the box itself has been defined.  Likewise you cannot read in
 triangulated surfaces until a grid has been defined to store them.
@@ -90,19 +90,19 @@ file names or user-chosen ID strings.
 
 Here is how each line in the input script is parsed by SPARTA:
 
-(1) If the last printable character on the line is a "&" character
+\(1) If the last printable character on the line is a "&" character
 (with no surrounding quotes), the command is assumed to continue on
 the next line.  The next line is concatenated to the previous line by
 removing the "&" character and newline.  This allows long commands to
 be continued across two or more lines.
 
-(2) All characters from the first "#" character onward are treated as
+\(2) All characters from the first "#" character onward are treated as
 comment and discarded.  See an exception in (6).  Note that a
 comment after a trailing "&" character will prevent the command from
 continuing on the next line.  Also note that for multi-line commands a
 single leading "#" will comment out the entire command.
 
-(3) The line is searched repeatedly for $ characters, which indicate
+\(3) The line is searched repeatedly for $ characters, which indicate
 variables that are replaced with a text string.  See an exception in
 (6).
 
@@ -161,14 +161,14 @@ See the :doc:`variable <variable>` command for more details of how
 strings are assigned to variables and evaluated, and how they can be
 used in input script commands.
 
-(4) The line is broken into "words" separated by whitespace (tabs,
+\(4) The line is broken into "words" separated by whitespace (tabs,
 spaces).  Note that words can thus contain letters, digits,
 underscores, or punctuation characters.
 
-(5) The first word is the command name.  All successive words in the
+\(5) The first word is the command name.  All successive words in the
 line are arguments.
 
-(6) If you want text with spaces to be treated as a single argument,
+\(6) If you want text with spaces to be treated as a single argument,
 it can be enclosed in either single (') or double (") or triple quotes
 (""").  A long single argument enclosed in single or double quotes can
 span multiple lines if the "&" character is used, as described above.
@@ -236,7 +236,7 @@ simulation, change some settings, run some more, etc.  Each of the 4
 parts is now described in more detail.  Remember that almost all the
 commands need only be used if a non-default value is desired.
 
-(1) Initialization
+\(1) Initialization
 
 Set parameters that need to be defined before the simulation domain,
 particles, grid cells, and surfaces are defined.
@@ -244,7 +244,7 @@ particles, grid cells, and surfaces are defined.
 Relevant commands include :doc:`dimension <dimension>`,
 :doc:`units <units>`, and :doc:`seed <seed>`.
 
-(2) Problem definition
+\(2) Problem definition
 
 These items must be defined before running a SPARTA calculation, and
 typically in this order:
@@ -265,7 +265,7 @@ are defined in the setup stage using the
 adapted before or betwee simulations using the
 :doc:`adapt\_grid <adapt_grid>` command.
 
-(3) Settings
+\(3) Settings
 
 Once the problem geometry, grid cells, surfaces, and particles are
 defined, a variety of settings can be specified, which include
@@ -284,7 +284,7 @@ Commands that do this include
 :doc:`dump image <dump>` for on-the-fly images of the simulation
 :doc:`dump vtk <dump_vtk>` for native VTK-format snapshots (VTK package)
 
-(4) Run a simulation
+\(4) Run a simulation
 
 A simulation is run using the :doc:`run <run>` command.
 

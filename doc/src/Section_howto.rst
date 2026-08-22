@@ -789,13 +789,13 @@ SPARTA can be coupled to other codes in at least 3 ways.  Each has
 advantages and disadvantages, which you'll have to think about in the
 context of your application.
 
-(1) Define a new :doc:`fix <fix>` command that calls the other code.  In
+\(1) Define a new :doc:`fix <fix>` command that calls the other code.  In
 this scenario, SPARTA is the driver code.  During its timestepping,
 the fix is invoked, and can make library calls to the other code,
 which has been linked to SPARTA as a library.  See :doc:`Section 8 <Section_modify>` of the documentation for info on how to add a
 new fix to SPARTA.
 
-(2) Define a new SPARTA command that calls the other code.  This is
+\(2) Define a new SPARTA command that calls the other code.  This is
 conceptually similar to method (1), but in this case SPARTA and the
 other code are on a more equal footing.  Note that now the other code
 is not called during the timestepping of a SPARTA run, but between
@@ -815,7 +815,7 @@ command writes and reads.
 See :doc:`Section\_modify <Section_modify>` of the documentation for how
 to add a new command to SPARTA.
 
-(3) Use SPARTA as a library called by another code.  In this case the
+\(3) Use SPARTA as a library called by another code.  In this case the
 other code is the driver and calls SPARTA as needed.  Or a wrapper
 code could link and call both SPARTA and another code as libraries.
 Again, the :doc:`run <run>` command has options that allow it to be
@@ -993,7 +993,7 @@ same and is calcluated as follows.  The rightmost 11 bits of the
 integer ID are encoded with 376.  This is because it requires 11 bits
 to represent 2000 cells (1 to 2000) at level 1.  The next 4 bits are
 encoded with 4, because it requires 4 bits to represent 8 cells (1 to
-8) at level 2.  Thus the level 2 cell ID in integer format is 4\*2048 +
+\8) at level 2.  Thus the level 2 cell ID in integer format is 4\*2048 +
 376 = 8568.  In string format it would be 376-4, with dashes
 separating each of the levels.  Either of these formats (integer or
 string) can be specified as id or idstr for output of grid cell info
@@ -1682,7 +1682,7 @@ not have access to the required ParaView Python modules and libraries.
 
 **\*\*Important\*\***
 
-(1) Getting Started
+\(1) Getting Started
 
 Download and install ParaView at `Kitware ParaView <https://www.paraview.org>`_
 
@@ -1708,11 +1708,11 @@ On Windows:
 
 .. parsed-literal::
 
-   pvpython is in C:\Program Files (x86)\ParaView 5.6.0\bin
+   pvpython is in C:\\Program Files (x86)\\ParaView 5.6.0\\bin
 
 -------------------------------
 
-(2) Using surf2paraview.py
+\(2) Using surf2paraview.py
 
 The *surf2paraview.py* program converts 3D SPARTA surface triangulation
 files and 2D SPARTA closed polygon files into ParaView *.pvd* format.
@@ -1779,7 +1779,7 @@ This will produce an Exodus 2 file *mir\_surf.ex2*, containing the same content
 as *mir\_surf.pvd* and *mir\_surf/*. The *.pvd* format output is not written when
 Exodus 2 output is requested.
 
-(3) Using grid2paraview.py
+\(3) Using grid2paraview.py
 
 The *grid2paraview.py* program converts a text file description of a 2D
 or 3D SPARTA mesh into a ParaView *.pvd* file.  Additionally, the
@@ -1891,7 +1891,7 @@ serially.  This is due to how the multiprocessing module is
 implemented on Windows, which prohibits multiple instances of *pvpython*
 from starting independently.
 
-(4) pvbatch for Large SPARTA Grids
+\(4) pvbatch for Large SPARTA Grids
 
 When SPARTA grid output becomes large, the processing time required for
 grid2paraview.py can be long on a single node even with multi-processing.
@@ -1916,7 +1916,7 @@ multi-processing with threads on a single compute node. Notice the "-sym"
 argument to *pvbatch*\ , which tells *pvbatch* to run in symmetric MPI mode.
 This argument is required.
 
-(5) Catalyst for Large SPARTA Grids
+\(5) Catalyst for Large SPARTA Grids
 
 There is an option in *grid2paraview.py* to execute a ParaView Catalyst Python
 script that has been exported from the ParaView GUI. For more details on
@@ -1947,7 +1947,7 @@ either edit your catalyst script or change the output directory name on the
 command line to match what your script expects. The output directory is not 
 created when *-c* option is used.
 
-(6) Post-processing large refined SPARTA output grids
+\(6) Post-processing large refined SPARTA output grids
 
 When SPARTA grids contain a large amount of grid refinement concentrated in
 small areas of the grid, the tool *grid2paraview.py* tends to run out of memory
