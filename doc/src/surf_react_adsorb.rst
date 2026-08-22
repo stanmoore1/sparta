@@ -6,8 +6,7 @@ surf\_react adsorb command
 surf\_react adsorb/kk command
 =============================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -56,8 +55,7 @@ file format below for details.
     angle-dependent factor (only for CI)
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -65,8 +63,7 @@ Examples
    surf_react adsorb gs gs_react.surf nsync 10 surf 1000 6.022e18 O CO
    surf_react adsorb gs/ps gs_react.surf ps_react.surf nsync 1 face 300 3e9 O
 
-Description
-"""""""""""
+**Description:**
 
 Define a model for surface chemistry reactions to perform when
 particles collide with surface elements or the global boundaries
@@ -407,8 +404,7 @@ specified in the :doc:`surf\_collide <surf_collide>` command.
 ----------
 
 
-Output info
-"""""""""""
+**Output info:**
 
 All the surface reaction models calculate a global vector of values.
 The values can be used by the :doc:`stats\_style <stats_style>` command
@@ -458,8 +454,7 @@ effectively.
 ----------
 
 
-Restrictions
-""""""""""""
+**Restrictions:**
 
 If the following conditions are met:
 
@@ -474,8 +469,7 @@ re-assigned to processors due to the change in the grid assignment to
 processors and the per-surface *tau* values must be upated
 appropriately when that occurs.
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`surf\_react <surf_react>`, :doc:`react <react>`, 
 :doc:`surf\_modify <surf_modify>`,

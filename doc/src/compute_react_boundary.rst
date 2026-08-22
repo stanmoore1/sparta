@@ -3,8 +3,7 @@
 compute react/boundary command
 ==============================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -24,8 +23,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -45,8 +43,7 @@ and output the results as part of statistical output:
    fix 1 ave/time all 10 100 1000 c_2[\*]
    stats_style step np f_1[1][\*] f_1[2][\*] f_1[3][\*] f_1[4][\*]
 
-Description
-"""""""""""
+**Description:**
 
 Define a computation that tallies counts of reactions for each
 boundary (i.e. face) of the simulation box, based on the particles
@@ -84,8 +81,7 @@ command.
 ----------
 
 
-Output info
-"""""""""""
+**Output info:**
 
 This compute calculates a global array, with the number of columns
 either equal to the number of reactions defined by the
@@ -107,8 +103,7 @@ on each face.
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`fix ave/time <fix_ave_time>`, :doc:`compute react/surf <compute_react_surf>`
 

@@ -3,8 +3,7 @@
 next command
 ============
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -13,8 +12,7 @@ Syntax
 
 * variables = one or more variable names
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -22,8 +20,7 @@ Examples
    next x
    next a t x myTemp
 
-Description
-"""""""""""
+**Description:**
 
 This command is used with variables defined by the
 :doc:`variable <variable>` command.  It assigns the next value to the
@@ -144,8 +141,7 @@ condition is met, then continues iterating thru the outer loop.
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`jump <jump>`, :doc:`include <include>`, :doc:`shell <shell>`,
 :doc:`variable <variable>`,

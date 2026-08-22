@@ -3,8 +3,7 @@
 compute reaction/tally command
 ==============================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -40,8 +39,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -56,8 +54,7 @@ file every 10 steps:
 
    dump 1 tally all 10 tmp.tally c_1[\*]
 
-Description
-"""""""""""
+**Description:**
 
 Tally various values for each gas-phase reaction of two particles
 during the current timestep.  Only gas collisions which result in a
@@ -129,8 +126,7 @@ particles after the reaction.  Velocity components will be zero if the
 ----------
 
 
-Output info
-"""""""""""
+**Output info:**
 
 This compute calculates a per-tally array, with the number of columns
 equal to the number of values.
@@ -149,8 +145,7 @@ velocity components are in velocity units.
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`compute gas/collision/tally <compute_gas_collision_tally>`, :doc:`dump tally <dump>`
 

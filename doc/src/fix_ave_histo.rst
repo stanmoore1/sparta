@@ -12,8 +12,7 @@ fix ave/histo/weight command
 fix ave/histo/weight/kk command
 ===============================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -72,8 +71,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -82,8 +80,7 @@ Examples
    fix 1 ave/histo 100 5 1000 0 5 100 c_kePart "My output values"
    fix 1 ave/histo/weight 1 100 1000 -2.0 2.0 18 vx vy ave running beyond extra
 
-Description
-"""""""""""
+**Description:**
 
 Use one or more values as inputs every few timesteps to create a
 single histogram.  The histogram can then be averaged over longer
@@ -393,14 +390,12 @@ effectively.
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`compute <compute>`, :doc:`fix ave/time <fix_ave_time>`,
 :doc:`variable <variable>`
 
-Default
-"""""""
+**Default:**
 
 The option defaults are mode = scalar, ave = one, start = 0, no file
 output, no region/mixture/group restriction on inclusion of particles

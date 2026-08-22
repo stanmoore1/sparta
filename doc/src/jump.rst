@@ -3,8 +3,7 @@
 jump command
 ============
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -14,8 +13,7 @@ Syntax
 * file = filename of new input script to switch to
 * label = optional label within file to jump to
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -24,8 +22,7 @@ Examples
    jump in.run2 runloop
    jump SELF runloop
 
-Description
-"""""""""""
+**Description:**
 
 This command closes the current input script file, opens the file with
 the specified name, and begins reading SPARTA commands from that file.
@@ -36,11 +33,9 @@ to chain from file to file or back to the original file.
 If the word "SELF" is used for the filename, then the current input
 script is re-opened and read again.
 
-.. warning::
-
-   The SELF option is not guaranteed to work when the
-   current input script is being read through stdin (standard input),
-   e.g.
+IMPORTANT NOTE: The SELF option is not guaranteed to work when the
+current input script is being read through stdin (standard input),
+e.g.
 
 
 .. parsed-literal::
@@ -124,14 +119,12 @@ then continues iterating thru the outer loop.
    next	    a
    jump	    in.script loopa
 
-Restrictions
-""""""""""""
+**Restrictions:**
 
 If you jump to a file and it does not contain the specified label,
 SPARTA will come to the end of the file and exit.
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`variable <variable>`, :doc:`include <include>`, :doc:`label <label>`,
 :doc:`next <next>`

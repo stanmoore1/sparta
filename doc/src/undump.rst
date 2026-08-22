@@ -3,8 +3,7 @@
 undump command
 ==============
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -13,8 +12,7 @@ Syntax
 
 * dump-ID = ID of previously defined dump
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -22,16 +20,14 @@ Examples
    undump mine
    undump 2
 
-Description
-"""""""""""
+**Description:**
 
 Delete a dump that was previously defined with a :doc:`dump <fix>`
 command.  This also closes the file associated with the dump.
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`dump <dump>`
 

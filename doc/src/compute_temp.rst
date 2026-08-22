@@ -6,8 +6,7 @@ compute temp command
 compute temp/kk command
 =======================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -17,8 +16,7 @@ Syntax
 * ID is documented in :doc:`compute <compute>` command
 * temp = style name of this compute command
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -26,8 +24,7 @@ Examples
    compute 1 temp
    compute myTemp temp
 
-Description
-"""""""""""
+**Description:**
 
 Define a computation that calculates the temperature of all particles.
 
@@ -46,8 +43,7 @@ calculation of thermal temperatures on a per grid cell basis.
 ----------
 
 
-Output info
-"""""""""""
+**Output info:**
 
 This compute calculates a global scalar (the temperature).  This value
 can be used by any command that uses global scalar values from a

@@ -3,8 +3,7 @@
 write\_surf command
 ===================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -28,8 +27,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -39,8 +37,7 @@ Examples
    write_surf data.surf points no
    write_surf data.surf.% nfile 50
 
-Description
-"""""""""""
+**Description:**
 
 Write a surface file in text format describing the currently defined
 surface elements, whether they be explicit or implicit surfaces.  See
@@ -149,18 +146,15 @@ next 3 processors and write it to a surface file.
 ----------
 
 
-Restrictions
-""""""""""""
+**Restrictions:**
 
 The *custom* keyword cannot be used with implicit surfaces.
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`read\_surf <read_surf>`, :doc:`read\_isurf <read_isurf>`
 
-Default
-"""""""
+**Default:**
 
 The default is points = yes.  If the *fileper* or *nfile* keywords are
 not used, a single file is written.

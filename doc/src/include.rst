@@ -3,8 +3,7 @@
 include command
 ===============
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -13,8 +12,7 @@ Syntax
 
 * file = filename of new input script to switch to
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -22,8 +20,7 @@ Examples
    include newfile
    include in.run2
 
-Description
-"""""""""""
+**Description:**
 
 This command opens a new input script file and begins reading SPARTA
 commands from that file.  When the new file is finished, the original
@@ -37,8 +34,7 @@ scripts.
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`variable <variable>`, :doc:`jump <jump>`
 

@@ -3,8 +3,7 @@
 variable command
 ================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -67,8 +66,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -89,8 +87,7 @@ Examples
    variable str format x %.6g
    variable x delete
 
-Description
-"""""""""""
+**Description:**
 
 This command assigns one or more strings to a variable name for
 evaluation later in the input script or during a simulation.
@@ -126,15 +123,13 @@ evaluation of the string.  Note that the same string can generate
 different values when it is evaluated at different times during a
 simulation.
 
-.. warning::
-
-   When an input script line is encountered that defines
-   a variable of style *equal* or *particle* or *grid* or *surf* that
-   contains a formula or links to Python code,, the formula or Python
-   code is NOT immediately evaluated and the result stored.  See the
-   discussion below about "Immediate Evaluation of Variables" if you want
-   to do this.  This is also true of the *format* style variable since it
-   evaluates another variable when it is invoked.
+IMPORTANT NOTE: When an input script line is encountered that defines
+a variable of style *equal* or *particle* or *grid* or *surf* that
+contains a formula or links to Python code,, the formula or Python
+code is NOT immediately evaluated and the result stored.  See the
+discussion below about "Immediate Evaluation of Variables" if you want
+to do this.  This is also true of the *format* style variable since it
+evaluates another variable when it is invoked.
 
 Variables of style *equal* and *particle* and *grid* and *surf* can be
 used as inputs to various other commands which evaluate their formulas
@@ -151,17 +146,15 @@ be used so long as the associated Python function, as defined by the
 SPARTA command evaluates the python-style variable, the Python
 function will be executed.
 
-.. warning::
-
-   When a variable command is encountered in the input
-   script and the variable name has already been specified, the command
-   is ignored.  This means variables can NOT be re-defined in an input
-   script (with 2 exceptions, read further).  This is to allow an input
-   script to be processed multiple times without resetting the variables;
-   see the :doc:`jump <jump>` or :doc:`include <include>` commands.  It also
-   means that using the `command-line switch <Section_start.html#start_7>`_
-   -var will override a corresponding index variable setting in the input
-   script.
+IMPORTANT NOTE: When a variable command is encountered in the input
+script and the variable name has already been specified, the command
+is ignored.  This means variables can NOT be re-defined in an input
+script (with 2 exceptions, read further).  This is to allow an input
+script to be processed multiple times without resetting the variables;
+see the :doc:`jump <jump>` or :doc:`include <include>` commands.  It also
+means that using the `command-line switch <Section_start.html#start_7>`_
+-var will override a corresponding index variable setting in the input
+script.
 
 There are two exceptions to this rule.  First, variables of style
 *string*\ , *getenv*\ , *internal*\ , *equal*\ , *particle*\ , *grid*\ , and
@@ -509,13 +502,11 @@ OR operator "\|\|" has the lowest precedence.  Parenthesis can be used
 to group one or more portions of a formula and/or enforce a different
 order of evaluation than what would occur with the default precedence.
 
-.. warning::
-
-   Because a unary minus is higher precedence than
-   exponentiation, the formula "-2\^2" will evaluate to 4, not -4.  This
-   convention is compatible with some programming languages, but not
-   others.  As mentioned, this behavior can be easily overridden with
-   parenthesis; the formula "-(2\^2)" will evaluate to -4.
+IMPORTANT NOTE: Because a unary minus is higher precedence than
+exponentiation, the formula "-2\^2" will evaluate to 4, not -4.  This
+convention is compatible with some programming languages, but not
+others.  As mentioned, this behavior can be easily overridden with
+parenthesis; the formula "-(2\^2)" will evaluate to -4.
 
 The exponentiation operator "x\^y" evaluates to 1.0 whenever y is zero,
 for any value of x.  An error is generated if x is zero and y is
@@ -568,13 +559,11 @@ for each processor.  This effectively generates a different random
 number for each particle or grid cell being looped over in the
 particle-style or grid-style variable.
 
-.. warning::
-
-   Internally, there is just one random number generator
-   for all equal-style variables and one for all particle-style and
-   grid-style variables.  If you define multiple variables (of each
-   style) which use the random() or normal() math functions, then the
-   internal random number generators will only be initialized once.
+IMPORTANT NOTE: Internally, there is just one random number generator
+for all equal-style variables and one for all particle-style and
+grid-style variables.  If you define multiple variables (of each
+style) which use the random() or normal() math functions, then the
+internal random number generators will only be initialized once.
 
 The ceil(), floor(), and round() functions are those in the C math
 library.  Ceil() is the smallest integer not less than its argument.
@@ -595,11 +584,9 @@ stopstep can span multiple runs, using the *start* and *stop* keywords
 of the :doc:`run <run>` command.  See the :doc:`run <run>` command for
 details of how to do this.
 
-.. warning::
-
-   Currently, the run command does not currently support
-   the start/stop keywords.  In the formula above startstep = 0 and
-   stopstep = the number of timesteps being performed by the run.
+IMPORTANT NOTE: Currently, the run command does not currently support
+the start/stop keywords.  In the formula above startstep = 0 and
+stopstep = the number of timesteps being performed by the run.
 
 The stagger(x,y) function uses the current timestep to generate a new
 timestep.  X,y > 0 and x > y are required.  The generated timesteps
@@ -1272,14 +1259,12 @@ The way to get around both of these special cases is to perform a
 ----------
 
 
-Restrictions
-""""""""""""
+**Restrictions:**
 
 All *universe*\ - and *uloop*\ -style variables defined in an input script
 must have the same number of values.
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`next <next>`, :doc:`jump <jump>`, :doc:`include <include>`, :doc:`fix print <fix_print>`, :doc:`print <print>`
 

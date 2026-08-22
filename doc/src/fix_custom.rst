@@ -3,8 +3,7 @@
 fix custom command
 ==================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -17,8 +16,7 @@ Syntax
 * style = *particle* or *grid* or *surf*
 * action args = all remaining args are identical to those defined for the :doc:`custom <custom>` command
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -33,8 +31,7 @@ Examples
 
 See examples using many of the :doc:`custom <custom>` and :doc:`fix custom <fix_custom>` command actions in examples/custom
 
-Description
-"""""""""""
+**Description:**
 
 Reset one or more custom attributes for particles, grid cells, or
 surface elements.  This operation is performed once every *Nfreq*
@@ -78,22 +75,18 @@ first run.  Likewise, between runs, this command DOES reset attribute
 values at the end of the last step (10000, 20000, etc) of each run,
 but DOES NOT reset them again before the first step of the next run.
 
-.. warning::
+IMPORTANT NOTE: If needed, resetting of custom values can be performed
+before the first run or between runs using the :doc:`custom <custom>`
+command.
 
-   If needed, resetting of custom values can be performed
-   before the first run or between runs using the :doc:`custom <custom>`
-   command.
-
-.. warning::
-
-   If *Nfreq* triggers the reading of a file on the last
-   step of the last run in the input script, then the
-   wildcard-substituted filename (explained below) must exist.  This is
-   the case, even though the new values will have no effect in the
-   current input script, since there are no subsequent timestep
-   operations which will use them.  Note, however that if a restart file
-   is written on the last timestep, or following the last run, the
-   updated custom values will be written to the restart file.
+IMPORTANT NOTE: If *Nfreq* triggers the reading of a file on the last
+step of the last run in the input script, then the
+wildcard-substituted filename (explained below) must exist.  This is
+the case, even though the new values will have no effect in the
+current input script, since there are no subsequent timestep
+operations which will use them.  Note, however that if a restart file
+is written on the last timestep, or following the last run, the
+updated custom values will be written to the restart file.
 
 
 ----------
@@ -101,8 +94,7 @@ but DOES NOT reset them again before the first step of the next run.
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`custom <custom>`, :doc:`mixture <mixture>`, :doc:`group <group>`,
 :doc:`region <region>`

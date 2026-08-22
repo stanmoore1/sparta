@@ -3,8 +3,7 @@
 print command
 =============
 
-Syntax
-""""""
+**Syntax:**
 
 print string keyword value:pre
 
@@ -20,8 +19,7 @@ print string keyword value:pre
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -34,8 +32,7 @@ Examples
    variable t equal c_myTemp
    print "The system temperature is now $t"
 
-Description
-"""""""""""
+**Description:**
 
 Print a text string to the screen and logfile.  One line of output is
 generated.  The text string must be a single argument, so it should be
@@ -69,13 +66,11 @@ involving mathematical operations, global values calculated by a
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`fix print <fix_print>`, :doc:`variable <variable>`
 
-Default
-"""""""
+**Default:**
 
 The option defaults are no file output and screen = yes.
 

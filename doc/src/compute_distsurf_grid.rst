@@ -6,8 +6,7 @@ compute distsurf/grid command
 compute distsurf/grid/kk command
 ================================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -28,8 +27,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -37,8 +35,7 @@ Examples
    compute 1 distsurf/grid all all
    compute 1 distsurf/grid subset sphere2 dir 1 0 0
 
-Description
-"""""""""""
+**Description:**
 
 Define a computation that calculates the minimum distance from each
 grid cell in a grid cell group to any surface element in a surface
@@ -86,9 +83,7 @@ value of 0.5 to create refine grid cells once.  The second adapt\_grid
 command uses a threshold distance value of 0.1 to create some of the
 grid cells closer to the surface a second time.
 
-.. note::
-
-   include pic
+NOTE: include pic
 
 Here is an example of how to use this compute with two successive
 "adapt\_grid" commands.  The first refines once for grid cells within a
@@ -115,8 +110,7 @@ image):
 ----------
 
 
-Output info
-"""""""""""
+**Output info:**
 
 This compute calculates a per-grid vector whose values are the
 distances of each grid cell from any of the surface elements.
@@ -165,13 +159,11 @@ effectively.
 
 **Restrictions:** None
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`adapt\_grid <adapt_grid>`
 
-Default
-"""""""
+**Default:**
 
 The keyword default is dir = 0,0,0.
 

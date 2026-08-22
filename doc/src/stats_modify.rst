@@ -3,8 +3,7 @@
 stats\_modify command
 =====================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -25,8 +24,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -35,8 +33,7 @@ Examples
    stats_modify format 3 %15.8g
    stas_modify format line "%ld %g %g %15.8g"
 
-Description
-"""""""""""
+**Description:**
 
 Set options for how statistical information is computed and printed by
 SPARTA.
@@ -66,16 +63,14 @@ else the *line* setting (if specified) for that value is used, else
 the default setting is used.  A setting of *none* clears all previous
 settings, reverting all values to their default format.
 
-.. note::
-
-   The stats output values *step* and *atoms* are stored internally
-   as 8-byte signed integers, rather than the usual 4-byte signed
-   integers.  When specifying the *format int* option you can use a
-   "%d"-style format identifier in the format string and SPARTA will
-   convert this to the corresponding 8-byte form when it is applied to
-   those keywords.  However, when specifying the *line* option or *format
-   M string* option for *step* and *natoms*\ , you should specify a format
-   string appropriate for an 8-byte signed integer, e.g. one with "%ld".
+NOTE: The stats output values *step* and *atoms* are stored internally
+as 8-byte signed integers, rather than the usual 4-byte signed
+integers.  When specifying the *format int* option you can use a
+"%d"-style format identifier in the format string and SPARTA will
+convert this to the corresponding 8-byte form when it is applied to
+those keywords.  However, when specifying the *line* option or *format
+M string* option for *step* and *natoms*\ , you should specify a format
+string appropriate for an 8-byte signed integer, e.g. one with "%ld".
 
 The *every* keyword allows a variable to be specified which will
 determine the timesteps on which statistical output is generated.  It
@@ -107,13 +102,11 @@ every command will be overridden.
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`stats <stats>`, :doc:`stats\_style <stats_style>`
 
-Default
-"""""""
+**Default:**
 
 The option defaults are flush = no, format int = "%8d", format float =
 "%12.8g", and every = non-variable setting provided by the

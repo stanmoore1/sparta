@@ -3,8 +3,7 @@
 read\_particles command
 =======================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -14,16 +13,14 @@ Syntax
 * file = dump file to read snapshot from
 * Nstep = timestep to read
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
 
    read_particles dump.sphere 10500
 
-Description
-"""""""""""
+**Description:**
 
 Read a snapshot of particles from a previously created dump file and
 add them to the simulation domain.  This is a means of reading in
@@ -72,8 +69,7 @@ to move.
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`create\_particles <create_particles>`, :doc:`fix emit/face <fix_emit_face>`
 

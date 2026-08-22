@@ -23,12 +23,10 @@ necessary) downloading or building any extra library it requires. It
 also gives links to documentation, example scripts, and
 pictures/movies (if available) that illustrate use of the package.
 
-.. note::
-
-   To see the complete list of commands a package adds to SPARTA,
-   just look at the files in its src directory, e.g. "ls src/KOKKOS".
-   Files with names that start with fix, compute, etc correspond to
-   commands with the same style names.
+NOTE: To see the complete list of commands a package adds to SPARTA,
+just look at the files in its src directory, e.g. "ls src/KOKKOS".
+Files with names that start with fix, compute, etc correspond to
+commands with the same style names.
 
 In these two tables, the "Example" column is a sub-directory in the
 examples directory of the distribution which has an input script that
@@ -146,10 +144,8 @@ kk" or "-suffix kk" `command-line switches <Section_start.html#start_7>`_.
 
 You must have a C++17 compatible compiler to use this package.
 
-.. warning::
-
-   The KOKKOS package must be built using CMake. GNU
-   Makefile builds are not supported.
+IMPORTANT NOTE: The KOKKOS package must be built using CMake. GNU
+Makefile builds are not supported.
 
 **Authors:** The KOKKOS package was created primarily by Stan Moore (Sandia),
 with contributions from other folks as well.
@@ -164,10 +160,8 @@ The KOKKOS package is built with CMake using a preset file that
 specifies the Kokkos backend (OpenMP, CUDA, HIP, or SYCL) and the
 target hardware architecture. Preset files are in cmake/presets/.
 
-.. note::
-
-   You cannot build one executable that runs on multiple hardware
-   targets. Build SPARTA separately for each target.
+NOTE: You cannot build one executable that runs on multiple hardware
+targets. Build SPARTA separately for each target.
 
 **For multicore CPUs using OpenMP:**
 
@@ -297,10 +291,8 @@ Kitware (version 9 or later recommended). It is distinct from the
 "tools/paraview" Python converters, which post-process existing SPARTA
 dump files rather than writing VTK directly.
 
-.. warning::
-
-   The VTK package must be built using CMake. GNU Makefile
-   builds are not supported.
+IMPORTANT NOTE: The VTK package must be built using CMake. GNU Makefile
+builds are not supported.
 
 **Install or un-install with CMake:**
 

@@ -6,8 +6,7 @@ fix balance command
 fix balance/kk command
 ======================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -38,8 +37,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -47,8 +45,7 @@ Examples
    fix 1 balance 1000 1.1 rcb cell
    fix 2 balance 10000 1.0 random
 
-Description
-"""""""""""
+**Description:**
 
 This command dynamically adjusts the assignment of grid cells and
 their particles to processors as a simulation runs, to attempt to
@@ -76,11 +73,9 @@ each processor.  This means each processor's cells will be
 geometrically compact.  The *random* and *proc* keywords will produce
 dispersed assignments of child cells to each processor.
 
-.. warning::
-
-   See `Section 6.8 <Section_howto.html#howto_8>`_ of the
-   manual for an explanation of clumped and dispersed grid cell
-   assignments and their relative performance trade-offs.
+IMPORTANT NOTE: See `Section 6.8 <Section_howto.html#howto_8>`_ of the
+manual for an explanation of clumped and dispersed grid cell
+assignments and their relative performance trade-offs.
 
 
 ----------
@@ -95,17 +90,15 @@ processor.  Thus an imbalance factor of 1.0 is perfect balance.  For
 processor has 1200 particles, then the factor is 1.2, meaning there is
 a 20% imbalance.  The *thresh* setting must be >= 1.0.
 
-.. warning::
-
-   This command attempts to minimize the imbalance
-   factor, as defined above.  But computational cost is not strictly
-   proportional to particle count, depending on the
-   :doc:`collision <collide>` and :doc:`chemistry <react>` models being used.
-   Also, changing the assignment of grid cells and particles to
-   processors may lead to additional communication overheads, e.g.  when
-   migrating particles between processors.  Thus you should benchmark the
-   run times of your simulation to judge how often balancing should be
-   performed, and how aggressively to set the *thresh* value.
+IMPORTANT NOTE: This command attempts to minimize the imbalance
+factor, as defined above.  But computational cost is not strictly
+proportional to particle count, depending on the
+:doc:`collision <collide>` and :doc:`chemistry <react>` models being used.
+Also, changing the assignment of grid cells and particles to
+processors may lead to additional communication overheads, e.g.  when
+migrating particles between processors.  Thus you should benchmark the
+run times of your simulation to judge how often balancing should be
+performed, and how aggressively to set the *thresh* value.
 
 
 ----------
@@ -148,18 +141,14 @@ of timesteps *Nfreq* between balancing steps also needs to be large
 enough to give reliable timings. The timers used for balancing tally
 time from the move, sort, collide, and modify portions of each timestep.
 
-.. warning::
+IMPORTANT NOTE: The :doc:`adapt\_grid <adapt_grid>` command zeros out
+timing data, so the weight *time* option is not available immediatly
+after this command.
 
-   The :doc:`adapt\_grid <adapt_grid>` command zeros out
-   timing data, so the weight *time* option is not available immediatly
-   after this command.
-
-.. warning::
-
-   The coarsening option in :doc:`fix\_adapt <fix_adapt>` may
-   shift cells to different processors, which makes the accumulated
-   timing data for the weight *time* option less accurate when load
-   balancing is performed immediately after this command.
+IMPORTANT NOTE: The coarsening option in :doc:`fix\_adapt <fix_adapt>` may
+shift cells to different processors, which makes the accumulated
+timing data for the weight *time* option less accurate when load
+balancing is performed immediately after this command.
 
 Here is an example of an RCB partitioning for 24 processors, of a 2d
 hierarchical grid with 5 levels, refined around a tilted ellipsoidal
@@ -252,8 +241,7 @@ effectively.
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`create\_grid <create_grid>`, :doc:`balance\_grid <balance_grid>`
 

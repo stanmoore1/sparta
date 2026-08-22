@@ -3,8 +3,7 @@
 partition command
 =================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -15,8 +14,7 @@ Syntax
 * N = partition number (see asterisk form below)
 * command = any SPARTA command
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -26,8 +24,7 @@ Examples
    partition yes \*5 fix all nve
    partition yes 6\* fix all nvt temp 1.0 1.0 0.1
 
-Description
-"""""""""""
+**Description:**
 
 This command invokes the specified command on a subset of the
 partitions of processors you have defined via the -partition

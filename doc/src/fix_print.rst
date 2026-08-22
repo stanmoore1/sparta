@@ -3,8 +3,7 @@
 fix print command
 =================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -28,8 +27,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -37,8 +35,7 @@ Examples
    fix extra print 100 "Coords of marker particle = $x $y $z"
    fix extra print 100 "Coords of marker particle = $x $y $z" file coord.txt
 
-Description
-"""""""""""
+**Description:**
 
 Print a text string every N steps during a simulation run.  This can
 be used for diagnostic purposes or as a debugging tool to monitor some
@@ -87,13 +84,11 @@ are stored by this fix for access by various output commands.
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`variable <variable>`, :doc:`print <print>`
 
-Default
-"""""""
+**Default:**
 
 The option defaults are no file output, screen = yes, and title string
 as described above.

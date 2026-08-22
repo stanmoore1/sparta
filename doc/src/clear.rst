@@ -3,16 +3,14 @@
 clear command
 =============
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
 
    clear
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -21,8 +19,7 @@ Examples
    clear
    (commands for 2nd simulation)
 
-Description
-"""""""""""
+**Description:**
 
 This command deletes all atoms, restores all settings to their default
 values, and frees all memory allocated by SPARTA.  Once a clear

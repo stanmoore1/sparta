@@ -3,8 +3,7 @@
 restart command
 ===============
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -29,8 +28,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -41,8 +39,7 @@ Examples
    restart 10000 flow.%.1 flow.%.2 nfile 10
    restart v_mystep flow.restart
 
-Description
-"""""""""""
+**Description:**
 
 Write out a binary restart file every so many timesteps, in either or
 both of two modes, as a run proceeds.  A value of 0 means do not write
@@ -150,13 +147,11 @@ next 3 processors and write it to a restart file.
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`write\_restart <write_restart>`, :doc:`read\_restart <read_restart>`
 
-Default
-"""""""
+**Default:**
 
 
 .. parsed-literal::

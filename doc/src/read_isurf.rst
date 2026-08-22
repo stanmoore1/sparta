@@ -3,8 +3,7 @@
 read\_isurf command
 ===================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -31,8 +30,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -41,8 +39,7 @@ Examples
    read_isurf subset 150 100 50 isurf.materials.3d 120.5 fablate type isurf.type
    read_isurf subset 150 100 50 isurf.materials.3d 120.5 fablate read parallel
 
-Description
-"""""""""""
+**Description:**
 
 Read the geometry of a surface from the specified file.  In SPARTA, a
 "surface" is a collection of surface elements that represent the
@@ -133,14 +130,12 @@ store 3 integers in binary format: Nxfile, Nyfile, and Nzfile.  These
 are the dimensions of the grid of corner point values in the remainder
 of the file.
 
-.. warning::
-
-   The Nxfile, Nyfile, Nzfile values are for a 2d or 3d
-   grid of corner points, which overlay the Nx by Ny by Nz grid of cells.
-   In each dimension there is one more corner point than cells.  Thus
-   Nxfile = Nx+1, Nyfile = Ny+1, Nzfile = Nz+1 is required.  SPARTA will
-   give an error if the read\_isurf Nx,Ny,Nz arguments do not match the
-   first 2 or 3 integers in the file.
+IMPORTANT NOTE: The Nxfile, Nyfile, Nzfile values are for a 2d or 3d
+grid of corner points, which overlay the Nx by Ny by Nz grid of cells.
+In each dimension there is one more corner point than cells.  Thus
+Nxfile = Nx+1, Nyfile = Ny+1, Nzfile = Nz+1 is required.  SPARTA will
+give an error if the read\_isurf Nx,Ny,Nz arguments do not match the
+first 2 or 3 integers in the file.
 
 The remaining N bytes of the file are a series of corner point values.
 There are N = Nxfile \* Nyfile values in 2d, and N = Nxfile \* Nyfile \*
@@ -158,26 +153,22 @@ command, where material is removed incrementally (from the corner
 point values) due to collisions of particles with the implicit
 surfaces.
 
-.. warning::
-
-   The corner point values are a 2d or 3d regular array
-   which must be ordered as follows.  The x indices (1 to Nxfile) vary
-   fastest, then the y indices (1 to Nyfile), and the z indices slowest
-   (1 to Nzfile).  These will be assigned as corner points to each child
-   grid cell in the Nx by Ny by Nz simulation domain.  For mapping corner
-   points to grid cells, the ordering of the regular array of grid cells
-   in the simulation domain is the same: their x indices vary fastest,
-   then y, and their z indices very slowest.
+IMPORTANT NOTE: The corner point values are a 2d or 3d regular array
+which must be ordered as follows.  The x indices (1 to Nxfile) vary
+fastest, then the y indices (1 to Nyfile), and the z indices slowest
+(1 to Nzfile).  These will be assigned as corner points to each child
+grid cell in the Nx by Ny by Nz simulation domain.  For mapping corner
+points to grid cells, the ordering of the regular array of grid cells
+in the simulation domain is the same: their x indices vary fastest,
+then y, and their z indices very slowest.
 
 The 8 corner point values (4 in 2d) for each grid cell are used with a
 marching cubes algorithm (marching squares in 2d) to infer a set of
 triangles (line segments in 2d) which are created in the grid cell.
 
-.. warning::
-
-   All triangles (line segments in 2d) created within the
-   same grid cell are assigned the same surface ID, which is the grid
-   cell ID.
+IMPORTANT NOTE: All triangles (line segments in 2d) created within the
+same grid cell are assigned the same surface ID, which is the grid
+cell ID.
 
 A good description of the two algorithms is given on these Wikipedia
 webpages:
@@ -196,28 +187,26 @@ The threshold must be specified as a floating point value such that 0
 not allowed, because that could induce generation of implicit surfaces
 with zero length (2d line) or area (3d triangle).
 
-.. warning::
-
-   The aggregate set of implicit surfaces created by this
-   procedure must represent a watertight object(s), the same as explained
-   for the :doc:`read\_surf <read_surf>` command, otherwise SPARTA will
-   generate an error.  The marching cube and square algorithms guarantee
-   this.  However, if the Nx by Ny by Nz array of grid cells is interior
-   to the simulation box, the entire outer boundary of the Nx+1 by Ny+1
-   by Nz+1 grid of corner points should have values = 0.  This will
-   insure no surface element touches the outer boundary (which would
-   induce a non-watertight surface).  If the array of grid cells touches
-   a simulation box face, then this is not a requirement (the same as if
-   a set of explicit surfs were clipped at the box boundary).  However,
-   if a boundary is periodic in a particular dimension and the array of
-   grid cells touches that boundary, then you must insure the Nx+1 by
-   Ny+1 by Nz+1 grid of corner points spans that entire dimension, and
-   its values are periodic in the same sense the simulation box is.
-   E.g. if the y dimension is periodic, then the corner point values at
-   the y = 1 and y = Ny+1 lines or planes of the 2d or 3d corner point
-   array must be identical for each x and z coordinate.  Otherwise the
-   aggregate set of induced implicit surfaces will not be consistent
-   across the y periodic boundary.
+IMPORTANT NOTE: The aggregate set of implicit surfaces created by this
+procedure must represent a watertight object(s), the same as explained
+for the :doc:`read\_surf <read_surf>` command, otherwise SPARTA will
+generate an error.  The marching cube and square algorithms guarantee
+this.  However, if the Nx by Ny by Nz array of grid cells is interior
+to the simulation box, the entire outer boundary of the Nx+1 by Ny+1
+by Nz+1 grid of corner points should have values = 0.  This will
+insure no surface element touches the outer boundary (which would
+induce a non-watertight surface).  If the array of grid cells touches
+a simulation box face, then this is not a requirement (the same as if
+a set of explicit surfs were clipped at the box boundary).  However,
+if a boundary is periodic in a particular dimension and the array of
+grid cells touches that boundary, then you must insure the Nx+1 by
+Ny+1 by Nz+1 grid of corner points spans that entire dimension, and
+its values are periodic in the same sense the simulation box is.
+E.g. if the y dimension is periodic, then the corner point values at
+the y = 1 and y = Ny+1 lines or planes of the 2d or 3d corner point
+array must be identical for each x and z coordinate.  Otherwise the
+aggregate set of induced implicit surfaces will not be consistent
+across the y periodic boundary.
 
 For an axisymmetric domain (see the :doc:`dimension <dimension>` and
 :doc:`boundary <boundary>` commands), the y = 0 face of the box is the
@@ -278,13 +267,11 @@ store 3 integers in binary format: Nxfile, Nyfile, and Nzfile.  These
 are the dimensions of the grid of corner point values in the remainder
 of the file.
 
-.. warning::
-
-   The Nxfile, Nyfile, Nzfile values are for a 2d or 3d
-   grid of per-cell values, which overlay the Nx by Ny by Nz grid of
-   cells.  Thus Nxfile = Nx, Nyfile = Ny, Nzfile = Nz is required.
-   SPARTA will give an error if the read\_isurf Nx,Ny,Nz arguments do not
-   match the first 2 or 3 integers in the file.
+IMPORTANT NOTE: The Nxfile, Nyfile, Nzfile values are for a 2d or 3d
+grid of per-cell values, which overlay the Nx by Ny by Nz grid of
+cells.  Thus Nxfile = Nx, Nyfile = Ny, Nzfile = Nz is required.
+SPARTA will give an error if the read\_isurf Nx,Ny,Nz arguments do not
+match the first 2 or 3 integers in the file.
 
 The remaining N bytes of the file are a series of one-byte integer
 values.  There are N = Nxfile \* Nyfile values in 2d, and N = Nxfile \*
@@ -292,16 +279,14 @@ Nyfile \* Nzfile values in 3d.  Each value is a single byte integer
 from 1 to 255 inclusive, since surface element type values must be >
 0.
 
-.. warning::
-
-   The corner point values are a 2d or 3d regular array
-   which must be ordered as follows.  The x indices (1 to Nxfile) vary
-   fastest, then the y indices (1 to Nyfile), and the z indices slowest
-   (1 to Nzfile).  These will be assigned to each grid cell in the Nx by
-   Ny by Nz simulation domain.  For mapping type values to grid cells,
-   the ordering of the regular array of grid cells in the simulation
-   domain is the same: their x indices vary fastest, then y, and their z
-   indices very slowest.
+IMPORTANT NOTE: The corner point values are a 2d or 3d regular array
+which must be ordered as follows.  The x indices (1 to Nxfile) vary
+fastest, then the y indices (1 to Nyfile), and the z indices slowest
+(1 to Nzfile).  These will be assigned to each grid cell in the Nx by
+Ny by Nz simulation domain.  For mapping type values to grid cells,
+the ordering of the regular array of grid cells in the simulation
+domain is the same: their x indices vary fastest, then y, and their z
+indices very slowest.
 
 The type value for each grid cell is used to assign a type value to
 each surface element created in that grid cell by the marching cubes
@@ -356,8 +341,7 @@ point files and large numbers of processors.
 ----------
 
 
-Restrictions
-""""""""""""
+**Restrictions:**
 
 This command can only be used after the simulation box is defined by
 the :doc:`create\_box <create_box>` command, and after a grid has been
@@ -367,13 +351,11 @@ up inside the set of implicit surfaces.
 
 Simulations with implicit surfaces cannot perform grid adaptation.
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`read\_surf <read_surf>`, :doc:`write\_surf <write_surf>`, :doc:`fix ablate <fix_ablate>`
 
-Default
-"""""""
+**Default:**
 
 The optional keyword defaults are group = all, type = no, push = yes,
 precision int, and read serial.

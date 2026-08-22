@@ -3,8 +3,7 @@
 echo command
 ============
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -13,8 +12,7 @@ Syntax
 
 * style = *none* or *screen* or *log* or *both*
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -22,8 +20,7 @@ Examples
    echo both
    echo log
 
-Description
-"""""""""""
+**Description:**
 
 This command determines whether SPARTA echoes each input script
 command to the screen and/or log file as it is read and processed.  If
@@ -37,8 +34,7 @@ in place of this command.
 
 **Related commands:** none
 
-Default
-"""""""
+**Default:**
 
 
 .. parsed-literal::

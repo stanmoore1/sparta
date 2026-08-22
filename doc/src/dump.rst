@@ -6,8 +6,7 @@ dump command
 :doc:`dump image <dump_image>` command
 ======================================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -124,8 +123,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -136,8 +134,7 @@ Examples
 
    dump 4 tally all 10 tmp.tally c_surfTally[\*]
 
-Description
-"""""""""""
+**Description:**
 
 Dump a snapshot of simulation quantities to one or more files every N
 timesteps in one of several styles.  The *image* style is the
@@ -588,21 +585,18 @@ asterisk to effectively specify multiple values.
 ----------
 
 
-Restrictions
-""""""""""""
+**Restrictions:**
 
 To write gzipped dump files, you must compile SPARTA with the
 -DSPARTA\_GZIP option - see the `Making SPARTA <Section_start.html#start_2>`_
 section of the documentation.
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`dump image <dump_image>`, :doc:`dump\_modify <dump_modify>`,
 :doc:`undump <undump>`
 
-Default
-"""""""
+**Default:**
 
 The defaults for the image style are listed on the :doc:`dump image <dump_image>` doc page.
 

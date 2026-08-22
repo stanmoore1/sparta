@@ -6,8 +6,7 @@ create\_particles command
 create\_particles/kk command
 ============================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -53,8 +52,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -68,8 +66,7 @@ Examples
    create_particles air n 0 temperature myTemp xgrid ygrid zgrid
    create_particles air n 0 velocity myVx NULL myVz xpos ypos NULL twopass
 
-Description
-"""""""""""
+**Description:**
 
 Create particles and add them to the simulation domain.  The
 attributes of individual particles, such as species and velocity, are
@@ -80,20 +77,18 @@ See the :doc:`mixture <mixture>` command for more details.  Note that
 this command can be used multiple times to add more and more
 particles.
 
-.. warning::
-
-   When a particle is created at a specified temperature
-   (as set by the :doc:`mixture <mixture>` command), it's rotational and
-   vibrational energy will also be initialized, consistent with the
-   corresponding mixture temperatures.  The *rotate* and *vibrate*
-   options of the :doc:`collide\_modify <collide_modify>` command determine
-   how internal energy modes are initialized.  If the
-   :doc:`collide <collide>` command has not yet been specified, then no
-   rotational or vibrational energy will be assigned to created
-   particles.  Thus if you wish to create particles with non-zero
-   internal energy, the :doc:`collide <collide>` and (optionally)
-   :doc:`collide\_modify <collide_modify>` commands must be used before this
-   command.
+IMPORTANT NOTE: When a particle is created at a specified temperature
+(as set by the :doc:`mixture <mixture>` command), it's rotational and
+vibrational energy will also be initialized, consistent with the
+corresponding mixture temperatures.  The *rotate* and *vibrate*
+options of the :doc:`collide\_modify <collide_modify>` command determine
+how internal energy modes are initialized.  If the
+:doc:`collide <collide>` command has not yet been specified, then no
+rotational or vibrational energy will be assigned to created
+particles.  Thus if you wish to create particles with non-zero
+internal energy, the :doc:`collide <collide>` and (optionally)
+:doc:`collide\_modify <collide_modify>` commands must be used before this
+command.
 
 If the *n* style is used with *Np* = 0, then the number of created
 particles is calculated by SPARTA as a function of the global *fnum*
@@ -124,10 +119,8 @@ fractional value, e.g. 12.5, then 12 particles will be inserted, and a
 cells are looped over, the remainder fraction is accumulated, so that
 exactly *Np* particles are created across all the processors.
 
-.. warning::
-
-   The preceeding calculation is actually done using
-   *weighted* cell volumes.  Grid cells can be weighted using the :doc:`global weight <global>` command.
+IMPORTANT NOTE: The preceeding calculation is actually done using
+*weighted* cell volumes.  Grid cells can be weighted using the :doc:`global weight <global>` command.
 
 Each particle is inserted at a random location within the grid cell.
 The particle species is chosen randomly in accord with the *frac*
@@ -170,9 +163,7 @@ checks what grid cell it is in, and only stores the particle if it
 owns that grid cell.  Thus an identical set of particles are created,
 no matter how many processors are running the simulation
 
-.. warning::
-
-   The *global* yes option is not yet implemented.
+IMPORTANT NOTE: The *global* yes option is not yet implemented.
 
 If the value is *no*\ , then each of the *P* processors generates a
 *N/P* subset of particles, using its own random number generation.  It
@@ -190,15 +181,13 @@ domain.  Note that the *side* option for the :doc:`region <region>`
 command can be used to define whether the inside or outside of the
 geometric region is considered to be "in" the region.
 
-.. warning::
-
-   If the *region* and *n* keywords are used together,
-   less than N particles may be added.  This is because grid cells will
-   be candidates for particle insertion, unless they are entirely outside
-   the bounding box that encloses the region.  Particles those grid cells
-   attempt to add are included in the count for N, even if some or all of
-   the particle insertions are rejected due to not being inside the
-   region.
+IMPORTANT NOTE: If the *region* and *n* keywords are used together,
+less than N particles may be added.  This is because grid cells will
+be candidates for particle insertion, unless they are entirely outside
+the bounding box that encloses the region.  Particles those grid cells
+attempt to add are included in the count for N, even if some or all of
+the particle insertions are rejected due to not being inside the
+region.
 
 
 ----------
@@ -518,8 +507,7 @@ effectively.
 ----------
 
 
-Restrictions
-""""""""""""
+**Restrictions:**
 
 The keywords *density* and *custom density* cannot both be used.  This
 is because they are both methods for setting the number of particles
@@ -527,13 +515,11 @@ created.  Ditto for *temperature* amd *custom temperature*\ .  Ditto for
 *vstream* and *custom vstream*\ .  Ditto for *species* and *custom
 fractions*\ .
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`mixture <mixture>`, :doc:`fix emit/face <fix_emit_face>`
 
-Default
-"""""""
+**Default:**
 
 The option defaults are cut = yes and global = no.
 

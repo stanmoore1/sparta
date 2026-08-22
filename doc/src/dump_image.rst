@@ -6,8 +6,7 @@ dump image command
 dump movie command
 ==================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -99,8 +98,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -121,8 +119,7 @@ finished) and play it in the Firefox browser:
    % convert tmp\*jpg tmp.gif
    % firefox tmp.gif
 
-Description
-"""""""""""
+**Description:**
 
 Dump a high-quality ray-traced image of the simulation every N
 timesteps and save the images either as a sequence of JPEG or PNG or
@@ -685,14 +682,12 @@ when combined with reduced shininess or increased ambient lighting.  The
 *width* value sets the width of the outlines in pixels of the final image; the
 *color* value sets their color, e.g. black.
 
-.. warning::
-
-   The *outline* keyword should not be combined with the
-   transparency options of the :doc:`dump\_modify <dump_modify>` command.
-   Outlines are drawn where the distance to the viewer jumps, and every
-   pixel left out by the dither pattern of a transparent object looks like
-   such a jump, so a transparent object is outlined pixel by pixel and is
-   filled almost entirely with the outline color.
+IMPORTANT NOTE: The *outline* keyword should not be combined with the
+transparency options of the :doc:`dump\_modify <dump_modify>` command.
+Outlines are drawn where the distance to the viewer jumps, and every
+pixel left out by the dither pattern of a transparent object looks like
+such a jump, so a transparent object is outlined pixel by pixel and is
+filled almost entirely with the outline color.
 
 
 ----------
@@ -785,8 +780,7 @@ You can play a movie file as follows:
 ----------
 
 
-Restrictions
-""""""""""""
+**Restrictions:**
 
 To write JPEG images, you must use the -DSPARTA\_JPEG switch when
 building SPARTA and link with a JPEG library. To write PNG images, you
@@ -825,13 +819,11 @@ or encode in a different format that is also supported by your copy of
 FFmpeg, and which does not have this limitation (e.g. .avi, .mkv,
 mp4).
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`dump <dump>`, :doc:`dump\_modify <dump_modify>`, :doc:`undump <undump>`
 
-Default
-"""""""
+**Default:**
 
 The defaults for the keywords are as follows:
 

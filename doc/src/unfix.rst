@@ -3,8 +3,7 @@
 unfix command
 =============
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -13,8 +12,7 @@ Syntax
 
 * fix-ID = ID of a previously defined fix
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -22,16 +20,14 @@ Examples
    unfix 2
    unfix lower-boundary
 
-Description
-"""""""""""
+**Description:**
 
 Delete a fix that was previously defined with a :doc:`fix <fix>`
 command.
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`fix <fix>`
 

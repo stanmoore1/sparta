@@ -3,8 +3,7 @@
 read\_grid command
 ==================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -24,8 +23,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -33,8 +31,7 @@ Examples
    read_grid data.grid
    read_grid data.grid custom temperature double 0
 
-Description
-"""""""""""
+**Description:**
 
 Read a grid file in text format which lists the grid cell IDs to be
 used to construct a hierarchical grid that overalys the simulation
@@ -59,15 +56,13 @@ cells a processor owns will not be contiguous in a geometric sense.
 They are thus assumed to be a "dispersed" assignment of grid cells to
 each processor.
 
-.. warning::
-
-   See `Section 6.8 <Section_howto.html#howto_8>`_ of the
-   manual for an explanation of clumped and dispersed grid cell
-   assignments and their relative performance trade-offs.  The
-   :doc:`balance\_grid <balance_grid>` command can be used after the grid is
-   read, to assign child cells to processors in different ways.  The "fix
-   balance" command can be used to re-assign them in a load-balanced
-   manner periodically during a running simulation.
+IMPORTANT NOTE: See `Section 6.8 <Section_howto.html#howto_8>`_ of the
+manual for an explanation of clumped and dispersed grid cell
+assignments and their relative performance trade-offs.  The
+:doc:`balance\_grid <balance_grid>` command can be used after the grid is
+read, to assign child cells to processors in different ways.  The "fix
+balance" command can be used to re-assign them in a load-balanced
+manner periodically during a running simulation.
 
 The *custom* keyword allows for the creation of custom per-grid
 attributes and specification of their values.  See the `Section 6.17 <Section_howto.html#howto_17>`_ doc page for an explanation of
@@ -104,8 +99,7 @@ per-grid vector named temperature which stores a single value per grid
 cell.  The next 3 integers will be assigned to a custom per-grid array
 named flags which stores 3 values per grid cell.
 
-Restrictions
-""""""""""""
+**Restrictions:**
 
 This command can only be used after the simulation box is defined by
 the :doc:`create\_box <create_box>` command.
@@ -114,8 +108,7 @@ To read gzipped grid files, you must compile SPARTA with the
 -DSPARTA\_GZIP option - see `Section 2.2 <Section_start.html#start_2>`_ of
 the manual for details.
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`create\_box <create_box>`, :doc:`create\_grid <create_grid>`,
 :doc:`write\_grid <write_grid>`

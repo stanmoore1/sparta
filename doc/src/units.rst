@@ -3,8 +3,7 @@
 units command
 =============
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -13,16 +12,14 @@ Syntax
 
 * style = *cgs* or *si*
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
 
    units cgs
 
-Description
-"""""""""""
+**Description:**
 
 This command sets the style of units used for a simulation.  It
 determines the units of all quantities specified in the input script
@@ -31,14 +28,12 @@ quantities output to the screen, log file, dump files, and other
 output files.  Typically, this command is used at the very beginning
 of an input script.
 
-.. warning::
-
-   Internally, this command simply sets the numeric
-   values of conversion factors used by SPARTA, e.g. the Boltzmann
-   constant used to convert temperature to energy.  It is up to you to
-   insure that all input values used in the input script and other input
-   files (surface data, species files, reaction files) contain numeric
-   values consistent with the chosen units.
+IMPORTANT NOTE: Internally, this command simply sets the numeric
+values of conversion factors used by SPARTA, e.g. the Boltzmann
+constant used to convert temperature to energy.  It is up to you to
+insure that all input values used in the input script and other input
+files (surface data, species files, reaction files) contain numeric
+values consistent with the chosen units.
 
 For style *cgs*\ , these are the units:
 
@@ -74,16 +69,14 @@ The units command also sets a default timestep size; see the
 * For style *cgs* this is dt = 1.0 sec.
 * For style *si* this is dt = 1.0 sec.
 
-Restrictions
-""""""""""""
+**Restrictions:**
 
 This command must be used before the simulation box is defined by a
 :doc:`create\_box <create_box>` command.
 
 **Related commands:** none
 
-Default
-"""""""
+**Default:**
 
 
 .. parsed-literal::

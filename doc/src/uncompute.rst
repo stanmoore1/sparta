@@ -3,8 +3,7 @@
 uncompute command
 =================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -13,8 +12,7 @@ Syntax
 
 * compute-ID = ID of a previously defined compute
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -22,16 +20,14 @@ Examples
    uncompute 2
    uncompute lower-boundary
 
-Description
-"""""""""""
+**Description:**
 
 Delete a compute that was previously defined with a :doc:`compute <compute>`
 command.
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`compute <compute>`
 

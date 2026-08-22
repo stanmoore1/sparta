@@ -3,8 +3,7 @@
 fix surf/temp command
 =====================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -26,8 +25,7 @@ Syntax
 * emisurf = emissivity of the surface (unitless, 0 < emisurf <= 1)
 * custom-name = name of a custom per-surf variable to create
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -36,8 +34,7 @@ Examples
    fix 1 surf/temp all 1000 c_1 250 0.9 temperature
    surf_collide 1 diffuse s_temperature 0.5
 
-Description
-"""""""""""
+**Description:**
 
 Compute a new temperature for each surface element in the group once
 every Nevery steps.  This command uses a compute or fix ID which
@@ -134,8 +131,7 @@ However, the custom per-surf attribute defined by this fix can be
 accessed by the :doc:`dump surf <dump>` command, as s\_name.  That means
 those per-surf values can be written to surface dump files.
 
-Restrictions
-""""""""""""
+**Restrictions:**
 
 This fix can only be used in simulations that define explicit
 surfaces, not for implicit surface models.

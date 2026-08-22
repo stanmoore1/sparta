@@ -3,8 +3,7 @@
 compute surf/reaction/tally command
 ===================================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -36,8 +35,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -52,8 +50,7 @@ file every 10 steps:
 
    dump 1 tally all 10 tmp.tally c_1[\*]
 
-Description
-"""""""""""
+**Description:**
 
 Tally various values for each reaction of a particle with a surface
 element during the current timestep.  Only surface collisions which
@@ -146,8 +143,7 @@ particle was created, these values will be zero.
 ----------
 
 
-Output info
-"""""""""""
+**Output info:**
 
 This compute calculates a per-tally array, with the number of columns
 equal to the number of values.
@@ -169,8 +165,7 @@ as are *vx1/post*\ , *vy1/post*\ , *vz1/post* and *vx2/post*\ , *vy2/post*\ ,
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`compute surf/collision/tally <compute_surf_collision_tally>`,
 :doc:`compute gas/reaction/tally <compute_gas_reaction_tally>`,

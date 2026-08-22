@@ -3,8 +3,7 @@
 surf\_modify command
 ====================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -24,8 +23,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -33,8 +31,7 @@ Examples
    surf_modify sphere collide 1
    surf_modify all collide sphere react sphere
 
-Description
-"""""""""""
+**Description:**
 
 Set parameters for a group of surface elements in the specified
 group-ID.  Surface elements are read in by the
@@ -66,8 +63,7 @@ using this command multiple times may override the effect of a
 previous command that assigned a different collision or reaction model
 to a particular surface element.
 
-Restrictions
-""""""""""""
+**Restrictions:**
 
 All surface elements must be assigned to a surface collision model via
 the *collide* keyword before a simlulation can be performed.  Using a
@@ -75,13 +71,11 @@ surface reaction model is optional.
 
 This command cannot be used before surfaces exist.
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`read\_surf <read_surf>`, :doc:`bound\_modify <bound_modify>`
 
-Default
-"""""""
+**Default:**
 
 The default for surface reactions is none.
 

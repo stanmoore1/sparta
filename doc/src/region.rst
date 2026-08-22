@@ -3,8 +3,7 @@
 region command
 ==============
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -47,8 +46,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -58,8 +56,7 @@ Examples
    region void cylinder y 2 3 5 -5.0 INF
    region outside union 4 side1 side2 side3 side4
 
-Description
-"""""""""""
+**Description:**
 
 This command defines a geometric region of space.  Various other
 commands use regions.  See the :doc:`group grid <group>`, :doc:`group surf <group>`, and :doc:`dump\_modify <dump_modify>` commands for
@@ -88,14 +85,12 @@ The *union* style creates a region consisting of the volume of all the
 listed regions combined.  The *intersect* style creates a region
 consisting of the volume that is common to all the listed regions.
 
-.. warning::
-
-   Regions in SPARTA are always 3d geometric objects,
-   regardless of whether the :doc:`dimension <dimension>` of the simulation
-   2d or 3d.  Thus when using regions in a 2d simulation, for example,
-   you should be careful to define the region so that its intersection
-   with the 2d x-y plane of the simulation has the 2d geometric extent
-   you want.
+IMPORTANT NOTE: Regions in SPARTA are always 3d geometric objects,
+regardless of whether the :doc:`dimension <dimension>` of the simulation
+2d or 3d.  Thus when using regions in a 2d simulation, for example,
+you should be careful to define the region so that its intersection
+with the 2d x-y plane of the simulation has the 2d geometric extent
+you want.
 
 The *side* keyword determines whether the region is considered to be
 inside or outside of the specified geometry.  Using this keyword in
@@ -135,13 +130,11 @@ effectively.
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`dump\_modify <dump_modify>`
 
-Default
-"""""""
+**Default:**
 
 The option default is side = in.
 

@@ -3,8 +3,7 @@
 dump\_modify command
 ====================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -137,8 +136,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -150,8 +148,7 @@ Examples
    dump_modify 1 every v_myVar
    dump_modify 1 cmap particle min max cf 0.0 3 min green 0.5 yellow max blue boxcolor red
 
-Description
-"""""""""""
+**Description:**
 
 Modify the parameters of a previously defined dump command.  Not all
 parameters are relevant to all dump styles.
@@ -295,17 +292,15 @@ else the *line* setting (if specified) for that value is used, else
 the default setting is used.  A setting of *none* clears all previous
 settings, reverting all values to their default format.
 
-.. note::
-
-   Grid cell IDs are stored internally as 4-byte or 8-byte signed
-   integers, depending on how SPARTA was compiled.  When specifying the
-   *format int* option you can use a "%d"-style format identifier in the
-   format string and SPARTA will convert this to the corresponding 8-byte
-   form it it is needed when outputting those values.  However, when
-   specifying the *line* option or *format M string* option for those
-   values, you should specify a format string appropriate for an 8-byte
-   signed integer, e.g. one with "%ld", if SPARTA was compiled with the
-   -DSPARTA\_BIGBIG option for 8-byte IDs.
+NOTE: Grid cell IDs are stored internally as 4-byte or 8-byte signed
+integers, depending on how SPARTA was compiled.  When specifying the
+*format int* option you can use a "%d"-style format identifier in the
+format string and SPARTA will convert this to the corresponding 8-byte
+form it it is needed when outputting those values.  However, when
+specifying the *line* option or *format M string* option for those
+values, you should specify a format string appropriate for an 8-byte
+signed integer, e.g. one with "%ld", if SPARTA was compiled with the
+-DSPARTA\_BIGBIG option for 8-byte IDs.
 
 
 ----------
@@ -434,14 +429,12 @@ post-processing of the *outline*\ , *depthcue* and *defocus* keywords of
 the :doc:`dump image <dump_image>` command all read.  See the discussion
 of those keywords on the :doc:`dump image <dump_image>` doc page.
 
-.. warning::
-
-   Transparency should not be combined with the *outline*
-   keyword of the :doc:`dump image <dump_image>` command.  Outlines are drawn
-   where the distance to the viewer jumps, and every pixel left out by the
-   dither pattern looks like such a jump, so a transparent object is
-   outlined pixel by pixel and is filled almost entirely with the outline
-   color.
+IMPORTANT NOTE: Transparency should not be combined with the *outline*
+keyword of the :doc:`dump image <dump_image>` command.  Outlines are drawn
+where the distance to the viewer jumps, and every pixel left out by the
+dither pattern looks like such a jump, so a transparent object is
+outlined pixel by pixel and is filled almost entirely with the outline
+color.
 
 
 ----------
@@ -475,10 +468,8 @@ also determined by the compression format and encoder.  The default
 setting is 2000 kbit/s, which will result in average quality with
 older compression formats.
 
-.. warning::
-
-   Not all movie file formats supported by dump movie
-   allow the bitrate to be set.  If not, the setting is silently ignored.
+IMPORTANT NOTE: Not all movie file formats supported by dump movie
+allow the bitrate to be set.  If not, the setting is silently ignored.
 
 
 ----------
@@ -738,14 +729,12 @@ example, defining a color with the *color* keyword using the values
 1.0 0.766 0.336 looks more like the metal than the pre-defined color
 *gold* does.
 
-.. warning::
-
-   These settings imitate the appearance of metal with a
-   few extra operations per pixel.  They do not compute how light
-   actually travels through the scene.  For images where the appearance
-   of the material matters, exporting the particle positions and
-   rendering them with a ray tracing program will always give better
-   results than any combination of these settings.
+IMPORTANT NOTE: These settings imitate the appearance of metal with a
+few extra operations per pixel.  They do not compute how light
+actually travels through the scene.  For images where the appearance
+of the material matters, exporting the particle positions and
+rendering them with a ray tracing program will always give better
+results than any combination of these settings.
 
 
 ----------
@@ -909,13 +898,11 @@ defined by the :doc:`group surf <group>` command.
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`dump <dump>`, :doc:`dump image <dump_image>`, :doc:`undump <undump>`
 
-Default
-"""""""
+**Default:**
 
 The option defaults are
 

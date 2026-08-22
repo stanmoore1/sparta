@@ -9,8 +9,7 @@ dump grid/vtk command
 dump surf/vtk command
 =====================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -29,8 +28,7 @@ Syntax
 * file = name of file to write dump info to
 * args = list of attributes, same as for the corresponding :doc:`dump <dump>` style
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -41,8 +39,7 @@ Examples
 
    dump 3 surf/vtk 100 tmp.surf.%.\*.vtp all id type
 
-Description
-"""""""""""
+**Description:**
 
 These dump styles are the VTK-format analogs of the :doc:`dump particle <dump>`, :doc:`dump grid <dump>`, and :doc:`dump surf <dump>`
 styles.  They periodically write a snapshot of geometry and per-element
@@ -110,8 +107,7 @@ writes the VTK data in binary (yes) or ASCII (no, the default) form.
 For dump particle/vtk the :doc:`dump\_modify <dump_modify>` *region* and
 *thresh* keywords are also supported, exactly as for :doc:`dump particle <dump>`, to restrict which particles are written.
 
-Restrictions
-""""""""""""
+**Restrictions:**
 
 These styles are part of the VTK package.  They are only enabled if
 SPARTA was built with that package and an external VTK library.  See
@@ -128,13 +124,11 @@ them, or restrict the dump to a grid group that excludes split cells.
 Dump particle/vtk and dump surf/vtk do not support string attributes.
 Dump grid/vtk writes the *idstr* attribute as a VTK string array.
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`dump <dump>`, :doc:`dump\_modify <dump_modify>`, :doc:`dump image <dump_image>`
 
-Default
-"""""""
+**Default:**
 
 binary no (ASCII).
 

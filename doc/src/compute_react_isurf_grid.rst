@@ -6,8 +6,7 @@ compute react/isurf/grid command
 compute react/isurf/grid/kk command
 ===================================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -28,8 +27,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -48,8 +46,7 @@ file every 1000 steps:
    fix 1 ave/grid all 10 100 1000 c_2[\*]
    dump 1 grid all 1000 tmp.surgrid id f_1[\*]
 
-Description
-"""""""""""
+**Description:**
 
 Define a computation that tallies counts of reactions for each grid
 cell containing implicit surface elements, based on the particles that
@@ -99,8 +96,7 @@ The values over many sampling timesteps can be averaged by the :doc:`fix ave/gri
 ----------
 
 
-Output info
-"""""""""""
+**Output info:**
 
 This compute calculates a per-grid array, with the number of columns
 either equal to the number of reactions defined by the
@@ -147,8 +143,7 @@ effectively.
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`fix ave/grid <fix_ave_grid>`, :doc:`dump grid <dump>`, :doc:`compute react/surf <compute_react_surf>`
 

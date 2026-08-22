@@ -3,8 +3,7 @@
 fix halt command
 ================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -33,8 +32,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -42,8 +40,7 @@ Examples
    fix 1 halt 10 tlimit > 3600.0
    fix 1 halt 10 v_myCheck != 0 error soft
 
-Description
-"""""""""""
+**Description:**
 
 Check a condition every N steps during a simulation run. N must be
 >=1. If the condition is met, exit the run.
@@ -163,13 +160,11 @@ This fix produces no output.
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`run <run>`
 
-Default
-"""""""
+**Default:**
 
 The option defaults are error = soft and message = yes.
 

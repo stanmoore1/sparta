@@ -294,20 +294,18 @@ where test.py contains the lines
 
 and see one line of output for each processor you run on.
 
-.. warning::
-
-   To use Pypar and SPARTA in parallel from Python, you
-   must insure both are using the same version of MPI.  If you only have
-   one MPI installed on your system, this is not an issue, but it can be
-   if you have multiple MPIs.  Your SPARTA build is explicit about which
-   MPI it is using, since you specify the details in your lo-level
-   src/MAKE/Makefile.foo file.  Pypar uses the "mpicc" command to find
-   information about the MPI it uses to build against.  And it tries to
-   load "libmpi.so" from the LD\_LIBRARY\_PATH.  This may or may not find
-   the MPI library that SPARTA is using.  If you have problems running
-   both Pypar and SPARTA together, this is an issue you may need to
-   address, e.g. by moving other MPI installations so that Pypar finds
-   the right one.
+IMPORTANT NOTE: To use Pypar and SPARTA in parallel from Python, you
+must insure both are using the same version of MPI.  If you only have
+one MPI installed on your system, this is not an issue, but it can be
+if you have multiple MPIs.  Your SPARTA build is explicit about which
+MPI it is using, since you specify the details in your lo-level
+src/MAKE/Makefile.foo file.  Pypar uses the "mpicc" command to find
+information about the MPI it uses to build against.  And it tries to
+load "libmpi.so" from the LD\_LIBRARY\_PATH.  This may or may not find
+the MPI library that SPARTA is using.  If you have problems running
+both Pypar and SPARTA together, this is an issue you may need to
+address, e.g. by moving other MPI installations so that Pypar finds
+the right one.
 
 
 ----------
@@ -553,16 +551,14 @@ C or Fortran program.
 ----------
 
 
-.. warning::
-
-   Currently, the creation of a SPARTA object from within
-   sparta.py does not take an MPI communicator as an argument.  There
-   should be a way to do this, so that the SPARTA instance runs on a
-   subset of processors if desired, but I don't know how to do it from
-   Pypar.  So for now, it runs with MPI\_COMM\_WORLD, which is all the
-   processors.  If someone figures out how to do this with one or more of
-   the Python wrappers for MPI, like Pypar, please let us know and we
-   will amend these doc pages.
+IMPORTANT NOTE: Currently, the creation of a SPARTA object from within
+sparta.py does not take an MPI communicator as an argument.  There
+should be a way to do this, so that the SPARTA instance runs on a
+subset of processors if desired, but I don't know how to do it from
+Pypar.  So for now, it runs with MPI\_COMM\_WORLD, which is all the
+processors.  If someone figures out how to do this with one or more of
+the Python wrappers for MPI, like Pypar, please let us know and we
+will amend these doc pages.
 
 Note that you can create multiple SPARTA objects in your Python
 script, and coordinate and run multiple simulations, e.g.

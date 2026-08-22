@@ -3,8 +3,7 @@
 fix field/grid command
 ======================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -15,16 +14,14 @@ Syntax
 * field/grid = style name of this fix command
 * axvar,ayvar,azvar = names of grid-style variables for acceleration components
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
 
    fix 1 field/grid gradBx gradBy NULL
 
-Description
-"""""""""""
+**Description:**
 
 Specify the formulas used to calculate the acceleration effect of an
 external field on particle motion.  The ID of this fix can be used by
@@ -120,8 +117,7 @@ the array is the number of non-NULL variables specified.
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`fix field/particle <fix_field_particle>`, :doc:`global field <global>`
 

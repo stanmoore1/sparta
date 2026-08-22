@@ -6,8 +6,7 @@ fix emit/face command
 fix emit/face/kk command
 ========================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -36,8 +35,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -50,8 +48,7 @@ Examples
    variable mod equal "1.0 + sin(step/10000\*2\*PI)"
    fix in emit/face air all modulate v_mod
 
-Description
-"""""""""""
+**Description:**
 
 Emit particles from one or more faces of the simulation box,
 continuously during a simulation.  If invoked every timestep, this fix
@@ -91,11 +88,9 @@ species is chosen randomly in accord with the *frac* settings of the
 collection of species in the mixture, as set by the
 :doc:`mixture <mixture>` command.
 
-.. warning::
-
-   The preceeding calculation is actually done using face
-   areas associated with *weighted* cell volumes.  Grid cells can be
-   weighted using the :doc:`global weight <global>` command.
+IMPORTANT NOTE: The preceeding calculation is actually done using face
+areas associated with *weighted* cell volumes.  Grid cells can be
+weighted using the :doc:`global weight <global>` command.
 
 The velocity of the particle is set to the sum of the streaming
 velocity and a thermal velocity sampled from the thermal temperature.
@@ -176,15 +171,13 @@ that the *side* option for the :doc:`region <region>` command can be
 used to define whether the inside or outside of the geometric region
 is considered to be "in" the region.
 
-.. warning::
-
-   If the *region* and *n* keywords are used together,
-   less than N particles may be added on an insertion timestep.  This is
-   because grid cells will be candidates for particle insertion, unless
-   they are entirely outside the bounding box that encloses the region.
-   Particles those grid cells attempt to add are included in the count
-   for N, even if some or all of the particle insertions are rejected due
-   to not being inside the region.
+IMPORTANT NOTE: If the *region* and *n* keywords are used together,
+less than N particles may be added on an insertion timestep.  This is
+because grid cells will be candidates for particle insertion, unless
+they are entirely outside the bounding box that encloses the region.
+Particles those grid cells attempt to add are included in the count
+for N, even if some or all of the particle insertions are rejected due
+to not being inside the region.
 
 The *modulate* keyword can be used to multiple the count of particles
 inserted at each timestep by a prefactor.  The prefactor is calcalated
@@ -213,27 +206,23 @@ of particles in the cells adjacent to the boundary face(s) are
 computed and used to determine the properties of inserted particles on
 each timestep.
 
-.. warning::
+IMPORTANT NOTE: Caution must be exercised when using the subsonic
+boundary condition without specifying an inlet temperature. In this
+case the code tries to estimate the temperature of the flow from the
+properties of the particles in the domain. If the domain contains few
+particles per cell it may lead to spurious results.  This boundary
+condition is meant more for an outlet than an inlet boundary
+condition, and performs well in cases where the cells are adequately
+populated.
 
-   Caution must be exercised when using the subsonic
-   boundary condition without specifying an inlet temperature. In this
-   case the code tries to estimate the temperature of the flow from the
-   properties of the particles in the domain. If the domain contains few
-   particles per cell it may lead to spurious results.  This boundary
-   condition is meant more for an outlet than an inlet boundary
-   condition, and performs well in cases where the cells are adequately
-   populated.
-
-.. warning::
-
-   When using this keyword, you should also use an
-   appropriate boundary collision or chemistry model via the
-   :doc:`boundary <boundary>` or :doc:`bound\_modify <bound_modify>` or
-   :doc:`surf\_collide <surf_collide>` or :doc:`surf\_react <surf_react>`
-   commands, so that particles hitting the surface disappear as if they
-   were exiting the simulation domain.  That is necessary to produce the
-   correct subsonic conditions that the particle insertions due to this
-   command are trying to achieve.
+IMPORTANT NOTE: When using this keyword, you should also use an
+appropriate boundary collision or chemistry model via the
+:doc:`boundary <boundary>` or :doc:`bound\_modify <bound_modify>` or
+:doc:`surf\_collide <surf_collide>` or :doc:`surf\_react <surf_react>`
+commands, so that particles hitting the surface disappear as if they
+were exiting the simulation domain.  That is necessary to produce the
+correct subsonic conditions that the particle insertions due to this
+command are trying to achieve.
 
 The *twopass* keyword does not require a value.  If used, the
 insertion procedure will loop over the insertion grid cells twice, the
@@ -287,8 +276,7 @@ effectively.
 ----------
 
 
-Restrictions
-""""""""""""
+**Restrictions:**
 
 Particles cannot be emitted from periodic faces of the simulation box.
 Particles cannot be emitted from *z* faces of the simluation box for a
@@ -307,13 +295,11 @@ thermal velocity 3 sigmas from the mean thermal velocity is large
 enough to overcome the outward streaming velocity and produce a net
 velocity into the simulation box.
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`mixture <mixture>`, :doc:`create\_particles <create_particles>`, :doc:`fix emit/face/file <fix_emit_face_file>`
 
-Default
-"""""""
+**Default:**
 
 The keyword defaults are n = 0, nevery = 1, perspecies = yes, region =
 none, no modulate setting, no subsonic settings, no twopass setting.

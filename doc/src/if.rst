@@ -3,8 +3,7 @@
 if command
 ==========
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -19,8 +18,7 @@ Syntax
 * else = optional argument
 * e1,e2,...,eN = one or more SPARTA commands to execute if no condition is met, each enclosed in quotes (optional arguments)
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -37,8 +35,7 @@ Examples
      "print 'Max step reached'"
    if "${eng} > ${eng_previous}" then "jump file1" else "jump file2"
 
-Description
-"""""""""""
+**Description:**
 
 This command provides an in-then-else capability within an input
 script.  A Boolean expression is evaluted and the result is TRUE or
@@ -66,14 +63,12 @@ allowed. If the command is more than one word, it must enclosed in
 quotes, so it will be treated as a single argument, as in the examples
 above.
 
-.. warning::
-
-   If a command itself requires a quoted argument (e.g. a
-   :doc:`print <print>` command), then double and single quotes can be used
-   and nested in the usual manner, as in the examples above and below.
-   See `Section commands 2 <Section_commands.html#cmd_2>`_ of the manual for
-   more details on using quotes in arguments.  Only one of level of
-   nesting is allowed, but that should be sufficient for most use cases.
+IMPORTANT NOTE: If a command itself requires a quoted argument (e.g. a
+:doc:`print <print>` command), then double and single quotes can be used
+and nested in the usual manner, as in the examples above and below.
+See `Section commands 2 <Section_commands.html#cmd_2>`_ of the manual for
+more details on using quotes in arguments.  Only one of level of
+nesting is allowed, but that should be sufficient for most use cases.
 
 Note that by using the line continuation character "&", the if command
 can be spread across many lines, though it is still a single command:
@@ -187,8 +182,7 @@ non-zero.  If the result is zero, the expression result is FALSE.
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`variable <variable>`, :doc:`print <print>`
 

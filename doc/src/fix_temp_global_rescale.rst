@@ -6,8 +6,7 @@ fix temp/global/rescale command
 fix temp/global/rescale/kk command
 ==================================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -20,8 +19,7 @@ Syntax
 * Tstart,Tstop = desired temperature at start/end of run (temperature units)
 * fraction = rescale to target temperature by this fraction
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -29,8 +27,7 @@ Examples
    fix 1 temp/global/rescale 100 300.0 300.0 0.5
    fix 5 temp/global/rescale 10 300.0 10.0 1.0
 
-Description
-"""""""""""
+**Description:**
 
 Reset the temperature of all the particles in the entire simulation by
 explicitly rescaling their velocities.  This is a simple
@@ -110,8 +107,7 @@ effectively.
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`fix temp/rescale <fix_temp_rescale>`
 

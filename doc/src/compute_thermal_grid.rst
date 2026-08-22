@@ -6,8 +6,7 @@ compute thermal/grid command
 compute thermal/grid/kk command
 ===============================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -28,8 +27,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -47,8 +45,7 @@ each species and each grid cell to a dump file every 1000 steps:
    fix 1 ave/grid 10 100 1000 c_1[\*]
    dump 1 grid all 1000 tmp.grid id f_1[\*]
 
-Description
-"""""""""""
+**Description:**
 
 Define a computation that calculates one or more values for each grid
 cell in a grid cell group, which are based on the thermal temperature
@@ -149,8 +146,7 @@ the grid cell.
 ----------
 
 
-Output info
-"""""""""""
+**Output info:**
 
 This compute calculates a per-grid array, with the number of columns
 equal to the number of values times the number of groups.  The
@@ -210,8 +206,7 @@ effectively.
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`compute grid <compute_grid>`, :doc:`fix ave/grid <fix_ave_grid>`,
 :doc:`dump grid <dump>`

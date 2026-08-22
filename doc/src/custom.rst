@@ -3,8 +3,7 @@
 custom command
 ==============
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -45,8 +44,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -66,8 +64,7 @@ Examples
 
 See examples using many of the :doc:`custom <custom>` and :doc:`fix custom <fix_custom>` command actions in examples/custom
 
-Description
-"""""""""""
+**Description:**
 
 Create or remove or initialize/reset custom attributes for particles,
 grid cells, or surface elements.
@@ -281,15 +278,13 @@ cell cell.  Here are a few additional details.
   In this case it should be fine to assign the grid cell values from the
   nearest coarse grid point in the flow.
 
-.. warning::
-
-   The current implementation of this "mapping" operation
-   stores the entire coarse grid on every processor, Each processor then
-   loops over the SPARTA grid cells it own and searches the entire set of
-   of coarse grid point for the nearest, using a k-d tree (in 2 or 3
-   dimensions).  If either the coarse grid storage or tree search becomes
-   a bottleneck for very large-scale problems, we could consider
-   implementing a more parallel algorithm.
+IMPORTANT NOTE: The current implementation of this "mapping" operation
+stores the entire coarse grid on every processor, Each processor then
+loops over the SPARTA grid cells it own and searches the entire set of
+of coarse grid point for the nearest, using a k-d tree (in 2 or 3
+dimensions).  If either the coarse grid storage or tree search becomes
+a bottleneck for very large-scale problems, we could consider
+implementing a more parallel algorithm.
 
 Creation of the file(s) read by this action is a pre-processing step.
 The :doc:`create\_particles <create_particles>` command can be used with
@@ -441,8 +436,7 @@ one, with names cfile.grid.1, cfile.grid.2, and cfile.grid.3.
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`fix custom <fix_custom>`, :doc:`mixture <mixture>`,
 :doc:`group <group>`, :doc:`region <region>`,

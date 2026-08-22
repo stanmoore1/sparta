@@ -3,8 +3,7 @@
 compute tvib/grid command
 =========================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -24,8 +23,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -34,8 +32,7 @@ Examples
    compute 1 tvib/grid subset all
    compute 1 tvib/grid all species mode
 
-Description
-"""""""""""
+**Description:**
 
 Define a computation that calculates the vibrational temperature for
 each grid cell in a grid cell group, based on the particles in the
@@ -156,8 +153,7 @@ and single mode M is calculated the same as explained above.
 ----------
 
 
-Output info
-"""""""""""
+**Output info:**
 
 This compute calculates a per-grid array.  If the *mode* keyword is
 not specified, the number of columns is equal to the number of groups
@@ -191,8 +187,7 @@ The per-grid array values will be in temperature :doc:`units <units>`.
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`compute grid <compute_grid>`
 

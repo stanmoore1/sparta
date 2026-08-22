@@ -3,8 +3,7 @@
 species\_modify command
 =======================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -27,16 +26,14 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
 
    species_modify Fe mu 2.0 Cr mu 3.0
 
-Description
-"""""""""""
+**Description:**
 
 Set additional properties of one or more species used in a simulation.
 This can be used as many times as desired for different species and
@@ -62,8 +59,7 @@ property should be specified in the units described on the
 
 **Related commands:** none
 
-Default
-"""""""
+**Default:**
 
 No magnetic moments are defined for any species (all 0.0).
 

@@ -6,8 +6,7 @@ compute lambda/grid command
 compute lambda/grid/kk command
 ==============================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -32,8 +31,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -54,8 +52,7 @@ collision time for each grid cell to a dump file every 1000 steps:
    compute 3 lambda/grid f_1[\*] f_2 lambda tau
    dump 1 grid all 1000 tmp.grid id c_3[\*]
 
-Description
-"""""""""""
+**Description:**
 
 This command calculates properties related to the gas collision mean
 free path for each grid cell based on the number density *nrho* and
@@ -101,10 +98,8 @@ The formula used to calculate the mean free path (lambda) is given in
 .. image:: Eqs/lambda.png
    :align: center
 
-.. warning::
-
-   Prior to October 2024, a simpler formula was used for
-   the mean free path, also from `(Bird94) <#Bird94>`_, equation 4.65:
+IMPORTANT NOTE: Prior to October 2024, a simpler formula was used for
+the mean free path, also from `(Bird94) <#Bird94>`_, equation 4.65:
 
 .. image:: Eqs/lambda_old.jpg
    :align: center
@@ -197,19 +192,16 @@ arguments will typically result in less noisy MFP and MCT values, due
 to the time averaging which the :doc:`fix ave/grid <fix_ave_grid>`
 command can perform.
 
-.. warning::
-
-   If the IDs of one or more :doc:`fix ave/grid <fix_ave_grid>` commands is used for the *nrho* or *temp*
-   arguments, they only produce output on timesteps that are multiples of
-   their *Nfreq* argument.  Thus this compute can only be invoked on
-   those timesteps.
+IMPORTANT NOTE: If the IDs of one or more :doc:`fix ave/grid <fix_ave_grid>` commands is used for the *nrho* or *temp*
+arguments, they only produce output on timesteps that are multiples of
+their *Nfreq* argument.  Thus this compute can only be invoked on
+those timesteps.
 
 
 ----------
 
 
-Output info
-"""""""""""
+**Output info:**
 
 If only one output value is specified, this compute outputs a per-grid
 vector. Otherwise it outputs a per-grid array with two or more
@@ -267,8 +259,7 @@ effectively.
 ----------
 
 
-Restrictions
-""""""""""""
+**Restrictions:**
 
 To use this compute, a collision style must be defined via the
 :doc:`collide.html <collide>` command, which defines properties for the
@@ -284,8 +275,7 @@ One or more output values must be specified. The same output value
 cannot be repeated more than once. The *knz* value cannot but used in
 a two-dimensional simulation.
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`compute grid <compute_grid>`, :doc:`compute thermal/grid <compute_thermal_grid>`, :doc:`fix ave/grid <fix_ave_grid>`, :doc:`dump grid <dump>`
 

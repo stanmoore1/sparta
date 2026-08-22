@@ -3,8 +3,7 @@
 reset\_timestep command
 =======================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -13,8 +12,7 @@ Syntax
 
 * N = timestep number
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -22,8 +20,7 @@ Examples
    reset_timestep 0
    reset_timestep 4000000
 
-Description
-"""""""""""
+**Description:**
 
 Set the timestep counter to the specified value.  This command
 normally comes after the timestep has been set by reading a restart

@@ -3,8 +3,7 @@
 read\_surf command
 ==================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -55,8 +54,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -69,8 +67,7 @@ Examples
    read_surf surf.file trans 10 5 0 scale 3 3 3 invert clip file tmp.surfs
    read_surf surf.file trans 10 5 0 scale 3 3 3 invert clip file tmp.surfs.% points no nfile 32
 
-Description
-"""""""""""
+**Description:**
 
 Read the geometry of a surface from the specified file.  In SPARTA, a
 "surface" is a collection of surface elements that represent the
@@ -238,23 +235,19 @@ simply ordered from 1 to N, regardless of the actual value of the
 index in the file.  *X,y,z* are the coordinates of the point in
 distance units.  Note that for 2d simulations, *z* should be omitted.
 
-.. warning::
+IMPORTANT NOTE: Unless points are on the surface of the simulation
+box, they will be part of multiple lines or triangles.  However, there
+is no requirement that each point appear exactly once in the *Points*
+list.  For example, a point that is the common corner point of M
+triangles, could appear 1 or 2 or up to M times.  However, if the same
+point appears multiple times in the *Points* list, the coordinates of
+all copies must be numerically identical, in order for SPARTA to
+verify the surface is a watertight object, as discussed below.
 
-   Unless points are on the surface of the simulation
-   box, they will be part of multiple lines or triangles.  However, there
-   is no requirement that each point appear exactly once in the *Points*
-   list.  For example, a point that is the common corner point of M
-   triangles, could appear 1 or 2 or up to M times.  However, if the same
-   point appears multiple times in the *Points* list, the coordinates of
-   all copies must be numerically identical, in order for SPARTA to
-   verify the surface is a watertight object, as discussed below.
-
-.. warning::
-
-   The *points* keyword and *Points* section are not
-   required.  You must either use both or neither.  As explained next, an
-   optional format for the *Lines* or *Triangles* sections includes point
-   coordinates directly with each line or triangle.
+IMPORTANT NOTE: The *points* keyword and *Points* section are not
+required.  You must either use both or neither.  As explained next, an
+optional format for the *Lines* or *Triangles* sections includes point
+coordinates directly with each line or triangle.
 
 
 ----------
@@ -284,11 +277,9 @@ the smallest values is 1 and the largest value is N.  Also note that
 lines in an individual file (single or multiple) do not need to be
 listed by ID order; they can be in any order.
 
-.. warning::
-
-   If the read\_surf command is used when lines already
-   exist, i.e. to add new lines, then each line-ID is incremented by
-   Nprevious = the # of lines that already exist.
+IMPORTANT NOTE: If the read\_surf command is used when lines already
+exist, i.e. to add new lines, then each line-ID is incremented by
+Nprevious = the # of lines that already exist.
 
 *Type* is an optional integer value and can only be included in the
 file if the *type* keyword is used.  It must be a positive integer for
@@ -329,11 +320,9 @@ per-surf vector named temperature which stores a single value per
 line.  The next 3 integers will be assigned to a custom per-surf array
 named flags which stores 3 values per line.
 
-.. warning::
-
-   If the read\_surf command is used when custom attributes already
-   exist, and values for custom attributes aren’t defined in the current file
-   being read, then the new custom values will be set to 0.0.
+IMPORTANT NOTE: If the read\_surf command is used when custom attributes already
+exist, and values for custom attributes aren’t defined in the current file
+being read, then the new custom values will be set to 0.0.
 
 
 ----------
@@ -363,11 +352,9 @@ smallest values is 1 and the largest value is N.  Also note that
 triangles in an individual file (single or multiple) do not need to be
 listed by ID order; they can be in any order.
 
-.. warning::
-
-   If the read\_surf command is used when triangles
-   already exist, i.e. to add new triangles, then each tri-ID is
-   incremented by Nprevious = the # of triangles that already exist.
+IMPORTANT NOTE: If the read\_surf command is used when triangles
+already exist, i.e. to add new triangles, then each tri-ID is
+incremented by Nprevious = the # of triangles that already exist.
 
 *Type* is an optional integer value and can only be specified if the
 *type* keyword is used.  It must be a positive integer for each
@@ -415,11 +402,9 @@ array named flags which stores 3 values per triangle.
 The following two optional keywords affect the format of the surface
 file(s) that are read.
 
-.. warning::
-
-   if the *type* or *custom* keywords are used, they must
-   come first, before any other keywords.  The two keywords themselves
-   can be in any order.
+IMPORTANT NOTE: if the *type* or *custom* keywords are used, they must
+come first, before any other keywords.  The two keywords themselves
+can be in any order.
 
 The *type* keyword means that each surface element in the Lines or
 Triangles section will include a surface element type, which is a
@@ -533,19 +518,17 @@ some of its triangles may include points on the faces of the
 simulation box.  A similar operation is performed in 2d with the 4
 clip edges represented by the edges of the global simulation box.
 
-.. warning::
-
-   If a surface you clip crosses a periodic boundary, as
-   specified by the :doc:`boundary <boundary>` command, then the clipping
-   that takes place must be consistent on both the low and high end of
-   the box (in the periodic dimension).  This means any point on the
-   boundary that is generated by the clip operation should be generated
-   twice, once on the low side of the box and once on the high side.  And
-   those two points must be periodic images of each other, as implied by
-   periodicity.  If the surface you are reading does not clip in this
-   manner, then SPARTA will likely generate an error about mis-matched or
-   inconsistent cells when it attempts to mark all the grid cells and
-   their corner points as inside vs outside the surface.
+IMPORTANT NOTE: If a surface you clip crosses a periodic boundary, as
+specified by the :doc:`boundary <boundary>` command, then the clipping
+that takes place must be consistent on both the low and high end of
+the box (in the periodic dimension).  This means any point on the
+boundary that is generated by the clip operation should be generated
+twice, once on the low side of the box and once on the high side.  And
+those two points must be periodic images of each other, as implied by
+periodicity.  If the surface you are reading does not clip in this
+manner, then SPARTA will likely generate an error about mis-matched or
+inconsistent cells when it attempts to mark all the grid cells and
+their corner points as inside vs outside the surface.
 
 If you use the *clip* keyword, you should check the resulting
 statistics of the clipped surface printed out by this command,
@@ -572,13 +555,11 @@ resulting altered set of surface elements can be written out to a file
 by the :doc:`write\_surf <write_surf>` command, which can then be used an
 input to a new simulation or for post-processing and visualization.
 
-.. warning::
-
-   When the *clip* operation deletes or adds surface
-   elements, the line-IDs or tri-IDs will be renumbered to produce IDs
-   that are consective values from 1 to the # of surface elements.  The
-   ID of a surface element that is unclipped may change due to this
-   reordering.
+IMPORTANT NOTE: When the *clip* operation deletes or adds surface
+elements, the line-IDs or tri-IDs will be renumbered to produce IDs
+that are consective values from 1 to the # of surface elements.  The
+ID of a surface element that is unclipped may change due to this
+reordering.
 
 
 ----------
@@ -642,11 +623,9 @@ If the *file* keyword is used, the surfaces will be written out to the
 specified *filename* immediately after they are read in (and
 transformed by any of the optional keywords).
 
-.. warning::
-
-   If the *file* keyword is used, it must be must be the
-   last keyword specified.  This is because all the remaining arguments
-   after *file* are passed to the :doc:`write\_surf <write_surf>` command.
+IMPORTANT NOTE: If the *file* keyword is used, it must be must be the
+last keyword specified.  This is because all the remaining arguments
+after *file* are passed to the :doc:`write\_surf <write_surf>` command.
 
 The arguments for this keyword are identical to those used for the
 :doc:`write\_surf <write_surf>` command.  This includes a file name with
@@ -666,8 +645,7 @@ of the surface element IDs.
 
 
 
-Restrictions
-""""""""""""
+**Restrictions:**
 
 This command can only be used after the simulation box is defined by
 the :doc:`create\_box <create_box>` command, and after a grid has been
@@ -718,13 +696,11 @@ surface files, you should insure they do not touch or overlap with
 each other.  SPARTA does not check for this, but it will typically
 lead to unphysical particle dynamics.
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`read\_isurf <read_isurf>`, :doc:`write\_surf <write_surf>`
 
-Default
-"""""""
+**Default:**
 
 The default origin for the vertices in the surface file is (0,0,0).
 The defaults for group = all, typeadd = 0, particle = none.

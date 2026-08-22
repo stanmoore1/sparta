@@ -3,8 +3,7 @@
 fix ave/surf command
 ====================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -41,8 +40,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -62,8 +60,7 @@ surface element to a dump file every 1000 steps:
    fix 1 ave/surf all 10 100 1000 c_1[\*]
    dump 1 surf all 1000 tmp.surf id f_1[\*]
 
-Description
-"""""""""""
+**Description:**
 
 Use one or more per-surf vectors as inputs every few timesteps, and
 average them surface element by surface element by over longer
@@ -238,8 +235,7 @@ is when averaging is performed.
 Surface elements not in the specified *group-ID* will output zeroes
 for all their values.
 
-Restrictions
-""""""""""""
+**Restrictions:**
 
 If one of the specified values is a compute which tallies information
 about particle/surface element collisions, then all the values must be
@@ -249,13 +245,11 @@ with other kinds of values in the same fix ave/surf command.
 Examples of computes which tally particle/surface element collision
 info are :doc:`compute surf <compute_surf>` and :doc:`compute react/surf <compute_react_surf>`.
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`compute <compute>`, :doc:`fix ave/time <fix_ave_time>`
 
-Default
-"""""""
+**Default:**
 
 The option defaults are ave = one.
 

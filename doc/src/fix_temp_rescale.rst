@@ -6,8 +6,7 @@ fix temp/rescale command
 fix temp/rescale/kk command
 ===========================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -27,8 +26,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -36,8 +34,7 @@ Examples
    fix 1 temp/rescale 100 300.0 300.0
    fix 5 temp/rescale 10 300.0 10.0 ave yes
 
-Description
-"""""""""""
+**Description:**
 
 Reset the thermal temperature of all the particles within each grid
 cell by explicitly rescaling their thermal velocities.  This is a
@@ -144,13 +141,11 @@ effectively.
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`fix temp/global/rescale <fix_temp_global_rescale>`
 
-Default
-"""""""
+**Default:**
 
 The default is ave = no.
 

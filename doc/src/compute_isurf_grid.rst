@@ -6,8 +6,7 @@ compute isurf/grid command
 compute isurf/grid/kk command
 =============================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -37,8 +36,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -69,8 +67,7 @@ lift (fy) on the set of implicit surfs:
    stats 1000
    stats_style step cpu np c_2[1] c_2[2]
 
-Description
-"""""""""""
+**Description:**
 
 Define a computation that calculates one or more values for each grid
 cell in a grid cell group, based on the particles that collide with
@@ -120,13 +117,11 @@ timestep, summing them over the sampling timesteps, and then dividing
 by the number of sampling steps.  However for the current values
 listed below, the two normalization methods are the same.
 
-.. note::
-
-   If particle weighting is enabled via the :doc:`global weight <global>` command, then all of the values below are scaled
-   by the weight assigned to the grid cell in which the particle
-   collision with the surface element occurs.  The only exception is the
-   the *n* value, which is NOT scaled by the weight; it is a simple count
-   of particle collisions with surface elements in the grid cell.
+NOTE: If particle weighting is enabled via the :doc:`global weight <global>` command, then all of the values below are scaled
+by the weight assigned to the grid cell in which the particle
+collision with the surface element occurs.  The only exception is the
+the *n* value, which is NOT scaled by the weight; it is a simple count
+of particle collisions with surface elements in the grid cell.
 
 
 ----------
@@ -143,8 +138,7 @@ cell.
 ----------
 
 
-Output info
-"""""""""""
+**Output info:**
 
 This compute calculates a per-grid array, with the number of columns
 equal to the number of values times the number of groups.  The
@@ -196,8 +190,7 @@ effectively.
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`fix ave/grid <fix_ave_grid>`, :doc:`dump grid <dump>`, :doc:`compute surf <compute_surf>`
 

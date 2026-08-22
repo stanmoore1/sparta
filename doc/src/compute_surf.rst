@@ -6,8 +6,7 @@ compute surf command
 compute surf/kk command
 =======================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -50,8 +49,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -83,8 +81,7 @@ body:
    stats 1000
    stats_style step cpu np c_2[1] c_2[2]
 
-Description
-"""""""""""
+**Description:**
 
 Define a computation that calculates one or more values for each
 explicit surface element in a surface element group, based on the
@@ -144,13 +141,11 @@ over the sampling timesteps, and then dividing by the number of
 sampling steps.  However for the current values listed below, the two
 normalization methods are the same.
 
-.. note::
-
-   If particle weighting is enabled via the :doc:`global weight <global>` command, then all of the values below are scaled
-   by the weight assigned to the grid cell in which the particle
-   collision with the surface element occurs.  The only exception is the
-   the *n* value, which is NOT scaled by the weight; it is a simple count
-   of particle collisions with the surface element.
+NOTE: If particle weighting is enabled via the :doc:`global weight <global>` command, then all of the values below are scaled
+by the weight assigned to the grid cell in which the particle
+collision with the surface element occurs.  The only exception is the
+the *n* value, which is NOT scaled by the weight; it is a simple count
+of particle collisions with the surface element.
 
 
 ----------
@@ -414,8 +409,7 @@ All the other values are calculated as described above.  This means
 they will be zero, since the incident and outgoing particle have the
 same mass and velocity.
 
-.. warning::
-
+IMPORTANT NOTE:
 
 Transparent surface elements can intersect standard non-transparent
 surface elements.  For example, to model flow around a spherical
@@ -464,8 +458,7 @@ will be calculated.
 ----------
 
 
-Output info
-"""""""""""
+**Output info:**
 
 This compute calculates a per-surf array, with the number of columns
 equal to the number of values times the number of groups.  The
@@ -517,13 +510,11 @@ effectively.
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`fix ave/surf <fix_ave_surf>`, :doc:`dump surf <dump>`, :doc:`compute isurf/grid <compute_isurf_grid>`
 
-Default
-"""""""
+**Default:**
 
 The default for the norm keyword is flux.
 

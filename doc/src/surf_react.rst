@@ -6,8 +6,7 @@ surf\_react command
 :doc:`surf\_react adsorb <surf_react_adsorb>` command
 =====================================================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -43,8 +42,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -54,8 +52,7 @@ Examples
    surf_react 1 adsorb gs gs_react.surf nsync 10 surf 1000 6.022e18 O CO
    surf_react 1 adsorb gs/ps gs_react.surf ps_react.surf nsync 1 face 300 3e9 O
 
-Description
-"""""""""""
+**Description:**
 
 Define a model for surface chemistry reactions occurring when
 particles collide with surface elements or the global boundaries of
@@ -82,12 +79,10 @@ reaction (if any) takes place.  A check is made that the sum of
 probabilities for all possible reactions is <= 1.0, which should
 normally be the case if reasonable reaction coefficients are defined.
 
-.. warning::
-
-   A surface reaction model cannot be specified for
-   surfaces whose surface collision style does not support reactions.
-   Currently this is only the *vanish* collision style.  See the
-   :doc:`surf\_collide <surf_collide>` doc page for details.
+IMPORTANT NOTE: A surface reaction model cannot be specified for
+surfaces whose surface collision style does not support reactions.
+Currently this is only the *vanish* collision style.  See the
+:doc:`surf\_collide <surf_collide>` doc page for details.
 
 
 ----------
@@ -234,8 +229,7 @@ two products must be specified in this order.
 ----------
 
 
-Output info
-"""""""""""
+**Output info:**
 
 All the surface reaction models calculate a global vector of values.
 The values can be used by the :doc:`stats\_style <stats_style>` command
@@ -287,14 +281,12 @@ effectively.
 ----------
 
 
-Restrictions
-""""""""""""
+**Restrictions:**
 
 If specified with a *kk* suffix, this command can be used no more than
 twice in the same input script (active at the same time).
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`react <react>`, :doc:`surf\_modify <surf_modify>`,
 :doc:`bound\_modify <bound_modify>`,

@@ -6,8 +6,7 @@ fix adapt command
 fix adapt/kk command
 ====================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -19,8 +18,7 @@ Syntax
 * Nfreq = perform grid adaptation every this many steps
 * args = all remaining args are identical to those defined for the :doc:`adapt\_grid <adapt_grid>` command
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -31,8 +29,7 @@ Examples
    fix 1 adapt 10000 all refine surf 0.15 iterate 1 dir 1 0 0 
    fix 10 adapt 1000 all refine coarsen value c_1[1] 5.0 10.0 iterate 2
 
-Description
-"""""""""""
+**Description:**
 
 This command performs on-the-fly adapatation of grid cells as a
 simulation runs, either by refinement or coarsening or both.  Grid
@@ -120,8 +117,7 @@ effectively.
 ----------
 
 
-Restrictions
-""""""""""""
+**Restrictions:**
 
 Currently, if there are custom attributes defined for grid cells, grid
 adaptation does not set new values for new grid cells created when
@@ -130,8 +126,7 @@ zero values for their attributes.  This is because there is no simple
 way to determine how new attribute values should be computed.  This
 may be changed in the future.
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`adapt\_grid <adapt_grid>`, :doc:`fix balance <fix_balance>`
 

@@ -6,8 +6,7 @@ fix ave/grid command
 fix ave/grid/kk command
 =======================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -44,8 +43,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -65,8 +63,7 @@ to a file every 1000 steps:
    fix 1 ave/grid 10 100 1000 c_1[\*]
    dump 1 grid all 1000 tmp.grid id f_1[\*]
 
-Description
-"""""""""""
+**Description:**
 
 Use one or more per-grid vectors as inputs every few timesteps, and
 average by grid cell over longer timescales, applying appropriate
@@ -278,8 +275,7 @@ effectively.
 ----------
 
 
-Restrictions
-""""""""""""
+**Restrictions:**
 
 If one of the specified values is a compute which tallies information
 on collisions between particles and implicit surface element within
@@ -295,13 +291,11 @@ If performing on-the-fly grid adaptation every N timesteps, using the
 across time windows > N steps, since the grid may change.  This means
 *Nfreq* cannot be > N, and keyword *ave* = *running* is not allowed.
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`compute <compute>`, :doc:`fix ave/time <fix_ave_time>`
 
-Default
-"""""""
+**Default:**
 
 The option defaults are ave = one.
 

@@ -3,8 +3,7 @@
 boundary command
 ================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -23,8 +22,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -33,8 +31,7 @@ Examples
    boundary os o o
    boundary r p rs
 
-Description
-"""""""""""
+**Description:**
 
 Set the style of boundaries for the global simulation box in each of
 the x, y, z dimensions.  A single letter assigns the same style to
@@ -77,21 +74,18 @@ collision model defined by the :doc:`surf\_collide <surf_collide>`
 command.  The assignment of the boundary to the model is done via the
 :doc:`bound\_modify <bound_modify>` command.
 
-Restrictions
-""""""""""""
+**Restrictions:**
 
 This command must be used before the grid is defined, e.g. by a
 :doc:`create\_grid <create_grid>` command.
 
 For 2d simulations, the z dimension must be periodic.
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`bound\_modify <bound_modify>`, :doc:`surf\_collide <surf_collide>`
 
-Default
-"""""""
+**Default:**
 
 
 .. parsed-literal::

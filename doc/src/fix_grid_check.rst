@@ -6,8 +6,7 @@ fix grid/check command
 fix grid/check/kk command
 =========================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -27,16 +26,14 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
 
    fix 1 grid/check 100 error
 
-Description
-"""""""""""
+**Description:**
 
 Check if particles are inside the grid cell they are supposed to be,
 based on their current coordinates.  This is useful as a debugging
@@ -61,10 +58,8 @@ For *silent*\ , it will print no message, but the count of such
 occurrences can be monitored as described below, e.g. by outputting
 the value with the :doc:`stats <stats>` command.
 
-.. warning::
-
-   Use of *outside yes* can be expensive if the check is
-   performed frequently (e.g. every step).
+IMPORTANT NOTE: Use of *outside yes* can be expensive if the check is
+performed frequently (e.g. every step).
 
 
 ----------
@@ -111,8 +106,7 @@ effectively.
 
 **Related commands:** none
 
-Default
-"""""""
+**Default:**
 
 The option default is outside = no.
 

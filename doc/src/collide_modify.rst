@@ -3,8 +3,7 @@
 collide\_modify command
 =======================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -33,8 +32,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -46,8 +44,7 @@ Examples
    collide_modify partners subcell
    collide_modify ambipolar yes
 
-Description
-"""""""""""
+**Description:**
 
 Set parameters that affect how collisions are performed.
 
@@ -248,13 +245,11 @@ the per-particle mode values.
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`collide <collide>`
 
-Default
-"""""""
+**Default:**
 
 The option defaults are vremax = (0,yes), remain = yes, scheme = ntc,
 ambipolar no, nearcp no, subcell no, rotate smooth, and vibrate = no.

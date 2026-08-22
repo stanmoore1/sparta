@@ -3,8 +3,7 @@
 compute reduce command
 ======================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -46,8 +45,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -67,8 +65,7 @@ all grid cells, in the stats output:
    compute 3 reduce ave c_2[1]
    stats_style step c_temp c_3
 
-Description
-"""""""""""
+**Description:**
 
 Define a calculation that "reduces" one or more vector inputs into
 scalar values, one per listed input.  The inputs can be per-particle
@@ -82,12 +79,10 @@ per-particle, per-grid, or per-surf quantities.  See the
 perform the same operations as the compute reduce command on global
 vectors.
 
-.. warning::
-
-   All inputs to a compute reduce command must be the
-   same type: per-particle, per-grid, or per-surf.  You can use the
-   command multiple times if you need to reduce values of different
-   types.
+IMPORTANT NOTE: All inputs to a compute reduce command must be the
+same type: per-particle, per-grid, or per-surf.  You can use the
+command multiple times if you need to reduce values of different
+types.
 
 The reduction operation is specified by the *mode* setting.  The *sum*
 option adds the values in the vector into a global total.  The *min*
@@ -261,15 +256,13 @@ specified.  Only surface elements in the surface group will be
 included in the calculations.  See the :doc:`group surf <group>` command
 for info on how surface elements can be assigned to surface groups.
 
-.. warning::
-
-   If computes or fixes are used as inputs to compute
-   reduce, they may define their own subsets of particles, grid cells, or
-   surface elements which contribute to their output.  Typically output
-   from those computes or fixes will be zero for grid cells or surface
-   elements not in the grid or surface group specified for those
-   commands.  Thus you may want to use an argument for the *subset*
-   keyword which is consistent with the inputs, but that is not required.
+IMPORTANT NOTE: If computes or fixes are used as inputs to compute
+reduce, they may define their own subsets of particles, grid cells, or
+surface elements which contribute to their output.  Typically output
+from those computes or fixes will be zero for grid cells or surface
+elements not in the grid or surface group specified for those
+commands.  Thus you may want to use an argument for the *subset*
+keyword which is consistent with the inputs, but that is not required.
 
 
 ----------
@@ -284,8 +277,7 @@ inputs specified.
 ----------
 
 
-Output info
-"""""""""""
+**Output info:**
 
 This compute calculates a global scalar if a single input value is
 specified or a global vector of length N where N is the number of
@@ -299,8 +291,7 @@ quantities being reduced are in.
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`compute <compute>`, :doc:`fix <fix>`, :doc:`variable <variable>`
 

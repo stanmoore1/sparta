@@ -3,8 +3,7 @@
 fix dt/reset command
 ====================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -19,8 +18,7 @@ Syntax
 * resetflag = 1 to overwrite global timestep with new timestep, 0 to just calculate new timestep
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -32,8 +30,7 @@ Examples
 
    fix 2 dt/reset 500 c_tstep 0.1 1
 
-Description
-"""""""""""
+**Description:**
 
 Calculate a new global timestep for the simulation based on per grid
 cell timesteps calculated by a compute or fix.  The new global
@@ -58,12 +55,10 @@ This is done by specifying the *step* argument like this:
 * f\_ID[m] = fix with ID that calculates a time-averaged timestep as a vector output
 * f\_ID[m] = fix with ID that calculates a time-averaged timestep as its Mth column of array output
 
-.. warning::
-
-   If the ID of a :doc:`fix ave/grid <fix_ave_grid>`
-   command is used as the *step* argument, it only produces output on
-   timesteps that are multiples of its *Nfreq* argument.  Thus this fix
-   can only be invoked on those timesteps.
+IMPORTANT NOTE: If the ID of a :doc:`fix ave/grid <fix_ave_grid>`
+command is used as the *step* argument, it only produces output on
+timesteps that are multiples of its *Nfreq* argument.  Thus this fix
+can only be invoked on those timesteps.
 
 Note that some of the per-cell timesteps may be zero for several reasons.  First,
 data used to calculate the timestep, such as mean collision time, temperature, or particle speed, may be zero.
@@ -110,8 +105,7 @@ It also computes a global vector of length 3 with these values:
 * 2 = DTmax
 * 3 = DTave
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`compute dt/grid <compute_dt_grid>`
 

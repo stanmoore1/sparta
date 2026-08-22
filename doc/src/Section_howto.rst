@@ -763,10 +763,8 @@ how a driver code can link to SPARTA as a library, run SPARTA on a
 subset of processors, grab data from SPARTA, change it, and put it
 back into SPARTA.
 
-.. warning::
-
-   The examples/COUPLE dir has not been added to the
-   distribution yet.
+IMPORTANT NOTE: The examples/COUPLE dir has not been added to the
+distribution yet.
 
 
 ----------
@@ -828,10 +826,8 @@ Examples of driver codes that call SPARTA as a library are included in
 the examples/COUPLE directory of the SPARTA distribution; see
 examples/COUPLE/README for more details.
 
-.. warning::
-
-   The examples/COUPLE dir has not been added to the
-   distribution yet.
+IMPORTANT NOTE: The examples/COUPLE dir has not been added to the
+distribution yet.
 
 `Section 2.3 <Section_start.html#start_3>`_ of the manual describes how to
 build SPARTA as a library.  Once this is done, you can interface with
@@ -1556,19 +1552,17 @@ All the current implicit surface elements are then discarded, and new
 ones are generated from the new corner point values via the Marching
 Squares or Marching Cubes algorithm.
 
-.. warning::
-
-   Ideally these algorithms should preserve the gas flow
-   volume inferred by the previous surfaces and only add to it with the
-   new surfaces.  However there are a few cases for the 3d Marching Cubes
-   algorithm where the gas flow volume is not strictly preserved.  This
-   can trap existing particles inside the new surfaces.  Currently SPARTA
-   checks for this condition and deletes the trapped particles.  In the
-   future, we plan to modify the standard Marching Cubes algorithm to
-   prevent this from happening.  In our testing, the fraction of trapped
-   particles in an ablation operation is tiny (around 0.005% or 5 in
-   100000).  The number of deleted particles can be monitored as an
-   output option by the :doc:`fix ablate <fix_ablate>` command.
+IMPORTANT NOTE: Ideally these algorithms should preserve the gas flow
+volume inferred by the previous surfaces and only add to it with the
+new surfaces.  However there are a few cases for the 3d Marching Cubes
+algorithm where the gas flow volume is not strictly preserved.  This
+can trap existing particles inside the new surfaces.  Currently SPARTA
+checks for this condition and deletes the trapped particles.  In the
+future, we plan to modify the standard Marching Cubes algorithm to
+prevent this from happening.  In our testing, the fraction of trapped
+particles in an ablation operation is tiny (around 0.005% or 5 in
+100000).  The number of deleted particles can be monitored as an
+output option by the :doc:`fix ablate <fix_ablate>` command.
 
 The :doc:`write\_isurf <write_isurf>` command can be used to periodically
 write out a pixelated/voxelated file of corner point values, in the
@@ -1760,12 +1754,10 @@ the file name to gather all of the *tmp\_surf.\** files stored in the
 directory.  Wild card characters can only be used in the file name part
 of the path and can be given for multiple paths.
 
-.. note::
-
-   SPARTA 2d enclosed polygons will be 2d outlines in ParaView.
-   This means that any grid cells inside of the polygon will be visible
-   in ParaView.  To obscure the inside of the enclosed polygon, select a
-   Delaunay 2D filter from the ParaView menu.
+NOTE: SPARTA 2d enclosed polygons will be 2d outlines in ParaView.
+This means that any grid cells inside of the polygon will be visible
+in ParaView.  To obscure the inside of the enclosed polygon, select a
+Delaunay 2D filter from the ParaView menu.
 
 
 .. parsed-literal::
@@ -1894,12 +1886,10 @@ chunk.  On workstations with many cores and sufficient memory, using
 small chunks (of about 1 million cells each) can greatly speed up
 output time. For 2d grids, the *-zc* option is ignored.
 
-.. note::
-
-   On Windows platforms, the grid blocking will always be executed
-   serially.  This is due to how the multiprocessing module is
-   implemented on Windows, which prohibits multiple instances of *pvpython*
-   from starting independently.
+NOTE: On Windows platforms, the grid blocking will always be executed
+serially.  This is due to how the multiprocessing module is
+implemented on Windows, which prohibits multiple instances of *pvpython*
+from starting independently.
 
 (4) pvbatch for Large SPARTA Grids
 

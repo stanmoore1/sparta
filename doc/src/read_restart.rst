@@ -3,8 +3,7 @@
 read\_restart command
 =====================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -23,8 +22,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -35,8 +33,7 @@ Examples
    read_restart save.10000 gridcut -1.0
    read_restart save.10000 balance rcb cell
 
-Description
-"""""""""""
+**Description:**
 
 Read in a previously saved simulation from a restart file.  This
 allows continuation of a previous run on the same or different number
@@ -53,11 +50,9 @@ run will not be identical to those used if the run had been continued.
 Hence the new run will not be identical to the continued original run,
 but should be statistically similar.
 
-.. warning::
-
-   Because restart files are binary, they may not be
-   portable to other machines.  SPARTA will print an error message if
-   it cannot read a restart file for this reason.
+IMPORTANT NOTE: Because restart files are binary, they may not be
+portable to other machines.  SPARTA will print an error message if
+it cannot read a restart file for this reason.
 
 If a restarted run is performed on the same number of processors as
 the original run, then the assignment of grid cells (and their
@@ -92,10 +87,8 @@ to those for the :doc:`balance\_grid <balance_grid>` command.  If you
 choose a balancing style that results in a "clumped" assignment, then
 ghost cells will be setup successfully.
 
-.. note::
-
-   Only the *gridcut* or the *balance* keyword can be used, not
-   both of them.
+NOTE: Only the *gridcut* or the *balance* keyword can be used, not
+both of them.
 
 
 ----------
@@ -222,8 +215,7 @@ custom attributes and their data.
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`read\_grid <read_grid>`, :doc:`read\_surf <read_surf>`,
 :doc:`write\_restart <write_restart>`, :doc:`restart <restart>`

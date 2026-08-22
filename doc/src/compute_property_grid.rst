@@ -6,8 +6,7 @@ compute property/grid command
 compute property/grid/kk command
 ================================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -35,16 +34,14 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
 
    compute 1 property/grid all id xc yc zc
 
-Description
-"""""""""""
+**Description:**
 
 Define a computation that simply stores grid attributes for each grid
 cell in a grid cell group.  This is useful for values which can be
@@ -88,8 +85,7 @@ cell.
 ----------
 
 
-Output info
-"""""""""""
+**Output info:**
 
 This compute calculates a per-grid vector or per-grid array depending
 on the number of input values.  If a single input is specified, a
@@ -149,8 +145,7 @@ effectively.
 For 2d simulations, none of the attributes which refer to the 3rd
 dimension may be used.
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`dump grid <dump>`, :doc:`compute reduce <compute_reduce>`, :doc:`fix ave/grid <fix_ave_grid>`
 

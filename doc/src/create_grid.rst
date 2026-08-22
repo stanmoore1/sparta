@@ -3,8 +3,7 @@
 create\_grid command
 ====================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -35,8 +34,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -50,8 +48,7 @@ Examples
    create_grid 20 10 1 levels 2 subset 2 10\*15 3\*7 1 2 2 1 region 3 b3 2 3 1
    create_grid 8 8 10 levels 3 subset 2 5\* \* \* 4 4 4 subset 3 1 2\*3 3\* 2 2 1
 
-Description
-"""""""""""
+**Description:**
 
 Overlay a grid over the simulation domain defined by the
 :doc:`create\_box <create_box>` command.  The grid can also be defined by
@@ -77,15 +74,13 @@ cells to each processor.  This means each processor's cells will be
 geometrically compact.  The *random* and *stride* keywords, produce
 dispersed assignments of child cells to each processor.
 
-.. warning::
-
-   See `Section 6.8 <Section_howto.html#howto_8>`_ of the
-   manual for an explanation of clumped and dispersed grid cell
-   assignments and their relative performance trade-offs.  The
-   :doc:`balance\_grid <balance_grid>` command can be used after the grid is
-   created, to assign child cells to processors in different ways.  The
-   "fix balance" command can be used to re-assign them in a load-balanced
-   manner periodically during a running simulation.
+IMPORTANT NOTE: See `Section 6.8 <Section_howto.html#howto_8>`_ of the
+manual for an explanation of clumped and dispersed grid cell
+assignments and their relative performance trade-offs.  The
+:doc:`balance\_grid <balance_grid>` command can be used after the grid is
+created, to assign child cells to processors in different ways.  The
+"fix balance" command can be used to re-assign them in a load-balanced
+manner periodically during a running simulation.
 
 
 ----------
@@ -254,19 +249,16 @@ Examples using the *region* keyword are given above.
 ----------
 
 
-Restrictions
-""""""""""""
+**Restrictions:**
 
 This command can only be used after the simulation box is defined by
 the :doc:`create\_box <create_box>` command.
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`create\_box <create_box>`, :doc:`read\_grid <read_grid>`
 
-Default
-"""""""
+**Default:**
 
 The default setting for block vs clump vs random vs stride is block
 with Px = Py = Pz = \*.  The inside keyword has a default setting of

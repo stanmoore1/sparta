@@ -3,8 +3,7 @@
 react\_modify command
 =====================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -25,8 +24,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -34,8 +32,7 @@ Examples
    react_modify recomb no
    react_modify rboost 100.0
 
-Description
-"""""""""""
+**Description:**
 
 Set parameters that affect how reactions are performed.
 
@@ -63,12 +60,10 @@ more likely to occur.
 The smallest value *rboost* can be set to is 1.0, which effectively
 applies no boost factor.
 
-.. warning::
-
-   Setting *rboost* too large could meant the probability
-   of a recombination reaction becomes > 1.0, when it is does occur.
-   SPARTA does not check for this, so you should estimate the largest
-   boost factor that is safe to use for your model.
+IMPORTANT NOTE: Setting *rboost* too large could meant the probability
+of a recombination reaction becomes > 1.0, when it is does occur.
+SPARTA does not check for this, so you should estimate the largest
+boost factor that is safe to use for your model.
 
 The *compute\_chem\_rates* keyword is a setting that allows the user to
 only compute Arrhenius rates for chemical reactions without performing them.
@@ -101,13 +96,11 @@ the QK reaction model.
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`react <react>`
 
-Default
-"""""""
+**Default:**
 
 The option defaults are recomb = yes, rboost = 1000.0,
 compute\_chem\_rates = no, partial\_energy = yes.

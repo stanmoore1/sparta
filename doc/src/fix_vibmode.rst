@@ -3,8 +3,7 @@
 fix vibmode command
 ===================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -14,16 +13,14 @@ Syntax
 * ID is documented in :doc:`fix <fix>` command
 * vibmode = style name of this fix command
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
 
    fix 1 vibmode
 
-Description
-"""""""""""
+**Description:**
 
 Enable multiple vibrational energy levels, defined on a per-species
 basis, to be used in a simulation.  This fix is meant to be used with
@@ -78,8 +75,7 @@ However, the custom particle attributes defined by this fix can be
 accessed by the :doc:`dump particle <dump>` command, as p\_vibmode.  That
 means those per-particle values can be written to particle dump files.
 
-Restrictions
-""""""""""""
+**Restrictions:**
 
 This fix is required if "collide\_modify vibrate discrete" is used and
 there is one or more species defined which haave multiple vibrational
@@ -96,8 +92,7 @@ used.  In that case, defining this fix after reading the restart file
 will enable the particles to keep their previous vibrational energy
 mode values.
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`collide\_modify vibrate discrete <collide_modify>`
 

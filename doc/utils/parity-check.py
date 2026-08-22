@@ -47,8 +47,13 @@ OLD_BANNER = re.compile(
     r'<CENTER>(?:(?!</?CENTER>).)*?SPARTA WWW Site(?:(?!</?CENTER>).)*?</CENTER>',
     re.S | re.I)
 
-BLOCK = re.compile(r'</(p|div|h[1-6]|li|tr|pre|ul|ol|dl|dd|dt|table|blockquote)>',
-                   re.I)
+# Tags that separate one run of text from the next.  Everything else is
+# inline and must not introduce a space: Pygments wraps each token of a
+# literal block in its own <span>, so replacing inline tags with a space
+# would split "/path/to/x" into "/ path / to / x".
+BLOCK = re.compile(
+    r'</(p|div|h[1-6]|li|tr|pre|ul|ol|dl|dd|dt|table|blockquote)>'
+    r'|<(br|hr)\b[^>]*>', re.I)
 TAG = re.compile(r'<[^>]+>')
 SCRIPT = re.compile(r'<(script|style)\b.*?</\1>', re.S | re.I)
 
@@ -79,7 +84,7 @@ def visible_text(markup, *, sphinx=None):
     t = content_only(markup)
     # keep block boundaries as separators so words do not run together
     t = BLOCK.sub('\n', t)
-    t = TAG.sub(' ', t)
+    t = TAG.sub('', t)
     t = html.unescape(t)
     t = unicodedata.normalize('NFKC', t)
     # Icon glyphs live in the Unicode private use area; the theme uses one

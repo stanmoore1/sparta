@@ -6,8 +6,7 @@ compute fft/grid command
 compute fft/grid/kk command
 ===========================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -42,8 +41,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -61,8 +59,7 @@ velocity components in each grid cell to a dump file every 1000 steps:
    compute 2 fft/grid f_1[1] f_1[2] f_1[3]
    dump 1 grid all 1000 tmp.grid id c_2 f_1
 
-Description
-"""""""""""
+**Description:**
 
 Define a computation that performs forward FFTs on per-grid values.  
 This can be useful, for example, in calculating the energy spectrum
@@ -157,8 +154,7 @@ P/2.
 
 
 
-Output info
-"""""""""""
+**Output info:**
 
 The number of per-grid values ouptut by this compute depends on the
 optional keyword settings.  The number of FFTs is equal to the number
@@ -228,19 +224,16 @@ effectively.
 ----------
 
 
-Restrictions
-""""""""""""
+**Restrictions:**
 
 This style is part of the FFT package.  It is only enabled if SPARTA
 was built with that package.  See the `Getting Started <Section_start.html#start_3>`_ section for more info.
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`fix ave/grid <fix_ave_grid>`, :doc:`dump grid <dump>`, :doc:`compute grid <compute_grid>`
 
-Default
-"""""""
+**Default:**
 
 The option defaults are sum = no, scale = 1.0, conjugate = no, kmag =
 no.

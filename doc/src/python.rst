@@ -3,8 +3,7 @@
 python command
 ==============
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -55,8 +54,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -74,8 +72,7 @@ Examples
    python source funcdef.py
    python source here "from sparta import sparta"
 
-Description
-"""""""""""
+**Description:**
 
 The *python* command interfaces SPARTA with an embedded Python
 interpreter and enables executing arbitrary python code in that
@@ -485,15 +482,13 @@ In general, Python can be used to implement a loop with complex logic,
 much more so than can be created using the SPARTA :doc:`jump <jump>` and
 :doc:`if <if>` commands.
 
-.. warning::
-
-   When using the callback mechanism just described,
-   recognize that there are some operations you should not attempt
-   because SPARTA cannot execute them correctly.  If the Python function
-   is invoked between runs in the SPARTA input script, then it should be
-   OK to invoke any SPARTA input script command via the library interface
-   command() or file() functions, so long as the command would work if it
-   were executed in the SPARTA input script directly at the same point.
+IMPORTANT NOTE: When using the callback mechanism just described,
+recognize that there are some operations you should not attempt
+because SPARTA cannot execute them correctly.  If the Python function
+is invoked between runs in the SPARTA input script, then it should be
+OK to invoke any SPARTA input script command via the library interface
+command() or file() functions, so long as the command would work if it
+were executed in the SPARTA input script directly at the same point.
 
 
 ----------
@@ -701,8 +696,7 @@ sys.exit() in the except clause).
 ----------
 
 
-Restrictions
-""""""""""""
+**Restrictions:**
 
 This command is part of the PYTHON package.  It is only enabled if
 SPARTA was built with that package.  See the `Section start 2.3 <Section_start.html#start_3>`_ doc page for more info.
@@ -735,8 +729,7 @@ SPARTA library will create a second python "main" module that hides
 the one from the Python interpreter and all previous defined function
 and global variables will become invisible.
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`shell <shell>`, :doc:`variable <variable>`
 

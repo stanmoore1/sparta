@@ -3,8 +3,7 @@
 adapt\_grid command
 ===================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -63,8 +62,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -75,8 +73,7 @@ Examples
    adapt_grid all refine surf all 0.15 iterate 1 dir 1 0 0 
    adapt_grid all refine coarsen value c_1[1] 5.0 10.0 iterate 2
 
-Description
-"""""""""""
+**Description:**
 
 This command perform a one-time adaptation of grid cells within a grid
 cell group, either by refinement or coarsening or both.  This command
@@ -344,8 +341,7 @@ If you want the grid partitioning (and their particles) to be
 rebalanced across processors after grid adaptation, you can use the
 :doc:`balance\_grid <balance_grid>` command after this command.
 
-Restrictions
-""""""""""""
+**Restrictions:**
 
 This command can only be used after the grid has been created by the
 :doc:`create\_grid <create_grid>`, :doc:`read\_grid <read_grid>`, or
@@ -363,13 +359,11 @@ zero values for their attributes.  This is because there is no simple
 way to determine how new attribute values should be computed.  This
 may be changed in the future.
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`fix adapt <fix_adapt>`, :doc:`balance\_grid <balance_grid>`
 
-Default
-"""""""
+**Default:**
 
 The keyword defaults are iterate = 1, minlevel = 1, maxlevel = 0,
 thresh = more for rdecide and less for cdecide, combine = sum, cells =

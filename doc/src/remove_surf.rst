@@ -3,8 +3,7 @@
 remove\_surf command
 ====================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -13,16 +12,14 @@ Syntax
 
 * surfID = group ID for which surface elements to remove
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
 
    remove_surf topsurf
 
-Description
-"""""""""""
+**Description:**
 
 Remove a group of surface elements that have previously been read-in
 via the :doc:`read\_surf <read_surf>` command.  The :doc:`group surf <group>` or :doc:`read\_surf <read_surf>` can be used to assign
@@ -41,8 +38,7 @@ be output via the :doc:`write\_surf <write_surf>` or :doc:`dump surf <dump>` com
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`read\_surf <read_surf>`
 

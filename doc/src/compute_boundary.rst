@@ -3,8 +3,7 @@
 compute boundary command
 ========================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -34,8 +33,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -61,8 +59,7 @@ boundary to a file every 1000 steps:
    compute 1 boundary species n press shx shy shz
    fix 1 ave/time 10 100 1000 c_1[\*] mode vector file tmp.boundary
 
-Description
-"""""""""""
+**Description:**
 
 Define a computation that calculates one or more values for each
 boundary (i.e. face) of the simulation box, based on the particles
@@ -103,13 +100,11 @@ over the sampling timesteps, and then dividing by the number of
 sampling steps.  However for the current values listed below, the two
 normalization methods are the same.
 
-.. note::
-
-   If particle weighting is enabled via the :doc:`global weight <global>` command, then all of the values below are scaled
-   by the weight assigned to the grid cell in which the particle
-   collision with the boundary occurs.  The only exception is the the *n*
-   value, which is NOT scaled by the weight; it is a simple count of
-   particle crossings or collisions with the boundary.
+NOTE: If particle weighting is enabled via the :doc:`global weight <global>` command, then all of the values below are scaled
+by the weight assigned to the grid cell in which the particle
+collision with the boundary occurs.  The only exception is the the *n*
+value, which is NOT scaled by the weight; it is a simple count of
+particle crossings or collisions with the boundary.
 
 
 ----------
@@ -244,8 +239,7 @@ the sum of what is computed by the *ke*\ , *erot*\ , and *evib* values.
 ----------
 
 
-Output info
-"""""""""""
+**Output info:**
 
 This compute calculates a global array, with the number of columns
 equal to the number of values times the number of groups.  The
@@ -293,14 +287,12 @@ effectively.
 ----------
 
 
-Restrictions
-""""""""""""
+**Restrictions:**
 
 If specified with a *kk* suffix, this compute can be used no more than
 twice in the same input script (active at the same time).
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`fix ave/time <fix_ave_time>`
 

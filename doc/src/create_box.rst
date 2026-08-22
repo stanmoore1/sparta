@@ -3,8 +3,7 @@
 create\_box command
 ===================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -15,8 +14,7 @@ Syntax
    ylo,yhi = box bounds in the y dimension (distance units)
    zlo,zhi = box bounds in the z dimension (distance units)
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -25,8 +23,7 @@ Examples
    create_box 0 1 0 1 -0.5 0.5
    create_box 0 10.0 0 5.0 -4.0 0.0
 
-Description
-"""""""""""
+**Description:**
 
 Set the size of the simulation box.
 

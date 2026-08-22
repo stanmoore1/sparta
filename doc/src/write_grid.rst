@@ -3,8 +3,7 @@
 write\_grid command
 ===================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -22,8 +21,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -31,8 +29,7 @@ Examples
    write_grid data.grid
    write_grid data.grid custom flags
 
-Description
-"""""""""""
+**Description:**
 
 Write a grid file in text format listing the grid cell IDs in the
 current hierarchical grid.  See the :doc:`read\_grid <read_grid>` and
@@ -90,8 +87,7 @@ values per grid cell, depending on how it was defined.  If the
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`read\_grid <read_grid>`, :doc:`create\_grid <create_grid>`
 

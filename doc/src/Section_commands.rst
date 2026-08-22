@@ -200,14 +200,12 @@ See the :doc:`dump modify format <dump_modify>`, :doc:`print <print>`,
 A "#" or "$" character that is between quotes will not be treated as a
 comment indicator in (2) or substituted for as a variable in (3).
 
-.. warning::
-
-   If the argument is itself a command that requires a
-   quoted argument (e.g. using a :doc:`print <print>` command as part of an
-   :doc:`if <if>` or :doc:`run every <run>` command), then single, double, or
-   triple quotes can be nested in the usual manner.  See the doc pages
-   for those commands for examples.  Only one of level of nesting is
-   allowed, but that should be sufficient for most use cases.
+IMPORTANT NOTE: If the argument is itself a command that requires a
+quoted argument (e.g. using a :doc:`print <print>` command as part of an
+:doc:`if <if>` or :doc:`run every <run>` command), then single, double, or
+triple quotes can be nested in the usual manner.  See the doc pages
+for those commands for examples.  Only one of level of nesting is
+allowed, but that should be sufficient for most use cases.
 
 
 ----------

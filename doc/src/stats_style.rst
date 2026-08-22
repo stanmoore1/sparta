@@ -3,8 +3,7 @@
 stats\_style command
 ====================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -70,8 +69,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -80,8 +78,7 @@ Examples
    stats_style step cpu spcpu np xlo xhi c_myCount[2]
    stats_style step cpu spcpu np xlo xhi c_myCount[\*]
 
-Description
-"""""""""""
+**Description:**
 
 Determine what statistical data is printed to the screen and log file.
 
@@ -286,13 +283,11 @@ then be referenced with these keywords to generate statistical output.
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`stats <stats>`, :doc:`stats\_modify <stats_modify>`
 
-Default
-"""""""
+**Default:**
 
 
 .. parsed-literal::

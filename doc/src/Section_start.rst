@@ -156,10 +156,8 @@ produced, you're done; it's your lucky day.
 Note that by default none of the SPARTA optional packages are
 installed.  To build SPARTA with optional packages, see `this section <#start_3>`_ below.
 
-.. warning::
-
-   The optional KOKKOS accelerator package does not
-   support Makefiles and must be built using CMake instead (see below).
+IMPORTANT NOTE: The optional KOKKOS accelerator package does not
+support Makefiles and must be built using CMake instead (see below).
 
 **Step 1**
 
@@ -925,17 +923,15 @@ architecture options and detailed instructions for each KOKKOS backend.
 
 **Errors that can occur when making SPARTA:** 
 
-.. warning::
-
-   If an error occurs when building SPARTA, the compiler
-   or linker will state very explicitly what the problem is.  The error
-   message should give you a hint as to which of the steps above has
-   failed, and what you need to do in order to fix it.  Building a code
-   with a Makefile is a very logical process.  The compiler and linker
-   need to find the appropriate files and those files need to be
-   compatible with SPARTA source files.  When a make fails, there is
-   usually a very simple reason, which you or a local expert will need to
-   fix.
+IMPORTANT NOTE: If an error occurs when building SPARTA, the compiler
+or linker will state very explicitly what the problem is.  The error
+message should give you a hint as to which of the steps above has
+failed, and what you need to do in order to fix it.  Building a code
+with a Makefile is a very logical process.  The compiler and linker
+need to find the appropriate files and those files need to be
+compatible with SPARTA source files.  When a make fails, there is
+usually a very simple reason, which you or a local expert will need to
+fix.
 
 Here are two non-obvious errors that can occur:
 
@@ -1133,13 +1129,11 @@ or
    make no-fft
    make g++
 
-.. note::
-
-   You should NOT include/exclude packages and build SPARTA in a
-   single make command using multiple targets, e.g. make yes-fft g++.
-   This is because the make procedure creates a list of source files that
-   will be out-of-date for the build if the package configuration changes
-   within the same command.
+NOTE: You should NOT include/exclude packages and build SPARTA in a
+single make command using multiple targets, e.g. make yes-fft g++.
+This is because the make procedure creates a list of source files that
+will be out-of-date for the build if the package configuration changes
+within the same command.
 
 Some packages have individual files that depend on other packages
 being included.  SPARTA checks for this and does the right thing.
@@ -1159,13 +1153,11 @@ name = fft for the FFT package.  You can also type "make yes-all", or
 "make no-all" to include/exclude all packages.  Type "make package" to
 see all of the package-related make options.
 
-.. note::
-
-   Inclusion/exclusion of a package works by simply moving files
-   back and forth between the main src directory and sub-directories with
-   the package name (e.g. src/FFT or src/KOKKOS), so that the files are
-   seen or not seen when SPARTA is built.  After you have included or
-   excluded a package, you must re-build SPARTA.
+NOTE: Inclusion/exclusion of a package works by simply moving files
+back and forth between the main src directory and sub-directories with
+the package name (e.g. src/FFT or src/KOKKOS), so that the files are
+seen or not seen when SPARTA is built.  After you have included or
+excluded a package, you must re-build SPARTA.
 
 Additional package-related make options exist to help manage SPARTA
 files that exist in both the src directory and in package
@@ -1237,11 +1229,9 @@ e.g. name = FFT for the FFT package. You can also type "cmake
 include or exclude all packages. Type "cmake -DSPARTA\_LIST\_PKGS=ON" to
 see all of the package-related CMake options.
 
-.. note::
-
-   Inclusion or exclusion of a package works by setting CMake boolean
-   variables to generate the correct Makefile targets and dependencies. After you
-   have included or excluded a package, you must re-build SPARTA.
+NOTE: Inclusion or exclusion of a package works by setting CMake boolean
+variables to generate the correct Makefile targets and dependencies. After you
+have included or excluded a package, you must re-build SPARTA.
 
 If a SPARTA package has source code changes, simply run "make" to rebuild SPARTA
 with these changes.
@@ -1974,13 +1964,11 @@ re-defined.  See the :doc:`variable <variable>` command for more info on
 defining index and other kinds of variables and `Section 3.2 <Section_commands.html#cmd_2>`_ for more info on using variables in
 input scripts.
 
-.. warning::
-
-   Currently, the command-line parser looks for arguments
-   that start with "-" to indicate new switches. Thus you cannot specify
-   multiple variable values if any of they start with a "-", e.g. a
-   negative numeric value. It is OK if the first value1 starts with a
-   "-", since it is automatically skipped.
+IMPORTANT NOTE: Currently, the command-line parser looks for arguments
+that start with "-" to indicate new switches. Thus you cannot specify
+multiple variable values if any of they start with a "-", e.g. a
+negative numeric value. It is OK if the first value1 starts with a
+"-", since it is automatically skipped.
 
 
 ----------

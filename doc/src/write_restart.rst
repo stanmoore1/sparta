@@ -3,8 +3,7 @@
 write\_restart command
 ======================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -24,8 +23,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -34,8 +32,7 @@ Examples
    write_restart restart.equil.mpiio
    write_restart flow.%.\* nfile 10
 
-Description
-"""""""""""
+**Description:**
 
 Write a binary restart file with the current state of the simulation.
 
@@ -61,15 +58,13 @@ Restart files can be read by a :doc:`read\_restart <read_restart>`
 command to restart a simulation from a particular state.  Because the
 file is binary, it may not be readable on another machine.
 
-.. warning::
-
-   Although the purpose of restart files is to enable
-   restarting a simulation from where it left off, not all information
-   about a simulation is stored in the file.  For example, the list of
-   fixes that were specified during the initial run is not stored, which
-   means the new input script must specify any fixes you want to use.
-   See the :doc:`read\_restart <read_restart>` command for details about
-   what is stored in a restart file.
+IMPORTANT NOTE: Although the purpose of restart files is to enable
+restarting a simulation from where it left off, not all information
+about a simulation is stored in the file.  For example, the list of
+fixes that were specified during the initial run is not stored, which
+means the new input script must specify any fixes you want to use.
+See the :doc:`read\_restart <read_restart>` command for details about
+what is stored in a restart file.
 
 
 ----------
@@ -99,8 +94,7 @@ next 3 processors and write it to a restart file.
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`restart <restart>`, :doc:`read\_restart <read_restart>`
 

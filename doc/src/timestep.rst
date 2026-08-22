@@ -3,8 +3,7 @@
 timestep command
 ================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -13,8 +12,7 @@ Syntax
 
 * dt = timestep size (time units)
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -22,20 +20,17 @@ Examples
    timestep 2.0 
    timestep 0.003
 
-Description
-"""""""""""
+**Description:**
 
 Set the timestep size for subsequent simulations.
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`run <run>`
 
-Default
-"""""""
+**Default:**
 
 
 .. parsed-literal::

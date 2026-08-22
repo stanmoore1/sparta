@@ -6,8 +6,7 @@ compute property/surf command
 compute property/surf/kk command
 ================================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -36,16 +35,14 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
 
    compute 1 property/surf all id xc yc zc
 
-Description
-"""""""""""
+**Description:**
 
 Define a computation that simply stores surface element attributes for
 each explicit surface element in a surface group.  This is useful for
@@ -91,8 +88,7 @@ points into the flow volume of the simulation.
 ----------
 
 
-Output info
-"""""""""""
+**Output info:**
 
 This compute calculates a per-surf vector or per-surf array depending
 on the number of input values.  If a single input is specified, a
@@ -141,15 +137,13 @@ effectively.
 ----------
 
 
-Restrictions
-""""""""""""
+**Restrictions:**
 
 For 2d simulations, none of the attributes which refer to the 3rd
 dimension may be used.  Likewise *v3x*\ , *v3y*\ , *v3z* may not be used
 since they refer to triangles.
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`dump surf <dump>`, :doc:`fix ave/surf <fix_ave_surf>`
 

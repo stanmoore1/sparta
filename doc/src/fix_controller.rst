@@ -3,8 +3,7 @@
 fix controller command
 ======================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -32,8 +31,7 @@ Syntax
 * cv = name of the control variable, an internal-style :doc:`variable <variable>`
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -42,8 +40,7 @@ Examples
    variable drive internal 0.0
    fix pid controller 100 0.1 1.0 0.0 0.0 c_myTemp 300.0 drive
 
-Description
-"""""""""""
+**Description:**
 
 Apply a "proportional-integral-derivative" (PID) feedback controller to
 a simulation.  Every *Nevery* timesteps the fix samples a *process
@@ -113,13 +110,11 @@ Setting one or more of *Kp*\ , *Ki*\ , *Kd* to zero disables the
 corresponding term, e.g. *Ki* = *Kd* = 0.0 yields a purely proportional
 controller.
 
-.. note::
-
-   The sign convention in the update formula above (the PID terms are
-   subtracted) is appropriate when an increase of the control variable
-   *decreases* the process variable.  If increasing the control variable
-   *increases* the process variable, use a negative *alpha* (or negative
-   gains) so that the feedback remains stabilizing.
+NOTE: The sign convention in the update formula above (the PID terms are
+subtracted) is appropriate when an increase of the control variable
+*decreases* the process variable.  If increasing the control variable
+*increases* the process variable, use a negative *alpha* (or negative
+gains) so that the feedback remains stabilizing.
 
 Choosing good values for the four constants depends on the system and
 typically requires some experimentation.  It is best to first choose a
@@ -168,8 +163,7 @@ by this fix are "extensive".
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`compute <compute>`, :doc:`variable <variable>`, :doc:`fix adapt <fix_adapt>`
 

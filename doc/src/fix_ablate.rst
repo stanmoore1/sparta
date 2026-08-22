@@ -3,8 +3,7 @@
 fix ablate command
 ==================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -39,8 +38,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -49,8 +47,7 @@ Examples
    fix 1 ablate surfcells 0 0.0 random 10
    fix fablate ablate inner 0 0.2 random 0 mindist 0.02
 
-Description
-"""""""""""
+**Description:**
 
 Perform ablation once every Nevery steps on a set of grid cell corner
 points to induce new implicit surface elements in those grid cells.
@@ -386,8 +383,7 @@ an overview of SPARTA output options.
 
 The scalar and vector values are unitless.
 
-Restrictions
-""""""""""""
+**Restrictions:**
 
 This fix can only be used in simulations that define implicit surfaces.
 
@@ -400,13 +396,11 @@ elements.  Assigning different models to different groups of surface
 elements is not yet supported with ablation; an error is generated if
 that is the case.
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`read isurf <read_isurf>`
 
-Default
-"""""""
+**Default:**
 
 The default for the *mindist* keyword = 0.0, i.e. the epsilon method
 is used.  The default for the *multiple* keyword = no.  The default for

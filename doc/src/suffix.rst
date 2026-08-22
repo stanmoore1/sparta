@@ -3,8 +3,7 @@
 suffix command
 ==============
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -13,8 +12,7 @@ Syntax
 
 * style = *off* or *on* or *kk*
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -23,8 +21,7 @@ Examples
    suffix on
    suffix kk
 
-Description
-"""""""""""
+**Description:**
 
 This command allows you to use variants of various styles if they
 exist.  In that respect it operates the same as the `-suffix command-line switch <Section_start.html#start_7>`_.  It also has options
@@ -56,8 +53,7 @@ commands in your input script.
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 `Command-line switch -suffix <Section_start.html#start_7>`_
 

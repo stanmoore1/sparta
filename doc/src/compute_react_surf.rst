@@ -6,8 +6,7 @@ compute react/surf command
 compute react/surf/kk command
 =============================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -28,8 +27,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -48,8 +46,7 @@ dump file every 1000 steps:
    fix 1 ave/surf all 10 100 1000 c_2[\*]
    dump 1 surf all 1000 tmp.surf id f_1[\*]
 
-Description
-"""""""""""
+**Description:**
 
 Define a computation that tallies counts of reactions for each
 explicit surface element in a surface element group, based on the
@@ -99,8 +96,7 @@ The values over many sampling timesteps can be averaged by the :doc:`fix ave/sur
 ----------
 
 
-Output info
-"""""""""""
+**Output info:**
 
 This compute calculates a per-surf array, with the number of columns
 either equal to the number of reactions defined by the
@@ -146,8 +142,7 @@ effectively.
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`fix ave/surf <fix_ave_surf>`, :doc:`dump surf <dump>`, :doc:`compute react/isurf/grid <compute_react_isurf_grid>`
 

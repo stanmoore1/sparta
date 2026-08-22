@@ -3,8 +3,7 @@
 balance\_grid command
 =====================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -36,8 +35,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -49,8 +47,7 @@ Examples
    balance_grid rcb part
    balance_grid rcb part axes xz
 
-Description
-"""""""""""
+**Description:**
 
 This command adjusts the assignment of grid cells and their particles
 to processors, to attempt to balance the computational cost (load)
@@ -90,11 +87,9 @@ processor's cells will be geometrically compact.  The *stride* and
 *random* and *proc* styles will produce dispersed assignments of
 child cells to each processor.
 
-.. warning::
-
-   See `Section 6.8 <Section_howto.html#howto_8>`_ of the
-   manual for an explanation of clumped and dispersed grid cell
-   assignments and their relative performance trade-offs.
+IMPORTANT NOTE: See `Section 6.8 <Section_howto.html#howto_8>`_ of the
+manual for an explanation of clumped and dispersed grid cell
+assignments and their relative performance trade-offs.
 
 
 ----------
@@ -159,18 +154,14 @@ before the balance command so that timer data is available. The timers
 used for balancing tally time from the move, sort, collide, and modify
 portions of each timestep.
 
-.. warning::
+IMPORTANT NOTE: The :doc:`adapt\_grid <adapt_grid>` command zeros out
+timing data, so the weight *time* option is not available immediatly
+after this command.
 
-   The :doc:`adapt\_grid <adapt_grid>` command zeros out
-   timing data, so the weight *time* option is not available immediatly
-   after this command.
-
-.. warning::
-
-   The coarsening option in :doc:`fix\_adapt <fix_adapt>` may
-   shift cells to different processors, which makes the accumulated
-   timing data for the weight *time* option less accurate when load
-   balancing is performed immediately after this command.
+IMPORTANT NOTE: The coarsening option in :doc:`fix\_adapt <fix_adapt>` may
+shift cells to different processors, which makes the accumulated
+timing data for the weight *time* option less accurate when load
+balancing is performed immediately after this command.
 
 Here is an example of an RCB partitioning for 24 processors, of a 2d
 hierarchical grid with 5 levels, refined around a tilted ellipsoidal
@@ -214,8 +205,7 @@ exercising the rebalancing code.
 ----------
 
 
-Restrictions
-""""""""""""
+**Restrictions:**
 
 This command can only be used after the grid has been created by the
 :doc:`create\_grid <create_grid>`, :doc:`read\_grid <read_grid>`, or
@@ -228,13 +218,11 @@ simulation box boundary condition is not yet assigned, that operation
 needs to be performed in the input script before balancing can be
 performed.
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`fix balance <fix_balance>`
 
-Default
-"""""""
+**Default:**
 
 The default settings for the optional keywords are axes = xyz, flip =
 no.

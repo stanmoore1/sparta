@@ -3,8 +3,7 @@
 global command
 ==============
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -73,8 +72,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -86,8 +84,7 @@ Examples
    global mem/limit 100 
    global field constant 9.8 0 0 1
 
-Description
-"""""""""""
+**Description:**
 
 Define global properties of the system.
 
@@ -265,31 +262,27 @@ cells owned by other processors.
 .. image:: JPG/partition_zoom_cutoff.jpg
    :align: center
 
-.. warning::
+IMPORTANT NOTE: Using the *gridcut* keyword with a cutoff >= 0.0 is
+only allowed if the grid cells owned by each processor are "clumped".
+If each processor's grid cells are "dispersed", then ghost cells
+cannot be created with a *gridcut* cutoff >= 0.0.  Whenever ghost
+cells are generated, a warning to this effect will be triggered.  At a
+later point when surfaces are read in or a simulation is performed, an
+error will result.  The solution is to use the
+:doc:`balance\_grid <balance_grid>` command to change to a clumped grid
+cell assignment.  See `Section 6.8 <Section_howto.html#howto_8>`_ of the
+manual for an explanation of clumped and dispersed grid cell
+assignments and their relative performance trade-offs.
 
-   Using the *gridcut* keyword with a cutoff >= 0.0 is
-   only allowed if the grid cells owned by each processor are "clumped".
-   If each processor's grid cells are "dispersed", then ghost cells
-   cannot be created with a *gridcut* cutoff >= 0.0.  Whenever ghost
-   cells are generated, a warning to this effect will be triggered.  At a
-   later point when surfaces are read in or a simulation is performed, an
-   error will result.  The solution is to use the
-   :doc:`balance\_grid <balance_grid>` command to change to a clumped grid
-   cell assignment.  See `Section 6.8 <Section_howto.html#howto_8>`_ of the
-   manual for an explanation of clumped and dispersed grid cell
-   assignments and their relative performance trade-offs.
-
-.. warning::
-
-   If grid cells have already been defined via the
-   :doc:`create\_grid <create_grid>`, :doc:`read\_grid <read_grid>`, or
-   :doc:`read\_restart <read_restart>` commands, when the *gridcut* cutoff
-   is specified, then any ghost cell information that is currently stored
-   will be erased.  As discussed in the preceeding paragraph, a
-   :doc:`balance\_grid <balance_grid>` command must then be invoked to
-   regenerate ghost cell information.  If this is not done before
-   surfaces are read in or a simulation is performed, an error will
-   result.
+IMPORTANT NOTE: If grid cells have already been defined via the
+:doc:`create\_grid <create_grid>`, :doc:`read\_grid <read_grid>`, or
+:doc:`read\_restart <read_restart>` commands, when the *gridcut* cutoff
+is specified, then any ghost cell information that is currently stored
+will be erased.  As discussed in the preceeding paragraph, a
+:doc:`balance\_grid <balance_grid>` command must then be invoked to
+regenerate ghost cell information.  If this is not done before
+surfaces are read in or a simulation is performed, an error will
+result.
 
 The *comm/sort* keyword determines whether the messages a proc
 receives for migrating particles (every step) and ghost grid cells (at
@@ -484,19 +477,16 @@ measure of how often the optimized move was not applicable, not of how
 far particles moved. A value near zero means it was used for nearly
 every particle.
 
-Restrictions
-""""""""""""
+**Restrictions:**
 
 The global surfmax command must be used before surface elements are
 defined, e.g. via the :doc:`read\_surf <read_surf>` command.
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`mixture <mixture>`
 
-Default
-"""""""
+**Default:**
 
 The keyword defaults are fnum = 1.0, nrho = 1.0, vstream = 0.0 0.0
 0.0, temp = 273.15, field = none, surfs = explicit, surfgrid = auto,

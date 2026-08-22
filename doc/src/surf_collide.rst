@@ -3,8 +3,7 @@
 surf\_collide command
 =====================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -92,8 +91,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -111,8 +109,7 @@ Examples
    surf_collide heatwall diffuse v_ramp 0.8 temp/freq 100
    surf_collide heatwall diffuse v_ramp 0.8 translate 5.0 0.0 0.0
 
-Description
-"""""""""""
+**Description:**
 
 Define a model for particle-surface collisions.  One or more models
 can be defined and assigned to different surfaces or simulation box
@@ -411,9 +408,7 @@ with a subsonic pressure boundary condition, as explained in
 *Vwall* should be chosen to correspond to a desired pressure condition
 for the density of particles in the system.
 
-.. note::
-
-   give more details on how to do this?
+NOTE: give more details on how to do this?
 
 Note that *Vwall* must always be input as a value >= 0.0, meaning the
 surface is moving away from the incident particle.  For example, in
@@ -481,16 +476,14 @@ In either case, the wall or surface elements themselves do not change
 position due to rotation.  They are simply modeled as having a
 tangential velocity, as if the entire object were rotating.
 
-.. warning::
-
-   For both the *translate* and *rotate* keywords the
-   added velocity can only be tangential to the surface, with no normal
-   component since the surface is not actually moving in the normal
-   direction.  SPARTA does not check that the specified translation or
-   rotation produces a tangential velocity.  However if does enforce the
-   condition by subtracting off any component of the added velocity that
-   is normal to the simulation box boundary or individual surface
-   element.
+IMPORTANT NOTE: For both the *translate* and *rotate* keywords the
+added velocity can only be tangential to the surface, with no normal
+component since the surface is not actually moving in the normal
+direction.  SPARTA does not check that the specified translation or
+rotation produces a tangential velocity.  However if does enforce the
+condition by subtracting off any component of the added velocity that
+is normal to the simulation box boundary or individual surface
+element.
 
 The *temp/freq* keyword only applies to the styles which define a
 *Tsurf* parameter for the temperature of the surface, and also only
@@ -601,8 +594,7 @@ transferred to the rotational and vibrational mode respectively.
 ----------
 
 
-Output info
-"""""""""""
+**Output info:**
 
 All the surface collide models calculate a global vector of length 2.
 The values can be used by the :doc:`stats\_style <stats_style>` command
@@ -643,21 +635,18 @@ effectively.
 ----------
 
 
-Restrictions
-""""""""""""
+**Restrictions:**
 
 The *translate* and *rotate* keywords cannot be used together.
 
 If specified with a *kk* suffix, this command can be used no more than
 twice in the same input script (active at the same time).
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`read\_surf <read_surf>`, :doc:`bound\_modify <bound_modify>`
 
-Default
-"""""""
+**Default:**
 
 The default for the *temp/freq* keyword = 1.
 

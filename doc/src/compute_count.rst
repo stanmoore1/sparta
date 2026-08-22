@@ -6,8 +6,7 @@ compute count command
 compute count/kk command
 ========================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -26,8 +25,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -35,8 +33,7 @@ Examples
    compute 1 count species
    compute Ncounts count N N2 N+ air/O
 
-Description
-"""""""""""
+**Description:**
 
 Define a computation that counts the number of particles currently in
 the simulation for various species or groups within mixtures.  Groups
@@ -70,8 +67,7 @@ ID and name is the name of a group in that mixture.
 ----------
 
 
-Output info
-"""""""""""
+**Output info:**
 
 If there is a single count accumulated, this compute calculates a
 global scalar.  If there are multiple counts accumulated, it
@@ -109,8 +105,7 @@ effectively.
 ----------
 
 
-Restrictions
-""""""""""""
+**Restrictions:**
 
 It is an error if a listed *id* is both a species ID and a mixture ID,
 since this command cannot distinguish between them.

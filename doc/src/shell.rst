@@ -3,8 +3,7 @@
 shell command
 =============
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -32,8 +31,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -48,8 +46,7 @@ Examples
    shell my_setup file1 10 file2
    shell my_post_process 100 dump.out
 
-Description
-"""""""""""
+**Description:**
 
 Execute a shell command.  A few simple file-based shell commands are
 supported directly, in Unix-style syntax.  Any command not listed
@@ -110,8 +107,7 @@ would be the same as invoking
 from a command-line prompt.  The executable program "my\_setup" is run
 with 3 arguments: file1 10 file2.
 
-Restrictions
-""""""""""""
+**Restrictions:**
 
 SPARTA does not detect errors or print warnings when any of these
 commands execute.  E.g. if the specified directory does not exist,

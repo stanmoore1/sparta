@@ -3,8 +3,7 @@
 compute gas/collision/grid command
 ==================================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -16,8 +15,7 @@ Syntax
 * group-ID = group ID for which grid cells to perform calculation on
 * mix-ID = mixture ID to perform calculation on
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -25,8 +23,7 @@ Examples
    compute 1 gas/collision/grid all all
    compute 2 gas/collision/grid subset mymixture
 
-Description
-"""""""""""
+**Description:**
 
 Count the number of gas-phase collisions bewteen pairs of particles
 which occur in each grid cell during the current timestep.  Only gas
@@ -48,8 +45,7 @@ averaged by the :doc:`fix ave/grid <fix_ave_grid>` command.
 ----------
 
 
-Output info
-"""""""""""
+**Output info:**
 
 This compute calculates a per-grid vector with the count of collisions
 for each grid cell.
@@ -64,8 +60,7 @@ for an overview of SPARTA output options.
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`compute gas/reaction/grid <compute_gas_reaction_grid>`, :doc:`compute gas/collision/tally <compute_gas_collision_tally>`, :doc:`dump grid <dump>`
 

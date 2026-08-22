@@ -3,8 +3,7 @@
 create\_isurf command
 =====================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -25,8 +24,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -34,8 +32,7 @@ Examples
    create_isurf all fablate 40.0 inout
    create_isurf subset fablate 100.0 ave
 
-Description
-"""""""""""
+**Description:**
 
 This command converts all currently defined explicit surface elements
 to implicit surface elements.  One motivation for this operation is
@@ -67,11 +64,9 @@ implicit and explicit surfaces to simulataneously exist.  The
 using implicit surfaces in a simulation, which also apply to this
 command.
 
-.. warning::
-
-   As for the :doc:`read\_isurf <read_isurf>` command, all
-   implicit triangles (line segments in 2d) created within the same grid
-   cell are assigned the same surface ID, which is the grid cell ID.
+IMPORTANT NOTE: As for the :doc:`read\_isurf <read_isurf>` command, all
+implicit triangles (line segments in 2d) created within the same grid
+cell are assigned the same surface ID, which is the grid cell ID.
 
 
 ----------
@@ -109,29 +104,27 @@ within which implicit surfaces will be created.  It is important that
 the specified group of grid cells wholly contain the explicit surfaces
 as explained in the next paragraph.
 
-.. warning::
-
-   The aggregate set of implicit surfaces created by this
-   command must represent a watertight object(s), the same as explained
-   for the read\_surf command, otherwise SPARTA will generate an
-   error. The marching cube and square algorithms guarantee this (see the
-   :doc:`read\_isurf <read_isurf>` doc page for details).  However, if the
-   Nx by Ny by Nz array of grid cells is interior to the simulation box,
-   the entire outer boundary of the grid cell array should not be
-   intersected by an explicit surface element.  Otherwise a
-   non-watertight surface will typically result.  If the array of grid
-   cells touches a simulation box face, then this is not a requirement
-   (the same as if a set of explicit surfs were clipped at the box
-   boundary).  However, if a boundary is periodic in a particular
-   dimension and the array of grid cells touches that boundary, then you
-   must insure the Nx by Ny by Nz grid of cells spans that entire
-   dimension.  And if any explicit surfaces intersect that boundary, both
-   periodic boundaries must be intersected in the identical manner.
-   E.g. if the y dimension is periodic, the any intersection by one or
-   more explicit surfaces of the ylo boundary must also occur at the yhi
-   boundary, with identical x and z coordinates for each intersection.
-   Otherwise the aggregate set of induced implicit surfaces will not be
-   consistent across the y periodic boundary.
+IMPORTANT NOTE: The aggregate set of implicit surfaces created by this
+command must represent a watertight object(s), the same as explained
+for the read\_surf command, otherwise SPARTA will generate an
+error. The marching cube and square algorithms guarantee this (see the
+:doc:`read\_isurf <read_isurf>` doc page for details).  However, if the
+Nx by Ny by Nz array of grid cells is interior to the simulation box,
+the entire outer boundary of the grid cell array should not be
+intersected by an explicit surface element.  Otherwise a
+non-watertight surface will typically result.  If the array of grid
+cells touches a simulation box face, then this is not a requirement
+(the same as if a set of explicit surfs were clipped at the box
+boundary).  However, if a boundary is periodic in a particular
+dimension and the array of grid cells touches that boundary, then you
+must insure the Nx by Ny by Nz grid of cells spans that entire
+dimension.  And if any explicit surfaces intersect that boundary, both
+periodic boundaries must be intersected in the identical manner.
+E.g. if the y dimension is periodic, the any intersection by one or
+more explicit surfaces of the ylo boundary must also occur at the yhi
+boundary, with identical x and z coordinates for each intersection.
+Otherwise the aggregate set of induced implicit surfaces will not be
+consistent across the y periodic boundary.
 
 The specified *ablateID* is the fix ID of a :doc:`fix ablate <fix_ablate>` command which has been previously specified in
 the input script.  It will store the grid corner point values for each
@@ -220,10 +213,8 @@ not require averaging since all corner point values computed for each
 vertex can be stored. In general, multivalues distorts the surface
 less during the surface conversion.
 
-.. note::
-
-   Regardless of which mode is used, implicit surfaces are an
-   approximation to the original explicit surfaces.  In particular:
+NOTE: Regardless of which mode is used, implicit surfaces are an
+approximation to the original explicit surfaces.  In particular:
 
 * The set of implicit surfaces cannot fully resolve features smaller
   than the size of the uniform grid cells used to overlay the
@@ -275,8 +266,7 @@ apex is close to the vertical grid line.
 ----------
 
 
-Restrictions
-""""""""""""
+**Restrictions:**
 
 Explicit and implicit surfaces cannot be mixed in the same simulation.
 Thus, all explicit surfaces from all surface groups are converted into
@@ -307,14 +297,12 @@ immediately deleted by this command.
 ----------
 
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`read\_surf <read_surf>`, :doc:`fix\_ablate <fix_ablate>`,
 :doc:`write\_isurf <write_isurf>`
 
-Default
-"""""""
+**Default:**
 
 none
 

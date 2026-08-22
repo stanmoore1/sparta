@@ -3,8 +3,7 @@
 fix emit/surf command
 =====================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -42,8 +41,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -59,8 +57,7 @@ Examples
    read_surf sdata.circle custom myrho float 0 custom mystream float 3
    fix in emit/surf air all custom nrho s_myrho custom vstream s_mystream
 
-Description
-"""""""""""
+**Description:**
 
 Emit particles from a group of surface elements, continuously during a
 simulation.  If invoked every timestep, this fix creates a continuous
@@ -104,11 +101,9 @@ chosen randomly in accord with the *frac* settings of the collection
 of species in the mixture, as set by the :doc:`mixture <mixture>`
 command.
 
-.. warning::
-
-   The preceeding calculation is actually done using
-   surface element areas associated with *weighted* cell volumes.  Grid
-   cells can be weighted using the :doc:`global weight <global>` command.
+IMPORTANT NOTE: The preceeding calculation is actually done using
+surface element areas associated with *weighted* cell volumes.  Grid
+cells can be weighted using the :doc:`global weight <global>` command.
 
 The velocity of the particle is set to the sum of the streaming
 velocity and a thermal velocity sampled from the thermal temperature.
@@ -226,16 +221,14 @@ for the :doc:`region <region>` command can be used to define whether the
 inside or outside of the geometric region is considered to be "in" the
 region.
 
-.. warning::
-
-   If the *region* and *n* keywords are used together,
-   less than N particles may be added on an insertion timestep.  This is
-   because grid cell/suface element pairs will be candidates for particle
-   insertion, unless the grid cell is entirely outside the bounding box
-   that encloses the region.  Particles those grid cell/surface element
-   pairs will attempt to add are included in the count for N, even if
-   some or all of the particle insertions are rejected due to not being
-   inside the region.
+IMPORTANT NOTE: If the *region* and *n* keywords are used together,
+less than N particles may be added on an insertion timestep.  This is
+because grid cell/suface element pairs will be candidates for particle
+insertion, unless the grid cell is entirely outside the bounding box
+that encloses the region.  Particles those grid cell/surface element
+pairs will attempt to add are included in the count for N, even if
+some or all of the particle insertions are rejected due to not being
+inside the region.
 
 The *subsonic* keyword uses the method of Fang and Liou
 `(Fang02) <#Fang02>`_ to determine the number of particles to insert in
@@ -266,35 +259,29 @@ behavior.  Only the cell velocity is averaged; for a pressure-only
 boundary (Tsub = NULL) the characteristic pressure correction is
 applied to the averaged velocity once per step, not accumulated.
 
-.. warning::
+IMPORTANT NOTE: The moving average is stored per grid cell/surface
+element pair, and those pairs are rebuilt whenever the grid changes.
+So the average restarts after :doc:`fix balance <fix_balance>` or
+:doc:`fix adapt <fix_adapt>` alters the grid.  Avoid dynamic load
+balancing, or use a window much shorter than the rebalance interval,
+if a converged average matters.
 
-   The moving average is stored per grid cell/surface
-   element pair, and those pairs are rebuilt whenever the grid changes.
-   So the average restarts after :doc:`fix balance <fix_balance>` or
-   :doc:`fix adapt <fix_adapt>` alters the grid.  Avoid dynamic load
-   balancing, or use a window much shorter than the rebalance interval,
-   if a converged average matters.
+IMPORTANT NOTE: Caution must be exercised when using the subsonic
+boundary condition without specifying an inlet temperature. In this
+case the code tries to estimate the temperature of the flow from the
+properties of the particles in the domain. If the domain contains few
+particles per cell it may lead to spurious results.  This boundary
+condition is meant more for an outlet than an inlet boundary
+condition, and performs well in cases where the cells are adequately
+populated.
 
-.. warning::
-
-   Caution must be exercised when using the subsonic
-   boundary condition without specifying an inlet temperature. In this
-   case the code tries to estimate the temperature of the flow from the
-   properties of the particles in the domain. If the domain contains few
-   particles per cell it may lead to spurious results.  This boundary
-   condition is meant more for an outlet than an inlet boundary
-   condition, and performs well in cases where the cells are adequately
-   populated.
-
-.. warning::
-
-   When using this keyword, you should also use an
-   appropriate surface collision or chemistry model via the
-   :doc:`surf\_collide <surf_collide>` or :doc:`surf\_react <surf_react>`
-   commands, so that particles hitting the surface disappear as if they
-   were exiting the simulation domain.  That is necessary to produce the
-   correct subsonic conditions that the particle insertions due to this
-   command are trying to achieve.
+IMPORTANT NOTE: When using this keyword, you should also use an
+appropriate surface collision or chemistry model via the
+:doc:`surf\_collide <surf_collide>` or :doc:`surf\_react <surf_react>`
+commands, so that particles hitting the surface disappear as if they
+were exiting the simulation domain.  That is necessary to produce the
+correct subsonic conditions that the particle insertions due to this
+command are trying to achieve.
 
 
 ----------
@@ -336,28 +323,24 @@ proportion to its own inflow flux, so masses are flux-weighted; with
 fractions, so the mean inserted mass is the fraction-weighted mean mass
 of the mixture.  Either setting delivers the requested *Mdot*\ .
 
-.. warning::
+IMPORTANT NOTE: The imposed mass flow rate is achieved in an *expected*
+(statistical) sense.  The number of particles inserted on any single
+timestep fluctuates, so the realized rate should be measured as a
+time-average over many steps.  A clean way to verify it is from the
+fix's cumulative insertion count (see output below): realized mass rate
+= (ntotal \* fnum \* mean-inserted-mass) / (Nsteps \* dt), where the
+per-particle mass must be multiplied by the cell weight if cell
+weighting is enabled.
 
-   The imposed mass flow rate is achieved in an *expected*
-   (statistical) sense.  The number of particles inserted on any single
-   timestep fluctuates, so the realized rate should be measured as a
-   time-average over many steps.  A clean way to verify it is from the
-   fix's cumulative insertion count (see output below): realized mass rate
-   = (ntotal \* fnum \* mean-inserted-mass) / (Nsteps \* dt), where the
-   per-particle mass must be multiplied by the cell weight if cell
-   weighting is enabled.
-
-.. warning::
-
-   As with *subsonic*\ , you should use an appropriate
-   :doc:`surf\_collide <surf_collide>` or :doc:`surf\_react <surf_react>` model
-   on the emitting surfaces so particles hitting them disappear as if
-   exiting the domain.  The *mflow* keyword cannot be combined with the
-   *subsonic*\ , *n*\ , *custom*\ , or *region* keywords.  Both *mflow* and
-   *subsonic* are supported by the *kk* suffix
-   version of this fix.  The *region* restriction exists
-   because insertions rejected by a region are not resampled, which would
-   silently reduce the realized mass flow rate below *Mdot*\ .
+IMPORTANT NOTE: As with *subsonic*\ , you should use an appropriate
+:doc:`surf\_collide <surf_collide>` or :doc:`surf\_react <surf_react>` model
+on the emitting surfaces so particles hitting them disappear as if
+exiting the domain.  The *mflow* keyword cannot be combined with the
+*subsonic*\ , *n*\ , *custom*\ , or *region* keywords.  Both *mflow* and
+*subsonic* are supported by the *kk* suffix
+version of this fix.  The *region* restriction exists
+because insertions rejected by a region are not resampled, which would
+silently reduce the realized mass flow rate below *Mdot*\ .
 
 
 ----------
@@ -380,10 +363,8 @@ based on gas collisions with each surface element.
 See `Section Howto 6.17 <Section_howto.html#howto_17>`_ for a discussion
 of custom per-surf attributes.
 
-.. warning::
-
-   The *custom* keyword cannot be used together with
-   either the *n* or *subsonic* keywords.
+IMPORTANT NOTE: The *custom* keyword cannot be used together with
+either the *n* or *subsonic* keywords.
 
 The *attribute* value of the *custom* keyword can be any of the
 following:
@@ -461,8 +442,7 @@ second element is the cummulative total number added since the
 beginning of the run.  The 2nd value is initialized to zero each time
 a run is performed.
 
-Restrictions
-""""""""""""
+**Restrictions:**
 
 A *n* setting of *Np* > 0 or *Np* as a variable can only be used with
 a *perspecies* setting of *no*\ .
@@ -477,13 +457,11 @@ outward streaming velocity, so that their net velocity is inward.  The
 threshold for this is the thermal velocity for particles 3\*sigma from
 the mean thermal velocity.
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`mixture <mixture>`, :doc:`create\_particles <create_particles>`, :doc:`fix emit/face <fix_emit_face>`
 
-Default
-"""""""
+**Default:**
 
 The keyword defaults are n = 0, normal = no, nevery = 1, perspecies =
 yes, region = none, no subsonic settings, no mflow settings.  For the

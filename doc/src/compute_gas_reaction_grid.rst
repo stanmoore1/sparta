@@ -3,8 +3,7 @@
 compute gas/reaction/grid command
 =================================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -28,8 +27,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -39,8 +37,7 @@ Examples
    compute 4 gas/reaction/grid all all every
    compute 4 gas/reaction/grid all all select 5 7 14
 
-Description
-"""""""""""
+**Description:**
 
 Count the number of gas-phase reactions bewteen pairs of particles
 which occur in each grid cell during the current timestep.  Only gas
@@ -87,8 +84,7 @@ a single index is specified.
 ----------
 
 
-Output info
-"""""""""""
+**Output info:**
 
 If no numeric keywords are used, then this compute calculates a
 per-grid vector with the count of all reactions for each grid cell.
@@ -108,8 +104,7 @@ options.
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`compute gas/collision/grid <compute_gas_collision_grid>`, :doc:`compute gas/reaction/tally <compute_gas_reaction_tally>`, :doc:`dump grid <dump>`
 

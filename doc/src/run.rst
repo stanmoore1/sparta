@@ -3,8 +3,7 @@
 run command
 ===========
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -31,8 +30,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -44,8 +42,7 @@ Examples
    run 100000 start 0 stop 1000000 every 1000 "print 'Temp = $t'"
    run 100000 every 1000 NULL
 
-Description
-"""""""""""
+**Description:**
 
 Run or continue a simulation for a specified number of timesteps.
 
@@ -104,12 +101,10 @@ setup is skipped, except for printing statistical info.  Note that if
 *pre* is set to "no" for the very 1st run SPARTA performs, then it is
 overridden, since the initial setup computations must be done.
 
-.. warning::
-
-   If your input script changes settings between 2 runs
-   (e.g. adds a :doc:`fix <fix>` or :doc:`compute <compute>`), then the
-   initial setup must be performed.  SPARTA does not check for this, but
-   it would be an error to use the *pre no* option in this case.
+IMPORTANT NOTE: If your input script changes settings between 2 runs
+(e.g. adds a :doc:`fix <fix>` or :doc:`compute <compute>`), then the
+initial setup must be performed.  SPARTA does not check for this, but
+it would be an error to use the *pre no* option in this case.
 
 If *post* is specified as "no", the full timing and statistical output
 is skipped; only a one-line summary timing is printed.
@@ -187,21 +182,18 @@ skipped for intermediate runs.
 If you want SPARTA to exit early during the middle of a run when a
 condition is met, use :doc:`fix halt <fix_halt>`.
 
-Restrictions
-""""""""""""
+**Restrictions:**
 
 The number of specified timesteps N must fit in a signed 32-bit
 integer, so you are limited to slightly more than 2 billion steps
 (2\^31) in a single run.  However, you can perform successive runs to
 run a simulation for any number of steps (ok, up to 2\^63 steps).
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`fix halt <fix_halt>`
 
-Default
-"""""""
+**Default:**
 
 The option defaults are start = the current timestep, stop = current
 timestep + N, pre = yes, and post = yes.

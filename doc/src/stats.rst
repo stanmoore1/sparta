@@ -3,8 +3,7 @@
 stats command
 =============
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -13,16 +12,14 @@ Syntax
 
 * N = output statistics every N timesteps
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
 
    stats 100
 
-Description
-"""""""""""
+**Description:**
 
 Compute and print statistical info (e.g. particle count, temperature)
 on timesteps that are a multiple of N and at the beginning and end of
@@ -38,13 +35,11 @@ controlled by a :doc:`variable <variable>`.  See the :doc:`stats\_modify every <
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`stats\_style <stats_style>`, :doc:`stats\_modify <stats_modify>`
 
-Default
-"""""""
+**Default:**
 
 
 .. parsed-literal::

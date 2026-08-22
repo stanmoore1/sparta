@@ -3,8 +3,7 @@
 react command
 =============
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -32,8 +31,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -42,8 +40,7 @@ Examples
    react tce air.tce
    react qk air.tce
 
-Description
-"""""""""""
+**Description:**
 
 Define chemical reactions to perform in the gas phase when
 particle-particle collisions occur.  See the
@@ -268,13 +265,11 @@ two reactions, one with P2 = "atom", and one with P2 = "mol".  And/or
 you can list multiple reactions of the third kind, each with a unique
 P2.
 
-.. warning::
-
-   If the ambipolar approximation is being used, via the
-   :doc:`fix ambipolar <fix_ambipolar>` and :doc:`collide\_modify ambipolar yes <collide_modify>` commands, then reactions which involve either
-   ambipolar ions or the ambipolar electron have more restricitve rules
-   about the ordering of reactants and products.  See the next section
-   for a discussion of these requirements.
+IMPORTANT NOTE: If the ambipolar approximation is being used, via the
+:doc:`fix ambipolar <fix_ambipolar>` and :doc:`collide\_modify ambipolar yes <collide_modify>` commands, then reactions which involve either
+ambipolar ions or the ambipolar electron have more restricitve rules
+about the ordering of reactants and products.  See the next section
+for a discussion of these requirements.
 
 The *style* of each reaction is a single character (upper or lower
 case) with the following meaning:
@@ -401,13 +396,11 @@ effectively.
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`collide <collide>`, :doc:`surf\_react <surf_react>`
 
-Default
-"""""""
+**Default:**
 
 style = none
 

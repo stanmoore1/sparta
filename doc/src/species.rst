@@ -3,8 +3,7 @@
 species command
 ===============
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -23,8 +22,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -34,8 +32,7 @@ Examples
    species air.species air CO2 CO vibfile co2.species.vib
    species myfile H+ Cl- HCl
 
-Description
-"""""""""""
+**Description:**
 
 Define one or more particle species to use in the simulation.  This
 command can be used as many times as desired to add species to the
@@ -117,14 +114,12 @@ specified for the species in a separate file using the optional
 species with a vibdof = 4,6,8.  Note that the :doc:`fix vibmode <fix_vibmode>` command must also be used to allocate
 per-particle storage for these additional modes.
 
-.. note::
-
-   By default the maximum allowed number of vibrational modes is 4
-   (dof = 8). If you have a model with species which need more, you can
-   change the settings at the top of src/particle.h in the enum command
-   for MAXVIBMODE=4 to a larger value and re-compile the code.  The
-   format of the *vibfile*\ , as described next, is then enhanced
-   accordingly.
+NOTE: By default the maximum allowed number of vibrational modes is 4
+(dof = 8). If you have a model with species which need more, you can
+change the settings at the top of src/particle.h in the enum command
+for MAXVIBMODE=4 to a larger value and re-compile the code.  The
+format of the *vibfile*\ , as described next, is then enhanced
+accordingly.
 
 
 ----------

@@ -6,8 +6,7 @@ fix move/surf command
 fix move/surf/kk command
 ========================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -21,8 +20,7 @@ Syntax
 * Nlarge = move surfaces the entire distance after this many timesteps
 * args = all remaining args are identical to those defined for the :doc:`move\_surf <move_surf>` command starting with its "style" argument
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -31,8 +29,7 @@ Examples
    fix 1 move/surf partial 100 10000 rotate 360 0 0 1 5 5 0 connect yes
    fix 1 move/surf object2 100 50000 rotate 360 0 0 1 5 5 0
 
-Description
-"""""""""""
+**Description:**
 
 This command performs on-the-fly movement of all the surface elements
 in the specfied group via one of several styles.  See the :doc:`group surf <group>` command for info on how surface elements can be
@@ -107,14 +104,12 @@ effectively.
 ----------
 
 
-Restrictions
-""""""""""""
+**Restrictions:**
 
 An error will be generated if any surface element vertex is moved
 outside the simulation box.
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`read\_surf <read_surf>`, :doc:`move\_surf <move_surf>`,
 :doc:`remove\_surf <remove_surf>`

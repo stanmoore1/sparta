@@ -3,8 +3,7 @@
 label command
 =============
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -13,8 +12,7 @@ Syntax
 
 * ID = string used as label name
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -22,8 +20,7 @@ Examples
    label xyz
    label loop
 
-Description
-"""""""""""
+**Description:**
 
 Label this line of the input script with the chosen ID.  Unless a jump
 command was used previously, this does nothing.  But if a

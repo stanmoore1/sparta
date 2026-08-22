@@ -3,8 +3,7 @@
 scale\_particles command
 ========================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -14,8 +13,7 @@ Syntax
 * mix-ID = ID of mixture to use when scaling particles
 * factor = scale factor
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -23,8 +21,7 @@ Examples
    scale_particles air 0.5
    scale_particles air 4.0
 
-Description
-"""""""""""
+**Description:**
 
 Scale the number of particles in the simulation by cloning or deleting
 individual particles.  This can be useful between runs, or after
@@ -54,8 +51,7 @@ created with probability 0.4.
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`create\_particles <create_particles>`
 

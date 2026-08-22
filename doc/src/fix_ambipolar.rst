@@ -6,8 +6,7 @@ fix ambipolar command
 fix ambipolar command/kk
 ========================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -19,16 +18,14 @@ Syntax
 * especies = species ID for ambipolar electrons
 * ion1,ion2,... = species IDs for one or more ambipolar ions
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
 
    fix 1 ambipolar e N+ O+ NO+
 
-Description
-"""""""""""
+**Description:**
 
 Enable the ambipolar approximation to be used in a simulation.  The
 ambipolar approximation is a computationally efficient way to model
@@ -121,8 +118,7 @@ effectively.
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`collide\_modify ambipolar yes <collide_modify>`
 

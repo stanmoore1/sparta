@@ -6,8 +6,7 @@ compute ke/particle command
 compute ke/particle/kk command
 ==============================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -17,16 +16,14 @@ Syntax
 * ID is documented in :doc:`compute <compute>` command
 * ke/particle = style name of this compute command
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
 
    compute 1 ke/particle
 
-Description
-"""""""""""
+**Description:**
 
 Define a computation that calculates the per-atom translational
 kinetic energy for each particle.
@@ -46,8 +43,7 @@ The kinetic energy is
 where m is the mass and (Vx,Vy,Vz) are the velocity components of the
 particle.
 
-Output info
-"""""""""""
+**Output info:**
 
 This compute calculates a per-particle vector, which can be accessed
 by any command that uses per-particle values from a compute as input.
@@ -87,8 +83,7 @@ effectively.
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`dump particle <dump>`
 

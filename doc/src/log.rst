@@ -3,8 +3,7 @@
 log command
 ===========
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -15,8 +14,7 @@ Syntax
 
 * keyword = *append* if output should be appended to logfile (optional)
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -24,8 +22,7 @@ Examples
    log log.equil
    log log.equil append
 
-Description
-"""""""""""
+**Description:**
 
 This command closes the current SPARTA log file, opens a new file with
 the specified name, and begins logging information to it.  If the
@@ -46,8 +43,7 @@ details.
 
 **Related commands:** none
 
-Default
-"""""""
+**Default:**
 
 The default SPARTA log file is named log.sparta
 

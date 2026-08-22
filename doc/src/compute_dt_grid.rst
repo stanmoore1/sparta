@@ -6,8 +6,7 @@ compute dt/grid command
 compute dt/grid/kk command
 ==========================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -26,8 +25,7 @@ Syntax
 * wsq = compute or fix column for z component of velocity squared, prefaced by "c\_" or "f\_"
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -37,8 +35,7 @@ Examples
    compute mct lambda/grid f_1[1] f_1[2] tau
    compute tstep dt/grid all 0.25 0.1 c_mct f_1[2] f_1[3] f_1[4] f_1[5]
 
-Description
-"""""""""""
+**Description:**
 
 Calculate a current timestep for each grid cell in a grid cell group,
 based on the properties of particles currently in the cell and the
@@ -92,19 +89,16 @@ arguments like this:
 See the Example section above for an example of how these arguments
 can be specified.
 
-.. warning::
-
-   If the IDs of one or more :doc:`fix ave/grid <fix_ave_grid>` commands is used for these 5 arguments,
-   they only produce output on timesteps that are multiples of their
-   *Nfreq* argument.  Thus this compute can only be invoked on those
-   timesteps.
+IMPORTANT NOTE: If the IDs of one or more :doc:`fix ave/grid <fix_ave_grid>` commands is used for these 5 arguments,
+they only produce output on timesteps that are multiples of their
+*Nfreq* argument.  Thus this compute can only be invoked on those
+timesteps.
 
 
 ----------
 
 
-Output info
-"""""""""""
+**Output info:**
 
 This compute calculates a per-grid vector.
 
@@ -154,8 +148,7 @@ effectively.
 ----------
 
 
-Restrictions
-""""""""""""
+**Restrictions:**
 
 As explained above, to use this compute with *nrho* or *temp* defined
 as input from a :doc:`fix ave/grid <fix_ave_grid>` command, this compute
@@ -163,8 +156,7 @@ must only be invoked on timesteps that are multiples of the *Nfreq*
 argument used by the fix, since those are the steps when it produces
 output.
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`fix dt/reset <fix_dt_reset>`, :doc:`compute grid <compute_grid>`,
 :doc:`compute thermal/grid <compute_thermal_grid>`, :doc:`compute lambda/grid <compute_lambda_grid>`,

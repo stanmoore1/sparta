@@ -220,16 +220,12 @@ CUDA (NVIDIA GPUs), HIP (AMD GPUs), and SYCL (Intel GPUs
 and other SYCL-capable devices). You choose the backend at build time
 to produce an executable compatible with specific hardware.
 
-.. note::
+NOTE: The KOKKOS package must be built using CMake. GNU Makefile builds
+are not supported for the KOKKOS package.
 
-   The KOKKOS package must be built using CMake. GNU Makefile builds
-   are not supported for the KOKKOS package.
-
-.. note::
-
-   Kokkos support within SPARTA must be built with a C++20
-   compatible compiler. For a list of compilers that have been tested with
-   the Kokkos library, see the Kokkos `README <https://github.com/kokkos/kokkos/blob/master/README.md>`_.
+NOTE: Kokkos support within SPARTA must be built with a C++20
+compatible compiler. For a list of compilers that have been tested with
+the Kokkos library, see the Kokkos `README <https://github.com/kokkos/kokkos/blob/master/README.md>`_.
 
 **Building SPARTA with the KOKKOS package with CMake:**
 
@@ -257,15 +253,13 @@ specific hardware. For example:
 See the **Advanced Kokkos Options** section below for a complete listing
 of all Kokkos architecture options.
 
-.. note::
-
-   If you are migrating from GNU Makefile builds, see the table of
-   preset files above and pick the one that matches your hardware. The
-   Kokkos KOKKOS\_DEVICES and KOKKOS\_ARCH Makefile variables map to CMake
-   options as follows: KOKKOS\_DEVICES=OpenMP becomes
-   -DKokkos\_ENABLE\_OPENMP=ON, KOKKOS\_DEVICES=Cuda becomes
-   -DKokkos\_ENABLE\_CUDA=ON, KOKKOS\_ARCH=Volta70 becomes
-   -DKokkos\_ARCH\_VOLTA70=ON, etc.
+NOTE: If you are migrating from GNU Makefile builds, see the table of
+preset files above and pick the one that matches your hardware. The
+Kokkos KOKKOS\_DEVICES and KOKKOS\_ARCH Makefile variables map to CMake
+options as follows: KOKKOS\_DEVICES=OpenMP becomes
+-DKokkos\_ENABLE\_OPENMP=ON, KOKKOS\_DEVICES=Cuda becomes
+-DKokkos\_ENABLE\_CUDA=ON, KOKKOS\_ARCH=Volta70 becomes
+-DKokkos\_ARCH\_VOLTA70=ON, etc.
 
 **Compile for CPU-only (MPI only, no threading):**
 
@@ -283,12 +277,10 @@ The resulting executable will be named spa\_kokkos\_mpi\_only.
 
 **Compile for CPU-only (MPI plus OpenMP threading):**
 
-.. note::
-
-   To build with Kokkos support for OpenMP threading, your compiler
-   must support the OpenMP interface. You should have one or more
-   multi-core CPUs so that multiple threads can be launched by each MPI
-   task running on a CPU.
+NOTE: To build with Kokkos support for OpenMP threading, your compiler
+must support the OpenMP interface. You should have one or more
+multi-core CPUs so that multiple threads can be launched by each MPI
+task running on a CPU.
 
 
 .. parsed-literal::
@@ -309,10 +301,8 @@ To select a specific CPU architecture (e.g. Haswell), add:
 
 **Compile for NVIDIA GPUs using CUDA (with OpenMPI or MPICH):**
 
-.. note::
-
-   To build with Kokkos support for NVIDIA GPUs, NVIDIA CUDA
-   software version 11.0 or later must be installed on your system.
+NOTE: To build with Kokkos support for NVIDIA GPUs, NVIDIA CUDA
+software version 11.0 or later must be installed on your system.
 
 The kokkos\_cuda.cmake preset defaults to NVIDIA Hopper (H100) GPUs.
 To target a different GPU, override the architecture flag. Common NVIDIA
@@ -358,10 +348,8 @@ The resulting executable will be named spa\_kokkos\_cuda.
 
 **Compile for AMD GPUs using HIP:**
 
-.. note::
-
-   To build with Kokkos support for AMD GPUs, ROCm software version
-   5.2 or later must be installed on your system.
+NOTE: To build with Kokkos support for AMD GPUs, ROCm software version
+5.2 or later must be installed on your system.
 
 The kokkos\_hip.cmake preset targets AMD MI250X GPUs (GFX90A). Common AMD
 GPU models and their Kokkos arch flags are:
@@ -405,12 +393,10 @@ spa\_elcapitan\_kokkos respectively.
 
 **Compile for Intel GPUs using SYCL:**
 
-.. note::
-
-   To build with Kokkos support for Intel GPUs via SYCL, Intel's
-   oneAPI toolkit (version 2024.0 or later) must be installed on your system.
-   Use the icpx compiler from the Intel oneAPI toolkit. The GPU architecture
-   is detected automatically at runtime; no arch flag override is needed.
+NOTE: To build with Kokkos support for Intel GPUs via SYCL, Intel's
+oneAPI toolkit (version 2024.0 or later) must be installed on your system.
+Use the icpx compiler from the Intel oneAPI toolkit. The GPU architecture
+is detected automatically at runtime; no arch flag override is needed.
 
 The kokkos\_sycl.cmake preset targets Intel Ponte Vecchio (PVC) GPUs and
 uses Intel MKL for FFTs:
@@ -478,21 +464,17 @@ this manner no modification to the input script is
 needed. Alternatively, one can run with the KOKKOS package by editing
 the input script as described below.
 
-.. note::
+NOTE: When using a single OpenMP thread, the Kokkos Serial backend will give better performance than the OpenMP 
+backend because some of the overhead to make 
+the code thread-safe is removed.
 
-   When using a single OpenMP thread, the Kokkos Serial backend will give better performance than the OpenMP 
-   backend because some of the overhead to make 
-   the code thread-safe is removed.
-
-.. note::
-
-   The default for the :doc:`package kokkos <package>` command is to
-   use "threaded" communication. However, when running on CPUs, it will
-   typically be faster to use "classic" non-threaded communication.  Use
-   the "-pk kokkos" `command-line switch <Section_start.html#start_7>`_ to
-   change the default :doc:`package kokkos <package>` options. See its doc
-   page for details and default settings. Experimenting with its options
-   can provide a speed-up for specific calculations. For example:
+NOTE: The default for the :doc:`package kokkos <package>` command is to
+use "threaded" communication. However, when running on CPUs, it will
+typically be faster to use "classic" non-threaded communication.  Use
+the "-pk kokkos" `command-line switch <Section_start.html#start_7>`_ to
+change the default :doc:`package kokkos <package>` options. See its doc
+page for details and default settings. Experimenting with its options
+can provide a speed-up for specific calculations. For example:
 
 
 .. parsed-literal::
@@ -563,10 +545,8 @@ one or more nodes, each with two GPUs.
    mpirun -np 2 spa_kokkos_cuda -k on g 2 -sf kk -in in.collide          # 1 node,   2 MPI tasks/node, 2 GPUs/node
    mpirun -np 32 -ppn 2 spa_kokkos_cuda -k on g 2 -sf kk -in in.collide  # 16 nodes, 2 MPI tasks/node, 2 GPUs/node (32 GPUs total)
 
-.. note::
-
-   Use the "-pk kokkos" `command-line switch <Section_start.html#start_7>`_ to change the default :doc:`package kokkos <package>` options. See its doc page for details and default
-   settings. For example:
+NOTE: Use the "-pk kokkos" `command-line switch <Section_start.html#start_7>`_ to change the default :doc:`package kokkos <package>` options. See its doc page for details and default
+settings. For example:
 
 
 .. parsed-literal::
@@ -597,27 +577,21 @@ Library) environment variable before running:
 
    mpirun -np 4 spa_kokkos_sycl -k on g 4 -sf kk -in in.collide          # 1 node, 4 MPI tasks/node, 4 GPUs/node
 
-.. note::
+NOTE: Using OpenMP threading and CUDA/HIP/SYCL together is currently not
+possible with the SPARTA KOKKOS package.
 
-   Using OpenMP threading and CUDA/HIP/SYCL together is currently not
-   possible with the SPARTA KOKKOS package.
+NOTE: For good performance of the KOKKOS package on GPUs, you must
+have Kepler generation GPUs (or later). The Kokkos library exploits
+texture cache options not supported by Tesla generation GPUs (or
+older).
 
-.. note::
-
-   For good performance of the KOKKOS package on GPUs, you must
-   have Kepler generation GPUs (or later). The Kokkos library exploits
-   texture cache options not supported by Tesla generation GPUs (or
-   older).
-
-.. note::
-
-   When using a GPU, you will achieve the best performance if your
-   input script does not use fix or compute styles which are not yet
-   Kokkos-enabled. This allows data to stay on the GPU for multiple
-   timesteps, without being copied back to the host CPU. Invoking a
-   non-Kokkos fix or compute, or performing I/O for :doc:`stat <stats>` or
-   :doc:`dump <dump>` output will cause data to be copied back to the CPU
-   incurring a performance penalty.
+NOTE: When using a GPU, you will achieve the best performance if your
+input script does not use fix or compute styles which are not yet
+Kokkos-enabled. This allows data to stay on the GPU for multiple
+timesteps, without being copied back to the host CPU. Invoking a
+non-Kokkos fix or compute, or performing I/O for :doc:`stat <stats>` or
+:doc:`dump <dump>` output will cause data to be copied back to the CPU
+incurring a performance penalty.
 
 **Run with the KOKKOS package by editing an input script:**
 
@@ -822,8 +796,7 @@ when developing a Kokkos-enabled style within SPARTA. This option enables printi
 information that can be useful and also enables runtime bounds
 checking on Kokkos data structures, but may slow down performance.
 
-Restrictions
-""""""""""""
+**Restrictions:**
 
 Currently, there are no precision options with the KOKKOS package. All
 compilation and computation is performed in double precision.

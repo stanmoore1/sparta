@@ -3,8 +3,7 @@
 fix emit/face/file command
 ==========================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -29,8 +28,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -38,8 +36,7 @@ Examples
    fix in emit/face/file air xlo input.data xlo
    fix in emit/face/file mymix ylo file.txt oneface frac 0.1 nevery 10
 
-Description
-"""""""""""
+**Description:**
 
 Emit particles from a face of the simulation box, continuously during
 a simulation.  The particles are added using properties of the
@@ -126,12 +123,10 @@ thermal temperature), as well as the number fraction of any species in
 the mixture.  Any value not defined in the input data file defaults to
 the mixture value.
 
-.. warning::
-
-   It is critical to understand that the input data file
-   defines **mesh points** on the face of the simulation box.  It does not
-   define **mesh cells**\ , e.g. 2d squares or rectangles, each with flow
-   properties.
+IMPORTANT NOTE: It is critical to understand that the input data file
+defines **mesh points** on the face of the simulation box.  It does not
+define **mesh cells**\ , e.g. 2d squares or rectangles, each with flow
+properties.
 
 For 3d simulations, 2d mesh points are defined in the file using I,J
 indices.  (The 1d mesh points for 2d simulations are described below).
@@ -277,27 +272,23 @@ the density, temperature, and stream velocity of particles in the
 cells adjacent to the boundary face(s) are computed and used to
 determine the properties of inserted particles on each timestep.
 
-.. warning::
+IMPORTANT NOTE: Caution must be exercised when using the subsonic
+boundary condition without specifying an inlet temperature. In this
+case the code tries to estimate the temperature of the flow from the
+properties of the particles in the domain. If the domain contains few
+particles per cell it may lead to spurious results.  This boundary
+condition is meant more for an outlet than an inlet boundary
+condition, and performs well in cases where the cells are adequately
+populated.
 
-   Caution must be exercised when using the subsonic
-   boundary condition without specifying an inlet temperature. In this
-   case the code tries to estimate the temperature of the flow from the
-   properties of the particles in the domain. If the domain contains few
-   particles per cell it may lead to spurious results.  This boundary
-   condition is meant more for an outlet than an inlet boundary
-   condition, and performs well in cases where the cells are adequately
-   populated.
-
-.. warning::
-
-   When using a subsonic prsesure boundary condition, you
-   should also use an appropriate boundary collision or chemistry model
-   via the :doc:`boundary <boundary>` or :doc:`bound\_modify <bound_modify>`
-   or :doc:`surf\_collide <surf_collide>` or :doc:`surf\_react <surf_react>`
-   commands, so that particles hitting the surface disappear as if they
-   were exiting the simulation domain.  That is necessary to produce the
-   correct subsonic conditions that the particle insertions due to this
-   command are trying to achieve.
+IMPORTANT NOTE: When using a subsonic prsesure boundary condition, you
+should also use an appropriate boundary collision or chemistry model
+via the :doc:`boundary <boundary>` or :doc:`bound\_modify <bound_modify>`
+or :doc:`surf\_collide <surf_collide>` or :doc:`surf\_react <surf_react>`
+commands, so that particles hitting the surface disappear as if they
+were exiting the simulation domain.  That is necessary to produce the
+correct subsonic conditions that the particle insertions due to this
+command are trying to achieve.
 
 
 ----------
@@ -401,8 +392,7 @@ second element is the cummulative total number added since the
 beginning of the run.  The 2nd value is initialized to zero each time
 a run is performed.
 
-Restrictions
-""""""""""""
+**Restrictions:**
 
 Particles cannot be added on periodic faces of the simulation box.
 Particles cannot be added on *z* faces of the simluation box for a 2d
@@ -420,13 +410,11 @@ overcome the outward streaming velocity, so that their net velocity is
 inward.  The threshold for this is the thermal velocity for particles
 3\*sigma from the mean thermal velocity.
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`mixture <mixture>`, :doc:`create\_particles <create_particles>`, :doc:`fix emit/face <fix_emit_face>`
 
-Default
-"""""""
+**Default:**
 
 The keyword defaults are frac = 1.0, nevery = 1, perspecies = yes,
 region = none.

@@ -3,8 +3,7 @@
 mixture command
 ===============
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -40,8 +39,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -53,8 +51,7 @@ Examples
    mixture background N O 
    mixture air delete N NO
 
-Description
-"""""""""""
+**Description:**
 
 Define a gas mixture and its properties.  A mixture can be referenced
 by its ID in several other SPARTA commands such as
@@ -240,8 +237,7 @@ that have no species assigned to them are also deleted.
 ----------
 
 
-Restrictions
-""""""""""""
+**Restrictions:**
 
 The streaming velocity and thermal temperature of the mixture cannot
 both be zero.  A zero streaming velocity means a zero vector =
@@ -249,13 +245,11 @@ both be zero.  A zero streaming velocity means a zero vector =
 
 The restrictions on use of the *delete* keyword are described above.
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`global <global>`, :doc:`create\_particles <create_particles>`
 
-Default
-"""""""
+**Default:**
 
 The *nrho*\ , *vstream*\ , and *temp* defaults are those defined for the
 background gas density, as set by the :doc:`global <global>` command.

@@ -3,8 +3,7 @@
 seed command
 ============
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -13,16 +12,14 @@ Syntax
 
 * Nvalue = seed for a random number generator (positive integer)
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
 
    seed 5838959
 
-Description
-"""""""""""
+**Description:**
 
 This command sets the random number seed for a master random number
 generator.  This generator is used by SPARTA to initialize auxiliary

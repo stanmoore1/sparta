@@ -3,8 +3,7 @@
 package command
 ===============
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -33,8 +32,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -43,8 +41,7 @@ Examples
    package kokkos comm threaded react/retry yes
    package kokkos gpu/aware no
 
-Description
-"""""""""""
+**Description:**
 
 This command invokes package-specific settings for the KOKKOS
 accelerator package available in SPARTA.
@@ -66,15 +63,13 @@ typically invoked by other accelerator settings. For example, the
 KOKKOS package requires a "-k on" `command-line switch <Section_start.html#start_7>`_ respectively, which invokes a
 "package kokkos" command with default settings.
 
-.. note::
-
-   A package command for a particular style can be invoked multiple
-   times when a simulation is setup, e.g. by the "-k on", "-sf", and
-   "-pk" `command-line switches <Section_start.html#start_7>`_, and by using
-   this command in an input script.  Each time it is used all of the
-   style options are set, either to default values or to specified
-   settings.  I.e. settings from previous invocations do not persist
-   across multiple invocations.
+NOTE: A package command for a particular style can be invoked multiple
+times when a simulation is setup, e.g. by the "-k on", "-sf", and
+"-pk" `command-line switches <Section_start.html#start_7>`_, and by using
+this command in an input script.  Each time it is used all of the
+style options are set, either to default values or to specified
+settings.  I.e. settings from previous invocations do not persist
+across multiple invocations.
 
 See the the `Accelerating SPARTA <Section_accelerate.html#acc_3>`_
 section of the manual for more details about using the various
@@ -131,8 +126,7 @@ using a value of *off*\ .
 ----------
 
 
-Restrictions
-""""""""""""
+**Restrictions:**
 
 This command cannot be used after the simulation box is defined by a
 :doc:`create\_box <create_box>` command.
@@ -140,13 +134,11 @@ This command cannot be used after the simulation box is defined by a
 The kk style of this command can only be invoked if SPARTA was built
 with the KOKKOS package.  See the `Making SPARTA <Section_start.html#start_3>`_ section for more info.
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`suffix <suffix>`, "-pk" `command-line setting <Section_start.html#start_7>`_
 
-Default
-"""""""
+**Default:**
 
 For the KOKKOS package, the option defaults are react/extra = 1.1,
 react/retry = no, and gpu/aware yes. For CPUs: comm = serial, and for

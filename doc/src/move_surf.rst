@@ -3,8 +3,7 @@
 move\_surf command
 ==================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -33,8 +32,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -43,8 +41,7 @@ Examples
    move_surf partial rotate 360 0 0 1 5 5 0 connect yes
    move_surf object2 rotate 360 0 0 1 5 5 0
 
-Description
-"""""""""""
+**Description:**
 
 This command performs a one-time movement of all the surface elements
 in the specified group via the specified style.  See the :doc:`group surf <group>` command for info on how surface elements can be
@@ -60,10 +57,8 @@ perform a series of runs from one input script, where some attribute
 of the surface elements change, e.g. the separation between two
 spheres.
 
-.. warning::
-
-   The *file* style is not yet implemented.  It will
-   allow new positions of points to be listed in a file.
+IMPORTANT NOTE: The *file* style is not yet implemented.  It will
+allow new positions of points to be listed in a file.
 
 In 2d, surface elements are line segments with 2 vertices each.  In
 3d, surface elements are triangles with 3 vertices each.  If a line
@@ -71,19 +66,17 @@ segment or triangle belongs to the specified group, all of its
 vertices are moved.  This effectively moves the entire surface
 element.
 
-.. warning::
-
-   Unless a vertex is on the simulation box boundary, it
-   will be part of two surface elements (in 2d) or multiple surface
-   elements (in 3d).  If you choose a surface groupID which does not
-   include all the elements in a gridded object, then you cannot move
-   them without breaking apart the object in a "watertight" sense (so
-   that particles could erroneously move inside the object).  To prevent
-   this use the optional *connect* keyword with its *yes* setting.  This
-   will insure that multiple copies of the same vertex in other elements
-   (not in the surface group) will also be moved.  This is a way to morph
-   the shape of a gridded object, e.g. make a sphere more oblate, by
-   moving only a portion of its elements.
+IMPORTANT NOTE: Unless a vertex is on the simulation box boundary, it
+will be part of two surface elements (in 2d) or multiple surface
+elements (in 3d).  If you choose a surface groupID which does not
+include all the elements in a gridded object, then you cannot move
+them without breaking apart the object in a "watertight" sense (so
+that particles could erroneously move inside the object).  To prevent
+this use the optional *connect* keyword with its *yes* setting.  This
+will insure that multiple copies of the same vertex in other elements
+(not in the surface group) will also be moved.  This is a way to morph
+the shape of a gridded object, e.g. make a sphere more oblate, by
+moving only a portion of its elements.
 
 The *trans* style shifts or displaces each vertex by the vector
 (Dx,Dy,Dz).
@@ -111,20 +104,17 @@ particles immediately after the move.  This will effectively leave a
 "void" in the flow until particles re-fill the grid cells that are now
 outside the object.
 
-Restrictions
-""""""""""""
+**Restrictions:**
 
 An error will be generated if any surface element vertex is moved
 outside the simulation box.
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`read\_surf <read_surf>`, :doc:`fix move/surf <fix_move_surf>`,
 :doc:`remove\_surf <remove_surf>`
 
-Default
-"""""""
+**Default:**
 
 The option default is connect = no.
 

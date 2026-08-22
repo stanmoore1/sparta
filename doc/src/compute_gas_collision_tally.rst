@@ -3,8 +3,7 @@
 compute gas/collision/tally command
 ===================================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -30,8 +29,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -46,8 +44,7 @@ file every 10 steps:
 
    dump 1 tally all 10 tmp.tally c_1[\*]
 
-Description
-"""""""""""
+**Description:**
 
 Tally various values for each gas-phase collision of two particles
 during the current timestep.  Only gas collisions which do not result
@@ -95,8 +92,7 @@ after the collision.
 ----------
 
 
-Output info
-"""""""""""
+**Output info:**
 
 This compute calculates a per-tally array, with the number of columns
 equal to the number of values.
@@ -115,8 +111,7 @@ velocity keywords are in velocity units.
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`compute gas/reaction/tally <compute_gas_reaction_tally>`,
 :doc:`compute surf/collision/tally <compute_surf_collision_tally>`,

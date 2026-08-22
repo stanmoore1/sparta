@@ -3,8 +3,7 @@
 fix ave/time command
 ====================
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -54,8 +53,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -66,8 +64,7 @@ Examples
    fix 1 ave/time 100 5 1000 c_myCount[\*] ave window 20
    fix 1 ave/time 1 100 1000 f_indent f_indent[1] file temp.indent off 1
 
-Description
-"""""""""""
+**Description:**
 
 Use one or more global values as inputs every few timesteps, and
 average them over longer timescales.  The resulting averages can be
@@ -313,13 +310,11 @@ inputs.
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`compute <compute>`, :doc:`fix ave/grid <fix_ave_grid>`, :doc:`fix ave/surf <fix_ave_surf>`, :doc:`variable <variable>`
 
-Default
-"""""""
+**Default:**
 
 The option defaults are mode = scalar, ave = one, start = 0, no file
 output, title 1,2,3 = strings as described above, and no off settings

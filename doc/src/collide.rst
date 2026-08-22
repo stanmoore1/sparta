@@ -3,8 +3,7 @@
 collide command
 ===============
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
@@ -33,8 +32,7 @@ Syntax
 
 
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -43,8 +41,7 @@ Examples
    collide vss all ../data/air.vss
    collide vss species all.vss relax variable
 
-Description
-"""""""""""
+**Description:**
 
 Define what style of particle-particle collisions will be performed by
 SPARTA each timestep.  If collisions are performed, particles are
@@ -88,13 +85,11 @@ not is a function of the relative velocities of the two particles,
 their respective species, and other parameters of the collision
 style; see equation 11.4 in `(Bird94) <#Bird94>`_.
 
-.. note::
-
-   If you are using the ambipolar approximation with charged
-   species, as described in `Section 6.11 <Section_howto.html#howto_11>`_,
-   and you have used the :doc:`collide\_modify ambipolar yes <collide_modify>` command to enable ambipolar collisions (not
-   required), and you are using a mixture ID with multiple groups, then
-   the ambipolar electron species must be in a group by itself.
+NOTE: If you are using the ambipolar approximation with charged
+species, as described in `Section 6.11 <Section_howto.html#howto_11>`_,
+and you have used the :doc:`collide\_modify ambipolar yes <collide_modify>` command to enable ambipolar collisions (not
+required), and you are using a mixture ID with multiple groups, then
+the ambipolar electron species must be in a group by itself.
 
 
 ----------
@@ -251,14 +246,12 @@ effectively.
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`collide\_modify <collide_modify>`, :doc:`mixture <mixture>`,
 :doc:`react <react>`
 
-Default
-"""""""
+**Default:**
 
 Style = none is the default (no collisions).  If the vss style is
 specified, then relax = constant is the default.

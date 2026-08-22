@@ -3,16 +3,14 @@
 quit command
 ============
 
-Syntax
-""""""
+**Syntax:**
 
 
 .. parsed-literal::
 
    quit
 
-Examples
-""""""""
+**Examples:**
 
 
 .. parsed-literal::
@@ -20,8 +18,7 @@ Examples
    quit
    if "$n > 10000" then quit
 
-Description
-"""""""""""
+**Description:**
 
 This command causes SPARTA to exit, after shutting down all
 output cleanly.
@@ -34,8 +31,7 @@ It can also be used as an invoked command inside the
 
 **Restrictions:** none
 
-Related commands
-""""""""""""""""
+**Related commands:**
 
 :doc:`if <if>`
 
