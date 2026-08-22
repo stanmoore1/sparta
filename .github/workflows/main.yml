@@ -165,3 +165,46 @@ jobs:
 
     - name: Build
       run: cd build; make -j4
+
+  # The manual is Sphinx now, and nothing else in this workflow would notice
+  # if it stopped building.  -W turns Sphinx's warnings into errors, so a
+  # broken cross-reference or a malformed table fails the pull request
+  # rather than reaching the web site; --keep-going reports all of them
+  # instead of stopping at the first.
+  doc:
+    runs-on: ubuntu-22.04
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Converter unit tests
+      run: make -C doc test
+
+    - name: Build the manual
+      run: make -C doc html SPHINXEXTRA="-W --keep-going"
+
+    - name: Check every internal link resolves
+      run: |
+        cd doc
+        python3 - <<'PY'
+        import pathlib, re, sys, html
+        root = pathlib.Path('html')
+        bad = []
+        for page in sorted(root.glob('*.html')):
+            text = page.read_text(errors='replace')
+            for m in re.finditer(r'<a\b[^>]*?href\s*=\s*"([^"]*)"', text, re.I):
+                href = html.unescape(m.group(1)).split('#')[0]
+                if not href or href.startswith(('http', 'mailto', 'ftp', 'javascript:')):
+                    continue
+                if not (root / href).exists():
+                    bad.append(f'{page.name} -> {href}')
+        # Manual.pdf is built separately and dropped in beside the manual
+        bad = [b for b in bad if not b.endswith('Manual.pdf')]
+        for b in sorted(set(bad)):
+            print(b)
+        print(f'{len(set(bad))} dead internal link(s)')
+        sys.exit(1 if bad else 0)
+        PY
