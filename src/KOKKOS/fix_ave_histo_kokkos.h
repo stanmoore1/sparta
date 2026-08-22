@@ -69,6 +69,12 @@ public:
   typedef Kokkos::MinMax<double,SPAHostType> minmax_type;
   typedef minmax_type::value_type mm_value_type;
 
+  // min/max accumulate across the whole Nrepeat window, so this cannot be
+  //   a local in end_of_step(): it is reset only at irepeat == 0, exactly
+  //   as the host resets stats[2]/stats[3] (fix_ave_histo.cpp:549-553)
+
+  mm_value_type minmax;
+
   FixAveHistoKokkos(class SPARTA *, int, char **);
   virtual ~FixAveHistoKokkos();
   void init();
@@ -199,7 +205,14 @@ protected:
   void
   bin_one(mm_value_type& mm_v, double value) const
   {
-    bin_one(mm_v, value, 1.);
+    // fix ave/histo/weight carries a single scalar weight for scalar-mode
+    //   inputs, computed in calculate_weights().  The host injects it by
+    //   overriding the single-value bin_one
+    //   (fix_ave_histo_weight.cpp:310-312), but the call sites here are in
+    //   the base class and this overload is not virtual, so read the member
+    //   directly.  weightflag is 0 for plain ave/histo, leaving weight 1
+
+    bin_one(mm_v, value, weightflag ? weight : 1.0);
   }
 
 };
