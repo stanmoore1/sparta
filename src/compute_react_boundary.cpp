@@ -98,6 +98,8 @@ ComputeReactBoundary(SPARTA *sparta, int narg, char **arg) :
 
 ComputeReactBoundary::~ComputeReactBoundary()
 {
+  if (copy || copymode) return;
+
   memory->destroy(reaction2col);
   memory->destroy(array);
   memory->destroy(myarray);

@@ -31,6 +31,7 @@
 #include "surf_collide_td_kokkos.h"
 #include "surf_collide_cll_kokkos.h"
 #include "compute_boundary_kokkos.h"
+#include "compute_react_boundary_kokkos.h"
 #include "compute_surf_kokkos.h"
 #include "compute_surf_collision_tally_kokkos.h"
 #include "compute_surf_reaction_tally_kokkos.h"
@@ -247,6 +248,8 @@ class UpdateKokkos : public Update {
   KKCopy<ComputeReactISurfGridKokkos> slist_active_react_isurf_copy[KOKKOS_MAX_SLIST];
   KKCopy<ComputeReactSurfKokkos> slist_active_react_surf_copy[KOKKOS_MAX_SLIST];
   KKCopy<ComputeBoundaryKokkos> blist_active_copy[KOKKOS_MAX_BLIST];
+  KKCopy<ComputeReactBoundaryKokkos> blist_active_react_copy[KOKKOS_MAX_BLIST];
+  ComputeReactBoundaryKokkos tmp_compute_react_boundary_kk;
 
   // unused fixed slots must not alias a compute that may be reallocated or
   //   deleted while they still reference count it
@@ -264,14 +267,15 @@ class UpdateKokkos : public Update {
 #define UK_SLIST_REACT_ISURF(m) slist_active_react_isurf_copy[m].obj
 #define UK_SLIST_REACT_SURF(m)  slist_active_react_surf_copy[m].obj
 #define UK_BLIST(m)             blist_active_copy[m].obj
+#define UK_BLIST_REACT(m)       blist_active_react_copy[m].obj
 
 #else
   DAT::tdual_char_1d k_slist_surf, k_slist_isurf, k_slist_coll_tally,
                      k_slist_react_tally, k_slist_react_isurf,
-                     k_slist_react_surf, k_blist;
+                     k_slist_react_surf, k_blist, k_blist_react;
   DAT::t_char_1d d_slist_surf, d_slist_isurf, d_slist_coll_tally,
                  d_slist_react_tally, d_slist_react_isurf,
-                 d_slist_react_surf, d_blist;
+                 d_slist_react_surf, d_blist, d_blist_react;
 
 #define UK_SLIST_SURF(m)        ((const ComputeSurfKokkos *) d_slist_surf.data())[m]
 #define UK_SLIST_ISURF(m)       ((const ComputeISurfGridKokkos *) d_slist_isurf.data())[m]
@@ -280,6 +284,7 @@ class UpdateKokkos : public Update {
 #define UK_SLIST_REACT_ISURF(m) ((const ComputeReactISurfGridKokkos *) d_slist_react_isurf.data())[m]
 #define UK_SLIST_REACT_SURF(m)  ((const ComputeReactSurfKokkos *) d_slist_react_surf.data())[m]
 #define UK_BLIST(m)             ((const ComputeBoundaryKokkos *) d_blist.data())[m]
+#define UK_BLIST_REACT(m)       ((const ComputeReactBoundaryKokkos *) d_blist_react.data())[m]
 #endif
 
   // partition of slist_active (set in tally_set):
@@ -290,6 +295,7 @@ class UpdateKokkos : public Update {
 
   int nslist_surf,nslist_isurf,nslist_react_isurf,nslist_react_surf;
   int nslist_coll_tally,nslist_react_tally;
+  int nblist_boundary,nblist_react;
 
   // grow every per-event tally compute after an overflowed attempt
   void grow_tally_computes();

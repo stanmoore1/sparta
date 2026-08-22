@@ -126,7 +126,9 @@ UpdateKokkos::UpdateKokkos(SPARTA *sparta) : Update(sparta),
   , slist_active_react_isurf_copy{VAL_2(KKCopy<ComputeReactISurfGridKokkos>(sparta))}
   , slist_active_react_surf_copy{VAL_2(KKCopy<ComputeReactSurfKokkos>(sparta))}
   , blist_active_copy{VAL_2(KKCopy<ComputeBoundaryKokkos>(sparta))}
+  , blist_active_react_copy{VAL_2(KKCopy<ComputeReactBoundaryKokkos>(sparta))}
   , tmp_compute_boundary_kk(sparta)
+  , tmp_compute_react_boundary_kk(sparta)
   , tmp_compute_surf_kk(sparta)
   , tmp_compute_isurf_grid_kk(sparta)
   , tmp_compute_react_isurf_grid_kk(sparta)
@@ -985,18 +987,21 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
   }
 
   // dispatch by dynamic_cast for the same reason as the surf tally list above,
-  //   and because compute react/boundary also sets boundary_tally_flag but is
-  //   an unrelated class with no Kokkos version: a static cast would call a
-  //   Kokkos method on a non-Kokkos object
+  //   and because compute boundary and compute react/boundary both set
+  //   boundary_tally_flag but are unrelated classes: a static cast would call
+  //   one's methods on the other
 
   if (nboundary_tally) {
     for (int m = 0; m < nboundary_tally; m++) {
-      ComputeBoundaryKokkos* compute_boundary_kk =
-        dynamic_cast<ComputeBoundaryKokkos*>(blist_active[m]);
-      if (!compute_boundary_kk)
+      if (ComputeBoundaryKokkos* c =
+            dynamic_cast<ComputeBoundaryKokkos*>(blist_active[m]))
+        c->post_boundary_tally();
+      else if (ComputeReactBoundaryKokkos* c =
+                 dynamic_cast<ComputeReactBoundaryKokkos*>(blist_active[m]))
+        c->post_boundary_tally();
+      else
         error->all(FLERR,"Kokkos does not (yet) support this boundary tally compute; "
                          "use a Kokkos-enabled boundary tally compute (-sf kk)");
-      compute_boundary_kk->post_boundary_tally();
     }
   }
 }
@@ -2097,10 +2102,14 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
         v = particle_i.v;
       }
 
-      if (nboundary_tally)
-        for (int m = 0; m < nboundary_tally; m++)
+      if (nboundary_tally) {
+        for (int m = 0; m < nblist_boundary; m++)
           UK_BLIST(m).
             boundary_tally_kk<ATOMIC_REDUCTION>(dtremain,outface,bflag,reaction,&iorig,ipart,jpart,domain_kk_copy.obj.norm[outface]);
+        for (int m = 0; m < nblist_react; m++)
+          UK_BLIST_REACT(m).
+            boundary_tally_kk<ATOMIC_REDUCTION>(dtremain,outface,bflag,reaction,&iorig,ipart,jpart,domain_kk_copy.obj.norm[outface]);
+      }
 
       if (DIM == 1) {
         xnew[0] = x[0] + dtremain*v[0];
@@ -2380,38 +2389,64 @@ void UpdateKokkos::tally_set(bigint ntimestep)
   int i;
 
   // dispatch by dynamic_cast, as setup_surf_tally_copies() does: compute
-  //   react/boundary also sets boundary_tally_flag, but it derives straight
-  //   from Compute and has no Kokkos version, so a static cast here would
-  //   call ComputeBoundaryKokkos methods on an unrelated object.  The cast
-  //   also fails for a plain compute boundary under "-k on" without "-sf kk",
-  //   which is likewise not the Kokkos class
+  //   boundary and compute react/boundary both set boundary_tally_flag but
+  //   are unrelated class hierarchies, so a static cast would call one's
+  //   methods on the other.  The cast also fails for a plain compute boundary
+  //   under "-k on" without "-sf kk", which is likewise not the Kokkos class
 
-#ifdef SPARTA_KOKKOS_FIXED_LISTS
-  if (nboundary_tally > KOKKOS_MAX_BLIST)
-    error->all(FLERR,"Kokkos currently only supports two instances of compute boundary");
-#else
-  tally_buf_resize<ComputeBoundaryKokkos>(k_blist,d_blist,nboundary_tally);
-#endif
+  // count first: the buffers have to be sized before anything is blitted in
 
+  nblist_boundary = nblist_react = 0;
   for (i = 0; i < nboundary_tally; i++) {
-    ComputeBoundaryKokkos* compute_boundary_kk =
-      dynamic_cast<ComputeBoundaryKokkos*>(blist_active[i]);
-    if (!compute_boundary_kk)
+    if (dynamic_cast<ComputeBoundaryKokkos*>(blist_active[i])) nblist_boundary++;
+    else if (dynamic_cast<ComputeReactBoundaryKokkos*>(blist_active[i])) nblist_react++;
+    else
       error->all(FLERR,"Kokkos does not (yet) support this boundary tally compute; "
                        "use a Kokkos-enabled boundary tally compute (-sf kk)");
-    compute_boundary_kk->pre_boundary_tally();
-#ifdef SPARTA_KOKKOS_FIXED_LISTS
-    blist_active_copy[i].copy(compute_boundary_kk);
-#else
-    tally_buf_blit(k_blist,i,compute_boundary_kk);
-#endif
   }
 
 #ifdef SPARTA_KOKKOS_FIXED_LISTS
-  for (i = nboundary_tally; i < KOKKOS_MAX_BLIST; i++)
+  if (nblist_boundary > KOKKOS_MAX_BLIST || nblist_react > KOKKOS_MAX_BLIST)
+    error->all(FLERR,"Kokkos currently only supports two instances of compute boundary");
+#else
+  tally_buf_resize<ComputeBoundaryKokkos>(k_blist,d_blist,nblist_boundary);
+  tally_buf_resize<ComputeReactBoundaryKokkos>(k_blist_react,d_blist_react,nblist_react);
+#endif
+
+  nblist_boundary = nblist_react = 0;
+
+  for (i = 0; i < nboundary_tally; i++) {
+    if (ComputeBoundaryKokkos* c =
+          dynamic_cast<ComputeBoundaryKokkos*>(blist_active[i])) {
+      c->pre_boundary_tally();
+#ifdef SPARTA_KOKKOS_FIXED_LISTS
+      blist_active_copy[nblist_boundary].copy(c);
+#else
+      tally_buf_blit(k_blist,nblist_boundary,c);
+#endif
+      nblist_boundary++;
+    } else if (ComputeReactBoundaryKokkos* c =
+                 dynamic_cast<ComputeReactBoundaryKokkos*>(blist_active[i])) {
+      c->pre_boundary_tally();
+#ifdef SPARTA_KOKKOS_FIXED_LISTS
+      blist_active_react_copy[nblist_react].copy(c);
+#else
+      tally_buf_blit(k_blist_react,nblist_react,c);
+#endif
+      nblist_react++;
+    } else
+      error->all(FLERR,"Kokkos does not (yet) support this boundary tally compute; "
+                       "use a Kokkos-enabled boundary tally compute (-sf kk)");
+  }
+
+#ifdef SPARTA_KOKKOS_FIXED_LISTS
+  for (i = nblist_boundary; i < KOKKOS_MAX_BLIST; i++)
     blist_active_copy[i].copy(&tmp_compute_boundary_kk);
+  for (i = nblist_react; i < KOKKOS_MAX_BLIST; i++)
+    blist_active_react_copy[i].copy(&tmp_compute_react_boundary_kk);
 #else
   tally_buf_sync(k_blist,d_blist);
+  tally_buf_sync(k_blist_react,d_blist_react);
 #endif
 
   // surf-tally compute scatter views (slist_active_copy et al.) are

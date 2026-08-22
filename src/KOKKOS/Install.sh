@@ -64,10 +64,14 @@ action compute_isurf_grid_kokkos.cpp
 action compute_isurf_grid_kokkos.h
 action compute_property_surf_kokkos.cpp
 action compute_property_surf_kokkos.h
+action compute_react_boundary_kokkos.cpp
+action compute_react_boundary_kokkos.h
 action compute_react_isurf_grid_kokkos.cpp
 action compute_react_isurf_grid_kokkos.h
 action compute_react_surf_kokkos.cpp
 action compute_react_surf_kokkos.h
+action compute_reduce_kokkos.cpp
+action compute_reduce_kokkos.h
 action compute_ke_particle_kokkos.cpp
 action compute_ke_particle_kokkos.h
 action compute_lambda_grid_kokkos.cpp
