@@ -115,3 +115,29 @@ html_show_sourcelink = False
 # They are now typeset by MathJax from their LaTeX source, which is the one
 # rendering difference this migration introduces; see
 # doc/utils/parity-check.py.
+
+
+# -- Full-size images ------------------------------------------------------
+#
+# Several pages show a scaled-down picture that links to the full-size one,
+# as "click for larger version".  The thumbnail is a separate file, so the
+# full-size image is named only by the link and Sphinx, which copies only
+# the images a page actually displays, never copies it.  Left alone every
+# one of those links 404s.
+#
+# The whole JPG directory is copied into the build instead of just the
+# linked files: the manual has always published these under JPG/, the web
+# site links to them from outside the manual, and keeping the directory
+# whole keeps those URLs working.
+def copy_full_size_images(app, exception):
+    import shutil
+
+    if exception is not None or app.builder.name not in ('html', 'dirhtml'):
+        return
+    src = os.path.join(SPARTA_DOC_DIR, 'src', 'JPG')
+    if os.path.isdir(src):
+        shutil.copytree(src, os.path.join(app.outdir, 'JPG'), dirs_exist_ok=True)
+
+
+def setup(app):
+    app.connect('build-finished', copy_full_size_images)

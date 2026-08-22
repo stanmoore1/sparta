@@ -36,13 +36,21 @@ clean-all: clean
 
 # the virtualenv is a directory target: it is built once, then only rebuilt
 # if requirements.txt changes
+#
+# Chained with && rather than ; so a failure stops here.  With ; a failed
+# "python3 -m venv" would go on to install Sphinx into whatever interpreter
+# is on PATH, and a failed "pip install" would still reach the touch below,
+# leaving a half-built virtualenv that make then considers up to date.
+# A partial virtualenv is also removed on the way out: it would otherwise be
+# left newer than requirements.txt, so the next make would take it for a
+# finished one and build the manual against half-installed dependencies.
 $(VENV): utils/requirements.txt
 	@rm -rf $(VENV)
-	@( $(PYTHON) -m venv $(VENV); \
-	   . $(VENV)/bin/activate; \
-	   pip install --upgrade pip wheel > /dev/null; \
+	@{ $(PYTHON) -m venv $(VENV) && \
+	   . $(VENV)/bin/activate && \
+	   pip install --upgrade pip wheel > /dev/null && \
 	   pip install -r $(BUILDDIR)/utils/requirements.txt; \
-	   deactivate; )
+	 } || { rm -rf $(VENV); exit 1; }
 	@touch $(VENV)
 
 $(SPHINXCONFIG)/conf.py: $(SPHINXCONFIG)/conf.py.in
@@ -64,9 +72,11 @@ $(MATHJAX):
 	 tar -xzf $$tmp/mathjax.tgz -C $$tmp && \
 	 mv $$tmp/package $(MATHJAX)
 
+# && rather than ; here too: with ; the recipe's exit status is the status
+# of the last command in the list, so a failed sphinx-build reported success
+# and a broken manual looked like a good one.
 html: $(SPHINXCONFIG)/conf.py $(VENV) $(MATHJAX)
-	@( . $(VENV)/bin/activate; \
-	   sphinx-build $(SPHINXEXTRA) -b html \
-	     -c $(SPHINXCONFIG) -d $(BUILDDIR)/doctrees $(RSTDIR) html; \
-	   deactivate; )
+	@. $(VENV)/bin/activate && \
+	 sphinx-build $(SPHINXEXTRA) -b html \
+	   -c $(SPHINXCONFIG) -d $(BUILDDIR)/doctrees $(RSTDIR) html
 	@echo "Build finished. The HTML pages are in doc/html."

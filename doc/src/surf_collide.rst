@@ -349,7 +349,7 @@ as a linear function of temperature. The linear term *a1* and constant term
 
 .. math::
 
-   \textlangle E_{f}\textrangle = E_{i} \left(1 - \frac{2\mu}{\left(\mu+1\right)^{2}}\left[1 + \mu sin^{2}\chi + \frac{E_{int}}{E_{i}}\left(\frac{\mu+1}{2\mu}\right) - cos\chi\sqrt{1 - \mu^{2}sin^{2}\chi - \frac{E_{int}}{E_{i}}\left(\mu+1\right)}\right]\right)
+   \langle E_{f} \rangle = E_{i} \left(1 - \frac{2\mu}{\left(\mu+1\right)^{2}}\left[1 + \mu sin^{2}\chi + \frac{E_{int}}{E_{i}}\left(\frac{\mu+1}{2\mu}\right) - cos\chi\sqrt{1 - \mu^{2}sin^{2}\chi - \frac{E_{int}}{E_{i}}\left(\mu+1\right)}\right]\right)
 
 The *u0* parameter can also be specified by a more physical model such
 as the soft sphere scattering model `(Alexander12) <#Alexander12>`_. This

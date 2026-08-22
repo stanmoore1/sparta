@@ -9,8 +9,18 @@ classes, and the navigation chrome Sphinx adds around every page.
 
 Usage:
     parity-check.py OLD_HTML_DIR NEW_HTML_DIR [--verbose] [--page NAME]
+                    [--no-allow-equations]
 
-Exits non-zero if any page differs outside the allowances in DELTAS.
+Exits non-zero if any page differs outside the agreed deltas, which are
+DELTAS for the ones that recur and DECLARED for the individual fixes.
+
+OLD_HTML_DIR has to be a complete doc/ tree -- the pages *and* the Eqs and
+JPG directories beside them -- because the check also verifies that a link
+which resolved in the old manual still resolves in the new one.  Generate
+it by running txt2html over the .txt sources of the commit being compared
+against, rather than reusing the .html committed next to them: two of those
+had drifted from their own sources by the time of the migration, and a
+baseline regenerated from the branch's own edited sources proves nothing.
 """
 import argparse
 import collections
@@ -36,9 +46,58 @@ DELTAS = {
         'now typeset by MathJax from their LaTeX source, and the two images '
         'that were tables of surface reactions are now real tables, so the '
         'image alt text is replaced by the text it depicted.  Every one was '
-        'compared against a screenshot of the image it replaces.'
+        'compared against a screenshot of the image it replaces.  Allowed '
+        'only where the old page had an equation image, and only for the '
+        'text that replaced that image.'
+    ),
+    'rst_markup_in_source': (
+        'variable.txt was edited at some point with reStructuredText markup '
+        'rather than txt2html markup, so txt2html printed ":doc:`clear `" '
+        'and "**not**" to the page as literal text.  Sphinx renders them, '
+        'which is what they were written to mean, so four links the old page '
+        'showed as raw markup are now real links.'
+    ),
+    'markup_typos_fixed': (
+        'Markup typos in the txt2html sources that made a page render '
+        'wrongly, fixed in the reST.  Each one is listed individually in '
+        'DECLARED below with the source line it came from, so the diff it '
+        'produces is reviewed rather than waved through.'
     ),
 }
+
+# Differences that are individually agreed, page by page and run by run.
+#
+# A heuristic cannot tell an intended fix from a regression, so the fixes
+# this migration makes are written out: the exact words the old page showed,
+# the exact words the new one shows, and why.  Anything else is a
+# regression.  Each entry is (old run, new run, delta key, reason).
+DECLARED = {
+    'dump_modify.html': [
+        ('(image', 'image', 'markup_typos_fixed',
+         'dump_modify.txt:41 wrote "(image}" where it meant "{image}", so '
+         'txt2html printed the paren and italicised the wrong span.'),
+    ],
+    'Section_python.html': [
+        ('site https://github.com/sparta/sparta,', 'site,',
+         'markup_typos_fixed',
+         'Section_python.txt put the link target of "GitHub site"_ on the '
+         'next line, so txt2html could not pair them and printed the URL as '
+         'text.  It is a link now, and the URL is no longer duplicated.'),
+    ],
+    'variable.html': [
+        (':doc:`python `', 'python', 'rst_markup_in_source', ''),
+        (':doc:`clear `', 'clear', 'rst_markup_in_source', ''),
+        ('**not**', 'not', 'rst_markup_in_source', ''),
+        ('* :doc:`create_particles ` * :doc:`python `',
+         'create_particles python', 'rst_markup_in_source', ''),
+    ],
+}
+
+# Where an equation image stood in the old page.  Marking the site lets the
+# equation allowance be scoped to the text that replaced that image, rather
+# than to any smallish difference on a page that happens to contain one.
+EQ_MARK = '\x01EQIMG\x01'
+EQ_IMG = re.compile(r'<img\b[^>]*?src\s*=\s*"(?:\./)?Eqs/[^"]+"[^>]*>', re.I)
 
 # Sphinx wraps every page in navigation the old manual did not have.
 CHROME = re.compile(
@@ -92,6 +151,10 @@ def content_only(markup):
 def visible_text(markup, *, sphinx=None):
     """The words a reader sees, normalized so formatting cannot matter."""
     t = content_only(markup)
+    # An equation image shows text but contributes no words, so leave a
+    # marker where it stood; without one the words that replaced it look
+    # like an insertion at an arbitrary point in the page.
+    t = EQ_IMG.sub(' ' + EQ_MARK + ' ', t)
     # keep block boundaries as separators so words do not run together
     t = BLOCK.sub('\n', t)
     t = TAG.sub('', t)
@@ -148,68 +211,78 @@ def anchors(markup):
     return out
 
 
-def equation_images(markup):
-    """Alt text / filenames of the pre-rendered equation images."""
-    return {m.group(1) for m in
-            re.finditer(r'<img\b[^>]*?src\s*=\s*"(?:\./)?(Eqs/[^"]+)"', markup, re.I)}
+
+def hidden_by_unescaped_lt(raw, old_run, new_run):
+    """Is this one difference text a browser could not show?
+
+    True only if the new words contain the "<" that caused the swallowing
+    *and* are present verbatim in the old file's raw markup.  That second
+    check is what makes it safe: it proves the text was published and
+    hidden, rather than being new text.
+    """
+    if not new_run or not any('<' in w for w in new_run):
+        return False
+    # Where the hidden span ends mid-paragraph the browser joins the word
+    # before it to the word after -- "x" + "These" becomes the one token
+    # "xThese" -- so the run picks up trailing words that belong to the
+    # visible text.  Trim them, but only if what is trimmed is really the
+    # tail of that merged token.
+    k = len(new_run)
+    while k > 0 and ' '.join(new_run[:k]) not in raw:
+        k -= 1
+    if k == 0 or not any('<' in w for w in new_run[:k]):
+        return False
+    tail = ''.join(new_run[k:])
+    return not tail or ''.join(old_run).endswith(tail)
 
 
-def hidden_by_unescaped_lt(old_markup, old_words, new_words):
-    """Count runs the old page contained but a browser could not show.
+def classify(name, raw, old_run, new_run, allow_equations):
+    """Name the agreed delta this one difference falls under, or None.
 
-    Returns 0 unless every difference is an insertion that starts with a
-    token beginning with "<" *and* the inserted words are present in the old
-    file's raw markup.  That second check is what makes this safe: it proves
-    the text was there and hidden, rather than being new text.
+    Every difference is judged on its own.  That cuts both ways and both
+    ways matter: one unexplained difference no longer discards the
+    verification of the others on the page, and an explained one no longer
+    covers for an unexplained one somewhere else.
+    """
+    o, n = ' '.join(old_run), ' '.join(new_run)
+    for d_old, d_new, key, _why in DECLARED.get(name, ()):
+        if o == d_old and n == d_new:
+            return key
+    # Scoped to the marker: the words have to be what replaced that image,
+    # not merely a difference somewhere on a page that has one.
+    if allow_equations and old_run and all(w == EQ_MARK for w in old_run):
+        return 'equations'
+    if hidden_by_unescaped_lt(raw, old_run, new_run):
+        return 'unescaped_lt'
+    return None
+
+
+def compare_text(name, old_markup, old_words, new_words, allow_equations):
+    """Classify every difference between two pages.
+
+    Returns (Counter of agreed deltas, list of unexplained differences).
     """
     import difflib
     raw = ' '.join(html.unescape(old_markup).split())
-    runs = 0
+    agreed = collections.Counter()
+    unexplained = []
     for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(
             a=old_words, b=new_words, autojunk=False).get_opcodes():
         if tag == 'equal':
             continue
-        if tag == 'delete':
-            return 0
-        run = new_words[j1:j2]
-        # The run has to contain the "<" that caused the swallowing, and it
-        # has to be present verbatim in the old file.  Together those prove
-        # the text was published and hidden, not that it is new text.
-        if not run or not any('<' in w for w in run):
-            return 0
-        # Where the hidden span ends mid-paragraph the browser joins the
-        # word before it to the word after -- "x" + "These" becomes the one
-        # token "xThese" -- so the run picks up trailing words that belong
-        # to the visible text.  Trim them, but only if what is trimmed is
-        # really the tail of that merged token.
-        old_run = ''.join(old_words[i1:i2])
-        k = len(run)
-        while k > 0 and ' '.join(run[:k]) not in raw:
-            k -= 1
-        if k == 0 or not any('<' in w for w in run[:k]):
-            return 0
-        tail = ''.join(run[k:])
-        if tail and not old_run.endswith(tail):
-            return 0
-        runs += 1
-    return runs
-
-
-def diff_words(old, new, context=6):
-    """First divergence between two word lists, with a little context."""
-    import difflib
-    sm = difflib.SequenceMatcher(a=old, b=new, autojunk=False)
-    for tag, i1, i2, j1, j2 in sm.get_opcodes():
-        if tag == 'equal':
-            continue
-        return {
-            'tag': tag,
-            'old': ' '.join(old[max(0, i1 - context):i2 + context]),
-            'new': ' '.join(new[max(0, j1 - context):j2 + context]),
-            'n_old': i2 - i1,
-            'n_new': j2 - j1,
-        }
-    return None
+        old_run, new_run = old_words[i1:i2], new_words[j1:j2]
+        key = classify(name, raw, old_run, new_run, allow_equations)
+        if key:
+            agreed[key] += 1
+        else:
+            unexplained.append({
+                'tag': tag,
+                'old': ' '.join(old_words[max(0, i1 - 6):i2 + 6]),
+                'new': ' '.join(new_words[max(0, j1 - 6):j2 + 6]),
+                'n_old': i2 - i1,
+                'n_new': j2 - j1,
+            })
+    return agreed, unexplained
 
 
 def main():
@@ -218,7 +291,9 @@ def main():
     ap.add_argument('new')
     ap.add_argument('--verbose', '-v', action='store_true')
     ap.add_argument('--page', help='check only this page')
-    ap.add_argument('--allow-equations', action='store_true', default=True)
+    ap.add_argument('--no-allow-equations', dest='allow_equations',
+                    action='store_false',
+                    help='treat the MathJax equations as regressions too')
     args = ap.parse_args()
 
     old_dir, new_dir = pathlib.Path(args.old), pathlib.Path(args.new)
@@ -227,8 +302,10 @@ def main():
         pages = [p for p in pages if p == args.page or p == args.page + '.html']
 
     missing, text_bad, link_bad, anchor_bad, ok = [], [], [], [], 0
+    dangling = []
     all_new_anchors = {}
-    unescaped, unescaped_pages = 0, []
+    agreed_total = collections.Counter()
+    agreed_pages = collections.Counter()
 
     for name in pages:
         new_path = new_dir / name
@@ -239,25 +316,21 @@ def main():
         n = new_path.read_text(errors='replace')
 
         ow, nw = visible_text(o, sphinx=False), visible_text(n, sphinx=True)
-        # equations: the old page shows an image, the new one shows TeX
-        eq = equation_images(o)
 
         page_ok = True
+        agreed = collections.Counter()
         if ow != nw:
-            d = diff_words(ow, nw)
-            hidden = hidden_by_unescaped_lt(o, ow, nw)
-            if hidden:
-                unescaped += hidden
-                unescaped_pages.append((name, hidden))
-                if args.verbose:
-                    print(f'  ~ {name}: {hidden} run(s) the old page hid '
-                          f'behind an unescaped "<" (allowed)')
-            elif not (eq and args.allow_equations and d
-                      and d['n_old'] + d['n_new'] < 400):
-                text_bad.append((name, d))
+            agreed, unexplained = compare_text(
+                name, o, ow, nw, args.allow_equations)
+            agreed_total.update(agreed)
+            for key in agreed:
+                agreed_pages[key] += 1
+            if args.verbose and agreed:
+                detail = ', '.join(f'{n_} {k}' for k, n_ in sorted(agreed.items()))
+                print(f'  ~ {name}: {detail} (agreed)')
+            if unexplained:
+                text_bad.append((name, unexplained))
                 page_ok = False
-            elif args.verbose:
-                print(f'  ~ {name}: text differs at an equation site (allowed)')
 
         # Compare intra-manual targets as a multiset, so replacing one of
         # several links to the same page is still caught, and report added
@@ -289,9 +362,41 @@ def main():
         nc = collections.Counter(resolve(k) for k in nc.elements())
         lost = oc - nc
         added = nc - oc
-        if lost or added:
+        # Links the old page did not make are not automatically a fault: the
+        # unescaped "<" swallowed some of them, and variable.txt's stray reST
+        # left others as literal text, so recovering the words recovers the
+        # link with them.  Allowed only where this page's text differences
+        # were themselves agreed for one of those two reasons, and never
+        # where a link was also lost.
+        recoverable = agreed['unescaped_lt'] or agreed['rst_markup_in_source']
+        if added and not lost and recoverable:
+            agreed_total['links_recovered'] += len(list(added.elements()))
+            agreed_pages['links_recovered'] += 1
+            if args.verbose:
+                print(f'  ~ {name}: {len(list(added.elements()))} link(s) the '
+                      f'old page hid, now visible (agreed)')
+        elif lost or added:
             link_bad.append((name, sorted(lost.elements()), sorted(added.elements())))
             page_ok = False
+
+        # A link that still points where it always did is only half the
+        # check: the file it points at has to be in the build.  Sphinx
+        # copies only the images a page displays, so a link to a file the
+        # page merely points at -- the full-size version of a thumbnail --
+        # silently 404s unless something else puts it there.
+        #
+        # Judged against the old tree rather than absolutely, so this
+        # reports what the migration broke and not what was already broken.
+        # Manual.pdf, for one, is built separately and dropped in beside the
+        # manual; it is absent from both trees and is not this check's
+        # business.
+        for href in {h for h in nc.elements() if h != '#'}:
+            target = href.split('#', 1)[0]
+            if not target or target.startswith(('http', 'mailto', 'ftp')):
+                continue
+            if not (new_dir / target).exists() and (old_dir / target).exists():
+                dangling.append((name, target))
+                page_ok = False
 
         oa, na = anchors(o), anchors(n)
         lost_a = {a for a in oa - na if not a.startswith(('index', 'search'))}
@@ -307,12 +412,19 @@ def main():
     print(f'  clean               {ok}')
     print(f'  missing in new      {len(missing)}')
     print(f'  text differs        {len(text_bad)}')
-    print(f'  links lost          {len(link_bad)}')
+    print(f'  link targets moved  {len(link_bad)}')
+    print(f'  links that 404      {len(dangling)}')
     print(f'  anchors lost        {len(anchor_bad)}')
-    if unescaped:
-        print(f'  text the old manual hid behind an unescaped "<": '
-              f'{unescaped} run(s) on {len(unescaped_pages)} pages')
+    if agreed_total:
+        print('\n  agreed deltas:')
+        for k in sorted(agreed_total):
+            print(f'    {agreed_total[k]:4d} on {agreed_pages[k]:3d} page(s)  {k}')
 
+    if dangling:
+        print('\nLINKS THAT 404 (target not in the build):')
+        seen = collections.Counter(t for _, t in dangling)
+        for target, n_ in seen.most_common(20):
+            print(f'  {target}  ({n_} link(s))')
     if missing:
         print('\nMISSING PAGES (URL would 404):')
         for m in missing:
@@ -329,21 +441,25 @@ def main():
             if added:
                 print(f'  {name}  added: {added[:6]}{" ..." if len(added) > 6 else ""}')
     if text_bad:
-        print('\nTEXT DIFFERS:')
-        for name, d in text_bad[:15]:
-            if not d:
-                print(f'  {name}: (length only)')
-                continue
-            print(f'  {name}  [{d["tag"]}: -{d["n_old"]} +{d["n_new"]}]')
-            print(f'      old: ...{d["old"][:150]}...')
-            print(f'      new: ...{d["new"][:150]}...')
+        print('\nTEXT DIFFERS (not covered by any agreed delta):')
+        for name, diffs in text_bad[:15]:
+            for d in diffs[:4]:
+                print(f'  {name}  [{d["tag"]}: -{d["n_old"]} +{d["n_new"]}]')
+                print(f'      old: ...{d["old"][:150]}...')
+                print(f'      new: ...{d["new"][:150]}...')
+            if len(diffs) > 4:
+                print(f'      ... and {len(diffs) - 4} more on this page')
 
-    failed = bool(missing or text_bad or link_bad or anchor_bad)
+    failed = bool(missing or text_bad or link_bad or anchor_bad or dangling)
     print('\n  RESULT: ' + ('PARITY FAILED' if failed else 'PARITY OK'))
     if not failed:
-        print('  allowed deltas:')
+        print('  agreed deltas, in full:')
         for k, v in DELTAS.items():
             print(f'    {k}: {v}')
+        for name, entries in sorted(DECLARED.items()):
+            for d_old, d_new, key, why in entries:
+                if why:
+                    print(f'    {name} [{key}]: {why}')
     return 1 if failed else 0
 
 
