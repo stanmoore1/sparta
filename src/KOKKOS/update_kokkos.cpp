@@ -877,7 +877,7 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
 
     if (error_flag) {
       char str[128];
-      sprintf(str,
+      snprintf(str,sizeof(str),
               "Particle being sent to self proc "
               "on step " BIGINT_FORMAT,
               update->ntimestep);
