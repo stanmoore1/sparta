@@ -215,6 +215,8 @@ void ComputeFFTGridKokkos::compute_per_grid_kokkos()
         error->all(FLERR,"Fix used in compute fft/grid not "
                    "computed at compatible time");
 
+      fixKKBase->sync_per_grid_device();
+
       if (aidx == 0) {
         d_ingrid = fixKKBase->d_vector_grid;
       } else {

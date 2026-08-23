@@ -296,6 +296,7 @@ void FixAveHistoKokkos::end_of_step()
         else if (fix->array_particle)
           bin_particles(reducer, fix->array_particle[j-1],fix->size_per_particle_cols);
       } else if (kind == PERGRID) {
+        fixKKBase->sync_per_grid_device();
         if (j == 0) {
           // per-grid fixes fill d_vector_grid; d_vector_particle is unallocated
           bin_grid_cells(reducer, fixKKBase->d_vector_grid);

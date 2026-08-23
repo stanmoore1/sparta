@@ -51,6 +51,8 @@ class FixAveGridKokkos : public FixAveGrid, public KokkosBase {
   void copy_grid_one(int, int);
   void add_grid_one();
 
+  void sync_per_grid_device();
+
   KOKKOS_INLINE_FUNCTION
   void operator()(TagFixAveGrid_Zero_group_vector, const int&) const;
 

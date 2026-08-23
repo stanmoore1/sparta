@@ -39,6 +39,17 @@ class KokkosBase {
 
   DAT::tdual_float_2d_lr k_array;    // Kokkos DualView of global array
 
+  // publish this style's per-grid output (d_vector_grid / d_array_grid) to
+  //   the device.  a compute regenerates its per-grid output from scratch on
+  //   every invocation, so its device side is always current and the default
+  //   no-op is right.  a fix does not: its output persists across steps and
+  //   the grid migration hooks (pack/unpack/copy/add_grid_one) edit it on the
+  //   host, leaving the device side holding pre-migration rows.  a consumer
+  //   that reads d_vector_grid / d_array_grid in a kernel must call this
+  //   first, or it sees stale values for the rest of the step in which a
+  //   fix adapt / fix balance moved cells
+  virtual void sync_per_grid_device() {}
+
   // Region
   virtual void match_all_kokkos(DAT::tdual_int_1d) {}
 

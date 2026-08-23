@@ -251,6 +251,7 @@ void FixAveHistoWeightKokkos::calculate_weights()
       }
 
     } else if (kind == PERGRID) {
+      fixKKBase->sync_per_grid_device();
       if (j == 0) {
         d_weights = fixKKBase->d_vector_grid;
       } else if (fixKKBase->d_array_grid.data()) {

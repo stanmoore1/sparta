@@ -274,6 +274,7 @@ void FixAveGridKokkos::end_of_step()
     } else if (which[m] == FIX) {
       Fix *ifix = modify->fix[n];
       KokkosBase *fixKKBase = dynamic_cast<KokkosBase*>(ifix);
+      if (fixKKBase) fixKKBase->sync_per_grid_device();
       k = umap[m][0];
 
       if (j == 0) {
@@ -681,6 +682,28 @@ void FixAveGridKokkos::add_grid_one()
   pergrid_sync(Host);
   FixAveGrid::add_grid_one();
   pergrid_modify(Host);
+}
+
+/* ----------------------------------------------------------------------
+   publish the averaged per-grid output to the device for a downstream
+   consumer (compute lambda/grid/kk, compute dt/grid/kk, another fix
+   ave/grid/kk, ...).  end_of_step() leaves both sides valid, but the grid
+   migration hooks above run afterwards in the same step whenever fix adapt
+   or fix balance moves cells, and they edit the host copy only.  a consumer
+   reading d_vector_grid / d_array_grid in a kernel would then get the
+   pre-migration rows, so it calls this first.
+   PERGRIDSURF keeps its per-cell arrays in host memory and allocates no
+   device views, so there is nothing to publish
+------------------------------------------------------------------------- */
+
+void FixAveGridKokkos::sync_per_grid_device()
+{
+  if (flavor == PERGRIDSURF) return;
+
+  pergrid_sync(Device);
+
+  if (nvalues == 1) d_vector_grid = k_vector_grid.view_device();
+  else d_array_grid = k_array_grid.view_device();
 }
 
 /* ----------------------------------------------------------------------

@@ -200,6 +200,11 @@ void ComputeLambdaGridKokkos::compute_per_grid_kokkos()
         error->all(FLERR,"Cannot (yet) use non-Kokkos fixes with compute lambda/grid/kk");
       KokkosBase* fKKBase = dynamic_cast<KokkosBase*>(fix);
 
+      // the fix's per-grid output survives across steps and its grid
+      //   migration hooks edit the host copy, so publish it to the device
+      //   before the kernels below read it
+      fKKBase->sync_per_grid_device();
+
       const int k = umap[m][0];
       if (j == 0) {
         auto l_fix_vector = fKKBase->d_vector_grid;
@@ -245,6 +250,8 @@ void ComputeLambdaGridKokkos::compute_per_grid_kokkos()
     if (!ftemp->kokkos_flag)
       error->all(FLERR,"Cannot (yet) use non-Kokkos fixes with compute lambda/grid/kk");
     KokkosBase* ftempKKBase = dynamic_cast<KokkosBase*>(ftemp);
+
+    ftempKKBase->sync_per_grid_device();
 
     if (tempindex == 0) {
       DAT::t_float_1d ft_vector_grid = ftempKKBase->d_vector_grid;
