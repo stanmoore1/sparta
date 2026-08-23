@@ -5071,7 +5071,18 @@ void CollideVSSKokkos::grow_percell(int n)
   if (nglocal+n < nglocalmax || !ngroups) return;
   while (nglocal+n >= nglocalmax) nglocalmax += DELTAGRID;
 
-  this->sync(Device,ALL_MASK); // force resize on device
+  // bring whichever side is currently newer into agreement, then let the
+  //   resize keep it.  do NOT route this through sync(Device,ALL_MASK): under
+  //   auto_sync that first calls modified(Host,ALL_MASK), asserting the host
+  //   is the authority.  it is not here -- grow_percell() runs from the grid
+  //   refinement hooks (add_grid_one() <- Grid::surf2grid_one() <-
+  //   AdaptGrid::perform_refine()), outside the per-step collide sync
+  //   discipline, so the collision kernels' vremax updates are still only on
+  //   the device.  claiming the host would make the copy below overwrite them
+  //   with whatever the host last held
+
+  k_vremax.sync_device();
+  if (remainflag) k_remain.sync_device();
 
   k_vremax.resize(Kokkos::view_alloc(Kokkos::WithoutInitializing),
                   nglocalmax,ngroups,ngroups);
