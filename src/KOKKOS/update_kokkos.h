@@ -187,6 +187,17 @@ class UpdateKokkos : public Update {
 
   int nsc_style[SC_NSTYLE];             // # of instances of each style
 
+  // the surf_collide index maps depend only on surf->sc[n]->style, which is
+  //   fixed for a run (surf_collide is a between-runs command), but
+  //   setup_surf_collide_models() runs once per migration iteration.  Build
+  //   them once per run and keep the host mirrors, instead of allocating a
+  //   fresh mirror and re-uploading both maps every iteration.
+  //   init() invalidates, so a new run picks up any style change
+
+  int nsc_index_cached;                 // surf->nsc the maps were built for
+  DAT::t_int_1d::host_mirror_type h_sc_type;
+  DAT::t_int_1d::host_mirror_type h_sc_map;
+
   static int surf_collide_style_tag(class SurfCollide *);
   static size_t sc_sizeof(int);
   void sc_phase(class SurfCollide *, int);

@@ -48,6 +48,7 @@ class FixEmitFaceFileKokkos : public FixEmitFaceFile {
   //   entry points land on the same kernel pair, exactly as fix emit/face/kk
   //   does (fix_emit_face_kokkos.h:46-47)
 
+  void flatten_region();
   void perform_task() override;
   void perform_task_twopass() override { perform_task(); }
 

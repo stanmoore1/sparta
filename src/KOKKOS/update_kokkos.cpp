@@ -137,6 +137,7 @@ UpdateKokkos::UpdateKokkos(SPARTA *sparta) : Update(sparta),
 {
   nslist_surf = nslist_isurf = nslist_react_isurf = nslist_react_surf = 0;
   nslist_coll_tally = nslist_react_tally = 0;
+  nsc_index_cached = -1;
 
   // the Kokkos views of Particle/Grid/Surf are populated from the host data
   //   once, by setup() when prewrap is set, which then clears prewrap
@@ -214,6 +215,11 @@ UpdateKokkos::~UpdateKokkos()
 
 void UpdateKokkos::init()
 {
+  // the surf_collide style list is fixed within a run but can change between
+  //   them, so force setup_surf_collide_models() to rebuild its index maps
+
+  nsc_index_cached = -1;
+
   // init the UpdateKokkos class if performing a run, else just return
   // only set first_update if a run is being performed
 
@@ -2732,29 +2738,43 @@ size_t UpdateKokkos::sc_sizeof(int tag)
 
 void UpdateKokkos::setup_surf_collide_models()
 {
-  for (int t = 0; t < SC_NSTYLE; t++) nsc_style[t] = 0;
-  if (surf->nsc == 0) return;
-
-  // index maps: which style each surf_collide is, and its slot within it
-
-  if ((int) d_sc_type.extent(0) < surf->nsc) {
-    d_sc_type = DAT::t_int_1d("update:sc_type",surf->nsc);
-    d_sc_map = DAT::t_int_1d("update:sc_map",surf->nsc);
-  }
-  auto h_type = Kokkos::create_mirror_view(d_sc_type);
-  auto h_map = Kokkos::create_mirror_view(d_sc_map);
-
-  for (int n = 0; n < surf->nsc; n++) {
-    if (!surf->sc[n]->kokkosable)
-      error->all(FLERR,"Must use Kokkos-enabled surface collide method with Kokkos");
-    const int tag = surf_collide_style_tag(surf->sc[n]);
-    if (tag < 0) error->all(FLERR,"Unknown Kokkos surface collide method");
-    h_type(n) = tag;
-    h_map(n) = nsc_style[tag]++;
+  if (surf->nsc == 0) {
+    for (int t = 0; t < SC_NSTYLE; t++) nsc_style[t] = 0;
+    nsc_index_cached = -1;
+    return;
   }
 
-  Kokkos::deep_copy(d_sc_type,h_type);
-  Kokkos::deep_copy(d_sc_map,h_map);
+  // index maps: which style each surf_collide is, and its slot within it.
+  //   this function is called from inside move()'s migration loop, but the
+  //   maps depend only on the surf_collide style list, which cannot change
+  //   during a run -- so build them once and keep nsc_style[] and the host
+  //   mirrors, rather than re-deriving and re-uploading both every iteration.
+  //   init() clears nsc_index_cached so a new run rebuilds
+
+  if (nsc_index_cached != surf->nsc) {
+    for (int t = 0; t < SC_NSTYLE; t++) nsc_style[t] = 0;
+
+    if ((int) d_sc_type.extent(0) < surf->nsc) {
+      d_sc_type = DAT::t_int_1d("update:sc_type",surf->nsc);
+      d_sc_map = DAT::t_int_1d("update:sc_map",surf->nsc);
+      h_sc_type = Kokkos::create_mirror_view(d_sc_type);
+      h_sc_map = Kokkos::create_mirror_view(d_sc_map);
+    }
+
+    for (int n = 0; n < surf->nsc; n++) {
+      if (!surf->sc[n]->kokkosable)
+        error->all(FLERR,"Must use Kokkos-enabled surface collide method with Kokkos");
+      const int tag = surf_collide_style_tag(surf->sc[n]);
+      if (tag < 0) error->all(FLERR,"Unknown Kokkos surface collide method");
+      h_sc_type(n) = tag;
+      h_sc_map(n) = nsc_style[tag]++;
+    }
+
+    Kokkos::deep_copy(d_sc_type,h_sc_type);
+    Kokkos::deep_copy(d_sc_map,h_sc_map);
+
+    nsc_index_cached = surf->nsc;
+  }
 
   // one buffer per style, grown to hold every instance of it
 

@@ -134,6 +134,7 @@ class ComputeSurfReactionTallyKokkos : public ComputeSurfReactionTally, public K
   enum{REACTION,IDSURF,IDPRE,ID1POST,ID2POST,TYPEPRE,TYPE1POST,TYPE2POST,TIME,
        XC,YC,ZC,VXPRE,VYPRE,VZPRE,VX1POST,VY1POST,VZ1POST,VX2POST,VY2POST,VZ2POST};
 
+  int maxtally_host;                 // rows array_tally is allocated for
   DAT::tdual_float_2d_lr k_array_tally;
   DAT::t_float_2d_lr d_array_tally;
   DAT::t_int_scalar d_ntally;

@@ -216,6 +216,8 @@ void FixAveGridKokkos::end_of_step()
 
   modify->clearstep_compute();
 
+  tally_on_host = 0;
+
   for (m = 0; m < nvalues; m++) {
     n = value2index[m];
     j = argindex[m];
@@ -239,6 +241,8 @@ void FixAveGridKokkos::end_of_step()
       // accumulate one or more compute values to umap columns of tally array
       // if compute does not post-process, access its vec/array grid directly
       // else access uomap columns in its ctally array
+
+      tally_to_device();
 
       if (post_process[m]) {
         ntally = numap[m];
@@ -282,6 +286,7 @@ void FixAveGridKokkos::end_of_step()
           (int) fixKKBase->d_vector_grid.extent(0) >= nglocal;
 
         if (device_ok) {
+          tally_to_device();
           d_fix_vector = fixKKBase->d_vector_grid;
           Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagFixAveGrid_Add_fix_vector>(0,nglocal),*this);
         } else {
@@ -296,12 +301,9 @@ void FixAveGridKokkos::end_of_step()
           // otherwise the host add would operate on stale values and the
           // sync_device() would clobber the on-device accumulation
 
-          k_tally.modify_device();
-          k_tally.sync_host();
+          tally_to_host();
           for (int i = 0; i < nglocal; i++)
             tally[i][k] += fix_vector[i];
-          k_tally.modify_host();
-          k_tally.sync_device();
         }
 
       } else {
@@ -311,6 +313,7 @@ void FixAveGridKokkos::end_of_step()
           (int) fixKKBase->d_array_grid.extent(1) > jm1;
 
         if (device_ok) {
+          tally_to_device();
           d_fix_array = fixKKBase->d_array_grid;
           Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagFixAveGrid_Add_fix_array>(0,nglocal),*this);
         } else {
@@ -319,12 +322,9 @@ void FixAveGridKokkos::end_of_step()
             error->all(FLERR,"Fix used by fix ave/grid/kk does not produce "
                        "a per-grid array");
 
-          k_tally.modify_device();
-          k_tally.sync_host();
+          tally_to_host();
           for (int i = 0; i < nglocal; i++)
             tally[i][k] += fix_array[i][jm1];
-          k_tally.modify_host();
-          k_tally.sync_device();
         }
       }
 
@@ -339,11 +339,8 @@ void FixAveGridKokkos::end_of_step()
       //   until after this loop.  Without the pull-down the sum would read
       //   stale values and the push-back would clobber the device work
 
-      k_tally.modify_device();
-      k_tally.sync_host();
+      tally_to_host();
       input->variable->compute_grid(n,&tally[0][k],ntotal,1);
-      k_tally.modify_host();
-      k_tally.sync_device();
 
     // access custom attribute
 
@@ -351,6 +348,7 @@ void FixAveGridKokkos::end_of_step()
 
       auto gridKK = (GridKokkos*) grid;
       gridKK->sync(Device,CUSTOM_MASK);
+      tally_to_device();
 
       k = umap[m][0];
       if (j == 0) {
@@ -441,6 +439,11 @@ void FixAveGridKokkos::end_of_step()
       }
     }
   }
+
+  // a trailing run of host values may have left the tally on the host, so
+  // push it down before claiming the device below
+
+  tally_to_device();
 
   // the tally array was accumulated on the device this step
   // mark it modified so the host copy is refreshed if grid cells later
@@ -704,6 +707,32 @@ void FixAveGridKokkos::sync_per_grid_device()
 
   if (nvalues == 1) d_vector_grid = k_vector_grid.view_device();
   else d_array_grid = k_array_grid.view_device();
+}
+
+/* ----------------------------------------------------------------------
+   move k_tally to one side, only when it is not already there.  the value
+   loop in end_of_step() mixes device values (computes, fixes that publish a
+   device view, custom attributes) with host ones (a fix with no device view,
+   a grid variable); transferring at the crossings collapses a run of host
+   values into a single round trip
+------------------------------------------------------------------------- */
+
+void FixAveGridKokkos::tally_to_host()
+{
+  if (tally_on_host) return;
+  k_tally.modify_device();
+  k_tally.sync_host();
+  tally_on_host = 1;
+}
+
+/* ---------------------------------------------------------------------- */
+
+void FixAveGridKokkos::tally_to_device()
+{
+  if (!tally_on_host) return;
+  k_tally.modify_host();
+  k_tally.sync_device();
+  tally_on_host = 0;
 }
 
 /* ----------------------------------------------------------------------

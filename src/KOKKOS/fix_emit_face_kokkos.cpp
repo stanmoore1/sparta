@@ -138,6 +138,11 @@ void FixEmitFaceKokkos::init()
   k_cummulative.modify_host();
   k_mspecies.modify_host();
   k_fraction.modify_host();
+  // the region is fixed for the run; flatten it once here rather than
+  //   rebuilding and re-uploading the token stream in perform_task()
+
+  flatten_region();
+
 }
 
 /* ----------------------------------------------------------------------
@@ -156,6 +161,35 @@ void FixEmitFaceKokkos::create_tasks()
   k_tasks.modify_host();
   if (perspecies) k_ntargetsp.modify_host();
   if (subsonic_style == PONLY) k_vscale.modify_host();
+}
+
+/* ----------------------------------------------------------------------
+   flatten the region to a device-resident postfix token stream, so the
+   emit kernel needs no virtual dispatch and no typed copy per region style.
+   the stream carries each sub-region's interior/exterior sense and the
+   composite's own, so nothing else needs to be passed along.
+   see region_prim_kokkos.h
+
+   a region is fixed for the duration of a run -- Region exposes no move or
+   rotate, and "region" is an input command -- so this runs from init()
+   rather than from perform_task(), which would rebuild the stream on the
+   host and re-upload it every step
+------------------------------------------------------------------------- */
+
+void FixEmitFaceKokkos::flatten_region()
+{
+  region_flag = 0;
+  nregion_token = 0;
+  if (region) {
+    KokkosBase* region_kkbase = dynamic_cast<KokkosBase*>(region);
+    if (!region->kokkos_flag || !region_kkbase)
+      error->all(FLERR,"KOKKOS package does not (yet) support chosen region style");
+    nregion_token = region_kkbase->flatten_region_kokkos(k_region_tokens);
+    if (nregion_token <= 0)
+      error->all(FLERR,"KOKKOS package does not (yet) support chosen region style");
+    d_region_tokens = k_region_tokens.view_device();
+    region_flag = 1;
+  }
 }
 
 /* ---------------------------------------------------------------------- */
@@ -270,18 +304,6 @@ void FixEmitFaceKokkos::perform_task()
   //   and the composite's own, so nothing else needs to be passed along.
   //   see region_prim_kokkos.h
 
-  region_flag = 0;
-  nregion_token = 0;
-  if (region) {
-    KokkosBase* region_kkbase = dynamic_cast<KokkosBase*>(region);
-    if (!region->kokkos_flag || !region_kkbase)
-      error->all(FLERR,"KOKKOS package does not (yet) support chosen region style");
-    nregion_token = region_kkbase->flatten_region_kokkos(k_region_tokens);
-    if (nregion_token <= 0)
-      error->all(FLERR,"KOKKOS package does not (yet) support chosen region style");
-    d_region_tokens = k_region_tokens.view_device();
-    region_flag = 1;
-  }
 
   int nsingle_reduce = 0;
   copymode = 1;

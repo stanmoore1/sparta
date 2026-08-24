@@ -125,6 +125,7 @@ class ComputeSurfCollisionTallyKokkos : public ComputeSurfCollisionTally, public
 
   enum{IDSURF,ID,TYPE,TIME,XC,YC,ZC,VXPRE,VYPRE,VZPRE,VXPOST,VYPOST,VZPOST};
 
+  int maxtally_host;                 // rows array_tally is allocated for
   DAT::tdual_float_2d_lr k_array_tally;
   DAT::t_float_2d_lr d_array_tally;
   DAT::t_int_scalar d_ntally;

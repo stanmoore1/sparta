@@ -48,6 +48,7 @@ class FixEmitSurfKokkos : public FixEmitSurf {
   FixEmitSurfKokkos(class SPARTA *, int, char **);
   ~FixEmitSurfKokkos() override;
   void init() override;
+  void flatten_region();
   void perform_task() override;
   void perform_task_twopass() override { perform_task(); }
 

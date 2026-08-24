@@ -13,6 +13,7 @@
 ------------------------------------------------------------------------- */
 
 #include "compute_gas_collision_tally_kokkos.h"
+#include <type_traits>
 #include "particle_kokkos.h"
 #include "grid_kokkos.h"
 #include "update.h"
@@ -47,6 +48,7 @@ ComputeGasCollisionTallyKokkos::ComputeGasCollisionTallyKokkos(SPARTA *sparta,
   d_which = k_which.view_device();
 
   maxtally = DELTA;
+  maxtally_host = 0;
   MemKK::realloc_kokkos(k_array_tally,"gas/collision/tally/kk:array_tally",
                         maxtally,nvalue);
   d_array_tally = k_array_tally.view_device();
@@ -118,19 +120,35 @@ void ComputeGasCollisionTallyKokkos::post_gas_tally()
 
   if (ntally > (int) d_array_tally.extent(0)) { ntally = 0; return; }
 
-  k_array_tally.modify_device();
-  k_array_tally.sync_host();
-
-  // the host base class hands out array_tally; point it at the host mirror
+  // the host base class hands out array_tally, row-indexed to ntally
+  //   (compute_surf_collision_tally.cpp:172).  Publish only the rows this
+  //   step produced: k_array_tally is sized to maxtally, a high-water mark,
+  //   so sync_host() moved the whole buffer and the scalar loop then touched
+  //   every element of it again.  The host half of the dual view has no
+  //   other reader, so copy the device rows straight into array_tally --
+  //   d_array_tally is LayoutRight and Memory::create hands back one
+  //   contiguous row-major block with the same nvalue row stride, so an
+  //   unmanaged wrap of the leading ntally rows lines up exactly.  Keep the
+  //   allocation on its own high-water mark rather than free/malloc-ing it
+  //   every step.
 
   if (ntally) {
-    memory->destroy(array_tally);
-    memory->create(array_tally,MAX(ntally,1),nvalue,
-                   "gas/collision/tally/kk:array_tally_host");
-    auto h_array = k_array_tally.view_host();
-    for (int i = 0; i < ntally; i++)
-      for (int m = 0; m < nvalue; m++)
-        array_tally[i][m] = h_array(i,m);
+    static_assert(std::is_same<F_FLOAT,double>::value,
+                  "array_tally is double**, so F_FLOAT must be double "
+                  "for the unmanaged wrap below to alias it");
+    if (ntally > maxtally_host) {
+      memory->destroy(array_tally);
+      maxtally_host = MAX(ntally,maxtally);
+      memory->create(array_tally,maxtally_host,nvalue,
+                     "gas/collision/tally/kk:array_tally_host");
+    }
+    Kokkos::View<F_FLOAT**,Kokkos::LayoutRight,Kokkos::HostSpace,
+                 Kokkos::MemoryTraits<Kokkos::Unmanaged> >
+      h_rows(array_tally[0],ntally,nvalue);
+    Kokkos::deep_copy(h_rows,
+                      Kokkos::subview(d_array_tally,
+                                      Kokkos::make_pair(0,ntally),
+                                      Kokkos::ALL()));
   }
 }
 

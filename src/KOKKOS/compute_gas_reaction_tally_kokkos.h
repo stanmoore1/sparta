@@ -143,6 +143,7 @@ class ComputeGasReactionTallyKokkos : public ComputeGasReactionTally, public Kok
        TYPE1POST,TYPE2POST,TYPE3POST,VX1PRE,VY1PRE,VZ1PRE,VX2PRE,VY2PRE,VZ2PRE,
        VX1POST,VY1POST,VZ1POST,VX2POST,VY2POST,VZ2POST,VX3POST,VY3POST,VZ3POST};
 
+  int maxtally_host;                 // rows array_tally is allocated for
   DAT::tdual_float_2d_lr k_array_tally;
   DAT::t_float_2d_lr d_array_tally;
   DAT::t_int_scalar d_ntally;

@@ -43,6 +43,7 @@ class FixEmitFaceKokkos : public FixEmitFace {
   FixEmitFaceKokkos(class SPARTA *, int, char **);
   ~FixEmitFaceKokkos() override;
   void init() override;
+  void flatten_region();
   void perform_task() override;
   void perform_task_twopass() override { perform_task(); }
 

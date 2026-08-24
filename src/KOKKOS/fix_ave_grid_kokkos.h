@@ -53,6 +53,16 @@ class FixAveGridKokkos : public FixAveGrid, public KokkosBase {
 
   void sync_per_grid_device();
 
+  // k_tally crosses between host and device only when the side in use
+  //   actually changes.  Each host-side value used to pull the whole
+  //   nglocal x ntotal tally down and push it straight back, so N host
+  //   values in one command cost N full round trips where one does
+  //   (see the value loop in end_of_step())
+
+  int tally_on_host;
+  void tally_to_host();
+  void tally_to_device();
+
   KOKKOS_INLINE_FUNCTION
   void operator()(TagFixAveGrid_Zero_group_vector, const int&) const;
 
