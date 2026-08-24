@@ -1173,9 +1173,9 @@ void ParticleKokkos::post_weight_device()
   auto l_pool = weight_rand_pool;
   const int nold = nlocal;
 
-  // per-particle output count, plus one slot so the scan yields the total
+  // per-particle output count
 
-  DAT::t_int_1d d_count("post_weight:count",nold+1);
+  DAT::t_int_1d d_count("post_weight:count",nold);
 
   Kokkos::parallel_for(nold, KOKKOS_LAMBDA(const int i) {
     const int icell = d_particles_l[i].icell;
@@ -1196,21 +1196,15 @@ void ParticleKokkos::post_weight_device()
     l_pool.free_state(rand_gen);
   });
 
-  // exclusive scan -> output offset of each particle's first copy
+  // exclusive scan -> output offset of each particle's first copy.
+  //   offset_scan() accumulates in 64-bit and aborts with a clear message if
+  //   the total exceeds 2^31.  a hand-rolled scan carrying an int update
+  //   would wrap to a negative nnew first, and the overflow guard that used
+  //   to sit here could never fire: MAXSMALLINT is INT_MAX, so "nnew >
+  //   MAXSMALLINT" is false for every int
 
-  DAT::t_int_1d d_offset("post_weight:offset",nold+1);
-  Kokkos::parallel_scan(nold+1, KOKKOS_LAMBDA(const int i, int &update_val, const bool final) {
-    const int val = (i < nold) ? d_count[i] : 0;
-    if (final) d_offset[i] = update_val;
-    update_val += val;
-  });
-
-  auto h_offset = Kokkos::create_mirror_view(Kokkos::subview(d_offset,Kokkos::make_pair(nold,nold+1)));
-  Kokkos::deep_copy(h_offset,Kokkos::subview(d_offset,Kokkos::make_pair(nold,nold+1)));
-  const int nnew = h_offset(0);
-
-  if (nnew > MAXSMALLINT)
-    error->one(FLERR,"Per-processor particle count is too big");
+  int nnew = 0;
+  auto d_offset = offset_scan(d_count, nnew);
 
   // grow to the new count, then scatter
 
