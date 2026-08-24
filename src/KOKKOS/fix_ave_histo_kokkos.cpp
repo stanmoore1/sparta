@@ -166,7 +166,7 @@ void FixAveHistoKokkos::end_of_step()
     minmax_type(minmax).init(minmax);
   }
 
-  minmax_type reducer(minmax);
+  minmax_type reducer(mm_scratch);
 
   // accumulate results of computes,fixes,variables to local copy
   // compute/fix/variable may invoke computes so wrap with clear/add
@@ -491,6 +491,7 @@ void FixAveHistoKokkos::bin_vector(
     minmax_type& reducer,
     int n, double *values, int stride)
 {
+  minmax_reset();
   using FixKokkosDetails::mirror_view_from_raw_host_array;
   this->stride = stride;
 
@@ -498,6 +499,7 @@ void FixAveHistoKokkos::bin_vector(
 
   auto policy = Kokkos::RangePolicy<TagFixAveHisto_BinVector,DeviceType>(0, n);
   Kokkos::parallel_reduce(policy, *this, reducer);
+  minmax_fold();
 }
 
 /* ----------------------------------------------------------------------
@@ -508,6 +510,7 @@ void FixAveHistoKokkos::bin_particles(
     minmax_type& reducer,
     int attribute, int index)
 {
+  minmax_reset();
   using Kokkos::RangePolicy;
 
   this->index = index;
@@ -561,6 +564,7 @@ void FixAveHistoKokkos::bin_particles(
       Kokkos::parallel_reduce(policy, *this, reducer);
     }
   }
+  minmax_fold();
 }
 
 /* ----------------------------------------------------------------------
@@ -570,6 +574,7 @@ void FixAveHistoKokkos::bin_particles(
     minmax_type& reducer,
     double *values, int stride)
 {
+  minmax_reset();
   using Kokkos::RangePolicy;
   using FixKokkosDetails::mirror_view_from_raw_host_array;
 
@@ -607,6 +612,7 @@ void FixAveHistoKokkos::bin_particles(
     auto policy = RangePolicy<TagFixAveHisto_BinParticles4,DeviceType>(0, n);
     Kokkos::parallel_reduce(policy, *this, reducer);
   }
+  minmax_fold();
 }
 
 /* ----------------------------------------------------------------------
@@ -616,6 +622,7 @@ void FixAveHistoKokkos::bin_grid_cells(
     minmax_type& reducer,
     DAT::t_float_1d_strided d_vec)
 {
+  minmax_reset();
   using Kokkos::RangePolicy;
   using FixKokkosDetails::mirror_view_from_raw_host_array;
 
@@ -631,6 +638,7 @@ void FixAveHistoKokkos::bin_grid_cells(
     auto policy = RangePolicy<TagFixAveHisto_BinGridCells2,DeviceType>(0, n);
     Kokkos::parallel_reduce(policy, *this, reducer);
   }
+  minmax_fold();
 }
 
 

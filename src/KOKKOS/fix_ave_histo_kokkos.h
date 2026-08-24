@@ -75,6 +75,23 @@ public:
 
   mm_value_type minmax;
 
+  // ... and the reducer must NOT be bound to it.  Kokkos::parallel_reduce()
+  //   writes its result through the reducer's bound reference and calls
+  //   init() on that reference first (Kokkos_Serial_Parallel_Range.hpp: the
+  //   result pointer is passed straight to reducer.init()), so binding to
+  //   minmax would reset the running window on every launch and leave only
+  //   the last kernel's extrema.  Reduce into this scratch value instead and
+  //   fold it in: minmax_reset() before a launch, minmax_fold() after
+
+  mm_value_type mm_scratch;
+
+  void minmax_reset() { minmax_type(mm_scratch).init(mm_scratch); }
+
+  void minmax_fold() {
+    if (mm_scratch.min_val < minmax.min_val) minmax.min_val = mm_scratch.min_val;
+    if (mm_scratch.max_val > minmax.max_val) minmax.max_val = mm_scratch.max_val;
+  }
+
   FixAveHistoKokkos(class SPARTA *, int, char **);
   virtual ~FixAveHistoKokkos();
   void init();

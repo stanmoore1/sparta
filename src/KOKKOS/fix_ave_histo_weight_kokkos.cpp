@@ -305,6 +305,7 @@ void FixAveHistoWeightKokkos::bin_vector(
     minmax_type& reducer,
     int n, double *values, int stride)
 {
+  minmax_reset();
   using FixKokkosDetails::mirror_view_from_raw_host_array;
   this->stride = stride;
 
@@ -312,6 +313,7 @@ void FixAveHistoWeightKokkos::bin_vector(
 
   auto policy = Kokkos::RangePolicy<TagFixAveHistoWeight_BinVector,DeviceType>(0, n);
   Kokkos::parallel_reduce(policy, *this, reducer);
+  minmax_fold();
 }
 
 /* ----------------------------------------------------------------------
@@ -322,6 +324,7 @@ void FixAveHistoWeightKokkos::bin_particles(
     minmax_type& reducer,
     int attribute, int index)
 {
+  minmax_reset();
   using Kokkos::RangePolicy;
   using FixKokkosDetails::mirror_view_from_raw_host_array;
 
@@ -376,6 +379,7 @@ void FixAveHistoWeightKokkos::bin_particles(
       Kokkos::parallel_reduce(policy, *this, reducer);
     }
   }
+  minmax_fold();
 }
 
 /* ----------------------------------------------------------------------
@@ -385,6 +389,7 @@ void FixAveHistoWeightKokkos::bin_particles(
     minmax_type& reducer,
     double *values, int stride)
 {
+  minmax_reset();
   using Kokkos::RangePolicy;
   using FixKokkosDetails::mirror_view_from_raw_host_array;
 
@@ -422,6 +427,7 @@ void FixAveHistoWeightKokkos::bin_particles(
     auto policy = RangePolicy<TagFixAveHistoWeight_BinParticles4,DeviceType>(0, n);
     Kokkos::parallel_reduce(policy, *this, reducer);
   }
+  minmax_fold();
 }
 
 /* ----------------------------------------------------------------------
@@ -431,6 +437,7 @@ void FixAveHistoWeightKokkos::bin_grid_cells(
     minmax_type& reducer,
     DAT::t_float_1d_strided d_vec)
 {
+  minmax_reset();
   using Kokkos::RangePolicy;
   using FixKokkosDetails::mirror_view_from_raw_host_array;
 
@@ -447,6 +454,7 @@ void FixAveHistoWeightKokkos::bin_grid_cells(
     auto policy = RangePolicy<TagFixAveHistoWeight_BinGridCells2,DeviceType>(0, n);
     Kokkos::parallel_reduce(policy, *this, reducer);
   }
+  minmax_fold();
 }
 
 /* ------------------------------------------------------------------------- */
