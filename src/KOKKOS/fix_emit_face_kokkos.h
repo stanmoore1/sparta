@@ -26,15 +26,10 @@ FixStyle(emit/face/kk,FixEmitFaceKokkos)
 #include "kokkos_base.h"
 #include "kokkos_copy.h"
 #include "particle_kokkos.h"
-#include "region_block_kokkos.h"
-#include "region_cylinder_kokkos.h"
-#include "region_plane_kokkos.h"
-#include "region_sphere_kokkos.h"
+#include "region_prim_kokkos.h"
 
 namespace SPARTA_NS {
 
-#define KOKKOS_MAX_REGION_PER_TYPE 2
-#define KOKKOS_MAX_TOT_REGION 10
 
 struct TagFixEmitFace_ninsert{};
 struct TagFixEmitFace_perform_task{};
@@ -48,6 +43,7 @@ class FixEmitFaceKokkos : public FixEmitFace {
   FixEmitFaceKokkos(class SPARTA *, int, char **);
   ~FixEmitFaceKokkos() override;
   void init() override;
+  void flatten_region();
   void perform_task() override;
   void perform_task_twopass() override { perform_task(); }
 
@@ -80,10 +76,14 @@ class FixEmitFaceKokkos : public FixEmitFace {
   double boltz,temp_thermal_mix;
 
   KKCopy<ParticleKokkos> particle_kk_copy;
-  KKCopy<RegBlockKokkos> regblock_kk_copy;
-  KKCopy<RegCylinderKokkos> regcylinder_kk_copy;
-  KKCopy<RegPlaneKokkos> regplane_kk_copy;
-  KKCopy<RegSphereKokkos> regsphere_kk_copy;
+  // region flattened to a device-resident postfix token stream; replaces
+  //   the per-style KKCopy members and the caps that went with them.
+  //   region_flag says whether there is a region at all -- nregion_token and
+  //   d_region_tokens are only meaningful when it is 1
+
+  tdual_region_token_1d k_region_tokens;
+  t_region_token_1d d_region_tokens;
+  int nregion_token;
 
   typedef Kokkos::DualView<Task*, DeviceType::array_layout, DeviceType> tdual_task_1d;
   typedef tdual_task_1d::t_dev t_task_1d;

@@ -1569,7 +1569,7 @@ template < int DIM, int SURF, int OPT > void Update::move()
         if (particles[i].flag != PDISCARD) {
           if (cells[icell].proc == me) {
             char str[128];
-            sprintf(str,
+            snprintf(str,sizeof(str),
                     "Particle %d on proc %d being sent to self "
                     "on step " BIGINT_FORMAT,
                     i,me,update->ntimestep);

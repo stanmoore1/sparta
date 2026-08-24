@@ -15,7 +15,7 @@ fix emit/surf command
 * mix-ID = ID of mixture to use when creating particles
 * group-ID = ID of surface group that emits particles
 * zero or more keyword/value pairs may be appended
-* keyword = *n* or *normal* or *nevery* or *perspecies* or *region* or *subsonic* or *mflow* or *custom*
+* keyword = *n* or *normal* or *nevery* or *perspecies* or *region* or *subsonic* or *mflow* or *custom* or *twopass*
   
   .. parsed-literal::
   
@@ -38,6 +38,7 @@ fix emit/surf command
        custom values = attribute s_name
          attribute = density or temperature or vstream or speed or fractions
          s_name = custom per-surf vector or array with name
+       twopass values = none
 
 
 
@@ -427,6 +428,16 @@ mixture.  This is determined by the :doc:`mixture <mixture>` command.
 It is the order the gas species names were listed when the mixture
 command was specified (one or more times).
 
+The *twopass* keyword does not require a value.  If used, the
+insertion procedure will loop over the insertion surface elements
+twice, the same as the KOKKOS package version of this fix does, so
+that it can reallocate memory efficiently, e.g. on a GPU.  If this
+keyword is used the non-KOKKOS and KOKKOS version will generate
+exactly the same set of particles, which makes debugging easier.  If
+the keyword is not used, the non-KOKKOS and KOKKOS runs will use
+random numbers differently and thus generate different particles,
+though they will be statistically similar.
+
 
 ----------
 
@@ -441,6 +452,32 @@ number of particles added on the most recent insertion step.  The
 second element is the cummulative total number added since the
 beginning of the run.  The 2nd value is initialized to zero each time
 a run is performed.
+
+----------
+
+
+Styles with a *kk* suffix are functionally the same as the
+corresponding style without the suffix.  They have been optimized to
+run faster, depending on your available hardware, as discussed in the
+:doc:`Accelerating SPARTA <Section_accelerate>` section of the manual.
+The accelerated styles take the same arguments and should produce the
+same results, except for different random number, round-off and
+precision issues.
+
+These accelerated styles are part of the KOKKOS package. They are only
+enabled if SPARTA was built with that package.  See the `Making SPARTA <Section_start.html#start_3>`_ section for more info.
+
+You can specify the accelerated styles explicitly in your input script
+by including their suffix, or you can use the `-suffix command-line switch <Section_start.html#start_7>`_ when you invoke SPARTA, or you can
+use the :doc:`suffix <suffix>` command in your input script.
+
+See the :doc:`Accelerating SPARTA <Section_accelerate>` section of the
+manual for more instructions on how to use the accelerated styles
+effectively.
+
+
+----------
+
 
 **Restrictions:**
 
@@ -464,9 +501,9 @@ the mean thermal velocity.
 **Default:**
 
 The keyword defaults are n = 0, normal = no, nevery = 1, perspecies =
-yes, region = none, no subsonic settings, no mflow settings.  For the
-*subsonic* and *mflow* keywords, the moving-average window defaults to
-0 (no smoothing).
+yes, region = none, no subsonic settings, no mflow settings, no
+twopass setting.  For the *subsonic* and *mflow* keywords, the
+moving-average window defaults to 0 (no smoothing).
 
 
 ----------

@@ -205,7 +205,7 @@ void Variable::set(int narg, char **arg)
       if (nlast <= 0) error->all(FLERR,"Illegal variable command");
       if (narg == 4 && strcmp(arg[3],"pad") == 0) {
         char digits[12];
-        sprintf(digits,"%d",nlast);
+        snprintf(digits,sizeof(digits),"%d",nlast);
         pad[nvar] = strlen(digits);
       } else pad[nvar] = 0;
     } else if (narg == 4 || (narg == 5 && strcmp(arg[4],"pad") == 0)) {
@@ -215,7 +215,7 @@ void Variable::set(int narg, char **arg)
         error->all(FLERR,"Illegal variable command");
       if (narg == 5 && strcmp(arg[4],"pad") == 0) {
         char digits[12];
-        sprintf(digits,"%d",nlast);
+        snprintf(digits,sizeof(digits),"%d",nlast);
         pad[nvar] = strlen(digits);
       } else pad[nvar] = 0;
     } else error->all(FLERR,"Illegal variable command");
@@ -269,7 +269,7 @@ void Variable::set(int narg, char **arg)
       data[nvar][0] = NULL;
       if (narg == 4) {
         char digits[12];
-        sprintf(digits,"%d",num[nvar]);
+        snprintf(digits,sizeof(digits),"%d",num[nvar]);
         pad[nvar] = strlen(digits);
       } else pad[nvar] = 0;
     }
@@ -722,11 +722,11 @@ char *Variable::retrieve(char *name)
 
   } else if (style[ivar] == LOOP || style[ivar] == ULOOP) {
     char result[16];
-    if (pad[ivar] == 0) sprintf(result,"%d",which[ivar]+1);
+    if (pad[ivar] == 0) snprintf(result,sizeof(result),"%d",which[ivar]+1);
     else {
       char padstr[16];
-      sprintf(padstr,"%%0%dd",pad[ivar]);
-      sprintf(result,padstr,which[ivar]+1);
+      snprintf(padstr,sizeof(padstr),"%%0%dd",pad[ivar]);
+      snprintf(result,sizeof(result),padstr,which[ivar]+1);
     }
     int n = strlen(result) + 1;
     delete [] data[ivar][0];
@@ -962,7 +962,7 @@ void Variable::internal_create(char *name, double value)
 {
   if (find(name) >= 0) {
     char str[128];
-    sprintf(str,"Creation of internal-style variable %s which already exists", name);
+    snprintf(str,sizeof(str),"Creation of internal-style variable %s which already exists", name);
     error->all(FLERR,str);
   }
 
@@ -977,7 +977,7 @@ void Variable::internal_create(char *name, double value)
 
   if (!utils::is_id(name)) {
     char str[128];
-    sprintf(str,"Variable name %s must have only letters, numbers, or underscores", name);
+    snprintf(str,sizeof(str),"Variable name %s must have only letters, numbers, or underscores", name);
     error->all(FLERR,str);
   }
 
@@ -3246,7 +3246,7 @@ int Variable::int_between_brackets(char *&ptr, int varallow, const char *caller)
     while (*ptr && *ptr != ']') {
       if (!isdigit(*ptr)) {
         char str[128];
-        sprintf(str,"Non digit character between brackets in %s",caller);
+        snprintf(str,sizeof(str),"Non digit character between brackets in %s",caller);
         error->all(FLERR,str);
       }
       ptr++;
@@ -3255,12 +3255,12 @@ int Variable::int_between_brackets(char *&ptr, int varallow, const char *caller)
 
   if (*ptr != ']') {
     char str[128];
-    sprintf(str,"Mismatched brackets in %s",caller);
+    snprintf(str,sizeof(str),"Mismatched brackets in %s",caller);
     error->all(FLERR,str);
   }
   if (ptr == start) {
     char str[128];
-    sprintf(str,"Empty brackets in %s",caller);
+    snprintf(str,sizeof(str),"Empty brackets in %s",caller);
     error->all(FLERR,str);
   }
 
@@ -3289,7 +3289,7 @@ int Variable::int_between_brackets(char *&ptr, int varallow, const char *caller)
 
   if (index == 0) {
     char str[128];
-    sprintf(str,"Index between brackets must be positive in %s",caller);
+    snprintf(str,sizeof(str),"Index between brackets must be positive in %s",caller);
     error->all(FLERR,str);
   }
   return index;
@@ -4617,7 +4617,7 @@ VarReader::VarReader(SPARTA *sparta, char *, char *file, int flag) :
     fp = fopen(file,"r");
     if (fp == NULL) {
       char str[128];
-      sprintf(str,"Cannot open file variable file %s",file);
+      snprintf(str,sizeof(str),"Cannot open file variable file %s",file);
       error->one(FLERR,str);
     }
   } else fp = NULL;

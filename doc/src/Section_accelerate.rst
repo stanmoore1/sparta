@@ -593,6 +593,34 @@ non-Kokkos fix or compute, or performing I/O for :doc:`stat <stats>` or
 :doc:`dump <dump>` output will cause data to be copied back to the CPU
 incurring a performance penalty.
 
+NOTE: Most non-Kokkos styles degrade this way, costing performance but
+still producing correct results.  A few, however, are rejected outright
+and will stop the run, rather than falling back to the host.  Those
+restrictions are documented on the page for the style that imposes them.
+
+NOTE: A run may define any number of instances of the styles that the
+device kernels capture -- :doc:`surf_collide <surf_collide>`,
+:doc:`surf_react <surf_react>`, and the per-event tally computes such as
+:doc:`compute boundary <compute_boundary>`, :doc:`compute surf <compute_surf>`,
+:doc:`compute isurf/grid <compute_isurf_grid>`,
+:doc:`compute react/boundary <compute_react_boundary>`,
+:doc:`compute react/surf <compute_react_surf>` and
+:doc:`compute react/isurf/grid <compute_react_isurf_grid>`.  Each is held in a
+runtime-sized device buffer, so there is no compile-time cap.  The one
+remaining exception is that at most two :doc:`compute surf <compute_surf>`
+instances may tally for a single :doc:`fix emit/surf <fix_emit_surf>`;
+exceeding that stops the run with an explanatory message.
+
+NOTE: Building with -DSPARTA_KOKKOS_FIXED_LISTS instead holds those
+styles in fixed-size arrays inside the kernel functor, which restores
+the former caps: at most two instances of each
+:doc:`surf_react <surf_react>` style, at most four surf react models in
+total, at most two active instances of each per-event tally compute
+listed above, and at most four gas-phase tally computes.  The two
+layouts produce identical results; which is faster is a
+hardware-dependent question, so both are kept so they can be compared
+by rebuilding.
+
 **Run with the KOKKOS package by editing an input script:**
 
 Alternatively the effect of the "-sf" or "-pk" switches can be

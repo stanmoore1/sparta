@@ -410,14 +410,14 @@ void PythonImpl::invoke_function(int ifunc, char *result, double *dvalue)
       if (dvalue) *dvalue = (double) PY_INT_AS_LONG(pValue);
       else {
         char value[128];
-        sprintf(value, BIGINT_FORMAT, (bigint) PY_INT_AS_LONG(pValue));
+        snprintf(value,sizeof(value), BIGINT_FORMAT, (bigint) PY_INT_AS_LONG(pValue));
         strncpy(result, value, Variable::VALUELENGTH - 1);
       }
     } else if (otype == DOUBLE) {
       if (dvalue) *dvalue = PyFloat_AsDouble(pValue);
       else {
         char value[128];
-        sprintf(value, "%.15g", PyFloat_AsDouble(pValue));
+        snprintf(value,sizeof(value), "%.15g", PyFloat_AsDouble(pValue));
         strncpy(result, value, Variable::VALUELENGTH - 1);
       }
     } else if (otype == STRING) {
@@ -576,7 +576,7 @@ int PythonImpl::create_entry(char *name, int ninput, int noutput,
         }
         if (!input->variable->internal_style(ivar)) {
           char str[128];
-          sprintf(str,"Variable %s for python command is invalid style",vname);
+          snprintf(str,sizeof(str),"Variable %s for python command is invalid style",vname);
           error->all(FLERR, str);
         }
       } else {
@@ -599,7 +599,7 @@ int PythonImpl::create_entry(char *name, int ninput, int noutput,
         }
         if (!input->variable->internal_style(ivar)) {
           char str[128];
-          sprintf(str,"Variable %s for python command is invalid style",vname);
+          snprintf(str,sizeof(str),"Variable %s for python command is invalid style",vname);
           error->all(FLERR, str);
         }
       } else {
@@ -613,7 +613,7 @@ int PythonImpl::create_entry(char *name, int ninput, int noutput,
         pfuncs[ifunc].svalue[i] = utils::strdup(istr[i] + 2);
       } else if (utils::strmatch(istr[i], "^iv_")) {
         char str[128];
-        sprintf(str,"Input argument %s cannot be internal variable with string format",istr[i]);
+        snprintf(str,sizeof(str),"Input argument %s cannot be internal variable with string format",istr[i]);
         error->all(FLERR, str);
       } else {
         pfuncs[ifunc].ivarflag[i] = 0;
