@@ -1175,7 +1175,11 @@ void ParticleKokkos::post_weight_device()
 
   // per-particle output count
 
-  DAT::t_int_1d d_count("post_weight:count",nold);
+  // plain Kokkos::View, not DAT::t_int_1d: offset_scan() takes
+  //   Kokkos::View<int*,Device> and the DAT alias does not deduce against it
+  //   (see the same note on FixEmitFaceKokkos::d_keep)
+
+  Kokkos::View<int*, DeviceType> d_count("post_weight:count",nold);
 
   Kokkos::parallel_for(nold, KOKKOS_LAMBDA(const int i) {
     const int icell = d_particles_l[i].icell;
