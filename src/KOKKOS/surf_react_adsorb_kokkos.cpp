@@ -521,8 +521,13 @@ void SurfReactAdsorbKokkos::tally_update()
   //   "surf:dvector ... this sync_device has nothing to copy".
   //   Go through the SurfKokkos wrapper, not the dual views directly, so the
   //   mask reaches the custom arrays.
+  //   Only on a sync step: SurfReactAdsorb::tally_update() returns at its top
+  //   on every other one (surf_react_adsorb.cpp:1194), so nothing has touched
+  //   the custom arrays and claiming them would make the next
+  //   sync(Device,CUSTOM_MASK) re-upload the owned *and* spread arrays for
+  //   nothing.
 
-  ((SurfKokkos *) surf)->modify(Host,CUSTOM_MASK);
+  if (sync_step) ((SurfKokkos *) surf)->modify(Host,CUSTOM_MASK);
 
   // PS chemistry may have appended particles on the host
 
