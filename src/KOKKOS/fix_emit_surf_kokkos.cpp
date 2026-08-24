@@ -130,13 +130,13 @@ FixEmitSurfKokkos::~FixEmitSurfKokkos()
   rand_pool.destroy();
 #endif
 
-  // tasks is the host side of k_tasks, and the last claim on it may have been
-  //   modify_device() (line 887).  Reading path/fracarea to delete them, and
-  //   writing the pointer fields, without first owning the host side is a
-  //   stale access -- poison mode traps all four of these lines on
-  //   examples/emit/in.emit.surf.mflow.  Claim the host before touching it.
+  // the loop below reads and writes the host side of k_tasks, which the
+  // emission kernels leave claimed for the device.  path and fracarea are host
+  // allocations the device never writes, so the host values are the right ones
+  // and no copy back is wanted here; say so rather than reading a side the
+  // coherence state calls stale.
 
-  k_tasks.sync_host();
+  k_tasks.clear_sync_state();
 
   for (int i = 0; i < ntaskmax; i++) {
     tasks[i].ntargetsp = NULL;
@@ -356,9 +356,14 @@ void FixEmitSurfKokkos::perform_task()
   //   see Bird 1994, p 259, eq 12.5
 
   // copy needed task data to device
+  // the kernels below read d_tasks whether or not perspecies is set, so tasks
+  //   is synced unconditionally and ntargetsp in addition, the same shape as
+  //   the second copy further down this routine.  The if/else this replaces
+  //   left tasks unsynced under perspecies and was only harmless because that
+  //   later copy covered it
 
+  k_tasks.sync_device();
   if (perspecies) k_ntargetsp.sync_device();
-  else k_tasks.sync_device();
 
   SurfKokkos* surf_kk = (SurfKokkos*) surf;
   surf_kk->sync(Device,ALL_MASK);

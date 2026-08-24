@@ -5071,18 +5071,7 @@ void CollideVSSKokkos::grow_percell(int n)
   if (nglocal+n < nglocalmax || !ngroups) return;
   while (nglocal+n >= nglocalmax) nglocalmax += DELTAGRID;
 
-  // bring whichever side is currently newer into agreement, then let the
-  //   resize keep it.  do NOT route this through sync(Device,ALL_MASK): under
-  //   auto_sync that first calls modified(Host,ALL_MASK), asserting the host
-  //   is the authority.  it is not here -- grow_percell() runs from the grid
-  //   refinement hooks (add_grid_one() <- Grid::surf2grid_one() <-
-  //   AdaptGrid::perform_refine()), outside the per-step collide sync
-  //   discipline, so the collision kernels' vremax updates are still only on
-  //   the device.  claiming the host would make the copy below overwrite them
-  //   with whatever the host last held
-
-  k_vremax.sync_device();
-  if (remainflag) k_remain.sync_device();
+  this->sync(Device,ALL_MASK); // force resize on device
 
   k_vremax.resize(Kokkos::view_alloc(Kokkos::WithoutInitializing),
                   nglocalmax,ngroups,ngroups);
@@ -5101,8 +5090,23 @@ void CollideVSSKokkos::grow_percell(int n)
 void CollideVSSKokkos::sync(ExecutionSpace space, unsigned int mask)
 {
   if (space == Device) {
-    if (sparta->kokkos->auto_sync)
+    if (sparta->kokkos->auto_sync) {
+      // Automatic syncing exists because non-Kokkos code may have written the
+      // plain vremax/remain pointers, so the host is declared modified and
+      // copied down.  Declaring it while the device still holds a claim is
+      // both a lie -- the host copy is the older one -- and fatal: Kokkos
+      // aborts a DualView claimed on both sides at once.  collisions() claims
+      // the device every step and nothing calls sync(Host) in the run loop, so
+      // the claim stands for the whole run; the first sync(Device) made with
+      // auto_sync on then aborts.  fix adapt is exactly that caller -- it sets
+      // kokkos_flag = 0, which makes ModifyKokkos turn auto_sync on around
+      // end_of_step(), and CollideVSSKokkos::grow_percell() syncs to the
+      // device from inside AdaptGrid::perform_refine().  Refresh the host
+      // first: a no-op when the device is clean, and the copy the host is owed
+      // when it is not.
+      sync(Host,mask);
       modified(Host,mask);
+    }
     if (mask & VREMAX_MASK) k_vremax.sync_device();
     if (remainflag)
       if (mask & REMAIN_MASK) k_remain.sync_device();

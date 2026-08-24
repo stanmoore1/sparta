@@ -223,6 +223,9 @@ void FixAveHistoWeightKokkos::calculate_weights()
     if (!fix->kokkos_flag)
       error->all(FLERR,"Cannot (yet) use non-Kokkos fixes with fix ave/histo/weight/kk");
     KokkosBase* fixKKBase = dynamic_cast<KokkosBase*>(fix);
+    // a fix keeps its per-grid output between invocations and grid migration
+    // can leave it current on the host alone, so ask for the device copy
+    if (fixKKBase) fixKKBase->sync_pergrid_device_kokkos();
 
     if (kind == GLOBAL && mode == SCALAR) {
       if (j == 0) {
@@ -251,7 +254,6 @@ void FixAveHistoWeightKokkos::calculate_weights()
       }
 
     } else if (kind == PERGRID) {
-      fixKKBase->sync_per_grid_device();
       if (j == 0) {
         d_weights = fixKKBase->d_vector_grid;
       } else if (fixKKBase->d_array_grid.data()) {

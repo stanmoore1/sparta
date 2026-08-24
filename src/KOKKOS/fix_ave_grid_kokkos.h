@@ -51,7 +51,7 @@ class FixAveGridKokkos : public FixAveGrid, public KokkosBase {
   void copy_grid_one(int, int);
   void add_grid_one();
 
-  void sync_per_grid_device();
+  void sync_pergrid_device_kokkos();
 
   // k_tally crosses between host and device only when the side in use
   //   actually changes.  Each host-side value used to pull the whole

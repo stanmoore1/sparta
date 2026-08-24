@@ -112,6 +112,15 @@ void ComputeSurfKokkos::init_normflux()
 
 void ComputeSurfKokkos::clear()
 {
+  // tallyinfo() compresses the tally list in place on the host and claims the
+  // host for it.  A new cycle starts here: the device copy below is about to be
+  // zeroed and refilled by the tally kernels, so the two are deliberately
+  // parted and neither owes the other a copy.  Without this the modify_device()
+  // in post_surf_tally() would meet the outstanding host claim and abort.
+
+  k_tally2surf.clear_sync_state();
+  k_array_surf_tally.clear_sync_state();
+
   // reset all set surf2tally values to -1
   // called by Update at beginning of timesteps surf tallying is done
 
@@ -275,17 +284,13 @@ int ComputeSurfKokkos::tallyinfo(surfint *&ptr)
     tally2surf[istart] = tally2surf[iend];
   }
 
-  // the compression above rewrites the host side of both dual views in place
-  //   and the caller consumes the host pointer immediately.  Leaving the pair
-  //   in sync would let the next post_surf_tally()'s modify_device() discard
-  //   the compressed rows -- harmless where both sides are one allocation, a
-  //   silent loss on a GPU, and reported by the watch detector as
-  //   "written, never claimed, and is now lost".  The two sides are
-  //   deliberately different from here until the next clear(), which is what
-  //   clear_sync_state() declares
+  // the compression above rewrote both arrays on the host.  Claim it: the dense
+  // list is what every consumer reads, and an unclaimed write is discarded by
+  // the next sync_host() or by the realloc in init_normflux(), which resizes
+  // whichever side the counters call newer.
 
-  k_tally2surf.clear_sync_state();
-  k_array_surf_tally.clear_sync_state();
+  k_tally2surf.modify_host();
+  k_array_surf_tally.modify_host();
 
   return ntally;
 }

@@ -26,6 +26,18 @@ class KokkosBase {
 
   // Compute
   virtual void compute_per_grid_kokkos() {}
+
+  // Bring this style's per-grid output up to date on the device.
+  //
+  // d_vector_grid and d_array_grid below are read by other Kokkos styles --
+  // compute lambda/grid, compute dt/grid, fix ave/histo and the rest all take
+  // the handle straight out of the producer and launch a kernel on it.  A
+  // compute is asked to recompute first, so its device copy is always fresh; a
+  // fix is not, and fix ave/grid keeps its per-grid arrays on the host while
+  // grid adaptation moves cells between them, leaving the device holding the
+  // pre-migration values.  A style that can be in that position overrides this
+  // and the reader calls it before it reads.
+  virtual void sync_pergrid_device_kokkos() {}
   virtual int query_tally_grid_kokkos(DAT::t_float_2d_lr&) {return 0;}
   virtual void post_process_grid_kokkos(int, int, DAT::t_float_2d_lr, int *,
                                    DAT::t_float_1d_strided) {}
@@ -38,17 +50,6 @@ class KokkosBase {
   DAT::t_float_2d_lr d_array_particle;   // Kokkos version of per-particle array
 
   DAT::tdual_float_2d_lr k_array;    // Kokkos DualView of global array
-
-  // publish this style's per-grid output (d_vector_grid / d_array_grid) to
-  //   the device.  a compute regenerates its per-grid output from scratch on
-  //   every invocation, so its device side is always current and the default
-  //   no-op is right.  a fix does not: its output persists across steps and
-  //   the grid migration hooks (pack/unpack/copy/add_grid_one) edit it on the
-  //   host, leaving the device side holding pre-migration rows.  a consumer
-  //   that reads d_vector_grid / d_array_grid in a kernel must call this
-  //   first, or it sees stale values for the rest of the step in which a
-  //   fix adapt / fix balance moved cells
-  virtual void sync_per_grid_device() {}
 
   // Region
   virtual void match_all_kokkos(DAT::tdual_int_1d) {}

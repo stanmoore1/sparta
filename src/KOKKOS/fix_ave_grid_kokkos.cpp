@@ -278,7 +278,7 @@ void FixAveGridKokkos::end_of_step()
     } else if (which[m] == FIX) {
       Fix *ifix = modify->fix[n];
       KokkosBase *fixKKBase = dynamic_cast<KokkosBase*>(ifix);
-      if (fixKKBase) fixKKBase->sync_per_grid_device();
+      if (fixKKBase) fixKKBase->sync_pergrid_device_kokkos();
       k = umap[m][0];
 
       if (j == 0) {
@@ -688,22 +688,28 @@ void FixAveGridKokkos::add_grid_one()
 }
 
 /* ----------------------------------------------------------------------
-   publish the averaged per-grid output to the device for a downstream
-   consumer (compute lambda/grid/kk, compute dt/grid/kk, another fix
-   ave/grid/kk, ...).  end_of_step() leaves both sides valid, but the grid
-   migration hooks above run afterwards in the same step whenever fix adapt
-   or fix balance moves cells, and they edit the host copy only.  a consumer
-   reading d_vector_grid / d_array_grid in a kernel would then get the
-   pre-migration rows, so it calls this first.
+   bring the per-grid output up to date on the device.
+
+   The migration hooks above leave vector_grid/array_grid current on the host
+   only, and end_of_step() is what normally refreshes the device.  Another
+   Kokkos style can read this fix's output before then: fix adapt invokes
+   compute lambda/grid from AdaptGrid::candidates_coarsen(), which is after
+   refinement has already migrated cells, and that compute launches a kernel
+   straight on d_array_grid.  Without this the kernel reads the values the
+   cells held before the migration.
+
    PERGRIDSURF keeps its per-cell arrays in host memory and allocates no
-   device views, so there is nothing to publish
+   device views, so there is nothing to publish.
 ------------------------------------------------------------------------- */
 
-void FixAveGridKokkos::sync_per_grid_device()
+void FixAveGridKokkos::sync_pergrid_device_kokkos()
 {
   if (flavor == PERGRIDSURF) return;
 
   pergrid_sync(Device);
+
+  // the consumer reads the cached handles, so re-point them at the views
+  //   pergrid_sync() just refreshed
 
   if (nvalues == 1) d_vector_grid = k_vector_grid.view_device();
   else d_array_grid = k_array_grid.view_device();
