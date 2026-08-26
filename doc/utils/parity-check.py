@@ -21,6 +21,20 @@ it by running txt2html over the .txt sources of the commit being compared
 against, rather than reusing the .html committed next to them: two of those
 had drifted from their own sources by the time of the migration, and a
 baseline regenerated from the branch's own edited sources proves nothing.
+
+txt2html writes the page to stdout, so the redirect is the whole recipe --
+and getting it wrong is quiet, because the .html committed beside the .txt
+is right there to be picked up instead:
+
+    git archive <commit> doc | tar x -C /tmp/base-src
+    cd /tmp/base-src/doc && rm -f *.html
+    for f in *.txt; do txt2html "$f" > /tmp/base/"${f%.txt}".html; done
+    cp -r JPG Eqs /tmp/base/
+
+The "rm -f *.html" is not tidiness.  Without it a mistake in the loop
+leaves the committed pages sitting in the directory, and the check then
+compares the new manual against those, which is the one thing this
+baseline exists to avoid.
 """
 import argparse
 import collections
