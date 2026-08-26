@@ -35,11 +35,18 @@ src                        source files
 tools                      pre- and post-processing tools
 
 The manual is built from reStructuredText sources in doc/src with
-Sphinx.  To build it:
+Sphinx, which is installed into a virtualenv on the first build, so the
+only prerequisite is a python3 with venv.  The targets are:
 
-make -C doc html          the SPARTA manual, in doc/html
+make -C doc html          the manual, in doc/html
+make -C doc pdf           doc/html/Manual.pdf (needs latexmk and pdflatex)
+make -C doc fasthtml      quick per-page preview, in doc/fasthtml (needs
+                          pandoc); "make -C doc fasthtml/read_surf.html"
+                          rebuilds just that page, for checking an edit
+make -C doc check         verify every internal link and anchor resolves
 
-Then point your browser at any of these files to get started:
+"make -C doc" on its own lists these with the rest.  Then point your
+browser at any of these files to get started:
 
 doc/html/Manual.html	   the SPARTA manual
 doc/html/Section_intro.html   hi-level introduction to SPARTA
