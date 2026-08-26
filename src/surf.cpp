@@ -314,7 +314,7 @@ void Surf::init()
 
   if (allflag) {
     char str[64];
-    sprintf(str,BIGINT_FORMAT
+    snprintf(str,sizeof(str),BIGINT_FORMAT
             " surface elements with invalid type <= 0",allflag);
     error->all(FLERR,str);
   }
@@ -338,7 +338,7 @@ void Surf::init()
 
     if (allflag) {
       char str[64];
-      sprintf(str,BIGINT_FORMAT
+      snprintf(str,sizeof(str),BIGINT_FORMAT
               " surface elements not assigned to a collision model",allflag);
       error->all(FLERR,str);
     }
@@ -363,7 +363,7 @@ void Surf::init()
 
     if (allflag) {
       char str[128];
-      sprintf(str,BIGINT_FORMAT " surface elements with reaction model, "
+      snprintf(str,sizeof(str),BIGINT_FORMAT " surface elements with reaction model, "
               "but invalid collision model",allflag);
       error->all(FLERR,str);
     }
@@ -392,7 +392,7 @@ void Surf::init()
 
     if (allflag) {
       char str[128];
-      sprintf(str,BIGINT_FORMAT " transparent surface elements "
+      snprintf(str,sizeof(str),BIGINT_FORMAT " transparent surface elements "
               "with invalid collision model or reaction model",allflag);
       error->all(FLERR,str);
     }
@@ -677,7 +677,7 @@ void Surf::add_surfs(int replace, int ncount,
   MPI_Allreduce(&flag,&flagall,1,MPI_INT,MPI_SUM,world);
   if (flagall) {
     char str[128];
-    sprintf(str,"Missing read_surf IDs = %d",flagall);
+    snprintf(str,sizeof(str),"Missing read_surf IDs = %d",flagall);
     error->all(FLERR,str);
   }
 }
@@ -1141,7 +1141,7 @@ void Surf::check_watertight_2d_all()
 
   if (ndup) {
     char str[128];
-    sprintf(str,"Watertight check failed with %d duplicate points",ndup);
+    snprintf(str,sizeof(str),"Watertight check failed with %d duplicate points",ndup);
     error->all(FLERR,str);
   }
 
@@ -1164,7 +1164,7 @@ void Surf::check_watertight_2d_all()
 
   if (nbad) {
     char str[128];
-    sprintf(str,"Watertight check failed with %d unmatched points",nbad);
+    snprintf(str,sizeof(str),"Watertight check failed with %d unmatched points",nbad);
     error->all(FLERR,str);
   }
 }
@@ -1276,7 +1276,7 @@ int Surf::rendezvous_watertight_2d(int n, char *inbuf, int &flag, int *&proclist
   MPI_Allreduce(&ndup,&alldup,1,MPI_INT,MPI_SUM,world);
   if (alldup) {
     char str[128];
-    sprintf(str,"Watertight check failed with %d duplicate points",alldup);
+    snprintf(str,sizeof(str),"Watertight check failed with %d duplicate points",alldup);
     error->all(FLERR,str);
   }
 
@@ -1301,7 +1301,7 @@ int Surf::rendezvous_watertight_2d(int n, char *inbuf, int &flag, int *&proclist
   MPI_Allreduce(&nbad,&allbad,1,MPI_INT,MPI_SUM,world);
   if (allbad) {
     char str[128];
-    sprintf(str,"Watertight check failed with %d unmatched points",allbad);
+    snprintf(str,sizeof(str),"Watertight check failed with %d unmatched points",allbad);
     error->all(FLERR,str);
   }
 
@@ -1395,7 +1395,7 @@ void Surf::check_watertight_3d_all()
 
   if (ndup) {
     char str[128];
-    sprintf(str,"Watertight check failed with %d duplicate edges",ndup);
+    snprintf(str,sizeof(str),"Watertight check failed with %d duplicate edges",ndup);
     error->all(FLERR,str);
   }
 
@@ -1416,7 +1416,7 @@ void Surf::check_watertight_3d_all()
 
   if (nbad) {
     char str[128];
-    sprintf(str,"Watertight check failed with %d unmatched edges",nbad);
+    snprintf(str,sizeof(str),"Watertight check failed with %d unmatched edges",nbad);
     error->all(FLERR,str);
   }
 }
@@ -1579,7 +1579,7 @@ int Surf::rendezvous_watertight_3d(int n, char *inbuf, int &flag, int *&proclist
   alldup /= 2;              // avoid double counting
   if (alldup) {
     char str[128];
-    sprintf(str,"Watertight check failed with %d duplicate edges",alldup);
+    snprintf(str,sizeof(str),"Watertight check failed with %d duplicate edges",alldup);
     error->all(FLERR,str);
   }
 
@@ -1603,7 +1603,7 @@ int Surf::rendezvous_watertight_3d(int n, char *inbuf, int &flag, int *&proclist
   allbad /= 2;              // avoid double counting
   if (allbad) {
     char str[128];
-    sprintf(str,"Watertight check failed with %d unmatched edges",allbad);
+    snprintf(str,sizeof(str),"Watertight check failed with %d unmatched edges",allbad);
     error->all(FLERR,str);
   }
 
@@ -1684,7 +1684,7 @@ void Surf::check_point_inside(int old)
 
   if (nbadall) {
     char str[128];
-    sprintf(str,"%d surface points are not inside simulation box",
+    snprintf(str,sizeof(str),"%d surface points are not inside simulation box",
             nbadall);
     error->all(FLERR,str);
   }
@@ -1741,14 +1741,14 @@ void Surf::check_point_near_surf_2d()
   MPI_Allreduce(&nerror,&all,1,MPI_INT,MPI_SUM,world);
   if (all) {
     char str[128];
-    sprintf(str,"Surface check failed with %d points on lines",all);
+    snprintf(str,sizeof(str),"Surface check failed with %d points on lines",all);
     error->all(FLERR,str);
   }
 
   MPI_Allreduce(&nwarn,&all,1,MPI_INT,MPI_SUM,world);
   if (all) {
     char str[128];
-    sprintf(str,"Surface check found %d points nearly on lines",all);
+    snprintf(str,sizeof(str),"Surface check found %d points nearly on lines",all);
     if (comm->me == 0) error->warning(FLERR,str);
   }
 }
@@ -1810,14 +1810,14 @@ void Surf::check_point_near_surf_3d()
   MPI_Allreduce(&nerror,&all,1,MPI_INT,MPI_SUM,world);
   if (all) {
     char str[128];
-    sprintf(str,"Surface check failed with %d points on triangles",all);
+    snprintf(str,sizeof(str),"Surface check failed with %d points on triangles",all);
     error->all(FLERR,str);
   }
 
   MPI_Allreduce(&nwarn,&all,1,MPI_INT,MPI_SUM,world);
   if (all) {
     char str[128];
-    sprintf(str,"Surface check found %d points nearly on triangles",all);
+    snprintf(str,sizeof(str),"Surface check found %d points nearly on triangles",all);
     if (comm->me == 0) error->warning(FLERR,str);
   }
 }

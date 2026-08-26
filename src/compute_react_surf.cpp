@@ -151,7 +151,7 @@ void ComputeReactSurf::init()
 
   if (flagall && comm->me == 0) {
     char str[128];
-    sprintf(str,
+    snprintf(str,sizeof(str),
             "Compute react/surf " BIGINT_FORMAT
             " surfs are not assigned to surf react model",flagall);
     error->warning(FLERR,str);

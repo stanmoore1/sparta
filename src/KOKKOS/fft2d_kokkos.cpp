@@ -66,6 +66,10 @@ FFT2dKokkos<DeviceType>::FFT2dKokkos(SPARTA *sparta, MPI_Comm comm, int nfast, i
   //  recursive function calls in KISS FFT and the default per-thread
   //  stack size on GPUs needs to be increased to prevent stack overflows
   //  for reasonably sized FFTs
+  // NOTE: only CUDA is handled below.  HIP has the same recursion and the
+  //  same default-stack problem, and hipDeviceSetLimit(hipLimitStackSize,...)
+  //  is the equivalent call, but it is untested here -- a KISS FFT large
+  //  enough to recurse deeply may still overflow the stack on AMD GPUs.
   #if defined (KOKKOS_ENABLE_CUDA)
     size_t stack_size;
     cudaDeviceGetLimit(&stack_size,cudaLimitStackSize);

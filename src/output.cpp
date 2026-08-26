@@ -297,10 +297,15 @@ void Output::write(bigint ntimestep)
 
   if (next_restart == ntimestep) {
     if (next_restart_single == ntimestep) {
-      char *file = new char[strlen(restart1) + 16];
+      // the length must be taken before *ptr = '\0' truncates restart1 at
+      //   the wildcard.  taken after, it is the prefix length, not the buffer
+      //   size, and snprintf silently drops the tail of the name
+
+      int nfile = strlen(restart1) + 16;
+      char *file = new char[nfile];
       char *ptr = strchr(restart1,'*');
       *ptr = '\0';
-      snprintf(file,strlen(restart1)+16,"%s" BIGINT_FORMAT "%s",restart1,ntimestep,ptr+1);
+      snprintf(file,nfile,"%s" BIGINT_FORMAT "%s",restart1,ntimestep,ptr+1);
       *ptr = '*';
       if (last_restart != ntimestep) restart->write(file);
       delete [] file;
@@ -383,10 +388,14 @@ void Output::write_dump(bigint ntimestep)
 void Output::write_restart(bigint ntimestep)
 {
   if (restart_flag_single) {
-    char *file = new char[strlen(restart1) + 16];
+    // see the note in Output::write(): the length must be taken before the
+    //   wildcard is truncated away
+
+    int nfile = strlen(restart1) + 16;
+    char *file = new char[nfile];
     char *ptr = strchr(restart1,'*');
     *ptr = '\0';
-    snprintf(file,strlen(restart1)+16,"%s" BIGINT_FORMAT "%s",restart1,ntimestep,ptr+1);
+    snprintf(file,nfile,"%s" BIGINT_FORMAT "%s",restart1,ntimestep,ptr+1);
     *ptr = '*';
     restart->write(file);
     delete [] file;

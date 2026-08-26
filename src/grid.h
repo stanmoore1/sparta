@@ -289,7 +289,7 @@ class Grid : protected Pointers {
   bigint pack_restart(char *);
   bigint unpack_restart(char *);
 
-  bigint memory_usage();
+  virtual bigint memory_usage();
 
   void debug();
 
