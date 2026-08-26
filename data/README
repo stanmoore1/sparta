@@ -23,7 +23,9 @@ are read by the read_surf command.
 
 Files that end in ".stl" are STL-formatted surface files which can be
 converted to SPARTA formatted surface files via the stl2surf.py tool
-in the tools directory.
+in the tools directory.  They can also be read directly by the region
+command with its mesh style, which defines the region as the volume
+enclosed by the surface.
 
 Files that end in ".surf" list reactions for surface chemistry
 and are read by the surf_react command.
@@ -36,5 +38,5 @@ species.vib = doc/species.html
 vss/vhs/hs = doc/collide.html
 tce = doc/react.html
 sdata = doc/read_surf.html
-stl = doc/Section_tools.html#stl2surf
+stl = doc/Section_tools.html#stl2surf and doc/region.html
 surf = doc/surf_react.html
