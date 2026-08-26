@@ -409,7 +409,7 @@ This is indicated by additional letters in parenthesis: k = KOKKOS.
 "custom"_fix_custom.html,
 "dt/reset (k)"_fix_dt_reset.html,
 "emit/face (k)"_fix_emit_face.html,
-"emit/face/file"_fix_emit_face_file.html,
+"emit/face/file (k)"_fix_emit_face_file.html,
 "emit/surf (k)"_fix_emit_surf.html,
 "field/grid (k)"_fix_field_grid.html,
 "field/particle (k)"_fix_field_particle.html,
