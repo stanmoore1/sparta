@@ -1,42 +1,48 @@
 ################################################################################
-# SPARTA logo, idea 2: a piston shock, filmed in the piston's frame
+# SPARTA logo, idea 2: a flat piston strikes the emblem, then holds
 #
-# The gas streams left at 2000 m/s into a specular wall at xlo, exactly as the
-# original explode does.  It starts at zero temperature, so nothing diffuses:
-# the emblem stays pixel-crisp until the shock reaches it, and the only random
-# motion in the picture is what the shock itself creates.  The camera is panned left at that same speed, so in
-# the image the emblem sits still and the wall drives into it: a flat piston
-# hitting the left edge, with the shock it launches running left to right
-# through the logo ahead of it.
+# The piston is a rigid slab driven by fix rigid at a constant 800 m/s.  Its
+# mass is set enormous compared with the gas it sweeps, so the gas cannot slow
+# it: the strike is at constant speed, not a deceleration.  After 300 steps the
+# fix is removed and the slab stops dead and stays put, while the shock it
+# launched runs on through the emblem by itself.
 #
-# Filming it this way rather than moving a surface with fix move/surf keeps the
-# wall a box boundary, which is both exact and far cheaper.
+# fix rigid is what makes this possible.  fix move/surf cannot: SPARTA finds
+# particle-surface collisions along the particle's own path, so a slab swept
+# across a gas at rest registers no collisions (nscoll stays 0) and the
+# particles it overruns are simply deleted - 42k of them, a clean wipe with no
+# compression.  fix rigid on this branch does swept collision coverage and
+# deletes nothing in the body's path.
 #
-# Note: surf_collide piston is Bird's *subsonic pressure* BC, a wall receding
-# from the incident particle, so it is not what drives a compression.
+# The gas is at essentially zero temperature, so nothing diffuses ahead of the
+# front and the emblem stays pixel-crisp until the shock reaches it.  What blur
+# there is behind the front is the shock's own heating, which is real: a strong
+# shock turns directed energy into heat, and the post-shock temperature goes as
+# the square of the piston speed.  800 m/s leaves ~600 K rather than the
+# ~8000 K a 3000 m/s piston would, which is why it is this slow.
 ################################################################################
 
 dimension           2
 seed                12345
 global              gridcut 0.0 comm/sort yes
-boundary            so rr p
+boundary            oo rr p
+
+create_box          -600e-1 1800e-1 -600e-1 600e-1 -0.5 0.5
+create_grid         200 100 1
+balance_grid        rcb cell
 
 include             emblem.regions
 
-surf_collide        wall specular
-bound_modify        xlo collide wall
+read_surf           piston.surf invert group piston
+surf_collide        face specular
+surf_modify         all collide face
 
 species             logo.species N O B Nh Oh
 global              fnum 8.4e16
 
-variable            vp equal -2000.0
-variable            dt equal 1.0e-4
-# camera centre tracks the unshocked material, as a fraction of box width
-variable            cx equal (v_vp*step*v_dt+60.0)/120.0
-
-mixture             gold N nrho 1.17e18 temp 0.0 vstream ${vp} 0.0 0.0
-mixture             red  O nrho 1.17e18 temp 0.0 vstream ${vp} 0.0 0.0
-mixture             bg   B nrho 1.17e18 temp 0.0 vstream ${vp} 0.0 0.0
+mixture             gold N nrho 1.17e18 temp 0.001
+mixture             red  O nrho 1.17e18 temp 0.001
+mixture             bg   B nrho 1.17e18 temp 0.001
 
 create_particles    gold n 0 region goldletters
 create_particles    gold n 0 region swirlsIn
@@ -46,25 +52,35 @@ create_particles    red  n 0 region redcenter
 create_particles    red  n 0 region redband
 create_particles    bg   n 0 region freefield
 
-# the whole field streams left, so feed it from the right to keep frame full
-fix                 feed emit/face bg xhi
-
 collide             vss all logo.vss
-# undisturbed gas is at rest in its own frame, so vremax there is zero and the
-# NTC candidate count stays cheap; re-zero it so cells the shock has left decay
 collide_modify      vremax 100 yes
 
-timestep            ${dt}
-stats               100
-stats_style         step cpu np ncoll
+timestep            1.0e-4
+stats               200
+stats_style         step cpu np ncoll nscoll
 
-dump                3 image all 4 pis.*.ppm type type pdiam 0.9 &
-                    box no 1 size 500 500 &
-                    view 0 0 center d v_cx 0.5 0.5 zoom 1.45
+# per-surf force tallies fix rigid needs, and a mass far above the ~2e-4 kg of
+# gas the slab sweeps, so the strike does not decelerate
+compute             csurf surf piston all fx fy fz tx ty tz com -58.25 0.0 0.0
+fix                 pist rigid piston csurf body &
+                    mass 1.0 com -58.25 0.0 0.0 vcom 800.0 0.0 0.0 &
+                    moi 1.0e6 1.0e6 1.0e6 0.0 0.0 0.0 angmom 0.0 0.0 0.0
+global              rigid pist
+
+variable            cx equal ramp(0.25,0.40)
+dump                3 image all 18 pis.*.ppm type type pdiam 0.9 &
+                    surf one 0.004 box no 1 size 500 500 &
+                    view 0 0 center d v_cx 0.5 0.5 zoom 3.99
 dump_modify         3 pad 5 backcolor white &
                     color shieldred 0.75 0 0 color shieldgold 0.95 0.75 0.05 &
-                    color gas 0.55 0.68 0.82 &
+                    color gas 0.55 0.68 0.82 color steel 0.20 0.22 0.26 &
                     pcolor 1 shieldgold pcolor 2 shieldred pcolor 3 gas &
-                    ptrans 3 0.25
+                    ptrans 3 0.25 scolor * steel
 
-run                 160
+# ---- 1. strike: 300 steps at 800 m/s = 24 units, about a fifth of the emblem
+run                 300
+
+# ---- 2. fixed: the slab stops dead, the shock runs on alone ----
+global              rigid NULL
+unfix               pist
+run                 900

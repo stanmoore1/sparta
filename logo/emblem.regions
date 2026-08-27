@@ -1,12 +1,9 @@
 ################################################################################
-# Shared geometry for the logo animations: the box, the grid, and the regions
-# that carve the emblem out of it.  Included after the boundary command, which
-# differs between the variants.
+# Shared geometry for the logo animations: the regions that carve the emblem
+# out of the domain.  Included after each input makes its own box, since the
+# piston needs a longer one - shocked material translates as the front crosses
+# it, so it has to have somewhere to go.
 ################################################################################
-
-create_box          -600e-1 600e-1 -600e-1 600e-1 -0.5 0.5
-create_grid         100 100 1
-balance_grid        rcb cell
 
 # ---- analytic ring/band/disk regions ----
 region              outer1 cylinder z 0.0 0.0 570e-1 INF INF side in

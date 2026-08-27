@@ -11,6 +11,10 @@ seed                12345
 global              gridcut 0.0 comm/sort yes
 boundary            oo oo p
 
+create_box          -600e-1 600e-1 -600e-1 600e-1 -0.5 0.5
+create_grid         100 100 1
+balance_grid        rcb cell
+
 include             emblem.regions
 
 species             logo.species N O B Nh Oh
