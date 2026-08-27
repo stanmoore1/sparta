@@ -8,6 +8,17 @@
 # fix rigid integrates the orientation quaternion; richardson is the more
 # accurate of the two schemes it offers and is worth it here, since the body
 # turns through a full revolution during the run.
+#
+# This one needs the surf-rigid-body branch: fix rigid does not exist in
+# mainline SPARTA.  Mainline can turn a surface with fix move/surf rotate, but
+# only geometrically - measured over 400 steps that logs 15 surface collisions
+# while deleting 40700 particles, because SPARTA finds collisions along the
+# particle's path and a surface sweeping across gas erases it rather than
+# reflecting it.  fix rigid does swept coverage: 352 collisions, none deleted.
+#
+# The mainline-honest alternative is static geometry plus surf_collide diffuse
+# ... rotate, which gives reflected particles the surface's local rotational
+# velocity.  Correct physics, but the mark does not visibly turn.
 ################################################################################
 
 dimension           2

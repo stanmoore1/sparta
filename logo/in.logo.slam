@@ -54,11 +54,11 @@ timestep            1.0e-4
 stats               500
 stats_style         step cpu np ncoll nbound
 
-dump                3 image all 20 slam.*.ppm type type pdiam 0.9 &
+dump                3 image all 25 slam.*.ppm type type pdiam 0.9 &
                     box no 1 size 500 500 &
                     view 0 0 center s 0.5 0.5 0.5 zoom 1.98
 dump_modify         3 pad 5 backcolor white &
                     color shieldred 0.75 0 0 color shieldgold 0.95 0.75 0.05 &
                     pcolor 1 shieldgold pcolor 2 shieldred
 
-run                 1200
+run                 1500
