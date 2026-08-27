@@ -1,58 +1,43 @@
-"""Build the logo composite: the three animations one after another in a single
-looping gif.  Each plays its whole arc out and then back again, so a segment
-returns to whatever it opened on and the handovers - and the loop itself -
-land there rather than cutting from mid-debris.  No captions: the emblem is
-the whole picture.
+"""Build the logo composite: the animations one after another in a single
+looping gif.
 
-Wind and expansion both open on the crisp emblem, so those two hand over on
-the same image.  The bow shock opens on an empty box instead, since it fills
-one, and it holds there before the gas arrives."""
+Most segments play out and come back the way they went, so each returns to the
+crisp emblem and the handovers land on it.  The recurrence segment is different
+in kind: it is collisionless and specular, so it returns to the emblem by
+itself and is played forward only - reversing it would be claiming a symmetry
+it does not need.  It also needs far more frames than the others, since what
+makes it read as motion rather than noise is how far a particle moves between
+frames.
+"""
 
 import glob, os, sys
 from PIL import Image
 
 D    = '/home/user/sparta/logo/'
-Q    = int(sys.argv[1]) if len(sys.argv) > 1 else 180   # frame size
-NF   = int(sys.argv[2]) if len(sys.argv) > 2 else 16    # frames per outward leg
+Q    = int(sys.argv[1]) if len(sys.argv) > 1 else 150
+NF   = int(sys.argv[2]) if len(sys.argv) > 2 else 12    # frames per outward leg
 NC   = int(sys.argv[3]) if len(sys.argv) > 3 else 10
-DUR  = int(sys.argv[4]) if len(sys.argv) > 4 else 140
-HOLD = 900                                              # ms on the crisp emblem
+DUR  = int(sys.argv[4]) if len(sys.argv) > 4 else 150
+HOLD = 900
 
-SEGMENTS = ['slam', 'bs', 'exp']
-
-# The bow shock opens on an empty box, so it gets a second of the crisp
-# particle emblem in front of it: the same transition the standalone gif uses,
-# borrowed from the wind run, which is the same geometry drawn as particles.
-OPENER = {}
-
-# and it closes on a second of the empty box: the ping-pong leaves it one frame
-# short of empty, which is not somewhere to rest
-TAIL = {}
+#            prefix  frames  ping-pong
+SEGMENTS = [('slam',  NF,    True),
+            ('bs',    NF,    True),
+            ('exp',   NF,    True),
+            ('rec',   64,    False)]
 
 frames, durs = [], []
-for prefix in SEGMENTS:
+for prefix, nf, pingpong in SEGMENTS:
     fs = sorted(glob.glob(D + prefix + '.*.ppm'))
-    fs = [fs[round(i * (len(fs) - 1) / (NF - 1))] for i in range(NF)]
+    if not pingpong:
+        fs = fs[:-1]                      # last frame repeats the first exactly
+    fs = [fs[round(i * (len(fs) - 1) / (nf - 1))] for i in range(nf)]
     ims = [Image.open(f).convert('RGB').resize((Q, Q), Image.LANCZOS) for f in fs]
-    leg = ims + ims[-2:0:-1]          # out and back, neither endpoint repeated
-    lead, tail = [], []
-    if prefix in OPENER:
-        lead = [Image.open(D + OPENER[prefix]).convert('RGB').resize((Q, Q), Image.LANCZOS)]
-    if prefix in TAIL:
-        tail = [Image.open(D + TAIL[prefix]).convert('RGB').resize((Q, Q), Image.LANCZOS)]
-    frames += lead + leg + tail
-    durs   += [HOLD] * (len(lead) + 1) + [DUR] * (len(leg) - 1) + [HOLD] * len(tail)
+    leg = ims + ims[-2:0:-1] if pingpong else ims
+    frames += leg
+    durs   += [HOLD] + [DUR] * (len(leg) - 1)
 
-# Palette from the crisp emblem and a gas-filled bow shock frame together,
-# with black, white and a mid grey forced in: the bow shock's lettering is a
-# thin black outline, and left to the medians it lands on the nearest gold.
-probe = Image.new('RGB', (Q * 2, Q), 'white')
-probe.paste(frames[0], (0, 0)); probe.paste(frames[-1], (Q, 0))
-adaptive = probe.quantize(colors=NC - 3, method=Image.MEDIANCUT).getpalette()[:3 * (NC - 3)]
-entries = [0, 0, 0, 255, 255, 255, 128, 128, 128] + adaptive
-pal = Image.new('P', (1, 1))
-pal.putpalette(entries + [0] * (768 - len(entries)))
-
+pal = frames[0].quantize(colors=NC, method=Image.MEDIANCUT)
 qf  = [f.quantize(palette=pal, dither=Image.NONE) for f in frames]
 
 out = D + 'logo_composite.gif'
