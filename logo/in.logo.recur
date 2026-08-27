@@ -1,0 +1,241 @@
+################################################################################
+# SPARTA logo, idea 14: collisionless specular box - it reassembles itself
+#
+# No collide command and every wall specular, so each particle flies ballistic
+# and bounces.  In a rectangular box that makes x and y independently periodic,
+# with period 2L/|v|.  Give every particle a speed that is an integer multiple
+# of 800 m/s and all of those periods divide 0.3 s, so at step 2999 every
+# particle is back exactly where it started, moving exactly as it was, and the
+# emblem reforms on its own.
+#
+# The gif therefore loops with no reversal: the last frame is the first.  It is
+# Poincare recurrence, arranged rather than waited for - a real recurrence in a
+# real integrable system, not a playback trick.
+#
+# 24 velocity classes, kx and ky each in -2..2, so the emblem disperses as 24
+# overlapping copies drifting apart and folding back.  Adding collisions would
+# destroy it: that is what makes the reassembly a statement about the dynamics.
+################################################################################
+
+dimension           2
+seed                12345
+global              gridcut 0.0 comm/sort yes
+boundary            rr rr p
+
+create_box          -600e-1 600e-1 -600e-1 600e-1 -0.5 0.5
+create_grid         100 100 1
+balance_grid        rcb cell
+
+include             emblem.regions
+
+species             logo.species N O B Nh Oh Nm Om
+global              fnum 8.4e16
+
+mixture             g00 N nrho 4.8750e+16 temp 0.0 vstream -1600.0 -1600.0 0.0
+mixture             r00 O nrho 4.8750e+16 temp 0.0 vstream -1600.0 -1600.0 0.0
+mixture             g01 N nrho 4.8750e+16 temp 0.0 vstream -1600.0 -800.0 0.0
+mixture             r01 O nrho 4.8750e+16 temp 0.0 vstream -1600.0 -800.0 0.0
+mixture             g02 N nrho 4.8750e+16 temp 0.0 vstream -1600.0 0.0 0.0
+mixture             r02 O nrho 4.8750e+16 temp 0.0 vstream -1600.0 0.0 0.0
+mixture             g03 N nrho 4.8750e+16 temp 0.0 vstream -1600.0 800.0 0.0
+mixture             r03 O nrho 4.8750e+16 temp 0.0 vstream -1600.0 800.0 0.0
+mixture             g04 N nrho 4.8750e+16 temp 0.0 vstream -1600.0 1600.0 0.0
+mixture             r04 O nrho 4.8750e+16 temp 0.0 vstream -1600.0 1600.0 0.0
+mixture             g05 N nrho 4.8750e+16 temp 0.0 vstream -800.0 -1600.0 0.0
+mixture             r05 O nrho 4.8750e+16 temp 0.0 vstream -800.0 -1600.0 0.0
+mixture             g06 N nrho 4.8750e+16 temp 0.0 vstream -800.0 -800.0 0.0
+mixture             r06 O nrho 4.8750e+16 temp 0.0 vstream -800.0 -800.0 0.0
+mixture             g07 N nrho 4.8750e+16 temp 0.0 vstream -800.0 0.0 0.0
+mixture             r07 O nrho 4.8750e+16 temp 0.0 vstream -800.0 0.0 0.0
+mixture             g08 N nrho 4.8750e+16 temp 0.0 vstream -800.0 800.0 0.0
+mixture             r08 O nrho 4.8750e+16 temp 0.0 vstream -800.0 800.0 0.0
+mixture             g09 N nrho 4.8750e+16 temp 0.0 vstream -800.0 1600.0 0.0
+mixture             r09 O nrho 4.8750e+16 temp 0.0 vstream -800.0 1600.0 0.0
+mixture             g10 N nrho 4.8750e+16 temp 0.0 vstream 0.0 -1600.0 0.0
+mixture             r10 O nrho 4.8750e+16 temp 0.0 vstream 0.0 -1600.0 0.0
+mixture             g11 N nrho 4.8750e+16 temp 0.0 vstream 0.0 -800.0 0.0
+mixture             r11 O nrho 4.8750e+16 temp 0.0 vstream 0.0 -800.0 0.0
+mixture             g12 N nrho 4.8750e+16 temp 0.0 vstream 0.0 800.0 0.0
+mixture             r12 O nrho 4.8750e+16 temp 0.0 vstream 0.0 800.0 0.0
+mixture             g13 N nrho 4.8750e+16 temp 0.0 vstream 0.0 1600.0 0.0
+mixture             r13 O nrho 4.8750e+16 temp 0.0 vstream 0.0 1600.0 0.0
+mixture             g14 N nrho 4.8750e+16 temp 0.0 vstream 800.0 -1600.0 0.0
+mixture             r14 O nrho 4.8750e+16 temp 0.0 vstream 800.0 -1600.0 0.0
+mixture             g15 N nrho 4.8750e+16 temp 0.0 vstream 800.0 -800.0 0.0
+mixture             r15 O nrho 4.8750e+16 temp 0.0 vstream 800.0 -800.0 0.0
+mixture             g16 N nrho 4.8750e+16 temp 0.0 vstream 800.0 0.0 0.0
+mixture             r16 O nrho 4.8750e+16 temp 0.0 vstream 800.0 0.0 0.0
+mixture             g17 N nrho 4.8750e+16 temp 0.0 vstream 800.0 800.0 0.0
+mixture             r17 O nrho 4.8750e+16 temp 0.0 vstream 800.0 800.0 0.0
+mixture             g18 N nrho 4.8750e+16 temp 0.0 vstream 800.0 1600.0 0.0
+mixture             r18 O nrho 4.8750e+16 temp 0.0 vstream 800.0 1600.0 0.0
+mixture             g19 N nrho 4.8750e+16 temp 0.0 vstream 1600.0 -1600.0 0.0
+mixture             r19 O nrho 4.8750e+16 temp 0.0 vstream 1600.0 -1600.0 0.0
+mixture             g20 N nrho 4.8750e+16 temp 0.0 vstream 1600.0 -800.0 0.0
+mixture             r20 O nrho 4.8750e+16 temp 0.0 vstream 1600.0 -800.0 0.0
+mixture             g21 N nrho 4.8750e+16 temp 0.0 vstream 1600.0 0.0 0.0
+mixture             r21 O nrho 4.8750e+16 temp 0.0 vstream 1600.0 0.0 0.0
+mixture             g22 N nrho 4.8750e+16 temp 0.0 vstream 1600.0 800.0 0.0
+mixture             r22 O nrho 4.8750e+16 temp 0.0 vstream 1600.0 800.0 0.0
+mixture             g23 N nrho 4.8750e+16 temp 0.0 vstream 1600.0 1600.0 0.0
+mixture             r23 O nrho 4.8750e+16 temp 0.0 vstream 1600.0 1600.0 0.0
+
+create_particles    g00 n 0 region goldletters
+create_particles    g00 n 0 region swirlsIn
+create_particles    g00 n 0 region outerring
+create_particles    g00 n 0 region innerring
+create_particles    r00 n 0 region redcenter
+create_particles    r00 n 0 region redband
+create_particles    g01 n 0 region goldletters
+create_particles    g01 n 0 region swirlsIn
+create_particles    g01 n 0 region outerring
+create_particles    g01 n 0 region innerring
+create_particles    r01 n 0 region redcenter
+create_particles    r01 n 0 region redband
+create_particles    g02 n 0 region goldletters
+create_particles    g02 n 0 region swirlsIn
+create_particles    g02 n 0 region outerring
+create_particles    g02 n 0 region innerring
+create_particles    r02 n 0 region redcenter
+create_particles    r02 n 0 region redband
+create_particles    g03 n 0 region goldletters
+create_particles    g03 n 0 region swirlsIn
+create_particles    g03 n 0 region outerring
+create_particles    g03 n 0 region innerring
+create_particles    r03 n 0 region redcenter
+create_particles    r03 n 0 region redband
+create_particles    g04 n 0 region goldletters
+create_particles    g04 n 0 region swirlsIn
+create_particles    g04 n 0 region outerring
+create_particles    g04 n 0 region innerring
+create_particles    r04 n 0 region redcenter
+create_particles    r04 n 0 region redband
+create_particles    g05 n 0 region goldletters
+create_particles    g05 n 0 region swirlsIn
+create_particles    g05 n 0 region outerring
+create_particles    g05 n 0 region innerring
+create_particles    r05 n 0 region redcenter
+create_particles    r05 n 0 region redband
+create_particles    g06 n 0 region goldletters
+create_particles    g06 n 0 region swirlsIn
+create_particles    g06 n 0 region outerring
+create_particles    g06 n 0 region innerring
+create_particles    r06 n 0 region redcenter
+create_particles    r06 n 0 region redband
+create_particles    g07 n 0 region goldletters
+create_particles    g07 n 0 region swirlsIn
+create_particles    g07 n 0 region outerring
+create_particles    g07 n 0 region innerring
+create_particles    r07 n 0 region redcenter
+create_particles    r07 n 0 region redband
+create_particles    g08 n 0 region goldletters
+create_particles    g08 n 0 region swirlsIn
+create_particles    g08 n 0 region outerring
+create_particles    g08 n 0 region innerring
+create_particles    r08 n 0 region redcenter
+create_particles    r08 n 0 region redband
+create_particles    g09 n 0 region goldletters
+create_particles    g09 n 0 region swirlsIn
+create_particles    g09 n 0 region outerring
+create_particles    g09 n 0 region innerring
+create_particles    r09 n 0 region redcenter
+create_particles    r09 n 0 region redband
+create_particles    g10 n 0 region goldletters
+create_particles    g10 n 0 region swirlsIn
+create_particles    g10 n 0 region outerring
+create_particles    g10 n 0 region innerring
+create_particles    r10 n 0 region redcenter
+create_particles    r10 n 0 region redband
+create_particles    g11 n 0 region goldletters
+create_particles    g11 n 0 region swirlsIn
+create_particles    g11 n 0 region outerring
+create_particles    g11 n 0 region innerring
+create_particles    r11 n 0 region redcenter
+create_particles    r11 n 0 region redband
+create_particles    g12 n 0 region goldletters
+create_particles    g12 n 0 region swirlsIn
+create_particles    g12 n 0 region outerring
+create_particles    g12 n 0 region innerring
+create_particles    r12 n 0 region redcenter
+create_particles    r12 n 0 region redband
+create_particles    g13 n 0 region goldletters
+create_particles    g13 n 0 region swirlsIn
+create_particles    g13 n 0 region outerring
+create_particles    g13 n 0 region innerring
+create_particles    r13 n 0 region redcenter
+create_particles    r13 n 0 region redband
+create_particles    g14 n 0 region goldletters
+create_particles    g14 n 0 region swirlsIn
+create_particles    g14 n 0 region outerring
+create_particles    g14 n 0 region innerring
+create_particles    r14 n 0 region redcenter
+create_particles    r14 n 0 region redband
+create_particles    g15 n 0 region goldletters
+create_particles    g15 n 0 region swirlsIn
+create_particles    g15 n 0 region outerring
+create_particles    g15 n 0 region innerring
+create_particles    r15 n 0 region redcenter
+create_particles    r15 n 0 region redband
+create_particles    g16 n 0 region goldletters
+create_particles    g16 n 0 region swirlsIn
+create_particles    g16 n 0 region outerring
+create_particles    g16 n 0 region innerring
+create_particles    r16 n 0 region redcenter
+create_particles    r16 n 0 region redband
+create_particles    g17 n 0 region goldletters
+create_particles    g17 n 0 region swirlsIn
+create_particles    g17 n 0 region outerring
+create_particles    g17 n 0 region innerring
+create_particles    r17 n 0 region redcenter
+create_particles    r17 n 0 region redband
+create_particles    g18 n 0 region goldletters
+create_particles    g18 n 0 region swirlsIn
+create_particles    g18 n 0 region outerring
+create_particles    g18 n 0 region innerring
+create_particles    r18 n 0 region redcenter
+create_particles    r18 n 0 region redband
+create_particles    g19 n 0 region goldletters
+create_particles    g19 n 0 region swirlsIn
+create_particles    g19 n 0 region outerring
+create_particles    g19 n 0 region innerring
+create_particles    r19 n 0 region redcenter
+create_particles    r19 n 0 region redband
+create_particles    g20 n 0 region goldletters
+create_particles    g20 n 0 region swirlsIn
+create_particles    g20 n 0 region outerring
+create_particles    g20 n 0 region innerring
+create_particles    r20 n 0 region redcenter
+create_particles    r20 n 0 region redband
+create_particles    g21 n 0 region goldletters
+create_particles    g21 n 0 region swirlsIn
+create_particles    g21 n 0 region outerring
+create_particles    g21 n 0 region innerring
+create_particles    r21 n 0 region redcenter
+create_particles    r21 n 0 region redband
+create_particles    g22 n 0 region goldletters
+create_particles    g22 n 0 region swirlsIn
+create_particles    g22 n 0 region outerring
+create_particles    g22 n 0 region innerring
+create_particles    r22 n 0 region redcenter
+create_particles    r22 n 0 region redband
+create_particles    g23 n 0 region goldletters
+create_particles    g23 n 0 region swirlsIn
+create_particles    g23 n 0 region outerring
+create_particles    g23 n 0 region innerring
+create_particles    r23 n 0 region redcenter
+create_particles    r23 n 0 region redband
+
+# no collide: collisions would scramble the phases and the recurrence with them
+
+timestep            0.0001
+stats               500
+stats_style         step cpu np nbound
+
+dump                3 image all 50 rec.*.ppm type type pdiam 0.9 &
+                    box no 1 size 500 500 &
+                    view 0 0 center s 0.5 0.5 0.5 zoom 1.98
+dump_modify         3 pad 5 backcolor white &
+                    color shieldred 0.75 0 0 color shieldgold 0.95 0.75 0.05 &
+                    pcolor 1 shieldgold pcolor 2 shieldred
+
+run                 3000
