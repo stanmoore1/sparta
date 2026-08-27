@@ -1,0 +1,23 @@
+# Species data for the logo animations
+# Three physically identical species: the two emblem colors and the
+# surrounding gas.  Identical so the emblem is a passive tracer in the flow.
+
+# ID
+# Molwt (amu)
+# Molmass (kg)
+# Rotational dof
+# RotRel
+# Vibrational dof
+# VibRel
+# VibTemp (K)
+# species wt
+# charge
+
+N  40.00    6.63E-26  0    .0   0   .0    0.0    1.0      0.0
+O  40.00    6.63E-26  0    .0   0   .0    0.0    1.0      0.0
+B  40.00    6.63E-26  0    .0   0   .0    0.0    1.0      0.0
+
+# heavy counterparts of the two emblem colors: same size, 100x the mass, so a
+# hypersonic stream deforms the emblem slowly instead of erasing it in a blink
+Nh 4000.00  6.63E-24  0    .0   0   .0    0.0    1.0      0.0
+Oh 4000.00  6.63E-24  0    .0   0   .0    0.0    1.0      0.0

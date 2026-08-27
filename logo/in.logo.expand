@@ -1,0 +1,42 @@
+################################################################################
+# SPARTA logo, idea 4: free expansion of the emblem into vacuum
+#
+# No surrounding gas and every boundary open, so the emblem is its own cloud.
+# It starts collisional and rarefies as it blooms, which is the regime SPARTA
+# exists for: the expansion runs away from equilibrium as it goes.
+################################################################################
+
+dimension           2
+seed                12345
+global              gridcut 0.0 comm/sort yes
+boundary            oo oo p
+
+include             emblem.regions
+
+species             logo.species N O B Nh Oh
+global              fnum 8.4e16
+
+mixture             gold N nrho 1.17e18 temp 60
+mixture             red  O nrho 1.17e18 temp 60
+
+create_particles    gold n 0 region goldletters
+create_particles    gold n 0 region swirlsIn
+create_particles    gold n 0 region outerring
+create_particles    gold n 0 region innerring
+create_particles    red  n 0 region redcenter
+create_particles    red  n 0 region redband
+
+collide             vss all logo.vss
+
+timestep            1.0e-4
+stats               400
+stats_style         step cpu np ncoll
+
+dump                3 image all 30 exp.*.ppm type type pdiam 0.9 &
+                    box no 1 size 500 500 &
+                    view 0 0 center s 0.5 0.5 0.5 zoom 1.98
+dump_modify         3 pad 5 backcolor white &
+                    color shieldred 0.75 0 0 color shieldgold 0.95 0.75 0.05 &
+                    pcolor 1 shieldgold pcolor 2 shieldred
+
+run                 1200

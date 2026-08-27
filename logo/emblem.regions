@@ -1,0 +1,38 @@
+################################################################################
+# Shared geometry for the logo animations: the box, the grid, and the regions
+# that carve the emblem out of it.  Included after the boundary command, which
+# differs between the variants.
+################################################################################
+
+create_box          -600e-1 600e-1 -600e-1 600e-1 -0.5 0.5
+create_grid         100 100 1
+balance_grid        rcb cell
+
+# ---- analytic ring/band/disk regions ----
+region              outer1 cylinder z 0.0 0.0 570e-1 INF INF side in
+region              outer2 cylinder z 0.0 0.0 550e-1 INF INF side out
+region              outerring intersect 2 outer1 outer2
+
+region              inner1 cylinder z 0.0 0.0 370e-1 INF INF side in
+region              inner2 cylinder z 0.0 0.0 350e-1 INF INF side out
+region              innerring intersect 2 inner1 inner2
+
+region              bandout cylinder z 0.0 0.0 550e-1 INF INF side in
+region              bandin  cylinder z 0.0 0.0 370e-1 INF INF side out
+region              band    intersect 2 bandout bandin
+
+region              center cylinder z 0.0 0.0 350e-1 INF INF side in
+region              shield cylinder z 0.0 0.0 570e-1 INF INF side in
+region              freefield cylinder z 0.0 0.0 570e-1 INF INF side out
+
+# ---- mesh regions: the letter and swirl shapes read from 2d surf files ----
+region              lettersIn  mesh logotext2d.surf
+region              lettersOut mesh logotext2d.surf side out
+region              swirlsIn   mesh swirl2d.surf scale 1.0e-1 1.0e-1 1.0e-1
+region              swirlsOut  mesh swirl2d.surf scale 1.0e-1 1.0e-1 1.0e-1 side out
+
+# logotext2d.surf encloses the disk with the letters cut out of it, so the
+# letters are the part of the disk lying outside the mesh.
+region              goldletters intersect 2 center lettersOut
+region              redcenter   intersect 2 center lettersIn
+region              redband     intersect 2 band swirlsOut

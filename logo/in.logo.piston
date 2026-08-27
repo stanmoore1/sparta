@@ -1,0 +1,53 @@
+################################################################################
+# SPARTA logo, idea 2: piston-driven shock sweeping the emblem
+#
+# The emblem is a passive tracer: same species properties as the surrounding
+# gas, only a different color.  The xlo wall is a diffuse wall translating into
+# the gas at 1500 m/s, which drives a shock to the right through the emblem.
+#
+# Note: surf_collide piston is Bird's *subsonic pressure* BC - it models a wall
+# receding from the particle - so it is the translate keyword, supported by the
+# diffuse and cll styles, that gives a compressing wall.
+################################################################################
+
+dimension           2
+seed                12345
+global              gridcut 0.0 comm/sort yes
+boundary            so rr p
+
+include             emblem.regions
+
+surf_collide        piston diffuse 300.0 1.0 translate 800.0 0.0 0.0
+bound_modify        xlo collide piston
+
+species             logo.species N O B Nh Oh
+global              fnum 8.4e16
+
+mixture             gold Nh nrho 1.17e18 temp 300
+mixture             red  Oh nrho 1.17e18 temp 300
+mixture             bg   B nrho 1.17e18 temp 300
+
+create_particles    gold n 0 region goldletters
+create_particles    gold n 0 region swirlsIn
+create_particles    gold n 0 region outerring
+create_particles    gold n 0 region innerring
+create_particles    red  n 0 region redcenter
+create_particles    red  n 0 region redband
+create_particles    bg   n 0 region freefield
+
+collide             vss all logo.vss
+
+timestep            1.0e-4
+stats               400
+stats_style         step cpu np ncoll
+
+dump                3 image all 30 pis.*.ppm type type pdiam 0.9 &
+                    box no 1 size 500 500 &
+                    view 0 0 center s 0.5 0.5 0.5 zoom 1.98
+dump_modify         3 pad 5 backcolor white &
+                    color shieldred 0.75 0 0 color shieldgold 0.95 0.75 0.05 &
+                    color gas 0.55 0.68 0.82 &
+                    pcolor 4 shieldgold pcolor 5 shieldred pcolor 3 gas &
+                    ptrans 3 0.25
+
+run                 1200

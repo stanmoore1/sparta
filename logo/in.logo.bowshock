@@ -1,0 +1,49 @@
+################################################################################
+# SPARTA logo, idea 1: the emblem in a hypersonic wind
+#
+# The emblem is a frozen (temp 0) particle field in the shield colors.  A cold
+# Mach ~9 stream enters at xlo and piles up against it, so a compression front
+# builds on the upstream face and the emblem erodes into a wake downstream.
+################################################################################
+
+dimension           2
+seed                12345
+global              gridcut 0.0 comm/sort yes
+boundary            oo rr p
+
+include             emblem.regions
+
+species             logo.species N O B Nh Oh
+global              fnum 8.4e16
+
+mixture             gold Nh nrho 1.17e18 temp 1.0
+mixture             red  Oh nrho 1.17e18 temp 1.0
+mixture             wind B nrho 1.17e18 temp 300 vstream 2000.0 0.0 0.0
+
+# the emblem: gold shapes, red field behind them
+create_particles    gold n 0 region goldletters
+create_particles    gold n 0 region swirlsIn
+create_particles    gold n 0 region outerring
+create_particles    gold n 0 region innerring
+create_particles    red  n 0 region redcenter
+create_particles    red  n 0 region redband
+# the freestream fills everything outside the shield
+create_particles    wind n 0 region freefield
+fix                 in emit/face wind xlo
+
+collide             vss all logo.vss
+
+timestep            1.0e-4
+stats               400
+stats_style         step cpu np ncoll
+
+dump                3 image all 20 bs.*.ppm type type pdiam 0.9 &
+                    box no 1 size 500 500 &
+                    view 0 0 center s 0.5 0.5 0.5 zoom 1.98
+dump_modify         3 pad 5 backcolor white &
+                    color shieldred 0.75 0 0 color shieldgold 0.95 0.75 0.05 &
+                    color gas 0.55 0.68 0.82 &
+                    pcolor 4 shieldgold pcolor 5 shieldred pcolor 3 gas &
+                    ptrans 3 0.25
+
+run                 800
