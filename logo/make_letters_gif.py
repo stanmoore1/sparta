@@ -1,8 +1,10 @@
 """Build the lettering bow shock gif.
 
 Forward only - the shot fills an empty box, so running it backwards would
-suck the gas back out - with a second held on the empty box before the gas
-arrives.
+suck the gas back out.  It opens on a second of the crisp particle emblem,
+then a second of the empty box with the lettering as black outline, and only
+then does the gas arrive.  The emblem frame is borrowed from the wind run,
+which starts from the same geometry drawn as particles.
 """
 import glob, os, sys
 from PIL import Image
@@ -15,6 +17,7 @@ DUR = int(sys.argv[4]) if len(sys.argv) > 4 else 130
 
 fs = sorted(glob.glob(D + 'let.*.ppm'))
 fs = [fs[round(i * (len(fs) - 1) / (NF - 1))] for i in range(NF)]
+fs = [sorted(glob.glob(D + 'bs.*.ppm'))[0]] + fs          # crisp emblem first
 ims = [Image.open(f).convert('RGB').resize((Q, Q), Image.LANCZOS) for f in fs]
 
 # Build the palette from an empty frame and a full one together - the last
@@ -23,7 +26,7 @@ ims = [Image.open(f).convert('RGB').resize((Q, Q), Image.LANCZOS) for f in fs]
 # that is nearly all white and orange and spend no entry on the black surface
 # outline, which then lands on the nearest gold.
 probe = Image.new('RGB', (Q * 2, Q), 'white')
-probe.paste(ims[0], (0, 0)); probe.paste(ims[-1], (Q, 0))
+probe.paste(ims[1], (0, 0)); probe.paste(ims[-1], (Q, 0))
 adaptive = probe.quantize(colors=NC - 3, method=Image.MEDIANCUT).getpalette()[:3 * (NC - 3)]
 
 # black, white, and a mid grey: the outline is thin enough that scaling down
@@ -34,7 +37,9 @@ pal = Image.new('P', (1, 1))
 pal.putpalette(entries + [0] * (768 - len(entries)))
 
 qf  = [im.quantize(palette=pal, dither=Image.NONE) for im in ims]
-dur = [DUR] * len(qf); dur[0] = 1000        # hold the empty box
+dur = [DUR] * len(qf)
+dur[0] = 1000        # hold the crisp emblem
+dur[1] = 1000        # then the empty box, lettering as outline
 
 out = D + 'logo_letters.gif'
 qf[0].save(out, save_all=True, append_images=qf[1:], duration=dur, loop=0, optimize=False)

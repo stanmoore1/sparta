@@ -73,7 +73,9 @@ timestep            1.0e-4
 stats               500
 stats_style         step cpu np nscoll
 
-dump                3 image all 40 abl.*.ppm type type pdiam 0.9 &
+# the dump interval has to be a common multiple of both ave/grid Nfreqs, 40
+# and 100, or dump image refuses the fixes as computed at incompatible times
+dump                3 image all 200 abl.*.ppm type type pdiam 0.9 &
                     grid f_densa surf one 0.002 box no 1 size 500 500 &
                     view 0 0 center s 0.5 0.5 0.5 zoom 1.98
 dump_modify         3 pad 5 backcolor white gridgroup ringcells &
@@ -82,4 +84,4 @@ dump_modify         3 pad 5 backcolor white gridgroup ringcells &
                     pcolor 1 shieldgold pcolor 2 shieldred scolor * slate &
                     cmap grid 0.0 4.0e17 cf 0.0 2 min shieldred max clear
 
-run                 2400
+run                 16000
