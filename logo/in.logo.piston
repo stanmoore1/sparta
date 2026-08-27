@@ -3,7 +3,7 @@
 #
 # The piston is a rigid slab driven by fix rigid at a constant 800 m/s.  Its
 # mass is set enormous compared with the gas it sweeps, so the gas cannot slow
-# it: the strike is at constant speed, not a deceleration.  After 75 steps the
+# it: the strike is at constant speed, not a deceleration.  After 4 steps the
 # fix is removed and the slab stops dead and stays put, while the shock it
 # launched runs on through the emblem by itself.
 #
@@ -16,10 +16,16 @@
 #
 # The gas is at essentially zero temperature, so nothing diffuses ahead of the
 # front and the emblem stays pixel-crisp until the shock reaches it.  What blur
-# there is behind the front is the shock's own heating, which is real: a strong
-# shock turns directed energy into heat, and the post-shock temperature goes as
-# the square of the piston speed.  800 m/s leaves ~600 K rather than the
-# ~8000 K a 3000 m/s piston would, which is why it is this slow.
+# there is behind the front is the shock's own heating, which is real.
+#
+# The piston speed is set by wanting the front to cross the whole box.  A
+# planar shock from a finite stroke decays as 1/x - the same momentum spread
+# over ever more swept gas - so the front reaches sqrt(2*V*d*t).  With a 3 unit
+# stroke, crossing 120 units in 3375 steps takes 7500 m/s.  That is a hard tap,
+# and the cost is heat: post-shock temperature goes as the square of the piston
+# speed, so this leaves ~50000 K behind the front and the emblem is wrecked as
+# the front passes over it.  The gentle alternative is the same 3 unit stroke
+# at 800 m/s, which stays at ~600 K but needs 30000 steps to cross.
 ################################################################################
 
 dimension           2
@@ -27,8 +33,8 @@ seed                12345
 global              gridcut 0.0 comm/sort yes
 boundary            oo rr p
 
-create_box          -600e-1 1800e-1 -600e-1 600e-1 -0.5 0.5
-create_grid         200 100 1
+create_box          -600e-1 600e-1 -600e-1 600e-1 -0.5 0.5
+create_grid         100 100 1
 balance_grid        rcb cell
 
 include             emblem.regions
@@ -63,23 +69,23 @@ stats_style         step cpu np ncoll nscoll
 # gas the slab sweeps, so the strike does not decelerate
 compute             csurf surf piston all fx fy fz tx ty tz com -58.25 0.0 0.0
 fix                 pist rigid piston csurf body &
-                    mass 1.0 com -58.25 0.0 0.0 vcom 800.0 0.0 0.0 &
+                    mass 1.0 com -58.25 0.0 0.0 vcom 7500.0 0.0 0.0 &
                     moi 1.0e6 1.0e6 1.0e6 0.0 0.0 0.0 angmom 0.0 0.0 0.0
 global              rigid pist
 
-dump                3 image all 36 pis.*.ppm type type pdiam 0.9 &
+dump                3 image all 55 pis.*.ppm type type pdiam 0.9 &
                     surf one 0.004 box no 1 size 500 500 &
-                    view 0 0 center s 0.25 0.5 0.5 zoom 3.99
+                    view 0 0 center s 0.5 0.5 0.5 zoom 1.98
 dump_modify         3 pad 5 backcolor white &
                     color shieldred 0.75 0 0 color shieldgold 0.95 0.75 0.05 &
                     color gas 0.55 0.68 0.82 color steel 0.20 0.22 0.26 &
                     pcolor 1 shieldgold pcolor 2 shieldred pcolor 3 gas &
                     ptrans 3 0.25 scolor * steel
 
-# ---- 1. strike: 75 steps at 800 m/s = 6 units, a twentieth of the emblem ----
-run                 75
+# ---- 1. strike: 4 steps at 7500 m/s = 3 units, an eighth of the original ----
+run                 4
 
 # ---- 2. fixed: the slab stops dead, the shock runs on alone ----
 global              rigid NULL
 unfix               pist
-run                 2175
+run                 3371
