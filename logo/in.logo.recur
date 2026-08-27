@@ -14,11 +14,14 @@
 # system, not a playback trick.  Adding collisions would destroy it, which is
 # what makes the reassembly a statement about the dynamics.
 #
-# kx and ky are held to -1..1 rather than -2..2 deliberately.  The frame rate
-# that reads as motion rather than noise is set by how far the fastest class
-# travels between frames: at 25 steps a frame that is 2.8 units here, against
-# a 120 unit box.  Doubling the speeds needs double the frames to look like
-# anything but static, and the gif cannot afford them.
+# Four classes, the diagonals only.  The dispersed state is an interference
+# pattern between shifted copies of the emblem, and fewer copies make a
+# stronger, cleaner weave - many copies average towards a uniform haze.
+#
+# All are held to |k| = 1.  What makes it read as motion rather than noise is
+# how far the fastest class travels between frames: at 25 steps a frame that is
+# 2.8 units, against a 120 unit box.  Doubling the speeds needs double the
+# frames, and the gif cannot afford them.
 ################################################################################
 
 dimension           2
@@ -35,22 +38,14 @@ include             emblem.regions
 species             logo.species N O B Nh Oh Nm Om
 global              fnum 8.4e16
 
-mixture             g00 N nrho 1.4625e+17 temp 0.0 vstream -800.0 -800.0 0.0
-mixture             r00 O nrho 1.4625e+17 temp 0.0 vstream -800.0 -800.0 0.0
-mixture             g01 N nrho 1.4625e+17 temp 0.0 vstream -800.0 0.0 0.0
-mixture             r01 O nrho 1.4625e+17 temp 0.0 vstream -800.0 0.0 0.0
-mixture             g02 N nrho 1.4625e+17 temp 0.0 vstream -800.0 800.0 0.0
-mixture             r02 O nrho 1.4625e+17 temp 0.0 vstream -800.0 800.0 0.0
-mixture             g03 N nrho 1.4625e+17 temp 0.0 vstream 0.0 -800.0 0.0
-mixture             r03 O nrho 1.4625e+17 temp 0.0 vstream 0.0 -800.0 0.0
-mixture             g04 N nrho 1.4625e+17 temp 0.0 vstream 0.0 800.0 0.0
-mixture             r04 O nrho 1.4625e+17 temp 0.0 vstream 0.0 800.0 0.0
-mixture             g05 N nrho 1.4625e+17 temp 0.0 vstream 800.0 -800.0 0.0
-mixture             r05 O nrho 1.4625e+17 temp 0.0 vstream 800.0 -800.0 0.0
-mixture             g06 N nrho 1.4625e+17 temp 0.0 vstream 800.0 0.0 0.0
-mixture             r06 O nrho 1.4625e+17 temp 0.0 vstream 800.0 0.0 0.0
-mixture             g07 N nrho 1.4625e+17 temp 0.0 vstream 800.0 800.0 0.0
-mixture             r07 O nrho 1.4625e+17 temp 0.0 vstream 800.0 800.0 0.0
+mixture             g00 N nrho 2.9250e+17 temp 0.0 vstream 800.0 800.0 0.0
+mixture             r00 O nrho 2.9250e+17 temp 0.0 vstream 800.0 800.0 0.0
+mixture             g01 N nrho 2.9250e+17 temp 0.0 vstream 800.0 -800.0 0.0
+mixture             r01 O nrho 2.9250e+17 temp 0.0 vstream 800.0 -800.0 0.0
+mixture             g02 N nrho 2.9250e+17 temp 0.0 vstream -800.0 800.0 0.0
+mixture             r02 O nrho 2.9250e+17 temp 0.0 vstream -800.0 800.0 0.0
+mixture             g03 N nrho 2.9250e+17 temp 0.0 vstream -800.0 -800.0 0.0
+mixture             r03 O nrho 2.9250e+17 temp 0.0 vstream -800.0 -800.0 0.0
 
 create_particles    g00 n 0 region goldletters
 create_particles    g00 n 0 region swirlsIn
@@ -76,30 +71,6 @@ create_particles    g03 n 0 region outerring
 create_particles    g03 n 0 region innerring
 create_particles    r03 n 0 region redcenter
 create_particles    r03 n 0 region redband
-create_particles    g04 n 0 region goldletters
-create_particles    g04 n 0 region swirlsIn
-create_particles    g04 n 0 region outerring
-create_particles    g04 n 0 region innerring
-create_particles    r04 n 0 region redcenter
-create_particles    r04 n 0 region redband
-create_particles    g05 n 0 region goldletters
-create_particles    g05 n 0 region swirlsIn
-create_particles    g05 n 0 region outerring
-create_particles    g05 n 0 region innerring
-create_particles    r05 n 0 region redcenter
-create_particles    r05 n 0 region redband
-create_particles    g06 n 0 region goldletters
-create_particles    g06 n 0 region swirlsIn
-create_particles    g06 n 0 region outerring
-create_particles    g06 n 0 region innerring
-create_particles    r06 n 0 region redcenter
-create_particles    r06 n 0 region redband
-create_particles    g07 n 0 region goldletters
-create_particles    g07 n 0 region swirlsIn
-create_particles    g07 n 0 region outerring
-create_particles    g07 n 0 region innerring
-create_particles    r07 n 0 region redcenter
-create_particles    r07 n 0 region redband
 
 # no collide: collisions would scramble the phases and the recurrence with them
 
