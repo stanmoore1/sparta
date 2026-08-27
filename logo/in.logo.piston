@@ -14,6 +14,10 @@
 # compression.  fix rigid on this branch does swept collision coverage and
 # deletes nothing in the body's path.
 #
+# There is no gas around the emblem: the slab face starts at x = -57.5 and the
+# emblem at -57, so a 3 unit stroke strikes it directly, and the emblem is its
+# own medium.  What it expands into afterwards is vacuum.
+#
 # The gas is at essentially zero temperature, so nothing diffuses ahead of the
 # front and the emblem stays pixel-crisp until the shock reaches it.  What blur
 # there is behind the front is the shock's own heating, which is real: a strong
@@ -42,7 +46,6 @@ global              fnum 8.4e16
 
 mixture             gold N nrho 1.17e18 temp 0.001
 mixture             red  O nrho 1.17e18 temp 0.001
-mixture             bg   B nrho 1.17e18 temp 0.001
 
 create_particles    gold n 0 region goldletters
 create_particles    gold n 0 region swirlsIn
@@ -50,7 +53,6 @@ create_particles    gold n 0 region outerring
 create_particles    gold n 0 region innerring
 create_particles    red  n 0 region redcenter
 create_particles    red  n 0 region redband
-create_particles    bg   n 0 region freefield
 
 collide             vss all logo.vss
 collide_modify      vremax 100 yes
@@ -72,9 +74,8 @@ dump                3 image all 70 pis.*.ppm type type pdiam 0.9 &
                     view 0 0 center s 0.25 0.5 0.5 zoom 3.99
 dump_modify         3 pad 5 backcolor white &
                     color shieldred 0.75 0 0 color shieldgold 0.95 0.75 0.05 &
-                    color gas 0.55 0.68 0.82 color steel 0.20 0.22 0.26 &
-                    pcolor 1 shieldgold pcolor 2 shieldred pcolor 3 gas &
-                    ptrans 3 0.25 scolor * steel
+                    color steel 0.20 0.22 0.26 &
+                    pcolor 1 shieldgold pcolor 2 shieldred scolor * steel
 
 # ---- 1. strike: 38 steps at 800 m/s = 3 units, an eighth of the original ----
 run                 38

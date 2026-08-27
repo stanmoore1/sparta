@@ -48,6 +48,6 @@ dump_modify         3 pad 5 backcolor white &
                     color shieldred 0.75 0 0 color shieldgold 0.95 0.75 0.05 &
                     color gas 0.55 0.68 0.82 &
                     pcolor 4 shieldgold pcolor 5 shieldred pcolor 3 gas &
-                    ptrans 3 0.25
+                    ptrans 3 0.0
 
 run                 5400
