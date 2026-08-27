@@ -200,10 +200,12 @@ since as noted above regions in SPARTA are 3d objects in either case.
 <P>There is no <I>mesh/kk</I> style.  The
 <A HREF = "create_particles.html">create_particles</A> command tests points against a
 region on the host, so a <I>mesh</I> region can be used with
-create_particles/kk.  Commands that test regions on the device, such as
-<A HREF = "fix_emit_face.html">fix emit/face</A> and <A HREF = "fix_ave_histo.html">fix ave/histo</A>,
+create_particles/kk, either on its own or as one of the regions listed
+by a <I>union</I> or <I>intersect</I> region.  Commands that test regions on the
+device, such as <A HREF = "fix_emit_face.html">fix emit/face</A> and <A HREF = "fix_ave_histo.html">fix ave/histo</A>,
 will generate an error if they are given a <I>mesh</I> region when running
-with the KOKKOS package.
+with the KOKKOS package, whether it is given to them directly or nested
+inside a <I>union</I> or <I>intersect</I> region.
 </P>
 <P><B>Related commands:</B>
 </P>
