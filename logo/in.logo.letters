@@ -3,12 +3,20 @@
 #
 # Only the lambda and the SPARTA text are surfaces - letters.surf, lifted out
 # of logotext2d.surf, which also carries the r = 37 boundary circle the other
-# variants use.  The domain starts empty and a Mach ~9 stream enters at xlo, so
+# variants use.  The domain starts empty and a Mach 6.2 stream enters at xlo, so
 # the bow shocks build in front of each letter as the gas arrives rather than
 # being there from the first frame, and the gaps between the letters choke.
 #
 # The gas is half gold and half red, which is the emblem's palette worn by the
 # flow rather than by the shape.
+#
+# The wakes close a few body widths downstream, which is physics rather than a
+# boundary artifact - both x faces are outflow.  The stream is directed at 2000
+# m/s but each molecule also carries about 353 m/s of thermal speed, so a void
+# of width d fills in over roughly d*U/vthermal, near 57 units for a letter ten
+# across.  The diffuse wall feeds it too: at full accommodation every molecule
+# that strikes a letter is re-emitted over a cosine distribution, backwards
+# into the wake included.  Specular surfaces would leave the wakes far emptier.
 ################################################################################
 
 dimension           2
