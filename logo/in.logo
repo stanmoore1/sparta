@@ -41,8 +41,12 @@ region              lettersOut mesh logotext2d.surf side out
 region              swirlsIn   mesh swirl2d.surf scale 1.0e-1 1.0e-1 1.0e-1
 region              swirlsOut  mesh swirl2d.surf scale 1.0e-1 1.0e-1 1.0e-1 side out
 
+# logotext2d.surf encloses the inner disk with the letters cut out of it, so
+# the letters themselves are the part of the disk that is *outside* the mesh.
+# swirl2d.surf encloses the swirl strokes directly, so those are inside it.
+region              goldletters intersect 2 center lettersOut
 # red background = disk/band with the gold shapes carved out
-region              redcenter intersect 2 center lettersOut
+region              redcenter intersect 2 center lettersIn
 region              redband   intersect 2 band swirlsOut
 
 species		    air.species N O
@@ -50,7 +54,7 @@ mixture		    red O vstream -12000.0 0.0 0.0 temp 0.0
 mixture		    gold N vstream -12000.0 0.0 0.0 temp 0.0
 
 # gold: the letters and swirls (mesh volumes)
-create_particles    gold n 0 region lettersIn
+create_particles    gold n 0 region goldletters
 create_particles    gold n 0 region swirlsIn
 # gold: thin rings (analytic)
 create_particles    gold n 0 region outerring
