@@ -41,7 +41,7 @@ timestep            1.0e-4
 stats               400
 stats_style         step cpu np ncoll
 
-dump                3 image all 120 bs.*.ppm type type pdiam 0.9 &
+dump                3 image all 90 bs.*.ppm type type pdiam 0.9 &
                     box no 1 size 500 500 &
                     view 0 0 center s 0.5 0.5 0.5 zoom 1.98
 dump_modify         3 pad 5 backcolor white &
@@ -50,4 +50,4 @@ dump_modify         3 pad 5 backcolor white &
                     pcolor 4 shieldgold pcolor 5 shieldred pcolor 3 gas &
                     ptrans 3 0.25
 
-run                 7200
+run                 5400

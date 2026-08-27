@@ -47,9 +47,10 @@ surf_modify         all collide face
 species             logo.species N O B Nh Oh
 global              fnum 8.4e16
 
-mixture             gold N nrho 1.17e18 temp 0.001
-mixture             red  O nrho 1.17e18 temp 0.001
+mixture             gold Nh nrho 1.17e18 temp 0.001
+mixture             red  Oh nrho 1.17e18 temp 0.001
 mixture             bg   B nrho 1.17e18 temp 0.001
+mixture             driver B nrho 4.7e18 temp 0.0 vstream 800.0 0.0 0.0
 
 create_particles    gold n 0 region goldletters
 create_particles    gold n 0 region swirlsIn
@@ -74,19 +75,17 @@ fix                 pist rigid piston csurf body &
                     moi 1.0e6 1.0e6 1.0e6 0.0 0.0 0.0 angmom 0.0 0.0 0.0
 global              rigid pist
 
-dump                3 image all 500 pis.*.ppm type type pdiam 0.9 &
+dump                3 image all 23 pis.*.ppm type type pdiam 0.9 &
                     surf one 0.004 box no 1 size 500 500 &
                     view 0 0 center s 0.5 0.5 0.5 zoom 1.98
 dump_modify         3 pad 5 backcolor white &
                     color shieldred 0.75 0 0 color shieldgold 0.95 0.75 0.05 &
                     color gas 0.55 0.68 0.82 color steel 0.20 0.22 0.26 &
-                    pcolor 1 shieldgold pcolor 2 shieldred pcolor 3 gas &
+                    pcolor 4 shieldgold pcolor 5 shieldred pcolor 3 gas &
                     ptrans 3 0.25 scolor * steel
 
-# ---- 1. strike: 38 steps at 800 m/s = 3 units, an eighth of the original ----
-run                 38
-
-# ---- 2. fixed: the slab stops dead, the shock runs on alone ----
+# ---- driven the whole way, so the front does not decay ----
 global              rigid NULL
 unfix               pist
-run                 29962
+fix                 drive emit/face driver xlo
+run                 1400
