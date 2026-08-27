@@ -1,0 +1,64 @@
+################################################################################
+# SPARTA logo, idea 9: the original explode, made collisional
+#
+# in.logo drives the emblem into a hot diffuse wall and lets it blow apart, but
+# it runs at nrho 1.0, which is empty enough that its collide command never
+# lands a single collision - the whole thing is free flight, and the particles
+# never see each other.
+#
+# Same picture at nrho 1.17e18, where the mean free path is about one grid cell.
+# Now the gas rebounding off the wall shocks into the emblem still arriving, so
+# the material piles up against a front instead of streaming through itself,
+# and the wall's 5000 K shows up as real pressure rather than as particles
+# scattering past one another.
+#
+# The emblem starts at essentially zero temperature, so nothing blurs until the
+# front reaches it.
+#
+# 1600 steps: the front has crossed the emblem and the debris has filled the
+# box by about 1500, and past that it is uniform noise thinning out through the
+# open xhi boundary, which is nothing to watch.
+################################################################################
+
+dimension           2
+seed                12345
+global              gridcut 0.0 comm/sort yes
+boundary            so rr p
+
+create_box          -600e-1 600e-1 -600e-1 600e-1 -0.5 0.5
+create_grid         100 100 1
+balance_grid        rcb cell
+
+include             emblem.regions
+
+surf_collide        wall diffuse 5000.0 1.0
+bound_modify        xlo collide wall
+
+species             logo.species N O B Nh Oh Nm Om
+global              fnum 8.4e16
+
+mixture             gold N nrho 1.17e18 temp 0.001 vstream -2000.0 0.0 0.0
+mixture             red  O nrho 1.17e18 temp 0.001 vstream -2000.0 0.0 0.0
+
+create_particles    gold n 0 region goldletters
+create_particles    gold n 0 region swirlsIn
+create_particles    gold n 0 region outerring
+create_particles    gold n 0 region innerring
+create_particles    red  n 0 region redcenter
+create_particles    red  n 0 region redband
+
+collide             vss all logo.vss
+collide_modify      vremax 100 yes
+
+timestep            1.0e-4
+stats               500
+stats_style         step cpu np ncoll nbound
+
+dump                3 image all 26 slam.*.ppm type type pdiam 0.9 &
+                    box no 1 size 500 500 &
+                    view 0 0 center s 0.5 0.5 0.5 zoom 1.98
+dump_modify         3 pad 5 backcolor white &
+                    color shieldred 0.75 0 0 color shieldgold 0.95 0.75 0.05 &
+                    pcolor 1 shieldgold pcolor 2 shieldred
+
+run                 1600
