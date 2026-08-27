@@ -1,33 +1,25 @@
 ################################################################################
-# SPARTA logo, idea 2: a shock front crossing the emblem
+# SPARTA logo, idea 2: a flat piston strikes the emblem, then holds
 #
-# A dense cold slug of gas is fed in at xlo for the whole run and drives a
-# front to the right across the box.  The emblem is a 10x-mass species, heavy
-# enough to hold together as the front passes over it, light enough to visibly
-# respond rather than sit there inert.
+# The piston is a rigid slab driven by fix rigid at a constant 800 m/s.  Its
+# mass is set enormous compared with the gas it sweeps, so the gas cannot slow
+# it: the strike is at constant speed, not a deceleration.  After 38 steps the
+# fix is removed and the slab stops dead and stays put, while the shock it
+# launched runs on through the emblem by itself.
 #
-# This shape is forced by the physics, and it took several dead ends to see it:
-#
-#  - fix move/surf cannot drive a shock.  SPARTA finds particle-surface
-#    collisions along the particle's own path, so a slab sweeping across a gas
-#    at rest registers no collisions (nscoll stays 0) and the particles it
-#    overruns are deleted - 42k of them, a clean wipe with no compression.
-#  - fix rigid from surf-rigid-body does drive one, correctly and with nothing
-#    deleted.  But a piston that strikes and stops cannot send a front across
-#    the box at any speed: a finite stroke's front decays as 1/x while the heat
-#    it leaves behind does not decay at all, so beyond about twice the stroke
-#    length the shocked gas diffuses faster than its own front advances.
-#    Hitting harder does not help - 7500 m/s just adds ~50000 K and vaporises
-#    the emblem - and neither does waiting: at 30000 steps the emblem was gone
-#    by step 5000 and the front had barely moved.  Hence a sustained drive.
-#  - the slab also has to go.  Parked at x = -59 it sits across the inlet and
-#    reflects the driver straight back out, which shows up as a particle count
-#    that never grows.
-#  - surf_collide piston is Bird's subsonic pressure BC, a wall receding from
-#    the incident particle, so it cannot compress anything.
+# fix rigid is what makes this possible.  fix move/surf cannot: SPARTA finds
+# particle-surface collisions along the particle's own path, so a slab swept
+# across a gas at rest registers no collisions (nscoll stays 0) and the
+# particles it overruns are simply deleted - 42k of them, a clean wipe with no
+# compression.  fix rigid on this branch does swept collision coverage and
+# deletes nothing in the body's path.
 #
 # The gas is at essentially zero temperature, so nothing diffuses ahead of the
-# front and the emblem is pixel-crisp until the shock reaches it.
+# front and the emblem stays pixel-crisp until the shock reaches it.  What blur
+# there is behind the front is the shock's own heating, which is real: a strong
+# shock turns directed energy into heat, and the post-shock temperature goes as
+# the square of the piston speed.  800 m/s leaves ~600 K rather than the
+# ~8000 K a 3000 m/s piston would, which is why it is this slow.
 ################################################################################
 
 dimension           2
@@ -35,19 +27,22 @@ seed                12345
 global              gridcut 0.0 comm/sort yes
 boundary            oo rr p
 
-create_box          -600e-1 600e-1 -600e-1 600e-1 -0.5 0.5
-create_grid         100 100 1
+create_box          -600e-1 1800e-1 -600e-1 600e-1 -0.5 0.5
+create_grid         200 100 1
 balance_grid        rcb cell
 
 include             emblem.regions
 
-species             logo.species N O B Nh Oh Nm Om
+read_surf           piston.surf invert group piston
+surf_collide        face specular
+surf_modify         all collide face
+
+species             logo.species N O B Nh Oh
 global              fnum 8.4e16
 
-mixture             gold Nm nrho 1.17e18 temp 0.001
-mixture             red  Om nrho 1.17e18 temp 0.001
+mixture             gold N nrho 1.17e18 temp 0.001
+mixture             red  O nrho 1.17e18 temp 0.001
 mixture             bg   B nrho 1.17e18 temp 0.001
-mixture             driver B nrho 4.7e18 temp 0.001 vstream 800.0 0.0 0.0
 
 create_particles    gold n 0 region goldletters
 create_particles    gold n 0 region swirlsIn
@@ -64,15 +59,27 @@ timestep            1.0e-4
 stats               200
 stats_style         step cpu np ncoll nscoll
 
-dump                3 image all 23 pis.*.ppm type type pdiam 0.9 &
-                    box no 1 size 500 500 &
-                    view 0 0 center s 0.5 0.5 0.5 zoom 1.98
+# per-surf force tallies fix rigid needs, and a mass far above the ~2e-4 kg of
+# gas the slab sweeps, so the strike does not decelerate
+compute             csurf surf piston all fx fy fz tx ty tz com -58.25 0.0 0.0
+fix                 pist rigid piston csurf body &
+                    mass 1.0 com -58.25 0.0 0.0 vcom 800.0 0.0 0.0 &
+                    moi 1.0e6 1.0e6 1.0e6 0.0 0.0 0.0 angmom 0.0 0.0 0.0
+global              rigid pist
+
+dump                3 image all 55 pis.*.ppm type type pdiam 0.9 &
+                    surf one 0.004 box no 1 size 500 500 &
+                    view 0 0 center s 0.25 0.5 0.5 zoom 3.99
 dump_modify         3 pad 5 backcolor white &
                     color shieldred 0.75 0 0 color shieldgold 0.95 0.75 0.05 &
                     color gas 0.55 0.68 0.82 color steel 0.20 0.22 0.26 &
-                    pcolor 6 shieldgold pcolor 7 shieldred pcolor 3 gas &
-                    ptrans 3 0.5
+                    pcolor 1 shieldgold pcolor 2 shieldred pcolor 3 gas &
+                    ptrans 3 0.25 scolor * steel
 
-# ---- driven the whole way, so the front does not decay ----
-fix                 drive emit/face driver xlo
-run                 1400
+# ---- 1. strike: 38 steps at 800 m/s = 3 units, an eighth of the original ----
+run                 38
+
+# ---- 2. fixed: the slab stops dead, the shock runs on alone ----
+global              rigid NULL
+unfix               pist
+run                 3337
