@@ -67,7 +67,7 @@ fix                 pist rigid piston csurf body &
                     moi 1.0e6 1.0e6 1.0e6 0.0 0.0 0.0 angmom 0.0 0.0 0.0
 global              rigid pist
 
-dump                3 image all 55 pis.*.ppm type type pdiam 0.9 &
+dump                3 image all 70 pis.*.ppm type type pdiam 0.9 &
                     surf one 0.004 box no 1 size 500 500 &
                     view 0 0 center s 0.25 0.5 0.5 zoom 3.99
 dump_modify         3 pad 5 backcolor white &
@@ -82,4 +82,4 @@ run                 38
 # ---- 2. fixed: the slab stops dead, the shock runs on alone ----
 global              rigid NULL
 unfix               pist
-run                 3337
+run                 4181
