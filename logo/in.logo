@@ -1,0 +1,69 @@
+################################################################################
+# TRUE 2D SPARTA logo explode - region mesh version
+# Uses `region mesh` with 2D line surf files (logotext2d.surf, swirl2d.surf)
+# for the letters/swirls, instead of the STL volume mesh / surf-hack approach.
+# Right-to-left flow drives the logo into a diffuse left wall where it explodes;
+# right boundary is outflow.
+################################################################################
+
+dimension   	    2
+seed	    	    12345
+global              gridcut 0.0 comm/sort yes
+
+boundary	    so rr p
+
+create_box  	    -600e-1 600e-1 -600e-1 600e-1 -0.5 0.5
+create_grid 	    100 100 1
+balance_grid        rcb cell
+surf_collide        wall diffuse 5000.0 1.0
+bound_modify        xlo collide wall
+
+global		    fnum 0.09
+
+# ---- analytic ring/band/disk regions ----
+region              outer1 cylinder z 0.0 0.0 570e-1 INF INF side in
+region              outer2 cylinder z 0.0 0.0 550e-1 INF INF side out
+region              outerring intersect 2 outer1 outer2
+
+region              inner1 cylinder z 0.0 0.0 370e-1 INF INF side in
+region              inner2 cylinder z 0.0 0.0 350e-1 INF INF side out
+region              innerring intersect 2 inner1 inner2
+
+region              bandout cylinder z 0.0 0.0 550e-1 INF INF side in
+region              bandin  cylinder z 0.0 0.0 370e-1 INF INF side out
+region              band    intersect 2 bandout bandin
+
+region              center cylinder z 0.0 0.0 350e-1 INF INF side in
+
+# ---- mesh regions: the actual letter + swirl shapes (2D surf, not STL) ----
+region              lettersIn  mesh logotext2d.surf
+region              lettersOut mesh logotext2d.surf side out
+region              swirlsIn   mesh swirl2d.surf scale 1.0e-1 1.0e-1 1.0e-1
+region              swirlsOut  mesh swirl2d.surf scale 1.0e-1 1.0e-1 1.0e-1 side out
+
+# red background = disk/band with the gold shapes carved out
+region              redcenter intersect 2 center lettersOut
+region              redband   intersect 2 band swirlsOut
+
+species		    air.species N O
+mixture		    red O vstream -12000.0 0.0 0.0 temp 0.0
+mixture		    gold N vstream -12000.0 0.0 0.0 temp 0.0
+
+# gold: the letters and swirls (mesh volumes)
+create_particles    gold n 0 region lettersIn
+create_particles    gold n 0 region swirlsIn
+# gold: thin rings (analytic)
+create_particles    gold n 0 region outerring
+create_particles    gold n 0 region innerring
+# red: background inside the disk, excluding the gold shapes
+create_particles    red n 0 region redcenter
+create_particles    red n 0 region redband
+
+collide		    vss all air.vss
+
+timestep 	    0.000001
+
+dump                2 image all 250 logo.*.ppm type type pdiam 1.0 box no 1 size 1000 1000 view 0 0 center s 0.5 0.5 0.5 zoom 1.05
+dump_modify	    2 pad 5 color shieldred 0.75 0 0 color shieldgold 0.95 0.75 0.05 pcolor 2 shieldred pcolor 1 shieldgold backcolor white
+
+run 		    30000
