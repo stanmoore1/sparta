@@ -13,6 +13,10 @@
 # map that paints zero density red and everything above it white fills the body
 # in and leaves the flow to the particles.
 #
+# Only the annulus is drawn that way.  The ring's interior is empty too, and
+# without restricting the grid group to the ring it comes out the same red as
+# the material and the whole disc fills in.
+#
 # An earlier version made the gold the solid instead.  Those are strands a cell
 # or two wide and broke up almost immediately.
 #
@@ -58,6 +62,10 @@ collide_modify      vremax 100 yes
 
 # only outside the ring, so its interior starts and stays empty
 region              outside cylinder z 0.0 0.0 570e-1 INF INF side out
+region              ringin  cylinder z 0.0 0.0 570e-1 INF INF side in
+region              ringout cylinder z 0.0 0.0 370e-1 INF INF side out
+region              annulus intersect 2 ringin ringout
+group               ringcells grid region annulus one
 create_particles    wind n 0 region outside
 fix                 in emit/face wind xhi
 
@@ -68,7 +76,7 @@ stats_style         step cpu np nscoll
 dump                3 image all 40 abl.*.ppm type type pdiam 0.9 &
                     grid f_densa surf one 0.002 box no 1 size 500 500 &
                     view 0 0 center s 0.5 0.5 0.5 zoom 1.98
-dump_modify         3 pad 5 backcolor white &
+dump_modify         3 pad 5 backcolor white gridgroup ringcells &
                     color shieldgold 0.95 0.75 0.05 color shieldred 0.75 0 0 &
                     color slate 0.30 0.10 0.10 color clear 1.0 1.0 1.0 &
                     pcolor 1 shieldgold pcolor 2 shieldred scolor * slate &
