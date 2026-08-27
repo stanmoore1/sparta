@@ -18,7 +18,7 @@ NC   = int(sys.argv[3]) if len(sys.argv) > 3 else 10
 DUR  = int(sys.argv[4]) if len(sys.argv) > 4 else 140
 HOLD = 900                                              # ms on the crisp emblem
 
-SEGMENTS = ['bs', 'exp', 'let']
+SEGMENTS = ['slam', 'bs', 'exp', 'let']
 
 # The bow shock opens on an empty box, so it gets a second of the crisp
 # particle emblem in front of it: the same transition the standalone gif uses,
