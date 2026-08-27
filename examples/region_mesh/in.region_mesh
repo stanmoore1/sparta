@@ -1,0 +1,44 @@
+################################################################################
+# thermal gas filling the volume enclosed by a triangulated surface mesh
+#
+# the mesh is a torus, read from an STL file by the region mesh style,
+# which is a shape none of the analytic region styles can describe
+#
+# Note:
+#  - The "comm/sort" option to the "global" command is used to match MPI runs.
+#  - The "twopass" option is used to match Kokkos runs.
+# The "comm/sort" and "twopass" options should not be used for production runs.
+################################################################################
+
+seed	    	    12345
+dimension   	    3
+global              gridcut 0.0 comm/sort yes
+
+boundary	    rr rr rr
+
+create_box  	    -5 5 -5 5 -5 5
+create_grid 	    20 20 20
+
+balance_grid        rcb cell
+
+species		    air.species N O
+mixture		    air N O vstream 0.0 0.0 0.0 temp 300.0
+
+global              nrho 1.0e20
+global              fnum 1.0e17
+
+# the torus in the file has a major radius of 3 and a minor radius of 1
+# and is centered on the origin with its axis along z
+
+region		    tor mesh data.torus.stl
+
+create_particles    air n 0 region tor twopass
+
+stats		    20
+compute             temp temp
+stats_style	    step cpu np nattempt ncoll c_temp
+
+collide		    vss air air.vss
+
+timestep 	    1.0e-5
+run 		    100
