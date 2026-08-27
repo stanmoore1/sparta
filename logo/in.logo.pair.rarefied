@@ -1,0 +1,93 @@
+################################################################################
+# SPARTA logo, idea 6: two emblems colliding head on
+#
+# The rarefied half of the pair.  nrho is two orders below in.logo.pair and
+# fnum with it, so the particle count is unchanged and only the mean free path
+# moves: about a hundred grid cells instead of one.  The emblems now pass
+# straight through each other rather than shocking, which is the whole of what
+# rarefied means, shown by changing one number.
+################################################################################
+
+dimension           2
+seed                12345
+global              gridcut 0.0 comm/sort yes
+boundary            oo rr p
+
+create_box          -800e-1 800e-1 -400e-1 400e-1 -0.5 0.5
+create_grid         200 100 1
+balance_grid        rcb cell
+
+# ---- emblem a, centred at x = -35.0 ----
+region  ao1 cylinder z -35.0 0.0 28.5 INF INF side in
+region  ao2 cylinder z -35.0 0.0 27.5 INF INF side out
+region  aouterring intersect 2 ao1 ao2
+region  ai1 cylinder z -35.0 0.0 18.5 INF INF side in
+region  ai2 cylinder z -35.0 0.0 17.5 INF INF side out
+region  ainnerring intersect 2 ai1 ai2
+region  abo cylinder z -35.0 0.0 27.5 INF INF side in
+region  abi cylinder z -35.0 0.0 18.5 INF INF side out
+region  aband intersect 2 abo abi
+region  acenter cylinder z -35.0 0.0 17.5 INF INF side in
+region  alettersIn  mesh logotext2d.surf scale 0.5 0.5 0.5 trans -35.0 0.0 0.0
+region  alettersOut mesh logotext2d.surf scale 0.5 0.5 0.5 trans -35.0 0.0 0.0 side out
+region  aswirlsIn   mesh swirl2d.surf scale 0.05 0.05 0.05 trans -35.0 0.0 0.0
+region  aswirlsOut  mesh swirl2d.surf scale 0.05 0.05 0.05 trans -35.0 0.0 0.0 side out
+region  agold   intersect 2 acenter alettersOut
+region  aredctr intersect 2 acenter alettersIn
+region  aredbnd intersect 2 aband aswirlsOut
+
+# ---- emblem b, centred at x = 35.0 ----
+region  bo1 cylinder z 35.0 0.0 28.5 INF INF side in
+region  bo2 cylinder z 35.0 0.0 27.5 INF INF side out
+region  bouterring intersect 2 bo1 bo2
+region  bi1 cylinder z 35.0 0.0 18.5 INF INF side in
+region  bi2 cylinder z 35.0 0.0 17.5 INF INF side out
+region  binnerring intersect 2 bi1 bi2
+region  bbo cylinder z 35.0 0.0 27.5 INF INF side in
+region  bbi cylinder z 35.0 0.0 18.5 INF INF side out
+region  bband intersect 2 bbo bbi
+region  bcenter cylinder z 35.0 0.0 17.5 INF INF side in
+region  blettersIn  mesh logotext2d.surf scale 0.5 0.5 0.5 trans 35.0 0.0 0.0
+region  blettersOut mesh logotext2d.surf scale 0.5 0.5 0.5 trans 35.0 0.0 0.0 side out
+region  bswirlsIn   mesh swirl2d.surf scale 0.05 0.05 0.05 trans 35.0 0.0 0.0
+region  bswirlsOut  mesh swirl2d.surf scale 0.05 0.05 0.05 trans 35.0 0.0 0.0 side out
+region  bgold   intersect 2 bcenter blettersOut
+region  bredctr intersect 2 bcenter blettersIn
+region  bredbnd intersect 2 bband bswirlsOut
+
+species             logo.species N O B Nh Oh Nm Om
+global              fnum 2.1e14
+
+mixture             goldL N nrho 1.17e16 temp 0.001 vstream  1500.0 0.0 0.0
+mixture             redL  O nrho 1.17e16 temp 0.001 vstream  1500.0 0.0 0.0
+mixture             goldR N nrho 1.17e16 temp 0.001 vstream -1500.0 0.0 0.0
+mixture             redR  O nrho 1.17e16 temp 0.001 vstream -1500.0 0.0 0.0
+
+create_particles    goldL n 0 region agold
+create_particles    goldL n 0 region aswirlsIn
+create_particles    goldL n 0 region aouterring
+create_particles    goldL n 0 region ainnerring
+create_particles    redL  n 0 region aredctr
+create_particles    redL  n 0 region aredbnd
+create_particles    goldR n 0 region bgold
+create_particles    goldR n 0 region bswirlsIn
+create_particles    goldR n 0 region bouterring
+create_particles    goldR n 0 region binnerring
+create_particles    redR  n 0 region bredctr
+create_particles    redR  n 0 region bredbnd
+
+collide             vss all logo.vss
+collide_modify      vremax 100 yes
+
+timestep            1.0e-4
+stats               200
+stats_style         step cpu np ncoll
+
+dump                3 image all 8 kn.*.ppm type type pdiam 0.55 &
+                    box no 1 size 640 320 &
+                    view 0 0 center s 0.5 0.5 0.5 zoom 1.98
+dump_modify         3 pad 5 backcolor white &
+                    color shieldred 0.75 0 0 color shieldgold 0.95 0.75 0.05 &
+                    pcolor 1 shieldgold pcolor 2 shieldred
+
+run                 480

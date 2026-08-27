@@ -1,0 +1,60 @@
+################################################################################
+# SPARTA logo, idea 12: a shock focusing inside the ring
+#
+# The emblem's ring is a concave reflector.  dish.surf is that ring with a gap
+# cut in its right side, so a stream entering through the gap reflects off the
+# inner wall and converges on the centre - the logo lights up at the lambda
+# rather than being swept past.
+#
+# Every other variant has a shock crossing the emblem.  This one collapses into
+# it, which is the focusing problem, and the geometry is what motivates it.
+#
+# A circular mirror brings a parallel beam to a focus at half its radius, not
+# at its centre, so the bright spot sits between the wall and the middle rather
+# than exactly on the lambda.  A parabolic dish would put it on the centre.
+################################################################################
+
+dimension           2
+seed                12345
+global              gridcut 0.0 comm/sort yes
+boundary            oo rr p
+
+create_box          -600e-1 600e-1 -600e-1 600e-1 -0.5 0.5
+create_grid         120 120 1
+balance_grid        rcb cell
+
+read_surf           dish.surf group dish
+surf_collide        mirror specular
+surf_modify         all collide mirror
+
+species             logo.species N O B Nh Oh Nm Om
+global              fnum 4.2e16
+
+mixture             flow N O nrho 1.17e18 temp 0.001 vstream -1500.0 0.0 0.0
+mixture             flow N frac 0.5
+mixture             flow O frac 0.5
+
+fix                 in emit/face flow xhi
+
+collide             vss all logo.vss
+collide_modify      vremax 100 yes
+
+timestep            1.0e-4
+stats               200
+stats_style         step cpu np ncoll nscoll
+
+# density field: the convergence shows as a bright core, not as a moving edge
+compute             dg grid all all nrho
+fix                 dga ave/grid all 5 4 20 c_dg[1]
+
+dump                3 image all 20 foc.*.ppm type type pdiam 0.7 particle no &
+                    grid f_dga surf one 0.006 box no 1 size 500 500 &
+                    view 0 0 center s 0.5 0.5 0.5 zoom 1.98
+dump_modify         3 pad 5 backcolor white &
+                    color cool 0.99 0.98 0.94 color warm 0.97 0.83 0.35 &
+                    color shieldgold 0.95 0.75 0.05 color shieldred 0.75 0 0 &
+                    color ink 0.0 0.0 0.0 scolor * ink &
+                    cmap grid 0.0 3.0e18 ca 0.0 4 &
+                    min cool 1.1e18 warm 1.7e18 shieldgold max shieldred
+
+run                 1200

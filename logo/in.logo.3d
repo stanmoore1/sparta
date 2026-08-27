@@ -1,0 +1,59 @@
+################################################################################
+# SPARTA logo, idea 13: the emblem as a 3d medallion
+#
+# A coin flown at incidence in a hypersonic stream, in 3d rather than 2d, with
+# SPARTA's own lighting and ambient occlusion doing the shading.  The bow shock
+# stands off the windward face and wraps around the rim.
+#
+# The coin is a plain cylinder - coin.stl is generated, not the emblem.  Giving
+# it the lettering means embossing the surface, which is a modelling job rather
+# than a SPARTA one; this is here to show what the 3d render looks like.
+################################################################################
+
+dimension           3
+seed                12345
+global              gridcut 0.0 comm/sort yes
+boundary            oo rr rr
+
+create_box          -600e-1 600e-1 -400e-1 400e-1 -400e-1 400e-1
+create_grid         60 40 40
+balance_grid        rcb cell
+
+# tipped 55 degrees out of the flow so both the face and the rim are lit
+read_surf           coin.surf rotate 55.0 0.0 1.0 0.0 group coin
+surf_collide        skin diffuse 500.0 1.0
+surf_modify         all collide skin
+
+species             logo.species N O B Nh Oh Nm Om
+global              fnum 2.4e18
+
+mixture             flow N O nrho 1.17e18 temp 300 vstream 2500.0 0.0 0.0
+mixture             flow N frac 0.5
+mixture             flow O frac 0.5
+
+create_particles    flow n 0
+fix                 in emit/face flow xlo
+
+collide             vss all logo.vss
+collide_modify      vremax 100 yes
+
+# a density slice through the mid-plane: in 3d the particles themselves fill
+# the frame and hide everything behind them, so the shock is shown as a cut
+compute             dg grid all all nrho
+fix                 dga ave/grid all 5 4 20 c_dg[1]
+
+timestep            2.0e-5
+stats               100
+stats_style         step cpu np ncoll nscoll
+
+dump                3 image all 20 d3.*.ppm type type pdiam 0.7 particle no &
+                    gridz -0.5 f_dga surf one 0.01 box no 1 size 500 500 &
+                    view 70 25 zoom 1.5 shiny 0.4 ssao yes 4785 0.6
+dump_modify         3 pad 5 backcolor white &
+                    color shieldred 0.75 0 0 color shieldgold 0.95 0.75 0.05 &
+                    color cool 0.99 0.98 0.94 color warm 0.97 0.83 0.35 &
+                    scolor * shieldgold &
+                    cmap gridz 0.0 4.0e18 ca 0.0 4 &
+                    min cool 1.3e18 warm 2.2e18 shieldgold max shieldred
+
+run                 500

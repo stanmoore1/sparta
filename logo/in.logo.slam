@@ -15,9 +15,9 @@
 # The emblem starts at essentially zero temperature, so nothing blurs until the
 # front reaches it.
 #
-# 1600 steps: the front has crossed the emblem and the debris has filled the
-# box by about 1500, and past that it is uniform noise thinning out through the
-# open xhi boundary, which is nothing to watch.
+# 800 m/s rather than 2000, and 1200 steps rather than 1600.  At 2000 the
+# emblem reaches the wall in 15 steps and is gone before the eye settles; at
+# 800 the approach, the pile-up and the front crossing back all read.
 ################################################################################
 
 dimension           2
@@ -37,8 +37,8 @@ bound_modify        xlo collide wall
 species             logo.species N O B Nh Oh Nm Om
 global              fnum 8.4e16
 
-mixture             gold N nrho 1.17e18 temp 0.001 vstream -2000.0 0.0 0.0
-mixture             red  O nrho 1.17e18 temp 0.001 vstream -2000.0 0.0 0.0
+mixture             gold N nrho 1.17e18 temp 0.001 vstream -800.0 0.0 0.0
+mixture             red  O nrho 1.17e18 temp 0.001 vstream -800.0 0.0 0.0
 
 create_particles    gold n 0 region goldletters
 create_particles    gold n 0 region swirlsIn
@@ -54,11 +54,11 @@ timestep            1.0e-4
 stats               500
 stats_style         step cpu np ncoll nbound
 
-dump                3 image all 26 slam.*.ppm type type pdiam 0.9 &
+dump                3 image all 20 slam.*.ppm type type pdiam 0.9 &
                     box no 1 size 500 500 &
                     view 0 0 center s 0.5 0.5 0.5 zoom 1.98
 dump_modify         3 pad 5 backcolor white &
                     color shieldred 0.75 0 0 color shieldgold 0.95 0.75 0.05 &
                     pcolor 1 shieldgold pcolor 2 shieldred
 
-run                 1600
+run                 1200

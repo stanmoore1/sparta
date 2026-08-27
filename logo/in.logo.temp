@@ -1,0 +1,59 @@
+################################################################################
+# SPARTA logo, idea 10: the wind as a temperature field
+#
+# The emblem is a frozen (temp 0) particle field in the shield colors.  A cold
+# Mach ~9 stream enters at xhi and piles up against it, so a compression front
+# builds on the upstream face and the emblem erodes into a wake downstream.
+################################################################################
+
+dimension           2
+seed                12345
+global              gridcut 0.0 comm/sort yes
+boundary            oo rr p
+
+create_box          -600e-1 600e-1 -600e-1 600e-1 -0.5 0.5
+create_grid         100 100 1
+balance_grid        rcb cell
+
+include             emblem.regions
+
+species             logo.species N O B Nh Oh
+global              fnum 8.4e16
+
+mixture             gold Nh nrho 1.17e18 temp 1.0
+mixture             red  Oh nrho 1.17e18 temp 1.0
+mixture             wind B nrho 1.17e18 temp 300 vstream -2000.0 0.0 0.0
+
+# the emblem: gold shapes, red field behind them
+create_particles    gold n 0 region goldletters
+create_particles    gold n 0 region swirlsIn
+create_particles    gold n 0 region outerring
+create_particles    gold n 0 region innerring
+create_particles    red  n 0 region redcenter
+create_particles    red  n 0 region redband
+# the freestream fills everything outside the shield
+create_particles    wind n 0 region freefield
+fix                 in emit/face wind xhi
+
+collide             vss all logo.vss
+
+# thermal temperature per cell: what the shock actually does to the gas
+compute             tg thermal/grid all all temp
+fix                 tga ave/grid all 10 5 50 c_tg[1]
+
+timestep            1.0e-4
+stats               400
+stats_style         step cpu np ncoll
+
+dump                3 image all 100 tmp.*.ppm type type pdiam 0.9 &
+                    box no 1 size 500 500 &
+                    view 0 0 center s 0.5 0.5 0.5 zoom 1.98
+# cool far field through gold to a red stagnation cap - the emblem's palette,
+# worn by the flow field rather than by the shape
+dump_modify         3 pad 5 backcolor white &
+                    color cool 0.99 0.98 0.94 color warm 0.97 0.83 0.35 &
+                    color shieldgold 0.95 0.75 0.05 color shieldred 0.75 0 0 &
+                    cmap grid 0.0 6000.0 ca 0.0 4 &
+                    min cool 900.0 warm 2500.0 shieldgold max shieldred
+
+run                 6750
