@@ -67,10 +67,9 @@ fix                 pist rigid piston csurf body &
                     moi 1.0e6 1.0e6 1.0e6 0.0 0.0 0.0 angmom 0.0 0.0 0.0
 global              rigid pist
 
-variable            cx equal ramp(0.25,0.40)
 dump                3 image all 18 pis.*.ppm type type pdiam 0.9 &
                     surf one 0.004 box no 1 size 500 500 &
-                    view 0 0 center d v_cx 0.5 0.5 zoom 3.99
+                    view 0 0 center s 0.25 0.5 0.5 zoom 3.99
 dump_modify         3 pad 5 backcolor white &
                     color shieldred 0.75 0 0 color shieldgold 0.95 0.75 0.05 &
                     color gas 0.55 0.68 0.82 color steel 0.20 0.22 0.26 &
