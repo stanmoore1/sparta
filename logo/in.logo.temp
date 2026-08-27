@@ -45,8 +45,8 @@ timestep            1.0e-4
 stats               400
 stats_style         step cpu np ncoll
 
-dump                3 image all 100 tmp.*.ppm type type pdiam 0.9 &
-                    box no 1 size 500 500 &
+dump                3 image all 50 tmp.*.ppm type type pdiam 0.9 particle no &
+                    grid f_tga box no 1 size 500 500 &
                     view 0 0 center s 0.5 0.5 0.5 zoom 1.98
 # cool far field through gold to a red stagnation cap - the emblem's palette,
 # worn by the flow field rather than by the shape
@@ -56,4 +56,4 @@ dump_modify         3 pad 5 backcolor white &
                     cmap grid 0.0 6000.0 ca 0.0 4 &
                     min cool 900.0 warm 2500.0 shieldgold max shieldred
 
-run                 6750
+run                 3000
