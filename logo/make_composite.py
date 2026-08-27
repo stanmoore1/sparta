@@ -20,14 +20,22 @@ HOLD = 900                                              # ms on the crisp emblem
 
 SEGMENTS = ['bs', 'exp', 'let']
 
+# The bow shock opens on an empty box, so it gets a second of the crisp
+# particle emblem in front of it: the same transition the standalone gif uses,
+# borrowed from the wind run, which is the same geometry drawn as particles.
+OPENER = {'let': 'bs.00000.ppm'}
+
 frames, durs = [], []
 for prefix in SEGMENTS:
     fs = sorted(glob.glob(D + prefix + '.*.ppm'))
     fs = [fs[round(i * (len(fs) - 1) / (NF - 1))] for i in range(NF)]
     ims = [Image.open(f).convert('RGB').resize((Q, Q), Image.LANCZOS) for f in fs]
     leg = ims + ims[-2:0:-1]          # out and back, neither endpoint repeated
-    frames += leg
-    durs   += [HOLD] + [DUR] * (len(leg) - 1)
+    lead = []
+    if prefix in OPENER:
+        lead = [Image.open(D + OPENER[prefix]).convert('RGB').resize((Q, Q), Image.LANCZOS)]
+    frames += lead + leg
+    durs   += [HOLD] * (len(lead) + 1) + [DUR] * (len(leg) - 1)
 
 # Palette from the crisp emblem and a gas-filled bow shock frame together,
 # with black, white and a mid grey forced in: the bow shock's lettering is a
