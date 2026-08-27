@@ -26,14 +26,10 @@ FixStyle(emit/surf/kk,FixEmitSurfKokkos)
 #include "kokkos_copy.h"
 #include "particle_kokkos.h"
 #include "compute_surf_kokkos.h"
-#include "region_block_kokkos.h"
-#include "region_cylinder_kokkos.h"
-#include "region_plane_kokkos.h"
-#include "region_sphere_kokkos.h"
+#include "kokkos_base.h"
+#include "region_prim_kokkos.h"
 
 namespace SPARTA_NS {
-
-#define KOKKOS_MAX_SLIST 2
 
 struct TagFixEmitSurf_ninsert{};
 struct TagFixEmitSurf_perform_task{};
@@ -52,6 +48,7 @@ class FixEmitSurfKokkos : public FixEmitSurf {
   FixEmitSurfKokkos(class SPARTA *, int, char **);
   ~FixEmitSurfKokkos() override;
   void init() override;
+  void flatten_region();
   void perform_task() override;
   void perform_task_twopass() override { perform_task(); }
 
@@ -98,11 +95,27 @@ class FixEmitSurfKokkos : public FixEmitSurf {
   double acoef,nrho_mflow;
 
   KKCopy<ParticleKokkos> particle_kk_copy;
+  // the active compute surf tallies this fix drives, reached on device only
+  //   through FES_SLIST().  Same two layouts as UpdateKokkos's tally lists:
+  //   a fixed KKCopy array held by value in the functor, or one runtime-sized
+  //   device byte buffer with no cap.  See kokkos_type.h for why both exist.
+
+#ifdef SPARTA_KOKKOS_FIXED_LISTS
   KKCopy<ComputeSurfKokkos> slist_active_copy[KOKKOS_MAX_SLIST];
-  KKCopy<RegBlockKokkos> regblock_kk_copy;
-  KKCopy<RegCylinderKokkos> regcylinder_kk_copy;
-  KKCopy<RegPlaneKokkos> regplane_kk_copy;
-  KKCopy<RegSphereKokkos> regsphere_kk_copy;
+#define FES_SLIST(m) slist_active_copy[m].obj
+#else
+  DAT::tdual_char_1d k_slist_surf;
+  DAT::t_char_1d d_slist_surf;
+#define FES_SLIST(m) ((const ComputeSurfKokkos *) d_slist_surf.data())[m]
+#endif
+  // region flattened to a device-resident postfix token stream; replaces
+  //   the per-style KKCopy members and the caps that went with them.
+  //   region_flag says whether there is a region at all -- nregion_token and
+  //   d_region_tokens are only meaningful when it is 1
+
+  tdual_region_token_1d k_region_tokens;
+  t_region_token_1d d_region_tokens;
+  int nregion_token;
 
   typedef Kokkos::DualView<Task*, DeviceType::array_layout, DeviceType> tdual_task_1d;
   typedef tdual_task_1d::t_dev t_task_1d;
@@ -169,7 +182,11 @@ class FixEmitSurfKokkos : public FixEmitSurf {
   void subsonic_grid() override;
   void mflow_grid() override;
 
+#ifdef SPARTA_KOKKOS_FIXED_LISTS
+  // unused fixed slots must not alias a compute that may be reallocated or
+  //   deleted while they still reference count it
   ComputeSurfKokkos tmp_compute_surf_kk;
+#endif
 };
 
 }

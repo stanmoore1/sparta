@@ -49,6 +49,10 @@ if(SPARTA_ENABLE_TESTING)
       "surf_react_heatflux"
       "chem_rates"
       "custom"
+      "tally_computes"
+      "ambi_3body"
+      "regions"
+      "qk"
       "explicit2implicit"
       "mfp_mct"
       "optmove"
@@ -90,9 +94,6 @@ if(SPARTA_ENABLE_TESTING)
   # the non-KOKKOS configurations.
   if(SPARTA_KOKKOS_EXACT)
     list(APPEND SPARTA_DISABLED_TESTS
-        # external field fix not KOKKOS-enabled
-        "in.bfield"
-        "in.bfield.grid"
         # VTK dump styles have no KOKKOS variant
         "in.vtk"
         "in.vtk.3d"

@@ -518,7 +518,7 @@ void Input::substitute(char *&str, char *&str2, int &max, int &max2, int flag)
         if (var[i] == '\0') error->one(FLERR,"Invalid immediate variable");
         var[i] = '\0';
         beyond = ptr + strlen(var) + 3;
-        sprintf(immediate,"%.20g",variable->compute_equal(var));
+        snprintf(immediate,sizeof(immediate),"%.20g",variable->compute_equal(var));
         value = immediate;
 
       // single character variable name, e.g. $a
@@ -759,7 +759,7 @@ int Input::expand_args(int narg, char **arg, int mode, char **&earg)
 
     if (expandflag < 0) {
       char str[256];
-      sprintf(str,"Cannot use wildcard with %s because it "
+      snprintf(str,sizeof(str),"Cannot use wildcard with %s because it "
               "does not produce multiple values",arg[iarg]);
       error->all(FLERR,str);
     }
@@ -899,7 +899,7 @@ int Input::execute_command()
 
   if (sparta->suffix_enable && sparta->suffix) {
     char command2[256];
-    sprintf(command2,"%s/%s",command,sparta->suffix);
+    snprintf(command2,sizeof(command2),"%s/%s",command,sparta->suffix);
 
     if (0) return 0;      // dummy line to enable else-if macro expansion
 #define COMMAND_CLASS
@@ -1398,7 +1398,7 @@ void Input::collide_command()
   if (sparta->suffix_enable) {
     if (sparta->suffix) {
       char estyle[256];
-      sprintf(estyle,"%s/%s",arg[0],sparta->suffix);
+      snprintf(estyle,sizeof(estyle),"%s/%s",arg[0],sparta->suffix);
 
       if (0) return;
 
@@ -1532,7 +1532,7 @@ void Input::react_command()
   if (sparta->suffix_enable) {
     if (sparta->suffix) {
       char estyle[256];
-      sprintf(estyle,"%s/%s",arg[0],sparta->suffix);
+      snprintf(estyle,sizeof(estyle),"%s/%s",arg[0],sparta->suffix);
 
       if (0) return;
 

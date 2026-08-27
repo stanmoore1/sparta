@@ -198,9 +198,21 @@ int CommKokkos::migrate_particles(int nmigrate, int *plist, const DAT::t_int_1d 
   d_particles = particle_kk->k_particles.view_device();
 
   if (gpu_aware_flag && !ncustom) {
-    iparticle_kk->
-      exchange_uniform(d_sbuf,nbytes_total,
-                       (char *) (d_particles.data()+particle->nlocal),d_rbuf);
+
+    // received particles land straight in the particle list, past nlocal.
+    // exchange_uniform() also copies the self datums itself, into the view it
+    // is handed, so that view has to describe the same buffer the receives
+    // target.  d_rbuf is only allocated in the branch below, so passing it
+    // here handed the self copy a default constructed view -- extent 0, null
+    // data -- to index.  It goes unnoticed because migrate_particles never
+    // produces a self datum: a particle is on the migrate list precisely
+    // because its new cell belongs to another proc, so the destination list
+    // never contains me.  Describe the real destination instead, the way every
+    // other caller of exchange_uniform already does.
+
+    char *d_pdest = (char *) (d_particles.data()+particle->nlocal);
+    DAT::t_char_1d d_pbuf(d_pdest,(size_t)nrecv*nbytes_total);
+    iparticle_kk->exchange_uniform(d_sbuf,nbytes_total,d_pdest,d_pbuf);
   } else {
 
     // allocate exact buffer size to reduce GPU <--> CPU memory transfer

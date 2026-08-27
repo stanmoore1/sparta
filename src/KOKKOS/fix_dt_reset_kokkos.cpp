@@ -93,6 +93,9 @@ void FixDtResetKokkos::end_of_step()
     if (!fstep->kokkos_flag)
       error->all(FLERR,"Cannot (yet) use non-Kokkos fixes with fix dt/reset/kk");
     KokkosBase* computeKKBase = dynamic_cast<KokkosBase*>(fstep);
+    // a fix keeps its per-grid output between invocations and grid migration
+    // can leave it current on the host alone, so ask for the device copy
+    if (computeKKBase) computeKKBase->sync_pergrid_device_kokkos();
     if (step_index == 0)
       copy_gridstep(computeKKBase->d_vector_grid,nglocal);
     else {

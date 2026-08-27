@@ -6,10 +6,10 @@
 # ion-third-body recombination, so any gas reactions that occur exercise the
 # new functionality directly.
 #
-# A single-group mixture is used so the case runs on the KOKKOS package,
-# which currently supports only single-group collisions.  The "comm/sort"
-# and "twopass" options make MPI and Kokkos runs reproducible and should not
-# be used for production runs.
+# A single-group mixture keeps the case focused on the third-body chemistry
+# rather than on group binning; the KOKKOS package runs multigroup ambipolar
+# collisions too.  The "comm/sort" and "twopass" options make MPI and Kokkos
+# runs reproducible and should not be used for production runs.
 ################################################################################
 
 seed                12345
@@ -25,7 +25,7 @@ global              nrho 1.0e22 fnum 1.0e8
 
 species             ambi_3body.species O2 O O2+ e
 
-# collide mixture: all species in one group (required for Kokkos)
+# collide mixture: all species in one group
 mixture             plasma O2 O O2+ e temp 50000.0
 
 # create mixture: heavy species only (electrons are added by fix ambipolar)

@@ -186,7 +186,7 @@ class Particle : protected Pointers {
   virtual void pack_custom(int, char *);
   virtual void unpack_custom(char *, int);
 
-  bigint memory_usage();
+  virtual bigint memory_usage();
 
  protected:
   int me;
