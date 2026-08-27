@@ -17,11 +17,18 @@ fs = sorted(glob.glob(D + 'let.*.ppm'))
 fs = [fs[round(i * (len(fs) - 1) / (NF - 1))] for i in range(NF)]
 ims = [Image.open(f).convert('RGB').resize((Q, Q), Image.LANCZOS) for f in fs]
 
-# Build the palette from an empty frame and a full one together.  The last
-# frame alone holds no white, so quantising on it turns the background gold.
+# Build the palette from an empty frame and a full one together - the last
+# frame alone holds no white, so quantising on it turns the background gold -
+# and force black and white in by hand.  Left to choose, medians see a probe
+# that is nearly all white and orange and spend no entry on the black surface
+# outline, which then lands on the nearest gold.
 probe = Image.new('RGB', (Q * 2, Q), 'white')
 probe.paste(ims[0], (0, 0)); probe.paste(ims[-1], (Q, 0))
-pal = probe.quantize(colors=NC, method=Image.MEDIANCUT)
+adaptive = probe.quantize(colors=NC - 2, method=Image.MEDIANCUT).getpalette()[:3 * (NC - 2)]
+
+entries = [0, 0, 0, 255, 255, 255] + adaptive
+pal = Image.new('P', (1, 1))
+pal.putpalette(entries + [0] * (768 - len(entries)))
 
 qf  = [im.quantize(palette=pal, dither=Image.NONE) for im in ims]
 dur = [DUR] * len(qf); dur[0] = 1000        # hold the empty box

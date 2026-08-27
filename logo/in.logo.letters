@@ -44,7 +44,7 @@ stats               400
 stats_style         step cpu np ncoll nscoll
 
 dump                3 image all 40 let.*.ppm type type pdiam 0.9 &
-                    surf one 0.004 box no 1 size 500 500 &
+                    surf one 0.012 box no 1 size 500 500 &
                     view 0 0 center s 0.5 0.5 0.5 zoom 1.98
 dump_modify         3 pad 5 backcolor white &
                     color shieldred 0.75 0 0 color shieldgold 0.95 0.75 0.05 &
