@@ -1,10 +1,12 @@
 """Rasterise the emblem into the corner-value file read_isurf reads.
 
-The solid is the red of the emblem - the field behind the lettering and the
-field behind the swirls - and the gold is void.  So the lambda, the text, the
-swirls and both rings are holes in a real slab of material, which erodes back
-around them.  An earlier version made the gold the solid instead; those are
-strands a cell or two wide and broke up almost immediately.
+The solid is the ring of the emblem - a thick annulus from r = 37 to r = 57 -
+with the swirls cut out of it as voids, so it reads as a solid circle carrying
+the meander pattern.  Everything inside r = 37 is left empty and, being sealed
+by the ring, never sees a particle.
+
+An earlier version made the gold itself the solid; those are strands a cell or
+two wide and broke up almost immediately.
 
 Corner values are 255 inside the solid and 0 outside, thresholded at 180.5.
 """
@@ -42,12 +44,9 @@ def inside(seg, px, py, chunk=400):
     return out
 
 r = np.hypot(px, py)
-inletters = inside(read_lines('logotext2d.surf'), px, py)   # disk minus letters
-inswirls  = inside(read_lines('swirl2d.surf', 0.1), px, py)
+inswirls = inside(read_lines('swirl2d.surf', 0.1), px, py)
 
-redcentre = (r < 35.0) & inletters
-redband   = (r > 37.0) & (r < 55.0) & ~inswirls
-solid     = redcentre | redband
+solid = (r > 37.0) & (r < 57.0) & ~inswirls
 # read_isurf expects an 8 byte header of two int32 corner counts, then the data
 with open('emblem.isurf', 'wb') as fh:
     fh.write(np.array([N + 1, N + 1], dtype=np.int32).tobytes())

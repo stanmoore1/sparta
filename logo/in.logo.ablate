@@ -1,9 +1,12 @@
 ################################################################################
 # SPARTA logo, idea 4: the emblem ablating
 #
-# The red of the emblem is a solid implicit surface and the gold is void, so
-# the lambda, the text, the swirls and both rings are holes in a real slab of
-# material.  A hot half-gold half-red stream erodes it from the windward edge.
+# The emblem's ring is a solid implicit surface with the swirls cut out of it,
+# so it reads as a solid circle carrying the meander pattern.  A hot half-gold
+# half-red stream erodes it from the windward edge.
+#
+# Nothing is inside.  The ring seals its own interior, and particles are only
+# created outside it, so the disc stays empty until the flow eats through.
 #
 # The material is drawn as solid rather than as outlines by colouring the grid
 # where there is no gas: cells inside the body hold no particles, so a colour
@@ -42,7 +45,7 @@ fix                 densa ave/grid all 8 5 40 c_dens[1]
 
 compute             isc isurf/grid all all n
 fix                 isca ave/grid all 10 10 100 c_isc[*]
-fix                 ablate ablate all 100 0.4 f_isca mindist 0.1
+fix                 ablate ablate all 100 0.2 f_isca mindist 0.1
 
 global              surfs implicit
 read_isurf          all 100 100 1 emblem.isurf 180.5 ablate
@@ -53,7 +56,9 @@ surf_modify         all collide hot
 collide             vss all logo.vss
 collide_modify      vremax 100 yes
 
-create_particles    wind n 0
+# only outside the ring, so its interior starts and stays empty
+region              outside cylinder z 0.0 0.0 570e-1 INF INF side out
+create_particles    wind n 0 region outside
 fix                 in emit/face wind xhi
 
 timestep            1.0e-4

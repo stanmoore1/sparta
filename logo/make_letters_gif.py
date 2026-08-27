@@ -24,9 +24,12 @@ ims = [Image.open(f).convert('RGB').resize((Q, Q), Image.LANCZOS) for f in fs]
 # outline, which then lands on the nearest gold.
 probe = Image.new('RGB', (Q * 2, Q), 'white')
 probe.paste(ims[0], (0, 0)); probe.paste(ims[-1], (Q, 0))
-adaptive = probe.quantize(colors=NC - 2, method=Image.MEDIANCUT).getpalette()[:3 * (NC - 2)]
+adaptive = probe.quantize(colors=NC - 3, method=Image.MEDIANCUT).getpalette()[:3 * (NC - 3)]
 
-entries = [0, 0, 0, 255, 255, 255] + adaptive
+# black, white, and a mid grey: the outline is thin enough that scaling down
+# leaves grey edge pixels, and without somewhere grey to land they snap to the
+# nearest gold
+entries = [0, 0, 0, 255, 255, 255, 128, 128, 128] + adaptive
 pal = Image.new('P', (1, 1))
 pal.putpalette(entries + [0] * (768 - len(entries)))
 
