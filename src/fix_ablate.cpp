@@ -100,8 +100,10 @@ FixAblate::FixAblate(SPARTA *sparta, int narg, char **arg) :
 
     char *ptr = strchr(suffix,'[');
     if (ptr) {
-      if (suffix[strlen(suffix)-1] != ']')
+      if (suffix[strlen(suffix)-1] != ']') {
+        delete [] suffix;
         error->all(FLERR,"Illegal fix ablate command");
+      }
       argindex = atoi(ptr+1);
       *ptr = '\0';
     } else argindex = 0;

@@ -293,7 +293,7 @@ void CreateISurf::set_corners()
     MPI_Allreduce(&ofull,&allofull,1,MPI_INT,MPI_SUM,world);
     if (allofull) {
       char str[128];
-      sprintf(str,
+      snprintf(str,sizeof(str),
               "Create_isurf could not determine whether some corner \
                values are inside or outside with respect to the surface");
       error->all(FLERR,str);
@@ -384,7 +384,7 @@ void CreateISurf::set_multi()
   MPI_Allreduce(&ofull,&allofull,1,MPI_INT,MPI_SUM,world);
   if (allofull) {
     char str[128];
-    sprintf(str,
+    snprintf(str,sizeof(str),
             "Create_isurf could not determine whether some corner \
              values are inside or outside with respect to the surface");
     error->all(FLERR,str);

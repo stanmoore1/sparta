@@ -171,7 +171,7 @@ void Particle::init()
       if (species[isp].vibdof <= 2) continue;
       if (species[isp].vibdiscrete_read == 0) {
         char str[128];
-        sprintf(str,"Discrete vibrational info for species %s not read in",
+        snprintf(str,sizeof(str),"Discrete vibrational info for species %s not read in",
                 species[isp].id);
         error->all(FLERR,str);
       }
@@ -787,7 +787,7 @@ void Particle::add_species(int narg, char **arg)
     fp = fopen(arg[0],"r");
     if (fp == NULL) {
       char str[128];
-      sprintf(str,"Cannot open species file %s",arg[0]);
+      snprintf(str,128,"Cannot open species file %s",arg[0]);
       error->one(FLERR,str);
     }
   }
@@ -920,7 +920,7 @@ void Particle::add_species(int narg, char **arg)
       fp = fopen(arg[rotindex],"r");
       if (fp == NULL) {
         char str[128];
-        sprintf(str,"Cannot open rotation file %s",arg[rotindex]);
+        snprintf(str,128,"Cannot open rotation file %s",arg[rotindex]);
         error->one(FLERR,str);
       }
     }
@@ -969,7 +969,7 @@ void Particle::add_species(int narg, char **arg)
       fp = fopen(arg[vibindex],"r");
       if (fp == NULL) {
         char str[128];
-        sprintf(str,"Cannot open vibration file %s",arg[vibindex]);
+        snprintf(str,128,"Cannot open vibration file %s",arg[vibindex]);
         error->one(FLERR,str);
       }
     }

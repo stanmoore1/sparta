@@ -25,7 +25,7 @@
 
 <LI>zero or more keyword/value pairs may be appended 
 
-<LI>keyword = <I>n</I> or <I>normal</I> or <I>nevery</I> or <I>perspecies</I> or <I>region</I> or <I>subsonic</I> or <I>mflow</I> or <I>custom</I> 
+<LI>keyword = <I>n</I> or <I>normal</I> or <I>nevery</I> or <I>perspecies</I> or <I>region</I> or <I>subsonic</I> or <I>mflow</I> or <I>custom</I> or <I>twopass</I> 
 
 <PRE>  <I>n</I> value = Np = number of particles to create
                    Np can be a variable (see below)
@@ -45,7 +45,8 @@
       <I>window</I> value = Nwin = moving-average window for the cell streaming velocity
   <I>custom</I> values = attribute s_name
     attribute = <I>density</I> or <I>temperature</I> or <I>vstream</I> or <I>speed</I> or <I>fractions</I>
-    s_name = custom per-surf vector or array with name 
+    s_name = custom per-surf vector or array with name
+  <I>twopass</I> values = none 
 </PRE>
 
 </UL>
@@ -427,6 +428,16 @@ mixture.  This is determined by the <A HREF = "mixture.html">mixture</A> command
 It is the order the gas species names were listed when the mixture
 command was specified (one or more times).
 </P>
+<P>The <I>twopass</I> keyword does not require a value.  If used, the
+insertion procedure will loop over the insertion surface elements
+twice, the same as the KOKKOS package version of this fix does, so
+that it can reallocate memory efficiently, e.g. on a GPU.  If this
+keyword is used the non-KOKKOS and KOKKOS version will generate
+exactly the same set of particles, which makes debugging easier.  If
+the keyword is not used, the non-KOKKOS and KOKKOS runs will use
+random numbers differently and thus generate different particles,
+though they will be statistically similar.
+</P>
 <HR>
 
 <P><B>Restart, output info:</B>
@@ -440,6 +451,29 @@ number of particles added on the most recent insertion step.  The
 second element is the cummulative total number added since the
 beginning of the run.  The 2nd value is initialized to zero each time
 a run is performed.
+</P>
+<HR>
+
+<P>Styles with a <I>kk</I> suffix are functionally the same as the
+corresponding style without the suffix.  They have been optimized to
+run faster, depending on your available hardware, as discussed in the
+<A HREF = "Section_accelerate.html">Accelerating SPARTA</A> section of the manual.
+The accelerated styles take the same arguments and should produce the
+same results, except for different random number, round-off and
+precision issues.
+</P>
+<P>These accelerated styles are part of the KOKKOS package. They are only
+enabled if SPARTA was built with that package.  See the <A HREF = "Section_start.html#start_3">Making
+SPARTA</A> section for more info.
+</P>
+<P>You can specify the accelerated styles explicitly in your input script
+by including their suffix, or you can use the <A HREF = "Section_start.html#start_7">-suffix command-line
+switch</A> when you invoke SPARTA, or you can
+use the <A HREF = "suffix.html">suffix</A> command in your input script.
+</P>
+<P>See the <A HREF = "Section_accelerate.html">Accelerating SPARTA</A> section of the
+manual for more instructions on how to use the accelerated styles
+effectively.
 </P>
 <P><B>Restrictions:</B>
 </P>
@@ -465,9 +499,9 @@ emit/face</A>
 <P><B>Default:</B>
 </P>
 <P>The keyword defaults are n = 0, normal = no, nevery = 1, perspecies =
-yes, region = none, no subsonic settings, no mflow settings.  For the
-<I>subsonic</I> and <I>mflow</I> keywords, the moving-average window defaults to
-0 (no smoothing).
+yes, region = none, no subsonic settings, no mflow settings, no
+twopass setting.  For the <I>subsonic</I> and <I>mflow</I> keywords, the
+moving-average window defaults to 0 (no smoothing).
 </P>
 <HR>
 
