@@ -1,0 +1,4 @@
+# simulation output, regenerate with: ../src/spa_serial -in in.logo
+*.ppm
+log.sparta
+run.log
