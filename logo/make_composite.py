@@ -18,16 +18,16 @@ NC   = int(sys.argv[3]) if len(sys.argv) > 3 else 10
 DUR  = int(sys.argv[4]) if len(sys.argv) > 4 else 140
 HOLD = 900                                              # ms on the crisp emblem
 
-SEGMENTS = ['slam', 'bs', 'exp', 'let']
+SEGMENTS = ['slam', 'bs', 'exp']
 
 # The bow shock opens on an empty box, so it gets a second of the crisp
 # particle emblem in front of it: the same transition the standalone gif uses,
 # borrowed from the wind run, which is the same geometry drawn as particles.
-OPENER = {'let': 'bs.00000.ppm'}
+OPENER = {}
 
 # and it closes on a second of the empty box: the ping-pong leaves it one frame
 # short of empty, which is not somewhere to rest
-TAIL = {'let': 'let.00000.ppm'}
+TAIL = {}
 
 frames, durs = [], []
 for prefix in SEGMENTS:

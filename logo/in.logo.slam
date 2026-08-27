@@ -23,7 +23,7 @@
 dimension           2
 seed                12345
 global              gridcut 0.0 comm/sort yes
-boundary            so rr p
+boundary            os rr p
 
 create_box          -600e-1 600e-1 -600e-1 600e-1 -0.5 0.5
 create_grid         100 100 1
@@ -32,13 +32,13 @@ balance_grid        rcb cell
 include             emblem.regions
 
 surf_collide        wall diffuse 5000.0 1.0
-bound_modify        xlo collide wall
+bound_modify        xhi collide wall
 
 species             logo.species N O B Nh Oh Nm Om
 global              fnum 8.4e16
 
-mixture             gold N nrho 1.17e18 temp 0.001 vstream -800.0 0.0 0.0
-mixture             red  O nrho 1.17e18 temp 0.001 vstream -800.0 0.0 0.0
+mixture             gold N nrho 1.17e18 temp 0.001 vstream 800.0 0.0 0.0
+mixture             red  O nrho 1.17e18 temp 0.001 vstream 800.0 0.0 0.0
 
 create_particles    gold n 0 region goldletters
 create_particles    gold n 0 region swirlsIn
