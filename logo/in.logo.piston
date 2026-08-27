@@ -37,8 +37,8 @@ seed                12345
 global              gridcut 0.0 comm/sort yes
 boundary            oo rr p
 
-create_box          -600e-1 1800e-1 -600e-1 600e-1 -0.5 0.5
-create_grid         200 100 1
+create_box          -600e-1 600e-1 -600e-1 600e-1 -0.5 0.5
+create_grid         100 100 1
 balance_grid        rcb cell
 
 include             emblem.regions
@@ -79,9 +79,9 @@ fix                 pist rigid piston csurf body &
                     moi 1.0e6 1.0e6 1.0e6 0.0 0.0 0.0 angmom 0.0 0.0 0.0
 global              rigid pist
 
-dump                3 image all 260 pis.*.ppm type type pdiam 0.9 &
+dump                3 image all 65 pis.*.ppm type type pdiam 0.9 &
                     box no 1 size 500 500 &
-                    view 0 0 center s 0.25 0.5 0.5 zoom 3.99
+                    view 0 0 center s 0.5 0.5 0.5 zoom 1.98
 dump_modify         3 pad 5 backcolor white &
                     color shieldred 0.75 0 0 color shieldgold 0.95 0.75 0.05 &
                     pcolor 1 shieldgold pcolor 2 shieldred pcolor 3 white &
@@ -93,4 +93,4 @@ run                 38
 # ---- 2. fixed: the slab stops dead, the shock runs on alone ----
 global              rigid NULL
 unfix               pist
-run                 15962
+run                 3962
