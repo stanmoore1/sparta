@@ -8,6 +8,10 @@
 # Nothing is inside.  The ring seals its own interior, and particles are only
 # created outside it, so the disc stays empty until the flow eats through.
 #
+# 4000 steps consumes it: 95% of the material is left at step 400, 52% at 1200,
+# 34% at 2000, 8% at 2800 and none by 3600.  16000 steps was tried and the last
+# three quarters of it is an empty box.
+#
 # The material is drawn as solid rather than as outlines by colouring the grid
 # where there is no gas: cells inside the body hold no particles, so a colour
 # map that paints zero density red and everything above it white fills the body
@@ -45,10 +49,10 @@ mixture             wind O frac 0.5
 # surface collisions per cell drive the recession
 # zero-density cells are the ones inside the body; the colour map fills them
 compute             dens grid all all nrho
-fix                 densa ave/grid all 8 5 40 c_dens[1]
+fix                 densa ave/grid all 4 5 20 c_dens[1]
 
 compute             isc isurf/grid all all n
-fix                 isca ave/grid all 10 10 100 c_isc[*]
+fix                 isca ave/grid all 5 4 20 c_isc[*]
 fix                 ablate ablate all 100 0.2 f_isca mindist 0.1
 
 global              surfs implicit
@@ -73,9 +77,11 @@ timestep            1.0e-4
 stats               500
 stats_style         step cpu np nscoll
 
-# the dump interval has to be a common multiple of both ave/grid Nfreqs, 40
-# and 100, or dump image refuses the fixes as computed at incompatible times
-dump                3 image all 200 abl.*.ppm type type pdiam 0.9 &
+# the dump interval has to be a common multiple of both ave/grid Nfreqs, or
+# dump image refuses the fixes as computed at incompatible times.  Both are on
+# 20 so that a 80 step dump works; at 40 and 100 the finest legal interval was
+# 200, which is too coarse for a 4000 step run.
+dump                3 image all 80 abl.*.ppm type type pdiam 0.9 &
                     grid f_densa surf one 0.002 box no 1 size 500 500 &
                     view 0 0 center s 0.5 0.5 0.5 zoom 1.98
 dump_modify         3 pad 5 backcolor white gridgroup ringcells &
@@ -84,4 +90,4 @@ dump_modify         3 pad 5 backcolor white gridgroup ringcells &
                     pcolor 1 shieldgold pcolor 2 shieldred scolor * slate &
                     cmap grid 0.0 4.0e17 cf 0.0 2 min shieldred max clear
 
-run                 16000
+run                 4000
