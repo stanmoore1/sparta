@@ -1,0 +1,52 @@
+################################################################################
+# SPARTA logo, idea 8: a bow shock on the lettering itself
+#
+# Only the lambda and the SPARTA text are surfaces - letters.surf, lifted out
+# of logotext2d.surf, which also carries the r = 37 boundary circle the other
+# variants use.  A Mach ~9 stream is run over them, so each letter carries its
+# own bow shock and drags its own wake, and the gaps between them choke.
+#
+# The gas is half gold and half red, which is the emblem's palette worn by the
+# flow rather than by the shape.
+################################################################################
+
+dimension           2
+seed                12345
+global              gridcut 0.0 comm/sort yes
+boundary            oo rr p
+
+create_box          -600e-1 600e-1 -600e-1 600e-1 -0.5 0.5
+create_grid         100 100 1
+balance_grid        rcb cell
+
+read_surf           letters.surf group letters
+surf_collide        skin diffuse 300.0 1.0
+surf_modify         all collide skin
+
+species             logo.species N O B Nh Oh Nm Om
+global              fnum 8.4e16
+
+# half gold, half red: equal fractions of the two emblem species
+mixture             flow N O nrho 1.17e18 temp 300 vstream -2000.0 0.0 0.0
+mixture             flow N frac 0.5
+mixture             flow O frac 0.5
+
+create_particles    flow n 0
+fix                 in emit/face flow xhi
+
+collide             vss all logo.vss
+collide_modify      vremax 100 yes
+
+timestep            1.0e-4
+stats               400
+stats_style         step cpu np ncoll nscoll
+
+dump                3 image all 40 let.*.ppm type type pdiam 0.9 &
+                    surf one 0.004 box no 1 size 500 500 &
+                    view 0 0 center s 0.5 0.5 0.5 zoom 1.98
+dump_modify         3 pad 5 backcolor white &
+                    color shieldred 0.75 0 0 color shieldgold 0.95 0.75 0.05 &
+                    color slate 0.25 0.27 0.32 &
+                    pcolor 1 shieldgold pcolor 2 shieldred scolor * slate
+
+run                 2400

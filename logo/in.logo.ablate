@@ -1,9 +1,17 @@
 ################################################################################
 # SPARTA logo, idea 4: the emblem ablating
 #
-# The gold of the logo - letters, swirls, both rings - is a solid implicit
-# surface, and a hot stream is run over it.  Where the flow strikes hardest the
-# material recedes, so the mark thins and breaks up from the windward side.
+# The red of the emblem is a solid implicit surface and the gold is void, so
+# the lambda, the text, the swirls and both rings are holes in a real slab of
+# material.  A hot half-gold half-red stream erodes it from the windward edge.
+#
+# The material is drawn as solid rather than as outlines by colouring the grid
+# where there is no gas: cells inside the body hold no particles, so a colour
+# map that paints zero density red and everything above it white fills the body
+# in and leaves the flow to the particles.
+#
+# An earlier version made the gold the solid instead.  Those are strands a cell
+# or two wide and broke up almost immediately.
 #
 # This is the application SPARTA exists for, and the emblem is a shield.
 #
@@ -22,12 +30,19 @@ balance_grid        rcb cell
 
 species             logo.species N O B Nh Oh Nm Om
 global              fnum 8.4e16
-mixture             wind B nrho 1.17e18 temp 300 vstream -2000.0 0.0 0.0
+# half gold, half red: the emblem's palette worn by the flow
+mixture             wind N O nrho 1.17e18 temp 300 vstream -2000.0 0.0 0.0
+mixture             wind N frac 0.5
+mixture             wind O frac 0.5
 
 # surface collisions per cell drive the recession
+# zero-density cells are the ones inside the body; the colour map fills them
+compute             dens grid all all nrho
+fix                 densa ave/grid all 8 5 40 c_dens[1]
+
 compute             isc isurf/grid all all n
 fix                 isca ave/grid all 10 10 100 c_isc[*]
-fix                 ablate ablate all 100 0.4 f_isca
+fix                 ablate ablate all 100 0.4 f_isca mindist 0.1
 
 global              surfs implicit
 read_isurf          all 100 100 1 emblem.isurf 180.5 ablate
@@ -46,10 +61,12 @@ stats               500
 stats_style         step cpu np nscoll
 
 dump                3 image all 40 abl.*.ppm type type pdiam 0.9 &
-                    surf one 0.003 box no 1 size 500 500 &
+                    grid f_densa surf one 0.002 box no 1 size 500 500 &
                     view 0 0 center s 0.5 0.5 0.5 zoom 1.98
 dump_modify         3 pad 5 backcolor white &
-                    color shieldgold 0.95 0.75 0.05 &
-                    scolor * shieldgold ptrans 3 0.0
+                    color shieldgold 0.95 0.75 0.05 color shieldred 0.75 0 0 &
+                    color slate 0.30 0.10 0.10 color clear 1.0 1.0 1.0 &
+                    pcolor 1 shieldgold pcolor 2 shieldred scolor * slate &
+                    cmap grid 0.0 4.0e17 cf 0.0 2 min shieldred max clear
 
 run                 2400
