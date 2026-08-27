@@ -3,7 +3,7 @@
 #
 # The piston is a rigid slab driven by fix rigid at a constant 800 m/s.  Its
 # mass is set enormous compared with the gas it sweeps, so the gas cannot slow
-# it: the strike is at constant speed, not a deceleration.  After 300 steps the
+# it: the strike is at constant speed, not a deceleration.  After 150 steps the
 # fix is removed and the slab stops dead and stays put, while the shock it
 # launched runs on through the emblem by itself.
 #
@@ -67,7 +67,7 @@ fix                 pist rigid piston csurf body &
                     moi 1.0e6 1.0e6 1.0e6 0.0 0.0 0.0 angmom 0.0 0.0 0.0
 global              rigid pist
 
-dump                3 image all 18 pis.*.ppm type type pdiam 0.9 &
+dump                3 image all 30 pis.*.ppm type type pdiam 0.9 &
                     surf one 0.004 box no 1 size 500 500 &
                     view 0 0 center s 0.25 0.5 0.5 zoom 3.99
 dump_modify         3 pad 5 backcolor white &
@@ -76,10 +76,10 @@ dump_modify         3 pad 5 backcolor white &
                     pcolor 1 shieldgold pcolor 2 shieldred pcolor 3 gas &
                     ptrans 3 0.25 scolor * steel
 
-# ---- 1. strike: 300 steps at 800 m/s = 24 units, about a fifth of the emblem
-run                 300
+# ---- 1. strike: 150 steps at 800 m/s = 12 units, a tenth of the emblem ----
+run                 150
 
 # ---- 2. fixed: the slab stops dead, the shock runs on alone ----
 global              rigid NULL
 unfix               pist
-run                 900
+run                 1650
