@@ -3,8 +3,9 @@
 #
 # Only the lambda and the SPARTA text are surfaces - letters.surf, lifted out
 # of logotext2d.surf, which also carries the r = 37 boundary circle the other
-# variants use.  A Mach ~9 stream is run over them, so each letter carries its
-# own bow shock and drags its own wake, and the gaps between them choke.
+# variants use.  The domain starts empty and a Mach ~9 stream enters at xlo, so
+# the bow shocks build in front of each letter as the gas arrives rather than
+# being there from the first frame, and the gaps between the letters choke.
 #
 # The gas is half gold and half red, which is the emblem's palette worn by the
 # flow rather than by the shape.
@@ -27,12 +28,13 @@ species             logo.species N O B Nh Oh Nm Om
 global              fnum 8.4e16
 
 # half gold, half red: equal fractions of the two emblem species
-mixture             flow N O nrho 1.17e18 temp 300 vstream -2000.0 0.0 0.0
+mixture             flow N O nrho 1.17e18 temp 300 vstream 2000.0 0.0 0.0
 mixture             flow N frac 0.5
 mixture             flow O frac 0.5
 
-create_particles    flow n 0
-fix                 in emit/face flow xhi
+# start empty and let the stream fill the domain, so the bow shocks build up
+# in front of each letter rather than being there from the first frame
+fix                 in emit/face flow xlo
 
 collide             vss all logo.vss
 collide_modify      vremax 100 yes
