@@ -9,16 +9,24 @@
 # accurate of the two schemes it offers and is worth it here, since the body
 # turns through a full revolution during the run.
 #
-# This one needs the surf-rigid-body branch: fix rigid does not exist in
-# mainline SPARTA.  Mainline can turn a surface with fix move/surf rotate, but
-# only geometrically - measured over 400 steps that logs 15 surface collisions
-# while deleting 40700 particles, because SPARTA finds collisions along the
-# particle's path and a surface sweeping across gas erases it rather than
-# reflecting it.  fix rigid does swept coverage: 352 collisions, none deleted.
+# This one needs the surf-rigid-body branch: fix rigid is not in mainline, and
+# mainline cannot do both halves of a spinning body at once.  Measured over the
+# same 400 steps, surface collisions against particles deleted:
 #
-# The mainline-honest alternative is static geometry plus surf_collide diffuse
-# ... rotate, which gives reflected particles the surface's local rotational
-# velocity.  Correct physics, but the mark does not visibly turn.
+#   fix move/surf rotate, every 5 steps       15 collisions   40700 deleted
+#   fix move/surf rotate, every step           0 collisions   41310 deleted
+#   surf_collide ... rotate, static geometry 374 collisions       0 deleted
+#   fix rigid (this file, 800 steps)         352 collisions       0 deleted
+#
+# move/surf does no swept collision detection - the 15 above are incidental
+# crossings, and moving in finer increments removes even those - so a surface
+# turning across the gas erases what it sweeps.  surf_collide's rotate keyword
+# reflects correctly, giving particles the surface's local rotational velocity,
+# but the geometry stays put so the mark does not visibly turn.
+#
+# fix rigid is the only one that both turns the mark and reflects off it, and
+# unlike the other two the rotation can be driven by gas torque rather than
+# dictated.
 ################################################################################
 
 dimension           2
