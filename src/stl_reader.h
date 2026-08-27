@@ -76,6 +76,11 @@ class STLReader : protected Pointers {
 
   static std::vector<Triangle> parse(const std::string &, std::string * = NULL);
 
+  // not part of the LAMMPS class, for callers that accept more than one
+  // mesh format and have to decide which reader to use
+
+  static bool is_stl_file(const std::string &);
+
  private:
   static std::vector<Triangle> parse_text(const std::string &, std::string &);
   static std::vector<Triangle> parse_binary(FILE *, std::string &);

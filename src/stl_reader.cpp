@@ -178,6 +178,44 @@ int STLReader::read_file(const char *filename, double **&caller_tris)
 }
 
 /* ----------------------------------------------------------------------
+   1 if the file is in STL format, else 0
+   a binary STL file has a size of exactly 84 + 50*N bytes for N triangles
+   an ASCII STL file starts with the solid keyword
+   throws an STLReaderException if the file cannot be opened
+------------------------------------------------------------------------- */
+
+bool STLReader::is_stl_file(const std::string &filename)
+{
+  FILE *fp = fopen(filename.c_str(),"rb");
+  if (!fp) throw STLReaderException("Cannot open mesh file " + filename);
+
+  bool is_stl = false;
+
+  if (fseek(fp,0,SEEK_END) == 0) {
+    long filesize = ftell(fp);
+    if (filesize >= STL_BIN_HEADER) {
+      uint32_t ntri_claim = 0;
+      if (fseek(fp,80,SEEK_SET) == 0 &&
+          fread(&ntri_claim,sizeof(ntri_claim),1,fp) == 1) {
+        bigint expected = (bigint) STL_BIN_HEADER +
+          (bigint) ntri_claim * STL_BIN_PER_TRI;
+        if (expected == (bigint) filesize) is_stl = true;
+      }
+    }
+  }
+
+  if (!is_stl) {
+    rewind(fp);
+    char buf[MAXLINE];
+    char *line = next_line(fp,buf);
+    if (line && utils::strmatch(line,"^ *solid")) is_stl = true;
+  }
+
+  fclose(fp);
+  return is_stl;
+}
+
+/* ----------------------------------------------------------------------
    read and parse an STL file and return its triangles
    independent of any SPARTA instance and does not communicate
    whether the file is text or binary is detected from its contents:
