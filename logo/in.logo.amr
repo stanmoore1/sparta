@@ -1,0 +1,105 @@
+################################################################################
+# SPARTA logo, idea 2: a flat piston strikes the emblem, then holds
+#
+# The piston is a rigid slab driven by fix rigid at a constant 800 m/s.  Its
+# mass is set enormous compared with the gas it sweeps, so the gas cannot slow
+# it: the strike is at constant speed, not a deceleration.  After 38 steps the
+# fix is removed and the slab stops dead and stays put, while the shock it
+# launched runs on through the emblem by itself.
+#
+# fix rigid is what makes this possible.  fix move/surf cannot: SPARTA finds
+# particle-surface collisions along the particle's own path, so a slab swept
+# across a gas at rest registers no collisions (nscoll stays 0) and the
+# particles it overruns are simply deleted - 42k of them, a clean wipe with no
+# compression.  fix rigid on this branch does swept collision coverage and
+# deletes nothing in the body's path.
+#
+# The slab itself is not drawn - no surf keyword on the dump - so what shows
+# is only the emblem and what the strike does to it.
+#
+# The gas around the emblem is simulated but not drawn.  It has to be there or
+# the front is not planar - with vacuum outside the disk the shocked gas
+# expands radially instead of staying flat - but ptrans 0.0 keeps it out of the
+# picture.  That is a real skip, not a dither: draw_sphere returns immediately
+# on zero opacity, where an intermediate ptrans would stipple it through a
+# Bayer matrix.
+#
+# The gas is at essentially zero temperature, so nothing diffuses ahead of the
+# front and the emblem stays pixel-crisp until the shock reaches it.  What blur
+# there is behind the front is the shock's own heating, which is real: a strong
+# shock turns directed energy into heat, and the post-shock temperature goes as
+# the square of the piston speed.  800 m/s leaves ~600 K rather than the
+# ~8000 K a 3000 m/s piston would, which is why it is this slow.
+################################################################################
+
+dimension           2
+seed                12345
+global              gridcut 0.0 comm/sort yes
+boundary            oo rr p
+
+create_box          -600e-1 600e-1 -600e-1 600e-1 -0.5 0.5
+create_grid         100 100 1
+balance_grid        rcb cell
+
+include             emblem.regions
+
+read_surf           piston.surf invert group piston
+surf_collide        face specular
+surf_modify         all collide face
+
+species             logo.species N O B Nh Oh
+global              fnum 8.4e16
+
+mixture             gold N nrho 1.17e18 temp 0.001
+mixture             red  O nrho 1.17e18 temp 0.001
+# gas around the emblem: not drawn, but the front needs it to stay planar -
+# expanding into vacuum instead, it goes radial
+mixture             bg   B nrho 1.17e18 temp 0.001
+
+create_particles    gold n 0 region goldletters
+create_particles    gold n 0 region swirlsIn
+create_particles    gold n 0 region outerring
+create_particles    gold n 0 region innerring
+create_particles    red  n 0 region redcenter
+create_particles    red  n 0 region redband
+create_particles    bg   n 0 region freefield
+
+collide             vss all logo.vss
+collide_modify      vremax 100 yes
+
+timestep            1.0e-4
+stats               200
+stats_style         step cpu np ncoll nscoll
+
+# per-surf force tallies fix rigid needs, and a mass far above the ~2e-4 kg of
+# gas the slab sweeps, so the strike does not decelerate
+compute             csurf surf piston all fx fy fz tx ty tz com -58.25 0.0 0.0
+fix                 pist rigid piston csurf body &
+                    mass 1.0 com -58.25 0.0 0.0 vcom 800.0 0.0 0.0 &
+                    moi 1.0e6 1.0e6 1.0e6 0.0 0.0 0.0 angmom 0.0 0.0 0.0
+global              rigid pist
+
+# refine where the particles pile up, coarsen where they thin out, so the grid
+# tracks the front across the emblem
+fix                 amr adapt 100 all refine coarsen particle 12 60 maxlevel 3
+
+
+dump                3 image all 68 amr.*.ppm type type pdiam 0.6 &
+                    gline yes 0.0015 box no 1 size 500 500 &
+                    view 0 0 center s 0.5 0.5 0.5 zoom 1.98
+dump_modify         3 pad 5 backcolor white glinecolor gray &
+                    color shieldred 0.75 0 0 color shieldgold 0.95 0.75 0.05 &
+                    pcolor 1 shieldgold pcolor 2 shieldred pcolor 3 white &
+                    ptrans 3 0.0
+
+# ---- 1. strike: 38 steps at 800 m/s = 3 units, an eighth of the original ----
+run                 38
+
+# ---- 2. fixed: the slab stops dead, the shock runs on alone ----
+# 4000 steps is where the disturbance front reaches the far wall: measured at
+# x = 45 by step 780, 54 by 3120, and hard against the boundary at 3900.  It
+# saturates there, so a longer run adds nothing - 12000 steps leaves the front
+# in exactly the same place.
+global              rigid NULL
+unfix               pist
+run                 4162

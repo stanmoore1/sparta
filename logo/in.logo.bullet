@@ -1,0 +1,63 @@
+################################################################################
+# SPARTA logo, idea 5: a projectile punched through the emblem
+#
+# A small rigid disk crosses the emblem at 2000 m/s, carrying its own bow wave
+# and dragging a wake behind it.  The emblem is the medium: at essentially zero
+# temperature it does not diffuse, so the channel the disk carves stays sharp
+# and the logo is legible either side of it.
+#
+# This is what fix rigid from surf-rigid-body is actually for - a body moving
+# through a gas - as opposed to the piston, where it stands in for a wall.
+################################################################################
+
+dimension           2
+seed                12345
+global              gridcut 0.0 comm/sort yes
+boundary            oo rr p
+
+create_box          -600e-1 600e-1 -600e-1 600e-1 -0.5 0.5
+create_grid         100 100 1
+balance_grid        rcb cell
+
+include             emblem.regions
+
+read_surf           bullet.surf group bullet
+surf_collide        skin specular
+surf_modify         all collide skin
+
+species             logo.species N O B Nh Oh Nm Om
+global              fnum 8.4e16
+
+mixture             gold N nrho 1.17e18 temp 0.001
+mixture             red  O nrho 1.17e18 temp 0.001
+mixture             bg   B nrho 1.17e18 temp 0.001
+
+create_particles    gold n 0 region goldletters
+create_particles    gold n 0 region swirlsIn
+create_particles    gold n 0 region outerring
+create_particles    gold n 0 region innerring
+create_particles    red  n 0 region redcenter
+create_particles    red  n 0 region redband
+create_particles    bg   n 0 region freefield
+
+collide             vss all logo.vss
+collide_modify      vremax 100 yes
+
+timestep            1.0e-4
+stats               200
+stats_style         step cpu np ncoll nscoll
+
+compute             csurf surf bullet all fx fy fz tx ty tz com -50.0 0.0 0.0
+fix                 shot rigid bullet csurf body &
+                    mass 1.0 com -50.0 0.0 0.0 vcom 2000.0 0.0 0.0 &
+                    moi 1.0e6 1.0e6 1.0e6 0.0 0.0 0.0 angmom 0.0 0.0 0.0
+global              rigid shot
+
+dump                3 image all 9 shot.*.ppm type type pdiam 0.9 &
+                    box no 1 size 500 500 &
+                    view 0 0 center s 0.5 0.5 0.5 zoom 1.98
+dump_modify         3 pad 5 backcolor white &
+                    color shieldred 0.75 0 0 color shieldgold 0.95 0.75 0.05 &
+                    pcolor 1 shieldgold pcolor 2 shieldred ptrans 3 0.0
+
+run                 540

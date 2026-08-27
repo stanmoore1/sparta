@@ -1,0 +1,55 @@
+################################################################################
+# SPARTA logo, idea 4: the emblem ablating
+#
+# The gold of the logo - letters, swirls, both rings - is a solid implicit
+# surface, and a hot stream is run over it.  Where the flow strikes hardest the
+# material recedes, so the mark thins and breaks up from the windward side.
+#
+# This is the application SPARTA exists for, and the emblem is a shield.
+#
+# emblem.isurf is written by make_isurf.py, which rasterises the same geometry
+# the other variants fill with particles onto the grid's corner points.
+################################################################################
+
+dimension           2
+seed                12345
+global              gridcut 0.0 comm/sort yes
+boundary            oo rr p
+
+create_box          -600e-1 600e-1 -600e-1 600e-1 -0.5 0.5
+create_grid         100 100 1
+balance_grid        rcb cell
+
+species             logo.species N O B Nh Oh Nm Om
+global              fnum 8.4e16
+mixture             wind B nrho 1.17e18 temp 300 vstream -2000.0 0.0 0.0
+
+# surface collisions per cell drive the recession
+compute             isc isurf/grid all all n
+fix                 isca ave/grid all 10 10 100 c_isc[*]
+fix                 ablate ablate all 100 0.4 f_isca
+
+global              surfs implicit
+read_isurf          all 100 100 1 emblem.isurf 180.5 ablate
+
+surf_collide        hot diffuse 1000.0 1.0
+surf_modify         all collide hot
+
+collide             vss all logo.vss
+collide_modify      vremax 100 yes
+
+create_particles    wind n 0
+fix                 in emit/face wind xhi
+
+timestep            1.0e-4
+stats               500
+stats_style         step cpu np nscoll
+
+dump                3 image all 40 abl.*.ppm type type pdiam 0.9 &
+                    surf one 0.003 box no 1 size 500 500 &
+                    view 0 0 center s 0.5 0.5 0.5 zoom 1.98
+dump_modify         3 pad 5 backcolor white &
+                    color shieldgold 0.95 0.75 0.05 &
+                    scolor * shieldgold ptrans 3 0.0
+
+run                 2400
