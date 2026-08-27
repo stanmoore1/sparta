@@ -25,17 +25,23 @@ SEGMENTS = ['bs', 'exp', 'let']
 # borrowed from the wind run, which is the same geometry drawn as particles.
 OPENER = {'let': 'bs.00000.ppm'}
 
+# and it closes on a second of the empty box: the ping-pong leaves it one frame
+# short of empty, which is not somewhere to rest
+TAIL = {'let': 'let.00000.ppm'}
+
 frames, durs = [], []
 for prefix in SEGMENTS:
     fs = sorted(glob.glob(D + prefix + '.*.ppm'))
     fs = [fs[round(i * (len(fs) - 1) / (NF - 1))] for i in range(NF)]
     ims = [Image.open(f).convert('RGB').resize((Q, Q), Image.LANCZOS) for f in fs]
     leg = ims + ims[-2:0:-1]          # out and back, neither endpoint repeated
-    lead = []
+    lead, tail = [], []
     if prefix in OPENER:
         lead = [Image.open(D + OPENER[prefix]).convert('RGB').resize((Q, Q), Image.LANCZOS)]
-    frames += lead + leg
-    durs   += [HOLD] * (len(lead) + 1) + [DUR] * (len(leg) - 1)
+    if prefix in TAIL:
+        tail = [Image.open(D + TAIL[prefix]).convert('RGB').resize((Q, Q), Image.LANCZOS)]
+    frames += lead + leg + tail
+    durs   += [HOLD] * (len(lead) + 1) + [DUR] * (len(leg) - 1) + [HOLD] * len(tail)
 
 # Palette from the crisp emblem and a gas-filled bow shock frame together,
 # with black, white and a mid grey forced in: the bow shock's lettering is a
