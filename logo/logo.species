@@ -21,3 +21,8 @@ B  40.00    6.63E-26  0    .0   0   .0    0.0    1.0      0.0
 # hypersonic stream deforms the emblem slowly instead of erasing it in a blink
 Nh 4000.00  6.63E-24  0    .0   0   .0    0.0    1.0      0.0
 Oh 4000.00  6.63E-24  0    .0   0   .0    0.0    1.0      0.0
+
+# 10x mass: heavy enough that the emblem holds together while a front crosses
+# it, light enough that it visibly responds instead of sitting there inert
+Nm  400.00  6.63E-25  0    .0   0   .0    0.0    1.0      0.0
+Om  400.00  6.63E-25  0    .0   0   .0    0.0    1.0      0.0
