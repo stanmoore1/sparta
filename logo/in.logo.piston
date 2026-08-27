@@ -17,9 +17,12 @@
 # The slab itself is not drawn - no surf keyword on the dump - so what shows
 # is only the emblem and what the strike does to it.
 #
-# There is no gas around the emblem: the slab face starts at x = -57.5 and the
-# emblem at -57, so a 3 unit stroke strikes it directly, and the emblem is its
-# own medium.  What it expands into afterwards is vacuum.
+# The gas around the emblem is simulated but not drawn.  It has to be there or
+# the front is not planar - with vacuum outside the disk the shocked gas
+# expands radially instead of staying flat - but ptrans 0.0 keeps it out of the
+# picture.  That is a real skip, not a dither: draw_sphere returns immediately
+# on zero opacity, where an intermediate ptrans would stipple it through a
+# Bayer matrix.
 #
 # The gas is at essentially zero temperature, so nothing diffuses ahead of the
 # front and the emblem stays pixel-crisp until the shock reaches it.  What blur
@@ -49,6 +52,9 @@ global              fnum 8.4e16
 
 mixture             gold N nrho 1.17e18 temp 0.001
 mixture             red  O nrho 1.17e18 temp 0.001
+# gas around the emblem: not drawn, but the front needs it to stay planar -
+# expanding into vacuum instead, it goes radial
+mixture             bg   B nrho 1.17e18 temp 0.001
 
 create_particles    gold n 0 region goldletters
 create_particles    gold n 0 region swirlsIn
@@ -56,6 +62,7 @@ create_particles    gold n 0 region outerring
 create_particles    gold n 0 region innerring
 create_particles    red  n 0 region redcenter
 create_particles    red  n 0 region redband
+create_particles    bg   n 0 region freefield
 
 collide             vss all logo.vss
 collide_modify      vremax 100 yes
@@ -77,7 +84,8 @@ dump                3 image all 260 pis.*.ppm type type pdiam 0.9 &
                     view 0 0 center s 0.25 0.5 0.5 zoom 3.99
 dump_modify         3 pad 5 backcolor white &
                     color shieldred 0.75 0 0 color shieldgold 0.95 0.75 0.05 &
-                    pcolor 1 shieldgold pcolor 2 shieldred
+                    pcolor 1 shieldgold pcolor 2 shieldred pcolor 3 white &
+                    ptrans 3 0.0
 
 # ---- 1. strike: 38 steps at 800 m/s = 3 units, an eighth of the original ----
 run                 38
