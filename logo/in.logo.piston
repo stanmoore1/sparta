@@ -91,6 +91,10 @@ dump_modify         3 pad 5 backcolor white &
 run                 38
 
 # ---- 2. fixed: the slab stops dead, the shock runs on alone ----
+# 4000 steps is where the disturbance front reaches the far wall: measured at
+# x = 45 by step 780, 54 by 3120, and hard against the boundary at 3900.  It
+# saturates there, so a longer run adds nothing - 12000 steps leaves the front
+# in exactly the same place.
 global              rigid NULL
 unfix               pist
 run                 3962
