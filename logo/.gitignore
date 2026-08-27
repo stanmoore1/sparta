@@ -1,5 +1,6 @@
 # simulation output, regenerate with: ../src/spa_serial -in in.logo
 *.ppm
 *.gif
+*.zip
 log.sparta
 run.log
