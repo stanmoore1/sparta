@@ -65,8 +65,6 @@ and use the package:
 ----------
 
 
-.. _FFT:
-
 .. raw:: html
 
    <span id="FFT"></span>
@@ -121,8 +119,6 @@ See the see discussion in `Section 2.2 <Section_start.html#start_2>`_ (step 6).
 
 ----------
 
-
-.. _KOKKOS:
 
 .. raw:: html
 
@@ -266,8 +262,6 @@ To uninstall (disable) the KOKKOS package:
 
 ----------
 
-
-.. _VTK:
 
 .. raw:: html
 

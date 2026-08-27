@@ -55,8 +55,6 @@ SPARTA distribution.  Each is described in more detail below.
 
 
 
-.. _dump2cfg:
-
 .. raw:: html
 
    <span id="dump2cfg"></span>
@@ -82,8 +80,6 @@ Python script.
 
 ----------
 
-
-.. _dump2xyz:
 
 .. raw:: html
 
@@ -156,8 +152,6 @@ The examples/implicit directory uses these files as input.
 ----------
 
 
-.. _jagged:
-
 .. raw:: html
 
    <span id="jagged"></span>
@@ -179,8 +173,6 @@ The examples/jagged directory uses these files as input.
 
 ----------
 
-
-.. _log2txt:
 
 .. raw:: html
 
@@ -206,8 +198,6 @@ Python script.
 
 ----------
 
-
-.. _logplot:
 
 .. raw:: html
 
@@ -247,8 +237,6 @@ Python script.
 ----------
 
 
-.. _paraview:
-
 .. raw:: html
 
    <span id="paraview"></span>
@@ -268,8 +256,6 @@ The scripts were developed by Tom Otahal (Sandia).
 
 ----------
 
-
-.. _stl2surf:
 
 .. raw:: html
 

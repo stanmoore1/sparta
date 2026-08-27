@@ -748,8 +748,6 @@ mechanisms, Journal of Chemical Physics, (1994).
 atomic-beam scattering on liquid and self-assembled monolayer
 surfaces, Faraday discussions, (2012)
 
-.. _Glatzer97:
-
 .. raw:: html
 
    <span id="Glatzer97"></span>
@@ -807,8 +805,6 @@ physics, (1994).
 **(Beckerle90)** J. Beckerle, A. Johnson, and S. Ceyer,
 Collision-induced desorption of physisorbed CH4 from Ni (111):
 Experiments and simulations, The Journal of Chemical Physics, (1990).
-
-.. _Goodman74:
 
 .. raw:: html
 

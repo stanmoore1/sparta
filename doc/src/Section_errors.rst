@@ -146,8 +146,6 @@ means that line #68 in the file src/create\_particles.cpp generated the
 error.  Looking in the source code may help you figure out what went
 wrong.
 
-.. _error:
-
 .. raw:: html
 
    <span id="error"></span>
