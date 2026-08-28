@@ -97,11 +97,11 @@ class ComputeGasCollisionTallyKokkos : public ComputeGasCollisionTally, public K
 
     for (int m = 0; m < nvalue; m++) {
       switch (d_which[m]) {
-      case IDCELL:   d_array_tally(itally,m) = ubuf(d_cells[icell].id).d; break;
-      case ID1:      d_array_tally(itally,m) = ubuf(ip->id).d; break;
-      case ID2:      d_array_tally(itally,m) = ubuf(jp->id).d; break;
-      case TYPE1:    d_array_tally(itally,m) = ubuf(ip->ispecies+1).d; break;
-      case TYPE2:    d_array_tally(itally,m) = ubuf(jp->ispecies+1).d; break;
+      case IDCELL:   d_array_tally(itally,m) = ubuf_kk(d_cells[icell].id); break;
+      case ID1:      d_array_tally(itally,m) = ubuf_kk(ip->id); break;
+      case ID2:      d_array_tally(itally,m) = ubuf_kk(jp->id); break;
+      case TYPE1:    d_array_tally(itally,m) = ubuf_kk(ip->ispecies+1); break;
+      case TYPE2:    d_array_tally(itally,m) = ubuf_kk(jp->ispecies+1); break;
       case VX1PRE:   d_array_tally(itally,m) = iorig->v[0]; break;
       case VY1PRE:   d_array_tally(itally,m) = iorig->v[1]; break;
       case VZ1PRE:   d_array_tally(itally,m) = iorig->v[2]; break;

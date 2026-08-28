@@ -100,17 +100,17 @@ class ComputeSurfReactionTallyKokkos : public ComputeSurfReactionTally, public K
 
     for (int m = 0; m < nvalue; m++) {
       switch (d_which[m]) {
-      case REACTION: d_array_tally(itally,m) = ubuf(reaction).d; break;
+      case REACTION: d_array_tally(itally,m) = ubuf_kk(reaction); break;
       case IDSURF:
-        if (dim == 2) d_array_tally(itally,m) = ubuf(d_lines(isurf).id).d;
-        else d_array_tally(itally,m) = ubuf(d_tris(isurf).id).d;
+        if (dim == 2) d_array_tally(itally,m) = ubuf_kk(d_lines(isurf).id);
+        else d_array_tally(itally,m) = ubuf_kk(d_tris(isurf).id);
         break;
-      case IDPRE:    d_array_tally(itally,m) = ubuf(iorig->id).d; break;
-      case ID1POST:  d_array_tally(itally,m) = ip ? ubuf(ip->id).d : ubuf(0).d; break;
-      case ID2POST:  d_array_tally(itally,m) = jp ? ubuf(jp->id).d : ubuf(0).d; break;
-      case TYPEPRE:  d_array_tally(itally,m) = ubuf(iorig->ispecies+1).d; break;
-      case TYPE1POST: d_array_tally(itally,m) = ip ? ubuf(ip->ispecies+1).d : ubuf(0).d; break;
-      case TYPE2POST: d_array_tally(itally,m) = jp ? ubuf(jp->ispecies+1).d : ubuf(0).d; break;
+      case IDPRE:    d_array_tally(itally,m) = ubuf_kk(iorig->id); break;
+      case ID1POST:  d_array_tally(itally,m) = ip ? ubuf_kk(ip->id) : ubuf_kk(0); break;
+      case ID2POST:  d_array_tally(itally,m) = jp ? ubuf_kk(jp->id) : ubuf_kk(0); break;
+      case TYPEPRE:  d_array_tally(itally,m) = ubuf_kk(iorig->ispecies+1); break;
+      case TYPE1POST: d_array_tally(itally,m) = ip ? ubuf_kk(ip->ispecies+1) : ubuf_kk(0); break;
+      case TYPE2POST: d_array_tally(itally,m) = jp ? ubuf_kk(jp->ispecies+1) : ubuf_kk(0); break;
       case TIME:     d_array_tally(itally,m) = dt - dtremain; break;
       case XC:       d_array_tally(itally,m) = iorig->x[0]; break;
       case YC:       d_array_tally(itally,m) = iorig->x[1]; break;

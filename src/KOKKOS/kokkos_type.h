@@ -505,6 +505,43 @@ namespace SPARTA_NS {
     DualView<Surf::Tri*, DeviceType::array_layout, DeviceType> tdual_tri_1d;
   typedef tdual_tri_1d::t_dev t_tri_1d;
   typedef tdual_tri_1d::t_host t_host_tri_1d;
+
+  // device-callable equivalent of Compute::ubuf(arg).d, used by the KOKKOS
+  //   tally computes to pack ints into a double buf slot from within
+  //   KOKKOS_INLINE_FUNCTION methods.  Compute::ubuf's constructors are
+  //   host-only, which nvcc tolerates but hipcc rejects, so the bit pattern
+  //   is reproduced here through a device-safe local union instead.
+
+  KOKKOS_INLINE_FUNCTION
+  double ubuf_kk(double arg) { return arg; }
+
+  KOKKOS_INLINE_FUNCTION
+  double ubuf_kk(int arg) {
+    union { double d; int64_t i; } u;
+    u.i = arg;
+    return u.d;
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  double ubuf_kk(int64_t arg) {
+    union { double d; int64_t i; } u;
+    u.i = arg;
+    return u.d;
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  double ubuf_kk(uint32_t arg) {
+    union { double d; int64_t i; } u;
+    u.i = arg;
+    return u.d;
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  double ubuf_kk(uint64_t arg) {
+    union { double d; int64_t i; } u;
+    u.i = arg;
+    return u.d;
+  }
 }
 
 template <class DeviceType>
