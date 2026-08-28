@@ -30,6 +30,7 @@ SurfCollideStyle(piston/kk,SurfCollidePistonKokkos)
 #include "fix_ambipolar_kokkos.h"
 #include "surf_react_global_kokkos.h"
 #include "surf_react_prob_kokkos.h"
+#include "surf_react_adsorb_kokkos.h"
 
 namespace SPARTA_NS {
 
@@ -69,10 +70,23 @@ class SurfCollidePistonKokkos : public SurfCollidePiston {
   FixAmbipolarKokkos* afix_kk;
   KKCopy<FixAmbipolarKokkos> fix_ambi_kk_copy;
 
+  // the active surf react models this model may dispatch to, partitioned by
+  //   style.  Two representations, selected by SPARTA_KOKKOS_FIXED_LISTS (see
+  //   kokkos_type.h); the device dispatch site in collide_kokkos() below is
+  //   written once, against the KK_SR_* accessors defined there.
+
+#ifdef SPARTA_KOKKOS_FIXED_LISTS
   int sr_type_list[KOKKOS_MAX_TOT_SURF_REACT];
   int sr_map[KOKKOS_MAX_TOT_SURF_REACT];
   KKCopy<SurfReactGlobalKokkos> sr_kk_global_copy[KOKKOS_MAX_SURF_REACT_PER_TYPE];
   KKCopy<SurfReactProbKokkos> sr_kk_prob_copy[KOKKOS_MAX_SURF_REACT_PER_TYPE];
+  KKCopy<SurfReactAdsorbKokkos> sr_kk_adsorb_copy[KOKKOS_MAX_SURF_REACT_PER_TYPE];
+#else
+  DAT::tdual_int_1d k_sr_type_list,k_sr_map;
+  DAT::t_int_1d d_sr_type_list,d_sr_map;
+  DAT::tdual_char_1d k_sr_global,k_sr_prob,k_sr_adsorb;
+  DAT::t_char_1d d_sr_global,d_sr_prob,d_sr_adsorb;
+#endif
 
  public:
 
@@ -108,17 +122,27 @@ class SurfCollidePistonKokkos : public SurfCollidePiston {
     reaction = 0;
     int velreset = 0;
 
-    if (REACT) {
+    // isr < 0 means this surface element or box face has no reaction model,
+    //   even though this surf collide instance is used somewhere that does.
+    //   REACT is a compile-time flag for the whole kernel, so the runtime test
+    //   is still needed; the host makes the same one
+    //   (surf_collide_diffuse.cpp:146 "if (isr >= 0)").  Without it,
+    //   KK_SR_TYPE(-1) reads out of bounds and dispatches on garbage
+
+    if (REACT && isr >= 0) {
       if (ambi_flag) memcpy(&iorig,ip,sizeof(Particle::OnePart));
 
-      int sr_type = sr_type_list[isr];
-      int m = sr_map[isr];
+      int sr_type = KK_SR_TYPE(isr);
+      int m = KK_SR_MAP(isr);
 
       if (sr_type == 0) {
-        reaction = sr_kk_global_copy[m].obj.
+        reaction = KK_SR_GLOBAL(m).
           react_kokkos<ATOMIC_REDUCTION>(ip,isurf,norm,jp,velreset,d_retry,d_nlocal);
       } else if (sr_type == 1) {
-        reaction = sr_kk_prob_copy[m].obj.
+        reaction = KK_SR_PROB(m).
+          react_kokkos<ATOMIC_REDUCTION>(ip,isurf,norm,jp,velreset,d_retry,d_nlocal);
+      } else if (sr_type == 2) {
+        reaction = KK_SR_ADSORB(m).
           react_kokkos<ATOMIC_REDUCTION>(ip,isurf,norm,jp,velreset,d_retry,d_nlocal);
       }
 

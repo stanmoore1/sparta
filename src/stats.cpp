@@ -168,9 +168,10 @@ void Stats::init()
     }
 
     n = strlen(format[i]);
-    sprintf(&format[i][n],"%s ",ptr);
+    snprintf(&format[i][n],32-n,"%s ",ptr);
   }
-  strcat(format[nfield-1],"\n");
+  n = strlen(format[nfield-1]);
+  snprintf(&format[nfield-1][n],32-n,"\n");
 
   delete [] format_line;
 
@@ -222,9 +223,11 @@ void Stats::init()
 void Stats::header()
 {
   int loc = 0;
-  for (int i = 0; i < nfield; i++)
-    loc += sprintf(&line[loc],"%s ",keyword[i]);
-  sprintf(&line[loc],"\n");
+  for (int i = 0; i < nfield; i++) {
+    loc += snprintf(&line[loc],MAXLINE-loc,"%s ",keyword[i]);
+    if (loc > MAXLINE-2) loc = MAXLINE-2;
+  }
+  snprintf(&line[loc],MAXLINE-loc,"\n");
 
   if (me == 0) {
     if (screen) fprintf(screen,"%s",line);
@@ -280,15 +283,18 @@ void Stats::compute(int flag)
       (this->*vfunc[ifield])();
       cache_keyword[ifield] = keyword[ifield];
       if (vtype[ifield] == FLOAT) {
-        loc += sprintf(&line[loc],format[ifield],dvalue);
+        loc += snprintf(&line[loc],MAXLINE-loc,format[ifield],dvalue);
+        if (loc > MAXLINE-1) loc = MAXLINE-1;
         cache_type[ifield] = 2;                  // SPARTA_DOUBLE
         cache_data[ifield].d = dvalue;
       } else if (vtype[ifield] == INT) {
-        loc += sprintf(&line[loc],format[ifield],ivalue);
+        loc += snprintf(&line[loc],MAXLINE-loc,format[ifield],ivalue);
+        if (loc > MAXLINE-1) loc = MAXLINE-1;
         cache_type[ifield] = 0;                  // SPARTA_INT
         cache_data[ifield].i = ivalue;
       } else if (vtype[ifield] == BIGINT) {
-        loc += sprintf(&line[loc],format[ifield],bivalue);
+        loc += snprintf(&line[loc],MAXLINE-loc,format[ifield],bivalue);
+        if (loc > MAXLINE-1) loc = MAXLINE-1;
         cache_type[ifield] = (sizeof(bigint) == 8) ? 4 : 0;  // SPARTA_INT64
         cache_data[ifield].b = bivalue;
       }
@@ -453,7 +459,7 @@ void Stats::modify_params(int narg, char **arg)
           error->all(FLERR,
                      "Stats_modify int format does not contain d character");
         char str[8];
-        sprintf(str,"%s",BIGINT_FORMAT);
+        snprintf(str,sizeof(str),"%s",BIGINT_FORMAT);
         *ptr = '\0';
         sprintf(format_bigint_user,"%s%s%s",format_int_user,&str[1],ptr+1);
         *ptr = 'd';

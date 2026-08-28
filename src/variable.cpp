@@ -205,7 +205,7 @@ void Variable::set(int narg, char **arg)
       if (nlast <= 0) error->all(FLERR,"Illegal variable command");
       if (narg == 4 && strcmp(arg[3],"pad") == 0) {
         char digits[12];
-        sprintf(digits,"%d",nlast);
+        snprintf(digits,sizeof(digits),"%d",nlast);
         pad[nvar] = strlen(digits);
       } else pad[nvar] = 0;
     } else if (narg == 4 || (narg == 5 && strcmp(arg[4],"pad") == 0)) {
@@ -215,7 +215,7 @@ void Variable::set(int narg, char **arg)
         error->all(FLERR,"Illegal variable command");
       if (narg == 5 && strcmp(arg[4],"pad") == 0) {
         char digits[12];
-        sprintf(digits,"%d",nlast);
+        snprintf(digits,sizeof(digits),"%d",nlast);
         pad[nvar] = strlen(digits);
       } else pad[nvar] = 0;
     } else error->all(FLERR,"Illegal variable command");
@@ -269,7 +269,7 @@ void Variable::set(int narg, char **arg)
       data[nvar][0] = NULL;
       if (narg == 4) {
         char digits[12];
-        sprintf(digits,"%d",num[nvar]);
+        snprintf(digits,sizeof(digits),"%d",num[nvar]);
         pad[nvar] = strlen(digits);
       } else pad[nvar] = 0;
     }
@@ -654,10 +654,13 @@ int Variable::next(int narg, char **arg)
       delete random;
 
       FILE *fp = fopen("tmp.sparta.variable.lock","r");
+      if (fp == NULL) error->one(FLERR,"Could not open variable lock file for reading");
       int tmp = fscanf(fp,"%d",&nextindex);
+      if (tmp != 1) error->one(FLERR,"Failed to read index from variable lock file");
       //printf("READ %d %d\n",universe->me,nextindex);
       fclose(fp);
       fp = fopen("tmp.sparta.variable.lock","w");
+      if (fp == NULL) error->one(FLERR,"Could not open variable lock file for writing");
       fprintf(fp,"%d\n",nextindex+1);
       //printf("WRITE %d %d\n",universe->me,nextindex+1);
       fclose(fp);
@@ -719,11 +722,11 @@ char *Variable::retrieve(char *name)
 
   } else if (style[ivar] == LOOP || style[ivar] == ULOOP) {
     char result[16];
-    if (pad[ivar] == 0) sprintf(result,"%d",which[ivar]+1);
+    if (pad[ivar] == 0) snprintf(result,sizeof(result),"%d",which[ivar]+1);
     else {
       char padstr[16];
-      sprintf(padstr,"%%0%dd",pad[ivar]);
-      sprintf(result,padstr,which[ivar]+1);
+      snprintf(padstr,sizeof(padstr),"%%0%dd",pad[ivar]);
+      snprintf(result,sizeof(result),padstr,which[ivar]+1);
     }
     int n = strlen(result) + 1;
     delete [] data[ivar][0];
@@ -959,7 +962,7 @@ void Variable::internal_create(char *name, double value)
 {
   if (find(name) >= 0) {
     char str[128];
-    sprintf(str,"Creation of internal-style variable %s which already exists", name);
+    snprintf(str,sizeof(str),"Creation of internal-style variable %s which already exists", name);
     error->all(FLERR,str);
   }
 
@@ -974,7 +977,7 @@ void Variable::internal_create(char *name, double value)
 
   if (!utils::is_id(name)) {
     char str[128];
-    sprintf(str,"Variable name %s must have only letters, numbers, or underscores", name);
+    snprintf(str,sizeof(str),"Variable name %s must have only letters, numbers, or underscores", name);
     error->all(FLERR,str);
   }
 
@@ -1325,8 +1328,10 @@ double Variable::evaluate(char *str, Tree **tree)
         strcpy(id,&word[2]);
 
         int icompute = modify->find_compute(id);
-        if (icompute < 0)
+        if (icompute < 0) {
+          delete [] id;
           error->all(FLERR,"Invalid compute ID in variable formula");
+        }
         Compute *compute = modify->compute[icompute];
         delete [] id;
 
@@ -1602,7 +1607,10 @@ double Variable::evaluate(char *str, Tree **tree)
         strcpy(id,&word[2]);
 
         int ifix = modify->find_fix(id);
-        if (ifix < 0) error->all(FLERR,"Invalid fix ID in variable formula");
+        if (ifix < 0) {
+          delete [] id;
+          error->all(FLERR,"Invalid fix ID in variable formula");
+        }
         Fix *fix = modify->fix[ifix];
         delete [] id;
 
@@ -1825,30 +1833,42 @@ double Variable::evaluate(char *str, Tree **tree)
 
 	int icustom,size,type;
 	if (cwhich == PARTICLE_CUSTOM) {
-	  if (tree == NULL || treestyle != PARTICLE)
+	  if (tree == NULL || treestyle != PARTICLE) {
+	    delete [] id;
 	    error->all(FLERR,"Per-particle custom attribute in "
 		       "non particle-style variable formula");
+	  }
 	  icustom = particle->find_custom(id);
-	  if (icustom < 0)
+	  if (icustom < 0) {
+	    delete [] id;
 	    error->all(FLERR,"Invalid custom attribute ID in variable formula");
+	  }
 	  size = particle->esize[icustom];
 	  type = particle->etype[icustom];
 	} else if (cwhich == GRID_CUSTOM) {
-	  if (tree == NULL || treestyle != GRID)
+	  if (tree == NULL || treestyle != GRID) {
+	    delete [] id;
 	    error->all(FLERR,"Per-grid custom attribute in "
 		       "non grid-style variable formula");
+	  }
 	  icustom = grid->find_custom(id);
-	  if (icustom < 0)
+	  if (icustom < 0) {
+	    delete [] id;
 	    error->all(FLERR,"Invalid custom attribute ID in variable formula");
+	  }
 	  size = grid->esize[icustom];
 	  type = grid->etype[icustom];
 	} else if (cwhich == SURF_CUSTOM) {
-	  if (tree == NULL || treestyle != SURF)
+	  if (tree == NULL || treestyle != SURF) {
+	    delete [] id;
 	    error->all(FLERR,"Per-surf custom attribute in "
 		       "non surf-style variable formula");
+	  }
 	  icustom = surf->find_custom(id);
-	  if (icustom < 0)
+	  if (icustom < 0) {
+	    delete [] id;
 	    error->all(FLERR,"Invalid custom attribute ID in variable formula");
+	  }
 	  size = surf->esize[icustom];
 	  type = surf->etype[icustom];
 	}
@@ -1947,8 +1967,10 @@ double Variable::evaluate(char *str, Tree **tree)
         strcpy(id,&word[3]);
 
         int isc = surf->find_collide(id);
-        if (isc < 0)
+        if (isc < 0) {
+          delete [] id;
           error->all(FLERR,"Invalid surf collide ID in variable formula");
+        }
         SurfCollide *sc = surf->sc[isc];
         delete [] id;
 
@@ -2002,8 +2024,10 @@ double Variable::evaluate(char *str, Tree **tree)
         strcpy(id,&word[3]);
 
         int isr = surf->find_react(id);
-        if (isr < 0)
+        if (isr < 0) {
+          delete [] id;
           error->all(FLERR,"Invalid surf reaction ID in variable formula");
+        }
         SurfReact *sr = surf->sr[isr];
         delete [] id;
 
@@ -2054,10 +2078,14 @@ double Variable::evaluate(char *str, Tree **tree)
         strcpy(id,&word[2]);
 
         int ivar = find(id);
-        if (ivar < 0)
+        if (ivar < 0) {
+          delete [] id;
           error->all(FLERR,"Invalid variable name in variable formula");
-        if (eval_in_progress[ivar])
+        }
+        if (eval_in_progress[ivar]) {
+          delete [] id;
           error->all(FLERR,"Variable has circular dependency");
+        }
 
         // parse zero or one trailing brackets
         // point i beyond last bracket
@@ -2092,8 +2120,10 @@ double Variable::evaluate(char *str, Tree **tree)
                    style[ivar] != GRID && style[ivar] != SURF) {
 
           char *var = retrieve(id);
-          if (var == NULL)
+          if (var == NULL) {
+            delete [] id;
             error->all(FLERR,"Invalid variable evaluation in variable formula");
+          }
           if (tree) {
             Tree *newtree = new Tree();
             newtree->type = VALUE;
@@ -2106,9 +2136,11 @@ double Variable::evaluate(char *str, Tree **tree)
 
         } else if (nbracket == 0 && style[ivar] == PARTICLE) {
 
-          if (tree == NULL || treestyle != PARTICLE)
+          if (tree == NULL || treestyle != PARTICLE) {
+            delete [] id;
             error->all(FLERR,"Per-particle variable in "
                        "non particle-style variable formula");
+          }
           Tree *newtree;
           evaluate(data[ivar][0],&newtree);
           treestack[ntreestack++] = newtree;
@@ -2118,9 +2150,11 @@ double Variable::evaluate(char *str, Tree **tree)
 
         } else if (nbracket == 0 && style[ivar] == GRID) {
 
-          if (tree == NULL || treestyle != GRID)
+          if (tree == NULL || treestyle != GRID) {
+            delete [] id;
             error->all(FLERR,"Per-grid variable in "
                        "non grid-style variable formula");
+          }
           Tree *newtree;
           evaluate(data[ivar][0],&newtree);
           treestack[ntreestack++] = newtree;
@@ -2130,16 +2164,21 @@ double Variable::evaluate(char *str, Tree **tree)
 
         } else if (nbracket == 0 && style[ivar] == SURF) {
 
-          if (tree == NULL || treestyle != SURF)
+          if (tree == NULL || treestyle != SURF) {
+            delete [] id;
             error->all(FLERR,"Per-surf variable in "
                        "non surf-style variable formula");
+          }
           Tree *newtree;
           evaluate(data[ivar][0],&newtree);
           treestack[ntreestack++] = newtree;
 
 	// unrecognized variable
 	
-        } else error->all(FLERR,"Mismatched variable in variable formula");
+        } else {
+          delete [] id;
+          error->all(FLERR,"Mismatched variable in variable formula");
+        }
 
         delete [] id;
 
@@ -3207,7 +3246,7 @@ int Variable::int_between_brackets(char *&ptr, int varallow, const char *caller)
     while (*ptr && *ptr != ']') {
       if (!isdigit(*ptr)) {
         char str[128];
-        sprintf(str,"Non digit character between brackets in %s",caller);
+        snprintf(str,sizeof(str),"Non digit character between brackets in %s",caller);
         error->all(FLERR,str);
       }
       ptr++;
@@ -3216,12 +3255,12 @@ int Variable::int_between_brackets(char *&ptr, int varallow, const char *caller)
 
   if (*ptr != ']') {
     char str[128];
-    sprintf(str,"Mismatched brackets in %s",caller);
+    snprintf(str,sizeof(str),"Mismatched brackets in %s",caller);
     error->all(FLERR,str);
   }
   if (ptr == start) {
     char str[128];
-    sprintf(str,"Empty brackets in %s",caller);
+    snprintf(str,sizeof(str),"Empty brackets in %s",caller);
     error->all(FLERR,str);
   }
 
@@ -3250,7 +3289,7 @@ int Variable::int_between_brackets(char *&ptr, int varallow, const char *caller)
 
   if (index == 0) {
     char str[128];
-    sprintf(str,"Index between brackets must be positive in %s",caller);
+    snprintf(str,sizeof(str),"Index between brackets must be positive in %s",caller);
     error->all(FLERR,str);
   }
   return index;
@@ -4578,7 +4617,7 @@ VarReader::VarReader(SPARTA *sparta, char *, char *file, int flag) :
     fp = fopen(file,"r");
     if (fp == NULL) {
       char str[128];
-      sprintf(str,"Cannot open file variable file %s",file);
+      snprintf(str,sizeof(str),"Cannot open file variable file %s",file);
       error->one(FLERR,str);
     }
   } else fp = NULL;

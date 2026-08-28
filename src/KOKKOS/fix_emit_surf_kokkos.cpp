@@ -15,6 +15,7 @@
 #include "stdlib.h"
 #include "string.h"
 #include "fix_emit_surf_kokkos.h"
+#include "compute_isurf_grid_kokkos.h"
 #include "update.h"
 #include "domain.h"
 #include "region.h"
@@ -41,6 +42,44 @@
 #include "Kokkos_Random.hpp"
 
 using namespace SPARTA_NS;
+
+#ifndef SPARTA_KOKKOS_FIXED_LISTS
+namespace {
+
+  // the surf-tally computes this fix drives are held in one runtime-sized
+  //   device byte buffer instead of a fixed KKCopy array, so their number is
+  //   not capped.  the three steps mirror KKCopy exactly: size the buffer,
+  //   blit each live object's bytes into its slot and mark the image a copy
+  //   so its destructor frees nothing, then push the buffer to the device.
+  //   this is the same code UpdateKokkos uses for its own tally lists
+  //   (update_kokkos.cpp:94-108); it is duplicated rather than shared
+  //   because both live in anonymous namespaces in their own translation
+  //   units, and the whole point is that neither is a class member
+
+  void slist_buf_grow(DAT::tdual_char_1d &k, int n, size_t bytes)
+  {
+    const size_t need = (size_t) n * bytes;
+    if (k.view_host().extent(0) >= need) return;
+    k = DAT::tdual_char_1d("fix_emit_surf:slist_surf",need);
+  }
+
+  template<class T>
+  void slist_buf_blit(DAT::tdual_char_1d &k, int slot, T *obj)
+  {
+    char *dst = k.view_host().data() + (size_t) slot*sizeof(T);
+    memcpy((void*) dst, (const void*) obj, sizeof(T));
+    ((T *) dst)->copy = 1;
+  }
+
+  void slist_buf_sync(DAT::tdual_char_1d &k, DAT::t_char_1d &d)
+  {
+    if (k.view_device().extent(0) == 0) return;
+    k.modify_host();
+    k.sync_device();
+    d = k.view_device();
+  }
+}
+#endif
 using namespace MathConst;
 
 enum{PKEEP,PINSERT,PDONE,PDISCARD,PENTRY,PEXIT,PSURF};   // several files
@@ -65,13 +104,11 @@ FixEmitSurfKokkos::FixEmitSurfKokkos(SPARTA *sparta, int narg, char **arg) :
             , sparta
 #endif
             ),
-  particle_kk_copy(sparta),
-  slist_active_copy{VAL_2(KKCopy<ComputeSurfKokkos>(sparta))},
-  tmp_compute_surf_kk(sparta),
-  regblock_kk_copy(sparta),
-  regcylinder_kk_copy(sparta),
-  regplane_kk_copy(sparta),
-  regsphere_kk_copy(sparta)
+  particle_kk_copy(sparta)
+#ifdef SPARTA_KOKKOS_FIXED_LISTS
+  , slist_active_copy{VAL_2(KKCopy<ComputeSurfKokkos>(sparta))}
+  , tmp_compute_surf_kk(sparta)
+#endif
 {
   kokkos_flag = 1;
   execution_space = Device;
@@ -79,6 +116,7 @@ FixEmitSurfKokkos::FixEmitSurfKokkos(SPARTA *sparta, int narg, char **arg) :
   datamask_modify = EMPTY_MASK;
 
   region_flag = 0;
+  nregion_token = 0;
 
 }
 
@@ -91,6 +129,14 @@ FixEmitSurfKokkos::~FixEmitSurfKokkos()
 #ifdef SPARTA_KOKKOS_EXACT
   rand_pool.destroy();
 #endif
+
+  // the loop below reads and writes the host side of k_tasks, which the
+  // emission kernels leave claimed for the device.  path and fracarea are host
+  // allocations the device never writes, so the host values are the right ones
+  // and no copy back is wanted here; say so rather than reading a side the
+  // coherence state calls stale.
+
+  k_tasks.clear_sync_state();
 
   for (int i = 0; i < ntaskmax; i++) {
     tasks[i].ntargetsp = NULL;
@@ -165,6 +211,11 @@ void FixEmitSurfKokkos::init()
 
   k_mspecies.modify_host();
   k_fraction.modify_host();
+  // the region is fixed for the run; flatten it once here rather than
+  //   rebuilding and re-uploading the token stream in perform_task()
+
+  flatten_region();
+
 }
 
 /* ----------------------------------------------------------------------
@@ -240,6 +291,35 @@ void FixEmitSurfKokkos::create_tasks()
     k_fracarea.modify_host();
 }
 
+/* ----------------------------------------------------------------------
+   flatten the region to a device-resident postfix token stream, so the
+   emit kernel needs no virtual dispatch and no typed copy per region style.
+   the stream carries each sub-region's interior/exterior sense and the
+   composite's own, so nothing else needs to be passed along.
+   see region_prim_kokkos.h
+
+   a region is fixed for the duration of a run -- Region exposes no move or
+   rotate, and "region" is an input command -- so this runs from init()
+   rather than from perform_task(), which would rebuild the stream on the
+   host and re-upload it every step
+------------------------------------------------------------------------- */
+
+void FixEmitSurfKokkos::flatten_region()
+{
+  region_flag = 0;
+  nregion_token = 0;
+  if (region) {
+    KokkosBase* region_kkbase = dynamic_cast<KokkosBase*>(region);
+    if (!region->kokkos_flag || !region_kkbase)
+      error->all(FLERR,"KOKKOS package does not (yet) support chosen region style");
+    nregion_token = region_kkbase->flatten_region_kokkos(k_region_tokens);
+    if (nregion_token <= 0)
+      error->all(FLERR,"KOKKOS package does not (yet) support chosen region style");
+    d_region_tokens = k_region_tokens.view_device();
+    region_flag = 1;
+  }
+}
+
 /* ---------------------------------------------------------------------- */
 
 void FixEmitSurfKokkos::perform_task()
@@ -276,9 +356,14 @@ void FixEmitSurfKokkos::perform_task()
   //   see Bird 1994, p 259, eq 12.5
 
   // copy needed task data to device
+  // the kernels below read d_tasks whether or not perspecies is set, so tasks
+  //   is synced unconditionally and ntargetsp in addition, the same shape as
+  //   the second copy further down this routine.  The if/else this replaces
+  //   left tasks unsynced under perspecies and was only harmless because that
+  //   later copy covered it
 
+  k_tasks.sync_device();
   if (perspecies) k_ntargetsp.sync_device();
-  else k_tasks.sync_device();
 
   SurfKokkos* surf_kk = (SurfKokkos*) surf;
   surf_kk->sync(Device,ALL_MASK);
@@ -289,18 +374,40 @@ void FixEmitSurfKokkos::perform_task()
   nsurf_tally = update->nsurf_tally;
   Compute **slist_active = update->slist_active;
 
+#ifdef SPARTA_KOKKOS_FIXED_LISTS
   if (nsurf_tally > KOKKOS_MAX_SLIST)
-    error->all(FLERR,"Kokkos currently only supports two instances of compute surface");
+    error->all(FLERR,"Kokkos currently only supports two instances of compute "
+               "surface with fix emit/surf; rebuild without "
+               "-DSPARTA_KOKKOS_FIXED_LISTS to lift the limit");
+#else
+  slist_buf_grow(k_slist_surf,nsurf_tally,sizeof(ComputeSurfKokkos));
+#endif
+
+  // dispatch by dynamic_cast, not by style string: the Kokkos computes are
+  //   registered under their "/kk" names too (isurf/grid/kk et al), so a
+  //   style compare never matches a compute the user typed with the suffix
+  //   and the caller then falls through to an unrelated error message.
+  //   see the same note in UpdateKokkos::setup_surf_tally_copies()
 
   for (int i = 0; i < nsurf_tally; i++) {
-    if (strcmp(slist_active[i]->style,"isurf/grid") == 0)
-      error->all(FLERR,"Kokkos doesn't yet support compute isurf/grid");
     ComputeSurfKokkos* compute_surf_kk = dynamic_cast<ComputeSurfKokkos*>(slist_active[i]);
-    if (!compute_surf_kk)
-      error->all(FLERR,"Kokkos does not (yet) support compute surf/collision/tally or compute surf/reaction/tally");
+    if (!compute_surf_kk) {
+      if (dynamic_cast<ComputeISurfGridKokkos*>(slist_active[i]))
+        error->all(FLERR,"Kokkos does not (yet) support compute isurf/grid "
+                   "with fix emit/surf");
+      error->all(FLERR,"Kokkos does not (yet) support this surf tally compute "
+                 "with fix emit/surf; use a Kokkos-enabled surf tally compute "
+                 "(-sf kk)");
+    }
     compute_surf_kk->pre_surf_tally();
+#ifdef SPARTA_KOKKOS_FIXED_LISTS
     slist_active_copy[i].copy(compute_surf_kk);
+#else
+    slist_buf_blit(k_slist_surf,i,compute_surf_kk);
+#endif
   }
+
+#ifdef SPARTA_KOKKOS_FIXED_LISTS
 
   // every Kokkos functor captures the whole array by value, so the unused
   //  slots must not alias a compute that may be reallocated or deleted while
@@ -309,6 +416,9 @@ void FixEmitSurfKokkos::perform_task()
 
   for (int i = nsurf_tally; i < KOKKOS_MAX_SLIST; i++)
     slist_active_copy[i].copy(&tmp_compute_surf_kk);
+#else
+  slist_buf_sync(k_slist_surf,d_slist_surf);
+#endif
 
   auto ninsert_dim1 = perspecies ? nspecies : 1;
   if (d_ninsert.extent(0) < ntask * ninsert_dim1)
@@ -365,31 +475,12 @@ void FixEmitSurfKokkos::perform_task()
   particle_kk->update_class_variables();
   particle_kk_copy.copy(particle_kk);
 
-  if (region && !region->kokkos_flag)
-    error->all(FLERR,"KOKKOS package does not (yet) support chosen region style");
+  // flatten the region to a device-resident postfix token stream, so the
+  //   kernel below needs no virtual dispatch and no typed copy per region
+  //   style.  the stream carries each sub-region's interior/exterior sense
+  //   and the composite's own, so nothing else needs to be passed along.
+  //   see region_prim_kokkos.h
 
-  region_flag = 0;
-  if (region) {
-    if (strstr(region->style,"block") != NULL) {
-      RegBlockKokkos* region_kk = ((RegBlockKokkos*)region);
-      regblock_kk_copy.copy(region_kk);
-      region_flag = 1;
-    } else if (strstr(region->style,"cylinder") != NULL) {
-      RegCylinderKokkos* region_kk = ((RegCylinderKokkos*)region);
-      regcylinder_kk_copy.copy(region_kk);
-      region_flag = 2;
-    } else if (strstr(region->style,"plane") != NULL) {
-      RegPlaneKokkos* region_kk = ((RegPlaneKokkos*)region);
-      regplane_kk_copy.copy(region_kk);
-      region_flag = 3;
-    } else if (strstr(region->style,"sphere") != NULL) {
-      RegSphereKokkos* region_kk = ((RegSphereKokkos*)region);
-      regsphere_kk_copy.copy(region_kk);
-      region_flag = 4;
-    } else {
-      error->all(FLERR,"KOKKOS package does not (yet) support chosen region style");
-    }
-  }
 
   int nsingle_reduce = 0;
   copymode = 1;
@@ -579,15 +670,9 @@ void FixEmitSurfKokkos::operator()(TagFixEmitSurf_perform_task, const int &i, in
           x[2] = p1[2] + alpha*e1[2] + beta*e2[2];
         }
 
-        if (region_flag == 1) {
-          if (!regblock_kk_copy.obj.match_kokkos(x[0], x[1], x[2])) continue;
-        } else if (region_flag == 2) {
-          if (!regcylinder_kk_copy.obj.match_kokkos(x[0], x[1], x[2])) continue;
-        } else if (region_flag == 3) {
-          if (!regplane_kk_copy.obj.match_kokkos(x[0], x[1], x[2])) continue;
-        } else if (region_flag == 4) {
-          if (!regsphere_kk_copy.obj.match_kokkos(x[0], x[1], x[2])) continue;
-        }
+        if (region_flag &&
+            !region_match_kk(d_region_tokens,nregion_token,
+                             x[0],x[1],x[2])) continue;
 
         nactual++;
         d_keep(cand) = 1;
@@ -694,15 +779,9 @@ void FixEmitSurfKokkos::operator()(TagFixEmitSurf_perform_task, const int &i, in
         x[2] = p1[2] + alpha*e1[2] + beta*e2[2];
       }
 
-      if (region_flag == 1) {
-        if (!regblock_kk_copy.obj.match_kokkos(x[0], x[1], x[2])) continue;
-      } else if (region_flag == 2) {
-        if (!regcylinder_kk_copy.obj.match_kokkos(x[0], x[1], x[2])) continue;
-      } else if (region_flag == 3) {
-        if (!regplane_kk_copy.obj.match_kokkos(x[0], x[1], x[2])) continue;
-      } else if (region_flag == 4) {
-        if (!regsphere_kk_copy.obj.match_kokkos(x[0], x[1], x[2])) continue;
-      }
+      if (region_flag &&
+          !region_match_kk(d_region_tokens,nregion_token,
+                           x[0],x[1],x[2])) continue;
 
       nactual++;
       d_keep(cand) = 1;
@@ -795,7 +874,7 @@ void FixEmitSurfKokkos::operator()(TagFixEmitSurf_insert_particles<ATOMIC_REDUCT
 
   if (nsurf_tally)
     for (int k = 0; k < nsurf_tally; k++)
-      slist_active_copy[k].obj.
+      FES_SLIST(k).
             surf_tally_kk<ATOMIC_REDUCTION>(dtremain,isurf,pcell,0,NULL,p,NULL);
 }
 
@@ -922,8 +1001,10 @@ void FixEmitSurfKokkos::subsonic_grid()
 
   particle_kk->update_class_variables();
   particle_kk_copy.copy(particle_kk);
+#ifdef SPARTA_KOKKOS_FIXED_LISTS
   for (int n = 0; n < KOKKOS_MAX_SLIST; n++)
     slist_active_copy[n].copy(&tmp_compute_surf_kk);
+#endif
 
   GridKokkos* grid_kk = (GridKokkos*) grid;
   grid_kk->sync(Device,CINFO_MASK);
@@ -1134,8 +1215,10 @@ void FixEmitSurfKokkos::mflow_grid()
 
   particle_kk->update_class_variables();
   particle_kk_copy.copy(particle_kk);
+#ifdef SPARTA_KOKKOS_FIXED_LISTS
   for (int n = 0; n < KOKKOS_MAX_SLIST; n++)
     slist_active_copy[n].copy(&tmp_compute_surf_kk);
+#endif
 
   GridKokkos* grid_kk = (GridKokkos*) grid;
   grid_kk->sync(Device,CINFO_MASK);

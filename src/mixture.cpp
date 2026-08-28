@@ -234,7 +234,7 @@ void Mixture::init()
 
   if (err) {
     char str[128];
-    sprintf(str,"Mixture %s fractions exceed 1.0",id);
+    snprintf(str,128,"Mixture %s fractions exceed 1.0",id);
     error->all(FLERR,str);
   }
 

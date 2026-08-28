@@ -38,10 +38,6 @@ enum{NUM,NRHO,NFRAC,MASS,MASSRHO,MASSFRAC,
 enum{COUNT,MASSSUM,MVX,MVY,MVZ,MVXSQ,MVYSQ,MVZSQ,MVSQ,
      ENGROT,ENGVIB,ENGELEC,DOFROT,DOFVIB,CELLCOUNT,CELLMASS,LASTSIZE};
 
-// max # of quantities to accumulate for any user value
-
-#define MAXACCUMULATE 2
-
 /* ---------------------------------------------------------------------- */
 
 ComputeGridKokkos::ComputeGridKokkos(SPARTA *sparta, int narg, char **arg) :

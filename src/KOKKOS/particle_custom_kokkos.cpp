@@ -368,6 +368,24 @@ void ParticleKokkos::zero_custom_kokkos()
 }
 
 /* ----------------------------------------------------------------------
+   zero the custom attributes of particle I
+   Particle::add_particle() calls this for every particle a host caller
+     creates, writing through the raw eivec/edvec/... pointers.  Register
+     that write, or a later sync(Device,CUSTOM_MASK) is a no-op and the
+     device keeps whatever the slot last held.  Not covered by the caller
+     in every case: SurfReactAdsorbKokkos inserts PS-chemistry particles on
+     the host and marks only PARTICLE_MASK
+   this is the host-side counterpart of zero_custom_kokkos()
+------------------------------------------------------------------------- */
+
+void ParticleKokkos::zero_custom(int i)
+{
+  sync(Host,CUSTOM_MASK);
+  Particle::zero_custom(i);
+  modify(Host,CUSTOM_MASK);
+}
+
+/* ----------------------------------------------------------------------
    copy info for one particle in custom attribute vectors/arrays
    into location I from location J
 ------------------------------------------------------------------------- */

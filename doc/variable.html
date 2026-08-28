@@ -730,7 +730,7 @@ grid for the wrong size; the mismatch then surfaces much later as a
 example, this computes a processor grid from the rank count itself:
 </P>
 <PRE>variable nprocs equal extract_setting(world_size)
-variable px equal 2^floor(log(v_nprocs)/log(2)/3)
+variable px equal 2^floor(log(v_nprocs)/log(2)/3) 
 </PRE>
 <P>Two cautions.  A setting is read locally on each rank rather than
 through a collective, so nothing is added to the collective path and

@@ -386,6 +386,13 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
 
         return d_list[i] + 1;
       }
+
+      // computeChemRates: the tally above is the whole point of this pass and
+      //   no reaction is performed, but the search still stops at the first
+      //   reaction that passes, as ReactTCE::attempt() does.  Without this the
+      //   loop keeps going and tallies every later reaction that also passes
+
+      break;
     }
   }
 

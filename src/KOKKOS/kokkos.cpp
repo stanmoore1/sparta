@@ -180,16 +180,32 @@ KokkosSPARTA::KokkosSPARTA(SPARTA *sparta, int narg, char **arg) : Pointers(spar
   if (ngpus > 0) {
     comm_serial = 0;
 
-    // must match the architectures that UpdateKokkos::move() dispatches the
-    //  ATOMIC_REDUCTION = -1 (parallel_reduce) kernel for, since the counters
-    //  are read back from the reduction result only when atomic_reduction is 0
+    // SPARTA_KOKKOS_REDUCE_ARCH (kokkos_type.h) is the single definition of
+    //  which architectures UpdateKokkos::move() dispatches the
+    //  ATOMIC_REDUCTION = -1 (parallel_reduce) kernel for; the counters are
+    //  read back from the reduction result only when atomic_reduction is 0
 
-#if defined(KOKKOS_ARCH_AMD_GFX940) || defined(KOKKOS_ARCH_AMD_GFX942) || defined(KOKKOS_ARCH_AMD_GFX942_APU)
+#if SPARTA_KOKKOS_REDUCE_ARCH
     atomic_reduction = 0;
 #else
     atomic_reduction = 1;
 #endif
   } else {
+
+    // on CPU the host migrate path beats the device pack/unpack kernels, so
+    //   it stays the default.  Measured on 4 MPI ranks, Serial backend, 400k
+    //   particles in a 20^3 grid over 400 steps with 2.65% of particles
+    //   migrating per step, comparing the Comm section of the timing
+    //   breakdown (median of 3):
+    //
+    //                      comm serial   comm threaded
+    //     free molecular      0.228 s       0.246 s   (+7.6%)
+    //     with VSS collide    0.211 s       0.259 s   (+22.5%)
+    //
+    //   There is no host/device transfer to avoid here, so the device path
+    //   only adds the irregular-comm plan rebuild.  Users can still ask for
+    //   it with "package kokkos comm threaded".
+
     comm_serial = 1;
     atomic_reduction = 0;
   }

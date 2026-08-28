@@ -34,8 +34,9 @@ CollideStyle(vss/kk,CollideVSSKokkos)
 #include "kokkos_copy.h"
 #include "compute_gas_collision_grid_kokkos.h"
 #include "compute_gas_reaction_grid_kokkos.h"
+#include "compute_gas_collision_tally_kokkos.h"
+#include "compute_gas_reaction_tally_kokkos.h"
 
-#define KOKKOS_MAX_GLIST 4
 
 namespace SPARTA_NS {
 
@@ -187,12 +188,43 @@ class CollideVSSKokkos : public CollideVSS {
   KKCopy<ReactTCEQKKokkos> react_tceqk_kk_copy;
   int react_style;   // 0=TCE, 1=QK, 2=TCEQK (set in setup)
 
-  // active gas/gas per-grid tally computes, partitioned by type
+  // active gas/gas tally computes, partitioned by type.  Two representations,
+  //   selected by SPARTA_KOKKOS_FIXED_LISTS (see kokkos_type.h); the kernel
+  //   dispatch sites are written once against the CVK_* accessors below.
+
+#ifdef SPARTA_KOKKOS_FIXED_LISTS
   KKCopy<ComputeGasCollisionGridKokkos> glist_collision_copy[KOKKOS_MAX_GLIST];
+  KKCopy<ComputeGasCollisionTallyKokkos> glist_coll_tally_copy[KOKKOS_MAX_GLIST];
+  KKCopy<ComputeGasReactionTallyKokkos> glist_react_tally_copy[KOKKOS_MAX_GLIST];
   KKCopy<ComputeGasReactionGridKokkos> glist_reaction_copy[KOKKOS_MAX_GLIST];
-  int nglist_collision,nglist_reaction;
   ComputeGasCollisionGridKokkos tmp_compute_gas_collision_kk;
   ComputeGasReactionGridKokkos tmp_compute_gas_reaction_kk;
+  ComputeGasCollisionTallyKokkos tmp_compute_gas_coll_tally_kk;
+  ComputeGasReactionTallyKokkos tmp_compute_gas_react_tally_kk;
+
+#define CVK_GLIST_COLLISION(m)   glist_collision_copy[m].obj
+#define CVK_GLIST_REACTION(m)    glist_reaction_copy[m].obj
+#define CVK_GLIST_COLL_TALLY(m)  glist_coll_tally_copy[m].obj
+#define CVK_GLIST_REACT_TALLY(m) glist_react_tally_copy[m].obj
+
+#else
+  DAT::tdual_char_1d k_glist_collision, k_glist_reaction,
+                     k_glist_coll_tally, k_glist_react_tally;
+  DAT::t_char_1d d_glist_collision, d_glist_reaction,
+                 d_glist_coll_tally, d_glist_react_tally;
+
+#define CVK_GLIST_COLLISION(m)   ((const ComputeGasCollisionGridKokkos *) d_glist_collision.data())[m]
+#define CVK_GLIST_REACTION(m)    ((const ComputeGasReactionGridKokkos *) d_glist_reaction.data())[m]
+#define CVK_GLIST_COLL_TALLY(m)  ((const ComputeGasCollisionTallyKokkos *) d_glist_coll_tally.data())[m]
+#define CVK_GLIST_REACT_TALLY(m) ((const ComputeGasReactionTallyKokkos *) d_glist_react_tally.data())[m]
+#endif
+
+  int nglist_collision,nglist_reaction;
+  int nglist_coll_tally,nglist_react_tally;
+  DAT::t_int_scalar d_tally_overflow;
+  HAT::t_int_scalar h_tally_overflow;
+  void grow_gas_tally_computes();
+  void rewind_gas_tally_computes(int);
   void setup_gas_tally();
   void finish_gas_tally();
   void clear_gas_tally();
@@ -210,7 +242,67 @@ class CollideVSSKokkos : public CollideVSS {
 
   // group collision scratch (ngroups > 1)
   DAT::t_int_1d d_species2group;
-  DAT::t_int_2d d_glist;
+  // reacting group collisions mutate group membership inside the kernel, so
+  //   the per-group lists cannot be one group-contiguous row per cell as they
+  //   were when only the non-reacting case was supported.  Each group gets its
+  //   own region of capacity d_plist.extent(1) -- a group can never hold more
+  //   than the cell does -- and d_p2g is the reverse map the host keeps in
+  //   Collide::p2g, needed so a swap-remove can fix the moved entry's owner.
+
+  Kokkos::View<int***,DeviceType> d_glist;   // (cell, group, k) -> plist index
+  Kokkos::View<int***,DeviceType> d_p2g;     // (cell, plist index) -> group, k
+
+  // per-group counters, formerly per-thread stack arrays dimensioned by a
+  //   compile-time MAXGROUP.  Both group kernels are one work item per grid
+  //   cell (RangePolicy over 0..nglocal indexed by icell), so icell is already
+  //   a unique, deterministic, contention-free row index -- no UniqueToken
+  //   needed.  Sized (nglocal, ngroups) alongside d_glist, which they cost
+  //   1/d_plist.extent(1) as much as.
+  //   both group kernels build their lists with addgroup_kk(), which keeps
+  //   d_gcount and d_p2g in step, so no separate fill cursor is needed.
+
+  Kokkos::View<int**,DeviceType> d_gcount;   // (cell, group) -> # in group
+
+  // near-neighbor partner history for the two groups of the current pair;
+  //   the host reallocates these per pair via set_nn_group()
+
+  DAT::t_int_2d d_nn_igroup;
+  DAT::t_int_2d d_nn_jgroup;
+
+ public:
+
+  // mirror Collide::addgroup / delgroup (collide.h:157-179) exactly, including
+  //   the swap-with-last order: a reaction that rebins a particle changes which
+  //   index a later random draw lands on, so any deviation diverges from the
+  //   host rather than merely reordering
+
+  // the group counts live in d_gcount(icell,*), so icell is all these need
+
+  KOKKOS_INLINE_FUNCTION
+  void addgroup_kk(const int icell, const int igroup, const int pindex) const
+  {
+    const int ng = d_gcount(icell,igroup);
+    d_glist(icell,igroup,ng) = pindex;
+    d_p2g(icell,pindex,0) = igroup;
+    d_p2g(icell,pindex,1) = ng;
+    d_gcount(icell,igroup)++;
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void delgroup_kk(const int icell, const int igroup, const int i) const
+  {
+    const int ng = d_gcount(icell,igroup);
+    if (i < ng-1) {
+      d_glist(icell,igroup,i) = d_glist(icell,igroup,ng-1);
+      const int pindex = d_glist(icell,igroup,i);
+      d_p2g(icell,pindex,0) = igroup;
+      d_p2g(icell,pindex,1) = i;
+    }
+    d_gcount(icell,igroup)--;
+  }
+
+ private:
+
   Kokkos::View<int***,DeviceType> d_nattempt_pair;
 
   DAT::t_int_1d d_ewhich;
@@ -234,7 +326,7 @@ class CollideVSSKokkos : public CollideVSS {
   // bigint scalars = per-step statistics counters, can exceed 2^31
   //   in one step at large per-proc particle counts
 
-  typedef Kokkos::DualView<int[8], DeviceType::array_layout, DeviceType> tdual_int_8;
+  typedef Kokkos::DualView<int[9], DeviceType::array_layout, DeviceType> tdual_int_8;
   typedef tdual_int_8::t_dev t_int_8;
   typedef tdual_int_8::t_host t_host_int_8;
   t_int_8 d_scalars;
@@ -378,6 +470,11 @@ class CollideVSSKokkos : public CollideVSS {
   int set_nn(int, int) const;
   KOKKOS_INLINE_FUNCTION
   int find_nn(rand_type &, int, int, int) const;
+
+  void grow_group_lists();
+
+  KOKKOS_INLINE_FUNCTION
+  int find_nn_group(rand_type &, int, int, int, int, int, int) const;
 
   void backup();
   void restore();

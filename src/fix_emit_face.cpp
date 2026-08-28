@@ -1109,7 +1109,7 @@ void FixEmitFace::subsonic_grid()
         tempmax = MAX(tempmax,temp_thermal_cell);
       }
 
-      if (np)  {
+      if (np && massrho_cell*soundspeed_cell > 0.0)  {
         ndim = tasks[i].ndim;
         sign = tasks[i].normal[ndim];
         vstream[ndim] += sign *

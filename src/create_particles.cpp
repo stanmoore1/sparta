@@ -439,9 +439,9 @@ void CreateParticles::command(int narg, char **arg)
   MPI_Allreduce(&nme,&nglobal,1,MPI_SPARTA_BIGINT,MPI_SUM,world);
   if (!region && !nrho_var_flag && nglobal-nprevious != np) {
     char str[128];
-    sprintf(str,"Created unexpected # of particles: "
-            BIGINT_FORMAT " versus " BIGINT_FORMAT,
-            nglobal-nprevious,np);
+    snprintf(str,sizeof(str),"Created unexpected # of particles: "
+	    BIGINT_FORMAT " versus " BIGINT_FORMAT,
+	    nglobal-nprevious,np);
     if (comm->me == 0) error->warning(FLERR,str);
   }
   bigint ncreated = nglobal-nprevious;

@@ -1504,7 +1504,7 @@ void Grid::find_neighbors()
 
   if (nall) {
     char str[128];
-    sprintf(str,"Owned cells with unknown neighbors = %d",nall);
+    snprintf(str,sizeof(str),"Owned cells with unknown neighbors = %d",nall);
     error->all(FLERR,str);
   }
 }
@@ -2107,7 +2107,7 @@ void Grid::type_check(int outflag)
 
   if (unknownall) {
     char str[128];
-    sprintf(str,"Grid cells marked as unknown = %d",unknownall);
+    snprintf(str,sizeof(str),"Grid cells marked as unknown = %d",unknownall);
     error->all(FLERR,str);
   }
 
@@ -2158,7 +2158,7 @@ void Grid::type_check(int outflag)
   MPI_Allreduce(&inside,&insideall,1,MPI_INT,MPI_SUM,world);
   if (insideall) {
     char str[128];
-    sprintf(str,"Grid cell interior corner points marked as unknown "
+    snprintf(str,sizeof(str),"Grid cell interior corner points marked as unknown "
             "(volume will be wrong if cell is effectively outside) = %d",
             insideall);
     if (comm->me == 0) error->warning(FLERR,str);
@@ -2168,7 +2168,7 @@ void Grid::type_check(int outflag)
   MPI_Allreduce(&outside,&outsideall,1,MPI_INT,MPI_SUM,world);
   if (outsideall) {
     char str[128];
-    sprintf(str,"Grid cell corner points on boundary marked as unknown = %d",
+    snprintf(str,sizeof(str),"Grid cell corner points on boundary marked as unknown = %d",
             outsideall);
     error->all(FLERR,str);
   }
@@ -2182,7 +2182,7 @@ void Grid::type_check(int outflag)
   MPI_Allreduce(&volzero,&volzeroall,1,MPI_INT,MPI_SUM,world);
   if (outsideall) {
     char str[128];
-    sprintf(str,"Grid cells marked outside, but with zero volume = %d",
+    snprintf(str,sizeof(str),"Grid cells marked outside, but with zero volume = %d",
             volzeroall);
     error->all(FLERR,str);
   }
@@ -2459,7 +2459,10 @@ void Grid::group(int narg, char **arg)
     int jgroup;
     for (int iarg = 3; iarg < narg; iarg++) {
       jgroup = find_group(arg[iarg]);
-      if (jgroup == -1) error->all(FLERR,"Group ID does not exist");
+      if (jgroup == -1) {
+        delete [] list;
+        error->all(FLERR,"Group ID does not exist");
+      }
       list[iarg-3] = jgroup;
     }
 
@@ -2494,7 +2497,10 @@ void Grid::group(int narg, char **arg)
     int jgroup;
     for (int iarg = 3; iarg < narg; iarg++) {
       jgroup = find_group(arg[iarg]);
-      if (jgroup == -1) error->all(FLERR,"Group ID does not exist");
+      if (jgroup == -1) {
+        delete [] list;
+        error->all(FLERR,"Group ID does not exist");
+      }
       list[iarg-3] = jgroup;
     }
 
@@ -2521,7 +2527,10 @@ void Grid::group(int narg, char **arg)
     int jgroup;
     for (int iarg = 3; iarg < narg; iarg++) {
       jgroup = find_group(arg[iarg]);
-      if (jgroup == -1) error->all(FLERR,"Group ID does not exist");
+      if (jgroup == -1) {
+        delete [] list;
+        error->all(FLERR,"Group ID does not exist");
+      }
       list[iarg-3] = jgroup;
     }
 
@@ -2651,7 +2660,7 @@ int Grid::check_uniform_group(int igroup, int *nxyz,
   MPI_Allreduce(&sflag,&allsflag,1,MPI_INT,MPI_SUM,world);
   if (allsflag && surf->implicit) {
     char str[128];
-    sprintf(str,
+    snprintf(str,sizeof(str),
             "Read_isurfs adding surfs to %d cells which already have surfs",
             allsflag);
     error->all(FLERR,str);
