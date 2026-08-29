@@ -209,16 +209,8 @@ void SurfReactAdsorbKokkos::init_reactions_gs_kokkos()
     nmax = MAX(nmax,n);
   }
 
-  // scratch for the per-reaction probability list react_kokkos() builds, in
-  //   whichever of the two representations this build selected (see the
-  //   SRA_KK_MAXPERSPECIES comment in the header)
-
-#ifdef SPARTA_KOKKOS_FIXED_LISTS
-  if (nmax > SRA_KK_MAXPERSPECIES)
-    error->all(FLERR,"Too many Kokkos surf_react adsorb reactions per species");
-#else
-
-  // one row per concurrent thread, claimed by prob_token.acquire() for the
+  // scratch for the per-reaction probability list react_kokkos() builds:
+  //   one row per concurrent thread, claimed by prob_token.acquire() for the
   //   duration of a react_kokkos() call.  prob_token.size() is the upper bound
   //   acquire() can return: max_hardware_threads() on a host backend, but
   //   maxThreadsPerMultiProcessor*multiProcessorCount on a GPU, so this
@@ -228,7 +220,6 @@ void SurfReactAdsorbKokkos::init_reactions_gs_kokkos()
 
   d_prob = Kokkos::View<double**,DeviceType>("sra:prob",
                                              prob_token.size(),MAX(nmax,1));
-#endif
 
   d_list = DAT::t_int_2d("surf_react_adsorb:list",nspecies,MAX(nmax,1));
   auto h_list = Kokkos::create_mirror_view(d_list);

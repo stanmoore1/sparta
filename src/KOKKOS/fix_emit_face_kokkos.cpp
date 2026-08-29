@@ -51,9 +51,6 @@ enum{NOSUBSONIC,PTBOTH,PONLY};
 #define DELTATASK 256
 #define TEMPLIMIT 1.0e5
 
-#define VAL_1(X) X
-#define VAL_2(X) VAL_1(X), VAL_1(X)
-
 /* ----------------------------------------------------------------------
    insert particles in grid cells with faces touching inflow boundaries
 ------------------------------------------------------------------------- */

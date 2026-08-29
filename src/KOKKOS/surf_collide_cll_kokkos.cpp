@@ -40,20 +40,12 @@ using namespace MathConst;
 enum{INT,DOUBLE};                        // several files
 enum{NUMERIC,CUSTOM,VARIABLE,VAREQUAL,VARSURF};   // surf_collide classes
 
-#define VAL_1(X) X
-#define VAL_2(X) VAL_1(X), VAL_1(X)
-
 /* ---------------------------------------------------------------------- */
 
 SurfCollideCLLKokkos::SurfCollideCLLKokkos(SPARTA *sparta, int narg, char **arg) :
   SurfCollideCLL(sparta, narg, arg),
   fix_ambi_kk_copy(sparta),
   fix_vibmode_kk_copy(sparta),
-#ifdef SPARTA_KOKKOS_FIXED_LISTS
-  sr_kk_global_copy{VAL_2(KKCopy<SurfReactGlobalKokkos>(sparta))},
-  sr_kk_prob_copy{VAL_2(KKCopy<SurfReactProbKokkos>(sparta))},
-  sr_kk_adsorb_copy{VAL_2(KKCopy<SurfReactAdsorbKokkos>(sparta))},
-#endif
   rand_pool(12345 + comm->me
 #ifdef SPARTA_KOKKOS_EXACT
             , sparta
@@ -89,11 +81,6 @@ SurfCollideCLLKokkos::SurfCollideCLLKokkos(SPARTA *sparta) :
   SurfCollideCLL(sparta),
   fix_ambi_kk_copy(sparta),
   fix_vibmode_kk_copy(sparta),
-#ifdef SPARTA_KOKKOS_FIXED_LISTS
-  sr_kk_global_copy{VAL_2(KKCopy<SurfReactGlobalKokkos>(sparta))},
-  sr_kk_prob_copy{VAL_2(KKCopy<SurfReactProbKokkos>(sparta))},
-  sr_kk_adsorb_copy{VAL_2(KKCopy<SurfReactAdsorbKokkos>(sparta))},
-#endif
   rand_pool(12345 // seed doesn't matter since it will just be copied over
 #ifdef SPARTA_KOKKOS_EXACT
             , sparta
@@ -242,11 +229,6 @@ void SurfCollideCLLKokkos::pre_collide()
     fix_vibmode_kk_copy.copy(vfix_kk);
   }
 
-#ifdef SPARTA_KOKKOS_FIXED_LISTS
-  if (surf->nsr > KOKKOS_MAX_TOT_SURF_REACT)
-    error->all(FLERR,"Kokkos currently supports two instances of each surface reaction method");
-#else
-
   // the buffers must be sized before anything is blitted into them.  surf->nsr
   //   bounds the count of every individual style, so sizing all of them to it
   //   needs no counting pass, and the loop below still runs pre_react() in
@@ -257,7 +239,6 @@ void SurfCollideCLLKokkos::pre_collide()
   sr_buf_resize<SurfReactGlobalKokkos>(k_sr_global,d_sr_global,surf->nsr);
   sr_buf_resize<SurfReactProbKokkos>(k_sr_prob,d_sr_prob,surf->nsr);
   sr_buf_resize<SurfReactAdsorbKokkos>(k_sr_adsorb,d_sr_adsorb,surf->nsr);
-#endif
 
   if (surf->nsr > 0) {
     int nglob,nprob,nadsorb;
@@ -266,37 +247,19 @@ void SurfCollideCLLKokkos::pre_collide()
       if (!surf->sr[n]->kokkosable)
         error->all(FLERR,"Must use Kokkos-enabled surface reaction method with Kokkos");
       if (strcmp(surf->sr[n]->style,"global") == 0) {
-#ifdef SPARTA_KOKKOS_FIXED_LISTS
-        if (nglob >= KOKKOS_MAX_SURF_REACT_PER_TYPE)
-          error->all(FLERR,"Kokkos currently supports two instances of each surface reaction method");
-        sr_kk_global_copy[nglob].copy((SurfReactGlobalKokkos*)(surf->sr[n]));
-#else
         sr_buf_blit(k_sr_global,nglob,(SurfReactGlobalKokkos*)(surf->sr[n]));
-#endif
         KK_SR_H_GLOBAL(nglob).pre_react();
         KK_SR_H_TYPE(n) = 0;
         KK_SR_H_MAP(n) = nglob;
         nglob++;
       } else if (strcmp(surf->sr[n]->style,"prob") == 0) {
-#ifdef SPARTA_KOKKOS_FIXED_LISTS
-        if (nprob >= KOKKOS_MAX_SURF_REACT_PER_TYPE)
-          error->all(FLERR,"Kokkos currently supports two instances of each surface reaction method");
-        sr_kk_prob_copy[nprob].copy((SurfReactProbKokkos*)(surf->sr[n]));
-#else
         sr_buf_blit(k_sr_prob,nprob,(SurfReactProbKokkos*)(surf->sr[n]));
-#endif
         KK_SR_H_PROB(nprob).pre_react();
         KK_SR_H_TYPE(n) = 1;
         KK_SR_H_MAP(n) = nprob;
         nprob++;
       } else if (strcmp(surf->sr[n]->style,"adsorb") == 0) {
-#ifdef SPARTA_KOKKOS_FIXED_LISTS
-        if (nadsorb >= KOKKOS_MAX_SURF_REACT_PER_TYPE)
-          error->all(FLERR,"Kokkos currently supports two instances of each surface reaction method");
-        sr_kk_adsorb_copy[nadsorb].copy((SurfReactAdsorbKokkos*)(surf->sr[n]));
-#else
         sr_buf_blit(k_sr_adsorb,nadsorb,(SurfReactAdsorbKokkos*)(surf->sr[n]));
-#endif
         KK_SR_H_ADSORB(nadsorb).pre_react();
         KK_SR_H_TYPE(n) = 2;
         KK_SR_H_MAP(n) = nadsorb;
@@ -306,8 +269,6 @@ void SurfCollideCLLKokkos::pre_collide()
       }
     }
 
-#ifndef SPARTA_KOKKOS_FIXED_LISTS
-
     // the models were blitted into the host image of the buffers and their
     //   pre_react() ran there; push the result to the device
 
@@ -316,7 +277,6 @@ void SurfCollideCLLKokkos::pre_collide()
     sr_buf_sync(k_sr_adsorb,d_sr_adsorb);
     sr_idx_sync(k_sr_type_list,d_sr_type_list);
     sr_idx_sync(k_sr_map,d_sr_map);
-#endif
 
   }
 
@@ -398,8 +358,6 @@ void SurfCollideCLLKokkos::backup()
       }
     }
 
-#ifndef SPARTA_KOKKOS_FIXED_LISTS
-
     // backup() rewrites members of each model -- d_particles above all, which
     //   a grow reallocates -- so the device image of the buffers is stale
     //   until it is pushed again
@@ -407,7 +365,6 @@ void SurfCollideCLLKokkos::backup()
     sr_buf_sync(k_sr_global,d_sr_global);
     sr_buf_sync(k_sr_prob,d_sr_prob);
     sr_buf_sync(k_sr_adsorb,d_sr_adsorb);
-#endif
   }
 
 #ifdef SPARTA_KOKKOS_EXACT
@@ -437,8 +394,6 @@ void SurfCollideCLLKokkos::restore()
       }
     }
 
-#ifndef SPARTA_KOKKOS_FIXED_LISTS
-
     // restore() writes no member of a model today, only deep_copies into Views
     //   the model already holds, but the buffers are pushed for the same reason
     //   backup() pushes them: the device image must never trail the host one
@@ -446,7 +401,6 @@ void SurfCollideCLLKokkos::restore()
     sr_buf_sync(k_sr_global,d_sr_global);
     sr_buf_sync(k_sr_prob,d_sr_prob);
     sr_buf_sync(k_sr_adsorb,d_sr_adsorb);
-#endif
   }
 
   Kokkos::deep_copy(d_scalars,0);

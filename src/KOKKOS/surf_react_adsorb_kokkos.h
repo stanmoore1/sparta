@@ -49,25 +49,10 @@ namespace SRA_KK {
 #define SRA_KK_MAXCMFLAG 4        // max cmodel flags (impulsive)
 
 // react_kokkos() needs one scratch probability per GS reaction the incident
-//   species takes part in.  Two representations, selected by
-//   SPARTA_KOKKOS_FIXED_LISTS (see kokkos_type.h):
-//   - default: a runtime-sized device buffer, one row per concurrent thread,
-//     with the row claimed by a UniqueToken for the duration of the call.
-//     No cap on the number of GS reactions a species may appear in.
-//   - SPARTA_KOKKOS_FIXED_LISTS: the original per-thread stack array, capped
-//     at SRA_KK_MAXPERSPECIES entries and rejected at init above that.
-// Unlike the tally-compute lists, this buffer sits in the inner loop of a
-//   per-particle kernel: the stack array is small enough to be kept in
-//   registers, while the device buffer is a global memory round trip plus an
-//   acquire/release pair on every surf collision, and its footprint is
-//   concurrency*nmax doubles.  The buffer may well be the slower of the two on
-//   an accelerator; neither has been measured there.  Both are kept so the two
-//   can be compared on real hardware by rebuilding with
-//   -DSPARTA_KOKKOS_FIXED_LISTS, rather than by reverting commits.
-
-#ifdef SPARTA_KOKKOS_FIXED_LISTS
-#define SRA_KK_MAXPERSPECIES 16   // max GS reactions a single species can be in
-#endif
+//   species takes part in.  These live in a runtime-sized device buffer, one
+//   row per concurrent thread, with the row claimed by a UniqueToken for the
+//   duration of the call, so there is no cap on the number of GS reactions a
+//   species may appear in.
 
 class SurfReactAdsorbKokkos : public SurfReactAdsorb {
  public:
@@ -91,9 +76,9 @@ class SurfReactAdsorbKokkos : public SurfReactAdsorb {
   DAT::t_int_2d d_list;              // per-species list of reaction indices
 
   // per-thread scratch for the probability list react_kokkos() builds (see
-  //   the SRA_KK_MAXPERSPECIES comment above).  react_kokkos() is called once
-  //   per particle from the surf collide kernels, not once per cell, so there
-  //   is no small stable index to key the scratch on -- a per-particle buffer
+  //   the comment above the class).  react_kokkos() is called once per
+  //   particle from the surf collide kernels, not once per cell, so there is
+  //   no small stable index to key the scratch on -- a per-particle buffer
   //   would be nlocal x nmax -- and the row is claimed with a UniqueToken
   //   instead, held for exactly as long as the RNG state is.
   // Both members are used from a const KOKKOS_INLINE_FUNCTION: UniqueToken's
@@ -109,7 +94,6 @@ class SurfReactAdsorbKokkos : public SurfReactAdsorb {
   //   purpose: SPARTA_FLOAT is float in a mixed precision build, and the host
   //   react() sums these probabilities in double.
 
-#ifndef SPARTA_KOKKOS_FIXED_LISTS
   typedef Kokkos::Experimental::UniqueToken<
     DeviceType,Kokkos::Experimental::UniqueTokenScope::Global> sra_token_type;
   sra_token_type prob_token;
@@ -120,10 +104,6 @@ class SurfReactAdsorbKokkos : public SurfReactAdsorb {
 
 #define SRA_KK_PROB(i) d_prob(tid,i)
 #define SRA_KK_PROB_RELEASE() prob_token.release(tid)
-#else
-#define SRA_KK_PROB(i) prob_value[i]
-#define SRA_KK_PROB_RELEASE() ((void) 0)
-#endif
 
   DAT::t_int_1d d_type;              // reaction type (DISSOCIATION,...)
   DAT::t_int_1d d_style;             // SIMPLE or ARRHENIUS
@@ -255,11 +235,7 @@ class SurfReactAdsorbKokkos : public SurfReactAdsorb {
     // claim the scratch row before the RNG state is drawn, and release it
     //   after the RNG state is freed, so the two nest on every exit path
 
-#ifdef SPARTA_KOKKOS_FIXED_LISTS
-    double prob_value[SRA_KK_MAXPERSPECIES];
-#else
     const int tid = prob_token.acquire();
-#endif
 
     double sum_prob = 0.0;
     double scatter_prob = 0.0, correction = 1.0;

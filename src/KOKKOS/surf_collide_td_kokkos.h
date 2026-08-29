@@ -92,22 +92,13 @@ class SurfCollideTDKokkos : public SurfCollideTD {
   KKCopy<FixVibmodeKokkos> fix_vibmode_kk_copy;
 
   // the active surf react models this model may dispatch to, partitioned by
-  //   style.  Two representations, selected by SPARTA_KOKKOS_FIXED_LISTS (see
-  //   kokkos_type.h); the device dispatch site in collide_kokkos() below is
-  //   written once, against the KK_SR_* accessors defined there.
+  //   style (see kokkos_type.h); the device dispatch site in collide_kokkos()
+  //   below is written once, against the KK_SR_* accessors defined there.
 
-#ifdef SPARTA_KOKKOS_FIXED_LISTS
-  int sr_type_list[KOKKOS_MAX_TOT_SURF_REACT];
-  int sr_map[KOKKOS_MAX_TOT_SURF_REACT];
-  KKCopy<SurfReactGlobalKokkos> sr_kk_global_copy[KOKKOS_MAX_SURF_REACT_PER_TYPE];
-  KKCopy<SurfReactProbKokkos> sr_kk_prob_copy[KOKKOS_MAX_SURF_REACT_PER_TYPE];
-  KKCopy<SurfReactAdsorbKokkos> sr_kk_adsorb_copy[KOKKOS_MAX_SURF_REACT_PER_TYPE];
-#else
   DAT::tdual_int_1d k_sr_type_list,k_sr_map;
   DAT::t_int_1d d_sr_type_list,d_sr_map;
   DAT::tdual_char_1d k_sr_global,k_sr_prob,k_sr_adsorb;
   DAT::t_char_1d d_sr_global,d_sr_prob,d_sr_adsorb;
-#endif
 
  public:
 

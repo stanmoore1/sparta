@@ -241,46 +241,12 @@ class UpdateKokkos : public Update {
     return NULL;
   }
 
-  // the active tally computes, partitioned by type.  Two representations,
-  //   selected by SPARTA_KOKKOS_FIXED_LISTS (see kokkos_type.h):
-  //   - default: one runtime-sized device buffer per type, objects blitted in
-  //     exactly as KKCopy::copy() does (kokkos_copy.h:71).  No instance cap.
-  //   - SPARTA_KOKKOS_FIXED_LISTS: the original fixed-size KKCopy arrays, held
-  //     by value in this functor, capped at two instances of each type.
+  // the active tally computes, partitioned by type: one runtime-sized device
+  //   buffer per type, objects blitted in exactly as KKCopy::copy() does
+  //   (kokkos_copy.h:71).  No instance cap.
   //   The dispatch sites in the move kernel are written once, against the
-  //   UK_* accessors below, so only these declarations and the setup routine
-  //   differ between the two.
+  //   UK_* accessors below.
 
-#ifdef SPARTA_KOKKOS_FIXED_LISTS
-  KKCopy<ComputeSurfKokkos> slist_active_copy[KOKKOS_MAX_SLIST];
-  KKCopy<ComputeISurfGridKokkos> slist_active_isurf_copy[KOKKOS_MAX_SLIST];
-  KKCopy<ComputeSurfCollisionTallyKokkos> slist_active_coll_tally_copy[KOKKOS_MAX_SLIST];
-  KKCopy<ComputeSurfReactionTallyKokkos> slist_active_react_tally_copy[KOKKOS_MAX_SLIST];
-  KKCopy<ComputeReactISurfGridKokkos> slist_active_react_isurf_copy[KOKKOS_MAX_SLIST];
-  KKCopy<ComputeReactSurfKokkos> slist_active_react_surf_copy[KOKKOS_MAX_SLIST];
-  KKCopy<ComputeBoundaryKokkos> blist_active_copy[KOKKOS_MAX_BLIST];
-  KKCopy<ComputeReactBoundaryKokkos> blist_active_react_copy[KOKKOS_MAX_BLIST];
-  ComputeReactBoundaryKokkos tmp_compute_react_boundary_kk;
-
-  // unused fixed slots must not alias a compute that may be reallocated or
-  //   deleted while they still reference count it
-
-  ComputeBoundaryKokkos tmp_compute_boundary_kk;
-  ComputeSurfKokkos tmp_compute_surf_kk;
-  ComputeISurfGridKokkos tmp_compute_isurf_grid_kk;
-  ComputeReactISurfGridKokkos tmp_compute_react_isurf_grid_kk;
-  ComputeReactSurfKokkos tmp_compute_react_surf_kk;
-
-#define UK_SLIST_SURF(m)        slist_active_copy[m].obj
-#define UK_SLIST_ISURF(m)       slist_active_isurf_copy[m].obj
-#define UK_SLIST_COLL_TALLY(m)  slist_active_coll_tally_copy[m].obj
-#define UK_SLIST_REACT_TALLY(m) slist_active_react_tally_copy[m].obj
-#define UK_SLIST_REACT_ISURF(m) slist_active_react_isurf_copy[m].obj
-#define UK_SLIST_REACT_SURF(m)  slist_active_react_surf_copy[m].obj
-#define UK_BLIST(m)             blist_active_copy[m].obj
-#define UK_BLIST_REACT(m)       blist_active_react_copy[m].obj
-
-#else
   DAT::tdual_char_1d k_slist_surf, k_slist_isurf, k_slist_coll_tally,
                      k_slist_react_tally, k_slist_react_isurf,
                      k_slist_react_surf, k_blist, k_blist_react;
@@ -296,11 +262,10 @@ class UpdateKokkos : public Update {
 #define UK_SLIST_REACT_SURF(m)  ((const ComputeReactSurfKokkos *) d_slist_react_surf.data())[m]
 #define UK_BLIST(m)             ((const ComputeBoundaryKokkos *) d_blist.data())[m]
 #define UK_BLIST_REACT(m)       ((const ComputeReactBoundaryKokkos *) d_blist_react.data())[m]
-#endif
 
   // partition of slist_active (set in tally_set):
-  //   nslist_surf        = # of compute surf style tallies (slist_active_copy)
-  //   nslist_isurf       = # of compute isurf/grid tallies (slist_active_isurf_copy)
+  //   nslist_surf        = # of compute surf style tallies (k_slist_surf)
+  //   nslist_isurf       = # of compute isurf/grid tallies (k_slist_isurf)
   //   nslist_react_isurf = # of compute react/isurf/grid tallies
   // nslist_surf + nslist_isurf + nslist_react_isurf == nsurf_tally
 

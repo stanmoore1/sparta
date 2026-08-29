@@ -43,18 +43,17 @@
 
 using namespace SPARTA_NS;
 
-#ifndef SPARTA_KOKKOS_FIXED_LISTS
 namespace {
 
   // the surf-tally computes this fix drives are held in one runtime-sized
-  //   device byte buffer instead of a fixed KKCopy array, so their number is
-  //   not capped.  the three steps mirror KKCopy exactly: size the buffer,
-  //   blit each live object's bytes into its slot and mark the image a copy
-  //   so its destructor frees nothing, then push the buffer to the device.
-  //   this is the same code UpdateKokkos uses for its own tally lists
-  //   (update_kokkos.cpp:94-108); it is duplicated rather than shared
-  //   because both live in anonymous namespaces in their own translation
-  //   units, and the whole point is that neither is a class member
+  //   device byte buffer, so their number is not capped.  the three steps
+  //   mirror KKCopy exactly: size the buffer, blit each live object's bytes
+  //   into its slot and mark the image a copy so its destructor frees
+  //   nothing, then push the buffer to the device.  this is the same code
+  //   UpdateKokkos uses for its own tally lists (update_kokkos.cpp:78-105);
+  //   it is duplicated rather than shared because both live in anonymous
+  //   namespaces in their own translation units, and the whole point is
+  //   that neither is a class member
 
   void slist_buf_grow(DAT::tdual_char_1d &k, int n, size_t bytes)
   {
@@ -79,7 +78,7 @@ namespace {
     d = k.view_device();
   }
 }
-#endif
+
 using namespace MathConst;
 
 enum{PKEEP,PINSERT,PDONE,PDISCARD,PENTRY,PEXIT,PSURF};   // several files
@@ -89,9 +88,6 @@ enum{INT,DOUBLE};                                        // several files
 
 #define DELTATASK 256
 #define TEMPLIMIT 1.0e5
-
-#define VAL_1(X) X
-#define VAL_2(X) VAL_1(X), VAL_1(X)
 
 /* ----------------------------------------------------------------------
    insert particles in grid cells with surfs touching inflow boundaries
@@ -105,10 +101,6 @@ FixEmitSurfKokkos::FixEmitSurfKokkos(SPARTA *sparta, int narg, char **arg) :
 #endif
             ),
   particle_kk_copy(sparta)
-#ifdef SPARTA_KOKKOS_FIXED_LISTS
-  , slist_active_copy{VAL_2(KKCopy<ComputeSurfKokkos>(sparta))}
-  , tmp_compute_surf_kk(sparta)
-#endif
 {
   kokkos_flag = 1;
   execution_space = Device;
@@ -374,14 +366,7 @@ void FixEmitSurfKokkos::perform_task()
   nsurf_tally = update->nsurf_tally;
   Compute **slist_active = update->slist_active;
 
-#ifdef SPARTA_KOKKOS_FIXED_LISTS
-  if (nsurf_tally > KOKKOS_MAX_SLIST)
-    error->all(FLERR,"Kokkos currently only supports two instances of compute "
-               "surface with fix emit/surf; rebuild without "
-               "-DSPARTA_KOKKOS_FIXED_LISTS to lift the limit");
-#else
   slist_buf_grow(k_slist_surf,nsurf_tally,sizeof(ComputeSurfKokkos));
-#endif
 
   // dispatch by dynamic_cast, not by style string: the Kokkos computes are
   //   registered under their "/kk" names too (isurf/grid/kk et al), so a
@@ -400,25 +385,10 @@ void FixEmitSurfKokkos::perform_task()
                  "(-sf kk)");
     }
     compute_surf_kk->pre_surf_tally();
-#ifdef SPARTA_KOKKOS_FIXED_LISTS
-    slist_active_copy[i].copy(compute_surf_kk);
-#else
     slist_buf_blit(k_slist_surf,i,compute_surf_kk);
-#endif
   }
 
-#ifdef SPARTA_KOKKOS_FIXED_LISTS
-
-  // every Kokkos functor captures the whole array by value, so the unused
-  //  slots must not alias a compute that may be reallocated or deleted while
-  //  they still reference count it: point them at a temporary that lives as
-  //  long as this class
-
-  for (int i = nsurf_tally; i < KOKKOS_MAX_SLIST; i++)
-    slist_active_copy[i].copy(&tmp_compute_surf_kk);
-#else
   slist_buf_sync(k_slist_surf,d_slist_surf);
-#endif
 
   auto ninsert_dim1 = perspecies ? nspecies : 1;
   if (d_ninsert.extent(0) < ntask * ninsert_dim1)
@@ -1000,10 +970,6 @@ void FixEmitSurfKokkos::subsonic_grid()
 
   particle_kk->update_class_variables();
   particle_kk_copy.copy(particle_kk);
-#ifdef SPARTA_KOKKOS_FIXED_LISTS
-  for (int n = 0; n < KOKKOS_MAX_SLIST; n++)
-    slist_active_copy[n].copy(&tmp_compute_surf_kk);
-#endif
 
   GridKokkos* grid_kk = (GridKokkos*) grid;
   grid_kk->sync(Device,CINFO_MASK);
@@ -1214,10 +1180,6 @@ void FixEmitSurfKokkos::mflow_grid()
 
   particle_kk->update_class_variables();
   particle_kk_copy.copy(particle_kk);
-#ifdef SPARTA_KOKKOS_FIXED_LISTS
-  for (int n = 0; n < KOKKOS_MAX_SLIST; n++)
-    slist_active_copy[n].copy(&tmp_compute_surf_kk);
-#endif
 
   GridKokkos* grid_kk = (GridKokkos*) grid;
   grid_kk->sync(Device,CINFO_MASK);
