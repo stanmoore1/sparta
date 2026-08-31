@@ -37,6 +37,9 @@
 #include "sparta_masks.h"
 #include "variable.h"
 #include "Kokkos_Random.hpp"
+#ifdef SPARTA_KOKKOS_PROFILE_EMIT
+#include <chrono>
+#endif
 
 using namespace SPARTA_NS;
 using namespace MathConst;
@@ -196,6 +199,16 @@ void FixEmitFaceKokkos::flatten_region()
 
 void FixEmitFaceKokkos::perform_task()
 {
+#ifdef SPARTA_KOKKOS_PROFILE_EMIT
+  static double t_ninsert=0,t_scan1=0,t_forkern=0,t_scan2=0,t_grow=0,t_construct=0,t_custom=0;
+  static int nsteps=0;
+  nsteps++;
+  Kokkos::fence();
+  auto t0 = std::chrono::high_resolution_clock::now();
+  #define EMIT_TIMER(acc) { Kokkos::fence(); auto _t1 = std::chrono::high_resolution_clock::now(); acc += std::chrono::duration<double>(_t1-t0).count(); t0 = _t1; }
+#else
+  #define EMIT_TIMER(acc)
+#endif
   dt = update->dt;
   auto l_dimension = this->dimension;
   auto l_subsonic_style = this->subsonic_style;
@@ -233,9 +246,11 @@ void FixEmitFaceKokkos::perform_task()
   copymode = 1;
   Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagFixEmitFace_ninsert>(0,ntask),*this);
   copymode = 0;
+  EMIT_TIMER(t_ninsert);
 
   int ncands;
   d_task2cand = offset_scan(d_ninsert, ncands);
+  EMIT_TIMER(t_scan1);
 
   if (ncands == 0) return;
 
@@ -310,20 +325,30 @@ void FixEmitFaceKokkos::perform_task()
   //   see region_prim_kokkos.h
 
 
-  int nsingle_reduce = 0;
   copymode = 1;
-  Kokkos::parallel_reduce(Kokkos::RangePolicy<DeviceType, TagFixEmitFace_perform_task>(0,ntask),*this,nsingle_reduce);
+  Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagFixEmitFace_perform_task>(0,ntask),*this);
   copymode = 0;
-  nsingle += nsingle_reduce;
+  EMIT_TIMER(t_forkern);
+
+  // nnew = # of d_keep entries set to 1 by the kernel above = the # of
+  //   particles actually inserted this step, i.e. exactly what a
+  //   parallel_reduce over the same predicate would have returned.  Getting
+  //   it from the scan already needed to size/place the new particles avoids
+  //   a 2nd blocking device round trip (the reduction's host-side fetch of
+  //   its partial sums) for a tiny-ntask fix like this, where dispatch
+  //   latency dominates over per-item work
 
   int nnew;
   auto ld_cands2new = offset_scan(d_keep, nnew);
+  nsingle += nnew;
+  EMIT_TIMER(t_scan2);
 
   auto particleKK = dynamic_cast<ParticleKokkos*>(particle);
   auto nlocal_before = particleKK->nlocal;
   particleKK->grow(nnew);
   particleKK->sync(SPARTA_NS::Device, PARTICLE_MASK);
   auto ld_particles = particleKK->k_particles.view_device();
+  EMIT_TIMER(t_grow);
 
   Kokkos::parallel_for(ncands, SPARTA_LAMBDA(int cand) {
     if (!ld_keep(cand)) return;
@@ -376,6 +401,7 @@ void FixEmitFaceKokkos::perform_task()
   });
   particleKK->nlocal = nlocal_before + nnew;
   particleKK->modify(SPARTA_NS::Device, PARTICLE_MASK);
+  EMIT_TIMER(t_construct);
   particleKK->zero_custom_kokkos(nlocal_before,particleKK->nlocal);
 
   if (modify->n_update_custom) {
@@ -407,6 +433,18 @@ void FixEmitFaceKokkos::perform_task()
           temp_rot,temp_vib,vstream);
     }
   }
+  EMIT_TIMER(t_custom);
+
+#ifdef SPARTA_KOKKOS_PROFILE_EMIT
+  if (nsteps % 50 == 0) {
+    fprintf(screen, "EMIT_PROFILE step=%d ninsert=%.4f scan1=%.4f forkern=%.4f scan2=%.4f grow=%.4f construct=%.4f custom=%.4f (ms/call, cumulative/%d)\n",
+            update->ntimestep,
+            t_ninsert/nsteps*1000, t_scan1/nsteps*1000, t_forkern/nsteps*1000,
+            t_scan2/nsteps*1000, t_grow/nsteps*1000, t_construct/nsteps*1000,
+            t_custom/nsteps*1000, nsteps);
+  }
+#endif
+#undef EMIT_TIMER
 }
 
 KOKKOS_INLINE_FUNCTION
@@ -439,7 +477,7 @@ void FixEmitFaceKokkos::operator()(TagFixEmitFace_ninsert, const int &i) const
 }
 
 KOKKOS_INLINE_FUNCTION
-void FixEmitFaceKokkos::operator()(TagFixEmitFace_perform_task, const int &i, int &nsingle) const
+void FixEmitFaceKokkos::operator()(TagFixEmitFace_perform_task, const int &i) const
 {
   double *lo,*hi,*normal,*vstream;
 
@@ -467,7 +505,6 @@ void FixEmitFaceKokkos::operator()(TagFixEmitFace_perform_task, const int &i, in
       auto start = d_task2cand(i * nspecies + isp);
       auto scosine = indot / vscale_val;
 
-      int nactual = 0;
       for (int m = 0; m < ninsert; m++) {
         auto cand = start + m;
         double x[3];
@@ -483,7 +520,6 @@ void FixEmitFaceKokkos::operator()(TagFixEmitFace_perform_task, const int &i, in
             !region_match_kk(d_region_tokens,nregion_token,
                              x[0],x[1],x[2])) continue;
 
-        nactual++;
         d_keep(cand) = 1;
         d_task(cand) = i;
         d_isp(cand) = isp;
@@ -508,13 +544,11 @@ void FixEmitFaceKokkos::operator()(TagFixEmitFace_perform_task, const int &i, in
         d_id(cand) = MAXSMALLINT*rand_gen.drand();
         d_dtremain(cand) = dt * rand_gen.drand();
       }
-      nsingle += nactual;
     }
   } else {
     auto ninsert = d_ninsert(i);
     auto start = d_task2cand(i);
 
-    int nactual = 0;
     for (int m = 0; m < ninsert; m++) {
       auto cand = start + m;
       auto rn = rand_gen.drand();
@@ -538,7 +572,6 @@ void FixEmitFaceKokkos::operator()(TagFixEmitFace_perform_task, const int &i, in
           !region_match_kk(d_region_tokens,nregion_token,
                            x[0],x[1],x[2])) continue;
 
-      nactual++;
       d_keep(cand) = 1;
       d_task(cand) = i;
       d_isp(cand) = isp;
@@ -564,8 +597,6 @@ void FixEmitFaceKokkos::operator()(TagFixEmitFace_perform_task, const int &i, in
       d_id(cand) = MAXSMALLINT*rand_gen.drand();
       d_dtremain(cand) = dt * rand_gen.drand();
     }
-
-    nsingle += nactual;
   }
 
   rand_pool.free_state(rand_gen);
