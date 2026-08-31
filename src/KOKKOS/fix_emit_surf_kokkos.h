@@ -43,8 +43,6 @@ struct TagFixEmitSurf_insert_particles{};
 
 class FixEmitSurfKokkos : public FixEmitSurf {
  public:
-  typedef int value_type;
-
   FixEmitSurfKokkos(class SPARTA *, int, char **);
   ~FixEmitSurfKokkos() override;
   void init() override;
