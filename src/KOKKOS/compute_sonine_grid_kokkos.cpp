@@ -306,6 +306,8 @@ void ComputeSonineGridKokkos::operator()(TagComputeSonineGrid_compute_per_grid, 
 
     int k = igroup*npergroup;
 
+    d_tally(icell,k++) += mass;
+
     double vthermal[3];
     double csq;
     vthermal[0] = v[0] - d_vcom(icell,igroup,0);
