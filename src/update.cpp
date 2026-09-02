@@ -2050,6 +2050,18 @@ void Update::global(int narg, char **arg)
       else if (strcmp(arg[iarg+1],"no") == 0) timer->rank_flag = 0;
       else error->all(FLERR,"Illegal global command");
       iarg += 2;
+    } else if (strcmp(arg[iarg],"timer/file") == 0) {
+      if (iarg+2 > narg) error->all(FLERR,"Illegal global command");
+      delete [] timer->rank_file;
+      timer->rank_file = NULL;
+      if (strcmp(arg[iarg+1],"none") != 0) {
+        int n = strlen(arg[iarg+1]) + 1;
+        timer->rank_file = new char[n];
+        strcpy(timer->rank_file,arg[iarg+1]);
+      }
+      // a new name starts a new file; the runs after it append
+      timer->rank_file_append = 0;
+      iarg += 2;
     } else if (strcmp(arg[iarg],"nrho") == 0) {
       if (iarg+2 > narg) error->all(FLERR,"Illegal global command");
       nrho = input->numeric(FLERR,arg[iarg+1]);

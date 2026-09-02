@@ -29,6 +29,7 @@
 #include "math_extra.h"
 #include "timer.h"
 #include "memory.h"
+#include "error.h"
 
 #include <string>
 
@@ -179,12 +180,12 @@ void Finish::end(int flag, double time_multiple_runs)
       if (logfile) fprintf(logfile,fmt,time,time/time_loop*100.0);
     }
 
-    // slowest and fastest rank of each section, with the host each ran on
-    // the host names are gathered to rank 0 once, then each section is a
-    //   MAXLOC/MINLOC reduction.  a nprocs x MPI_MAX_PROCESSOR_NAME buffer
-    //   on rank 0 is a few MB at the largest processor counts
+    // per-rank timing diagnostics, both keyed on the host each rank ran on
+    // the host names are gathered to rank 0 once.  a nprocs x
+    //   MPI_MAX_PROCESSOR_NAME buffer on rank 0 is a few MB at the largest
+    //   processor counts
 
-    if (timer->rank_flag) {
+    if (timer->rank_flag || timer->rank_file) {
       char myname[MPI_MAX_PROCESSOR_NAME];
       int namelen;
       MPI_Get_processor_name(myname,&namelen);
@@ -197,27 +198,77 @@ void Finish::end(int flag, double time_multiple_runs)
       MPI_Gather(myname,MPI_MAX_PROCESSOR_NAME,MPI_CHAR,
                  names,MPI_MAX_PROCESSOR_NAME,MPI_CHAR,0,world);
 
-      const char hdr2[] = "\nMPI task timing extremes:\n"
-        "Section |  max time  | max rank | on host          "
-        "|  min time  | min rank | on host\n"
-        "-----------------------------------------------------"
-        "-----------------------------------------\n";
-      if (me == 0) {
-        if (screen)  fputs(hdr2,screen);
-        if (logfile) fputs(hdr2,logfile);
+      // slowest and fastest rank of each section, one MAXLOC/MINLOC
+      //   reduction per section
+
+      if (timer->rank_flag) {
+        const char hdr2[] = "\nMPI task timing extremes:\n"
+          "Section |  max time  | max rank | on host          "
+          "|  min time  | min rank | on host\n"
+          "-----------------------------------------------------"
+          "-----------------------------------------\n";
+        if (me == 0) {
+          if (screen)  fputs(hdr2,screen);
+          if (logfile) fputs(hdr2,logfile);
+        }
+
+        mpi_timings_rank("Move",timer,TIME_MOVE,world,me,names,
+                         screen,logfile);
+        mpi_timings_rank("Coll",timer,TIME_COLLIDE,world,me,names,
+                         screen,logfile);
+        mpi_timings_rank("Sort",timer,TIME_SORT,world,me,names,
+                         screen,logfile);
+        mpi_timings_rank("Comm",timer,TIME_COMM,world,me,names,
+                         screen,logfile);
+        mpi_timings_rank("Modify",timer,TIME_MODIFY,world,me,names,
+                         screen,logfile);
+        mpi_timings_rank("Output",timer,TIME_OUTPUT,world,me,names,
+                         screen,logfile);
+        mpi_timings_rank("MPI Sync",timer,TIME_SYNC,world,me,names,
+                         screen,logfile);
       }
 
-      mpi_timings_rank("Move",timer,TIME_MOVE,world,me,names,screen,logfile);
-      mpi_timings_rank("Coll",timer,TIME_COLLIDE,world,me,names,
-                       screen,logfile);
-      mpi_timings_rank("Sort",timer,TIME_SORT,world,me,names,screen,logfile);
-      mpi_timings_rank("Comm",timer,TIME_COMM,world,me,names,screen,logfile);
-      mpi_timings_rank("Modify",timer,TIME_MODIFY,world,me,names,
-                       screen,logfile);
-      mpi_timings_rank("Output",timer,TIME_OUTPUT,world,me,names,
-                       screen,logfile);
-      mpi_timings_rank("MPI Sync",timer,TIME_SYNC,world,me,names,
-                       screen,logfile);
+      // every rank's section times to a file, one line per rank, so the
+      //   full distribution is available and every outlier host shows up in
+      //   a single run.  the whole timer array of every rank is gathered to
+      //   rank 0, TIME_N doubles per rank, under 1 MB at 8192 ranks
+
+      if (timer->rank_file) {
+        double *times = NULL;
+        if (me == 0) times = new double[(bigint) nprocs * TIME_N];
+        MPI_Gather(timer->array,TIME_N,MPI_DOUBLE,
+                   times,TIME_N,MPI_DOUBLE,0,world);
+
+        if (me == 0) {
+          FILE *fp = fopen(timer->rank_file,
+                           timer->rank_file_append ? "a" : "w");
+          if (fp == NULL) {
+            char str[256];
+            snprintf(str,sizeof(str),
+                     "Cannot open timer/file %s",timer->rank_file);
+            error->one(FLERR,str);
+          }
+
+          fprintf(fp,"# SPARTA per-rank timing: run ending on step "
+                  BIGINT_FORMAT ", %d steps, %d procs\n",
+                  update->ntimestep,update->nsteps,nprocs);
+          fprintf(fp,"# rank host move coll sort comm modify output "
+                  "sync loop\n");
+
+          for (int iproc = 0; iproc < nprocs; iproc++) {
+            const double *t = &times[(bigint) iproc * TIME_N];
+            fprintf(fp,"%d %s %g %g %g %g %g %g %g %g\n",iproc,
+                    &names[(size_t) iproc * MPI_MAX_PROCESSOR_NAME],
+                    t[TIME_MOVE],t[TIME_COLLIDE],t[TIME_SORT],t[TIME_COMM],
+                    t[TIME_MODIFY],t[TIME_OUTPUT],t[TIME_SYNC],t[TIME_LOOP]);
+          }
+
+          fclose(fp);
+          delete [] times;
+        }
+
+        timer->rank_file_append = 1;
+      }
 
       delete [] names;
     }

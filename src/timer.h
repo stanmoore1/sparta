@@ -43,6 +43,14 @@ class Timer : protected Pointers {
   //   slow node from a different rank being slow on every run
   int rank_flag;
 
+  // rank_file = name of a file Finish::end() writes one line per rank to,
+  //   with the host name and every section time, so the whole distribution
+  //   is available rather than only its extremes.  NULL = no file.
+  //   set by "global timer/file name".  the first run after the command
+  //   creates the file, later runs append to it
+  char *rank_file;
+  int rank_file_append;
+
   Timer(class SPARTA *);
   ~Timer();
   void init();
