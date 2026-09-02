@@ -37,6 +37,7 @@ Timer::Timer(SPARTA *sparta) : Pointers(sparta)
   // missed "no time history" warning) -- benign in a fresh process where the
   // heap is zeroed, but not when SPARTA is embedded in a long-lived process.
   for (int i = 0; i < TIME_N; i++) array[i] = 0.0;
+  rank_flag = 0;
   _timeout = -1.0;
   _s_timeout = -1.0;
   _checkfreq = 10;

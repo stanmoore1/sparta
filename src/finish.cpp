@@ -39,6 +39,9 @@ using namespace SPARTA_NS;
 static void mpi_timings(const char *label, Timer *t, int tt,
                         MPI_Comm world, const int nprocs,
                         const int me, double time_loop, FILE *scr, FILE *log);
+static void mpi_timings_rank(const char *label, Timer *t, int tt,
+                             MPI_Comm world, const int me,
+                             const char *names, FILE *scr, FILE *log);
 
 /* ---------------------------------------------------------------------- */
 
@@ -174,6 +177,49 @@ void Finish::end(int flag, double time_multiple_runs)
     if (me == 0) {
       if (screen) fprintf(screen,fmt,time,time/time_loop*100.0);
       if (logfile) fprintf(logfile,fmt,time,time/time_loop*100.0);
+    }
+
+    // slowest and fastest rank of each section, with the host each ran on
+    // the host names are gathered to rank 0 once, then each section is a
+    //   MAXLOC/MINLOC reduction.  a nprocs x MPI_MAX_PROCESSOR_NAME buffer
+    //   on rank 0 is a few MB at the largest processor counts
+
+    if (timer->rank_flag) {
+      char myname[MPI_MAX_PROCESSOR_NAME];
+      int namelen;
+      MPI_Get_processor_name(myname,&namelen);
+
+      char *names = NULL;
+      if (me == 0) {
+        bigint nbytes = (bigint) nprocs * MPI_MAX_PROCESSOR_NAME;
+        names = new char[nbytes];
+      }
+      MPI_Gather(myname,MPI_MAX_PROCESSOR_NAME,MPI_CHAR,
+                 names,MPI_MAX_PROCESSOR_NAME,MPI_CHAR,0,world);
+
+      const char hdr2[] = "\nMPI task timing extremes:\n"
+        "Section |  max time  | max rank | on host          "
+        "|  min time  | min rank | on host\n"
+        "-----------------------------------------------------"
+        "-----------------------------------------\n";
+      if (me == 0) {
+        if (screen)  fputs(hdr2,screen);
+        if (logfile) fputs(hdr2,logfile);
+      }
+
+      mpi_timings_rank("Move",timer,TIME_MOVE,world,me,names,screen,logfile);
+      mpi_timings_rank("Coll",timer,TIME_COLLIDE,world,me,names,
+                       screen,logfile);
+      mpi_timings_rank("Sort",timer,TIME_SORT,world,me,names,screen,logfile);
+      mpi_timings_rank("Comm",timer,TIME_COMM,world,me,names,screen,logfile);
+      mpi_timings_rank("Modify",timer,TIME_MODIFY,world,me,names,
+                       screen,logfile);
+      mpi_timings_rank("Output",timer,TIME_OUTPUT,world,me,names,
+                       screen,logfile);
+      mpi_timings_rank("MPI Sync",timer,TIME_SYNC,world,me,names,
+                       screen,logfile);
+
+      delete [] names;
     }
   }
 
@@ -598,5 +644,40 @@ void mpi_timings(const char *label, Timer *t, int tt,
       fprintf(scr,fmt,label,time_min,time,time_max,time_sq,tmp);
     if (log)
       fprintf(log,fmt,label,time_min,time,time_max,time_sq,tmp);
+  }
+}
+
+/* ----------------------------------------------------------------------
+   one row of the per-rank extremes table: the rank with the largest and
+     the rank with the smallest time in section tt, and the host name of
+     each from the names buffer gathered on rank 0
+   names is only dereferenced on rank 0 and may be NULL elsewhere
+------------------------------------------------------------------------- */
+
+void mpi_timings_rank(const char *label, Timer *t, int tt,
+                      MPI_Comm world, const int me,
+                      const char *names, FILE *scr, FILE *log)
+{
+  struct {
+    double value;
+    int rank;
+  } in,outmax,outmin;
+
+  in.value = t->array[tt];
+  in.rank = me;
+
+  MPI_Reduce(&in,&outmax,1,MPI_DOUBLE_INT,MPI_MAXLOC,0,world);
+  MPI_Reduce(&in,&outmin,1,MPI_DOUBLE_INT,MPI_MINLOC,0,world);
+
+  if (me == 0) {
+    const char *hostmax = &names[(size_t) outmax.rank * MPI_MAX_PROCESSOR_NAME];
+    const char *hostmin = &names[(size_t) outmin.rank * MPI_MAX_PROCESSOR_NAME];
+    const char fmt[] = "%-8s|%- 12.5g|%9d | %-17s|%- 12.5g|%9d | %s\n";
+    if (scr)
+      fprintf(scr,fmt,label,outmax.value,outmax.rank,hostmax,
+              outmin.value,outmin.rank,hostmin);
+    if (log)
+      fprintf(log,fmt,label,outmax.value,outmax.rank,hostmax,
+              outmin.value,outmin.rank,hostmin);
   }
 }

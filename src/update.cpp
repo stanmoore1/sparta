@@ -2044,6 +2044,12 @@ void Update::global(int narg, char **arg)
       else if (strcmp(arg[iarg+1],"no") == 0) optmove_flag = 0;
       else error->all(FLERR,"Illegal global command");
       iarg += 2;
+    } else if (strcmp(arg[iarg],"timer/rank") == 0) {
+      if (iarg+2 > narg) error->all(FLERR,"Illegal global command");
+      if (strcmp(arg[iarg+1],"yes") == 0) timer->rank_flag = 1;
+      else if (strcmp(arg[iarg+1],"no") == 0) timer->rank_flag = 0;
+      else error->all(FLERR,"Illegal global command");
+      iarg += 2;
     } else if (strcmp(arg[iarg],"nrho") == 0) {
       if (iarg+2 > narg) error->all(FLERR,"Illegal global command");
       nrho = input->numeric(FLERR,arg[iarg+1]);

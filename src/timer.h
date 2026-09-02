@@ -36,6 +36,13 @@ class Timer : protected Pointers {
  public:
   double *array;
 
+  // rank_flag = 1 makes Finish::end() follow the timing breakdown with the
+  //   slowest and fastest MPI rank of each section and the host each ran on.
+  //   set by "global timer/rank yes".  a debugging aid for load imbalance at
+  //   large processor counts: the min/avg/max table cannot tell a persistent
+  //   slow node from a different rank being slow on every run
+  int rank_flag;
+
   Timer(class SPARTA *);
   ~Timer();
   void init();

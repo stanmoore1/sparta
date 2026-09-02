@@ -17,7 +17,7 @@
 </PRE>
 <UL><LI>one or more keyword/value pairs 
 
-<LI>keyword = <I>fnum</I> or <I>nrho</I> or <I>vstream</I> or <I>temp</I> or <I>field</I> or <I>surfs</I> or <I>surfgrid</I> or <I>surfmax</I> or <I>splitmax</I> or <I>surftally</I> or <I>gridcut</I> or <I>comm/sort</I> or <I>comm/style</I> or <I>weight</I> or <I>particle/reorder</I> or <I>mem/limit</I> 
+<LI>keyword = <I>fnum</I> or <I>nrho</I> or <I>vstream</I> or <I>temp</I> or <I>field</I> or <I>surfs</I> or <I>surfgrid</I> or <I>surfmax</I> or <I>splitmax</I> or <I>surftally</I> or <I>gridcut</I> or <I>comm/sort</I> or <I>comm/style</I> or <I>weight</I> or <I>particle/reorder</I> or <I>mem/limit</I> or <I>optmove</I> or <I>timer/rank</I> 
 
 <PRE>  <I>fnum</I> value = ratio
     ratio = Fnum ratio of physical particles to simulation particles
@@ -72,7 +72,9 @@
     grid = limit extra memory for load-balancing, particle reordering, and restart file read/write to grid cell memory
     bytes = limit extra particle memory to this amount (in MBytes)
   <I>optmove</I> value = yes or no
-    yes/no = use optimized particle move if yes, else use regular move 
+    yes/no = use optimized particle move if yes, else use regular move
+  <I>timer/rank</I> value = yes or no
+    yes/no = also print the slowest and fastest MPI rank and its host for each timing section 
 </PRE>
 
 </UL>
@@ -475,6 +477,19 @@ measure of how often the optimized move was not applicable, not of how
 far particles moved. A value near zero means it was used for nearly
 every particle.
 </P>
+<P>If the <I>timer/rank</I> keyword is set to <I>yes</I> then the MPI task timing
+breakdown printed at the end of each run (see the <A HREF = "run.html">run</A>
+command) is followed by a second table. For each timing section it
+lists the MPI rank with the largest time and the MPI rank with the
+smallest time, together with the host name each of those ranks ran on,
+as returned by MPI_Get_processor_name(). This is a debugging aid for
+load imbalance at large processor counts. The min/avg/max table shows
+that some rank is slow in a section, but not which one; this table
+shows whether it is the same rank or the same host from run to run,
+which distinguishes a slow node from an effect that moves between
+ranks. The host names of all ranks are gathered to rank 0 once at the
+end of the run, which costs nothing measurable.
+</P>
 <P><B>Restrictions:</B>
 </P>
 <P>The global surfmax command must be used before surface elements are
@@ -490,6 +505,6 @@ defined, e.g. via the <A HREF = "read_surf.html">read_surf</A> command.
 0.0, temp = 273.15, field = none, surfs = explicit, surfgrid = auto,
 surfmax = 100, splitmax = 10, surftally = auto,
 gridcut = -1.0, comm/sort = no, comm/style = neigh, weight = cell
-none, particle/reorder = 0, mem/limit = 0, optmove = no.
+none, particle/reorder = 0, mem/limit = 0, optmove = no, timer/rank = no.
 </P>
 </HTML>
