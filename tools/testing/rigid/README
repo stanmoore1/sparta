@@ -54,6 +54,9 @@ splitcell     body sweeping alongside a diagonal wall that creates
               are reflected (no deletions), both remap modes agree
 twobody       two bodies colliding head-on via push-off: symmetric,
               elastic within 2%
+splitbalance  split cells plus a fix balance every 3 steps: the particle
+              count must not change (a stale sort after the re-map let
+              the balance migrate cells with duplicated particles)
 pushpair      ASYMMETRIC body-body contact (heavy large body vs light
               small body, corner-vs-face): total pair momentum
               conserved to output precision, verifying that contact
@@ -67,6 +70,10 @@ modifyafter   negative: with distributed surfs, surf_modify of the body
               surfs after the fix is defined must be rejected
 wallmotion    negative: a body surf_collide model with its own wall
               motion (diffuse translate) must be rejected
+customemit    a fix emit/surf spreading a custom per-surf attribute,
+              defined before fix rigid, over two runs: the per-surf
+              status flags fix rigid resets after a grid rebuild must
+              be reset collectively, else the second run hangs (dist)
 emitsurf      negative: a fix emit/surf emitting from the body surfs
               must be rejected
 renumber      negative: a remove_surf issued after the fix is defined

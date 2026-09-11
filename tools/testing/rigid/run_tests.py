@@ -32,8 +32,16 @@ FNUM = 0.001
 def run_deck(exe_cmd, deck, extra=None):
     """Run one deck, return (returncode, stdout+stderr)."""
     cmd = exe_cmd + ["-in", deck] + (extra or [])
-    proc = subprocess.run(cmd, cwd=THISDIR, stdout=subprocess.PIPE,
-                          stderr=subprocess.STDOUT, text=True, timeout=600)
+    try:
+        proc = subprocess.run(cmd, cwd=THISDIR, stdout=subprocess.PIPE,
+                              stderr=subprocess.STDOUT, text=True,
+                              timeout=600)
+    except subprocess.TimeoutExpired as e:
+        # a hang (e.g. a collective entered by only some ranks) is a
+        # failure, not a reason to stall the suite
+        out = e.stdout.decode() if isinstance(e.stdout, bytes) else \
+            (e.stdout or "")
+        return -1, out + "\nTIMEOUT after 600 s\n"
     return proc.returncode, proc.stdout
 
 
@@ -566,6 +574,36 @@ def test_splitcell(exe_cmd):
     return fails
 
 
+def test_splitbalance(exe_cmd):
+    # split cells plus a fix balance in the same run: after a full re-map
+    # fix rigid reassigns split-cell particles to sub cells, which leaves
+    # them unsorted, and the balance later in the step must re-sort
+    # before migrating cells.  the box is periodic with no emission and
+    # no deletion, so the particle count must stay at its initial value;
+    # with stale lists a random balance quadrupled it on 4 ranks
+    fails = []
+    for mode in ("cutcell", "incremental"):
+        rc, out = run_deck(exe_cmd, "in.test.splitbalance",
+                           extra=["-var", "mode", mode])
+        if rc:
+            fails.append("mode %s: run failed with exit code %d" % (mode, rc))
+            continue
+        rows = parse_stats(out)
+        if not rows:
+            fails.append("mode %s: no stats output" % mode)
+            continue
+        np0 = rows[0]["Np"]
+        for row in rows[1:]:
+            if row["Np"] != np0:
+                fails.append("mode %s: step %d has %d particles, started "
+                             "with %d" % (mode, row["Step"], row["Np"], np0))
+                break
+        if rows[-1]["f_1"] != 0:
+            fails.append("mode %s: %g particles deleted inside the body"
+                         % (mode, rows[-1]["f_1"]))
+    return fails
+
+
 def test_multiremap(exe_cmd):
     # two gas-driven bodies: cutcell and incremental must give identical
     # trajectories, verifying multi-body incremental re-cut
@@ -824,6 +862,21 @@ def test_rotwall3d(exe_cmd):
         ("1.0e-3", "5"), ("2.0e-5", "250"))
 
 
+def test_customemit(exe_cmd):
+    # a fix emit/surf which spreads a custom per-surf attribute, defined
+    # before fix rigid, across two runs with distributed surfs: the
+    # per-surf status flags fix rigid resets after a grid rebuild gate a
+    # collective re-spread in the emit fix's init, so they must be reset
+    # on every rank or none, else the second run's init hangs
+    rc, out = run_deck(exe_cmd, "in.test.customemit")
+    if rc:
+        return ["run failed with exit code %d" % rc]
+    rows = parse_stats(out)
+    if len(rows) < 2:
+        return ["fewer than two stats rows, the second run did not start"]
+    return []
+
+
 def test_emitsurf(exe_cmd):
     return negative_test(exe_cmd, "in.test.emitsurf",
                          "cannot emit from fix rigid body surfs")
@@ -915,6 +968,7 @@ TESTS = [
     ("overrun", test_overrun),
     ("remap", test_remap),
     ("multiremap", test_multiremap),
+    ("splitbalance", test_splitbalance),
     ("staticdist", test_staticdist),
     ("staticdist3d", test_staticdist3d),
     ("splitcell", test_splitcell),
@@ -928,6 +982,7 @@ TESTS = [
     ("zerothick", test_zerothick),
     ("modifyafter", test_modifyafter),
     ("wallmotion", test_wallmotion),
+    ("customemit", test_customemit),
     ("emitsurf", test_emitsurf),
     ("renumber", test_renumber),
     ("mixture", test_mixture),
@@ -949,7 +1004,8 @@ DIST_TESTS = {"ballistic", "force", "rotation", "bounce", "restitution",
               "overrun",
               "remap", "multiremap", "staticdist", "staticdist3d",
               "splitcell", "gridchange", "exitbox", "twobody", "pushpair",
-              "tallyorder", "rotwall", "rotwall3d"}
+              "tallyorder", "rotwall", "rotwall3d", "customemit",
+              "splitbalance"}
 
 
 def main():

@@ -1887,12 +1887,15 @@ void FixRigid::surfs_changed(int changed, int stage)
   // if any proc appended copies or re-indexed ghosts, the per-surf
   //   state of surface reaction and collision models must follow,
   //   as after a grid change (see Grid::notify_changed())
-  // stage = 0 when called during a run: flag the change as of this step
   // stage = 1 when called from Update::init_rigid() before the models
   //   init, stage = 2 from setup() after they init: flag the change as
   //   of the previous step, which is what SurfCollide::dynamic() tests
   //   in Update::setup() to re-spread its per-surf values over the new
   //   local+ghost surfs
+  // a change during a run, after a grid rebuild, is handled by
+  //   grid_changed() instead: Grid::notify_changed() itself notifies
+  //   the computes and reaction models after the fixes, so only the
+  //   flags are reset there (stage 0 here would flag it as of this step)
   // stage = 1: the reaction models have not init'd yet, so their
   //   notification is deferred to init() via Update::rigid_notify_sr
   // collective: every proc takes the same branch
@@ -2848,8 +2851,14 @@ void FixRigid::grid_changed()
     // a fix earlier in the notification may already have re-spread
     //   per-surf custom values over the pre-append layout: invalidate
     //   them again so they are re-spread over the final one
+    // collective: the flags below gate collective re-spreads (a custom
+    //   attribute in FixEmitSurf::init(), SurfCollide::dynamic()), so
+    //   every proc must reset them or none; whether copies were
+    //   appended differs by proc, so the decision is reduced first
 
-    if (changed) {
+    int changed_any;
+    MPI_Allreduce(&changed,&changed_any,1,MPI_INT,MPI_MAX,world);
+    if (changed_any) {
       surf->localghost_changed_step = update->ntimestep;
       for (int i = 0; i < surf->ncustom; i++) surf->estatus[i] = 0;
     }
@@ -3423,12 +3432,17 @@ bigint FixRigid::remove_inside_particles(int splitflag)
   // reassign particles in split cells to sub cell owner
   // requires sorted particles, done by grid_rebuild()
 
+  // the particles are relabeled to their sub cells but not re-listed
+  //   under them, so they are no longer sorted; a fix balance later in
+  //   this step would otherwise migrate cells with stale particle lists
+
   if (splitflag && grid->nsplitlocal) {
     Grid::ChildCell *cells = grid->cells;
     int nglocal = grid->nlocal;
     for (int icell = 0; icell < nglocal; icell++)
       if (cells[icell].nsplit > 1)
         grid->assign_split_cell_particles(icell);
+    particle->sorted = 0;
   }
 
   // bbox around body at its current position
@@ -3496,12 +3510,17 @@ void FixRigid::remove_inside_all(int splitflag)
   // reassign particles in split cells to sub cell owner
   // requires sorted particles, done by grid_rebuild()
 
+  // the particles are relabeled to their sub cells but not re-listed
+  //   under them, so they are no longer sorted; a fix balance later in
+  //   this step would otherwise migrate cells with stale particle lists
+
   if (splitflag && grid->nsplitlocal) {
     Grid::ChildCell *cells = grid->cells;
     int nglocal = grid->nlocal;
     for (int icell = 0; icell < nglocal; icell++)
       if (cells[icell].nsplit > 1)
         grid->assign_split_cell_particles(icell);
+    particle->sorted = 0;
   }
 
   // flag particles inside any body or in INSIDE cells for deletion
