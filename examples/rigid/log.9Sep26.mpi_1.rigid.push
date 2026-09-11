@@ -17,8 +17,8 @@ create_box  	    0 10 0 10 -0.5 0.5
 Created orthogonal box = (0 0 -0.5) to (10 10 0.5)
 create_grid 	    20 20 1
 Created 400 child grid cells
-  CPU time = 0.00140629 secs
-  create/ghost percent = 85.1206 14.8794
+  CPU time = 0.00103536 secs
+  create/ghost percent = 83.9059 16.0941
 
 global		    nrho 1.0 fnum 0.001
 
@@ -35,10 +35,10 @@ read_surf           data.square group body
   384 0 16 = cells outside/inside/overlapping surfs
   16 = surf cells with 1,2,etc splits
   99 99 = cell-wise and global flow volume
-  CPU time = 0.000564379 secs
-  read/check/sort/surf2grid/ghost/inout/particle percent = 3.68866 23.6276 1.7141 54.415 16.5547 3.83413 0.0205536
-  surf2grid time = 0.000307107 secs
-  map/comm1/comm2/comm3/comm4/split percent = 53.8877 4.47759 17.4451 3.41575 12.4536 3.78956
+  CPU time = 0.000523976 secs
+  read/check/sort/surf2grid/ghost/inout/particle percent = 5.57048 22.9738 1.4932 58.9571 11.0055 7.60436 0.0225201
+  surf2grid time = 0.000308921 secs
+  map/comm1/comm2/comm3/comm4/split percent = 39.6079 4.79831 15.4247 2.46309 26.1649 8.37042
 read_surf           data.wall group wall
   4 lines
   8 8.2 xlo xhi
@@ -49,10 +49,10 @@ read_surf           data.wall group wall
   356 0 44 = cells outside/inside/overlapping surfs
   44 = surf cells with 1,2,etc splits
   97.8 97.8 = cell-wise and global flow volume
-  CPU time = 0.000384254 secs
-  read/check/sort/surf2grid/ghost/inout/particle percent = 6.13995 5.10131 1.93023 58.574 28.2545 5.34855 0.0192581
-  surf2grid time = 0.000225073 secs
-  map/comm1/comm2/comm3/comm4/split percent = 58.9022 5.27962 18.0812 4.53808 3.70413 6.13223
+  CPU time = 0.000340151 secs
+  read/check/sort/surf2grid/ghost/inout/particle percent = 8.46242 20.739 1.53226 51.0547 18.2116 15.7001 0.0185212
+  surf2grid time = 0.000173663 secs
+  map/comm1/comm2/comm3/comm4/split percent = 48.3885 6.16481 16.6806 4.64463 4.77361 15.2773
 surf_collide	    1 specular
 surf_modify         all collide 1
 
@@ -74,38 +74,38 @@ Memory usage per proc in Mbytes:
   particles (ave,min,max) = 0 0 0
   grid      (ave,min,max) = 1.51379 1.51379 1.51379
   surf      (ave,min,max) = 0.000823975 0.000823975 0.000823975
-  modify    (ave,min,max) = 0.251907 0.251907 0.251907
-  total     (ave,min,max) = 1.76653 1.76653 1.76653
+  modify    (ave,min,max) = 0.25388 0.25388 0.25388
+  total     (ave,min,max) = 1.7685 1.7685 1.7685
 Step f_1[1] f_1[4] f_1[15] f_1[20] f_1[21] 
        0            5           50            0            0            0 
      250         6.25           50            0            0            0 
-     500    7.2458526   -12.907428            0       -8e-19            0 
-     750    6.0886217   -50.001949            0            0            0 
-    1000     4.838573   -50.001949            0            0            0 
-    1250    3.5885242   -50.001949            0            0            0 
-    1500    2.3384755   -50.001949            0            0            0 
-    1750    1.0884268   -50.001949            0            0            0 
-    2000    1.3762037    50.001605            0            0            0 
-    2250    2.6262438    50.001605            0            0            0 
-    2500    3.8762839    50.001605            0            0            0 
-    2750     5.126324    50.001605            0            0            0 
-    3000    6.3763641    50.001605            0            0            0 
-    3250    7.1876709   -33.034595            0 -7.5068349e-19            0 
-    3500     5.962216   -50.002055            0            0            0 
-Loop time of 0.0176893 on 1 procs for 3500 steps with 0 particles
-Performance: 197859.611 timesteps/s, 0.000 particle-step/s
+     500    7.2273323   -20.808857            0 -9.0932902e-19            0 
+     750    6.0353714   -50.000711            0            0            0 
+    1000    4.7853536   -50.000711            0            0            0 
+    1250    3.5353358   -50.000711            0            0            0 
+    1500    2.2853181   -50.000711            0            0            0 
+    1750    1.0353003   -50.000711            0            0            0 
+    2000    1.4293265    50.001329            0            0            0 
+    2250    2.6793598    50.001329            0            0            0 
+    2500     3.929393    50.001329            0            0            0 
+    2750    5.1794262    50.001329            0            0            0 
+    3000    6.4294595    50.001329            0            0            0 
+    3250    7.1027783   -45.580109            0 -4.1111302e-19            0 
+    3500    5.8558674   -50.001878            0            0            0 
+Loop time of 0.0131957 on 1 procs for 3500 steps with 0 particles
+Performance: 265238.240 timesteps/s, 0.000 particle-step/s
 
 MPI task timing breakdown:
 Section |  min time  |  avg time  |  max time  |%varavg| %total
 ---------------------------------------------------------------
-Move    | 0.0001726  | 0.0001726  | 0.0001726  |   0.0 |  0.98
+Move    | 0.00017551 | 0.00017551 | 0.00017551 |   0.0 |  1.33
 Coll    | 0          | 0          | 0          |   0.0 |  0.00
 Sort    | 0          | 0          | 0          |   0.0 |  0.00
-Comm    | 0.00027061 | 0.00027061 | 0.00027061 |   0.0 |  1.53
-Modify  | 0.016886   | 0.016886   | 0.016886   |   0.0 | 95.46
-Output  | 0.00010964 | 0.00010964 | 0.00010964 |   0.0 |  0.62
-MPI Sync| 1.62e-07   | 1.62e-07   | 1.62e-07   |   0.0 |  0.00
-Other   |            | 0.0002499  |            |       |  1.41
+Comm    | 0.00026103 | 0.00026103 | 0.00026103 |   0.0 |  1.98
+Modify  | 0.01229    | 0.01229    | 0.01229    |   0.0 | 93.14
+Output  | 0.00026699 | 0.00026699 | 0.00026699 |   0.0 |  2.02
+MPI Sync| 7.6e-08    | 7.6e-08    | 7.6e-08    |   0.0 |  0.00
+Other   |            | 0.0002016  |            |       |  1.53
 
 Particle moves    = 0 (0K)
 Cells touched     = 0 (0K)
