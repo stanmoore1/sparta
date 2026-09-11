@@ -2261,11 +2261,15 @@ void FixRigid::push_bins()
      linear spring F = kpush * delta, or
      Hertzian contact F = kpush * delta^3/2 (smooth onset, standard
      model for elastic contact of spherical particulates)
-   if gammapush > 0, a dashpot term F -= gammapush * d(delta)/dt is
-     added (the DEM spring-dashpot pair), computed from the normal
-     approach rate of the corner pt relative to the source surface;
-     the total contact force is clamped at zero, so the dashpot never
-     produces adhesion as a contact ends
+   an element pushes only a corner pt on its outward side: a pt behind
+     its plane is either in front of the opposite face of the same
+     object (a wall thinner than 2*pushcutoff) or already inside it,
+     and a push along this normal would drive the body through
+   if gammapush > 0, a dashpot term F += gammapush * d(delta)/dt is
+     added (the DEM spring-dashpot pair), i.e. minus gammapush times
+     the normal separation rate of the corner pt relative to the source
+     surface; the total contact force is clamped at zero, so the
+     dashpot never produces adhesion as a contact ends
    src = the rigid body the element belongs to, or NULL if static
    if src is set, the reaction force -F is applied to src at the same
      contact point, so body-body contacts conserve momentum exactly
@@ -2305,6 +2309,12 @@ void FixRigid::push_contact(double *p1, double *p2, double *p3,
     pts = bodypt[i];
 
     for (j = 0; j < npoint; j++) {
+
+      // one-sided contact: skip a corner pt behind the element's plane
+
+      if ((pts[j][0]-p1[0])*norm[0] + (pts[j][1]-p1[1])*norm[1] +
+          (pts[j][2]-p1[2])*norm[2] <= 0.0) continue;
+
       if (dim == 2)
         dsq = Geometry::distsq_point_line(pts[j],p1,p2);
       else

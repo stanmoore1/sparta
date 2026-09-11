@@ -248,6 +248,17 @@ def test_restitution(exe_cmd):
                 fails.append("%s elastic v0=%g: restitution %.6f, expected 1"
                              % (pstyle, v0, e))
 
+    # the wall is 0.2 thick, less than 2*cutoff, so a corner pt which
+    # crosses the near face is within range of the far face too; contact
+    # is one-sided, so the far face must not push the body on through
+    # (v0=90 is within the 4-contact capacity of the linear spring)
+    e = bounce("linear", "1.0e-18", "0.0", 90.0)
+    if e is None:
+        fails.append("linear elastic v0=90: no rebound, thin wall pushed "
+                     "the body through instead of repelling it")
+    elif not approx(e, 1.0, abs_=1e-3):
+        fails.append("linear elastic v0=90: restitution %.6f, expected 1" % e)
+
     # a linear spring-dashpot has a restitution independent of impact
     # speed; this is the property which distinguishes it from Hertzian
     lin = [bounce("linear", "1.0e-18", "3.0e-21", v0) for v0 in (10.0, 25.0)]
