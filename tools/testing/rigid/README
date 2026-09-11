@@ -83,6 +83,8 @@ rotwall3d     see rotwall
 mixture       negative: a compute surf whose mixture omits a species
               must be rejected, since the body would feel only part of
               the gas
+badinfile     negative: an infile with a malformed number (1.0d-22)
+              must be rejected rather than read as 1.0
 axistuck      no rigid body: axisymmetric tube in which particles hit
               the same static line many times per step; the mover must
               not treat the repeated hits as a stuck particle

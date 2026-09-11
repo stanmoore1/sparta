@@ -861,6 +861,11 @@ def test_tallyorder(exe_cmd):
     return fails
 
 
+def test_badinfile(exe_cmd):
+    return negative_test(exe_cmd, "in.test.badinfile",
+                         "Invalid floating point number")
+
+
 def test_mixture(exe_cmd):
     return negative_test(exe_cmd, "in.test.mixture",
                          "mixture must contain all species")
@@ -900,6 +905,7 @@ TESTS = [
     ("emitsurf", test_emitsurf),
     ("renumber", test_renumber),
     ("mixture", test_mixture),
+    ("badinfile", test_badinfile),
     ("rotwall", test_rotwall),
     ("rotwall3d", test_rotwall3d),
     ("axistuck", test_axistuck),

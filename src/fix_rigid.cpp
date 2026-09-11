@@ -15,6 +15,7 @@
 #include "mpi.h"
 #include "string.h"
 #include "stdlib.h"
+#include "ctype.h"
 #include <array>
 #include <map>
 #include <algorithm>
@@ -1290,6 +1291,33 @@ void FixRigid::write_outfile()
    one-time initialization of rigid body attributes from file
 ------------------------------------------------------------------------- */
 
+/* ----------------------------------------------------------------------
+   convert one word of the infile to a double
+   the word must be a complete floating point number: atof() would
+     silently truncate "1.0d-22" to 1.0 and run the body with that mass
+   proc 0 only, so error->one
+------------------------------------------------------------------------- */
+
+static double infile_numeric(Error *error, const char *word)
+{
+  if (!word || !word[0])
+    error->one(FLERR,"Unexpected end of line in fix rigid infile");
+
+  int n = strlen(word);
+  for (int i = 0; i < n; i++) {
+    if (isdigit(word[i])) continue;
+    if (word[i] == '-' || word[i] == '+' || word[i] == '.') continue;
+    if (word[i] == 'e' || word[i] == 'E') continue;
+    error->one(FLERR,"Invalid floating point number in fix rigid infile");
+  }
+
+  char *end;
+  double value = strtod(word,&end);
+  if (end == word || *end != '\0')
+    error->one(FLERR,"Invalid floating point number in fix rigid infile");
+  return value;
+}
+
 void FixRigid::read_infile(char *filename)
 {
   // open file and read first non-empty, non-comment line
@@ -1303,7 +1331,8 @@ void FixRigid::read_infile(char *filename)
       error->one(FLERR,"Cannot open fix rigid infile");
     while (true) {
       char *eof = fgets(line,MAXLINE,fp);
-      if (eof == nullptr) error->one(FLERR,"Unexpected end of fix rigid infile");
+      if (eof == nullptr)
+        error->one(FLERR,"Unexpected end of fix rigid infile");
       start = &line[strspn(line," \t\n\v\f\r")];
       if (*start != '\0' && *start != '#') break;
     }
@@ -1321,28 +1350,22 @@ void FixRigid::read_infile(char *filename)
     // convert each word to a rigid body param
     // totalmass, xcm, moi, vcm, angmom
 
-    massbody = atof(strtok(line," \t\n\r\f"));
-    xcm[0] = atof(strtok(NULL," \t\n\r\f"));
-    xcm[1] = atof(strtok(NULL," \t\n\r\f"));
-    xcm[2] = atof(strtok(NULL," \t\n\r\f"));
-    moi[0] = atof(strtok(NULL," \t\n\r\f"));
-    moi[1] = atof(strtok(NULL," \t\n\r\f"));
-    moi[2] = atof(strtok(NULL," \t\n\r\f"));
-    moi[3] = atof(strtok(NULL," \t\n\r\f"));
-    moi[4] = atof(strtok(NULL," \t\n\r\f"));
-    moi[5] = atof(strtok(NULL," \t\n\r\f"));
-    vcm[0] = atof(strtok(NULL," \t\n\r\f"));
-    vcm[1] = atof(strtok(NULL," \t\n\r\f"));
-    vcm[2] = atof(strtok(NULL," \t\n\r\f"));
-    angmom[0] = atof(strtok(NULL," \t\n\r\f"));
-    angmom[1] = atof(strtok(NULL," \t\n\r\f"));
-    angmom[2] = atof(strtok(NULL," \t\n\r\f"));
+    const char *sep = " \t\n\r\f";
+    massbody = infile_numeric(error,strtok(line,sep));
+    for (int j = 0; j < 3; j++)
+      xcm[j] = infile_numeric(error,strtok(NULL,sep));
+    for (int j = 0; j < 6; j++)
+      moi[j] = infile_numeric(error,strtok(NULL,sep));
+    for (int j = 0; j < 3; j++)
+      vcm[j] = infile_numeric(error,strtok(NULL,sep));
+    for (int j = 0; j < 3; j++)
+      angmom[j] = infile_numeric(error,strtok(NULL,sep));
 
     if (forceinfile) {
       for (int j = 0; j < 3; j++)
-        fcm_infile[j] = atof(strtok(NULL," \t\n\r\f"));
+        fcm_infile[j] = infile_numeric(error,strtok(NULL,sep));
       for (int j = 0; j < 3; j++)
-        torque_infile[j] = atof(strtok(NULL," \t\n\r\f"));
+        torque_infile[j] = infile_numeric(error,strtok(NULL,sep));
     }
 
     fclose(fp);
