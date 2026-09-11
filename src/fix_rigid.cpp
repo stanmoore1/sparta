@@ -32,6 +32,7 @@
 #include "modify.h"
 #include "compute.h"
 #include "compute_surf.h"
+#include "compute_react_surf.h"
 #include "fix_emit_surf.h"
 #include "input.h"
 #include "geometry.h"
@@ -2573,21 +2574,24 @@ void FixRigid::push_off()
 void FixRigid::grid_rebuild()
 {
   // every surf compute tallying this step must first bring its tallies
-  //   to the host, keyed by surf ID: the KOKKOS variant of compute surf
-  //   indexes its device tallies by local surf index, which the rebuild
-  //   of the surf arrays below invalidates (distributed surfs), and
-  //   re-sizes its per-surf tally index when it re-allocates after the
-  //   rebuild, which discards device tallies not yet fetched
+  //   to the host, keyed by surf ID: the KOKKOS variants of compute surf
+  //   and compute react/surf index their device tallies by local surf
+  //   index, which the rebuild of the surf arrays below invalidates
+  //   (distributed surfs), and re-size their per-surf tally index when
+  //   they re-allocate after the rebuild, which discards device tallies
+  //   not yet fetched
   // must precede any change to the local+ghost surf arrays
   // no-op for a compute whose tallies were already fetched, and for the
-  //   non-KOKKOS compute
+  //   non-KOKKOS computes
 
   for (int m = 0; m < update->nsurf_tally; m++) {
     Compute *c = update->slist_active[m];
-    if (strcmp(c->style,"surf") != 0 && strcmp(c->style,"surf/kk") != 0)
-      continue;
     surfint *t2s;
-    ((ComputeSurf *) c)->tallyinfo(t2s);
+    if (strcmp(c->style,"surf") == 0 || strcmp(c->style,"surf/kk") == 0)
+      ((ComputeSurf *) c)->tallyinfo(t2s);
+    else if (strcmp(c->style,"react/surf") == 0 ||
+             strcmp(c->style,"react/surf/kk") == 0)
+      ((ComputeReactSurf *) c)->tallyinfo(t2s);
   }
 
   // sort particles, grid rebuild requires it
@@ -2828,9 +2832,11 @@ void FixRigid::swept_restore()
    called via Grid::notify_changed(), after the new owned cells and
      ghost cells (and for distributed surfs, the local/ghost surf
      arrays) are in place, and before per-surf computes re-size
-   any merged csurfs lists were discarded by the grid rebuild, and any
-     csurfs lists installed by incremental re-cutting were copied into
-     grid storage by Grid::compress() or discarded by Grid::clear_surf()
+   any merged csurfs lists were discarded by the grid rebuild; csurfs
+     lists installed by incremental re-cutting were copied into grid
+     storage by Grid::compress() or discarded by Grid::clear_surf(),
+     except on a proc which migrated no cells and so skipped compress(),
+     whose cells still reference them (handled below)
    next re-map re-cuts body surfs into the new grid cells
 ------------------------------------------------------------------------- */
 

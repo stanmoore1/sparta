@@ -653,9 +653,10 @@ prevented from being emitted inside the body region during a run
 (e.g. by "fix emit/face"_fix_emit_face.html with an emission region
 overlapping the body).
 
-This fix must be defined before any "fix balance"_fix_balance.html or
-"fix adapt"_fix_adapt.html command, so that it re-cuts the grid cells
-for the moved body before the grid is re-balanced or adapted.
+This fix must be defined before any "fix balance"_fix_balance.html,
+"fix adapt"_fix_adapt.html, or "fix move/surf"_fix_move_surf.html
+command, so that it re-cuts the grid cells for the moved body before
+the grid is re-balanced, adapted, or re-mapped to moved static surfs.
 
 If this fix is deleted via the "unfix"_unfix.html command, the
 "global rigid"_global.html setting should also be set to {no}.  The

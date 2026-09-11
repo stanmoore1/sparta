@@ -665,9 +665,10 @@ prevented from being emitted inside the body region during a run
 (e.g. by <A HREF = "fix_emit_face.html">fix emit/face</A> with an emission region
 overlapping the body).
 </P>
-<P>This fix must be defined before any <A HREF = "fix_balance.html">fix balance</A> or
-<A HREF = "fix_adapt.html">fix adapt</A> command, so that it re-cuts the grid cells
-for the moved body before the grid is re-balanced or adapted.
+<P>This fix must be defined before any <A HREF = "fix_balance.html">fix balance</A>,
+<A HREF = "fix_adapt.html">fix adapt</A>, or <A HREF = "fix_move_surf.html">fix move/surf</A>
+command, so that it re-cuts the grid cells for the moved body before
+the grid is re-balanced, adapted, or re-mapped to moved static surfs.
 </P>
 <P>If this fix is deleted via the <A HREF = "unfix.html">unfix</A> command, the
 <A HREF = "global.html">global rigid</A> setting should also be set to <I>no</I>.  The
