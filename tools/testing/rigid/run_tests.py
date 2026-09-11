@@ -446,12 +446,13 @@ def test_restart(exe_cmd):
                 "geometry is broken" % ref["f_1[4]"]]
 
     for split in (300, 700, 1100):
-        rc, _ = run_deck(exe_cmd, "in.test.restart.part1",
-                         extra=["-var", "nrun", str(split)])
+        rc, out1 = run_deck(exe_cmd, "in.test.restart.part1",
+                            extra=["-var", "nrun", str(split)])
         if rc:
             fails.append("split %d: first half failed with exit code %d"
                          % (split, rc))
             continue
+        rows1 = parse_stats(out1)
         rc, out2 = run_deck(exe_cmd, "in.test.restart.part2",
                             extra=["-var", "nrun", str(total - split)])
         if rc:
@@ -459,15 +460,40 @@ def test_restart(exe_cmd):
                          % (split, rc))
             continue
         rows2 = parse_stats(out2)
-        if not rows2:
-            fails.append("split %d: continuation produced no stats output"
+        if not rows1 or not rows2:
+            fails.append("split %d: a half produced no stats output"
                          % split)
             continue
+        keys = (("f_1[1]", "xcm"), ("f_1[4]", "vx"), ("f_1[15]", "omega"),
+                ("f_2[1]", "xcm2"), ("f_2[4]", "vx2"), ("f_2[15]", "omega2"))
+
+        # the state read back from the outfile at the start of the
+        # continuation must equal the state at the end of the first half
+        # exactly: the outfile stores 17 digits, which round-trip a double
+        # (15 digits, the previous format, lost the last few ulp)
+
+        first = rows2[0]
+        end1 = rows1[-1]
+        for key, name in keys:
+            if name.startswith("omega"):
+                # omega is not stored: it is re-derived from the angular
+                # momentum through the inertia eigensolver, to round-off
+                if not approx(first[key], end1[key], rel=1e-12, abs_=1e-300):
+                    fails.append("split %d: %s re-derived from the outfile "
+                                 "as %.17g, was %.17g"
+                                 % (split, name, first[key], end1[key]))
+            elif first[key] != end1[key]:
+                fails.append("split %d: %s read back from the outfile as "
+                             "%.17g, written from %.17g"
+                             % (split, name, first[key], end1[key]))
+
+        # the rest of the continuation re-derives the body-frame geometry
+        # from the restarted surfs, so it tracks the one-shot run to
+        # round-off rather than exactly
+
         last = rows2[-1]
-        for key, name in (("f_1[1]", "xcm"), ("f_1[4]", "vx"),
-                          ("f_1[15]", "omega"), ("f_2[1]", "xcm2"),
-                          ("f_2[4]", "vx2"), ("f_2[15]", "omega2")):
-            if not approx(last[key], ref[key], rel=1e-7, abs_=1e-12):
+        for key, name in keys:
+            if not approx(last[key], ref[key], rel=1e-12, abs_=1e-300):
                 fails.append("split %d: %s = %.12g differs from one-shot "
                              "%.12g" % (split, name, last[key], ref[key]))
 

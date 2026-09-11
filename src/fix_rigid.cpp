@@ -1205,7 +1205,8 @@ void FixRigid::end_of_step()
         if (comm->me == 0) {
           const char *why;
           if (fallback == FALLBACK_SPLIT)
-            why = "a split cell is in the re-cut region";
+            why = "a cell in the re-cut region is or would become "
+                  "a split cell";
           else if (fallback == FALLBACK_SURFMAX)
             why = "a cell would exceed global surfmax";
           else if (fallback == FALLBACK_UNKNOWN)
@@ -1276,9 +1277,11 @@ void FixRigid::write_outfile()
 
   fprintf(fp,"# mtotal xcm ycm zcm ixx iyy izz ixy ixz iyz "
           "vxcm vycm vzcm lx ly lz fx fy fz tx ty tz\n");
-  fprintf(fp,"%.15g %.15g %.15g %.15g %.15g %.15g %.15g %.15g %.15g %.15g "
-          "%.15g %.15g %.15g %.15g %.15g %.15g "
-          "%.15g %.15g %.15g %.15g %.15g %.15g\n",
+  // 17 significant digits, the fewest which read back as the same double
+
+  fprintf(fp,"%.17g %.17g %.17g %.17g %.17g %.17g %.17g %.17g %.17g %.17g "
+          "%.17g %.17g %.17g %.17g %.17g %.17g "
+          "%.17g %.17g %.17g %.17g %.17g %.17g\n",
           massbody,xcm[0],xcm[1],xcm[2],
           ispace[0],ispace[1],ispace[2],ispace[3],ispace[4],ispace[5],
           vcm[0],vcm[1],vcm[2],angmom[0],angmom[1],angmom[2],
@@ -1286,10 +1289,6 @@ void FixRigid::write_outfile()
 
   fclose(fp);
 }
-
-/* ----------------------------------------------------------------------
-   one-time initialization of rigid body attributes from file
-------------------------------------------------------------------------- */
 
 /* ----------------------------------------------------------------------
    convert one word of the infile to a double
@@ -1305,7 +1304,7 @@ static double infile_numeric(Error *error, const char *word)
 
   int n = strlen(word);
   for (int i = 0; i < n; i++) {
-    if (isdigit(word[i])) continue;
+    if (isdigit((unsigned char) word[i])) continue;
     if (word[i] == '-' || word[i] == '+' || word[i] == '.') continue;
     if (word[i] == 'e' || word[i] == 'E') continue;
     error->one(FLERR,"Invalid floating point number in fix rigid infile");
@@ -1317,6 +1316,10 @@ static double infile_numeric(Error *error, const char *word)
     error->one(FLERR,"Invalid floating point number in fix rigid infile");
   return value;
 }
+
+/* ----------------------------------------------------------------------
+   one-time initialization of rigid body attributes from file
+------------------------------------------------------------------------- */
 
 void FixRigid::read_infile(char *filename)
 {
