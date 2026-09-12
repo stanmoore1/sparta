@@ -852,7 +852,7 @@ def test_torqueonly(exe_cmd):
     rows = parse_stats(out)
     if len(rows) < 6:
         return ["expected 6 stats rows, got %d" % len(rows)]
-    if rows[-1]["np"] <= 0:
+    if rows[-1]["Np"] <= 0:
         return ["no particles were emitted"]
     return []
 
