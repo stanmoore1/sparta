@@ -2396,7 +2396,12 @@ void FixRigid::push_contact(double *p1, double *p2, double *p3,
      which the caller merges with one Allreduce
    NOTE: a corner pt shared by adjacent body elements contributes once
      per element, and a corner close to several source elements
-     interacts with each of them, so kpush is a per-contact stiffness
+     interacts with each of them, so kpush is a per-contact stiffness;
+     two bodies which both push engage the corner pts of each against
+     the elements of the other, about twice the contacts of one body
+     against a static surf of the same shape (each set is a distinct
+     geometric contact, and dropping either would make the force
+     depend on the order the fixes are defined in)
 ------------------------------------------------------------------------- */
 
 void FixRigid::push_off()
@@ -3807,8 +3812,7 @@ void FixRigid::check_watertight()
      signed volume via the divergence theorem over the tris,
      each computed relative to the centroid of the body points
      so that round-off is set by the body extent, not its position
-   only the magnitude is tested, since a watertight body with
-     inward normals (a container) is a valid object
+   the sign is tested too: the normals must point outward (see below)
    all procs store all surfs, so the check is identical on every proc
 ------------------------------------------------------------------------- */
 
