@@ -311,24 +311,9 @@ void Update::init_rigid()
 
   rigid_bins_clear();
 
-  // clear the list before the error check below, so a caught error
-  //   (library use) leaves no dangling list for the destructor or
-  //   the next init to free again
-
-  delete [] fixrigidlist;
-  fixrigidlist = NULL;
-
-  nfixrigid = 0;
-  for (int ifix = 0; ifix < modify->nfix; ifix++)
-    if (fix_rigid_style(modify->fix[ifix]->style)) nfixrigid++;
+  refresh_fixrigidlist();
   if (!nfixrigid)
     error->all(FLERR,"Global rigid is set but no fix rigid is defined");
-
-  fixrigidlist = new FixRigid*[nfixrigid];
-  nfixrigid = 0;
-  for (int ifix = 0; ifix < modify->nfix; ifix++)
-    if (fix_rigid_style(modify->fix[ifix]->style))
-      fixrigidlist[nfixrigid++] = (FixRigid *) modify->fix[ifix];
 
   // distributed surfs: establish the local copies of the body surfs
   //   now, before the surface collision and reaction models init,
@@ -479,6 +464,50 @@ int Update::rigid_cell_box(double *blo, double *bhi, int **list)
 }
 
 /* ----------------------------------------------------------------------
+   fixrigidlist = the FixRigid instances currently defined, in Modify
+     order (body index = position in this list)
+   rebuilt from Modify on every use, so an instance deleted by unfix or
+     by a re-definition between runs is never referenced: Modify does
+     not notify Update of the deletion, and a grid-changing command
+     issued before the next run reaches build_rigidmap()
+   the list is empty (NULL) when no fix rigid is defined, so a caught
+     error leaves nothing for the destructor to free twice
+------------------------------------------------------------------------- */
+
+void Update::refresh_fixrigidlist()
+{
+  int ifix,n;
+
+  // keep the current array when the set is unchanged: callers within
+  //   a run hold a pointer to it across build_rigidmap()
+
+  n = 0;
+  for (ifix = 0; ifix < modify->nfix; ifix++)
+    if (fix_rigid_style(modify->fix[ifix]->style)) n++;
+
+  if (n == nfixrigid) {
+    int m = 0;
+    for (ifix = 0; ifix < modify->nfix; ifix++)
+      if (fix_rigid_style(modify->fix[ifix]->style)) {
+        if (fixrigidlist[m] != (FixRigid *) modify->fix[ifix]) break;
+        m++;
+      }
+    if (m == n) return;
+  }
+
+  delete [] fixrigidlist;
+  fixrigidlist = NULL;
+  nfixrigid = n;
+  if (!nfixrigid) return;
+
+  fixrigidlist = new FixRigid*[nfixrigid];
+  n = 0;
+  for (ifix = 0; ifix < modify->nfix; ifix++)
+    if (fix_rigid_style(modify->fix[ifix]->style))
+      fixrigidlist[n++] = (FixRigid *) modify->fix[ifix];
+}
+
+/* ----------------------------------------------------------------------
    rigidmap = map from each local or ghost surf to the rigid fix which
      owns it, -1 = static surf
    used by the move loop to dispatch moving-surf collision tests
@@ -490,7 +519,9 @@ int Update::rigid_cell_box(double *blo, double *bhi, int **list)
 
 void Update::build_rigidmap()
 {
-  if (!rigidflag || !nfixrigid) return;
+  if (!rigidflag) return;
+  refresh_fixrigidlist();
+  if (!nfixrigid) return;
 
   memory->destroy(rigidmap);
   int nslocal = surf->nlocal;

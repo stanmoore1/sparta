@@ -73,6 +73,9 @@ inward        body surfs traversed the wrong way round (normals pointing
               inward, a container) are rejected in 2d and 3d
 torqueonly    compute surf torque columns without force columns fed by
               fix emit/surf (no incoming particle state) must not crash
+refix         a fix rigid re-defined between runs, then balance_grid
+              before the next run: the rigid map rebuild must not reach
+              the deleted fix (use-after-free visible under ASAN)
 modifyafter   negative: with distributed surfs, surf_modify of the body
               surfs after the fix is defined must be rejected
 wallmotion    negative: a body surf_collide model with its own wall

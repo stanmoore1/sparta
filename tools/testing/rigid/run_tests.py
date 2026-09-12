@@ -849,6 +849,24 @@ def test_notwatertight(exe_cmd):
     return negative_test(exe_cmd, "in.test.notwatertight", "not watertight")
 
 
+def test_refix(exe_cmd):
+    # a fix rigid re-defined between runs, then balance_grid before the
+    # next run: the rigid map rebuild must not reach the deleted fix;
+    # the second run continues the ballistic body from where the
+    # re-definition placed it (xcm 5.08 + 20*0.0001*20)
+    rc, out = run_deck(exe_cmd, "in.test.refix")
+    if rc:
+        return ["run failed with exit code %d" % rc]
+    rows = parse_stats(out)
+    if not rows or rows[-1]["Step"] != 60:
+        return ["run did not reach step 60"]
+    x = rows[-1]["f_1[1]"]
+    if not approx(x, 5.08 + 20.0 * 1.0e-4 * 20, rel=1e-12):
+        return ["xcm after the second run %.17g, expected %.17g"
+                % (x, 5.08 + 20.0 * 1.0e-4 * 20)]
+    return []
+
+
 def test_torqueonly(exe_cmd):
     # compute surf tx ty tz (no fx fy fz) with fix emit/surf: the emitted
     # particle has no incoming state, which the torque tally must
@@ -1059,6 +1077,7 @@ TESTS = [
     ("zerothick", test_zerothick),
     ("inward", test_inward),
     ("torqueonly", test_torqueonly),
+    ("refix", test_refix),
     ("modifyafter", test_modifyafter),
     ("wallmotion", test_wallmotion),
     ("customemit", test_customemit),
