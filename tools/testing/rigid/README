@@ -109,8 +109,9 @@ tallyorder    a fix ave/surf on a static wall defined after fix rigid
 The ballistic, force, bounce, twobody, and pushpair tests contain no
 particles, and the recoil test a single particle; they must produce
 identical results on any number of procs.
-The momentum and overrun tests are statistical and use loose
-tolerances.
+The momentum and overrun tests run through statistical gas, but their
+checks are exact: the lag-corrected momentum invariant holds to 1e-11
+and the overrun deletion count must be exactly zero.
 
 Usage:
 
@@ -124,8 +125,9 @@ SPARTA_KOKKOS_EXACT reproduces the non-KOKKOS results exactly.
 
 Passing --dist reruns the subset of tests whose decks support
 distributed surfs (global surfs explicit/distributed): all but the
-negative tests, recoil, and restart.  Run it on several procs as well
-as on one, since only then are static surfs stored as ghost surfs on
-some procs.
+negative tests, recoil, restart, and axistuck (no rigid body, a
+single grid cell).  Run it on several procs
+as well as on one, since only then are static surfs stored as ghost
+surfs on some procs.
 
 Exit code = number of failed tests.

@@ -162,7 +162,8 @@ class FixRigid : public Fix {
   double ex_space[3],ey_space[3],ez_space[3];  // prinicpal axes of body
   double fcm[3];          // force on COM in space frame
   double torque[3];       // torque on body in space frame
-  double fpush[3];        // push-off force on COM from static surfs
+  double fpush[3];        // push-off force on COM: static surfs, other
+                          //   bodies' reactions, box boundaries
 
   int pushflag;           // 1 if push-off forces are enabled
   int pushboundflag;      // 1 to also push off non-periodic boundaries

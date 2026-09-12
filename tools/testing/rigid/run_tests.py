@@ -413,6 +413,11 @@ def test_staticdist(exe_cmd):
         if ndel != 0:
             fails.append("mode %s: %g particles deleted inside the body "
                          "during the run" % (mode, ndel))
+    # the gas must actually have moved the body (it drifts ~0.006 in x
+    # over the run), else the two modes agree trivially
+    if abs(results["cutcell"][-1]["f_1[1]"] - 6.0) < 0.001:
+        fails.append("body barely moved (xcm = %.6g), test is too weak"
+                     % results["cutcell"][-1]["f_1[1]"])
     return fails
 
 
@@ -464,7 +469,9 @@ def test_restart(exe_cmd):
         return ["one-shot final vx = %.6g, body did not rebound; test "
                 "geometry is broken" % ref["f_1[4]"]]
 
-    for split in (300, 700, 1100):
+    # 480 falls inside body 1's contact with the wall (steps ~405-565),
+    # so its stored force and torque are nonzero at that split
+    for split in (300, 480, 700, 1100):
         rc, out1 = run_deck(exe_cmd, "in.test.restart.part1",
                             extra=["-var", "nrun", str(split)])
         if rc:
@@ -875,10 +882,13 @@ def test_wallmotion(exe_cmd):
     return negative_test(exe_cmd, "in.test.wallmotion", "own wall motion")
 
 
-def timestep_independence(exe_cmd, deck, keys, coarse, fine, tol=1.0e-9):
+def timestep_independence(exe_cmd, deck, keys, coarse, fine, tol=1.0e-9,
+                          hitkey="c_rvx"):
     """run the same physical problem at two timesteps and require the same
     answer: the deck is built so that the only timestep-dependent piece is
-    the moving-surf collision test"""
+    the moving-surf collision test; the particle is launched in +x and
+    must have been turned around by the body (hitkey < 0), else the
+    moving-surf test was never exercised"""
     fails = []
     last = {}
     for label, (dt, nsteps) in (("coarse", coarse), ("fine", fine)):
@@ -893,6 +903,10 @@ def timestep_independence(exe_cmd, deck, keys, coarse, fine, tol=1.0e-9):
             continue
         if rows[-1]["Np"] != 1:
             fails.append("%s: the particle was lost" % label)
+            continue
+        if rows[-1][hitkey] >= 0.0:
+            fails.append("%s: %s = %.6g, the particle never hit the body"
+                         % (label, hitkey, rows[-1][hitkey]))
             continue
         last[label] = rows[-1]
     if fails:
@@ -1071,7 +1085,7 @@ DIST_TESTS = {"ballistic", "force", "rotation", "bounce", "restitution",
               "staticdist3d",
               "splitcell", "gridchange", "exitbox", "twobody", "pushpair",
               "tallyorder", "rotwall", "rotwall3d", "customemit",
-              "splitbalance"}
+              "splitbalance", "torqueonly"}
 
 
 def main():
