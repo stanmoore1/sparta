@@ -849,6 +849,11 @@ def test_notwatertight(exe_cmd):
     return negative_test(exe_cmd, "in.test.notwatertight", "not watertight")
 
 
+def test_prenofix(exe_cmd):
+    return negative_test(exe_cmd, "in.test.prenofix",
+                         "not initialized before the run")
+
+
 def test_refix(exe_cmd):
     # a fix rigid re-defined between runs, then balance_grid before the
     # next run: the rigid map rebuild must not reach the deleted fix;
@@ -1078,6 +1083,7 @@ TESTS = [
     ("inward", test_inward),
     ("torqueonly", test_torqueonly),
     ("refix", test_refix),
+    ("prenofix", test_prenofix),
     ("modifyafter", test_modifyafter),
     ("wallmotion", test_wallmotion),
     ("customemit", test_customemit),

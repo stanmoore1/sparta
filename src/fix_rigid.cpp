@@ -130,6 +130,7 @@ FixRigid::FixRigid(SPARTA *sparta, int narg, char **arg) :
   // parse body params
 
   dim = domain->dimension;
+  csurf = NULL;
   infile = NULL;
   slist = NULL;
   displace = NULL;
@@ -767,6 +768,12 @@ void FixRigid::setup()
 
 void FixRigid::start_of_step()
 {
+  // csurf is set by init(): a fix defined after the last init (e.g.
+  //   re-defined before a "run pre no") has no body state to advance
+
+  if (!csurf)
+    error->all(FLERR,"Fix rigid was not initialized before the run");
+
   // body inverse mass and inertia for collision recoil this step,
   //   from the start-of-step axes before they are advanced below
 
