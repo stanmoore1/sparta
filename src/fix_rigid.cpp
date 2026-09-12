@@ -2883,7 +2883,9 @@ void FixRigid::grid_changed()
 
 /* ----------------------------------------------------------------------
    for incremental remap: record cells interior to the body,
-     i.e. INSIDE cells with no surfs whose center is within the body
+     i.e. INSIDE cells cut by no surf whose center is within the body
+   a cell whose only surfs are transparent is not cut, and is typed
+     INSIDE/OUTSIDE like a surf-free cell
    called before the body surfs move to their end-of-step positions
 ------------------------------------------------------------------------- */
 
@@ -2912,7 +2914,7 @@ void FixRigid::record_oldinside()
     icell = cand[ic];
     if (icell >= nglocal) continue;
     if (cells[icell].nsplit != 1) continue;
-    if (cells[icell].nsurf) continue;
+    if (cell_cut(icell)) continue;
     if (cinfo[icell].type != CELLINSIDE) continue;
     if (!box_overlap(cells[icell].lo,cells[icell].hi,bbodylo,bbodyhi))
       continue;
@@ -2942,7 +2944,9 @@ void FixRigid::record_oldinside()
      count; only local surf indices are ever referenced, as required
      for distributed surfs
    cells interior to the body at its old or new position are re-typed
-     as INSIDE/OUTSIDE via parity tests, all other cells are untouched
+     as INSIDE/OUTSIDE via parity tests, all other cells are untouched;
+     a cell cut by no surf (surf-free, or overlapped only by transparent
+     surfs) is typed this way, as Grid::set_inout() types it
    ghost cell copies of re-cut cells become stale, which is acceptable:
      the ghost cell surf lists the mover consults are re-covered by the
      swept assignment every step, and cell volumes/types of ghost cells
@@ -2955,7 +2959,7 @@ void FixRigid::record_oldinside()
 
 int FixRigid::incremental_recut()
 {
-  int i,n,ncand,icell,nsplitone,xsub,moving,nontrans;
+  int i,n,ncand,icell,nsplitone,xsub,moving;
   double vol;
   double xsplit[3],ctr[3],rlo[3],rhi[3];
   double *vols;
@@ -2963,8 +2967,6 @@ int FixRigid::incremental_recut()
 
   Grid::ChildCell *cells = grid->cells;
   Grid::ChildInfo *cinfo = grid->cinfo;
-  Surf::Line *lines = surf->lines;
-  Surf::Tri *tris = surf->tris;
   int nglocal = grid->nlocal;
   int maxsurfpercell = grid->maxsurfpercell;
   int *rigidmap = update->rigidmap;
@@ -3115,17 +3117,7 @@ int FixRigid::incremental_recut()
       //   pipeline (Grid::surf2grid_split() skips non-OVERLAP cells):
       //   full flow volume, interior/exterior typing via parity test
 
-      nontrans = 0;
-      for (i = 0; i < n; i++) {
-        int trans = (dim == 2) ? lines[list[i]].transparent :
-          tris[list[i]].transparent;
-        if (!trans) {
-          nontrans = 1;
-          break;
-        }
-      }
-
-      if (!nontrans) {
+      if (!cell_cut(icell)) {
         if (dim == 3)
           vol = (chi[0]-clo[0]) * (chi[1]-clo[1]) * (chi[2]-clo[2]);
         else vol = (chi[0]-clo[0]) * (chi[1]-clo[1]);
@@ -3170,7 +3162,7 @@ int FixRigid::incremental_recut()
 
   // pass 2: cells a body interior moved away from become OUTSIDE
   // process every incremental body's recorded interior cells
-  // only cells which are now surf-free and inside no body,
+  // only cells which are now cut by no surf and inside no body,
   //   which leaves any static (non-body) INSIDE cells untouched
 
   for (int mb = 0; mb < nb; mb++) {
@@ -3179,7 +3171,7 @@ int FixRigid::incremental_recut()
 
     for (int m = 0; m < f->noldinside; m++) {
       icell = f->oldinside[m];
-      if (cells[icell].nsurf) continue;
+      if (cell_cut(icell)) continue;
 
       clo = cells[icell].lo;
       chi = cells[icell].hi;
@@ -3190,7 +3182,7 @@ int FixRigid::incremental_recut()
       if (inside_any_body(ctr)) continue;
 
       cinfo[icell].type = CELLOUTSIDE;
-    typechanged = 1;
+      typechanged = 1;
       if (dim == 3)
         cinfo[icell].volume = (chi[0]-clo[0]) * (chi[1]-clo[1]) *
           (chi[2]-clo[2]);
@@ -3200,7 +3192,7 @@ int FixRigid::incremental_recut()
     }
   }
 
-  // pass 3: surf-free cells a body interior moved over become INSIDE
+  // pass 3: uncut cells a body interior moved over become INSIDE
   // catches cells swept over entirely within one step, which never
   //   overlap a body surf at start- or end-of-step positions
   // R covers the swept corridor since it unions old and new positions
@@ -3209,7 +3201,7 @@ int FixRigid::incremental_recut()
   for (int ic = 0; ic < nrcand; ic++) {
     icell = rcand[ic];
     if (cells[icell].nsplit != 1) continue;
-    if (cells[icell].nsurf) continue;
+    if (cell_cut(icell)) continue;
     if (cinfo[icell].type == CELLINSIDE) continue;
 
     clo = cells[icell].lo;
@@ -3228,6 +3220,32 @@ int FixRigid::incremental_recut()
   }
 
   return FALLBACK_NONE;
+}
+
+/* ----------------------------------------------------------------------
+   return 1 if grid cell icell is cut by a surf, else 0
+   a cell overlapped only by transparent surfs is not cut:
+     Grid::surf2grid_split() leaves it uncut, and Grid::set_inout()
+     types it INSIDE/OUTSIDE by flood fill like a surf-free cell,
+     so the incremental re-cut must re-type it the same way
+------------------------------------------------------------------------- */
+
+int FixRigid::cell_cut(int icell)
+{
+  Grid::ChildCell *cells = grid->cells;
+  int n = cells[icell].nsurf;
+  surfint *list = cells[icell].csurfs;
+
+  if (dim == 2) {
+    Surf::Line *lines = surf->lines;
+    for (int i = 0; i < n; i++)
+      if (!lines[list[i]].transparent) return 1;
+  } else {
+    Surf::Tri *tris = surf->tris;
+    for (int i = 0; i < n; i++)
+      if (!tris[list[i]].transparent) return 1;
+  }
+  return 0;
 }
 
 /* ----------------------------------------------------------------------

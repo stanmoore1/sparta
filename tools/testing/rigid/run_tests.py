@@ -615,6 +615,33 @@ def test_splitbalance(exe_cmd):
     return fails
 
 
+def test_transplane(exe_cmd):
+    # a fast body sweeps over and then vacates cells cut only by a
+    # transparent plane; the total flow volume per step must agree
+    # between the incremental and cutcell remap modes
+    vols = {}
+    fails = []
+    for mode in ("cutcell", "incremental"):
+        rc, out = run_deck(exe_cmd, "in.test.transplane",
+                           extra=["-var", "mode", mode])
+        if rc:
+            fails.append("mode %s: run failed with exit code %d" % (mode, rc))
+            continue
+        rows = parse_stats(out)
+        if len(rows) < 15:
+            fails.append("mode %s: expected 15 stats rows, got %d"
+                         % (mode, len(rows)))
+            continue
+        vols[mode] = [r["c_tvol"] for r in rows]
+    if fails:
+        return fails
+    for i, (vi, vc) in enumerate(zip(vols["incremental"], vols["cutcell"])):
+        if not approx(vi, vc, rel=1e-12):
+            fails.append("step %d: incremental flow volume %.17g differs "
+                         "from cutcell %.17g" % (i, vi, vc))
+    return fails
+
+
 def test_multiremap(exe_cmd):
     # two gas-driven bodies: cutcell and incremental must give identical
     # trajectories, verifying multi-body incremental re-cut
@@ -979,6 +1006,7 @@ TESTS = [
     ("overrun", test_overrun),
     ("remap", test_remap),
     ("multiremap", test_multiremap),
+    ("transplane", test_transplane),
     ("splitbalance", test_splitbalance),
     ("staticdist", test_staticdist),
     ("staticdist3d", test_staticdist3d),
@@ -1013,7 +1041,8 @@ TESTS = [
 DIST_TESTS = {"ballistic", "force", "rotation", "bounce", "restitution",
               "momentum",
               "overrun",
-              "remap", "multiremap", "staticdist", "staticdist3d",
+              "remap", "multiremap", "transplane", "staticdist",
+              "staticdist3d",
               "splitcell", "gridchange", "exitbox", "twobody", "pushpair",
               "tallyorder", "rotwall", "rotwall3d", "customemit",
               "splitbalance"}

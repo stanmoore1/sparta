@@ -30,6 +30,9 @@ remap         cutcell and incremental remap modes produce identical
               deterministic trajectories
 multiremap    two gas-driven bodies give identical trajectories in
               cutcell and incremental modes (multi-body incremental)
+transplane    body sweeping 1.4 cells per step over cells cut only by
+              a transparent plane: total flow volume per step identical
+              in both remap modes (engulfed and vacated uncut cells)
 staticdist    gas-driven body next to a 200-segment static circle:
               identical trajectories in both remap modes, no particles
               deleted; on several procs with --dist most static surfs

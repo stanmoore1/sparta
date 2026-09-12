@@ -282,6 +282,7 @@ class FixRigid : public Fix {
   void swept_assign_all();      // add all bodies' surfs to swept cells
   void swept_restore();         // undo swept_assign_all
   void body_bbox(int);          // bbox of body, current or swept over step
+  int cell_cut(int);            // 1 if cell is cut by a non-transparent surf
   int inside_body(double *);    // 1 if point is inside rigid body, else 0
   int inside_any_body(double *); // 1 if inside any rigid body
   bigint remove_inside_particles(int);  // per-body, used at setup
