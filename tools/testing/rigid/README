@@ -76,6 +76,10 @@ torqueonly    compute surf torque columns without force columns fed by
 refix         a fix rigid re-defined between runs, then balance_grid
               before the next run: the rigid map rebuild must not reach
               the deleted fix (use-after-free visible under ASAN)
+balancetally  no rigid body: fix balance every step after the move; the
+              per-surf collision and reaction tallies summed over a static
+              wall must equal the step's Nscoll and Nsreact (KOKKOS: the
+              tallies must survive the grid change's index re-size)
 prenofix      negative: a fix rigid re-defined between runs, then
               "run pre no" (setup skipped): the uninitialized fix must
               refuse to run rather than advance a deleted body's state

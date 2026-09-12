@@ -849,6 +849,28 @@ def test_notwatertight(exe_cmd):
     return negative_test(exe_cmd, "in.test.notwatertight", "not watertight")
 
 
+def test_balancetally(exe_cmd):
+    # fix balance every step: the per-surf collision and reaction tallies
+    # summed over the wall must equal the step's Nscoll and Nsreact
+    rc, out = run_deck(exe_cmd, "in.test.balancetally")
+    if rc:
+        return ["run failed with exit code %d" % rc]
+    rows = parse_stats(out)
+    if len(rows) < 11:
+        return ["expected 11 stats rows, got %d" % len(rows)]
+    fails = []
+    for r in rows[1:]:
+        if r["c_csum"] != r["Nscoll"]:
+            fails.append("step %d: surf tally sum %g != Nscoll %g"
+                         % (r["Step"], r["c_csum"], r["Nscoll"]))
+        if r["c_rsum[2]"] != r["Nsreact"]:
+            fails.append("step %d: react/surf tally sum %g != Nsreact %g"
+                         % (r["Step"], r["c_rsum[2]"], r["Nsreact"]))
+    if sum(r["Nscoll"] for r in rows) == 0:
+        fails.append("no surface collisions, test geometry is broken")
+    return fails
+
+
 def test_prenofix(exe_cmd):
     return negative_test(exe_cmd, "in.test.prenofix",
                          "not initialized before the run")
@@ -1084,6 +1106,7 @@ TESTS = [
     ("torqueonly", test_torqueonly),
     ("refix", test_refix),
     ("prenofix", test_prenofix),
+    ("balancetally", test_balancetally),
     ("modifyafter", test_modifyafter),
     ("wallmotion", test_wallmotion),
     ("customemit", test_customemit),
@@ -1110,7 +1133,7 @@ DIST_TESTS = {"ballistic", "force", "rotation", "bounce", "restitution",
               "staticdist3d",
               "splitcell", "gridchange", "exitbox", "twobody", "pushpair",
               "tallyorder", "rotwall", "rotwall3d", "customemit",
-              "splitbalance", "torqueonly"}
+              "splitbalance", "torqueonly", "balancetally"}
 
 
 def main():
