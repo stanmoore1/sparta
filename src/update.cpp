@@ -311,7 +311,12 @@ void Update::init_rigid()
 
   rigid_bins_clear();
 
+  // clear the list before the error check below, so a caught error
+  //   (library use) leaves no dangling list for the destructor or
+  //   the next init to free again
+
   delete [] fixrigidlist;
+  fixrigidlist = NULL;
 
   nfixrigid = 0;
   for (int ifix = 0; ifix < modify->nfix; ifix++)
@@ -404,7 +409,7 @@ int Update::rigid_cell_box(double *blo, double *bhi, int **list)
     rigid_stampcur = 0;
 
     // two passes: count entries per bin, then fill
-    // skip sub cells and empty ghosts
+    // skip sub cells; empty ghost cells are binned, callers skip them
 
     for (int pass = 0; pass < 2; pass++) {
       if (pass == 0)
