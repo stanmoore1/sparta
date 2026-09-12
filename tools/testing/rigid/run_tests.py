@@ -842,6 +842,21 @@ def test_notwatertight(exe_cmd):
     return negative_test(exe_cmd, "in.test.notwatertight", "not watertight")
 
 
+def test_torqueonly(exe_cmd):
+    # compute surf tx ty tz (no fx fy fz) with fix emit/surf: the emitted
+    # particle has no incoming state, which the torque tally must
+    # tolerate on the host and on the device
+    rc, out = run_deck(exe_cmd, "in.test.torqueonly")
+    if rc:
+        return ["run failed with exit code %d" % rc]
+    rows = parse_stats(out)
+    if len(rows) < 6:
+        return ["expected 6 stats rows, got %d" % len(rows)]
+    if rows[-1]["np"] <= 0:
+        return ["no particles were emitted"]
+    return []
+
+
 def test_inward(exe_cmd):
     # a body traversed the wrong way round (normals pointing into its
     # interior, a container) is rejected in 2d and 3d
@@ -1029,6 +1044,7 @@ TESTS = [
     ("notwatertight", test_notwatertight),
     ("zerothick", test_zerothick),
     ("inward", test_inward),
+    ("torqueonly", test_torqueonly),
     ("modifyafter", test_modifyafter),
     ("wallmotion", test_wallmotion),
     ("customemit", test_customemit),
