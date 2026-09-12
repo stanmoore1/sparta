@@ -2975,12 +2975,15 @@ int FixRigid::incremental_recut()
   if (dim == 3) ncorner = 8;
 
   // gather all incremental bodies; every one must have a previous region
-  // R = rlo/rhi = union over all incremental bodies of the region each
+  // R = union over all incremental bodies of the region rlo/rhi each
   //   occupied before and after its move this step
+  // collect the owned cells overlapping R from the box->cell index,
+  //   one body region at a time, so bodies far apart do not sweep the
+  //   cells between them; the re-cut and re-type passes below iterate
+  //   only this list
 
-  rlo[0] = rlo[1] = rlo[2] = BIG;
-  rhi[0] = rhi[1] = rhi[2] = -BIG;
   int nincr = 0;
+  nrcand = 0;
 
   FixRigid **flist = update->fixrigidlist;
   int nb = update->nfixrigid;
@@ -2990,30 +2993,33 @@ int FixRigid::incremental_recut()
     if (f->remapmode != INCREMENTAL) continue;
     if (!f->pbodyflag) return FALLBACK_NOPREV;
     for (i = 0; i < 3; i++) {
-      rlo[i] = MIN(rlo[i],MIN(f->pbodylo[i],f->bbodylo[i]));
-      rhi[i] = MAX(rhi[i],MAX(f->pbodyhi[i],f->bbodyhi[i]));
+      rlo[i] = MIN(f->pbodylo[i],f->bbodylo[i]);
+      rhi[i] = MAX(f->pbodyhi[i],f->bbodyhi[i]);
     }
     nincr++;
+
+    int *cand;
+    int ncells = update->rigid_cell_box(rlo,rhi,&cand);
+
+    for (int ic = 0; ic < ncells; ic++) {
+      icell = cand[ic];
+      if (icell >= nglocal) continue;
+      if (cells[icell].nsplit <= 0) continue;
+      if (!box_overlap(cells[icell].lo,cells[icell].hi,rlo,rhi)) continue;
+      if (nrcand == maxrcand) {
+        maxrcand += DELTA_MODIFY;
+        memory->grow(rcand,maxrcand,"fix_rigid:rcand");
+      }
+      rcand[nrcand++] = icell;
+    }
   }
   if (!nincr) return FALLBACK_NOPREV;
 
-  // collect the owned cells overlapping R from the box->cell index;
-  //   the re-cut and re-type passes below iterate only this list
+  // a cell in the regions of several bodies is listed once
 
-  int *cand;
-  int ncells = update->rigid_cell_box(rlo,rhi,&cand);
-
-  nrcand = 0;
-  for (int ic = 0; ic < ncells; ic++) {
-    icell = cand[ic];
-    if (icell >= nglocal) continue;
-    if (cells[icell].nsplit <= 0) continue;
-    if (!box_overlap(cells[icell].lo,cells[icell].hi,rlo,rhi)) continue;
-    if (nrcand == maxrcand) {
-      maxrcand += DELTA_MODIFY;
-      memory->grow(rcand,maxrcand,"fix_rigid:rcand");
-    }
-    rcand[nrcand++] = icell;
+  if (nincr > 1) {
+    std::sort(rcand,rcand+nrcand);
+    nrcand = std::unique(rcand,rcand+nrcand) - rcand;
   }
 
   // pass 1: re-cut cells in R whose surf overlap changed
@@ -3854,6 +3860,20 @@ void FixRigid::check_enclosed()
     else
       error->all(FLERR,"Fix rigid body encloses zero volume");
   }
+
+  // the normals must point outward, so the body is an object with the
+  //   gas outside it: the point-in-body parity test ignores the normal
+  //   direction, so a body traversed the other way round (a container,
+  //   with the gas inside) would have its interior and exterior swapped
+  //   relative to the cut-cell typing and lose every particle inside it
+  // sign of the enclosed measure: 2d lines with outward normals run
+  //   clockwise (the normal is to the left of p1 -> p2), 3d triangles
+  //   with outward normals run counter-clockwise seen from outside
+
+  int inward = 0;
+  if (dim == 2 && measure > 0.0) inward = 1;
+  if (dim == 3 && measure < 0.0) inward = 1;
+  if (inward) error->all(FLERR,"Fix rigid body surf normals point inward");
 }
 
 /* ----------------------------------------------------------------------

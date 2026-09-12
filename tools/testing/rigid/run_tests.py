@@ -842,6 +842,15 @@ def test_notwatertight(exe_cmd):
     return negative_test(exe_cmd, "in.test.notwatertight", "not watertight")
 
 
+def test_inward(exe_cmd):
+    # a body traversed the wrong way round (normals pointing into its
+    # interior, a container) is rejected in 2d and 3d
+    fails = negative_test(exe_cmd, "in.test.inward", "normals point inward")
+    fails += negative_test(exe_cmd, "in.test.inward3d",
+                           "normals point inward")
+    return fails
+
+
 def test_modifyafter(exe_cmd):
     return negative_test(exe_cmd, "in.test.modifyafter",
                          "attributes were changed")
@@ -1019,6 +1028,7 @@ TESTS = [
     ("badmoi", test_badmoi),
     ("notwatertight", test_notwatertight),
     ("zerothick", test_zerothick),
+    ("inward", test_inward),
     ("modifyafter", test_modifyafter),
     ("wallmotion", test_wallmotion),
     ("customemit", test_customemit),

@@ -104,7 +104,10 @@ each direction by the body triangles which share it.  The body must
 also enclose a non-zero area (2d) or volume (3d): a zero-thickness
 body, such as a single line or triangle traversed once in each
 direction, passes the watertight test but has no interior for the
-cut-cell routines to mark, and is rejected.
+cut-cell routines to mark, and is rejected.  The surf normals must
+point outward, away from the enclosed interior: the body is an object
+surrounded by gas, not a container with gas inside it, and a body
+traversed the wrong way round is rejected.
 </P>
 <P>Each fix rigid command defines a single rigid body.  Multiple rigid
 bodies can be simulated by using multiple fix rigid commands, each
@@ -656,7 +659,8 @@ moving-surf collision test assumes straight paths, so the hit time on
 a body is approximate to the same order as the field perturbation.
 </P>
 <P>The body must be a closed (watertight) object which encloses a
-non-zero area or volume.  The body must stay
+non-zero area or volume, with its surf normals pointing outward.  The
+body must stay
 within the simulation box if the boundaries it would cross are
 periodic; body coordinates are not wrapped across periodic
 boundaries, so an error is generated in that case.  The body may exit
