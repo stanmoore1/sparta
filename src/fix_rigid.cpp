@@ -2270,10 +2270,15 @@ void FixRigid::push_bins()
      linear spring F = kpush * delta, or
      Hertzian contact F = kpush * delta^3/2 (smooth onset, standard
      model for elastic contact of spherical particulates)
-   an element pushes only a corner pt on its outward side: a pt behind
-     its plane is either in front of the opposite face of the same
-     object (a wall thinner than 2*pushcutoff) or already inside it,
-     and a push along this normal would drive the body through
+   every element within the cutoff contributes, on either side of it:
+     each force is the gradient of its own spring potential in the
+     distance to the element, so the total is the gradient of the sum
+     and the contacts conserve energy exactly
+   a corner pt inside a wall thinner than 2*pushcutoff is repelled by
+     both faces at once; their potentials add to a barrier whose peak
+     is at the near surface, so the wall repels the body rather than
+     driving it through, and the body passes only if it arrives with
+     more energy than the barrier
    if gammapush > 0, a dashpot term F += gammapush * d(delta)/dt is
      added (the DEM spring-dashpot pair), i.e. minus gammapush times
      the normal separation rate of the corner pt relative to the source
@@ -2318,11 +2323,6 @@ void FixRigid::push_contact(double *p1, double *p2, double *p3,
     pts = bodypt[i];
 
     for (j = 0; j < npoint; j++) {
-
-      // one-sided contact: skip a corner pt behind the element's plane
-
-      if ((pts[j][0]-p1[0])*norm[0] + (pts[j][1]-p1[1])*norm[1] +
-          (pts[j][2]-p1[2])*norm[2] <= 0.0) continue;
 
       if (dim == 2)
         dsq = Geometry::closest_point_line(pts[j],p1,p2,cp);

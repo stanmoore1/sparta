@@ -469,11 +469,14 @@ element when the closest feature is its interior; when the closest
 feature is an edge or a vertex, as it is for most contacts with a
 faceted curved surface, this direction is what keeps each contact
 force the gradient of its spring potential, so that the contacts
-conserve energy.  An element pushes
-only a corner point on its outward side; a point behind an element's
-plane is left to the opposite face of the same object, so a wall
-thinner than twice the cutoff still repels from both faces and never
-propels a body through itself.
+conserve energy.  Every element within the cutoff contributes, on
+either side of it: each contact force is the gradient of its own
+spring potential, so their sum is the gradient of a single potential
+and the contacts conserve energy exactly.  A corner point inside a
+wall thinner than twice the cutoff is therefore repelled by both of
+its faces at once, whose potentials add to a barrier peaking at the
+near surface, so a thin wall repels a body rather than propelling it
+through.
 
 The push-off spring has a finite range, so it can only absorb a finite
 amount of kinetic energy: for a linear spring the work done in
