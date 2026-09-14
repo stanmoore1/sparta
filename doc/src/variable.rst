@@ -54,7 +54,7 @@ Syntax
                           sin(x), cos(x), tan(x), asin(x), acos(x), atan(x), atan2(y,x), erf(x),
                           random(x,y), normal(x,y), ceil(x), floor(x), round(x)
                           ramp(x,y), stagger(x,y), logfreq(x,y,z), stride(x,y,z), vdisplace(x,y), swiggle(x,y,z), cwiggle(x,y,z)
-         special functions = sum(x), min(x), max(x), ave(x), trap(x), slope(x), next(x), grid2part(x), is_file(x)
+         special functions = sum(x), min(x), max(x), ave(x), trap(x), slope(x), next(x), grid2part(x), is_file(x), extract_setting(name)
          python function wrapper = py_varname(x,y,z,...)
          particle vectors = id, type, mass, q, mu, x, y, z, vx, vy, vz
          grid vectors = cxlo, cxhi, cylo, cyhi, czlo, czhi
@@ -389,12 +389,12 @@ each particle whenever it is evaluated.  For *grid* style variables
 the formula computes one quantity for each grid cell whenever it is
 evaluated.  A *grid* style variable computes quantities for all flavors
 of child grid cells in the simulation, which includes unsplit, cut,
-split, and sub cells.  See :ref:`Section 4.8 <howto_8>` of
+split, and sub cells.  See :ref:`Section 6.8 <howto_8>` of
 the manual gives details of how SPARTA defines child, unsplit, split,
 and sub cells.  For *surf* style variables the formula computes one
 quantity for each surface element (line or triangle) whenever it is
 evaluated.  They can only be defined for explicit surfaces, not
-implicit surfaces.  See :ref:`Section 4.9 <howto_9>` of
+implicit surfaces.  See :ref:`Section 6.9 <howto_9>` of
 the manual for a description of both kinds of surface elements.
 
 Note that *equal*\ , *particle*\ , *grid*\ , and *surf* variables can
@@ -436,7 +436,7 @@ references, and references to other variables.
 +------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Math functions                     | sqrt(x), exp(x), ln(x), log(x), abs(x), sin(x), cos(x), tan(x),      asin(x), acos(x), atan(x), atan2(y,x), erf(x), random(x,y,z), normal(x,y,z),      ceil(x), floor(x), round(x), ramp(x,y), stagger(x,y), logfreq(x,y,z),      stride(x,y,z), vdisplace(x,y), swiggle(x,y,z), cwiggle(x,y,z) |
 +------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| Special functions                  | sum(x), min(x), max(x), ave(x), trap(x), slope(x), next(x), grid2part(x), is\_file(x)                                                                                                                                                                                                           |
+| Special functions                  | sum(x), min(x), max(x), ave(x), trap(x), slope(x), next(x), grid2part(x), is\_file(x), extract\_setting(name)                                                                                                                                                                                   |
 +------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Python function wrapper            | py\_varname(x,y,z,...)                                                                                                                                                                                                                                                                          |
 +------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -516,6 +516,10 @@ order of evaluation than what would occur with the default precedence.
    convention is compatible with some programming languages, but not
    others.  As mentioned, this behavior can be easily overridden with
    parenthesis; the formula "-(2\^2)" will evaluate to -4.
+
+The exponentiation operator "x\^y" evaluates to 1.0 whenever y is zero,
+for any value of x.  An error is generated if x is zero and y is
+negative, since the result would be infinite.
 
 The 6 relational operators return either a 1.0 or 0.0 depending on
 whether the relationship between x and y is TRUE or FALSE.  For
@@ -774,6 +778,43 @@ which column of the per-grid array is being referenced.
 The is\_file(x) function is a test whether "x" is a (readable) file and
 returns 1 in this case, otherwise it returns 0. For this test, "x" is taken
 as a literal string and must not have any blanks in it.
+
+The extract\_setting(name) function returns the value of the setting
+*name* as a number.  It gives an input script access to basic settings
+of the SPARTA executable and of the running simulation, by calling the
+sparta\_extract\_setting() library function; :ref:`Section howto <howto_6>` lists the settings *name* may be.
+It is an error if *name* is not one of them.  Note that *name* is taken
+as a literal string and must not have any blanks in it, and that it is
+not enclosed in quotes.
+
+This is how an input script asks for something it has no other way to
+see, most usefully the number of MPI ranks it is running on.  A script
+whose decomposition must match the launcher would otherwise have to be
+told the rank count with the :ref:`-var <start_7>`
+command-line switch, and when the two disagree it builds a processor
+grid for the wrong size; the mismatch then surfaces much later as a
+"Bad grid of processors" error that cannot say what was intended.  For
+example, this computes a processor grid from the rank count itself:
+
+
+.. parsed-literal::
+
+   variable nprocs equal extract_setting(world_size)
+   variable px equal 2\^floor(log(v_nprocs)/log(2)/3)
+
+Two cautions.  A setting is read locally on each rank rather than
+through a collective, so nothing is added to the collective path and
+partitions that evaluate the variable on different code paths cannot
+deadlock on it -- but by the same token *world\_rank* differs from rank
+to rank, and a variable built from it has a different value on every
+rank.  That is fine for a :doc:`print <print>` of per-rank information
+and wrong for anything that must agree across ranks, such as a
+:doc:`region <region>` or a :doc:`create\_grid <create_grid>` argument.
+Second, under the :ref:`-partition <start_7>` switch,
+*world\_size* and *world\_rank* are the size of and the rank within the
+partition running the script, matching every other per-partition
+quantity a script sees; use *universe\_size* and *universe\_rank* for the
+totals across all partitions.
 
 
 ----------
@@ -1177,7 +1218,7 @@ if it contains variables preceded by $ signs.  For example,
 
    variable nratio equal "${nfinal}/${n0}"
 
-This is because the quotes prevent variable substitution (see :ref:`Section 2.2 <cmd_2>` of the manual on parsing input script
+This is because the quotes prevent variable substitution (see :ref:`Section 3.2 <cmd_2>` of the manual on parsing input script
 commands), and thus an error will occur when the formula for "nratio"
 is evaluated later.
 

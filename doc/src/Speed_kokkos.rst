@@ -13,7 +13,7 @@ compile time) the memory layout of data structures like 2d and 3d
 arrays to optimize performance on different hardware. For more
 information on Kokkos, see
 `Github <https://github.com/kokkos/kokkos>`_. Kokkos is part of
-`Trilinos <https://github.com/kokkos/kokkos>`_. The Kokkos
+`Trilinos <https://github.com/trilinos/Trilinos>`_. The Kokkos
 library was written primarily by Carter Edwards, Christian Trott, and
 Dan Sunderland (all Sandia).
 
@@ -61,7 +61,6 @@ specific hardware. For example:
 
 * for Sandy Bridge CPUs, set -D Kokkos\_ARCH\_SNB=ON
 * for Broadwell CPUs, set -D Kokkos\_ARCH\_BDW=ON
-* for K80 GPUs, set -D Kokkos\_ARCH\_KEPLER37=ON
 * for V100 GPUs and Power9 CPUs, set -D Kokkos\_ARCH\_VOLTA70=ON -D Kokkos\_ARCH\_POWER9=ON
 * for A100 GPUs, set -D Kokkos\_ARCH\_AMPERE80=ON
 * for H100 GPUs, set -D Kokkos\_ARCH\_HOPPER90=ON
@@ -124,7 +123,7 @@ To select a specific CPU architecture (e.g. Haswell), add:
 .. note::
 
    To build with Kokkos support for NVIDIA GPUs, NVIDIA CUDA
-   software version 11.0 or later must be installed on your system.
+   software version 12.2 or later must be installed on your system.
 
 The kokkos\_cuda.cmake preset defaults to NVIDIA Hopper (H100) GPUs.
 To target a different GPU, override the architecture flag. Common NVIDIA
@@ -170,6 +169,19 @@ Build for V100 GPUs:
      /path/to/sparta/cmake
    make -j 4
 
+Build with CUDA unified memory, so that a simulation can use memory on
+the host to supplement the memory on the GPU, and host code can read
+and write GPU data directly. See the **Advanced Kokkos Options** section
+below for what this option requires and costs:
+
+
+.. parsed-literal::
+
+   mkdir build
+   cd build
+   cmake -C /path/to/sparta/cmake/presets/kokkos_cuda.cmake   -DKokkos_ENABLE_IMPL_CUDA_UNIFIED_MEMORY=ON   /path/to/sparta/cmake
+   make -j 4
+
 The resulting executable will be named spa\_kokkos\_cuda.
 
 **Compile for AMD GPUs using HIP:**
@@ -177,7 +189,7 @@ The resulting executable will be named spa\_kokkos\_cuda.
 .. note::
 
    To build with Kokkos support for AMD GPUs, ROCm software version
-   5.2 or later must be installed on your system.
+   6.2 or later must be installed on your system.
 
 The kokkos\_hip.cmake preset targets AMD MI250X GPUs (GFX90A). Common AMD
 GPU models and their Kokkos arch flags are:
@@ -437,6 +449,36 @@ Library) environment variable before running:
    :doc:`dump <dump>` output will cause data to be copied back to the CPU
    incurring a performance penalty.
 
+.. note::
+
+   Most non-Kokkos styles degrade this way, costing performance but
+   still producing correct results.  A few, however, are rejected outright
+   and will stop the run, rather than falling back to the host.  Those
+   restrictions are documented on the page for the style that imposes them.
+
+.. note::
+
+   A run may define any number of instances of the styles that the
+   device kernels capture -- :doc:`surf\_collide <surf_collide>`,
+   :doc:`surf\_react <surf_react>`, and the per-event tally computes such as
+   :doc:`compute boundary <compute_boundary>`, :doc:`compute surf <compute_surf>`, :doc:`compute isurf/grid <compute_isurf_grid>`,
+   :doc:`compute react/boundary <compute_react_boundary>`, :doc:`compute react/surf <compute_react_surf>` and :doc:`compute react/isurf/grid <compute_react_isurf_grid>`.  Each is held in a
+   runtime-sized device buffer, so there is no compile-time cap.  The one
+   remaining exception is that at most two :doc:`compute surf <compute_surf>` instances may tally for a single :doc:`fix emit/surf <fix_emit_surf>`; exceeding that stops the run with an
+   explanatory message.
+
+.. note::
+
+   Building with -DSPARTA\_KOKKOS\_FIXED\_LISTS instead holds those
+   styles in fixed-size arrays inside the kernel functor, which restores
+   the former caps: at most two instances of each
+   :doc:`surf\_react <surf_react>` style, at most four surf react models in
+   total, at most two active instances of each per-event tally compute
+   listed above, and at most four gas-phase tally computes.  The two
+   layouts produce identical results; which is faster is a
+   hardware-dependent question, so both are kept so they can be compared
+   by rebuilding.
+
 **Run with the KOKKOS package by editing an input script:**
 
 Alternatively the effect of the "-sf" or "-pk" switches can be
@@ -530,6 +572,10 @@ As described above, the CMake option Kokkos\_ARCH\_\ *TYPE*\ =ON enables compile
 +------------------+-----------------+---------------------------------------------------------+
 | SKX              | HOST            | Intel Skylake Xeon Server CPUs (AVX512)                 |
 +------------------+-----------------+---------------------------------------------------------+
+| KNC              | HOST            | Intel Knights Corner Xeon Phi                           |
++------------------+-----------------+---------------------------------------------------------+
+| KNL              | HOST            | Intel Knights Landing Xeon Phi                          |
++------------------+-----------------+---------------------------------------------------------+
 | SPR              | HOST            | Intel Sapphire Rapids Xeon Server CPUs (AVX512)         |
 +------------------+-----------------+---------------------------------------------------------+
 | POWER8           | HOST            | IBM POWER8 CPUs                                         |
@@ -551,14 +597,6 @@ As described above, the CMake option Kokkos\_ARCH\_\ *TYPE*\ =ON enables compile
 | RISCV\_RVA22V    | HOST            | RVA22V (RISC-V) CPUs                                    |
 +------------------+-----------------+---------------------------------------------------------+
 | RISCV\_U74MC     | HOST            | U74MC (RISC-V) CPUs                                     |
-+------------------+-----------------+---------------------------------------------------------+
-| KEPLER30         | GPU             | NVIDIA Kepler generation CC 3.0                         |
-+------------------+-----------------+---------------------------------------------------------+
-| KEPLER32         | GPU             | NVIDIA Kepler generation CC 3.2                         |
-+------------------+-----------------+---------------------------------------------------------+
-| KEPLER35         | GPU             | NVIDIA Kepler generation CC 3.5                         |
-+------------------+-----------------+---------------------------------------------------------+
-| KEPLER37         | GPU             | NVIDIA Kepler generation CC 3.7                         |
 +------------------+-----------------+---------------------------------------------------------+
 | MAXWELL50        | GPU             | NVIDIA Maxwell generation CC 5.0                        |
 +------------------+-----------------+---------------------------------------------------------+
@@ -588,7 +626,11 @@ As described above, the CMake option Kokkos\_ARCH\_\ *TYPE*\ =ON enables compile
 +------------------+-----------------+---------------------------------------------------------+
 | BLACKWELL100     | GPU             | NVIDIA Blackwell generation CC 10.0                     |
 +------------------+-----------------+---------------------------------------------------------+
+| BLACKWELL103     | GPU             | NVIDIA Blackwell generation CC 10.3                     |
++------------------+-----------------+---------------------------------------------------------+
 | BLACKWELL120     | GPU             | NVIDIA Blackwell generation CC 12.0                     |
++------------------+-----------------+---------------------------------------------------------+
+| BLACKWELL121     | GPU             | NVIDIA Blackwell generation CC 12.1                     |
 +------------------+-----------------+---------------------------------------------------------+
 | AMD\_GFX906      | GPU             | AMD GPU MI50/60                                         |
 +------------------+-----------------+---------------------------------------------------------+
@@ -602,11 +644,21 @@ As described above, the CMake option Kokkos\_ARCH\_\ *TYPE*\ =ON enables compile
 +------------------+-----------------+---------------------------------------------------------+
 | AMD\_GFX942\_APU | GPU             | AMD APU MI300A                                          |
 +------------------+-----------------+---------------------------------------------------------+
+| AMD\_GFX950      | GPU             | AMD GPU MI350                                           |
++------------------+-----------------+---------------------------------------------------------+
 | AMD\_GFX1030     | GPU             | AMD GPU V620/W6800                                      |
 +------------------+-----------------+---------------------------------------------------------+
 | AMD\_GFX1100     | GPU             | AMD GPU RX7900XTX                                       |
 +------------------+-----------------+---------------------------------------------------------+
-| AMD\_GFX1103     | GPU             | AMD GPU PHOENIX                                         |
+| AMD\_GFX1101     | GPU             | AMD GPU RX7800XT/RX7700XT                               |
++------------------+-----------------+---------------------------------------------------------+
+| AMD\_GFX1103     | GPU             | AMD APU Phoenix                                         |
++------------------+-----------------+---------------------------------------------------------+
+| AMD\_GFX1151     | GPU             | AMD APU Strix Halo                                      |
++------------------+-----------------+---------------------------------------------------------+
+| AMD\_GFX1152     | GPU             | AMD GPU Radeon 860M                                     |
++------------------+-----------------+---------------------------------------------------------+
+| AMD\_GFX1201     | GPU             | AMD GPU RX9070XT                                        |
 +------------------+-----------------+---------------------------------------------------------+
 | INTEL\_GEN       | GPU             | SPIR64-based devices, e.g. Intel GPUs, using JIT        |
 +------------------+-----------------+---------------------------------------------------------+
@@ -627,13 +679,23 @@ As described above, the CMake option Kokkos\_ARCH\_\ *TYPE*\ =ON enables compile
 |                  |                 |                                                         |
 +------------------+-----------------+---------------------------------------------------------+
 
+This list was last updated for version 5.2.2 of the Kokkos library.
+
 The CMake option Kokkos\_ENABLE\_CUDA\_\ *OPTION* enables additional
 options for CUDA. For example, the CMake option
-Kokkos\_ENABLE\_CUDA\_UVM=ON enables the use of CUDA
-"Unified Virtual Memory" (UVM) in Kokkos. UVM allows to one to use the
-host CPU memory to supplement the memory used on the GPU (with some
-performance penalty) and thus enables running larger problems that
-would otherwise not fit into the RAM on the GPU.
+Kokkos\_ENABLE\_IMPL\_CUDA\_UNIFIED\_MEMORY=ON makes Kokkos allocate all GPU
+memory as CUDA managed memory, which the host can read and write
+directly. This allows a simulation to use memory on the host to
+supplement the memory on the GPU (with some performance penalty), so
+that larger problems can be run than would otherwise fit on the GPU,
+and it allows host code to access GPU data directly, which is useful
+when developing or debugging a Kokkos-enabled style within SPARTA. It
+requires CUDA 12.2 or later and a GPU with support for concurrent
+managed access, which is any NVIDIA GPU since the Pascal generation
+running under Linux. Kokkos classifies this as an internal option that
+may change in a future release. It replaces the option
+Kokkos\_ENABLE\_CUDA\_UVM=ON, which Kokkos no longer supports;
+configuring with that option now stops with an error.
 
 The CMake option Kokkos\_ENABLE\_DEBUG=ON is useful
 when developing a Kokkos-enabled style within SPARTA. This option enables printing of run-time debugging

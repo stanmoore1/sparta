@@ -12,7 +12,7 @@ Syntax
    region ID style args keyword value ...
 
 * ID = user-assigned name for the region
-* style = *block* or *cylinder* or *plane* or *sphere* or *union* or *intersect* or *block/kk* or *cylinder/kk* or *plane/kk* or *sphere/kk*
+* style = *block* or *cylinder* or *plane* or *sphere* or *union* or *intersect* or *block/kk* or *cylinder/kk* or *plane/kk* or *sphere/kk* or *union/kk* or *intersect/kk*
   
   .. parsed-literal::
   

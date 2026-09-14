@@ -111,7 +111,7 @@ Grid cells not in the specified *group-ID* will output zeroes for all
 their values.
 
 The vector or array can be accessed by any command that uses per-atom
-values from a compute as input.  See :ref:`Section 4.4 <howto_4>` for an overview of SPARTA output
+values from a compute as input.  See :ref:`Section 6.4 <howto_4>` for an overview of SPARTA output
 options.
 
 The vector or array values will be in whatever :doc:`units <units>` the

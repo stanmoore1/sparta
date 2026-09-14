@@ -10,6 +10,4 @@ repository.  Please contact the
 interested in contributing to any of those developments, or would be a
 future user of that feature.
 
-You can request a new feature by opening an issue, or through the
-`request form <https://sparta.github.io/unbug.html>`_ on the SPARTA web
-page.
+You can request a new feature by opening an issue on Github.

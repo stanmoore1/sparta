@@ -12,7 +12,7 @@ Syntax
    surf_collide ID style args keyword values ...
 
 * ID = user-assigned name for the surface collision model
-* style = *specular* or *diffuse* or *cll* or *adiabatic* or *impulsive* or *td* or *piston* or *transparent* or *vanish* or *specular/kk* or *diffuse/kk* or *piston/kk* or *vanish/kk*
+* style = *specular* or *diffuse* or *cll* or *adiabatic* or *impulsive* or *td* or *piston* or *transparent* or *vanish* or *specular/kk* or *diffuse/kk* or *cll/kk* or *adiabatic/kk* or *impulsive/kk* or *td/kk* or *piston/kk* or *transparent/kk* or *vanish/kk*
 * args = arguments for specific style
   
   .. parsed-literal::
@@ -23,15 +23,15 @@ Syntax
          Tsurf = temperature of surface (temperature units)
                  Tsurf can be a variable or custom per-surf attribute (see below)
          acc = accommodation coefficient
-       *cll* args = Tsurf acc_n acc_t acc_rot acc_vib
+       *cll* or *cll/kk* args = Tsurf acc_n acc_t acc_rot acc_vib
          Tsurf = temperature of surface (temperature units)
                  Tsurf can be a variable or custom per-surf attribute (see below)
          acc_n = accommodation coefficient in the surface normal direction
          acc_t = accommodation coefficient in the surface tangential direction
          acc_rot = accommodation coefficient for the rotational modes
          acc_vib = accommodation coefficient for the vibrational modes
-       *adiabatic* args = none
-       *impulsive* args = Tsurf model param1 param2 var theta_peak pol_pow azi_pow
+       *adiabatic* or *adiabatic/kk* args = none
+       *impulsive* or *impulsive/kk* args = Tsurf model param1 param2 var theta_peak pol_pow azi_pow
          Tsurf = temperature of surface (temperature units)
                  Tsurf can be a variable or custom per-surf attribute (see below)
          model can be *softsphere* or *tempvar*
@@ -45,7 +45,7 @@ Syntax
          theta_peak = peak location of the polar angle distribution
          pol_pow = cosine power represeting the polar angular distribution
          azi_pow = cosine power represeting the azimuthal angular distribution
-       *td* arg = Tsurf 
+       *td* or *td/kk* arg = Tsurf
          Tsurf = temperature of surface (temperature units)
                  Tsurf can be a variable or custom per-surf attribute (see below)
        *piston* or *piston/kk* args = Vwall
@@ -117,11 +117,11 @@ Description
 Define a model for particle-surface collisions.  One or more models
 can be defined and assigned to different surfaces or simulation box
 boundaries via the :doc:`surf\_modify <surf_modify>` or
-:doc:`bound\_modify <bound_modify>` commands.  See :ref:`Section 4.9 <howto_9>` for more details of how SPARTA defines
+:doc:`bound\_modify <bound_modify>` commands.  See :ref:`Section 6.9 <howto_9>` for more details of how SPARTA defines
 surfaces as collections of geometric elements, triangles in 3d and
 line segments in 2d.  Chemical reactions can also be part of a
 particle-surface interaction model.  See the
-surf\_react"_surf\_react.html command for details.  All of the collision
+:doc:`surf\_react <surf_react>` command for details.  All of the collision
 styles listed here support optional reactions, except the *vanish*
 style.
 
@@ -352,7 +352,7 @@ as a linear function of temperature. The linear term *a1* and constant term
 
 .. math::
 
-   \textlangle E_{f}\textrangle = E_{i} \left(1 - \frac{2\mu}{\left(\mu+1\right)^{2}}\left[1 + \mu sin^{2}\chi + \frac{E_{int}}{E_{i}}\left(\frac{\mu+1}{2\mu}\right) - cos\chi\sqrt{1 - \mu^{2}sin^{2}\chi - \frac{E_{int}}{E_{i}}\left(\mu+1\right)}\right]\right)
+   \langle E_{f}\rangle = E_{i} \left(1 - \frac{2\mu}{\left(\mu+1\right)^{2}}\left[1 + \mu sin^{2}\chi + \frac{E_{int}}{E_{i}}\left(\frac{\mu+1}{2\mu}\right) - cos\chi\sqrt{1 - \mu^{2}sin^{2}\chi - \frac{E_{int}}{E_{i}}\left(\mu+1\right)}\right]\right)
 
 The *u0* parameter can also be specified by a more physical model such
 as the soft sphere scattering model :ref:`(Alexander12) <Alexander12>`. This
@@ -623,7 +623,7 @@ All the surface collide models calculate a global vector of length 2.
 The values can be used by the :doc:`stats\_style <stats_style>` command
 and by :doc:`variables <variable>` that define formulas.  The latter
 means they can be used by any command that uses a variable as input,
-e.g. the :doc:`fix ave/time <fix_ave_time>` command.  See :ref:`Section 4.4 <howto_4>` for an overview of SPARTA output
+e.g. the :doc:`fix ave/time <fix_ave_time>` command.  See :ref:`Section 6.4 <howto_4>` for an overview of SPARTA output
 options.
 
 The first element of the vector is the count of particles that hit

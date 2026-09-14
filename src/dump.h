@@ -45,6 +45,9 @@ class Dump : protected Pointers {
   char *filename;            // user-specified file
   int compressed;            // 1 if dump file is written compressed, 0 no
   int binary;                // 1 if dump file is written binary, 0 no
+  int binaryopen;            // 1 if file must be opened in binary mode
+                             // set by styles whose content is binary even
+                             // though the filename is not *.bin, e.g. images
   int multifile;             // 0 = one big file, 1 = one file per timestep
   int multiproc;             // 0 = proc 0 writes for all, 1 = one file/proc
                              // else # of procs writing files
@@ -162,6 +165,12 @@ E: Dump_modify buffer yes not allowed for this style
 
 Not all dump styles allow dump_modify buffer yes.  See the dump_modify
 doc page.
+
+E: Dump_modify every requires a dump defined by the dump command
+
+The dump frequency is stored by the Output class, so dump_modify every
+can only be used on a dump that was created by the dump command and is
+in the Output list of dumps.
 
 E: Cannot use dump_modify fileper without % in dump file name
 

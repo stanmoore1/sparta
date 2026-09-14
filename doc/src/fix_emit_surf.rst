@@ -16,7 +16,7 @@ Syntax
 * mix-ID = ID of mixture to use when creating particles
 * group-ID = ID of surface group that emits particles
 * zero or more keyword/value pairs may be appended
-* keyword = *n* or *normal* or *nevery* or *perspecies* or *region* or *subsonic* or *custom*
+* keyword = *n* or *normal* or *nevery* or *perspecies* or *region* or *subsonic* or *mflow* or *custom* or *twopass*
   
   .. parsed-literal::
   
@@ -26,12 +26,20 @@ Syntax
        *nevery* value = Nstep = add particles every this many timesteps
        *perspecies* value = *yes* or *no*
        *region* value = region-ID
-       *subsonic* values = Psub Tsub
+       *subsonic* values = Psub Tsub keyword/value
          Psub = pressure setting at inflow boundary (pressure units)
          Tsub = temperature setting at inflow boundary, can be NULL (temperature units)
+         zero or one additional keyword/value pair may be appended:
+           *window* value = Nwin = moving-average window for the cell streaming velocity
+       *mflow* values = Mdot Tin keyword/value
+         Mdot = target mass flow rate through the surface group (mass/time units)
+         Tin = thermal temperature of inflow particles (temperature units)
+         zero or one additional keyword/value pair may be appended:
+           *window* value = Nwin = moving-average window for the cell streaming velocity
        *custom* values = attribute s_name
          attribute = *density* or *temperature* or *vstream* or *speed* or *fractions*
          s_name = custom per-surf vector or array with name
+       *twopass* values = none
 
 
 
@@ -45,6 +53,9 @@ Examples
    fix in emit/face mymix myPatch region circle normal yes
    fix in emit/surf air all subsonic 0.1 300
    fix in emit/surf air all subsonic 0.05 NULL
+
+   fix in emit/surf air inlet mflow 1.0e-6 300
+   fix in emit/surf air inlet normal no mflow 1.0e-6 300 window 1000
 
    read_surf sdata.circle custom myrho float 0 custom mystream float 3
    fix in emit/surf air all custom nrho s_myrho custom vstream s_mystream
@@ -137,6 +148,12 @@ of emitted particles is set to its fraction of the total emission area
 (for all grid cell/surface element pairs), multiplied by *Np*\ .  If
 that results in a fractional value, then an extra particle is emitted
 depending on the value of a random number, as explained above.
+
+*Np* may be set to a non-integer value, e.g. 12.5 or 0.5.  Since the
+per-surface-element target is rounded stochastically, this allows for
+an emission rate of less than one particle per timestep, which is
+useful when a low inflow rate is desired through a specific group of
+surface elements without changing the global *fnum* setting.
 
 The *Np* value can be also be specified as an equal-style
 :doc:`variable <variable>`.  If the value is a variable, it should be
@@ -238,6 +255,27 @@ of particles in the cells containing the surface elements are computed
 and used to determine the properties of inserted particles on each
 timestep.
 
+The optional *window* keyword applies a moving average to the cell
+streaming velocity used by the subsonic boundary condition, to reduce
+the statistical fluctuations inherent in the instantaneous cell values
+(see :ref:`(Sun05) <Sun05>`).  On each timestep the averaged velocity is
+vcom = a\*vnew + (1-a)\*vold with a = 1/(Nwin+1), where vnew is the
+current center-of-mass velocity of the cell and vold is the average
+from the previous step; larger *Nwin* gives heavier smoothing.  The
+default Nwin = 0 disables smoothing and reproduces the instantaneous
+behavior.  Only the cell velocity is averaged; for a pressure-only
+boundary (Tsub = NULL) the characteristic pressure correction is
+applied to the averaged velocity once per step, not accumulated.
+
+.. warning::
+
+   The moving average is stored per grid cell/surface
+   element pair, and those pairs are rebuilt whenever the grid changes.
+   So the average restarts after :doc:`fix balance <fix_balance>` or
+   :doc:`fix adapt <fix_adapt>` alters the grid.  Avoid dynamic load
+   balancing, or use a window much shorter than the rebalance interval,
+   if a converged average matters.
+
 .. warning::
 
    Caution must be exercised when using the subsonic
@@ -258,6 +296,69 @@ timestep.
    were exiting the simulation domain.  That is necessary to produce the
    correct subsonic conditions that the particle insertions due to this
    command are trying to achieve.
+
+
+----------
+
+
+The *mflow* keyword imposes a target mass flow rate *Mdot* (in
+mass/time units) through the entire emitting surface group, rather than
+a prescribed pressure.  This is useful for internal-flow problems where
+the inflow rate, not the inlet pressure, is the known quantity.
+
+On each timestep the code computes a single number density that makes
+the *expected* total inserted mass rate, summed over all emitting grid
+cell/surface element pairs (and over all processors), equal to *Mdot*\ .
+It does this from the actual molecular inflow flux (equation 4.22 of
+:ref:`(Bird94) <Bird94>`, the same flux used for insertion) evaluated over
+the true overlap area of each surface element with its grid cell.  The
+inlet area is therefore computed internally from the surface geometry;
+it is not a user input, so the imposed mass flow rate is independent of
+the surface mesh resolution and is correct for arbitrary geometries.
+
+Cell weighting (see the *weight* keyword of the
+:doc:`global <global>` command) does not change the imposed rate: fewer
+particles are inserted in a more heavily weighted cell, but each one
+represents proportionally more molecules.
+
+The inflow particles are given the thermal temperature *Tin*\ , which
+must be > 0.0.  By default the streaming direction in each cell is taken
+from the center-of-mass velocity of the particles currently in that
+cell (or, with *normal* set to *yes*\ , along the inward surface normal).
+Because that velocity is a noisy instantaneous quantity, the optional
+*window* keyword applies a moving average to it, exactly as described
+above for the *subsonic* keyword (including the caveat that the average
+restarts when the grid changes).
+
+The calculation accounts for how the species of each inserted particle
+is chosen.  With *perspecies* = *yes* each species is inserted in
+proportion to its own inflow flux, so masses are flux-weighted; with
+*perspecies* = *no* a single species is drawn from the mixture number
+fractions, so the mean inserted mass is the fraction-weighted mean mass
+of the mixture.  Either setting delivers the requested *Mdot*\ .
+
+.. warning::
+
+   The imposed mass flow rate is achieved in an *expected*
+   (statistical) sense.  The number of particles inserted on any single
+   timestep fluctuates, so the realized rate should be measured as a
+   time-average over many steps.  A clean way to verify it is from the
+   fix's cumulative insertion count (see output below): realized mass rate
+   = (ntotal \* fnum \* mean-inserted-mass) / (Nsteps \* dt), where the
+   per-particle mass must be multiplied by the cell weight if cell
+   weighting is enabled.
+
+.. warning::
+
+   As with *subsonic*\ , you should use an appropriate
+   :doc:`surf\_collide <surf_collide>` or :doc:`surf\_react <surf_react>` model
+   on the emitting surfaces so particles hitting them disappear as if
+   exiting the domain.  The *mflow* keyword cannot be combined with the
+   *subsonic*\ , *n*\ , *custom*\ , or *region* keywords.  Both *mflow* and
+   *subsonic* are supported by the *kk* suffix
+   version of this fix.  The *region* restriction exists
+   because insertions rejected by a region are not resampled, which would
+   silently reduce the realized mass flow rate below *Mdot*\ .
 
 
 ----------
@@ -346,6 +447,16 @@ mixture.  This is determined by the :doc:`mixture <mixture>` command.
 It is the order the gas species names were listed when the mixture
 command was specified (one or more times).
 
+The *twopass* keyword does not require a value.  If used, the
+insertion procedure will loop over the insertion surface elements
+twice, the same as the KOKKOS package version of this fix does, so
+that it can reallocate memory efficiently, e.g. on a GPU.  If this
+keyword is used the non-KOKKOS and KOKKOS version will generate
+exactly the same set of particles, which makes debugging easier.  If
+the keyword is not used, the non-KOKKOS and KOKKOS runs will use
+random numbers differently and thus generate different particles,
+though they will be statistically similar.
+
 
 ----------
 
@@ -360,6 +471,29 @@ number of particles added on the most recent insertion step.  The
 second element is the cumulative total number added since the
 beginning of the run.  The 2nd value is initialized to zero each time
 a run is performed.
+
+
+----------
+
+
+Styles with a *kk* suffix are functionally the same as the
+corresponding style without the suffix.  They have been optimized to
+run faster, depending on your available hardware, as discussed in the
+:doc:`Accelerating SPARTA <Section_accelerate>` section of the manual.
+The accelerated styles take the same arguments and should produce the
+same results, except for different random number, round-off and
+precision issues.
+
+These accelerated styles are part of the KOKKOS package. They are only
+enabled if SPARTA was built with that package.  See the :ref:`Making SPARTA <start_3>` section for more info.
+
+You can specify the accelerated styles explicitly in your input script
+by including their suffix, or you can use the :ref:`-suffix command-line switch <start_7>` when you invoke SPARTA, or you can
+use the :doc:`suffix <suffix>` command in your input script.
+
+See the :doc:`Accelerating SPARTA <Section_accelerate>` section of the
+manual for more instructions on how to use the accelerated styles
+effectively.
 
 Restrictions
 """"""""""""
@@ -386,7 +520,9 @@ Default
 """""""
 
 The keyword defaults are n = 0, normal = no, nevery = 1, perspecies =
-yes, region = none, no subsonic settings.
+yes, region = none, no subsonic settings, no mflow settings, no
+twopass setting.  For the *subsonic* and *mflow* keywords, the
+moving-average window defaults to 0 (no smoothing).
 
 .. _sws: https://sparta.github.io
 .. _sd: Manual.html

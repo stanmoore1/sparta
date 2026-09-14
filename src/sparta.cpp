@@ -52,6 +52,17 @@ SPARTA::SPARTA(int narg, char **arg, MPI_Comm communicator)
   universe = new Universe(this,communicator);
   output = NULL;
 
+  // input is not created until the end of this constructor, after the MPI
+  //   info is set up, but the switch parsing below can call error->one() for a
+  //   bad -in/-log/-screen path.  Error::one() and Error::all() echo the
+  //   input line being processed, so they read input->line, and an
+  //   indeterminate input makes that a wild dereference rather than the
+  //   "(unknown)" the guard there is meant to produce
+  // an uninitialized pointer that happens to hold 0 hides this, so it shows up
+  //   as a startup SIGSEGV in one build and a clean error message in another
+
+  input = NULL;
+
   screen = NULL;
   logfile = NULL;
 
@@ -247,7 +258,7 @@ SPARTA::SPARTA(int narg, char **arg, MPI_Comm communicator)
       else infile = fopen(arg[inflag],"r");
       if (infile == NULL) {
         char str[128];
-        sprintf(str,"Cannot open input script %s",arg[inflag]);
+        snprintf(str,128,"Cannot open input script %s",arg[inflag]);
         error->one(FLERR,str);
       }
     }
@@ -271,14 +282,14 @@ SPARTA::SPARTA(int narg, char **arg, MPI_Comm communicator)
       if (partscreenflag == 0)
        if (screenflag == 0) {
          char str[32];
-         sprintf(str,"screen.%d",universe->iworld);
+         snprintf(str,sizeof(str),"screen.%d",universe->iworld);
          screen = fopen(str,"w");
          if (screen == NULL) error->one(FLERR,"Cannot open screen file");
        } else if (strcmp(arg[screenflag],"none") == 0)
          screen = NULL;
        else {
          char str[128];
-         sprintf(str,"%s.%d",arg[screenflag],universe->iworld);
+         snprintf(str,128,"%s.%d",arg[screenflag],universe->iworld);
          screen = fopen(str,"w");
          if (screen == NULL) error->one(FLERR,"Cannot open screen file");
        }
@@ -286,7 +297,7 @@ SPARTA::SPARTA(int narg, char **arg, MPI_Comm communicator)
         screen = NULL;
       else {
         char str[128];
-        sprintf(str,"%s.%d",arg[partscreenflag],universe->iworld);
+        snprintf(str,128,"%s.%d",arg[partscreenflag],universe->iworld);
         screen = fopen(str,"w");
         if (screen == NULL) error->one(FLERR,"Cannot open screen file");
       } else screen = NULL;
@@ -295,14 +306,14 @@ SPARTA::SPARTA(int narg, char **arg, MPI_Comm communicator)
       if (partlogflag == 0)
        if (logflag == 0) {
          char str[32];
-         sprintf(str,"log.sparta.%d",universe->iworld);
+         snprintf(str,sizeof(str),"log.sparta.%d",universe->iworld);
          logfile = fopen(str,"w");
          if (logfile == NULL) error->one(FLERR,"Cannot open logfile");
        } else if (strcmp(arg[logflag],"none") == 0)
          logfile = NULL;
        else {
          char str[128];
-         sprintf(str,"%s.%d",arg[logflag],universe->iworld);
+         snprintf(str,128,"%s.%d",arg[logflag],universe->iworld);
          logfile = fopen(str,"w");
          if (logfile == NULL) error->one(FLERR,"Cannot open logfile");
        }
@@ -310,7 +321,7 @@ SPARTA::SPARTA(int narg, char **arg, MPI_Comm communicator)
         logfile = NULL;
       else {
         char str[128];
-        sprintf(str,"%s.%d",arg[partlogflag],universe->iworld);
+        snprintf(str,128,"%s.%d",arg[partlogflag],universe->iworld);
         logfile = fopen(str,"w");
         if (logfile == NULL) error->one(FLERR,"Cannot open logfile");
       } else logfile = NULL;
@@ -319,7 +330,7 @@ SPARTA::SPARTA(int narg, char **arg, MPI_Comm communicator)
       infile = fopen(arg[inflag],"r");
       if (infile == NULL) {
         char str[128];
-        sprintf(str,"Cannot open input script %s",arg[inflag]);
+        snprintf(str,128,"Cannot open input script %s",arg[inflag]);
         error->one(FLERR,str);
       }
     } else infile = NULL;

@@ -230,7 +230,7 @@ produce a zero result.  This is because their sub-cells actually
 contain the particles that are geometrically inside the split cell.
 
 The vector or array can be accessed by any command that uses per-grid
-values from a compute as input.  See :ref:`Section 4.4 <howto_4>` for an overview of SPARTA output
+values from a compute as input.  See :ref:`Section 6.4 <howto_4>` for an overview of SPARTA output
 options.
 
 The per-grid values for a column of output for *lambda* will be in

@@ -244,7 +244,7 @@ All the surface reaction models calculate a global vector of values.
 The values can be used by the :doc:`stats\_style <stats_style>` command
 and by :doc:`variables <variable>` that define formulas.  The latter
 means they can be used by any command that uses a variable as input,
-e.g. "the :doc:`fix ave/time <fix_ave_time>` command.  See :ref:`Section 4.4 <howto_4>` for an overview of SPARTA output
+e.g. the :doc:`fix ave/time <fix_ave_time>` command.  See :ref:`Section 6.4 <howto_4>` for an overview of SPARTA output
 options.
 
 The *global*\ , *prob*\ , and *adsorb* styles each compute a vector of

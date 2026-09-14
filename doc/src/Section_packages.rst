@@ -132,7 +132,7 @@ hardware and software is required on your system, and how to build and
 use this package.  Its styles can be invoked at run time via the "-sf
 kk" or "-suffix kk" :ref:`command-line switches <start_7>`.
 
-You must have a C++17 compatible compiler to use this package.
+You must have a C++20 compatible compiler to use this package.
 
 .. warning::
 

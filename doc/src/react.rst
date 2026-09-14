@@ -25,6 +25,10 @@ Syntax
          infile = file with list of gas-phase chemistry reactions
        *tce/kk* args = infile
          infile = file with list of gas-phase chemistry reactions
+       *qk/kk* args = infile
+         infile = file with list of gas-phase chemistry reactions
+       *tce/qk/kk* args = infile
+         infile = file with list of gas-phase chemistry reactions
 
 
 

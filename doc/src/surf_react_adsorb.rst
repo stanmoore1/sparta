@@ -3,6 +3,9 @@
 surf\_react adsorb command
 ==========================
 
+surf\_react adsorb/kk command
+=============================
+
 Syntax
 """"""
 
@@ -12,7 +15,7 @@ Syntax
    surf_react ID adsorb model infile(s) Nsync type temp n_sites adsp1 adsp2 ...
 
 * ID = user-assigned name for the surface reaction model
-* style = *adsorb*
+* style = *adsorb* or *adsorb/kk*
 * model = *gs* or *ps* or *gs/ps*
   
   .. parsed-literal::
@@ -434,6 +437,17 @@ reactants. The reaction probability is obtained by normalized all the
 reaction rates. A detailed description can be found in Swaminathan
 Gopalan *et al.* :ref:`(SG18) <SG18>`.
 
+Note that adsorption events are accumulated against the surface state
+stored at the most recent sync, so the influx of an entire *Nsync*
+window can adsorb more particles on a face or surface element than the
+*n\_sites* value gives it room for.  When that happens, the coverage
+which scales the adsorption reactions is clamped at one, so that those
+reactions stop until the coverage drops, and a warning is printed the
+first time it happens.  Since the stored count of adsorbed particles is
+then larger than the number of sites, which is not physical, the run
+should be repeated with a smaller *Nsync* or *fnum*\ , or a larger
+*n\_sites* value.
+
 
 ----------
 
@@ -464,7 +478,7 @@ All the surface reaction models calculate a global vector of values.
 The values can be used by the :doc:`stats\_style <stats_style>` command
 and by :doc:`variables <variable>` that define formulas.  The latter
 means they can be used by any command that uses a variable as input,
-e.g. the :doc:`fix ave/time <fix_ave_time>` command.  See :ref:`Section 4.4 <howto_4>` for an overview of SPARTA output
+e.g. the :doc:`fix ave/time <fix_ave_time>` command.  See :ref:`Section 6.4 <howto_4>` for an overview of SPARTA output
 options.
 
 This *adsorb* style compute a vector of length 2 + 2\*nlist.  Nlist is
@@ -480,6 +494,29 @@ beginning of the current run.  The next nlist elements are the count
 of each individual reaction that occurred during the current timestep.
 The final nlist elements are the cumulative count of each individual
 reaction since the beginning of the current run.
+
+
+----------
+
+
+Styles with a *kk* suffix are functionally the same as the
+corresponding style without the suffix.  They have been optimized to
+run faster, depending on your available hardware, as discussed in the
+:doc:`Accelerating SPARTA <Section_accelerate>` section of the manual.
+The accelerated styles take the same arguments and should produce the
+same results, except for different random number, round-off and
+precision issues.
+
+These accelerated styles are part of the KOKKOS package. They are only
+enabled if SPARTA was built with that package.  See the :ref:`Making SPARTA <start_3>` section for more info.
+
+You can specify the accelerated styles explicitly in your input script
+by including their suffix, or you can use the :ref:`-suffix command-line switch <start_7>` when you invoke SPARTA, or you can
+use the :doc:`suffix <suffix>` command in your input script.
+
+See the :doc:`Accelerating SPARTA <Section_accelerate>` section of the
+manual for more instructions on how to use the accelerated styles
+effectively.
 
 
 ----------

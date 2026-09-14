@@ -53,7 +53,7 @@ This compute calculates a per-particle vector, which can be accessed
 by any command that uses per-particle values from a compute as input.
 
 The vector can be accessed by any command that uses per-particle
-values from a compute as input.  See :ref:`Section 4.4 <howto_4>` for an overview of SPARTA output
+values from a compute as input.  See :ref:`Section 6.4 <howto_4>` for an overview of SPARTA output
 options.
 
 The per-particle vector values will be in energy :doc:`units <units>`.

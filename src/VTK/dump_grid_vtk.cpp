@@ -261,7 +261,7 @@ void DumpGridVTK::buf2arrays(int n, double *mybuf)
       else if (fields[f].type == STRING) {
         // idstr: buf holds the numeric cell ID (ubuf-encoded); convert to the
         // hierarchical string form, mirroring DumpGrid::write_text
-        char str[32];
+        char str[128];   // Grid::id_num2str assumes a 128 byte buffer
         grid->id_num2str((cellint) ubuf(mybuf[c]).i,str);
         ((vtkStringArray *) paa)->InsertNextValue(str);
       } else

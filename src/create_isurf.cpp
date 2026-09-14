@@ -130,8 +130,6 @@ void CreateISurf::command(int narg, char **arg)
     error->all(FLERR,"Create_isurf Cannot have pre-existing implicit surfaces");
   if (!surf->distributed)
     error->all(FLERR,"Create_isurf requires distributed explicit surfaces");
-  if (domain->axisymmetric)
-    error->all(FLERR,"Cannot create_isurf for axisymmetric domains");
 
   if (narg < 4) error->all(FLERR,"Illegal create_isurf command");
 
@@ -295,7 +293,7 @@ void CreateISurf::set_corners()
     MPI_Allreduce(&ofull,&allofull,1,MPI_INT,MPI_SUM,world);
     if (allofull) {
       char str[128];
-      sprintf(str,
+      snprintf(str,sizeof(str),
               "Create_isurf could not determine whether some corner \
                values are inside or outside with respect to the surface");
       error->all(FLERR,str);
@@ -386,7 +384,7 @@ void CreateISurf::set_multi()
   MPI_Allreduce(&ofull,&allofull,1,MPI_INT,MPI_SUM,world);
   if (allofull) {
     char str[128];
-    sprintf(str,
+    snprintf(str,sizeof(str),
             "Create_isurf could not determine whether some corner \
              values are inside or outside with respect to the surface");
     error->all(FLERR,str);
@@ -1898,11 +1896,11 @@ void CreateISurf::remove_old()
   else nbytes = sizeof(Surf::Tri);
 
   if (dim == 2) {
-    llines = (Surf::Line *) memory->smalloc(nsurf*nbytes,"createisurf:lines");
-    memcpy(llines,surf->mylines,nsurf*nbytes);
+    llines = (Surf::Line *) memory->smalloc((bigint) nsurf*nbytes,"createisurf:lines");
+    memcpy(llines,surf->mylines,(bigint) nsurf*nbytes);
   } else {
-    ltris = (Surf::Tri *) memory->smalloc(nsurf*nbytes,"createisurf:ltris");
-    memcpy(ltris,surf->mytris,nsurf*nbytes);
+    ltris = (Surf::Tri *) memory->smalloc((bigint) nsurf*nbytes,"createisurf:ltris");
+    memcpy(ltris,surf->mytris,(bigint) nsurf*nbytes);
   }
 
   surf->add_surfs(1,0,llines,ltris,ncustom,index_custom,cuvalues);

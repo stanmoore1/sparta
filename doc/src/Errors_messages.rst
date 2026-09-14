@@ -611,9 +611,6 @@ Errors:
 *Dump image fix does not produce per-surf values*
    Self-explanatory.
 
-*Dump image persp option is not yet supported*
-   Self-explanatory.
-
 *Dump image requires one snapshot per file*
    Use a "\*" in the filename.
 
@@ -1002,6 +999,10 @@ Errors:
 *Invalid collide style*
    The choice of collision style is unknown.
 
+*Invalid color in dump image command*
+   The specified color name was not in the list of recognized colors.
+   See the dump image doc page.
+
 *Invalid color in dump\_modify command*
    The specified color name was not in the list of recognized colors.
    See the dump\_modify doc page.
@@ -1033,9 +1034,6 @@ Errors:
 *Invalid dump image filename*
    The file produced by dump image cannot be binary and must
    be for a single processor.
-
-*Invalid dump image persp value*
-   Persp value must be >= 0.0.
 
 *Invalid dump image theta value*
    Theta must be between 0.0 and 180.0 inclusive.
@@ -1106,6 +1104,10 @@ Errors:
 
 *Invalid point index in triangle*
    Self-explanatory.
+
+*Invalid power expression in variable formula*
+   A zero base cannot be raised to a negative power in a variable
+   formula, since the result is infinite.
 
 *Invalid react style*
    The choice of reaction style is unknown.
@@ -1365,9 +1367,6 @@ Errors:
    This is an error when calculating how a 2d grid is cut or split by
    surface elements.  It should not normally occur.  Please report the
    issue to the SPARTA developers.
-
-*Power by 0 in variable formula*
-   Self-explanatory.
 
 *Processor partitions are inconsistent*
    The total number of processors in all partitions must match the number
@@ -1709,9 +1708,6 @@ Errors:
 *Variable for dump image center is invalid style*
    Must be an equal-style variable.
 
-*Variable for dump image persp is invalid style*
-   Must be an equal-style variable.
-
 *Variable for dump image phi is invalid style*
    Must be an equal-style variable.
 
@@ -1754,9 +1750,6 @@ Errors:
    Self-explanatory.
 
 *Variable name for dump image center does not exist*
-   Self-explanatory.
-
-*Variable name for dump image persp does not exist*
    Self-explanatory.
 
 *Variable name for dump image phi does not exist*

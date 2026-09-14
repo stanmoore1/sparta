@@ -149,6 +149,15 @@ inferred implicit surface elements will be.
 The threshold must be specified as a floating point value such that 0
 < thresh < 255.
 
+This command can be used in an axisymmetric domain (see the
+:doc:`dimension <dimension>` and :doc:`boundary <boundary>` commands).  The
+explicit surfaces are then a body of revolution about the y = 0
+symmetry axis, and the generated implicit surfaces may close on the
+axis, e.g. at the nose and base of a sphere-cone.  Subsequent ablation
+via :doc:`fix ablate <fix_ablate>` uses the axisymmetric surface area of
+each surface element, so material recedes fastest where the incident
+flux is highest.
+
 The specified *mode* can be either *inout* or *ave*\ . The *inout* mode
 sets corner point values to zero if they are outside the volume or
 area enclosed by the explicit surfaces.  Conversely it sets corner

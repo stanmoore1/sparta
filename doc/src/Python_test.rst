@@ -91,7 +91,7 @@ from the command line.
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 To run SPARTA in parallel, assuming you have installed the
-`Pypar <http://datamining.anu.edu.au/~ole/pypar>`_ package as discussed
+`Pypar <https://code.google.com/archive/p/pypar>`_ package as discussed
 above, create a test.py file containing these lines:
 
 

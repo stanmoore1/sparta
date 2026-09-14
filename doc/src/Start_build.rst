@@ -179,7 +179,7 @@ src/spatype.h.  The only reason to use the BIGBIG setting is if you
 have a regular grid with more than ~2 billion grid cells or a
 hierarchical grid with enough levels that grid cell IDs cannot fit in
 a 32-bit integer.  In either case, SPARTA will generate an error
-message for "Cell ID has too many bits".  See :ref:`Section 4.8 <howto_8>` of the manual for details on how cell
+message for "Cell ID has too many bits".  See :ref:`Section 6.8 <howto_8>` of the manual for details on how cell
 IDs are formatted.  The only reason to use the SMALL setting is if
 your machine does not support 64-bit integers.
 
@@ -295,7 +295,7 @@ trouble finding.
 
 FFTW is a fast, portable library that should also work on any
 platform.  You can download it from
-`www.fftw.org <http://www.fftw.org>`_. The 3.X versions are supported
+`www.fftw.org <https://www.fftw.org>`_. The 3.X versions are supported
 as -DFFT\_FFTW3.
 Building FFTW for your box should be as simple as ./configure; make.
 
@@ -522,7 +522,7 @@ src/spatype.h.  The only reason to use the BIGBIG setting is if you
 have a regular grid with more than ~2 billion grid cells or a
 hierarchical grid with enough levels that grid cell IDs cannot fit in
 a 32-bit integer.  In either case, SPARTA will generate an error
-message for "Cell ID has too many bits".  See :ref:`Section 4.8 <howto_8>` of the manual for details on how cell
+message for "Cell ID has too many bits".  See :ref:`Section 6.8 <howto_8>` of the manual for details on how cell
 IDs are formatted.  The only reason to use the SMALL setting is if
 your machine does not support 64-bit integers.
 
@@ -563,7 +563,7 @@ Now just do:
    make
 
 consider sharing and vetting NEW.cmake by opening a pull request at
-https://github.com/sparta/sparta/.
+https://github.com/sparta/sparta.
 
 **Step 6**
 

@@ -145,12 +145,12 @@ When used from a C or Fortran program or a scripting language like
 Python, the library has a simple function-style interface, provided in
 src/library.cpp and src/library.h.
 
-See :ref:`Section\_howto 4.7 <howto_7>` of the manual for
+See :ref:`Section\_howto 6.7 <howto_7>` of the manual for
 ideas on how to couple SPARTA to other codes via its library
 interface.  See :doc:`Section\_python <Section_python>` of the manual for
 a description of the Python wrapper provided with SPARTA that operates
 through the SPARTA library interface.
 
 The files src/library.cpp and library.h define the C-style API for
-using SPARTA as a library.  See :ref:`Section\_howto 4.6 <howto_6>` of the manual for a description of the
+using SPARTA as a library.  See :ref:`Section\_howto 6.6 <howto_6>` of the manual for a description of the
 interface and how to extend it for your needs.

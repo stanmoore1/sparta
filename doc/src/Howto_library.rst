@@ -81,6 +81,68 @@ and the sparta\_config\_has\_\*\_support functions for MPI, PNG, JPEG,
 FFmpeg and gzip support).  See the library.cpp file and its associated
 header file library.h for the full list and exact signatures.
 
+The sparta\_extract\_setting() function takes a keyword and returns an
+integer setting of the SPARTA executable or of the running simulation.
+It returns -1 for a keyword it does not recognize; no setting it does
+recognize is negative.  The keywords are grouped by what they
+describe:
+
+Integer sizes:
+
+* *bigint* = size in bytes of a bigint, the type SPARTA counts timesteps and particles with
+
+
+System status:
+
+* *dimension* = 2 or 3, as set by the :doc:`dimension <dimension>` command
+* *box\_exist* = 1 after :doc:`create\_box <create_box>`, else 0
+* *grid\_exist* = 1 after the grid is defined, else 0
+* *surf\_exist* = 1 if surface elements are defined, else 0
+
+
+Communication status:
+
+* *world\_size* = # of MPI ranks on SPARTA's world communicator
+* *world\_rank* = MPI rank of this processor on that communicator, 0 <= world\_rank < world\_size
+* *universe\_size* = # of MPI ranks on SPARTA's universe communicator, world\_size <= universe\_size
+* *universe\_rank* = MPI rank of this processor on that communicator
+
+
+System sizes:
+
+* *nplocal* = # of particles owned by this processor
+* *nspecies* = # of species defined
+* *nmixture* = # of mixtures defined
+* *nsurf* = # of surface elements, global
+* *nlocal\_surf* = # of surface elements owned by this processor
+* *ngroup\_grid* = # of grid groups defined
+* *ngroup\_surf* = # of surface groups defined
+
+
+Defined commands:
+
+* *ncompute* = # of computes defined
+* *nfix* = # of fixes defined
+* *ndump* = # of dumps defined
+* *nregion* = # of regions defined
+* *nvariable* = # of variables defined
+
+
+Output settings:
+
+* *stats\_every* = N from the :doc:`stats <stats>` command
+
+
+*world\_size* and *world\_rank* are for the partition this processor
+belongs to, so they differ from *universe\_size* and *universe\_rank*
+only under the :ref:`-partition <start_7>` command-line
+switch.  All of these are read locally, so calling this function is
+not collective and ranks may call it independently.
+
+An input script can read the same settings without a driver program,
+through the extract\_setting(name) special function of the
+:doc:`variable <variable>` command, which calls this function.
+
 Other functions may be added to the library interface as needed to
 allow reading from or writing to internal SPARTA data structures.
 

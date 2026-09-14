@@ -3,6 +3,9 @@
 compute property/surf command
 =============================
 
+compute property/surf/kk command
+================================
+
 Syntax
 """"""
 
@@ -57,7 +60,7 @@ This command can only be used for simulations with explicit surface
 elements.  Explicit surface elements are triangles for 3d simulations
 and line segments for 2d simulations.  Unlike implicit surface
 elements, each explicit triangle or line segment may span multiple
-grid cells.  See :ref:`Section 4.9 <howto_9>` of the
+grid cells.  See :ref:`Section 6.9 <howto_9>` of the
 manual for details.
 
 
@@ -104,12 +107,35 @@ Surface elements not in the specified *group-ID* will output zeroes
 for all their values.
 
 The vector or array can be accessed by any command that uses per-surf
-values from a compute as input.  See :ref:`Section 4.4 <howto_4>` for an overview of SPARTA output
+values from a compute as input.  See :ref:`Section 6.4 <howto_4>` for an overview of SPARTA output
 options.
 
 The vector or array values will be in whatever :doc:`units <units>` the
 corresponding attribute is in, e.g. distance units for *v1x* or *xc*\ ,
 length units for *area* in 2d, area units for *area* in 3d.
+
+
+----------
+
+
+Styles with a *kk* suffix are functionally the same as the
+corresponding style without the suffix.  They have been optimized to
+run faster, depending on your available hardware, as discussed in the
+:doc:`Accelerating SPARTA <Section_accelerate>` section of the manual.
+The accelerated styles take the same arguments and should produce the
+same results, except for different random number, round-off and
+precision issues.
+
+These accelerated styles are part of the KOKKOS package. They are only
+enabled if SPARTA was built with that package.  See the :ref:`Making SPARTA <start_3>` section for more info.
+
+You can specify the accelerated styles explicitly in your input script
+by including their suffix, or you can use the :ref:`-suffix command-line switch <start_7>` when you invoke SPARTA, or you can
+use the :doc:`suffix <suffix>` command in your input script.
+
+See the :doc:`Accelerating SPARTA <Section_accelerate>` section of the
+manual for more instructions on how to use the accelerated styles
+effectively.
 
 
 ----------

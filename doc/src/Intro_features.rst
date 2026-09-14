@@ -45,7 +45,7 @@ Geometry
 
 * :ref:`Cartesian, heirarchical grids <intro_3>` with multiple levels of local refinement
 * :doc:`create grid from input script <create_grid>` or :doc:`read from file <read_grid>`
-* embed :triangulated (3d) or line-segmented (2d) surfaces"_#intro\_3 in grid, :doc:`read in from file <read_surf>`
+* embed :ref:`triangulated (3d) or line-segmented (2d) surfaces <intro_3>` in grid, :doc:`read in from file <read_surf>`
 
 Gas-phase collisions and chemistry
 ----------------------------------

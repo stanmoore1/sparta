@@ -55,14 +55,6 @@ list(APPEND TARGET_SPARTA_BUILD_TPLS ${TARGET_SPARTA_BUILD_MPI})
 
 # ################### BEGIN PROCESS FFT TPL/PKG ####################
 
-if((NOT PKG_FFT) AND (NOT (FFT_KOKKOS STREQUAL "OFF")))
-  message(FATAL_ERROR  "Setting FFT_KOKKOS library requires PKG_FFT: ON.")
-endif()
-
-if((NOT PKG_FFT) AND (NOT (FFT STREQUAL "OFF")))
-  message(FATAL_ERROR  "Setting FFT library requires PKG_FFT: ON.")
-endif()
-
 if(PKG_FFT)
 
   if(FFT STREQUAL "OFF")
@@ -205,6 +197,15 @@ endif()
   # existing (non-KOKKOS) gold-standard log files.
   if(SPARTA_KOKKOS_EXACT)
     set(SPARTA_DEFAULT_CXX_COMPILE_FLAGS -DSPARTA_KOKKOS_EXACT
+                                         ${SPARTA_DEFAULT_CXX_COMPILE_FLAGS})
+  endif()
+  # SPARTA_KOKKOS_FIXED_LISTS restores the fixed-size KKCopy arrays for the
+  # per-type tally compute lists instead of runtime-sized device buffers.  The
+  # buffers lift the instance caps; the arrays keep every compute inside the
+  # kernel functor.  Which performs better is hardware-dependent -- functor
+  # size trades against occupancy and data locality -- so both are buildable.
+  if(SPARTA_KOKKOS_FIXED_LISTS)
+    set(SPARTA_DEFAULT_CXX_COMPILE_FLAGS -DSPARTA_KOKKOS_FIXED_LISTS
                                          ${SPARTA_DEFAULT_CXX_COMPILE_FLAGS})
   endif()
   # PKG_KOKKOS depends on BUILD_KOKKOS

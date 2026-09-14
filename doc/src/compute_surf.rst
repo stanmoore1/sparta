@@ -103,7 +103,7 @@ with implicit surface elements.
 Explicit surface elements are triangles for 3d simulations and line
 segments for 2d simulations.  Unlike implicit surface elements, each
 explicit triangle or line segment may span multiple grid cells.  See
-:ref:`Section 4.9 <howto_9>` of the manual for details.
+:ref:`Section 6.9 <howto_9>` of the manual for details.
 
 Note that when a particle collides with a surface element, it can
 bounce off (possibly as a different species), be captured by the

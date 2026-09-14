@@ -18,7 +18,7 @@ Syntax
 * filename = input data file with boundary values for the emission
 * boundary-ID = section of data file to read
 * zero or more keyword/value pairs may be appended
-* keyword = *frac* or *nevery* or *perspecies* or *region*
+* keyword = *frac* or *nevery* or *perspecies* or *region* or *twopass*
   
   .. parsed-literal::
   
@@ -26,6 +26,7 @@ Syntax
        *nevery* value = Nstep = insert every this many timesteps
        *perspecies* value = *yes* or *no*
        *region* value = region-ID
+       *twopass* values = none
 
 
 
@@ -386,6 +387,16 @@ that the *side* option for the :doc:`region <region>` command can be
 used to define whether the inside or outside of the geometric region
 is considered to be "in" the region.
 
+The *twopass* keyword does not require a value.  If used, the
+insertion procedure will loop over the insertion grid cells twice, the
+same as the KOKKOS package version of this fix does, so that it can
+reallocate memory efficiently, e.g. on a GPU.  If this keyword is used
+the non-KOKKOS and KOKKOS version will generate exactly the same set
+of particles, which makes debugging easier.  If the keyword is not
+used, the non-KOKKOS and KOKKOS runs will use random numbers
+differently and thus generate different particles, though they will be
+statistically similar.
+
 
 ----------
 
@@ -429,7 +440,7 @@ Default
 """""""
 
 The keyword defaults are frac = 1.0, nevery = 1, perspecies = yes,
-region = none.
+region = none, no twopass setting.
 
 .. _sws: https://sparta.github.io
 .. _sd: Manual.html

@@ -125,7 +125,7 @@ cell data to be used in the timestep calculation is
 zero (including temperature, speed, and mean collision time).
 
 The vector can be accessed by any command that uses per-grid values
-from a compute as input.  See :ref:`Section 4.4 <howto_4>`
+from a compute as input.  See :ref:`Section 6.4 <howto_4>`
 for an overview of SPARTA output options.
 
 

@@ -61,6 +61,7 @@ extern "C" {
 void *sparta_open(int, char **, MPI_Comm, void **);
 void *sparta_open_no_mpi(int, char **, void **);
 void sparta_close(void *);
+void sparta_kokkos_finalize();
 
 /* ----------------------------------------------------------------------
  * executing commands

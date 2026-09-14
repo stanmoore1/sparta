@@ -71,6 +71,8 @@ ReactBird::ReactBird(SPARTA *sparta) : React(sparta)
   reactions = NULL;
   list_ij = NULL;
   sp2recomb_ij = NULL;
+  tally_reactions = NULL;
+  tally_reactions_all = NULL;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -577,7 +579,7 @@ void ReactBird::readfile(char *fname)
     fp = fopen(fname,"r");
     if (fp == NULL) {
       char str[128];
-      sprintf(str,"Cannot open reaction file %s",fname);
+      snprintf(str,sizeof(str),"Cannot open reaction file %s",fname);
       error->one(FLERR,str);
     }
   }

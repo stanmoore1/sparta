@@ -24,8 +24,7 @@ Each simulation particle stores the following properties:
 The :doc:`dump particle <dump>` command can output all of these
 properties, see its doc page for the associated keywords and a further
 description of each property.  Various commands in SPARTA can define
-and set additional per-particle properties.  The fix
-ambipolar"_fix\_ambipolar.html command is an example.
+and set additional per-particle properties.  The :doc:`fix ambipolar <fix_ambipolar>` command is an example.
 
 The ID of each particle is a random integer from 1 to 2\^31 in size,
 which is approximately 2 billion possible IDs.  The ID is assigned

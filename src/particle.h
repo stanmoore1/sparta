@@ -129,8 +129,8 @@ class Particle : protected Pointers {
 
   // Kokkos settings
 
-  int copy,uncopy,copymode; // prevent deallocation of
-                            //  base class when child copy is destroyed
+  int copy,copymode; // prevent deallocation of
+                     //  base class when child copy is destroyed
 
   // methods
 
@@ -167,7 +167,6 @@ class Particle : protected Pointers {
   void write_restart_mixture(FILE *fp);
   void read_restart_mixture(FILE *fp);
 
-  int size_restart();
   bigint size_restart_big();
   int pack_restart(char *);
   void pack_restart(char *, int, int);
@@ -187,7 +186,7 @@ class Particle : protected Pointers {
   virtual void pack_custom(int, char *);
   virtual void unpack_custom(char *, int);
 
-  bigint memory_usage();
+  virtual bigint memory_usage();
 
  protected:
   int me;

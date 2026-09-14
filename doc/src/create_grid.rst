@@ -57,7 +57,7 @@ Overlay a grid over the simulation domain defined by the
 :doc:`create\_box <create_box>` command.  The grid can also be defined by
 the :doc:`read\_grid <read_grid>` command.
 
-The grid in SPARTA is hierarchical, as described in :ref:`Section howto 4.8 <howto_8>`.  The entire simulation box is a
+The grid in SPARTA is hierarchical, as described in :ref:`Section howto 6.8 <howto_8>`.  The entire simulation box is a
 single parent grid cell at level 0.  It is subdivided into Nx by Ny by
 Nz cells at level 1.  Each of those cells can be a child cell (no
 further sub-division) or can be a parent cell which is further

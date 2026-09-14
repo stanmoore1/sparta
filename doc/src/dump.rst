@@ -427,7 +427,7 @@ attributes are the same for multiple sub-cells of a single split cell
 they are part of.
 
 The *vol* attribute is the flow volume of the grid cell (or area in
-2d) for unsplit or cut or sub cells.  :ref:`Section 4.8 <howto_8>` of the manual gives details of how
+2d) for unsplit or cut or sub cells.  :ref:`Section 6.8 <howto_8>` of the manual gives details of how
 SPARTA defines unsplit and sub cells.  Flow volume is the portion of
 the grid cell that is accessible to particles, i.e. outside any closed
 surface that may intersect the cell.  Note that unsplit cells which

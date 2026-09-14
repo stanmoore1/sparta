@@ -34,6 +34,13 @@ of Gas Flows, Clarendon Press, Oxford (1994).
 **(Bird09)** G. A. Bird, Chemical Reactions in DSMC Rarefied Gas Dynamics,
 Editor T Abe, AIP Conference Proceedings (2009).
 
+.. _Bird09b:
+
+**(Bird09b)** G. A. Bird, M. A. Gallis, J. R. Torczynski, D. J. Rader,
+"Accuracy and efficiency of the sophisticated direct simulation Monte
+Carlo algorithm for simulating noncontinuum gas flows," Physics of
+Fluids, 21, 017103 (2009).
+
 .. _Bird11:
 
 **(Bird11)** G. A. Bird, "The Q-K model for gas-phase chemical reaction
@@ -170,3 +177,9 @@ pt (111): A new desorption mechanism, The Journal of chemical physics,
 
 **(SG18)** K. Swaminathan Gopalan, "Development of a detailed surface
 chemistry framework in DSMC", AIAA Aerospace Sciences Meeting, Jan (2018).
+
+.. _Sun05:
+
+**(Sun05)** Q. Sun and I. D. Boyd, Evaluation of Macroscopic Properties
+in the Direct Simulation Monte Carlo Method, Journal of Thermophysics
+and Heat Transfer, 19(3), 329-335 (2005).

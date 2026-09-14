@@ -87,7 +87,7 @@ dump2xyz tool
 This is a Python script that converts a SPARTA particle dump file into
 XYZ format so that it can be visualized by various visualization
 packages that read XYZ formatted files.  An example is
-`VMD <http://www.ks.uiuc.edu/Research/vmd>`_ package, commonly used in
+`VMD <https://www.ks.uiuc.edu/Research/vmd>`_ package, commonly used in
 the molecular dynamics modeling community.
 
 See the header of the script for the syntax used to run it.

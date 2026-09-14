@@ -316,7 +316,7 @@ inputs.
 Related commands
 """"""""""""""""
 
-:doc:`compute <compute>`, fix ave/grid"_fix\_ave\_grid.html, :doc:`fix ave/surf <fix_ave_surf>`, :doc:`variable <variable>`
+:doc:`compute <compute>`, :doc:`fix ave/grid <fix_ave_grid>`, :doc:`fix ave/surf <fix_ave_surf>`, :doc:`variable <variable>`
 
 Default
 """""""

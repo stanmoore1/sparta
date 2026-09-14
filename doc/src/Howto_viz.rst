@@ -35,7 +35,7 @@ surface and grid cell information as output by SPARTA.
 
 
 
-.. _vmd: http://www.ks.uiuc.edu/Research/vmd
+.. _vmd: https://www.ks.uiuc.edu/Research/vmd
 
 
 

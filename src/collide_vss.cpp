@@ -172,9 +172,12 @@ double CollideVSS::attempt_collision(int icell, int igroup, int jgroup,
 
  // return 2x the value for igroup != jgroup, since no J,I pairing
 
+ // compute npairs in double, else the igroup != jgroup int*int product
+ //   can overflow a 32-bit int for large per-cell group counts
+
  double npairs;
  if (igroup == jgroup) npairs = 0.5 * ngroup[igroup] * (ngroup[igroup]-1);
- else npairs = ngroup[igroup] * (ngroup[jgroup]);
+ else npairs = (double) ngroup[igroup] * (ngroup[jgroup]);
  //else npairs = 0.5 * ngroup[igroup] * (ngroup[jgroup]);
 
  nattempt = npairs * vremax[icell][igroup][jgroup] * dt * fnum / volume;
@@ -222,6 +225,7 @@ int CollideVSS::test_collision(int icell, int igroup, int jgroup,
 
   double vre = vro*prefactor[ispecies][jspecies];
   vremax[icell][igroup][jgroup] = MAX(vre,vremax[icell][igroup][jgroup]);
+  if (vremax[icell][igroup][jgroup] == 0.0) return 0;
   if (vre/vremax[icell][igroup][jgroup] < random->uniform()) return 0;
   precoln.vr2 = vr2;
   return 1;
@@ -980,7 +984,7 @@ void CollideVSS::read_param_file(char *fname)
   FILE *fp = fopen(fname,"r");
   if (fp == NULL) {
     char str[128];
-    sprintf(str,"Cannot open VSS parameter file %s",fname);
+    snprintf(str,sizeof(str),"Cannot open VSS parameter file %s",fname);
     error->one(FLERR,str);
   }
 
@@ -1046,7 +1050,7 @@ void CollideVSS::read_param_file(char *fname)
       params[isp][jsp].alpha = params[jsp][isp].alpha = atof(words[5]);
       if (relaxflag == VARIABLE) {
         params[isp][jsp].rotc1 = params[jsp][isp].rotc1 = atof(words[6]);
-        params[isp][jsp].rotc2 = atof(words[7]);
+        params[isp][jsp].rotc2 = params[jsp][isp].rotc2 = atof(words[7]);
         params[isp][jsp].rotc3 = params[jsp][isp].rotc3 =
                         (MY_PI+MY_PI2*MY_PI2)*params[isp][jsp].rotc2;
         if(params[isp][jsp].rotc2 > 0)
@@ -1066,7 +1070,7 @@ void CollideVSS::read_param_file(char *fname)
 
     if (params[i][i].diam < 0.0) {
       char str[128];
-      sprintf(str,"Species %s did not appear in VSS parameter file",
+      snprintf(str,sizeof(str),"Species %s did not appear in VSS parameter file",
               particle->species[i].id);
       error->one(FLERR,str);
     }

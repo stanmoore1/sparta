@@ -171,7 +171,7 @@ vibrational mode (1 to 3 in this example).
 
 This compute performs calculations for all flavors of child grid cells
 in the simulation, which includes unsplit, cut, split, and sub cells.
-See :ref:`Section 4.8 <howto_8>` of the manual gives
+See :ref:`Section 6.8 <howto_8>` of the manual gives
 details of how SPARTA defines child, unsplit, split, and sub cells.
 Note that cells inside closed surfaces contain no particles.  These
 could be unsplit or cut cells (if they have zero flow volume).  Both
@@ -184,10 +184,33 @@ Grid cells not in the specified *group-ID* will output zeroes for all
 their values.
 
 The array can be accessed by any command that uses per-grid values
-from a compute as input.  See :ref:`Section 4.4 <howto_4>`
+from a compute as input.  See :ref:`Section 6.4 <howto_4>`
 for an overview of SPARTA output options.
 
 The per-grid array values will be in temperature :doc:`units <units>`.
+
+
+----------
+
+
+Styles with a *kk* suffix are functionally the same as the
+corresponding style without the suffix.  They have been optimized to
+run faster, depending on your available hardware, as discussed in the
+:doc:`Accelerating SPARTA <Section_accelerate>` section of the manual.
+The accelerated styles take the same arguments and should produce the
+same results, except for different random number, round-off and
+precision issues.
+
+These accelerated styles are part of the KOKKOS package. They are only
+enabled if SPARTA was built with that package.  See the :ref:`Making SPARTA <start_3>` section for more info.
+
+You can specify the accelerated styles explicitly in your input script
+by including their suffix, or you can use the :ref:`-suffix command-line switch <start_7>` when you invoke SPARTA, or you can
+use the :doc:`suffix <suffix>` command in your input script.
+
+See the :doc:`Accelerating SPARTA <Section_accelerate>` section of the
+manual for more instructions on how to use the accelerated styles
+effectively.
 
 **Restrictions:** none
 

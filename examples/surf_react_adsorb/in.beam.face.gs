@@ -49,7 +49,7 @@ bound_modify        zlo react adsorb_test_gs2
 
 region              circle1 cylinder z  0 -10 1 INF INF
 
-fix                 in1 emit/face/file air zhi data.beam beam_area_1 nevery 100 region circle1
+fix                 in1 emit/face/file air zhi data.beam beam_area_1 nevery 100 region circle1 twopass
 
 ################################################################################################
 
