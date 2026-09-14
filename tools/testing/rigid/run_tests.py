@@ -849,6 +849,32 @@ def test_notwatertight(exe_cmd):
     return negative_test(exe_cmd, "in.test.notwatertight", "not watertight")
 
 
+def test_vacate(exe_cmd):
+    # gas collisions with a fast body spanning whole interior cells: the
+    # cells the body partly vacates within a step hold particles at zero
+    # flow volume until the re-cut; the run must complete with the
+    # particle count constant and nothing deleted after step 0
+    rc, out = run_deck(exe_cmd, "in.test.vacate")
+    if rc:
+        return ["run failed with exit code %d" % rc]
+    rows = parse_stats(out)
+    if len(rows) < 11:
+        return ["expected 11 stats rows, got %d" % len(rows)]
+    fails = []
+    np0 = rows[0]["Np"]
+    for r in rows[1:]:
+        if r["Np"] != np0:
+            fails.append("step %d: Np %g != %g" % (r["Step"], r["Np"], np0))
+            break
+    if rows[-1]["f_1"] != rows[0]["f_1"]:
+        fails.append("%g particles deleted during the run"
+                     % (rows[-1]["f_1"] - rows[0]["f_1"]))
+    if rows[-1]["f_1[1]"] < 5.5:
+        fails.append("body barely moved (xcm = %.6g), test is too weak"
+                     % rows[-1]["f_1[1]"])
+    return fails
+
+
 def test_balancetally(exe_cmd):
     # fix balance every step: the per-surf collision and reaction tallies
     # summed over the wall must equal the step's Nscoll and Nsreact
@@ -1107,6 +1133,7 @@ TESTS = [
     ("refix", test_refix),
     ("prenofix", test_prenofix),
     ("balancetally", test_balancetally),
+    ("vacate", test_vacate),
     ("modifyafter", test_modifyafter),
     ("wallmotion", test_wallmotion),
     ("customemit", test_customemit),
@@ -1133,7 +1160,8 @@ DIST_TESTS = {"ballistic", "force", "rotation", "bounce", "restitution",
               "staticdist3d",
               "splitcell", "gridchange", "exitbox", "twobody", "pushpair",
               "tallyorder", "rotwall", "rotwall3d", "customemit",
-              "splitbalance", "torqueonly", "balancetally"}
+              "splitbalance", "torqueonly", "balancetally",
+              "vacate"}
 
 
 def main():

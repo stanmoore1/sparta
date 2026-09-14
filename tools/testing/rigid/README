@@ -76,6 +76,11 @@ torqueonly    compute surf torque columns without force columns fed by
 refix         a fix rigid re-defined between runs, then balance_grid
               before the next run: the rigid map rebuild must not reach
               the deleted fix (use-after-free visible under ASAN)
+vacate        gas collisions (collide vss) with a fast body spanning whole
+              interior cells: the sliver of an interior cell the body
+              uncovers within a step holds particles at zero flow volume
+              until the end-of-step re-cut, and the collision step must
+              skip such a cell rather than abort; Np constant, no deletions
 balancetally  no rigid body: fix balance every step after the move; the
               per-surf collision and reaction tallies summed over a static
               wall must equal the step's Nscoll and Nsreact (KOKKOS: the
