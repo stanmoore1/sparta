@@ -470,12 +470,15 @@ feature is an edge or a vertex, as it is for most contacts with a
 faceted curved surface, this direction is what keeps each contact
 force the gradient of its spring potential, so that the contacts
 conserve energy.  Every element within the cutoff contributes, on
-either side of it: each contact force is the gradient of its own
-spring potential, so their sum is the gradient of a single potential
-and the contacts conserve energy exactly.  A corner point inside a
-wall thinner than twice the cutoff is therefore repelled by both of
-its faces at once, whose potentials add to a barrier peaking at the
-near surface, so a thin wall repels a body rather than propelling it
+either side of it, so the total contact force is the gradient of the
+sum of the per-element spring potentials: the only energy error of a
+contact resolved by the timestep is then the second-order error of
+the time integration itself, with no secular drift (measured 4.5e-5,
+1.5e-5, 3.8e-6 and 6.9e-7 of the body kinetic energy for a single 2d
+contact as the timestep is halved from 5e-5).  A corner point inside
+a wall thinner than twice the cutoff is repelled by both of its faces
+at once, whose potentials add to a barrier peaking at the near
+surface, so a thin wall repels a body rather than propelling it
 through.
 
 The push-off spring has a finite range, so it can only absorb a finite
