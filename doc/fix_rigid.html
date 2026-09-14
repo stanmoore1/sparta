@@ -475,9 +475,13 @@ keyword engage the corner points of each against the elements of the
 other, so a body-body contact has about twice as many contacts, and
 twice the effective stiffness, as the same body meeting a static surf
 or a body without {push} (which only receives reaction forces).  The
-force acts along the outward normal
-of the static element, also when the closest feature of the element to
-the corner point is one of its edges or vertices.  An element pushes
+force acts along the direction from the closest point of the source
+element to the corner point, which is the outward normal of the
+element when the closest feature is its interior; when the closest
+feature is an edge or a vertex, as it is for most contacts with a
+faceted curved surface, this direction is what keeps each contact
+force the gradient of its spring potential, so that the contacts
+conserve energy.  An element pushes
 only a corner point on its outward side; a point behind an element's
 plane is left to the opposite face of the same object, so a wall
 thinner than twice the cutoff still repels from both faces and never

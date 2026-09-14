@@ -849,6 +849,29 @@ def test_notwatertight(exe_cmd):
     return negative_test(exe_cmd, "in.test.notwatertight", "not watertight")
 
 
+def test_facetbounce(exe_cmd):
+    # a square rebounding from a 200-segment static circle: kinetic
+    # energy in free flight after the contact must equal the launch
+    # energy (contacts with a faceted surface must be conservative)
+    rc, out = run_deck(exe_cmd, "in.test.facetbounce")
+    if rc:
+        return ["run failed with exit code %d" % rc]
+    rows = parse_stats(out)
+    if len(rows) < 21:
+        return ["expected 21 stats rows, got %d" % len(rows)]
+    free = [r for r in rows if r["f_1[20]"] == 0.0 and r["f_1[21]"] == 0.0]
+    if len(free) == len(rows):
+        return ["the body never touched the circle, test geometry is broken"]
+    if rows[-1]["f_1[4]"] >= 0.0:
+        return ["body did not rebound (vx = %.6g)" % rows[-1]["f_1[4]"]]
+    e0 = rows[0]["v_ke"]
+    e1 = free[-1]["v_ke"]
+    if not approx(e1, e0, rel=1e-4):
+        return ["kinetic energy after the rebound %.10g vs %.10g before "
+                "(%.3g%%)" % (e1, e0, 100.0 * (e1 / e0 - 1.0))]
+    return []
+
+
 def test_vacate(exe_cmd):
     # gas collisions with a fast body spanning whole interior cells: the
     # cells the body partly vacates within a step hold particles at zero
@@ -1134,6 +1157,7 @@ TESTS = [
     ("prenofix", test_prenofix),
     ("balancetally", test_balancetally),
     ("vacate", test_vacate),
+    ("facetbounce", test_facetbounce),
     ("modifyafter", test_modifyafter),
     ("wallmotion", test_wallmotion),
     ("customemit", test_customemit),
@@ -1161,7 +1185,7 @@ DIST_TESTS = {"ballistic", "force", "rotation", "bounce", "restitution",
               "splitcell", "gridchange", "exitbox", "twobody", "pushpair",
               "tallyorder", "rotwall", "rotwall3d", "customemit",
               "splitbalance", "torqueonly", "balancetally",
-              "vacate"}
+              "vacate", "facetbounce"}
 
 
 def main():

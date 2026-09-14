@@ -76,6 +76,10 @@ torqueonly    compute surf torque columns without force columns fed by
 refix         a fix rigid re-defined between runs, then balance_grid
               before the next run: the rigid map rebuild must not reach
               the deleted fix (use-after-free visible under ASAN)
+facetbounce   a square rebounding from a 200-segment static circle via
+              push-off: kinetic energy in free flight after the contact
+              equals the launch energy to 1e-4 (contacts with a faceted
+              curved surface must be conservative)
 vacate        gas collisions (collide vss) with a fast body spanning whole
               interior cells: the sliver of an interior cell the body
               uncovers within a step holds particles at zero flow volume

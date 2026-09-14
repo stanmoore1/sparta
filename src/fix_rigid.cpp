@@ -2264,8 +2264,9 @@ void FixRigid::push_bins()
    contact forces between all corner pts of this body and one source
      element with corner pts p1,p2 (p3 for 3d) and outward normal norm
    for each body corner pt within pushcutoff of the element, apply a
-     repulsive force along the element outward normal, with overlap
-     delta = pushcutoff - dist:
+     repulsive force directed from the closest point of the element to
+     the corner pt (the element outward normal for a face-on contact),
+     with overlap delta = pushcutoff - dist:
      linear spring F = kpush * delta, or
      Hertzian contact F = kpush * delta^3/2 (smooth onset, standard
      model for elastic contact of spherical particulates)
@@ -2289,7 +2290,7 @@ void FixRigid::push_contact(double *p1, double *p2, double *p3,
   int i,j;
   double dsq,d,scale;
   double **pts;
-  double fone[3],rdelta[3],tq[3];
+  double fone[3],rdelta[3],tq[3],cp[3],fdir[3];
 
   int npoint = dim;     // 2 corner pts per line, 3 per tri
   double cutsq = pushcutoff*pushcutoff;
@@ -2324,14 +2325,29 @@ void FixRigid::push_contact(double *p1, double *p2, double *p3,
           (pts[j][2]-p1[2])*norm[2] <= 0.0) continue;
 
       if (dim == 2)
-        dsq = Geometry::distsq_point_line(pts[j],p1,p2);
+        dsq = Geometry::closest_point_line(pts[j],p1,p2,cp);
       else
-        dsq = Geometry::distsq_point_tri(pts[j],p1,p2,p3,norm);
+        dsq = Geometry::closest_point_tri(pts[j],p1,p2,p3,norm,cp);
       if (dsq >= cutsq) continue;
 
       d = sqrt(dsq);
       if (pushstyle == LINEAR) scale = kpush * (pushcutoff-d);
       else scale = kpush * (pushcutoff-d) * sqrt(pushcutoff-d);
+
+      // force direction = from the closest point of the element to the
+      //   corner pt, the gradient of the spring potential in d: equals
+      //   the element normal when the closest feature is the interior,
+      //   and stays conservative when it is an edge or vertex, as it is
+      //   for most contacts with a faceted curved surface
+      // a corner pt on the element (d = 0) is pushed along the normal
+
+      if (d > 0.0) {
+        fdir[0] = (pts[j][0]-cp[0]) / d;
+        fdir[1] = (pts[j][1]-cp[1]) / d;
+        fdir[2] = (pts[j][2]-cp[2]) / d;
+      } else {
+        fdir[0] = norm[0]; fdir[1] = norm[1]; fdir[2] = norm[2];
+      }
 
       // dashpot: damp by the normal approach rate of the corner pt
       //   relative to the source surface,
@@ -2348,13 +2364,13 @@ void FixRigid::push_contact(double *p1, double *p2, double *p3,
           MathExtra::add3(src->vcm,vsrc,vsrc);
           MathExtra::sub3(vpt,vsrc,vpt);
         }
-        scale -= gammapush * MathExtra::dot3(vpt,norm);
+        scale -= gammapush * MathExtra::dot3(vpt,fdir);
         if (scale < 0.0) scale = 0.0;
       }
 
-      fone[0] = scale*norm[0];
-      fone[1] = scale*norm[1];
-      fone[2] = scale*norm[2];
+      fone[0] = scale*fdir[0];
+      fone[1] = scale*fdir[1];
+      fone[2] = scale*fdir[2];
 
       fpush[0] += fone[0];
       fpush[1] += fone[1];
