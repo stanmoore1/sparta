@@ -476,7 +476,9 @@ amount of kinetic energy: for a linear spring the work done in
 compressing N contacts through the full cutoff is N k cutoff^2 / 2.  A
 body which arrives with more kinetic energy than that is not stopped;
 it passes through the source surface and out the other side, with no
-error or warning.  When sizing k, check that
+warning from the push-off model itself; if it then overlaps a static
+surface, the grid cut of the cells holding both fails with an error.
+When sizing k, check that
 
 N k cutoff^2 / 2 >> 1/2 M v^2 :pre
 
