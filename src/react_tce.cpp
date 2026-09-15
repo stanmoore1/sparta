@@ -41,6 +41,8 @@ void ReactTCE::init()
   if (!collide || strcmp(collide->style,"vss") != 0)
     error->all(FLERR,"React tce can only be used with collide vss");
 
+  probwarnflag = 0;
+
   ReactBird::init();
 
   // reverse exchange reactions are implemented by microcanonical

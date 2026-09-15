@@ -111,15 +111,6 @@ SurfCollideDiffuse::SurfCollideDiffuse(SPARTA *sparta, int narg, char **arg) :
 
 /* ---------------------------------------------------------------------- */
 
-SurfCollideDiffuse::~SurfCollideDiffuse()
-{
-  if (copy) return;
-
-  delete random;
-}
-
-/* ---------------------------------------------------------------------- */
-
 void SurfCollideDiffuse::init()
 {
   SurfCollide::init();

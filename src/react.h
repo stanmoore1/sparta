@@ -68,8 +68,8 @@ class React : protected Pointers {
                              //   evaluate reverse-reaction rates; set per grid
                              //   cell by Collide before the collision loop
 
-  int copy,uncopy,copymode;  // prevent deallocation of
-                             //  base class when child copy is destroyed
+  int copy,copymode;  // prevent deallocation of
+                      //  base class when child copy is destroyed
 
   React(class SPARTA *, int, char **);
   React(class SPARTA *sparta) : Pointers(sparta) // needed for Kokkos
