@@ -28,6 +28,7 @@
 #include "modify.h"
 #include "update.h"
 #include "variable.h"
+#include "sparta_masks.h"
 
 using namespace SPARTA_NS;
 
@@ -136,6 +137,12 @@ FixController::FixController(SPARTA *sparta, int narg, char **arg) :
   control = input->variable->compute_equal(ivariable);
 
   firsttime = 1;
+
+  // this fix reads one global value and sets an internal variable; it never
+  //   writes particle data, so the Kokkos wrapper need not push particles
+  //   back to the device afterwards
+
+  datamask_modify = EMPTY_MASK;
 }
 
 /* ---------------------------------------------------------------------- */
