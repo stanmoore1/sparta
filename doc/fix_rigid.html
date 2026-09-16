@@ -248,7 +248,16 @@ resulting inertia tensor is shifted from the origin to the COM.  For
 with the rest of this command, so <I>rho</I> is a mass per unit area and
 izz = ixx + iyy with ixz = iyz = 0 exactly.
 </P>
-<P>Because the integration measures the surface elements themselves, the
+<P>The element sums are referenced to a point on the body rather than to
+the coordinate origin.  Any reference point gives the same COM and the
+same COM-relative inertia, but an origin-based sum would lose relative
+precision like (R/L)^2 for a body of size L lying a distance R from the
+origin, since its second moments are then of order V R^2 while the
+answer is of order V L^2.  Referencing to the body holds the error at
+round-off wherever the body sits in the box; the mass and COM are
+well-conditioned either way.
+
+Because the integration measures the surface elements themselves, the
 values are those of the faceted body SPARTA actually simulates, which
 for a coarse mesh differs slightly from the ideal shape the mesh
 approximates.  A 1200-triangle sphere, for example, encloses about 1%

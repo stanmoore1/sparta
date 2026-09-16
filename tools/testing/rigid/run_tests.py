@@ -1146,6 +1146,54 @@ def test_density(exe_cmd):
     return fails
 
 
+def test_density_far(exe_cmd):
+    """dstyle = density must give the same answer wherever the body sits.
+
+    The volume integrals reduce to sums over the body elements.  Taken about
+    the coordinate origin those sums are O(V R^2) for a body of size L a
+    distance R from the origin, while the answer is O(V L^2), so the inertia
+    loses relative precision like (R/L)^2 -- this unit cube at 1e5 kept only
+    about 5 digits before the sums were referenced to the body itself.  Mass
+    and COM are unaffected either way; only the second moments degrade, so
+    this test is what distinguishes the two reductions."""
+    fails = []
+    out_name = "tmp.densityfar.state"
+    path = os.path.join(THISDIR, out_name)
+    if os.path.exists(path):
+        os.remove(path)
+
+    rc, out = run_deck(exe_cmd, "in.test.density.far")
+    if rc:
+        return ["run failed with exit code %d" % rc]
+
+    v = read_state(out_name)
+    if v is None:
+        return ["no state file written"]
+    if len(v) < 16:
+        return ["state file has %d values, expected at least 16" % len(v)]
+
+    C = 100000.5
+    # the same tolerances as in.test.density: placement must not cost digits
+    if abs(v[0] - 1.0) > 1.0e-12:
+        fails.append("mass %.17g != 1 (unit cube, density 1)" % v[0])
+    for k, nm in enumerate("xyz"):
+        if abs(v[1+k] - C) > 1.0e-9:
+            fails.append("com %s %.17g != %.17g" % (nm, v[1+k], C))
+    for k, nm in enumerate(("ixx", "iyy", "izz")):
+        err = abs(v[4+k] - 1.0/6.0) / (1.0/6.0)
+        if err > 1.0e-12:
+            fails.append("%s %.17g != M/6, rel err %.3e -- the moment sums "
+                         "are losing precision to the body's distance from "
+                         "the origin" % (nm, v[4+k], err))
+    for k, nm in enumerate(("ixy", "ixz", "iyz")):
+        if abs(v[7+k]) > 1.0e-12:
+            fails.append("%s %.3e != 0 (cube has no products of inertia)"
+                         % (nm, v[7+k]))
+
+    os.remove(path)
+    return fails
+
+
 def test_density2d(exe_cmd):
     """dstyle = density in 2d, plus the vcom/angmom keywords.
 
@@ -1257,6 +1305,7 @@ TESTS = [
     ("axistuck", test_axistuck),
     ("tallyorder", test_tallyorder),
     ("density", test_density),
+    ("densityfar", test_density_far),
     ("density2d", test_density2d),
     ("baddensity", test_baddensity),
     ("badvcom", test_badvcom),

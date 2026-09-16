@@ -2060,9 +2060,17 @@ void FixRigid::update_surf_copies()
      body is a plate of unit thickness in z, matching how the rest of
      this fix and the surf collision models treat 2d
 
-   the sums above are taken about the origin.  the inertia tensor fix
-     rigid uses is about the COM, so the parallel-axis shift is applied
-     at the end.  the products of inertia carry the minus sign of the
+   the sums are taken about a reference point on the body, not about the
+     coordinate origin.  any reference gives the same COM and the same
+     COM-relative inertia, but an origin-based sum loses relative
+     precision like (R/L)^2 for a body of size L lying a distance R from
+     the origin, because the second moments are then O(V R^2) while the
+     answer is O(V L^2): a unit body 1e5 away keeps only 5 digits of its
+     inertia.  referencing to a point on the body bounds |x| by the body
+     diameter and holds the error at round-off for any placement.
+   the inertia tensor fix rigid uses is about the COM, so the
+     parallel-axis shift is applied at the end, relative to that same
+     reference.  the products of inertia carry the minus sign of the
      ixy = -integral x y dm convention
 ------------------------------------------------------------------------- */
 
@@ -2077,13 +2085,22 @@ void FixRigid::body_properties(double density)
   for (i = 0; i < 3; i++)
     for (j = 0; j < 3; j++) second[i][j] = 0.0;
 
+  // reference all sums to a point on the body (its first vertex), so the
+  //   accumulated moments stay O(body size) however far the body sits
+  //   from the coordinate origin.  added back into the COM below.
+
+  double ref[3];
+  ref[0] = bodypt[0][0][0];
+  ref[1] = bodypt[0][0][1];
+  ref[2] = (dim == 3) ? bodypt[0][0][2] : 0.0;
+
   if (dim == 3) {
-    double s[3],cr[3];
+    double s[3],cr[3],a[3],b[3],c[3];
 
     for (i = 0; i < nsurf; i++) {
-      double *a = bodypt[i][0];
-      double *b = bodypt[i][1];
-      double *c = bodypt[i][2];
+      MathExtra::sub3(bodypt[i][0],ref,a);
+      MathExtra::sub3(bodypt[i][1],ref,b);
+      MathExtra::sub3(bodypt[i][2],ref,c);
 
       MathExtra::cross3(b,c,cr);
       double v6 = MathExtra::dot3(a,cr);      // 6 * signed tet volume
@@ -2112,8 +2129,8 @@ void FixRigid::body_properties(double density)
     double sxx = 0.0, syy = 0.0, sxy = 0.0;
 
     for (i = 0; i < nsurf; i++) {
-      double x0 = bodypt[i][0][0], y0 = bodypt[i][0][1];
-      double x1 = bodypt[i][1][0], y1 = bodypt[i][1][1];
+      double x0 = bodypt[i][0][0] - ref[0], y0 = bodypt[i][0][1] - ref[1];
+      double x1 = bodypt[i][1][0] - ref[0], y1 = bodypt[i][1][1] - ref[1];
       double cross = x0*y1 - x1*y0;
       if (cross == 0.0 && x0 == x1 && y0 == y1) continue;
 
@@ -2146,9 +2163,16 @@ void FixRigid::body_properties(double density)
   if (massbody <= 0.0)
     error->all(FLERR,"Fix rigid body mass must be positive");
 
-  xcm[0] = first[0] / measure;
-  xcm[1] = first[1] / measure;
-  xcm[2] = (dim == 3) ? first[2] / measure : 0.0;
+  xcm[0] = first[0] / measure + ref[0];
+  xcm[1] = first[1] / measure + ref[1];
+  xcm[2] = (dim == 3) ? first[2] / measure + ref[2] : 0.0;
+
+  // parallel-axis shift is from the reference point to the COM
+
+  double dcm[3];
+  dcm[0] = xcm[0] - ref[0];
+  dcm[1] = xcm[1] - ref[1];
+  dcm[2] = xcm[2] - ref[2];
 
   // moments of inertia about the COM
   // 3d: ixx = rho * (Myy + Mzz) - M (ycm^2 + zcm^2), etc
@@ -2158,22 +2182,22 @@ void FixRigid::body_properties(double density)
     double rho = massbody / measure;
 
     moi[0] = rho * (second[1][1] + second[2][2]) -
-      massbody * (xcm[1]*xcm[1] + xcm[2]*xcm[2]);
+      massbody * (dcm[1]*dcm[1] + dcm[2]*dcm[2]);
     moi[1] = rho * (second[0][0] + second[2][2]) -
-      massbody * (xcm[0]*xcm[0] + xcm[2]*xcm[2]);
+      massbody * (dcm[0]*dcm[0] + dcm[2]*dcm[2]);
     moi[2] = rho * (second[0][0] + second[1][1]) -
-      massbody * (xcm[0]*xcm[0] + xcm[1]*xcm[1]);
-    moi[3] = -rho * second[0][1] + massbody * xcm[0]*xcm[1];
-    moi[4] = -rho * second[0][2] + massbody * xcm[0]*xcm[2];
-    moi[5] = -rho * second[1][2] + massbody * xcm[1]*xcm[2];
+      massbody * (dcm[0]*dcm[0] + dcm[1]*dcm[1]);
+    moi[3] = -rho * second[0][1] + massbody * dcm[0]*dcm[1];
+    moi[4] = -rho * second[0][2] + massbody * dcm[0]*dcm[2];
+    moi[5] = -rho * second[1][2] + massbody * dcm[1]*dcm[2];
 
   } else {
     double rho = massbody / measure;
 
-    moi[0] = rho * second[0][0] - massbody * xcm[1]*xcm[1];
-    moi[1] = rho * second[1][1] - massbody * xcm[0]*xcm[0];
+    moi[0] = rho * second[0][0] - massbody * dcm[1]*dcm[1];
+    moi[1] = rho * second[1][1] - massbody * dcm[0]*dcm[0];
     moi[2] = moi[0] + moi[1];
-    moi[3] = -rho * second[0][1] + massbody * xcm[0]*xcm[1];
+    moi[3] = -rho * second[0][1] + massbody * dcm[0]*dcm[1];
     moi[4] = 0.0;
     moi[5] = 0.0;
   }

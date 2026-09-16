@@ -1,0 +1,40 @@
+# TEST: dstyle = density must be invariant to where the body sits.
+# the volume integrals reduce to sums over the body elements; taken about
+# the coordinate ORIGIN those sums are O(V R^2) for a body of size L a
+# distance R away, while the answer is O(V L^2), so an origin-based sum
+# keeps only about (L/R)^2 of full precision -- a unit body at 1e5 would
+# retain roughly 5 digits of its inertia.  Referencing the sums to a point
+# on the body removes that entirely.  This deck is the same unit cube as
+# in.test.density, moved to (1e5,1e5,1e5): every value must still be
+# analytic to round-off.
+
+seed	    	    12345
+variable            dist index 0
+if "${dist} == 1" then "global surfs explicit/distributed"
+
+dimension   	    3
+boundary            o o o
+
+create_box  	    99998 100003 99998 100003 99998 100003
+create_grid 	    4 4 4
+
+global		    nrho 1.0e10 fnum 1.0e10
+
+species		    air.species N
+mixture		    air N vstream 0 0 0 temp 273.0
+
+read_surf           sdata.faroff group body
+surf_collide	    1 specular
+surf_modify         all collide 1
+
+timestep 	    1.0e-6
+
+compute             c1 surf body all fx fy fz tx ty tz com 100000.5 100000.5 100000.5
+
+global              rigid yes
+
+fix		    1 rigid body c1 density 1.0 outfile tmp.densityfar.state 1
+
+stats		    1
+stats_style         step np nscoll
+run 		    1
