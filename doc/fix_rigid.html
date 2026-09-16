@@ -744,7 +744,9 @@ would no longer be a body of revolution.  A rigid body in an
 axisymmetric domain therefore has two degrees of freedom rather than
 six, and SPARTA rejects a <I>com</I>, <I>vcom</I>, <I>angmom</I>,
 <I>force</I>, or <I>moi</I> setting with a non-zero transverse
-component.
+component.  Of the moments of inertia only ixx is ever used, since the
+body can only spin about its own axis; iyy and izz are carried and
+reported but do not affect the motion.
 </P>
 <P>Dropping the transverse force and torque is not a constraint imposed on
 the physics; it is the azimuthal average of it.  A simulated particle
