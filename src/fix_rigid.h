@@ -210,6 +210,19 @@ class FixRigid : public Fix {
   int *pushstamp;         // per-surf visit stamp to dedup multi-bin surfs
   int pushstampcur;
 
+  // bins over bodies by COM, rebuilt each step after the bodies move,
+  //   for finding the bodies near another body, a grid cell, or a point
+  //   without a loop over all bodies
+
+  int bodynbin[3];        // # of bins in each dim
+  double bodybinlo[3];    // bin grid origin
+  double bodybininv[3];   // inverse bin edge lengths
+  int *bodybinstart;      // CSR offsets into bodybinlist per bin
+  int *bodybinlist;       // body indices, binned by COM
+  int *bodycand;          // query result buffer
+  int maxbodycand;
+  double rmaxall;         // max over bodies of rmaxbody + bbox inflation
+
   // work buffers for the fused force/torque Allreduce over all bodies
 
   double *ftbuf_mine;
@@ -304,6 +317,8 @@ class FixRigid : public Fix {
   void push_contact(int, double *, double *, double *, double *, int);
                                 // corner contacts vs one source elem
   void push_bins();             // bin static surfs for candidate pruning
+  void body_bins();             // bin bodies by COM
+  int body_box(double *, double *, int **);  // bodies overlapping a box
   void gather_body();           // build replicated body element table
   void check_body_attributes(); // error if body surf attributes changed
   int same_coords(double *, double *, double *, int);  // coords = elem

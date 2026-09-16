@@ -441,6 +441,10 @@ FixRigid::FixRigid(SPARTA *sparta, int narg, char **arg) :
   pushbinlist = NULL;
   pushstamp = NULL;
   pushstampcur = 0;
+  bodybinstart = NULL;
+  bodybinlist = NULL;
+  bodycand = NULL;
+  maxbodycand = 0;
   ftbuf_mine = ftbuf_all = NULL;
   warnfallback = 0;
   warndelete = 0;
@@ -548,6 +552,9 @@ FixRigid::~FixRigid()
   memory->destroy(pushbinstart);
   memory->destroy(pushbinlist);
   memory->destroy(pushstamp);
+  memory->destroy(bodybinstart);
+  memory->destroy(bodybinlist);
+  memory->destroy(bodycand);
   memory->destroy(ftbuf_mine);
   memory->destroy(ftbuf_all);
   memory->destroy(swstamp);
@@ -830,6 +837,7 @@ void FixRigid::setup()
   //   end up inside, e.g. via an emit region overlapping a body
 
   for (int ibody = 0; ibody < nbody; ibody++) body_bbox(ibody,0);
+  body_bins();
   if (particle->exist) ndeleted += remove_inside_particles(0);
 
   // for incremental remap: grid state is now consistent with the
@@ -1189,9 +1197,11 @@ void FixRigid::end_of_step()
 
   update_surf_copies();
 
-  // bbox around each body's elements at their new positions
+  // bbox around each body's elements at their new positions,
+  //   and the bins of bodies by COM the queries below use
 
   for (ibody = 0; ibody < nbody; ibody++) body_bbox(ibody,0);
+  body_bins();
 
   // error if a body now extends beyond a periodic boundary,
   //   b/c body coords are not wrapped across periodic boundaries
@@ -3000,6 +3010,123 @@ void FixRigid::push_bins()
 }
 
 /* ----------------------------------------------------------------------
+   bin bodies by COM, so that the bodies near another body, a grid
+     cell, or a point can be found without a loop over all bodies
+   bin edge lengths are at least the largest body diameter plus the
+     push-off cutoff, so a body in contact with another or overlapping a
+     query box is never further than one bin away from it
+   total # of bins is capped at about twice the # of bodies, so the
+     bin arrays stay small however small the bodies are
+   rebuilt each step after the bodies move, from their current bboxes
+------------------------------------------------------------------------- */
+
+void FixRigid::body_bins()
+{
+  int i,k,ibin;
+  int ib[3];
+
+  double *boxlo = domain->boxlo;
+  double *boxhi = domain->boxhi;
+
+  // rmaxall = how far any body's bbox can extend from its COM
+
+  rmaxall = 0.0;
+  for (i = 0; i < nbody; i++)
+    rmaxall = MAX(rmaxall,rmaxbody[i] + bboxeps[i]);
+
+  double edge = 2.0*rmaxall;
+  if (pushflag) edge += pushcutoff;
+
+  double vol = 1.0;
+  for (k = 0; k < dim; k++) vol *= boxhi[k] - boxlo[k];
+  double scale = pow(2.0*nbody/vol,1.0/dim);
+
+  for (k = 0; k < 3; k++) {
+    bodybinlo[k] = boxlo[k];
+    double len = boxhi[k] - boxlo[k];
+    int n = (int) (len*scale);
+    if (edge > 0.0) n = MIN(n,(int) (len/edge));
+    n = MAX(n,1);
+    if (dim == 2 && k == 2) n = 1;
+    bodynbin[k] = n;
+    bodybininv[k] = n/len;
+  }
+  int nbins = bodynbin[0]*bodynbin[1]*bodynbin[2];
+
+  memory->destroy(bodybinstart);
+  memory->destroy(bodybinlist);
+  memory->create(bodybinstart,nbins+1,"fix_rigid:bodybinstart");
+  memory->create(bodybinlist,nbody,"fix_rigid:bodybinlist");
+
+  // two passes: count bodies per bin, then fill
+  // a body outside the box is binned in the nearest edge bin
+
+  for (int pass = 0; pass < 2; pass++) {
+    if (pass == 0)
+      for (i = 0; i <= nbins; i++) bodybinstart[i] = 0;
+
+    for (i = 0; i < nbody; i++) {
+      for (k = 0; k < 3; k++) {
+        ib[k] = (int) ((xcm[i][k]-bodybinlo[k]) * bodybininv[k]);
+        ib[k] = MAX(0,MIN(ib[k],bodynbin[k]-1));
+      }
+      ibin = (ib[2]*bodynbin[1] + ib[1])*bodynbin[0] + ib[0];
+      if (pass == 0) bodybinstart[ibin+1]++;
+      else bodybinlist[bodybinstart[ibin]++] = i;
+    }
+
+    if (pass == 0) {
+      for (i = 0; i < nbins; i++) bodybinstart[i+1] += bodybinstart[i];
+    } else {
+      // filling advanced the starts by one bin: shift them back
+      for (i = nbins; i > 0; i--) bodybinstart[i] = bodybinstart[i-1];
+      bodybinstart[0] = 0;
+    }
+  }
+}
+
+/* ----------------------------------------------------------------------
+   list = bodies whose bbox overlaps the box lo/hi, return the count
+   scans the bins overlapping the box inflated by rmaxall, since a
+     body's bbox extends at most that far from the COM it is binned by,
+     then tests each body's bbox exactly
+   the list is a single buffer, overwritten by the next query
+------------------------------------------------------------------------- */
+
+int FixRigid::body_box(double *lo, double *hi, int **list)
+{
+  int i,k,ibin,ibody;
+  int blo[3],bhi[3];
+
+  for (k = 0; k < 3; k++) {
+    blo[k] = (int) ((lo[k]-rmaxall-bodybinlo[k]) * bodybininv[k]);
+    bhi[k] = (int) ((hi[k]+rmaxall-bodybinlo[k]) * bodybininv[k]);
+    blo[k] = MAX(0,MIN(blo[k],bodynbin[k]-1));
+    bhi[k] = MAX(0,MIN(bhi[k],bodynbin[k]-1));
+  }
+
+  int n = 0;
+
+  for (int ibz = blo[2]; ibz <= bhi[2]; ibz++)
+    for (int iby = blo[1]; iby <= bhi[1]; iby++)
+      for (int ibx = blo[0]; ibx <= bhi[0]; ibx++) {
+        ibin = (ibz*bodynbin[1] + iby)*bodynbin[0] + ibx;
+        for (i = bodybinstart[ibin]; i < bodybinstart[ibin+1]; i++) {
+          ibody = bodybinlist[i];
+          if (!box_overlap(lo,hi,bbodylo[ibody],bbodyhi[ibody])) continue;
+          if (n == maxbodycand) {
+            maxbodycand += DELTA_MODIFY;
+            memory->grow(bodycand,maxbodycand,"fix_rigid:bodycand");
+          }
+          bodycand[n++] = ibody;
+        }
+      }
+
+  *list = bodycand;
+  return n;
+}
+
+/* ----------------------------------------------------------------------
    contact forces between all corner pts of this body and one source
      element with corner pts p1,p2 (p3 for 3d) and outward normal norm
    for each body corner pt within pushcutoff of the element, apply a
@@ -3263,15 +3390,26 @@ void FixRigid::push_off(int ibody)
         }
       }
 
-  // other rigid bodies: body-body bbox prefilter, then per-element
-  //   bbox tests using the current-position element boxes set by
-  //   body_bbox(0) when each body committed its end-of-step geometry
+  // other rigid bodies: those whose bbox overlaps the inflated body
+  //   bbox, from the body bins, then per-element bbox tests using the
+  //   current-position element boxes set by body_bbox(0) when each
+  //   body committed its end-of-step geometry
   // each contact applies equal-and-opposite forces to both bodies
+  // distributed: the bodies are split round-robin across procs, each
+  //   proc computes the pair and boundary contributions of its share
+  //   and the Allreduce which merges the static contributions sums them
+  // non-distributed: every proc computes all of them identically
 
-  if (!distributed || comm->me == 0) {
-    for (jbody = 0; jbody < nbody; jbody++) {
+  int mine = 1;
+  if (distributed && ibody % comm->nprocs != comm->me) mine = 0;
+
+  if (mine) {
+    int *jlist;
+    int nj = body_box(cutlo,cuthi,&jlist);
+
+    for (int jj = 0; jj < nj; jj++) {
+      jbody = jlist[jj];
       if (jbody == ibody) continue;
-      if (!box_overlap(cutlo,cuthi,bbodylo[jbody],bbodyhi[jbody])) continue;
 
       for (e = bodystart[jbody]; e < bodystart[jbody+1]; e++) {
         if (!box_overlap(cutlo,cuthi,elemlo[e],elemhi[e])) continue;
@@ -3288,7 +3426,7 @@ void FixRigid::push_off(int ibody)
   // spring force from non-periodic simulation box boundaries
   // corner pts from the replicated body geometry
 
-  if (pushboundflag && (!distributed || comm->me == 0)) {
+  if (pushboundflag && mine) {
     double *boxlo = domain->boxlo;
     double *boxhi = domain->boxhi;
     int *bflag = domain->bflag;
@@ -3820,16 +3958,17 @@ int FixRigid::incremental_recut()
     for (i = 0; i < cells[icell].nsurf; i++)
       if (rigidmap[cur[i]] < 0) reclist[ncand++] = cur[i];
 
-    // a body whose bounding box misses this cell contributes no
-    //   candidate: bbodylo/bbodyhi bound every element of the body at
+    // only bodies whose bounding box overlaps this cell contribute
+    //   candidates: bbodylo/bbodyhi bound every element of the body at
     //   its end-of-step position, so surf2grid_list would reject all of
-    //   them one at a time.  one test per body instead of one per
-    //   element is what keeps the cost of a cell independent of how
+    //   them one at a time.  the body bins find them without a loop
+    //   over all bodies, so the cost of a cell is independent of how
     //   many bodies are defined far away from it
 
-    for (ibody = 0; ibody < nbody; ibody++) {
-      if (!box_overlap(cells[icell].lo,cells[icell].hi,
-                       bbodylo[ibody],bbodyhi[ibody])) continue;
+    int *blist;
+    int nb = body_box(cells[icell].lo,cells[icell].hi,&blist);
+    for (int m = 0; m < nb; m++) {
+      ibody = blist[m];
       for (i = bodystart[ibody]; i < bodystart[ibody+1]; i++)
         reclist[ncand++] = lblist[i];
     }
@@ -4071,27 +4210,20 @@ int FixRigid::cell_cut(int icell)
 
 /* ----------------------------------------------------------------------
    return 1 if point x is inside any rigid body, else 0
-   the bounding box test is what makes this affordable with many bodies:
-     inside_body() casts a ray against every element of a body, so without
-     it the cost of one query is the total element count over all bodies,
-     and the cost of typing the cells around N bodies is O(N^2).  a point
-     outside a body's bbox cannot be inside the body, so the box test is
-     exact, not a heuristic
-   the same prefilter is applied per body in remove_inside_all()
-   requires body_bbox() was called to set bbodylo/bbodyhi on every body,
-     which end_of_step() does when each body commits its new geometry
+   only bodies whose bbox contains the point are tested, found from the
+     body bins: inside_body() casts a ray against every element of a
+     body, and a point outside a body's bbox cannot be inside the body,
+     so the box test is exact, not a heuristic
+   requires body_bbox() and body_bins() were called for every body,
+     which end_of_step() does when the bodies commit their new geometry
 ------------------------------------------------------------------------- */
 
 int FixRigid::inside_any_body(double *x)
 {
-  for (int ibody = 0; ibody < nbody; ibody++) {
-    double *blo = bbodylo[ibody];
-    double *bhi = bbodyhi[ibody];
-    if (x[0] < blo[0] || x[0] > bhi[0]) continue;
-    if (x[1] < blo[1] || x[1] > bhi[1]) continue;
-    if (dim == 3 && (x[2] < blo[2] || x[2] > bhi[2])) continue;
-    if (inside_body(ibody,x)) return 1;
-  }
+  int *blist;
+  int nb = body_box(x,x,&blist);
+  for (int m = 0; m < nb; m++)
+    if (inside_body(blist[m],x)) return 1;
   return 0;
 }
 
@@ -4793,6 +4925,11 @@ double FixRigid::memory_usage()
   bytes += (double) nbody * 90 * sizeof(double);
   bytes += (double) (nbody+1) * sizeof(int);              // bodystart
   bytes += (double) nsurf * sizeof(int);                  // body
+  if (bodybinstart) {
+    int nbins = bodynbin[0]*bodynbin[1]*bodynbin[2];
+    bytes += (double) (nbins+1+nbody) * sizeof(int);      // body bins
+  }
+  bytes += (double) maxbodycand * sizeof(int);
   return bytes;
 }
 
