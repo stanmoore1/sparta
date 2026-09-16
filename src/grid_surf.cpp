@@ -1538,6 +1538,185 @@ int Grid::rendezvous_surfrequest(int n, char *inbuf, int &flag,
 }
 
 /* ----------------------------------------------------------------------
+   turn an unsplit owned cell into a split cell with Nsplit sub cells
+   the caller supplies the split: csplits maps each of the cell's surfs
+     to the piece it bounds, xsub/xsplit locate the reference point
+     Update::split2d/3d() cast a ray to, and vols are the flow volumes
+     of the pieces, as returned by Cut2d/Cut3d::split()
+   csplits is stored by reference: the caller owns it and must keep it
+     alive and the same length as the cell's surf list, which
+     Update::split2d/3d() index in lockstep with it
+   csubs is filled in with the indices of the new sub cells and stored
+     by reference on the same terms
+   same sequence as the split branch of surf2grid_one(), and like it may
+     only be called when this proc stores no ghost cells, since each new
+     sub cell is appended at nlocal, which is otherwise the first ghost
+   the caller owns the particles in the cell: on return they are all
+     still labelled with the split cell, which holds none of its own, so
+     assign_split_cell_particles() has to follow
+------------------------------------------------------------------------- */
+
+void Grid::split_cell_set(int icell, int nsplitone, int *csplits, int *csubs,
+                          int xsub, double *xsplit, double *vols)
+{
+  int dim = domain->dimension;
+
+  cells[icell].nsplit = nsplitone;
+  nunsplitlocal--;
+
+  cells[icell].isplit = nsplitlocal;
+  add_split_cell(1);
+  SplitInfo *s = &sinfo[nsplitlocal-1];
+  s->icell = icell;
+  s->csplits = csplits;
+  s->csubs = csubs;
+  s->xsub = xsub;
+  s->xsplit[0] = xsplit[0];
+  s->xsplit[1] = xsplit[1];
+  if (dim == 3) s->xsplit[2] = xsplit[2];
+  else s->xsplit[2] = 0.0;
+
+  // one sub cell per piece, appended after the split cell
+  // collide and fixes also need to add cells
+  // add_sub_cell() copies the split cell, including its ilocal and its
+  //   particle list, so both are reset here
+
+  for (int i = 0; i < nsplitone; i++) {
+    int isub = nlocal;
+    add_sub_cell(icell,1);
+    if (collide) collide->add_grid_one();
+    if (modify->n_pergrid) modify->add_grid_one();
+    cells[isub].nsplit = -i;
+    cells[isub].ilocal = isub;
+    cinfo[isub].volume = vols[i];
+    cinfo[isub].count = 0;
+    cinfo[isub].first = -1;
+    csubs[i] = isub;
+  }
+}
+
+/* ----------------------------------------------------------------------
+   turn a split owned cell back into an unsplit cell
+   its sub cells are detached and marked for removal rather than removed
+     here, so that a batch of split changes can be applied before the
+     cell list is compacted once by remove_marked_cells()
+   the caller must move the particles out of the sub cells first, e.g.
+     with combine_split_cell_particles(icell,1)
+   the abandoned SplitInfo entry is reclaimed by remove_marked_cells()
+------------------------------------------------------------------------- */
+
+void Grid::split_cell_unset(int icell)
+{
+  if (cells[icell].nsplit <= 1) return;
+
+  int isplit = cells[icell].isplit;
+  int nsplit = cells[icell].nsplit;
+  int *mycsubs = sinfo[isplit].csubs;
+
+  for (int i = 0; i < nsplit; i++) {
+    int isub = mycsubs[i];
+    cells[isub].nsplit = 1;
+    cells[isub].isplit = -1;
+    cells[isub].nsurf = 0;
+    cells[isub].csurfs = NULL;
+    cells[isub].proc = -1;
+    cinfo[isub].count = 0;
+    cinfo[isub].first = -1;
+  }
+
+  cells[icell].nsplit = 1;
+  cells[icell].isplit = -1;
+}
+
+/* ----------------------------------------------------------------------
+   remove every owned cell marked for deletion with proc = -1
+   cells are compacted by moving the last cell into each hole, as
+     clear_surf() does, and every reference to a moved cell is repaired:
+     its SplitInfo back pointer, its own index, the particles it holds,
+     and the per-cell data collide and the fixes keep
+   neighbor links hold cell IDs at this point (Grid::unset_neighbors())
+     and ghost cells have been removed, so neither needs fixing here;
+     the caller re-establishes both
+   the SplitInfo list is compacted afterwards, dropping the entries of
+     the cells which stopped being split
+   assumes particles are sorted; they are still sorted on return
+   returns the # of cells removed
+------------------------------------------------------------------------- */
+
+int Grid::remove_marked_cells()
+{
+  Particle::OnePart *particles = particle->particles;
+  int *next = particle->next;
+  int nlocal_prev = nlocal;
+
+  int icell = 0;
+  while (icell < nlocal) {
+    if (cells[icell].proc != -1) {
+      icell++;
+      continue;
+    }
+
+    if (icell != nlocal-1) {
+      memcpy(&cells[icell],&cells[nlocal-1],sizeof(ChildCell));
+      memcpy(&cinfo[icell],&cinfo[nlocal-1],sizeof(ChildInfo));
+      if (ncustom) copy_custom(nlocal-1,icell);
+      if (collide) collide->copy_grid_one(nlocal-1,icell);
+      if (modify->n_pergrid) modify->copy_grid_one(nlocal-1,icell);
+
+      // repair the references to the cell which moved into this slot
+
+      cells[icell].ilocal = icell;
+      if (cells[icell].nsplit > 1)
+        sinfo[cells[icell].isplit].icell = icell;
+      else if (cells[icell].nsplit <= 0)
+        sinfo[cells[icell].isplit].csubs[-cells[icell].nsplit] = icell;
+
+      int ip = cinfo[icell].first;
+      while (ip >= 0) {
+        particles[ip].icell = icell;
+        ip = next[ip];
+      }
+    }
+
+    nlocal--;
+  }
+
+  if (nlocal == nlocal_prev) return 0;
+
+  // compact sinfo, dropping the entry of every cell which is no longer
+  //   split, and re-point each split cell and its sub cells at it
+
+  int nsplitnew = 0;
+  for (int i = 0; i < nsplitlocal; i++) {
+    int ic = sinfo[i].icell;
+    if (ic < 0 || ic >= nlocal) continue;
+    if (cells[ic].nsplit <= 1) continue;
+    if (cells[ic].isplit != i) continue;
+    if (i != nsplitnew) memcpy(&sinfo[nsplitnew],&sinfo[i],sizeof(SplitInfo));
+    cells[ic].isplit = nsplitnew;
+    int *mycsubs = sinfo[nsplitnew].csubs;
+    for (int j = 0; j < cells[ic].nsplit; j++)
+      cells[mycsubs[j]].isplit = nsplitnew;
+    nsplitnew++;
+  }
+  nsplitlocal = nsplitnew;
+
+  // re-derive the cell-kind counts, as setup_owned() does for unsplit
+
+  nsublocal = 0;
+  for (int i = 0; i < nlocal; i++)
+    if (cells[i].nsplit <= 0) nsublocal++;
+  nunsplitlocal = nlocal - nsplitlocal - nsublocal;
+
+  if (collide) collide->reset_grid_count(nlocal);
+  if (modify->n_pergrid) modify->reset_grid_count(nlocal);
+
+  hashfilled = 0;
+
+  return nlocal_prev - nlocal;
+}
+
+/* ----------------------------------------------------------------------
    remove all surf info from owned grid cells and reset cell volumes
    also remove sub cells by compressing grid cells list
    set cell type and corner flags to UNKNOWN or OUTSIDE

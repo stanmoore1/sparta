@@ -254,6 +254,9 @@ class Grid : protected Pointers {
   void add_child_cell(cellint, int, double *, double *);
   void add_split_cell(int);
   void add_sub_cell(int, int);
+  void split_cell_set(int, int, int *, int *, int, double *, double *);
+  void split_cell_unset(int);
+  int remove_marked_cells();
   void notify_changed();
   int set_minlevel();
   void set_maxlevel();

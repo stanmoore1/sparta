@@ -419,6 +419,10 @@ FixRigid::FixRigid(SPARTA *sparta, int narg, char **arg) :
 
   nmodified = maxmodified = 0;
   listschanged = 0;
+  splitchanged = 0;
+  pending = NULL;
+  npending = maxpending = 0;
+  insplitrebuild = 0;
   typechanged = 0;
   modified = NULL;
   nsurf_saved = NULL;
@@ -543,6 +547,13 @@ FixRigid::~FixRigid()
 
   copy_registry_to_grid();
   free_registry();
+  copy_split_registry_to_grid();
+  free_split_registry();
+  for (int m = 0; m < maxpending; m++) {
+    memory->destroy(pending[m].map);
+    memory->destroy(pending[m].vols);
+  }
+  memory->sfree(pending);
   memory->destroy(oldinside);
   memory->destroy(rcand);
   memory->destroy(newlist);
@@ -1349,22 +1360,25 @@ void FixRigid::end_of_step()
   //   every step silently costs as much as remap cutcell
 
   int fallback = 1;
+  int structural = 0;
   if (remapmode == INCREMENTAL) {
-    int fallmine = incremental_recut();
-    MPI_Allreduce(&fallmine,&fallback,1,MPI_INT,MPI_MAX,world);
+    int mine[3],all[3];
+    mine[0] = incremental_recut();
+    mine[1] = (npending > 0);
+    mine[2] = typechanged;
+    MPI_Allreduce(mine,all,3,MPI_INT,MPI_MAX,world);
+    fallback = all[0];
+    structural = all[1];
 
     // an incremental re-cut which changed cell markings must be seen
     //   by emit fixes, whose per-cell tasks depend on them; a full
-    //   re-map notifies them via Grid::notify_changed()
+    //   re-map and split_rebuild() both notify them via
+    //   Grid::notify_changed()
 
-    if (!fallback) {
-      int changed_any;
-      MPI_Allreduce(&typechanged,&changed_any,1,MPI_INT,MPI_MAX,world);
-      if (changed_any)
-        for (int ifix = 0; ifix < modify->nfix; ifix++)
-          if (strncmp(modify->fix[ifix]->style,"emit",4) == 0)
-            modify->fix[ifix]->grid_changed();
-    }
+    if (!fallback && !structural && all[2])
+      for (int ifix = 0; ifix < modify->nfix; ifix++)
+        if (strncmp(modify->fix[ifix]->style,"emit",4) == 0)
+          modify->fix[ifix]->grid_changed();
     typechanged = 0;
 
     if (fallback && !warnfallback) {
@@ -1387,14 +1401,42 @@ void FixRigid::end_of_step()
       }
     }
   }
+
+  // every split cell whose geometry changed holds its particles in its
+  //   sub cells, but the flow regions those stand for moved with the
+  //   body, so the particles have to be redistributed
+  // pull them up into the split cell first, before any cell is
+  //   restructured, and let remove_inside_all() put them back into the
+  //   right pieces: the same two steps a full re-map takes around
+  //   Grid::clear_surf()
+  // purely local, and a proc with no split cell does nothing
+
+  if (!fallback && (splitchanged || structural) &&
+      particle->exist && grid->nsplitlocal) {
+    if (!particle->sorted) particle->sort();
+    Grid::ChildCell *cells = grid->cells;
+    int nglocal = grid->nlocal;
+    for (int icell = 0; icell < nglocal; icell++)
+      if (cells[icell].nsplit > 1)
+        grid->combine_split_cell_particles(icell,1);
+  }
+
+  // a cell which gained or lost sub cells is restructured here, which
+  //   is far cheaper than the full re-map it used to force: the surf
+  //   lists, volumes and cell types are already correct, so only the
+  //   cell list, the ghosts and the neighbor links are rebuilt
+  // every proc enters split_rebuild() together, since it communicates
+
   if (fallback) grid_rebuild();
+  else if (structural) split_rebuild();
+  npending = 0;
 
   // remove particles inside any body in one pass over particles,
-  //   with split-cell reassignment only after a full re-map; no
-  //   reduction here, deletion counts stay per-proc and are reduced
-  //   lazily by compute_scalar()
+  //   with split-cell reassignment after a full re-map or after a
+  //   split cell was re-cut in place; no reduction here, deletion
+  //   counts stay per-proc and are reduced lazily by compute_scalar()
 
-  if (particle->exist) remove_inside_all(fallback);
+  if (particle->exist) remove_inside_all(fallback || splitchanged || structural);
 
   // advance the previous-region bookkeeping for incremental remap
 
@@ -3845,8 +3887,16 @@ void FixRigid::grid_changed()
   //   Grid::compress() and so keeps its cells' csurfs pointers;
   //   copy those lists into grid storage before freeing them
 
-  copy_registry_to_grid();
-  free_registry();
+  // during split_rebuild() the lists this fix installed are still in
+  //   the cells and still current, unlike after a full re-map where
+  //   Grid::clear_surf() has already thrown them away
+
+  if (!insplitrebuild) {
+    copy_registry_to_grid();
+    free_registry();
+    copy_split_registry_to_grid();
+    free_split_registry();
+  }
   listschanged = 1;
   update->rigid_bins_clear();
 
@@ -3936,6 +3986,228 @@ void FixRigid::record_oldinside()
 }
 
 /* ----------------------------------------------------------------------
+   a ghost copy of a split cell whose piece count changed
+   this proc cannot restructure a cell it does not own, and does not
+     need to: the owner records the same change, so split_rebuild()
+     runs this step and re-acquires every ghost before the next move
+   until then the copy is marked unsplit, so that nothing indexes its
+     piece map, whose length no longer matches its surf list
+------------------------------------------------------------------------- */
+
+void FixRigid::split_ghost_drop(int icell)
+{
+  grid->cells[icell].nsplit = 1;
+  grid->cells[icell].isplit = -1;
+}
+
+/* ----------------------------------------------------------------------
+   record that one owned cell's number of flow pieces changes this step
+   the cut of the next cell overwrites the work buffers, so the piece
+     map and the piece volumes are copied out here; the map is a
+     fix-owned array which becomes sinfo[].csplits when it is applied,
+     and the sub cell list is allocated now and filled in then
+   nsplitnew = 1 means the cell stops being a split cell, and needs no
+     map, no sub cell list and no volumes
+------------------------------------------------------------------------- */
+
+void FixRigid::split_pending(int icell, int nsplitnew, int n, int *map,
+                             int xsub, double *xsplit, double *vols)
+{
+  if (npending == maxpending) {
+    int oldmax = maxpending;
+    maxpending += DELTA_MODIFY;
+    pending = (PendingSplit *)
+      memory->srealloc(pending,maxpending*sizeof(PendingSplit),
+                       "fix_rigid:pending");
+    for (int m = oldmax; m < maxpending; m++) {
+      pending[m].map = NULL;
+      pending[m].maxmap = 0;
+      pending[m].vols = NULL;
+      pending[m].maxvols = 0;
+    }
+  }
+
+  PendingSplit *p = &pending[npending++];
+  p->icell = icell;
+  p->nsplitnew = nsplitnew;
+  p->nsurf = n;
+  p->csplits = NULL;
+  p->csubs = NULL;
+
+  if (nsplitnew == 1) return;
+
+  // the arrays the cell will own are allocated in split_rebuild(), not
+  //   here: allocating one now would free the array the cell's current
+  //   SplitInfo still points at, which split_cell_unset() has yet to read
+
+  if (n > p->maxmap) {
+    p->maxmap = n;
+    memory->destroy(p->map);
+    memory->create(p->map,p->maxmap,"fix_rigid:pendingmap");
+  }
+  memcpy(p->map,map,n*sizeof(int));
+
+  p->xsub = xsub;
+  p->xsplit[0] = xsplit[0];
+  p->xsplit[1] = xsplit[1];
+  p->xsplit[2] = xsplit[2];
+
+  if (nsplitnew > p->maxvols) {
+    p->maxvols = nsplitnew;
+    memory->destroy(p->vols);
+    memory->create(p->vols,p->maxvols,"fix_rigid:pendingvols");
+  }
+  memcpy(p->vols,vols,nsplitnew*sizeof(double));
+}
+
+/* ----------------------------------------------------------------------
+   apply every pending split change, in place of a full grid re-map
+   the incremental passes already produced the correct surf list, flow
+     volume, cell type and corner marks of every cell, so the two most
+     expensive steps of grid_rebuild() are skipped: Grid::clear_surf()
+     plus Grid::surf2grid(), which re-maps every surf to every cell, and
+     Grid::set_inout(), whose flood fill is an iterative collective
+   what is left is the structural part, the same sequence fix adapt uses
+     when it refines or coarsens cells during a run: no owned cell may
+     be added or removed while ghost cells are stored, so they are
+     dropped and re-acquired around the change
+   the sub cells of every cell which stops being split are detached
+     first and removed in one sweep afterwards, so that the cell indices
+     the pending list holds stay valid until every change is applied
+------------------------------------------------------------------------- */
+
+void FixRigid::split_rebuild()
+{
+  int m;
+
+  // Grid::remove_marked_cells() walks the per-cell particle lists
+  // the caller has already pulled the particles of every split cell up
+  //   into the cell itself, so none is labelled with a sub cell which
+  //   is about to vanish
+
+  if (particle->exist) particle->sort();
+
+  // neighbor links become cell IDs, which survive the cells moving below
+
+  grid->unset_neighbors();
+  grid->remove_ghosts();
+
+  // detach the old sub cells of every pending cell, then build the new
+  //   ones; detaching only marks, so no index moves in between
+
+  for (m = 0; m < npending; m++)
+    grid->split_cell_unset(pending[m].icell);
+
+  // nothing points at the old piece map and sub cell list of a pending
+  //   cell any more, so they can be replaced now
+  // a cell which stops being split gives both of them up
+
+  for (m = 0; m < npending; m++) {
+    cellint id = grid->cells[pending[m].icell].id;
+    if (pending[m].nsplitnew == 1) {
+      split_registry_remove(id);
+      continue;
+    }
+    pending[m].csplits = csplits_alloc(id,pending[m].nsurf);
+    memcpy(pending[m].csplits,pending[m].map,pending[m].nsurf*sizeof(int));
+    pending[m].csubs = csubs_alloc(id,pending[m].nsplitnew);
+  }
+
+  for (m = 0; m < npending; m++) {
+    if (pending[m].nsplitnew == 1) continue;
+    grid->split_cell_set(pending[m].icell,pending[m].nsplitnew,
+                         pending[m].csplits,pending[m].csubs,
+                         pending[m].xsub,pending[m].xsplit,pending[m].vols);
+  }
+
+  grid->remove_marked_cells();
+
+  // re-establish the owned cell bookkeeping, the ghost cells and the
+  //   neighbor links, exactly as fix adapt does after changing cells
+
+  grid->setup_owned();
+  grid->acquire_ghosts();
+  grid->reset_neighbors();
+  comm->reset_neighbors();
+
+  // the box->cell index holds cell indices, which just moved
+  // a step which added and removed the same number of cells leaves the
+  //   total unchanged, so it cannot detect this for itself
+
+  update->rigid_bins_clear();
+
+  // as after a grid rebuild with distributed surfs
+
+  if (surf->distributed) {
+    surf->localghost_changed_step = update->ntimestep;
+    for (int i = 0; i < surf->ncustom; i++) surf->estatus[i] = 0;
+  }
+
+  // a per-grid compute sized itself for the old cell count; one which
+  //   sees the same count again would keep arrays that now refer to
+  //   different cells, so they are dropped, as AdaptGrid does
+  // insplitrebuild keeps grid_changed() from taking this fix's surf
+  //   lists away: unlike a full re-map, they are still installed in the
+  //   cells and still current
+
+  Compute **compute = modify->compute;
+  for (int i = 0; i < modify->ncompute; i++)
+    if (compute[i]->per_grid_flag) {
+      compute[i]->reallocate();
+      compute[i]->invoked_flag = 0;
+    }
+
+  insplitrebuild = 1;
+  grid->notify_changed();
+  insplitrebuild = 0;
+}
+
+/* ----------------------------------------------------------------------
+   install a re-cut split of one cell which keeps its piece count
+   the cell's surf list and its csplits map must stay the same length,
+     since Update::split2d/3d() index them in lockstep, so the map is
+     replaced whenever the surf list is
+   the sub cells share the split cell's surf list, and an owned cell's
+     sub cells take the new per-piece flow volumes; the split cell's own
+     volume is the whole cell volume and is left alone, as
+     Grid::surf2grid_split() leaves it
+   a ghost copy has no ChildInfo, so it takes the piece map only: it
+     exists here so this proc's mover can route a particle crossing into
+     the cell to the right sub cell, which Comm::migrate_particles()
+     then translates to the owner's index via ChildCell::ilocal
+------------------------------------------------------------------------- */
+
+void FixRigid::split_update(int icell, int n, int *map, int xsub,
+                            double *xsplit, double *vols, int ghostflag)
+{
+  Grid::ChildCell *cells = grid->cells;
+  Grid::ChildInfo *cinfo = grid->cinfo;
+  Grid::SplitInfo *sinfo = grid->sinfo;
+
+  int isplit = cells[icell].isplit;
+  int nsplit = cells[icell].nsplit;
+
+  int *csplits = csplits_alloc(cells[icell].id,n);
+  memcpy(csplits,map,n*sizeof(int));
+
+  sinfo[isplit].csplits = csplits;
+  sinfo[isplit].xsub = xsub;
+  sinfo[isplit].xsplit[0] = xsplit[0];
+  sinfo[isplit].xsplit[1] = xsplit[1];
+  if (dim == 3) sinfo[isplit].xsplit[2] = xsplit[2];
+  else sinfo[isplit].xsplit[2] = 0.0;
+
+  int *csubs = sinfo[isplit].csubs;
+
+  for (int i = 0; i < nsplit; i++) {
+    int isub = csubs[i];
+    cells[isub].nsurf = cells[icell].nsurf;
+    cells[isub].csurfs = cells[icell].csurfs;
+    if (!ghostflag) cinfo[isub].volume = vols[i];
+  }
+}
+
+/* ----------------------------------------------------------------------
    for incremental remap: re-cut only grid cells near the body
    a cell is re-cut if the set of surfs overlapping it changed,
      or if it is overlapped by a body surf (whose geometry moved)
@@ -3974,6 +4246,7 @@ int FixRigid::incremental_recut()
 
   int ncorner = 4;
   if (dim == 3) ncorner = 8;
+  int cornerscratch[8];
 
   // every body must have a previous region
   // R = union over all bodies of the region rlo/rhi each
@@ -3985,6 +4258,8 @@ int FixRigid::incremental_recut()
 
   if (!pbodyflag) return FALLBACK_NOPREV;
   nrcand = 0;
+  splitchanged = 0;
+  npending = 0;
 
   for (ibody = 0; ibody < nbody; ibody++) {
     for (i = 0; i < 3; i++) {
@@ -3995,10 +4270,17 @@ int FixRigid::incremental_recut()
     int *cand;
     int ncells = update->rigid_cell_box(rlo,rhi,&cand);
 
+    // owned cells are re-cut; a ghost cell is included only when it is
+    //   a split cell, whose sinfo this proc must keep current because
+    //   Comm::migrate_particles() resolves a crossing particle's
+    //   destination sub cell on the SENDING proc, from the ghost copy
+    // the body geometry is replicated, so every proc re-derives the
+    //   same split of the same cell without communicating
+
     for (int ic = 0; ic < ncells; ic++) {
       icell = cand[ic];
-      if (icell >= nglocal) continue;
       if (cells[icell].nsplit <= 0) continue;
+      if (icell >= nglocal && cells[icell].nsplit == 1) continue;
       if (!box_overlap(cells[icell].lo,cells[icell].hi,rlo,rhi)) continue;
       if (nrcand == maxrcand) {
         maxrcand += DELTA_MODIFY;
@@ -4024,9 +4306,13 @@ int FixRigid::incremental_recut()
   for (int ic = 0; ic < nrcand; ic++) {
     icell = rcand[ic];
 
-    // structural change unsupported: split cells trigger a full re-map
+    // a ghost cell in the list is a split cell whose sinfo is refreshed
+    //   below; it has no ChildInfo, so the cut writes its corner marks
+    //   to scratch and its flow volumes are the owner's business
 
-    if (cells[icell].nsplit > 1) return FALLBACK_SPLIT;
+    int ghostflag = (icell >= nglocal);
+    int nsplitold = cells[icell].nsplit;
+    int *corner = ghostflag ? cornerscratch : cinfo[icell].corner;
 
     ncand = 0;
     surfint *cur = cells[icell].csurfs;
@@ -4091,10 +4377,18 @@ int FixRigid::incremental_recut()
 
     if (n == 0) {
 
+      // a split cell which no longer overlaps any surf gives up its
+      //   sub cells, which changes the cell count
+
+      if (nsplitold > 1) {
+        if (ghostflag) { split_ghost_drop(icell); continue; }
+        split_pending(icell,1,0,NULL,0,NULL,NULL);
+      }
+
       // cell no longer overlaps any surf
       // full flow volume, interior/exterior typing via parity test
 
-      registry_remove(icell);
+      registry_remove(cells[icell].id);
       cells[icell].nsurf = 0;
       cells[icell].csurfs = NULL;
       listschanged = 1;
@@ -4115,7 +4409,7 @@ int FixRigid::incremental_recut()
       surfint *list =
         (surfint *) memory->smalloc(n*sizeof(surfint),"fix_rigid:recut");
       memcpy(list,newlist,n*sizeof(surfint));
-      registry_replace(icell,list);
+      registry_replace(cells[icell].id,list);
       cells[icell].nsurf = n;
       cells[icell].csurfs = list;
       listschanged = 1;
@@ -4125,6 +4419,10 @@ int FixRigid::incremental_recut()
       //   full flow volume, interior/exterior typing via parity test
 
       if (!cell_cut(icell)) {
+        if (nsplitold > 1) {
+          if (ghostflag) { split_ghost_drop(icell); continue; }
+          split_pending(icell,1,0,NULL,0,NULL,NULL);
+        }
         cinfo[icell].volume = full_cell_volume(clo,chi);
         if (inside_any_body(ctr)) cinfo[icell].type = CELLINSIDE;
         else cinfo[icell].type = CELLOUTSIDE;
@@ -4141,22 +4439,53 @@ int FixRigid::incremental_recut()
         nsplitone = cut2d->split(cells[icell].id,
                                  cells[icell].lo,cells[icell].hi,
                                  n,list,vols,newmap,
-                                 cinfo[icell].corner,xsub,xsplit);
+                                 corner,xsub,xsplit);
       else
         nsplitone = cut3d->split(cells[icell].id,
                                  cells[icell].lo,cells[icell].hi,
                                  n,list,vols,newmap,
-                                 cinfo[icell].corner,xsub,xsplit);
-
-      // cell would become a split cell: fall back to full re-map
-
-      if (nsplitone > 1) return FALLBACK_SPLIT;
+                                 corner,xsub,xsplit);
 
       // the cut leaves the corner marks UNKNOWN when every surf only
       //   touches the cell faces; the full pipeline resolves such cells
       //   by flood fill in Grid::set_inout(), so fall back to it
 
-      if (cinfo[icell].corner[0] == CELLUNKNOWN) return FALLBACK_UNKNOWN;
+      if (corner[0] == CELLUNKNOWN) return FALLBACK_UNKNOWN;
+
+      // the number of disconnected flow pieces changed: the cell gains
+      //   or loses sub cells, which changes this proc's cell count and
+      //   the sub cell indices other procs migrate particles into
+      // recorded now and applied by split_rebuild() at the end of the
+      //   step, together with every other such cell
+
+      if (nsplitone != nsplitold) {
+        if (ghostflag) { split_ghost_drop(icell); continue; }
+        split_pending(icell,nsplitone,n,newmap,xsub,xsplit,vols);
+
+        // a split cell's own volume is the whole cell volume
+
+        if (nsplitone > 1) cinfo[icell].volume = full_cell_volume(clo,chi);
+        else cinfo[icell].volume = vols[0];
+        cinfo[icell].type = CELLOVERLAP;
+        typechanged = 1;
+        continue;
+      }
+
+      // a cell which was and still is split keeps its sub cells and
+      //   takes the new piece map and per-piece volumes in place
+
+      if (nsplitone > 1) {
+        split_update(icell,n,newmap,xsub,xsplit,vols,ghostflag);
+        splitchanged = 1;
+        if (ghostflag) continue;
+
+        // a split cell's own volume is the whole cell volume
+        //   (Grid::surf2grid_split() likewise leaves it alone)
+
+        cinfo[icell].type = CELLOVERLAP;
+        typechanged = 1;
+        continue;
+      }
 
       cinfo[icell].volume = vols[0];
       cinfo[icell].type = CELLOVERLAP;
@@ -4309,18 +4638,18 @@ int FixRigid::inside_any_body(double *x)
      tracked here and freed when replaced or when the grid changes
 ------------------------------------------------------------------------- */
 
-void FixRigid::registry_replace(int icell, surfint *list)
+void FixRigid::registry_replace(cellint id, surfint *list)
 {
-  std::map<int,surfint *>::iterator it = registry.find(icell);
+  std::map<cellint,surfint *>::iterator it = registry.find(id);
   if (it != registry.end()) {
     memory->sfree(it->second);
     it->second = list;
-  } else registry[icell] = list;
+  } else registry[id] = list;
 }
 
-void FixRigid::registry_remove(int icell)
+void FixRigid::registry_remove(cellint id)
 {
-  std::map<int,surfint *>::iterator it = registry.find(icell);
+  std::map<cellint,surfint *>::iterator it = registry.find(id);
   if (it == registry.end()) return;
   memory->sfree(it->second);
   registry.erase(it);
@@ -4328,7 +4657,7 @@ void FixRigid::registry_remove(int icell)
 
 void FixRigid::free_registry()
 {
-  for (std::map<int,surfint *>::iterator it = registry.begin();
+  for (std::map<cellint,surfint *>::iterator it = registry.begin();
        it != registry.end(); ++it)
     memory->sfree(it->second);
   registry.clear();
@@ -4351,7 +4680,7 @@ void FixRigid::copy_registry_to_grid()
   Grid::ChildCell *cells = grid->cells;
   int ntotal = grid->nlocal + grid->nghost;
 
-  for (std::map<int,surfint *>::iterator it = registry.begin();
+  for (std::map<cellint,surfint *>::iterator it = registry.begin();
        it != registry.end(); ++it)
     replaced[it->second] = NULL;
 
@@ -4368,6 +4697,118 @@ void FixRigid::copy_registry_to_grid()
       it->second = copy;
     }
     cells[icell].csurfs = it->second;
+  }
+}
+
+/* ----------------------------------------------------------------------
+   registry of split-cell arrays allocated by this fix
+   sinfo[].csplits and sinfo[].csubs live in the Grid page allocators,
+     which never free an individual list, and csplits has one entry per
+     surf in the split cell, so a cell re-cut every step as a body moves
+     through it would grow the page without bound
+   the arrays this fix installs are tracked here instead, keyed by cell
+     index, and freed when replaced or when the grid changes
+   same problem and same solution as the csurfs registry above
+------------------------------------------------------------------------- */
+
+int *FixRigid::csplits_alloc(cellint id, int n)
+{
+  int *list = (int *) memory->smalloc(n*sizeof(int),"fix_rigid:csplits");
+  std::map<cellint,int *>::iterator it = csplitreg.find(id);
+  if (it != csplitreg.end()) {
+    memory->sfree(it->second);
+    it->second = list;
+  } else csplitreg[id] = list;
+  return list;
+}
+
+int *FixRigid::csubs_alloc(cellint id, int n)
+{
+  int *list = (int *) memory->smalloc(n*sizeof(int),"fix_rigid:csubs");
+  std::map<cellint,int *>::iterator it = csubreg.find(id);
+  if (it != csubreg.end()) {
+    memory->sfree(it->second);
+    it->second = list;
+  } else csubreg[id] = list;
+  return list;
+}
+
+void FixRigid::split_registry_remove(cellint id)
+{
+  std::map<cellint,int *>::iterator it = csplitreg.find(id);
+  if (it != csplitreg.end()) {
+    memory->sfree(it->second);
+    csplitreg.erase(it);
+  }
+  it = csubreg.find(id);
+  if (it != csubreg.end()) {
+    memory->sfree(it->second);
+    csubreg.erase(it);
+  }
+}
+
+void FixRigid::free_split_registry()
+{
+  for (std::map<cellint,int *>::iterator it = csplitreg.begin();
+       it != csplitreg.end(); ++it)
+    memory->sfree(it->second);
+  csplitreg.clear();
+
+  for (std::map<cellint,int *>::iterator it = csubreg.begin();
+       it != csubreg.end(); ++it)
+    memory->sfree(it->second);
+  csubreg.clear();
+}
+
+/* ----------------------------------------------------------------------
+   copy every registry split array still installed in a live split cell
+     into grid-owned page storage, so no sinfo entry is left pointing at
+     memory this fix is about to free
+   the cell index a list was registered under may no longer refer to the
+     same cell, so entries are matched by pointer identity, as
+     copy_registry_to_grid() does for the csurfs lists
+   one csplits and one csubs array belong to exactly one sinfo entry, so
+     there is no pointer sharing to preserve here
+------------------------------------------------------------------------- */
+
+void FixRigid::copy_split_registry_to_grid()
+{
+  if (csplitreg.empty() && csubreg.empty()) return;
+
+  std::map<int *,int> mine;
+
+  for (std::map<cellint,int *>::iterator it = csplitreg.begin();
+       it != csplitreg.end(); ++it)
+    mine[it->second] = 1;
+  for (std::map<cellint,int *>::iterator it = csubreg.begin();
+       it != csubreg.end(); ++it)
+    mine[it->second] = 1;
+
+  Grid::ChildCell *cells = grid->cells;
+  Grid::SplitInfo *sinfo = grid->sinfo;
+  int nsplitall = grid->nsplitlocal + grid->nsplitghost;
+
+  for (int i = 0; i < nsplitall; i++) {
+    int icell = sinfo[i].icell;
+    if (cells[icell].nsplit <= 1) continue;
+    int nsurf = cells[icell].nsurf;
+    int nsplit = cells[icell].nsplit;
+
+    if (nsurf > 0 && mine.find(sinfo[i].csplits) != mine.end()) {
+      int *copy = grid->csplits->get(nsurf);
+      if (!copy)
+        error->one(FLERR,"Failed to allocate grid split list for fix rigid");
+      memcpy(copy,sinfo[i].csplits,nsurf*sizeof(int));
+      sinfo[i].csplits = copy;
+    }
+
+    if (mine.find(sinfo[i].csubs) != mine.end()) {
+      int *copy = grid->csubs->get(nsplit);
+      if (!copy)
+        error->one(FLERR,"Failed to allocate grid sub list for fix rigid");
+      memcpy(copy,sinfo[i].csubs,nsplit*sizeof(int));
+      sinfo[i].csubs = copy;
+    }
   }
 }
 
@@ -4994,6 +5435,10 @@ double FixRigid::memory_usage()
   if (cpage) bytes += (double) cpage->size();
   bytes += (double) registry.size() *
     (sizeof(std::pair<int,surfint *>) + grid->maxsurfpercell*sizeof(surfint));
+  bytes += (double) csplitreg.size() *
+    (sizeof(std::pair<int,int *>) + grid->maxsurfpercell*sizeof(int));
+  bytes += (double) csubreg.size() *
+    (sizeof(std::pair<int,int *>) + grid->maxsplitpercell*sizeof(int));
 
   // per-body arrays, including the ftbuf work buffers
 

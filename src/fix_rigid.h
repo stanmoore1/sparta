@@ -96,6 +96,9 @@ class FixRigid : public Fix {
   int listschanged;       // 1 if this fix changed a per-cell surf list
                           //   on the host since the flag was cleared
                           //   (read/cleared by fix rigid/kk)
+  int splitchanged;       // 1 if a split cell was re-cut in place this
+                          //   step, so its particles must be
+                          //   redistributed over its new pieces
   double compute_scalar();
   double compute_vector(int);
   double compute_array(int,int);
@@ -276,8 +279,39 @@ class FixRigid : public Fix {
   int maxoldinside;
   int *oldinside;
 
-  std::map<int,surfint *> registry;   // cells whose csurfs lists are
-                                      //   allocated by this fix
+  // lists this fix allocated and installed in grid cells, keyed by
+  //   cell ID rather than cell index, so that removing a sub cell and
+  //   compacting the cell list cannot invalidate a key
+
+  std::map<cellint,surfint *> registry;   // cells whose csurfs lists are
+                                          //   allocated by this fix
+  std::map<cellint,int *> csplitreg;      // split cells whose sinfo csplits
+  std::map<cellint,int *> csubreg;        //   and csubs arrays are allocated
+                                          //   by this fix
+
+  // cells whose number of disconnected flow pieces changes this step
+  // they are applied together by split_rebuild(), because adding or
+  //   removing a sub cell changes this proc's cell count and the sub
+  //   cell indices other procs migrate particles into, neither of which
+  //   can be done while ghost cells are stored
+
+  struct PendingSplit {
+    int icell;            // owned cell whose piece count changes
+    int nsplitnew;        // its new # of pieces, 1 = no longer split
+    int nsurf;            // # of surfs in the cell, = length of map
+    int *map;             // the new piece map, copied out of the work
+    int maxmap;           //   buffer the next cell's cut overwrites
+    int *csplits;         // fix-owned piece map, installed when applied
+    int *csubs;           // fix-owned sub cell list, filled in then
+    int xsub;             // reference piece and point for split2d/3d
+    double xsplit[3];
+    double *vols;         // flow volume of each new piece
+    int maxvols;
+  };
+
+  PendingSplit *pending;
+  int npending,maxpending;
+  int insplitrebuild;     // 1 while split_rebuild() notifies the others
 
   int nrcand;             // work list of cells overlapping the
   int maxrcand;           //   incremental re-cut region this step
@@ -330,10 +364,19 @@ class FixRigid : public Fix {
   void grid_rebuild();          // full re-map of all surfs to grid cells
   void record_oldinside();      // cells interior to bodies, pre-move
   int incremental_recut();      // re-cut cells whose overlap changed
-  void registry_replace(int, surfint *);
-  void registry_remove(int);
+  void split_update(int, int, int *, int, double *, double *, int);
+  void split_ghost_drop(int);
+  void split_pending(int, int, int, int *, int, double *, double *);
+  void split_rebuild();         // apply the pending split changes
+  void registry_replace(cellint, surfint *);
+  void registry_remove(cellint);
   void free_registry();
   void copy_registry_to_grid(); // move registry lists into grid pages
+  int *csplits_alloc(cellint, int);  // fix-owned sinfo csplits/csubs arrays
+  int *csubs_alloc(cellint, int);
+  void split_registry_remove(cellint);
+  void free_split_registry();
+  void copy_split_registry_to_grid();
   void swept_assign_all();      // add all bodies' surfs to swept cells
   void swept_restore();         // undo swept_assign_all
   void body_bbox(int, int);     // bbox of body, current or swept over step
