@@ -2003,6 +2003,74 @@ def test_crossproc(exe_cmd):
     return fails
 
 
+def test_splitmany(exe_cmd):
+    """Split cells created and destroyed by the bodies every step.
+
+    Three faceted circles drift and spin across a grid whose cells are
+    about the size of their segments, so a body vertex repeatedly leaves
+    two disconnected flow slivers in a cell.  Such a cell is a split
+    cell, and it comes and goes within a step or two, so the incremental
+    re-cut has to create and remove its sub cells rather than fall back
+    to a full grid re-map.  Without particles the two remap modes must
+    agree at every step; with a collisional gas the particle count must
+    hold and no particle may be deleted."""
+    fails = []
+
+    # no particles: deterministic, so the modes must agree exactly
+    results = {}
+    for mode in ("cutcell", "incremental"):
+        rc, out = run_deck(exe_cmd, "in.test.splitmany",
+                           ["-var", "mode", mode, "-var", "gas", "0"])
+        if rc:
+            fails.append("mode %s: run failed with exit code %d" % (mode, rc))
+            continue
+        rows = parse_stats(out)
+        if not rows:
+            fails.append("mode %s: no stats output" % mode)
+            continue
+        results[mode] = rows
+    if fails:
+        return fails
+    if len(results["cutcell"]) != len(results["incremental"]):
+        return ["stats row counts differ between remap modes"]
+    keys = [k for k in results["cutcell"][0] if k.startswith("f_1")]
+    for rc_, ri in zip(results["cutcell"], results["incremental"]):
+        for k in keys:
+            if not approx(ri[k], rc_[k], rel=1e-10, abs_=1e-13):
+                fails.append("step %d %s: incremental %.15g differs from "
+                             "cutcell %.15g" % (int(rc_["Step"]), k,
+                                                ri[k], rc_[k]))
+        if fails:
+            return fails
+    # the bodies must have moved several cells, else no cell is re-cut
+    if abs(results["cutcell"][-1]["f_1[1][1]"] -
+           results["cutcell"][0]["f_1[1][1]"]) < 1.0:
+        fails.append("body 1 moved less than one cell; test is too weak")
+
+    # collisional gas: each mode against its own invariants
+    for mode in ("cutcell", "incremental"):
+        rc, out = run_deck(exe_cmd, "in.test.splitmany",
+                           ["-var", "mode", mode, "-var", "gas", "1"])
+        if rc:
+            fails.append("gas mode %s: run failed with exit code %d"
+                         % (mode, rc))
+            continue
+        rows = parse_stats(out)
+        if not rows:
+            fails.append("gas mode %s: no stats output" % mode)
+            continue
+        np0 = rows[0]["Np"]
+        for r in rows:
+            if r["Np"] != np0:
+                fails.append("gas mode %s step %d: Np = %d, was %d"
+                             % (mode, int(r["Step"]), int(r["Np"]), int(np0)))
+                break
+        if rows[-1]["f_1"] != rows[0]["f_1"]:
+            fails.append("gas mode %s: %g particles deleted inside a body"
+                         % (mode, rows[-1]["f_1"] - rows[0]["f_1"]))
+    return fails
+
+
 def test_nbody(exe_cmd):
     """Conservation laws of many-body push-off contacts.
 
@@ -2176,6 +2244,7 @@ TESTS = [
     ("axiopen", test_axiopen),
     ("nonfinite", test_nonfinite),
     ("crossproc", test_crossproc),
+    ("splitmany", test_splitmany),
     ("nbody", test_nbody),
     ("idperm", test_idperm),
     ("missingid", test_missingid),
@@ -2195,7 +2264,7 @@ DIST_TESTS = {"ballistic", "force", "rotation", "bounce", "restitution",
               "splitcell", "gridchange", "exitbox", "twobody", "pushpair",
               "tallyorder", "rotwall", "rotwall3d", "customemit",
               "splitbalance",
-              "vacate", "facetbounce", "nbody",
+              "vacate", "facetbounce", "nbody", "splitmany",
               "axiballistic", "axidensity", "aximomentum", "axispin",
               "axipush", "axireact", "axipair"}
 

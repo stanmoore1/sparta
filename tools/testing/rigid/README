@@ -145,6 +145,15 @@ crossproc     three gas-driven bodies crossing the whole box, with
               approaches, and the trajectories must be identical to the
               non-distributed run on the same procs.  run it on several
               procs, since on one proc every body is always local
+splitmany     three faceted circles drifting and spinning across a grid
+              whose cells are about the size of their segments, so a body
+              vertex repeatedly leaves two disconnected flow slivers in a
+              cell: a split cell which appears and disappears within a
+              step or two, and whose sub cells the incremental re-cut
+              must create and remove itself rather than fall back to a
+              full grid re-map.  without particles the two remap modes
+              must agree at every step; with a collisional gas the
+              particle count must hold and nothing may be deleted
 nbody         four squares of different masses colliding with each other
               in pair and multi-body push-off contacts, no particles, no
               wall contacts: total linear momentum and total angular

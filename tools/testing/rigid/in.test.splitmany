@@ -1,0 +1,56 @@
+# TEST: split cells created and destroyed by the bodies every step
+# three faceted circles drift and spin across a grid whose cells are
+# about the size of their segments, so a body vertex repeatedly leaves
+# two disconnected flow slivers in a cell.  such a cell is a split
+# cell, and it appears and disappears again within a step or two, so
+# the incremental re-cut has to create and remove its sub cells itself
+# rather than fall back to a full grid re-map
+# gas 0: no particles, so the two remap modes must agree exactly
+# gas 1: a collisional gas, checked against its own invariants
+# run as: -var mode cutcell   (or incremental), -var gas 0 (or 1)
+
+seed	    	    12345
+
+variable            dist index 0
+if "${dist} == 1" then "global surfs explicit/distributed"
+variable            mode index incremental
+variable            gas index 0
+dimension   	    2
+global              gridcut 1.0 comm/sort yes
+
+boundary            r r p
+
+create_box  	    0 10 0 10 -0.5 0.5
+create_grid 	    20 20 1
+balance_grid        rcb cell
+
+global		    nrho 1.0e20 fnum 1.0e3
+
+species		    air.species N
+mixture		    air N vstream 0 0 0 temp 273.0
+
+if "${gas} == 1" then "collide vss air air.vss"
+
+read_surf           data.circle24 group bodies trans -3.0 -2.7 0
+read_surf           data.circle24 group bodies trans 0.3 0.1 0 typeadd 1
+read_surf           data.circle24 group bodies trans 2.7 -1.6 0 typeadd 2
+surf_collide	    1 specular
+surf_modify         all collide 1
+
+timestep 	    2.0e-5
+
+compute             c1 surf bodies all fx fy fz tx ty tz com rigid
+
+global              rigid yes
+
+fix		    1 rigid bodies c1 type infile data.splitmany.bodies &
+                    remap ${mode} push 1.0e-17 0.3 pushbound yes
+
+if "${gas} == 1" then "create_particles air n 20000"
+
+stats		    100
+stats_style         step np f_1 f_1[1][1] f_1[1][2] f_1[1][15] &
+                    f_1[2][1] f_1[2][2] f_1[2][15] &
+                    f_1[3][1] f_1[3][2] f_1[3][15]
+stats_modify        format float %20.14e
+run 		    500

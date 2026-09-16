@@ -482,14 +482,26 @@ surfs, so the cost per step depends on the number of grid cells and
 surfs near the bodies, not on the size of the grid or the total
 number of surfs.  Cells the body interior moved over or away from are
 re-marked as INSIDE or OUTSIDE.  All of this work is local to each
-processor.  Whenever the change to a cell would be structural - the
-cell would become or stop being a split cell, or its surf count would
-exceed the "global surfmax"_global.html setting - the fix
-automatically falls back to the full grid re-map that {cutcell}
-performs on every step, and issues a one-time warning saying why.  A
-body whose path is always near a split cell (e.g. a thin static wall
-crossing grid cells) therefore falls back on every step and runs at
-the cost of {cutcell}.
+processor.
+
+A cell whose flow volume the body breaks into disconnected pieces is
+a split cell, which a body vertex lying just outside a cell face
+produces routinely.  The {incremental} mode handles those too.  A
+split cell which keeps its number of pieces is re-cut in place, with
+no communication: each processor derives the same split of the same
+cell from the replicated body geometry, including for the cells it
+stores as ghosts.  A cell which gains or loses pieces needs its sub
+cells created or removed, which changes the number of grid cells a
+processor owns, so all such cells are collected and restructured
+together at the end of the step, and the ghost cells are re-acquired
+once.  Neither path re-maps the surfs or flood fills the grid.
+
+If the change to a cell is structural in a way the incremental re-cut
+cannot express - its surf count would exceed the "global
+surfmax"_global.html setting, or its cut leaves the inside/outside
+marking undecided - the fix falls back to the full grid re-map that
+{cutcell} performs on every step, and issues a one-time warning
+saying why.
 
 For {remap cutcell}, at the end of every timestep, after the body
 surfs move, all surfs are re-assigned to grid cells and cut/split
@@ -510,12 +522,6 @@ Any particles found inside the body after the re-map are deleted, but
 with swept collision coverage (see above) particles in the body's
 path are reflected rather than overtaken, so in practice no particles
 are deleted once a run is under way.
-
-With multiple rigid bodies, the {incremental} re-cut is applied only
-if every body uses {incremental}; the last-defined body then re-cuts
-the cells affected by all of them in a single coordinated pass.  If
-any body uses {cutcell}, an exact full grid re-map is performed
-instead, which correctly handles all bodies.
 
 Particles which are inside the body when a run starts are deleted at
 the start of the run.  The cumulative count of particles deleted
