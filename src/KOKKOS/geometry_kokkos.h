@@ -1678,7 +1678,7 @@ bool line_tri_moving_intersect(double *start, double *stop,
 ------------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-void rigid_recoil(int dim, double msuper, const double *norm,
+void rigid_recoil(int dim, double mpre, double mpost, const double *norm,
                   const double *vwall,
                   const double *vpre, double *v,
                   const double *point, double thit,
@@ -1692,7 +1692,7 @@ void rigid_recoil(int dim, double msuper, const double *norm,
   for (k = 0; k < 3; k++) {
     vmodel[k] = v[k];
     r[k] = point[k] - (xcm0[k] + vcm[k]*thit);
-    jinf[k] = msuper * (v[k] - vpre[k]);
+    jinf[k] = mpost*v[k] - mpre*vpre[k];
   }
   if (dim == 2) r[2] = jinf[2] = 0.0;
 
@@ -1715,19 +1715,20 @@ void rigid_recoil(int dim, double msuper, const double *norm,
   double jn = MathExtraKokkos::dot3(jinf,norm);
   for (k = 0; k < 3; k++) jt[k] = jinf[k] - jn*norm[k];
 
-  if (MathExtraKokkos::lensq3(jt) <= EPSRECOIL*EPSRECOIL*jn*jn) {
+  if (mpre == mpost &&
+      MathExtraKokkos::lensq3(jt) <= EPSRECOIL*EPSRECOIL*jn*jn) {
     MathExtraKokkos::matvec(kmat,norm,kn);
-    double scale = 1.0 / (1.0 + msuper*MathExtraKokkos::dot3(norm,kn));
+    double scale = 1.0 / (1.0 + mpost*MathExtraKokkos::dot3(norm,kn));
     for (k = 0; k < 3; k++) jnew[k] = jinf[k] + (scale-1.0)*jn*norm[k];
   } else {
     for (i = 0; i < 3; i++)
-      for (j = 0; j < 3; j++) a[i][j] = msuper*kmat[i][j];
+      for (j = 0; j < 3; j++) a[i][j] = mpost*kmat[i][j];
     for (i = 0; i < 3; i++) a[i][i] += 1.0;
     MathExtraKokkos::invert3(a,ainv);
     MathExtraKokkos::matvec(ainv,jinf,jnew);
   }
 
-  for (k = 0; k < dim; k++) v[k] = vpre[k] + jnew[k]/msuper;
+  for (k = 0; k < dim; k++) v[k] = (jnew[k] + mpre*vpre[k]) / mpost;
 
   MathExtraKokkos::sub3(v,vwall,wrel);
   if (MathExtraKokkos::dot3(wrel,norm) < 0.0)

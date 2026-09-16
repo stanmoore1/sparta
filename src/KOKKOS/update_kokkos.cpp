@@ -1995,10 +1995,14 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
           //   velocities and the full momentum exchange with the wall
 
           const int moving = rigid_on && minmoving;
+          int isppre = 0;
+          double wtpre = 1.0;
           if (moving) {
             vpre[0] = v[0];
             vpre[1] = v[1];
             vpre[2] = v[2];
+            isppre = particle_i.ispecies;
+            wtpre = particle_i.weight;
             v[0] -= minvwall[0];
             v[1] -= minvwall[1];
             v[2] -= minvwall[2];
@@ -2037,9 +2041,11 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
             }
 
             // correct the reflected velocity for the recoil of the
-            //   finite-mass body, as in Update::move()
+            //   finite-mass body, as in Update::move(), including the
+            //   case where a surface reaction changed the species and so
+            //   the mass which carries the impulse
 
-            if (ipart && !jpart && !reaction) {
+            if (ipart && !jpart) {
               double bxcm[3],bvcm[3],binvi[9];
               for (int k = 0; k < 3; k++) {
                 bxcm[k] = d_rigidbody(minbody,k);
@@ -2047,9 +2053,13 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
               }
               const double binvmass = d_rigidbody(minbody,9);
               for (int k = 0; k < 9; k++) binvi[k] = d_rigidbody(minbody,10+k);
-              double msuper = fnum * d_species(ipart->ispecies).mass;
-              if (cellweightflag_kk) msuper *= ipart->weight;
-              GeometryKokkos::rigid_recoil(DIM == 3 ? 3 : 2,msuper,
+              double mpre = fnum * d_species(isppre).mass;
+              double mpost = fnum * d_species(ipart->ispecies).mass;
+              if (cellweightflag_kk) {
+                mpre *= wtpre;
+                mpost *= ipart->weight;
+              }
+              GeometryKokkos::rigid_recoil(DIM == 3 ? 3 : 2,mpre,mpost,
                                            minnorm,minvwall,
                                            vpre,ipart->v,x,dt-dtremain,
                                            bxcm,bvcm,binvmass,binvi);
