@@ -1,0 +1,60 @@
+# TEST: gas + body axial momentum conservation in an axisymmetric domain
+# x-periodic box, drifting gas, body of revolution initially at rest
+# total x momentum = m_N * fnum * sum(vx) + M * vcm_x must be conserved
+# as the gas pushes the body along the axis
+#
+# as in in.test.momentum, the exactly conserved quantity includes the
+# half-step impulse 0.5*dt*fcm which velocity Verlet has in flight at
+# any instant, so the invariant holds to round-off rather than to the
+# statistical size of one step's transfer
+#
+# only the axial component is conserved: the radial and azimuthal
+# momentum of the gas is not a conserved quantity of the axisymmetric
+# model at all, since a particle's own (vy,vz) are rotated into the
+# plane at every move, and the body by construction only responds to
+# the azimuthal average of what the gas gives it
+#
+# run in both remap modes: the incremental re-cut must reproduce the
+# full rebuild exactly, which for an axisymmetric domain also pins down
+# the annular cell volumes it installs for cells the body vacates
+
+seed	    	    12345
+
+variable            dist index 0
+variable            remap index incremental
+if "${dist} == 1" then "global surfs explicit/distributed"
+dimension   	    2
+boundary            p ar p
+
+create_box  	    0 1 0 0.3 -0.5 0.5
+create_grid 	    20 6 1
+
+global		    nrho 1.0 fnum 0.001
+
+species		    air.species N
+mixture		    air N vstream 100.0 0 0 temp 273.0
+
+read_surf           adata.cylinder group body
+surf_collide	    1 specular
+surf_modify         all collide 1
+
+timestep 	    1.0e-5
+
+compute             c1 surf body all fx fy fz tx ty tz com 0.5 0 0
+
+global              rigid yes
+
+fix		    1 rigid body c1 body &
+		    mass 1.0e-22 com 0.5 0 0 vcom 0 0 0 &
+		    moi 5.0e-25 1.0e-24 1.0e-24 0 0 0 angmom 0 0 0 &
+                    remap ${remap}
+
+create_particles    air n 20000
+
+variable px particle vx
+compute r reduce sum v_px
+
+stats		    200
+stats_style         step np c_r f_1[4] f_1[7] f_1[8] f_1[9] f_1
+stats_modify        format float %20.14e
+run 		    2000

@@ -47,6 +47,11 @@ namespace Geometry {
                           double *, double *, double &, int &);
   bool axi_horizontal_line(double, double *, double *, double,
                            int &, double &, double &);
+  bool axi_line_moving_intersect(double, double *, double *, double,
+                                 double *, double *, double *, int,
+                                 double *, double *,
+                                 double *, double *, double *, double *,
+                                 double &, int &);
 
   bool line_tri_intersect(double *, double *,
                           double *, double *, double *, double *,

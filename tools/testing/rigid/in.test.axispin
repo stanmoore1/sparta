@@ -1,0 +1,58 @@
+# TEST: gas + body axial angular momentum in an axisymmetric domain
+# a body of revolution spinning about the axis inside a closed box of gas,
+# with a diffuse wall so the spin couples to the gas
+#
+# axial angular momentum is exactly conserved by the axisymmetric model:
+# a particle's r * v_theta does not change during free flight (it is its
+# angular momentum about the axis), the remap into the plane is a
+# rotation about that axis, the reflecting outer radial wall reverses
+# only v_r, and the axis itself is not a boundary.  so
+#   m_N * fnum * sum(r*v_theta) + ixx * omega_x + 0.5*dt*tx
+# must hold to round-off, with the half-step torque impulse included for
+# the same reason as in in.test.momentum
+#
+# this is the invariant which exercises the azimuthal channel of the
+# axisymmetric recoil, kmat[2][2] = r^2/ixx: a body which took the full
+# impulse, or none of it, would not conserve this sum
+
+seed	    	    12345
+
+variable            dist index 0
+if "${dist} == 1" then "global surfs explicit/distributed"
+dimension   	    2
+boundary            p ar p
+
+create_box  	    0 1 0 0.3 -0.5 0.5
+create_grid         20 6 1
+
+global		    nrho 1.0 fnum 0.001
+
+species		    air.species N
+mixture		    air N vstream 0 0 0 temp 273.0
+
+read_surf           adata.cylinder group body
+surf_collide	    1 diffuse 273.0 1.0
+surf_modify         all collide 1
+
+timestep 	    1.0e-5
+
+compute             c1 surf body all fx fy fz tx ty tz com 0.5 0 0
+
+global              rigid yes
+
+# ixx of a uniform cylinder R=0.1, M=1e-24: M R^2 / 2 = 5.0e-27
+# spun up so the gas has something to take
+
+fix		    1 rigid body c1 body &
+		    mass 1.0e-24 com 0.5 0 0 vcom 0 0 0 &
+		    moi 5.0e-27 1.0e-26 1.0e-26 0 0 0 angmom 5.0e-24 0 0
+
+create_particles    air n 20000
+
+variable lz particle y*vz
+compute r reduce sum v_lz
+
+stats		    200
+stats_style         step np c_r f_1[13] f_1[10] f_1[1]
+stats_modify        format float %20.14e
+run 		    2000

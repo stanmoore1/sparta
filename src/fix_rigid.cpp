@@ -40,10 +40,12 @@
 #include "cut3d.h"
 #include "math_extra.h"
 #include "math_eigen.h"
+#include "math_const.h"
 #include "memory.h"
 #include "error.h"
 
 using namespace SPARTA_NS;
+using namespace MathConst;
 
 static constexpr double EPSILON = 1.0e-7;
 
@@ -106,10 +108,15 @@ FixRigid::FixRigid(SPARTA *sparta, int narg, char **arg) :
 
   if (!surf->exist) error->all(FLERR,"Fix rigid requires surf elements exist");
   kokkosable = 0;
-  if (domain->axisymmetric)
-    error->all(FLERR,"Fix rigid cannot be used with axisymmetric domains");
   if (surf->implicit)
     error->all(FLERR,"Fix rigid cannot be used with implicit surfs");
+
+  // in an axisymmetric domain the surf elements are profiles in the
+  //   (x,r) half plane which stand for surfaces of revolution about the
+  //   x axis, so a rigid body built from them is a body of revolution
+  //   and only axial translation and axial spin preserve that symmetry
+
+  axiflag = domain->axisymmetric;
 
   // for distributed surfs, each proc owns a subset of the surfs;
   // the fix gathers a replicated copy of its (compact) body elements
@@ -335,7 +342,7 @@ FixRigid::FixRigid(SPARTA *sparta, int narg, char **arg) :
   // for dstyle = density, xcm and moi are computed from the geometry,
   //   which is planar in 2d, so only the user-settable values are checked
 
-  if (dim == 2) {
+  if (dim == 2 && !axiflag) {
     if (vcm[2] != 0.0)
       error->all(FLERR,"Fix rigid z components of com and vcom "
                  "must be zero for 2d");
@@ -354,6 +361,34 @@ FixRigid::FixRigid(SPARTA *sparta, int narg, char **arg) :
       error->all(FLERR,"Fix rigid z component of force must be zero for 2d");
   }
 
+  // axisymmetric: the body is a body of revolution about the x axis, so
+  //   it can only translate along x and spin about x.  its COM lies on
+  //   the axis, its transverse velocity and angular momentum must be
+  //   zero, and only ixx of the inertia tensor is ever used
+
+  if (axiflag) {
+    if (vcm[1] != 0.0 || vcm[2] != 0.0)
+      error->all(FLERR,"Fix rigid y,z components of vcom must be zero "
+                 "for an axisymmetric domain");
+    if (angmom[1] != 0.0 || angmom[2] != 0.0)
+      error->all(FLERR,"Fix rigid y,z components of angmom must be zero "
+                 "for an axisymmetric domain");
+    if (fext[1] != 0.0 || fext[2] != 0.0)
+      error->all(FLERR,"Fix rigid y,z components of force must be zero "
+                 "for an axisymmetric domain");
+    if (!densityflag) {
+      if (xcm[1] != 0.0 || xcm[2] != 0.0)
+        error->all(FLERR,"Fix rigid y,z components of com must be zero "
+                   "for an axisymmetric domain");
+      if (moi[3] != 0.0 || moi[4] != 0.0 || moi[5] != 0.0)
+        error->all(FLERR,"Fix rigid products of inertia must be zero "
+                   "for an axisymmetric domain");
+      if (moi[0] <= 0.0)
+        error->all(FLERR,"Fix rigid ixx of moi must be positive "
+                   "for an axisymmetric domain");
+    }
+  }
+
   // setup the rigid body
 
   setup_body();
@@ -362,10 +397,15 @@ FixRigid::FixRigid(SPARTA *sparta, int narg, char **arg) :
   //   setup_body() zeroed; the body is moved by them on the first step
 
   if (forceinfile) {
-    if (dim == 2 && (fcm_infile[2] != 0.0 ||
-                     torque_infile[0] != 0.0 || torque_infile[1] != 0.0))
+    if (dim == 2 && !axiflag &&
+        (fcm_infile[2] != 0.0 ||
+         torque_infile[0] != 0.0 || torque_infile[1] != 0.0))
       error->all(FLERR,"Fix rigid infile force and torque must be "
                  "in-plane for 2d");
+    if (axiflag && (fcm_infile[1] != 0.0 || fcm_infile[2] != 0.0 ||
+                    torque_infile[1] != 0.0 || torque_infile[2] != 0.0))
+      error->all(FLERR,"Fix rigid infile force and torque must be axial "
+                 "for an axisymmetric domain");
     for (int j = 0; j < 3; j++) {
       fcm[j] = fcm_infile[j];
       torque[j] = torque_infile[j];
@@ -447,7 +487,7 @@ FixRigid::FixRigid(SPARTA *sparta, int narg, char **arg) :
   //   changed between runs, after this fix is defined
 
   if (remapmode == INCREMENTAL) {
-    if (dim == 2) cut2d = new Cut2d(sparta,0);
+    if (dim == 2) cut2d = new Cut2d(sparta,axiflag);
     else cut3d = new Cut3d(sparta);
   }
 }
@@ -884,7 +924,7 @@ void FixRigid::start_of_step()
   // for 2d, insure COM stays in plane and rotation is about z axis
   // guards against small numeric drift in principal axes
 
-  if (dim == 2) {
+  if (dim == 2 && !axiflag) {
     xcmnew[2] = 0.0;
     omega[0] = 0.0;
     omega[1] = 0.0;
@@ -901,7 +941,19 @@ void FixRigid::start_of_step()
   //   re-evaluates omega at the half step from the (constant over the
   //   step) angular momentum; useful for rotation-dominated bodies
 
-  if (rotstyle == RICHARDSON) {
+  // axisymmetric: the body can only spin about its own axis, which maps
+  //   the surface of revolution onto itself and so moves no geometry.
+  //   integrating the quaternion would instead rotate each profile point
+  //   out of the (x,r) plane by omega_x*dt, which is not the same body.
+  //   so the orientation is held at the identity and only the spin rate
+  //   in omega[0] is carried forward, where the mover reads it as the
+  //   azimuthal wall velocity omega_x * r
+
+  if (axiflag) {
+    quatnew[0] = 1.0;
+    quatnew[1] = quatnew[2] = quatnew[3] = 0.0;
+
+  } else if (rotstyle == RICHARDSON) {
     quatnew[0] = quat[0];
     quatnew[1] = quat[1];
     quatnew[2] = quat[2];
@@ -934,7 +986,11 @@ void FixRigid::start_of_step()
   // max surf pt displacement > smallest grid cell degrades the
   //   accuracy of surf assignment to grid cells for cutcell remapping
 
-  if (!warnrotate && MathExtra::len3(omega)*dt > 0.1) {
+  // neither warning applies to the spin of an axisymmetric body: it
+  //   maps the surface onto itself, so it displaces no surf point and
+  //   the collision test for it is exact at any spin rate
+
+  if (!warnrotate && !axiflag && MathExtra::len3(omega)*dt > 0.1) {
     warnrotate = 1;
     if (comm->me == 0)
       error->warning(FLERR,"Fix rigid body rotation per timestep exceeds "
@@ -942,8 +998,8 @@ void FixRigid::start_of_step()
   }
 
   if (!warntranslate) {
-    double dispmax =
-      (MathExtra::len3(vcm) + MathExtra::len3(omega)*rmaxbody) * dt;
+    double dispmax = MathExtra::len3(vcm) * dt;
+    if (!axiflag) dispmax += MathExtra::len3(omega)*rmaxbody * dt;
     if (dispmax > mincellsize) {
       warntranslate = 1;
       if (comm->me == 0)
@@ -1028,6 +1084,7 @@ void FixRigid::end_of_step()
       f->torque[0] = ftbuf_all[6*m+3];
       f->torque[1] = ftbuf_all[6*m+4];
       f->torque[2] = ftbuf_all[6*m+5];
+      f->axi_project(f->fcm,f->torque);
     }
   }
 
@@ -1053,11 +1110,24 @@ void FixRigid::end_of_step()
   quat[2] = quatnew[2];
   quat[3] = quatnew[3];
 
-  // enforce2d on all body properties
-  // start_of_step() enforces it on xcmnew and omega; quat stays a
-  //   rotation about z since omega is along z
+  // enforce the body's degrees of freedom on all its properties
+  // 2d: in-plane motion and rotation about z.  start_of_step() enforces
+  //   it on xcmnew and omega; quat stays a rotation about z since omega
+  //   is along z
+  // axisymmetric: translation along x and spin about x.  axi_project()
+  //   already removed the transverse force and torque, so this only
+  //   guards against drift; quat is pinned to the identity in
+  //   start_of_step()
 
-  if (dim == 2) {
+  if (axiflag) {
+    xcm[1] = xcm[2] = 0.0;
+    vcm[1] = vcm[2] = 0.0;
+    fcm[1] = fcm[2] = 0.0;
+    torque[1] = torque[2] = 0.0;
+    angmom[1] = angmom[2] = 0.0;
+    omega[1] = omega[2] = 0.0;
+
+  } else if (dim == 2) {
     xcm[2] = 0.0;
     vcm[2] = 0.0;
     fcm[2] = 0.0;
@@ -1081,6 +1151,22 @@ void FixRigid::end_of_step()
 
     for (int i = 0; i < nsurf; i++) {
       for (int j = 0; j < dim; j++) {
+
+        // axisymmetric: the body frame never rotates and the COM stays
+        //   on the axis, so the pose map is a shift along x and nothing
+        //   else.  doing it as a shift rather than through the (identity)
+        //   rotation keeps the radial coordinate bitwise unchanged, so a
+        //   profile point on the axis stays exactly at r = 0 for the
+        //   whole run.  the cut-cell routines and the watertight check
+        //   both compare against r = 0 exactly
+
+        if (axiflag) {
+          bodypt[i][j][0] = xcm[0] + displace[i][j][0];
+          bodypt[i][j][1] = displace[i][j][1];
+          bodypt[i][j][2] = 0.0;
+          continue;
+        }
+
         MathExtra::matvec(ex_space,ey_space,ez_space,displace[i][j],delta);
         if (dim == 2) delta[2] = 0.0;
         MathExtra::add3(xcm,delta,bodypt[i][j]);
@@ -1210,6 +1296,7 @@ void FixRigid::end_of_step()
 
       for (int m = 0; m < nb; m++) {
         FixRigid *f = flist[m];
+        f->axi_project(f->fpush,f->tqpush);
         f->fcm[0] += f->fpush[0];
         f->fcm[1] += f->fpush[1];
         f->fcm[2] += f->fpush[2];
@@ -2211,6 +2298,108 @@ void FixRigid::body_properties(double density)
 }
 
 /* ----------------------------------------------------------------------
+   compute massbody, xcm, and moi for an axisymmetric body of revolution
+   called for dstyle = density in an axisymmetric domain, in place of
+     body_properties(), after check_enclosed() has verified that the
+     profile encloses a positive volume of revolution with outward
+     normals
+
+   the body elements are a profile in the (x,r) half plane traversed so
+     that the element normals (-dr,dx)/L point out of the body, i.e. in
+     the +x sense over the outer surface.  the solid they generate by
+     revolution about the x axis is closed even where the profile itself
+     is open, as long as the open ends terminate on the axis: a
+     semicircle from (-R,0) to (R,0) generates a sphere with no missing
+     area at the poles.  so the surface integrals below need no special
+     handling for a body that touches the axis
+
+   every volume integral is reduced to a surface integral by the
+     divergence theorem and then done exactly, element by element.  for
+     one element, with x(t) = x1 + t dx and r(t) = r1 + t dr on [0,1],
+       dA = 2 pi r L dt,  n = (-dr,dx)/L,  so
+       int_V div F dV = 2 pi sum_i int_0^1 [-Fx dr + Fr dx] r dt
+     which is a polynomial in t, hence exact with no quadrature.  the
+     four integrals needed come from
+       F = (0, r/2)    -> V          = int dV
+       F = (x^2/2, 0)  -> first      = int x dV
+       F = (x^3/3, 0)  -> secondxx   = int x^2 dV
+       F = (0, r^3/4)  -> secondrr   = int r^2 dV
+
+   as in body_properties(), the x integrals are referenced to a point on
+     the body so that an origin-based sum cannot lose relative precision
+     like (R/L)^2 for a body far from the origin.  r is measured from the
+     axis, which is physical and cannot be shifted
+
+   the COM of a body of revolution lies on the axis, so ycm = zcm = 0 and
+     no parallel-axis shift is needed for ixx.  the transverse moments
+     use <z^2> = r^2/2 averaged around the ring, giving
+       ixx = rho secondrr
+       iyy = izz = rho (secondxx - 2 xcm first + xcm^2 V) + ixx/2
+     with all products of inertia zero.  only ixx is used by the
+     dynamics, since the body may only spin about its own axis; the
+     transverse moments are computed so the reported inertia is right
+------------------------------------------------------------------------- */
+
+void FixRigid::body_properties_axi(double density)
+{
+  double volume = 0.0;         // int dV
+  double first = 0.0;          // int x dV, about ref
+  double secondxx = 0.0;       // int x^2 dV, about ref
+  double secondrr = 0.0;       // int r^2 dV
+
+  double ref = bodypt[0][0][0];
+
+  for (int i = 0; i < nsurf; i++) {
+    double x1 = bodypt[i][0][0] - ref, r1 = bodypt[i][0][1];
+    double x2 = bodypt[i][1][0] - ref, r2 = bodypt[i][1][1];
+    double dx = x2 - x1, dr = r2 - r1;
+
+    // int_0^1 r^2 dt, int_0^1 r^4 dt, int_0^1 x^2 r dt, int_0^1 x^3 r dt
+
+    double ir2 = (r1*r1 + r1*r2 + r2*r2) / 3.0;
+    double ir4 = r1*r1*r1*r1 + 2.0*r1*r1*r1*dr + 2.0*r1*r1*dr*dr +
+      r1*dr*dr*dr + 0.2*dr*dr*dr*dr;
+    double ix2r = x1*x1*r1 + 0.5*(x1*x1*dr + 2.0*x1*dx*r1) +
+      (2.0*x1*dx*dr + dx*dx*r1)/3.0 + 0.25*dx*dx*dr;
+    double ix3r = x1*x1*x1*r1 + 0.5*(x1*x1*x1*dr + 3.0*x1*x1*dx*r1) +
+      (3.0*x1*x1*dx*dr + 3.0*x1*dx*dx*r1)/3.0 +
+      0.25*(3.0*x1*dx*dx*dr + dx*dx*dx*r1) + 0.2*dx*dx*dx*dr;
+
+    // 2 pi int [-Fx dr + Fr dx] r dt for each F above, so the prefactor
+    //   differs per integral: pi for V and first, 2pi/3 for secondxx
+    //   (from x^3/3), pi/2 for secondrr (from r^3/4)
+
+    volume += MY_PI * dx * ir2;
+    first -= MY_PI * dr * ix2r;
+    secondxx -= (2.0/3.0) * MY_PI * dr * ix3r;
+    secondrr += 0.5 * MY_PI * dx * ir4;
+  }
+
+  if (volume <= 0.0)
+    error->all(FLERR,"Fix rigid could not compute body properties");
+
+  massbody = density * volume;
+  if (massbody <= 0.0)
+    error->all(FLERR,"Fix rigid body mass must be positive");
+
+  // the COM is on the axis by symmetry
+
+  double xcmref = first / volume;
+  xcm[0] = xcmref + ref;
+  xcm[1] = 0.0;
+  xcm[2] = 0.0;
+
+  moi[0] = density * secondrr;
+  moi[1] = density * (secondxx - 2.0*xcmref*first + xcmref*xcmref*volume) +
+    0.5 * moi[0];
+  moi[2] = moi[1];
+  moi[3] = moi[4] = moi[5] = 0.0;
+
+  if (moi[0] <= 0.0)
+    error->all(FLERR,"Fix rigid could not compute body properties");
+}
+
+/* ----------------------------------------------------------------------
    one-time initialization of rigid body attributes
 ------------------------------------------------------------------------- */
 
@@ -2230,7 +2419,54 @@ void FixRigid::setup_body()
   // done here, after the checks above have verified the body is closed
   //   and its normals point outward, which the sums rely on
 
-  if (densityflag) body_properties(density);
+  if (densityflag) {
+    if (axiflag) body_properties_axi(density);
+    else body_properties(density);
+  }
+
+  // axisymmetric: the body frame is the space frame, always
+  // a body of revolution has iyy = izz, so the inertia tensor is
+  //   degenerate in the transverse plane and a diagonalization would
+  //   return an arbitrary rotation about x.  that rotation is harmless
+  //   physically, but it would make the body-frame -> space-frame map
+  //   in end_of_step() a non-trivial matrix product, and the profile
+  //   points which sit exactly on the axis would then pick up a
+  //   round-off y of order 1e-17 instead of staying exactly zero.  the
+  //   cut-cell routines and the watertight check both compare against
+  //   y = 0 exactly, so that drift would silently open the body up
+  // pinning the axes to the identity keeps the map an exact copy plus a
+  //   shift in x, and costs nothing: the body can only spin about x,
+  //   which moves no geometry, so the body frame never rotates anyway
+
+  if (axiflag) {
+    ex_space[0] = 1.0; ex_space[1] = 0.0; ex_space[2] = 0.0;
+    ey_space[0] = 0.0; ey_space[1] = 1.0; ey_space[2] = 0.0;
+    ez_space[0] = 0.0; ez_space[1] = 0.0; ez_space[2] = 1.0;
+    inertia[0] = moi[0];
+    inertia[1] = moi[1];
+    inertia[2] = moi[2];
+
+    if (xcm[1] != 0.0 || xcm[2] != 0.0)
+      error->all(FLERR,"Fix rigid body COM must lie on the axisymmetric "
+                 "axis");
+    if (inertia[0] <= 0.0)
+      error->all(FLERR,"Fix rigid moment of inertia about the "
+                 "axisymmetric axis must be positive");
+
+    // an element lying flat on the axis sweeps out no area, so it can
+    //   neither be hit nor bound any volume, and it would confuse the
+    //   profile-closure check above
+
+    for (int i = 0; i < nsurf; i++)
+      if (bodypt[i][0][1] == 0.0 && bodypt[i][1][1] == 0.0)
+        error->all(FLERR,"Fix rigid body surf lies on the axisymmetric "
+                   "axis");
+
+    quat[0] = 1.0; quat[1] = quat[2] = quat[3] = 0.0;
+    set_recoil();
+    setup_body_displace();
+    return;
+  }
 
   // tensor = inertia tensor in space frame
 
@@ -2321,6 +2557,16 @@ void FixRigid::setup_body()
 
   set_recoil();
 
+  setup_body_displace();
+}
+
+/* ----------------------------------------------------------------------
+   finish one-time body setup, once the body frame axes are known
+   shared by the general path and the axisymmetric one
+------------------------------------------------------------------------- */
+
+void FixRigid::setup_body_displace()
+{
   // set displacement for each end/corner point in each line/tri
   // delta = vector from COM to end/corner point in space frame
   // displace = delta rotated to be in basis of principal axes, i.e. in body frame
@@ -2598,6 +2844,16 @@ void FixRigid::push_contact(double *p1, double *p2, double *p3,
         if (scale < 0.0) scale = 0.0;
       }
 
+      // axisymmetric: the corner pt stands for a ring of radius r and
+      //   the source element for another, so the spring law gives a
+      //   force per unit length of contact and the total is 2 pi r
+      //   times it.  a pt on the axis then feels no push, which is
+      //   right: its ring has no circumference.  the force stays in the
+      //   (x,r) plane, so a contact exerts no torque about the axis and
+      //   cannot spin the body
+
+      if (axiflag) scale *= MY_2PI * pts[j][1];
+
       fone[0] = scale*fdir[0];
       fone[1] = scale*fdir[1];
       fone[2] = scale*fdir[2];
@@ -2779,6 +3035,13 @@ void FixRigid::push_off()
       for (j = 0; j < npoint; j++) {
         for (int iface = 0; iface < nface; iface++) {
           if (bflag[iface] == PERIODIC) continue;
+
+          // the axisymmetric axis is not a wall: a body of revolution
+          //   is expected to reach r = 0, and pushing it off the axis
+          //   would break the symmetry it is built on
+
+          if (bflag[iface] == AXISYM) continue;
+
           int idim = iface/2;
           if (iface % 2 == 0) d = pts[j][idim] - boxlo[idim];
           else d = boxhi[idim] - pts[j][idim];
@@ -2800,6 +3063,7 @@ void FixRigid::push_off()
           }
 
           scale *= fsign[iface];
+          if (axiflag) scale *= MY_2PI * pts[j][1];
           fone[0] = fone[1] = fone[2] = 0.0;
           fone[idim] = scale;
 
@@ -3218,7 +3482,6 @@ void FixRigid::record_oldinside()
 int FixRigid::incremental_recut()
 {
   int i,n,ncand,icell,nsplitone,xsub,moving;
-  double vol;
   double xsplit[3],ctr[3],rlo[3],rhi[3];
   double *vols;
   double *clo,*chi;
@@ -3353,10 +3616,7 @@ int FixRigid::incremental_recut()
       cells[icell].csurfs = NULL;
       listschanged = 1;
 
-      if (dim == 3)
-        vol = (chi[0]-clo[0]) * (chi[1]-clo[1]) * (chi[2]-clo[2]);
-      else vol = (chi[0]-clo[0]) * (chi[1]-clo[1]);
-      cinfo[icell].volume = vol;
+      cinfo[icell].volume = full_cell_volume(clo,chi);
 
       if (inside_any_body(ctr)) cinfo[icell].type = CELLINSIDE;
       else cinfo[icell].type = CELLOUTSIDE;
@@ -3382,10 +3642,7 @@ int FixRigid::incremental_recut()
       //   full flow volume, interior/exterior typing via parity test
 
       if (!cell_cut(icell)) {
-        if (dim == 3)
-          vol = (chi[0]-clo[0]) * (chi[1]-clo[1]) * (chi[2]-clo[2]);
-        else vol = (chi[0]-clo[0]) * (chi[1]-clo[1]);
-        cinfo[icell].volume = vol;
+        cinfo[icell].volume = full_cell_volume(clo,chi);
         if (inside_any_body(ctr)) cinfo[icell].type = CELLINSIDE;
         else cinfo[icell].type = CELLOUTSIDE;
         for (i = 0; i < ncorner; i++)
@@ -3447,10 +3704,7 @@ int FixRigid::incremental_recut()
 
       cinfo[icell].type = CELLOUTSIDE;
       typechanged = 1;
-      if (dim == 3)
-        cinfo[icell].volume = (chi[0]-clo[0]) * (chi[1]-clo[1]) *
-          (chi[2]-clo[2]);
-      else cinfo[icell].volume = (chi[0]-clo[0]) * (chi[1]-clo[1]);
+      cinfo[icell].volume = full_cell_volume(clo,chi);
       for (i = 0; i < ncorner; i++)
         cinfo[icell].corner[i] = CELLOUTSIDE;
     }
@@ -3484,6 +3738,46 @@ int FixRigid::incremental_recut()
   }
 
   return FALLBACK_NONE;
+}
+
+/* ----------------------------------------------------------------------
+   project a force and torque on an axisymmetric body onto the two
+     degrees of freedom it has: translation along x and spin about x
+   no-op unless the domain is axisymmetric
+   this is not a constraint imposed on the physics, it is the azimuthal
+     average of it.  a simulated particle in an axisymmetric run stands
+     for real molecules at every azimuth around the ring at its radius,
+     so the force it exerts must be averaged around that ring before the
+     body responds to it.  a radial force at azimuth phi points along
+     (cos phi, sin phi) in the space frame and an azimuthal one along
+     (-sin phi, cos phi); both average to zero.  what survives is the
+     axial force and the torque about the axis, which compute surf
+     already tallies correctly as tx = r * f_theta, since the hit point
+     is (x,r,0) and the COM is on the axis
+   the body's own response is averaged the same way in the collision
+     recoil: see the axisymmetric kmat in Geometry::rigid_recoil()
+------------------------------------------------------------------------- */
+
+void FixRigid::axi_project(double *f, double *tq)
+{
+  if (!axiflag) return;
+  f[1] = f[2] = 0.0;
+  tq[1] = tq[2] = 0.0;
+}
+
+/* ----------------------------------------------------------------------
+   flow volume of a grid cell which no surf cuts
+   matches Grid::set_inout() and Grid::add_child_cell(): an axisymmetric
+     cell is an annulus swept about the axis, not a rectangle
+------------------------------------------------------------------------- */
+
+double FixRigid::full_cell_volume(double *clo, double *chi)
+{
+  if (dim == 3)
+    return (chi[0]-clo[0]) * (chi[1]-clo[1]) * (chi[2]-clo[2]);
+  if (axiflag)
+    return MY_PI * (chi[1]*chi[1] - clo[1]*clo[1]) * (chi[0]-clo[0]);
+  return (chi[0]-clo[0]) * (chi[1]-clo[1]);
 }
 
 /* ----------------------------------------------------------------------
@@ -3630,9 +3924,15 @@ void FixRigid::body_bbox(int sweepflag)
 
     if (sweepflag) {
       for (j = 0; j < npoint; j++) {
-        MathExtra::matvec(ex_space,ey_space,ez_space,displace[i][j],delta);
-        if (dim == 2) delta[2] = 0.0;
-        MathExtra::add3(xcmnew,delta,ptnew);
+        if (axiflag) {
+          ptnew[0] = xcmnew[0] + displace[i][j][0];
+          ptnew[1] = displace[i][j][1];
+          ptnew[2] = 0.0;
+        } else {
+          MathExtra::matvec(ex_space,ey_space,ez_space,displace[i][j],delta);
+          if (dim == 2) delta[2] = 0.0;
+          MathExtra::add3(xcmnew,delta,ptnew);
+        }
         for (k = 0; k < 3; k++) {
           lo[k] = MIN(lo[k],ptnew[k]);
           hi[k] = MAX(hi[k],ptnew[k]);
@@ -3654,8 +3954,10 @@ void FixRigid::body_bbox(int sweepflag)
   //   rotating point bulges beyond the chord by up to R*(1-cos(a/2))
   //   for rotation angle a and distance R from the axis, so pad by
   //   that (bounded by R*a^2/8) to cover the true swept region
+  // an axisymmetric body's spin is about its own axis of revolution, so
+  //   it displaces no surf point and the motion is the chord exactly
 
-  if (sweepflag) {
+  if (sweepflag && !axiflag) {
     double angle = MathExtra::len3(omega) * update->dt;
     double rmax = 0.0;
     for (i = 0; i < nsurf; i++)
@@ -3932,7 +4234,15 @@ void FixRigid::final_kick()
 
   MathExtra::angmom_to_omega(angmom,ex_space,ey_space,ez_space,inertia,omega);
 
-  if (dim == 2) {
+  // guard against numeric drift out of the degrees of freedom the body
+  //   has: rotation about z only in 2d, translation along x and spin
+  //   about x only in an axisymmetric domain
+
+  if (axiflag) {
+    vcm[1] = vcm[2] = 0.0;
+    angmom[1] = angmom[2] = 0.0;
+    omega[1] = omega[2] = 0.0;
+  } else if (dim == 2) {
     vcm[2] = 0.0;
     angmom[0] = 0.0;
     angmom[1] = 0.0;
@@ -3958,7 +4268,15 @@ void FixRigid::set_recoil()
   invmass = 1.0 / massbody;
   for (k = 0; k < 9; k++) invinertia[k] = 0.0;
 
-  if (dim == 2) {
+  // axisymmetric: the body can only spin about x, and the axes are
+  //   pinned to the identity, so only 1/ixx is ever needed.  it is
+  //   stored in slot 0, where Geometry::rigid_recoil() reads it for the
+  //   axisymmetric kmat
+
+  if (axiflag) {
+    invinertia[0] = 1.0 / inertia[0];
+
+  } else if (dim == 2) {
     double izz = 0.0;
     for (k = 0; k < 3; k++) izz += inertia[k]*e[k][2]*e[k][2];
     invinertia[8] = 1.0 / izz;
@@ -3976,6 +4294,17 @@ void FixRigid::set_recoil()
      line as it does as the 2nd endpoint of a line
    3d: each edge must be traversed the same number of times in each
      direction by the tris that share it
+   axisymmetric: a profile end point lying exactly on the axis needs no
+     match, since the surface of revolution it generates is closed there
+     (a semicircle generates a sphere, whose poles are not holes).  this
+     is the same exception the Surf class makes for a surf end point on
+     the box surface, of which the axis y = 0 is one face.
+     no further check is needed once the other end points all match:
+     every line contributes +1 at one point and -1 at another, so the
+     counts sum to zero over all points, and if the only non-zero ones
+     are on the axis then every open chain of the profile has both of
+     its ends there.  such a chain generates a closed surface, so the
+     body is closed
    matching of points is on exact floating point values, the same as
      the watertight checks applied to all surfs by the Surf class
    all procs store all surfs, so the check is identical on every proc
@@ -3997,8 +4326,11 @@ void FixRigid::check_watertight()
     }
 
     for (std::map<std::array<double,2>,int>::iterator it = count.begin();
-         it != count.end(); ++it)
-      if (it->second != 0) unmatched++;
+         it != count.end(); ++it) {
+      if (it->second == 0) continue;
+      if (axiflag && it->first[1] == 0.0) continue;
+      unmatched++;
+    }
 
   } else {
     std::map<std::array<double,6>,int> count;
@@ -4058,6 +4390,13 @@ void FixRigid::check_watertight()
      signed volume via the divergence theorem over the tris,
      each computed relative to the centroid of the body points
      so that round-off is set by the body extent, not its position
+   axisymmetric: the measure is instead the volume of revolution the
+     profile generates, pi sum (r1^2 + r1 r2 + r2^2) (x2-x1) / 3, which
+     is the same divergence-theorem reduction and is valid for a profile
+     whose free ends terminate on the axis, since the surface of
+     revolution is closed there.  the planar area the profile encloses
+     is meaningless for such a body, and is zero for a body which is a
+     thin shell of revolution, so the volume is the right measure
    the sign is tested too: the normals must point outward (see below)
    all procs store all surfs, so the check is identical on every proc
 ------------------------------------------------------------------------- */
@@ -4087,7 +4426,14 @@ void FixRigid::check_enclosed()
 
   double measure = 0.0;
 
-  if (dim == 2) {
+  if (axiflag) {
+    for (i = 0; i < nsurf; i++) {
+      double r1 = bodypt[i][0][1];
+      double r2 = bodypt[i][1][1];
+      measure += MY_PI3 * (r1*r1 + r1*r2 + r2*r2) *
+        (bodypt[i][1][0] - bodypt[i][0][0]);
+    }
+  } else if (dim == 2) {
     for (i = 0; i < nsurf; i++) {
       MathExtra::sub3(bodypt[i][0],c,a);
       MathExtra::sub3(bodypt[i][1],c,b);
@@ -4109,10 +4455,10 @@ void FixRigid::check_enclosed()
   //   has no usable interior on any grid that could resolve it
 
   double scale = extent*extent;
-  if (dim == 3) scale *= extent;
+  if (dim == 3 || axiflag) scale *= extent;
 
   if (fabs(measure) <= EPSENCLOSED*scale) {
-    if (dim == 2)
+    if (dim == 2 && !axiflag)
       error->all(FLERR,"Fix rigid body encloses zero area");
     else
       error->all(FLERR,"Fix rigid body encloses zero volume");
@@ -4126,10 +4472,19 @@ void FixRigid::check_enclosed()
   // sign of the enclosed measure: 2d lines with outward normals run
   //   clockwise (the normal is to the left of p1 -> p2), 3d triangles
   //   with outward normals run counter-clockwise seen from outside
+  // axisymmetric: the measure is the volume between the profile and the
+  //   axis, not the area the profile encloses in the plane, and an
+  //   outward normal (-dr,dx) points away from the axis where dx > 0,
+  //   so an outward-facing profile runs in +x and gives a positive
+  //   volume, the opposite sign convention from the planar 2d case
 
   int inward = 0;
-  if (dim == 2 && measure > 0.0) inward = 1;
-  if (dim == 3 && measure < 0.0) inward = 1;
+  if (axiflag) {
+    if (measure < 0.0) inward = 1;
+  } else {
+    if (dim == 2 && measure > 0.0) inward = 1;
+    if (dim == 3 && measure < 0.0) inward = 1;
+  }
   if (inward) error->all(FLERR,"Fix rigid body surf normals point inward");
 }
 

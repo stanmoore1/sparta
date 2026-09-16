@@ -232,9 +232,10 @@ void Update::init()
       else moveptr = &Update::move<3,0,0,0>;
     }
   } else if (domain->axisymmetric) {
-    if (surf->exist)
-      moveptr = &Update::move<1,1,0,0>;
-    else {
+    if (surf->exist) {
+      if (!rigidflag) moveptr = &Update::move<1,1,0,0>;
+      else moveptr = &Update::move<1,1,0,1>;
+    } else {
       if (optmove_flag) moveptr = &Update::move<1,0,1,0>;
       else moveptr = &Update::move<1,0,0,0>;
     }
@@ -301,9 +302,6 @@ void Update::init()
 void Update::init_rigid()
 {
   if (!rigidflag) return;
-
-  if (domain->axisymmetric)
-    error->all(FLERR,"Cannot use global rigid with axisymmetric domain");
 
   // the cell-bin index holds cell indices for the grid it was built
   //   from; the grid may have been replaced between runs by a command
@@ -1446,7 +1444,8 @@ template < int DIM, int SURF, int OPT, int RIGID > void Update::move()
               // in 2d the mapped z is zero up to round-off; it is set to
               //   zero exactly, as the static line test expects
 
-              if (RIGID && rigidmap[isurf] >= 0 && rigidmap[isurf] != mapbody) {
+              if (DIM > 1 && RIGID && rigidmap[isurf] >= 0 &&
+                  rigidmap[isurf] != mapbody) {
                 FixRigid *fr = fixrigidlist[rigidmap[isurf]];
                 Geometry::body_frame_path(x,xnew,dt-dtremain,dtsurf,
                                           fr->xcm,fr->vcm,fr->omega,
@@ -1489,10 +1488,21 @@ template < int DIM, int SURF, int OPT, int RIGID > void Update::move()
               }
               if (DIM == 1) {
                 line = &lines[isurf];
-                hitflag = Geometry::
-                  axi_line_intersect(dtsurf,x,v,outface,lo,hi,line->p1,line->p2,
-                                     line->norm,exclude == isurf,
-                                     xc,vc,param,side);
+                if (RIGID && rigidmap[isurf] >= 0) {
+                  FixRigid *fr = fixrigidlist[rigidmap[isurf]];
+                  hitflag = Geometry::
+                    axi_line_moving_intersect(dtsurf,x,v,dt-dtremain,
+                                              line->p1,line->p2,line->norm,
+                                              exclude == isurf,
+                                              fr->vcm,fr->omega,
+                                              xc,vc,nhit,vwallhit,param,side);
+                } else {
+                  hitflag = Geometry::
+                    axi_line_intersect(dtsurf,x,v,outface,lo,hi,
+                                       line->p1,line->p2,
+                                       line->norm,exclude == isurf,
+                                       xc,vc,param,side);
+                }
               }
 
 #ifdef MOVE_DEBUG
@@ -1706,7 +1716,7 @@ template < int DIM, int SURF, int OPT, int RIGID > void Update::move()
                     mpre *= wtpre;
                     mpost *= ipart->weight;
                   }
-                  Geometry::rigid_recoil(DIM == 3 ? 3 : 2,mpre,mpost,
+                  Geometry::rigid_recoil(DIM,mpre,mpost,
                                          minnorm,minvwall,
                                          vpre,v,x,dt-dtremain,
                                          fr->xcm,fr->vcm,

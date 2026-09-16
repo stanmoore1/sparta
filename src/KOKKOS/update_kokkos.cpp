@@ -1788,9 +1788,11 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
               mvcm[k] = d_rigidbody(ibody,3+k);
               momega[k] = d_rigidbody(ibody,6+k);
             }
-            GeometryKokkos::body_frame_path(x,xnew,dt-dtremain,dtsurf,
-                                            mxcm,mvcm,momega,ymap0,ymap1);
-            if (DIM == 2) ymap0[2] = ymap1[2] = 0.0;
+            if (DIM > 1) {
+              GeometryKokkos::body_frame_path(x,xnew,dt-dtremain,dtsurf,
+                                              mxcm,mvcm,momega,ymap0,ymap1);
+              if (DIM == 2) ymap0[2] = ymap1[2] = 0.0;
+            }
             mapbody = ibody;
           }
 
@@ -1828,11 +1830,19 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
           }
           if (DIM == 1) {
             line = &d_lines[isurf];
-            hitflag = GeometryKokkos::
-              axi_line_intersect(dtsurf,x,v,outface,lo,hi,
-                                 line->p1,line->p2,
-                                 line->norm,exclude == isurf,
-                                 xc,vc,param,side);
+            if (ibody >= 0) {
+              hitflag = GeometryKokkos::
+                axi_line_moving_intersect(dtsurf,x,v,dt-dtremain,
+                                          line->p1,line->p2,line->norm,
+                                          exclude == isurf,mvcm,momega,
+                                          xc,vc,nhit,vwallhit,param,side);
+            } else {
+              hitflag = GeometryKokkos::
+                axi_line_intersect(dtsurf,x,v,outface,lo,hi,
+                                   line->p1,line->p2,
+                                   line->norm,exclude == isurf,
+                                   xc,vc,param,side);
+            }
           }
 
 #ifdef MOVE_DEBUG
@@ -2059,7 +2069,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
                 mpre *= wtpre;
                 mpost *= ipart->weight;
               }
-              GeometryKokkos::rigid_recoil(DIM == 3 ? 3 : 2,mpre,mpost,
+              GeometryKokkos::rigid_recoil(DIM,mpre,mpost,
                                            minnorm,minvwall,
                                            vpre,ipart->v,x,dt-dtremain,
                                            bxcm,bvcm,binvmass,binvi);

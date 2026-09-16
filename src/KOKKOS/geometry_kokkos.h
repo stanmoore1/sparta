@@ -18,6 +18,7 @@
 #define EPSSQNEG -1.0e-16
 #define EPSSELF 1.0e-6
 #define EPSTIME 1.0e-16
+#define NOFACE -1           // same as Geometry
 #define EPSRECOIL 1.0e-8    // same as Geometry
 #define EPSREFINE 1.0e-15   // same as Geometry
 #define MAXREFINE 10        // same as Geometry
@@ -430,6 +431,52 @@ bool axi_line_intersect(double tdelta, double *x, double *v,
   param = t1/tdelta;
   return true;
 };
+
+/* ----------------------------------------------------------------------
+   check for an axisymmetric move crossing a moving rigid-body line seg
+   same args and semantics as Geometry::axi_line_moving_intersect():
+     the body frame is a Galilean boost along the symmetry axis, so the
+     static axisymmetric test applies unchanged in it
+------------------------------------------------------------------------- */
+
+KOKKOS_INLINE_FUNCTION
+bool axi_line_moving_intersect(double tdelta, double *x, double *v,
+                               double dtbody, double *v1, double *v2,
+                               double *norm, int selfflag,
+                               const double *vcm, const double *omega,
+                               double *xc, double *vc, double *nhit,
+                               double *vwallhit, double &param, int &side)
+{
+  double xb[3],vb[3];
+
+  xb[0] = x[0] - vcm[0]*dtbody;
+  xb[1] = x[1];
+  xb[2] = x[2];
+  vb[0] = v[0] - vcm[0];
+  vb[1] = v[1];
+  vb[2] = v[2];
+
+  double lo[3],hi[3];
+  lo[0] = lo[1] = lo[2] = 0.0;
+  hi[0] = hi[1] = hi[2] = 0.0;
+
+  if (!axi_line_intersect(tdelta,xb,vb,NOFACE,lo,hi,v1,v2,norm,selfflag,
+                          xc,vc,param,side)) return false;
+
+  double thit = param*tdelta;
+  xc[0] += vcm[0]*(dtbody + thit);
+  vc[0] += vcm[0];
+
+  nhit[0] = norm[0];
+  nhit[1] = norm[1];
+  nhit[2] = norm[2];
+
+  vwallhit[0] = vcm[0];
+  vwallhit[1] = 0.0;
+  vwallhit[2] = omega[0]*xc[1];
+
+  return true;
+}
 
 /* ----------------------------------------------------------------------
    detect intersection between a directed line segment and a triangle
@@ -1689,28 +1736,39 @@ void rigid_recoil(int dim, double mpre, double mpost, const double *norm,
   double r[3],jinf[3],jnew[3],jt[3],kn[3],vmodel[3],wrel[3];
   double rx[3][3],t[3][3],kmat[3][3],a[3][3],ainv[3][3];
 
+  int ncomp = (dim == 2) ? 2 : 3;
+
   for (k = 0; k < 3; k++) {
     vmodel[k] = v[k];
     r[k] = point[k] - (xcm0[k] + vcm[k]*thit);
     jinf[k] = mpost*v[k] - mpre*vpre[k];
   }
   if (dim == 2) r[2] = jinf[2] = 0.0;
+  if (dim == 1) r[2] = 0.0;
 
-  rx[0][0] = 0.0;   rx[0][1] = -r[2]; rx[0][2] = r[1];
-  rx[1][0] = r[2];  rx[1][1] = 0.0;   rx[1][2] = -r[0];
-  rx[2][0] = -r[1]; rx[2][1] = r[0];  rx[2][2] = 0.0;
+  if (dim == 1) {
+    for (i = 0; i < 3; i++)
+      for (j = 0; j < 3; j++) kmat[i][j] = 0.0;
+    kmat[0][0] = invmass;
+    kmat[2][2] = r[1]*r[1]*invinertia[0];
 
-  for (i = 0; i < 3; i++)
-    for (j = 0; j < 3; j++) {
-      t[i][j] = 0.0;
-      for (k = 0; k < 3; k++) t[i][j] += invinertia[3*i+k]*rx[k][j];
-    }
-  for (i = 0; i < 3; i++)
-    for (j = 0; j < 3; j++) {
-      kmat[i][j] = 0.0;
-      for (k = 0; k < 3; k++) kmat[i][j] -= rx[i][k]*t[k][j];
-    }
-  for (i = 0; i < 3; i++) kmat[i][i] += invmass;
+  } else {
+    rx[0][0] = 0.0;   rx[0][1] = -r[2]; rx[0][2] = r[1];
+    rx[1][0] = r[2];  rx[1][1] = 0.0;   rx[1][2] = -r[0];
+    rx[2][0] = -r[1]; rx[2][1] = r[0];  rx[2][2] = 0.0;
+
+    for (i = 0; i < 3; i++)
+      for (j = 0; j < 3; j++) {
+        t[i][j] = 0.0;
+        for (k = 0; k < 3; k++) t[i][j] += invinertia[3*i+k]*rx[k][j];
+      }
+    for (i = 0; i < 3; i++)
+      for (j = 0; j < 3; j++) {
+        kmat[i][j] = 0.0;
+        for (k = 0; k < 3; k++) kmat[i][j] -= rx[i][k]*t[k][j];
+      }
+    for (i = 0; i < 3; i++) kmat[i][i] += invmass;
+  }
 
   double jn = MathExtraKokkos::dot3(jinf,norm);
   for (k = 0; k < 3; k++) jt[k] = jinf[k] - jn*norm[k];
@@ -1728,11 +1786,11 @@ void rigid_recoil(int dim, double mpre, double mpost, const double *norm,
     MathExtraKokkos::matvec(ainv,jinf,jnew);
   }
 
-  for (k = 0; k < dim; k++) v[k] = (jnew[k] + mpre*vpre[k]) / mpost;
+  for (k = 0; k < ncomp; k++) v[k] = (jnew[k] + mpre*vpre[k]) / mpost;
 
   MathExtraKokkos::sub3(v,vwall,wrel);
   if (MathExtraKokkos::dot3(wrel,norm) < 0.0)
-    for (k = 0; k < dim; k++) v[k] = vmodel[k];
+    for (k = 0; k < ncomp; k++) v[k] = vmodel[k];
 }
 
 }

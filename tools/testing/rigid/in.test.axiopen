@@ -1,0 +1,35 @@
+# TEST (negative): an axisymmetric body profile may terminate on the axis,
+# because the surface of revolution it generates is closed there, but its
+# free ends must balance: one leaving the axis for each one returning to
+# it.  adata.open is the sphere profile with its last element removed, so
+# one free end is on the axis and the other is not, and the surface of
+# revolution has a hole in it
+
+seed                12345
+dimension           2
+global              gridcut 0.0 comm/sort yes
+boundary            o ar p
+
+create_box          0 3 0 1 -0.5 0.5
+create_grid         30 10 1
+balance_grid        rcb cell
+
+global              nrho 1.0 fnum 0.001
+
+species             air.species N
+mixture             air N vstream 0 0 0 temp 273.0
+
+read_surf           adata.open group body
+surf_collide        1 specular
+surf_modify         all collide 1
+
+timestep            1.0e-4
+
+compute             c1 surf body all fx fy fz tx ty tz com 1.5 0 0
+global              rigid yes
+
+fix                 1 rigid body c1 body &
+                    mass 1.0e-22 com 1.5 0 0 vcom 0 0 0 &
+                    moi 1.0e-23 1.0e-23 1.0e-23 0 0 0 angmom 0 0 0
+
+run                 0

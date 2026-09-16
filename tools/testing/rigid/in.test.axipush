@@ -1,0 +1,59 @@
+# TEST: push-off contact for a body of revolution in an axisymmetric domain
+#
+# no particles.  a solid cylinder slides along the axis into a static disk
+# and is pushed back by the contact spring.  with no damping the contact is
+# elastic, so the axial speed must come back unchanged, and the body must
+# never leave the axis: ycm and the transverse force must be identically
+# zero at every step, which is what pins the azimuthal average of the
+# contact force
+#
+# the contact force is weighted by the circumference 2 pi r of the ring the
+# contact point stands for, so a profile point on the axis contributes
+# nothing, and the force stays in the (x,r) plane so it cannot spin the body
+#
+# the box is narrow enough that the body's outer radius is also inside the
+# cutoff of the yhi boundary, so there is a live radial contact throughout
+# the run.  its force must never reach the body: fpush_y and fpush_z stay
+# identically zero while fpush_x is not, which is what shows the azimuthal
+# average is applied to the contact forces and not only to the gas forces
+#
+# the ylo boundary is the axis, not a wall: pushbound is on, and a body of
+# revolution which reaches r = 0 must not be pushed off it
+
+seed	    	    12345
+
+variable            dist index 0
+if "${dist} == 1" then "global surfs explicit/distributed"
+dimension   	    2
+boundary            o ar p
+
+create_box  	    0 1 0 0.12 -0.5 0.5
+create_grid 	    20 6 1
+balance_grid        rcb cell
+
+global		    nrho 1.0 fnum 0.001
+
+species		    air.species N
+mixture		    air N vstream 0 0 0 temp 273.0
+
+read_surf           adata.cylinder group body trans 0.12 0 0
+read_surf           adata.axiwall
+surf_collide	    1 specular
+surf_modify         all collide 1
+
+timestep 	    1.0e-6
+
+compute             c1 surf body all fx fy fz tx ty tz com 0.62 0 0
+
+global              rigid yes
+
+fix		    1 rigid body c1 body &
+		    mass 1.0e-22 com 0.62 0 0 vcom 100.0 0 0 &
+		    moi 5.0e-25 1.0e-24 1.0e-24 0 0 0 angmom 0 0 0 &
+                    push 5.0e-15 0.03 pushbound yes
+
+stats		    100
+stats_style         step f_1[1] f_1[2] f_1[4] f_1[5] f_1[8] f_1[9] &
+                    f_1[20] f_1[21] f_1[22]
+stats_modify        format float %20.14e
+run 		    2000

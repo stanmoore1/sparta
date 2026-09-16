@@ -1,0 +1,71 @@
+# TEST: free-molecular drag on a body of revolution in an axisymmetric domain
+#
+# a cold monoenergetic beam at speed U hits a sphere of radius R with
+# specular reflection.  each molecule delivers 2 m U n_x^2 along x and the
+# incident flux on an element is nrho U |n_x|, so
+#   Fx = 2 rho U^2 int_front |n_x|^3 dA = rho U^2 pi R^2
+# for a sphere, independent of how finely the profile is faceted: the
+# faceted sum reproduces the smooth value exactly for an inscribed
+# polygon whose widest vertex sits at R
+#
+# run three ways, selected by -var rigid and -var weight:
+#   rigid 1            the sphere is a fix rigid body, so every hit goes
+#                      through the moving-surf intersection and the
+#                      recoil correction
+#   rigid 0            the same sphere as a static surf
+#   rigid 1 weight 1   the rigid case again with radial cell weighting,
+#                      the usual choice for axisymmetric flows.  the
+#                      tallied force and the recoil mass both carry the
+#                      particle weight, so the drag must not change.
+#                      fnum is raised to match, since the radial weight
+#                      is an absolute factor and not a relative one
+#
+# the sharper half of this test is the first pair.  the body is heavy
+# enough not to move, and the moving-surf test reduces to the static one
+# exactly in that case, because the body frame is a Galilean boost along
+# the symmetry axis: the two runs must agree to round-off, not merely to
+# the statistical error
+
+variable            sd index 12345
+variable            rigid index 1
+variable            weight index 0
+variable            fnum index 1.0e-3
+
+seed                ${sd}
+
+dimension           2
+global              gridcut 0.0 comm/sort yes
+boundary            o ao p
+
+create_box          0 3 0 1.5 -0.5 0.5
+create_grid         60 30 1
+balance_grid        rcb cell
+
+if "${weight} == 1" then "variable fnum delete" "variable fnum index 4.0e-2"
+
+global              nrho 1.0 fnum ${fnum} surfmax 3000
+if "${weight} == 1" then "global weight cell radius"
+
+species             air.species N
+mixture             beam N vstream 1000.0 0 0 temp 1.0e-5
+
+read_surf           adata.sphere group body
+surf_collide        1 specular
+surf_modify         all collide 1
+
+fix                 in emit/face beam xlo twopass
+
+timestep            5.0e-5
+
+compute             csurf surf body all fx fy fz tx ty tz com 1.5 0 0
+compute             red reduce sum c_csurf[1] c_csurf[2] c_csurf[3]
+
+if "${rigid} == 1" then &
+  "global rigid yes" &
+  "fix 1 rigid body csurf body mass 1.0 com 1.5 0 0 vcom 0 0 0 moi 1.0 1.0 1.0 0 0 0 angmom 0 0 0"
+
+stats               20
+stats_style         step np nscoll c_red[1] c_red[2] c_red[3]
+stats_modify        format float %20.12e
+run                 400
+run                 2400

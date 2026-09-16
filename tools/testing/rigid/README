@@ -139,6 +139,44 @@ tallyorder    a fix ave/surf on a static wall defined after fix rigid
               must see the same hit counts as one defined before it
               (KOKKOS: tallies fetched before the grid rebuild)
 
+axisymmetric domains: a rigid body is a body of revolution about the
+x axis, so it has two degrees of freedom, axial translation and axial
+spin, and the transverse force and torque the gas exerts average to
+zero around the ring a simulated particle stands for
+
+axiballistic  free body of revolution: linear drift along the axis and
+              constant spin, with the transverse components identically
+              zero rather than merely small; also the exact
+              constant-force trajectory
+axidensity    dstyle = density for a body of revolution: mass, COM and
+              inertia from the volume of revolution, against a cylinder
+              (no dr terms) and a cone (all of them), both of which a
+              straight profile represents exactly
+aximomentum   axial momentum of gas + body is conserved, the same
+              lag-corrected invariant as the momentum test.  only the
+              axial component is a conserved quantity of the
+              axisymmetric model at all
+axispin       axial angular momentum of gas + body is conserved while a
+              spinning body spins down against a diffuse wall.  this is
+              the invariant that pins the azimuthal channel of the
+              recoil, kmat[2][2] = r^2/ixx
+axidrag       free-molecular drag on a sphere of revolution against the
+              analytic rho U^2 pi R^2, and, more sharply, the same
+              sphere run as a rigid body and as a static surf must
+              agree to round-off: with the body at rest the moving-surf
+              test reduces to the static one exactly, because the body
+              frame is a Galilean boost along the symmetry axis.  also
+              run with radial cell weighting
+axipush       push-off contact for a body of revolution: elastic axial
+              bounce off a static disk, while a live radial contact with
+              the outer boundary must never reach the body.  the axis is
+              not a wall, and the contact force is ring-weighted
+axibadvcom    a transverse vcom must be rejected: it would carry the
+              body off the axis
+axiopen       the axis exception must not let through a free end that is
+              off the axis, even one on the box surface, which the Surf
+              class's own watertight check does allow
+
 The ballistic, force, bounce, twobody, and pushpair tests contain no
 particles, and the recoil test a single particle; they must produce
 identical results on any number of procs.

@@ -16,6 +16,7 @@ Exit code = number of failed tests.
 
 import argparse
 import glob
+import math
 import os
 import shlex
 import subprocess
@@ -1439,6 +1440,366 @@ def test_baddensity(exe_cmd):
                          "body density must be positive")
 
 
+# ----------------------------------------------------------------------
+# axisymmetric domains
+#
+# a rigid body in an axisymmetric domain is a body of revolution about the
+# x axis, so its only symmetry-preserving motions are translation along x
+# and spin about x.  the tests below check that reduction from three
+# directions: the free-flight integration, the volume integrals that give
+# a body of revolution its mass and inertia, and the two exact
+# conservation laws the collision machinery has to satisfy
+# ----------------------------------------------------------------------
+
+def test_axiballistic(exe_cmd):
+    """Free body of revolution: linear drift along the axis, constant spin.
+
+    The transverse degrees of freedom do not exist, so ycm, zcm, vy, vz and
+    the transverse angular velocities must be identically zero, not merely
+    small.  With -var fx a constant axial force is applied and the COM must
+    follow the exact constant-force trajectory."""
+    fails = []
+
+    rc, out = run_deck(exe_cmd, "in.test.axiballistic")
+    if rc:
+        return ["run failed with exit code %d" % rc]
+    rows = parse_stats(out)
+    if not rows:
+        return ["no stats output"]
+    last = rows[-1]
+
+    # com = com0 + v t, t = 1000 * 1e-4 = 0.1;  omega_x = Lx / ixx
+    if not approx(last["f_1[1]"], 1.5 + 2.0 * 0.1, rel=1e-7):
+        fails.append("xcm = %.12g, expected 1.7" % last["f_1[1]"])
+    if not approx(last["f_1[4]"], 2.0, rel=1e-7):
+        fails.append("vx = %.12g, expected 2" % last["f_1[4]"])
+    if not approx(last["f_1[13]"], 7.5e-21 / 1.0e-23, rel=1e-7):
+        fails.append("omega_x = %.12g, expected 750" % last["f_1[13]"])
+
+    for r in rows:
+        for col, nm in (("f_1[2]", "ycm"), ("f_1[3]", "zcm"),
+                        ("f_1[5]", "vy"), ("f_1[6]", "vz"),
+                        ("f_1[14]", "omega_y"), ("f_1[15]", "omega_z")):
+            if r[col] != 0.0:
+                fails.append("%s = %.3e at step %d, must be exactly zero for "
+                             "a body of revolution" % (nm, r[col], r["Step"]))
+                break
+        else:
+            continue
+        break
+
+    # constant axial force: xcm = xcm0 + v0 t + f t^2 / (2 M)
+    FX = 1.0e-21
+    MB = 1.0e-22
+    rc, out = run_deck(exe_cmd, "in.test.axiballistic",
+                       extra=["-var", "fx", repr(FX)])
+    if rc:
+        fails.append("forced run failed with exit code %d" % rc)
+        return fails
+    rows = parse_stats(out)
+    if not rows:
+        fails.append("forced run: no stats output")
+        return fails
+    last = rows[-1]
+    t = 0.1
+    xexp = 1.5 + 2.0 * t + 0.5 * FX * t * t / MB
+    vexp = 2.0 + FX * t / MB
+    if not approx(last["f_1[1]"], xexp, rel=1e-7):
+        fails.append("forced xcm = %.12g, expected %.12g"
+                     % (last["f_1[1]"], xexp))
+    if not approx(last["f_1[4]"], vexp, rel=1e-7):
+        fails.append("forced vx = %.12g, expected %.12g"
+                     % (last["f_1[4]"], vexp))
+    return fails
+
+
+def test_axidensity(exe_cmd):
+    """dstyle = density for a body of revolution.
+
+    A straight profile segment generates a frustum, and the volume integrals
+    which give mass, COM and inertia reduce to exact polynomials in its end
+    points, so a cylinder and a cone are both represented exactly and the
+    only error is round-off.  The cone is the case that exercises the
+    dr != 0 terms; a cylinder profile has none."""
+    fails = []
+    out_name = "tmp.axidensity.state"
+    path = os.path.join(THISDIR, out_name)
+
+    RHO = 1000.0
+
+    # (geometry, volume, xcm, ixx/M, iyy/M)
+    # cylinder R = 0.1 from x = 0.4 to 0.6:
+    #   V = pi R^2 L, ixx = M R^2 / 2, iyy = M (3 R^2 + L^2) / 12
+    # cone base R = 0.1 at x = 0.4, apex at x = 0.7:
+    #   V = pi R^2 h / 3, xcm = base + h/4, ixx = 3 M R^2 / 10,
+    #   iyy = 3 M (4 R^2 + h^2) / 80
+    R = 0.1
+    L = 0.2
+    H = 0.3
+    cases = [
+        ("cylinder", math.pi * R * R * L, 0.5,
+         R * R / 2.0, (3.0 * R * R + L * L) / 12.0),
+        ("cone", math.pi * R * R * H / 3.0, 0.4 + H / 4.0,
+         3.0 * R * R / 10.0, 3.0 * (4.0 * R * R + H * H) / 80.0),
+    ]
+
+    TOL = 1.0e-12
+    for geom, vol, xcm, ixx_m, iyy_m in cases:
+        if os.path.exists(path):
+            os.remove(path)
+        rc, out = run_deck(exe_cmd, "in.test.axidensity",
+                           extra=["-var", "geom", geom])
+        if rc:
+            fails.append("%s: run failed with exit code %d" % (geom, rc))
+            continue
+        v = read_state(out_name)
+        if v is None or len(v) < 16:
+            fails.append("%s: no usable state file" % geom)
+            continue
+
+        mass = RHO * vol
+        for got, want, nm in ((v[0], mass, "mass"),
+                              (v[1], xcm, "xcm"),
+                              (v[4], mass * ixx_m, "ixx"),
+                              (v[5], mass * iyy_m, "iyy"),
+                              (v[6], mass * iyy_m, "izz")):
+            if not approx(got, want, rel=TOL):
+                fails.append("%s: %s %.17g != %.17g" % (geom, nm, got, want))
+
+        # the COM of a body of revolution is on the axis, and its products
+        # of inertia vanish, both exactly
+        for k, nm in ((2, "ycm"), (3, "zcm"),
+                      (7, "ixy"), (8, "ixz"), (9, "iyz")):
+            if v[k] != 0.0:
+                fails.append("%s: %s = %.3e, must be exactly zero"
+                             % (geom, nm, v[k]))
+
+    if os.path.exists(path):
+        os.remove(path)
+    return fails
+
+
+def test_aximomentum(exe_cmd):
+    """Axial momentum of gas + body is conserved in an axisymmetric domain.
+
+    Same invariant as test_momentum, including the half-step impulse which
+    velocity Verlet has in flight, so it holds to round-off rather than to
+    the statistical size of one step's transfer.  Only the axial component
+    is conserved: the axisymmetric model rotates each particle's (vy,vz)
+    into the plane on every move, so transverse gas momentum is not a
+    conserved quantity of the model at all."""
+    MB = 1.0e-22
+    DT = 1.0e-5
+    rows_by_mode = {}
+    for mode in ("incremental", "cutcell"):
+        rc, out = run_deck(exe_cmd, "in.test.aximomentum",
+                           extra=["-var", "remap", mode])
+        if rc:
+            return ["%s: run failed with exit code %d" % (mode, rc)]
+        rows_by_mode[mode] = parse_stats(out)
+    rows = rows_by_mode["incremental"]
+    if len(rows) < 3:
+        return ["not enough stats output"]
+
+    p = [MASS_N * FNUM * r["c_r"] + MB * r["f_1[4]"] + 0.5 * DT * r["f_1[7]"]
+         for r in rows]
+    drift = max(abs(x - p[0]) for x in p) / abs(p[0])
+    fails = []
+    if drift > 1.0e-12:
+        fails.append("axial momentum drifted by %.3e (relative)" % drift)
+
+    # compute surf tallies the raw per-element force, whose radial part is
+    # large and does not cancel in the plane; it is fix rigid that takes
+    # the azimuthal average, so the force the body actually sees must have
+    # no transverse part at all
+    for r in rows:
+        if r["f_1[8]"] != 0.0 or r["f_1[9]"] != 0.0:
+            fails.append("transverse force on the body %.3e %.3e is not "
+                         "exactly zero at step %d"
+                         % (r["f_1[8]"], r["f_1[9]"], r["Step"]))
+            break
+
+    # the incremental re-cut must reproduce the full rebuild, which for an
+    # axisymmetric domain includes the annular volumes it installs for the
+    # cells the body vacates.  in serial with non-distributed surfs the two
+    # agree bit for bit; on several procs the cutcell path rebuilds the
+    # grid every step and so reorders the summation of the gas momentum,
+    # which moves its last bits
+    other = rows_by_mode["cutcell"]
+    if len(other) != len(rows):
+        fails.append("cutcell remap produced %d stats rows, incremental %d"
+                     % (len(other), len(rows)))
+    else:
+        for a, b in zip(rows, other):
+            for col in ("f_1[4]", "c_r"):
+                if not approx(a[col], b[col], rel=1.0e-12, abs_=1.0e-30):
+                    fails.append("cutcell and incremental remap diverged at "
+                                 "step %d: %s %.17g vs %.17g"
+                                 % (a["Step"], col, a[col], b[col]))
+                    break
+            else:
+                continue
+            break
+    # the body must actually be pushed, or the invariant is vacuous
+    if abs(rows[-1]["f_1[4]"]) < 1.0e-3:
+        fails.append("body barely moved: vcm_x = %.3e" % rows[-1]["f_1[4]"])
+    return fails
+
+
+def test_axispin(exe_cmd):
+    """Axial angular momentum of gas + body is conserved.
+
+    r * v_theta is a particle's angular momentum about the axis; it does not
+    change during free flight, the remap into the plane is a rotation about
+    that axis, and the reflecting outer wall reverses only v_r.  So
+      m fnum sum(r v_theta) + ixx omega_x + 0.5 dt tx
+    holds to round-off.  This is the invariant which pins down the azimuthal
+    channel of the axisymmetric recoil, kmat[2][2] = r^2/ixx: a body which
+    took the whole impulse, or none of it, would break it.  The wall is
+    diffuse, so the matrix branch of the recoil solve is the one used."""
+    IXX = 5.0e-27
+    DT = 1.0e-5
+    rc, out = run_deck(exe_cmd, "in.test.axispin")
+    if rc:
+        return ["run failed with exit code %d" % rc]
+    rows = parse_stats(out)
+    if len(rows) < 3:
+        return ["not enough stats output"]
+
+    lz = [MASS_N * FNUM * r["c_r"] + IXX * r["f_1[13]"] + 0.5 * DT * r["f_1[10]"]
+          for r in rows]
+    drift = max(abs(x - lz[0]) for x in lz) / abs(lz[0])
+    fails = []
+    if drift > 1.0e-12:
+        fails.append("axial angular momentum drifted by %.3e (relative)"
+                     % drift)
+    # the body must actually spin down, or the invariant is vacuous
+    w0 = rows[0]["f_1[13]"]
+    wend = rows[-1]["f_1[13]"]
+    if abs(wend - w0) < 0.05 * abs(w0):
+        fails.append("body barely spun down: omega_x %.4g -> %.4g"
+                     % (w0, wend))
+    return fails
+
+
+def test_axidrag(exe_cmd):
+    """Free-molecular drag on a body of revolution.
+
+    A cold beam at speed U on a sphere of radius R with specular reflection
+    gives Fx = rho U^2 pi R^2 exactly, and the faceted profile reproduces
+    the smooth value because its widest vertex sits at R.
+
+    The sharper half of this test is the comparison between the same sphere
+    run as a fix rigid body and as a static surf.  The body is heavy enough
+    not to move, and the moving-surf test reduces to the static one exactly
+    in that case, because the body frame is a Galilean boost along the
+    symmetry axis: the two runs must agree to round-off, not merely to the
+    statistical error.  A third run repeats the rigid case with radial cell
+    weighting, which must not change the drag."""
+    U = 1000.0
+    R = 0.5
+    NRHO = 1.0
+    analytic = MASS_N * NRHO * U * U * math.pi * R * R
+
+    fails = []
+    means = {}
+    for label, extra in (("rigid", ["-var", "rigid", "1"]),
+                         ("static", ["-var", "rigid", "0"]),
+                         ("weighted", ["-var", "rigid", "1",
+                                       "-var", "weight", "1"])):
+        rc, out = run_deck(exe_cmd, "in.test.axidrag", extra=extra)
+        if rc:
+            fails.append("%s: run failed with exit code %d" % (label, rc))
+            continue
+        rows = parse_stats(out)
+        if len(rows) < 10:
+            fails.append("%s: not enough stats output" % label)
+            continue
+        fx = [r["c_red[1]"] for r in rows[1:]]
+        means[label] = sum(fx) / len(fx)
+
+    if "rigid" in means and "static" in means:
+        rel = abs(means["rigid"] - means["static"]) / abs(means["static"])
+        if rel > 1.0e-9:
+            fails.append("moving body and static surf differ by %.3e "
+                         "(relative); with the body at rest the moving test "
+                         "must reduce to the static one" % rel)
+    if "rigid" in means and "weighted" in means:
+        rel = abs(means["weighted"] - means["rigid"]) / abs(means["rigid"])
+        if rel > 0.06:
+            fails.append("radial cell weighting changed the drag by %.3e"
+                         % rel)
+    for label in ("rigid", "weighted"):
+        if label not in means:
+            continue
+        rel = abs(means[label] - analytic) / analytic
+        if rel > 0.05:
+            fails.append("%s: drag %.6e differs from the free-molecular "
+                         "value %.6e by %.2f%%"
+                         % (label, means[label], analytic, 100.0 * rel))
+    return fails
+
+
+def test_axipush(exe_cmd):
+    """Push-off contact for a body of revolution.
+
+    No particles.  A solid cylinder slides along the axis into a static
+    disk and is pushed back elastically, so the axial speed must return
+    unchanged.  Meanwhile the narrow box keeps the body's outer radius
+    inside the cutoff of the yhi boundary the whole run, so there is a live
+    radial contact throughout: its force must never reach the body.  That
+    is the discriminating check -- with the azimuthal average removed, the
+    radial push shows up in fpush_y and leaks straight into fcm_y."""
+    rc, out = run_deck(exe_cmd, "in.test.axipush")
+    if rc:
+        return ["run failed with exit code %d" % rc]
+    rows = parse_stats(out)
+    if len(rows) < 5:
+        return ["not enough stats output"]
+
+    fails = []
+    for r in rows:
+        for col, nm in (("f_1[2]", "ycm"), ("f_1[5]", "vcm_y"),
+                        ("f_1[8]", "fcm_y"), ("f_1[9]", "fcm_z"),
+                        ("f_1[21]", "fpush_y"), ("f_1[22]", "fpush_z")):
+            if r[col] != 0.0:
+                fails.append("%s = %.3e at step %d, must be exactly zero for "
+                             "a body of revolution" % (nm, r[col], r["Step"]))
+                break
+        else:
+            continue
+        break
+
+    # the axial contact must actually have happened
+    if not any(r["f_1[20]"] != 0.0 for r in rows):
+        fails.append("no axial contact force was ever applied")
+
+    # elastic contact with no damping: the speed comes back
+    v0 = rows[0]["f_1[4]"]
+    vend = rows[-1]["f_1[4]"]
+    if vend >= 0.0:
+        fails.append("body did not bounce: vcm_x %.6g -> %.6g" % (v0, vend))
+    elif not approx(abs(vend), abs(v0), rel=1.0e-4):
+        fails.append("contact was not elastic: |vcm_x| %.9g -> %.9g"
+                     % (abs(v0), abs(vend)))
+    return fails
+
+
+def test_axibadvcom(exe_cmd):
+    return negative_test(exe_cmd, "in.test.axibadvcom",
+                         "vcom must be zero for an axisymmetric domain")
+
+
+def test_axiopen(exe_cmd):
+    """A free end off the axis is still a hole in an axisymmetric body.
+
+    The axis exception lets a profile terminate at r = 0, where the surface
+    of revolution closes itself.  It must not let through a free end
+    anywhere else, even one which sits on the box surface and so passes the
+    Surf class's own watertight check."""
+    return negative_test(exe_cmd, "in.test.axiopen", "not watertight")
+
+
 def test_badvcom(exe_cmd):
     return negative_test(exe_cmd, "in.test.badvcom",
                          "vcom keyword requires density style")
@@ -1493,6 +1854,14 @@ TESTS = [
     ("density2d", test_density2d),
     ("baddensity", test_baddensity),
     ("badvcom", test_badvcom),
+    ("axiballistic", test_axiballistic),
+    ("axidensity", test_axidensity),
+    ("aximomentum", test_aximomentum),
+    ("axispin", test_axispin),
+    ("axidrag", test_axidrag),
+    ("axipush", test_axipush),
+    ("axibadvcom", test_axibadvcom),
+    ("axiopen", test_axiopen),
 ]
 
 # tests whose decks support -var dist 1 (global surfs explicit/distributed)
@@ -1509,7 +1878,9 @@ DIST_TESTS = {"ballistic", "force", "rotation", "bounce", "restitution",
               "splitcell", "gridchange", "exitbox", "twobody", "pushpair",
               "tallyorder", "rotwall", "rotwall3d", "customemit",
               "splitbalance",
-              "vacate", "facetbounce"}
+              "vacate", "facetbounce",
+              "axiballistic", "axidensity", "aximomentum", "axispin",
+              "axipush"}
 
 
 def main():

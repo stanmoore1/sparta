@@ -23,6 +23,7 @@
 #define EPSSQNEG -1.0e-16
 #define EPSSELF 1.0e-6
 #define EPSTIME 1.0e-16
+#define NOFACE -1           // outface value matching no cell face
 #define EPSREFINE 1.0e-15   // converged hit-fraction Newton step
 #define MAXREFINE 10        // iteration cap for the same
 
@@ -1256,6 +1257,92 @@ bool axi_line_intersect(double tdelta, double *x, double *v,
 }
 
 /* ----------------------------------------------------------------------
+   check for an axisymmetric move crossing a moving rigid-body line seg
+   a rigid body in an axisymmetric domain is a body of revolution about
+     the x axis, so the only motions which preserve that symmetry are
+     translation along x and spin about x.  spin maps the surface of
+     revolution onto itself, so it does not move the surface at all,
+     and the body's geometry only translates along x
+   that makes the body frame a Galilean boost along the symmetry axis:
+     the particle path is still a straight line in 3d and the element is
+     still a surface of revolution about the same axis, so the static
+     axisymmetric test applies unchanged in that frame.  no curved-path
+     root find and no chord approximation are needed, unlike the 2d and
+     3d moving-surf tests
+   tdelta = time window for this test, from the start of the path
+   x,v = particle position in the axisymmetry plane and its 3d velocity,
+     at the start of the window
+   dtbody = time from the start of the timestep to the start of the
+     window, so the element has translated vcm*dtbody by then
+   v1,v2 = element end points at the start of the timestep
+   norm = outward element normal, which lies in the (x,r) plane and does
+     not change as the body moves
+   selfflag = 1 if the particle starts on this element
+   vcm,omega = body velocity and angular velocity; only their x
+     components are non-zero, by the symmetry argument above
+   return 1 if yes, 0 if no
+   if yes, also return:
+     param = fraction of tdelta at the collision pt
+     xc = collision pt in the axisymmetry plane, in the lab frame
+     vc = particle velocity at the collision pt, rotated into that plane
+     nhit = element normal at the hit
+     vwallhit = wall velocity at the hit pt: the body translates along x
+       and its spin carries the surface azimuthally at omega_x * r
+     side = side of the element that was hit = OUTSIDE or INSIDE
+------------------------------------------------------------------------- */
+
+bool axi_line_moving_intersect(double tdelta, double *x, double *v,
+                               double dtbody, double *v1, double *v2,
+                               double *norm, int selfflag,
+                               double *vcm, double *omega,
+                               double *xc, double *vc, double *nhit,
+                               double *vwallhit, double &param, int &side)
+{
+  double xb[3],vb[3];
+
+  // boost into the body frame: shift x by the element's displacement so
+  //   far and subtract the body velocity.  the radial coordinates and
+  //   velocities are untouched, since the boost is along the axis
+
+  xb[0] = x[0] - vcm[0]*dtbody;
+  xb[1] = x[1];
+  xb[2] = x[2];
+  vb[0] = v[0] - vcm[0];
+  vb[1] = v[1];
+  vb[2] = v[2];
+
+  // outface = NOFACE: the start-on-cell-face special cases in
+  //   axi_line_intersect() are for static surfs lying on a cell face,
+  //   which a moving element is not, so lo/hi are not used either
+
+  double lo[3],hi[3];
+  lo[0] = lo[1] = lo[2] = 0.0;
+  hi[0] = hi[1] = hi[2] = 0.0;
+
+  if (!axi_line_intersect(tdelta,xb,vb,NOFACE,lo,hi,v1,v2,norm,selfflag,
+                          xc,vc,param,side)) return false;
+
+  // map the collision pt and velocity back to the lab frame
+  // the radial parts, and hence side, are the same in both frames:
+  //   norm has no azimuthal component, so the normal relative velocity
+  //   axi_line_intersect() used to set side is the same either way
+
+  double thit = param*tdelta;
+  xc[0] += vcm[0]*(dtbody + thit);
+  vc[0] += vcm[0];
+
+  nhit[0] = norm[0];
+  nhit[1] = norm[1];
+  nhit[2] = norm[2];
+
+  vwallhit[0] = vcm[0];
+  vwallhit[1] = 0.0;
+  vwallhit[2] = omega[0]*xc[1];
+
+  return true;
+}
+
+/* ----------------------------------------------------------------------
    check for axisymmetric move crossing horizontal line in (x,r) space
      not line segment but infinite horizontal line
    called from Update for cell boundary
@@ -1500,7 +1587,7 @@ bool line_tri_moving_intersect(double *start, double *stop,
    the collision model reflected the particle in the frame of the wall
      as though the body were infinitely massive; the body then receives
      the full impulse, so the recoil energy would be counted twice
-   dim = 2 or 3
+   dim = 2 or 3, or 1 for axisymmetric
    mpre,mpost = super-particle mass before and after = fnum * weight *
      species mass; equal unless a surface reaction changed the species
    norm,vwall = outward surf normal and wall velocity at the hit point
@@ -1523,6 +1610,23 @@ bool line_tri_moving_intersect(double *start, double *stop,
        relative to the recoiled surface velocity, J = (1 + m K)^-1 Jinf
    in 2d only in-plane components are corrected, since the body
      cannot move out of plane
+   in axisymmetric the body is a body of revolution about the x axis and
+     may only translate along x and spin about x, so its response to an
+     impulse is the azimuthal average of the general one.  in the local
+     (x,r,theta) basis the mover works in, an impulse component
+       along x     moves the body with 1/M, as in 2d/3d
+       along r     moves it not at all: the radial direction at azimuth
+                   phi is (cos phi, sin phi) in the space frame, which
+                   averages to zero around the ring the particle
+                   represents
+       along theta likewise contributes no linear motion, but does spin
+                   the body, with dv_theta = r^2/Ixx per unit impulse
+     so kmat = diag(1/M, 0, r^2/Ixx), which is still symmetric positive
+     semi-definite and so still conserves energy in the solve below.
+     note this is not what the general formula gives for a body whose
+     only inertia is Ixx: that would leave 1/M in the radial and
+     azimuthal slots, which is exactly the part azimuthal averaging
+     removes
    the body recoil takes effect on the next step, so for the rest of
      this step the mover moves the wall at its uncorrected velocity;
      if the corrected particle would then be overtaken by the wall
@@ -1541,8 +1645,16 @@ void rigid_recoil(int dim, double mpre, double mpost,
   double r[3],jinf[3],jnew[3],jt[3],kn[3],vmodel[3],wrel[3];
   double rx[3][3],t[3][3],kmat[3][3],a[3][3],ainv[3][3];
 
+  // ncomp = # of velocity components the body can act on
+  // 2d has no out-of-plane motion, axisymmetric does (the azimuthal
+  //   component, which the body's spin acts on)
+
+  int ncomp = (dim == 2) ? 2 : 3;
+
   // r = hit point relative to the body COM at the hit time
   // jinf = impulse the collision model gave the particle
+  // axisymmetric: the COM is on the axis, so r[1] is the radius of the
+  //   hit point and r[2] is zero; the components are (x,r,theta)
 
   for (k = 0; k < 3; k++) {
     vmodel[k] = v[k];
@@ -1550,24 +1662,33 @@ void rigid_recoil(int dim, double mpre, double mpost,
     jinf[k] = mpost*v[k] - mpre*vpre[k];
   }
   if (dim == 2) r[2] = jinf[2] = 0.0;
+  if (dim == 1) r[2] = 0.0;
 
-  // kmat = 1/M - [r x] Iinv [r x]
+  // kmat = 1/M - [r x] Iinv [r x], or its azimuthal average in axisym
 
-  rx[0][0] = 0.0;   rx[0][1] = -r[2]; rx[0][2] = r[1];
-  rx[1][0] = r[2];  rx[1][1] = 0.0;   rx[1][2] = -r[0];
-  rx[2][0] = -r[1]; rx[2][1] = r[0];  rx[2][2] = 0.0;
+  if (dim == 1) {
+    for (i = 0; i < 3; i++)
+      for (j = 0; j < 3; j++) kmat[i][j] = 0.0;
+    kmat[0][0] = invmass;
+    kmat[2][2] = r[1]*r[1]*invinertia[0];
 
-  for (i = 0; i < 3; i++)
-    for (j = 0; j < 3; j++) {
-      t[i][j] = 0.0;
-      for (k = 0; k < 3; k++) t[i][j] += invinertia[3*i+k]*rx[k][j];
-    }
-  for (i = 0; i < 3; i++)
-    for (j = 0; j < 3; j++) {
-      kmat[i][j] = 0.0;
-      for (k = 0; k < 3; k++) kmat[i][j] -= rx[i][k]*t[k][j];
-    }
-  for (i = 0; i < 3; i++) kmat[i][i] += invmass;
+  } else {
+    rx[0][0] = 0.0;   rx[0][1] = -r[2]; rx[0][2] = r[1];
+    rx[1][0] = r[2];  rx[1][1] = 0.0;   rx[1][2] = -r[0];
+    rx[2][0] = -r[1]; rx[2][1] = r[0];  rx[2][2] = 0.0;
+
+    for (i = 0; i < 3; i++)
+      for (j = 0; j < 3; j++) {
+        t[i][j] = 0.0;
+        for (k = 0; k < 3; k++) t[i][j] += invinertia[3*i+k]*rx[k][j];
+      }
+    for (i = 0; i < 3; i++)
+      for (j = 0; j < 3; j++) {
+        kmat[i][j] = 0.0;
+        for (k = 0; k < 3; k++) kmat[i][j] -= rx[i][k]*t[k][j];
+      }
+    for (i = 0; i < 3; i++) kmat[i][i] += invmass;
+  }
 
   // impulse along the normal: scalar correction
   // else: solve (1 + m K) J = Jinf
@@ -1589,13 +1710,14 @@ void rigid_recoil(int dim, double mpre, double mpost,
 
   // jnew = mpost*v - mpre*vpre, so invert for v with the post-collision mass
 
-  for (k = 0; k < dim; k++) v[k] = (jnew[k] + mpre*vpre[k]) / mpost;
+  for (k = 0; k < ncomp; k++) v[k] = (jnew[k] + mpre*vpre[k]) / mpost;
 
   // keep the uncorrected reflection if the wall would overtake the particle
+  // norm has no azimuthal component, so this test is the same in axisym
 
   MathExtra::sub3(v,vwall,wrel);
   if (MathExtra::dot3(wrel,norm) < 0.0)
-    for (k = 0; k < dim; k++) v[k] = vmodel[k];
+    for (k = 0; k < ncomp; k++) v[k] = vmodel[k];
 }
 
 /* ----------------------------------------------------------------------

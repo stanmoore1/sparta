@@ -98,6 +98,10 @@ class FixRigid : public Fix {
   int outevery;
 
   int dim;
+  int axiflag;            // 1 if the domain is axisymmetric, in which
+                          //   case the body is a body of revolution about
+                          //   the x axis and may only translate along x
+                          //   and spin about x (see start_of_step)
   int massflag,comflag,vcomflag,moiflag,angmomflag;
   int densityflag;        // 1 if dstyle = density: mass/com/moi are
                           //   computed from the body geometry
@@ -262,7 +266,12 @@ class FixRigid : public Fix {
   void read_infile(char *);
   void write_outfile();
   void setup_body();
+  void setup_body_displace();    // body-frame pts etc, once axes are set
   void body_properties(double);  // mass/com/moi from the body geometry
+  void body_properties_axi(double);  // the same for a body of revolution
+  double full_cell_volume(double *, double *);   // uncut volume of a cell
+  void axi_project(double *, double *);   // azimuthal average of a
+                                          //   force and torque on the body
   void check_watertight();
   void set_recoil();            // set invmass/invinertia from current axes
   void final_kick();            // second half kick of velocity Verlet

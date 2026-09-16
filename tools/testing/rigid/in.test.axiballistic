@@ -1,0 +1,50 @@
+# TEST: free rigid body of revolution in an axisymmetric domain
+# no particles: the COM must slide along the axis at constant velocity and
+# the spin about the axis must stay constant, since nothing acts on either.
+# with -var fx set, a constant external force acts on the COM and the COM
+# must follow the exact constant-force trajectory (velocity Verlet)
+#
+# a body of revolution has no transverse degrees of freedom, so ycm, zcm,
+# vy, vz and the transverse angular velocities must stay identically zero
+
+seed	    	    12345
+
+variable            dist index 0
+variable            fx index 0.0
+if "${dist} == 1" then "global surfs explicit/distributed"
+dimension   	    2
+boundary            o ar p
+
+create_box  	    0 3 0 1 -0.5 0.5
+create_grid 	    30 10 1
+balance_grid        rcb cell
+
+global		    nrho 1.0 fnum 0.001
+
+species		    air.species N
+mixture		    air N vstream 0 0 0 temp 273.0
+
+read_surf           adata.sphere group body
+surf_collide	    1 specular
+surf_modify         all collide 1
+
+timestep 	    0.0001
+
+compute             c1 surf body all fx fy fz tx ty tz com 1.5 0 0
+
+global              rigid yes
+
+# a uniform sphere of radius 0.5 and mass 1e-22 would have
+#   ixx = iyy = izz = 2/5 M R^2 = 1.0e-23
+# the values are given explicitly so this test does not depend on the
+# density-style integration, which in.test.axidensity covers
+
+fix		    1 rigid body c1 body &
+		    mass 1.0e-22 com 1.5 0 0 vcom 2.0 0 0 &
+		    moi 1.0e-23 1.0e-23 1.0e-23 0 0 0 &
+                    angmom 7.5e-21 0 0 force ${fx} 0 0
+
+stats		    100
+stats_style         step f_1[1] f_1[2] f_1[3] f_1[4] f_1[5] f_1[6] &
+                    f_1[13] f_1[14] f_1[15]
+run 		    1000

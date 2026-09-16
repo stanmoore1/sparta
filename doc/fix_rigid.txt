@@ -255,6 +255,10 @@ with.  Note also that {read_surf} transformations such as {scale},
 {trans}, and {rotate} are applied before this fix is defined, so the
 computed values reflect the transformed geometry.
 
+In an axisymmetric domain the integrals are instead over the volume of
+revolution the profile generates; see the axisymmetric discussion
+below.
+
 The {density} style does not set the body's initial motion, which
 cannot be derived from its shape.  Both default to zero and may be
 given with the optional {vcom} and {angmom} keywords:
@@ -713,6 +717,75 @@ accuracy of the re-assignment of surfs to grid cells), or
 if the body exits the simulation box entirely (after which it no
 longer interacts with any particles).
 
+:line
+
+[Axisymmetric domains:]
+
+In an axisymmetric domain a line surf element in the (x,r) half plane
+stands for the surface of revolution it sweeps about the x axis, so a
+rigid body built from such elements is a body of revolution.  The only
+motions which keep it one are translation along the axis and spin about
+the axis: a body of revolution is unchanged by a rotation about its own
+axis, but any transverse motion would carry it off the axis and it
+would no longer be a body of revolution.  A rigid body in an
+axisymmetric domain therefore has two degrees of freedom rather than
+six, and SPARTA rejects a {com}, {vcom}, {angmom}, {force}, or {moi}
+setting with a non-zero transverse component.
+
+Dropping the transverse force and torque is not a constraint imposed on
+the physics; it is the azimuthal average of it.  A simulated particle
+in an axisymmetric run stands for real molecules at every azimuth
+around the ring at its radius, so the force it exerts is averaged
+around that ring before the body responds.  A radial force applied at
+azimuth phi points along (cos phi, sin phi) in the space frame and an
+azimuthal one along (-sin phi, cos phi); both average to zero.  What
+survives is the axial force and the torque about the axis, which
+"compute surf"_compute_surf.html tallies as tx = r fz with the hit
+point at (x,r,0) and the COM on the axis.  The same average is applied
+to the body's response to a single collision, which is what makes the
+recoil correction correct here: an impulse along the axis moves the
+body with 1/M, an impulse in the azimuthal direction spins it with
+r^2/ixx, and a radial impulse moves it not at all.
+
+The body's mass and moments of inertia are those of the whole
+three-dimensional body of revolution, not values per radian.  The
+{density} style computes them from the volume of revolution the profile
+generates, by the same divergence-theorem reduction used in 2d and 3d;
+for a profile made of straight segments every integral is again an
+exact polynomial in the end points, so a cylinder or a cone is
+represented exactly.  Only ixx enters the dynamics, since the body can
+only spin about its own axis, but the transverse moments are computed
+and reported as well.
+
+The body profile may terminate on the axis.  The surface of revolution
+is closed there whether or not the profile closes in the plane: a
+semicircle from (-R,0) to (R,0) generates a sphere, whose poles are not
+holes.  A free end anywhere else is still a hole and is rejected.  The
+profile must be traversed so that its element normals point out of the
+body, which for a body of revolution means running in the +x direction
+over the outer surface; this is the same convention as in 2d and 3d,
+but note that it gives a positive volume of revolution where the planar
+2d convention gives a negative signed area.  An element lying flat on
+the axis is rejected: it sweeps out no area.
+
+Because a spin about the axis maps the surface onto itself, the body
+geometry only translates, and the collision test for a moving body
+reduces to a Galilean boost along the axis.  That makes the moving-surf
+intersection exact for a body of revolution, with none of the chord
+approximation the 2d and 3d rotating-body tests use, at any spin rate
+and any translation speed within a timestep.  The consequence for the
+reported body state is that the quaternion is held at the identity and
+the spin appears only in omega_x; the warning about rotation per
+timestep does not apply and is not issued.
+
+The axis is not a wall.  If the {push} keyword is used, contacts with
+the ylo boundary are not computed, since a body of revolution is
+expected to reach r = 0.  Contacts elsewhere are weighted by the
+circumference 2 pi r of the ring the contact point stands for, so with
+an axisymmetric domain {kpush} is a force per unit length of contact
+rather than a force.  A contact force lies in the (x,r) plane, so it
+never spins the body.
+
 [Restrictions:]
 
 The "global rigid"_global.html command must be used to enable
@@ -727,8 +800,7 @@ distributed surfs each processor stores a replicated copy of the
 (compact) body elements plus the static surfs which overlap its own
 and ghost grid cells, so the total surf collection can be much larger
 than any one processor's memory.  Both {remap} modes work with
-distributed surfs.  Rigid bodies cannot be used with axisymmetric
-domains.  Body surf elements cannot be transparent.
+distributed surfs.  Body surf elements cannot be transparent.
 
 Body surf elements may carry a "surf_react"_surf_react.html model
 only if every reaction in it leaves exactly one particle, which for

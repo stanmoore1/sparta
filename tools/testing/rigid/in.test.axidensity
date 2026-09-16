@@ -1,0 +1,45 @@
+# TEST: dstyle = density for an axisymmetric body of revolution
+# the profile is a rectangle in (x,r), so the body is a solid cylinder of
+# radius R = 0.1 running from x = 0.4 to 0.6, which straight profile
+# segments represent exactly.  for density rho the analytic values are
+#   V    = pi R^2 L                   M = rho V
+#   xcm  = 0.5 on the axis
+#   ixx  = M R^2 / 2
+#   iyy  = izz = M (3 R^2 + L^2) / 12
+# the volume integrals in body_properties_axi() are exact for a straight
+# profile, so agreement is limited only by round-off.
+# the values are written to an outfile and checked by run_tests.py
+
+seed	    	    12345
+variable            dist index 0
+variable            geom index cylinder
+if "${dist} == 1" then "global surfs explicit/distributed"
+
+dimension   	    2
+boundary            o ar p
+
+create_box  	    0 1 0 0.3 -0.5 0.5
+create_grid 	    20 6 1
+
+global		    nrho 1.0e10 fnum 1.0e10
+
+species		    air.species N
+mixture		    air N vstream 0 0 0 temp 273.0
+
+read_surf           adata.${geom} group body
+surf_collide	    1 specular
+surf_modify         all collide 1
+
+timestep 	    1.0e-6
+
+compute             c1 surf body all fx fy fz tx ty tz com 0.5 0 0
+
+global              rigid yes
+
+# no mass, com, or moi given: all three are integrated from the geometry
+
+fix		    1 rigid body c1 density 1000.0 outfile tmp.axidensity.state 1
+
+stats		    1
+stats_style         step np nscoll
+run 		    1
