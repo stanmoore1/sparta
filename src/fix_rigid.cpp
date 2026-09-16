@@ -3581,8 +3581,17 @@ int FixRigid::incremental_recut()
     for (i = 0; i < cells[icell].nsurf; i++)
       if (rigidmap[cur[i]] < 0) reclist[ncand++] = cur[i];
 
+    // a body whose bounding box misses this cell contributes no
+    //   candidate: bbodylo/bbodyhi bound every element of the body at
+    //   its end-of-step position, so surf2grid_list would reject all of
+    //   them one at a time.  one test per body instead of one per
+    //   element is what keeps the cost of a cell independent of how
+    //   many bodies are defined far away from it
+
     for (int m = 0; m < nb; m++) {
       FixRigid *f = flist[m];
+      if (!box_overlap(cells[icell].lo,cells[icell].hi,
+                       f->bbodylo,f->bbodyhi)) continue;
       for (i = 0; i < f->nsurf; i++) reclist[ncand++] = f->lblist[i];
     }
 
