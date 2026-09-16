@@ -570,7 +570,12 @@ void FixRigid::init()
 
   csurf->addstep(update->ntimestep+1);
 
-  // body surfs cannot be transparent or have surface reactions assigned
+  // body surfs cannot be transparent, and may only carry a surf_react
+  //   model in which every reaction leaves exactly one particle: the
+  //   body's recoil correction maps one incoming particle to one
+  //   outgoing one, so a reaction which destroys the particle, produces
+  //   a second, or adsorbs it onto the surface has no defined recoil
+  //   and would also change the body's mass, which this fix holds fixed
   // all body surfs must be in the surf group tallied by the compute
   // attributes come from the replicated body table, valid for both
   //   non-distributed and distributed surfs
@@ -610,8 +615,10 @@ void FixRigid::init()
   for (int i = 0; i < nsurf; i++) {
     if (bodytrans[i])
       error->all(FLERR,"Fix rigid body surfs cannot be transparent");
-    if (bodyisr[i] >= 0)
-      error->all(FLERR,"Fix rigid body surfs cannot have surface reactions");
+    if (bodyisr[i] >= 0 && !surf->sr[bodyisr[i]]->one_product_only())
+      error->all(FLERR,"Fix rigid body surfs can only use a surf_react "
+                 "model in which every reaction leaves exactly one "
+                 "particle");
     if (!(bodymask[i] & cbit))
       error->all(FLERR,"Fix rigid compute surf group does not include "
                  "all body surfs");

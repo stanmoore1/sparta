@@ -112,6 +112,13 @@ mixture       negative: a compute surf whose mixture omits a species
               the gas
 badinfile     negative: an infile with a malformed number (1.0d-22)
               must be rejected rather than read as 1.0
+react         a surf_react model on the body surfs which leaves exactly
+              one particle: species A becomes species B of twice the mass,
+              so the impulse is mpost*v - mpre*vpre and the recoil must use
+              the post-collision mass and the matrix branch; checked
+              against the exact rigid-body impulse solution
+badreact      negative: a reaction which destroys the particle (or produces
+              a second one) must be rejected on body surfs
 recoilspin    the recoil correction must include the body's ROTATIONAL
               response, not just 1/M: an off-centre strike with Izz chosen
               so (r x n)^2/Izz equals 1/M, checked against the exact

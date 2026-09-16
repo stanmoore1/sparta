@@ -1,0 +1,4 @@
+# every reaction leaves exactly one particle (EXCHANGE), so fix rigid allows it
+# format: reactants --> products  /  type style coeff1 coeff2
+A --> B
+E S 1.0 1.0

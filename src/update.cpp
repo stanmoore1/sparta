@@ -889,6 +889,8 @@ template < int DIM, int SURF, int OPT, int RIGID > void Update::move()
   double xnew[3],xhold[3],xc[3],vc[3],minxc[3],minvc[3];
   int minmoving,minbody,mapbody;
   double nhit[3],vwallhit[3],minnorm[3],minvwall[3],vpre[3];
+  int isppre = 0;                // species of the particle before a hit on
+  double wtpre = 1.0;            //   a moving body surf, and its weight
   double ymap0[3],ymap1[3];   // path endpoints mapped into the body frame
   double *x,*v,*lo,*hi;
   double Lx,Ly,Lz,dx,dy,dz;
@@ -1632,6 +1634,8 @@ template < int DIM, int SURF, int OPT, int RIGID > void Update::move()
                 vpre[0] = v[0];
                 vpre[1] = v[1];
                 vpre[2] = v[2];
+                isppre = particles[i].ispecies;
+                wtpre = particles[i].weight;
                 v[0] -= minvwall[0];
                 v[1] -= minvwall[1];
                 v[2] -= minvwall[2];
@@ -1687,11 +1691,22 @@ template < int DIM, int SURF, int OPT, int RIGID > void Update::move()
                 //   momentum; skipped if a surface reaction occurred
                 // x = hit point, dt-dtremain = hit time from start of step
 
-                if (ipart && !jpart && !reaction) {
+                // a surface reaction which produced exactly one particle
+                //   is corrected the same way, with the pre- and
+                //   post-collision species masses: the impulse is then
+                //   mpost*v - mpre*vpre.  fix rigid rejects body surfs
+                //   whose reaction model can produce any other count, so
+                //   a reaction reaching here always leaves one particle
+
+                if (ipart && !jpart) {
                   FixRigid *fr = fixrigidlist[minbody];
-                  double msuper = fnum * species[ipart->ispecies].mass;
-                  if (cellweightflag) msuper *= ipart->weight;
-                  Geometry::rigid_recoil(DIM == 3 ? 3 : 2,msuper,
+                  double mpre = fnum * species[isppre].mass;
+                  double mpost = fnum * species[ipart->ispecies].mass;
+                  if (cellweightflag) {
+                    mpre *= wtpre;
+                    mpost *= ipart->weight;
+                  }
+                  Geometry::rigid_recoil(DIM == 3 ? 3 : 2,mpre,mpost,
                                          minnorm,minvwall,
                                          vpre,v,x,dt-dtremain,
                                          fr->xcm,fr->vcm,

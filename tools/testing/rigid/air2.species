@@ -1,0 +1,5 @@
+# two species with DIFFERENT masses, so an exchange reaction changes the
+# super-particle mass and exercises the mpre != mpost path
+# ID Molwt Molmass rotdof rotrel vibdof vibrel vibtemp specwt charge
+A   14.008  2.325E-26  0  0.0  0  0.0  0.0  1.0  0.0
+B   28.016  4.650E-26  0  0.0  0  0.0  0.0  1.0  0.0

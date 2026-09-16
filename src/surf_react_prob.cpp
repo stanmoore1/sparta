@@ -115,6 +115,23 @@ void SurfReactProb::init()
    if dissociation, add particle and return ptr JP
 ------------------------------------------------------------------------- */
 
+/* ----------------------------------------------------------------------
+   1 if every reaction in the list leaves exactly one particle
+   a DISSOCIATION produces 2 and a RECOMBINATION produces 0, so only a
+     list made entirely of EXCHANGE reactions qualifies
+   all reactions are checked, not just the active ones, so the answer does
+     not depend on whether init() has run
+------------------------------------------------------------------------- */
+
+int SurfReactProb::one_product_only()
+{
+  for (int i = 0; i < nlist; i++)
+    if (rlist[i].nproduct != 1) return 0;
+  return 1;
+}
+
+/* ---------------------------------------------------------------------- */
+
 int SurfReactProb::react(Particle::OnePart *&ip, int, double *,
                          Particle::OnePart *&jp, int &)
 {

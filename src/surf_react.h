@@ -36,6 +36,14 @@ class SurfReact : protected Pointers {
   SurfReact(class SPARTA *sparta) : Pointers(sparta) {} // needed for Kokkos
   virtual ~SurfReact();
   virtual void init();
+  // 1 only if EVERY reaction this model can perform leaves exactly one
+  //   particle: no destruction, no second product, no adsorption.  fix
+  //   rigid requires it on body surfs, where a collision must map one
+  //   incoming particle to one outgoing one for the body's recoil
+  //   correction to be defined.  the default is 0: a model must prove it.
+
+  virtual int one_product_only() { return 0; }
+
   virtual int react(Particle::OnePart *&, int, double *,
                     Particle::OnePart *&, int &) = 0;
   virtual char *reactionID(int) = 0;

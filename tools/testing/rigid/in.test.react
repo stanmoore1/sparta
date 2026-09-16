@@ -1,0 +1,45 @@
+# TEST: a surface reaction on the body surfs which leaves exactly one
+# particle.  One particle of species A strikes a free body and is converted
+# to species B, whose mass is twice A's, so the collision impulse is
+# mpost*v - mpre*vpre with two different masses.  The recoil correction has
+# to use the post-collision mass in (1 + m K) J = Jinf, and must take the
+# matrix branch rather than the scalar elastic one, since a reaction is not
+# an elastic normal impulse.  Deterministic, so run_tests.py checks the
+# particle's outgoing velocity and the body's vcom and omega against the
+# exact rigid-body impulse solution, plus exact momentum conservation.
+
+seed                12345
+dimension           2
+global              gridcut 0.0 comm/sort yes
+boundary            r r p
+
+create_box          0 10 0 10 -0.5 0.5
+create_grid         20 20 1
+
+global              nrho 1.0 fnum 1.0e-3
+
+species             air2.species A B
+mixture             air A B vstream 1000.0 0 0 temp 1.0e-6
+
+read_surf           data.square group body
+surf_collide        1 specular
+surf_react          r1 prob exch.surf
+surf_modify         all collide 1 react r1
+collide             none
+
+timestep            1.0e-6
+
+compute             c1 surf body all fx fy fz tx ty tz com 5 5 0
+global              rigid yes
+
+fix                 1 rigid body c1 body mass 1.0e-24 com 5 5 0 &
+                    vcom 0 0 0 moi 1.0e-25 1.0e-25 1.6e-25 0 0 0 &
+                    angmom 0 0 0 rotate richardson
+
+create_particles    air single A 2.0 5.4 0.0 1000.0 0.0 0.0
+
+compute             pv reduce ave vx vy
+stats               4000
+stats_style         step np c_pv[1] c_pv[2] f_1[4] f_1[5] f_1[15] f_1
+stats_modify        format float %.17g
+run                 4000

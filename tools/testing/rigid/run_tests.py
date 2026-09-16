@@ -1104,6 +1104,79 @@ def read_state(name):
     return None
 
 
+def test_react(exe_cmd):
+    """A surface reaction on body surfs which leaves exactly one particle.
+
+    Species A becomes species B, whose mass is twice A's, so the impulse is
+    mpost*v - mpre*vpre with two different masses and the recoil correction
+    must use the post-collision mass.  A reaction is not an elastic normal
+    impulse, so it must take the matrix branch of rigid_recoil, which also
+    induces a tangential component through the off-diagonal terms of K.
+    Checked against the exact rigid-body impulse solution."""
+    FN = 1.0e-3
+    mpre = FN * 2.325e-26
+    mpost = FN * 4.650e-26
+    MB = 1.0e-24
+    IZZ = 1.6e-25
+    V0 = 1000.0
+    rx, ry = -0.5, 0.4
+    rxn = -ry * -1.0                      # z of r x n for n = (-1,0)
+    # K as a 3x3 acting in the plane; build the two in-plane rows we need
+    kxx = 1.0/MB + ry*ry/IZZ
+    kxy = -rx*ry/IZZ
+    kyy = 1.0/MB + rx*rx/IZZ
+    # Jinf from a specular reflection off a wall at rest, with the mass change
+    jinf_x = mpost*(-V0) - mpre*V0
+    # solve (1 + mpost K) J = Jinf in the plane
+    a11 = 1.0 + mpost*kxx; a12 = mpost*kxy
+    a21 = mpost*kxy;       a22 = 1.0 + mpost*kyy
+    det = a11*a22 - a12*a21
+    jx = ( a22*jinf_x) / det
+    jy = (-a21*jinf_x) / det
+    vout_x = (jx + mpre*V0) / mpost
+    vout_y = jy / mpost
+    dvcm_x = -jx/MB
+    dom_z = (rx*(-jy) - ry*(-jx))/IZZ      # z of Iinv (r x -J)
+
+    rc, out = run_deck(exe_cmd, "in.test.react")
+    if rc:
+        return ["run failed with exit code %d" % rc]
+    rows = parse_stats(out)
+    if not rows:
+        return ["no stats output"]
+    last = rows[-1]
+    fails = []
+    if last["Np"] != 1:
+        fails.append("Np = %d, an exchange reaction must leave exactly one "
+                     "particle" % last["Np"])
+    if last["f_1"] != 0:
+        fails.append("%d particles deleted" % last["f_1"])
+    for nm, col, ex in (("particle vx", "c_pv[1]", vout_x),
+                        ("particle vy", "c_pv[2]", vout_y),
+                        ("body vcom x", "f_1[4]", dvcm_x),
+                        ("body omega z", "f_1[15]", dom_z)):
+        if not approx(last[col], ex, rel=1.0e-11):
+            fails.append("%s %.17g != exact %.17g" % (nm, last[col], ex))
+
+    # momentum must be conserved exactly despite the mass change
+    dp = mpost*last["c_pv[1]"] + MB*last["f_1[4]"] - mpre*V0
+    if abs(dp) > 1.0e-12 * abs(mpre*V0):
+        fails.append("momentum not conserved across the reaction: %.3e" % dp)
+    return fails
+
+
+def test_badreact(exe_cmd):
+    """A reaction model which does not leave exactly one particle must be
+    rejected on body surfs: the recoil correction is undefined and the body
+    would gain or lose mass, which this fix holds fixed."""
+    rc, out = run_deck(exe_cmd, "in.test.badreact")
+    if rc == 0:
+        return ["a recombination reaction on the body surfs was accepted"]
+    if "one particle" not in out and "surf_react" not in out:
+        return ["rejected, but not with the expected message"]
+    return []
+
+
 def test_recoil_spin(exe_cmd):
     """The recoil correction must include the body's rotational response.
 
@@ -1411,6 +1484,8 @@ TESTS = [
     ("rotwall3d", test_rotwall3d),
     ("axistuck", test_axistuck),
     ("tallyorder", test_tallyorder),
+    ("react", test_react),
+    ("badreact", test_badreact),
     ("recoilspin", test_recoil_spin),
     ("couple", test_couple),
     ("density", test_density),

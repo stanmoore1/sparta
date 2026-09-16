@@ -1501,9 +1501,13 @@ bool line_tri_moving_intersect(double *start, double *stop,
      as though the body were infinitely massive; the body then receives
      the full impulse, so the recoil energy would be counted twice
    dim = 2 or 3
-   msuper = mass of the simulation particle = fnum * weight * species mass
+   mpre,mpost = super-particle mass before and after = fnum * weight *
+     species mass; equal unless a surface reaction changed the species
    norm,vwall = outward surf normal and wall velocity at the hit point
      and time, as used by the mover for the rest of this step
+   mpre,mpost = super-particle mass before and after the collision; they
+     differ only when a surface reaction changed the species, in which
+     case the impulse is mpost*v - mpre*vpre rather than mpost*(v - vpre)
    vpre = space-frame particle velocity before the collision
    v = space-frame particle velocity after the collision, corrected here
    point,thit = hit point and hit time measured from the start of step
@@ -1527,7 +1531,8 @@ bool line_tri_moving_intersect(double *start, double *stop,
      of order (m/M)^2), the uncorrected reflection is kept instead
 ------------------------------------------------------------------------- */
 
-void rigid_recoil(int dim, double msuper, double *norm, double *vwall,
+void rigid_recoil(int dim, double mpre, double mpost,
+                  double *norm, double *vwall,
                   double *vpre, double *v, double *point, double thit,
                   double *xcm0, double *vcm,
                   double invmass, double *invinertia)
@@ -1542,7 +1547,7 @@ void rigid_recoil(int dim, double msuper, double *norm, double *vwall,
   for (k = 0; k < 3; k++) {
     vmodel[k] = v[k];
     r[k] = point[k] - (xcm0[k] + vcm[k]*thit);
-    jinf[k] = msuper * (v[k] - vpre[k]);
+    jinf[k] = mpost*v[k] - mpre*vpre[k];
   }
   if (dim == 2) r[2] = jinf[2] = 0.0;
 
@@ -1570,19 +1575,21 @@ void rigid_recoil(int dim, double msuper, double *norm, double *vwall,
   double jn = MathExtra::dot3(jinf,norm);
   for (k = 0; k < 3; k++) jt[k] = jinf[k] - jn*norm[k];
 
-  if (MathExtra::lensq3(jt) <= EPSRECOIL*EPSRECOIL*jn*jn) {
+  if (mpre == mpost && MathExtra::lensq3(jt) <= EPSRECOIL*EPSRECOIL*jn*jn) {
     MathExtra::matvec(kmat,norm,kn);
-    double scale = 1.0 / (1.0 + msuper*MathExtra::dot3(norm,kn));
+    double scale = 1.0 / (1.0 + mpost*MathExtra::dot3(norm,kn));
     for (k = 0; k < 3; k++) jnew[k] = jinf[k] + (scale-1.0)*jn*norm[k];
   } else {
     for (i = 0; i < 3; i++)
-      for (j = 0; j < 3; j++) a[i][j] = msuper*kmat[i][j];
+      for (j = 0; j < 3; j++) a[i][j] = mpost*kmat[i][j];
     for (i = 0; i < 3; i++) a[i][i] += 1.0;
     MathExtra::invert3(a,ainv);
     MathExtra::matvec(ainv,jinf,jnew);
   }
 
-  for (k = 0; k < dim; k++) v[k] = vpre[k] + jnew[k]/msuper;
+  // jnew = mpost*v - mpre*vpre, so invert for v with the post-collision mass
+
+  for (k = 0; k < dim; k++) v[k] = (jnew[k] + mpre*vpre[k]) / mpost;
 
   // keep the uncorrected reflection if the wall would overtake the particle
 

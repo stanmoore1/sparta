@@ -741,8 +741,21 @@ distributed surfs each processor stores a replicated copy of the
 and ghost grid cells, so the total surf collection can be much larger
 than any one processor's memory.  Both <I>remap</I> modes work with
 distributed surfs.  Rigid bodies cannot be used with axisymmetric
-domains.  Body surf elements cannot be transparent and cannot have
-surface reactions assigned to them.  Because the grid may be re-mapped
+domains.  Body surf elements cannot be transparent.
+</P>
+<P>Body surf elements may carry a <A HREF = "surf_react.html">surf_react</A>
+model only if every reaction in it leaves exactly one particle, which
+for <A HREF = "surf_react.html">surf_react prob</A> means a file of
+<I>exchange</I> reactions alone.  Such a reaction may change the species,
+and hence the mass, of the particle; the collision impulse is then the
+difference of two different momenta and the recoil correction described
+below uses the post-collision mass.  A reaction which destroys the
+particle, produces a second one, or adsorbs it onto the surface is
+rejected: the body's recoil is not defined when one incoming particle
+does not map to one outgoing particle, and such a reaction would also
+move mass between the gas and the body, whose mass this fix holds fixed.
+</P>
+<P>Because the grid may be re-mapped
 on any step, with distributed surfs a <A HREF = "surf_react_adsorb.html">surf_react
 adsorb</A> model in its <I>surf</I> mode on any surfs
 requires its <I>nsync</I> setting to be 1.  A <A HREF = "fix_emit_surf.html">fix
