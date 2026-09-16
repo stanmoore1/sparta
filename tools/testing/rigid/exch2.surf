@@ -1,0 +1,7 @@
+# a two-way exchange pair, so every hit flips the species and the
+# super-particle mass and the reactions never run out of reactant
+# every reaction leaves exactly one particle, so fix rigid allows it
+A --> B
+E S 1.0 1.0
+B --> A
+E S 1.0 1.0

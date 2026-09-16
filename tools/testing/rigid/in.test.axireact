@@ -1,0 +1,70 @@
+# TEST: a mass-changing surface reaction on a spinning body of revolution
+#
+# every hit flips the species between A and B, whose masses differ by 2x, so
+# the collision impulse is mpost*v - mpre*vpre with two different masses and
+# the recoil correction must take the matrix branch of the axisymmetric kmat
+#
+# the wall is specular and the body spins, which is what makes this test the
+# azimuthal channel and not just the axial one: specular reflection leaves
+# the azimuthal velocity RELATIVE TO THE WALL unchanged, so the lab v_theta
+# is unchanged too, and the azimuthal impulse is exactly
+#   (mpost - mpre) * v_theta
+# which is non-zero only because the mass changed.  the body answers it
+# through kmat[2][2] = r^2/ixx and its spin responds
+#
+# ixx is small enough that the body's spin answers visibly: the azimuthal
+# impulse has zero mean for a thermal gas, so the spin random-walks rather
+# than drifting, and over the run it covers about +-15% while the gas
+# carries the balance
+#
+# both exact invariants must hold to round-off, with the per-particle mass
+# taken from the CURRENT species so the sums follow the reactions:
+#   fnum sum(m vx)     + M vcm_x   + 0.5 dt fx
+#   fnum sum(m r vth)  + ixx w_x   + 0.5 dt tx
+# neither is conserved by the reaction itself -- an exchange between species
+# of different mass does not conserve gas momentum -- but the impulse the
+# body is given is exactly the momentum the gas lost, so the sum is
+
+seed	    	    12345
+
+variable            dist index 0
+if "${dist} == 1" then "global surfs explicit/distributed"
+dimension   	    2
+boundary            p ar p
+
+create_box  	    0 1 0 0.3 -0.5 0.5
+create_grid 	    20 6 1
+balance_grid        rcb cell
+
+global		    nrho 1.0 fnum 0.001
+
+species		    air2.species A B
+mixture		    air A B vstream 0 0 0 temp 500.0
+
+read_surf           adata.cylinder group body
+surf_collide	    1 specular
+surf_react          r1 prob exch2.surf
+surf_modify         all collide 1 react r1
+collide             none
+
+timestep 	    1.0e-5
+
+compute             c1 surf body all fx fy fz tx ty tz com 0.5 0 0
+
+global              rigid yes
+
+fix		    1 rigid body c1 body &
+		    mass 1.0e-22 com 0.5 0 0 vcom 0 0 0 &
+		    moi 5.0e-28 1.0e-24 1.0e-24 0 0 0 angmom 5.0e-25 0 0
+
+create_particles    air n 20000
+
+variable            px particle mass*vx
+variable            lx particle mass*y*vz
+compute             rp reduce sum v_px
+compute             rl reduce sum v_lx
+
+stats		    200
+stats_style         step np c_rp c_rl f_1[4] f_1[13] f_1[7] f_1[10] f_1
+stats_modify        format float %20.14e
+run 		    2000

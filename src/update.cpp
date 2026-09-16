@@ -1698,7 +1698,9 @@ template < int DIM, int SURF, int OPT, int RIGID > void Update::move()
                 // correct the reflected velocity for the recoil of the
                 //   finite-mass body, so the impulse tallied below and
                 //   applied to the body conserves energy as well as
-                //   momentum; skipped if a surface reaction occurred
+                //   momentum
+                // done before the tally, so the force the body is given
+                //   comes from the corrected outgoing velocity
                 // x = hit point, dt-dtremain = hit time from start of step
 
                 // a surface reaction which produced exactly one particle

@@ -171,6 +171,13 @@ axipush       push-off contact for a body of revolution: elastic axial
               bounce off a static disk, while a live radial contact with
               the outer boundary must never reach the body.  the axis is
               not a wall, and the contact force is ring-weighted
+axireact      a mass-changing surface reaction on a SPINNING body of
+              revolution.  specular reflection leaves v_theta relative to
+              the wall unchanged, so the azimuthal impulse is exactly
+              (mpost - mpre)*v_theta, non-zero only because the mass
+              changed; the body answers through kmat[2][2] = r^2/ixx.
+              both exact invariants hold with the per-particle mass taken
+              from the current species
 axibadvcom    a transverse vcom must be rejected: it would carry the
               body off the axis
 axiopen       the axis exception must not let through a free end that is
