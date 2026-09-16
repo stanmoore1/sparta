@@ -117,7 +117,8 @@ as there are surf types.
 The tools/rigid/replicate.py script creates a surf file with many
 copies of a template body, each with its own surf type, plus a
 matching file of per-body parameters for the {infile} style described
-below.
+below; the examples/rigid/in.rigid.many input script runs 100 circles
+made this way.
 
 Each body must form a closed (watertight) object, which is checked
 when the fix is defined: in 2d every point must be the first endpoint

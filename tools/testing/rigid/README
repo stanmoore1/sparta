@@ -145,6 +145,17 @@ crossproc     three gas-driven bodies crossing the whole box, with
               approaches, and the trajectories must be identical to the
               non-distributed run on the same procs.  run it on several
               procs, since on one proc every body is always local
+nbody         four squares of different masses colliding with each other
+              in pair and multi-body push-off contacts, no particles, no
+              wall contacts: total linear momentum and total angular
+              momentum about the origin are conserved exactly, kinetic
+              energy within 2%
+idperm        the same three colliding squares numbered (1,2,3) and
+              (3,1,2): each body follows the same trajectory, so nothing
+              depends on the order of the body element table or of the
+              per-body loops
+missingid     negative: surf types 1 and 3 with no type 2 must be
+              rejected, since body 2 would have no surface elements
 
 axisymmetric domains: a rigid body is a body of revolution about the
 x axis, so it has two degrees of freedom, axial translation and axial

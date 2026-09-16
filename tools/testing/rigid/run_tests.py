@@ -2003,6 +2003,118 @@ def test_crossproc(exe_cmd):
     return fails
 
 
+def test_nbody(exe_cmd):
+    """Conservation laws of many-body push-off contacts.
+
+    Four squares of different masses collide with each other in several
+    pair and multi-body contacts, with no particles and no wall
+    contacts.  The contact forces are equal-and-opposite and act at the
+    same point on both bodies, so the total linear momentum and the total
+    angular momentum about the origin (orbital plus spin) are conserved
+    exactly; the elastic springs conserve the kinetic energy once the
+    bodies separate."""
+    rc, out = run_deck(exe_cmd, "in.test.nbody")
+    if rc:
+        return ["run failed with exit code %d" % rc]
+    rows = parse_stats(out)
+    if not rows:
+        return ["no stats output"]
+    mass = (1.0e-22, 2.0e-22, 3.0e-22, 4.0e-22)
+    izz = (1.6667e-23, 3.3333e-23, 5.0e-23, 6.6667e-23)
+
+    def invariants(r):
+        px = py = lz = ke = 0.0
+        for i in range(4):
+            b = i + 1
+            x, y = r["f_1[%d][1]" % b], r["f_1[%d][2]" % b]
+            vx, vy = r["f_1[%d][4]" % b], r["f_1[%d][5]" % b]
+            w = r["f_1[%d][15]" % b]
+            px += mass[i] * vx
+            py += mass[i] * vy
+            lz += mass[i] * (x * vy - y * vx) + izz[i] * w
+            ke += 0.5 * mass[i] * (vx * vx + vy * vy) + 0.5 * izz[i] * w * w
+        return px, py, lz, ke
+
+    px0, py0, lz0, ke0 = invariants(rows[0])
+    pscale = sum(m * 40.0 for m in mass)
+    lscale = sum(m * 40.0 * 10.0 for m in mass)
+    fails = []
+    for r in rows:
+        px, py, lz, ke = invariants(r)
+        if abs(px - px0) > 1e-9 * pscale or abs(py - py0) > 1e-9 * pscale:
+            fails.append("step %d: momentum (%.10e,%.10e) drifted from "
+                         "(%.10e,%.10e)"
+                         % (int(r["Step"]), px, py, px0, py0))
+        if abs(lz - lz0) > 1e-9 * lscale:
+            fails.append("step %d: angular momentum %.10e drifted from "
+                         "%.10e" % (int(r["Step"]), lz, lz0))
+    px, py, lz, ke = invariants(rows[-1])
+    if not approx(ke, ke0, rel=0.02):
+        fails.append("final kinetic energy %.6e vs initial %.6e, not "
+                     "conserved within 2%%" % (ke, ke0))
+    # every body must have been deflected, else the contacts did not happen
+    for i in range(4):
+        b = i + 1
+        dv = abs(rows[-1]["f_1[%d][4]" % b] - rows[0]["f_1[%d][4]" % b]) + \
+            abs(rows[-1]["f_1[%d][5]" % b] - rows[0]["f_1[%d][5]" % b])
+        if dv < 1.0:
+            fails.append("body %d velocity changed by only %.3g, it was "
+                         "not hit; test geometry is broken" % (b, dv))
+    return fails
+
+
+def test_idperm(exe_cmd):
+    """The physics must not depend on how the bodies are numbered.
+
+    Three squares colliding via push-off, run with body IDs (1,2,3) and
+    with the same bodies numbered (3,1,2), which changes the order of the
+    body element table and of every per-body loop.  Each body must follow
+    the same trajectory in both runs, to the round-off of summing its
+    contact forces in a different order."""
+    runs = {}
+    fails = []
+    for perm, extra in (("123", []),
+                        ("312", ["-var", "ta", "2", "-var", "tb", "0",
+                                 "-var", "tc", "1", "-var", "bodies",
+                                 "data.idperm.312.bodies"])):
+        rc, out = run_deck(exe_cmd, "in.test.idperm", extra)
+        if rc:
+            fails.append("IDs %s: run failed with exit code %d" % (perm, rc))
+            continue
+        rows = parse_stats(out)
+        if not rows:
+            fails.append("IDs %s: no stats output" % perm)
+            continue
+        runs[perm] = rows
+    if fails:
+        return fails
+    if len(runs["123"]) != len(runs["312"]):
+        return ["stats row counts differ"]
+    # body A is ID 1 then 3, B is 2 then 1, C is 3 then 2
+    for name, b123, b312 in (("A", 1, 3), ("B", 2, 1), ("C", 3, 2)):
+        for r1, r2 in zip(runs["123"], runs["312"]):
+            for col in (1, 2, 4, 5, 15):
+                v1 = r1["f_1[%d][%d]" % (b123, col)]
+                v2 = r2["f_1[%d][%d]" % (b312, col)]
+                if not approx(v1, v2, rel=1e-12, abs_=1e-12):
+                    fails.append("step %d body %s column %d: %.15g with "
+                                 "IDs (1,2,3) vs %.15g with IDs (3,1,2)"
+                                 % (int(r1["Step"]), name, col, v1, v2))
+            if fails:
+                return fails
+    # the bodies must have collided
+    last = runs["123"][-1]
+    if last["f_1[1][4]"] > 30.0:
+        fails.append("final body A vx = %.6g, no collision occurred; "
+                     "test geometry is broken" % last["f_1[1][4]"])
+    return fails
+
+
+def test_missingid(exe_cmd):
+    return negative_test(exe_cmd, "in.test.missingid",
+                         "Fix rigid body 2 has no surface elements")
+
+
 TESTS = [
     ("ballistic", test_ballistic),
     ("force", test_force),
@@ -2064,6 +2176,9 @@ TESTS = [
     ("axiopen", test_axiopen),
     ("nonfinite", test_nonfinite),
     ("crossproc", test_crossproc),
+    ("nbody", test_nbody),
+    ("idperm", test_idperm),
+    ("missingid", test_missingid),
 ]
 
 # tests whose decks support -var dist 1 (global surfs explicit/distributed)
@@ -2080,7 +2195,7 @@ DIST_TESTS = {"ballistic", "force", "rotation", "bounce", "restitution",
               "splitcell", "gridchange", "exitbox", "twobody", "pushpair",
               "tallyorder", "rotwall", "rotwall3d", "customemit",
               "splitbalance",
-              "vacate", "facetbounce",
+              "vacate", "facetbounce", "nbody",
               "axiballistic", "axidensity", "aximomentum", "axispin",
               "axipush", "axireact", "axipair"}
 

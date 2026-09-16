@@ -1,0 +1,53 @@
+################################################################################
+# 100 mobile rigid-body circles in a gas at rest
+# the bodies start with random velocities and bounce off each other and
+# the box walls via push-off springs while the gas slows them down
+# the surf file and the body parameter file were made by
+#   tools/rigid/replicate.py data.circle24 2 100 data.many.surf \
+#     -box 0 10 0 10 -gap 0.5 -seed 12345 \
+#     -bodies data.many.bodies 2.0e-24 3.125e-26 3.125e-26 6.25e-26 30.0
+# each copy of the circle has its own surf type, which is its body ID
+################################################################################
+
+seed	    	    12345
+dimension   	    2
+global              gridcut 0.0 comm/sort yes
+
+boundary	    r r p
+
+create_box  	    0 10 0 10 -0.5 0.5
+create_grid 	    50 50 1
+balance_grid        rcb cell
+
+global		    nrho 0.5 fnum 0.001
+
+species		    air.species N O
+mixture		    air N O vstream 0 0 0 temp 300.0
+
+# 100 circles of radius 0.25, body ID = surf type
+
+read_surf           data.many.surf type group bodies
+
+surf_collide	    1 diffuse 300.0 0.5
+surf_modify         all collide 1
+
+create_particles    air n 0
+
+timestep 	    0.0001
+
+compute      c1 surf bodies all fx fy fz tx ty tz com rigid
+
+global              rigid yes
+
+fix	 1 rigid bodies c1 type infile data.many.bodies &
+         push 1.0e-18 0.1 pushbound yes
+
+dump                5 image all 100 image.*.ppm type type pdiam 0.03 &
+                    surf one 0.01 size 800 800 zoom 1.75
+dump_modify	    5 pad 5 scolor * gray
+
+stats		    100
+stats_style	    step np nscoll f_1[1][1] f_1[1][2] f_1[1][4] &
+                    f_1[50][1] f_1[50][2] f_1[50][4] &
+                    f_1[100][1] f_1[100][2] f_1[100][4]
+run 		    2000

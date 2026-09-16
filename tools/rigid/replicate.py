@@ -22,7 +22,9 @@
 #                                   up to vmax (default = 0)
 #
 # The template body should be centered on the origin, since each copy is
-#   translated to its site.  Each copy is written with surf type = its body
+#   translated to its site, and its lines or triangles must be ordered so
+#   that the surf normals point outward, as fix rigid requires (in 2d,
+#   clockwise around the body).  Each copy is written with surf type = its body
 #   ID, so it can be read with "read_surf outsurf type" and driven by
 #   "fix rigid ... type infile file" or "fix rigid ... type density rho".
 #

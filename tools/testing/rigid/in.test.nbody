@@ -1,0 +1,48 @@
+# TEST: conservation laws of many-body push-off contacts
+# four unit squares of different masses converge on the center of the
+# box and collide with each other, corner to face, in several pair
+# and multi-body contacts; no particles, no wall contacts
+# the contact forces are equal-and-opposite and act at the same point on
+# both bodies, so the total linear momentum and the total angular
+# momentum about the origin (orbital plus spin) are conserved exactly,
+# and the elastic springs conserve the kinetic energy once the bodies
+# separate
+
+seed	    	    12345
+
+variable            dist index 0
+if "${dist} == 1" then "global surfs explicit/distributed"
+dimension   	    2
+boundary            r r p
+
+create_box  	    0 20 0 20 -0.5 0.5
+create_grid 	    20 20 1
+
+global		    nrho 1.0 fnum 0.001
+
+species		    air.species N
+mixture		    air N vstream 0 0 0 temp 273.0
+
+read_surf           data.square group bodies trans 0.0 5.0 0
+read_surf           data.square group bodies trans 6.0 5.3 0 typeadd 1
+read_surf           data.square group bodies trans 5.2 0.0 0 typeadd 2
+read_surf           data.square group bodies trans 4.8 10.0 0 typeadd 3
+surf_collide	    1 specular
+surf_modify         all collide 1
+
+timestep 	    0.0001
+
+compute             c1 surf bodies all fx fy fz tx ty tz com rigid
+
+global              rigid yes
+
+fix		    1 rigid bodies c1 type infile data.nbody.bodies &
+		    push 1.0e-17 0.3
+
+stats		    100
+stats_style         step f_1[1][1] f_1[1][2] f_1[1][4] f_1[1][5] f_1[1][15] &
+                    f_1[2][1] f_1[2][2] f_1[2][4] f_1[2][5] f_1[2][15] &
+                    f_1[3][1] f_1[3][2] f_1[3][4] f_1[3][5] f_1[3][15] &
+                    f_1[4][1] f_1[4][2] f_1[4][4] f_1[4][5] f_1[4][15]
+stats_modify        format float %20.14e
+run 		    1500
