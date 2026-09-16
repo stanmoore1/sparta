@@ -113,7 +113,8 @@ void FixRigidKokkos::setup()
 /* ----------------------------------------------------------------------
    integrate the bodies and install the swept collision lists (host),
      then rebuild the device surf graphs the mover reads
-   surfs and cells are not otherwise changed here
+   distributed surfs: local copies of bodies entering this proc may be
+     appended to the surf arrays; cells are not otherwise changed here
 ------------------------------------------------------------------------- */
 
 void FixRigidKokkos::start_of_step()
@@ -125,6 +126,14 @@ void FixRigidKokkos::start_of_step()
   surf_kk->sync(Host,ALL_MASK);
 
   FixRigid::start_of_step();
+
+  // distributed surfs: local copies of a body entering this proc were
+  //   appended to the host surf arrays
+
+  if (copiesappended) {
+    surf_kk->modify(Host,ALL_MASK);
+    copiesappended = 0;
+  }
 
   grid_kk->modify(Host,CELL_MASK);
   if (listschanged) grid_kk->wrap_kokkos_graphs();

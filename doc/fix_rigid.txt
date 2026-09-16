@@ -841,11 +841,15 @@ style can only be used when there is a single body.
 Rigid bodies can be used with explicit surface elements, both
 non-distributed and distributed ("global surfs"_global.html
 explicit/distributed); implicit surfs are not supported.  With
-distributed surfs each processor stores a replicated copy of the
-(compact) body elements plus the static surfs which overlap its own
-and ghost grid cells, so the total surf collection can be much larger
-than any one processor's memory.  Both {remap} modes work with
-distributed surfs.  Body surf elements cannot be transparent.
+distributed surfs each processor stores the static surfs which
+overlap its own and ghost grid cells, plus a copy of the surfs of the
+bodies which can reach those cells, added as a body approaches; a
+body far from a processor's sub-domain costs it no surf storage.
+The body geometry itself (corner points and per-body state) is
+replicated on every processor.  So the total surf collection, and the
+total number of bodies, can be much larger than any one processor's
+share of them.  Both {remap} modes work with distributed surfs.  Body
+surf elements cannot be transparent.
 
 Body surf elements may carry a "surf_react"_surf_react.html model
 only if every reaction in it leaves exactly one particle, which for

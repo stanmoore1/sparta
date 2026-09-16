@@ -171,6 +171,7 @@ FixRigid::FixRigid(SPARTA *sparta, int narg, char **arg) :
   infile = NULL;
   slist = NULL;
   displace = NULL;
+  bodyneed = NULL;
 
   bodyflag = 0;
   densityflag = 0;
@@ -445,6 +446,7 @@ FixRigid::FixRigid(SPARTA *sparta, int narg, char **arg) :
   bodybinlist = NULL;
   bodycand = NULL;
   maxbodycand = 0;
+  copiesappended = 0;
   ftbuf_mine = ftbuf_all = NULL;
   warnfallback = 0;
   warndelete = 0;
@@ -555,6 +557,7 @@ FixRigid::~FixRigid()
   memory->destroy(bodybinstart);
   memory->destroy(bodybinlist);
   memory->destroy(bodycand);
+  memory->destroy(bodyneed);
   memory->destroy(ftbuf_mine);
   memory->destroy(ftbuf_all);
   memory->destroy(swstamp);
@@ -791,12 +794,20 @@ void FixRigid::setup()
   if (cpage->errorflag)
     error->all(FLERR,"Fix rigid could not allocate collision-list page");
 
-  // distributed surfs: insure local copies of body surfs exist and
-  //   rigidmap covers them, before the first step's swept assignment
+  // bbox around each body's elements at their current positions,
+  //   and the bins of bodies by COM the queries below use
+
+  for (int ibody = 0; ibody < nbody; ibody++) body_bbox(ibody,0);
+  body_bins();
+
+  // distributed surfs: insure local copies of the body surfs which
+  //   can reach this proc's cells exist and rigidmap covers them,
+  //   before the first step's swept assignment
   // rigidmap also spans the ghost surfs acquired for this run, and
   //   per-surf computes must size their arrays for any appended copies
 
   if (surf->distributed) {
+    proc_bbox();
     int changed = ensure_local_copies();
     update->build_rigidmap();
     surfs_changed(changed,2);
@@ -836,8 +847,6 @@ void FixRigid::setup()
   //   and normally avoids them, but this is a safety net for any that
   //   end up inside, e.g. via an emit region overlapping a body
 
-  for (int ibody = 0; ibody < nbody; ibody++) body_bbox(ibody,0);
-  body_bins();
   if (particle->exist) ndeleted += remove_inside_particles(0);
 
   // for incremental remap: grid state is now consistent with the
@@ -1036,6 +1045,25 @@ void FixRigid::start_of_step()
                          "per timestep, cell assignment accuracy degrades");
       }
     }
+  }
+
+  // per-element swept bounding boxes of every body for this step
+
+  for (int ibody = 0; ibody < nbody; ibody++) body_bbox(ibody,1);
+
+  // distributed surfs: a body sweeping into this proc's cells for the
+  //   first time since the last grid rebuild needs local copies of its
+  //   surfs here, before the swept lists and the mover reference them
+  // collective: surfs_changed() reduces whether any proc appended
+
+  if (surf->distributed) {
+    int changed = ensure_local_copies();
+    if (changed) {
+      update->build_rigidmap();
+      listschanged = 1;
+      copiesappended = 1;
+    }
+    surfs_changed(changed,0);
   }
 
   // augment collision lists of all cells any body sweeps through during
@@ -1864,10 +1892,17 @@ void FixRigid::gather_body()
 
 /* ----------------------------------------------------------------------
    distributed surfs: insure this proc's local (non-ghost) surf arrays
-     contain a copy of every body element, at its current position
+     contain a copy of every element of each body it needs, at its
+     current position
    the swept collision lists and the particle mover reference body
      surfs by local index, and a fast body can sweep into cells on a
      proc whose local arrays do not yet hold its surfs
+   a proc needs a body if the body's bbox (swept bbox during a step)
+     overlaps the bbox of its owned and ghost cells, or if it already
+     stores a copy of one of the body's surfs: a copy is kept until the
+     next grid rebuild discards it, and a ghost copy is referenced by a
+     ghost cell, so it must follow the body like the local copies do
+   a body far from this proc's cells thus costs it no surf storage
    copies must be in the local range: owned cells may only reference
      local surfs (Surf::compress_explicit relies on it)
    ghost surfs follow the local range in the same array, so appending a
@@ -1913,9 +1948,21 @@ int FixRigid::ensure_local_copies()
     ncopy++;
   }
 
+  // bodies this proc needs local copies of
+
+  for (i = 0; i < nbody; i++)
+    bodyneed[i] = box_overlap(bbodylo[i],bbodyhi[i],proclo,prochi);
+  for (k = 0; k < nsurf; k++)
+    if (lblist[k] >= 0) bodyneed[body[k]] = 1;
+  for (i = nslocal; i < nslocal+nsghost; i++) {
+    surfint id = (dim == 2) ? lines[i].id : tris[i].id;
+    k = body_elem(id);
+    if (k >= 0) bodyneed[body[k]] = 1;
+  }
+
   int nmissing = 0;
   for (k = 0; k < nsurf; k++)
-    if (lblist[k] < 0) nmissing++;
+    if (lblist[k] < 0 && bodyneed[body[k]]) nmissing++;
   if (!nmissing) return 0;
 
   // save the ghost entries, then truncate the ghost range
@@ -1935,10 +1982,11 @@ int FixRigid::ensure_local_copies()
   }
   surf->remove_ghosts();
 
-  // append a local copy of each missing element from the body table
+  // append a local copy of each missing element of a needed body
+  //   from the body table
 
   for (k = 0; k < nsurf; k++) {
-    if (lblist[k] >= 0) continue;
+    if (lblist[k] >= 0 || !bodyneed[body[k]]) continue;
     if (dim == 2) {
       Surf::Line line;
       memset(&line,0,sizeof(Surf::Line));
@@ -2016,6 +2064,30 @@ int FixRigid::ensure_local_copies()
   delete [] gtris;
   delete [] gmap;
   return 1;
+}
+
+/* ----------------------------------------------------------------------
+   bounding box of this proc's owned and ghost cells
+   a body whose bbox does not overlap it cannot put a surf in any cell
+     this proc stores, so this proc needs no local copy of its surfs
+   called whenever the cells change, before ensure_local_copies()
+------------------------------------------------------------------------- */
+
+void FixRigid::proc_bbox()
+{
+  Grid::ChildCell *cells = grid->cells;
+  int ntotal = grid->nlocal + grid->nghost;
+
+  proclo[0] = proclo[1] = proclo[2] = BIG;
+  prochi[0] = prochi[1] = prochi[2] = -BIG;
+
+  for (int icell = 0; icell < ntotal; icell++) {
+    if (cells[icell].nsplit <= 0) continue;
+    for (int k = 0; k < 3; k++) {
+      proclo[k] = MIN(proclo[k],cells[icell].lo[k]);
+      prochi[k] = MAX(prochi[k],cells[icell].hi[k]);
+    }
+  }
 }
 
 /* ----------------------------------------------------------------------
@@ -2129,10 +2201,6 @@ void FixRigid::check_body_attributes()
 
 void FixRigid::surfs_changed(int changed, int stage)
 {
-  Compute **compute = modify->compute;
-  for (int i = 0; i < modify->ncompute; i++)
-    if (compute[i]->per_surf_flag) compute[i]->reallocate();
-
   // if any proc appended copies or re-indexed ghosts, the per-surf
   //   state of surface reaction and collision models must follow,
   //   as after a grid change (see Grid::notify_changed())
@@ -2152,6 +2220,9 @@ void FixRigid::surfs_changed(int changed, int stage)
   int changed_any;
   MPI_Allreduce(&changed,&changed_any,1,MPI_INT,MPI_MAX,world);
   if (changed_any) {
+    Compute **compute = modify->compute;
+    for (int i = 0; i < modify->ncompute; i++)
+      if (compute[i]->per_surf_flag) compute[i]->reallocate();
     if (stage == 1) update->rigid_notify_sr = 1;
     else for (int i = 0; i < surf->nsr; i++) surf->sr[i]->grid_changed();
     if (stage) surf->localghost_changed_step = update->ntimestep - 1;
@@ -2619,6 +2690,7 @@ void FixRigid::allocate_bodies()
   memory->create(pbodyhi,nbody,3,"fix_rigid:pbodyhi");
   memory->create(fcm_infile,nbody,3,"fix_rigid:fcm_infile");
   memory->create(torque_infile,nbody,3,"fix_rigid:torque_infile");
+  memory->create(bodyneed,nbody,"fix_rigid:bodyneed");
 
   for (int ibody = 0; ibody < nbody; ibody++) {
     invmass[ibody] = massbody[ibody] = rmaxbody[ibody] = bboxeps[ibody] = 0.0;
@@ -3395,13 +3467,15 @@ void FixRigid::push_off(int ibody)
   //   current-position element boxes set by body_bbox(0) when each
   //   body committed its end-of-step geometry
   // each contact applies equal-and-opposite forces to both bodies
-  // distributed: the bodies are split round-robin across procs, each
-  //   proc computes the pair and boundary contributions of its share
-  //   and the Allreduce which merges the static contributions sums them
-  // non-distributed: every proc computes all of them identically
+  // distributed: proc 0 alone computes the pair and boundary
+  //   contributions, so that the Allreduce which merges the static
+  //   contributions sums them once and in the same order as a
+  //   non-distributed run, which computes them on every proc
+  // the bins keep this proc-0 work small: a body only tests the bodies
+  //   in its neighboring bins
 
   int mine = 1;
-  if (distributed && ibody % comm->nprocs != comm->me) mine = 0;
+  if (distributed && comm->me) mine = 0;
 
   if (mine) {
     int *jlist;
@@ -3594,9 +3668,8 @@ void FixRigid::swept_assign_all()
   Grid::SplitInfo *sinfo = grid->sinfo;
   int ntotal = grid->nlocal + grid->nghost;
 
-  // per-element swept bounding boxes of every body for this step
-
-  for (ibody = 0; ibody < nbody; ibody++) body_bbox(ibody,1);
+  // per-element swept bounding boxes of every body were set by
+  //   body_bbox(ibody,1) in start_of_step()
 
   cpage->reset();
   nmodified = 0;
@@ -3783,6 +3856,8 @@ void FixRigid::grid_changed()
   // per-surf computes re-size after all fixes are notified
 
   if (surf->distributed) {
+    for (int ibody = 0; ibody < nbody; ibody++) body_bbox(ibody,0);
+    proc_bbox();
     int changed = ensure_local_copies();
     update->build_rigidmap();
 
@@ -4925,6 +5000,7 @@ double FixRigid::memory_usage()
   bytes += (double) nbody * 90 * sizeof(double);
   bytes += (double) (nbody+1) * sizeof(int);              // bodystart
   bytes += (double) nsurf * sizeof(int);                  // body
+  bytes += (double) nbody * sizeof(int);                  // bodyneed
   if (bodybinstart) {
     int nbins = bodynbin[0]*bodynbin[1]*bodynbin[2];
     bytes += (double) (nbins+1+nbody) * sizeof(int);      // body bins

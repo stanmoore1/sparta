@@ -87,6 +87,7 @@ class FixRigid : public Fix {
   void grid_changed();
   double memory_usage();
   int ensure_local_copies();    // distributed: local copies of body surfs
+  void proc_bbox();             // bbox of this proc's owned + ghost cells
                                 //   returns 1 if surf arrays were changed
   void surfs_changed(int, int = 0);  // notify per-surf models of the above
                                      //   2nd arg = 0 in run, 1 init, 2 setup
@@ -163,6 +164,9 @@ class FixRigid : public Fix {
   //   left duplicates, every copy is tracked so all are kept current
 
   int *lblist;            // local surf index of each element
+  int *bodyneed;          // 1 if this proc needs local copies of a body
+  double proclo[3],prochi[3];  // bbox of this proc's owned + ghost cells
+  int copiesappended;     // 1 if start_of_step() appended local copies
   int ncopy,maxcopy;      // all local copies of body elements
   int *copy_index;        //   local surf index of each copy
   int *copy_elem;         //   element index of each copy

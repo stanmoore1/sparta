@@ -138,6 +138,13 @@ axistuck      no rigid body: axisymmetric tube in which particles hit
 tallyorder    a fix ave/surf on a static wall defined after fix rigid
               must see the same hit counts as one defined before it
               (KOKKOS: tallies fetched before the grid rebuild)
+crossproc     three gas-driven bodies crossing the whole box, with
+              contacts between them and with the box boundaries: with
+              distributed surfs each proc stores local copies only of
+              the bodies which can reach its cells, appended as a body
+              approaches, and the trajectories must be identical to the
+              non-distributed run on the same procs.  run it on several
+              procs, since on one proc every body is always local
 
 axisymmetric domains: a rigid body is a body of revolution about the
 x axis, so it has two degrees of freedom, axial translation and axial

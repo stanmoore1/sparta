@@ -1958,6 +1958,51 @@ def test_nonfinite(exe_cmd):
                          "no longer a finite number")
 
 
+def test_crossproc(exe_cmd):
+    """Bodies crossing proc boundaries with distributed surfs.
+
+    With distributed surfs a proc stores local copies only of the bodies
+    which can reach its cells, appended as a body approaches.  Three
+    gas-driven bodies fast enough to cross the whole box, with contacts
+    between them and with the box boundaries, must follow exactly the
+    same trajectories as with non-distributed surfs on the same procs,
+    where every proc stores every body.  Run it on several procs."""
+    results = {}
+    fails = []
+    for dist in ("0", "1"):
+        rc, out = run_deck(exe_cmd, "in.test.crossproc",
+                           extra=["-var", "dist", dist])
+        if rc:
+            fails.append("dist %s: run failed with exit code %d" % (dist, rc))
+            continue
+        rows = parse_stats(out)
+        if not rows:
+            fails.append("dist %s: no stats output" % dist)
+            continue
+        results[dist] = rows
+    if fails:
+        return fails
+    if len(results["0"]) != len(results["1"]):
+        return ["stats row counts differ: %d vs %d"
+                % (len(results["0"]), len(results["1"]))]
+    keys = [k for k in results["0"][0] if k.startswith("f_1")]
+    for r0, r1 in zip(results["0"], results["1"]):
+        for k in keys:
+            if r0[k] != r1[k]:
+                fails.append("step %d %s: distributed %.15g differs from "
+                             "non-distributed %.15g"
+                             % (int(r0["Step"]), k, r1[k], r0[k]))
+        if fails:
+            break
+    # the bodies must actually have collided, else the contacts on
+    # bodies stored by only some procs are not exercised
+    if results["0"][-1]["f_1[1][4]"] > 100.0:
+        fails.append("final body1 vx = %.6g, no body-body collision "
+                     "occurred; test geometry is broken"
+                     % results["0"][-1]["f_1[1][4]"])
+    return fails
+
+
 TESTS = [
     ("ballistic", test_ballistic),
     ("force", test_force),
@@ -2018,6 +2063,7 @@ TESTS = [
     ("axibadvcom", test_axibadvcom),
     ("axiopen", test_axiopen),
     ("nonfinite", test_nonfinite),
+    ("crossproc", test_crossproc),
 ]
 
 # tests whose decks support -var dist 1 (global surfs explicit/distributed)

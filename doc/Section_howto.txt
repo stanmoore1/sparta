@@ -1995,8 +1995,8 @@ for the whole grid every step, exactly as "fix
 move/surf"_fix_move_surf.html does; both modes give the same exact
 flow volumes near the body.  Rigid bodies work with both
 non-distributed and distributed explicit surfs, in either remap mode;
-with distributed surfs each processor keeps a replicated copy of only
-the compact body elements.
+with distributed surfs each processor keeps a copy of the surfs of
+only the bodies near its sub-domain.
 
 If the object approaches other static (non-moving) surface elements
 or other rigid bodies, optional push-off contact forces can repel it
