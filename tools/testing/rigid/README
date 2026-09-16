@@ -171,6 +171,11 @@ axipush       push-off contact for a body of revolution: elastic axial
               bounce off a static disk, while a live radial contact with
               the outer boundary must never reach the body.  the axis is
               not a wall, and the contact force is ring-weighted
+axipair       push-off contact between TWO bodies of revolution on the
+              same axis.  the ring weighting cancels between action and
+              reaction, so the pair's axial momentum is conserved exactly
+              however it is chosen; the individual velocities reach the
+              elastic two-body result to the one-step contact resolution
 axireact      a mass-changing surface reaction on a SPINNING body of
               revolution.  specular reflection leaves v_theta relative to
               the wall unchanged, so the azimuthal impulse is exactly

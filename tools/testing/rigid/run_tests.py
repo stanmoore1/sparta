@@ -1755,6 +1755,63 @@ def test_axidrag(exe_cmd):
     return fails
 
 
+def test_axipair(exe_cmd):
+    """Push-off contact between two bodies of revolution on the same axis.
+
+    No particles.  A cylinder slides along the axis into a heavier one at
+    rest.  The contact force is ring-weighted by 2*pi*r and the reaction on
+    the second body uses the SAME weighted force, so the total axial
+    momentum of the pair is conserved exactly however that weighting is
+    chosen -- that is the property this test pins down, and it is
+    independent of how well the contact is resolved in time.  The
+    individual velocities converge to the elastic two-body result only to
+    the one-step resolution of the release instant.
+
+    This is the body-body branch of push_contact in an axisymmetric domain,
+    which the single-body axipush deck does not reach."""
+    M1 = 1.0e-22
+    M2 = 2.0e-22
+    V0 = 100.0
+    rc, out = run_deck(exe_cmd, "in.test.axipair")
+    if rc:
+        return ["run failed with exit code %d" % rc]
+    rows = parse_stats(out)
+    if len(rows) < 5:
+        return ["not enough stats output"]
+
+    fails = []
+    for r in rows:
+        for col, nm in (("f_1[5]", "body 1 vcm_y"), ("f_2[5]", "body 2 vcm_y"),
+                        ("f_1[21]", "body 1 fpush_y"),
+                        ("f_2[21]", "body 2 fpush_y")):
+            if r[col] != 0.0:
+                fails.append("%s = %.3e at step %d, must be exactly zero for "
+                             "a body of revolution" % (nm, r[col], r["Step"]))
+                break
+        else:
+            continue
+        break
+
+    last = rows[-1]
+    v1, v2 = last["f_1[4]"], last["f_2[4]"]
+    if v2 <= 0.0:
+        fails.append("the bodies never made contact: body 2 vcm_x = %.4g" % v2)
+        return fails
+
+    # exact: the ring weighting cancels between action and reaction
+    p0 = M1 * V0
+    p1 = M1 * v1 + M2 * v2
+    if not approx(p1, p0, rel=1.0e-12):
+        fails.append("pair momentum %.17g != %.17g (relative %.3e)"
+                     % (p1, p0, abs(p1 - p0) / abs(p0)))
+
+    # approximate: elastic two-body, to the one-step contact resolution
+    if not approx((v2 - v1) / V0, 1.0, rel=1.0e-3):
+        fails.append("restitution %.6f, expected 1 for an undamped contact"
+                     % ((v2 - v1) / V0))
+    return fails
+
+
 def test_axireact(exe_cmd):
     """A mass-changing surface reaction on a spinning body of revolution.
 
@@ -1935,6 +1992,7 @@ TESTS = [
     ("axidrag", test_axidrag),
     ("axipush", test_axipush),
     ("axireact", test_axireact),
+    ("axipair", test_axipair),
     ("axibadvcom", test_axibadvcom),
     ("axiopen", test_axiopen),
 ]
@@ -1955,7 +2013,7 @@ DIST_TESTS = {"ballistic", "force", "rotation", "bounce", "restitution",
               "splitbalance",
               "vacate", "facetbounce",
               "axiballistic", "axidensity", "aximomentum", "axispin",
-              "axipush", "axireact"}
+              "axipush", "axireact", "axipair"}
 
 
 def main():
