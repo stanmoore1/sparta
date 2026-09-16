@@ -17,6 +17,12 @@
 # than drifting, and over the run it covers about +-15% while the gas
 # carries the balance
 #
+# the gas is given a net axial drift so that sum(m vx) does not sit on a
+# near-total cancellation: with vstream 0 the sum is a random walk about
+# zero, its magnitude is smaller than that of its own terms, and the
+# reduction-order noise of an MPI sum then swamps any relative measure of
+# the closure
+#
 # both exact invariants must hold to round-off, with the per-particle mass
 # taken from the CURRENT species so the sums follow the reactions:
 #   fnum sum(m vx)     + M vcm_x   + 0.5 dt fx
@@ -39,7 +45,7 @@ balance_grid        rcb cell
 global		    nrho 1.0 fnum 0.001
 
 species		    air2.species A B
-mixture		    air A B vstream 0 0 0 temp 500.0
+mixture		    air A B vstream 100.0 0 0 temp 500.0
 
 read_surf           adata.cylinder group body
 surf_collide	    1 specular

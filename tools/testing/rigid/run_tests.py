@@ -1843,21 +1843,32 @@ def test_axireact(exe_cmd):
         fails.append("%d particles were deleted; a reacting particle must "
                      "not be lost" % rows[-1]["f_1"])
 
-    # axial momentum, and axial angular momentum.  the two angular pieces
-    # nearly cancel, so the drift is measured against the size of the pieces
-    # rather than of their sum
-    p = [FNUM * r["c_rp"] + MB * r["f_1[4]"] + 0.5 * DT * r["f_1[7]"]
-         for r in rows]
+    # both drifts are measured against the size of the PARTS of each sum,
+    # not against the sum itself.  an invariant that is a difference of two
+    # larger quantities has no meaningful relative measure of its own: the
+    # angular pieces here nearly cancel, and the axial ones would too if
+    # the gas had no net drift, at which point the reduction-order noise of
+    # an MPI sum swamps the closure.  the deck gives the gas a drift so the
+    # axial sum is well conditioned as well, but the measure below does not
+    # rely on that
+    pg = [FNUM * r["c_rp"] for r in rows]
+    pb = [MB * r["f_1[4]"] for r in rows]
+    p = [g + b + 0.5 * DT * r["f_1[7]"]
+         for g, b, r in zip(pg, pb, rows)]
     lg = [FNUM * r["c_rl"] for r in rows]
     lb = [IXX * r["f_1[13]"] for r in rows]
     lz = [g + b + 0.5 * DT * r["f_1[10]"]
           for g, b, r in zip(lg, lb, rows)]
 
-    pdrift = max(abs(x - p[0]) for x in p) / abs(p[0])
-    scale = max(max(abs(x) for x in lg), max(abs(x) for x in lb))
-    ldrift = max(abs(x - lz[0]) for x in lz) / scale
+    def drift(vals, parts):
+        scale = max(max(abs(x) for x in q) for q in parts)
+        return max(abs(x - vals[0]) for x in vals) / scale
+
+    pdrift = drift(p, (pg, pb))
+    ldrift = drift(lz, (lg, lb))
     if pdrift > 1.0e-12:
-        fails.append("axial momentum drifted by %.3e (relative)" % pdrift)
+        fails.append("axial momentum drifted by %.3e (relative to the "
+                     "size of its parts)" % pdrift)
     if ldrift > 1.0e-12:
         fails.append("axial angular momentum drifted by %.3e (relative to "
                      "the size of its parts)" % ldrift)
