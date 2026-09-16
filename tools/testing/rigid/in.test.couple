@@ -1,0 +1,47 @@
+# TEST: accuracy of the explicit gas-body coupling, one impulse.
+# A single particle strikes a free body head-on, so the collision set is
+# fixed by construction and the only thing the timestep changes is where
+# in the step the impulse lands.
+#   velocity: exact.  the impulse does not depend on where it lands, so
+#     the post-collision COM velocity must equal the analytic two-body
+#     result 2*m*v/(m+M) to round-off at EVERY timestep.
+#   position: first order.  the body carries the velocity change from a
+#     step boundary rather than from the instant of the hit, so the
+#     trajectory is displaced by at most one step's body motion, an
+#     offset which must fall linearly with dt.
+# run_tests.py checks both, and that the position error never exceeds the
+# one-step bound.
+
+seed                12345
+dimension           2
+global              gridcut 0.0 comm/sort yes
+boundary            r r p
+
+create_box          0 10 0 10 -0.5 0.5
+create_grid         20 20 1
+
+global              nrho 1.0 fnum 1.0e-3
+
+species             air.species N
+mixture             air N vstream 1000.0 0 0 temp 1.0e-6
+
+read_surf           data.square group body
+surf_collide        1 specular
+surf_modify         all collide 1
+collide             none
+
+timestep            ${dt}
+
+compute             c1 surf body all fx fy fz tx ty tz com 5 5 0
+global              rigid yes
+fix                 1 rigid body c1 body mass 1.0e-24 com 5 5 0 &
+                    vcom 0 0 0 moi 8.3333333e-24 8.3333333e-24 1.6666667e-23 0 0 0 &
+                    angmom 0 0 0 rotate richardson
+
+# x0 = 2.037 makes the hit time deliberately non-commensurate with dt
+create_particles    air single N 2.037 5.0 0.0 1000.0 0.0 0.0
+
+stats               ${nstep}
+stats_style         step np f_1[1] f_1[4] f_1
+stats_modify        format float %.17g
+run                 ${nstep}

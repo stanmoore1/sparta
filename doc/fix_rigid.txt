@@ -357,11 +357,28 @@ the fix are synchronized with its position and orientation.  Note
 that during any one step the body moves with a single, already
 determined velocity, which is what makes this explicit coupling
 scheme well-defined; the impulse of a step is applied half at its end
-and half at the start of the next.  The scheme is second order
-accurate in the timestep and exact for a constant force.  It is
-accurate when the body mass is large compared to the momentum
-imparted by particles during a single step, which is the intended
-regime of this command (large particulates).
+and half at the start of the next.  For a smooth force the update is
+second order accurate in the timestep, and for a constant force it is
+exact: a body under a constant external force reproduces the analytic
+trajectory to round-off at any timestep.
+
+Gas forcing is not smooth, however, but a sequence of impulses, and
+the accuracy differs between the two halves of the body state.  The
+velocity is exact: the impulse a collision delivers does not depend on
+where in the step it lands, so the COM velocity and angular momentum
+after a collision reproduce the analytic two-body result to round-off,
+independent of the timestep.  The position and orientation are first
+order.  The body travels through the step at its pre-impulse velocity
+and picks up the change at a step boundary rather than at the instant
+of the hit, which displaces the trajectory by at most one step's worth
+of body motion.  That offset vanishes linearly with the timestep.
+
+The practical consequence is a phase error, not a conservation error:
+momentum and angular momentum are carried exactly (see the invariants
+above), and only the body's position within its trajectory lags.  It
+is small when the body mass is large compared to the momentum imparted
+by particles during a single step, which is the intended regime of this
+command (large particulates).
 
 A surface collision model reflects a particle as though the wall were
 infinitely massive, so on its own it would return the particle's full

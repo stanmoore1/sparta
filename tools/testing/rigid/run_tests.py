@@ -1104,6 +1104,60 @@ def read_state(name):
     return None
 
 
+def test_couple(exe_cmd):
+    """Accuracy of the explicit gas-body coupling, measured on one impulse.
+
+    A single particle strikes a free body, so the collision set is fixed and
+    only the placement of the impulse within the step varies with dt.  The
+    velocity must be exact at every dt; the position carries an offset of at
+    most one step's body motion, falling linearly with dt."""
+    MP = MASS_N * 1.0e-3          # species mass x fnum
+    MB = 1.0e-24
+    V0 = 1000.0
+    X0 = 2.037
+    T = 5.0e-3
+    thit = (4.5 - X0) / V0        # body is at rest until struck
+    vb = 2.0 * MP * V0 / (MP + MB)
+    xex = 5.0 + vb * (T - thit)
+
+    fails = []
+    seen = []
+    for ns in (1250, 5000, 20000):
+        dt = T / ns
+        rc, out = run_deck(exe_cmd, "in.test.couple",
+                           extra=["-var", "dt", "%.17g" % dt,
+                                  "-var", "nstep", str(ns)])
+        if rc:
+            return ["run failed with exit code %d" % rc]
+        rows = parse_stats(out)
+        if not rows:
+            return ["no stats output"]
+        last = rows[-1]
+        if last["f_1"] != 0:
+            fails.append("dt=%g: %d particles deleted" % (dt, last["f_1"]))
+
+        # velocity: exact, independent of dt
+        vgot = last["f_1[4]"]
+        if not approx(vgot, vb, rel=1.0e-13):
+            fails.append("dt=%g: body velocity %.17g != two-body result "
+                         "%.17g -- the impulse must not depend on where in "
+                         "the step the hit lands" % (dt, vgot, vb))
+
+        # position: offset bounded by one step's body motion
+        xerr = abs(last["f_1[1]"] - xex)
+        if xerr > 1.05 * vb * dt:
+            fails.append("dt=%g: position error %.3e exceeds one step's body "
+                         "motion %.3e" % (dt, xerr, vb * dt))
+        seen.append((dt, xerr))
+
+    # and that offset must actually shrink with dt, not sit at a fixed value
+    if len(seen) == 3 and all(e > 0 for _, e in seen):
+        if seen[0][1] < seen[2][1]:
+            fails.append("position error does not decrease with dt: %s"
+                         % ", ".join("dt=%g err=%.3e" % x for x in seen))
+    return fails
+
+
 def test_density(exe_cmd):
     """dstyle = density on a unit cube: mass, COM and moi from geometry.
 
@@ -1304,6 +1358,7 @@ TESTS = [
     ("rotwall3d", test_rotwall3d),
     ("axistuck", test_axistuck),
     ("tallyorder", test_tallyorder),
+    ("couple", test_couple),
     ("density", test_density),
     ("densityfar", test_density_far),
     ("density2d", test_density2d),
