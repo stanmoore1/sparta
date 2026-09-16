@@ -3808,12 +3808,31 @@ int FixRigid::cell_cut(int icell)
 
 /* ----------------------------------------------------------------------
    return 1 if point x is inside any rigid body, else 0
+   the bounding box test is what makes this affordable with many bodies:
+     inside_body() casts a ray against every element of a body, so without
+     it the cost of one query is the total element count over all bodies,
+     and the cost of typing the cells around N bodies is O(N^2).  a point
+     outside a body's bbox cannot be inside the body, so the box test is
+     exact, not a heuristic
+   the same prefilter is applied per body in remove_inside_all()
+   requires body_bbox() was called to set bbodylo/bbodyhi on every body,
+     which end_of_step() does when each body commits its new geometry
 ------------------------------------------------------------------------- */
 
 int FixRigid::inside_any_body(double *x)
 {
-  for (int m = 0; m < update->nfixrigid; m++)
-    if (update->fixrigidlist[m]->inside_body(x)) return 1;
+  FixRigid **flist = update->fixrigidlist;
+  int nb = update->nfixrigid;
+  int dimension = domain->dimension;
+
+  for (int m = 0; m < nb; m++) {
+    FixRigid *f = flist[m];
+    if (x[0] < f->bbodylo[0] || x[0] > f->bbodyhi[0]) continue;
+    if (x[1] < f->bbodylo[1] || x[1] > f->bbodyhi[1]) continue;
+    if (dimension == 3 &&
+        (x[2] < f->bbodylo[2] || x[2] > f->bbodyhi[2])) continue;
+    if (f->inside_body(x)) return 1;
+  }
   return 0;
 }
 
