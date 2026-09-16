@@ -1947,6 +1947,16 @@ def test_badvcom(exe_cmd):
                          "vcom keyword requires density style")
 
 
+def test_nonfinite(exe_cmd):
+    """A body state which stops being a finite number is caught here.
+
+    Inf or NaN in the pose reaches the surf coords, the moving-surf
+    collision tests, and the cut/split geometry, where Cut2d walks off the
+    end of its point list and writes out of bounds instead of failing."""
+    return negative_test(exe_cmd, "in.test.nonfinite",
+                         "no longer a finite number")
+
+
 TESTS = [
     ("ballistic", test_ballistic),
     ("force", test_force),
@@ -2006,6 +2016,7 @@ TESTS = [
     ("axipair", test_axipair),
     ("axibadvcom", test_axibadvcom),
     ("axiopen", test_axiopen),
+    ("nonfinite", test_nonfinite),
 ]
 
 # tests whose decks support -var dist 1 (global surfs explicit/distributed)

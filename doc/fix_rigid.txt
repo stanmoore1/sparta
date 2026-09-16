@@ -717,6 +717,20 @@ accuracy of the re-assignment of surfs to grid cells), or
 if the body exits the simulation box entirely (after which it no
 longer interacts with any particles).
 
+A body whose position, velocity, or rotation stops being a finite
+number is a hard error.  The pose computed each step is handed to the
+body surf coordinates, to the moving-surf collision tests, and to the
+cut/split geometry which recomputes cell volumes, and none of those can
+do anything sensible with an Inf or a NaN, so the run stops where the
+value is produced rather than where it is used.  The usual cause is a
+body mass at or below the mass a single computational particle carries,
+which is {fnum} times the species mass: one gas collision then changes
+the body velocity by more than the collision speed and the body
+accelerates without bound.  Choose the body mass, or in {density} style
+the density, so that the body is much heavier than one computational
+particle.  A {push} stiffness large enough that the contact period is
+shorter than the timestep does the same thing.
+
 :line
 
 [Axisymmetric domains:]

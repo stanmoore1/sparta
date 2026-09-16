@@ -1,0 +1,45 @@
+# TEST: a body whose state stops being a finite number is caught
+# a contact spring stiff enough to overflow a double drives the body
+# velocity to Inf in a couple of steps.  the pose computed each step is
+# handed to the surf coords, the moving-surf collision tests, and the
+# cut/split geometry, none of which can do anything sensible with Inf or
+# NaN - the cut walks off the end of its point list and corrupts memory.
+# so fix rigid must stop at the source with a clean error.
+# the same divergence happens physically when a body mass is at or below
+# the mass one computational particle carries (fnum * species mass).
+# no particles: the blow-up comes only from the push-off spring, so the
+# test is deterministic
+
+seed	    	    12345
+
+dimension   	    2
+boundary            r r p
+
+create_box  	    0 20 0 20 -0.5 0.5
+create_grid 	    20 20 1
+
+global		    nrho 1.0 fnum 0.001
+
+species		    air.species N
+mixture		    air N vstream 0 0 0 temp 273.0
+
+# square sits 0.1 from the lower wall, inside the 0.3 push cutoff
+
+read_surf           data.square origin 5 5 0 trans -4.0 -4.4 0
+surf_collide	    1 specular
+surf_modify         all collide 1
+
+timestep 	    0.0001
+
+compute             c1 surf all all fx fy fz tx ty tz com 1 0.6 0
+
+global              rigid yes
+
+fix		    1 rigid all c1 body &
+		    mass 4.0e-22 com 1 0.6 0 vcom 0 0 0 &
+		    moi 3.3333e-23 3.3333e-23 6.6667e-23 0 0 0 angmom 0 0 0 &
+		    push 1.0e300 0.3 pushbound yes
+
+stats		    1
+stats_style         step f_1[2] f_1[5]
+run 		    5

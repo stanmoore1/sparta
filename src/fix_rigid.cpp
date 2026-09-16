@@ -13,6 +13,7 @@
 ------------------------------------------------------------------------- */
 
 #include "mpi.h"
+#include "math.h"
 #include "string.h"
 #include "stdlib.h"
 #include "ctype.h"
@@ -977,6 +978,25 @@ void FixRigid::start_of_step()
     }
   }
   MathExtra::q_to_exyz(quatnew,ex_space,ey_space,ez_space);
+
+  // hard error if the body state has stopped being a finite number
+  // the pose computed here is handed to the surf coords, the moving
+  //   collision tests, and the cut/split geometry; an Inf or NaN
+  //   propagates into all of them and crashes inside the cut instead
+  //   of failing cleanly, so stop at the source
+  // the state is replicated on every proc, so the test is collective
+  // the usual cause is a body mass at or below the mass one
+  //   computational particle carries (fnum times the species mass),
+  //   which lets a single gas collision accelerate the body without
+  //   bound; a push stiffness too large for the timestep does it too
+
+  if (!isfinite(xcmnew[0]) || !isfinite(xcmnew[1]) || !isfinite(xcmnew[2]) ||
+      !isfinite(vcm[0]) || !isfinite(vcm[1]) || !isfinite(vcm[2]) ||
+      !isfinite(omega[0]) || !isfinite(omega[1]) || !isfinite(omega[2]) ||
+      !isfinite(quatnew[0]) || !isfinite(quatnew[1]) ||
+      !isfinite(quatnew[2]) || !isfinite(quatnew[3]))
+    error->all(FLERR,"Fix rigid body position, velocity, or rotation is "
+               "no longer a finite number");
 
   // warn once per run if body motion in a single step is too large
   // rotation > 0.1 radian degrades the collision test for particles
@@ -3560,6 +3580,7 @@ int FixRigid::incremental_recut()
     surfint *cur = cells[icell].csurfs;
     for (i = 0; i < cells[icell].nsurf; i++)
       if (rigidmap[cur[i]] < 0) reclist[ncand++] = cur[i];
+
     for (int m = 0; m < nb; m++) {
       FixRigid *f = flist[m];
       for (i = 0; i < f->nsurf; i++) reclist[ncand++] = f->lblist[i];
