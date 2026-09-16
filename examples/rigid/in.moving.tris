@@ -19,9 +19,9 @@ global		    nrho 0.5 fnum 0.001
 species		    air.species N O
 mixture		    air N O vstream -100.0 0 0 temp 1.0
 
-read_surf           data.tri group body1 trans 3.0 3.0 0
-read_surf           data.tri group body2 trans 5.0 6.5 0
-read_surf           data.tri group body3 trans 7.2 3.5 0
+read_surf           data.tri group bodies trans 3.0 3.0 0
+read_surf           data.tri group bodies trans 5.0 6.5 0 typeadd 1
+read_surf           data.tri group bodies trans 7.2 3.5 0 typeadd 2
 
 surf_collide	    1 diffuse 300.0 0.0
 surf_modify         all collide 1
@@ -31,9 +31,7 @@ fix		    in emit/face air xhi twopass
 
 timestep 	    0.0001
 
-compute      c1 surf body1 all fx fy fz tx ty tz com 3.0 3.0 0
-compute      c2 surf body2 all fx fy fz tx ty tz com 5.0 6.5 0
-compute      c3 surf body3 all fx fy fz tx ty tz com 7.2 3.5 0
+compute      c1 surf bodies all fx fy fz tx ty tz com rigid
 
 # grid cell flow volumes, for visualizing cut/split cells
 
@@ -41,18 +39,10 @@ compute      vg property/grid all vol
 
 global              rigid yes
 
+# the 3 bodies are numbered by surf type, their params are in the infile
 # moi of a uniform triangular plate, edge A: izz = M A^2 / 12
 
-fix	 1 rigid body1 c1 body mass 2.0e-24 com 3.0 3.0 0 vcom 25 10 0 &
-         moi 2.27e-25 2.27e-25 4.54e-25 0 0 0 angmom 0 0 6.8e-24 &
-         push 1.0e-18 0.1 pushstyle hertz pushdamp 1.5e-22 &
-         pushbound yes remap incremental
-fix	 2 rigid body2 c2 body mass 2.0e-24 com 5.0 6.5 0 vcom 5 -20 0 &
-         moi 2.27e-25 2.27e-25 4.54e-25 0 0 0 angmom 0 0 -5.4e-24 &
-         push 1.0e-18 0.1 pushstyle hertz pushdamp 1.5e-22 &
-         pushbound yes remap incremental
-fix	 3 rigid body3 c3 body mass 2.0e-24 com 7.2 3.5 0 vcom -25 8 0 &
-         moi 2.27e-25 2.27e-25 4.54e-25 0 0 0 angmom 0 0 8.2e-24 &
+fix	 1 rigid bodies c1 type infile data.tris.bodies &
          push 1.0e-18 0.1 pushstyle hertz pushdamp 1.5e-22 &
          pushbound yes remap incremental
 
@@ -62,5 +52,7 @@ dump                5 image all 25 image.*.ppm type type pdiam 0.04 &
 dump_modify	    5 pad 5 scolor * white glinecolor dimgray
 
 stats		    250
-stats_style	    step np f_1[1] f_1[2] f_1[15] f_2[1] f_2[2] f_2[15] f_3[1] f_3[2] f_3[15]
+stats_style	    step np f_1[1][1] f_1[1][2] f_1[1][15] &
+                    f_1[2][1] f_1[2][2] f_1[2][15] &
+                    f_1[3][1] f_1[3][2] f_1[3][15]
 run 		    5000

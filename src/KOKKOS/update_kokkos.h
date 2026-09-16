@@ -162,15 +162,20 @@ class UpdateKokkos : public Update {
   // mobile rigid bodies (fix rigid/kk), see Update::rigidmap
   // rigid_on = 1 for this move if any body is active
   // d_rigidmap = per local/ghost surf: body index or -1 if static
+  //   public: compute surf/kk reads it to tally torque about the COM
+  //   of the body each surf belongs to
   // d_rigidbody = per body: xcm[3], vcm[3], omega[3], 1/mass,
   //   3x3 inverse inertia for this step, uploaded by rigid_upload()
   //   before each move
   // d_species,cellweightflag_kk = for the simulation particle mass
   //   in the recoil correction of collisions with a body
 
+ public:
   int rigid_on;
   DAT::tdual_int_1d k_rigidmap;
   DAT::t_int_1d d_rigidmap;
+
+ private:
 
   // always double: holds absolute COM coordinates compared against
   //   double-precision surf points, whatever SPA_PRECISION is

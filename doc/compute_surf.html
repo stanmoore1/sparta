@@ -51,7 +51,9 @@
 <LI>keyword = <I>norm</I> or <I>com</I> 
 
 <PRE>  norm arg = <I>flux</I> or <I>flow</I> for dividing flux quantities by area or not
-  com args = Cx Cy Cz = coords of center-of-mass of body for calculating torque 
+  com args = Cx Cy Cz or rigid
+    Cx,Cy,Cz = coords of center-of-mass of body for calculating torque
+    rigid = torque is about the center-of-mass of the rigid body each surf belongs to 
 </PRE>
 
 </UL>
@@ -417,7 +419,13 @@ denominator.
 <P>The <I>com</I> keyword is only used if torque is being computed by any of
 the <I>tx</I>, <I>ty</I>, <I>tz</I> values.  The <I>Cx</I>, <I>Cy</I>, <I>Cz</I> settings are the
 coordinates of the center-of-mass of the body around which the torque
-will be calculated.
+will be calculated.  If <I>rigid</I> is specified instead, the torque on
+each surf which belongs to a rigid body defined by the <A HREF = "fix_rigid.html">fix
+rigid</A> command is calculated about the mid-step
+center-of-mass of that body, and the torque on any other surf about
+the origin.  This setting requires the <A HREF = "global.html">global rigid</A>
+command and a fix rigid command, and is what fix rigid requires of
+its compute.
 </P>
 <HR>
 

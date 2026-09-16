@@ -24,6 +24,7 @@
 #include "modify.h"
 #include "domain.h"
 #include "input.h"
+#include "fix_rigid.h"
 #include "math_extra.h"
 #include "memory.h"
 #include "error.h"
@@ -90,6 +91,9 @@ ComputeSurf::ComputeSurf(SPARTA *sparta, int narg, char **arg) :
 
   normarea = 1;
   comflag = 0;
+  comrigid = 0;
+  com[0] = com[1] = com[2] = 0.0;
+  fixrigid = NULL;
 
   while (iarg < narg) {
     if (strcmp(arg[iarg],"norm") == 0) {
@@ -100,13 +104,20 @@ ComputeSurf::ComputeSurf(SPARTA *sparta, int narg, char **arg) :
       else error->all(FLERR,"Invalid compute surf optional keyword");
       iarg += 2;
     } else if (strcmp(arg[iarg],"com") == 0) {
-      if (iarg+4 > narg)
+      if (iarg+2 > narg)
         error->all(FLERR,"Invalid compute surf optional keyword");
       comflag = 1;
-      com[0] = input->numeric(FLERR,arg[iarg+1]);
-      com[1] = input->numeric(FLERR,arg[iarg+2]);
-      com[2] = input->numeric(FLERR,arg[iarg+3]);
-      iarg += 4;
+      if (strcmp(arg[iarg+1],"rigid") == 0) {
+        comrigid = 1;
+        iarg += 2;
+      } else {
+        if (iarg+4 > narg)
+          error->all(FLERR,"Invalid compute surf optional keyword");
+        com[0] = input->numeric(FLERR,arg[iarg+1]);
+        com[1] = input->numeric(FLERR,arg[iarg+2]);
+        com[2] = input->numeric(FLERR,arg[iarg+3]);
+        iarg += 4;
+      }
     } else error->all(FLERR,"Invalid compute surf value or optional keyword");
   }
 
@@ -165,6 +176,17 @@ void ComputeSurf::init()
 
   if (ngroup != particle->mixture[imix]->ngroup)
     error->all(FLERR,"Number of groups in compute surf mixture has changed");
+
+  // com rigid: torque on a surf in a rigid body is tallied about the
+  //   mid-step COM of that body, read from the fix rigid each step
+
+  if (comrigid) {
+    if (!update->rigidflag)
+      error->all(FLERR,"Compute surf com rigid requires global rigid yes");
+    fixrigid = update->find_fixrigid();
+    if (!fixrigid)
+      error->all(FLERR,"Compute surf com rigid requires a fix rigid");
+  }
 
   // set normflux for all owned + ghost surfs
 
@@ -325,6 +347,14 @@ void ComputeSurf::surf_tally(double /*dtremain*/, int isurf, int icell, int reac
 
   double fluxscale = normflux[isurf];
 
+  // COM for torques: that of the rigid body the surf belongs to, if any
+
+  double *comuse = com;
+  if (comrigid) {
+    int ibody = update->rigidmap[isurf];
+    if (ibody >= 0) comuse = fixrigid->xcmmid[ibody];
+  }
+
   // tally all values associated with group into array
   // set fflag after force computation is done once
   // set tqflag after torque computation is done once
@@ -456,7 +486,7 @@ void ComputeSurf::surf_tally(double /*dtremain*/, int isurf, int icell, int reac
         tqflag = 1;
         if (ip) xcollide = ip->x;
         else xcollide = iorig->x;
-        MathExtra::sub3(xcollide,com,rdelta);
+        MathExtra::sub3(xcollide,comuse,rdelta);
         MathExtra::cross3(rdelta,pdelta_force,torque);
       }
       vec[k++] -= torque[0] * nfactor_inverse;
@@ -473,7 +503,7 @@ void ComputeSurf::surf_tally(double /*dtremain*/, int isurf, int icell, int reac
         tqflag = 1;
         if (ip) xcollide = ip->x;
         else xcollide = iorig->x;
-        MathExtra::sub3(xcollide,com,rdelta);
+        MathExtra::sub3(xcollide,comuse,rdelta);
         MathExtra::cross3(rdelta,pdelta_force,torque);
       }
       vec[k++] -= torque[1] * nfactor_inverse;
@@ -490,7 +520,7 @@ void ComputeSurf::surf_tally(double /*dtremain*/, int isurf, int icell, int reac
         tqflag = 1;
         if (ip) xcollide = ip->x;
         else xcollide = iorig->x;
-        MathExtra::sub3(xcollide,com,rdelta);
+        MathExtra::sub3(xcollide,comuse,rdelta);
         MathExtra::cross3(rdelta,pdelta_force,torque);
       }
       vec[k++] -= torque[2] * nfactor_inverse;

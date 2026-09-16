@@ -62,16 +62,6 @@ void FixRigidKokkos::init()
 }
 
 /* ----------------------------------------------------------------------
-   1 if this is the last-defined rigid fix, which performs the all-body
-     grid operations (swept assignment, re-map) each step
-------------------------------------------------------------------------- */
-
-int FixRigidKokkos::last_body()
-{
-  return (update->fixrigidlist[update->nfixrigid-1] == this);
-}
-
-/* ----------------------------------------------------------------------
    bring grid, particles and surfs to the host before host-side work
 ------------------------------------------------------------------------- */
 
@@ -107,8 +97,8 @@ void FixRigidKokkos::host_end()
   particle_kk->sorted_kk = 0;
 
   if (grid->changed) grid_kk->resync_after_host_change();
-  else if (any_lists_changed()) grid_kk->wrap_kokkos_graphs();
-  clear_lists_changed();
+  else if (listschanged) grid_kk->wrap_kokkos_graphs();
+  listschanged = 0;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -121,10 +111,9 @@ void FixRigidKokkos::setup()
 }
 
 /* ----------------------------------------------------------------------
-   integrate the body and install the swept collision lists (host),
+   integrate the bodies and install the swept collision lists (host),
      then rebuild the device surf graphs the mover reads
-   only the last-defined fix changes the per-cell lists, so only it
-     rewraps; surfs and cells are not otherwise changed here
+   surfs and cells are not otherwise changed here
 ------------------------------------------------------------------------- */
 
 void FixRigidKokkos::start_of_step()
@@ -137,30 +126,22 @@ void FixRigidKokkos::start_of_step()
 
   FixRigid::start_of_step();
 
-  if (last_body()) {
-    grid_kk->modify(Host,CELL_MASK);
-    if (any_lists_changed()) grid_kk->wrap_kokkos_graphs();
-    clear_lists_changed();
-  }
+  grid_kk->modify(Host,CELL_MASK);
+  if (listschanged) grid_kk->wrap_kokkos_graphs();
+  listschanged = 0;
 }
 
 /* ----------------------------------------------------------------------
-   restore swept lists, reduce force/torque, move the body, re-map the
-     grid and delete particles inside the body (host), then re-establish
-     the device state
-   the first-defined fix restores the swept lists and the last-defined
-     fix re-maps, so the device is re-established after the last one
+   restore swept lists, reduce force/torque, move the bodies, re-map the
+     grid and delete particles inside the bodies (host), then
+     re-establish the device state
 ------------------------------------------------------------------------- */
 
 void FixRigidKokkos::end_of_step()
 {
   host_begin();
   FixRigid::end_of_step();
-  if (last_body()) host_end();
-  else {
-    ((SurfKokkos*) surf)->modify(Host,ALL_MASK);
-    ((GridKokkos*) grid)->modify(Host,CELL_MASK);
-  }
+  host_end();
 }
 
 /* ----------------------------------------------------------------------
@@ -176,23 +157,4 @@ void FixRigidKokkos::grid_changed()
   FixRigid::grid_changed();
   if (surf->distributed) ((SurfKokkos*) surf)->modify(Host,ALL_MASK);
   ((GridKokkos*) grid)->modify(Host,CELL_MASK);
-}
-
-/* ----------------------------------------------------------------------
-   1 if any rigid fix changed a per-cell surf list on the host since the
-     device graphs were last rewrapped: swept lists installed or
-     restored, or cells re-cut incrementally
-------------------------------------------------------------------------- */
-
-int FixRigidKokkos::any_lists_changed()
-{
-  for (int m = 0; m < update->nfixrigid; m++)
-    if (update->fixrigidlist[m]->listschanged) return 1;
-  return 0;
-}
-
-void FixRigidKokkos::clear_lists_changed()
-{
-  for (int m = 0; m < update->nfixrigid; m++)
-    update->fixrigidlist[m]->listschanged = 0;
 }

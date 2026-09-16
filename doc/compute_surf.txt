@@ -38,7 +38,9 @@ value = {n} or {nwt} or {nflux} or {nflux_incident} or {mflux} or {mflux_inciden
 zero or more keyword/setting pairs can be appended :l
 keyword = {norm} or {com} :l
   norm arg = {flux} or {flow} for dividing flux quantities by area or not
-  com args = Cx Cy Cz = coords of center-of-mass of body for calculating torque :pre
+  com args = Cx Cy Cz or rigid
+    Cx,Cy,Cz = coords of center-of-mass of body for calculating torque
+    rigid = torque is about the center-of-mass of the rigid body each surf belongs to :pre
 :ule
 
 [Examples:]
@@ -403,7 +405,13 @@ denominator.
 The {com} keyword is only used if torque is being computed by any of
 the {tx}, {ty}, {tz} values.  The {Cx}, {Cy}, {Cz} settings are the
 coordinates of the center-of-mass of the body around which the torque
-will be calculated.
+will be calculated.  If {rigid} is specified instead, the torque on
+each surf which belongs to a rigid body defined by the "fix
+rigid"_fix_rigid.html command is calculated about the mid-step
+center-of-mass of that body, and the torque on any other surf about
+the origin.  This setting requires the "global rigid"_global.html
+command and a fix rigid command, and is what fix rigid requires of
+its compute.
 
 :line
 

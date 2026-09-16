@@ -21,14 +21,14 @@ mixture		    air N O vstream -100.0 0 0 temp 1.0
 
 # four circles of radius 0.8
 
-read_surf           data.circle group body1 origin 5 5 0 &
+read_surf           data.circle group bodies origin 5 5 0 &
                     scale 0.26666667 0.26666667 1 trans -2.5 -1.8 0
-read_surf           data.circle group body2 origin 5 5 0 &
-                    scale 0.26666667 0.26666667 1 trans -2.2 1.8 0
-read_surf           data.circle group body3 origin 5 5 0 &
-                    scale 0.26666667 0.26666667 1 trans 0.5 0 0
-read_surf           data.circle group body4 origin 5 5 0 &
-                    scale 0.26666667 0.26666667 1 trans 2.5 -1.5 0
+read_surf           data.circle group bodies origin 5 5 0 &
+                    scale 0.26666667 0.26666667 1 trans -2.2 1.8 0 typeadd 1
+read_surf           data.circle group bodies origin 5 5 0 &
+                    scale 0.26666667 0.26666667 1 trans 0.5 0 0 typeadd 2
+read_surf           data.circle group bodies origin 5 5 0 &
+                    scale 0.26666667 0.26666667 1 trans 2.5 -1.5 0 typeadd 3
 
 surf_collide	    1 diffuse 300.0 0.0
 surf_modify         all collide 1
@@ -38,24 +38,13 @@ fix		    in emit/face air xhi twopass
 
 timestep 	    0.0001
 
-compute      c1 surf body1 all fx fy fz tx ty tz com 2.5 3.2 0
-compute      c2 surf body2 all fx fy fz tx ty tz com 2.8 6.8 0
-compute      c3 surf body3 all fx fy fz tx ty tz com 5.5 5.0 0
-compute      c4 surf body4 all fx fy fz tx ty tz com 7.5 3.5 0
+compute      c1 surf bodies all fx fy fz tx ty tz com rigid
 
 global              rigid yes
 
-fix	 1 rigid body1 c1 body mass 2.0e-24 com 2.5 3.2 0 vcom 35 20 0 &
-         moi 3.2e-25 3.2e-25 6.4e-25 0 0 0 angmom 0 0 0 &
-         push 1.0e-18 0.1 pushstyle hertz pushdamp 1.5e-22 pushbound yes remap cutcell
-fix	 2 rigid body2 c2 body mass 2.0e-24 com 2.8 6.8 0 vcom 30 -25 0 &
-         moi 3.2e-25 3.2e-25 6.4e-25 0 0 0 angmom 0 0 0 &
-         push 1.0e-18 0.1 pushstyle hertz pushdamp 1.5e-22 pushbound yes remap cutcell
-fix	 3 rigid body3 c3 body mass 2.0e-24 com 5.5 5.0 0 vcom -15 10 0 &
-         moi 3.2e-25 3.2e-25 6.4e-25 0 0 0 angmom 0 0 0 &
-         push 1.0e-18 0.1 pushstyle hertz pushdamp 1.5e-22 pushbound yes remap cutcell
-fix	 4 rigid body4 c4 body mass 2.0e-24 com 7.5 3.5 0 vcom -30 20 0 &
-         moi 3.2e-25 3.2e-25 6.4e-25 0 0 0 angmom 0 0 0 &
+# the 4 bodies are numbered by surf type, their params are in the infile
+
+fix	 1 rigid bodies c1 type infile data.circles.bodies &
          push 1.0e-18 0.1 pushstyle hertz pushdamp 1.5e-22 pushbound yes remap cutcell
 
 dump                5 image all 25 image.*.ppm type type pdiam 0.06 &
@@ -63,5 +52,6 @@ dump                5 image all 25 image.*.ppm type type pdiam 0.06 &
 dump_modify	    5 pad 5 scolor * gray
 
 stats		    25
-stats_style	    step np f_1[1] f_1[2] f_2[1] f_2[2] f_3[1] f_3[2] f_4[1] f_4[2]
+stats_style	    step np f_1[1][1] f_1[1][2] f_1[2][1] f_1[2][2] &
+                    f_1[3][1] f_1[3][2] f_1[4][1] f_1[4][2]
 run 		    5000

@@ -1981,19 +1981,24 @@ grains or droplets which are much larger than the gas molecules.
 <P>Three commands work together to enable this:
 </P>
 <UL><LI>The <A HREF = "read_surf.html">read_surf</A> command reads the object geometry and
-should assign its surface elements to a <A HREF = "group.html">group</A>, which
-identifies the rigid body. 
+should assign its surface elements to a <A HREF = "group.html">group</A>.  For
+many bodies, each body's surfs also carry a surf type or a per-surf
+custom integer value which is the body ID; the tools/rigid/replicate.py
+script creates such a file from a template body. 
 
 <P>A <A HREF = "compute_surf.html">compute surf</A> command tallies the force and
-torque exerted on each surface element of the body by particle
+torque exerted on each surface element of the bodies by particle
 collisions.  It must tally exactly the 6 values fx fy fz tx ty tz for
-a single mixture group and use its <I>com</I> keyword, e.g.
+a single mixture group and use <I>com rigid</I>, so that the torque on each
+surf is about the center-of-mass of its own body, e.g.
 </P>
-<PRE>compute csurf surf all all fx fy fz tx ty tz com 5 5 0 
+<PRE>compute csurf surf all all fx fy fz tx ty tz com rigid 
 </PRE>
-<LI>A <A HREF = "fix_rigid.html">fix rigid</A> command defines the body's mass,
-center-of-mass, moments of inertia, and initial velocities, and time
-integrates its motion using the force/torque tallied by the compute.
+<LI>A <A HREF = "fix_rigid.html">fix rigid</A> command defines how the surfs are
+assigned to bodies, the mass, center-of-mass, moments of inertia, and
+initial velocities of each body, and time integrates their motion
+using the force/torque tallied by the compute.  One fix rigid command
+defines all the bodies, of which there can be thousands.
 The <A HREF = "global.html">global rigid</A> command must also be set to <I>yes</I>, so
 the particle mover checks for collisions with the moving surface
 elements. 
@@ -2033,7 +2038,7 @@ rigid</A>.  A constant external force such as gravity
 can be applied with its <I>force</I> option.
 </P>
 <P>The state of the body (position, velocities, orientation, forces) is
-available as a 22-value global vector computed by the fix, for
+available as a global array with 22 values per body computed by the fix, for
 printing with <A HREF = "stats_style.html">stats_style</A>.  The moving surface
 elements themselves can be visualized with the <A HREF = "dump_image.html">dump
 image</A> command or output by <A HREF = "dump.html">dump surf</A>,

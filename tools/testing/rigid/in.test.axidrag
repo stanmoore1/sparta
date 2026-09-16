@@ -57,12 +57,13 @@ fix                 in emit/face beam xlo twopass
 
 timestep            5.0e-5
 
-compute             csurf surf body all fx fy fz tx ty tz com 1.5 0 0
-compute             red reduce sum c_csurf[1] c_csurf[2] c_csurf[3]
-
 if "${rigid} == 1" then &
   "global rigid yes" &
-  "fix 1 rigid body csurf body mass 1.0 com 1.5 0 0 vcom 0 0 0 moi 1.0 1.0 1.0 0 0 0 angmom 0 0 0"
+  "compute csurf surf body all fx fy fz tx ty tz com rigid" &
+  "fix 1 rigid body csurf single body mass 1.0 com 1.5 0 0 vcom 0 0 0 moi 1.0 1.0 1.0 0 0 0 angmom 0 0 0" &
+else &
+  "compute csurf surf body all fx fy fz tx ty tz com 1.5 0 0"
+compute             red reduce sum c_csurf[1] c_csurf[2] c_csurf[3]
 
 stats               20
 stats_style         step np nscoll c_red[1] c_red[2] c_red[3]

@@ -466,9 +466,9 @@ def test_restart(exe_cmd):
     # the body must actually reach the wall and rebound, else the test
     # never exercises a restart under load
 
-    if ref["f_1[4]"] > -40.0:
+    if ref["f_1[1][4]"] > -40.0:
         return ["one-shot final vx = %.6g, body did not rebound; test "
-                "geometry is broken" % ref["f_1[4]"]]
+                "geometry is broken" % ref["f_1[1][4]"]]
 
     # 480 falls inside body 1's contact with the wall (steps ~405-565),
     # so its stored force and torque are nonzero at that split
@@ -491,8 +491,8 @@ def test_restart(exe_cmd):
             fails.append("split %d: a half produced no stats output"
                          % split)
             continue
-        keys = (("f_1[1]", "xcm"), ("f_1[4]", "vx"), ("f_1[15]", "omega"),
-                ("f_2[1]", "xcm2"), ("f_2[4]", "vx2"), ("f_2[15]", "omega2"))
+        keys = (("f_1[1][1]", "xcm"), ("f_1[1][4]", "vx"), ("f_1[1][15]", "omega"),
+                ("f_1[2][1]", "xcm2"), ("f_1[2][4]", "vx2"), ("f_1[2][15]", "omega2"))
 
         # the state read back from the outfile at the start of the
         # continuation must equal the state at the end of the first half
@@ -667,8 +667,8 @@ def test_multiremap(exe_cmd):
             continue
         last = rows[-1]
         results[mode] = tuple(last[k] for k in
-                              ("f_1[1]", "f_1[2]", "f_1[15]",
-                               "f_2[1]", "f_2[2]", "f_2[15]"))
+                              ("f_1[1][1]", "f_1[1][2]", "f_1[1][15]",
+                               "f_1[2][1]", "f_1[2][2]", "f_1[2][15]"))
     if fails:
         return fails
     labels = ("b1 xcm", "b1 ycm", "b1 omega", "b2 xcm", "b2 ycm", "b2 omega")
@@ -693,12 +693,12 @@ def test_pushpair(exe_cmd):
     if not rows:
         return ["no stats output"]
     m1, m2 = 4.0e-22, 1.0e-22
-    px0 = m1 * rows[0]["f_1[4]"] + m2 * rows[0]["f_2[4]"]
-    py0 = m1 * rows[0]["f_1[5]"] + m2 * rows[0]["f_2[5]"]
+    px0 = m1 * rows[0]["f_1[1][4]"] + m2 * rows[0]["f_1[2][4]"]
+    py0 = m1 * rows[0]["f_1[1][5]"] + m2 * rows[0]["f_1[2][5]"]
     fails = []
     for r in rows:
-        px = m1 * r["f_1[4]"] + m2 * r["f_2[4]"]
-        py = m1 * r["f_1[5]"] + m2 * r["f_2[5]"]
+        px = m1 * r["f_1[1][4]"] + m2 * r["f_1[2][4]"]
+        py = m1 * r["f_1[1][5]"] + m2 * r["f_1[2][5]"]
         if not approx(px, px0, rel=1e-6):
             fails.append("step %d: px = %.10e vs initial %.10e, body-body "
                          "contact violates momentum conservation"
@@ -707,10 +707,10 @@ def test_pushpair(exe_cmd):
             fails.append("step %d: py = %.3e drifted from %.3e"
                          % (int(r["Step"]), py, py0))
     # the collision must actually have happened
-    if rows[-1]["f_2[4]"] < 20.0:
+    if rows[-1]["f_1[2][4]"] < 20.0:
         fails.append("final body2 vx = %.6g, no significant collision "
                      "occurred; test geometry is broken"
-                     % rows[-1]["f_2[4]"])
+                     % rows[-1]["f_1[2][4]"])
     return fails
 
 
@@ -722,7 +722,7 @@ def test_twobody(exe_cmd):
     if not rows:
         return ["no stats output"]
     last = rows[-1]
-    v1, v2 = last["f_1[4]"], last["f_2[4]"]
+    v1, v2 = last["f_1[1][4]"], last["f_1[2][4]"]
     fails = []
     # head-on symmetric collision: velocities reverse, ~elastic
     if not approx(v1, -30.0, rel=0.02):
@@ -823,12 +823,12 @@ def test_exitbox(exe_cmd):
         return ["no stats output"]
     last = rows[-1]
     fails = []
-    if not approx(last["f_1[2]"], 3.0 - 400.0 * 0.02, rel=1e-10):
+    if not approx(last["f_1[1][2]"], 3.0 - 400.0 * 0.02, rel=1e-10):
         fails.append("body 1 ycm = %.12g, expected %.12g"
-                     % (last["f_1[2]"], 3.0 - 400.0 * 0.02))
-    if not approx(last["f_2[2]"], 7.0 + 400.0 * 0.02, rel=1e-10):
+                     % (last["f_1[1][2]"], 3.0 - 400.0 * 0.02))
+    if not approx(last["f_1[2][2]"], 7.0 + 400.0 * 0.02, rel=1e-10):
         fails.append("body 2 ycm = %.12g, expected %.12g"
-                     % (last["f_2[2]"], 7.0 + 400.0 * 0.02))
+                     % (last["f_1[2][2]"], 7.0 + 400.0 * 0.02))
     return fails
 
 
@@ -1092,7 +1092,8 @@ def test_zerothick(exe_cmd):
 
 
 def read_state(name):
-    """Read the 16 (or 22) body parameters from a fix rigid outfile.
+    """Read the 16 (or 22) body parameters of the first body from a fix
+       rigid outfile, skipping its leading body ID.
        Returns the list of floats, or None if the file is missing."""
     path = os.path.join(THISDIR, name)
     if not os.path.exists(path):
@@ -1101,7 +1102,7 @@ def read_state(name):
         line = line.split('#')[0].strip()
         if not line:
             continue
-        return [float(w) for w in line.split()]
+        return [float(w) for w in line.split()][1:]
     return None
 
 
@@ -1781,9 +1782,9 @@ def test_axipair(exe_cmd):
 
     fails = []
     for r in rows:
-        for col, nm in (("f_1[5]", "body 1 vcm_y"), ("f_2[5]", "body 2 vcm_y"),
-                        ("f_1[21]", "body 1 fpush_y"),
-                        ("f_2[21]", "body 2 fpush_y")):
+        for col, nm in (("f_1[1][5]", "body 1 vcm_y"), ("f_1[2][5]", "body 2 vcm_y"),
+                        ("f_1[1][21]", "body 1 fpush_y"),
+                        ("f_1[2][21]", "body 2 fpush_y")):
             if r[col] != 0.0:
                 fails.append("%s = %.3e at step %d, must be exactly zero for "
                              "a body of revolution" % (nm, r[col], r["Step"]))
@@ -1793,7 +1794,7 @@ def test_axipair(exe_cmd):
         break
 
     last = rows[-1]
-    v1, v2 = last["f_1[4]"], last["f_2[4]"]
+    v1, v2 = last["f_1[1][4]"], last["f_1[2][4]"]
     if v2 <= 0.0:
         fails.append("the bodies never made contact: body 2 vcm_x = %.4g" % v2)
         return fails

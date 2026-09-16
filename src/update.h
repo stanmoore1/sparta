@@ -54,16 +54,15 @@ class Update : protected Pointers {
   int rigidflag;         // 1 if a mobile rigid-body surf object will be used
   int rigid_notify_sr;   // 1 if surf reaction models must be told of new
                          //   local body-surf copies once they have init'd
-  int nfixrigid;              // # of FixRigid instances = # of bodies
-  class FixRigid **fixrigidlist;  // ptrs to each FixRigid instance
-  int *rigidmap;              // which FixRigid each surf belongs to
-                              // = index into fixrigidlist, -1 = static surf
+  class FixRigid *fixrigid;   // the FixRigid instance, NULL if none
+  int *rigidmap;              // which rigid body each surf belongs to
+                              // = body index in fixrigid, -1 = static surf
                               // length = surf->nlocal + surf->nghost, since
                               //   the mover tests surfs of ghost cells too
 
   virtual void build_rigidmap();  // rebuild rigidmap from current surfs
-  void refresh_fixrigidlist();    // rebuild the fix list from Modify
-  void init_rigid();          // per-run setup of the rigid body list
+  class FixRigid *find_fixrigid();  // look up the fix rigid in Modify
+  void init_rigid();          // per-run setup of the rigid bodies
 
   // bin index over local+ghost child cells, for box -> candidate-cell
   //   queries by fix rigid (swept assignment, incremental re-cut)

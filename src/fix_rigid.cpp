@@ -77,6 +77,7 @@ enum{FALLBACK_NONE,FALLBACK_NOPREV,FALLBACK_SPLIT,FALLBACK_SURFMAX,
 
 enum{LINEAR,HERTZ};             // push-off force laws
 enum{EULER,RICHARDSON};         // quaternion rotation update schemes
+enum{SINGLE,TYPE,CUSTOM};       // body styles
 
 // local box/box overlap test, touching counts as overlap
 
@@ -94,11 +95,9 @@ static inline int box_overlap(double *alo, double *ahi,
 FixRigid::FixRigid(SPARTA *sparta, int narg, char **arg) :
   Fix(sparta, narg, arg)
 {
-  if (narg < 5) error->all(FLERR,"Illegal fix rigid command");
+  if (narg < 6) error->all(FLERR,"Illegal fix rigid command");
 
   scalar_flag = 1;
-  vector_flag = 1;
-  size_vector = 22;
   global_freq = 1;
   nevery = 1;
 
@@ -112,6 +111,16 @@ FixRigid::FixRigid(SPARTA *sparta, int narg, char **arg) :
   if (surf->implicit)
     error->all(FLERR,"Fix rigid cannot be used with implicit surfs");
 
+  // all bodies are defined by one fix rigid, so that body-body
+  //   contacts and the per-surf body map have a single owner
+  // the fix being replaced by a re-definition is already deleted
+
+  for (int ifix = 0; ifix < modify->nfix; ifix++) {
+    if (!modify->fix[ifix] || modify->fix[ifix] == this) continue;
+    if (fix_rigid_style(modify->fix[ifix]->style))
+      error->all(FLERR,"Only one fix rigid command can be defined");
+  }
+
   // in an axisymmetric domain the surf elements are profiles in the
   //   (x,r) half plane which stand for surfaces of revolution about the
   //   x axis, so a rigid body built from them is a body of revolution
@@ -122,7 +131,6 @@ FixRigid::FixRigid(SPARTA *sparta, int narg, char **arg) :
   // for distributed surfs, each proc owns a subset of the surfs;
   // the fix gathers a replicated copy of its (compact) body elements
   //   in gather_body() and maintains local Surf copies of them
-
 
   igroup = surf->find_group(arg[2]);
   if (igroup < 0) error->all(FLERR,"Fix rigid surf group ID does not exist");
@@ -135,6 +143,27 @@ FixRigid::FixRigid(SPARTA *sparta, int narg, char **arg) :
   n = modify->find_compute(csurfID);
   if (n < 0) error->all(FLERR,"Fix rigid compute ID does not exist");
 
+  // bodystyle = how surfs in the group are assigned to bodies
+
+  customname = NULL;
+  int iarg = 4;
+  if (strcmp(arg[iarg],"single") == 0) {
+    bodystyle = SINGLE;
+    iarg++;
+  } else if (strcmp(arg[iarg],"type") == 0) {
+    bodystyle = TYPE;
+    iarg++;
+  } else if (strcmp(arg[iarg],"custom") == 0) {
+    if (iarg+2 > narg) error->all(FLERR,"Illegal fix rigid command");
+    bodystyle = CUSTOM;
+    n = strlen(arg[iarg+1]) + 1;
+    customname = new char[n];
+    strcpy(customname,arg[iarg+1]);
+    iarg += 2;
+  } else error->all(FLERR,"Fix rigid body style not recognized");
+
+  if (iarg >= narg) error->all(FLERR,"Illegal fix rigid command");
+
   // parse body params
 
   dim = domain->dimension;
@@ -143,16 +172,20 @@ FixRigid::FixRigid(SPARTA *sparta, int narg, char **arg) :
   slist = NULL;
   displace = NULL;
 
+  bodyflag = 0;
   densityflag = 0;
   density = 0.0;
-
   forceinfile = 0;
-  fcm_infile[0] = fcm_infile[1] = fcm_infile[2] = 0.0;
-  torque_infile[0] = torque_infile[1] = torque_infile[2] = 0.0;
 
-  int iarg = 4;
+  massone = 0.0;
+  for (int j = 0; j < 3; j++)
+    xcmone[j] = vcmone[j] = angmomone[j] = 0.0;
+  for (int j = 0; j < 6; j++) moione[j] = 0.0;
+
   if (strcmp(arg[iarg],"body") == 0) {
     if (iarg+22 > narg) error->all(FLERR,"Fix rigid body args not valid");
+    bodyflag = 1;
+    int massflag,comflag,vcomflag,moiflag,angmomflag;
     massflag = comflag = vcomflag = moiflag = angmomflag = 0;
     int jarg = iarg+1;
 
@@ -168,38 +201,38 @@ FixRigid::FixRigid(SPARTA *sparta, int narg, char **arg) :
       if (strcmp(arg[jarg],"mass") == 0) {
         BODY_ARGS(2);
 	massflag = 1;
-	massbody = input->numeric(FLERR,arg[jarg+1]);
+	massone = input->numeric(FLERR,arg[jarg+1]);
 	jarg += 2;
       } else if (strcmp(arg[jarg],"com") == 0) {
         BODY_ARGS(4);
 	comflag = 1;
-	xcm[0] = input->numeric(FLERR,arg[jarg+1]);
-	xcm[1] = input->numeric(FLERR,arg[jarg+2]);
-	xcm[2] = input->numeric(FLERR,arg[jarg+3]);
+	xcmone[0] = input->numeric(FLERR,arg[jarg+1]);
+	xcmone[1] = input->numeric(FLERR,arg[jarg+2]);
+	xcmone[2] = input->numeric(FLERR,arg[jarg+3]);
 	jarg += 4;
       } else if (strcmp(arg[jarg],"moi") == 0) {
         BODY_ARGS(7);
 	moiflag = 1;
-	moi[0] = input->numeric(FLERR,arg[jarg+1]);
-	moi[1] = input->numeric(FLERR,arg[jarg+2]);
-	moi[2] = input->numeric(FLERR,arg[jarg+3]);
-	moi[3] = input->numeric(FLERR,arg[jarg+4]);
-	moi[4] = input->numeric(FLERR,arg[jarg+5]);
-	moi[5] = input->numeric(FLERR,arg[jarg+6]);
+	moione[0] = input->numeric(FLERR,arg[jarg+1]);
+	moione[1] = input->numeric(FLERR,arg[jarg+2]);
+	moione[2] = input->numeric(FLERR,arg[jarg+3]);
+	moione[3] = input->numeric(FLERR,arg[jarg+4]);
+	moione[4] = input->numeric(FLERR,arg[jarg+5]);
+	moione[5] = input->numeric(FLERR,arg[jarg+6]);
 	jarg += 7;
       } else if (strcmp(arg[jarg],"vcom") == 0) {
         BODY_ARGS(4);
 	vcomflag = 1;
-	vcm[0] = input->numeric(FLERR,arg[jarg+1]);
-	vcm[1] = input->numeric(FLERR,arg[jarg+2]);
-	vcm[2] = input->numeric(FLERR,arg[jarg+3]);
+	vcmone[0] = input->numeric(FLERR,arg[jarg+1]);
+	vcmone[1] = input->numeric(FLERR,arg[jarg+2]);
+	vcmone[2] = input->numeric(FLERR,arg[jarg+3]);
 	jarg += 4;
       } else if (strcmp(arg[jarg],"angmom") == 0) {
         BODY_ARGS(4);
 	angmomflag = 1;
-	angmom[0] = input->numeric(FLERR,arg[jarg+1]);
-	angmom[1] = input->numeric(FLERR,arg[jarg+2]);
-	angmom[2] = input->numeric(FLERR,arg[jarg+3]);
+	angmomone[0] = input->numeric(FLERR,arg[jarg+1]);
+	angmomone[1] = input->numeric(FLERR,arg[jarg+2]);
+	angmomone[2] = input->numeric(FLERR,arg[jarg+3]);
 	jarg += 4;
       } else
 	error->all(FLERR,"Fix rigid body keyword not recognized");
@@ -209,19 +242,23 @@ FixRigid::FixRigid(SPARTA *sparta, int narg, char **arg) :
 #undef BODY_ARGS
     if (!massflag || !comflag || !moiflag || !vcomflag || !angmomflag)
       error->all(FLERR,"Fix rigid body args not valid");
+    if (massone <= 0.0)
+      error->all(FLERR,"Fix rigid body mass must be positive");
     iarg += 22;
 
   } else if (strcmp(arg[iarg],"infile") == 0) {
+
+    // read in setup_body(), once the bodies are known
+
     if (iarg+2 > narg) error->all(FLERR,"Fix rigid infile args not valid");
     int n = strlen(arg[iarg+1]) + 1;
     infile = new char[n];
     strcpy(infile,arg[iarg+1]);
-    read_infile(infile);
     iarg += 2;
 
   } else if (strcmp(arg[iarg],"density") == 0) {
 
-    // mass, COM, and moi are computed from the body geometry in
+    // mass, COM, and moi are computed from each body's geometry in
     //   setup_body(); vcom and angmom default to zero and may be
     //   overridden by the optional vcom/angmom keywords below
 
@@ -230,8 +267,6 @@ FixRigid::FixRigid(SPARTA *sparta, int narg, char **arg) :
     density = input->numeric(FLERR,arg[iarg+1]);
     if (density <= 0.0)
       error->all(FLERR,"Fix rigid body density must be positive");
-    vcm[0] = vcm[1] = vcm[2] = 0.0;
-    angmom[0] = angmom[1] = angmom[2] = 0.0;
     iarg += 2;
 
   } else error->all(FLERR,"Fix rigid define style not recognized");
@@ -306,17 +341,17 @@ FixRigid::FixRigid(SPARTA *sparta, int narg, char **arg) :
       if (iarg+4 > narg) error->all(FLERR,"Fix rigid body args not valid");
       if (!densityflag)
         error->all(FLERR,"Fix rigid vcom keyword requires density style");
-      vcm[0] = input->numeric(FLERR,arg[iarg+1]);
-      vcm[1] = input->numeric(FLERR,arg[iarg+2]);
-      vcm[2] = input->numeric(FLERR,arg[iarg+3]);
+      vcmone[0] = input->numeric(FLERR,arg[iarg+1]);
+      vcmone[1] = input->numeric(FLERR,arg[iarg+2]);
+      vcmone[2] = input->numeric(FLERR,arg[iarg+3]);
       iarg += 4;
     } else if (strcmp(arg[iarg],"angmom") == 0) {
       if (iarg+4 > narg) error->all(FLERR,"Fix rigid body args not valid");
       if (!densityflag)
         error->all(FLERR,"Fix rigid angmom keyword requires density style");
-      angmom[0] = input->numeric(FLERR,arg[iarg+1]);
-      angmom[1] = input->numeric(FLERR,arg[iarg+2]);
-      angmom[2] = input->numeric(FLERR,arg[iarg+3]);
+      angmomone[0] = input->numeric(FLERR,arg[iarg+1]);
+      angmomone[1] = input->numeric(FLERR,arg[iarg+2]);
+      angmomone[2] = input->numeric(FLERR,arg[iarg+3]);
       iarg += 4;
     } else if (strcmp(arg[iarg],"outfile") == 0) {
       if (iarg+3 > narg) error->all(FLERR,"Fix rigid body args not valid");
@@ -333,88 +368,28 @@ FixRigid::FixRigid(SPARTA *sparta, int narg, char **arg) :
     error->all(FLERR,"Fix rigid pushbound, pushstyle, and pushdamp "
                "require push keyword");
 
-  // for dstyle = density the mass is not known until setup_body() has
-  //   integrated the geometry, so it is validated there instead
+  if (dim == 2 && !axiflag && fext[2] != 0.0)
+    error->all(FLERR,"Fix rigid z component of force must be zero for 2d");
+  if (axiflag && (fext[1] != 0.0 || fext[2] != 0.0))
+    error->all(FLERR,"Fix rigid y,z components of force must be zero "
+               "for an axisymmetric domain");
 
-  if (!densityflag && massbody <= 0.0)
-    error->all(FLERR,"Fix rigid body mass must be positive");
-
-  // for 2d, insure all body params are consistent with in-plane motion
-  // for dstyle = density, xcm and moi are computed from the geometry,
-  //   which is planar in 2d, so only the user-settable values are checked
-
-  if (dim == 2 && !axiflag) {
-    if (vcm[2] != 0.0)
-      error->all(FLERR,"Fix rigid z components of com and vcom "
-                 "must be zero for 2d");
-    if (angmom[0] != 0.0 || angmom[1] != 0.0)
-      error->all(FLERR,"Fix rigid x,y components of angmom "
-                 "must be zero for 2d");
-    if (!densityflag) {
-      if (xcm[2] != 0.0)
-        error->all(FLERR,"Fix rigid z components of com and vcom "
-                   "must be zero for 2d");
-      if (moi[4] != 0.0 || moi[5] != 0.0)
-        error->all(FLERR,"Fix rigid ixz,iyz components of moi "
-                   "must be zero for 2d");
-    }
-    if (fext[2] != 0.0)
-      error->all(FLERR,"Fix rigid z component of force must be zero for 2d");
-  }
-
-  // axisymmetric: the body is a body of revolution about the x axis, so
-  //   it can only translate along x and spin about x.  its COM lies on
-  //   the axis, its transverse velocity and angular momentum must be
-  //   zero, and only ixx of the inertia tensor is ever used
-
-  if (axiflag) {
-    if (vcm[1] != 0.0 || vcm[2] != 0.0)
-      error->all(FLERR,"Fix rigid y,z components of vcom must be zero "
-                 "for an axisymmetric domain");
-    if (angmom[1] != 0.0 || angmom[2] != 0.0)
-      error->all(FLERR,"Fix rigid y,z components of angmom must be zero "
-                 "for an axisymmetric domain");
-    if (fext[1] != 0.0 || fext[2] != 0.0)
-      error->all(FLERR,"Fix rigid y,z components of force must be zero "
-                 "for an axisymmetric domain");
-    if (!densityflag) {
-      if (xcm[1] != 0.0 || xcm[2] != 0.0)
-        error->all(FLERR,"Fix rigid y,z components of com must be zero "
-                   "for an axisymmetric domain");
-      if (moi[3] != 0.0 || moi[4] != 0.0 || moi[5] != 0.0)
-        error->all(FLERR,"Fix rigid products of inertia must be zero "
-                   "for an axisymmetric domain");
-      if (moi[0] <= 0.0)
-        error->all(FLERR,"Fix rigid ixx of moi must be positive "
-                   "for an axisymmetric domain");
-    }
-  }
-
-  // setup the rigid body
+  // setup the rigid bodies
 
   setup_body();
 
-  // restore the force/torque of the step before a continuation, which
-  //   setup_body() zeroed; the body is moved by them on the first step
+  // global output: a vector for a single body, an array for any count
 
-  if (forceinfile) {
-    if (dim == 2 && !axiflag &&
-        (fcm_infile[2] != 0.0 ||
-         torque_infile[0] != 0.0 || torque_infile[1] != 0.0))
-      error->all(FLERR,"Fix rigid infile force and torque must be "
-                 "in-plane for 2d");
-    if (axiflag && (fcm_infile[1] != 0.0 || fcm_infile[2] != 0.0 ||
-                    torque_infile[1] != 0.0 || torque_infile[2] != 0.0))
-      error->all(FLERR,"Fix rigid infile force and torque must be axial "
-                 "for an axisymmetric domain");
-    for (int j = 0; j < 3; j++) {
-      fcm[j] = fcm_infile[j];
-      torque[j] = torque_infile[j];
-    }
+  if (nbody == 1) {
+    vector_flag = 1;
+    size_vector = 22;
   }
+  array_flag = 1;
+  size_array_rows = nbody;
+  size_array_cols = 22;
 
   // irigid = per-surf flags, indexed by local surf index
-  // -1 for static surfs, else index into slist of body surfs
+  // -1 for static surfs, else body index
   // used by Update::build_rigidmap() to detect moving surfs
   // non-distributed only: every proc stores all surfs, length = nlocal
   // for distributed surfs the local surf list changes as the body
@@ -427,7 +402,7 @@ FixRigid::FixRigid(SPARTA *sparta, int narg, char **arg) :
     int nslocal = surf->nlocal;
     memory->create(irigid,nslocal,"fix_rigid:irigid");
     for (int i = 0; i < nslocal; i++) irigid[i] = -1;
-    for (int i = 0; i < nsurf; i++) irigid[slist[i]] = i;
+    for (int i = 0; i < nsurf; i++) irigid[slist[i]] = body[i];
   }
 
   // remap data structs
@@ -467,7 +442,6 @@ FixRigid::FixRigid(SPARTA *sparta, int narg, char **arg) :
   pushstamp = NULL;
   pushstampcur = 0;
   ftbuf_mine = ftbuf_all = NULL;
-  tqpush[0] = tqpush[1] = tqpush[2] = 0.0;
   warnfallback = 0;
   warndelete = 0;
   ndelrun = 0;
@@ -498,8 +472,41 @@ FixRigid::FixRigid(SPARTA *sparta, int narg, char **arg) :
 FixRigid::~FixRigid()
 {
   delete [] csurfID;
+  delete [] customname;
   delete [] infile;
   delete [] outfile;
+
+  memory->destroy(xcm);
+  memory->destroy(vcm);
+  memory->destroy(omega);
+  memory->destroy(invmass);
+  memory->destroy(invinertia);
+  memory->destroy(quat);
+  memory->destroy(xcmnew);
+  memory->destroy(quatnew);
+  memory->destroy(xcmmid);
+  memory->destroy(massbody);
+  memory->destroy(moi);
+  memory->destroy(inertia);
+  memory->destroy(angmom);
+  memory->destroy(ex_space);
+  memory->destroy(ey_space);
+  memory->destroy(ez_space);
+  memory->destroy(fcm);
+  memory->destroy(torque);
+  memory->destroy(fpush);
+  memory->destroy(tqpush);
+  memory->destroy(rmaxbody);
+  memory->destroy(bbodylo);
+  memory->destroy(bbodyhi);
+  memory->destroy(bboxeps);
+  memory->destroy(pbodylo);
+  memory->destroy(pbodyhi);
+  memory->destroy(fcm_infile);
+  memory->destroy(torque_infile);
+  memory->destroy(body);
+  memory->destroy(bodystart);
+
   memory->destroy(slist);
   memory->destroy(displace);
   memory->destroy(irigid);
@@ -583,13 +590,17 @@ void FixRigid::init()
   double mmax = 0.0;
   for (int i = 0; i < particle->nspecies; i++)
     mmax = MAX(mmax,particle->species[i].mass);
-  if (massbody < update->fnum*mmax && comm->me == 0)
+  double mmin = massbody[0];
+  for (int ibody = 1; ibody < nbody; ibody++)
+    mmin = MIN(mmin,massbody[ibody]);
+  if (mmin < update->fnum*mmax && comm->me == 0)
     error->warning(FLERR,"Fix rigid body mass is less than the mass of a "
                    "simulation particle, collisions are not corrected "
                    "for body recoil");
 
   // check that specified compute is valid for use with fix rigid
-  // NOTE: check that it operates on same surf group ?
+  // the compute tallies torque about the COM of the body each surf
+  //   belongs to, which it reads from this fix (com rigid)
 
   int n = modify->find_compute(csurfID);
   if (n < 0) error->all(FLERR,"Could not find fix rigid compute ID");
@@ -602,6 +613,8 @@ void FixRigid::init()
   if (csurf->size_per_surf_cols != 6 || !csurf->force_torque_colcheck())
     error->all(FLERR,"Fix rigid compute must tally exactly "
                "fx fy fz tx ty tz for a single group");
+  if (!csurf->com_rigid())
+    error->all(FLERR,"Fix rigid compute surf must use com rigid");
   if (!csurf->mixture_covers_all_species())
     error->all(FLERR,"Fix rigid compute surf mixture must contain "
                "all species");
@@ -629,7 +642,7 @@ void FixRigid::init()
   // Update::init() clamps its rigidmap scan to nsurfall, so it is
   //   correct even though it runs before this method
 
-  if (surf->count_group(igroup) != nsurf)
+  if (surf->count_group(igroup) != ngroupsurf)
     error->all(FLERR,"Fix rigid body surf group was changed "
                "after fix rigid was defined");
 
@@ -695,10 +708,9 @@ void FixRigid::init()
   //   so their per-surf state was sized for the final local+ghost surf
   //   arrays; now that they have init'd, tell them the arrays changed
   //   (as after a load balance) so per-surf state is re-spread
-  // done once, by the first rigid fix, since all fixes init after
-  //   the models
+  // done here, since the fix inits after the models
 
-  if (update->rigid_notify_sr && update->fixrigidlist[0] == this) {
+  if (update->rigid_notify_sr) {
     for (int i = 0; i < surf->nsr; i++) surf->sr[i]->grid_changed();
     update->rigid_notify_sr = 0;
   }
@@ -735,22 +747,6 @@ void FixRigid::init()
   warndelete = 0;
   ndelrun = 0;
 
-  // each fix rigid defines its own body: no surf can be in two bodies
-  // each fix rigid must have its own compute: the fix resets the
-  //   compute's COM to its own body COM every step, so a shared compute
-  //   would tally torques about the wrong body's COM
-
-  for (int ifix = 0; ifix < modify->nfix; ifix++) {
-    if (modify->fix[ifix] == this) continue;
-    if (!fix_rigid_style(modify->fix[ifix]->style)) continue;
-    FixRigid *other = (FixRigid *) modify->fix[ifix];
-    for (int i = 0; i < nsurf; i++)
-      if (other->body_elem(sids[i]) >= 0)
-        error->all(FLERR,"Surf element is in more than one fix rigid body");
-    if (strcmp(other->csurfID,csurfID) == 0)
-      error->all(FLERR,"Two fix rigid commands cannot use the same compute");
-  }
-
   // fix rigid must be defined before fixes which change the grid,
   // so its end_of_step() restores overlaid grid cells before they run
 
@@ -770,32 +766,23 @@ void FixRigid::init()
 
 void FixRigid::setup()
 {
-  FixRigid **flist = update->fixrigidlist;
-  int nb = update->nfixrigid;
-
   // work buffer for the fused force/torque Allreduce over all bodies
-  // the # of rigid fixes can change between runs, so (re)allocate
 
-  memory->destroy(ftbuf_mine);
-  memory->destroy(ftbuf_all);
-  memory->create(ftbuf_mine,6*nb,"fix_rigid:ftbuf_mine");
-  memory->create(ftbuf_all,6*nb,"fix_rigid:ftbuf_all");
+  if (!ftbuf_mine) {
+    memory->create(ftbuf_mine,6*nbody,"fix_rigid:ftbuf_mine");
+    memory->create(ftbuf_all,6*nbody,"fix_rigid:ftbuf_all");
+  }
 
   // page for merged csurfs lists built by swept_assign_all each step
-  // owned by the last-defined rigid fix, which performs the single
-  //   cell pass for all bodies; a merged list can hold one cell's
-  //   current surfs plus the swept surfs of every body
+  // a merged list can hold one cell's current surfs plus the swept
+  //   surfs of every body
+  // maxsurfpercell can change between runs, so (re)allocate
 
   delete cpage;
-  cpage = NULL;
-  if (flist[nb-1] == this) {
-    int nsurftotal = 0;
-    for (int m = 0; m < nb; m++) nsurftotal += flist[m]->nsurf;
-    int maxchunk = grid->maxsurfpercell + nsurftotal;
-    cpage = new MyPage<surfint>(maxchunk,MAX(65536,4*maxchunk));
-    if (cpage->errorflag)
-      error->all(FLERR,"Fix rigid could not allocate collision-list page");
-  }
+  int maxchunk = grid->maxsurfpercell + nsurf;
+  cpage = new MyPage<surfint>(maxchunk,MAX(65536,4*maxchunk));
+  if (cpage->errorflag)
+    error->all(FLERR,"Fix rigid could not allocate collision-list page");
 
   // distributed surfs: insure local copies of body surfs exist and
   //   rigidmap covers them, before the first step's swept assignment
@@ -825,9 +812,7 @@ void FixRigid::setup()
       memory->create(newmap,maxnewlist,"fix_rigid:newmap");
     }
 
-    int nsurftotal = 0;
-    for (int m = 0; m < nb; m++) nsurftotal += flist[m]->nsurf;
-    int n = grid->maxsurfpercell + nsurftotal;
+    int n = grid->maxsurfpercell + nsurf;
     if (n > maxreclist) {
       maxreclist = n;
       memory->destroy(reclist);
@@ -839,23 +824,23 @@ void FixRigid::setup()
 
   if (pushflag) push_bins();
 
-  // delete any particles inside the body
-  // create_particles marks the body's cells INSIDE via the surf pipeline
+  // delete any particles inside a body
+  // create_particles marks the bodies' cells INSIDE via the surf pipeline
   //   and normally avoids them, but this is a safety net for any that
-  //   end up inside, e.g. via an emit region overlapping the body
+  //   end up inside, e.g. via an emit region overlapping a body
 
+  for (int ibody = 0; ibody < nbody; ibody++) body_bbox(ibody,0);
   if (particle->exist) ndeleted += remove_inside_particles(0);
-  else body_bbox(0);
 
   // for incremental remap: grid state is now consistent with the
-  //   body at its current position
-  // body_bbox(0) was computed by remove_inside_particles() or just above
+  //   bodies at their current positions
 
   if (remapmode == INCREMENTAL) {
-    for (int j = 0; j < 3; j++) {
-      pbodylo[j] = bbodylo[j];
-      pbodyhi[j] = bbodyhi[j];
-    }
+    for (int ibody = 0; ibody < nbody; ibody++)
+      for (int j = 0; j < 3; j++) {
+        pbodylo[ibody][j] = bbodylo[ibody][j];
+        pbodyhi[ibody][j] = bbodyhi[ibody][j];
+      }
     pbodyflag = 1;
   }
 }
@@ -870,307 +855,302 @@ void FixRigid::start_of_step()
   if (!csurf)
     error->all(FLERR,"Fix rigid was not initialized before the run");
 
-  // body inverse mass and inertia for collision recoil this step,
-  //   from the start-of-step axes before they are advanced below
-
-  set_recoil();
-
-  // time integrate from current position to end-of-step position
-  // velocity Verlet: this is the first half kick and the drift,
-  //   the second half kick is applied in end_of_step() once the force
-  //   and torque of this step are known
-  // fcm,torque = from particle collisions and push-off contacts during
-  //   the previous step, i.e. the force at the start of this step,
-  //   plus the constant external force
-  // vcm/angmom/omega are thus half-step values during the step: the
-  //   body moves, and particles collide with it, at these velocities,
-  //   which is second-order accurate and exact for a constant force
-  // xcmnew/quatnew/exyz_space = end-of-step values
-
   double dt = update->dt;
-  double dtfhalf = 0.5 * dt / massbody;
   double dthalf = 0.5 * dt;
 
-  vcm[0] += dtfhalf * (fcm[0] + fext[0]);
-  vcm[1] += dtfhalf * (fcm[1] + fext[1]);
-  vcm[2] += dtfhalf * (fcm[2] + fext[2]);
+  for (int ibody = 0; ibody < nbody; ibody++) {
+    double *xcm1 = xcm[ibody];
+    double *vcm1 = vcm[ibody];
+    double *omega1 = omega[ibody];
+    double *quat1 = quat[ibody];
+    double *xcmnew1 = xcmnew[ibody];
+    double *quatnew1 = quatnew[ibody];
+    double *angmom1 = angmom[ibody];
+    double *fcm1 = fcm[ibody];
+    double *torque1 = torque[ibody];
 
-  // drift xcm by full step with the half-step velocity
-  // store as xcmnew so have start/stop position for this timestep
+    // body inverse mass and inertia for collision recoil this step,
+    //   from the start-of-step axes before they are advanced below
 
-  xcmnew[0] = xcm[0] + dt * vcm[0];
-  xcmnew[1] = xcm[1] + dt * vcm[1];
-  xcmnew[2] = xcm[2] + dt * vcm[2];
+    set_recoil(ibody);
 
-  // reset COM used by compute surf for torque tallies to the mid-step
-  //   COM, the time-average of the COM the particles collide about
-  //   during the step
+    // time integrate from current position to end-of-step position
+    // velocity Verlet: this is the first half kick and the drift,
+    //   the second half kick is applied in end_of_step() once the force
+    //   and torque of this step are known
+    // fcm,torque = from particle collisions and push-off contacts during
+    //   the previous step, i.e. the force at the start of this step,
+    //   plus the constant external force
+    // vcm/angmom/omega are thus half-step values during the step: the
+    //   body moves, and particles collide with it, at these velocities,
+    //   which is second-order accurate and exact for a constant force
+    // xcmnew/quatnew/exyz_space = end-of-step values
 
-  double xcmmid[3];
-  xcmmid[0] = 0.5 * (xcm[0] + xcmnew[0]);
-  xcmmid[1] = 0.5 * (xcm[1] + xcmnew[1]);
-  xcmmid[2] = 0.5 * (xcm[2] + xcmnew[2]);
-  csurf->set_com(xcmmid);
+    double dtfhalf = 0.5 * dt / massbody[ibody];
 
-  // half kick of angular momentum in spatial frame
+    vcm1[0] += dtfhalf * (fcm1[0] + fext[0]);
+    vcm1[1] += dtfhalf * (fcm1[1] + fext[1]);
+    vcm1[2] += dtfhalf * (fcm1[2] + fext[2]);
 
-  angmom[0] += dthalf * torque[0];
-  angmom[1] += dthalf * torque[1];
-  angmom[2] += dthalf * torque[2];
+    // drift xcm by full step with the half-step velocity
+    // store as xcmnew so have start/stop position for this timestep
 
-  // compute new omega from new angmom, both in spatial frame
+    xcmnew1[0] = xcm1[0] + dt * vcm1[0];
+    xcmnew1[1] = xcm1[1] + dt * vcm1[1];
+    xcmnew1[2] = xcm1[2] + dt * vcm1[2];
 
-  MathExtra::angmom_to_omega(angmom,ex_space,ey_space,ez_space,inertia,omega);
+    // mid-step COM, the time-average of the COM the particles collide
+    //   about during the step; compute surf tallies torques about it
 
-  // for 2d, insure COM stays in plane and rotation is about z axis
-  // guards against small numeric drift in principal axes
+    xcmmid[ibody][0] = 0.5 * (xcm1[0] + xcmnew1[0]);
+    xcmmid[ibody][1] = 0.5 * (xcm1[1] + xcmnew1[1]);
+    xcmmid[ibody][2] = 0.5 * (xcm1[2] + xcmnew1[2]);
 
-  if (dim == 2 && !axiflag) {
-    xcmnew[2] = 0.0;
-    omega[0] = 0.0;
-    omega[1] = 0.0;
-  }
+    // half kick of angular momentum in spatial frame
 
-  // update quaternion by full step using new omega in spatial frame
-  // store as quatnew so have start/stop orientation for this timestep
-  // rotate euler (default): omega is held constant over the step, so
-  //   dq/dt = 1/2 omega q integrates exactly to the rotation by
-  //   angle |omega|*dt about omega; the moving-surf collision tests
-  //   assume this same rotation, so the end-of-step geometry the
-  //   particles were reflected from is exactly the one installed
-  // rotate richardson: LAMMPS-style Richardson iteration which
-  //   re-evaluates omega at the half step from the (constant over the
-  //   step) angular momentum; useful for rotation-dominated bodies
+    angmom1[0] += dthalf * torque1[0];
+    angmom1[1] += dthalf * torque1[1];
+    angmom1[2] += dthalf * torque1[2];
 
-  // axisymmetric: the body can only spin about its own axis, which maps
-  //   the surface of revolution onto itself and so moves no geometry.
-  //   integrating the quaternion would instead rotate each profile point
-  //   out of the (x,r) plane by omega_x*dt, which is not the same body.
-  //   so the orientation is held at the identity and only the spin rate
-  //   in omega[0] is carried forward, where the mover reads it as the
-  //   azimuthal wall velocity omega_x * r
+    // compute new omega from new angmom, both in spatial frame
 
-  if (axiflag) {
-    quatnew[0] = 1.0;
-    quatnew[1] = quatnew[2] = quatnew[3] = 0.0;
+    MathExtra::angmom_to_omega(angmom1,ex_space[ibody],ey_space[ibody],
+                               ez_space[ibody],inertia[ibody],omega1);
 
-  } else if (rotstyle == RICHARDSON) {
-    quatnew[0] = quat[0];
-    quatnew[1] = quat[1];
-    quatnew[2] = quat[2];
-    quatnew[3] = quat[3];
-    MathExtra::richardson(quatnew,angmom,omega,inertia,dthalf);
-  } else {
-    double wmag = MathExtra::len3(omega);
-    if (wmag > 0.0) {
-      double axis[3],qrot[4];
-      axis[0] = omega[0]/wmag;
-      axis[1] = omega[1]/wmag;
-      axis[2] = omega[2]/wmag;
-      MathExtra::axisangle_to_quat(axis,wmag*dt,qrot);
-      MathExtra::quatquat(qrot,quat,quatnew);
-      MathExtra::qnormalize(quatnew);
-    } else {
-      quatnew[0] = quat[0];
-      quatnew[1] = quat[1];
-      quatnew[2] = quat[2];
-      quatnew[3] = quat[3];
+    // for 2d, insure COM stays in plane and rotation is about z axis
+    // guards against small numeric drift in principal axes
+
+    if (dim == 2 && !axiflag) {
+      xcmnew1[2] = 0.0;
+      omega1[0] = 0.0;
+      omega1[1] = 0.0;
     }
-  }
-  MathExtra::q_to_exyz(quatnew,ex_space,ey_space,ez_space);
 
-  // hard error if the body state has stopped being a finite number
-  // the pose computed here is handed to the surf coords, the moving
-  //   collision tests, and the cut/split geometry; an Inf or NaN
-  //   propagates into all of them and crashes inside the cut instead
-  //   of failing cleanly, so stop at the source
-  // the state is replicated on every proc, so the test is collective
-  // the usual cause is a body mass at or below the mass one
-  //   computational particle carries (fnum times the species mass),
-  //   which lets a single gas collision accelerate the body without
-  //   bound; a push stiffness too large for the timestep does it too
+    // update quaternion by full step using new omega in spatial frame
+    // store as quatnew so have start/stop orientation for this timestep
+    // rotate euler (default): omega is held constant over the step, so
+    //   dq/dt = 1/2 omega q integrates exactly to the rotation by
+    //   angle |omega|*dt about omega; the moving-surf collision tests
+    //   assume this same rotation, so the end-of-step geometry the
+    //   particles were reflected from is exactly the one installed
+    // rotate richardson: LAMMPS-style Richardson iteration which
+    //   re-evaluates omega at the half step from the (constant over the
+    //   step) angular momentum; useful for rotation-dominated bodies
 
-  if (!isfinite(xcmnew[0]) || !isfinite(xcmnew[1]) || !isfinite(xcmnew[2]) ||
-      !isfinite(vcm[0]) || !isfinite(vcm[1]) || !isfinite(vcm[2]) ||
-      !isfinite(omega[0]) || !isfinite(omega[1]) || !isfinite(omega[2]) ||
-      !isfinite(quatnew[0]) || !isfinite(quatnew[1]) ||
-      !isfinite(quatnew[2]) || !isfinite(quatnew[3]))
-    error->all(FLERR,"Fix rigid body position, velocity, or rotation is "
-               "no longer a finite number");
+    // axisymmetric: the body can only spin about its own axis, which
+    //   maps the surface of revolution onto itself and so moves no
+    //   geometry.  integrating the quaternion would instead rotate each
+    //   profile point out of the (x,r) plane by omega_x*dt, which is
+    //   not the same body.  so the orientation is held at the identity
+    //   and only the spin rate in omega[0] is carried forward, where
+    //   the mover reads it as the azimuthal wall velocity omega_x * r
 
-  // warn once per run if body motion in a single step is too large
-  // rotation > 0.1 radian degrades the collision test for particles
-  //   hitting rotating surfs: the hit time is exact, but which element
-  //   is hit comes from the chord through the mapped path endpoints
-  //   (see Geometry::refine_moving_param)
-  // max surf pt displacement > smallest grid cell degrades the
-  //   accuracy of surf assignment to grid cells for cutcell remapping
+    if (axiflag) {
+      quatnew1[0] = 1.0;
+      quatnew1[1] = quatnew1[2] = quatnew1[3] = 0.0;
 
-  // neither warning applies to the spin of an axisymmetric body: it
-  //   maps the surface onto itself, so it displaces no surf point and
-  //   the collision test for it is exact at any spin rate
+    } else if (rotstyle == RICHARDSON) {
+      quatnew1[0] = quat1[0];
+      quatnew1[1] = quat1[1];
+      quatnew1[2] = quat1[2];
+      quatnew1[3] = quat1[3];
+      MathExtra::richardson(quatnew1,angmom1,omega1,inertia[ibody],dthalf);
+    } else {
+      double wmag = MathExtra::len3(omega1);
+      if (wmag > 0.0) {
+        double axis[3],qrot[4];
+        axis[0] = omega1[0]/wmag;
+        axis[1] = omega1[1]/wmag;
+        axis[2] = omega1[2]/wmag;
+        MathExtra::axisangle_to_quat(axis,wmag*dt,qrot);
+        MathExtra::quatquat(qrot,quat1,quatnew1);
+        MathExtra::qnormalize(quatnew1);
+      } else {
+        quatnew1[0] = quat1[0];
+        quatnew1[1] = quat1[1];
+        quatnew1[2] = quat1[2];
+        quatnew1[3] = quat1[3];
+      }
+    }
+    MathExtra::q_to_exyz(quatnew1,ex_space[ibody],ey_space[ibody],
+                         ez_space[ibody]);
 
-  if (!warnrotate && !axiflag && MathExtra::len3(omega)*dt > 0.1) {
-    warnrotate = 1;
-    if (comm->me == 0)
-      error->warning(FLERR,"Fix rigid body rotation per timestep exceeds "
-                     "0.1 radian, collision accuracy degrades");
-  }
+    // hard error if the body state has stopped being a finite number
+    // the pose computed here is handed to the surf coords, the moving
+    //   collision tests, and the cut/split geometry; an Inf or NaN
+    //   propagates into all of them and crashes inside the cut instead
+    //   of failing cleanly, so stop at the source
+    // the state is replicated on every proc, so the test is collective
+    // the usual cause is a body mass at or below the mass one
+    //   computational particle carries (fnum times the species mass),
+    //   which lets a single gas collision accelerate the body without
+    //   bound; a push stiffness too large for the timestep does it too
 
-  if (!warntranslate) {
-    double dispmax = MathExtra::len3(vcm) * dt;
-    if (!axiflag) dispmax += MathExtra::len3(omega)*rmaxbody * dt;
-    if (dispmax > mincellsize) {
-      warntranslate = 1;
+    if (!isfinite(xcmnew1[0]) || !isfinite(xcmnew1[1]) ||
+        !isfinite(xcmnew1[2]) ||
+        !isfinite(vcm1[0]) || !isfinite(vcm1[1]) || !isfinite(vcm1[2]) ||
+        !isfinite(omega1[0]) || !isfinite(omega1[1]) ||
+        !isfinite(omega1[2]) ||
+        !isfinite(quatnew1[0]) || !isfinite(quatnew1[1]) ||
+        !isfinite(quatnew1[2]) || !isfinite(quatnew1[3])) {
+      char str[128];
+      sprintf(str,"Fix rigid body %d position, velocity, or rotation is "
+              "no longer a finite number",ibody+1);
+      error->all(FLERR,str);
+    }
+
+    // warn once per run if body motion in a single step is too large
+    // rotation > 0.1 radian degrades the collision test for particles
+    //   hitting rotating surfs: the hit time is exact, but which element
+    //   is hit comes from the chord through the mapped path endpoints
+    //   (see Geometry::refine_moving_param)
+    // max surf pt displacement > smallest grid cell degrades the
+    //   accuracy of surf assignment to grid cells for cutcell remapping
+
+    // neither warning applies to the spin of an axisymmetric body: it
+    //   maps the surface onto itself, so it displaces no surf point and
+    //   the collision test for it is exact at any spin rate
+
+    if (!warnrotate && !axiflag && MathExtra::len3(omega1)*dt > 0.1) {
+      warnrotate = 1;
       if (comm->me == 0)
-        error->warning(FLERR,"Fix rigid body moves more than a grid cell "
-                       "per timestep, cell assignment accuracy degrades");
+        error->warning(FLERR,"Fix rigid body rotation per timestep exceeds "
+                       "0.1 radian, collision accuracy degrades");
+    }
+
+    if (!warntranslate) {
+      double dispmax = MathExtra::len3(vcm1) * dt;
+      if (!axiflag) dispmax += MathExtra::len3(omega1)*rmaxbody[ibody] * dt;
+      if (dispmax > mincellsize) {
+        warntranslate = 1;
+        if (comm->me == 0)
+          error->warning(FLERR,"Fix rigid body moves more than a grid cell "
+                         "per timestep, cell assignment accuracy degrades");
+      }
     }
   }
 
   // augment collision lists of all cells any body sweeps through during
   //   the step, so particles in the swept paths are tested against the
   //   moving surfs and reflected rather than overtaken and later deleted
-  // one pass over grid cells for all bodies, by the last-defined fix:
-  //   start_of_step runs fixes in definition order, so when the last
-  //   fix runs every body's end-of-step pose is known
 
-  if (update->fixrigidlist[update->nfixrigid-1] == this) swept_assign_all();
+  swept_assign_all();
 }
 
 /* ---------------------------------------------------------------------- */
 
 void FixRigid::end_of_step()
 {
-  FixRigid **flist = update->fixrigidlist;
-  int nb = update->nfixrigid;
+  int i,j,k,ibody;
 
-  // the first-defined rigid fix coordinates two all-body operations,
-  //   before any fix reads per-cell surf lists or per-surf tallies:
-  // (1) undo the swept collision-list augmentation from start_of_step;
-  //     the last-defined fix installed it and owns the bookkeeping
-  // (2) sum per-surf force/torque tallies to fcm/torque of every body,
-  //     fused into a single Allreduce of 6 values per body
-  // end_of_step runs fixes in definition order, so the first fix runs
-  //   before any other fix's end_of_step touches the grid
+  // undo the swept collision-list augmentation from start_of_step
 
-  if (flist[0] == this) {
+  swept_restore();
 
-    flist[nb-1]->swept_restore();
+  // sum per-surf force/torque to each body's fcm/torque
+  // read the compute's RAW local tally rows: values are fully
+  //   normalized at tally time, and each row's surf ID maps to a
+  //   body element via the ID table, so a local sum plus the
+  //   single fused Allreduce below is exactly the collated result
+  // this avoids Surf::collate_array entirely, whose reduce path is
+  //   an Allreduce over ALL global surfs per compute per step, and
+  //   avoids any scan over the surf list: cost is O(local tallies)
+  // identical for non-distributed and distributed surfs
 
-    // sum per-surf force/torque to each body's fcm/torque
-    // read the compute's RAW local tally rows: values are fully
-    //   normalized at tally time, and each row's surf ID maps to a
-    //   body element via the body's ID table, so a local sum plus the
-    //   single fused Allreduce below is exactly the collated result
-    // this avoids Surf::collate_array entirely, whose reduce path is
-    //   an Allreduce over ALL global surfs per compute per step, and
-    //   avoids any scan over the surf list: cost is O(local tallies)
-    // identical for non-distributed and distributed surfs
+  for (i = 0; i < 6*nbody; i++) ftbuf_mine[i] = 0.0;
 
-    for (int i = 0; i < 6*nb; i++) ftbuf_mine[i] = 0.0;
+  if (!(csurf->invoked_flag & INVOKED_PER_SURF)) {
+    csurf->compute_per_surf();
+    csurf->invoked_flag |= INVOKED_PER_SURF;
+  }
 
-    surfint *t2s;
-    for (int m = 0; m < nb; m++) {
-      FixRigid *f = flist[m];
+  surfint *t2s;
+  int ntally = csurf->tallyinfo(t2s);
+  double **tally = csurf->tally_array();
 
-      ComputeSurf *cs = f->csurf;
-      if (!(cs->invoked_flag & INVOKED_PER_SURF)) {
-        cs->compute_per_surf();
-        cs->invoked_flag |= INVOKED_PER_SURF;
-      }
+  for (i = 0; i < ntally; i++) {
+    k = body_elem(t2s[i]);
+    if (k < 0) continue;
+    double *ft = &ftbuf_mine[6*body[k]];
+    for (j = 0; j < 6; j++) ft[j] += tally[i][j];
+  }
 
-      int ntally = cs->tallyinfo(t2s);
-      double **tally = cs->tally_array();
+  // insure the compute tallies on the next step
 
-      double *ft = &ftbuf_mine[6*m];
-      for (int i = 0; i < ntally; i++) {
-        if (f->body_elem(t2s[i]) < 0) continue;
-        for (int j = 0; j < 6; j++) ft[j] += tally[i][j];
-      }
+  csurf->addstep(update->ntimestep+1);
 
-      // insure the compute tallies on the next step
+  MPI_Allreduce(ftbuf_mine,ftbuf_all,6*nbody,MPI_DOUBLE,MPI_SUM,world);
 
-      cs->addstep(update->ntimestep+1);
+  for (ibody = 0; ibody < nbody; ibody++) {
+    fcm[ibody][0] = ftbuf_all[6*ibody];
+    fcm[ibody][1] = ftbuf_all[6*ibody+1];
+    fcm[ibody][2] = ftbuf_all[6*ibody+2];
+    torque[ibody][0] = ftbuf_all[6*ibody+3];
+    torque[ibody][1] = ftbuf_all[6*ibody+4];
+    torque[ibody][2] = ftbuf_all[6*ibody+5];
+    axi_project(fcm[ibody],torque[ibody]);
+  }
+
+  // for incremental remap: record cells interior to the bodies
+  //   before their surfs move to their end-of-step positions
+
+  if (remapmode == INCREMENTAL) record_oldinside();
+
+  double z[3],delta[3],delta12[3],delta13[3];
+  z[0] = 0.0; z[1] = 0.0; z[2] = 1.0;
+
+  for (ibody = 0; ibody < nbody; ibody++) {
+    double *xcm1 = xcm[ibody];
+    double *quat1 = quat[ibody];
+
+    // reset xcm/quat to new xcm/quat calculated in start_of_step()
+
+    xcm1[0] = xcmnew[ibody][0];
+    xcm1[1] = xcmnew[ibody][1];
+    xcm1[2] = xcmnew[ibody][2];
+
+    quat1[0] = quatnew[ibody][0];
+    quat1[1] = quatnew[ibody][1];
+    quat1[2] = quatnew[ibody][2];
+    quat1[3] = quatnew[ibody][3];
+
+    // enforce the body's degrees of freedom on all its properties
+    // 2d: in-plane motion and rotation about z.  start_of_step()
+    //   enforces it on xcmnew and omega; quat stays a rotation about z
+    //   since omega is along z
+    // axisymmetric: translation along x and spin about x.  axi_project()
+    //   already removed the transverse force and torque, so this only
+    //   guards against drift; quat is pinned to the identity in
+    //   start_of_step()
+
+    if (axiflag) {
+      xcm1[1] = xcm1[2] = 0.0;
+      vcm[ibody][1] = vcm[ibody][2] = 0.0;
+      fcm[ibody][1] = fcm[ibody][2] = 0.0;
+      torque[ibody][1] = torque[ibody][2] = 0.0;
+      angmom[ibody][1] = angmom[ibody][2] = 0.0;
+      omega[ibody][1] = omega[ibody][2] = 0.0;
+
+    } else if (dim == 2) {
+      xcm1[2] = 0.0;
+      vcm[ibody][2] = 0.0;
+      fcm[ibody][2] = 0.0;
+      torque[ibody][0] = 0.0;
+      torque[ibody][1] = 0.0;
+      angmom[ibody][0] = 0.0;
+      angmom[ibody][1] = 0.0;
+      omega[ibody][0] = 0.0;
+      omega[ibody][1] = 0.0;
     }
 
-    MPI_Allreduce(ftbuf_mine,ftbuf_all,6*nb,MPI_DOUBLE,MPI_SUM,world);
+    // regenerate the replicated body geometry from the new pose:
+    //   corner pts from displace rotated to the space frame + new COM,
+    //   normals recomputed from the corner pts
+    // then write it into the Surf copies the mover and cut pipeline read
+    // matvec() converts displace vector from body frame to space frame
 
-    for (int m = 0; m < nb; m++) {
-      FixRigid *f = flist[m];
-      f->fcm[0] = ftbuf_all[6*m];
-      f->fcm[1] = ftbuf_all[6*m+1];
-      f->fcm[2] = ftbuf_all[6*m+2];
-      f->torque[0] = ftbuf_all[6*m+3];
-      f->torque[1] = ftbuf_all[6*m+4];
-      f->torque[2] = ftbuf_all[6*m+5];
-      f->axi_project(f->fcm,f->torque);
-    }
-  }
-
-  // for incremental remap: record cells interior to the body
-  //   before its surfs move to their end-of-step positions
-  // skipped if any body uses cutcell, since then every step re-maps fully
-
-  if (remapmode == INCREMENTAL) {
-    int all_incr = 1;
-    for (int m = 0; m < nb; m++)
-      if (flist[m]->remapmode != INCREMENTAL) all_incr = 0;
-    if (all_incr) record_oldinside();
-  }
-
-  // reset xcm/quat to new xcm/quat calculated in start_of_step()
-
-  xcm[0] = xcmnew[0];
-  xcm[1] = xcmnew[1];
-  xcm[2] = xcmnew[2];
-
-  quat[0] = quatnew[0];
-  quat[1] = quatnew[1];
-  quat[2] = quatnew[2];
-  quat[3] = quatnew[3];
-
-  // enforce the body's degrees of freedom on all its properties
-  // 2d: in-plane motion and rotation about z.  start_of_step() enforces
-  //   it on xcmnew and omega; quat stays a rotation about z since omega
-  //   is along z
-  // axisymmetric: translation along x and spin about x.  axi_project()
-  //   already removed the transverse force and torque, so this only
-  //   guards against drift; quat is pinned to the identity in
-  //   start_of_step()
-
-  if (axiflag) {
-    xcm[1] = xcm[2] = 0.0;
-    vcm[1] = vcm[2] = 0.0;
-    fcm[1] = fcm[2] = 0.0;
-    torque[1] = torque[2] = 0.0;
-    angmom[1] = angmom[2] = 0.0;
-    omega[1] = omega[2] = 0.0;
-
-  } else if (dim == 2) {
-    xcm[2] = 0.0;
-    vcm[2] = 0.0;
-    fcm[2] = 0.0;
-    torque[0] = 0.0;
-    torque[1] = 0.0;
-    angmom[0] = 0.0;
-    angmom[1] = 0.0;
-    omega[0] = 0.0;
-    omega[1] = 0.0;
-  }
-
-  // regenerate the replicated body geometry from the new pose:
-  //   corner pts from displace rotated to the space frame + new COM,
-  //   normals recomputed from the corner pts
-  // then write it into the Surf copies the mover and cut pipeline read
-  // matvec() converts displace vector from body frame to space frame
-
-  {
-    double z[3],delta[3],delta12[3],delta13[3];
-    z[0] = 0.0; z[1] = 0.0; z[2] = 1.0;
-
-    for (int i = 0; i < nsurf; i++) {
-      for (int j = 0; j < dim; j++) {
+    for (i = bodystart[ibody]; i < bodystart[ibody+1]; i++) {
+      for (j = 0; j < dim; j++) {
 
         // axisymmetric: the body frame never rotates and the COM stays
         //   on the axis, so the pose map is a shift along x and nothing
@@ -1181,15 +1161,16 @@ void FixRigid::end_of_step()
         //   both compare against r = 0 exactly
 
         if (axiflag) {
-          bodypt[i][j][0] = xcm[0] + displace[i][j][0];
+          bodypt[i][j][0] = xcm1[0] + displace[i][j][0];
           bodypt[i][j][1] = displace[i][j][1];
           bodypt[i][j][2] = 0.0;
           continue;
         }
 
-        MathExtra::matvec(ex_space,ey_space,ez_space,displace[i][j],delta);
+        MathExtra::matvec(ex_space[ibody],ey_space[ibody],ez_space[ibody],
+                          displace[i][j],delta);
         if (dim == 2) delta[2] = 0.0;
-        MathExtra::add3(xcm,delta,bodypt[i][j]);
+        MathExtra::add3(xcm1,delta,bodypt[i][j]);
       }
 
       if (dim == 2) {
@@ -1208,210 +1189,190 @@ void FixRigid::end_of_step()
 
   update_surf_copies();
 
-  // bbox around body elements at their new positions
+  // bbox around each body's elements at their new positions
 
-  body_bbox(0);
+  for (ibody = 0; ibody < nbody; ibody++) body_bbox(ibody,0);
 
-  // push-off forces are computed for all bodies at once by the
-  //   last-defined fix in its end_of_step below, after every body has
-  //   committed its end-of-step geometry, so that body-body contact
-  //   forces can be applied equal-and-opposite to both bodies
-
-  // error if body now extends beyond a periodic boundary,
+  // error if a body now extends beyond a periodic boundary,
   //   b/c body coords are not wrapped across periodic boundaries
-  // body is allowed to exit thru non-periodic boundaries
+  // a body is allowed to exit thru non-periodic boundaries
   // test the true body extent, not the eps-inflated bbox
 
-  int outflag = 0;
   double *boxlo = domain->boxlo;
   double *boxhi = domain->boxhi;
   int *bflag = domain->bflag;
-  double eps = bboxeps;
 
-  // warn once per run if body is entirely outside the simulation box,
-  //   b/c it no longer interacts with any particles
+  for (ibody = 0; ibody < nbody; ibody++) {
+    double *blo = bbodylo[ibody];
+    double *bhi = bbodyhi[ibody];
+    double eps = bboxeps[ibody];
 
-  if (!warnexit) {
-    if (bbodyhi[0] < boxlo[0] || bbodylo[0] > boxhi[0] ||
-        bbodyhi[1] < boxlo[1] || bbodylo[1] > boxhi[1] ||
-        (dim == 3 &&
-         (bbodyhi[2] < boxlo[2] || bbodylo[2] > boxhi[2]))) {
-      warnexit = 1;
-      if (comm->me == 0)
-        error->warning(FLERR,"Fix rigid body has exited the simulation box "
-                       "and no longer interacts with particles");
+    // warn once per run if a body is entirely outside the simulation
+    //   box, b/c it no longer interacts with any particles
+
+    if (!warnexit) {
+      if (bhi[0] < boxlo[0] || blo[0] > boxhi[0] ||
+          bhi[1] < boxlo[1] || blo[1] > boxhi[1] ||
+          (dim == 3 && (bhi[2] < boxlo[2] || blo[2] > boxhi[2]))) {
+        warnexit = 1;
+        if (comm->me == 0)
+          error->warning(FLERR,"Fix rigid body has exited the simulation "
+                         "box and no longer interacts with particles");
+      }
+    }
+
+    int outflag = 0;
+    if (bflag[0] == PERIODIC && blo[0]+eps < boxlo[0]) outflag = 1;
+    if (bflag[1] == PERIODIC && bhi[0]-eps > boxhi[0]) outflag = 1;
+    if (bflag[2] == PERIODIC && blo[1]+eps < boxlo[1]) outflag = 1;
+    if (bflag[3] == PERIODIC && bhi[1]-eps > boxhi[1]) outflag = 1;
+    if (dim == 3) {
+      if (bflag[4] == PERIODIC && blo[2]+eps < boxlo[2]) outflag = 1;
+      if (bflag[5] == PERIODIC && bhi[2]-eps > boxhi[2]) outflag = 1;
+    }
+
+    if (outflag) {
+      char str[128];
+      sprintf(str,"Fix rigid body %d moved beyond a periodic boundary",
+              ibody+1);
+      error->all(FLERR,str);
     }
   }
 
-  if (bflag[0] == PERIODIC && bbodylo[0]+eps < boxlo[0]) outflag = 1;
-  if (bflag[1] == PERIODIC && bbodyhi[0]-eps > boxhi[0]) outflag = 1;
-  if (bflag[2] == PERIODIC && bbodylo[1]+eps < boxlo[1]) outflag = 1;
-  if (bflag[3] == PERIODIC && bbodyhi[1]-eps > boxhi[1]) outflag = 1;
-  if (dim == 3) {
-    if (bflag[4] == PERIODIC && bbodylo[2]+eps < boxlo[2]) outflag = 1;
-    if (bflag[5] == PERIODIC && bbodyhi[2]-eps > boxhi[2]) outflag = 1;
+  // push-off forces for all bodies, after every body has moved to its
+  //   end-of-step position; body-body contact forces are applied
+  //   equal-and-opposite to both bodies of a contact, so body-body
+  //   interactions conserve momentum
+
+  for (ibody = 0; ibody < nbody; ibody++) {
+    fpush[ibody][0] = fpush[ibody][1] = fpush[ibody][2] = 0.0;
+    tqpush[ibody][0] = tqpush[ibody][1] = tqpush[ibody][2] = 0.0;
   }
 
-  if (outflag)
-    error->all(FLERR,"Fix rigid body moved beyond a periodic boundary");
+  if (pushflag) {
+    for (ibody = 0; ibody < nbody; ibody++) push_off(ibody);
 
-  // the last-defined rigid fix coordinates the all-body end-of-step
-  //   work, after every body has moved to its end-of-step position;
-  //   end_of_step runs fixes in definition order, so when the last fix
-  //   runs, all earlier bodies are already moved:
-  // (1) push-off forces for all bodies; body-body contact forces are
-  //     applied equal-and-opposite to both bodies of a contact, so
-  //     body-body interactions conserve momentum; reactions are applied
-  //     even to bodies without the push keyword
-  // (2) re-map body surfs to grid cells: cut/split cells and
-  //     INSIDE/OUTSIDE typing from the new body positions; if every
-  //     body is incremental, attempt the cheap incremental re-cut of
-  //     only the affected cells, else do an exact full grid re-map;
-  //     the fallback decision is per-proc but a full re-map is
-  //     collective, so all procs must agree via Allreduce
-  // (3) remove particles inside any body in one fused pass over
-  //     particles, with split-cell reassignment only after a full
-  //     re-map; no reduction here, deletion counts stay per-proc and
-  //     are reduced lazily by compute_scalar()
+    // for distributed surfs the static-contact contributions are
+    //   disjoint per-proc partial sums (each proc handles the static
+    //   surfs it owns): merge with one Allreduce for all bodies
+    // for non-distributed surfs every proc computed identical totals
 
-  if (flist[nb-1] == this) {
-
-    int anypush = 0;
-    for (int m = 0; m < nb; m++) {
-      FixRigid *f = flist[m];
-      f->fpush[0] = f->fpush[1] = f->fpush[2] = 0.0;
-      f->tqpush[0] = f->tqpush[1] = f->tqpush[2] = 0.0;
-      if (f->pushflag) anypush = 1;
-    }
-    if (anypush) {
-      for (int m = 0; m < nb; m++)
-        if (flist[m]->pushflag) flist[m]->push_off();
-
-      // for distributed surfs the static-contact contributions are
-      //   disjoint per-proc partial sums (each proc handles the static
-      //   surfs it owns): merge with one Allreduce for all bodies
-      // for non-distributed surfs every proc computed identical totals
-
-      if (surf->distributed) {
-        for (int m = 0; m < nb; m++) {
-          FixRigid *f = flist[m];
-          ftbuf_mine[6*m]   = f->fpush[0];
-          ftbuf_mine[6*m+1] = f->fpush[1];
-          ftbuf_mine[6*m+2] = f->fpush[2];
-          ftbuf_mine[6*m+3] = f->tqpush[0];
-          ftbuf_mine[6*m+4] = f->tqpush[1];
-          ftbuf_mine[6*m+5] = f->tqpush[2];
-        }
-        MPI_Allreduce(ftbuf_mine,ftbuf_all,6*nb,MPI_DOUBLE,MPI_SUM,world);
-        for (int m = 0; m < nb; m++) {
-          FixRigid *f = flist[m];
-          f->fpush[0] = ftbuf_all[6*m];
-          f->fpush[1] = ftbuf_all[6*m+1];
-          f->fpush[2] = ftbuf_all[6*m+2];
-          f->tqpush[0] = ftbuf_all[6*m+3];
-          f->tqpush[1] = ftbuf_all[6*m+4];
-          f->tqpush[2] = ftbuf_all[6*m+5];
-        }
+    if (surf->distributed) {
+      for (ibody = 0; ibody < nbody; ibody++) {
+        ftbuf_mine[6*ibody]   = fpush[ibody][0];
+        ftbuf_mine[6*ibody+1] = fpush[ibody][1];
+        ftbuf_mine[6*ibody+2] = fpush[ibody][2];
+        ftbuf_mine[6*ibody+3] = tqpush[ibody][0];
+        ftbuf_mine[6*ibody+4] = tqpush[ibody][1];
+        ftbuf_mine[6*ibody+5] = tqpush[ibody][2];
       }
-
-      for (int m = 0; m < nb; m++) {
-        FixRigid *f = flist[m];
-        f->axi_project(f->fpush,f->tqpush);
-        f->fcm[0] += f->fpush[0];
-        f->fcm[1] += f->fpush[1];
-        f->fcm[2] += f->fpush[2];
-        f->torque[0] += f->tqpush[0];
-        f->torque[1] += f->tqpush[1];
-        f->torque[2] += f->tqpush[2];
+      MPI_Allreduce(ftbuf_mine,ftbuf_all,6*nbody,MPI_DOUBLE,MPI_SUM,world);
+      for (ibody = 0; ibody < nbody; ibody++) {
+        fpush[ibody][0] = ftbuf_all[6*ibody];
+        fpush[ibody][1] = ftbuf_all[6*ibody+1];
+        fpush[ibody][2] = ftbuf_all[6*ibody+2];
+        tqpush[ibody][0] = ftbuf_all[6*ibody+3];
+        tqpush[ibody][1] = ftbuf_all[6*ibody+4];
+        tqpush[ibody][2] = ftbuf_all[6*ibody+5];
       }
     }
 
-    // second half kick of velocity Verlet for every body, now that
-    //   its end-of-step force and torque are complete: vcm/angmom/omega
-    //   become the velocities at the end of the step, synchronized
-    //   with xcm/quat, as reported by the fix and written to outfile
-
-    for (int m = 0; m < nb; m++) flist[m]->final_kick();
-
-    // write body states to output files every outevery steps, now that
-    //   velocities and forces are complete; files are compatible with
-    //   the infile option for run continuation
-
-    for (int m = 0; m < nb; m++) {
-      FixRigid *f = flist[m];
-      if (f->outfile && update->ntimestep % f->outevery == 0)
-        f->write_outfile();
-    }
-
-    int all_incremental = 1;
-    for (int m = 0; m < nb; m++)
-      if (flist[m]->remapmode != INCREMENTAL) all_incremental = 0;
-
-    // incremental_recut() returns a reason code > 0 if a full re-map is
-    //   required; all procs must agree, so reduce the max
-    // warn once per run when the fallback occurs, since a fallback on
-    //   every step silently costs as much as remap cutcell
-
-    int fallback = 1;
-    if (all_incremental) {
-      int fallmine = incremental_recut();
-      MPI_Allreduce(&fallmine,&fallback,1,MPI_INT,MPI_MAX,world);
-      // an incremental re-cut which changed cell markings must be seen
-      //   by emit fixes, whose per-cell tasks depend on them; a full
-      //   re-map notifies them via Grid::notify_changed()
-
-      if (!fallback) {
-        int changed_any;
-        MPI_Allreduce(&typechanged,&changed_any,1,MPI_INT,MPI_MAX,world);
-        if (changed_any)
-          for (int ifix = 0; ifix < modify->nfix; ifix++)
-            if (strncmp(modify->fix[ifix]->style,"emit",4) == 0)
-              modify->fix[ifix]->grid_changed();
-      }
-      typechanged = 0;
-
-      if (fallback && !warnfallback) {
-        warnfallback = 1;
-        if (comm->me == 0) {
-          const char *why;
-          if (fallback == FALLBACK_SPLIT)
-            why = "a cell in the re-cut region is or would become "
-                  "a split cell";
-          else if (fallback == FALLBACK_SURFMAX)
-            why = "a cell would exceed global surfmax";
-          else if (fallback == FALLBACK_UNKNOWN)
-            why = "the cut of a cell could not decide its inside/outside "
-              "marking (body surfs only touching its faces)";
-          else why = "no previous body position is known";
-          char str[256];
-          snprintf(str,sizeof(str),"Fix rigid incremental remap fell back "
-                   "to a full grid re-map because %s",why);
-          error->warning(FLERR,str);
-        }
-      }
-    }
-    if (fallback) grid_rebuild();
-
-    if (particle->exist) remove_inside_all(fallback);
-
-    // advance each incremental body's previous-region bookkeeping
-
-    for (int m = 0; m < nb; m++) {
-      FixRigid *f = flist[m];
-      if (f->remapmode != INCREMENTAL) continue;
-      for (int j = 0; j < 3; j++) {
-        f->pbodylo[j] = f->bbodylo[j];
-        f->pbodyhi[j] = f->bbodyhi[j];
-      }
-      f->pbodyflag = 1;
+    for (ibody = 0; ibody < nbody; ibody++) {
+      axi_project(fpush[ibody],tqpush[ibody]);
+      fcm[ibody][0] += fpush[ibody][0];
+      fcm[ibody][1] += fpush[ibody][1];
+      fcm[ibody][2] += fpush[ibody][2];
+      torque[ibody][0] += tqpush[ibody][0];
+      torque[ibody][1] += tqpush[ibody][1];
+      torque[ibody][2] += tqpush[ibody][2];
     }
   }
 
+  // second half kick of velocity Verlet for every body, now that
+  //   its end-of-step force and torque are complete: vcm/angmom/omega
+  //   become the velocities at the end of the step, synchronized
+  //   with xcm/quat, as reported by the fix and written to outfile
+
+  for (ibody = 0; ibody < nbody; ibody++) final_kick(ibody);
+
+  // write body states to the output file every outevery steps, now that
+  //   velocities and forces are complete; the file is compatible with
+  //   the infile option for run continuation
+
+  if (outfile && update->ntimestep % outevery == 0) write_outfile();
+
+  // re-map body surfs to grid cells: cut/split cells and
+  //   INSIDE/OUTSIDE typing from the new body positions; attempt the
+  //   cheap incremental re-cut of only the affected cells, else do an
+  //   exact full grid re-map
+  // incremental_recut() returns a reason code > 0 if a full re-map is
+  //   required; all procs must agree, so reduce the max
+  // warn once per run when the fallback occurs, since a fallback on
+  //   every step silently costs as much as remap cutcell
+
+  int fallback = 1;
+  if (remapmode == INCREMENTAL) {
+    int fallmine = incremental_recut();
+    MPI_Allreduce(&fallmine,&fallback,1,MPI_INT,MPI_MAX,world);
+
+    // an incremental re-cut which changed cell markings must be seen
+    //   by emit fixes, whose per-cell tasks depend on them; a full
+    //   re-map notifies them via Grid::notify_changed()
+
+    if (!fallback) {
+      int changed_any;
+      MPI_Allreduce(&typechanged,&changed_any,1,MPI_INT,MPI_MAX,world);
+      if (changed_any)
+        for (int ifix = 0; ifix < modify->nfix; ifix++)
+          if (strncmp(modify->fix[ifix]->style,"emit",4) == 0)
+            modify->fix[ifix]->grid_changed();
+    }
+    typechanged = 0;
+
+    if (fallback && !warnfallback) {
+      warnfallback = 1;
+      if (comm->me == 0) {
+        const char *why;
+        if (fallback == FALLBACK_SPLIT)
+          why = "a cell in the re-cut region is or would become "
+                "a split cell";
+        else if (fallback == FALLBACK_SURFMAX)
+          why = "a cell would exceed global surfmax";
+        else if (fallback == FALLBACK_UNKNOWN)
+          why = "the cut of a cell could not decide its inside/outside "
+            "marking (body surfs only touching its faces)";
+        else why = "no previous body position is known";
+        char str[256];
+        snprintf(str,sizeof(str),"Fix rigid incremental remap fell back "
+                 "to a full grid re-map because %s",why);
+        error->warning(FLERR,str);
+      }
+    }
+  }
+  if (fallback) grid_rebuild();
+
+  // remove particles inside any body in one pass over particles,
+  //   with split-cell reassignment only after a full re-map; no
+  //   reduction here, deletion counts stay per-proc and are reduced
+  //   lazily by compute_scalar()
+
+  if (particle->exist) remove_inside_all(fallback);
+
+  // advance the previous-region bookkeeping for incremental remap
+
+  if (remapmode == INCREMENTAL) {
+    for (ibody = 0; ibody < nbody; ibody++)
+      for (j = 0; j < 3; j++) {
+        pbodylo[ibody][j] = bbodylo[ibody][j];
+        pbodyhi[ibody][j] = bbodyhi[ibody][j];
+      }
+    pbodyflag = 1;
+  }
 }
 
 /* ----------------------------------------------------------------------
-   write current rigid body attributes to output file
-   format matches what the infile option reads
+   write current attributes of all rigid bodies to output file
+   one line per body, format matches what the infile option reads
    moi is written in the space frame for the current body orientation
 ------------------------------------------------------------------------- */
 
@@ -1419,43 +1380,49 @@ void FixRigid::write_outfile()
 {
   if (comm->me) return;
 
-  // reconstruct space-frame moi from principal moments and current axes
-  // I_space = sum over K of inertia[K] e_K outer-product e_K
-
-  double ispace[6];
-  ispace[0] = inertia[0]*ex_space[0]*ex_space[0] +
-    inertia[1]*ey_space[0]*ey_space[0] + inertia[2]*ez_space[0]*ez_space[0];
-  ispace[1] = inertia[0]*ex_space[1]*ex_space[1] +
-    inertia[1]*ey_space[1]*ey_space[1] + inertia[2]*ez_space[1]*ez_space[1];
-  ispace[2] = inertia[0]*ex_space[2]*ex_space[2] +
-    inertia[1]*ey_space[2]*ey_space[2] + inertia[2]*ez_space[2]*ez_space[2];
-  ispace[3] = inertia[0]*ex_space[0]*ex_space[1] +
-    inertia[1]*ey_space[0]*ey_space[1] + inertia[2]*ez_space[0]*ez_space[1];
-  ispace[4] = inertia[0]*ex_space[0]*ex_space[2] +
-    inertia[1]*ey_space[0]*ey_space[2] + inertia[2]*ez_space[0]*ez_space[2];
-  ispace[5] = inertia[0]*ex_space[1]*ex_space[2] +
-    inertia[1]*ey_space[1]*ey_space[2] + inertia[2]*ez_space[1]*ez_space[2];
-
   FILE *fp = fopen(outfile,"w");
   if (fp == nullptr) error->one(FLERR,"Cannot open fix rigid outfile");
 
   fprintf(fp,"# rigid body state from fix %s rigid at timestep " BIGINT_FORMAT
           "\n",id,update->ntimestep);
+
   // fcm/torque are written after the 16 body params, so that a
   //   continuation run resumes with the force and torque which would
   //   have moved the body on the next step
 
-  fprintf(fp,"# mtotal xcm ycm zcm ixx iyy izz ixy ixz iyz "
+  fprintf(fp,"# ID mtotal xcm ycm zcm ixx iyy izz ixy ixz iyz "
           "vxcm vycm vzcm lx ly lz fx fy fz tx ty tz\n");
-  // 17 significant digits, the fewest which read back as the same double
 
-  fprintf(fp,"%.17g %.17g %.17g %.17g %.17g %.17g %.17g %.17g %.17g %.17g "
-          "%.17g %.17g %.17g %.17g %.17g %.17g "
-          "%.17g %.17g %.17g %.17g %.17g %.17g\n",
-          massbody,xcm[0],xcm[1],xcm[2],
-          ispace[0],ispace[1],ispace[2],ispace[3],ispace[4],ispace[5],
-          vcm[0],vcm[1],vcm[2],angmom[0],angmom[1],angmom[2],
-          fcm[0],fcm[1],fcm[2],torque[0],torque[1],torque[2]);
+  for (int ibody = 0; ibody < nbody; ibody++) {
+    double *in = inertia[ibody];
+    double *ex = ex_space[ibody];
+    double *ey = ey_space[ibody];
+    double *ez = ez_space[ibody];
+
+    // reconstruct space-frame moi from principal moments and current axes
+    // I_space = sum over K of inertia[K] e_K outer-product e_K
+
+    double ispace[6];
+    ispace[0] = in[0]*ex[0]*ex[0] + in[1]*ey[0]*ey[0] + in[2]*ez[0]*ez[0];
+    ispace[1] = in[0]*ex[1]*ex[1] + in[1]*ey[1]*ey[1] + in[2]*ez[1]*ez[1];
+    ispace[2] = in[0]*ex[2]*ex[2] + in[1]*ey[2]*ey[2] + in[2]*ez[2]*ez[2];
+    ispace[3] = in[0]*ex[0]*ex[1] + in[1]*ey[0]*ey[1] + in[2]*ez[0]*ez[1];
+    ispace[4] = in[0]*ex[0]*ex[2] + in[1]*ey[0]*ey[2] + in[2]*ez[0]*ez[2];
+    ispace[5] = in[0]*ex[1]*ex[2] + in[1]*ey[1]*ey[2] + in[2]*ez[1]*ez[2];
+
+    // 17 significant digits, the fewest which read back as the same double
+
+    fprintf(fp,"%d %.17g %.17g %.17g %.17g %.17g %.17g %.17g %.17g %.17g %.17g "
+            "%.17g %.17g %.17g %.17g %.17g %.17g "
+            "%.17g %.17g %.17g %.17g %.17g %.17g\n",
+            ibody+1,massbody[ibody],
+            xcm[ibody][0],xcm[ibody][1],xcm[ibody][2],
+            ispace[0],ispace[1],ispace[2],ispace[3],ispace[4],ispace[5],
+            vcm[ibody][0],vcm[ibody][1],vcm[ibody][2],
+            angmom[ibody][0],angmom[ibody][1],angmom[ibody][2],
+            fcm[ibody][0],fcm[ibody][1],fcm[ibody][2],
+            torque[ibody][0],torque[ibody][1],torque[ibody][2]);
+  }
 
   fclose(fp);
 }
@@ -1489,71 +1456,85 @@ static double infile_numeric(Error *error, const char *word)
 
 /* ----------------------------------------------------------------------
    one-time initialization of rigid body attributes from file
+   one non-empty, non-comment line per body: body ID, then 16 params,
+     optionally followed by the force and torque which act on the body
+     during the first step of a continuation run
+   called after gather_body(), so nbody is known
 ------------------------------------------------------------------------- */
 
 void FixRigid::read_infile(char *filename)
 {
-  // open file and read first non-empty, non-comment line
-  // only done by proc 0
+  int ibody,nwords;
+  double *buf;
+  memory->create(buf,nbody*22,"fix_rigid:buf");
+
+  // read and convert all lines, only done by proc 0
 
   if (comm->me == 0) {
     char *start;
     char line[MAXLINE];
+    const char *sep = " \t\n\r\f";
+    int *seen = new int[nbody];
+    for (ibody = 0; ibody < nbody; ibody++) seen[ibody] = 0;
+
     FILE *fp = fopen(filename,"r");
     if (fp == nullptr)
       error->one(FLERR,"Cannot open fix rigid infile");
-    while (true) {
-      char *eof = fgets(line,MAXLINE,fp);
-      if (eof == nullptr)
-        error->one(FLERR,"Unexpected end of fix rigid infile");
-      start = &line[strspn(line," \t\n\v\f\r")];
-      if (*start != '\0' && *start != '#') break;
-    }
 
-    // check that line has correct number of words
+    for (int iline = 0; iline < nbody; iline++) {
+      while (true) {
+        char *eof = fgets(line,MAXLINE,fp);
+        if (eof == nullptr)
+          error->one(FLERR,"Unexpected end of fix rigid infile");
+        start = &line[strspn(line," \t\n\v\f\r")];
+        if (*start != '\0' && *start != '#') break;
+      }
 
-    // 16 params, optionally followed by the force and torque which
-    //   act on the body during the first step of a continuation run
+      // every line has the same word count: ID + 16, or ID + 22
 
-    int nwords = input->count_words(line);
-    if (nwords != 16 && nwords != 22)
-      error->one(FLERR,"Incorrect rigid body format in fix rigid infile");
-    if (nwords == 22) forceinfile = 1;
+      nwords = input->count_words(line);
+      if (nwords != 17 && nwords != 23)
+        error->one(FLERR,"Incorrect rigid body format in fix rigid infile");
+      if (iline == 0) forceinfile = (nwords == 23);
+      else if (forceinfile != (nwords == 23))
+        error->one(FLERR,"Incorrect rigid body format in fix rigid infile");
 
-    // convert each word to a rigid body param
-    // totalmass, xcm, moi, vcm, angmom
+      // body ID, then totalmass, xcm, moi, vcm, angmom, force, torque
 
-    const char *sep = " \t\n\r\f";
-    massbody = infile_numeric(error,strtok(line,sep));
-    for (int j = 0; j < 3; j++)
-      xcm[j] = infile_numeric(error,strtok(NULL,sep));
-    for (int j = 0; j < 6; j++)
-      moi[j] = infile_numeric(error,strtok(NULL,sep));
-    for (int j = 0; j < 3; j++)
-      vcm[j] = infile_numeric(error,strtok(NULL,sep));
-    for (int j = 0; j < 3; j++)
-      angmom[j] = infile_numeric(error,strtok(NULL,sep));
+      ibody = (int) infile_numeric(error,strtok(line,sep)) - 1;
+      if (ibody < 0 || ibody >= nbody || seen[ibody])
+        error->one(FLERR,"Invalid body ID in fix rigid infile");
+      seen[ibody] = 1;
 
-    if (forceinfile) {
-      for (int j = 0; j < 3; j++)
-        fcm_infile[j] = infile_numeric(error,strtok(NULL,sep));
-      for (int j = 0; j < 3; j++)
-        torque_infile[j] = infile_numeric(error,strtok(NULL,sep));
+      double *values = &buf[22*ibody];
+      for (int j = 0; j < nwords-1; j++)
+        values[j] = infile_numeric(error,strtok(NULL,sep));
+      for (int j = nwords-1; j < 22; j++) values[j] = 0.0;
     }
 
     fclose(fp);
+    delete [] seen;
   }
 
   // broadcast result of file read to all procs
 
-  MPI_Bcast(&massbody,1,MPI_DOUBLE,0,world);
-  MPI_Bcast(xcm,3,MPI_DOUBLE,0,world);
-  MPI_Bcast(moi,6,MPI_DOUBLE,0,world);
-  MPI_Bcast(vcm,3,MPI_DOUBLE,0,world);
-  MPI_Bcast(angmom,3,MPI_DOUBLE,0,world);
   MPI_Bcast(&forceinfile,1,MPI_INT,0,world);
-  MPI_Bcast(fcm_infile,3,MPI_DOUBLE,0,world);
-  MPI_Bcast(torque_infile,3,MPI_DOUBLE,0,world);
+  MPI_Bcast(buf,nbody*22,MPI_DOUBLE,0,world);
+
+  for (ibody = 0; ibody < nbody; ibody++) {
+    double *values = &buf[22*ibody];
+    massbody[ibody] = values[0];
+    for (int j = 0; j < 3; j++) xcm[ibody][j] = values[1+j];
+    for (int j = 0; j < 6; j++) moi[ibody][j] = values[4+j];
+    for (int j = 0; j < 3; j++) vcm[ibody][j] = values[10+j];
+    for (int j = 0; j < 3; j++) angmom[ibody][j] = values[13+j];
+    for (int j = 0; j < 3; j++) fcm_infile[ibody][j] = values[16+j];
+    for (int j = 0; j < 3; j++) torque_infile[ibody][j] = values[19+j];
+    if (massbody[ibody] <= 0.0)
+      error->all(FLERR,"Fix rigid body mass must be positive");
+  }
+
+  memory->destroy(buf);
 }
 
 /* ----------------------------------------------------------------------
@@ -1561,11 +1542,15 @@ void FixRigid::read_infile(char *filename)
    every proc stores every body element, the authoritative source for
      all body computations; bodies are compact so this is small even
      when the full surf collection is distributed
+   body ID of a surf in the group = 1 for bodystyle single, its surf
+     type for type, its custom vector value for custom; a surf with
+     body ID 0 is static, the IDs of all other surfs must be 1 to nbody
+   elements are ordered by body ID, then by surf ID within a body
    non-distributed surfs: filled directly from the local surf arrays,
      which hold all surfs on every proc
    distributed surfs: each proc contributes the body elements it owns,
-     gathered to all procs and sorted by surf ID so every proc builds
-     the identical table
+     gathered to all procs and sorted so every proc builds the
+     identical table
 ------------------------------------------------------------------------- */
 
 // per-element record exchanged between procs for distributed surfs
@@ -1573,100 +1558,131 @@ void FixRigid::read_infile(char *filename)
 struct BodyElemRecord {
   double pts[9];
   surfint id;
-  int type,mask,trans,isc,isr;
+  int bodyid,type,mask,trans,isc,isr;
 };
 
 static bool body_record_cmp(const BodyElemRecord &a, const BodyElemRecord &b)
 {
+  if (a.bodyid != b.bodyid) return a.bodyid < b.bodyid;
   return a.id < b.id;
 }
 
 void FixRigid::gather_body()
 {
-  int i,j,k;
-
-  // nsurf = # of lines/tris in rigid body
-
-  bigint bnsurf = surf->count_group(igroup);
-  if (bnsurf > MAXSMALLINT) error->all(FLERR,"Too many surfs in rigid body");
-  nsurf = bnsurf;
-  if (nsurf == 0) error->all(FLERR,"Fix rigid body has no surface elements");
-
-  memory->create(bodypt,nsurf,dim,3,"fix_rigid:bodypt");
-  memory->create(bodynorm,nsurf,3,"fix_rigid:bodynorm");
-  memory->create(sids,nsurf,"fix_rigid:sids");
-  memory->create(bodymask,nsurf,"fix_rigid:bodymask");
-  memory->create(bodytype,nsurf,"fix_rigid:bodytype");
-  memory->create(bodytrans,nsurf,"fix_rigid:bodytrans");
-  memory->create(bodyisc,nsurf,"fix_rigid:bodyisc");
-  memory->create(bodyisr,nsurf,"fix_rigid:bodyisr");
-  memory->create(lblist,nsurf,"fix_rigid:lblist");
+  int i,j,k,n,ibody;
 
   Surf::Line *lines = surf->lines;
   Surf::Tri *tris = surf->tris;
 
+  // per-surf custom vector of body IDs, for bodystyle custom
+  // owned values are the source for distributed surfs, for
+  //   non-distributed surfs spread them to the local arrays
+
+  int *custom = NULL;
+  int icustom;
+  if (bodystyle == CUSTOM) {
+    icustom = surf->find_custom(customname);
+    if (icustom < 0)
+      error->all(FLERR,"Fix rigid custom vector does not exist");
+    if (surf->etype[icustom] != INT || surf->esize[icustom] != 0)
+      error->all(FLERR,"Fix rigid custom attribute is not an integer vector");
+    if (!surf->distributed) {
+      if (surf->estatus[icustom] == 0) surf->spread_custom(icustom);
+      custom = surf->eivec_local[surf->ewhich[icustom]];
+    } else custom = surf->eivec[surf->ewhich[icustom]];
+  }
+
+  // ngroupsurf = # of surfs in group, checked by init() for changes
+
+  bigint bnsurf = surf->count_group(igroup);
+  if (bnsurf > MAXSMALLINT) error->all(FLERR,"Too many surfs in rigid body");
+  ngroupsurf = bnsurf;
+
+  BodyElemRecord *all;
+  int nlocal = surf->nlocal;
+
   if (!surf->distributed) {
 
-    // slist = list of local surf indices in the body group
+    // pack every surf in the group with a non-zero body ID
 
-    memory->create(slist,nsurf,"fix_rigid:slist");
-
-    int nlocal = surf->nlocal;
-    int n = 0;
+    int *bodyid = new int[MAX(nlocal,1)];
+    nsurf = 0;
 
     for (i = 0; i < nlocal; i++) {
       int mask = (dim == 2) ? lines[i].mask : tris[i].mask;
       if (!(mask & groupbit)) continue;
-      slist[n] = i;
-      if (dim == 2) {
-        sids[n] = lines[i].id;
-        bodymask[n] = lines[i].mask;
-        bodytype[n] = lines[i].type;
-        bodytrans[n] = lines[i].transparent;
-        bodyisc[n] = lines[i].isc;
-        bodyisr[n] = lines[i].isr;
-        memcpy(bodypt[n][0],lines[i].p1,3*sizeof(double));
-        memcpy(bodypt[n][1],lines[i].p2,3*sizeof(double));
-        memcpy(bodynorm[n],lines[i].norm,3*sizeof(double));
-      } else {
-        sids[n] = tris[i].id;
-        bodymask[n] = tris[i].mask;
-        bodytype[n] = tris[i].type;
-        bodytrans[n] = tris[i].transparent;
-        bodyisc[n] = tris[i].isc;
-        bodyisr[n] = tris[i].isr;
-        memcpy(bodypt[n][0],tris[i].p1,3*sizeof(double));
-        memcpy(bodypt[n][1],tris[i].p2,3*sizeof(double));
-        memcpy(bodypt[n][2],tris[i].p3,3*sizeof(double));
-        memcpy(bodynorm[n],tris[i].norm,3*sizeof(double));
-      }
-      n++;
+      if (bodystyle == SINGLE) bodyid[i] = 1;
+      else if (bodystyle == TYPE)
+        bodyid[i] = (dim == 2) ? lines[i].type : tris[i].type;
+      else bodyid[i] = custom[i];
+      if (bodyid[i] < 0) error->all(FLERR,"Fix rigid body ID is negative");
+      if (bodyid[i]) nsurf++;
     }
+
+    all = new BodyElemRecord[MAX(nsurf,1)];
+
+    n = 0;
+    for (i = 0; i < nlocal; i++) {
+      int mask = (dim == 2) ? lines[i].mask : tris[i].mask;
+      if (!(mask & groupbit)) continue;
+      if (!bodyid[i]) continue;
+      BodyElemRecord &r = all[n++];
+      r.bodyid = bodyid[i];
+      if (dim == 2) {
+        r.id = lines[i].id;
+        r.type = lines[i].type;
+        r.mask = lines[i].mask;
+        r.trans = lines[i].transparent;
+        r.isc = lines[i].isc;
+        r.isr = lines[i].isr;
+        memcpy(&r.pts[0],lines[i].p1,3*sizeof(double));
+        memcpy(&r.pts[3],lines[i].p2,3*sizeof(double));
+      } else {
+        r.id = tris[i].id;
+        r.type = tris[i].type;
+        r.mask = tris[i].mask;
+        r.trans = tris[i].transparent;
+        r.isc = tris[i].isc;
+        r.isr = tris[i].isr;
+        memcpy(&r.pts[0],tris[i].p1,3*sizeof(double));
+        memcpy(&r.pts[3],tris[i].p2,3*sizeof(double));
+        memcpy(&r.pts[6],tris[i].p3,3*sizeof(double));
+      }
+    }
+
+    delete [] bodyid;
 
   } else {
 
-    // pack the body elements this proc owns, gather to all procs,
-    //   sort by surf ID so the table is identical everywhere
-
-    slist = NULL;
+    // pack the body elements this proc owns, gather to all procs
 
     Surf::Line *mylines = surf->mylines;
     Surf::Tri *mytris = surf->mytris;
     int nown = surf->nown;
 
+    int *bodyid = new int[MAX(nown,1)];
     int nmine = 0;
+
     for (i = 0; i < nown; i++) {
       int mask = (dim == 2) ? mylines[i].mask : mytris[i].mask;
-      if (mask & groupbit) nmine++;
+      if (!(mask & groupbit)) continue;
+      if (bodystyle == SINGLE) bodyid[i] = 1;
+      else if (bodystyle == TYPE)
+        bodyid[i] = (dim == 2) ? mylines[i].type : mytris[i].type;
+      else bodyid[i] = custom[i];
+      if (bodyid[i] < 0) error->one(FLERR,"Fix rigid body ID is negative");
+      if (bodyid[i]) nmine++;
     }
 
     BodyElemRecord *mine = new BodyElemRecord[MAX(nmine,1)];
 
-    int n = 0;
+    n = 0;
     for (i = 0; i < nown; i++) {
       int mask = (dim == 2) ? mylines[i].mask : mytris[i].mask;
       if (!(mask & groupbit)) continue;
+      if (!bodyid[i]) continue;
       BodyElemRecord &r = mine[n++];
+      r.bodyid = bodyid[i];
       if (dim == 2) {
         r.id = mylines[i].id;
         r.type = mylines[i].type;
@@ -1689,8 +1705,7 @@ void FixRigid::gather_body()
       }
     }
 
-    if ((bigint) nsurf * sizeof(BodyElemRecord) > MAXSMALLINT)
-      error->all(FLERR,"Too many surfs in rigid body for distributed gather");
+    delete [] bodyid;
 
     int nprocs = comm->nprocs;
     int *counts = new int[nprocs];
@@ -1700,53 +1715,107 @@ void FixRigid::gather_body()
     displs[0] = 0;
     for (i = 1; i < nprocs; i++) displs[i] = displs[i-1] + counts[i-1];
     bigint btotal = (bigint) displs[nprocs-1] + counts[nprocs-1];
-    if (btotal != (bigint) nsurf * sizeof(BodyElemRecord))
-      error->all(FLERR,"Fix rigid body element gather is inconsistent");
+    if (btotal > MAXSMALLINT)
+      error->all(FLERR,"Too many surfs in rigid body for distributed gather");
+    nsurf = btotal / sizeof(BodyElemRecord);
 
-    BodyElemRecord *all = new BodyElemRecord[nsurf];
+    all = new BodyElemRecord[MAX(nsurf,1)];
     MPI_Allgatherv(mine,nbytes,MPI_BYTE,all,counts,displs,MPI_BYTE,world);
-    std::sort(all,all+nsurf,body_record_cmp);
-
-    double d12[3],d13[3];
-    double z[3] = {0.0,0.0,1.0};
-
-    for (i = 0; i < nsurf; i++) {
-      BodyElemRecord &r = all[i];
-      sids[i] = r.id;
-      bodymask[i] = r.mask;
-      bodytype[i] = r.type;
-      bodytrans[i] = r.trans;
-      bodyisc[i] = r.isc;
-      bodyisr[i] = r.isr;
-      memcpy(bodypt[i][0],&r.pts[0],3*sizeof(double));
-      memcpy(bodypt[i][1],&r.pts[3],3*sizeof(double));
-      if (dim == 3) memcpy(bodypt[i][2],&r.pts[6],3*sizeof(double));
-
-      // recompute the outward normal the same way Surf does
-
-      if (dim == 2) {
-        MathExtra::sub3(bodypt[i][1],bodypt[i][0],d12);
-        MathExtra::cross3(z,d12,bodynorm[i]);
-        MathExtra::norm3(bodynorm[i]);
-        bodynorm[i][2] = 0.0;
-      } else {
-        MathExtra::sub3(bodypt[i][1],bodypt[i][0],d12);
-        MathExtra::sub3(bodypt[i][2],bodypt[i][0],d13);
-        MathExtra::cross3(d12,d13,bodynorm[i]);
-        MathExtra::norm3(bodynorm[i]);
-      }
-    }
 
     delete [] mine;
-    delete [] all;
     delete [] counts;
     delete [] displs;
   }
+
+  if (nsurf == 0) error->all(FLERR,"Fix rigid has no body surface elements");
+
+  // sort elements by body ID, then by surf ID, so that the elements of
+  //   each body are contiguous and the table is identical on all procs
+
+  std::sort(all,all+nsurf,body_record_cmp);
+
+  // nbody = largest body ID, every body must have at least one element
+
+  nbody = all[nsurf-1].bodyid;
+
+  memory->create(body,nsurf,"fix_rigid:body");
+  memory->create(bodystart,nbody+1,"fix_rigid:bodystart");
+
+  for (ibody = 0; ibody <= nbody; ibody++) bodystart[ibody] = 0;
+  for (i = 0; i < nsurf; i++) {
+    body[i] = all[i].bodyid - 1;
+    bodystart[body[i]+1]++;
+  }
+  for (ibody = 0; ibody < nbody; ibody++) {
+    if (bodystart[ibody+1] == 0) {
+      char str[128];
+      sprintf(str,"Fix rigid body %d has no surface elements",ibody+1);
+      error->all(FLERR,str);
+    }
+    bodystart[ibody+1] += bodystart[ibody];
+  }
+
+  // fill the replicated element table from the sorted records
+
+  memory->create(bodypt,nsurf,dim,3,"fix_rigid:bodypt");
+  memory->create(bodynorm,nsurf,3,"fix_rigid:bodynorm");
+  memory->create(sids,nsurf,"fix_rigid:sids");
+  memory->create(bodymask,nsurf,"fix_rigid:bodymask");
+  memory->create(bodytype,nsurf,"fix_rigid:bodytype");
+  memory->create(bodytrans,nsurf,"fix_rigid:bodytrans");
+  memory->create(bodyisc,nsurf,"fix_rigid:bodyisc");
+  memory->create(bodyisr,nsurf,"fix_rigid:bodyisr");
+  memory->create(lblist,nsurf,"fix_rigid:lblist");
+
+  double d12[3],d13[3];
+  double z[3] = {0.0,0.0,1.0};
+
+  for (i = 0; i < nsurf; i++) {
+    BodyElemRecord &r = all[i];
+    sids[i] = r.id;
+    bodymask[i] = r.mask;
+    bodytype[i] = r.type;
+    bodytrans[i] = r.trans;
+    bodyisc[i] = r.isc;
+    bodyisr[i] = r.isr;
+    memcpy(bodypt[i][0],&r.pts[0],3*sizeof(double));
+    memcpy(bodypt[i][1],&r.pts[3],3*sizeof(double));
+    if (dim == 3) memcpy(bodypt[i][2],&r.pts[6],3*sizeof(double));
+
+    // recompute the outward normal the same way Surf does
+
+    if (dim == 2) {
+      MathExtra::sub3(bodypt[i][1],bodypt[i][0],d12);
+      MathExtra::cross3(z,d12,bodynorm[i]);
+      MathExtra::norm3(bodynorm[i]);
+      bodynorm[i][2] = 0.0;
+    } else {
+      MathExtra::sub3(bodypt[i][1],bodypt[i][0],d12);
+      MathExtra::sub3(bodypt[i][2],bodypt[i][0],d13);
+      MathExtra::cross3(d12,d13,bodynorm[i]);
+      MathExtra::norm3(bodynorm[i]);
+    }
+  }
+
+  delete [] all;
 
   // idmap = global surf ID -> body element index
 
   idmap.clear();
   for (i = 0; i < nsurf; i++) idmap[sids[i]] = i;
+
+  // non-distributed: slist = local surf index of each element
+
+  slist = NULL;
+  if (!surf->distributed) {
+    memory->create(slist,nsurf,"fix_rigid:slist");
+    for (i = 0; i < nsurf; i++) slist[i] = -1;
+    for (i = 0; i < nlocal; i++) {
+      surfint id = (dim == 2) ? lines[i].id : tris[i].id;
+      k = body_elem(id);
+      if (k >= 0) slist[k] = i;
+    }
+  }
 
   // lblist = local surf index of each body element on this proc
   // for distributed surfs, ensure_local_copies() fills lblist and the
@@ -2188,12 +2257,15 @@ void FixRigid::update_surf_copies()
      ixy = -integral x y dm convention
 ------------------------------------------------------------------------- */
 
-void FixRigid::body_properties(double density)
+void FixRigid::body_properties(int ibody, double density)
 {
   int i,j,k;
   double measure = 0.0;              // volume (3d) or area (2d)
   double first[3];                   // integral of x over the body
   double second[3][3];               // integral of xi xj over the body
+
+  int istart = bodystart[ibody];
+  int istop = bodystart[ibody+1];
 
   for (k = 0; k < 3; k++) first[k] = 0.0;
   for (i = 0; i < 3; i++)
@@ -2204,14 +2276,14 @@ void FixRigid::body_properties(double density)
   //   from the coordinate origin.  added back into the COM below.
 
   double ref[3];
-  ref[0] = bodypt[0][0][0];
-  ref[1] = bodypt[0][0][1];
-  ref[2] = (dim == 3) ? bodypt[0][0][2] : 0.0;
+  ref[0] = bodypt[istart][0][0];
+  ref[1] = bodypt[istart][0][1];
+  ref[2] = (dim == 3) ? bodypt[istart][0][2] : 0.0;
 
   if (dim == 3) {
     double s[3],cr[3],a[3],b[3],c[3];
 
-    for (i = 0; i < nsurf; i++) {
+    for (i = istart; i < istop; i++) {
       MathExtra::sub3(bodypt[i][0],ref,a);
       MathExtra::sub3(bodypt[i][1],ref,b);
       MathExtra::sub3(bodypt[i][2],ref,c);
@@ -2242,7 +2314,7 @@ void FixRigid::body_properties(double density)
   } else {
     double sxx = 0.0, syy = 0.0, sxy = 0.0;
 
-    for (i = 0; i < nsurf; i++) {
+    for (i = istart; i < istop; i++) {
       double x0 = bodypt[i][0][0] - ref[0], y0 = bodypt[i][0][1] - ref[1];
       double x1 = bodypt[i][1][0] - ref[0], y1 = bodypt[i][1][1] - ref[1];
       double cross = x0*y1 - x1*y0;
@@ -2271,49 +2343,49 @@ void FixRigid::body_properties(double density)
   }
 
   if (measure <= 0.0)
-    error->all(FLERR,"Fix rigid could not compute body properties");
+    body_error(ibody,"properties could not be computed");
 
-  massbody = density * measure;
-  if (massbody <= 0.0)
-    error->all(FLERR,"Fix rigid body mass must be positive");
+  double mass = density * measure;
+  if (mass <= 0.0) body_error(ibody,"mass must be positive");
+  massbody[ibody] = mass;
 
-  xcm[0] = first[0] / measure + ref[0];
-  xcm[1] = first[1] / measure + ref[1];
-  xcm[2] = (dim == 3) ? first[2] / measure + ref[2] : 0.0;
+  double *xcm1 = xcm[ibody];
+  xcm1[0] = first[0] / measure + ref[0];
+  xcm1[1] = first[1] / measure + ref[1];
+  xcm1[2] = (dim == 3) ? first[2] / measure + ref[2] : 0.0;
 
   // parallel-axis shift is from the reference point to the COM
 
   double dcm[3];
-  dcm[0] = xcm[0] - ref[0];
-  dcm[1] = xcm[1] - ref[1];
-  dcm[2] = xcm[2] - ref[2];
+  dcm[0] = xcm1[0] - ref[0];
+  dcm[1] = xcm1[1] - ref[1];
+  dcm[2] = xcm1[2] - ref[2];
 
   // moments of inertia about the COM
   // 3d: ixx = rho * (Myy + Mzz) - M (ycm^2 + zcm^2), etc
   // 2d: a plate, so izz = ixx + iyy and ixz = iyz = 0
 
-  if (dim == 3) {
-    double rho = massbody / measure;
+  double *moi1 = moi[ibody];
+  double rho = mass / measure;
 
-    moi[0] = rho * (second[1][1] + second[2][2]) -
-      massbody * (dcm[1]*dcm[1] + dcm[2]*dcm[2]);
-    moi[1] = rho * (second[0][0] + second[2][2]) -
-      massbody * (dcm[0]*dcm[0] + dcm[2]*dcm[2]);
-    moi[2] = rho * (second[0][0] + second[1][1]) -
-      massbody * (dcm[0]*dcm[0] + dcm[1]*dcm[1]);
-    moi[3] = -rho * second[0][1] + massbody * dcm[0]*dcm[1];
-    moi[4] = -rho * second[0][2] + massbody * dcm[0]*dcm[2];
-    moi[5] = -rho * second[1][2] + massbody * dcm[1]*dcm[2];
+  if (dim == 3) {
+    moi1[0] = rho * (second[1][1] + second[2][2]) -
+      mass * (dcm[1]*dcm[1] + dcm[2]*dcm[2]);
+    moi1[1] = rho * (second[0][0] + second[2][2]) -
+      mass * (dcm[0]*dcm[0] + dcm[2]*dcm[2]);
+    moi1[2] = rho * (second[0][0] + second[1][1]) -
+      mass * (dcm[0]*dcm[0] + dcm[1]*dcm[1]);
+    moi1[3] = -rho * second[0][1] + mass * dcm[0]*dcm[1];
+    moi1[4] = -rho * second[0][2] + mass * dcm[0]*dcm[2];
+    moi1[5] = -rho * second[1][2] + mass * dcm[1]*dcm[2];
 
   } else {
-    double rho = massbody / measure;
-
-    moi[0] = rho * second[0][0] - massbody * dcm[1]*dcm[1];
-    moi[1] = rho * second[1][1] - massbody * dcm[0]*dcm[0];
-    moi[2] = moi[0] + moi[1];
-    moi[3] = -rho * second[0][1] + massbody * dcm[0]*dcm[1];
-    moi[4] = 0.0;
-    moi[5] = 0.0;
+    moi1[0] = rho * second[0][0] - mass * dcm[1]*dcm[1];
+    moi1[1] = rho * second[1][1] - mass * dcm[0]*dcm[0];
+    moi1[2] = moi1[0] + moi1[1];
+    moi1[3] = -rho * second[0][1] + mass * dcm[0]*dcm[1];
+    moi1[4] = 0.0;
+    moi1[5] = 0.0;
   }
 }
 
@@ -2360,16 +2432,18 @@ void FixRigid::body_properties(double density)
      transverse moments are computed so the reported inertia is right
 ------------------------------------------------------------------------- */
 
-void FixRigid::body_properties_axi(double density)
+void FixRigid::body_properties_axi(int ibody, double density)
 {
   double volume = 0.0;         // int dV
   double first = 0.0;          // int x dV, about ref
   double secondxx = 0.0;       // int x^2 dV, about ref
   double secondrr = 0.0;       // int r^2 dV
 
-  double ref = bodypt[0][0][0];
+  int istart = bodystart[ibody];
+  int istop = bodystart[ibody+1];
+  double ref = bodypt[istart][0][0];
 
-  for (int i = 0; i < nsurf; i++) {
+  for (int i = istart; i < istop; i++) {
     double x1 = bodypt[i][0][0] - ref, r1 = bodypt[i][0][1];
     double x2 = bodypt[i][1][0] - ref, r2 = bodypt[i][1][1];
     double dx = x2 - x1, dr = r2 - r1;
@@ -2396,27 +2470,26 @@ void FixRigid::body_properties_axi(double density)
   }
 
   if (volume <= 0.0)
-    error->all(FLERR,"Fix rigid could not compute body properties");
+    body_error(ibody,"properties could not be computed");
 
-  massbody = density * volume;
-  if (massbody <= 0.0)
-    error->all(FLERR,"Fix rigid body mass must be positive");
+  massbody[ibody] = density * volume;
+  if (massbody[ibody] <= 0.0) body_error(ibody,"mass must be positive");
 
   // the COM is on the axis by symmetry
 
   double xcmref = first / volume;
-  xcm[0] = xcmref + ref;
-  xcm[1] = 0.0;
-  xcm[2] = 0.0;
+  xcm[ibody][0] = xcmref + ref;
+  xcm[ibody][1] = 0.0;
+  xcm[ibody][2] = 0.0;
 
-  moi[0] = density * secondrr;
-  moi[1] = density * (secondxx - 2.0*xcmref*first + xcmref*xcmref*volume) +
-    0.5 * moi[0];
-  moi[2] = moi[1];
-  moi[3] = moi[4] = moi[5] = 0.0;
+  double *moi1 = moi[ibody];
+  moi1[0] = density * secondrr;
+  moi1[1] = density * (secondxx - 2.0*xcmref*first + xcmref*xcmref*volume) +
+    0.5 * moi1[0];
+  moi1[2] = moi1[1];
+  moi1[3] = moi1[4] = moi1[5] = 0.0;
 
-  if (moi[0] <= 0.0)
-    error->all(FLERR,"Fix rigid could not compute body properties");
+  if (moi1[0] <= 0.0) body_error(ibody,"properties could not be computed");
 }
 
 /* ----------------------------------------------------------------------
@@ -2425,24 +2498,216 @@ void FixRigid::body_properties_axi(double density)
 
 void FixRigid::setup_body()
 {
+  int ibody,j;
+
   // build the replicated body element table: geometry + attributes
+  // sets nbody
 
   gather_body();
+  allocate_bodies();
 
-  // insure body surfs form a closed (watertight) object
-  //   which encloses a non-zero area or volume
+  // body params from the define style
+  // body: params for a single body from the command
+  // infile: params for every body from the file
+  // density: mass, COM, and moi are computed from the geometry below,
+  //   vcom and angmom from the optional keywords apply to every body
 
-  check_watertight();
-  check_enclosed();
-
-  // dstyle = density: compute mass, COM, and moi from the geometry
-  // done here, after the checks above have verified the body is closed
-  //   and its normals point outward, which the sums rely on
-
-  if (densityflag) {
-    if (axiflag) body_properties_axi(density);
-    else body_properties(density);
+  if (bodyflag) {
+    if (nbody > 1)
+      error->all(FLERR,"Fix rigid body style requires a single body");
+    massbody[0] = massone;
+    for (j = 0; j < 3; j++) {
+      xcm[0][j] = xcmone[j];
+      vcm[0][j] = vcmone[j];
+      angmom[0][j] = angmomone[j];
+    }
+    for (j = 0; j < 6; j++) moi[0][j] = moione[j];
+  } else if (infile) read_infile(infile);
+  else {
+    for (ibody = 0; ibody < nbody; ibody++)
+      for (j = 0; j < 3; j++) {
+        vcm[ibody][j] = vcmone[j];
+        angmom[ibody][j] = angmomone[j];
+      }
   }
+
+  for (ibody = 0; ibody < nbody; ibody++) check_body_params(ibody);
+
+  // insure each body's surfs form a closed (watertight) object
+  //   which encloses a non-zero area or volume
+  // dstyle = density: compute mass, COM, and moi from the geometry,
+  //   after the checks have verified the body is closed and its
+  //   normals point outward, which the sums rely on
+  // then the body frame axes, quaternion, and body-frame geometry
+
+  for (ibody = 0; ibody < nbody; ibody++) {
+    check_watertight(ibody);
+    check_enclosed(ibody);
+    if (densityflag) {
+      if (axiflag) body_properties_axi(ibody,density);
+      else body_properties(ibody,density);
+    }
+    setup_body_one(ibody);
+    setup_body_displace(ibody);
+  }
+
+  // restore the force/torque of the step before a continuation;
+  //   a body is moved by them on the first step
+
+  if (forceinfile) {
+    for (ibody = 0; ibody < nbody; ibody++) {
+      double *f = fcm_infile[ibody];
+      double *tq = torque_infile[ibody];
+      if (dim == 2 && !axiflag &&
+          (f[2] != 0.0 || tq[0] != 0.0 || tq[1] != 0.0))
+        error->all(FLERR,"Fix rigid infile force and torque must be "
+                   "in-plane for 2d");
+      if (axiflag && (f[1] != 0.0 || f[2] != 0.0 ||
+                      tq[1] != 0.0 || tq[2] != 0.0))
+        error->all(FLERR,"Fix rigid infile force and torque must be axial "
+                   "for an axisymmetric domain");
+      for (j = 0; j < 3; j++) {
+        fcm[ibody][j] = f[j];
+        torque[ibody][j] = tq[j];
+      }
+    }
+  }
+}
+
+/* ----------------------------------------------------------------------
+   allocate and zero the per-body arrays and per-element geometry
+   called once by setup_body(), after gather_body() has set nbody/nsurf
+------------------------------------------------------------------------- */
+
+void FixRigid::allocate_bodies()
+{
+  memory->create(xcm,nbody,3,"fix_rigid:xcm");
+  memory->create(vcm,nbody,3,"fix_rigid:vcm");
+  memory->create(omega,nbody,3,"fix_rigid:omega");
+  memory->create(invmass,nbody,"fix_rigid:invmass");
+  memory->create(invinertia,nbody,9,"fix_rigid:invinertia");
+  memory->create(quat,nbody,4,"fix_rigid:quat");
+  memory->create(xcmnew,nbody,3,"fix_rigid:xcmnew");
+  memory->create(quatnew,nbody,4,"fix_rigid:quatnew");
+  memory->create(xcmmid,nbody,3,"fix_rigid:xcmmid");
+  memory->create(massbody,nbody,"fix_rigid:massbody");
+  memory->create(moi,nbody,6,"fix_rigid:moi");
+  memory->create(inertia,nbody,3,"fix_rigid:inertia");
+  memory->create(angmom,nbody,3,"fix_rigid:angmom");
+  memory->create(ex_space,nbody,3,"fix_rigid:ex_space");
+  memory->create(ey_space,nbody,3,"fix_rigid:ey_space");
+  memory->create(ez_space,nbody,3,"fix_rigid:ez_space");
+  memory->create(fcm,nbody,3,"fix_rigid:fcm");
+  memory->create(torque,nbody,3,"fix_rigid:torque");
+  memory->create(fpush,nbody,3,"fix_rigid:fpush");
+  memory->create(tqpush,nbody,3,"fix_rigid:tqpush");
+  memory->create(rmaxbody,nbody,"fix_rigid:rmaxbody");
+  memory->create(bbodylo,nbody,3,"fix_rigid:bbodylo");
+  memory->create(bbodyhi,nbody,3,"fix_rigid:bbodyhi");
+  memory->create(bboxeps,nbody,"fix_rigid:bboxeps");
+  memory->create(pbodylo,nbody,3,"fix_rigid:pbodylo");
+  memory->create(pbodyhi,nbody,3,"fix_rigid:pbodyhi");
+  memory->create(fcm_infile,nbody,3,"fix_rigid:fcm_infile");
+  memory->create(torque_infile,nbody,3,"fix_rigid:torque_infile");
+
+  for (int ibody = 0; ibody < nbody; ibody++) {
+    invmass[ibody] = massbody[ibody] = rmaxbody[ibody] = bboxeps[ibody] = 0.0;
+    for (int j = 0; j < 3; j++)
+      xcm[ibody][j] = vcm[ibody][j] = omega[ibody][j] = xcmnew[ibody][j] =
+        xcmmid[ibody][j] = inertia[ibody][j] = angmom[ibody][j] =
+        ex_space[ibody][j] = ey_space[ibody][j] = ez_space[ibody][j] =
+        fcm[ibody][j] = torque[ibody][j] = fpush[ibody][j] =
+        tqpush[ibody][j] = bbodylo[ibody][j] = bbodyhi[ibody][j] =
+        pbodylo[ibody][j] = pbodyhi[ibody][j] = fcm_infile[ibody][j] =
+        torque_infile[ibody][j] = 0.0;
+    for (int j = 0; j < 4; j++) quat[ibody][j] = quatnew[ibody][j] = 0.0;
+    for (int j = 0; j < 6; j++) moi[ibody][j] = 0.0;
+    for (int j = 0; j < 9; j++) invinertia[ibody][j] = 0.0;
+  }
+
+  // per-element body-frame corner pts, and bboxes for swept collision
+  //   assignment and push-off candidate pruning
+
+  memory->create(displace,nsurf,dim,3,"fix_rigid:displace");
+  memory->create(elemlo,nsurf,3,"fix_rigid:elemlo");
+  memory->create(elemhi,nsurf,3,"fix_rigid:elemhi");
+}
+
+/* ----------------------------------------------------------------------
+   error out with a message naming one body
+------------------------------------------------------------------------- */
+
+void FixRigid::body_error(int ibody, const char *msg)
+{
+  char str[256];
+  snprintf(str,sizeof(str),"Fix rigid body %d %s",ibody+1,msg);
+  error->all(FLERR,str);
+}
+
+/* ----------------------------------------------------------------------
+   insure the user-settable params of one body are consistent with the
+     degrees of freedom of the domain
+   2d: in-plane motion.  dstyle = density computes xcm and moi from the
+     geometry, which is planar in 2d, so only the settable values are
+     checked
+   axisymmetric: the body is a body of revolution about the x axis, so
+     it can only translate along x and spin about x.  its COM lies on
+     the axis, its transverse velocity and angular momentum must be
+     zero, and only ixx of the inertia tensor is ever used
+------------------------------------------------------------------------- */
+
+void FixRigid::check_body_params(int ibody)
+{
+  double *x = xcm[ibody];
+  double *v = vcm[ibody];
+  double *l = angmom[ibody];
+  double *m = moi[ibody];
+
+  if (dim == 2 && !axiflag) {
+    if (v[2] != 0.0)
+      body_error(ibody,"z components of com and vcom must be zero for 2d");
+    if (l[0] != 0.0 || l[1] != 0.0)
+      body_error(ibody,"x,y components of angmom must be zero for 2d");
+    if (!densityflag) {
+      if (x[2] != 0.0)
+        body_error(ibody,"z components of com and vcom must be zero for 2d");
+      if (m[4] != 0.0 || m[5] != 0.0)
+        body_error(ibody,"ixz,iyz components of moi must be zero for 2d");
+    }
+  }
+
+  if (axiflag) {
+    if (v[1] != 0.0 || v[2] != 0.0)
+      body_error(ibody,"y,z components of vcom must be zero "
+                 "for an axisymmetric domain");
+    if (l[1] != 0.0 || l[2] != 0.0)
+      body_error(ibody,"y,z components of angmom must be zero "
+                 "for an axisymmetric domain");
+    if (!densityflag) {
+      if (x[1] != 0.0 || x[2] != 0.0)
+        body_error(ibody,"y,z components of com must be zero "
+                   "for an axisymmetric domain");
+      if (m[3] != 0.0 || m[4] != 0.0 || m[5] != 0.0)
+        body_error(ibody,"products of inertia must be zero "
+                   "for an axisymmetric domain");
+      if (m[0] <= 0.0)
+        body_error(ibody,"ixx of moi must be positive "
+                   "for an axisymmetric domain");
+    }
+  }
+}
+
+/* ----------------------------------------------------------------------
+   body frame axes and quaternion of one body from its inertia tensor
+------------------------------------------------------------------------- */
+
+void FixRigid::setup_body_one(int ibody)
+{
+  double *moi1 = moi[ibody];
+  double *inertia1 = inertia[ibody];
+  double *ex = ex_space[ibody];
+  double *ey = ey_space[ibody];
+  double *ez = ez_space[ibody];
 
   // axisymmetric: the body frame is the space frame, always
   // a body of revolution has iyy = izz, so the inertia tensor is
@@ -2459,17 +2724,17 @@ void FixRigid::setup_body()
   //   which moves no geometry, so the body frame never rotates anyway
 
   if (axiflag) {
-    ex_space[0] = 1.0; ex_space[1] = 0.0; ex_space[2] = 0.0;
-    ey_space[0] = 0.0; ey_space[1] = 1.0; ey_space[2] = 0.0;
-    ez_space[0] = 0.0; ez_space[1] = 0.0; ez_space[2] = 1.0;
-    inertia[0] = moi[0];
-    inertia[1] = moi[1];
-    inertia[2] = moi[2];
+    ex[0] = 1.0; ex[1] = 0.0; ex[2] = 0.0;
+    ey[0] = 0.0; ey[1] = 1.0; ey[2] = 0.0;
+    ez[0] = 0.0; ez[1] = 0.0; ez[2] = 1.0;
+    inertia1[0] = moi1[0];
+    inertia1[1] = moi1[1];
+    inertia1[2] = moi1[2];
 
-    if (xcm[1] != 0.0 || xcm[2] != 0.0)
+    if (xcm[ibody][1] != 0.0 || xcm[ibody][2] != 0.0)
       error->all(FLERR,"Fix rigid body COM must lie on the axisymmetric "
                  "axis");
-    if (inertia[0] <= 0.0)
+    if (inertia1[0] <= 0.0)
       error->all(FLERR,"Fix rigid moment of inertia about the "
                  "axisymmetric axis must be positive");
 
@@ -2477,14 +2742,14 @@ void FixRigid::setup_body()
     //   neither be hit nor bound any volume, and it would confuse the
     //   profile-closure check above
 
-    for (int i = 0; i < nsurf; i++)
+    for (int i = bodystart[ibody]; i < bodystart[ibody+1]; i++)
       if (bodypt[i][0][1] == 0.0 && bodypt[i][1][1] == 0.0)
         error->all(FLERR,"Fix rigid body surf lies on the axisymmetric "
                    "axis");
 
-    quat[0] = 1.0; quat[1] = quat[2] = quat[3] = 0.0;
-    set_recoil();
-    setup_body_displace();
+    quat[ibody][0] = 1.0;
+    quat[ibody][1] = quat[ibody][2] = quat[ibody][3] = 0.0;
+    set_recoil(ibody);
     return;
   }
 
@@ -2492,58 +2757,57 @@ void FixRigid::setup_body()
 
   double tensor[3][3],evectors[3][3];
 
-  tensor[0][0] = moi[0];
-  tensor[1][1] = moi[1];
-  tensor[2][2] = moi[2];
-  tensor[1][2] = tensor[2][1] = moi[5];
-  tensor[0][2] = tensor[2][0] = moi[4];
-  tensor[0][1] = tensor[1][0] = moi[3];
+  tensor[0][0] = moi1[0];
+  tensor[1][1] = moi1[1];
+  tensor[2][2] = moi1[2];
+  tensor[1][2] = tensor[2][1] = moi1[5];
+  tensor[0][2] = tensor[2][0] = moi1[4];
+  tensor[0][1] = tensor[1][0] = moi1[3];
 
   // diagonalize the inertia tensor to create body frame
 
-  int ierror = MathEigen::jacobi3(tensor,inertia,evectors,1);
+  int ierror = MathEigen::jacobi3(tensor,inertia1,evectors,1);
   if (ierror) error->all(FLERR,"Insufficient Jacobi rotations for rigid body");
 
-  ex_space[0] = evectors[0][0];
-  ex_space[1] = evectors[1][0];
-  ex_space[2] = evectors[2][0];
-  ey_space[0] = evectors[0][1];
-  ey_space[1] = evectors[1][1];
-  ey_space[2] = evectors[2][1];
-  ez_space[0] = evectors[0][2];
-  ez_space[1] = evectors[1][2];
-  ez_space[2] = evectors[2][2];
+  ex[0] = evectors[0][0];
+  ex[1] = evectors[1][0];
+  ex[2] = evectors[2][0];
+  ey[0] = evectors[0][1];
+  ey[1] = evectors[1][1];
+  ey[2] = evectors[2][1];
+  ez[0] = evectors[0][2];
+  ez[1] = evectors[1][2];
+  ez[2] = evectors[2][2];
 
   // for 2d, insure the principal axis aligned with z is in the 3rd slot
   // the z axis is a principal axis b/c ixz = iyz = 0 is enforced for 2d
 
   if (dim == 2) {
-    if (fabs(ez_space[2]) < 1.0-EPSILON) {
-      if (fabs(ey_space[2]) > 1.0-EPSILON) {
-        std::swap(inertia[1],inertia[2]);
-        std::swap(ey_space[0],ez_space[0]);
-        std::swap(ey_space[1],ez_space[1]);
-        std::swap(ey_space[2],ez_space[2]);
-      } else if (fabs(ex_space[2]) > 1.0-EPSILON) {
-        std::swap(inertia[0],inertia[2]);
-        std::swap(ex_space[0],ez_space[0]);
-        std::swap(ex_space[1],ez_space[1]);
-        std::swap(ex_space[2],ez_space[2]);
+    if (fabs(ez[2]) < 1.0-EPSILON) {
+      if (fabs(ey[2]) > 1.0-EPSILON) {
+        std::swap(inertia1[1],inertia1[2]);
+        std::swap(ey[0],ez[0]);
+        std::swap(ey[1],ez[1]);
+        std::swap(ey[2],ez[2]);
+      } else if (fabs(ex[2]) > 1.0-EPSILON) {
+        std::swap(inertia1[0],inertia1[2]);
+        std::swap(ex[0],ez[0]);
+        std::swap(ex[1],ez[1]);
+        std::swap(ex[2],ez[2]);
       } else
-        error->all(FLERR,"Fix rigid 2d body inertia tensor has "
-                   "no principal axis along z");
+        body_error(ibody,"inertia tensor has no principal axis along z");
     }
   }
 
   // if any principal moment < scaled EPSILON, set to 0.0
 
   double max;
-  max = MAX(inertia[0],inertia[1]);
-  max = MAX(max,inertia[2]);
+  max = MAX(inertia1[0],inertia1[1]);
+  max = MAX(max,inertia1[2]);
 
-  if (inertia[0] < EPSILON*max) inertia[0] = 0.0;
-  if (inertia[1] < EPSILON*max) inertia[1] = 0.0;
-  if (inertia[2] < EPSILON*max) inertia[2] = 0.0;
+  if (inertia1[0] < EPSILON*max) inertia1[0] = 0.0;
+  if (inertia1[1] < EPSILON*max) inertia1[1] = 0.0;
+  if (inertia1[2] < EPSILON*max) inertia1[2] = 0.0;
 
   // validity checks on principal moments of inertia
   // for 2d only the moment about the z axis matters
@@ -2552,15 +2816,13 @@ void FixRigid::setup_body()
   // jacobi3() sorted the moments in increasing order
 
   if (dim == 2) {
-    if (inertia[2] <= 0.0)
-      error->all(FLERR,
-                 "Fix rigid moment of inertia about z axis must be positive");
+    if (inertia1[2] <= 0.0)
+      body_error(ibody,"moment of inertia about z axis must be positive");
   } else {
-    if (inertia[0] <= 0.0 || inertia[1] <= 0.0 || inertia[2] <= 0.0)
-      error->all(FLERR,
-                 "Fix rigid principal moments of inertia must be positive");
-    if (inertia[0] + inertia[1] < (1.0-EPSILON)*inertia[2])
-      error->all(FLERR,"Fix rigid moments of inertia do not satisfy "
+    if (inertia1[0] <= 0.0 || inertia1[1] <= 0.0 || inertia1[2] <= 0.0)
+      body_error(ibody,"principal moments of inertia must be positive");
+    if (inertia1[0] + inertia1[1] < (1.0-EPSILON)*inertia1[2])
+      body_error(ibody,"moments of inertia do not satisfy "
                  "the triangle inequality");
   }
 
@@ -2568,24 +2830,21 @@ void FixRigid::setup_body()
   // flip 3rd vector if needed
 
   double cross[3];
-  MathExtra::cross3(ex_space,ey_space,cross);
-  if (MathExtra::dot3(cross,ez_space) < 0.0) MathExtra::negate3(ez_space);
+  MathExtra::cross3(ex,ey,cross);
+  if (MathExtra::dot3(cross,ez) < 0.0) MathExtra::negate3(ez);
 
   // create initial quaternion
 
-  MathExtra::exyz_to_q(ex_space,ey_space,ez_space,quat);
+  MathExtra::exyz_to_q(ex,ey,ez,quat[ibody]);
 
-  set_recoil();
-
-  setup_body_displace();
+  set_recoil(ibody);
 }
 
 /* ----------------------------------------------------------------------
-   finish one-time body setup, once the body frame axes are known
-   shared by the general path and the axisymmetric one
+   finish one-time setup of one body, once its body frame axes are known
 ------------------------------------------------------------------------- */
 
-void FixRigid::setup_body_displace()
+void FixRigid::setup_body_displace(int ibody)
 {
   // set displacement for each end/corner point in each line/tri
   // delta = vector from COM to end/corner point in space frame
@@ -2593,41 +2852,30 @@ void FixRigid::setup_body_displace()
   // corner pts come from the replicated body geometry built by gather_body()
 
   double delta[3];
+  double *xcm1 = xcm[ibody];
 
-  memory->create(displace,nsurf,dim,3,"fix_rigid:displace");
-
-  for (int i = 0; i < nsurf; i++)
+  for (int i = bodystart[ibody]; i < bodystart[ibody+1]; i++)
     for (int j = 0; j < dim; j++) {
-      delta[0] = bodypt[i][j][0] - xcm[0];
-      delta[1] = bodypt[i][j][1] - xcm[1];
-      if (dim == 3) delta[2] = bodypt[i][j][2] - xcm[2];
+      delta[0] = bodypt[i][j][0] - xcm1[0];
+      delta[1] = bodypt[i][j][1] - xcm1[1];
+      if (dim == 3) delta[2] = bodypt[i][j][2] - xcm1[2];
       else delta[2] = 0.0;
-      MathExtra::transpose_matvec(ex_space,ey_space,ez_space,
-                                  delta,&displace[i][j][0]);
+      MathExtra::transpose_matvec(ex_space[ibody],ey_space[ibody],
+                                  ez_space[ibody],delta,&displace[i][j][0]);
     }
 
   // initial omega, consistent with initial angmom
 
-  MathExtra::angmom_to_omega(angmom,ex_space,ey_space,ez_space,inertia,omega);
+  MathExtra::angmom_to_omega(angmom[ibody],ex_space[ibody],ey_space[ibody],
+                             ez_space[ibody],inertia[ibody],omega[ibody]);
 
   // rmaxbody = max distance of any body corner pt from the COM
 
-  rmaxbody = 0.0;
-  for (int i = 0; i < nsurf; i++)
+  rmaxbody[ibody] = 0.0;
+  for (int i = bodystart[ibody]; i < bodystart[ibody+1]; i++)
     for (int j = 0; j < dim; j++)
-      rmaxbody = MAX(rmaxbody,MathExtra::len3(&displace[i][j][0]));
-
-  // per-element bbox arrays for swept collision assignment
-  //   and push-off candidate pruning
-
-  memory->create(elemlo,nsurf,3,"fix_rigid:elemlo");
-  memory->create(elemhi,nsurf,3,"fix_rigid:elemhi");
-
-  // zero body force/torque in case accessed via compute_vector() on step 0
-
-  fcm[0] = fcm[1] = fcm[2] = 0.0;
-  torque[0] = torque[1] = torque[2] = 0.0;
-  fpush[0] = fpush[1] = fpush[2] = 0.0;
+      rmaxbody[ibody] = MAX(rmaxbody[ibody],
+                            MathExtra::len3(&displace[i][j][0]));
 }
 
 /* ----------------------------------------------------------------------
@@ -2666,8 +2914,6 @@ void FixRigid::push_bins()
     nslocal = surf->nown;
   }
 
-  FixRigid **flist = update->fixrigidlist;
-  int nb = update->nfixrigid;
   int *rigidmap = update->rigidmap;
 
   double *boxlo = domain->boxlo;
@@ -2709,10 +2955,7 @@ void FixRigid::push_bins()
         if (rigidmap[m] >= 0) continue;
       } else {
         surfint id = (dim == 2) ? lines[m].id : tris[m].id;
-        int inbody = 0;
-        for (k = 0; k < nb; k++)
-          if (flist[k]->body_elem(id) >= 0) { inbody = 1; break; }
-        if (inbody) continue;
+        if (body_elem(id) >= 0) continue;
       }
 
       if (dim == 2) {
@@ -2780,13 +3023,14 @@ void FixRigid::push_bins()
      the normal separation rate of the corner pt relative to the source
      surface; the total contact force is clamped at zero, so the
      dashpot never produces adhesion as a contact ends
-   src = the rigid body the element belongs to, or NULL if static
-   if src is set, the reaction force -F is applied to src at the same
+   ibody = the body whose corner pts are tested
+   jbody = the rigid body the element belongs to, or -1 if static
+   if jbody >= 0, the reaction force -F is applied to it at the same
      contact point, so body-body contacts conserve momentum exactly
 ------------------------------------------------------------------------- */
 
-void FixRigid::push_contact(double *p1, double *p2, double *p3,
-                            double *norm, FixRigid *src)
+void FixRigid::push_contact(int ibody, double *p1, double *p2, double *p3,
+                            double *norm, int jbody)
 {
   int i,j;
   double dsq,d,scale;
@@ -2795,6 +3039,10 @@ void FixRigid::push_contact(double *p1, double *p2, double *p3,
 
   int npoint = dim;     // 2 corner pts per line, 3 per tri
   double cutsq = pushcutoff*pushcutoff;
+
+  double *xcm1 = xcm[ibody];
+  double *fpush1 = fpush[ibody];
+  double *tqpush1 = tqpush[ibody];
 
   // bounding box of the source element inflated by the cutoff:
   //   only body elements whose own box overlaps it can be in contact
@@ -2811,7 +3059,7 @@ void FixRigid::push_contact(double *p1, double *p2, double *p3,
     shi[k] += pushcutoff;
   }
 
-  for (i = 0; i < nsurf; i++) {
+  for (i = bodystart[ibody]; i < bodystart[ibody+1]; i++) {
     if (elemlo[i][0] > shi[0] || elemhi[i][0] < slo[0]) continue;
     if (elemlo[i][1] > shi[1] || elemhi[i][1] < slo[1]) continue;
     if (dim == 3 && (elemlo[i][2] > shi[2] || elemhi[i][2] < slo[2]))
@@ -2851,13 +3099,13 @@ void FixRigid::push_contact(double *p1, double *p2, double *p3,
 
       if (gammapush > 0.0) {
         double vpt[3],vsrc[3],rd[3];
-        MathExtra::sub3(pts[j],xcm,rd);
-        MathExtra::cross3(omega,rd,vpt);
-        MathExtra::add3(vcm,vpt,vpt);
-        if (src) {
-          MathExtra::sub3(pts[j],src->xcm,rd);
-          MathExtra::cross3(src->omega,rd,vsrc);
-          MathExtra::add3(src->vcm,vsrc,vsrc);
+        MathExtra::sub3(pts[j],xcm1,rd);
+        MathExtra::cross3(omega[ibody],rd,vpt);
+        MathExtra::add3(vcm[ibody],vpt,vpt);
+        if (jbody >= 0) {
+          MathExtra::sub3(pts[j],xcm[jbody],rd);
+          MathExtra::cross3(omega[jbody],rd,vsrc);
+          MathExtra::add3(vcm[jbody],vsrc,vsrc);
           MathExtra::sub3(vpt,vsrc,vpt);
         }
         scale -= gammapush * MathExtra::dot3(vpt,fdir);
@@ -2878,68 +3126,71 @@ void FixRigid::push_contact(double *p1, double *p2, double *p3,
       fone[1] = scale*fdir[1];
       fone[2] = scale*fdir[2];
 
-      fpush[0] += fone[0];
-      fpush[1] += fone[1];
-      fpush[2] += fone[2];
-      MathExtra::sub3(pts[j],xcm,rdelta);
+      fpush1[0] += fone[0];
+      fpush1[1] += fone[1];
+      fpush1[2] += fone[2];
+      MathExtra::sub3(pts[j],xcm1,rdelta);
       MathExtra::cross3(rdelta,fone,tq);
-      tqpush[0] += tq[0];
-      tqpush[1] += tq[1];
-      tqpush[2] += tq[2];
+      tqpush1[0] += tq[0];
+      tqpush1[1] += tq[1];
+      tqpush1[2] += tq[2];
 
       // equal-and-opposite reaction on the source body,
       //   applied at the same contact point
 
-      if (src) {
-        src->fpush[0] -= fone[0];
-        src->fpush[1] -= fone[1];
-        src->fpush[2] -= fone[2];
-        MathExtra::sub3(pts[j],src->xcm,rdelta);
+      if (jbody >= 0) {
+        fpush[jbody][0] -= fone[0];
+        fpush[jbody][1] -= fone[1];
+        fpush[jbody][2] -= fone[2];
+        MathExtra::sub3(pts[j],xcm[jbody],rdelta);
         MathExtra::cross3(rdelta,fone,tq);
-        src->tqpush[0] -= tq[0];
-        src->tqpush[1] -= tq[1];
-        src->tqpush[2] -= tq[2];
+        tqpush[jbody][0] -= tq[0];
+        tqpush[jbody][1] -= tq[1];
+        tqpush[jbody][2] -= tq[2];
       }
     }
   }
 }
 
 /* ----------------------------------------------------------------------
-   push-off forces on the body from too-close static surfs, other
+   push-off forces on body ibody from too-close static surfs, other
      rigid bodies, and (if pushboundflag) non-periodic box boundaries
-   called by the last-defined rigid fix for each body with the push
-     keyword, after all bodies have committed end-of-step geometry
+   called for each body, after all bodies have committed end-of-step
+     geometry
    static surf candidates come from the bins built by push_bins();
      other bodies are pruned by a body-body bbox test, then per element
-   forces accumulate in fpush/torque; the caller adds fpush into fcm
-     for the next step's time integration
+   forces accumulate in fpush/tqpush; the caller adds them into
+     fcm/torque for the next step's time integration
    non-distributed surfs: computed identically on every proc, so no
      communication is needed; distributed surfs: per-proc partial sums
      which the caller merges with one Allreduce
    NOTE: a corner pt shared by adjacent body elements contributes once
      per element, and a corner close to several source elements
      interacts with each of them, so kpush is a per-contact stiffness;
-     two bodies which both push engage the corner pts of each against
-     the elements of the other, about twice the contacts of one body
-     against a static surf of the same shape (each set is a distinct
-     geometric contact, and dropping either would make the force
-     depend on the order the fixes are defined in)
+     two bodies engage the corner pts of each against the elements of
+     the other, about twice the contacts of one body against a static
+     surf of the same shape (each set is a distinct geometric contact,
+     and dropping either would make the force depend on body order)
 ------------------------------------------------------------------------- */
 
-void FixRigid::push_off()
+void FixRigid::push_off(int ibody)
 {
-  int i,j,m,e;
+  int i,j,m,e,jbody;
   double d,scale;
   double **pts;
   double fone[3],rdelta[3],tq[3];
   int blo[3],bhi[3];
 
+  double *xcm1 = xcm[ibody];
+  double *fpush1 = fpush[ibody];
+  double *tqpush1 = tqpush[ibody];
+
   // static surf sources:
   //   non-distributed: local surf arrays hold all surfs on every proc,
   //     every proc computes the identical full contribution
   //   distributed: each proc's bins hold only the static surfs it OWNS,
-  //     so contributions are disjoint partial sums, merged by the
-  //     coordinating fix with an Allreduce
+  //     so contributions are disjoint partial sums, merged by
+  //     end_of_step() with an Allreduce
   // pair and boundary contributions are identical on every proc, so
   //   for distributed surfs only proc 0 computes them before the merge
 
@@ -2961,8 +3212,8 @@ void FixRigid::push_off()
 
   double cutlo[3],cuthi[3];
   for (j = 0; j < 3; j++) {
-    cutlo[j] = bbodylo[j] - pushcutoff;
-    cuthi[j] = bbodyhi[j] + pushcutoff;
+    cutlo[j] = bbodylo[ibody][j] - pushcutoff;
+    cuthi[j] = bbodyhi[ibody][j] + pushcutoff;
   }
 
   // static surf candidates: bins overlapping the inflated body bbox
@@ -2991,7 +3242,8 @@ void FixRigid::push_off()
             if (MIN(lines[m].p1[0],lines[m].p2[0]) > cuthi[0]) continue;
             if (MAX(lines[m].p1[1],lines[m].p2[1]) < cutlo[1]) continue;
             if (MIN(lines[m].p1[1],lines[m].p2[1]) > cuthi[1]) continue;
-            push_contact(lines[m].p1,lines[m].p2,NULL,lines[m].norm,NULL);
+            push_contact(ibody,lines[m].p1,lines[m].p2,NULL,
+                         lines[m].norm,-1);
           } else {
             if (MAX(tris[m].p1[0],MAX(tris[m].p2[0],tris[m].p3[0])) <
                 cutlo[0]) continue;
@@ -3005,8 +3257,8 @@ void FixRigid::push_off()
                 cutlo[2]) continue;
             if (MIN(tris[m].p1[2],MIN(tris[m].p2[2],tris[m].p3[2])) >
                 cuthi[2]) continue;
-            push_contact(tris[m].p1,tris[m].p2,tris[m].p3,
-                         tris[m].norm,NULL);
+            push_contact(ibody,tris[m].p1,tris[m].p2,tris[m].p3,
+                         tris[m].norm,-1);
           }
         }
       }
@@ -3014,26 +3266,21 @@ void FixRigid::push_off()
   // other rigid bodies: body-body bbox prefilter, then per-element
   //   bbox tests using the current-position element boxes set by
   //   body_bbox(0) when each body committed its end-of-step geometry
-  // element geometry from the source body's replicated bodypt/bodynorm
   // each contact applies equal-and-opposite forces to both bodies
 
   if (!distributed || comm->me == 0) {
-    FixRigid **flist = update->fixrigidlist;
-    int nb = update->nfixrigid;
+    for (jbody = 0; jbody < nbody; jbody++) {
+      if (jbody == ibody) continue;
+      if (!box_overlap(cutlo,cuthi,bbodylo[jbody],bbodyhi[jbody])) continue;
 
-    for (int mb = 0; mb < nb; mb++) {
-      FixRigid *g = flist[mb];
-      if (g == this) continue;
-      if (!box_overlap(cutlo,cuthi,g->bbodylo,g->bbodyhi)) continue;
-
-      for (e = 0; e < g->nsurf; e++) {
-        if (!box_overlap(cutlo,cuthi,g->elemlo[e],g->elemhi[e])) continue;
+      for (e = bodystart[jbody]; e < bodystart[jbody+1]; e++) {
+        if (!box_overlap(cutlo,cuthi,elemlo[e],elemhi[e])) continue;
         if (dim == 2)
-          push_contact(g->bodypt[e][0],g->bodypt[e][1],NULL,
-                       g->bodynorm[e],g);
+          push_contact(ibody,bodypt[e][0],bodypt[e][1],NULL,
+                       bodynorm[e],jbody);
         else
-          push_contact(g->bodypt[e][0],g->bodypt[e][1],g->bodypt[e][2],
-                       g->bodynorm[e],g);
+          push_contact(ibody,bodypt[e][0],bodypt[e][1],bodypt[e][2],
+                       bodynorm[e],jbody);
       }
     }
   }
@@ -3049,7 +3296,7 @@ void FixRigid::push_off()
     int nface = 2*dim;
     double fsign[6] = {1.0,-1.0,1.0,-1.0,1.0,-1.0};
 
-    for (i = 0; i < nsurf; i++) {
+    for (i = bodystart[ibody]; i < bodystart[ibody+1]; i++) {
       pts = bodypt[i];
 
       for (j = 0; j < npoint; j++) {
@@ -3075,9 +3322,9 @@ void FixRigid::push_off()
 
           if (gammapush > 0.0) {
             double vpt[3],rd[3];
-            MathExtra::sub3(pts[j],xcm,rd);
-            MathExtra::cross3(omega,rd,vpt);
-            MathExtra::add3(vcm,vpt,vpt);
+            MathExtra::sub3(pts[j],xcm1,rd);
+            MathExtra::cross3(omega[ibody],rd,vpt);
+            MathExtra::add3(vcm[ibody],vpt,vpt);
             scale -= gammapush * fsign[iface] * vpt[idim];
             if (scale < 0.0) scale = 0.0;
           }
@@ -3087,22 +3334,22 @@ void FixRigid::push_off()
           fone[0] = fone[1] = fone[2] = 0.0;
           fone[idim] = scale;
 
-          fpush[0] += fone[0];
-          fpush[1] += fone[1];
-          fpush[2] += fone[2];
-          MathExtra::sub3(pts[j],xcm,rdelta);
+          fpush1[0] += fone[0];
+          fpush1[1] += fone[1];
+          fpush1[2] += fone[2];
+          MathExtra::sub3(pts[j],xcm1,rdelta);
           MathExtra::cross3(rdelta,fone,tq);
-          tqpush[0] += tq[0];
-          tqpush[1] += tq[1];
-          tqpush[2] += tq[2];
+          tqpush1[0] += tq[0];
+          tqpush1[1] += tq[1];
+          tqpush1[2] += tq[2];
         }
       }
     }
   }
 
-  // fpush/tqpush are merged into fcm/torque by the coordinating fix
-  //   after all bodies' push-off forces, including reactions from
-  //   other bodies' contacts, have been accumulated
+  // fpush/tqpush are merged into fcm/torque by end_of_step() after all
+  //   bodies' push-off forces, including reactions from other bodies'
+  //   contacts, have been accumulated
 }
 
 /* ----------------------------------------------------------------------
@@ -3191,9 +3438,8 @@ void FixRigid::grid_rebuild()
      cells they sweep through during this step, so particles anywhere in
      a body's swept path are tested against the moving surfs and
      reflected (rather than overtaken by a fast body and deleted)
-   called each start_of_step by the last-defined rigid fix, after the
-     end-of-step pose of every body is known; a single pass over the
-     grid cells handles all bodies
+   called each start_of_step, after the end-of-step pose of every body
+     is known; a single pass over the grid cells handles all bodies
    for each overlapped cell a merged list = its current csurfs plus all
      swept surfs not already present is installed; the original is
      saved for swept_restore(); split cells share the merged list with
@@ -3203,12 +3449,8 @@ void FixRigid::grid_rebuild()
 
 void FixRigid::swept_assign_all()
 {
-  int i,j,m,icell,isub,ncur,isplit,dup,nmerged;
+  int i,j,ibody,icell,isub,ncur,isplit,dup,nmerged;
   surfint *merged,*cur;
-  FixRigid *f;
-
-  FixRigid **flist = update->fixrigidlist;
-  int nb = update->nfixrigid;
 
   Grid::ChildCell *cells = grid->cells;
   Grid::SplitInfo *sinfo = grid->sinfo;
@@ -3216,7 +3458,7 @@ void FixRigid::swept_assign_all()
 
   // per-element swept bounding boxes of every body for this step
 
-  for (m = 0; m < nb; m++) flist[m]->body_bbox(1);
+  for (ibody = 0; ibody < nbody; ibody++) body_bbox(ibody,1);
 
   cpage->reset();
   nmodified = 0;
@@ -3242,20 +3484,20 @@ void FixRigid::swept_assign_all()
   int ncand,icand;
   int *cand;
 
-  for (m = 0; m < nb; m++) {
-    f = flist[m];
-    ncand = update->rigid_cell_box(f->bbodylo,f->bbodyhi,&cand);
+  for (ibody = 0; ibody < nbody; ibody++) {
+    double *blo = bbodylo[ibody];
+    double *bhi = bbodyhi[ibody];
+    ncand = update->rigid_cell_box(blo,bhi,&cand);
 
     for (icand = 0; icand < ncand; icand++) {
       icell = cand[icand];
       if (cells[icell].nsplit <= 0) continue;
       if (cells[icell].nsurf < 0) continue;
-      if (!box_overlap(cells[icell].lo,cells[icell].hi,
-                       f->bbodylo,f->bbodyhi)) continue;
+      if (!box_overlap(cells[icell].lo,cells[icell].hi,blo,bhi)) continue;
 
-      for (i = 0; i < f->nsurf; i++) {
+      for (i = bodystart[ibody]; i < bodystart[ibody+1]; i++) {
         if (!box_overlap(cells[icell].lo,cells[icell].hi,
-                         f->elemlo[i],f->elemhi[i])) continue;
+                         elemlo[i],elemhi[i])) continue;
 
         if (swstamp[icell] != swcur) {
           swstamp[icell] = swcur;
@@ -3275,7 +3517,7 @@ void FixRigid::swept_assign_all()
           memory->grow(entnext,maxent,"fix_rigid:entnext");
           memory->grow(entelem,maxent,"fix_rigid:entelem");
         }
-        entelem[nent] = (surfint) f->lblist[i];
+        entelem[nent] = (surfint) lblist[i];
         entnext[nent] = swhead[icell];
         swhead[icell] = nent++;
       }
@@ -3424,8 +3666,8 @@ void FixRigid::grid_changed()
 }
 
 /* ----------------------------------------------------------------------
-   for incremental remap: record cells interior to the body,
-     i.e. INSIDE cells cut by no surf whose center is within the body
+   for incremental remap: record cells interior to any body,
+     i.e. INSIDE cells cut by no surf whose center is within a body
    a cell whose only surfs are transparent is not cut, and is typed
      INSIDE/OUTSIDE like a surf-free cell
    called before the body surfs move to their end-of-step positions
@@ -3434,11 +3676,7 @@ void FixRigid::grid_changed()
 void FixRigid::record_oldinside()
 {
   double ctr[3];
-  int icell;
-
-  // bbox around body at its current (pre-move) position
-
-  body_bbox(0);
+  int ibody,icell;
 
   Grid::ChildCell *cells = grid->cells;
   Grid::ChildInfo *cinfo = grid->cinfo;
@@ -3446,32 +3684,41 @@ void FixRigid::record_oldinside()
 
   noldinside = 0;
 
-  // candidate cells near the body from the box->cell index,
+  // candidate cells near each body from the box->cell index,
   //   restricted to owned cells
+  // bodies are disjoint, so a cell center is interior to at most one
 
-  int *cand;
-  int ncand = update->rigid_cell_box(bbodylo,bbodyhi,&cand);
+  for (ibody = 0; ibody < nbody; ibody++) {
 
-  for (int ic = 0; ic < ncand; ic++) {
-    icell = cand[ic];
-    if (icell >= nglocal) continue;
-    if (cells[icell].nsplit != 1) continue;
-    if (cell_cut(icell)) continue;
-    if (cinfo[icell].type != CELLINSIDE) continue;
-    if (!box_overlap(cells[icell].lo,cells[icell].hi,bbodylo,bbodyhi))
-      continue;
+    // bbox around body at its current (pre-move) position
 
-    ctr[0] = 0.5 * (cells[icell].lo[0] + cells[icell].hi[0]);
-    ctr[1] = 0.5 * (cells[icell].lo[1] + cells[icell].hi[1]);
-    if (dim == 3) ctr[2] = 0.5 * (cells[icell].lo[2] + cells[icell].hi[2]);
-    else ctr[2] = 0.0;
-    if (!inside_body(ctr)) continue;
+    body_bbox(ibody,0);
+    double *blo = bbodylo[ibody];
+    double *bhi = bbodyhi[ibody];
 
-    if (noldinside == maxoldinside) {
-      maxoldinside += DELTA_MODIFY;
-      memory->grow(oldinside,maxoldinside,"fix_rigid:oldinside");
+    int *cand;
+    int ncand = update->rigid_cell_box(blo,bhi,&cand);
+
+    for (int ic = 0; ic < ncand; ic++) {
+      icell = cand[ic];
+      if (icell >= nglocal) continue;
+      if (cells[icell].nsplit != 1) continue;
+      if (cell_cut(icell)) continue;
+      if (cinfo[icell].type != CELLINSIDE) continue;
+      if (!box_overlap(cells[icell].lo,cells[icell].hi,blo,bhi)) continue;
+
+      ctr[0] = 0.5 * (cells[icell].lo[0] + cells[icell].hi[0]);
+      ctr[1] = 0.5 * (cells[icell].lo[1] + cells[icell].hi[1]);
+      if (dim == 3) ctr[2] = 0.5 * (cells[icell].lo[2] + cells[icell].hi[2]);
+      else ctr[2] = 0.0;
+      if (!inside_body(ibody,ctr)) continue;
+
+      if (noldinside == maxoldinside) {
+        maxoldinside += DELTA_MODIFY;
+        memory->grow(oldinside,maxoldinside,"fix_rigid:oldinside");
+      }
+      oldinside[noldinside++] = icell;
     }
-    oldinside[noldinside++] = icell;
   }
 }
 
@@ -3501,7 +3748,7 @@ void FixRigid::record_oldinside()
 
 int FixRigid::incremental_recut()
 {
-  int i,n,ncand,icell,nsplitone,xsub,moving;
+  int i,n,ncand,icell,ibody,nsplitone,xsub,moving;
   double xsplit[3],ctr[3],rlo[3],rhi[3];
   double *vols;
   double *clo,*chi;
@@ -3515,29 +3762,22 @@ int FixRigid::incremental_recut()
   int ncorner = 4;
   if (dim == 3) ncorner = 8;
 
-  // gather all incremental bodies; every one must have a previous region
-  // R = union over all incremental bodies of the region rlo/rhi each
+  // every body must have a previous region
+  // R = union over all bodies of the region rlo/rhi each
   //   occupied before and after its move this step
   // collect the owned cells overlapping R from the box->cell index,
   //   one body region at a time, so bodies far apart do not sweep the
   //   cells between them; the re-cut and re-type passes below iterate
   //   only this list
 
-  int nincr = 0;
+  if (!pbodyflag) return FALLBACK_NOPREV;
   nrcand = 0;
 
-  FixRigid **flist = update->fixrigidlist;
-  int nb = update->nfixrigid;
-
-  for (int m = 0; m < nb; m++) {
-    FixRigid *f = flist[m];
-    if (f->remapmode != INCREMENTAL) continue;
-    if (!f->pbodyflag) return FALLBACK_NOPREV;
+  for (ibody = 0; ibody < nbody; ibody++) {
     for (i = 0; i < 3; i++) {
-      rlo[i] = MIN(f->pbodylo[i],f->bbodylo[i]);
-      rhi[i] = MAX(f->pbodyhi[i],f->bbodyhi[i]);
+      rlo[i] = MIN(pbodylo[ibody][i],bbodylo[ibody][i]);
+      rhi[i] = MAX(pbodyhi[ibody][i],bbodyhi[ibody][i]);
     }
-    nincr++;
 
     int *cand;
     int ncells = update->rigid_cell_box(rlo,rhi,&cand);
@@ -3554,11 +3794,10 @@ int FixRigid::incremental_recut()
       rcand[nrcand++] = icell;
     }
   }
-  if (!nincr) return FALLBACK_NOPREV;
 
   // a cell in the regions of several bodies is listed once
 
-  if (nincr > 1) {
+  if (nbody > 1) {
     std::sort(rcand,rcand+nrcand);
     nrcand = std::unique(rcand,rcand+nrcand) - rcand;
   }
@@ -3588,11 +3827,11 @@ int FixRigid::incremental_recut()
     //   element is what keeps the cost of a cell independent of how
     //   many bodies are defined far away from it
 
-    for (int m = 0; m < nb; m++) {
-      FixRigid *f = flist[m];
+    for (ibody = 0; ibody < nbody; ibody++) {
       if (!box_overlap(cells[icell].lo,cells[icell].hi,
-                       f->bbodylo,f->bbodyhi)) continue;
-      for (i = 0; i < f->nsurf; i++) reclist[ncand++] = f->lblist[i];
+                       bbodylo[ibody],bbodyhi[ibody])) continue;
+      for (i = bodystart[ibody]; i < bodystart[ibody+1]; i++)
+        reclist[ncand++] = lblist[i];
     }
 
     // new list of surfs overlapping this cell
@@ -3712,32 +3951,26 @@ int FixRigid::incremental_recut()
   }
 
   // pass 2: cells a body interior moved away from become OUTSIDE
-  // process every incremental body's recorded interior cells
   // only cells which are now cut by no surf and inside no body,
   //   which leaves any static (non-body) INSIDE cells untouched
 
-  for (int mb = 0; mb < nb; mb++) {
-    FixRigid *f = flist[mb];
-    if (f->remapmode != INCREMENTAL) continue;
+  for (int m = 0; m < noldinside; m++) {
+    icell = oldinside[m];
+    if (cell_cut(icell)) continue;
 
-    for (int m = 0; m < f->noldinside; m++) {
-      icell = f->oldinside[m];
-      if (cell_cut(icell)) continue;
+    clo = cells[icell].lo;
+    chi = cells[icell].hi;
+    ctr[0] = 0.5 * (clo[0] + chi[0]);
+    ctr[1] = 0.5 * (clo[1] + chi[1]);
+    if (dim == 3) ctr[2] = 0.5 * (clo[2] + chi[2]);
+    else ctr[2] = 0.0;
+    if (inside_any_body(ctr)) continue;
 
-      clo = cells[icell].lo;
-      chi = cells[icell].hi;
-      ctr[0] = 0.5 * (clo[0] + chi[0]);
-      ctr[1] = 0.5 * (clo[1] + chi[1]);
-      if (dim == 3) ctr[2] = 0.5 * (clo[2] + chi[2]);
-      else ctr[2] = 0.0;
-      if (inside_any_body(ctr)) continue;
-
-      cinfo[icell].type = CELLOUTSIDE;
-      typechanged = 1;
-      cinfo[icell].volume = full_cell_volume(clo,chi);
-      for (i = 0; i < ncorner; i++)
-        cinfo[icell].corner[i] = CELLOUTSIDE;
-    }
+    cinfo[icell].type = CELLOUTSIDE;
+    typechanged = 1;
+    cinfo[icell].volume = full_cell_volume(clo,chi);
+    for (i = 0; i < ncorner; i++)
+      cinfo[icell].corner[i] = CELLOUTSIDE;
   }
 
   // pass 3: uncut cells a body interior moved over become INSIDE
@@ -3851,17 +4084,13 @@ int FixRigid::cell_cut(int icell)
 
 int FixRigid::inside_any_body(double *x)
 {
-  FixRigid **flist = update->fixrigidlist;
-  int nb = update->nfixrigid;
-  int dimension = domain->dimension;
-
-  for (int m = 0; m < nb; m++) {
-    FixRigid *f = flist[m];
-    if (x[0] < f->bbodylo[0] || x[0] > f->bbodyhi[0]) continue;
-    if (x[1] < f->bbodylo[1] || x[1] > f->bbodyhi[1]) continue;
-    if (dimension == 3 &&
-        (x[2] < f->bbodylo[2] || x[2] > f->bbodyhi[2])) continue;
-    if (f->inside_body(x)) return 1;
+  for (int ibody = 0; ibody < nbody; ibody++) {
+    double *blo = bbodylo[ibody];
+    double *bhi = bbodyhi[ibody];
+    if (x[0] < blo[0] || x[0] > bhi[0]) continue;
+    if (x[1] < blo[1] || x[1] > bhi[1]) continue;
+    if (dim == 3 && (x[2] < blo[2] || x[2] > bhi[2])) continue;
+    if (inside_body(ibody,x)) return 1;
   }
   return 0;
 }
@@ -3937,7 +4166,7 @@ void FixRigid::copy_registry_to_grid()
 
 /* ----------------------------------------------------------------------
    compute per-element bounding boxes (elemlo/elemhi) and the whole-body
-     bounding box (bbodylo/bbodyhi)
+     bounding box (bbodylo/bbodyhi) of one body
    sweepflag = 0: boxes bound elements at their current positions
    sweepflag = 1: boxes also bound elements at their end-of-step positions
      (from xcmnew and exyz_space set from quatnew in start_of_step),
@@ -3945,7 +4174,7 @@ void FixRigid::copy_registry_to_grid()
    boxes are inflated by EPSSURF * body extent to avoid round-off misses
 ------------------------------------------------------------------------- */
 
-void FixRigid::body_bbox(int sweepflag)
+void FixRigid::body_bbox(int ibody, int sweepflag)
 {
   int i,j,k;
   double **pts;
@@ -3953,11 +4182,15 @@ void FixRigid::body_bbox(int sweepflag)
   double *lo,*hi;
 
   int npoint = dim;     // 2 points per line, 3 per tri
+  int istart = bodystart[ibody];
+  int istop = bodystart[ibody+1];
+  double *blo = bbodylo[ibody];
+  double *bhi = bbodyhi[ibody];
 
-  bbodylo[0] = bbodylo[1] = bbodylo[2] = BIG;
-  bbodyhi[0] = bbodyhi[1] = bbodyhi[2] = -BIG;
+  blo[0] = blo[1] = blo[2] = BIG;
+  bhi[0] = bhi[1] = bhi[2] = -BIG;
 
-  for (i = 0; i < nsurf; i++) {
+  for (i = istart; i < istop; i++) {
     pts = bodypt[i];
 
     lo = elemlo[i];
@@ -3974,13 +4207,14 @@ void FixRigid::body_bbox(int sweepflag)
     if (sweepflag) {
       for (j = 0; j < npoint; j++) {
         if (axiflag) {
-          ptnew[0] = xcmnew[0] + displace[i][j][0];
+          ptnew[0] = xcmnew[ibody][0] + displace[i][j][0];
           ptnew[1] = displace[i][j][1];
           ptnew[2] = 0.0;
         } else {
-          MathExtra::matvec(ex_space,ey_space,ez_space,displace[i][j],delta);
+          MathExtra::matvec(ex_space[ibody],ey_space[ibody],ez_space[ibody],
+                            displace[i][j],delta);
           if (dim == 2) delta[2] = 0.0;
-          MathExtra::add3(xcmnew,delta,ptnew);
+          MathExtra::add3(xcmnew[ibody],delta,ptnew);
         }
         for (k = 0; k < 3; k++) {
           lo[k] = MIN(lo[k],ptnew[k]);
@@ -3990,14 +4224,14 @@ void FixRigid::body_bbox(int sweepflag)
     }
 
     for (k = 0; k < 3; k++) {
-      bbodylo[k] = MIN(bbodylo[k],lo[k]);
-      bbodyhi[k] = MAX(bbodyhi[k],hi[k]);
+      blo[k] = MIN(blo[k],lo[k]);
+      bhi[k] = MAX(bhi[k],hi[k]);
     }
   }
 
-  double eps = EPSSURF * MAX(bbodyhi[0]-bbodylo[0],bbodyhi[1]-bbodylo[1]);
-  eps = EPSSURF * MAX(eps/EPSSURF,bbodyhi[2]-bbodylo[2]);
-  bboxeps = eps;
+  double eps = EPSSURF * MAX(bhi[0]-blo[0],bhi[1]-blo[1]);
+  eps = EPSSURF * MAX(eps/EPSSURF,bhi[2]-blo[2]);
+  bboxeps[ibody] = eps;
 
   // swept boxes bound the chord of each point's motion; the arc of a
   //   rotating point bulges beyond the chord by up to R*(1-cos(a/2))
@@ -4007,28 +4241,23 @@ void FixRigid::body_bbox(int sweepflag)
   //   it displaces no surf point and the motion is the chord exactly
 
   if (sweepflag && !axiflag) {
-    double angle = MathExtra::len3(omega) * update->dt;
-    double rmax = 0.0;
-    for (i = 0; i < nsurf; i++)
-      for (j = 0; j < npoint; j++)
-        rmax = MAX(rmax,MathExtra::lensq3(displace[i][j]));
-    rmax = sqrt(rmax);
-    eps += 0.125 * rmax * angle * angle;
+    double angle = MathExtra::len3(omega[ibody]) * update->dt;
+    eps += 0.125 * rmaxbody[ibody] * angle * angle;
   }
 
-  for (i = 0; i < nsurf; i++)
+  for (i = istart; i < istop; i++)
     for (k = 0; k < 3; k++) {
       elemlo[i][k] -= eps;
       elemhi[i][k] += eps;
     }
   for (k = 0; k < 3; k++) {
-    bbodylo[k] -= eps;
-    bbodyhi[k] += eps;
+    blo[k] -= eps;
+    bhi[k] += eps;
   }
 }
 
 /* ----------------------------------------------------------------------
-   determine if point X is inside the closed body via a parity test
+   determine if point X is inside closed body ibody via a parity test
    count intersections of segment from X to a point outside the body
      with all body elements: odd = inside, even = outside
    segment direction is oblique to coordinate axes to reduce the chance
@@ -4036,22 +4265,25 @@ void FixRigid::body_bbox(int sweepflag)
    requires body_bbox() was called to set bbodylo/bbodyhi
 ------------------------------------------------------------------------- */
 
-int FixRigid::inside_body(double *x)
+int FixRigid::inside_body(int ibody, double *x)
 {
   int hitflag,side;
   double param;
   double xout[3],xc[3];
 
-  double dmax = MAX(bbodyhi[0]-bbodylo[0],bbodyhi[1]-bbodylo[1]);
-  dmax = MAX(dmax,bbodyhi[2]-bbodylo[2]);
+  double *blo = bbodylo[ibody];
+  double *bhi = bbodyhi[ibody];
 
-  xout[0] = bbodyhi[0] + 0.414159*dmax;
+  double dmax = MAX(bhi[0]-blo[0],bhi[1]-blo[1]);
+  dmax = MAX(dmax,bhi[2]-blo[2]);
+
+  xout[0] = bhi[0] + 0.414159*dmax;
   xout[1] = x[1] + 0.271828*dmax;
   if (dim == 3) xout[2] = x[2] + 0.161803*dmax;
   else xout[2] = 0.0;
 
   int count = 0;
-  for (int i = 0; i < nsurf; i++) {
+  for (int i = bodystart[ibody]; i < bodystart[ibody+1]; i++) {
     if (dim == 2)
       hitflag = Geometry::
         line_line_intersect(x,xout,bodypt[i][0],bodypt[i][1],
@@ -4067,11 +4299,12 @@ int FixRigid::inside_body(double *x)
 }
 
 /* ----------------------------------------------------------------------
-   remove particles which are inside this body
+   remove particles which are inside any body
    also remove all particles in INSIDE cells
-   used at setup; each step uses the fused remove_inside_all() instead
+   used at setup; each step uses remove_inside_all() instead
    splitflag = 1 if called after a grid rebuild,
      to first reassign particles in split cells to their sub cells
+   requires body_bbox() was called to set every body's bbox
    return # of particles deleted by this proc; counts are summed
      across procs lazily by compute_scalar()
 ------------------------------------------------------------------------- */
@@ -4094,18 +4327,13 @@ bigint FixRigid::remove_inside_particles(int splitflag)
     particle->sorted = 0;
   }
 
-  // bbox around body at its current position
-
-  body_bbox(0);
-
-  // flag particles inside the body or in INSIDE cells for deletion
+  // flag particles inside a body or in INSIDE cells for deletion
 
   Grid::ChildInfo *cinfo = grid->cinfo;
   Particle::OnePart *particles = particle->particles;
   int nplocal = particle->nlocal;
 
   int icell;
-  double *x;
   int delflag = 0;
 
   for (int i = 0; i < nplocal; i++) {
@@ -4118,12 +4346,7 @@ bigint FixRigid::remove_inside_particles(int splitflag)
       continue;
     }
 
-    x = particles[i].x;
-    if (x[0] < bbodylo[0] || x[0] > bbodyhi[0]) continue;
-    if (x[1] < bbodylo[1] || x[1] > bbodyhi[1]) continue;
-    if (dim == 3 && (x[2] < bbodylo[2] || x[2] > bbodyhi[2])) continue;
-
-    if (inside_body(x)) {
+    if (inside_any_body(particles[i].x)) {
       particles[i].icell = -1;
       delflag = 1;
     }
@@ -4138,23 +4361,18 @@ bigint FixRigid::remove_inside_particles(int splitflag)
 
 /* ----------------------------------------------------------------------
    remove particles inside any rigid body, in one pass over particles
-   called each step by the last-defined rigid fix, after the grid
-     re-map; every body's bbodylo/bbodyhi is current (set when each
-     body committed its end-of-step geometry)
+   called each step after the grid re-map; every body's bbodylo/bbodyhi
+     is current (set when each body committed its end-of-step geometry)
    also removes all particles in INSIDE cells
    splitflag = 1 if called after a full grid rebuild,
      to first reassign particles in split cells to their sub cells
-   deletions increment the owning body's per-proc ndeleted count with
-     no communication; compute_scalar() reduces the counts on demand
+   deletions increment the per-proc ndeleted count with no
+     communication; compute_scalar() reduces the counts on demand
 ------------------------------------------------------------------------- */
 
 void FixRigid::remove_inside_all(int splitflag)
 {
-  int m;
   double *x;
-
-  FixRigid **flist = update->fixrigidlist;
-  int nb = update->nfixrigid;
 
   // reassign particles in split cells to sub cell owner
   // requires sorted particles, done by grid_rebuild()
@@ -4173,9 +4391,8 @@ void FixRigid::remove_inside_all(int splitflag)
   }
 
   // flag particles inside any body or in INSIDE cells for deletion
-  // attribute each deletion to the body containing the particle;
-  //   a particle in an INSIDE cell claimed by no body (e.g. inside
-  //   static closed geometry) is attributed to this fix
+  // a particle in an INSIDE cell claimed by no body (e.g. inside
+  //   static closed geometry) is deleted but not counted
 
   Grid::ChildCell *cells = grid->cells;
   Grid::ChildInfo *cinfo = grid->cinfo;
@@ -4198,29 +4415,14 @@ void FixRigid::remove_inside_all(int splitflag)
     if (!inside && cinfo[icell].type == CELLOUTSIDE &&
         cells[icell].nsurf == 0) continue;
 
-    int owner = -1;
-    for (m = 0; m < nb; m++) {
-      FixRigid *f = flist[m];
-      if (x[0] < f->bbodylo[0] || x[0] > f->bbodyhi[0]) continue;
-      if (x[1] < f->bbodylo[1] || x[1] > f->bbodyhi[1]) continue;
-      if (dim == 3 &&
-          (x[2] < f->bbodylo[2] || x[2] > f->bbodyhi[2])) continue;
-      if (f->inside_body(x)) {
-        owner = m;
-        break;
-      }
-    }
-
-    if (owner < 0 && !inside) continue;
-
-    // a particle in an INSIDE cell claimed by no body is interior to
-    //   static geometry: deleted, but not counted against any body
+    int inbody = inside_any_body(x);
+    if (!inbody && !inside) continue;
 
     particles[i].icell = -1;
     delflag = 1;
-    if (owner >= 0) {
-      flist[owner]->ndeleted++;
-      flist[owner]->ndelrun++;
+    if (inbody) {
+      ndeleted++;
+      ndelrun++;
     }
   }
 
@@ -4238,14 +4440,12 @@ void FixRigid::remove_inside_all(int splitflag)
   //   on every step
 
   if (!warndelete && update->ntimestep == update->laststep) {
-    bigint mine = 0;
-    for (m = 0; m < nb; m++) mine += flist[m]->ndelrun;
     bigint all;
-    MPI_Allreduce(&mine,&all,1,MPI_SPARTA_BIGINT,MPI_SUM,world);
+    MPI_Allreduce(&ndelrun,&all,1,MPI_SPARTA_BIGINT,MPI_SUM,world);
     if (all && comm->me == 0) {
       char str[256];
       snprintf(str,sizeof(str),BIGINT_FORMAT " particles were deleted inside "
-               "a rigid body during this run.  The body may be moving too "
+               "a rigid body during this run.  A body may be moving too "
                "far per timestep, or its surfs may lie exactly on grid cell "
                "boundaries",all);
       error->warning(FLERR,str);
@@ -4254,11 +4454,8 @@ void FixRigid::remove_inside_all(int splitflag)
     // re-arm the once-per-run warnings for a following run,
     //   which may skip init() (run ... pre no)
 
-    for (m = 0; m < nb; m++) {
-      FixRigid *f = flist[m];
-      f->ndelrun = 0;
-      f->warnrotate = f->warntranslate = f->warnexit = f->warnfallback = 0;
-    }
+    ndelrun = 0;
+    warnrotate = warntranslate = warnexit = warnfallback = 0;
   }
 }
 
@@ -4267,55 +4464,64 @@ void FixRigid::remove_inside_all(int splitflag)
    omega is recomputed from angmom with the end-of-step axes
 ------------------------------------------------------------------------- */
 
-void FixRigid::final_kick()
+void FixRigid::final_kick(int ibody)
 {
   double dt = update->dt;
-  double dtfhalf = 0.5 * dt / massbody;
+  double dtfhalf = 0.5 * dt / massbody[ibody];
   double dthalf = 0.5 * dt;
 
-  vcm[0] += dtfhalf * (fcm[0] + fext[0]);
-  vcm[1] += dtfhalf * (fcm[1] + fext[1]);
-  vcm[2] += dtfhalf * (fcm[2] + fext[2]);
+  double *vcm1 = vcm[ibody];
+  double *fcm1 = fcm[ibody];
+  double *angmom1 = angmom[ibody];
+  double *torque1 = torque[ibody];
+  double *omega1 = omega[ibody];
 
-  angmom[0] += dthalf * torque[0];
-  angmom[1] += dthalf * torque[1];
-  angmom[2] += dthalf * torque[2];
+  vcm1[0] += dtfhalf * (fcm1[0] + fext[0]);
+  vcm1[1] += dtfhalf * (fcm1[1] + fext[1]);
+  vcm1[2] += dtfhalf * (fcm1[2] + fext[2]);
 
-  MathExtra::angmom_to_omega(angmom,ex_space,ey_space,ez_space,inertia,omega);
+  angmom1[0] += dthalf * torque1[0];
+  angmom1[1] += dthalf * torque1[1];
+  angmom1[2] += dthalf * torque1[2];
+
+  MathExtra::angmom_to_omega(angmom1,ex_space[ibody],ey_space[ibody],
+                             ez_space[ibody],inertia[ibody],omega1);
 
   // guard against numeric drift out of the degrees of freedom the body
   //   has: rotation about z only in 2d, translation along x and spin
   //   about x only in an axisymmetric domain
 
   if (axiflag) {
-    vcm[1] = vcm[2] = 0.0;
-    angmom[1] = angmom[2] = 0.0;
-    omega[1] = omega[2] = 0.0;
+    vcm1[1] = vcm1[2] = 0.0;
+    angmom1[1] = angmom1[2] = 0.0;
+    omega1[1] = omega1[2] = 0.0;
   } else if (dim == 2) {
-    vcm[2] = 0.0;
-    angmom[0] = 0.0;
-    angmom[1] = 0.0;
-    omega[0] = 0.0;
-    omega[1] = 0.0;
+    vcm1[2] = 0.0;
+    angmom1[0] = 0.0;
+    angmom1[1] = 0.0;
+    omega1[0] = 0.0;
+    omega1[1] = 0.0;
   }
 }
 
 /* ----------------------------------------------------------------------
-   set invmass and the space-frame inverse inertia tensor from the
-     current principal axes and moments, used by the particle mover to
-     correct collisions for the recoil of the finite-mass body
+   set invmass and the space-frame inverse inertia tensor of one body
+     from its current principal axes and moments, used by the particle
+     mover to correct collisions for the recoil of the finite-mass body
    Iinv = sum over K of (1/inertia[K]) e_K outer-product e_K
    for 2d only rotation about z is possible, so Iinv has only a zz
      component = 1/Izz, which keeps the in-plane response decoupled
 ------------------------------------------------------------------------- */
 
-void FixRigid::set_recoil()
+void FixRigid::set_recoil(int ibody)
 {
   int i,j,k;
-  double *e[3] = {ex_space,ey_space,ez_space};
+  double *e[3] = {ex_space[ibody],ey_space[ibody],ez_space[ibody]};
+  double *inertia1 = inertia[ibody];
+  double *invi = invinertia[ibody];
 
-  invmass = 1.0 / massbody;
-  for (k = 0; k < 9; k++) invinertia[k] = 0.0;
+  invmass[ibody] = 1.0 / massbody[ibody];
+  for (k = 0; k < 9; k++) invi[k] = 0.0;
 
   // axisymmetric: the body can only spin about x, and the axes are
   //   pinned to the identity, so only 1/ixx is ever needed.  it is
@@ -4323,17 +4529,17 @@ void FixRigid::set_recoil()
   //   axisymmetric kmat
 
   if (axiflag) {
-    invinertia[0] = 1.0 / inertia[0];
+    invi[0] = 1.0 / inertia1[0];
 
   } else if (dim == 2) {
     double izz = 0.0;
-    for (k = 0; k < 3; k++) izz += inertia[k]*e[k][2]*e[k][2];
-    invinertia[8] = 1.0 / izz;
+    for (k = 0; k < 3; k++) izz += inertia1[k]*e[k][2]*e[k][2];
+    invi[8] = 1.0 / izz;
   } else {
     for (k = 0; k < 3; k++)
       for (i = 0; i < 3; i++)
         for (j = 0; j < 3; j++)
-          invinertia[3*i+j] += e[k][i]*e[k][j] / inertia[k];
+          invi[3*i+j] += e[k][i]*e[k][j] / inertia1[k];
   }
 }
 
@@ -4359,15 +4565,17 @@ void FixRigid::set_recoil()
    all procs store all surfs, so the check is identical on every proc
 ------------------------------------------------------------------------- */
 
-void FixRigid::check_watertight()
+void FixRigid::check_watertight(int ibody)
 {
   int unmatched = 0;
+  int istart = bodystart[ibody];
+  int istop = bodystart[ibody+1];
 
   if (dim == 2) {
     std::map<std::array<double,2>,int> count;
     std::array<double,2> key;
 
-    for (int i = 0; i < nsurf; i++) {
+    for (int i = istart; i < istop; i++) {
       key[0] = bodypt[i][0][0]; key[1] = bodypt[i][0][1];
       count[key]++;
       key[0] = bodypt[i][1][0]; key[1] = bodypt[i][1][1];
@@ -4388,7 +4596,7 @@ void FixRigid::check_watertight()
     double *a,*b;
     int dir;
 
-    for (int i = 0; i < nsurf; i++) {
+    for (int i = istart; i < istop; i++) {
       pts[0] = bodypt[i][0]; pts[1] = bodypt[i][1];
       pts[2] = bodypt[i][2]; pts[3] = bodypt[i][0];
 
@@ -4421,12 +4629,10 @@ void FixRigid::check_watertight()
   if (unmatched) {
     char str[128];
     if (dim == 2)
-      sprintf(str,"Fix rigid body is not watertight: "
-              "%d unmatched points",unmatched);
+      sprintf(str,"is not watertight: %d unmatched points",unmatched);
     else
-      sprintf(str,"Fix rigid body is not watertight: "
-              "%d unmatched edges",unmatched);
-    error->all(FLERR,str);
+      sprintf(str,"is not watertight: %d unmatched edges",unmatched);
+    body_error(ibody,str);
   }
 }
 
@@ -4450,25 +4656,27 @@ void FixRigid::check_watertight()
    all procs store all surfs, so the check is identical on every proc
 ------------------------------------------------------------------------- */
 
-void FixRigid::check_enclosed()
+void FixRigid::check_enclosed(int ibody)
 {
   int i,j,k;
   double c[3],a[3],b[3],d[3],e[3];
 
   int npoint = dim;
+  int istart = bodystart[ibody];
+  int istop = bodystart[ibody+1];
   double lo[3],hi[3];
   lo[0] = lo[1] = lo[2] = BIG;
   hi[0] = hi[1] = hi[2] = -BIG;
   c[0] = c[1] = c[2] = 0.0;
 
-  for (i = 0; i < nsurf; i++)
+  for (i = istart; i < istop; i++)
     for (j = 0; j < npoint; j++)
       for (k = 0; k < 3; k++) {
         c[k] += bodypt[i][j][k];
         lo[k] = MIN(lo[k],bodypt[i][j][k]);
         hi[k] = MAX(hi[k],bodypt[i][j][k]);
       }
-  for (k = 0; k < 3; k++) c[k] /= nsurf*npoint;
+  for (k = 0; k < 3; k++) c[k] /= (istop-istart)*npoint;
 
   double extent = MAX(hi[0]-lo[0],hi[1]-lo[1]);
   if (dim == 3) extent = MAX(extent,hi[2]-lo[2]);
@@ -4476,21 +4684,21 @@ void FixRigid::check_enclosed()
   double measure = 0.0;
 
   if (axiflag) {
-    for (i = 0; i < nsurf; i++) {
+    for (i = istart; i < istop; i++) {
       double r1 = bodypt[i][0][1];
       double r2 = bodypt[i][1][1];
       measure += MY_PI3 * (r1*r1 + r1*r2 + r2*r2) *
         (bodypt[i][1][0] - bodypt[i][0][0]);
     }
   } else if (dim == 2) {
-    for (i = 0; i < nsurf; i++) {
+    for (i = istart; i < istop; i++) {
       MathExtra::sub3(bodypt[i][0],c,a);
       MathExtra::sub3(bodypt[i][1],c,b);
       measure += a[0]*b[1] - a[1]*b[0];
     }
     measure *= 0.5;
   } else {
-    for (i = 0; i < nsurf; i++) {
+    for (i = istart; i < istop; i++) {
       MathExtra::sub3(bodypt[i][0],c,a);
       MathExtra::sub3(bodypt[i][1],c,b);
       MathExtra::sub3(bodypt[i][2],c,d);
@@ -4507,10 +4715,8 @@ void FixRigid::check_enclosed()
   if (dim == 3 || axiflag) scale *= extent;
 
   if (fabs(measure) <= EPSENCLOSED*scale) {
-    if (dim == 2 && !axiflag)
-      error->all(FLERR,"Fix rigid body encloses zero area");
-    else
-      error->all(FLERR,"Fix rigid body encloses zero volume");
+    if (dim == 2 && !axiflag) body_error(ibody,"encloses zero area");
+    else body_error(ibody,"encloses zero volume");
   }
 
   // the normals must point outward, so the body is an object with the
@@ -4534,7 +4740,7 @@ void FixRigid::check_enclosed()
     if (dim == 2 && measure > 0.0) inward = 1;
     if (dim == 3 && measure < 0.0) inward = 1;
   }
-  if (inward) error->all(FLERR,"Fix rigid body surf normals point inward");
+  if (inward) body_error(ibody,"surf normals point inward");
 }
 
 /* ----------------------------------------------------------------------
@@ -4578,15 +4784,20 @@ double FixRigid::memory_usage()
   bytes += (double) maxmodified * (2*sizeof(int) + sizeof(surfint *));
   bytes += (double) maxreclist * sizeof(surfint);
   bytes += (double) 2 * maxnewlist * sizeof(int);
-  bytes += (double) 12 * update->nfixrigid * sizeof(double); // ftbuf
   if (cpage) bytes += (double) cpage->size();
   bytes += (double) registry.size() *
     (sizeof(std::pair<int,surfint *>) + grid->maxsurfpercell*sizeof(surfint));
+
+  // per-body arrays, including the ftbuf work buffers
+
+  bytes += (double) nbody * 90 * sizeof(double);
+  bytes += (double) (nbody+1) * sizeof(int);              // bodystart
+  bytes += (double) nsurf * sizeof(int);                  // body
   return bytes;
 }
 
 /* ----------------------------------------------------------------------
-   return cummulative count of particles deleted inside the moving body
+   return cummulative count of particles deleted inside the moving bodies
 ------------------------------------------------------------------------- */
 
 double FixRigid::compute_scalar()
@@ -4604,18 +4815,28 @@ double FixRigid::compute_scalar()
 }
 
 /* ----------------------------------------------------------------------
-   return properties of the single rigid body
+   return properties of a single rigid body, the vector is only defined
+     when nbody = 1
 ------------------------------------------------------------------------- */
 
 double FixRigid::compute_vector(int index)
 {
-  if (index < 3) return xcm[index];
-  if (index < 6) return vcm[index-3];
-  if (index < 9) return fcm[index-6];
-  if (index < 12) return torque[index-9];
-  if (index < 15) return omega[index-12];
-  if (index < 19) return quat[index-15];
-  if (index < 22) return fpush[index-19];
+  return compute_array(0,index);
+}
+
+/* ----------------------------------------------------------------------
+   return properties of rigid body I, 22 columns
+------------------------------------------------------------------------- */
+
+double FixRigid::compute_array(int i, int index)
+{
+  if (index < 3) return xcm[i][index];
+  if (index < 6) return vcm[i][index-3];
+  if (index < 9) return fcm[i][index-6];
+  if (index < 12) return torque[i][index-9];
+  if (index < 15) return omega[i][index-12];
+  if (index < 19) return quat[i][index-15];
+  if (index < 22) return fpush[i][index-19];
 
   return 0.0;
 }

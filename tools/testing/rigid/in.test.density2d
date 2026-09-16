@@ -29,11 +29,11 @@ surf_modify         all collide 1
 
 timestep 	    1.0e-6
 
-compute             c1 surf body all fx fy fz tx ty tz com 5 5 0
+compute             c1 surf body all fx fy fz tx ty tz com rigid
 
 global              rigid yes
 
-fix		    1 rigid body c1 density 1.0 &
+fix		    1 rigid body c1 single density 1.0 &
                     vcom 12 -3 0 angmom 0 0 5.0e-3 &
                     outfile tmp.density2d.state 1
 

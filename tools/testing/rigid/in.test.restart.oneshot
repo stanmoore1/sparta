@@ -13,24 +13,18 @@ create_grid 	    20 20 1
 global		    nrho 1.0 fnum 0.001
 species		    air.species N
 mixture		    air N vstream 0 0 0 temp 273.0
-read_surf           data.square group body
+read_surf           data.square group bodies
 read_surf           data.wall group wall
-read_surf           data.square group body2 trans 0 3 0
+read_surf           data.square group bodies trans 0 3 0 typeadd 1
 surf_collide	    1 specular
 surf_modify         all collide 1
 timestep 	    0.0001
-compute             csurf surf body all fx fy fz tx ty tz com 5 5 0
+compute             csurf surf bodies all fx fy fz tx ty tz com rigid
 global              rigid yes
-fix		    1 rigid body csurf body mass 1.0e-22 com 5 5 0 &
-                    vcom 50 0 0 &
-		    moi 8.3333333e-24 8.3333333e-24 1.6666667e-23 0 0 0 &
-                    angmom 0 0 0 push 1.0e-18 0.5 pushbound yes
-compute             csurf2 surf body2 all fx fy fz tx ty tz com 5 8 0
-fix		    2 rigid body2 csurf2 body mass 1.0e-22 com 5 8 0 &
-                    vcom -30 0 0 &
-		    moi 8.3333333e-24 8.3333333e-24 1.6666667e-23 0 0 0 &
-                    angmom 0 0 1.0e-23 push 1.0e-18 0.5 pushbound yes
+fix		    1 rigid bodies csurf type infile data.restart.bodies &
+                    push 1.0e-18 0.5 pushbound yes
 stats		    ${nrun}
-stats_style         step f_1[1] f_1[4] f_1[15] f_2[1] f_2[4] f_2[15]
+stats_style         step f_1[1][1] f_1[1][4] f_1[1][15] &
+                    f_1[2][1] f_1[2][4] f_1[2][15]
 stats_modify        format float %.17g
 run 		    ${nrun}

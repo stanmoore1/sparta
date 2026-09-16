@@ -29,13 +29,13 @@ surf_modify         all collide 1
 
 timestep 	    1.0e-6
 
-compute             c1 surf body all fx fy fz tx ty tz com 0 0 0
+compute             c1 surf body all fx fy fz tx ty tz com rigid
 
 global              rigid yes
 
 # no mass, com, or moi given: all three are integrated from the geometry
 
-fix		    1 rigid body c1 density 1.0 outfile tmp.density.state 1
+fix		    1 rigid body c1 single density 1.0 outfile tmp.density.state 1
 
 stats		    1
 stats_style         step np nscoll

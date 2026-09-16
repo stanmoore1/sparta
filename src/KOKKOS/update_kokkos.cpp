@@ -409,7 +409,7 @@ void UpdateKokkos::setup()
 void UpdateKokkos::build_rigidmap()
 {
   Update::build_rigidmap();
-  if (!rigidflag || !nfixrigid) return;
+  if (!rigidflag || !fixrigid) return;
 
   int n = surf->nlocal + surf->nghost;
   if ((int) k_rigidmap.extent(0) < n)
@@ -431,18 +431,18 @@ void UpdateKokkos::build_rigidmap()
 
 void UpdateKokkos::rigid_upload()
 {
-  if ((int) k_rigidbody.extent(0) < nfixrigid)
-    k_rigidbody = tdual_rigidbody_2d("update:rigidbody",nfixrigid,19);
+  int nbody = fixrigid->nbody;
+  if ((int) k_rigidbody.extent(0) < nbody)
+    k_rigidbody = tdual_rigidbody_2d("update:rigidbody",nbody,19);
   auto h_rigidbody = k_rigidbody.view_host();
-  for (int m = 0; m < nfixrigid; m++) {
-    FixRigid *f = fixrigidlist[m];
+  for (int m = 0; m < nbody; m++) {
     for (int k = 0; k < 3; k++) {
-      h_rigidbody(m,k) = f->xcm[k];
-      h_rigidbody(m,3+k) = f->vcm[k];
-      h_rigidbody(m,6+k) = f->omega[k];
+      h_rigidbody(m,k) = fixrigid->xcm[m][k];
+      h_rigidbody(m,3+k) = fixrigid->vcm[m][k];
+      h_rigidbody(m,6+k) = fixrigid->omega[m][k];
     }
-    h_rigidbody(m,9) = f->invmass;
-    for (int k = 0; k < 9; k++) h_rigidbody(m,10+k) = f->invinertia[k];
+    h_rigidbody(m,9) = fixrigid->invmass[m];
+    for (int k = 0; k < 9; k++) h_rigidbody(m,10+k) = fixrigid->invinertia[m][k];
   }
   k_rigidbody.modify_host();
   k_rigidbody.sync_device();
@@ -707,7 +707,7 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
   //   body map was uploaded when the surf arrays last changed
 
   rigid_on = 0;
-  if (rigidflag && nfixrigid) {
+  if (rigidflag && fixrigid) {
     rigid_upload();
     rigid_on = 1;
   }

@@ -189,6 +189,11 @@ axiopen       the axis exception must not let through a free end that is
               off the axis, even one on the box surface, which the Surf
               class's own watertight check does allow
 
+The decks with several bodies (twobody, pushpair, exitbox, multiremap,
+axipair, and the restart trio) define them with one fix rigid using
+bodystyle type: each read_surf gives its body a distinct surf type via
+typeadd, and the per-body parameters come from a data.*.bodies infile.
+
 The ballistic, force, bounce, twobody, and pushpair tests contain no
 particles, and the recoil test a single particle; they must produce
 identical results on any number of procs.

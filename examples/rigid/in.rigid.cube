@@ -45,11 +45,11 @@ timestep 	    0.0001
 # moi of a uniform cube of edge A is isotropic: 1/6 M A^2 on the diagonal,
 # which is the same in any orientation
 
-compute             csurf surf cube all fx fy fz tx ty tz com 5 5 5
+compute             csurf surf cube all fx fy fz tx ty tz com rigid
 
 global              rigid yes
 
-fix		    1 rigid cube csurf body &
+fix		    1 rigid cube csurf single body &
                     mass 3.0e-21 com 5 5 5 vcom 0 0 0 &
                     moi 5.0e-22 5.0e-22 5.0e-22 0 0 0 angmom 0 0 0
 

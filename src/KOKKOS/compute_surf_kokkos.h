@@ -116,6 +116,19 @@ void surf_tally_kk(double /*dtremain*/, int isurf, int icell, int reaction,
 
   double fluxscale = d_normflux(isurf);
 
+  // COM for torques: that of the rigid body the surf belongs to, if any
+
+  double comuse[3];
+  comuse[0] = com[0]; comuse[1] = com[1]; comuse[2] = com[2];
+  if (comrigid) {
+    int ibody = d_rigidmap(isurf);
+    if (ibody >= 0) {
+      comuse[0] = d_xcmmid(ibody,0);
+      comuse[1] = d_xcmmid(ibody,1);
+      comuse[2] = d_xcmmid(ibody,2);
+    }
+  }
+
   // tally all values associated with group into array
   // set fflag after force computation is done once
   // set tqflag after torque computation is done once
@@ -247,7 +260,7 @@ void surf_tally_kk(double /*dtremain*/, int isurf, int icell, int reaction,
         tqflag = 1;
         if (ip) xcollide = ip->x;
         else xcollide = iorig->x;
-        MathExtraKokkos::sub3(xcollide,com,rdelta);
+        MathExtraKokkos::sub3(xcollide,comuse,rdelta);
         MathExtraKokkos::cross3(rdelta,pdelta_force,torque);
       }
       a_array_surf_tally(itally,k++) -= torque[0] * nfactor_inverse;
@@ -263,7 +276,7 @@ void surf_tally_kk(double /*dtremain*/, int isurf, int icell, int reaction,
         tqflag = 1;
         if (ip) xcollide = ip->x;
         else xcollide = iorig->x;
-        MathExtraKokkos::sub3(xcollide,com,rdelta);
+        MathExtraKokkos::sub3(xcollide,comuse,rdelta);
         MathExtraKokkos::cross3(rdelta,pdelta_force,torque);
       }
       a_array_surf_tally(itally,k++) -= torque[1] * nfactor_inverse;
@@ -279,7 +292,7 @@ void surf_tally_kk(double /*dtremain*/, int isurf, int icell, int reaction,
         tqflag = 1;
         if (ip) xcollide = ip->x;
         else xcollide = iorig->x;
-        MathExtraKokkos::sub3(xcollide,com,rdelta);
+        MathExtraKokkos::sub3(xcollide,comuse,rdelta);
         MathExtraKokkos::cross3(rdelta,pdelta_force,torque);
       }
       a_array_surf_tally(itally,k++) -= torque[2] * nfactor_inverse;
@@ -463,6 +476,16 @@ void surf_tally_kk(double /*dtremain*/, int isurf, int icell, int reaction,
   DAT::t_int_1d d_surf2tally;         // using Kokkos::UnorderedMap::insert uses too many registers on GPUs
 
   DAT::t_float_1d d_normflux;         // normalization factor for each surf element
+
+  // com rigid: per-surf body index from UpdateKokkos, and the mid-step
+  //   COM of each body from fix rigid, uploaded by pre_surf_tally()
+  // always double: COM coords are compared against double surf points
+
+  DAT::t_int_1d d_rigidmap;
+  typedef Kokkos::DualView<double**,DeviceType::array_layout,DeviceType>
+    tdual_xcm_2d;
+  tdual_xcm_2d k_xcmmid;
+  tdual_xcm_2d::t_dev d_xcmmid;
 
   t_species_1d d_species;
   DAT::t_int_2d d_s2g;

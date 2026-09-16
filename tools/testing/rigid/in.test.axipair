@@ -26,29 +26,22 @@ global		    nrho 1.0 fnum 0.001
 species		    air.species N
 mixture		    air N vstream 0 0 0 temp 273.0
 
-read_surf           adata.cylinder group b1 trans 0.2 0 0
-read_surf           adata.cylinder group b2 trans 0.55 0 0
+read_surf           adata.cylinder group bodies trans 0.2 0 0
+read_surf           adata.cylinder group bodies trans 0.55 0 0 typeadd 1
 surf_collide	    1 specular
 surf_modify         all collide 1
 
 timestep 	    1.0e-6
 
-compute             c1 surf b1 all fx fy fz tx ty tz com 0.7 0 0
-compute             c2 surf b2 all fx fy fz tx ty tz com 1.05 0 0
+compute             c1 surf bodies all fx fy fz tx ty tz com rigid
 
 global              rigid yes
 
-fix		    1 rigid b1 c1 body &
-		    mass 1.0e-22 com 0.7 0 0 vcom 100.0 0 0 &
-		    moi 5.0e-25 1.0e-24 1.0e-24 0 0 0 angmom 0 0 0 &
-                    push 5.0e-15 0.03
-fix		    2 rigid b2 c2 body &
-		    mass 2.0e-22 com 1.05 0 0 vcom 0 0 0 &
-		    moi 1.0e-24 2.0e-24 2.0e-24 0 0 0 angmom 0 0 0 &
+fix		    1 rigid bodies c1 type infile data.axipair.bodies &
                     push 5.0e-15 0.03
 
 stats		    250
-stats_style         step f_1[1] f_1[4] f_1[5] f_2[1] f_2[4] f_2[5] &
-                    f_1[21] f_2[21]
+stats_style         step f_1[1][1] f_1[1][4] f_1[1][5] &
+                    f_1[2][1] f_1[2][4] f_1[2][5] f_1[1][21] f_1[2][21]
 stats_modify        format float %20.14e
 run 		    3000

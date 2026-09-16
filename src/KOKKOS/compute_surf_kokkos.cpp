@@ -18,9 +18,10 @@
 #include "mixture.h"
 #include "surf_kokkos.h"
 #include "grid.h"
-#include "update.h"
+#include "update_kokkos.h"
 #include "modify.h"
 #include "domain.h"
+#include "fix_rigid.h"
 #include "memory_kokkos.h"
 #include "error.h"
 #include "sparta_masks.h"
@@ -148,6 +149,24 @@ void ComputeSurfKokkos::pre_surf_tally()
   surf_kk->sync(Device,ALL_MASK);
   d_lines = surf_kk->k_lines.view_device();
   d_tris = surf_kk->k_tris.view_device();
+
+  // com rigid: the per-surf body map is mirrored on the device when the
+  //   surf arrays change; upload this step's mid-step COM of every body,
+  //   set by fix rigid in start_of_step() which ran before this
+
+  if (comrigid) {
+    UpdateKokkos *update_kk = (UpdateKokkos *) update;
+    d_rigidmap = update_kk->d_rigidmap;
+    int nbody = fixrigid->nbody;
+    if ((int) k_xcmmid.extent(0) < nbody)
+      k_xcmmid = tdual_xcm_2d("surf:xcmmid",nbody,3);
+    auto h_xcmmid = k_xcmmid.view_host();
+    for (int m = 0; m < nbody; m++)
+      for (int k = 0; k < 3; k++) h_xcmmid(m,k) = fixrigid->xcmmid[m][k];
+    k_xcmmid.modify_host();
+    k_xcmmid.sync_device();
+    d_xcmmid = k_xcmmid.view_device();
+  }
 
   need_dup = sparta->kokkos->need_dup<DeviceType>();
   if (need_dup)

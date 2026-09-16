@@ -10,14 +10,19 @@ fix rigid command :h3
 
 [Syntax:]
 
-fix ID rigid group-ID compute-ID dstyle args keyword value ... :pre
+fix ID rigid group-ID compute-ID bodystyle dstyle args keyword value ... :pre
 
 ID is documented in "fix"_fix.html command :ulb,l
 rigid = style name of this fix command :l
-group-ID = ID of surface group containing surf elements which comprise the rigid body :l
-compute-ID = ID of "compute surf"_compute_surf.html command for force/torque calculation on rigid body :l
+group-ID = ID of surface group containing surf elements which comprise the rigid bodies :l
+compute-ID = ID of "compute surf"_compute_surf.html command for force/torque calculation on rigid bodies :l
+bodystyle = {single} or {type} or {custom} :l
+  {single} = all surfs in the group are one rigid body
+  {type} = body ID of each surf = its surf type
+  {custom} arg = name
+    name = body ID of each surf = value of per-surf custom integer vector {name} :pre
 dstyle = {body} or {infile} or {density}, followed by args :l
-  {body} args = several keyword/values pairs, all keywords must appear, in any order
+  {body} args = several keyword/values pairs, all keywords must appear, in any order, only for a single body
     keyword = {com} and {mass} and {moi} and {vcom} and {angmom}
       {mass} value = mtotal
         mtotal = total mass of rigid body (mass units)
@@ -31,9 +36,9 @@ dstyle = {body} or {infile} or {density}, followed by args :l
       {angmom} values = lx ly lz
         lx, ly, lz = angular momentum of rigid body in space frame (mass-distance^2/time units) :pre
   {infile} args = filename
-    filename = name of file containing all rigid body attributes on a single line :pre
+    filename = name of file containing the attributes of every rigid body, one line per body :pre
   {density} args = rho
-    rho = uniform mass density of the rigid body
+    rho = uniform mass density of the rigid bodies
           (mass/distance^3 units for 3d, mass/distance^2 for 2d) :pre
 zero or more optional keyword/value pairs :l
   keyword = {vcom} or {angmom} or {remap} or {rotate} or {push} or {pushbound} or {pushstyle} or {pushdamp} or {force} or {outfile}
@@ -65,14 +70,16 @@ zero or more optional keyword/value pairs :l
 
 [Examples:]
 
-compute csurf surf all all fx fy fz tx ty tz com 5 5 0
+compute csurf surf all all fx fy fz tx ty tz com rigid
 global rigid yes
-fix 1 rigid all csurf body mass 1.0 com 5 5 0 vcom 0 0 0 moi 2 2 3 0.5 0 0 angmom 0 0 0
-fix 1 rigid all csurf infile square.rigid outfile square.state 1000
-fix 1 rigid all csurf infile square.rigid push 1.0e-18 0.5 pushbound yes
-fix 1 rigid all csurf infile square.rigid force 0 -9.8e-22 0
-fix 1 rigid all csurf density 2700.0
-fix 1 rigid all csurf density 2700.0 vcom 60 0 0 angmom 0 0 6.8e-24 :pre
+fix 1 rigid all csurf single body mass 1.0 com 5 5 0 vcom 0 0 0 moi 2 2 3 0.5 0 0 angmom 0 0 0
+fix 1 rigid all csurf single infile square.rigid outfile square.state 1000
+fix 1 rigid all csurf single infile square.rigid push 1.0e-18 0.5 pushbound yes
+fix 1 rigid all csurf single infile square.rigid force 0 -9.8e-22 0
+fix 1 rigid all csurf single density 2700.0
+fix 1 rigid all csurf single density 2700.0 vcom 60 0 0 angmom 0 0 6.8e-24
+fix 1 rigid all csurf type infile circles.bodies push 1.0e-18 0.5
+fix 1 rigid all csurf custom body density 2700.0 :pre
 
 [Description:]
 
@@ -92,52 +99,69 @@ set to {yes}, so that the particle move code checks for collisions
 with moving surface elements.
 
 Group-ID is the ID of the group of surface elements (lines in 2d or
-triangles in 3d) which comprise the rigid body object.  The
-collection of surfs must form a closed (watertight) object, which is
-checked when the fix is defined: in 2d every point must be the first
-endpoint of exactly as many body lines as it is the second endpoint,
-and in 3d every edge must be traversed the same number of times in
-each direction by the body triangles which share it.  The body must
-also enclose a non-zero area (2d) or volume (3d): a zero-thickness
-body, such as a single line or triangle traversed once in each
-direction, passes the watertight test but has no interior for the
-cut-cell routines to mark, and is rejected.  The surf normals must
-point outward, away from the enclosed interior: the body is an object
+triangles in 3d) which comprise the rigid bodies.  The {bodystyle}
+setting assigns each surf in the group to a body.  With style
+{single}, all the surfs in the group are one rigid body.  With style
+{type}, the body ID of each surf is its surf type, as read by the
+"read_surf"_read_surf.html command from a surf file with a type
+column, or as offset by the {typeadd} keyword of that command.  With
+style {custom}, the body ID of each surf is the value of the specified
+per-surf custom integer vector, defined by the
+"read_surf"_read_surf.html or "custom"_custom.html commands.  Body IDs
+must be integers from 1 to Nbody, and every body must have at least
+one surf.  A surf in the group with body ID 0 is a static surf which
+is not part of any body.  All the rigid bodies in a simulation are
+defined by a single fix rigid command, so there can be as many bodies
+as there are surf types.
+
+The tools/rigid/replicate.py script creates a surf file with many
+copies of a template body, each with its own surf type, plus a
+matching file of per-body parameters for the {infile} style described
+below.
+
+Each body must form a closed (watertight) object, which is checked
+when the fix is defined: in 2d every point must be the first endpoint
+of exactly as many body lines as it is the second endpoint, and in 3d
+every edge must be traversed the same number of times in each
+direction by the body triangles which share it.  The body must also
+enclose a non-zero area (2d) or volume (3d): a zero-thickness body,
+such as a single line or triangle traversed once in each direction,
+passes the watertight test but has no interior for the cut-cell
+routines to mark, and is rejected.  The surf normals must point
+outward, away from the enclosed interior: the body is an object
 surrounded by gas, not a container with gas inside it, and a body
 traversed the wrong way round is rejected.
 
-Each fix rigid command defines a single rigid body.  Multiple rigid
-bodies can be simulated by using multiple fix rigid commands, each
-with its own surf group and its own compute; no surf element can
-belong to more than one body.  Bodies interact with each other via
-the push-off forces described below: another body's surfs act as
-push-off sources just as static surfs do, so a body with the {push}
-keyword enabled is repelled by other bodies before contact.  All
-push-off forces are computed once per step after every body has moved
-to its end-of-step position, and each body-body contact force is
-applied equal-and-opposite to both bodies at the contact point, so
-body-body interactions conserve linear and angular momentum exactly.
+Bodies interact with each other via the push-off forces described
+below: another body's surfs act as push-off sources just as static
+surfs do, so with the {push} keyword enabled bodies are repelled by
+each other before contact.  All push-off forces are computed once per
+step after every body has moved to its end-of-step position, and each
+body-body contact force is applied equal-and-opposite to both bodies
+at the contact point, so body-body interactions conserve linear and
+angular momentum exactly.
 
 Compute-ID is the ID of a "compute surf"_compute_surf.html command
 which tallies the force and torque on individual surface elements due
 to collisions with particles.  It must compute exactly these 6 values
 in this order, for a single group of a mixture which contains every
 species (otherwise part of the gas would push on the body without
-being tallied), so that it produces a per-surf array with 6 columns:
+being tallied), and its surf group must include all the body surfs:
 
-compute csurf surf all all fx fy fz tx ty tz com 5 5 0 :pre
+compute csurf surf all all fx fy fz tx ty tz com rigid :pre
 
-The compute must also specify the {com} keyword, which "compute
-surf"_compute_surf.html requires for its torque values; the
-coordinates given to it are irrelevant here, since this fix resets
-the COM used by the compute at the beginning of each timestep to the
-mid-step position of the body's COM, so that tallied torques are
-always about the current COM of the body.
-This fix also insures the compute tallies collision info on every
-timestep of a run.
+The compute must use the {rigid} setting of its {com} keyword, so that
+the torque on each surf is tallied about the center-of-mass of the
+body the surf belongs to, at its mid-step position; see the "compute
+surf"_compute_surf.html doc page.  This fix also insures the compute
+tallies collision info on every timestep of a run.
 
-The parameters of the rigid body can be specified in one of three
-ways via the {dstyle} setting: {body}, {infile}, or {density}.  Note that all these
+The parameters of the rigid bodies can be specified in one of three
+ways via the {dstyle} setting: {body}, {infile}, or {density}.  The
+{body} style gives the parameters of a single body in the command
+itself.  The {infile} style reads them from a file, one line per body.
+The {density} style computes the mass, COM, and moments of inertia of
+every body from its geometry.  Note that all these
 parameters are specified in the coordinate frame of the simulation
 box, also called the "space" frame.  See the discussion below of
 "space" versus "body" frames for rigid bodies.
@@ -187,18 +211,20 @@ The {angmom} argument provides 3 values for the angular momentum of
 the rigid body in the space frame.  For 2d systems, lx and ly must be
 zero.
 
-The {infile} style allows the same 5 parameters to be read from a
-specified {filename}.  The format of the file is as follows.  It can
-contain initial blank lines or comment lines starting with "#" which
-are ignored.  The first non-blank, non-comment line should list the
-following 16 parameters in the order listed:
+The {infile} style allows the same 5 parameters to be read for every
+body from a specified {filename}.  The format of the file is as
+follows.  It can contain blank lines or comment lines starting with
+"#" which are ignored.  Each other line lists a body ID followed by
+the following 16 parameters in the order listed:
 
-mtotal xcm ycm zcm ixx iyy izz ixy ixz iyz vxcm vycm vzcm lx ly lz :pre
+ID mtotal xcm ycm zcm ixx iyy izz ixy ixz iyz vxcm vycm vzcm lx ly lz :pre
 
 Six more values may follow the 16, the force and torque on the body:
 
-mtotal ... lx ly lz fx fy fz tx ty tz :pre
+ID mtotal ... lx ly lz fx fy fz tx ty tz :pre
 
+Every body must have a line, in any order, and all lines must list
+the same number of values.
 A file written by the {outfile} keyword always includes them.  They
 matter only for run continuation, where they carry the force and
 torque of the last completed step into the first step of the
@@ -220,7 +246,7 @@ such as a body read from an STL file or one of the meshes produced by
 the tools described in "Section tools"_Section_tools.html.  Only the
 density is given:
 
-fix 1 rigid body csurf density 2700.0 :pre
+fix 1 rigid body csurf single density 2700.0 :pre
 
 The volume integrals which define these quantities are converted into
 sums over the body elements.  In 3d each triangle forms a tetrahedron
@@ -263,7 +289,7 @@ The {density} style does not set the body's initial motion, which
 cannot be derived from its shape.  Both default to zero and may be
 given with the optional {vcom} and {angmom} keywords:
 
-fix 1 rigid body csurf density 2700.0 vcom 60 0 0 angmom 0 0 6.8e-24 :pre
+fix 1 rigid body csurf single density 2700.0 vcom 60 0 0 angmom 0 0 6.8e-24 :pre
 
 Those two keywords may only be used with the {density} style.  With
 the {body} style, {vcom} and {angmom} are already two of its five
@@ -622,8 +648,8 @@ collisions and push-off contacts.  For example, a body of mass M in a
 gravitational field g pointing in -y would use {force} 0 -M*g 0.  For
 2d systems, fz must be zero.
 
-The {outfile} keyword writes the current state of the rigid body
-(the same parameters as the {infile} format, with the moments of
+The {outfile} keyword writes the current state of every rigid body
+(one line per body in the {infile} format, with the moments of
 inertia given in the space frame for the current body orientation) to
 the specified file every Nevery timesteps.  The file is overwritten
 each time, so it always contains the most recent state.
@@ -668,10 +694,12 @@ is chosen.
 
 [Restart, output info:]
 
-This fix computes a global scalar and a global vector, which can be
-accessed by various output commands at any timestep.  The scalar is
-the cumulative number of particles deleted because they ended up
-inside the moving body.  The vector has 22 values:
+This fix computes a global scalar, a global vector, and a global
+array, which can be accessed by various output commands at any
+timestep.  The scalar is the cumulative number of particles deleted
+because they ended up inside a moving body.  The array has one row
+per body, in body ID order, and 22 columns.  The vector is only
+defined when there is a single body, and has the same 22 values:
 
 1,2,3 = xyz coords of the center of mass (COM) (distance units)
 4,5,6 = xyz components of the COM velocity (velocity units)
@@ -806,9 +834,9 @@ never spins the body.
 [Restrictions:]
 
 The "global rigid"_global.html command must be used to enable
-moving-surf collisions in the particle mover.  Each fix rigid command
-defines one rigid body; multiple bodies require multiple fixes with
-disjoint surf groups.
+moving-surf collisions in the particle mover.  Only one fix rigid
+command can be defined; it defines all the rigid bodies.  The {body}
+style can only be used when there is a single body.
 
 Rigid bodies can be used with explicit surface elements, both
 non-distributed and distributed ("global surfs"_global.html
