@@ -112,6 +112,19 @@ mixture       negative: a compute surf whose mixture omits a species
               the gas
 badinfile     negative: an infile with a malformed number (1.0d-22)
               must be rejected rather than read as 1.0
+recoilspin    the recoil correction must include the body's ROTATIONAL
+              response, not just 1/M: an off-centre strike with Izz chosen
+              so (r x n)^2/Izz equals 1/M, checked against the exact
+              rigid-body impulse solution for both vcom and omega, plus
+              exact momentum and elastic energy conservation
+couple        accuracy of the explicit gas-body coupling on one impulse:
+              the body VELOCITY is exact at every timestep, while the
+              POSITION carries an offset of at most one step's body
+              motion which must fall linearly with dt
+densityfar    dstyle = density must be placement invariant: the same unit
+              cube as the density test, moved to (1e5,1e5,1e5), held to
+              the same tolerances.  an origin-referenced moment sum keeps
+              only about (L/R)^2 of full precision and fails this
 axistuck      no rigid body: axisymmetric tube in which particles hit
               the same static line many times per step; the mover must
               not treat the repeated hits as a stuck particle

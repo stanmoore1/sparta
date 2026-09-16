@@ -1104,6 +1104,59 @@ def read_state(name):
     return None
 
 
+def test_recoil_spin(exe_cmd):
+    """The recoil correction must include the body's rotational response.
+
+    A collision's impulse is reduced by the body's inverse-mass matrix at the
+    contact, K = 1/M - [r x] Iinv [r x].  in.test.recoil covers the 1/M part
+    on a head-on hit; here the strike is off-centre and Izz is chosen so the
+    rotational term (r x n)^2/Izz equals 1/M exactly, making it half the
+    body's response.  Checked against the exact rigid-body impulse solution."""
+    MP = MASS_N * 1.0e-3
+    MB = 1.0e-24
+    IZZ = 1.6e-25
+    V0 = 1000.0
+    # left face of the unit square at x=4.5, outward normal (-1,0); COM (5,5)
+    rx, ry = -0.5, 0.4
+    nx, ny = -1.0, 0.0
+    rxn = rx*ny - ry*nx                      # z component of r x n
+    nKn = 1.0/MB + rxn*rxn/IZZ
+    p = -2.0 * (V0*nx) / (1.0/MP + nKn)      # elastic normal impulse
+    vcm_ex = -(p/MB)*nx
+    om_ex = -p*rxn/IZZ
+
+    rc, out = run_deck(exe_cmd, "in.test.recoil.spin")
+    if rc:
+        return ["run failed with exit code %d" % rc]
+    rows = parse_stats(out)
+    if not rows:
+        return ["no stats output"]
+    last = rows[-1]
+    fails = []
+    if last["f_1"] != 0:
+        fails.append("%d particles deleted" % last["f_1"])
+    if not approx(last["f_1[4]"], vcm_ex, rel=1.0e-12):
+        fails.append("vcom x %.17g != exact rigid-body impulse result %.17g"
+                     % (last["f_1[4]"], vcm_ex))
+    if not approx(last["f_1[15]"], om_ex, rel=1.0e-12):
+        fails.append("omega z %.17g != exact %.17g -- the rotational part of "
+                     "the recoil correction is wrong" % (last["f_1[15]"], om_ex))
+    if abs(last["f_1[5]"]) > 1.0e-12 * abs(vcm_ex):
+        fails.append("vcom y %.3e != 0 (impulse is along x)" % last["f_1[5]"])
+
+    # exact momentum conservation, and an elastic collision conserves energy
+    vp_out = V0 + (p/MP)*nx
+    dp = MP*(vp_out - V0) + MB*last["f_1[4]"]
+    if abs(dp) > 1.0e-12 * abs(MP*V0):
+        fails.append("momentum not conserved: %.3e" % dp)
+    e0 = 0.5*MP*V0*V0
+    e1 = (0.5*MP*vp_out*vp_out + 0.5*MB*last["f_1[4]"]**2 +
+          0.5*IZZ*last["f_1[15]"]**2)
+    if abs(e1-e0) > 1.0e-10 * e0:
+        fails.append("energy not conserved: rel %.3e" % ((e1-e0)/e0))
+    return fails
+
+
 def test_couple(exe_cmd):
     """Accuracy of the explicit gas-body coupling, measured on one impulse.
 
@@ -1358,6 +1411,7 @@ TESTS = [
     ("rotwall3d", test_rotwall3d),
     ("axistuck", test_axistuck),
     ("tallyorder", test_tallyorder),
+    ("recoilspin", test_recoil_spin),
     ("couple", test_couple),
     ("density", test_density),
     ("densityfar", test_density_far),
