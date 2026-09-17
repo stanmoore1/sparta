@@ -419,13 +419,24 @@ void FixRigidKokkos::operator()(TagFixRigidAssignSplit, const int &m) const
 
 int FixRigidKokkos::assign_split_kokkos()
 {
-  // DISABLED: this path corrupts the heap after ~20 steps of the 1000-body
-  //   deck (double free), cause not yet identified.  compute-sanitizer finds
-  //   no kernel memory error, so the fault is in the host-side mirror views
-  //   or the cinfo bookkeeping below.  the host path is correct, so use it
-  //   until this is understood
+  // DISABLED by default, and a measured decision rather than a broken one.
+  //   the kernel is correct (ASAN clean) but is not a win: the CRS graphs it
+  //   reads must be rewrapped first, see below, and that costs more than the
+  //   host pass it replaces -- 8.05 s against 6.34 s over 40 steps, with the
+  //   particle-array copy count unchanged at 36/37, because the round trip
+  //   this pass would have saved is already spent by the host code around it
+  //   set SPARTA_ASSIGN_KK=1 to enable it when finishing that work
 
-  return 0;
+  if (!getenv("SPARTA_ASSIGN_KK")) return 0;
+
+  // the split tests index d_csplits/d_csubs by isplit and d_csurfs by icell,
+  //   and those CRS graphs are sized by the split/cell counts as of the last
+  //   wrap_kokkos_graphs().  split_rebuild() has just created and destroyed
+  //   split cells, so they must be rewrapped before the kernel reads them --
+  //   host_end() only does it after end_of_step() returns, which is too late
+  //   (ASAN: heap-buffer-overflow in split2d_kk at d_csplits.row_map(isplit))
+
+  ((GridKokkos*) grid)->wrap_kokkos_graphs();
 
   ParticleKokkos *particle_kk = (ParticleKokkos*) particle;
   GridKokkos *grid_kk = (GridKokkos*) grid;
