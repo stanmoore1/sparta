@@ -1422,15 +1422,8 @@ void FixRigid::end_of_step()
   // purely local, and a proc with no split cell does nothing
 
   if (!fallback && (splitchanged || structural) &&
-      particle->exist && grid->nsplitlocal) {
-    particles_to_host();
-    if (!particle->sorted) particle->sort();
-    Grid::ChildCell *cells = grid->cells;
-    int nglocal = grid->nlocal;
-    for (int icell = 0; icell < nglocal; icell++)
-      if (cells[icell].nsplit > 1)
-        grid->combine_split_cell_particles(icell,1);
-  }
+      particle->exist && grid->nsplitlocal)
+    combine_split_all();
 
   // a cell which gained or lost sub cells is restructured here, which
   //   is far cheaper than the full re-map it used to force: the surf
@@ -4142,10 +4135,7 @@ void FixRigid::split_rebuild()
   //   into the cell itself, so none is labelled with a sub cell which
   //   is about to vanish
 
-  if (particle->exist) {
-    particles_to_host();
-    particle->sort();
-  }
+  if (particle->exist) sort_for_split_rebuild();
 
   // neighbor links become cell IDs, which survive the cells moving below
 
@@ -5183,6 +5173,28 @@ void FixRigid::remove_inside_all(int splitflag)
    split out of remove_inside_all() so the KOKKOS override, which runs the
      deletion pass as a device kernel, reports it the same way
 ------------------------------------------------------------------------- */
+
+void FixRigid::sort_for_split_rebuild()
+{
+  particles_to_host();
+  particle->sort();
+}
+
+/* ---------------------------------------------------------------------- */
+
+void FixRigid::combine_split_all()
+{
+  particles_to_host();
+  if (!particle->sorted) particle->sort();
+
+  Grid::ChildCell *cells = grid->cells;
+  int nglocal = grid->nlocal;
+  for (int icell = 0; icell < nglocal; icell++)
+    if (cells[icell].nsplit > 1)
+      grid->combine_split_cell_particles(icell,1);
+}
+
+/* ---------------------------------------------------------------------- */
 
 void FixRigid::end_of_run_delete_warning()
 {

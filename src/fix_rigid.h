@@ -392,6 +392,22 @@ class FixRigid : public Fix {
                                         //   it as a device kernel instead
   void end_of_run_delete_warning();     // once-per-run warning for the above
 
+  // pull the particles of every changed split cell up into the split cell
+  //   itself, before any cell is restructured
+  // virtual so fix rigid/kk can do it with a device kernel and keep the
+  //   particle array on the device
+
+  virtual void combine_split_all();
+
+  // sort the particles so Grid::remove_marked_cells() can walk the per-cell
+  //   lists of the cells it moves
+  // virtual so fix rigid/kk can skip it: the cells that routine moves are
+  //   the detached sub cells, which split_cell_unset() has already emptied,
+  //   so the walk never reaches a particle and the sort only exists to make
+  //   empty lists valid
+
+  virtual void sort_for_split_rebuild();
+
   // hook called before host code touches the particle array, so fix
   //   rigid/kk can bring the particles back from the device: it otherwise
   //   leaves them there for the whole step (see host_begin)

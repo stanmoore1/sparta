@@ -29,6 +29,8 @@ FixStyle(rigid/kk,FixRigidKokkos)
 namespace SPARTA_NS {
 
 struct TagFixRigidRemoveInside{};
+struct TagFixRigidCombineSplit{};
+struct TagFixRigidAssignSplit{};
 
 class FixRigidKokkos : public FixRigid {
  public:
@@ -44,6 +46,8 @@ class FixRigidKokkos : public FixRigid {
   void grid_changed();
   void remove_inside_all(int);
   void particles_to_host();
+  void combine_split_all();
+  void sort_for_split_rebuild();
 
   // flag particles inside a body, one thread per particle
   // the reduction value is the # of particles this body claimed, which
@@ -51,6 +55,25 @@ class FixRigidKokkos : public FixRigid {
 
   KOKKOS_INLINE_FUNCTION
   void operator()(TagFixRigidRemoveInside, const int&, int&) const;
+
+  // relabel the particles of every sub cell of a changed split cell to the
+  //   split cell itself, one thread per (split cell, sub cell) pair
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()(TagFixRigidCombineSplit, const int&) const;
+
+  // re-decide the sub cell of every particle of a changed split cell, one
+  //   thread per particle of the split cell
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()(TagFixRigidAssignSplit, const int&) const;
+
+  // device split2d/split3d, the same tests as Update::split2d/split3d
+
+  KOKKOS_INLINE_FUNCTION
+  int split2d_kk(int, double*) const;
+  KOKKOS_INLINE_FUNCTION
+  int split3d_kk(int, double*) const;
 
  private:
   void host_begin();
@@ -63,6 +86,44 @@ class FixRigidKokkos : public FixRigid {
 
   int remove_inside_all_kokkos(int);
   void pack_body_device();
+
+  // device replacement for the host
+  //   sort + combine_split_cell_particles() pass in end_of_step(), which is
+  //   the last thing forcing the particle array to the host every step
+  // returns 1 if it handled it, 0 to leave it to the host
+
+  int combine_split_kokkos();
+
+  // device replacement for the host assign_split_cell_particles() pass in
+  //   remove_inside_all_kokkos(), the last per-step host particle consumer
+
+  int assign_split_kokkos();
+
+  // the split cells to re-assign, and a flat (cell,slot) work list so one
+  //   thread handles one particle
+
+  DAT::tdual_int_1d k_asgcell,k_asgpart;
+  DAT::t_int_1d d_asgcell,d_asgpart;
+  int nasg_kk;
+
+  // grid/surf device views the split tests read
+
+  t_cell_1d d_cells_kk;
+  t_sinfo_1d d_sinfo_kk;
+  t_line_1d d_lines_kk;
+  t_tri_1d d_tris_kk;
+  Kokkos::Crs<int,DeviceType,void,crs_size_type> d_csurfs_kk,d_csplits_kk,d_csubs_kk;
+
+  // one entry per sub cell of a changed split cell: which sub cell to scan
+  //   and which split cell to relabel its particles to
+
+  DAT::tdual_int_1d k_subcell,k_subparent;
+  DAT::t_int_1d d_subcell,d_subparent;
+  int nsub_kk;
+
+  DAT::t_int_1d d_plist_kk;     // per-cell particle lists, from sort_kokkos
+  DAT::t_int_2d d_plist2_kk;
+  DAT::t_int_1d d_cellcount_kk;
 
   int dim_kk;                   // dim, captured for the kernel
   int nplocal_kk;
