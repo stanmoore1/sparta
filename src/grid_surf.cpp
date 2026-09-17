@@ -1671,6 +1671,20 @@ int Grid::remove_marked_cells()
       else if (cells[icell].nsplit <= 0)
         sinfo[cells[icell].isplit].csubs[-cells[icell].nsplit] = icell;
 
+      // patch the hash for the cell which moved, so a caller which only
+      //   removes a few cells (fix rigid re-cutting split cells every step)
+      //   need not rehash the whole grid afterwards
+      // conditions, in order:
+      //   proc != -1: the cell which moved in may itself be marked for
+      //     removal (the loop does not re-test icell, it removes it on the
+      //     next pass), and such a cell must not be entered in the hash
+      //   nsplit >= 1: a sub cell shares the ID of its split cell
+      //     (add_sub_cell copies the parent's ChildCell) and is not the
+      //     owner of that ID; rehash() skips it, so this must too
+
+      if (hashcurrent && cells[icell].proc != -1 && cells[icell].nsplit >= 1)
+        (*hash)[cells[icell].id] = icell;
+
       int ip = cinfo[icell].first;
       while (ip >= 0) {
         particles[ip].icell = icell;
@@ -1711,7 +1725,17 @@ int Grid::remove_marked_cells()
   if (collide) collide->reset_grid_count(nlocal);
   if (modify->n_pergrid) modify->reset_grid_count(nlocal);
 
+  // the hash is left VALID when it was valid on entry: only sub cells are
+  //   ever marked for removal here, and a sub cell is not the owner of its
+  //   ID so it has no hash entry of its own; every cell whose index moved
+  //   had its entry patched in the loop above
+  // halo_index maps a position to a local index the same way, so it moves
+  //   with the hash and is refreshed here rather than invalidated
+  // hashfilled stays as it was: a caller which never filled the hash still
+  //   has an empty one
+
   hashfilled = 0;
+  hashcurrent = 0;
 
   return nlocal_prev - nlocal;
 }
@@ -1733,6 +1757,7 @@ void Grid::clear_surf()
   double *lo,*hi;
 
   hashfilled = 0;
+  hashcurrent = 0;
 
   // if surfs no longer exist, set cell type to OUTSIDE, else UNKNOWN
   // set corner points of every cell to UNKNOWN
@@ -1898,6 +1923,7 @@ void Grid::clear_surf_implicit()
   memory->destroy(cellIDs);
   hash->clear();
   hashfilled = 0;
+  hashcurrent = 0;
 }
 
 /* ----------------------------------------------------------------------

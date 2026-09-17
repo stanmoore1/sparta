@@ -305,6 +305,7 @@ void FixBalance::end_of_step()
 
   comm->migrate_cells(nmigrate);
   grid->hashfilled = 0;
+  grid->hashcurrent = 0;
 
   grid->setup_owned();
   grid->acquire_ghosts();

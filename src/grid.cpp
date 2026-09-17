@@ -161,6 +161,7 @@ Grid::Grid(SPARTA *sparta) : Pointers(sparta)
 
   hash = new MyHash();
   hashfilled = 0;
+  hashcurrent = 0;
 
   copy = copymode = 0;
 }
@@ -249,6 +250,7 @@ void Grid::remove()
 
   hash->clear();
   hashfilled = 0;
+  hashcurrent = 0;
 
   cells = NULL;
   cinfo = NULL;
@@ -463,6 +465,7 @@ void Grid::setup_owned()
 void Grid::remove_ghosts()
 {
   hashfilled = 0;
+  hashcurrent = 0;
   exist_ghost = 0;
   nghost = nunsplitghost = nsplitghost = nsubghost = nempty = 0;
   surf->remove_ghosts();
@@ -480,11 +483,23 @@ void Grid::acquire_ghosts(int surfflag)
 {
   if (surf->distributed && !surf->implicit) surf->rehash();
 
+  int nghost_before = nghost;
+
   if (cutoff < 0.0) acquire_ghosts_all(surfflag);
   else if (clumped) acquire_ghosts_near(surfflag);
   else if (comm->me == 0)
     error->warning(FLERR,"Could not acquire nearby ghost cells b/c "
                    "grid partition is not clumped");
+
+  // ghost cells acquired here are not in the hash, which holds owned +
+  //   ghost IDs, so it is no longer complete
+  // if none were acquired the hash still describes the grid exactly, which
+  //   is what lets fix rigid's per-step split-cell rebuild keep it
+
+  if (nghost != nghost_before) {
+    hashfilled = 0;
+    hashcurrent = 0;
+  }
 
   for (int i = 0; i < ncustom; i++) grid->estatus[i] = 1;
 
@@ -1192,6 +1207,7 @@ void Grid::rehash()
   }
 
   hashfilled = 1;
+  hashcurrent = 1;
 
   update_halo_index();
 }
@@ -1574,8 +1590,12 @@ void Grid::reset_neighbors()
   unset_flag = 0;
 
   // insure all cell IDs (owned + ghost) are hashed
+  // skip it when the hash already maps every ID to its current index: a
+  //   mobile rigid body re-cuts a handful of split cells every step, and
+  //   rehashing the whole grid each time is O(nlocal+nghost) work to
+  //   repair O(nsplit) entries, which dominated the step
 
-  rehash();
+  if (!hashcurrent) rehash();
 
   // clear parent cells data structure since will (re)build it here
 

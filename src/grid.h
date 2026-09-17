@@ -102,6 +102,13 @@ class Grid : protected Pointers {
 
   MyHash *hash;
   int hashfilled;             // 1 if hash is filled with cell IDs
+  int hashcurrent;            // 1 if every owned+ghost child cell ID in the
+                              //   hash maps to its CURRENT local index, so a
+                              //   full rehash() can be skipped.  set by
+                              //   rehash(), kept true by the incremental
+                              //   patches in remove_marked_cells(), and
+                              //   cleared by any other operation which moves
+                              //   cells (migrate, rebalance, adapt, ...)
 
   // dense alternative to hash for the uniform-grid fast path in Update::move()
   //   maps a cell's position within this proc's halo straight to its local

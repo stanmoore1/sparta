@@ -178,6 +178,9 @@ class FixRigid : public Fix {
   int *olist_elem;        // element index of each
 
   double *rmaxbody;       // max distance of any body corner pt from COM
+  double *rminbody;       // min distance of any point of any body element
+                          //   from the COM.  a cell which lies wholly
+                          //   inside this radius cannot hold a body surf
   double mincellsize;     // smallest edge length of any grid cell
   int warnrotate;         // 1 after warning about rotation rate
   int warntranslate;      // 1 after warning about translation rate
@@ -384,7 +387,17 @@ class FixRigid : public Fix {
   int inside_body(int, double *); // 1 if point is inside rigid body, else 0
   int inside_any_body(double *); // 1 if inside any rigid body
   bigint remove_inside_particles(int);  // all bodies, used at setup
-  void remove_inside_all(int);  // fused pass over all bodies, per step
+  virtual void remove_inside_all(int);  // fused pass over all bodies, per step
+                                        //   virtual so fix rigid/kk can run
+                                        //   it as a device kernel instead
+  void end_of_run_delete_warning();     // once-per-run warning for the above
+
+  // hook called before host code touches the particle array, so fix
+  //   rigid/kk can bring the particles back from the device: it otherwise
+  //   leaves them there for the whole step (see host_begin)
+  // no-op in the non-KOKKOS class
+
+  virtual void particles_to_host() {}
 };
 
 }

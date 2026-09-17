@@ -394,6 +394,7 @@ void BalanceGrid::command(int narg, char **arg, int outflag)
 
   comm->migrate_cells(nmigrate);
   grid->hashfilled = 0;
+  grid->hashcurrent = 0;
 
   MPI_Barrier(world);
   double time4 = MPI_Wtime();

@@ -481,6 +481,12 @@ FixRigid::FixRigid(SPARTA *sparta, int narg, char **arg) :
 
 FixRigid::~FixRigid()
 {
+  // a KOKKOS functor copy of this fix (fix rigid/kk passes *this to a
+  //   parallel_reduce) shares these pointers with the original and must
+  //   not free them when the copy goes out of scope
+
+  if (copy || copymode) return;
+
   delete [] csurfID;
   delete [] customname;
   delete [] infile;
@@ -507,6 +513,7 @@ FixRigid::~FixRigid()
   memory->destroy(fpush);
   memory->destroy(tqpush);
   memory->destroy(rmaxbody);
+  memory->destroy(rminbody);
   memory->destroy(bbodylo);
   memory->destroy(bbodyhi);
   memory->destroy(bboxeps);
@@ -858,7 +865,10 @@ void FixRigid::setup()
   //   and normally avoids them, but this is a safety net for any that
   //   end up inside, e.g. via an emit region overlapping a body
 
-  if (particle->exist) ndeleted += remove_inside_particles(0);
+  if (particle->exist) {
+    particles_to_host();
+    ndeleted += remove_inside_particles(0);
+  }
 
   // for incremental remap: grid state is now consistent with the
   //   bodies at their current positions
@@ -1413,6 +1423,7 @@ void FixRigid::end_of_step()
 
   if (!fallback && (splitchanged || structural) &&
       particle->exist && grid->nsplitlocal) {
+    particles_to_host();
     if (!particle->sorted) particle->sort();
     Grid::ChildCell *cells = grid->cells;
     int nglocal = grid->nlocal;
@@ -2725,6 +2736,7 @@ void FixRigid::allocate_bodies()
   memory->create(fpush,nbody,3,"fix_rigid:fpush");
   memory->create(tqpush,nbody,3,"fix_rigid:tqpush");
   memory->create(rmaxbody,nbody,"fix_rigid:rmaxbody");
+  memory->create(rminbody,nbody,"fix_rigid:rminbody");
   memory->create(bbodylo,nbody,3,"fix_rigid:bbodylo");
   memory->create(bbodyhi,nbody,3,"fix_rigid:bbodyhi");
   memory->create(bboxeps,nbody,"fix_rigid:bboxeps");
@@ -2736,6 +2748,7 @@ void FixRigid::allocate_bodies()
 
   for (int ibody = 0; ibody < nbody; ibody++) {
     invmass[ibody] = massbody[ibody] = rmaxbody[ibody] = bboxeps[ibody] = 0.0;
+    rminbody[ibody] = 0.0;
     for (int j = 0; j < 3; j++)
       xcm[ibody][j] = vcm[ibody][j] = omega[ibody][j] = xcmnew[ibody][j] =
         xcmmid[ibody][j] = inertia[ibody][j] = angmom[ibody][j] =
@@ -3000,6 +3013,47 @@ void FixRigid::setup_body_displace(int ibody)
     for (int j = 0; j < dim; j++)
       rmaxbody[ibody] = MAX(rmaxbody[ibody],
                             MathExtra::len3(&displace[i][j][0]));
+
+  // rminbody = lower bound on the distance from the COM to any point of
+  //   any body element, used by incremental_recut() to reject a cell which
+  //   lies wholly inside the body and so can hold no body surf
+  // measured to each element's supporting line (2d) or plane (3d), not to
+  //   its corner points: the closest point of an element may be interior to
+  //   it, and a corner-point minimum would OVER-estimate the distance and
+  //   so reject a cell that does hold a surf.  a distance to the supporting
+  //   line/plane is always <= the distance to the element itself, which
+  //   keeps the test conservative
+
+  double dmin = BIG;
+  for (int i = bodystart[ibody]; i < bodystart[ibody+1]; i++) {
+    double *a = &displace[i][0][0];
+    double *b = &displace[i][1][0];
+    double e1[3],e2[3],nrm[3];
+    MathExtra::sub3(b,a,e1);
+    if (dim == 2) {
+      e1[2] = 0.0;
+      double len = MathExtra::len3(e1);
+      if (len == 0.0) continue;
+
+      // 2d: |a x e1| / |e1| is the distance from the origin (the COM in the
+      //   body frame) to the line through a and b
+
+      dmin = MIN(dmin,fabs(a[0]*e1[1] - a[1]*e1[0]) / len);
+    } else {
+      double *c = &displace[i][2][0];
+      MathExtra::sub3(c,a,e2);
+      MathExtra::cross3(e1,e2,nrm);
+      double len = MathExtra::len3(nrm);
+      if (len == 0.0) continue;
+
+      // 3d: |a . n| / |n| is the distance from the origin to the plane of
+      //   the triangle
+
+      dmin = MIN(dmin,fabs(MathExtra::dot3(a,nrm)) / len);
+    }
+  }
+
+  rminbody[ibody] = (dmin == BIG) ? 0.0 : dmin;
 }
 
 /* ----------------------------------------------------------------------
@@ -3639,7 +3693,10 @@ void FixRigid::grid_rebuild()
 
   // sort particles, grid rebuild requires it
 
-  if (particle->exist) particle->sort();
+  if (particle->exist) {
+    particles_to_host();
+    particle->sort();
+  }
 
   // assign split cell particles to parent split cell
 
@@ -4085,7 +4142,10 @@ void FixRigid::split_rebuild()
   //   into the cell itself, so none is labelled with a sub cell which
   //   is about to vanish
 
-  if (particle->exist) particle->sort();
+  if (particle->exist) {
+    particles_to_host();
+    particle->sort();
+  }
 
   // neighbor links become cell IDs, which survive the cells moving below
 
@@ -4330,6 +4390,43 @@ int FixRigid::incremental_recut()
     int nb = body_box(cells[icell].lo,cells[icell].hi,&blist);
     for (int m = 0; m < nb; m++) {
       ibody = blist[m];
+
+      // radial prefilter: body_box() only compared this cell against the
+      //   body's bounding BOX, so it still returns a body whose surfs all
+      //   lie far from the cell -- the deep interior of the body, and the
+      //   corners of its bbox, which for a rounded body is 1-pi/4 of it.
+      //   every such surf would then be tested against the cell one at a
+      //   time by surf2grid_list() only to be rejected
+      // an element of this body lies at a distance in [rminbody,rmaxbody]
+      //   of the COM, so if the cell's own distance range from the COM does
+      //   not meet that interval, no element of this body can touch the
+      //   cell and none need be offered
+      // dlo/dhi are the min/max distance from the COM to the cell, computed
+      //   per axis and exact for an axis-aligned box
+
+      double dlo2 = 0.0, dhi2 = 0.0;
+      double *clo2 = cells[icell].lo;
+      double *chi2 = cells[icell].hi;
+      for (int k = 0; k < dim; k++) {
+        double c = xcm[ibody][k];
+        double dlok = 0.0;
+        if (c < clo2[k]) dlok = clo2[k] - c;
+        else if (c > chi2[k]) dlok = c - chi2[k];
+        double dhik = MAX(fabs(c-clo2[k]),fabs(c-chi2[k]));
+        dlo2 += dlok*dlok;
+        dhi2 += dhik*dhik;
+      }
+
+      // rmaxbody/rminbody are body-frame radii about the COM and so are
+      //   invariant under the body's rotation; compare squared distances
+      // rminbody is a lower bound on the true element distance, so the
+      //   inner test only rejects cells that certainly hold no surf
+
+      double rmax = rmaxbody[ibody] + bboxeps[ibody];
+      if (dlo2 > rmax*rmax) continue;
+      double rmin = rminbody[ibody] - bboxeps[ibody];
+      if (rmin > 0.0 && dhi2 < rmin*rmin) continue;
+
       for (i = bodystart[ibody]; i < bodystart[ibody+1]; i++)
         reclist[ncand++] = lblist[i];
     }
@@ -5078,6 +5175,17 @@ void FixRigid::remove_inside_all(int splitflag)
 
   if (delflag) particle->compress_rebalance();
 
+  end_of_run_delete_warning();
+}
+
+/* ----------------------------------------------------------------------
+   warn once per run if any particle was deleted inside a body
+   split out of remove_inside_all() so the KOKKOS override, which runs the
+     deletion pass as a device kernel, reports it the same way
+------------------------------------------------------------------------- */
+
+void FixRigid::end_of_run_delete_warning()
+{
   // warn once per run if any particle was deleted after the setup pass
   // with swept collision coverage a particle in the body's path is
   //   reflected, so this should not happen; if it does, either the body
