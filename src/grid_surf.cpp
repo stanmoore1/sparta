@@ -1734,8 +1734,8 @@ int Grid::remove_marked_cells()
   // hashfilled stays as it was: a caller which never filled the hash still
   //   has an empty one
 
-  hashfilled = 0;
-  hashcurrent = 0;
+  if (hashcurrent) update_halo_index();
+  else hashfilled = 0;
 
   return nlocal_prev - nlocal;
 }

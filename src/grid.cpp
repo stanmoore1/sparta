@@ -464,8 +464,16 @@ void Grid::setup_owned()
 
 void Grid::remove_ghosts()
 {
-  hashfilled = 0;
-  hashcurrent = 0;
+  // the hash holds owned + ghost IDs, so dropping ghosts invalidates it --
+  //   unless there were none to drop, in which case it still describes the
+  //   grid exactly.  a mobile rigid body run with gridcut 0.0 has no ghosts
+  //   at all and calls this every step through split_rebuild(), so without
+  //   the test reset_neighbors() rehashes the whole grid every step
+
+  if (nghost) {
+    hashfilled = 0;
+    hashcurrent = 0;
+  }
   exist_ghost = 0;
   nghost = nunsplitghost = nsplitghost = nsubghost = nempty = 0;
   surf->remove_ghosts();
