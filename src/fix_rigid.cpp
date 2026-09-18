@@ -97,6 +97,12 @@ FixRigid::FixRigid(SPARTA *sparta, int narg, char **arg) :
 
   gridmigrate = 1;
 
+  // ghost sub cells route migrating particles to their split cell, since
+  //   the sub cells of the owner are restructured in place without
+  //   informing the ghost copies (see Grid::subroute)
+
+  grid->subroute = 1;
+
   if (!surf->exist) error->all(FLERR,"Fix rigid requires surf elements exist");
   kokkosable = 0;
   if (surf->implicit)
@@ -500,6 +506,7 @@ int FixRigid::setmask()
   int mask = 0;
   mask |= START_OF_STEP;
   mask |= END_OF_STEP;
+  mask |= POST_RUN;
   return mask;
 }
 
@@ -511,6 +518,11 @@ void FixRigid::init()
 
   if (update->rigidflag == 0)
     error->all(FLERR,"Cannot use fix rigid unless global rigid is set");
+
+  // ghost sub cells acquired before this fix was defined still route
+  //   to the owner's sub cells
+
+  grid->route_ghost_subcells();
 
   // with the KOKKOS package active, only the rigid/kk variant brackets
   //   its host-side work with the required device transfers
@@ -648,6 +660,7 @@ void FixRigid::init()
   warnrotate = warntranslate = warnexit = warnfallback = 0;
   warndelete = 0;
   ndelrun = 0;
+  nstep_run = nstep_inplace = nstep_rebuild = nstep_fallback = 0;
 
   // fix rigid must be defined before fixes which change the grid,
   // so its end_of_step() restores overlaid grid cells before they run
@@ -1195,21 +1208,24 @@ void FixRigid::remap_grid()
 {
   int fallback = 1;
   int structural = 0;
+  int rebuild = 0;
   if (remapmode == INCREMENTAL) {
-    int mine[3],all[3];
+    int mine[4],all[4];
     mine[0] = remap->recut();
     mine[1] = (remap->npending > 0);
     mine[2] = remap->typechanged;
-    MPI_Allreduce(mine,all,3,MPI_INT,MPI_MAX,world);
+    mine[3] = remap->rebuild_needed();
+    MPI_Allreduce(mine,all,4,MPI_INT,MPI_MAX,world);
     fallback = all[0];
     structural = all[1];
+    rebuild = all[3];
 
-    // an incremental re-cut which changed cell markings must be seen
-    //   by emit fixes, whose per-cell tasks depend on them; a full
-    //   re-map and split_rebuild() both notify them via
+    // an incremental re-cut which changed cell markings or cells must
+    //   be seen by emit fixes, whose per-cell tasks depend on them; a
+    //   full re-map and the collective rebuild both notify them via
     //   Grid::notify_changed()
 
-    if (!fallback && !structural && all[2])
+    if (!fallback && !rebuild && (all[2] || structural))
       for (int ifix = 0; ifix < modify->nfix; ifix++)
         if (strncmp(modify->fix[ifix]->style,"emit",4) == 0)
           modify->fix[ifix]->grid_changed();
@@ -1237,16 +1253,22 @@ void FixRigid::remap_grid()
       particle->exist && grid->nsplitlocal)
     combine_split_all();
 
-  // a cell which gained or lost sub cells is restructured here, which
-  //   is far cheaper than the full re-map it used to force: the surf
-  //   lists, volumes and cell types are already correct, so only the
-  //   cell list, the ghosts and the neighbor links are rebuilt
-  // every proc enters split_rebuild() together, since it communicates
+  // a cell which gained or lost sub cells is restructured in place,
+  //   which is far cheaper than the full re-map it used to force: the
+  //   surf lists, volumes and cell types are already correct, so only
+  //   the sub cells change; every proc enters together, since it
+  //   reduces the cell counts, or rebuilds the ghosts when it must
+
+  nstep_run++;
+  if (fallback) nstep_fallback++;
+  else if (structural && rebuild) nstep_rebuild++;
+  else if (structural) nstep_inplace++;
 
   if (fallback) grid_rebuild();
   else if (structural) {
     if (particle->exist) sort_for_split_rebuild();
-    remap->apply_pending();
+    remap->apply_pending(rebuild);
+    relabel_moved_cells();
   }
   remap->npending = 0;
 
@@ -1257,6 +1279,32 @@ void FixRigid::remap_grid()
 
   if (particle->exist)
     remove_inside_all(fallback || remap->splitchanged || structural);
+}
+
+/* ----------------------------------------------------------------------
+   per-run summary of the re-map paths taken, for performance work
+------------------------------------------------------------------------- */
+
+void FixRigid::post_run()
+{
+  if (!getenv("SPARTA_RIGID_TIMING")) return;
+
+  bigint mine[4],all[4];
+  mine[0] = nstep_run;
+  mine[1] = nstep_inplace;
+  mine[2] = nstep_rebuild;
+  mine[3] = nstep_fallback;
+  MPI_Allreduce(mine,all,4,MPI_SPARTA_BIGINT,MPI_MAX,world);
+
+  if (comm->me == 0) {
+    char str[256];
+    sprintf(str,"Fix rigid re-map: " BIGINT_FORMAT " steps, "
+            BIGINT_FORMAT " in place, " BIGINT_FORMAT " ghost rebuilds, "
+            BIGINT_FORMAT " full re-maps (max over procs)\n",
+            all[0],all[1],all[2],all[3]);
+    if (screen) fprintf(screen,"%s",str);
+    if (logfile) fprintf(logfile,"%s",str);
+  }
 }
 
 /* ----------------------------------------------------------------------

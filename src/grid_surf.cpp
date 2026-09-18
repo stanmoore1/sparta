@@ -13,6 +13,7 @@
 ------------------------------------------------------------------------- */
 
 #include "string.h"
+#include <algorithm>
 #include "grid.h"
 #include "domain.h"
 #include "update.h"
@@ -43,8 +44,11 @@ int compare_surfIDs(const void *, const void *);
 #define CHUNK 16
 #define EPSSURF 1.0e-4
 #define DELTA_SEND 16384
+#define DELTA_MOVED 128
+#define DELTA_JOURNAL 4096
 
 enum{UNKNOWN,OUTSIDE,INSIDE,OVERLAP};         // several files
+enum{NCHILD,NPARENT,NUNKNOWN,NPBCHILD,NPBPARENT,NPBUNKNOWN,NBOUND};  // Grid
 enum{PERAUTO,PERCELL,PERSURF};                // several files
 enum{SOUTSIDE,SINSIDE,ONSURF2OUT,ONSURF2IN};  // several files (changed 2 words)
 
@@ -1648,6 +1652,7 @@ int Grid::remove_marked_cells()
   Particle::OnePart *particles = particle->particles;
   int *next = particle->next;
   int nlocal_prev = nlocal;
+  nmoved = 0;
 
   int icell = 0;
   while (icell < nlocal) {
@@ -1690,6 +1695,17 @@ int Grid::remove_marked_cells()
         particles[ip].icell = icell;
         ip = next[ip];
       }
+
+      // for a caller which labels particles outside Grid (KOKKOS)
+
+      if (nmoved == maxmoved) {
+        maxmoved += DELTA_MOVED;
+        memory->grow(movedfrom,maxmoved,"grid:movedfrom");
+        memory->grow(movedto,maxmoved,"grid:movedto");
+      }
+      movedfrom[nmoved] = nlocal-1;
+      movedto[nmoved] = icell;
+      nmoved++;
     }
 
     nlocal--;
@@ -1739,6 +1755,540 @@ int Grid::remove_marked_cells()
   clear_cell_bins();
 
   return nlocal_prev - nlocal;
+}
+
+/* ----------------------------------------------------------------------
+   1 if restructure_split_cells() would move an owned cell which is not
+     a sub cell, else 0
+   only sub cells can move without informing other procs: a ghost copy of
+     any other cell records its owner's index for particle migration,
+     while a ghost sub cell routes to its split cell (subroute), so its
+     record never goes stale
+   the cells which move are the ones the compaction pulls off the tail
+     of the owned list, found here by the same walk without moving them
+   collective callers reduce the result so every proc takes the same path
+------------------------------------------------------------------------- */
+
+int Grid::restructure_check(int n, SplitChange *list)
+{
+  int i,m,icell,nsplit;
+
+  // holes = sub cells given up, nadd = sub cells created
+  // the first nadd holes (ascending) take the new sub cells,
+  //   the rest take cells from the tail
+
+  int nhole = 0;
+  int nadd = 0;
+  for (m = 0; m < n; m++) {
+    nsplit = cells[list[m].icell].nsplit;
+    if (nsplit > 1) nhole += nsplit;
+    if (list[m].nsplitnew > 1) nadd += list[m].nsplitnew;
+  }
+  if (nadd >= nhole) return 0;
+
+  int *holes;
+  memory->create(holes,nhole,"grid:holes");
+  nhole = 0;
+  for (m = 0; m < n; m++) {
+    icell = list[m].icell;
+    nsplit = cells[icell].nsplit;
+    if (nsplit <= 1) continue;
+    int *mycsubs = sinfo[cells[icell].isplit].csubs;
+    for (i = 0; i < nsplit; i++) holes[nhole++] = mycsubs[i];
+  }
+  std::sort(holes,holes+nhole);
+
+  // walk the tail as the compaction will: a tail cell which is itself a
+  //   hole is dropped, any other tail cell moves into the next hole
+
+  int flag = 0;
+  int nl = nlocal;
+  int ihole = nhole-1;
+  for (i = nadd; i < nhole; i++) {
+    while (ihole >= 0 && holes[ihole] == nl-1) {
+      nl--;
+      ihole--;
+    }
+    if (holes[i] >= nl) break;
+    if (cells[nl-1].nsplit > 0) {
+      flag = 1;
+      break;
+    }
+    nl--;
+  }
+
+  memory->destroy(holes);
+  return flag;
+}
+
+/* ----------------------------------------------------------------------
+   apply N changes of the number of flow pieces of owned cells in place
+   the cut lists, flow volumes, types and corner marks of the cells are
+     already current (see set_cell_surfs() etc.); only the sub cells
+     change: the old ones of every changing cell are given up, new ones
+     created, and the cell list compacted, without dropping the ghost
+     cells and neighbor links or communicating
+   the resulting layout of the owned cells is exactly the one
+     split_cell_set() + remove_marked_cells() produce: the new sub cells
+     are appended after the owned cells, then the holes left by the old
+     sub cells are filled from the tail, lowest hole first, so results
+     do not depend on which path was taken
+   only sub cells move (restructure_check() must have returned 0 on
+     every proc): they are referenced only by their split cell's csubs
+     and by their particles, so no hash, neighbor or ghost record of
+     another proc goes stale.  the ghost block is moved aside or closed
+     up by moving a few ghost cells, whose references are repaired by
+     move_cell()
+   the caller has pulled the particles of every changing split cell up
+     into the cell itself, so no particle is labelled with a hole
+   the cells moved are listed in movedfrom/movedto for a caller which
+     keeps particle labels outside Grid (KOKKOS)
+------------------------------------------------------------------------- */
+
+void Grid::restructure_split_cells(int n, SplitChange *list)
+{
+  int i,j,m,icell,isplit,isub,nsplit;
+
+  int nlocal_old = nlocal;
+  nmoved = 0;
+
+  // holes = the sub cells every changing split cell gives up, detached
+  //   as split_cell_unset() does; their sinfo entries become free slots
+
+  int nhole = 0;
+  int nadd = 0;
+  int nfree = 0;
+  for (m = 0; m < n; m++) {
+    nsplit = cells[list[m].icell].nsplit;
+    if (nsplit > 1) {
+      nhole += nsplit;
+      nfree++;
+    }
+    if (list[m].nsplitnew > 1) nadd += list[m].nsplitnew;
+  }
+
+  int *holes,*freeslots;
+  memory->create(holes,nhole,"grid:holes");
+  memory->create(freeslots,nfree,"grid:freeslots");
+  nhole = nfree = 0;
+
+  for (m = 0; m < n; m++) {
+    icell = list[m].icell;
+    nsplit = cells[icell].nsplit;
+    if (nsplit <= 1) continue;
+    isplit = cells[icell].isplit;
+    int *mycsubs = sinfo[isplit].csubs;
+    for (i = 0; i < nsplit; i++) holes[nhole++] = mycsubs[i];
+    split_cell_unset(icell);
+    sinfo[isplit].icell = -1;
+    freeslots[nfree++] = isplit;
+    nsublocal -= nsplit;
+    if (journalflag) journal_cell(icell);
+  }
+  std::sort(holes,holes+nhole);
+  std::sort(freeslots,freeslots+nfree);
+
+  // layout: the first min(nadd,nhole) holes take new sub cells, in the
+  //   reverse of their creation order; nkeep new sub cells remain
+  //   appended at nlocal_old and up, for which the first nkeep ghost
+  //   cells step aside to the end of the ghost block
+
+  int nkeep = MAX(0,nadd-nhole);
+
+  if (nkeep) {
+    grow_cells(nkeep,nkeep);
+    int nmove = MIN(nkeep,nghost);
+    int start = nlocal_old + MAX(nkeep,nghost);
+    for (i = 0; i < nmove; i++) move_cell(nlocal_old+i,start+i);
+  }
+
+  // create the new sub cells of every changing cell, in list order
+  // per-cell data of collide and the per-grid fixes is appended in the
+  //   same order and copied into a hole exactly as the compaction of
+  //   the appended cells would have done
+
+  int ifree = 0;
+  j = 0;
+  for (m = 0; m < n; m++) {
+    if (list[m].nsplitnew <= 1) continue;
+    icell = list[m].icell;
+    nsplit = list[m].nsplitnew;
+
+    // a free sinfo slot, else a new one before the ghost entries
+
+    if (ifree < nfree) isplit = freeslots[ifree++];
+    else {
+      grow_sinfo(1);
+      isplit = nsplitlocal;
+      if (nsplitghost) move_sinfo(isplit,isplit+nsplitghost);
+      nsplitlocal++;
+    }
+
+    int *mycsplits = csplits->get(list[m].nsurf);
+    int *mycsubs = csubs->get(nsplit);
+    if (!mycsplits || !mycsubs)
+      error->one(FLERR,"Failed to allocate grid split cell lists");
+    memcpy(mycsplits,list[m].map,list[m].nsurf*sizeof(int));
+    surflist_churn += (list[m].nsurf + nsplit) * sizeof(int);
+
+    SplitInfo *s = &sinfo[isplit];
+    s->icell = icell;
+    s->csplits = mycsplits;
+    s->csubs = mycsubs;
+    s->xsub = list[m].xsub;
+    s->xsplit[0] = list[m].xsplit[0];
+    s->xsplit[1] = list[m].xsplit[1];
+    if (domain->dimension == 3) s->xsplit[2] = list[m].xsplit[2];
+    else s->xsplit[2] = 0.0;
+
+    cells[icell].nsplit = nsplit;
+    cells[icell].isplit = isplit;
+    if (journalflag) {
+      journal_cell(icell);
+      journal_sinfo(isplit);
+    }
+
+    for (i = 0; i < nsplit; i++) {
+      if (j < nkeep) isub = nlocal_old + j;
+      else isub = holes[nadd-1-j];
+      add_sub_cell_at(icell,isub,i);
+      cinfo[isub].volume = list[m].vols[i];
+      mycsubs[i] = isub;
+      if (journalflag) journal_cell(isub);
+      if (collide) collide->add_grid_one();
+      if (modify->n_pergrid) modify->add_grid_one();
+      if (isub != nlocal_old+j) {
+        if (collide) collide->copy_grid_one(nlocal_old+j,isub);
+        if (modify->n_pergrid) modify->copy_grid_one(nlocal_old+j,isub);
+      }
+      j++;
+    }
+  }
+
+  // the remaining holes are filled from the tail, lowest hole first:
+  //   a tail cell which is itself a hole is dropped, any other moves in
+
+  int nl = nlocal_old;
+  for (i = nadd; i < nhole; i++) {
+    while (nl > 0 && cells[nl-1].proc == -1) nl--;
+    if (holes[i] >= nl) break;
+    move_cell(nl-1,holes[i]);
+    nl--;
+  }
+
+  // a shorter owned list: the ghost block closes up behind it
+
+  if (nl < nlocal_old) {
+    int nmove = MIN(nlocal_old-nl,nghost);
+    for (i = 0; i < nmove; i++)
+      move_cell(nlocal_old+nghost-nmove+i,nl+i);
+    nlocal = nl;
+  } else nlocal = nlocal_old + nkeep;
+
+  // free sinfo slots not reused are filled from the tail of the owned
+  //   entries; the ghost entries close up behind them
+
+  int nsplit_old = nsplitlocal;
+  for (i = ifree; i < nfree; i++) {
+    while (nsplitlocal > 0 && sinfo[nsplitlocal-1].icell < 0) nsplitlocal--;
+    if (freeslots[i] >= nsplitlocal) break;
+    move_sinfo(nsplitlocal-1,freeslots[i]);
+    nsplitlocal--;
+  }
+  while (nsplitlocal > 0 && sinfo[nsplitlocal-1].icell < 0) nsplitlocal--;
+  if (nsplitlocal < nsplit_old) {
+    int nmove = MIN(nsplit_old-nsplitlocal,nsplitghost);
+    for (i = 0; i < nmove; i++)
+      move_sinfo(nsplit_old+nsplitghost-nmove+i,nsplitlocal+i);
+  }
+
+  nunsplitlocal = nlocal - nsplitlocal - nsublocal;
+
+  if (collide) collide->reset_grid_count(nlocal);
+  if (modify->n_pergrid) modify->reset_grid_count(nlocal);
+
+  // a grid with cells at several levels: a finer neighbor of a moved
+  //   cell is not reachable from the cell itself, so the links of every
+  //   cell are scanned for the old indices of the moved cells
+
+  if (neighscan) {
+    int nold = nlocal_old + nghost + nkeep;
+    int *newidx;
+    memory->create(newidx,nold,"grid:newidx");
+    for (i = 0; i < nold; i++) newidx[i] = -1;
+    for (m = 0; m < nmoved; m++)
+      if (cells[movedto[m]].nsplit >= 1) newidx[movedfrom[m]] = movedto[m];
+
+    int ntotal = nlocal + nghost;
+    for (icell = 0; icell < ntotal; icell++) {
+      cellint *neigh = cells[icell].neigh;
+      int nmask = cells[icell].nmask;
+      for (i = 0; i < 6; i++) {
+        int nflag = neigh_decode(nmask,i);
+        if (nflag != NCHILD && nflag != NPBCHILD) continue;
+        if (neigh[i] >= nold || newidx[neigh[i]] < 0) continue;
+        neigh[i] = newidx[neigh[i]];
+        if (journalflag) journal_cell(icell);
+      }
+    }
+    memory->destroy(newidx);
+    neighscan = 0;
+  }
+
+  memory->destroy(holes);
+  memory->destroy(freeslots);
+}
+
+/* ----------------------------------------------------------------------
+   create sub cell I of split cell icell in slot isub, from the cell
+     itself as add_sub_cell() does; isplit of the split cell is set
+------------------------------------------------------------------------- */
+
+void Grid::add_sub_cell_at(int icell, int isub, int i)
+{
+  memcpy(&cells[isub],&cells[icell],sizeof(ChildCell));
+  cells[isub].ccoll = NULL;
+  cells[isub].ilocal = isub;
+  cells[isub].nsplit = -i;
+  memcpy(&cinfo[isub],&cinfo[icell],sizeof(ChildInfo));
+  cinfo[isub].count = 0;
+  cinfo[isub].first = -1;
+  if (ncustom) copy_custom(icell,isub);
+  nsublocal++;
+}
+
+/* ----------------------------------------------------------------------
+   move cell src into slot dst and repair every reference to it: its
+     sinfo entry, the hash, the halo index, the cell bins, the neighbor
+     links of its neighbors, its particles and the per-cell data of
+     collide and the per-grid fixes
+   src is an owned or ghost cell, dst a slot no live cell occupies
+   the neighbors' links are repaired through the cell's own links, which
+     is exact when every cell is at the same level; otherwise a finer
+     neighbor referencing this cell is not reachable from it, and
+     restructure_split_cells() repairs the links with a scan
+------------------------------------------------------------------------- */
+
+void Grid::move_cell(int src, int dst)
+{
+  int i,j,n;
+
+  int ownflag = (cells[src].proc == me);
+  int nsplit = cells[src].nsplit;
+
+  memcpy(&cells[dst],&cells[src],sizeof(ChildCell));
+  if (ownflag) {
+    memcpy(&cinfo[dst],&cinfo[src],sizeof(ChildInfo));
+    cells[dst].ilocal = dst;
+    if (collide) collide->copy_grid_one(src,dst);
+    if (modify->n_pergrid) modify->copy_grid_one(src,dst);
+  }
+  if (ncustom) copy_custom(src,dst);
+  if (journalflag) journal_cell(dst);
+
+  if (nsplit > 1) sinfo[cells[dst].isplit].icell = dst;
+  else if (nsplit <= 0) sinfo[cells[dst].isplit].csubs[-nsplit] = dst;
+  if (journalflag && nsplit != 1) journal_sinfo(cells[dst].isplit);
+
+  // a sub cell is referenced only by its split cell and its particles
+
+  if (nsplit >= 1) {
+    if (hashfilled) (*hash)[cells[dst].id] = dst;
+    if (halo_index) {
+      int site = halo_site(dst);
+      if (site >= 0) halo_index[site] = dst;
+    }
+    if (cellbinvalid) rebin_cell(src,dst);
+
+    cellint *neigh = cells[dst].neigh;
+    int nmask = cells[dst].nmask;
+    for (i = 0; i < 6; i++) {
+      int nflag = neigh_decode(nmask,i);
+      if (nflag != NCHILD && nflag != NPBCHILD) continue;
+      if (neigh[i] == src) neigh[i] = dst;
+      n = neigh[i];
+      j = i ^ 1;
+      int jflag = neigh_decode(cells[n].nmask,j);
+      if ((jflag == NCHILD || jflag == NPBCHILD) && cells[n].neigh[j] == src) {
+        cells[n].neigh[j] = dst;
+        if (journalflag) journal_cell(n);
+      } else if (!uniform) neighscan = 1;
+    }
+    if (!uniform) neighscan = 1;
+  }
+
+  if (ownflag && particle->sorted) {
+    Particle::OnePart *particles = particle->particles;
+    int *next = particle->next;
+    int ip = cinfo[dst].first;
+    while (ip >= 0) {
+      particles[ip].icell = dst;
+      ip = next[ip];
+    }
+  }
+
+  if (nmoved == maxmoved) {
+    maxmoved += DELTA_MOVED;
+    memory->grow(movedfrom,maxmoved,"grid:movedfrom");
+    memory->grow(movedto,maxmoved,"grid:movedto");
+  }
+  movedfrom[nmoved] = src;
+  movedto[nmoved] = dst;
+  nmoved++;
+}
+
+/* ----------------------------------------------------------------------
+   move sinfo entry src into slot dst and re-point its split cell and
+     sub cells at it; a dropped ghost split cell no longer points at
+     its entry and is left alone
+------------------------------------------------------------------------- */
+
+void Grid::move_sinfo(int src, int dst)
+{
+  memcpy(&sinfo[dst],&sinfo[src],sizeof(SplitInfo));
+  if (journalflag) journal_sinfo(dst);
+  int icell = sinfo[dst].icell;
+  if (icell < 0) return;
+  if (cells[icell].isplit != src) return;
+  cells[icell].isplit = dst;
+  if (journalflag) journal_cell(icell);
+  int *mycsubs = sinfo[dst].csubs;
+  for (int i = 0; i < cells[icell].nsplit; i++) {
+    cells[mycsubs[i]].isplit = dst;
+    if (journalflag) journal_cell(mycsubs[i]);
+  }
+}
+
+/* ----------------------------------------------------------------------
+   change journal, see grid.h
+   a cut record holds a copy of the list; a collision record likewise,
+     in its own buffer which reset_collision_surfs() empties
+------------------------------------------------------------------------- */
+
+void Grid::journal_cell(int icell)
+{
+  if (ndirtycell == maxdirtycell) {
+    maxdirtycell += DELTA_JOURNAL;
+    memory->grow(dirtycell,maxdirtycell,"grid:dirtycell");
+  }
+  dirtycell[ndirtycell++] = icell;
+}
+
+void Grid::journal_sinfo(int isplit)
+{
+  if (ndirtysinfo == maxdirtysinfo) {
+    maxdirtysinfo += DELTA_JOURNAL;
+    memory->grow(dirtysinfo,maxdirtysinfo,"grid:dirtysinfo");
+  }
+  dirtysinfo[ndirtysinfo++] = isplit;
+}
+
+void Grid::journal_list(int icell, int n, surfint *list, int collflag)
+{
+  int *nrec,*maxrec;
+  ListRecord **rec;
+  int **buf;
+  bigint *nbuf,*maxbuf;
+
+  if (collflag) {
+    nrec = &ncollrec; maxrec = &maxcollrec; rec = &collrec;
+    buf = &collbuf; nbuf = &ncollbuf; maxbuf = &maxcollbuf;
+  } else {
+    nrec = &ncutrec; maxrec = &maxcutrec; rec = &cutrec;
+    buf = &cutbuf; nbuf = &ncutbuf; maxbuf = &maxcutbuf;
+  }
+
+  if (*nrec == *maxrec) {
+    *maxrec += DELTA_JOURNAL;
+    *rec = (ListRecord *)
+      memory->srealloc(*rec,(*maxrec)*sizeof(ListRecord),"grid:listrec");
+  }
+  if (*nbuf + n > *maxbuf) {
+    while (*nbuf + n > *maxbuf) *maxbuf += DELTA_JOURNAL;
+    memory->grow(*buf,*maxbuf,"grid:listbuf");
+  }
+
+  ListRecord *r = &(*rec)[(*nrec)++];
+  r->icell = icell;
+  r->n = n;
+  r->offset = *nbuf;
+  int *ptr = &(*buf)[*nbuf];
+  for (int i = 0; i < n; i++) ptr[i] = (int) list[i];
+  *nbuf += n;
+}
+
+void Grid::journal_clear()
+{
+  ndirtycell = ndirtysinfo = 0;
+  ncutrec = ncutbuf = 0;
+  ncollrec = ncollbuf = 0;
+  collreset = 0;
+  nmoved = 0;
+}
+
+/* ----------------------------------------------------------------------
+   site of cell icell in halo_index, -1 if it has none
+   the same placement as update_halo_index()
+------------------------------------------------------------------------- */
+
+int Grid::halo_site(int icell)
+{
+  const int un[3] = {unx,uny,unz};
+  const int lo[3] = {halo_ilo,halo_jlo,halo_klo};
+  const int nh[3] = {halo_nx,halo_ny,halo_nz};
+  int l[3];
+
+  for (int d = 0; d < 3; d++) {
+    double inv = un[d]/(domain->boxhi[d]-domain->boxlo[d]);
+    l[d] = static_cast<int> ((cells[icell].lo[d]-domain->boxlo[d])*inv+0.5)
+      - lo[d];
+    if (l[d] < 0) l[d] += un[d];
+    if (l[d] >= nh[d]) return -1;
+  }
+  return (l[2]*halo_ny + l[1])*halo_nx + l[0];
+}
+
+/* ----------------------------------------------------------------------
+   cell src moved to slot dst: replace it in every bin of the bin index
+------------------------------------------------------------------------- */
+
+void Grid::rebin_cell(int src, int dst)
+{
+  int k,ibx,iby,ibz,ibin;
+  int lo[3],hi[3];
+
+  for (k = 0; k < 3; k++) {
+    lo[k] = (int) ((cells[dst].lo[k]-cellbinlo[k]) * cellbininv[k]);
+    hi[k] = (int) ((cells[dst].hi[k]-cellbinlo[k]) * cellbininv[k]);
+    lo[k] = MAX(0,MIN(lo[k],cellnbin[k]-1));
+    hi[k] = MAX(0,MIN(hi[k],cellnbin[k]-1));
+  }
+
+  for (ibz = lo[2]; ibz <= hi[2]; ibz++)
+    for (iby = lo[1]; iby <= hi[1]; iby++)
+      for (ibx = lo[0]; ibx <= hi[0]; ibx++) {
+        ibin = (ibz*cellnbin[1] + iby)*cellnbin[0] + ibx;
+        for (int i = cellbinstart[ibin]; i < cellbinstart[ibin+1]; i++)
+          if (cellbinlist[i] == src) cellbinlist[i] = dst;
+      }
+}
+
+/* ----------------------------------------------------------------------
+   route every ghost sub cell to its split cell for particle migration,
+     for a caller which sets subroute after the ghosts were acquired
+------------------------------------------------------------------------- */
+
+void Grid::route_ghost_subcells()
+{
+  for (int isplit = nsplitlocal; isplit < nsplitlocal+nsplitghost; isplit++) {
+    int icell = sinfo[isplit].icell;
+    if (icell < 0 || cells[icell].isplit != isplit) continue;
+    int *mycsubs = sinfo[isplit].csubs;
+    for (int i = 0; i < cells[icell].nsplit; i++) {
+      cells[mycsubs[i]].ilocal = cells[icell].ilocal;
+      if (journalflag) journal_cell(mycsubs[i]);
+    }
+  }
 }
 
 /* ----------------------------------------------------------------------
@@ -2485,7 +3035,13 @@ void Grid::set_cell_surfs(int icell, int n, surfint *list)
     for (int i = 0; i < cells[icell].nsplit; i++) {
       cells[mycsubs[i]].nsurf = n;
       cells[mycsubs[i]].csurfs = ptr;
+      if (journalflag) journal_cell(mycsubs[i]);
     }
+  }
+
+  if (journalflag) {
+    journal_cell(icell);
+    journal_list(icell,n,list,0);
   }
 }
 
@@ -2504,6 +3060,7 @@ void Grid::set_cell_type(int icell, int type)
   for (int i = 0; i < ncorner; i++) cinfo[icell].corner[i] = type;
   if (type == INSIDE) cinfo[icell].volume = 0.0;
   else cinfo[icell].volume = cell_volume(cells[icell].lo,cells[icell].hi);
+  if (journalflag) journal_cell(icell);
 }
 
 /* ----------------------------------------------------------------------
@@ -2522,6 +3079,7 @@ void Grid::set_cell_overlap(int icell, double volume, int *corner)
   cinfo[icell].type = OVERLAP;
   for (int i = 0; i < ncorner; i++) cinfo[icell].corner[i] = corner[i];
   cinfo[icell].volume = volume;
+  if (journalflag) journal_cell(icell);
 }
 
 /* ----------------------------------------------------------------------
@@ -2529,10 +3087,7 @@ void Grid::set_cell_overlap(int icell, double volume, int *corner)
      for its current cut list, a new reference piece and point, and the
      flow volume of each piece
    map has one entry per surf of the cut list, so it is replaced with it
-   a ghost split cell has no ChildInfo, so its piece volumes are skipped;
-     it is kept current so this proc can route a particle crossing into
-     it to the right piece, the owner translates the piece to its own
-     sub cell index
+   a ghost split cell has no ChildInfo, so its piece volumes are skipped
 ------------------------------------------------------------------------- */
 
 void Grid::set_split_info(int icell, int *map, int xsub, double *xsplit,
@@ -2554,11 +3109,14 @@ void Grid::set_split_info(int icell, int *map, int xsub, double *xsplit,
   if (domain->dimension == 3) s->xsplit[2] = xsplit[2];
   else s->xsplit[2] = 0.0;
 
+  if (journalflag) journal_sinfo(isplit);
   if (icell >= nlocal) return;
 
   int *mycsubs = s->csubs;
-  for (int i = 0; i < cells[icell].nsplit; i++)
+  for (int i = 0; i < cells[icell].nsplit; i++) {
     cinfo[mycsubs[i]].volume = vols[i];
+    if (journalflag) journal_cell(mycsubs[i]);
+  }
 }
 
 /* ----------------------------------------------------------------------
@@ -2672,6 +3230,7 @@ void Grid::set_collision_surfs(int icell, int n, surfint *list)
 
   cells[icell].ncoll = n;
   cells[icell].ccoll = ptr;
+  if (journalflag) journal_list(icell,n,list,1);
 }
 
 /* ----------------------------------------------------------------------
@@ -2683,6 +3242,11 @@ void Grid::reset_collision_surfs()
   for (int i = 0; i < ncollcells; i++) cells[collcells[i]].ccoll = NULL;
   ncollcells = 0;
   if (ccollpage) ccollpage->reset();
+  if (journalflag) {
+    ncollrec = 0;
+    ncollbuf = 0;
+    collreset = 1;
+  }
 }
 
 /* ----------------------------------------------------------------------
@@ -2701,8 +3265,13 @@ void Grid::reindex_ghost_surfs(int nslocal_old, int *gmap)
     if (cells[icell].nsurf <= 0) continue;
     surfint *list = cells[icell].csurfs;
     int n = cells[icell].nsurf;
+    int changed = 0;
     for (int j = 0; j < n; j++)
-      if (list[j] >= nslocal_old) list[j] = gmap[list[j]-nslocal_old];
+      if (list[j] >= nslocal_old) {
+        list[j] = gmap[list[j]-nslocal_old];
+        changed = 1;
+      }
+    if (changed && journalflag) journal_list(icell,n,list,0);
   }
 }
 

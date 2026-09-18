@@ -361,12 +361,17 @@ bigint Grid::unpack_one(char *buf,
       ptr += nsplit*sizeof(double);
     }
 
+    // a ghost sub cell normally records the owner's index of the sub cell
+    //   for particle migration; with subroute it records the split cell's,
+    //   and the owner resolves the sub cell (see Grid::subroute)
+
     int isub;
     for (int i = 0; i < nsplit; i++) {
       if (ownflag) isub = nlocal;
       else isub = nlocal + nghost;
       add_sub_cell(icell,ownflag);
-      cells[isub].ilocal = sinfo[isplit].csubs[i];
+      if (subroute && !ownflag) cells[isub].ilocal = cells[icell].ilocal;
+      else cells[isub].ilocal = sinfo[isplit].csubs[i];
       cells[isub].nsplit = -i;
       if (ownflag) cinfo[isub].volume = dptr[i];
       sinfo[isplit].csubs[i] = isub;

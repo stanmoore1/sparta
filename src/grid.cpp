@@ -132,6 +132,26 @@ Grid::Grid(SPARTA *sparta) : Pointers(sparta)
   cellstampcur = 0;
   maxcellcand = 0;
 
+  subroute = 0;
+  neighscan = 0;
+  nmoved = maxmoved = 0;
+  movedfrom = movedto = NULL;
+
+  journalflag = 0;
+  ndirtycell = maxdirtycell = 0;
+  dirtycell = NULL;
+  ndirtysinfo = maxdirtysinfo = 0;
+  dirtysinfo = NULL;
+  ncutrec = maxcutrec = 0;
+  cutrec = NULL;
+  cutbuf = NULL;
+  ncutbuf = maxcutbuf = 0;
+  ncollrec = maxcollrec = 0;
+  collrec = NULL;
+  collbuf = NULL;
+  ncollbuf = maxcollbuf = 0;
+  collreset = 0;
+
   neighshift[XLO] = 0;
   neighshift[XHI] = 3;
   neighshift[YLO] = 6;
@@ -207,6 +227,14 @@ Grid::~Grid()
   memory->destroy(cellbinlist);
   memory->destroy(cellstamp);
   memory->destroy(cellcand);
+  memory->destroy(movedfrom);
+  memory->destroy(movedto);
+  memory->destroy(dirtycell);
+  memory->destroy(dirtysinfo);
+  memory->sfree(cutrec);
+  memory->destroy(cutbuf);
+  memory->sfree(collrec);
+  memory->destroy(collbuf);
   delete hash;
 
   for (int i = 0; i < ncustom; i++) delete [] ename[i];
@@ -3031,8 +3059,17 @@ int Grid::cells_in_box(double *blo, double *bhi, int **list)
   int dim = domain->dimension;
 
   // (re)build the bin index if the cells changed since last query
+  // a valid index may be shorter than the cell list: sub cells appended
+  //   by restructure_split_cells() are not binned, but the stamp must
+  //   cover every cell a bin can hold
 
-  if (!cellbinvalid || ncellbin != ntotal) {
+  if (cellbinvalid && ntotal > ncellbin) {
+    memory->grow(cellstamp,ntotal,"grid:cellstamp");
+    for (i = ncellbin; i < ntotal; i++) cellstamp[i] = 0;
+    ncellbin = ntotal;
+  }
+
+  if (!cellbinvalid) {
 
     double *boxlo = domain->boxlo;
     double *boxhi = domain->boxhi;

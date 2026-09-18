@@ -12,6 +12,7 @@
    See the README file in the top-level SPARTA directory.
 ------------------------------------------------------------------------- */
 
+#include "mpi.h"
 #include "string.h"
 #include "math.h"
 #include <algorithm>
@@ -25,6 +26,8 @@
 #include "comm.h"
 #include "modify.h"
 #include "compute.h"
+#include "output.h"
+#include "dump.h"
 #include "memory.h"
 #include "error.h"
 
@@ -66,9 +69,10 @@ static inline int box_overlap(double *alo, double *ahi,
      re-type the cells its interior entered or left by a parity test of
      the cell center against the body surfs.  a cell whose piece count
      changes is queued and restructured by apply_pending()
-   the body geometry is replicated on every proc (FixRigid::bodypt), so
-     every proc re-derives the same split of a ghost split cell without
-     communicating; a ghost cell's type and volume are not used
+   ghost cells are left alone: their cut lists are covered by the
+     collision lists every step, and a particle migrating into a ghost
+     split cell is routed to the split cell itself (Grid::subroute), so
+     a ghost copy of a split cell never needs its pieces re-derived
 ------------------------------------------------------------------------- */
 
 RigidRemap::RigidRemap(SPARTA *sparta, FixRigid *fixrigid) : Pointers(sparta)
@@ -79,9 +83,10 @@ RigidRemap::RigidRemap(SPARTA *sparta, FixRigid *fixrigid) : Pointers(sparta)
   memory->create(prevlo,fix->nbody,3,"rigid_remap:prevlo");
   memory->create(prevhi,fix->nbody,3,"rigid_remap:prevhi");
 
-  typechanged = listschanged = splitchanged = 0;
+  typechanged = listschanged = splitchanged = restructured = 0;
   npending = maxpending = 0;
   pending = NULL;
+  maxmap = maxvols = NULL;
 
   swstamp = swhead = NULL;
   maxswcell = 0;
@@ -119,6 +124,8 @@ RigidRemap::~RigidRemap()
     memory->destroy(pending[m].vols);
   }
   memory->sfree(pending);
+  memory->destroy(maxmap);
+  memory->destroy(maxvols);
 
   memory->destroy(swstamp);
   memory->destroy(swhead);
@@ -458,17 +465,13 @@ int RigidRemap::recut()
     int *cand;
     int ncells = grid->cells_in_box(rlo,rhi,&cand);
 
-    // owned cells are re-cut; a ghost cell is included only when it is
-    //   a split cell, whose sinfo this proc must keep current because
-    //   Comm::migrate_particles() resolves a crossing particle's
-    //   destination sub cell on the SENDING proc, from the ghost copy
-    // the body geometry is replicated, so every proc re-derives the
-    //   same split of the same cell without communicating
+    // owned cells only: a ghost cell's cut list is covered by the
+    //   collision lists, and its pieces are never consulted (subroute)
 
     for (int ic = 0; ic < ncells; ic++) {
       icell = cand[ic];
+      if (icell >= nglocal) continue;
       if (cells[icell].nsplit <= 0) continue;
-      if (icell >= nglocal && cells[icell].nsplit == 1) continue;
       if (!box_overlap(cells[icell].lo,cells[icell].hi,rlo,rhi)) continue;
       if (nrcand == maxrcand) {
         maxrcand += DELTA;
@@ -494,11 +497,6 @@ int RigidRemap::recut()
   for (int ic = 0; ic < nrcand; ic++) {
     icell = rcand[ic];
 
-    // a ghost cell in the list is a split cell whose sinfo is refreshed
-    //   below; it has no ChildInfo, so its type and flow volumes are
-    //   the owner's business
-
-    int ghostflag = (icell >= nglocal);
     int nsplitold = cells[icell].nsplit;
 
     ncand = 0;
@@ -601,14 +599,10 @@ int RigidRemap::recut()
     //   cut (Grid::surf2grid_split() skips non-OVERLAP cells): full
     //   flow volume, interior/exterior typing via parity test
     // if it was a split cell it gives up its sub cells, which changes
-    //   the cell count; a ghost copy is marked unsplit until the
-    //   owner's change reaches it
+    //   the cell count
 
     if (!cell_cut(icell)) {
-      if (nsplitold > 1) {
-        if (ghostflag) { split_ghost_drop(icell); continue; }
-        split_pending(icell,1,0,NULL,0,NULL,NULL);
-      }
+      if (nsplitold > 1) split_pending(icell,1,0,NULL,0,NULL,NULL);
       if (fix->inside_any_body(ctr)) grid->set_cell_type(icell,INSIDE);
       else grid->set_cell_type(icell,OUTSIDE);
       typechanged = 1;
@@ -646,7 +640,6 @@ int RigidRemap::recut()
     // a split cell's own volume is the whole cell volume
 
     if (nsplitone != nsplitold) {
-      if (ghostflag) { split_ghost_drop(icell); continue; }
       split_pending(icell,nsplitone,n,newmap,xsub,xsplit,vols);
       if (nsplitone > 1)
         grid->set_cell_overlap(icell,grid->cell_volume(clo,chi),corner);
@@ -663,7 +656,6 @@ int RigidRemap::recut()
     if (nsplitone > 1) {
       grid->set_split_info(icell,newmap,xsub,xsplit,vols);
       splitchanged = 1;
-      if (ghostflag) continue;
       grid->set_cell_overlap(icell,grid->cell_volume(clo,chi),corner);
       typechanged = 1;
       continue;
@@ -678,12 +670,9 @@ int RigidRemap::recut()
   //   over entirely within one step never overlap a body surf at the
   //   start- or end-of-step position, so pass 1 never sees them
   // a cell INSIDE because of the static surfs is left alone
-  // a ghost cell in R is a split cell, or one just marked unsplit by
-  //   split_ghost_drop(); neither has a type to set
 
   for (int ic = 0; ic < nrcand; ic++) {
     icell = rcand[ic];
-    if (icell >= nglocal) continue;
     if (cells[icell].nsplit != 1) continue;
     if (cell_cut(icell)) continue;
     if (staticinside[icell]) continue;
@@ -741,21 +730,6 @@ int RigidRemap::cell_cut(int icell)
 }
 
 /* ----------------------------------------------------------------------
-   a ghost copy of a split cell whose piece count changed
-   this proc cannot restructure a cell it does not own, and does not
-     need to: the owner records the same change, so apply_pending()
-     runs this step and re-acquires every ghost before the next move
-   until then the copy is marked unsplit, so that nothing indexes its
-     piece map, whose length no longer matches its surf list
-------------------------------------------------------------------------- */
-
-void RigidRemap::split_ghost_drop(int icell)
-{
-  grid->cells[icell].nsplit = 1;
-  grid->cells[icell].isplit = -1;
-}
-
-/* ----------------------------------------------------------------------
    record that one owned cell's number of flow pieces changes this step
    the cut of the next cell overwrites the work buffers, so the piece
      map and the piece volumes are copied out here
@@ -769,28 +743,30 @@ void RigidRemap::split_pending(int icell, int nsplitnew, int n, int *map,
   if (npending == maxpending) {
     int oldmax = maxpending;
     maxpending += DELTA;
-    pending = (PendingSplit *)
-      memory->srealloc(pending,maxpending*sizeof(PendingSplit),
+    pending = (Grid::SplitChange *)
+      memory->srealloc(pending,maxpending*sizeof(Grid::SplitChange),
                        "rigid_remap:pending");
+    memory->grow(maxmap,maxpending,"rigid_remap:maxmap");
+    memory->grow(maxvols,maxpending,"rigid_remap:maxvols");
     for (int m = oldmax; m < maxpending; m++) {
       pending[m].map = NULL;
-      pending[m].maxmap = 0;
       pending[m].vols = NULL;
-      pending[m].maxvols = 0;
+      maxmap[m] = maxvols[m] = 0;
     }
   }
 
-  PendingSplit *p = &pending[npending++];
+  int m = npending++;
+  Grid::SplitChange *p = &pending[m];
   p->icell = icell;
   p->nsplitnew = nsplitnew;
   p->nsurf = n;
 
   if (nsplitnew == 1) return;
 
-  if (n > p->maxmap) {
-    p->maxmap = n;
+  if (n > maxmap[m]) {
+    maxmap[m] = n;
     memory->destroy(p->map);
-    memory->create(p->map,p->maxmap,"rigid_remap:pendingmap");
+    memory->create(p->map,n,"rigid_remap:pendingmap");
   }
   memcpy(p->map,map,n*sizeof(int));
 
@@ -799,12 +775,28 @@ void RigidRemap::split_pending(int icell, int nsplitnew, int n, int *map,
   p->xsplit[1] = xsplit[1];
   p->xsplit[2] = xsplit[2];
 
-  if (nsplitnew > p->maxvols) {
-    p->maxvols = nsplitnew;
+  if (nsplitnew > maxvols[m]) {
+    maxvols[m] = nsplitnew;
     memory->destroy(p->vols);
-    memory->create(p->vols,p->maxvols,"rigid_remap:pendingvols");
+    memory->create(p->vols,nsplitnew,"rigid_remap:pendingvols");
   }
   memcpy(p->vols,vols,nsplitnew*sizeof(double));
+}
+
+/* ----------------------------------------------------------------------
+   1 if the pending changes cannot be applied in place on this proc
+   Grid::restructure_split_cells() moves only sub cells, since a ghost
+     copy of any other cell on another proc records its index; after a
+     grid rebuild or balance the tail of the owned cell list may hold
+     other cells, and a change which would pull one of them into a hole
+     takes the collective rebuild instead
+   the caller reduces the flag so every proc takes the same path
+------------------------------------------------------------------------- */
+
+int RigidRemap::rebuild_needed()
+{
+  if (!npending) return 0;
+  return grid->restructure_check(npending,pending);
 }
 
 /* ----------------------------------------------------------------------
@@ -814,67 +806,82 @@ void RigidRemap::split_pending(int icell, int nsplitnew, int n, int *map,
      steps of a full re-map are skipped: Grid::clear_surf() plus
      Grid::surf2grid(), which re-maps every surf to every cell, and
      Grid::set_inout(), whose flood fill is an iterative collective
-   what is left is the structural part, the same sequence fix adapt uses
-     when it refines or coarsens cells during a run: no owned cell may
-     be added or removed while ghost cells are stored, so they are
-     dropped and re-acquired around the change
-   the sub cells of every cell which stops being split are detached
-     first and removed in one sweep afterwards, so that the cell indices
-     the pending list holds stay valid until every change is applied
+   what is left is the structural part: sub cells are added and removed
+     and the cell list compacted by Grid::restructure_split_cells(),
+     which repairs every reference to the cells it moves, so the ghost
+     cells and neighbor links survive and nothing is communicated
+     beyond one reduction of the cell counts
+   rebuild = 1 (collective, every proc agrees) takes the sequence fix
+     adapt uses when it refines or coarsens cells during a run instead:
+     no owned cell may be added or removed while ghost cells are
+     stored, so they are dropped and re-acquired around the change
    the caller has pulled the particles of every split cell up into the
      cell itself, so none is labelled with a sub cell about to vanish,
-     and has sorted them if Grid::remove_marked_cells() is to walk the
-     per-cell lists
+     and has sorted them if the per-cell lists are to be walked
    collective: every proc enters together
 ------------------------------------------------------------------------- */
 
-void RigidRemap::apply_pending()
+void RigidRemap::apply_pending(int rebuild)
 {
   int m;
   int nstatic_old = grid->nlocal;
 
-  // neighbor links become cell IDs, which survive the cells moving below
+  if (rebuild) {
 
-  grid->unset_neighbors();
-  grid->remove_ghosts();
+    // neighbor links become cell IDs, which survive the cells moving
 
-  // detach the old sub cells of every pending cell, then build the new
-  //   ones; detaching only marks, so no index moves in between
+    grid->unset_neighbors();
+    grid->remove_ghosts();
 
-  for (m = 0; m < npending; m++)
-    grid->split_cell_unset(pending[m].icell);
+    for (m = 0; m < npending; m++)
+      grid->split_cell_unset(pending[m].icell);
 
-  // nothing points at the old piece map and sub cell list of a pending
-  //   cell any more, so they can be replaced now, in grid storage
-  // a cell which stops being split needs neither
+    for (m = 0; m < npending; m++) {
+      if (pending[m].nsplitnew == 1) continue;
+      int *csplits = grid->csplits->get(pending[m].nsurf);
+      int *csubs = grid->csubs->get(pending[m].nsplitnew);
+      if (!csplits || !csubs)
+        error->one(FLERR,"Failed to allocate grid split cell lists");
+      memcpy(csplits,pending[m].map,pending[m].nsurf*sizeof(int));
+      grid->split_cell_set(pending[m].icell,pending[m].nsplitnew,
+                           csplits,csubs,pending[m].xsub,pending[m].xsplit,
+                           pending[m].vols);
+    }
 
-  for (m = 0; m < npending; m++) {
-    if (pending[m].nsplitnew == 1) continue;
-    int *csplits = grid->csplits->get(pending[m].nsurf);
-    int *csubs = grid->csubs->get(pending[m].nsplitnew);
-    if (!csplits || !csubs)
-      error->one(FLERR,"Failed to allocate grid split cell lists");
-    memcpy(csplits,pending[m].map,pending[m].nsurf*sizeof(int));
-    grid->split_cell_set(pending[m].icell,pending[m].nsplitnew,
-                         csplits,csubs,pending[m].xsub,pending[m].xsplit,
-                         pending[m].vols);
-  }
+    grid->remove_marked_cells();
 
-  grid->remove_marked_cells();
+    grid->setup_owned();
+    grid->acquire_ghosts();
+    grid->reset_neighbors();
+    comm->reset_neighbors();
 
-  // re-establish the owned cell bookkeeping, the ghost cells and the
-  //   neighbor links, exactly as fix adapt does after changing cells
+    // as after a grid rebuild with distributed surfs
 
-  grid->setup_owned();
-  grid->acquire_ghosts();
-  grid->reset_neighbors();
-  comm->reset_neighbors();
+    if (surf->distributed) {
+      surf->localghost_changed_step = update->ntimestep;
+      for (int i = 0; i < surf->ncustom; i++) surf->estatus[i] = 0;
+    }
 
-  // as after a grid rebuild with distributed surfs
+  } else {
+    grid->restructure_split_cells(npending,pending);
+    restructured = 1;
+    listschanged = 1;
 
-  if (surf->distributed) {
-    surf->localghost_changed_step = update->ntimestep;
-    for (int i = 0; i < surf->ncustom; i++) surf->estatus[i] = 0;
+    // global cell counts, the one collective of the in-place change
+
+    bigint mine[3],all[3];
+    mine[0] = grid->nunsplitlocal;
+    mine[1] = grid->nsplitlocal;
+    mine[2] = grid->nsublocal;
+    MPI_Allreduce(mine,all,3,MPI_SPARTA_BIGINT,MPI_SUM,world);
+    grid->nunsplit = all[0];
+    grid->nsplit = all[1];
+    grid->nsub = all[2];
+
+    // dumps count cells when they next write
+
+    for (int i = 0; i < output->ndump; i++)
+      output->dump[i]->reset_grid_count();
   }
 
   // a per-grid compute sized itself for the old cell count; one which
@@ -888,9 +895,9 @@ void RigidRemap::apply_pending()
       compute[i]->invoked_flag = 0;
     }
 
-  grid->notify_changed();
+  if (rebuild) grid->notify_changed();
 
-  // notify_changed() invalidated the static-inside flags as for any
+  // notify_changed() invalidates the static-inside flags as for any
   //   grid change, but this change only added, removed and moved sub
   //   cells, which are never static INSIDE: the flags of the other
   //   cells still hold, and the cells appended at the end are sub cells
@@ -931,6 +938,6 @@ double RigidRemap::memory_usage()
   bytes += (double) maxrcand * sizeof(int);
   bytes += (double) maxreclist * sizeof(surfint);
   bytes += (double) 2 * maxnewlist * sizeof(int);
-  bytes += (double) maxpending * sizeof(PendingSplit);
+  bytes += (double) maxpending * (sizeof(Grid::SplitChange) + 2*sizeof(int));
   return bytes;
 }

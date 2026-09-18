@@ -84,6 +84,7 @@ class FixRigid : public Fix {
   void setup();
   virtual void start_of_step();
   virtual void end_of_step();
+  void post_run();
   void grid_changed();
   double memory_usage();
   void init_surfs();            // per-run setup of the body surfs
@@ -261,6 +262,14 @@ class FixRigid : public Fix {
   int rotstyle;           // EULER or RICHARDSON quaternion update
   class RigidRemap *remap;
 
+  // per-run counts of how the re-map went, printed by post_run() when
+  //   the SPARTA_RIGID_TIMING environment variable is set
+
+  bigint nstep_run;       // steps this run
+  bigint nstep_inplace;   // steps whose split changes were applied in place
+  bigint nstep_rebuild;   // steps which took the collective ghost rebuild
+  bigint nstep_fallback;  // steps which fell back to a full re-map
+
   bigint ndeleted;        // per-proc count of deleted particles
   bigint ndeleted_all;    // cached global sum for compute_scalar()
   bigint ndelvalid;       // timestep the cached sum is valid for
@@ -326,6 +335,12 @@ class FixRigid : public Fix {
   //   empty lists valid
 
   virtual void sort_for_split_rebuild();
+
+  // particles of the cells Grid::restructure_split_cells() moved: the
+  //   host routine relabels them itself from the sorted per-cell lists,
+  //   fix rigid/kk relabels the device copy from Grid::movedfrom/movedto
+
+  virtual void relabel_moved_cells() {}
 
   // hook called before host code touches the particle array, so fix
   //   rigid/kk can bring the particles back from the device: it otherwise

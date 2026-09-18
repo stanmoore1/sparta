@@ -106,20 +106,102 @@ void FixRigidKokkos::host_end()
   SurfKokkos *surf_kk = (SurfKokkos*) surf;
 
   // surfs: the body geometry was regenerated on the host
-  // per-cell surf lists: only rewrap the device graphs if a list changed
+  // grid: the cells, split info, hash and per-cell surf graphs are
+  //   patched from the change journal the Grid primitives kept, so
+  //   nothing sized by the grid crosses to the device; a full re-map
+  //   (Grid::changed) is the exception and re-establishes everything
   // particles: NOT flagged as host-modified.  the deletion pass ran on the
   //   device and left the device copy authoritative; flagging the host
   //   copy here would mark a stale array as the newer one and discard the
   //   deletions on the next sync.  the host fallback path in
   //   remove_inside_all() does the flagging itself
 
-  grid_kk->modify(Host,ALL_MASK);
   surf_kk->modify(Host,ALL_MASK);
   particle_kk->sorted_kk = 0;
 
   if (grid->changed) grid_kk->resync_after_host_change();
-  else if (remap->listschanged) grid_kk->wrap_kokkos_graphs();
+  else grid_kk->apply_changes();
   remap->listschanged = 0;
+  remap->restructured = 0;
+}
+
+/* ----------------------------------------------------------------------
+   the cells a restructure moved hold particles labelled with their old
+     index; the host routine relabels them from the sorted per-cell
+     lists, which the device copy of the particles never sees
+   an old -> new map over the old cell range, applied to every particle
+------------------------------------------------------------------------- */
+
+void FixRigidKokkos::relabel_moved_cells()
+{
+  int nmoved = grid->nmoved;
+  if (!nmoved || !particle->exist) return;
+
+  ParticleKokkos *particle_kk = (ParticleKokkos*) particle;
+
+  int nold = 0;
+  for (int i = 0; i < nmoved; i++) nold = MAX(nold,grid->movedfrom[i]+1);
+
+  if ((int) d_cellmap.extent(0) < nold)
+    d_cellmap = DAT::t_int_1d("fix_rigid:cellmap",nold);
+  if ((int) k_movedfrom.extent(0) < nmoved) {
+    k_movedfrom = DAT::tdual_int_1d("fix_rigid:movedfrom",nmoved);
+    k_movedto = DAT::tdual_int_1d("fix_rigid:movedto",nmoved);
+  }
+  auto h_from = k_movedfrom.view_host();
+  auto h_to = k_movedto.view_host();
+  for (int i = 0; i < nmoved; i++) {
+    h_from(i) = grid->movedfrom[i];
+    h_to(i) = grid->movedto[i];
+  }
+  k_movedfrom.modify_host(); k_movedfrom.sync_device();
+  k_movedto.modify_host(); k_movedto.sync_device();
+  d_movedfrom = k_movedfrom.view_device();
+  d_movedto = k_movedto.view_device();
+
+  const int prev_auto_sync = sparta->kokkos->auto_sync;
+  sparta->kokkos->auto_sync = 0;
+
+  particle_kk->sync(Device,PARTICLE_MASK);
+  d_particles_kk = particle_kk->k_particles.view_device();
+  nplocal_kk = particle->nlocal;
+
+  copymode = 1;
+  Kokkos::parallel_for(
+    Kokkos::RangePolicy<DeviceType,TagFixRigidCellMapInit>(0,nold),*this);
+  Kokkos::parallel_for(
+    Kokkos::RangePolicy<DeviceType,TagFixRigidCellMapSet>(0,nmoved),*this);
+  Kokkos::parallel_for(
+    Kokkos::RangePolicy<DeviceType,TagFixRigidRelabel>(0,nplocal_kk),*this);
+  copymode = 0;
+
+  particle_kk->modify(Device,PARTICLE_MASK);
+  particle->sorted = 0;
+  particle_kk->sorted_kk = 0;
+
+  sparta->kokkos->auto_sync = prev_auto_sync;
+}
+
+/* ---------------------------------------------------------------------- */
+
+KOKKOS_INLINE_FUNCTION
+void FixRigidKokkos::operator()(TagFixRigidCellMapInit, const int &i) const
+{
+  d_cellmap(i) = i;
+}
+
+KOKKOS_INLINE_FUNCTION
+void FixRigidKokkos::operator()(TagFixRigidCellMapSet, const int &m) const
+{
+  d_cellmap(d_movedfrom(m)) = d_movedto(m);
+}
+
+KOKKOS_INLINE_FUNCTION
+void FixRigidKokkos::operator()(TagFixRigidRelabel, const int &i) const
+{
+  const int icell = d_particles_kk[i].icell;
+  if (icell < (int) d_cellmap.extent(0))
+    d_particles_kk[i].icell = d_cellmap(icell);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -166,8 +248,10 @@ void FixRigidKokkos::start_of_step()
   }
   Kokkos::deep_copy(d_ftally,0.0);
 
-  grid_kk->modify(Host,CELL_MASK);
-  if (remap->listschanged) grid_kk->wrap_kokkos_graphs();
+  // the collision lists, and any re-indexed ghost cell lists, reach the
+  //   device through the journal
+
+  grid_kk->apply_changes();
   remap->listschanged = 0;
 }
 
@@ -602,17 +686,15 @@ int FixRigidKokkos::assign_split_kokkos()
 
   d_particles_kk = particle_kk->k_particles.view_device();
 
-  // the split tests read cells, sinfo and the surf lines/tris on the device.
-  //   FixRigid has just rewritten all of them on the HOST (the body pose, the
-  //   re-cut, split_cell_set), so they must be pushed to the device or the
-  //   kernel reads whatever was there before -- for sinfo that is an
-  //   unwritten allocation, and dereferencing xsplit out of it is what
-  //   produced the intermittent
-  //     cudaDeviceSynchronize() error( cudaErrorInvalidAddressSpace )
-  //   on about half of the 40-step runs
-  // this is the same mask UpdateKokkos::move() syncs before its own kernel
+  // the split tests read cells, sinfo, the per-cell graphs and the surf
+  //   lines/tris on the device.  FixRigid has just rewritten them on the
+  //   HOST (the body pose, the re-cut, the restructure), so the device is
+  //   patched from the change journal first, and the surfs flagged and
+  //   synced: reading the device state as it was would dereference
+  //   split info of cells which no longer exist
 
-  grid_kk->sync(Device,CELL_MASK|PCELL_MASK|SINFO_MASK|PLEVEL_MASK);
+  grid_kk->apply_changes();
+  surf_kk->modify(Host,ALL_MASK);
   surf_kk->sync(Device,ALL_MASK);
 
   d_cells_kk = grid_kk->k_cells.view_device();
@@ -799,13 +881,14 @@ void FixRigidKokkos::operator()(TagFixRigidRemoveInside,
   const int icell = d_particles_kk[i].icell;
   if (icell < 0) return;
 
-  const int ctype = d_celltype_kk[icell];
+  int ctype = CELLOUTSIDE;
+  if (icell < nlocal_kk) ctype = d_cinfo_kk[icell].type;
   const int inside = (ctype == CELLINSIDE);
 
   // a surf-free OUTSIDE cell cannot contain a point interior to a body,
   //   since a body boundary crossing the cell would put a surf in it
 
-  if (!inside && ctype == CELLOUTSIDE && d_cellnsurf_kk[icell] == 0) return;
+  if (!inside && ctype == CELLOUTSIDE && d_cells_kk[icell].nsurf == 0) return;
 
   double *x = d_particles_kk[i].x;
 
@@ -930,26 +1013,13 @@ int FixRigidKokkos::remove_inside_all_kokkos(int splitflag)
 
   pack_body_device();
 
-  // the two per-cell fields the test reads, over owned + ghost cells,
-  //   since a particle's icell may be a ghost after migration
+  // the two per-cell fields the test reads come from the device grid,
+  //   patched from the change journal; a ghost cell has no ChildInfo
 
-  int nglocal = grid->nlocal + grid->nghost;
-  if (k_celltype_kk.extent(0) < (size_t)nglocal) {
-    k_celltype_kk = DAT::tdual_int_1d("fix_rigid:celltype",nglocal);
-    k_cellnsurf_kk = DAT::tdual_int_1d("fix_rigid:cellnsurf",nglocal);
-    d_celltype_kk = k_celltype_kk.view_device();
-    d_cellnsurf_kk = k_cellnsurf_kk.view_device();
-  }
-  auto h_celltype = k_celltype_kk.view_host();
-  auto h_cellnsurf = k_cellnsurf_kk.view_host();
-  Grid::ChildCell *cells = grid->cells;
-  Grid::ChildInfo *cinfo = grid->cinfo;
-  for (int ic = 0; ic < nglocal; ic++) {
-    h_celltype(ic) = cinfo[ic].type;
-    h_cellnsurf(ic) = cells[ic].nsurf;
-  }
-  k_celltype_kk.modify_host(); k_celltype_kk.sync_device();
-  k_cellnsurf_kk.modify_host(); k_cellnsurf_kk.sync_device();
+  grid_kk->apply_changes();
+  d_cells_kk = grid_kk->k_cells.view_device();
+  d_cinfo_kk = grid_kk->k_cinfo.view_device();
+  nlocal_kk = grid->nlocal;
 
   nplocal_kk = particle->nlocal;
 

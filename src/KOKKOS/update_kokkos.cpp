@@ -764,6 +764,7 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
     hash_kk = grid_kk->hash_kk;
 
     d_csurfs = grid_kk->d_csurfs;
+    d_csurfs_move = grid_kk->d_csurfs_move;
     d_csplits = grid_kk->d_csplits;
     d_csubs = grid_kk->d_csubs;
 
@@ -1727,8 +1728,15 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
 
       // skip surf checks if particle flagged as EXITing this cell
       // then unset pflag so not checked again for this particle
+      // the surfs to test are the cell's row of the device graph: its
+      //   cut list, or the collision list a fix which moves surfs set
+      //   for this step (Grid::set_collision_surfs), which is longer;
+      //   an empty ghost cell (nsurf < 0) has no row and is counted as
+      //   Update::move() counts it
 
       nsurf = d_cells[icell].nsurf;
+      if (nsurf >= 0)
+        nsurf = d_csurfs_move.row_map(icell+1) - d_csurfs_move.row_map(icell);
       if (pflag == PEXIT) {
         nsurf = 0;
         pflag = 0;
@@ -1784,7 +1792,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
         cflag = 0;
         minparam = 2.0;
         minmoving = 0;
-        auto csurfs_begin = d_csurfs.row_map(icell);
+        auto csurfs_begin = d_csurfs_move.row_map(icell);
 
         // body whose path endpoints are currently mapped, and the mapping
         //   itself: it depends on the path and the body, not on which
@@ -1794,7 +1802,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
         double mxcm[3],mvcm[3],momega[3],ymap0[3],ymap1[3];
 
         for (int m = 0; m < nsurf; m++) {
-          isurf = d_csurfs.entries(csurfs_begin + m);
+          isurf = d_csurfs_move.entries(csurfs_begin + m);
 
           // skip collisions with previous surf, but not for a moving
           //   rigid-body surf, whose round-off re-hit at param ~ 0 is

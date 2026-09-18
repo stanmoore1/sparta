@@ -237,6 +237,19 @@ class Grid : protected Pointers {
     int *csubs;               // indices in cells of Nsplit sub cells
   };
 
+  // one owned cell whose number of flow pieces changes, applied in
+  //   place by restructure_split_cells()
+
+  struct SplitChange {
+    int icell;                // owned split or unsplit cell
+    int nsplitnew;            // its new # of pieces, 1 = becomes unsplit
+    int nsurf;                // # of surfs in the cell, = length of map
+    int *map;                 // piece each surf of the cut list belongs to
+    int xsub;                 // reference piece and point for split2d/3d
+    double xsplit[3];
+    double *vols;             // flow volume of each piece
+  };
+
   struct ParentLevel {
     int nbits;                // nbits = # of bits to store parent ID at this level
     int newbits;              // newbits = extra bits to store children of this parent
@@ -262,6 +275,58 @@ class Grid : protected Pointers {
 
   int maxlocal;               // size of cinfo
   int maxparent;              // size of pcells
+
+  // subroute = 1 if a particle migrating into a ghost sub cell is routed
+  //   to the owner's split cell, which resolves the sub cell itself,
+  //   rather than to the owner's copy of the sub cell: a fix which
+  //   restructures split cells in place moves sub cells without
+  //   informing the ghost copies (see restructure_split_cells())
+
+  int subroute;
+
+  // cells moved by the last restructure_split_cells(), old -> new index,
+  //   for a caller which labels particles by cell outside Grid
+
+  int nmoved,maxmoved;
+  int *movedfrom,*movedto;
+
+  // change journal, kept when journalflag is set (GridKokkos): what the
+  //   primitives which change cells during a run touched since the
+  //   journal was last cleared, so a device mirror of the grid can be
+  //   patched rather than re-uploaded
+  //   dirtycell = cells whose ChildCell/ChildInfo changed (may repeat)
+  //   dirtysinfo = split info entries which changed
+  //   cutrec/cutbuf = cut lists replaced, one record per cell: the list
+  //     is copied at cutbuf[offset], n long, as local surf indices
+  //   collrec/collbuf = collision lists set since the last reset
+  //   both record lists are keyed by the cell index at the time of the
+  //     call; the moves of a restructure are applied to them
+
+  struct ListRecord {
+    int icell;
+    int n;
+    bigint offset;
+  };
+
+  int journalflag;
+  int ndirtycell,maxdirtycell;
+  int *dirtycell;
+  int ndirtysinfo,maxdirtysinfo;
+  int *dirtysinfo;
+  int ncutrec,maxcutrec;
+  ListRecord *cutrec;
+  int *cutbuf;
+  bigint ncutbuf,maxcutbuf;
+  int ncollrec,maxcollrec;
+  ListRecord *collrec;
+  int *collbuf;
+  bigint ncollbuf,maxcollbuf;
+  int collreset;              // 1 if reset_collision_surfs() was called
+
+  void journal_cell(int);
+  void journal_sinfo(int);
+  void journal_list(int, int, surfint *, int);
+  void journal_clear();
 
   ChildCell *cells;           // list of owned and ghost child cells
   ChildInfo *cinfo;           // extra info for nlocal owned cells
@@ -290,6 +355,12 @@ class Grid : protected Pointers {
   void split_cell_set(int, int, int *, int *, int, double *, double *);
   void split_cell_unset(int);
   int remove_marked_cells();
+  int restructure_check(int, SplitChange *);
+  void restructure_split_cells(int, SplitChange *);
+  void move_cell(int, int);
+  void move_sinfo(int, int);
+  void route_ghost_subcells();
+  int neighscan;              // 1 if move_cell() could not repair a link
   void notify_changed();
   int set_minlevel();
   void set_maxlevel();
@@ -379,6 +450,9 @@ class Grid : protected Pointers {
   void set_cell_overlap(int, double, int *);
   void set_split_info(int, int *, int, double *, double *);
   void compact_surf_lists();
+  void add_sub_cell_at(int, int, int);
+  int halo_site(int);
+  void rebin_cell(int, int);
   void collision_page(int);
   void set_collision_surfs(int, int, surfint *);
   void reset_collision_surfs();

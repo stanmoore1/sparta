@@ -151,6 +151,7 @@ class UpdateKokkos : public Update {
   t_pcell_1d d_pcells;
 
   Kokkos::Crs<int, DeviceType, void, crs_size_type> d_csurfs;
+  Kokkos::Crs<int, DeviceType, void, crs_size_type> d_csurfs_move;
   Kokkos::Crs<int, DeviceType, void, crs_size_type> d_csplits;
   Kokkos::Crs<int, DeviceType, void, crs_size_type> d_csubs;
 

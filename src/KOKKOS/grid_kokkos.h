@@ -56,6 +56,9 @@ class GridKokkos : public Grid {
   // re-establish device state after a host fix rebuilt the grid/surfs
   void resync_after_host_change();
 
+  // patch the device with the change journal (see Grid::journalflag)
+  void apply_changes();
+
   /* ----------------------------------------------------------------------
      compute lo/hi extent of a specific child cell within a parent cell
      plevel = level of parent
@@ -171,9 +174,21 @@ class GridKokkos : public Grid {
   //   BIGBIG the total entry count on a rank can exceed 2^31, so the offset
   //   type must be 64-bit; under BIG it cannot, and a 32-bit row_map halves
   //   the bytes touched by the per-particle surf lookups in the move kernel.
+  // d_csurfs = the cut list of every owned+ghost cell, which split2d/3d
+  //   index in lockstep with d_csplits
+  // d_csurfs_move = the list the mover tests particles against: the cut
+  //   list, or the collision list a fix which moves surfs set for this
+  //   step (Grid::set_collision_surfs); the same graph as d_csurfs when
+  //   no cell has one
+  // graph_generation counts rebuilds of any of them, so a consumer
+  //   holding a copy of a graph can tell it is stale
+
   Kokkos::Crs<int, DeviceType, void, crs_size_type> d_csurfs;
+  Kokkos::Crs<int, DeviceType, void, crs_size_type> d_csurfs_move;
   Kokkos::Crs<int, DeviceType, void, crs_size_type> d_csplits;
   Kokkos::Crs<int, DeviceType, void, crs_size_type> d_csubs;
+  int ncsurfsrows;            // rows of d_csurfs, whose views may be longer
+  int graph_generation;
 
   DAT::t_int_1d d_cellcount;
   DAT::t_int_2d d_plist;
@@ -202,10 +217,41 @@ class GridKokkos : public Grid {
   tdual_struct_tdual_int_2d_1d k_eiarray;
   tdual_struct_tdual_float_2d_1d k_edarray;
 
+  void wrap_split_graphs();   // d_csplits/d_csubs from the host sinfo
+  void build_csurfs_device(); // d_csurfs from its old rows + cut records
+  void build_move_graph_device(); // d_csurfs_move from d_csurfs + records
+
  private:
   void grow_cells(int, int) override;
   void grow_sinfo(int) override;
   void grow_pcells() override;
+
+  // staging for apply_changes(): the journal's records, uploaded and
+  //   scattered by kernels; the stamps deduplicate the dirty lists
+
+  int *dirtystamp,*sinfostamp;
+  int maxdirtystamp,maxsinfostamp,dirtygen;
+
+  tdual_cell_1d k_stagecell;
+  tdual_cinfo_1d k_stagecinfo;
+  tdual_sinfo_1d k_stagesinfo;
+  DAT::tdual_int_1d k_dirtycell,k_dirtyown,k_dirtysinfo;
+  DAT::tdual_cellint_1d k_hashid;
+  DAT::tdual_int_1d k_hashidx,k_halosite,k_haloidx;
+  DAT::tdual_int_1d k_movedfrom,k_movedto,k_subcell,k_subparent;
+  DAT::tdual_int_1d k_recicell,k_recn,k_listbuf;
+  DAT::tdual_bigint_1d k_recoff;
+  DAT::t_int_1d d_rowsrc,d_rowpar,d_rowrec;
+  Kokkos::View<crs_size_type*,DeviceType> d_rowcount;
+  Kokkos::View<crs_size_type*,DeviceType> d_rowmap_buf[2],d_rowmap_move;
+  DAT::t_int_1d d_entries_buf[2],d_entries_move;
+  int ibuf;                   // which buffer pair d_csurfs currently uses
+
+  int stage_records(int, int *, int **);   // dedup a dirty list
+  void upload_list_records(int, ListRecord *, int *, bigint);
+  void build_crs(int, Kokkos::Crs<int, DeviceType, void, crs_size_type> &,
+                 Kokkos::View<crs_size_type*,DeviceType> &, DAT::t_int_1d &,
+                 Kokkos::Crs<int, DeviceType, void, crs_size_type> &);
 };
 
 }

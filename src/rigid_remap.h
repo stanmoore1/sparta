@@ -16,6 +16,7 @@
 #define SPARTA_RIGID_REMAP_H
 
 #include "pointers.h"
+#include "grid.h"
 
 namespace SPARTA_NS {
 
@@ -33,6 +34,8 @@ class RigidRemap : protected Pointers {
                           //   redistributed over its new pieces
   int npending;           // # of owned cells whose piece count changes
                           //   this step, applied by apply_pending()
+  int restructured;       // 1 if apply_pending() moved cells in place
+                          //   since the flag was cleared (fix rigid/kk)
 
   RigidRemap(class SPARTA *, class FixRigid *);
   ~RigidRemap();
@@ -41,7 +44,9 @@ class RigidRemap : protected Pointers {
   void reset_collision_lists();
   void refresh();                 // per-cell state, before the bodies move
   int recut();                    // re-cut cells near the bodies
-  void apply_pending();           // restructure the piece-count changes
+  int rebuild_needed();           // 1 if the pending changes need the
+                                  //   collective grid rebuild
+  void apply_pending(int);        // restructure the piece-count changes
   void grid_changed();
   double memory_usage();
 
@@ -94,29 +99,16 @@ class RigidRemap : protected Pointers {
   int maxreclist;
 
   // owned cells whose number of disconnected flow pieces changes this
-  //   step, applied together by apply_pending(): adding or removing a
-  //   sub cell changes this proc's cell count and the sub cell indices
-  //   other procs migrate particles into, neither of which can be done
-  //   while ghost cells are stored
+  //   step, applied together by apply_pending(): the piece map and
+  //   volumes are copied out of the work buffers the next cell's cut
+  //   overwrites
 
-  struct PendingSplit {
-    int icell;            // owned cell whose piece count changes
-    int nsplitnew;        // its new # of pieces, 1 = no longer split
-    int nsurf;            // # of surfs in the cell, = length of map
-    int *map;             // the new piece map, copied out of the work
-    int maxmap;           //   buffer the next cell's cut overwrites
-    int xsub;             // reference piece and point for split2d/3d
-    double xsplit[3];
-    double *vols;         // flow volume of each new piece
-    int maxvols;
-  };
-
-  PendingSplit *pending;
+  Grid::SplitChange *pending;
+  int *maxmap,*maxvols;   // allocated lengths of each entry's map/vols
   int maxpending;
 
   int cell_cut(int);
   void mark_static();
-  void split_ghost_drop(int);
   void split_pending(int, int, int, int *, int, double *, double *);
 };
 

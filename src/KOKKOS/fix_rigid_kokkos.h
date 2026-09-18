@@ -32,6 +32,9 @@ struct TagFixRigidRemoveInside{};
 struct TagFixRigidCombineSplit{};
 struct TagFixRigidAssignSplit{};
 struct TagFixRigidSumTallies{};
+struct TagFixRigidCellMapInit{};
+struct TagFixRigidCellMapSet{};
+struct TagFixRigidRelabel{};
 
 class FixRigidKokkos : public FixRigid {
  public:
@@ -50,6 +53,7 @@ class FixRigidKokkos : public FixRigid {
   void particles_to_host();
   void combine_split_all();
   void sort_for_split_rebuild();
+  void relabel_moved_cells();
   void sum_tallies();
 
   // flag particles inside a body, one thread per particle
@@ -75,6 +79,16 @@ class FixRigidKokkos : public FixRigid {
 
   KOKKOS_INLINE_FUNCTION
   void operator()(TagFixRigidSumTallies, const int&) const;
+
+  // old -> new cell index map of the cells a restructure moved, and
+  //   its application to every particle's cell label
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()(TagFixRigidCellMapInit, const int&) const;
+  KOKKOS_INLINE_FUNCTION
+  void operator()(TagFixRigidCellMapSet, const int&) const;
+  KOKKOS_INLINE_FUNCTION
+  void operator()(TagFixRigidRelabel, const int&) const;
 
   // device split2d/split3d, the same tests as Update::split2d/split3d
 
@@ -165,6 +179,10 @@ class FixRigidKokkos : public FixRigid {
   tdual_dbl_2d k_ft;
   tdual_dbl_2d::t_dev d_ft;
 
+  DAT::t_int_1d d_cellmap;
+  DAT::tdual_int_1d k_movedfrom,k_movedto;
+  DAT::t_int_1d d_movedfrom,d_movedto;
+
   tdual_dbl_3d k_bodypt;
   tdual_dbl_2d k_bodynorm;
   tdual_dbl_2d k_bbodylo,k_bbodyhi;
@@ -192,9 +210,8 @@ class FixRigidKokkos : public FixRigid {
   HAT::t_int_scalar h_ndelete_kk;
 
   t_particle_1d d_particles_kk;
-  DAT::t_int_1d d_celltype_kk;  // cinfo[icell].type per owned+ghost cell
-  DAT::t_int_1d d_cellnsurf_kk; // cells[icell].nsurf
-  DAT::tdual_int_1d k_celltype_kk,k_cellnsurf_kk;
+  t_cinfo_1d d_cinfo_kk;        // the device grid, current after apply_changes()
+  int nlocal_kk;                // grid->nlocal, cinfo has no ghost rows
 };
 
 }
