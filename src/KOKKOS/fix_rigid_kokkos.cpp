@@ -833,59 +833,44 @@ void FixRigidKokkos::pack_body_device(int sweepflag)
     k_elemlo = tdual_dbl_2d("fix_rigid:elemlo",nelem,3);
     k_elemhi = tdual_dbl_2d("fix_rigid:elemhi",nelem,3);
     k_lblist = DAT::tdual_int_1d("fix_rigid:lblist",nelem);
-    d_bodypt = k_bodypt.view_device();
-    d_bodynorm = k_bodynorm.view_device();
-    d_elemlo = k_elemlo.view_device();
-    d_elemhi = k_elemhi.view_device();
-    d_lblist = k_lblist.view_device();
     nelem_kk = nelem;
   }
+  if (nbins > nbin_kk || k_bodybinstart.extent(0) < (size_t)(nbins+1)) {
+    k_bodybinstart = DAT::tdual_int_1d("fix_rigid:bodybinstart",nbins+1);
+    nbin_kk = nbins;
+  }
+  if (k_bodybinlist.extent(0) < (size_t)nbody)
+    k_bodybinlist = DAT::tdual_int_1d("fix_rigid:bodybinlist",nbody);
+  if (k_bodystart.extent(0) < (size_t)(nbody+1)) {
+    k_bodystart = DAT::tdual_int_1d("fix_rigid:bodystart",nbody+1);
+    k_bbodylo = tdual_dbl_2d("fix_rigid:bbodylo",nbody,3);
+    k_bbodyhi = tdual_dbl_2d("fix_rigid:bbodyhi",nbody,3);
+  }
 
+  // bodypt is allocated [nsurf][dim][3]: a 2d element is a line and has
+  //   only 2 corner points, so copy dim of them, not 3
   // per-element boxes: the current ones, or the swept ones of this step
 
+  auto h_bodypt = k_bodypt.view_host();
+  auto h_bodynorm = k_bodynorm.view_host();
   auto h_elemlo = k_elemlo.view_host();
   auto h_elemhi = k_elemhi.view_host();
   auto h_lblist = k_lblist.view_host();
   for (int i = 0; i < nelem; i++) {
+    for (int j = 0; j < dim; j++)
+      for (int k = 0; k < 3; k++) h_bodypt(i,j,k) = bodypt[i][j][k];
     for (int k = 0; k < 3; k++) {
+      h_bodynorm(i,k) = bodynorm[i][k];
       h_elemlo(i,k) = elemlo[i][k];
       h_elemhi(i,k) = elemhi[i][k];
     }
     h_lblist(i) = lblist[i];
   }
+  k_bodypt.modify_host(); k_bodypt.sync_device();
+  k_bodynorm.modify_host(); k_bodynorm.sync_device();
   k_elemlo.modify_host(); k_elemlo.sync_device();
   k_elemhi.modify_host(); k_elemhi.sync_device();
   k_lblist.modify_host(); k_lblist.sync_device();
-  if (nbins > nbin_kk || k_bodybinstart.extent(0) < (size_t)(nbins+1)) {
-    k_bodybinstart = DAT::tdual_int_1d("fix_rigid:bodybinstart",nbins+1);
-    d_bodybinstart = k_bodybinstart.view_device();
-    nbin_kk = nbins;
-  }
-  if (k_bodybinlist.extent(0) < (size_t)nbody) {
-    k_bodybinlist = DAT::tdual_int_1d("fix_rigid:bodybinlist",nbody);
-    d_bodybinlist = k_bodybinlist.view_device();
-  }
-  if (k_bodystart.extent(0) < (size_t)(nbody+1)) {
-    k_bodystart = DAT::tdual_int_1d("fix_rigid:bodystart",nbody+1);
-    k_bbodylo = tdual_dbl_2d("fix_rigid:bbodylo",nbody,3);
-    k_bbodyhi = tdual_dbl_2d("fix_rigid:bbodyhi",nbody,3);
-    d_bodystart = k_bodystart.view_device();
-    d_bbodylo = k_bbodylo.view_device();
-    d_bbodyhi = k_bbodyhi.view_device();
-  }
-
-  // bodypt is allocated [nsurf][dim][3]: a 2d element is a line and has
-  //   only 2 corner points, so copy dim of them, not 3
-
-  auto h_bodypt = k_bodypt.view_host();
-  auto h_bodynorm = k_bodynorm.view_host();
-  for (int i = 0; i < nelem; i++) {
-    for (int j = 0; j < dim; j++)
-      for (int k = 0; k < 3; k++) h_bodypt(i,j,k) = bodypt[i][j][k];
-    for (int k = 0; k < 3; k++) h_bodynorm(i,k) = bodynorm[i][k];
-  }
-  k_bodypt.modify_host(); k_bodypt.sync_device();
-  k_bodynorm.modify_host(); k_bodynorm.sync_device();
 
   auto h_bodystart = k_bodystart.view_host();
   auto h_bbodylo = k_bbodylo.view_host();
@@ -907,12 +892,24 @@ void FixRigidKokkos::pack_body_device(int sweepflag)
   k_bodybinstart.modify_host(); k_bodybinstart.sync_device();
   k_bodybinlist.modify_host(); k_bodybinlist.sync_device();
 
+  body.nbody = nbody;
+  body.dim = dim;
+  body.d_bodypt = k_bodypt.view_device();
+  body.d_bodynorm = k_bodynorm.view_device();
+  body.d_elemlo = k_elemlo.view_device();
+  body.d_elemhi = k_elemhi.view_device();
+  body.d_bbodylo = k_bbodylo.view_device();
+  body.d_bbodyhi = k_bbodyhi.view_device();
+  body.d_bodystart = k_bodystart.view_device();
+  body.d_lblist = k_lblist.view_device();
+  body.d_binstart = k_bodybinstart.view_device();
+  body.d_binlist = k_bodybinlist.view_device();
   for (int k = 0; k < 3; k++) {
-    bodynbin_kk[k] = bodynbin[k];
-    bodybinlo_kk[k] = bodybinlo[k];
-    bodybininv_kk[k] = bodybininv[k];
+    body.nbin[k] = bodynbin[k];
+    body.binlo[k] = bodybinlo[k];
+    body.bininv[k] = bodybininv[k];
   }
-  rmaxall_kk = rmaxall;
+  body.rmaxall = rmaxall;
   dim_kk = dim;
 }
 
@@ -942,75 +939,7 @@ void FixRigidKokkos::operator()(TagFixRigidRemoveInside,
   if (!inside && ctype == CELLOUTSIDE && d_cells_kk[icell].nsurf == 0) return;
 
   double *x = d_particles_kk[i].x;
-
-  // inside_any_body(): the bins overlapping x inflated by rmaxall give the
-  //   candidate bodies, then each body's bbox is tested exactly
-
-  int inbody = 0;
-  int blo[3],bhi[3];
-  for (int k = 0; k < 3; k++) {
-    blo[k] = (int) ((x[k]-rmaxall_kk-bodybinlo_kk[k]) * bodybininv_kk[k]);
-    bhi[k] = (int) ((x[k]+rmaxall_kk-bodybinlo_kk[k]) * bodybininv_kk[k]);
-    blo[k] = MAX(0,MIN(blo[k],bodynbin_kk[k]-1));
-    bhi[k] = MAX(0,MIN(bhi[k],bodynbin_kk[k]-1));
-  }
-
-  for (int ibz = blo[2]; ibz <= bhi[2] && !inbody; ibz++)
-    for (int iby = blo[1]; iby <= bhi[1] && !inbody; iby++)
-      for (int ibx = blo[0]; ibx <= bhi[0] && !inbody; ibx++) {
-        const int ibin = (ibz*bodynbin_kk[1] + iby)*bodynbin_kk[0] + ibx;
-        for (int m = d_bodybinstart[ibin]; m < d_bodybinstart[ibin+1]; m++) {
-          const int ibody = d_bodybinlist[m];
-
-          // body_box(): exact bbox test, x as a degenerate box
-
-          int overlap = 1;
-          for (int k = 0; k < 3; k++)
-            if (x[k] < d_bbodylo(ibody,k) || x[k] > d_bbodyhi(ibody,k))
-              { overlap = 0; break; }
-          if (!overlap) continue;
-
-          // inside_body(): parity of the crossings of a ray from x to a
-          //   point outside the body's bbox.  the ray and the loop order
-          //   are those of the host routine, so the count matches
-
-          double blox = d_bbodylo(ibody,0), bhix = d_bbodyhi(ibody,0);
-          double dmax = MAX(bhix-blox,d_bbodyhi(ibody,1)-d_bbodylo(ibody,1));
-          dmax = MAX(dmax,d_bbodyhi(ibody,2)-d_bbodylo(ibody,2));
-
-          double xout[3],xc[3];
-          xout[0] = bhix + 0.414159*dmax;
-          xout[1] = x[1] + 0.271828*dmax;
-          if (dim_kk == 3) xout[2] = x[2] + 0.161803*dmax;
-          else xout[2] = 0.0;
-
-          int count = 0;
-          for (int e = d_bodystart(ibody); e < d_bodystart(ibody+1); e++) {
-            // only a 3d element has a third corner point; in 2d the
-            //   third slot of d_bodypt is never written
-
-            double p1[3],p2[3],p3[3],nrm[3];
-            for (int k = 0; k < 3; k++) {
-              p1[k] = d_bodypt(e,0,k);
-              p2[k] = d_bodypt(e,1,k);
-              p3[k] = (dim_kk == 3) ? d_bodypt(e,2,k) : 0.0;
-              nrm[k] = d_bodynorm(e,k);
-            }
-            double param;
-            int side;
-            bool hitflag;
-            if (dim_kk == 2)
-              hitflag = GeometryKokkos::
-                line_line_intersect(x,xout,p1,p2,nrm,xc,param,side);
-            else
-              hitflag = GeometryKokkos::
-                line_tri_intersect(x,xout,p1,p2,p3,nrm,xc,param,side);
-            if (hitflag) count++;
-          }
-
-          if (count % 2) { inbody = 1; break; }
-        }
-      }
+  const int inbody = body.inside_any_body(x);
 
   if (!inbody && !inside) return;
 

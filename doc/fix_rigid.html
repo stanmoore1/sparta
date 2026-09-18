@@ -940,11 +940,17 @@ switch; when the KOKKOS package is active (the "-k on" switch) the
 <I>rigid/kk</I> style must be used, and the plain style generates an
 error.  The KOKKOS version performs the moving-surf collision tests
 and the force/torque tallies in the KOKKOS particle mover, on the GPU
-or host threads, and sums the tallies per body there.  The body time
-integration, the per-step re-assignment of body surfs to grid cells,
-and the deletion of particles inside the body run on the host, so
-each timestep the grid data is copied from the device to the host and
-back.  This limits performance on GPUs for large particle counts.
+or host threads, and runs the rest of the per-step work sized by the
+particles or the grid cells there as well: the per-body force sums,
+the collision lists of the cells the bodies sweep through, the search
+for the cells the re-cut must visit, their new surf lists and their
+re-typing, the deletion of particles inside the bodies and the
+re-assignment of particles to sub cells.  The body time integration,
+the cut of the cells whose surf list changed and the restructuring of
+split cells run on the host, and the device copy of the grid is
+patched with those changes rather than re-copied.  Each timestep the
+new positions of the body surfs and the cells which changed cross to
+the device, and nothing sized by the particles or by all grid cells.
 The results are statistically equivalent to those of the non-KOKKOS
 version; the KOKKOS surface collision models use a different random
 number stream and per-surf tallies are summed in a different order,

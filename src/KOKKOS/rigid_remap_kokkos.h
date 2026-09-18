@@ -17,6 +17,7 @@
 
 #include "rigid_remap.h"
 #include "kokkos_type.h"
+#include "rigid_body_kokkos.h"
 
 namespace SPARTA_NS {
 
@@ -26,6 +27,7 @@ class RigidRemapKokkos : public RigidRemap {
   ~RigidRemapKokkos() {}
   void collision_lists() override;
   void reset_collision_lists() override;
+  int recut() override;
 
  private:
   class FixRigidKokkos *fix_kk;
@@ -54,6 +56,22 @@ class RigidRemapKokkos : public RigidRemap {
   Kokkos::View<crs_size_type*,DeviceType> d_rowmap_move;
   DAT::t_int_1d d_entries_move;
   Kokkos::View<crs_size_type*,DeviceType> d_rowcount;
+
+  // the re-cut: per body its region, COM, radii and interior flag; the
+  //   candidate cells; per candidate its new list, whether it changed
+  //   and its new type; the changed lists packed for the host
+
+  typedef RigidBodyKK::tdual_dbl_2d tdual_dbl_2d;
+  tdual_dbl_2d k_bodyparam;
+  DAT::tdual_int_1d k_cominside,k_staticinside;
+  int staticgen_kk;
+  DAT::t_int_1d d_candflag,d_candoff;
+  int maxrcand_kk;
+  DAT::tdual_int_1d k_rcand,k_newlist,k_newtype;
+  DAT::t_int_1d d_newn,d_chflag,d_choff,d_newtype;
+  int maxrcandlist_kk;
+  DAT::tdual_int_1d k_chcand,k_chn,k_chlist;
+  int maxch_kk;
 };
 
 }

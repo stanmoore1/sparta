@@ -12,6 +12,9 @@
    See the README file in the top-level SPARTA directory.
 ------------------------------------------------------------------------- */
 
+#ifndef SPARTA_GEOMETRY_KOKKOS_H
+#define SPARTA_GEOMETRY_KOKKOS_H
+
 #include "math_extra_kokkos.h"
 
 #define EPSSQ 1.0e-16
@@ -1794,3 +1797,5 @@ void rigid_recoil(int dim, double mpre, double mpost, const double *norm,
 }
 
 }
+
+#endif

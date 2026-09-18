@@ -25,6 +25,7 @@ FixStyle(rigid/kk,FixRigidKokkos)
 #include "kokkos_type.h"
 #include "particle_kokkos.h"
 #include "grid_kokkos.h"
+#include "rigid_body_kokkos.h"
 #include "rigid_remap_kokkos.h"
 
 namespace SPARTA_NS {
@@ -124,16 +125,10 @@ class FixRigidKokkos : public FixRigid {
   //   or the swept ones of this step (sweepflag 1)
 
   void pack_body_device(int);
+  RigidBodyKK body;
 
-  typedef Kokkos::DualView<double***,DeviceType::array_layout,DeviceType> tdual_dbl_3d;
-  typedef Kokkos::DualView<double**,DeviceType::array_layout,DeviceType> tdual_dbl_2d;
-
-  tdual_dbl_3d::t_dev d_bodypt;
-  tdual_dbl_2d::t_dev d_bodynorm;
-  tdual_dbl_2d::t_dev d_bbodylo,d_bbodyhi;
-  tdual_dbl_2d::t_dev d_elemlo,d_elemhi;
-  DAT::t_int_1d d_bodystart,d_lblist;
-  DAT::t_int_1d d_bodybinstart,d_bodybinlist;
+  typedef RigidBodyKK::tdual_dbl_3d tdual_dbl_3d;
+  typedef RigidBodyKK::tdual_dbl_2d tdual_dbl_2d;
 
  private:
 
@@ -212,9 +207,6 @@ class FixRigidKokkos : public FixRigid {
 
   int nelem_kk;                 // # of body elements packed
   int nbin_kk;                  // # of body bins packed
-  int bodynbin_kk[3];
-  double bodybinlo_kk[3],bodybininv_kk[3];
-  double rmaxall_kk;
 
   // deletion list, built on device exactly as collide/kk builds its own
 

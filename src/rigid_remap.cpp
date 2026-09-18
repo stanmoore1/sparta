@@ -103,6 +103,7 @@ RigidRemap::RigidRemap(SPARTA *sparta, FixRigid *fixrigid) : Pointers(sparta)
   nswept = 0;
 
   staticinside = NULL;
+  staticgen = 0;
   maxstatic = 0;
   staticvalid = 0;
   nrcand = maxrcand = 0;
@@ -409,6 +410,7 @@ void RigidRemap::mark_static()
   }
 
   staticvalid = 1;
+  staticgen++;
 }
 
 /* ----------------------------------------------------------------------
@@ -436,11 +438,8 @@ void RigidRemap::mark_static()
 
 int RigidRemap::recut()
 {
-  int i,n,ncand,icell,ibody,nsplitone,xsub,moving;
-  int corner[8];
-  double xsplit[3],ctr[3],rlo[3],rhi[3];
-  double unknownvol;
-  double *vols;
+  int i,n,ncand,icell,ibody,moving;
+  double ctr[3],rlo[3],rhi[3];
   double *clo,*chi;
 
   Grid::ChildCell *cells = grid->cells;
@@ -637,89 +636,10 @@ int RigidRemap::recut()
     }
     nlist_run++;
 
-    // install the new cut list, which any sub cells share
+    // cut the cell by its new list
 
-    grid->set_cell_surfs(icell,n,newlist);
-    listschanged = 1;
-
-    clo = cells[icell].lo;
-    chi = cells[icell].hi;
-    ctr[0] = 0.5 * (clo[0] + chi[0]);
-    ctr[1] = 0.5 * (clo[1] + chi[1]);
-    if (dim == 3) ctr[2] = 0.5 * (clo[2] + chi[2]);
-    else ctr[2] = 0.0;
-
-    // a cell overlapped by no surf, or only by transparent ones, is not
-    //   cut (Grid::surf2grid_split() skips non-OVERLAP cells): full
-    //   flow volume, interior/exterior typing via parity test
-    // if it was a split cell it gives up its sub cells, which changes
-    //   the cell count
-
-    if (!cell_cut(icell)) {
-      if (nsplitold > 1) split_pending(icell,1,0,NULL,0,NULL,NULL);
-      if (fix->inside_any_body(ctr)) grid->set_cell_type(icell,INSIDE);
-      else grid->set_cell_type(icell,OUTSIDE);
-      typechanged = 1;
-      if (timeflag) tcut += MPI_Wtime() - tstart;
-      continue;
-    }
-
-    // re-cut the cell
-
-    ncut_run++;
-    nsplitone = grid->cut_cell(icell,vols,newmap,corner,xsub,xsplit);
+    recut_cell(icell,n,newlist);
     if (timeflag) tcut += MPI_Wtime() - tstart;
-
-    // the cut leaves the corner marks UNKNOWN when every surf only
-    //   touches the cell faces, so the cell is one flow piece lying
-    //   entirely on one side of them; the full pipeline marks it from
-    //   a neighbor by flood fill in Grid::set_inout(), the parity test
-    //   of its center against the closed body gives the same answer
-    // as set_inout(): the cell stays OVERLAP with its corners marked,
-    //   and its volume is the full cell volume or zero
-
-    if (corner[0] == UNKNOWN) {
-      int mark = OUTSIDE;
-      if (fix->inside_any_body(ctr)) mark = INSIDE;
-      int ncorner = (dim == 3) ? 8 : 4;
-      for (i = 0; i < ncorner; i++) corner[i] = mark;
-      nsplitone = 1;
-      vols = &unknownvol;
-      if (mark == INSIDE) unknownvol = 0.0;
-      else unknownvol = grid->cell_volume(clo,chi);
-    }
-
-    // the number of disconnected flow pieces changed: the cell gains
-    //   or loses sub cells, which changes this proc's cell count and
-    //   the sub cell indices other procs migrate particles into
-    // recorded now and applied by apply_pending() at the end of the
-    //   step, together with every other such cell
-    // a split cell's own volume is the whole cell volume
-
-    if (nsplitone != nsplitold) {
-      split_pending(icell,nsplitone,n,newmap,xsub,xsplit,vols);
-      if (nsplitone > 1)
-        grid->set_cell_overlap(icell,grid->cell_volume(clo,chi),corner);
-      else grid->set_cell_overlap(icell,vols[0],corner);
-      typechanged = 1;
-      continue;
-    }
-
-    // a cell which was and still is split keeps its sub cells and
-    //   takes the new piece map and per-piece volumes in place
-    // a split cell's own volume is the whole cell volume
-    //   (Grid::surf2grid_split() likewise leaves it alone)
-
-    if (nsplitone > 1) {
-      grid->set_split_info(icell,newmap,xsub,xsplit,vols);
-      splitchanged = 1;
-      grid->set_cell_overlap(icell,grid->cell_volume(clo,chi),corner);
-      typechanged = 1;
-      continue;
-    }
-
-    grid->set_cell_overlap(icell,vols[0],corner);
-    typechanged = 1;
   }
 
   if (timeflag) {
@@ -797,6 +717,109 @@ int RigidRemap::recut()
     }
 
   return FALLBACK_NONE;
+}
+
+/* ----------------------------------------------------------------------
+   install the new cut list of owned cell icell and cut it: its type,
+     corner marks and flow volume, its piece map if it is split, and a
+     pending change if its number of flow pieces changed
+   the per-cell part of recut(), shared with the device variant which
+     computes the lists elsewhere
+------------------------------------------------------------------------- */
+
+void RigidRemap::recut_cell(int icell, int n, surfint *newlist)
+{
+  int i,nsplitone,xsub;
+  int corner[8];
+  double xsplit[3],ctr[3];
+  double unknownvol;
+  double *vols;
+  double *clo,*chi;
+
+  Grid::ChildCell *cells = grid->cells;
+  int nsplitold = cells[icell].nsplit;
+
+  // install the new cut list, which any sub cells share
+
+  grid->set_cell_surfs(icell,n,newlist);
+  listschanged = 1;
+
+  clo = cells[icell].lo;
+  chi = cells[icell].hi;
+  ctr[0] = 0.5 * (clo[0] + chi[0]);
+  ctr[1] = 0.5 * (clo[1] + chi[1]);
+  if (dim == 3) ctr[2] = 0.5 * (clo[2] + chi[2]);
+  else ctr[2] = 0.0;
+
+  // a cell overlapped by no surf, or only by transparent ones, is not
+  //   cut (Grid::surf2grid_split() skips non-OVERLAP cells): full
+  //   flow volume, interior/exterior typing via parity test
+  // if it was a split cell it gives up its sub cells, which changes
+  //   the cell count
+
+  if (!cell_cut(icell)) {
+    if (nsplitold > 1) split_pending(icell,1,0,NULL,0,NULL,NULL);
+    if (fix->inside_any_body(ctr)) grid->set_cell_type(icell,INSIDE);
+    else grid->set_cell_type(icell,OUTSIDE);
+    typechanged = 1;
+    return;
+  }
+
+  // re-cut the cell
+
+  ncut_run++;
+  nsplitone = grid->cut_cell(icell,vols,newmap,corner,xsub,xsplit);
+
+  // the cut leaves the corner marks UNKNOWN when every surf only
+  //   touches the cell faces, so the cell is one flow piece lying
+  //   entirely on one side of them; the full pipeline marks it from
+  //   a neighbor by flood fill in Grid::set_inout(), the parity test
+  //   of its center against the closed body gives the same answer
+  // as set_inout(): the cell stays OVERLAP with its corners marked,
+  //   and its volume is the full cell volume or zero
+
+  if (corner[0] == UNKNOWN) {
+    int mark = OUTSIDE;
+    if (fix->inside_any_body(ctr)) mark = INSIDE;
+    int ncorner = (dim == 3) ? 8 : 4;
+    for (i = 0; i < ncorner; i++) corner[i] = mark;
+    nsplitone = 1;
+    vols = &unknownvol;
+    if (mark == INSIDE) unknownvol = 0.0;
+    else unknownvol = grid->cell_volume(clo,chi);
+  }
+
+  // the number of disconnected flow pieces changed: the cell gains
+  //   or loses sub cells, which changes this proc's cell count and
+  //   the sub cell indices other procs migrate particles into
+  // recorded now and applied by apply_pending() at the end of the
+  //   step, together with every other such cell
+  // a split cell's own volume is the whole cell volume
+
+  if (nsplitone != nsplitold) {
+    split_pending(icell,nsplitone,n,newmap,xsub,xsplit,vols);
+    if (nsplitone > 1)
+      grid->set_cell_overlap(icell,grid->cell_volume(clo,chi),corner);
+    else grid->set_cell_overlap(icell,vols[0],corner);
+    typechanged = 1;
+    return;
+  }
+
+  // a cell which was and still is split keeps its sub cells and
+  //   takes the new piece map and per-piece volumes in place
+  // a split cell's own volume is the whole cell volume
+  //   (Grid::surf2grid_split() likewise leaves it alone)
+
+  if (nsplitone > 1) {
+    grid->set_split_info(icell,newmap,xsub,xsplit,vols);
+    splitchanged = 1;
+    grid->set_cell_overlap(icell,grid->cell_volume(clo,chi),corner);
+    typechanged = 1;
+    return;
+  }
+
+  grid->set_cell_overlap(icell,vols[0],corner);
+  typechanged = 1;
 }
 
 /* ----------------------------------------------------------------------

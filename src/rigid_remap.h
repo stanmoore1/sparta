@@ -46,7 +46,7 @@ class RigidRemap : protected Pointers {
   virtual void collision_lists(); // add swept body surfs to the cells
   virtual void reset_collision_lists();
   void refresh();                 // per-cell state, before the bodies move
-  int recut();                    // re-cut cells near the bodies
+  virtual int recut();            // re-cut cells near the bodies
   int rebuild_needed();           // 1 if the pending changes need the
                                   //   collective grid rebuild
   void apply_pending(int);        // restructure the piece-count changes
@@ -94,6 +94,7 @@ class RigidRemap : protected Pointers {
   char *staticinside;
   int maxstatic;
   int staticvalid;
+  int staticgen;          // # of rebuilds of the flags, for a device copy
 
   // work list of cells overlapping the re-cut region this step
 
@@ -119,6 +120,7 @@ class RigidRemap : protected Pointers {
 
   int cell_cut(int);
   void mark_static();
+  void recut_cell(int, int, surfint *);   // cut one cell by a new list
   void split_pending(int, int, int, int *, int, double *, double *);
 };
 
