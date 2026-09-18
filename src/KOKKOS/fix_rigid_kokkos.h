@@ -124,9 +124,11 @@ class FixRigidKokkos : public FixRigid {
   // the split cells to re-assign, and a flat (cell,slot) work list so one
   //   thread handles one particle
 
-  DAT::tdual_int_1d k_asgcell,k_asgpart;
   DAT::t_int_1d d_asgcell,d_asgpart;
   int nasg_kk;
+  DAT::tdual_int_1d k_splitcells;    // the owned split cells
+  DAT::t_int_1d d_splitcells,d_splitoff;
+  int nsplit_kk;
 
   // grid/surf device views the split tests read
 

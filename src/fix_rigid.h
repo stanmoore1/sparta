@@ -270,6 +270,16 @@ class FixRigid : public Fix {
   bigint nstep_rebuild;   // steps which took the collective ghost rebuild
   bigint nstep_fallback;  // steps which fell back to a full re-map
 
+  // per-stage wall time this run, accumulated when timing is on
+
+  enum{T_INTEGRATE,T_COPIES,T_COLLIDELIST,T_TALLY,T_FORCES,T_SETXV,T_CONTACT,
+       T_RECUT,T_APPLY,T_REMOVE,T_NSTAGE};
+  int timeflag;
+  double stagetime[T_NSTAGE];
+  double stagestart;
+  void stage_begin() { if (timeflag) stagestart = MPI_Wtime(); }
+  void stage_end(int i) { if (timeflag) stagetime[i] += MPI_Wtime() - stagestart; }
+
   bigint ndeleted;        // per-proc count of deleted particles
   bigint ndeleted_all;    // cached global sum for compute_scalar()
   bigint ndelvalid;       // timestep the cached sum is valid for

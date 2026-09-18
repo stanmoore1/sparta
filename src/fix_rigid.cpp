@@ -661,6 +661,8 @@ void FixRigid::init()
   warndelete = 0;
   ndelrun = 0;
   nstep_run = nstep_inplace = nstep_rebuild = nstep_fallback = 0;
+  timeflag = (getenv("SPARTA_RIGID_TIMING") != NULL);
+  for (int i = 0; i < T_NSTAGE; i++) stagetime[i] = 0.0;
 
   // fix rigid must be defined before fixes which change the grid,
   // so its end_of_step() restores overlaid grid cells before they run
@@ -739,11 +741,13 @@ void FixRigid::start_of_step()
   if (!initflag)
     error->all(FLERR,"Fix rigid was not initialized before the run");
 
+  stage_begin();
   initial_integrate();
 
   // per-element swept bounding boxes of every body for this step
 
   for (int ibody = 0; ibody < nbody; ibody++) body_bbox(ibody,1);
+  stage_end(T_INTEGRATE);
 
   // distributed surfs: a body sweeping into this proc's cells for the
   //   first time since the last grid rebuild needs local copies of its
@@ -751,6 +755,7 @@ void FixRigid::start_of_step()
   // collective: surfs_changed() reduces whether any proc appended
 
   if (surf->distributed) {
+    stage_begin();
     int changed = ensure_local_copies();
     if (changed) {
       surf_maps();
@@ -758,13 +763,16 @@ void FixRigid::start_of_step()
       copiesappended = 1;
     }
     surfs_changed(changed,0);
+    stage_end(T_COPIES);
   }
 
   // augment collision lists of all cells any body sweeps through during
   //   the step, so particles in the swept paths are tested against the
   //   moving surfs and reflected rather than overtaken and later deleted
 
+  stage_begin();
   remap->collision_lists();
+  stage_end(T_COLLIDELIST);
 
   // the mover tallies the force/torque of this step's collisions
 
@@ -777,25 +785,33 @@ void FixRigid::end_of_step()
 {
   // undo the swept collision-list augmentation from start_of_step
 
+  stage_begin();
   remap->reset_collision_lists();
+  stage_end(T_COLLIDELIST);
 
   // force and torque on each body from this step's collisions
 
+  stage_begin();
   sum_forces();
+  stage_end(T_FORCES);
 
   // for incremental remap: record cells interior to the bodies
   //   before their surfs move to their end-of-step positions
 
+  stage_begin();
   if (remapmode == INCREMENTAL) remap->refresh();
 
   // move every body to its end-of-step pose and regenerate its geometry
 
   set_xv();
   check_bounds();
+  stage_end(T_SETXV);
 
   // push-off contacts and the second half kick
 
+  stage_begin();
   final_integrate();
+  stage_end(T_CONTACT);
 
   // write body states to the output file every outevery steps, now that
   //   velocities and forces are complete; the file is compatible with
@@ -1209,6 +1225,7 @@ void FixRigid::remap_grid()
   int fallback = 1;
   int structural = 0;
   int rebuild = 0;
+  stage_begin();
   if (remapmode == INCREMENTAL) {
     int mine[4],all[4];
     mine[0] = remap->recut();
@@ -1263,7 +1280,9 @@ void FixRigid::remap_grid()
   if (fallback) nstep_fallback++;
   else if (structural && rebuild) nstep_rebuild++;
   else if (structural) nstep_inplace++;
+  stage_end(T_RECUT);
 
+  stage_begin();
   if (fallback) grid_rebuild();
   else if (structural) {
     if (particle->exist) sort_for_split_rebuild();
@@ -1271,14 +1290,17 @@ void FixRigid::remap_grid()
     relabel_moved_cells();
   }
   remap->npending = 0;
+  stage_end(T_APPLY);
 
   // remove particles inside any body in one pass over particles,
   //   with split-cell reassignment after a full re-map or after a
   //   split cell was re-cut in place; no reduction here, deletion
   //   counts stay per-proc and are reduced lazily by compute_scalar()
 
+  stage_begin();
   if (particle->exist)
     remove_inside_all(fallback || remap->splitchanged || structural);
+  stage_end(T_REMOVE);
 }
 
 /* ----------------------------------------------------------------------
@@ -1304,6 +1326,24 @@ void FixRigid::post_run()
             all[0],all[1],all[2],all[3]);
     if (screen) fprintf(screen,"%s",str);
     if (logfile) fprintf(logfile,"%s",str);
+  }
+
+  // per-stage times, max over procs
+
+  const char *names[T_NSTAGE] =
+    {"integrate+bbox","surf copies","collision lists","tally",
+     "sum forces","set_xv+bounds","contacts+kick","recut",
+     "apply split changes","remove inside"};
+  double tmax[T_NSTAGE];
+  MPI_Allreduce(stagetime,tmax,T_NSTAGE,MPI_DOUBLE,MPI_MAX,world);
+  if (comm->me == 0) {
+    for (int i = 0; i < T_NSTAGE; i++) {
+      if (i == T_TALLY) continue;
+      char str[128];
+      sprintf(str,"Fix rigid time: %-20s %10.4f s\n",names[i],tmax[i]);
+      if (screen) fprintf(screen,"%s",str);
+      if (logfile) fprintf(logfile,"%s",str);
+    }
   }
 }
 

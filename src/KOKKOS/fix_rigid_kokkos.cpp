@@ -53,6 +53,7 @@ FixRigidKokkos::FixRigidKokkos(SPARTA *sparta, int narg, char **arg) :
   nelem_kk = nbin_kk = 0;
   nsub_kk = 0;
   nasg_kk = 0;
+  nsplit_kk = 0;
   maxdelete_kk = 0;
   d_ndelete_kk = DAT::t_int_scalar("fix_rigid:ndelete");
   h_ndelete_kk = Kokkos::create_mirror_view(d_ndelete_kk);
@@ -398,11 +399,18 @@ int FixRigidKokkos::combine_split_kokkos()
 
   Grid::ChildCell *cells = grid->cells;
   Grid::SplitInfo *sinfo = grid->sinfo;
-  int nglocal = grid->nlocal;
+  int nsplitlocal = grid->nsplitlocal;
+
+  // the owned split cells, from the split info: O(nsplit), no scan of
+  //   the cells; an entry a restructure abandoned points at no cell
 
   int nsub = 0;
-  for (int icell = 0; icell < nglocal; icell++)
-    if (cells[icell].nsplit > 1) nsub += cells[icell].nsplit;
+  for (int i = 0; i < nsplitlocal; i++) {
+    int icell = sinfo[i].icell;
+    if (icell < 0 || cells[icell].isplit != i || cells[icell].nsplit <= 1)
+      continue;
+    nsub += cells[icell].nsplit;
+  }
   if (!nsub) return 1;
 
   if (nsub > nsub_kk) {
@@ -417,11 +425,13 @@ int FixRigidKokkos::combine_split_kokkos()
   auto h_subparent = k_subparent.view_host();
 
   int m = 0;
-  for (int icell = 0; icell < nglocal; icell++) {
-    if (cells[icell].nsplit <= 1) continue;
-    int *mycsubs = sinfo[cells[icell].isplit].csubs;
-    for (int i = 0; i < cells[icell].nsplit; i++) {
-      h_subcell(m) = mycsubs[i];
+  for (int i = 0; i < nsplitlocal; i++) {
+    int icell = sinfo[i].icell;
+    if (icell < 0 || cells[icell].isplit != i || cells[icell].nsplit <= 1)
+      continue;
+    int *mycsubs = sinfo[i].csubs;
+    for (int j = 0; j < cells[icell].nsplit; j++) {
+      h_subcell(m) = mycsubs[j];
       h_subparent(m) = icell;
       m++;
     }
@@ -472,14 +482,16 @@ int FixRigidKokkos::combine_split_kokkos()
   //   host routine sets as it splices.  no particle access
 
   Grid::ChildInfo *cinfo = grid->cinfo;
-  for (int icell = 0; icell < nglocal; icell++) {
-    if (cells[icell].nsplit <= 1) continue;
-    int *mycsubs = sinfo[cells[icell].isplit].csubs;
+  for (int i = 0; i < nsplitlocal; i++) {
+    int icell = sinfo[i].icell;
+    if (icell < 0 || cells[icell].isplit != i || cells[icell].nsplit <= 1)
+      continue;
+    int *mycsubs = sinfo[i].csubs;
     int count = 0;
-    for (int i = 0; i < cells[icell].nsplit; i++) {
-      count += cinfo[mycsubs[i]].count;
-      cinfo[mycsubs[i]].count = 0;
-      cinfo[mycsubs[i]].first = -1;
+    for (int j = 0; j < cells[icell].nsplit; j++) {
+      count += cinfo[mycsubs[j]].count;
+      cinfo[mycsubs[j]].count = 0;
+      cinfo[mycsubs[j]].first = -1;
     }
     cinfo[icell].count = count;
     cinfo[icell].first = -1;   // the list is stale; the next sort rebuilds it
@@ -585,20 +597,6 @@ void FixRigidKokkos::operator()(TagFixRigidAssignSplit, const int &m) const
 
 int FixRigidKokkos::assign_split_kokkos()
 {
-  // set SPARTA_NO_ASSIGN_KK to fall back to the host pass (debugging only:
-  //   the host pass is unreachable from this class, see remove_inside_all)
-
-  if (getenv("SPARTA_NO_ASSIGN_KK")) return 0;
-
-  // the split tests index d_csplits/d_csubs by isplit and d_csurfs by icell,
-  //   and those CRS graphs are sized by the split/cell counts as of the last
-  //   wrap_kokkos_graphs().  split_rebuild() has just created and destroyed
-  //   split cells, so they must be rewrapped before the kernel reads them --
-  //   host_end() only does it after end_of_step() returns, which is too late
-  //   (ASAN: heap-buffer-overflow in split2d_kk at d_csplits.row_map(isplit))
-
-  ((GridKokkos*) grid)->wrap_kokkos_graphs();
-
   ParticleKokkos *particle_kk = (ParticleKokkos*) particle;
   GridKokkos *grid_kk = (GridKokkos*) grid;
   SurfKokkos *surf_kk = (SurfKokkos*) surf;
@@ -612,41 +610,82 @@ int FixRigidKokkos::assign_split_kokkos()
   particle_kk->sync(Device,PARTICLE_MASK);
   if (!particle_kk->sorted_kk) particle_kk->sort_kokkos();
 
-  // flat work list: one entry per particle of a split cell
-  // built from the device counts, so the host never reads a particle
-
-  auto h_cellcount = Kokkos::create_mirror_view(grid_kk->d_cellcount);
-  Kokkos::deep_copy(h_cellcount,grid_kk->d_cellcount);
+  // the owned split cells, from the split info: O(nsplit), no scan of
+  //   the cells; an entry a restructure abandoned points at no cell
 
   Grid::ChildCell *cells = grid->cells;
-  int nglocal = grid->nlocal;
+  Grid::SplitInfo *sinfo = grid->sinfo;
+  int nsplitlocal = grid->nsplitlocal;
 
-  // d_cellcount/d_plist are sized to grid->nlocal as it was at the last
-  //   sort_kokkos(); clamp to their real extent so a cell added since then
-  //   is not read out of bounds
-
-  const int ncnt = (int) h_cellcount.extent(0);
-  if (nglocal > ncnt) {
+  int nsplit = 0;
+  for (int i = 0; i < nsplitlocal; i++) {
+    int icell = sinfo[i].icell;
+    if (icell < 0 || cells[icell].isplit != i || cells[icell].nsplit <= 1)
+      continue;
+    nsplit++;
+  }
+  if (!nsplit) {
     sparta->kokkos->auto_sync = prev_auto_sync;
-    return 0;               // let the host handle this step
+    return 1;
   }
 
-  // sort_kokkos() records the true per-cell count even when it exceeded the
-  //   capacity of d_plist, in which case the list is incomplete and the
-  //   indices beyond it were never written: fall back to the host rather
-  //   than read past the end
+  // d_cellcount/d_plist are sized to grid->nlocal as it was at the last
+  //   sort_kokkos(); a cell added since then is out of their range, and
+  //   a count beyond the list capacity means an incomplete list: let
+  //   the host handle such a step rather than read past the end
 
-  const int pcap = (int) grid_kk->d_plist.extent(1);
-  int nasg = 0;
-  for (int icell = 0; icell < nglocal; icell++)
-    if (cells[icell].nsplit > 1) {
-      const int n = h_cellcount(icell);
-      if (n > pcap) {
-        sparta->kokkos->auto_sync = prev_auto_sync;
-        return 0;
-      }
-      nasg += n;
-    }
+  d_cellcount_kk = grid_kk->d_cellcount;
+  d_plist2_kk = grid_kk->d_plist;
+  const int ncnt = (int) d_cellcount_kk.extent(0);
+  if (grid->nlocal > ncnt) {
+    sparta->kokkos->auto_sync = prev_auto_sync;
+    return 0;
+  }
+  const int pcap = (int) d_plist2_kk.extent(1);
+
+  if (nsplit > nsplit_kk) {
+    nsplit_kk = nsplit;
+    k_splitcells = DAT::tdual_int_1d("fix_rigid:splitcells",nsplit_kk);
+    d_splitcells = k_splitcells.view_device();
+    d_splitoff = DAT::t_int_1d("fix_rigid:splitoff",nsplit_kk+1);
+  }
+  auto h_splitcells = k_splitcells.view_host();
+  int m = 0;
+  for (int i = 0; i < nsplitlocal; i++) {
+    int icell = sinfo[i].icell;
+    if (icell < 0 || cells[icell].isplit != i || cells[icell].nsplit <= 1)
+      continue;
+    h_splitcells(m++) = icell;
+  }
+  k_splitcells.modify_host(); k_splitcells.sync_device();
+
+  // flat work list: one entry per particle of a split cell, from the
+  //   device per-cell counts and lists, so the host never reads either
+
+  auto d_splitcells = this->d_splitcells;
+  auto d_splitoff = this->d_splitoff;
+  auto d_cellcount = d_cellcount_kk;
+  auto d_plist = d_plist2_kk;
+
+  int maxcount = 0;
+  Kokkos::parallel_reduce(nsplit, KOKKOS_LAMBDA(const int i, int &mx) {
+    const int n = d_cellcount(d_splitcells(i));
+    if (n > mx) mx = n;
+  },Kokkos::Max<int>(maxcount));
+  if (maxcount > pcap) {
+    sparta->kokkos->auto_sync = prev_auto_sync;
+    return 0;
+  }
+
+  Kokkos::parallel_scan(nsplit, KOKKOS_LAMBDA(const int i, int &sum,
+                                              const bool final) {
+    const int n = d_cellcount(d_splitcells(i));
+    if (final) d_splitoff(i) = sum;
+    sum += n;
+    if (final && i == nsplit-1) d_splitoff(nsplit) = sum;
+  });
+  int nasg;
+  Kokkos::deep_copy(nasg,Kokkos::subview(d_splitoff,nsplit));
 
   if (!nasg) {
     sparta->kokkos->auto_sync = prev_auto_sync;
@@ -655,34 +694,20 @@ int FixRigidKokkos::assign_split_kokkos()
 
   if (nasg > nasg_kk) {
     nasg_kk = nasg;
-    k_asgcell = DAT::tdual_int_1d("fix_rigid:asgcell",nasg_kk);
-    k_asgpart = DAT::tdual_int_1d("fix_rigid:asgpart",nasg_kk);
-    d_asgcell = k_asgcell.view_device();
-    d_asgpart = k_asgpart.view_device();
+    d_asgcell = DAT::t_int_1d("fix_rigid:asgcell",nasg_kk);
+    d_asgpart = DAT::t_int_1d("fix_rigid:asgpart",nasg_kk);
   }
-
-  // the particle indices come from the device plist, which must be read on
-  //   the host to build the work list; it is int-per-particle-of-a-split-cell,
-  //   not the 109 byte OnePart record, so it is a small transfer
-
-  auto h_plist = Kokkos::create_mirror_view(grid_kk->d_plist);
-  Kokkos::deep_copy(h_plist,grid_kk->d_plist);
-
-  auto h_asgcell = k_asgcell.view_host();
-  auto h_asgpart = k_asgpart.view_host();
-
-  int m = 0;
-  for (int icell = 0; icell < nglocal; icell++) {
-    if (cells[icell].nsplit <= 1) continue;
-    const int n = h_cellcount(icell);
+  auto d_asgcell = this->d_asgcell;
+  auto d_asgpart = this->d_asgpart;
+  Kokkos::parallel_for(nsplit, KOKKOS_LAMBDA(const int i) {
+    const int icell = d_splitcells(i);
+    const int off = d_splitoff(i);
+    const int n = d_cellcount(icell);
     for (int k = 0; k < n; k++) {
-      h_asgcell(m) = icell;
-      h_asgpart(m) = h_plist(icell,k);
-      m++;
+      d_asgcell(off+k) = icell;
+      d_asgpart(off+k) = d_plist(icell,k);
     }
-  }
-  k_asgcell.modify_host(); k_asgcell.sync_device();
-  k_asgpart.modify_host(); k_asgpart.sync_device();
+  });
 
   d_particles_kk = particle_kk->k_particles.view_device();
 
@@ -720,11 +745,10 @@ int FixRigidKokkos::assign_split_kokkos()
   // the split cells no longer hold the particles, their sub cells do
 
   Grid::ChildInfo *cinfo = grid->cinfo;
-  for (int icell = 0; icell < nglocal; icell++)
-    if (cells[icell].nsplit > 1) {
-      cinfo[icell].count = 0;
-      cinfo[icell].first = -1;
-    }
+  for (int i = 0; i < nsplit; i++) {
+    cinfo[h_splitcells(i)].count = 0;
+    cinfo[h_splitcells(i)].first = -1;
+  }
 
   return 1;
 }
