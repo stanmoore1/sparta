@@ -123,15 +123,6 @@ Update::Update(SPARTA *sparta) : Pointers(sparta)
   fixrigid = NULL;
   rigidmap = NULL;
 
-  rigid_binvalid = 0;
-  rigid_ncellbin = 0;
-  rigid_binstart = NULL;
-  rigid_binlist = NULL;
-  rigid_cellstamp = NULL;
-  rigid_stampcur = 0;
-  rigid_cand = NULL;
-  maxrigidcand = 0;
-
   copymode = 0;
 }
 
@@ -143,11 +134,6 @@ Update::~Update()
 
   delete [] unit_style;
   delete [] fieldID;
-  memory->destroy(rigidmap);
-  memory->destroy(rigid_binstart);
-  memory->destroy(rigid_binlist);
-  memory->destroy(rigid_cellstamp);
-  memory->destroy(rigid_cand);
   memory->destroy(mlist);
 
   delete [] glist_compute;
@@ -291,170 +277,21 @@ void Update::init()
 }
 
 /* ----------------------------------------------------------------------
-   per-run setup for mobile rigid bodies (global rigid yes):
-     find the fix rigid instance, which defines all the bodies,
-     and build the per-surf map from surf to body
-   also called by UpdateKokkos::init()
+   per-run setup of the rigid bodies, before the surface collision and
+     reaction models init: with distributed surfs the fix may append
+     local copies of body surfs, and the models size their per-surf
+     state for the final local+ghost surf arrays of the run
 ------------------------------------------------------------------------- */
 
 void Update::init_rigid()
 {
   if (!rigidflag) return;
 
-  // the cell-bin index holds cell indices for the grid it was built
-  //   from; the grid may have been replaced between runs by a command
-  //   which does not notify fixes, so rebuild it on first use
-
-  rigid_bins_clear();
-
   find_fixrigid();
   if (!fixrigid)
     error->all(FLERR,"Global rigid is set but no fix rigid is defined");
 
-  // distributed surfs: establish the local copies of the body surfs
-  //   now, before the surface collision and reaction models init,
-  //   so that their per-surf state is sized for the final local+ghost
-  //   surf arrays of this run
-
-  if (surf->distributed) {
-    int changed = fixrigid->ensure_local_copies();
-    build_rigidmap();
-    fixrigid->surfs_changed(changed,1);
-  } else build_rigidmap();
-}
-
-/* ----------------------------------------------------------------------
-   invalidate the rigid cell-bin index
-   called whenever grid cells are rebuilt, migrated, or re-ghosted
-------------------------------------------------------------------------- */
-
-void Update::rigid_bins_clear()
-{
-  rigid_binvalid = 0;
-}
-
-/* ----------------------------------------------------------------------
-   return candidate local+ghost child cells whose bounding box may
-     overlap the box blo/bhi, in *list; return count
-   callers must still apply an exact cell-vs-box overlap test
-   the bin index is built lazily from the current cells on first query
-     and reused until the grid changes, so each query costs
-     O(cells near the box), not O(cells per rank)
-   bins are sized so the total bin count is comparable to the local
-     cell count; a cell is entered in every bin its bbox overlaps and
-     a per-cell stamp dedups multi-bin cells in query results
-------------------------------------------------------------------------- */
-
-int Update::rigid_cell_box(double *blo, double *bhi, int **list)
-{
-  int i,j,k,m,ibx,iby,ibz,ibin;
-  int lo[3],hi[3];
-
-  Grid::ChildCell *cells = grid->cells;
-  int ntotal = grid->nlocal + grid->nghost;
-  int dim = domain->dimension;
-
-  // (re)build the bin index if the grid changed since last query
-
-  if (!rigid_binvalid || rigid_ncellbin != ntotal) {
-
-    double *boxlo = domain->boxlo;
-    double *boxhi = domain->boxhi;
-
-    // total bins ~ local cell count, distributed over dims by extent
-
-    double vol = 1.0;
-    for (k = 0; k < dim; k++) vol *= boxhi[k] - boxlo[k];
-    double scale = pow(MAX(ntotal,1)/vol,1.0/dim);
-
-    for (k = 0; k < 3; k++) {
-      rigid_binlo[k] = boxlo[k];
-      double len = boxhi[k] - boxlo[k];
-      int n = (int) (len*scale);
-      n = MAX(n,1);
-      n = MIN(n,1024);
-      if (dim == 2 && k == 2) n = 1;
-      rigid_nbin[k] = n;
-      rigid_bininv[k] = n/len;
-    }
-    int nbins = rigid_nbin[0]*rigid_nbin[1]*rigid_nbin[2];
-
-    memory->destroy(rigid_binstart);
-    memory->destroy(rigid_binlist);
-    memory->destroy(rigid_cellstamp);
-    memory->create(rigid_binstart,nbins+1,"update:rigid_binstart");
-    memory->create(rigid_cellstamp,ntotal,"update:rigid_cellstamp");
-    for (i = 0; i < ntotal; i++) rigid_cellstamp[i] = 0;
-    rigid_stampcur = 0;
-
-    // two passes: count entries per bin, then fill
-    // skip sub cells; empty ghost cells are binned, callers skip them
-
-    for (int pass = 0; pass < 2; pass++) {
-      if (pass == 0)
-        for (i = 0; i <= nbins; i++) rigid_binstart[i] = 0;
-
-      for (m = 0; m < ntotal; m++) {
-        if (cells[m].nsplit <= 0) continue;
-        for (k = 0; k < 3; k++) {
-          lo[k] = (int) ((cells[m].lo[k]-rigid_binlo[k]) * rigid_bininv[k]);
-          hi[k] = (int) ((cells[m].hi[k]-rigid_binlo[k]) * rigid_bininv[k]);
-          lo[k] = MAX(0,MIN(lo[k],rigid_nbin[k]-1));
-          hi[k] = MAX(0,MIN(hi[k],rigid_nbin[k]-1));
-        }
-        for (ibz = lo[2]; ibz <= hi[2]; ibz++)
-          for (iby = lo[1]; iby <= hi[1]; iby++)
-            for (ibx = lo[0]; ibx <= hi[0]; ibx++) {
-              ibin = (ibz*rigid_nbin[1] + iby)*rigid_nbin[0] + ibx;
-              if (pass == 0) rigid_binstart[ibin+1]++;
-              else rigid_binlist[rigid_binstart[ibin]++] = m;
-            }
-      }
-
-      if (pass == 0) {
-        for (i = 0; i < nbins; i++) rigid_binstart[i+1] += rigid_binstart[i];
-        memory->create(rigid_binlist,rigid_binstart[nbins],
-                       "update:rigid_binlist");
-      } else {
-        for (i = nbins; i > 0; i--) rigid_binstart[i] = rigid_binstart[i-1];
-        rigid_binstart[0] = 0;
-      }
-    }
-
-    rigid_ncellbin = ntotal;
-    rigid_binvalid = 1;
-  }
-
-  // query: gather cells from bins overlapping the box, dedup by stamp
-
-  for (k = 0; k < 3; k++) {
-    lo[k] = (int) ((blo[k]-rigid_binlo[k]) * rigid_bininv[k]);
-    hi[k] = (int) ((bhi[k]-rigid_binlo[k]) * rigid_bininv[k]);
-    lo[k] = MAX(0,MIN(lo[k],rigid_nbin[k]-1));
-    hi[k] = MAX(0,MIN(hi[k],rigid_nbin[k]-1));
-  }
-
-  rigid_stampcur++;
-  int ncand = 0;
-
-  for (ibz = lo[2]; ibz <= hi[2]; ibz++)
-    for (iby = lo[1]; iby <= hi[1]; iby++)
-      for (ibx = lo[0]; ibx <= hi[0]; ibx++) {
-        ibin = (ibz*rigid_nbin[1] + iby)*rigid_nbin[0] + ibx;
-        for (i = rigid_binstart[ibin]; i < rigid_binstart[ibin+1]; i++) {
-          m = rigid_binlist[i];
-          if (rigid_cellstamp[m] == rigid_stampcur) continue;
-          rigid_cellstamp[m] = rigid_stampcur;
-          if (ncand == maxrigidcand) {
-            maxrigidcand += 4096;
-            memory->grow(rigid_cand,maxrigidcand,"update:rigid_cand");
-          }
-          rigid_cand[ncand++] = m;
-        }
-      }
-
-  *list = rigid_cand;
-  return ncand;
+  fixrigid->init_surfs();
 }
 
 /* ----------------------------------------------------------------------
@@ -475,54 +312,15 @@ FixRigid *Update::find_fixrigid()
 }
 
 /* ----------------------------------------------------------------------
-   rigidmap = map from each local or ghost surf to the rigid body which
-     owns it, -1 = static surf
-   used by the move loop to dispatch moving-surf collision tests
-   covers ghost surfs too: the mover advects particles thru ghost cells
-     and tests collisions with the surfs stored for those cells
-   called from init(), and by FixRigid whenever the local/ghost surf
-     arrays change (setup, full grid re-map, balance or adapt)
+   the fix rebuilt its per-surf maps: take the body map the move loop
+     reads to dispatch the moving-surf collision tests, covering ghost
+     surfs too since the mover advects particles thru ghost cells
+   the KOKKOS variant also mirrors it on the device
 ------------------------------------------------------------------------- */
 
-void Update::build_rigidmap()
+void Update::rigid_maps_changed()
 {
-  if (!rigidflag) return;
-  find_fixrigid();
-  if (!fixrigid) return;
-
-  memory->destroy(rigidmap);
-  int nslocal = surf->nlocal;
-  int nstotal = surf->nlocal + surf->nghost;
-  memory->create(rigidmap,MAX(nstotal,1),"update:rigidmap");
-  for (int i = 0; i < nstotal; i++) rigidmap[i] = -1;
-
-  if (!surf->distributed) {
-
-    // map via the fix's per-surf irigid body indices
-    // irigid may be shorter than nslocal if surfs were appended after
-    //   the fix was defined; appended surfs are static, and
-    //   FixRigid::init() (which runs after Update::init()) grows irigid
-    //   or errors out if the change is not allowed
-
-    int *irigid = fixrigid->irigid;
-    int nmap = MIN(nslocal,fixrigid->nsurfall);
-    for (int i = 0; i < nmap; i++) rigidmap[i] = irigid[i];
-
-  } else {
-
-    // distributed: the local surf list changes as the grid is re-cut,
-    //   so map by global surf ID via the body element table
-
-    Surf::Line *lines = surf->lines;
-    Surf::Tri *tris = surf->tris;
-    int dim = domain->dimension;
-
-    for (int i = 0; i < nstotal; i++) {
-      surfint id = (dim == 2) ? lines[i].id : tris[i].id;
-      int k = fixrigid->body_elem(id);
-      if (k >= 0) rigidmap[i] = fixrigid->body[k];
-    }
-  }
+  rigidmap = fixrigid->surfbody;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -1602,7 +1400,7 @@ template < int DIM, int SURF, int OPT, int RIGID > void Update::move()
               ipart->icell = icell;
               dtremain *= 1.0 - minparam*frac;
 
-              if (nsurf_tally)
+              if (nsurf_tally || (RIGID && minmoving))
                 memcpy(&iorig,&particles[i],sizeof(Particle::OnePart));
 
               // for hit on moving surf:
@@ -1703,6 +1501,11 @@ template < int DIM, int SURF, int OPT, int RIGID > void Update::move()
                 for (m = 0; m < nsurf_tally; m++)
                   slist_active[m]->surf_tally(dtremain,minsurf,icell,reaction,
                                               &iorig,ipart,jpart);
+
+              // force/torque on a body from the collision, tallied by the fix
+
+              if (RIGID && minmoving)
+                fixrigid->surf_tally(minsurf,&iorig,ipart,jpart);
 
               // stuck_iterate = consecutive iterations particle is immobile
 

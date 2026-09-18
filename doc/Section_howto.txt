@@ -1946,7 +1946,7 @@ the presence and motion of the object.  This can be useful for
 modeling the effect of gas flows on large particulates, e.g. dust
 grains or droplets which are much larger than the gas molecules.
 
-Three commands work together to enable this:
+Two commands work together to enable this:
 
 The "read_surf"_read_surf.html command reads the object geometry and
 should assign its surface elements to a "group"_group.html.  For
@@ -1954,19 +1954,12 @@ many bodies, each body's surfs also carry a surf type or a per-surf
 custom integer value which is the body ID; the tools/rigid/replicate.py
 script creates such a file from a template body. :ulb,l
 
-A "compute surf"_compute_surf.html command tallies the force and
-torque exerted on each surface element of the bodies by particle
-collisions.  It must tally exactly the 6 values fx fy fz tx ty tz for
-a single mixture group and use {com rigid}, so that the torque on each
-surf is about the center-of-mass of its own body, e.g.
-
-compute csurf surf all all fx fy fz tx ty tz com rigid :pre
-
 A "fix rigid"_fix_rigid.html command defines how the surfs are
 assigned to bodies, the mass, center-of-mass, moments of inertia, and
-initial velocities of each body, and time integrates their motion
-using the force/torque tallied by the compute.  One fix rigid command
-defines all the bodies, of which there can be thousands.
+initial velocities of each body, tallies the force and torque exerted
+on each body by particle collisions, and time integrates the motion of
+the bodies.  One fix rigid command defines all the bodies, of which
+there can be thousands.
 The "global rigid"_global.html command must also be set to {yes}, so
 the particle mover checks for collisions with the moving surface
 elements. :l

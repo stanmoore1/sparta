@@ -103,7 +103,7 @@ class UpdateKokkos : public Update {
   void init();
   void setup();
   void run(int);
-  void build_rigidmap() override;
+  void rigid_maps_changed() override;
 
   template<int DIM, int SURF, int REACT, int OPT, int ATOMIC_REDUCTION>
   KOKKOS_INLINE_FUNCTION
@@ -165,10 +165,12 @@ class UpdateKokkos : public Update {
   //   public: compute surf/kk reads it to tally torque about the COM
   //   of the body each surf belongs to
   // d_rigidbody = per body: xcm[3], vcm[3], omega[3], 1/mass,
-  //   3x3 inverse inertia for this step, uploaded by rigid_upload()
-  //   before each move
+  //   3x3 inverse inertia for this step, mid-step COM[3], uploaded by
+  //   rigid_upload() before each move
   // d_species,cellweightflag_kk = for the simulation particle mass
   //   in the recoil correction of collisions with a body
+  // d_rigidtally = the fix's per-surf force/torque tallies, which the
+  //   move kernel accumulates for every collision with a body surf
 
  public:
   int rigid_on;
@@ -186,7 +188,52 @@ class UpdateKokkos : public Update {
   tdual_rigidbody_2d::t_dev d_rigidbody;
   t_species_1d d_species;
   int cellweightflag_kk;
+  double nfactor_inverse_kk;
   void rigid_upload();
+  void rigid_tally_done();
+
+  tdual_rigidbody_2d::t_dev d_rigidtally;
+  int need_dup_rigid;
+  Kokkos::Experimental::ScatterView<double**,DeviceType::array_layout,DeviceType,typename Kokkos::Experimental::ScatterSum,typename Kokkos::Experimental::ScatterDuplicated> dup_rigidtally;
+  Kokkos::Experimental::ScatterView<double**,DeviceType::array_layout,DeviceType,typename Kokkos::Experimental::ScatterSum,typename Kokkos::Experimental::ScatterNonDuplicated> ndup_rigidtally;
+
+  // force and torque one collision exerts on body surf isurf of body
+  //   ibody, the device twin of FixRigid::surf_tally()
+
+  template<int ATOMIC_REDUCTION>
+  KOKKOS_INLINE_FUNCTION
+  void rigid_tally(int isurf, int ibody, const Particle::OnePart *iorig,
+                   const Particle::OnePart *ip,
+                   const Particle::OnePart *jp) const
+  {
+    double weight = 1.0;
+    if (cellweightflag_kk) weight = iorig->weight;
+    const double origmass = d_species[iorig->ispecies].mass * weight;
+
+    double pdelta[3],rdelta[3],torque[3];
+    pdelta[0] = pdelta[1] = pdelta[2] = 0.0;
+    MathExtraKokkos::axpy3(-origmass,iorig->v,pdelta);
+    if (ip) MathExtraKokkos::axpy3(d_species[ip->ispecies].mass * weight,
+                                   ip->v,pdelta);
+    if (jp) MathExtraKokkos::axpy3(d_species[jp->ispecies].mass * weight,
+                                   jp->v,pdelta);
+
+    const double *xcollide = ip ? ip->x : iorig->x;
+    rdelta[0] = xcollide[0] - d_rigidbody(ibody,19);
+    rdelta[1] = xcollide[1] - d_rigidbody(ibody,20);
+    rdelta[2] = xcollide[2] - d_rigidbody(ibody,21);
+    MathExtraKokkos::cross3(rdelta,pdelta,torque);
+
+    auto v_tally = ScatterViewHelper<typename NeedDup<ATOMIC_REDUCTION,DeviceType>::value,decltype(dup_rigidtally),decltype(ndup_rigidtally)>::get(dup_rigidtally,ndup_rigidtally);
+    auto a_tally = v_tally.template access<typename AtomicDup<ATOMIC_REDUCTION,DeviceType>::value>();
+
+    a_tally(isurf,0) -= pdelta[0] * nfactor_inverse_kk;
+    a_tally(isurf,1) -= pdelta[1] * nfactor_inverse_kk;
+    a_tally(isurf,2) -= pdelta[2] * nfactor_inverse_kk;
+    a_tally(isurf,3) -= torque[0] * nfactor_inverse_kk;
+    a_tally(isurf,4) -= torque[1] * nfactor_inverse_kk;
+    a_tally(isurf,5) -= torque[2] * nfactor_inverse_kk;
+  }
 
   DAT::t_float_2d_lr d_fieldfix_array_particle;
   DAT::t_float_2d_lr d_fieldfix_array_grid;

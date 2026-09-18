@@ -242,7 +242,7 @@ void RigidRemap::collision_lists()
   for (ibody = 0; ibody < nbody; ibody++) {
     double *blo = fix->bbodylo[ibody];
     double *bhi = fix->bbodyhi[ibody];
-    ncand = update->rigid_cell_box(blo,bhi,&cand);
+    ncand = grid->cells_in_box(blo,bhi,&cand);
 
     for (icand = 0; icand < ncand; icand++) {
       icell = cand[icand];
@@ -456,7 +456,7 @@ int RigidRemap::recut()
     }
 
     int *cand;
-    int ncells = update->rigid_cell_box(rlo,rhi,&cand);
+    int ncells = grid->cells_in_box(rlo,rhi,&cand);
 
     // owned cells are re-cut; a ghost cell is included only when it is
     //   a split cell, whose sinfo this proc must keep current because
@@ -870,12 +870,6 @@ void RigidRemap::apply_pending()
   grid->reset_neighbors();
   comm->reset_neighbors();
 
-  // the box->cell index holds cell indices, which just moved
-  // a step which added and removed the same number of cells leaves the
-  //   total unchanged, so it cannot detect this for itself
-
-  update->rigid_bins_clear();
-
   // as after a grid rebuild with distributed surfs
 
   if (surf->distributed) {
@@ -921,7 +915,6 @@ void RigidRemap::grid_changed()
   nswept = 0;
   listschanged = 1;
   staticvalid = 0;
-  update->rigid_bins_clear();
 }
 
 /* ---------------------------------------------------------------------- */

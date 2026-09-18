@@ -21,12 +21,12 @@ create_box  	    0 10 0 10 -0.5 0.5
 Created orthogonal box = (0 0 -0.5) to (10 10 0.5)
 create_grid 	    50 50 1
 Created 2500 child grid cells
-  CPU time = 0.00122261 secs
-  create/ghost percent = 72.179 27.821
+  CPU time = 0.00120029 secs
+  create/ghost percent = 67.8393 32.1607
 balance_grid        rcb cell
 Balance grid migrated 0 cells
-  CPU time = 0.000459811 secs
-  reassign/sort/migrate/ghost percent = 40.3031 1.18679 5.71931 52.7908
+  CPU time = 0.000464018 secs
+  reassign/sort/migrate/ghost percent = 33.2918 1.95553 6.2351 58.5176
 
 global		    nrho 0.5 fnum 0.001
 
@@ -45,10 +45,10 @@ read_surf           data.many.surf type group bodies
   1400 95 1005 = cells outside/inside/overlapping surfs
   988 17 = surf cells with 1,2,etc splits
   80.5886 80.5886 = cell-wise and global flow volume
-  CPU time = 0.00460043 secs
-  read/check/sort/surf2grid/ghost/inout/particle percent = 29.7234 22.2279 1.51762 38.5354 7.99566 3.36107 0.00626028
-  surf2grid time = 0.0017728 secs
-  map/comm1/comm2/comm3/comm4/split percent = 22.8028 25.9456 8.93932 4.8582 13.0133 21.8073
+  CPU time = 0.00567943 secs
+  read/check/sort/surf2grid/ghost/inout/particle percent = 38.7321 16.6143 1.13268 36.0402 7.48068 2.74885 0.00160227
+  surf2grid time = 0.00204688 secs
+  map/comm1/comm2/comm3/comm4/split percent = 25.0395 23.5708 10.8873 4.67048 11.4919 21.761
 
 surf_collide	    1 diffuse 300.0 0.5
 surf_modify         all collide 1
@@ -56,15 +56,14 @@ surf_modify         all collide 1
 create_particles    air n 0
 WARNING: Created unexpected # of particles: 40292 versus 40294 (/home/user/sparta/src/create_particles.cpp:445)
 Created 40292 particles
-  CPU time = 0.00895403 secs
+  CPU time = 0.0085178 secs
 
 timestep 	    0.0001
 
-compute      c1 surf bodies all fx fy fz tx ty tz com rigid
 
 global              rigid yes
 
-fix	 1 rigid bodies c1 type infile data.many.bodies          push 1.0e-18 0.1 pushbound yes
+fix	 1 rigid bodies type infile data.many.bodies          push 1.0e-18 0.1 pushbound yes
 
 dump                5 image all 100 image.*.ppm type type pdiam 0.03                     surf one 0.01 size 800 800 zoom 1.75
 dump_modify	    5 pad 5 scolor * gray
@@ -74,13 +73,12 @@ stats_style	    step np nscoll f_1[1][1] f_1[1][2] f_1[1][4]                    
 run 		    2000
 Memory usage per proc in Mbytes:
   particles (ave,min,max) = 4.6875 4.6875 4.6875
-  grid      (ave,min,max) = 1.88879 1.88879 1.88879
+  grid      (ave,min,max) = 2.01379 2.01379 2.01379
   surf      (ave,min,max) = 0.247192 0.247192 0.247192
-  modify    (ave,min,max) = 0.936337 0.936337 0.936337
-  total     (ave,min,max) = 7.75982 7.75982 7.75982
+  modify    (ave,min,max) = 0.742199 0.742199 0.742199
+  total     (ave,min,max) = 7.69069 7.69069 7.69069
 Step Np Nscoll f_1[1][1] f_1[1][2] f_1[1][4] f_1[50][1] f_1[50][2] f_1[50][4] f_1[100][1] f_1[100][2] f_1[100][4] 
        0    40292        0    4.2287338   0.46906482    29.887168    5.4576375    6.4549883  -0.76361414    7.9531694    4.2071037   -22.838675 
-WARNING: Fix rigid incremental remap fell back to a full grid re-map because a cell in the re-cut region is or would become a split cell (/home/user/sparta/src/fix_rigid.cpp:1386)
      100    40292     1279    4.5228645   0.44591387    28.862048    5.4493864    6.7504838  -0.93793507    7.7284577    4.4033236   -21.850629 
      200    40292     1370    4.7891177   0.43295608   -17.923476     5.441823    7.0422664  -0.97953498    7.6503073    4.4334859    1.6726162 
      300    40292     1324    4.5362335   0.53158849   -24.844414    5.4197759    7.3350526   -3.8983427    7.6608195    4.3570643   0.32767118 
@@ -100,22 +98,22 @@ WARNING: Fix rigid incremental remap fell back to a full grid re-map because a c
     1700    40291     1295    4.5683174   0.37339681   -11.934598    4.8469894    6.4503255   -6.6411151    8.8956799    2.9969817   -19.609747 
     1800    40291     1255    4.4496035   0.38144767   -11.884845    4.7489649    6.3986225   -11.694122     8.703442    3.0459734   -18.826928 
     1900    40291     1241     4.335254    0.3908848   -11.082861    4.6348486    6.3434758   -10.749826    8.5190108    3.0888512   -18.144211 
-WARNING: 1 particles were deleted inside a rigid body during this run.  A body may be moving too far per timestep, or its surfs may lie exactly on grid cell boundaries (/home/user/sparta/src/fix_rigid.cpp:4658)
+WARNING: 1 particles were deleted inside a rigid body during this run.  A body may be moving too far per timestep, or its surfs may lie exactly on grid cell boundaries (/home/user/sparta/src/fix_rigid.cpp:3584)
     2000    40291     1345    4.2259584   0.40190328   -10.803623    4.5286857    6.2865995   -10.730093    8.4084842    3.0193417   -5.0684237 
-Loop time of 17.9286 on 1 procs for 2000 steps with 40291 particles
-Performance: 111.554 timesteps/s, 4.495 Mparticle-step/s
+Loop time of 16.6405 on 1 procs for 2000 steps with 40291 particles
+Performance: 120.189 timesteps/s, 4.843 Mparticle-step/s
 
 MPI task timing breakdown:
 Section |  min time  |  avg time  |  max time  |%varavg| %total
 ---------------------------------------------------------------
-Move    | 7.7174     | 7.7174     | 7.7174     |   0.0 | 43.05
+Move    | 8.8716     | 8.8716     | 8.8716     |   0.0 | 53.31
 Coll    | 0          | 0          | 0          |   0.0 |  0.00
 Sort    | 0          | 0          | 0          |   0.0 |  0.00
-Comm    | 0.0040385  | 0.0040385  | 0.0040385  |   0.0 |  0.02
-Modify  | 9.264      | 9.264      | 9.264      |   0.0 | 51.67
-Output  | 0.87265    | 0.87265    | 0.87265    |   0.0 |  4.87
-MPI Sync| 0.0034689  | 0.0034689  | 0.0034689  |   0.0 |  0.02
-Other   |            | 0.06704    |            |       |  0.37
+Comm    | 0.0016384  | 0.0016384  | 0.0016384  |   0.0 |  0.01
+Modify  | 6.7846     | 6.7846     | 6.7846     |   0.0 | 40.77
+Output  | 0.98063    | 0.98063    | 0.98063    |   0.0 |  5.89
+MPI Sync| 0.0014984  | 0.0014984  | 0.0014984  |   0.0 |  0.01
+Other   |            | 0.0005033  |            |       |  0.00
 
 Particle moves    = 80583597 (80.6M)
 Cells touched     = 106282720 (106M)
@@ -131,7 +129,7 @@ Reactions         = 0 (0K)
 Particles stuck   = 0
 Axisymm bad moves = 0
 
-Particle-moves/CPUsec/proc: 4.4947e+06
+Particle-moves/CPUsec/proc: 4.84263e+06
 Particle-moves/step: 40291.8
 Cell-touches/particle/step: 1.31891
 Particle comm iterations/step: 1

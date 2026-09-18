@@ -107,9 +107,6 @@ rotwall       a collision with a body spinning at 0.09 radian per step
               timestep.  the 3d variant does the same for a spinning
               cube and the moving-triangle test
 rotwall3d     see rotwall
-mixture       negative: a compute surf whose mixture omits a species
-              must be rejected, since the body would feel only part of
-              the gas
 badinfile     negative: an infile with a malformed number (1.0d-22)
               must be rejected rather than read as 1.0
 react         a surf_react model on the body surfs which leaves exactly

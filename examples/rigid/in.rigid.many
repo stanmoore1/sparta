@@ -35,11 +35,10 @@ create_particles    air n 0
 
 timestep 	    0.0001
 
-compute      c1 surf bodies all fx fy fz tx ty tz com rigid
 
 global              rigid yes
 
-fix	 1 rigid bodies c1 type infile data.many.bodies &
+fix	 1 rigid bodies type infile data.many.bodies &
          push 1.0e-18 0.1 pushbound yes
 
 dump                5 image all 100 image.*.ppm type type pdiam 0.03 &

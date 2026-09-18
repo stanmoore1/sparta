@@ -1736,6 +1736,7 @@ int Grid::remove_marked_cells()
 
   if (hashcurrent) update_halo_index();
   else hashfilled = 0;
+  clear_cell_bins();
 
   return nlocal_prev - nlocal;
 }
@@ -1758,6 +1759,7 @@ void Grid::clear_surf()
 
   hashfilled = 0;
   hashcurrent = 0;
+  clear_cell_bins();
 
   // if surfs no longer exist, set cell type to OUTSIDE, else UNKNOWN
   // set corner points of every cell to UNKNOWN
@@ -2681,6 +2683,27 @@ void Grid::reset_collision_surfs()
   for (int i = 0; i < ncollcells; i++) cells[collcells[i]].ccoll = NULL;
   ncollcells = 0;
   if (ccollpage) ccollpage->reset();
+}
+
+/* ----------------------------------------------------------------------
+   the ghost surfs were re-packed after the local surf range grew from
+     nslocal_old: an entry >= nslocal_old in a ghost cell's cut list is
+     the old ghost index, mapped to its new index by gmap
+   sub cells share the list of their split cell, so each is visited once
+------------------------------------------------------------------------- */
+
+void Grid::reindex_ghost_surfs(int nslocal_old, int *gmap)
+{
+  int ntotal = nlocal + nghost;
+
+  for (int icell = nlocal; icell < ntotal; icell++) {
+    if (cells[icell].nsplit <= 0) continue;
+    if (cells[icell].nsurf <= 0) continue;
+    surfint *list = cells[icell].csurfs;
+    int n = cells[icell].nsurf;
+    for (int j = 0; j < n; j++)
+      if (list[j] >= nslocal_old) list[j] = gmap[list[j]-nslocal_old];
+  }
 }
 
 /* ----------------------------------------------------------------------

@@ -13,6 +13,7 @@
 ------------------------------------------------------------------------- */
 
 #include "ctype.h"
+#include "stdlib.h"
 #include "surf.h"
 #include "style_surf_collide.h"
 #include "style_surf_react.h"
@@ -542,6 +543,91 @@ void Surf::add_tri(surfint id, int itype, double *p1, double *p2, double *p3)
   tris[nlocal].p3[2] = p3[2];
   tris[nlocal].transparent = 0;
   nlocal++;
+}
+
+/* ----------------------------------------------------------------------
+   append n copies of surfs to the local range of a distributed surf
+     collection while ghost surfs are stored: newlines in 2d, newtris
+     in 3d
+   ghost surfs follow the local range in the same array, so they are
+     saved, the copies appended, and the ghosts re-appended after them;
+     a ghost which is a copy of an appended surf (same ID) is dropped,
+     since the surf is now stored locally
+   gmap[m] = new index of old ghost m, for the caller to re-index the
+     ghost cells' surf lists (Grid::reindex_ghost_surfs)
+------------------------------------------------------------------------- */
+
+struct IDIndex {
+  surfint id;
+  int index;
+};
+
+static int compare_idindex(const void *a, const void *b)
+{
+  surfint ida = ((const IDIndex *) a)->id;
+  surfint idb = ((const IDIndex *) b)->id;
+  if (ida < idb) return -1;
+  if (ida > idb) return 1;
+  return 0;
+}
+
+void Surf::add_local_copies(int n, Line *newlines, Tri *newtris, int *gmap)
+{
+  int i,m;
+  int dim = domain->dimension;
+
+  int nslocal = nlocal;
+  int nsghost = nghost;
+
+  // save the ghosts, then truncate the ghost range
+
+  Line *glines = NULL;
+  Tri *gtris = NULL;
+  if (nsghost) {
+    if (dim == 2) {
+      glines = new Line[nsghost];
+      memcpy(glines,&lines[nslocal],nsghost*sizeof(Line));
+    } else {
+      gtris = new Tri[nsghost];
+      memcpy(gtris,&tris[nslocal],nsghost*sizeof(Tri));
+    }
+  }
+  remove_ghosts();
+
+  // append the copies to the local range, and sort their IDs
+
+  IDIndex *ids = new IDIndex[n];
+  for (i = 0; i < n; i++) {
+    if (dim == 2) {
+      add_line_copy(1,&newlines[i]);
+      ids[i].id = newlines[i].id;
+    } else {
+      add_tri_copy(1,&newtris[i]);
+      ids[i].id = newtris[i].id;
+    }
+    ids[i].index = nslocal + i;
+  }
+  qsort(ids,n,sizeof(IDIndex),compare_idindex);
+
+  // re-append the ghosts which are not copies of an appended surf
+
+  IDIndex key,*found;
+  for (m = 0; m < nsghost; m++) {
+    if (dim == 2) key.id = glines[m].id;
+    else key.id = gtris[m].id;
+    found = (IDIndex *) bsearch(&key,ids,n,sizeof(IDIndex),compare_idindex);
+    if (found) {
+      gmap[m] = found->index;
+      continue;
+    }
+    if (dim == 2) add_line_copy(0,&glines[m]);
+    else add_tri_copy(0,&gtris[m]);
+    gmap[m] = nlocal + nghost - 1;
+  }
+
+  delete [] ids;
+  delete [] glines;
+  delete [] gtris;
 }
 
 /* ----------------------------------------------------------------------

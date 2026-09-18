@@ -31,6 +31,7 @@ namespace SPARTA_NS {
 struct TagFixRigidRemoveInside{};
 struct TagFixRigidCombineSplit{};
 struct TagFixRigidAssignSplit{};
+struct TagFixRigidSumTallies{};
 
 class FixRigidKokkos : public FixRigid {
  public:
@@ -44,10 +45,12 @@ class FixRigidKokkos : public FixRigid {
   void start_of_step();
   void end_of_step();
   void grid_changed();
+  void surf_maps();
   void remove_inside_all(int);
   void particles_to_host();
   void combine_split_all();
   void sort_for_split_rebuild();
+  void sum_tallies();
 
   // flag particles inside a body, one thread per particle
   // the reduction value is the # of particles this body claimed, which
@@ -67,6 +70,11 @@ class FixRigidKokkos : public FixRigid {
 
   KOKKOS_INLINE_FUNCTION
   void operator()(TagFixRigidAssignSplit, const int&) const;
+
+  // per-body sums of the mover's per-surf tallies, one thread per body
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()(TagFixRigidSumTallies, const int&) const;
 
   // device split2d/split3d, the same tests as Update::split2d/split3d
 
@@ -138,6 +146,25 @@ class FixRigidKokkos : public FixRigid {
   typedef Kokkos::DualView<double***,DeviceType::array_layout,DeviceType> tdual_dbl_3d;
   typedef Kokkos::DualView<double**,DeviceType::array_layout,DeviceType> tdual_dbl_2d;
 
+ public:
+
+  // per local+ghost surf: force/torque (fx,fy,fz,tx,ty,tz) tallied by
+  //   the KOKKOS move kernel for this step's collisions, zeroed in
+  //   start_of_step(), read by UpdateKokkos::rigid_upload()
+
+  tdual_dbl_2d k_ftally;
+  tdual_dbl_2d::t_dev d_ftally;
+
+ private:
+
+  // per body: its local+ghost surfs as a CSR list in surf index order,
+  //   built with the per-surf maps, and the per-body sums of the tallies
+
+  DAT::tdual_int_1d k_bodysurfstart,k_bodysurflist;
+  DAT::t_int_1d d_bodysurfstart,d_bodysurflist;
+  tdual_dbl_2d k_ft;
+  tdual_dbl_2d::t_dev d_ft;
+
   tdual_dbl_3d k_bodypt;
   tdual_dbl_2d k_bodynorm;
   tdual_dbl_2d k_bbodylo,k_bbodyhi;
@@ -176,10 +203,5 @@ class FixRigidKokkos : public FixRigid {
 #endif
 
 /* ERROR/WARNING messages:
-
-E: Fix rigid/kk requires compute surf/kk
-
-The compute surf used by fix rigid must be the KOKKOS version, so that
-the force/torque tallies are computed by the KOKKOS particle mover.
 
 */

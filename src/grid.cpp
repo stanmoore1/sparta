@@ -126,6 +126,12 @@ Grid::Grid(SPARTA *sparta) : Pointers(sparta)
   collcells = NULL;
   ncollcells = maxcollcells = 0;
 
+  cellbinvalid = 0;
+  ncellbin = 0;
+  cellbinstart = cellbinlist = cellstamp = cellcand = NULL;
+  cellstampcur = 0;
+  maxcellcand = 0;
+
   neighshift[XLO] = 0;
   neighshift[XHI] = 3;
   neighshift[YLO] = 6;
@@ -197,6 +203,10 @@ Grid::~Grid()
   delete csubs;
   delete ccollpage;
   memory->destroy(collcells);
+  memory->destroy(cellbinstart);
+  memory->destroy(cellbinlist);
+  memory->destroy(cellstamp);
+  memory->destroy(cellcand);
   delete hash;
 
   for (int i = 0; i < ncustom; i++) delete [] ename[i];
@@ -246,6 +256,7 @@ void Grid::remove()
   delete csurfs;
   delete csplits;
   delete csubs;
+  clear_cell_bins();
 
   exist_ghost = clumped = 0;
   ncell = nunsplit = nsplit = nsub = 0;
@@ -487,6 +498,7 @@ void Grid::remove_ghosts()
   exist_ghost = 0;
   nghost = nunsplitghost = nsplitghost = nsubghost = nempty = 0;
   surf->remove_ghosts();
+  clear_cell_bins();
 }
 
 /* ----------------------------------------------------------------------
@@ -518,6 +530,7 @@ void Grid::acquire_ghosts(int surfflag)
     hashfilled = 0;
     hashcurrent = 0;
   }
+  clear_cell_bins();
 
   for (int i = 0; i < ncustom; i++) grid->estatus[i] = 1;
 
@@ -2994,6 +3007,141 @@ bigint Grid::unpack_restart(char *buf)
   }
 
   return n;
+}
+
+/* ----------------------------------------------------------------------
+   candidate owned and ghost child cells whose bounding box may overlap
+     the box blo/bhi, in *list; returns the count
+   callers must still apply an exact cell-vs-box overlap test
+   the bin index is built lazily from the current cells on first query
+     and reused until the cells move, so each query costs O(cells near
+     the box), not O(cells per proc)
+   bins are sized so the total bin count is comparable to the local
+     cell count; a cell is entered in every bin its bbox overlaps and
+     a per-cell stamp dedups multi-bin cells in query results
+   the list is a single buffer, overwritten by the next query
+------------------------------------------------------------------------- */
+
+int Grid::cells_in_box(double *blo, double *bhi, int **list)
+{
+  int i,k,m,ibx,iby,ibz,ibin;
+  int lo[3],hi[3];
+
+  int ntotal = nlocal + nghost;
+  int dim = domain->dimension;
+
+  // (re)build the bin index if the cells changed since last query
+
+  if (!cellbinvalid || ncellbin != ntotal) {
+
+    double *boxlo = domain->boxlo;
+    double *boxhi = domain->boxhi;
+
+    // total bins ~ local cell count, distributed over dims by extent
+
+    double vol = 1.0;
+    for (k = 0; k < dim; k++) vol *= boxhi[k] - boxlo[k];
+    double scale = pow(MAX(ntotal,1)/vol,1.0/dim);
+
+    for (k = 0; k < 3; k++) {
+      cellbinlo[k] = boxlo[k];
+      double len = boxhi[k] - boxlo[k];
+      int n = (int) (len*scale);
+      n = MAX(n,1);
+      n = MIN(n,1024);
+      if (dim == 2 && k == 2) n = 1;
+      cellnbin[k] = n;
+      cellbininv[k] = n/len;
+    }
+    int nbins = cellnbin[0]*cellnbin[1]*cellnbin[2];
+
+    memory->destroy(cellbinstart);
+    memory->destroy(cellbinlist);
+    memory->destroy(cellstamp);
+    memory->create(cellbinstart,nbins+1,"grid:cellbinstart");
+    memory->create(cellstamp,ntotal,"grid:cellstamp");
+    for (i = 0; i < ntotal; i++) cellstamp[i] = 0;
+    cellstampcur = 0;
+
+    // two passes: count entries per bin, then fill
+    // skip sub cells; empty ghost cells are binned, callers skip them
+
+    for (int pass = 0; pass < 2; pass++) {
+      if (pass == 0)
+        for (i = 0; i <= nbins; i++) cellbinstart[i] = 0;
+
+      for (m = 0; m < ntotal; m++) {
+        if (cells[m].nsplit <= 0) continue;
+        for (k = 0; k < 3; k++) {
+          lo[k] = (int) ((cells[m].lo[k]-cellbinlo[k]) * cellbininv[k]);
+          hi[k] = (int) ((cells[m].hi[k]-cellbinlo[k]) * cellbininv[k]);
+          lo[k] = MAX(0,MIN(lo[k],cellnbin[k]-1));
+          hi[k] = MAX(0,MIN(hi[k],cellnbin[k]-1));
+        }
+        for (ibz = lo[2]; ibz <= hi[2]; ibz++)
+          for (iby = lo[1]; iby <= hi[1]; iby++)
+            for (ibx = lo[0]; ibx <= hi[0]; ibx++) {
+              ibin = (ibz*cellnbin[1] + iby)*cellnbin[0] + ibx;
+              if (pass == 0) cellbinstart[ibin+1]++;
+              else cellbinlist[cellbinstart[ibin]++] = m;
+            }
+      }
+
+      if (pass == 0) {
+        for (i = 0; i < nbins; i++) cellbinstart[i+1] += cellbinstart[i];
+        memory->create(cellbinlist,cellbinstart[nbins],"grid:cellbinlist");
+      } else {
+        for (i = nbins; i > 0; i--) cellbinstart[i] = cellbinstart[i-1];
+        cellbinstart[0] = 0;
+      }
+    }
+
+    ncellbin = ntotal;
+    cellbinvalid = 1;
+  }
+
+  // query: gather cells from bins overlapping the box, dedup by stamp
+
+  for (k = 0; k < 3; k++) {
+    lo[k] = (int) ((blo[k]-cellbinlo[k]) * cellbininv[k]);
+    hi[k] = (int) ((bhi[k]-cellbinlo[k]) * cellbininv[k]);
+    lo[k] = MAX(0,MIN(lo[k],cellnbin[k]-1));
+    hi[k] = MAX(0,MIN(hi[k],cellnbin[k]-1));
+  }
+
+  cellstampcur++;
+  int ncand = 0;
+
+  for (ibz = lo[2]; ibz <= hi[2]; ibz++)
+    for (iby = lo[1]; iby <= hi[1]; iby++)
+      for (ibx = lo[0]; ibx <= hi[0]; ibx++) {
+        ibin = (ibz*cellnbin[1] + iby)*cellnbin[0] + ibx;
+        for (i = cellbinstart[ibin]; i < cellbinstart[ibin+1]; i++) {
+          m = cellbinlist[i];
+          if (cellstamp[m] == cellstampcur) continue;
+          cellstamp[m] = cellstampcur;
+          if (ncand == maxcellcand) {
+            maxcellcand += 4096;
+            memory->grow(cellcand,maxcellcand,"grid:cellcand");
+          }
+          cellcand[ncand++] = m;
+        }
+      }
+
+  *list = cellcand;
+  return ncand;
+}
+
+/* ----------------------------------------------------------------------
+   invalidate the cell bin index
+   called whenever cells are rebuilt, migrated, re-ghosted or compacted;
+     a change which keeps the cell count cannot be detected by the
+     lazy rebuild in cells_in_box()
+------------------------------------------------------------------------- */
+
+void Grid::clear_cell_bins()
+{
+  cellbinvalid = 0;
 }
 
 /* ---------------------------------------------------------------------- */

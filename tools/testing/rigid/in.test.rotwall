@@ -30,7 +30,6 @@ surf_modify         all collide 1
 
 timestep 	    ${dt}
 
-compute             c1 surf body all fx fy fz tx ty tz com rigid
 
 global              rigid yes
 
@@ -38,7 +37,7 @@ global              rigid yes
 #   vcom and omega unchanged to round-off
 # angmom = Izz * omega with omega = 90 rad/s
 
-fix		    1 rigid body c1 single body &
+fix		    1 rigid body single body &
 		    mass 1.0e-6 com 5 5 0 vcom 0 0 0 &
 		    moi 1.0e-7 1.0e-7 2.0e-7 0 0 0 angmom 0 0 1.8e-5
 

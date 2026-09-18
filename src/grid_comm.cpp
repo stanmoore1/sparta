@@ -669,6 +669,8 @@ void Grid::unpack_particles_adapt(int np, char *buf)
 
 void Grid::compress()
 {
+  clear_cell_bins();
+
   // copy of integer lists
   // create new lists
 

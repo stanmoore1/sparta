@@ -24,13 +24,12 @@ surf_modify         all collide 1
 
 timestep 	    0.0001
 
-compute             c1 surf body all fx fy fz tx ty tz com rigid
 
 global              rigid yes
 
 # unit cube: I = M/6 about each axis
 
-fix		    1 rigid body c1 single body &
+fix		    1 rigid body single body &
 		    mass 2.325e-15 com 5 5 5 vcom 0 0 0 &
 		    moi 3.875e-16 3.875e-16 3.875e-16 0 0 0 angmom 0 0 0
 

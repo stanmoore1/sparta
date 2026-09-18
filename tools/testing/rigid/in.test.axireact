@@ -55,11 +55,10 @@ collide             none
 
 timestep 	    1.0e-5
 
-compute             c1 surf body all fx fy fz tx ty tz com rigid
 
 global              rigid yes
 
-fix		    1 rigid body c1 single body &
+fix		    1 rigid body single body &
 		    mass 1.0e-22 com 0.5 0 0 vcom 0 0 0 &
 		    moi 5.0e-28 1.0e-24 1.0e-24 0 0 0 angmom 5.0e-25 0 0
 

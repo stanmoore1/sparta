@@ -141,6 +141,21 @@ class Grid : protected Pointers {
   bigint surflist_churn;      // bytes of cut lists and piece maps replaced
                               //   since the last compact_surf_lists()
 
+  // bin index over owned+ghost child cells for box -> candidate-cell
+  //   queries, see cells_in_box()
+  // built lazily on first query, cleared whenever cells move
+
+  int cellbinvalid;
+  int cellnbin[3];
+  double cellbinlo[3],cellbininv[3];
+  int *cellbinstart;          // CSR offsets per bin
+  int *cellbinlist;           // cell indices, binned by cell bbox
+  int ncellbin;               // # of cells when the bins were built
+  int *cellstamp;             // dedup stamp per cell
+  int cellstampcur;
+  int *cellcand;              // query result buffer
+  int maxcellcand;
+
   // owned or ghost child cell
   // includes unsplit cells, split cells, sub cells in any order
   // ghost cells are appended to owned
@@ -367,6 +382,9 @@ class Grid : protected Pointers {
   void collision_page(int);
   void set_collision_surfs(int, int, surfint *);
   void reset_collision_surfs();
+  int cells_in_box(double *, double *, int **);
+  void clear_cell_bins();
+  void reindex_ghost_surfs(int, int *);
   void clear_surf();
   void clear_surf_implicit();
   void clear_surf_restart();

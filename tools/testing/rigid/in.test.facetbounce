@@ -20,9 +20,8 @@ read_surf           data.circle200 group wall
 surf_collide	    1 specular
 surf_modify         all collide 1
 timestep 	    0.0001
-compute             c1 surf body all fx fy fz tx ty tz com rigid
 global              rigid yes
-fix		    1 rigid body c1 single body mass 1.0e-21 com 3 2.6 0 &
+fix		    1 rigid body single body mass 1.0e-21 com 3 2.6 0 &
 		    vcom 40 0 0 moi 1.7e-22 1.7e-22 3.4e-22 0 0 0 &
 		    angmom 0 0 0 push 2.0e-17 0.3
 variable            ke equal 0.5*1.0e-21*(f_1[4]^2+f_1[5]^2)+0.5*3.4e-22*f_1[15]^2

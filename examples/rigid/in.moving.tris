@@ -31,7 +31,6 @@ fix		    in emit/face air xhi twopass
 
 timestep 	    0.0001
 
-compute      c1 surf bodies all fx fy fz tx ty tz com rigid
 
 # grid cell flow volumes, for visualizing cut/split cells
 
@@ -42,7 +41,7 @@ global              rigid yes
 # the 3 bodies are numbered by surf type, their params are in the infile
 # moi of a uniform triangular plate, edge A: izz = M A^2 / 12
 
-fix	 1 rigid bodies c1 type infile data.tris.bodies &
+fix	 1 rigid bodies type infile data.tris.bodies &
          push 1.0e-18 0.1 pushstyle hertz pushdamp 1.5e-22 &
          pushbound yes remap incremental
 

@@ -9,9 +9,8 @@ variable            nrun index 1000
 read_restart        tmp.rigid.restart
 surf_collide	    1 specular
 surf_modify         all collide 1
-compute             csurf surf bodies all fx fy fz tx ty tz com rigid
 global              rigid yes
-fix		    1 rigid bodies csurf type infile tmp.rigid.state &
+fix		    1 rigid bodies type infile tmp.rigid.state &
                     push 1.0e-18 0.5 pushbound yes
 stats		    ${nrun}
 stats_style         step f_1[1][1] f_1[1][4] f_1[1][15] &

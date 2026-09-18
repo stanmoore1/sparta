@@ -61,14 +61,14 @@ class FixRigid : public Fix {
   int *body;              // body index of each element
   int *bodystart;         // elements of body I = bodystart[I] to bodystart[I+1]-1
 
-  int *irigid;            // per-surf flags, indexed by local surf index:
-                          // -1 = static surf, else body index
-                          // non-distributed surfs only, else NULL
-  int nsurfall;           // length of irigid = surf->nlocal when allocated
-                          // Update::init() clamps its scan to this length
+  // per local+ghost surf: body index and element index, -1 = static
+  // read by the mover (via Update::rigidmap) and the force sum
+
+  int *surfbody;
+  int *surfelem;
+  int maxsurfmap;         // allocated length of both
 
   // body_elem() = element index of a global surf ID, -1 if not in a body
-  // used by Update::build_rigidmap() for distributed surfs
 
   int body_elem(surfint id)
   {
@@ -86,11 +86,20 @@ class FixRigid : public Fix {
   virtual void end_of_step();
   void grid_changed();
   double memory_usage();
+  void init_surfs();            // per-run setup of the body surfs
   int ensure_local_copies();    // distributed: local copies of body surfs
-  void proc_bbox();             // bbox of this proc's owned + ghost cells
                                 //   returns 1 if surf arrays were changed
+  void proc_bbox();             // bbox of this proc's owned + ghost cells
   void surfs_changed(int, int = 0);  // notify per-surf models of the above
                                      //   2nd arg = 0 in run, 1 init, 2 setup
+  virtual void surf_maps();     // rebuild surfbody/surfelem
+
+  // force/torque on a body surf from one particle collision,
+  //   called by the particle mover for every collision with a body surf
+  // iorig = particle before the collision, ip/jp = particles after it
+
+  void surf_tally(int, Particle::OnePart *,
+                  Particle::OnePart *, Particle::OnePart *);
 
   double compute_scalar();
   double compute_vector(int);
@@ -101,8 +110,8 @@ class FixRigid : public Fix {
   int bodystyle;          // SINGLE, TYPE, or CUSTOM
   char *customname;       // name of per-surf custom vector for CUSTOM
   int ngroupsurf;         // # of surfs in group when fix was defined
-  char *csurfID;
-  class ComputeSurf *csurf;
+  int initflag;           // 1 once init() has run, 0 for a fix defined
+                          //   after the last init, which has no state
   char *infile;
   char *outfile;
   int outevery;
@@ -158,9 +167,6 @@ class FixRigid : public Fix {
   int inside_any_body(double *); // 1 if inside any rigid body
 
  protected:
-  int *slist;    // list of local surf indices for body surfs
-                 //   non-distributed surfs only, else NULL
-
   // replicated body geometry (bodypt/bodynorm above), the authoritative
   //   source for all body computations (bbox, inside tests, watertight,
   //   contacts); for distributed surfs it is gathered from the owned
@@ -175,11 +181,9 @@ class FixRigid : public Fix {
   std::unordered_map<surfint,int> idmap;  // global surf ID -> element index
 
   // where this proc stores copies of body elements in the Surf arrays
-  // non-distributed: lblist = slist, one copy per element
-  // distributed: ensure_local_copies() guarantees at least one copy of
-  //   every element in the local (non-ghost) range; if the surf comm
-  //   left duplicates, every copy is tracked so all are kept current
+  //   (lblist and the copy list above), see scan_copies()
 
+  int nsurfall;           // surf->nlocal when the fix was defined
   int *bodyneed;          // 1 if this proc needs local copies of a body
   double proclo[3],prochi[3];  // bbox of this proc's owned + ghost cells
   int copiesappended;     // 1 if start_of_step() appended local copies
@@ -232,6 +236,20 @@ class FixRigid : public Fix {
   int maxbodycand;
   double rmaxall;         // max over bodies of rmaxbody + bbox inflation
 
+  // per-element force/torque tallies of the particle mover this step
+  // one row per body element hit, rows in the order first hit, so the
+  //   per-body sums below are formed in a reproducible order which does
+  //   not depend on how many local copies of an element a proc holds
+  // the tally converts the momentum a collision gives the surf into a
+  //   force via nfactor_inverse = fnum/dt, exactly as compute surf does
+
+  int ntally,maxtally;
+  int *tally2elem;        // element index of each row
+  int *elem2tally;        // row of each element, -1 if not hit this step
+  double **ftally;        // fx,fy,fz,tx,ty,tz per row
+  double nfactor_inverse;
+  int weightflag;         // 1 if particles carry cell weights
+
   // work buffers for the fused force/torque Allreduce over all bodies
 
   double *ftbuf_mine;
@@ -264,10 +282,27 @@ class FixRigid : public Fix {
   void final_kick(int);         // second half kick of velocity Verlet
   void check_enclosed(int);     // reject a body which encloses no area/volume
 
+  void clear_tally();           // reset the per-element tallies
+  void grow_tally();
+  void sum_forces();            // per-body force/torque from the tallies
+                                //   and the push-off contacts
+  virtual void sum_tallies();   // local per-body sums of the tallies
+                                //   virtual: fix rigid/kk sums the device
+                                //   tallies with a kernel
+
+  // the per-step skeleton, see start_of_step() and end_of_step()
+
+  void initial_integrate();     // half kick + drift to the end-of-step pose
+  void set_xv();                // commit the pose, regenerate the geometry
+  void check_bounds();          // body vs simulation box
+  void final_integrate();       // push-off forces + second half kick
+  void remap_grid();            // re-map the body surfs to grid cells
+
   void body_bins();             // bin bodies by COM
   void gather_body();           // build replicated body element table
   void check_body_attributes(); // error if body surf attributes changed
   int same_coords(double *, double *, double *, int);  // coords = elem
+  void scan_copies();           // lblist and the local copy list
   void update_surf_copies();    // write bodypt/bodynorm into Surf storage
   void grid_rebuild();          // full re-map of all surfs to grid cells
   bigint remove_inside_particles(int);  // all bodies, used at setup

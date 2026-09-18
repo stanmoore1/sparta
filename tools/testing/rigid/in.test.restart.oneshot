@@ -19,9 +19,8 @@ read_surf           data.square group bodies trans 0 3 0 typeadd 1
 surf_collide	    1 specular
 surf_modify         all collide 1
 timestep 	    0.0001
-compute             csurf surf bodies all fx fy fz tx ty tz com rigid
 global              rigid yes
-fix		    1 rigid bodies csurf type infile data.restart.bodies &
+fix		    1 rigid bodies type infile data.restart.bodies &
                     push 1.0e-18 0.5 pushbound yes
 stats		    ${nrun}
 stats_style         step f_1[1][1] f_1[1][4] f_1[1][15] &

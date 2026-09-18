@@ -59,29 +59,11 @@ class Update : protected Pointers {
                               // = body index in fixrigid, -1 = static surf
                               // length = surf->nlocal + surf->nghost, since
                               //   the mover tests surfs of ghost cells too
+                              // owned by the fix (FixRigid::surfbody)
 
-  virtual void build_rigidmap();  // rebuild rigidmap from current surfs
+  virtual void rigid_maps_changed();  // the fix rebuilt its per-surf maps
   class FixRigid *find_fixrigid();  // look up the fix rigid in Modify
   void init_rigid();          // per-run setup of the rigid bodies
-
-  // bin index over local+ghost child cells, for box -> candidate-cell
-  //   queries by fix rigid (swept assignment, incremental re-cut)
-  // built lazily on first query, invalidated whenever the grid changes,
-  //   so per-step query cost scales with the box, not the local grid
-
-  void rigid_bins_clear();
-  int rigid_cell_box(double *, double *, int **);
-
-  int rigid_binvalid;
-  int rigid_nbin[3];
-  double rigid_binlo[3],rigid_bininv[3];
-  int *rigid_binstart;        // CSR offsets per bin
-  int *rigid_binlist;         // cell indices, binned by cell bbox
-  int rigid_ncellbin;         // # of cells when bins were built
-  int *rigid_cellstamp;       // dedup stamp per cell
-  int rigid_stampcur;
-  int *rigid_cand;            // query result buffer
-  int maxrigidcand;
 
   int nmigrate;          // # of particles to migrate to new procs
   int *mlist;            // indices of particles to migrate

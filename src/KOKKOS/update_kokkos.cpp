@@ -42,7 +42,7 @@
 #include "kokkos.h"
 #include "sparta_masks.h"
 #include "surf_collide_specular_kokkos.h"
-#include "fix_rigid.h"
+#include "fix_rigid_kokkos.h"
 #include "kokkos_base.h"
 
 using namespace SPARTA_NS;
@@ -400,16 +400,13 @@ void UpdateKokkos::setup()
 }
 
 /* ----------------------------------------------------------------------
-   rebuild the host rigidmap (Update::build_rigidmap) and mirror it on
-     the device, one entry per local+ghost surf
-   called whenever the surf arrays change (fix rigid setup and
-     grid_changed), and once per run from init_rigid()
+   the fix rebuilt its per-surf maps: mirror the body map on the device,
+     one entry per local+ghost surf
 ------------------------------------------------------------------------- */
 
-void UpdateKokkos::build_rigidmap()
+void UpdateKokkos::rigid_maps_changed()
 {
-  Update::build_rigidmap();
-  if (!rigidflag || !fixrigid) return;
+  Update::rigid_maps_changed();
 
   int n = surf->nlocal + surf->nghost;
   if ((int) k_rigidmap.extent(0) < n)
@@ -433,13 +430,14 @@ void UpdateKokkos::rigid_upload()
 {
   int nbody = fixrigid->nbody;
   if ((int) k_rigidbody.extent(0) < nbody)
-    k_rigidbody = tdual_rigidbody_2d("update:rigidbody",nbody,19);
+    k_rigidbody = tdual_rigidbody_2d("update:rigidbody",nbody,22);
   auto h_rigidbody = k_rigidbody.view_host();
   for (int m = 0; m < nbody; m++) {
     for (int k = 0; k < 3; k++) {
       h_rigidbody(m,k) = fixrigid->xcm[m][k];
       h_rigidbody(m,3+k) = fixrigid->vcm[m][k];
       h_rigidbody(m,6+k) = fixrigid->omega[m][k];
+      h_rigidbody(m,19+k) = fixrigid->xcmmid[m][k];
     }
     h_rigidbody(m,9) = fixrigid->invmass[m];
     for (int k = 0; k < 9; k++) h_rigidbody(m,10+k) = fixrigid->invinertia[m][k];
@@ -448,10 +446,42 @@ void UpdateKokkos::rigid_upload()
   k_rigidbody.sync_device();
   d_rigidbody = k_rigidbody.view_device();
 
+  // the fix's per-surf force/torque tallies, zeroed by the fix in
+  //   start_of_step(), accumulated by the move kernel below through a
+  //   scatter view (duplicated on host threads, atomic on a GPU) and
+  //   summed per body by the fix in end_of_step()
+  // the force is the momentum given the surf times fnum/dt, with the
+  //   same expression as compute surf so the two agree bit for bit
+
+  FixRigidKokkos *fixrigid_kk = dynamic_cast<FixRigidKokkos *>(fixrigid);
+  if (!fixrigid_kk) error->all(FLERR,"Fix rigid requires rigid/kk with -k on");
+  d_rigidtally = fixrigid_kk->d_ftally;
+  double nfactor = dt/fnum;
+  nfactor_inverse_kk = 1.0/nfactor;
+
+  need_dup_rigid = sparta->kokkos->need_dup<DeviceType>();
+  if (need_dup_rigid)
+    dup_rigidtally = Kokkos::Experimental::create_scatter_view<typename Kokkos::Experimental::ScatterSum, typename Kokkos::Experimental::ScatterDuplicated>(d_rigidtally);
+  else
+    ndup_rigidtally = Kokkos::Experimental::create_scatter_view<typename Kokkos::Experimental::ScatterSum, typename Kokkos::Experimental::ScatterNonDuplicated>(d_rigidtally);
+
   ParticleKokkos* particle_kk = (ParticleKokkos*) particle;
   particle_kk->sync(Device,SPECIES_MASK);
   d_species = particle_kk->k_species.view_device();
   cellweightflag_kk = grid->cellweightflag;
+}
+
+/* ----------------------------------------------------------------------
+   after the move: the duplicated per-thread tallies of the host backends
+     are summed into the fix's tally view; a GPU accumulated in place
+------------------------------------------------------------------------- */
+
+void UpdateKokkos::rigid_tally_done()
+{
+  if (need_dup_rigid) {
+    Kokkos::Experimental::contribute(d_rigidtally,dup_rigidtally);
+    dup_rigidtally = {};
+  }
 }
 
 /* ----------------------------------------------------------------------
@@ -1023,6 +1053,10 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
     for (int f = 0; f < 6; f++) bcmirror_one[f] = h_bcmirror[f];
     optmove_surf_tally();
   }
+
+  // mobile rigid bodies: fold the move kernel's tallies into the fix's
+
+  if (rigid_on) rigid_tally_done();
 
   // accumulate running totals
 
@@ -1995,7 +2029,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
           ipart->icell = icell;
           dtremain *= 1.0 - minparam*frac;
 
-          if (nsurf_tally)
+          if (nsurf_tally || (rigid_on && minmoving))
             iorig = particle_i;
           const int n = DIM == 3 ? tri->isc : line->isc;
 
@@ -2096,6 +2130,11 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
               UK_SLIST_REACT_SURF(m).
                     surf_tally_kk<ATOMIC_REDUCTION>(dtremain,minsurf,icell,reaction,&iorig,ipart,jpart);
           }
+
+          // force/torque on a body from the collision, tallied for the fix
+
+          if (rigid_on && minmoving)
+            rigid_tally<ATOMIC_REDUCTION>(minsurf,minbody,&iorig,ipart,jpart);
 
           // stuck_iterate = consecutive iterations particle is immobile
 

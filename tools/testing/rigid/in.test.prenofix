@@ -15,15 +15,14 @@ read_surf           data.square group body
 surf_collide	    1 specular
 surf_modify         all collide 1
 timestep 	    0.0001
-compute             c1 surf body all fx fy fz tx ty tz com rigid
 global              rigid yes
-fix		    1 rigid body c1 single body mass 1.0e-22 com 5 5 0 &
+fix		    1 rigid body single body mass 1.0e-22 com 5 5 0 &
                     vcom 20 5 0 moi 1.7e-23 1.7e-23 3.4e-23 0 0 0 &
                     angmom 0 0 0
 stats		    10
 stats_style         step
 run 		    20
-fix		    1 rigid body c1 single body mass 1.0e-22 com 5 5 0 &
+fix		    1 rigid body single body mass 1.0e-22 com 5 5 0 &
                     vcom 20 5 0 moi 1.7e-23 1.7e-23 3.4e-23 0 0 0 &
                     angmom 0 0 0
 run 		    20 pre no

@@ -33,11 +33,10 @@ surf_modify         all collide 1
 
 timestep 	    1.0e-6
 
-compute             c1 surf bodies all fx fy fz tx ty tz com rigid
 
 global              rigid yes
 
-fix		    1 rigid bodies c1 type infile data.axipair.bodies &
+fix		    1 rigid bodies type infile data.axipair.bodies &
                     push 5.0e-15 0.03
 
 stats		    250

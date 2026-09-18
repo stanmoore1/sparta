@@ -31,11 +31,10 @@ collide             none
 
 timestep            1.0e-6
 
-compute             c1 surf body all fx fy fz tx ty tz com rigid
 global              rigid yes
 
 # Izz = 1.6e-25 makes (r x n)^2/Izz = 0.4^2/1.6e-25 = 1e24 = 1/M exactly
-fix                 1 rigid body c1 single body mass 1.0e-24 com 5 5 0 &
+fix                 1 rigid body single body mass 1.0e-24 com 5 5 0 &
                     vcom 0 0 0 moi 1.0e-25 1.0e-25 1.6e-25 0 0 0 &
                     angmom 0 0 0 rotate richardson
 

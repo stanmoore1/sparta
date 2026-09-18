@@ -72,12 +72,6 @@ void FixRigidKokkos::init()
   ((SurfKokkos*) surf)->sync(Host,ALL_MASK);
 
   FixRigid::init();
-
-  // force/torque tallies must come from the KOKKOS mover, which only
-  //   tallies into the KOKKOS variant of compute surf
-
-  if (!csurf->kokkos_flag)
-    error->all(FLERR,"Fix rigid/kk requires compute surf/kk");
 }
 
 /* ----------------------------------------------------------------------
@@ -162,6 +156,16 @@ void FixRigidKokkos::start_of_step()
     copiesappended = 0;
   }
 
+  // the move kernel's per-surf force/torque tallies for this step,
+  //   sized after any copies were appended
+
+  int n = surf->nlocal + surf->nghost;
+  if ((int) k_ftally.extent(0) < n) {
+    k_ftally = tdual_dbl_2d("fix_rigid:ftally",n,6);
+    d_ftally = k_ftally.view_device();
+  }
+  Kokkos::deep_copy(d_ftally,0.0);
+
   grid_kk->modify(Host,CELL_MASK);
   if (remap->listschanged) grid_kk->wrap_kokkos_graphs();
   remap->listschanged = 0;
@@ -178,6 +182,83 @@ void FixRigidKokkos::end_of_step()
   host_begin();
   FixRigid::end_of_step();
   host_end();
+}
+
+/* ----------------------------------------------------------------------
+   per-surf maps, plus the per-body CSR list of local+ghost surfs the
+     tally sums walk, in surf index order
+------------------------------------------------------------------------- */
+
+void FixRigidKokkos::surf_maps()
+{
+  FixRigid::surf_maps();
+
+  int n = surf->nlocal + surf->nghost;
+
+  if ((int) k_bodysurfstart.extent(0) < nbody+1)
+    k_bodysurfstart = DAT::tdual_int_1d("fix_rigid:bodysurfstart",nbody+1);
+  if ((int) k_bodysurflist.extent(0) < n)
+    k_bodysurflist = DAT::tdual_int_1d("fix_rigid:bodysurflist",n);
+  if ((int) k_ft.extent(0) < nbody) {
+    k_ft = tdual_dbl_2d("fix_rigid:ft",nbody,6);
+    d_ft = k_ft.view_device();
+  }
+
+  auto h_start = k_bodysurfstart.view_host();
+  auto h_list = k_bodysurflist.view_host();
+
+  for (int ibody = 0; ibody <= nbody; ibody++) h_start(ibody) = 0;
+  for (int i = 0; i < n; i++)
+    if (surfbody[i] >= 0) h_start(surfbody[i]+1)++;
+  for (int ibody = 0; ibody < nbody; ibody++)
+    h_start(ibody+1) += h_start(ibody);
+  for (int i = 0; i < n; i++)
+    if (surfbody[i] >= 0) h_list(h_start(surfbody[i])++) = i;
+  for (int ibody = nbody; ibody > 0; ibody--)
+    h_start(ibody) = h_start(ibody-1);
+  h_start(0) = 0;
+
+  k_bodysurfstart.modify_host(); k_bodysurfstart.sync_device();
+  k_bodysurflist.modify_host(); k_bodysurflist.sync_device();
+  d_bodysurfstart = k_bodysurfstart.view_device();
+  d_bodysurflist = k_bodysurflist.view_device();
+}
+
+/* ----------------------------------------------------------------------
+   per-body sums of the move kernel's per-surf tallies into ftbuf_mine
+   one thread per body, its surfs in index order on every backend
+------------------------------------------------------------------------- */
+
+void FixRigidKokkos::sum_tallies()
+{
+  copymode = 1;
+  Kokkos::parallel_for(
+    Kokkos::RangePolicy<DeviceType,TagFixRigidSumTallies>(0,nbody),*this);
+  copymode = 0;
+
+  k_ft.modify_device();
+  k_ft.sync_host();
+  auto h_ft = k_ft.view_host();
+  for (int ibody = 0; ibody < nbody; ibody++)
+    for (int j = 0; j < 6; j++) ftbuf_mine[6*ibody+j] = h_ft(ibody,j);
+}
+
+/* ---------------------------------------------------------------------- */
+
+KOKKOS_INLINE_FUNCTION
+void FixRigidKokkos::operator()(TagFixRigidSumTallies, const int &ibody) const
+{
+  double f[6];
+  for (int j = 0; j < 6; j++) f[j] = 0.0;
+
+  const int start = d_bodysurfstart(ibody);
+  const int stop = d_bodysurfstart(ibody+1);
+  for (int c = start; c < stop; c++) {
+    const int isurf = d_bodysurflist(c);
+    for (int j = 0; j < 6; j++) f[j] += d_ftally(isurf,j);
+  }
+
+  for (int j = 0; j < 6; j++) d_ft(ibody,j) = f[j];
 }
 
 /* ----------------------------------------------------------------------

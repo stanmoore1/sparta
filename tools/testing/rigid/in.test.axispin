@@ -36,14 +36,13 @@ surf_modify         all collide 1
 
 timestep 	    1.0e-5
 
-compute             c1 surf body all fx fy fz tx ty tz com rigid
 
 global              rigid yes
 
 # ixx of a uniform cylinder R=0.1, M=1e-24: M R^2 / 2 = 5.0e-27
 # spun up so the gas has something to take
 
-fix		    1 rigid body c1 single body &
+fix		    1 rigid body single body &
 		    mass 1.0e-24 com 0.5 0 0 vcom 0 0 0 &
 		    moi 5.0e-27 1.0e-26 1.0e-26 0 0 0 angmom 5.0e-24 0 0
 

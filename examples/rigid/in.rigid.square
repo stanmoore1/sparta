@@ -41,11 +41,10 @@ timestep 	    0.0001
 # per-surf force/torque tallies used to move the rigid body
 # moi of a uniform square of edge A: izz = 1/6 M A^2, ixx = iyy = izz/2
 
-compute             csurf surf square all fx fy fz tx ty tz com rigid
 
 global              rigid yes
 
-fix		    1 rigid square csurf single body &
+fix		    1 rigid square single body &
                     mass 5.0e-22 com 5 5 0 vcom 0 0 0 &
                     moi 4.1666667e-23 4.1666667e-23 8.3333333e-23 0 0 0 &
                     angmom 0 0 0

@@ -691,34 +691,6 @@ int ComputeSurf::tallyinfo(surfint *&ptr)
 }
 
 /* ----------------------------------------------------------------------
-   check that tallied values are exactly fx,fy,fz,tx,ty,tz for one group
-   used by fix rigid to insure its compute tallies force/torque
-------------------------------------------------------------------------- */
-
-int ComputeSurf::force_torque_colcheck()
-{
-  if (ngroup != 1 || nvalue != 6) return 0;
-  if (which[0] != FX || which[1] != FY || which[2] != FZ) return 0;
-  if (which[3] != TX || which[4] != TY || which[5] != TZ) return 0;
-  return 1;
-}
-
-/* ----------------------------------------------------------------------
-   1 if every species is in the compute's mixture, else 0
-   surf_tally() skips a particle whose species is not in the mixture,
-     so fix rigid requires full coverage: otherwise part of the gas
-     would push on the body without being tallied
-------------------------------------------------------------------------- */
-
-int ComputeSurf::mixture_covers_all_species()
-{
-  int *species2group = particle->mixture[imix]->species2group;
-  for (int i = 0; i < particle->nspecies; i++)
-    if (species2group[i] < 0) return 0;
-  return 1;
-}
-
-/* ----------------------------------------------------------------------
    sum tally values to owning surfs via surf->collate()
 ------------------------------------------------------------------------- */
 

@@ -39,11 +39,10 @@ surf_modify         all collide 1
 
 timestep 	    2.0e-5
 
-compute             c1 surf bodies all fx fy fz tx ty tz com rigid
 
 global              rigid yes
 
-fix		    1 rigid bodies c1 type infile data.splitmany.bodies &
+fix		    1 rigid bodies type infile data.splitmany.bodies &
                     remap ${mode} push 1.0e-17 0.3 pushbound yes
 
 if "${gas} == 1" then "create_particles air n 20000"

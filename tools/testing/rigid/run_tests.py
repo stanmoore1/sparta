@@ -1079,11 +1079,6 @@ def test_badinfile(exe_cmd):
                          "Invalid floating point number")
 
 
-def test_mixture(exe_cmd):
-    return negative_test(exe_cmd, "in.test.mixture",
-                         "mixture must contain all species")
-
-
 def test_zerothick(exe_cmd):
     fails = negative_test(exe_cmd, "in.test.zerothick", "encloses zero area")
     fails += negative_test(exe_cmd, "in.test.zerothick3d",
@@ -2217,7 +2212,6 @@ TESTS = [
     ("customemit", test_customemit),
     ("emitsurf", test_emitsurf),
     ("renumber", test_renumber),
-    ("mixture", test_mixture),
     ("badinfile", test_badinfile),
     ("rotwall", test_rotwall),
     ("rotwall3d", test_rotwall3d),

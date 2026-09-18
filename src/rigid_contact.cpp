@@ -122,7 +122,7 @@ void RigidContact::setup()
     nslocal = surf->nown;
   }
 
-  int *rigidmap = update->rigidmap;
+  int *surfbody = fix->surfbody;
 
   double *boxlo = domain->boxlo;
   double *boxhi = domain->boxhi;
@@ -160,7 +160,7 @@ void RigidContact::setup()
       // skip surfs belonging to any rigid body
 
       if (!distributed) {
-        if (rigidmap[m] >= 0) continue;
+        if (surfbody[m] >= 0) continue;
       } else {
         surfint id = (dim == 2) ? lines[m].id : tris[m].id;
         if (fix->body_elem(id) >= 0) continue;

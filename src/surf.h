@@ -191,6 +191,7 @@ class Surf : protected Pointers {
 
   void add_line(surfint, int, double *, double *);
   void add_line_copy(int, Line *);
+  void add_local_copies(int, Line *, Tri *, int *);
   void add_tri(surfint, int, double *, double *, double *);
   void add_tri_copy(int, Tri *);
   void add_surfs(int, int, Line *, Tri *, int, int *, double **);

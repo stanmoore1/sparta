@@ -30,7 +30,6 @@ surf_modify         all collide 1
 
 timestep 	    0.0001
 
-compute             c1 surf body all fx fy fz tx ty tz com rigid
 
 global              rigid yes
 
@@ -39,7 +38,7 @@ global              rigid yes
 # the values are given explicitly so this test does not depend on the
 # density-style integration, which in.test.axidensity covers
 
-fix		    1 rigid body c1 single body &
+fix		    1 rigid body single body &
 		    mass 1.0e-22 com 1.5 0 0 vcom 2.0 0 0 &
 		    moi 1.0e-23 1.0e-23 1.0e-23 0 0 0 &
                     angmom 7.5e-21 0 0 force ${fx} 0 0

@@ -13,7 +13,7 @@
 </H3>
 <P><B>Syntax:</B>
 </P>
-<PRE>fix ID rigid group-ID compute-ID bodystyle dstyle args keyword value ... 
+<PRE>fix ID rigid group-ID bodystyle dstyle args keyword value ... 
 </PRE>
 <UL><LI>ID is documented in <A HREF = "fix.html">fix</A> command 
 
@@ -21,7 +21,6 @@
 
 <LI>group-ID = ID of surface group containing surf elements which comprise the rigid bodies 
 
-<LI>compute-ID = ID of <A HREF = "compute_surf.html">compute surf</A> command for force/torque calculation on rigid bodies 
 
 <LI>bodystyle = <I>single</I> or <I>type</I> or <I>custom</I> 
 
@@ -86,16 +85,15 @@
 </UL>
 <P><B>Examples:</B>
 </P>
-<PRE>compute csurf surf all all fx fy fz tx ty tz com rigid
-global rigid yes
-fix 1 rigid all csurf single body mass 1.0 com 5 5 0 vcom 0 0 0 moi 2 2 3 0.5 0 0 angmom 0 0 0
-fix 1 rigid all csurf single infile square.rigid outfile square.state 1000
-fix 1 rigid all csurf single infile square.rigid push 1.0e-18 0.5 pushbound yes
-fix 1 rigid all csurf single infile square.rigid force 0 -9.8e-22 0
-fix 1 rigid all csurf single density 2700.0
-fix 1 rigid all csurf single density 2700.0 vcom 60 0 0 angmom 0 0 6.8e-24
-fix 1 rigid all csurf type infile circles.bodies push 1.0e-18 0.5
-fix 1 rigid all csurf custom body density 2700.0 
+<PRE>global rigid yes
+fix 1 rigid all single body mass 1.0 com 5 5 0 vcom 0 0 0 moi 2 2 3 0.5 0 0 angmom 0 0 0
+fix 1 rigid all single infile square.rigid outfile square.state 1000
+fix 1 rigid all single infile square.rigid push 1.0e-18 0.5 pushbound yes
+fix 1 rigid all single infile square.rigid force 0 -9.8e-22 0
+fix 1 rigid all single density 2700.0
+fix 1 rigid all single density 2700.0 vcom 60 0 0 angmom 0 0 6.8e-24
+fix 1 rigid all type infile circles.bodies push 1.0e-18 0.5
+fix 1 rigid all custom body density 2700.0 
 </PRE>
 <P><B>Description:</B>
 </P>
@@ -158,20 +156,15 @@ body-body contact force is applied equal-and-opposite to both bodies
 at the contact point, so body-body interactions conserve linear and
 angular momentum exactly.
 </P>
-<P>Compute-ID is the ID of a <A HREF = "compute_surf.html">compute surf</A> command
-which tallies the force and torque on individual surface elements due
-to collisions with particles.  It must compute exactly these 6 values
-in this order, for a single group of a mixture which contains every
-species (otherwise part of the gas would push on the body without
-being tallied), and its surf group must include all the body surfs:
-</P>
-<PRE>compute csurf surf all all fx fy fz tx ty tz com rigid 
-</PRE>
-<P>The compute must use the <I>rigid</I> setting of its <I>com</I> keyword, so that
-the torque on each surf is tallied about the center-of-mass of the
-body the surf belongs to, at its mid-step position; see the <A HREF = "compute_surf.html">compute
-surf</A> doc page.  This fix also insures the compute
-tallies collision info on every timestep of a run.
+<P>The force and torque on each body are tallied by this fix from every
+collision of a particle with one of its surfs, on every timestep of a
+run: the momentum the particle gives up, scaled by the ratio of real
+to simulation particles and the timestep, is the force on the surf,
+and the torque is taken about the center-of-mass of the body at its
+mid-step position, exactly as a <A HREF = "compute_surf.html">compute surf</A>
+command with the <I>fx fy fz tx ty tz</I> values and its <I>com rigid</I>
+setting tallies them.  Such a compute is not needed by the fix, but
+can be defined to output the per-surf forces on the bodies.
 </P>
 <P>The parameters of the rigid bodies can be specified in one of three
 ways via the <I>dstyle</I> setting: <I>body</I>, <I>infile</I>, or <I>density</I>.  The
@@ -263,7 +256,7 @@ such as a body read from an STL file or one of the meshes produced by
 the tools described in <A HREF = "Section_tools.html">Section tools</A>.  Only the
 density is given:
 </P>
-<PRE>fix 1 rigid body csurf single density 2700.0 
+<PRE>fix 1 rigid body single density 2700.0 
 </PRE>
 <P>The volume integrals which define these quantities are converted into
 sums over the body elements.  In 3d each triangle forms a tetrahedron
@@ -306,7 +299,7 @@ below.
 cannot be derived from its shape.  Both default to zero and may be
 given with the optional <I>vcom</I> and <I>angmom</I> keywords:
 </P>
-<PRE>fix 1 rigid body csurf single density 2700.0 vcom 60 0 0 angmom 0 0 6.8e-24 
+<PRE>fix 1 rigid body single density 2700.0 vcom 60 0 0 angmom 0 0 6.8e-24 
 </PRE>
 <P>Those two keywords may only be used with the <I>density</I> style.  With
 the <I>body</I> style, <I>vcom</I> and <I>angmom</I> are already two of its five
@@ -393,9 +386,9 @@ is added back.  All surface collision models thus operate correctly on
 the moving body.  The reflected velocity is then corrected for the
 recoil of the finite-mass body, as described below.
 </P>
-<P>At the end of the step, the per-surf force/torque tallies of the
-associated compute are summed over the body surfs to become the force
-and torque of the step (together with any push-off forces).  The
+<P>At the end of the step, the force/torque tallies of all the
+collisions with the body surfs are summed to become the force and
+torque of the step (together with any push-off forces).  The
 body position and orientation are updated to their end-of-step values,
 the coordinates of all its lines or triangles are regenerated, and
 the COM velocity and angular momentum receive the second half-step
@@ -755,9 +748,8 @@ initialized: the body must be watertight and enclose a non-zero area
 or volume (see above), its mass must
 be positive, its principal moments of inertia must be positive and
 satisfy the triangle inequality I1 + I2 >= I3 in 3d, or its moment
-about the z axis must be positive in 2d, the compute's surf group
-must include all body surfs, and the surf collision model of the
-body surfs must not itself impose a wall motion (the <I>translate</I> and
+about the z axis must be positive in 2d, and the surf collision model
+of the body surfs must not itself impose a wall motion (the <I>translate</I> and
 <I>rotate</I> options of <A HREF = "surf_collide.html">surf_collide</A> diffuse, and the
 piston style), since the motion of the body is what the surfs
 follow.  During a run, a
@@ -947,17 +939,16 @@ automatically by the <A HREF = "Section_start.html#start_7">-sf kk</A> command-l
 switch; when the KOKKOS package is active (the "-k on" switch) the
 <I>rigid/kk</I> style must be used, and the plain style generates an
 error.  The KOKKOS version performs the moving-surf collision tests
-in the KOKKOS particle mover, on the GPU or host threads.  The body
-time integration, the summation of force and torque, the per-step
-re-assignment of body surfs to grid cells, and the deletion of
-particles inside the body run on the host, so each timestep the
-particle data is copied from the device to the host and back.  This
-limits performance on GPUs for large particle counts.  The results
-are statistically equivalent to those of the non-KOKKOS version; the
-KOKKOS surface collision models use a different random number stream
-and per-surf tallies are summed in a different order, so trajectories
-are not bit-for-bit identical.  The compute used by the fix must be
-the <I>surf/kk</I> style, which "-sf kk" also selects.
+and the force/torque tallies in the KOKKOS particle mover, on the GPU
+or host threads, and sums the tallies per body there.  The body time
+integration, the per-step re-assignment of body surfs to grid cells,
+and the deletion of particles inside the body run on the host, so
+each timestep the grid data is copied from the device to the host and
+back.  This limits performance on GPUs for large particle counts.
+The results are statistically equivalent to those of the non-KOKKOS
+version; the KOKKOS surface collision models use a different random
+number stream and per-surf tallies are summed in a different order,
+so trajectories are not bit-for-bit identical.
 </P>
 <P><B>Related commands:</B>
 </P>

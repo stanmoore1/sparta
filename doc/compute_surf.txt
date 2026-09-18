@@ -410,8 +410,9 @@ each surf which belongs to a rigid body defined by the "fix
 rigid"_fix_rigid.html command is calculated about the mid-step
 center-of-mass of that body, and the torque on any other surf about
 the origin.  This setting requires the "global rigid"_global.html
-command and a fix rigid command, and is what fix rigid requires of
-its compute.
+command and a fix rigid command.  Fix rigid tallies the force and
+torque on its bodies itself in the same way, so this compute is only
+needed to output the per-surf forces on the bodies.
 
 :line
 
