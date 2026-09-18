@@ -72,6 +72,7 @@ GridKokkos::GridKokkos(SPARTA *sparta) : Grid(sparta)
   journalflag = 1;
   ncsurfsrows = 0;
   graph_generation = 0;
+  cellbingen_kk = -1;
   dirtystamp = sinfostamp = NULL;
   maxdirtystamp = maxsinfostamp = 0;
   dirtygen = 0;
@@ -476,6 +477,55 @@ void GridKokkos::apply_changes()
     memory->destroy(sunique);
   }
 
+  // the cell bins: a moved cell is replaced in its bins, if the device
+  //   copy is the one the host patched
+
+  if (nbinpatch && cellbingen_kk == cellbingen) {
+    if ((int) k_movedfrom.extent(0) < nbinpatch) {
+      k_movedfrom = DAT::tdual_int_1d("grid:movedfrom",nbinpatch);
+      k_movedto = DAT::tdual_int_1d("grid:movedto",nbinpatch);
+    }
+    auto h_from = k_movedfrom.view_host();
+    auto h_to = k_movedto.view_host();
+    for (i = 0; i < nbinpatch; i++) {
+      h_from(i) = binpatchfrom[i];
+      h_to(i) = binpatchto[i];
+    }
+    k_movedfrom.modify_host(); k_movedfrom.sync_device();
+    k_movedto.modify_host(); k_movedto.sync_device();
+    auto d_from = k_movedfrom.view_device();
+    auto d_to = k_movedto.view_device();
+    auto d_binstart = d_cellbinstart;
+    auto d_binlist = d_cellbinlist;
+    auto d_cells = k_cells.view_device();
+    const int nbinx = cellnbin[0], nbiny = cellnbin[1], nbinz = cellnbin[2];
+    const double blo0 = cellbinlo[0], blo1 = cellbinlo[1], blo2 = cellbinlo[2];
+    const double binv0 = cellbininv[0], binv1 = cellbininv[1],
+      binv2 = cellbininv[2];
+    int npatch = nbinpatch;
+    Kokkos::parallel_for(npatch, KOKKOS_LAMBDA(const int m) {
+      const int src = d_from(m);
+      const int dst = d_to(m);
+      const double *lo = d_cells[dst].lo;
+      const double *hi = d_cells[dst].hi;
+      int clo[3],chi[3];
+      clo[0] = MAX(0,MIN((int) ((lo[0]-blo0)*binv0),nbinx-1));
+      chi[0] = MAX(0,MIN((int) ((hi[0]-blo0)*binv0),nbinx-1));
+      clo[1] = MAX(0,MIN((int) ((lo[1]-blo1)*binv1),nbiny-1));
+      chi[1] = MAX(0,MIN((int) ((hi[1]-blo1)*binv1),nbiny-1));
+      clo[2] = MAX(0,MIN((int) ((lo[2]-blo2)*binv2),nbinz-1));
+      chi[2] = MAX(0,MIN((int) ((hi[2]-blo2)*binv2),nbinz-1));
+      for (int ibz = clo[2]; ibz <= chi[2]; ibz++)
+        for (int iby = clo[1]; iby <= chi[1]; iby++)
+          for (int ibx = clo[0]; ibx <= chi[0]; ibx++) {
+            const int ibin = (ibz*nbiny + iby)*nbinx + ibx;
+            for (int j = d_binstart(ibin); j < d_binstart(ibin+1); j++)
+              if (d_binlist(j) == src) d_binlist(j) = dst;
+          }
+    });
+    Kokkos::fence();
+  }
+
   // the graphs: the cut graph when a list or the cell layout changed,
   //   the split graphs when a split cell changed, the mover's graph
   //   when collision lists were set or reset
@@ -491,6 +541,34 @@ void GridKokkos::apply_changes()
 
   memory->destroy(unique);
   journal_clear();
+}
+
+/* ----------------------------------------------------------------------
+   the device copy of the cell bin index, built by the host on demand
+     and re-copied when it was rebuilt; the patches of moved cells are
+     applied by apply_changes() in between
+------------------------------------------------------------------------- */
+
+void GridKokkos::sync_cell_bins()
+{
+  if (!cellbinvalid) build_cell_bins();
+  if (cellbingen_kk == cellbingen) return;
+
+  int nbins = cellnbin[0]*cellnbin[1]*cellnbin[2];
+  int nlist = cellbinstart[nbins];
+  if ((int) k_cellbinstart.extent(0) < nbins+1)
+    k_cellbinstart = DAT::tdual_int_1d("grid:cellbinstart",nbins+1);
+  if ((int) k_cellbinlist.extent(0) < MAX(nlist,1))
+    k_cellbinlist = DAT::tdual_int_1d("grid:cellbinlist",MAX(nlist,1));
+  auto h_start = k_cellbinstart.view_host();
+  auto h_list = k_cellbinlist.view_host();
+  for (int i = 0; i <= nbins; i++) h_start(i) = cellbinstart[i];
+  for (int i = 0; i < nlist; i++) h_list(i) = cellbinlist[i];
+  k_cellbinstart.modify_host(); k_cellbinstart.sync_device();
+  k_cellbinlist.modify_host(); k_cellbinlist.sync_device();
+  d_cellbinstart = k_cellbinstart.view_device();
+  d_cellbinlist = k_cellbinlist.view_device();
+  cellbingen_kk = cellbingen;
 }
 
 /* ----------------------------------------------------------------------

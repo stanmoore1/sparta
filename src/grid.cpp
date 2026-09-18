@@ -127,6 +127,7 @@ Grid::Grid(SPARTA *sparta) : Pointers(sparta)
   ncollcells = maxcollcells = 0;
 
   cellbinvalid = 0;
+  cellbingen = 0;
   ncellbin = 0;
   cellbinstart = cellbinlist = cellstamp = cellcand = NULL;
   cellstampcur = 0;
@@ -151,6 +152,8 @@ Grid::Grid(SPARTA *sparta) : Pointers(sparta)
   collbuf = NULL;
   ncollbuf = maxcollbuf = 0;
   collreset = 0;
+  nbinpatch = maxbinpatch = 0;
+  binpatchfrom = binpatchto = NULL;
 
   neighshift[XLO] = 0;
   neighshift[XHI] = 3;
@@ -235,6 +238,8 @@ Grid::~Grid()
   memory->destroy(cutbuf);
   memory->sfree(collrec);
   memory->destroy(collbuf);
+  memory->destroy(binpatchfrom);
+  memory->destroy(binpatchto);
   delete hash;
 
   for (int i = 0; i < ncustom; i++) delete [] ename[i];
@@ -3069,73 +3074,7 @@ int Grid::cells_in_box(double *blo, double *bhi, int **list)
     ncellbin = ntotal;
   }
 
-  if (!cellbinvalid) {
-
-    double *boxlo = domain->boxlo;
-    double *boxhi = domain->boxhi;
-
-    // total bins ~ local cell count, distributed over dims by extent
-
-    double vol = 1.0;
-    for (k = 0; k < dim; k++) vol *= boxhi[k] - boxlo[k];
-    double scale = pow(MAX(ntotal,1)/vol,1.0/dim);
-
-    for (k = 0; k < 3; k++) {
-      cellbinlo[k] = boxlo[k];
-      double len = boxhi[k] - boxlo[k];
-      int n = (int) (len*scale);
-      n = MAX(n,1);
-      n = MIN(n,1024);
-      if (dim == 2 && k == 2) n = 1;
-      cellnbin[k] = n;
-      cellbininv[k] = n/len;
-    }
-    int nbins = cellnbin[0]*cellnbin[1]*cellnbin[2];
-
-    memory->destroy(cellbinstart);
-    memory->destroy(cellbinlist);
-    memory->destroy(cellstamp);
-    memory->create(cellbinstart,nbins+1,"grid:cellbinstart");
-    memory->create(cellstamp,ntotal,"grid:cellstamp");
-    for (i = 0; i < ntotal; i++) cellstamp[i] = 0;
-    cellstampcur = 0;
-
-    // two passes: count entries per bin, then fill
-    // skip sub cells; empty ghost cells are binned, callers skip them
-
-    for (int pass = 0; pass < 2; pass++) {
-      if (pass == 0)
-        for (i = 0; i <= nbins; i++) cellbinstart[i] = 0;
-
-      for (m = 0; m < ntotal; m++) {
-        if (cells[m].nsplit <= 0) continue;
-        for (k = 0; k < 3; k++) {
-          lo[k] = (int) ((cells[m].lo[k]-cellbinlo[k]) * cellbininv[k]);
-          hi[k] = (int) ((cells[m].hi[k]-cellbinlo[k]) * cellbininv[k]);
-          lo[k] = MAX(0,MIN(lo[k],cellnbin[k]-1));
-          hi[k] = MAX(0,MIN(hi[k],cellnbin[k]-1));
-        }
-        for (ibz = lo[2]; ibz <= hi[2]; ibz++)
-          for (iby = lo[1]; iby <= hi[1]; iby++)
-            for (ibx = lo[0]; ibx <= hi[0]; ibx++) {
-              ibin = (ibz*cellnbin[1] + iby)*cellnbin[0] + ibx;
-              if (pass == 0) cellbinstart[ibin+1]++;
-              else cellbinlist[cellbinstart[ibin]++] = m;
-            }
-      }
-
-      if (pass == 0) {
-        for (i = 0; i < nbins; i++) cellbinstart[i+1] += cellbinstart[i];
-        memory->create(cellbinlist,cellbinstart[nbins],"grid:cellbinlist");
-      } else {
-        for (i = nbins; i > 0; i--) cellbinstart[i] = cellbinstart[i-1];
-        cellbinstart[0] = 0;
-      }
-    }
-
-    ncellbin = ntotal;
-    cellbinvalid = 1;
-  }
+  if (!cellbinvalid) build_cell_bins();
 
   // query: gather cells from bins overlapping the box, dedup by stamp
 
@@ -3167,6 +3106,87 @@ int Grid::cells_in_box(double *blo, double *bhi, int **list)
 
   *list = cellcand;
   return ncand;
+}
+
+/* ----------------------------------------------------------------------
+   (re)build the bin index over the owned+ghost cells
+   cellbingen counts rebuilds, so a device mirror knows when to re-copy
+------------------------------------------------------------------------- */
+
+void Grid::build_cell_bins()
+{
+  int i,k,m,ibx,iby,ibz,ibin;
+  int lo[3],hi[3];
+
+  int ntotal = nlocal + nghost;
+  int dim = domain->dimension;
+
+
+  double *boxlo = domain->boxlo;
+  double *boxhi = domain->boxhi;
+
+  // total bins ~ local cell count, distributed over dims by extent
+
+  double vol = 1.0;
+  for (k = 0; k < dim; k++) vol *= boxhi[k] - boxlo[k];
+  double scale = pow(MAX(ntotal,1)/vol,1.0/dim);
+
+  for (k = 0; k < 3; k++) {
+    cellbinlo[k] = boxlo[k];
+    double len = boxhi[k] - boxlo[k];
+    int n = (int) (len*scale);
+    n = MAX(n,1);
+    n = MIN(n,1024);
+    if (dim == 2 && k == 2) n = 1;
+    cellnbin[k] = n;
+    cellbininv[k] = n/len;
+  }
+  int nbins = cellnbin[0]*cellnbin[1]*cellnbin[2];
+
+  memory->destroy(cellbinstart);
+  memory->destroy(cellbinlist);
+  memory->destroy(cellstamp);
+  memory->create(cellbinstart,nbins+1,"grid:cellbinstart");
+  memory->create(cellstamp,ntotal,"grid:cellstamp");
+  for (i = 0; i < ntotal; i++) cellstamp[i] = 0;
+  cellstampcur = 0;
+
+  // two passes: count entries per bin, then fill
+  // skip sub cells; empty ghost cells are binned, callers skip them
+
+  for (int pass = 0; pass < 2; pass++) {
+    if (pass == 0)
+      for (i = 0; i <= nbins; i++) cellbinstart[i] = 0;
+
+    for (m = 0; m < ntotal; m++) {
+      if (cells[m].nsplit <= 0) continue;
+      for (k = 0; k < 3; k++) {
+        lo[k] = (int) ((cells[m].lo[k]-cellbinlo[k]) * cellbininv[k]);
+        hi[k] = (int) ((cells[m].hi[k]-cellbinlo[k]) * cellbininv[k]);
+        lo[k] = MAX(0,MIN(lo[k],cellnbin[k]-1));
+        hi[k] = MAX(0,MIN(hi[k],cellnbin[k]-1));
+      }
+      for (ibz = lo[2]; ibz <= hi[2]; ibz++)
+        for (iby = lo[1]; iby <= hi[1]; iby++)
+          for (ibx = lo[0]; ibx <= hi[0]; ibx++) {
+            ibin = (ibz*cellnbin[1] + iby)*cellnbin[0] + ibx;
+            if (pass == 0) cellbinstart[ibin+1]++;
+            else cellbinlist[cellbinstart[ibin]++] = m;
+          }
+    }
+
+    if (pass == 0) {
+      for (i = 0; i < nbins; i++) cellbinstart[i+1] += cellbinstart[i];
+      memory->create(cellbinlist,cellbinstart[nbins],"grid:cellbinlist");
+    } else {
+      for (i = nbins; i > 0; i--) cellbinstart[i] = cellbinstart[i-1];
+      cellbinstart[0] = 0;
+    }
+  }
+
+  ncellbin = ntotal;
+  cellbinvalid = 1;
+  cellbingen++;
 }
 
 /* ----------------------------------------------------------------------

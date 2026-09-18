@@ -25,6 +25,7 @@ FixStyle(rigid/kk,FixRigidKokkos)
 #include "kokkos_type.h"
 #include "particle_kokkos.h"
 #include "grid_kokkos.h"
+#include "rigid_remap_kokkos.h"
 
 namespace SPARTA_NS {
 
@@ -107,7 +108,6 @@ class FixRigidKokkos : public FixRigid {
   // returns 1 if it handled the deletion, 0 to fall back to the host
 
   int remove_inside_all_kokkos(int);
-  void pack_body_device();
 
   // device replacement for the host
   //   sort + combine_split_cell_particles() pass in end_of_step(), which is
@@ -115,6 +115,27 @@ class FixRigidKokkos : public FixRigid {
   // returns 1 if it handled it, 0 to leave it to the host
 
   int combine_split_kokkos();
+
+ public:
+
+  // the replicated body table on the device, read by the kernels here
+  //   and by RigidRemapKokkos: copied from the host arrays by
+  //   pack_body_device(), with the current element boxes (sweepflag 0)
+  //   or the swept ones of this step (sweepflag 1)
+
+  void pack_body_device(int);
+
+  typedef Kokkos::DualView<double***,DeviceType::array_layout,DeviceType> tdual_dbl_3d;
+  typedef Kokkos::DualView<double**,DeviceType::array_layout,DeviceType> tdual_dbl_2d;
+
+  tdual_dbl_3d::t_dev d_bodypt;
+  tdual_dbl_2d::t_dev d_bodynorm;
+  tdual_dbl_2d::t_dev d_bbodylo,d_bbodyhi;
+  tdual_dbl_2d::t_dev d_elemlo,d_elemhi;
+  DAT::t_int_1d d_bodystart,d_lblist;
+  DAT::t_int_1d d_bodybinstart,d_bodybinlist;
+
+ private:
 
   // device replacement for the host assign_split_cell_particles() pass in
   //   remove_inside_all_kokkos(), the last per-step host particle consumer
@@ -159,9 +180,6 @@ class FixRigidKokkos : public FixRigid {
   //   precision build (SPA_PRECISION 1) would change which side of an
   //   element a nearly tangent ray falls on
 
-  typedef Kokkos::DualView<double***,DeviceType::array_layout,DeviceType> tdual_dbl_3d;
-  typedef Kokkos::DualView<double**,DeviceType::array_layout,DeviceType> tdual_dbl_2d;
-
  public:
 
   // per local+ghost surf: force/torque (fx,fy,fz,tx,ty,tz) tallied by
@@ -188,14 +206,9 @@ class FixRigidKokkos : public FixRigid {
   tdual_dbl_3d k_bodypt;
   tdual_dbl_2d k_bodynorm;
   tdual_dbl_2d k_bbodylo,k_bbodyhi;
-  DAT::tdual_int_1d k_bodystart;
+  tdual_dbl_2d k_elemlo,k_elemhi;
+  DAT::tdual_int_1d k_bodystart,k_lblist;
   DAT::tdual_int_1d k_bodybinstart,k_bodybinlist;
-
-  tdual_dbl_3d::t_dev d_bodypt;
-  tdual_dbl_2d::t_dev d_bodynorm;
-  tdual_dbl_2d::t_dev d_bbodylo,d_bbodyhi;
-  DAT::t_int_1d d_bodystart;
-  DAT::t_int_1d d_bodybinstart,d_bodybinlist;
 
   int nelem_kk;                 // # of body elements packed
   int nbin_kk;                  // # of body bins packed

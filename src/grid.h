@@ -146,6 +146,7 @@ class Grid : protected Pointers {
   // built lazily on first query, cleared whenever cells move
 
   int cellbinvalid;
+  int cellbingen;             // # of rebuilds, for a device mirror
   int cellnbin[3];
   double cellbinlo[3],cellbininv[3];
   int *cellbinstart;          // CSR offsets per bin
@@ -322,6 +323,8 @@ class Grid : protected Pointers {
   int *collbuf;
   bigint ncollbuf,maxcollbuf;
   int collreset;              // 1 if reset_collision_surfs() was called
+  int nbinpatch,maxbinpatch;  // cells replaced in the bin index, old
+  int *binpatchfrom,*binpatchto;   //   and new index
 
   void journal_cell(int);
   void journal_sinfo(int);
@@ -457,6 +460,7 @@ class Grid : protected Pointers {
   void set_collision_surfs(int, int, surfint *);
   void reset_collision_surfs();
   int cells_in_box(double *, double *, int **);
+  void build_cell_bins();
   void clear_cell_bins();
   void reindex_ghost_surfs(int, int *);
   void clear_surf();

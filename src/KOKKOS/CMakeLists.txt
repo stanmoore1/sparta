@@ -100,8 +100,8 @@ if(PKG_KOKKOS)
 
   if (NOT PKG_FFT)
     list(FILTER SPARTA_PKG_KOKKOS_SRC_FILES EXCLUDE REGEX ".*fft.*kokkos.*")
-    list(FILTER SPARTA_PKG_KOKKOS_SRC_FILES EXCLUDE REGEX ".*pack.*kokkos.*")
-    list(FILTER SPARTA_PKG_KOKKOS_SRC_FILES EXCLUDE REGEX ".*remap.*kokkos.*")
+    list(FILTER SPARTA_PKG_KOKKOS_SRC_FILES EXCLUDE REGEX ".*/pack[^/]*kokkos.*")
+    list(FILTER SPARTA_PKG_KOKKOS_SRC_FILES EXCLUDE REGEX ".*/remap[^/]*kokkos.*")
     list(REMOVE_ITEM style_files kokkos_base_fft.h)
   endif()
 

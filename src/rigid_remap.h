@@ -41,10 +41,10 @@ class RigidRemap : protected Pointers {
   bigint ncut_run;
 
   RigidRemap(class SPARTA *, class FixRigid *);
-  ~RigidRemap();
+  virtual ~RigidRemap();
   void setup();                   // per run, after the bodies are placed
-  void collision_lists();         // add swept body surfs to the cells
-  void reset_collision_lists();
+  virtual void collision_lists(); // add swept body surfs to the cells
+  virtual void reset_collision_lists();
   void refresh();                 // per-cell state, before the bodies move
   int recut();                    // re-cut cells near the bodies
   int rebuild_needed();           // 1 if the pending changes need the
@@ -53,9 +53,10 @@ class RigidRemap : protected Pointers {
   void grid_changed();
   double memory_usage();
 
- private:
+ protected:
   class FixRigid *fix;
   int dim;
+  int nswept;             // # of cells given a collision list this step
 
   // previous position of each body: bbox at the end of the last step,
   //   with which the current bbox bounds the region to re-cut
@@ -83,7 +84,6 @@ class RigidRemap : protected Pointers {
   int nent,maxent;
   surfint *swlist;        // work buf for one cell's merged collision list
   int maxswlist;
-  int nswept;             // # of cells given a collision list this step
 
   // per owned cell: 1 if it is INSIDE because of the static surfs, so
   //   the bodies moving over and away from it never re-type it

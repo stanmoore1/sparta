@@ -2224,6 +2224,7 @@ void Grid::journal_clear()
   ncollrec = ncollbuf = 0;
   collreset = 0;
   nmoved = 0;
+  nbinpatch = 0;
 }
 
 /* ----------------------------------------------------------------------
@@ -2271,6 +2272,17 @@ void Grid::rebin_cell(int src, int dst)
         for (int i = cellbinstart[ibin]; i < cellbinstart[ibin+1]; i++)
           if (cellbinlist[i] == src) cellbinlist[i] = dst;
       }
+
+  if (journalflag) {
+    if (nbinpatch == maxbinpatch) {
+      maxbinpatch += DELTA_MOVED;
+      memory->grow(binpatchfrom,maxbinpatch,"grid:binpatchfrom");
+      memory->grow(binpatchto,maxbinpatch,"grid:binpatchto");
+    }
+    binpatchfrom[nbinpatch] = src;
+    binpatchto[nbinpatch] = dst;
+    nbinpatch++;
+  }
 }
 
 /* ----------------------------------------------------------------------

@@ -54,6 +54,11 @@ FixRigidKokkos::FixRigidKokkos(SPARTA *sparta, int narg, char **arg) :
   nsub_kk = 0;
   nasg_kk = 0;
   nsplit_kk = 0;
+
+  // the re-map helper with its device stages
+
+  delete remap;
+  remap = new RigidRemapKokkos(sparta,this);
   maxdelete_kk = 0;
   d_ndelete_kk = DAT::t_int_scalar("fix_rigid:ndelete");
   h_ndelete_kk = Kokkos::create_mirror_view(d_ndelete_kk);
@@ -817,7 +822,7 @@ void FixRigidKokkos::remove_inside_all(int splitflag)
      append local copies), so the views are grown, not reallocated
 ------------------------------------------------------------------------- */
 
-void FixRigidKokkos::pack_body_device()
+void FixRigidKokkos::pack_body_device(int sweepflag)
 {
   int nelem = bodystart[nbody];
   int nbins = bodynbin[0]*bodynbin[1]*bodynbin[2];
@@ -825,10 +830,32 @@ void FixRigidKokkos::pack_body_device()
   if (nelem > nelem_kk) {
     k_bodypt = tdual_dbl_3d("fix_rigid:bodypt",nelem,3,3);
     k_bodynorm = tdual_dbl_2d("fix_rigid:bodynorm",nelem,3);
+    k_elemlo = tdual_dbl_2d("fix_rigid:elemlo",nelem,3);
+    k_elemhi = tdual_dbl_2d("fix_rigid:elemhi",nelem,3);
+    k_lblist = DAT::tdual_int_1d("fix_rigid:lblist",nelem);
     d_bodypt = k_bodypt.view_device();
     d_bodynorm = k_bodynorm.view_device();
+    d_elemlo = k_elemlo.view_device();
+    d_elemhi = k_elemhi.view_device();
+    d_lblist = k_lblist.view_device();
     nelem_kk = nelem;
   }
+
+  // per-element boxes: the current ones, or the swept ones of this step
+
+  auto h_elemlo = k_elemlo.view_host();
+  auto h_elemhi = k_elemhi.view_host();
+  auto h_lblist = k_lblist.view_host();
+  for (int i = 0; i < nelem; i++) {
+    for (int k = 0; k < 3; k++) {
+      h_elemlo(i,k) = elemlo[i][k];
+      h_elemhi(i,k) = elemhi[i][k];
+    }
+    h_lblist(i) = lblist[i];
+  }
+  k_elemlo.modify_host(); k_elemlo.sync_device();
+  k_elemhi.modify_host(); k_elemhi.sync_device();
+  k_lblist.modify_host(); k_lblist.sync_device();
   if (nbins > nbin_kk || k_bodybinstart.extent(0) < (size_t)(nbins+1)) {
     k_bodybinstart = DAT::tdual_int_1d("fix_rigid:bodybinstart",nbins+1);
     d_bodybinstart = k_bodybinstart.view_device();
@@ -1035,7 +1062,7 @@ int FixRigidKokkos::remove_inside_all_kokkos(int splitflag)
   ParticleKokkos *particle_kk = (ParticleKokkos*) particle;
   GridKokkos *grid_kk = (GridKokkos*) grid;
 
-  pack_body_device();
+  pack_body_device(0);
 
   // the two per-cell fields the test reads come from the device grid,
   //   patched from the change journal; a ghost cell has no ChildInfo

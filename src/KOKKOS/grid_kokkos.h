@@ -59,6 +59,14 @@ class GridKokkos : public Grid {
   // patch the device with the change journal (see Grid::journalflag)
   void apply_changes();
 
+  // device copy of the cell bin index (Grid::cells_in_box), re-copied
+  //   when the host rebuilds it and patched with it otherwise
+
+  DAT::tdual_int_1d k_cellbinstart,k_cellbinlist;
+  DAT::t_int_1d d_cellbinstart,d_cellbinlist;
+  int cellbingen_kk;
+  void sync_cell_bins();
+
   /* ----------------------------------------------------------------------
      compute lo/hi extent of a specific child cell within a parent cell
      plevel = level of parent
