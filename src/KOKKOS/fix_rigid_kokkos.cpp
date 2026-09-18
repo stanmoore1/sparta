@@ -419,15 +419,10 @@ void FixRigidKokkos::operator()(TagFixRigidAssignSplit, const int &m) const
 
 int FixRigidKokkos::assign_split_kokkos()
 {
-  // DISABLED by default, and a measured decision rather than a broken one.
-  //   the kernel is correct (ASAN clean) but is not a win: the CRS graphs it
-  //   reads must be rewrapped first, see below, and that costs more than the
-  //   host pass it replaces -- 8.05 s against 6.34 s over 40 steps, with the
-  //   particle-array copy count unchanged at 36/37, because the round trip
-  //   this pass would have saved is already spent by the host code around it
-  //   set SPARTA_ASSIGN_KK=1 to enable it when finishing that work
+  // set SPARTA_NO_ASSIGN_KK to fall back to the host pass (debugging only:
+  //   the host pass is unreachable from this class, see remove_inside_all)
 
-  if (!getenv("SPARTA_ASSIGN_KK")) return 0;
+  if (getenv("SPARTA_NO_ASSIGN_KK")) return 0;
 
   // the split tests index d_csplits/d_csubs by isplit and d_csurfs by icell,
   //   and those CRS graphs are sized by the split/cell counts as of the last
@@ -524,6 +519,20 @@ int FixRigidKokkos::assign_split_kokkos()
   k_asgpart.modify_host(); k_asgpart.sync_device();
 
   d_particles_kk = particle_kk->k_particles.view_device();
+
+  // the split tests read cells, sinfo and the surf lines/tris on the device.
+  //   FixRigid has just rewritten all of them on the HOST (the body pose, the
+  //   re-cut, split_cell_set), so they must be pushed to the device or the
+  //   kernel reads whatever was there before -- for sinfo that is an
+  //   unwritten allocation, and dereferencing xsplit out of it is what
+  //   produced the intermittent
+  //     cudaDeviceSynchronize() error( cudaErrorInvalidAddressSpace )
+  //   on about half of the 40-step runs
+  // this is the same mask UpdateKokkos::move() syncs before its own kernel
+
+  grid_kk->sync(Device,CELL_MASK|PCELL_MASK|SINFO_MASK|PLEVEL_MASK);
+  surf_kk->sync(Device,ALL_MASK);
+
   d_cells_kk = grid_kk->k_cells.view_device();
   d_sinfo_kk = grid_kk->k_sinfo.view_device();
   d_csurfs_kk = grid_kk->d_csurfs;
@@ -800,23 +809,38 @@ void FixRigidKokkos::operator()(TagFixRigidRemoveInside,
      the particle array to the host and back on every step; running it on
      the device removes two crossings of the largest array in the problem
    return 1 if the deletion was done here, 0 to let the host do it
-   the split-cell reassignment path (splitflag) stays on the host: it
-     needs sorted particle lists and per-cell sub cell structure, and it
-     only runs on a step where the grid was rebuilt anyway
+   the split-cell reassignment runs first, on the device, so the particles
+     never have to come back to the host for it
 ------------------------------------------------------------------------- */
 
 int FixRigidKokkos::remove_inside_all_kokkos(int splitflag)
 {
-  // the split-cell reassignment relabels only the particles listed under a
-  //   split cell, a small subset, but it needs them on the host and sorted.
-  //   do just that part on the host and then run the inside test, which is
-  //   the pass over ALL particles, on the device
+  // the split-cell reassignment re-decides the sub cell of every particle of
+  //   a changed split cell.  it must not be skipped: it changes results (the
+  //   trajectory of the 1000-body deck moves, and moves TOWARD the
+  //   non-KOKKOS reference on 6 of 7 reported fields), so if the device pass
+  //   declines we have to bring the particles over and let FixRigid do it
+  // a body which repeatedly creates and destroys split cells sets splitflag
+  //   on every step (splitchanged/structural), so this is the common case,
+  //   not a corner
+
+  if (splitflag && grid->nsplitlocal && !assign_split_kokkos()) {
+    particles_to_host();
+    if (!particle->sorted) particle->sort();
+    Grid::ChildCell *cells = grid->cells;
+    int nglocal = grid->nlocal;
+    for (int icell = 0; icell < nglocal; icell++)
+      if (cells[icell].nsplit > 1)
+        grid->assign_split_cell_particles(icell);
+    particle->sorted = 0;
+    ((ParticleKokkos*) particle)->modify(Host,PARTICLE_MASK|CUSTOM_MASK);
+    ((ParticleKokkos*) particle)->sorted_kk = 0;
+  }
   // a body which repeatedly creates and destroys split cells sets splitflag
   //   on every step (splitchanged/structural), so declining the device path
   //   here would give up on it entirely for exactly the problems that need
   //   it most
 
-  if (splitflag && grid->nsplitlocal) assign_split_kokkos();
   if (!particle->exist) return 1;
 
   ParticleKokkos *particle_kk = (ParticleKokkos*) particle;
