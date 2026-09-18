@@ -81,6 +81,8 @@ RigidRemap::RigidRemap(SPARTA *sparta, FixRigid *fixrigid) : Pointers(sparta)
   dim = domain->dimension;
 
   memory->create(prevlo,fix->nbody,3,"rigid_remap:prevlo");
+  memory->create(prevxcm,fix->nbody,3,"rigid_remap:prevxcm");
+  memory->create(cominside,fix->nbody,"rigid_remap:cominside");
   memory->create(prevhi,fix->nbody,3,"rigid_remap:prevhi");
 
   typechanged = listschanged = splitchanged = restructured = 0;
@@ -118,6 +120,8 @@ RigidRemap::~RigidRemap()
 {
   memory->destroy(prevlo);
   memory->destroy(prevhi);
+  memory->destroy(prevxcm);
+  memory->destroy(cominside);
 
   for (int m = 0; m < maxpending; m++) {
     memory->destroy(pending[m].map);
@@ -189,7 +193,13 @@ void RigidRemap::setup()
     for (int j = 0; j < 3; j++) {
       prevlo[ibody][j] = fix->bbodylo[ibody][j];
       prevhi[ibody][j] = fix->bbodyhi[ibody][j];
+      prevxcm[ibody][j] = fix->xcm[ibody][j];
     }
+
+  // whether each body's COM is interior to it, a property of its shape
+
+  for (int ibody = 0; ibody < nbody; ibody++)
+    cominside[ibody] = fix->inside_body(ibody,fix->xcm[ibody]);
 }
 
 /* ----------------------------------------------------------------------
@@ -467,12 +477,34 @@ int RigidRemap::recut()
 
     // owned cells only: a ghost cell's cut list is covered by the
     //   collision lists, and its pieces are never consulted (subroute)
+    // a cell lying wholly closer to the COM than any element, at both
+    //   the start and the end of the move, held no element of this body
+    //   at any time and kept the COM's parity: nothing to do for it
+    //   (the COM moves on a line and the farthest corner's distance to
+    //   a point on a line is convex, so the cell stays inside the
+    //   element-free ball throughout)
+
+    double rmin2 = fix->rminbody[ibody] * fix->rminbody[ibody];
+    int interior = cominside[ibody];
 
     for (int ic = 0; ic < ncells; ic++) {
       icell = cand[ic];
       if (icell >= nglocal) continue;
       if (cells[icell].nsplit <= 0) continue;
       if (!box_overlap(cells[icell].lo,cells[icell].hi,rlo,rhi)) continue;
+      if (interior) {
+        double dnew = 0.0;
+        double dold = 0.0;
+        for (i = 0; i < dim; i++) {
+          double c = fix->xcm[ibody][i];
+          double dk = MAX(fabs(c-cells[icell].lo[i]),fabs(c-cells[icell].hi[i]));
+          dnew += dk*dk;
+          c = prevxcm[ibody][i];
+          dk = MAX(fabs(c-cells[icell].lo[i]),fabs(c-cells[icell].hi[i]));
+          dold += dk*dk;
+        }
+        if (dnew < rmin2 && dold < rmin2) continue;
+      }
       if (nrcand == maxrcand) {
         maxrcand += DELTA;
         memory->grow(rcand,maxrcand,"rigid_remap:rcand");
@@ -487,6 +519,12 @@ int RigidRemap::recut()
     std::sort(rcand,rcand+nrcand);
     nrcand = std::unique(rcand,rcand+nrcand) - rcand;
   }
+  ncand_run += nrcand;
+
+  double tlists = 0.0;
+  double tcut = 0.0;
+  double tstart = 0.0;
+  int timeflag = fix->timeflag;
 
   // pass 1: re-cut cells in R whose surf overlap changed
   //   or which are overlapped by a moved body surf (from any body)
@@ -498,6 +536,7 @@ int RigidRemap::recut()
     icell = rcand[ic];
 
     int nsplitold = cells[icell].nsplit;
+    if (timeflag) tstart = MPI_Wtime();
 
     ncand = 0;
     surfint *cur = cells[icell].csurfs;
@@ -552,8 +591,12 @@ int RigidRemap::recut()
       double rmin = fix->rminbody[ibody] - fix->bboxeps[ibody];
       if (rmin > 0.0 && dhi2 < rmin*rmin) continue;
 
+      // only the elements whose own box reaches the cell are offered:
+      //   the exact test rejects the others one at a time otherwise
+
       for (i = bodystart[ibody]; i < bodystart[ibody+1]; i++)
-        reclist[ncand++] = lblist[i];
+        if (box_overlap(fix->elemlo[i],fix->elemhi[i],clo2,chi2))
+          reclist[ncand++] = lblist[i];
     }
 
     // new list of surfs overlapping this cell
@@ -578,10 +621,21 @@ int RigidRemap::recut()
       }
 
     if (!moving && n == cells[icell].nsurf) {
-      if (n == 0) continue;
-      if (memcmp(newlist,cells[icell].csurfs,n*sizeof(surfint)) == 0)
+      if (n == 0) {
+        if (timeflag) tlists += MPI_Wtime() - tstart;
         continue;
+      }
+      if (memcmp(newlist,cells[icell].csurfs,n*sizeof(surfint)) == 0) {
+        if (timeflag) tlists += MPI_Wtime() - tstart;
+        continue;
+      }
     }
+    if (timeflag) {
+      double now = MPI_Wtime();
+      tlists += now - tstart;
+      tstart = now;
+    }
+    nlist_run++;
 
     // install the new cut list, which any sub cells share
 
@@ -606,12 +660,15 @@ int RigidRemap::recut()
       if (fix->inside_any_body(ctr)) grid->set_cell_type(icell,INSIDE);
       else grid->set_cell_type(icell,OUTSIDE);
       typechanged = 1;
+      if (timeflag) tcut += MPI_Wtime() - tstart;
       continue;
     }
 
     // re-cut the cell
 
+    ncut_run++;
     nsplitone = grid->cut_cell(icell,vols,newmap,corner,xsub,xsplit);
+    if (timeflag) tcut += MPI_Wtime() - tstart;
 
     // the cut leaves the corner marks UNKNOWN when every surf only
     //   touches the cell faces, so the cell is one flow piece lying
@@ -665,11 +722,22 @@ int RigidRemap::recut()
     typechanged = 1;
   }
 
+  if (timeflag) {
+    fix->add_time(FixRigid::T_RECUT_LISTS,tlists);
+    fix->add_time(FixRigid::T_RECUT_CUT,tcut);
+    tstart = MPI_Wtime();
+  }
+
   // pass 2: re-type the uncut owned cells in R which a body interior
   //   entered or left, by the parity test of their centers: cells swept
   //   over entirely within one step never overlap a body surf at the
   //   start- or end-of-step position, so pass 1 never sees them
   // a cell INSIDE because of the static surfs is left alone
+  // the ray cast is only needed for a center in the shell of some body
+  //   between its inner and outer radius about the COM: closer than the
+  //   inner radius the center shares the parity of the COM, since no
+  //   element lies between them, and beyond the outer radius of every
+  //   body it is outside them all
 
   for (int ic = 0; ic < nrcand; ic++) {
     icell = rcand[ic];
@@ -685,12 +753,39 @@ int RigidRemap::recut()
     else ctr[2] = 0.0;
 
     int type = OUTSIDE;
-    if (fix->inside_any_body(ctr)) type = INSIDE;
+    int shell = 0;
+    int *blist;
+    int nb = fix->body_box(clo,chi,&blist);
+    for (int m = 0; m < nb; m++) {
+      ibody = blist[m];
+      double d2 = 0.0;
+      for (int k = 0; k < dim; k++) {
+        double dk = ctr[k] - fix->xcm[ibody][k];
+        d2 += dk*dk;
+      }
+      double rmin = fix->rminbody[ibody];
+      if (d2 < rmin*rmin) {
+        if (cominside[ibody]) {
+          type = INSIDE;
+          shell = 0;
+          break;
+        }
+        continue;
+      }
+      double rmax = fix->rmaxbody[ibody] + fix->bboxeps[ibody];
+      if (d2 <= rmax*rmax) shell = 1;
+    }
+    if (shell) {
+      if (fix->inside_any_body(ctr)) type = INSIDE;
+      else type = OUTSIDE;
+    }
     if (cinfo[icell].type == type) continue;
 
     grid->set_cell_type(icell,type);
     typechanged = 1;
   }
+
+  if (timeflag) fix->add_time(FixRigid::T_RECUT_TYPE,MPI_Wtime() - tstart);
 
   // the bodies' current bboxes bound the region on the next step
 
@@ -698,6 +793,7 @@ int RigidRemap::recut()
     for (i = 0; i < 3; i++) {
       prevlo[ibody][i] = bbodylo[ibody][i];
       prevhi[ibody][i] = bbodyhi[ibody][i];
+      prevxcm[ibody][i] = fix->xcm[ibody][i];
     }
 
   return FALLBACK_NONE;
@@ -922,6 +1018,15 @@ void RigidRemap::grid_changed()
   nswept = 0;
   listschanged = 1;
   staticvalid = 0;
+
+  // the grid now matches the bodies where they are
+
+  for (int ibody = 0; ibody < fix->nbody; ibody++)
+    for (int j = 0; j < 3; j++) {
+      prevlo[ibody][j] = fix->bbodylo[ibody][j];
+      prevhi[ibody][j] = fix->bbodyhi[ibody][j];
+      prevxcm[ibody][j] = fix->xcm[ibody][j];
+    }
 }
 
 /* ---------------------------------------------------------------------- */

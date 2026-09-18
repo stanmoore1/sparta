@@ -271,14 +271,19 @@ class FixRigid : public Fix {
   bigint nstep_fallback;  // steps which fell back to a full re-map
 
   // per-stage wall time this run, accumulated when timing is on
+  // the helper classes time their own sections with add_time()
 
+ public:
   enum{T_INTEGRATE,T_COPIES,T_COLLIDELIST,T_TALLY,T_FORCES,T_SETXV,T_CONTACT,
-       T_RECUT,T_APPLY,T_REMOVE,T_NSTAGE};
+       T_RECUT,T_RECUT_LISTS,T_RECUT_CUT,T_RECUT_TYPE,T_APPLY,T_REMOVE,
+       T_NSTAGE};
   int timeflag;
   double stagetime[T_NSTAGE];
   double stagestart;
   void stage_begin() { if (timeflag) stagestart = MPI_Wtime(); }
   void stage_end(int i) { if (timeflag) stagetime[i] += MPI_Wtime() - stagestart; }
+  void add_time(int i, double t) { stagetime[i] += t; }
+ protected:
 
   bigint ndeleted;        // per-proc count of deleted particles
   bigint ndeleted_all;    // cached global sum for compute_scalar()

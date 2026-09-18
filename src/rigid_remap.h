@@ -36,6 +36,9 @@ class RigidRemap : protected Pointers {
                           //   this step, applied by apply_pending()
   int restructured;       // 1 if apply_pending() moved cells in place
                           //   since the flag was cleared (fix rigid/kk)
+  bigint ncand_run;       // per-run counts: candidate cells, cells whose
+  bigint nlist_run;       //   cut list changed, cells cut
+  bigint ncut_run;
 
   RigidRemap(class SPARTA *, class FixRigid *);
   ~RigidRemap();
@@ -58,6 +61,13 @@ class RigidRemap : protected Pointers {
   //   with which the current bbox bounds the region to re-cut
 
   double **prevlo,**prevhi;
+  double **prevxcm;
+
+  // per body, 1 if its COM is interior to it: a point closer to the COM
+  //   than any element then shares its parity without a ray cast; a
+  //   property of the shape, set once per run
+
+  int *cominside;
 
   // per-cell accumulation of (cell, swept element) entries across
   //   bodies, so the collision list pass visits only candidate cells

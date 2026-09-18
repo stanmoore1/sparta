@@ -663,6 +663,7 @@ void FixRigid::init()
   nstep_run = nstep_inplace = nstep_rebuild = nstep_fallback = 0;
   timeflag = (getenv("SPARTA_RIGID_TIMING") != NULL);
   for (int i = 0; i < T_NSTAGE; i++) stagetime[i] = 0.0;
+  remap->ncand_run = remap->nlist_run = remap->ncut_run = 0;
 
   // fix rigid must be defined before fixes which change the grid,
   // so its end_of_step() restores overlaid grid cells before they run
@@ -1333,6 +1334,7 @@ void FixRigid::post_run()
   const char *names[T_NSTAGE] =
     {"integrate+bbox","surf copies","collision lists","tally",
      "sum forces","set_xv+bounds","contacts+kick","recut",
+     "  recut: surf lists","  recut: cuts","  recut: retyping",
      "apply split changes","remove inside"};
   double tmax[T_NSTAGE];
   MPI_Allreduce(stagetime,tmax,T_NSTAGE,MPI_DOUBLE,MPI_MAX,world);
@@ -1344,6 +1346,22 @@ void FixRigid::post_run()
       if (screen) fprintf(screen,"%s",str);
       if (logfile) fprintf(logfile,"%s",str);
     }
+  }
+
+  // per-run counts of the re-cut, max over procs
+
+  bigint cmine[3],call[3];
+  cmine[0] = remap->ncand_run;
+  cmine[1] = remap->nlist_run;
+  cmine[2] = remap->ncut_run;
+  MPI_Allreduce(cmine,call,3,MPI_SPARTA_BIGINT,MPI_MAX,world);
+  if (comm->me == 0) {
+    char str[256];
+    sprintf(str,"Fix rigid re-cut: " BIGINT_FORMAT " candidate cells, "
+            BIGINT_FORMAT " lists changed, " BIGINT_FORMAT
+            " cells cut (max over procs)\n",call[0],call[1],call[2]);
+    if (screen) fprintf(screen,"%s",str);
+    if (logfile) fprintf(logfile,"%s",str);
   }
 }
 
@@ -3630,7 +3648,7 @@ void FixRigid::remove_inside_all(int splitflag)
 void FixRigid::sort_for_split_rebuild()
 {
   particles_to_host();
-  particle->sort();
+  if (!particle->sorted) particle->sort();
 }
 
 /* ---------------------------------------------------------------------- */
