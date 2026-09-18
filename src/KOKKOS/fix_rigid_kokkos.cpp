@@ -14,6 +14,7 @@
 
 #include "string.h"
 #include "fix_rigid_kokkos.h"
+#include "rigid_remap.h"
 #include "update.h"
 #include "grid_kokkos.h"
 #include "particle_kokkos.h"
@@ -123,8 +124,8 @@ void FixRigidKokkos::host_end()
   particle_kk->sorted_kk = 0;
 
   if (grid->changed) grid_kk->resync_after_host_change();
-  else if (listschanged) grid_kk->wrap_kokkos_graphs();
-  listschanged = 0;
+  else if (remap->listschanged) grid_kk->wrap_kokkos_graphs();
+  remap->listschanged = 0;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -162,8 +163,8 @@ void FixRigidKokkos::start_of_step()
   }
 
   grid_kk->modify(Host,CELL_MASK);
-  if (listschanged) grid_kk->wrap_kokkos_graphs();
-  listschanged = 0;
+  if (remap->listschanged) grid_kk->wrap_kokkos_graphs();
+  remap->listschanged = 0;
 }
 
 /* ----------------------------------------------------------------------

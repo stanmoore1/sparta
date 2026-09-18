@@ -92,13 +92,6 @@ class FixRigid : public Fix {
   void surfs_changed(int, int = 0);  // notify per-surf models of the above
                                      //   2nd arg = 0 in run, 1 init, 2 setup
 
-  int typechanged;        // 1 if incremental_recut changed a cell type
-  int listschanged;       // 1 if this fix changed a per-cell surf list
-                          //   on the host since the flag was cleared
-                          //   (read/cleared by fix rigid/kk)
-  int splitchanged;       // 1 if a split cell was re-cut in place this
-                          //   step, so its particles must be
-                          //   redistributed over its new pieces
   double compute_scalar();
   double compute_vector(int);
   double compute_array(int,int);
@@ -141,17 +134,38 @@ class FixRigid : public Fix {
   double **fcm_infile,**torque_infile;
   int kokkosable;         // 1 if this is the KOKKOS variant (rigid/kk)
 
+ public:
+
+  // the tables below are read by the RigidRemap and RigidContact helpers
+
   int nsurf;     // # of surfs which comprise surfaces of all rigid bodies
+  int *lblist;            // local surf index of each element
+  double **elemlo;        // per-element bounding boxes: swept boxes for
+  double **elemhi;        //   this step, or current boxes after commit
+  double ***bodypt;       // bodypt[i][j] = corner pt j of element i
+  double **bodynorm;      // outward normal of element i
+  double **bbodylo;       // bounding box around each body
+  double **bbodyhi;
+  double *bboxeps;        // inflation applied to bbodylo/bbodyhi
+  double *rmaxbody;       // max distance of any body corner pt from COM
+  double *rminbody;       // min distance of any point of any body element
+                          //   from the COM.  a cell which lies wholly
+                          //   inside this radius cannot hold a body surf
+
+  int body_box(double *, double *, int **);  // bodies overlapping a box
+  void body_bbox(int, int);     // bbox of body, current or swept over step
+  int inside_body(int, double *); // 1 if point is inside rigid body, else 0
+  int inside_any_body(double *); // 1 if inside any rigid body
+
+ protected:
   int *slist;    // list of local surf indices for body surfs
                  //   non-distributed surfs only, else NULL
 
-  // replicated body geometry, the authoritative source for all body
-  //   computations (bbox, inside tests, watertight, contacts)
-  // for distributed surfs it is gathered from the owned copies at
-  //   setup and regenerated from the body pose each step
+  // replicated body geometry (bodypt/bodynorm above), the authoritative
+  //   source for all body computations (bbox, inside tests, watertight,
+  //   contacts); for distributed surfs it is gathered from the owned
+  //   copies at setup and regenerated from the body pose each step
 
-  double ***bodypt;       // bodypt[i][j] = corner pt j of element i
-  double **bodynorm;      // outward normal of element i
   surfint *sids;          // global surf ID of each element
   int *bodymask;          // per-element group mask
   int *bodytype;          // per-element surf type
@@ -166,7 +180,6 @@ class FixRigid : public Fix {
   //   every element in the local (non-ghost) range; if the surf comm
   //   left duplicates, every copy is tracked so all are kept current
 
-  int *lblist;            // local surf index of each element
   int *bodyneed;          // 1 if this proc needs local copies of a body
   double proclo[3],prochi[3];  // bbox of this proc's owned + ghost cells
   int copiesappended;     // 1 if start_of_step() appended local copies
@@ -177,10 +190,6 @@ class FixRigid : public Fix {
   int *olist_own;         // owned-array index of each
   int *olist_elem;        // element index of each
 
-  double *rmaxbody;       // max distance of any body corner pt from COM
-  double *rminbody;       // min distance of any point of any body element
-                          //   from the COM.  a cell which lies wholly
-                          //   inside this radius cannot hold a body surf
   double mincellsize;     // smallest edge length of any grid cell
   int warnrotate;         // 1 after warning about rotation rate
   int warntranslate;      // 1 after warning about translation rate
@@ -204,21 +213,11 @@ class FixRigid : public Fix {
 
   int pushflag;           // 1 if push-off forces are enabled
   int pushboundflag;      // 1 to also push off non-periodic boundaries
-  int pushstyle;          // LINEAR or HERTZ force law
+  int pushstyle;          // force law, see RigidContact
   double kpush;           // spring constant for push-off force
   double pushcutoff;      // distance below which push-off is applied
   double gammapush;       // dashpot damping coefficient, 0 = elastic
-
-  // bins over static surfs for push-off candidate pruning
-  // built once per run in setup(), static surfs never move during a run
-
-  int pushnbin[3];        // # of bins in each dim
-  double pushbinlo[3];    // bin grid origin
-  double pushbininv[3];   // inverse bin edge lengths
-  int *pushbinstart;      // CSR offsets into pushbinlist per bin
-  int *pushbinlist;       // static surf indices, binned by surf bbox
-  int *pushstamp;         // per-surf visit stamp to dedup multi-bin surfs
-  int pushstampcur;
+  class RigidContact *contact;   // the contact model, NULL if no push
 
   // bins over bodies by COM, rebuilt each step after the bodies move,
   //   for finding the bodies near another body, a grid cell, or a point
@@ -242,94 +241,7 @@ class FixRigid : public Fix {
 
   int remapmode;          // CUTCELL or INCREMENTAL
   int rotstyle;           // EULER or RICHARDSON quaternion update
-
-  // swept collision assignment: each step every body's surfs are added
-  //   to the collision lists (csurfs) of all cells they sweep through,
-  //   so particles anywhere in a body's swept path are tested against
-  //   the moving surfs and reflected rather than overtaken and deleted
-  // this augments collision lists only; cut-cell volumes are unaffected
-
-  double **elemlo;        // per-element bounding boxes: swept boxes for
-  double **elemhi;        //   this step, or current boxes after commit
-
-  int nmodified;          // # of cells augmented this step
-  int maxmodified;        // allocated size of restore lists
-  int *modified;          // indices of cells whose csurfs were augmented
-  int *nsurf_saved;       // saved nsurf of each modified cell
-  surfint **csurfs_saved; // saved csurfs ptr of each modified cell
-  MyPage<surfint> *cpage; // storage for merged csurfs lists
-
-  // per-cell accumulation of (cell, swept element) entries across
-  //   bodies, so the cell pass visits only candidate cells
-
-  int *swstamp;           // per-cell visit stamp
-  int *swhead;            // head of per-cell entry chain, per stamp
-  int maxswcell;          // allocated length of swstamp/swhead
-  int swcur;              // current stamp
-  int *swcells;           // cells touched this step
-  int nswcell,maxswcells;
-  int *entnext;           // entry chains: next index and element's
-  surfint *entelem;       //   local surf index
-  int nent,maxent;
-
-  // incremental cutcell remap data
-
-  double **pbodylo;       // bbox around each body at end of previous step
-  double **pbodyhi;
-  int pbodyflag;          // 1 if pbodylo/pbodyhi are set
-
-  int noldinside;         // cells interior to any body before it moved
-  int maxoldinside;
-  int *oldinside;
-
-  // lists this fix allocated and installed in grid cells, keyed by
-  //   cell ID rather than cell index, so that removing a sub cell and
-  //   compacting the cell list cannot invalidate a key
-
-  std::map<cellint,surfint *> registry;   // cells whose csurfs lists are
-                                          //   allocated by this fix
-  std::map<cellint,int *> csplitreg;      // split cells whose sinfo csplits
-  std::map<cellint,int *> csubreg;        //   and csubs arrays are allocated
-                                          //   by this fix
-
-  // cells whose number of disconnected flow pieces changes this step
-  // they are applied together by split_rebuild(), because adding or
-  //   removing a sub cell changes this proc's cell count and the sub
-  //   cell indices other procs migrate particles into, neither of which
-  //   can be done while ghost cells are stored
-
-  struct PendingSplit {
-    int icell;            // owned cell whose piece count changes
-    int nsplitnew;        // its new # of pieces, 1 = no longer split
-    int nsurf;            // # of surfs in the cell, = length of map
-    int *map;             // the new piece map, copied out of the work
-    int maxmap;           //   buffer the next cell's cut overwrites
-    int *csplits;         // fix-owned piece map, installed when applied
-    int *csubs;           // fix-owned sub cell list, filled in then
-    int xsub;             // reference piece and point for split2d/3d
-    double xsplit[3];
-    double *vols;         // flow volume of each new piece
-    int maxvols;
-  };
-
-  PendingSplit *pending;
-  int npending,maxpending;
-  int insplitrebuild;     // 1 while split_rebuild() notifies the others
-
-  int nrcand;             // work list of cells overlapping the
-  int maxrcand;           //   incremental re-cut region this step
-  int *rcand;
-
-  surfint *newlist;       // work bufs for re-cutting one cell
-  int *newmap;
-  surfint *reclist;       // candidate surfs for re-cutting one cell
-  int maxreclist;
-  int maxnewlist;         // allocated length of newlist/newmap
-  class Cut2d *cut2d;
-  class Cut3d *cut3d;
-  double **bbodylo;       // bounding box around each body
-  double **bbodyhi;
-  double *bboxeps;        // inflation applied to bbodylo/bbodyhi
+  class RigidRemap *remap;
 
   bigint ndeleted;        // per-proc count of deleted particles
   bigint ndeleted_all;    // cached global sum for compute_scalar()
@@ -345,7 +257,6 @@ class FixRigid : public Fix {
   void setup_body_displace(int); // body-frame pts etc, once axes are set
   void body_properties(int, double);  // mass/com/moi from the geometry
   void body_properties_axi(int, double); // the same for a body of revolution
-  double full_cell_volume(double *, double *);   // uncut volume of a cell
   void axi_project(double *, double *);   // azimuthal average of a
                                           //   force and torque on the body
   void check_watertight(int);
@@ -353,39 +264,12 @@ class FixRigid : public Fix {
   void final_kick(int);         // second half kick of velocity Verlet
   void check_enclosed(int);     // reject a body which encloses no area/volume
 
-  void push_off(int);           // spring forces on one body, with
-                                //   equal-opposite reactions on others
-  void push_contact(int, double *, double *, double *, double *, int);
-                                // corner contacts vs one source elem
-  void push_bins();             // bin static surfs for candidate pruning
   void body_bins();             // bin bodies by COM
-  int body_box(double *, double *, int **);  // bodies overlapping a box
   void gather_body();           // build replicated body element table
   void check_body_attributes(); // error if body surf attributes changed
   int same_coords(double *, double *, double *, int);  // coords = elem
   void update_surf_copies();    // write bodypt/bodynorm into Surf storage
   void grid_rebuild();          // full re-map of all surfs to grid cells
-  void record_oldinside();      // cells interior to bodies, pre-move
-  int incremental_recut();      // re-cut cells whose overlap changed
-  void split_update(int, int, int *, int, double *, double *, int);
-  void split_ghost_drop(int);
-  void split_pending(int, int, int, int *, int, double *, double *);
-  void split_rebuild();         // apply the pending split changes
-  void registry_replace(cellint, surfint *);
-  void registry_remove(cellint);
-  void free_registry();
-  void copy_registry_to_grid(); // move registry lists into grid pages
-  int *csplits_alloc(cellint, int);  // fix-owned sinfo csplits/csubs arrays
-  int *csubs_alloc(cellint, int);
-  void split_registry_remove(cellint);
-  void free_split_registry();
-  void copy_split_registry_to_grid();
-  void swept_assign_all();      // add all bodies' surfs to swept cells
-  void swept_restore();         // undo swept_assign_all
-  void body_bbox(int, int);     // bbox of body, current or swept over step
-  int cell_cut(int);            // 1 if cell is cut by a non-transparent surf
-  int inside_body(int, double *); // 1 if point is inside rigid body, else 0
-  int inside_any_body(double *); // 1 if inside any rigid body
   bigint remove_inside_particles(int);  // all bodies, used at setup
   virtual void remove_inside_all(int);  // fused pass over all bodies, per step
                                         //   virtual so fix rigid/kk can run

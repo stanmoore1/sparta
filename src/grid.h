@@ -134,6 +134,12 @@ class Grid : protected Pointers {
                               // owned + ghost split info
   MyPage<int> *csubs;         // lists of sub cell indices for
                               // owned + ghost split info
+  MyPage<surfint> *ccollpage; // per-step collision lists, see ChildCell
+  int ccollmax;               // longest list ccollpage can hold
+  int *collcells;             // cells with a collision list set this step
+  int ncollcells,maxcollcells;
+  bigint surflist_churn;      // bytes of cut lists and piece maps replaced
+                              //   since the last compact_surf_lists()
 
   // owned or ghost child cell
   // includes unsplit cells, split cells, sub cells in any order
@@ -172,6 +178,11 @@ class Grid : protected Pointers {
                               // sometimes global surf IDs are stored
                               // for sub cells, lo/hi/nsurf/csurfs
                               //   are same as in split cell containing them
+    int ncoll;                // # of surfs the mover tests particles in
+    surfint *ccoll;           //   this cell against, and their indices
+                              // ccoll = NULL: the cut list nsurf/csurfs
+                              // else a list set for one step by a fix
+                              //   which moves surfs, see set_collision_surfs()
 
     int nsplit;               // 1, unsplit cell
                               // N > 1, split cell with N sub cells
@@ -345,6 +356,17 @@ class Grid : protected Pointers {
   void surf2grid(int, int outflag=1);
   void surf2grid_implicit(int, int outflag=1);
   void surf2grid_one(int, int, int, int, class Cut3d *, class Cut2d *);
+  double cell_volume(double *, double *);
+  int surfs_in_cell(int, int, surfint *, surfint *, int);
+  int cut_cell(int, double *&, int *, int *, int &, double *);
+  void set_cell_surfs(int, int, surfint *);
+  void set_cell_type(int, int);
+  void set_cell_overlap(int, double, int *);
+  void set_split_info(int, int *, int, double *, double *);
+  void compact_surf_lists();
+  void collision_page(int);
+  void set_collision_surfs(int, int, surfint *);
+  void reset_collision_surfs();
   void clear_surf();
   void clear_surf_implicit();
   void clear_surf_restart();

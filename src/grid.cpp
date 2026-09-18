@@ -121,6 +121,11 @@ Grid::Grid(SPARTA *sparta) : Pointers(sparta)
   csurfs = NULL; csplits = NULL; csubs = NULL;
   allocate_surf_arrays();
 
+  ccollpage = NULL;
+  ccollmax = 0;
+  collcells = NULL;
+  ncollcells = maxcollcells = 0;
+
   neighshift[XLO] = 0;
   neighshift[XHI] = 3;
   neighshift[YLO] = 6;
@@ -190,6 +195,8 @@ Grid::~Grid()
   delete csurfs;
   delete csplits;
   delete csubs;
+  delete ccollpage;
+  memory->destroy(collcells);
   delete hash;
 
   for (int i = 0; i < ncustom; i++) delete [] ename[i];
@@ -299,6 +306,8 @@ void Grid::add_child_cell(cellint id, int level, double *lo, double *hi)
   c->hi[2] = hi[2];
   c->nsurf = 0;
   c->csurfs = NULL;
+  c->ncoll = 0;
+  c->ccoll = NULL;
   c->nsplit = 1;
   c->isplit = -1;
 
@@ -357,6 +366,7 @@ void Grid::add_sub_cell(int icell, int ownflag)
   // for owned cells also make copy of custom attribute data if it exists
 
   memcpy(&cells[inew],&cells[icell],sizeof(ChildCell));
+  cells[inew].ccoll = NULL;
   if (ownflag) {
     memcpy(&cinfo[inew],&cinfo[icell],sizeof(ChildInfo));
     if (ncustom) copy_custom(icell,inew);

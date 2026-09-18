@@ -2392,6 +2392,295 @@ void Grid::allocate_surf_arrays()
   csurfs = new MyPage<surfint>(maxsurfpercell,MAX(100*maxsurfpercell,1024));
   csplits = new MyPage<int>(maxsurfpercell,MAX(100*maxsurfpercell,1024));
   csubs = new MyPage<int>(maxsplitpercell,MAX(100*maxsplitpercell,128));
+
+  surflist_churn = 0;
+}
+
+/* ----------------------------------------------------------------------
+   flow volume of a cell no surf cuts, from its corner points
+------------------------------------------------------------------------- */
+
+double Grid::cell_volume(double *lo, double *hi)
+{
+  if (domain->dimension == 3)
+    return (hi[0]-lo[0]) * (hi[1]-lo[1]) * (hi[2]-lo[2]);
+  if (domain->axisymmetric)
+    return MY_PI * (hi[1]*hi[1]-lo[1]*lo[1]) * (hi[0]-lo[0]);
+  return (hi[0]-lo[0]) * (hi[1]-lo[1]);
+}
+
+/* ----------------------------------------------------------------------
+   operations a fix which moves surfs uses to re-map them to grid cells
+     one cell at a time, in place of the full surf2grid() pipeline
+   every list they install lives in the Grid pages, like the lists the
+     pipeline installs, so the cells own their lists and nothing outside
+     Grid ever has to free one
+   surfs_in_cell() and cut_cell() run the same cut routines the pipeline
+     runs, on the cell's own extent and cut list
+------------------------------------------------------------------------- */
+
+/* ----------------------------------------------------------------------
+   which of the ncand surfs in cand overlap cell icell
+   their local indices are returned in list, at most max of them
+   returns the full count, which may exceed max: the caller decides
+------------------------------------------------------------------------- */
+
+int Grid::surfs_in_cell(int icell, int ncand, surfint *cand,
+                        surfint *list, int max)
+{
+  ChildCell *c = &cells[icell];
+  if (domain->dimension == 3)
+    return cut3d->surf2grid_list(c->id,c->lo,c->hi,ncand,cand,list,max);
+  return cut2d->surf2grid_list(c->id,c->lo,c->hi,ncand,cand,list,max);
+}
+
+/* ----------------------------------------------------------------------
+   cut cell icell by its current cut list, changing nothing in the cell
+   returns the number of flow pieces the surfs divide the cell into
+   vols = flow volume of each piece, a buffer the cut routine owns which
+     is valid until its next call
+   map = piece each surf of the cut list belongs to, -1 if none
+   corner = INSIDE/OUTSIDE/UNKNOWN mark of each cell corner point
+   xsub,xsplit = reference piece and a point inside it, the start of the
+     ray split2d/3d cast to assign a particle to a piece
+------------------------------------------------------------------------- */
+
+int Grid::cut_cell(int icell, double *&vols, int *map, int *corner,
+                   int &xsub, double *xsplit)
+{
+  ChildCell *c = &cells[icell];
+  if (domain->dimension == 3)
+    return cut3d->split(c->id,c->lo,c->hi,c->nsurf,c->csurfs,
+                        vols,map,corner,xsub,xsplit);
+  return cut2d->split(c->id,c->lo,c->hi,c->nsurf,c->csurfs,
+                      vols,map,corner,xsub,xsplit);
+}
+
+/* ----------------------------------------------------------------------
+   replace the cut list of cell icell by the n surfs in list
+   the sub cells of a split cell share its list, so they follow
+   the previous list stays in its page: a page never frees a single
+     list, compact_surf_lists() reclaims the space once enough has piled up
+   the caller sets the cell's type, volume and split info afterwards
+------------------------------------------------------------------------- */
+
+void Grid::set_cell_surfs(int icell, int n, surfint *list)
+{
+  surfint *ptr = NULL;
+
+  if (n) {
+    ptr = csurfs->get(n);
+    if (!ptr) error->one(FLERR,"Failed to allocate grid cell surf list");
+    memcpy(ptr,list,n*sizeof(surfint));
+    surflist_churn += n*sizeof(surfint);
+  }
+
+  cells[icell].nsurf = n;
+  cells[icell].csurfs = ptr;
+
+  if (cells[icell].nsplit > 1) {
+    int *mycsubs = sinfo[cells[icell].isplit].csubs;
+    for (int i = 0; i < cells[icell].nsplit; i++) {
+      cells[mycsubs[i]].nsurf = n;
+      cells[mycsubs[i]].csurfs = ptr;
+    }
+  }
+}
+
+/* ----------------------------------------------------------------------
+   type an owned cell no surf cuts as INSIDE or OUTSIDE
+   its corner marks follow its type, its flow volume is the full cell
+     volume, or zero if INSIDE, as set_inout() assigns them
+------------------------------------------------------------------------- */
+
+void Grid::set_cell_type(int icell, int type)
+{
+  int ncorner = 4;
+  if (domain->dimension == 3) ncorner = 8;
+
+  cinfo[icell].type = type;
+  for (int i = 0; i < ncorner; i++) cinfo[icell].corner[i] = type;
+  if (type == INSIDE) cinfo[icell].volume = 0.0;
+  else cinfo[icell].volume = cell_volume(cells[icell].lo,cells[icell].hi);
+}
+
+/* ----------------------------------------------------------------------
+   type an owned cell a surf cuts as OVERLAP, with the flow volume and
+     corner marks its cut produced
+   a split cell's own volume is the full cell volume, as the pipeline
+     leaves it; the caller passes that, its pieces get theirs from
+     set_split_info()
+------------------------------------------------------------------------- */
+
+void Grid::set_cell_overlap(int icell, double volume, int *corner)
+{
+  int ncorner = 4;
+  if (domain->dimension == 3) ncorner = 8;
+
+  cinfo[icell].type = OVERLAP;
+  for (int i = 0; i < ncorner; i++) cinfo[icell].corner[i] = corner[i];
+  cinfo[icell].volume = volume;
+}
+
+/* ----------------------------------------------------------------------
+   re-split cell icell in place, keeping its sub cells: a new piece map
+     for its current cut list, a new reference piece and point, and the
+     flow volume of each piece
+   map has one entry per surf of the cut list, so it is replaced with it
+   a ghost split cell has no ChildInfo, so its piece volumes are skipped;
+     it is kept current so this proc can route a particle crossing into
+     it to the right piece, the owner translates the piece to its own
+     sub cell index
+------------------------------------------------------------------------- */
+
+void Grid::set_split_info(int icell, int *map, int xsub, double *xsplit,
+                          double *vols)
+{
+  int isplit = cells[icell].isplit;
+  int n = cells[icell].nsurf;
+
+  int *ptr = csplits->get(n);
+  if (!ptr) error->one(FLERR,"Failed to allocate grid split cell map");
+  memcpy(ptr,map,n*sizeof(int));
+  surflist_churn += n*sizeof(int);
+
+  SplitInfo *s = &sinfo[isplit];
+  s->csplits = ptr;
+  s->xsub = xsub;
+  s->xsplit[0] = xsplit[0];
+  s->xsplit[1] = xsplit[1];
+  if (domain->dimension == 3) s->xsplit[2] = xsplit[2];
+  else s->xsplit[2] = 0.0;
+
+  if (icell >= nlocal) return;
+
+  int *mycsubs = s->csubs;
+  for (int i = 0; i < cells[icell].nsplit; i++)
+    cinfo[mycsubs[i]].volume = vols[i];
+}
+
+/* ----------------------------------------------------------------------
+   rebuild the pages of cut lists, piece maps and sub cell lists from the
+     lists the cells currently hold, so the space of every list which
+     set_cell_surfs() or set_split_info() replaced is reclaimed
+   a fix which re-cuts cells every step replaces lists every step, and a
+     page never frees a single list, so without this the pages would grow
+     without bound; same idea as compress()
+   only done once the replaced lists outweigh the ones in use, so the
+     O(nlocal+nghost) pass is amortized over many steps
+   sub cells share the list of their split cell: it is copied once for
+     the split cell and the sub cells are re-pointed at the copy
+------------------------------------------------------------------------- */
+
+void Grid::compact_surf_lists()
+{
+  bigint bytes = csurfs->size() + csplits->size();
+  if (surflist_churn < bytes/2) return;
+
+  MyPage<surfint> *csurfs_old = csurfs;
+  MyPage<int> *csplits_old = csplits;
+  MyPage<int> *csubs_old = csubs;
+
+  csurfs = NULL; csplits = NULL; csubs = NULL;
+  allocate_surf_arrays();
+
+  int i,n,icell,isplit;
+  int *iptr;
+  surfint *sptr;
+
+  int ntotal = nlocal + nghost;
+
+  for (icell = 0; icell < ntotal; icell++) {
+    if (cells[icell].nsplit <= 0) continue;
+    n = cells[icell].nsurf;
+    if (n <= 0) continue;
+    sptr = csurfs->get(n);
+    if (!sptr) error->one(FLERR,"Failed to allocate grid cell surf list");
+    memcpy(sptr,cells[icell].csurfs,n*sizeof(surfint));
+    cells[icell].csurfs = sptr;
+  }
+
+  int nsplitall = nsplitlocal + nsplitghost;
+
+  for (isplit = 0; isplit < nsplitall; isplit++) {
+    icell = sinfo[isplit].icell;
+    n = cells[icell].nsurf;
+    int nsplitone = cells[icell].nsplit;
+
+    iptr = csplits->get(n);
+    if (!iptr) error->one(FLERR,"Failed to allocate grid split cell map");
+    memcpy(iptr,sinfo[isplit].csplits,n*sizeof(int));
+    sinfo[isplit].csplits = iptr;
+
+    iptr = csubs->get(nsplitone);
+    if (!iptr) error->one(FLERR,"Failed to allocate grid sub cell list");
+    memcpy(iptr,sinfo[isplit].csubs,nsplitone*sizeof(int));
+    sinfo[isplit].csubs = iptr;
+
+    for (i = 0; i < nsplitone; i++) {
+      cells[iptr[i]].nsurf = n;
+      cells[iptr[i]].csurfs = cells[icell].csurfs;
+    }
+  }
+
+  delete csurfs_old;
+  delete csplits_old;
+  delete csubs_old;
+}
+
+/* ----------------------------------------------------------------------
+   per-step collision lists
+   a fix which moves surfs adds them to the cells they sweep through
+     during a step, so the mover tests particles anywhere on their path
+     against them; the cut lists, which define the cell geometry and
+     which split2d/3d index in lockstep with the piece maps, stay as they
+     are.  the lists are set after the surfs are moved and reset before
+     the cells are re-cut
+   collision_page() sizes the storage for the longest list a fix will
+     set, once per run
+------------------------------------------------------------------------- */
+
+void Grid::collision_page(int maxchunk)
+{
+  if (ccollpage && maxchunk <= ccollmax) return;
+  delete ccollpage;
+  ccollmax = maxchunk;
+  ccollpage = new MyPage<surfint>(maxchunk,MAX(65536,4*maxchunk));
+  if (ccollpage->errorflag)
+    error->one(FLERR,"Failed to allocate grid collision list page");
+}
+
+/* ----------------------------------------------------------------------
+   set the collision list of cell icell for this step to the n surfs in list
+------------------------------------------------------------------------- */
+
+void Grid::set_collision_surfs(int icell, int n, surfint *list)
+{
+  surfint *ptr = ccollpage->get(n);
+  if (!ptr) error->one(FLERR,"Failed to allocate grid collision list");
+  memcpy(ptr,list,n*sizeof(surfint));
+
+  if (!cells[icell].ccoll) {
+    if (ncollcells == maxcollcells) {
+      maxcollcells += 1024;
+      memory->grow(collcells,maxcollcells,"grid:collcells");
+    }
+    collcells[ncollcells++] = icell;
+  }
+
+  cells[icell].ncoll = n;
+  cells[icell].ccoll = ptr;
+}
+
+/* ----------------------------------------------------------------------
+   every cell's collision list is its cut list again
+------------------------------------------------------------------------- */
+
+void Grid::reset_collision_surfs()
+{
+  for (int i = 0; i < ncollcells; i++) cells[collcells[i]].ccoll = NULL;
+  ncollcells = 0;
+  if (ccollpage) ccollpage->reset();
 }
 
 /* ----------------------------------------------------------------------

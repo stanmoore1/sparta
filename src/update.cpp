@@ -1325,7 +1325,16 @@ template < int DIM, int SURF, int OPT, int RIGID > void Update::move()
           // skip surf checks if particle flagged as EXITing this cell
           // then unset pflag so not checked again for this particle
 
-          nsurf = cells[icell].nsurf;
+          // a cell whose surfs are moving carries a collision list of
+          //   its own for this step, else the cut list is the collision list
+
+          if (cells[icell].ccoll) {
+            nsurf = cells[icell].ncoll;
+            csurfs = cells[icell].ccoll;
+          } else {
+            nsurf = cells[icell].nsurf;
+            csurfs = cells[icell].csurfs;
+          }
           if (pflag == PEXIT) {
             nsurf = 0;
             pflag = 0;
@@ -1386,7 +1395,6 @@ template < int DIM, int SURF, int OPT, int RIGID > void Update::move()
             minparam = 2.0;
             minmoving = 0;
             mapbody = -1;
-            csurfs = cells[icell].csurfs;
 
             for (m = 0; m < nsurf; m++) {
               isurf = csurfs[m];

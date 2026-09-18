@@ -224,6 +224,8 @@ bigint Grid::unpack_one(char *buf,
   // ditto for EMPTY ghost with nsurf < 0
   // reset other fields for ghost cell (csurfs, nsplit, isplit)
 
+  cells[icell].ccoll = NULL;
+
   if (!surfflag || cells[icell].nsurf < 0) {
     cells[icell].csurfs = NULL;
     cells[icell].nsplit = 1;

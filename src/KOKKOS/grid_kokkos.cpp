@@ -199,11 +199,20 @@ void GridKokkos::wrap_kokkos_graphs()
   // csurfs
 
   Kokkos::Crs<int, SPAHostType, void, crs_size_type> h_csurfs;
+  // a cell with a per-step collision list (moving surfs) contributes that
+  //   list, since the device graph is what the mover tests against; a
+  //   split cell never has one, so split2d/3d index its cut list in
+  //   lockstep with csplits as before
+
   auto csurfs_lambda = [&](int icell, int* fill) {
     int nsurf = cells[icell].nsurf;
+    surfint* csurfs = cells[icell].csurfs;
+    if (cells[icell].ccoll) {
+      nsurf = cells[icell].ncoll;
+      csurfs = cells[icell].ccoll;
+    }
     if (nsurf < 0) nsurf = 0;
     else if (fill) {
-      surfint* csurfs = cells[icell].csurfs;
       // d_csurfs doesn't need to be surfint because at this point there are only
       //   local (not global) ids stored in csurfs
       for (int j = 0; j < nsurf; ++j) fill[j] = (int) csurfs[j];
