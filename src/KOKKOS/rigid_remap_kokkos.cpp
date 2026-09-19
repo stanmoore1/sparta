@@ -18,12 +18,18 @@
 #include "surf_kokkos.h"
 #include "update_kokkos.h"
 #include "cut_kokkos.h"
+#include "cut2d_kokkos.h"
+#include "cut3d_kokkos.h"
 #include "domain.h"
+#include "math_const.h"
 #include "memory_kokkos.h"
 #include "sparta_masks.h"
 #include "error.h"
 
 using namespace SPARTA_NS;
+using namespace MathConst;
+
+#define CUTSCRATCH 268435456   // bytes of device scratch per chunk of 3d cuts
 
 enum{CELLUNKNOWN,CELLOUTSIDE,CELLINSIDE,CELLOVERLAP};   // same as Grid
 
@@ -43,7 +49,9 @@ RigidRemapKokkos::RigidRemapKokkos(SPARTA *sparta, FixRigidKokkos *fix_in) :
   maxpair = 0;
   maxswcell_kk = maxswent_kk = 0;
   staticgen_kk = -1;
-  maxrcand_kk = maxrcandlist_kk = maxch_kk = 0;
+  maxrcand_kk = maxrcandlist_kk = maxch_kk = maxchent_kk = 0;
+  maxvert_kk = maxedge_kk = maxcline_kk = maxpt_kk = 0;
+  d_cutstats = DAT::t_int_1d("rigid_remap:cutstats",2);
 }
 
 /* ----------------------------------------------------------------------
@@ -419,6 +427,58 @@ void RigidRemapKokkos::reset_collision_lists()
      cell order, the same candidate surfs, the same overlap decisions
      and the same sorted lists, so the cells the host cuts, the order it
      cuts them in, and every type it sets are those of RigidRemap::recut()
+------------------------------------------------------------------------- */
+
+/* ----------------------------------------------------------------------
+   size the scratch rows of the device cut to hold nvert vertices,
+     nedge edges, ncline clipped lines and npt points, uninitialized
+------------------------------------------------------------------------- */
+
+void RigidRemapKokkos::grow_cut_scratch(int nvert, int nedge,
+                                        int ncline, int npt)
+{
+  if (nvert > maxvert_kk) {
+    maxvert_kk = nvert;
+    d_verts = t_vertex_1d(Kokkos::view_alloc(Kokkos::WithoutInitializing,
+                                             "rigid_remap:verts"),maxvert_kk);
+    d_loops3 = t_loop3_1d(Kokkos::view_alloc(Kokkos::WithoutInitializing,
+                                             "rigid_remap:loops3"),maxvert_kk);
+    d_phs = t_ph_1d(Kokkos::view_alloc(Kokkos::WithoutInitializing,
+                                       "rigid_remap:phs"),maxvert_kk);
+    d_used3 = DAT::t_int_1d(Kokkos::view_alloc(Kokkos::WithoutInitializing,
+                                               "rigid_remap:used3"),maxvert_kk);
+    d_stack = DAT::t_int_1d(Kokkos::view_alloc(Kokkos::WithoutInitializing,
+                                               "rigid_remap:stack"),maxvert_kk);
+  }
+  if (nedge > maxedge_kk) {
+    maxedge_kk = nedge;
+    d_edges = t_edge_1d(Kokkos::view_alloc(Kokkos::WithoutInitializing,
+                                           "rigid_remap:edges"),maxedge_kk);
+    d_facelist = DAT::t_int_1d(Kokkos::view_alloc(Kokkos::WithoutInitializing,
+                                                  "rigid_remap:facelist"),maxedge_kk);
+    d_efaces = DAT::t_int_1d(Kokkos::view_alloc(Kokkos::WithoutInitializing,
+                                                "rigid_remap:efaces"),maxedge_kk);
+  }
+  if (ncline > maxcline_kk) {
+    maxcline_kk = ncline;
+    d_clines = t_cline_1d(Kokkos::view_alloc(Kokkos::WithoutInitializing,
+                                             "rigid_remap:clines"),maxcline_kk);
+  }
+  if (npt > maxpt_kk) {
+    maxpt_kk = npt;
+    d_points = t_point_1d(Kokkos::view_alloc(Kokkos::WithoutInitializing,
+                                             "rigid_remap:points"),maxpt_kk);
+    d_loops = t_loop_1d(Kokkos::view_alloc(Kokkos::WithoutInitializing,
+                                           "rigid_remap:loops"),maxpt_kk);
+    d_pgs = t_pg_1d(Kokkos::view_alloc(Kokkos::WithoutInitializing,
+                                       "rigid_remap:pgs"),maxpt_kk);
+    d_used = DAT::t_int_1d(Kokkos::view_alloc(Kokkos::WithoutInitializing,
+                                              "rigid_remap:used"),maxpt_kk);
+  }
+}
+
+/* ----------------------------------------------------------------------
+   the re-cut on the device
 ------------------------------------------------------------------------- */
 
 int RigidRemapKokkos::recut()
@@ -871,7 +931,8 @@ int RigidRemapKokkos::recut()
     if (d_cinfo[icell].type != type) d_newtype(ic) = type;
   });
 
-  // the changed lists and the new types come to the host, compactly
+  // the changed lists are packed as rows of one entries array, the
+  //   cell of each row and its offset listed by a scan of the lengths
 
   Kokkos::parallel_scan(nrcand, KOKKOS_LAMBDA(const int ic, int &sum,
                                                const bool final) {
@@ -883,35 +944,56 @@ int RigidRemapKokkos::recut()
   int nch;
   Kokkos::deep_copy(nch,Kokkos::subview(d_choff,nrcand));
 
-  if (nch > maxch_kk) {
-    maxch_kk = nch;
+  if (nch+1 > maxch_kk) {
+    maxch_kk = nch+1;
     k_chcand = DAT::tdual_int_1d("rigid_remap:chcand",maxch_kk);
     k_chn = DAT::tdual_int_1d("rigid_remap:chn",maxch_kk);
-    k_chlist = DAT::tdual_int_1d("rigid_remap:chlist",
-                                 (bigint) maxch_kk * maxsurfpercell);
+    k_chloff = DAT::tdual_int_1d("rigid_remap:chloff",maxch_kk);
+    k_chnsplit = DAT::tdual_int_1d("rigid_remap:chnsplit",maxch_kk);
+    k_chcorner = DAT::tdual_int_1d("rigid_remap:chcorner",8*maxch_kk);
+    k_chxsub = DAT::tdual_int_1d("rigid_remap:chxsub",maxch_kk);
+    k_cherr = DAT::tdual_int_1d("rigid_remap:cherr",maxch_kk);
+    k_chxsplit = tdual_dbl_1d("rigid_remap:chxsplit",3*maxch_kk);
   }
   auto d_chcand = k_chcand.view_device();
   auto d_chn = k_chn.view_device();
-  auto d_chlist = k_chlist.view_device();
+  auto d_chloff = k_chloff.view_device();
+
   Kokkos::parallel_for(nrcand, KOKKOS_LAMBDA(const int ic) {
     if (!d_chflag(ic)) return;
     const int c = d_choff(ic);
     d_chcand(c) = ic;
-    const int n = d_newn(ic);
-    d_chn(c) = n;
-    for (int j = 0; j < n; j++)
-      d_chlist(((bigint) c) * maxsurf + j) = d_newlist(((bigint) ic) * maxsurf + j);
+    d_chn(c) = d_newn(ic);
   });
-  k_chcand.modify_device(); k_chcand.sync_host();
-  k_chn.modify_device(); k_chn.sync_host();
-  k_chlist.modify_device(); k_chlist.sync_host();
-  k_rcand.modify_device(); k_rcand.sync_host();
 
-  auto h_rcand = k_rcand.view_host();
-  auto h_chcand = k_chcand.view_host();
-  auto h_chn = k_chn.view_host();
-  auto h_chlist = k_chlist.view_host();
-  for (i = 0; i < nrcand; i++) rcand[i] = h_rcand(i);
+  // row offsets of the lists: the piece maps, the piece volumes and the
+  //   scratch rows of the device cut are laid out by the same offsets
+
+  Kokkos::parallel_scan(nch, KOKKOS_LAMBDA(const int c, int &sum,
+                                            const bool final) {
+    const int n = d_chn(c);
+    if (final) d_chloff(c) = sum;
+    sum += n;
+    if (final && c == nch-1) d_chloff(nch) = sum;
+  });
+  int nent = 0;
+  if (nch) Kokkos::deep_copy(nent,Kokkos::subview(d_chloff,nch));
+
+  if (nent > maxchent_kk) {
+    maxchent_kk = nent;
+    k_chlist = DAT::tdual_int_1d("rigid_remap:chlist",maxchent_kk);
+    k_chmap = DAT::tdual_int_1d("rigid_remap:chmap",maxchent_kk);
+    k_chvols = tdual_dbl_1d("rigid_remap:chvols",maxchent_kk);
+  }
+  auto d_chlist = k_chlist.view_device();
+
+  Kokkos::parallel_for(nch, KOKKOS_LAMBDA(const int c) {
+    const int ic = d_chcand(c);
+    const int n = d_chn(c);
+    const int off = d_chloff(c);
+    for (int j = 0; j < n; j++)
+      d_chlist(off+j) = d_newlist(((bigint) ic) * maxsurf + j);
+  });
 
   if (timeflag) {
     double now = MPI_Wtime();
@@ -919,17 +1001,291 @@ int RigidRemapKokkos::recut()
     tstart = now;
   }
 
-  // pass 1 on the host: cut the cells whose list changed, in ascending
-  //   cell order, exactly as the host loop does
+  // the cut of every changed cell on the device, as recut_cell() cuts
+  //   it on the host: no cut if only transparent surfs overlap it
+  //   (nsplit = 0, the parity test of its center gives its type), else
+  //   Cut2d/Cut3d::split() on scratch rows sized by its # of surfs,
+  //   with UNKNOWN corner marks resolved by the same parity test
+  // a cell the device cut fails on is cut again on the host, which
+  //   raises the error message
+  // the 3d scratch is large per cell, so the cells are cut in chunks
+  //   which fit a memory budget; the row offsets are linear in the
+  //   running # of surfs and of cells within the chunk
+
+  auto d_chnsplit = k_chnsplit.view_device();
+  auto d_chcorner = k_chcorner.view_device();
+  auto d_chxsub = k_chxsub.view_device();
+  auto d_cherr = k_cherr.view_device();
+  auto d_chxsplit = k_chxsplit.view_device();
+  auto d_chmap = k_chmap.view_device();
+  auto d_chvols = k_chvols.view_device();
+
+  if (dim == 2) {
+    grow_cut_scratch(0,0,nent,2*nent + 4*nch);
+    auto d_clines = this->d_clines;
+    auto d_points = this->d_points;
+    auto d_loops = this->d_loops;
+    auto d_pgs = this->d_pgs;
+    auto d_used = this->d_used;
+    const int axisymmetric = domain->axisymmetric;
+    const Surf::Line *lines = d_lines.data();
+
+    Kokkos::parallel_for(nch, KOKKOS_LAMBDA(const int c) {
+      const int icell = d_rcand(d_chcand(c));
+      const int n = d_chn(c);
+      const int off = d_chloff(c);
+      const int *list = &d_chlist(off);
+      const double *clo = d_cells[icell].lo;
+      const double *chi = d_cells[icell].hi;
+      d_cherr(c) = 0;
+
+      double ctr[3];
+      ctr[0] = 0.5 * (clo[0] + chi[0]);
+      ctr[1] = 0.5 * (clo[1] + chi[1]);
+      ctr[2] = 0.0;
+
+      int cut = 0;
+      for (int j = 0; j < n; j++)
+        if (!lines[list[j]].transparent) { cut = 1; break; }
+      if (!cut) {
+        d_chnsplit(c) = 0;
+        if (body.inside_any_body(ctr)) d_chcorner(8*c) = CELLINSIDE;
+        else d_chcorner(8*c) = CELLOUTSIDE;
+        return;
+      }
+
+      const int poff = 2*off + 4*c;
+      Cut2dKokkos cut2d(lines,axisymmetric,clo,chi,n,list,
+                        &d_clines(off),&d_points(poff),&d_loops(poff),
+                        &d_pgs(poff),&d_used(poff));
+
+      int corner[4];
+      int xsub = 0;
+      int errflag;
+      double xsplit[3];
+      xsplit[0] = xsplit[1] = xsplit[2] = 0.0;
+      double *vols = &d_chvols(off);
+      int *map = &d_chmap(off);
+
+      int nsplit = cut2d.split(vols,map,corner,xsub,xsplit,errflag);
+      if (errflag) {
+        d_cherr(c) = errflag;
+        d_chnsplit(c) = 1;
+        return;
+      }
+
+      if (corner[0] == CELLUNKNOWN) {
+        int mark = CELLOUTSIDE;
+        if (body.inside_any_body(ctr)) mark = CELLINSIDE;
+        corner[0] = corner[1] = corner[2] = corner[3] = mark;
+        nsplit = 1;
+        if (mark == CELLINSIDE) vols[0] = 0.0;
+        else if (axisymmetric)
+          vols[0] = MY_PI * (chi[1]*chi[1]-clo[1]*clo[1]) * (chi[0]-clo[0]);
+        else vols[0] = (chi[0]-clo[0]) * (chi[1]-clo[1]);
+      }
+
+      d_chnsplit(c) = nsplit;
+      for (int k = 0; k < 4; k++) d_chcorner(8*c+k) = corner[k];
+      d_chxsub(c) = xsub;
+      for (int k = 0; k < 3; k++) d_chxsplit(3*c+k) = xsplit[k];
+    });
+
+  } else {
+    k_chloff.modify_device(); k_chloff.sync_host();
+    k_chn.modify_device(); k_chn.sync_host();
+    auto h_chloff = k_chloff.view_host();
+    auto h_chn = k_chn.view_host();
+    const Surf::Tri *tris = d_tris.data();
+    Kokkos::deep_copy(d_cutstats,0);
+
+    // bytes of scratch per surf of a cell and per cell, from the row
+    //   bounds at the head of cut3d_kokkos.h
+
+    const bigint persurf =
+      27 * (sizeof(Cut3dKokkos::Edge) + 2*sizeof(int)) +
+      10 * (sizeof(Cut3dKokkos::Vertex) + sizeof(Cut3dKokkos::Loop) +
+            sizeof(Cut3dKokkos::PH) + 2*sizeof(int)) +
+      9 * sizeof(Cut2dKokkos::Cline) +
+      18 * (sizeof(Cut2dKokkos::Point) + sizeof(Cut2dKokkos::Loop) +
+            sizeof(Cut2dKokkos::PG) + sizeof(int));
+    const bigint percell =
+      24 * (sizeof(Cut3dKokkos::Edge) + 2*sizeof(int)) +
+      6 * (sizeof(Cut3dKokkos::Vertex) + sizeof(Cut3dKokkos::Loop) +
+           sizeof(Cut3dKokkos::PH) + 2*sizeof(int)) +
+      4 * (sizeof(Cut2dKokkos::Point) + sizeof(Cut2dKokkos::Loop) +
+           sizeof(Cut2dKokkos::PG) + sizeof(int));
+
+    int c0 = 0;
+    while (c0 < nch) {
+      int c1 = c0 + 1;
+      bigint bytes = persurf * h_chn(c0) + percell;
+      while (c1 < nch) {
+        bigint more = persurf * h_chn(c1) + percell;
+        if (bytes + more > CUTSCRATCH) break;
+        bytes += more;
+        c1++;
+      }
+
+      const int base = h_chloff(c0);
+      const int dl = h_chloff(c1) - base;
+      const int dc = c1 - c0;
+      grow_cut_scratch(10*dl + 6*dc,27*dl + 24*dc,9*dl,18*dl + 4*dc);
+      auto d_verts = this->d_verts;
+      auto d_edges = this->d_edges;
+      auto d_loops3 = this->d_loops3;
+      auto d_phs = this->d_phs;
+      auto d_facelist = this->d_facelist;
+      auto d_efaces = this->d_efaces;
+      auto d_used3 = this->d_used3;
+      auto d_stack = this->d_stack;
+      auto d_clines = this->d_clines;
+      auto d_points = this->d_points;
+      auto d_loops = this->d_loops;
+      auto d_pgs = this->d_pgs;
+      auto d_used = this->d_used;
+      auto d_cutstats = this->d_cutstats;
+      const int cfirst = c0;
+
+      Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType>(c0,c1),
+                           KOKKOS_LAMBDA(const int c) {
+        const int icell = d_rcand(d_chcand(c));
+        const int n = d_chn(c);
+        const int off = d_chloff(c);
+        const int *list = &d_chlist(off);
+        const double *clo = d_cells[icell].lo;
+        const double *chi = d_cells[icell].hi;
+        d_cherr(c) = 0;
+
+        double ctr[3];
+        ctr[0] = 0.5 * (clo[0] + chi[0]);
+        ctr[1] = 0.5 * (clo[1] + chi[1]);
+        ctr[2] = 0.5 * (clo[2] + chi[2]);
+
+        int cut = 0;
+        for (int j = 0; j < n; j++)
+          if (!tris[list[j]].transparent) { cut = 1; break; }
+        if (!cut) {
+          d_chnsplit(c) = 0;
+          if (body.inside_any_body(ctr)) d_chcorner(8*c) = CELLINSIDE;
+          else d_chcorner(8*c) = CELLOUTSIDE;
+          return;
+        }
+
+        const int u = off - base;
+        const int k = c - cfirst;
+        const int voff = 10*u + 6*k;
+        const int eoff = 27*u + 24*k;
+        const int coff = 9*u;
+        const int poff = 18*u + 4*k;
+        Cut3dKokkos cut3d(tris,clo,chi,n,list,
+                          &d_verts(voff),&d_edges(eoff),&d_loops3(voff),
+                          &d_phs(voff),&d_facelist(eoff),&d_efaces(eoff),
+                          &d_used3(voff),&d_stack(voff),10*n + 6,27*n + 24,
+                          &d_clines(coff),&d_points(poff),&d_loops(poff),
+                          &d_pgs(poff),&d_used(poff),9*n);
+
+        int corner[8];
+        int xsub = 0;
+        int errflag;
+        double xsplit[3];
+        xsplit[0] = xsplit[1] = xsplit[2] = 0.0;
+        double *vols = &d_chvols(off);
+        int *map = &d_chmap(off);
+
+        int nsplit = cut3d.split(vols,map,corner,xsub,xsplit,errflag);
+        if (cut3d.ntiny) Kokkos::atomic_add(&d_cutstats(0),cut3d.ntiny);
+        if (cut3d.nshrink) Kokkos::atomic_add(&d_cutstats(1),cut3d.nshrink);
+        if (errflag) {
+          d_cherr(c) = errflag;
+          d_chnsplit(c) = 1;
+          return;
+        }
+
+        if (corner[0] == CELLUNKNOWN) {
+          int mark = CELLOUTSIDE;
+          if (body.inside_any_body(ctr)) mark = CELLINSIDE;
+          for (int j = 0; j < 8; j++) corner[j] = mark;
+          nsplit = 1;
+          if (mark == CELLINSIDE) vols[0] = 0.0;
+          else vols[0] = (chi[0]-clo[0]) * (chi[1]-clo[1]) * (chi[2]-clo[2]);
+        }
+
+        d_chnsplit(c) = nsplit;
+        for (int j = 0; j < 8; j++) d_chcorner(8*c+j) = corner[j];
+        d_chxsub(c) = xsub;
+        for (int j = 0; j < 3; j++) d_chxsplit(3*c+j) = xsplit[j];
+      });
+
+      c0 = c1;
+    }
+
+    int cutstats[2];
+    Kokkos::deep_copy(Kokkos::View<int[2],Kokkos::HostSpace>(cutstats),
+                      d_cutstats);
+    grid->add_cut3d_counts(cutstats[0],cutstats[1]);
+  }
+
+  // the changed lists and the results of their cuts come to the host
+
+  k_chcand.modify_device(); k_chcand.sync_host();
+  k_chn.modify_device(); k_chn.sync_host();
+  k_chloff.modify_device(); k_chloff.sync_host();
+  k_chlist.modify_device(); k_chlist.sync_host();
+  k_rcand.modify_device(); k_rcand.sync_host();
+  k_chnsplit.modify_device(); k_chnsplit.sync_host();
+  k_chcorner.modify_device(); k_chcorner.sync_host();
+  k_chxsub.modify_device(); k_chxsub.sync_host();
+  k_cherr.modify_device(); k_cherr.sync_host();
+  k_chxsplit.modify_device(); k_chxsplit.sync_host();
+  k_chmap.modify_device(); k_chmap.sync_host();
+  k_chvols.modify_device(); k_chvols.sync_host();
+
+  auto h_rcand = k_rcand.view_host();
+  auto h_chcand = k_chcand.view_host();
+  auto h_chn = k_chn.view_host();
+  auto h_chloff = k_chloff.view_host();
+  auto h_chlist = k_chlist.view_host();
+  auto h_chnsplit = k_chnsplit.view_host();
+  auto h_chcorner = k_chcorner.view_host();
+  auto h_chxsub = k_chxsub.view_host();
+  auto h_cherr = k_cherr.view_host();
+  auto h_chxsplit = k_chxsplit.view_host();
+  auto h_chmap = k_chmap.view_host();
+  auto h_chvols = k_chvols.view_host();
+  for (i = 0; i < nrcand; i++) rcand[i] = h_rcand(i);
+
+  // install the new list and the cut of every changed cell, in
+  //   ascending cell order, exactly as the host loop does
+
+  int corner[8];
+  double xsplit[3];
+  const int ncorner = (dim == 3) ? 8 : 4;
 
   for (m = 0; m < nch; m++) {
-    int ic = h_chcand(m);
-    icell = rcand[ic];
+    icell = rcand[h_chcand(m)];
     int n = h_chn(m);
-    for (int j = 0; j < n; j++)
-      newlist[j] = (surfint) h_chlist(((bigint) m) * maxsurfpercell + j);
+    int off = h_chloff(m);
+    for (int j = 0; j < n; j++) newlist[j] = (surfint) h_chlist(off+j);
     nlist_run++;
-    recut_cell(icell,n,newlist);
+
+    if (h_cherr(m)) {
+      recut_cell(icell,n,newlist);
+      continue;
+    }
+
+    grid->set_cell_surfs(icell,n,newlist);
+    listschanged = 1;
+
+    int nsplitone = h_chnsplit(m);
+    if (nsplitone) ncut_run++;
+    for (int j = 0; j < ncorner; j++) corner[j] = h_chcorner(8*m+j);
+    if (nsplitone > 1)
+      for (int j = 0; j < n; j++) newmap[j] = h_chmap(off+j);
+    for (int j = 0; j < 3; j++) xsplit[j] = h_chxsplit(3*m+j);
+
+    apply_cut(icell,nsplitone,&h_chvols(off),newmap,corner,
+              h_chxsub(m),xsplit);
   }
 
   if (timeflag) {

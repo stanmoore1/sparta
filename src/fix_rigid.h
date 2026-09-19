@@ -238,9 +238,10 @@ class FixRigid : public Fix {
   double rmaxall;         // max over bodies of rmaxbody + bbox inflation
 
   // per-element force/torque tallies of the particle mover this step
-  // one row per body element hit, rows in the order first hit, so the
-  //   per-body sums below are formed in a reproducible order which does
-  //   not depend on how many local copies of an element a proc holds
+  // one row per body element hit, shared by every local copy of the
+  //   element, so the per-body sums are formed element by element in
+  //   element order, which does not depend on how many local copies of
+  //   an element a proc holds and is the order the device sums them in
   // the tally converts the momentum a collision gives the surf into a
   //   force via nfactor_inverse = fnum/dt, exactly as compute surf does
 

@@ -121,6 +121,7 @@ class RigidRemap : protected Pointers {
   int cell_cut(int);
   void mark_static();
   void recut_cell(int, int, surfint *);   // cut one cell by a new list
+  void apply_cut(int, int, double *, int *, int *, int, double *);
   void split_pending(int, int, int, int *, int, double *, double *);
 };
 

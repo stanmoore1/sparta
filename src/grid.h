@@ -446,6 +446,7 @@ class Grid : protected Pointers {
   void surf2grid_implicit(int, int outflag=1);
   void surf2grid_one(int, int, int, int, class Cut3d *, class Cut2d *);
   double cell_volume(double *, double *);
+  void add_cut3d_counts(bigint, bigint);
   int surfs_in_cell(int, int, surfint *, surfint *, int);
   int cut_cell(int, double *&, int *, int *, int &, double *);
   void set_cell_surfs(int, int, surfint *);

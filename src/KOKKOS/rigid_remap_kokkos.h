@@ -18,6 +18,8 @@
 #include "rigid_remap.h"
 #include "kokkos_type.h"
 #include "rigid_body_kokkos.h"
+#include "cut2d_kokkos.h"
+#include "cut3d_kokkos.h"
 
 namespace SPARTA_NS {
 
@@ -70,8 +72,40 @@ class RigidRemapKokkos : public RigidRemap {
   DAT::tdual_int_1d k_rcand,k_newlist,k_newtype;
   DAT::t_int_1d d_newn,d_chflag,d_choff,d_newtype;
   int maxrcandlist_kk;
-  DAT::tdual_int_1d k_chcand,k_chn,k_chlist;
-  int maxch_kk;
+  // the changed lists as rows of one entries array, and the results of
+  //   their cuts: per cell # of pieces, corner marks, split point and
+  //   piece, per entry the piece map and piece volumes
+
+  typedef Kokkos::DualView<double*,DeviceType::array_layout,DeviceType> tdual_dbl_1d;
+  typedef Kokkos::View<Cut2dKokkos::Cline*,DeviceType> t_cline_1d;
+  typedef Kokkos::View<Cut2dKokkos::Point*,DeviceType> t_point_1d;
+  typedef Kokkos::View<Cut2dKokkos::Loop*,DeviceType> t_loop_1d;
+  typedef Kokkos::View<Cut2dKokkos::PG*,DeviceType> t_pg_1d;
+
+  typedef Kokkos::View<Cut3dKokkos::Vertex*,DeviceType> t_vertex_1d;
+  typedef Kokkos::View<Cut3dKokkos::Edge*,DeviceType> t_edge_1d;
+  typedef Kokkos::View<Cut3dKokkos::Loop*,DeviceType> t_loop3_1d;
+  typedef Kokkos::View<Cut3dKokkos::PH*,DeviceType> t_ph_1d;
+
+  DAT::tdual_int_1d k_chcand,k_chn,k_chloff,k_chlist;
+  DAT::tdual_int_1d k_chnsplit,k_chcorner,k_chxsub,k_cherr,k_chmap;
+  tdual_dbl_1d k_chxsplit,k_chvols;
+  int maxch_kk,maxchent_kk;
+
+  t_cline_1d d_clines;       // scratch rows of the device cut
+  t_point_1d d_points;
+  t_loop_1d d_loops;
+  t_pg_1d d_pgs;
+  DAT::t_int_1d d_used;
+  t_vertex_1d d_verts;
+  t_edge_1d d_edges;
+  t_loop3_1d d_loops3;
+  t_ph_1d d_phs;
+  DAT::t_int_1d d_facelist,d_efaces,d_used3,d_stack;
+  int maxvert_kk,maxedge_kk,maxcline_kk,maxpt_kk;
+  DAT::t_int_1d d_cutstats;  // tiny edge and shrink counts of the 3d cut
+
+  void grow_cut_scratch(int, int, int, int);
 };
 
 }

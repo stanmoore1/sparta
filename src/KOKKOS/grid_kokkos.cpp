@@ -81,9 +81,10 @@ GridKokkos::GridKokkos(SPARTA *sparta) : Grid(sparta)
 
 GridKokkos::~GridKokkos()
 {
+  if (copy || copymode) return;
+
   memory->destroy(dirtystamp);
   memory->destroy(sinfostamp);
-  if (copy || copymode) return;
 
   cells = NULL;
   cinfo = NULL;

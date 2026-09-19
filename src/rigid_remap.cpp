@@ -724,7 +724,7 @@ int RigidRemap::recut()
      corner marks and flow volume, its piece map if it is split, and a
      pending change if its number of flow pieces changed
    the per-cell part of recut(), shared with the device variant which
-     computes the lists elsewhere
+     computes the lists elsewhere and cuts the cell on the device
 ------------------------------------------------------------------------- */
 
 void RigidRemap::recut_cell(int icell, int n, surfint *newlist)
@@ -737,7 +737,6 @@ void RigidRemap::recut_cell(int icell, int n, surfint *newlist)
   double *clo,*chi;
 
   Grid::ChildCell *cells = grid->cells;
-  int nsplitold = cells[icell].nsplit;
 
   // install the new cut list, which any sub cells share
 
@@ -754,14 +753,11 @@ void RigidRemap::recut_cell(int icell, int n, surfint *newlist)
   // a cell overlapped by no surf, or only by transparent ones, is not
   //   cut (Grid::surf2grid_split() skips non-OVERLAP cells): full
   //   flow volume, interior/exterior typing via parity test
-  // if it was a split cell it gives up its sub cells, which changes
-  //   the cell count
 
   if (!cell_cut(icell)) {
-    if (nsplitold > 1) split_pending(icell,1,0,NULL,0,NULL,NULL);
-    if (fix->inside_any_body(ctr)) grid->set_cell_type(icell,INSIDE);
-    else grid->set_cell_type(icell,OUTSIDE);
-    typechanged = 1;
+    if (fix->inside_any_body(ctr)) corner[0] = INSIDE;
+    else corner[0] = OUTSIDE;
+    apply_cut(icell,0,NULL,NULL,corner,0,NULL);
     return;
   }
 
@@ -789,6 +785,38 @@ void RigidRemap::recut_cell(int icell, int n, surfint *newlist)
     else unknownvol = grid->cell_volume(clo,chi);
   }
 
+  apply_cut(icell,nsplitone,vols,newmap,corner,xsub,xsplit);
+}
+
+/* ----------------------------------------------------------------------
+   install the result of cutting owned cell icell by the cut list it
+     already holds: nsplitone flow pieces with volumes vols, the piece
+     map of its surfs, corner marks, and the reference piece xsub with
+     a point xsplit in it if it is split
+   nsplitone = 0 means no surf cuts the cell: corner[0] is then its
+     INSIDE/OUTSIDE type, and the other arguments are unused
+   the cut itself ran on the host (recut_cell) or on the device
+------------------------------------------------------------------------- */
+
+void RigidRemap::apply_cut(int icell, int nsplitone, double *vols,
+                           int *map, int *corner, int xsub, double *xsplit)
+{
+  Grid::ChildCell *cells = grid->cells;
+  int nsplitold = cells[icell].nsplit;
+  int n = cells[icell].nsurf;
+  double *clo = cells[icell].lo;
+  double *chi = cells[icell].hi;
+
+  // an uncut cell which was a split cell gives up its sub cells, which
+  //   changes the cell count
+
+  if (nsplitone == 0) {
+    if (nsplitold > 1) split_pending(icell,1,0,NULL,0,NULL,NULL);
+    grid->set_cell_type(icell,corner[0]);
+    typechanged = 1;
+    return;
+  }
+
   // the number of disconnected flow pieces changed: the cell gains
   //   or loses sub cells, which changes this proc's cell count and
   //   the sub cell indices other procs migrate particles into
@@ -797,7 +825,7 @@ void RigidRemap::recut_cell(int icell, int n, surfint *newlist)
   // a split cell's own volume is the whole cell volume
 
   if (nsplitone != nsplitold) {
-    split_pending(icell,nsplitone,n,newmap,xsub,xsplit,vols);
+    split_pending(icell,nsplitone,n,map,xsub,xsplit,vols);
     if (nsplitone > 1)
       grid->set_cell_overlap(icell,grid->cell_volume(clo,chi),corner);
     else grid->set_cell_overlap(icell,vols[0],corner);
@@ -811,7 +839,7 @@ void RigidRemap::recut_cell(int icell, int n, surfint *newlist)
   //   (Grid::surf2grid_split() likewise leaves it alone)
 
   if (nsplitone > 1) {
-    grid->set_split_info(icell,newmap,xsub,xsplit,vols);
+    grid->set_split_info(icell,map,xsub,xsplit,vols);
     splitchanged = 1;
     grid->set_cell_overlap(icell,grid->cell_volume(clo,chi),corner);
     typechanged = 1;

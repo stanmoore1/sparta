@@ -315,12 +315,15 @@ FixRigid *Update::find_fixrigid()
    the fix rebuilt its per-surf maps: take the body map the move loop
      reads to dispatch the moving-surf collision tests, covering ghost
      surfs too since the mover advects particles thru ghost cells
+   the fix passes itself, since a fix re-defined between runs replaces
+     the instance fixrigid was last set to
    the KOKKOS variant also mirrors it on the device
 ------------------------------------------------------------------------- */
 
-void Update::rigid_maps_changed()
+void Update::rigid_maps_changed(FixRigid *fix)
 {
-  rigidmap = fixrigid->surfbody;
+  fixrigid = fix;
+  rigidmap = fix->surfbody;
 }
 
 /* ---------------------------------------------------------------------- */

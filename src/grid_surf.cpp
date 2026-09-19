@@ -2974,6 +2974,18 @@ double Grid::cell_volume(double *lo, double *hi)
 }
 
 /* ----------------------------------------------------------------------
+   add to the tiny-edge and shrink counts of the 3d cut, for cells a
+     caller cut elsewhere (fix rigid/kk cuts them on the device)
+------------------------------------------------------------------------- */
+
+void Grid::add_cut3d_counts(bigint ntiny, bigint nshrink)
+{
+  if (!cut3d) return;
+  cut3d->ntiny += ntiny;
+  cut3d->nshrink += nshrink;
+}
+
+/* ----------------------------------------------------------------------
    operations a fix which moves surfs uses to re-map them to grid cells
      one cell at a time, in place of the full surf2grid() pipeline
    every list they install lives in the Grid pages, like the lists the

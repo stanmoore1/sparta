@@ -924,18 +924,19 @@ and the force/torque tallies in the KOKKOS particle mover, on the GPU
 or host threads, and runs the rest of the per-step work sized by the
 particles or the grid cells there as well: the per-body force sums,
 the collision lists of the cells the bodies sweep through, the search
-for the cells the re-cut must visit, their new surf lists and their
-re-typing, the deletion of particles inside the bodies and the
-re-assignment of particles to sub cells.  The body time integration,
-the cut of the cells whose surf list changed and the restructuring of
-split cells run on the host, and the device copy of the grid is
-patched with those changes rather than re-copied.  Each timestep the
-new positions of the body surfs and the cells which changed cross to
-the device, and nothing sized by the particles or by all grid cells.
-The results are statistically equivalent to those of the non-KOKKOS
-version; the KOKKOS surface collision models use a different random
-number stream and per-surf tallies are summed in a different order,
-so trajectories are not bit-for-bit identical.
+for the cells the re-cut must visit, their new surf lists, the cut of
+the cells whose list changed (in 2d and 3d, by device versions of the
+cut routines) and their re-typing, the deletion of particles inside
+the bodies and the re-assignment of particles to sub cells.  The body
+time integration and the restructuring of split cells run on the
+host, and the device copy of the grid is patched with those changes
+rather than re-copied.  Each timestep the new positions of the body
+surfs and the results of the changed cells cross to the device, and
+nothing sized by the particles or by all grid cells.  The results are
+statistically equivalent to those of the non-KOKKOS version, since
+the KOKKOS surface collision models use a different random number
+stream; with the SPARTA_KOKKOS_EXACT build option and the Serial
+backend they are identical.
 
 [Related commands:]
 

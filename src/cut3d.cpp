@@ -1653,7 +1653,7 @@ int Cut3d::check()
 
 void Cut3d::walk()
 {
-  int flag,ncount,ivert,firstvert,iedge,dir,nedge,prev;
+  int j,flag,ncount,ivert,firstvert,iedge,dir,nedge,prev;
   double volume;
   Vertex *vert;
   Edge *edge;
@@ -1708,7 +1708,7 @@ void Cut3d::walk()
       iedge = vert->first;
       dir = vert->dirfirst;
 
-      for (i = 0; i < nedge; i++) {
+      for (j = 0; j < nedge; j++) {
         edge = &edges[iedge];
         if (!used[edge->verts[0]]) {
           stack[nstack++] = edge->verts[0];

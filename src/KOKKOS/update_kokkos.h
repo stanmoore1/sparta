@@ -103,7 +103,7 @@ class UpdateKokkos : public Update {
   void init();
   void setup();
   void run(int);
-  void rigid_maps_changed() override;
+  void rigid_maps_changed(class FixRigid *) override;
 
   template<int DIM, int SURF, int REACT, int OPT, int ATOMIC_REDUCTION>
   KOKKOS_INLINE_FUNCTION
@@ -165,18 +165,19 @@ class UpdateKokkos : public Update {
   // d_rigidmap = per local/ghost surf: body index or -1 if static
   //   public: compute surf/kk reads it to tally torque about the COM
   //   of the body each surf belongs to
+  // d_surfelem = per local/ghost surf: its body element, the tally row
   // d_rigidbody = per body: xcm[3], vcm[3], omega[3], 1/mass,
   //   3x3 inverse inertia for this step, mid-step COM[3], uploaded by
   //   rigid_upload() before each move
   // d_species,cellweightflag_kk = for the simulation particle mass
   //   in the recoil correction of collisions with a body
-  // d_rigidtally = the fix's per-surf force/torque tallies, which the
+  // d_rigidtally = the fix's per-element force/torque tallies, which the
   //   move kernel accumulates for every collision with a body surf
 
  public:
   int rigid_on;
-  DAT::tdual_int_1d k_rigidmap;
-  DAT::t_int_1d d_rigidmap;
+  DAT::tdual_int_1d k_rigidmap,k_surfelem;
+  DAT::t_int_1d d_rigidmap,d_surfelem;
 
  private:
 
@@ -199,7 +200,8 @@ class UpdateKokkos : public Update {
   Kokkos::Experimental::ScatterView<double**,DeviceType::array_layout,DeviceType,typename Kokkos::Experimental::ScatterSum,typename Kokkos::Experimental::ScatterNonDuplicated> ndup_rigidtally;
 
   // force and torque one collision exerts on body surf isurf of body
-  //   ibody, the device twin of FixRigid::surf_tally()
+  //   ibody, the device twin of FixRigid::surf_tally(): tallied into
+  //   the row of the surf's element
 
   template<int ATOMIC_REDUCTION>
   KOKKOS_INLINE_FUNCTION
@@ -227,13 +229,14 @@ class UpdateKokkos : public Update {
 
     auto v_tally = ScatterViewHelper<typename NeedDup<ATOMIC_REDUCTION,DeviceType>::value,decltype(dup_rigidtally),decltype(ndup_rigidtally)>::get(dup_rigidtally,ndup_rigidtally);
     auto a_tally = v_tally.template access<typename AtomicDup<ATOMIC_REDUCTION,DeviceType>::value>();
+    const int k = d_surfelem(isurf);
 
-    a_tally(isurf,0) -= pdelta[0] * nfactor_inverse_kk;
-    a_tally(isurf,1) -= pdelta[1] * nfactor_inverse_kk;
-    a_tally(isurf,2) -= pdelta[2] * nfactor_inverse_kk;
-    a_tally(isurf,3) -= torque[0] * nfactor_inverse_kk;
-    a_tally(isurf,4) -= torque[1] * nfactor_inverse_kk;
-    a_tally(isurf,5) -= torque[2] * nfactor_inverse_kk;
+    a_tally(k,0) -= pdelta[0] * nfactor_inverse_kk;
+    a_tally(k,1) -= pdelta[1] * nfactor_inverse_kk;
+    a_tally(k,2) -= pdelta[2] * nfactor_inverse_kk;
+    a_tally(k,3) -= torque[0] * nfactor_inverse_kk;
+    a_tally(k,4) -= torque[1] * nfactor_inverse_kk;
+    a_tally(k,5) -= torque[2] * nfactor_inverse_kk;
   }
 
   DAT::t_float_2d_lr d_fieldfix_array_particle;

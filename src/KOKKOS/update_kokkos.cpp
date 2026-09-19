@@ -404,18 +404,27 @@ void UpdateKokkos::setup()
      one entry per local+ghost surf
 ------------------------------------------------------------------------- */
 
-void UpdateKokkos::rigid_maps_changed()
+void UpdateKokkos::rigid_maps_changed(FixRigid *fix)
 {
-  Update::rigid_maps_changed();
+  Update::rigid_maps_changed(fix);
 
   int n = surf->nlocal + surf->nghost;
-  if ((int) k_rigidmap.extent(0) < n)
+  if ((int) k_rigidmap.extent(0) < n) {
     k_rigidmap = DAT::tdual_int_1d("update:rigidmap",n);
+    k_surfelem = DAT::tdual_int_1d("update:surfelem",n);
+  }
   auto h_rigidmap = k_rigidmap.view_host();
-  for (int i = 0; i < n; i++) h_rigidmap(i) = rigidmap[i];
+  auto h_surfelem = k_surfelem.view_host();
+  for (int i = 0; i < n; i++) {
+    h_rigidmap(i) = rigidmap[i];
+    h_surfelem(i) = fix->surfelem[i];
+  }
   k_rigidmap.modify_host();
   k_rigidmap.sync_device();
+  k_surfelem.modify_host();
+  k_surfelem.sync_device();
   d_rigidmap = k_rigidmap.view_device();
+  d_surfelem = k_surfelem.view_device();
 }
 
 /* ----------------------------------------------------------------------
@@ -446,7 +455,7 @@ void UpdateKokkos::rigid_upload()
   k_rigidbody.sync_device();
   d_rigidbody = k_rigidbody.view_device();
 
-  // the fix's per-surf force/torque tallies, zeroed by the fix in
+  // the fix's per-element force/torque tallies, zeroed by the fix in
   //   start_of_step(), accumulated by the move kernel below through a
   //   scatter view (duplicated on host threads, atomic on a GPU) and
   //   summed per body by the fix in end_of_step()

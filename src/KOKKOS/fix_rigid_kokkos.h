@@ -50,7 +50,6 @@ class FixRigidKokkos : public FixRigid {
   void start_of_step();
   void end_of_step();
   void grid_changed();
-  void surf_maps();
   void remove_inside_all(int);
   void particles_to_host();
   void combine_split_all();
@@ -177,20 +176,18 @@ class FixRigidKokkos : public FixRigid {
 
  public:
 
-  // per local+ghost surf: force/torque (fx,fy,fz,tx,ty,tz) tallied by
-  //   the KOKKOS move kernel for this step's collisions, zeroed in
-  //   start_of_step(), read by UpdateKokkos::rigid_upload()
+  // per body element: force/torque (fx,fy,fz,tx,ty,tz) tallied by the
+  //   KOKKOS move kernel for this step's collisions on any local copy of
+  //   the element, zeroed in start_of_step(), summed by sum_tallies()
 
   tdual_dbl_2d k_ftally;
   tdual_dbl_2d::t_dev d_ftally;
 
  private:
 
-  // per body: its local+ghost surfs as a CSR list in surf index order,
-  //   built with the per-surf maps, and the per-body sums of the tallies
+  // per body: its element range, and the per-body sums of the tallies
 
-  DAT::tdual_int_1d k_bodysurfstart,k_bodysurflist;
-  DAT::t_int_1d d_bodysurfstart,d_bodysurflist;
+  DAT::t_int_1d d_bodystart;
   tdual_dbl_2d k_ft;
   tdual_dbl_2d::t_dev d_ft;
 

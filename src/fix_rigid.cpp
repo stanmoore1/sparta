@@ -1461,17 +1461,24 @@ void FixRigid::sum_forces()
 }
 
 /* ----------------------------------------------------------------------
-   per-body sums of this proc's tallies into ftbuf_mine, row by row in
-     the order the rows were created
+   per-body sums of this proc's tallies into ftbuf_mine, element by
+     element in element order, the order the device sums them in
 ------------------------------------------------------------------------- */
 
 void FixRigid::sum_tallies()
 {
-  for (int i = 0; i < 6*nbody; i++) ftbuf_mine[i] = 0.0;
+  int itally;
 
-  for (int i = 0; i < ntally; i++) {
-    double *ft = &ftbuf_mine[6*body[tally2elem[i]]];
-    for (int j = 0; j < 6; j++) ft[j] += ftally[i][j];
+  for (int i = 0; i < 6*nbody; i++) ftbuf_mine[i] = 0.0;
+  if (!ntally) return;
+
+  for (int ibody = 0; ibody < nbody; ibody++) {
+    double *ft = &ftbuf_mine[6*ibody];
+    for (int k = bodystart[ibody]; k < bodystart[ibody+1]; k++) {
+      itally = elem2tally[k];
+      if (itally < 0) continue;
+      for (int j = 0; j < 6; j++) ft[j] += ftally[itally][j];
+    }
   }
 }
 
@@ -2037,7 +2044,7 @@ void FixRigid::surf_maps()
     }
   }
 
-  update->rigid_maps_changed();
+  update->rigid_maps_changed(this);
 }
 
 /* ----------------------------------------------------------------------

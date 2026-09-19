@@ -61,7 +61,7 @@ class Update : protected Pointers {
                               //   the mover tests surfs of ghost cells too
                               // owned by the fix (FixRigid::surfbody)
 
-  virtual void rigid_maps_changed();  // the fix rebuilt its per-surf maps
+  virtual void rigid_maps_changed(class FixRigid *); // the fix rebuilt its maps
   class FixRigid *find_fixrigid();  // look up the fix rigid in Modify
   void init_rigid();          // per-run setup of the rigid bodies
 
