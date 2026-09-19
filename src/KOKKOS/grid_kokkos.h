@@ -257,6 +257,11 @@ class GridKokkos : public Grid {
 
   int stage_records(int, int *, int **);   // dedup a dirty list
   void upload_list_records(int, ListRecord *, int *, bigint);
+
+  // public, and not private, only because nvcc refuses an extended
+  //   __host__ __device__ lambda inside a private member function
+
+ public:
   void build_crs(int, Kokkos::Crs<int, DeviceType, void, crs_size_type> &,
                  Kokkos::View<crs_size_type*,DeviceType> &, DAT::t_int_1d &,
                  Kokkos::Crs<int, DeviceType, void, crs_size_type> &);

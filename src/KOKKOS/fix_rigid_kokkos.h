@@ -185,8 +185,12 @@ class FixRigidKokkos : public FixRigid {
 
   // device replacement for the host assign_split_cell_particles() pass in
   //   remove_inside_all_kokkos(), the last per-step host particle consumer
+  // public, and not private, only because nvcc refuses an extended
+  //   __host__ __device__ lambda inside a private member function
 
+ public:
   int assign_split_kokkos();
+ private:
 
   // the split cells to re-assign, and a flat (cell,slot) work list so one
   //   thread handles one particle
