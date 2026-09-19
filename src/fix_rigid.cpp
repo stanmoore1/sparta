@@ -2152,11 +2152,6 @@ int FixRigid::ensure_local_copies()
     if (lblist[k] < 0 && bodyneed[body[k]]) nmissing++;
   if (!nmissing) return 0;
 
-  // the surf arrays are about to be restructured and re-copied whole:
-  //   fix rigid/kk brings every host copy of a body surf up to date first
-
-  refresh_host_surfs();
-
   // build the missing copies from the body table and append them to
   //   the local range; Surf re-packs the ghosts after them and maps each
   //   old ghost index to its new one, so the ghost cells' cut lists can

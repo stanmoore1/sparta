@@ -67,6 +67,7 @@ FixRigidKokkos::FixRigidKokkos(SPARTA *sparta, int narg, char **arg) :
   hostgeom = NULL;
   maxhostgeom = 0;
   ncopy_kk = 0;
+  devicegeom = 0;
   maxdelete_kk = 0;
   d_ndelete_kk = DAT::t_int_scalar("fix_rigid:ndelete");
   h_ndelete_kk = Kokkos::create_mirror_view(d_ndelete_kk);
@@ -139,6 +140,7 @@ void FixRigidKokkos::host_end()
   else grid_kk->apply_changes();
   remap->listschanged = 0;
   remap->restructured = 0;
+
 }
 
 /* ----------------------------------------------------------------------
@@ -233,6 +235,7 @@ void FixRigidKokkos::setup()
   ((SurfKokkos*) surf)->modify(Host,ALL_MASK);
   pack_body_static();
   pack_body_geometry();
+  devicegeom = 1;
   host_end();
 }
 
@@ -286,9 +289,12 @@ void FixRigidKokkos::end_of_step()
   host_begin();
   FixRigid::end_of_step();
 
-  // output at this step reads the host surfs
+  // output at this step reads the host surfs; with distributed surfs a
+  //   load balance or grid change restructures the host surf arrays
+  //   before this fix hears of it, so they are kept current every step
 
-  if (output->next == update->ntimestep) refresh_host_surfs();
+  if (surf->distributed || output->next == update->ntimestep)
+    refresh_host_surfs();
   host_end();
 }
 
@@ -325,7 +331,7 @@ void FixRigidKokkos::post_run()
 void FixRigidKokkos::surf_maps()
 {
   FixRigid::surf_maps();
-  pack_body_static();
+  if (devicegeom) pack_body_static();
 }
 
 /* ----------------------------------------------------------------------
@@ -358,18 +364,21 @@ void FixRigidKokkos::swept_boxes()
 
 void FixRigidKokkos::host_geometry(int ibody)
 {
-  if (hostgeom[ibody]) return;
+  if (!devicegeom || hostgeom[ibody]) return;
   body_geometry(ibody);
   hostgeom[ibody] = 1;
 }
 
 /* ----------------------------------------------------------------------
    the host copies of every body surf, for a host consumer of the surf
-     arrays: output, a grid rebuild, appended local copies
+     arrays: output, a grid rebuild, every step with distributed surfs
+   only with the copy tables of the current surf arrays: never between
+     a restructure of the arrays and FixRigid::grid_changed()
 ------------------------------------------------------------------------- */
 
 void FixRigidKokkos::refresh_host_surfs()
 {
+  if (!devicegeom) return;
   for (int ibody = 0; ibody < nbody; ibody++) host_geometry(ibody);
   update_surf_copies();
 }
@@ -1459,7 +1468,6 @@ int FixRigidKokkos::remove_inside_all_kokkos(int splitflag)
 
 void FixRigidKokkos::grid_changed()
 {
-  refresh_host_surfs();
   FixRigid::grid_changed();
   if (surf->distributed) ((SurfKokkos*) surf)->modify(Host,ALL_MASK);
   ((GridKokkos*) grid)->modify(Host,CELL_MASK);

@@ -172,6 +172,7 @@ class FixRigidKokkos : public FixRigid {
   int ncopy_kk;
   int *hostgeom;
   int maxhostgeom;
+  int devicegeom;               // 1 once setup() put the geometry on the device
 
   tdual_dbl_3d::t_dev d_displace_kk,d_bodypt_kk;
   tdual_dbl_2d::t_dev d_bodynorm_kk,d_elemlo_kk,d_elemhi_kk,d_pose_kk;
