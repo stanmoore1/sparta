@@ -20,14 +20,14 @@ boundary	    r r p
 create_box  	    0 10 0 10 -0.5 0.5
 Created orthogonal box = (0 0 -0.5) to (10 10 0.5)
 create_grid 	    50 50 1
-WARNING: Could not acquire nearby ghost cells b/c grid partition is not clumped (/home/user/sparta/src/grid.cpp:521)
+WARNING: Could not acquire nearby ghost cells b/c grid partition is not clumped (/home/user/sparta/src/grid.cpp:554)
 Created 2500 child grid cells
-  CPU time = 0.000901749 secs
-  create/ghost percent = 95.1034 4.8966
+  CPU time = 0.116001 secs
+  create/ghost percent = 10.3435 89.6565
 balance_grid        rcb cell
 Balance grid migrated 1874 cells
-  CPU time = 0.000742558 secs
-  reassign/sort/migrate/ghost percent = 43.2571 0.585543 30.3679 25.7895
+  CPU time = 0.651998 secs
+  reassign/sort/migrate/ghost percent = 55.2187 1.83676 12.8895 30.0551
 
 global		    nrho 0.5 fnum 0.001
 
@@ -46,10 +46,10 @@ read_surf           data.many.surf type group bodies
   1400 95 1005 = cells outside/inside/overlapping surfs
   988 17 = surf cells with 1,2,etc splits
   80.5886 80.5886 = cell-wise and global flow volume
-  CPU time = 0.00788376 secs
-  read/check/sort/surf2grid/ghost/inout/particle percent = 69.7324 13.7145 0.282771 13.9345 2.33592 1.2572 0.0140162
-  surf2grid time = 0.00109856 secs
-  map/comm1/comm2/comm3/comm4/split percent = 15.6405 17.4571 6.20413 3.49977 28.4937 25.9145
+  CPU time = 0.6 secs
+  read/check/sort/surf2grid/ghost/inout/particle percent = 12.0004 19.333 1.33878 38.6611 28.6668 24.0005 1.99948
+  surf2grid time = 0.231966 secs
+  map/comm1/comm2/comm3/comm4/split percent = 3.53015 24.1461 12.0734 10.2702 3.56747 17.2464
 
 surf_collide	    1 diffuse 300.0 0.5
 surf_modify         all collide 1
@@ -57,7 +57,7 @@ surf_modify         all collide 1
 create_particles    air n 0
 WARNING: Created unexpected # of particles: 40291 versus 40294 (/home/user/sparta/src/create_particles.cpp:445)
 Created 40291 particles
-  CPU time = 0.00261133 secs
+  CPU time = 0.0545764 secs
 
 timestep 	    0.0001
 
@@ -84,44 +84,45 @@ Step Np Nscoll f_1[1][1] f_1[1][2] f_1[1][4] f_1[50][1] f_1[50][2] f_1[50][4] f_
      200    40291     1339     4.757372   0.43366878   -26.581107     5.451081    7.0322085   0.18014795    7.6255515    4.4476325  -0.52649955 
      300    40291     1274    4.4955002   0.54905149   -25.681287    5.4519615    7.3159294  -0.26388211    7.6190884     4.380724  -0.87495279 
      400    40291     1269    4.2404914   0.65863187   -24.995331    5.3708182    7.4855691   -25.908837     7.576215    4.2908206   -8.3213115 
-     500    40291     1357    4.2191904   0.49752866    5.1059294     5.125545    7.4064615   -13.966172    7.4998717    4.1722644   -6.9019125 
-     600    40291     1245    4.2657791   0.38132068    4.1013023    5.1059334    7.5939892    3.2270637    7.6484825    4.1593414    40.228038 
-     700    40291     1230    4.3046123   0.60269061    4.0344856    5.1366434    7.6413237    4.2110584    8.0436434    4.1967496    38.672556 
-     800    40291     1250    4.3370555   0.79233543  -0.67030532    5.1092484    7.5345924   -14.205426    8.0907929    4.3443418     2.593777 
-     900    40291     1314    4.2920529   0.78372378   -4.2930277    5.0401207      7.36122      18.2692     8.121096    4.4895152    3.3839971 
-    1000    40291     1296     4.255066   0.76664979   -3.3746201    5.2618547    7.2668842     21.60549    8.1525258    4.6306798    2.8769141 
-    1100    40291     1297    4.3557604   0.81369892    30.550838    5.4732263    7.1709878    20.193159    8.1796753    4.7683728    2.3907543 
-    1200    40291     1304    4.5391135   0.76195456    9.9974415    5.6695972     7.076545    18.961279    8.2044542    4.9052941    2.9867789 
-    1300    40291     1260    4.6380356   0.69259846    9.7586031    5.8544182    6.9824654    18.253485     8.236706    5.0421316    3.6400228 
-    1400    40291     1233    4.7332768    0.6213816    9.1284447    6.0414036    6.9012299    24.740316    8.2514004    5.2474948   0.51845409 
-    1500    40291     1292     4.824175   0.55661614    9.1333246    6.2847554     6.927104    23.681197    8.2839618    5.3793787    3.6120811 
-    1600    40291     1280    4.9155702   0.49301682    8.8392099      6.39422    6.8788581    -4.662144     8.320237    5.5013581    3.5860034 
-    1700    40291     1308    4.9989743   0.43217135    7.9940401    6.3516754    6.7664578    -3.740193    8.3503258    5.6208888    3.0806055 
-    1800    40291     1303    5.0818033   0.37117728    8.4406833    6.3149285    6.6611631   -3.4915031    8.3802048    5.7375012    2.7899525 
-    1900    40291     1351    5.1668761    0.3721971    8.3109062    6.2830597    6.5643155    7.1287521    8.4068316    5.8559221    1.9856168 
-    2000    40291     1338    5.2474615   0.43795313    8.0850381    6.3002336    6.6660696   -4.1446969    8.4261673    5.9725525    1.7542293 
-Loop time of 5.80557 on 4 procs for 2000 steps with 40291 particles
-Performance: 344.497 timesteps/s, 13.880 Mparticle-step/s
+     500    40290     1324    4.2192291   0.49768679    5.1390408    5.1251465    7.4067415   -14.402448    7.4998243    4.1724043   -6.9905304 
+     600    40290     1299    4.2694173    0.3774191    5.0795701    5.1079061    7.5872698    3.4780486    7.6451439    4.1561351    39.109121 
+     700    40289     1346    4.3194871   0.59822394      4.88383    5.1412706    7.6225755    3.2997644    8.0264439    4.1889523    37.229067 
+     800    40289     1292    4.3559619   0.76670932    1.6095687    5.1095168    7.5427199   -12.179887    8.0689526     4.316786    1.3029531 
+     900    40289     1247    4.3666935   0.82219007   0.53219192       5.0366     7.318443    16.917208    8.0789677    4.4527181   0.94947617 
+    1000    40287     1304    4.3669326   0.85935976  -0.49126134    5.2172291    7.2838985    20.163383    8.0899455    4.5893157    1.0596771 
+    1100    40287     1273    4.3949112   0.81741075   0.74697645    5.4130555    7.2056146    18.924114    8.0988712     4.723439     1.104802 
+    1200    40287     1292    4.4500174   0.67662432    15.252232     5.597249    7.1225377    17.922649    8.1062225    4.8090455  -0.59776519 
+    1300    40285     1254    4.5982931   0.55053815     14.55599    5.6938893    7.0723852   -8.3213281    8.1003181    4.7361876  -0.71234229 
+    1400    40284     1293    4.7409266   0.42565792    13.888465    5.5982212    7.0441669   -12.690513    8.0930076    4.6672416  -0.63062495 
+    1500    40284     1252    4.8813279   0.36427239    13.811315    5.5457506    6.8555759    -2.182959     8.088333    4.6030442    7.9446854 
+    1600    40284     1268    5.0211501   0.47666874    14.161038     5.533372    6.7983253  -0.91815824    8.1908987    4.5101673    10.274712 
+    1700    40284     1326    5.1642155   0.58167276    13.967894    5.5206187    6.8042387   -1.3388933    8.2932836     4.421867    10.087766 
+    1800    40284     1231    5.2960483   0.68524828    12.448161     5.507456    6.8023348   -1.3076633    8.3941874    4.3331772    9.9047165 
+    1900    40284     1317    5.4183084   0.78357953    11.593075      5.49802    6.8020264  -0.69366183    8.4737135    4.3027825    7.1178152 
+WARNING: 7 particles were deleted inside a rigid body during this run.  A body may be moving too far per timestep, or its surfs may lie exactly on grid cell boundaries (/home/user/sparta/src/fix_rigid.cpp:3697)
+    2000    40284     1237    5.5432495   0.86390519    17.241431    5.4981874    6.7907623    0.4879919    8.5443196    4.3028698    7.0054766 
+Loop time of 299.948 on 4 procs for 2000 steps with 40284 particles
+Performance: 6.668 timesteps/s, 268.607 kparticle-step/s
 
 MPI task timing breakdown:
 Section |  min time  |  avg time  |  max time  |%varavg| %total
 ---------------------------------------------------------------
-Move    | 2.1748     | 2.2089     | 2.2702     |   2.5 | 38.05
+Move    | 2.1956     | 2.2801     | 2.3556     |   4.3 |  0.76
 Coll    | 0          | 0          | 0          |   0.0 |  0.00
 Sort    | 0          | 0          | 0          |   0.0 |  0.00
-Comm    | 0.044513   | 0.046501   | 0.047647   |   0.6 |  0.80
-Modify  | 2.5909     | 2.6069     | 2.6243     |   0.9 | 44.90
-Output  | 0.61821    | 0.61837    | 0.61849    |   0.0 | 10.65
-MPI Sync| 0.24495    | 0.32443    | 0.37333    |   8.4 |  5.59
-Other   |            | 0.0004253  |            |       |  0.01
+Comm    | 158.95     | 166.97     | 176.42     |  50.9 | 55.67
+Modify  | 72.795     | 74.34      | 75.361     |  12.1 | 24.78
+Output  | 2.4187     | 2.4473     | 2.4913     |   1.7 |  0.82
+MPI Sync| 43.519     | 53.911     | 60.979     |  93.9 | 17.97
+Other   |            | 0.00187    |            |       |  0.00
 
-Particle moves    = 80582000 (80.6M)
-Cells touched     = 106289188 (106M)
-Particle comms    = 482049 (0.482M)
-Boundary collides = 650023 (0.65M)
+Particle moves    = 80574865 (80.6M)
+Cells touched     = 106319096 (106M)
+Particle comms    = 487301 (0.487M)
+Boundary collides = 652252 (0.652M)
 Boundary exits    = 0 (0K)
-SurfColl checks   = 119624849 (120M)
-SurfColl occurs   = 2578692 (2.58M)
+SurfColl checks   = 119358382 (119M)
+SurfColl occurs   = 2576836 (2.58M)
 Surf reactions    = 0 (0K)
 Collide attempts  = 0 (0K)
 Collide occurs    = 0 (0K)
@@ -129,24 +130,24 @@ Reactions         = 0 (0K)
 Particles stuck   = 0
 Axisymm bad moves = 0
 
-Particle-moves/CPUsec/proc: 3.47003e+06
-Particle-moves/step: 40291
-Cell-touches/particle/step: 1.31902
-Particle comm iterations/step: 2.835
-Particle fraction communicated: 0.00598209
-Particle fraction colliding with boundary: 0.0080666
+Particle-moves/CPUsec/proc: 67157.4
+Particle-moves/step: 40287.4
+Cell-touches/particle/step: 1.31951
+Particle comm iterations/step: 2.91
+Particle fraction communicated: 0.0060478
+Particle fraction colliding with boundary: 0.00809498
 Particle fraction exiting boundary: 0
-Surface-checks/particle/step: 1.48451
-Surface-collisions/particle/step: 0.0320008
+Surface-checks/particle/step: 1.48134
+Surface-collisions/particle/step: 0.0319806
 Surf-reactions/particle/step: 0
 Collision-attempts/particle/step: 0
 Collisions/particle/step: 0
 Reactions/particle/step: 0
 
-Particles: 10072.8 ave 10180 max 9980 min
-Histogram: 1 1 0 0 0 0 1 0 0 1
-Cells:      632 ave 633 max 631 min
-Histogram: 2 0 0 0 0 0 0 0 0 2
+Particles: 10071 ave 10192 max 9943 min
+Histogram: 1 0 0 1 0 0 0 1 0 1
+Cells:      635 ave 637 max 631 min
+Histogram: 1 0 0 0 0 0 1 0 0 2
 GhostCell: 51 ave 51 max 51 min
 Histogram: 4 0 0 0 0 0 0 0 0 0
 EmptyCell: 51 ave 51 max 51 min

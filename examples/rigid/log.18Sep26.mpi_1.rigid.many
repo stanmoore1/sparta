@@ -21,12 +21,12 @@ create_box  	    0 10 0 10 -0.5 0.5
 Created orthogonal box = (0 0 -0.5) to (10 10 0.5)
 create_grid 	    50 50 1
 Created 2500 child grid cells
-  CPU time = 0.00120029 secs
-  create/ghost percent = 67.8393 32.1607
+  CPU time = 0.00145283 secs
+  create/ghost percent = 72.2596 27.7404
 balance_grid        rcb cell
 Balance grid migrated 0 cells
-  CPU time = 0.000464018 secs
-  reassign/sort/migrate/ghost percent = 33.2918 1.95553 6.2351 58.5176
+  CPU time = 0.000471104 secs
+  reassign/sort/migrate/ghost percent = 50.17 2.54869 6.94263 40.3387
 
 global		    nrho 0.5 fnum 0.001
 
@@ -45,10 +45,10 @@ read_surf           data.many.surf type group bodies
   1400 95 1005 = cells outside/inside/overlapping surfs
   988 17 = surf cells with 1,2,etc splits
   80.5886 80.5886 = cell-wise and global flow volume
-  CPU time = 0.00567943 secs
-  read/check/sort/surf2grid/ghost/inout/particle percent = 38.7321 16.6143 1.13268 36.0402 7.48068 2.74885 0.00160227
-  surf2grid time = 0.00204688 secs
-  map/comm1/comm2/comm3/comm4/split percent = 25.0395 23.5708 10.8873 4.67048 11.4919 21.761
+  CPU time = 0.0057293 secs
+  read/check/sort/surf2grid/ghost/inout/particle percent = 39.2234 19.0004 1.54706 33.4344 6.79474 3.0668 0.00370028
+  surf2grid time = 0.00191556 secs
+  map/comm1/comm2/comm3/comm4/split percent = 25.3881 23.705 8.40952 5.59044 14.409 18.6705
 
 surf_collide	    1 diffuse 300.0 0.5
 surf_modify         all collide 1
@@ -56,7 +56,7 @@ surf_modify         all collide 1
 create_particles    air n 0
 WARNING: Created unexpected # of particles: 40292 versus 40294 (/home/user/sparta/src/create_particles.cpp:445)
 Created 40292 particles
-  CPU time = 0.0085178 secs
+  CPU time = 0.00902967 secs
 
 timestep 	    0.0001
 
@@ -86,42 +86,41 @@ Step Np Nscoll f_1[1][1] f_1[1][2] f_1[1][4] f_1[50][1] f_1[50][2] f_1[50][4] f_
      500    40292     1371    4.1566615    0.5267547   -5.4251542    5.0990504     7.370773   -13.225587    7.3116683    4.2043092   -17.065362 
      600    40292     1343    4.1029398   0.34577768   -5.4448025    4.7594237     7.219011   -39.891826    7.4777967    4.0165012    28.259981 
      700    40292     1317    4.0549232   0.55070285   -3.7972524    4.8319107    7.0912226    25.450612    7.7889551    3.8702869    31.262783 
-     800    40292     1253    4.1653754   0.61063618     8.980187    5.0822964    6.9788046    24.427807    8.1005014    3.7454659    30.809728 
-     900    40292     1234    4.2644032   0.47144713    10.343629    5.1873463    6.9430747   0.38271809    8.4082088    3.6274695    30.818903 
-    1000    40292     1281    4.3660571    0.3438554    9.9031965    5.1952659    6.9798734    1.2148995    8.7095873    3.5143317    29.481743 
-    1100    40292     1274    4.4626218   0.44531663     9.698928    5.2840166    6.9155182    12.936756    8.9958487    3.4087711    27.900399 
-    1200    40292     1260    4.5560574   0.55965006    9.1599959    5.2723963    6.7998664   -9.0054384    9.2666098    3.3062312    26.586236 
-    1300    40292     1246    4.6491744   0.59751249    9.9551599    5.1798071    6.7228093   -9.3859717    9.5282203    3.2094819    25.918613 
-    1400    40292     1290    4.7587383   0.40254298    10.843106    5.0894424    6.6510067   -8.7645163    9.5736154    3.1182338   -25.289407 
-    1500    40292     1249    4.8184075   0.39466592   -13.870127    5.0032885    6.5824079   -8.4524866     9.327552    3.0351507   -23.889558 
-    1600    40291     1276    4.6938876   0.36993647   -12.842777    4.9171468    6.5120673   -8.8238269    9.0974451    2.9562349   -22.487003 
-    1700    40291     1295    4.5683174   0.37339681   -11.934598    4.8469894    6.4503255   -6.6411151    8.8956799    2.9969817   -19.609747 
-    1800    40291     1255    4.4496035   0.38144767   -11.884845    4.7489649    6.3986225   -11.694122     8.703442    3.0459734   -18.826928 
-    1900    40291     1241     4.335254    0.3908848   -11.082861    4.6348486    6.3434758   -10.749826    8.5190108    3.0888512   -18.144211 
-WARNING: 1 particles were deleted inside a rigid body during this run.  A body may be moving too far per timestep, or its surfs may lie exactly on grid cell boundaries (/home/user/sparta/src/fix_rigid.cpp:3584)
-    2000    40291     1345    4.2259584   0.40190328   -10.803623    4.5286857    6.2865995   -10.730093    8.4084842    3.0193417   -5.0684237 
-Loop time of 16.6405 on 1 procs for 2000 steps with 40291 particles
-Performance: 120.189 timesteps/s, 4.843 Mparticle-step/s
+     800    40292     1253    4.1653754   0.61063618    8.9801869    5.0822964    6.9788046    24.427807    8.1005014    3.7454659    30.809728 
+     900    40292     1234    4.2644032   0.47144713    10.343629    5.1873463    6.9430747   0.38271801    8.4082088    3.6274695    30.818903 
+    1000    40292     1281    4.3660571    0.3438554    9.9031964    5.1952659    6.9798734    1.2148994    8.7095873    3.5143317    29.481743 
+    1100    40292     1342    4.4625462   0.44541922    9.9219161    5.2826612    6.9145936    12.769157    8.9957537    3.4114422    27.856491 
+    1200    40292     1309    4.5596225   0.56332812    9.2499028    5.2663326    6.7969697   -11.066904    9.2685306     3.313006    26.880064 
+    1300    40292     1269    4.6587372   0.60961433    11.029888    5.1588036    6.6964511   -10.448505    9.5320502     3.217138    26.180329 
+    1400    40292     1231    4.8029035    0.4228022    13.577789    5.0547124    6.6006926   -9.9536456    9.5702577    3.1208503    -25.06231 
+    1500    40292     1264    4.8858495   0.36910641   -10.921139    5.0270714    6.5686849    4.1137563    9.3215556    3.0211838   -24.565114 
+    1600    40292     1311    4.7774945   0.37985089   -10.879847    5.0652998    6.5926221    3.3821274    9.0849063    2.9242277   -22.734579 
+    1700    40292     1290    4.6709349   0.45788125   -10.402432    5.0973953    6.6157989     3.024072    8.8931169    2.9579061    -18.46339 
+    1800    40292     1279     4.569051   0.53229626     -9.57126    4.9887236    6.6555688   -18.711736    8.7161264    2.9977297    -16.88116 
+    1900    40292     1274    4.4790917   0.60691475   -8.4634635    4.8072659     6.701653   -17.548195    8.5546331    3.0320223   -15.837899 
+    2000    40292     1277    4.3969389   0.68464877    -8.141679    4.6307282      6.71404   -18.239176    8.4027258    3.0808335   -9.6505087 
+Loop time of 15.5054 on 1 procs for 2000 steps with 40292 particles
+Performance: 128.987 timesteps/s, 5.197 Mparticle-step/s
 
 MPI task timing breakdown:
 Section |  min time  |  avg time  |  max time  |%varavg| %total
 ---------------------------------------------------------------
-Move    | 8.8716     | 8.8716     | 8.8716     |   0.0 | 53.31
+Move    | 8.3316     | 8.3316     | 8.3316     |   0.0 | 53.73
 Coll    | 0          | 0          | 0          |   0.0 |  0.00
 Sort    | 0          | 0          | 0          |   0.0 |  0.00
-Comm    | 0.0016384  | 0.0016384  | 0.0016384  |   0.0 |  0.01
-Modify  | 6.7846     | 6.7846     | 6.7846     |   0.0 | 40.77
-Output  | 0.98063    | 0.98063    | 0.98063    |   0.0 |  5.89
-MPI Sync| 0.0014984  | 0.0014984  | 0.0014984  |   0.0 |  0.01
-Other   |            | 0.0005033  |            |       |  0.00
+Comm    | 0.0022427  | 0.0022427  | 0.0022427  |   0.0 |  0.01
+Modify  | 6.2906     | 6.2906     | 6.2906     |   0.0 | 40.57
+Output  | 0.87816    | 0.87816    | 0.87816    |   0.0 |  5.66
+MPI Sync| 0.0021481  | 0.0021481  | 0.0021481  |   0.0 |  0.01
+Other   |            | 0.0006497  |            |       |  0.00
 
-Particle moves    = 80583597 (80.6M)
-Cells touched     = 106282720 (106M)
+Particle moves    = 80584000 (80.6M)
+Cells touched     = 106277604 (106M)
 Particle comms    = 0 (0K)
-Boundary collides = 654315 (0.654M)
+Boundary collides = 653007 (0.653M)
 Boundary exits    = 0 (0K)
-SurfColl checks   = 119339279 (119M)
-SurfColl occurs   = 2574062 (2.57M)
+SurfColl checks   = 119550942 (120M)
+SurfColl occurs   = 2573879 (2.57M)
 Surf reactions    = 0 (0K)
 Collide attempts  = 0 (0K)
 Collide occurs    = 0 (0K)
@@ -129,23 +128,23 @@ Reactions         = 0 (0K)
 Particles stuck   = 0
 Axisymm bad moves = 0
 
-Particle-moves/CPUsec/proc: 4.84263e+06
-Particle-moves/step: 40291.8
-Cell-touches/particle/step: 1.31891
+Particle-moves/CPUsec/proc: 5.19716e+06
+Particle-moves/step: 40292
+Cell-touches/particle/step: 1.31884
 Particle comm iterations/step: 1
 Particle fraction communicated: 0
-Particle fraction colliding with boundary: 0.0081197
+Particle fraction colliding with boundary: 0.00810343
 Particle fraction exiting boundary: 0
-Surface-checks/particle/step: 1.48094
-Surface-collisions/particle/step: 0.0319428
+Surface-checks/particle/step: 1.48356
+Surface-collisions/particle/step: 0.0319403
 Surf-reactions/particle/step: 0
 Collision-attempts/particle/step: 0
 Collisions/particle/step: 0
 Reactions/particle/step: 0
 
-Particles: 40291 ave 40291 max 40291 min
+Particles: 40292 ave 40292 max 40292 min
 Histogram: 1 0 0 0 0 0 0 0 0 0
-Cells:      2542 ave 2542 max 2542 min
+Cells:      2534 ave 2534 max 2534 min
 Histogram: 1 0 0 0 0 0 0 0 0 0
 GhostCell: 0 ave 0 max 0 min
 Histogram: 1 0 0 0 0 0 0 0 0 0
