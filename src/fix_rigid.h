@@ -329,7 +329,7 @@ class FixRigid : public Fix {
   int same_coords(double *, double *, double *, int);  // coords = elem
   void scan_copies();           // lblist and the local copy list
   void update_surf_copies();    // write bodypt/bodynorm into Surf storage
-  void grid_rebuild();          // full re-map of all surfs to grid cells
+  virtual void grid_rebuild();  // full re-map of all surfs to grid cells
   bigint remove_inside_particles(int);  // all bodies, used at setup
   virtual void remove_inside_all(int);  // fused pass over all bodies, per step
                                         //   virtual so fix rigid/kk can run

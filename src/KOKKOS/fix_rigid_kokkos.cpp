@@ -273,6 +273,19 @@ void FixRigidKokkos::end_of_step()
 }
 
 /* ----------------------------------------------------------------------
+   full re-map of the surfs to the grid on the host, then the device grid
+     re-established at once: the deletion and split-assign pass which
+     follows runs on the device and reads the cells and the split graphs
+     the re-map replaced, so it must not wait for host_end()
+------------------------------------------------------------------------- */
+
+void FixRigidKokkos::grid_rebuild()
+{
+  FixRigid::grid_rebuild();
+  ((GridKokkos*) grid)->resync_after_host_change();
+}
+
+/* ----------------------------------------------------------------------
    per-body sums of the move kernel's per-element tallies into ftbuf_mine
    one thread per body, its elements in element order on every backend,
      the order the host sums its rows in
@@ -923,6 +936,7 @@ void FixRigidKokkos::operator()(TagFixRigidRemoveInside,
 
 int FixRigidKokkos::remove_inside_all_kokkos(int splitflag)
 {
+  }
   // the split-cell reassignment re-decides the sub cell of every particle of
   //   a changed split cell.  it must not be skipped: it changes results (the
   //   trajectory of the 1000-body deck moves, and moves TOWARD the
@@ -1017,8 +1031,6 @@ int FixRigidKokkos::remove_inside_all_kokkos(int splitflag)
   k_dellist_kk.sync_host();
   int *dellist_h = k_dellist_kk.view_host().data();
   std::sort(dellist_h,dellist_h+ndelete);
-  k_dellist_kk.modify_host();
-  k_dellist_kk.sync_device();
 
   particle_kk->modify(Device,PARTICLE_MASK);
   particle_kk->compress_migrate(ndelete,dellist_h);

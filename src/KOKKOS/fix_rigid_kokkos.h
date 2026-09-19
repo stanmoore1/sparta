@@ -49,6 +49,7 @@ class FixRigidKokkos : public FixRigid {
   void setup();
   void start_of_step();
   void end_of_step();
+  void grid_rebuild();
   void grid_changed();
   void remove_inside_all(int);
   void particles_to_host();
