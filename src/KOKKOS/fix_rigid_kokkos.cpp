@@ -936,7 +936,6 @@ void FixRigidKokkos::operator()(TagFixRigidRemoveInside,
 
 int FixRigidKokkos::remove_inside_all_kokkos(int splitflag)
 {
-  }
   // the split-cell reassignment re-decides the sub cell of every particle of
   //   a changed split cell.  it must not be skipped: it changes results (the
   //   trajectory of the 1000-body deck moves, and moves TOWARD the
@@ -1031,6 +1030,8 @@ int FixRigidKokkos::remove_inside_all_kokkos(int splitflag)
   k_dellist_kk.sync_host();
   int *dellist_h = k_dellist_kk.view_host().data();
   std::sort(dellist_h,dellist_h+ndelete);
+  k_dellist_kk.modify_host();
+  k_dellist_kk.sync_device();
 
   particle_kk->modify(Device,PARTICLE_MASK);
   particle_kk->compress_migrate(ndelete,dellist_h);
