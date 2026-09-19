@@ -273,6 +273,8 @@ void RigidContact::body(int ibody, double **fpush, double **tqpush)
   double fone[3],rdelta[3],tq[3];
   int blo[3],bhi[3];
 
+  fix->host_geometry(ibody);
+
   double *xcm1 = fix->xcm[ibody];
   double *fpush1 = fpush[ibody];
   double *tqpush1 = tqpush[ibody];
@@ -370,6 +372,7 @@ void RigidContact::body(int ibody, double **fpush, double **tqpush)
 
     for (int jj = 0; jj < nj; jj++) {
       jbody = jlist[jj];
+      fix->host_geometry(jbody);
       if (jbody == ibody) continue;
 
       for (e = bodystart[jbody]; e < bodystart[jbody+1]; e++) {

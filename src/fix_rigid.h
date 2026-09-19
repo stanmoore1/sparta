@@ -94,6 +94,9 @@ class FixRigid : public Fix {
   void surfs_changed(int, int = 0);  // notify per-surf models of the above
                                      //   2nd arg = 0 in run, 1 init, 2 setup
   virtual void surf_maps();     // rebuild surfbody/surfelem
+  void body_geometry(int);      // one body's geometry from its pose
+  virtual void host_geometry(int) {}   // fix rigid/kk: host copy of it
+  virtual void refresh_host_surfs() {} // fix rigid/kk: host surf copies
 
   // force/torque on a body surf from one particle collision,
   //   called by the particle mover for every collision with a body surf
@@ -311,6 +314,11 @@ class FixRigid : public Fix {
   void grow_tally();
   void sum_forces();            // per-body force/torque from the tallies
                                 //   and the push-off contacts
+  void set_pose();              // bodies to the end-of-step pose
+  int posesplit;                // 1 between initial_integrate() and
+                                //   set_pose(): xcm/quat at the start of
+                                //   the step, ex/ey/ez_space at its end
+  virtual void swept_boxes();   // per-element swept boxes of the step
   virtual void sum_tallies();   // local per-body sums of the tallies
                                 //   virtual: fix rigid/kk sums the device
                                 //   tallies with a kernel
@@ -318,7 +326,7 @@ class FixRigid : public Fix {
   // the per-step skeleton, see start_of_step() and end_of_step()
 
   void initial_integrate();     // half kick + drift to the end-of-step pose
-  void set_xv();                // commit the pose, regenerate the geometry
+  virtual void set_xv();                // commit the pose, regenerate the geometry
   void check_bounds();          // body vs simulation box
   void final_integrate();       // push-off forces + second half kick
   void remap_grid();            // re-map the body surfs to grid cells

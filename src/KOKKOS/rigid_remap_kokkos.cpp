@@ -88,7 +88,7 @@ void RigidRemapKokkos::collision_lists()
 
   grid_kk->apply_changes();
   grid_kk->sync_cell_bins();
-  fix_kk->pack_body_device(1);
+  fix_kk->pack_body_device();
 
   int ntotal = grid->nlocal + grid->nghost;
   int nbody = fix->nbody;
@@ -510,9 +510,7 @@ int RigidRemapKokkos::recut()
 
   grid_kk->apply_changes();
   grid_kk->sync_cell_bins();
-  surf_kk->modify(Host,ALL_MASK);
-  surf_kk->sync(Device,ALL_MASK);
-  fix_kk->pack_body_device(0);
+  fix_kk->pack_body_device();
 
   if (staticgen != staticgen_kk || (int) k_staticinside.extent(0) < nglocal) {
     if ((int) k_staticinside.extent(0) < nglocal)
@@ -1270,6 +1268,7 @@ int RigidRemapKokkos::recut()
     nlist_run++;
 
     if (h_cherr(m)) {
+      fix_kk->refresh_host_surfs();
       recut_cell(icell,n,newlist);
       continue;
     }

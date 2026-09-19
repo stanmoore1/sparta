@@ -37,6 +37,10 @@ struct TagFixRigidSumTallies{};
 struct TagFixRigidCellMapInit{};
 struct TagFixRigidCellMapSet{};
 struct TagFixRigidRelabel{};
+struct TagFixRigidGeometry{};
+struct TagFixRigidBodyBox{};
+struct TagFixRigidInflate{};
+struct TagFixRigidScatterSurfs{};
 
 class FixRigidKokkos : public FixRigid {
  public:
@@ -51,6 +55,12 @@ class FixRigidKokkos : public FixRigid {
   void end_of_step();
   void grid_rebuild();
   void grid_changed();
+  void post_run();
+  void surf_maps();
+  void set_xv();
+  void swept_boxes();
+  void host_geometry(int);
+  void refresh_host_surfs();
   void remove_inside_all(int);
   void particles_to_host();
   void combine_split_all();
@@ -92,6 +102,19 @@ class FixRigidKokkos : public FixRigid {
   KOKKOS_INLINE_FUNCTION
   void operator()(TagFixRigidRelabel, const int&) const;
 
+  // the body geometry from the pose: one thread per element (points,
+  //   normal, box), per body (bbox and its inflation), per element again
+  //   (box inflation) and per local surf copy (the surf itself)
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()(TagFixRigidGeometry, const int&) const;
+  KOKKOS_INLINE_FUNCTION
+  void operator()(TagFixRigidBodyBox, const int&) const;
+  KOKKOS_INLINE_FUNCTION
+  void operator()(TagFixRigidInflate, const int&) const;
+  KOKKOS_INLINE_FUNCTION
+  void operator()(TagFixRigidScatterSurfs, const int&) const;
+
   // device split2d/split3d, the same tests as Update::split2d/split3d
 
   KOKKOS_INLINE_FUNCTION
@@ -120,17 +143,44 @@ class FixRigidKokkos : public FixRigid {
  public:
 
   // the replicated body table on the device, read by the kernels here
-  //   and by RigidRemapKokkos: copied from the host arrays by
-  //   pack_body_device(), with the current element boxes (sweepflag 0)
-  //   or the swept ones of this step (sweepflag 1)
+  //   and by RigidRemapKokkos: the element tables from pack_body_static(),
+  //   the geometry and boxes from device_geometry() (current element
+  //   boxes after set_xv(), the swept ones of the step after
+  //   swept_boxes()), the bins of bodies by COM from pack_body_device()
 
-  void pack_body_device(int);
+  void pack_body_device();
   RigidBodyKK body;
 
   typedef RigidBodyKK::tdual_dbl_3d tdual_dbl_3d;
   typedef RigidBodyKK::tdual_dbl_2d tdual_dbl_2d;
+  typedef Kokkos::DualView<double*,DeviceType::array_layout,DeviceType> tdual_dbl_1d;
 
  private:
+  void pack_body_static();      // element tables to the device
+  void pack_body_geometry();    // host geometry to the device, at setup
+  void device_geometry(int);    // geometry and boxes from the pose
+
+  // per element: displace in the body frame and the body; per local
+  //   surf copy: its surf index and element; per body: the pose of
+  //   this step (xcm, ex, ey, ez, omega, rmax) and the box inflation
+  // hostgeom = per body, 1 if the host copy of its geometry is current
+
+  tdual_dbl_3d k_displace;
+  DAT::tdual_int_1d k_body,k_copy_index,k_copy_elem;
+  tdual_dbl_2d k_pose;
+  tdual_dbl_1d k_bboxeps;
+  int ncopy_kk;
+  int *hostgeom;
+  int maxhostgeom;
+
+  tdual_dbl_3d::t_dev d_displace_kk,d_bodypt_kk;
+  tdual_dbl_2d::t_dev d_bodynorm_kk,d_elemlo_kk,d_elemhi_kk,d_pose_kk;
+  tdual_dbl_2d::t_dev d_bbodylo_kk,d_bbodyhi_kk;
+  tdual_dbl_1d::t_dev d_bboxeps_kk;
+  DAT::t_int_1d d_body_kk,d_bodystart_kk,d_copy_index_kk,d_copy_elem_kk;
+  int sweep_kk,axiflag_kk;
+  double dt_kk;
+
 
   // device replacement for the host assign_split_cell_particles() pass in
   //   remove_inside_all_kokkos(), the last per-step host particle consumer

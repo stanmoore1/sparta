@@ -25,8 +25,13 @@
 #include "kokkos.h"
 #include "sparta_masks.h"
 #include "geometry_kokkos.h"
+#include "output.h"
+#include "domain.h"
 
 using namespace SPARTA_NS;
+
+#define EPSSURF 1.0e-4          // same as FixRigid
+#define BIG 1.0e20
 
 enum{CELLUNKNOWN,CELLOUTSIDE,CELLINSIDE,CELLOVERLAP};   // same as Grid
 
@@ -59,6 +64,9 @@ FixRigidKokkos::FixRigidKokkos(SPARTA *sparta, int narg, char **arg) :
 
   delete remap;
   remap = new RigidRemapKokkos(sparta,this);
+  hostgeom = NULL;
+  maxhostgeom = 0;
+  ncopy_kk = 0;
   maxdelete_kk = 0;
   d_ndelete_kk = DAT::t_int_scalar("fix_rigid:ndelete");
   h_ndelete_kk = Kokkos::create_mirror_view(d_ndelete_kk);
@@ -68,6 +76,8 @@ FixRigidKokkos::FixRigidKokkos(SPARTA *sparta, int narg, char **arg) :
 
 FixRigidKokkos::~FixRigidKokkos()
 {
+  if (copy || copymode) return;
+  memory->destroy(hostgeom);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -111,7 +121,8 @@ void FixRigidKokkos::host_end()
   ParticleKokkos *particle_kk = (ParticleKokkos*) particle;
   SurfKokkos *surf_kk = (SurfKokkos*) surf;
 
-  // surfs: the body geometry was regenerated on the host
+  // surfs: the body geometry was regenerated on the device by set_xv()
+  //   and the host copies are refreshed only for a host consumer
   // grid: the cells, split info, hash and per-cell surf graphs are
   //   patched from the change journal the Grid primitives kept, so
   //   nothing sized by the grid crosses to the device; a full re-map
@@ -122,7 +133,6 @@ void FixRigidKokkos::host_end()
   //   deletions on the next sync.  the host fallback path in
   //   remove_inside_all() does the flagging itself
 
-  surf_kk->modify(Host,ALL_MASK);
   particle_kk->sorted_kk = 0;
 
   if (grid->changed) grid_kk->resync_after_host_change();
@@ -216,6 +226,13 @@ void FixRigidKokkos::setup()
 {
   host_begin();
   FixRigid::setup();
+
+  // the host geometry and surfs are current at setup: the device takes
+  //   them from the host once, then keeps them itself
+
+  ((SurfKokkos*) surf)->modify(Host,ALL_MASK);
+  pack_body_static();
+  pack_body_geometry();
   host_end();
 }
 
@@ -232,7 +249,6 @@ void FixRigidKokkos::start_of_step()
   SurfKokkos *surf_kk = (SurfKokkos*) surf;
 
   grid_kk->sync(Host,ALL_MASK);
-  surf_kk->sync(Host,ALL_MASK);
 
   FixRigid::start_of_step();
 
@@ -269,6 +285,10 @@ void FixRigidKokkos::end_of_step()
 {
   host_begin();
   FixRigid::end_of_step();
+
+  // output at this step reads the host surfs
+
+  if (output->next == update->ntimestep) refresh_host_surfs();
   host_end();
 }
 
@@ -281,9 +301,449 @@ void FixRigidKokkos::end_of_step()
 
 void FixRigidKokkos::grid_rebuild()
 {
+  refresh_host_surfs();
   FixRigid::grid_rebuild();
   ((GridKokkos*) grid)->resync_after_host_change();
 }
+
+/* ----------------------------------------------------------------------
+   the host surfs are read after the run: dumps, restart files, a
+     write_surf, the next run's setup
+------------------------------------------------------------------------- */
+
+void FixRigidKokkos::post_run()
+{
+  refresh_host_surfs();
+  FixRigid::post_run();
+}
+
+/* ----------------------------------------------------------------------
+   per-surf maps, and the element tables the device keeps: the local
+     copies of the body surfs changed
+------------------------------------------------------------------------- */
+
+void FixRigidKokkos::surf_maps()
+{
+  FixRigid::surf_maps();
+  pack_body_static();
+}
+
+/* ----------------------------------------------------------------------
+   the bodies to the end-of-step pose, then their geometry, boxes and
+     surfs regenerated on the device; the host copies go stale and are
+     regenerated per body on demand by host_geometry()
+------------------------------------------------------------------------- */
+
+void FixRigidKokkos::set_xv()
+{
+  set_pose();
+  device_geometry(0);
+  body_bins();
+}
+
+/* ----------------------------------------------------------------------
+   the swept boxes of this step, on the device
+------------------------------------------------------------------------- */
+
+void FixRigidKokkos::swept_boxes()
+{
+  posesplit = 1;
+  device_geometry(1);
+}
+
+/* ----------------------------------------------------------------------
+   the host copy of one body's geometry, for a host consumer: the same
+     arithmetic as the device kernel, so it is the same geometry
+------------------------------------------------------------------------- */
+
+void FixRigidKokkos::host_geometry(int ibody)
+{
+  if (hostgeom[ibody]) return;
+  body_geometry(ibody);
+  hostgeom[ibody] = 1;
+}
+
+/* ----------------------------------------------------------------------
+   the host copies of every body surf, for a host consumer of the surf
+     arrays: output, a grid rebuild, appended local copies
+------------------------------------------------------------------------- */
+
+void FixRigidKokkos::refresh_host_surfs()
+{
+  for (int ibody = 0; ibody < nbody; ibody++) host_geometry(ibody);
+  update_surf_copies();
+}
+
+/* ----------------------------------------------------------------------
+   the element tables to the device: displace, the body of each element,
+     the element ranges, the local surf of each element and every local
+     copy of an element
+   called at setup and whenever the local copies change
+------------------------------------------------------------------------- */
+
+void FixRigidKokkos::pack_body_static()
+{
+  int nelem = bodystart[nbody];
+
+  if (nelem > nelem_kk) {
+    k_displace = tdual_dbl_3d("fix_rigid:displace",nelem,3,3);
+    k_body = DAT::tdual_int_1d("fix_rigid:body",nelem);
+    k_bodypt = tdual_dbl_3d("fix_rigid:bodypt",nelem,3,3);
+    k_bodynorm = tdual_dbl_2d("fix_rigid:bodynorm",nelem,3);
+    k_elemlo = tdual_dbl_2d("fix_rigid:elemlo",nelem,3);
+    k_elemhi = tdual_dbl_2d("fix_rigid:elemhi",nelem,3);
+    k_lblist = DAT::tdual_int_1d("fix_rigid:lblist",nelem);
+    nelem_kk = nelem;
+  }
+  if (ncopy > ncopy_kk) {
+    k_copy_index = DAT::tdual_int_1d("fix_rigid:copy_index",ncopy);
+    k_copy_elem = DAT::tdual_int_1d("fix_rigid:copy_elem",ncopy);
+    ncopy_kk = ncopy;
+  }
+  if (k_bodystart.extent(0) < (size_t)(nbody+1)) {
+    k_bodystart = DAT::tdual_int_1d("fix_rigid:bodystart",nbody+1);
+    k_bbodylo = tdual_dbl_2d("fix_rigid:bbodylo",nbody,3);
+    k_bbodyhi = tdual_dbl_2d("fix_rigid:bbodyhi",nbody,3);
+    k_pose = tdual_dbl_2d("fix_rigid:pose",nbody,16);
+    k_bboxeps = tdual_dbl_1d("fix_rigid:bboxeps",nbody);
+  }
+  if (nbody > maxhostgeom) {
+    memory->grow(hostgeom,nbody,"fix_rigid:hostgeom");
+    for (int ib = maxhostgeom; ib < nbody; ib++) hostgeom[ib] = 1;
+    maxhostgeom = nbody;
+  }
+
+  auto h_displace = k_displace.view_host();
+  auto h_body = k_body.view_host();
+  auto h_lblist = k_lblist.view_host();
+  for (int i = 0; i < nelem; i++) {
+    for (int j = 0; j < dim; j++)
+      for (int k = 0; k < 3; k++) h_displace(i,j,k) = displace[i][j][k];
+    h_body(i) = FixRigid::body[i];
+    h_lblist(i) = lblist[i];
+  }
+  k_displace.modify_host(); k_displace.sync_device();
+  k_body.modify_host(); k_body.sync_device();
+  k_lblist.modify_host(); k_lblist.sync_device();
+
+  auto h_copy_index = k_copy_index.view_host();
+  auto h_copy_elem = k_copy_elem.view_host();
+  for (int m = 0; m < ncopy; m++) {
+    h_copy_index(m) = copy_index[m];
+    h_copy_elem(m) = copy_elem[m];
+  }
+  k_copy_index.modify_host(); k_copy_index.sync_device();
+  k_copy_elem.modify_host(); k_copy_elem.sync_device();
+
+  auto h_bodystart = k_bodystart.view_host();
+  for (int ib = 0; ib <= nbody; ib++) h_bodystart(ib) = bodystart[ib];
+  k_bodystart.modify_host(); k_bodystart.sync_device();
+}
+
+/* ----------------------------------------------------------------------
+   the host geometry to the device, at setup: the corner points,
+     normals, element boxes and body boxes the host computed
+------------------------------------------------------------------------- */
+
+void FixRigidKokkos::pack_body_geometry()
+{
+  int nelem = bodystart[nbody];
+
+  auto h_bodypt = k_bodypt.view_host();
+  auto h_bodynorm = k_bodynorm.view_host();
+  auto h_elemlo = k_elemlo.view_host();
+  auto h_elemhi = k_elemhi.view_host();
+  for (int i = 0; i < nelem; i++) {
+    for (int j = 0; j < dim; j++)
+      for (int k = 0; k < 3; k++) h_bodypt(i,j,k) = bodypt[i][j][k];
+    for (int k = 0; k < 3; k++) {
+      h_bodynorm(i,k) = bodynorm[i][k];
+      h_elemlo(i,k) = elemlo[i][k];
+      h_elemhi(i,k) = elemhi[i][k];
+    }
+  }
+  k_bodypt.modify_host(); k_bodypt.sync_device();
+  k_bodynorm.modify_host(); k_bodynorm.sync_device();
+  k_elemlo.modify_host(); k_elemlo.sync_device();
+  k_elemhi.modify_host(); k_elemhi.sync_device();
+
+  auto h_bbodylo = k_bbodylo.view_host();
+  auto h_bbodyhi = k_bbodyhi.view_host();
+  auto h_bboxeps = k_bboxeps.view_host();
+  for (int ib = 0; ib < nbody; ib++) {
+    for (int k = 0; k < 3; k++) {
+      h_bbodylo(ib,k) = bbodylo[ib][k];
+      h_bbodyhi(ib,k) = bbodyhi[ib][k];
+    }
+    h_bboxeps(ib) = bboxeps[ib];
+    hostgeom[ib] = 1;
+  }
+  k_bbodylo.modify_host(); k_bbodylo.sync_device();
+  k_bbodyhi.modify_host(); k_bbodyhi.sync_device();
+  k_bboxeps.modify_host(); k_bboxeps.sync_device();
+}
+
+/* ----------------------------------------------------------------------
+   the body geometry from the pose, on the device: the twin of
+     FixRigid::body_geometry() for every body, or of body_bbox(ibody,1)
+     for every body if sweepflag is set
+   sweepflag = 0: corner points and normals from the current pose, the
+     surfs rewritten, element boxes and body bboxes of the current
+     positions
+   sweepflag = 1: the element boxes and body bboxes also bound the
+     end-of-step positions; the points and surfs are left alone
+   the body bboxes and their inflation come back to the host, which
+     reads them; the host copies of the geometry go stale
+------------------------------------------------------------------------- */
+
+void FixRigidKokkos::device_geometry(int sweepflag)
+{
+  int nelem = bodystart[nbody];
+
+  auto h_pose = k_pose.view_host();
+  for (int ib = 0; ib < nbody; ib++) {
+    double *x = sweepflag ? xcmnew[ib] : xcm[ib];
+    for (int k = 0; k < 3; k++) {
+      h_pose(ib,k) = x[k];
+      h_pose(ib,3+k) = ex_space[ib][k];
+      h_pose(ib,6+k) = ey_space[ib][k];
+      h_pose(ib,9+k) = ez_space[ib][k];
+      h_pose(ib,12+k) = omega[ib][k];
+    }
+    h_pose(ib,15) = rmaxbody[ib];
+  }
+  k_pose.modify_host(); k_pose.sync_device();
+
+  d_pose_kk = k_pose.view_device();
+  d_displace_kk = k_displace.view_device();
+  d_bodypt_kk = k_bodypt.view_device();
+  d_bodynorm_kk = k_bodynorm.view_device();
+  d_elemlo_kk = k_elemlo.view_device();
+  d_elemhi_kk = k_elemhi.view_device();
+  d_bbodylo_kk = k_bbodylo.view_device();
+  d_bbodyhi_kk = k_bbodyhi.view_device();
+  d_bboxeps_kk = k_bboxeps.view_device();
+  d_body_kk = k_body.view_device();
+  d_bodystart_kk = k_bodystart.view_device();
+  d_copy_index_kk = k_copy_index.view_device();
+  d_copy_elem_kk = k_copy_elem.view_device();
+  SurfKokkos *surf_kk = (SurfKokkos*) surf;
+  if (dim == 2) d_lines_kk = surf_kk->k_lines.view_device();
+  else d_tris_kk = surf_kk->k_tris.view_device();
+  sweep_kk = sweepflag;
+  axiflag_kk = axiflag;
+  dim_kk = dim;
+  dt_kk = update->dt;
+
+  copymode = 1;
+  Kokkos::parallel_for(
+    Kokkos::RangePolicy<DeviceType,TagFixRigidGeometry>(0,nelem),*this);
+  Kokkos::parallel_for(
+    Kokkos::RangePolicy<DeviceType,TagFixRigidBodyBox>(0,nbody),*this);
+  Kokkos::parallel_for(
+    Kokkos::RangePolicy<DeviceType,TagFixRigidInflate>(0,nelem),*this);
+  if (!sweepflag)
+    Kokkos::parallel_for(
+      Kokkos::RangePolicy<DeviceType,TagFixRigidScatterSurfs>(0,ncopy),*this);
+  copymode = 0;
+
+  k_bbodylo.modify_device(); k_bbodylo.sync_host();
+  k_bbodyhi.modify_device(); k_bbodyhi.sync_host();
+  k_bboxeps.modify_device(); k_bboxeps.sync_host();
+  auto h_bbodylo = k_bbodylo.view_host();
+  auto h_bbodyhi = k_bbodyhi.view_host();
+  auto h_bboxeps = k_bboxeps.view_host();
+  for (int ib = 0; ib < nbody; ib++) {
+    for (int k = 0; k < 3; k++) {
+      bbodylo[ib][k] = h_bbodylo(ib,k);
+      bbodyhi[ib][k] = h_bbodyhi(ib,k);
+    }
+    bboxeps[ib] = h_bboxeps(ib);
+    if (!sweepflag) hostgeom[ib] = 0;
+  }
+}
+
+/* ----------------------------------------------------------------------
+   one thread per element: FixRigid::body_geometry() for its points and
+     normal (not when sweeping: the points are those of the start of the
+     step), then its box, over the current points and, when sweeping,
+     the end-of-step points
+------------------------------------------------------------------------- */
+
+KOKKOS_INLINE_FUNCTION
+void FixRigidKokkos::operator()(TagFixRigidGeometry, const int &i) const
+{
+  int j,k;
+  double v[3],delta[3],delta12[3],delta13[3],ptnew[3],lo[3],hi[3];
+  double z[3];
+  z[0] = 0.0; z[1] = 0.0; z[2] = 1.0;
+
+  const int ib = d_body_kk(i);
+  double xcm1[3],ex[3],ey[3],ez[3];
+  for (k = 0; k < 3; k++) {
+    xcm1[k] = d_pose_kk(ib,k);
+    ex[k] = d_pose_kk(ib,3+k);
+    ey[k] = d_pose_kk(ib,6+k);
+    ez[k] = d_pose_kk(ib,9+k);
+  }
+
+  if (!sweep_kk) {
+    for (j = 0; j < dim_kk; j++) {
+      for (k = 0; k < 3; k++) v[k] = d_displace_kk(i,j,k);
+      if (axiflag_kk) {
+        d_bodypt_kk(i,j,0) = xcm1[0] + v[0];
+        d_bodypt_kk(i,j,1) = v[1];
+        d_bodypt_kk(i,j,2) = 0.0;
+        continue;
+      }
+      delta[0] = ex[0]*v[0] + ey[0]*v[1] + ez[0]*v[2];
+      delta[1] = ex[1]*v[0] + ey[1]*v[1] + ez[1]*v[2];
+      delta[2] = ex[2]*v[0] + ey[2]*v[1] + ez[2]*v[2];
+      if (dim_kk == 2) delta[2] = 0.0;
+      for (k = 0; k < 3; k++) d_bodypt_kk(i,j,k) = xcm1[k] + delta[k];
+    }
+
+    double norm[3];
+    if (dim_kk == 2) {
+      for (k = 0; k < 3; k++) delta[k] = d_bodypt_kk(i,1,k) - d_bodypt_kk(i,0,k);
+      norm[0] = z[1]*delta[2] - z[2]*delta[1];
+      norm[1] = z[2]*delta[0] - z[0]*delta[2];
+      norm[2] = z[0]*delta[1] - z[1]*delta[0];
+    } else {
+      for (k = 0; k < 3; k++) {
+        delta12[k] = d_bodypt_kk(i,1,k) - d_bodypt_kk(i,0,k);
+        delta13[k] = d_bodypt_kk(i,2,k) - d_bodypt_kk(i,0,k);
+      }
+      norm[0] = delta12[1]*delta13[2] - delta12[2]*delta13[1];
+      norm[1] = delta12[2]*delta13[0] - delta12[0]*delta13[2];
+      norm[2] = delta12[0]*delta13[1] - delta12[1]*delta13[0];
+    }
+    const double scale = 1.0/sqrt(norm[0]*norm[0]+norm[1]*norm[1]+norm[2]*norm[2]);
+    norm[0] *= scale;
+    norm[1] *= scale;
+    norm[2] *= scale;
+    if (dim_kk == 2) norm[2] = 0.0;
+    for (k = 0; k < 3; k++) d_bodynorm_kk(i,k) = norm[k];
+  }
+
+  // FixRigid::body_bbox(): the box of the element, current points and,
+  //   when sweeping, the end-of-step points from the new pose
+
+  lo[0] = lo[1] = lo[2] = BIG;
+  hi[0] = hi[1] = hi[2] = -BIG;
+
+  for (j = 0; j < dim_kk; j++)
+    for (k = 0; k < 3; k++) {
+      lo[k] = MIN(lo[k],d_bodypt_kk(i,j,k));
+      hi[k] = MAX(hi[k],d_bodypt_kk(i,j,k));
+    }
+
+  if (sweep_kk) {
+    for (j = 0; j < dim_kk; j++) {
+      for (k = 0; k < 3; k++) v[k] = d_displace_kk(i,j,k);
+      if (axiflag_kk) {
+        ptnew[0] = xcm1[0] + v[0];
+        ptnew[1] = v[1];
+        ptnew[2] = 0.0;
+      } else {
+        delta[0] = ex[0]*v[0] + ey[0]*v[1] + ez[0]*v[2];
+        delta[1] = ex[1]*v[0] + ey[1]*v[1] + ez[1]*v[2];
+        delta[2] = ex[2]*v[0] + ey[2]*v[1] + ez[2]*v[2];
+        if (dim_kk == 2) delta[2] = 0.0;
+        for (k = 0; k < 3; k++) ptnew[k] = xcm1[k] + delta[k];
+      }
+      for (k = 0; k < 3; k++) {
+        lo[k] = MIN(lo[k],ptnew[k]);
+        hi[k] = MAX(hi[k],ptnew[k]);
+      }
+    }
+  }
+
+  for (k = 0; k < 3; k++) {
+    d_elemlo_kk(i,k) = lo[k];
+    d_elemhi_kk(i,k) = hi[k];
+  }
+}
+
+/* ----------------------------------------------------------------------
+   one thread per body: its bbox over its element boxes and the
+     inflation FixRigid::body_bbox() applies to both, the arc bulge of
+     the rotation included when sweeping
+------------------------------------------------------------------------- */
+
+KOKKOS_INLINE_FUNCTION
+void FixRigidKokkos::operator()(TagFixRigidBodyBox, const int &ib) const
+{
+  int k;
+  double blo[3],bhi[3];
+
+  blo[0] = blo[1] = blo[2] = BIG;
+  bhi[0] = bhi[1] = bhi[2] = -BIG;
+
+  for (int i = d_bodystart_kk(ib); i < d_bodystart_kk(ib+1); i++)
+    for (k = 0; k < 3; k++) {
+      blo[k] = MIN(blo[k],d_elemlo_kk(i,k));
+      bhi[k] = MAX(bhi[k],d_elemhi_kk(i,k));
+    }
+
+  double eps = EPSSURF * MAX(bhi[0]-blo[0],bhi[1]-blo[1]);
+  eps = EPSSURF * MAX(eps/EPSSURF,bhi[2]-blo[2]);
+
+  if (sweep_kk && !axiflag_kk) {
+    const double wx = d_pose_kk(ib,12);
+    const double wy = d_pose_kk(ib,13);
+    const double wz = d_pose_kk(ib,14);
+    const double angle = sqrt(wx*wx + wy*wy + wz*wz) * dt_kk;
+    eps += 0.125 * d_pose_kk(ib,15) * angle * angle;
+  }
+
+  d_bboxeps_kk(ib) = eps;
+  for (k = 0; k < 3; k++) {
+    d_bbodylo_kk(ib,k) = blo[k] - eps;
+    d_bbodyhi_kk(ib,k) = bhi[k] + eps;
+  }
+}
+
+/* ----------------------------------------------------------------------
+   one thread per element: its box inflated by its body's eps
+------------------------------------------------------------------------- */
+
+KOKKOS_INLINE_FUNCTION
+void FixRigidKokkos::operator()(TagFixRigidInflate, const int &i) const
+{
+  const double eps = d_bboxeps_kk(d_body_kk(i));
+  for (int k = 0; k < 3; k++) {
+    d_elemlo_kk(i,k) -= eps;
+    d_elemhi_kk(i,k) += eps;
+  }
+}
+
+/* ----------------------------------------------------------------------
+   one thread per local surf copy of an element: the surf takes the
+     element's points and normal, FixRigid::update_surf_copies()
+------------------------------------------------------------------------- */
+
+KOKKOS_INLINE_FUNCTION
+void FixRigidKokkos::operator()(TagFixRigidScatterSurfs, const int &m) const
+{
+  const int index = d_copy_index_kk(m);
+  const int i = d_copy_elem_kk(m);
+  if (dim_kk == 2) {
+    for (int k = 0; k < 3; k++) {
+      d_lines_kk[index].p1[k] = d_bodypt_kk(i,0,k);
+      d_lines_kk[index].p2[k] = d_bodypt_kk(i,1,k);
+      d_lines_kk[index].norm[k] = d_bodynorm_kk(i,k);
+    }
+  } else {
+    for (int k = 0; k < 3; k++) {
+      d_tris_kk[index].p1[k] = d_bodypt_kk(i,0,k);
+      d_tris_kk[index].p2[k] = d_bodypt_kk(i,1,k);
+      d_tris_kk[index].p3[k] = d_bodypt_kk(i,2,k);
+      d_tris_kk[index].norm[k] = d_bodynorm_kk(i,k);
+    }
+  }
+}
+
 
 /* ----------------------------------------------------------------------
    per-body sums of the move kernel's per-element tallies into ftbuf_mine
@@ -693,15 +1153,13 @@ int FixRigidKokkos::assign_split_kokkos()
   d_particles_kk = particle_kk->k_particles.view_device();
 
   // the split tests read cells, sinfo, the per-cell graphs and the surf
-  //   lines/tris on the device.  FixRigid has just rewritten them on the
-  //   HOST (the body pose, the re-cut, the restructure), so the device is
-  //   patched from the change journal first, and the surfs flagged and
-  //   synced: reading the device state as it was would dereference
-  //   split info of cells which no longer exist
+  //   lines/tris on the device.  FixRigid has just rewritten the cells on
+  //   the HOST (the re-cut, the restructure), so the device is patched
+  //   from the change journal first: reading the device state as it was
+  //   would dereference split info of cells which no longer exist; the
+  //   surfs were regenerated on the device by set_xv()
 
   grid_kk->apply_changes();
-  surf_kk->modify(Host,ALL_MASK);
-  surf_kk->sync(Device,ALL_MASK);
 
   d_cells_kk = grid_kk->k_cells.view_device();
   d_sinfo_kk = grid_kk->k_sinfo.view_device();
@@ -798,68 +1256,16 @@ void FixRigidKokkos::remove_inside_all(int splitflag)
      append local copies), so the views are grown, not reallocated
 ------------------------------------------------------------------------- */
 
-void FixRigidKokkos::pack_body_device(int sweepflag)
+void FixRigidKokkos::pack_body_device()
 {
-  int nelem = bodystart[nbody];
   int nbins = bodynbin[0]*bodynbin[1]*bodynbin[2];
 
-  if (nelem > nelem_kk) {
-    k_bodypt = tdual_dbl_3d("fix_rigid:bodypt",nelem,3,3);
-    k_bodynorm = tdual_dbl_2d("fix_rigid:bodynorm",nelem,3);
-    k_elemlo = tdual_dbl_2d("fix_rigid:elemlo",nelem,3);
-    k_elemhi = tdual_dbl_2d("fix_rigid:elemhi",nelem,3);
-    k_lblist = DAT::tdual_int_1d("fix_rigid:lblist",nelem);
-    nelem_kk = nelem;
-  }
   if (nbins > nbin_kk || k_bodybinstart.extent(0) < (size_t)(nbins+1)) {
     k_bodybinstart = DAT::tdual_int_1d("fix_rigid:bodybinstart",nbins+1);
     nbin_kk = nbins;
   }
   if (k_bodybinlist.extent(0) < (size_t)nbody)
     k_bodybinlist = DAT::tdual_int_1d("fix_rigid:bodybinlist",nbody);
-  if (k_bodystart.extent(0) < (size_t)(nbody+1)) {
-    k_bodystart = DAT::tdual_int_1d("fix_rigid:bodystart",nbody+1);
-    k_bbodylo = tdual_dbl_2d("fix_rigid:bbodylo",nbody,3);
-    k_bbodyhi = tdual_dbl_2d("fix_rigid:bbodyhi",nbody,3);
-  }
-
-  // bodypt is allocated [nsurf][dim][3]: a 2d element is a line and has
-  //   only 2 corner points, so copy dim of them, not 3
-  // per-element boxes: the current ones, or the swept ones of this step
-
-  auto h_bodypt = k_bodypt.view_host();
-  auto h_bodynorm = k_bodynorm.view_host();
-  auto h_elemlo = k_elemlo.view_host();
-  auto h_elemhi = k_elemhi.view_host();
-  auto h_lblist = k_lblist.view_host();
-  for (int i = 0; i < nelem; i++) {
-    for (int j = 0; j < dim; j++)
-      for (int k = 0; k < 3; k++) h_bodypt(i,j,k) = bodypt[i][j][k];
-    for (int k = 0; k < 3; k++) {
-      h_bodynorm(i,k) = bodynorm[i][k];
-      h_elemlo(i,k) = elemlo[i][k];
-      h_elemhi(i,k) = elemhi[i][k];
-    }
-    h_lblist(i) = lblist[i];
-  }
-  k_bodypt.modify_host(); k_bodypt.sync_device();
-  k_bodynorm.modify_host(); k_bodynorm.sync_device();
-  k_elemlo.modify_host(); k_elemlo.sync_device();
-  k_elemhi.modify_host(); k_elemhi.sync_device();
-  k_lblist.modify_host(); k_lblist.sync_device();
-
-  auto h_bodystart = k_bodystart.view_host();
-  auto h_bbodylo = k_bbodylo.view_host();
-  auto h_bbodyhi = k_bbodyhi.view_host();
-  for (int ib = 0; ib <= nbody; ib++) h_bodystart(ib) = bodystart[ib];
-  for (int ib = 0; ib < nbody; ib++)
-    for (int k = 0; k < 3; k++) {
-      h_bbodylo(ib,k) = bbodylo[ib][k];
-      h_bbodyhi(ib,k) = bbodyhi[ib][k];
-    }
-  k_bodystart.modify_host(); k_bodystart.sync_device();
-  k_bbodylo.modify_host(); k_bbodylo.sync_device();
-  k_bbodyhi.modify_host(); k_bbodyhi.sync_device();
 
   auto h_binstart = k_bodybinstart.view_host();
   auto h_binlist = k_bodybinlist.view_host();
@@ -967,7 +1373,7 @@ int FixRigidKokkos::remove_inside_all_kokkos(int splitflag)
   ParticleKokkos *particle_kk = (ParticleKokkos*) particle;
   GridKokkos *grid_kk = (GridKokkos*) grid;
 
-  pack_body_device(0);
+  pack_body_device();
 
   // the two per-cell fields the test reads come from the device grid,
   //   patched from the change journal; a ghost cell has no ChildInfo
@@ -1053,6 +1459,7 @@ int FixRigidKokkos::remove_inside_all_kokkos(int splitflag)
 
 void FixRigidKokkos::grid_changed()
 {
+  refresh_host_surfs();
   FixRigid::grid_changed();
   if (surf->distributed) ((SurfKokkos*) surf)->modify(Host,ALL_MASK);
   ((GridKokkos*) grid)->modify(Host,CELL_MASK);

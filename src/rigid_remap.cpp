@@ -369,7 +369,10 @@ void RigidRemap::refresh()
   // the bodies' bboxes are the swept boxes of this step: restore the
   //   boxes of the positions which typed the cells
 
-  for (int ibody = 0; ibody < fix->nbody; ibody++) fix->body_bbox(ibody,0);
+  for (int ibody = 0; ibody < fix->nbody; ibody++) {
+    fix->host_geometry(ibody);
+    fix->body_bbox(ibody,0);
+  }
   mark_static();
 }
 

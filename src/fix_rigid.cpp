@@ -159,6 +159,7 @@ FixRigid::FixRigid(SPARTA *sparta, int narg, char **arg) :
 
   dim = domain->dimension;
   initflag = 0;
+  posesplit = 0;
   infile = NULL;
   displace = NULL;
   bodyneed = NULL;
@@ -744,10 +745,7 @@ void FixRigid::start_of_step()
 
   stage_begin();
   initial_integrate();
-
-  // per-element swept bounding boxes of every body for this step
-
-  for (int ibody = 0; ibody < nbody; ibody++) body_bbox(ibody,1);
+  swept_boxes();
   stage_end(T_INTEGRATE);
 
   // distributed surfs: a body sweeping into this proc's cells for the
@@ -823,6 +821,17 @@ void FixRigid::end_of_step()
   // re-map the body surfs to the grid cells
 
   remap_grid();
+}
+
+/* ----------------------------------------------------------------------
+   per-element swept bounding boxes of every body for this step, from
+     the start-of-step geometry and the end-of-step pose
+------------------------------------------------------------------------- */
+
+void FixRigid::swept_boxes()
+{
+  posesplit = 1;
+  for (int ibody = 0; ibody < nbody; ibody++) body_bbox(ibody,1);
 }
 
 /* ----------------------------------------------------------------------
@@ -1021,15 +1030,32 @@ void FixRigid::initial_integrate()
 
 void FixRigid::set_xv()
 {
-  int i,j,ibody;
-  double z[3],delta[3],delta12[3],delta13[3];
-  z[0] = 0.0; z[1] = 0.0; z[2] = 1.0;
+  set_pose();
+  for (int ibody = 0; ibody < nbody; ibody++) body_geometry(ibody);
+  update_surf_copies();
+  body_bins();
+}
 
-  for (ibody = 0; ibody < nbody; ibody++) {
+/* ----------------------------------------------------------------------
+   move every body to the end-of-step pose initial_integrate() computed:
+     xcm/quat take xcmnew/quatnew, and the body's degrees of freedom are
+     enforced on all its properties
+   2d: in-plane motion and rotation about z.  start_of_step() enforces it
+     on xcmnew and omega; quat stays a rotation about z since omega is
+     along z
+   axisymmetric: translation along x and spin about x.  axi_project()
+     already removed the transverse force and torque, so this only
+     guards against drift; quat is pinned to the identity in
+     start_of_step()
+------------------------------------------------------------------------- */
+
+void FixRigid::set_pose()
+{
+  posesplit = 0;
+
+  for (int ibody = 0; ibody < nbody; ibody++) {
     double *xcm1 = xcm[ibody];
     double *quat1 = quat[ibody];
-
-    // reset xcm/quat to new xcm/quat calculated in start_of_step()
 
     xcm1[0] = xcmnew[ibody][0];
     xcm1[1] = xcmnew[ibody][1];
@@ -1039,15 +1065,6 @@ void FixRigid::set_xv()
     quat1[1] = quatnew[ibody][1];
     quat1[2] = quatnew[ibody][2];
     quat1[3] = quatnew[ibody][3];
-
-    // enforce the body's degrees of freedom on all its properties
-    // 2d: in-plane motion and rotation about z.  start_of_step()
-    //   enforces it on xcmnew and omega; quat stays a rotation about z
-    //   since omega is along z
-    // axisymmetric: translation along x and spin about x.  axi_project()
-    //   already removed the transverse force and torque, so this only
-    //   guards against drift; quat is pinned to the identity in
-    //   start_of_step()
 
     if (axiflag) {
       xcm1[1] = xcm1[2] = 0.0;
@@ -1068,59 +1085,78 @@ void FixRigid::set_xv()
       omega[ibody][0] = 0.0;
       omega[ibody][1] = 0.0;
     }
+  }
+}
 
-    // regenerate the replicated body geometry from the new pose:
-    //   corner pts from displace rotated to the space frame + new COM,
-    //   normals recomputed from the corner pts
-    // then write it into the Surf copies the mover and cut pipeline read
-    // matvec() converts displace vector from body frame to space frame
+/* ----------------------------------------------------------------------
+   regenerate the replicated geometry of one body from its current pose:
+     corner pts from displace rotated to the space frame + the COM,
+     normals recomputed from the corner pts, then the per-element boxes
+     and the body bbox
+   matvec() converts a displace vector from body frame to space frame
+   the same arithmetic as the device kernel of fix rigid/kk, so a body
+     regenerated here for a host consumer matches the device geometry
+------------------------------------------------------------------------- */
 
-    for (i = bodystart[ibody]; i < bodystart[ibody+1]; i++) {
-      for (j = 0; j < dim; j++) {
+void FixRigid::body_geometry(int ibody)
+{
+  int i,j;
+  double z[3],delta[3],delta12[3],delta13[3];
+  double exq[3],eyq[3],ezq[3];
+  z[0] = 0.0; z[1] = 0.0; z[2] = 1.0;
 
-        // axisymmetric: the body frame never rotates and the COM stays
-        //   on the axis, so the pose map is a shift along x and nothing
-        //   else.  doing it as a shift rather than through the (identity)
-        //   rotation keeps the radial coordinate bitwise unchanged, so a
-        //   profile point on the axis stays exactly at r = 0 for the
-        //   whole run.  the cut-cell routines and the watertight check
-        //   both compare against r = 0 exactly
+  double *xcm1 = xcm[ibody];
 
-        if (axiflag) {
-          bodypt[i][j][0] = xcm1[0] + displace[i][j][0];
-          bodypt[i][j][1] = displace[i][j][1];
-          bodypt[i][j][2] = 0.0;
-          continue;
-        }
+  // between initial_integrate() and set_pose() the stored frame is the
+  //   end-of-step one while xcm is still the start-of-step COM: the
+  //   start-of-step frame is that of quat, the same values ex/ey/ez_space
+  //   held when the geometry was last generated from it
 
-        MathExtra::matvec(ex_space[ibody],ey_space[ibody],ez_space[ibody],
-                          displace[i][j],delta);
-        if (dim == 2) delta[2] = 0.0;
-        MathExtra::add3(xcm1,delta,bodypt[i][j]);
+  double *ex = ex_space[ibody];
+  double *ey = ey_space[ibody];
+  double *ez = ez_space[ibody];
+  if (posesplit) {
+    MathExtra::q_to_exyz(quat[ibody],exq,eyq,ezq);
+    ex = exq; ey = eyq; ez = ezq;
+  }
+
+  for (i = bodystart[ibody]; i < bodystart[ibody+1]; i++) {
+    for (j = 0; j < dim; j++) {
+
+      // axisymmetric: the body frame never rotates and the COM stays
+      //   on the axis, so the pose map is a shift along x and nothing
+      //   else.  doing it as a shift rather than through the (identity)
+      //   rotation keeps the radial coordinate bitwise unchanged, so a
+      //   profile point on the axis stays exactly at r = 0 for the
+      //   whole run.  the cut-cell routines and the watertight check
+      //   both compare against r = 0 exactly
+
+      if (axiflag) {
+        bodypt[i][j][0] = xcm1[0] + displace[i][j][0];
+        bodypt[i][j][1] = displace[i][j][1];
+        bodypt[i][j][2] = 0.0;
+        continue;
       }
 
-      if (dim == 2) {
-        MathExtra::sub3(bodypt[i][1],bodypt[i][0],delta);
-        MathExtra::cross3(z,delta,bodynorm[i]);
-        MathExtra::norm3(bodynorm[i]);
-        bodynorm[i][2] = 0.0;
-      } else {
-        MathExtra::sub3(bodypt[i][1],bodypt[i][0],delta12);
-        MathExtra::sub3(bodypt[i][2],bodypt[i][0],delta13);
-        MathExtra::cross3(delta12,delta13,bodynorm[i]);
-        MathExtra::norm3(bodynorm[i]);
-      }
+      MathExtra::matvec(ex,ey,ez,displace[i][j],delta);
+      if (dim == 2) delta[2] = 0.0;
+      MathExtra::add3(xcm1,delta,bodypt[i][j]);
+    }
+
+    if (dim == 2) {
+      MathExtra::sub3(bodypt[i][1],bodypt[i][0],delta);
+      MathExtra::cross3(z,delta,bodynorm[i]);
+      MathExtra::norm3(bodynorm[i]);
+      bodynorm[i][2] = 0.0;
+    } else {
+      MathExtra::sub3(bodypt[i][1],bodypt[i][0],delta12);
+      MathExtra::sub3(bodypt[i][2],bodypt[i][0],delta13);
+      MathExtra::cross3(delta12,delta13,bodynorm[i]);
+      MathExtra::norm3(bodynorm[i]);
     }
   }
 
-  update_surf_copies();
-
-  // bbox around each body's elements at their new positions,
-  //   and the bins of bodies by COM the queries below use
-
-  for (ibody = 0; ibody < nbody; ibody++) body_bbox(ibody,0);
-  body_bins();
-
+  body_bbox(ibody,0);
 }
 
 /* ----------------------------------------------------------------------
@@ -1243,10 +1279,12 @@ void FixRigid::remap_grid()
     //   full re-map and the collective rebuild both notify them via
     //   Grid::notify_changed()
 
-    if (!fallback && !rebuild && (all[2] || structural))
+    if (!fallback && !rebuild && (all[2] || structural)) {
+      refresh_host_surfs();
       for (int ifix = 0; ifix < modify->nfix; ifix++)
         if (strncmp(modify->fix[ifix]->style,"emit",4) == 0)
           modify->fix[ifix]->grid_changed();
+    }
     remap->typechanged = 0;
 
     if (fallback && !warnfallback) {
@@ -2114,6 +2152,11 @@ int FixRigid::ensure_local_copies()
     if (lblist[k] < 0 && bodyneed[body[k]]) nmissing++;
   if (!nmissing) return 0;
 
+  // the surf arrays are about to be restructured and re-copied whole:
+  //   fix rigid/kk brings every host copy of a body surf up to date first
+
+  refresh_host_surfs();
+
   // build the missing copies from the body table and append them to
   //   the local range; Surf re-packs the ghosts after them and maps each
   //   old ghost index to its new one, so the ghost cells' cut lists can
@@ -2135,6 +2178,7 @@ int FixRigid::ensure_local_copies()
       line->transparent = bodytrans[k];
       line->isc = bodyisc[k];
       line->isr = bodyisr[k];
+      host_geometry(body[k]);
       memcpy(line->p1,bodypt[k][0],3*sizeof(double));
       memcpy(line->p2,bodypt[k][1],3*sizeof(double));
       memcpy(line->norm,bodynorm[k],3*sizeof(double));
@@ -2154,6 +2198,7 @@ int FixRigid::ensure_local_copies()
       tri->transparent = bodytrans[k];
       tri->isc = bodyisc[k];
       tri->isr = bodyisr[k];
+      host_geometry(body[k]);
       memcpy(tri->p1,bodypt[k][0],3*sizeof(double));
       memcpy(tri->p2,bodypt[k][1],3*sizeof(double));
       memcpy(tri->p3,bodypt[k][2],3*sizeof(double));
@@ -3480,6 +3525,7 @@ void FixRigid::body_bbox(int ibody, int sweepflag)
 
 int FixRigid::inside_body(int ibody, double *x)
 {
+  host_geometry(ibody);
   int hitflag,side;
   double param;
   double xout[3],xc[3];

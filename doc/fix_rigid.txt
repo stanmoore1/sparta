@@ -922,17 +922,22 @@ switch; when the KOKKOS package is active (the "-k on" switch) the
 error.  The KOKKOS version performs the moving-surf collision tests
 and the force/torque tallies in the KOKKOS particle mover, on the GPU
 or host threads, and runs the rest of the per-step work sized by the
-particles or the grid cells there as well: the per-body force sums,
-the collision lists of the cells the bodies sweep through, the search
-for the cells the re-cut must visit, their new surf lists, the cut of
-the cells whose list changed (in 2d and 3d, by device versions of the
-cut routines) and their re-typing, the deletion of particles inside
-the bodies and the re-assignment of particles to sub cells.  The body
-time integration and the restructuring of split cells run on the
-host, and the device copy of the grid is patched with those changes
-rather than re-copied.  Each timestep the new positions of the body
-surfs and the results of the changed cells cross to the device, and
-nothing sized by the particles or by all grid cells.  The results are
+particles, the grid cells or the body surfs there as well: the
+per-body force sums, the body geometry and bounding boxes from the
+new pose, the collision lists of the cells the bodies sweep through,
+the search for the cells the re-cut must visit, their new surf lists,
+the cut of the cells whose list changed (in 2d and 3d, by device
+versions of the cut routines) and their re-typing, the deletion of
+particles inside the bodies and the re-assignment of particles to sub
+cells.  The body time integration, the push-off contacts and the
+restructuring of split cells run on the host, and the device copy of
+the grid is patched with those changes rather than re-copied.  Each
+timestep the poses of the bodies and the results of the changed cells
+cross to the device, and nothing sized by the particles, the body
+surfs or all grid cells.  The host copies of the body surfs are
+refreshed on output steps and whenever the grid is rebuilt, so dumps,
+restart files and other host readers see the current geometry.  The
+results are
 statistically equivalent to those of the non-KOKKOS version, since
 the KOKKOS surface collision models use a different random number
 stream; with the SPARTA_KOKKOS_EXACT build option and the Serial
