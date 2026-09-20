@@ -932,13 +932,22 @@ int RigidRemapKokkos::recut()
   // the changed lists are packed as rows of one entries array, the
   //   cell of each row and its offset listed by a scan of the lengths
 
-  Kokkos::parallel_scan(nrcand, KOKKOS_LAMBDA(const int ic, int &sum,
-                                               const bool final) {
-    const int n = d_chflag(ic);
-    if (final) d_choff(ic) = sum;
-    sum += n;
-    if (final && ic == nrcand-1) d_choff(nrcand) = sum;
-  });
+  Kokkos::fence();
+  // nrcand is a member of RigidRemap, so naming it inside the lambda would
+  //   capture this, a HOST pointer, and dereferencing it on the device is an
+  //   illegal access (it aborted every rigid-body run on a GPU with
+  //   cudaErrorIllegalAddress).  copy it to a local first
+
+  {
+    const int nrc = nrcand;
+    Kokkos::parallel_scan(nrc, KOKKOS_LAMBDA(const int ic, int &sum,
+                                             const bool final) {
+      const int n = d_chflag(ic);
+      if (final) d_choff(ic) = sum;
+      sum += n;
+      if (final && ic == nrc-1) d_choff(nrc) = sum;
+    });
+  }
   int nch;
   Kokkos::deep_copy(nch,Kokkos::subview(d_choff,nrcand));
 
