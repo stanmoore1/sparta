@@ -56,6 +56,7 @@ class ParticleKokkos : public Particle {
 #ifndef SPARTA_KOKKOS_EXACT
   void compress_migrate(int, int *) override;
 #endif
+  void compress_migrate_kokkos(int, int *);
   void sort_kokkos();
   void grow(int) override;
   void grow_species() override;

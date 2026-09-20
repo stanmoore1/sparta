@@ -249,6 +249,67 @@ void ParticleKokkos::compress_migrate(int ndelete, int *dellist)
 }
 #endif
 
+/* ----------------------------------------------------------------------
+   compress particle list to remove particles with indices in dellist,
+     on the device, leaving the layout Particle::compress_migrate() leaves:
+     each deleted slot, lowest first, takes the last live particle
+   dellist must be sorted in ascending order
+   the copies are independent (every source is above every destination
+     and no source is a destination), so they run as one kernel
+   a KOKKOS build with SPARTA_KOKKOS_EXACT compacts through the host
+     routine, so a device pass which cannot bring the particles to the
+     host (fix rigid/kk deleting particles inside a body) compacts here
+------------------------------------------------------------------------- */
+
+void ParticleKokkos::compress_migrate_kokkos(int ndelete, int *dellist)
+{
+  if (ndelete > d_lists.extent(1)) {
+    d_lists = DAT::t_int_2d_lr(Kokkos::view_alloc("particle:lists",Kokkos::WithoutInitializing),2,ndelete);
+    d_mlist = Kokkos::subview(d_lists,0,Kokkos::ALL);
+    d_slist = Kokkos::subview(d_lists,1,Kokkos::ALL);
+
+    h_lists = HAT::t_int_2d_lr(Kokkos::view_alloc("particle:lists_mirror",Kokkos::WithoutInitializing),2,ndelete);
+    h_mlist = Kokkos::subview(h_lists,0,Kokkos::ALL);
+    h_slist = Kokkos::subview(h_lists,1,Kokkos::ALL);
+  }
+
+  // the (destination,source) pairs, exactly as the host routine walks them
+
+  int nmigrate = ndelete;
+  int nlocal_new = nlocal;
+  int ncopy = 0;
+  for (int i = 0; i < nmigrate; i++) {
+    int j = dellist[i];
+    int k = nlocal_new - 1;
+    while (k == dellist[nmigrate-1] && k > j) {
+      nmigrate--;
+      nlocal_new--;
+      k--;
+    }
+    nlocal_new--;
+    if (j == k) continue;
+    h_mlist[ncopy] = j;
+    h_slist[ncopy] = k;
+    ncopy++;
+  }
+
+  Kokkos::deep_copy(d_lists,h_lists);
+
+  this->sync(Device,PARTICLE_MASK|CUSTOM_MASK);
+  d_particles = k_particles.view_device();
+
+  copymode = 1;
+  Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagParticleCompressReactions>(0,ncopy),*this);
+  copymode = 0;
+
+  this->modify(Device,PARTICLE_MASK|CUSTOM_MASK);
+  d_particles = t_particle_1d();
+
+  nlocal = nlocal_new;
+  sorted = 0;
+  sorted_kk = 0;
+}
+
 KOKKOS_INLINE_FUNCTION
 void ParticleKokkos::operator()(TagParticleCompressReactions, const int &i) const {
   const int j = d_mlist[i];

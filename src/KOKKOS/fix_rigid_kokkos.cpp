@@ -66,7 +66,7 @@ FixRigidKokkos::FixRigidKokkos(SPARTA *sparta, int narg, char **arg) :
   remap = new RigidRemapKokkos(sparta,this);
   hostgeom = NULL;
   maxhostgeom = 0;
-  ncopy_kk = 0;
+  ncopy_kk = nolist_kk = 0;
   devicegeom = 0;
   maxdelete_kk = 0;
   d_ndelete_kk = DAT::t_int_scalar("fix_rigid:ndelete");
@@ -92,7 +92,12 @@ void FixRigidKokkos::init()
 }
 
 /* ----------------------------------------------------------------------
-   bring grid and surfs to the host before host-side work
+   bring the grid to the host before host-side work
+   the surfs are NOT brought over: set_xv() writes the body surfs on the
+     device and claims them for it, and the host work of a step reads the
+     body geometry from its own per-body copies (host_geometry()), never
+     from the surf arrays; the host consumers of the arrays (output, a
+     full re-map, a host cut of a cell) call refresh_host_surfs() first
    the particles are NOT brought over: the only per-particle work in the
      step is remove_inside_all(), which runs as a device kernel, and the
      particle array is by far the largest in the problem (one crossing
@@ -104,7 +109,6 @@ void FixRigidKokkos::init()
 void FixRigidKokkos::host_begin()
 {
   ((GridKokkos*) grid)->sync(Host,ALL_MASK);
-  ((SurfKokkos*) surf)->sync(Host,ALL_MASK);
 }
 
 /* ----------------------------------------------------------------------
@@ -227,6 +231,7 @@ void FixRigidKokkos::operator()(TagFixRigidRelabel, const int &i) const
 void FixRigidKokkos::setup()
 {
   host_begin();
+  ((SurfKokkos*) surf)->sync(Host,ALL_MASK);
   FixRigid::setup();
 
   // the host geometry and surfs are current at setup: the device takes
@@ -370,17 +375,19 @@ void FixRigidKokkos::host_geometry(int ibody)
 }
 
 /* ----------------------------------------------------------------------
-   the host copies of every body surf, for a host consumer of the surf
-     arrays: output, a grid rebuild, every step with distributed surfs
-   only with the copy tables of the current surf arrays: never between
-     a restructure of the arrays and FixRigid::grid_changed()
+   the host copies of the surf arrays, for a host consumer of them:
+     output, a grid rebuild, every step with distributed surfs
+   set_xv() wrote the body surfs on the device and claimed the arrays for
+     it, so this is the copy the claim calls for; a host write of the
+     arrays (a full re-map, appended local copies) must come after it
 ------------------------------------------------------------------------- */
 
 void FixRigidKokkos::refresh_host_surfs()
 {
   if (!devicegeom) return;
-  for (int ibody = 0; ibody < nbody; ibody++) host_geometry(ibody);
-  update_surf_copies();
+  unsigned int mask = (dim == 2) ? LINE_MASK : TRI_MASK;
+  if (surf->distributed) mask |= (dim == 2) ? MYLINE_MASK : MYTRI_MASK;
+  ((SurfKokkos*) surf)->sync(Host,mask);
 }
 
 /* ----------------------------------------------------------------------
@@ -408,6 +415,11 @@ void FixRigidKokkos::pack_body_static()
     k_copy_index = DAT::tdual_int_1d("fix_rigid:copy_index",ncopy);
     k_copy_elem = DAT::tdual_int_1d("fix_rigid:copy_elem",ncopy);
     ncopy_kk = ncopy;
+  }
+  if (surf->distributed && nolist > nolist_kk) {
+    k_olist_own = DAT::tdual_int_1d("fix_rigid:olist_own",nolist);
+    k_olist_elem = DAT::tdual_int_1d("fix_rigid:olist_elem",nolist);
+    nolist_kk = nolist;
   }
   if (k_bodystart.extent(0) < (size_t)(nbody+1)) {
     k_bodystart = DAT::tdual_int_1d("fix_rigid:bodystart",nbody+1);
@@ -443,6 +455,17 @@ void FixRigidKokkos::pack_body_static()
   }
   k_copy_index.modify_host(); k_copy_index.sync_device();
   k_copy_elem.modify_host(); k_copy_elem.sync_device();
+
+  if (surf->distributed) {
+    auto h_olist_own = k_olist_own.view_host();
+    auto h_olist_elem = k_olist_elem.view_host();
+    for (int m = 0; m < nolist; m++) {
+      h_olist_own(m) = olist_own[m];
+      h_olist_elem(m) = olist_elem[m];
+    }
+    k_olist_own.modify_host(); k_olist_own.sync_device();
+    k_olist_elem.modify_host(); k_olist_elem.sync_device();
+  }
 
   auto h_bodystart = k_bodystart.view_host();
   for (int ib = 0; ib <= nbody; ib++) h_bodystart(ib) = bodystart[ib];
@@ -539,6 +562,15 @@ void FixRigidKokkos::device_geometry(int sweepflag)
   SurfKokkos *surf_kk = (SurfKokkos*) surf;
   if (dim == 2) d_lines_kk = surf_kk->k_lines.view_device();
   else d_tris_kk = surf_kk->k_tris.view_device();
+  nscatter_kk = ncopy;
+  int nowned = 0;
+  if (surf->distributed) {
+    nowned = nolist;
+    d_olist_own_kk = k_olist_own.view_device();
+    d_olist_elem_kk = k_olist_elem.view_device();
+    if (dim == 2) d_mylines_kk = surf_kk->k_mylines.view_device();
+    else d_mytris_kk = surf_kk->k_mytris.view_device();
+  }
   sweep_kk = sweepflag;
   axiflag_kk = axiflag;
   dim_kk = dim;
@@ -553,8 +585,24 @@ void FixRigidKokkos::device_geometry(int sweepflag)
     Kokkos::RangePolicy<DeviceType,TagFixRigidInflate>(0,nelem),*this);
   if (!sweepflag)
     Kokkos::parallel_for(
-      Kokkos::RangePolicy<DeviceType,TagFixRigidScatterSurfs>(0,ncopy),*this);
+      Kokkos::RangePolicy<DeviceType,TagFixRigidScatterSurfs>(0,ncopy+nowned),
+      *this);
   copymode = 0;
+
+  // the surf arrays were written on the device: claim them for it, so
+  //   the next host reader copies them over rather than the reverse.
+  //   auto-sync (on, this being a host fix to ModifyKokkos) would copy
+  //   them straight back to the host, which refresh_host_surfs() does
+  //   only when a host consumer needs them
+
+  if (!sweepflag) {
+    unsigned int mask = (dim == 2) ? LINE_MASK : TRI_MASK;
+    if (surf->distributed) mask |= (dim == 2) ? MYLINE_MASK : MYTRI_MASK;
+    const int prev_auto_sync = sparta->kokkos->auto_sync;
+    sparta->kokkos->auto_sync = 0;
+    surf_kk->modify(Device,mask);
+    sparta->kokkos->auto_sync = prev_auto_sync;
+  }
 
   k_bbodylo.modify_device(); k_bbodylo.sync_host();
   k_bbodyhi.modify_device(); k_bbodyhi.sync_host();
@@ -728,28 +776,45 @@ void FixRigidKokkos::operator()(TagFixRigidInflate, const int &i) const
 }
 
 /* ----------------------------------------------------------------------
-   one thread per local surf copy of an element: the surf takes the
-     element's points and normal, FixRigid::update_surf_copies()
+   one thread per local surf copy of an element, then per owned copy
+     with distributed surfs: the surf takes the element's points and
+     normal, FixRigid::update_surf_copies()
 ------------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
 void FixRigidKokkos::operator()(TagFixRigidScatterSurfs, const int &m) const
 {
-  const int index = d_copy_index_kk(m);
-  const int i = d_copy_elem_kk(m);
-  if (dim_kk == 2) {
-    for (int k = 0; k < 3; k++) {
-      d_lines_kk[index].p1[k] = d_bodypt_kk(i,0,k);
-      d_lines_kk[index].p2[k] = d_bodypt_kk(i,1,k);
-      d_lines_kk[index].norm[k] = d_bodynorm_kk(i,k);
-    }
+  if (m < nscatter_kk) {
+    const int index = d_copy_index_kk(m);
+    const int i = d_copy_elem_kk(m);
+    if (dim_kk == 2) scatter_line(d_lines_kk[index],i);
+    else scatter_tri(d_tris_kk[index],i);
   } else {
-    for (int k = 0; k < 3; k++) {
-      d_tris_kk[index].p1[k] = d_bodypt_kk(i,0,k);
-      d_tris_kk[index].p2[k] = d_bodypt_kk(i,1,k);
-      d_tris_kk[index].p3[k] = d_bodypt_kk(i,2,k);
-      d_tris_kk[index].norm[k] = d_bodynorm_kk(i,k);
-    }
+    const int iown = d_olist_own_kk(m-nscatter_kk);
+    const int i = d_olist_elem_kk(m-nscatter_kk);
+    if (dim_kk == 2) scatter_line(d_mylines_kk[iown],i);
+    else scatter_tri(d_mytris_kk[iown],i);
+  }
+}
+
+KOKKOS_INLINE_FUNCTION
+void FixRigidKokkos::scatter_line(Surf::Line &line, int i) const
+{
+  for (int k = 0; k < 3; k++) {
+    line.p1[k] = d_bodypt_kk(i,0,k);
+    line.p2[k] = d_bodypt_kk(i,1,k);
+    line.norm[k] = d_bodynorm_kk(i,k);
+  }
+}
+
+KOKKOS_INLINE_FUNCTION
+void FixRigidKokkos::scatter_tri(Surf::Tri &tri, int i) const
+{
+  for (int k = 0; k < 3; k++) {
+    tri.p1[k] = d_bodypt_kk(i,0,k);
+    tri.p2[k] = d_bodypt_kk(i,1,k);
+    tri.p3[k] = d_bodypt_kk(i,2,k);
+    tri.norm[k] = d_bodynorm_kk(i,k);
   }
 }
 
@@ -1436,10 +1501,13 @@ int FixRigidKokkos::remove_inside_all_kokkos(int splitflag)
   }
 
   // the kernel appended to the dellist under an atomic, so its order is
-  //   not reproducible; ParticleKokkos::compress_migrate() walks it
-  //   assuming ascending indices, and an unsorted list would both break
-  //   that walk and make the surviving particle order depend on thread
-  //   scheduling.  sort it, so a run is reproducible and matches the host
+  //   not reproducible; the compaction walks it assuming ascending
+  //   indices, and an unsorted list would both break that walk and make
+  //   the surviving particle order depend on thread scheduling.  sort it,
+  //   so a run is reproducible and matches the host
+  // the compaction runs on the device, where the particles are: the host
+  //   copy is stale here, and Particle::compress_migrate() would compact
+  //   that copy while the device kept the deleted particle
 
   k_dellist_kk.modify_device();
   k_dellist_kk.sync_host();
@@ -1449,7 +1517,7 @@ int FixRigidKokkos::remove_inside_all_kokkos(int splitflag)
   k_dellist_kk.sync_device();
 
   particle_kk->modify(Device,PARTICLE_MASK);
-  particle_kk->compress_migrate(ndelete,dellist_h);
+  particle_kk->compress_migrate_kokkos(ndelete,dellist_h);
   particle->sorted = 0;
   particle_kk->sorted_kk = 0;
 

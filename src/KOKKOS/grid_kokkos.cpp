@@ -956,6 +956,17 @@ void GridKokkos::resync_after_host_change()
   ((ParticleKokkos*) particle)->sorted_kk = 0;
 
   changed = 0;
+
+  // the device copies of the cells, split info and surfs are refreshed
+  //   here, not left to the next sync: a device pass that follows in the
+  //   same step (the deletion and split-assign pass of fix rigid/kk)
+  //   reads them through views it already holds, with no sync of its
+  //   own, and the sync the mover does at the next step comes too late.
+  //   on a CPU backend the two sides are one allocation and this is
+  //   free; on a GPU the upload happens now instead of one step later
+
+  sync(Device,ALL_MASK);
+  if (surf->exist) ((SurfKokkos*) surf)->sync(Device,ALL_MASK);
 }
 
 /* ---------------------------------------------------------------------- */

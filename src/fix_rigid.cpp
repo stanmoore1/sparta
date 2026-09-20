@@ -2277,6 +2277,7 @@ void FixRigid::check_body_attributes()
     for (int k = 0; k < nsurf; k++) {
       int i = lblist[k];
       if (i < 0) continue;
+      host_geometry(body[k]);
       if (dim == 2) {
         if (lines[i].id != sids[k] ||
             !same_coords(lines[i].p1,lines[i].p2,NULL,k))
@@ -2306,6 +2307,7 @@ void FixRigid::check_body_attributes()
         renumbered = 1;
         continue;
       }
+      host_geometry(body[k]);
       if (dim == 2) {
         if (mylines[i].id != sids[k] ||
             !same_coords(mylines[i].p1,mylines[i].p2,NULL,k))

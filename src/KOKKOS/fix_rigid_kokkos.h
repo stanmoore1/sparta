@@ -161,15 +161,16 @@ class FixRigidKokkos : public FixRigid {
   void device_geometry(int);    // geometry and boxes from the pose
 
   // per element: displace in the body frame and the body; per local
-  //   surf copy: its surf index and element; per body: the pose of
+  //   surf copy: its surf index and element, and with distributed surfs
+  //   per owned copy its owned index and element; per body: the pose of
   //   this step (xcm, ex, ey, ez, omega, rmax) and the box inflation
   // hostgeom = per body, 1 if the host copy of its geometry is current
 
   tdual_dbl_3d k_displace;
-  DAT::tdual_int_1d k_body,k_copy_index,k_copy_elem;
+  DAT::tdual_int_1d k_body,k_copy_index,k_copy_elem,k_olist_own,k_olist_elem;
   tdual_dbl_2d k_pose;
   tdual_dbl_1d k_bboxeps;
-  int ncopy_kk;
+  int ncopy_kk,nolist_kk;
   int *hostgeom;
   int maxhostgeom;
   int devicegeom;               // 1 once setup() put the geometry on the device
@@ -179,8 +180,17 @@ class FixRigidKokkos : public FixRigid {
   tdual_dbl_2d::t_dev d_bbodylo_kk,d_bbodyhi_kk;
   tdual_dbl_1d::t_dev d_bboxeps_kk;
   DAT::t_int_1d d_body_kk,d_bodystart_kk,d_copy_index_kk,d_copy_elem_kk;
+  DAT::t_int_1d d_olist_own_kk,d_olist_elem_kk;
+  t_line_1d d_mylines_kk;
+  t_tri_1d d_mytris_kk;
+  int nscatter_kk;              // the local copies come first in the scatter
   int sweep_kk,axiflag_kk;
   double dt_kk;
+
+  KOKKOS_INLINE_FUNCTION
+  void scatter_line(Surf::Line &, int) const;
+  KOKKOS_INLINE_FUNCTION
+  void scatter_tri(Surf::Tri &, int) const;
 
 
   // device replacement for the host assign_split_cell_particles() pass in
