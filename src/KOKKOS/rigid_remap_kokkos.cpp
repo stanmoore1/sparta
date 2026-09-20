@@ -47,7 +47,10 @@ RigidRemapKokkos::RigidRemapKokkos(SPARTA *sparta, FixRigidKokkos *fix_in) :
 {
   fix_kk = fix_in;
   maxpair = 0;
-  maxswcell_kk = maxswent_kk = 0;
+  maxswcell_kk = maxtouched_kk = maxhit_kk = 0;
+  ntouched_prev = 0;
+  d_ntouched = DAT::t_int_scalar("rigid_remap:ntouched");
+  d_nhit = DAT::t_int_scalar("rigid_remap:nhit");
   staticgen_kk = -1;
   maxrcand_kk = maxrcandlist_kk = maxch_kk = maxchent_kk = 0;
   maxvert_kk = maxedge_kk = maxcline_kk = maxpt_kk = 0;
@@ -71,9 +74,17 @@ static int box_overlap_kk(const double *alo, const double *ahi,
 
 /* ----------------------------------------------------------------------
    add every body's swept surfs to the collision lists of the cells it
-     sweeps through, as the mover's graph d_csurfs_move on the device
-   the host lists are not built: nothing on the host reads them when
-     the KOKKOS mover runs
+     sweeps this step, on the device: the mover's list for a cell is its
+     cut list followed by the swept elements, the same merge as the host
+     (cut list, then the swept elements not already in it, in descending
+     element order)
+   only the cells a body sweeps are touched: the count pass over the
+     (body, bin) pairs records every (cell, element) hit and lists each
+     touched cell once, the hits are scattered into one row per touched
+     cell, and the mover reads a cell's row through d_swrow (a sub cell
+     its split cell's row).  nothing is sized by the grid but the two
+     per-cell arrays, which are reset from the previous step's touched
+     list rather than rewritten
 ------------------------------------------------------------------------- */
 
 void RigidRemapKokkos::collision_lists()
@@ -148,14 +159,31 @@ void RigidRemapKokkos::collision_lists()
   k_qlo.modify_host(); k_qlo.sync_device();
   k_qhi.modify_host(); k_qhi.sync_device();
 
+  // per-cell count and row: zero and -1 everywhere but the cells the
+  //   previous step touched, which its touched list resets here; views
+  //   which grow start fresh
+
   if (ntotal > maxswcell_kk) {
     maxswcell_kk = ntotal;
     d_swcount = DAT::t_int_1d("rigid_remap:swcount",maxswcell_kk);
-    d_swoff = DAT::t_int_1d("rigid_remap:swoff",maxswcell_kk+1);
-    d_swcursor = DAT::t_int_1d("rigid_remap:swcursor",maxswcell_kk);
-    d_swext = DAT::t_int_1d("rigid_remap:swext",maxswcell_kk);
-    d_subparent = DAT::t_int_1d("rigid_remap:subparent",maxswcell_kk);
-    d_rowcount = Kokkos::View<crs_size_type*,DeviceType>("rigid_remap:rowcount",maxswcell_kk+1);
+    d_swrow = DAT::t_int_1d("rigid_remap:swrow",maxswcell_kk);
+    Kokkos::deep_copy(d_swrow,-1);
+    d_swtouched = DAT::t_int_1d("rigid_remap:swtouched",maxswcell_kk);
+    ntouched_prev = 0;
+  }
+
+  auto d_swcount = this->d_swcount;
+  auto d_swrow = this->d_swrow;
+  auto d_swtouched = this->d_swtouched;
+
+  if (ntouched_prev) {
+    Kokkos::parallel_for("rigid_remap:sw_reset",ntouched_prev,
+                         KOKKOS_LAMBDA(const int t) {
+      const int icell = d_swtouched(t);
+      d_swcount(icell) = 0;
+      d_swrow(icell) = -1;
+    });
+    ntouched_prev = 0;
   }
 
   // the views the kernels read, as locals so the lambdas carry copies
@@ -168,11 +196,8 @@ void RigidRemapKokkos::collision_lists()
   auto d_binlist = grid_kk->d_cellbinlist;
   auto d_cells = grid_kk->k_cells.view_device();
   const RigidBodyKK body = fix_kk->body;
-  auto d_swcount = this->d_swcount;
-  auto d_swoff = this->d_swoff;
-  auto d_swcursor = this->d_swcursor;
-  auto d_swext = this->d_swext;
-  auto d_subparent = this->d_subparent;
+  auto d_ntouched = this->d_ntouched;
+  auto d_nhit = this->d_nhit;
   const int nbinx = grid->cellnbin[0];
   const int nbiny = grid->cellnbin[1];
   const int nbinz = grid->cellnbin[2];
@@ -207,84 +232,118 @@ void RigidRemapKokkos::collision_lists()
     return ibin == (fz*nbiny + fy)*nbinx + fx;
   };
 
-  // count the swept elements of each cell
+  // count the swept elements of each cell, recording every hit and
+  //   listing a cell the first time it is counted
+  // a hit buffer too small for this step is grown and the pass re-run,
+  //   which happens on the first step and rarely after
 
-  Kokkos::deep_copy(Kokkos::subview(d_swcount,std::make_pair(0,ntotal)),0);
+  int ntouched,nhit;
 
-  Kokkos::parallel_for(npair, KOKKOS_LAMBDA(const int p) {
-    const int ibody = d_pairbody(p);
-    const int ibin = d_pairbin(p);
-    for (int m = d_binstart(ibin); m < d_binstart(ibin+1); m++) {
-      const int icell = d_binlist(m);
-      if (d_cells[icell].nsplit <= 0) continue;
-      if (d_cells[icell].nsurf < 0) continue;
-      if (!first_bin(icell,ibody,ibin)) continue;
-      const double *clo = d_cells[icell].lo;
-      const double *chi = d_cells[icell].hi;
-      if (!body.box_overlap(ibody,clo,chi)) continue;
-      int n = 0;
-      for (int e = body.d_bodystart(ibody); e < body.d_bodystart(ibody+1); e++)
-        if (body.elem_overlap(e,clo,chi)) n++;
-      if (n) Kokkos::atomic_add(&d_swcount(icell),n);
-    }
-  });
+  while (1) {
+    Kokkos::deep_copy(d_ntouched,0);
+    Kokkos::deep_copy(d_nhit,0);
+    auto d_hitcell = this->d_hitcell;
+    auto d_hitelem = this->d_hitelem;
+    const int maxhit = maxhit_kk;
 
-  Kokkos::parallel_scan(ntotal, KOKKOS_LAMBDA(const int icell, int &sum,
-                                               const bool final) {
-    const int n = d_swcount(icell);
-    if (final) d_swoff(icell) = sum;
-    sum += n;
-    if (final && icell == ntotal-1) d_swoff(ntotal) = sum;
-  });
-  int nent;
-  Kokkos::deep_copy(nent,Kokkos::subview(d_swoff,ntotal));
+    Kokkos::parallel_for("rigid_remap:sw_count",npair, KOKKOS_LAMBDA(const int p) {
+      const int ibody = d_pairbody(p);
+      const int ibin = d_pairbin(p);
+      for (int m = d_binstart(ibin); m < d_binstart(ibin+1); m++) {
+        const int icell = d_binlist(m);
+        if (d_cells[icell].nsplit <= 0) continue;
+        if (d_cells[icell].nsurf < 0) continue;
+        if (!first_bin(icell,ibody,ibin)) continue;
+        const double *clo = d_cells[icell].lo;
+        const double *chi = d_cells[icell].hi;
+        if (!body.box_overlap(ibody,clo,chi)) continue;
+        int n = 0;
+        for (int e = body.d_bodystart(ibody); e < body.d_bodystart(ibody+1); e++) {
+          if (!body.elem_overlap(e,clo,chi)) continue;
+          const int h = Kokkos::atomic_fetch_add(&d_nhit(),1);
+          if (h < maxhit) {
+            d_hitcell(h) = icell;
+            d_hitelem(h) = e;
+          }
+          n++;
+        }
+        if (!n) continue;
+        const int old = Kokkos::atomic_fetch_add(&d_swcount(icell),n);
+        if (old == 0) {
+          const int t = Kokkos::atomic_fetch_add(&d_ntouched(),1);
+          d_swtouched(t) = icell;
+        }
+      }
+    });
 
-  if (!nent) {
+    Kokkos::deep_copy(ntouched,d_ntouched);
+    Kokkos::deep_copy(nhit,d_nhit);
+    if (nhit <= maxhit_kk) break;
+
+    maxhit_kk = nhit + nhit/2;
+    this->d_hitcell = DAT::t_int_1d("rigid_remap:hitcell",maxhit_kk);
+    this->d_hitelem = DAT::t_int_1d("rigid_remap:hitelem",maxhit_kk);
+    this->d_swelem = DAT::t_int_1d("rigid_remap:swelem",maxhit_kk);
+    Kokkos::parallel_for("rigid_remap:sw_reset",ntouched,
+                         KOKKOS_LAMBDA(const int t) {
+      d_swcount(d_swtouched(t)) = 0;
+    });
+  }
+
+  ntouched_prev = ntouched;
+
+  if (!nhit) {
     grid_kk->d_csurfs_move = grid_kk->d_csurfs;
+    grid_kk->swextras = 0;
     return;
   }
 
-  if (nent > maxswent_kk) {
-    maxswent_kk = nent;
-    d_swelem = DAT::t_int_1d("rigid_remap:swelem",maxswent_kk);
+  // one row per touched cell, in list order: the cell's row index, the
+  //   row offsets by a scan of the counts, then the hits scattered into
+  //   the rows
+
+  if (ntouched > maxtouched_kk) {
+    maxtouched_kk = ntouched;
+    d_swoff = DAT::t_int_1d("rigid_remap:swoff",maxtouched_kk+1);
+    d_swcursor = DAT::t_int_1d("rigid_remap:swcursor",maxtouched_kk);
+    d_swext = DAT::t_int_1d("rigid_remap:swext",maxtouched_kk);
   }
+  auto d_swoff = this->d_swoff;
+  auto d_swcursor = this->d_swcursor;
+  auto d_swext = this->d_swext;
   auto d_swelem = this->d_swelem;
-  Kokkos::deep_copy(Kokkos::subview(d_swcursor,std::make_pair(0,ntotal)),0);
+  auto d_hitcell = this->d_hitcell;
+  auto d_hitelem = this->d_hitelem;
 
-  // fill: the same enumeration, each cell's elements in arrival order
-
-  Kokkos::parallel_for(npair, KOKKOS_LAMBDA(const int p) {
-    const int ibody = d_pairbody(p);
-    const int ibin = d_pairbin(p);
-    for (int m = d_binstart(ibin); m < d_binstart(ibin+1); m++) {
-      const int icell = d_binlist(m);
-      if (d_cells[icell].nsplit <= 0) continue;
-      if (d_cells[icell].nsurf < 0) continue;
-      if (!first_bin(icell,ibody,ibin)) continue;
-      const double *clo = d_cells[icell].lo;
-      const double *chi = d_cells[icell].hi;
-      if (!body.box_overlap(ibody,clo,chi)) continue;
-      for (int e = body.d_bodystart(ibody); e < body.d_bodystart(ibody+1); e++) {
-        if (!body.elem_overlap(e,clo,chi)) continue;
-        const int j = Kokkos::atomic_fetch_add(&d_swcursor(icell),1);
-        d_swelem(d_swoff(icell)+j) = e;
-      }
-    }
+  Kokkos::parallel_for("rigid_remap:sw_rows",ntouched, KOKKOS_LAMBDA(const int t) {
+    d_swrow(d_swtouched(t)) = t;
+    d_swcursor(t) = 0;
   });
 
-  // per cell: the host chains its entries and reads the chain from its
+  Kokkos::parallel_scan("rigid_remap:sw_scan",ntouched,
+                        KOKKOS_LAMBDA(const int t, int &sum, const bool final) {
+    const int n = d_swcount(d_swtouched(t));
+    if (final) d_swoff(t) = sum;
+    sum += n;
+    if (final && t == ntouched-1) d_swoff(ntouched) = sum;
+  });
+
+  Kokkos::parallel_for("rigid_remap:sw_scatter",nhit, KOKKOS_LAMBDA(const int h) {
+    const int t = d_swrow(d_hitcell(h));
+    const int j = Kokkos::atomic_fetch_add(&d_swcursor(t),1);
+    d_swelem(d_swoff(t)+j) = d_hitelem(h);
+  });
+
+  // per row: the host chains its entries and reads the chain from its
   //   head, so the swept elements follow the cut list in descending
   //   element order; elements the cut list already holds are dropped
 
   auto d_csurfs = grid_kk->d_csurfs;
 
-  Kokkos::parallel_for(ntotal, KOKKOS_LAMBDA(const int icell) {
+  Kokkos::parallel_for("rigid_remap:sw_sort_dedup",ntouched, KOKKOS_LAMBDA(const int t) {
+    const int icell = d_swtouched(t);
     const int n = d_swcount(icell);
-    if (!n) {
-      d_swext(icell) = 0;
-      return;
-    }
-    const int off = d_swoff(icell);
+    const int off = d_swoff(t);
     for (int a = 1; a < n; a++) {
       const int v = d_swelem(off+a);
       int b = a - 1;
@@ -304,105 +363,18 @@ void RigidRemapKokkos::collision_lists()
         if (d_csurfs.entries(cstart+j) == s) { dup = 1; break; }
       if (!dup) d_swelem(off+nextra++) = s;
     }
-    d_swext(icell) = nextra;
+    d_swext(t) = nextra;
   });
 
-  // the split cell of every sub cell, which takes its split cell's
-  //   swept elements; a split cell itself keeps its cut list
+  // the mover reads the cut graph plus these rows: a split cell keeps
+  //   its cut list, its sub cells take its row
 
-  Grid::ChildCell *cells = grid->cells;
-  Grid::SplitInfo *sinfo = grid->sinfo;
-  int nsinfo = grid->nsplitlocal + grid->nsplitghost;
-  int nsub = 0;
-  for (i = 0; i < nsinfo; i++) {
-    int icell = sinfo[i].icell;
-    if (icell < 0 || icell >= ntotal) continue;
-    if (cells[icell].nsplit <= 1 || cells[icell].isplit != i) continue;
-    nsub += cells[icell].nsplit;
-  }
-  if ((int) k_subcell.extent(0) < MAX(nsub,1)) {
-    k_subcell = DAT::tdual_int_1d("rigid_remap:subcell",MAX(nsub,1));
-    k_subpar = DAT::tdual_int_1d("rigid_remap:subpar",MAX(nsub,1));
-  }
-  auto h_subcell = k_subcell.view_host();
-  auto h_subpar = k_subpar.view_host();
-  k = 0;
-  for (i = 0; i < nsinfo; i++) {
-    int icell = sinfo[i].icell;
-    if (icell < 0 || icell >= ntotal) continue;
-    if (cells[icell].nsplit <= 1 || cells[icell].isplit != i) continue;
-    int *mycsubs = sinfo[i].csubs;
-    for (int j = 0; j < cells[icell].nsplit; j++) {
-      h_subcell(k) = mycsubs[j];
-      h_subpar(k) = icell;
-      k++;
-    }
-  }
-  k_subcell.modify_host(); k_subcell.sync_device();
-  k_subpar.modify_host(); k_subpar.sync_device();
-  auto d_subcell = k_subcell.view_device();
-  auto d_subpar = k_subpar.view_device();
-
-  Kokkos::deep_copy(Kokkos::subview(d_subparent,std::make_pair(0,ntotal)),-1);
-  Kokkos::parallel_for(nsub, KOKKOS_LAMBDA(const int m) {
-    d_subparent(d_subcell(m)) = d_subpar(m);
-  });
-
-  // the mover's graph: cut list plus the swept elements of the cell, or
-  //   of its split cell for a sub cell
-
-  auto d_rowcount = this->d_rowcount;
-  Kokkos::parallel_for(ntotal, KOKKOS_LAMBDA(const int icell) {
-    crs_size_type n = d_csurfs.row_map(icell+1) - d_csurfs.row_map(icell);
-    const int nsplit = d_cells[icell].nsplit;
-    if (nsplit == 1) n += d_swext(icell);
-    else if (nsplit <= 0) {
-      const int par = d_subparent(icell);
-      if (par >= 0) n += d_swext(par);
-    }
-    d_rowcount(icell) = n;
-  });
-
-  if ((int) d_rowmap_move.extent(0) < ntotal+1)
-    d_rowmap_move = Kokkos::View<crs_size_type*,DeviceType>(
-      Kokkos::view_alloc(Kokkos::WithoutInitializing,"rigid_remap:rowmap_move"),
-      ntotal+1);
-  auto rowmap = d_rowmap_move;
-  Kokkos::parallel_scan(ntotal, KOKKOS_LAMBDA(const int icell, crs_size_type &sum,
-                                               const bool final) {
-    const crs_size_type n = d_rowcount(icell);
-    if (final) rowmap(icell) = sum;
-    sum += n;
-    if (final && icell == ntotal-1) rowmap(ntotal) = sum;
-  });
-  crs_size_type nentries;
-  Kokkos::deep_copy(nentries,Kokkos::subview(rowmap,ntotal));
-
-  if ((bigint) d_entries_move.extent(0) < (bigint) nentries)
-    d_entries_move = DAT::t_int_1d(
-      Kokkos::view_alloc(Kokkos::WithoutInitializing,"rigid_remap:entries_move"),
-      nentries);
-  auto entries = d_entries_move;
-
-  Kokkos::parallel_for(ntotal, KOKKOS_LAMBDA(const int icell) {
-    const crs_size_type cstart = d_csurfs.row_map(icell);
-    const int ncut = d_csurfs.row_map(icell+1) - cstart;
-    crs_size_type start = rowmap(icell);
-    for (int j = 0; j < ncut; j++) entries(start+j) = d_csurfs.entries(cstart+j);
-    start += ncut;
-    const int nsplit = d_cells[icell].nsplit;
-    int src = -1;
-    if (nsplit == 1) src = icell;
-    else if (nsplit <= 0) src = d_subparent(icell);
-    if (src < 0) return;
-    const int nextra = d_swext(src);
-    const int off = d_swoff(src);
-    for (int j = 0; j < nextra; j++) entries(start+j) = d_swelem(off+j);
-  });
-  Kokkos::fence();
-
-  grid_kk->d_csurfs_move.row_map = rowmap;
-  grid_kk->d_csurfs_move.entries = entries;
+  grid_kk->d_csurfs_move = grid_kk->d_csurfs;
+  grid_kk->d_swrow = d_swrow;
+  grid_kk->d_swoff = d_swoff;
+  grid_kk->d_swext = d_swext;
+  grid_kk->d_swelem = d_swelem;
+  grid_kk->swextras = 1;
   grid_kk->graph_generation++;
   nswept = 1;
 }
@@ -415,6 +387,7 @@ void RigidRemapKokkos::reset_collision_lists()
 {
   GridKokkos *grid_kk = (GridKokkos *) grid;
   grid_kk->d_csurfs_move = grid_kk->d_csurfs;
+  grid_kk->swextras = 0;
   grid_kk->graph_generation++;
   nswept = 0;
 }
@@ -629,7 +602,7 @@ int RigidRemapKokkos::recut()
 
   Kokkos::deep_copy(Kokkos::subview(d_candflag,std::make_pair(0,nglocal)),0);
 
-  Kokkos::parallel_for(npair, KOKKOS_LAMBDA(const int p) {
+  Kokkos::parallel_for("rigid_remap:rc_cand_flag",npair, KOKKOS_LAMBDA(const int p) {
     const int ib = d_pairbody(p);
     const int ibin = d_pairbin(p);
     double blo[3],bhi[3];
@@ -664,7 +637,7 @@ int RigidRemapKokkos::recut()
     }
   });
 
-  Kokkos::parallel_scan(nglocal, KOKKOS_LAMBDA(const int ic, int &sum,
+  Kokkos::parallel_scan("rigid_remap:rc_cand_scan",nglocal, KOKKOS_LAMBDA(const int ic, int &sum,
                                                 const bool final) {
     const int n = d_candflag(ic);
     if (final) d_candoff(ic) = sum;
@@ -698,7 +671,7 @@ int RigidRemapKokkos::recut()
   auto d_newtype = this->d_newtype;
   auto d_newlist = k_newlist.view_device();
 
-  Kokkos::parallel_for(nglocal, KOKKOS_LAMBDA(const int ic) {
+  Kokkos::parallel_for("rigid_remap:rc_cand_list",nglocal, KOKKOS_LAMBDA(const int ic) {
     if (d_candflag(ic)) d_rcand(d_candoff(ic)) = ic;
   });
 
@@ -755,7 +728,7 @@ int RigidRemapKokkos::recut()
     return CutKokkos::clip3d(x1,x2,x3,clo,chi) ? 1 : 0;
   };
 
-  Kokkos::parallel_for(nrcand, KOKKOS_LAMBDA(const int ic) {
+  Kokkos::parallel_for("rigid_remap:rc_newlists",nrcand, KOKKOS_LAMBDA(const int ic) {
     const int icell = d_rcand(ic);
     const double *clo = d_cells[icell].lo;
     const double *chi = d_cells[icell].hi;
@@ -859,7 +832,7 @@ int RigidRemapKokkos::recut()
 
   auto d_staticinside = k_staticinside.view_device();
 
-  Kokkos::parallel_for(nrcand, KOKKOS_LAMBDA(const int ic) {
+  Kokkos::parallel_for("rigid_remap:rc_compare",nrcand, KOKKOS_LAMBDA(const int ic) {
     d_newtype(ic) = -1;
     const int icell = d_rcand(ic);
     if (d_cells[icell].nsplit != 1) return;
@@ -940,7 +913,7 @@ int RigidRemapKokkos::recut()
 
   {
     const int nrc = nrcand;
-    Kokkos::parallel_scan(nrc, KOKKOS_LAMBDA(const int ic, int &sum,
+    Kokkos::parallel_scan("rigid_remap:rc_ch_scan",nrc, KOKKOS_LAMBDA(const int ic, int &sum,
                                              const bool final) {
       const int n = d_chflag(ic);
       if (final) d_choff(ic) = sum;
@@ -966,7 +939,7 @@ int RigidRemapKokkos::recut()
   auto d_chn = k_chn.view_device();
   auto d_chloff = k_chloff.view_device();
 
-  Kokkos::parallel_for(nrcand, KOKKOS_LAMBDA(const int ic) {
+  Kokkos::parallel_for("rigid_remap:rc_ch_pack",nrcand, KOKKOS_LAMBDA(const int ic) {
     if (!d_chflag(ic)) return;
     const int c = d_choff(ic);
     d_chcand(c) = ic;
@@ -976,7 +949,7 @@ int RigidRemapKokkos::recut()
   // row offsets of the lists: the piece maps, the piece volumes and the
   //   scratch rows of the device cut are laid out by the same offsets
 
-  Kokkos::parallel_scan(nch, KOKKOS_LAMBDA(const int c, int &sum,
+  Kokkos::parallel_scan("rigid_remap:rc_ch_offscan",nch, KOKKOS_LAMBDA(const int c, int &sum,
                                             const bool final) {
     const int n = d_chn(c);
     if (final) d_chloff(c) = sum;
@@ -994,7 +967,7 @@ int RigidRemapKokkos::recut()
   }
   auto d_chlist = k_chlist.view_device();
 
-  Kokkos::parallel_for(nch, KOKKOS_LAMBDA(const int c) {
+  Kokkos::parallel_for("rigid_remap:rc_ch_fill",nch, KOKKOS_LAMBDA(const int c) {
     const int ic = d_chcand(c);
     const int n = d_chn(c);
     const int off = d_chloff(c);
@@ -1037,7 +1010,7 @@ int RigidRemapKokkos::recut()
     const int axisymmetric = domain->axisymmetric;
     const Surf::Line *lines = d_lines.data();
 
-    Kokkos::parallel_for(nch, KOKKOS_LAMBDA(const int c) {
+    Kokkos::parallel_for("rigid_remap:rc_cut2d",nch, KOKKOS_LAMBDA(const int c) {
       const int icell = d_rcand(d_chcand(c));
       const int n = d_chn(c);
       const int off = d_chloff(c);
@@ -1154,7 +1127,7 @@ int RigidRemapKokkos::recut()
       auto d_cutstats = this->d_cutstats;
       const int cfirst = c0;
 
-      Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType>(c0,c1),
+      Kokkos::parallel_for("rigid_remap:rc_cut3d",Kokkos::RangePolicy<DeviceType>(c0,c1),
                            KOKKOS_LAMBDA(const int c) {
         const int icell = d_rcand(d_chcand(c));
         const int n = d_chn(c);

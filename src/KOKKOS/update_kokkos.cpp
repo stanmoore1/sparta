@@ -774,6 +774,13 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
 
     d_csurfs = grid_kk->d_csurfs;
     d_csurfs_move = grid_kk->d_csurfs_move;
+    swextras = grid_kk->swextras;
+    if (swextras) {
+      d_swrow = grid_kk->d_swrow;
+      d_swoff = grid_kk->d_swoff;
+      d_swext = grid_kk->d_swext;
+      d_swelem = grid_kk->d_swelem;
+    }
     d_csplits = grid_kk->d_csplits;
     d_csubs = grid_kk->d_csubs;
 
@@ -1740,12 +1747,28 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
       // the surfs to test are the cell's row of the device graph: its
       //   cut list, or the collision list a fix which moves surfs set
       //   for this step (Grid::set_collision_surfs), which is longer;
-      //   an empty ghost cell (nsurf < 0) has no row and is counted as
-      //   Update::move() counts it
+      //   then the swept surfs fix rigid/kk appended for this step, a
+      //   row over the touched cells (GridKokkos::d_swrow): an unsplit
+      //   cell reads its own row, a sub cell its split cell's, a split
+      //   cell none.  an empty ghost cell (nsurf < 0) has no row and is
+      //   counted as Update::move() counts it
 
+      int ncut = 0,extraoff = 0;
       nsurf = d_cells[icell].nsurf;
-      if (nsurf >= 0)
+      if (nsurf >= 0) {
         nsurf = d_csurfs_move.row_map(icell+1) - d_csurfs_move.row_map(icell);
+        ncut = nsurf;
+        if (swextras) {
+          int t = -1;
+          const int nsplit = d_cells[icell].nsplit;
+          if (nsplit == 1) t = d_swrow(icell);
+          else if (nsplit <= 0) t = d_swrow(d_sinfo[d_cells[icell].isplit].icell);
+          if (t >= 0) {
+            extraoff = d_swoff(t);
+            nsurf += d_swext(t);
+          }
+        }
+      }
       if (pflag == PEXIT) {
         nsurf = 0;
         pflag = 0;
@@ -1811,7 +1834,8 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
         double mxcm[3],mvcm[3],momega[3],ymap0[3],ymap1[3];
 
         for (int m = 0; m < nsurf; m++) {
-          isurf = d_csurfs_move.entries(csurfs_begin + m);
+          if (m < ncut) isurf = d_csurfs_move.entries(csurfs_begin + m);
+          else isurf = d_swelem(extraoff + m - ncut);
 
           // skip collisions with previous surf, but not for a moving
           //   rigid-body surf, whose round-off re-hit at param ~ 0 is

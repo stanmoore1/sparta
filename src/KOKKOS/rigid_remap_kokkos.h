@@ -42,22 +42,19 @@ class RigidRemapKokkos : public RigidRemap {
   DAT::tdual_int_2d k_qlo,k_qhi;
   int maxpair;
 
-  // per cell: # of swept elements, their offsets, an atomic cursor, the
-  //   entries (element indices, then the surviving local surf indices)
-  //   and the # which survive the merge with the cut list
+  // the swept lists: per cell its count of swept elements and its row
+  //   (-1 = none), reset each step for the cells the previous step
+  //   touched; per touched cell its cell, row offset, atomic cursor and
+  //   # of entries which survive the merge with the cut list; per hit
+  //   of the count pass its cell and element, and the row entries
+  //   (element indices, then the surviving local surf indices)
 
-  DAT::t_int_1d d_swcount,d_swoff,d_swcursor,d_swext,d_swelem,d_subparent;
-  int maxswcell_kk,maxswent_kk;
-
-  // the split cell of every sub cell, from the host split info
-
-  DAT::tdual_int_1d k_subcell,k_subpar;
-
-  // the mover's graph, built here each step
-
-  Kokkos::View<crs_size_type*,DeviceType> d_rowmap_move;
-  DAT::t_int_1d d_entries_move;
-  Kokkos::View<crs_size_type*,DeviceType> d_rowcount;
+  DAT::t_int_1d d_swcount,d_swrow;
+  DAT::t_int_1d d_swtouched,d_swoff,d_swcursor,d_swext;
+  DAT::t_int_1d d_hitcell,d_hitelem,d_swelem;
+  DAT::t_int_scalar d_ntouched,d_nhit;
+  int maxswcell_kk,maxtouched_kk,maxhit_kk;
+  int ntouched_prev;            // # of cells the previous step touched
 
   // the re-cut: per body its region, COM, radii and interior flag; the
   //   candidate cells; per candidate its new list, whether it changed

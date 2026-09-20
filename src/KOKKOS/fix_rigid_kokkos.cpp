@@ -1183,7 +1183,7 @@ int FixRigidKokkos::assign_split_kokkos()
   auto d_plist = d_plist2_kk;
 
   int maxcount = 0;
-  Kokkos::parallel_reduce(nsplit, KOKKOS_LAMBDA(const int i, int &mx) {
+  Kokkos::parallel_reduce("fix_rigid:asg_max",nsplit, KOKKOS_LAMBDA(const int i, int &mx) {
     const int n = d_cellcount(d_splitcells(i));
     if (n > mx) mx = n;
   },Kokkos::Max<int>(maxcount));
@@ -1192,7 +1192,7 @@ int FixRigidKokkos::assign_split_kokkos()
     return 0;
   }
 
-  Kokkos::parallel_scan(nsplit, KOKKOS_LAMBDA(const int i, int &sum,
+  Kokkos::parallel_scan("fix_rigid:asg_scan",nsplit, KOKKOS_LAMBDA(const int i, int &sum,
                                               const bool final) {
     const int n = d_cellcount(d_splitcells(i));
     if (final) d_splitoff(i) = sum;
@@ -1214,7 +1214,7 @@ int FixRigidKokkos::assign_split_kokkos()
   }
   auto d_asgcell = this->d_asgcell;
   auto d_asgpart = this->d_asgpart;
-  Kokkos::parallel_for(nsplit, KOKKOS_LAMBDA(const int i) {
+  Kokkos::parallel_for("fix_rigid:asg_list",nsplit, KOKKOS_LAMBDA(const int i) {
     const int icell = d_splitcells(i);
     const int off = d_splitoff(i);
     const int n = d_cellcount(icell);

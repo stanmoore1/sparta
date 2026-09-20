@@ -198,6 +198,17 @@ class GridKokkos : public Grid {
   int ncsurfsrows;            // rows of d_csurfs, whose views may be longer
   int graph_generation;
 
+  // the swept surfs fix rigid/kk appends to the mover's list of a cell
+  //   this step (RigidRemapKokkos::collision_lists), as rows over the
+  //   touched cells only: d_swrow(icell) = the cell's row or -1,
+  //   d_swoff/d_swext its offset and length, d_swelem the entries; a sub
+  //   cell reads its split cell's row, a split cell reads none
+  // swextras = 1 while the rows are this step's; cleared when the
+  //   collision lists are reset or the graphs rebuilt from the host
+
+  DAT::t_int_1d d_swrow,d_swoff,d_swext,d_swelem;
+  int swextras;
+
   DAT::t_int_1d d_cellcount;
   DAT::t_int_2d d_plist;
 

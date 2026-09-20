@@ -72,6 +72,7 @@ GridKokkos::GridKokkos(SPARTA *sparta) : Grid(sparta)
   journalflag = 1;
   ncsurfsrows = 0;
   graph_generation = 0;
+  swextras = 0;
   cellbingen_kk = -1;
   dirtystamp = sinfostamp = NULL;
   maxdirtystamp = maxsinfostamp = 0;
@@ -260,6 +261,7 @@ void GridKokkos::wrap_kokkos_graphs()
     Kokkos::deep_copy(d_csurfs_move.row_map, h_move.row_map);
     Kokkos::deep_copy(d_csurfs_move.entries, h_move.entries);
   } else d_csurfs_move = d_csurfs;
+  swextras = 0;
 
   wrap_split_graphs();
   graph_generation++;
@@ -405,7 +407,7 @@ void GridKokkos::apply_changes()
     auto d_stagecinfo = k_stagecinfo.view_device();
     auto d_dirtycell = k_dirtycell.view_device();
     auto d_dirtyown = k_dirtyown.view_device();
-    Kokkos::parallel_for(nunique, KOKKOS_LAMBDA(const int m) {
+    Kokkos::parallel_for("grid:ac_scatter_cells",nunique, KOKKOS_LAMBDA(const int m) {
       const int ic = d_dirtycell(m);
       d_cells(ic) = d_stagecell(m);
       if (d_dirtyown(m)) d_cinfo(ic) = d_stagecinfo(m);
@@ -417,7 +419,7 @@ void GridKokkos::apply_changes()
       auto d_hashid = k_hashid.view_device();
       auto d_hashidx = k_hashidx.view_device();
       auto hash_d = hash_kk;
-      Kokkos::parallel_for(nhash, KOKKOS_LAMBDA(const int m) {
+      Kokkos::parallel_for("grid:ac_hash_patch",nhash, KOKKOS_LAMBDA(const int m) {
         auto h = hash_d.find(static_cast<key_type>(d_hashid(m)));
         if (hash_d.valid_at(h)) hash_d.value_at(h) = d_hashidx(m);
       });
@@ -429,7 +431,7 @@ void GridKokkos::apply_changes()
       auto d_halosite = k_halosite.view_device();
       auto d_haloidx = k_haloidx.view_device();
       auto d_halo = d_halo_index;
-      Kokkos::parallel_for(nhalo, KOKKOS_LAMBDA(const int m) {
+      Kokkos::parallel_for("grid:ac_halo_patch",nhalo, KOKKOS_LAMBDA(const int m) {
         d_halo(d_halosite(m)) = d_haloidx(m);
       });
     }
@@ -471,7 +473,7 @@ void GridKokkos::apply_changes()
       auto d_sinfo = k_sinfo.view_device();
       auto d_stagesinfo = k_stagesinfo.view_device();
       auto d_dirtysinfo = k_dirtysinfo.view_device();
-      Kokkos::parallel_for(nsunique, KOKKOS_LAMBDA(const int m) {
+      Kokkos::parallel_for("grid:ac_scatter_sinfo",nsunique, KOKKOS_LAMBDA(const int m) {
         d_sinfo(d_dirtysinfo(m)) = d_stagesinfo(m);
       });
     }
@@ -504,7 +506,7 @@ void GridKokkos::apply_changes()
     const double binv0 = cellbininv[0], binv1 = cellbininv[1],
       binv2 = cellbininv[2];
     int npatch = nbinpatch;
-    Kokkos::parallel_for(npatch, KOKKOS_LAMBDA(const int m) {
+    Kokkos::parallel_for("grid:ac_bin_patch",npatch, KOKKOS_LAMBDA(const int m) {
       const int src = d_from(m);
       const int dst = d_to(m);
       const double *lo = d_cells[dst].lo;
@@ -537,6 +539,7 @@ void GridKokkos::apply_changes()
     if (nsunique || structural) wrap_split_graphs();
     if (ncollrec) build_move_graph_device();
     else if (collreset || ncutrec || structural) d_csurfs_move = d_csurfs;
+    if (collreset || ncollrec) swextras = 0;
     graph_generation++;
   }
 
@@ -656,7 +659,7 @@ void GridKokkos::build_csurfs_device()
   }
   auto d_rowsrc = this->d_rowsrc;
   auto d_rowpar = this->d_rowpar;
-  Kokkos::parallel_for(ntotal, KOKKOS_LAMBDA(const int m) {
+  Kokkos::parallel_for("grid:bc_subparent_init",ntotal, KOKKOS_LAMBDA(const int m) {
     d_rowsrc(m) = (m < nold) ? m : -1;
     d_rowpar(m) = -1;
   });
@@ -676,7 +679,7 @@ void GridKokkos::build_csurfs_device()
     k_movedto.modify_host(); k_movedto.sync_device();
     auto d_from = k_movedfrom.view_device();
     auto d_to = k_movedto.view_device();
-    Kokkos::parallel_for(nmoved, KOKKOS_LAMBDA(const int m) {
+    Kokkos::parallel_for("grid:bc_moved",nmoved, KOKKOS_LAMBDA(const int m) {
       const int from = d_from(m);
       d_rowsrc(d_to(m)) = (from < nold) ? from : -1;
     });
@@ -713,7 +716,7 @@ void GridKokkos::build_csurfs_device()
     k_subparent.modify_host(); k_subparent.sync_device();
     auto d_subcell = k_subcell.view_device();
     auto d_subparent = k_subparent.view_device();
-    Kokkos::parallel_for(nsub, KOKKOS_LAMBDA(const int m) {
+    Kokkos::parallel_for("grid:bc_subparent",nsub, KOKKOS_LAMBDA(const int m) {
       d_rowpar(d_subcell(m)) = d_subparent(m);
     });
   }
@@ -723,18 +726,18 @@ void GridKokkos::build_csurfs_device()
   if ((int) d_rowrec.extent(0) < MAX(nold,1))
     d_rowrec = DAT::t_int_1d("grid:rowrec",MAX(nold,1));
   auto d_rowrec = this->d_rowrec;
-  Kokkos::parallel_for(nold, KOKKOS_LAMBDA(const int m) { d_rowrec(m) = -1; });
+  Kokkos::parallel_for("grid:bc_rowrec_init",nold, KOKKOS_LAMBDA(const int m) { d_rowrec(m) = -1; });
 
   if (ncutrec) {
     upload_list_records(ncutrec,cutrec,cutbuf,ncutbuf);
     auto d_recicell = k_recicell.view_device();
     int nrec = ncutrec;
-    Kokkos::parallel_for(nrec, KOKKOS_LAMBDA(const int m) {
+    Kokkos::parallel_for("grid:bc_rowrec_set",nrec, KOKKOS_LAMBDA(const int m) {
       const int ic = d_recicell(m);
       if (ic < nold) d_rowrec(ic) = m;
     });
     Kokkos::fence();
-    Kokkos::parallel_for(nrec, KOKKOS_LAMBDA(const int m) {
+    Kokkos::parallel_for("grid:bc_rowrec_last",nrec, KOKKOS_LAMBDA(const int m) {
       const int ic = d_recicell(m);
       if (ic < nold && d_rowrec(ic) < m) d_rowrec(ic) = m;
     });
@@ -764,7 +767,7 @@ void GridKokkos::build_move_graph_device()
   auto d_rowsrc = this->d_rowsrc;
   auto d_rowpar = this->d_rowpar;
   auto d_rowrec = this->d_rowrec;
-  Kokkos::parallel_for(ntotal, KOKKOS_LAMBDA(const int m) {
+  Kokkos::parallel_for("grid:bm_rowrec_init",ntotal, KOKKOS_LAMBDA(const int m) {
     d_rowsrc(m) = m;
     d_rowpar(m) = -1;
     d_rowrec(m) = -1;
@@ -773,12 +776,12 @@ void GridKokkos::build_move_graph_device()
   upload_list_records(ncollrec,collrec,collbuf,ncollbuf);
   auto d_recicell = k_recicell.view_device();
   int nrec = ncollrec;
-  Kokkos::parallel_for(nrec, KOKKOS_LAMBDA(const int m) {
+  Kokkos::parallel_for("grid:bm_rowrec_set",nrec, KOKKOS_LAMBDA(const int m) {
     const int ic = d_recicell(m);
     if (ic < ntotal) d_rowrec(ic) = m;
   });
   Kokkos::fence();
-  Kokkos::parallel_for(nrec, KOKKOS_LAMBDA(const int m) {
+  Kokkos::parallel_for("grid:bm_rowrec_last",nrec, KOKKOS_LAMBDA(const int m) {
     const int ic = d_recicell(m);
     if (ic < ntotal && d_rowrec(ic) < m) d_rowrec(ic) = m;
   });
@@ -816,7 +819,7 @@ void GridKokkos::build_crs(int nrows,
   // count: the source row of cell i is its own old row, or its split
   //   cell's; a record for that source replaces it
 
-  Kokkos::parallel_for(nrows, KOKKOS_LAMBDA(const int i) {
+  Kokkos::parallel_for("grid:crs_count",nrows, KOKKOS_LAMBDA(const int i) {
     int par = d_rowpar(i);
     int src = (par >= 0) ? d_rowsrc(par) : d_rowsrc(i);
     crs_size_type n = 0;
@@ -836,7 +839,7 @@ void GridKokkos::build_crs(int nrows,
       nrows+1);
   auto rowmap = rowmap_buf;
 
-  Kokkos::parallel_scan(nrows, KOKKOS_LAMBDA(const int i, crs_size_type &sum,
+  Kokkos::parallel_scan("grid:crs_scan",nrows, KOKKOS_LAMBDA(const int i, crs_size_type &sum,
                                              const bool final) {
     const crs_size_type n = d_rowcount(i);
     if (final) rowmap(i) = sum;
@@ -857,7 +860,7 @@ void GridKokkos::build_crs(int nrows,
 
   // fill
 
-  Kokkos::parallel_for(nrows, KOKKOS_LAMBDA(const int i) {
+  Kokkos::parallel_for("grid:crs_fill",nrows, KOKKOS_LAMBDA(const int i) {
     int par = d_rowpar(i);
     int src = (par >= 0) ? d_rowsrc(par) : d_rowsrc(i);
     if (src < 0) return;
