@@ -1,0 +1,30 @@
+# TEST: bodies owned with remap cutcell is rejected
+# the full grid re-map of cutcell mode needs every body on every proc
+
+seed	    	    12345
+dimension   	    2
+boundary            r r p
+
+create_box  	    0 10 0 10 -0.5 0.5
+create_grid 	    20 20 1
+
+global		    nrho 1.0 fnum 0.001
+
+species		    air.species N
+mixture		    air N vstream 0 0 0 temp 273.0
+
+read_surf           data.square group body
+surf_collide	    1 specular
+surf_modify         all collide 1
+
+timestep 	    0.0001
+
+
+global              rigid yes
+
+fix		    1 rigid body single body mass 1.0e-22 com 5 5 0 &
+                    vcom 30 0 0 &
+		    moi 8.3333333e-24 8.3333333e-24 1.6666667e-23 0 0 0 &
+                    angmom 0 0 0 remap cutcell bodies owned
+
+run 		    0

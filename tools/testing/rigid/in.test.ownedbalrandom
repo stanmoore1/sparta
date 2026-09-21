@@ -1,0 +1,41 @@
+# TEST: bodies owned when a balance fix disperses the grid mid-run
+# its random style leaves a decomposition which is not clumped, which
+# the ownership rule cannot use, so the error comes at the grid change
+# on one proc every decomposition is clumped and the run proceeds
+
+seed	    	    12345
+dimension   	    2
+boundary            r r p
+
+create_box  	    0 10 0 10 -0.5 0.5
+create_grid 	    20 20 1
+balance_grid        rcb cell
+
+global		    nrho 1.0 fnum 0.001
+
+species		    air.species N
+mixture		    air N vstream 0 0 0 temp 273.0
+
+read_surf           data.square group body
+surf_collide	    1 specular
+surf_modify         all collide 1
+
+timestep 	    0.0001
+
+
+global              rigid yes
+
+# fix rigid must be defined before any fix which changes the grid
+
+fix		    1 rigid body single body mass 1.0e-22 com 5 5 0 &
+                    vcom 30 0 0 &
+		    moi 8.3333333e-24 8.3333333e-24 1.6666667e-23 0 0 0 &
+                    angmom 0 0 0 push 1.0e-18 0.3 bodies owned
+
+# particles, so the balance fix has a cost imbalance to act on
+
+create_particles    air n 2000
+
+fix                 2 balance 10 1.0 random
+
+run 		    30

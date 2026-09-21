@@ -22,6 +22,7 @@ seed	    	    12345
 
 variable            dist index 0
 variable            remap index incremental
+variable            bodies index replicated
 if "${dist} == 1" then "global surfs explicit/distributed"
 dimension   	    2
 boundary            p ar p
@@ -46,7 +47,8 @@ global              rigid yes
 fix		    1 rigid body single body &
 		    mass 1.0e-22 com 0.5 0 0 vcom 0 0 0 &
 		    moi 5.0e-25 1.0e-24 1.0e-24 0 0 0 angmom 0 0 0 &
-                    remap ${remap}
+                    remap ${remap} &
+                    bodies ${bodies}
 
 create_particles    air n 20000
 

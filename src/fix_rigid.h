@@ -93,7 +93,12 @@ class FixRigid : public Fix {
   void proc_bbox();             // bbox of this proc's owned + ghost cells
   void proc_boxes();            // every proc's owned and owned+ghost bboxes
   int body_owner(double *);     // rank which owns a body at this COM
-  void body_status();           // body ownership/status and the loop lists
+  void body_status(int = 0);    // body ownership/status and the loop lists
+                                //   1 = every proc holds every body
+  void gather_all();            // every proc's owned rows to all procs
+  void refresh_all();           // gather + host geometry of every body
+  int host_surfs_needed();      // 1 if a host consumer reads the surf
+                                //   arrays this step
   void surfs_changed(int, int = 0);  // notify per-surf models of the above
                                      //   2nd arg = 0 in run, 1 init, 2 setup
   virtual void surf_maps();     // rebuild surfbody/surfelem
@@ -174,11 +179,19 @@ class FixRigid : public Fix {
   int bodymode;           // REPLICATED or OWNED
   int *bodystatus;        // OWNEDBODY, GHOSTBODY, or FARBODY on this proc
   int *bodyowner;         // rank which owns each body
-  int *bodystamp;         // step this proc's copy of each body arrived on
+  bigint *bodystamp;      // step this proc's copy of each body arrived on
   int nown,*ownlist;      // bodies this proc owns
   int nblist,*blist;      // owned + ghost bodies, ascending body index
   int nnewghost,*newghost;  // GHOST now, FAR on the previous step
   int blistgen;           // bumped whenever blist changes
+
+  // the records the exchanges of owned mode move: the dynamic state of
+  //   one body, and one proc's partial force/torque sum for a ghost
+  // static per-body data stays replicated from setup
+
+  enum{NBODYDATUM = 63};
+  struct BodyDatum { int ibody,pad; double v[NBODYDATUM]; };
+  struct PartDatum { int ibody,rank; double f[6]; };
 
   int body_box(double *, double *, int **);  // bodies overlapping a box
   void body_bbox(int, int);     // bbox of body, current or swept over step
@@ -215,6 +228,28 @@ class FixRigid : public Fix {
   double bodycut_user;    // cutoff keyword value, <= 0.0 = use the default
   double rmaxmax;         // max over bodies of rmaxbody, for that default
 
+  // bodies owned: the per-step exchanges and the gathered outputs
+
+  class Irregular *irregular;   // plan of both exchanges
+  BodyDatum *bodysend,*bodyrecv;
+  int *bodydest;          // destination proc of each forward record
+  int maxbodysend,maxbodyrecv;
+  PartDatum *partsend,*partrecv;
+  int *partdest;          // owner of each reverse record
+  int maxpartsend,maxpartrecv;
+  int *gathernum;         // records each proc contributes to gather_all()
+  int *gathercount;       // and the byte counts/displacements of them
+  int *gatherdispl;
+  bigint gathervalid;     // step the gathered rows are valid for
+
+  void pack_datum(int, BodyDatum &);
+  void unpack_datum(const BodyDatum &);
+  void exchange_forward();      // owner -> holders, after the integration
+  void exchange_reverse();      // ghost partial sums -> owner
+  void newghost_geometry();     // start-of-step geometry of FAR -> GHOST
+  void check_bodycut();         // swept bbox vs the bodies cutoff
+  void body_warning(int &, int);  // once per run, per rank
+
   int copiesappended;     // 1 if start_of_step() appended local copies
   int ncopy,maxcopy;      // all local copies of body elements
   int *copy_index;        //   local surf index of each copy
@@ -227,6 +262,8 @@ class FixRigid : public Fix {
   int warnrotate;         // 1 after warning about rotation rate
   int warntranslate;      // 1 after warning about translation rate
   int warnexit;           // 1 after warning that a body exited the box
+  int warndefer[3];       // owned: the once-per-run warnings of the body
+                          //   loops, reduced and printed by post_run()
   int warnfallback;       // 1 after warning about incremental fallback
   int warndelete;         // 1 after warning about deletions during a run
   bigint ndelrun;         // per-proc deletions since this run started
@@ -431,8 +468,16 @@ E: Fix rigid bodies owned does not yet support distributed surfs
 
 Self-explanatory.
 
-E: Fix rigid bodies owned is not yet supported on more than one proc
+E: Fix rigid body moved beyond the bodies cutoff
 
-Self-explanatory.
+With bodies owned, a body may only reach the procs which were sent it,
+which are those within the cutoff of its COM.  Raise the cutoff value of
+the bodies keyword, or lower the timestep.
+
+E: Fix rigid/kk bodies owned is not yet supported
+
+The device geometry of a body which was not held on the previous step is
+not regenerated yet, so the KOKKOS version only runs bodies owned on one
+proc, where no body is ever a ghost.
 
 */

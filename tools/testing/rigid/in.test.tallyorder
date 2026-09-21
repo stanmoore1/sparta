@@ -11,6 +11,7 @@ seed                12345
 variable            dist index 0
 if "${dist} == 1" then "global surfs explicit/distributed"
 variable            order index 0
+variable            bodies index replicated
 dimension           2
 global              comm/sort yes gridcut 0.5
 boundary            p p p
@@ -41,7 +42,8 @@ if "${order} == 0" then &
 
 fix                 1 rigid body single body mass 1.0e-22 com 16 3.5 0 &
                     vcom 0 0 0 moi 1.7e-23 1.7e-23 3.4e-23 0 0 0 &
-                    angmom 0 0 0 remap cutcell push 1.0e-18 0.3
+                    angmom 0 0 0 remap cutcell push 1.0e-18 0.3 &
+                    bodies ${bodies}
 
 if "${order} == 1" then &
   "fix aw ave/surf wall 1 1 1 c_cw[1]"

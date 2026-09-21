@@ -13,6 +13,8 @@
 seed	    	    12345
 variable            dist index 0
 variable            geom index cylinder
+variable            bodies index replicated
+variable            clump index 0
 if "${dist} == 1" then "global surfs explicit/distributed"
 
 dimension   	    2
@@ -20,6 +22,7 @@ boundary            o ar p
 
 create_box  	    0 1 0 0.3 -0.5 0.5
 create_grid 	    20 6 1
+if "${clump} == 1" then "balance_grid rcb cell"
 
 global		    nrho 1.0e10 fnum 1.0e10
 
@@ -37,7 +40,8 @@ global              rigid yes
 
 # no mass, com, or moi given: all three are integrated from the geometry
 
-fix		    1 rigid body single density 1000.0 outfile tmp.axidensity.state 1
+fix		    1 rigid body single density 1000.0 outfile tmp.axidensity.state 1 &
+                    bodies ${bodies}
 
 stats		    1
 stats_style         step np nscoll

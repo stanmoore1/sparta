@@ -18,12 +18,15 @@
 seed	    	    12345
 
 variable            dist index 0
+variable            bodies index replicated
+variable            clump index 0
 if "${dist} == 1" then "global surfs explicit/distributed"
 dimension   	    2
 boundary            p ar p
 
 create_box  	    0 1 0 0.3 -0.5 0.5
 create_grid         20 6 1
+if "${clump} == 1" then "balance_grid rcb cell"
 
 global		    nrho 1.0 fnum 0.001
 
@@ -44,7 +47,8 @@ global              rigid yes
 
 fix		    1 rigid body single body &
 		    mass 1.0e-24 com 0.5 0 0 vcom 0 0 0 &
-		    moi 5.0e-27 1.0e-26 1.0e-26 0 0 0 angmom 5.0e-24 0 0
+		    moi 5.0e-27 1.0e-26 1.0e-26 0 0 0 angmom 5.0e-24 0 0 &
+                    bodies ${bodies}
 
 create_particles    air n 20000
 

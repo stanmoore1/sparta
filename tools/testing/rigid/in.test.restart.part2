@@ -6,12 +6,14 @@
 # run as: -var nrun <steps>
 seed	    	    12345
 variable            nrun index 1000
+variable            bodies index replicated
 read_restart        tmp.rigid.restart
 surf_collide	    1 specular
 surf_modify         all collide 1
 global              rigid yes
 fix		    1 rigid bodies type infile tmp.rigid.state &
-                    push 1.0e-18 0.5 pushbound yes
+                    push 1.0e-18 0.5 pushbound yes &
+                    bodies ${bodies}
 stats		    ${nrun}
 stats_style         step f_1[1][1] f_1[1][4] f_1[1][15] &
                     f_1[2][1] f_1[2][4] f_1[2][15]

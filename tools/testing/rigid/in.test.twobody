@@ -6,12 +6,15 @@
 seed	    	    12345
 
 variable            dist index 0
+variable            bodies index replicated
+variable            clump index 0
 if "${dist} == 1" then "global surfs explicit/distributed"
 dimension   	    2
 boundary            r r p
 
 create_box  	    0 10 0 10 -0.5 0.5
 create_grid 	    20 20 1
+if "${clump} == 1" then "balance_grid rcb cell"
 
 global		    nrho 1.0 fnum 0.001
 
@@ -29,7 +32,8 @@ timestep 	    0.0001
 global              rigid yes
 
 fix		    1 rigid bodies type infile data.twobody.bodies &
-		    push 1.0e-18 0.4
+		    push 1.0e-18 0.4 &
+                    bodies ${bodies}
 
 stats		    100
 stats_style         step f_1[1][1] f_1[1][4] f_1[2][1] f_1[2][4]

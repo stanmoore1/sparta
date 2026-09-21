@@ -1,0 +1,55 @@
+# TEST: bodies owned reproduces bodies replicated across a 2x2 grid
+# decomposition.  three pushed bodies on a 20x20 grid balanced rcb:
+# body 1 crosses both processor boundaries diagonally, body 2 crosses
+# the horizontal one and runs into body 1, and body 3 leaves the box
+# through a non-periodic face.  so a body is handed off from one owner
+# to another, a body becomes far from a processor and is held by it
+# again later, two bodies owned by different processors are in contact,
+# and one body ends up outside the cells of every processor
+# with gas 0 the motion is deterministic and the two modes must agree
+# exactly; with gas 1 they may differ at round-off in the sum of the
+# collision forces alone
+# run as: -var bodies owned  (or replicated), -var gas 0  (or 1)
+
+seed	    	    12345
+
+variable            bodies index replicated
+variable            gas index 1
+dimension   	    2
+global              gridcut 1.0 comm/sort yes
+boundary            o o p
+
+create_box  	    0 10 0 10 -0.5 0.5
+create_grid 	    20 20 1
+balance_grid        rcb cell
+
+global		    nrho 1.0 fnum 0.001
+
+species		    air.species N
+mixture		    air N vstream 0 0 0 temp 273.0
+
+read_surf           data.square group bodies trans -2.5 -2.5 0
+read_surf           data.square group bodies trans 2.5 -2.5 0 typeadd 1
+read_surf           data.square group bodies trans -2.5 2.5 0 typeadd 2
+surf_collide	    1 specular
+surf_modify         all collide 1
+
+timestep 	    0.0001
+
+
+global              rigid yes
+
+fix		    1 rigid bodies type infile data.ownership.bodies &
+                    push 1.0e-17 0.3 bodies ${bodies}
+
+if "${gas} == 1" then "create_particles air n 20000"
+
+stats		    1
+stats_style         step np f_1[1][1] f_1[1][2] f_1[1][4] f_1[1][5] &
+                    f_1[1][20] f_1[1][21] &
+                    f_1[2][1] f_1[2][2] f_1[2][4] f_1[2][5] &
+                    f_1[2][20] f_1[2][21] &
+                    f_1[3][1] f_1[3][2] f_1[3][4] f_1[3][5] &
+                    f_1[3][20] f_1[3][21]
+stats_modify        format float %20.14e
+run 		    250

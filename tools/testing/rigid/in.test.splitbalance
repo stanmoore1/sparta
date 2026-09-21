@@ -12,6 +12,7 @@ seed                12345
 variable            dist index 0
 variable            mode index cutcell
 variable            bstyle index random
+variable            bodies index replicated
 if "${dist} == 1" then "global surfs explicit/distributed"
 dimension           2
 global              comm/sort yes
@@ -39,7 +40,8 @@ global              rigid yes
 
 fix                 1 rigid body single body mass 1.0e-15 com 2.5 4.0 0 &
                     vcom 1000 1000 0 moi 1.7e-16 1.7e-16 3.4e-16 0 0 0 &
-                    angmom 0 0 0 remap ${mode}
+                    angmom 0 0 0 remap ${mode} &
+                    bodies ${bodies}
 
 fix                 2 balance 3 1.0 ${bstyle}
 

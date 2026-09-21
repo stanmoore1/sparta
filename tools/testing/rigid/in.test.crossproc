@@ -11,6 +11,7 @@
 seed	    	    12345
 
 variable            dist index 0
+variable            bodies index replicated
 if "${dist} == 1" then "global surfs explicit/distributed"
 dimension   	    2
 global              gridcut 1.0 comm/sort yes
@@ -38,7 +39,8 @@ timestep 	    0.0001
 global              rigid yes
 
 fix		    1 rigid bodies type infile data.crossproc.bodies &
-                    push 1.0e-18 0.3 pushbound yes
+                    push 1.0e-18 0.3 pushbound yes &
+                    bodies ${bodies}
 
 create_particles    air n 20000
 

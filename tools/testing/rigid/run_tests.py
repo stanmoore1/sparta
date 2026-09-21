@@ -10,6 +10,7 @@ Usage:
   python3 run_tests.py --exe /path/to/spa_serial
   python3 run_tests.py --exe /path/to/spa_mpi --mpi "mpirun -np 4"
   python3 run_tests.py --exe /path/to/spa_kokkos --args "-k on -sf kk"
+  python3 run_tests.py --exe /path/to/spa_mpi --owned
 
 Exit code = number of failed tests.
 """
@@ -46,6 +47,17 @@ def run_deck(exe_cmd, deck, extra=None):
     return proc.returncode, proc.stdout
 
 
+def nprocs_of(exe_cmd):
+    """# of MPI ranks the runner was given, 1 if not launched with mpirun."""
+    for i, tok in enumerate(exe_cmd):
+        if tok in ("-np", "-n", "--np", "-c") and i + 1 < len(exe_cmd):
+            try:
+                return int(exe_cmd[i + 1])
+            except ValueError:
+                return 1
+    return 1
+
+
 def parse_stats(output):
     """Parse the last stats table in the output into a list of dicts."""
     header = None
@@ -70,6 +82,9 @@ def parse_stats(output):
         if len(vals) == len(header):
             rows.append(dict(zip(header, vals)))
     return rows
+
+
+RAW_RUN_DECK = run_deck
 
 
 def approx(a, b, rel=0.0, abs_=0.0):
@@ -2178,6 +2193,100 @@ def test_missingid(exe_cmd):
                          "Fix rigid body 2 has no surface elements")
 
 
+def test_ownership(exe_cmd):
+    # bodies owned vs bodies replicated on the same ranks, per step:
+    # with no gas the run is deterministic and the two must agree
+    # exactly, including the push-off columns; with gas they may differ
+    # at round-off in the sum of the collision forces alone
+    fails = []
+    exact_all = nprocs_of(exe_cmd) == 1
+    for gas in (0, 1):
+        runs = {}
+        for mode in ("replicated", "owned"):
+            rc, out = RAW_RUN_DECK(exe_cmd, "in.test.ownership",
+                                   extra=["-var", "bodies", mode,
+                                          "-var", "gas", str(gas)])
+            if rc:
+                fails.append("gas %d, bodies %s: run failed with exit code %d"
+                             % (gas, mode, rc))
+                continue
+            rows = parse_stats(out)
+            if not rows:
+                fails.append("gas %d, bodies %s: no stats output" % (gas, mode))
+                continue
+            runs[mode] = rows
+        if len(runs) < 2:
+            continue
+        if len(runs["owned"]) != len(runs["replicated"]):
+            fails.append("gas %d: %d stats rows owned vs %d replicated"
+                         % (gas, len(runs["owned"]), len(runs["replicated"])))
+            continue
+        exact = exact_all or gas == 0
+        for r1, r2 in zip(runs["replicated"], runs["owned"]):
+            for key in sorted(r1):
+                if key == "Step":
+                    continue
+                v1, v2 = r1[key], r2[key]
+                if exact or key == "Np":
+                    ok = (v1 == v2)
+                else:
+                    ok = approx(v1, v2, rel=1e-10, abs_=1e-13)
+                if not ok:
+                    fails.append("gas %d, step %d, %s: owned %.17g vs "
+                                 "replicated %.17g"
+                                 % (gas, int(r1["Step"]), key, v2, v1))
+            if fails:
+                return fails[:8]
+        # the test is only meaningful if the bodies crossed the
+        # decomposition, pushed each other and left the box
+        rows = runs["replicated"]
+        last = rows[-1]
+        if last["f_1[1][1]"] < 5.0:
+            fails.append("gas %d: body 1 ended at x = %.6g, it never crossed "
+                         "the decomposition; test geometry is broken"
+                         % (gas, last["f_1[1][1]"]))
+        if last["f_1[3][1]"] > 0.0:
+            fails.append("gas %d: body 3 ended at x = %.6g, it never left the "
+                         "box; test geometry is broken"
+                         % (gas, last["f_1[3][1]"]))
+        fpush = max(abs(r["f_1[1][20]"]) + abs(r["f_1[1][21]"]) for r in rows)
+        if fpush == 0.0:
+            fails.append("gas %d: no push-off force on body 1 at any step, "
+                         "the contact never happened" % gas)
+    return fails
+
+
+def test_ownedcutcell(exe_cmd):
+    return negative_test(exe_cmd, "in.test.ownedcutcell",
+                         "Fix rigid bodies owned requires remap incremental")
+
+
+def test_ownedrandom(exe_cmd):
+    # a dispersed decomposition is rejected; on one proc every
+    # decomposition is clumped, so the deck runs
+    if nprocs_of(exe_cmd) == 1:
+        rc, out = RAW_RUN_DECK(exe_cmd, "in.test.ownedrandom")
+        return [] if rc == 0 else ["run failed with exit code %d" % rc]
+    return negative_test(exe_cmd, "in.test.ownedrandom",
+                         "Fix rigid bodies owned requires a clumped grid "
+                         "decomposition")
+
+
+def test_ownedbalrandom(exe_cmd):
+    # the same, for a balance fix which disperses the grid during a run
+    if nprocs_of(exe_cmd) == 1:
+        rc, out = RAW_RUN_DECK(exe_cmd, "in.test.ownedbalrandom")
+        return [] if rc == 0 else ["run failed with exit code %d" % rc]
+    return negative_test(exe_cmd, "in.test.ownedbalrandom",
+                         "Fix rigid bodies owned requires a clumped grid "
+                         "decomposition")
+
+
+def test_ownedfast(exe_cmd):
+    return negative_test(exe_cmd, "in.test.ownedfast",
+                         "Fix rigid body moved beyond the bodies cutoff")
+
+
 TESTS = [
     ("ballistic", test_ballistic),
     ("force", test_force),
@@ -2242,6 +2351,11 @@ TESTS = [
     ("nbody", test_nbody),
     ("idperm", test_idperm),
     ("missingid", test_missingid),
+    ("ownership", test_ownership),
+    ("ownedcutcell", test_ownedcutcell),
+    ("ownedrandom", test_ownedrandom),
+    ("ownedbalrandom", test_ownedbalrandom),
+    ("ownedfast", test_ownedfast),
 ]
 
 # tests whose decks support -var dist 1 (global surfs explicit/distributed)
@@ -2262,6 +2376,27 @@ DIST_TESTS = {"ballistic", "force", "rotation", "bounce", "restitution",
               "axiballistic", "axidensity", "aximomentum", "axispin",
               "axipush", "axireact", "axipair"}
 
+# tests whose decks support -var bodies owned: their fix rigid line
+# carries the bodies keyword, they do not use remap cutcell (which owned
+# mode rejects) and they do not disperse the grid decomposition
+# the decks which do not balance the grid themselves take -var clump 1,
+# since the default create_grid decomposition is strided, not clumped
+# crossproc is out: its test compares against a distributed-surf run,
+# which owned mode does not support yet
+
+OWNED_TESTS = {"ballistic", "force", "rotation", "bounce", "restitution",
+               "momentum", "overrun", "twobody", "pushpair", "rotwall",
+               "rotwall3d", "vacate", "facetbounce", "nbody", "restart",
+               "axiballistic", "axidensity", "axispin", "axipush",
+               "axireact", "axipair",
+               "ownership", "ownedcutcell", "ownedrandom", "ownedbalrandom",
+               "ownedfast"}
+
+# tests which only make sense in owned mode, skipped otherwise
+
+OWNED_ONLY = {"ownership", "ownedcutcell", "ownedrandom", "ownedbalrandom",
+              "ownedfast"}
+
 
 def main():
     global run_deck
@@ -2278,6 +2413,9 @@ def main():
     parser.add_argument("--dist", action="store_true",
                         help="run with distributed surfs "
                              "(global surfs explicit/distributed)")
+    parser.add_argument("--owned", action="store_true",
+                        help="run with bodies owned (each proc holds the "
+                             "bodies near its own grid cells)")
     args = parser.parse_args()
 
     exe_cmd = (shlex.split(args.mpi) + [os.path.abspath(args.exe)] +
@@ -2300,9 +2438,25 @@ def main():
 
         run_deck = dist_run_deck
 
+    if args.owned:
+        if subset is None:
+            subset = set(OWNED_TESTS)
+        else:
+            subset &= OWNED_TESTS
+        owned_base_run_deck = run_deck
+
+        def owned_run_deck(exe_cmd, deck, extra=None):
+            extra = (extra or []) + ["-var", "bodies", "owned",
+                                     "-var", "clump", "1"]
+            return owned_base_run_deck(exe_cmd, deck, extra)
+
+        run_deck = owned_run_deck
+
     nfail = 0
     for name, func in TESTS:
         if subset and name not in subset:
+            continue
+        if not args.owned and name in OWNED_ONLY:
             continue
         fails = func(exe_cmd)
         if fails:

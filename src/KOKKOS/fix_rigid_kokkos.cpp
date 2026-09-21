@@ -20,6 +20,7 @@
 #include "particle_kokkos.h"
 #include "surf_kokkos.h"
 #include "compute_surf.h"
+#include "comm.h"
 #include "error.h"
 #include "memory_kokkos.h"
 #include "kokkos.h"
@@ -34,6 +35,7 @@ using namespace SPARTA_NS;
 #define BIG 1.0e20
 
 enum{CELLUNKNOWN,CELLOUTSIDE,CELLINSIDE,CELLOVERLAP};   // same as Grid
+enum{REPLICATED,OWNED};                                // same as FixRigid
 
 /* ----------------------------------------------------------------------
    KOKKOS version of fix rigid
@@ -96,6 +98,13 @@ void FixRigidKokkos::init()
   ((SurfKokkos*) surf)->sync(Host,ALL_MASK);
 
   FixRigid::init();
+
+  // the device geometry of a body which was not held on the previous
+  //   step is not regenerated yet, so owned mode is host-only for now
+  // on one proc no body is ever a ghost and the two modes coincide
+
+  if (bodymode == OWNED && comm->nprocs > 1)
+    error->all(FLERR,"Fix rigid/kk bodies owned is not yet supported");
 }
 
 /* ----------------------------------------------------------------------

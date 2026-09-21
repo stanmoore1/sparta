@@ -40,7 +40,7 @@ dstyle = {body} or {infile} or {density}, followed by args :l
     rho = uniform mass density of the rigid bodies
           (mass/distance^3 units for 3d, mass/distance^2 for 2d) :pre
 zero or more optional keyword/value pairs :l
-  keyword = {vcom} or {angmom} or {remap} or {rotate} or {push} or {pushbound} or {pushstyle} or {pushdamp} or {force} or {outfile}
+  keyword = {vcom} or {angmom} or {remap} or {rotate} or {bodies} or {push} or {pushbound} or {pushstyle} or {pushdamp} or {force} or {outfile}
      {vcom} values = vxcm vycm vzcm
        COM velocity of the rigid body, only with dstyle {density}
      {angmom} values = lx ly lz
@@ -49,6 +49,11 @@ zero or more optional keyword/value pairs :l
        method used to assign the moving body surfs to grid cells
      {rotate} value = {euler} or {richardson}
        scheme used to update the body orientation quaternion each step
+     {bodies} values = mode, optionally followed by {cutoff} and a value
+       mode = {replicated} or {owned}
+         which processors hold each rigid body
+       cutoff = how far beyond its own grid cells a processor holds
+                bodies (distance units)
      {push} values = k cutoff
        k = stiffness for push-off forces
            (force/distance units for pushstyle linear,
@@ -531,6 +536,49 @@ face which coincides with a cell face cannot be tunneled through.
 
 :line
 
+The {bodies} keyword selects which processors hold each rigid body.
+With {replicated}, the default and the mode described everywhere else
+on this page, every processor holds every body: it integrates all of
+them, and the force and torque the bodies collect from particle
+collisions are summed with one MPI_Allreduce over all bodies each
+step.  That cost is the same on every processor however the bodies
+are spread over the simulation box, so it limits how many bodies a
+run can afford.
+
+With {owned}, a processor holds only the bodies near its own grid
+cells, as LAMMPS "fix rigid/small" holds only the bodies near its
+sub-domain.  A body is owned by the processor whose grid cells
+contain its COM, which integrates it and produces its output, and it
+is held as a ghost copy by every processor whose cells are within
+{cutoff} of the COM.  Each step the owners send the state of their
+bodies to those processors, the partial force and torque sums of the
+ghost copies are sent back to the owner, and ownership passes to
+another processor when the COM moves into its cells.  A processor
+does no work for a body far from its cells, so the per-processor cost
+falls as bodies are spread over more processors.
+
+{Cutoff} is how far beyond its own grid cells a processor reaches for
+the bodies it holds, the analogue of a communication cutoff.  If a
+body moves so far in one step that the region it sweeps leaves its COM
+plus or minus the cutoff, an error is generated, since the body could
+then reach a processor which was not sent it.  The cutoff defaults to
+twice the largest body radius, inflated as the body bounding boxes
+are, plus the push-off cutoff: the COM of a body in contact with an
+owned one lies within two radii and the push-off range of it, and the
+second radius also covers the distance a body travels in one step.  A
+body which moves more than its own radius in a step needs a larger
+value.
+
+Results in {owned} mode are identical to {replicated} on one
+processor.  On more processors they differ at round-off in the sum of
+the collision forces alone, since each body's force is summed from the
+partial sums of the processors which hold it, in processor order,
+rather than by an MPI_Allreduce over all of them.  The per-body
+outputs of this fix, and the {outfile}, gather the bodies from their
+owners when they are read, once per timestep.
+
+:line
+
 The {rotate} keyword selects the scheme used to advance the body
 orientation quaternion each step.  The default {euler} update holds
 the angular velocity fixed over the step and applies the exact
@@ -850,6 +898,14 @@ total number of bodies, can be much larger than any one processor's
 share of them.  Both {remap} modes work with distributed surfs.  Body
 surf elements cannot be transparent.
 
+The {bodies owned} mode requires {remap incremental}, since a full
+grid re-map needs every body on every processor, and a clumped grid
+decomposition, since a processor's bodies are decided from the
+bounding box of its grid cells: use "create_grid"_create_grid.html
+{clump} or {block}, "balance_grid"_balance_grid.html {rcb}, or "fix
+balance"_fix_balance.html {rcb}; a strided or random decomposition is
+rejected.  It does not yet support distributed surfs.
+
 Body surf elements may carry a "surf_react"_surf_react.html model
 only if every reaction in it leaves exactly one particle, which for
 "surf_react prob"_surf_react.html means a file of {exchange} reactions
@@ -951,9 +1007,9 @@ backend they are identical.
 [Default:]
 
 The option defaults are remap = incremental, rotate = euler,
-pushbound = no, pushstyle = linear, pushdamp = 0.0, force = 0 0 0,
-no push-off forces, no outfile.  For dstyle = density, vcom = 0 0 0
-and angmom = 0 0 0.
+bodies = replicated, pushbound = no, pushstyle = linear,
+pushdamp = 0.0, force = 0 0 0, no push-off forces, no outfile.  For
+dstyle = density, vcom = 0 0 0 and angmom = 0 0 0.
 
 :line
 

@@ -51,6 +51,8 @@ class RigidRemap : protected Pointers {
                                   //   collective grid rebuild
   void apply_pending(int);        // restructure the piece-count changes
   void grid_changed();
+  void pack_prev(int, double *);        // a body's previous-position
+  void unpack_prev(int, const double *);  //   state, for the exchanges
   double memory_usage();
 
  protected:

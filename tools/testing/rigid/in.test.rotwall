@@ -12,12 +12,15 @@ variable            dist index 0
 if "${dist} == 1" then "global surfs explicit/distributed"
 variable            dt index 1.0e-3
 variable            nsteps index 5
+variable            bodies index replicated
+variable            clump index 0
 
 dimension   	    2
 boundary            o o p
 
 create_box  	    0 10 0 10 -0.5 0.5
 create_grid 	    5 5 1
+if "${clump} == 1" then "balance_grid rcb cell"
 
 global		    nrho 1.0 fnum 1.0e10
 
@@ -39,7 +42,8 @@ global              rigid yes
 
 fix		    1 rigid body single body &
 		    mass 1.0e-6 com 5 5 0 vcom 0 0 0 &
-		    moi 1.0e-7 1.0e-7 2.0e-7 0 0 0 angmom 0 0 1.8e-5
+		    moi 1.0e-7 1.0e-7 2.0e-7 0 0 0 angmom 0 0 1.8e-5 &
+                    bodies ${bodies}
 
 create_particles    air single N 1.0 4.6 0.0 1500.0 260.0 0.0
 

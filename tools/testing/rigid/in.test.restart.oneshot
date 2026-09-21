@@ -6,10 +6,13 @@
 # run as: -var nrun <steps>
 seed	    	    12345
 variable            nrun index 1500
+variable            bodies index replicated
+variable            clump index 0
 dimension   	    2
 boundary            r r p
 create_box  	    0 10 0 10 -0.5 0.5
 create_grid 	    20 20 1
+if "${clump} == 1" then "balance_grid rcb cell"
 global		    nrho 1.0 fnum 0.001
 species		    air.species N
 mixture		    air N vstream 0 0 0 temp 273.0
@@ -21,7 +24,8 @@ surf_modify         all collide 1
 timestep 	    0.0001
 global              rigid yes
 fix		    1 rigid bodies type infile data.restart.bodies &
-                    push 1.0e-18 0.5 pushbound yes
+                    push 1.0e-18 0.5 pushbound yes &
+                    bodies ${bodies}
 stats		    ${nrun}
 stats_style         step f_1[1][1] f_1[1][4] f_1[1][15] &
                     f_1[2][1] f_1[2][4] f_1[2][15]

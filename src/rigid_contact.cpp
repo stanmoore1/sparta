@@ -30,6 +30,7 @@ using namespace SPARTA_NS;
 using namespace MathConst;
 
 enum{PERIODIC,OUTFLOW,REFLECT,SURFACE,AXISYM};  // same as Domain
+enum{REPLICATED,OWNED};                         // same as FixRigid
 
 // local box/box overlap test, touching counts as overlap
 
@@ -71,6 +72,8 @@ RigidContact::RigidContact(SPARTA *sparta, FixRigid *fixrigid, int style_in,
 
   binstart = binlist = stamp = NULL;
   stampcur = 0;
+  jsort = NULL;
+  maxjsort = 0;
 
   memory->create(buf_mine,6*fix->nbody,"rigid_contact:buf_mine");
   memory->create(buf_all,6*fix->nbody,"rigid_contact:buf_all");
@@ -85,6 +88,7 @@ RigidContact::~RigidContact()
   memory->destroy(stamp);
   memory->destroy(buf_mine);
   memory->destroy(buf_all);
+  memory->destroy(jsort);
 }
 
 /* ----------------------------------------------------------------------
@@ -229,6 +233,22 @@ void RigidContact::compute(double **fpush, double **tqpush)
     tqpush[ibody][0] = tqpush[ibody][1] = tqpush[ibody][2] = 0.0;
   }
 
+  // owned: the owner of a body produces its complete force, in the
+  //   accumulation order of replicated mode: the reactions from the
+  //   partners below it, its own pass, then the partners above it
+  // non-distributed surfs, so the static and boundary contributions of
+  //   the owner are the ones every proc computes in replicated mode
+
+  if (fix->bodymode == OWNED) {
+    for (int m = 0; m < fix->nown; m++) {
+      ibody = fix->ownlist[m];
+      partner_pass(ibody,0,fpush,tqpush);
+      body(ibody,fpush,tqpush);
+      partner_pass(ibody,1,fpush,tqpush);
+    }
+    return;
+  }
+
   for (int m = 0; m < fix->nown; m++) body(fix->ownlist[m],fpush,tqpush);
 
   if (!surf->distributed) return;
@@ -296,6 +316,11 @@ void RigidContact::body(int ibody, double **fpush, double **tqpush)
 
   int npoint = dim;     // 2 corner pts per line, 3 per tri
 
+  // owned: partner_pass() applies the reaction on a partner body, on
+  //   the proc which owns that body
+
+  int side = (fix->bodymode == OWNED) ? PRIMARY : BOTH;
+
   // cutlo/cuthi = bbox around body inflated by the cutoff
   // requires FixRigid::body_bbox() was called for the current position
 
@@ -332,7 +357,7 @@ void RigidContact::body(int ibody, double **fpush, double **tqpush)
             if (MAX(lines[m].p1[1],lines[m].p2[1]) < cutlo[1]) continue;
             if (MIN(lines[m].p1[1],lines[m].p2[1]) > cuthi[1]) continue;
             contact(ibody,lines[m].p1,lines[m].p2,NULL,
-                    lines[m].norm,-1,fpush,tqpush);
+                    lines[m].norm,-1,fpush,tqpush,side);
           } else {
             if (MAX(tris[m].p1[0],MAX(tris[m].p2[0],tris[m].p3[0])) <
                 cutlo[0]) continue;
@@ -347,7 +372,7 @@ void RigidContact::body(int ibody, double **fpush, double **tqpush)
             if (MIN(tris[m].p1[2],MIN(tris[m].p2[2],tris[m].p3[2])) >
                 cuthi[2]) continue;
             contact(ibody,tris[m].p1,tris[m].p2,tris[m].p3,
-                    tris[m].norm,-1,fpush,tqpush);
+                    tris[m].norm,-1,fpush,tqpush,side);
           }
         }
       }
@@ -380,10 +405,10 @@ void RigidContact::body(int ibody, double **fpush, double **tqpush)
         if (!box_overlap(cutlo,cuthi,elemlo[e],elemhi[e])) continue;
         if (dim == 2)
           contact(ibody,bodypt[e][0],bodypt[e][1],NULL,
-                  bodynorm[e],jbody,fpush,tqpush);
+                  bodynorm[e],jbody,fpush,tqpush,side);
         else
           contact(ibody,bodypt[e][0],bodypt[e][1],bodypt[e][2],
-                  bodynorm[e],jbody,fpush,tqpush);
+                  bodynorm[e],jbody,fpush,tqpush,side);
       }
     }
   }
@@ -452,6 +477,78 @@ void RigidContact::body(int ibody, double **fpush, double **tqpush)
 }
 
 /* ----------------------------------------------------------------------
+   the reactions body ibody receives from the contacts of its partner
+     bodies with it: the pass body(jbody) would run over ibody's
+     elements, with only ibody's side of each contact kept
+   jflag = 0: the partners below ibody, whose passes write their
+     reactions before ibody's own pass in replicated mode; 1: those
+     above it
+   the partners come from the body bins, which every proc builds the
+     same way, and the box test is the one body(jbody) applies, so the
+     result is the replicated force in the replicated order
+------------------------------------------------------------------------- */
+
+void RigidContact::partner_pass(int ibody, int jflag,
+                                double **fpush, double **tqpush)
+{
+  int e,j,k,jbody;
+  double cutlo[3],cuthi[3],jlo[3],jhi[3];
+
+  fix->host_geometry(ibody);
+
+  int *bodystart = fix->bodystart;
+  double ***bodypt = fix->bodypt;
+  double **bodynorm = fix->bodynorm;
+  double **elemlo = fix->elemlo;
+  double **elemhi = fix->elemhi;
+
+  for (j = 0; j < 3; j++) {
+    cutlo[j] = fix->bbodylo[ibody][j] - cutoff;
+    cuthi[j] = fix->bbodyhi[ibody][j] + cutoff;
+  }
+
+  int *jlist;
+  int nj = fix->body_box(cutlo,cuthi,&jlist);
+  if (!nj) return;
+
+  // the bins return the partners in bin order: sort them ascending,
+  //   the order the replicated loop over bodies reaches them in
+
+  if (nj > maxjsort) {
+    maxjsort = nj;
+    memory->destroy(jsort);
+    memory->create(jsort,maxjsort,"rigid_contact:jsort");
+  }
+  for (j = 0; j < nj; j++) {
+    jbody = jlist[j];
+    for (k = j; k > 0 && jsort[k-1] > jbody; k--) jsort[k] = jsort[k-1];
+    jsort[k] = jbody;
+  }
+
+  for (j = 0; j < nj; j++) {
+    jbody = jsort[j];
+    if (jflag == 0 && jbody >= ibody) break;
+    if (jflag && jbody <= ibody) continue;
+    fix->host_geometry(jbody);
+
+    for (k = 0; k < 3; k++) {
+      jlo[k] = fix->bbodylo[jbody][k] - cutoff;
+      jhi[k] = fix->bbodyhi[jbody][k] + cutoff;
+    }
+
+    for (e = bodystart[ibody]; e < bodystart[ibody+1]; e++) {
+      if (!box_overlap(jlo,jhi,elemlo[e],elemhi[e])) continue;
+      if (dim == 2)
+        contact(jbody,bodypt[e][0],bodypt[e][1],NULL,
+                bodynorm[e],ibody,fpush,tqpush,REACTION);
+      else
+        contact(jbody,bodypt[e][0],bodypt[e][1],bodypt[e][2],
+                bodynorm[e],ibody,fpush,tqpush,REACTION);
+    }
+  }
+}
+
+/* ----------------------------------------------------------------------
    contact forces between all corner pts of body ibody and one source
      element with corner pts p1,p2 (p3 for 3d) and outward normal norm
    for each body corner pt within the cutoff of the element, apply a
@@ -482,7 +579,7 @@ void RigidContact::body(int ibody, double **fpush, double **tqpush)
 
 void RigidContact::contact(int ibody, double *p1, double *p2, double *p3,
                            double *norm, int jbody,
-                           double **fpush, double **tqpush)
+                           double **fpush, double **tqpush, int side)
 {
   int i,j;
   double dsq,d,scale;
@@ -500,6 +597,17 @@ void RigidContact::contact(int ibody, double *p1, double *p2, double *p3,
   double *xcm1 = fix->xcm[ibody];
   double *fpush1 = fpush[ibody];
   double *tqpush1 = tqpush[ibody];
+
+  // a reaction-only pass wants the partner's side alone, so the force
+  //   on ibody is accumulated into a buffer which is thrown away
+
+  double fdrop[3],tqdrop[3];
+  if (side == REACTION) {
+    fdrop[0] = fdrop[1] = fdrop[2] = 0.0;
+    tqdrop[0] = tqdrop[1] = tqdrop[2] = 0.0;
+    fpush1 = fdrop;
+    tqpush1 = tqdrop;
+  }
 
   // bounding box of the source element inflated by the cutoff:
   //   only body elements whose own box overlaps it can be in contact
@@ -595,7 +703,7 @@ void RigidContact::contact(int ibody, double *p1, double *p2, double *p3,
       // equal-and-opposite reaction on the source body,
       //   applied at the same contact point
 
-      if (jbody >= 0) {
+      if (jbody >= 0 && side != PRIMARY) {
         fpush[jbody][0] -= fone[0];
         fpush[jbody][1] -= fone[1];
         fpush[jbody][2] -= fone[2];

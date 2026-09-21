@@ -13,6 +13,7 @@
 seed	    	    12345
 
 variable            dist index 0
+variable            bodies index replicated
 if "${dist} == 1" then "global surfs explicit/distributed"
 dimension   	    2
 boundary            o ar p
@@ -37,7 +38,8 @@ timestep 	    1.0e-6
 global              rigid yes
 
 fix		    1 rigid bodies type infile data.axipair.bodies &
-                    push 5.0e-15 0.03
+                    push 5.0e-15 0.03 &
+                    bodies ${bodies}
 
 stats		    250
 stats_style         step f_1[1][1] f_1[1][4] f_1[1][5] &

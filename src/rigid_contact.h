@@ -55,9 +55,20 @@ class RigidContact : protected Pointers {
 
   double *buf_mine,*buf_all;
 
+  // which side of a contact is kept: both (replicated), the force on
+  //   the body being processed, or the reaction on its partner
+
+  enum{BOTH,PRIMARY,REACTION};
+
+  // partner bodies of an owned body, sorted ascending
+
+  int *jsort;
+  int maxjsort;
+
   void body(int, double **, double **);
+  void partner_pass(int, int, double **, double **);
   void contact(int, double *, double *, double *, double *, int,
-               double **, double **);
+               double **, double **, int);
 };
 
 }

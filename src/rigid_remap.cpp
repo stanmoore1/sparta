@@ -1068,6 +1068,28 @@ void RigidRemap::apply_pending(int rebuild)
 }
 
 /* ----------------------------------------------------------------------
+   the previous-position state of one body: it travels with the body,
+     since the re-cut region of the next step is the union of where the
+     body was and where it goes
+------------------------------------------------------------------------- */
+
+void RigidRemap::pack_prev(int ibody, double *buf)
+{
+  memcpy(&buf[0],prevlo[ibody],3*sizeof(double));
+  memcpy(&buf[3],prevhi[ibody],3*sizeof(double));
+  memcpy(&buf[6],prevxcm[ibody],3*sizeof(double));
+}
+
+/* ---------------------------------------------------------------------- */
+
+void RigidRemap::unpack_prev(int ibody, const double *buf)
+{
+  memcpy(prevlo[ibody],&buf[0],3*sizeof(double));
+  memcpy(prevhi[ibody],&buf[3],3*sizeof(double));
+  memcpy(prevxcm[ibody],&buf[6],3*sizeof(double));
+}
+
+/* ----------------------------------------------------------------------
    grid cells were rebuilt, adapted, or migrated to other procs
    any collision lists were discarded with the cells; the cut lists
      installed by recut() were copied by Grid::compress() or discarded
