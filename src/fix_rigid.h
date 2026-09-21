@@ -284,8 +284,13 @@ class FixRigid : public Fix {
   int timeflag;
   double stagetime[T_NSTAGE];
   double stagestart;
-  void stage_begin() { if (timeflag) stagestart = MPI_Wtime(); }
-  void stage_end(int i) { if (timeflag) stagetime[i] += MPI_Wtime() - stagestart; }
+  // with SPARTA_RIGID_TIMING the KOKKOS version fences the device at the
+  //   stage boundaries, so a stage is charged its own asynchronous kernels
+  //   rather than the next stage which happens to wait for them
+
+  virtual void stage_fence() {}
+  void stage_begin() { if (timeflag) { stage_fence(); stagestart = MPI_Wtime(); } }
+  void stage_end(int i) { if (timeflag) { stage_fence(); stagetime[i] += MPI_Wtime() - stagestart; } }
   void add_time(int i, double t) { stagetime[i] += t; }
  protected:
 

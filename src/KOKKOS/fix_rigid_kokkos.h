@@ -61,6 +61,7 @@ class FixRigidKokkos : public FixRigid {
   void swept_boxes();
   void host_geometry(int);
   void refresh_host_surfs();
+  void stage_fence() override { Kokkos::fence(); }
   void remove_inside_all(int);
   void particles_to_host();
   void combine_split_all();
