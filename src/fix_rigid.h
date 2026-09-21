@@ -343,11 +343,22 @@ class FixRigid : public Fix {
   // the helper classes time their own sections with add_time()
 
  public:
-  enum{T_INTEGRATE,T_COPIES,T_COLLIDELIST,T_TALLY,T_FORCES,T_SETXV,T_CONTACT,
-       T_RECUT,T_RECUT_LISTS,T_RECUT_CUT,T_RECUT_TYPE,T_APPLY,T_REMOVE,
+  enum{T_INTEGRATE,T_COPIES,T_COLLIDELIST,T_COLL_ENUM,T_COLL_MERGE,
+       T_COLL_RESET,T_TALLY,T_FORCES,T_SETXV,T_CONTACT,
+       T_RECUT,T_RECUT_CAND,T_RECUT_LISTS,T_RECUT_CMP,T_RECUT_CUT,
+       T_RECUT_TYPE,T_RECUT_RED,T_RECUT_COMB,
+       T_APPLY,T_APPLY_REST,T_APPLY_COUNT,
+       T_REMOVE,T_REMOVE_SPLIT,T_REMOVE_PASS,T_REMOVE_COMP,
        T_NSTAGE};
+
+  // per-run counts of the work each stage did, printed with the timers
+
+  enum{C_PTEST,C_PDEL,C_CAND,C_LISTCH,C_CUT,C_PENDING,C_BODYCELL,C_ELEMBOX,
+       C_SWCELL,C_SWENT,C_SWEXTRA,C_NCOUNT};
+
   int timeflag;
   double stagetime[T_NSTAGE];
+  bigint stagecount[C_NCOUNT];
   double stagestart;
   // with SPARTA_RIGID_TIMING the KOKKOS version fences the device at the
   //   stage boundaries, so a stage is charged its own asynchronous kernels
@@ -357,6 +368,7 @@ class FixRigid : public Fix {
   void stage_begin() { if (timeflag) { stage_fence(); stagestart = MPI_Wtime(); } }
   void stage_end(int i) { if (timeflag) { stage_fence(); stagetime[i] += MPI_Wtime() - stagestart; } }
   void add_time(int i, double t) { stagetime[i] += t; }
+  void add_count(int i, bigint n) { stagecount[i] += n; }
  protected:
 
   bigint ndeleted;        // per-proc count of deleted particles

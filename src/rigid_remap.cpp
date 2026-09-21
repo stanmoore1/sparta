@@ -259,17 +259,28 @@ void RigidRemap::collision_lists()
   int ncand,icand;
   int *cand;
 
+  // with timing on, each phase is timed and its work counted
+
+  int timeflag = fix->timeflag;
+  double tstart = 0.0;
+  bigint nbodycell = 0;
+  bigint nelembox = 0;
+  if (timeflag) tstart = MPI_Wtime();
+
   for (int m = 0; m < nblist; m++) {
     ibody = blist[m];
     double *blo = fix->bbodylo[ibody];
     double *bhi = fix->bbodyhi[ibody];
     ncand = grid->cells_in_box(blo,bhi,&cand);
+    if (timeflag) nbodycell += ncand;
 
     for (icand = 0; icand < ncand; icand++) {
       icell = cand[icand];
       if (cells[icell].nsplit <= 0) continue;
       if (cells[icell].nsurf < 0) continue;
       if (!box_overlap(cells[icell].lo,cells[icell].hi,blo,bhi)) continue;
+
+      if (timeflag) nelembox += bodystart[ibody+1] - bodystart[ibody];
 
       for (i = bodystart[ibody]; i < bodystart[ibody+1]; i++) {
         if (!box_overlap(cells[icell].lo,cells[icell].hi,
@@ -298,6 +309,17 @@ void RigidRemap::collision_lists()
         swhead[icell] = nent++;
       }
     }
+  }
+
+  // phase 1 is the enumeration, phase 2 below the per-cell merge
+
+  if (timeflag) {
+    fix->add_time(FixRigid::T_COLL_ENUM,MPI_Wtime() - tstart);
+    fix->add_count(FixRigid::C_BODYCELL,nbodycell);
+    fix->add_count(FixRigid::C_ELEMBOX,nelembox);
+    fix->add_count(FixRigid::C_SWCELL,nswcell);
+    fix->add_count(FixRigid::C_SWENT,nent);
+    tstart = MPI_Wtime();
   }
 
   // phase 2: for each touched cell, install a merged collision list =
@@ -340,6 +362,11 @@ void RigidRemap::collision_lists()
     nswept++;
   }
 
+  if (timeflag) {
+    fix->add_time(FixRigid::T_COLL_MERGE,MPI_Wtime() - tstart);
+    fix->add_count(FixRigid::C_SWEXTRA,nswept);
+  }
+
   // per-cell surf lists changed on the host (read by fix rigid/kk)
 
   if (nswept) listschanged = 1;
@@ -351,9 +378,12 @@ void RigidRemap::collision_lists()
 
 void RigidRemap::reset_collision_lists()
 {
+  double tstart = 0.0;
+  if (fix->timeflag) tstart = MPI_Wtime();
   if (nswept) listschanged = 1;
   grid->reset_collision_surfs();
   nswept = 0;
+  if (fix->timeflag) fix->add_time(FixRigid::T_COLL_RESET,MPI_Wtime() - tstart);
 }
 
 /* ----------------------------------------------------------------------
@@ -472,6 +502,15 @@ int RigidRemap::recut()
   splitchanged = 0;
   npending = 0;
 
+  // with timing on, the candidate enumeration, the list build, the
+  //   compare and the cut are timed separately, and the cells counted
+
+  int timeflag = fix->timeflag;
+  bigint list0 = nlist_run;
+  bigint cut0 = ncut_run;
+  double tstart = 0.0;
+  if (timeflag) tstart = MPI_Wtime();
+
   for (int m = 0; m < fix->nblist; m++) {
     ibody = fix->blist[m];
     for (i = 0; i < 3; i++) {
@@ -527,11 +566,11 @@ int RigidRemap::recut()
     nrcand = std::unique(rcand,rcand+nrcand) - rcand;
   }
   ncand_run += nrcand;
+  if (timeflag) fix->add_time(FixRigid::T_RECUT_CAND,MPI_Wtime() - tstart);
 
   double tlists = 0.0;
+  double tcmp = 0.0;
   double tcut = 0.0;
-  double tstart = 0.0;
-  int timeflag = fix->timeflag;
 
   // pass 1: re-cut cells in R whose surf overlap changed
   //   or which are overlapped by a moved body surf (from any body)
@@ -610,6 +649,11 @@ int RigidRemap::recut()
 
     n = grid->surfs_in_cell(icell,ncand,reclist,newlist,maxsurfpercell);
     if (n > maxsurfpercell) return FALLBACK_SURFMAX;
+    if (timeflag) {
+      double now = MPI_Wtime();
+      tlists += now - tstart;
+      tstart = now;
+    }
 
     // order the list by local surf index, as Grid::surf2grid() does
     //   before cutting, so the cut sees surfs in the same order in both
@@ -629,17 +673,17 @@ int RigidRemap::recut()
 
     if (!moving && n == cells[icell].nsurf) {
       if (n == 0) {
-        if (timeflag) tlists += MPI_Wtime() - tstart;
+        if (timeflag) tcmp += MPI_Wtime() - tstart;
         continue;
       }
       if (memcmp(newlist,cells[icell].csurfs,n*sizeof(surfint)) == 0) {
-        if (timeflag) tlists += MPI_Wtime() - tstart;
+        if (timeflag) tcmp += MPI_Wtime() - tstart;
         continue;
       }
     }
     if (timeflag) {
       double now = MPI_Wtime();
-      tlists += now - tstart;
+      tcmp += now - tstart;
       tstart = now;
     }
     nlist_run++;
@@ -652,6 +696,7 @@ int RigidRemap::recut()
 
   if (timeflag) {
     fix->add_time(FixRigid::T_RECUT_LISTS,tlists);
+    fix->add_time(FixRigid::T_RECUT_CMP,tcmp);
     fix->add_time(FixRigid::T_RECUT_CUT,tcut);
     tstart = MPI_Wtime();
   }
@@ -714,6 +759,13 @@ int RigidRemap::recut()
   }
 
   if (timeflag) fix->add_time(FixRigid::T_RECUT_TYPE,MPI_Wtime() - tstart);
+
+  if (timeflag) {
+    fix->add_count(FixRigid::C_CAND,nrcand);
+    fix->add_count(FixRigid::C_LISTCH,nlist_run-list0);
+    fix->add_count(FixRigid::C_CUT,ncut_run-cut0);
+    fix->add_count(FixRigid::C_PENDING,npending);
+  }
 
   // the bodies' current bboxes bound the region on the next step
 
@@ -1020,9 +1072,16 @@ void RigidRemap::apply_pending(int rebuild)
     }
 
   } else {
+    double tstart = 0.0;
+    if (fix->timeflag) tstart = MPI_Wtime();
     grid->restructure_split_cells(npending,pending);
     restructured = 1;
     listschanged = 1;
+    if (fix->timeflag) {
+      double now = MPI_Wtime();
+      fix->add_time(FixRigid::T_APPLY_REST,now-tstart);
+      tstart = now;
+    }
 
     // global cell counts, the one collective of the in-place change
 
@@ -1034,6 +1093,7 @@ void RigidRemap::apply_pending(int rebuild)
     grid->nunsplit = all[0];
     grid->nsplit = all[1];
     grid->nsub = all[2];
+    if (fix->timeflag) fix->add_time(FixRigid::T_APPLY_COUNT,MPI_Wtime()-tstart);
 
     // dumps count cells when they next write
 

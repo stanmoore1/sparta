@@ -768,6 +768,7 @@ void FixRigid::init()
   nstep_run = nstep_inplace = nstep_rebuild = nstep_fallback = 0;
   timeflag = (getenv("SPARTA_RIGID_TIMING") != NULL);
   for (int i = 0; i < T_NSTAGE; i++) stagetime[i] = 0.0;
+  for (int i = 0; i < C_NCOUNT; i++) stagecount[i] = 0;
   remap->ncand_run = remap->nlist_run = remap->ncut_run = 0;
 
   // fix rigid must be defined before fixes which change the grid,
@@ -1425,7 +1426,10 @@ void FixRigid::remap_grid()
     mine[1] = (remap->npending > 0);
     mine[2] = remap->typechanged;
     mine[3] = remap->rebuild_needed();
+    double tred = 0.0;
+    if (timeflag) tred = MPI_Wtime();
     MPI_Allreduce(mine,all,4,MPI_INT,MPI_MAX,world);
+    if (timeflag) add_time(T_RECUT_RED,MPI_Wtime() - tred);
     fallback = all[0];
     structural = all[1];
     rebuild = all[3];
@@ -1468,8 +1472,12 @@ void FixRigid::remap_grid()
   // purely local, and a proc with no split cell does nothing
 
   if (!fallback && (remap->splitchanged || structural) &&
-      particle->exist && grid->nsplitlocal)
+      particle->exist && grid->nsplitlocal) {
+    double tcomb = 0.0;
+    if (timeflag) tcomb = MPI_Wtime();
     combine_split_all();
+    if (timeflag) add_time(T_RECUT_COMB,MPI_Wtime() - tcomb);
+  }
 
   // a cell which gained or lost sub cells is restructured in place,
   //   which is far cheaper than the full re-map it used to force: the
@@ -1544,20 +1552,53 @@ void FixRigid::post_run()
     if (logfile) fprintf(logfile,"%s",str);
   }
 
-  // per-stage times, max over procs
+  // per-stage times, min/avg/max over procs, sub-timers under their stage
 
   const char *names[T_NSTAGE] =
-    {"integrate+bbox","surf copies","collision lists","tally",
-     "sum forces","set_xv+bounds","contacts+kick","recut",
-     "  recut: surf lists","  recut: cuts","  recut: retyping",
-     "apply split changes","remove inside"};
-  double tmax[T_NSTAGE];
+    {"integrate+bbox","surf copies","collision lists",
+     "  collision: enumerate","  collision: merge","  collision: reset",
+     "tally","sum forces","set_xv+bounds","contacts+kick",
+     "recut","  recut: candidates","  recut: surf lists",
+     "  recut: compare","  recut: cuts","  recut: retyping",
+     "  recut: reduce","  recut: split combine",
+     "apply split changes","  apply: restructure","  apply: cell counts",
+     "remove inside","  remove: split assign","  remove: particle pass",
+     "  remove: compress"};
+  double tmin[T_NSTAGE],tsum[T_NSTAGE],tmax[T_NSTAGE];
+  MPI_Allreduce(stagetime,tmin,T_NSTAGE,MPI_DOUBLE,MPI_MIN,world);
+  MPI_Allreduce(stagetime,tsum,T_NSTAGE,MPI_DOUBLE,MPI_SUM,world);
   MPI_Allreduce(stagetime,tmax,T_NSTAGE,MPI_DOUBLE,MPI_MAX,world);
   if (comm->me == 0) {
+    char hdr[128];
+    sprintf(hdr,"Fix rigid stage times: min avg max over %d procs\n",
+            comm->nprocs);
+    if (screen) fprintf(screen,"%s",hdr);
+    if (logfile) fprintf(logfile,"%s",hdr);
     for (int i = 0; i < T_NSTAGE; i++) {
       if (i == T_TALLY) continue;
-      char str[128];
-      sprintf(str,"Fix rigid time: %-20s %10.4f s\n",names[i],tmax[i]);
+      char str[160];
+      sprintf(str,"Fix rigid time: %-24s %10.4f %10.4f %10.4f s\n",
+              names[i],tmin[i],tsum[i]/comm->nprocs,tmax[i]);
+      if (screen) fprintf(screen,"%s",str);
+      if (logfile) fprintf(logfile,"%s",str);
+    }
+  }
+
+  // per-stage counts of the work done, summed over procs, with the
+  //   per-step average; they explain the times above
+
+  const char *cnames[C_NCOUNT] =
+    {"particles tested","particles deleted","candidate cells",
+     "lists changed","cells cut","pending splits","(body,cell) pairs",
+     "element box tests","swept cells","swept entries","cells with extras"};
+  bigint csum[C_NCOUNT];
+  MPI_Allreduce(stagecount,csum,C_NCOUNT,MPI_SPARTA_BIGINT,MPI_SUM,world);
+  bigint nstep = all[0];
+  if (comm->me == 0 && nstep) {
+    for (int i = 0; i < C_NCOUNT; i++) {
+      char str[160];
+      sprintf(str,"Fix rigid count: %-24s " BIGINT_FORMAT " total %12.1f "
+              "per step\n",cnames[i],csum[i],1.0*csum[i]/nstep);
       if (screen) fprintf(screen,"%s",str);
       if (logfile) fprintf(logfile,"%s",str);
     }
@@ -4304,6 +4345,8 @@ void FixRigid::remove_inside_all(int splitflag)
   //   under them, so they are no longer sorted; a fix balance later in
   //   this step would otherwise migrate cells with stale particle lists
 
+  double tsplit = 0.0;
+  if (timeflag) tsplit = MPI_Wtime();
   if (splitflag && grid->nsplitlocal) {
     Grid::ChildCell *cells = grid->cells;
     int nglocal = grid->nlocal;
@@ -4312,6 +4355,7 @@ void FixRigid::remove_inside_all(int splitflag)
         grid->assign_split_cell_particles(icell);
     particle->sorted = 0;
   }
+  if (timeflag) add_time(T_REMOVE_SPLIT,MPI_Wtime() - tsplit);
 
   // flag particles inside any body or in INSIDE cells for deletion
   // a particle in an INSIDE cell claimed by no body (e.g. inside
@@ -4324,6 +4368,10 @@ void FixRigid::remove_inside_all(int splitflag)
 
   int icell;
   int delflag = 0;
+  bigint ntest = 0;
+  bigint ndel = 0;
+  double tstart = 0.0;
+  if (timeflag) tstart = MPI_Wtime();
 
   for (int i = 0; i < nplocal; i++) {
     icell = particles[i].icell;
@@ -4338,20 +4386,30 @@ void FixRigid::remove_inside_all(int splitflag)
     if (!inside && cinfo[icell].type == CELLOUTSIDE &&
         cells[icell].nsurf == 0) continue;
 
+    if (timeflag) ntest++;
     int inbody = inside_any_body(x);
     if (!inbody && !inside) continue;
 
     particles[i].icell = -1;
     delflag = 1;
+    if (timeflag) ndel++;
     if (inbody) {
       ndeleted++;
       ndelrun++;
     }
   }
 
+  if (timeflag) {
+    add_time(T_REMOVE_PASS,MPI_Wtime() - tstart);
+    add_count(C_PTEST,ntest);
+    add_count(C_PDEL,ndel);
+    tstart = MPI_Wtime();
+  }
+
   // compress out deleted particles, once for all bodies
 
   if (delflag) particle->compress_rebalance();
+  if (timeflag) add_time(T_REMOVE_COMP,MPI_Wtime() - tstart);
 
   end_of_run_delete_warning();
 }
