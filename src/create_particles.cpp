@@ -618,6 +618,13 @@ void CreateParticles::create_local()
   nstop = static_cast<bigint> (np * (vols[me]/vols[nprocs-1]));
   bigint nme = nstop-nstart;
 
+  // one growth to the final size: the array grows in chunks otherwise,
+  //   and a KOKKOS build copies it between the host and the device at
+  //   every growth
+
+  if (nme > MAXSMALLINT) error->one(FLERR,"Per-processor particle count is too big");
+  particle->grow((int) nme);
+
   memory->destroy(vols);
 
   // nfix_update_custom = # of fixes with update_custom() method
@@ -913,6 +920,13 @@ void CreateParticles::create_local_twopass()
   else nstart = 0;
   nstop = static_cast<bigint> (np * (vols[me]/vols[nprocs-1]));
   bigint nme = nstop-nstart;
+
+  // one growth to the final size: the array grows in chunks otherwise,
+  //   and a KOKKOS build copies it between the host and the device at
+  //   every growth
+
+  if (nme > MAXSMALLINT) error->one(FLERR,"Per-processor particle count is too big");
+  particle->grow((int) nme);
 
   memory->destroy(vols);
 

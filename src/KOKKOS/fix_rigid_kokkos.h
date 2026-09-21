@@ -223,6 +223,17 @@ class FixRigidKokkos : public FixRigid {
   //   and which split cell to relabel its particles to
 
   DAT::tdual_int_1d k_subcell,k_subparent;
+  int nsub_used;                // # of pairs of this step's combine
+  int combined_kk;              // 1 while those pairs are current
+
+  // the rows the assign pass redistributes after a device combine: the
+  //   combine's pairs of the cells split now, plus the own row of a cell
+  //   split now but not then; asgstamp marks the cells the pairs cover
+
+  DAT::tdual_int_1d k_asgrowcell,k_asgrowparent;
+  int maxasgrow;
+  int *asgstamp;
+  int maxasgstamp,asgcur;
   DAT::t_int_1d d_subcell,d_subparent;
   int nsub_kk;
 
