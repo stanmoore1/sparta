@@ -20,14 +20,13 @@
 #include "particle_kokkos.h"
 #include "surf_kokkos.h"
 #include "compute_surf.h"
-#include "comm.h"
-#include "error.h"
 #include "memory_kokkos.h"
 #include "kokkos.h"
 #include "sparta_masks.h"
 #include "geometry_kokkos.h"
 #include "output.h"
 #include "domain.h"
+#include "math_extra.h"
 
 using namespace SPARTA_NS;
 
@@ -36,6 +35,7 @@ using namespace SPARTA_NS;
 
 enum{CELLUNKNOWN,CELLOUTSIDE,CELLINSIDE,CELLOVERLAP};   // same as Grid
 enum{REPLICATED,OWNED};                                // same as FixRigid
+enum{OWNEDBODY,GHOSTBODY,FARBODY};                     // same as FixRigid
 
 /* ----------------------------------------------------------------------
    KOKKOS version of fix rigid
@@ -75,6 +75,8 @@ FixRigidKokkos::FixRigidKokkos(SPARTA *sparta, int narg, char **arg) :
   hostgeom = NULL;
   maxhostgeom = 0;
   ncopy_kk = nolist_kk = 0;
+  blistgen_kk = -1;
+  nlelem_kk = 0;
   devicegeom = 0;
   maxdelete_kk = 0;
   d_ndelete_kk = DAT::t_int_scalar("fix_rigid:ndelete");
@@ -98,13 +100,6 @@ void FixRigidKokkos::init()
   ((SurfKokkos*) surf)->sync(Host,ALL_MASK);
 
   FixRigid::init();
-
-  // the device geometry of a body which was not held on the previous
-  //   step is not regenerated yet, so owned mode is host-only for now
-  // on one proc no body is ever a ghost and the two modes coincide
-
-  if (bodymode == OWNED && comm->nprocs > 1)
-    error->all(FLERR,"Fix rigid/kk bodies owned is not yet supported");
 }
 
 /* ----------------------------------------------------------------------
@@ -312,11 +307,13 @@ void FixRigidKokkos::end_of_step()
   host_begin();
   FixRigid::end_of_step();
 
-  // output at this step reads the host surfs; with distributed surfs a
-  //   load balance or grid change restructures the host surf arrays
-  //   before this fix hears of it, so they are kept current every step
+  // output at this step reads the host surfs, and so does a balance or
+  //   adapt fix which will run on it; with distributed surfs a load
+  //   balance or grid change restructures the host surf arrays before
+  //   this fix hears of it, so they are kept current every step
 
-  if (surf->distributed || output->next == update->ntimestep)
+  if (surf->distributed || host_surfs_needed() ||
+      output->next == update->ntimestep)
     refresh_host_surfs();
   host_end();
 }
@@ -381,6 +378,78 @@ void FixRigidKokkos::swept_boxes()
 }
 
 /* ----------------------------------------------------------------------
+   start-of-step geometry of the bodies which just became ghosts, on the
+     device: the geometry kernels over their elements alone, from the
+     start-of-step frame of quat, as FixRigid::body_geometry() takes it
+     with posesplit set
+   no surf scatter and no bbox read-back: swept_boxes() runs next over
+     every body this proc holds and rewrites both
+------------------------------------------------------------------------- */
+
+void FixRigidKokkos::newghost_geometry()
+{
+  posesplit = 1;
+
+  if (!devicegeom) {
+    FixRigid::newghost_geometry();
+    return;
+  }
+  if (!nnewghost) return;
+
+  int nelem = bodystart[nbody];
+  if ((int) k_newblist.extent(0) < nbody)
+    k_newblist = DAT::tdual_int_1d("fix_rigid:newblist",nbody);
+  if ((int) k_newelem.extent(0) < nelem)
+    k_newelem = DAT::tdual_int_1d("fix_rigid:newelem",nelem);
+
+  auto h_newblist = k_newblist.view_host();
+  auto h_newelem = k_newelem.view_host();
+  auto h_pose = k_pose.view_host();
+
+  double ex[3],ey[3],ez[3];
+  int n = 0;
+  for (int m = 0; m < nnewghost; m++) {
+    const int ib = newghost[m];
+    h_newblist(m) = ib;
+    for (int i = bodystart[ib]; i < bodystart[ib+1]; i++) h_newelem(n++) = i;
+
+    MathExtra::q_to_exyz(quat[ib],ex,ey,ez);
+    for (int k = 0; k < 3; k++) {
+      h_pose(ib,k) = xcm[ib][k];
+      h_pose(ib,3+k) = ex[k];
+      h_pose(ib,6+k) = ey[k];
+      h_pose(ib,9+k) = ez[k];
+      h_pose(ib,12+k) = omega[ib][k];
+    }
+    h_pose(ib,15) = rmaxbody[ib];
+  }
+  k_newblist.modify_host(); k_newblist.sync_device();
+  k_newelem.modify_host(); k_newelem.sync_device();
+  k_pose.modify_host(); k_pose.sync_device();
+
+  geometry_views();
+  d_blist_kk = k_newblist.view_device();
+  d_lelem_kk = k_newelem.view_device();
+  sweep_kk = 0;
+  axiflag_kk = axiflag;
+  dim_kk = dim;
+  dt_kk = update->dt;
+
+  copymode = 1;
+  Kokkos::parallel_for(
+    Kokkos::RangePolicy<DeviceType,TagFixRigidGeometry>(0,n),*this);
+  Kokkos::parallel_for(
+    Kokkos::RangePolicy<DeviceType,TagFixRigidBodyBox>(0,nnewghost),*this);
+  Kokkos::parallel_for(
+    Kokkos::RangePolicy<DeviceType,TagFixRigidInflate>(0,n),*this);
+  copymode = 0;
+
+  // the host copy of a body regenerated here is stale
+
+  for (int m = 0; m < nnewghost; m++) hostgeom[newghost[m]] = 0;
+}
+
+/* ----------------------------------------------------------------------
    the host copy of one body's geometry, for a host consumer: the same
      arithmetic as the device kernel, so it is the same geometry
 ------------------------------------------------------------------------- */
@@ -406,6 +475,31 @@ void FixRigidKokkos::refresh_host_surfs()
   unsigned int mask = (dim == 2) ? LINE_MASK : TRI_MASK;
   if (surf->distributed) mask |= (dim == 2) ? MYLINE_MASK : MYTRI_MASK;
   ((SurfKokkos*) surf)->sync(Host,mask);
+}
+
+/* ----------------------------------------------------------------------
+   every proc takes every body back: the gathered state, then the
+     geometry, boxes, surf copies and bins of every body, which
+     FixRigid::refresh_all() regenerates on the host and this does on
+     the device with blist covering all of them
+   the host surfs follow: the steps which call this are the steps a host
+     consumer reads them on
+------------------------------------------------------------------------- */
+
+void FixRigidKokkos::refresh_all()
+{
+  if (!devicegeom) {
+    FixRigid::refresh_all();
+    return;
+  }
+
+  gather_all();
+
+  posesplit = 0;
+  body_status(1);
+  device_geometry(0);
+  body_bins();
+  refresh_host_surfs();
 }
 
 /* ----------------------------------------------------------------------
@@ -488,6 +582,10 @@ void FixRigidKokkos::pack_body_static()
   auto h_bodystart = k_bodystart.view_host();
   for (int ib = 0; ib <= nbody; ib++) h_bodystart(ib) = bodystart[ib];
   k_bodystart.modify_host(); k_bodystart.sync_device();
+
+  // the element ranges may have moved under the local lists
+
+  blistgen_kk = -1;
 }
 
 /* ----------------------------------------------------------------------
@@ -534,9 +632,72 @@ void FixRigidKokkos::pack_body_geometry()
 }
 
 /* ----------------------------------------------------------------------
+   the bodies this proc holds and their elements, for the kernels below
+   blist changes only when a body arrives or is let go, which blistgen
+     counts; replicated, it is the identity and is packed once
+------------------------------------------------------------------------- */
+
+void FixRigidKokkos::pack_body_lists()
+{
+  if (blistgen_kk == blistgen) return;
+
+  int nelem = bodystart[nbody];
+
+  if ((int) k_blist.extent(0) < nbody) {
+    k_blist = DAT::tdual_int_1d("fix_rigid:blist",nbody);
+    k_bodystat = DAT::tdual_int_1d("fix_rigid:bodystat",nbody);
+  }
+  if ((int) k_lelem.extent(0) < nelem)
+    k_lelem = DAT::tdual_int_1d("fix_rigid:lelem",nelem);
+
+  auto h_blist = k_blist.view_host();
+  auto h_lelem = k_lelem.view_host();
+  auto h_bodystat = k_bodystat.view_host();
+
+  int n = 0;
+  for (int m = 0; m < nblist; m++) {
+    const int ib = blist[m];
+    h_blist(m) = ib;
+    for (int i = bodystart[ib]; i < bodystart[ib+1]; i++) h_lelem(n++) = i;
+  }
+  nlelem_kk = n;
+
+  // the kernels read the status only for the FAR test, which is exactly
+  //   membership of blist, so blistgen covers it
+
+  for (int ib = 0; ib < nbody; ib++) h_bodystat(ib) = bodystatus[ib];
+
+  k_blist.modify_host(); k_blist.sync_device();
+  k_lelem.modify_host(); k_lelem.sync_device();
+  k_bodystat.modify_host(); k_bodystat.sync_device();
+
+  blistgen_kk = blistgen;
+}
+
+/* ----------------------------------------------------------------------
+   the device views the geometry kernels read
+------------------------------------------------------------------------- */
+
+void FixRigidKokkos::geometry_views()
+{
+  d_pose_kk = k_pose.view_device();
+  d_displace_kk = k_displace.view_device();
+  d_bodypt_kk = k_bodypt.view_device();
+  d_bodynorm_kk = k_bodynorm.view_device();
+  d_elemlo_kk = k_elemlo.view_device();
+  d_elemhi_kk = k_elemhi.view_device();
+  d_bbodylo_kk = k_bbodylo.view_device();
+  d_bbodyhi_kk = k_bbodyhi.view_device();
+  d_bboxeps_kk = k_bboxeps.view_device();
+  d_body_kk = k_body.view_device();
+  d_bodystart_kk = k_bodystart.view_device();
+  d_bodystat_kk = k_bodystat.view_device();
+}
+
+/* ----------------------------------------------------------------------
    the body geometry from the pose, on the device: the twin of
-     FixRigid::body_geometry() for every body, or of body_bbox(ibody,1)
-     for every body if sweepflag is set
+     FixRigid::body_geometry() for the bodies this proc holds, or of
+     body_bbox(ibody,1) for them if sweepflag is set
    sweepflag = 0: corner points and normals from the current pose, the
      surfs rewritten, element boxes and body bboxes of the current
      positions
@@ -548,7 +709,7 @@ void FixRigidKokkos::pack_body_geometry()
 
 void FixRigidKokkos::device_geometry(int sweepflag)
 {
-  int nelem = bodystart[nbody];
+  pack_body_lists();
 
   auto h_pose = k_pose.view_host();
   for (int m = 0; m < nblist; m++) {
@@ -565,17 +726,9 @@ void FixRigidKokkos::device_geometry(int sweepflag)
   }
   k_pose.modify_host(); k_pose.sync_device();
 
-  d_pose_kk = k_pose.view_device();
-  d_displace_kk = k_displace.view_device();
-  d_bodypt_kk = k_bodypt.view_device();
-  d_bodynorm_kk = k_bodynorm.view_device();
-  d_elemlo_kk = k_elemlo.view_device();
-  d_elemhi_kk = k_elemhi.view_device();
-  d_bbodylo_kk = k_bbodylo.view_device();
-  d_bbodyhi_kk = k_bbodyhi.view_device();
-  d_bboxeps_kk = k_bboxeps.view_device();
-  d_body_kk = k_body.view_device();
-  d_bodystart_kk = k_bodystart.view_device();
+  geometry_views();
+  d_blist_kk = k_blist.view_device();
+  d_lelem_kk = k_lelem.view_device();
   d_copy_index_kk = k_copy_index.view_device();
   d_copy_elem_kk = k_copy_elem.view_device();
   SurfKokkos *surf_kk = (SurfKokkos*) surf;
@@ -597,11 +750,11 @@ void FixRigidKokkos::device_geometry(int sweepflag)
 
   copymode = 1;
   Kokkos::parallel_for(
-    Kokkos::RangePolicy<DeviceType,TagFixRigidGeometry>(0,nelem),*this);
+    Kokkos::RangePolicy<DeviceType,TagFixRigidGeometry>(0,nlelem_kk),*this);
   Kokkos::parallel_for(
-    Kokkos::RangePolicy<DeviceType,TagFixRigidBodyBox>(0,nbody),*this);
+    Kokkos::RangePolicy<DeviceType,TagFixRigidBodyBox>(0,nblist),*this);
   Kokkos::parallel_for(
-    Kokkos::RangePolicy<DeviceType,TagFixRigidInflate>(0,nelem),*this);
+    Kokkos::RangePolicy<DeviceType,TagFixRigidInflate>(0,nlelem_kk),*this);
   if (!sweepflag)
     Kokkos::parallel_for(
       Kokkos::RangePolicy<DeviceType,TagFixRigidScatterSurfs>(0,ncopy+nowned),
@@ -629,7 +782,8 @@ void FixRigidKokkos::device_geometry(int sweepflag)
   auto h_bbodylo = k_bbodylo.view_host();
   auto h_bbodyhi = k_bbodyhi.view_host();
   auto h_bboxeps = k_bboxeps.view_host();
-  for (int ib = 0; ib < nbody; ib++) {
+  for (int m = 0; m < nblist; m++) {
+    const int ib = blist[m];
     for (int k = 0; k < 3; k++) {
       bbodylo[ib][k] = h_bbodylo(ib,k);
       bbodyhi[ib][k] = h_bbodyhi(ib,k);
@@ -640,15 +794,16 @@ void FixRigidKokkos::device_geometry(int sweepflag)
 }
 
 /* ----------------------------------------------------------------------
-   one thread per element: FixRigid::body_geometry() for its points and
-     normal (not when sweeping: the points are those of the start of the
-     step), then its box, over the current points and, when sweeping,
-     the end-of-step points
+   one thread per element of a body this proc holds: FixRigid::
+     body_geometry() for its points and normal (not when sweeping: the
+     points are those of the start of the step), then its box, over the
+     current points and, when sweeping, the end-of-step points
 ------------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-void FixRigidKokkos::operator()(TagFixRigidGeometry, const int &i) const
+void FixRigidKokkos::operator()(TagFixRigidGeometry, const int &m) const
 {
+  const int i = d_lelem_kk(m);
   int j,k;
   double v[3],delta[3],delta12[3],delta13[3],ptnew[3],lo[3],hi[3];
   double z[3];
@@ -742,14 +897,15 @@ void FixRigidKokkos::operator()(TagFixRigidGeometry, const int &i) const
 }
 
 /* ----------------------------------------------------------------------
-   one thread per body: its bbox over its element boxes and the
-     inflation FixRigid::body_bbox() applies to both, the arc bulge of
-     the rotation included when sweeping
+   one thread per body this proc holds: its bbox over its element boxes
+     and the inflation FixRigid::body_bbox() applies to both, the arc
+     bulge of the rotation included when sweeping
 ------------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-void FixRigidKokkos::operator()(TagFixRigidBodyBox, const int &ib) const
+void FixRigidKokkos::operator()(TagFixRigidBodyBox, const int &m) const
 {
+  const int ib = d_blist_kk(m);
   int k;
   double blo[3],bhi[3];
 
@@ -781,12 +937,14 @@ void FixRigidKokkos::operator()(TagFixRigidBodyBox, const int &ib) const
 }
 
 /* ----------------------------------------------------------------------
-   one thread per element: its box inflated by its body's eps
+   one thread per element of a body this proc holds: its box inflated by
+     its body's eps
 ------------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-void FixRigidKokkos::operator()(TagFixRigidInflate, const int &i) const
+void FixRigidKokkos::operator()(TagFixRigidInflate, const int &m) const
 {
+  const int i = d_lelem_kk(m);
   const double eps = d_bboxeps_kk(d_body_kk(i));
   for (int k = 0; k < 3; k++) {
     d_elemlo_kk(i,k) -= eps;
@@ -798,6 +956,8 @@ void FixRigidKokkos::operator()(TagFixRigidInflate, const int &i) const
    one thread per local surf copy of an element, then per owned copy
      with distributed surfs: the surf takes the element's points and
      normal, FixRigid::update_surf_copies()
+   a copy of a body this proc no longer holds keeps the pose it had when
+     it let it go, as on the host
 ------------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
@@ -806,11 +966,13 @@ void FixRigidKokkos::operator()(TagFixRigidScatterSurfs, const int &m) const
   if (m < nscatter_kk) {
     const int index = d_copy_index_kk(m);
     const int i = d_copy_elem_kk(m);
+    if (d_bodystat_kk(d_body_kk(i)) == FARBODY) return;
     if (dim_kk == 2) scatter_line(d_lines_kk[index],i);
     else scatter_tri(d_tris_kk[index],i);
   } else {
     const int iown = d_olist_own_kk(m-nscatter_kk);
     const int i = d_olist_elem_kk(m-nscatter_kk);
+    if (d_bodystat_kk(d_body_kk(i)) == FARBODY) return;
     if (dim_kk == 2) scatter_line(d_mylines_kk[iown],i);
     else scatter_tri(d_mytris_kk[iown],i);
   }
@@ -840,21 +1002,24 @@ void FixRigidKokkos::scatter_tri(Surf::Tri &tri, int i) const
 
 /* ----------------------------------------------------------------------
    per-body sums of the move kernel's per-element tallies into ftbuf_mine
-   one thread per body, its elements in element order on every backend,
-     the order the host sums its rows in
+   one thread per body this proc holds, its elements in element order on
+     every backend, the order the host sums its rows in
 ------------------------------------------------------------------------- */
 
 void FixRigidKokkos::sum_tallies()
 {
+  pack_body_lists();
+
   if ((int) k_ft.extent(0) < nbody) {
     k_ft = tdual_dbl_2d("fix_rigid:ft",nbody,6);
     d_ft = k_ft.view_device();
   }
   d_bodystart = k_bodystart.view_device();
+  d_blist_kk = k_blist.view_device();
 
   copymode = 1;
   Kokkos::parallel_for(
-    Kokkos::RangePolicy<DeviceType,TagFixRigidSumTallies>(0,nbody),*this);
+    Kokkos::RangePolicy<DeviceType,TagFixRigidSumTallies>(0,nblist),*this);
   copymode = 0;
 
   k_ft.modify_device();
@@ -870,8 +1035,9 @@ void FixRigidKokkos::sum_tallies()
 /* ---------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-void FixRigidKokkos::operator()(TagFixRigidSumTallies, const int &ibody) const
+void FixRigidKokkos::operator()(TagFixRigidSumTallies, const int &m) const
 {
+  const int ibody = d_blist_kk(m);
   double f[6];
   for (int j = 0; j < 6; j++) f[j] = 0.0;
 

@@ -3994,6 +3994,12 @@ void FixRigid::grid_rebuild()
 
 void FixRigid::grid_changed()
 {
+  // owned: a grid change re-decides ownership from every body, so every
+  //   proc must hold every body's current state and geometry first
+
+  if (bodymode == OWNED && initflag && gathervalid != update->ntimestep)
+    refresh_all();
+
   remap->grid_changed();
 
   // cells moved: proc boxes and ownership re-decided before the

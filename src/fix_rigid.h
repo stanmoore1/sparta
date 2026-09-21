@@ -96,7 +96,8 @@ class FixRigid : public Fix {
   void body_status(int = 0);    // body ownership/status and the loop lists
                                 //   1 = every proc holds every body
   void gather_all();            // every proc's owned rows to all procs
-  void refresh_all();           // gather + host geometry of every body
+  virtual void refresh_all();   // gather + host geometry of every body
+                                //   virtual: fix rigid/kk uses the device
   int host_surfs_needed();      // 1 if a host consumer reads the surf
                                 //   arrays this step
   void surfs_changed(int, int = 0);  // notify per-surf models of the above
@@ -246,7 +247,9 @@ class FixRigid : public Fix {
   void unpack_datum(const BodyDatum &);
   void exchange_forward();      // owner -> holders, after the integration
   void exchange_reverse();      // ghost partial sums -> owner
-  void newghost_geometry();     // start-of-step geometry of FAR -> GHOST
+  virtual void newghost_geometry();  // start-of-step geometry of
+                                     //   FAR -> GHOST; virtual: fix
+                                     //   rigid/kk uses the device
   void check_bodycut();         // swept bbox vs the bodies cutoff
   void body_warning(int &, int);  // once per run, per rank
 
@@ -473,11 +476,5 @@ E: Fix rigid body moved beyond the bodies cutoff
 With bodies owned, a body may only reach the procs which were sent it,
 which are those within the cutoff of its COM.  Raise the cutoff value of
 the bodies keyword, or lower the timestep.
-
-E: Fix rigid/kk bodies owned is not yet supported
-
-The device geometry of a body which was not held on the previous step is
-not regenerated yet, so the KOKKOS version only runs bodies owned on one
-proc, where no body is ever a ghost.
 
 */

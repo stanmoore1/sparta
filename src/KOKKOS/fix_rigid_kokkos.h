@@ -61,6 +61,8 @@ class FixRigidKokkos : public FixRigid {
   void swept_boxes();
   void host_geometry(int);
   void refresh_host_surfs();
+  void refresh_all();
+  void newghost_geometry();
   void stage_fence() override { Kokkos::fence(); }
   void remove_inside_all(int);
   void particles_to_host();
@@ -89,6 +91,7 @@ class FixRigidKokkos : public FixRigid {
   void operator()(TagFixRigidAssignSplit, const int&) const;
 
   // per-body sums of the mover's per-surf tallies, one thread per body
+  //   this proc holds
 
   KOKKOS_INLINE_FUNCTION
   void operator()(TagFixRigidSumTallies, const int&) const;
@@ -103,9 +106,10 @@ class FixRigidKokkos : public FixRigid {
   KOKKOS_INLINE_FUNCTION
   void operator()(TagFixRigidRelabel, const int&) const;
 
-  // the body geometry from the pose: one thread per element (points,
-  //   normal, box), per body (bbox and its inflation), per element again
-  //   (box inflation) and per local surf copy (the surf itself)
+  // the body geometry from the pose, over the bodies this proc holds:
+  //   one thread per local element (points, normal, box), per held body
+  //   (bbox and its inflation), per local element again (box inflation)
+  //   and per local surf copy (the surf itself)
 
   KOKKOS_INLINE_FUNCTION
   void operator()(TagFixRigidGeometry, const int&) const;
@@ -159,6 +163,8 @@ class FixRigidKokkos : public FixRigid {
  private:
   void pack_body_static();      // element tables to the device
   void pack_body_geometry();    // host geometry to the device, at setup
+  void pack_body_lists();       // blist/its elements/bodystatus, on change
+  void geometry_views();        // the device views the kernels below read
   void device_geometry(int);    // geometry and boxes from the pose
 
   // per element: displace in the body frame and the body; per local
@@ -182,6 +188,7 @@ class FixRigidKokkos : public FixRigid {
   tdual_dbl_1d::t_dev d_bboxeps_kk;
   DAT::t_int_1d d_body_kk,d_bodystart_kk,d_copy_index_kk,d_copy_elem_kk;
   DAT::t_int_1d d_olist_own_kk,d_olist_elem_kk;
+  DAT::t_int_1d d_blist_kk,d_lelem_kk,d_bodystat_kk;
   t_line_1d d_mylines_kk;
   t_tri_1d d_mytris_kk;
   int nscatter_kk;              // the local copies come first in the scatter
@@ -279,6 +286,16 @@ class FixRigidKokkos : public FixRigid {
   tdual_dbl_2d k_elemlo,k_elemhi;
   DAT::tdual_int_1d k_bodystart,k_lblist;
   DAT::tdual_int_1d k_bodybinstart,k_bodybinlist;
+
+  // the bodies this proc holds and their elements, in blist order, plus
+  //   the per-body status the surf scatter tests; re-packed when
+  //   blistgen moved.  the new-ghost pre-pass runs the same kernels
+  //   over its own short lists
+
+  DAT::tdual_int_1d k_blist,k_lelem,k_bodystat;
+  DAT::tdual_int_1d k_newblist,k_newelem;
+  int blistgen_kk;              // blistgen of the last upload, -1 = none
+  int nlelem_kk;                // # of elements of the blist bodies
 
   int nelem_kk;                 // # of body elements packed
   int nbin_kk;                  // # of body bins packed
