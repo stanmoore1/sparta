@@ -542,7 +542,8 @@ void FixRigidKokkos::device_geometry(int sweepflag)
   int nelem = bodystart[nbody];
 
   auto h_pose = k_pose.view_host();
-  for (int ib = 0; ib < nbody; ib++) {
+  for (int m = 0; m < nblist; m++) {
+    const int ib = blist[m];
     double *x = sweepflag ? xcmnew[ib] : xcm[ib];
     for (int k = 0; k < 3; k++) {
       h_pose(ib,k) = x[k];
@@ -850,8 +851,11 @@ void FixRigidKokkos::sum_tallies()
   k_ft.modify_device();
   k_ft.sync_host();
   auto h_ft = k_ft.view_host();
-  for (int ibody = 0; ibody < nbody; ibody++)
+  for (int i = 0; i < 6*nbody; i++) ftbuf_mine[i] = 0.0;
+  for (int m = 0; m < nblist; m++) {
+    const int ibody = blist[m];
     for (int j = 0; j < 6; j++) ftbuf_mine[6*ibody+j] = h_ft(ibody,j);
+  }
 }
 
 /* ---------------------------------------------------------------------- */

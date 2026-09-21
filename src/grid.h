@@ -365,6 +365,7 @@ class Grid : protected Pointers {
   void route_ghost_subcells();
   int neighscan;              // 1 if move_cell() could not repair a link
   void notify_changed();
+  void owned_bbox(double *, double *);   // bbox of my owned cells
   int set_minlevel();
   void set_maxlevel();
   void setup_owned();

@@ -103,6 +103,8 @@ void RigidRemapKokkos::collision_lists()
 
   int ntotal = grid->nlocal + grid->nghost;
   int nbody = fix->nbody;
+  int nblist = fix->nblist;
+  int *blist = fix->blist;
   double **bbodylo = fix->bbodylo;
   double **bbodyhi = fix->bbodyhi;
 
@@ -110,7 +112,8 @@ void RigidRemapKokkos::collision_lists()
 
   int npair = 0;
   int qlo[3],qhi[3];
-  for (ibody = 0; ibody < nbody; ibody++) {
+  for (int m = 0; m < nblist; m++) {
+    ibody = blist[m];
     int n = 1;
     for (k = 0; k < 3; k++) {
       qlo[k] = (int) ((bbodylo[ibody][k]-grid->cellbinlo[k]) * grid->cellbininv[k]);
@@ -137,7 +140,8 @@ void RigidRemapKokkos::collision_lists()
   auto h_qhi = k_qhi.view_host();
 
   npair = 0;
-  for (ibody = 0; ibody < nbody; ibody++) {
+  for (int m = 0; m < nblist; m++) {
+    ibody = blist[m];
     for (k = 0; k < 3; k++) {
       qlo[k] = (int) ((bbodylo[ibody][k]-grid->cellbinlo[k]) * grid->cellbininv[k]);
       qhi[k] = (int) ((bbodyhi[ibody][k]-grid->cellbinlo[k]) * grid->cellbininv[k]);
@@ -468,6 +472,8 @@ int RigidRemapKokkos::recut()
   int nglocal = grid->nlocal;
   int maxsurfpercell = grid->maxsurfpercell;
   int nbody = fix->nbody;
+  int nblist = fix->nblist;
+  int *blist = fix->blist;
   double **bbodylo = fix->bbodylo;
   double **bbodyhi = fix->bbodyhi;
   int timeflag = fix->timeflag;
@@ -509,7 +515,8 @@ int RigidRemapKokkos::recut()
   auto h_cominside = k_cominside.view_host();
 
   int npair = 0;
-  for (ibody = 0; ibody < nbody; ibody++) {
+  for (int m = 0; m < nblist; m++) {
+    ibody = blist[m];
     int n = 1;
     for (k = 0; k < 3; k++) {
       rlo[k] = MIN(prevlo[ibody][k],bbodylo[ibody][k]);
@@ -541,11 +548,11 @@ int RigidRemapKokkos::recut()
   auto h_pairbody = k_pairbody.view_host();
   auto h_pairbin = k_pairbin.view_host();
   npair = 0;
-  for (ibody = 0; ibody < nbody; ibody++)
-    for (int ibz = h_qlo(ibody,2); ibz <= h_qhi(ibody,2); ibz++)
-      for (int iby = h_qlo(ibody,1); iby <= h_qhi(ibody,1); iby++)
-        for (int ibx = h_qlo(ibody,0); ibx <= h_qhi(ibody,0); ibx++) {
-          h_pairbody(npair) = ibody;
+  for (int m = 0; m < nblist; m++)
+    for (int ibz = h_qlo(blist[m],2); ibz <= h_qhi(blist[m],2); ibz++)
+      for (int iby = h_qlo(blist[m],1); iby <= h_qhi(blist[m],1); iby++)
+        for (int ibx = h_qlo(blist[m],0); ibx <= h_qhi(blist[m],0); ibx++) {
+          h_pairbody(npair) = blist[m];
           h_pairbin(npair) = (ibz*grid->cellnbin[1] + iby)*grid->cellnbin[0] + ibx;
           npair++;
         }
@@ -676,12 +683,14 @@ int RigidRemapKokkos::recut()
   });
 
   if (!nrcand) {
-    for (ibody = 0; ibody < nbody; ibody++)
+    for (int m = 0; m < nblist; m++) {
+      ibody = blist[m];
       for (i = 0; i < 3; i++) {
         prevlo[ibody][i] = bbodylo[ibody][i];
         prevhi[ibody][i] = bbodyhi[ibody][i];
         prevxcm[ibody][i] = fix->xcm[ibody][i];
       }
+    }
     if (timeflag) fix->add_time(FixRigid::T_RECUT_LISTS,MPI_Wtime()-tstart);
     return FALLBACK_NONE;
   }
@@ -1296,12 +1305,14 @@ int RigidRemapKokkos::recut()
 
   // the bodies' current bboxes bound the region on the next step
 
-  for (ibody = 0; ibody < nbody; ibody++)
+  for (int m = 0; m < nblist; m++) {
+    ibody = blist[m];
     for (i = 0; i < 3; i++) {
       prevlo[ibody][i] = bbodylo[ibody][i];
       prevhi[ibody][i] = bbodyhi[ibody][i];
       prevxcm[ibody][i] = fix->xcm[ibody][i];
     }
+  }
 
   return FALLBACK_NONE;
 }

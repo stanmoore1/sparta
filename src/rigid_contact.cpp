@@ -207,7 +207,8 @@ void RigidContact::setup()
 }
 
 /* ----------------------------------------------------------------------
-   push-off force and torque on every body, into fpush/tqpush
+   push-off force and torque of the bodies this proc owns into
+     fpush/tqpush; a contact also writes the partner's row
    called after all bodies have committed their end-of-step geometry
    non-distributed surfs: computed identically on every proc, so no
      communication is needed
@@ -228,7 +229,7 @@ void RigidContact::compute(double **fpush, double **tqpush)
     tqpush[ibody][0] = tqpush[ibody][1] = tqpush[ibody][2] = 0.0;
   }
 
-  for (ibody = 0; ibody < nbody; ibody++) body(ibody,fpush,tqpush);
+  for (int m = 0; m < fix->nown; m++) body(fix->ownlist[m],fpush,tqpush);
 
   if (!surf->distributed) return;
 

@@ -204,10 +204,11 @@ void RigidRemap::setup()
 }
 
 /* ----------------------------------------------------------------------
-   add every body's surfs to the collision lists of all grid cells they
-     sweep through during this step, so particles anywhere in a body's
-     swept path are tested against the moving surfs and reflected
-     (rather than overtaken by a fast body and deleted)
+   add the surfs of every body this proc holds to the collision lists
+     of all grid cells they sweep through during this step, so
+     particles anywhere in a body's swept path are tested against the
+     moving surfs and reflected (rather than overtaken by a fast body
+     and deleted)
    called each start_of_step, after the end-of-step pose of every body
      is known; a single pass over the grid cells handles all bodies
    for each overlapped cell the collision list = its cut list plus all
@@ -225,7 +226,8 @@ void RigidRemap::collision_lists()
   Grid::SplitInfo *sinfo = grid->sinfo;
   int ntotal = grid->nlocal + grid->nghost;
 
-  int nbody = fix->nbody;
+  int nblist = fix->nblist;
+  int *blist = fix->blist;
   int *bodystart = fix->bodystart;
   int *lblist = fix->lblist;
   double **elemlo = fix->elemlo;
@@ -257,7 +259,8 @@ void RigidRemap::collision_lists()
   int ncand,icand;
   int *cand;
 
-  for (ibody = 0; ibody < nbody; ibody++) {
+  for (int m = 0; m < nblist; m++) {
+    ibody = blist[m];
     double *blo = fix->bbodylo[ibody];
     double *bhi = fix->bbodyhi[ibody];
     ncand = grid->cells_in_box(blo,bhi,&cand);
@@ -369,7 +372,8 @@ void RigidRemap::refresh()
   // the bodies' bboxes are the swept boxes of this step: restore the
   //   boxes of the positions which typed the cells
 
-  for (int ibody = 0; ibody < fix->nbody; ibody++) {
+  for (int m = 0; m < fix->nblist; m++) {
+    int ibody = fix->blist[m];
     fix->host_geometry(ibody);
     fix->body_bbox(ibody,0);
   }
@@ -468,7 +472,8 @@ int RigidRemap::recut()
   splitchanged = 0;
   npending = 0;
 
-  for (ibody = 0; ibody < nbody; ibody++) {
+  for (int m = 0; m < fix->nblist; m++) {
+    ibody = fix->blist[m];
     for (i = 0; i < 3; i++) {
       rlo[i] = MIN(prevlo[ibody][i],bbodylo[ibody][i]);
       rhi[i] = MAX(prevhi[ibody][i],bbodyhi[ibody][i]);
@@ -712,12 +717,14 @@ int RigidRemap::recut()
 
   // the bodies' current bboxes bound the region on the next step
 
-  for (ibody = 0; ibody < nbody; ibody++)
+  for (int m = 0; m < fix->nblist; m++) {
+    ibody = fix->blist[m];
     for (i = 0; i < 3; i++) {
       prevlo[ibody][i] = bbodylo[ibody][i];
       prevhi[ibody][i] = bbodyhi[ibody][i];
       prevxcm[ibody][i] = fix->xcm[ibody][i];
     }
+  }
 
   return FALLBACK_NONE;
 }

@@ -91,6 +91,9 @@ class FixRigid : public Fix {
   int ensure_local_copies();    // distributed: local copies of body surfs
                                 //   returns 1 if surf arrays were changed
   void proc_bbox();             // bbox of this proc's owned + ghost cells
+  void proc_boxes();            // every proc's owned and owned+ghost bboxes
+  int body_owner(double *);     // rank which owns a body at this COM
+  void body_status();           // body ownership/status and the loop lists
   void surfs_changed(int, int = 0);  // notify per-surf models of the above
                                      //   2nd arg = 0 in run, 1 init, 2 setup
   virtual void surf_maps();     // rebuild surfbody/surfelem
@@ -165,6 +168,18 @@ class FixRigid : public Fix {
                           //   from the COM.  a cell which lies wholly
                           //   inside this radius cannot hold a body surf
 
+  // body ownership and the per-step loop lists, set by body_status()
+  // replicated: every proc owns every body, both lists = identity
+
+  int bodymode;           // REPLICATED or OWNED
+  int *bodystatus;        // OWNEDBODY, GHOSTBODY, or FARBODY on this proc
+  int *bodyowner;         // rank which owns each body
+  int *bodystamp;         // step this proc's copy of each body arrived on
+  int nown,*ownlist;      // bodies this proc owns
+  int nblist,*blist;      // owned + ghost bodies, ascending body index
+  int nnewghost,*newghost;  // GHOST now, FAR on the previous step
+  int blistgen;           // bumped whenever blist changes
+
   int body_box(double *, double *, int **);  // bodies overlapping a box
   void body_bbox(int, int);     // bbox of body, current or swept over step
   int inside_body(int, double *); // 1 if point is inside rigid body, else 0
@@ -190,6 +205,16 @@ class FixRigid : public Fix {
   int nsurfall;           // surf->nlocal when the fix was defined
   int *bodyneed;          // 1 if this proc needs local copies of a body
   double proclo[3],prochi[3];  // bbox of this proc's owned + ghost cells
+
+  // bodies owned: per-proc boxes the ownership and ghost rules read
+
+  double *ownboxall;      // nprocs x 6: bbox of each proc's owned cells
+  double *procboxall;     // nprocs x 6: ditto, owned + ghost cells
+  double bodycut;         // a proc holds a body whose COM is within this
+                          //   distance of its owned + ghost cells
+  double bodycut_user;    // cutoff keyword value, <= 0.0 = use the default
+  double rmaxmax;         // max over bodies of rmaxbody, for that default
+
   int copiesappended;     // 1 if start_of_step() appended local copies
   int ncopy,maxcopy;      // all local copies of body elements
   int *copy_index;        //   local surf index of each copy
@@ -391,5 +416,23 @@ E: Illegal ... command
 Self-explanatory.  Check the input script syntax and compare to the
 documentation for the command.  You can use -echo screen as a
 command-line option when running SPARTA to see the offending line.
+
+E: Fix rigid bodies owned requires remap incremental
+
+The cutcell re-map needs every body on every proc.
+
+E: Fix rigid bodies owned requires a clumped grid decomposition
+
+Body ownership is decided from the bounding box of each proc's owned
+cells.  Use create_grid clump or block, balance_grid rcb, or fix balance
+rcb.
+
+E: Fix rigid bodies owned does not yet support distributed surfs
+
+Self-explanatory.
+
+E: Fix rigid bodies owned is not yet supported on more than one proc
+
+Self-explanatory.
 
 */

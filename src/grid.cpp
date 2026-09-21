@@ -639,6 +639,31 @@ void Grid::acquire_ghosts_all(int surfflag)
 }
 
 /* ----------------------------------------------------------------------
+   lo/hi = bounding box of this proc's owned cells (sub cells skipped)
+------------------------------------------------------------------------- */
+
+void Grid::owned_bbox(double *lo, double *hi)
+{
+  int i;
+  double *clo,*chi;
+
+  for (i = 0; i < 3; i++) {
+    lo[i] = BIG;
+    hi[i] = -BIG;
+  }
+
+  for (int icell = 0; icell < nlocal; icell++) {
+    if (cells[icell].nsplit <= 0) continue;
+    clo = cells[icell].lo;
+    chi = cells[icell].hi;
+    for (i = 0; i < 3; i++) {
+      lo[i] = MIN(lo[i],clo[i]);
+      hi[i] = MAX(hi[i],chi[i]);
+    }
+  }
+}
+
+/* ----------------------------------------------------------------------
    acquire ghost cells from local cells of other procs
    use irregular comm to only get copy of nearby cells
    within extended bounding box = bounding box of owned cells + cutoff
@@ -657,20 +682,7 @@ void Grid::acquire_ghosts_near(int surfflag)
   double bblo[3],bbhi[3];
   double *lo,*hi;
 
-  for (i = 0; i < 3; i++) {
-    bblo[i] = BIG;
-    bbhi[i] = -BIG;
-  }
-
-  for (int icell = 0; icell < nlocal; icell++) {
-    if (cells[icell].nsplit <= 0) continue;
-    lo = cells[icell].lo;
-    hi = cells[icell].hi;
-    for (i = 0; i < 3; i++) {
-      bblo[i] = MIN(bblo[i],lo[i]);
-      bbhi[i] = MAX(bbhi[i],hi[i]);
-    }
-  }
+  owned_bbox(bblo,bbhi);
 
   // ebb lo/hi = bbox + grid cutoff
   // trim to simulation box in non-periodic dims

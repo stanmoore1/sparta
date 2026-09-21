@@ -67,6 +67,9 @@ enum{PERIODIC,OUTFLOW,REFLECT,SURFACE,AXISYM};  // same as Domain
 
 enum{CUTCELL,INCREMENTAL};          // remap modes
 
+enum{REPLICATED,OWNED};             // body modes
+enum{OWNEDBODY,GHOSTBODY,FARBODY};  // per-body status on this proc
+
 enum{EULER,RICHARDSON};         // quaternion rotation update schemes
 enum{SINGLE,TYPE,CUSTOM};       // body styles
 
@@ -267,6 +270,8 @@ FixRigid::FixRigid(SPARTA *sparta, int narg, char **arg) :
 
   outfile = NULL;
   outevery = 0;
+  bodymode = REPLICATED;
+  bodycut_user = 0.0;
   remapmode = INCREMENTAL;
   rotstyle = EULER;
   pushflag = 0;
@@ -315,6 +320,25 @@ FixRigid::FixRigid(SPARTA *sparta, int narg, char **arg) :
         remapmode = INCREMENTAL;
       else error->all(FLERR,"Fix rigid body args not valid");
       iarg += 2;
+    } else if (strcmp(arg[iarg],"bodies") == 0) {
+
+      // replicated: every proc holds every body
+      // owned: a proc holds the bodies within cutoff of its cells
+
+      if (iarg+2 > narg) error->all(FLERR,"Fix rigid body args not valid");
+      if (strcmp(arg[iarg+1],"replicated") == 0) bodymode = REPLICATED;
+      else if (strcmp(arg[iarg+1],"owned") == 0) bodymode = OWNED;
+      else error->all(FLERR,"Fix rigid body args not valid");
+      iarg += 2;
+
+      if (iarg < narg && strcmp(arg[iarg],"cutoff") == 0) {
+        if (iarg+2 > narg) error->all(FLERR,"Fix rigid body args not valid");
+        bodycut_user = input->numeric(FLERR,arg[iarg+1]);
+        if (bodycut_user <= 0.0)
+          error->all(FLERR,"Fix rigid body args not valid");
+        iarg += 2;
+      }
+
     } else if (strcmp(arg[iarg],"rotate") == 0) {
       if (iarg+2 > narg) error->all(FLERR,"Fix rigid body args not valid");
       if (strcmp(arg[iarg+1],"euler") == 0) rotstyle = EULER;
@@ -362,6 +386,11 @@ FixRigid::FixRigid(SPARTA *sparta, int narg, char **arg) :
     error->all(FLERR,"Fix rigid pushbound, pushstyle, and pushdamp "
                "require push keyword");
 
+  // cutcell re-map needs every body on every proc
+
+  if (bodymode == OWNED && remapmode == CUTCELL)
+    error->all(FLERR,"Fix rigid bodies owned requires remap incremental");
+
   if (dim == 2 && !axiflag && fext[2] != 0.0)
     error->all(FLERR,"Fix rigid z component of force must be zero for 2d");
   if (axiflag && (fext[1] != 0.0 || fext[2] != 0.0))
@@ -407,6 +436,15 @@ FixRigid::FixRigid(SPARTA *sparta, int narg, char **arg) :
   if (pushflag)
     contact = new RigidContact(sparta,this,pushstyle,kpush,pushcutoff,
                                gammapush,pushboundflag);
+
+  // per-proc cell bboxes, set by proc_boxes()
+
+  memory->create(ownboxall,6*comm->nprocs,"fix_rigid:ownboxall");
+  memory->create(procboxall,6*comm->nprocs,"fix_rigid:procboxall");
+  for (int i = 0; i < 6*comm->nprocs; i++)
+    ownboxall[i] = procboxall[i] = 0.0;
+  bodycut = 0.0;
+  rmaxmax = 0.0;
 
   bodybinstart = NULL;
   bodybinlist = NULL;
@@ -493,6 +531,14 @@ FixRigid::~FixRigid()
   memory->destroy(bodybinlist);
   memory->destroy(bodycand);
   memory->destroy(bodyneed);
+  memory->destroy(bodystatus);
+  memory->destroy(bodyowner);
+  memory->destroy(bodystamp);
+  memory->destroy(ownlist);
+  memory->destroy(blist);
+  memory->destroy(newghost);
+  memory->destroy(ownboxall);
+  memory->destroy(procboxall);
   memory->destroy(tally2elem);
   memory->destroy(elem2tally);
   memory->destroy(ftally);
@@ -530,6 +576,22 @@ void FixRigid::init()
 
   if (sparta->kokkos && !kokkosable)
     error->all(FLERR,"Must use fix rigid/kk with KOKKOS");
+
+  // owned: ownership is decided from per-proc cell bboxes, which
+  //   requires a clumped decomposition
+  // body exchange and distributed surfs not yet supported
+
+  if (bodymode == OWNED) {
+    if (!grid->clumped)
+      error->all(FLERR,"Fix rigid bodies owned requires a clumped grid "
+                 "decomposition");
+    if (surf->distributed)
+      error->all(FLERR,"Fix rigid bodies owned does not yet support "
+                 "distributed surfs");
+    if (comm->nprocs > 1)
+      error->all(FLERR,"Fix rigid bodies owned is not yet supported on "
+                 "more than one proc");
+  }
 
   // the recoil correction of collisions is exact down to a body as
   //   light as one simulation particle; below that the exact result
@@ -693,6 +755,27 @@ void FixRigid::setup()
     memory->create(ftbuf_all,6*nbody,"fix_rigid:ftbuf_all");
   }
 
+  // owned: default cutoff = largest inflated body radius + push range,
+  //   the same on every proc
+
+  if (bodymode == OWNED) {
+    rmaxmax = 0.0;
+    for (int ibody = 0; ibody < nbody; ibody++)
+      rmaxmax = MAX(rmaxmax,rmaxbody[ibody]);
+
+    if (bodycut_user > 0.0) bodycut = bodycut_user;
+    else {
+      bodycut = rmaxmax * (1.0 + 2.0*EPSSURF);
+      if (pushflag) bodycut += pushcutoff;
+    }
+
+    proc_boxes();
+  }
+
+  // ownership and the per-step loop lists
+
+  body_status();
+
   // bbox around each body's elements at their current positions,
   //   and the bins of bodies by COM the queries below use
 
@@ -824,20 +907,21 @@ void FixRigid::end_of_step()
 }
 
 /* ----------------------------------------------------------------------
-   per-element swept bounding boxes of every body for this step, from
+   per-element swept bounding boxes of the bodies this proc holds, from
      the start-of-step geometry and the end-of-step pose
 ------------------------------------------------------------------------- */
 
 void FixRigid::swept_boxes()
 {
   posesplit = 1;
-  for (int ibody = 0; ibody < nbody; ibody++) body_bbox(ibody,1);
+  for (int m = 0; m < nblist; m++) body_bbox(blist[m],1);
 }
 
 /* ----------------------------------------------------------------------
-   first half of velocity Verlet for every body: half kick of vcm and
-     angmom with the force/torque of the previous step, drift of the COM
-     and orientation by a full step to the end-of-step pose
+   first half of velocity Verlet for the bodies this proc owns: half
+     kick of vcm and angmom with the force/torque of the previous step,
+     drift of the COM and orientation by a full step to the
+     end-of-step pose
    xcm/quat stay at the start-of-step pose (the grid holds that geometry)
      and xcmnew/quatnew/ex,ey,ez_space are the end-of-step values the
      moving-surf collision tests interpolate between
@@ -848,7 +932,8 @@ void FixRigid::initial_integrate()
   double dt = update->dt;
   double dthalf = 0.5 * dt;
 
-  for (int ibody = 0; ibody < nbody; ibody++) {
+  for (int m = 0; m < nown; m++) {
+    int ibody = ownlist[m];
     double *xcm1 = xcm[ibody];
     double *vcm1 = vcm[ibody];
     double *omega1 = omega[ibody];
@@ -1022,7 +1107,8 @@ void FixRigid::initial_integrate()
 }
 
 /* ----------------------------------------------------------------------
-   commit the end-of-step pose of every body and regenerate its geometry
+   commit the end-of-step pose of every body this proc holds and
+     regenerate its geometry
      from it: corner pts from displace rotated to the space frame + COM,
      normals from the corner pts, then the Surf copies the mover and cut
      pipeline read, the current bboxes and the bins of bodies by COM
@@ -1031,13 +1117,14 @@ void FixRigid::initial_integrate()
 void FixRigid::set_xv()
 {
   set_pose();
-  for (int ibody = 0; ibody < nbody; ibody++) body_geometry(ibody);
+  for (int m = 0; m < nblist; m++) body_geometry(blist[m]);
   update_surf_copies();
   body_bins();
 }
 
 /* ----------------------------------------------------------------------
-   move every body to the end-of-step pose initial_integrate() computed:
+   move every body this proc holds to the end-of-step pose
+     initial_integrate() computed:
      xcm/quat take xcmnew/quatnew, and the body's degrees of freedom are
      enforced on all its properties
    2d: in-plane motion and rotation about z.  start_of_step() enforces it
@@ -1053,7 +1140,8 @@ void FixRigid::set_pose()
 {
   posesplit = 0;
 
-  for (int ibody = 0; ibody < nbody; ibody++) {
+  for (int m = 0; m < nblist; m++) {
+    int ibody = blist[m];
     double *xcm1 = xcm[ibody];
     double *quat1 = quat[ibody];
 
@@ -1163,6 +1251,7 @@ void FixRigid::body_geometry(int ibody)
    a body may exit the box through a non-periodic boundary, but body
      coords are not wrapped, so one which reaches a periodic boundary
      is an error; warn once if a body no longer touches the box at all
+   each proc checks the bodies it owns
 ------------------------------------------------------------------------- */
 
 void FixRigid::check_bounds()
@@ -1172,7 +1261,8 @@ void FixRigid::check_bounds()
   double *boxhi = domain->boxhi;
   int *bflag = domain->bflag;
 
-  for (ibody = 0; ibody < nbody; ibody++) {
+  for (int m = 0; m < nown; m++) {
+    ibody = ownlist[m];
     double *blo = bbodylo[ibody];
     double *bhi = bbodyhi[ibody];
     double eps = bboxeps[ibody];
@@ -1212,17 +1302,20 @@ void FixRigid::check_bounds()
 }
 
 /* ----------------------------------------------------------------------
-   second half of velocity Verlet for every body, once the force and
-     torque of the step are complete: the push-off contacts of the
-     bodies at their end-of-step poses are added to the collision
+   second half of velocity Verlet for the bodies this proc owns, once
+     the force and torque of the step are complete: the push-off
+     contacts at the end-of-step poses are added to the collision
      force/torque, then vcm/angmom/omega get the second half kick
+   fpush/tqpush are zeroed for every body held, since a contact of an
+     owned body also pushes back on its partner
 ------------------------------------------------------------------------- */
 
 void FixRigid::final_integrate()
 {
   int ibody;
 
-  for (ibody = 0; ibody < nbody; ibody++) {
+  for (int m = 0; m < nblist; m++) {
+    ibody = blist[m];
     fpush[ibody][0] = fpush[ibody][1] = fpush[ibody][2] = 0.0;
     tqpush[ibody][0] = tqpush[ibody][1] = tqpush[ibody][2] = 0.0;
   }
@@ -1230,7 +1323,8 @@ void FixRigid::final_integrate()
   if (contact) {
     contact->compute(fpush,tqpush);
 
-    for (ibody = 0; ibody < nbody; ibody++) {
+    for (int m = 0; m < nown; m++) {
+      ibody = ownlist[m];
       axi_project(fpush[ibody],tqpush[ibody]);
       fcm[ibody][0] += fpush[ibody][0];
       fcm[ibody][1] += fpush[ibody][1];
@@ -1246,7 +1340,7 @@ void FixRigid::final_integrate()
   //   become the velocities at the end of the step, synchronized
   //   with xcm/quat, as reported by the fix and written to outfile
 
-  for (ibody = 0; ibody < nbody; ibody++) final_kick(ibody);
+  for (int m = 0; m < nown; m++) final_kick(ownlist[m]);
 
 }
 
@@ -1510,7 +1604,8 @@ void FixRigid::sum_tallies()
   for (int i = 0; i < 6*nbody; i++) ftbuf_mine[i] = 0.0;
   if (!ntally) return;
 
-  for (int ibody = 0; ibody < nbody; ibody++) {
+  for (int m = 0; m < nblist; m++) {
+    int ibody = blist[m];
     double *ft = &ftbuf_mine[6*ibody];
     for (int k = bodystart[ibody]; k < bodystart[ibody+1]; k++) {
       itally = elem2tally[k];
@@ -2137,8 +2232,11 @@ int FixRigid::ensure_local_copies()
 
   // bodies this proc needs local copies of
 
-  for (i = 0; i < nbody; i++)
+  for (i = 0; i < nbody; i++) bodyneed[i] = 0;
+  for (int m = 0; m < nblist; m++) {
+    i = blist[m];
     bodyneed[i] = box_overlap(bbodylo[i],bbodyhi[i],proclo,prochi);
+  }
   for (k = 0; k < nsurf; k++)
     if (lblist[k] >= 0) bodyneed[body[k]] = 1;
   for (i = nslocal; i < nslocal+nsghost; i++) {
@@ -2232,6 +2330,91 @@ void FixRigid::proc_bbox()
       prochi[k] = MAX(prochi[k],cells[icell].hi[k]);
     }
   }
+}
+
+/* ----------------------------------------------------------------------
+   every proc's owned-cell bbox and owned+ghost bbox, allgathered into
+     ownboxall/procboxall: the ownership and ghost rules read only
+     these and a body's COM, so every proc agrees
+------------------------------------------------------------------------- */
+
+void FixRigid::proc_boxes()
+{
+  double box[6];
+
+  grid->owned_bbox(&box[0],&box[3]);
+  MPI_Allgather(box,6,MPI_DOUBLE,ownboxall,6,MPI_DOUBLE,world);
+
+  Grid::ChildCell *cells = grid->cells;
+  int ntotal = grid->nlocal + grid->nghost;
+
+  box[0] = box[1] = box[2] = BIG;
+  box[3] = box[4] = box[5] = -BIG;
+
+  for (int icell = 0; icell < ntotal; icell++) {
+    if (cells[icell].nsplit <= 0) continue;
+    for (int k = 0; k < 3; k++) {
+      box[k] = MIN(box[k],cells[icell].lo[k]);
+      box[3+k] = MAX(box[3+k],cells[icell].hi[k]);
+    }
+  }
+
+  MPI_Allgather(box,6,MPI_DOUBLE,procboxall,6,MPI_DOUBLE,world);
+}
+
+/* ----------------------------------------------------------------------
+   owner of a body with COM x = lowest rank whose owned-cell bbox
+     contains x (inclusive), else rank 0 (e.g. a body outside the box)
+------------------------------------------------------------------------- */
+
+int FixRigid::body_owner(double *x)
+{
+  int nprocs = comm->nprocs;
+
+  for (int iproc = 0; iproc < nprocs; iproc++) {
+    double *lo = &ownboxall[6*iproc];
+    double *hi = &ownboxall[6*iproc+3];
+    if (x[0] < lo[0] || x[0] > hi[0]) continue;
+    if (x[1] < lo[1] || x[1] > hi[1]) continue;
+    if (x[2] < lo[2] || x[2] > hi[2]) continue;
+    return iproc;
+  }
+
+  return 0;
+}
+
+/* ----------------------------------------------------------------------
+   per-body owner and status, and the loop lists: ownlist = bodies this
+     proc owns, blist = owned + ghost, ascending
+   replicated: every proc owns every body, both lists = identity
+   owned: owner from the COM; single proc until the exchange lands, so
+     the lists are the identity here too
+------------------------------------------------------------------------- */
+
+void FixRigid::body_status()
+{
+  int me = comm->me;
+
+  nown = nblist = nnewghost = 0;
+
+  if (bodymode == REPLICATED) {
+    for (int ibody = 0; ibody < nbody; ibody++) {
+      bodystatus[ibody] = OWNEDBODY;
+      bodyowner[ibody] = me;
+      ownlist[nown++] = ibody;
+      blist[nblist++] = ibody;
+    }
+
+  } else {
+    for (int ibody = 0; ibody < nbody; ibody++) {
+      bodyowner[ibody] = body_owner(xcm[ibody]);
+      bodystatus[ibody] = OWNEDBODY;
+      ownlist[nown++] = ibody;
+      blist[nblist++] = ibody;
+    }
+  }
+
+  blistgen++;
 }
 
 /* ----------------------------------------------------------------------
@@ -2394,6 +2577,7 @@ void FixRigid::update_surf_copies()
   for (int m = 0; m < ncopy; m++) {
     index = copy_index[m];
     i = copy_elem[m];
+    if (bodystatus[body[i]] == FARBODY) continue;
     if (dim == 2) {
       memcpy(lines[index].p1,bodypt[i][0],3*sizeof(double));
       memcpy(lines[index].p2,bodypt[i][1],3*sizeof(double));
@@ -2414,6 +2598,7 @@ void FixRigid::update_surf_copies()
   for (int m = 0; m < nolist; m++) {
     int iown = olist_own[m];
     i = olist_elem[m];
+    if (bodystatus[body[i]] == FARBODY) continue;
     if (dim == 2) {
       memcpy(mylines[iown].p1,bodypt[i][0],3*sizeof(double));
       memcpy(mylines[iown].p2,bodypt[i][1],3*sizeof(double));
@@ -2820,6 +3005,27 @@ void FixRigid::allocate_bodies()
   memory->create(torque_infile,nbody,3,"fix_rigid:torque_infile");
   memory->create(bodyneed,nbody,"fix_rigid:bodyneed");
 
+  // ownership and loop lists, replicated state until setup() (run pre
+  //   no skips it)
+
+  memory->create(bodystatus,nbody,"fix_rigid:bodystatus");
+  memory->create(bodyowner,nbody,"fix_rigid:bodyowner");
+  memory->create(bodystamp,nbody,"fix_rigid:bodystamp");
+  memory->create(ownlist,nbody,"fix_rigid:ownlist");
+  memory->create(blist,nbody,"fix_rigid:blist");
+  memory->create(newghost,nbody,"fix_rigid:newghost");
+
+  nown = nblist = nbody;
+  nnewghost = 0;
+  blistgen = 0;
+
+  for (int ibody = 0; ibody < nbody; ibody++) {
+    bodystatus[ibody] = OWNEDBODY;
+    bodyowner[ibody] = comm->me;
+    bodystamp[ibody] = -1;
+    ownlist[ibody] = blist[ibody] = ibody;
+  }
+
   for (int ibody = 0; ibody < nbody; ibody++) {
     invmass[ibody] = massbody[ibody] = rmaxbody[ibody] = bboxeps[ibody] = 0.0;
     rminbody[ibody] = 0.0;
@@ -3130,8 +3336,9 @@ void FixRigid::setup_body_displace(int ibody)
 }
 
 /* ----------------------------------------------------------------------
-   bin bodies by COM, so that the bodies near another body, a grid
-     cell, or a point can be found without a loop over all bodies
+   bin the bodies this proc holds by COM, so that the bodies near
+     another body, a grid cell, or a point can be found without a loop
+     over all of them
    bin edge lengths are at least the largest body diameter plus the
      push-off cutoff, so a body in contact with another or overlapping a
      query box is never further than one bin away from it
@@ -3185,7 +3392,8 @@ void FixRigid::body_bins()
     if (pass == 0)
       for (i = 0; i <= nbins; i++) bodybinstart[i] = 0;
 
-    for (i = 0; i < nbody; i++) {
+    for (int m = 0; m < nblist; m++) {
+      i = blist[m];
       for (k = 0; k < 3; k++) {
         ib[k] = (int) ((xcm[i][k]-bodybinlo[k]) * bodybininv[k]);
         ib[k] = MAX(0,MIN(ib[k],bodynbin[k]-1));
@@ -3346,6 +3554,18 @@ void FixRigid::grid_rebuild()
 void FixRigid::grid_changed()
 {
   remap->grid_changed();
+
+  // cells moved: proc boxes and ownership re-decided before the
+  //   distributed-surf block asks which bodies this proc holds
+
+  if (bodymode == OWNED) {
+    if (!grid->clumped)
+      error->all(FLERR,"Fix rigid bodies owned requires a clumped grid "
+                 "decomposition");
+    proc_boxes();
+  }
+
+  body_status();
 
   // distributed surfs: the local surf arrays were rebuilt, so
   //   re-establish this fix's local body-surf copies and the per-surf
