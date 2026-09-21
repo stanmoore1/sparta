@@ -1,0 +1,42 @@
+Kokkos kernel and copy census
+=============================
+
+A Kokkos Tools library which counts and times every kernel launch by
+name and every host-device copy by the labels of the two views, and a
+script which turns two runs of different length into per-step numbers.
+It needs no change to SPARTA: any KOKKOS build with Kokkos_ENABLE_LIBDL
+(the default) loads it through the KOKKOS_TOOLS_LIBS variable.
+
+Build the tool once:
+
+    g++ -shared -fPIC -O2 -o kp_count.so kp_count.cpp
+
+Run the input for N and for 2N steps with the tool loaded:
+
+    KOKKOS_TOOLS_LIBS=/path/kp_count.so KP_COUNT_OUT=r40.txt \
+        spa_kokkos_cuda -k on g 1 -sf kk -in in.bench40
+    KOKKOS_TOOLS_LIBS=/path/kp_count.so KP_COUNT_OUT=r80.txt \
+        spa_kokkos_cuda -k on g 1 -sf kk -in in.bench80
+
+    python3 perstep.py r40.txt r80.txt 40
+
+The difference of the two runs divided by the step difference is the
+per-step count, which cancels setup and post-run.  Under MPI every rank
+writes its own report, KP_COUNT_OUT with the rank appended.
+
+Environment variables the tool reads:
+
+    KP_COUNT_OUT   report file (stderr when unset)
+    KP_COUNT_BT    a substring of a view label: every copy of a view whose
+                   label contains it is also keyed by the SPARTA routines on
+                   its call stack, so the copies of one array (for example
+                   particle:particles) are attributed to their callers.
+                   Needs a build with symbols (-g or -rdynamic).
+
+Report format: one line per kernel, "K count seconds name", and one per
+copy, "C count MB dst <- src".  A kernel's name is the label given to its
+parallel_for/scan/reduce, or the type of its functor or lambda when it has
+none.  The seconds are host wall time between the begin and end callbacks:
+on a GPU that is launch time for asynchronous kernels unless the run
+fences after them, so use the counts and the copy volumes on a GPU, and the
+times on a CPU backend.
