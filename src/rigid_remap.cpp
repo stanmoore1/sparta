@@ -582,6 +582,7 @@ int RigidRemap::recut()
   double tlists = 0.0;
   double tcmp = 0.0;
   double tcut = 0.0;
+  bigint nskip = 0;
 
   // pass 1: re-cut cells in R whose surf overlap changed
   //   or which are overlapped by a moved body surf (from any body)
@@ -599,6 +600,7 @@ int RigidRemap::recut()
     surfint *cur = cells[icell].csurfs;
     for (i = 0; i < cells[icell].nsurf; i++)
       if (rigidmap[cur[i]] < 0) reclist[ncand++] = cur[i];
+    int nstatic = ncand;
 
     // only bodies whose bounding box overlaps this cell contribute
     //   candidates: bbodylo/bbodyhi bound every element of the body at
@@ -661,6 +663,17 @@ int RigidRemap::recut()
           if (box_overlap(fix->elemlo[i],fix->elemhi[i],clo2,chi2))
             reclist[ncand++] = lblist[i];
       }
+    }
+
+    // a cell whose list is all static and which no body element box
+    //   reaches keeps exactly that list: the static surfs are in it
+    //   because the same exact test put them there and they have not
+    //   moved, so the test below would return them in the same order
+
+    if (ncand == nstatic && nstatic == cells[icell].nsurf) {
+      nskip++;
+      if (timeflag) tlists += MPI_Wtime() - tstart;
+      continue;
     }
 
     // new list of surfs overlapping this cell
@@ -780,6 +793,7 @@ int RigidRemap::recut()
 
   if (timeflag) {
     fix->add_count(FixRigid::C_CAND,nrcand);
+    fix->add_count(FixRigid::C_CANDSKIP,nskip);
     fix->add_count(FixRigid::C_LISTCH,nlist_run-list0);
     fix->add_count(FixRigid::C_CUT,ncut_run-cut0);
     fix->add_count(FixRigid::C_PENDING,npending);

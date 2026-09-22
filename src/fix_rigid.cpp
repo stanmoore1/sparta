@@ -1636,8 +1636,9 @@ void FixRigid::post_run()
 
   const char *cnames[C_NCOUNT] =
     {"particles tested","particles deleted","candidate cells",
-     "lists changed","cells cut","pending splits","(body,cell) pairs",
-     "element box tests","swept cells","swept entries","cells with extras"};
+     "candidates no body reaches","lists changed","cells cut",
+     "pending splits","(body,cell) pairs","element box tests",
+     "swept cells","swept entries","cells with extras"};
   bigint csum[C_NCOUNT];
   MPI_Allreduce(stagecount,csum,C_NCOUNT,MPI_SPARTA_BIGINT,MPI_SUM,world);
   bigint nstep = all[0];

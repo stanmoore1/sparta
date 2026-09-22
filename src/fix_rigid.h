@@ -394,8 +394,8 @@ class FixRigid : public Fix {
 
   // per-run counts of the work each stage did, printed with the timers
 
-  enum{C_PTEST,C_PDEL,C_CAND,C_LISTCH,C_CUT,C_PENDING,C_BODYCELL,C_ELEMBOX,
-       C_SWCELL,C_SWENT,C_SWEXTRA,C_NCOUNT};
+  enum{C_PTEST,C_PDEL,C_CAND,C_CANDSKIP,C_LISTCH,C_CUT,C_PENDING,
+       C_BODYCELL,C_ELEMBOX,C_SWCELL,C_SWENT,C_SWEXTRA,C_NCOUNT};
 
   int timeflag;
   double stagetime[T_NSTAGE];
