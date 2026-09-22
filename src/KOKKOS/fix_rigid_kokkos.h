@@ -40,6 +40,7 @@ struct TagFixRigidRelabel{};
 struct TagFixRigidGeometry{};
 struct TagFixRigidBodyBox{};
 struct TagFixRigidInflate{};
+struct TagFixRigidGroupBox{};
 struct TagFixRigidScatterSurfs{};
 
 class FixRigidKokkos : public FixRigid {
@@ -117,6 +118,9 @@ class FixRigidKokkos : public FixRigid {
   void operator()(TagFixRigidBodyBox, const int&) const;
   KOKKOS_INLINE_FUNCTION
   void operator()(TagFixRigidInflate, const int&) const;
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()(TagFixRigidGroupBox, const int&) const;
   KOKKOS_INLINE_FUNCTION
   void operator()(TagFixRigidScatterSurfs, const int&) const;
 
@@ -186,6 +190,7 @@ class FixRigidKokkos : public FixRigid {
 
   tdual_dbl_3d::t_dev d_displace_kk,d_bodypt_kk;
   tdual_dbl_2d::t_dev d_bodynorm_kk,d_elemlo_kk,d_elemhi_kk,d_pose_kk;
+  tdual_dbl_2d::t_dev d_elemglo_kk,d_elemghi_kk,d_glonew_kk,d_ghinew_kk;
   tdual_dbl_2d::t_dev d_bbodylo_kk,d_bbodyhi_kk;
   tdual_dbl_1d::t_dev d_bboxeps_kk;
   tdual_dbl_3d::t_dev d_ptnew_kk;
@@ -197,6 +202,7 @@ class FixRigidKokkos : public FixRigid {
   DAT::t_int_1d d_body_kk,d_bodystart_kk,d_copy_index_kk,d_copy_elem_kk;
   DAT::t_int_1d d_olist_own_kk,d_olist_elem_kk;
   DAT::t_int_1d d_blist_kk,d_lelem_kk,d_bodystat_kk;
+  DAT::t_int_1d d_lgroup_kk,d_groupelem_kk;
   t_line_1d d_mylines_kk;
   t_tri_1d d_mytris_kk;
   int nscatter_kk;              // the local copies come first in the scatter
@@ -293,6 +299,14 @@ class FixRigidKokkos : public FixRigid {
   tdual_dbl_2d k_bbodylo,k_bbodyhi;
   tdual_dbl_2d k_elemlo,k_elemhi;
 
+  // a box per group of elements, the device twin of FixRigid's: the
+  //   per-cell scans of the remap skip a group whose box misses the
+  //   cell.  groupelem is the element range of each group, a CSR over
+  //   all bodies since the groups of a body partition its elements
+
+  tdual_dbl_2d k_elemglo,k_elemghi;
+  DAT::tdual_int_1d k_groupstart,k_groupelem;
+
   // the end-of-step geometry the sweep pass computes on its way to the
   //   swept boxes, committed by a handle swap in set_xv(): the geometry
   //   kernels run once per step, not twice
@@ -302,6 +316,7 @@ class FixRigidKokkos : public FixRigid {
   tdual_dbl_2d k_bodynorm_new;
   tdual_dbl_2d k_bbodylo_new,k_bbodyhi_new;
   tdual_dbl_2d k_elemlo_new,k_elemhi_new;
+  tdual_dbl_2d k_elemglo_new,k_elemghi_new;
   tdual_dbl_1d k_bboxeps_new;
   tdual_dbl_2d k_bbox,k_bbox_new;
   int newgeom;            // 1 if a sweep left an end-of-step geometry
@@ -313,7 +328,7 @@ class FixRigidKokkos : public FixRigid {
   //   blistgen moved.  the new-ghost pre-pass runs the same kernels
   //   over its own short lists
 
-  DAT::tdual_int_1d k_blist,k_lelem,k_bodystat;
+  DAT::tdual_int_1d k_blist,k_lelem,k_bodystat,k_lgroup;
 
   // the surf copies of the bodies this proc holds, in the scatter's own
   //   numbering: the copies come first, the owned surfs of distributed
@@ -322,9 +337,10 @@ class FixRigidKokkos : public FixRigid {
 
   DAT::tdual_int_1d k_lcopy;
   int nlcopy_kk;
-  DAT::tdual_int_1d k_newblist,k_newelem;
+  DAT::tdual_int_1d k_newblist,k_newelem,k_newgroup;
   int blistgen_kk;              // blistgen of the last upload, -1 = none
   int nlelem_kk;                // # of elements of the blist bodies
+  int nlgroup_kk;               // # of their element groups
 
   int nelem_kk;                 // # of body elements packed
   int nbin_kk;                  // # of body bins packed

@@ -261,15 +261,24 @@ void RigidRemapKokkos::collision_lists()
         const double *clo = d_cells[icell].lo;
         const double *chi = d_cells[icell].hi;
         if (!body.box_overlap(ibody,clo,chi)) continue;
+
+        // the elements are scanned a group at a time; the groups are
+        //   consecutive element ranges, so the hits are recorded in
+        //   ascending element order either way
+
         int n = 0;
-        for (int e = body.d_bodystart(ibody); e < body.d_bodystart(ibody+1); e++) {
-          if (!body.elem_overlap(e,clo,chi)) continue;
-          const int h = Kokkos::atomic_fetch_add(&d_nhit(),1);
-          if (h < maxhit) {
-            d_hitcell(h) = icell;
-            d_hitelem(h) = e;
+        for (int g = body.d_groupstart(ibody); g < body.d_groupstart(ibody+1);
+             g++) {
+          if (!body.group_overlap(g,clo,chi)) continue;
+          for (int e = body.d_groupelem(g); e < body.d_groupelem(g+1); e++) {
+            if (!body.elem_overlap(e,clo,chi)) continue;
+            const int h = Kokkos::atomic_fetch_add(&d_nhit(),1);
+            if (h < maxhit) {
+              d_hitcell(h) = icell;
+              d_hitelem(h) = e;
+            }
+            n++;
           }
-          n++;
         }
         if (!n) continue;
         const int old = Kokkos::atomic_fetch_add(&d_swcount(icell),n);
@@ -784,12 +793,17 @@ int RigidRemapKokkos::recut()
             const double rmin = d_bodyparam(ib,12) - d_bodyparam(ib,14);
             if (rmin > 0.0 && dhi2 < rmin*rmin) continue;
 
-            for (int e = body.d_bodystart(ib); e < body.d_bodystart(ib+1); e++) {
-              if (!body.elem_overlap(e,clo,chi)) continue;
-              const int s = body.d_lblist(e);
-              if (surf_in_cell(s,clo,chi)) {
-                if (n < maxsurf) newlist[n] = s;
-                n++;
+            for (int g = body.d_groupstart(ib); g < body.d_groupstart(ib+1);
+                 g++) {
+              if (!body.group_overlap(g,clo,chi)) continue;
+              for (int e = body.d_groupelem(g); e < body.d_groupelem(g+1);
+                   e++) {
+                if (!body.elem_overlap(e,clo,chi)) continue;
+                const int s = body.d_lblist(e);
+                if (surf_in_cell(s,clo,chi)) {
+                  if (n < maxsurf) newlist[n] = s;
+                  n++;
+                }
               }
             }
           }

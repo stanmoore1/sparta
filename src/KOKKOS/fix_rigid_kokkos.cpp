@@ -78,6 +78,7 @@ FixRigidKokkos::FixRigidKokkos(SPARTA *sparta, int narg, char **arg) :
   ncopy_kk = nolist_kk = 0;
   blistgen_kk = -1;
   nlelem_kk = 0;
+  nlgroup_kk = 0;
   devicegeom = 0;
   newgeom = 0;
   nlcopy_kk = 0;
@@ -405,17 +406,23 @@ void FixRigidKokkos::newghost_geometry()
     k_newblist = DAT::tdual_int_1d("fix_rigid:newblist",nbody);
   if ((int) k_newelem.extent(0) < nelem)
     k_newelem = DAT::tdual_int_1d("fix_rigid:newelem",nelem);
+  if ((int) k_newgroup.extent(0) < groupstart[nbody])
+    k_newgroup = DAT::tdual_int_1d("fix_rigid:newgroup",groupstart[nbody]);
 
   auto h_newblist = k_newblist.view_host();
   auto h_newelem = k_newelem.view_host();
+  auto h_newgroup = k_newgroup.view_host();
   auto h_pose = k_pose.view_host();
 
   double ex[3],ey[3],ez[3];
   int n = 0;
+  int ng = 0;
   for (int m = 0; m < nnewghost; m++) {
     const int ib = newghost[m];
     h_newblist(m) = ib;
     for (int i = bodystart[ib]; i < bodystart[ib+1]; i++) h_newelem(n++) = i;
+    for (int g = groupstart[ib]; g < groupstart[ib+1]; g++)
+      h_newgroup(ng++) = g;
 
     MathExtra::q_to_exyz(quat[ib],ex,ey,ez);
     for (int k = 0; k < 3; k++) {
@@ -429,11 +436,13 @@ void FixRigidKokkos::newghost_geometry()
   }
   k_newblist.modify_host(); k_newblist.sync_device();
   k_newelem.modify_host(); k_newelem.sync_device();
+  k_newgroup.modify_host(); k_newgroup.sync_device();
   k_pose.modify_host(); k_pose.sync_device();
 
   geometry_views();
   d_blist_kk = k_newblist.view_device();
   d_lelem_kk = k_newelem.view_device();
+  d_lgroup_kk = k_newgroup.view_device();
   sweep_kk = 0;
   axiflag_kk = axiflag;
   dim_kk = dim;
@@ -446,6 +455,8 @@ void FixRigidKokkos::newghost_geometry()
     Kokkos::RangePolicy<DeviceType,TagFixRigidBodyBox>(0,nnewghost),*this);
   Kokkos::parallel_for(
     Kokkos::RangePolicy<DeviceType,TagFixRigidInflate>(0,n),*this);
+  Kokkos::parallel_for(
+    Kokkos::RangePolicy<DeviceType,TagFixRigidGroupBox>(0,ng),*this);
   copymode = 0;
 
   // the host copy of a body regenerated here is stale
@@ -530,6 +541,15 @@ void FixRigidKokkos::pack_body_static()
     k_elemhi_new = tdual_dbl_2d("fix_rigid:elemhi_new",nelem,3);
     k_lblist = DAT::tdual_int_1d("fix_rigid:lblist",nelem);
     nelem_kk = nelem;
+
+    const int ngroup = groupstart[nbody];
+    k_elemglo = tdual_dbl_2d("fix_rigid:elemglo",ngroup,3);
+    k_elemghi = tdual_dbl_2d("fix_rigid:elemghi",ngroup,3);
+    k_elemglo_new = tdual_dbl_2d("fix_rigid:elemglo_new",ngroup,3);
+    k_elemghi_new = tdual_dbl_2d("fix_rigid:elemghi_new",ngroup,3);
+    k_lgroup = DAT::tdual_int_1d("fix_rigid:lgroup",ngroup);
+    k_groupstart = DAT::tdual_int_1d("fix_rigid:groupstart",nbody+1);
+    k_groupelem = DAT::tdual_int_1d("fix_rigid:groupelem",ngroup+1);
   }
   if (ncopy > ncopy_kk) {
     k_copy_index = DAT::tdual_int_1d("fix_rigid:copy_index",ncopy);
@@ -596,6 +616,23 @@ void FixRigidKokkos::pack_body_static()
   for (int ib = 0; ib <= nbody; ib++) h_bodystart(ib) = bodystart[ib];
   k_bodystart.modify_host(); k_bodystart.sync_device();
 
+  // the grouping is fixed once the element table is, so it goes up here
+  // the last group of a body ends where the next body starts, so one
+  //   CSR array carries every group's element range
+
+  auto h_groupstart = k_groupstart.view_host();
+  auto h_groupelem = k_groupelem.view_host();
+  for (int ib = 0; ib <= nbody; ib++) h_groupstart(ib) = groupstart[ib];
+  for (int ib = 0; ib < nbody; ib++)
+    for (int g = groupstart[ib]; g < groupstart[ib+1]; g++) {
+      int ilo,ihi;
+      group_range(ib,g,ilo,ihi);
+      h_groupelem(g) = ilo;
+    }
+  h_groupelem(groupstart[nbody]) = bodystart[nbody];
+  k_groupstart.modify_host(); k_groupstart.sync_device();
+  k_groupelem.modify_host(); k_groupelem.sync_device();
+
   // the element ranges may have moved under the local lists
 
   blistgen_kk = -1;
@@ -627,6 +664,16 @@ void FixRigidKokkos::pack_body_geometry()
   k_bodynorm.modify_host(); k_bodynorm.sync_device();
   k_elemlo.modify_host(); k_elemlo.sync_device();
   k_elemhi.modify_host(); k_elemhi.sync_device();
+
+  auto h_elemglo = k_elemglo.view_host();
+  auto h_elemghi = k_elemghi.view_host();
+  for (int g = 0; g < groupstart[nbody]; g++)
+    for (int k = 0; k < 3; k++) {
+      h_elemglo(g,k) = elemglo[g][k];
+      h_elemghi(g,k) = elemghi[g][k];
+    }
+  k_elemglo.modify_host(); k_elemglo.sync_device();
+  k_elemghi.modify_host(); k_elemghi.sync_device();
 
   auto h_bbodylo = k_bbodylo.view_host();
   auto h_bbodyhi = k_bbodyhi.view_host();
@@ -666,15 +713,19 @@ void FixRigidKokkos::pack_body_lists()
 
   auto h_blist = k_blist.view_host();
   auto h_lelem = k_lelem.view_host();
+  auto h_lgroup = k_lgroup.view_host();
   auto h_bodystat = k_bodystat.view_host();
 
   int n = 0;
+  int ng = 0;
   for (int m = 0; m < nblist; m++) {
     const int ib = blist[m];
     h_blist(m) = ib;
     for (int i = bodystart[ib]; i < bodystart[ib+1]; i++) h_lelem(n++) = i;
+    for (int g = groupstart[ib]; g < groupstart[ib+1]; g++) h_lgroup(ng++) = g;
   }
   nlelem_kk = n;
+  nlgroup_kk = ng;
 
   // the kernels read the status only for the FAR test, which is exactly
   //   membership of blist, so blistgen covers it
@@ -698,6 +749,7 @@ void FixRigidKokkos::pack_body_lists()
 
   k_blist.modify_host(); k_blist.sync_device();
   k_lelem.modify_host(); k_lelem.sync_device();
+  k_lgroup.modify_host(); k_lgroup.sync_device();
   k_bodystat.modify_host(); k_bodystat.sync_device();
   k_lcopy.modify_host(); k_lcopy.sync_device();
 
@@ -726,6 +778,11 @@ void FixRigidKokkos::geometry_views()
   d_normnew_kk = k_bodynorm_new.view_device();
   d_ellonew_kk = k_elemlo_new.view_device();
   d_elhinew_kk = k_elemhi_new.view_device();
+  d_elemglo_kk = k_elemglo.view_device();
+  d_elemghi_kk = k_elemghi.view_device();
+  d_glonew_kk = k_elemglo_new.view_device();
+  d_ghinew_kk = k_elemghi_new.view_device();
+  d_groupelem_kk = k_groupelem.view_device();
   d_bblonew_kk = k_bbodylo_new.view_device();
   d_bbhinew_kk = k_bbodyhi_new.view_device();
   d_bbepsnew_kk = k_bboxeps_new.view_device();
@@ -768,6 +825,7 @@ void FixRigidKokkos::device_geometry(int sweepflag)
   geometry_views();
   d_blist_kk = k_blist.view_device();
   d_lelem_kk = k_lelem.view_device();
+  d_lgroup_kk = k_lgroup.view_device();
   d_copy_index_kk = k_copy_index.view_device();
   d_copy_elem_kk = k_copy_elem.view_device();
   d_lcopy_kk = k_lcopy.view_device();
@@ -795,6 +853,8 @@ void FixRigidKokkos::device_geometry(int sweepflag)
     Kokkos::RangePolicy<DeviceType,TagFixRigidBodyBox>(0,nblist),*this);
   Kokkos::parallel_for(
     Kokkos::RangePolicy<DeviceType,TagFixRigidInflate>(0,nlelem_kk),*this);
+  Kokkos::parallel_for(
+    Kokkos::RangePolicy<DeviceType,TagFixRigidGroupBox>(0,nlgroup_kk),*this);
   if (!sweepflag)
     Kokkos::parallel_for(
       Kokkos::RangePolicy<DeviceType,TagFixRigidScatterSurfs>(0,nlcopy_kk),
@@ -863,6 +923,8 @@ void FixRigidKokkos::commit_geometry()
   std::swap(k_bodynorm,k_bodynorm_new);
   std::swap(k_elemlo,k_elemlo_new);
   std::swap(k_elemhi,k_elemhi_new);
+  std::swap(k_elemglo,k_elemglo_new);
+  std::swap(k_elemghi,k_elemghi_new);
   std::swap(k_bbodylo,k_bbodylo_new);
   std::swap(k_bbodyhi,k_bbodyhi_new);
   std::swap(k_bboxeps,k_bboxeps_new);
@@ -1139,6 +1201,52 @@ void FixRigidKokkos::operator()(TagFixRigidInflate, const int &m) const
   for (int k = 0; k < 3; k++) {
     d_ellonew_kk(i,k) -= epsnew;
     d_elhinew_kk(i,k) += epsnew;
+  }
+}
+
+/* ----------------------------------------------------------------------
+   one thread per element group of a body this proc holds: the box
+     around its elements' boxes, the twin of the loop which closes
+     FixRigid::body_bbox()
+   runs after the inflation, so a group box contains the inflated boxes
+------------------------------------------------------------------------- */
+
+KOKKOS_INLINE_FUNCTION
+void FixRigidKokkos::operator()(TagFixRigidGroupBox, const int &m) const
+{
+  const int g = d_lgroup_kk(m);
+  const int ilo = d_groupelem_kk(g);
+  const int ihi = d_groupelem_kk(g+1);
+
+  double glo[3],ghi[3];
+  for (int k = 0; k < 3; k++) {
+    glo[k] = BIG;
+    ghi[k] = -BIG;
+  }
+  for (int i = ilo; i < ihi; i++)
+    for (int k = 0; k < 3; k++) {
+      glo[k] = MIN(glo[k],d_elemlo_kk(i,k));
+      ghi[k] = MAX(ghi[k],d_elemhi_kk(i,k));
+    }
+  for (int k = 0; k < 3; k++) {
+    d_elemglo_kk(g,k) = glo[k];
+    d_elemghi_kk(g,k) = ghi[k];
+  }
+
+  if (!sweep_kk) return;
+
+  for (int k = 0; k < 3; k++) {
+    glo[k] = BIG;
+    ghi[k] = -BIG;
+  }
+  for (int i = ilo; i < ihi; i++)
+    for (int k = 0; k < 3; k++) {
+      glo[k] = MIN(glo[k],d_ellonew_kk(i,k));
+      ghi[k] = MAX(ghi[k],d_elhinew_kk(i,k));
+    }
+  for (int k = 0; k < 3; k++) {
+    d_glonew_kk(g,k) = glo[k];
+    d_ghinew_kk(g,k) = ghi[k];
   }
 }
 
@@ -1806,6 +1914,10 @@ void FixRigidKokkos::pack_body_device()
   body.d_bodynorm = k_bodynorm.view_device();
   body.d_elemlo = k_elemlo.view_device();
   body.d_elemhi = k_elemhi.view_device();
+  body.d_elemglo = k_elemglo.view_device();
+  body.d_elemghi = k_elemghi.view_device();
+  body.d_groupstart = k_groupstart.view_device();
+  body.d_groupelem = k_groupelem.view_device();
   body.d_bbodylo = k_bbodylo.view_device();
   body.d_bbodyhi = k_bbodyhi.view_device();
   body.d_bodystart = k_bodystart.view_device();

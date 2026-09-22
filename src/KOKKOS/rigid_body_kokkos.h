@@ -41,7 +41,10 @@ struct RigidBodyKK {
   tdual_dbl_2d::t_dev d_bodynorm;     // outward normal of each element
   tdual_dbl_2d::t_dev d_elemlo,d_elemhi;    // box of each element
   tdual_dbl_2d::t_dev d_bbodylo,d_bbodyhi;  // bbox of each body
+  tdual_dbl_2d::t_dev d_elemglo,d_elemghi;  // box of each element group
   DAT::t_int_1d d_bodystart;          // elements of body I = start[I]..start[I+1]-1
+  DAT::t_int_1d d_groupstart;         // groups of body I = start[I]..start[I+1]-1
+  DAT::t_int_1d d_groupelem;          // elements of group G = elem[G]..elem[G+1]-1
   DAT::t_int_1d d_lblist;             // local surf index of each element
   DAT::t_int_1d d_binstart,d_binlist; // bins of bodies by COM
   int nbin[3];
@@ -69,6 +72,19 @@ struct RigidBodyKK {
     if (d_bbodyhi(ibody,0) < lo[0] || d_bbodylo(ibody,0) > hi[0]) return 0;
     if (d_bbodyhi(ibody,1) < lo[1] || d_bbodylo(ibody,1) > hi[1]) return 0;
     if (d_bbodyhi(ibody,2) < lo[2] || d_bbodylo(ibody,2) > hi[2]) return 0;
+    return 1;
+  }
+
+  // 1 if the box of element group g overlaps the box
+  // a group box contains its elements' boxes, so a group it rejects
+  //   holds no element which reaches the box
+
+  KOKKOS_INLINE_FUNCTION
+  int group_overlap(int g, const double *lo, const double *hi) const
+  {
+    if (d_elemghi(g,0) < lo[0] || d_elemglo(g,0) > hi[0]) return 0;
+    if (d_elemghi(g,1) < lo[1] || d_elemglo(g,1) > hi[1]) return 0;
+    if (d_elemghi(g,2) < lo[2] || d_elemglo(g,2) > hi[2]) return 0;
     return 1;
   }
 
