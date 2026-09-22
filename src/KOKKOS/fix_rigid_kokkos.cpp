@@ -80,6 +80,7 @@ FixRigidKokkos::FixRigidKokkos(SPARTA *sparta, int narg, char **arg) :
   nlelem_kk = 0;
   devicegeom = 0;
   newgeom = 0;
+  nlcopy_kk = 0;
   maxdelete_kk = 0;
   d_ndelete_kk = DAT::t_int_scalar("fix_rigid:ndelete");
   h_ndelete_kk = Kokkos::create_mirror_view(d_ndelete_kk);
@@ -680,9 +681,25 @@ void FixRigidKokkos::pack_body_lists()
 
   for (int ib = 0; ib < nbody; ib++) h_bodystat(ib) = bodystatus[ib];
 
+  // the scatter's copies of those bodies, in its own numbering
+
+  const int nown = surf->distributed ? nolist : 0;
+  if ((int) k_lcopy.extent(0) < ncopy+nown)
+    k_lcopy = DAT::tdual_int_1d("fix_rigid:lcopy",ncopy+nown);
+  auto h_lcopy = k_lcopy.view_host();
+
+  n = 0;
+  for (int m = 0; m < ncopy; m++)
+    if (bodystatus[FixRigid::body[copy_elem[m]]] != FARBODY) h_lcopy(n++) = m;
+  for (int m = 0; m < nown; m++)
+    if (bodystatus[FixRigid::body[olist_elem[m]]] != FARBODY)
+      h_lcopy(n++) = ncopy + m;
+  nlcopy_kk = n;
+
   k_blist.modify_host(); k_blist.sync_device();
   k_lelem.modify_host(); k_lelem.sync_device();
   k_bodystat.modify_host(); k_bodystat.sync_device();
+  k_lcopy.modify_host(); k_lcopy.sync_device();
 
   blistgen_kk = blistgen;
 }
@@ -753,6 +770,7 @@ void FixRigidKokkos::device_geometry(int sweepflag)
   d_lelem_kk = k_lelem.view_device();
   d_copy_index_kk = k_copy_index.view_device();
   d_copy_elem_kk = k_copy_elem.view_device();
+  d_lcopy_kk = k_lcopy.view_device();
   SurfKokkos *surf_kk = (SurfKokkos*) surf;
   if (dim == 2) d_lines_kk = surf_kk->k_lines.view_device();
   else d_tris_kk = surf_kk->k_tris.view_device();
@@ -779,7 +797,7 @@ void FixRigidKokkos::device_geometry(int sweepflag)
     Kokkos::RangePolicy<DeviceType,TagFixRigidInflate>(0,nlelem_kk),*this);
   if (!sweepflag)
     Kokkos::parallel_for(
-      Kokkos::RangePolicy<DeviceType,TagFixRigidScatterSurfs>(0,ncopy+nowned),
+      Kokkos::RangePolicy<DeviceType,TagFixRigidScatterSurfs>(0,nlcopy_kk),
       *this);
   copymode = 0;
 
@@ -854,6 +872,7 @@ void FixRigidKokkos::commit_geometry()
   geometry_views();
   d_copy_index_kk = k_copy_index.view_device();
   d_copy_elem_kk = k_copy_elem.view_device();
+  d_lcopy_kk = k_lcopy.view_device();
   SurfKokkos *surf_kk = (SurfKokkos*) surf;
   if (dim == 2) d_lines_kk = surf_kk->k_lines.view_device();
   else d_tris_kk = surf_kk->k_tris.view_device();
@@ -870,7 +889,7 @@ void FixRigidKokkos::commit_geometry()
 
   copymode = 1;
   Kokkos::parallel_for(
-    Kokkos::RangePolicy<DeviceType,TagFixRigidScatterSurfs>(0,ncopy+nowned),
+    Kokkos::RangePolicy<DeviceType,TagFixRigidScatterSurfs>(0,nlcopy_kk),
     *this);
   copymode = 0;
 
@@ -1132,8 +1151,9 @@ void FixRigidKokkos::operator()(TagFixRigidInflate, const int &m) const
 ------------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-void FixRigidKokkos::operator()(TagFixRigidScatterSurfs, const int &m) const
+void FixRigidKokkos::operator()(TagFixRigidScatterSurfs, const int &n) const
 {
+  const int m = d_lcopy_kk(n);
   if (m < nscatter_kk) {
     const int index = d_copy_index_kk(m);
     const int i = d_copy_elem_kk(m);

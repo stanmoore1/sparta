@@ -193,6 +193,7 @@ class FixRigidKokkos : public FixRigid {
   tdual_dbl_2d::t_dev d_bblonew_kk,d_bbhinew_kk;
   tdual_dbl_1d::t_dev d_bbepsnew_kk;
   tdual_dbl_2d::t_dev d_bbox_kk,d_bboxnew_kk;
+  DAT::t_int_1d d_lcopy_kk;
   DAT::t_int_1d d_body_kk,d_bodystart_kk,d_copy_index_kk,d_copy_elem_kk;
   DAT::t_int_1d d_olist_own_kk,d_olist_elem_kk;
   DAT::t_int_1d d_blist_kk,d_lelem_kk,d_bodystat_kk;
@@ -313,6 +314,14 @@ class FixRigidKokkos : public FixRigid {
   //   over its own short lists
 
   DAT::tdual_int_1d k_blist,k_lelem,k_bodystat;
+
+  // the surf copies of the bodies this proc holds, in the scatter's own
+  //   numbering: the copies come first, the owned surfs of distributed
+  //   surfs after them.  the surf arrays span every body, so without
+  //   this the scatter is a pass over all of them on every proc
+
+  DAT::tdual_int_1d k_lcopy;
+  int nlcopy_kk;
   DAT::tdual_int_1d k_newblist,k_newelem;
   int blistgen_kk;              // blistgen of the last upload, -1 = none
   int nlelem_kk;                // # of elements of the blist bodies
