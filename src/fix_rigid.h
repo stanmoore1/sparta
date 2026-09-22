@@ -92,6 +92,7 @@ class FixRigid : public Fix {
                                 //   returns 1 if surf arrays were changed
   void proc_bbox();             // bbox of this proc's owned + ghost cells
   void proc_boxes();            // every proc's owned and owned+ghost bboxes
+  void neighbor_list();         // owned: procs a body exchange can reach
   int body_owner(double *);     // rank which owns a body at this COM
   void body_status(int = 0);    // body ownership/status and the loop lists
                                 //   1 = every proc holds every body
@@ -192,7 +193,7 @@ class FixRigid : public Fix {
 
   enum{NBODYDATUM = 63};
   struct BodyDatum { int ibody,pad; double v[NBODYDATUM]; };
-  struct PartDatum { int ibody,rank; double f[6]; };
+  struct PartDatum { int ibody,pad; double f[6]; };
 
   int body_box(double *, double *, int **);  // bodies overlapping a box
   void body_bbox(int, int);     // bbox of body, current or swept over step
@@ -229,15 +230,26 @@ class FixRigid : public Fix {
   double bodycut_user;    // cutoff keyword value, <= 0.0 = use the default
   double rmaxmax;         // max over bodies of rmaxbody, for that default
 
-  // bodies owned: the per-step exchanges and the gathered outputs
+  // bodies owned: the fixed neighbor list both exchanges run over,
+  //   set by proc_boxes() whenever the cells change
+  // the test is symmetric in the two procs, so r is my neighbor exactly
+  //   when I am r's: the exchanges need no handshake
 
-  class Irregular *irregular;   // plan of both exchanges
+  int nneigh;             // procs within bodycut of mine, ascending
+  int *neighlist;         // their ranks, excluding me
+  int *neighslot;         // nprocs: rank -> slot, -1 if not a neighbor
+
+  // bodies owned: the per-step exchanges and the gathered outputs
+  // records are bucketed by neighbor slot, so the receive buffer is
+  //   laid out in ascending source rank
+
   BodyDatum *bodysend,*bodyrecv;
-  int *bodydest;          // destination proc of each forward record
   int maxbodysend,maxbodyrecv;
   PartDatum *partsend,*partrecv;
-  int *partdest;          // owner of each reverse record
   int maxpartsend,maxpartrecv;
+  int *nsendslot,*nrecvslot;   // records exchanged with each neighbor
+  int *sendoffset,*recvoffset; // first record of each slot in the buffers
+  MPI_Request *neighreq;       // 2*nneigh, both rounds of an exchange
   int *gathernum;         // records each proc contributes to gather_all()
   int *gathercount;       // and the byte counts/displacements of them
   int *gatherdispl;
@@ -245,6 +257,8 @@ class FixRigid : public Fix {
 
   void pack_datum(int, BodyDatum &);
   void unpack_datum(const BodyDatum &);
+  int neighbor_counts(int);     // trade the per-slot record counts
+  void neighbor_data(char *, char *, int, int);   // trade the records
   void exchange_forward();      // owner -> holders, after the integration
   void exchange_reverse();      // ghost partial sums -> owner
   virtual void newghost_geometry();  // start-of-step geometry of
@@ -343,8 +357,9 @@ class FixRigid : public Fix {
   // the helper classes time their own sections with add_time()
 
  public:
-  enum{T_INTEGRATE,T_COPIES,T_COLLIDELIST,T_COLL_ENUM,T_COLL_MERGE,
-       T_COLL_RESET,T_TALLY,T_FORCES,T_SETXV,T_CONTACT,
+  enum{T_INTEGRATE,T_INTEG_EX,T_COPIES,T_COLLIDELIST,T_COLL_ENUM,
+       T_COLL_MERGE,T_COLL_RESET,T_TALLY,
+       T_FORCES,T_FORCE_TALLY,T_FORCE_EX,T_SETXV,T_CONTACT,
        T_RECUT,T_RECUT_CAND,T_RECUT_LISTS,T_RECUT_CMP,T_RECUT_CUT,
        T_RECUT_TYPE,T_RECUT_RED,T_RECUT_COMB,
        T_APPLY,T_APPLY_REST,T_APPLY_COUNT,
@@ -488,5 +503,10 @@ E: Fix rigid body moved beyond the bodies cutoff
 With bodies owned, a body may only reach the procs which were sent it,
 which are those within the cutoff of its COM.  Raise the cutoff value of
 the bodies keyword, or lower the timestep.
+
+E: Fix rigid body exchange reached a non-neighbor proc
+
+The body exchanges only reach procs within the bodies cutoff of this one.
+This should not be possible and indicates a bug.
 
 */

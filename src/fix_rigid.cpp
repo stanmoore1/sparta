@@ -30,7 +30,6 @@
 #include "grid.h"
 #include "particle.h"
 #include "comm.h"
-#include "irregular.h"
 #include "output.h"
 #include "modify.h"
 #include "compute.h"
@@ -68,6 +67,8 @@ static const char *warn_text[W_NWARN] = {
 #define EPSENCLOSED 1.0e-8      // min enclosed area/volume, relative
 #define BIG 1.0e20
 #define DELTA_MODIFY 1024
+#define TAG_FORWARD 2   // MPI tags of the body exchanges, counts then data
+#define TAG_REVERSE 4   //   tags 0 and 1 are used with MPI_ANY_SOURCE
 
 enum{INT,DOUBLE};                      // several files
 
@@ -463,17 +464,25 @@ FixRigid::FixRigid(SPARTA *sparta, int narg, char **arg) :
 
   // the body exchanges and the gathered outputs of owned mode
 
-  irregular = NULL;
+  nneigh = 0;
+  neighlist = neighslot = NULL;
   bodysend = bodyrecv = NULL;
-  bodydest = NULL;
   maxbodysend = maxbodyrecv = 0;
   partsend = partrecv = NULL;
-  partdest = NULL;
   maxpartsend = maxpartrecv = 0;
+  nsendslot = nrecvslot = sendoffset = recvoffset = NULL;
+  neighreq = NULL;
   gathernum = gathercount = gatherdispl = NULL;
   gathervalid = -1;
   if (bodymode == OWNED) {
-    irregular = new Irregular(sparta);
+    memory->create(neighlist,comm->nprocs,"fix_rigid:neighlist");
+    memory->create(neighslot,comm->nprocs,"fix_rigid:neighslot");
+    memory->create(nsendslot,comm->nprocs,"fix_rigid:nsendslot");
+    memory->create(nrecvslot,comm->nprocs,"fix_rigid:nrecvslot");
+    memory->create(sendoffset,comm->nprocs,"fix_rigid:sendoffset");
+    memory->create(recvoffset,comm->nprocs,"fix_rigid:recvoffset");
+    neighreq = new MPI_Request[2*comm->nprocs];
+    for (int i = 0; i < comm->nprocs; i++) neighslot[i] = -1;
     memory->create(gathernum,comm->nprocs,"fix_rigid:gathernum");
     memory->create(gathercount,comm->nprocs,"fix_rigid:gathercount");
     memory->create(gatherdispl,comm->nprocs,"fix_rigid:gatherdispl");
@@ -573,13 +582,17 @@ FixRigid::~FixRigid()
   memory->destroy(newghost);
   memory->destroy(ownboxall);
   memory->destroy(procboxall);
-  delete irregular;
+  memory->destroy(neighlist);
+  memory->destroy(neighslot);
   memory->destroy(bodysend);
   memory->destroy(bodyrecv);
-  memory->destroy(bodydest);
   memory->destroy(partsend);
   memory->destroy(partrecv);
-  memory->destroy(partdest);
+  memory->destroy(nsendslot);
+  memory->destroy(nrecvslot);
+  memory->destroy(sendoffset);
+  memory->destroy(recvoffset);
+  delete [] neighreq;
   memory->destroy(gathernum);
   memory->destroy(gathercount);
   memory->destroy(gatherdispl);
@@ -889,7 +902,10 @@ void FixRigid::start_of_step()
   //   start-of-step geometry the swept boxes are built from
 
   if (bodymode == OWNED) {
+    double tex = 0.0;
+    if (timeflag) { stage_fence(); tex = MPI_Wtime(); }
     exchange_forward();
+    if (timeflag) add_time(T_INTEG_EX,MPI_Wtime() - tex);
     body_status();
     newghost_geometry();
   }
@@ -1555,9 +1571,11 @@ void FixRigid::post_run()
   // per-stage times, min/avg/max over procs, sub-timers under their stage
 
   const char *names[T_NSTAGE] =
-    {"integrate+bbox","surf copies","collision lists",
-     "  collision: enumerate","  collision: merge","  collision: reset",
-     "tally","sum forces","set_xv+bounds","contacts+kick",
+    {"integrate+bbox","  integrate: exchange","surf copies",
+     "collision lists","  collision: enumerate","  collision: merge",
+     "  collision: reset","tally",
+     "sum forces","  forces: tallies","  forces: exchange",
+     "set_xv+bounds","contacts+kick",
      "recut","  recut: candidates","  recut: surf lists",
      "  recut: compare","  recut: cuts","  recut: retyping",
      "  recut: reduce","  recut: split combine",
@@ -1701,10 +1719,21 @@ void FixRigid::surf_tally(int isurf, Particle::OnePart *iorig,
 
 void FixRigid::sum_forces()
 {
+  double ttal = 0.0,tex = 0.0;
+  if (timeflag) ttal = MPI_Wtime();
+
   sum_tallies();
+
+  if (timeflag) {
+    stage_fence();
+    tex = MPI_Wtime();
+    add_time(T_FORCE_TALLY,tex - ttal);
+  }
 
   if (bodymode == OWNED) exchange_reverse();
   else MPI_Allreduce(ftbuf_mine,ftbuf_all,6*nbody,MPI_DOUBLE,MPI_SUM,world);
+
+  if (timeflag) add_time(T_FORCE_EX,MPI_Wtime() - tex);
 
   for (int m = 0; m < nown; m++) {
     int ibody = ownlist[m];
@@ -2466,6 +2495,7 @@ void FixRigid::proc_bbox()
    every proc's owned-cell bbox and owned+ghost bbox, allgathered into
      ownboxall/procboxall: the ownership and ghost rules read only
      these and a body's COM, so every proc agrees
+   owned: also the neighbor list both body exchanges run over
 ------------------------------------------------------------------------- */
 
 void FixRigid::proc_boxes()
@@ -2490,6 +2520,42 @@ void FixRigid::proc_boxes()
   }
 
   MPI_Allgather(box,6,MPI_DOUBLE,procboxall,6,MPI_DOUBLE,world);
+
+  if (bodymode == OWNED) neighbor_list();
+}
+
+/* ----------------------------------------------------------------------
+   the procs a body exchange can ever reach: those whose owned+ghost box
+     is within bodycut of mine, plus rank 0, which body_owner() names for
+     a body outside every owned box
+   "within bodycut" is one box inflated by bodycut overlapping the other,
+     which is the same pair of inequalities either way round, and bodycut
+     is identical on every proc: so r is my neighbor exactly when I am
+     r's.  both exchanges depend on that symmetry
+   the boxes change only when the cells do, i.e. only where this is called
+------------------------------------------------------------------------- */
+
+void FixRigid::neighbor_list()
+{
+  int me = comm->me;
+  int nprocs = comm->nprocs;
+  double lo[3],hi[3];
+
+  for (int k = 0; k < 3; k++) {
+    lo[k] = procboxall[6*me+k] - bodycut;
+    hi[k] = procboxall[6*me+3+k] + bodycut;
+  }
+
+  nneigh = 0;
+  for (int iproc = 0; iproc < nprocs; iproc++) {
+    neighslot[iproc] = -1;
+    if (iproc == me) continue;
+    if (iproc != 0 && me != 0 &&
+        !box_overlap(lo,hi,&procboxall[6*iproc],&procboxall[6*iproc+3]))
+      continue;
+    neighslot[iproc] = nneigh;
+    neighlist[nneigh++] = iproc;
+  }
 }
 
 /* ----------------------------------------------------------------------
@@ -2642,22 +2708,114 @@ void FixRigid::unpack_datum(const BodyDatum &datum)
 }
 
 /* ----------------------------------------------------------------------
+   trade the per-slot record counts with every neighbor: every receive is
+     posted before any send, so no message is unexpected and no plan has
+     to be rebuilt
+   lays out recvoffset so slot i holds records [recvoffset[i], +nrecvslot[i])
+     of the receive buffer, i.e. ascending source rank; returns the total
+------------------------------------------------------------------------- */
+
+int FixRigid::neighbor_counts(int tag)
+{
+  for (int i = 0; i < nneigh; i++)
+    MPI_Irecv(&nrecvslot[i],1,MPI_INT,neighlist[i],tag,world,&neighreq[i]);
+  for (int i = 0; i < nneigh; i++)
+    MPI_Isend(&nsendslot[i],1,MPI_INT,neighlist[i],tag,world,
+              &neighreq[nneigh+i]);
+  if (nneigh) MPI_Waitall(2*nneigh,neighreq,MPI_STATUSES_IGNORE);
+
+  int nrecv = 0;
+  for (int i = 0; i < nneigh; i++) {
+    recvoffset[i] = nrecv;
+    nrecv += nrecvslot[i];
+  }
+  return nrecv;
+}
+
+/* ----------------------------------------------------------------------
+   trade the records themselves, both buffers already bucketed by slot
+   a slot with nothing to move in a direction is skipped, so the round
+     costs nothing when no body changes hands
+------------------------------------------------------------------------- */
+
+void FixRigid::neighbor_data(char *sendbuf, char *recvbuf, int nbytes,
+                             int tag)
+{
+  int nreq = 0;
+
+  for (int i = 0; i < nneigh; i++) {
+    if (!nrecvslot[i]) continue;
+    MPI_Irecv(&recvbuf[(size_t) recvoffset[i] * nbytes],
+              nrecvslot[i]*nbytes,MPI_CHAR,neighlist[i],tag,world,
+              &neighreq[nreq++]);
+  }
+  for (int i = 0; i < nneigh; i++) {
+    if (!nsendslot[i]) continue;
+    MPI_Isend(&sendbuf[(size_t) sendoffset[i] * nbytes],
+              nsendslot[i]*nbytes,MPI_CHAR,neighlist[i],tag,world,
+              &neighreq[nreq++]);
+  }
+  if (nreq) MPI_Waitall(nreq,neighreq,MPI_STATUSES_IGNORE);
+}
+
+/* ----------------------------------------------------------------------
    owner -> holder exchange of the bodies, after initial_integrate()
    each owner sends the record of each body it owns to every other proc
      whose owned + ghost cells are within bodycut of the start-of-step
      COM, and to the proc the owner rule names for that COM
    the destinations follow from the COM and the allgathered proc boxes,
      so sender and receiver need no handshake
+   every destination is a neighbor: the COM is in my owned box, and it is
+     within bodycut of the destination's box, so the two boxes are within
+     bodycut of each other
 ------------------------------------------------------------------------- */
 
 void FixRigid::exchange_forward()
 {
   int me = comm->me;
-  int nprocs = comm->nprocs;
   double lo[3],hi[3];
   BodyDatum datum;
 
+  // pass 1: count the records each neighbor slot gets
+
+  for (int i = 0; i < nneigh; i++) nsendslot[i] = 0;
+
+  for (int m = 0; m < nown; m++) {
+    int ibody = ownlist[m];
+    double *x = xcm[ibody];
+    for (int k = 0; k < 3; k++) {
+      lo[k] = x[k] - bodycut;
+      hi[k] = x[k] + bodycut;
+    }
+    int newowner = body_owner(x);
+    if (newowner != me && neighslot[newowner] < 0)
+      error->one(FLERR,
+                 "Fix rigid body exchange reached a non-neighbor proc");
+
+    for (int i = 0; i < nneigh; i++) {
+      int iproc = neighlist[i];
+      if (iproc != newowner &&
+          !box_overlap(lo,hi,&procboxall[6*iproc],&procboxall[6*iproc+3]))
+        continue;
+      nsendslot[i]++;
+    }
+  }
+
+  // prefix offsets; nsendslot is then reused as the per-slot fill cursor
+  //   and ends back at the counts the exchange needs
+
   int nsend = 0;
+  for (int i = 0; i < nneigh; i++) {
+    sendoffset[i] = nsend;
+    nsend += nsendslot[i];
+    nsendslot[i] = 0;
+  }
+  if (nsend > maxbodysend) {
+    maxbodysend = nsend + DELTA_MODIFY;
+    memory->grow(bodysend,maxbodysend,"fix_rigid:bodysend");
+  }
+
+  // pass 2: fill each slot's region of the send buffer
 
   for (int m = 0; m < nown; m++) {
     int ibody = ownlist[m];
@@ -2669,29 +2827,23 @@ void FixRigid::exchange_forward()
     int newowner = body_owner(x);
     pack_datum(ibody,datum);
 
-    for (int iproc = 0; iproc < nprocs; iproc++) {
-      if (iproc == me) continue;
+    for (int i = 0; i < nneigh; i++) {
+      int iproc = neighlist[i];
       if (iproc != newowner &&
           !box_overlap(lo,hi,&procboxall[6*iproc],&procboxall[6*iproc+3]))
         continue;
-      if (nsend == maxbodysend) {
-        maxbodysend += DELTA_MODIFY;
-        memory->grow(bodysend,maxbodysend,"fix_rigid:bodysend");
-        memory->grow(bodydest,maxbodysend,"fix_rigid:bodydest");
-      }
-      memcpy(&bodysend[nsend],&datum,sizeof(BodyDatum));
-      bodydest[nsend] = iproc;
-      nsend++;
+      memcpy(&bodysend[sendoffset[i] + nsendslot[i]++],&datum,
+             sizeof(BodyDatum));
     }
   }
 
-  int nrecv = irregular->create_data_uniform(nsend,bodydest);
+  int nrecv = neighbor_counts(TAG_FORWARD);
   if (nrecv > maxbodyrecv) {
-    maxbodyrecv = nrecv;
+    maxbodyrecv = nrecv + DELTA_MODIFY;
     memory->grow(bodyrecv,maxbodyrecv,"fix_rigid:bodyrecv");
   }
-  irregular->exchange_uniform((char *) bodysend,sizeof(BodyDatum),
-                              (char *) bodyrecv);
+  neighbor_data((char *) bodysend,(char *) bodyrecv,sizeof(BodyDatum),
+                TAG_FORWARD+1);
 
   for (int i = 0; i < nrecv; i++) {
     unpack_datum(bodyrecv[i]);
@@ -2700,62 +2852,72 @@ void FixRigid::exchange_forward()
 }
 
 /* ----------------------------------------------------------------------
-   sort received partial sums by source rank, then body
-------------------------------------------------------------------------- */
-
-static int compare_partials(const void *a, const void *b)
-{
-  const FixRigid::PartDatum *pa = (const FixRigid::PartDatum *) a;
-  const FixRigid::PartDatum *pb = (const FixRigid::PartDatum *) b;
-  if (pa->rank != pb->rank) return pa->rank < pb->rank ? -1 : 1;
-  if (pa->ibody != pb->ibody) return pa->ibody < pb->ibody ? -1 : 1;
-  return 0;
-}
-
-/* ----------------------------------------------------------------------
    ghost -> owner exchange of the per-body partial force/torque sums,
      in place of the Allreduce of replicated mode
    the owner starts from its own partial and adds the received ones in
      source-rank order, so the sum does not depend on message order
+   every owner is a neighbor: it sent me the body
 ------------------------------------------------------------------------- */
 
 void FixRigid::exchange_reverse()
 {
-  int ibody;
+  int ibody,slot;
 
   for (int i = 0; i < 6*nbody; i++) ftbuf_all[i] = 0.0;
 
-  int nsend = 0;
+  // pass 1: one record per ghost body, to its owner's slot
+
+  for (int i = 0; i < nneigh; i++) nsendslot[i] = 0;
 
   for (int m = 0; m < nblist; m++) {
     ibody = blist[m];
     if (bodystatus[ibody] != GHOSTBODY) continue;
-    if (nsend == maxpartsend) {
-      maxpartsend += DELTA_MODIFY;
-      memory->grow(partsend,maxpartsend,"fix_rigid:partsend");
-      memory->grow(partdest,maxpartsend,"fix_rigid:partdest");
-    }
-    partsend[nsend].ibody = ibody;
-    partsend[nsend].rank = comm->me;
-    memcpy(partsend[nsend].f,&ftbuf_mine[6*ibody],6*sizeof(double));
-    partdest[nsend] = bodyowner[ibody];
-    nsend++;
+    slot = neighslot[bodyowner[ibody]];
+    if (slot < 0)
+      error->one(FLERR,
+                 "Fix rigid body exchange reached a non-neighbor proc");
+    nsendslot[slot]++;
   }
 
-  int nrecv = irregular->create_data_uniform(nsend,partdest);
+  int nsend = 0;
+  for (int i = 0; i < nneigh; i++) {
+    sendoffset[i] = nsend;
+    nsend += nsendslot[i];
+    nsendslot[i] = 0;
+  }
+  if (nsend > maxpartsend) {
+    maxpartsend = nsend + DELTA_MODIFY;
+    memory->grow(partsend,maxpartsend,"fix_rigid:partsend");
+  }
+
+  // pass 2: blist is ascending, so a slot's records are too
+
+  for (int m = 0; m < nblist; m++) {
+    ibody = blist[m];
+    if (bodystatus[ibody] != GHOSTBODY) continue;
+    slot = neighslot[bodyowner[ibody]];
+    int j = sendoffset[slot] + nsendslot[slot]++;
+    partsend[j].ibody = ibody;
+    partsend[j].pad = 0;
+    memcpy(partsend[j].f,&ftbuf_mine[6*ibody],6*sizeof(double));
+  }
+
+  int nrecv = neighbor_counts(TAG_REVERSE);
   if (nrecv > maxpartrecv) {
-    maxpartrecv = nrecv;
+    maxpartrecv = nrecv + DELTA_MODIFY;
     memory->grow(partrecv,maxpartrecv,"fix_rigid:partrecv");
   }
-  irregular->exchange_uniform((char *) partsend,sizeof(PartDatum),
-                              (char *) partrecv);
+  neighbor_data((char *) partsend,(char *) partrecv,sizeof(PartDatum),
+                TAG_REVERSE+1);
 
   for (int m = 0; m < nown; m++) {
     ibody = ownlist[m];
     memcpy(&ftbuf_all[6*ibody],&ftbuf_mine[6*ibody],6*sizeof(double));
   }
 
-  if (nrecv > 1) qsort(partrecv,nrecv,sizeof(PartDatum),compare_partials);
+  // the buffer is in ascending source rank, and within a source in
+  //   ascending body index: exactly the order the qsort by (rank, body)
+  //   this replaces produced, so the owner's sums are bit-identical
 
   for (int i = 0; i < nrecv; i++) {
     double *ft = &ftbuf_all[6*partrecv[i].ibody];
@@ -2806,7 +2968,6 @@ void FixRigid::gather_all()
   if (nown > maxbodysend) {
     maxbodysend = nown;
     memory->grow(bodysend,maxbodysend,"fix_rigid:bodysend");
-    memory->grow(bodydest,maxbodysend,"fix_rigid:bodydest");
   }
   for (int m = 0; m < nown; m++) pack_datum(ownlist[m],bodysend[m]);
 
@@ -4821,6 +4982,10 @@ double FixRigid::memory_usage()
 
   bytes += (double) nbody * (3*sizeof(int) + sizeof(bigint));
   bytes += (double) 12 * comm->nprocs * sizeof(double);   // proc boxes
+  if (bodymode == OWNED) {
+    bytes += (double) 6 * comm->nprocs * sizeof(int);     // neighbor arrays
+    bytes += (double) 2 * comm->nprocs * sizeof(MPI_Request);
+  }
   bytes += (double) (maxbodysend+maxbodyrecv) * sizeof(BodyDatum);
   bytes += (double) (maxpartsend+maxpartrecv) * sizeof(PartDatum);
 
