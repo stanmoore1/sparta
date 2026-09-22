@@ -280,9 +280,19 @@ void RigidRemap::collision_lists()
       if (cells[icell].nsurf < 0) continue;
       if (!box_overlap(cells[icell].lo,cells[icell].hi,blo,bhi)) continue;
 
-      if (timeflag) nelembox += bodystart[ibody+1] - bodystart[ibody];
+      // the elements are scanned a group at a time: a cell which
+      //   misses a group's box misses every element in it
 
-      for (i = bodystart[ibody]; i < bodystart[ibody+1]; i++) {
+      for (int g = fix->groupstart[ibody]; g < fix->groupstart[ibody+1];
+           g++) {
+      if (!box_overlap(cells[icell].lo,cells[icell].hi,
+                       fix->elemglo[g],fix->elemghi[g])) continue;
+      int ilo,ihi;
+      fix->group_range(ibody,g,ilo,ihi);
+
+      if (timeflag) nelembox += ihi - ilo;
+
+      for (i = ilo; i < ihi; i++) {
         if (!box_overlap(cells[icell].lo,cells[icell].hi,
                          elemlo[i],elemhi[i])) continue;
 
@@ -307,6 +317,7 @@ void RigidRemap::collision_lists()
         entelem[nent] = (surfint) lblist[i];
         entnext[nent] = swhead[icell];
         swhead[icell] = nent++;
+      }
       }
     }
   }
@@ -640,9 +651,16 @@ int RigidRemap::recut()
       // only the elements whose own box reaches the cell are offered:
       //   the exact test rejects the others one at a time otherwise
 
-      for (i = bodystart[ibody]; i < bodystart[ibody+1]; i++)
-        if (box_overlap(fix->elemlo[i],fix->elemhi[i],clo2,chi2))
-          reclist[ncand++] = lblist[i];
+      for (int g = fix->groupstart[ibody]; g < fix->groupstart[ibody+1];
+           g++) {
+        if (!box_overlap(fix->elemglo[g],fix->elemghi[g],clo2,chi2))
+          continue;
+        int ilo,ihi;
+        fix->group_range(ibody,g,ilo,ihi);
+        for (i = ilo; i < ihi; i++)
+          if (box_overlap(fix->elemlo[i],fix->elemhi[i],clo2,chi2))
+            reclist[ncand++] = lblist[i];
+      }
     }
 
     // new list of surfs overlapping this cell

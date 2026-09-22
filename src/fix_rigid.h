@@ -64,6 +64,21 @@ class FixRigid : public Fix {
   // per local+ghost surf: body index and element index, -1 = static
   // read by the mover (via Update::rigidmap) and the force sum
 
+  // the elements of a body in groups of EGROUP with a box around each,
+  //   so a per-cell scan can skip a whole group; rebuilt with the
+  //   element boxes by body_bbox()
+
+  enum{EGROUP = 8};
+  int *groupstart;              // groups of body I = start[I]..start[I+1]-1
+  double **elemglo,**elemghi;
+
+  // elements of group g of body ibody
+
+  void group_range(int ibody, int g, int &ilo, int &ihi) {
+    ilo = bodystart[ibody] + (g - groupstart[ibody]) * EGROUP;
+    ihi = MIN(ilo + EGROUP, bodystart[ibody+1]);
+  }
+
   // the deletion pass: one byte per cell saying whether its particles
   //   can be inside a body, and the bodies which reach the last cell
 

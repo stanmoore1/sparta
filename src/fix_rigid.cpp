@@ -414,6 +414,10 @@ FixRigid::FixRigid(SPARTA *sparta, int narg, char **arg) :
                "for an axisymmetric domain");
 
   // setup the rigid bodies
+  // the element group boxes are allocated by allocate_bodies()
+
+  groupstart = NULL;
+  elemglo = elemghi = NULL;
 
   setup_body();
 
@@ -554,6 +558,9 @@ FixRigid::~FixRigid()
   memory->destroy(bodystart);
 
   memory->destroy(displace);
+  memory->destroy(groupstart);
+  memory->destroy(elemglo);
+  memory->destroy(elemghi);
   memory->destroy(celldel);
   memory->destroy(celbody);
   memory->destroy(surfbody);
@@ -3708,6 +3715,20 @@ void FixRigid::allocate_bodies()
   memory->create(displace,nsurf,dim,3,"fix_rigid:displace");
   memory->create(elemlo,nsurf,3,"fix_rigid:elemlo");
   memory->create(elemhi,nsurf,3,"fix_rigid:elemhi");
+
+  // the elements of a body in groups of EGROUP, with a box around each:
+  //   a cell which misses a group's box misses every element in it, so
+  //   the per-cell scans below test the groups first
+  // the boxes are rebuilt with the element boxes in body_bbox()
+
+  memory->create(groupstart,nbody+1,"fix_rigid:groupstart");
+  groupstart[0] = 0;
+  for (int ibody = 0; ibody < nbody; ibody++) {
+    int n = bodystart[ibody+1] - bodystart[ibody];
+    groupstart[ibody+1] = groupstart[ibody] + (n + EGROUP-1) / EGROUP;
+  }
+  memory->create(elemglo,groupstart[nbody],3,"fix_rigid:elemglo");
+  memory->create(elemghi,groupstart[nbody],3,"fix_rigid:elemghi");
 }
 
 /* ----------------------------------------------------------------------
@@ -4413,6 +4434,22 @@ void FixRigid::body_bbox(int ibody, int sweepflag)
   for (k = 0; k < 3; k++) {
     blo[k] -= eps;
     bhi[k] += eps;
+  }
+
+  // the box of each group of elements, for the per-cell scans
+
+  for (int g = groupstart[ibody]; g < groupstart[ibody+1]; g++) {
+    int ilo,ihi;
+    group_range(ibody,g,ilo,ihi);
+    double *glo = elemglo[g];
+    double *ghi = elemghi[g];
+    glo[0] = glo[1] = glo[2] = BIG;
+    ghi[0] = ghi[1] = ghi[2] = -BIG;
+    for (i = ilo; i < ihi; i++)
+      for (k = 0; k < 3; k++) {
+        glo[k] = MIN(glo[k],elemlo[i][k]);
+        ghi[k] = MAX(ghi[k],elemhi[i][k]);
+      }
   }
 }
 
