@@ -165,6 +165,8 @@ class FixRigidKokkos : public FixRigid {
   void pack_body_geometry();    // host geometry to the device, at setup
   void pack_body_lists();       // blist/its elements/bodystatus, on change
   void geometry_views();        // the device views the kernels below read
+  void commit_geometry();       // the swept pass's end-of-step geometry
+  void bbox_to_host(tdual_dbl_2d &);   // one read-back of the body boxes
   void device_geometry(int);    // geometry and boxes from the pose
 
   // per element: displace in the body frame and the body; per local
@@ -186,6 +188,11 @@ class FixRigidKokkos : public FixRigid {
   tdual_dbl_2d::t_dev d_bodynorm_kk,d_elemlo_kk,d_elemhi_kk,d_pose_kk;
   tdual_dbl_2d::t_dev d_bbodylo_kk,d_bbodyhi_kk;
   tdual_dbl_1d::t_dev d_bboxeps_kk;
+  tdual_dbl_3d::t_dev d_ptnew_kk;
+  tdual_dbl_2d::t_dev d_normnew_kk,d_ellonew_kk,d_elhinew_kk;
+  tdual_dbl_2d::t_dev d_bblonew_kk,d_bbhinew_kk;
+  tdual_dbl_1d::t_dev d_bbepsnew_kk;
+  tdual_dbl_2d::t_dev d_bbox_kk,d_bboxnew_kk;
   DAT::t_int_1d d_body_kk,d_bodystart_kk,d_copy_index_kk,d_copy_elem_kk;
   DAT::t_int_1d d_olist_own_kk,d_olist_elem_kk;
   DAT::t_int_1d d_blist_kk,d_lelem_kk,d_bodystat_kk;
@@ -284,6 +291,19 @@ class FixRigidKokkos : public FixRigid {
   tdual_dbl_2d k_bodynorm;
   tdual_dbl_2d k_bbodylo,k_bbodyhi;
   tdual_dbl_2d k_elemlo,k_elemhi;
+
+  // the end-of-step geometry the sweep pass computes on its way to the
+  //   swept boxes, committed by a handle swap in set_xv(): the geometry
+  //   kernels run once per step, not twice
+  // per body (lo,hi,eps) packed, so a stage reads one array back
+
+  tdual_dbl_3d k_bodypt_new;
+  tdual_dbl_2d k_bodynorm_new;
+  tdual_dbl_2d k_bbodylo_new,k_bbodyhi_new;
+  tdual_dbl_2d k_elemlo_new,k_elemhi_new;
+  tdual_dbl_1d k_bboxeps_new;
+  tdual_dbl_2d k_bbox,k_bbox_new;
+  int newgeom;            // 1 if a sweep left an end-of-step geometry
   DAT::tdual_int_1d k_bodystart,k_lblist;
   DAT::tdual_int_1d k_bodybinstart,k_bodybinlist;
 

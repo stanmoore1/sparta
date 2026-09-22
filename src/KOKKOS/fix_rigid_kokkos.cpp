@@ -13,6 +13,7 @@
 ------------------------------------------------------------------------- */
 
 #include "string.h"
+#include <algorithm>
 #include "fix_rigid_kokkos.h"
 #include "rigid_remap.h"
 #include "update.h"
@@ -78,6 +79,7 @@ FixRigidKokkos::FixRigidKokkos(SPARTA *sparta, int narg, char **arg) :
   blistgen_kk = -1;
   nlelem_kk = 0;
   devicegeom = 0;
+  newgeom = 0;
   maxdelete_kk = 0;
   d_ndelete_kk = DAT::t_int_scalar("fix_rigid:ndelete");
   h_ndelete_kk = Kokkos::create_mirror_view(d_ndelete_kk);
@@ -363,7 +365,8 @@ void FixRigidKokkos::surf_maps()
 void FixRigidKokkos::set_xv()
 {
   set_pose();
-  device_geometry(0);
+  if (devicegeom && newgeom) commit_geometry();
+  else device_geometry(0);
   body_bins();
 }
 
@@ -520,6 +523,10 @@ void FixRigidKokkos::pack_body_static()
     k_bodynorm = tdual_dbl_2d("fix_rigid:bodynorm",nelem,3);
     k_elemlo = tdual_dbl_2d("fix_rigid:elemlo",nelem,3);
     k_elemhi = tdual_dbl_2d("fix_rigid:elemhi",nelem,3);
+    k_bodypt_new = tdual_dbl_3d("fix_rigid:bodypt_new",nelem,3,3);
+    k_bodynorm_new = tdual_dbl_2d("fix_rigid:bodynorm_new",nelem,3);
+    k_elemlo_new = tdual_dbl_2d("fix_rigid:elemlo_new",nelem,3);
+    k_elemhi_new = tdual_dbl_2d("fix_rigid:elemhi_new",nelem,3);
     k_lblist = DAT::tdual_int_1d("fix_rigid:lblist",nelem);
     nelem_kk = nelem;
   }
@@ -539,6 +546,11 @@ void FixRigidKokkos::pack_body_static()
     k_bbodyhi = tdual_dbl_2d("fix_rigid:bbodyhi",nbody,3);
     k_pose = tdual_dbl_2d("fix_rigid:pose",nbody,16);
     k_bboxeps = tdual_dbl_1d("fix_rigid:bboxeps",nbody);
+    k_bbodylo_new = tdual_dbl_2d("fix_rigid:bbodylo_new",nbody,3);
+    k_bbodyhi_new = tdual_dbl_2d("fix_rigid:bbodyhi_new",nbody,3);
+    k_bboxeps_new = tdual_dbl_1d("fix_rigid:bboxeps_new",nbody);
+    k_bbox = tdual_dbl_2d("fix_rigid:bbox",nbody,7);
+    k_bbox_new = tdual_dbl_2d("fix_rigid:bbox_new",nbody,7);
   }
   if (nbody > maxhostgeom) {
     memory->grow(hostgeom,nbody,"fix_rigid:hostgeom");
@@ -626,6 +638,7 @@ void FixRigidKokkos::pack_body_geometry()
     h_bboxeps(ib) = bboxeps[ib];
     hostgeom[ib] = 1;
   }
+  newgeom = 0;
   k_bbodylo.modify_host(); k_bbodylo.sync_device();
   k_bbodyhi.modify_host(); k_bbodyhi.sync_device();
   k_bboxeps.modify_host(); k_bboxeps.sync_device();
@@ -692,6 +705,15 @@ void FixRigidKokkos::geometry_views()
   d_body_kk = k_body.view_device();
   d_bodystart_kk = k_bodystart.view_device();
   d_bodystat_kk = k_bodystat.view_device();
+  d_ptnew_kk = k_bodypt_new.view_device();
+  d_normnew_kk = k_bodynorm_new.view_device();
+  d_ellonew_kk = k_elemlo_new.view_device();
+  d_elhinew_kk = k_elemhi_new.view_device();
+  d_bblonew_kk = k_bbodylo_new.view_device();
+  d_bbhinew_kk = k_bbodyhi_new.view_device();
+  d_bbepsnew_kk = k_bboxeps_new.view_device();
+  d_bbox_kk = k_bbox.view_device();
+  d_bboxnew_kk = k_bbox_new.view_device();
 }
 
 /* ----------------------------------------------------------------------
@@ -776,21 +798,94 @@ void FixRigidKokkos::device_geometry(int sweepflag)
     sparta->kokkos->auto_sync = prev_auto_sync;
   }
 
-  k_bbodylo.modify_device(); k_bbodylo.sync_host();
-  k_bbodyhi.modify_device(); k_bbodyhi.sync_host();
-  k_bboxeps.modify_device(); k_bboxeps.sync_host();
-  auto h_bbodylo = k_bbodylo.view_host();
-  auto h_bbodyhi = k_bbodyhi.view_host();
-  auto h_bboxeps = k_bboxeps.view_host();
+  bbox_to_host(k_bbox);
+
+  if (!sweepflag) {
+    for (int m = 0; m < nblist; m++) hostgeom[blist[m]] = 0;
+    newgeom = 0;
+  } else newgeom = 1;
+}
+
+/* ----------------------------------------------------------------------
+   the body boxes of one pose back to the host, in one read-back
+   the separate lo/hi/eps views the kernels and RigidBodyKK read are
+     written on the device only: nothing syncs them to the host, so
+     their flags stay clear for the pack at setup
+------------------------------------------------------------------------- */
+
+void FixRigidKokkos::bbox_to_host(tdual_dbl_2d &k_box)
+{
+  k_box.modify_device();
+  k_box.sync_host();
+  auto h_box = k_box.view_host();
+
   for (int m = 0; m < nblist; m++) {
     const int ib = blist[m];
     for (int k = 0; k < 3; k++) {
-      bbodylo[ib][k] = h_bbodylo(ib,k);
-      bbodyhi[ib][k] = h_bbodyhi(ib,k);
+      bbodylo[ib][k] = h_box(ib,k);
+      bbodyhi[ib][k] = h_box(ib,3+k);
     }
-    bboxeps[ib] = h_bboxeps(ib);
-    if (!sweepflag) hostgeom[ib] = 0;
+    bboxeps[ib] = h_box(ib,6);
   }
+}
+
+/* ----------------------------------------------------------------------
+   commit the end-of-step geometry the sweep pass computed: the handles
+     of the two sets are swapped, so no kernel and no copy runs, then
+     the surfs are written from it and its boxes come back to the host
+   the elements of a body this proc does not hold are not written by
+     either pass, so a FAR body's geometry is stale in both sets, as it
+     is on the host; newghost_geometry() regenerates it when the body
+     comes back
+------------------------------------------------------------------------- */
+
+void FixRigidKokkos::commit_geometry()
+{
+  std::swap(k_bodypt,k_bodypt_new);
+  std::swap(k_bodynorm,k_bodynorm_new);
+  std::swap(k_elemlo,k_elemlo_new);
+  std::swap(k_elemhi,k_elemhi_new);
+  std::swap(k_bbodylo,k_bbodylo_new);
+  std::swap(k_bbodyhi,k_bbodyhi_new);
+  std::swap(k_bboxeps,k_bboxeps_new);
+  std::swap(k_bbox,k_bbox_new);
+  newgeom = 0;
+
+  geometry_views();
+  d_copy_index_kk = k_copy_index.view_device();
+  d_copy_elem_kk = k_copy_elem.view_device();
+  SurfKokkos *surf_kk = (SurfKokkos*) surf;
+  if (dim == 2) d_lines_kk = surf_kk->k_lines.view_device();
+  else d_tris_kk = surf_kk->k_tris.view_device();
+  nscatter_kk = ncopy;
+  int nowned = 0;
+  if (surf->distributed) {
+    nowned = nolist;
+    d_olist_own_kk = k_olist_own.view_device();
+    d_olist_elem_kk = k_olist_elem.view_device();
+    if (dim == 2) d_mylines_kk = surf_kk->k_mylines.view_device();
+    else d_mytris_kk = surf_kk->k_mytris.view_device();
+  }
+  dim_kk = dim;
+
+  copymode = 1;
+  Kokkos::parallel_for(
+    Kokkos::RangePolicy<DeviceType,TagFixRigidScatterSurfs>(0,ncopy+nowned),
+    *this);
+  copymode = 0;
+
+  // the surf arrays were written on the device: claim them for it, as
+  //   device_geometry() does
+
+  unsigned int mask = (dim == 2) ? LINE_MASK : TRI_MASK;
+  if (surf->distributed) mask |= (dim == 2) ? MYLINE_MASK : MYTRI_MASK;
+  const int prev_auto_sync = sparta->kokkos->auto_sync;
+  sparta->kokkos->auto_sync = 0;
+  surf_kk->modify(Device,mask);
+  sparta->kokkos->auto_sync = prev_auto_sync;
+
+  bbox_to_host(k_bbox);
+  for (int m = 0; m < nblist; m++) hostgeom[blist[m]] = 0;
 }
 
 /* ----------------------------------------------------------------------
@@ -869,7 +964,15 @@ void FixRigidKokkos::operator()(TagFixRigidGeometry, const int &m) const
       hi[k] = MAX(hi[k],d_bodypt_kk(i,j,k));
     }
 
+  // sweeping: the end-of-step points are the geometry set_xv() commits,
+  //   so they are kept, with their normals and their own box, rather
+  //   than recomputed there by a second pass over every element
+
   if (sweep_kk) {
+    double nlo[3],nhi[3];
+    nlo[0] = nlo[1] = nlo[2] = BIG;
+    nhi[0] = nhi[1] = nhi[2] = -BIG;
+
     for (j = 0; j < dim_kk; j++) {
       for (k = 0; k < 3; k++) v[k] = d_displace_kk(i,j,k);
       if (axiflag_kk) {
@@ -884,9 +987,39 @@ void FixRigidKokkos::operator()(TagFixRigidGeometry, const int &m) const
         for (k = 0; k < 3; k++) ptnew[k] = xcm1[k] + delta[k];
       }
       for (k = 0; k < 3; k++) {
+        d_ptnew_kk(i,j,k) = ptnew[k];
         lo[k] = MIN(lo[k],ptnew[k]);
         hi[k] = MAX(hi[k],ptnew[k]);
+        nlo[k] = MIN(nlo[k],ptnew[k]);
+        nhi[k] = MAX(nhi[k],ptnew[k]);
       }
+    }
+
+    double nrm[3];
+    if (dim_kk == 2) {
+      for (k = 0; k < 3; k++)
+        delta[k] = d_ptnew_kk(i,1,k) - d_ptnew_kk(i,0,k);
+      nrm[0] = z[1]*delta[2] - z[2]*delta[1];
+      nrm[1] = z[2]*delta[0] - z[0]*delta[2];
+      nrm[2] = z[0]*delta[1] - z[1]*delta[0];
+    } else {
+      for (k = 0; k < 3; k++) {
+        delta12[k] = d_ptnew_kk(i,1,k) - d_ptnew_kk(i,0,k);
+        delta13[k] = d_ptnew_kk(i,2,k) - d_ptnew_kk(i,0,k);
+      }
+      nrm[0] = delta12[1]*delta13[2] - delta12[2]*delta13[1];
+      nrm[1] = delta12[2]*delta13[0] - delta12[0]*delta13[2];
+      nrm[2] = delta12[0]*delta13[1] - delta12[1]*delta13[0];
+    }
+    const double nscale = 1.0/sqrt(nrm[0]*nrm[0]+nrm[1]*nrm[1]+nrm[2]*nrm[2]);
+    nrm[0] *= nscale;
+    nrm[1] *= nscale;
+    nrm[2] *= nscale;
+    if (dim_kk == 2) nrm[2] = 0.0;
+    for (k = 0; k < 3; k++) {
+      d_normnew_kk(i,k) = nrm[k];
+      d_ellonew_kk(i,k) = nlo[k];
+      d_elhinew_kk(i,k) = nhi[k];
     }
   }
 
@@ -933,7 +1066,36 @@ void FixRigidKokkos::operator()(TagFixRigidBodyBox, const int &m) const
   for (k = 0; k < 3; k++) {
     d_bbodylo_kk(ib,k) = blo[k] - eps;
     d_bbodyhi_kk(ib,k) = bhi[k] + eps;
+    d_bbox_kk(ib,k) = blo[k] - eps;
+    d_bbox_kk(ib,3+k) = bhi[k] + eps;
   }
+  d_bbox_kk(ib,6) = eps;
+
+  // sweeping: the same reduction over the end-of-step element boxes,
+  //   without the rotation term, which is what set_xv() commits
+
+  if (!sweep_kk) return;
+
+  blo[0] = blo[1] = blo[2] = BIG;
+  bhi[0] = bhi[1] = bhi[2] = -BIG;
+
+  for (int i = d_bodystart_kk(ib); i < d_bodystart_kk(ib+1); i++)
+    for (k = 0; k < 3; k++) {
+      blo[k] = MIN(blo[k],d_ellonew_kk(i,k));
+      bhi[k] = MAX(bhi[k],d_elhinew_kk(i,k));
+    }
+
+  eps = EPSSURF * MAX(bhi[0]-blo[0],bhi[1]-blo[1]);
+  eps = EPSSURF * MAX(eps/EPSSURF,bhi[2]-blo[2]);
+
+  d_bbepsnew_kk(ib) = eps;
+  for (k = 0; k < 3; k++) {
+    d_bblonew_kk(ib,k) = blo[k] - eps;
+    d_bbhinew_kk(ib,k) = bhi[k] + eps;
+    d_bboxnew_kk(ib,k) = blo[k] - eps;
+    d_bboxnew_kk(ib,3+k) = bhi[k] + eps;
+  }
+  d_bboxnew_kk(ib,6) = eps;
 }
 
 /* ----------------------------------------------------------------------
@@ -945,10 +1107,19 @@ KOKKOS_INLINE_FUNCTION
 void FixRigidKokkos::operator()(TagFixRigidInflate, const int &m) const
 {
   const int i = d_lelem_kk(m);
-  const double eps = d_bboxeps_kk(d_body_kk(i));
+  const int ib = d_body_kk(i);
+  const double eps = d_bboxeps_kk(ib);
   for (int k = 0; k < 3; k++) {
     d_elemlo_kk(i,k) -= eps;
     d_elemhi_kk(i,k) += eps;
+  }
+
+  if (!sweep_kk) return;
+
+  const double epsnew = d_bbepsnew_kk(ib);
+  for (int k = 0; k < 3; k++) {
+    d_ellonew_kk(i,k) -= epsnew;
+    d_elhinew_kk(i,k) += epsnew;
   }
 }
 
