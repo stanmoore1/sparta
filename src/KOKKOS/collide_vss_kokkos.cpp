@@ -116,6 +116,7 @@ CollideVSSKokkos::CollideVSSKokkos(SPARTA *sparta, int narg, char **arg) :
 {
   kokkos_flag = 1;
   react_style = 0;
+  ncellop = maxcellop = 0;
   nglist_collision = nglist_reaction = 0;
   nglist_coll_tally = nglist_react_tally = 0;
   egroup = -1;
@@ -453,6 +454,8 @@ void CollideVSSKokkos::init()
 
 void CollideVSSKokkos::reset_vremax()
 {
+  apply_cellops();
+
   grid_kk_copy.copy((GridKokkos*)grid);
 
   k_vremax.clear_sync_state();
@@ -484,6 +487,10 @@ void CollideVSSKokkos::collisions()
   //   (see Collide::collisions): skip it instead of flagging an error
 
   rigid_skip = update->rigidflag;
+
+  // the kernels below read vremax/remain directly
+
+  apply_cellops();
 
   // if requested, reset vrwmax & remain
 
@@ -5001,22 +5008,80 @@ int CollideVSSKokkos::unpack_grid_one(int icell, char *buf_char)
    caller checks that Icell != Jcell
 ------------------------------------------------------------------------- */
 
-void CollideVSSKokkos::copy_grid_one(int icell, int jcell)
+/* ---------------------------------------------------------------------- */
+
+void CollideVSSKokkos::record_cellop(int icell, int jcell)
 {
-  this->sync(Host,ALL_MASK);
-  for (int igroup = 0; igroup < ngroups; igroup++) {
-    for (int jgroup = 0; jgroup < ngroups; jgroup++) {
-      k_vremax.view_host()(jcell,igroup,jgroup) = k_vremax.view_host()(icell,igroup,jgroup);
-      if (remainflag)
-        k_remain.view_host()(jcell,igroup,jgroup) = k_remain.view_host()(icell,igroup,jgroup);
-    }
+  if (ncellop == maxcellop) {
+    const int old = maxcellop;
+    maxcellop = maxcellop ? 2*maxcellop : 1024;
+    if (!old) k_cellop = DAT::tdual_int_2d("collide:cellop",maxcellop,2);
+    else k_cellop.resize(maxcellop,2);
   }
-  this->modified(Host,ALL_MASK);
+  k_cellop.view_host()(ncellop,0) = icell;
+  k_cellop.view_host()(ncellop,1) = jcell;
+  ncellop++;
 }
 
 /* ----------------------------------------------------------------------
-   reset final grid cell count after grid cell removals
+   replay the recorded updates on the device, in the order they were
+     made: one thread, since a later one may read a cell an earlier one
+     wrote, and the work is a few values per update
 ------------------------------------------------------------------------- */
+
+void CollideVSSKokkos::apply_cellops()
+{
+  if (!ncellop) return;
+
+  const int n = ncellop;
+  ncellop = 0;                  // before the syncs below, which re-enter
+
+  // the replay reads and writes the device copy, so the host owes it
+  //   anything it changed, and owns nothing afterwards
+
+  if (k_vremax.need_sync_device()) k_vremax.sync_device();
+  if (remainflag && k_remain.need_sync_device()) k_remain.sync_device();
+
+  k_cellop.modify_host();
+  k_cellop.sync_device();
+
+  auto d_op = k_cellop.view_device();
+  auto l_vremax = k_vremax.view_device();
+  auto l_remain = k_remain.view_device();
+  auto l_initial = k_vremax_initial.view_device();
+  const int ng = ngroups;
+  const int rflag = remainflag;
+
+  copymode = 1;
+  Kokkos::parallel_for("collide:cellops",
+                       Kokkos::RangePolicy<DeviceType>(0,1),
+                       KOKKOS_LAMBDA(const int&) {
+    for (int m = 0; m < n; m++) {
+      const int src = d_op(m,0);
+      const int dst = d_op(m,1);
+      for (int ig = 0; ig < ng; ig++)
+        for (int jg = 0; jg < ng; jg++) {
+          l_vremax(dst,ig,jg) = (src < 0) ? l_initial(ig,jg)
+                                          : l_vremax(src,ig,jg);
+          if (rflag)
+            l_remain(dst,ig,jg) = (src < 0) ? 0.0 : l_remain(src,ig,jg);
+        }
+    }
+  });
+  copymode = 0;
+
+  k_vremax.modify_device();
+  if (remainflag) k_remain.modify_device();
+}
+
+/* ---------------------------------------------------------------------- */
+
+void CollideVSSKokkos::copy_grid_one(int icell, int jcell)
+{
+  if (ngroups) record_cellop(icell,jcell);
+}
+
+/* ---------------------------------------------------------------------- */
 
 void CollideVSSKokkos::reset_grid_count(int nlocal)
 {
@@ -5032,15 +5097,7 @@ void CollideVSSKokkos::reset_grid_count(int nlocal)
 void CollideVSSKokkos::add_grid_one()
 {
   grow_percell(1);
-
-  this->sync(Host,ALL_MASK);
-  for (int igroup = 0; igroup < ngroups; igroup++)
-    for (int jgroup = 0; jgroup < ngroups; jgroup++) {
-      k_vremax.view_host()(nglocal,igroup,jgroup) = vremax_initial[igroup][jgroup];
-      if (remainflag) k_remain.view_host()(nglocal,igroup,jgroup) = 0.0;
-    }
-  this->modified(Host,ALL_MASK);
-
+  if (ngroups) record_cellop(-1,nglocal);
   nglocal++;
 }
 
@@ -5109,6 +5166,8 @@ void CollideVSSKokkos::grow_percell(int n)
 
 void CollideVSSKokkos::sync(ExecutionSpace space, unsigned int mask)
 {
+  apply_cellops();
+
   if (space == Device) {
     if (sparta->kokkos->auto_sync) {
       // Automatic syncing exists because non-Kokkos code may have written the
@@ -5141,6 +5200,8 @@ void CollideVSSKokkos::sync(ExecutionSpace space, unsigned int mask)
 
 void CollideVSSKokkos::modified(ExecutionSpace space, unsigned int mask)
 {
+  apply_cellops();
+
   if (space == Device) {
     if (mask & VREMAX_MASK) k_vremax.modify_device();
     if (remainflag)
@@ -5158,6 +5219,8 @@ void CollideVSSKokkos::modified(ExecutionSpace space, unsigned int mask)
 
 void CollideVSSKokkos::backup()
 {
+  apply_cellops();
+
   d_particles_backup = decltype(d_particles)(Kokkos::view_alloc("collide:particles_backup",Kokkos::WithoutInitializing),d_particles.extent(0));
   d_plist_backup = decltype(d_plist)(Kokkos::view_alloc("collide:plist_backup",Kokkos::WithoutInitializing),d_plist.extent(0),d_plist.extent(1));
   d_vremax_backup = decltype(d_vremax)(Kokkos::view_alloc("collide:vremax_backup",Kokkos::WithoutInitializing),d_vremax.extent(0),d_vremax.extent(1),d_vremax.extent(2));

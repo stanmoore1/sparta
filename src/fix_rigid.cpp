@@ -777,6 +777,14 @@ void FixRigid::init()
   warnrotate = warntranslate = warnexit = warnfallback = 0;
   warndelete = 0;
   for (int i = 0; i < W_NWARN; i++) warndefer[i] = 0;
+
+  // emit fixes read the host surfs and cells when the re-map changes
+  //   them; with none defined that notification, and the surf copies
+  //   the KOKKOS version would make for it, are not needed
+
+  nemitfix = 0;
+  for (int ifix = 0; ifix < modify->nfix; ifix++)
+    if (strncmp(modify->fix[ifix]->style,"emit",4) == 0) nemitfix++;
   ndelrun = 0;
   nstep_run = nstep_inplace = nstep_rebuild = nstep_fallback = 0;
   timeflag = (getenv("SPARTA_RIGID_TIMING") != NULL);
@@ -1461,7 +1469,7 @@ void FixRigid::remap_grid()
     //   full re-map and the collective rebuild both notify them via
     //   Grid::notify_changed()
 
-    if (!fallback && !rebuild && (all[2] || structural)) {
+    if (nemitfix && !fallback && !rebuild && (all[2] || structural)) {
       refresh_host_surfs();
       for (int ifix = 0; ifix < modify->nfix; ifix++)
         if (strncmp(modify->fix[ifix]->style,"emit",4) == 0)

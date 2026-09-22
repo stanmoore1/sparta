@@ -311,6 +311,16 @@ class CollideVSSKokkos : public CollideVSS {
 
   DAT::tdual_float_2d k_vremax_initial;
   DAT::t_float_2d d_vremax_initial;
+  // per-cell updates from the grid callbacks, recorded while the device
+  //   copy is the newer one and replayed on it in one pass: a grid which
+  //   restructures every step then costs no transfer of these arrays
+  //   (src,dst) pairs, src < 0 = set dst to the initial values
+
+  DAT::tdual_int_2d k_cellop;
+  int ncellop,maxcellop;
+  void record_cellop(int, int);
+  void apply_cellops();
+
   DAT::tdual_float_3d k_vremax;
   DAT::t_float_3d d_vremax;
   DAT::tdual_float_3d k_remain;

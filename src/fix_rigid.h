@@ -267,6 +267,8 @@ class FixRigid : public Fix {
   void check_bodycut();         // swept bbox vs the bodies cutoff
   void body_warning(int &, int);  // once per run, per rank
 
+  int nemitfix;           // emit fixes, which read the host surfs on a
+                          //   re-map which changed cells or markings
   int copiesappended;     // 1 if start_of_step() appended local copies
   int ncopy,maxcopy;      // all local copies of body elements
   int *copy_index;        //   local surf index of each copy
