@@ -2571,6 +2571,38 @@ void Grid::combine_split_cell_particles(int icell, int relabel)
 }
 
 /* ----------------------------------------------------------------------
+   the owned split cells, in ascending cell index
+   sinfo holds the owned split cells before the ghost ones, so the list
+     comes from it in O(nsplit) instead of a scan of every owned cell;
+     an entry a restructure abandoned points at no split cell of its own
+   returns the count, the list is a Grid buffer valid until the next call
+------------------------------------------------------------------------- */
+
+int Grid::owned_split_cells(int *&list)
+{
+  if (nsplitlocal > maxsplitlist) {
+    maxsplitlist = nsplitlocal;
+    memory->destroy(splitlist);
+    memory->create(splitlist,maxsplitlist,"grid:splitlist");
+  }
+
+  int n = 0;
+  for (int i = 0; i < nsplitlocal; i++) {
+    int icell = sinfo[i].icell;
+    if (icell < 0 || cells[icell].isplit != i || cells[icell].nsplit <= 1)
+      continue;
+    splitlist[n++] = icell;
+  }
+
+  // the callers walked the cells in index order, so the list does too
+
+  std::sort(splitlist,splitlist+n);
+
+  list = splitlist;
+  return n;
+}
+
+/* ----------------------------------------------------------------------
    assign all particles in a split icell to appropriate sub cells
    assumes particles are sorted, are NOT sorted by sub cell when done
    also change particle icell label

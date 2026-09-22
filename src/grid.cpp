@@ -130,6 +130,8 @@ Grid::Grid(SPARTA *sparta) : Pointers(sparta)
   cellbingen = 0;
   ncellbin = 0;
   cellbinstart = cellbinlist = cellstamp = cellcand = NULL;
+  splitlist = NULL;
+  maxsplitlist = 0;
   cellstampcur = 0;
   maxcellcand = 0;
 
@@ -230,6 +232,7 @@ Grid::~Grid()
   memory->destroy(cellbinlist);
   memory->destroy(cellstamp);
   memory->destroy(cellcand);
+  memory->destroy(splitlist);
   memory->destroy(movedfrom);
   memory->destroy(movedto);
   memory->destroy(dirtycell);

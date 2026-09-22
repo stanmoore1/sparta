@@ -156,6 +156,8 @@ class Grid : protected Pointers {
   int cellstampcur;
   int *cellcand;              // query result buffer
   int maxcellcand;
+  int *splitlist;             // owned split cells, ascending
+  int maxsplitlist;
 
   // owned or ghost child cell
   // includes unsplit cells, split cells, sub cells in any order
@@ -470,6 +472,7 @@ class Grid : protected Pointers {
   void clear_surf_restart();
   void combine_split_cell_particles(int, int);
   void assign_split_cell_particles(int);
+  int owned_split_cells(int *&);
   int point_outside_surfs(int, double *);
   int outside_surfs(int, double *, double *);
   void allocate_surf_arrays();

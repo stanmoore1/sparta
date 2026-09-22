@@ -4518,11 +4518,10 @@ bigint FixRigid::remove_inside_particles(int splitflag)
   //   this step would otherwise migrate cells with stale particle lists
 
   if (splitflag && grid->nsplitlocal) {
-    Grid::ChildCell *cells = grid->cells;
-    int nglocal = grid->nlocal;
-    for (int icell = 0; icell < nglocal; icell++)
-      if (cells[icell].nsplit > 1)
-        grid->assign_split_cell_particles(icell);
+    int *slist;
+    int ns = grid->owned_split_cells(slist);
+    for (int m = 0; m < ns; m++)
+      grid->assign_split_cell_particles(slist[m]);
     particle->sorted = 0;
   }
 
@@ -4583,11 +4582,10 @@ void FixRigid::remove_inside_all(int splitflag)
   double tsplit = 0.0;
   if (timeflag) tsplit = MPI_Wtime();
   if (splitflag && grid->nsplitlocal) {
-    Grid::ChildCell *cells = grid->cells;
-    int nglocal = grid->nlocal;
-    for (int icell = 0; icell < nglocal; icell++)
-      if (cells[icell].nsplit > 1)
-        grid->assign_split_cell_particles(icell);
+    int *slist;
+    int ns = grid->owned_split_cells(slist);
+    for (int m = 0; m < ns; m++)
+      grid->assign_split_cell_particles(slist[m]);
     particle->sorted = 0;
   }
   if (timeflag) add_time(T_REMOVE_SPLIT,MPI_Wtime() - tsplit);
@@ -4725,11 +4723,10 @@ void FixRigid::combine_split_all()
   particles_to_host();
   if (!particle->sorted) particle->sort();
 
-  Grid::ChildCell *cells = grid->cells;
-  int nglocal = grid->nlocal;
-  for (int icell = 0; icell < nglocal; icell++)
-    if (cells[icell].nsplit > 1)
-      grid->combine_split_cell_particles(icell,1);
+  int *slist;
+  int ns = grid->owned_split_cells(slist);
+  for (int m = 0; m < ns; m++)
+    grid->combine_split_cell_particles(slist[m],1);
 }
 
 /* ---------------------------------------------------------------------- */
