@@ -636,16 +636,10 @@ void FixRigid::init()
 
   // owned: ownership is decided from per-proc cell bboxes, which
   //   requires a clumped decomposition
-  // body exchange and distributed surfs not yet supported
 
-  if (bodymode == OWNED) {
-    if (!grid->clumped)
-      error->all(FLERR,"Fix rigid bodies owned requires a clumped grid "
-                 "decomposition");
-    if (surf->distributed)
-      error->all(FLERR,"Fix rigid bodies owned does not yet support "
-                 "distributed surfs");
-  }
+  if (bodymode == OWNED && !grid->clumped)
+    error->all(FLERR,"Fix rigid bodies owned requires a clumped grid "
+               "decomposition");
 
   // the recoil correction of collisions is exact down to a body as
   //   light as one simulation particle; below that the exact result
@@ -844,6 +838,19 @@ void FixRigid::setup()
       memcpy(quatnew[ibody],quat[ibody],4*sizeof(double));
     }
 
+    // owned + distributed: the owner of a body computes its push-off
+    //   contacts from its local surf copies, which are the surfs of its
+    //   own and ghost cells, so that layer must reach as far as a
+    //   contact does.  a negative grid cutoff copies every cell
+
+    if (surf->distributed && pushflag && grid->cutoff >= 0.0 &&
+        grid->cutoff < bodycut) {
+      char str[128];
+      sprintf(str,"Fix rigid bodies owned with distributed surfs and "
+              "push requires global gridcut >= %g",bodycut);
+      error->all(FLERR,str);
+    }
+
     proc_boxes();
   }
 
@@ -932,6 +939,7 @@ void FixRigid::start_of_step()
     int changed = ensure_local_copies();
     if (changed) {
       surf_maps();
+      rebin_contacts();
       remap->listschanged = 1;
       copiesappended = 1;
     }
@@ -2310,6 +2318,18 @@ void FixRigid::scan_copies()
      distributed copies are appended
 ------------------------------------------------------------------------- */
 
+/* ----------------------------------------------------------------------
+   owned + distributed: the push-off bins index this proc's local surf
+     copies, which a grid change and a copy append both restructure
+------------------------------------------------------------------------- */
+
+void FixRigid::rebin_contacts()
+{
+  if (contact && bodymode == OWNED && surf->distributed) contact->setup();
+}
+
+/* ---------------------------------------------------------------------- */
+
 void FixRigid::surf_maps()
 {
   int i,k;
@@ -2358,6 +2378,7 @@ void FixRigid::init_surfs()
   if (surf->distributed) {
     int changed = ensure_local_copies();
     surf_maps();
+    if (changed) rebin_contacts();
     surfs_changed(changed,1);
   } else surf_maps();
 }
@@ -4234,6 +4255,7 @@ void FixRigid::grid_changed()
     proc_bbox();
     int changed = ensure_local_copies();
     surf_maps();
+    rebin_contacts();
 
     // a fix earlier in the notification may already have re-spread
     //   per-surf custom values over the pre-append layout: invalidate

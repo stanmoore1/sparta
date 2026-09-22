@@ -2193,6 +2193,63 @@ def test_missingid(exe_cmd):
                          "Fix rigid body 2 has no surface elements")
 
 
+def _compare_body_modes(exe_cmd, deck, extra, label):
+    # bodies owned vs bodies replicated on the same ranks and the same
+    # deck: with distributed surfs the owner of a body gathers its
+    # push-off contacts from the static surfs of its own and ghost
+    # cells, where replicated mode sums a partial force from every proc
+    fails = []
+    runs = {}
+    for mode in ("replicated", "owned"):
+        rc, out = RAW_RUN_DECK(exe_cmd, deck,
+                               extra=extra + ["-var", "bodies", mode])
+        if rc:
+            fails.append("%s, bodies %s: run failed with exit code %d"
+                         % (label, mode, rc))
+            continue
+        rows = parse_stats(out)
+        if not rows:
+            fails.append("%s, bodies %s: no stats output" % (label, mode))
+            continue
+        runs[mode] = rows
+    if len(runs) < 2:
+        return fails
+    if len(runs["owned"]) != len(runs["replicated"]):
+        fails.append("%s: %d stats rows owned vs %d replicated"
+                     % (label, len(runs["owned"]), len(runs["replicated"])))
+        return fails
+    for r1, r2 in zip(runs["replicated"], runs["owned"]):
+        for key in sorted(r1):
+            if key == "Step":
+                continue
+            v1, v2 = r1[key], r2[key]
+            if key == "Np":
+                ok = (v1 == v2)
+            else:
+                ok = approx(v1, v2, rel=1e-10, abs_=1e-13)
+            if not ok:
+                fails.append("%s, step %d, %s: owned %.17g vs replicated "
+                             "%.17g" % (label, int(r1["Step"]), key, v2, v1))
+        if fails:
+            return fails[:8]
+    return fails
+
+
+def test_owneddist(exe_cmd):
+    # the distributed static-surf decks in owned mode: a body drifting
+    # past a many-segment static wall, which on several procs is mostly
+    # ghost surfs, with push-off on.  the owner must see every static
+    # surf near its body, so this is the gate on the contact bins being
+    # built over the local copies rather than the surfs a proc owns
+    fails = []
+    for deck, label in (("in.test.staticdist", "2d"),
+                        ("in.test.staticdist3d", "3d")):
+        fails += _compare_body_modes(
+            exe_cmd, deck,
+            ["-var", "dist", "1", "-var", "mode", "incremental"], label)
+    return fails
+
+
 def test_ownership(exe_cmd):
     # bodies owned vs bodies replicated on the same ranks, per step:
     # with no gas the run is deterministic and the two must agree
@@ -2352,6 +2409,7 @@ TESTS = [
     ("idperm", test_idperm),
     ("missingid", test_missingid),
     ("ownership", test_ownership),
+    ("owneddist", test_owneddist),
     ("ownedcutcell", test_ownedcutcell),
     ("ownedrandom", test_ownedrandom),
     ("ownedbalrandom", test_ownedbalrandom),
@@ -2389,12 +2447,14 @@ OWNED_TESTS = {"ballistic", "force", "rotation", "bounce", "restitution",
                "rotwall3d", "vacate", "facetbounce", "nbody", "restart",
                "axiballistic", "axidensity", "axispin", "axipush",
                "axireact", "axipair",
-               "ownership", "ownedcutcell", "ownedrandom", "ownedbalrandom",
+               "ownership", "owneddist",
+               "ownedcutcell", "ownedrandom", "ownedbalrandom",
                "ownedfast"}
 
 # tests which only make sense in owned mode, skipped otherwise
 
-OWNED_ONLY = {"ownership", "ownedcutcell", "ownedrandom", "ownedbalrandom",
+OWNED_ONLY = {"ownership", "owneddist",
+              "ownedcutcell", "ownedrandom", "ownedbalrandom",
               "ownedfast"}
 
 

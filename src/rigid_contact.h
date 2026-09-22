@@ -66,6 +66,7 @@ class RigidContact : protected Pointers {
   int maxjsort;
 
   void body(int, double **, double **);
+  int local_surfs();            // bins over the local copies, not owned
   void partner_pass(int, int, double **, double **);
   void contact(int, double *, double *, double *, double *, int,
                double **, double **, int);

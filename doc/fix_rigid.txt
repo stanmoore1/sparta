@@ -904,7 +904,11 @@ decomposition, since a processor's bodies are decided from the
 bounding box of its grid cells: use "create_grid"_create_grid.html
 {clump} or {block}, "balance_grid"_balance_grid.html {rcb}, or "fix
 balance"_fix_balance.html {rcb}; a strided or random decomposition is
-rejected.  It does not yet support distributed surfs.
+rejected.  With distributed surfs and {push}, the processor which owns
+a body gathers its push-off contacts from the static surfs of its own
+and ghost cells, so that layer must reach as far as a contact does:
+the "global gridcut"_global.html value must be at least the {bodies}
+cutoff, or negative so that every cell is copied.
 
 Body surf elements may carry a "surf_react"_surf_react.html model
 only if every reaction in it leaves exactly one particle, which for

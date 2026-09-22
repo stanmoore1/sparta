@@ -106,20 +106,42 @@ RigidContact::~RigidContact()
    static = surf not in any rigid body
 ------------------------------------------------------------------------- */
 
+/* ----------------------------------------------------------------------
+   1 if the static surf bins are built over this proc's local and ghost
+     copies rather than the surfs it owns: always without distributed
+     surfs, where they are the same arrays, and with them whenever an
+     owner must produce a body's complete push force by itself
+------------------------------------------------------------------------- */
+
+int RigidContact::local_surfs()
+{
+  return !surf->distributed || fix->bodymode == OWNED;
+}
+
+/* ---------------------------------------------------------------------- */
+
 void RigidContact::setup()
 {
   int i,k,m,ibx,iby,ibz;
   int blo[3],bhi[3];
 
+  // which surf arrays the bins are built over
+  // replicated: each proc bins the static surfs it owns and the partial
+  //   push forces are summed, so the round-robin owned arrays serve
+  // owned: the owner of a body computes its complete force alone, so it
+  //   must see every static surf near it, which is what the local and
+  //   ghost copies of its own cells are
+
+  int uselocal = local_surfs();
   int distributed = surf->distributed;
 
   Surf::Line *lines;
   Surf::Tri *tris;
   int nslocal;
-  if (!distributed) {
+  if (uselocal) {
     lines = surf->lines;
     tris = surf->tris;
-    nslocal = surf->nlocal;
+    nslocal = surf->nlocal + (distributed ? surf->nghost : 0);
   } else {
     lines = surf->mylines;
     tris = surf->mytris;
@@ -163,7 +185,7 @@ void RigidContact::setup()
 
       // skip surfs belonging to any rigid body
 
-      if (!distributed) {
+      if (uselocal) {
         if (surfbody[m] >= 0) continue;
       } else {
         surfint id = (dim == 2) ? lines[m].id : tris[m].id;
@@ -303,10 +325,9 @@ void RigidContact::body(int ibody, double **fpush, double **tqpush)
   double ***bodypt = fix->bodypt;
   double **bodynorm = fix->bodynorm;
 
-  int distributed = surf->distributed;
   Surf::Line *lines;
   Surf::Tri *tris;
-  if (!distributed) {
+  if (local_surfs()) {
     lines = surf->lines;
     tris = surf->tris;
   } else {
@@ -382,13 +403,14 @@ void RigidContact::body(int ibody, double **fpush, double **tqpush)
   //   current-position element boxes set by FixRigid::body_bbox() when
   //   each body committed its end-of-step geometry
   // each contact applies equal-and-opposite forces to both bodies
-  // distributed: proc 0 alone computes the pair and boundary
-  //   contributions, see compute()
-  // the bins keep this proc-0 work small: a body only tests the bodies
-  //   in its neighboring bins
+  // replicated + distributed: proc 0 alone computes the pair and
+  //   boundary contributions, see compute(); the bins keep that work
+  //   small, a body only tests the bodies in its neighboring bins
+  // owned: the owner computes them, holding every partner within the
+  //   bodies cutoff
 
   int mine = 1;
-  if (distributed && comm->me) mine = 0;
+  if (surf->distributed && fix->bodymode != OWNED && comm->me) mine = 0;
 
   if (mine) {
     int *jlist;

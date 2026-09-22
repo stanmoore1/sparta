@@ -103,6 +103,7 @@ class FixRigid : public Fix {
                                 //   arrays this step
   void surfs_changed(int, int = 0);  // notify per-surf models of the above
                                      //   2nd arg = 0 in run, 1 init, 2 setup
+  void rebin_contacts();        // owned: the push-off bins, on a change
   virtual void surf_maps();     // rebuild surfbody/surfelem
   void body_geometry(int);      // one body's geometry from its pose
   virtual void host_geometry(int) {}   // fix rigid/kk: host copy of it
@@ -496,15 +497,17 @@ Body ownership is decided from the bounding box of each proc's owned
 cells.  Use create_grid clump or block, balance_grid rcb, or fix balance
 rcb.
 
-E: Fix rigid bodies owned does not yet support distributed surfs
-
-Self-explanatory.
-
 E: Fix rigid body moved beyond the bodies cutoff
 
 With bodies owned, a body may only reach the procs which were sent it,
 which are those within the cutoff of its COM.  Raise the cutoff value of
 the bodies keyword, or lower the timestep.
+
+E: Fix rigid bodies owned with distributed surfs and push requires global gridcut >= N
+
+The owner of a body computes its push-off contacts from the surfs of its
+own and ghost cells, so that layer must reach as far as a contact does.
+Raise the global gridcut, or set it negative to copy every cell.
 
 E: Fix rigid body exchange reached a non-neighbor proc
 
