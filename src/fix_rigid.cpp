@@ -431,6 +431,10 @@ FixRigid::FixRigid(SPARTA *sparta, int narg, char **arg) :
   //   once the local+ghost surf arrays of the run are final
 
   surfbody = surfelem = NULL;
+  celldel = NULL;
+  maxcelldel = 0;
+  celbody = NULL;
+  maxcelbody = 0;
   maxsurfmap = 0;
   nsurfall = surf->nlocal;
 
@@ -550,6 +554,8 @@ FixRigid::~FixRigid()
   memory->destroy(bodystart);
 
   memory->destroy(displace);
+  memory->destroy(celldel);
+  memory->destroy(celbody);
   memory->destroy(surfbody);
   memory->destroy(surfelem);
   memory->destroy(elemlo);
@@ -4564,22 +4570,79 @@ void FixRigid::remove_inside_all(int splitflag)
   double tstart = 0.0;
   if (timeflag) tstart = MPI_Wtime();
 
+  // classify the cells first: a surf-free OUTSIDE cell cannot contain a
+  //   point interior to a body, since a body boundary crossing the cell
+  //   would put a surf in it, so none of its particles is read again
+  // one byte per cell in place of two reads of the much larger cell
+  //   records for every particle
+
+  int nglocal = grid->nlocal;
+  if (nglocal > maxcelldel) {
+    maxcelldel = nglocal;
+    memory->destroy(celldel);
+    memory->create(celldel,maxcelldel,"fix_rigid:celldel");
+  }
+  for (icell = 0; icell < nglocal; icell++) {
+    const int type = cinfo[icell].type;
+    if (type == CELLINSIDE) celldel[icell] = 2;
+    else if (type != CELLOUTSIDE || cells[icell].nsurf) celldel[icell] = 1;
+    else celldel[icell] = 0;
+  }
+
+  // the bodies whose bbox reaches a cell are the candidates for every
+  //   particle in it, so they are found once per cell rather than once
+  //   per particle; the particle array is grouped by cell, so caching
+  //   the last one covers nearly all of them
+  // the set is a superset of the one a query at the particle would
+  //   return, and inside_body() is exact, so the answer is the same
+
+  int lastcell = -1;
+  int nb = 0;
+
   for (int i = 0; i < nplocal; i++) {
     icell = particles[i].icell;
     if (icell < 0) continue;
 
+    const int cd = celldel[icell];
+    if (!cd) continue;
+
     x = particles[i].x;
-    int inside = (cinfo[icell].type == CELLINSIDE);
 
-    // a surf-free OUTSIDE cell cannot contain a point interior to a body,
-    //   since a body boundary crossing the cell would put a surf in it
-
-    if (!inside && cinfo[icell].type == CELLOUTSIDE &&
-        cells[icell].nsurf == 0) continue;
+    if (icell != lastcell) {
+      int *blist;
+      nb = body_box(cells[icell].lo,cells[icell].hi,&blist);
+      if (nb > maxcelbody) {
+        maxcelbody = nb + DELTA_MODIFY;
+        memory->destroy(celbody);
+        memory->create(celbody,maxcelbody,"fix_rigid:celbody");
+      }
+      for (int m = 0; m < nb; m++) celbody[m] = blist[m];
+      lastcell = icell;
+    }
 
     if (timeflag) ntest++;
-    int inbody = inside_any_body(x);
-    if (!inbody && !inside) continue;
+
+    int inbody = 0;
+    for (int m = 0; m < nb; m++) {
+      const int ibody = celbody[m];
+
+      // every point inside the body is within rmaxbody of its COM
+
+      double d2 = 0.0;
+      for (int k = 0; k < dim; k++) {
+        const double dk = x[k] - xcm[ibody][k];
+        d2 += dk*dk;
+      }
+      const double rmax = rmaxbody[ibody] + bboxeps[ibody];
+      if (d2 > rmax*rmax) continue;
+
+      if (inside_body(ibody,x)) {
+        inbody = 1;
+        break;
+      }
+    }
+
+    if (!inbody && cd != 2) continue;
 
     particles[i].icell = -1;
     delflag = 1;

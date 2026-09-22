@@ -64,6 +64,14 @@ class FixRigid : public Fix {
   // per local+ghost surf: body index and element index, -1 = static
   // read by the mover (via Update::rigidmap) and the force sum
 
+  // the deletion pass: one byte per cell saying whether its particles
+  //   can be inside a body, and the bodies which reach the last cell
+
+  char *celldel;
+  int maxcelldel;
+  int *celbody;
+  int maxcelbody;
+
   int *surfbody;
   int *surfelem;
   int maxsurfmap;         // allocated length of both
