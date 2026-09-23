@@ -1,0 +1,43 @@
+# 1000 mobile rigid circles in a 2d gas: stress test of fix rigid
+# each circle is its own body, numbered by surf type, driven by the gas
+# and by push-off contacts with its neighbours and the box walls
+
+seed                12345
+dimension           2
+global              gridcut 0.0 comm/sort yes
+boundary            r r p
+
+create_box          0 0.565685424949238 0 0.565685424949238 -0.05 0.05
+create_grid         1131 1131 1
+balance_grid        rcb cell
+
+global              nrho 1.0e20 fnum 1.6e13
+species             air.species N O
+mixture             air N O vstream 0 0 0 temp 300.0
+collide             vss air air.vss
+
+read_surf           nc1000.surf type group bodies
+surf_collide        1 diffuse 300.0 1.0
+surf_modify         all collide 1
+
+timestep            2.5e-7
+global              rigid yes
+
+
+fix                 1 rigid bodies type infile nc1000.bodies &
+                    push 1.25e4 8.0e-4 pushbound yes bodies owned
+
+create_particles    air n 0
+
+# full box: all 1000 bodies in the 7.2M particle gas
+# the particles are sub-pixel at this scale, so they read as a red/green
+#   speckle (N red, O green) with the bodies standing out on top
+
+
+# a tenth of the box edge, where individual gas particles resolve:
+#   about 70000 of them and a dozen bodies in the frame
+
+
+stats               10
+stats_style         step cpu np nscoll f_1[1][1] f_1[1][2] f_1[500][4] f_1[1000][4]
+run                 40
