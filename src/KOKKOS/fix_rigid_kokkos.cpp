@@ -2034,14 +2034,12 @@ void FixRigidKokkos::operator()(TagFixRigidRemoveInside,
   const int icell = d_particles_kk[i].icell;
   if (icell < 0) return;
 
-  int ctype = CELLOUTSIDE;
-  if (icell < nlocal_kk) ctype = d_cinfo_kk[icell].type;
-  const int inside = (ctype == CELLINSIDE);
+  // the cell's verdict, one byte per cell built before the pass, rather
+  //   than two reads into the cell structs per particle
 
-  // a surf-free OUTSIDE cell cannot contain a point interior to a body,
-  //   since a body boundary crossing the cell would put a surf in it
-
-  if (!inside && ctype == CELLOUTSIDE && d_cells_kk[icell].nsurf == 0) return;
+  const int flag = d_delflag_kk(icell);
+  if (!flag) return;
+  const int inside = (flag == 2);
 
   double *x = d_particles_kk[i].x;
   const int inbody = body.inside_any_body(x);
@@ -2120,6 +2118,32 @@ int FixRigidKokkos::remove_inside_all_kokkos(int splitflag)
   nlocal_kk = grid->nlocal;
 
   nplocal_kk = particle->nlocal;
+
+  // per cell, what the pass does with its particles: a surf-free OUTSIDE
+  //   cell cannot contain a point interior to a body, since a body
+  //   boundary crossing the cell would put a surf in it, so they are
+  //   skipped (0); an INSIDE cell's are deleted (2); any other cell's are
+  //   tested against the bodies (1).  a ghost cell has no ChildInfo and
+  //   counts as OUTSIDE
+
+  const int ncellall = grid->nlocal + grid->nghost;
+  if ((int) d_delflag_kk.extent(0) < ncellall)
+    d_delflag_kk = DAT::t_char_1d(
+      Kokkos::view_alloc(Kokkos::WithoutInitializing,"fix_rigid:delflag"),
+      grow_extra(ncellall));
+  {
+    auto d_flag = d_delflag_kk;
+    auto d_cells = d_cells_kk;
+    auto d_cinfo = d_cinfo_kk;
+    const int nl = nlocal_kk;
+    Kokkos::parallel_for("fix_rigid:delflag",ncellall, KOKKOS_LAMBDA(const int ic) {
+      const int ctype = (ic < nl) ? d_cinfo[ic].type : (int) CELLOUTSIDE;
+      char f = 1;
+      if (ctype == CELLINSIDE) f = 2;
+      else if (ctype == CELLOUTSIDE && d_cells[ic].nsurf == 0) f = 0;
+      d_flag(ic) = f;
+    });
+  }
 
   // the dellist is sized to the particle count so the kernel can never
   //   overflow it, which keeps this a single pass with no retry

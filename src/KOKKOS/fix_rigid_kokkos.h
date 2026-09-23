@@ -426,6 +426,7 @@ class FixRigidKokkos : public FixRigid {
 
   t_particle_1d d_particles_kk;
   t_cinfo_1d d_cinfo_kk;        // the device grid, current after apply_changes()
+  DAT::t_char_1d d_delflag_kk;  // per cell: 0 skip, 1 test, 2 inside a body
   int nlocal_kk;                // grid->nlocal, cinfo has no ghost rows
 };
 
