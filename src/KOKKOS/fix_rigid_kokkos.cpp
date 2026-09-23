@@ -69,6 +69,7 @@ FixRigidKokkos::FixRigidKokkos(SPARTA *sparta, int narg, char **arg) :
   kokkosable = 1;
 
   nelem_kk = nbin_kk = 0;
+  bodybingen_kk = -1;
   nsub_kk = 0;
   nsub_used = 0;
   combined_kk = 0;
@@ -1967,19 +1968,30 @@ void FixRigidKokkos::pack_body_device()
 {
   int nbins = bodynbin[0]*bodynbin[1]*bodynbin[2];
 
+  // the bins change only when body_bins() rebuilds them, once a step,
+  //   while this runs before each of the three passes that read them;
+  //   the list holds the bodies this proc holds, the first nlist entries
+
   if (nbins > nbin_kk || k_bodybinstart.extent(0) < (size_t)(nbins+1)) {
     k_bodybinstart = DAT::tdual_int_1d("fix_rigid:bodybinstart",nbins+1);
     nbin_kk = nbins;
+    bodybingen_kk = -1;
   }
-  if (k_bodybinlist.extent(0) < (size_t)nbody)
+  if (k_bodybinlist.extent(0) < (size_t)nbody) {
     k_bodybinlist = DAT::tdual_int_1d("fix_rigid:bodybinlist",nbody);
+    bodybingen_kk = -1;
+  }
 
-  auto h_binstart = k_bodybinstart.view_host();
-  auto h_binlist = k_bodybinlist.view_host();
-  for (int i = 0; i <= nbins; i++) h_binstart(i) = bodybinstart[i];
-  for (int i = 0; i < nbody; i++) h_binlist(i) = bodybinlist[i];
-  k_bodybinstart.modify_host(); k_bodybinstart.sync_device();
-  k_bodybinlist.modify_host(); k_bodybinlist.sync_device();
+  if (bodybingen_kk != bodybingen) {
+    const int nlist = bodybinstart[nbins];
+    auto h_binstart = k_bodybinstart.view_host();
+    auto h_binlist = k_bodybinlist.view_host();
+    for (int i = 0; i <= nbins; i++) h_binstart(i) = bodybinstart[i];
+    for (int i = 0; i < nlist; i++) h_binlist(i) = bodybinlist[i];
+    k_bodybinstart.modify_host(); k_bodybinstart.sync_device();
+    k_bodybinlist.modify_host(); k_bodybinlist.sync_device();
+    bodybingen_kk = bodybingen;
+  }
 
   body.nbody = nbody;
   body.dim = dim;

@@ -346,6 +346,7 @@ class FixRigid : public Fix {
   //   without a loop over all bodies
 
   int bodynbin[3];        // # of bins in each dim
+  int bodybingen;         // bumped by every body_bins()
   double bodybinlo[3];    // bin grid origin
   double bodybininv[3];   // inverse bin edge lengths
   int *bodybinstart;      // CSR offsets into bodybinlist per bin

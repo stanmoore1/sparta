@@ -419,6 +419,7 @@ FixRigid::FixRigid(SPARTA *sparta, int narg, char **arg) :
   groupstart = NULL;
   elemglo = elemghi = NULL;
   idmap = new std::unordered_map<surfint,int>();
+  bodybingen = 0;
 
   setup_body();
 
@@ -4111,6 +4112,7 @@ void FixRigid::body_bins()
     bodybininv[k] = n/len;
   }
   int nbins = bodynbin[0]*bodynbin[1]*bodynbin[2];
+  bodybingen++;
 
   // grown, never reallocated: this runs every step
 

@@ -414,6 +414,7 @@ class FixRigidKokkos : public FixRigid {
 
   int nelem_kk;                 // # of body elements packed
   int nbin_kk;                  // # of body bins packed
+  int bodybingen_kk;            // bodybingen of the bins on the device
 
   // deletion list, built on device exactly as collide/kk builds its own
 
