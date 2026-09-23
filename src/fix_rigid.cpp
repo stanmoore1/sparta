@@ -478,7 +478,7 @@ FixRigid::FixRigid(SPARTA *sparta, int narg, char **arg) :
   maxbodysend = maxbodyrecv = 0;
   partsend = partrecv = NULL;
   maxpartsend = maxpartrecv = 0;
-  nsendslot = nrecvslot = sendoffset = recvoffset = NULL;
+  nsendslot = nrecvslot = sendoffset = recvoffset = nsendcount = NULL;
   neighreq = NULL;
   gathernum = gathercount = gatherdispl = NULL;
   gathervalid = -1;
@@ -486,6 +486,7 @@ FixRigid::FixRigid(SPARTA *sparta, int narg, char **arg) :
     memory->create(neighlist,comm->nprocs,"fix_rigid:neighlist");
     memory->create(neighslot,comm->nprocs,"fix_rigid:neighslot");
     memory->create(nsendslot,comm->nprocs,"fix_rigid:nsendslot");
+    memory->create(nsendcount,comm->nprocs,"fix_rigid:nsendcount");
     memory->create(nrecvslot,comm->nprocs,"fix_rigid:nrecvslot");
     memory->create(sendoffset,comm->nprocs,"fix_rigid:sendoffset");
     memory->create(recvoffset,comm->nprocs,"fix_rigid:recvoffset");
@@ -497,6 +498,7 @@ FixRigid::FixRigid(SPARTA *sparta, int narg, char **arg) :
   }
 
   bodybinstart = NULL;
+  maxbodybin = maxbodybinlist = 0;
   bodybinlist = NULL;
   bodycand = NULL;
   maxbodycand = 0;
@@ -602,6 +604,7 @@ FixRigid::~FixRigid()
   memory->destroy(partsend);
   memory->destroy(partrecv);
   memory->destroy(nsendslot);
+  memory->destroy(nsendcount);
   memory->destroy(nrecvslot);
   memory->destroy(sendoffset);
   memory->destroy(recvoffset);
@@ -2758,13 +2761,25 @@ void FixRigid::unpack_datum(const BodyDatum &datum)
      of the receive buffer, i.e. ascending source rank; returns the total
 ------------------------------------------------------------------------- */
 
-int FixRigid::neighbor_counts(int tag)
+void FixRigid::neighbor_counts_post(int tag)
 {
+  // the counts travel in their own buffer: the caller packs its records
+  //   while this is in flight, and that pass reuses nsendslot as its
+  //   per-slot fill cursor
+
+  for (int i = 0; i < nneigh; i++) nsendcount[i] = nsendslot[i];
+
   for (int i = 0; i < nneigh; i++)
     MPI_Irecv(&nrecvslot[i],1,MPI_INT,neighlist[i],tag,world,&neighreq[i]);
   for (int i = 0; i < nneigh; i++)
-    MPI_Isend(&nsendslot[i],1,MPI_INT,neighlist[i],tag,world,
+    MPI_Isend(&nsendcount[i],1,MPI_INT,neighlist[i],tag,world,
               &neighreq[nneigh+i]);
+}
+
+/* ---------------------------------------------------------------------- */
+
+int FixRigid::neighbor_counts_wait()
+{
   if (nneigh) MPI_Waitall(2*nneigh,neighreq,MPI_STATUSES_IGNORE);
 
   int nrecv = 0;
@@ -2844,6 +2859,11 @@ void FixRigid::exchange_forward()
     }
   }
 
+  // the counts are final: start trading them, and let pass 2 pack the
+  //   records while they are in flight
+
+  neighbor_counts_post(TAG_FORWARD);
+
   // prefix offsets; nsendslot is then reused as the per-slot fill cursor
   //   and ends back at the counts the exchange needs
 
@@ -2880,7 +2900,7 @@ void FixRigid::exchange_forward()
     }
   }
 
-  int nrecv = neighbor_counts(TAG_FORWARD);
+  int nrecv = neighbor_counts_wait();
   if (nrecv > maxbodyrecv) {
     maxbodyrecv = nrecv + DELTA_MODIFY;
     memory->grow(bodyrecv,maxbodyrecv,"fix_rigid:bodyrecv");
@@ -2906,7 +2926,11 @@ void FixRigid::exchange_reverse()
 {
   int ibody,slot;
 
-  for (int i = 0; i < 6*nbody; i++) ftbuf_all[i] = 0.0;
+  // only the rows of held bodies are written and read: a partial
+  //   arrives for a body this proc owns, and ownlist is within blist
+
+  for (int m = 0; m < nblist; m++)
+    for (int k = 0; k < 6; k++) ftbuf_all[6*blist[m]+k] = 0.0;
 
   // pass 1: one record per ghost body, to its owner's slot
 
@@ -2921,6 +2945,8 @@ void FixRigid::exchange_reverse()
                  "Fix rigid body exchange reached a non-neighbor proc");
     nsendslot[slot]++;
   }
+
+  neighbor_counts_post(TAG_REVERSE);
 
   int nsend = 0;
   for (int i = 0; i < nneigh; i++) {
@@ -2945,7 +2971,7 @@ void FixRigid::exchange_reverse()
     memcpy(partsend[j].f,&ftbuf_mine[6*ibody],6*sizeof(double));
   }
 
-  int nrecv = neighbor_counts(TAG_REVERSE);
+  int nrecv = neighbor_counts_wait();
   if (nrecv > maxpartrecv) {
     maxpartrecv = nrecv + DELTA_MODIFY;
     memory->grow(partrecv,maxpartrecv,"fix_rigid:partrecv");
@@ -4080,10 +4106,18 @@ void FixRigid::body_bins()
   }
   int nbins = bodynbin[0]*bodynbin[1]*bodynbin[2];
 
-  memory->destroy(bodybinstart);
-  memory->destroy(bodybinlist);
-  memory->create(bodybinstart,nbins+1,"fix_rigid:bodybinstart");
-  memory->create(bodybinlist,nbody,"fix_rigid:bodybinlist");
+  // grown, never reallocated: this runs every step
+
+  if (nbins+1 > maxbodybin) {
+    maxbodybin = nbins + 1;
+    memory->destroy(bodybinstart);
+    memory->create(bodybinstart,maxbodybin,"fix_rigid:bodybinstart");
+  }
+  if (nbody > maxbodybinlist) {
+    maxbodybinlist = nbody;
+    memory->destroy(bodybinlist);
+    memory->create(bodybinlist,maxbodybinlist,"fix_rigid:bodybinlist");
+  }
 
   // two passes: count bodies per bin, then fill
   // a body outside the box is binned in the nearest edge bin

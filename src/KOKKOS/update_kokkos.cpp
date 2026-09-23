@@ -440,8 +440,15 @@ void UpdateKokkos::rigid_upload()
   int nbody = fixrigid->nbody;
   if ((int) k_rigidbody.extent(0) < nbody)
     k_rigidbody = tdual_rigidbody_2d("update:rigidbody",nbody,22);
+  // only the bodies this proc holds are read: the move kernel indexes a
+  //   body by a surf it hit, and a surf in a local cell belongs to a
+  //   held body.  replicated mode holds every body, so it is unchanged
+
   auto h_rigidbody = k_rigidbody.view_host();
-  for (int m = 0; m < nbody; m++) {
+  const int nblist = fixrigid->nblist;
+  int *blist = fixrigid->blist;
+  for (int ib = 0; ib < nblist; ib++) {
+    const int m = blist[ib];
     for (int k = 0; k < 3; k++) {
       h_rigidbody(m,k) = fixrigid->xcm[m][k];
       h_rigidbody(m,3+k) = fixrigid->vcm[m][k];

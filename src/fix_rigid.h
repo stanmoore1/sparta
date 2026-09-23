@@ -272,6 +272,9 @@ class FixRigid : public Fix {
   PartDatum *partsend,*partrecv;
   int maxpartsend,maxpartrecv;
   int *nsendslot,*nrecvslot;   // records exchanged with each neighbor
+  int *nsendcount;             // the counts in flight, which pass 2 of an
+                               //   exchange must not touch: nsendslot is
+                               //   its fill cursor
   int *sendoffset,*recvoffset; // first record of each slot in the buffers
   MPI_Request *neighreq;       // 2*nneigh, both rounds of an exchange
   int *gathernum;         // records each proc contributes to gather_all()
@@ -281,7 +284,9 @@ class FixRigid : public Fix {
 
   void pack_datum(int, BodyDatum &);
   void unpack_datum(const BodyDatum &);
-  int neighbor_counts(int);     // trade the per-slot record counts
+  void neighbor_counts_post(int);  // start the per-slot count trade, so
+                                   //   the record packing covers it
+  int neighbor_counts_wait();      // finish it, return the record count
   void neighbor_data(char *, char *, int, int);   // trade the records
   void exchange_forward();      // owner -> holders, after the integration
   void exchange_reverse();      // ghost partial sums -> owner
@@ -341,6 +346,8 @@ class FixRigid : public Fix {
   double bodybininv[3];   // inverse bin edge lengths
   int *bodybinstart;      // CSR offsets into bodybinlist per bin
   int *bodybinlist;       // body indices, binned by COM
+  int maxbodybin;         // both grown, not reallocated per step
+  int maxbodybinlist;
   int *bodycand;          // query result buffer
   int maxbodycand;
   double rmaxall;         // max over bodies of rmaxbody + bbox inflation
