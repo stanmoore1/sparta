@@ -212,5 +212,5 @@ is called from the constructor and allocates.
 - `b4ac4da` per-cell element scans test element groups first
 - `b78f190` deletion pass classifies cells, not particles
 
-Full history, measurements and the staged R3 design are in the plan file
-`~/.claude/plans/i-benchmarked-the-surf-rigid-body-velvet-bee.md`.
+Full history, measurements and the staged R3 design are in
+`bench/rigid/PORT_PLAN.md` beside this note.

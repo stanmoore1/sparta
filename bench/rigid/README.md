@@ -1,5 +1,10 @@
 # fix rigid benchmark decks
 
+Two notes live here beside the decks:
+`GEOMETRY_KERNEL_HANDOFF.md`, the diagnosis of the GPU scaling ceiling
+and what to do next, and `PORT_PLAN.md`, the running design and
+measurement record of the whole Kokkos port.
+
 2d decks of N mobile rigid circles in a gas, each circle its own body of
 32 line segments, driven by the gas and by push-off contacts with its
 neighbours and the box walls.  Every deck runs 40 steps and prints a
