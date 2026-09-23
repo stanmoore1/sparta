@@ -34,6 +34,16 @@ using namespace SPARTA_NS;
 #define EPSSURF 1.0e-4          // same as FixRigid
 #define BIG 1.0e20
 
+// capacity for n entries of a buffer that grows with a per-step count:
+//   10% extra, as SPARTA grows its other KOKKOS buffers, so a count
+//   that creeps up does not reallocate, and on a GPU synchronize the
+//   device to free the old buffer, on every step it does
+
+static inline int grow_extra(bigint n)
+{
+  return (int) (n + n/10 + 1);
+}
+
 enum{CELLUNKNOWN,CELLOUTSIDE,CELLINSIDE,CELLOVERLAP};   // same as Grid
 enum{REPLICATED,OWNED};                                // same as FixRigid
 enum{OWNEDBODY,GHOSTBODY,FARBODY};                     // same as FixRigid
@@ -82,6 +92,8 @@ FixRigidKokkos::FixRigidKokkos(SPARTA *sparta, int narg, char **arg) :
   devicegeom = 0;
   newgeom = 0;
   nlcopy_kk = 0;
+  zerotally_kk = zeropending_kk = 0;
+  zerogen_kk = -1;
   maxdelete_kk = 0;
   d_ndelete_kk = DAT::t_int_scalar("fix_rigid:ndelete");
   h_ndelete_kk = Kokkos::create_mirror_view(d_ndelete_kk);
@@ -180,10 +192,10 @@ void FixRigidKokkos::relabel_moved_cells()
   for (int i = 0; i < nmoved; i++) nold = MAX(nold,grid->movedfrom[i]+1);
 
   if ((int) d_cellmap.extent(0) < nold)
-    d_cellmap = DAT::t_int_1d("fix_rigid:cellmap",nold);
+    d_cellmap = DAT::t_int_1d("fix_rigid:cellmap",grow_extra(nold));
   if ((int) k_movedfrom.extent(0) < nmoved) {
-    k_movedfrom = DAT::tdual_int_1d("fix_rigid:movedfrom",nmoved);
-    k_movedto = DAT::tdual_int_1d("fix_rigid:movedto",nmoved);
+    k_movedfrom = DAT::tdual_int_1d("fix_rigid:movedfrom",grow_extra(nmoved));
+    k_movedto = DAT::tdual_int_1d("fix_rigid:movedto",grow_extra(nmoved));
   }
   auto h_from = k_movedfrom.view_host();
   auto h_to = k_movedto.view_host();
@@ -275,6 +287,23 @@ void FixRigidKokkos::start_of_step()
 
   grid_kk->sync(Host,ALL_MASK);
 
+  // the move kernel's per-element force/torque tallies for this step
+  // only the rows of the elements this proc holds are written by the
+  //   mover -- a surf it tallies lies in a local cell, so its body is
+  //   held -- and only those rows are read by sum_tallies(), so the
+  //   rest keep whatever they had.  replicated mode holds every body,
+  //   so it zeroes the whole array as before
+  // the sweep's geometry kernel in swept_boxes() zeroes them on its way,
+  //   over the same element list; the kernel below runs only if no
+  //   sweep did, or the list changed after it
+
+  if ((int) k_ftally.extent(0) < nsurf) {
+    k_ftally = tdual_dbl_2d("fix_rigid:ftally",nsurf,6);
+    d_ftally = k_ftally.view_device();
+    Kokkos::deep_copy(d_ftally,0.0);
+  }
+  zeropending_kk = 1;
+
   FixRigid::start_of_step();
 
   // distributed surfs: local copies of a body entering this proc were
@@ -285,26 +314,15 @@ void FixRigidKokkos::start_of_step()
     copiesappended = 0;
   }
 
-  // the move kernel's per-element force/torque tallies for this step
-
-  if ((int) k_ftally.extent(0) < nsurf) {
-    k_ftally = tdual_dbl_2d("fix_rigid:ftally",nsurf,6);
-    d_ftally = k_ftally.view_device();
-    Kokkos::deep_copy(d_ftally,0.0);
-  }
-
-  // only the rows of the elements this proc holds are written by the
-  //   mover -- a surf it tallies lies in a local cell, so its body is
-  //   held -- and only those rows are read by sum_tallies(), so the
-  //   rest keep whatever they had.  replicated mode holds every body,
-  //   so it zeroes the whole array as before
-
   pack_body_lists();
-  d_lelem_kk = k_lelem.view_device();
-  copymode = 1;
-  Kokkos::parallel_for(
-    Kokkos::RangePolicy<DeviceType,TagFixRigidZeroTally>(0,nlelem_kk),*this);
-  copymode = 0;
+  if (zeropending_kk || zerogen_kk != blistgen_kk) {
+    d_lelem_kk = k_lelem.view_device();
+    copymode = 1;
+    Kokkos::parallel_for(
+      Kokkos::RangePolicy<DeviceType,TagFixRigidZeroTally>(0,nlelem_kk),*this);
+    copymode = 0;
+  }
+  zeropending_kk = 0;
 
   // the collision lists, and any re-indexed ghost cell lists, reach the
   //   device through the journal
@@ -461,16 +479,12 @@ void FixRigidKokkos::newghost_geometry()
   dim_kk = dim;
   dt_kk = update->dt;
 
+  zerotally_kk = 0;
   copymode = 1;
   Kokkos::parallel_for(
     Kokkos::RangePolicy<DeviceType,TagFixRigidGeometry>(0,n),*this);
-  Kokkos::parallel_for(
-    Kokkos::RangePolicy<DeviceType,TagFixRigidBodyBox>(0,nnewghost),*this);
-  Kokkos::parallel_for(
-    Kokkos::RangePolicy<DeviceType,TagFixRigidInflate>(0,n),*this);
-  Kokkos::parallel_for(
-    Kokkos::RangePolicy<DeviceType,TagFixRigidGroupBox>(0,ng),*this);
   copymode = 0;
+  body_group_boxes(nnewghost);
 
   // the host copy of a body regenerated here is stale
 
@@ -749,7 +763,7 @@ void FixRigidKokkos::pack_body_lists()
 
   const int nown = surf->distributed ? nolist : 0;
   if ((int) k_lcopy.extent(0) < ncopy+nown)
-    k_lcopy = DAT::tdual_int_1d("fix_rigid:lcopy",ncopy+nown);
+    k_lcopy = DAT::tdual_int_1d("fix_rigid:lcopy",grow_extra(ncopy+nown));
   auto h_lcopy = k_lcopy.view_host();
 
   n = 0;
@@ -796,6 +810,7 @@ void FixRigidKokkos::geometry_views()
   d_glonew_kk = k_elemglo_new.view_device();
   d_ghinew_kk = k_elemghi_new.view_device();
   d_groupelem_kk = k_groupelem.view_device();
+  d_groupstart_kk = k_groupstart.view_device();
   d_bblonew_kk = k_bbodylo_new.view_device();
   d_bbhinew_kk = k_bbodyhi_new.view_device();
   d_bbepsnew_kk = k_bboxeps_new.view_device();
@@ -865,16 +880,21 @@ void FixRigidKokkos::device_geometry(int sweepflag)
   dim_kk = dim;
   dt_kk = update->dt;
 
+  // a sweep zeroes the tally rows of the elements it visits, once a step
+
+  zerotally_kk = (sweepflag && zeropending_kk);
+  if (zerotally_kk) {
+    zeropending_kk = 0;
+    zerogen_kk = blistgen_kk;
+  }
+
   if (timeflag) tg = MPI_Wtime();
   copymode = 1;
   Kokkos::parallel_for(
     Kokkos::RangePolicy<DeviceType,TagFixRigidGeometry>(0,nlelem_kk),*this);
-  Kokkos::parallel_for(
-    Kokkos::RangePolicy<DeviceType,TagFixRigidBodyBox>(0,nblist),*this);
-  Kokkos::parallel_for(
-    Kokkos::RangePolicy<DeviceType,TagFixRigidInflate>(0,nlelem_kk),*this);
-  Kokkos::parallel_for(
-    Kokkos::RangePolicy<DeviceType,TagFixRigidGroupBox>(0,nlgroup_kk),*this);
+  copymode = 0;
+  body_group_boxes(nblist);
+  copymode = 1;
   if (!sweepflag)
     Kokkos::parallel_for(
       Kokkos::RangePolicy<DeviceType,TagFixRigidScatterSurfs>(0,nlcopy_kk),
@@ -1015,6 +1035,9 @@ void FixRigidKokkos::operator()(TagFixRigidGeometry, const int &m) const
 
   const int ib = d_body_kk(i);
   double xcm1[3],ex[3],ey[3],ez[3];
+
+  if (zerotally_kk)
+    for (k = 0; k < 6; k++) d_ftally(i,k) = 0.0;
   for (k = 0; k < 3; k++) {
     xcm1[k] = d_pose_kk(ib,k);
     ex[k] = d_pose_kk(ib,3+k);
@@ -1139,31 +1162,62 @@ void FixRigidKokkos::operator()(TagFixRigidGeometry, const int &m) const
 }
 
 /* ----------------------------------------------------------------------
-   one thread per body this proc holds: its bbox over its element boxes
-     and the inflation FixRigid::body_bbox() applies to both, the arc
-     bulge of the rotation included when sweeping
+   launch the per-body kernel over the first n entries of d_blist_kk:
+     a team per body, see the kernel
+------------------------------------------------------------------------- */
+
+void FixRigidKokkos::body_group_boxes(int n)
+{
+  if (n <= 0) return;
+  copymode = 1;
+  Kokkos::parallel_for(t_bodygroup_policy(n,Kokkos::AUTO),*this);
+  copymode = 0;
+}
+
+/* ----------------------------------------------------------------------
+   one team per body this proc holds, the twin of what follows the
+     element loop of FixRigid::body_bbox():
+   its bbox over its element boxes, as one team reduction, and the
+     inflation applied to both, the arc bulge of the rotation included
+     when sweeping; when sweeping also the box of the end-of-step element
+     boxes, without the rotation term, which is what set_xv() commits
+   then a thread per element group of the body: its elements' boxes
+     inflated by the body's eps, and the group box around them.  the
+     groups of a body partition its elements, so each element box is
+     inflated exactly once, before its group reads it
 ------------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-void FixRigidKokkos::operator()(TagFixRigidBodyBox, const int &m) const
+void FixRigidKokkos::operator()(TagFixRigidBodyGroup,
+                                const t_bodygroup_member &team) const
 {
-  const int ib = d_blist_kk(m);
-  int k;
-  double blo[3],bhi[3];
+  const int ib = d_blist_kk(team.league_rank());
+  const int ilo = d_bodystart_kk(ib);
+  const int ihi = d_bodystart_kk(ib+1);
+  const int sweep = sweep_kk;
 
-  blo[0] = blo[1] = blo[2] = BIG;
-  bhi[0] = bhi[1] = bhi[2] = -BIG;
+  RigidBoxVal box;
+  Kokkos::parallel_reduce(
+    Kokkos::TeamThreadRange(team,ilo,ihi),
+    [&](const int i, RigidBoxVal &b) {
+      for (int k = 0; k < 3; k++) {
+        b.v[k] = MIN(b.v[k],d_elemlo_kk(i,k));
+        b.v[3+k] = MAX(b.v[3+k],d_elemhi_kk(i,k));
+      }
+      if (sweep)
+        for (int k = 0; k < 3; k++) {
+          b.v[6+k] = MIN(b.v[6+k],d_ellonew_kk(i,k));
+          b.v[9+k] = MAX(b.v[9+k],d_elhinew_kk(i,k));
+        }
+    },RigidBoxReducer(box));
 
-  for (int i = d_bodystart_kk(ib); i < d_bodystart_kk(ib+1); i++)
-    for (k = 0; k < 3; k++) {
-      blo[k] = MIN(blo[k],d_elemlo_kk(i,k));
-      bhi[k] = MAX(bhi[k],d_elemhi_kk(i,k));
-    }
+  const double *blo = &box.v[0];
+  const double *bhi = &box.v[3];
 
   double eps = EPSSURF * MAX(bhi[0]-blo[0],bhi[1]-blo[1]);
   eps = EPSSURF * MAX(eps/EPSSURF,bhi[2]-blo[2]);
 
-  if (sweep_kk && !axiflag_kk) {
+  if (sweep && !axiflag_kk) {
     const double wx = d_pose_kk(ib,12);
     const double wy = d_pose_kk(ib,13);
     const double wz = d_pose_kk(ib,14);
@@ -1171,65 +1225,82 @@ void FixRigidKokkos::operator()(TagFixRigidBodyBox, const int &m) const
     eps += 0.125 * d_pose_kk(ib,15) * angle * angle;
   }
 
-  d_bboxeps_kk(ib) = eps;
-  for (k = 0; k < 3; k++) {
-    d_bbodylo_kk(ib,k) = blo[k] - eps;
-    d_bbodyhi_kk(ib,k) = bhi[k] + eps;
-    d_bbox_kk(ib,k) = blo[k] - eps;
-    d_bbox_kk(ib,3+k) = bhi[k] + eps;
+  double epsnew = 0.0;
+  if (sweep) {
+    const double *nlo = &box.v[6];
+    const double *nhi = &box.v[9];
+    epsnew = EPSSURF * MAX(nhi[0]-nlo[0],nhi[1]-nlo[1]);
+    epsnew = EPSSURF * MAX(epsnew/EPSSURF,nhi[2]-nlo[2]);
   }
-  d_bbox_kk(ib,6) = eps;
 
-  // sweeping: the same reduction over the end-of-step element boxes,
-  //   without the rotation term, which is what set_xv() commits
-
-  if (!sweep_kk) return;
-
-  blo[0] = blo[1] = blo[2] = BIG;
-  bhi[0] = bhi[1] = bhi[2] = -BIG;
-
-  for (int i = d_bodystart_kk(ib); i < d_bodystart_kk(ib+1); i++)
-    for (k = 0; k < 3; k++) {
-      blo[k] = MIN(blo[k],d_ellonew_kk(i,k));
-      bhi[k] = MAX(bhi[k],d_elhinew_kk(i,k));
+  Kokkos::single(Kokkos::PerTeam(team),[&]() {
+    d_bboxeps_kk(ib) = eps;
+    for (int k = 0; k < 3; k++) {
+      d_bbodylo_kk(ib,k) = blo[k] - eps;
+      d_bbodyhi_kk(ib,k) = bhi[k] + eps;
+      d_bbox_kk(ib,k) = blo[k] - eps;
+      d_bbox_kk(ib,3+k) = bhi[k] + eps;
     }
+    d_bbox_kk(ib,6) = eps;
 
-  eps = EPSSURF * MAX(bhi[0]-blo[0],bhi[1]-blo[1]);
-  eps = EPSSURF * MAX(eps/EPSSURF,bhi[2]-blo[2]);
+    if (sweep) {
+      const double *nlo = &box.v[6];
+      const double *nhi = &box.v[9];
+      d_bbepsnew_kk(ib) = epsnew;
+      for (int k = 0; k < 3; k++) {
+        d_bblonew_kk(ib,k) = nlo[k] - epsnew;
+        d_bbhinew_kk(ib,k) = nhi[k] + epsnew;
+        d_bboxnew_kk(ib,k) = nlo[k] - epsnew;
+        d_bboxnew_kk(ib,3+k) = nhi[k] + epsnew;
+      }
+      d_bboxnew_kk(ib,6) = epsnew;
+    }
+  });
 
-  d_bbepsnew_kk(ib) = eps;
-  for (k = 0; k < 3; k++) {
-    d_bblonew_kk(ib,k) = blo[k] - eps;
-    d_bbhinew_kk(ib,k) = bhi[k] + eps;
-    d_bboxnew_kk(ib,k) = blo[k] - eps;
-    d_bboxnew_kk(ib,3+k) = bhi[k] + eps;
-  }
-  d_bboxnew_kk(ib,6) = eps;
-}
+  Kokkos::parallel_for(
+    Kokkos::TeamThreadRange(team,d_groupstart_kk(ib),d_groupstart_kk(ib+1)),
+    [&](const int g) {
+      const int gelo = d_groupelem_kk(g);
+      const int gehi = d_groupelem_kk(g+1);
+      double glo[3],ghi[3];
+      for (int k = 0; k < 3; k++) {
+        glo[k] = BIG;
+        ghi[k] = -BIG;
+      }
+      for (int i = gelo; i < gehi; i++)
+        for (int k = 0; k < 3; k++) {
+          const double lo = d_elemlo_kk(i,k) - eps;
+          const double hi = d_elemhi_kk(i,k) + eps;
+          d_elemlo_kk(i,k) = lo;
+          d_elemhi_kk(i,k) = hi;
+          glo[k] = MIN(glo[k],lo);
+          ghi[k] = MAX(ghi[k],hi);
+        }
+      for (int k = 0; k < 3; k++) {
+        d_elemglo_kk(g,k) = glo[k];
+        d_elemghi_kk(g,k) = ghi[k];
+      }
 
-/* ----------------------------------------------------------------------
-   one thread per element of a body this proc holds: its box inflated by
-     its body's eps
-------------------------------------------------------------------------- */
+      if (!sweep) return;
 
-KOKKOS_INLINE_FUNCTION
-void FixRigidKokkos::operator()(TagFixRigidInflate, const int &m) const
-{
-  const int i = d_lelem_kk(m);
-  const int ib = d_body_kk(i);
-  const double eps = d_bboxeps_kk(ib);
-  for (int k = 0; k < 3; k++) {
-    d_elemlo_kk(i,k) -= eps;
-    d_elemhi_kk(i,k) += eps;
-  }
-
-  if (!sweep_kk) return;
-
-  const double epsnew = d_bbepsnew_kk(ib);
-  for (int k = 0; k < 3; k++) {
-    d_ellonew_kk(i,k) -= epsnew;
-    d_elhinew_kk(i,k) += epsnew;
-  }
+      for (int k = 0; k < 3; k++) {
+        glo[k] = BIG;
+        ghi[k] = -BIG;
+      }
+      for (int i = gelo; i < gehi; i++)
+        for (int k = 0; k < 3; k++) {
+          const double lo = d_ellonew_kk(i,k) - epsnew;
+          const double hi = d_elhinew_kk(i,k) + epsnew;
+          d_ellonew_kk(i,k) = lo;
+          d_elhinew_kk(i,k) = hi;
+          glo[k] = MIN(glo[k],lo);
+          ghi[k] = MAX(ghi[k],hi);
+        }
+      for (int k = 0; k < 3; k++) {
+        d_glonew_kk(g,k) = glo[k];
+        d_ghinew_kk(g,k) = ghi[k];
+      }
+    });
 }
 
 /* ----------------------------------------------------------------------
@@ -1241,52 +1312,6 @@ void FixRigidKokkos::operator()(TagFixRigidZeroTally, const int &m) const
 {
   const int i = d_lelem_kk(m);
   for (int j = 0; j < 6; j++) d_ftally(i,j) = 0.0;
-}
-
-/* ----------------------------------------------------------------------
-   one thread per element group of a body this proc holds: the box
-     around its elements' boxes, the twin of the loop which closes
-     FixRigid::body_bbox()
-   runs after the inflation, so a group box contains the inflated boxes
-------------------------------------------------------------------------- */
-
-KOKKOS_INLINE_FUNCTION
-void FixRigidKokkos::operator()(TagFixRigidGroupBox, const int &m) const
-{
-  const int g = d_lgroup_kk(m);
-  const int ilo = d_groupelem_kk(g);
-  const int ihi = d_groupelem_kk(g+1);
-
-  double glo[3],ghi[3];
-  for (int k = 0; k < 3; k++) {
-    glo[k] = BIG;
-    ghi[k] = -BIG;
-  }
-  for (int i = ilo; i < ihi; i++)
-    for (int k = 0; k < 3; k++) {
-      glo[k] = MIN(glo[k],d_elemlo_kk(i,k));
-      ghi[k] = MAX(ghi[k],d_elemhi_kk(i,k));
-    }
-  for (int k = 0; k < 3; k++) {
-    d_elemglo_kk(g,k) = glo[k];
-    d_elemghi_kk(g,k) = ghi[k];
-  }
-
-  if (!sweep_kk) return;
-
-  for (int k = 0; k < 3; k++) {
-    glo[k] = BIG;
-    ghi[k] = -BIG;
-  }
-  for (int i = ilo; i < ihi; i++)
-    for (int k = 0; k < 3; k++) {
-      glo[k] = MIN(glo[k],d_ellonew_kk(i,k));
-      ghi[k] = MAX(ghi[k],d_elhinew_kk(i,k));
-    }
-  for (int k = 0; k < 3; k++) {
-    d_glonew_kk(g,k) = glo[k];
-    d_ghinew_kk(g,k) = ghi[k];
-  }
 }
 
 /* ----------------------------------------------------------------------
@@ -1708,7 +1733,7 @@ int FixRigidKokkos::assign_split_kokkos()
     asgcur++;
 
     if (nsub_used + nsplit > maxasgrow) {
-      maxasgrow = nsub_used + nsplit;
+      maxasgrow = grow_extra(nsub_used + nsplit);
       k_asgrowcell = DAT::tdual_int_1d("fix_rigid:asgrowcell",maxasgrow);
       k_asgrowparent = DAT::tdual_int_1d("fix_rigid:asgrowparent",maxasgrow);
     }
@@ -1747,7 +1772,7 @@ int FixRigidKokkos::assign_split_kokkos()
       return 0;
     }
     if (nsplit > nsplit_kk) {
-      nsplit_kk = nsplit;
+      nsplit_kk = grow_extra(nsplit);
       k_splitcells = DAT::tdual_int_1d("fix_rigid:splitcells",nsplit_kk);
       d_splitcells = k_splitcells.view_device();
     }
@@ -1769,8 +1794,8 @@ int FixRigidKokkos::assign_split_kokkos()
   d_plist2_kk = grid_kk->d_plist;
   const int pcap = (int) d_plist2_kk.extent(1);
 
-  if ((int) d_splitoff.extent(0) < nrow+1)
-    d_splitoff = DAT::t_int_1d("fix_rigid:splitoff",nrow+1);
+  if ((int) d_splitoff.extent(0) < nrow+2)
+    d_splitoff = DAT::t_int_1d("fix_rigid:splitoff",grow_extra(nrow+2));
 
   // flat work list: one entry per particle of a row, from the device
   //   per-cell counts and lists, so the host never reads either
@@ -1779,25 +1804,34 @@ int FixRigidKokkos::assign_split_kokkos()
   auto d_cellcount = d_cellcount_kk;
   auto d_plist = d_plist2_kk;
 
+  // one scan gives the row offsets of the work list and the largest
+  //   per-cell count, which must fit the per-cell lists; both come back
+  //   in one copy from the tail of d_splitoff
+
+  int nasg = 0;
   int maxcount = 0;
-  Kokkos::parallel_reduce("fix_rigid:asg_max",nrow, KOKKOS_LAMBDA(const int i, int &mx) {
-    const int n = d_cellcount(d_rowcell(i));
-    if (n > mx) mx = n;
-  },Kokkos::Max<int>(maxcount));
+  if (nrow) {
+    Kokkos::parallel_scan("fix_rigid:asg_scan",nrow, KOKKOS_LAMBDA(const int i, RigidSumMax &v,
+                                                const bool final) {
+      const int n = d_cellcount(d_rowcell(i));
+      if (final) d_splitoff(i) = v.sum;
+      v.sum += n;
+      if (n > v.mx) v.mx = n;
+      if (final && i == nrow-1) {
+        d_splitoff(nrow) = v.sum;
+        d_splitoff(nrow+1) = v.mx;
+      }
+    });
+    int tail[2];
+    Kokkos::deep_copy(Kokkos::View<int[2],Kokkos::HostSpace>(tail),
+                      Kokkos::subview(d_splitoff,std::make_pair(nrow,nrow+2)));
+    nasg = tail[0];
+    maxcount = tail[1];
+  }
   if (maxcount > pcap) {
     sparta->kokkos->auto_sync = prev_auto_sync;
     return 0;
   }
-
-  Kokkos::parallel_scan("fix_rigid:asg_scan",nrow, KOKKOS_LAMBDA(const int i, int &sum,
-                                              const bool final) {
-    const int n = d_cellcount(d_rowcell(i));
-    if (final) d_splitoff(i) = sum;
-    sum += n;
-    if (final && i == nrow-1) d_splitoff(nrow) = sum;
-  });
-  int nasg;
-  Kokkos::deep_copy(nasg,Kokkos::subview(d_splitoff,nrow));
 
   if (nasg) {
     if (nasg > nasg_kk) {
@@ -2066,7 +2100,7 @@ int FixRigidKokkos::remove_inside_all_kokkos(int splitflag)
   //   overflow it, which keeps this a single pass with no retry
 
   if (nplocal_kk > maxdelete_kk) {
-    maxdelete_kk = nplocal_kk;
+    maxdelete_kk = grow_extra(nplocal_kk);
     k_dellist_kk = DAT::tdual_int_1d("fix_rigid:dellist",maxdelete_kk);
     d_dellist_kk = k_dellist_kk.view_device();
   }

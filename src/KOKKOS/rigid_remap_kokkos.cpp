@@ -31,6 +31,16 @@ using namespace MathConst;
 
 #define CUTSCRATCH 268435456   // bytes of device scratch per chunk of 3d cuts
 
+// capacity for n entries of a buffer that grows with a per-step count:
+//   10% extra, as SPARTA grows its other KOKKOS buffers, so a count
+//   that creeps up does not reallocate, and on a GPU synchronize the
+//   device to free the old buffer, on every step it does
+
+static inline int grow_extra(bigint n)
+{
+  return (int) (n + n/10 + 1);
+}
+
 enum{CELLUNKNOWN,CELLOUTSIDE,CELLINSIDE,CELLOVERLAP};   // same as Grid
 
 /* ----------------------------------------------------------------------
@@ -46,13 +56,17 @@ RigidRemapKokkos::RigidRemapKokkos(SPARTA *sparta, FixRigidKokkos *fix_in) :
   RigidRemap(sparta,fix_in)
 {
   fix_kk = fix_in;
-  maxpair = 0;
+  maxpack = 0;
   maxswcell_kk = maxtouched_kk = maxhit_kk = 0;
   ntouched_prev = 0;
-  d_ntouched = DAT::t_int_scalar("rigid_remap:ntouched");
-  d_nhit = DAT::t_int_scalar("rigid_remap:nhit");
+  d_rscalars = DAT::t_int_1d("rigid_remap:scalars",5);
+  h_rscalars = Kokkos::create_mirror_view(d_rscalars);
+  d_ntouched = Kokkos::subview(d_rscalars,0);
+  d_nhit = Kokkos::subview(d_rscalars,1);
+  d_fallback = Kokkos::subview(d_rscalars,2);
   staticgen_kk = -1;
-  maxrcand_kk = maxrcandlist_kk = maxch_kk = maxchent_kk = 0;
+  maxrcand_kk = maxrcandlist_kk = 0;
+  maxchint_kk = maxchdbl_kk = 0;
   maxvert_kk = maxedge_kk = maxcline_kk = maxpt_kk = 0;
   d_cutstats = DAT::t_int_1d("rigid_remap:cutstats",2);
 }
@@ -86,6 +100,16 @@ static int box_overlap_kk(const double *alo, const double *ahi,
      per-cell arrays, which are reset from the previous step's touched
      list rather than rewritten
 ------------------------------------------------------------------------- */
+
+void RigidRemapKokkos::grow_pack(bigint n)
+{
+  if (n <= maxpack) return;
+  maxpack = grow_extra(n);
+  d_pack = DAT::t_int_1d("rigid_remap:pack",maxpack);
+  h_pack = Kokkos::create_mirror_view(d_pack);
+}
+
+/* ---------------------------------------------------------------------- */
 
 void RigidRemapKokkos::collision_lists()
 {
@@ -125,19 +149,18 @@ void RigidRemapKokkos::collision_lists()
     npair += n;
   }
 
-  if (npair > maxpair) {
-    maxpair = npair;
-    k_pairbody = DAT::tdual_int_1d("rigid_remap:pairbody",maxpair);
-    k_pairbin = DAT::tdual_int_1d("rigid_remap:pairbin",maxpair);
-  }
-  if ((int) k_qlo.extent(0) < nbody) {
-    k_qlo = DAT::tdual_int_2d("rigid_remap:qlo",nbody,3);
-    k_qhi = DAT::tdual_int_2d("rigid_remap:qhi",nbody,3);
-  }
-  auto h_pairbody = k_pairbody.view_host();
-  auto h_pairbin = k_pairbin.view_host();
-  auto h_qlo = k_qlo.view_host();
-  auto h_qhi = k_qhi.view_host();
+  // qlo | qhi | pairbody | pairbin in the staging buffer
+
+  typedef std::pair<bigint,bigint> range;
+  const bigint o_qhi = 3*((bigint) nbody);
+  const bigint o_pbody = 2*o_qhi;
+  const bigint o_pbin = o_pbody + npair;
+  const bigint npack = o_pbin + npair;
+  grow_pack(npack);
+  t_hint_2d_um h_qlo(h_pack.data(),nbody,3);
+  t_hint_2d_um h_qhi(h_pack.data()+o_qhi,nbody,3);
+  auto h_pairbody = Kokkos::subview(h_pack,range(o_pbody,o_pbin));
+  auto h_pairbin = Kokkos::subview(h_pack,range(o_pbin,npack));
 
   npair = 0;
   for (int m = 0; m < nblist; m++) {
@@ -158,17 +181,15 @@ void RigidRemapKokkos::collision_lists()
           npair++;
         }
   }
-  k_pairbody.modify_host(); k_pairbody.sync_device();
-  k_pairbin.modify_host(); k_pairbin.sync_device();
-  k_qlo.modify_host(); k_qlo.sync_device();
-  k_qhi.modify_host(); k_qhi.sync_device();
+  Kokkos::deep_copy(Kokkos::subview(d_pack,range(0,npack)),
+                    Kokkos::subview(h_pack,range(0,npack)));
 
   // per-cell count and row: zero and -1 everywhere but the cells the
   //   previous step touched, which its touched list resets here; views
   //   which grow start fresh
 
   if (ntotal > maxswcell_kk) {
-    maxswcell_kk = ntotal;
+    maxswcell_kk = grow_extra(ntotal);
     d_swcount = DAT::t_int_1d("rigid_remap:swcount",maxswcell_kk);
     d_swrow = DAT::t_int_1d("rigid_remap:swrow",maxswcell_kk);
     Kokkos::deep_copy(d_swrow,-1);
@@ -192,10 +213,10 @@ void RigidRemapKokkos::collision_lists()
 
   // the views the kernels read, as locals so the lambdas carry copies
 
-  auto d_pairbody = k_pairbody.view_device();
-  auto d_pairbin = k_pairbin.view_device();
-  auto d_qlo = k_qlo.view_device();
-  auto d_qhi = k_qhi.view_device();
+  auto d_pairbody = Kokkos::subview(d_pack,range(o_pbody,o_pbin));
+  auto d_pairbin = Kokkos::subview(d_pack,range(o_pbin,npack));
+  t_int_2d_um d_qlo(d_pack.data(),nbody,3);
+  t_int_2d_um d_qhi(d_pack.data()+o_qhi,nbody,3);
   auto d_binstart = grid_kk->d_cellbinstart;
   auto d_binlist = grid_kk->d_cellbinlist;
   auto d_cells = grid_kk->k_cells.view_device();
@@ -244,8 +265,7 @@ void RigidRemapKokkos::collision_lists()
   int ntouched,nhit;
 
   while (1) {
-    Kokkos::deep_copy(d_ntouched,0);
-    Kokkos::deep_copy(d_nhit,0);
+    Kokkos::deep_copy(d_rscalars,0);
     auto d_hitcell = this->d_hitcell;
     auto d_hitelem = this->d_hitelem;
     const int maxhit = maxhit_kk;
@@ -289,8 +309,9 @@ void RigidRemapKokkos::collision_lists()
       }
     });
 
-    Kokkos::deep_copy(ntouched,d_ntouched);
-    Kokkos::deep_copy(nhit,d_nhit);
+    Kokkos::deep_copy(h_rscalars,d_rscalars);
+    ntouched = h_rscalars(0);
+    nhit = h_rscalars(1);
     if (nhit <= maxhit_kk) break;
 
     maxhit_kk = nhit + nhit/2;
@@ -316,7 +337,7 @@ void RigidRemapKokkos::collision_lists()
   //   the rows
 
   if (ntouched > maxtouched_kk) {
-    maxtouched_kk = ntouched;
+    maxtouched_kk = grow_extra(ntouched);
     d_swoff = DAT::t_int_1d("rigid_remap:swoff",maxtouched_kk+1);
     d_swcursor = DAT::t_int_1d("rigid_remap:swcursor",maxtouched_kk);
     d_swext = DAT::t_int_1d("rigid_remap:swext",maxtouched_kk);
@@ -502,7 +523,7 @@ int RigidRemapKokkos::recut()
 
   if (staticgen != staticgen_kk || (int) k_staticinside.extent(0) < nglocal) {
     if ((int) k_staticinside.extent(0) < nglocal)
-      k_staticinside = DAT::tdual_int_1d("rigid_remap:staticinside",nglocal);
+      k_staticinside = DAT::tdual_int_1d("rigid_remap:staticinside",grow_extra(nglocal));
     auto h_static = k_staticinside.view_host();
     for (i = 0; i < nglocal; i++) h_static(i) = staticinside[i];
     k_staticinside.modify_host(); k_staticinside.sync_device();
@@ -512,21 +533,44 @@ int RigidRemapKokkos::recut()
   // per body: the region R = old bbox U new bbox, its bins, the COM now
   //   and before, the radii about it and whether the COM is interior
 
-  if ((int) k_bodyparam.extent(0) < nbody) {
+  if ((int) k_bodyparam.extent(0) < nbody)
     k_bodyparam = tdual_dbl_2d("rigid_remap:bodyparam",nbody,15);
-    k_qlo = DAT::tdual_int_2d("rigid_remap:qlo",nbody,3);
-    k_qhi = DAT::tdual_int_2d("rigid_remap:qhi",nbody,3);
-    k_cominside = DAT::tdual_int_1d("rigid_remap:cominside",nbody);
-  }
   auto h_bodyparam = k_bodyparam.view_host();
-  auto h_qlo = k_qlo.view_host();
-  auto h_qhi = k_qhi.view_host();
-  auto h_cominside = k_cominside.view_host();
+
+  // the # of (body, bin) pairs first, so the staging buffer is sized
+  //   before anything is written to it
 
   int npair = 0;
   for (int m = 0; m < nblist; m++) {
     ibody = blist[m];
     int n = 1;
+    for (k = 0; k < 3; k++) {
+      double lo = MIN(prevlo[ibody][k],bbodylo[ibody][k]);
+      double hi = MAX(prevhi[ibody][k],bbodyhi[ibody][k]);
+      int qlo = (int) ((lo-grid->cellbinlo[k]) * grid->cellbininv[k]);
+      int qhi = (int) ((hi-grid->cellbinlo[k]) * grid->cellbininv[k]);
+      qlo = MAX(0,MIN(qlo,grid->cellnbin[k]-1));
+      qhi = MAX(0,MIN(qhi,grid->cellnbin[k]-1));
+      n *= qhi - qlo + 1;
+    }
+    npair += n;
+  }
+
+  // qlo | qhi | cominside | pairbody | pairbin in the staging buffer
+
+  typedef std::pair<bigint,bigint> range;
+  const bigint o_qhi = 3*((bigint) nbody);
+  const bigint o_com = 2*o_qhi;
+  const bigint o_pbody = o_com + nbody;
+  const bigint o_pbin = o_pbody + npair;
+  const bigint npack = o_pbin + npair;
+  grow_pack(npack);
+  t_hint_2d_um h_qlo(h_pack.data(),nbody,3);
+  t_hint_2d_um h_qhi(h_pack.data()+o_qhi,nbody,3);
+  auto h_cominside = Kokkos::subview(h_pack,range(o_com,o_pbody));
+
+  for (int m = 0; m < nblist; m++) {
+    ibody = blist[m];
     for (k = 0; k < 3; k++) {
       rlo[k] = MIN(prevlo[ibody][k],bbodylo[ibody][k]);
       rhi[k] = MAX(prevhi[ibody][k],bbodyhi[ibody][k]);
@@ -540,22 +584,15 @@ int RigidRemapKokkos::recut()
       qhi = MAX(0,MIN(qhi,grid->cellnbin[k]-1));
       h_qlo(ibody,k) = qlo;
       h_qhi(ibody,k) = qhi;
-      n *= qhi - qlo + 1;
     }
     h_bodyparam(ibody,12) = fix->rminbody[ibody];
     h_bodyparam(ibody,13) = fix->rmaxbody[ibody];
     h_bodyparam(ibody,14) = fix->bboxeps[ibody];
     h_cominside(ibody) = cominside[ibody];
-    npair += n;
   }
 
-  if (npair > maxpair) {
-    maxpair = npair;
-    k_pairbody = DAT::tdual_int_1d("rigid_remap:pairbody",maxpair);
-    k_pairbin = DAT::tdual_int_1d("rigid_remap:pairbin",maxpair);
-  }
-  auto h_pairbody = k_pairbody.view_host();
-  auto h_pairbin = k_pairbin.view_host();
+  auto h_pairbody = Kokkos::subview(h_pack,range(o_pbody,o_pbin));
+  auto h_pairbin = Kokkos::subview(h_pack,range(o_pbin,npack));
   npair = 0;
   for (int m = 0; m < nblist; m++)
     for (int ibz = h_qlo(blist[m],2); ibz <= h_qhi(blist[m],2); ibz++)
@@ -567,24 +604,21 @@ int RigidRemapKokkos::recut()
         }
 
   k_bodyparam.modify_host(); k_bodyparam.sync_device();
-  k_qlo.modify_host(); k_qlo.sync_device();
-  k_qhi.modify_host(); k_qhi.sync_device();
-  k_cominside.modify_host(); k_cominside.sync_device();
-  k_pairbody.modify_host(); k_pairbody.sync_device();
-  k_pairbin.modify_host(); k_pairbin.sync_device();
+  Kokkos::deep_copy(Kokkos::subview(d_pack,range(0,npack)),
+                    Kokkos::subview(h_pack,range(0,npack)));
 
   if (nglocal+1 > maxrcand_kk) {
-    maxrcand_kk = nglocal+1;
+    maxrcand_kk = grow_extra(nglocal+1);
     d_candflag = DAT::t_int_1d("rigid_remap:candflag",maxrcand_kk);
     d_candoff = DAT::t_int_1d("rigid_remap:candoff",maxrcand_kk);
   }
 
-  auto d_pairbody = k_pairbody.view_device();
-  auto d_pairbin = k_pairbin.view_device();
-  auto d_qlo = k_qlo.view_device();
-  auto d_qhi = k_qhi.view_device();
+  auto d_pairbody = Kokkos::subview(d_pack,range(o_pbody,o_pbin));
+  auto d_pairbin = Kokkos::subview(d_pack,range(o_pbin,npack));
+  t_int_2d_um d_qlo(d_pack.data(),nbody,3);
+  t_int_2d_um d_qhi(d_pack.data()+o_qhi,nbody,3);
   auto d_bodyparam = k_bodyparam.view_device();
-  auto d_cominside = k_cominside.view_device();
+  auto d_cominside = Kokkos::subview(d_pack,range(o_com,o_pbody));
   auto d_binstart = grid_kk->d_cellbinstart;
   auto d_binlist = grid_kk->d_cellbinlist;
   auto d_cells = grid_kk->k_cells.view_device();
@@ -666,16 +700,17 @@ int RigidRemapKokkos::recut()
   ncand_run += nrcand;
 
   if (nrcand > maxrcand) {
-    maxrcand = nrcand;
+    maxrcand = grow_extra(nrcand);
     memory->destroy(rcand);
     memory->create(rcand,maxrcand,"rigid_remap:rcand");
   }
   if (nrcand > maxrcandlist_kk) {
-    maxrcandlist_kk = nrcand;
+    maxrcandlist_kk = grow_extra(nrcand);
     k_rcand = DAT::tdual_int_1d("rigid_remap:rcand",maxrcandlist_kk);
     d_newn = DAT::t_int_1d("rigid_remap:newn",maxrcandlist_kk);
     d_chflag = DAT::t_int_1d("rigid_remap:chflag",maxrcandlist_kk);
-    d_choff = DAT::t_int_1d("rigid_remap:choff",maxrcandlist_kk+1);
+    d_chpre = Kokkos::View<bigint*,DeviceType>("rigid_remap:chpre",
+                                               maxrcandlist_kk+1);
     d_newtype = DAT::t_int_1d("rigid_remap:newtype",maxrcandlist_kk);
     k_newlist = DAT::tdual_int_1d("rigid_remap:newlist",
                                   (bigint) maxrcandlist_kk * maxsurfpercell);
@@ -683,7 +718,7 @@ int RigidRemapKokkos::recut()
   auto d_rcand = k_rcand.view_device();
   auto d_newn = this->d_newn;
   auto d_chflag = this->d_chflag;
-  auto d_choff = this->d_choff;
+  auto d_chpre = this->d_chpre;
   auto d_newtype = this->d_newtype;
   auto d_newlist = k_newlist.view_device();
 
@@ -713,7 +748,7 @@ int RigidRemapKokkos::recut()
   auto d_tris = surf_kk->k_tris.view_device();
   const RigidBodyKK body = fix_kk->body;
   const int maxsurf = maxsurfpercell;
-  DAT::t_int_scalar d_fallback("rigid_remap:fallback");
+  auto d_fallback = this->d_fallback;
   Kokkos::deep_copy(d_fallback,0);
 
   auto surf_in_cell = KOKKOS_LAMBDA(const int s, const double *clo,
@@ -841,12 +876,9 @@ int RigidRemapKokkos::recut()
     d_chflag(ic) = changed;
   });
 
-  int fallback = 0;
-  Kokkos::deep_copy(fallback,d_fallback);
-  if (fallback) {
-    if (timeflag) fix->add_time(FixRigid::T_RECUT_LISTS,MPI_Wtime()-tstart);
-    return FALLBACK_SURFMAX;
-  }
+  // the fallback flag is read back below, with the totals of the changed
+  //   lists, so both passes run first: a candidate with more surfs than
+  //   a row holds is skipped by the type pass, and the scan only sums
 
   // pass 2 on the device: the type of every uncut candidate, from the
   //   shell test and the ray cast of RigidRemap::recut(); a candidate
@@ -857,6 +889,7 @@ int RigidRemapKokkos::recut()
 
   Kokkos::parallel_for("rigid_remap:rc_compare",nrcand, KOKKOS_LAMBDA(const int ic) {
     d_newtype(ic) = -1;
+    if (d_chflag(ic) && d_newn(ic) > maxsurf) return;
     const int icell = d_rcand(ic);
     if (d_cells[icell].nsplit != 1) return;
     if (d_staticinside(icell)) return;
@@ -928,72 +961,94 @@ int RigidRemapKokkos::recut()
   // the changed lists are packed as rows of one entries array, the
   //   cell of each row and its offset listed by a scan of the lengths
 
-  Kokkos::fence();
   // nrcand is a member of RigidRemap, so naming it inside the lambda would
   //   capture this, a HOST pointer, and dereferencing it on the device is an
   //   illegal access (it aborted every rigid-body run on a GPU with
   //   cudaErrorIllegalAddress).  copy it to a local first
+  // one scan gives every changed candidate its row c and the offset of
+  //   its entries: the prefix sum of (1<<32 | newn) over the changed
+  //   candidates carries both, since each total stays below 2^31
+  // the totals land in the per-step scalars, which come back in one copy
+  //   with the fallback flag
 
-  {
-    const int nrc = nrcand;
-    Kokkos::parallel_scan("rigid_remap:rc_ch_scan",nrc, KOKKOS_LAMBDA(const int ic, int &sum,
-                                             const bool final) {
-      const int n = d_chflag(ic);
-      if (final) d_choff(ic) = sum;
-      sum += n;
-      if (final && ic == nrc-1) d_choff(nrc) = sum;
-    });
+  const int nrc = nrcand;
+  auto d_rscalars = this->d_rscalars;
+  Kokkos::parallel_scan("rigid_remap:rc_ch_scan",nrc, KOKKOS_LAMBDA(const int ic, bigint &sum,
+                                           const bool final) {
+    const bigint v = d_chflag(ic) ?
+      ((((bigint) 1) << 32) | (bigint) d_newn(ic)) : (bigint) 0;
+    if (final) d_chpre(ic) = sum;
+    sum += v;
+    if (final && ic == nrc-1) {
+      d_rscalars(3) = (int) (sum >> 32);
+      d_rscalars(4) = (int) (sum & 0xffffffff);
+    }
+  });
+  Kokkos::deep_copy(h_rscalars,d_rscalars);
+  if (h_rscalars(2)) {
+    if (timeflag) fix->add_time(FixRigid::T_RECUT_LISTS,MPI_Wtime()-tstart);
+    return FALLBACK_SURFMAX;
   }
-  int nch;
-  Kokkos::deep_copy(nch,Kokkos::subview(d_choff,nrcand));
+  const int nch = h_rscalars(3);
+  const int nent = h_rscalars(4);
 
-  if (nch+1 > maxch_kk) {
-    maxch_kk = nch+1;
-    k_chcand = DAT::tdual_int_1d("rigid_remap:chcand",maxch_kk);
-    k_chn = DAT::tdual_int_1d("rigid_remap:chn",maxch_kk);
-    k_chloff = DAT::tdual_int_1d("rigid_remap:chloff",maxch_kk);
-    k_chnsplit = DAT::tdual_int_1d("rigid_remap:chnsplit",maxch_kk);
-    k_chcorner = DAT::tdual_int_1d("rigid_remap:chcorner",8*maxch_kk);
-    k_chxsub = DAT::tdual_int_1d("rigid_remap:chxsub",maxch_kk);
-    k_cherr = DAT::tdual_int_1d("rigid_remap:cherr",maxch_kk);
-    k_chxsplit = tdual_dbl_1d("rigid_remap:chxsplit",3*maxch_kk);
+  // the changed lists and the results of their cuts, as ranges of one
+  //   int buffer and one double buffer
+  //   ints:    chcand, chn (nch each), chloff (nch+1), chnsplit, chxsub,
+  //            cherr (nch each), chcorner (8 per cell), then chlist and
+  //            chmap (nent each)
+  //   doubles: chxsplit (3 per cell), then chvols (nent)
+
+  const bigint o_cand = 0;
+  const bigint o_n = o_cand + nch;
+  const bigint o_loff = o_n + nch;
+  const bigint o_nsplit = o_loff + nch + 1;
+  const bigint o_xsub = o_nsplit + nch;
+  const bigint o_err = o_xsub + nch;
+  const bigint o_corner = o_err + nch;
+  const bigint o_list = o_corner + 8*((bigint) nch);
+  const bigint o_map = o_list + nent;
+  const bigint nchint = o_map + nent;
+  const bigint o_xsplit = 0;
+  const bigint o_vols = o_xsplit + 3*((bigint) nch);
+  const bigint nchdbl = o_vols + nent;
+
+  if (nchint > maxchint_kk) {
+    maxchint_kk = grow_extra(nchint);
+    d_chint = DAT::t_int_1d("rigid_remap:chint",maxchint_kk);
+    h_chint = Kokkos::create_mirror_view(d_chint);
   }
-  auto d_chcand = k_chcand.view_device();
-  auto d_chn = k_chn.view_device();
-  auto d_chloff = k_chloff.view_device();
+  if (MAX(nchdbl,1) > maxchdbl_kk) {
+    maxchdbl_kk = grow_extra(MAX(nchdbl,1));
+    d_chdbl = Kokkos::View<double*,DeviceType>("rigid_remap:chdbl",maxchdbl_kk);
+    h_chdbl = Kokkos::create_mirror_view(d_chdbl);
+  }
 
-  Kokkos::parallel_for("rigid_remap:rc_ch_pack",nrcand, KOKKOS_LAMBDA(const int ic) {
+  auto d_chcand = Kokkos::subview(d_chint,range(o_cand,o_n));
+  auto d_chn = Kokkos::subview(d_chint,range(o_n,o_loff));
+  auto d_chloff = Kokkos::subview(d_chint,range(o_loff,o_nsplit));
+  auto d_chnsplit = Kokkos::subview(d_chint,range(o_nsplit,o_xsub));
+  auto d_chxsub = Kokkos::subview(d_chint,range(o_xsub,o_err));
+  auto d_cherr = Kokkos::subview(d_chint,range(o_err,o_corner));
+  auto d_chcorner = Kokkos::subview(d_chint,range(o_corner,o_list));
+  auto d_chlist = Kokkos::subview(d_chint,range(o_list,o_map));
+  auto d_chmap = Kokkos::subview(d_chint,range(o_map,nchint));
+  auto d_chxsplit = Kokkos::subview(d_chdbl,range(o_xsplit,o_vols));
+  auto d_chvols = Kokkos::subview(d_chdbl,range(o_vols,nchdbl));
+
+  // every changed candidate writes its row: its candidate index, its
+  //   length and offset, and its entries, in candidate order as before
+
+  Kokkos::parallel_for("rigid_remap:rc_ch_pack",nrc, KOKKOS_LAMBDA(const int ic) {
+    if (ic == nrc-1) d_chloff(nch) = nent;
     if (!d_chflag(ic)) return;
-    const int c = d_choff(ic);
+    const bigint pre = d_chpre(ic);
+    const int c = (int) (pre >> 32);
+    const int off = (int) (pre & 0xffffffff);
+    const int n = d_newn(ic);
     d_chcand(c) = ic;
-    d_chn(c) = d_newn(ic);
-  });
-
-  // row offsets of the lists: the piece maps, the piece volumes and the
-  //   scratch rows of the device cut are laid out by the same offsets
-
-  Kokkos::parallel_scan("rigid_remap:rc_ch_offscan",nch, KOKKOS_LAMBDA(const int c, int &sum,
-                                            const bool final) {
-    const int n = d_chn(c);
-    if (final) d_chloff(c) = sum;
-    sum += n;
-    if (final && c == nch-1) d_chloff(nch) = sum;
-  });
-  int nent = 0;
-  if (nch) Kokkos::deep_copy(nent,Kokkos::subview(d_chloff,nch));
-
-  if (nent > maxchent_kk) {
-    maxchent_kk = nent;
-    k_chlist = DAT::tdual_int_1d("rigid_remap:chlist",maxchent_kk);
-    k_chmap = DAT::tdual_int_1d("rigid_remap:chmap",maxchent_kk);
-    k_chvols = tdual_dbl_1d("rigid_remap:chvols",maxchent_kk);
-  }
-  auto d_chlist = k_chlist.view_device();
-
-  Kokkos::parallel_for("rigid_remap:rc_ch_fill",nch, KOKKOS_LAMBDA(const int c) {
-    const int ic = d_chcand(c);
-    const int n = d_chn(c);
-    const int off = d_chloff(c);
+    d_chn(c) = n;
+    d_chloff(c) = off;
     for (int j = 0; j < n; j++)
       d_chlist(off+j) = d_newlist(((bigint) ic) * maxsurf + j);
   });
@@ -1014,14 +1069,6 @@ int RigidRemapKokkos::recut()
   // the 3d scratch is large per cell, so the cells are cut in chunks
   //   which fit a memory budget; the row offsets are linear in the
   //   running # of surfs and of cells within the chunk
-
-  auto d_chnsplit = k_chnsplit.view_device();
-  auto d_chcorner = k_chcorner.view_device();
-  auto d_chxsub = k_chxsub.view_device();
-  auto d_cherr = k_cherr.view_device();
-  auto d_chxsplit = k_chxsplit.view_device();
-  auto d_chmap = k_chmap.view_device();
-  auto d_chvols = k_chvols.view_device();
 
   if (dim == 2) {
     grow_cut_scratch(0,0,nent,2*nent + 4*nch);
@@ -1095,10 +1142,10 @@ int RigidRemapKokkos::recut()
     });
 
   } else {
-    k_chloff.modify_device(); k_chloff.sync_host();
-    k_chn.modify_device(); k_chn.sync_host();
-    auto h_chloff = k_chloff.view_host();
-    auto h_chn = k_chn.view_host();
+    Kokkos::deep_copy(Kokkos::subview(h_chint,range(o_n,o_nsplit)),
+                      Kokkos::subview(d_chint,range(o_n,o_nsplit)));
+    auto h_chloff = Kokkos::subview(h_chint,range(o_loff,o_nsplit));
+    auto h_chn = Kokkos::subview(h_chint,range(o_n,o_loff));
     const Surf::Tri *tris = d_tris.data();
     Kokkos::deep_copy(d_cutstats,0);
 
@@ -1231,31 +1278,28 @@ int RigidRemapKokkos::recut()
 
   // the changed lists and the results of their cuts come to the host
 
-  k_chcand.modify_device(); k_chcand.sync_host();
-  k_chn.modify_device(); k_chn.sync_host();
-  k_chloff.modify_device(); k_chloff.sync_host();
-  k_chlist.modify_device(); k_chlist.sync_host();
-  k_rcand.modify_device(); k_rcand.sync_host();
-  k_chnsplit.modify_device(); k_chnsplit.sync_host();
-  k_chcorner.modify_device(); k_chcorner.sync_host();
-  k_chxsub.modify_device(); k_chxsub.sync_host();
-  k_cherr.modify_device(); k_cherr.sync_host();
-  k_chxsplit.modify_device(); k_chxsplit.sync_host();
-  k_chmap.modify_device(); k_chmap.sync_host();
-  k_chvols.modify_device(); k_chvols.sync_host();
+  // only the ranges in use, one copy per buffer, and the candidates
+
+  Kokkos::deep_copy(Kokkos::subview(h_chint,range(0,nchint)),
+                    Kokkos::subview(d_chint,range(0,nchint)));
+  if (nchdbl)
+    Kokkos::deep_copy(Kokkos::subview(h_chdbl,range(0,nchdbl)),
+                      Kokkos::subview(d_chdbl,range(0,nchdbl)));
+  Kokkos::deep_copy(Kokkos::subview(k_rcand.view_host(),range(0,nrcand)),
+                    Kokkos::subview(k_rcand.view_device(),range(0,nrcand)));
 
   auto h_rcand = k_rcand.view_host();
-  auto h_chcand = k_chcand.view_host();
-  auto h_chn = k_chn.view_host();
-  auto h_chloff = k_chloff.view_host();
-  auto h_chlist = k_chlist.view_host();
-  auto h_chnsplit = k_chnsplit.view_host();
-  auto h_chcorner = k_chcorner.view_host();
-  auto h_chxsub = k_chxsub.view_host();
-  auto h_cherr = k_cherr.view_host();
-  auto h_chxsplit = k_chxsplit.view_host();
-  auto h_chmap = k_chmap.view_host();
-  auto h_chvols = k_chvols.view_host();
+  auto h_chcand = Kokkos::subview(h_chint,range(o_cand,o_n));
+  auto h_chn = Kokkos::subview(h_chint,range(o_n,o_loff));
+  auto h_chloff = Kokkos::subview(h_chint,range(o_loff,o_nsplit));
+  auto h_chlist = Kokkos::subview(h_chint,range(o_list,o_map));
+  auto h_chnsplit = Kokkos::subview(h_chint,range(o_nsplit,o_xsub));
+  auto h_chcorner = Kokkos::subview(h_chint,range(o_corner,o_list));
+  auto h_chxsub = Kokkos::subview(h_chint,range(o_xsub,o_err));
+  auto h_cherr = Kokkos::subview(h_chint,range(o_err,o_corner));
+  auto h_chxsplit = Kokkos::subview(h_chdbl,range(o_xsplit,o_vols));
+  auto h_chmap = Kokkos::subview(h_chint,range(o_map,nchint));
+  auto h_chvols = Kokkos::subview(h_chdbl,range(o_vols,nchdbl));
   for (i = 0; i < nrcand; i++) rcand[i] = h_rcand(i);
 
   // the device cut is done; what follows is the host install of its
@@ -1310,7 +1354,7 @@ int RigidRemapKokkos::recut()
   // pass 2 on the host: the new types
 
   if ((int) k_newtype.extent(0) < nrcand) {
-    k_newtype = DAT::tdual_int_1d("rigid_remap:newtypeh",nrcand);
+    k_newtype = DAT::tdual_int_1d("rigid_remap:newtypeh",grow_extra(nrcand));
   }
   Kokkos::deep_copy(Kokkos::subview(k_newtype.view_host(),std::make_pair(0,nrcand)),
                     Kokkos::subview(d_newtype,std::make_pair(0,nrcand)));

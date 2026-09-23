@@ -2828,3 +2828,52 @@ items above: sub-timers inside `integrate+bbox` and `set_xv+bounds`
 separating the host fill, the transfers, the kernels and the read-back.
 That names which of the five carries the 42%, and it is an hour's work
 against a package that would otherwise be guesswork.
+
+# The functor copy, and the launch census (23 Sep 2026)
+
+**The body/element stages did not partition because every `*this`
+launch deep-copied a global hash map.**  `FixRigid::idmap` was a
+`std::unordered_map` held by value, one entry per body element in the
+global problem.  `parallel_for(..., *this)` copy-constructs the whole
+fix on the host at every launch, so each of fix rigid/kk's launches
+copied and freed it: 1.3 ms at 32,000 entries, 6.7 ms at 128,000 on the
+VM.  That is the whole of `integrate+bbox`, `set_xv+bounds` and
+`forces: tallies` staying flat with the rank count and growing with the
+body count, and it explains the 42 ms a step the GPU showed.  The Kokkos
+launch mechanism plays no part: the copy happens before it.  Fixed by
+holding it by pointer (`805ca2ae`).  Kokkos
+Serial, in.bench40.owned, 4 ranks: geometry kernels 0.288 -> 0.034 s,
+loop 6.67 -> 5.37 s.
+
+**Census, not estimates.**  A Kokkos Tools library counting launches,
+deep copies, fences and allocations per step (difference of a 20 and a
+40 step run, rigid path only, 1000-body deck, 1 rank):
+
+| | before | after |
+|---|---|---|
+| kernel launches | 41.5 | 30.5 |
+| View allocations | 20.3 | 2.1 (growth still settling) |
+| fences | 109 | 60 |
+
+Under Serial a DualView sync is a no-op and is not counted; on a GPU
+each is a full-extent copy.  Those were cut as well: the re-cut's 12
+changed-cell read-backs are 3 copies of the part in use, its 6 uploads
+2, the collision lists' 4 uploads 1, the split graphs' 4 uploads 2, and
+the 5 scalar read-backs 2.
+
+What changed, all bit-identical:
+
+- geometry: Geometry + ZeroTally per element, then one team per body for
+  BodyBox + Inflate + GroupBox (5 launches -> 2); a team per body also
+  parallelizes the body box of a large body, which was one thread
+- grid patch: the cell/hash/halo/sinfo scatters are one kernel; the CSR
+  rebuild's two init kernels are one, its set/last record passes one
+  atomic max, its count folded into the scan (11 -> 6)
+- re-cut: one scan of a packed (row, offset) prefix and one pack replace
+  scan/pack/offscan/fill (4 -> 2), and the fallback flag comes back with
+  the totals, so three read-backs are one
+- split assign: the max reduce is folded into the scan (2 -> 1 launches,
+  2 -> 1 read-backs)
+- the per-step allocations: the split graphs are subviews of persistent
+  buffers, the re-cut's fallback flag and the swept counters one scalar
+  view, and every buffer grown by a per-step count gets 10% extra

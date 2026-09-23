@@ -38,9 +38,20 @@ class RigidRemapKokkos : public RigidRemap {
   //   swept box overlaps, and each body's bin range for the first-bin
   //   rule which lists a cell once per body
 
-  DAT::tdual_int_1d k_pairbody,k_pairbin;
-  DAT::tdual_int_2d k_qlo,k_qhi;
-  int maxpair;
+  // one staging buffer holds the per-step int tables both passes
+  //   upload: per body its bin range qlo,qhi (nbody x 3 each) and, for
+  //   the re-cut, its interior flag, then the (body, bin) pairs; one copy
+  //   moves the part in use
+
+  typedef DAT::t_int_1d::host_mirror_type t_hint_1d;
+  typedef Kokkos::View<int**,Kokkos::LayoutRight,DeviceType,
+                       Kokkos::MemoryUnmanaged> t_int_2d_um;
+  typedef Kokkos::View<int**,Kokkos::LayoutRight,t_hint_1d::memory_space,
+                       Kokkos::MemoryUnmanaged> t_hint_2d_um;
+  DAT::t_int_1d d_pack;
+  t_hint_1d h_pack;
+  bigint maxpack;
+  void grow_pack(bigint);
 
   // the swept lists: per cell its count of swept elements and its row
   //   (-1 = none), reset each step for the cells the previous step
@@ -52,7 +63,14 @@ class RigidRemapKokkos : public RigidRemap {
   DAT::t_int_1d d_swcount,d_swrow;
   DAT::t_int_1d d_swtouched,d_swoff,d_swcursor,d_swext;
   DAT::t_int_1d d_hitcell,d_hitelem,d_swelem;
-  DAT::t_int_scalar d_ntouched,d_nhit;
+  // the per-step device counters and flags, one allocation so one copy
+  //   zeroes them and one reads them back, as UpdateKokkos does:
+  //   0 = ntouched, 1 = nhit (the swept lists), 2 = fallback (the re-cut),
+  //   3 = nch, 4 = nent (the re-cut's changed cells and their entries)
+
+  DAT::t_int_1d d_rscalars;
+  t_hint_1d h_rscalars;
+  DAT::t_int_scalar d_ntouched,d_nhit,d_fallback;
   int maxswcell_kk,maxtouched_kk,maxhit_kk;
   int ntouched_prev;            // # of cells the previous step touched
 
@@ -62,12 +80,13 @@ class RigidRemapKokkos : public RigidRemap {
 
   typedef RigidBodyKK::tdual_dbl_2d tdual_dbl_2d;
   tdual_dbl_2d k_bodyparam;
-  DAT::tdual_int_1d k_cominside,k_staticinside;
+  DAT::tdual_int_1d k_staticinside;
   int staticgen_kk;
   DAT::t_int_1d d_candflag,d_candoff;
   int maxrcand_kk;
   DAT::tdual_int_1d k_rcand,k_newlist,k_newtype;
-  DAT::t_int_1d d_newn,d_chflag,d_choff,d_newtype;
+  DAT::t_int_1d d_newn,d_chflag,d_newtype;
+  Kokkos::View<bigint*,DeviceType> d_chpre;   // packed (row, offset) prefix
   int maxrcandlist_kk;
   // the changed lists as rows of one entries array, and the results of
   //   their cuts: per cell # of pieces, corner marks, split point and
@@ -84,10 +103,15 @@ class RigidRemapKokkos : public RigidRemap {
   typedef Kokkos::View<Cut3dKokkos::Loop*,DeviceType> t_loop3_1d;
   typedef Kokkos::View<Cut3dKokkos::PH*,DeviceType> t_ph_1d;
 
-  DAT::tdual_int_1d k_chcand,k_chn,k_chloff,k_chlist;
-  DAT::tdual_int_1d k_chnsplit,k_chcorner,k_chxsub,k_cherr,k_chmap;
-  tdual_dbl_1d k_chxsplit,k_chvols;
-  int maxch_kk,maxchent_kk;
+  // all of them live in one int and one double buffer, laid out by this
+  //   step's # of changed cells nch and entries nent (see recut()), so
+  //   the part in use is contiguous and comes back in one copy each
+
+  DAT::t_int_1d d_chint;
+  t_hint_1d h_chint;
+  Kokkos::View<double*,DeviceType> d_chdbl;
+  Kokkos::View<double*,DeviceType>::host_mirror_type h_chdbl;
+  bigint maxchint_kk,maxchdbl_kk;
 
   t_cline_1d d_clines;       // scratch rows of the device cut
   t_point_1d d_points;

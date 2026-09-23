@@ -38,11 +38,69 @@ struct TagFixRigidCellMapInit{};
 struct TagFixRigidCellMapSet{};
 struct TagFixRigidRelabel{};
 struct TagFixRigidGeometry{};
-struct TagFixRigidBodyBox{};
-struct TagFixRigidInflate{};
-struct TagFixRigidGroupBox{};
+struct TagFixRigidBodyGroup{};
 struct TagFixRigidZeroTally{};
 struct TagFixRigidScatterSurfs{};
+
+// the box of a body's element boxes, current and end-of-step, as one
+//   team reduction: lo[3], hi[3], then the end-of-step lo[3], hi[3]
+// min and max are exact in any order, so the result is the one the
+//   serial loop of FixRigid::body_bbox() gets
+
+struct RigidBoxVal {
+  double v[12];
+};
+
+struct RigidBoxReducer {
+  typedef RigidBoxReducer reducer;
+  typedef RigidBoxVal value_type;
+  typedef Kokkos::View<value_type,Kokkos::HostSpace,
+                       Kokkos::MemoryUnmanaged> result_view_type;
+  value_type &value;
+
+  KOKKOS_INLINE_FUNCTION
+  RigidBoxReducer(value_type &v) : value(v) {}
+
+  KOKKOS_INLINE_FUNCTION
+  void join(value_type &dst, const value_type &src) const {
+    for (int k = 0; k < 3; k++) {
+      dst.v[k] = MIN(dst.v[k],src.v[k]);
+      dst.v[3+k] = MAX(dst.v[3+k],src.v[3+k]);
+      dst.v[6+k] = MIN(dst.v[6+k],src.v[6+k]);
+      dst.v[9+k] = MAX(dst.v[9+k],src.v[9+k]);
+    }
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void init(value_type &val) const {
+    for (int k = 0; k < 3; k++) {
+      val.v[k] = val.v[6+k] = 1.0e20;
+      val.v[3+k] = val.v[9+k] = -1.0e20;
+    }
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  value_type &reference() const { return value; }
+
+  KOKKOS_INLINE_FUNCTION
+  result_view_type view() const { return result_view_type(&value,1); }
+
+  KOKKOS_INLINE_FUNCTION
+  bool references_scalar() const { return true; }
+};
+
+// the running (sum, max) of the split-assign scan: the offsets of the
+//   work list and the largest per-cell particle count, in one pass
+
+struct RigidSumMax {
+  int sum,mx;
+  KOKKOS_INLINE_FUNCTION RigidSumMax() : sum(0), mx(0) {}
+  KOKKOS_INLINE_FUNCTION RigidSumMax &operator+=(const RigidSumMax &o) {
+    sum += o.sum;
+    if (o.mx > mx) mx = o.mx;
+    return *this;
+  }
+};
 
 class FixRigidKokkos : public FixRigid {
  public:
@@ -109,19 +167,19 @@ class FixRigidKokkos : public FixRigid {
   void operator()(TagFixRigidRelabel, const int&) const;
 
   // the body geometry from the pose, over the bodies this proc holds:
-  //   one thread per local element (points, normal, box), per held body
-  //   (bbox and its inflation), per local element again (box inflation)
-  //   and per local surf copy (the surf itself)
+  //   one thread per local element (points, normal, box, and on a sweep
+  //   the zero of its tally row), then a team per held body (its bbox
+  //   and inflation, then a thread per element group inflating the
+  //   group's element boxes and boxing them), and one thread per local
+  //   surf copy (the surf itself)
+
+  typedef Kokkos::TeamPolicy<DeviceType,TagFixRigidBodyGroup> t_bodygroup_policy;
+  typedef t_bodygroup_policy::member_type t_bodygroup_member;
 
   KOKKOS_INLINE_FUNCTION
   void operator()(TagFixRigidGeometry, const int&) const;
   KOKKOS_INLINE_FUNCTION
-  void operator()(TagFixRigidBodyBox, const int&) const;
-  KOKKOS_INLINE_FUNCTION
-  void operator()(TagFixRigidInflate, const int&) const;
-
-  KOKKOS_INLINE_FUNCTION
-  void operator()(TagFixRigidGroupBox, const int&) const;
+  void operator()(TagFixRigidBodyGroup, const t_bodygroup_member&) const;
 
   KOKKOS_INLINE_FUNCTION
   void operator()(TagFixRigidZeroTally, const int&) const;
@@ -206,12 +264,20 @@ class FixRigidKokkos : public FixRigid {
   DAT::t_int_1d d_body_kk,d_bodystart_kk,d_copy_index_kk,d_copy_elem_kk;
   DAT::t_int_1d d_olist_own_kk,d_olist_elem_kk;
   DAT::t_int_1d d_blist_kk,d_lelem_kk,d_bodystat_kk;
-  DAT::t_int_1d d_lgroup_kk,d_groupelem_kk;
+  DAT::t_int_1d d_lgroup_kk,d_groupelem_kk,d_groupstart_kk;
   t_line_1d d_mylines_kk;
   t_tri_1d d_mytris_kk;
   int nscatter_kk;              // the local copies come first in the scatter
   int sweep_kk,axiflag_kk;
   double dt_kk;
+
+  // the zero of the held elements' tally rows rides on the sweep's
+  //   geometry kernel: zerotally_kk tells the kernel, zeropending_kk is
+  //   set at the start of a step until a kernel zeroed them, and
+  //   zerogen_kk is the blistgen of the element list it zeroed
+
+  int zerotally_kk,zeropending_kk,zerogen_kk;
+  void body_group_boxes(int);
 
   KOKKOS_INLINE_FUNCTION
   void scatter_line(Surf::Line &, int) const;

@@ -36,6 +36,16 @@ using namespace MathConst;
 #define BIG 1.0e20
 #define MAXLEVEL 32
 
+// capacity for n entries of a buffer that grows with a per-step count:
+//   10% extra, as SPARTA grows its other KOKKOS buffers, so a count
+//   that creeps up does not reallocate, and on a GPU synchronize the
+//   device to free the old buffer, on every step it does
+
+static inline bigint grow_extra(bigint n)
+{
+  return n + n/10 + 1;
+}
+
 enum{XLO,XHI,YLO,YHI,ZLO,ZHI,INTERIOR};         // same as Domain
 enum{PERIODIC,OUTFLOW,REFLECT,SURFACE,AXISYM};  // same as Domain
 enum{REGION_ALL,REGION_ONE,REGION_CENTER};      // same as Surf
@@ -280,47 +290,78 @@ void GridKokkos::wrap_split_graphs()
 {
   if (sinfo == NULL) return;
 
-  Kokkos::Crs<int, SPAHostType, void, crs_size_type> h_csplits;
-  auto csplits_lambda = [&](int isplit, int* fill) {
-    int icell = sinfo[isplit].icell;
-    if (icell < 0) return 0;
-    int nsurf = cells[icell].nsurf;
-    int nsplit = cells[icell].nsplit;
-    if (nsurf < 0 || nsplit <= 1 || cells[icell].isplit != isplit) nsurf = 0;
-    else if (fill) {
-      int* csplits = sinfo[isplit].csplits;
-      for (int j = 0; j < nsurf; ++j) fill[j] = csplits[j];
-    }
-    return nsurf;
-  };
-  Kokkos::count_and_fill_crs(h_csplits, nsplitlocal+nsplitghost, csplits_lambda);
-  d_csplits.row_map = decltype(d_csplits.row_map)(
-      "csplits.row_map", h_csplits.row_map.size());
-  d_csplits.entries = decltype(d_csplits.entries)(
-      "csplits.entries", h_csplits.entries.size());
-  Kokkos::deep_copy(d_csplits.row_map, h_csplits.row_map);
-  Kokkos::deep_copy(d_csplits.entries, h_csplits.entries);
+  // a split cell's rows: its csplits (one per surf) and its csubs (one
+  //   per sub cell), empty for a slot that is not a live split cell
 
-  Kokkos::Crs<int, SPAHostType, void, crs_size_type> h_csubs;
-  auto csubs_lambda = [&](int isplit, int* fill) {
+  const int nrows = nsplitlocal + nsplitghost;
+  bigint nsplitent = 0;
+  bigint nsubent = 0;
+  for (int isplit = 0; isplit < nrows; isplit++) {
     int icell = sinfo[isplit].icell;
-    if (icell < 0) return 0;
+    if (icell < 0) continue;
     int nsurf = cells[icell].nsurf;
     int nsplit = cells[icell].nsplit;
-    if (nsurf < 0 || nsplit <= 1 || cells[icell].isplit != isplit) nsplit = 0;
-    else if (fill) {
-      int* csubs = sinfo[isplit].csubs;
-      for (int j = 0; j < nsplit; ++j) fill[j] = csubs[j];
-    }
-    return nsplit;
-  };
-  Kokkos::count_and_fill_crs(h_csubs, nsplitlocal+nsplitghost, csubs_lambda);
-  d_csubs.row_map = decltype(d_csubs.row_map)(
-      "csubs.row_map", h_csubs.row_map.size());
-  d_csubs.entries = decltype(d_csubs.entries)(
-      "csubs.entries", h_csubs.entries.size());
-  Kokkos::deep_copy(d_csubs.row_map, h_csubs.row_map);
-  Kokkos::deep_copy(d_csubs.entries, h_csubs.entries);
+    if (nsurf < 0 || nsplit <= 1 || cells[icell].isplit != isplit) continue;
+    nsplitent += nsurf;
+    nsubent += nsplit;
+  }
+
+  // row maps: csplits in [0,nrows], csubs in [nrows+1,2*nrows+1]
+  // entries: csplits in [0,nsplitent), csubs after them
+
+  const bigint nrowall = 2*((bigint) nrows + 1);
+  const bigint nentall = MAX(nsplitent + nsubent,1);
+  if ((bigint) d_splitrowbuf.extent(0) < nrowall) {
+    d_splitrowbuf = Kokkos::View<crs_size_type*,DeviceType>(
+      Kokkos::view_alloc(Kokkos::WithoutInitializing,"grid:splitrowbuf"),
+      grow_extra(nrowall));
+    h_splitrowbuf = Kokkos::create_mirror_view(d_splitrowbuf);
+  }
+  if ((bigint) d_splitentbuf.extent(0) < nentall) {
+    d_splitentbuf = DAT::t_int_1d(
+      Kokkos::view_alloc(Kokkos::WithoutInitializing,"grid:splitentbuf"),
+      grow_extra(nentall));
+    h_splitentbuf = Kokkos::create_mirror_view(d_splitentbuf);
+  }
+
+  auto h_row = h_splitrowbuf;
+  auto h_ent = h_splitentbuf;
+  crs_size_type nsp = 0;
+  crs_size_type nsb = 0;
+  const bigint subrow = nrows + 1;
+  for (int isplit = 0; isplit < nrows; isplit++) {
+    h_row(isplit) = nsp;
+    h_row(subrow+isplit) = nsb;
+    int icell = sinfo[isplit].icell;
+    if (icell < 0) continue;
+    int nsurf = cells[icell].nsurf;
+    int nsplit = cells[icell].nsplit;
+    if (nsurf < 0 || nsplit <= 1 || cells[icell].isplit != isplit) continue;
+    int *csplits = sinfo[isplit].csplits;
+    for (int j = 0; j < nsurf; j++) h_ent(nsp++) = csplits[j];
+    int *csubs = sinfo[isplit].csubs;
+    for (int j = 0; j < nsplit; j++) h_ent(nsplitent + nsb++) = csubs[j];
+  }
+  h_row(nrows) = nsp;
+  h_row(subrow+nrows) = nsb;
+
+  auto rows = std::make_pair((bigint) 0,nrowall);
+  auto ents = std::make_pair((bigint) 0,nsplitent + nsubent);
+  Kokkos::deep_copy(Kokkos::subview(d_splitrowbuf,rows),
+                    Kokkos::subview(h_splitrowbuf,rows));
+  if (nsplitent + nsubent)
+    Kokkos::deep_copy(Kokkos::subview(d_splitentbuf,ents),
+                      Kokkos::subview(h_splitentbuf,ents));
+
+  d_csplits.row_map = Kokkos::subview(d_splitrowbuf,
+                                      std::make_pair((bigint) 0,subrow));
+  d_csplits.entries = Kokkos::subview(d_splitentbuf,
+                                      std::make_pair((bigint) 0,nsplitent));
+  d_csubs.row_map = Kokkos::subview(d_splitrowbuf,
+                                    std::make_pair(subrow,2*subrow));
+  d_csubs.entries = Kokkos::subview(d_splitentbuf,
+                                    std::make_pair(nsplitent,
+                                                   nsplitent + nsubent));
 }
 
 /* ----------------------------------------------------------------------
@@ -347,16 +388,24 @@ void GridKokkos::apply_changes()
   int *unique;
   int nunique = stage_records(ndirtycell,dirtycell,&unique);
 
+  // the cells, their hash and halo entries and the split info are staged
+  //   first and scattered by one kernel below, since the four touch
+  //   disjoint arrays
+
+  int nhash = 0;
+  int nhalo = 0;
+  int nsunique = 0;
+
   if (nunique) {
     if ((int) k_stagecell.extent(0) < nunique) {
-      k_stagecell = tdual_cell_1d("grid:stagecell",nunique);
-      k_stagecinfo = tdual_cinfo_1d("grid:stagecinfo",nunique);
-      k_dirtycell = DAT::tdual_int_1d("grid:dirtycell",nunique);
-      k_dirtyown = DAT::tdual_int_1d("grid:dirtyown",nunique);
-      k_hashid = DAT::tdual_cellint_1d("grid:hashid",nunique);
-      k_hashidx = DAT::tdual_int_1d("grid:hashidx",nunique);
-      k_halosite = DAT::tdual_int_1d("grid:halosite",nunique);
-      k_haloidx = DAT::tdual_int_1d("grid:haloidx",nunique);
+      k_stagecell = tdual_cell_1d("grid:stagecell",grow_extra(nunique));
+      k_stagecinfo = tdual_cinfo_1d("grid:stagecinfo",grow_extra(nunique));
+      k_dirtycell = DAT::tdual_int_1d("grid:dirtycell",grow_extra(nunique));
+      k_dirtyown = DAT::tdual_int_1d("grid:dirtyown",grow_extra(nunique));
+      k_hashid = DAT::tdual_cellint_1d("grid:hashid",grow_extra(nunique));
+      k_hashidx = DAT::tdual_int_1d("grid:hashidx",grow_extra(nunique));
+      k_halosite = DAT::tdual_int_1d("grid:halosite",grow_extra(nunique));
+      k_haloidx = DAT::tdual_int_1d("grid:haloidx",grow_extra(nunique));
     }
     auto h_stagecell = k_stagecell.view_host();
     auto h_stagecinfo = k_stagecinfo.view_host();
@@ -367,8 +416,6 @@ void GridKokkos::apply_changes()
     auto h_halosite = k_halosite.view_host();
     auto h_haloidx = k_haloidx.view_host();
 
-    int nhash = 0;
-    int nhalo = 0;
     for (k = 0; k < nunique; k++) {
       icell = unique[k];
       h_dirtycell(k) = icell;
@@ -400,46 +447,19 @@ void GridKokkos::apply_changes()
     k_stagecinfo.modify_host(); k_stagecinfo.sync_device();
     k_dirtycell.modify_host(); k_dirtycell.sync_device();
     k_dirtyown.modify_host(); k_dirtyown.sync_device();
-
-    auto d_cells = k_cells.view_device();
-    auto d_cinfo = k_cinfo.view_device();
-    auto d_stagecell = k_stagecell.view_device();
-    auto d_stagecinfo = k_stagecinfo.view_device();
-    auto d_dirtycell = k_dirtycell.view_device();
-    auto d_dirtyown = k_dirtyown.view_device();
-    Kokkos::parallel_for("grid:ac_scatter_cells",nunique, KOKKOS_LAMBDA(const int m) {
-      const int ic = d_dirtycell(m);
-      d_cells(ic) = d_stagecell(m);
-      if (d_dirtyown(m)) d_cinfo(ic) = d_stagecinfo(m);
-    });
-
     if (nhash) {
       k_hashid.modify_host(); k_hashid.sync_device();
       k_hashidx.modify_host(); k_hashidx.sync_device();
-      auto d_hashid = k_hashid.view_device();
-      auto d_hashidx = k_hashidx.view_device();
-      auto hash_d = hash_kk;
-      Kokkos::parallel_for("grid:ac_hash_patch",nhash, KOKKOS_LAMBDA(const int m) {
-        auto h = hash_d.find(static_cast<key_type>(d_hashid(m)));
-        if (hash_d.valid_at(h)) hash_d.value_at(h) = d_hashidx(m);
-      });
     }
-
-    if (nhalo && d_halo_index.extent(0)) {
+    if (!d_halo_index.extent(0)) nhalo = 0;
+    if (nhalo) {
       k_halosite.modify_host(); k_halosite.sync_device();
       k_haloidx.modify_host(); k_haloidx.sync_device();
-      auto d_halosite = k_halosite.view_device();
-      auto d_haloidx = k_haloidx.view_device();
-      auto d_halo = d_halo_index;
-      Kokkos::parallel_for("grid:ac_halo_patch",nhalo, KOKKOS_LAMBDA(const int m) {
-        d_halo(d_halosite(m)) = d_haloidx(m);
-      });
     }
   }
 
   // split info
 
-  int nsunique = 0;
   int *sunique = NULL;
   if (ndirtysinfo) {
     if (maxsplit > maxsinfostamp) {
@@ -459,8 +479,8 @@ void GridKokkos::apply_changes()
     }
     if (nsunique) {
       if ((int) k_stagesinfo.extent(0) < nsunique) {
-        k_stagesinfo = tdual_sinfo_1d("grid:stagesinfo",nsunique);
-        k_dirtysinfo = DAT::tdual_int_1d("grid:dirtysinfo",nsunique);
+        k_stagesinfo = tdual_sinfo_1d("grid:stagesinfo",grow_extra(nsunique));
+        k_dirtysinfo = DAT::tdual_int_1d("grid:dirtysinfo",grow_extra(nsunique));
       }
       auto h_stagesinfo = k_stagesinfo.view_host();
       auto h_dirtysinfo = k_dirtysinfo.view_host();
@@ -470,14 +490,44 @@ void GridKokkos::apply_changes()
       }
       k_stagesinfo.modify_host(); k_stagesinfo.sync_device();
       k_dirtysinfo.modify_host(); k_dirtysinfo.sync_device();
-      auto d_sinfo = k_sinfo.view_device();
-      auto d_stagesinfo = k_stagesinfo.view_device();
-      auto d_dirtysinfo = k_dirtysinfo.view_device();
-      Kokkos::parallel_for("grid:ac_scatter_sinfo",nsunique, KOKKOS_LAMBDA(const int m) {
-        d_sinfo(d_dirtysinfo(m)) = d_stagesinfo(m);
-      });
     }
     memory->destroy(sunique);
+  }
+
+  // one scatter of all four: thread m patches the m-th staged cell, hash
+  //   entry, halo entry and split info, whichever exist
+
+  const int nscatter = MAX(MAX(nunique,nsunique),MAX(nhash,nhalo));
+  if (nscatter) {
+    auto d_cells = k_cells.view_device();
+    auto d_cinfo = k_cinfo.view_device();
+    auto d_stagecell = k_stagecell.view_device();
+    auto d_stagecinfo = k_stagecinfo.view_device();
+    auto d_dirtycell = k_dirtycell.view_device();
+    auto d_dirtyown = k_dirtyown.view_device();
+    auto d_hashid = k_hashid.view_device();
+    auto d_hashidx = k_hashidx.view_device();
+    auto hash_d = hash_kk;
+    auto d_halosite = k_halosite.view_device();
+    auto d_haloidx = k_haloidx.view_device();
+    auto d_halo = d_halo_index;
+    auto d_sinfo = k_sinfo.view_device();
+    auto d_stagesinfo = k_stagesinfo.view_device();
+    auto d_dirtysinfo = k_dirtysinfo.view_device();
+    const int ncell = nunique, nh = nhash, nhl = nhalo, ns = nsunique;
+    Kokkos::parallel_for("grid:ac_scatter",nscatter, KOKKOS_LAMBDA(const int m) {
+      if (m < ncell) {
+        const int ic = d_dirtycell(m);
+        d_cells(ic) = d_stagecell(m);
+        if (d_dirtyown(m)) d_cinfo(ic) = d_stagecinfo(m);
+      }
+      if (m < nh) {
+        auto h = hash_d.find(static_cast<key_type>(d_hashid(m)));
+        if (hash_d.valid_at(h)) hash_d.value_at(h) = d_hashidx(m);
+      }
+      if (m < nhl) d_halo(d_halosite(m)) = d_haloidx(m);
+      if (m < ns) d_sinfo(d_dirtysinfo(m)) = d_stagesinfo(m);
+    });
   }
 
   // the cell bins: a moved cell is replaced in its bins, if the device
@@ -485,8 +535,8 @@ void GridKokkos::apply_changes()
 
   if (nbinpatch && cellbingen_kk == cellbingen) {
     if ((int) k_movedfrom.extent(0) < nbinpatch) {
-      k_movedfrom = DAT::tdual_int_1d("grid:movedfrom",nbinpatch);
-      k_movedto = DAT::tdual_int_1d("grid:movedto",nbinpatch);
+      k_movedfrom = DAT::tdual_int_1d("grid:movedfrom",grow_extra(nbinpatch));
+      k_movedto = DAT::tdual_int_1d("grid:movedto",grow_extra(nbinpatch));
     }
     auto h_from = k_movedfrom.view_host();
     auto h_to = k_movedto.view_host();
@@ -613,12 +663,12 @@ void GridKokkos::upload_list_records(int n, ListRecord *rec, int *buf,
                                      bigint nbuf)
 {
   if ((int) k_recicell.extent(0) < n) {
-    k_recicell = DAT::tdual_int_1d("grid:recicell",n);
-    k_recn = DAT::tdual_int_1d("grid:recn",n);
-    k_recoff = DAT::tdual_bigint_1d("grid:recoff",n);
+    k_recicell = DAT::tdual_int_1d("grid:recicell",grow_extra(n));
+    k_recn = DAT::tdual_int_1d("grid:recn",grow_extra(n));
+    k_recoff = DAT::tdual_bigint_1d("grid:recoff",grow_extra(n));
   }
   if ((bigint) k_listbuf.extent(0) < nbuf)
-    k_listbuf = DAT::tdual_int_1d("grid:listbuf",nbuf);
+    k_listbuf = DAT::tdual_int_1d("grid:listbuf",grow_extra(nbuf));
 
   auto h_recicell = k_recicell.view_host();
   auto h_recn = k_recn.view_host();
@@ -654,20 +704,29 @@ void GridKokkos::build_csurfs_device()
   //   every sub cell (current index), -1 otherwise
 
   if ((int) d_rowsrc.extent(0) < ntotal) {
-    d_rowsrc = DAT::t_int_1d("grid:rowsrc",ntotal);
-    d_rowpar = DAT::t_int_1d("grid:rowpar",ntotal);
+    d_rowsrc = DAT::t_int_1d("grid:rowsrc",grow_extra(ntotal));
+    d_rowpar = DAT::t_int_1d("grid:rowpar",grow_extra(ntotal));
   }
+  // rowrec = record for an old index, -1 if none; the last record wins
+  // one kernel sets all three to their defaults
+
+  if ((int) d_rowrec.extent(0) < MAX(nold,1))
+    d_rowrec = DAT::t_int_1d("grid:rowrec",grow_extra(MAX(nold,1)));
   auto d_rowsrc = this->d_rowsrc;
   auto d_rowpar = this->d_rowpar;
-  Kokkos::parallel_for("grid:bc_subparent_init",ntotal, KOKKOS_LAMBDA(const int m) {
-    d_rowsrc(m) = (m < nold) ? m : -1;
-    d_rowpar(m) = -1;
+  auto d_rowrec = this->d_rowrec;
+  Kokkos::parallel_for("grid:bc_init",MAX(ntotal,nold), KOKKOS_LAMBDA(const int m) {
+    if (m < ntotal) {
+      d_rowsrc(m) = (m < nold) ? m : -1;
+      d_rowpar(m) = -1;
+    }
+    if (m < nold) d_rowrec(m) = -1;
   });
 
   if (nmoved) {
     if ((int) k_movedfrom.extent(0) < nmoved) {
-      k_movedfrom = DAT::tdual_int_1d("grid:movedfrom",nmoved);
-      k_movedto = DAT::tdual_int_1d("grid:movedto",nmoved);
+      k_movedfrom = DAT::tdual_int_1d("grid:movedfrom",grow_extra(nmoved));
+      k_movedto = DAT::tdual_int_1d("grid:movedto",grow_extra(nmoved));
     }
     auto h_from = k_movedfrom.view_host();
     auto h_to = k_movedto.view_host();
@@ -695,8 +754,8 @@ void GridKokkos::build_csurfs_device()
   }
   if (nsub) {
     if ((int) k_subcell.extent(0) < nsub) {
-      k_subcell = DAT::tdual_int_1d("grid:subcell",nsub);
-      k_subparent = DAT::tdual_int_1d("grid:subparent",nsub);
+      k_subcell = DAT::tdual_int_1d("grid:subcell",grow_extra(nsub));
+      k_subparent = DAT::tdual_int_1d("grid:subparent",grow_extra(nsub));
     }
     auto h_subcell = k_subcell.view_host();
     auto h_subparent = k_subparent.view_host();
@@ -721,25 +780,16 @@ void GridKokkos::build_csurfs_device()
     });
   }
 
-  // rowrec = record for an old index, -1 if none; the last record wins
-
-  if ((int) d_rowrec.extent(0) < MAX(nold,1))
-    d_rowrec = DAT::t_int_1d("grid:rowrec",MAX(nold,1));
-  auto d_rowrec = this->d_rowrec;
-  Kokkos::parallel_for("grid:bc_rowrec_init",nold, KOKKOS_LAMBDA(const int m) { d_rowrec(m) = -1; });
+  // the last record for a cell wins: the largest record index, one
+  //   atomic max per record
 
   if (ncutrec) {
     upload_list_records(ncutrec,cutrec,cutbuf,ncutbuf);
     auto d_recicell = k_recicell.view_device();
     int nrec = ncutrec;
-    Kokkos::parallel_for("grid:bc_rowrec_set",nrec, KOKKOS_LAMBDA(const int m) {
+    Kokkos::parallel_for("grid:bc_rowrec",nrec, KOKKOS_LAMBDA(const int m) {
       const int ic = d_recicell(m);
-      if (ic < nold) d_rowrec(ic) = m;
-    });
-    Kokkos::fence();
-    Kokkos::parallel_for("grid:bc_rowrec_last",nrec, KOKKOS_LAMBDA(const int m) {
-      const int ic = d_recicell(m);
-      if (ic < nold && d_rowrec(ic) < m) d_rowrec(ic) = m;
+      if (ic < nold) Kokkos::atomic_max(&d_rowrec(ic),m);
     });
   }
 
@@ -759,11 +809,11 @@ void GridKokkos::build_move_graph_device()
   int ntotal = nlocal + nghost;
 
   if ((int) d_rowsrc.extent(0) < ntotal) {
-    d_rowsrc = DAT::t_int_1d("grid:rowsrc",ntotal);
-    d_rowpar = DAT::t_int_1d("grid:rowpar",ntotal);
+    d_rowsrc = DAT::t_int_1d("grid:rowsrc",grow_extra(ntotal));
+    d_rowpar = DAT::t_int_1d("grid:rowpar",grow_extra(ntotal));
   }
   if ((int) d_rowrec.extent(0) < ntotal)
-    d_rowrec = DAT::t_int_1d("grid:rowrec",ntotal);
+    d_rowrec = DAT::t_int_1d("grid:rowrec",grow_extra(ntotal));
   auto d_rowsrc = this->d_rowsrc;
   auto d_rowpar = this->d_rowpar;
   auto d_rowrec = this->d_rowrec;
@@ -776,14 +826,9 @@ void GridKokkos::build_move_graph_device()
   upload_list_records(ncollrec,collrec,collbuf,ncollbuf);
   auto d_recicell = k_recicell.view_device();
   int nrec = ncollrec;
-  Kokkos::parallel_for("grid:bm_rowrec_set",nrec, KOKKOS_LAMBDA(const int m) {
+  Kokkos::parallel_for("grid:bm_rowrec",nrec, KOKKOS_LAMBDA(const int m) {
     const int ic = d_recicell(m);
-    if (ic < ntotal) d_rowrec(ic) = m;
-  });
-  Kokkos::fence();
-  Kokkos::parallel_for("grid:bm_rowrec_last",nrec, KOKKOS_LAMBDA(const int m) {
-    const int ic = d_recicell(m);
-    if (ic < ntotal && d_rowrec(ic) < m) d_rowrec(ic) = m;
+    if (ic < ntotal) Kokkos::atomic_max(&d_rowrec(ic),m);
   });
 
   build_crs(ntotal,d_csurfs,d_rowmap_move,d_entries_move,d_csurfs_move);
@@ -812,41 +857,30 @@ void GridKokkos::build_crs(int nrows,
   auto d_recoff = k_recoff.view_device();
   auto d_listbuf = k_listbuf.view_device();
 
-  if ((int) d_rowcount.extent(0) < nrows+1)
-    d_rowcount = Kokkos::View<crs_size_type*,DeviceType>("grid:rowcount",nrows+1);
-  auto d_rowcount = this->d_rowcount;
+  // count and scan into the row map in one pass: the source row of
+  //   cell i is its own old row, or its split cell's; a record for that
+  //   source replaces it
 
-  // count: the source row of cell i is its own old row, or its split
-  //   cell's; a record for that source replaces it
+  if ((int) rowmap_buf.extent(0) < nrows+1)
+    rowmap_buf = Kokkos::View<crs_size_type*,DeviceType>(
+      Kokkos::view_alloc(Kokkos::WithoutInitializing,"grid:crs_rowmap"),
+      grow_extra(nrows+1));
+  auto rowmap = rowmap_buf;
 
-  Kokkos::parallel_for("grid:crs_count",nrows, KOKKOS_LAMBDA(const int i) {
-    int par = d_rowpar(i);
-    int src = (par >= 0) ? d_rowsrc(par) : d_rowsrc(i);
+  Kokkos::parallel_scan("grid:crs_scan",nrows, KOKKOS_LAMBDA(const int i, crs_size_type &sum,
+                                             const bool final) {
+    const int par = d_rowpar(i);
+    const int src = (par >= 0) ? d_rowsrc(par) : d_rowsrc(i);
     crs_size_type n = 0;
     if (src >= 0) {
       const int rec = d_rowrec(src);
       if (rec >= 0) n = d_recn(rec);
       else n = old_rowmap(src+1) - old_rowmap(src);
     }
-    d_rowcount(i) = n;
-  });
-
-  // scan into the row map
-
-  if ((int) rowmap_buf.extent(0) < nrows+1)
-    rowmap_buf = Kokkos::View<crs_size_type*,DeviceType>(
-      Kokkos::view_alloc(Kokkos::WithoutInitializing,"grid:crs_rowmap"),
-      nrows+1);
-  auto rowmap = rowmap_buf;
-
-  Kokkos::parallel_scan("grid:crs_scan",nrows, KOKKOS_LAMBDA(const int i, crs_size_type &sum,
-                                             const bool final) {
-    const crs_size_type n = d_rowcount(i);
     if (final) rowmap(i) = sum;
     sum += n;
     if (final && i == nrows-1) rowmap(nrows) = sum;
   });
-  Kokkos::fence();
 
   crs_size_type nentries = 0;
   if (nrows > 0) Kokkos::deep_copy(nentries,Kokkos::subview(rowmap,nrows));
@@ -855,7 +889,7 @@ void GridKokkos::build_crs(int nrows,
   if ((bigint) entries_buf.extent(0) < (bigint) nentries)
     entries_buf = DAT::t_int_1d(
       Kokkos::view_alloc(Kokkos::WithoutInitializing,"grid:crs_entries"),
-      nentries);
+      grow_extra(nentries));
   auto entries = entries_buf;
 
   // fill

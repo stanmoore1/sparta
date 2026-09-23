@@ -261,7 +261,16 @@ class GridKokkos : public Grid {
   DAT::tdual_int_1d k_recicell,k_recn,k_listbuf;
   DAT::tdual_bigint_1d k_recoff;
   DAT::t_int_1d d_rowsrc,d_rowpar,d_rowrec;
-  Kokkos::View<crs_size_type*,DeviceType> d_rowcount;
+
+  // the split graphs d_csplits/d_csubs share one row-map buffer and one
+  //   entry buffer, each graph a subview of them, so a rebuild is two
+  //   uploads into persistent storage rather than four new allocations;
+  //   the host halves are the staging buffers
+
+  Kokkos::View<crs_size_type*,DeviceType> d_splitrowbuf;
+  Kokkos::View<crs_size_type*,DeviceType>::host_mirror_type h_splitrowbuf;
+  DAT::t_int_1d d_splitentbuf;
+  DAT::t_int_1d::host_mirror_type h_splitentbuf;
   Kokkos::View<crs_size_type*,DeviceType> d_rowmap_buf[2],d_rowmap_move;
   DAT::t_int_1d d_entries_buf[2],d_entries_move;
   int ibuf;                   // which buffer pair d_csurfs currently uses
