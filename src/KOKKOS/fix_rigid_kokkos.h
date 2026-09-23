@@ -41,6 +41,7 @@ struct TagFixRigidGeometry{};
 struct TagFixRigidBodyBox{};
 struct TagFixRigidInflate{};
 struct TagFixRigidGroupBox{};
+struct TagFixRigidZeroTally{};
 struct TagFixRigidScatterSurfs{};
 
 class FixRigidKokkos : public FixRigid {
@@ -121,6 +122,9 @@ class FixRigidKokkos : public FixRigid {
 
   KOKKOS_INLINE_FUNCTION
   void operator()(TagFixRigidGroupBox, const int&) const;
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()(TagFixRigidZeroTally, const int&) const;
   KOKKOS_INLINE_FUNCTION
   void operator()(TagFixRigidScatterSurfs, const int&) const;
 

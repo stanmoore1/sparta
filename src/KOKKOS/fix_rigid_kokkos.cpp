@@ -290,8 +290,21 @@ void FixRigidKokkos::start_of_step()
   if ((int) k_ftally.extent(0) < nsurf) {
     k_ftally = tdual_dbl_2d("fix_rigid:ftally",nsurf,6);
     d_ftally = k_ftally.view_device();
+    Kokkos::deep_copy(d_ftally,0.0);
   }
-  Kokkos::deep_copy(d_ftally,0.0);
+
+  // only the rows of the elements this proc holds are written by the
+  //   mover -- a surf it tallies lies in a local cell, so its body is
+  //   held -- and only those rows are read by sum_tallies(), so the
+  //   rest keep whatever they had.  replicated mode holds every body,
+  //   so it zeroes the whole array as before
+
+  pack_body_lists();
+  d_lelem_kk = k_lelem.view_device();
+  copymode = 1;
+  Kokkos::parallel_for(
+    Kokkos::RangePolicy<DeviceType,TagFixRigidZeroTally>(0,nlelem_kk),*this);
+  copymode = 0;
 
   // the collision lists, and any re-indexed ghost cell lists, reach the
   //   device through the journal
@@ -820,7 +833,13 @@ void FixRigidKokkos::device_geometry(int sweepflag)
     }
     h_pose(ib,15) = rmaxbody[ib];
   }
+  double tg = 0.0;
+  if (timeflag) tg = MPI_Wtime();
   k_pose.modify_host(); k_pose.sync_device();
+  if (timeflag) {
+    Kokkos::fence();
+    add_time(T_GEOM_POSE,MPI_Wtime() - tg);
+  }
 
   geometry_views();
   d_blist_kk = k_blist.view_device();
@@ -846,6 +865,7 @@ void FixRigidKokkos::device_geometry(int sweepflag)
   dim_kk = dim;
   dt_kk = update->dt;
 
+  if (timeflag) tg = MPI_Wtime();
   copymode = 1;
   Kokkos::parallel_for(
     Kokkos::RangePolicy<DeviceType,TagFixRigidGeometry>(0,nlelem_kk),*this);
@@ -876,7 +896,15 @@ void FixRigidKokkos::device_geometry(int sweepflag)
     sparta->kokkos->auto_sync = prev_auto_sync;
   }
 
+  if (timeflag) {
+    Kokkos::fence();
+    double now = MPI_Wtime();
+    add_time(T_GEOM_KERNEL,now - tg);
+    tg = now;
+  }
+
   bbox_to_host(k_bbox);
+  if (timeflag) add_time(T_GEOM_BBOX,MPI_Wtime() - tg);
 
   if (!sweepflag) {
     for (int m = 0; m < nblist; m++) hostgeom[blist[m]] = 0;
@@ -1202,6 +1230,17 @@ void FixRigidKokkos::operator()(TagFixRigidInflate, const int &m) const
     d_ellonew_kk(i,k) -= epsnew;
     d_elhinew_kk(i,k) += epsnew;
   }
+}
+
+/* ----------------------------------------------------------------------
+   one thread per element of a body this proc holds: zero its tally row
+------------------------------------------------------------------------- */
+
+KOKKOS_INLINE_FUNCTION
+void FixRigidKokkos::operator()(TagFixRigidZeroTally, const int &m) const
+{
+  const int i = d_lelem_kk(m);
+  for (int j = 0; j < 6; j++) d_ftally(i,j) = 0.0;
 }
 
 /* ----------------------------------------------------------------------

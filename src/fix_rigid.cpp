@@ -1609,6 +1609,7 @@ void FixRigid::post_run()
      "  collision: reset","tally",
      "sum forces","  forces: tallies","  forces: exchange",
      "set_xv+bounds","contacts+kick",
+     "geometry: pose up","geometry: kernels","geometry: bbox back",
      "recut","  recut: candidates","  recut: surf lists",
      "  recut: compare","  recut: cuts","  recut: install","  recut: retyping",
      "  recut: reduce","  recut: split combine",
