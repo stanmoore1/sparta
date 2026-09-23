@@ -1258,6 +1258,15 @@ int RigidRemapKokkos::recut()
   auto h_chvols = k_chvols.view_host();
   for (i = 0; i < nrcand; i++) rcand[i] = h_rcand(i);
 
+  // the device cut is done; what follows is the host install of its
+  //   results, which is what a device-authoritative grid would remove
+
+  if (timeflag) {
+    double now = MPI_Wtime();
+    fix->add_time(FixRigid::T_RECUT_CUT,now-tstart);
+    tstart = now;
+  }
+
   // install the new list and the cut of every changed cell, in
   //   ascending cell order, exactly as the host loop does
 
@@ -1294,7 +1303,7 @@ int RigidRemapKokkos::recut()
 
   if (timeflag) {
     double now = MPI_Wtime();
-    fix->add_time(FixRigid::T_RECUT_CUT,now-tstart);
+    fix->add_time(FixRigid::T_RECUT_INST,now-tstart);
     tstart = now;
   }
 

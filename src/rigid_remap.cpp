@@ -895,6 +895,11 @@ void RigidRemap::recut_cell(int icell, int n, surfint *newlist)
 void RigidRemap::apply_cut(int icell, int nsplitone, double *vols,
                            int *map, int *corner, int xsub, double *xsplit)
 {
+  // a cell whose piece count changes is the one case a device-side
+  //   install could not finish alone: it adds or removes sub cells
+
+  if (nsplitone && nsplitone != grid->cells[icell].nsplit) npiece_run++;
+
   Grid::ChildCell *cells = grid->cells;
   int nsplitold = cells[icell].nsplit;
   int n = cells[icell].nsurf;

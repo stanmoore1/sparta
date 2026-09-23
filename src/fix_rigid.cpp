@@ -801,6 +801,7 @@ void FixRigid::init()
   for (int i = 0; i < T_NSTAGE; i++) stagetime[i] = 0.0;
   for (int i = 0; i < C_NCOUNT; i++) stagecount[i] = 0;
   remap->ncand_run = remap->nlist_run = remap->ncut_run = 0;
+  remap->npiece_run = 0;
 
   // fix rigid must be defined before fixes which change the grid,
   // so its end_of_step() restores overlaid grid cells before they run
@@ -1609,7 +1610,7 @@ void FixRigid::post_run()
      "sum forces","  forces: tallies","  forces: exchange",
      "set_xv+bounds","contacts+kick",
      "recut","  recut: candidates","  recut: surf lists",
-     "  recut: compare","  recut: cuts","  recut: retyping",
+     "  recut: compare","  recut: cuts","  recut: install","  recut: retyping",
      "  recut: reduce","  recut: split combine",
      "apply split changes","  apply: restructure","  apply: cell counts",
      "remove inside","  remove: split assign","  remove: particle pass",
@@ -1657,16 +1658,18 @@ void FixRigid::post_run()
 
   // per-run counts of the re-cut, max over procs
 
-  bigint cmine[3],call[3];
+  bigint cmine[4],call[4];
   cmine[0] = remap->ncand_run;
   cmine[1] = remap->nlist_run;
   cmine[2] = remap->ncut_run;
-  MPI_Allreduce(cmine,call,3,MPI_SPARTA_BIGINT,MPI_MAX,world);
+  cmine[3] = remap->npiece_run;
+  MPI_Allreduce(cmine,call,4,MPI_SPARTA_BIGINT,MPI_MAX,world);
   if (comm->me == 0) {
     char str[256];
     sprintf(str,"Fix rigid re-cut: " BIGINT_FORMAT " candidate cells, "
             BIGINT_FORMAT " lists changed, " BIGINT_FORMAT
-            " cells cut (max over procs)\n",call[0],call[1],call[2]);
+            " cells cut, " BIGINT_FORMAT " piece counts changed "
+            "(max over procs)\n",call[0],call[1],call[2],call[3]);
     if (screen) fprintf(screen,"%s",str);
     if (logfile) fprintf(logfile,"%s",str);
   }

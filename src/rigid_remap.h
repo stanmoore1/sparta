@@ -37,8 +37,9 @@ class RigidRemap : protected Pointers {
   int restructured;       // 1 if apply_pending() moved cells in place
                           //   since the flag was cleared (fix rigid/kk)
   bigint ncand_run;       // per-run counts: candidate cells, cells whose
-  bigint nlist_run;       //   cut list changed, cells cut
-  bigint ncut_run;
+  bigint nlist_run;       //   cut list changed, cells cut, and cells
+  bigint ncut_run;        //   whose piece count changed, which only a
+  bigint npiece_run;      //   host restructure can apply
 
   RigidRemap(class SPARTA *, class FixRigid *);
   virtual ~RigidRemap();
