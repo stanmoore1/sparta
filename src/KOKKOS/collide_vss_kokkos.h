@@ -319,7 +319,13 @@ class CollideVSSKokkos : public CollideVSS {
   DAT::tdual_int_2d k_cellop;
   int ncellop,maxcellop;
   void record_cellop(int, int);
+
+  // apply_cellops() is public because it encloses an extended
+  //   __host__ __device__ lambda, which nvcc forbids in a private or
+  //   protected member function
+ public:
   void apply_cellops();
+ private:
 
   DAT::tdual_float_3d k_vremax;
   DAT::t_float_3d d_vremax;

@@ -5021,6 +5021,16 @@ void CollideVSSKokkos::record_cellop(int icell, int jcell)
   k_cellop.view_host()(ncellop,0) = icell;
   k_cellop.view_host()(ncellop,1) = jcell;
   ncellop++;
+
+  // the host is the only writer of this buffer, and it must say so before
+  //   the resize above can be reached again: DualView::resize() resizes
+  //   whichever copy the modified flags name as the newer one, and with
+  //   neither marked it picks the device, which marks the device modified
+  //   and then rebuilds the host mirror from scratch -- that both loses
+  //   the records already made and makes the modify_host() in
+  //   apply_cellops() a concurrent modification of both copies
+
+  k_cellop.modify_host();
 }
 
 /* ----------------------------------------------------------------------
@@ -5041,6 +5051,10 @@ void CollideVSSKokkos::apply_cellops()
 
   if (k_vremax.need_sync_device()) k_vremax.sync_device();
   if (remainflag && k_remain.need_sync_device()) k_remain.sync_device();
+
+  // record_cellop() has already marked the host copy modified, so this is
+  //   a no-op unless n came from somewhere else; it keeps the requirement
+  //   stated where the sync happens
 
   k_cellop.modify_host();
   k_cellop.sync_device();
