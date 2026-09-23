@@ -95,8 +95,8 @@ class FixRigid : public Fix {
 
   int body_elem(surfint id)
   {
-    std::unordered_map<surfint,int>::const_iterator it = idmap.find(id);
-    if (it == idmap.end()) return -1;
+    std::unordered_map<surfint,int>::const_iterator it = idmap->find(id);
+    if (it == idmap->end()) return -1;
     return it->second;
   }
 
@@ -236,7 +236,11 @@ class FixRigid : public Fix {
   int *bodytrans;         // per-element transparent flag
   int *bodyisc;           // per-element collision model index
   int *bodyisr;           // per-element reaction model index
-  std::unordered_map<surfint,int> idmap;  // global surf ID -> element index
+  // global surf ID -> element index, held by pointer: fix rigid/kk
+  //   passes *this to its kernels by value, which would otherwise copy
+  //   the whole map, sized by the global surf count, on every launch
+
+  std::unordered_map<surfint,int> *idmap;
 
   // where this proc stores copies of body elements in the Surf arrays
   //   (lblist and the copy list above), see scan_copies()

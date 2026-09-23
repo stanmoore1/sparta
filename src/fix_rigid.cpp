@@ -418,6 +418,7 @@ FixRigid::FixRigid(SPARTA *sparta, int narg, char **arg) :
 
   groupstart = NULL;
   elemglo = elemghi = NULL;
+  idmap = new std::unordered_map<surfint,int>();
 
   setup_body();
 
@@ -528,6 +529,7 @@ FixRigid::~FixRigid()
   delete [] customname;
   delete [] infile;
   delete [] outfile;
+  delete idmap;
 
   memory->destroy(xcm);
   memory->destroy(vcm);
@@ -2262,8 +2264,8 @@ void FixRigid::gather_body()
 
   // idmap = global surf ID -> body element index
 
-  idmap.clear();
-  for (i = 0; i < nsurf; i++) idmap[sids[i]] = i;
+  idmap->clear();
+  for (i = 0; i < nsurf; i++) (*idmap)[sids[i]] = i;
 
   // lblist = local surf index of each body element on this proc, and
   //   the list of every local copy of a body element
