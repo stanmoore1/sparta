@@ -2074,6 +2074,12 @@ int FixRigidKokkos::remove_inside_all_kokkos(int splitflag)
   //   on every step (splitchanged/structural), so this is the common case,
   //   not a corner
 
+  // the sub-timers of the pass, as FixRigid::remove_inside_all() keeps
+  //   them on the host: split assign, the particle pass, the compress
+
+  double tsub = 0.0;
+  if (timeflag) { Kokkos::fence(); tsub = MPI_Wtime(); }
+
   if (splitflag && grid->nsplitlocal && !assign_split_kokkos()) {
     particles_to_host();
     if (!particle->sorted) particle->sort();
@@ -2090,6 +2096,13 @@ int FixRigidKokkos::remove_inside_all_kokkos(int splitflag)
   //   on every step (splitchanged/structural), so declining the device path
   //   here would give up on it entirely for exactly the problems that need
   //   it most
+
+  if (timeflag) {
+    Kokkos::fence();
+    const double now = MPI_Wtime();
+    add_time(T_REMOVE_SPLIT,now - tsub);
+    tsub = now;
+  }
 
   if (!particle->exist) return 1;
 
@@ -2143,6 +2156,12 @@ int FixRigidKokkos::remove_inside_all_kokkos(int splitflag)
   ndeleted += nbody_del;
   ndelrun += nbody_del;
 
+  if (timeflag) {
+    const double now = MPI_Wtime();
+    add_time(T_REMOVE_PASS,now - tsub);
+    tsub = now;
+  }
+
   if (!ndelete) {
     particle_kk->modify(Device,PARTICLE_MASK);
     sparta->kokkos->auto_sync = prev_auto_sync;
@@ -2158,17 +2177,26 @@ int FixRigidKokkos::remove_inside_all_kokkos(int splitflag)
   //   copy is stale here, and Particle::compress_migrate() would compact
   //   that copy while the device kept the deleted particle
 
-  k_dellist_kk.modify_device();
-  k_dellist_kk.sync_host();
+  // only the ndelete entries the kernel wrote come to the host: the list
+  //   is sized by the particle count, and a DualView sync would move all
+  //   of it, twice.  compress_migrate_kokkos() reads the host copy alone,
+  //   so the sorted list does not go back
+
+  auto used = std::make_pair(0,ndelete);
+  Kokkos::deep_copy(Kokkos::subview(k_dellist_kk.view_host(),used),
+                    Kokkos::subview(d_dellist_kk,used));
   int *dellist_h = k_dellist_kk.view_host().data();
   std::sort(dellist_h,dellist_h+ndelete);
-  k_dellist_kk.modify_host();
-  k_dellist_kk.sync_device();
 
   particle_kk->modify(Device,PARTICLE_MASK);
   particle_kk->compress_migrate_kokkos(ndelete,dellist_h);
   particle->sorted = 0;
   particle_kk->sorted_kk = 0;
+
+  if (timeflag) {
+    Kokkos::fence();
+    add_time(T_REMOVE_COMP,MPI_Wtime() - tsub);
+  }
 
   sparta->kokkos->auto_sync = prev_auto_sync;
 
