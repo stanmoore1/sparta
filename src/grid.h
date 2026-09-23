@@ -312,6 +312,9 @@ class Grid : protected Pointers {
   };
 
   int journalflag;
+  int journalcells;           // 0 = a caller applied its changes to the
+                              //   device cells itself: journal_cell() skips
+                              //   them, lists and split info still recorded
   int ndirtycell,maxdirtycell;
   int *dirtycell;
   int ndirtysinfo,maxdirtysinfo;

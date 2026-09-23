@@ -1278,6 +1278,86 @@ int RigidRemapKokkos::recut()
 
   // the changed lists and the results of their cuts come to the host
 
+  // the cells whose piece count does not change -- all but a fraction of
+  //   a percent -- take their new cell fields on the device, from the
+  //   results it holds, exactly as RigidRemap::apply_cut() and the Grid
+  //   primitives it calls set them on the host: the surf count (the sub
+  //   cells' too), the type, corner marks and flow volume, and a split
+  //   cell's piece volumes.  the host sets the same values below without
+  //   journaling those cells, so the next apply_changes() does not stage
+  //   and upload their ChildCell and ChildInfo again.  their lists and
+  //   split info are still journaled, since the restructure of the cells
+  //   whose piece count does change rebuilds the device graphs anyway
+  // a cell whose cut failed or whose piece count changes is left to the
+  //   host and its journal, as before.  the classification is the host's:
+  //   the device and host nsplit agree here, apply_changes() ran above
+
+  if (nch) {
+    auto d_cinfo = grid_kk->k_cinfo.view_device();
+    auto d_csubs = grid_kk->d_csubs;
+    const int ncornerk = (dim == 3) ? 8 : 4;
+    const int dim3 = (dim == 3);
+    const int axi = domain->axisymmetric;
+    const int nlocalk = grid->nlocal;
+    Kokkos::parallel_for("rigid_remap:rc_devinstall",nch, KOKKOS_LAMBDA(const int c) {
+      if (d_cherr(c)) return;
+      const int icell = d_rcand(d_chcand(c));
+      const int nsplitone = d_chnsplit(c);
+      const int nsplitold = d_cells[icell].nsplit;
+      const int inplace = (nsplitone == 0) ? (nsplitold <= 1) :
+        (nsplitone == nsplitold);
+      if (!inplace) return;
+
+      // Grid::set_cell_surfs(): the count of the cell and its sub cells
+
+      const int n = d_chn(c);
+      const int off = d_chloff(c);
+      d_cells[icell].nsurf = n;
+      if (nsplitold > 1) {
+        const int isplit = d_cells[icell].isplit;
+        const crs_size_type s0 = d_csubs.row_map(isplit);
+        for (int i = 0; i < nsplitold; i++)
+          d_cells[d_csubs.entries(s0+i)].nsurf = n;
+      }
+
+      // Grid::cell_volume()
+
+      const double *clo = d_cells[icell].lo;
+      const double *chi = d_cells[icell].hi;
+      double cvol;
+      if (dim3) cvol = (chi[0]-clo[0]) * (chi[1]-clo[1]) * (chi[2]-clo[2]);
+      else if (axi) cvol = MY_PI * (chi[1]*chi[1]-clo[1]*clo[1]) * (chi[0]-clo[0]);
+      else cvol = (chi[0]-clo[0]) * (chi[1]-clo[1]);
+
+      // RigidRemap::apply_cut(): Grid::set_cell_type() for an uncut cell,
+      //   set_split_info() (its sub cells' volumes) + set_cell_overlap()
+      //   for a split cell, set_cell_overlap() for a cut cell of one piece
+
+      if (nsplitone == 0) {
+        const int t = d_chcorner(8*c);
+        d_cinfo[icell].type = t;
+        for (int j = 0; j < ncornerk; j++) d_cinfo[icell].corner[j] = t;
+        d_cinfo[icell].volume = (t == CELLINSIDE) ? 0.0 : cvol;
+        return;
+      }
+
+      double vol = d_chvols(off);
+      if (nsplitone > 1) {
+        if (icell < nlocalk) {
+          const int isplit = d_cells[icell].isplit;
+          const crs_size_type s0 = d_csubs.row_map(isplit);
+          for (int i = 0; i < nsplitold; i++)
+            d_cinfo[d_csubs.entries(s0+i)].volume = d_chvols(off+i);
+        }
+        vol = cvol;
+      }
+      d_cinfo[icell].type = CELLOVERLAP;
+      for (int j = 0; j < ncornerk; j++)
+        d_cinfo[icell].corner[j] = d_chcorner(8*c+j);
+      d_cinfo[icell].volume = vol;
+    });
+  }
+
   // only the ranges in use, one copy per buffer, and the candidates
 
   Kokkos::deep_copy(Kokkos::subview(h_chint,range(0,nchint)),
@@ -1331,10 +1411,18 @@ int RigidRemapKokkos::recut()
       continue;
     }
 
+    // a cell the device installed above is installed here unjournaled,
+    //   by the same rule
+
+    int nsplitone = h_chnsplit(m);
+    const int nsplitold = grid->cells[icell].nsplit;
+    const int inplace = (nsplitone == 0) ? (nsplitold <= 1) :
+      (nsplitone == nsplitold);
+    if (inplace) grid->journalcells = 0;
+
     grid->set_cell_surfs(icell,n,newlist);
     listschanged = 1;
 
-    int nsplitone = h_chnsplit(m);
     if (nsplitone) ncut_run++;
     for (int j = 0; j < ncorner; j++) corner[j] = h_chcorner(8*m+j);
     if (nsplitone > 1)
@@ -1343,6 +1431,7 @@ int RigidRemapKokkos::recut()
 
     apply_cut(icell,nsplitone,&h_chvols(off),newmap,corner,
               h_chxsub(m),xsplit);
+    grid->journalcells = 1;
   }
 
   if (timeflag) {

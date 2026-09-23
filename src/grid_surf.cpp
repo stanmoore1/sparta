@@ -2167,6 +2167,7 @@ void Grid::move_sinfo(int src, int dst)
 
 void Grid::journal_cell(int icell)
 {
+  if (!journalcells) return;
   if (ndirtycell == maxdirtycell) {
     maxdirtycell += DELTA_JOURNAL;
     memory->grow(dirtycell,maxdirtycell,"grid:dirtycell");

@@ -141,6 +141,7 @@ Grid::Grid(SPARTA *sparta) : Pointers(sparta)
   movedfrom = movedto = NULL;
 
   journalflag = 0;
+  journalcells = 1;
   ndirtycell = maxdirtycell = 0;
   dirtycell = NULL;
   ndirtysinfo = maxdirtysinfo = 0;
