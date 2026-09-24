@@ -1562,6 +1562,14 @@ void FixRigid::remap_grid()
   if (particle->exist)
     remove_inside_all(fallback || remap->splitchanged || structural);
   stage_end(T_REMOVE);
+
+  // the re-cut replaces tens of thousands of cut lists and piece maps a
+  //   step, and a page never frees a single list: reclaim the replaced
+  //   ones once they outweigh the lists in use, or the pages grow for as
+  //   long as the run does.  only host pointers move, the lists keep
+  //   their contents, so the device copies are unaffected
+
+  grid->compact_surf_lists();
 }
 
 /* ----------------------------------------------------------------------

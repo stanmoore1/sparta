@@ -2991,6 +2991,7 @@ void Grid::allocate_surf_arrays()
   csubs = new MyPage<int>(maxsplitpercell,MAX(100*maxsplitpercell,128));
 
   surflist_churn = 0;
+  surflist_live = 0;
 }
 
 /* ----------------------------------------------------------------------
@@ -3070,6 +3071,9 @@ int Grid::cut_cell(int icell, double *&vols, int *map, int *corner,
    the sub cells of a split cell share its list, so they follow
    the previous list stays in its page: a page never frees a single
      list, compact_surf_lists() reclaims the space once enough has piled up
+   the new list is not written over the old one even when it fits: after
+     a grid change a list can be shared beyond the cell's own sub cells,
+     and overwriting it corrupts the other cell (fix balance, fix adapt)
    the caller sets the cell's type, volume and split info afterwards
 ------------------------------------------------------------------------- */
 
@@ -3183,16 +3187,19 @@ void Grid::set_split_info(int icell, int *map, int xsub, double *xsplit,
    a fix which re-cuts cells every step replaces lists every step, and a
      page never frees a single list, so without this the pages would grow
      without bound; same idea as compress()
-   only done once the replaced lists outweigh the ones in use, so the
-     O(nlocal+nghost) pass is amortized over many steps
+   only done once the lists replaced since the last compaction outweigh
+     4x the lists live then, and at least 32 MB, so the O(nlocal+nghost)
+     pass is amortized over many steps and the pages stay within that
+     much of what is in use.  FixRigid calls it once a step; until then
+     nothing did, so the pages of a re-cut grew for as long as the run
    sub cells share the list of their split cell: it is copied once for
      the split cell and the sub cells are re-pointed at the copy
 ------------------------------------------------------------------------- */
 
 void Grid::compact_surf_lists()
 {
-  bigint bytes = csurfs->size() + csplits->size();
-  if (surflist_churn < bytes/2) return;
+  const bigint threshold = MAX(4*surflist_live,(bigint) 32*1024*1024);
+  if (surflist_churn < threshold) return;
 
   MyPage<surfint> *csurfs_old = csurfs;
   MyPage<int> *csplits_old = csplits;
@@ -3210,7 +3217,10 @@ void Grid::compact_surf_lists()
   for (icell = 0; icell < ntotal; icell++) {
     if (cells[icell].nsplit <= 0) continue;
     n = cells[icell].nsurf;
-    if (n <= 0) continue;
+    if (n <= 0) {
+      cells[icell].csurfs = NULL;
+      continue;
+    }
     sptr = csurfs->get(n);
     if (!sptr) error->one(FLERR,"Failed to allocate grid cell surf list");
     memcpy(sptr,cells[icell].csurfs,n*sizeof(surfint));
@@ -3219,8 +3229,16 @@ void Grid::compact_surf_lists()
 
   int nsplitall = nsplitlocal + nsplitghost;
 
+  // an entry a restructure abandoned points at no cell, or at a cell
+  //   which no longer uses it; it keeps no lists
+
   for (isplit = 0; isplit < nsplitall; isplit++) {
     icell = sinfo[isplit].icell;
+    if (icell < 0 || cells[icell].isplit != isplit || cells[icell].nsplit <= 1) {
+      sinfo[isplit].csplits = NULL;
+      sinfo[isplit].csubs = NULL;
+      continue;
+    }
     n = cells[icell].nsurf;
     int nsplitone = cells[icell].nsplit;
 
@@ -3243,6 +3261,8 @@ void Grid::compact_surf_lists()
   delete csurfs_old;
   delete csplits_old;
   delete csubs_old;
+
+  surflist_live = csurfs->size() + csplits->size();
 }
 
 /* ----------------------------------------------------------------------

@@ -138,6 +138,7 @@ class Grid : protected Pointers {
   int ccollmax;               // longest list ccollpage can hold
   int *collcells;             // cells with a collision list set this step
   int ncollcells,maxcollcells;
+  bigint surflist_live;       // bytes of those pages after the last compaction
   bigint surflist_churn;      // bytes of cut lists and piece maps replaced
                               //   since the last compact_surf_lists()
 
