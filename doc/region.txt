@@ -13,7 +13,7 @@ region command :h3
 region ID style args keyword value ... :pre
 
 ID = user-assigned name for the region :ulb,l
-style = {block} or {cylinder} or {plane} or {sphere} or {union} or {intersect} or {block/kk} or {cylinder/kk} or {plane/kk} or {sphere/kk} or {union/kk} or {intersect/kk} :l
+style = {block} or {cylinder} or {mesh} or {plane} or {sphere} or {union} or {intersect} or {block/kk} or {cylinder/kk} or {plane/kk} or {sphere/kk} or {union/kk} or {intersect/kk} :l
   {block} or {block/kk} args = xlo xhi ylo yhi zlo zhi
     xlo,xhi,ylo,yhi,zlo,zhi = bounds of block in all dimensions (distance units)
   {cylinder} or {cylinder/kk} args = dim c1 c2 radius lo hi
@@ -21,6 +21,9 @@ style = {block} or {cylinder} or {plane} or {sphere} or {union} or {intersect} o
     c1,c2 = coords of cylinder axis in other 2 dimensions (distance units)
     radius = cylinder radius (distance units)
     lo,hi = bounds of cylinder in dim (distance units)
+  {mesh} args = file
+    file = name of file with a closed surface, in STL format or in the
+           format the "read_surf"_read_surf.html command reads
   {plane} or {plane/kk} args = px py pz nx ny nz
     px,py,pz = point on the plane (distance units)
     nx,ny,nz = direction normal to plane (distance units)
@@ -34,10 +37,19 @@ style = {block} or {cylinder} or {plane} or {sphere} or {union} or {intersect} o
     N = # of regions to follow, must be 2 or greater
     reg-ID1,reg-ID2, ... = IDs of regions to intersect :pre
 zero or more keyword/value pairs may be appended :l
-keyword = {side} :l
+keyword = {side} or {origin} or {trans} or {scale} or {rotate} :l
   {side} value = {in} or {out}
     {in} = the region is inside the specified geometry
-    {out} = the region is outside the specified geometry :pre
+    {out} = the region is outside the specified geometry
+  {origin} values = Ox Oy Oz (only for style {mesh})
+    Ox,Oy,Oz = point that {scale} and {rotate} operate around (distance units)
+  {trans} values = Dx Dy Dz (only for style {mesh})
+    Dx,Dy,Dz = distance to translate the mesh by (distance units)
+  {scale} values = Sx Sy Sz (only for style {mesh})
+    Sx,Sy,Sz = scale factor to apply to the mesh in each dimension
+  {rotate} values = theta Rx Ry Rz (only for style {mesh})
+    theta = angle to rotate the mesh by (degrees)
+    Rx,Ry,Rz = axis of rotation :pre
 :ule
 
 [Examples:]
@@ -45,7 +57,10 @@ keyword = {side} :l
 region 1 block -3.0 5.0 INF 10.0 INF INF
 region 2 sphere 0.0 0.0 0.0 5 side out
 region void cylinder y 2 3 5 -5.0 INF
-region outside union 4 side1 side2 side3 side4 :pre
+region outside union 4 side1 side2 side3 side4
+region flask mesh flask.stl
+region duct mesh duct.stl scale 0.001 0.001 0.001 side out
+region shell mesh data.circle side out :pre
 
 [Description:]
 
@@ -72,6 +87,53 @@ y/z; for dim = y, c1/c2 = x/z; for dim = z, c1/c2 = x/y.  Thus the
 third example above specifies a cylinder with its axis in the
 y-direction located at x = 2.0 and z = 3.0, with a radius of 5.0, and
 extending in the y-direction from -5.0 to infinity.
+
+The {mesh} style defines the region as the volume enclosed by a closed
+surface which is read from a file.  Two file formats are supported and
+SPARTA detects which one a file is from its contents, not from its name:
+
+STL (stereolithography) files, in either of the two variants of that
+format, plain text ("ASCII") or binary.  An STL file always stores a 3d
+triangulated surface.
+
+Surface files in the format the "read_surf"_read_surf.html command
+reads, which store a 3d surface as triangles or a 2d surface as line
+segments.  As for read_surf, a {Points} section is optional, and a
+per-surface type column is skipped if it is present.  Per-surface custom
+attributes are not supported.
+
+Only the geometry in the file is used.  Surface types, surface IDs, and
+the direction of the normals are all ignored.  Every processor reads and
+stores the entire mesh, so this style is best suited to small and medium
+sized meshes.
+
+A point is tested against a 3d mesh by casting a ray from the point in
+the +x direction and counting how many triangles it crosses.  An odd
+count means the point is inside the surface.  A 2d mesh is a closed
+curve in the x-y plane, so the ray is cast in that plane and crossings
+of the line segments are counted instead.  The z coordinate of the point
+does not matter for a 2d mesh, which means the region it defines is the
+curve extruded to infinity in both z directions.  A 2d mesh can thus be
+used in a 3d simulation as well, where it defines a prism.
+
+Either way this requires the surface to be closed, and SPARTA prints a
+warning if the elements in the file do not enclose a volume (or an area
+in 2d), in which case the inside/outside test gives arbitrary answers.
+As for the other styles, a point that lies exactly on the surface is
+considered to be inside it, and the {side} keyword selects whether the
+region is the volume inside or outside the mesh.
+
+The {origin}, {trans}, {scale}, and {rotate} keywords can only be used
+with the {mesh} style.  They transform the mesh after it is read, which
+is useful when the file uses different units or is positioned
+differently than the simulation box.  They are applied in the order they
+appear in the command, and follow the same conventions as the
+"read_surf"_read_surf.html keywords of the same name.  {Trans}
+translates the mesh by the specified distance.  {Scale} multiplies the
+distance of every vertex from the {origin} point by the specified
+factors.  {Rotate} rotates the mesh by theta degrees around the axis
+Rx,Ry,Rz which passes through the {origin} point.  The {origin} point is
+0,0,0 by default and is moved along by any preceding {trans}.
 
 The {union} style creates a region consisting of the volume of all the
 listed regions combined.  The {intersect} style creates a region
@@ -118,10 +180,28 @@ effectively.
 
 :line
 
-[Restrictions:] none
+[Restrictions:]
+
+An STL file always describes a 3d surface, so a 2d region can only be
+defined with a "read_surf"_read_surf.html format file containing lines.
+Unlike read_surf, the {mesh} style does not require the dimensionality
+of the file to match the "dimension"_dimension.html of the simulation,
+since as noted above regions in SPARTA are 3d objects in either case.
+
+There is no {mesh/kk} style.  The
+"create_particles"_create_particles.html command tests points against a
+region on the host, so a {mesh} region can be used with
+create_particles/kk, either on its own or as one of the regions listed
+by a {union} or {intersect} region.  Commands that test regions on the
+device, such as "fix emit/face"_fix_emit_face.html and "fix
+ave/histo"_fix_ave_histo.html, will generate an error if they are given
+a {mesh} region when running with the KOKKOS package, whether it is
+given to them directly or nested inside a {union} or {intersect}
+region.
 
 [Related commands:]
 
+"create_particles"_create_particles.html, "read_surf"_read_surf.html,
 "dump_modify"_dump_modify.html
 
 [Default:]
