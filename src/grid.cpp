@@ -3092,14 +3092,10 @@ int Grid::cells_in_box(double *blo, double *bhi, int **list)
 
   if (!cellbinvalid) build_cell_bins();
 
-  // query: gather cells from bins overlapping the box, dedup by stamp
+  // query: gather cells from the bins the widened box overlaps, dedup
+  //   by stamp
 
-  for (k = 0; k < 3; k++) {
-    lo[k] = (int) ((blo[k]-cellbinlo[k]) * cellbininv[k]);
-    hi[k] = (int) ((bhi[k]-cellbinlo[k]) * cellbininv[k]);
-    lo[k] = MAX(0,MIN(lo[k],cellnbin[k]-1));
-    hi[k] = MAX(0,MIN(hi[k],cellnbin[k]-1));
-  }
+  cell_bin_range(blo,bhi,lo,hi);
 
   cellstampcur++;
   int ncand = 0;
@@ -3169,6 +3165,11 @@ void Grid::build_cell_bins()
 
   // two passes: count entries per bin, then fill
   // skip sub cells; empty ghost cells are binned, callers skip them
+  // one entry per cell, in the bin of its center, and the largest half
+  //   extent of a cell, which a query widens its box by; a millionth of
+  //   a bin more covers the rounding of the center and the box edge
+
+  double halfmax[3] = {0.0,0.0,0.0};
 
   for (int pass = 0; pass < 2; pass++) {
     if (pass == 0)
@@ -3176,19 +3177,12 @@ void Grid::build_cell_bins()
 
     for (m = 0; m < ntotal; m++) {
       if (cells[m].nsplit <= 0) continue;
-      for (k = 0; k < 3; k++) {
-        lo[k] = (int) ((cells[m].lo[k]-cellbinlo[k]) * cellbininv[k]);
-        hi[k] = (int) ((cells[m].hi[k]-cellbinlo[k]) * cellbininv[k]);
-        lo[k] = MAX(0,MIN(lo[k],cellnbin[k]-1));
-        hi[k] = MAX(0,MIN(hi[k],cellnbin[k]-1));
-      }
-      for (ibz = lo[2]; ibz <= hi[2]; ibz++)
-        for (iby = lo[1]; iby <= hi[1]; iby++)
-          for (ibx = lo[0]; ibx <= hi[0]; ibx++) {
-            ibin = (ibz*cellnbin[1] + iby)*cellnbin[0] + ibx;
-            if (pass == 0) cellbinstart[ibin+1]++;
-            else cellbinlist[cellbinstart[ibin]++] = m;
-          }
+      if (pass == 0)
+        for (k = 0; k < dim; k++)
+          halfmax[k] = MAX(halfmax[k],0.5*(cells[m].hi[k]-cells[m].lo[k]));
+      ibin = cell_bin(m);
+      if (pass == 0) cellbinstart[ibin+1]++;
+      else cellbinlist[cellbinstart[ibin]++] = m;
     }
 
     if (pass == 0) {
@@ -3200,9 +3194,40 @@ void Grid::build_cell_bins()
     }
   }
 
+  for (k = 0; k < 3; k++) cellbinpad[k] = halfmax[k] + 1.0e-6/cellbininv[k];
+
   ncellbin = ntotal;
   cellbinvalid = 1;
   cellbingen++;
+}
+
+/* ----------------------------------------------------------------------
+   the bin holding the center of cell m
+------------------------------------------------------------------------- */
+
+int Grid::cell_bin(int m)
+{
+  int b[3];
+  for (int k = 0; k < 3; k++) {
+    b[k] = (int) ((0.5*(cells[m].lo[k]+cells[m].hi[k])-cellbinlo[k]) *
+                  cellbininv[k]);
+    b[k] = MAX(0,MIN(b[k],cellnbin[k]-1));
+  }
+  return (b[2]*cellnbin[1] + b[1])*cellnbin[0] + b[0];
+}
+
+/* ----------------------------------------------------------------------
+   the range of bins a query of box blo/bhi scans, widened by cellbinpad
+------------------------------------------------------------------------- */
+
+void Grid::cell_bin_range(const double *blo, const double *bhi, int *lo, int *hi)
+{
+  for (int k = 0; k < 3; k++) {
+    lo[k] = (int) ((blo[k]-cellbinpad[k]-cellbinlo[k]) * cellbininv[k]);
+    hi[k] = (int) ((bhi[k]+cellbinpad[k]-cellbinlo[k]) * cellbininv[k]);
+    lo[k] = MAX(0,MIN(lo[k],cellnbin[k]-1));
+    hi[k] = MAX(0,MIN(hi[k],cellnbin[k]-1));
+  }
 }
 
 /* ----------------------------------------------------------------------

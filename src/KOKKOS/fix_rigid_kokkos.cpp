@@ -2158,25 +2158,11 @@ int FixRigidKokkos::remove_inside_all_kokkos(int splitflag)
   //   skipped (0); an INSIDE cell's are deleted (2); any other cell's are
   //   tested against the bodies (1).  a ghost cell has no ChildInfo and
   //   counts as OUTSIDE
+  // that is GridKokkos's cell kind, which the grid patch and the re-cut
+  //   keep current for the cells they change, rather than one pass over
+  //   every cell's two structs a step
 
-  const int ncellall = grid->nlocal + grid->nghost;
-  if ((int) d_delflag_kk.extent(0) < ncellall)
-    d_delflag_kk = DAT::t_char_1d(
-      Kokkos::view_alloc(Kokkos::WithoutInitializing,"fix_rigid:delflag"),
-      grow_extra(ncellall));
-  {
-    auto d_flag = d_delflag_kk;
-    auto d_cells = d_cells_kk;
-    auto d_cinfo = d_cinfo_kk;
-    const int nl = nlocal_kk;
-    Kokkos::parallel_for("fix_rigid:delflag",ncellall, KOKKOS_LAMBDA(const int ic) {
-      const int ctype = (ic < nl) ? d_cinfo[ic].type : (int) CELLOUTSIDE;
-      char f = 1;
-      if (ctype == CELLINSIDE) f = 2;
-      else if (ctype == CELLOUTSIDE && d_cells[ic].nsurf == 0) f = 0;
-      d_flag(ic) = f;
-    });
-  }
+  d_delflag_kk = grid_kk->cell_kinds();
 
   // the dellist is sized to the particle count so the kernel can never
   //   overflow it, which keeps this a single pass with no retry

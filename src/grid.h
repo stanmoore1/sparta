@@ -145,13 +145,16 @@ class Grid : protected Pointers {
   // bin index over owned+ghost child cells for box -> candidate-cell
   //   queries, see cells_in_box()
   // built lazily on first query, cleared whenever cells move
+  // a cell is listed once, in the bin holding its center; a query box
+  //   is widened by cellbinpad, the largest half extent of a cell, so
+  //   it reaches every cell whose box overlaps it
 
   int cellbinvalid;
   int cellbingen;             // # of rebuilds, for a device mirror
   int cellnbin[3];
-  double cellbinlo[3],cellbininv[3];
+  double cellbinlo[3],cellbininv[3],cellbinpad[3];
   int *cellbinstart;          // CSR offsets per bin
-  int *cellbinlist;           // cell indices, binned by cell bbox
+  int *cellbinlist;           // cell indices, binned by cell center
   int ncellbin;               // # of cells when the bins were built
   int *cellstamp;             // dedup stamp per cell
   int cellstampcur;
@@ -475,6 +478,8 @@ class Grid : protected Pointers {
   void set_collision_surfs(int, int, surfint *);
   void reset_collision_surfs();
   int cells_in_box(double *, double *, int **);
+  void cell_bin_range(const double *, const double *, int *, int *);
+  int cell_bin(int);
   void build_cell_bins();
   void clear_cell_bins();
   void reindex_ghost_surfs(int, int *);

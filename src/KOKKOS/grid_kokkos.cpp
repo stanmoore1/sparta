@@ -93,6 +93,8 @@ GridKokkos::GridKokkos(SPARTA *sparta) : Grid(sparta)
   stalebuf = NULL;
   maxstalemark = nstale = maxstale = maxstalebuf = 0;
   ndevrec = 0;
+  cellkindvalid = 0;
+  kind_nlocal = kind_ntotal = 0;
 }
 
 GridKokkos::~GridKokkos()
@@ -149,6 +151,7 @@ void GridKokkos::grow_cells(int n, int m)
         MemKK::realloc_kokkos(k_cells,"grid:cells",maxcell);
       else {
         refresh_host_cells();          // the host copy is copied over
+        cellkindvalid = 0;
         this->modify(Host,CELL_MASK);  // the host is authoritative
         this->sync(Device,CELL_MASK);  // force resize on device
         Kokkos::resize(Kokkos::view_alloc(Kokkos::WithoutInitializing),
@@ -166,6 +169,7 @@ void GridKokkos::grow_cells(int n, int m)
         MemKK::realloc_kokkos(k_cinfo,"grid:cinfo",maxlocal);
       else {
         refresh_host_cells();           // the host copy is copied over
+        cellkindvalid = 0;
         this->modify(Host,CINFO_MASK);  // the host is authoritative
         this->sync(Device,CINFO_MASK);  // force resize on device
         Kokkos::resize(Kokkos::view_alloc(Kokkos::WithoutInitializing),
@@ -237,6 +241,7 @@ void GridKokkos::wrap_kokkos_graphs()
 
   discard_host_stale();
   ndevrec = 0;
+  cellkindvalid = 0;
   if (!surf->exist) return;
 
   // csurfs = the cut list of every cell; ghost cells with nsurf < 0 (empty)
@@ -514,6 +519,12 @@ void GridKokkos::apply_changes()
   // one scatter of all four: thread m patches the m-th staged cell, hash
   //   entry, halo entry and split info, whichever exist
 
+  // the cell kinds of the scattered cells follow them, if they are kept
+  //   and cover the current cells
+
+  if (cellkindvalid && ntotal > (int) d_cellkind.extent(0)) cellkindvalid = 0;
+  const int kinds = cellkindvalid;
+
   const int nscatter = MAX(MAX(nunique,nsunique),MAX(nhash,nhalo));
   if (nscatter) {
     auto d_cells = k_cells.view_device();
@@ -531,6 +542,8 @@ void GridKokkos::apply_changes()
     auto d_sinfo = k_sinfo.view_device();
     auto d_stagesinfo = k_stagesinfo.view_device();
     auto d_dirtysinfo = k_dirtysinfo.view_device();
+    auto d_kind = d_cellkind;
+    const int nl = nlocal;
     const int ncell = nunique, nh = nhash, nhl = nhalo, ns = nsunique;
     Kokkos::parallel_for("grid:ac_scatter",nscatter, KOKKOS_LAMBDA(const int m) {
       if (m < ncell) {
@@ -556,6 +569,7 @@ void GridKokkos::apply_changes()
           d_cells(ic) = d_stagecell(m);
           if (flags) d_cinfo(ic) = d_stagecinfo(m);
         }
+        if (kinds) d_kind(ic) = cell_kind(ic,nl,d_cells,d_cinfo);
       }
       if (m < nh) {
         auto h = hash_d.find(static_cast<key_type>(d_hashid(m)));
@@ -566,8 +580,20 @@ void GridKokkos::apply_changes()
     });
   }
 
-  // the cell bins: a moved cell is replaced in its bins, if the device
-  //   copy is the one the host patched
+  // a change of the owned count changes which cells have a ChildInfo:
+  //   the kinds of the cells between the two counts, and of any cells
+  //   added, are recomputed, though a cell there is normally scattered
+
+  if (cellkindvalid) {
+    kinds_for_range(MIN(kind_nlocal,nlocal),MAX(kind_nlocal,nlocal));
+    if (ntotal > kind_ntotal) kinds_for_range(kind_ntotal,ntotal);
+    kind_nlocal = nlocal;
+    kind_ntotal = ntotal;
+  }
+
+  // the cell bins: a moved cell is replaced in its bin, the one holding
+  //   its center (Grid::cell_bin()), if the device copy is the one the
+  //   host patched
 
   if (nbinpatch && cellbingen_kk == cellbingen) {
     if ((int) k_movedfrom.extent(0) < nbinpatch) {
@@ -597,20 +623,12 @@ void GridKokkos::apply_changes()
       const int dst = d_to(m);
       const double *lo = d_cells[dst].lo;
       const double *hi = d_cells[dst].hi;
-      int clo[3],chi[3];
-      clo[0] = MAX(0,MIN((int) ((lo[0]-blo0)*binv0),nbinx-1));
-      chi[0] = MAX(0,MIN((int) ((hi[0]-blo0)*binv0),nbinx-1));
-      clo[1] = MAX(0,MIN((int) ((lo[1]-blo1)*binv1),nbiny-1));
-      chi[1] = MAX(0,MIN((int) ((hi[1]-blo1)*binv1),nbiny-1));
-      clo[2] = MAX(0,MIN((int) ((lo[2]-blo2)*binv2),nbinz-1));
-      chi[2] = MAX(0,MIN((int) ((hi[2]-blo2)*binv2),nbinz-1));
-      for (int ibz = clo[2]; ibz <= chi[2]; ibz++)
-        for (int iby = clo[1]; iby <= chi[1]; iby++)
-          for (int ibx = clo[0]; ibx <= chi[0]; ibx++) {
-            const int ibin = (ibz*nbiny + iby)*nbinx + ibx;
-            for (int j = d_binstart(ibin); j < d_binstart(ibin+1); j++)
-              if (d_binlist(j) == src) d_binlist(j) = dst;
-          }
+      const int bx = MAX(0,MIN((int) ((0.5*(lo[0]+hi[0])-blo0)*binv0),nbinx-1));
+      const int by = MAX(0,MIN((int) ((0.5*(lo[1]+hi[1])-blo1)*binv1),nbiny-1));
+      const int bz = MAX(0,MIN((int) ((0.5*(lo[2]+hi[2])-blo2)*binv2),nbinz-1));
+      const int ibin = (bz*nbiny + by)*nbinx + bx;
+      for (int j = d_binstart(ibin); j < d_binstart(ibin+1); j++)
+        if (d_binlist(j) == src) d_binlist(j) = dst;
     });
     Kokkos::fence();
   }
@@ -1014,6 +1032,43 @@ int GridKokkos::device_lists_ok()
 }
 
 /* ----------------------------------------------------------------------
+   the cell kinds of every owned and ghost cell (see grid_kokkos.h),
+     recomputed in full only when they are not being kept current
+------------------------------------------------------------------------- */
+
+const DAT::t_char_1d &GridKokkos::cell_kinds()
+{
+  const int ntotal = nlocal + nghost;
+  if (!cellkindvalid || ntotal > (int) d_cellkind.extent(0)) {
+    if (ntotal > (int) d_cellkind.extent(0))
+      d_cellkind = DAT::t_char_1d(
+        Kokkos::view_alloc(Kokkos::WithoutInitializing,"grid:cellkind"),
+        grow_extra(ntotal));
+    cellkindvalid = 1;
+    kinds_for_range(0,ntotal);
+    kind_nlocal = nlocal;
+    kind_ntotal = ntotal;
+  }
+
+  return d_cellkind;
+}
+
+/* ---------------------------------------------------------------------- */
+
+void GridKokkos::kinds_for_range(int ilo, int ihi)
+{
+  if (ihi <= ilo) return;
+  auto d_kind = d_cellkind;
+  auto d_cells = k_cells.view_device();
+  auto d_cinfo = k_cinfo.view_device();
+  const int nl = nlocal;
+  Kokkos::parallel_for("grid:cell_kinds",Kokkos::RangePolicy<DeviceType>(ilo,ihi),
+                       KOKKOS_LAMBDA(const int ic) {
+    d_kind(ic) = cell_kind(ic,nl,d_cells,d_cinfo);
+  });
+}
+
+/* ----------------------------------------------------------------------
    the cut lists of the cells in nrec records the caller holds on the
      device, as ranges of one int buffer: record m is cell buf(o_icell+m),
      or none if that is -1, with buf(o_n+m) surfs starting at buf(o_list +
@@ -1334,6 +1389,11 @@ void GridKokkos::sync(ExecutionSpace space, unsigned int mask, int refresh)
       if (mask & (CELL_MASK|CINFO_MASK)) refresh_host_cells();
       modify(Host,mask);
     }
+
+    // a copy of the cells over the device invalidates the cell kinds
+
+    if ((mask & CELL_MASK) && k_cells.need_sync_device()) cellkindvalid = 0;
+    if ((mask & CINFO_MASK) && k_cinfo.need_sync_device()) cellkindvalid = 0;
     if (mask & CELL_MASK) k_cells.sync_device();
     if (mask & CINFO_MASK) k_cinfo.sync_device();
     if (mask & PCELL_MASK) k_pcells.sync_device();
@@ -1403,6 +1463,7 @@ void GridKokkos::modify(ExecutionSpace space, unsigned int mask)
   }
 
   if (space == Device) {
+    if (mask & (CELL_MASK|CINFO_MASK)) cellkindvalid = 0;
     if (mask & CELL_MASK) k_cells.modify_device();
     if (mask & CINFO_MASK) k_cinfo.modify_device();
     if (mask & PCELL_MASK) k_pcells.modify_device();

@@ -2969,3 +2969,46 @@ A cube spinning through a 30^3 grid (about 490 cut cells a step, 40
 steps, particles): identical stats with the old greedy chunks, the new
 single chunk, and a 64 KB budget (about 120 chunks a step) on the
 split-memory build.
+
+## Three per-step kernels that did avoidable work (24 Sep 2026)
+
+A per-kernel census (Kokkos Tools, Serial, in.bench40.owned, 40 steps)
+named three fix rigid kernels whose work did not follow what changed.
+
+**`fix_rigid:delflag`, 0.80 s -> 0.02 s.**  The deletion pass's per-cell
+byte (skip / test / delete) was recomputed every step from two large
+structs of all 1.28M cells.  It is now GridKokkos's cell kind
+(`cell_kinds()`), kept current by the writers of cells and types: the
+grid patch's scatter, the re-cut's device install and retype, and the
+cells between the old and new owned counts when that changes.  A copy of
+the cells over the device (grow, a full wrap, a sync of host changes,
+`modify(Device)`) marks them invalid and the next reader recomputes
+them.  `rc_devinstall` rose 0.08 -> 0.16 s for writing them: net -0.69 s.
+
+**`sw_count` and `rc_cand_flag`: each cell once, and no pair lists.**
+The cell bin index listed a cell in every bin its box overlaps.  Bins are
+barely larger than cells here, so a cell sat in ~3 bins: of 727K bin
+visits a step, 230K survived the first-bin test that removed the
+duplicates, each after reading the cell's struct.  Cells are now binned
+once, by center (`Grid::cell_bin()`), and a query widens its box by the
+largest half cell (`cellbinpad`, `Grid::cell_bin_range()`): 9.2M visits
+over 40 steps instead of 29M, the same 7.9M cells passing the box test.
+The host no longer builds and uploads two (body, bin) pair lists a step
+(160K pairs each, ~1.3 MB); it sends each body's bin range, and a team
+per body walks its bins.  A flat range with a binary search for the body
+was tried first and was slower on one core (the search per item cost
+more than the visits saved).  On one core: `rc_cand_flag` 0.84 ->
+0.69-0.73 s, `sw_count` 1.16 -> 1.25-1.29 s, since its cost is the 1.8M
+element box tests a step, which do not change.  The gain is meant for a
+GPU (a third of the divergent struct reads, no per-step host pair build
+and upload), and is not measured there yet.  The CPU build (host
+`cells_in_box()`, same bins) is bit-identical too.
+
+**The CRS rebuild (0.45 s) stays.**  One rebuild runs a step, and every
+step here restructures split cells (40 of 40 in place): sub cells are
+added and removed and the ghost block shifts, which moves rows.  Spare
+row capacity for in-place list updates would still leave that rebuild,
+and would change the row-length contract every reader relies on, the
+mover's hot loop included (`update_kokkos.cpp` reads a row's width as
+its surf count).  Worth it only with the restructure made row-preserving
+as well, for about 3% of the loop.

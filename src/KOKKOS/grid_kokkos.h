@@ -113,6 +113,29 @@ class GridKokkos : public Grid {
   void refresh_host_cells() override;
   void discard_host_stale();
 
+  // per cell, whether a point in it may lie inside a closed surface:
+  //   0 = no (an OUTSIDE cell, or a ghost cell, which has no ChildInfo,
+  //   holding no surf), 2 = yes (an INSIDE cell), 1 = maybe (any other)
+  // kept current on the device by the writers of cells and cell types
+  //   (apply_changes() and fix rigid/kk's re-cut) while cellkindvalid is
+  //   set; cell_kinds() recomputes them all when it is not
+
+  DAT::t_char_1d d_cellkind;
+  int cellkindvalid;
+  int kind_nlocal,kind_ntotal;   // the layout d_cellkind was last kept for
+  const DAT::t_char_1d &cell_kinds();
+  void kinds_for_range(int, int);
+
+  template <class Cells, class Cinfo>
+  KOKKOS_INLINE_FUNCTION static
+  char cell_kind(const int ic, const int nl, const Cells &cells,
+                 const Cinfo &cinfo) {
+    const int type = (ic < nl) ? cinfo(ic).type : 1;   // Grid's OUTSIDE
+    if (type == 2) return 2;                           // Grid's INSIDE
+    if (type == 1 && cells(ic).nsurf == 0) return 0;
+    return 1;
+  }
+
   // cut lists replaced on the device, by a caller which installs cells
   //   there: whether it may, and the records it holds, which the next
   //   rebuild of d_csurfs applies (flush_cut_lists() forces one)

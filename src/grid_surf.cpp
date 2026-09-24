@@ -2251,28 +2251,14 @@ int Grid::halo_site(int icell)
 }
 
 /* ----------------------------------------------------------------------
-   cell src moved to slot dst: replace it in every bin of the bin index
+   cell src moved to slot dst: replace it in its bin of the bin index
 ------------------------------------------------------------------------- */
 
 void Grid::rebin_cell(int src, int dst)
 {
-  int k,ibx,iby,ibz,ibin;
-  int lo[3],hi[3];
-
-  for (k = 0; k < 3; k++) {
-    lo[k] = (int) ((cells[dst].lo[k]-cellbinlo[k]) * cellbininv[k]);
-    hi[k] = (int) ((cells[dst].hi[k]-cellbinlo[k]) * cellbininv[k]);
-    lo[k] = MAX(0,MIN(lo[k],cellnbin[k]-1));
-    hi[k] = MAX(0,MIN(hi[k],cellnbin[k]-1));
-  }
-
-  for (ibz = lo[2]; ibz <= hi[2]; ibz++)
-    for (iby = lo[1]; iby <= hi[1]; iby++)
-      for (ibx = lo[0]; ibx <= hi[0]; ibx++) {
-        ibin = (ibz*cellnbin[1] + iby)*cellnbin[0] + ibx;
-        for (int i = cellbinstart[ibin]; i < cellbinstart[ibin+1]; i++)
-          if (cellbinlist[i] == src) cellbinlist[i] = dst;
-      }
+  int ibin = cell_bin(dst);
+  for (int i = cellbinstart[ibin]; i < cellbinstart[ibin+1]; i++)
+    if (cellbinlist[i] == src) cellbinlist[i] = dst;
 
   if (journalflag) {
     if (nbinpatch == maxbinpatch) {

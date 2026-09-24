@@ -89,6 +89,25 @@ static int box_overlap_kk(const double *alo, const double *ahi,
 }
 
 /* ----------------------------------------------------------------------
+   the bin of item local of a body whose query box spans bins qlo..qhi,
+     in x-fastest order: a team per body walks its bins this way
+------------------------------------------------------------------------- */
+
+template <class Int2d>
+KOKKOS_INLINE_FUNCTION
+static int body_bin(int local, const int ibody, const Int2d &qlo,
+                    const Int2d &qhi, const int nbinx, const int nbiny)
+{
+  const int nx = qhi(ibody,0) - qlo(ibody,0) + 1;
+  const int ny = qhi(ibody,1) - qlo(ibody,1) + 1;
+  const int ibx = qlo(ibody,0) + local % nx;
+  local /= nx;
+  const int iby = qlo(ibody,1) + local % ny;
+  const int ibz = qlo(ibody,2) + local / ny;
+  return (ibz*nbiny + iby)*nbinx + ibx;
+}
+
+/* ----------------------------------------------------------------------
    add every body's swept surfs to the collision lists of the cells it
      sweeps this step, on the device: the mover's list for a cell is its
      cut list followed by the swept elements, the same merge as the host
@@ -134,55 +153,37 @@ void RigidRemapKokkos::collision_lists()
   double **bbodylo = fix->bbodylo;
   double **bbodyhi = fix->bbodyhi;
 
-  // (body, bin) pairs: the bins each body's swept box overlaps
+  // (body, bin) pairs: the bins each body's swept box reaches
+  //   (Grid::cell_bin_range()), as each body's bin range and its first
+  //   item, which the kernel decodes (pair_item())
+  // qlo | qhi | first item per listed body (nblist+1) | body per listed
+  //   body (nblist) in the staging buffer
+
+  typedef std::pair<bigint,bigint> range;
+  const bigint o_qhi = 3*((bigint) nbody);
+  const bigint o_boff = 2*o_qhi;
+  const bigint o_bid = o_boff + nblist + 1;
+  const bigint npack = o_bid + nblist;
+  grow_pack(npack);
+  t_hint_2d_um h_qlo(h_pack.data(),nbody,3);
+  t_hint_2d_um h_qhi(h_pack.data()+o_qhi,nbody,3);
+  auto h_boff = Kokkos::subview(h_pack,range(o_boff,o_bid));
+  auto h_bid = Kokkos::subview(h_pack,range(o_bid,npack));
 
   int npair = 0;
   int qlo[3],qhi[3];
   for (int m = 0; m < nblist; m++) {
     ibody = blist[m];
-    int n = 1;
+    grid->cell_bin_range(bbodylo[ibody],bbodyhi[ibody],qlo,qhi);
     for (k = 0; k < 3; k++) {
-      qlo[k] = (int) ((bbodylo[ibody][k]-grid->cellbinlo[k]) * grid->cellbininv[k]);
-      qhi[k] = (int) ((bbodyhi[ibody][k]-grid->cellbinlo[k]) * grid->cellbininv[k]);
-      qlo[k] = MAX(0,MIN(qlo[k],grid->cellnbin[k]-1));
-      qhi[k] = MAX(0,MIN(qhi[k],grid->cellnbin[k]-1));
-      n *= qhi[k] - qlo[k] + 1;
-    }
-    npair += n;
-  }
-
-  // qlo | qhi | pairbody | pairbin in the staging buffer
-
-  typedef std::pair<bigint,bigint> range;
-  const bigint o_qhi = 3*((bigint) nbody);
-  const bigint o_pbody = 2*o_qhi;
-  const bigint o_pbin = o_pbody + npair;
-  const bigint npack = o_pbin + npair;
-  grow_pack(npack);
-  t_hint_2d_um h_qlo(h_pack.data(),nbody,3);
-  t_hint_2d_um h_qhi(h_pack.data()+o_qhi,nbody,3);
-  auto h_pairbody = Kokkos::subview(h_pack,range(o_pbody,o_pbin));
-  auto h_pairbin = Kokkos::subview(h_pack,range(o_pbin,npack));
-
-  npair = 0;
-  for (int m = 0; m < nblist; m++) {
-    ibody = blist[m];
-    for (k = 0; k < 3; k++) {
-      qlo[k] = (int) ((bbodylo[ibody][k]-grid->cellbinlo[k]) * grid->cellbininv[k]);
-      qhi[k] = (int) ((bbodyhi[ibody][k]-grid->cellbinlo[k]) * grid->cellbininv[k]);
-      qlo[k] = MAX(0,MIN(qlo[k],grid->cellnbin[k]-1));
-      qhi[k] = MAX(0,MIN(qhi[k],grid->cellnbin[k]-1));
       h_qlo(ibody,k) = qlo[k];
       h_qhi(ibody,k) = qhi[k];
     }
-    for (int ibz = qlo[2]; ibz <= qhi[2]; ibz++)
-      for (int iby = qlo[1]; iby <= qhi[1]; iby++)
-        for (int ibx = qlo[0]; ibx <= qhi[0]; ibx++) {
-          h_pairbody(npair) = ibody;
-          h_pairbin(npair) = (ibz*grid->cellnbin[1] + iby)*grid->cellnbin[0] + ibx;
-          npair++;
-        }
+    h_boff(m) = npair;
+    h_bid(m) = ibody;
+    npair += (qhi[0]-qlo[0]+1) * (qhi[1]-qlo[1]+1) * (qhi[2]-qlo[2]+1);
   }
+  h_boff(nblist) = npair;
   Kokkos::deep_copy(Kokkos::subview(d_pack,range(0,npack)),
                     Kokkos::subview(h_pack,range(0,npack)));
 
@@ -215,8 +216,8 @@ void RigidRemapKokkos::collision_lists()
 
   // the views the kernels read, as locals so the lambdas carry copies
 
-  auto d_pairbody = Kokkos::subview(d_pack,range(o_pbody,o_pbin));
-  auto d_pairbin = Kokkos::subview(d_pack,range(o_pbin,npack));
+  auto d_boff = Kokkos::subview(d_pack,range(o_boff,o_bid));
+  auto d_bid = Kokkos::subview(d_pack,range(o_bid,npack));
   t_int_2d_um d_qlo(d_pack.data(),nbody,3);
   t_int_2d_um d_qhi(d_pack.data()+o_qhi,nbody,3);
   auto d_binstart = grid_kk->d_cellbinstart;
@@ -227,37 +228,10 @@ void RigidRemapKokkos::collision_lists()
   auto d_nhit = this->d_nhit;
   const int nbinx = grid->cellnbin[0];
   const int nbiny = grid->cellnbin[1];
-  const int nbinz = grid->cellnbin[2];
-  const double binlo0 = grid->cellbinlo[0], binlo1 = grid->cellbinlo[1],
-    binlo2 = grid->cellbinlo[2];
-  const double bininv0 = grid->cellbininv[0], bininv1 = grid->cellbininv[1],
-    bininv2 = grid->cellbininv[2];
+  const int nbl = nblist;
 
-  // a cell is listed in every bin its box overlaps: for one body's query
-  //   it is handled from the lowest of those bins inside the query range,
-  //   which is what the host's per-query stamp achieves
-
-  auto first_bin = KOKKOS_LAMBDA(const int icell, const int ibody, const int ibin) {
-    const double *lo = d_cells[icell].lo;
-    const double *hi = d_cells[icell].hi;
-    int clo[3],chi[3];
-    clo[0] = (int) ((lo[0]-binlo0) * bininv0);
-    chi[0] = (int) ((hi[0]-binlo0) * bininv0);
-    clo[1] = (int) ((lo[1]-binlo1) * bininv1);
-    chi[1] = (int) ((hi[1]-binlo1) * bininv1);
-    clo[2] = (int) ((lo[2]-binlo2) * bininv2);
-    chi[2] = (int) ((hi[2]-binlo2) * bininv2);
-    clo[0] = MAX(0,MIN(clo[0],nbinx-1));
-    chi[0] = MAX(0,MIN(chi[0],nbinx-1));
-    clo[1] = MAX(0,MIN(clo[1],nbiny-1));
-    chi[1] = MAX(0,MIN(chi[1],nbiny-1));
-    clo[2] = MAX(0,MIN(clo[2],nbinz-1));
-    chi[2] = MAX(0,MIN(chi[2],nbinz-1));
-    const int fx = MAX(clo[0],d_qlo(ibody,0));
-    const int fy = MAX(clo[1],d_qlo(ibody,1));
-    const int fz = MAX(clo[2],d_qlo(ibody,2));
-    return ibin == (fz*nbiny + fy)*nbinx + fx;
-  };
+  // each cell is listed once, in the bin of its center, so a body's
+  //   query meets it at most once
 
   // count the swept elements of each cell, recording every hit and
   //   listing a cell the first time it is counted
@@ -272,43 +246,47 @@ void RigidRemapKokkos::collision_lists()
     auto d_hitelem = this->d_hitelem;
     const int maxhit = maxhit_kk;
 
-    Kokkos::parallel_for("rigid_remap:sw_count",npair, KOKKOS_LAMBDA(const int p) {
-      const int ibody = d_pairbody(p);
-      const int ibin = d_pairbin(p);
-      for (int m = d_binstart(ibin); m < d_binstart(ibin+1); m++) {
-        const int icell = d_binlist(m);
-        if (d_cells[icell].nsplit <= 0) continue;
-        if (d_cells[icell].nsurf < 0) continue;
-        if (!first_bin(icell,ibody,ibin)) continue;
-        const double *clo = d_cells[icell].lo;
-        const double *chi = d_cells[icell].hi;
-        if (!body.box_overlap(ibody,clo,chi)) continue;
+    Kokkos::parallel_for("rigid_remap:sw_count",
+                         Kokkos::TeamPolicy<DeviceType>(nbl,Kokkos::AUTO),
+                         KOKKOS_LAMBDA(const Kokkos::TeamPolicy<DeviceType>::member_type &team) {
+      const int ibody = d_bid(team.league_rank());
+      const int nb = d_boff(team.league_rank()+1) - d_boff(team.league_rank());
+      Kokkos::parallel_for(Kokkos::TeamThreadRange(team,nb), [&](const int local) {
+        const int ibin = body_bin(local,ibody,d_qlo,d_qhi,nbinx,nbiny);
+        for (int m = d_binstart(ibin); m < d_binstart(ibin+1); m++) {
+          const int icell = d_binlist(m);
+          if (d_cells[icell].nsplit <= 0) continue;
+          if (d_cells[icell].nsurf < 0) continue;
+          const double *clo = d_cells[icell].lo;
+          const double *chi = d_cells[icell].hi;
+          if (!body.box_overlap(ibody,clo,chi)) continue;
 
-        // the elements are scanned a group at a time; the groups are
-        //   consecutive element ranges, so the hits are recorded in
-        //   ascending element order either way
+          // the elements are scanned a group at a time; the groups are
+          //   consecutive element ranges, so the hits are recorded in
+          //   ascending element order either way
 
-        int n = 0;
-        for (int g = body.d_groupstart(ibody); g < body.d_groupstart(ibody+1);
-             g++) {
-          if (!body.group_overlap(g,clo,chi)) continue;
-          for (int e = body.d_groupelem(g); e < body.d_groupelem(g+1); e++) {
-            if (!body.elem_overlap(e,clo,chi)) continue;
-            const int h = Kokkos::atomic_fetch_add(&d_nhit(),1);
-            if (h < maxhit) {
-              d_hitcell(h) = icell;
-              d_hitelem(h) = e;
+          int n = 0;
+          for (int g = body.d_groupstart(ibody); g < body.d_groupstart(ibody+1);
+               g++) {
+            if (!body.group_overlap(g,clo,chi)) continue;
+            for (int e = body.d_groupelem(g); e < body.d_groupelem(g+1); e++) {
+              if (!body.elem_overlap(e,clo,chi)) continue;
+              const int h = Kokkos::atomic_fetch_add(&d_nhit(),1);
+              if (h < maxhit) {
+                d_hitcell(h) = icell;
+                d_hitelem(h) = e;
+              }
+              n++;
             }
-            n++;
+          }
+          if (!n) continue;
+          const int old = Kokkos::atomic_fetch_add(&d_swcount(icell),n);
+          if (old == 0) {
+            const int t = Kokkos::atomic_fetch_add(&d_ntouched(),1);
+            d_swtouched(t) = icell;
           }
         }
-        if (!n) continue;
-        const int old = Kokkos::atomic_fetch_add(&d_swcount(icell),n);
-        if (old == 0) {
-          const int t = Kokkos::atomic_fetch_add(&d_ntouched(),1);
-          d_swtouched(t) = icell;
-        }
-      }
+      });
     });
 
     Kokkos::deep_copy(h_rscalars,d_rscalars);
@@ -539,38 +517,27 @@ int RigidRemapKokkos::recut()
     k_bodyparam = tdual_dbl_2d("rigid_remap:bodyparam",nbody,15);
   auto h_bodyparam = k_bodyparam.view_host();
 
-  // the # of (body, bin) pairs first, so the staging buffer is sized
-  //   before anything is written to it
-
-  int npair = 0;
-  for (int m = 0; m < nblist; m++) {
-    ibody = blist[m];
-    int n = 1;
-    for (k = 0; k < 3; k++) {
-      double lo = MIN(prevlo[ibody][k],bbodylo[ibody][k]);
-      double hi = MAX(prevhi[ibody][k],bbodyhi[ibody][k]);
-      int qlo = (int) ((lo-grid->cellbinlo[k]) * grid->cellbininv[k]);
-      int qhi = (int) ((hi-grid->cellbinlo[k]) * grid->cellbininv[k]);
-      qlo = MAX(0,MIN(qlo,grid->cellnbin[k]-1));
-      qhi = MAX(0,MIN(qhi,grid->cellnbin[k]-1));
-      n *= qhi - qlo + 1;
-    }
-    npair += n;
-  }
-
-  // qlo | qhi | cominside | pairbody | pairbin in the staging buffer
+  // (body, bin) pairs: the bins each body's region R reaches
+  //   (Grid::cell_bin_range()), as each body's bin range and its first
+  //   item, which the kernel decodes (pair_item())
+  // qlo | qhi | cominside | first item per listed body (nblist+1) | body
+  //   per listed body (nblist) in the staging buffer
 
   typedef std::pair<bigint,bigint> range;
   const bigint o_qhi = 3*((bigint) nbody);
   const bigint o_com = 2*o_qhi;
-  const bigint o_pbody = o_com + nbody;
-  const bigint o_pbin = o_pbody + npair;
-  const bigint npack = o_pbin + npair;
+  const bigint o_boff = o_com + nbody;
+  const bigint o_bid = o_boff + nblist + 1;
+  const bigint npack = o_bid + nblist;
   grow_pack(npack);
   t_hint_2d_um h_qlo(h_pack.data(),nbody,3);
   t_hint_2d_um h_qhi(h_pack.data()+o_qhi,nbody,3);
-  auto h_cominside = Kokkos::subview(h_pack,range(o_com,o_pbody));
+  auto h_cominside = Kokkos::subview(h_pack,range(o_com,o_boff));
+  auto h_boff = Kokkos::subview(h_pack,range(o_boff,o_bid));
+  auto h_bid = Kokkos::subview(h_pack,range(o_bid,npack));
 
+  int npair = 0;
+  int qlo[3],qhi[3];
   for (int m = 0; m < nblist; m++) {
     ibody = blist[m];
     for (k = 0; k < 3; k++) {
@@ -580,30 +547,21 @@ int RigidRemapKokkos::recut()
       h_bodyparam(ibody,3+k) = rhi[k];
       h_bodyparam(ibody,6+k) = fix->xcm[ibody][k];
       h_bodyparam(ibody,9+k) = prevxcm[ibody][k];
-      int qlo = (int) ((rlo[k]-grid->cellbinlo[k]) * grid->cellbininv[k]);
-      int qhi = (int) ((rhi[k]-grid->cellbinlo[k]) * grid->cellbininv[k]);
-      qlo = MAX(0,MIN(qlo,grid->cellnbin[k]-1));
-      qhi = MAX(0,MIN(qhi,grid->cellnbin[k]-1));
-      h_qlo(ibody,k) = qlo;
-      h_qhi(ibody,k) = qhi;
     }
+    grid->cell_bin_range(rlo,rhi,qlo,qhi);
+    for (k = 0; k < 3; k++) {
+      h_qlo(ibody,k) = qlo[k];
+      h_qhi(ibody,k) = qhi[k];
+    }
+    h_boff(m) = npair;
+    h_bid(m) = ibody;
+    npair += (qhi[0]-qlo[0]+1) * (qhi[1]-qlo[1]+1) * (qhi[2]-qlo[2]+1);
     h_bodyparam(ibody,12) = fix->rminbody[ibody];
     h_bodyparam(ibody,13) = fix->rmaxbody[ibody];
     h_bodyparam(ibody,14) = fix->bboxeps[ibody];
     h_cominside(ibody) = cominside[ibody];
   }
-
-  auto h_pairbody = Kokkos::subview(h_pack,range(o_pbody,o_pbin));
-  auto h_pairbin = Kokkos::subview(h_pack,range(o_pbin,npack));
-  npair = 0;
-  for (int m = 0; m < nblist; m++)
-    for (int ibz = h_qlo(blist[m],2); ibz <= h_qhi(blist[m],2); ibz++)
-      for (int iby = h_qlo(blist[m],1); iby <= h_qhi(blist[m],1); iby++)
-        for (int ibx = h_qlo(blist[m],0); ibx <= h_qhi(blist[m],0); ibx++) {
-          h_pairbody(npair) = blist[m];
-          h_pairbin(npair) = (ibz*grid->cellnbin[1] + iby)*grid->cellnbin[0] + ibx;
-          npair++;
-        }
+  h_boff(nblist) = npair;
 
   k_bodyparam.modify_host(); k_bodyparam.sync_device();
   Kokkos::deep_copy(Kokkos::subview(d_pack,range(0,npack)),
@@ -615,12 +573,12 @@ int RigidRemapKokkos::recut()
     d_candoff = DAT::t_int_1d("rigid_remap:candoff",maxrcand_kk);
   }
 
-  auto d_pairbody = Kokkos::subview(d_pack,range(o_pbody,o_pbin));
-  auto d_pairbin = Kokkos::subview(d_pack,range(o_pbin,npack));
+  auto d_boff = Kokkos::subview(d_pack,range(o_boff,o_bid));
+  auto d_bid = Kokkos::subview(d_pack,range(o_bid,npack));
   t_int_2d_um d_qlo(d_pack.data(),nbody,3);
   t_int_2d_um d_qhi(d_pack.data()+o_qhi,nbody,3);
   auto d_bodyparam = k_bodyparam.view_device();
-  auto d_cominside = Kokkos::subview(d_pack,range(o_com,o_pbody));
+  auto d_cominside = Kokkos::subview(d_pack,range(o_com,o_boff));
   auto d_binstart = grid_kk->d_cellbinstart;
   auto d_binlist = grid_kk->d_cellbinlist;
   auto d_cells = grid_kk->k_cells.view_device();
@@ -629,34 +587,19 @@ int RigidRemapKokkos::recut()
   auto d_candoff = this->d_candoff;
   const int nbinx = grid->cellnbin[0];
   const int nbiny = grid->cellnbin[1];
-  const int nbinz = grid->cellnbin[2];
-  const double binlo0 = grid->cellbinlo[0], binlo1 = grid->cellbinlo[1],
-    binlo2 = grid->cellbinlo[2];
-  const double bininv0 = grid->cellbininv[0], bininv1 = grid->cellbininv[1],
-    bininv2 = grid->cellbininv[2];
+  const int nbl = nblist;
   const int dimk = dim;
-
-  auto first_bin = KOKKOS_LAMBDA(const int ic, const int ib, const int ibin) {
-    const double *lo = d_cells[ic].lo;
-    const double *hi = d_cells[ic].hi;
-    int clo[3];
-    clo[0] = MAX(0,MIN((int) ((lo[0]-binlo0) * bininv0),nbinx-1));
-    clo[1] = MAX(0,MIN((int) ((lo[1]-binlo1) * bininv1),nbiny-1));
-    clo[2] = MAX(0,MIN((int) ((lo[2]-binlo2) * bininv2),nbinz-1));
-    const int fx = MAX(clo[0],d_qlo(ib,0));
-    const int fy = MAX(clo[1],d_qlo(ib,1));
-    const int fz = MAX(clo[2],d_qlo(ib,2));
-    return ibin == (fz*nbiny + fy)*nbinx + fx;
-  };
 
   // pass 0: the owned cells in R, as RigidRemap::recut() collects them,
   //   flagged then listed in ascending order
 
   Kokkos::deep_copy(Kokkos::subview(d_candflag,std::make_pair(0,nglocal)),0);
 
-  Kokkos::parallel_for("rigid_remap:rc_cand_flag",npair, KOKKOS_LAMBDA(const int p) {
-    const int ib = d_pairbody(p);
-    const int ibin = d_pairbin(p);
+  Kokkos::parallel_for("rigid_remap:rc_cand_flag",
+                       Kokkos::TeamPolicy<DeviceType>(nbl,Kokkos::AUTO),
+                       KOKKOS_LAMBDA(const Kokkos::TeamPolicy<DeviceType>::member_type &team) {
+    const int ib = d_bid(team.league_rank());
+    const int nb = d_boff(team.league_rank()+1) - d_boff(team.league_rank());
     double blo[3],bhi[3];
     for (int kk = 0; kk < 3; kk++) {
       blo[kk] = d_bodyparam(ib,kk);
@@ -664,29 +607,31 @@ int RigidRemapKokkos::recut()
     }
     const double rmin2 = d_bodyparam(ib,12) * d_bodyparam(ib,12);
     const int interior = d_cominside(ib);
-    for (int mm = d_binstart(ibin); mm < d_binstart(ibin+1); mm++) {
-      const int ic = d_binlist(mm);
-      if (ic >= nglocal) continue;
-      if (d_cells[ic].nsplit <= 0) continue;
-      if (!first_bin(ic,ib,ibin)) continue;
-      const double *clo = d_cells[ic].lo;
-      const double *chi = d_cells[ic].hi;
-      if (!box_overlap_kk(clo,chi,blo,bhi)) continue;
-      if (interior) {
-        double dnew = 0.0;
-        double dold = 0.0;
-        for (int kk = 0; kk < dimk; kk++) {
-          double c = d_bodyparam(ib,6+kk);
-          double dk = MAX(fabs(c-clo[kk]),fabs(c-chi[kk]));
-          dnew += dk*dk;
-          c = d_bodyparam(ib,9+kk);
-          dk = MAX(fabs(c-clo[kk]),fabs(c-chi[kk]));
-          dold += dk*dk;
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(team,nb), [&](const int local) {
+      const int ibin = body_bin(local,ib,d_qlo,d_qhi,nbinx,nbiny);
+      for (int mm = d_binstart(ibin); mm < d_binstart(ibin+1); mm++) {
+        const int ic = d_binlist(mm);
+        if (ic >= nglocal) continue;
+        if (d_cells[ic].nsplit <= 0) continue;
+        const double *clo = d_cells[ic].lo;
+        const double *chi = d_cells[ic].hi;
+        if (!box_overlap_kk(clo,chi,blo,bhi)) continue;
+        if (interior) {
+          double dnew = 0.0;
+          double dold = 0.0;
+          for (int kk = 0; kk < dimk; kk++) {
+            double c = d_bodyparam(ib,6+kk);
+            double dk = MAX(fabs(c-clo[kk]),fabs(c-chi[kk]));
+            dnew += dk*dk;
+            c = d_bodyparam(ib,9+kk);
+            dk = MAX(fabs(c-clo[kk]),fabs(c-chi[kk]));
+            dold += dk*dk;
+          }
+          if (dnew < rmin2 && dold < rmin2) continue;
         }
-        if (dnew < rmin2 && dold < rmin2) continue;
+        d_candflag(ic) = 1;
       }
-      d_candflag(ic) = 1;
-    }
+    });
   });
 
   Kokkos::parallel_scan("rigid_remap:rc_cand_scan",nglocal, KOKKOS_LAMBDA(const int ic, int &sum,
@@ -1328,6 +1273,13 @@ int RigidRemapKokkos::recut()
   const int devlists = grid_kk->device_lists_ok();
   if (!devlists) grid_kk->refresh_host_cells();
 
+  // the cell kinds (GridKokkos::cell_kinds()) of the cells installed and
+  //   retyped on the device follow them, if they are being kept
+
+  auto d_kind = grid_kk->d_cellkind;
+  const int kinds = grid_kk->cellkindvalid &&
+    (int) d_kind.extent(0) >= grid->nlocal + grid->nghost;
+
   if (nch) {
     auto d_ipcell = Kokkos::subview(d_chint,range(o_ipcell,nchint));
     auto d_cinfo = grid_kk->k_cinfo.view_device();
@@ -1377,6 +1329,8 @@ int RigidRemapKokkos::recut()
         d_cinfo[icell].type = t;
         for (int j = 0; j < ncornerk; j++) d_cinfo[icell].corner[j] = t;
         d_cinfo[icell].volume = (t == CELLINSIDE) ? 0.0 : cvol;
+        if (kinds)
+          d_kind(icell) = GridKokkos::cell_kind(icell,nlocalk,d_cells,d_cinfo);
         return;
       }
 
@@ -1394,6 +1348,20 @@ int RigidRemapKokkos::recut()
       for (int j = 0; j < ncornerk; j++)
         d_cinfo[icell].corner[j] = d_chcorner(8*c+j);
       d_cinfo[icell].volume = vol;
+
+      // an OVERLAP cell and its sub cells, whose counts changed too
+
+      if (kinds) {
+        d_kind(icell) = GridKokkos::cell_kind(icell,nlocalk,d_cells,d_cinfo);
+        if (nsplitold > 1) {
+          const int isplit = d_cells[icell].isplit;
+          const crs_size_type s0 = d_csubs.row_map(isplit);
+          for (int i = 0; i < nsplitold; i++) {
+            const int isub = d_csubs.entries(s0+i);
+            d_kind(isub) = GridKokkos::cell_kind(isub,nlocalk,d_cells,d_cinfo);
+          }
+        }
+      }
     });
 
     if (devlists) grid_kk->defer_cut_lists(nch,d_chint,o_ipcell,o_n,o_loff,
@@ -1411,6 +1379,7 @@ int RigidRemapKokkos::recut()
     const int ncornerk = (dim == 3) ? 8 : 4;
     const int dim3 = (dim == 3);
     const int axi = domain->axisymmetric;
+    const int nlocalk = grid->nlocal;
     Kokkos::parallel_for("rigid_remap:rc_devtype",nrc, KOKKOS_LAMBDA(const int ic) {
       const int t = d_newtype(ic);
       if (t < 0) return;
@@ -1428,6 +1397,8 @@ int RigidRemapKokkos::recut()
       d_cinfo[icell].type = t;
       for (int j = 0; j < ncornerk; j++) d_cinfo[icell].corner[j] = t;
       d_cinfo[icell].volume = (t == CELLINSIDE) ? 0.0 : cvol;
+      if (kinds)
+        d_kind(icell) = GridKokkos::cell_kind(icell,nlocalk,d_cells,d_cinfo);
     });
   }
 
