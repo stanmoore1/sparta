@@ -316,6 +316,13 @@ class Grid : protected Pointers {
   int journalcells;           // 0 = a caller applied its changes to the
                               //   device cells itself: journal_cell() skips
                               //   them, lists and split info still recorded
+
+  // a device mirror of the grid may hold changes to owned cells it made
+  //   itself, whose host copies are behind until this is called: their
+  //   cut lists, types, corner marks and flow volumes (GridKokkos); a
+  //   host reader of those which is not a Kokkos style calls it first
+
+  virtual void refresh_host_cells() {}
   int ndirtycell,maxdirtycell;
   int *dirtycell;
   int ndirtysinfo,maxdirtysinfo;

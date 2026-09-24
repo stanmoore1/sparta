@@ -996,7 +996,8 @@ int RigidRemapKokkos::recut()
   //   int buffer and one double buffer
   //   ints:    chcand, chn (nch each), chloff (nch+1), chnsplit, chxsub,
   //            cherr (nch each), chcorner (8 per cell), then chlist and
-  //            chmap (nent each)
+  //            chmap (nent each); then, device only, the cell whose list
+  //            the device installs (nch)
   //   doubles: chxsplit (3 per cell), then chvols (nent)
 
   const bigint o_cand = 0;
@@ -1008,7 +1009,9 @@ int RigidRemapKokkos::recut()
   const bigint o_corner = o_err + nch;
   const bigint o_list = o_corner + 8*((bigint) nch);
   const bigint o_map = o_list + nent;
-  const bigint nchint = o_map + nent;
+  const bigint nchcopy = o_map + nent;
+  const bigint o_ipcell = nchcopy;
+  const bigint nchint = o_ipcell + nch;
   const bigint o_xsplit = 0;
   const bigint o_vols = o_xsplit + 3*((bigint) nch);
   const bigint nchdbl = o_vols + nent;
@@ -1276,23 +1279,28 @@ int RigidRemapKokkos::recut()
     grid->add_cut3d_counts(cutstats[0],cutstats[1]);
   }
 
-  // the changed lists and the results of their cuts come to the host
-
   // the cells whose piece count does not change -- all but a fraction of
   //   a percent -- take their new cell fields on the device, from the
   //   results it holds, exactly as RigidRemap::apply_cut() and the Grid
   //   primitives it calls set them on the host: the surf count (the sub
   //   cells' too), the type, corner marks and flow volume, and a split
-  //   cell's piece volumes.  the host sets the same values below without
-  //   journaling those cells, so the next apply_changes() does not stage
-  //   and upload their ChildCell and ChildInfo again.  their lists and
-  //   split info are still journaled, since the restructure of the cells
-  //   whose piece count does change rebuilds the device graphs anyway
+  //   cell's piece volumes
+  // the unsplit ones among them (devlists), nearly all, are installed on
+  //   the device alone: their cut lists too, from the rows above, and the
+  //   host marks them stale (GridKokkos::mark_host_stale()), to be read
+  //   back only if a host reader needs them.  a split one is installed on
+  //   the host as well, without journaling the cell; its list and split
+  //   info are journaled, since the host keeps its piece map
   // a cell whose cut failed or whose piece count changes is left to the
   //   host and its journal, as before.  the classification is the host's:
-  //   the device and host nsplit agree here, apply_changes() ran above
+  //   the device and host nsplit agree here, apply_changes() ran above,
+  //   and a cell's nsplit is never stale
+
+  const int devlists = grid_kk->device_lists_ok();
+  if (!devlists) grid_kk->refresh_host_cells();
 
   if (nch) {
+    auto d_ipcell = Kokkos::subview(d_chint,range(o_ipcell,nchint));
     auto d_cinfo = grid_kk->k_cinfo.view_device();
     auto d_csubs = grid_kk->d_csubs;
     const int ncornerk = (dim == 3) ? 8 : 4;
@@ -1300,6 +1308,7 @@ int RigidRemapKokkos::recut()
     const int axi = domain->axisymmetric;
     const int nlocalk = grid->nlocal;
     Kokkos::parallel_for("rigid_remap:rc_devinstall",nch, KOKKOS_LAMBDA(const int c) {
+      d_ipcell(c) = -1;
       if (d_cherr(c)) return;
       const int icell = d_rcand(d_chcand(c));
       const int nsplitone = d_chnsplit(c);
@@ -1307,6 +1316,7 @@ int RigidRemapKokkos::recut()
       const int inplace = (nsplitone == 0) ? (nsplitold <= 1) :
         (nsplitone == nsplitold);
       if (!inplace) return;
+      if (devlists && nsplitold <= 1) d_ipcell(c) = icell;
 
       // Grid::set_cell_surfs(): the count of the cell and its sub cells
 
@@ -1356,12 +1366,47 @@ int RigidRemapKokkos::recut()
         d_cinfo[icell].corner[j] = d_chcorner(8*c+j);
       d_cinfo[icell].volume = vol;
     });
+
+    if (devlists) grid_kk->defer_cut_lists(nch,d_chint,o_ipcell,o_n,o_loff,
+                                           o_list);
   }
 
-  // only the ranges in use, one copy per buffer, and the candidates
+  // pass 2 applied on the device too, Grid::set_cell_type() as the host
+  //   loop below calls it, after the installs: a new type which matches
+  //   the cell's type after its install is dropped
+  // no cell here was installed by the host: pass 2 types only uncut
+  //   cells, and none of those has a failed cut or a piece count change
 
-  Kokkos::deep_copy(Kokkos::subview(h_chint,range(0,nchint)),
-                    Kokkos::subview(d_chint,range(0,nchint)));
+  if (devlists) {
+    auto d_cinfo = grid_kk->k_cinfo.view_device();
+    const int ncornerk = (dim == 3) ? 8 : 4;
+    const int dim3 = (dim == 3);
+    const int axi = domain->axisymmetric;
+    Kokkos::parallel_for("rigid_remap:rc_devtype",nrc, KOKKOS_LAMBDA(const int ic) {
+      const int t = d_newtype(ic);
+      if (t < 0) return;
+      const int icell = d_rcand(ic);
+      if (d_cinfo[icell].type == t) {
+        d_newtype(ic) = -1;
+        return;
+      }
+      const double *clo = d_cells[icell].lo;
+      const double *chi = d_cells[icell].hi;
+      double cvol;
+      if (dim3) cvol = (chi[0]-clo[0]) * (chi[1]-clo[1]) * (chi[2]-clo[2]);
+      else if (axi) cvol = MY_PI * (chi[1]*chi[1]-clo[1]*clo[1]) * (chi[0]-clo[0]);
+      else cvol = (chi[0]-clo[0]) * (chi[1]-clo[1]);
+      d_cinfo[icell].type = t;
+      for (int j = 0; j < ncornerk; j++) d_cinfo[icell].corner[j] = t;
+      d_cinfo[icell].volume = (t == CELLINSIDE) ? 0.0 : cvol;
+    });
+  }
+
+  // the changed lists and the results of their cuts come to the host:
+  //   only the ranges in use, one copy per buffer, and the candidates
+
+  Kokkos::deep_copy(Kokkos::subview(h_chint,range(0,nchcopy)),
+                    Kokkos::subview(d_chint,range(0,nchcopy)));
   if (nchdbl)
     Kokkos::deep_copy(Kokkos::subview(h_chdbl,range(0,nchdbl)),
                       Kokkos::subview(d_chdbl,range(0,nchdbl)));
@@ -1378,7 +1423,7 @@ int RigidRemapKokkos::recut()
   auto h_chxsub = Kokkos::subview(h_chint,range(o_xsub,o_err));
   auto h_cherr = Kokkos::subview(h_chint,range(o_err,o_corner));
   auto h_chxsplit = Kokkos::subview(h_chdbl,range(o_xsplit,o_vols));
-  auto h_chmap = Kokkos::subview(h_chint,range(o_map,nchint));
+  auto h_chmap = Kokkos::subview(h_chint,range(o_map,nchcopy));
   auto h_chvols = Kokkos::subview(h_chdbl,range(o_vols,nchdbl));
   for (i = 0; i < nrcand; i++) rcand[i] = h_rcand(i);
 
@@ -1402,8 +1447,28 @@ int RigidRemapKokkos::recut()
     icell = rcand[h_chcand(m)];
     int n = h_chn(m);
     int off = h_chloff(m);
-    for (int j = 0; j < n; j++) newlist[j] = (surfint) h_chlist(off+j);
     nlist_run++;
+
+    // a cell the device installed alone is only marked; the counters
+    //   are those apply_cut() keeps
+    // a cell the host installs is current on the host once it has,
+    //   whatever it was before
+
+    int nsplitone = h_chnsplit(m);
+    const int nsplitold = grid->cells[icell].nsplit;
+    const int inplace = (nsplitone == 0) ? (nsplitold <= 1) :
+      (nsplitone == nsplitold);
+
+    if (devlists && !h_cherr(m) && inplace && nsplitold <= 1) {
+      grid_kk->mark_host_stale(icell);
+      listschanged = 1;
+      if (nsplitone) ncut_run++;
+      typechanged = 1;
+      continue;
+    }
+
+    grid_kk->unmark_host_stale(icell);
+    for (int j = 0; j < n; j++) newlist[j] = (surfint) h_chlist(off+j);
 
     if (h_cherr(m)) {
       fix_kk->refresh_host_surfs();
@@ -1414,10 +1479,6 @@ int RigidRemapKokkos::recut()
     // a cell the device installed above is installed here unjournaled,
     //   by the same rule
 
-    int nsplitone = h_chnsplit(m);
-    const int nsplitold = grid->cells[icell].nsplit;
-    const int inplace = (nsplitone == 0) ? (nsplitold <= 1) :
-      (nsplitone == nsplitold);
     if (inplace) grid->journalcells = 0;
 
     grid->set_cell_surfs(icell,n,newlist);
@@ -1448,13 +1509,30 @@ int RigidRemapKokkos::recut()
   Kokkos::deep_copy(Kokkos::subview(k_newtype.view_host(),std::make_pair(0,nrcand)),
                     Kokkos::subview(d_newtype,std::make_pair(0,nrcand)));
   auto h_newtype = k_newtype.view_host();
-  for (i = 0; i < nrcand; i++) {
-    int type = h_newtype(i);
-    if (type < 0) continue;
-    icell = rcand[i];
-    if (cinfo[icell].type == type) continue;
-    grid->set_cell_type(icell,type);
-    typechanged = 1;
+
+  // devlists: the device applied them above and kept only the changes;
+  //   a stale cell stays stale, another takes the type unjournaled
+
+  if (devlists) {
+    grid->journalcells = 0;
+    for (i = 0; i < nrcand; i++) {
+      int type = h_newtype(i);
+      if (type < 0) continue;
+      typechanged = 1;
+      icell = rcand[i];
+      if (grid_kk->host_stale(icell)) continue;
+      grid->set_cell_type(icell,type);
+    }
+    grid->journalcells = 1;
+  } else {
+    for (i = 0; i < nrcand; i++) {
+      int type = h_newtype(i);
+      if (type < 0) continue;
+      icell = rcand[i];
+      if (cinfo[icell].type == type) continue;
+      grid->set_cell_type(icell,type);
+      typechanged = 1;
+    }
   }
 
   if (timeflag) fix->add_time(FixRigid::T_RECUT_TYPE,MPI_Wtime()-tstart);

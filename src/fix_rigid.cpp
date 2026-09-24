@@ -1499,6 +1499,7 @@ void FixRigid::remap_grid()
 
     if (nemitfix && !fallback && !rebuild && (all[2] || structural)) {
       refresh_host_surfs();
+      grid->refresh_host_cells();
       for (int ifix = 0; ifix < modify->nfix; ifix++)
         if (strncmp(modify->fix[ifix]->style,"emit",4) == 0)
           modify->fix[ifix]->grid_changed();

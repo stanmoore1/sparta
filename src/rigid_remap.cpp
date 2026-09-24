@@ -409,6 +409,7 @@ void RigidRemap::reset_collision_lists()
 void RigidRemap::refresh()
 {
   if (staticvalid) return;
+  grid->refresh_host_cells();
 
   // the bodies' bboxes are the swept boxes of this step: restore the
   //   boxes of the positions which typed the cells
@@ -1073,6 +1074,10 @@ void RigidRemap::apply_pending(int rebuild)
   int nstatic_old = grid->nlocal;
 
   if (rebuild) {
+
+    // the owned cells are sent to other procs as ghosts
+
+    grid->refresh_host_cells();
 
     // neighbor links become cell IDs, which survive the cells moving
 

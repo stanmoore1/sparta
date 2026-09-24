@@ -2877,3 +2877,51 @@ What changed, all bit-identical:
 - the per-step allocations: the split graphs are subviews of persistent
   buffers, the re-cut's fallback flag and the swept counters one scalar
   view, and every buffer grown by a per-step count gets 10% extra
+
+# R3 stage 2: the device installs the unsplit cells alone (24 Sep 2026)
+
+Stage 1 set the in-place cells' fields on the device but still installed
+every changed cell on the host (`set_cell_surfs` + `apply_cut`), and
+journaled its list.  Stage 2 drops the host install for the cells that
+are unsplit before and after (nsplit 1 -> 0 or 1), nearly all of the
+~53,000 changed cells a step on the 1000-body deck.
+
+- **Device**: `rc_devinstall` also names those cells (`o_ipcell` range of
+  `d_chint`, device only), and `GridKokkos::defer_cut_lists()` holds the
+  records.  The next rebuild of `d_csurfs` applies them, which is the
+  one `apply_changes()` does for the 0.28% exceptions anyway
+  (`build_csurfs_device()` takes a device record as `-2-m` in `d_rowrec`,
+  and a journal record overrides it).  A first version rebuilt the CRS
+  on its own (`replace_cut_lists`): +0.31 s of `recut: cuts` on Serial,
+  which ate the whole gain.  `flush_cut_lists()` still does that, only
+  for a reader which cannot wait.  Pass 2 runs on the device too
+  (`rc_devtype`) and returns only the types which changed.
+- **Host**: the cells are marked stale (`GridKokkos::mark_host_stale`);
+  their `nsurf/csurfs` and `cinfo` type, corners and volume are the
+  device's until `refresh_host_cells()` packs them back.  A cell the
+  host installs later (exception, failed cut) is unmarked first.
+  Stale cells are owned, never split and never move (only sub cells do
+  in place).
+- **Refresh points**: `GridKokkos::sync(Host, CELL|CINFO)` (every Kokkos
+  style that reads the host grid syncs first: balance, adapt, move_surf,
+  create_particles, compute reduce, variables) except fix rigid/kk's own
+  per-step syncs (`refresh = 0`); `sync(Device)` under auto_sync;
+  `grow_cells`; `compact_surf_lists`; `RigidRemap::refresh` (static
+  flags); `apply_pending(rebuild)` (ghosts are sent); the emit-fix
+  notification; the host deletion fallback; `grid_rebuild`, setup,
+  post_run; and end_of_step when output, a dump/restart, or a balance or
+  adapt fix on this or the next step reads the host.
+  `wrap_kokkos_graphs()` discards the marks (host rebuilt wholesale).
+- **Journaled stale cells**: the in-place restructure repairs neighbor
+  links of cells next to moved ghosts and journals them.  `apply_changes`
+  stages such a cell with a flag and the scatter keeps the device's
+  `nsurf`, type, corners and volume.
+- `device_lists_ok()` does not reject `auto_sync`: fix rigid/kk is not a
+  `kokkos_flag` fix, so ModifyKokkos runs it with auto_sync on, and the
+  first cut of this check disabled stage 2 entirely.
+
+Serial, in.bench40.owned, EXACT: bit-identical at 1 and 4 ranks;
+`recut: install` 0.295 -> 0.080 s, `recut: retyping` 0.013 -> 0.004 s,
+`recut: cuts` unchanged.  Serial aliases the two copies, so the stale
+host fields are only exercised by the split-memory debug build
+(`SPARTA_KOKKOS_DEBUG_SYNC`, applied in a scratch worktree only).

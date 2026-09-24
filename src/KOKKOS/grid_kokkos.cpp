@@ -88,6 +88,11 @@ GridKokkos::GridKokkos(SPARTA *sparta) : Grid(sparta)
   maxdirtystamp = maxsinfostamp = 0;
   dirtygen = 0;
   ibuf = 0;
+  stalemark = NULL;
+  stalelist = NULL;
+  stalebuf = NULL;
+  maxstalemark = nstale = maxstale = maxstalebuf = 0;
+  ndevrec = 0;
 }
 
 GridKokkos::~GridKokkos()
@@ -96,6 +101,9 @@ GridKokkos::~GridKokkos()
 
   memory->destroy(dirtystamp);
   memory->destroy(sinfostamp);
+  memory->destroy(stalemark);
+  memory->destroy(stalelist);
+  memory->destroy(stalebuf);
 
   cells = NULL;
   cinfo = NULL;
@@ -140,6 +148,7 @@ void GridKokkos::grow_cells(int n, int m)
       if (cells == NULL)
         MemKK::realloc_kokkos(k_cells,"grid:cells",maxcell);
       else {
+        refresh_host_cells();          // the host copy is copied over
         this->modify(Host,CELL_MASK);  // the host is authoritative
         this->sync(Device,CELL_MASK);  // force resize on device
         Kokkos::resize(Kokkos::view_alloc(Kokkos::WithoutInitializing),
@@ -156,6 +165,7 @@ void GridKokkos::grow_cells(int n, int m)
       if (cinfo == NULL)
         MemKK::realloc_kokkos(k_cinfo,"grid:cinfo",maxlocal);
       else {
+        refresh_host_cells();           // the host copy is copied over
         this->modify(Host,CINFO_MASK);  // the host is authoritative
         this->sync(Device,CINFO_MASK);  // force resize on device
         Kokkos::resize(Kokkos::view_alloc(Kokkos::WithoutInitializing),
@@ -221,6 +231,12 @@ void GridKokkos::grow_sinfo(int n)
 
 void GridKokkos::wrap_kokkos_graphs()
 {
+  // the host is authoritative here: whoever rebuilt it read the device
+  //   copies of the stale cells first (a sync to the host), or replaced
+  //   them (a full re-map)
+
+  discard_host_stale();
+  ndevrec = 0;
   if (!surf->exist) return;
 
   // csurfs = the cut list of every cell; ghost cells with nsurf < 0 (empty)
@@ -424,6 +440,7 @@ void GridKokkos::apply_changes()
         h_dirtyown(k) = 1;
         h_stagecinfo(k) = cinfo[icell];
       } else h_dirtyown(k) = 0;
+      if (host_stale(icell)) h_dirtyown(k) |= 2;
 
       // a live cell with an ID of its own: its hash and halo entries
 
@@ -518,8 +535,27 @@ void GridKokkos::apply_changes()
     Kokkos::parallel_for("grid:ac_scatter",nscatter, KOKKOS_LAMBDA(const int m) {
       if (m < ncell) {
         const int ic = d_dirtycell(m);
-        d_cells(ic) = d_stagecell(m);
-        if (d_dirtyown(m)) d_cinfo(ic) = d_stagecinfo(m);
+        const int flags = d_dirtyown(m);
+
+        // a stale cell (flag 2) keeps the fields the device holds: the
+        //   host changed only others, a neighbor link of a moved cell
+
+        if (flags & 2) {
+          const int nsurf = d_cells(ic).nsurf;
+          const int type = d_cinfo(ic).type;
+          const double volume = d_cinfo(ic).volume;
+          int corner[8];
+          for (int j = 0; j < 8; j++) corner[j] = d_cinfo(ic).corner[j];
+          d_cells(ic) = d_stagecell(m);
+          d_cinfo(ic) = d_stagecinfo(m);
+          d_cells(ic).nsurf = nsurf;
+          d_cinfo(ic).type = type;
+          d_cinfo(ic).volume = volume;
+          for (int j = 0; j < 8; j++) d_cinfo(ic).corner[j] = corner[j];
+        } else {
+          d_cells(ic) = d_stagecell(m);
+          if (flags) d_cinfo(ic) = d_stagecinfo(m);
+        }
       }
       if (m < nh) {
         auto h = hash_d.find(static_cast<key_type>(d_hashid(m)));
@@ -585,10 +621,11 @@ void GridKokkos::apply_changes()
 
   int structural = (nmoved > 0 || ntotal != ncsurfsrows);
   if (surf->exist) {
-    if (ncutrec || structural) build_csurfs_device();
+    int cutchange = (ncutrec || ndevrec || structural);
+    if (cutchange) build_csurfs_device();
     if (nsunique || structural) wrap_split_graphs();
     if (ncollrec) build_move_graph_device();
-    else if (collreset || ncutrec || structural) d_csurfs_move = d_csurfs;
+    else if (collreset || cutchange) d_csurfs_move = d_csurfs;
     if (collreset || ncollrec) swextras = 0;
     graph_generation++;
   }
@@ -780,8 +817,19 @@ void GridKokkos::build_csurfs_device()
     });
   }
 
-  // the last record for a cell wins: the largest record index, one
-  //   atomic max per record
+  // a caller's device record for a cell (defer_cut_lists()) first, as
+  //   -2-m, then the journal's: the last record for a cell wins, the
+  //   largest record index, one atomic max per record, and a journal
+  //   record is newer than any device one
+
+  if (ndevrec) {
+    auto b = devrec.buf;
+    const bigint oi = devrec_icell;
+    Kokkos::parallel_for("grid:bc_devrec",ndevrec, KOKKOS_LAMBDA(const int m) {
+      const int ic = b(oi+m);
+      if (ic >= 0 && ic < nold) d_rowrec(ic) = -2 - m;
+    });
+  }
 
   if (ncutrec) {
     upload_list_records(ncutrec,cutrec,cutbuf,ncutbuf);
@@ -793,10 +841,18 @@ void GridKokkos::build_csurfs_device()
     });
   }
 
+  GridRecBoth rec;
+  rec.host.recn = k_recn.view_device();
+  rec.host.recoff = k_recoff.view_device();
+  rec.host.list = k_listbuf.view_device();
+  rec.dev = devrec;
+
   int jbuf = 1 - ibuf;
-  build_crs(ntotal,d_csurfs,d_rowmap_buf[jbuf],d_entries_buf[jbuf],d_csurfs);
+  build_crs_t(ntotal,d_csurfs,d_rowmap_buf[jbuf],d_entries_buf[jbuf],d_csurfs,
+              1,rec);
   ibuf = jbuf;
   ncsurfsrows = ntotal;
+  ndevrec = 0;
 }
 
 /* ----------------------------------------------------------------------
@@ -848,14 +904,34 @@ void GridKokkos::build_crs(int nrows,
                            DAT::t_int_1d &entries_buf,
                            Kokkos::Crs<int, DeviceType, void, crs_size_type> &dst)
 {
+  GridRecViews rec;
+  rec.recn = k_recn.view_device();
+  rec.recoff = k_recoff.view_device();
+  rec.list = k_listbuf.view_device();
+  build_crs_t(nrows,old,rowmap_buf,entries_buf,dst,1,rec);
+}
+
+/* ----------------------------------------------------------------------
+   the count/scan/fill of build_crs(), for records of any kind: d_rowrec
+     = -1 for no record, else the record Rec reads
+   usemap = 0: row i is old row i or its record d_rowrec(i), and
+     d_rowsrc/d_rowpar are not read
+------------------------------------------------------------------------- */
+
+template <class Rec>
+void GridKokkos::build_crs_t(int nrows,
+                             Kokkos::Crs<int, DeviceType, void, crs_size_type> &old,
+                             Kokkos::View<crs_size_type*,DeviceType> &rowmap_buf,
+                             DAT::t_int_1d &entries_buf,
+                             Kokkos::Crs<int, DeviceType, void, crs_size_type> &dst,
+                             int usemap, const Rec &rec)
+{
   auto d_rowsrc = this->d_rowsrc;
   auto d_rowpar = this->d_rowpar;
   auto d_rowrec = this->d_rowrec;
   auto old_rowmap = old.row_map;
   auto old_entries = old.entries;
-  auto d_recn = k_recn.view_device();
-  auto d_recoff = k_recoff.view_device();
-  auto d_listbuf = k_listbuf.view_device();
+  const int map = usemap;
 
   // count and scan into the row map in one pass: the source row of
   //   cell i is its own old row, or its split cell's; a record for that
@@ -869,12 +945,15 @@ void GridKokkos::build_crs(int nrows,
 
   Kokkos::parallel_scan("grid:crs_scan",nrows, KOKKOS_LAMBDA(const int i, crs_size_type &sum,
                                              const bool final) {
-    const int par = d_rowpar(i);
-    const int src = (par >= 0) ? d_rowsrc(par) : d_rowsrc(i);
+    int src = i;
+    if (map) {
+      const int par = d_rowpar(i);
+      src = (par >= 0) ? d_rowsrc(par) : d_rowsrc(i);
+    }
     crs_size_type n = 0;
     if (src >= 0) {
-      const int rec = d_rowrec(src);
-      if (rec >= 0) n = d_recn(rec);
+      const int r = d_rowrec(src);
+      if (r != -1) n = rec.n(r);
       else n = old_rowmap(src+1) - old_rowmap(src);
     }
     if (final) rowmap(i) = sum;
@@ -895,15 +974,18 @@ void GridKokkos::build_crs(int nrows,
   // fill
 
   Kokkos::parallel_for("grid:crs_fill",nrows, KOKKOS_LAMBDA(const int i) {
-    int par = d_rowpar(i);
-    int src = (par >= 0) ? d_rowsrc(par) : d_rowsrc(i);
+    int src = i;
+    if (map) {
+      const int par = d_rowpar(i);
+      src = (par >= 0) ? d_rowsrc(par) : d_rowsrc(i);
+    }
     if (src < 0) return;
     const crs_size_type start = rowmap(i);
-    const int rec = d_rowrec(src);
-    if (rec >= 0) {
-      const int n = d_recn(rec);
-      const bigint off = d_recoff(rec);
-      for (int j = 0; j < n; j++) entries(start+j) = d_listbuf(off+j);
+    const int r = d_rowrec(src);
+    if (r != -1) {
+      const int n = rec.n(r);
+      const auto off = rec.off(r);
+      for (int j = 0; j < n; j++) entries(start+j) = rec.entry(off+j);
     } else {
       const crs_size_type ostart = old_rowmap(src);
       const int n = old_rowmap(src+1) - ostart;
@@ -914,6 +996,232 @@ void GridKokkos::build_crs(int nrows,
 
   dst.row_map = rowmap;
   dst.entries = entries;
+}
+
+/* ----------------------------------------------------------------------
+   1 if a caller may replace cut lists on the device: the journal is
+     empty, so nothing waits to move a row or replace a list
+------------------------------------------------------------------------- */
+
+int GridKokkos::device_lists_ok()
+{
+  if (sparta->kokkos->prewrap) return 0;
+  if (!surf->exist) return 0;
+  if (ndirtycell || ndirtysinfo || ncutrec || ncollrec || nmoved) return 0;
+  if (ndevrec) return 0;
+  if (ncsurfsrows != nlocal + nghost) return 0;
+  return 1;
+}
+
+/* ----------------------------------------------------------------------
+   the cut lists of the cells in nrec records the caller holds on the
+     device, as ranges of one int buffer: record m is cell buf(o_icell+m),
+     or none if that is -1, with buf(o_n+m) surfs starting at buf(o_list +
+     buf(o_off+m)); the caller keeps the buffer as it is until the next
+     rebuild of d_csurfs, which applies them: the one apply_changes() does
+     for the journal anyway, or flush_cut_lists()
+   none of the cells is a split cell, so every sub cell's row, which is
+     its split cell's list, stays as it is; none of them moves
+   the caller checked device_lists_ok(), set the cells' counts on the
+     device and marks them stale on the host.  until the rebuild, the
+     rows of d_csurfs for these cells are the old lists
+------------------------------------------------------------------------- */
+
+void GridKokkos::defer_cut_lists(int nrec, const DAT::t_int_1d &buf,
+                                 bigint o_icell, bigint o_n, bigint o_off,
+                                 bigint o_list)
+{
+  flush_cut_lists();
+  ndevrec = nrec;
+  devrec.buf = buf;
+  devrec.on = o_n;
+  devrec.ooff = o_off;
+  devrec.olist = o_list;
+  devrec_icell = o_icell;
+}
+
+/* ----------------------------------------------------------------------
+   apply the caller's records now, with nothing else to rebuild: the
+     rows of the current layout, each its old row or its record
+------------------------------------------------------------------------- */
+
+void GridKokkos::flush_cut_lists()
+{
+  if (!ndevrec) return;
+
+  int ntotal = ncsurfsrows;
+  if ((int) d_rowrec.extent(0) < MAX(ntotal,1))
+    d_rowrec = DAT::t_int_1d("grid:rowrec",grow_extra(MAX(ntotal,1)));
+  auto d_rowrec = this->d_rowrec;
+  Kokkos::deep_copy(Kokkos::subview(d_rowrec,std::make_pair(0,ntotal)),-1);
+
+  auto b = devrec.buf;
+  const bigint oi = devrec_icell;
+  Kokkos::parallel_for("grid:fc_rowrec",ndevrec, KOKKOS_LAMBDA(const int m) {
+    const int ic = b(oi+m);
+    if (ic >= 0 && ic < ntotal) d_rowrec(ic) = m;
+  });
+
+  int jbuf = 1 - ibuf;
+  build_crs_t(ntotal,d_csurfs,d_rowmap_buf[jbuf],d_entries_buf[jbuf],d_csurfs,
+              0,devrec);
+  ibuf = jbuf;
+  ndevrec = 0;
+
+  // the mover's graph follows the cut lists, as apply_changes() leaves
+  //   it after a cut record
+
+  d_csurfs_move = d_csurfs;
+  graph_generation++;
+}
+
+/* ----------------------------------------------------------------------
+   the host-stale cells: owned cells, never split, whose cut list, type,
+     corner marks and flow volume a caller installed on the device only
+     (fix rigid/kk's re-cut, which would otherwise install tens of
+     thousands of cells a step on the host just to upload them again)
+   the device copies are authoritative for those fields until the cell
+     is refreshed, or unmarked by a caller installing it on the host;
+     every other field stays the host's
+   the cells never move while marked: only sub cells do, in place
+------------------------------------------------------------------------- */
+
+void GridKokkos::mark_host_stale(int icell)
+{
+  if (icell >= maxstalemark) {
+    int oldmax = maxstalemark;
+    maxstalemark = MAX(maxcell,icell+1);
+    memory->grow(stalemark,maxstalemark,"grid:stalemark");
+    for (int i = oldmax; i < maxstalemark; i++) stalemark[i] = 0;
+  }
+  if (stalemark[icell]) return;
+  stalemark[icell] = 1;
+  if (nstale == maxstale) {
+    maxstale = grow_extra(maxstale + 1024);
+    memory->grow(stalelist,maxstale,"grid:stalelist");
+  }
+  stalelist[nstale++] = icell;
+}
+
+/* ----------------------------------------------------------------------
+   forget the stale cells: the host copies were replaced wholesale
+------------------------------------------------------------------------- */
+
+void GridKokkos::discard_host_stale()
+{
+  for (int k = 0; k < nstale; k++) stalemark[stalelist[k]] = 0;
+  nstale = 0;
+}
+
+/* ----------------------------------------------------------------------
+   bring the host copies of the stale cells level with the device: their
+     cut lists (Grid::set_cell_surfs(), unjournaled) and their types,
+     corner marks and flow volumes, packed on the device and copied back
+     once
+------------------------------------------------------------------------- */
+
+void GridKokkos::refresh_host_cells()
+{
+  if (!nstale) return;
+  flush_cut_lists();
+
+  // the cells still marked, each once
+
+  int n = 0;
+  for (int k = 0; k < nstale; k++) {
+    int icell = stalelist[k];
+    if (!stalemark[icell]) continue;
+    stalemark[icell] = 0;
+    stalelist[n++] = icell;
+  }
+  nstale = 0;
+  if (!n) return;
+
+  if ((int) k_stalecell.extent(0) < n) {
+    k_stalecell = DAT::tdual_int_1d("grid:stalecell",grow_extra(n));
+    d_staleoff = Kokkos::View<bigint*,DeviceType>("grid:staleoff",
+                                                  grow_extra(n)+1);
+  }
+  auto h_stalecell = k_stalecell.view_host();
+  for (int k = 0; k < n; k++) h_stalecell(k) = stalelist[k];
+  k_stalecell.modify_host(); k_stalecell.sync_device();
+
+  // per cell: its count, type and corner marks (NFIX ints) and flow
+  //   volume, then the lists in one run, placed by a scan of the counts
+
+  const int NFIX = 10;
+  auto d_list = k_stalecell.view_device();
+  auto d_cells = k_cells.view_device();
+  auto d_cinfo = k_cinfo.view_device();
+  auto d_rowmap = d_csurfs.row_map;
+  auto d_entries = d_csurfs.entries;
+  auto d_off = d_staleoff;
+
+  Kokkos::parallel_scan("grid:stale_scan",n, KOKKOS_LAMBDA(const int k, bigint &sum,
+                                             const bool final) {
+    const int ic = d_list(k);
+    const bigint len = d_rowmap(ic+1) - d_rowmap(ic);
+    if (final) d_off(k) = sum;
+    sum += len;
+    if (final && k == n-1) d_off(n) = sum;
+  });
+  bigint nent = 0;
+  Kokkos::deep_copy(nent,Kokkos::subview(d_off,n));
+
+  const bigint nint = NFIX*((bigint) n) + nent;
+  if ((bigint) d_staleint.extent(0) < nint) {
+    d_staleint = DAT::t_int_1d("grid:staleint",grow_extra(nint));
+    h_staleint = Kokkos::create_mirror_view(d_staleint);
+  }
+  if ((int) d_staledbl.extent(0) < n) {
+    d_staledbl = Kokkos::View<double*,DeviceType>("grid:staledbl",grow_extra(n));
+    h_staledbl = Kokkos::create_mirror_view(d_staledbl);
+  }
+  auto d_int = d_staleint;
+  auto d_dbl = d_staledbl;
+  const bigint o_list = NFIX*((bigint) n);
+
+  Kokkos::parallel_for("grid:stale_pack",n, KOKKOS_LAMBDA(const int k) {
+    const int ic = d_list(k);
+    const crs_size_type start = d_rowmap(ic);
+    const int len = d_rowmap(ic+1) - start;
+    d_int(NFIX*k) = len;
+    d_int(NFIX*k+1) = d_cinfo(ic).type;
+    for (int j = 0; j < 8; j++) d_int(NFIX*k+2+j) = d_cinfo(ic).corner[j];
+    d_dbl(k) = d_cinfo(ic).volume;
+    const bigint off = o_list + d_off(k);
+    for (int j = 0; j < len; j++) d_int(off+j) = d_entries(start+j);
+  });
+
+  typedef std::pair<bigint,bigint> range;
+  Kokkos::deep_copy(Kokkos::subview(h_staleint,range(0,nint)),
+                    Kokkos::subview(d_staleint,range(0,nint)));
+  Kokkos::deep_copy(Kokkos::subview(h_staledbl,range(0,n)),
+                    Kokkos::subview(d_staledbl,range(0,n)));
+
+  // the offsets are those of the scan, recomputed from the counts
+
+  const int ncorner = (domain->dimension == 3) ? 8 : 4;
+  const int savejournal = journalflag;
+  journalflag = 0;
+  bigint off = o_list;
+  for (int k = 0; k < n; k++) {
+    int icell = stalelist[k];
+    int len = h_staleint(NFIX*k);
+    if (len > maxstalebuf) {
+      maxstalebuf = len;
+      memory->destroy(stalebuf);
+      memory->create(stalebuf,maxstalebuf,"grid:stalebuf");
+    }
+    for (int j = 0; j < len; j++) stalebuf[j] = (surfint) h_staleint(off+j);
+    off += len;
+    set_cell_surfs(icell,len,stalebuf);
+    cinfo[icell].type = h_staleint(NFIX*k+1);
+    for (int j = 0; j < ncorner; j++)
+      cinfo[icell].corner[j] = h_staleint(NFIX*k+2+j);
+    cinfo[icell].volume = h_staledbl(k);
+  }
+  journalflag = savejournal;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -1008,7 +1316,7 @@ void GridKokkos::resync_after_host_change()
 
 /* ---------------------------------------------------------------------- */
 
-void GridKokkos::sync(ExecutionSpace space, unsigned int mask)
+void GridKokkos::sync(ExecutionSpace space, unsigned int mask, int refresh)
 {
   if (sparta->kokkos->prewrap) {
     if (space == Device)
@@ -1018,8 +1326,14 @@ void GridKokkos::sync(ExecutionSpace space, unsigned int mask)
   }
 
   if (space == Device) {
-    if (sparta->kokkos->auto_sync)
+
+    // auto_sync copies the host over the device: the stale cells' host
+    //   copies are brought level first
+
+    if (sparta->kokkos->auto_sync) {
+      if (mask & (CELL_MASK|CINFO_MASK)) refresh_host_cells();
       modify(Host,mask);
+    }
     if (mask & CELL_MASK) k_cells.sync_device();
     if (mask & CINFO_MASK) k_cinfo.sync_device();
     if (mask & PCELL_MASK) k_pcells.sync_device();
@@ -1067,6 +1381,13 @@ void GridKokkos::sync(ExecutionSpace space, unsigned int mask)
         for (int i = 0; i < ncustom_darray; i++)
           k_edarray.view_host()[i].k_view.sync_host();
     }
+
+    // a host reader of the cells sees the stale ones current, after any
+    //   copy of the device cells above, whose list pointers are the old
+    //   ones; fix rigid/kk's own step, which reads none of them, passes
+    //   refresh = 0
+
+    if (refresh && (mask & (CELL_MASK|CINFO_MASK))) refresh_host_cells();
   }
 }
 

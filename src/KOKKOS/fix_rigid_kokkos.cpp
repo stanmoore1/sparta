@@ -26,6 +26,8 @@
 #include "sparta_masks.h"
 #include "geometry_kokkos.h"
 #include "output.h"
+#include "modify.h"
+#include "fix.h"
 #include "domain.h"
 #include "math_extra.h"
 
@@ -136,7 +138,7 @@ void FixRigidKokkos::init()
 
 void FixRigidKokkos::host_begin()
 {
-  ((GridKokkos*) grid)->sync(Host,ALL_MASK);
+  ((GridKokkos*) grid)->sync(Host,ALL_MASK,0);
 }
 
 /* ----------------------------------------------------------------------
@@ -259,6 +261,7 @@ void FixRigidKokkos::operator()(TagFixRigidRelabel, const int &i) const
 void FixRigidKokkos::setup()
 {
   host_begin();
+  grid->refresh_host_cells();
   ((SurfKokkos*) surf)->sync(Host,ALL_MASK);
   FixRigid::setup();
 
@@ -286,7 +289,10 @@ void FixRigidKokkos::start_of_step()
 
   combined_kk = 0;
 
-  grid_kk->sync(Host,ALL_MASK);
+  // the cells the re-cut installed on the device alone stay stale on the
+  //   host: nothing below reads them (see RigidRemapKokkos::recut())
+
+  grid_kk->sync(Host,ALL_MASK,0);
 
   // the move kernel's per-element force/torque tallies for this step
   // only the rows of the elements this proc holds are written by the
@@ -351,7 +357,31 @@ void FixRigidKokkos::end_of_step()
   if (surf->distributed || host_surfs_needed() ||
       output->next == update->ntimestep)
     refresh_host_surfs();
+
+  // likewise the cells the re-cut installed on the device alone, for a
+  //   host reader of the grid: output, or a balance or adapt fix which
+  //   runs on this step or, ahead of this fix, on the next one
+
+  if (host_cells_needed()) grid->refresh_host_cells();
   host_end();
+}
+
+/* ----------------------------------------------------------------------
+   1 if a host reader of the grid cells may run before this fix's next
+     end_of_step()
+------------------------------------------------------------------------- */
+
+int FixRigidKokkos::host_cells_needed()
+{
+  bigint ntimestep = update->ntimestep;
+  if (output->next == ntimestep || host_surfs_needed()) return 1;
+  for (int ifix = 0; ifix < modify->nfix; ifix++) {
+    Fix *fix = modify->fix[ifix];
+    if (strncmp(fix->style,"balance",7) != 0 &&
+        strncmp(fix->style,"adapt",5) != 0) continue;
+    if (fix->nevery && (ntimestep+1) % fix->nevery == 0) return 1;
+  }
+  return 0;
 }
 
 /* ----------------------------------------------------------------------
@@ -364,6 +394,7 @@ void FixRigidKokkos::end_of_step()
 void FixRigidKokkos::grid_rebuild()
 {
   refresh_host_surfs();
+  grid->refresh_host_cells();
   FixRigid::grid_rebuild();
   ((GridKokkos*) grid)->resync_after_host_change();
 }
@@ -376,6 +407,7 @@ void FixRigidKokkos::grid_rebuild()
 void FixRigidKokkos::post_run()
 {
   refresh_host_surfs();
+  grid->refresh_host_cells();
   FixRigid::post_run();
 }
 
@@ -1951,6 +1983,7 @@ void FixRigidKokkos::remove_inside_all(int splitflag)
   // host fallback: the particles must be on the host for FixRigid's pass
 
   ((ParticleKokkos*) particle)->sync(Host,PARTICLE_MASK|CUSTOM_MASK);
+  grid->refresh_host_cells();
   FixRigid::remove_inside_all(splitflag);
   ((ParticleKokkos*) particle)->modify(Host,PARTICLE_MASK|CUSTOM_MASK);
 }

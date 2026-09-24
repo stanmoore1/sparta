@@ -21,6 +21,46 @@
 
 namespace SPARTA_NS {
 
+// the records a per-row graph rebuild takes a row from: record r gives
+//   n(r) entries, starting at off(r), of a list read through entry()
+// GridRecViews = the journal's records, uploaded; GridRecBuf = records
+//   a caller keeps on the device, as ranges of one int buffer
+
+struct GridRecViews {
+  DAT::t_int_1d recn;
+  DAT::t_bigint_1d recoff;
+  DAT::t_int_1d list;
+  KOKKOS_INLINE_FUNCTION int n(const int r) const { return recn(r); }
+  KOKKOS_INLINE_FUNCTION bigint off(const int r) const { return recoff(r); }
+  KOKKOS_INLINE_FUNCTION int entry(const bigint k) const { return list(k); }
+};
+
+struct GridRecBuf {
+  DAT::t_int_1d buf;
+  bigint on,ooff,olist;
+  KOKKOS_INLINE_FUNCTION int n(const int r) const { return buf(on+r); }
+  KOKKOS_INLINE_FUNCTION bigint off(const int r) const { return buf(ooff+r); }
+  KOKKOS_INLINE_FUNCTION int entry(const bigint k) const { return buf(olist+k); }
+};
+
+// both: record r >= 0 is the journal's, r <= -2 is record -2-r of the
+//   caller's, whose entries off() places above DEVBASE
+
+struct GridRecBoth {
+  static constexpr int64_t DEVBASE = ((int64_t) 1) << 62;
+  GridRecViews host;
+  GridRecBuf dev;
+  KOKKOS_INLINE_FUNCTION int n(const int r) const {
+    return (r >= 0) ? host.n(r) : dev.n(-2-r);
+  }
+  KOKKOS_INLINE_FUNCTION int64_t off(const int r) const {
+    return (r >= 0) ? host.off(r) : DEVBASE + dev.off(-2-r);
+  }
+  KOKKOS_INLINE_FUNCTION int entry(const int64_t k) const {
+    return (k < DEVBASE) ? host.entry(k) : dev.entry(k-DEVBASE);
+  }
+};
+
 class GridKokkos : public Grid {
  public:
   typedef ArrayTypes<DeviceType> AT;
@@ -39,7 +79,7 @@ class GridKokkos : public Grid {
   ~GridKokkos();
   void wrap_kokkos();
   void wrap_kokkos_graphs();
-  void sync(ExecutionSpace, unsigned int);
+  void sync(ExecutionSpace, unsigned int, int refresh = 1);
   void modify(ExecutionSpace, unsigned int);
 
   int add_custom(char *, int, int) override;
@@ -58,6 +98,29 @@ class GridKokkos : public Grid {
 
   // patch the device with the change journal (see Grid::journalflag)
   void apply_changes();
+
+  // owned cells the device changed itself, whose host copies are behind
+  //   (see grid_kokkos.cpp): a caller which installs cells on the device
+  //   marks them, one which installs a cell on the host unmarks it first
+
+  void mark_host_stale(int);
+  void unmark_host_stale(int icell) {
+    if (icell < maxstalemark && stalemark[icell]) stalemark[icell] = 0;
+  }
+  int host_stale(int icell) const {
+    return icell < maxstalemark && stalemark[icell];
+  }
+  void refresh_host_cells() override;
+  void discard_host_stale();
+
+  // cut lists replaced on the device, by a caller which installs cells
+  //   there: whether it may, and the records it holds, which the next
+  //   rebuild of d_csurfs applies (flush_cut_lists() forces one)
+
+  int device_lists_ok();
+  void defer_cut_lists(int, const DAT::t_int_1d &, bigint, bigint, bigint,
+                       bigint);
+  void flush_cut_lists();
 
   // device copy of the cell bin index (Grid::cells_in_box), re-copied
   //   when the host rebuilds it and patched with it otherwise
@@ -276,6 +339,27 @@ class GridKokkos : public Grid {
   int ibuf;                   // which buffer pair d_csurfs currently uses
 
   int stage_records(int, int *, int **);   // dedup a dirty list
+
+  // the host-stale cells: a mark per cell and a list of the marked ones
+  //   (an unmarked one may linger in it), and the staging of their
+  //   device copies for refresh_host_cells()
+
+  int ndevrec;                // the caller's records, see defer_cut_lists()
+  GridRecBuf devrec;
+  bigint devrec_icell;
+
+  char *stalemark;
+  int maxstalemark;
+  int *stalelist;
+  int nstale,maxstale;
+  DAT::tdual_int_1d k_stalecell;
+  Kokkos::View<bigint*,DeviceType> d_staleoff;
+  DAT::t_int_1d d_staleint;
+  DAT::t_int_1d::host_mirror_type h_staleint;
+  Kokkos::View<double*,DeviceType> d_staledbl;
+  Kokkos::View<double*,DeviceType>::host_mirror_type h_staledbl;
+  surfint *stalebuf;
+  int maxstalebuf;
   void upload_list_records(int, ListRecord *, int *, bigint);
 
   // public, and not private, only because nvcc refuses an extended
@@ -285,6 +369,11 @@ class GridKokkos : public Grid {
   void build_crs(int, Kokkos::Crs<int, DeviceType, void, crs_size_type> &,
                  Kokkos::View<crs_size_type*,DeviceType> &, DAT::t_int_1d &,
                  Kokkos::Crs<int, DeviceType, void, crs_size_type> &);
+  template <class Rec>
+  void build_crs_t(int, Kokkos::Crs<int, DeviceType, void, crs_size_type> &,
+                   Kokkos::View<crs_size_type*,DeviceType> &, DAT::t_int_1d &,
+                   Kokkos::Crs<int, DeviceType, void, crs_size_type> &,
+                   int, const Rec &);
 };
 
 }

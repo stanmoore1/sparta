@@ -3201,6 +3201,10 @@ void Grid::compact_surf_lists()
   const bigint threshold = MAX(4*surflist_live,(bigint) 32*1024*1024);
   if (surflist_churn < threshold) return;
 
+  // the lists are copied by the cells' counts, so those must be the lists'
+
+  refresh_host_cells();
+
   MyPage<surfint> *csurfs_old = csurfs;
   MyPage<int> *csplits_old = csplits;
   MyPage<int> *csubs_old = csubs;

@@ -121,6 +121,7 @@ class FixRigidKokkos : public FixRigid {
   void swept_boxes();
   void host_geometry(int);
   void refresh_host_surfs();
+  int host_cells_needed();
   void refresh_all();
   void newghost_geometry();
   void stage_fence() override { Kokkos::fence(); }
