@@ -121,7 +121,8 @@ class RigidRemapKokkos : public RigidRemap {
   //   the part in use is contiguous and comes back in one copy each
 
   DAT::t_int_1d d_chint;
-  t_hint_1d h_chint;             // the 3d cut's chunking reads counts back
+  DAT::t_int_1d d_chunk;         // first cell and entry of each 3d cut chunk
+  t_hint_1d h_chunk;
   Kokkos::View<double*,DeviceType> d_chdbl;
   bigint maxchint_kk,maxchdbl_kk;
 

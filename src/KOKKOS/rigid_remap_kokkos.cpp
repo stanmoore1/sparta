@@ -1020,7 +1020,6 @@ int RigidRemapKokkos::recut()
   if (nchint > maxchint_kk) {
     maxchint_kk = grow_extra(nchint);
     d_chint = DAT::t_int_1d("rigid_remap:chint",maxchint_kk);
-    h_chint = Kokkos::create_mirror_view(d_chint);
   }
   if (MAX(nchdbl,1) > maxchdbl_kk) {
     maxchdbl_kk = grow_extra(MAX(nchdbl,1));
@@ -1145,10 +1144,6 @@ int RigidRemapKokkos::recut()
     });
 
   } else {
-    Kokkos::deep_copy(Kokkos::subview(h_chint,range(o_n,o_nsplit)),
-                      Kokkos::subview(d_chint,range(o_n,o_nsplit)));
-    auto h_chloff = Kokkos::subview(h_chint,range(o_loff,o_nsplit));
-    auto h_chn = Kokkos::subview(h_chint,range(o_n,o_loff));
     const Surf::Tri *tris = d_tris.data();
     Kokkos::deep_copy(d_cutstats,0);
 
@@ -1169,19 +1164,54 @@ int RigidRemapKokkos::recut()
       4 * (sizeof(Cut2dKokkos::Point) + sizeof(Cut2dKokkos::Loop) +
            sizeof(Cut2dKokkos::PG) + sizeof(int));
 
-    int c0 = 0;
-    while (c0 < nch) {
-      int c1 = c0 + 1;
-      bigint bytes = persurf * h_chn(c0) + percell;
-      while (c1 < nch) {
-        bigint more = persurf * h_chn(c1) + percell;
-        if (bytes + more > CUTSCRATCH) break;
-        bytes += more;
-        c1++;
-      }
+    // the scratch of cell c starts persurf*chloff(c) + percell*c bytes
+    //   into that of all nch cells, so chunk k is the cells which start
+    //   in [k,k+1) budgets: the host needs only the totals it holds to
+    //   count the chunks, and one chunk, the usual case, is one launch
+    //   as in 2d.  otherwise the device lists each chunk's first cell and
+    //   its first entry, and only those come back
+    // a cell larger than a budget makes a chunk of its own, and the
+    //   chunks it spans empty; the cut of a cell does not depend on
+    //   which other cells share its launch
 
-      const int base = h_chloff(c0);
-      const int dl = h_chloff(c1) - base;
+    const bigint total = persurf*((bigint) nent) + percell*((bigint) nch);
+    const int nk = (total > CUTSCRATCH) ? (int) ((total-1)/CUTSCRATCH) + 1 : 1;
+    if (2*(nk+1) > (int) d_chunk.extent(0)) {
+      d_chunk = DAT::t_int_1d("rigid_remap:chunk",grow_extra(2*(nk+1)));
+      h_chunk = Kokkos::create_mirror_view(d_chunk);
+    }
+    if (nk == 1) {
+      h_chunk(0) = 0;
+      h_chunk(1) = nch;
+      h_chunk(nk+1) = 0;
+      h_chunk(nk+2) = nent;
+    } else {
+      auto d_chunk = this->d_chunk;
+      const int nkk = nk;
+      Kokkos::parallel_for("rigid_remap:rc_chunk",nch+1, KOKKOS_LAMBDA(const int c) {
+        const bigint budget = CUTSCRATCH;
+        int k = nkk;
+        if (c < nch) k = (int) ((persurf*((bigint) d_chloff(c)) +
+                                 percell*((bigint) c)) / budget);
+        int kprev = -1;
+        if (c > 0) kprev = (int) ((persurf*((bigint) d_chloff(c-1)) +
+                                   percell*((bigint) (c-1))) / budget);
+        const int off = (c < nch) ? d_chloff(c) : nent;
+        for (int kk = kprev+1; kk <= k && kk <= nkk; kk++) {
+          d_chunk(kk) = c;
+          d_chunk(nkk+1+kk) = off;
+        }
+      });
+      Kokkos::deep_copy(Kokkos::subview(h_chunk,range(0,2*(nk+1))),
+                        Kokkos::subview(d_chunk,range(0,2*(nk+1))));
+    }
+
+    for (int k = 0; k < nk; k++) {
+      const int c0 = h_chunk(k);
+      const int c1 = h_chunk(k+1);
+      if (c1 == c0) continue;
+      const int base = h_chunk(nk+1+k);
+      const int dl = h_chunk(nk+2+k) - base;
       const int dc = c1 - c0;
       grow_cut_scratch(10*dl + 6*dc,27*dl + 24*dc,9*dl,18*dl + 4*dc);
       auto d_verts = this->d_verts;
@@ -1270,7 +1300,6 @@ int RigidRemapKokkos::recut()
         for (int j = 0; j < 3; j++) d_chxsplit(3*c+j) = xsplit[j];
       });
 
-      c0 = c1;
     }
 
     int cutstats[2];

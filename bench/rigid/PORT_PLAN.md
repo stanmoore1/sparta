@@ -2944,10 +2944,28 @@ in a third, one pack (`rc_sort_pack`) writes them, and the host reads
 back only: the cells it installs, in the ascending order it always
 installed them in, with their lists and cuts; the indices of the cells
 the device installed (to mark stale); and (cell, type) for the retyped
-ones.  Four read-backs become three, one of them five ints.  The 3d cut
-still reads the counts back to size its chunks, as before.
+ones.  Four read-backs become three, one of them five ints.
 
 Serial, in.bench40.owned, EXACT: bit-identical at 1 and 4 ranks;
 `recut: install` 0.080 -> 0.019 s, `recut: retyping` 0.004 -> 0.000 s;
 `recut: cuts` +0.12 s for the sort and pack on one CPU core, which on a
 GPU are two short kernels.
+
+## 3d cut chunks without the per-cell read-back (24 Sep 2026)
+
+The 3d cut needs ~6.4 KB of scratch per surf of a cell and ~3.7 KB per
+cell (2d: a small fraction of that), so a 3d step the size of the 2d
+benchmark would need ~1.9 GB at once: it is cut in chunks of a 256 MB
+budget.  The host used to read every cell's count and offset back to
+pick the chunks greedily.  But cell c's scratch starts at persurf *
+chloff(c) + percell * c bytes, so chunk k is the cells starting in
+[k,k+1) budgets: the host counts the chunks from the totals it holds,
+and one chunk (the usual case) is one launch with no read-back, as in
+2d.  Otherwise `rc_chunk` lists each chunk's first cell and entry, and
+only those come back (2 ints a chunk, not 2 a cell).  A cell larger
+than a budget gets a chunk to itself.
+
+A cube spinning through a 30^3 grid (about 490 cut cells a step, 40
+steps, particles): identical stats with the old greedy chunks, the new
+single chunk, and a 64 KB budget (about 120 chunks a step) on the
+split-memory build.
