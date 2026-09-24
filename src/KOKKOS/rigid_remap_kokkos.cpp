@@ -60,6 +60,8 @@ RigidRemapKokkos::RigidRemapKokkos(SPARTA *sparta, FixRigidKokkos *fix_in) :
   maxswcell_kk = maxtouched_kk = maxhit_kk = 0;
   ntouched_prev = 0;
   d_rscalars = DAT::t_int_1d("rigid_remap:scalars",5);
+  d_ctot = DAT::t_int_1d("rigid_remap:ctot",5);
+  h_ctot = Kokkos::create_mirror_view(d_ctot);
   h_rscalars = Kokkos::create_mirror_view(d_rscalars);
   d_ntouched = Kokkos::subview(d_rscalars,0);
   d_nhit = Kokkos::subview(d_rscalars,1);
@@ -1009,8 +1011,7 @@ int RigidRemapKokkos::recut()
   const bigint o_corner = o_err + nch;
   const bigint o_list = o_corner + 8*((bigint) nch);
   const bigint o_map = o_list + nent;
-  const bigint nchcopy = o_map + nent;
-  const bigint o_ipcell = nchcopy;
+  const bigint o_ipcell = o_map + nent;
   const bigint nchint = o_ipcell + nch;
   const bigint o_xsplit = 0;
   const bigint o_vols = o_xsplit + 3*((bigint) nch);
@@ -1024,7 +1025,6 @@ int RigidRemapKokkos::recut()
   if (MAX(nchdbl,1) > maxchdbl_kk) {
     maxchdbl_kk = grow_extra(MAX(nchdbl,1));
     d_chdbl = Kokkos::View<double*,DeviceType>("rigid_remap:chdbl",maxchdbl_kk);
-    h_chdbl = Kokkos::create_mirror_view(d_chdbl);
   }
 
   auto d_chcand = Kokkos::subview(d_chint,range(o_cand,o_n));
@@ -1402,33 +1402,131 @@ int RigidRemapKokkos::recut()
     });
   }
 
-  // the changed lists and the results of their cuts come to the host:
-  //   only the ranges in use, one copy per buffer, and the candidates
+  // the host needs only what it installs: the device sorts the changed
+  //   cells into the ones the host installs (a split cell, a changed
+  //   piece count, a failed cut, every cell when !devlists) and the ones
+  //   it installed alone, and lists the candidates whose type changed.
+  //   one scan places each in its list, one pack writes the lists
+  //   ints:    per host cell its cell, count, offset, nsplit, xsub, err
+  //            (nh each) and corner marks (8 per cell), then its lists
+  //            and piece maps (nhe each), then the cells installed on
+  //            the device (nd), then the retyped cells and their types
+  //            (ntc each)
+  //   doubles: per host cell its split point (3 per cell), then the
+  //            volumes of its pieces (nhe)
+  // the host cells keep their ascending order, the order the host loop
+  //   installed every cell in
 
-  Kokkos::deep_copy(Kokkos::subview(h_chint,range(0,nchcopy)),
-                    Kokkos::subview(d_chint,range(0,nchcopy)));
-  if (nchdbl)
-    Kokkos::deep_copy(Kokkos::subview(h_chdbl,range(0,nchdbl)),
-                      Kokkos::subview(d_chdbl,range(0,nchdbl)));
-  Kokkos::deep_copy(Kokkos::subview(k_rcand.view_host(),range(0,nrcand)),
-                    Kokkos::subview(k_rcand.view_device(),range(0,nrcand)));
+  if ((int) d_cls.extent(0) < 3*nch + 1) {
+    d_cls = DAT::t_int_1d("rigid_remap:cls",grow_extra(3*((bigint) nch) + 1));
+  }
+  auto d_cls = this->d_cls;
+  auto d_ctot = this->d_ctot;
+  auto d_ipcell = Kokkos::subview(d_chint,range(o_ipcell,nchint));
+  const int nchk = nch;
 
-  auto h_rcand = k_rcand.view_host();
-  auto h_chcand = Kokkos::subview(h_chint,range(o_cand,o_n));
-  auto h_chn = Kokkos::subview(h_chint,range(o_n,o_loff));
-  auto h_chloff = Kokkos::subview(h_chint,range(o_loff,o_nsplit));
-  auto h_chlist = Kokkos::subview(h_chint,range(o_list,o_map));
-  auto h_chnsplit = Kokkos::subview(h_chint,range(o_nsplit,o_xsub));
-  auto h_chcorner = Kokkos::subview(h_chint,range(o_corner,o_list));
-  auto h_chxsub = Kokkos::subview(h_chint,range(o_xsub,o_err));
-  auto h_cherr = Kokkos::subview(h_chint,range(o_err,o_corner));
-  auto h_chxsplit = Kokkos::subview(h_chdbl,range(o_xsplit,o_vols));
-  auto h_chmap = Kokkos::subview(h_chint,range(o_map,nchcopy));
-  auto h_chvols = Kokkos::subview(h_chdbl,range(o_vols,nchdbl));
-  for (i = 0; i < nrcand; i++) rcand[i] = h_rcand(i);
+  Kokkos::parallel_scan("rigid_remap:rc_sort_scan",nrc, KOKKOS_LAMBDA(const int i, RecutCount &v,
+                                             const bool final) {
+    if (final) {
+      if (i < nchk) {
+        d_cls(3*i) = v.nh;
+        d_cls(3*i+1) = v.nhe;
+        d_cls(3*i+2) = v.nd;
+      }
+    }
+    if (i < nchk) {
+      if (d_ipcell(i) >= 0) {
+        v.nd++;
+        if (d_chnsplit(i)) v.ndcut++;
+      } else {
+        v.nh++;
+        v.nhe += d_chn(i);
+      }
+    }
+    if (d_newtype(i) >= 0) v.ntc++;
+    if (final && i == nrc-1) {
+      d_ctot(0) = v.nh;
+      d_ctot(1) = v.nhe;
+      d_ctot(2) = v.nd;
+      d_ctot(3) = v.ndcut;
+      d_ctot(4) = v.ntc;
+    }
+  });
+  Kokkos::deep_copy(h_ctot,d_ctot);
+  const int nh = h_ctot(0);
+  const int nhe = h_ctot(1);
+  const int nd = h_ctot(2);
+  const int ndcut = h_ctot(3);
+  const int ntc = h_ctot(4);
 
-  // the device cut is done; what follows is the host install of its
-  //   results, which is what a device-authoritative grid would remove
+  const bigint q_icell = 0;
+  const bigint q_n = q_icell + nh;
+  const bigint q_off = q_n + nh;
+  const bigint q_nsplit = q_off + nh;
+  const bigint q_xsub = q_nsplit + nh;
+  const bigint q_err = q_xsub + nh;
+  const bigint q_corner = q_err + nh;
+  const bigint q_list = q_corner + 8*((bigint) nh);
+  const bigint q_map = q_list + nhe;
+  const bigint q_dcell = q_map + nhe;
+  const bigint q_tcell = q_dcell + nd;
+  const bigint q_ttype = q_tcell + ntc;
+  const bigint nqint = q_ttype + ntc;
+  const bigint q_xsplit = 0;
+  const bigint q_vols = q_xsplit + 3*((bigint) nh);
+  const bigint nqdbl = q_vols + nhe;
+
+  if (MAX(nqint,1) > (bigint) d_qint.extent(0)) {
+    d_qint = DAT::t_int_1d("rigid_remap:qint",grow_extra(MAX(nqint,1)));
+    h_qint = Kokkos::create_mirror_view(d_qint);
+  }
+  if (MAX(nqdbl,1) > (bigint) d_qdbl.extent(0)) {
+    d_qdbl = Kokkos::View<double*,DeviceType>("rigid_remap:qdbl",
+                                              grow_extra(MAX(nqdbl,1)));
+    h_qdbl = Kokkos::create_mirror_view(d_qdbl);
+  }
+  auto d_qint = this->d_qint;
+  auto d_qdbl = this->d_qdbl;
+
+  Kokkos::parallel_scan("rigid_remap:rc_sort_pack",nrc, KOKKOS_LAMBDA(const int i, int &tpos,
+                                             const bool final) {
+    const int t = d_newtype(i);
+    if (final && t >= 0) {
+      d_qint(q_tcell+tpos) = d_rcand(i);
+      d_qint(q_ttype+tpos) = t;
+    }
+    if (t >= 0) tpos++;
+    if (!final || i >= nchk) return;
+
+    if (d_ipcell(i) >= 0) {
+      d_qint(q_dcell + d_cls(3*i+2)) = d_ipcell(i);
+      return;
+    }
+    const int h = d_cls(3*i);
+    const int ho = d_cls(3*i+1);
+    const int n = d_chn(i);
+    const int off = d_chloff(i);
+    d_qint(q_icell+h) = d_rcand(d_chcand(i));
+    d_qint(q_n+h) = n;
+    d_qint(q_off+h) = ho;
+    d_qint(q_nsplit+h) = d_chnsplit(i);
+    d_qint(q_xsub+h) = d_chxsub(i);
+    d_qint(q_err+h) = d_cherr(i);
+    for (int j = 0; j < 8; j++) d_qint(q_corner+8*h+j) = d_chcorner(8*i+j);
+    for (int j = 0; j < 3; j++) d_qdbl(q_xsplit+3*h+j) = d_chxsplit(3*i+j);
+    for (int j = 0; j < n; j++) {
+      d_qint(q_list+ho+j) = d_chlist(off+j);
+      d_qint(q_map+ho+j) = d_chmap(off+j);
+      d_qdbl(q_vols+ho+j) = d_chvols(off+j);
+    }
+  });
+
+  if (nqint)
+    Kokkos::deep_copy(Kokkos::subview(h_qint,range(0,nqint)),
+                      Kokkos::subview(d_qint,range(0,nqint)));
+  if (nqdbl)
+    Kokkos::deep_copy(Kokkos::subview(h_qdbl,range(0,nqdbl)),
+                      Kokkos::subview(d_qdbl,range(0,nqdbl)));
 
   if (timeflag) {
     double now = MPI_Wtime();
@@ -1436,41 +1534,35 @@ int RigidRemapKokkos::recut()
     tstart = now;
   }
 
-  // install the new list and the cut of every changed cell, in
+  // the cells the device installed alone are marked, with the counters
+  //   apply_cut() keeps; their order is immaterial
+
+  nlist_run += nch;
+  if (nd) {
+    listschanged = 1;
+    typechanged = 1;
+    ncut_run += ndcut;
+    for (m = 0; m < nd; m++) grid_kk->mark_host_stale(h_qint(q_dcell+m));
+  }
+
+  // install the new list and the cut of every other changed cell, in
   //   ascending cell order, exactly as the host loop does
+  // a cell the host installs is current on the host once it has,
+  //   whatever it was before
 
   int corner[8];
   double xsplit[3];
   const int ncorner = (dim == 3) ? 8 : 4;
 
-  for (m = 0; m < nch; m++) {
-    icell = rcand[h_chcand(m)];
-    int n = h_chn(m);
-    int off = h_chloff(m);
-    nlist_run++;
-
-    // a cell the device installed alone is only marked; the counters
-    //   are those apply_cut() keeps
-    // a cell the host installs is current on the host once it has,
-    //   whatever it was before
-
-    int nsplitone = h_chnsplit(m);
-    const int nsplitold = grid->cells[icell].nsplit;
-    const int inplace = (nsplitone == 0) ? (nsplitold <= 1) :
-      (nsplitone == nsplitold);
-
-    if (devlists && !h_cherr(m) && inplace && nsplitold <= 1) {
-      grid_kk->mark_host_stale(icell);
-      listschanged = 1;
-      if (nsplitone) ncut_run++;
-      typechanged = 1;
-      continue;
-    }
+  for (m = 0; m < nh; m++) {
+    icell = h_qint(q_icell+m);
+    int n = h_qint(q_n+m);
+    const bigint off = h_qint(q_off+m);
 
     grid_kk->unmark_host_stale(icell);
-    for (int j = 0; j < n; j++) newlist[j] = (surfint) h_chlist(off+j);
+    for (int j = 0; j < n; j++) newlist[j] = (surfint) h_qint(q_list+off+j);
 
-    if (h_cherr(m)) {
+    if (h_qint(q_err+m)) {
       fix_kk->refresh_host_surfs();
       recut_cell(icell,n,newlist);
       continue;
@@ -1479,19 +1571,23 @@ int RigidRemapKokkos::recut()
     // a cell the device installed above is installed here unjournaled,
     //   by the same rule
 
+    int nsplitone = h_qint(q_nsplit+m);
+    const int nsplitold = grid->cells[icell].nsplit;
+    const int inplace = (nsplitone == 0) ? (nsplitold <= 1) :
+      (nsplitone == nsplitold);
     if (inplace) grid->journalcells = 0;
 
     grid->set_cell_surfs(icell,n,newlist);
     listschanged = 1;
 
     if (nsplitone) ncut_run++;
-    for (int j = 0; j < ncorner; j++) corner[j] = h_chcorner(8*m+j);
+    for (int j = 0; j < ncorner; j++) corner[j] = h_qint(q_corner+8*m+j);
     if (nsplitone > 1)
-      for (int j = 0; j < n; j++) newmap[j] = h_chmap(off+j);
-    for (int j = 0; j < 3; j++) xsplit[j] = h_chxsplit(3*m+j);
+      for (int j = 0; j < n; j++) newmap[j] = h_qint(q_map+off+j);
+    for (int j = 0; j < 3; j++) xsplit[j] = h_qdbl(q_xsplit+3*m+j);
 
-    apply_cut(icell,nsplitone,&h_chvols(off),newmap,corner,
-              h_chxsub(m),xsplit);
+    apply_cut(icell,nsplitone,&h_qdbl(q_vols+off),newmap,corner,
+              h_qint(q_xsub+m),xsplit);
     grid->journalcells = 1;
   }
 
@@ -1502,33 +1598,22 @@ int RigidRemapKokkos::recut()
   }
 
   // pass 2 on the host: the new types
-
-  if ((int) k_newtype.extent(0) < nrcand) {
-    k_newtype = DAT::tdual_int_1d("rigid_remap:newtypeh",grow_extra(nrcand));
-  }
-  Kokkos::deep_copy(Kokkos::subview(k_newtype.view_host(),std::make_pair(0,nrcand)),
-                    Kokkos::subview(d_newtype,std::make_pair(0,nrcand)));
-  auto h_newtype = k_newtype.view_host();
-
   // devlists: the device applied them above and kept only the changes;
   //   a stale cell stays stale, another takes the type unjournaled
 
   if (devlists) {
+    if (ntc) typechanged = 1;
     grid->journalcells = 0;
-    for (i = 0; i < nrcand; i++) {
-      int type = h_newtype(i);
-      if (type < 0) continue;
-      typechanged = 1;
-      icell = rcand[i];
+    for (m = 0; m < ntc; m++) {
+      icell = h_qint(q_tcell+m);
       if (grid_kk->host_stale(icell)) continue;
-      grid->set_cell_type(icell,type);
+      grid->set_cell_type(icell,h_qint(q_ttype+m));
     }
     grid->journalcells = 1;
   } else {
-    for (i = 0; i < nrcand; i++) {
-      int type = h_newtype(i);
-      if (type < 0) continue;
-      icell = rcand[i];
+    for (m = 0; m < ntc; m++) {
+      icell = h_qint(q_tcell+m);
+      int type = h_qint(q_ttype+m);
       if (cinfo[icell].type == type) continue;
       grid->set_cell_type(icell,type);
       typechanged = 1;

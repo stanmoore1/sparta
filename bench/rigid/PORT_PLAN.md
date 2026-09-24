@@ -2932,3 +2932,22 @@ split-memory build is bit-identical on the benchmark at 1 and 4 ranks
 and passes the suite at 1 rank, owned at 4 ranks, distributed and owned
 distributed.  (Two suites run at once in the same directory share the
 restart test's tmp files and fail it; run alone it passes.)
+
+## The exceptions sorted out on the device (24 Sep 2026)
+
+The host still read back every changed cell (counts, corners, lists,
+piece maps, volumes: ~2.5 MB a rank a step on the 1000-body deck) and
+the candidate list and new types, then looped over all of them to find
+the few it installs.  Now one scan (`rc_sort_scan`, a `RecutCount` value)
+places each changed cell in one of two lists and each retyped candidate
+in a third, one pack (`rc_sort_pack`) writes them, and the host reads
+back only: the cells it installs, in the ascending order it always
+installed them in, with their lists and cuts; the indices of the cells
+the device installed (to mark stale); and (cell, type) for the retyped
+ones.  Four read-backs become three, one of them five ints.  The 3d cut
+still reads the counts back to size its chunks, as before.
+
+Serial, in.bench40.owned, EXACT: bit-identical at 1 and 4 ranks;
+`recut: install` 0.080 -> 0.019 s, `recut: retyping` 0.004 -> 0.000 s;
+`recut: cuts` +0.12 s for the sort and pack on one CPU core, which on a
+GPU are two short kernels.

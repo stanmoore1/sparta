@@ -23,6 +23,19 @@
 
 namespace SPARTA_NS {
 
+// the running counts of the re-cut's sort of its changed cells: host
+//   cells and their entries, cells installed on the device and the cut
+//   ones among them, retyped candidates
+
+struct RecutCount {
+  int nh,nhe,nd,ndcut,ntc;
+  KOKKOS_INLINE_FUNCTION RecutCount() : nh(0), nhe(0), nd(0), ndcut(0), ntc(0) {}
+  KOKKOS_INLINE_FUNCTION RecutCount &operator+=(const RecutCount &o) {
+    nh += o.nh; nhe += o.nhe; nd += o.nd; ndcut += o.ndcut; ntc += o.ntc;
+    return *this;
+  }
+};
+
 class RigidRemapKokkos : public RigidRemap {
  public:
   RigidRemapKokkos(class SPARTA *, class FixRigidKokkos *);
@@ -84,7 +97,7 @@ class RigidRemapKokkos : public RigidRemap {
   int staticgen_kk;
   DAT::t_int_1d d_candflag,d_candoff;
   int maxrcand_kk;
-  DAT::tdual_int_1d k_rcand,k_newlist,k_newtype;
+  DAT::tdual_int_1d k_rcand,k_newlist;
   DAT::t_int_1d d_newn,d_chflag,d_newtype;
   Kokkos::View<bigint*,DeviceType> d_chpre;   // packed (row, offset) prefix
   int maxrcandlist_kk;
@@ -108,10 +121,20 @@ class RigidRemapKokkos : public RigidRemap {
   //   the part in use is contiguous and comes back in one copy each
 
   DAT::t_int_1d d_chint;
-  t_hint_1d h_chint;
+  t_hint_1d h_chint;             // the 3d cut's chunking reads counts back
   Kokkos::View<double*,DeviceType> d_chdbl;
-  Kokkos::View<double*,DeviceType>::host_mirror_type h_chdbl;
   bigint maxchint_kk,maxchdbl_kk;
+
+  // what the host installs of them, sorted out on the device (see
+  //   recut()): per changed cell its place in the sort, the totals, and
+  //   the lists that come back
+
+  DAT::t_int_1d d_cls,d_ctot;
+  t_hint_1d h_ctot;
+  DAT::t_int_1d d_qint;
+  t_hint_1d h_qint;
+  Kokkos::View<double*,DeviceType> d_qdbl;
+  Kokkos::View<double*,DeviceType>::host_mirror_type h_qdbl;
 
   t_cline_1d d_clines;       // scratch rows of the device cut
   t_point_1d d_points;
