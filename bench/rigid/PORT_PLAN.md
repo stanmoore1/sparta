@@ -2925,3 +2925,10 @@ Serial, in.bench40.owned, EXACT: bit-identical at 1 and 4 ranks;
 `recut: cuts` unchanged.  Serial aliases the two copies, so the stale
 host fields are only exercised by the split-memory debug build
 (`SPARTA_KOKKOS_DEBUG_SYNC`, applied in a scratch worktree only).
+
+Validated: the rigid suite passes in all six combinations on Kokkos
+Serial and at 1 rank and owned at 4 ranks on the CPU build.  The
+split-memory build is bit-identical on the benchmark at 1 and 4 ranks
+and passes the suite at 1 rank, owned at 4 ranks, distributed and owned
+distributed.  (Two suites run at once in the same directory share the
+restart test's tmp files and fail it; run alone it passes.)
