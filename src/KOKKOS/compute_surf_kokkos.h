@@ -114,7 +114,7 @@ void surf_tally_kk(KK_POS_FLOAT /*dtremain*/, int isurf, int icell, int reaction
   d_tally2surf(itally) = surfID;
   d_surf2tally(isurf) = isurf;
 
-  KK_FLOAT fluxscale = d_normflux(isurf);
+  KK_ACC_FLOAT fluxscale = d_normflux(isurf);
 
   // tally all values associated with group into array
   // set fflag after force computation is done once
@@ -125,18 +125,18 @@ void surf_tally_kk(KK_POS_FLOAT /*dtremain*/, int isurf, int icell, int reaction
   // fluxscale factor applied for all keywords except NUM,FX,FY,FZ
   // if surf is transparent, all flux tallying is for incident particle only
 
-  KK_FLOAT vsqpre,ivsqpost,jvsqpost;
-  KK_FLOAT ierot,jerot,ievib,jevib,iother,jother,otherpre,etot;
-  KK_FLOAT pdelta[3],pnorm[3],ptang[3],pdelta_force[3],rdelta[3],torque[3];
+  KK_ACC_FLOAT vsqpre,ivsqpost,jvsqpost;
+  KK_FLOAT ierot; KK_FLOAT jerot; KK_FLOAT ievib; KK_FLOAT jevib; KK_ACC_FLOAT iother; KK_ACC_FLOAT jother; KK_ACC_FLOAT otherpre; KK_ACC_FLOAT etot;
+  KK_ACC_FLOAT pdelta[3],pnorm[3],ptang[3],pdelta_force[3],rdelta[3],torque[3];
   KK_POS_FLOAT *xcollide;
 
   KK_POS_FLOAT *norm;
   if (dim == 2) norm = d_lines(isurf).norm;
   else norm = d_tris(isurf).norm;
 
-  KK_FLOAT weight = 1.0;
-  KK_FLOAT origmass = 0.0;
-  KK_FLOAT imass,jmass;
+  KK_ACC_FLOAT weight = 1.0;
+  KK_ACC_FLOAT origmass = 0.0;
+  KK_ACC_FLOAT imass,jmass;
   if (weightflag && iorig) weight = iorig->weight;
   else if (weightflag) weight = ip->weight;
   if (origspecies >= 0) origmass = d_species[origspecies].mass * weight;
@@ -144,7 +144,7 @@ void surf_tally_kk(KK_POS_FLOAT /*dtremain*/, int isurf, int icell, int reaction
   if (jp) jmass = d_species(jp->ispecies).mass * weight;
 
   KK_FLOAT *vorig = NULL;
-  KK_FLOAT oerot,oevib;
+  KK_ACC_FLOAT oerot,oevib;
   if (iorig) {
     vorig = iorig->v;
     oerot = iorig->erot;
@@ -171,7 +171,7 @@ void surf_tally_kk(KK_POS_FLOAT /*dtremain*/, int isurf, int icell, int reaction
     // counts and fluxes
 
     case NUM:
-      a_array_surf_tally(itally,k++) += static_cast<KK_FLOAT>(1.0);
+      a_array_surf_tally(itally,k++) += static_cast<KK_ACC_FLOAT>(1.0);
       break;
     case NUMWT:
       a_array_surf_tally(itally,k++) += weight;
@@ -378,9 +378,9 @@ void surf_tally_kk(KK_POS_FLOAT /*dtremain*/, int isurf, int icell, int reaction
       if (jp) jvsqpost = jmass * MathExtraKokkos::lensq3(jp->v);
       else jvsqpost = 0.0;
       if (transparent)
-        a_array_surf_tally(itally,k++) += static_cast<KK_FLOAT>(0.5)*mvv2e * vsqpre * fluxscale;
+        a_array_surf_tally(itally,k++) += static_cast<KK_ACC_FLOAT>(0.5)*mvv2e * vsqpre * fluxscale;
       else
-        a_array_surf_tally(itally,k++) -= static_cast<KK_FLOAT>(0.5)*mvv2e * (ivsqpost + jvsqpost - vsqpre) * fluxscale;
+        a_array_surf_tally(itally,k++) -= static_cast<KK_ACC_FLOAT>(0.5)*mvv2e * (ivsqpost + jvsqpost - vsqpre) * fluxscale;
       break;
     case EROT:
       if (ip) ierot = ip->erot;
@@ -406,7 +406,7 @@ void surf_tally_kk(KK_POS_FLOAT /*dtremain*/, int isurf, int icell, int reaction
       if (reaction && !transparent) {
         int sr_type = KK_SR_TYPE(isr);
         int m = KK_SR_MAP(isr);
-        KK_FLOAT r_coeff = 0.0;
+        KK_ACC_FLOAT r_coeff = 0.0;
         if (sr_type == 1)
           r_coeff = KK_SR_PROB(m).d_coeffs(reaction-1,1);
         a_array_surf_tally(itally,k) += weight * r_coeff * fluxscale;
@@ -426,14 +426,14 @@ void surf_tally_kk(KK_POS_FLOAT /*dtremain*/, int isurf, int icell, int reaction
         jother = jp->erot + jp->evib;
       } else jvsqpost = jother = 0.0;
       if (transparent)
-        etot = -static_cast<KK_FLOAT>(0.5)*mvv2e*vsqpre - weight*otherpre;
+        etot = -static_cast<KK_ACC_FLOAT>(0.5)*mvv2e*vsqpre - weight*otherpre;
       else {
-        etot = static_cast<KK_FLOAT>(0.5)*mvv2e*(ivsqpost + jvsqpost - vsqpre) +
+        etot = static_cast<KK_ACC_FLOAT>(0.5)*mvv2e*(ivsqpost + jvsqpost - vsqpre) +
           weight * (iother + jother - otherpre);
         if (reaction) {
           int sr_type = KK_SR_TYPE(isr);
           int m = KK_SR_MAP(isr);
-          KK_FLOAT r_coeff = 0.0;
+          KK_ACC_FLOAT r_coeff = 0.0;
           if (sr_type == 1)
             r_coeff = KK_SR_PROB(m).d_coeffs(reaction-1,1);
           etot -= weight * r_coeff;

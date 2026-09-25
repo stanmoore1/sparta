@@ -189,7 +189,7 @@ void ComputeTvibGridKokkos::operator()(TagComputeTvibGrid_compute_per_grid_atomi
   if (modeflag == 0) {
     const int j = d_s2t[ispecies];
     a_tally(icell,j) += d_particles[i].evib;
-    a_tally(icell,j+1) += static_cast<KK_FLOAT>(1.0);
+    a_tally(icell,j+1) += static_cast<KK_ACC_FLOAT>(1.0);
   } else if (modeflag >= 1) {
     const auto &d_vibmode = k_eiarray.view_device()[d_ewhich[index_vibmode]].k_view.view_device();
 
@@ -201,7 +201,7 @@ void ComputeTvibGridKokkos::operator()(TagComputeTvibGrid_compute_per_grid_atomi
       if (nmode > 1) a_tally(icell,j) += d_vibmode(i,imode);
       else a_tally(icell,j) +=
              d_particles[i].evib / (boltz*d_species[ispecies].vibtemp[0]);
-      a_tally(icell,j+1) += static_cast<KK_FLOAT>(1.0);
+      a_tally(icell,j+1) += static_cast<KK_ACC_FLOAT>(1.0);
     }
   }
 }
@@ -336,15 +336,15 @@ void ComputeTvibGridKokkos::operator()(TagComputeTvibGrid_post_process_grid, con
 
     for (int isp = 0; isp < nsp; ++isp) {
       const int ispecies = d_groupspecies(index,isp);
-      const KK_FLOAT theta = d_species[ispecies].vibtemp[0];
+      const KK_ACC_FLOAT theta = d_species[ispecies].vibtemp[0];
       if (theta == static_cast<KK_ACC_FLOAT>(0.0) || d_etally(icell,cnt) == static_cast<KK_ACC_FLOAT>(0.0)) {
         d_tspecies[isp] = 0.0;
         evb += 2;
         cnt = evb+1;
         continue;
       }
-      const KK_FLOAT ibar = d_etally(icell,evb) / (d_etally(icell,cnt) * boltz * theta);
-      if (ibar == static_cast<KK_FLOAT>(0.0)) {
+      const KK_ACC_FLOAT ibar = d_etally(icell,evb) / (d_etally(icell,cnt) * boltz * theta);
+      if (ibar == static_cast<KK_ACC_FLOAT>(0.0)) {
         d_tspecies[isp] = 0.0;
         evb += 2;
         cnt = evb+1;
@@ -357,8 +357,8 @@ void ComputeTvibGridKokkos::operator()(TagComputeTvibGrid_post_process_grid, con
       cnt = evb+1;
     }
 
-    KK_FLOAT numer = 0.0;
-    KK_FLOAT denom = 0.0;
+    KK_ACC_FLOAT numer = 0.0;
+    KK_ACC_FLOAT denom = 0.0;
     cnt = count;
     for (int isp = 0; isp < nsp; isp++) {
       numer += d_tspecies[isp]*d_etally(icell,cnt);
@@ -381,15 +381,15 @@ void ComputeTvibGridKokkos::operator()(TagComputeTvibGrid_post_process_grid, con
     for (int isp = 0; isp < nsp; isp++) {
       const int ispecies = d_groupspecies(index,isp);
       for (int imode = 0; imode < maxmode; imode++) {
-        const KK_FLOAT theta = d_species[ispecies].vibtemp[imode];
+        const KK_ACC_FLOAT theta = d_species[ispecies].vibtemp[imode];
         if (theta == static_cast<KK_ACC_FLOAT>(0.0) || d_etally(icell,cnt) == static_cast<KK_ACC_FLOAT>(0.0)) {
           d_tspecies_mode(isp,imode) = 0.0;
           evb += 2;
           cnt = evb+1;
           continue;
         }
-        const KK_FLOAT ibar = d_etally(icell,evb) / d_etally(icell,cnt);
-        if (ibar == static_cast<KK_FLOAT>(0.0)) {
+        const KK_ACC_FLOAT ibar = d_etally(icell,evb) / d_etally(icell,cnt);
+        if (ibar == static_cast<KK_ACC_FLOAT>(0.0)) {
           d_tspecies_mode(isp,imode) = 0.0;
           evb += 2;
           cnt = evb+1;
@@ -406,8 +406,8 @@ void ComputeTvibGridKokkos::operator()(TagComputeTvibGrid_post_process_grid, con
     // loop over species in group and all their modes
     // to accumulate numerator & denominator
 
-    KK_FLOAT numer = 0.0;
-    KK_FLOAT denom = 0.0;
+    KK_ACC_FLOAT numer = 0.0;
+    KK_ACC_FLOAT denom = 0.0;
     cnt = count;
     for (int isp = 0; isp < nsp; isp++) {
       for (int imode = 0; imode < maxmode; imode++) {
@@ -430,15 +430,15 @@ void ComputeTvibGridKokkos::operator()(TagComputeTvibGrid_post_process_grid, con
 
     for (int isp = 0; isp < nsp; isp++) {
       const int ispecies = d_groupspecies(index,isp);
-      const KK_FLOAT theta = d_species[ispecies].vibtemp[imode];
+      const KK_ACC_FLOAT theta = d_species[ispecies].vibtemp[imode];
       if (theta == static_cast<KK_ACC_FLOAT>(0.0) || d_etally(icell,cnt) == static_cast<KK_ACC_FLOAT>(0.0)) {
         d_tspecies_mode(isp,imode) = 0.0;
         evb += 2*maxmode;
         cnt = evb+1;
         continue;
       }
-      const KK_FLOAT ibar = d_etally(icell,evb) / d_etally(icell,cnt);
-      if (ibar == static_cast<KK_FLOAT>(0.0)) {
+      const KK_ACC_FLOAT ibar = d_etally(icell,evb) / d_etally(icell,cnt);
+      if (ibar == static_cast<KK_ACC_FLOAT>(0.0)) {
         d_tspecies_mode(isp,imode) = 0.0;
         evb += 2*maxmode;
         cnt = evb+1;
@@ -454,8 +454,8 @@ void ComputeTvibGridKokkos::operator()(TagComputeTvibGrid_post_process_grid, con
     // loop over species in group and single mode for each species
     // to accumulate numerator & denominator
 
-    KK_FLOAT numer = 0.0;
-    KK_FLOAT denom = 0.0;
+    KK_ACC_FLOAT numer = 0.0;
+    KK_ACC_FLOAT denom = 0.0;
     cnt = count;
     for (int isp = 0; isp < nsp; isp++) {
       numer += d_tspecies_mode(isp,imode)*d_etally(icell,cnt);

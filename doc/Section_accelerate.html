@@ -727,7 +727,7 @@ option KOKKOS_PREC selects the precision of the KOKKOS package:
 </P>
 <PRE>-D KOKKOS_PREC=double  # double precision for all calculations (default)
 -D KOKKOS_PREC=mixed   # single precision for most calculations, see below
--D KOKKOS_PREC=single  # single precision for all calculations 
+-D KOKKOS_PREC=single  # single precision also for positions, see below 
 </PRE>
 <P>With KOKKOS_PREC=mixed, particle velocities, rotational and
 vibrational energies, and the arithmetic of collisions, reactions and
@@ -736,8 +736,10 @@ the remaining timestep of a particle, grid cell and surface element
 coordinates (and so the particle move and the surface collision
 detection), per-grid-cell and per-surface tallies, and global sums
 (e.g. temperature) stay in double precision. With
-KOKKOS_PREC=single, all of these are single precision, except the
-global sums. In all modes random numbers are generated in double
+KOKKOS_PREC=single, positions and geometry are single precision too,
+while tallies and global sums stay double: SPARTA uses SI units, in
+which statistics computed from mass weighted sums (e.g. a thermal
+temperature) underflow single precision. In all modes random numbers are generated in double
 precision, and all data seen by non-KOKKOS styles, output, and
 restart files remain double precision.
 </P>

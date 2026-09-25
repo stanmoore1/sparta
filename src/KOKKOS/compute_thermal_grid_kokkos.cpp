@@ -139,14 +139,14 @@ void ComputeThermalGridKokkos::operator()(TagComputeThermalGrid_compute_per_grid
   const int icell = d_particles[i].icell;
   if (!(d_cinfo[icell].mask & groupbit)) return;
 
-  const KK_FLOAT mass = d_species[ispecies].mass;
+  const KK_ACC_FLOAT mass = d_species[ispecies].mass;
   KK_FLOAT *v = d_particles[i].v;
 
   // 6 tallies per particle: N, Mass, mVx, mVy, mVz, mV^2
 
   int k = igroup*npergroup;
 
-  a_tally(icell,k++) += static_cast<KK_FLOAT>(1.0);
+  a_tally(icell,k++) += static_cast<KK_ACC_FLOAT>(1.0);
   a_tally(icell,k++) += mass;
   a_tally(icell,k++) += mass*v[0];
   a_tally(icell,k++) += mass*v[1];
@@ -170,7 +170,7 @@ void ComputeThermalGridKokkos::operator()(TagComputeThermalGrid_compute_per_grid
 
     const int icell = d_particles[i].icell;
 
-    const KK_FLOAT mass = d_species[ispecies].mass;
+    const KK_ACC_FLOAT mass = d_species[ispecies].mass;
     KK_FLOAT *v = d_particles[i].v;
 
     // 6 tallies per particle: N, Mass, mVx, mVy, mVz, mV^2
@@ -270,14 +270,14 @@ post_process_grid_kokkos(int index, int nsample,
 
 KOKKOS_INLINE_FUNCTION
 void ComputeThermalGridKokkos::operator()(TagComputeThermalGrid_post_process_grid, const int &icell) const {
-  const KK_FLOAT ncount = d_etally(icell,n);
+  const KK_ACC_FLOAT ncount = d_etally(icell,n);
   if (ncount <= static_cast<KK_ACC_FLOAT>(1.0)) d_vec[icell] = 0.0;
   else {
-    const KK_FLOAT mass = d_etally(icell,n+1);
-    const KK_FLOAT mvx = d_etally(icell,n+2);
-    const KK_FLOAT mvy = d_etally(icell,n+3);
-    const KK_FLOAT mvz = d_etally(icell,n+4);
-    const KK_FLOAT mvsq = d_etally(icell,n+5);
+    const KK_ACC_FLOAT mass = d_etally(icell,n+1);
+    const KK_ACC_FLOAT mvx = d_etally(icell,n+2);
+    const KK_ACC_FLOAT mvy = d_etally(icell,n+3);
+    const KK_ACC_FLOAT mvz = d_etally(icell,n+4);
+    const KK_ACC_FLOAT mvsq = d_etally(icell,n+5);
     d_vec[icell] = mvsq - (mvx*mvx + mvy*mvy + mvz*mvz)/mass;
     d_vec[icell] *= prefactor;
     if (tflag) d_vec[icell] /= ncount;

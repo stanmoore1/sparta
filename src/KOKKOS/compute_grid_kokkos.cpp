@@ -161,7 +161,7 @@ void ComputeGridKokkos::operator()(TagComputeGrid_compute_per_grid_atomic<NEED_A
   const int icell = d_particles[i].icell;
   if (!(d_cinfo[icell].mask & groupbit)) return;
 
-  const KK_FLOAT mass = d_species[ispecies].mass;
+  const KK_ACC_FLOAT mass = d_species[ispecies].mass;
   KK_FLOAT* v = d_particles[i].v;
 
   if (cellmass) a_tally(icell,cellmass) += mass;
@@ -175,7 +175,7 @@ void ComputeGridKokkos::operator()(TagComputeGrid_compute_per_grid_atomic<NEED_A
   for (int m = 0; m < npergroup; m++) {
     switch (d_unique[m]) {
     case COUNT:
-      a_tally(icell,k++) += static_cast<KK_FLOAT>(1.0);
+      a_tally(icell,k++) += static_cast<KK_ACC_FLOAT>(1.0);
       break;
     case MASSSUM:
       a_tally(icell,k++) += mass;
@@ -231,7 +231,7 @@ void ComputeGridKokkos::operator()(TagComputeGrid_compute_per_grid, const int &i
     const int igroup = d_s2g(imix,ispecies);
     if (igroup < 0) return;
 
-    const KK_FLOAT mass = d_species[ispecies].mass;
+    const KK_ACC_FLOAT mass = d_species[ispecies].mass;
     KK_FLOAT* v = d_particles[i].v;
 
     if (cellmass) d_tally(icell,cellmass) += mass;
@@ -479,7 +479,7 @@ void ComputeGridKokkos::operator()(TagComputeGrid_NRHO, const int &icell) const 
   const KK_POS_FLOAT norm = d_cinfo[icell].volume;
   if (norm == static_cast<KK_POS_FLOAT>(0.0)) d_vec[icell] = 0.0;
   else {
-    const KK_FLOAT wt = fnum * d_cinfo[icell].weight / norm;
+    const KK_ACC_FLOAT wt = fnum * d_cinfo[icell].weight / norm;
     d_vec[icell] = wt * d_etally(icell,count) / nsample;
   }
 }
@@ -491,7 +491,7 @@ void ComputeGridKokkos::operator()(TagComputeGrid_MASSRHO, const int &icell) con
   const KK_POS_FLOAT norm = d_cinfo[icell].volume;
   if (norm == static_cast<KK_POS_FLOAT>(0.0)) d_vec[icell] = 0.0;
   else {
-    const KK_FLOAT wt = fnum * d_cinfo[icell].weight / norm;
+    const KK_ACC_FLOAT wt = fnum * d_cinfo[icell].weight / norm;
     d_vec[icell] = wt * d_etally(icell,mass) / nsample;
   }
 }
@@ -557,7 +557,7 @@ void ComputeGridKokkos::operator()(TagComputeGrid_PXRHO, const int &icell) const
   const KK_POS_FLOAT norm = d_cinfo[icell].volume;
   if (norm == static_cast<KK_POS_FLOAT>(0.0)) d_vec[icell] = 0.0;
   else {
-    const KK_FLOAT wt = fnum * d_cinfo[icell].weight / norm;
+    const KK_ACC_FLOAT wt = fnum * d_cinfo[icell].weight / norm;
     d_vec[icell] = wt * d_etally(icell,mom) / nsample;
   }
 }
@@ -569,7 +569,7 @@ void ComputeGridKokkos::operator()(TagComputeGrid_KERHO, const int &icell) const
   const KK_POS_FLOAT norm = d_cinfo[icell].volume;
   if (norm == static_cast<KK_POS_FLOAT>(0.0)) d_vec[icell] = 0.0;
   else {
-    const KK_FLOAT wt = fnum * d_cinfo[icell].weight / norm;
+    const KK_ACC_FLOAT wt = fnum * d_cinfo[icell].weight / norm;
     d_vec[icell] = eprefactor * wt * d_etally(icell,ke) / nsample;
   }
 }

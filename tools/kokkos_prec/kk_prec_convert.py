@@ -84,7 +84,7 @@ class Converter:
 
     def classify(self, name, fname):
         base = os.path.basename(fname)
-        ov = self.file_overrides.get(base, {})
+        ov = self.file_overrides_for(base)
         if name in ov:
             return ov[name]
         if name in self.double_names:
@@ -93,7 +93,19 @@ class Converter:
             return "pos"
         if name in self.acc_names:
             return "acc"
-        return self.file_defaults.get(base, "float")
+        for pattern, cls in self.file_defaults.items():
+            if fnmatch.fnmatch(base, pattern):
+                return cls
+        return "float"
+
+    def file_overrides_for(self, base):
+        """identifier classes for a file; keys of file_identifier_class are
+        file names or glob patterns, later matches win"""
+        out = {}
+        for pattern, ov in self.file_overrides.items():
+            if fnmatch.fnmatch(base, pattern):
+                out.update(ov)
+        return out
 
     # ------------------------------------------------------------------
 
@@ -462,7 +474,7 @@ class Converter:
             if x in K.CPP_KEYWORDS:
                 continue
             c = decl_class.get(x) or self.view_class.get(x)
-            ov = self.file_overrides.get(os.path.basename(self.fname), {})
+            ov = self.file_overrides_for(os.path.basename(self.fname))
             if c is None and (x in self.pos_names or x in self.double_names
                               or x in self.acc_names or x in ov):
                 c = self.classify(x, self.fname)

@@ -326,7 +326,7 @@ int ComputeReduceKokkos::setup_values(int m)
       Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType>(0,nelements),
         KOKKOS_LAMBDA(const int i) {
           const KK_FLOAT *v = l_particles(i).v;
-          l_values(i) = mvv2e * static_cast<KK_FLOAT>(0.5) * l_species(l_particles(i).ispecies).mass *
+          l_values(i) = mvv2e * static_cast<KK_ACC_FLOAT>(0.5) * l_species(l_particles(i).ispecies).mass *
             (v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
         });
 

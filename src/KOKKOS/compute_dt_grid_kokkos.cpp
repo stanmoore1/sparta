@@ -344,43 +344,43 @@ void ComputeDtGridKokkos::operator()(TagComputeDtGrid_ComputePerGrid, const int 
   if ( !(d_temp_vector(i) > static_cast<KK_ACC_FLOAT>(0.)) ) return;
 
   // exclude cells with zero speed
-  KK_FLOAT speed_squared = 0.;
+  KK_ACC_FLOAT speed_squared = 0.;
   if (dimension == 3)
     speed_squared = d_usq_vector(i) + d_vsq_vector(i) + d_wsq_vector(i);
   else
     speed_squared = d_usq_vector(i) + d_vsq_vector(i);
-  if ( !(speed_squared > static_cast<KK_FLOAT>(0.)) ) return;
+  if ( !(speed_squared > static_cast<KK_ACC_FLOAT>(0.)) ) return;
 
   // cell dt based on mean collision time
-  KK_FLOAT cell_dt_desired = collision_fraction*d_tau_vector(i);
+  KK_ACC_FLOAT cell_dt_desired = collision_fraction*d_tau_vector(i);
 
   // cell size
-  KK_FLOAT dx = d_cells[i].hi[0] - d_cells[i].lo[0];
-  KK_FLOAT dy = d_cells[i].hi[1] - d_cells[i].lo[1];
-  KK_FLOAT dz = d_cells[i].hi[2] - d_cells[i].lo[2];
+  KK_ACC_FLOAT dx = d_cells[i].hi[0] - d_cells[i].lo[0];
+  KK_ACC_FLOAT dy = d_cells[i].hi[1] - d_cells[i].lo[1];
+  KK_ACC_FLOAT dz = d_cells[i].hi[2] - d_cells[i].lo[2];
 
   // cell dt based on transit time using average velocities
-  KK_FLOAT dt_candidate;
-  KK_FLOAT umag = Kokkos::sqrt(d_usq_vector(i));
-  if (umag > static_cast<KK_FLOAT>(0.)) {
+  KK_ACC_FLOAT dt_candidate;
+  KK_ACC_FLOAT umag = Kokkos::sqrt(d_usq_vector(i));
+  if (umag > static_cast<KK_ACC_FLOAT>(0.)) {
     dt_candidate = transit_fraction*dx/umag;
     cell_dt_desired = MIN(dt_candidate,cell_dt_desired);
   }
-  KK_FLOAT vmag = Kokkos::sqrt(d_vsq_vector(i));
-  if (vmag > static_cast<KK_FLOAT>(0.)) {
+  KK_ACC_FLOAT vmag = Kokkos::sqrt(d_vsq_vector(i));
+  if (vmag > static_cast<KK_ACC_FLOAT>(0.)) {
     dt_candidate = transit_fraction*dy/vmag;
     cell_dt_desired = MIN(dt_candidate,cell_dt_desired);
   }
   if (dimension == 3) {
-    KK_FLOAT wmag = Kokkos::sqrt(d_wsq_vector(i));
-    if (wmag > static_cast<KK_FLOAT>(0.)) {
+    KK_ACC_FLOAT wmag = Kokkos::sqrt(d_wsq_vector(i));
+    if (wmag > static_cast<KK_ACC_FLOAT>(0.)) {
       dt_candidate = transit_fraction*dz/wmag;
       cell_dt_desired = MIN(dt_candidate,cell_dt_desired);
     }
   }
 
   // cell dt based on transit time using maximum most probable speed
-  KK_FLOAT vrm_max = Kokkos::sqrt(static_cast<KK_FLOAT>(2.0)*boltz * d_temp_vector(i) / min_species_mass);
+  KK_ACC_FLOAT vrm_max = Kokkos::sqrt(static_cast<KK_ACC_FLOAT>(2.0)*boltz * d_temp_vector(i) / min_species_mass);
   dt_candidate = transit_fraction*dx/vrm_max;
   cell_dt_desired = MIN(dt_candidate,cell_dt_desired);
   dt_candidate = transit_fraction*dy/vrm_max;

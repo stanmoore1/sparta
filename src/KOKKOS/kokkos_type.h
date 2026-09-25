@@ -355,13 +355,20 @@ public:
 // SPARTA_KOKKOS_SINGLE_DOUBLE: mixed precision; single precision for
 //   velocities, energies and per-particle/per-collision arithmetic, double
 //   precision for particle positions, geometry and accumulations
-// SPARTA_KOKKOS_SINGLE_SINGLE: single precision for all calculations
+// SPARTA_KOKKOS_SINGLE_SINGLE: single precision for all per-particle data
+//   and arithmetic, including positions and geometry
 //
 // KK_FLOAT     = storage and arithmetic precision
 // KK_POS_FLOAT = particle positions, remaining timestep, grid cell and
 //                surface element coordinates, and the move/geometry kernels
 //                that use them
-// KK_ACC_FLOAT = per-grid/per-surf tallies and other accumulations
+// KK_ACC_FLOAT = per-grid/per-surf tallies and other accumulations, and the
+//                per-cell statistics computed from them
+//
+// KK_ACC_FLOAT is double even in a single precision build: in SI units
+//   masses are ~1e-26 kg, so the per-cell moments computed from mass
+//   weighted sums, e.g. (sum m*v)^2/sum(m) or (sum m*v)^3/sum(m)^2,
+//   underflow single precision
 //
 // host (legacy) data structures are always double, see TransformView below
 
@@ -374,7 +381,7 @@ public:
 #if defined(SPARTA_KOKKOS_SINGLE_SINGLE)
 typedef float KK_FLOAT;
 typedef float KK_POS_FLOAT;
-typedef float KK_ACC_FLOAT;
+typedef double KK_ACC_FLOAT;
 #elif defined(SPARTA_KOKKOS_SINGLE_DOUBLE)
 typedef float KK_FLOAT;
 typedef double KK_POS_FLOAT;

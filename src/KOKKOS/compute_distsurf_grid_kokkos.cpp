@@ -146,7 +146,7 @@ KOKKOS_INLINE_FUNCTION
 void ComputeDistSurfGridKokkos::operator()(TagComputeDistSurfGrid_surf_centroid, const int &i) const {
 
   // compute surf centroids
-  KK_FLOAT invthird = static_cast<KK_FLOAT>(1.0)/static_cast<KK_FLOAT>(3.0);
+  KK_ACC_FLOAT invthird = static_cast<KK_ACC_FLOAT>(1.0)/static_cast<KK_ACC_FLOAT>(3.0);
   KK_POS_FLOAT *p1,*p2,*p3;
 
   int m = d_slist[i];
@@ -171,9 +171,9 @@ void ComputeDistSurfGridKokkos::operator()(TagComputeDistSurfGrid_surf_centroid,
 KOKKOS_INLINE_FUNCTION
 void ComputeDistSurfGridKokkos::operator()(TagComputeDistSurfGrid_surf_distance, const int &icell) const {
   int i,m,n;
-  KK_FLOAT dist,mindist;
+  KK_ACC_FLOAT dist,mindist;
   KK_POS_FLOAT *lo,*hi;
-  KK_POS_FLOAT cctr[3]; KK_FLOAT cell2surf[3];
+  KK_POS_FLOAT cctr[3]; KK_ACC_FLOAT cell2surf[3];
 
   if (!(d_cinfo[icell].mask & groupbit)) return;
   if (d_cells[icell].nsplit < 1) return;

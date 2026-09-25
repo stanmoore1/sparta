@@ -74,10 +74,10 @@ class ComputeGasReactionGridKokkos : public ComputeGasReactionGrid, public Kokko
     // for EVERY and SELECT mode, reaction index determines column of array_grid
 
     if (mode == ALL) {
-      d_vector_grid(icell) += static_cast<KK_FLOAT>(1.0);
+      d_vector_grid(icell) += static_cast<KK_ACC_FLOAT>(1.0);
     } else if (mode == EVERY) {
       int icol = reaction - 1;
-      d_array_grid(icell,icol) += static_cast<KK_FLOAT>(1.0);
+      d_array_grid(icell,icol) += static_cast<KK_ACC_FLOAT>(1.0);
     } else {   // SELECT
       int icol = d_reaction2col(reaction);
       if (icol >= 0) d_array_grid(icell,icol) += static_cast<KK_FLOAT>(1.0);

@@ -301,8 +301,8 @@ void ComputeLambdaGridKokkos::compute_per_grid_kokkos()
     auto l_noutputs = noutputs;
 
     Kokkos::parallel_for(nglocal, SPARTA_LAMBDA(int i) {
-      const KK_FLOAT lambda = l_lambda_grid(i);
-      KK_FLOAT sizex,sizey,sizez,sizeall;
+      const KK_ACC_FLOAT lambda = l_lambda_grid(i);
+      KK_ACC_FLOAT sizex,sizey,sizez,sizeall;
 
       if (l_knxflag || l_knallflag)
         sizex = (l_cells[i].hi[0] - l_cells[i].lo[0]);
@@ -316,10 +316,10 @@ void ComputeLambdaGridKokkos::compute_per_grid_kokkos()
       if (l_knallflag) {
         sizeall = sizex + sizey;
 
-        if (dimension == 2) sizeall *= static_cast<KK_FLOAT>(0.5);
+        if (dimension == 2) sizeall *= static_cast<KK_ACC_FLOAT>(0.5);
         else {
           sizeall += sizez;
-          sizeall /= static_cast<KK_FLOAT>(3.0);
+          sizeall /= static_cast<KK_ACC_FLOAT>(3.0);
         }
         if (l_noutputs == 1) l_vector_grid[i] = lambda / sizeall;
         else l_array_grid(i,l_output_order[KNALL]) = lambda / sizeall;
@@ -355,17 +355,17 @@ void ComputeLambdaGridKokkos::compute_per_grid_kokkos()
 
 KOKKOS_INLINE_FUNCTION
 void ComputeLambdaGridKokkos::operator()(TagComputeLambdaGrid_ComputePerGrid, const int &i) const {
-  KK_FLOAT nrhosum,lambda,tau;
+  KK_ACC_FLOAT nrhosum,lambda,tau;
   nrhosum = lambda = tau = 0.0;
   for (int j = 0; j < nspecies; j++) {
     nrhosum += d_nrho(i,j);
     for (int k = 0; k < nspecies; k++) {
-      const KK_FLOAT dref = d_params_const(j,k).diam;
-      const KK_FLOAT tref = d_params_const(j,k).tref;
-      const KK_FLOAT omega = d_params_const(j,k).omega;
-      const KK_FLOAT mj = d_species[j].mass;
-      const KK_FLOAT mk = d_species[k].mass;
-      const KK_FLOAT mr = mj * mk / (mj + mk);
+      const KK_ACC_FLOAT dref = d_params_const(j,k).diam;
+      const KK_ACC_FLOAT tref = d_params_const(j,k).tref;
+      const KK_ACC_FLOAT omega = d_params_const(j,k).omega;
+      const KK_ACC_FLOAT mj = d_species[j].mass;
+      const KK_ACC_FLOAT mk = d_species[k].mass;
+      const KK_ACC_FLOAT mr = mj * mk / (mj + mk);
 
       if (tempwhich == NONE || d_temp[i] == static_cast<KK_ACC_FLOAT>(0.0)) {
         if (lambdaflag)
@@ -391,7 +391,7 @@ void ComputeLambdaGridKokkos::operator()(TagComputeLambdaGrid_ComputePerGrid, co
   // lambdaflag may be set with no output of lambda
 
   if (lambdaflag) {
-    if (lambda == static_cast<KK_FLOAT>(0.0)) lambda = BIG;
+    if (lambda == static_cast<KK_ACC_FLOAT>(0.0)) lambda = BIG;
     d_lambda_grid[i] = lambda;
     if (d_output_order[LAMBDA] >= 0) {
       if (noutputs == 1) d_vector_grid[i] = lambda;
@@ -400,7 +400,7 @@ void ComputeLambdaGridKokkos::operator()(TagComputeLambdaGrid_ComputePerGrid, co
   }
 
   if (tauflag) {
-    if (tau == static_cast<KK_FLOAT>(0.0)) tau = BIG;
+    if (tau == static_cast<KK_ACC_FLOAT>(0.0)) tau = BIG;
     if (noutputs == 1) d_vector_grid[i] = tau;
     else d_array_grid(i,d_output_order[TAU]) = tau;
   }

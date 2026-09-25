@@ -82,7 +82,7 @@
     "SPARTA_KOKKOS_SINGLE_SINGLE": {
       "float": "float",
       "pos": "float",
-      "acc": "float"
+      "acc": "double"
     }
   },
   "conversion": {
@@ -278,12 +278,69 @@
       "recomb_density",
       "vibtemp",
       "vibTemp",
-      "rottemp"
+      "rottemp",
+      "mass_i",
+      "mass_j",
+      "mass_k",
+      "mass_ij",
+      "mr"
     ],
     "file_default_class": {
-      "geometry_kokkos.h": "pos"
+      "geometry_kokkos.h": "pos",
+      "compute_*_kokkos.*": "acc",
+      "fix_temp_rescale_kokkos.*": "acc",
+      "fix_temp_global_rescale_kokkos.*": "acc",
+      "fix_ave_grid_kokkos.*": "acc"
     },
     "file_identifier_class": {
+      "compute_*_kokkos.*": {
+        "v": "float",
+        "vi": "float",
+        "vj": "float",
+        "vorig": "float",
+        "erot": "float",
+        "evib": "float",
+        "ierot": "float",
+        "jerot": "float",
+        "ievib": "float",
+        "jevib": "float"
+      },
+      "fix_temp_rescale_kokkos.*": {
+        "v": "float",
+        "vi": "float",
+        "vj": "float",
+        "vorig": "float",
+        "erot": "float",
+        "evib": "float",
+        "ierot": "float",
+        "jerot": "float",
+        "ievib": "float",
+        "jevib": "float"
+      },
+      "fix_temp_global_rescale_kokkos.*": {
+        "v": "float",
+        "vi": "float",
+        "vj": "float",
+        "vorig": "float",
+        "erot": "float",
+        "evib": "float",
+        "ierot": "float",
+        "jerot": "float",
+        "ievib": "float",
+        "jevib": "float"
+      },
+      "fix_ave_grid_kokkos.*": {
+        "v": "float",
+        "vi": "float",
+        "vj": "float",
+        "vorig": "float",
+        "erot": "float",
+        "evib": "float",
+        "ierot": "float",
+        "jerot": "float",
+        "ievib": "float",
+        "jevib": "float"
+      },
       "grid_kokkos.h": {
         "phi": "pos"
       },
@@ -325,6 +382,19 @@
       },
       "compute_distsurf_grid_kokkos.cpp": {
         "sctr": "pos"
+      },
+      "fix_emit_*_kokkos.cpp": {
+        "mv": "acc",
+        "masstot": "acc",
+        "ke": "acc",
+        "nrho_cell": "acc",
+        "massrho_cell": "acc",
+        "press_cell": "acc",
+        "soundspeed_cell": "acc",
+        "mass_cell": "acc",
+        "gamma_cell": "acc",
+        "temp_thermal_cell": "acc",
+        "mass": "acc"
       }
     },
     "post_substitutions": {},
@@ -400,6 +470,7 @@
         ]
       ]
     },
-    "_comment_file_type_renames": "per-file view type renames, applied before type_renames: per-grid/per-surf compute and fix output is KK_ACC_FLOAT, per-particle custom data KK_FLOAT"
+    "_comment_file_type_renames": "per-file view type renames, applied before type_renames: per-grid/per-surf compute and fix output is KK_ACC_FLOAT, per-particle custom data KK_FLOAT",
+    "_comment_file_default_class": "default class of double declarations in device code by file name or glob: per-cell statistics (sums of mass*v, mass*v^2) underflow in float in SI units, so computes and thermostats accumulate in KK_ACC_FLOAT"
   }
 }

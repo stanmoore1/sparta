@@ -39,9 +39,9 @@ class ComputePropertySurfKokkos : public ComputePropertySurf, public KokkosBase 
   void compute_per_surf_kokkos();
 
   KOKKOS_INLINE_FUNCTION
-  KK_FLOAT pack_one(int m, int field) const
+  KK_ACC_FLOAT pack_one(int m, int field) const
   {
-    const KK_FLOAT THIRD = static_cast<KK_FLOAT>(1.0)/static_cast<KK_FLOAT>(3.0);
+    const KK_ACC_FLOAT THIRD = static_cast<KK_ACC_FLOAT>(1.0)/static_cast<KK_ACC_FLOAT>(3.0);
     if (dim == 2) {
       const auto &L = d_lines[m];
       switch (field) {
@@ -73,11 +73,11 @@ class ComputePropertySurfKokkos : public ComputePropertySurf, public KokkosBase 
       case XC:    return static_cast<KK_POS_FLOAT>(THIRD)*(T.p1[0]+T.p2[0]+T.p3[0]);
       case YC:    return static_cast<KK_POS_FLOAT>(THIRD)*(T.p1[1]+T.p2[1]+T.p3[1]);
       case ZC:    return static_cast<KK_POS_FLOAT>(THIRD)*(T.p1[2]+T.p2[2]+T.p3[2]);
-      case AREA:  { KK_POS_FLOAT p12[3]; KK_POS_FLOAT p13[3]; KK_FLOAT cross[3];
+      case AREA:  { KK_POS_FLOAT p12[3]; KK_POS_FLOAT p13[3]; KK_ACC_FLOAT cross[3];
                     MathExtraKokkos::sub3(T.p2,T.p1,p12);
                     MathExtraKokkos::sub3(T.p3,T.p1,p13);
                     MathExtraKokkos::cross3(p12,p13,cross);
-                    return static_cast<KK_FLOAT>(0.5)*MathExtraKokkos::len3(cross); }
+                    return static_cast<KK_ACC_FLOAT>(0.5)*MathExtraKokkos::len3(cross); }
       case NORMX: return T.norm[0];
       case NORMY: return T.norm[1];
       case NORMZ: return T.norm[2];

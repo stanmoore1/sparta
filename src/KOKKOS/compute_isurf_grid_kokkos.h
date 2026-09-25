@@ -77,20 +77,20 @@ void surf_tally_kk(KK_POS_FLOAT /*dtremain*/, int isurf, int /*icell*/, int /*re
   d_tally2surf(itally) = surfID;
   d_surf2tally(isurf) = isurf;
 
-  KK_FLOAT fluxscale = d_normflux(isurf);
+  KK_ACC_FLOAT fluxscale = d_normflux(isurf);
 
-  KK_FLOAT vsqpre,ivsqpost,jvsqpost;
-  KK_FLOAT ierot,jerot,ievib,jevib,iother,jother,otherpre,etot;
-  KK_FLOAT pdelta[3],pnorm[3],ptang[3],pdelta_force[3];
+  KK_ACC_FLOAT vsqpre,ivsqpost,jvsqpost;
+  KK_FLOAT ierot; KK_FLOAT jerot; KK_FLOAT ievib; KK_FLOAT jevib; KK_ACC_FLOAT iother; KK_ACC_FLOAT jother; KK_ACC_FLOAT otherpre; KK_ACC_FLOAT etot;
+  KK_ACC_FLOAT pdelta[3],pnorm[3],ptang[3],pdelta_force[3];
 
   KK_POS_FLOAT *norm;
   if (dim == 2) norm = d_lines(isurf).norm;
   else norm = d_tris(isurf).norm;
 
-  KK_FLOAT weight = 1.0;
+  KK_ACC_FLOAT weight = 1.0;
   if (weightflag) weight = iorig->weight;
-  KK_FLOAT origmass = d_species[origspecies].mass * weight;
-  KK_FLOAT imass = 0.0, jmass = 0.0;
+  KK_ACC_FLOAT origmass = d_species[origspecies].mass * weight;
+  KK_ACC_FLOAT imass = 0.0, jmass = 0.0;
   if (ip) imass = d_species(ip->ispecies).mass * weight;
   if (jp) jmass = d_species(jp->ispecies).mass * weight;
 
@@ -107,7 +107,7 @@ void surf_tally_kk(KK_POS_FLOAT /*dtremain*/, int isurf, int /*icell*/, int /*re
   for (int m = 0; m < nvalue; m++) {
     switch (d_which(m)) {
     case NUM:
-      a_array_surf_tally(itally,k++) += static_cast<KK_FLOAT>(1.0);
+      a_array_surf_tally(itally,k++) += static_cast<KK_ACC_FLOAT>(1.0);
       break;
     case NUMWT:
       a_array_surf_tally(itally,k++) += weight;
@@ -220,7 +220,7 @@ void surf_tally_kk(KK_POS_FLOAT /*dtremain*/, int isurf, int /*icell*/, int /*re
       else ivsqpost = 0.0;
       if (jp) jvsqpost = jmass * MathExtraKokkos::lensq3(jp->v);
       else jvsqpost = 0.0;
-      a_array_surf_tally(itally,k++) -= static_cast<KK_FLOAT>(0.5)*mvv2e * (ivsqpost + jvsqpost - vsqpre) * fluxscale;
+      a_array_surf_tally(itally,k++) -= static_cast<KK_ACC_FLOAT>(0.5)*mvv2e * (ivsqpost + jvsqpost - vsqpre) * fluxscale;
       break;
     case EROT:
       if (ip) ierot = ip->erot;
@@ -247,7 +247,7 @@ void surf_tally_kk(KK_POS_FLOAT /*dtremain*/, int isurf, int /*icell*/, int /*re
         jvsqpost = jmass * MathExtraKokkos::lensq3(jp->v);
         jother = jp->erot + jp->evib;
       } else jvsqpost = jother = 0.0;
-      etot = static_cast<KK_FLOAT>(0.5)*mvv2e*(ivsqpost + jvsqpost - vsqpre) +
+      etot = static_cast<KK_ACC_FLOAT>(0.5)*mvv2e*(ivsqpost + jvsqpost - vsqpre) +
         weight * (iother + jother - otherpre);
       a_array_surf_tally(itally,k++) -= etot * fluxscale;
       break;

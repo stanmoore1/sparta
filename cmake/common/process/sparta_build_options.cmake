@@ -208,7 +208,7 @@ endif()
   #   double = double precision for everything (default)
   #   mixed  = single precision for velocities, energies and per-particle
   #            arithmetic; double for positions, geometry, and accumulations
-  #   single = single precision for everything
+  #   single = single precision also for positions and geometry; tallies stay double
   # host (non-KOKKOS) data structures are always double precision
   string(TOLOWER ${KOKKOS_PREC} KOKKOS_PREC)
   if(KOKKOS_PREC STREQUAL "double")

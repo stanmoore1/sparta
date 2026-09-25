@@ -177,7 +177,7 @@ void ComputeSonineGridKokkos::operator()(TagComputeSonineGrid_compute_vcom_init_
   const int icell = d_particles[i].icell;
   if (!(d_cinfo[icell].mask & groupbit)) return;
 
-  const KK_FLOAT mass = d_species[ispecies].mass;
+  const KK_ACC_FLOAT mass = d_species[ispecies].mass;
   KK_FLOAT *v = d_particles[i].v;
 
   a_vcom_tally(icell,igroup,0) += mass * v[0];
@@ -202,7 +202,7 @@ void ComputeSonineGridKokkos::operator()(TagComputeSonineGrid_compute_vcom, cons
     if (igroup < 0) continue;
     if (!(d_cinfo[icell].mask & groupbit)) continue;
 
-    const KK_FLOAT mass = d_species[ispecies].mass;
+    const KK_ACC_FLOAT mass = d_species[ispecies].mass;
     KK_FLOAT *v = d_particles[i].v;
 
     d_vcom(icell,igroup,0) += mass * v[0];
@@ -254,18 +254,18 @@ void ComputeSonineGridKokkos::operator()(TagComputeSonineGrid_compute_per_grid_a
 
   int k = igroup*npergroup;
 
-  const KK_FLOAT mass = d_species[ispecies].mass;
+  const KK_ACC_FLOAT mass = d_species[ispecies].mass;
   KK_FLOAT *v = d_particles[i].v;
   a_tally(icell,k++) += mass;
 
-  KK_FLOAT vthermal[3];
-  KK_FLOAT csq;
+  KK_ACC_FLOAT vthermal[3];
+  KK_ACC_FLOAT csq;
   vthermal[0] = v[0] - d_vcom(icell,igroup,0);
   vthermal[1] = v[1] - d_vcom(icell,igroup,1);
   vthermal[2] = v[2] - d_vcom(icell,igroup,2);
   csq = vthermal[0]*vthermal[0] + vthermal[1]*vthermal[1] + vthermal[2]*vthermal[2];
 
-  KK_FLOAT value;
+  KK_ACC_FLOAT value;
   for (int m=0; m<nvalue; m++) {
     if (d_which[m] == AMOM) {
       value = mass*vthermal[d_moment[m]] * csq;
@@ -301,19 +301,19 @@ void ComputeSonineGridKokkos::operator()(TagComputeSonineGrid_compute_per_grid, 
     if (igroup < 0) continue;
     if (!(d_cinfo[icell].mask & groupbit)) continue;
 
-    const KK_FLOAT mass = d_species[ispecies].mass;
+    const KK_ACC_FLOAT mass = d_species[ispecies].mass;
     KK_FLOAT *v = d_particles[i].v;
 
     int k = igroup*npergroup;
 
-    KK_FLOAT vthermal[3];
-    KK_FLOAT csq;
+    KK_ACC_FLOAT vthermal[3];
+    KK_ACC_FLOAT csq;
     vthermal[0] = v[0] - d_vcom(icell,igroup,0);
     vthermal[1] = v[1] - d_vcom(icell,igroup,1);
     vthermal[2] = v[2] - d_vcom(icell,igroup,2);
     csq = vthermal[0]*vthermal[0] + vthermal[1]*vthermal[1] + vthermal[2]*vthermal[2];
 
-    KK_FLOAT value;
+    KK_ACC_FLOAT value;
     for (int m=0; m<nvalue; m++) {
       if (d_which[m] == AMOM) {
         value = mass*vthermal[d_moment[m]] * csq;

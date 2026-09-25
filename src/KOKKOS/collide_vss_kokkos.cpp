@@ -4032,8 +4032,8 @@ void CollideVSSKokkos::SCATTER_TwoBodyScattering(OnePartKK *ip,
   KK_FLOAT *vj = jp->v;
   int isp = ip->ispecies;
   int jsp = jp->ispecies;
-  KK_FLOAT mass_i = d_species[isp].mass;
-  KK_FLOAT mass_j = d_species[jsp].mass;
+  double mass_i = d_species[isp].mass;  // KK_DOUBLE: precision_map.json keep_double_identifiers
+  double mass_j = d_species[jsp].mass;  // KK_DOUBLE: precision_map.json keep_double_identifiers
 
   KK_FLOAT alpha_r = static_cast<KK_FLOAT>(1.0) / d_params(isp,jsp).alpha;
 
@@ -4240,16 +4240,16 @@ void CollideVSSKokkos::SCATTER_ThreeBodyScattering(OnePartKK *ip,
   int isp = ip->ispecies;
   int jsp = jp->ispecies;
   int ksp = kp->ispecies;
-  KK_FLOAT mass_i = d_species[isp].mass;
-  KK_FLOAT mass_j = d_species[jsp].mass;
-  KK_FLOAT mass_k = d_species[ksp].mass;
-  KK_FLOAT mass_ij = mass_i + mass_j;
+  double mass_i = d_species[isp].mass;  // KK_DOUBLE: precision_map.json keep_double_identifiers
+  double mass_j = d_species[jsp].mass;  // KK_DOUBLE: precision_map.json keep_double_identifiers
+  double mass_k = d_species[ksp].mass;  // KK_DOUBLE: precision_map.json keep_double_identifiers
+  double mass_ij = mass_i + mass_j;  // KK_DOUBLE: precision_map.json keep_double_identifiers
   KK_FLOAT *vi = ip->v;
   KK_FLOAT *vj = jp->v;
   KK_FLOAT *vk = kp->v;
 
   KK_FLOAT alpha_r = static_cast<KK_FLOAT>(1.0) / d_params(isp,jsp).alpha;
-  KK_FLOAT mr = mass_ij * mass_k / (mass_ij + mass_k);
+  double mr = mass_ij * mass_k / (mass_ij + mass_k);  // KK_DOUBLE: precision_map.json keep_double_identifiers
   postcoln.eint = ip->erot + jp->erot + ip->evib + jp->evib
                 + kp->erot + kp->evib;
 

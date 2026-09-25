@@ -74,8 +74,8 @@ class ComputeReactBoundaryKokkos : public ComputeReactBoundary, public KokkosBas
 
     if (rpflag) {
       for (int i = 0; i < ntotal; i++)
-        if (d_reaction2col(reaction,i)) a_myarray(iface,i) += static_cast<KK_FLOAT>(1.0);
-    } else a_myarray(iface,reaction) += static_cast<KK_FLOAT>(1.0);
+        if (d_reaction2col(reaction,i)) a_myarray(iface,i) += static_cast<KK_ACC_FLOAT>(1.0);
+    } else a_myarray(iface,reaction) += static_cast<KK_ACC_FLOAT>(1.0);
   }
 
  private:

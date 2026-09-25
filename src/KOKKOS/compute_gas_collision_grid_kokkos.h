@@ -69,7 +69,7 @@ class ComputeGasCollisionGridKokkos : public ComputeGasCollisionGrid, public Kok
 
     // tally the collision to its grid cell
 
-    d_vector_grid(icell) += static_cast<KK_FLOAT>(1.0);
+    d_vector_grid(icell) += static_cast<KK_ACC_FLOAT>(1.0);
   }
 
  private:

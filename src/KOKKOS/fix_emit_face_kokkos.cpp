@@ -625,7 +625,7 @@ void FixEmitFaceKokkos::operator()(TagFixEmitFace_subsonic_inflow, const int &i)
 
   KK_FLOAT ntarget = 0.0;
   for (int isp = 0; isp < nspecies; isp++) {
-    const KK_FLOAT mass = d_species_all[d_mspecies[isp]].mass;
+    const KK_ACC_FLOAT mass = d_species_all[d_mspecies[isp]].mass;
     const KK_FLOAT vscale = Kokkos::sqrt(static_cast<KK_FLOAT>(2.0) * boltz * temp_thermal / mass);
     KK_FLOAT ntargetsp = mol_inflow_kokkos(indot,vscale,d_fraction[isp]);
     ntargetsp *= nrho*area*dt / fnum;
@@ -738,9 +738,9 @@ void FixEmitFaceKokkos::operator()(TagFixEmitFace_subsonic_grid, const int &i) c
   // mv = mass*velocity terms, masstot = total mass
   // gamma = rotational/tranlational DOFs
 
-  KK_FLOAT mv[4];
+  KK_ACC_FLOAT mv[4];
   mv[0] = mv[1] = mv[2] = mv[3] = 0.0;
-  KK_FLOAT masstot = 0.0;
+  KK_ACC_FLOAT masstot = 0.0;
   KK_FLOAT gamma = 0.0;
 
   // d_plist orders particles by increasing index.  The non-Kokkos path walks
@@ -760,7 +760,7 @@ void FixEmitFaceKokkos::operator()(TagFixEmitFace_subsonic_grid, const int &i) c
 #endif
     const int ip = d_plist(icell,n);
     const int ispecies = d_particles[ip].ispecies;
-    const KK_FLOAT mass = d_species_all[ispecies].mass;
+    const KK_ACC_FLOAT mass = d_species_all[ispecies].mass;
     const KK_FLOAT *v = d_particles[ip].v;
     mv[0] += mass*v[0];
     mv[1] += mass*v[1];
@@ -782,33 +782,33 @@ void FixEmitFaceKokkos::operator()(TagFixEmitFace_subsonic_grid, const int &i) c
     vstream[2] = mv[2] / masstot;
   } else vstream[0] = vstream[1] = vstream[2] = 0.0;
 
-  KK_FLOAT temp_thermal_cell;
+  KK_ACC_FLOAT temp_thermal_cell;
 
   if (subsonic_style == PTBOTH) {
     d_tasks(i).nrho = nsubsonic;
     temp_thermal_cell = tsubsonic;
 
   } else {
-    const KK_FLOAT nrho_cell = np * fnum / d_cinfo[icell].volume;
-    const KK_FLOAT massrho_cell = masstot * fnum / d_cinfo[icell].volume;
+    const KK_ACC_FLOAT nrho_cell = np * fnum / d_cinfo[icell].volume;
+    const KK_ACC_FLOAT massrho_cell = masstot * fnum / d_cinfo[icell].volume;
     if (np > 1) {
-      const KK_FLOAT ke = mv[3]/np -
+      const KK_ACC_FLOAT ke = mv[3]/np -
         (mv[0]*mv[0] + mv[1]*mv[1] + mv[2]*mv[2])/np/masstot;
       temp_thermal_cell = tprefactor * ke;
     } else temp_thermal_cell = temp_thermal_mix;
 
-    const KK_FLOAT press_cell = nrho_cell * boltz * temp_thermal_cell;
-    KK_FLOAT soundspeed_cell;
+    const KK_ACC_FLOAT press_cell = nrho_cell * boltz * temp_thermal_cell;
+    KK_ACC_FLOAT soundspeed_cell;
     if (np) {
-      const KK_FLOAT mass_cell = masstot / np;
-      const KK_FLOAT gamma_cell = gamma / np;
+      const KK_ACC_FLOAT mass_cell = masstot / np;
+      const KK_ACC_FLOAT gamma_cell = gamma / np;
       soundspeed_cell = Kokkos::sqrt(gamma_cell*boltz*temp_thermal_cell / mass_cell);
     } else soundspeed_cell = soundspeed_mixture;
 
     d_tasks(i).nrho = nrho_cell +
       (psubsonic - press_cell) / (soundspeed_cell*soundspeed_cell);
     temp_thermal_cell = psubsonic / (boltz * d_tasks(i).nrho);
-    if (!subsonic_warning && temp_thermal_cell > static_cast<KK_FLOAT>(TEMPLIMIT))
+    if (!subsonic_warning && temp_thermal_cell > static_cast<KK_ACC_FLOAT>(TEMPLIMIT))
       Kokkos::atomic_max(&d_tempmax(),temp_thermal_cell);
 
     if (np) {

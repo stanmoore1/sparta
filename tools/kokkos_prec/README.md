@@ -15,7 +15,14 @@ The approach follows the LAMMPS KOKKOS package (`-D KOKKOS_PREC=...`).
 |----------------|--------|--------|--------|----------|
 | `KK_FLOAT`     | double | float  | float  | velocities, rotational/vibrational energies, collision, reaction and surface collision arithmetic |
 | `KK_POS_FLOAT` | double | double | float  | particle positions, remaining timestep, grid cell and surface element coordinates, particle move and geometry kernels |
-| `KK_ACC_FLOAT` | double | double | float  | per-grid/per-surf tallies and other accumulations |
+| `KK_ACC_FLOAT` | double | double | double | per-grid/per-surf tallies and other accumulations, and the per-cell statistics computed from them |
+
+`KK_ACC_FLOAT` stays double in a single precision build.  SPARTA uses SI
+units, where a molecular mass is ~1e-26 kg: the per-cell moments computed
+from mass weighted sums, e.g. (sum m v)^2 / sum m in a thermal temperature
+or (sum m v)^3 / (sum m)^2 in `compute eflux/grid`, underflow single
+precision.  For the same reason masses and reduced masses are kept double
+in device code (`keep_double_identifiers`).
 
 Global reductions (temperature, `compute reduce`, ...) always reduce into
 `double`.  Random numbers are always generated in double precision and each
