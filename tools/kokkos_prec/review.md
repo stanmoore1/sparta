@@ -203,8 +203,8 @@ construct the conversion cannot decide automatically.
 | update_kokkos.cpp | 1342 | atomic on a view: check floating point atomics use the intended precision (device) | `indx = Kokkos::atomic_fetch_add(&d_nmigrate(),1);` |
 | update_kokkos.cpp | 1391 | atomic on a view: check floating point atomics use the intended precision (device) | `Kokkos::atomic_add(&d_nboundary_one(),nb);` |
 | update_kokkos.cpp | 1419 | atomic on a view: check floating point atomics use the intended precision (device) | `indx = Kokkos::atomic_fetch_add(&d_nmigrate(),1);` |
-| update_kokkos.cpp | 1630 | atomic on a view: check floating point atomics use the intended precision (device) | `Kokkos::atomic_add(&d_nscheck_one(),nsurf);` |
-| update_kokkos.cpp | 1883 | tiny absolute tolerance, below float resolution (device) | `if (minparam <= kk_eps<KK_POS_FLOAT>(1.0e-14,1.0e-6)) stuck_iterate++;` |
-| update_kokkos.cpp | 2079 | memcpy: check element types/sizes of source and destination (device) | `memcpy(&iorig,&particle_i,sizeof(OnePartKK));` |
-| update_kokkos.cpp | 2269 | atomic on a view: check floating point atomics use the intended precision (device) | `index = Kokkos::atomic_fetch_add(&d_nmigrate(),1);` |
-| update_kokkos.cpp | 2688 | memcpy: check element types/sizes of source and destination (host) | `memcpy((void*) dst, (const void*) ((T *) base), sizeof(T));` |
+| update_kokkos.cpp | 1640 | atomic on a view: check floating point atomics use the intended precision (device) | `Kokkos::atomic_add(&d_nscheck_one(),nsurf);` |
+| update_kokkos.cpp | 1893 | tiny absolute tolerance, below float resolution (device) | `if (minparam <= kk_eps<KK_POS_FLOAT>(1.0e-14,1.0e-6)) stuck_iterate++;` |
+| update_kokkos.cpp | 2089 | memcpy: check element types/sizes of source and destination (device) | `memcpy(&iorig,&particle_i,sizeof(OnePartKK));` |
+| update_kokkos.cpp | 2279 | atomic on a view: check floating point atomics use the intended precision (device) | `index = Kokkos::atomic_fetch_add(&d_nmigrate(),1);` |
+| update_kokkos.cpp | 2698 | memcpy: check element types/sizes of source and destination (host) | `memcpy((void*) dst, (const void*) ((T *) base), sizeof(T));` |

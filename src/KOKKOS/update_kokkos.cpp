@@ -1600,6 +1600,16 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
       }
     }
 
+    // in single precision x + dtremain*v can round to x, so a particle can
+    //   end up exactly on a cell face with dtremain = 0.  With no motion
+    //   left it must not cross the face: at a reflecting boundary it would
+    //   otherwise be reflected back and forth forever.  Only done for float
+    //   positions, so a double precision build is unchanged.
+
+    if constexpr (std::is_same_v<KK_POS_FLOAT,float>) {
+      if (dtremain == static_cast<KK_POS_FLOAT>(0.0)) outface = INTERIOR;
+    }
+
 #ifdef MOVE_DEBUG
     if (ntimestep == MOVE_DEBUG_STEP &&
         (MOVE_DEBUG_ID == d_particles[i].id ||
