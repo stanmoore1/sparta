@@ -29,6 +29,7 @@ SurfCollideStyle(piston/kk,SurfCollidePistonKokkos)
 #include "kokkos_copy.h"
 #include "fix_ambipolar_kokkos.h"
 #include "fix_vibmode_kokkos.h"
+#include "fix_elecmode_kokkos.h"
 #include "surf_react_global_kokkos.h"
 #include "surf_react_prob_kokkos.h"
 #include "surf_react_adsorb_kokkos.h"
@@ -67,11 +68,13 @@ class SurfCollidePistonKokkos : public SurfCollidePiston {
 
   t_particle_1d d_particles;
 
-  int ambi_flag,vibmode_flag;
+  int ambi_flag,vibmode_flag,elecmode_flag;
   FixAmbipolarKokkos* afix_kk;
   FixVibmodeKokkos* vfix_kk;
+  FixElecmodeKokkos* efix_kk;
   KKCopy<FixAmbipolarKokkos> fix_ambi_kk_copy;
   KKCopy<FixVibmodeKokkos> fix_vibmode_kk_copy;
+  KKCopy<FixElecmodeKokkos> fix_elecmode_kk_copy;
 
   // the active surf react models this model may dispatch to, partitioned by
   //   style.  Two representations, selected by SPARTA_KOKKOS_FIXED_LISTS (see
@@ -133,7 +136,8 @@ class SurfCollidePistonKokkos : public SurfCollidePiston {
     //   KK_SR_TYPE(-1) reads out of bounds and dispatches on garbage
 
     if (REACT && isr >= 0) {
-      if (ambi_flag || vibmode_flag) memcpy(&iorig,ip,sizeof(Particle::OnePart));
+      if (ambi_flag || vibmode_flag || elecmode_flag)
+        memcpy(&iorig,ip,sizeof(Particle::OnePart));
 
       int sr_type = KK_SR_TYPE(isr);
       int m = KK_SR_MAP(isr);
@@ -220,6 +224,13 @@ class SurfCollidePistonKokkos : public SurfCollidePiston {
     // call any fixes with a surf_react() method
     // they may reset j to -1, e.g. fix ambipolar
     //   in which case newly created j is deleted
+
+    // fix elecmode: a species change keeps a stale electronic state,
+    //   since this model does not resample internal energy (matches
+    //   FixElecmode::surf_react() on the host)
+
+    if (REACT && reaction && elecmode_flag && ip)
+      fix_elecmode_kk_copy.obj.surf_react_kokkos(&iorig,ip - d_particles.data());
 
     if (REACT && reaction && ambi_flag) {
       int i = -1;

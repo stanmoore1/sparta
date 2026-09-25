@@ -394,9 +394,10 @@ def main():
     sig = lambda name: ROT[name][1]
     check("symmetry numbers N2=2 NO=1", sig("N2")==2 and sig("NO")==1)
 
-    print("check 6: error paths reject invalid B-style inputs")
+    print("check 6: error paths reject invalid B-style inputs; unsupported "
+          "styles switch B lines off")
     def expect_error(tag, tce_text, msg_frag, deck="in.reverse_rate",
-                     react_style_line=None):
+                     react_style_line=None, edits=()):
         wd = os.path.join(HERE,"work_validate","err_"+tag)
         os.makedirs(wd, exist_ok=True)
         for f in ("air.species","air.vss","air.rot","air.elec",
@@ -406,6 +407,7 @@ def main():
         dk = open(os.path.join(wd,deck)).read()
         if react_style_line:
             dk = dk.replace("react           tce rev.tce", react_style_line)
+        for a,b in edits: dk = dk.replace(a,b)
         open(os.path.join(wd,deck),"w").write(dk)
         cmd = [exe] + extra + ["-in", deck, "-log", "log.sparta",
                "-var","T","15000.0","-var","RB","1000.0",
@@ -423,10 +425,48 @@ def main():
         "N2 + N --> N + N + N\nD A 1.0 1.561e-18 4.980e-8 -1.5 -1.561e-18\n"
         "\nN + N --> N2 + atom\nR B 0.0 0.0 0.0 0.0 0.0\n",
         "explicit third-body species")
-    expect_error("qkstyle",
+    # a rotating species without rotfile data would silently get q_rot = 1
+    expect_error("norotfile",
         "N2 + O --> NO + N\nE A 0.0 5.175e-19 1.069e-12 -1.0 -5.175e-19\n"
         "\nNO + N --> N2 + O\nE B 0.0 0.0 0.0 0.0 0.0\n",
-        "require react tce",
+        "needs the rotational temperature",
+        edits=(("rotfile air.rot ",""),))
+    # reverse auto is an explicit request: error with the partial-energy model
+    expect_error("autopartial",
+        "N2 + O --> NO + N\nE A 0.0 5.175e-19 1.069e-12 -1.0 -5.175e-19\n",
+        "reverse auto requires react_modify partial_energy no",
+        edits=(("partial_energy no","partial_energy yes reverse auto"),))
+
+    # the qk and tce/qk styles do not implement reverse rates: B lines are
+    # switched off with a warning (so a file carrying reverses still runs
+    # forward-only), rather than aborting the run.  tce/qk rejects
+    # compute_chem_rates, so drop it here, and a few steps suffice
+
+    def expect_warning(tag, tce_text, msg_frag, react_style_line):
+        wd = os.path.join(HERE,"work_validate","warn_"+tag)
+        os.makedirs(wd, exist_ok=True)
+        for f in ("air.species","air.vss","air.rot","air.elec",
+                  "in.reverse_rate"):
+            shutil.copy(os.path.join(HERE,f), wd)
+        open(os.path.join(wd,"rev.tce"),"w").write(tce_text)
+        dk = open(os.path.join(wd,"in.reverse_rate")).read()
+        dk = dk.replace("react           tce rev.tce", react_style_line)
+        dk = dk.replace("compute_chem_rates yes ", "")
+        dk = dk.replace("run             2000", "run             10")
+        open(os.path.join(wd,"in.reverse_rate"),"w").write(dk)
+        cmd = [exe] + extra + ["-in", "in.reverse_rate", "-log", "log.sparta",
+               "-var","T","15000.0","-var","RB","1000.0",
+               "-var","NRHO","7.07043e22","-var","FNUM","1.767e6"]
+        r = subprocess.run(cmd, cwd=wd, capture_output=True, text=True,
+                           timeout=600)
+        out = (r.stdout or "") + (r.stderr or "")
+        check("%s: run completes with warning '%s'" % (tag, msg_frag),
+              r.returncode == 0 and "ERROR" not in out and msg_frag in out)
+
+    expect_warning("qkstyle",
+        "N2 + O --> NO + N\nE A 0.0 5.175e-19 1.069e-12 -1.0 -5.175e-19\n"
+        "\nNO + N --> N2 + O\nE B 0.0 0.0 0.0 0.0 0.0\n",
+        "1 reverse (B-style) reaction(s) deactivated",
         react_style_line="react           tce/qk rev.tce")
 
     # forward-only reaction file for the auto-reverse checks

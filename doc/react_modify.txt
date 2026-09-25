@@ -129,10 +129,17 @@ recombination, and every 2-product (associative) ionization gains the
 corresponding dissociative recombination as an exchange reverse.  A forward reaction is skipped if the file already
 contains any reverse for it -- an explicit B line, an independently
 fitted reverse rate, or a wildcard (atom/mol) recombination covering
-the same product -- so existing reaction sets are not double counted.
-Generated reactions appear in the reaction tallies under their
-constructed formula.  Setting {reverse} back to {no} before a later
-run makes the generated reactions inert.
+the same product and third body (atom covers third bodies without
+vibrational modes, mol those with) -- so existing reaction sets are
+not double counted.  Generated recombinations obey the {recomb}
+keyword like any other recombination.  Generated reactions appear in
+the reaction tallies under their constructed formula, and are
+appended after the reactions of the file, so "compute
+gas/reaction/grid"_compute_gas_reaction_grid.html with {every} gains
+a column for each of them.  Setting {reverse} back to {no} before a
+later run makes the generated reactions inert.  {Reverse} {auto}
+requires the "react tce"_react.html style and {partial_energy} {no};
+it is an error otherwise.
 
 The {keq_file} keyword supplies equilibrium-constant curve fits that
 replace the internally computed partition functions for the reverse

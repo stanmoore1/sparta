@@ -131,10 +131,17 @@ reaction with an explicit third-body species gains the corresponding
 recombination.  A forward reaction is skipped if the file already
 contains any reverse for it -- an explicit B line, an independently
 fitted reverse rate, or a wildcard (atom/mol) recombination covering
-the same product -- so existing reaction sets are not double counted.
-Generated reactions appear in the reaction tallies under their
-constructed formula.  Setting <I>reverse</I> back to <I>no</I> before a later
-run makes the generated reactions inert.
+the same product and third body (atom covers third bodies without
+vibrational modes, mol those with) -- so existing reaction sets are
+not double counted.  Generated recombinations obey the <I>recomb</I>
+keyword like any other recombination.  Generated reactions appear in
+the reaction tallies under their constructed formula, and are
+appended after the reactions of the file, so <A HREF = "compute_gas_reaction_grid.html">compute
+gas/reaction/grid</A> with <I>every</I> gains
+a column for each of them.  Setting <I>reverse</I> back to <I>no</I> before a
+later run makes the generated reactions inert.  <I>Reverse</I> <I>auto</I>
+requires the <A HREF = "react.html">react tce</A> style and <I>partial_energy</I> <I>no</I>;
+it is an error otherwise.
 </P>
 <P>The <I>keq_file</I> keyword supplies equilibrium-constant curve fits that
 replace the internally computed partition functions for the reverse

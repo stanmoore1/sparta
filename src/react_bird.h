@@ -107,6 +107,11 @@ class ReactBird : public React {
                                    //   reaction, applied at the cell
                                    //   temperature in the backward
                                    //   recombination prefactor
+    double a_raw;                  // Arrhenius prefactor as read from the
+                                   //   file, saved before the TCE transform
+                                   //   overwrites coeff[2], so a reverse
+                                   //   generated or paired in a later run
+                                   //   is still seeded with the raw value
     double reverse_A;              // raw Arrhenius prefactor of the forward
                                    //   reaction (stashed before the TCE
                                    //   transform), used to calibrate the
@@ -175,6 +180,11 @@ class ReactBird : public React {
   int nkeqfits;
 
   int generated_flag;              // 1 once auto-reverses were generated
+  int tce_style;                   // 1 for the tce styles (set by their
+                                   //   constructors), whose Arrhenius
+                                   //   probability carries the TCE Gamma
+                                   //   normalization and which implement
+                                   //   detailed-balance reverse reactions
 
   void readfile(char *);
   int readone(char *, char *, int &, int &);
@@ -185,7 +195,7 @@ class ReactBird : public React {
   int max_nelecstate();
   void build_db_table(int);
   void build_db3_table(int);
-  void generate_reverses();
+  void generate_reverses(int *);
   void read_keq_file();
   void assign_keq_fits();
   void fit_keq_residual(int);

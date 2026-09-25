@@ -352,15 +352,20 @@ recombination exactly as microscopic reversibility of the forward
 dissociation demands, and the thermal average again reproduces
 k_f(T)/K_eq(T) at every temperature with no cell temperature
 evaluated.  Reverse reactions require
-<A HREF = "react_modify.html">react_modify</A> <I>partial_energy</I> <I>no</I> (the
-default).
+<A HREF = "react_modify.html">react_modify</A> <I>partial_energy</I> <I>no</I>; the default
+is <I>yes</I>.  With <I>partial_energy</I> <I>yes</I>, B lines in the reaction file
+are switched off with a warning and the forward reactions run alone,
+so a reaction file that carries reverses (such as data/air.tce) can
+still be used with the default partial-energy model.
 </P>
 <P>For quantitatively correct equilibrium constants, define a <I>rotfile</I>
 with the rotational symmetry numbers of homonuclear molecules and an
 <I>elecfile</I> with at least the ground-state degeneracies of each species
 (see the <A HREF = "species.html">species</A> command): for N2 + O <-> NO + N the
 ground-state electronic degeneracies alone change K_eq by a factor of
-~1.8 and the N2 symmetry number by a further factor of 2.  See
+~1.8 and the N2 symmetry number by a further factor of 2.  A
+<I>rotfile</I> entry is required for every rotating species that takes part
+in an active reverse reaction; it is an error if one is missing.  See
 examples/reverse for a complete worked example and
 examples/reverse/validate_reverse.py for a quantitative validation
 against independently computed equilibrium constants.  Instead of
@@ -372,8 +377,11 @@ partition functions when a published chemistry set's backward rates
 must be reproduced exactly.
 </P>
 <P>The B style requires the <A HREF = "react.html">react tce</A> style (with or without
-<A HREF = "react_modify.html">react_modify</A> <I>compute_chem_rates</I>); it is an error
-with the qk and tce/qk styles.  Reactions between charged and neutral
+<A HREF = "react_modify.html">react_modify</A> <I>compute_chem_rates</I>); with the qk
+and tce/qk styles, B lines are switched off with a warning.  A reverse
+reaction is also switched off, with a warning, if its forward reaction
+is inactive, e.g. because its temperature exponent is outside the
+range the TCE model allows.  Reactions between charged and neutral
 heavy species are fully supported: a charge-exchange reaction such as
 A+ + B --> A + B+ is an exchange (E) reaction and pairs with a B-style
 reverse like any other exchange, since no free electron participates

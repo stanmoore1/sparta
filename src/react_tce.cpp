@@ -32,7 +32,7 @@ enum{DISSOCIATION,EXCHANGE,IONIZATION,RECOMBINATION};   // other files
 /* ---------------------------------------------------------------------- */
 
 ReactTCE::ReactTCE(SPARTA *sparta, int narg, char **arg) :
-  ReactBird(sparta, narg, arg) { probwarnflag = 0; }
+  ReactBird(sparta, narg, arg) { probwarnflag = 0; tce_style = 1; }
 
 /* ---------------------------------------------------------------------- */
 
@@ -44,15 +44,6 @@ void ReactTCE::init()
   probwarnflag = 0;
 
   ReactBird::init();
-
-  // reverse exchange reactions are implemented by microcanonical
-  // detailed-balance tables, which are built on the total-energy model
-
-  if (partialEnergy)
-    for (int i = 0; i < nlist; i++)
-      if (rlist[i].active && rlist[i].reverse)
-        error->all(FLERR,"Reverse (B-style) reactions require "
-                   "react_modify partial_energy no");
 
   // custom electronic energy of the 3rd particle, needed by the 3-body
   // detailed-balance probability of a reverse recombination
@@ -220,11 +211,12 @@ double ReactTCE::channel_prob(int rindex, Particle::OnePart *ip,
 
   OneReaction *r = &rlist[rindex];
 
-    // a channel switched off by check_tce_bounds() (temperature exponent
-    // outside the TCE validity range) must contribute nothing: its
-    // probability would be negative, which would also corrupt the pair's
-    // cumulative channel sum in attempt().  The per-pair reaction lists are
-    // built before that check runs, so the channel is still listed here
+    // an inactive channel (e.g. switched off by check_tce_bounds() for a
+    // temperature exponent outside the TCE validity range) must contribute
+    // nothing: its probability could be negative, which would also corrupt
+    // the pair's cumulative channel sum in attempt().  ReactBird::init()
+    // builds the per-pair lists after all deactivations, so this is only
+    // a safeguard (matched in ReactTCEKokkos::channel_prob_kk)
 
     if (!r->active) return 0.0;
 

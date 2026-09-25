@@ -73,15 +73,7 @@ ComputeGasReactionGrid::ComputeGasReactionGrid(SPARTA *sparta, int narg, char **
     }
   }
 
-  // convert selectlist to reaction2col
-  // reaction2col[I] = column index (0 to Ncol-1) in array_grid for reaction I (1 to M)
-
-  if (mode == SELECT) {
-    reaction2col = new int[react->nlist + 1];
-    for (int i = 0; i <= react->nlist; i++) reaction2col[i] = -1;
-    for (int icol = 0; icol < ncol; icol++)
-      reaction2col[selectlist[icol]] = icol;
-  }
+  // selectlist is converted to reaction2col in init()
 
   // setup
 
@@ -113,6 +105,30 @@ ComputeGasReactionGrid::~ComputeGasReactionGrid()
 
 void ComputeGasReactionGrid::init()
 {
+  // react_modify reverse auto appends the generated reverse reactions to
+  //   the reaction list when the reaction model is initialized, after this
+  //   compute was created, so react->nlist can exceed its value at creation
+  // EVERY mode: one column per reaction, so add columns for the generated
+  //   reactions and force reallocate() to resize array_grid
+  // SELECT mode: rebuild reaction2col over the current reaction list;
+  //   generated reactions were not selectable, so they map to no column
+  // reaction2col[I] = column index (0 to Ncol-1) in array_grid for reaction I (1 to M)
+
+  int nlist = react->nlist;
+
+  if (mode == EVERY && ncol != nlist) {
+    ncol = size_per_grid_cols = nlist;
+    nglocal = -1;
+  }
+
+  if (mode == SELECT) {
+    delete [] reaction2col;
+    reaction2col = new int[nlist + 1];
+    for (int i = 0; i <= nlist; i++) reaction2col[i] = -1;
+    for (int icol = 0; icol < ncol; icol++)
+      reaction2col[selectlist[icol]] = icol;
+  }
+
   reallocate();
 }
 

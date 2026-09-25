@@ -40,6 +40,9 @@ class FixElecmodeKokkos : public FixElecmode {
   KOKKOS_INLINE_FUNCTION
   void update_custom_kokkos(int, double, double, double, double, const double *) const;
 
+  KOKKOS_INLINE_FUNCTION
+  void surf_react_kokkos(Particle::OnePart *, int) const;
+
  private:
   double boltz;
   int elecstyle;
@@ -62,60 +65,45 @@ class FixElecmodeKokkos : public FixElecmode {
   DAT::t_int_1d d_elecstate;
   DAT::t_int_1d d_nelecstates;
   t_elecstate_2d d_elecstates;
-  DAT::t_float_2d d_cumulative_probabilities;
 
   KOKKOS_INLINE_FUNCTION
-  void electronic_distribution_func(int, int, double) const;
-
-  KOKKOS_INLINE_FUNCTION
-  int ielec(int, int, double, rand_type &) const;
+  int ielec(int, double, rand_type &) const;
 };
 
 /* ---------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-void FixElecmodeKokkos::electronic_distribution_func(int index, int isp, double temp_elec) const
-{
-  auto &d_distribution = d_cumulative_probabilities;
-  double partition_function = 0.0;
-  const int nelecstate = d_nelecstates[isp];
-
-  for (int i = 0; i < nelecstate; ++i) {
-    // Calculate boltzmann fractions
-    d_distribution(index,i) = d_elecstates(isp,i).degen*exp(-d_elecstates(isp,i).temp/temp_elec);
-    // Calculate partition function
-    partition_function += d_distribution(index,i);
-  }
-
-  for (int i = 0; i < nelecstate; ++i)
-    d_distribution(index,i) /= partition_function;
-}
-
-/* ---------------------------------------------------------------------- */
-
-KOKKOS_INLINE_FUNCTION
-int FixElecmodeKokkos::ielec(int index, int isp, double temp_elec, rand_type &erandom) const
+int FixElecmodeKokkos::ielec(int isp, double temp_elec, rand_type &erandom) const
 {
   enum{NONE,DISCRETE,SMOOTH};            // several files
 
   int ielec = 0;
 
   if (elecstyle == DISCRETE) {
-    int nelecstate = d_nelecstates[isp];
+    const int nelecstate = d_nelecstates[isp];
     if (!nelecstate) return 0;
 
-    electronic_distribution_func(index, isp, temp_elec);
+    // sample the Boltzmann distribution over the species' states, with the
+    // cumulative probabilities evaluated on the fly (no per-particle
+    // scratch array); same arithmetic as the CPU FixElecmode, so the
+    // selected state is identical for the same random number
 
-    for (int i = 1; i < nelecstate; ++i)
-      d_cumulative_probabilities(index,i) += d_cumulative_probabilities(index,i-1);
+    double partition_function = 0.0;
+    for (int i = 0; i < nelecstate; ++i)
+      partition_function +=
+        d_elecstates(isp,i).degen*exp(-d_elecstates(isp,i).temp/temp_elec);
 
     double ran = erandom.drand();
+    double cumulative = 0.0;
     ielec = 0;
     // bound the search: floating-point roundoff can leave ran above the
     // final cumulative entry, which would index past the last state
-    while (ielec < nelecstate-1 &&
-           ran > d_cumulative_probabilities(index,ielec))
+    while (ielec < nelecstate-1) {
+      cumulative += d_elecstates(isp,ielec).degen *
+        exp(-d_elecstates(isp,ielec).temp/temp_elec) / partition_function;
+      if (!(ran > cumulative)) break;
       ++ielec;
+    }
   }
   return ielec;
 }
@@ -140,10 +128,37 @@ void FixElecmodeKokkos::update_custom_kokkos(int index, double temp_thermal,
 
   rand_type rand_gen = rand_pool.get_state();
 
-  d_elecstate[index] = ielec(index,isp,temp_elec,rand_gen);
+  d_elecstate[index] = ielec(isp,temp_elec,rand_gen);
   d_eelec[index] = boltz*d_elecstates(isp,d_elecstate[index]).temp;
 
   rand_pool.free_state(rand_gen);
+}
+
+/* ----------------------------------------------------------------------
+   device version of FixElecmode::surf_react(), for surface collision
+     models that do not resample internal energy (specular, piston):
+   after a surface reaction changed particle I's species, keep its state
+     index only if the new species has that state, else reset it to the
+     ground state, and set eelec to the energy of that state
+------------------------------------------------------------------------- */
+
+KOKKOS_INLINE_FUNCTION
+void FixElecmodeKokkos::surf_react_kokkos(Particle::OnePart *iorig, int i) const
+{
+  if (i < 0) return;
+
+  const int isp = d_particles[i].ispecies;
+  if (iorig->ispecies == isp) return;
+
+  const int nstate = d_nelecstates[isp];
+  if (nstate == 0) {
+    d_elecstate[i] = 0;
+    d_eelec[i] = 0.0;
+    return;
+  }
+
+  if (d_elecstate[i] >= nstate) d_elecstate[i] = 0;
+  d_eelec[i] = boltz*d_elecstates(isp,d_elecstate[i]).temp;
 }
 
 }
