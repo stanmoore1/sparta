@@ -95,9 +95,6 @@ void FixElecmodeKokkos::pre_update_custom_kokkos()
   auto k_eivec = particle_kk->k_eivec;
   d_eelec = k_edvec.view_host()[h_ewhich[index_eelec]].k_view.view_device();
   d_elecstate = k_eivec.view_host()[h_ewhich[index_elecstate]].k_view.view_device();
-  if (particle->maxlocal > (int)d_cumulative_probabilities.extent(0) ||
-      particle->maxelecstate > (int)d_cumulative_probabilities.extent(1))
-    MemKK::realloc_kokkos(d_cumulative_probabilities,"cumulative_probabilities",particle->maxlocal,particle->maxelecstate);
 
   elecstyle = NONE;
   if (collide) elecstyle = collide->elecstyle;

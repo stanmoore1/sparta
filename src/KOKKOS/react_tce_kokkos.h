@@ -179,6 +179,10 @@ double channel_prob_kk(int rindex, Particle::OnePart *ip,
 
   OneReactionKokkos *r = &d_rlist[rindex];
 
+    // an inactive channel contributes nothing (matches ReactTCE::channel_prob)
+
+    if (!r->active) return 0.0;
+
     // ignore energetically impossible reactions
 
     const double pre_etotal = pre_etrans + pre_erot + pre_evib + pre_eelec;

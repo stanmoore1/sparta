@@ -99,6 +99,7 @@ ReactBird::ReactBird(SPARTA *sparta, int narg, char **arg) :
   keqfits = NULL;
   nkeqfits = 0;
   generated_flag = 0;
+  tce_style = 0;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -119,6 +120,7 @@ ReactBird::ReactBird(SPARTA *sparta) : React(sparta)
   keqfits = NULL;
   nkeqfits = 0;
   generated_flag = 0;
+  tce_style = 0;
   tally_reactions = NULL;
   tally_reactions_all = NULL;
 }
@@ -165,9 +167,14 @@ void ReactBird::init()
 
   // convert species IDs to species indices
   // flag reactions as active/inactive depending on whether all species exist
-  // mark recombination reactions inactive if recombflag_user = 0
+  // mark recombination reactions inactive if recombflag_user = 0,
+  //   after resolving their species, and remember which ones so that
+  //   generate_reverses() still sees them as providing a reverse
+
+  int *recomb_off = new int[nlist];
 
   for (int m = 0; m < nlist; m++) {
+    recomb_off[m] = 0;
     OneReaction *r = &rlist[m];
     r->active = 1;
     r->keq_flag = 0;
@@ -176,11 +183,6 @@ void ReactBird::init()
     // auto-generated reverse reactions are inert when reverse_auto is off
 
     if (r->generated && !reverse_auto) {
-      r->active = 0;
-      continue;
-    }
-
-    if (r->type == RECOMBINATION && recombflag_user == 0) {
       r->active = 0;
       continue;
     }
@@ -213,69 +215,47 @@ void ReactBird::init()
         break;
       }
     }
+
+    if (r->active && r->type == RECOMBINATION && recombflag_user == 0) {
+      r->active = 0;
+      recomb_off[m] = 1;
+    }
+  }
+
+  // detailed-balance reverse rates are implemented only by the tce styles
+  //   with the total-energy model (react_modify partial_energy no)
+  // otherwise B lines read from a file are switched off with one warning,
+  //   so a file that carries a reverse for every forward reaction (e.g.
+  //   data/air.tce) still runs forward-only, as it did before B lines
+  //   existed; react_modify reverse auto is an explicit request, so an error
+
+  if (!tce_style || partialEnergy) {
+    if (reverse_auto) {
+      if (!tce_style)
+        error->all(FLERR,"React_modify reverse auto requires react tce");
+      error->all(FLERR,"React_modify reverse auto requires "
+                 "react_modify partial_energy no");
+    }
+    int noff = 0;
+    for (int m = 0; m < nlist; m++)
+      if (rlist[m].active && rlist[m].reverse) {
+        rlist[m].active = 0;
+        noff++;
+      }
+    if (noff && comm->me == 0) {
+      char str[256];
+      snprintf(str,sizeof(str),"%d reverse (B-style) reaction(s) "
+               "deactivated: detailed-balance reverse rates require "
+               "react tce with react_modify partial_energy no",noff);
+      error->warning(FLERR,str);
+    }
   }
 
   // auto-generate reverse (B-style) reactions for eligible forward
-  // reactions (react_modify reverse auto), before the per-pair lists
+  // reactions (react_modify reverse auto)
 
-  if (reverse_auto) generate_reverses();
-
-  // count possible active reactions for each species pair
-  // include J,I reactions in I,J list and vice versa
-  // this allows collision pair I,J to be in either order in Collide
-
-  memory->destroy(reactions);
-  int nspecies = particle->nspecies;
-  reactions = memory->create(reactions,nspecies,nspecies,
-                             "react/bird:reactions");
-
-  for (int i = 0; i < nspecies; i++)
-    for (int j = 0; j < nspecies; j++)
-      reactions[i][j].n = 0;
-
-  int n = 0;
-  for (int m = 0; m < nlist; m++) {
-    OneReaction *r = &rlist[m];
-    if (!r->active) continue;
-    int i = r->reactants[0];
-    int j = r->reactants[1];
-    reactions[i][j].n++;
-    n++;
-    if (i == j) continue;
-    reactions[j][i].n++;
-    n++;
-  }
-
-  // allocate list_IJ = contiguous list of reactions for each IJ pair
-
-  memory->destroy(list_ij);
-  memory->create(list_ij,n,"react/bird:list_ij");
-
-  // reactions[i][j].list = pointer into full list_ij vector
-
-  int offset = 0;
-  for (int i = 0; i < nspecies; i++)
-    for (int j = 0; j < nspecies; j++) {
-      reactions[i][j].list = &list_ij[offset];
-      offset += reactions[i][j].n;
-    }
-
-  // reactions[i][j].list = indices of reactions for each species pair
-  // include J,I reactions in I,J list and vice versa
-
-  for (int i = 0; i < nspecies; i++)
-    for (int j = 0; j < nspecies; j++)
-      reactions[i][j].n = 0;
-
-  for (int m = 0; m < nlist; m++) {
-    OneReaction *r = &rlist[m];
-    if (!r->active) continue;
-    int i = r->reactants[0];
-    int j = r->reactants[1];
-    reactions[i][j].list[reactions[i][j].n++] = m;
-    if (i == j) continue;
-    reactions[j][i].list[reactions[j][i].n++] = m;
-  }
+  if (reverse_auto) generate_reverses(recomb_off);
+  delete [] recomb_off;
 
   // issue #472: pair each reverse (detailed-balance, B-style) reaction with
   //   its forward partner and seed the backward Arrhenius coefficients.
@@ -377,10 +357,15 @@ void ReactBird::init()
 
     b->coeff[0] = f->coeff[0];                // effective internal DOF
     b->coeff[1] = f->coeff[1] + f->coeff[4];  // Ea_B = Ea_F + dHf
-    b->coeff[2] = f->coeff[2];                // raw A_F (scaled at run time)
+    // raw A_F: the forward's coeff[2] already holds its TCE-transformed
+    // prefactor if it was initialized in an earlier run (a reverse
+    // generated or activated after that run), so use the saved raw value
+
+    double araw_f = f->initflag ? f->a_raw : f->coeff[2];
+    b->coeff[2] = araw_f;                     // raw A_F (scaled at run time)
     b->coeff[3] = 0.0;                        // T dependence handled by the
     b->reverse_bf = f->coeff[3];              //   microcanonical detailed-
-    b->reverse_A = f->coeff[2];               //   balance tables (see
+    b->reverse_A = araw_f;                    //   balance tables (see
                                               //   build_db_table and
                                               //   build_db3_table), which
                                               //   also keep the backward
@@ -405,28 +390,6 @@ void ReactBird::init()
 
   read_keq_file();
   assign_keq_fits();
-
-  // set reverse_active if any active reverse reaction uses an external
-  // Keq curve fit: only the residual thermal correction R(T) needs the
-  // per-cell temperature at run time; the energy-resolved shape of every
-  // reverse reaction comes from its temperature-free detailed-balance table
-
-  reverse_active = 0;
-  for (int m = 0; m < nlist; m++)
-    if (rlist[m].active && rlist[m].reverse && rlist[m].keq_flag)
-      reverse_active = 1;
-
-  // set reverse_recomb_active if any active reverse recombination uses a
-  // 3-body detailed-balance table (with or without an external Keq fit):
-  // the KOKKOS collision loop fetches the 3rd particle's electronic energy
-  // for the reaction probability only when this is set
-
-  reverse_recomb_active = 0;
-  for (int m = 0; m < nlist; m++)
-    if (rlist[m].active && rlist[m].reverse &&
-        rlist[m].type == RECOMBINATION &&
-        rlist[m].reverse_partner >= 0)
-      reverse_recomb_active = 1;
 
   // modify Arrhenius coefficients for TCE model
   // C1,C2 Bird 94, p 127
@@ -463,6 +426,7 @@ void ReactBird::init()
 
     // add additional coeff for effective DOF
 
+    r->a_raw = r->coeff[2];
     double c1 = MY_PIS*epsilon*r->coeff[2]/(2.0*sigma) *
       sqrt(mr/(2.0*update->boltz*tref)) *
       pow(tref,1.0-omega)/pow(update->boltz,r->coeff[3]-1.0+omega);
@@ -508,10 +472,137 @@ void ReactBird::init()
   // validate the TCE temperature exponents now that coeff[5] = omega is
   // set.  This must happen inside init(), before ReactBirdKokkos::init()
   // mirrors rlist onto the device, so that a channel switched off by the
-  // check is switched off on the GPU too.  It only inspects ARRHENIUS
-  // reactions, so the qk and tce/qk styles are unaffected.
+  // check is switched off on the GPU too.  It applies only to the tce
+  // styles, whose probability carries the Gamma normalization it guards.
 
   check_tce_bounds();
+
+  // a reverse reaction whose forward partner is inactive (switched off by
+  // the bounds check above) has no rate to derive from: switch it off too
+
+  for (int m = 0; m < nlist; m++) {
+    OneReaction *b = &rlist[m];
+    if (!b->active || !b->reverse || b->reverse_partner < 0) continue;
+    if (rlist[b->reverse_partner].active) continue;
+    b->active = 0;
+    if (comm->me == 0) {
+      char str[MAXLINE+128];
+      snprintf(str,sizeof(str),"Reverse reaction %s deactivated because its "
+               "forward reaction %s is inactive",
+               b->id,rlist[b->reverse_partner].id);
+      error->warning(FLERR,str);
+    }
+  }
+
+  // the equilibrium constant of every active reverse reaction comes from
+  //   partition functions: a rotating species with no rotfile data would
+  //   silently get q_rot = 1, a constant error in the reverse rate that the
+  //   table drift check cannot detect when it cancels in T, so require it
+
+  for (int m = 0; m < nlist; m++) {
+    OneReaction *b = &rlist[m];
+    if (!b->active || !b->reverse) continue;
+    for (int i = 0; i < b->nreactant + b->nproduct; i++) {
+      int isp = (i < b->nreactant) ? b->reactants[i] :
+        b->products[i-b->nreactant];
+      if (isp < 0) continue;
+      Particle::Species *sp = &particle->species[isp];
+      if (sp->rotdof == 0) continue;
+      int ok = 0;
+      if (sp->rotdof == 2 && sp->nrottemp >= 1 && sp->rottemp[0] > 0.0)
+        ok = 1;
+      else if (sp->rotdof == 3 && sp->nrottemp == 3 &&
+               sp->rottemp[0] > 0.0 && sp->rottemp[1] > 0.0 &&
+               sp->rottemp[2] > 0.0) ok = 1;
+      if (!ok) {
+        char str[MAXLINE+256];
+        snprintf(str,sizeof(str),"Reverse reaction %s needs the rotational "
+                 "temperature(s) of species %s for its equilibrium "
+                 "constant: add a rotfile to the species command",
+                 b->id,sp->id);
+        error->all(FLERR,str);
+      }
+    }
+  }
+
+  // set reverse_active if any active reverse reaction uses an external
+  // Keq curve fit: only the residual thermal correction R(T) needs the
+  // per-cell temperature at run time; the energy-resolved shape of every
+  // reverse reaction comes from its temperature-free detailed-balance table
+
+  reverse_active = 0;
+  for (int m = 0; m < nlist; m++)
+    if (rlist[m].active && rlist[m].reverse && rlist[m].keq_flag)
+      reverse_active = 1;
+
+  // set reverse_recomb_active if any active reverse recombination uses a
+  // 3-body detailed-balance table (with or without an external Keq fit):
+  // the KOKKOS collision loop fetches the 3rd particle's electronic energy
+  // for the reaction probability only when this is set
+
+  reverse_recomb_active = 0;
+  for (int m = 0; m < nlist; m++)
+    if (rlist[m].active && rlist[m].reverse &&
+        rlist[m].type == RECOMBINATION &&
+        rlist[m].reverse_partner >= 0)
+      reverse_recomb_active = 1;
+
+  // count possible active reactions for each species pair
+  // include J,I reactions in I,J list and vice versa
+  // this allows collision pair I,J to be in either order in Collide
+
+  memory->destroy(reactions);
+  int nspecies = particle->nspecies;
+  reactions = memory->create(reactions,nspecies,nspecies,
+                             "react/bird:reactions");
+
+  for (int i = 0; i < nspecies; i++)
+    for (int j = 0; j < nspecies; j++)
+      reactions[i][j].n = 0;
+
+  int n = 0;
+  for (int m = 0; m < nlist; m++) {
+    OneReaction *r = &rlist[m];
+    if (!r->active) continue;
+    int i = r->reactants[0];
+    int j = r->reactants[1];
+    reactions[i][j].n++;
+    n++;
+    if (i == j) continue;
+    reactions[j][i].n++;
+    n++;
+  }
+
+  // allocate list_IJ = contiguous list of reactions for each IJ pair
+
+  memory->destroy(list_ij);
+  memory->create(list_ij,n,"react/bird:list_ij");
+
+  // reactions[i][j].list = pointer into full list_ij vector
+
+  int offset = 0;
+  for (int i = 0; i < nspecies; i++)
+    for (int j = 0; j < nspecies; j++) {
+      reactions[i][j].list = &list_ij[offset];
+      offset += reactions[i][j].n;
+    }
+
+  // reactions[i][j].list = indices of reactions for each species pair
+  // include J,I reactions in I,J list and vice versa
+
+  for (int i = 0; i < nspecies; i++)
+    for (int j = 0; j < nspecies; j++)
+      reactions[i][j].n = 0;
+
+  for (int m = 0; m < nlist; m++) {
+    OneReaction *r = &rlist[m];
+    if (!r->active) continue;
+    int i = r->reactants[0];
+    int j = r->reactants[1];
+    reactions[i][j].list[reactions[i][j].n++] = m;
+    if (i == j) continue;
+    reactions[j][i].list[reactions[j][i].n++] = m;
+  }
 
   // set recombflag = 0/1 if any recombination reactions are defined & active
   // check for user disabling them is at top of this method
@@ -638,12 +729,15 @@ void ReactBird::init()
        with a per-partner dissociation rate)
    a forward reaction is skipped if any active reaction already provides
      its reverse: an explicit B line, an independently fitted reverse, or
-     a wildcard recombination covering the same product
+     a wildcard recombination covering the same product and third body;
+     a recombination switched off only by react_modify recomb no counts,
+     so switching recombination back on later cannot duplicate it
+   recomb_off[m] = 1 for file reactions switched off by recomb no
    generated entries are marked and become inert if reverse_auto is
      turned off before a later run
 ------------------------------------------------------------------------- */
 
-void ReactBird::generate_reverses()
+void ReactBird::generate_reverses(int *recomb_off)
 {
   if (generated_flag) return;
   generated_flag = 1;
@@ -683,15 +777,24 @@ void ReactBird::generate_reverses()
     int exists = 0;
     for (int k = 0; k < nlist; k++) {
       OneReaction *r2 = &rlist[k];
-      if (!r2->active || r2->type != rtype) continue;
+      if (r2->type != rtype) continue;
+      if (!r2->active && !(k < nforward && recomb_off[k])) continue;
       if (rtype == EXCHANGE) {
         if (set_match(r2->reactants,2,reactants,2) &&
             set_match(r2->products,2,products,2)) { exists = 1; break; }
       } else {
         if (!set_match(r2->reactants,2,reactants,2)) continue;
         if (r2->products[0] != products[0]) continue;
-        if (r2->nproduct < 2 || r2->products[1] == products[1] ||
-            r2->products[1] < 0) { exists = 1; break; }
+        // a wildcard third body covers this one only if sp2recomb would
+        // select it for it: atom for species without vibration, mol for
+        // species with vibration (see the end of init())
+        int k = products[1];
+        if (r2->nproduct < 2 || r2->products[1] == k ||
+            (r2->products[1] == -1 && species[k].vibdof == 0) ||
+            (r2->products[1] == -2 && species[k].vibdof > 0)) {
+          exists = 1;
+          break;
+        }
       }
     }
     if (exists) continue;
@@ -714,6 +817,7 @@ void ReactBird::generate_reverses()
         r->reverse = 0;
         r->reverse_partner = -1;
         r->reverse_bf = 0.0;
+        r->a_raw = 0.0;
         r->reverse_A = 0.0;
         r->generated = 0;
         r->keq_flag = 0;
@@ -722,7 +826,10 @@ void ReactBird::generate_reverses()
     }
 
     OneReaction *b = &rlist[nlist];
-    b->active = 1;
+    // a generated recombination obeys react_modify recomb no like any
+    // other recombination (later runs apply it in the loop at the top of
+    // init(), this covers the run that generates it)
+    b->active = (rtype == RECOMBINATION && recombflag_user == 0) ? 0 : 1;
     b->initflag = 0;
     b->type = rtype;
     b->style = ARRHENIUS;
@@ -732,6 +839,7 @@ void ReactBird::generate_reverses()
     b->reverse = 1;
     b->reverse_partner = -1;
     b->reverse_bf = 0.0;
+    b->a_raw = 0.0;
     b->reverse_A = 0.0;
     b->generated = 1;
     b->keq_flag = 0;
@@ -1106,6 +1214,11 @@ void ReactBird::fit_keq_residual(int i)
 
 void ReactBird::check_tce_bounds()
 {
+  // the qk and tce/qk styles evaluate Arrhenius reactions with a plain
+  // power law that has no Gamma normalization, so the bounds do not apply
+
+  if (!tce_style) return;
+
   Particle::Species *species = particle->species;
   char str[MAXLINE+256];
 
@@ -1138,16 +1251,18 @@ void ReactBird::check_tce_bounds()
     // (1) and (2) are lower bounds on eta, (3) is an upper bound
 
     if (eta <= -(z+1.5)) {
-      // the TCE normalization divides by Gamma(z+eta+3/2), which is
-      // negative (or a pole) here, so this channel's probability comes out
-      // negative and, being summed into the pair's cumulative total in
-      // ReactTCE::attempt(), would also corrupt the selection of every
+      // the TCE normalization divides by Gamma(z+eta+3/2), whose argument
+      // is <= 0 here: a pole, or a value whose sign alternates between
+      // unit intervals, so the probability is meaningless; where it comes
+      // out negative, being summed into the pair's cumulative total in
+      // ReactTCE::attempt(), it also corrupts the selection of every
       // OTHER channel the same species pair participates in.  Deactivate
       // the channel and warn rather than aborting: several shipped rate
       // sets (e.g. the charge-exchange fits in examples/ambi/air.tce)
-      // contain such exponents, and with the reaction switched off the
-      // rest of the mechanism runs exactly as it did before this check
-      // existed -- the channel was already inert, just destructively so
+      // contain such exponents.  For those (Gamma argument in (-1,0) or
+      // (-3,-2)) the channel could never fire, but its negative
+      // probability shifted the selection of the pair's other channels;
+      // with it switched off they are selected correctly
       r->active = 0;
       if (comm->me == 0) {
         sprintf(str,"Reaction %s: temperature exponent %g must be > %g, "
@@ -1390,6 +1505,7 @@ void ReactBird::readfile(char *fname)
         r->reverse = 0;
         r->reverse_partner = -1;
         r->reverse_bf = 0.0;
+        r->a_raw = 0.0;
         r->reverse_A = 0.0;
         r->generated = 0;
         r->keq_flag = 0;
@@ -1899,7 +2015,9 @@ void ReactBird::build_micro_tables()
 
     // convolve numerator and denominator with each ladder
 
-    int maxlev = (int) (umax/(boltz*(theta_min > 0.0 ? theta_min : 1.0))) + 2;
+    // with no discrete vibrational ladder (theta_min = 0) only the
+    // electronic ladders below use leps/lg
+    int maxlev = (theta_min > 0.0) ? (int) (umax/(boltz*theta_min)) + 2 : 0;
     if (max_nelecstate() + 2 > maxlev) maxlev = max_nelecstate() + 2;
     memory->create(leps,maxlev,"react:mtab_leps");
     memory->create(lg,maxlev,"react:mtab_lg");
@@ -2139,7 +2257,9 @@ void ReactBird::build_db_table(int i)
   // convolve den with the backward pair's ladders and num with the
   // forward pair's ladders
 
-  int maxlev = (int) (umax/(boltz*(theta_min > 0.0 ? theta_min : 1.0))) + 2;
+  // with no discrete vibrational ladder (theta_min = 0) only the
+  // electronic ladders below use leps/lg
+  int maxlev = (theta_min > 0.0) ? (int) (umax/(boltz*theta_min)) + 2 : 0;
   if (max_nelecstate() + 2 > maxlev) maxlev = max_nelecstate() + 2;
   memory->create(leps,maxlev,"react:mtab_leps");
   memory->create(lg,maxlev,"react:mtab_lg");
@@ -2418,7 +2538,9 @@ void ReactBird::build_db3_table(int i)
   // convolve den with the backward pair's ladders, num with the
   // forward pair's ladders, and v3 with the third body's ladders
 
-  int maxlev = (int) (umax/(boltz*(theta_min > 0.0 ? theta_min : 1.0))) + 2;
+  // with no discrete vibrational ladder (theta_min = 0) only the
+  // electronic ladders below use leps/lg
+  int maxlev = (theta_min > 0.0) ? (int) (umax/(boltz*theta_min)) + 2 : 0;
   if (max_nelecstate() + 2 > maxlev) maxlev = max_nelecstate() + 2;
   memory->create(leps,maxlev,"react:mtab_leps");
   memory->create(lg,maxlev,"react:mtab_lg");

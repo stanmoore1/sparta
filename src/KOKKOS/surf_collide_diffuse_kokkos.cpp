@@ -411,6 +411,11 @@ void SurfCollideDiffuseKokkos::backup()
     fix_vibmode_kk_copy.copy(vfix_kk);
   }
 
+  if (elecmode_flag) {
+    efix_kk->pre_update_custom_kokkos();
+    fix_elecmode_kk_copy.copy(efix_kk);
+  }
+
   if (surf->nsr > 0) {
     int nglob,nprob,nadsorb;
     nglob = nprob = nadsorb = 0;

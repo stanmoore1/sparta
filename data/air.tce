@@ -16,7 +16,12 @@
 # "B" - its rate is derived at run time from the forward rate and the
 # species partition functions by energy-resolved microscopic reversibility
 # (see doc/react.txt).  The five numeric coefficients on a B line are
-# placeholders.  Accurate reverse rates need the partition-function data:
+# placeholders.  Reverse rates need react tce with
+#
+#     react_modify partial_energy no
+#
+# (otherwise the B lines are switched off with a warning and only the
+# forward reactions run), and the partition-function data:
 #
 #     species air.species <...> rotfile air.rot elecfile air.elec
 #

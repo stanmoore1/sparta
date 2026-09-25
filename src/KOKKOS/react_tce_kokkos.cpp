@@ -32,7 +32,7 @@ enum{DISSOCIATION,EXCHANGE,IONIZATION,RECOMBINATION};   // other files
 /* ---------------------------------------------------------------------- */
 
 ReactTCEKokkos::ReactTCEKokkos(SPARTA *sparta, int narg, char **arg) :
-  ReactBirdKokkos(sparta, narg, arg) {}
+  ReactBirdKokkos(sparta, narg, arg) { tce_style = 1; }
 
 /* ---------------------------------------------------------------------- */
 
@@ -42,15 +42,6 @@ void ReactTCEKokkos::init()
     error->all(FLERR,"React tce can only be used with collide vss");
 
   ReactBirdKokkos::init();
-
-  // reverse exchange reactions are implemented by microcanonical
-  // detailed-balance tables, which are built on the total-energy model
-
-  if (partialEnergy)
-    for (int i = 0; i < nlist; i++)
-      if (rlist[i].active && rlist[i].reverse)
-        error->all(FLERR,"Reverse (B-style) reactions require "
-                   "react_modify partial_energy no");
 
   vibstyle = collide->vibstyle;
   elecstyle = collide->elecstyle;

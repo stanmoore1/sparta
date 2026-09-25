@@ -357,15 +357,20 @@ recombination exactly as microscopic reversibility of the forward
 dissociation demands, and the thermal average again reproduces
 k_f(T)/K_eq(T) at every temperature with no cell temperature
 evaluated.  Reverse reactions require
-"react_modify"_react_modify.html {partial_energy} {no} (the
-default).
+"react_modify"_react_modify.html {partial_energy} {no}; the default
+is {yes}.  With {partial_energy} {yes}, B lines in the reaction file
+are switched off with a warning and the forward reactions run alone,
+so a reaction file that carries reverses (such as data/air.tce) can
+still be used with the default partial-energy model.
 
 For quantitatively correct equilibrium constants, define a {rotfile}
 with the rotational symmetry numbers of homonuclear molecules and an
 {elecfile} with at least the ground-state degeneracies of each species
 (see the "species"_species.html command): for N2 + O <-> NO + N the
 ground-state electronic degeneracies alone change K_eq by a factor of
-~1.8 and the N2 symmetry number by a further factor of 2.  See
+~1.8 and the N2 symmetry number by a further factor of 2.  A
+{rotfile} entry is required for every rotating species that takes part
+in an active reverse reaction; it is an error if one is missing.  See
 examples/reverse for a complete worked example and
 examples/reverse/validate_reverse.py for a quantitative validation
 against independently computed equilibrium constants.  Instead of
@@ -377,8 +382,11 @@ partition functions when a published chemistry set's backward rates
 must be reproduced exactly.
 
 The B style requires the "react tce"_react.html style (with or without
-"react_modify"_react_modify.html {compute_chem_rates}); it is an error
-with the qk and tce/qk styles.  Reactions between charged and neutral
+"react_modify"_react_modify.html {compute_chem_rates}); with the qk
+and tce/qk styles, B lines are switched off with a warning.  A reverse
+reaction is also switched off, with a warning, if its forward reaction
+is inactive, e.g. because its temperature exponent is outside the
+range the TCE model allows.  Reactions between charged and neutral
 heavy species are fully supported: a charge-exchange reaction such as
 A+ + B --> A + B+ is an exchange (E) reaction and pairs with a B-style
 reverse like any other exchange, since no free electron participates
