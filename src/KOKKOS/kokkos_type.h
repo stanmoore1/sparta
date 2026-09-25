@@ -416,6 +416,31 @@ constexpr T kk_eps(const double eps_double, const double eps_float)
     static_cast<T>(eps_double);
 }
 
+namespace SPARTA_NS {
+
+// convert one element between precisions, specialized for structs in
+//   kokkos_structs.h
+
+// dst keeps its value if it already converts exactly to src, so a double
+//   host value whose single precision image was not changed on the device
+//   survives the round trip host -> device -> host with full precision
+//   (e.g. grid cell corners, which host geometry code compares exactly)
+
+template<class DstType, class SrcType>
+KOKKOS_INLINE_FUNCTION
+std::enable_if_t<std::is_arithmetic_v<DstType>>
+kk_convert(DstType &dst, const SrcType &src)
+{
+  if (static_cast<SrcType>(dst) != src) dst = static_cast<DstType>(src);
+}
+
+template<class Type>
+KOKKOS_INLINE_FUNCTION
+std::enable_if_t<!std::is_arithmetic_v<Type>>
+kk_convert(Type &dst, const Type &src) { dst = src; }
+
+}
+
 // KK precision copies of the host structs shared with the device
 
 #include "kokkos_structs.h"
@@ -443,27 +468,6 @@ constexpr T kk_eps(const double eps_double, const double eps_float)
 // ------------------------------------------------------------------------
 
 namespace SPARTA_NS {
-
-// convert one element between precisions, specialized for structs in
-//   kokkos_structs.h
-
-// dst keeps its value if it already converts exactly to src, so a double
-//   host value whose single precision image was not changed on the device
-//   survives the round trip host -> device -> host with full precision
-//   (e.g. grid cell corners, which host geometry code compares exactly)
-
-template<class DstType, class SrcType>
-KOKKOS_INLINE_FUNCTION
-std::enable_if_t<std::is_arithmetic_v<DstType>>
-kk_convert(DstType &dst, const SrcType &src)
-{
-  if (static_cast<SrcType>(dst) != src) dst = static_cast<DstType>(src);
-}
-
-template<class Type>
-KOKKOS_INLINE_FUNCTION
-std::enable_if_t<!std::is_arithmetic_v<Type>>
-kk_convert(Type &dst, const Type &src) { dst = src; }
 
 // converting host-side copy between two views of different value types
 
