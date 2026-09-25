@@ -101,8 +101,19 @@ def compare_stats(ref, new, fraction, rtol, nsigma):
     if len(rb) != len(nb):
         return ["different number of thermo blocks (%d vs %d)" % (len(rb), len(nb))]
     msgs = []
-    for (rh, rr), (nh, nr) in zip(rb, nb):
-        if rh != nh or not rr or not nr:
+    for b, ((rh, rr), (nh, nr)) in enumerate(zip(rb, nb)):
+        if rh != nh:
+            msgs.append("thermo block %d: different columns" % b)
+            continue
+        if not rr and not nr:
+            continue
+        if not rr or not nr:
+            msgs.append("thermo block %d: no data rows in %s log"
+                        % (b, "reference" if not rr else "new"))
+            continue
+        if len(nr) < len(rr):
+            msgs.append("thermo block %d: run stopped early (%d of %d rows)"
+                        % (b, len(nr), len(rr)))
             continue
         for c in range(1, len(rh)):
             if rh[c] in TIMING_COLUMNS:

@@ -116,9 +116,9 @@ construct the conversion cannot decide automatically.
 | fix_emit_surf_kokkos.cpp | 1257 | MPI_DOUBLE: check the buffer is double, not a Kokkos KK view (host) | `MPI_Allreduce(&S_me,&S,1,MPI_DOUBLE,MPI_SUM,world);` |
 | fix_temp_global_rescale_kokkos.cpp | 64 | MPI_DOUBLE: check the buffer is double, not a Kokkos KK view (host) | `MPI_Allreduce(&t,&t_current,1,MPI_DOUBLE,MPI_SUM,world);` |
 | fix_temp_rescale_kokkos.cpp | 206 | MPI_DOUBLE: check the buffer is double, not a Kokkos KK view (host) | `MPI_Allreduce(&t_current_mine,&t_current,1,MPI_DOUBLE,MPI_SUM,world);` |
-| geometry_kokkos.h | 24 | tiny absolute tolerance, below float resolution (host) | `#define EPSSQ kk_eps<KK_POS_FLOAT>(1.0e-16,1.0e-10)` |
-| geometry_kokkos.h | 25 | tiny absolute tolerance, below float resolution (host) | `#define EPSSQNEG kk_eps<KK_POS_FLOAT>(-1.0e-16,-1.0e-10)` |
-| geometry_kokkos.h | 27 | tiny absolute tolerance, below float resolution (host) | `#define EPSTIME kk_eps<KK_POS_FLOAT>(1.0e-16,1.0e-13)` |
+| geometry_kokkos.h | 23 | tiny absolute tolerance, below float resolution (host) | `#define EPSSQ 1.0e-16` |
+| geometry_kokkos.h | 24 | tiny absolute tolerance, below float resolution (host) | `#define EPSSQNEG -1.0e-16` |
+| geometry_kokkos.h | 26 | tiny absolute tolerance, below float resolution (host) | `#define EPSTIME kk_eps<KK_POS_FLOAT>(1.0e-16,1.0e-13)` |
 | irregular_kokkos.cpp | 217 | memcpy: check element types/sizes of source and destination (host) | `memcpy(proc_recv,proc_recv_ordered,nrecv*sizeof(int));` |
 | irregular_kokkos.cpp | 218 | memcpy: check element types/sizes of source and destination (host) | `memcpy(num_recv,num_recv_ordered,nrecv*sizeof(int));` |
 | irregular_kokkos.cpp | 448 | memcpy: check element types/sizes of source and destination (host) | `memcpy(&h_recvbuf[(bigint)i*nbytes],&h_sendbuf[(bigint)m*nbytes],nbytes);` |
@@ -147,28 +147,28 @@ construct the conversion cannot decide automatically.
 | particle_kokkos.h | 433 | sizeof of a type whose Kokkos copy may have a different size (device) | `ptr += sizeof(double);  // KK_DOUBLE: buffer format` |
 | react_bird_kokkos.cpp | 194 | memcpy: check element types/sizes of source and destination (host) | `memcpy(random_backup,random,sizeof(RanKnuth));` |
 | react_bird_kokkos.cpp | 206 | memcpy: check element types/sizes of source and destination (host) | `memcpy(random,random_backup,sizeof(RanKnuth));` |
-| react_tce_kokkos.h | 208 | tiny absolute tolerance, below float resolution (device) | `if (ievib < static_cast<KK_FLOAT>(1e-26) ) zi = 0.0; //Low Energy Cut-Off to prevent nan solutions t` |
-| react_tce_kokkos.h | 222 | tiny absolute tolerance, below float resolution (device) | `if (jevib < static_cast<KK_FLOAT>(1e-26)) zj = 0.0;` |
+| react_tce_kokkos.h | 216 | tiny absolute tolerance, below float resolution (device) | `if (ievib < static_cast<KK_FLOAT>(1e-26) ) zi = 0.0; //Low Energy Cut-Off to prevent nan solutions t` |
+| react_tce_kokkos.h | 230 | tiny absolute tolerance, below float resolution (device) | `if (jevib < static_cast<KK_FLOAT>(1e-26)) zj = 0.0;` |
 | surf_collide_adiabatic_kokkos.cpp | 325 | memcpy: check element types/sizes of source and destination (host) | `memcpy(random_backup,random,sizeof(RanKnuth));` |
 | surf_collide_adiabatic_kokkos.cpp | 364 | memcpy: check element types/sizes of source and destination (host) | `memcpy(random,random_backup,sizeof(RanKnuth));` |
 | surf_collide_adiabatic_kokkos.h | 146 | memcpy: check element types/sizes of source and destination (device) | `if (ambi_flag \|\| vibmode_flag) memcpy(&iorig,ip,sizeof(OnePartKK));` |
-| surf_collide_cll_kokkos.cpp | 419 | memcpy: check element types/sizes of source and destination (host) | `memcpy(random_backup,random,sizeof(RanKnuth));` |
-| surf_collide_cll_kokkos.cpp | 458 | memcpy: check element types/sizes of source and destination (host) | `memcpy(random,random_backup,sizeof(RanKnuth));` |
+| surf_collide_cll_kokkos.cpp | 415 | memcpy: check element types/sizes of source and destination (host) | `memcpy(random_backup,random,sizeof(RanKnuth));` |
+| surf_collide_cll_kokkos.cpp | 454 | memcpy: check element types/sizes of source and destination (host) | `memcpy(random,random_backup,sizeof(RanKnuth));` |
 | surf_collide_cll_kokkos.h | 147 | memcpy: check element types/sizes of source and destination (device) | `if (ambi_flag \|\| vibmode_flag) memcpy(&iorig,ip,sizeof(OnePartKK));` |
 | surf_collide_cll_kokkos.h | 291 | 1-drand(): kept double | `psi_f = Kokkos::acos(1-rand_gen.drand())` |
 | surf_collide_cll_kokkos.h | 385 | 1-drand(): kept double | `KK_FLOAT evib_star =
         -Kokkos::log(1 - rand_gen.drand() *
              (1` |
-| surf_collide_diffuse_kokkos.cpp | 433 | memcpy: check element types/sizes of source and destination (host) | `memcpy(random_backup,random,sizeof(RanKnuth));` |
-| surf_collide_diffuse_kokkos.cpp | 472 | memcpy: check element types/sizes of source and destination (host) | `memcpy(random,random_backup,sizeof(RanKnuth));` |
+| surf_collide_diffuse_kokkos.cpp | 429 | memcpy: check element types/sizes of source and destination (host) | `memcpy(random_backup,random,sizeof(RanKnuth));` |
+| surf_collide_diffuse_kokkos.cpp | 468 | memcpy: check element types/sizes of source and destination (host) | `memcpy(random,random_backup,sizeof(RanKnuth));` |
 | surf_collide_diffuse_kokkos.h | 156 | memcpy: check element types/sizes of source and destination (device) | `if (ambi_flag \|\| vibmode_flag) memcpy(&iorig,ip,sizeof(OnePartKK));` |
-| surf_collide_impulsive_kokkos.cpp | 419 | memcpy: check element types/sizes of source and destination (host) | `memcpy(random_backup,random,sizeof(RanKnuth));` |
-| surf_collide_impulsive_kokkos.cpp | 458 | memcpy: check element types/sizes of source and destination (host) | `memcpy(random,random_backup,sizeof(RanKnuth));` |
+| surf_collide_impulsive_kokkos.cpp | 415 | memcpy: check element types/sizes of source and destination (host) | `memcpy(random_backup,random,sizeof(RanKnuth));` |
+| surf_collide_impulsive_kokkos.cpp | 454 | memcpy: check element types/sizes of source and destination (host) | `memcpy(random,random_backup,sizeof(RanKnuth));` |
 | surf_collide_impulsive_kokkos.h | 147 | memcpy: check element types/sizes of source and destination (device) | `if (ambi_flag \|\| vibmode_flag) memcpy(&iorig,ip,sizeof(OnePartKK));` |
 | surf_collide_piston_kokkos.h | 136 | memcpy: check element types/sizes of source and destination (device) | `if (ambi_flag \|\| vibmode_flag) memcpy(&iorig,ip,sizeof(OnePartKK));` |
 | surf_collide_specular_kokkos.h | 136 | memcpy: check element types/sizes of source and destination (device) | `if (ambi_flag \|\| vibmode_flag) memcpy(&iorig,ip,sizeof(OnePartKK));` |
-| surf_collide_td_kokkos.cpp | 419 | memcpy: check element types/sizes of source and destination (host) | `memcpy(random_backup,random,sizeof(RanKnuth));` |
-| surf_collide_td_kokkos.cpp | 458 | memcpy: check element types/sizes of source and destination (host) | `memcpy(random,random_backup,sizeof(RanKnuth));` |
+| surf_collide_td_kokkos.cpp | 415 | memcpy: check element types/sizes of source and destination (host) | `memcpy(random_backup,random,sizeof(RanKnuth));` |
+| surf_collide_td_kokkos.cpp | 454 | memcpy: check element types/sizes of source and destination (host) | `memcpy(random,random_backup,sizeof(RanKnuth));` |
 | surf_collide_td_kokkos.h | 147 | memcpy: check element types/sizes of source and destination (device) | `if (ambi_flag \|\| vibmode_flag) memcpy(&iorig,ip,sizeof(OnePartKK));` |
 | surf_react_adsorb_kokkos.cpp | 602 | memcpy: check element types/sizes of source and destination (host) | `memcpy(random_backup,random,sizeof(RanKnuth));` |
 | surf_react_adsorb_kokkos.cpp | 614 | memcpy: check element types/sizes of source and destination (host) | `memcpy(cmodel_random_backup[idx],cmrand,sizeof(RanKnuth));` |

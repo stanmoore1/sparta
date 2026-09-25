@@ -290,7 +290,8 @@
       "compute_*_kokkos.*": "acc",
       "fix_temp_rescale_kokkos.*": "acc",
       "fix_temp_global_rescale_kokkos.*": "acc",
-      "fix_ave_grid_kokkos.*": "acc"
+      "region_*_kokkos.*": "pos",
+      "fix_ave_*_kokkos.*": "acc"
     },
     "file_identifier_class": {
       "compute_*_kokkos.*": {
@@ -318,18 +319,6 @@
         "jevib": "float"
       },
       "fix_temp_global_rescale_kokkos.*": {
-        "v": "float",
-        "vi": "float",
-        "vj": "float",
-        "vorig": "float",
-        "erot": "float",
-        "evib": "float",
-        "ierot": "float",
-        "jerot": "float",
-        "ievib": "float",
-        "jevib": "float"
-      },
-      "fix_ave_grid_kokkos.*": {
         "v": "float",
         "vi": "float",
         "vj": "float",
@@ -395,6 +384,18 @@
         "gamma_cell": "acc",
         "temp_thermal_cell": "acc",
         "mass": "acc"
+      },
+      "fix_ave_*_kokkos.*": {
+        "v": "float",
+        "vi": "float",
+        "vj": "float",
+        "vorig": "float",
+        "erot": "float",
+        "evib": "float",
+        "ierot": "float",
+        "jerot": "float",
+        "ievib": "float",
+        "jevib": "float"
       }
     },
     "post_substitutions": {},

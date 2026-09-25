@@ -16,19 +16,38 @@
 
 // tolerances of the geometry tests, which work in KK_POS_FLOAT
 // the double values are those of the non-KOKKOS Geometry and Update code,
-//   tuned to double precision round-off; the float values (used only for
-//   KOKKOS_PREC=single) are larger to exceed single precision round-off
-//   of quantities of order 1 (EPSSQ) and of times of order a timestep
-//   (EPSTIME)
+//   tuned to double precision round-off; for single precision positions
+//   (KOKKOS_PREC=single) EPSTIME is larger to exceed the round-off of times
+//   of order a timestep, and EPSSQ is replaced by epssq(), see below
 
-#define EPSSQ kk_eps<KK_POS_FLOAT>(1.0e-16,1.0e-10)
-#define EPSSQNEG kk_eps<KK_POS_FLOAT>(-1.0e-16,-1.0e-10)
+#define EPSSQ 1.0e-16
+#define EPSSQNEG -1.0e-16
 #define EPSSELF 1.0e-6
 #define EPSTIME kk_eps<KK_POS_FLOAT>(1.0e-16,1.0e-13)
 
 enum{OUTSIDE,INSIDE,ONSURF2OUT,ONSURF2IN};    // same as Update
 
 namespace GeometryKokkos {
+
+/* ----------------------------------------------------------------------
+   tolerance of the point-in-line and point-in-triangle tests below, which
+     compare a dot product of two length vectors of the element with 0
+   EPSSQ is an absolute value, tuned for double precision round-off
+   for single precision positions the round-off of the dot product scales
+     with the element size and with the magnitude of its coordinates, so
+     the tolerance is made relative to them
+------------------------------------------------------------------------- */
+
+KOKKOS_INLINE_FUNCTION
+KK_POS_FLOAT epssq(const KK_POS_FLOAT *edge, const KK_POS_FLOAT *v0)
+{
+  if constexpr (std::is_same_v<KK_POS_FLOAT,float>) {
+    const KK_POS_FLOAT len = Kokkos::sqrt(MathExtraKokkos::lensq3(edge));
+    KK_POS_FLOAT scale = len;
+    for (int i = 0; i < 3; i++) scale = MAX(scale,Kokkos::fabs(v0[i]));
+    return static_cast<KK_POS_FLOAT>(1.0e-6) * len * scale;
+  } else return EPSSQ;
+}
 
 /* ----------------------------------------------------------------------
    determine which side of plane the point x,y,z is on
@@ -121,9 +140,9 @@ bool line_line_intersect(KK_POS_FLOAT *start, KK_POS_FLOAT *stop,
 
   MathExtraKokkos::sub3(v1,v0,edge);
   MathExtraKokkos::sub3(point,v0,pvec);
-  if (MathExtraKokkos::dot3(edge,pvec) < EPSSQNEG) return false;
+  if (MathExtraKokkos::dot3(edge,pvec) < -epssq(edge,v0)) return false;
   MathExtraKokkos::sub3(point,v1,pvec);
-  if (MathExtraKokkos::dot3(edge,pvec) > EPSSQ) return false;
+  if (MathExtraKokkos::dot3(edge,pvec) > epssq(edge,v0)) return false;
 
   // there is a valid intersection with line B
   // set side to ONSUFR, OUTSIDE, or INSIDE
@@ -506,17 +525,17 @@ bool line_tri_intersect(KK_POS_FLOAT *start, KK_POS_FLOAT *stop,
   MathExtraKokkos::sub3(v1,v0,edge);
   MathExtraKokkos::sub3(point,v0,pvec);
   MathExtraKokkos::cross3(edge,pvec,xproduct);
-  if (MathExtraKokkos::dot3(xproduct,norm) < EPSSQNEG) return false;
+  if (MathExtraKokkos::dot3(xproduct,norm) < -epssq(edge,v0)) return false;
 
   MathExtraKokkos::sub3(v2,v1,edge);
   MathExtraKokkos::sub3(point,v1,pvec);
   MathExtraKokkos::cross3(edge,pvec,xproduct);
-  if (MathExtraKokkos::dot3(xproduct,norm) < EPSSQNEG) return false;
+  if (MathExtraKokkos::dot3(xproduct,norm) < -epssq(edge,v1)) return false;
 
   MathExtraKokkos::sub3(v0,v2,edge);
   MathExtraKokkos::sub3(point,v2,pvec);
   MathExtraKokkos::cross3(edge,pvec,xproduct);
-  if (MathExtraKokkos::dot3(xproduct,norm) < EPSSQNEG) return false;
+  if (MathExtraKokkos::dot3(xproduct,norm) < -epssq(edge,v2)) return false;
 
   // there is a valid intersection with triangle
   // set side to ONSUFR, OUTSIDE, or INSIDE

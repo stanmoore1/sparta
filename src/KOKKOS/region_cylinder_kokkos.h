@@ -67,7 +67,7 @@ class RegCylinderKokkos : public RegCylinder, public KokkosBase {
   void operator()(TagRegCylinderMatchAll, const int&) const;
 
   KOKKOS_INLINE_FUNCTION
-  int match_kokkos(KK_POS_FLOAT x, KK_FLOAT y, KK_FLOAT z) const
+  int match_kokkos(KK_POS_FLOAT x, KK_POS_FLOAT y, KK_POS_FLOAT z) const
   {
     return !(k_inside(x,y,z) ^ interior);
   }
@@ -78,9 +78,9 @@ class RegCylinderKokkos : public RegCylinder, public KokkosBase {
   t_particle_1d d_particles;
 
   KOKKOS_INLINE_FUNCTION
-  int k_inside(KK_POS_FLOAT x, KK_FLOAT y, KK_FLOAT z) const
+  int k_inside(KK_POS_FLOAT x, KK_POS_FLOAT y, KK_POS_FLOAT z) const
   {
-    KK_FLOAT del1,del2,dist;
+    KK_POS_FLOAT del1,del2,dist;
     int inside;
 
     if (axis == 'x') {

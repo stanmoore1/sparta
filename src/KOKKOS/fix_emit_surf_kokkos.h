@@ -136,11 +136,11 @@ class FixEmitSurfKokkos : public FixEmitSurf {
   DAT::t_int_1d d_task2cand;
   DAT::t_int_1d d_cands2new;
 
-  DAT::t_kkfloat_2d d_x;
+  DAT::t_kkpos_2d d_x;
   DAT::t_kkfloat_2d d_v;
   DAT::t_kkfloat_1d d_erot;
   DAT::t_kkfloat_1d d_evib;
-  DAT::t_kkfloat_1d d_dtremain;
+  DAT::t_kkpos_1d d_dtremain;
   DAT::t_int_1d   d_id;
   DAT::t_int_1d   d_isp;
   DAT::t_int_1d   d_task;

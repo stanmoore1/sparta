@@ -66,7 +66,7 @@ class RegBlockKokkos : public RegBlock, public KokkosBase {
   void operator()(TagRegBlockMatchAll, const int&) const;
 
   KOKKOS_INLINE_FUNCTION
-  int match_kokkos(KK_POS_FLOAT x, KK_FLOAT y, KK_FLOAT z) const
+  int match_kokkos(KK_POS_FLOAT x, KK_POS_FLOAT y, KK_POS_FLOAT z) const
   {
     return !(k_inside(x,y,z) ^ interior);
   }
@@ -77,7 +77,7 @@ class RegBlockKokkos : public RegBlock, public KokkosBase {
   t_particle_1d d_particles;
 
   KOKKOS_INLINE_FUNCTION
-  int k_inside(KK_POS_FLOAT x, KK_FLOAT y, KK_FLOAT z) const
+  int k_inside(KK_POS_FLOAT x, KK_POS_FLOAT y, KK_POS_FLOAT z) const
   {
     if (x >= xlo && x <= xhi && y >= ylo && y <= yhi && z >= zlo && z <= zhi)
       return 1;

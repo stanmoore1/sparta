@@ -67,7 +67,7 @@ class RegPlaneKokkos : public RegPlane, public KokkosBase {
   void operator()(TagRegPlaneMatchAll, const int&) const;
 
   KOKKOS_INLINE_FUNCTION
-  int match_kokkos(KK_POS_FLOAT x, KK_FLOAT y, KK_FLOAT z) const
+  int match_kokkos(KK_POS_FLOAT x, KK_POS_FLOAT y, KK_POS_FLOAT z) const
   {
     return !(k_inside(x,y,z) ^ interior);
   }
@@ -78,11 +78,11 @@ class RegPlaneKokkos : public RegPlane, public KokkosBase {
   t_particle_1d d_particles;
 
   KOKKOS_INLINE_FUNCTION
-  int k_inside(KK_POS_FLOAT x, KK_FLOAT y, KK_FLOAT z) const
+  int k_inside(KK_POS_FLOAT x, KK_POS_FLOAT y, KK_POS_FLOAT z) const
   {
-    const KK_FLOAT dot = (x-xp)*normal[0] + (y-yp)*normal[1] + (z-zp)*normal[2];
+    const KK_POS_FLOAT dot = (x-xp)*normal[0] + (y-yp)*normal[1] + (z-zp)*normal[2];
 
-    if (dot >= static_cast<KK_FLOAT>(0.0)) return 1;
+    if (dot >= static_cast<KK_POS_FLOAT>(0.0)) return 1;
     return 0;
   }
 };

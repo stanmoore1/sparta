@@ -66,7 +66,7 @@ class KokkosBase {
   virtual int flatten_region_kokkos(tdual_region_token_1d &) {return 0;}
 
   KOKKOS_INLINE_FUNCTION
-  int match_kokkos(KK_POS_FLOAT x, KK_FLOAT y, KK_FLOAT z) const {return 0;}
+  int match_kokkos(KK_POS_FLOAT x, KK_POS_FLOAT y, KK_POS_FLOAT z) const {return 0;}
 };
 
 }

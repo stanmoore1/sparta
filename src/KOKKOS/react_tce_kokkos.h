@@ -38,18 +38,26 @@ class ReactTCEKokkos : public ReactBirdKokkos {
 
 /* ---------------------------------------------------------------------- */
 
+// the Newton solve for the vibrational temperature is done in double
+//   precision: exp(vibtemp/Tvib) overflows single precision for
+//   vibtemp/Tvib > 88, and the absolute tolerance on Tvib is below single
+//   precision resolution for Tvib > 1000 K; it is called only when a
+//   reaction is attempted
+
+typedef double tce_float;  // KK_DOUBLE: see comment above
+
 KOKKOS_INLINE_FUNCTION
-KK_FLOAT bird_Evib(const int& nmode, const KK_FLOAT& Tvib,
+tce_float bird_Evib(const int& nmode, const tce_float& Tvib,
                  const double vibtemp[],  // KK_DOUBLE: Species data is double
-                 const KK_FLOAT& Evib) const
+                 const tce_float& Evib) const
 {
   // Comutes f for Newton's search method outlined in newtonTvib()
 
-  KK_FLOAT f = -Evib;
-  const KK_FLOAT kb = boltz;
+  tce_float f = -Evib;
+  const tce_float kb = boltz;
 
   for (int i = 0; i < nmode; i++) {
-    const KK_FLOAT vti = vibtemp[i];
+    const tce_float vti = vibtemp[i];
     f += (((kb*vti)/(Kokkos::exp(vti/Tvib)-1)));
   }
 
@@ -59,21 +67,21 @@ KK_FLOAT bird_Evib(const int& nmode, const KK_FLOAT& Tvib,
 /* ---------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-KK_FLOAT bird_dEvib(const int& nmode, const KK_FLOAT& Tvib, const double vibtemp[]) const  // KK_DOUBLE: Species data is double
+tce_float bird_dEvib(const int& nmode, const tce_float& Tvib, const double vibtemp[]) const  // KK_DOUBLE: Species data is double
 {
   // Comutes df for Newton's search method
 
-  KK_FLOAT df = 0.0;
-  const KK_FLOAT kb = boltz;
+  tce_float df = 0.0;
+  const tce_float kb = boltz;
 
   for (int i = 0; i < nmode; i++) {
-    const KK_FLOAT vti = vibtemp[i];
-    const KK_FLOAT vti2 = vti * vti;
-    const KK_FLOAT Tvib2 = Tvib * Tvib;
-    const KK_FLOAT k1 = vti/Tvib;
-    const KK_FLOAT ek1 = Kokkos::exp(k1);
-    const KK_FLOAT k2 = ek1 - static_cast<KK_FLOAT>(1.0);
-    const KK_FLOAT k22 = k2 * k2;
+    const tce_float vti = vibtemp[i];
+    const tce_float vti2 = vti * vti;
+    const tce_float Tvib2 = Tvib * Tvib;
+    const tce_float k1 = vti/Tvib;
+    const tce_float ek1 = Kokkos::exp(k1);
+    const tce_float k2 = ek1 - static_cast<tce_float>(1.0);
+    const tce_float k22 = k2 * k2;
     df += (vti2*kb*ek1)/(Tvib2*k22);
   }
 
@@ -83,9 +91,9 @@ KK_FLOAT bird_dEvib(const int& nmode, const KK_FLOAT& Tvib, const double vibtemp
 /* ---------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-KK_FLOAT newtonTvib(const int &nmode, const KK_FLOAT& Evib, const double vibTemp[],  // KK_DOUBLE: Species data is double
-               const KK_FLOAT &Tvib0,
-               const KK_FLOAT &tol,
+tce_float newtonTvib(const int &nmode, const tce_float& Evib, const double vibTemp[],  // KK_DOUBLE: Species data is double
+               const tce_float &Tvib0,
+               const tce_float &tol,
                const int& nmax) const
 {
   // Function for converting vibrational energy to vibrational temperature
@@ -95,15 +103,15 @@ KK_FLOAT newtonTvib(const int &nmode, const KK_FLOAT& Evib, const double vibTemp
   // Uses Newton's method to solve for a vibrational temperature given a
   // distribution of vibrational energy levels
 
-  KK_FLOAT Tvib_prev;
+  tce_float Tvib_prev;
 
   // f and df are computed for Newton's search
-  KK_FLOAT f = bird_Evib(nmode,Tvib0,vibTemp,Evib);
-  KK_FLOAT df = bird_dEvib(nmode,Tvib0,vibTemp);
+  tce_float f = bird_Evib(nmode,Tvib0,vibTemp,Evib);
+  tce_float df = bird_dEvib(nmode,Tvib0,vibTemp);
 
   // Update guess for Tvib and compute error
-  KK_FLOAT Tvib = Tvib0 - (f/df);
-  KK_FLOAT err = Kokkos::fabs(Tvib-Tvib0);
+  tce_float Tvib = Tvib0 - (f/df);
+  tce_float err = Kokkos::fabs(Tvib-Tvib0);
 
   int i = 2;
 

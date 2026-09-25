@@ -190,7 +190,7 @@ protected:
      ----------------------------------------------------------------------- */
   KOKKOS_INLINE_FUNCTION
   void
-  bin_one(mm_value_type& mm_v, KK_FLOAT value, KK_FLOAT weight) const
+  bin_one(mm_value_type& mm_v, KK_ACC_FLOAT value, KK_ACC_FLOAT weight) const
   {
     auto nbins = d_bin.extent(0);
     if (value < mm_v.min_val) mm_v.min_val = value;
@@ -220,7 +220,7 @@ protected:
 
   KOKKOS_INLINE_FUNCTION
   void
-  bin_one(mm_value_type& mm_v, KK_FLOAT value) const
+  bin_one(mm_value_type& mm_v, KK_ACC_FLOAT value) const
   {
     // fix ave/histo/weight carries a single scalar weight for scalar-mode
     //   inputs, computed in calculate_weights().  The host injects it by
@@ -229,7 +229,7 @@ protected:
     //   the base class and this overload is not virtual, so read the member
     //   directly.  weightflag is 0 for plain ave/histo, leaving weight 1
 
-    bin_one(mm_v, value, weightflag ? weight : static_cast<KK_FLOAT>(1.0));
+    bin_one(mm_v, value, weightflag ? weight : static_cast<KK_ACC_FLOAT>(1.0));
   }
 
 };

@@ -471,7 +471,18 @@ namespace SPARTA_NS {
 
 // converting host-side copy between two views of different value types
 
-template<class DstView, class SrcView>
+template<bool KEEP, class DstType, class SrcType>
+KOKKOS_INLINE_FUNCTION
+void convert_one(DstType &dst, const SrcType &src)
+{
+  if constexpr (KEEP) kk_convert(dst,src);
+  else dst = static_cast<DstType>(src);
+}
+
+// with KEEP, a dst value that already converts exactly to its src value is
+//   kept (see kk_convert()), else every element is overwritten
+
+template<class DstView, class SrcView, bool KEEP = true>
 void transform_copy(const DstView &dst, const SrcView &src)
 {
   typedef typename DstView::non_const_value_type dst_type;
@@ -482,18 +493,18 @@ void transform_copy(const DstView &dst, const SrcView &src)
     // element by element, as kk_convert() keeps unchanged values
     static_assert(DstView::rank == SrcView::rank && DstView::rank <= 3,
                   "TransformView of an arithmetic type must have rank 0 to 3");
-    if constexpr (DstView::rank == 0) kk_convert(dst(),src());
+    if constexpr (DstView::rank == 0) convert_one<KEEP>(dst(),src());
     else if constexpr (DstView::rank == 1)
       Kokkos::parallel_for(policy_1d(0,dst.extent(0)),
-                           [=](const int i) { kk_convert(dst(i),src(i)); });
+                           [=](const int i) { convert_one<KEEP>(dst(i),src(i)); });
     else if constexpr (DstView::rank == 2)
       Kokkos::parallel_for(policy_2d({0,0},{(int64_t) dst.extent(0),(int64_t) dst.extent(1)}),
-                           [=](const int i, const int j) { kk_convert(dst(i,j),src(i,j)); });
+                           [=](const int i, const int j) { convert_one<KEEP>(dst(i,j),src(i,j)); });
     else
       Kokkos::parallel_for(policy_3d({0,0,0},{(int64_t) dst.extent(0),(int64_t) dst.extent(1),
                                               (int64_t) dst.extent(2)}),
                            [=](const int i, const int j, const int k) {
-                             kk_convert(dst(i,j,k),src(i,j,k)); });
+                             convert_one<KEEP>(dst(i,j,k),src(i,j,k)); });
     Kokkos::fence();
   } else {
     static_assert(DstView::rank == 1 && SrcView::rank == 1,
@@ -516,11 +527,24 @@ void deep_copy_convert(const DstView &dst, const SrcView &src)
     Kokkos::deep_copy(dst,src);
   } else {
     auto h_dst = Kokkos::create_mirror_view(Kokkos::HostSpace(),dst);
-    auto h_src = Kokkos::create_mirror_view(Kokkos::HostSpace(),src);
-    Kokkos::deep_copy(h_src,src);
-    transform_copy(h_dst,h_src);
+    auto h_src = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(),src);
+    transform_copy<decltype(h_dst),decltype(h_src),false>(h_dst,h_src);
     Kokkos::deep_copy(dst,h_dst);
   }
+}
+
+// copy a host double array of length n into a 1d KK view on the device,
+//   (re)allocating the view only if it is too short
+
+template<class ViewType>
+void copy_host_array_to_view(ViewType &d_view, const double *array, const int n,
+                             const char *label)
+{
+  if ((int) d_view.extent(0) < n)
+    d_view = ViewType(Kokkos::view_alloc(label,Kokkos::WithoutInitializing),n);
+  Kokkos::View<const double*,Kokkos::LayoutRight,Kokkos::HostSpace,
+               Kokkos::MemoryTraits<Kokkos::Unmanaged>> h_array(array,n);
+  deep_copy_convert(Kokkos::subview(d_view,Kokkos::make_pair(0,n)),h_array);
 }
 
 template<class KKType, class LegacyType, class KKLayout, class KKSpace = DeviceType>

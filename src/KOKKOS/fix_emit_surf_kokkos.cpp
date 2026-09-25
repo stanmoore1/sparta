@@ -434,7 +434,7 @@ void FixEmitSurfKokkos::perform_task()
   if (ncands == 0) return;
 
   if (d_x.extent(0) < ncands || d_x.extent(1) < dimension)
-    d_x = DAT::t_kkfloat_2d("x", ncands, dimension);
+    d_x = DAT::t_kkpos_2d("x", ncands, dimension);
 
   if (d_v.extent(0) < ncands)
     d_v = DAT::t_kkfloat_2d("v", ncands, 3);
@@ -442,7 +442,7 @@ void FixEmitSurfKokkos::perform_task()
   if (d_task.extent(0) < ncands) {
     d_erot     = DAT::t_kkfloat_1d("erot", ncands);
     d_evib     = DAT::t_kkfloat_1d("evib", ncands);
-    d_dtremain = DAT::t_kkfloat_1d("dtremain", ncands);
+    d_dtremain = DAT::t_kkpos_1d("dtremain", ncands);
     d_id       = DAT::t_int_1d("id", ncands);
     d_isp      = DAT::t_int_1d("isp", ncands);
     d_task     = DAT::t_int_1d("task", ncands);
@@ -713,7 +713,7 @@ void FixEmitSurfKokkos::operator()(TagFixEmitSurf_perform_task, const int &i, in
         d_erot(cand) = particle_kk_copy.obj.erot(ispecies,temp_rot,rand_gen);
         d_evib(cand) = particle_kk_copy.obj.evib(ispecies,temp_vib,rand_gen);
         d_id(cand) = MAXSMALLINT*rand_gen.drand();
-        d_dtremain(cand) = dt * static_cast<KK_FLOAT>(rand_gen.drand());
+        d_dtremain(cand) = dt * static_cast<KK_POS_FLOAT>(rand_gen.drand());
       }
 
       nsingle += nactual;
@@ -823,7 +823,7 @@ void FixEmitSurfKokkos::operator()(TagFixEmitSurf_perform_task, const int &i, in
       d_erot(cand) = particle_kk_copy.obj.erot(ispecies,temp_rot,rand_gen);
       d_evib(cand) = particle_kk_copy.obj.evib(ispecies,temp_vib,rand_gen);
       d_id(cand) = MAXSMALLINT*rand_gen.drand();
-      d_dtremain(cand) = dt * static_cast<KK_FLOAT>(rand_gen.drand());
+      d_dtremain(cand) = dt * static_cast<KK_POS_FLOAT>(rand_gen.drand());
     }
 
     nsingle += nactual;
