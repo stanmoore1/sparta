@@ -10,6 +10,8 @@
 # Adapted from the LAMMPS doc/utils/sphinx-config/conf.py.in.
 
 import os
+import pathlib
+import shutil
 import sys
 from datetime import date
 
@@ -218,5 +220,28 @@ def _restore_static_path(app, env):
         app.config.html_static_path[:] = ['_static']
 
 
+def _copy_full_size_figures(app, exception):
+    # Every figure on a page is the _small thumbnail, with the full-size
+    # version as the click-through ":target:".  Sphinx copies an image it
+    # renders, into _images/ under a name of its own choosing, but a
+    # ":target:" is just a URL: it reaches the page verbatim as
+    # href="JPG/adapt_2d.jpg" and nothing copies what it points at, so
+    # every one of those links 404s.
+    #
+    # Publishing src/JPG as html/JPG fixes all of them at once, and keeps
+    # the URLs the txt2html site published -- sparta.github.io/doc/JPG/... --
+    # working for links from the web site, papers and search results, the
+    # same reason the page filenames were kept.  The whole directory goes,
+    # thumbnails included, so any /doc/JPG/ URL resolves and not just the
+    # ones a ":target:" happens to name today.
+    if exception is not None or app.builder.name != 'html':
+        return
+    src = pathlib.Path(app.srcdir) / 'JPG'
+    if not src.is_dir():
+        return
+    shutil.copytree(src, pathlib.Path(app.outdir) / 'JPG', dirs_exist_ok=True)
+
+
 def setup(app):
     app.connect('env-updated', _restore_static_path)
+    app.connect('build-finished', _copy_full_size_figures)

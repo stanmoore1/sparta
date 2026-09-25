@@ -46,6 +46,7 @@ SPHINXEXTRA = -j $(shell $(PYTHON) -c 'import multiprocessing;print(multiprocess
 
 .PHONY: help clean-all clean clean-spelling clean-linkcheck epub html pdf \
         spelling anchor_check style_check char_check link_check role_check \
+        internal_link_check \
         fasthtml fasthtml-init check upgrade
 
 FASTHTMLFILES = $(patsubst $(RSTDIR)/%.rst,fasthtml/%.html,$(wildcard $(RSTDIR)/*rst))
@@ -61,12 +62,13 @@ help:
 	@echo "  upgrade       upgrade sphinx, extensions, and dependencies to latest supported versions"
 	@echo "  clean         remove all intermediate files"
 	@echo "  clean-all     reset the entire build environment"
-	@echo "  check         run 'anchor_check', 'style_check', 'char_check', and 'role_check'"
+	@echo "  check         run 'anchor_check', 'style_check', 'char_check', 'role_check', and 'internal_link_check'"
 	@echo "  anchor_check  scan for duplicate anchor labels"
 	@echo "  style_check   check for complete and consistent style lists"
 	@echo "  char_check    check for non-ASCII characters"
 	@echo "  role_check    check for misformatted role keywords"
 	@echo "  link_check    check external links in the manual"
+	@echo "  internal_link_check  check every internal link and anchor in doc/html"
 	@echo "  spelling      spell-check the manual"
 
 # ------------------------------------------
@@ -191,7 +193,18 @@ pdf: $(VENV) $(SPHINXCONFIG)/conf.py $(ANCHORCHECK)
 	@rm -rf latex/_sources
 	@echo "Build finished. Manual.pdf is in this directory."
 
-check : anchor_check style_check char_check role_check
+check : anchor_check style_check char_check role_check internal_link_check
+
+# link_check (above) is sphinx's linkcheck builder: it asks the network about
+# external URLs.  This is the other half, and the half that can break without
+# anyone outside the project doing anything -- every internal link and every
+# anchor, resolved against the build.  Anchor names are URLs, so a renamed one
+# breaks inbound links as surely as a deleted page.  It needs the built html,
+# which "make html" leaves in place and CI builds before running this.
+internal_link_check :
+	@if [ ! -d $(BUILDDIR)/html ]; then \
+		echo "no build to check: run '$(MAKE) html' first" 1>&2; exit 1; fi
+	@$(PYTHON) $(BUILDDIR)/utils/link-check.py $(BUILDDIR)/html
 
 anchor_check : $(ANCHORCHECK)
 	@(\

@@ -31,6 +31,16 @@ HREF = re.compile(r'<a\b[^>]*?href\s*=\s*"([^"]*)"', re.I)
 # built by the pdf target, into this directory; see the note below
 PDF = 'Manual.pdf'
 
+# The web server serves 404.html for any missing URL, including ones in
+# subdirectories, so a relative link on that page would resolve against
+# whatever path the visitor mistyped.  sphinx-notfound-page therefore
+# rewrites every link on it to be site-absolute, and conf.py sets the
+# prefix to match where the manual is deployed.  Those links are correct
+# for the site and wrong only against a local build tree, so strip the
+# prefix and check them against the build root like any other link --
+# a page 404.html names that does not exist is still a dead link.
+SITE_PREFIX = '/doc/'
+
 
 def anchors(text):
     found = set(NAME.findall(text))
@@ -60,6 +70,8 @@ def main():
             if href.startswith(('http', 'mailto', 'ftp', 'javascript:')):
                 continue
             target, _, frag = href.partition('#')
+            if target.startswith(SITE_PREFIX):
+                target = target[len(SITE_PREFIX):]
             if target and not (root / target).exists():
                 # "make pdf" is a separate target with a LaTeX toolchain
                 # behind it, so the PDF is legitimately absent from an
