@@ -141,14 +141,15 @@ def main():
                 for ctype, fname, dims in fields:
                     d = dims_of(dims)
                     if fname in info["fields"]:
-                        dtype = "double" if dst == host else ctypes[info["fields"][fname]]
+                        # kk_convert() keeps a double value whose single
+                        #   precision image is unchanged
                         if not d:
-                            w("  dst.%s = static_cast<%s>(src.%s);" % (fname, dtype, fname))
+                            w("  kk_convert(dst.%s,src.%s);" % (fname, fname))
                         else:
                             if len(d) != 1:
                                 sys.exit("gen_kk_structs: only 1d array fields supported")
                             w("  for (int k = 0; k < %s; k++)" % d[0])
-                            w("    dst.%s[k] = static_cast<%s>(src.%s[k]);" % (fname, dtype, fname))
+                            w("    kk_convert(dst.%s[k],src.%s[k]);" % (fname, fname))
                     elif d:
                         w("  for (int k = 0; k < %s; k++) dst.%s[k] = src.%s[k];"
                           % (d[0], fname, fname))

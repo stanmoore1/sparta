@@ -62,13 +62,13 @@ void kk_convert(OnePartKK &dst, const Particle::OnePart &src)
   dst.icell = src.icell;
   dst.flag = src.flag;
   for (int k = 0; k < 3; k++)
-    dst.x[k] = static_cast<KK_POS_FLOAT>(src.x[k]);
+    kk_convert(dst.x[k],src.x[k]);
   for (int k = 0; k < 3; k++)
-    dst.v[k] = static_cast<KK_FLOAT>(src.v[k]);
-  dst.erot = static_cast<KK_FLOAT>(src.erot);
-  dst.evib = static_cast<KK_FLOAT>(src.evib);
-  dst.dtremain = static_cast<KK_POS_FLOAT>(src.dtremain);
-  dst.weight = static_cast<KK_FLOAT>(src.weight);
+    kk_convert(dst.v[k],src.v[k]);
+  kk_convert(dst.erot,src.erot);
+  kk_convert(dst.evib,src.evib);
+  kk_convert(dst.dtremain,src.dtremain);
+  kk_convert(dst.weight,src.weight);
 }
 
 KOKKOS_INLINE_FUNCTION
@@ -79,13 +79,13 @@ void kk_convert(Particle::OnePart &dst, const OnePartKK &src)
   dst.icell = src.icell;
   dst.flag = src.flag;
   for (int k = 0; k < 3; k++)
-    dst.x[k] = static_cast<double>(src.x[k]);
+    kk_convert(dst.x[k],src.x[k]);
   for (int k = 0; k < 3; k++)
-    dst.v[k] = static_cast<double>(src.v[k]);
-  dst.erot = static_cast<double>(src.erot);
-  dst.evib = static_cast<double>(src.evib);
-  dst.dtremain = static_cast<double>(src.dtremain);
-  dst.weight = static_cast<double>(src.weight);
+    kk_convert(dst.v[k],src.v[k]);
+  kk_convert(dst.erot,src.erot);
+  kk_convert(dst.evib,src.evib);
+  kk_convert(dst.dtremain,src.dtremain);
+  kk_convert(dst.weight,src.weight);
 }
 
 typedef Grid::ChildCell ChildCellKK;
@@ -121,13 +121,13 @@ void kk_convert(OnePartKK &dst, const Particle::OnePart &src)
   dst.icell = src.icell;
   dst.flag = src.flag;
   for (int k = 0; k < 3; k++)
-    dst.x[k] = static_cast<KK_POS_FLOAT>(src.x[k]);
+    kk_convert(dst.x[k],src.x[k]);
   for (int k = 0; k < 3; k++)
-    dst.v[k] = static_cast<KK_FLOAT>(src.v[k]);
-  dst.erot = static_cast<KK_FLOAT>(src.erot);
-  dst.evib = static_cast<KK_FLOAT>(src.evib);
-  dst.dtremain = static_cast<KK_POS_FLOAT>(src.dtremain);
-  dst.weight = static_cast<KK_FLOAT>(src.weight);
+    kk_convert(dst.v[k],src.v[k]);
+  kk_convert(dst.erot,src.erot);
+  kk_convert(dst.evib,src.evib);
+  kk_convert(dst.dtremain,src.dtremain);
+  kk_convert(dst.weight,src.weight);
 }
 
 KOKKOS_INLINE_FUNCTION
@@ -138,13 +138,13 @@ void kk_convert(Particle::OnePart &dst, const OnePartKK &src)
   dst.icell = src.icell;
   dst.flag = src.flag;
   for (int k = 0; k < 3; k++)
-    dst.x[k] = static_cast<double>(src.x[k]);
+    kk_convert(dst.x[k],src.x[k]);
   for (int k = 0; k < 3; k++)
-    dst.v[k] = static_cast<double>(src.v[k]);
-  dst.erot = static_cast<double>(src.erot);
-  dst.evib = static_cast<double>(src.evib);
-  dst.dtremain = static_cast<double>(src.dtremain);
-  dst.weight = static_cast<double>(src.weight);
+    kk_convert(dst.v[k],src.v[k]);
+  kk_convert(dst.erot,src.erot);
+  kk_convert(dst.evib,src.evib);
+  kk_convert(dst.dtremain,src.dtremain);
+  kk_convert(dst.weight,src.weight);
 }
 
 struct SPARTA_ALIGN(64) ChildCellKK {
@@ -172,9 +172,9 @@ void kk_convert(ChildCellKK &dst, const Grid::ChildCell &src)
   for (int k = 0; k < 6; k++) dst.neigh[k] = src.neigh[k];
   dst.nmask = src.nmask;
   for (int k = 0; k < 3; k++)
-    dst.lo[k] = static_cast<KK_POS_FLOAT>(src.lo[k]);
+    kk_convert(dst.lo[k],src.lo[k]);
   for (int k = 0; k < 3; k++)
-    dst.hi[k] = static_cast<KK_POS_FLOAT>(src.hi[k]);
+    kk_convert(dst.hi[k],src.hi[k]);
   dst.nsurf = src.nsurf;
   dst.csurfs = src.csurfs;
   dst.nsplit = src.nsplit;
@@ -191,9 +191,9 @@ void kk_convert(Grid::ChildCell &dst, const ChildCellKK &src)
   for (int k = 0; k < 6; k++) dst.neigh[k] = src.neigh[k];
   dst.nmask = src.nmask;
   for (int k = 0; k < 3; k++)
-    dst.lo[k] = static_cast<double>(src.lo[k]);
+    kk_convert(dst.lo[k],src.lo[k]);
   for (int k = 0; k < 3; k++)
-    dst.hi[k] = static_cast<double>(src.hi[k]);
+    kk_convert(dst.hi[k],src.hi[k]);
   dst.nsurf = src.nsurf;
   dst.csurfs = src.csurfs;
   dst.nsplit = src.nsplit;
@@ -214,7 +214,7 @@ void kk_convert(SplitInfoKK &dst, const Grid::SplitInfo &src)
   dst.icell = src.icell;
   dst.xsub = src.xsub;
   for (int k = 0; k < 3; k++)
-    dst.xsplit[k] = static_cast<KK_POS_FLOAT>(src.xsplit[k]);
+    kk_convert(dst.xsplit[k],src.xsplit[k]);
   dst.csplits = src.csplits;
   dst.csubs = src.csubs;
 }
@@ -225,7 +225,7 @@ void kk_convert(Grid::SplitInfo &dst, const SplitInfoKK &src)
   dst.icell = src.icell;
   dst.xsub = src.xsub;
   for (int k = 0; k < 3; k++)
-    dst.xsplit[k] = static_cast<double>(src.xsplit[k]);
+    kk_convert(dst.xsplit[k],src.xsplit[k]);
   dst.csplits = src.csplits;
   dst.csubs = src.csubs;
 }
@@ -241,9 +241,9 @@ void kk_convert(ParentCellKK &dst, const Grid::ParentCell &src)
 {
   dst.id = src.id;
   for (int k = 0; k < 3; k++)
-    dst.lo[k] = static_cast<KK_POS_FLOAT>(src.lo[k]);
+    kk_convert(dst.lo[k],src.lo[k]);
   for (int k = 0; k < 3; k++)
-    dst.hi[k] = static_cast<KK_POS_FLOAT>(src.hi[k]);
+    kk_convert(dst.hi[k],src.hi[k]);
 }
 
 KOKKOS_INLINE_FUNCTION
@@ -251,9 +251,9 @@ void kk_convert(Grid::ParentCell &dst, const ParentCellKK &src)
 {
   dst.id = src.id;
   for (int k = 0; k < 3; k++)
-    dst.lo[k] = static_cast<double>(src.lo[k]);
+    kk_convert(dst.lo[k],src.lo[k]);
   for (int k = 0; k < 3; k++)
-    dst.hi[k] = static_cast<double>(src.hi[k]);
+    kk_convert(dst.hi[k],src.hi[k]);
 }
 
 struct LineKK {
@@ -277,11 +277,11 @@ void kk_convert(LineKK &dst, const Surf::Line &src)
   dst.isc = src.isc;
   dst.isr = src.isr;
   for (int k = 0; k < 3; k++)
-    dst.p1[k] = static_cast<KK_POS_FLOAT>(src.p1[k]);
+    kk_convert(dst.p1[k],src.p1[k]);
   for (int k = 0; k < 3; k++)
-    dst.p2[k] = static_cast<KK_POS_FLOAT>(src.p2[k]);
+    kk_convert(dst.p2[k],src.p2[k]);
   for (int k = 0; k < 3; k++)
-    dst.norm[k] = static_cast<KK_POS_FLOAT>(src.norm[k]);
+    kk_convert(dst.norm[k],src.norm[k]);
   dst.transparent = src.transparent;
 }
 
@@ -294,11 +294,11 @@ void kk_convert(Surf::Line &dst, const LineKK &src)
   dst.isc = src.isc;
   dst.isr = src.isr;
   for (int k = 0; k < 3; k++)
-    dst.p1[k] = static_cast<double>(src.p1[k]);
+    kk_convert(dst.p1[k],src.p1[k]);
   for (int k = 0; k < 3; k++)
-    dst.p2[k] = static_cast<double>(src.p2[k]);
+    kk_convert(dst.p2[k],src.p2[k]);
   for (int k = 0; k < 3; k++)
-    dst.norm[k] = static_cast<double>(src.norm[k]);
+    kk_convert(dst.norm[k],src.norm[k]);
   dst.transparent = src.transparent;
 }
 
@@ -324,13 +324,13 @@ void kk_convert(TriKK &dst, const Surf::Tri &src)
   dst.isc = src.isc;
   dst.isr = src.isr;
   for (int k = 0; k < 3; k++)
-    dst.p1[k] = static_cast<KK_POS_FLOAT>(src.p1[k]);
+    kk_convert(dst.p1[k],src.p1[k]);
   for (int k = 0; k < 3; k++)
-    dst.p2[k] = static_cast<KK_POS_FLOAT>(src.p2[k]);
+    kk_convert(dst.p2[k],src.p2[k]);
   for (int k = 0; k < 3; k++)
-    dst.p3[k] = static_cast<KK_POS_FLOAT>(src.p3[k]);
+    kk_convert(dst.p3[k],src.p3[k]);
   for (int k = 0; k < 3; k++)
-    dst.norm[k] = static_cast<KK_POS_FLOAT>(src.norm[k]);
+    kk_convert(dst.norm[k],src.norm[k]);
   dst.transparent = src.transparent;
 }
 
@@ -343,13 +343,13 @@ void kk_convert(Surf::Tri &dst, const TriKK &src)
   dst.isc = src.isc;
   dst.isr = src.isr;
   for (int k = 0; k < 3; k++)
-    dst.p1[k] = static_cast<double>(src.p1[k]);
+    kk_convert(dst.p1[k],src.p1[k]);
   for (int k = 0; k < 3; k++)
-    dst.p2[k] = static_cast<double>(src.p2[k]);
+    kk_convert(dst.p2[k],src.p2[k]);
   for (int k = 0; k < 3; k++)
-    dst.p3[k] = static_cast<double>(src.p3[k]);
+    kk_convert(dst.p3[k],src.p3[k]);
   for (int k = 0; k < 3; k++)
-    dst.norm[k] = static_cast<double>(src.norm[k]);
+    kk_convert(dst.norm[k],src.norm[k]);
   dst.transparent = src.transparent;
 }
 

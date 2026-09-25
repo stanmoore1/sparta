@@ -447,10 +447,18 @@ namespace SPARTA_NS {
 // convert one element between precisions, specialized for structs in
 //   kokkos_structs.h
 
+// dst keeps its value if it already converts exactly to src, so a double
+//   host value whose single precision image was not changed on the device
+//   survives the round trip host -> device -> host with full precision
+//   (e.g. grid cell corners, which host geometry code compares exactly)
+
 template<class DstType, class SrcType>
 KOKKOS_INLINE_FUNCTION
 std::enable_if_t<std::is_arithmetic_v<DstType>>
-kk_convert(DstType &dst, const SrcType &src) { dst = static_cast<DstType>(src); }
+kk_convert(DstType &dst, const SrcType &src)
+{
+  if (static_cast<SrcType>(dst) != src) dst = static_cast<DstType>(src);
+}
 
 template<class Type>
 KOKKOS_INLINE_FUNCTION
@@ -463,8 +471,26 @@ template<class DstView, class SrcView>
 void transform_copy(const DstView &dst, const SrcView &src)
 {
   typedef typename DstView::non_const_value_type dst_type;
+  typedef Kokkos::RangePolicy<SPAHostType> policy_1d;
+  typedef Kokkos::MDRangePolicy<SPAHostType,Kokkos::Rank<2>> policy_2d;
+  typedef Kokkos::MDRangePolicy<SPAHostType,Kokkos::Rank<3>> policy_3d;
   if constexpr (std::is_arithmetic_v<dst_type>) {
-    Kokkos::deep_copy(dst,src);
+    // element by element, as kk_convert() keeps unchanged values
+    static_assert(DstView::rank == SrcView::rank && DstView::rank <= 3,
+                  "TransformView of an arithmetic type must have rank 0 to 3");
+    if constexpr (DstView::rank == 0) kk_convert(dst(),src());
+    else if constexpr (DstView::rank == 1)
+      Kokkos::parallel_for(policy_1d(0,dst.extent(0)),
+                           [=](const int i) { kk_convert(dst(i),src(i)); });
+    else if constexpr (DstView::rank == 2)
+      Kokkos::parallel_for(policy_2d({0,0},{(int64_t) dst.extent(0),(int64_t) dst.extent(1)}),
+                           [=](const int i, const int j) { kk_convert(dst(i,j),src(i,j)); });
+    else
+      Kokkos::parallel_for(policy_3d({0,0,0},{(int64_t) dst.extent(0),(int64_t) dst.extent(1),
+                                              (int64_t) dst.extent(2)}),
+                           [=](const int i, const int j, const int k) {
+                             kk_convert(dst(i,j,k),src(i,j,k)); });
+    Kokkos::fence();
   } else {
     static_assert(DstView::rank == 1 && SrcView::rank == 1,
                   "TransformView of a struct type must have rank 1");

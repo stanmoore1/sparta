@@ -116,9 +116,13 @@ def compare_stats(ref, new, fraction, rtol, nsigma):
                 msgs.append("%s: NaN/Inf" % rh[c])
                 continue
             var = sum((x - rm) ** 2 for x in ra) / max(1, len(ra) - 1)
-            sem = math.sqrt(var / len(ra)) if len(ra) > 1 else 0.0
+            nvar = sum((x - nm) ** 2 for x in na) / max(1, len(na) - 1)
+            # standard error of the difference of the two means
+            sem = math.sqrt(var / len(ra) + nvar / len(na)) if min(len(ra), len(na)) > 1 else 0.0
             diff = abs(nm - rm)
-            scale = max(abs(rm), 1e-300)
+            # relative to the mean, or to the fluctuation of a quantity
+            #   that averages to about zero
+            scale = max(abs(rm), math.sqrt(var), 1e-300)
             if diff <= rtol * scale or diff <= nsigma * sem or (rm == 0 and nm == 0):
                 continue
             # too few samples for a meaningful standard error

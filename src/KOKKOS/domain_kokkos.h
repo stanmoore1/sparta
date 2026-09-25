@@ -88,6 +88,20 @@ class DomainKokkos : public Domain {
           break;
         }
 
+        // with single precision positions the shifted xnew can round to
+        //   just outside the box face the particle re-entered through
+        //   (float(boxhi) - prd != boxlo), and the particle would then be
+        //   wrapped back and forth across the periodic boundary forever;
+        //   keep it inside, which only moves it by round-off
+
+        if constexpr (std::is_same_v<KK_POS_FLOAT,float>) {
+          const int dim = face/2;
+          if (face % 2 && xnew[dim] < static_cast<KK_POS_FLOAT>(boxlo[dim]))
+            xnew[dim] = boxlo[dim];
+          else if (!(face % 2) && xnew[dim] > static_cast<KK_POS_FLOAT>(boxhi[dim]))
+            xnew[dim] = boxhi[dim];
+        }
+
         return PERIODIC;
       }
 
