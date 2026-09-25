@@ -1040,7 +1040,7 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
 
 template < int DIM >
 KOKKOS_INLINE_FUNCTION
-int UpdateKokkos::optmove_bc(const double *xnew, double *xp, int &flip) const
+int UpdateKokkos::optmove_bc(const KK_POS_FLOAT *xnew, KK_POS_FLOAT *xp, int &flip) const
 {
   xp[0] = xnew[0];
   xp[1] = xnew[1];
@@ -1144,7 +1144,7 @@ int UpdateKokkos::optmove_bc(const double *xnew, double *xp, int &flip) const
 
 template < int DIM >
 KOKKOS_INLINE_FUNCTION
-int UpdateKokkos::optmove_cell(const double *xp) const
+int UpdateKokkos::optmove_cell(const KK_POS_FLOAT *xp) const
 {
   const int ip = static_cast<int> ((xp[0] - xlo)/dx);
   const int jp = static_cast<int> ((xp[1] - ylo)/dy);
@@ -1201,18 +1201,18 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
   bool hitflag;
   int icell,icell_original,outface,bflag,nflag,pflag,itmp;
   int side,minsurf,nsurf,cflag,isurf,exclude,stuck_iterate;
-  double dtremain,frac,newfrac,param,minparam,rnew,dtsurf,tc,tmp;
-  double xnew[3],xhold[3],xc[3],vc[3],minxc[3],minvc[3];
-  double *x,*v;
-  Surf::Tri *tri;
-  Surf::Line *line;
+  KK_POS_FLOAT dtremain,frac,newfrac,param,minparam,rnew,dtsurf,tc,tmp;
+  KK_POS_FLOAT xnew[3]; KK_POS_FLOAT xhold[3]; KK_POS_FLOAT xc[3]; KK_FLOAT vc[3]; KK_POS_FLOAT minxc[3]; KK_FLOAT minvc[3];
+  KK_POS_FLOAT *x; KK_FLOAT *v;
+  TriKK *tri;
+  LineKK *line;
   int reaction;
 
-  Particle::OnePart &particle_i = d_particles[i];
+  OnePartKK &particle_i = d_particles[i];
   pflag = particle_i.flag;
 
-  Particle::OnePart iorig;
-  Particle::OnePart *ipart,*jpart;
+  OnePartKK iorig;
+  OnePartKK *ipart,*jpart;
   jpart = NULL;
 
   // received from another proc and move is done
@@ -1298,7 +1298,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
   //   standard move below with its state untouched
 
   if (OPT) {
-    double xp[3];
+    KK_POS_FLOAT xp[3];
     int flip;
 
     // axisymmetry: fold the linear end-of-step position back into the (x,r)
@@ -1312,8 +1312,8 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
     // remap a copy: axi_remap() rotates the velocity, and a particle that
     //   falls through has to reach the standard move with v untouched
 
-    const double *xin = xnew;
-    double xaxi[3],vaxi[3];
+    const KK_POS_FLOAT *xin = xnew;
+    KK_POS_FLOAT xaxi[3]; KK_FLOAT vaxi[3];
 
     if (DIM == 1) {
       xaxi[0] = xnew[0]; xaxi[1] = xnew[1]; xaxi[2] = xnew[2];
@@ -1437,8 +1437,8 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
 
   particle_i.flag = PKEEP;
   icell = particle_i.icell;
-  double* lo = d_cells[icell].lo;
-  double* hi = d_cells[icell].hi;
+  KK_POS_FLOAT* lo = d_cells[icell].lo;
+  KK_POS_FLOAT* hi = d_cells[icell].hi;
   cellint* neigh = d_cells[icell].neigh;
   int nmask = d_cells[icell].nmask;
   stuck_iterate = 0;
@@ -1486,7 +1486,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
                CELLINT_FORMAT ": lo %g %g: hi %g %g: DTR: %g\n",
                me,ntimestep,i,d_particles[i].id,
                d_cells[icell].nsurf,
-               x[0],x[1],xnew[0],sqrt(xnew[1]*xnew[1]+xnew[2]*xnew[2]),
+               x[0],x[1],xnew[0],Kokkos::sqrt(xnew[1]*xnew[1]+xnew[2]*xnew[2]),
                icell,d_cells[icell].id,
                lo[0],lo[1],hi[0],hi[1],dtremain);
     }
@@ -1512,14 +1512,14 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
     if (xnew[0] < lo[0]) {
       if (xnew[0] != x[0]) frac = (lo[0]-x[0]) / (xnew[0]-x[0]);
       else frac = 0.0;
-      if (frac < 0.0) frac = 0.0;
-      else if (frac > 1.0) frac = 1.0;
+      if (frac < static_cast<KK_POS_FLOAT>(0.0)) frac = 0.0;
+      else if (frac > static_cast<KK_POS_FLOAT>(1.0)) frac = 1.0;
       outface = XLO;
     } else if (xnew[0] >= hi[0]) {
       if (xnew[0] != x[0]) frac = (hi[0]-x[0]) / (xnew[0]-x[0]);
       else frac = 0.0;
-      if (frac < 0.0) frac = 0.0;
-      else if (frac > 1.0) frac = 1.0;
+      if (frac < static_cast<KK_POS_FLOAT>(0.0)) frac = 0.0;
+      else if (frac > static_cast<KK_POS_FLOAT>(1.0)) frac = 1.0;
       outface = XHI;
     }
 
@@ -1527,8 +1527,8 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
       if (xnew[1] < lo[1]) {
         if (xnew[1] != x[1]) newfrac = (lo[1]-x[1]) / (xnew[1]-x[1]);
         else newfrac = 0.0;
-        if (newfrac < 0.0) newfrac = 0.0;
-        else if (newfrac > 1.0) newfrac = 1.0;
+        if (newfrac < static_cast<KK_POS_FLOAT>(0.0)) newfrac = 0.0;
+        else if (newfrac > static_cast<KK_POS_FLOAT>(1.0)) newfrac = 1.0;
         if (newfrac < frac) {
           frac = newfrac;
           outface = YLO;
@@ -1536,8 +1536,8 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
       } else if (xnew[1] >= hi[1]) {
         if (xnew[1] != x[1]) newfrac = (hi[1]-x[1]) / (xnew[1]-x[1]);
         else newfrac = 0.0;
-        if (newfrac < 0.0) newfrac = 0.0;
-        else if (newfrac > 1.0) newfrac = 1.0;
+        if (newfrac < static_cast<KK_POS_FLOAT>(0.0)) newfrac = 0.0;
+        else if (newfrac > static_cast<KK_POS_FLOAT>(1.0)) newfrac = 1.0;
         if (newfrac < frac) {
           frac = newfrac;
           outface = YHI;
@@ -1546,7 +1546,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
     }
 
     if (DIM == 1) {
-      if (x[1] == lo[1] && (pflag == PEXIT || v[1] < 0.0)) {
+      if (x[1] == lo[1] && (pflag == PEXIT || v[1] < static_cast<KK_POS_FLOAT>(0.0))) {
         frac = 0.0;
         outface = YLO;
       } else if (GeometryKokkos::
@@ -1558,11 +1558,11 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
         }
       }
 
-      if (x[1] == hi[1] && (pflag == PEXIT || v[1] > 0.0)) {
+      if (x[1] == hi[1] && (pflag == PEXIT || v[1] > static_cast<KK_POS_FLOAT>(0.0))) {
         frac = 0.0;
         outface = YHI;
       } else {
-        rnew = sqrt(xnew[1]*xnew[1] + xnew[2]*xnew[2]);
+        rnew = Kokkos::sqrt(xnew[1]*xnew[1] + xnew[2]*xnew[2]);
         if (rnew >= hi[1]) {
           if (GeometryKokkos::
               axi_horizontal_line(dtremain,x,v,hi[1],itmp,tc,tmp)) {
@@ -1582,8 +1582,8 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
       if (xnew[2] < lo[2]) {
         if (xnew[2] != x[2]) newfrac = (lo[2]-x[2]) / (xnew[2]-x[2]);
         else newfrac = 0.0;
-        if (newfrac < 0.0) newfrac = 0.0;
-        else if (newfrac > 1.0) newfrac = 1.0;
+        if (newfrac < static_cast<KK_POS_FLOAT>(0.0)) newfrac = 0.0;
+        else if (newfrac > static_cast<KK_POS_FLOAT>(1.0)) newfrac = 1.0;
         if (newfrac < frac) {
           frac = newfrac;
           outface = ZLO;
@@ -1591,13 +1591,23 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
       } else if (xnew[2] >= hi[2]) {
         if (xnew[2] != x[2]) newfrac = (hi[2]-x[2]) / (xnew[2]-x[2]);
         else newfrac = 0.0;
-        if (newfrac < 0.0) newfrac = 0.0;
-        else if (newfrac > 1.0) newfrac = 1.0;
+        if (newfrac < static_cast<KK_POS_FLOAT>(0.0)) newfrac = 0.0;
+        else if (newfrac > static_cast<KK_POS_FLOAT>(1.0)) newfrac = 1.0;
         if (newfrac < frac) {
           frac = newfrac;
           outface = ZHI;
         }
       }
+    }
+
+    // in single precision x + dtremain*v can round to x, so a particle can
+    //   end up exactly on a cell face with dtremain = 0.  With no motion
+    //   left it must not cross the face: at a reflecting boundary it would
+    //   otherwise be reflected back and forth forever.  Only done for float
+    //   positions, so a double precision build is unchanged.
+
+    if constexpr (std::is_same_v<KK_POS_FLOAT,float>) {
+      if (dtremain == 0.0) outface = INTERIOR;
     }
 
 #ifdef MOVE_DEBUG
@@ -1744,11 +1754,11 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
                      "VC %g %g %g: Param %g: Side %d\n",
                      hitflag,ntimestep,MOVE_DEBUG_INDEX,icell,nsurf,isurf,
                      x[0],x[1],
-                     xnew[0],sqrt(xnew[1]*xnew[1]+xnew[2]*xnew[2]),
+                     xnew[0],Kokkos::sqrt(xnew[1]*xnew[1]+xnew[2]*xnew[2]),
                      line->p1[0],line->p1[1],line->p2[0],line->p2[1],
                      line->norm[0],line->norm[1],
                      xc[0],xc[1],vc[0],vc[1],vc[2],param,side);
-            double edge1[3],edge2[3],xfinal[3],cross[3];
+            KK_POS_FLOAT edge1[3]; KK_POS_FLOAT edge2[3]; KK_POS_FLOAT xfinal[3]; KK_FLOAT cross[3];
             MathExtraKokkos::sub3(line->p2,line->p1,edge1);
             MathExtraKokkos::sub3(x,line->p1,edge2);
             MathExtraKokkos::cross3(edge2,edge1,cross);
@@ -1756,7 +1766,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
                 MOVE_DEBUG_ID == d_particles[i].id)
               printf("CROSSSTART %g %g %g\n",cross[0],cross[1],cross[2]);
             xfinal[0] = xnew[0];
-            xfinal[1] = sqrt(xnew[1]*xnew[1]+xnew[2]*xnew[2]);
+            xfinal[1] = Kokkos::sqrt(xnew[1]*xnew[1]+xnew[2]*xnew[2]);
             xfinal[2] = 0.0;
             MathExtraKokkos::sub3(xfinal,line->p1,edge2);
             MathExtraKokkos::cross3(edge2,edge1,cross);
@@ -1833,7 +1843,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
 
           ipart = &particle_i;
           ipart->icell = icell;
-          dtremain *= 1.0 - minparam*frac;
+          dtremain *= static_cast<KK_POS_FLOAT>(1.0) - minparam*frac;
 
           if (nsurf_tally)
             iorig = particle_i;
@@ -1880,7 +1890,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
 
           // stuck_iterate = consecutive iterations particle is immobile
 
-          if (minparam <= 1.0e-14) stuck_iterate++;
+          if (minparam <= kk_eps<KK_POS_FLOAT>(1.0e-14,1.0e-6)) stuck_iterate++;
           else stuck_iterate = 0;
 
           // reset post-bounce xnew
@@ -1923,7 +1933,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
               printf("POST COLLISION %d: %g %g: %g %g: vel %g %g %g: %g %g %g\n",
                      MOVE_DEBUG_INDEX,
                      x[0],x[1],
-                     xnew[0],sqrt(xnew[1]*xnew[1]+xnew[2]*xnew[2]),
+                     xnew[0],Kokkos::sqrt(xnew[1]*xnew[1]+xnew[2]*xnew[2]),
                      v[0],v[1],v[2],
                      minparam,frac,dtremain);
           }
@@ -2001,7 +2011,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
     // reset particle x to be exactly on cell face
     // for axisymmetry, must reset xnew for next iteration since v changed
 
-    dtremain *= 1.0-frac;
+    dtremain *= static_cast<KK_POS_FLOAT>(1.0)-frac;
     exclude = -1;
 
     x[0] += frac * (xnew[0]-x[0]);
@@ -2074,15 +2084,19 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
     else {
       ipart = &particle_i;
 
-      Particle::OnePart iorig;
+      OnePartKK iorig;
       if (nboundary_tally)
-        memcpy(&iorig,&particle_i,sizeof(Particle::OnePart));
+        memcpy(&iorig,&particle_i,sizeof(OnePartKK));
 
       // from Domain:
 
-      Particle::OnePart* ipart = &particle_i;
+      OnePartKK* ipart = &particle_i;
       lo = d_cells[icell].lo;
       hi = d_cells[icell].hi;
+      // boundary normal in KK position precision (Domain holds it in double)
+      KK_POS_FLOAT bnorm[3];
+      for (int k = 0; k < 3; k++) bnorm[k] = domain_kk_copy.obj.norm[outface][k];
+
       if (domain_kk_copy.obj.bflag[outface] == SURFACE) {
         // treat global boundary as a surface
         // particle velocity is changed by surface collision model
@@ -2093,12 +2107,12 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
         const int n = domain_kk_copy.obj.surf_collide[outface];
 
         jpart = surf_collide_dispatch<REACT,ATOMIC_REDUCTION>
-          (n,ipart,dtremain,-(outface+1),domain_kk_copy.obj.norm[outface],
+          (n,ipart,dtremain,-(outface+1),bnorm,
            domain_kk_copy.obj.surf_react[outface],reaction,d_retry,d_nlocal);
 
         if (ipart) {
-          double *x = ipart->x;
-          double *v = ipart->v;
+          KK_POS_FLOAT *x = ipart->x;
+          KK_FLOAT *v = ipart->v;
           xnew[0] = x[0] + dtremain*v[0];
           xnew[1] = x[1] + dtremain*v[1];
           if (domain_kk_copy.obj.dimension == 3) xnew[2] = x[2] + dtremain*v[2];
@@ -2116,10 +2130,10 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
       if (nboundary_tally) {
         for (int m = 0; m < nblist_boundary; m++)
           UK_BLIST(m).
-            boundary_tally_kk<ATOMIC_REDUCTION>(dtremain,outface,bflag,reaction,&iorig,ipart,jpart,domain_kk_copy.obj.norm[outface]);
+            boundary_tally_kk<ATOMIC_REDUCTION>(dtremain,outface,bflag,reaction,&iorig,ipart,jpart,bnorm);
         for (int m = 0; m < nblist_react; m++)
           UK_BLIST_REACT(m).
-            boundary_tally_kk<ATOMIC_REDUCTION>(dtremain,outface,bflag,reaction,&iorig,ipart,jpart,domain_kk_copy.obj.norm[outface]);
+            boundary_tally_kk<ATOMIC_REDUCTION>(dtremain,outface,bflag,reaction,&iorig,ipart,jpart,bnorm);
       }
 
       if (DIM == 1) {
@@ -2287,12 +2301,12 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
 ------------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-int UpdateKokkos::split3d(int icell, double *x) const
+int UpdateKokkos::split3d(int icell, KK_POS_FLOAT *x) const
 {
   int m,cflag,isurf,hitflag,side,minsurfindex;
-  double param,minparam;
-  double xc[3];
-  Surf::Tri *tri;
+  KK_POS_FLOAT param,minparam;
+  KK_POS_FLOAT xc[3];
+  TriKK *tri;
 
   // check for collisions with lines in cell
   // find 1st surface hit via minparam
@@ -2305,7 +2319,7 @@ int UpdateKokkos::split3d(int icell, double *x) const
 
   int nsurf = d_cells[icell].nsurf;
   int isplit = d_cells[icell].isplit;
-  double *xnew = d_sinfo[isplit].xsplit;
+  KK_POS_FLOAT *xnew = d_sinfo[isplit].xsplit;
 
   cflag = 0;
   minparam = 2.0;
@@ -2341,12 +2355,12 @@ int UpdateKokkos::split3d(int icell, double *x) const
 ------------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-int UpdateKokkos::split2d(int icell, double *x) const
+int UpdateKokkos::split2d(int icell, KK_POS_FLOAT *x) const
 {
   int m,cflag,isurf,hitflag,side,minsurfindex;
-  double param,minparam;
-  double xc[3];
-  Surf::Line *line;
+  KK_POS_FLOAT param,minparam;
+  KK_POS_FLOAT xc[3];
+  LineKK *line;
 
   // check for collisions with lines in cell
   // find 1st surface hit via minparam
@@ -2359,7 +2373,7 @@ int UpdateKokkos::split2d(int icell, double *x) const
 
   int nsurf = d_cells[icell].nsurf;
   int isplit = d_cells[icell].isplit;
-  double *xnew = d_sinfo[isplit].xsplit;
+  KK_POS_FLOAT *xnew = d_sinfo[isplit].xsplit;
 
   cflag = 0;
   minparam = 2.0;

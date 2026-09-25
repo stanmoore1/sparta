@@ -93,7 +93,7 @@ typedef tdual_region_token_1d::t_dev t_region_token_1d;
 
 KOKKOS_INLINE_FUNCTION
 int region_prim_match_kk(const RegionPrimKK &p,
-                         const double x, const double y, const double z)
+                         const KK_POS_FLOAT x, const KK_POS_FLOAT y, const KK_POS_FLOAT z)
 {
   int inside = 0;
 
@@ -102,23 +102,23 @@ int region_prim_match_kk(const RegionPrimKK &p,
       inside = 1;
 
   } else if (p.style == RKK_CYLINDER) {
-    double del1,del2;
+    KK_POS_FLOAT del1,del2;
     if (p.axis == 0) { del1 = y - p.a; del2 = z - p.b; }
     else if (p.axis == 1) { del1 = x - p.a; del2 = z - p.b; }
     else { del1 = x - p.a; del2 = y - p.b; }
-    const double dist = sqrt(del1*del1 + del2*del2);
-    const double along = (p.axis == 0) ? x : ((p.axis == 1) ? y : z);
+    const KK_POS_FLOAT dist = Kokkos::sqrt(del1*del1 + del2*del2);
+    const KK_POS_FLOAT along = (p.axis == 0) ? x : ((p.axis == 1) ? y : z);
     if (dist <= p.c && along >= p.d && along <= p.e) inside = 1;
 
   } else if (p.style == RKK_PLANE) {
-    const double dot = (x-p.a)*p.n0 + (y-p.b)*p.n1 + (z-p.c)*p.n2;
+    const KK_POS_FLOAT dot = (x-p.a)*p.n0 + (y-p.b)*p.n1 + (z-p.c)*p.n2;
     if (dot >= 0.0) inside = 1;
 
   } else {   // RKK_SPHERE
-    const double delx = x - p.a;
-    const double dely = y - p.b;
-    const double delz = z - p.c;
-    if (sqrt(delx*delx + dely*dely + delz*delz) <= p.d) inside = 1;
+    const KK_POS_FLOAT delx = x - p.a;
+    const KK_POS_FLOAT dely = y - p.b;
+    const KK_POS_FLOAT delz = z - p.c;
+    if (Kokkos::sqrt(delx*delx + dely*dely + delz*delz) <= p.d) inside = 1;
   }
 
   return !(inside ^ p.interior);
@@ -137,7 +137,7 @@ int region_prim_match_kk(const RegionPrimKK &p,
 template<class ViewType>
 KOKKOS_INLINE_FUNCTION
 int region_match_kk(const ViewType &d_tokens, const int ntoken,
-                    const double x, const double y, const double z)
+                    const KK_POS_FLOAT x, const KK_POS_FLOAT y, const KK_POS_FLOAT z)
 {
   if (ntoken == 1) return region_prim_match_kk(d_tokens[0].prim,x,y,z);
   if (ntoken <= 0) return 0;

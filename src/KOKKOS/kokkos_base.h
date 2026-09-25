@@ -38,18 +38,18 @@ class KokkosBase {
   // pre-migration values.  A style that can be in that position overrides this
   // and the reader calls it before it reads.
   virtual void sync_pergrid_device_kokkos() {}
-  virtual int query_tally_grid_kokkos(DAT::t_float_2d_lr&) {return 0;}
-  virtual void post_process_grid_kokkos(int, int, DAT::t_float_2d_lr, int *,
-                                   DAT::t_float_1d_strided) {}
+  virtual int query_tally_grid_kokkos(DAT::t_kkacc_2d_lr&) {return 0;}
+  virtual void post_process_grid_kokkos(int, int, DAT::t_kkacc_2d_lr, int *,
+                                   DAT::t_kkacc_1d_strided) {}
 
   //DAT::t_float_1d d_vector;        // Kokkos version of global vector
-  DAT::t_float_2d_lr d_array;        // Kokkos version of global array
-  DAT::t_float_1d d_vector_grid;     // Kokkos version of per-grid vector
-  DAT::t_float_2d_lr d_array_grid;   // Kokkos version of per-grid array
-  DAT::t_float_1d d_vector_particle;     // Kokkos version of per-particle vector
-  DAT::t_float_2d_lr d_array_particle;   // Kokkos version of per-particle array
+  DAT::t_kkacc_2d_lr d_array;        // Kokkos version of global array
+  DAT::t_kkacc_1d d_vector_grid;     // Kokkos version of per-grid vector
+  DAT::t_kkacc_2d_lr d_array_grid;   // Kokkos version of per-grid array
+  DAT::t_kkacc_1d d_vector_particle;     // Kokkos version of per-particle vector
+  DAT::t_kkacc_2d_lr d_array_particle;   // Kokkos version of per-particle array
 
-  DAT::tdual_float_2d_lr k_array;    // Kokkos DualView of global array
+  DAT::ttransform_kkacc_2d_lr k_array;    // Kokkos DualView of global array
 
   // Region
   virtual void match_all_kokkos(DAT::tdual_int_1d) {}
@@ -66,7 +66,7 @@ class KokkosBase {
   virtual int flatten_region_kokkos(tdual_region_token_1d &) {return 0;}
 
   KOKKOS_INLINE_FUNCTION
-  int match_kokkos(double x, double y, double z) const {return 0;}
+  int match_kokkos(KK_POS_FLOAT x, KK_POS_FLOAT y, KK_POS_FLOAT z) const {return 0;}
 };
 
 }

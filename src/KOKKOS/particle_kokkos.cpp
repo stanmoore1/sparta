@@ -189,7 +189,7 @@ void ParticleKokkos::compress_migrate(int ndelete, int *dellist)
 
   int i;
 
-  nbytes = sizeof(OnePart);
+  nbytes = sizeof(OnePartKK);
 
   if (ndelete > d_lists.extent(1)) {
     d_lists = DAT::t_int_2d_lr(Kokkos::view_alloc("particle:lists",Kokkos::WithoutInitializing),2,ndelete);
@@ -385,12 +385,12 @@ void ParticleKokkos::sort_kokkos()
       if (d_particles.extent(0) > d_sorted_id.extent(0))
         MemKK::realloc_kokkos(d_sorted_id,"particle:sorted_id",d_particles.extent(0));
     } else if (reorder_scheme == FIXEDMEMORY && d_pswap1.size() == 0) {
-      nParticlesWksp = MIN(nlocal,(double)update->global_mem_limit/sizeof(Particle::OnePart));
+      nParticlesWksp = MIN(nlocal,(double)update->global_mem_limit/sizeof(OnePartKK));
       d_pswap1 = t_particle_1d(Kokkos::view_alloc("particle:swap1",Kokkos::WithoutInitializing),nParticlesWksp);
       d_pswap2 = t_particle_1d(Kokkos::view_alloc("particle:swap2",Kokkos::WithoutInitializing),nParticlesWksp);
     }
 
-    nbytes = sizeof(OnePart);
+    nbytes = sizeof(OnePartKK);
 
     if (reorder_scheme == COPYPARTICLELIST) {
       copymode = 1;
@@ -436,7 +436,7 @@ void ParticleKokkos::sort_kokkos()
 
         for (int m = 0; m < ncustom_dvec; m++) {
           auto d_src = k_edvec.view_host()[m].k_view.view_device();
-          DAT::t_float_1d d_tmp(Kokkos::view_alloc("reorder:custom_dvec",
+          DAT::t_kkfloat_1d d_tmp(Kokkos::view_alloc("reorder:custom_dvec",
                                                    Kokkos::WithoutInitializing),l_nlocal);
           Kokkos::parallel_for(l_nlocal, KOKKOS_LAMBDA(int i) {
             d_tmp[i] = d_src[l_sorted_id[i]];
@@ -447,7 +447,7 @@ void ParticleKokkos::sort_kokkos()
         for (int m = 0; m < ncustom_darray; m++) {
           auto d_src = k_edarray.view_host()[m].k_view.view_device();
           const int ncol = d_src.extent(1);
-          DAT::t_float_2d d_tmp(Kokkos::view_alloc("reorder:custom_darray",
+          DAT::t_kkfloat_2d d_tmp(Kokkos::view_alloc("reorder:custom_darray",
                                                    Kokkos::WithoutInitializing),l_nlocal,ncol);
           Kokkos::parallel_for(l_nlocal, KOKKOS_LAMBDA(int i) {
             for (int k = 0; k < ncol; k++) d_tmp(i,k) = d_src(l_sorted_id[i],k);
@@ -540,7 +540,7 @@ KOKKOS_INLINE_FUNCTION
 void ParticleKokkos::operator()(TagFixedMemoryReorder, const int &i) const
 {
   // particle movement for this thread continues until a particle is moved to a vacant location (indicated by icell = -1)
-  OnePart *movePtr;
+  OnePartKK *movePtr;
   int newParticleLoc;
   bool iHaveAnotherParticle = false;
   if (d_pswap1[i].icell != -999)
@@ -615,7 +615,7 @@ KOKKOS_INLINE_FUNCTION
 void ParticleKokkos::operator()(TagParticleReorder_COPYPARTICLELIST2, const int offset) const
 {
   const int iparticle = d_sorted_id[offset];
-  const Particle::OnePart &particle_i = d_particles[iparticle];
+  const OnePartKK &particle_i = d_particles[iparticle];
   d_sorted[offset] = particle_i;
   const int icell = particle_i.icell;
   const int j = d_offsets_part[iparticle];
@@ -715,7 +715,7 @@ void ParticleKokkos::post_weight()
     int nchanged = 0;
     Kokkos::parallel_reduce(nlocal, KOKKOS_LAMBDA(const int i, int &lsum) {
       const auto icell = d_particles[i].icell;
-      const double ratio = d_particles[i].weight / d_cinfo[icell].weight;
+      const KK_FLOAT ratio = d_particles[i].weight / d_cinfo[icell].weight;
       d_map[i].ratio = ratio;
       d_map[i].id = d_particles[i].id;
       d_map[i].i = i;
@@ -845,7 +845,7 @@ void ParticleKokkos::post_weight()
 
       for (int m = 0; m < ncustom_dvec; m++) {
         auto d_src = k_edvec.view_host()[m].k_view.view_device();
-        DAT::t_float_1d d_tmp(Kokkos::view_alloc("post_weight:custom_dvec",
+        DAT::t_kkfloat_1d d_tmp(Kokkos::view_alloc("post_weight:custom_dvec",
                                                  Kokkos::WithoutInitializing),nlocal);
         Kokkos::parallel_for(nlocal, KOKKOS_LAMBDA(int i) {
           d_tmp[i] = d_src[d_map[i].i];
@@ -856,7 +856,7 @@ void ParticleKokkos::post_weight()
       for (int m = 0; m < ncustom_darray; m++) {
         auto d_src = k_edarray.view_host()[m].k_view.view_device();
         const int ncol = d_src.extent(1);
-        DAT::t_float_2d d_tmp(Kokkos::view_alloc("post_weight:custom_darray",
+        DAT::t_kkfloat_2d d_tmp(Kokkos::view_alloc("post_weight:custom_darray",
                                                  Kokkos::WithoutInitializing),nlocal,ncol);
         Kokkos::parallel_for(nlocal, KOKKOS_LAMBDA(int i) {
           for (int k = 0; k < ncol; k++) d_tmp(i,k) = d_src(d_map[i].i,k);
@@ -1183,18 +1183,18 @@ void ParticleKokkos::post_weight_device()
 
   Kokkos::parallel_for(nold, KOKKOS_LAMBDA(const int i) {
     const int icell = d_particles_l[i].icell;
-    const double ratio = d_particles_l[i].weight / d_cinfo[icell].weight;
+    const KK_FLOAT ratio = d_particles_l[i].weight / d_cinfo[icell].weight;
 
-    if (ratio == 1.0) { d_count[i] = 1; return; }
+    if (ratio == static_cast<KK_FLOAT>(1.0)) { d_count[i] = 1; return; }
 
     rand_type rand_gen = l_pool.get_state();
-    if (ratio < 1.0) {
-      d_count[i] = (rand_gen.drand() > ratio) ? 0 : 1;
+    if (ratio < static_cast<KK_FLOAT>(1.0)) {
+      d_count[i] = (static_cast<KK_FLOAT>(rand_gen.drand()) > ratio) ? 0 : 1;
     } else {
       int nclone = static_cast<int>(ratio);
-      const double fraction = ratio - nclone;
+      const KK_FLOAT fraction = ratio - nclone;
       nclone--;
-      if (rand_gen.drand() < fraction) nclone++;
+      if (static_cast<KK_FLOAT>(rand_gen.drand()) < fraction) nclone++;
       d_count[i] = 1 + nclone;
     }
     l_pool.free_state(rand_gen);
@@ -1268,7 +1268,7 @@ void ParticleKokkos::post_weight_device()
     }
     for (int m = 0; m < ncustom_dvec; m++) {
       auto d_src = k_edvec.view_host()[m].k_view.view_device();
-      DAT::t_float_1d d_tmp("post_weight:cust_dv",nnew);
+      DAT::t_kkfloat_1d d_tmp("post_weight:cust_dv",nnew);
       Kokkos::parallel_for(nold, KOKKOS_LAMBDA(const int i) {
         for (int k = 0; k < d_count[i]; k++) d_tmp[d_offset[i]+k] = d_src[i];
       });
@@ -1277,7 +1277,7 @@ void ParticleKokkos::post_weight_device()
     for (int m = 0; m < ncustom_darray; m++) {
       auto d_src = k_edarray.view_host()[m].k_view.view_device();
       const int ncol = d_src.extent(1);
-      DAT::t_float_2d d_tmp("post_weight:cust_da",nnew,ncol);
+      DAT::t_kkfloat_2d d_tmp("post_weight:cust_da",nnew,ncol);
       Kokkos::parallel_for(nold, KOKKOS_LAMBDA(const int i) {
         for (int k = 0; k < d_count[i]; k++)
           for (int c = 0; c < ncol; c++) d_tmp(d_offset[i]+k,c) = d_src(i,c);

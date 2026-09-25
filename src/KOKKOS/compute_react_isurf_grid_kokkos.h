@@ -46,9 +46,9 @@ class ComputeReactISurfGridKokkos : public ComputeReactISurfGrid {
 
   template <int ATOMIC_REDUCTION>
   KOKKOS_INLINE_FUNCTION
-  void surf_tally_kk(double /*dtremain*/, int isurf, int /*icell*/, int reaction,
-                     Particle::OnePart * /*iorig*/,
-                     Particle::OnePart * /*ip*/, Particle::OnePart * /*jp*/) const
+  void surf_tally_kk(KK_POS_FLOAT /*dtremain*/, int isurf, int /*icell*/, int reaction,
+                     OnePartKK * /*iorig*/,
+                     OnePartKK * /*ip*/, OnePartKK * /*jp*/) const
   {
     // skip if no reaction
 
@@ -77,19 +77,19 @@ class ComputeReactISurfGridKokkos : public ComputeReactISurfGrid {
 
     if (rpflag) {
       for (int i = 0; i < ntotal; i++)
-        if (d_reaction2col(reaction,i)) a_array_surf_tally(itally,i) += 1.0;
-    } else a_array_surf_tally(itally,reaction) += 1.0;
+        if (d_reaction2col(reaction,i)) a_array_surf_tally(itally,i) += static_cast<KK_ACC_FLOAT>(1.0);
+    } else a_array_surf_tally(itally,reaction) += static_cast<KK_ACC_FLOAT>(1.0);
   }
 
  private:
   DAT::t_int_2d d_reaction2col;     // [nreaction][ntotal], only if rpflag
 
-  DAT::tdual_float_2d_lr k_array_surf_tally;
-  DAT::t_float_2d_lr d_array_surf_tally;
+  DAT::ttransform_kkacc_2d_lr k_array_surf_tally;
+  DAT::t_kkacc_2d_lr d_array_surf_tally;
 
   int need_dup;
-  Kokkos::Experimental::ScatterView<F_FLOAT**, typename DAT::t_float_2d_lr::array_layout,DeviceType,typename Kokkos::Experimental::ScatterSum,typename Kokkos::Experimental::ScatterDuplicated> dup_array_surf_tally;
-  Kokkos::Experimental::ScatterView<F_FLOAT**, typename DAT::t_float_2d_lr::array_layout,DeviceType,typename Kokkos::Experimental::ScatterSum,typename Kokkos::Experimental::ScatterNonDuplicated> ndup_array_surf_tally;
+  Kokkos::Experimental::ScatterView<KK_ACC_FLOAT**, typename DAT::t_kkacc_2d_lr::array_layout,DeviceType,typename Kokkos::Experimental::ScatterSum,typename Kokkos::Experimental::ScatterDuplicated> dup_array_surf_tally;
+  Kokkos::Experimental::ScatterView<KK_ACC_FLOAT**, typename DAT::t_kkacc_2d_lr::array_layout,DeviceType,typename Kokkos::Experimental::ScatterSum,typename Kokkos::Experimental::ScatterNonDuplicated> ndup_array_surf_tally;
 
   DAT::t_surfint_1d d_tally2surf;
   DAT::tdual_surfint_1d k_tally2surf;

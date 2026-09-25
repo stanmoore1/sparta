@@ -193,8 +193,8 @@ void FixAveHistoWeightKokkos::calculate_weights()
         // post-process the same compute again) cannot overwrite the weights.
         // mirrors FixAveHistoWeight::calculate_weights()
 
-        computeKKBase->post_process_grid_kokkos(j,1,DAT::t_float_2d_lr(),
-                                                NULL,DAT::t_float_1d_strided());
+        computeKKBase->post_process_grid_kokkos(j,1,DAT::t_kkacc_2d_lr(),
+                                                NULL,DAT::t_kkacc_1d_strided());
         if (grid->maxlocal > maxvectorwt) {
           memoryKK->destroy_kokkos(k_vectorwt,vectorwt);
           maxvectorwt = grid->maxlocal;
@@ -311,7 +311,7 @@ void FixAveHistoWeightKokkos::bin_vector(
   using FixKokkosDetails::mirror_view_from_raw_host_array;
   this->stride = stride;
 
-  d_values = mirror_view_from_raw_host_array<double,DeviceType>(values, n, stride);
+  d_values = mirror_view_from_raw_host_array<KK_ACC_FLOAT,DeviceType>(values, n, stride);
 
   auto policy = Kokkos::RangePolicy<TagFixAveHistoWeight_BinVector,DeviceType>(0, n);
   Kokkos::parallel_reduce(policy, *this, reducer);
@@ -399,7 +399,7 @@ void FixAveHistoWeightKokkos::bin_particles(
   int n = particle->nlocal;
   int nmax = particle->maxlocal;
 
-  d_values = mirror_view_from_raw_host_array<double,DeviceType>(values, n, stride);
+  d_values = mirror_view_from_raw_host_array<KK_ACC_FLOAT,DeviceType>(values, n, stride);
 
   if (regionflag) {
     Region *region = domain->regions[iregion];
@@ -437,7 +437,7 @@ void FixAveHistoWeightKokkos::bin_particles(
 ------------------------------------------------------------------------- */
 void FixAveHistoWeightKokkos::bin_grid_cells(
     minmax_type& reducer,
-    DAT::t_float_1d_strided d_vec)
+    DAT::t_kkacc_1d_strided d_vec)
 {
   minmax_reset();
   using Kokkos::RangePolicy;

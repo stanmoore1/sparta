@@ -124,8 +124,8 @@ class SurfCollideAdiabaticKokkos : public SurfCollideAdiabatic {
 
   template<int REACT, int ATOMIC_REDUCTION>
   KOKKOS_INLINE_FUNCTION
-  Particle::OnePart* collide_kokkos(Particle::OnePart *&ip, double &,
-                                    int isurf, const double *norm, int isr, int &reaction,
+  OnePartKK* collide_kokkos(OnePartKK *&ip, KK_POS_FLOAT &,
+                                    int isurf, const KK_POS_FLOAT *norm, int isr, int &reaction,
                                     const DAT::t_int_scalar &d_retry, const DAT::t_int_scalar &d_nlocal) const
   {
     if (ATOMIC_REDUCTION == 0)
@@ -137,13 +137,13 @@ class SurfCollideAdiabaticKokkos : public SurfCollideAdiabatic {
     // reaction = 1 to N for which reaction took place, 0 for none
     // velreset = 1 if reaction reset post-collision velocity, else 0
 
-    Particle::OnePart iorig;
-    Particle::OnePart *jp = NULL;
+    OnePartKK iorig;
+    OnePartKK *jp = NULL;
     reaction = 0;
     int velreset = 0;
 
     if (REACT && isr >= 0) {
-      if (ambi_flag || vibmode_flag) memcpy(&iorig,ip,sizeof(Particle::OnePart));
+      if (ambi_flag || vibmode_flag) memcpy(&iorig,ip,sizeof(OnePartKK));
 
       int sr_type = KK_SR_TYPE(isr);
       int m = KK_SR_MAP(isr);
@@ -211,26 +211,26 @@ class SurfCollideAdiabaticKokkos : public SurfCollideAdiabatic {
   ------------------------------------------------------------------------- */
 
   KOKKOS_INLINE_FUNCTION
-  void scatter_isotropic(Particle::OnePart *p, const double *norm) const
+  void scatter_isotropic(OnePartKK *p, const KK_POS_FLOAT *norm) const
   {
     rand_type rand_gen = rand_pool.get_state();
 
-    double *v = p->v;
-    double dot = MathExtraKokkos::dot3(v,norm);
+    KK_FLOAT *v = p->v;
+    KK_FLOAT dot = MathExtraKokkos::dot3(v,norm);
 
     // tangent1/2 = surface tangential unit vectors
 
-    double tangent1[3],tangent2[3];
+    KK_FLOAT tangent1[3],tangent2[3];
     tangent1[0] = v[0] - dot*norm[0];
     tangent1[1] = v[1] - dot*norm[1];
     tangent1[2] = v[2] - dot*norm[2];
 
     // if mag(tangent1) == 0, normal collision: choose a random tangent vector
 
-    if (MathExtraKokkos::lensq3(tangent1) == 0.0) {
-      tangent2[0] = rand_gen.drand();
-      tangent2[1] = rand_gen.drand();
-      tangent2[2] = rand_gen.drand();
+    if (MathExtraKokkos::lensq3(tangent1) == static_cast<KK_FLOAT>(0.0)) {
+      tangent2[0] = static_cast<KK_FLOAT>(rand_gen.drand());
+      tangent2[1] = static_cast<KK_FLOAT>(rand_gen.drand());
+      tangent2[2] = static_cast<KK_FLOAT>(rand_gen.drand());
       MathExtraKokkos::cross3(norm,tangent2,tangent1);
     }
 
@@ -242,15 +242,15 @@ class SurfCollideAdiabaticKokkos : public SurfCollideAdiabatic {
     // vperp = velocity component perpendicular to surface along norm
     // vtan1/2 = 2 remaining velocity components tangential to surface
 
-    double vmag = MathExtraKokkos::len3(v);
+    KK_FLOAT vmag = MathExtraKokkos::len3(v);
 
-    double theta = MathConst::MY_2PI * rand_gen.drand();
-    double f_phi = rand_gen.drand();
-    double sqrt_f_phi = sqrt(f_phi);
+    KK_FLOAT theta = static_cast<KK_FLOAT>(MathConst::MY_2PI) * static_cast<KK_FLOAT>(rand_gen.drand());
+    KK_FLOAT f_phi = static_cast<KK_FLOAT>(rand_gen.drand());
+    KK_FLOAT sqrt_f_phi = Kokkos::sqrt(f_phi);
 
-    double vperp = vmag * sqrt(1.0 - f_phi);
-    double vtan1 = vmag * sqrt_f_phi * sin(theta);
-    double vtan2 = vmag * sqrt_f_phi * cos(theta);
+    KK_FLOAT vperp = vmag * Kokkos::sqrt(static_cast<KK_FLOAT>(1.0) - f_phi);
+    KK_FLOAT vtan1 = vmag * sqrt_f_phi * Kokkos::sin(theta);
+    KK_FLOAT vtan2 = vmag * sqrt_f_phi * Kokkos::cos(theta);
 
     v[0] = vperp*norm[0] + vtan1*tangent1[0] + vtan2*tangent2[0];
     v[1] = vperp*norm[1] + vtan1*tangent1[1] + vtan2*tangent2[1];

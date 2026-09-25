@@ -25,6 +25,7 @@
 #include "accelerator_kokkos_defs.h"
 
 #include <cstring>
+#include <type_traits>
 
 // offset type for the Kokkos::Crs per-cell surf/split/sub lists.
 // Under BIGBIG the total number of flattened entries on one rank can exceed
@@ -147,24 +148,6 @@ namespace Kokkos {
     }
   };
 
-  struct sparta_double3 {
-    double x,y,z;
-    KOKKOS_INLINE_FUNCTION
-    sparta_double3():x(0.0),y(0.0),z(0.0) {}
-
-    KOKKOS_INLINE_FUNCTION
-    void operator += (const sparta_double3& tmp) {
-      x+=tmp.x;
-      y+=tmp.y;
-      z+=tmp.z;
-    }
-    KOKKOS_INLINE_FUNCTION
-    void operator = (const sparta_double3& tmp) {
-      x=tmp.x;
-      y=tmp.y;
-      z=tmp.z;
-    }
-  };
 
 // set SPAHostype and DeviceType from Kokkos Default Types
 typedef Kokkos::DefaultExecutionSpace SPADeviceType;
@@ -367,87 +350,515 @@ public:
 
 
 // define precision
+//
+// SPARTA_KOKKOS_DOUBLE_DOUBLE: double precision for all calculations (default)
+// SPARTA_KOKKOS_SINGLE_DOUBLE: mixed precision; single precision for
+//   velocities, energies and per-particle/per-collision arithmetic, double
+//   precision for particle positions, geometry and accumulations
+// SPARTA_KOKKOS_SINGLE_SINGLE: single precision for all per-particle data
+//   and arithmetic, including positions and geometry
+//
+// KK_FLOAT     = storage and arithmetic precision
+// KK_POS_FLOAT = particle positions, remaining timestep, grid cell and
+//                surface element coordinates, and the move/geometry kernels
+//                that use them
+// KK_ACC_FLOAT = per-grid/per-surf tallies and other accumulations, and the
+//                per-cell statistics computed from them
+//
+// KK_ACC_FLOAT is double even in a single precision build: in SI units
+//   masses are ~1e-26 kg, so the per-cell moments computed from mass
+//   weighted sums, e.g. (sum m*v)^2/sum(m) or (sum m*v)^3/sum(m)^2,
+//   underflow single precision
+//
+// host (legacy) data structures are always double, see TransformView below
 
-#ifndef SPA_PRECISION
-#define SPA_PRECISION 2
+#if !defined(SPARTA_KOKKOS_SINGLE_SINGLE) && \
+    !defined(SPARTA_KOKKOS_DOUBLE_DOUBLE) && \
+    !defined(SPARTA_KOKKOS_SINGLE_DOUBLE)
+#define SPARTA_KOKKOS_DOUBLE_DOUBLE
 #endif
-#if SPA_PRECISION==1
-typedef float SPARTA_FLOAT;
+
+#if (defined(SPARTA_KOKKOS_SINGLE_SINGLE) + defined(SPARTA_KOKKOS_DOUBLE_DOUBLE) + \
+     defined(SPARTA_KOKKOS_SINGLE_DOUBLE)) > 1
+#error "Only one of SPARTA_KOKKOS_DOUBLE_DOUBLE, SPARTA_KOKKOS_SINGLE_DOUBLE, SPARTA_KOKKOS_SINGLE_SINGLE can be defined"
+#endif
+
+#if defined(SPARTA_KOKKOS_EXACT) && !defined(SPARTA_KOKKOS_DOUBLE_DOUBLE)
+#error "SPARTA_KOKKOS_EXACT requires double precision (SPARTA_KOKKOS_DOUBLE_DOUBLE)"
+#endif
+
+#if defined(SPARTA_KOKKOS_SINGLE_SINGLE)
+typedef float KK_FLOAT;
+typedef float KK_POS_FLOAT;
+typedef double KK_ACC_FLOAT;
+#elif defined(SPARTA_KOKKOS_SINGLE_DOUBLE)
+typedef float KK_FLOAT;
+typedef double KK_POS_FLOAT;
+typedef double KK_ACC_FLOAT;
 #else
-typedef double SPARTA_FLOAT;
+typedef double KK_FLOAT;
+typedef double KK_POS_FLOAT;
+typedef double KK_ACC_FLOAT;
 #endif
 
-#ifndef PREC_FORCE
-#define PREC_FORCE SPA_PRECISION
-#endif
+// MPI datatypes of the KK precision types, for MPI calls on Kokkos data
+//   (macros, so they expand where mpi.h is included)
 
-#if PREC_FORCE==1
-typedef float F_FLOAT;
-#else
-typedef double F_FLOAT;
-#endif
+#define MPI_KK_FLOAT (std::is_same_v<KK_FLOAT,double> ? MPI_DOUBLE : MPI_FLOAT)
+#define MPI_KK_POS_FLOAT (std::is_same_v<KK_POS_FLOAT,double> ? MPI_DOUBLE : MPI_FLOAT)
+#define MPI_KK_ACC_FLOAT (std::is_same_v<KK_ACC_FLOAT,double> ? MPI_DOUBLE : MPI_FLOAT)
 
-#ifndef PREC_ENERGY
-#define PREC_ENERGY SPA_PRECISION
-#endif
+// true if any Kokkos data is stored in reduced precision
 
-#if PREC_ENERGY==1
-typedef float E_FLOAT;
-#else
-typedef double E_FLOAT;
-#endif
+static constexpr bool KK_FP32 = !std::is_same_v<KK_FLOAT,double> ||
+  !std::is_same_v<KK_POS_FLOAT,double> || !std::is_same_v<KK_ACC_FLOAT,double>;
 
-struct s_EV_FLOAT {
-  E_FLOAT evdwl;
-  E_FLOAT ecoul;
-  E_FLOAT v[6];
+// select a tolerance by precision: the double value is the one tuned for
+//   the original double precision code, the float value must be large
+//   enough to exceed float round-off for the quantity it guards
+
+template<class T>
+KOKKOS_INLINE_FUNCTION
+constexpr T kk_eps(const double eps_double, const double eps_float)
+{
+  return std::is_same_v<T,float> ? static_cast<T>(eps_float) :
+    static_cast<T>(eps_double);
+}
+
+namespace SPARTA_NS {
+
+// convert one element between precisions, specialized for structs in
+//   kokkos_structs.h
+
+// dst keeps its value if it already converts exactly to src, so a double
+//   host value whose single precision image was not changed on the device
+//   survives the round trip host -> device -> host with full precision
+//   (e.g. grid cell corners, which host geometry code compares exactly)
+
+template<class DstType, class SrcType>
+KOKKOS_INLINE_FUNCTION
+std::enable_if_t<std::is_arithmetic_v<DstType>>
+kk_convert(DstType &dst, const SrcType &src)
+{
+  if (static_cast<SrcType>(dst) != src) dst = static_cast<DstType>(src);
+}
+
+template<class Type>
+KOKKOS_INLINE_FUNCTION
+std::enable_if_t<!std::is_arithmetic_v<Type>>
+kk_convert(Type &dst, const Type &src) { dst = src; }
+
+}
+
+// KK precision copies of the host structs shared with the device
+
+#include "kokkos_structs.h"
+
+// ------------------------------------------------------------------------
+// TransformView: a DualView whose host (legacy) side can have a different
+//   value type than its Kokkos side, following the LAMMPS KOKKOS package
+//
+// three copies of the data can exist:
+//   d_view   = device view, KK precision
+//   h_viewkk = Kokkos host mirror of d_view, KK precision
+//              (same memory as d_view when the device is the host)
+//   h_view   = legacy host view, double precision, aliased by the double*
+//              pointers of the host (non-Kokkos) classes
+//
+// when KKType == LegacyType (always the case in a double precision build)
+//   h_view is h_viewkk and this class is a thin wrapper of a DualView, so
+//   there is no extra memory and no extra copy
+//
+// view_host()/sync_host()/modify_host() refer to the legacy host view,
+//   view_device()/sync_device()/modify_device() to the device view, and
+//   view_hostkk()/sync_hostkk()/modify_hostkk() to the Kokkos host mirror;
+//   view<>()/sync<>()/modify<>() on the host space refer to h_viewkk
+// all type conversion happens host-side, between h_viewkk and h_view;
+//   transfers between host and device are always same-type
+//
+// sync state: the DualView tracks h_viewkk vs d_view; two more flags track
+//   h_view vs the pair (h_viewkk,d_view), so a sync converts or transfers
+//   only what is out of date:
+//   sync_device() = h_view -> h_viewkk (if h_view modified), h_viewkk -> d_view
+//   sync_hostkk() = h_view -> h_viewkk (if h_view modified), or d_view -> h_viewkk
+//   sync_host()   = d_view -> h_viewkk (if needed), h_viewkk -> h_view
+//     (if h_viewkk or d_view modified)
+// as for a DualView, copies of a TransformView share their sync state, and
+//   modifying both the legacy view and a Kokkos view without a sync in
+//   between aborts, since the two modifications cannot be merged
+// ------------------------------------------------------------------------
+
+namespace SPARTA_NS {
+
+// converting host-side copy between two views of different value types
+
+template<bool KEEP, class DstType, class SrcType>
+KOKKOS_INLINE_FUNCTION
+void convert_one(DstType &dst, const SrcType &src)
+{
+  if constexpr (KEEP) kk_convert(dst,src);
+  else dst = static_cast<DstType>(src);
+}
+
+// with KEEP, a dst value that already converts exactly to its src value is
+//   kept (see kk_convert()), else every element is overwritten
+
+template<class DstView, class SrcView, bool KEEP = true>
+void transform_copy(const DstView &dst, const SrcView &src)
+{
+  typedef typename DstView::non_const_value_type dst_type;
+  typedef Kokkos::RangePolicy<SPAHostType> policy_1d;
+  typedef Kokkos::MDRangePolicy<SPAHostType,Kokkos::Rank<2>> policy_2d;
+  typedef Kokkos::MDRangePolicy<SPAHostType,Kokkos::Rank<3>> policy_3d;
+  if constexpr (std::is_arithmetic_v<dst_type>) {
+    // element by element, so that with KEEP kk_convert() can keep a dst
+    //   value that converts exactly to its src value
+    static_assert(DstView::rank == SrcView::rank && DstView::rank <= 3,
+                  "TransformView of an arithmetic type must have rank 0 to 3");
+    if constexpr (DstView::rank == 0) convert_one<KEEP>(dst(),src());
+    else if constexpr (DstView::rank == 1)
+      Kokkos::parallel_for(policy_1d(0,dst.extent(0)),
+                           [=](const int i) { convert_one<KEEP>(dst(i),src(i)); });
+    else if constexpr (DstView::rank == 2)
+      Kokkos::parallel_for(policy_2d({0,0},{(int64_t) dst.extent(0),(int64_t) dst.extent(1)}),
+                           [=](const int i, const int j) { convert_one<KEEP>(dst(i,j),src(i,j)); });
+    else
+      Kokkos::parallel_for(policy_3d({0,0,0},{(int64_t) dst.extent(0),(int64_t) dst.extent(1),
+                                              (int64_t) dst.extent(2)}),
+                           [=](const int i, const int j, const int k) {
+                             convert_one<KEEP>(dst(i,j,k),src(i,j,k)); });
+    Kokkos::fence();
+  } else {
+    static_assert(DstView::rank == 1 && SrcView::rank == 1,
+                  "TransformView of a struct type must have rank 1");
+    const int n = (int) (dst.extent(0) < src.extent(0) ? dst.extent(0) : src.extent(0));
+    Kokkos::parallel_for(Kokkos::RangePolicy<SPAHostType>(0,n),
+                         [=](const int i) { kk_convert(dst(i),src(i)); });
+    Kokkos::fence();
+  }
+}
+
+// deep copy between views whose value types may differ (e.g. a double host
+//   array and a KK_FLOAT device view); the conversion is done on the host
+
+template<class DstView, class SrcView>
+void deep_copy_convert(const DstView &dst, const SrcView &src)
+{
+  if constexpr (std::is_same_v<typename DstView::non_const_value_type,
+                typename SrcView::non_const_value_type>) {
+    Kokkos::deep_copy(dst,src);
+  } else {
+    auto h_dst = Kokkos::create_mirror_view(Kokkos::HostSpace(),dst);
+    auto h_src = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(),src);
+    transform_copy<decltype(h_dst),decltype(h_src),false>(h_dst,h_src);
+    Kokkos::deep_copy(dst,h_dst);
+  }
+}
+
+// copy a host double array of length n into a 1d KK view on the device,
+//   (re)allocating the view only if it is too short
+
+template<class ViewType>
+void copy_host_array_to_view(ViewType &d_view, const double *array, const int n,
+                             const char *label)
+{
+  if ((int) d_view.extent(0) < n)
+    d_view = ViewType(Kokkos::view_alloc(std::string(label),Kokkos::WithoutInitializing),n);
+  Kokkos::View<const double*,Kokkos::LayoutRight,Kokkos::HostSpace,
+               Kokkos::MemoryTraits<Kokkos::Unmanaged>> h_array(array,n);
+  deep_copy_convert(Kokkos::subview(d_view,Kokkos::make_pair(0,n)),h_array);
+}
+
+template<class KKType, class LegacyType, class KKLayout, class KKSpace = DeviceType>
+class TransformView {
+ public:
+  static constexpr bool NEED_TRANSFORM = !std::is_same_v<KKType,LegacyType>;
+
+  typedef Kokkos::DualView<KKType, KKLayout, KKSpace> kk_view;
+  typedef typename kk_view::t_host::memory_space kk_host_memory_space;
+
+  // legacy host view type: same as the Kokkos host mirror when no transform
+  //   is needed, else a LayoutRight view of the legacy type in host memory,
+  //   so that rows can be aliased by double** pointers
+
+  typedef std::conditional_t<NEED_TRANSFORM,
+    Kokkos::View<LegacyType, Kokkos::LayoutRight, kk_host_memory_space>,
+    typename kk_view::t_host> legacy_view;
+
+  typedef typename legacy_view::value_type value_type;
+  typedef typename legacy_view::array_layout array_layout;
+  typedef typename kk_view::t_dev::value_type kk_value_type;
+
+  typedef typename kk_view::t_dev t_dev;
+  typedef typename kk_view::t_dev_const t_dev_const;
+  typedef typename kk_view::t_dev_um t_dev_um;
+  typedef typename kk_view::t_dev_const_um t_dev_const_um;
+  typedef typename kk_view::t_dev_const_randomread t_dev_const_randomread;
+  typedef typename kk_view::t_host t_hostkk;
+
+  typedef legacy_view t_host;
+  typedef Kokkos::View<typename legacy_view::const_data_type,
+                       typename legacy_view::array_layout,
+                       typename legacy_view::memory_space> t_host_const;
+  typedef Kokkos::View<typename legacy_view::data_type,
+                       typename legacy_view::array_layout,
+                       typename legacy_view::memory_space,
+                       Kokkos::MemoryTraits<Kokkos::Unmanaged>> t_host_um;
+  typedef Kokkos::View<typename legacy_view::const_data_type,
+                       typename legacy_view::array_layout,
+                       typename legacy_view::memory_space,
+                       Kokkos::MemoryTraits<Kokkos::Unmanaged>> t_host_const_um;
+  typedef t_host_const t_host_const_randomread;
+
+  // true if device and Kokkos host views share memory
+
+  static constexpr bool SINGLE_DEVICE =
+    std::is_same_v<typename kk_view::t_dev::memory_space,kk_host_memory_space>;
+
+ private:
+  kk_view k_view;
+  legacy_view h_view;
+
+  // sync state between the legacy view and the two Kokkos views, which
+  //   the DualView tracks between themselves:
+  //   flags(LEGACY) = legacy view modified since last conversion to KK
+  //   flags(KK) = device or KK host view modified since last conversion
+  //     to legacy
+  // held in a View, as the DualView flags, so that copies of a
+  //   TransformView share their sync state; not allocated (and empty)
+  //   when no transform is needed
+
+  enum { LEGACY = 0, KK = 1 };
+  struct no_flags {};
+  typedef std::conditional_t<NEED_TRANSFORM,
+    Kokkos::View<int[2], Kokkos::HostSpace>, no_flags> flags_view;
+  flags_view flags;
+
+  bool flag(const int which) const {
+    if constexpr (NEED_TRANSFORM) return flags.data() && flags(which);
+    else return false;
+  }
+
+  void set_flags(const int legacy, const int kk) {
+    if constexpr (NEED_TRANSFORM) {
+      if (flags.data() == nullptr) return;
+      flags(LEGACY) = legacy;
+      flags(KK) = kk;
+    }
+  }
+
+  void allocate_flags() {
+    if constexpr (NEED_TRANSFORM)
+      if (flags.data() == nullptr) flags = flags_view("TransformView:flags");
+  }
+
+  // a legacy and a Kokkos modification with no sync in between cannot be
+  //   merged, as for a DualView
+
+  void check_concurrent() const {
+    if (flag(LEGACY) && flag(KK)) {
+      std::string msg = "SPARTA TransformView ERROR: ";
+      msg += "Concurrent modification of legacy host and Kokkos views ";
+      msg += "in TransformView \"";
+      msg += k_view.view_device().label();
+      msg += "\"\n";
+      Kokkos::abort(msg.c_str());
+    }
+  }
+
+ public:
+  TransformView() = default;
+
+  template<class... Indices>
+  TransformView(const std::string &label, Indices... ns)
+    : k_view(label, ns...) {
+    if constexpr (NEED_TRANSFORM) h_view = legacy_view(label + "_legacy", ns...);
+    else h_view = k_view.view_host();
+    allocate_flags();
+  }
+
+  template<class... Indices>
+  TransformView(const char *label, Indices... ns)
+    : TransformView(std::string(label), ns...) {}
+
+  // the legacy view is initialized if the Kokkos views are
+
+  template<class... P, class... Indices>
+  TransformView(const Kokkos::Impl::ViewCtorProp<P...> &prop, Indices... ns)
+    : k_view(prop, ns...) {
+    if constexpr (NEED_TRANSFORM) {
+      const std::string label = k_view.view_device().label() + "_legacy";
+      if constexpr (Kokkos::Impl::ViewCtorProp<P...>::initialize)
+        h_view = legacy_view(label, ns...);
+      else
+        h_view = legacy_view(Kokkos::view_alloc(Kokkos::WithoutInitializing,label),
+                             ns...);
+    } else h_view = k_view.view_host();
+    allocate_flags();
+  }
+
+  // accessors
+
   KOKKOS_INLINE_FUNCTION
-  s_EV_FLOAT() {
-    evdwl = 0;
-    ecoul = 0;
-    v[0] = 0; v[1] = 0; v[2] = 0;
-    v[3] = 0; v[4] = 0; v[5] = 0;
+  const legacy_view &view_host() const { return h_view; }
+  KOKKOS_INLINE_FUNCTION
+  const t_hostkk &view_hostkk() const { return k_view.view_host(); }
+  KOKKOS_INLINE_FUNCTION
+  const t_dev &view_device() const { return k_view.view_device(); }
+
+  template<class Device>
+  auto view() const {
+    if constexpr (std::is_same_v<typename Device::memory_space,
+                  typename t_dev::memory_space>)
+      return k_view.view_device();
+    else return k_view.view_host();
   }
 
   KOKKOS_INLINE_FUNCTION
-  void operator+=(const s_EV_FLOAT &rhs) {
-    evdwl += rhs.evdwl;
-    ecoul += rhs.ecoul;
-    v[0] += rhs.v[0];
-    v[1] += rhs.v[1];
-    v[2] += rhs.v[2];
-    v[3] += rhs.v[3];
-    v[4] += rhs.v[4];
-    v[5] += rhs.v[5];
+  size_t extent(const int i) const { return k_view.view_device().extent(i); }
+  KOKKOS_INLINE_FUNCTION
+  size_t span() const { return k_view.view_device().span(); }
+
+  // modify
+
+  void modify_device() {
+    k_view.modify_device();
+    if constexpr (NEED_TRANSFORM) {
+      set_flags(flag(LEGACY),1);
+      check_concurrent();
+    }
+  }
+
+  void modify_hostkk() {
+    k_view.modify_host();
+    if constexpr (NEED_TRANSFORM) {
+      set_flags(flag(LEGACY),1);
+      check_concurrent();
+    }
+  }
+
+  void modify_host() {
+    if constexpr (NEED_TRANSFORM) {
+      set_flags(1,flag(KK));
+      check_concurrent();
+    } else k_view.modify_host();
+  }
+
+  template<class Device>
+  void modify() {
+    if constexpr (std::is_same_v<typename Device::memory_space,
+                  typename t_dev::memory_space>) modify_device();
+    else modify_hostkk();
+  }
+
+  // sync
+  // a modified legacy view is converted to the KK host view, which then
+  //   is the modified side of the DualView; the legacy view is updated
+  //   from the KK host view, after it is synced from the device if needed
+
+  void sync_device() {
+    if constexpr (NEED_TRANSFORM) {
+      if (flag(LEGACY)) legacy_to_kk();
+    }
+    k_view.sync_device();
+  }
+
+  void sync_hostkk() {
+    if constexpr (NEED_TRANSFORM) {
+      if (flag(LEGACY)) {
+        legacy_to_kk();
+        return;
+      }
+    }
+    k_view.sync_host();
+  }
+
+  void sync_host() {
+    if constexpr (NEED_TRANSFORM) {
+      if (flag(KK)) {
+        k_view.sync_host();
+        transform_copy(h_view,k_view.view_host());
+        set_flags(0,0);
+      }
+    } else k_view.sync_host();
+  }
+
+  template<class Device>
+  void sync() {
+    if constexpr (std::is_same_v<typename Device::memory_space,
+                  typename t_dev::memory_space>) sync_device();
+    else sync_hostkk();
+  }
+
+  bool need_sync_host() const {
+    if constexpr (NEED_TRANSFORM) return flag(KK);
+    else return k_view.need_sync_host();
+  }
+
+  bool need_sync_hostkk() const {
+    if constexpr (NEED_TRANSFORM)
+      return flag(LEGACY) || k_view.need_sync_host();
+    else return k_view.need_sync_host();
+  }
+
+  bool need_sync_device() const {
+    if constexpr (NEED_TRANSFORM)
+      return flag(LEGACY) || k_view.need_sync_device();
+    else return k_view.need_sync_device();
+  }
+
+  void clear_sync_state() {
+    k_view.clear_sync_state();
+    set_flags(0,0);
+  }
+
+  // resize, preserving contents of the legacy view and of the most
+  //   recently modified Kokkos view (see Kokkos::DualView::resize())
+
+  template<class... Indices>
+  void resize(Indices... ns) {
+    allocate_flags();
+    k_view.resize(ns...);
+    if constexpr (NEED_TRANSFORM) Kokkos::resize(h_view,ns...);
+    else h_view = k_view.view_host();
+  }
+
+  template<class... P, class... Indices>
+  void resize(const Kokkos::Impl::ViewCtorProp<P...> &prop, Indices... ns) {
+    allocate_flags();
+    Kokkos::resize(prop,k_view,ns...);
+    if constexpr (NEED_TRANSFORM) Kokkos::resize(prop,h_view,ns...);
+    else h_view = k_view.view_host();
+  }
+
+ private:
+
+  // convert the legacy view to the KK host view and make the KK host view
+  //   the modified side of the DualView
+
+  void legacy_to_kk() {
+    transform_copy(k_view.view_host(),h_view);
+    set_flags(0,0);
+    k_view.clear_sync_state();
+    k_view.modify_host();
   }
 };
-typedef struct s_EV_FLOAT EV_FLOAT;
 
-#ifndef PREC_POS
-#define PREC_POS SPA_PRECISION
-#endif
+}
 
-#if PREC_POS==1
-typedef float X_FLOAT;
-#else
-typedef double X_FLOAT;
-#endif
+// Kokkos::resize() of a TransformView, as for a DualView
 
-#ifndef PREC_VELOCITIES
-#define PREC_VELOCITIES SPA_PRECISION
-#endif
+namespace Kokkos {
+template<class KKType, class LegacyType, class KKLayout, class KKSpace, class... Indices>
+void resize(SPARTA_NS::TransformView<KKType,LegacyType,KKLayout,KKSpace> &v,
+            Indices... ns) { v.resize(ns...); }
 
-#if PREC_VELOCITIES==1
-typedef float V_FLOAT;
-#else
-typedef double V_FLOAT;
-#endif
-
-#if PREC_KSPACE==1
-typedef float K_FLOAT;
-#else
-typedef double K_FLOAT;
-#endif
+template<class... P, class KKType, class LegacyType, class KKLayout, class KKSpace,
+         class... Indices>
+void resize(const Impl::ViewCtorProp<P...> &prop,
+            SPARTA_NS::TransformView<KKType,LegacyType,KKLayout,KKSpace> &v,
+            Indices... ns) { v.resize(prop,ns...); }
+}
 
 // ------------------------------------------------------------------------
 
@@ -455,13 +866,17 @@ typedef double K_FLOAT;
 
 namespace SPARTA_NS {
 
-  typedef Kokkos::
-    DualView<Particle::OnePart*, DeviceType::array_layout, DeviceType> tdual_particle_1d;
+  // the per-particle, per-grid-cell and per-surf structs are stored in
+  //   KK precision on the device (see kokkos_structs.h) and converted to
+  //   the double precision legacy structs of the host classes on sync
+
+  typedef TransformView<OnePartKK*, Particle::OnePart*, DeviceType::array_layout>
+    tdual_particle_1d;
   typedef tdual_particle_1d::t_dev t_particle_1d;
   typedef tdual_particle_1d::t_host t_host_particle_1d;
 
   typedef Kokkos::
-    DualView<Particle::OnePart**, DeviceType::array_layout, DeviceType> tdual_particle_2d;
+    DualView<OnePartKK**, DeviceType::array_layout, DeviceType> tdual_particle_2d;
   typedef tdual_particle_2d::t_dev t_particle_2d;
   typedef tdual_particle_2d::t_host t_host_particle_2d;
 
@@ -471,8 +886,8 @@ namespace SPARTA_NS {
   typedef tdual_species_1d::t_dev_const t_species_1d_const;
   typedef tdual_species_1d::t_host t_host_species_1d;
 
-  typedef Kokkos::
-    DualView<Grid::ChildCell*, DeviceType::array_layout, DeviceType> tdual_cell_1d;
+  typedef TransformView<ChildCellKK*, Grid::ChildCell*, DeviceType::array_layout>
+    tdual_cell_1d;
   typedef tdual_cell_1d::t_dev t_cell_1d;
   typedef tdual_cell_1d::t_host t_host_cell_1d;
 
@@ -481,28 +896,28 @@ namespace SPARTA_NS {
   typedef tdual_cinfo_1d::t_dev t_cinfo_1d;
   typedef tdual_cinfo_1d::t_host t_host_cinfo_1d;
 
-  typedef Kokkos::
-    DualView<Grid::SplitInfo*, DeviceType::array_layout, DeviceType> tdual_sinfo_1d;
+  typedef TransformView<SplitInfoKK*, Grid::SplitInfo*, DeviceType::array_layout>
+    tdual_sinfo_1d;
   typedef tdual_sinfo_1d::t_dev t_sinfo_1d;
   typedef tdual_sinfo_1d::t_host t_host_sinfo_1d;
 
-  typedef Kokkos::
-    DualView<Grid::ParentCell*, DeviceType::array_layout, DeviceType> tdual_pcell_1d;
+  typedef TransformView<ParentCellKK*, Grid::ParentCell*, DeviceType::array_layout>
+    tdual_pcell_1d;
   typedef tdual_pcell_1d::t_dev t_pcell_1d;
   typedef tdual_pcell_1d::t_host t_host_pcell_1d;
 
   typedef Kokkos::
     DualView<Grid::ParentLevel*, DeviceType::array_layout, DeviceType> tdual_plevel_1d;
-  typedef tdual_pcell_1d::t_dev t_plevel_1d;
-  typedef tdual_pcell_1d::t_host t_host_plevel_1d;
+  typedef tdual_plevel_1d::t_dev t_plevel_1d;
+  typedef tdual_plevel_1d::t_host t_host_plevel_1d;
 
-  typedef Kokkos::
-    DualView<Surf::Line*, DeviceType::array_layout, DeviceType> tdual_line_1d;
+  typedef TransformView<LineKK*, Surf::Line*, DeviceType::array_layout>
+    tdual_line_1d;
   typedef tdual_line_1d::t_dev t_line_1d;
   typedef tdual_line_1d::t_host t_host_line_1d;
 
-  typedef Kokkos::
-    DualView<Surf::Tri*, DeviceType::array_layout, DeviceType> tdual_tri_1d;
+  typedef TransformView<TriKK*, Surf::Tri*, DeviceType::array_layout>
+    tdual_tri_1d;
   typedef tdual_tri_1d::t_dev t_tri_1d;
   typedef tdual_tri_1d::t_host t_host_tri_1d;
 
@@ -522,6 +937,40 @@ namespace SPARTA_NS {
     KOKKOS_INLINE_FUNCTION d_ubuf(uint64_t arg) : i(arg) {}
   };
 }
+
+// macros to define the typedef families of a DualView or TransformView
+
+#define SPARTA_DEVICE_DUALVIEW(TYPE, LAYOUT, SUFFIX) \
+typedef Kokkos::DualView<TYPE, LAYOUT, DeviceType> tdual_##SUFFIX; \
+typedef tdual_##SUFFIX::t_dev t_##SUFFIX; \
+typedef tdual_##SUFFIX::t_dev_const t_##SUFFIX##_const; \
+typedef tdual_##SUFFIX::t_dev_um t_##SUFFIX##_um; \
+typedef tdual_##SUFFIX::t_dev_const_um t_##SUFFIX##_const_um; \
+typedef tdual_##SUFFIX::t_dev_const_randomread t_##SUFFIX##_randomread;
+
+#define SPARTA_HOST_DUALVIEW(TYPE, LAYOUT, SUFFIX) \
+typedef Kokkos::DualView<TYPE, LAYOUT, DeviceType> tdual_##SUFFIX; \
+typedef tdual_##SUFFIX::t_host t_##SUFFIX; \
+typedef tdual_##SUFFIX::t_host_const t_##SUFFIX##_const; \
+typedef tdual_##SUFFIX::t_host_um t_##SUFFIX##_um; \
+typedef tdual_##SUFFIX::t_host_const_um t_##SUFFIX##_const_um; \
+typedef tdual_##SUFFIX::t_host_const_randomread t_##SUFFIX##_randomread;
+
+#define SPARTA_DEVICE_TRANSFORMVIEW(KKTYPE, LEGACYTYPE, LAYOUT, SUFFIX) \
+typedef SPARTA_NS::TransformView<KKTYPE, LEGACYTYPE, LAYOUT> ttransform_##SUFFIX; \
+typedef ttransform_##SUFFIX::t_dev t_##SUFFIX; \
+typedef ttransform_##SUFFIX::t_dev_const t_##SUFFIX##_const; \
+typedef ttransform_##SUFFIX::t_dev_um t_##SUFFIX##_um; \
+typedef ttransform_##SUFFIX::t_dev_const_um t_##SUFFIX##_const_um; \
+typedef ttransform_##SUFFIX::t_dev_const_randomread t_##SUFFIX##_randomread;
+
+#define SPARTA_HOST_TRANSFORMVIEW(KKTYPE, LEGACYTYPE, LAYOUT, SUFFIX) \
+typedef SPARTA_NS::TransformView<KKTYPE, LEGACYTYPE, LAYOUT> ttransform_##SUFFIX; \
+typedef ttransform_##SUFFIX::kk_view::t_host t_##SUFFIX; \
+typedef ttransform_##SUFFIX::kk_view::t_host_const t_##SUFFIX##_const; \
+typedef ttransform_##SUFFIX::kk_view::t_host_um t_##SUFFIX##_um; \
+typedef ttransform_##SUFFIX::kk_view::t_host_const_um t_##SUFFIX##_const_um; \
+typedef ttransform_##SUFFIX::kk_view::t_host_const_randomread t_##SUFFIX##_randomread;
 
 template <class DeviceType>
 struct ArrayTypes;
@@ -545,13 +994,6 @@ typedef tdual_bigint_scalar::t_dev_const t_bigint_scalar_const;
 typedef tdual_bigint_scalar::t_dev_um t_bigint_scalar_um;
 typedef tdual_bigint_scalar::t_dev_const_um t_bigint_scalar_const_um;
 
-typedef Kokkos::
-  DualView<SPARTA_FLOAT, DeviceType::array_layout, DeviceType>
-  tdual_float_scalar;
-typedef tdual_float_scalar::t_dev t_float_scalar;
-typedef tdual_float_scalar::t_dev_const t_float_scalar_const;
-typedef tdual_float_scalar::t_dev_um t_float_scalar_um;
-typedef tdual_float_scalar::t_dev_const_um t_float_scalar_const_um;
 
 // generic array types
 
@@ -621,52 +1063,38 @@ typedef tdual_surfint_1d::t_dev_um t_surfint_1d_um;
 typedef tdual_surfint_1d::t_dev_const_um t_surfint_1d_const_um;
 typedef tdual_surfint_1d::t_dev_const_randomread t_surfint_1d_randomread;
 
-// 1d float array n
+// floating point arrays
+//   kkfloat = KK_FLOAT, kkpos = KK_POS_FLOAT, kkacc = KK_ACC_FLOAT
+//   the ttransform_* types are TransformViews with a double legacy host view
+//   the tdual_double_* types are plain DualViews, always double
 
-typedef Kokkos::DualView<SPARTA_FLOAT*, DeviceType::array_layout, DeviceType> tdual_float_1d;
-typedef tdual_float_1d::t_dev t_float_1d;
-typedef tdual_float_1d::t_dev_const t_float_1d_const;
-typedef tdual_float_1d::t_dev_um t_float_1d_um;
-typedef tdual_float_1d::t_dev_const_um t_float_1d_const_um;
-typedef tdual_float_1d::t_dev_const_randomread t_float_1d_randomread;
+SPARTA_DEVICE_TRANSFORMVIEW(KK_FLOAT, double, DeviceType::array_layout, kkfloat_scalar)
+SPARTA_DEVICE_TRANSFORMVIEW(KK_FLOAT*, double*, DeviceType::array_layout, kkfloat_1d)
+SPARTA_DEVICE_TRANSFORMVIEW(KK_FLOAT*[3], double*[3], DeviceType::array_layout, kkfloat_1d_3)
+SPARTA_DEVICE_TRANSFORMVIEW(KK_FLOAT**, double**, DeviceType::array_layout, kkfloat_2d)
+SPARTA_DEVICE_TRANSFORMVIEW(KK_FLOAT**, double**, Kokkos::LayoutRight, kkfloat_2d_lr)
+SPARTA_DEVICE_TRANSFORMVIEW(KK_FLOAT***, double***, DeviceType::array_layout, kkfloat_3d)
 
-//1d float array strided
-typedef Kokkos::DualView<SPARTA_FLOAT*, Kokkos::LayoutStride, DeviceType> tdual_float_1d_strided;
-typedef tdual_float_1d_strided::t_dev t_float_1d_strided;
-typedef tdual_float_1d_strided::t_dev_um t_float_1d_strided_um;
+SPARTA_DEVICE_TRANSFORMVIEW(KK_POS_FLOAT*, double*, DeviceType::array_layout, kkpos_1d)
+SPARTA_DEVICE_TRANSFORMVIEW(KK_POS_FLOAT*[3], double*[3], DeviceType::array_layout, kkpos_1d_3)
+SPARTA_DEVICE_TRANSFORMVIEW(KK_POS_FLOAT**, double**, DeviceType::array_layout, kkpos_2d)
+SPARTA_DEVICE_TRANSFORMVIEW(KK_POS_FLOAT**, double**, Kokkos::LayoutRight, kkpos_2d_lr)
 
-// 1d float array n[3]
+SPARTA_DEVICE_TRANSFORMVIEW(KK_ACC_FLOAT, double, DeviceType::array_layout, kkacc_scalar)
+SPARTA_DEVICE_TRANSFORMVIEW(KK_ACC_FLOAT*, double*, DeviceType::array_layout, kkacc_1d)
+SPARTA_DEVICE_TRANSFORMVIEW(KK_ACC_FLOAT*[3], double*[3], DeviceType::array_layout, kkacc_1d_3)
+SPARTA_DEVICE_TRANSFORMVIEW(KK_ACC_FLOAT**, double**, DeviceType::array_layout, kkacc_2d)
+SPARTA_DEVICE_TRANSFORMVIEW(KK_ACC_FLOAT**, double**, Kokkos::LayoutRight, kkacc_2d_lr)
+SPARTA_DEVICE_TRANSFORMVIEW(KK_ACC_FLOAT***, double***, DeviceType::array_layout, kkacc_3d)
 
-typedef Kokkos::DualView<SPARTA_FLOAT*[3], DeviceType::array_layout, DeviceType> tdual_float_1d_3;
-typedef tdual_float_1d_3::t_dev t_float_1d_3;
-typedef tdual_float_1d_3::t_dev_const t_float_1d_3_const;
-typedef tdual_float_1d_3::t_dev_um t_float_1d_3_um;
-typedef tdual_float_1d_3::t_dev_const_um t_float_1d_3_const_um;
-typedef tdual_float_1d_3::t_dev_const_randomread t_float_1d_3_randomread;
+SPARTA_DEVICE_DUALVIEW(KK_FLOAT*, Kokkos::LayoutStride, kkfloat_1d_strided)
+SPARTA_DEVICE_DUALVIEW(KK_ACC_FLOAT*, Kokkos::LayoutStride, kkacc_1d_strided)
 
-//2d float array n
-typedef Kokkos::DualView<SPARTA_FLOAT**, DeviceType::array_layout, DeviceType> tdual_float_2d;
-typedef tdual_float_2d::t_dev t_float_2d;
-typedef tdual_float_2d::t_dev_const t_float_2d_const;
-typedef tdual_float_2d::t_dev_um t_float_2d_um;
-typedef tdual_float_2d::t_dev_const_um t_float_2d_const_um;
-typedef tdual_float_2d::t_dev_const_randomread t_float_2d_randomread;
-
-//2d float array n Kokkos::LayoutRight
-typedef Kokkos::DualView<F_FLOAT**, Kokkos::LayoutRight, DeviceType> tdual_float_2d_lr;
-typedef tdual_float_2d_lr::t_dev t_float_2d_lr;
-typedef tdual_float_2d_lr::t_dev_const t_float_2d_lr_const;
-typedef tdual_float_2d_lr::t_dev_um t_float_2d_lr_um;
-typedef tdual_float_2d_lr::t_dev_const_um t_float_2d_lr_const_um;
-typedef tdual_float_2d_lr::t_dev_const_randomread t_float_2d_lr_randomread;
-
-//3d float array n
-typedef Kokkos::DualView<SPARTA_FLOAT***, DeviceType::array_layout, DeviceType> tdual_float_3d;
-typedef tdual_float_3d::t_dev t_float_3d;
-typedef tdual_float_3d::t_dev_const t_float_3d_const;
-typedef tdual_float_3d::t_dev_um t_float_3d_um;
-typedef tdual_float_3d::t_dev_const_um t_float_3d_const_um;
-typedef tdual_float_3d::t_dev_const_randomread t_float_3d_randomread;
+SPARTA_DEVICE_DUALVIEW(double, DeviceType::array_layout, double_scalar)
+SPARTA_DEVICE_DUALVIEW(double*, DeviceType::array_layout, double_1d)
+SPARTA_DEVICE_DUALVIEW(double**, DeviceType::array_layout, double_2d)
+SPARTA_DEVICE_DUALVIEW(double**, Kokkos::LayoutRight, double_2d_lr)
+SPARTA_DEVICE_DUALVIEW(double***, DeviceType::array_layout, double_3d)
 };
 
 #ifdef SPARTA_KOKKOS_GPU
@@ -687,11 +1115,6 @@ typedef tdual_bigint_scalar::t_host_const t_bigint_scalar_const;
 typedef tdual_bigint_scalar::t_host_um t_bigint_scalar_um;
 typedef tdual_bigint_scalar::t_host_const_um t_bigint_scalar_const_um;
 
-typedef Kokkos::DualView<SPARTA_FLOAT, DeviceType::array_layout, DeviceType> tdual_float_scalar;
-typedef tdual_float_scalar::t_host t_float_scalar;
-typedef tdual_float_scalar::t_host_const t_float_scalar_const;
-typedef tdual_float_scalar::t_host_um t_float_scalar_um;
-typedef tdual_float_scalar::t_host_const_um t_float_scalar_const_um;
 
 //Generic ArrayTypes
 typedef Kokkos::
@@ -751,50 +1174,38 @@ typedef tdual_surfint_1d::t_host_um t_surfint_1d_um;
 typedef tdual_surfint_1d::t_host_const_um t_surfint_1d_const_um;
 typedef tdual_surfint_1d::t_host_const_randomread t_surfint_1d_randomread;
 
-//1d float array
-typedef Kokkos::DualView<SPARTA_FLOAT*, DeviceType::array_layout, DeviceType> tdual_float_1d;
-typedef tdual_float_1d::t_host t_float_1d;
-typedef tdual_float_1d::t_host_const t_float_1d_const;
-typedef tdual_float_1d::t_host_um t_float_1d_um;
-typedef tdual_float_1d::t_host_const_um t_float_1d_const_um;
-typedef tdual_float_1d::t_host_const_randomread t_float_1d_randomread;
+// floating point arrays
+//   kkfloat = KK_FLOAT, kkpos = KK_POS_FLOAT, kkacc = KK_ACC_FLOAT
+//   the ttransform_* types are TransformViews with a double legacy host view
+//   the tdual_double_* types are plain DualViews, always double
 
-//1d float array strided
-typedef Kokkos::DualView<SPARTA_FLOAT*, Kokkos::LayoutStride, DeviceType> tdual_float_1d_strided;
-typedef tdual_float_1d_strided::t_host t_float_1d_strided;
-typedef tdual_float_1d_strided::t_host_um t_float_1d_strided_um;
+SPARTA_HOST_TRANSFORMVIEW(KK_FLOAT, double, DeviceType::array_layout, kkfloat_scalar)
+SPARTA_HOST_TRANSFORMVIEW(KK_FLOAT*, double*, DeviceType::array_layout, kkfloat_1d)
+SPARTA_HOST_TRANSFORMVIEW(KK_FLOAT*[3], double*[3], DeviceType::array_layout, kkfloat_1d_3)
+SPARTA_HOST_TRANSFORMVIEW(KK_FLOAT**, double**, DeviceType::array_layout, kkfloat_2d)
+SPARTA_HOST_TRANSFORMVIEW(KK_FLOAT**, double**, Kokkos::LayoutRight, kkfloat_2d_lr)
+SPARTA_HOST_TRANSFORMVIEW(KK_FLOAT***, double***, DeviceType::array_layout, kkfloat_3d)
 
-//1d float array n[3]
-typedef Kokkos::DualView<SPARTA_FLOAT*[3], DeviceType::array_layout, DeviceType> tdual_float_1d_3;
-typedef tdual_float_1d_3::t_host t_float_1d_3;
-typedef tdual_float_1d_3::t_host_const t_float_1d_3_const;
-typedef tdual_float_1d_3::t_host_um t_float_1d_3_um;
-typedef tdual_float_1d_3::t_host_const_um t_float_1d_3_const_um;
-typedef tdual_float_1d_3::t_host_const_randomread t_float_1d_3_randomread;
+SPARTA_HOST_TRANSFORMVIEW(KK_POS_FLOAT*, double*, DeviceType::array_layout, kkpos_1d)
+SPARTA_HOST_TRANSFORMVIEW(KK_POS_FLOAT*[3], double*[3], DeviceType::array_layout, kkpos_1d_3)
+SPARTA_HOST_TRANSFORMVIEW(KK_POS_FLOAT**, double**, DeviceType::array_layout, kkpos_2d)
+SPARTA_HOST_TRANSFORMVIEW(KK_POS_FLOAT**, double**, Kokkos::LayoutRight, kkpos_2d_lr)
 
-//2d float array
-typedef Kokkos::DualView<SPARTA_FLOAT**, DeviceType::array_layout, DeviceType> tdual_float_2d;
-typedef tdual_float_2d::t_host t_float_2d;
-typedef tdual_float_2d::t_host_const t_float_2d_const;
-typedef tdual_float_2d::t_host_um t_float_2d_um;
-typedef tdual_float_2d::t_host_const_um t_float_2d_const_um;
-typedef tdual_float_2d::t_host_const_randomread t_float_2d_randomread;
+SPARTA_HOST_TRANSFORMVIEW(KK_ACC_FLOAT, double, DeviceType::array_layout, kkacc_scalar)
+SPARTA_HOST_TRANSFORMVIEW(KK_ACC_FLOAT*, double*, DeviceType::array_layout, kkacc_1d)
+SPARTA_HOST_TRANSFORMVIEW(KK_ACC_FLOAT*[3], double*[3], DeviceType::array_layout, kkacc_1d_3)
+SPARTA_HOST_TRANSFORMVIEW(KK_ACC_FLOAT**, double**, DeviceType::array_layout, kkacc_2d)
+SPARTA_HOST_TRANSFORMVIEW(KK_ACC_FLOAT**, double**, Kokkos::LayoutRight, kkacc_2d_lr)
+SPARTA_HOST_TRANSFORMVIEW(KK_ACC_FLOAT***, double***, DeviceType::array_layout, kkacc_3d)
 
-//2d float array LayoutRight
-typedef Kokkos::DualView<F_FLOAT**, Kokkos::LayoutRight, DeviceType> tdual_float_2d_lr;
-typedef tdual_float_2d_lr::t_host t_float_2d_lr;
-typedef tdual_float_2d_lr::t_host_const t_float_2d_lr_const;
-typedef tdual_float_2d_lr::t_host_um t_float_2d_lr_um;
-typedef tdual_float_2d_lr::t_host_const_um t_float_2d_lr_const_um;
-typedef tdual_float_2d_lr::t_host_const_randomread t_float_2d_lr_randomread;
+SPARTA_HOST_DUALVIEW(KK_FLOAT*, Kokkos::LayoutStride, kkfloat_1d_strided)
+SPARTA_HOST_DUALVIEW(KK_ACC_FLOAT*, Kokkos::LayoutStride, kkacc_1d_strided)
 
-//3d float array
-typedef Kokkos::DualView<SPARTA_FLOAT***, DeviceType::array_layout, DeviceType> tdual_float_3d;
-typedef tdual_float_3d::t_host t_float_3d;
-typedef tdual_float_3d::t_host_const t_float_3d_const;
-typedef tdual_float_3d::t_host_um t_float_3d_um;
-typedef tdual_float_3d::t_host_const_um t_float_3d_const_um;
-typedef tdual_float_3d::t_host_const_randomread t_float_3d_randomread;
+SPARTA_HOST_DUALVIEW(double, DeviceType::array_layout, double_scalar)
+SPARTA_HOST_DUALVIEW(double*, DeviceType::array_layout, double_1d)
+SPARTA_HOST_DUALVIEW(double**, DeviceType::array_layout, double_2d)
+SPARTA_HOST_DUALVIEW(double**, Kokkos::LayoutRight, double_2d_lr)
+SPARTA_HOST_DUALVIEW(double***, DeviceType::array_layout, double_3d)
 };
 
 #endif
@@ -827,13 +1238,13 @@ namespace SPARTA_NS {
   { DAT::tdual_int_1d k_view; };
 
   struct struct_tdual_float_1d
-  { DAT::tdual_float_1d k_view; };
+  { DAT::ttransform_kkfloat_1d k_view; };
 
   struct struct_tdual_int_2d
   { DAT::tdual_int_2d_lr k_view; };
 
   struct struct_tdual_float_2d
-  { DAT::tdual_float_2d_lr k_view; };
+  { DAT::ttransform_kkfloat_2d_lr k_view; };
 
   typedef Kokkos::DualView<struct_tdual_int_1d*, DeviceType::array_layout, DeviceType> tdual_struct_tdual_int_1d_1d;
   typedef Kokkos::DualView<struct_tdual_float_1d*, DeviceType::array_layout, DeviceType> tdual_struct_tdual_float_1d_1d;

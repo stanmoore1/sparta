@@ -57,6 +57,9 @@ sparta_option(BUILD_VTK "Enable or disable VTK TPL. Default: OFF." OFF
 
 set(FFT "OFF" CACHE STRING "Select a FFT TPL from FFTW3, MKL, or KISS. Default: KISS.")
 set(FFT_KOKKOS "OFF" CACHE STRING "Select a FFT TPL for Kokkos from CUFFT, HIPFFT, FFTW3, MKL, or KISS. Default: KISS.")
+option(FFT_SINGLE "Use single precision FFTs. Default: OFF." OFF)
+set(KOKKOS_PREC "double" CACHE STRING "Select the precision of the KOKKOS package from double, mixed, or single. Default: double.")
+set_property(CACHE KOKKOS_PREC PROPERTY STRINGS double mixed single)
 # ######### END   SPARTA TPL DEPENDENCIES ##########
 
 # ######### BEGIN SPARTA EXTRA OPTIONS ##########

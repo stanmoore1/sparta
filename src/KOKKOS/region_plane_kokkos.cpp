@@ -62,8 +62,8 @@ void RegPlaneKokkos::match_all_kokkos(DAT::tdual_int_1d k_match_in)
 KOKKOS_INLINE_FUNCTION
 void RegPlaneKokkos::operator()(TagRegPlaneMatchAll, const int &i) const
 {
-  const double x_tmp = d_particles[i].x[0];
-  const double y_tmp = d_particles[i].x[1];
-  const double z_tmp = d_particles[i].x[2];
+  const KK_POS_FLOAT x_tmp = d_particles[i].x[0];
+  const KK_POS_FLOAT y_tmp = d_particles[i].x[1];
+  const KK_POS_FLOAT z_tmp = d_particles[i].x[2];
   d_match[i] = match_kokkos(x_tmp,y_tmp,z_tmp);
 }

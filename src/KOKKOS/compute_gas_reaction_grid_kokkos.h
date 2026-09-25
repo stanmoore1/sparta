@@ -52,9 +52,9 @@ class ComputeGasReactionGridKokkos : public ComputeGasReactionGrid, public Kokko
   template<int ATOMIC_REDUCTION>
   KOKKOS_INLINE_FUNCTION
   void gas_tally_kk(int icell, int reaction,
-                    Particle::OnePart *iorig, Particle::OnePart *jorig,
-                    Particle::OnePart * /*ip*/, Particle::OnePart * /*jp*/,
-                    Particle::OnePart * /*kp*/) const
+                    OnePartKK *iorig, OnePartKK *jorig,
+                    OnePartKK * /*ip*/, OnePartKK * /*jp*/,
+                    OnePartKK * /*kp*/) const
   {
     // skip if not a reaction (collisions tallied by compute gas/collision/grid)
 
@@ -74,19 +74,19 @@ class ComputeGasReactionGridKokkos : public ComputeGasReactionGrid, public Kokko
     // for EVERY and SELECT mode, reaction index determines column of array_grid
 
     if (mode == ALL) {
-      d_vector_grid(icell) += 1.0;
+      d_vector_grid(icell) += static_cast<KK_ACC_FLOAT>(1.0);
     } else if (mode == EVERY) {
       int icol = reaction - 1;
-      d_array_grid(icell,icol) += 1.0;
+      d_array_grid(icell,icol) += static_cast<KK_ACC_FLOAT>(1.0);
     } else {   // SELECT
       int icol = d_reaction2col(reaction);
-      if (icol >= 0) d_array_grid(icell,icol) += 1.0;
+      if (icol >= 0) d_array_grid(icell,icol) += static_cast<KK_FLOAT>(1.0);
     }
   }
 
  private:
-  DAT::tdual_float_1d k_vector_grid;
-  DAT::tdual_float_2d_lr k_array_grid;
+  DAT::ttransform_kkacc_1d k_vector_grid;
+  DAT::ttransform_kkacc_2d_lr k_array_grid;
   // d_vector_grid and d_array_grid are inherited from KokkosBase
   //   (read by fix ave/grid/kk)
 

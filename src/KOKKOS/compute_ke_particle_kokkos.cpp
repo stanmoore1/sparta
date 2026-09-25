@@ -95,8 +95,8 @@ void ComputeKEParticleKokkos::compute_per_particle_kokkos()
 KOKKOS_INLINE_FUNCTION
 void ComputeKEParticleKokkos::operator()(const int &i) const {
   const int ispecies = d_particles[i].ispecies;
-  const double mass = d_species[ispecies].mass;
-  const double mvv2e = update->mvv2e;
-  double *v = d_particles[i].v;
-  d_vector_particle[i] = 0.5 * mvv2e * mass * (v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+  const KK_ACC_FLOAT mass = d_species[ispecies].mass;
+  const KK_ACC_FLOAT mvv2e = update->mvv2e;
+  KK_FLOAT *v = d_particles[i].v;
+  d_vector_particle[i] = static_cast<KK_ACC_FLOAT>(0.5) * mvv2e * mass * (v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
 }

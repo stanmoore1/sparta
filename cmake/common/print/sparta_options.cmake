@@ -25,6 +25,11 @@ if(PKG_FFT AND FFT_KOKKOS)
   message(STATUS "  ${FFT_KOKKOS}")
 endif()
 
+if(PKG_KOKKOS)
+  message(STATUS "")
+  message(STATUS "Using ${KOKKOS_PREC} precision for KOKKOS package")
+endif()
+
 message(STATUS "")
 
 message(STATUS "Enabled extra options")

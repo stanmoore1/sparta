@@ -69,6 +69,11 @@ if(PKG_FFT)
   set(SPARTA_DEFAULT_CXX_COMPILE_FLAGS -DFFT_${FFT}
                                        ${SPARTA_DEFAULT_CXX_COMPILE_FLAGS})
 
+  if(FFT_SINGLE)
+    set(SPARTA_DEFAULT_CXX_COMPILE_FLAGS -DFFT_SINGLE
+                                         ${SPARTA_DEFAULT_CXX_COMPILE_FLAGS})
+  endif()
+
   if(NOT FFT STREQUAL "KISS")
     find_package(${FFT} REQUIRED)
 
@@ -199,6 +204,27 @@ endif()
     set(SPARTA_DEFAULT_CXX_COMPILE_FLAGS -DSPARTA_KOKKOS_EXACT
                                          ${SPARTA_DEFAULT_CXX_COMPILE_FLAGS})
   endif()
+  # KOKKOS_PREC selects the precision of the KOKKOS package:
+  #   double = double precision for everything (default)
+  #   mixed  = single precision for velocities, energies and per-particle
+  #            arithmetic; double for positions, geometry, and accumulations
+  #   single = single precision also for positions and geometry; tallies stay double
+  # host (non-KOKKOS) data structures are always double precision
+  string(TOLOWER ${KOKKOS_PREC} KOKKOS_PREC)
+  if(KOKKOS_PREC STREQUAL "double")
+    set(KOKKOS_PREC_SETTING "DOUBLE_DOUBLE")
+  elseif(KOKKOS_PREC STREQUAL "mixed")
+    set(KOKKOS_PREC_SETTING "SINGLE_DOUBLE")
+  elseif(KOKKOS_PREC STREQUAL "single")
+    set(KOKKOS_PREC_SETTING "SINGLE_SINGLE")
+  else()
+    message(FATAL_ERROR "KOKKOS_PREC: ${KOKKOS_PREC} is not one of double, mixed, or single.")
+  endif()
+  if(SPARTA_KOKKOS_EXACT AND NOT KOKKOS_PREC STREQUAL "double")
+    message(FATAL_ERROR "SPARTA_KOKKOS_EXACT requires KOKKOS_PREC=double.")
+  endif()
+  set(SPARTA_DEFAULT_CXX_COMPILE_FLAGS -DSPARTA_KOKKOS_${KOKKOS_PREC_SETTING}
+                                       ${SPARTA_DEFAULT_CXX_COMPILE_FLAGS})
   # SPARTA_KOKKOS_FIXED_LISTS restores the fixed-size KKCopy arrays for the
   # per-type tally compute lists instead of runtime-sized device buffers.  The
   # buffers lift the instance caps; the arrays keep every compute inside the

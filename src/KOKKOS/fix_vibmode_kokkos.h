@@ -38,7 +38,7 @@ class FixVibmodeKokkos : public FixVibmode {
   void update_custom(int, double, double, double, double *);
 
   KOKKOS_INLINE_FUNCTION
-  void update_custom_kokkos(int, double, double, double, const double *) const;
+  void update_custom_kokkos(int, KK_FLOAT, KK_FLOAT, KK_FLOAT, const double *) const;  // KK_DOUBLE: vstream is host data
 
  private:
   double boltz;
@@ -67,9 +67,9 @@ class FixVibmodeKokkos : public FixVibmode {
 ------------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-void FixVibmodeKokkos::update_custom_kokkos(int index, double temp_thermal,
-                                            double temp_rot, double temp_vib,
-                                            const double *) const
+void FixVibmodeKokkos::update_custom_kokkos(int index, KK_FLOAT temp_thermal,
+                                            KK_FLOAT temp_rot, KK_FLOAT temp_vib,
+                                            const double *) const  // KK_DOUBLE: vstream is host data
 {
   int isp = d_particles[index].ispecies;
   int nmode = d_species[isp].nvibmode;
@@ -91,12 +91,12 @@ void FixVibmodeKokkos::update_custom_kokkos(int index, double temp_thermal,
   // loop over modes and populate each
   // accumlate new total evib
 
-  double evib = 0.0;
+  KK_FLOAT evib = 0.0;
 
   rand_type rand_gen = rand_pool.get_state();
 
   for (int imode = 0; imode < nmode; imode++) {
-    const int ivib = static_cast<int> (-log(rand_gen.drand()) * temp_vib /
+    const int ivib = static_cast<int> (-Kokkos::log(rand_gen.drand()) * temp_vib /
                                        d_species[isp].vibtemp[imode]);
     d_vibmode(index,imode) = ivib;
     evib += ivib * boltz * d_species[isp].vibtemp[imode];

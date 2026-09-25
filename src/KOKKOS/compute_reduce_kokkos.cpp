@@ -256,9 +256,9 @@ double ComputeReduceKokkos::compute_one_kokkos(int m, int flag)
 
       // the scalar handed to deep_copy(value,View) is a non-deduced
       //   parameter, so it has to be spelled with the view's own value type,
-      //   SPARTA_FLOAT, not double, or template deduction fails
+      //   KK_ACC_FLOAT, not double, or template deduction fails
 
-      SPARTA_FLOAT tmp = 0.0;
+      KK_ACC_FLOAT tmp = 0.0;
       Kokkos::deep_copy(tmp,Kokkos::subview(d_values,flag));
       one = tmp;
     }
@@ -325,8 +325,8 @@ int ComputeReduceKokkos::setup_values(int m)
 
       Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType>(0,nelements),
         KOKKOS_LAMBDA(const int i) {
-          const double *v = l_particles(i).v;
-          l_values(i) = mvv2e * 0.5 * l_species(l_particles(i).ispecies).mass *
+          const KK_FLOAT *v = l_particles(i).v;
+          l_values(i) = mvv2e * static_cast<KK_ACC_FLOAT>(0.5) * l_species(l_particles(i).ispecies).mass *
             (v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
         });
 
@@ -357,7 +357,7 @@ int ComputeReduceKokkos::setup_values(int m)
     KokkosBase *ckk = dynamic_cast<KokkosBase*>(c);
     if (!ckk) return 0;
 
-    DAT::t_float_1d_strided d_src;
+    DAT::t_kkacc_1d_strided d_src;
 
     if (flavor[m] == PARTICLE) {
 
@@ -419,8 +419,8 @@ int ComputeReduceKokkos::setup_values(int m)
       //   post_process_grid(aidx,1,NULL,NULL,NULL,1)
 
       if (c->post_process_grid_flag)
-        ckk->post_process_grid_kokkos(aidx,1,DAT::t_float_2d_lr(),NULL,
-                                      DAT::t_float_1d_strided());
+        ckk->post_process_grid_kokkos(aidx,1,DAT::t_kkacc_2d_lr(),NULL,
+                                      DAT::t_kkacc_1d_strided());
 
       // a post-processing compute writes its answer to d_vector_grid
       //   regardless of aidx, matching the host's cvec/carray choice
@@ -463,7 +463,7 @@ int ComputeReduceKokkos::setup_values(int m)
     KokkosBase *fkk = dynamic_cast<KokkosBase*>(fix);
     if (!fkk) return 0;
 
-    DAT::t_float_1d_strided d_src;
+    DAT::t_kkacc_1d_strided d_src;
 
     if (flavor[m] == PARTICLE) {
       if (aidx == 0) {
@@ -602,7 +602,8 @@ int ComputeReduceKokkos::setup_values(int m)
      d_values, so taking the local copy afterwards is mandatory
 ------------------------------------------------------------------------- */
 
-void ComputeReduceKokkos::gather_float(DAT::t_float_1d_strided d_src)
+template<class ViewType>
+void ComputeReduceKokkos::gather_float(ViewType d_src)
 {
   if (nelements == 0) return;
   auto l_values = d_values;
@@ -759,13 +760,13 @@ double ComputeReduceKokkos::reduce_values()
     //   see the SPARTA_KOKKOS_EXACT branch above for the bit-exact path
 
     Kokkos::parallel_reduce(Kokkos::RangePolicy<DeviceType>(0,n),
-      KOKKOS_LAMBDA(const int i, double &lsum) {
+      KOKKOS_LAMBDA(const int i, double &lsum) {  // KK_DOUBLE: reduction value
         if (l_include(i)) lsum += l_values(i);
       },one);
 
   } else if (mode == SUMSQ || mode == AVESQ) {
     Kokkos::parallel_reduce(Kokkos::RangePolicy<DeviceType>(0,n),
-      KOKKOS_LAMBDA(const int i, double &lsum) {
+      KOKKOS_LAMBDA(const int i, double &lsum) {  // KK_DOUBLE: reduction value
         if (l_include(i)) lsum += l_values(i)*l_values(i);
       },one);
 
@@ -779,7 +780,7 @@ double ComputeReduceKokkos::reduce_values()
 
     double vmin = BIG;
     Kokkos::parallel_reduce(Kokkos::RangePolicy<DeviceType>(0,n),
-      KOKKOS_LAMBDA(const int i, double &lmin) {
+      KOKKOS_LAMBDA(const int i, double &lmin) {  // KK_DOUBLE: reduction value
         if (l_include(i) && l_values(i) < lmin) lmin = l_values(i);
       },Kokkos::Min<double>(vmin));
     if (vmin < one) one = vmin;
@@ -787,7 +788,7 @@ double ComputeReduceKokkos::reduce_values()
   } else if (mode == MAXX) {
     double vmax = -BIG;
     Kokkos::parallel_reduce(Kokkos::RangePolicy<DeviceType>(0,n),
-      KOKKOS_LAMBDA(const int i, double &lmax) {
+      KOKKOS_LAMBDA(const int i, double &lmax) {  // KK_DOUBLE: reduction value
         if (l_include(i) && l_values(i) > lmax) lmax = l_values(i);
       },Kokkos::Max<double>(vmax));
     if (vmax > one) one = vmax;

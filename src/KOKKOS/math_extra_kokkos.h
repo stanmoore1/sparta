@@ -20,31 +20,169 @@
 #define SPARTA_MATH_EXTRA_KOKKOS_H
 
 #include "spatype.h"
+#include <Kokkos_Core.hpp>
+#include <type_traits>
 #include "math.h"
 #include "stdio.h"
 #include "string.h"
 
 namespace MathExtraKokkos {
 
+  // 3 vector operations, templated on the element types so they work for
+  //   any mix of KK_FLOAT, KK_POS_FLOAT and double arguments
+
+  template<class T>
+  KOKKOS_INLINE_FUNCTION void norm3(T *v)
+  {
+    const T scale = static_cast<T>(1.0)/Kokkos::sqrt(v[0]*v[0]+v[1]*v[1]+v[2]*v[2]);
+    v[0] *= scale;
+    v[1] *= scale;
+    v[2] *= scale;
+  }
+
+  template<class T1, class T2>
+  KOKKOS_INLINE_FUNCTION void normalize3(const T1 *v, T2 *ans)
+  {
+    const T1 scale = static_cast<T1>(1.0)/Kokkos::sqrt(v[0]*v[0]+v[1]*v[1]+v[2]*v[2]);
+    ans[0] = v[0]*scale;
+    ans[1] = v[1]*scale;
+    ans[2] = v[2]*scale;
+  }
+
+  template<class S, class T>
+  KOKKOS_INLINE_FUNCTION void snorm3(const S length, T *v)
+  {
+    const T scale = length/Kokkos::sqrt(v[0]*v[0]+v[1]*v[1]+v[2]*v[2]);
+    v[0] *= scale;
+    v[1] *= scale;
+    v[2] *= scale;
+  }
+
+  template<class S, class T1, class T2>
+  KOKKOS_INLINE_FUNCTION void snormalize3(const S length, const T1 *v, T2 *ans)
+  {
+    const T1 scale = length/Kokkos::sqrt(v[0]*v[0]+v[1]*v[1]+v[2]*v[2]);
+    ans[0] = v[0]*scale;
+    ans[1] = v[1]*scale;
+    ans[2] = v[2]*scale;
+  }
+
+  template<class T>
+  KOKKOS_INLINE_FUNCTION void negate3(T *v)
+  {
+    v[0] = -v[0];
+    v[1] = -v[1];
+    v[2] = -v[2];
+  }
+
+  // scale vector v by s in place
+
+  template<class S, class T>
+  KOKKOS_INLINE_FUNCTION void scale3(S s, T *v)
+  {
+    v[0] *= s;
+    v[1] *= s;
+    v[2] *= s;
+  }
+
+  // scale vector v by s, return in ans
+
+  template<class S, class T1, class T2>
+  KOKKOS_INLINE_FUNCTION void scale3(S s, const T1 *v, T2 *ans)
+  {
+    ans[0] = s*v[0];
+    ans[1] = s*v[1];
+    ans[2] = s*v[2];
+  }
+
+  // axpy: y = alpha*x + y
+
+  template<class S, class T1, class T2>
+  KOKKOS_INLINE_FUNCTION void axpy3(S alpha, const T1 *x, T2 *y)
+  {
+    y[0] += alpha*x[0];
+    y[1] += alpha*x[1];
+    y[2] += alpha*x[2];
+  }
+
+  // axpy: ynew = alpha*x + y
+
+  template<class S, class T1, class T2, class T3>
+  KOKKOS_INLINE_FUNCTION void axpy3(S alpha, const T1 *x, const T2 *y, T3 *ynew)
+  {
+    ynew[0] += alpha*x[0] + y[0];
+    ynew[1] += alpha*x[1] + y[1];
+    ynew[2] += alpha*x[2] + y[2];
+  }
+
+  // ans = v1 + v2
+
+  template<class T1, class T2, class T3>
+  KOKKOS_INLINE_FUNCTION void add3(const T1 *v1, const T2 *v2, T3 *ans)
+  {
+    ans[0] = v1[0] + v2[0];
+    ans[1] = v1[1] + v2[1];
+    ans[2] = v1[2] + v2[2];
+  }
+
+  // ans = v1 - v2
+
+  template<class T1, class T2, class T3>
+  KOKKOS_INLINE_FUNCTION void sub3(const T1 *v1, const T2 *v2, T3 *ans)
+  {
+    ans[0] = v1[0] - v2[0];
+    ans[1] = v1[1] - v2[1];
+    ans[2] = v1[2] - v2[2];
+  }
+
+  // length of vector v
+
+  template<class T>
+  KOKKOS_INLINE_FUNCTION T len3(const T *v)
+  {
+    return Kokkos::sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+  }
+
+  // squared length of vector v, or dot product of v with itself
+
+  template<class T>
+  KOKKOS_INLINE_FUNCTION T lensq3(const T *v)
+  {
+    return v[0]*v[0] + v[1]*v[1] + v[2]*v[2];
+  }
+
+  // dot product of 2 vectors, in the wider of the two precisions
+
+  template<class T1, class T2>
+  KOKKOS_INLINE_FUNCTION std::common_type_t<T1,T2> dot3(const T1 *v1, const T2 *v2)
+  {
+    return v1[0]*v2[0]+v1[1]*v2[1]+v1[2]*v2[2];
+  }
+
+  // cross product of 2 vectors
+
+  template<class T1, class T2, class T3>
+  KOKKOS_INLINE_FUNCTION void cross3(const T1 *v1, const T2 *v2, T3 *ans)
+  {
+    ans[0] = v1[1]*v2[2] - v1[2]*v2[1];
+    ans[1] = v1[2]*v2[0] - v1[0]*v2[2];
+    ans[2] = v1[0]*v2[1] - v1[1]*v2[0];
+  }
+
+  // reflect vector v around unit normal n
+  // return updated v of same length = v - 2(v dot n)n
+
+  template<class T1, class T2>
+  KOKKOS_INLINE_FUNCTION void reflect3(T1 *v, const T2 *n)
+  {
+    const std::common_type_t<T1,T2> dot = dot3(v,n);
+    v[0] -= static_cast<T1>(2.0)*dot*n[0];
+    v[1] -= static_cast<T1>(2.0)*dot*n[1];
+    v[2] -= static_cast<T1>(2.0)*dot*n[2];
+  }
+
   // 3 vector operations
 
-  KOKKOS_INLINE_FUNCTION void norm3(double *v);
-  KOKKOS_INLINE_FUNCTION void normalize3(const double *v, double *ans);
-  KOKKOS_INLINE_FUNCTION void snorm3(const double, double *v);
-  KOKKOS_INLINE_FUNCTION void snormalize3(const double, const double *v, double *ans);
-  KOKKOS_INLINE_FUNCTION void negate3(double *v);
-  KOKKOS_INLINE_FUNCTION void scale3(double s, double *v);
-  KOKKOS_INLINE_FUNCTION void scale3(double s, const double *v, double *ans);
-  KOKKOS_INLINE_FUNCTION void axpy3(double alpha, const double *x, double *y);
-  KOKKOS_INLINE_FUNCTION void axpy3(double alpha, const double *x, const double *y,
-                    double *ynew);
-  KOKKOS_INLINE_FUNCTION void add3(const double *v1, const double *v2, double *ans);
-  KOKKOS_INLINE_FUNCTION void sub3(const double *v1, const double *v2, double *ans);
-  KOKKOS_INLINE_FUNCTION double len3(const double *v);
-  KOKKOS_INLINE_FUNCTION double lensq3(const double *v);
-  KOKKOS_INLINE_FUNCTION double dot3(const double *v1, const double *v2);
-  KOKKOS_INLINE_FUNCTION void cross3(const double *v1, const double *v2, double *ans);
-  KOKKOS_INLINE_FUNCTION void reflect3(double *v, const double *norm);
 
   // 3x3 matrix operations
 
@@ -85,196 +223,6 @@ namespace MathExtraKokkos {
 /* ----------------------------------------------------------------------
    normalize a vector in place
 ------------------------------------------------------------------------- */
-KOKKOS_INLINE_FUNCTION
-void MathExtraKokkos::norm3(double *v)
-{
-  double scale = 1.0/sqrt(v[0]*v[0]+v[1]*v[1]+v[2]*v[2]);
-  v[0] *= scale;
-  v[1] *= scale;
-  v[2] *= scale;
-}
-
-/* ----------------------------------------------------------------------
-   normalize a vector, return in ans
-------------------------------------------------------------------------- */
-
-KOKKOS_INLINE_FUNCTION
-void MathExtraKokkos::normalize3(const double *v, double *ans)
-{
-  double scale = 1.0/sqrt(v[0]*v[0]+v[1]*v[1]+v[2]*v[2]);
-  ans[0] = v[0]*scale;
-  ans[1] = v[1]*scale;
-  ans[2] = v[2]*scale;
-}
-
-/* ----------------------------------------------------------------------
-   scale a vector to length in place
-------------------------------------------------------------------------- */
-
-KOKKOS_INLINE_FUNCTION
-void MathExtraKokkos::snorm3(const double length, double *v)
-{
-  double scale = length/sqrt(v[0]*v[0]+v[1]*v[1]+v[2]*v[2]);
-  v[0] *= scale;
-  v[1] *= scale;
-  v[2] *= scale;
-}
-
-/* ----------------------------------------------------------------------
-   scale a vector to length
-------------------------------------------------------------------------- */
-
-KOKKOS_INLINE_FUNCTION
-void MathExtraKokkos::snormalize3(const double length, const double *v, double *ans)
-{
-  double scale = length/sqrt(v[0]*v[0]+v[1]*v[1]+v[2]*v[2]);
-  ans[0] = v[0]*scale;
-  ans[1] = v[1]*scale;
-  ans[2] = v[2]*scale;
-}
-
-/* ----------------------------------------------------------------------
-   negate vector v in place
-------------------------------------------------------------------------- */
-
-KOKKOS_INLINE_FUNCTION
-void MathExtraKokkos::negate3(double *v)
-{
-  v[0] = -v[0];
-  v[1] = -v[1];
-  v[2] = -v[2];
-}
-
-/* ----------------------------------------------------------------------
-   scale vector v by s in place
-------------------------------------------------------------------------- */
-
-KOKKOS_INLINE_FUNCTION
-void MathExtraKokkos::scale3(double s, double *v)
-{
-  v[0] *= s;
-  v[1] *= s;
-  v[2] *= s;
-}
-
-/* ----------------------------------------------------------------------
-   scale vector v by s, return in ans
-------------------------------------------------------------------------- */
-
-KOKKOS_INLINE_FUNCTION
-void MathExtraKokkos::scale3(double s, const double *v, double *ans)
-{
-  ans[0] = s*v[0];
-  ans[1] = s*v[1];
-  ans[2] = s*v[2];
-}
-
-/* ----------------------------------------------------------------------
-   axpy: y = alpha*x + y
-   y is replaced by result
-------------------------------------------------------------------------- */
-
-KOKKOS_INLINE_FUNCTION
-void MathExtraKokkos::axpy3(double alpha, const double *x, double *y)
-{
-  y[0] += alpha*x[0];
-  y[1] += alpha*x[1];
-  y[2] += alpha*x[2];
-}
-
-/* ----------------------------------------------------------------------
-   axpy: ynew = alpha*x + y
-------------------------------------------------------------------------- */
-
-KOKKOS_INLINE_FUNCTION
-void MathExtraKokkos::axpy3(double alpha, const double *x, const double *y,
-                      double *ynew)
-{
-  ynew[0] += alpha*x[0] + y[0];
-  ynew[1] += alpha*x[1] + y[1];
-  ynew[2] += alpha*x[2] + y[2];
-}
-
-/* ----------------------------------------------------------------------
-   ans = v1 + v2
-------------------------------------------------------------------------- */
-
-KOKKOS_INLINE_FUNCTION
-void MathExtraKokkos::add3(const double *v1, const double *v2, double *ans)
-{
-  ans[0] = v1[0] + v2[0];
-  ans[1] = v1[1] + v2[1];
-  ans[2] = v1[2] + v2[2];
-}
-
-/* ----------------------------------------------------------------------
-   ans = v1 - v2
-------------------------------------------------------------------------- */
-
-KOKKOS_INLINE_FUNCTION
-void MathExtraKokkos::sub3(const double *v1, const double *v2, double *ans)
-{
-  ans[0] = v1[0] - v2[0];
-  ans[1] = v1[1] - v2[1];
-  ans[2] = v1[2] - v2[2];
-}
-
-/* ----------------------------------------------------------------------
-   length of vector v
-------------------------------------------------------------------------- */
-
-KOKKOS_INLINE_FUNCTION
-double MathExtraKokkos::len3(const double *v)
-{
-  return sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
-}
-
-/* ----------------------------------------------------------------------
-   squared length of vector v, or dot product of v with itself
-------------------------------------------------------------------------- */
-
-KOKKOS_INLINE_FUNCTION
-double MathExtraKokkos::lensq3(const double *v)
-{
-  return v[0]*v[0] + v[1]*v[1] + v[2]*v[2];
-}
-
-/* ----------------------------------------------------------------------
-   dot product of 2 vectors
-------------------------------------------------------------------------- */
-
-KOKKOS_INLINE_FUNCTION
-double MathExtraKokkos::dot3(const double *v1, const double *v2)
-{
-  return v1[0]*v2[0]+v1[1]*v2[1]+v1[2]*v2[2];
-}
-
-/* ----------------------------------------------------------------------
-   cross product of 2 vectors
-------------------------------------------------------------------------- */
-
-KOKKOS_INLINE_FUNCTION
-void MathExtraKokkos::cross3(const double *v1, const double *v2, double *ans)
-{
-  ans[0] = v1[1]*v2[2] - v1[2]*v2[1];
-  ans[1] = v1[2]*v2[0] - v1[0]*v2[2];
-  ans[2] = v1[0]*v2[1] - v1[1]*v2[0];
-}
-
-/* ----------------------------------------------------------------------
-   reflect vector v around unit normal n
-   return updated v of same length = v - 2(v dot n)n
-------------------------------------------------------------------------- */
-
-KOKKOS_INLINE_FUNCTION
-void MathExtraKokkos::reflect3(double *v, const double *n)
-{
-  double dot = dot3(v,n);
-  v[0] -= 2.0*dot*n[0];
-  v[1] -= 2.0*dot*n[1];
-  v[2] -= 2.0*dot*n[2];
-}
-
 /* ----------------------------------------------------------------------
    determinant of a matrix
 ------------------------------------------------------------------------- */

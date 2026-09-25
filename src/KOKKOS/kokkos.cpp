@@ -49,6 +49,20 @@ KokkosSPARTA::KokkosSPARTA(SPARTA *sparta, int narg, char **arg) : Pointers(spar
   MPI_Comm_rank(world,&me);
   if (me == 0) error->message(FLERR,"KOKKOS mode is enabled");
 
+  // precision
+
+  if (me == 0) {
+#if defined(SPARTA_KOKKOS_SINGLE_SINGLE)
+    const char *prec = "single";
+#elif defined(SPARTA_KOKKOS_SINGLE_DOUBLE)
+    const char *prec = "mixed";
+#else
+    const char *prec = "double";
+#endif
+    if (screen) fprintf(screen,"  using %s precision\n",prec);
+    if (logfile) fprintf(logfile,"  using %s precision\n",prec);
+  }
+
   // process any command-line args that invoke Kokkos settings
 
   ngpus = 0;

@@ -83,11 +83,11 @@ void ComputePropertySurfKokkos::init()
 
   int n = MAX(nsown,1);
   if (nvalues == 1) {
-    d_vector_surf = DAT::t_float_1d("property/surf:vector_surf",n);
-    k_vector_surf = DAT::tdual_float_1d("property/surf:vector_surf",n);
+    d_vector_surf = DAT::t_kkacc_1d("property/surf:vector_surf",n);
+    k_vector_surf = DAT::ttransform_kkacc_1d("property/surf:vector_surf",n);
   } else {
-    d_array_surf = DAT::t_float_2d_lr("property/surf:array_surf",n,nvalues);
-    k_array_surf = DAT::tdual_float_2d_lr("property/surf:array_surf",n,nvalues);
+    d_array_surf = DAT::t_kkacc_2d_lr("property/surf:array_surf",n,nvalues);
+    k_array_surf = DAT::ttransform_kkacc_2d_lr("property/surf:array_surf",n,nvalues);
   }
 }
 

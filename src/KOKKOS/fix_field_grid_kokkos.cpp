@@ -61,19 +61,13 @@ void FixFieldGridKokkos::compute_field()
 
   // array_grid is one contiguous row-major block: Memory::create(TYPE**&,n1,n2)
   //   (memory.h:114-127) does a single allocation of n1*n2 and points each
-  //   row pointer into it.  tdual_float_2d_lr is LayoutRight, so the two have
-  //   the same element order and the host side needs no copy at all -- wrap
-  //   the existing buffer in an unmanaged View and hand it straight to
-  //   deep_copy.  On a host backend the DualView's two views are the same
-  //   memory and this is a no-op; on a GPU it is the one H2D transfer that
-  //   has to happen either way.  The element-wise loop this replaces was
-  //   pure overhead on every step.
+  //   row pointer into it.  The Kokkos view is LayoutRight, so the two have
+  //   the same element order: wrap the existing buffer in an unmanaged View
+  //   and copy it to the device with deep_copy_convert(), which is a plain
+  //   deep_copy when the value types match (KK_ACC_FLOAT is double) and
+  //   otherwise converts on the host.
 
-  static_assert(std::is_same<F_FLOAT,double>::value,
-                "wrapping array_grid (double**) in an F_FLOAT view assumes "
-                "F_FLOAT is double; use a converting deep_copy if that changes");
-
-  Kokkos::View<F_FLOAT**,Kokkos::LayoutRight,Kokkos::HostSpace,
+  Kokkos::View<double**,Kokkos::LayoutRight,Kokkos::HostSpace,
                Kokkos::MemoryTraits<Kokkos::Unmanaged> >
     h_array_grid(array_grid[0],nglocal,ncols);
 
@@ -87,7 +81,8 @@ void FixFieldGridKokkos::compute_field()
 
   auto d_rows = Kokkos::subview(k_array_grid.view_device(),
                                 Kokkos::make_pair(0,nglocal),Kokkos::ALL());
-  Kokkos::deep_copy(d_rows,h_array_grid);
+  // in a reduced precision build deep_copy_convert() converts on the host
+  deep_copy_convert(d_rows,h_array_grid);
   k_array_grid.modify_device();
 
   d_array_grid = k_array_grid.view_device();

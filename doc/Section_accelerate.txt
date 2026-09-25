@@ -720,7 +720,58 @@ when developing a Kokkos-enabled style within SPARTA. This option enables printi
 information that can be useful and also enables runtime bounds
 checking on Kokkos data structures, but may slow down performance.
 
+[Precision:]
+
+By default the KOKKOS package is built in double precision. The CMake
+option KOKKOS_PREC selects the precision of the KOKKOS package:
+
+-D KOKKOS_PREC=double  # double precision for all calculations (default)
+-D KOKKOS_PREC=mixed   # single precision for most calculations, see below
+-D KOKKOS_PREC=single  # single precision also for positions, see below :pre
+
+With KOKKOS_PREC=mixed, particle velocities, rotational and
+vibrational energies, and the arithmetic of collisions, reactions and
+surface collisions are single precision, while particle positions,
+the remaining timestep of a particle, grid cell and surface element
+coordinates (and so the particle move and the surface collision
+detection), per-grid-cell and per-surface tallies, and global sums
+(e.g. temperature) stay in double precision. With
+KOKKOS_PREC=single, positions and geometry are single precision too,
+while tallies and global sums stay double: SPARTA uses SI units, in
+which statistics computed from mass weighted sums (e.g. a thermal
+temperature) underflow single precision. In all modes random numbers are generated in double
+precision, and all data seen by non-KOKKOS styles, output, and
+restart files remain double precision.
+
+Reduced precision can give large speedups on GPUs whose double
+precision throughput is much lower than their single precision
+throughput, and it reduces the memory used per particle. Mixed
+precision is recommended over single precision: single precision
+particle positions lose resolution in large domains and near surface
+elements. As with any change in round-off, a reduced precision run
+diverges from a double precision run after a few timesteps, so
+results should be compared statistically (e.g. time averaged
+temperature, collision rates, surface fluxes), and a reduced
+precision model should be validated against a double precision run
+before it is used for production. KOKKOS_PREC=mixed or single cannot
+be combined with SPARTA_KOKKOS_EXACT=ON. The precision a SPARTA binary was built with
+is printed at startup and in the log file (e.g. "using mixed precision"),
+and by the -h command-line switch (e.g. "KOKKOS package precision: mixed").
+
+In a reduced precision build, data shared with non-KOKKOS styles is
+converted between double and single precision each time it moves
+between the host and the device, so styles that run on the host every
+timestep (non-KOKKOS fixes or computes, frequent dumps) cost more than
+in a double precision build. A double precision build has no such
+overhead.
+
+The precision of the KOKKOS FFTs used by "compute fft/grid"_compute_fft_grid.html
+is selected separately, with -D FFT_SINGLE=ON.
+
+The tools/kokkos_prec directory contains the scripts used to convert
+the KOKKOS package to precision-generic code, and a checker for new
+KOKKOS code; see tools/kokkos_prec/README.md.
+
 [Restrictions:]
 
-Currently, there are no precision options with the KOKKOS package. All
-compilation and computation is performed in double precision.
+None.

@@ -145,6 +145,52 @@ jobs:
         sudo rm /bin/sh
         sudo ln -s /bin/bash /bin/sh
         ctest --output-on-failure -j4
+  kokkos-precision:
+    # KOKKOS package built in mixed and single precision (KOKKOS_PREC).
+    # Reduced precision runs diverge from double precision ones after a few
+    # steps, so instead of the regression tests a set of examples is run and
+    # the time averaged thermo output compared with the gold standard logs.
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        prec: [mixed, single]
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Dependencies
+      run: sudo apt install openmpi-bin libopenmpi-dev
+
+    - name: Check precision conversion
+      run: |
+        python3 tools/kokkos_prec/gen_kk_structs.py --check
+        python3 tools/kokkos_prec/kk_prec_audit.py
+
+    - name: Configure
+      run: |
+        mkdir build
+        cd build
+        cmake -C ../cmake/presets/kokkos_mpi_only.cmake \
+          -DKOKKOS_PREC=${{ matrix.prec }} \
+          -DSPARTA_ENABLE_TESTING=ON \
+          -DKokkos_ENABLE_SERIAL=ON \
+          -DKokkos_ENABLE_OPENMP=OFF \
+          -DPKG_FFT=ON \
+          ../cmake
+
+    - name: Build
+      run: cd build; make -j4
+
+    - name: Test
+      run: |
+        cd build
+        ctest --output-on-failure -R KokkosTransformView
+        python3 ../tools/kokkos_prec/run_examples.py \
+          --spa "$PWD/src/spa_kokkos_mpi_only -k on -sf kk" \
+          --out examples_${{ matrix.prec }}
+        python3 ../tools/kokkos_prec/compare_logs.py --gold --stats \
+          ../examples examples_${{ matrix.prec }} \
+          --only $(cat ../tools/kokkos_prec/ci_examples.txt)
   bigbig:
     runs-on: ubuntu-22.04
     steps:

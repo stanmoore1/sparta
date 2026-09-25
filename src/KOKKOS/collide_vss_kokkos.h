@@ -82,6 +82,26 @@ class CollideVSSKokkos : public CollideVSS {
  public:
   typedef COLLIDE_REDUCE value_type;
 
+  // two-particle state in KK precision, hides CollideVSS::State in this class
+
+  struct State {
+    KK_FLOAT vr2;
+    KK_FLOAT vr;
+    KK_FLOAT imass,jmass;
+    KK_FLOAT ave_rotdof;
+    KK_FLOAT ave_vibdof;
+    KK_FLOAT ave_dof;
+    KK_FLOAT etrans;
+    KK_FLOAT erot;
+    KK_FLOAT evib;
+    KK_FLOAT eexchange;
+    KK_FLOAT eint;
+    KK_FLOAT etotal;
+    KK_FLOAT ucmf;
+    KK_FLOAT vcmf;
+    KK_FLOAT wcmf;
+  };
+
   CollideVSSKokkos(class SPARTA *, int, char **);
   ~CollideVSSKokkos();
   void init();
@@ -101,19 +121,19 @@ class CollideVSSKokkos : public CollideVSS {
 #endif
 
   KOKKOS_INLINE_FUNCTION
-  double attempt_collision_kokkos(int, int, double, rand_type &) const;
+  double attempt_collision_kokkos(int, int, double, rand_type &) const;  // KK_DOUBLE: precision_map.json keep_double_identifiers
   KOKKOS_INLINE_FUNCTION
-  double attempt_collision_kokkos(int, int, int, int, int, double, rand_type &) const;
+  double attempt_collision_kokkos(int, int, int, int, int, double, rand_type &) const;  // KK_DOUBLE: precision_map.json keep_double_identifiers
   KOKKOS_INLINE_FUNCTION
-  double poisson_kokkos(double, rand_type &) const;
+  double poisson_kokkos(double, rand_type &) const;  // KK_DOUBLE: precision_map.json keep_double_identifiers
   KOKKOS_INLINE_FUNCTION
-  int test_collision_kokkos(int, int, int, Particle::OnePart *, Particle::OnePart *, struct State &, rand_type &) const;
+  int test_collision_kokkos(int, int, int, OnePartKK *, OnePartKK *, struct State &, rand_type &) const;
   KOKKOS_INLINE_FUNCTION
-  void setup_collision_kokkos(Particle::OnePart *, Particle::OnePart *, struct State &, struct State &) const;
+  void setup_collision_kokkos(OnePartKK *, OnePartKK *, struct State &, struct State &) const;
   KOKKOS_INLINE_FUNCTION
-  int perform_collision_kokkos(Particle::OnePart *&, Particle::OnePart *&,
-                        Particle::OnePart *&, struct State &, struct State &, rand_type &,
-                        Particle::OnePart *&, int &, double &,
+  int perform_collision_kokkos(OnePartKK *&, OnePartKK *&,
+                        OnePartKK *&, struct State &, struct State &, rand_type &,
+                        OnePartKK *&, int &, double &,  // KK_DOUBLE: recombination density
                         int &) const;
 
   KOKKOS_INLINE_FUNCTION
@@ -171,8 +191,8 @@ class CollideVSSKokkos : public CollideVSS {
  private:
   KOKKOS_INLINE_FUNCTION
   void ambi_reset_kokkos(int, int, int, int,
-                         Particle::OnePart *, Particle::OnePart *,
-                         Particle::OnePart *, const DAT::t_int_1d &) const;
+                         OnePartKK *, OnePartKK *,
+                         OnePartKK *, const DAT::t_int_1d &) const;
   void reset_vremax();
   int pack_grid_one(int, char *, int);
   int unpack_grid_one(int, char *);
@@ -304,15 +324,15 @@ class CollideVSSKokkos : public CollideVSS {
   tdual_struct_tdual_float_2d_1d k_edarray;
   DAT::t_int_1d d_ionambi;
   DAT::t_int_1d d_ions;
-  DAT::t_float_2d_lr d_velambi;
+  DAT::t_kkfloat_2d_lr d_velambi;
   t_particle_2d d_elist;
 
-  DAT::tdual_float_2d k_vremax_initial;
-  DAT::t_float_2d d_vremax_initial;
-  DAT::tdual_float_3d k_vremax;
-  DAT::t_float_3d d_vremax;
-  DAT::tdual_float_3d k_remain;
-  DAT::t_float_3d d_remain;
+  DAT::ttransform_kkfloat_2d k_vremax_initial;
+  DAT::t_kkfloat_2d d_vremax_initial;
+  DAT::ttransform_kkfloat_3d k_vremax;
+  DAT::t_kkfloat_3d d_vremax;
+  DAT::ttransform_kkacc_3d k_remain;
+  DAT::t_kkacc_3d d_remain;
 
   // int scalars = flags and view-size counters, must stay int
   // bigint scalars = per-step statistics counters, can exceed 2^31
@@ -366,7 +386,7 @@ class CollideVSSKokkos : public CollideVSS {
   DAT::tdual_int_1d k_dellist;
   DAT::t_int_1d d_dellist;
 
-  DAT::t_float_2d d_recomb_ijflag;
+  DAT::t_kkfloat_2d d_recomb_ijflag;
 
   DAT::t_int_2d d_nn_last_partner;
 
@@ -388,11 +408,11 @@ class CollideVSSKokkos : public CollideVSS {
 
   template < int DIM >
   KOKKOS_INLINE_FUNCTION
-  void rebin_subcell(int, int, int, const double *, const double *) const;
+  void rebin_subcell(int, int, int, const KK_POS_FLOAT *, const KK_FLOAT *) const;
 
   template < int DIM >
   KOKKOS_INLINE_FUNCTION
-  void bin_one_subcell(int, int, int, const double *, const double *) const;
+  void bin_one_subcell(int, int, int, const KK_POS_FLOAT *, const KK_FLOAT *) const;
 
   KOKKOS_INLINE_FUNCTION
   void unbin_one_subcell(int, int, int) const;
@@ -405,8 +425,8 @@ class CollideVSSKokkos : public CollideVSS {
 
   // VSS specific
 
-  DAT::tdual_float_2d k_prefactor;
-  DAT::t_float_2d d_prefactor;
+  DAT::ttransform_kkfloat_2d k_prefactor;
+  DAT::t_kkfloat_2d d_prefactor;
 
   tdual_params_2d k_params;
   t_params_2d d_params;
@@ -415,35 +435,35 @@ class CollideVSSKokkos : public CollideVSS {
   int maxcellcount,react_defined;
 
   KOKKOS_INLINE_FUNCTION
-  void SCATTER_TwoBodyScattering(Particle::OnePart *,
-                                 Particle::OnePart *,
+  void SCATTER_TwoBodyScattering(OnePartKK *,
+                                 OnePartKK *,
                                  struct State &, struct State &, rand_type &) const;
   KOKKOS_INLINE_FUNCTION
-  void EEXCHANGE_NonReactingEDisposal(Particle::OnePart *,
-                                      Particle::OnePart *,
+  void EEXCHANGE_NonReactingEDisposal(OnePartKK *,
+                                      OnePartKK *,
                                       struct State &, struct State &, rand_type &) const;
 
   KOKKOS_INLINE_FUNCTION
-  void SCATTER_ThreeBodyScattering(Particle::OnePart *,
-                                   Particle::OnePart *,
-                                   Particle::OnePart *,
+  void SCATTER_ThreeBodyScattering(OnePartKK *,
+                                   OnePartKK *,
+                                   OnePartKK *,
                                    struct State &, struct State &, rand_type &) const;
   KOKKOS_INLINE_FUNCTION
-  void EEXCHANGE_ReactingEDisposal(Particle::OnePart *,
-                                   Particle::OnePart *,
-                                   Particle::OnePart *,
+  void EEXCHANGE_ReactingEDisposal(OnePartKK *,
+                                   OnePartKK *,
+                                   OnePartKK *,
                                    struct State &, struct State &, rand_type &) const;
 
   KOKKOS_INLINE_FUNCTION
-  double sample_bl(rand_type &, double, double) const;
+  KK_FLOAT sample_bl(rand_type &, KK_FLOAT, KK_FLOAT) const;
   KOKKOS_INLINE_FUNCTION
-  double eff_vib_dof(double, double) const;
+  KK_FLOAT eff_vib_dof(KK_FLOAT, KK_FLOAT) const;
   KOKKOS_INLINE_FUNCTION
-  double vib_pool_temp(double, int, double *, double) const;
+  KK_FLOAT vib_pool_temp(KK_FLOAT, int, KK_FLOAT *, KK_FLOAT) const;
   KOKKOS_INLINE_FUNCTION
-  double rotrel (int, double) const;
+  KK_FLOAT rotrel (int, KK_FLOAT) const;
   KOKKOS_INLINE_FUNCTION
-  double vibrel (int, double) const;
+  KK_FLOAT vibrel (int, KK_FLOAT) const;
 
   KOKKOS_INLINE_FUNCTION
   int set_nn(int, int) const;
@@ -460,11 +480,11 @@ class CollideVSSKokkos : public CollideVSS {
 
   t_particle_1d d_particles_backup;
   DAT::t_int_2d d_plist_backup;
-  DAT::t_float_3d d_vremax_backup;
-  DAT::t_float_3d d_remain_backup;
+  DAT::t_kkfloat_3d d_vremax_backup;
+  DAT::t_kkacc_3d d_remain_backup;
   DAT::t_int_2d d_nn_last_partner_backup;
   DAT::t_int_1d d_ionambi_backup;
-  DAT::t_float_2d_lr d_velambi_backup;
+  DAT::t_kkfloat_2d_lr d_velambi_backup;
   RanKnuth* random_backup;
 };
 

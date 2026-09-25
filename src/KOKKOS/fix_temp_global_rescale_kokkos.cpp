@@ -88,8 +88,8 @@ void FixTempGlobalRescaleKokkos::end_of_step()
 
 KOKKOS_INLINE_FUNCTION
 void FixTempGlobalRescaleKokkos::operator()(TagFixTempGlobalRescale_reduce,
-                                            const int &i, double &t) const {
-  const double *v = d_particles[i].v;
+                                            const int &i, double &t) const {  // KK_DOUBLE: reduction value
+  const KK_FLOAT *v = d_particles[i].v;
   t += (v[0]*v[0] + v[1]*v[1] + v[2]*v[2]) *
     d_species[d_particles[i].ispecies].mass;
 }
@@ -99,7 +99,7 @@ void FixTempGlobalRescaleKokkos::operator()(TagFixTempGlobalRescale_reduce,
 KOKKOS_INLINE_FUNCTION
 void FixTempGlobalRescaleKokkos::operator()(TagFixTempGlobalRescale_scale,
                                             const int &i) const {
-  double *v = d_particles[i].v;
+  KK_FLOAT *v = d_particles[i].v;
   v[0] *= vscale;
   v[1] *= vscale;
   v[2] *= vscale;

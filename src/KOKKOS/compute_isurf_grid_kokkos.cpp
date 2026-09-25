@@ -78,7 +78,7 @@ void ComputeISurfGridKokkos::init_normflux()
 
   int nsurf = surf->nlocal + surf->nghost;
 
-  d_normflux = DAT::t_float_1d("isurf/grid:normflux",nsurf);
+  d_normflux = DAT::t_kkacc_1d("isurf/grid:normflux",nsurf);
   auto h_normflux = Kokkos::create_mirror_view(d_normflux);
   for (int n=0; n<nsurf; n++)
     h_normflux(n) = normflux[n];

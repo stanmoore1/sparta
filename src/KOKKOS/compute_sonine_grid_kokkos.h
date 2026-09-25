@@ -47,9 +47,9 @@ class ComputeSonineGridKokkos : public ComputeSonineGrid, public KokkosBase {
   ~ComputeSonineGridKokkos();
   void compute_per_grid();
   void compute_per_grid_kokkos();
-  int query_tally_grid_kokkos(DAT::t_float_2d_lr &);
-  void post_process_grid_kokkos(int, int, DAT::t_float_2d_lr, int *,
-                                  DAT::t_float_1d_strided);
+  int query_tally_grid_kokkos(DAT::t_kkacc_2d_lr &);
+  void post_process_grid_kokkos(int, int, DAT::t_kkacc_2d_lr, int *,
+                                  DAT::t_kkacc_1d_strided);
   void reallocate();
 
   template<int NEED_ATOMICS>
@@ -70,21 +70,21 @@ class ComputeSonineGridKokkos : public ComputeSonineGrid, public KokkosBase {
   KOKKOS_INLINE_FUNCTION
   void operator()(TagComputeSonineGrid_post_process_grid, const int&) const;
 
-  DAT::tdual_float_1d k_vector_grid;
+  DAT::ttransform_kkacc_1d k_vector_grid;
 
  private:
-  DAT::t_float_3d d_vcom;
-  Kokkos::Experimental::ScatterView<F_FLOAT***, typename DAT::t_float_3d::array_layout,DeviceType,typename Kokkos::Experimental::ScatterSum,typename Kokkos::Experimental::ScatterDuplicated> dup_vcom_tally;
-  Kokkos::Experimental::ScatterView<F_FLOAT***, typename DAT::t_float_3d::array_layout,DeviceType,typename Kokkos::Experimental::ScatterSum,typename Kokkos::Experimental::ScatterNonDuplicated> ndup_vcom_tally;
+  DAT::t_kkacc_3d d_vcom;
+  Kokkos::Experimental::ScatterView<KK_ACC_FLOAT***, typename DAT::t_kkacc_3d::array_layout,DeviceType,typename Kokkos::Experimental::ScatterSum,typename Kokkos::Experimental::ScatterDuplicated> dup_vcom_tally;
+  Kokkos::Experimental::ScatterView<KK_ACC_FLOAT***, typename DAT::t_kkacc_3d::array_layout,DeviceType,typename Kokkos::Experimental::ScatterSum,typename Kokkos::Experimental::ScatterNonDuplicated> ndup_vcom_tally;
 
-  DAT::tdual_float_2d_lr k_tally;
-  DAT::t_float_2d_lr d_tally;
+  DAT::ttransform_kkacc_2d_lr k_tally;
+  DAT::t_kkacc_2d_lr d_tally;
   int need_dup;
-  Kokkos::Experimental::ScatterView<F_FLOAT**, typename DAT::t_float_2d_lr::array_layout,DeviceType,typename Kokkos::Experimental::ScatterSum,typename Kokkos::Experimental::ScatterDuplicated> dup_tally;
-  Kokkos::Experimental::ScatterView<F_FLOAT**, typename DAT::t_float_2d_lr::array_layout,DeviceType,typename Kokkos::Experimental::ScatterSum,typename Kokkos::Experimental::ScatterNonDuplicated> ndup_tally;
+  Kokkos::Experimental::ScatterView<KK_ACC_FLOAT**, typename DAT::t_kkacc_2d_lr::array_layout,DeviceType,typename Kokkos::Experimental::ScatterSum,typename Kokkos::Experimental::ScatterDuplicated> dup_tally;
+  Kokkos::Experimental::ScatterView<KK_ACC_FLOAT**, typename DAT::t_kkacc_2d_lr::array_layout,DeviceType,typename Kokkos::Experimental::ScatterSum,typename Kokkos::Experimental::ScatterNonDuplicated> ndup_tally;
 
-  DAT::t_float_2d_lr d_etally;
-  DAT::t_float_1d_strided d_vec;
+  DAT::t_kkacc_2d_lr d_etally;
+  DAT::t_kkacc_1d_strided d_vec;
 
   t_cinfo_1d d_cinfo;
   t_particle_1d d_particles;

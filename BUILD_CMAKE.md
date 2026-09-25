@@ -66,6 +66,11 @@ cmake -C /path/to/<NAME>.cmake /path/to/sparta/cmake
   * Which SPARTA FFT TPL to enable: FFTW3, MKL, or KISS.
 * FFT_KOKKOS
   * Which SPARTA Kokkos FFT TPL to enable: CUFFT, HIPFFT, FFTW3, MKL, or KISS.
+* FFT_SINGLE
+  * Whether to use single precision FFTs (FFT and KOKKOS FFT). Default: OFF.
+* KOKKOS_PREC
+  * Precision of the KOKKOS package: double (default), mixed, or single.
+    See doc/Section_accelerate.html. mixed and single require SPARTA_KOKKOS_EXACT=OFF.
 
 Note: To point to a TPL installation, export <TPL>_ROOT=/path/to/tpl/install
 before running cmake.

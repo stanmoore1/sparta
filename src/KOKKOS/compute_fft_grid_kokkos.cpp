@@ -111,7 +111,7 @@ void ComputeFFTGridKokkos::post_constructor()
 
   memoryKK->create_kokkos(k_fftwork, fftwork, nfft, "fft/grid:fftwork");
   d_fftwork = k_fftwork.view_device();
-  d_fftwork_char = DAT::t_char_1d((char *)d_fftwork.data(),d_fftwork.size()*sizeof(double));
+  d_fftwork_char = DAT::t_char_1d((char *)d_fftwork.data(),d_fftwork.size()*sizeof(KK_ACC_FLOAT));
 
   reallocate();
 
@@ -183,8 +183,8 @@ void ComputeFFTGridKokkos::compute_per_grid_kokkos()
       }
 
       if (c->post_process_grid_flag) {
-        DAT::t_float_2d_lr d_tmp1;
-        DAT::t_float_1d_strided d_tmp2;
+        DAT::t_kkacc_2d_lr d_tmp1;
+        DAT::t_kkacc_1d_strided d_tmp2;
         cKKBase->post_process_grid_kokkos(aidx,1,d_tmp1,NULL,d_tmp2);
       }
 
@@ -245,9 +245,9 @@ void ComputeFFTGridKokkos::compute_per_grid_kokkos()
 
     // irregular comm to move grid values from SPARTA owners -> FFT owners
 
-    auto d_ingrid_char = DAT::t_char_1d((char *)d_ingrid.data(),d_ingrid.size()*sizeof(double));
+    auto d_ingrid_char = DAT::t_char_1d((char *)d_ingrid.data(),d_ingrid.size()*sizeof(KK_ACC_FLOAT));
 
-    irregular1KK->exchange_uniform(d_ingrid_char,sizeof(double),(char *)d_fftwork_char.data(),
+    irregular1KK->exchange_uniform(d_ingrid_char,sizeof(KK_ACC_FLOAT),(char *)d_fftwork_char.data(),
                                    d_fftwork_char);
 
     // convert SPARTA grid value to FFT complex
@@ -279,7 +279,7 @@ void ComputeFFTGridKokkos::compute_per_grid_kokkos()
         d_fftwork[i] = real*real + imag*imag;
       });
 
-      irregular2KK->exchange_uniform(d_fftwork_char,sizeof(double),
+      irregular2KK->exchange_uniform(d_fftwork_char,sizeof(KK_ACC_FLOAT),
                                    (char *) d_gridwork_char.data(),d_gridwork_char);
       if (sumflag) {
         if (ncol == 1) {
@@ -376,7 +376,7 @@ void ComputeFFTGridKokkos::reallocate()
 
   if (startcol || conjugate) {
     MemKK::realloc_kokkos(d_gridwork,"fft/grid:gridwork",nglocal);
-    d_gridwork_char = DAT::t_char_1d((char *)d_gridwork.data(),d_gridwork.size()*sizeof(double));
+    d_gridwork_char = DAT::t_char_1d((char *)d_gridwork.data(),d_gridwork.size()*sizeof(KK_ACC_FLOAT));
   }
 
   if (!conjugate) {
@@ -445,7 +445,7 @@ void ComputeFFTGridKokkos::reallocate()
     k_fftwork.modify_host();
     k_fftwork.sync_device();
 
-    irregular2KK->exchange_uniform(d_fftwork_char,sizeof(double),
+    irregular2KK->exchange_uniform(d_fftwork_char,sizeof(KK_ACC_FLOAT),
                                  (char *) d_gridwork_char.data(),d_gridwork_char);
 
     copymode = 1;
@@ -576,7 +576,7 @@ void ComputeFFTGridKokkos::irregular_create()
     d_cells = t_cell_1d("grid:cells",nglocal);
     auto h_cells = Kokkos::create_mirror_view(d_cells);
     for (int i = 0; i < nglocal; i++)
-      h_cells[i] = grid->cells[i];
+      kk_convert(h_cells[i],grid->cells[i]);
     Kokkos::deep_copy(d_cells,h_cells);
   } else {
     d_cells = gridKK->k_cells.view_device();

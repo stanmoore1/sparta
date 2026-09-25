@@ -771,6 +771,17 @@ cd build
 cmake -C /path/to/sparta/cmake/presets/kokkos_hip.cmake       -DKokkos_ARCH_VEGA90A=OFF -DKokkos_ARCH_AMD_GFX942=ON       /path/to/sparta/cmake
 make -j 4 
 </PRE>
+<P>Example: build for NVIDIA GPUs in mixed precision:
+</P>
+<PRE>mkdir build
+cd build
+cmake -C /path/to/sparta/cmake/presets/kokkos_cuda.cmake \
+      -DKOKKOS_PREC=mixed /path/to/sparta/cmake
+make -j 4 
+</PRE>
+<P>KOKKOS_PREC can be double (default), mixed, or single; see <A HREF = "Section_accelerate.html#acc_3">Section
+5.3</A> for what each one means.
+</P>
 <P>After building, run SPARTA with the KOKKOS package using the -k, -sf,
 and -pk command-line switches. The -k on g Ng switch specifies Ng GPUs
 per node. Examples (assuming a node with 4 GPUs):

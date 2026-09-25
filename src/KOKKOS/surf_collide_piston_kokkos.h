@@ -107,8 +107,8 @@ class SurfCollidePistonKokkos : public SurfCollidePiston {
 
   template<int REACT, int ATOMIC_REDUCTION>
   KOKKOS_INLINE_FUNCTION
-  Particle::OnePart* collide_kokkos(Particle::OnePart *&ip, double &dtremain,
-                                    int isurf, const double *norm, int isr, int &reaction,
+  OnePartKK* collide_kokkos(OnePartKK *&ip, KK_POS_FLOAT &dtremain,
+                                    int isurf, const KK_POS_FLOAT *norm, int isr, int &reaction,
                                     const DAT::t_int_scalar &d_retry, const DAT::t_int_scalar &d_nlocal) const
   {
     if (ATOMIC_REDUCTION == 0)
@@ -120,8 +120,8 @@ class SurfCollidePistonKokkos : public SurfCollidePiston {
     // reaction = 1 to N for which reaction took place, 0 for none
     // velreset = 1 if reaction reset post-collision velocity, else 0
 
-    Particle::OnePart iorig;
-    Particle::OnePart *jp = NULL;
+    OnePartKK iorig;
+    OnePartKK *jp = NULL;
     reaction = 0;
     int velreset = 0;
 
@@ -133,7 +133,7 @@ class SurfCollidePistonKokkos : public SurfCollidePiston {
     //   KK_SR_TYPE(-1) reads out of bounds and dispatches on garbage
 
     if (REACT && isr >= 0) {
-      if (ambi_flag || vibmode_flag) memcpy(&iorig,ip,sizeof(Particle::OnePart));
+      if (ambi_flag || vibmode_flag) memcpy(&iorig,ip,sizeof(OnePartKK));
 
       int sr_type = KK_SR_TYPE(isr);
       int m = KK_SR_MAP(isr);
@@ -163,11 +163,11 @@ class SurfCollidePistonKokkos : public SurfCollidePiston {
 
     int dim,which;
 
-    if (norm[0] != 0.0) {
+    if (norm[0] != static_cast<KK_POS_FLOAT>(0.0)) {
       dim = 0;
       if (norm[0] < 0.0) which = 1;
       else which = 0;
-    } else if (norm[1] != 0.0) {
+    } else if (norm[1] != static_cast<KK_POS_FLOAT>(0.0)) {
       dim = 1;
       if (norm[1] < 0.0) which = 1;
       else which = 0;
@@ -182,11 +182,11 @@ class SurfCollidePistonKokkos : public SurfCollidePiston {
     // vorig = initial velocity component
     // vwall = user-specified wall velocity (always >= 0)
 
-    double *x = ip->x;
-    double *v = ip->v;
-    double xwall = x[dim];
-    double xorig = xwall - v[dim]*(dt - dtremain);
-    double vorig = v[dim];
+    KK_POS_FLOAT *x = ip->x;
+    KK_FLOAT *v = ip->v;
+    KK_POS_FLOAT xwall = x[dim];
+    KK_POS_FLOAT xorig = xwall - v[dim]*(dt - dtremain);
+    KK_FLOAT vorig = v[dim];
 
     // piston reflection: see eqs 12.30 and 12.31 in Bird 1994, p 288
     // uprime = post-collision velocity component
@@ -195,18 +195,18 @@ class SurfCollidePistonKokkos : public SurfCollidePiston {
     // formula for dtremain works for both which = 0/1
     //   since numerator and denominator are always same sign
 
-    double uprime,xprime;
+    KK_FLOAT uprime; KK_POS_FLOAT xprime;
 
     if (which == 0) {
-      uprime = -2.0*vwall - vorig;
-      xprime = 2.0*xwall - xorig + uprime*dt;
+      uprime = -static_cast<KK_FLOAT>(2.0)*vwall - vorig;
+      xprime = static_cast<KK_POS_FLOAT>(2.0)*xwall - xorig + uprime*dt;
       if (xprime <= xwall) {
         ip = NULL;
         return NULL;
       }
     } else {
-      uprime = 2.0*vwall - vorig;
-      xprime = 2.0*xwall - xorig + uprime*dt;
+      uprime = static_cast<KK_FLOAT>(2.0)*vwall - vorig;
+      xprime = static_cast<KK_POS_FLOAT>(2.0)*xwall - xorig + uprime*dt;
       if (xprime >= xwall) {
         ip = NULL;
         return NULL;

@@ -48,7 +48,7 @@ class FixAmbipolarKokkos : public FixAmbipolar {
   t_species_1d d_species;
 
   DAT::t_int_1d d_ionambi;
-  DAT::t_float_2d_lr d_velambi;
+  DAT::t_kkfloat_2d_lr d_velambi;
 
 #ifndef SPARTA_KOKKOS_EXACT
   Kokkos::Random_XorShift64_Pool<DeviceType> rand_pool;
@@ -70,9 +70,9 @@ class FixAmbipolarKokkos : public FixAmbipolar {
   ------------------------------------------------------------------------- */
 
   KOKKOS_INLINE_FUNCTION
-  void update_custom_kokkos(int index, double temp_thermal,
-                            double, double,
-                            const double *vstream) const
+  void update_custom_kokkos(int index, KK_FLOAT temp_thermal,
+                            KK_FLOAT, KK_FLOAT,
+                            const double *vstream) const  // KK_DOUBLE: host array
   {
     // if species is not ambipolar ion, set ionambi off and return
 
@@ -88,19 +88,19 @@ class FixAmbipolarKokkos : public FixAmbipolar {
 
     d_ionambi[index] = 1;
 
-    const double vscale = sqrt(2.0 * boltz * temp_thermal /
+    const KK_FLOAT vscale = Kokkos::sqrt(static_cast<KK_FLOAT>(2.0) * boltz * temp_thermal /
                                d_species[especies].mass);
 
     rand_type rand_gen = rand_pool.get_state();
 
-    const double vn = vscale * sqrt(-log(rand_gen.drand()));
-    const double vr = vscale * sqrt(-log(rand_gen.drand()));
-    const double theta1 = MathConst::MY_2PI * rand_gen.drand();
-    const double theta2 = MathConst::MY_2PI * rand_gen.drand();
+    const KK_FLOAT vn = vscale * Kokkos::sqrt(-Kokkos::log(static_cast<KK_FLOAT>(rand_gen.drand())));
+    const KK_FLOAT vr = vscale * Kokkos::sqrt(-Kokkos::log(static_cast<KK_FLOAT>(rand_gen.drand())));
+    const KK_FLOAT theta1 = static_cast<KK_FLOAT>(MathConst::MY_2PI) * static_cast<KK_FLOAT>(rand_gen.drand());
+    const KK_FLOAT theta2 = static_cast<KK_FLOAT>(MathConst::MY_2PI) * static_cast<KK_FLOAT>(rand_gen.drand());
 
-    d_velambi(index,0) = vstream[0] + vn*cos(theta1);
-    d_velambi(index,1) = vstream[1] + vr*cos(theta2);
-    d_velambi(index,2) = vstream[2] + vr*sin(theta2);
+    d_velambi(index,0) = vstream[0] + vn*Kokkos::cos(theta1);
+    d_velambi(index,1) = vstream[1] + vr*Kokkos::cos(theta2);
+    d_velambi(index,2) = vstream[2] + vr*Kokkos::sin(theta2);
 
     rand_pool.free_state(rand_gen);
   }
@@ -113,7 +113,7 @@ class FixAmbipolarKokkos : public FixAmbipolar {
   ------------------------------------------------------------------------- */
 
   KOKKOS_INLINE_FUNCTION
-  void surf_react_kokkos(Particle::OnePart *iorig, int &i, int &j) const
+  void surf_react_kokkos(OnePartKK *iorig, int &i, int &j) const
   {
     int ispecies = iorig->ispecies;
 

@@ -154,8 +154,8 @@ void SurfReactAdsorbKokkos::grid_changed()
 void SurfReactAdsorbKokkos::init_cmodels_kokkos()
 {
   int nr = MAX(nlist_gs,1);
-  d_cmip_coeffs = DAT::t_float_2d("sra:cmip_coeffs",nr,SRA_KK_MAXCMCOEFF);
-  d_cmjp_coeffs = DAT::t_float_2d("sra:cmjp_coeffs",nr,SRA_KK_MAXCMCOEFF);
+  d_cmip_coeffs = DAT::t_kkfloat_2d("sra:cmip_coeffs",nr,SRA_KK_MAXCMCOEFF);
+  d_cmjp_coeffs = DAT::t_kkfloat_2d("sra:cmjp_coeffs",nr,SRA_KK_MAXCMCOEFF);
   d_cmip_flags = DAT::t_int_2d("sra:cmip_flags",nr,SRA_KK_MAXCMFLAG);
   d_cmjp_flags = DAT::t_int_2d("sra:cmjp_flags",nr,SRA_KK_MAXCMFLAG);
 
@@ -242,12 +242,12 @@ void SurfReactAdsorbKokkos::init_reactions_gs_kokkos()
   int nr = MAX(nlist_gs,1);
   d_type = DAT::t_int_1d("sra:type",nr);
   d_style = DAT::t_int_1d("sra:style",nr);
-  d_kreact = DAT::t_float_1d("sra:kreact",nr);
+  d_kreact = DAT::t_kkfloat_1d("sra:kreact",nr);
   d_kisliuk_flag = DAT::t_int_1d("sra:kflag",nr);
-  d_kisliuk = DAT::t_float_2d("sra:kisliuk",nr,3);
+  d_kisliuk = DAT::t_kkfloat_2d("sra:kisliuk",nr,3);
   d_energy_flag = DAT::t_int_1d("sra:eflag",nr);
-  d_energy = DAT::t_float_2d("sra:energy",nr,2);
-  d_coeff = DAT::t_float_2d("sra:coeff",nr,SRA_KK_MAXCOEFF);
+  d_energy = DAT::t_kkfloat_2d("sra:energy",nr,2);
+  d_coeff = DAT::t_kkfloat_2d("sra:coeff",nr,SRA_KK_MAXCOEFF);
   d_nreactant = DAT::t_int_1d("sra:nreactant",nr);
   d_nproduct = DAT::t_int_1d("sra:nproduct",nr);
   d_nprod_g = DAT::t_int_1d("sra:nprod_g",nr);
@@ -357,8 +357,8 @@ void SurfReactAdsorbKokkos::init_reactions_gs_kokkos()
   state_synced_to_device = 0;
 
   d_total_state = DAT::t_int_1d("sra:total_state",ns);
-  d_area = DAT::t_float_1d("sra:area",ns);
-  d_weight = DAT::t_float_1d("sra:weight",ns);
+  d_area = DAT::t_kkfloat_1d("sra:area",ns);
+  d_weight = DAT::t_kkfloat_1d("sra:weight",ns);
   d_species_state = DAT::t_int_2d("sra:species_state",ns,nspecies_surf);
 
   k_species_delta = DAT::tdual_int_2d("sra:species_delta",ns,nspecies_surf);

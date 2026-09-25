@@ -54,12 +54,12 @@ class ComputeBoundaryKokkos : public ComputeBoundary, public KokkosBase {
 
 template <int ATOMIC_REDUCTION>
 KOKKOS_INLINE_FUNCTION
-void boundary_tally_kk(double dtremain,
+void boundary_tally_kk(KK_POS_FLOAT dtremain,
                        int iface, int istyle, int reaction,
-                       Particle::OnePart *iorig,
-                       Particle::OnePart *ip,
-                       Particle::OnePart *jp,
-                       const double* norm) const
+                       OnePartKK *iorig,
+                       OnePartKK *ip,
+                       OnePartKK *jp,
+                       const KK_POS_FLOAT* norm) const
 {
   // skip if species not in mixture group
 
@@ -75,17 +75,17 @@ void boundary_tally_kk(double dtremain,
   auto v_myarray = ScatterViewHelper<typename NeedDup<ATOMIC_REDUCTION,DeviceType>::value,decltype(dup_myarray),decltype(ndup_myarray)>::get(dup_myarray,ndup_myarray);
   auto a_myarray = v_myarray.template access<typename AtomicDup<ATOMIC_REDUCTION,DeviceType>::value>();
 
-  double vsqpre,ivsqpost,jvsqpost;
-  double ierot,jerot,ievib,jevib,iother,jother,otherpre;
-  double vnorm[3],vtang[3],pdelta[3],pnorm[3],ptang[3];
+  KK_ACC_FLOAT vsqpre,ivsqpost,jvsqpost;
+  KK_FLOAT ierot; KK_FLOAT jerot; KK_FLOAT ievib; KK_FLOAT jevib; KK_ACC_FLOAT iother; KK_ACC_FLOAT jother; KK_ACC_FLOAT otherpre;
+  KK_ACC_FLOAT vnorm[3],vtang[3],pdelta[3],pnorm[3],ptang[3];
 
-  double origmass,imass,jmass,pre;
-  double weight = weightflag ? iorig->weight : 1.0;
+  KK_ACC_FLOAT origmass,imass,jmass,pre;
+  KK_ACC_FLOAT weight = weightflag ? iorig->weight : static_cast<KK_ACC_FLOAT>(1.0);
   origmass = d_species[origspecies].mass * weight;
   if (ip) imass = d_species[ip->ispecies].mass * weight;
   if (jp) jmass = d_species[jp->ispecies].mass * weight;
 
-  double *vorig = iorig->v;
+  KK_FLOAT *vorig = iorig->v;
 
   int k = igroup*nvalue;
   int nflag = 0;
@@ -93,7 +93,7 @@ void boundary_tally_kk(double dtremain,
 
   if (istyle == PERIODIC) {
     for (int m = 0; m < nvalue; m++) {
-      if (d_which[m] == NUM) a_myarray(iface,k++) += 1.0;
+      if (d_which[m] == NUM) a_myarray(iface,k++) += static_cast<KK_FLOAT>(1.0);
       else if (d_which[m] == NUMWT) a_myarray(iface,k++) += weight;
       else k++;
     }
@@ -102,7 +102,7 @@ void boundary_tally_kk(double dtremain,
     for (int m = 0; m < nvalue; m++) {
       switch (d_which[m]) {
       case NUM:
-        a_myarray(iface,k++) += 1.0;
+        a_myarray(iface,k++) += static_cast<KK_ACC_FLOAT>(1.0);
         break;
       case NUMWT:
         a_myarray(iface,k++) += weight;
@@ -146,7 +146,7 @@ void boundary_tally_kk(double dtremain,
         break;
       case KE:
         vsqpre = MathExtraKokkos::lensq3(vorig);
-        a_myarray(iface,k++) += 0.5 * mvv2e * origmass * vsqpre;
+        a_myarray(iface,k++) += static_cast<KK_ACC_FLOAT>(0.5) * mvv2e * origmass * vsqpre;
         break;
       case EROT:
         a_myarray(iface,k++) += weight * iorig->erot;
@@ -156,7 +156,7 @@ void boundary_tally_kk(double dtremain,
         break;
       case ETOT:
         vsqpre = MathExtraKokkos::lensq3(vorig);
-        a_myarray(iface,k++) += 0.5*mvv2e*origmass*vsqpre +
+        a_myarray(iface,k++) += static_cast<KK_ACC_FLOAT>(0.5)*mvv2e*origmass*vsqpre +
           weight*(iorig->erot+iorig->evib);
         break;
       }
@@ -166,7 +166,7 @@ void boundary_tally_kk(double dtremain,
     for (int m = 0; m < nvalue; m++) {
       switch (d_which[m]) {
       case NUM:
-        a_myarray(iface,k++) += 1.0;
+        a_myarray(iface,k++) += static_cast<KK_ACC_FLOAT>(1.0);
         break;
       case NUMWT:
         a_myarray(iface,k++) += weight;
@@ -228,7 +228,7 @@ void boundary_tally_kk(double dtremain,
         else ivsqpost = 0.0;
         if (jp) jvsqpost = jmass * MathExtraKokkos::lensq3(jp->v);
         else jvsqpost = 0.0;
-        a_myarray(iface,k++) -= 0.5*mvv2e * (ivsqpost + jvsqpost - vsqpre);
+        a_myarray(iface,k++) -= static_cast<KK_ACC_FLOAT>(0.5)*mvv2e * (ivsqpost + jvsqpost - vsqpre);
         break;
       case EROT:
         if (ip) ierot = ip->erot;
@@ -255,7 +255,7 @@ void boundary_tally_kk(double dtremain,
           jvsqpost = jmass * MathExtraKokkos::lensq3(jp->v);
           jother = jp->erot + jp->evib;
         } else jvsqpost = jother = 0.0;
-        a_myarray(iface,k++) -= 0.5*mvv2e*(ivsqpost + jvsqpost - vsqpre) +
+        a_myarray(iface,k++) -= static_cast<KK_ACC_FLOAT>(0.5)*mvv2e*(ivsqpost + jvsqpost - vsqpre) +
           weight * (iother + jother - otherpre);
         break;
       }
@@ -268,12 +268,12 @@ void boundary_tally_kk(double dtremain,
   int mvv2e;
   DAT::t_int_1d d_which;
 
-  DAT::tdual_float_2d_lr k_myarray; // local accumulator array
-  DAT::t_float_2d_lr d_myarray;
+  DAT::ttransform_kkacc_2d_lr k_myarray; // local accumulator array
+  DAT::t_kkacc_2d_lr d_myarray;
 
   int need_dup;
-  Kokkos::Experimental::ScatterView<F_FLOAT**, typename DAT::t_float_2d_lr::array_layout,DeviceType,typename Kokkos::Experimental::ScatterSum,typename Kokkos::Experimental::ScatterDuplicated> dup_myarray;
-  Kokkos::Experimental::ScatterView<F_FLOAT**, typename DAT::t_float_2d_lr::array_layout,DeviceType,typename Kokkos::Experimental::ScatterSum,typename Kokkos::Experimental::ScatterNonDuplicated> ndup_myarray;
+  Kokkos::Experimental::ScatterView<KK_ACC_FLOAT**, typename DAT::t_kkacc_2d_lr::array_layout,DeviceType,typename Kokkos::Experimental::ScatterSum,typename Kokkos::Experimental::ScatterDuplicated> dup_myarray;
+  Kokkos::Experimental::ScatterView<KK_ACC_FLOAT**, typename DAT::t_kkacc_2d_lr::array_layout,DeviceType,typename Kokkos::Experimental::ScatterSum,typename Kokkos::Experimental::ScatterNonDuplicated> ndup_myarray;
 
   t_species_1d d_species;
   DAT::t_int_2d d_s2g;
