@@ -89,6 +89,7 @@ class ReactBird : public React {
   void readfile(char *);
   int readone(char *, char *, int &, int &);
   void check_duplicate();
+  int tce_bounds_checked;      // 1 if check_tce_bounds() already ran
   void check_tce_bounds();
   void print_reaction(char *, char *);
   void print_reaction(OneReaction *);

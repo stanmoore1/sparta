@@ -15,6 +15,7 @@
 #include "math.h"
 #include "string.h"
 #include "stdlib.h"
+#include <string>
 #include "react_bird.h"
 #include "input.h"
 #include "collide.h"
@@ -58,6 +59,7 @@ ReactBird::ReactBird(SPARTA *sparta, int narg, char **arg) :
   tally_reactions = new bigint[nlist];
   tally_reactions_all = new bigint[nlist];
   tally_flag = 0;
+  tce_bounds_checked = 0;
 
   reactions = NULL;
   list_ij = NULL;
@@ -74,6 +76,7 @@ ReactBird::ReactBird(SPARTA *sparta) : React(sparta)
   sp2recomb_ij = NULL;
   tally_reactions = NULL;
   tally_reactions_all = NULL;
+  tce_bounds_checked = 0;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -408,10 +411,10 @@ void ReactBird::init()
 
 /* ----------------------------------------------------------------------
    check that the temperature exponent eta = coeff[3] of each active
-     reaction is within the exact bounds of the TCE reaction probability
+     reaction is within the bound for which the TCE reaction probability
        P = C1 * Gamma(z+5/2-omega) / Gamma(z+eta+3/2) *
            (Ec-Ea)^(eta-1+omega) * (1-Ea/Ec)^(z+3/2-omega)
-     else warn that the probability will be erroneous
+     reproduces the Arrhenius rate of the reaction
    z = effective internal DOF contributing to the collision energy Ec,
      its minimum value zmin depends on the energy and vibrational models:
      partial energy (rDOF): z = coeff[0], constant
@@ -420,35 +423,36 @@ void ReactBird::init()
        average vibrational DOF, constant
      total energy, vibstyle = discrete: z >= average rotational DOF,
        since the instantaneous vibrational contribution can be zero
-   3 bounds on eta, each is most restrictive at z = zmin:
-   (1) eta > -(zmin + 3/2), else the argument of Gamma(z+eta+3/2) is
-       non-positive: Gamma is negative (negative probability) or hits
-       a pole at a non-positive integer (infinite or NaN probability)
-       for models where z is constant this is certain, so it is an error
-       for the discrete vibrational model z varies with the instantaneous
-       vibrational energy and only reaches zmin when it is small,
-       so it is a warning
-   (2) trend as Ec -> Ea: for Ea > 0 the probability varies as
-       (Ec-Ea)^(eta+z+1/2) near threshold and must not diverge there,
-       requiring eta >= -(zmin + 1/2)
-       at equality the probability tends to a finite constant at
-       threshold, so equality is allowed (as for bound (3))
-       not checked for barrierless reactions (Ea = 0, e.g. recombination),
-       whose integrable low-energy behavior is set by eta-1+omega
-   (3) trend as Ec -> infinity: the probability varies as
-       Ec^(eta-1+omega) and must not diverge, requiring eta <= 1 - omega
+   the bound is eta > -(zmin + 3/2), most restrictive at z = zmin
+     below it the TCE inversion of the Arrhenius rate does not exist
+     and the argument of Gamma(z+eta+3/2) is non-positive
+     ReactTCE::attempt() clamps the gamma function to 1.0e-6,
+     so the reaction still runs but its rate is incorrect
+   other properties of the probability, e.g. whether it diverges as Ec
+     approaches Ea or infinity, do not change its average, so the rate
+     is still reproduced; where the probability exceeds 1 it is clipped,
+     which ReactTCE::attempt() warns about when it happens
+   all violating reactions are reported in one warning, on the first
+     call only, so that it is not repeated for each run
    called from ReactTCE::init() and ReactTCEKokkos::init(),
      after ReactBird::init() has set coeff[5] = omega
 ------------------------------------------------------------------------- */
 
 void ReactBird::check_tce_bounds()
 {
-  Particle::Species *species = particle->species;
-  char str[MAXLINE+256];
+  if (tce_bounds_checked) return;
+  tce_bounds_checked = 1;
 
-  // z is constant unless using total energy with discrete vibration
+  Particle::Species *species = particle->species;
+  char str[MAXLINE+64];
+
+  // for the discrete vibrational model z varies with the instantaneous
+  //   vibrational energy and only reaches zmin when it is small
 
   int zconstant = partialEnergy || collide->vibstyle != DISCRETE;
+
+  int nbad = 0;
+  std::string mesg;
 
   for (int m = 0; m < nlist; m++) {
     OneReaction *r = &rlist[m];
@@ -457,9 +461,7 @@ void ReactBird::check_tce_bounds()
     int isp = r->reactants[0];
     int jsp = r->reactants[1];
 
-    double ea = r->coeff[1];
     double eta = r->coeff[3];
-    double omega = r->coeff[5];
 
     double zmin;
     if (partialEnergy) zmin = r->coeff[0];
@@ -469,44 +471,26 @@ void ReactBird::check_tce_bounds()
         zmin += 0.5 * (species[isp].vibdof + species[jsp].vibdof);
     }
 
-    // each test below fires on the violation of its bound:
-    // (1) and (2) are lower bounds on eta, (3) is an upper bound
-
     if (eta <= -(zmin+1.5)) {
-      if (zconstant) {
-        sprintf(str,"Reaction %s: temperature exponent %g must be > %g, "
-                "else the gamma function is negative or infinite and "
-                "the reaction probability is erroneous or NaN",
-                r->id,eta,-(zmin+1.5));
-        error->all(FLERR,str);
-      }
-      if (comm->me == 0) {
-        sprintf(str,"Reaction %s: temperature exponent %g must be > %g, "
-                "else the gamma function is negative or infinite and "
-                "the reaction probability is erroneous when the "
-                "vibrational energy is small",
-                r->id,eta,-(zmin+1.5));
-        error->warning(FLERR,str);
-      }
-    } else if (ea > 0.0 && eta < -(zmin+0.5)) {
-      if (comm->me == 0) {
-        sprintf(str,"Reaction %s: temperature exponent %g must be >= %g, "
-                "else the reaction probability diverges as the "
-                "collision energy approaches the activation energy",
-                r->id,eta,-(zmin+0.5));
-        error->warning(FLERR,str);
-      }
+      snprintf(str,sizeof(str),"\n  %s: temperature exponent %g <= %g",
+               r->id,eta,-(zmin+1.5));
+      mesg += str;
+      nbad++;
     }
+  }
 
-    if (eta > 1.0-omega) {
-      if (comm->me == 0) {
-        sprintf(str,"Reaction %s: temperature exponent %g must be <= %g, "
-                "else the reaction probability diverges as the "
-                "collision energy approaches infinity",
-                r->id,eta,1.0-omega);
-        error->warning(FLERR,str);
-      }
-    }
+  if (nbad && comm->me == 0) {
+    std::string head = std::to_string(nbad) + " TCE reaction(s) have a "
+      "temperature exponent below the bound -(z+3/2) for which the TCE "
+      "model can reproduce their Arrhenius rate. ";
+    if (zconstant)
+      head += "Their gamma function is non-positive and clamped, "
+        "so their reaction rates are incorrect:";
+    else
+      head += "With discrete vibration their gamma function is "
+        "non-positive and clamped when the vibrational energy is small, "
+        "so their reaction rates may be incorrect:";
+    error->warning(FLERR,(head + mesg).c_str());
   }
 }
 

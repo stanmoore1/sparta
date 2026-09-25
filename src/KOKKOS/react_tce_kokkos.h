@@ -232,16 +232,17 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
     }
 
     // compute probability of reaction
-    // gamma function denominator is negative or infinite (erroneous
-    //   probability) if temperature exponent is out of bounds,
-    //   checked at init by ReactBird::check_tce_bounds()
+    // gamma function denominator is non-positive if the temperature
+    //   exponent is below the TCE bound, then it is clamped to 1.0e-6
+    //   and the reaction rate is incorrect, warned about at init by
+    //   ReactBird::check_tce_bounds()
 
     switch (r->type) {
     case DISSOCIATION:
     case IONIZATION:
     case EXCHANGE:
       {
-        react_prob += r->d_coeff[2] * tgamma(z+2.5-r->d_coeff[5]) / tgamma(z+r->d_coeff[3]+1.5) *
+        react_prob += r->d_coeff[2] * tgamma(z+2.5-r->d_coeff[5]) / MAX(1.0e-6,tgamma(z+r->d_coeff[3]+1.5)) *
           pow(ecc-r->d_coeff[1],r->d_coeff[3]-1+r->d_coeff[5]) *
           pow(1.0-r->d_coeff[1]/ecc,z+1.5-r->d_coeff[5]);
         break;
@@ -262,7 +263,7 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
         if (d_sp2recomb[recomb_species] != d_list[i]) continue;
 
         react_prob += recomb_boost * recomb_density * r->d_coeff[2] *
-          tgamma(z+2.5-r->d_coeff[5]) / tgamma(z+r->d_coeff[3]+1.5) *
+          tgamma(z+2.5-r->d_coeff[5]) / MAX(1.0e-6,tgamma(z+r->d_coeff[3]+1.5)) *
           pow(ecc-r->d_coeff[1],r->d_coeff[3]-1+r->d_coeff[5]) *  // extended to general recombination case with non-zero activation energy
           pow(1.0-r->d_coeff[1]/ecc,z+1.5-r->d_coeff[5]);
         break;
