@@ -298,7 +298,8 @@ bigint Custom::process_actions(int narg, char **arg, int external)
       // else: store info in Action list for FixCustom
 
       if (!external)
-        action_set(vstyle,vindex,cindex,ctype,csize,ccol,groupbit,mixture,region);
+        count += action_set(vstyle,vindex,cindex,ctype,csize,ccol,
+                            groupbit,mixture,region);
       else {
         actions[naction].action = action;
         actions[naction].vstyle = vstyle;
