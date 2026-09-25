@@ -49,6 +49,8 @@ into `src/KOKKOS/kokkos_structs.h`.
 | `kk_prec_convert.py`  | the bulk rewriter (dry run by default, `--apply` to write); writes `review.md`, the list of constructs to review by hand |
 | `kk_prec_audit.py`    | linter: fails if device code contains an unjustified `double`, a bare C math call, an unwrapped literal, or legacy types. Run it on new KOKKOS code |
 | `compare_logs.py`     | compares thermo output of two sets of log files, exactly (double build vs. original) or statistically (`--stats`, reduced precision vs. double) |
+| `run_examples.py`     | runs a list of example inputs (default `ci_examples.txt`) and collects their logs, used by the CI job |
+| `conversion_test/`    | exact check of the host/device precision conversion of particle data (`check_conversion.py`) |
 | `kkprec.py`           | shared lexer: comments/strings, brace matching, device regions |
 
 ## Conventions for KOKKOS code
@@ -123,3 +125,12 @@ few steps, as any round-off change does in DSMC, so they are compared on
 time averages:
 
     compare_logs.py --stats DOUBLE_LOG_DIR MIXED_LOG_DIR
+
+The conversion of particle data between the double precision host and the
+reduced precision device is checked exactly with `conversion_test/`, see
+`check_conversion.py`.
+
+A reduced precision build converts Kokkos data on every host/device sync
+of a TransformView (whole allocated extent), so styles that run on the
+host every step (non-KOKKOS fixes or computes, frequent dumps) cost more
+than in a double precision build.
