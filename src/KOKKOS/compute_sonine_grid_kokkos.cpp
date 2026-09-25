@@ -211,10 +211,10 @@ void ComputeSonineGridKokkos::operator()(TagComputeSonineGrid_compute_vcom, cons
     d_vcom(icell,igroup,3) += mass;
   }
 
-  KK_POS_FLOAT norm;
+  KK_ACC_FLOAT norm;
   for (int j=0; j<ngroup; j++) {
     norm = d_vcom(icell,j,3);
-    if (norm == static_cast<KK_POS_FLOAT>(0.0)) continue;
+    if (norm == static_cast<KK_ACC_FLOAT>(0.0)) continue;
     d_vcom(icell,j,0) /= norm;
     d_vcom(icell,j,1) /= norm;
     d_vcom(icell,j,2) /= norm;
@@ -225,10 +225,10 @@ void ComputeSonineGridKokkos::operator()(TagComputeSonineGrid_compute_vcom, cons
 
 KOKKOS_INLINE_FUNCTION
 void ComputeSonineGridKokkos::operator()(TagComputeSonineGrid_normalize_vcom, const int &icell) const {
-  KK_POS_FLOAT norm;
+  KK_ACC_FLOAT norm;
   for (int j=0; j<ngroup; j++) {
     norm = d_vcom(icell,j,3);
-    if (norm == static_cast<KK_POS_FLOAT>(0.0)) continue;
+    if (norm == static_cast<KK_ACC_FLOAT>(0.0)) continue;
     d_vcom(icell,j,0) /= norm;
     d_vcom(icell,j,1) /= norm;
     d_vcom(icell,j,2) /= norm;
@@ -394,8 +394,8 @@ void ComputeSonineGridKokkos::post_process_grid_kokkos(int index,
 KOKKOS_INLINE_FUNCTION
 void ComputeSonineGridKokkos::operator()(TagComputeSonineGrid_post_process_grid, const int &icell) const
 {
-  KK_POS_FLOAT norm = d_etally(icell,mass);
-  if (norm == static_cast<KK_POS_FLOAT>(0.0)) d_vec[icell] = 0.0;
+  KK_ACC_FLOAT norm = d_etally(icell,mass);
+  if (norm == static_cast<KK_ACC_FLOAT>(0.0)) d_vec[icell] = 0.0;
   else d_vec[icell] = d_etally(icell,numerator)/norm;
 }
 

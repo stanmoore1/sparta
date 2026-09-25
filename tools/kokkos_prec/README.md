@@ -46,7 +46,7 @@ into `src/KOKKOS/kokkos_structs.h`.
 |------|---------|
 | `precision_map.json`  | the single source of truth: struct field precisions, type renames, which identifiers are positions / accumulators / kept double, per-file overrides |
 | `gen_kk_structs.py`   | regenerates `src/KOKKOS/kokkos_structs.h` from the host struct definitions; fails if a host struct gains a double field with no mapping. `--check` verifies the file is current |
-| `kk_prec_convert.py`  | the bulk rewriter (dry run by default, `--apply` to write); writes `review.md`, the list of constructs to review by hand |
+| `kk_prec_convert.py`  | the bulk rewriter (dry run by default, `--apply` to write); writes `review.md` (not tracked), the list of constructs to review by hand |
 | `kk_prec_audit.py`    | linter: fails if device code contains an unjustified `double`, a bare C math call, an unwrapped literal, or legacy types. Run it on new KOKKOS code |
 | `compare_logs.py`     | compares thermo output of two sets of log files, exactly (double build vs. original) or statistically (`--stats`, reduced precision vs. double) |
 | `run_examples.py`     | runs a list of example inputs (default `ci_examples.txt`) and collects their logs, used by the CI job |

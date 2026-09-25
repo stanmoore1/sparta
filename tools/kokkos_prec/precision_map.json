@@ -294,6 +294,12 @@
       "fix_ave_*_kokkos.*": "acc"
     },
     "file_identifier_class": {
+      "compute_grid_kokkos.*": {
+        "norm": "acc"
+      },
+      "compute_sonine_grid_kokkos.*": {
+        "norm": "acc"
+      },
       "compute_*_kokkos.*": {
         "v": "float",
         "vi": "float",

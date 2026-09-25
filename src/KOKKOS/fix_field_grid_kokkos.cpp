@@ -61,14 +61,11 @@ void FixFieldGridKokkos::compute_field()
 
   // array_grid is one contiguous row-major block: Memory::create(TYPE**&,n1,n2)
   //   (memory.h:114-127) does a single allocation of n1*n2 and points each
-  //   row pointer into it.  tdual_float_2d_lr is LayoutRight, so the two have
-  //   the same element order and the host side needs no copy at all -- wrap
-  //   the existing buffer in an unmanaged View and hand it straight to
-  //   deep_copy.  On a host backend the DualView's two views are the same
-  //   memory and this is a no-op; on a GPU it is the one H2D transfer that
-  //   has to happen either way.  The element-wise loop this replaces was
-  //   pure overhead on every step.
-
+  //   row pointer into it.  The Kokkos view is LayoutRight, so the two have
+  //   the same element order: wrap the existing buffer in an unmanaged View
+  //   and copy it to the device with deep_copy_convert(), which is a plain
+  //   deep_copy when the value types match (KK_ACC_FLOAT is double) and
+  //   otherwise converts on the host.
 
   Kokkos::View<double**,Kokkos::LayoutRight,Kokkos::HostSpace,
                Kokkos::MemoryTraits<Kokkos::Unmanaged> >

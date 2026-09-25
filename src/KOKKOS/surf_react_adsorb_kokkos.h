@@ -105,9 +105,9 @@ class SurfReactAdsorbKokkos : public SurfReactAdsorb {
   //   lock array it references is a Kokkos owned singleton that outlives every
   //   blitted copy (it is released in Kokkos::finalize, after SPARTA has
   //   deleted its styles).
-  // The element type is spelled double rather than DAT::t_float_2d on
-  //   purpose: SPARTA_FLOAT is float in a mixed precision build, and the host
-  //   react() sums these probabilities in double.
+  // The element type is double rather than a KK precision type on
+  //   purpose: the host react() sums these probabilities in double, in
+  //   every KOKKOS_PREC mode.
 
 #ifndef SPARTA_KOKKOS_FIXED_LISTS
   typedef Kokkos::Experimental::UniqueToken<
