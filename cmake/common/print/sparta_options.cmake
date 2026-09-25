@@ -27,7 +27,7 @@ endif()
 
 if(PKG_KOKKOS)
   message(STATUS "")
-  message(STATUS "KOKKOS package precision: ${KOKKOS_PREC}")
+  message(STATUS "Using ${KOKKOS_PREC} precision for KOKKOS package")
 endif()
 
 message(STATUS "")

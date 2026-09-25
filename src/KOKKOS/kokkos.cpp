@@ -49,6 +49,20 @@ KokkosSPARTA::KokkosSPARTA(SPARTA *sparta, int narg, char **arg) : Pointers(spar
   MPI_Comm_rank(world,&me);
   if (me == 0) error->message(FLERR,"KOKKOS mode is enabled");
 
+  // precision
+
+  if (me == 0) {
+#if defined(SPARTA_KOKKOS_SINGLE_SINGLE)
+    const char *prec = "single";
+#elif defined(SPARTA_KOKKOS_SINGLE_DOUBLE)
+    const char *prec = "mixed";
+#else
+    const char *prec = "double";
+#endif
+    if (screen) fprintf(screen,"  using %s precision\n",prec);
+    if (logfile) fprintf(logfile,"  using %s precision\n",prec);
+  }
+
   // process any command-line args that invoke Kokkos settings
 
   ngpus = 0;
@@ -136,10 +150,6 @@ KokkosSPARTA::KokkosSPARTA(SPARTA *sparta, int narg, char **arg) : Pointers(spar
 
     if (screen) fprintf(screen,"  requested %d thread(s) per MPI task\n",nthreads);
     if (logfile) fprintf(logfile,"  requested %d thread(s) per MPI task\n",nthreads);
-
-    const char *prec = KK_FP32 ? (std::is_same_v<KK_POS_FLOAT,float> ? "single" : "mixed") : "double";
-    if (screen) fprintf(screen,"  using %s precision\n",prec);
-    if (logfile) fprintf(logfile,"  using %s precision\n",prec);
   }
 
 #ifdef SPARTA_KOKKOS_GPU

@@ -730,6 +730,39 @@ void SPARTA::print_help()
   printf("  FFmpeg movie: %s\n",have_ffmpeg);
   printf("  gzip files:   %s\n",have_gzip);
 
+#ifdef SPARTA_KOKKOS
+  printf("\nAccelerator configuration:\n\n");
+  printf("KOKKOS package API:");
+#if defined(KOKKOS_ENABLE_CUDA)
+  printf(" CUDA");
+#endif
+#if defined(KOKKOS_ENABLE_HIP)
+  printf(" HIP");
+#endif
+#if defined(KOKKOS_ENABLE_SYCL)
+  printf(" SYCL");
+#endif
+#if defined(KOKKOS_ENABLE_OPENMP)
+  printf(" OpenMP");
+#endif
+#if defined(KOKKOS_ENABLE_SERIAL)
+  printf(" Serial");
+#endif
+#if defined(KOKKOS_ENABLE_THREADS)
+  printf(" Pthreads");
+#endif
+  printf("\nKOKKOS package precision:");
+#if defined(SPARTA_KOKKOS_SINGLE_SINGLE)
+  printf(" single");
+#elif defined(SPARTA_KOKKOS_SINGLE_DOUBLE)
+  printf(" mixed");
+#else
+  printf(" double");
+#endif
+  printf("\nKokkos library version: %d.%d.%d\n",KOKKOS_VERSION / 10000,
+         (KOKKOS_VERSION % 10000) / 100,KOKKOS_VERSION % 100);
+#endif
+
   // command-line switches
 
   printf("\nUsage: sparta [command-line switches] < input_script\n");

@@ -755,7 +755,8 @@ temperature, collision rates, surface fluxes), and a reduced
 precision model should be validated against a double precision run
 before it is used for production. KOKKOS_PREC=mixed or single cannot
 be combined with SPARTA_KOKKOS_EXACT=ON. The precision a SPARTA binary was built with
-is printed at startup and in the log file (e.g. "using mixed precision").
+is printed at startup and in the log file (e.g. "using mixed precision"),
+and by the -h command-line switch (e.g. "KOKKOS package precision: mixed").
 </P>
 <P>In a reduced precision build, data shared with non-KOKKOS styles is
 converted between double and single precision each time it moves
