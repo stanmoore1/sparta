@@ -28,8 +28,9 @@ namespace SPARTA_NS {
 class SurfReactAdsorb : public SurfReact {
  public:
   SurfReactAdsorb(class SPARTA *, int, char **);
+  SurfReactAdsorb(class SPARTA *sparta) : SurfReact(sparta) {} // needed for Kokkos
   ~SurfReactAdsorb();
-  void init();
+  virtual void init();
   int react(Particle::OnePart *&, int, double *, Particle::OnePart *&, int &);
 
   char *reactionID(int);
@@ -37,10 +38,10 @@ class SurfReactAdsorb : public SurfReact {
   int match_reactant(char *, int);
   int match_product(char *, int);
 
-  void tally_update();
+  virtual void tally_update();
   void grid_changed();
 
- private:
+ protected:
   int me,nprocs;
   int distributed;
 
@@ -54,6 +55,8 @@ class SurfReactAdsorb : public SurfReact {
                                     // in Surf list of all reaction models
 
   int firstflag;                    // 1 until init() of first run
+  int firstwarn_capacity;           // 1 until warned once that the adsorbate
+                                    // count exceeded a surface's capacity
 
   class RanKnuth *random;     // RNG for reaction probabilities
 
@@ -238,6 +241,7 @@ class SurfReactAdsorb : public SurfReact {
 
   void update_state_face();
   void update_state_surf();
+  void check_capacity();
 
   // NOTE: can remove these 3 at some point
   /*
