@@ -956,13 +956,21 @@ void Surf::hex_corner_point(int icorner, double *lo, double *hi, double *pt)
 
 /* ----------------------------------------------------------------------
    return vector of masks for my owned surfs
-   for distributed or non-distributed explicit surfs
+   for distributed or non-distributed explicit surfs or implicit surfs
    called by other classes which need to select owned surfs in surf group
 ------------------------------------------------------------------------- */
 
 void Surf::extract_masks(int *masks)
 {
-  if (distributed) {
+  if (implicit) {
+    if (domain->dimension == 2) {
+      for (int i = 0; i < nown; i++)
+        masks[i] = lines[i].mask;
+    } else {
+      for (int i = 0; i < nown; i++)
+	masks[i] = tris[i].mask;
+    }
+  } else if (distributed) {
     if (domain->dimension == 2) {
       for (int i = 0; i < nown; i++)
         masks[i] = mylines[i].mask;
