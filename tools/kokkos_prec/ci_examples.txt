@@ -1,0 +1,10 @@
+free
+collide
+circle
+sphere
+ambi
+chem
+vibrate
+emit.face
+beam.diffuse
+circle.specular
