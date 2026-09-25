@@ -378,6 +378,15 @@ public:
 #define SPARTA_KOKKOS_DOUBLE_DOUBLE
 #endif
 
+#if (defined(SPARTA_KOKKOS_SINGLE_SINGLE) + defined(SPARTA_KOKKOS_DOUBLE_DOUBLE) + \
+     defined(SPARTA_KOKKOS_SINGLE_DOUBLE)) > 1
+#error "Only one of SPARTA_KOKKOS_DOUBLE_DOUBLE, SPARTA_KOKKOS_SINGLE_DOUBLE, SPARTA_KOKKOS_SINGLE_SINGLE can be defined"
+#endif
+
+#if defined(SPARTA_KOKKOS_EXACT) && !defined(SPARTA_KOKKOS_DOUBLE_DOUBLE)
+#error "SPARTA_KOKKOS_EXACT requires double precision (SPARTA_KOKKOS_DOUBLE_DOUBLE)"
+#endif
+
 #if defined(SPARTA_KOKKOS_SINGLE_SINGLE)
 typedef float KK_FLOAT;
 typedef float KK_POS_FLOAT;
@@ -462,9 +471,21 @@ kk_convert(Type &dst, const Type &src) { dst = src; }
 //
 // view_host()/sync_host()/modify_host() refer to the legacy host view,
 //   view_device()/sync_device()/modify_device() to the device view, and
-//   view_hostkk()/sync_hostkk()/modify_hostkk() to the Kokkos host mirror
+//   view_hostkk()/sync_hostkk()/modify_hostkk() to the Kokkos host mirror;
+//   view<>()/sync<>()/modify<>() on the host space refer to h_viewkk
 // all type conversion happens host-side, between h_viewkk and h_view;
 //   transfers between host and device are always same-type
+//
+// sync state: the DualView tracks h_viewkk vs d_view; two more flags track
+//   h_view vs the pair (h_viewkk,d_view), so a sync converts or transfers
+//   only what is out of date:
+//   sync_device() = h_view -> h_viewkk (if h_view modified), h_viewkk -> d_view
+//   sync_hostkk() = h_view -> h_viewkk (if h_view modified), or d_view -> h_viewkk
+//   sync_host()   = d_view -> h_viewkk (if needed), h_viewkk -> h_view
+//     (if h_viewkk or d_view modified)
+// as for a DualView, copies of a TransformView share their sync state, and
+//   modifying both the legacy view and a Kokkos view without a sync in
+//   between aborts, since the two modifications cannot be merged
 // ------------------------------------------------------------------------
 
 namespace SPARTA_NS {
@@ -490,7 +511,8 @@ void transform_copy(const DstView &dst, const SrcView &src)
   typedef Kokkos::MDRangePolicy<SPAHostType,Kokkos::Rank<2>> policy_2d;
   typedef Kokkos::MDRangePolicy<SPAHostType,Kokkos::Rank<3>> policy_3d;
   if constexpr (std::is_arithmetic_v<dst_type>) {
-    // element by element, as kk_convert() keeps unchanged values
+    // element by element, so that with KEEP kk_convert() can keep a dst
+    //   value that converts exactly to its src value
     static_assert(DstView::rank == SrcView::rank && DstView::rank <= 3,
                   "TransformView of an arithmetic type must have rank 0 to 3");
     if constexpr (DstView::rank == 0) convert_one<KEEP>(dst(),src());
@@ -597,17 +619,51 @@ class TransformView {
   kk_view k_view;
   legacy_view h_view;
 
-  // modified_legacy = legacy view modified since last conversion to KK
-  // modified_kk = device or KK host view modified since last conversion
-  //   to legacy
+  // sync state between the legacy view and the two Kokkos views, which
+  //   the DualView tracks between themselves:
+  //   flags(LEGACY) = legacy view modified since last conversion to KK
+  //   flags(KK) = device or KK host view modified since last conversion
+  //     to legacy
+  // held in a View, as the DualView flags, so that copies of a
+  //   TransformView share their sync state; not allocated (and empty)
+  //   when no transform is needed
 
-  bool modified_legacy = false;
-  bool modified_kk = false;
+  enum { LEGACY = 0, KK = 1 };
+  struct no_flags {};
+  typedef std::conditional_t<NEED_TRANSFORM,
+    Kokkos::View<int[2], Kokkos::HostSpace>, no_flags> flags_view;
+  flags_view flags;
 
-  template<class... Args>
-  void make_legacy_view_args(Args... args) {
-    if constexpr (NEED_TRANSFORM) h_view = legacy_view(args...);
-    else h_view = k_view.view_host();
+  bool flag(const int which) const {
+    if constexpr (NEED_TRANSFORM) return flags.data() && flags(which);
+    else return false;
+  }
+
+  void set_flags(const int legacy, const int kk) {
+    if constexpr (NEED_TRANSFORM) {
+      if (flags.data() == nullptr) return;
+      flags(LEGACY) = legacy;
+      flags(KK) = kk;
+    }
+  }
+
+  void allocate_flags() {
+    if constexpr (NEED_TRANSFORM)
+      if (flags.data() == nullptr) flags = flags_view("TransformView:flags");
+  }
+
+  // a legacy and a Kokkos modification with no sync in between cannot be
+  //   merged, as for a DualView
+
+  void check_concurrent() const {
+    if (flag(LEGACY) && flag(KK)) {
+      std::string msg = "SPARTA TransformView ERROR: ";
+      msg += "Concurrent modification of legacy host and Kokkos views ";
+      msg += "in TransformView \"";
+      msg += k_view.view_device().label();
+      msg += "\"\n";
+      Kokkos::abort(msg.c_str());
+    }
   }
 
  public:
@@ -616,21 +672,29 @@ class TransformView {
   template<class... Indices>
   TransformView(const std::string &label, Indices... ns)
     : k_view(label, ns...) {
-    make_legacy_view_args(label + "_legacy", ns...);
+    if constexpr (NEED_TRANSFORM) h_view = legacy_view(label + "_legacy", ns...);
+    else h_view = k_view.view_host();
+    allocate_flags();
   }
 
   template<class... Indices>
   TransformView(const char *label, Indices... ns)
     : TransformView(std::string(label), ns...) {}
 
+  // the legacy view is initialized if the Kokkos views are
+
   template<class... P, class... Indices>
   TransformView(const Kokkos::Impl::ViewCtorProp<P...> &prop, Indices... ns)
     : k_view(prop, ns...) {
-    if constexpr (NEED_TRANSFORM)
-      h_view = legacy_view(Kokkos::view_alloc(Kokkos::WithoutInitializing,
-                                              k_view.view_host().label() + "_legacy"),
-                           ns...);
-    else h_view = k_view.view_host();
+    if constexpr (NEED_TRANSFORM) {
+      const std::string label = k_view.view_device().label() + "_legacy";
+      if constexpr (Kokkos::Impl::ViewCtorProp<P...>::initialize)
+        h_view = legacy_view(label, ns...);
+      else
+        h_view = legacy_view(Kokkos::view_alloc(Kokkos::WithoutInitializing,label),
+                             ns...);
+    } else h_view = k_view.view_host();
+    allocate_flags();
   }
 
   // accessors
@@ -641,7 +705,6 @@ class TransformView {
   const t_hostkk &view_hostkk() const { return k_view.view_host(); }
   KOKKOS_INLINE_FUNCTION
   const t_dev &view_device() const { return k_view.view_device(); }
-  kk_view &dual_view() { return k_view; }
 
   template<class Device>
   auto view() const {
@@ -660,17 +723,25 @@ class TransformView {
 
   void modify_device() {
     k_view.modify_device();
-    if constexpr (NEED_TRANSFORM) modified_kk = true;
+    if constexpr (NEED_TRANSFORM) {
+      set_flags(flag(LEGACY),1);
+      check_concurrent();
+    }
   }
 
   void modify_hostkk() {
     k_view.modify_host();
-    if constexpr (NEED_TRANSFORM) modified_kk = true;
+    if constexpr (NEED_TRANSFORM) {
+      set_flags(flag(LEGACY),1);
+      check_concurrent();
+    }
   }
 
   void modify_host() {
-    if constexpr (NEED_TRANSFORM) modified_legacy = true;
-    else k_view.modify_host();
+    if constexpr (NEED_TRANSFORM) {
+      set_flags(1,flag(KK));
+      check_concurrent();
+    } else k_view.modify_host();
   }
 
   template<class Device>
@@ -681,24 +752,21 @@ class TransformView {
   }
 
   // sync
+  // a modified legacy view is converted to the KK host view, which then
+  //   is the modified side of the DualView; the legacy view is updated
+  //   from the KK host view, after it is synced from the device if needed
 
   void sync_device() {
     if constexpr (NEED_TRANSFORM) {
-      if (modified_legacy) {
-        legacy_to_kk();
-        k_view.clear_sync_state();
-        k_view.modify_host();
-      }
+      if (flag(LEGACY)) legacy_to_kk();
     }
     k_view.sync_device();
   }
 
   void sync_hostkk() {
     if constexpr (NEED_TRANSFORM) {
-      if (modified_legacy) {
+      if (flag(LEGACY)) {
         legacy_to_kk();
-        k_view.clear_sync_state();
-        k_view.modify_host();
         return;
       }
     }
@@ -707,10 +775,10 @@ class TransformView {
 
   void sync_host() {
     if constexpr (NEED_TRANSFORM) {
-      if (modified_kk) {
+      if (flag(KK)) {
         k_view.sync_host();
         transform_copy(h_view,k_view.view_host());
-        modified_kk = false;
+        set_flags(0,0);
       }
     } else k_view.sync_host();
   }
@@ -723,25 +791,33 @@ class TransformView {
   }
 
   bool need_sync_host() const {
-    if constexpr (NEED_TRANSFORM) return modified_kk;
+    if constexpr (NEED_TRANSFORM) return flag(KK);
+    else return k_view.need_sync_host();
+  }
+
+  bool need_sync_hostkk() const {
+    if constexpr (NEED_TRANSFORM)
+      return flag(LEGACY) || k_view.need_sync_host();
     else return k_view.need_sync_host();
   }
 
   bool need_sync_device() const {
     if constexpr (NEED_TRANSFORM)
-      return modified_legacy || k_view.need_sync_device();
+      return flag(LEGACY) || k_view.need_sync_device();
     else return k_view.need_sync_device();
   }
 
   void clear_sync_state() {
     k_view.clear_sync_state();
-    modified_legacy = modified_kk = false;
+    set_flags(0,0);
   }
 
-  // resize, preserving contents of both copies
+  // resize, preserving contents of the legacy view and of the most
+  //   recently modified Kokkos view (see Kokkos::DualView::resize())
 
   template<class... Indices>
   void resize(Indices... ns) {
+    allocate_flags();
     k_view.resize(ns...);
     if constexpr (NEED_TRANSFORM) Kokkos::resize(h_view,ns...);
     else h_view = k_view.view_host();
@@ -749,16 +825,22 @@ class TransformView {
 
   template<class... P, class... Indices>
   void resize(const Kokkos::Impl::ViewCtorProp<P...> &prop, Indices... ns) {
+    allocate_flags();
     Kokkos::resize(prop,k_view,ns...);
     if constexpr (NEED_TRANSFORM) Kokkos::resize(prop,h_view,ns...);
     else h_view = k_view.view_host();
   }
 
  private:
+
+  // convert the legacy view to the KK host view and make the KK host view
+  //   the modified side of the DualView
+
   void legacy_to_kk() {
     transform_copy(k_view.view_host(),h_view);
-    modified_legacy = false;
-    modified_kk = false;
+    set_flags(0,0);
+    k_view.clear_sync_state();
+    k_view.modify_host();
   }
 };
 

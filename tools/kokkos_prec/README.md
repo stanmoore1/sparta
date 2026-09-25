@@ -51,6 +51,7 @@ into `src/KOKKOS/kokkos_structs.h`.
 | `compare_logs.py`     | compares thermo output of two sets of log files, exactly (double build vs. original) or statistically (`--stats`, reduced precision vs. double) |
 | `run_examples.py`     | runs a list of example inputs (default `ci_examples.txt`) and collects their logs, used by the CI job |
 | `conversion_test/`    | exact check of the host/device precision conversion of particle data (`check_conversion.py`) |
+| `transformview_test/` | unit test of the TransformView sync state machine (ctest `KokkosTransformView`) |
 | `kkprec.py`           | shared lexer: comments/strings, brace matching, device regions |
 
 ## Conventions for KOKKOS code
@@ -129,6 +130,14 @@ time averages:
 The conversion of particle data between the double precision host and the
 reduced precision device is checked exactly with `conversion_test/`, see
 `check_conversion.py`.
+
+The TransformView sync state machine (every host/Kokkos host/device
+transition, resize, copies, the struct conversion, the abort on concurrent
+modification) is unit tested by `transformview_test/test_transformview.cpp`,
+built and run as the ctest `KokkosTransformView` when the KOKKOS package and
+`SPARTA_ENABLE_TESTING` are enabled:
+
+    ctest -R KokkosTransformView --output-on-failure
 
 A reduced precision build converts Kokkos data on every host/device sync
 of a TransformView (whole allocated extent), so styles that run on the

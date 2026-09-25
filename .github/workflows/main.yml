@@ -172,6 +172,7 @@ jobs:
         cd build
         cmake -C ../cmake/presets/kokkos_mpi_only.cmake \
           -DKOKKOS_PREC=${{ matrix.prec }} \
+          -DSPARTA_ENABLE_TESTING=ON \
           -DKokkos_ENABLE_SERIAL=ON \
           -DKokkos_ENABLE_OPENMP=OFF \
           -DPKG_FFT=ON \
@@ -183,6 +184,7 @@ jobs:
     - name: Test
       run: |
         cd build
+        ctest --output-on-failure -R KokkosTransformView
         python3 ../tools/kokkos_prec/run_examples.py \
           --spa "$PWD/src/spa_kokkos_mpi_only -k on -sf kk" \
           --out examples_${{ matrix.prec }}
