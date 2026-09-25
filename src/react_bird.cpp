@@ -427,8 +427,10 @@ void ReactBird::init()
        vibrational energy and only reaches zmin when it is small,
        so it is a warning
    (2) trend as Ec -> Ea: for Ea > 0 the probability varies as
-       (Ec-Ea)^(eta+z+1/2) near threshold and must vanish there,
-       requiring eta > -(zmin + 1/2)
+       (Ec-Ea)^(eta+z+1/2) near threshold and must not diverge there,
+       requiring eta >= -(zmin + 1/2)
+       at equality the probability tends to a finite constant at
+       threshold, so equality is allowed (as for bound (3))
        not checked for barrierless reactions (Ea = 0, e.g. recombination),
        whose integrable low-energy behavior is set by eta-1+omega
    (3) trend as Ec -> infinity: the probability varies as
@@ -484,10 +486,10 @@ void ReactBird::check_tce_bounds()
                 r->id,eta,-(zmin+1.5));
         error->warning(FLERR,str);
       }
-    } else if (ea > 0.0 && eta <= -(zmin+0.5)) {
+    } else if (ea > 0.0 && eta < -(zmin+0.5)) {
       if (comm->me == 0) {
-        sprintf(str,"Reaction %s: temperature exponent %g must be > %g, "
-                "else the reaction probability does not vanish as the "
+        sprintf(str,"Reaction %s: temperature exponent %g must be >= %g, "
+                "else the reaction probability diverges as the "
                 "collision energy approaches the activation energy",
                 r->id,eta,-(zmin+0.5));
         error->warning(FLERR,str);
