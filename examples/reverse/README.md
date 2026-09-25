@@ -67,8 +67,10 @@ number sigma from the species `rotfile`), harmonic-oscillator
 vibrational, and electronic (from the species `elecfile` ladder)
 factors.
 
-Reverse reactions require `react tce` (with the microcanonical
-`partial_energy no` coupling recommended) and are not available for
+Reverse reactions require `react tce` with the microcanonical
+`react_modify partial_energy no` coupling (otherwise B lines are
+switched off with a warning), a `rotfile` entry for every rotating
+species they involve, and are not available for
 ionization, whose reverse rate depends on the electron temperature and
 must be supplied explicitly.  The KOKKOS `tce/kk` style produces
 bit-for-bit identical results (SPARTA_KOKKOS_EXACT).
