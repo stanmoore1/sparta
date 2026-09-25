@@ -652,7 +652,7 @@ void ReactBird::readfile(char *fname)
           strcpy(r->id_reactants[r->nreactant],word);
           r->nreactant++;
         } else {
-          if (r->nreactant == MAXPRODUCT) {
+          if (r->nproduct == MAXPRODUCT) {
             print_reaction(copy1,copy2);
             error->all(FLERR,"Too many products in a reaction formula");
           }
