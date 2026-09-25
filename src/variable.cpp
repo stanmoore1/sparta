@@ -3633,7 +3633,7 @@ int Variable::math_function(char *word, char *contents, Tree **tree,
     // pyvar = index of python-style variable which invokes Python function
 
     int pyvar = find(&word[3]);
-    if (style[pyvar] != PYTHON)
+    if (pyvar < 0 || style[pyvar] != PYTHON)
       error->all(FLERR,"Invalid python function variable name");
 
     // check that wrapper matches Python function
