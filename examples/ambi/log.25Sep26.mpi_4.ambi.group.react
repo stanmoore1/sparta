@@ -1,0 +1,159 @@
+SPARTA (27 Aug 2026)
+Running on 4 MPI task(s)
+################################################################################
+# thermal plasma in a 2d box, reacting multigroup ambipolar collisions
+#
+# Same setup as in.ambi.group, with gas-phase chemistry enabled and the
+# temperature and density raised until reactions are frequent.  This is the
+# regression guard for the reacting multigroup ambipolar collision path,
+# where group membership, the electron list and the cell particle list all
+# change as reactions rebin, create and destroy particles.
+#
+# Note:
+#  - The "comm/sort" option to the "global" command is used to match MPI runs.
+#  - The "twopass" option is used to match Kokkos runs.
+# The "comm/sort" and "twopass" options should not be used for production runs.
+################################################################################
+
+seed                12345
+dimension           2
+boundary            rr rr p
+global              gridcut 0.01 comm/sort yes
+create_box          -2.0 2.0 -2.0 2.0 -0.5 0.5
+Created orthogonal box = (-2 -2 -0.5) to (2 2 0.5)
+create_grid         20 20 1
+WARNING: Could not acquire nearby ghost cells b/c grid partition is not clumped (../grid.cpp:486)
+Created 400 child grid cells
+  CPU time = 0.0474552 secs
+  create/ghost percent = 24.1055 75.8945
+balance_grid        rcb cell
+Balance grid migrated 280 cells
+  CPU time = 0.220009 secs
+  reassign/sort/migrate/ghost percent = 41.8207 1.81511 14.5518 41.8124
+
+global              fnum 2.6404E16
+global              nrho 2.6404e23
+
+species             air.species N2 O2 N O NO N2+ O2+ N+ O+ NO+ e
+
+# collide mixture: all species, two groups
+# the ambipolar electron species e must be in a group by itself
+
+mixture             gas N2 O2 N O NO N2+ O2+ N+ O+ NO+ vstream 0 0 0 temp 100000.0 group heavy
+mixture             gas e group electron
+mixture             gas N2 frac 0.6
+mixture             gas N2+ frac 0.4
+
+fix                 ambi ambipolar e N+ N2+ NO+ O+ O2+
+
+collide             vss gas air.vss
+collide_modify      ambipolar yes
+react               tce air.tce
+
+create_particles    gas n 10000 twopass
+Created 10000 particles
+  CPU time = 0.0137342 secs
+
+compute             temp temp
+stats               25
+stats_style         step np nattempt ncoll nreact c_temp
+
+timestep            1.0e-7
+run                 300
+WARNING: Reaction N2 + O --> N + N + O: temperature exponent -1.6 must be >= -1.5, else the reaction probability does not vanish as the collision energy approaches the activation energy (../react_bird.cpp:1285)
+WARNING: Reaction N2 + O2 --> N + N + O2: temperature exponent -1.6 must be >= -1.5, else the reaction probability does not vanish as the collision energy approaches the activation energy (../react_bird.cpp:1285)
+WARNING: Reaction N2 + NO --> N + N + NO: temperature exponent -1.6 must be >= -1.5, else the reaction probability does not vanish as the collision energy approaches the activation energy (../react_bird.cpp:1285)
+WARNING: Reaction N2 + N2 --> N + N + N2: temperature exponent -1.6 must be >= -1.5, else the reaction probability does not vanish as the collision energy approaches the activation energy (../react_bird.cpp:1285)
+WARNING: Reaction N2 + N --> N + N + N: temperature exponent -1.6 must be >= -1.5, else the reaction probability does not vanish as the collision energy approaches the activation energy (../react_bird.cpp:1285)
+WARNING: Reaction N2 + O --> NO + N: temperature exponent -1 must be >= -0.5, else the reaction probability does not vanish as the collision energy approaches the activation energy (../react_bird.cpp:1285)
+WARNING: Reaction N2+ + O --> N + NO+: temperature exponent 0.302 must be <= 0.23, else the reaction probability diverges as the collision energy approaches infinity (../react_bird.cpp:1295)
+WARNING: Reaction N2 + N+ --> N + N2+: temperature exponent 0.5 must be <= 0.23, else the reaction probability diverges as the collision energy approaches infinity (../react_bird.cpp:1295)
+WARNING: Reaction N2+ + N --> N2 + N+: temperature exponent 0.5 must be <= 0.23, else the reaction probability diverges as the collision energy approaches infinity (../react_bird.cpp:1295)
+WARNING: Reaction NO+ + N --> N2 + O+: temperature exponent 1.08 must be <= 0.2, else the reaction probability diverges as the collision energy approaches infinity (../react_bird.cpp:1295)
+WARNING: Reaction NO+ + O --> O2 + N+: temperature exponent 0.5 must be <= 0.2, else the reaction probability diverges as the collision energy approaches infinity (../react_bird.cpp:1295)
+WARNING: Reaction NO+ + O --> N + O2+: temperature exponent 0.29 must be <= 0.2, else the reaction probability diverges as the collision energy approaches infinity (../react_bird.cpp:1295)
+WARNING: Reaction NO+ + O2 --> NO + O2+: temperature exponent 0.41 must be <= 0.215, else the reaction probability diverges as the collision energy approaches infinity (../react_bird.cpp:1295)
+WARNING: Reaction O2+ + NO --> O2 + NO+: temperature exponent 0.41 must be <= 0.215, else the reaction probability diverges as the collision energy approaches infinity (../react_bird.cpp:1295)
+WARNING: Reaction N2+ + O --> N2 + O+ : temperature exponent -2.2 must be > -1.5, else the gamma function is negative or infinite and the reaction probability is erroneous; reaction deactivated (../react_bird.cpp:1272)
+WARNING: Reaction O+ + NO --> O2 + N+ : temperature exponent 1.9 must be <= 0.2, else the reaction probability diverges as the collision energy approaches infinity (../react_bird.cpp:1295)
+WARNING: Reaction N+ + O2 --> NO + O+ : temperature exponent 2.102 must be <= 0.215, else the reaction probability diverges as the collision energy approaches infinity (../react_bird.cpp:1295)
+WARNING: Reaction O + e --> O+ + e + e: temperature exponent -3.78 must be > -1.5, else the gamma function is negative or infinite and the reaction probability is erroneous; reaction deactivated (../react_bird.cpp:1272)
+WARNING: Reaction N + e --> N+ + e + e: temperature exponent -3.82 must be > -1.5, else the gamma function is negative or infinite and the reaction probability is erroneous; reaction deactivated (../react_bird.cpp:1272)
+Memory usage per proc in Mbytes:
+  particles (ave,min,max) = 2 2 2
+  grid      (ave,min,max) = 1.51379 1.51379 1.51379
+  surf      (ave,min,max) = 0 0 0
+  modify    (ave,min,max) = 0 0 0
+  total     (ave,min,max) = 3.51379 3.51379 3.51379
+Step Np Natt Ncoll Nreact c_temp 
+       0    10000        0        0        0    99791.345 
+      25    10003     3101      845        0     99740.02 
+      50    10004     3122      843        0    99832.142 
+      75    10012     3133      870        0    99678.174 
+     100    10017     3137      894        0    99533.678 
+     125    10023     3189      892        0     99370.76 
+     150    10030     3172      947        0    99353.495 
+     175    10036     3211      862        0    99181.675 
+     200    10039     3207      916        0    99119.993 
+     225    10042     3205      908        0    98985.696 
+     250    10047     3183      892        0    98854.456 
+     275    10053     3213      876        1    98806.554 
+     300    10060     3218      881        0    98664.754 
+Loop time of 5.78499 on 4 procs for 300 steps with 10060 particles
+Performance: 51.858 timesteps/s, 521.695 kparticle-step/s
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Move    | 0.0045985  | 0.0049904  | 0.00555    |   0.5 |  0.09
+Coll    | 0.034907   | 0.035828   | 0.036591   |   0.3 |  0.62
+Sort    | 0.0027888  | 0.0031777  | 0.0039581  |   0.8 |  0.05
+Comm    | 3.6108     | 4.101      | 4.9401     |  25.1 | 70.89
+Modify  | 0          | 0          | 0          |   0.0 |  0.00
+Output  | 0.32446    | 0.33002    | 0.33287    |   0.6 |  5.70
+MPI Sync| 0.47511    | 1.31       | 1.803      |  44.3 | 22.64
+Other   |            | 5.151e-05  |            |       |  0.00
+
+Particle moves    = 3008414 (3.01M)
+Cells touched     = 3020922 (3.02M)
+Particle comms    = 652 (0.652K)
+Boundary collides = 664 (0.664K)
+Boundary exits    = 0 (0K)
+SurfColl checks   = 0 (0K)
+SurfColl occurs   = 0 (0K)
+Surf reactions    = 0 (0K)
+Collide attempts  = 951422 (0.951M)
+Collide occurs    = 261387 (0.261M)
+Reactions         = 64 (0.064K)
+Particles stuck   = 0
+Axisymm bad moves = 0
+
+Particle-moves/CPUsec/proc: 130009
+Particle-moves/step: 10028
+Cell-touches/particle/step: 1.00416
+Particle comm iterations/step: 1
+Particle fraction communicated: 0.000216725
+Particle fraction colliding with boundary: 0.000220714
+Particle fraction exiting boundary: 0
+Surface-checks/particle/step: 0
+Surface-collisions/particle/step: 0
+Surf-reactions/particle/step: 0
+Collision-attempts/particle/step: 0.316254
+Collisions/particle/step: 0.0868853
+Reactions/particle/step: 2.12737e-05
+
+Gas reaction tallies:
+  style tce #-of-reactions 45
+  reaction N2 + N2 --> N + N + N2: 56
+  reaction N2 + N --> N + N + N: 4
+  reaction N2 + N+ --> N + N2+: 1
+  reaction N2+ + N --> N2 + N+: 3
+
+Particles: 2515 ave 2543 max 2485 min
+Histogram: 1 0 0 0 1 0 1 0 0 1
+Cells:      100 ave 100 max 100 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+GhostCell: 21 ave 21 max 21 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+EmptyCell: 0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0

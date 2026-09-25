@@ -1,0 +1,218 @@
+SPARTA (27 Aug 2026)
+Running on 1 MPI task(s)
+################################################################################
+# thermal gas in a 3d box with collisions
+# particles reflect off global box boundaries
+#
+# Note:
+#  - The "comm/sort” option to the “global” command is used to match MPI runs.
+#  - The “twopass” option is used to match Kokkos runs.
+# The "comm/sort" and "twopass" options should not be used for production runs.
+################################################################################
+
+seed	    	    12345
+dimension   	    3
+global              gridcut 1.0e-5 comm/sort yes
+
+boundary	    rr rr rr
+
+create_box  	    0 0.0001 0 0.0001 0 0.0001
+Created orthogonal box = (0 0 0) to (0.0001 0.0001 0.0001)
+create_grid 	    2 2 2
+Created 8 child grid cells
+  CPU time = 0.000927363 secs
+  create/ghost percent = 96.9398 3.06018
+
+balance_grid        rcb part
+Balance grid migrated 0 cells
+  CPU time = 0.000107675 secs
+  reassign/sort/migrate/ghost percent = 86.4119 0.130021 9.86301 3.59508
+
+species		    air.species N2 O2 N2+ O2+ O N O+ N+ NO NO+ e elecfile air.elec
+mixture		    air N2 O2 N2+ O2+ O N O+ N+ NO NO+ e vstream 0.0 0.0 0.0 temp 20000.0 trot 20000.0 tvib 20000.0 telec 100.0
+
+mixture             air copy noelectron
+mixture             noelectron delete e
+mixture             noelectron N2 frac 0.80
+mixture             noelectron O2 frac 0.199
+mixture             noelectron N2+ frac 0.0001
+
+global              nrho 7.07043E22
+global              fnum 7.07043E5
+
+fix                 ambi ambipolar e N2+ O2+ NO+ N+ O+
+
+collide		    vss air air.vss relax constant
+collide_modify      rotate smooth vibrate discrete electronic discrete
+collide_modify      ambipolar yes
+fix                 electronic elecmode
+collide_modify      remain no
+react               tce air.tce
+
+create_particles    noelectron n 40000 twopass
+Created 40000 particles
+  CPU time = 0.0420468 secs
+
+stats		    100
+compute             temp temp
+compute             T thermal/grid all all temp
+compute             Ttrans reduce ave c_T[1]
+
+compute             rot grid all all trot erot
+compute             Trot reduce ave c_rot[1]
+compute             Erot reduce ave c_rot[2]
+
+compute             vib grid all all tvib evib
+compute             Tvib reduce ave c_vib[1]
+compute             Evib reduce ave c_vib[2]
+
+compute             elec grid all species eelec
+compute             Eelec reduce ave c_elec[1]
+
+compute             telec telec/grid all air
+compute             Telec reduce ave c_telec[*]
+
+compute             telec2 telec/grid all species
+compute             Telec2 reduce ave c_telec2[*]
+
+compute             den grid all species nrho
+compute             Den_N2 reduce ave c_den[1]
+compute             Den_O2 reduce ave c_den[2]
+compute             Den_N2p reduce ave c_den[3]
+compute             Den_O2p reduce ave c_den[4]
+compute             Den_O reduce ave c_den[5]
+compute             Den_N reduce ave c_den[6]
+compute             Den_Op reduce ave c_den[6]
+compute             Den_Np reduce ave c_den[7]
+compute             Den_NO reduce ave c_den[8]
+compute             Den_NOp reduce ave c_den[9]
+
+#stats_style	    step cpu np nattempt ncoll c_Erot c_Evib c_Eelec
+stats_style	    step cpu np nattempt ncoll c_Ttrans c_Trot c_Erot c_Tvib c_Evib c_Eelec c_Telec c_Den_N2 c_Den_O2 c_Den_N2p c_Den_O2p c_Den_O c_Den_N c_Den_Op c_Den_Np c_Den_NO c_Den_NOp
+
+timestep 	    1.00E-9
+run 		    1000
+WARNING: Reaction N2 + O --> N + N + O: temperature exponent -1.6 must be >= -1.5, else the reaction probability does not vanish as the collision energy approaches the activation energy (../react_bird.cpp:1285)
+WARNING: Reaction N2 + O2 --> N + N + O2: temperature exponent -1.6 must be >= -1.5, else the reaction probability does not vanish as the collision energy approaches the activation energy (../react_bird.cpp:1285)
+WARNING: Reaction N2 + NO --> N + N + NO: temperature exponent -1.6 must be >= -1.5, else the reaction probability does not vanish as the collision energy approaches the activation energy (../react_bird.cpp:1285)
+WARNING: Reaction N2 + N2 --> N + N + N2: temperature exponent -1.6 must be >= -1.5, else the reaction probability does not vanish as the collision energy approaches the activation energy (../react_bird.cpp:1285)
+WARNING: Reaction N2 + N --> N + N + N: temperature exponent -1.6 must be >= -1.5, else the reaction probability does not vanish as the collision energy approaches the activation energy (../react_bird.cpp:1285)
+WARNING: Reaction N2 + O --> NO + N: temperature exponent -1 must be >= -0.5, else the reaction probability does not vanish as the collision energy approaches the activation energy (../react_bird.cpp:1285)
+WARNING: Reaction N2+ + O --> N + NO+: temperature exponent 0.302 must be <= 0.23, else the reaction probability diverges as the collision energy approaches infinity (../react_bird.cpp:1295)
+WARNING: Reaction N2 + N+ --> N + N2+: temperature exponent 0.5 must be <= 0.23, else the reaction probability diverges as the collision energy approaches infinity (../react_bird.cpp:1295)
+WARNING: Reaction N2+ + N --> N2 + N+: temperature exponent 0.5 must be <= 0.23, else the reaction probability diverges as the collision energy approaches infinity (../react_bird.cpp:1295)
+WARNING: Reaction NO+ + N --> N2 + O+: temperature exponent 1.08 must be <= 0.2, else the reaction probability diverges as the collision energy approaches infinity (../react_bird.cpp:1295)
+WARNING: Reaction NO+ + O --> O2 + N+: temperature exponent 0.5 must be <= 0.2, else the reaction probability diverges as the collision energy approaches infinity (../react_bird.cpp:1295)
+WARNING: Reaction NO+ + O --> N + O2+: temperature exponent 0.29 must be <= 0.2, else the reaction probability diverges as the collision energy approaches infinity (../react_bird.cpp:1295)
+WARNING: Reaction NO+ + O2 --> NO + O2+: temperature exponent 0.41 must be <= 0.215, else the reaction probability diverges as the collision energy approaches infinity (../react_bird.cpp:1295)
+WARNING: Reaction O2+ + NO --> O2 + NO+: temperature exponent 0.41 must be <= 0.215, else the reaction probability diverges as the collision energy approaches infinity (../react_bird.cpp:1295)
+WARNING: Reaction N2+ + O --> N2 + O+ : temperature exponent -2.2 must be > -1.5, else the gamma function is negative or infinite and the reaction probability is erroneous; reaction deactivated (../react_bird.cpp:1272)
+WARNING: Reaction O+ + NO --> O2 + N+ : temperature exponent 1.9 must be <= 0.2, else the reaction probability diverges as the collision energy approaches infinity (../react_bird.cpp:1295)
+WARNING: Reaction N+ + O2 --> NO + O+ : temperature exponent 2.102 must be <= 0.215, else the reaction probability diverges as the collision energy approaches infinity (../react_bird.cpp:1295)
+WARNING: Reaction O + e --> O+ + e + e: temperature exponent -3.78 must be > -1.5, else the gamma function is negative or infinite and the reaction probability is erroneous; reaction deactivated (../react_bird.cpp:1272)
+WARNING: Reaction N + e --> N+ + e + e: temperature exponent -3.82 must be > -1.5, else the gamma function is negative or infinite and the reaction probability is erroneous; reaction deactivated (../react_bird.cpp:1272)
+WARNING: Single-group ambipolar collisions are inefficient; grouping electrons separately (e.g. collide ... species) is recommended (../collide.cpp:390)
+Memory usage per proc in Mbytes:
+  particles (ave,min,max) = 6.5625 6.5625 6.5625
+  grid      (ave,min,max) = 1.51379 1.51379 1.51379
+  surf      (ave,min,max) = 0 0 0
+  modify    (ave,min,max) = 0.00585938 0.00585938 0.00585938
+  total     (ave,min,max) = 8.08215 8.08215 8.08215
+Step CPU Np Natt Ncoll c_Ttrans c_Trot c_Erot c_Tvib c_Evib c_Eelec c_Telec c_Den_N2 c_Den_O2 c_Den_N2p c_Den_O2p c_Den_O c_Den_N c_Den_Op c_Den_Np c_Den_NO c_Den_NOp 
+       0            0    40000        0        0    20091.476    19863.368 2.7411341e-19    18448.949 2.5459465e-19            0            0 2.2688303e+22 5.5637214e+21 4.242258e+18 1.414086e+18 2.828172e+18 5.656344e+18 5.656344e+18 1.414086e+18 3.535215e+18 4.242258e+18 
+WARNING: TCE reaction probability exceeded 1 and was capped (reaction cross-section limited to the VHS cross-section); the simulated rate saturates at the collision rate - reduce the timestep or fnum, or refine the grid (../react_tce.cpp:133)
+     100   0.97148264    41617   124539      632    18642.409    19022.172 2.4210326e-19    18172.938 2.3129618e-19 4.2444881e-21    9248.6167 2.2402657e+22 4.6834528e+21 6.363387e+18 2.121129e+18 1.742154e+21 5.5502875e+20 5.5502875e+20 1.414086e+18 1.414086e+18 2.4746505e+19 
+     200    2.2871725    43086   133481      646     17510.49    18210.603 2.1529295e-19    17787.967 2.1029057e-19 7.3764558e-21    10468.544 2.2123375e+22 3.8894435e+21 5.656344e+18 3.535215e+18 3.2934063e+21 1.0810687e+21 1.0810687e+21 1.414086e+18 1.414086e+18 5.9391612e+19 
+     300    3.5525198    44376   141617      669    16501.136    17616.999 1.9514347e-19    17398.711 1.9270429e-19 9.4404461e-21    11136.449 2.1822175e+22 3.2163386e+21 7.777473e+18 4.242258e+18 4.5788105e+21 1.6212496e+21 1.6212496e+21 1.414086e+18            0 1.1736914e+20 
+     400    5.0950708    45524   149043      670     15729.81    17033.504 1.7799943e-19    16851.752 1.7610577e-19 1.0961339e-20    11597.153 2.1523096e+22 2.6450479e+21 7.777473e+18 4.242258e+18 5.6627074e+21 2.1607234e+21 2.1607234e+21 1.414086e+18            0 1.7534666e+20 
+     500     6.363544    46363   154606      648     15187.89     16618.07  1.66367e-19    16327.271 1.6344632e-19 1.1945883e-20    11922.497 2.1266439e+22 2.2377911e+21 7.777473e+18 4.242258e+18 6.4058096e+21 2.6033323e+21 2.6033323e+21 2.121129e+18            0 2.4463688e+20 
+     600    7.8204081    47090   159543      693     14762.13    16257.806 1.5677032e-19    15775.114 1.5212721e-19 1.2054873e-20    12104.819 2.100554e+22 1.9104302e+21 7.777473e+18 4.949301e+18 6.9841708e+21 3.0501835e+21 3.0501835e+21 3.535215e+18 1.414086e+18 3.2029048e+20 
+     700    9.1676709    47702   163748      723     14364.21    15942.458 1.4893933e-19    15346.337 1.4337091e-19 1.2228301e-20    12180.586 2.077363e+22 1.6424609e+21 8.484516e+18 5.656344e+18 7.4522332e+21 3.4468346e+21 3.4468346e+21 4.242258e+18 1.414086e+18 3.8533844e+20 
+     800    10.609266    48236   167478      685    14047.874    15652.729 1.4221342e-19    14931.665 1.3568586e-19 1.245521e-20    12228.636 2.0562932e+22 1.4013592e+21 8.484516e+18 4.949301e+18  7.85949e+21 3.7932857e+21 3.7932857e+21 5.656344e+18 1.414086e+18 4.5745682e+20 
+     900    12.066684    48712   170803      750    13784.559    15381.228 1.3632107e-19    14443.559 1.2801305e-19 1.2485883e-20    12265.454 2.0357889e+22 1.2090435e+21  7.07043e+18 5.656344e+18 8.1790734e+21 4.1418579e+21 4.1418579e+21 7.777473e+18 4.242258e+18 5.1967661e+20 
+    1000    13.813219    49118   173769      768    13508.518    15148.039 1.3141715e-19    14107.209 1.2238423e-19 1.2848142e-20    12308.396 2.0156382e+22 1.0513729e+21  7.07043e+18 4.949301e+18 8.4222962e+21 4.4706329e+21 4.4706329e+21 8.484516e+18 5.656344e+18 5.903809e+20 
+Loop time of 13.8133 on 1 procs for 1000 steps with 49118 particles
+Performance: 72.394 timesteps/s, 3.556 Mparticle-step/s
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Move    | 0.70363    | 0.70363    | 0.70363    |   0.0 |  5.09
+Coll    | 12.896     | 12.896     | 12.896     |   0.0 | 93.36
+Sort    | 0.18317    | 0.18317    | 0.18317    |   0.0 |  1.33
+Comm    | 0.0015246  | 0.0015246  | 0.0015246  |   0.0 |  0.01
+Modify  | 0          | 0          | 0          |   0.0 |  0.00
+Output  | 0.026065   | 0.026065   | 0.026065   |   0.0 |  0.19
+MPI Sync| 0.0021819  | 0.0021819  | 0.0021819  |   0.0 |  0.02
+Other   |            | 0.0003694  |            |       |  0.00
+
+Particle moves    = 45735813 (45.7M)
+Cells touched     = 48270734 (48.3M)
+Particle comms    = 0 (0K)
+Boundary collides = 2535875 (2.54M)
+Boundary exits    = 0 (0K)
+SurfColl checks   = 0 (0K)
+SurfColl occurs   = 0 (0K)
+Surf reactions    = 0 (0K)
+Collide attempts  = 151039896 (151M)
+Collide occurs    = 681350 (0.681M)
+Reactions         = 10346 (10.3K)
+Particles stuck   = 0
+Axisymm bad moves = 0
+
+Particle-moves/CPUsec/proc: 3.311e+06
+Particle-moves/step: 45735.8
+Cell-touches/particle/step: 1.05543
+Particle comm iterations/step: 1
+Particle fraction communicated: 0
+Particle fraction colliding with boundary: 0.0554462
+Particle fraction exiting boundary: 0
+Surface-checks/particle/step: 0
+Surface-collisions/particle/step: 0
+Surf-reactions/particle/step: 0
+Collision-attempts/particle/step: 3.30244
+Collisions/particle/step: 0.0148975
+Reactions/particle/step: 0.000226212
+
+Gas reaction tallies:
+  style tce #-of-reactions 45
+  reaction O2 + N --> O + O + N: 708
+  reaction O2 + NO --> O + O + NO: 16
+  reaction O2 + N2 --> O + O + N2: 3388
+  reaction O2 + O2 --> O + O + O2: 499
+  reaction O2 + O --> O + O + O: 1628
+  reaction N2 + O --> N + N + O: 960
+  reaction N2 + O2 --> N + N + O2: 149
+  reaction N2 + NO --> N + N + NO: 4
+  reaction N2 + N2 --> N + N + N2: 1131
+  reaction N2 + N --> N + N + N: 406
+  reaction NO + N2 --> N + O + N2: 159
+  reaction NO + O2 --> N + O + O2: 12
+  reaction NO + NO --> N + O + NO: 1
+  reaction NO + O --> N + O + O: 43
+  reaction NO + N --> N + O + N: 43
+  reaction NO + O --> O2 + N: 12
+  reaction N2 + O --> NO + N: 950
+  reaction O2 + N --> NO + O: 157
+  reaction NO + N --> N2 + O: 11
+  reaction O + N --> NO+ + e: 20
+  reaction N + N --> N2+ + e: 5
+  reaction O + O --> O2+ + e: 4
+  reaction N2+ + O --> N + NO+: 3
+  reaction N2 + N+ --> N + N2+: 8
+  reaction N2+ + N --> N2 + N+: 6
+  reaction NO+ + N --> N2 + O+: 10
+  reaction NO+ + O --> O2 + N+: 4
+  reaction O2+ + N --> O + NO+: 1
+  reaction NO+ + O2 --> NO + O2+: 5
+  reaction O2+ + NO --> O2 + NO+: 2
+  reaction O2+ + N --> O2 + N+: 1
+
+Particles: 49118 ave 49118 max 49118 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Cells:      8 ave 8 max 8 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+GhostCell: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+EmptyCell: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
