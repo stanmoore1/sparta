@@ -68,6 +68,31 @@ Device code is the signature and body of `KOKKOS_INLINE_FUNCTION`,
 - floating point Kokkos arrays are `DAT::ttransform_kkfloat_*` /
   `DAT::ttransform_kkacc_*`; their `view_host()` is double
 
+## Reduced precision pitfalls found in SPARTA
+
+These are handled in the converted code; keep them in mind for new KOKKOS
+code:
+
+- *Underflow in SI units.*  Products of masses (~1e-26 kg), e.g. a reduced
+  mass or the square of a mass weighted sum, underflow single precision.
+  Masses are kept double in device code and per-cell statistics use
+  `KK_ACC_FLOAT`.
+- *Integer truncation.*  `int j = n*drand()` can give `j == n` when the
+  draw is rounded to float; expressions converted to an integer are kept
+  double.
+- *Byte counts.*  `memcpy(v,ip->v,3*sizeof(double))` overruns a float
+  array; use the KK type in `sizeof`.
+- *Round trips.*  Host data converted to float on the device and back must
+  not lose its exact double value if the device did not change it (host
+  geometry compares cell corners exactly); `kk_convert()` keeps it.
+- *Degenerate moves.*  With float positions `x + dt*v` can round to `x`: a
+  particle with `dtremain = 0` on a reflecting face, or re-entering through
+  a periodic face just outside the box, looped forever in the move kernel.
+  Both are guarded, for float positions only, so a double precision build
+  is unchanged.
+- *Tolerances.*  Absolute tolerances tuned for double round-off are chosen
+  by precision with `kk_eps<T>()`.
+
 ## Rerunning the conversion
 
 The conversion is idempotent, so it can be rerun on converted code, e.g.
