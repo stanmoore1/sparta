@@ -26,6 +26,12 @@ import sys
 
 TIMING_COLUMNS = ("CPU", "Elapsed", "Time", "TpS", "CPULeft")
 
+# with fewer thermo rows than this in the averaging window, a column also
+#   passes within FEW_RTOL relative difference
+
+MIN_SAMPLES = 5
+FEW_RTOL = 0.1
+
 
 def thermo_blocks(path):
     """list of (header, rows) for every thermo block in a log file"""
@@ -114,6 +120,9 @@ def compare_stats(ref, new, fraction, rtol, nsigma):
             diff = abs(nm - rm)
             scale = max(abs(rm), 1e-300)
             if diff <= rtol * scale or diff <= nsigma * sem or (rm == 0 and nm == 0):
+                continue
+            # too few samples for a meaningful standard error
+            if min(len(ra), len(na)) < MIN_SAMPLES and diff <= FEW_RTOL * scale:
                 continue
             msgs.append("%s: ref %.6g new %.6g (rel %.3g, %.1f sem)"
                         % (rh[c], rm, nm, diff / scale, diff / sem if sem else float("inf")))
