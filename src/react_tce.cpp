@@ -15,6 +15,7 @@
 #include "math.h"
 #include "string.h"
 #include "stdlib.h"
+#include <string>
 #include "react_tce.h"
 #include "particle.h"
 #include "collide.h"
@@ -191,6 +192,8 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
 
     // sum of reaction probabilities should be < 1 for a valid TCE scheme,
     //   else reaction rates are biased by clipping
+    // the probability is per collision, so it does not depend on
+    //   timestep or fnum, only on the reaction coefficients and ecc
     // warn only once per run to avoid flooding output
 
     if (!prob_warn_flag) {
@@ -201,10 +204,13 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
                        "(further warnings suppressed)");
       } else if (react_prob > 1.0) {
         prob_warn_flag = 1;
-        error->warning(FLERR,"TCE reaction probability exceeded 1.0, "
-                       "chemistry may be under-resolved, "
-                       "consider reducing timestep or fnum "
-                       "(further warnings suppressed)");
+        std::string mesg = "Summed TCE reaction probability exceeded 1.0 "
+          "at reaction " + std::string(r->id) + ": the Arrhenius rates "
+          "exceed the collision rate at this collision energy, so this "
+          "reaction and any listed after it for the same reactants are "
+          "under-sampled; this is independent of timestep and fnum "
+          "(further warnings suppressed)";
+        error->warning(FLERR,mesg.c_str());
       }
     }
 
