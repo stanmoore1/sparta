@@ -541,7 +541,7 @@ void copy_host_array_to_view(ViewType &d_view, const double *array, const int n,
                              const char *label)
 {
   if ((int) d_view.extent(0) < n)
-    d_view = ViewType(Kokkos::view_alloc(label,Kokkos::WithoutInitializing),n);
+    d_view = ViewType(Kokkos::view_alloc(std::string(label),Kokkos::WithoutInitializing),n);
   Kokkos::View<const double*,Kokkos::LayoutRight,Kokkos::HostSpace,
                Kokkos::MemoryTraits<Kokkos::Unmanaged>> h_array(array,n);
   deep_copy_convert(Kokkos::subview(d_view,Kokkos::make_pair(0,n)),h_array);
