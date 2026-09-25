@@ -233,8 +233,10 @@ void FixEmitSurfKokkos::grid_changed()
   // setup cummulative_custom array for nlocal surfs
 
   if (fractions_custom_flag && !perspecies) {
-    if (k_cummulative_custom.extent(0) > max_cummulative)
+    if ((int) k_cummulative_custom.extent(0) < max_cummulative ||
+        (int) k_cummulative_custom.extent(1) != nspecies)
       MemKK::realloc_kokkos(k_cummulative_custom,"fix/emit/surf:cummulative_custom",max_cummulative,nspecies);
+    d_cummulative_custom = k_cummulative_custom.view_device();
 
     for (int isurf = 0; isurf < max_cummulative; isurf++) {
       for (int isp = 0; isp < nspecies; isp++) {
@@ -648,7 +650,7 @@ void FixEmitSurfKokkos::operator()(TagFixEmitSurf_perform_task, const int &i, in
           x[1] = p1[1] + rn * (p2[1]-p1[1]);
           x[2] = 0.0;
         } else {
-          const KK_FLOAT rn = static_cast<KK_FLOAT>(rand_gen.drand());
+          const double rn = rand_gen.drand(); // KK_DOUBLE: selects an index, can round to 1 in float
           int ntri = task_i.npoint - 2;
           int n;
           for (n = 0; n < ntri; n++)
@@ -735,7 +737,7 @@ void FixEmitSurfKokkos::operator()(TagFixEmitSurf_perform_task, const int &i, in
     int nactual = 0;
     for (int m = 0; m < ninsert; m++) {
       const int cand = start + m;
-      const KK_FLOAT rn = static_cast<KK_FLOAT>(rand_gen.drand());
+      const double rn = rand_gen.drand(); // KK_DOUBLE: selects an index, can round to 1 in float
       int isp = 0;
       while (cummulative[isp] < rn) isp++;
 
@@ -757,7 +759,7 @@ void FixEmitSurfKokkos::operator()(TagFixEmitSurf_perform_task, const int &i, in
         x[1] = p1[1] + rn * (p2[1]-p1[1]);
         x[2] = 0.0;
       } else {
-        const KK_FLOAT rn = static_cast<KK_FLOAT>(rand_gen.drand());
+        const double rn = rand_gen.drand(); // KK_DOUBLE: selects an index, can round to 1 in float
         int ntri = task_i.npoint - 2;
         int n;
         for (n = 0; n < ntri; n++)

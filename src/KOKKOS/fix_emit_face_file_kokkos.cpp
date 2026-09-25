@@ -594,7 +594,7 @@ void FixEmitFaceFileKokkos::operator()(TagFixEmitFaceFile_perform_task,
       // per-task cummulative, not the mixture's: the file can set per-face
       //   species fractions, which interpolate() folded into the task
 
-      const KK_FLOAT rn = static_cast<KK_FLOAT>(rand_gen.drand());
+      const double rn = rand_gen.drand(); // KK_DOUBLE: selects an index, can round to 1 in float
       int isp = 0;
       while (d_cummulative(i,isp) < rn) isp++;
 

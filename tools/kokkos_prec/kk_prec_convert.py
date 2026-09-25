@@ -633,6 +633,13 @@ class Converter:
                 continue
             if re.match(r"\s*(int|bigint|cellint)\b", stmt):
                 continue
+            # a draw into a double kept on purpose, e.g. one that selects an
+            #   index from a cumulative distribution, where a draw rounded
+            #   to 1 in float runs off the end
+            line = text[text.rfind("\n", 0, s) + 1:text.find("\n", s)]
+            code = re.sub(r"//[^\n]*|/\*.*?\*/", "", stmt, flags=re.S)
+            if re.match(r"\s*(const\s+)?double\b", code) and KEEP_MARK in line:
+                continue
             cls = self.statement_class(text, mask, s, decl_class)
             if cls != "double":
                 edits.append((s, e, "static_cast<%s>(%s)" % (CLASS_TYPE[cls], m.group(0))))

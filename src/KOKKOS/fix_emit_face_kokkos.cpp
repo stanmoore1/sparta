@@ -517,7 +517,7 @@ void FixEmitFaceKokkos::operator()(TagFixEmitFace_perform_task, const int &i, in
     int nactual = 0;
     for (int m = 0; m < ninsert; m++) {
       auto cand = start + m;
-      auto rn = static_cast<KK_FLOAT>(rand_gen.drand());
+      const double rn = rand_gen.drand(); // KK_DOUBLE: selects an index, can round to 1 in float
       int isp = 0;
       while (d_cummulative[isp] < rn) isp++;
       auto vscale_val = (subsonic_style == PONLY) ?
