@@ -25,6 +25,22 @@ namespace SPARTA_NS {
 
 class Collide : protected Pointers {
  public:
+  // with a mobile rigid body, a cut cell's flow piece can become an
+  //   arbitrarily thin sliver that still holds a few particles; NTC's
+  //   attempt count, which scales as np^2/volume, then grows without bound
+  //   (10^8-10^9 attempts in one cell and step have stalled GPU runs)
+  // NTC and the majorant scheme are valid only while a particle collides
+  //   less than about once a step (dt below the mean collision time), so
+  //   the mean attempt count is capped at one attempt per particle: a
+  //   resolved cell stays far below it (0.12 at most on the rigid benches),
+  //   and only a sliver, whose density estimate from a few particles in a
+  //   tiny volume means nothing, reaches it
+  // n = the particles which take part: np, or ni+nj for two groups
+
+  static double cap_attempts(double mean, double n) {
+    return (mean > n) ? n : mean;
+  }
+
   char *style;
   int rotstyle;       // none/smooth rotational modes
   int vibstyle;       // none/discrete/smooth vibrational modes

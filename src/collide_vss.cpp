@@ -141,20 +141,21 @@ double CollideVSS::attempt_collision(int icell, int np, double volume)
 
   double nattempt;
 
+  double mean = 0.5 * np * (np-1) * vremax[icell][0][0] * dt * fnum / volume;
+  // with a mobile rigid body active, the mean is capped at one attempt
+  //   per particle per step (see Collide::cap_attempts)
+  if (update->rigidflag) mean = cap_attempts(mean,np);
+
   // MCF scheme: attempt count is a Poisson variate whose mean is the
   //   majorant collision frequency x timestep, remain is not used
 
-  if (mcflag)
-    return random->poisson(0.5 * np * (np-1) *
-                           vremax[icell][0][0] * dt * fnum / volume);
+  if (mcflag) return random->poisson(mean);
 
   if (remainflag) {
-    nattempt = 0.5 * np * (np-1) *
-      vremax[icell][0][0] * dt * fnum / volume + remain[icell][0][0];
+    nattempt = mean + remain[icell][0][0];
     remain[icell][0][0] = nattempt - static_cast<int> (nattempt);
   } else {
-    nattempt = 0.5 * np * (np-1) *
-      vremax[icell][0][0] * dt * fnum / volume + random->uniform();
+    nattempt = mean + random->uniform();
   }
 
   return nattempt;
@@ -181,6 +182,13 @@ double CollideVSS::attempt_collision(int icell, int igroup, int jgroup,
  //else npairs = 0.5 * ngroup[igroup] * (ngroup[jgroup]);
 
  nattempt = npairs * vremax[icell][igroup][jgroup] * dt * fnum / volume;
+ // with a mobile rigid body active, the mean is capped at one attempt
+ //   per particle per step (see Collide::cap_attempts)
+ if (update->rigidflag) {
+   double n = ngroup[igroup];
+   if (igroup != jgroup) n += ngroup[jgroup];
+   nattempt = cap_attempts(nattempt,n);
+ }
 
  // MCF scheme: attempt count is a Poisson variate whose mean is the
  //   majorant collision frequency x timestep, remain is not used

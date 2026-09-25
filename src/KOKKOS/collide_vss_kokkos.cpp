@@ -3748,20 +3748,21 @@ double CollideVSSKokkos::attempt_collision_kokkos(int icell, int np, double volu
 {
  double nattempt;
 
+ double mean = 0.5 * np * (np-1) * d_vremax(icell,0,0) * dt * fnum / volume;
+ // with a mobile rigid body active, the mean is capped at one attempt
+ //   per particle per step (see Collide::cap_attempts, rigid_skip = rigid active)
+ if (rigid_skip) mean = (mean > np) ? (double) np : mean;
+
  // MCF scheme: attempt count is a Poisson variate whose mean is the
  //   majorant collision frequency x timestep, remain is not used
 
- if (mcflag)
-   return poisson_kokkos(0.5 * np * (np-1) *
-                         d_vremax(icell,0,0) * dt * fnum / volume, rand_gen);
+ if (mcflag) return poisson_kokkos(mean,rand_gen);
 
  if (remainflag) {
-   nattempt = 0.5 * np * (np-1) *
-     d_vremax(icell,0,0) * dt * fnum / volume + d_remain(icell,0,0);
+   nattempt = mean + d_remain(icell,0,0);
    d_remain(icell,0,0) = nattempt - static_cast<int> (nattempt);
  } else {
-   nattempt = 0.5 * np * (np-1) *
-     d_vremax(icell,0,0) * dt * fnum / volume + rand_gen.drand();
+   nattempt = mean + rand_gen.drand();
  }
 
  // DEBUG
@@ -3792,6 +3793,12 @@ double CollideVSSKokkos::attempt_collision_kokkos(int icell, int igroup, int jgr
   else npairs = (double) ni * nj;
 
   nattempt = npairs * d_vremax(icell,igroup,jgroup) * dt * fnum / volume;
+  // with a mobile rigid body active, the mean is capped at one attempt
+  //   per particle per step (see Collide::cap_attempts)
+  if (rigid_skip) {
+    const double n = (igroup == jgroup) ? (double) ni : (double) ni + nj;
+    nattempt = (nattempt > n) ? n : nattempt;
+  }
 
   // MCF scheme: attempt count is a Poisson variate whose mean is the
   //   majorant collision frequency x timestep, remain is not used
