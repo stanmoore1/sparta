@@ -58,7 +58,7 @@ class SurfCollideTransparentKokkos : public SurfCollideTransparent {
 
   template<int REACT, int ATOMIC_REDUCTION>
   KOKKOS_INLINE_FUNCTION
-  OnePartKK* collide_kokkos(OnePartKK *, double &,
+  OnePartKK* collide_kokkos(OnePartKK *, KK_POS_FLOAT &,
                                     int, const KK_POS_FLOAT *, int, int &,
                                     const DAT::t_int_scalar &, const DAT::t_int_scalar &) const
   {

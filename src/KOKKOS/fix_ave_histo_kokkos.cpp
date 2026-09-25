@@ -497,7 +497,7 @@ void FixAveHistoKokkos::bin_vector(
   using FixKokkosDetails::mirror_view_from_raw_host_array;
   this->stride = stride;
 
-  d_values = mirror_view_from_raw_host_array<double,DeviceType>(values, n, stride);
+  d_values = mirror_view_from_raw_host_array<KK_ACC_FLOAT,DeviceType>(values, n, stride);
 
   auto policy = Kokkos::RangePolicy<TagFixAveHisto_BinVector,DeviceType>(0, n);
   Kokkos::parallel_reduce(policy, *this, reducer);
@@ -584,7 +584,7 @@ void FixAveHistoKokkos::bin_particles(
   int n = particle->nlocal;
   int nmax = particle->maxlocal;
 
-  d_values = mirror_view_from_raw_host_array<double,DeviceType>(values, n, stride);
+  d_values = mirror_view_from_raw_host_array<KK_ACC_FLOAT,DeviceType>(values, n, stride);
 
   if (regionflag) {
     Region *region = domain->regions[iregion];

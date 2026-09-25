@@ -45,10 +45,10 @@ struct TagFixAveHisto_BinParticlesV3 {};
 struct TagFixAveHisto_BinParticlesV4 {};
 
 namespace FixKokkosDetails {
-  template<class ValueType, class OutputDeviceType>
+  template<class ValueType, class OutputDeviceType, class InputValueType>
   inline
   Kokkos::View<ValueType*, OutputDeviceType>
-  mirror_view_from_raw_host_array(ValueType* x, const int size, const int stride)
+  mirror_view_from_raw_host_array(InputValueType* x, const int size, const int stride)
   {
     typedef typename OutputDeviceType::memory_space out_mem_space;
     typedef Kokkos::View<ValueType*, OutputDeviceType> out_view_type;

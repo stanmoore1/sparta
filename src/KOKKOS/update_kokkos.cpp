@@ -2083,6 +2083,10 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
       OnePartKK* ipart = &particle_i;
       lo = d_cells[icell].lo;
       hi = d_cells[icell].hi;
+      // boundary normal in KK position precision (Domain holds it in double)
+      KK_POS_FLOAT bnorm[3];
+      for (int k = 0; k < 3; k++) bnorm[k] = domain_kk_copy.obj.norm[outface][k];
+
       if (domain_kk_copy.obj.bflag[outface] == SURFACE) {
         // treat global boundary as a surface
         // particle velocity is changed by surface collision model
@@ -2093,7 +2097,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
         const int n = domain_kk_copy.obj.surf_collide[outface];
 
         jpart = surf_collide_dispatch<REACT,ATOMIC_REDUCTION>
-          (n,ipart,dtremain,-(outface+1),domain_kk_copy.obj.norm[outface],
+          (n,ipart,dtremain,-(outface+1),bnorm,
            domain_kk_copy.obj.surf_react[outface],reaction,d_retry,d_nlocal);
 
         if (ipart) {
@@ -2116,10 +2120,10 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
       if (nboundary_tally) {
         for (int m = 0; m < nblist_boundary; m++)
           UK_BLIST(m).
-            boundary_tally_kk<ATOMIC_REDUCTION>(dtremain,outface,bflag,reaction,&iorig,ipart,jpart,domain_kk_copy.obj.norm[outface]);
+            boundary_tally_kk<ATOMIC_REDUCTION>(dtremain,outface,bflag,reaction,&iorig,ipart,jpart,bnorm);
         for (int m = 0; m < nblist_react; m++)
           UK_BLIST_REACT(m).
-            boundary_tally_kk<ATOMIC_REDUCTION>(dtremain,outface,bflag,reaction,&iorig,ipart,jpart,domain_kk_copy.obj.norm[outface]);
+            boundary_tally_kk<ATOMIC_REDUCTION>(dtremain,outface,bflag,reaction,&iorig,ipart,jpart,bnorm);
       }
 
       if (DIM == 1) {

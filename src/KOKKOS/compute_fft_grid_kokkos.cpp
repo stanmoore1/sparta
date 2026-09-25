@@ -576,7 +576,7 @@ void ComputeFFTGridKokkos::irregular_create()
     d_cells = t_cell_1d("grid:cells",nglocal);
     auto h_cells = Kokkos::create_mirror_view(d_cells);
     for (int i = 0; i < nglocal; i++)
-      h_cells[i] = grid->cells[i];
+      kk_convert(h_cells[i],grid->cells[i]);
     Kokkos::deep_copy(d_cells,h_cells);
   } else {
     d_cells = gridKK->k_cells.view_device();

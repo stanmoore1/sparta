@@ -125,7 +125,7 @@ class SurfCollideCLLKokkos : public SurfCollideCLL {
 
   template<int REACT, int ATOMIC_REDUCTION>
   KOKKOS_INLINE_FUNCTION
-  OnePartKK* collide_kokkos(OnePartKK *&ip, double &,
+  OnePartKK* collide_kokkos(OnePartKK *&ip, KK_POS_FLOAT &,
                                     int isurf, const KK_POS_FLOAT *norm, int isr, int &reaction,
                                     const DAT::t_int_scalar &d_retry, const DAT::t_int_scalar &d_nlocal) const
   {

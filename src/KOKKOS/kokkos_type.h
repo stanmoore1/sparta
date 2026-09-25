@@ -445,6 +445,11 @@ KOKKOS_INLINE_FUNCTION
 std::enable_if_t<std::is_arithmetic_v<DstType>>
 kk_convert(DstType &dst, const SrcType &src) { dst = static_cast<DstType>(src); }
 
+template<class Type>
+KOKKOS_INLINE_FUNCTION
+std::enable_if_t<!std::is_arithmetic_v<Type>>
+kk_convert(Type &dst, const Type &src) { dst = src; }
+
 // converting host-side copy between two views of different value types
 
 template<class DstView, class SrcView>

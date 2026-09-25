@@ -594,7 +594,8 @@ void FixEmitSurfKokkos::operator()(TagFixEmitSurf_ninsert, const int &i) const
 KOKKOS_INLINE_FUNCTION
 void FixEmitSurfKokkos::operator()(TagFixEmitSurf_perform_task, const int &i, int &nsingle) const
 {
-  double *vstream,*normal,*atan,*btan;  // KK_DOUBLE: Task data is double
+  double *vstream,*atan,*btan;  // KK_DOUBLE: Task data is double
+  KK_POS_FLOAT *normal;
 
   rand_type rand_gen = rand_pool.get_state();
 
@@ -1127,9 +1128,9 @@ void FixEmitSurfKokkos::operator()(TagFixEmitSurf_subsonic_grid, const int &i) c
   } else vnew[0] = vnew[1] = vnew[2] = 0.0;
 
   double *vcom = d_tasks(i).vcom;  // KK_DOUBLE: Task data is double
-  vcom[0] = acoef*vnew[0] + (static_cast<KK_FLOAT>(1.0)-acoef)*vcom[0];
-  vcom[1] = acoef*vnew[1] + (static_cast<KK_FLOAT>(1.0)-acoef)*vcom[1];
-  vcom[2] = acoef*vnew[2] + (static_cast<KK_FLOAT>(1.0)-acoef)*vcom[2];
+  vcom[0] = acoef*vnew[0] + (1.0-acoef)*vcom[0];
+  vcom[1] = acoef*vnew[1] + (1.0-acoef)*vcom[1];
+  vcom[2] = acoef*vnew[2] + (1.0-acoef)*vcom[2];
 
   double *vstream = d_tasks(i).vstream;  // KK_DOUBLE: Task data is double
   vstream[0] = vcom[0];
@@ -1326,9 +1327,9 @@ void FixEmitSurfKokkos::operator()(TagFixEmitSurf_mflow_grid, const int &i, doub
   } else vnew[0] = vnew[1] = vnew[2] = 0.0;
 
   double *vcom = d_tasks(i).vcom;  // KK_DOUBLE: Task data is double
-  vcom[0] = acoef*vnew[0] + (static_cast<KK_FLOAT>(1.0)-acoef)*vcom[0];
-  vcom[1] = acoef*vnew[1] + (static_cast<KK_FLOAT>(1.0)-acoef)*vcom[1];
-  vcom[2] = acoef*vnew[2] + (static_cast<KK_FLOAT>(1.0)-acoef)*vcom[2];
+  vcom[0] = acoef*vnew[0] + (1.0-acoef)*vcom[0];
+  vcom[1] = acoef*vnew[1] + (1.0-acoef)*vcom[1];
+  vcom[2] = acoef*vnew[2] + (1.0-acoef)*vcom[2];
 
   double *vstream = d_tasks(i).vstream;  // KK_DOUBLE: Task data is double
   vstream[0] = vcom[0];
