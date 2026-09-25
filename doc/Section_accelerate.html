@@ -756,6 +756,13 @@ precision model should be validated against a double precision run
 before it is used for production. KOKKOS_PREC=mixed or single cannot
 be combined with SPARTA_KOKKOS_EXACT=ON.
 </P>
+<P>In a reduced precision build, data shared with non-KOKKOS styles is
+converted between double and single precision each time it moves
+between the host and the device, so styles that run on the host every
+timestep (non-KOKKOS fixes or computes, frequent dumps) cost more than
+in a double precision build. A double precision build has no such
+overhead.
+</P>
 <P>The precision of the KOKKOS FFTs used by <A HREF = "compute_fft_grid.html">compute fft/grid</A>
 is selected separately, with -D FFT_SINGLE=ON.
 </P>

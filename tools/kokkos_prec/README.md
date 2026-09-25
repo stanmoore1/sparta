@@ -133,4 +133,4 @@ reduced precision device is checked exactly with `conversion_test/`, see
 A reduced precision build converts Kokkos data on every host/device sync
 of a TransformView (whole allocated extent), so styles that run on the
 host every step (non-KOKKOS fixes or computes, frequent dumps) cost more
-than in a double precision build.
+than in a double precision build, which has no conversion at all.
