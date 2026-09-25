@@ -130,6 +130,10 @@ def compare_stats(ref, new, fraction, rtol, nsigma):
             nvar = sum((x - nm) ** 2 for x in na) / max(1, len(na) - 1)
             # standard error of the difference of the two means
             sem = math.sqrt(var / len(ra) + nvar / len(na)) if min(len(ra), len(na)) > 1 else 0.0
+            # counts per step (Ncoll, Nscoll, ...) fluctuate at least as a
+            #   Poisson variable, which a few rows cannot estimate
+            if all(x >= 0 and x == int(x) for x in ra + na):
+                sem = max(sem, math.sqrt(max(rm, nm, 1.0) / len(ra) + max(rm, nm, 1.0) / len(na)))
             diff = abs(nm - rm)
             # relative to the mean, or to the fluctuation of a quantity
             #   that averages to about zero
