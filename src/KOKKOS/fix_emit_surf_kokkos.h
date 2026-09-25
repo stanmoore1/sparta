@@ -124,12 +124,12 @@ class FixEmitSurfKokkos : public FixEmitSurf {
 
   DAT::ttransform_kkacc_2d_lr k_ntargetsp;          // # of mols to insert for each species
   DAT::ttransform_kkacc_2d_lr k_vscale;             // vscale for each species
-  DAT::ttransform_kkacc_2d_lr k_path;               // path for each species
-  DAT::ttransform_kkacc_2d_lr k_fracarea;           // fracarea for each species
+  DAT::ttransform_kkpos_2d_lr k_path;               // path for each species
+  DAT::ttransform_kkfloat_2d_lr k_fracarea;           // fracarea for each species
   DAT::t_kkacc_2d_lr d_ntargetsp;
   DAT::t_kkacc_2d_lr d_vscale;
-  DAT::t_kkacc_2d_lr d_path;
-  DAT::t_kkacc_2d_lr d_fracarea;
+  DAT::t_kkpos_2d_lr d_path;
+  DAT::t_kkfloat_2d_lr d_fracarea;
 
   DAT::tdual_int_1d k_ninsert;
   Kokkos::View<int*, DeviceType> d_ninsert; // won't compile with DAT::t_int_1d type

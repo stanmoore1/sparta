@@ -942,6 +942,7 @@ SPARTA_DEVICE_TRANSFORMVIEW(KK_FLOAT***, double***, DeviceType::array_layout, kk
 SPARTA_DEVICE_TRANSFORMVIEW(KK_POS_FLOAT*, double*, DeviceType::array_layout, kkpos_1d)
 SPARTA_DEVICE_TRANSFORMVIEW(KK_POS_FLOAT*[3], double*[3], DeviceType::array_layout, kkpos_1d_3)
 SPARTA_DEVICE_TRANSFORMVIEW(KK_POS_FLOAT**, double**, DeviceType::array_layout, kkpos_2d)
+SPARTA_DEVICE_TRANSFORMVIEW(KK_POS_FLOAT**, double**, Kokkos::LayoutRight, kkpos_2d_lr)
 
 SPARTA_DEVICE_TRANSFORMVIEW(KK_ACC_FLOAT, double, DeviceType::array_layout, kkacc_scalar)
 SPARTA_DEVICE_TRANSFORMVIEW(KK_ACC_FLOAT*, double*, DeviceType::array_layout, kkacc_1d)
@@ -1052,6 +1053,7 @@ SPARTA_HOST_TRANSFORMVIEW(KK_FLOAT***, double***, DeviceType::array_layout, kkfl
 SPARTA_HOST_TRANSFORMVIEW(KK_POS_FLOAT*, double*, DeviceType::array_layout, kkpos_1d)
 SPARTA_HOST_TRANSFORMVIEW(KK_POS_FLOAT*[3], double*[3], DeviceType::array_layout, kkpos_1d_3)
 SPARTA_HOST_TRANSFORMVIEW(KK_POS_FLOAT**, double**, DeviceType::array_layout, kkpos_2d)
+SPARTA_HOST_TRANSFORMVIEW(KK_POS_FLOAT**, double**, Kokkos::LayoutRight, kkpos_2d_lr)
 
 SPARTA_HOST_TRANSFORMVIEW(KK_ACC_FLOAT, double, DeviceType::array_layout, kkacc_scalar)
 SPARTA_HOST_TRANSFORMVIEW(KK_ACC_FLOAT*, double*, DeviceType::array_layout, kkacc_1d)
