@@ -3012,3 +3012,41 @@ and would change the row-length contract every reader relies on, the
 mover's hot loop included (`update_kokkos.cpp` reads a row's width as
 its surf count).  Worth it only with the restructure made row-preserving
 as well, for about 3% of the loop.
+
+## The GPU collision "hang": sliver cut cells (25 Sep 2026)
+
+One rank sat in `CollideVSSKokkos::collisions_one` (collide_vss_kokkos.cpp
+at the read-back after the kernel) while the other three waited in the
+rigid exchange, at a different step each run, with or without image
+dumps.  Cause: a body sweeping into a cell can leave its flow piece a
+sliver that still holds a few particles, and NTC's attempt count,
+0.5 np(np-1) vremax dt fnum / V, grows without bound as V -> 0.  Measured
+on the CPU (inflow 1k deck): 3 particles in a piece of 6e-7 of a cell
+made 6600 attempts in one step; a denser gas or thinner sliver reaches
+1e8-1e9, minutes for one GPU thread.  Host code has the same formula; the
+only guard was the zero-volume skip.
+
+Fix (`1e9b1e07`): with a rigid body active, the mean attempt count is
+capped at one per particle (np; ni, or ni+nj for two groups), in
+`attempt_collision()` and its Kokkos twin, both overloads, before the
+MCF Poisson draw and before remain/uniform are added, so NTC, MCF, near
+neighbor, groups and ambipolar all take it.  NTC/MCF assume a particle
+collides less than about once a step; a histogram of mean attempts per
+particle over 21M calls (bench40.owned, 4 ranks) peaks at 0.12 in cells
+with >5% flow volume, and every call above 0.5 is a sliver of <0.6%.
+A first version floored the collision volume at 1e-3 of the cell; the
+fraction is problem dependent, so it was dropped.
+
+Validation:
+- non-rigid: bit-identical (examples collide, collide.group,
+  collide_2D_nn, adjust_temp circle.constant)
+- rigid, 400 steps of bench40.owned on 4 ranks, capped vs uncapped at
+  the same seed against uncapped at another seed: attempts -0.07% vs
+  +1.8% (NTC), -0.15% vs +0.12% (MCF), -0.87% vs -0.75% (near
+  neighbor); collisions and body states differ by as much as a seed
+  change does, no more
+- Kokkos bench40.owned, 40 steps: body positions change by <3e-8 (box
+  0.57), velocities by <0.03 of ~122, surf collisions by ~0.2%; but
+  collisions fall from 3706 to 1805 at 1 rank: over half the gas
+  collisions of the uncapped run were a few particles in slivers
+- rigid suites: Kokkos 1 rank, Kokkos owned 4 ranks, CPU 1 rank pass
