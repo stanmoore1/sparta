@@ -373,16 +373,19 @@ void ParticleKokkos::pack_custom_kokkos(int n, char *buf) const
 
   if (ncustom_dvec) {
     for (i = 0; i < ncustom_dvec; i++) {
-      memcpy(ptr,&(k_edvec.view_device()(i).k_view.view_device()(n)),sizeof(double));
-      ptr += sizeof(double);
+      // custom doubles are packed as double, same as the host pack_custom()
+      const double value = k_edvec.view_device()(i).k_view.view_device()(n);  // KK_DOUBLE: buffer format
+      memcpy(ptr,&value,sizeof(double));  // KK_DOUBLE: buffer format
+      ptr += sizeof(double);  // KK_DOUBLE: buffer format
     }
   }
   if (ncustom_darray) {
     for (i = 0; i < ncustom_darray; i++) {
       const int ncols = k_edcol.view_device()[i];
       for (j = 0; j < ncols; j++) {
-        memcpy(ptr,&(k_edarray.view_device()(i).k_view.view_device()(n,j)),sizeof(double));
-        ptr += sizeof(double);
+        const double value = k_edarray.view_device()(i).k_view.view_device()(n,j);  // KK_DOUBLE: buffer format
+        memcpy(ptr,&value,sizeof(double));  // KK_DOUBLE: buffer format
+        ptr += sizeof(double);  // KK_DOUBLE: buffer format
       }
     }
   }
@@ -414,16 +417,20 @@ void ParticleKokkos::unpack_custom_kokkos(char *buf, int n) const
 
   if (ncustom_dvec) {
     for (i = 0; i < ncustom_dvec; i++) {
-      memcpy(&(k_edvec.view_device()(i).k_view.view_device()(n)),ptr,sizeof(double));
-      ptr += sizeof(double);
+      double value;  // KK_DOUBLE: buffer format
+      memcpy(&value,ptr,sizeof(double));  // KK_DOUBLE: buffer format
+      k_edvec.view_device()(i).k_view.view_device()(n) = value;
+      ptr += sizeof(double);  // KK_DOUBLE: buffer format
     }
   }
   if (ncustom_darray) {
     for (i = 0; i < ncustom_darray; i++) {
       const int ncols = k_edcol.view_device()[i];
       for (j = 0; j < ncols; j++) {
-        memcpy(&(k_edarray.view_device()(i).k_view.view_device()(n,j)),ptr,sizeof(double));
-        ptr += sizeof(double);
+        double value;  // KK_DOUBLE: buffer format
+        memcpy(&value,ptr,sizeof(double));  // KK_DOUBLE: buffer format
+        k_edarray.view_device()(i).k_view.view_device()(n,j) = value;
+        ptr += sizeof(double);  // KK_DOUBLE: buffer format
       }
     }
   }

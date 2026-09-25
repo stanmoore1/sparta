@@ -11,7 +11,7 @@ Two modes:
           passes if the averages agree within --rtol relative, or within
           --nsigma standard errors of the double precision run
 
-usage: compare_logs.py [--stats] REFDIR NEWDIR [--pattern 'log.mpi_1.*']
+usage: compare_logs.py [--stats] [--gold] REFDIR NEWDIR [--pattern 'log.mpi_1.*']
 Log files are matched by path relative to REFDIR and NEWDIR.
 """
 
@@ -19,6 +19,7 @@ import argparse
 import fnmatch
 import math
 import os
+import re
 import sys
 
 # wall clock columns, never compared
@@ -54,13 +55,22 @@ def thermo_blocks(path):
     return blocks
 
 
-def find_logs(root, pattern):
+def find_logs(root, pattern, gold=False):
+    """log files under root matching pattern, keyed by relative path; with
+    gold=True the gold standard names log.DATE.mpi_N.NAME in the examples
+    directories are keyed as log.mpi_N.NAME, the name a test run writes"""
     out = {}
     for d, _, files in os.walk(root):
         for f in files:
-            if fnmatch.fnmatch(f, pattern):
+            name = f
+            if gold:
+                m = re.match(r"log\.\w+\.(mpi_\d+\..*)$", f)
+                if not m:
+                    continue
+                name = "log." + m.group(1)
+            if fnmatch.fnmatch(name, pattern):
                 p = os.path.join(d, f)
-                out[os.path.relpath(p, root)] = p
+                out[os.path.relpath(os.path.join(d, name), root)] = p
     return out
 
 
@@ -117,12 +127,18 @@ def main():
     ap.add_argument("newdir")
     ap.add_argument("--pattern", default="log.mpi_1.*")
     ap.add_argument("--stats", action="store_true")
+    ap.add_argument("--gold", action="store_true",
+                    help="REFDIR holds gold standard logs named log.DATE.mpi_N.NAME")
+    ap.add_argument("--only", nargs="*", help="compare only these log names")
     ap.add_argument("--fraction", type=float, default=0.5)
     ap.add_argument("--rtol", type=float, default=0.02)
     ap.add_argument("--nsigma", type=float, default=4.0)
     args = ap.parse_args()
 
-    ref = find_logs(args.refdir, args.pattern)
+    ref = find_logs(args.refdir, args.pattern, args.gold)
+    if args.only:
+        ref = {k: v for k, v in ref.items() if os.path.basename(k) in args.only
+               or os.path.basename(k).split(".", 2)[-1] in args.only}
     new = find_logs(args.newdir, args.pattern)
     nfail = 0
     for rel in sorted(ref):

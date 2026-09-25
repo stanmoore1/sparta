@@ -68,7 +68,7 @@ class ComputeReduceKokkos : public ComputeReduce, public KokkosBase {
   double compute_one_kokkos(int, int);
   int setup_values(int);
   void build_include(int);
-  void gather_float(DAT::t_kkacc_1d_strided);
+  template<class ViewType> void gather_float(ViewType);
   void gather_int_vec(DAT::t_int_1d);
   void gather_int_array(DAT::t_int_2d_lr, int);
   double reduce_values();

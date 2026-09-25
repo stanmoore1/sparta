@@ -72,11 +72,8 @@ void FixFieldParticleKokkos::compute_field()
   //   has to happen either way.  The element-wise loop this replaces was
   //   pure overhead on every step.
 
-  static_assert(std::is_same<KK_ACC_FLOAT,double>::value,
-                "wrapping array_particle (double**) in an F_FLOAT view assumes "
-                "F_FLOAT is double; use a converting deep_copy if that changes");
 
-  Kokkos::View<KK_ACC_FLOAT**,Kokkos::LayoutRight,Kokkos::HostSpace,
+  Kokkos::View<double**,Kokkos::LayoutRight,Kokkos::HostSpace,
                Kokkos::MemoryTraits<Kokkos::Unmanaged> >
     h_array_particle(array_particle[0],nlocal,ncols);
 
@@ -90,7 +87,8 @@ void FixFieldParticleKokkos::compute_field()
 
   auto d_rows = Kokkos::subview(k_array_particle.view_device(),
                                 Kokkos::make_pair(0,nlocal),Kokkos::ALL());
-  Kokkos::deep_copy(d_rows,h_array_particle);
+  // in a reduced precision build deep_copy_convert() converts on the host
+  deep_copy_convert(d_rows,h_array_particle);
   k_array_particle.modify_device();
 
   d_array_particle = k_array_particle.view_device();

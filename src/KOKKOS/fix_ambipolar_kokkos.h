@@ -71,8 +71,8 @@ class FixAmbipolarKokkos : public FixAmbipolar {
 
   KOKKOS_INLINE_FUNCTION
   void update_custom_kokkos(int index, KK_FLOAT temp_thermal,
-                            double, double,
-                            const KK_FLOAT *vstream) const
+                            KK_FLOAT, KK_FLOAT,
+                            const double *vstream) const  // KK_DOUBLE: host array
   {
     // if species is not ambipolar ion, set ionambi off and return
 

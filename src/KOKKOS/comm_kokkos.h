@@ -58,7 +58,7 @@ class CommKokkos : public Comm {
   t_cell_1d d_cells;
 
   typedef Kokkos::
-    DualView<Particle::OnePart*, Kokkos::LayoutRight, DeviceType> tdual_particle_1d;
+    DualView<OnePartKK*, Kokkos::LayoutRight, DeviceType> tdual_particle_1d;
   typedef tdual_particle_1d::t_dev t_particle_1d;
   t_particle_1d d_particles;
 

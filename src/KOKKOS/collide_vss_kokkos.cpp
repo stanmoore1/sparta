@@ -3947,8 +3947,8 @@ int CollideVSSKokkos::perform_collision_kokkos(OnePartKK *&ip,
   if (kspecies >= 0) {
     int id = MAXSMALLINT*rand_gen.drand();
 
-    memcpy(x,ip->x,3*sizeof(double));
-    memcpy(v,ip->v,3*sizeof(double));
+    memcpy(x,ip->x,3*sizeof(KK_POS_FLOAT));
+    memcpy(v,ip->v,3*sizeof(KK_FLOAT));
     index_kpart = Kokkos::atomic_fetch_add(&d_nlocal(),1);
     int reallocflag =
       ParticleKokkos::add_particle_kokkos(d_particles,index_kpart,id,kspecies,ip->icell,x,v,0.0,0.0);

@@ -189,7 +189,7 @@ void ParticleKokkos::compress_migrate(int ndelete, int *dellist)
 
   int i;
 
-  nbytes = sizeof(OnePart);
+  nbytes = sizeof(OnePartKK);
 
   if (ndelete > d_lists.extent(1)) {
     d_lists = DAT::t_int_2d_lr(Kokkos::view_alloc("particle:lists",Kokkos::WithoutInitializing),2,ndelete);
@@ -385,12 +385,12 @@ void ParticleKokkos::sort_kokkos()
       if (d_particles.extent(0) > d_sorted_id.extent(0))
         MemKK::realloc_kokkos(d_sorted_id,"particle:sorted_id",d_particles.extent(0));
     } else if (reorder_scheme == FIXEDMEMORY && d_pswap1.size() == 0) {
-      nParticlesWksp = MIN(nlocal,(double)update->global_mem_limit/sizeof(Particle::OnePart));
+      nParticlesWksp = MIN(nlocal,(double)update->global_mem_limit/sizeof(OnePartKK));
       d_pswap1 = t_particle_1d(Kokkos::view_alloc("particle:swap1",Kokkos::WithoutInitializing),nParticlesWksp);
       d_pswap2 = t_particle_1d(Kokkos::view_alloc("particle:swap2",Kokkos::WithoutInitializing),nParticlesWksp);
     }
 
-    nbytes = sizeof(OnePart);
+    nbytes = sizeof(OnePartKK);
 
     if (reorder_scheme == COPYPARTICLELIST) {
       copymode = 1;

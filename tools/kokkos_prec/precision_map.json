@@ -180,10 +180,7 @@
       "THIRD",
       "BIG",
       "EPSZERO",
-      "EPSSQ",
-      "EPSSQNEG",
       "EPSSELF",
-      "EPSTIME",
       "EPSPARAM",
       "TEMPLIMIT",
       "SMALL"
@@ -323,7 +320,8 @@
       "fix_emit_surf_kokkos.cpp": {
         "vstream": "double",
         "atan": "double",
-        "btan": "double"
+        "btan": "double",
+        "vcom": "double"
       },
       "compute_distsurf_grid_kokkos.cpp": {
         "sctr": "pos"

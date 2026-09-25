@@ -328,7 +328,7 @@ void FixEmitFaceKokkos::perform_task()
   Kokkos::parallel_for(ncands, SPARTA_LAMBDA(int cand) {
     if (!ld_keep(cand)) return;
 
-    double *normal,*vstream;  // KK_DOUBLE: precision_map.json keep_double_identifiers
+    double *normal,*vstream;  // KK_DOUBLE: Task data is double
 
     auto i = ld_task(cand);
     Task task_i = ld_tasks(i);
@@ -441,7 +441,7 @@ void FixEmitFaceKokkos::operator()(TagFixEmitFace_ninsert, const int &i) const
 KOKKOS_INLINE_FUNCTION
 void FixEmitFaceKokkos::operator()(TagFixEmitFace_perform_task, const int &i, int &nsingle) const
 {
-  double *lo,*hi,*normal,*vstream;  // KK_DOUBLE: precision_map.json keep_double_identifiers
+  double *lo,*hi,*normal,*vstream;  // KK_DOUBLE: Task data is double
 
   rand_type rand_gen = rand_pool.get_state();
 
@@ -613,8 +613,8 @@ void FixEmitFaceKokkos::subsonic_inflow()
 KOKKOS_INLINE_FUNCTION
 void FixEmitFaceKokkos::operator()(TagFixEmitFace_subsonic_inflow, const int &i) const
 {
-  double *vstream = d_tasks(i).vstream;  // KK_DOUBLE: precision_map.json keep_double_identifiers
-  double *normal = d_tasks(i).normal;  // KK_DOUBLE: precision_map.json keep_double_identifiers
+  double *vstream = d_tasks(i).vstream;  // KK_DOUBLE: Task data is double
+  double *normal = d_tasks(i).normal;  // KK_DOUBLE: Task data is double
   const KK_FLOAT indot = vstream[0]*normal[0] + vstream[1]*normal[1] +
     vstream[2]*normal[2];
 
@@ -719,8 +719,9 @@ void FixEmitFaceKokkos::subsonic_grid()
   // test if any task has invalid thermal temperature for first time
 
   if (!subsonic_warning) {
-    double tempmax = 0.0;
-    Kokkos::deep_copy(tempmax,d_tempmax);
+    KK_FLOAT tempmax_kk = 0.0;
+    Kokkos::deep_copy(tempmax_kk,d_tempmax);
+    const double tempmax = tempmax_kk;
     int temp_exceed_flag = 0;
     if (tempmax > TEMPLIMIT) temp_exceed_flag = 1;
     subsonic_warning = subsonic_temperature_check(temp_exceed_flag,tempmax);
@@ -774,7 +775,7 @@ void FixEmitFaceKokkos::operator()(TagFixEmitFace_subsonic_grid, const int &i) c
   // if sound speed = 0.0 due to <= 1 particle in cell or
   //   all particles having COM velocity, set via mixture properties
 
-  double *vstream = d_tasks(i).vstream;  // KK_DOUBLE: precision_map.json keep_double_identifiers
+  double *vstream = d_tasks(i).vstream;  // KK_DOUBLE: Task data is double
   if (np) {
     vstream[0] = mv[0] / masstot;
     vstream[1] = mv[1] / masstot;

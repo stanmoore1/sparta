@@ -1880,7 +1880,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
 
           // stuck_iterate = consecutive iterations particle is immobile
 
-          if (minparam <= static_cast<KK_POS_FLOAT>(1.0e-14)) stuck_iterate++;
+          if (minparam <= kk_eps<KK_POS_FLOAT>(1.0e-14,1.0e-6)) stuck_iterate++;
           else stuck_iterate = 0;
 
           // reset post-bounce xnew

@@ -594,7 +594,7 @@ void FixEmitSurfKokkos::operator()(TagFixEmitSurf_ninsert, const int &i) const
 KOKKOS_INLINE_FUNCTION
 void FixEmitSurfKokkos::operator()(TagFixEmitSurf_perform_task, const int &i, int &nsingle) const
 {
-  double *vstream; KK_FLOAT *normal; double *atan; double *btan;  // KK_DOUBLE: precision_map.json keep_double_identifiers
+  double *vstream,*normal,*atan,*btan;  // KK_DOUBLE: Task data is double
 
   rand_type rand_gen = rand_pool.get_state();
 
@@ -926,7 +926,7 @@ void FixEmitSurfKokkos::subsonic_inflow()
 KOKKOS_INLINE_FUNCTION
 void FixEmitSurfKokkos::operator()(TagFixEmitSurf_subsonic_inflow, const int &i) const
 {
-  double *vstream = d_tasks(i).vstream;  // KK_DOUBLE: precision_map.json keep_double_identifiers
+  double *vstream = d_tasks(i).vstream;  // KK_DOUBLE: Task data is double
 
   // indot = vstream dotted into inward surf normal
   // depends on normalflag, same as FixEmitSurf::subsonic_inflow()
@@ -935,7 +935,7 @@ void FixEmitSurfKokkos::operator()(TagFixEmitSurf_subsonic_inflow, const int &i)
   if (normalflag) indot = magvstream;
   else {
     const surfint isurf = d_tasks(i).isurf;
-    KK_FLOAT *normal = (dimension == 2) ? d_lines[isurf].norm : d_tris[isurf].norm;
+    KK_POS_FLOAT *normal = (dimension == 2) ? d_lines[isurf].norm : d_tris[isurf].norm;
     indot = vstream[0]*normal[0] + vstream[1]*normal[1];
     if (dimension != 2) indot += vstream[2]*normal[2];
   }
@@ -1058,8 +1058,9 @@ void FixEmitSurfKokkos::subsonic_grid()
   // test if any task has invalid thermal temperature for first time
 
   if (!subsonic_warning) {
-    double tempmax = 0.0;
-    Kokkos::deep_copy(tempmax,d_tempmax);
+    KK_FLOAT tempmax_kk = 0.0;
+    Kokkos::deep_copy(tempmax_kk,d_tempmax);
+    const double tempmax = tempmax_kk;
     int temp_exceed_flag = 0;
     if (tempmax > TEMPLIMIT) temp_exceed_flag = 1;
     subsonic_warning = subsonic_temperature_check(temp_exceed_flag,tempmax);
@@ -1125,12 +1126,12 @@ void FixEmitSurfKokkos::operator()(TagFixEmitSurf_subsonic_grid, const int &i) c
     vnew[2] = mv[2] / masstot;
   } else vnew[0] = vnew[1] = vnew[2] = 0.0;
 
-  KK_FLOAT *vcom = d_tasks(i).vcom;
+  double *vcom = d_tasks(i).vcom;  // KK_DOUBLE: Task data is double
   vcom[0] = acoef*vnew[0] + (static_cast<KK_FLOAT>(1.0)-acoef)*vcom[0];
   vcom[1] = acoef*vnew[1] + (static_cast<KK_FLOAT>(1.0)-acoef)*vcom[1];
   vcom[2] = acoef*vnew[2] + (static_cast<KK_FLOAT>(1.0)-acoef)*vcom[2];
 
-  double *vstream = d_tasks(i).vstream;  // KK_DOUBLE: precision_map.json keep_double_identifiers
+  double *vstream = d_tasks(i).vstream;  // KK_DOUBLE: Task data is double
   vstream[0] = vcom[0];
   vstream[1] = vcom[1];
   vstream[2] = vcom[2];
@@ -1168,11 +1169,14 @@ void FixEmitSurfKokkos::operator()(TagFixEmitSurf_subsonic_grid, const int &i) c
     //   cell pressure and subsonic target pressure
     // normal = direction of difference, depends on normalflag
 
-    const KK_FLOAT *normal;
+    KK_POS_FLOAT normal[3];
     if (normalflag) {
       const surfint isurf = d_tasks(i).isurf;
-      normal = (dimension == 2) ? d_lines[isurf].norm : d_tris[isurf].norm;
-    } else normal = norm_vstream;
+      const KK_POS_FLOAT *snorm = (dimension == 2) ? d_lines[isurf].norm : d_tris[isurf].norm;
+      for (int k = 0; k < 3; k++) normal[k] = snorm[k];
+    } else {
+      for (int k = 0; k < 3; k++) normal[k] = norm_vstream[k];
+    }
 
     if (np) {
       const KK_FLOAT vsmag = (psubsonic - press_cell) / (massrho_cell*soundspeed_cell);
@@ -1321,12 +1325,12 @@ void FixEmitSurfKokkos::operator()(TagFixEmitSurf_mflow_grid, const int &i, doub
     vnew[2] = mv[2] / masstot;
   } else vnew[0] = vnew[1] = vnew[2] = 0.0;
 
-  KK_FLOAT *vcom = d_tasks(i).vcom;
+  double *vcom = d_tasks(i).vcom;  // KK_DOUBLE: Task data is double
   vcom[0] = acoef*vnew[0] + (static_cast<KK_FLOAT>(1.0)-acoef)*vcom[0];
   vcom[1] = acoef*vnew[1] + (static_cast<KK_FLOAT>(1.0)-acoef)*vcom[1];
   vcom[2] = acoef*vnew[2] + (static_cast<KK_FLOAT>(1.0)-acoef)*vcom[2];
 
-  double *vstream = d_tasks(i).vstream;  // KK_DOUBLE: precision_map.json keep_double_identifiers
+  double *vstream = d_tasks(i).vstream;  // KK_DOUBLE: Task data is double
   vstream[0] = vcom[0];
   vstream[1] = vcom[1];
   vstream[2] = vcom[2];
@@ -1348,7 +1352,7 @@ void FixEmitSurfKokkos::operator()(TagFixEmitSurf_mflow_grid, const int &i, doub
   if (normalflag) indot = magvstream;
   else {
     const surfint isurf = d_tasks(i).isurf;
-    KK_FLOAT *normal = (dimension == 2) ? d_lines[isurf].norm : d_tris[isurf].norm;
+    KK_POS_FLOAT *normal = (dimension == 2) ? d_lines[isurf].norm : d_tris[isurf].norm;
     indot = vstream[0]*normal[0] + vstream[1]*normal[1];
     if (dimension != 2) indot += vstream[2]*normal[2];
   }

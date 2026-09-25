@@ -150,12 +150,12 @@ class FixEmitSurfKokkos : public FixEmitSurf {
 
   DAT::ttransform_kkfloat_1d k_vscale_mix;
   DAT::ttransform_kkfloat_1d k_cummulative_mix;
-  DAT::ttransform_kkacc_2d_lr k_cummulative_custom;
+  DAT::ttransform_kkfloat_2d_lr k_cummulative_custom;
   DAT::tdual_int_1d k_mspecies;
 
   DAT::t_kkfloat_1d d_vscale_mix;
   DAT::t_kkfloat_1d d_cummulative_mix;
-  DAT::t_kkacc_2d_lr d_cummulative_custom;
+  DAT::t_kkfloat_2d_lr d_cummulative_custom;
   DAT::t_int_1d d_mspecies;
 
   DAT::ttransform_kkfloat_1d k_fraction;        // mixture fraction for each species

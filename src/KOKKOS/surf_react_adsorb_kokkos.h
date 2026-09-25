@@ -400,8 +400,8 @@ class SurfReactAdsorbKokkos : public SurfReactAdsorb {
           KK_POS_FLOAT x[3]; KK_FLOAT v[3];
           ip->ispecies = d_products(j,0);
           int id = MAXSMALLINT*rand_gen.drand();
-          memcpy(x,ip->x,3*sizeof(double));
-          memcpy(v,ip->v,3*sizeof(double));
+          memcpy(x,ip->x,3*sizeof(KK_POS_FLOAT));
+          memcpy(v,ip->v,3*sizeof(KK_FLOAT));
           int jp_species;
           if (d_pstoich(j,0) == 2) jp_species = d_products(j,0);
           else jp_species = d_products(j,1);
@@ -823,7 +823,7 @@ class SurfReactAdsorbKokkos : public SurfReactAdsorb {
       if (vibstyle_ == SRA_KK::NONE || vibdof < 2) {
         p->evib = 0.0;
       } else {
-        const double *vibtemp = d_species[ispecies].vibtemp;  // KK_DOUBLE: precision_map.json keep_double_identifiers
+        const double *vibtemp = d_species[ispecies].vibtemp;  // KK_DOUBLE: Species data is double
         const KK_FLOAT evib_val = p->evib + vib_frac*extra_energy;
         if (vibstyle_ == SRA_KK::SMOOTH) {
           p->evib = evib_val;
@@ -1064,8 +1064,8 @@ class SurfReactAdsorbKokkos : public SurfReactAdsorb {
                                      const DAT::t_int_scalar &d_retry) const
   {
     KK_POS_FLOAT x[3]; KK_FLOAT v[3];
-    memcpy(x,ip->x,3*sizeof(double));
-    memcpy(v,ip->v,3*sizeof(double));
+    memcpy(x,ip->x,3*sizeof(KK_POS_FLOAT));
+    memcpy(v,ip->v,3*sizeof(KK_FLOAT));
     int id = MAXSMALLINT*rand_gen.drand();
 
     int index = Kokkos::atomic_fetch_add(&d_nlocal(),1);

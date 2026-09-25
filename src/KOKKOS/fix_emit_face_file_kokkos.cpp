@@ -401,7 +401,7 @@ void FixEmitFaceFileKokkos::perform_task()
     Task task_i = ld_tasks(i);
 
     const int pcell = task_i.pcell;
-    double *vstream = task_i.vstream;  // KK_DOUBLE: precision_map.json keep_double_identifiers
+    double *vstream = task_i.vstream;  // KK_DOUBLE: Task data is double
 
     auto isp = ld_isp(cand);
     auto vscale_val = ld_vscale(i, isp);
@@ -508,9 +508,9 @@ void FixEmitFaceFileKokkos::operator()(TagFixEmitFaceFile_perform_task,
 
   Task task_i = d_tasks(i);
 
-  double *lo = task_i.lo;  // KK_DOUBLE: precision_map.json keep_double_identifiers
-  double *hi = task_i.hi;  // KK_DOUBLE: precision_map.json keep_double_identifiers
-  double *vstream = task_i.vstream;  // KK_DOUBLE: precision_map.json keep_double_identifiers
+  double *lo = task_i.lo;  // KK_DOUBLE: Task data is double
+  double *hi = task_i.hi;  // KK_DOUBLE: Task data is double
+  double *vstream = task_i.vstream;  // KK_DOUBLE: Task data is double
 
   const KK_FLOAT temp_rot = task_i.temp_rot;
   const KK_FLOAT temp_vib = task_i.temp_vib;
@@ -703,7 +703,7 @@ KOKKOS_INLINE_FUNCTION
 void FixEmitFaceFileKokkos::operator()(TagFixEmitFaceFile_subsonic_inflow,
                                        const int &i) const
 {
-  double *vstream = d_tasks(i).vstream;  // KK_DOUBLE: precision_map.json keep_double_identifiers
+  double *vstream = d_tasks(i).vstream;  // KK_DOUBLE: Task data is double
   const KK_FLOAT indot = vstream[0]*normal[0] + vstream[1]*normal[1] +
     vstream[2]*normal[2];
 
@@ -821,8 +821,9 @@ void FixEmitFaceFileKokkos::subsonic_grid()
   // test if any task has invalid thermal temperature for first time
 
   if (!subsonic_warning) {
-    double tempmax = 0.0;
-    Kokkos::deep_copy(tempmax,d_tempmax);
+    KK_FLOAT tempmax_kk = 0.0;
+    Kokkos::deep_copy(tempmax_kk,d_tempmax);
+    const double tempmax = tempmax_kk;
     int temp_exceed_flag = 0;
     if (tempmax > TEMPLIMIT) temp_exceed_flag = 1;
     subsonic_warning = subsonic_temperature_check(temp_exceed_flag,tempmax);
@@ -879,7 +880,7 @@ void FixEmitFaceFileKokkos::operator()(TagFixEmitFaceFile_subsonic_grid,
   // if sound speed = 0.0 due to <= 1 particle in cell or
   //   all particles having COM velocity, set via mixture properties
 
-  double *vstream = d_tasks(i).vstream;  // KK_DOUBLE: precision_map.json keep_double_identifiers
+  double *vstream = d_tasks(i).vstream;  // KK_DOUBLE: Task data is double
   if (np) {
     vstream[0] = mv[0] / masstot;
     vstream[1] = mv[1] / masstot;

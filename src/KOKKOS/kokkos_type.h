@@ -385,6 +385,13 @@ typedef double KK_POS_FLOAT;
 typedef double KK_ACC_FLOAT;
 #endif
 
+// MPI datatypes of the KK precision types, for MPI calls on Kokkos data
+//   (macros, so they expand where mpi.h is included)
+
+#define MPI_KK_FLOAT (std::is_same_v<KK_FLOAT,double> ? MPI_DOUBLE : MPI_FLOAT)
+#define MPI_KK_POS_FLOAT (std::is_same_v<KK_POS_FLOAT,double> ? MPI_DOUBLE : MPI_FLOAT)
+#define MPI_KK_ACC_FLOAT (std::is_same_v<KK_ACC_FLOAT,double> ? MPI_DOUBLE : MPI_FLOAT)
+
 // true if any Kokkos data is stored in reduced precision
 
 static constexpr bool KK_FP32 = !std::is_same_v<KK_FLOAT,double> ||

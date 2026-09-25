@@ -124,8 +124,8 @@ class SurfReactGlobalKokkos : public SurfReactGlobal {
       }
       KK_POS_FLOAT x[3]; KK_FLOAT v[3];
       int id = MAXSMALLINT*rand_gen.drand();
-      memcpy(x,ip->x,3*sizeof(double));
-      memcpy(v,ip->v,3*sizeof(double));
+      memcpy(x,ip->x,3*sizeof(KK_POS_FLOAT));
+      memcpy(v,ip->v,3*sizeof(KK_FLOAT));
 
       int index;
       if (ATOMIC_REDUCTION == 0) {

@@ -40,7 +40,7 @@ class ReactTCEKokkos : public ReactBirdKokkos {
 
 KOKKOS_INLINE_FUNCTION
 KK_FLOAT bird_Evib(const int& nmode, const KK_FLOAT& Tvib,
-                 const double vibtemp[],
+                 const double vibtemp[],  // KK_DOUBLE: Species data is double
                  const KK_FLOAT& Evib) const
 {
   // Comutes f for Newton's search method outlined in newtonTvib()
@@ -59,7 +59,7 @@ KK_FLOAT bird_Evib(const int& nmode, const KK_FLOAT& Tvib,
 /* ---------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-KK_FLOAT bird_dEvib(const int& nmode, const KK_FLOAT& Tvib, const double vibtemp[]) const
+KK_FLOAT bird_dEvib(const int& nmode, const KK_FLOAT& Tvib, const double vibtemp[]) const  // KK_DOUBLE: Species data is double
 {
   // Comutes df for Newton's search method
 
@@ -83,7 +83,7 @@ KK_FLOAT bird_dEvib(const int& nmode, const KK_FLOAT& Tvib, const double vibtemp
 /* ---------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-KK_FLOAT newtonTvib(const int &nmode, const KK_FLOAT& Evib, const double vibTemp[],
+KK_FLOAT newtonTvib(const int &nmode, const KK_FLOAT& Evib, const double vibTemp[],  // KK_DOUBLE: Species data is double
                const KK_FLOAT &Tvib0,
                const KK_FLOAT &tol,
                const int& nmax) const

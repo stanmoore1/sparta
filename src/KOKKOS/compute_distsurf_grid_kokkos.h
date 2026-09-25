@@ -54,7 +54,7 @@ struct TagComputeDistSurfGrid_surf_distance{};
   DAT::t_int_1d d_slist;
   HAT::t_int_1d h_eflag;
   HAT::t_int_1d h_slist;
-  DAT::t_kkacc_1d_3 d_sctr;
+  DAT::t_kkpos_1d_3 d_sctr;
   t_cinfo_1d d_cinfo;
   t_cell_1d d_cells;
   Kokkos::Crs<int, DeviceType, void, crs_size_type> d_csurfs;

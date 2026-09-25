@@ -35,7 +35,6 @@ construct the conversion cannot decide automatically.
 | collide_vss_kokkos.cpp | 4975 | sizeof of a type whose Kokkos copy may have a different size (host) | `return n*sizeof(double);` |
 | collide_vss_kokkos.cpp | 5169 | memcpy: check element types/sizes of source and destination (host) | `memcpy(random_backup,random,sizeof(RanKnuth));` |
 | collide_vss_kokkos.cpp | 5207 | memcpy: check element types/sizes of source and destination (host) | `memcpy(random,random_backup,sizeof(RanKnuth));` |
-| comm_kokkos.cpp | 94 | sizeof of a type whose Kokkos copy may have a different size (host) | `nbytes_particle = sizeof(Particle::OnePart);` |
 | comm_kokkos.cpp | 259 | atomic on a view: check floating point atomics use the intended precision (device) | `nsend = Kokkos::atomic_fetch_add(&d_nsend(),1);` |
 | comm_kokkos.cpp | 267 | memcpy: check element types/sizes of source and destination (device) | `memcpy(&d_sbuf[offset],&d_particles[j],nbytes_particle);` |
 | comm_kokkos.cpp | 277 | memcpy: check element types/sizes of source and destination (device) | `memcpy(&d_particles[i],&d_rbuf[offset],nbytes_particle);` |
@@ -115,20 +114,20 @@ construct the conversion cannot decide automatically.
 | fix_dt_reset_kokkos.cpp | 147 | MPI_DOUBLE: check the buffer is double, not a Kokkos KK view (host) | `MPI_Allreduce(&dtsum_me,&dtave,1,MPI_DOUBLE,MPI_SUM,world);` |
 | fix_emit_face_file_kokkos.cpp | 579 | particle ID from a random draw: must stay double (device) | `d_id(cand) = MAXSMALLINT*rand_gen.drand();` |
 | fix_emit_face_file_kokkos.cpp | 643 | particle ID from a random draw: must stay double (device) | `d_id(cand) = MAXSMALLINT*rand_gen.drand();` |
-| fix_emit_face_file_kokkos.cpp | 921 | atomic on a view: check floating point atomics use the intended precision (device) | `Kokkos::atomic_max(&d_tempmax(),temp_thermal_cell);` |
+| fix_emit_face_file_kokkos.cpp | 922 | atomic on a view: check floating point atomics use the intended precision (device) | `Kokkos::atomic_max(&d_tempmax(),temp_thermal_cell);` |
 | fix_emit_face_kokkos.cpp | 508 | particle ID from a random draw: must stay double (device) | `d_id(cand) = MAXSMALLINT*rand_gen.drand();` |
 | fix_emit_face_kokkos.cpp | 564 | particle ID from a random draw: must stay double (device) | `d_id(cand) = MAXSMALLINT*rand_gen.drand();` |
-| fix_emit_face_kokkos.cpp | 811 | atomic on a view: check floating point atomics use the intended precision (device) | `Kokkos::atomic_max(&d_tempmax(),temp_thermal_cell);` |
+| fix_emit_face_kokkos.cpp | 812 | atomic on a view: check floating point atomics use the intended precision (device) | `Kokkos::atomic_max(&d_tempmax(),temp_thermal_cell);` |
 | fix_emit_surf_kokkos.cpp | 70 | memcpy: check element types/sizes of source and destination (host) | `memcpy((void*) dst, (const void*) obj, sizeof(T));` |
 | fix_emit_surf_kokkos.cpp | 714 | particle ID from a random draw: must stay double (device) | `d_id(cand) = MAXSMALLINT*rand_gen.drand();` |
 | fix_emit_surf_kokkos.cpp | 824 | particle ID from a random draw: must stay double (device) | `d_id(cand) = MAXSMALLINT*rand_gen.drand();` |
-| fix_emit_surf_kokkos.cpp | 1165 | atomic on a view: check floating point atomics use the intended precision (device) | `Kokkos::atomic_max(&d_tempmax(),temp_thermal_cell);` |
-| fix_emit_surf_kokkos.cpp | 1252 | MPI_DOUBLE: check the buffer is double, not a Kokkos KK view (host) | `MPI_Allreduce(&S_me,&S,1,MPI_DOUBLE,MPI_SUM,world);` |
+| fix_emit_surf_kokkos.cpp | 1166 | atomic on a view: check floating point atomics use the intended precision (device) | `Kokkos::atomic_max(&d_tempmax(),temp_thermal_cell);` |
+| fix_emit_surf_kokkos.cpp | 1256 | MPI_DOUBLE: check the buffer is double, not a Kokkos KK view (host) | `MPI_Allreduce(&S_me,&S,1,MPI_DOUBLE,MPI_SUM,world);` |
 | fix_temp_global_rescale_kokkos.cpp | 64 | MPI_DOUBLE: check the buffer is double, not a Kokkos KK view (host) | `MPI_Allreduce(&t,&t_current,1,MPI_DOUBLE,MPI_SUM,world);` |
 | fix_temp_rescale_kokkos.cpp | 206 | MPI_DOUBLE: check the buffer is double, not a Kokkos KK view (host) | `MPI_Allreduce(&t_current_mine,&t_current,1,MPI_DOUBLE,MPI_SUM,world);` |
-| geometry_kokkos.h | 17 | tiny absolute tolerance, below float resolution (host) | `#define EPSSQ 1.0e-16` |
-| geometry_kokkos.h | 18 | tiny absolute tolerance, below float resolution (host) | `#define EPSSQNEG -1.0e-16` |
-| geometry_kokkos.h | 20 | tiny absolute tolerance, below float resolution (host) | `#define EPSTIME 1.0e-16` |
+| geometry_kokkos.h | 24 | tiny absolute tolerance, below float resolution (host) | `#define EPSSQ kk_eps<KK_POS_FLOAT>(1.0e-16,1.0e-10)` |
+| geometry_kokkos.h | 25 | tiny absolute tolerance, below float resolution (host) | `#define EPSSQNEG kk_eps<KK_POS_FLOAT>(-1.0e-16,-1.0e-10)` |
+| geometry_kokkos.h | 27 | tiny absolute tolerance, below float resolution (host) | `#define EPSTIME kk_eps<KK_POS_FLOAT>(1.0e-16,1.0e-13)` |
 | irregular_kokkos.cpp | 217 | memcpy: check element types/sizes of source and destination (host) | `memcpy(proc_recv,proc_recv_ordered,nrecv*sizeof(int));` |
 | irregular_kokkos.cpp | 218 | memcpy: check element types/sizes of source and destination (host) | `memcpy(num_recv,num_recv_ordered,nrecv*sizeof(int));` |
 | irregular_kokkos.cpp | 448 | memcpy: check element types/sizes of source and destination (host) | `memcpy(&h_recvbuf[(bigint)i*nbytes],&h_sendbuf[(bigint)m*nbytes],nbytes);` |
@@ -137,27 +136,24 @@ construct the conversion cannot decide automatically.
 | kokkos_copy.h | 73 | memcpy: check element types/sizes of source and destination (host) | `memcpy((void*)&obj, (const void*)orig, sizeof(ClassStyle));` |
 | kokkos_copy.h | 82 | memcpy: check element types/sizes of source and destination (host) | `memcpy(ptr_temp, (void*)&obj, sizeof(ClassStyle));` |
 | kokkos_copy.h | 87 | memcpy: check element types/sizes of source and destination (host) | `memcpy((void*)&obj, ptr_temp, sizeof(ClassStyle));` |
-| particle_kokkos.cpp | 192 | sizeof of a type whose Kokkos copy may have a different size (host) | `nbytes = sizeof(OnePart);` |
-| particle_kokkos.cpp | 388 | sizeof of a type whose Kokkos copy may have a different size (host) | `nParticlesWksp = MIN(nlocal,(double)update->global_mem_limit/sizeof(Particle::OnePart));` |
-| particle_kokkos.cpp | 393 | sizeof of a type whose Kokkos copy may have a different size (host) | `nbytes = sizeof(OnePart);` |
 | particle_kokkos.cpp | 586 | atomic on a view: check floating point atomics use the intended precision (device) | `j = Kokkos::atomic_fetch_add(&d_cellcount[icell],1);` |
 | particle_kokkos.cpp | 1238 | particle ID from a random draw: must stay double (device) | `d_new[base+k].id = MAXSMALLINT*rand_gen.drand();` |
 | particle_kokkos.h | 358 | memcpy: check element types/sizes of source and destination (device) | `memcpy(ptr,&(k_eivec.view_device()(i).k_view.view_device()(n)),sizeof(int));` |
 | particle_kokkos.h | 366 | memcpy: check element types/sizes of source and destination (device) | `memcpy(ptr,&(k_eiarray.view_device()(i).k_view.view_device()(n,j)),sizeof(int));` |
-| particle_kokkos.h | 376 | memcpy: check element types/sizes of source and destination (device) | `memcpy(ptr,&(k_edvec.view_device()(i).k_view.view_device()(n)),sizeof(double));` |
-| particle_kokkos.h | 376 | sizeof of a type whose Kokkos copy may have a different size (device) | `memcpy(ptr,&(k_edvec.view_device()(i).k_view.view_device()(n)),sizeof(double));` |
-| particle_kokkos.h | 377 | sizeof of a type whose Kokkos copy may have a different size (device) | `ptr += sizeof(double);` |
-| particle_kokkos.h | 384 | memcpy: check element types/sizes of source and destination (device) | `memcpy(ptr,&(k_edarray.view_device()(i).k_view.view_device()(n,j)),sizeof(double));` |
-| particle_kokkos.h | 384 | sizeof of a type whose Kokkos copy may have a different size (device) | `memcpy(ptr,&(k_edarray.view_device()(i).k_view.view_device()(n,j)),sizeof(double));` |
-| particle_kokkos.h | 385 | sizeof of a type whose Kokkos copy may have a different size (device) | `ptr += sizeof(double);` |
-| particle_kokkos.h | 399 | memcpy: check element types/sizes of source and destination (device) | `memcpy(&(k_eivec.view_device()(i).k_view.view_device()(n)),ptr,sizeof(int));` |
-| particle_kokkos.h | 407 | memcpy: check element types/sizes of source and destination (device) | `memcpy(&(k_eiarray.view_device()(i).k_view.view_device()(n,j)),ptr,sizeof(int));` |
-| particle_kokkos.h | 417 | memcpy: check element types/sizes of source and destination (device) | `memcpy(&(k_edvec.view_device()(i).k_view.view_device()(n)),ptr,sizeof(double));` |
-| particle_kokkos.h | 417 | sizeof of a type whose Kokkos copy may have a different size (device) | `memcpy(&(k_edvec.view_device()(i).k_view.view_device()(n)),ptr,sizeof(double));` |
-| particle_kokkos.h | 418 | sizeof of a type whose Kokkos copy may have a different size (device) | `ptr += sizeof(double);` |
-| particle_kokkos.h | 425 | memcpy: check element types/sizes of source and destination (device) | `memcpy(&(k_edarray.view_device()(i).k_view.view_device()(n,j)),ptr,sizeof(double));` |
-| particle_kokkos.h | 425 | sizeof of a type whose Kokkos copy may have a different size (device) | `memcpy(&(k_edarray.view_device()(i).k_view.view_device()(n,j)),ptr,sizeof(double));` |
-| particle_kokkos.h | 426 | sizeof of a type whose Kokkos copy may have a different size (device) | `ptr += sizeof(double);` |
+| particle_kokkos.h | 378 | memcpy: check element types/sizes of source and destination (device) | `memcpy(ptr,&value,sizeof(double));  // KK_DOUBLE: buffer format` |
+| particle_kokkos.h | 378 | sizeof of a type whose Kokkos copy may have a different size (device) | `memcpy(ptr,&value,sizeof(double));  // KK_DOUBLE: buffer format` |
+| particle_kokkos.h | 379 | sizeof of a type whose Kokkos copy may have a different size (device) | `ptr += sizeof(double);  // KK_DOUBLE: buffer format` |
+| particle_kokkos.h | 387 | memcpy: check element types/sizes of source and destination (device) | `memcpy(ptr,&value,sizeof(double));  // KK_DOUBLE: buffer format` |
+| particle_kokkos.h | 387 | sizeof of a type whose Kokkos copy may have a different size (device) | `memcpy(ptr,&value,sizeof(double));  // KK_DOUBLE: buffer format` |
+| particle_kokkos.h | 388 | sizeof of a type whose Kokkos copy may have a different size (device) | `ptr += sizeof(double);  // KK_DOUBLE: buffer format` |
+| particle_kokkos.h | 402 | memcpy: check element types/sizes of source and destination (device) | `memcpy(&(k_eivec.view_device()(i).k_view.view_device()(n)),ptr,sizeof(int));` |
+| particle_kokkos.h | 410 | memcpy: check element types/sizes of source and destination (device) | `memcpy(&(k_eiarray.view_device()(i).k_view.view_device()(n,j)),ptr,sizeof(int));` |
+| particle_kokkos.h | 421 | memcpy: check element types/sizes of source and destination (device) | `memcpy(&value,ptr,sizeof(double));  // KK_DOUBLE: buffer format` |
+| particle_kokkos.h | 421 | sizeof of a type whose Kokkos copy may have a different size (device) | `memcpy(&value,ptr,sizeof(double));  // KK_DOUBLE: buffer format` |
+| particle_kokkos.h | 423 | sizeof of a type whose Kokkos copy may have a different size (device) | `ptr += sizeof(double);  // KK_DOUBLE: buffer format` |
+| particle_kokkos.h | 431 | memcpy: check element types/sizes of source and destination (device) | `memcpy(&value,ptr,sizeof(double));  // KK_DOUBLE: buffer format` |
+| particle_kokkos.h | 431 | sizeof of a type whose Kokkos copy may have a different size (device) | `memcpy(&value,ptr,sizeof(double));  // KK_DOUBLE: buffer format` |
+| particle_kokkos.h | 433 | sizeof of a type whose Kokkos copy may have a different size (device) | `ptr += sizeof(double);  // KK_DOUBLE: buffer format` |
 | react_bird_kokkos.cpp | 194 | memcpy: check element types/sizes of source and destination (host) | `memcpy(random_backup,random,sizeof(RanKnuth));` |
 | react_bird_kokkos.cpp | 206 | memcpy: check element types/sizes of source and destination (host) | `memcpy(random,random_backup,sizeof(RanKnuth));` |
 | react_tce_kokkos.h | 208 | tiny absolute tolerance, below float resolution (device) | `if (ievib < static_cast<KK_FLOAT>(1e-26) ) zi = 0.0; //Low Energy Cut-Off to prevent nan solutions t` |
@@ -165,23 +161,23 @@ construct the conversion cannot decide automatically.
 | surf_collide_adiabatic_kokkos.cpp | 325 | memcpy: check element types/sizes of source and destination (host) | `memcpy(random_backup,random,sizeof(RanKnuth));` |
 | surf_collide_adiabatic_kokkos.cpp | 364 | memcpy: check element types/sizes of source and destination (host) | `memcpy(random,random_backup,sizeof(RanKnuth));` |
 | surf_collide_adiabatic_kokkos.h | 146 | memcpy: check element types/sizes of source and destination (device) | `if (ambi_flag \|\| vibmode_flag) memcpy(&iorig,ip,sizeof(OnePartKK));` |
-| surf_collide_cll_kokkos.cpp | 416 | memcpy: check element types/sizes of source and destination (host) | `memcpy(random_backup,random,sizeof(RanKnuth));` |
-| surf_collide_cll_kokkos.cpp | 455 | memcpy: check element types/sizes of source and destination (host) | `memcpy(random,random_backup,sizeof(RanKnuth));` |
+| surf_collide_cll_kokkos.cpp | 419 | memcpy: check element types/sizes of source and destination (host) | `memcpy(random_backup,random,sizeof(RanKnuth));` |
+| surf_collide_cll_kokkos.cpp | 458 | memcpy: check element types/sizes of source and destination (host) | `memcpy(random,random_backup,sizeof(RanKnuth));` |
 | surf_collide_cll_kokkos.h | 147 | memcpy: check element types/sizes of source and destination (device) | `if (ambi_flag \|\| vibmode_flag) memcpy(&iorig,ip,sizeof(OnePartKK));` |
 | surf_collide_cll_kokkos.h | 291 | 1-drand(): kept double | `psi_f = Kokkos::acos(1-rand_gen.drand())` |
 | surf_collide_cll_kokkos.h | 385 | 1-drand(): kept double | `KK_FLOAT evib_star =
         -Kokkos::log(1 - rand_gen.drand() *
              (1` |
-| surf_collide_diffuse_kokkos.cpp | 430 | memcpy: check element types/sizes of source and destination (host) | `memcpy(random_backup,random,sizeof(RanKnuth));` |
-| surf_collide_diffuse_kokkos.cpp | 469 | memcpy: check element types/sizes of source and destination (host) | `memcpy(random,random_backup,sizeof(RanKnuth));` |
+| surf_collide_diffuse_kokkos.cpp | 433 | memcpy: check element types/sizes of source and destination (host) | `memcpy(random_backup,random,sizeof(RanKnuth));` |
+| surf_collide_diffuse_kokkos.cpp | 472 | memcpy: check element types/sizes of source and destination (host) | `memcpy(random,random_backup,sizeof(RanKnuth));` |
 | surf_collide_diffuse_kokkos.h | 156 | memcpy: check element types/sizes of source and destination (device) | `if (ambi_flag \|\| vibmode_flag) memcpy(&iorig,ip,sizeof(OnePartKK));` |
-| surf_collide_impulsive_kokkos.cpp | 416 | memcpy: check element types/sizes of source and destination (host) | `memcpy(random_backup,random,sizeof(RanKnuth));` |
-| surf_collide_impulsive_kokkos.cpp | 455 | memcpy: check element types/sizes of source and destination (host) | `memcpy(random,random_backup,sizeof(RanKnuth));` |
+| surf_collide_impulsive_kokkos.cpp | 419 | memcpy: check element types/sizes of source and destination (host) | `memcpy(random_backup,random,sizeof(RanKnuth));` |
+| surf_collide_impulsive_kokkos.cpp | 458 | memcpy: check element types/sizes of source and destination (host) | `memcpy(random,random_backup,sizeof(RanKnuth));` |
 | surf_collide_impulsive_kokkos.h | 147 | memcpy: check element types/sizes of source and destination (device) | `if (ambi_flag \|\| vibmode_flag) memcpy(&iorig,ip,sizeof(OnePartKK));` |
 | surf_collide_piston_kokkos.h | 136 | memcpy: check element types/sizes of source and destination (device) | `if (ambi_flag \|\| vibmode_flag) memcpy(&iorig,ip,sizeof(OnePartKK));` |
 | surf_collide_specular_kokkos.h | 136 | memcpy: check element types/sizes of source and destination (device) | `if (ambi_flag \|\| vibmode_flag) memcpy(&iorig,ip,sizeof(OnePartKK));` |
-| surf_collide_td_kokkos.cpp | 416 | memcpy: check element types/sizes of source and destination (host) | `memcpy(random_backup,random,sizeof(RanKnuth));` |
-| surf_collide_td_kokkos.cpp | 455 | memcpy: check element types/sizes of source and destination (host) | `memcpy(random,random_backup,sizeof(RanKnuth));` |
+| surf_collide_td_kokkos.cpp | 419 | memcpy: check element types/sizes of source and destination (host) | `memcpy(random_backup,random,sizeof(RanKnuth));` |
+| surf_collide_td_kokkos.cpp | 458 | memcpy: check element types/sizes of source and destination (host) | `memcpy(random,random_backup,sizeof(RanKnuth));` |
 | surf_collide_td_kokkos.h | 147 | memcpy: check element types/sizes of source and destination (device) | `if (ambi_flag \|\| vibmode_flag) memcpy(&iorig,ip,sizeof(OnePartKK));` |
 | surf_react_adsorb_kokkos.cpp | 602 | memcpy: check element types/sizes of source and destination (host) | `memcpy(random_backup,random,sizeof(RanKnuth));` |
 | surf_react_adsorb_kokkos.cpp | 614 | memcpy: check element types/sizes of source and destination (host) | `memcpy(cmodel_random_backup[idx],cmrand,sizeof(RanKnuth));` |
@@ -225,7 +221,7 @@ construct the conversion cannot decide automatically.
 | update_kokkos.cpp | 1391 | atomic on a view: check floating point atomics use the intended precision (device) | `Kokkos::atomic_add(&d_nboundary_one(),nb);` |
 | update_kokkos.cpp | 1419 | atomic on a view: check floating point atomics use the intended precision (device) | `indx = Kokkos::atomic_fetch_add(&d_nmigrate(),1);` |
 | update_kokkos.cpp | 1630 | atomic on a view: check floating point atomics use the intended precision (device) | `Kokkos::atomic_add(&d_nscheck_one(),nsurf);` |
-| update_kokkos.cpp | 1883 | tiny absolute tolerance, below float resolution (device) | `if (minparam <= static_cast<KK_POS_FLOAT>(1.0e-14)) stuck_iterate++;` |
+| update_kokkos.cpp | 1883 | tiny absolute tolerance, below float resolution (device) | `if (minparam <= kk_eps<KK_POS_FLOAT>(1.0e-14,1.0e-6)) stuck_iterate++;` |
 | update_kokkos.cpp | 2079 | memcpy: check element types/sizes of source and destination (device) | `memcpy(&iorig,&particle_i,sizeof(OnePartKK));` |
 | update_kokkos.cpp | 2265 | atomic on a view: check floating point atomics use the intended precision (device) | `index = Kokkos::atomic_fetch_add(&d_nmigrate(),1);` |
 | update_kokkos.cpp | 2684 | memcpy: check element types/sizes of source and destination (host) | `memcpy((void*) dst, (const void*) ((T *) base), sizeof(T));` |

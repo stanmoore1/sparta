@@ -111,7 +111,7 @@ void ComputeDistSurfGridKokkos::compute_per_grid_kokkos()
   k_eflag.sync_device();
   k_slist.sync_device();
 
-  d_sctr = DAT::t_kkacc_1d_3("compute/distsurf/grid:sctr",nsurf);
+  d_sctr = DAT::t_kkpos_1d_3("compute/distsurf/grid:sctr",nsurf);
 
   // pre-compute center point of each eligible surf
   copymode = 1;
@@ -137,7 +137,7 @@ void ComputeDistSurfGridKokkos::compute_per_grid_kokkos()
 
   memoryKK->destroy_kokkos(k_eflag);
   memoryKK->destroy_kokkos(k_slist);
-  d_sctr = DAT::t_kkacc_1d_3();
+  d_sctr = DAT::t_kkpos_1d_3();
 }
 
 /* ---------------------------------------------------------------------- */
@@ -153,8 +153,8 @@ void ComputeDistSurfGridKokkos::operator()(TagComputeDistSurfGrid_surf_centroid,
   if (dim == 2) {
     p1 = d_lines[m].p1;
     p2 = d_lines[m].p2;
-    d_sctr(i,0) = static_cast<KK_ACC_FLOAT>(0.5) * (p1[0] + p2[0]);
-    d_sctr(i,1) = static_cast<KK_ACC_FLOAT>(0.5) * (p1[1] + p2[1]);
+    d_sctr(i,0) = static_cast<KK_POS_FLOAT>(0.5) * (p1[0] + p2[0]);
+    d_sctr(i,1) = static_cast<KK_POS_FLOAT>(0.5) * (p1[1] + p2[1]);
     d_sctr(i,2) = 0.0;
   } else {
     p1 = d_tris[m].p1;

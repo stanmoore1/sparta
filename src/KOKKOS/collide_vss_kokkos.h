@@ -82,6 +82,26 @@ class CollideVSSKokkos : public CollideVSS {
  public:
   typedef COLLIDE_REDUCE value_type;
 
+  // two-particle state in KK precision, hides CollideVSS::State in this class
+
+  struct State {
+    KK_FLOAT vr2;
+    KK_FLOAT vr;
+    KK_FLOAT imass,jmass;
+    KK_FLOAT ave_rotdof;
+    KK_FLOAT ave_vibdof;
+    KK_FLOAT ave_dof;
+    KK_FLOAT etrans;
+    KK_FLOAT erot;
+    KK_FLOAT evib;
+    KK_FLOAT eexchange;
+    KK_FLOAT eint;
+    KK_FLOAT etotal;
+    KK_FLOAT ucmf;
+    KK_FLOAT vcmf;
+    KK_FLOAT wcmf;
+  };
+
   CollideVSSKokkos(class SPARTA *, int, char **);
   ~CollideVSSKokkos();
   void init();
@@ -311,8 +331,8 @@ class CollideVSSKokkos : public CollideVSS {
   DAT::t_kkfloat_2d d_vremax_initial;
   DAT::ttransform_kkfloat_3d k_vremax;
   DAT::t_kkfloat_3d d_vremax;
-  DAT::ttransform_kkfloat_3d k_remain;
-  DAT::t_kkfloat_3d d_remain;
+  DAT::ttransform_kkacc_3d k_remain;
+  DAT::t_kkacc_3d d_remain;
 
   // int scalars = flags and view-size counters, must stay int
   // bigint scalars = per-step statistics counters, can exceed 2^31
@@ -461,7 +481,7 @@ class CollideVSSKokkos : public CollideVSS {
   t_particle_1d d_particles_backup;
   DAT::t_int_2d d_plist_backup;
   DAT::t_kkfloat_3d d_vremax_backup;
-  DAT::t_kkfloat_3d d_remain_backup;
+  DAT::t_kkacc_3d d_remain_backup;
   DAT::t_int_2d d_nn_last_partner_backup;
   DAT::t_int_1d d_ionambi_backup;
   DAT::t_kkfloat_2d_lr d_velambi_backup;

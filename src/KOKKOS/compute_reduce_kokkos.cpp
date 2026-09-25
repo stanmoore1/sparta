@@ -256,9 +256,9 @@ double ComputeReduceKokkos::compute_one_kokkos(int m, int flag)
 
       // the scalar handed to deep_copy(value,View) is a non-deduced
       //   parameter, so it has to be spelled with the view's own value type,
-      //   SPARTA_FLOAT, not double, or template deduction fails
+      //   KK_ACC_FLOAT, not double, or template deduction fails
 
-      KK_FLOAT tmp = 0.0;
+      KK_ACC_FLOAT tmp = 0.0;
       Kokkos::deep_copy(tmp,Kokkos::subview(d_values,flag));
       one = tmp;
     }
@@ -602,7 +602,8 @@ int ComputeReduceKokkos::setup_values(int m)
      d_values, so taking the local copy afterwards is mandatory
 ------------------------------------------------------------------------- */
 
-void ComputeReduceKokkos::gather_float(DAT::t_kkacc_1d_strided d_src)
+template<class ViewType>
+void ComputeReduceKokkos::gather_float(ViewType d_src)
 {
   if (nelements == 0) return;
   auto l_values = d_values;

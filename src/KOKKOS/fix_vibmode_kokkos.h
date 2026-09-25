@@ -38,7 +38,7 @@ class FixVibmodeKokkos : public FixVibmode {
   void update_custom(int, double, double, double, double *);
 
   KOKKOS_INLINE_FUNCTION
-  void update_custom_kokkos(int, KK_FLOAT, double, double, const KK_FLOAT *) const;
+  void update_custom_kokkos(int, KK_FLOAT, KK_FLOAT, KK_FLOAT, const double *) const;  // KK_DOUBLE: vstream is host data
 
  private:
   double boltz;
@@ -69,7 +69,7 @@ class FixVibmodeKokkos : public FixVibmode {
 KOKKOS_INLINE_FUNCTION
 void FixVibmodeKokkos::update_custom_kokkos(int index, KK_FLOAT temp_thermal,
                                             KK_FLOAT temp_rot, KK_FLOAT temp_vib,
-                                            const KK_FLOAT *) const
+                                            const double *) const  // KK_DOUBLE: vstream is host data
 {
   int isp = d_particles[index].ispecies;
   int nmode = d_species[isp].nvibmode;

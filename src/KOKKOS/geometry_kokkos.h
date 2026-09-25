@@ -14,10 +14,17 @@
 
 #include "math_extra_kokkos.h"
 
-#define EPSSQ 1.0e-16
-#define EPSSQNEG -1.0e-16
+// tolerances of the geometry tests, which work in KK_POS_FLOAT
+// the double values are those of the non-KOKKOS Geometry and Update code,
+//   tuned to double precision round-off; the float values (used only for
+//   KOKKOS_PREC=single) are larger to exceed single precision round-off
+//   of quantities of order 1 (EPSSQ) and of times of order a timestep
+//   (EPSTIME)
+
+#define EPSSQ kk_eps<KK_POS_FLOAT>(1.0e-16,1.0e-10)
+#define EPSSQNEG kk_eps<KK_POS_FLOAT>(-1.0e-16,-1.0e-10)
 #define EPSSELF 1.0e-6
-#define EPSTIME 1.0e-16
+#define EPSTIME kk_eps<KK_POS_FLOAT>(1.0e-16,1.0e-13)
 
 enum{OUTSIDE,INSIDE,ONSURF2OUT,ONSURF2IN};    // same as Update
 
@@ -114,9 +121,9 @@ bool line_line_intersect(KK_POS_FLOAT *start, KK_POS_FLOAT *stop,
 
   MathExtraKokkos::sub3(v1,v0,edge);
   MathExtraKokkos::sub3(point,v0,pvec);
-  if (MathExtraKokkos::dot3(edge,pvec) < static_cast<KK_POS_FLOAT>(EPSSQNEG)) return false;
+  if (MathExtraKokkos::dot3(edge,pvec) < EPSSQNEG) return false;
   MathExtraKokkos::sub3(point,v1,pvec);
-  if (MathExtraKokkos::dot3(edge,pvec) > static_cast<KK_POS_FLOAT>(EPSSQ)) return false;
+  if (MathExtraKokkos::dot3(edge,pvec) > EPSSQ) return false;
 
   // there is a valid intersection with line B
   // set side to ONSUFR, OUTSIDE, or INSIDE
@@ -147,7 +154,7 @@ bool line_line_intersect(KK_POS_FLOAT *start, KK_POS_FLOAT *stop,
 ------------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-bool axi_horizontal_line(KK_POS_FLOAT tdelta, KK_POS_FLOAT *x, KK_POS_FLOAT *v,
+bool axi_horizontal_line(KK_POS_FLOAT tdelta, KK_POS_FLOAT *x, KK_FLOAT *v,
                          KK_POS_FLOAT yhoriz, int &nc, KK_POS_FLOAT &t1, KK_POS_FLOAT &t2)
 {
   KK_POS_FLOAT a = v[1]*v[1] + v[2]*v[2];
@@ -188,9 +195,9 @@ bool axi_horizontal_line(KK_POS_FLOAT tdelta, KK_POS_FLOAT *x, KK_POS_FLOAT *v,
   //   can cause t1 or t2 to be EPSTIME greater than tdelta and miss collision
   // force a collision in this special case by setting t1/t2 = tdelta
 
-  if (t1 > tdelta && (t1-tdelta) < static_cast<KK_POS_FLOAT>(EPSTIME) && tdelta > static_cast<KK_POS_FLOAT>(0.0))
+  if (t1 > tdelta && (t1-tdelta) < EPSTIME && tdelta > static_cast<KK_POS_FLOAT>(0.0))
     t1 = tdelta;
-  else if (t2 > tdelta && (t2-tdelta) < static_cast<KK_POS_FLOAT>(EPSTIME) && tdelta > static_cast<KK_POS_FLOAT>(0.0))
+  else if (t2 > tdelta && (t2-tdelta) < EPSTIME && tdelta > static_cast<KK_POS_FLOAT>(0.0))
     t2 = tdelta;
 
   // require first collision time >= 0.0 and <= tdelta
@@ -225,10 +232,10 @@ bool axi_horizontal_line(KK_POS_FLOAT tdelta, KK_POS_FLOAT *x, KK_POS_FLOAT *v,
 ------------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-bool axi_line_intersect(KK_POS_FLOAT tdelta, KK_POS_FLOAT *x, KK_POS_FLOAT *v,
+bool axi_line_intersect(KK_POS_FLOAT tdelta, KK_POS_FLOAT *x, KK_FLOAT *v,
                         int outface, KK_POS_FLOAT *lo, KK_POS_FLOAT *hi,
                         KK_POS_FLOAT *v1, KK_POS_FLOAT *v2, KK_POS_FLOAT *norm, int selfflag,
-                        KK_POS_FLOAT *xc, KK_POS_FLOAT *vc, KK_POS_FLOAT &param, int &side)
+                        KK_POS_FLOAT *xc, KK_FLOAT *vc, KK_POS_FLOAT &param, int &side)
 {
   // compute nc = # of collisions with infinite line
   // if 0, return false
@@ -323,7 +330,7 @@ bool axi_line_intersect(KK_POS_FLOAT tdelta, KK_POS_FLOAT *x, KK_POS_FLOAT *v,
     //   can cause t1 to be EPSTIME greater than tdelta and miss collision
     // force a collision in this special case by setting t1 = tdelta
 
-    if (t1 > tdelta && (t1-tdelta) < static_cast<KK_POS_FLOAT>(EPSTIME) && tdelta > static_cast<KK_POS_FLOAT>(0.0))
+    if (t1 > tdelta && (t1-tdelta) < EPSTIME && tdelta > static_cast<KK_POS_FLOAT>(0.0))
       t1 = tdelta;
 
     // test for collision time >= 0.0 and <= tdelta
@@ -499,17 +506,17 @@ bool line_tri_intersect(KK_POS_FLOAT *start, KK_POS_FLOAT *stop,
   MathExtraKokkos::sub3(v1,v0,edge);
   MathExtraKokkos::sub3(point,v0,pvec);
   MathExtraKokkos::cross3(edge,pvec,xproduct);
-  if (MathExtraKokkos::dot3(xproduct,norm) < static_cast<KK_POS_FLOAT>(EPSSQNEG)) return false;
+  if (MathExtraKokkos::dot3(xproduct,norm) < EPSSQNEG) return false;
 
   MathExtraKokkos::sub3(v2,v1,edge);
   MathExtraKokkos::sub3(point,v1,pvec);
   MathExtraKokkos::cross3(edge,pvec,xproduct);
-  if (MathExtraKokkos::dot3(xproduct,norm) < static_cast<KK_POS_FLOAT>(EPSSQNEG)) return false;
+  if (MathExtraKokkos::dot3(xproduct,norm) < EPSSQNEG) return false;
 
   MathExtraKokkos::sub3(v0,v2,edge);
   MathExtraKokkos::sub3(point,v2,pvec);
   MathExtraKokkos::cross3(edge,pvec,xproduct);
-  if (MathExtraKokkos::dot3(xproduct,norm) < static_cast<KK_POS_FLOAT>(EPSSQNEG)) return false;
+  if (MathExtraKokkos::dot3(xproduct,norm) < EPSSQNEG) return false;
 
   // there is a valid intersection with triangle
   // set side to ONSUFR, OUTSIDE, or INSIDE

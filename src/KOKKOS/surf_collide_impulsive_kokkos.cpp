@@ -200,8 +200,11 @@ void SurfCollideImpulsiveKokkos::dynamic()
       surf->spread_own2local(1,DOUBLE,t_owned,t_localghost);
       t_persurf = t_localghost;
 
-      auto h_t_persurf = HAT::t_kkfloat_1d(t_persurf,n_localghost);
-      d_t_persurf = Kokkos::create_mirror_view_and_copy(SPADeviceType(),h_t_persurf);
+      Kokkos::View<double*,Kokkos::LayoutRight,Kokkos::HostSpace,
+                   Kokkos::MemoryTraits<Kokkos::Unmanaged>> h_t_persurf(t_persurf,n_localghost);
+      d_t_persurf = DAT::t_kkfloat_1d(Kokkos::view_alloc("surf_collide:t_persurf",
+                                                         Kokkos::WithoutInitializing),n_localghost);
+      deep_copy_convert(d_t_persurf,h_t_persurf);
     }
 
   // CUSTOM mode
