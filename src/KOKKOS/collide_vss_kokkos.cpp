@@ -4090,7 +4090,7 @@ void CollideVSSKokkos::EEXCHANGE_NonReactingEDisposal(OnePartKK *ip,
 
   OnePartKK *p;
 
-  KK_FLOAT AdjustFactor = 0.99999999;
+  double AdjustFactor = 0.99999999; // KK_DOUBLE: margin below 1 so that ivib <= max_level, 1.0 in float
   postcoln.erot = 0.0;
   postcoln.evib = 0.0;
   KK_FLOAT pevib = 0.0;
@@ -4309,7 +4309,7 @@ void CollideVSSKokkos::EEXCHANGE_ReactingEDisposal(OnePartKK *ip,
   KK_FLOAT aveomega,pevib;
 
   OnePartKK *p;
-  KK_FLOAT AdjustFactor = 0.99999999;
+  double AdjustFactor = 0.99999999; // KK_DOUBLE: margin below 1 so that ivib <= max_level, 1.0 in float
 
   if (!kp) {
     ip->erot = 0.0;
